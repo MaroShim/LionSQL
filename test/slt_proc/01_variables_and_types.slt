@@ -1,0 +1,54 @@
+# test/slt_proc/01_variables_and_types.slt
+# Babelfish T-SQL Parity: Variables, Scopes, and Table Variables
+
+statement ok
+CREATE TABLE acc_var (id INT PRIMARY KEY, balance INT, status VARCHAR(20));
+
+statement ok
+INSERT INTO acc_var VALUES (1, 100, 'ACTIVE'), (2, 200, 'INACTIVE'), (3, 300, 'ACTIVE');
+
+# 1. Local Variables: DECLARE, SET, Arithmetic
+statement ok
+CREATE PROCEDURE sp_var_calc
+AS
+BEGIN
+    DECLARE @x INT = 10, @y INT = 20;
+    DECLARE @sum INT;
+    SET @sum = @x + @y;
+    SELECT @sum;
+END;
+
+query I
+EXEC sp_var_calc;
+----
+30
+
+# 2. SELECT INTO variable from table
+statement ok
+CREATE PROCEDURE sp_select_into_var @target_id INT
+AS
+BEGIN
+    DECLARE @bal INT;
+    SELECT @bal = balance FROM acc_var WHERE id = @target_id;
+    SELECT @bal;
+END;
+
+query I
+EXEC sp_select_into_var 2;
+----
+200
+
+# 3. Inline Multiple Declarations and Expressions
+statement ok
+CREATE PROCEDURE sp_multi_decl
+AS
+BEGIN
+    DECLARE @cnt INT = 5, @price INT = 100;
+    DECLARE @total INT = @cnt * @price;
+    SELECT @total;
+END;
+
+query I
+EXEC sp_multi_decl;
+----
+500

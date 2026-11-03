@@ -1,0 +1,31 @@
+# test/slt_proc/08_table_variables.slt
+# Babelfish T-SQL Parity: Table Variables (@table) and Session Isolation
+
+statement ok
+DECLARE @local_items TABLE (id INT PRIMARY KEY, name VARCHAR(50), price INT);
+
+statement ok
+INSERT INTO @local_items VALUES (1, 'Apple', 100), (2, 'Banana', 200), (3, 'Cherry', 300);
+
+query ITI
+SELECT id, name, price FROM @local_items ORDER BY id;
+----
+1 Apple 100
+2 Banana 200
+3 Cherry 300
+
+statement ok
+UPDATE @local_items SET price = price + 50 WHERE id = 1;
+
+query I
+SELECT price FROM @local_items WHERE id = 1;
+----
+150
+
+statement ok
+DELETE FROM @local_items WHERE id = 2;
+
+query I
+SELECT COUNT(*) FROM @local_items;
+----
+2

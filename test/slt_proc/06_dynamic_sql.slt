@@ -1,0 +1,51 @@
+# test/slt_proc/06_dynamic_sql.slt
+# Babelfish T-SQL Parity: Dynamic SQL and sp_executesql
+
+statement ok
+CREATE TABLE acc_dyn (id INT PRIMARY KEY, name VARCHAR(50), balance INT);
+
+statement ok
+INSERT INTO acc_dyn VALUES (1, 'Alice', 100), (2, 'Bob', 200), (3, 'Charlie', 300);
+
+# 1. Simple EXEC with string literal
+statement ok
+CREATE PROCEDURE sp_exec_dyn_simple AS
+BEGIN
+    EXEC('UPDATE acc_dyn SET balance = balance + 50 WHERE id = 1;');
+END;
+
+statement ok
+EXEC sp_exec_dyn_simple;
+
+query I
+SELECT balance FROM acc_dyn WHERE id = 1;
+----
+150
+
+# 2. sp_executesql with parameterized query
+query T
+EXEC sp_executesql N'SELECT name FROM acc_dyn WHERE id = @id;', N'@id INT', @id = 2;
+----
+Bob
+
+query I
+EXEC sp_executesql N'SELECT balance FROM acc_dyn WHERE name = @n;', N'@n VARCHAR', @n = 'Charlie';
+----
+300
+
+# 3. Dynamic SQL via EXEC(@sql) with variable inside procedure
+statement ok
+CREATE PROCEDURE sp_find_by_id @target_id INT AS
+BEGIN
+    DECLARE @sql VARCHAR(200);
+    SET @sql = 'UPDATE acc_dyn SET balance = balance + 10 WHERE id = 2;';
+    EXEC(@sql);
+END;
+
+statement ok
+EXEC sp_find_by_id 2;
+
+query I
+SELECT balance FROM acc_dyn WHERE id = 2;
+----
+210

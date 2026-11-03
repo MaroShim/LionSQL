@@ -1,0 +1,59 @@
+# test/slt_proc/05_cursors.slt
+# Babelfish T-SQL Parity: Cursors (DECLARE, OPEN, FETCH NEXT, @@FETCH_STATUS, CLOSE, DEALLOCATE)
+
+statement ok
+CREATE TABLE acc_cur (id INT PRIMARY KEY, balance INT, status VARCHAR(20));
+
+statement ok
+INSERT INTO acc_cur VALUES (1, 100, 'ACTIVE'), (2, 200, 'INACTIVE'), (3, 300, 'ACTIVE');
+
+# 1. Cursor iterating with @@FETCH_STATUS
+statement ok
+CREATE PROCEDURE sp_cursor_sum_active AS
+BEGIN
+    DECLARE @id INT;
+    DECLARE @bal INT;
+    DECLARE @total INT = 0;
+    DECLARE cur LOCAL FAST_FORWARD CURSOR FOR
+        SELECT id, balance FROM acc_cur WHERE status = 'ACTIVE' ORDER BY id ASC;
+    OPEN cur;
+    FETCH NEXT FROM cur INTO @id, @bal;
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SET @total = @total + @bal;
+        FETCH NEXT FROM cur INTO @id, @bal;
+    END
+    CLOSE cur;
+    DEALLOCATE cur;
+    SELECT @total;
+END;
+
+query I
+EXEC sp_cursor_sum_active;
+----
+400
+
+# 2. Empty cursor immediate @@FETCH_STATUS = -1
+statement ok
+CREATE PROCEDURE sp_cursor_empty AS
+BEGIN
+    DECLARE @id INT;
+    DECLARE @bal INT;
+    DECLARE @reached INT = 0;
+    DECLARE cur_none LOCAL FAST_FORWARD CURSOR FOR
+        SELECT id, balance FROM acc_cur WHERE balance > 9999;
+    OPEN cur_none;
+    FETCH NEXT FROM cur_none INTO @id, @bal;
+    IF @@FETCH_STATUS = 0
+    BEGIN
+        SET @reached = 1;
+    END
+    CLOSE cur_none;
+    DEALLOCATE cur_none;
+    SELECT @reached;
+END;
+
+query I
+EXEC sp_cursor_empty;
+----
+0

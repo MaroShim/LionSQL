@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- add Babelfish-inspired T-SQL stored procedure logic test suite covering 9 domains and 19 procedures (TEST-BABEL-SLT-1)
+
 ## [0.90.0] - 2026-11-03
 
 ### Added

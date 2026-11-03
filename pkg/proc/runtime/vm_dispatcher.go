@@ -1287,6 +1287,21 @@ vmLoop:
 					}
 				}
 			}
+			if len(data.Projections) > 0 {
+				allVars := true
+				for _, p := range data.Projections {
+					if !strings.HasPrefix(p.Alias, "@") {
+						allVars = false
+						break
+					}
+				}
+				if allVars {
+					f.rows = nil
+					f.columns = nil
+					f.values = nil
+					f.rowCount = 0
+				}
+			}
 			continue vmLoop
 		}
 
@@ -1363,6 +1378,22 @@ vmLoop:
 		f.rows = rows
 		f.columns = cols
 		f.rowCount = int64(len(rows))
+
+		if len(data.Projections) > 0 {
+			allVars := true
+			for _, p := range data.Projections {
+				if !strings.HasPrefix(p.Alias, "@") {
+					allVars = false
+					break
+				}
+			}
+			if allVars {
+				f.rows = nil
+				f.columns = nil
+				f.values = nil
+				f.rowCount = 0
+			}
+		}
 
 		if inst.A >= 0 && int(inst.A) < len(f.regs) {
 			f.regs[inst.A] = storage.IntValue(f.rowCount)

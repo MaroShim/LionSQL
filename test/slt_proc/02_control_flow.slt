@@ -1,0 +1,130 @@
+# test/slt_proc/02_control_flow.slt
+# Babelfish T-SQL Parity: Control Flow (IF/ELSE, WHILE, BREAK, CONTINUE)
+
+statement ok
+CREATE TABLE acc_flow (id INT PRIMARY KEY, balance INT);
+
+statement ok
+INSERT INTO acc_flow VALUES (1, 100), (2, 200), (3, 300);
+
+# 1. IF...ELSE with nested conditions
+statement ok
+CREATE PROCEDURE sp_check_tier @bal INT AS
+BEGIN
+    IF @bal >= 250
+    BEGIN
+        SELECT 'PLATINUM';
+    END
+    ELSE IF @bal >= 150
+    BEGIN
+        SELECT 'GOLD';
+    END
+    ELSE
+    BEGIN
+        SELECT 'SILVER';
+    END
+END;
+
+query T
+EXEC sp_check_tier 300;
+----
+PLATINUM
+
+query T
+EXEC sp_check_tier 200;
+----
+GOLD
+
+query T
+EXEC sp_check_tier 50;
+----
+SILVER
+
+# 2. WHILE Loop with Accumulator
+statement ok
+CREATE PROCEDURE sp_sum_loop @n INT AS
+BEGIN
+    DECLARE @i INT = 1;
+    DECLARE @sum INT = 0;
+    WHILE @i <= @n
+    BEGIN
+        SET @sum = @sum + @i;
+        SET @i = @i + 1;
+    END
+    SELECT @sum;
+END;
+
+query I
+EXEC sp_sum_loop 10;
+----
+55
+
+# 3. WHILE with BREAK and CONTINUE
+statement ok
+CREATE PROCEDURE sp_loop_break_continue AS
+BEGIN
+    DECLARE @i INT = 0;
+    DECLARE @sum INT = 0;
+    WHILE @i < 10
+    BEGIN
+        SET @i = @i + 1;
+        IF @i = 3
+        BEGIN
+            CONTINUE;
+        END
+        IF @i = 7
+        BEGIN
+            BREAK;
+        END
+        SET @sum = @sum + @i;
+    END
+    SELECT @sum;
+END;
+
+# Expect: 1 + 2 + 4 + 5 + 6 = 18 (skips 3, stops at 7)
+query I
+EXEC sp_loop_break_continue;
+----
+18
+
+# 4. Procedure modifying table rows in a conditional branch
+statement ok
+CREATE PROCEDURE sp_transfer_funds @from INT, @to INT, @amt INT AS
+BEGIN
+    DECLARE @bal INT;
+    SELECT @bal = balance FROM acc_flow WHERE id = @from;
+    IF @bal >= @amt
+    BEGIN
+        UPDATE acc_flow SET balance = balance - @amt WHERE id = @from;
+        UPDATE acc_flow SET balance = balance + @amt WHERE id = @to;
+        SELECT 'SUCCESS';
+    END
+    ELSE
+    BEGIN
+        SELECT 'INSUFFICIENT_FUNDS';
+    END
+END;
+
+query T
+EXEC sp_transfer_funds 1, 2, 50;
+----
+SUCCESS
+
+query I
+SELECT balance FROM acc_flow ORDER BY id;
+----
+50
+250
+300
+
+query T
+EXEC sp_transfer_funds 1, 2, 500;
+----
+INSUFFICIENT_FUNDS
+
+query I
+SELECT balance FROM acc_flow ORDER BY id;
+----
+50
+250
+300

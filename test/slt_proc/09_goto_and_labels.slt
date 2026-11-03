@@ -1,0 +1,53 @@
+# test/slt_proc/09_goto_and_labels.slt
+# Babelfish T-SQL Parity: GOTO and Labels Flow Control
+
+statement ok
+CREATE TABLE acc_goto (id INT PRIMARY KEY, val INT);
+
+statement ok
+INSERT INTO acc_goto VALUES (1, 10);
+
+# 1. Forward GOTO skipping statement
+statement ok
+CREATE PROCEDURE sp_test_goto_skip @skip INT AS
+BEGIN
+    DECLARE @res INT = 1;
+    IF @skip = 1
+    BEGIN
+        GOTO skip_target;
+    END
+    SET @res = 100;
+skip_target:
+    SELECT @res;
+END;
+
+query I
+EXEC sp_test_goto_skip 0;
+----
+100
+
+query I
+EXEC sp_test_goto_skip 1;
+----
+1
+
+# 2. Backward GOTO loop emulation
+statement ok
+CREATE PROCEDURE sp_test_goto_loop @max INT AS
+BEGIN
+    DECLARE @i INT = 0;
+    DECLARE @acc INT = 0;
+loop_start:
+    SET @i = @i + 1;
+    SET @acc = @acc + @i;
+    IF @i < @max
+    BEGIN
+        GOTO loop_start;
+    END
+    SELECT @acc;
+END;
+
+query I
+EXEC sp_test_goto_loop 5;
+----
+15

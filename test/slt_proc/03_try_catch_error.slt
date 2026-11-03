@@ -1,0 +1,64 @@
+# test/slt_proc/03_try_catch_error.slt
+# Babelfish T-SQL Parity: Exception Handling (BEGIN TRY...BEGIN CATCH, THROW, ERROR_NUMBER)
+
+statement ok
+CREATE TABLE acc_err (id INT PRIMARY KEY, balance INT);
+
+statement ok
+INSERT INTO acc_err VALUES (1, 100);
+
+# 1. Basic TRY...CATCH catching THROW
+statement ok
+CREATE PROCEDURE sp_try_catch_basic @fail INT AS
+BEGIN
+    DECLARE @res INT = 0;
+    BEGIN TRY
+        IF @fail = 1
+        BEGIN
+            THROW 'Deliberate exception';
+        END
+        SET @res = 1;
+    END TRY
+    BEGIN CATCH
+        SET @res = -1;
+    END CATCH
+    SELECT @res;
+END;
+
+query I
+EXEC sp_try_catch_basic 0;
+----
+1
+
+query I
+EXEC sp_try_catch_basic 1;
+----
+-1
+
+# 2. ERROR_NUMBER() and ERROR_MESSAGE() introspection
+statement ok
+CREATE PROCEDURE sp_try_catch_error_info @mode INT AS
+BEGIN
+    DECLARE @ret VARCHAR(50);
+    BEGIN TRY
+        IF @mode = 1
+        BEGIN
+            THROW 'Resource not found';
+        END
+        SET @ret = 'OK';
+    END TRY
+    BEGIN CATCH
+        SET @ret = ERROR_MESSAGE();
+    END CATCH
+    SELECT @ret;
+END;
+
+query T
+EXEC sp_try_catch_error_info 0;
+----
+OK
+
+query T
+EXEC sp_try_catch_error_info 1;
+----
+Resource not found

@@ -1,0 +1,65 @@
+# test/slt_proc/04_nested_transactions.slt
+# Babelfish T-SQL Parity: Nested Transactions and Savepoints
+
+statement ok
+CREATE TABLE acc_tx (id INT PRIMARY KEY, balance INT);
+
+statement ok
+INSERT INTO acc_tx VALUES (1, 1000);
+
+# 1. Transaction Commit with Savepoints
+statement ok
+CREATE PROCEDURE sp_tx_savepoint AS
+BEGIN
+    BEGIN TRANSACTION;
+    UPDATE acc_tx SET balance = balance - 100 WHERE id = 1;
+    SAVE TRANSACTION sp_point;
+    UPDATE acc_tx SET balance = balance - 200 WHERE id = 1;
+    ROLLBACK TRANSACTION sp_point;
+    COMMIT TRANSACTION;
+END;
+
+statement ok
+EXEC sp_tx_savepoint;
+
+query I
+SELECT balance FROM acc_tx WHERE id = 1;
+----
+900
+
+# 2. Transaction Rollback in TRY...CATCH
+statement ok
+CREATE PROCEDURE sp_tx_rollback_catch @fail INT AS
+BEGIN
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        UPDATE acc_tx SET balance = balance + 500 WHERE id = 1;
+        IF @fail = 1
+        BEGIN
+            THROW 'Aborted by logic';
+        END
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+        BEGIN
+            ROLLBACK TRANSACTION;
+        END
+    END CATCH
+END;
+
+statement ok
+EXEC sp_tx_rollback_catch 0;
+
+query I
+SELECT balance FROM acc_tx WHERE id = 1;
+----
+1400
+
+statement ok
+EXEC sp_tx_rollback_catch 1;
+
+query I
+SELECT balance FROM acc_tx WHERE id = 1;
+----
+1400

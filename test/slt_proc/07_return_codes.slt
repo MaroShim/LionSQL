@@ -1,0 +1,49 @@
+# test/slt_proc/07_return_codes.slt
+# Babelfish T-SQL Parity: Procedure Return Codes and Early Exit
+
+statement ok
+CREATE TABLE acc_ret (id INT PRIMARY KEY, balance INT);
+
+statement ok
+INSERT INTO acc_ret VALUES (1, 500);
+
+# 1. Early RETURN on validation failure
+statement ok
+CREATE PROCEDURE sp_validate_and_deduct @target INT, @amt INT AS
+BEGIN
+    DECLARE @bal INT;
+    SELECT @bal = balance FROM acc_ret WHERE id = @target;
+    IF @bal < @amt
+    BEGIN
+        RETURN -1;
+    END
+    UPDATE acc_ret SET balance = balance - @amt WHERE id = @target;
+    RETURN 0;
+END;
+
+statement ok
+EXEC sp_validate_and_deduct 1, 1000;
+
+query I
+SELECT balance FROM acc_ret WHERE id = 1;
+----
+500
+
+statement ok
+EXEC sp_validate_and_deduct 1, 200;
+
+query I
+SELECT balance FROM acc_ret WHERE id = 1;
+----
+300
+
+# 2. Return calculation result
+statement ok
+CREATE PROCEDURE sp_calc_return @a INT, @b INT AS
+BEGIN
+    DECLARE @res INT = @a * 10 + @b;
+    RETURN @res;
+END;
+
+statement ok
+EXEC sp_calc_return 4, 2;
