@@ -1,0 +1,73 @@
+# test/slt_proc/13_recursive_cte_delta.slt
+# T-SQL and ANSI Recursive CTE with Delta Working Table Semantics
+
+statement ok
+WITH numbers(c1) AS (
+    SELECT 1
+    UNION ALL
+    SELECT c1 + 1 FROM numbers WHERE c1 < 5
+)
+SELECT c1 FROM numbers ORDER BY c1;
+
+query I
+WITH numbers(c1) AS (
+    SELECT 1
+    UNION ALL
+    SELECT c1 + 1 FROM numbers WHERE c1 < 5
+)
+SELECT c1 FROM numbers ORDER BY c1;
+----
+1
+2
+3
+4
+5
+
+query T
+WITH string_recursion(a) AS (
+    SELECT 'a'
+    UNION ALL
+    SELECT CAST(a + 'a' AS CHAR(5)) FROM string_recursion WHERE a != 'aaaaa'
+)
+SELECT a FROM string_recursion ORDER BY a;
+----
+a
+aa
+aaa
+aaaa
+aaaaa
+
+statement ok
+CREATE TABLE test_hierarchy (id INT PRIMARY KEY, parent_id INT, name VARCHAR(20));
+
+statement ok
+INSERT INTO test_hierarchy VALUES (1, NULL, 'Root');
+
+statement ok
+INSERT INTO test_hierarchy VALUES (2, 1, 'Child1');
+
+statement ok
+INSERT INTO test_hierarchy VALUES (3, 1, 'Child2');
+
+statement ok
+INSERT INTO test_hierarchy VALUES (4, 2, 'Grandchild1');
+
+query IT
+WITH tree(id, path) AS (
+    SELECT id, CAST(name AS VARCHAR(100))
+    FROM test_hierarchy
+    WHERE parent_id IS NULL
+    UNION ALL
+    SELECT t.id, CAST(p.path + '/' + t.name AS VARCHAR(100))
+    FROM test_hierarchy t
+    INNER JOIN tree p ON t.parent_id = p.id
+)
+SELECT id, path FROM tree ORDER BY id;
+----
+1 Root
+2 Root/Child1
+3 Root/Child2
+4 Root/Child1/Grandchild1
+
+statement ok
+DROP TABLE test_hierarchy;

@@ -1,0 +1,64 @@
+# test/slt_proc/14_drop_function_and_params.slt
+# T-SQL DROP FUNCTION, Extended Parameter Syntax, and Return Codes
+
+statement ok
+CREATE FUNCTION dbo.fn_add_ten(@n INT) RETURNS INT AS BEGIN RETURN @n + 10; END;
+
+query I
+SELECT dbo.fn_add_ten(5);
+----
+15
+
+statement ok
+DROP FUNCTION dbo.fn_add_ten;
+
+statement error
+SELECT dbo.fn_add_ten(5);
+
+statement ok
+DROP FUNCTION IF EXISTS dbo.fn_add_ten;
+
+statement ok
+CREATE PROCEDURE dbo.sp_extended_param (
+    @param1 AS INT = 100,
+    @param2 VARCHAR(20) NULL,
+    @param3 AS NVARCHAR(50) OUTPUT
+) AS
+BEGIN
+    SET @param3 = @param2;
+    SELECT @param1, @param3;
+END;
+
+statement ok
+DROP PROCEDURE dbo.sp_extended_param;
+
+statement ok
+DROP PROCEDURE IF EXISTS dbo.sp_extended_param;
+
+statement ok
+CREATE PROCEDURE dbo.sp_calc_return (@val INT) AS
+BEGIN
+    IF @val > 10
+        RETURN 1;
+    ELSE
+        RETURN 0;
+END;
+
+statement ok
+CREATE PROCEDURE dbo.sp_caller_test AS
+BEGIN
+    DECLARE @ret INT;
+    EXEC @ret = dbo.sp_calc_return 20;
+    SELECT @ret;
+END;
+
+query I
+EXEC dbo.sp_caller_test;
+----
+1
+
+statement ok
+DROP PROCEDURE dbo.sp_calc_return;
+
+statement ok
+DROP PROCEDURE dbo.sp_caller_test;

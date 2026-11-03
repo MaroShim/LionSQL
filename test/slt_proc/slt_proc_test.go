@@ -17,6 +17,8 @@ func discoverProcSLTFiles(t *testing.T) []string {
 	if err != nil {
 		t.Fatalf("failed to glob .slt files: %v", err)
 	}
+	subFiles, _ := filepath.Glob("*/*.slt")
+	files = append(files, subFiles...)
 	if len(files) == 0 {
 		t.Fatalf("no .slt test files discovered in test/slt_proc")
 	}

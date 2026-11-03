@@ -44,21 +44,21 @@ func runSLTFile(t *testing.T, file string) {
 }
 
 func TestSQLLogicTest_Select1_InProc(t *testing.T) {
-	runSLTFile(t, "full/select1.test")
+	runSLTFile(t, "full/select1.slt")
 }
 
 func TestSQLLogicTest_Select2_InProc(t *testing.T) {
-	runSLTFile(t, "full/select2.test")
+	runSLTFile(t, "full/select2.slt")
 }
 
 func TestSQLLogicTest_Select3_InProc(t *testing.T) {
-	runSLTFile(t, "full/select3.test")
+	runSLTFile(t, "full/select3.slt")
 }
 
 func TestSQLLogicTest_Select4_InProc(t *testing.T) {
-	runSLTFile(t, "full/select4.test")
+	runSLTFile(t, "full/select4.slt")
 }
 
 func TestSQLLogicTest_Select5_InProc(t *testing.T) {
-	runSLTFile(t, "full/select5.test")
+	runSLTFile(t, "full/select5.slt")
 }
