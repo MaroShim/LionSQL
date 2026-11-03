@@ -167,7 +167,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - support PostgreSQL recursive common table expressions (WITH RECURSIVE) with iterative convergence evaluation loop up to depth 100
 - complete Umami web analytics platform integration over PGWire (:5433, Next.js 16.4.2, Prisma ORM, 26 migrations, event tracking, and stats aggregation) (INTEG-UMAMI-1)
 - complete Metabase BI dual-protocol integration across PGWire (:5433, org.postgresql.Driver) and MSSQL TDS (:1433, com.microsoft.sqlserver.jdbc.SQLServerDriver) with 100% schema sync, MBQL visual query builder, multi-table derived joins, and native SQL support (INTEG-METABASE-1)
-- support Microsoft JDBC Driver metadata temp table multi-statement batches (DECLARE @temp TABLE / INSERT INTO @temp EXEC sp_columns_170 / SELECT ... FROM @temp) and implement sp_pkeys, sp_fkeys stored procedures
+- support Microsoft JDBC Driver metadata temp table multi-statement batches (`DECLARE @temp TABLE` / `INSERT INTO @temp` EXEC `sp_columns_170` / `SELECT ... FROM @temp`) and implement sp_pkeys, sp_fkeys stored procedures
 - complete Vaultwarden password manager integration over PGWire (:5433, 47 Diesel ORM migrations, composite primary keys, cipher and folder CRUD, sync API) (INTEG-VAULTWARDEN-1)
 - complete Apache Answer Q&A knowledge-base platform integration over PGWire (:5433, 35 tables, XORM migrations, admin login, question/answer E2E) (INTEG-ANSWER-1)
 - implement IdentityProvider SPI in VDBE execution runtime and synchronize table identity counters across VDBE and SQL coordinator
