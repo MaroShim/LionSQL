@@ -163,11 +163,39 @@ if [ "${PUSH_ONLY}" = true ]; then
             [ -f "bin/lionsql-linux-amd64" ] && ASSETS+=("bin/lionsql-linux-amd64")
             [ -f "bin/lionsql-windows-amd64.exe" ] && ASSETS+=("bin/lionsql-windows-amd64.exe")
 
+            # Check if comprehensive release notes exist in notes/ (e.g. notes/RELEASE_NOTES_v0.90.0.md)
+            GH_NOTES_CONTENT=""
+            NOTES_DOC_MD="${ROOT_DIR}/notes/RELEASE_NOTES_${TAG}.md"
+            if [ -f "${NOTES_DOC_MD}" ]; then
+                echo -e "Found formal release notes in ${CLR_BOLD}${NOTES_DOC_MD}${CLR_RESET}."
+                GH_NOTES_CONTENT="$(cat "${NOTES_DOC_MD}")"
+                # Extract changelog delta from CHANGELOG.md if present
+                if grep -q "## \[${VER}\]" "${CHANGELOG_FILE}"; then
+                    CHANGELOG_DELTA="$(awk -v ver="## [${VER}]" '
+                        $0 ~ ver { p=1; next }
+                        p && /^## \[/ { exit }
+                        p { print }
+                    ' "${CHANGELOG_FILE}" | sed -e :a -e '/^\n*$/{$d;N;};/\n$/ba')"
+                    GH_NOTES_CONTENT+=$'\n\n---\n\n<details>\n<summary><b>Detailed Changelog Delta</b></summary>\n\n'
+                    GH_NOTES_CONTENT+="${CHANGELOG_DELTA}"
+                    GH_NOTES_CONTENT+=$'\n</details>'
+                fi
+            fi
+
+            GH_NOTES_OPT=("--generate-notes")
+            GH_NOTES_FILE=""
+            if [ -n "${GH_NOTES_CONTENT}" ]; then
+                GH_NOTES_FILE="$(mktemp)"
+                printf "%s\n" "${GH_NOTES_CONTENT}" > "${GH_NOTES_FILE}"
+                GH_NOTES_OPT=("--notes-file" "${GH_NOTES_FILE}")
+            fi
+
             gh release create "${TAG}" \
                 --title "LionSQL ${TAG}" \
-                --generate-notes \
+                "${GH_NOTES_OPT[@]}" \
                 ${PRERELEASE_OPT} \
-                "${ASSETS[@]}" || gh release upload "${TAG}" "${ASSETS[@]}" --clobber
+                "${ASSETS[@]}" || gh release edit "${TAG}" "${GH_NOTES_OPT[@]}"
+            [ -n "${GH_NOTES_FILE}" ] && rm -f "${GH_NOTES_FILE}"
             echo -e "${CLR_GREEN}GitHub Release published: https://github.com/MaroShim/LionSQL/releases/tag/${TAG}${CLR_RESET}"
         else
             echo -e "${CLR_YELLOW}Note: GitHub CLI (gh) not logged in. Skipped GitHub Release creation.${CLR_RESET}"
@@ -424,11 +452,30 @@ else
             [ -f "bin/lionsql-linux-amd64" ] && ASSETS+=("bin/lionsql-linux-amd64")
             [ -f "bin/lionsql-windows-amd64.exe" ] && ASSETS+=("bin/lionsql-windows-amd64.exe")
 
+            # Check if comprehensive release notes exist in notes/ (e.g. notes/RELEASE_NOTES_v0.90.0.md)
+            GH_NOTES_CONTENT=""
+            NOTES_DOC_MD="${ROOT_DIR}/notes/RELEASE_NOTES_${TAG}.md"
+            if [ -f "${NOTES_DOC_MD}" ]; then
+                echo -e "Found formal release notes in ${CLR_BOLD}${NOTES_DOC_MD}${CLR_RESET}."
+                GH_NOTES_CONTENT="$(cat "${NOTES_DOC_MD}")"
+                GH_NOTES_CONTENT+=$'\n\n---\n\n<details>\n<summary><b>Detailed Changelog Delta</b></summary>\n\n'
+                # Strip out ## [version] header since it's already represented in tag and summary
+                CLEAN_DELTA="$(echo "${RELEASE_NOTES}" | sed -E '/^## \[/d')"
+                GH_NOTES_CONTENT+="${CLEAN_DELTA}"
+                GH_NOTES_CONTENT+=$'\n</details>'
+            else
+                GH_NOTES_CONTENT="${RELEASE_NOTES}"
+            fi
+
+            GH_NOTES_FILE="$(mktemp)"
+            printf "%s\n" "${GH_NOTES_CONTENT}" > "${GH_NOTES_FILE}"
+
             gh release create "${TAG}" \
                 --title "LionSQL ${TAG}" \
-                --notes "${RELEASE_NOTES}" \
+                --notes-file "${GH_NOTES_FILE}" \
                 ${PRERELEASE_OPT} \
                 "${ASSETS[@]}"
+            rm -f "${GH_NOTES_FILE}"
             echo -e "${CLR_GREEN}GitHub Release published: https://github.com/MaroShim/LionSQL/releases/tag/${TAG}${CLR_RESET}"
         else
             echo -e "${CLR_YELLOW}Note: GitHub CLI (gh) not logged in. Skipped GitHub Release creation.${CLR_RESET}"
