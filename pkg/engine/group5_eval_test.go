@@ -193,3 +193,77 @@ func TestGroup5_API_DecimalAndDateTimeSerialization(t *testing.T) {
 		t.Fatalf("DateTimeValue SVal should not be empty")
 	}
 }
+
+func TestParseInCondition_Regression(t *testing.T) {
+	tests := []struct {
+		input       string
+		wantCol     string
+		wantIsNot   bool
+		wantValList string
+		wantOk      bool
+	}{
+		// Valid single IN conditions
+		{
+			input:       "status IN ('active', 'pending')",
+			wantCol:     "status",
+			wantIsNot:   false,
+			wantValList: "'active', 'pending'",
+			wantOk:      true,
+		},
+		{
+			input:       "[users].[role] NOT IN ('admin', 'superuser')",
+			wantCol:     "users.role",
+			wantIsNot:   true,
+			wantValList: "'admin', 'superuser'",
+			wantOk:      true,
+		},
+		{
+			input:       "id IN (1, 2, 3)",
+			wantCol:     "id",
+			wantIsNot:   false,
+			wantValList: "1, 2, 3",
+			wantOk:      true,
+		},
+
+		// Compound conditions that must NOT be parsed as a single IN clause
+		{
+			input:  "col1 IN (1, 2) AND (col2 = 3)",
+			wantOk: false,
+		},
+		{
+			input:  "a > 10 AND b IN (1, 2)",
+			wantOk: false,
+		},
+		{
+			input:  "(col1 IN (1, 2)) OR (col2 IN (3, 4))",
+			wantOk: false,
+		},
+		{
+			input:  "col1 IN (SELECT id FROM t) AND col2 > 5",
+			wantOk: false,
+		},
+		{
+			input:  "x + y IN (1, 2)",
+			wantOk: false,
+		},
+	}
+
+	for _, tc := range tests {
+		col, isNot, valList, ok := parseInCondition(tc.input)
+		if ok != tc.wantOk {
+			t.Errorf("parseInCondition(%q): got ok=%v, want %v", tc.input, ok, tc.wantOk)
+			continue
+		}
+		if tc.wantOk {
+			if col != tc.wantCol {
+				t.Errorf("parseInCondition(%q): got col=%q, want %q", tc.input, col, tc.wantCol)
+			}
+			if isNot != tc.wantIsNot {
+				t.Errorf("parseInCondition(%q): got isNot=%v, want %v", tc.input, isNot, tc.wantIsNot)
+			}
+			if valList != tc.wantValList {
+				t.Errorf("parseInCondition(%q): got valList=%q, want %q", tc.input, valList, tc.wantValList)
+			}
+		}
+	}
+}

@@ -23,23 +23,35 @@ func parseInCondition(whereStr string) (string, bool, string, bool) {
 	if openIdx == -1 {
 		return "", false, "", false
 	}
+	// The opening parenthesis must be closed by the final character; otherwise the
+	// condition is a compound expression (e.g. "c IN (1) AND (x)"), not a single IN predicate.
+	if sqlutil.FindMatchingParen(whereStr, openIdx) != len(whereStr)-1 {
+		return "", false, "", false
+	}
 	beforeParen := strings.TrimSpace(whereStr[:openIdx])
 	valList := strings.TrimSpace(whereStr[openIdx+1 : len(whereStr)-1])
 
+	// The left operand must be a single column identifier; anything containing
+	// whitespace or operators (e.g. "a > 5 AND col") is a compound condition.
+	singleColumn := func(raw string) (string, bool) {
+		raw = strings.TrimSpace(raw)
+		if raw == "" || strings.ContainsAny(raw, " \t\r\n=<>!()+-*/%,") {
+			return "", false
+		}
+		col := cleanIdentifier(raw)
+		return col, col != ""
+	}
+
 	if sqlutil.ContainsKeyword(beforeParen, "NOT IN", false) {
-		kwIdx := sqlutil.FindTopLevelKeyword(beforeParen, "NOT IN")
-		if kwIdx != -1 {
-			colName := cleanIdentifier(strings.TrimSpace(beforeParen[:kwIdx]))
-			if colName != "" {
-				return colName, true, valList, true
+		if kwIdx := sqlutil.FindTopLevelKeyword(beforeParen, "NOT IN"); kwIdx != -1 {
+			if col, ok := singleColumn(beforeParen[:kwIdx]); ok {
+				return col, true, valList, true
 			}
 		}
 	} else if sqlutil.ContainsKeyword(beforeParen, "IN", false) {
-		kwIdx := sqlutil.FindTopLevelKeyword(beforeParen, "IN")
-		if kwIdx != -1 {
-			colName := cleanIdentifier(strings.TrimSpace(beforeParen[:kwIdx]))
-			if colName != "" {
-				return colName, false, valList, true
+		if kwIdx := sqlutil.FindTopLevelKeyword(beforeParen, "IN"); kwIdx != -1 {
+			if col, ok := singleColumn(beforeParen[:kwIdx]); ok {
+				return col, false, valList, true
 			}
 		}
 	}
