@@ -408,7 +408,7 @@ func (d *OutboxDispatcher) loadCheckpoint() {
 	}
 }
 
-// saveCheckpoint saves LastAckLSN atomically using swap file (Golden Rule 1 & 5).
+// saveCheckpoint saves LastAckLSN atomically using swap file ([RULE:AtomicSaves] & [RULE:PathSecurity]).
 func (d *OutboxDispatcher) saveCheckpoint(lsn int64) {
 	if d.checkpointFile == "" {
 		return
@@ -447,7 +447,7 @@ func (d *OutboxDispatcher) Stop() {
 		// Save final checkpoint
 		d.saveCheckpoint(d.lastAckLSN.Load())
 
-		// Close all sinks cleanly (Golden Rule 12 & 20)
+		// Close all sinks cleanly ([RULE:DoubleCloseSafety] & [RULE:HandleHygiene])
 		d.mu.Lock()
 		defer d.mu.Unlock()
 		for _, sink := range d.sinks {

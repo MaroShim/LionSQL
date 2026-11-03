@@ -48,7 +48,7 @@ func TestLoadFromFile_PartialJSON(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	configPath := filepath.Join(tmpDir, "custom.json")
-	// Only override HTTP and DataDir; other fields should maintain defaults (Rule 82)
+	// Only override HTTP and DataDir; other fields should maintain defaults ([RULE:SafeDefaults])
 	jsonContent := `{
 		"server": {
 			"data_dir": "custom_data"

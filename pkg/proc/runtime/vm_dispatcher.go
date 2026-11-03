@@ -1440,7 +1440,7 @@ vmLoop:
 		curName := cleanSymbol(f.aux(&inst).(string))
 		if cur, exists := f.cursors[curName]; exists {
 			cur.isOpen = false
-			cur.rows = nil // immediately release row buffer memory (Golden Rule 20, 23)
+			cur.rows = nil // immediately release row buffer memory ([RULE:BoundedBuffers])
 			cur.idx = 0
 		} else {
 			return nil, fmt.Errorf("cursor %s does not exist", curName)

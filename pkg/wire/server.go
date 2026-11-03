@@ -366,7 +366,7 @@ type pgPreparedEntry struct {
 	stmt *PreparedStatement
 }
 
-// PreparedStatementCache implements a thread-safe bounded LRU cache for prepared statements in a PGWire session (Golden Rule 23).
+// PreparedStatementCache implements a thread-safe bounded LRU cache for prepared statements in a PGWire session ([RULE:BoundedBuffers]).
 type PreparedStatementCache struct {
 	mu       sync.Mutex
 	capacity int
@@ -867,6 +867,10 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements *Prepared
 
 	var numParamTypes int16
 	_ = binary.Read(r, binary.BigEndian, &numParamTypes)
+	if numParamTypes < 0 || numParamTypes > 10000 {
+		_ = WriteError(conn, "invalid number of parameter types")
+		return
+	}
 
 	paramTypes := make([]int32, numParamTypes)
 	for i := 0; i < int(numParamTypes); i++ {
@@ -882,6 +886,10 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements *Prepared
 				maxIdx = idx
 			}
 		}
+	}
+	if maxIdx > 10000 {
+		_ = WriteError(conn, "parameter count exceeds maximum supported limit (10000)")
+		return
 	}
 	if maxIdx > len(paramTypes) {
 		expanded := make([]int32, maxIdx)
@@ -946,6 +954,10 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements *PreparedS
 
 	var numFormats int16
 	_ = binary.Read(r, binary.BigEndian, &numFormats)
+	if numFormats < 0 || numFormats > 10000 {
+		_ = WriteError(conn, "invalid number of parameter formats")
+		return
+	}
 	formats := make([]int16, numFormats)
 	for i := 0; i < int(numFormats); i++ {
 		_ = binary.Read(r, binary.BigEndian, &formats[i])
@@ -953,12 +965,20 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements *PreparedS
 
 	var numParams int16
 	_ = binary.Read(r, binary.BigEndian, &numParams)
+	if numParams < 0 || numParams > 10000 {
+		_ = WriteError(conn, "invalid number of parameters")
+		return
+	}
 	paramVals := make([]string, numParams)
 	paramStorageVals := make([]storage.Value, numParams)
 
 	for i := 0; i < int(numParams); i++ {
 		var paramLen int32
 		_ = binary.Read(r, binary.BigEndian, &paramLen)
+		if paramLen < -1 || paramLen > 64*1024*1024 || (paramLen != -1 && int(paramLen) > r.Len()) {
+			_ = WriteError(conn, "invalid parameter length")
+			return
+		}
 		if paramLen == -1 {
 			paramVals[i] = "NULL"
 			paramStorageVals[i] = storage.NullValue(storage.TypeUnknown)
@@ -991,7 +1011,7 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements *PreparedS
 	var resultFormats []int16
 	if r.Len() >= 2 {
 		_ = binary.Read(r, binary.BigEndian, &numResultFormats)
-		if numResultFormats > 0 {
+		if numResultFormats > 0 && numResultFormats <= 10000 {
 			resultFormats = make([]int16, numResultFormats)
 			for i := 0; i < int(numResultFormats); i++ {
 				_ = binary.Read(r, binary.BigEndian, &resultFormats[i])

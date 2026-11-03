@@ -12,7 +12,7 @@ import (
 
 // EvalBinaryOp evaluates an arithmetic binary operator (+, -, *, /, %) on two storage.Values
 // and casts the result to targetType, preventing integer divide-by-zero panics and
-// honoring the SQL type promotion lattice (Decimal > Float > Int > Bool) (Golden Rule 2 & 11).
+// honoring the SQL type promotion lattice (Decimal > Float > Int > Bool) ([RULE:PanicRecovery] & [RULE:DefensiveIndexing]).
 func EvalBinaryOp(op byte, leftVal, rightVal storage.Value, targetType storage.DataType) (storage.Value, error) {
 	if leftVal.IsNull || rightVal.IsNull {
 		return storage.NullValue(targetType), nil
@@ -24,7 +24,7 @@ func EvalBinaryOp(op byte, leftVal, rightVal storage.Value, targetType storage.D
 		return storage.NullValue(targetType), fmt.Errorf("incompatible operand types for arithmetic operator %c", op)
 	}
 
-	// 1. Division / Modulo zero guard (Golden Rule 2 & 11)
+	// 1. Division / Modulo zero guard ([RULE:PanicRecovery] & [RULE:DefensiveIndexing])
 	if op == '/' || op == '%' {
 		if rightF == 0 || (targetType == storage.TypeInt && rightI == 0) {
 			return storage.NullValue(targetType), fmt.Errorf("divide by zero error encountered")

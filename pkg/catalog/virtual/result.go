@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	reEvalBinaryOp = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s*(=|!=|<>|>=|<=|>|<|LIKE|NOT\s+LIKE|ILIKE|NOT\s+ILIKE|!~\*|!~|~\*|~)\s*(.*?)\s*$`)
+	// No package-level regexes
 )
 
 func findTopLevelKeyword(s, kw string) int {
@@ -507,11 +507,11 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		return !found
 	}
 
-	if m := reEvalBinaryOp.FindStringSubmatch(whereStr); len(m) == 4 {
-		colName := cleanIdentifier(m[1])
-		op := strings.ToUpper(strings.TrimSpace(m[2]))
-		rawTarget := strings.TrimSpace(m[3])
-		target := strings.TrimSpace(strings.Trim(rawTarget, "'\""))
+	if comp, ok := sqlutil.ParseBinaryComparison(whereStr); ok {
+		colName := comp.Column
+		op := comp.Op
+		rawTarget := comp.RightRaw
+		target := comp.RightClean
 
 		// Handle Join conditions (e.g. "c"."relnamespace" = "n"."oid" or "n"."oid" = "c"."relnamespace")
 		targetCol := cleanIdentifier(rawTarget)
@@ -526,12 +526,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 			}
 		}
 
-		val, ok := rec[colName]
-		if !ok {
-			if idx := strings.Index(colName, "."); idx != -1 {
-				val, ok = rec[colName[idx+1:]]
-			}
-		}
+		val, ok := lookupRec(colName)
 		if !ok || val == nil {
 			return op == "!=" || op == "<>" || op == "!~" || op == "!~*"
 		}

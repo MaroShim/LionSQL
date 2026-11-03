@@ -202,7 +202,7 @@ func LoadFromFile(filePath string) (*Config, error) {
 
 // AutoDiscoverConfig attempts to locate an existing config file or falls back to defaults.
 // Precedence: explicitPath > ./lionsql.json > <dataDir>/lionsql.json > Built-in Defaults.
-// Applies environment variable overrides as per Golden Rule 37.
+// Applies environment variable overrides as per [RULE:ConfigHierarchy].
 func AutoDiscoverConfig(explicitPath string, dataDir string) (*Config, string, error) {
 	var resCfg *Config
 	var resPath string
@@ -239,7 +239,7 @@ func AutoDiscoverConfig(explicitPath string, dataDir string) (*Config, string, e
 }
 
 // ApplyEnvOverrides overrides configuration settings with environment variables.
-// Follows Golden Rule 37: CLI Arguments > Environment Variables > Config File > Built-in Defaults.
+// Follows [RULE:ConfigHierarchy]: CLI Arguments > Environment Variables > Config File > Built-in Defaults.
 func ApplyEnvOverrides(cfg *Config) {
 	if cfg == nil {
 		return

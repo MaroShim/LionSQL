@@ -1722,12 +1722,12 @@ func (tx *Transaction) Commit() error {
 	for name := range tx.tableSet {
 		tx.tableNames = append(tx.tableNames, name)
 	}
-	sort.Strings(tx.tableNames) // Strict Lock Hierarchy to prevent deadlocks (Rule 10)
+	sort.Strings(tx.tableNames) // Strict Lock Hierarchy to prevent deadlocks ([RULE:LockHierarchy])
 
 	for _, tName := range tx.tableNames {
 		td := tx.tableSet[tName]
 		mask := tx.shardMasks[tName]
-		// Invariant: Iterating bit 0 to numTableShards-1 naturally guarantees ascending canonical shard order (Rule 10)
+		// Invariant: Iterating bit 0 to numTableShards-1 naturally guarantees ascending canonical shard order ([RULE:LockHierarchy])
 		for sIdx := 0; sIdx < numTableShards; sIdx++ {
 			if (mask[sIdx/64] & (uint64(1) << (sIdx % 64))) != 0 {
 				tx.neededShards = append(tx.neededShards, shardRef{

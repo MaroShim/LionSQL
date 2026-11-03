@@ -302,7 +302,7 @@ type tdsPreparedEntry struct {
 	stmt   *TdsPreparedStatement
 }
 
-// TdsPreparedStatementCache implements a thread-safe bounded LRU cache for prepared statements (Golden Rule 23).
+// TdsPreparedStatementCache implements a thread-safe bounded LRU cache for prepared statements ([RULE:BoundedBuffers]).
 type TdsPreparedStatementCache struct {
 	mu       sync.Mutex
 	capacity int

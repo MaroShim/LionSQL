@@ -134,7 +134,7 @@ func stopDaemon(pidFile string) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	// 3. Escalate to SIGKILL if still alive after timeout (Golden Rule 4)
+	// 3. Escalate to SIGKILL if still alive after timeout ([RULE:CleanTeardown])
 	if !stopped && isProcessAlive(pid) {
 		fmt.Println("[LionSQL] Process did not terminate within timeout. Sending SIGKILL...")
 		_ = killProcessForce(pid)
@@ -187,7 +187,7 @@ func startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineTyp
 		os.Exit(1)
 	}
 
-	// Golden Rule 3: Execve Safety without raw shell
+	// [RULE:ExecveSafety] Execve Safety without raw shell
 	cmd := exec.Command(os.Args[0], childArgs...)
 	cmd.Stdout = logFd
 	cmd.Stderr = logFd

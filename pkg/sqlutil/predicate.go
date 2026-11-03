@@ -27,6 +27,9 @@ func StripParentheses(s string) (string, bool) {
 func CleanLeafIdentifier(name string) string {
 	name = strings.TrimSpace(name)
 	name = strings.Trim(name, "[]\"'`")
+	if idx := strings.LastIndex(name, "->>"); idx != -1 {
+		return strings.Trim(strings.TrimSpace(name[idx+3:]), "[]\"'`")
+	}
 	if dot := strings.LastIndex(name, "."); dot != -1 {
 		name = name[dot+1:]
 	}
@@ -215,4 +218,131 @@ func ParseBetweenPredicate(s string) (*BetweenPredicate, bool) {
 		Low:        low,
 		High:       high,
 	}, true
+}
+
+// BinaryComparison represents a parsed binary comparison: "left op right".
+type BinaryComparison struct {
+	Column     string // Cleaned leaf column identifier (e.g. "relname")
+	FullColumn string // Cleaned multipart identifier (e.g. "c.relname")
+	RawCol     string // Raw left expression (e.g. "c.relname" or "doc->>'key'")
+	Op         string // Standardized uppercase operator ("=", "!=", "<>", ">=", "<=", ">", "<", "LIKE", "NOT LIKE", "ILIKE", "NOT ILIKE", "~", "~*", "!~", "!~*")
+	RightRaw   string // Raw right expression (e.g. "'Orders'")
+	RightClean string // Cleaned right string with quotes stripped (e.g. "Orders")
+}
+
+// ParseBinaryComparison extracts a binary comparison operation from s at depth 0.
+func ParseBinaryComparison(s string) (*BinaryComparison, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil, false
+	}
+
+	n := len(s)
+	depth := 0
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBracket := false
+
+	// Comparison operators to test at depth 0, ordered by descending length.
+	ops := []string{
+		"NOT ILIKE", "NOT LIKE", "ILIKE", "LIKE",
+		"!~*", "!~", "~*", "~",
+		"!=", "<>", ">=", "<=",
+		"=", ">", "<",
+	}
+
+	for i := 0; i < n; i++ {
+		ch := s[i]
+
+		if inSingleQuote {
+			if ch == '\'' {
+				if i+1 < n && s[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			if ch == '"' {
+				if i+1 < n && s[i+1] == '"' {
+					i++
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+		if inBracket {
+			if ch == ']' {
+				inBracket = false
+			}
+			continue
+		}
+
+		if ch == '\'' {
+			inSingleQuote = true
+			continue
+		}
+		if ch == '"' {
+			inDoubleQuote = true
+			continue
+		}
+		if ch == '[' {
+			inBracket = true
+			continue
+		}
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+
+		if depth == 0 {
+			rem := s[i:]
+			remUpper := strings.ToUpper(rem)
+			for _, op := range ops {
+				if strings.HasPrefix(remUpper, op) {
+					// Avoid matching '>' inside PostgreSQL JSON operators '->' and '->>'
+					if (op == ">" || op == ">=") && i > 0 && (s[i-1] == '-' || s[i-1] == '>') {
+						continue
+					}
+					opLen := len(op)
+					isKeyword := strings.Contains(op, "LIKE")
+					if isKeyword {
+						if i > 0 && !isWhitespaceByte(s[i-1]) {
+							continue
+						}
+						if i+opLen < n && !isWhitespaceByte(s[i+opLen]) {
+							continue
+						}
+					}
+					left := strings.TrimSpace(s[:i])
+					right := strings.TrimSpace(s[i+opLen:])
+					if left != "" && right != "" {
+						fullCol := CleanIdentifierParts(left)
+						if strings.Contains(left, "->") {
+							fullCol = left
+						}
+						return &BinaryComparison{
+							Column:     CleanLeafIdentifier(left),
+							FullColumn: fullCol,
+							RawCol:     left,
+							Op:         op,
+							RightRaw:   right,
+							RightClean: strings.Trim(right, "'\""),
+						}, true
+					}
+				}
+			}
+		}
+	}
+
+	return nil, false
 }

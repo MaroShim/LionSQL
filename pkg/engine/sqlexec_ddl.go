@@ -1436,7 +1436,9 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 					Columns:   cols,
 					Unique:    true,
 				}
-				_ = s.engine.CreateIndex(idxSchema)
+				if err := s.engine.CreateIndex(idxSchema); err != nil {
+					return nil, err
+				}
 				s.InvalidatePKBypassCache()
 
 				return &QueryResult{
@@ -1498,7 +1500,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 						cName = cleanIdentifier(cTokens[0])
 					}
 				}
-				_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 					for i := range sch.Columns {
 						sch.Columns[i].PrimaryKey = false
 					}
@@ -1510,7 +1512,9 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 						}
 					}
 					return nil
-				})
+				}); err != nil {
+					return nil, err
+				}
 				s.InvalidatePKBypassCache()
 				return &QueryResult{
 					Success:    true,
@@ -1532,12 +1536,14 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		if len(tokens) > 0 {
 			cName := cleanIdentifier(tokens[0])
 			if strings.HasSuffix(strings.ToLower(cName), "_pkey") || strings.Contains(cleaned, "PRIMARY KEY") {
-				_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 					for i := range sch.Columns {
 						sch.Columns[i].PrimaryKey = false
 					}
 					return nil
-				})
+				}); err != nil {
+					return nil, err
+				}
 			}
 			_ = s.engine.DropIndex(tableName, cName)
 			s.InvalidatePKBypassCache()
@@ -1560,7 +1566,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		ddIdx := sqlutil.FindTopLevelKeyword(afterAlter, "DROP DEFAULT")
 		if ddIdx != -1 {
 			colName := cleanIdentifier(strings.TrimSpace(afterAlter[:ddIdx]))
-			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 				for i := range sch.Columns {
 					if strings.EqualFold(sch.Columns[i].Name, colName) {
 						sch.Columns[i].Default = ""
@@ -1568,7 +1574,9 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 					}
 				}
 				return nil
-			})
+			}); err != nil {
+				return nil, err
+			}
 			return &QueryResult{
 				Success:    true,
 				Command:    "ALTER TABLE",
@@ -1588,7 +1596,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		if sdIdx != -1 {
 			colName := cleanIdentifier(strings.TrimSpace(afterAlter[:sdIdx]))
 			defExpr := cleanDefaultExpr(strings.TrimSpace(afterAlter[sdIdx+len("SET DEFAULT"):]))
-			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 				for i := range sch.Columns {
 					if strings.EqualFold(sch.Columns[i].Name, colName) {
 						sch.Columns[i].Default = defExpr
@@ -1596,7 +1604,9 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 					}
 				}
 				return nil
-			})
+			}); err != nil {
+				return nil, err
+			}
 			return &QueryResult{
 				Success:    true,
 				Command:    "ALTER TABLE",
@@ -1632,7 +1642,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 				baseType = strings.TrimSpace(baseType[:idx])
 			}
 			newType := parseSQLDataType(baseType)
-			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 				for i := range sch.Columns {
 					if strings.EqualFold(sch.Columns[i].Name, colName) {
 						sch.Columns[i].Type = newType
@@ -1640,7 +1650,9 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 					}
 				}
 				return nil
-			})
+			}); err != nil {
+				return nil, err
+			}
 			return &QueryResult{
 				Success:    true,
 				Command:    "ALTER TABLE",
@@ -1675,7 +1687,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		if toIdx != -1 {
 			oldName := cleanIdentifier(strings.TrimSpace(afterRename[:toIdx]))
 			newName := cleanIdentifier(strings.TrimSpace(afterRename[toIdx+len("TO"):]))
-			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 				for i := range sch.Columns {
 					if strings.EqualFold(sch.Columns[i].Name, oldName) {
 						sch.Columns[i].Name = newName
@@ -1683,7 +1695,9 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 					}
 				}
 				return nil
-			})
+			}); err != nil {
+				return nil, err
+			}
 			return &QueryResult{
 				Success:    true,
 				Command:    "ALTER TABLE",
@@ -1708,7 +1722,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		}
 		if nullIdx != -1 {
 			colName := cleanIdentifier(strings.TrimSpace(afterAlter[:nullIdx]))
-			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 				for i := range sch.Columns {
 					if strings.EqualFold(sch.Columns[i].Name, colName) {
 						sch.Columns[i].Nullable = isDrop
@@ -1716,7 +1730,9 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 					}
 				}
 				return nil
-			})
+			}); err != nil {
+				return nil, err
+			}
 			return &QueryResult{
 				Success:    true,
 				Command:    "ALTER TABLE",
@@ -1743,7 +1759,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			}
 		}
 		if len(droppedCols) > 0 {
-			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 				newCols := make([]storage.Column, 0, len(sch.Columns))
 				for _, col := range sch.Columns {
 					shouldDrop := false
@@ -1759,7 +1775,9 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 				}
 				sch.Columns = newCols
 				return nil
-			})
+			}); err != nil {
+				return nil, err
+			}
 			return &QueryResult{
 				Success:    true,
 				Command:    "ALTER TABLE",

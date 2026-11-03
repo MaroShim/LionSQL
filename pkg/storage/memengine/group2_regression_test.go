@@ -78,7 +78,7 @@ func TestGroup2_StorageUpdateCase(t *testing.T) {
 
 func TestStorage_REV_STOR_001_ParsePKValue_RobustnessAndZeroAlloc(t *testing.T) {
 	// 1. Hot-path allocation check: fmt.Sscanf causes 6 allocs/op (120B).
-	// With strconv.ParseInt, this MUST be 0 allocs/op (Golden Rule 24).
+	// With strconv.ParseInt, this MUST be 0 allocs/op ([RULE:ZeroAllocation]).
 	allocs := testing.AllocsPerRun(100, func() {
 		_ = ParsePKValue("1002345", storage.TypeInt)
 	})

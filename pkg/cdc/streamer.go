@@ -70,7 +70,7 @@ func (s *Streamer) OnWALRecord(rec memengine.WALRecord) {
 			s.historyHead = (s.historyHead + 1) % s.historyCap
 		}
 
-		// 2. Non-blocking fan-out to active subscribers (Golden Rule 29)
+		// 2. Non-blocking fan-out to active subscribers ([RULE:NonBlockingSink])
 		for _, sub := range s.subscribers {
 			if sub.tableFilter != "" && !strings.EqualFold(sub.tableFilter, ev.Table) {
 				continue

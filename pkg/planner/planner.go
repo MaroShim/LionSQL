@@ -2564,7 +2564,7 @@ func optimizeJoinOrderDP(
 	if n == 0 {
 		return currentNode, currentEstimatedRows, availableTables, true
 	}
-	// Bound DP state space to <= MaxJoinDPThreshold tables to ensure constant-time sub-microsecond planning (Golden Rule 21, 23)
+	// Bound DP state space to <= MaxJoinDPThreshold tables to ensure constant-time sub-microsecond planning ([RULE:BoundedRecursion], [RULE:BoundedBuffers])
 	if n > MaxJoinDPThreshold {
 		return nil, 0, nil, false
 	}

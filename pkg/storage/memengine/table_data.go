@@ -195,7 +195,7 @@ func (td *TableData) rowCount() int64 {
 
 func (td *TableData) snapshotRowsAndKeys(filter func(pk string) bool) ([]string, []storage.Row) {
 	td.ensureShardsInit()
-	// Strict canonical order (0 to 255) to prevent deadlocks (Rule 10)
+	// Strict canonical order (0 to 255) to prevent deadlocks ([RULE:LockHierarchy])
 	for i := 0; i < numTableShards; i++ {
 		td.shards[i].mu.RLock()
 	}

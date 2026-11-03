@@ -27,7 +27,7 @@ type RequestLogEntry struct {
 }
 
 // RequestActivityLogger maintains a thread-safe, bounded ring buffer of recent HTTP requests.
-// Strictly adheres to Golden Rule 23 (Bounded Buffers & Defensive Resource Limits).
+// Strictly adheres to [RULE:BoundedBuffers] (Bounded Buffers & Defensive Resource Limits).
 type RequestActivityLogger struct {
 	mu       sync.RWMutex
 	capacity int

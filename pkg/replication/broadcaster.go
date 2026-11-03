@@ -58,7 +58,7 @@ func (b *WALBroadcaster) Broadcast(rec memengine.WALRecord) {
 		b.historyHead = (b.historyHead + 1) % b.historyCap
 	}
 
-	// 2. Non-blocking fan-out to all active replica subscribers (Golden Rule 36)
+	// 2. Non-blocking fan-out to all active replica subscribers ([RULE:NonBlockingSink])
 	for _, sub := range b.subscribers {
 		select {
 		case sub.ch <- rec:

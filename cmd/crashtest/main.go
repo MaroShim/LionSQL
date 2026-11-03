@@ -89,7 +89,7 @@ func (l *ledgerState) markAborted(txID int64) {
 	l.mu.Unlock()
 }
 
-// saveAtomically persists the ledger via temporary swap file and atomic rename (Rule 1).
+// saveAtomically persists the ledger via temporary swap file and atomic rename ([RULE:AtomicSaves]).
 func (l *ledgerState) saveAtomically() error {
 	l.mu.Lock()
 	data, err := json.Marshal(l)

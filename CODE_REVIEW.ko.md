@@ -51,6 +51,7 @@
 | **REV-ENG-008** | P2 | 아키텍처 | [`pkg/engine/sqlexec_select.go`](pkg/engine/sqlexec_select.go) | 단순 SELECT를 위해 자체적인 프로젝션/필터링/정렬을 구현하여 `pkg/execution/` 및 `pkg/proc/runtime/` VDBE와 3갈래 중복 실행 경로 유지 부채 (`KISS-5`) | `[x]` | 2-Tier 구조(VDBE Fast-Path + Volcano CBO) 확립 및 1세대 레거시 정규식 스캔 코드 삭제 완료 (ADR: `notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`) |
 | **REV-ENG-009** | P2 | 안티패턴 | [`pkg/storage/coerce.go:1-85`](pkg/storage/coerce.go) | 문자열 리터럴 파싱 시 정규식 기반의 타입 추측(Type Guessing)으로 인해 숫자 형태 문자열이 부적절하게 타입 변환되거나 정밀도가 왜곡되는 안티패턴 | `[x]` | `storage.CoerceValue` 및 스키마 기반 명시적 캐스팅으로 교체 완료 (`TYPE-GUESSING-1`) |
 | **REV-ENG-010** | P1 | 성능/GC | [`pkg/execution/governor.go:20-65`](pkg/execution/governor.go) | 고빈도 인메모리 OLTP 환경에서 Go 런타임의 기본 `GOGC=100`으로 인해 불필요한 GC 사이클이 빈번히 발생하여 CPU를 낭비하던 문제 | `[x]` | `DefaultGCPercent = 200` 기본값 완화 및 `debug.SetMemoryLimit` 동적 소프트 메모리 제한 연동 완료 (`VPERF-16`) |
+| **REV-ENG-011** | P1 | 예외처리 | [`pkg/engine/sqlexec_ddl.go:1439-1760`](pkg/engine/sqlexec_ddl.go#L1439) | `ALTER TABLE`의 10개 서브 커맨드(`ADD/DROP CONSTRAINT`, `RENAME TO`, `RENAME COLUMN`, `ALTER COLUMN DROP/SET NOT NULL`, `DROP COLUMN`)에서 스토리지 엔진의 `AlterTable` 및 `CreateIndex` 반환 에러를 `_ = `로 무시하여 실패 시에도 무조건 성공 반환하던 무결성 결함 ([`RULE:ExplicitError`] 위반) | `[x]` | `s.engine.AlterTable` / `CreateIndex` 실패 시 에러 즉시 반환하도록 전면 수정 완료 |
 
 ---
 
@@ -59,7 +60,7 @@
 | ID | 우선순위 | 구분 | 파일 및 라인 | 설명 | 상태 | 커밋 / 비고 |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
 | **REV-STOR-001** | P2 | 성능/안전성 | [`pkg/storage/memengine/tx.go:1395, 1399`](pkg/storage/memengine/tx.go#L1395) | `ParsePKValue`에서 기본키 파싱 시 `strconv.ParseInt`/`strconv.ParseFloat` 대신 `fmt.Sscanf` 리플렉션을 사용하여 핫패스 할당 오버헤드가 발생하고 파싱 에러를 무시(`_, _ = fmt.Sscanf(...)`)함 | `[x]` | `strconv` 기반 제로-할당 변환 및 에러 안전 반환 완료 (0 allocs/op) |
-| **REV-STOR-002** | P2 | 예외처리 | [`pkg/storage/memengine/memengine.go:360`](pkg/storage/memengine/memengine.go#L360) | In-Memory OCC 엔진 `Open()` 기동 시 AOF 크기가 임계치를 초과할 때 `_ = e.rewriteAOFLocked()`로 초기 컴팩션 에러를 무시(Silent Swallow)하여 손상 가능성 은폐 (Golden Rule 7 위반) | `[x]` | `rewriteAOFLocked()` 실패 시 에러 반환 및 기동 중단 처리 완료 |
+| **REV-STOR-002** | P2 | 예외처리 | [`pkg/storage/memengine/memengine.go:360`](pkg/storage/memengine/memengine.go#L360) | In-Memory OCC 엔진 `Open()` 기동 시 AOF 크기가 임계치를 초과할 때 `_ = e.rewriteAOFLocked()`로 초기 컴팩션 에러를 무시(Silent Swallow)하여 손상 가능성 은폐 ([`RULE:ExplicitError`] 위반) | `[x]` | `rewriteAOFLocked()` 실패 시 에러 반환 및 기동 중단 처리 완료 |
 | **REV-STOR-003** | P1 | 레이스컨디션 | [`pkg/storage/memengine/tx.go:440-475`](pkg/storage/memengine/tx.go#L440) | `txPool` 트랜잭션 객체 재사용 시, `defer tx.Rollback()`이 풀에서 재할당된 새 트랜잭션 인스턴스를 대상으로 비동기 실행되어 데이터 레이스를 유발하는 취약점 | `[x]` | `Rollback()` 내부에서만 명시적으로 풀 반환 및 ReadOnly 트랜잭션 복사 생략으로 해결 (`VPERF-18`) |
 | **REV-STOR-004** | P1 | 동시성병목 | [`pkg/storage/memengine/memengine.go:50-80`](pkg/storage/memengine/memengine.go#L50) | 테이블 카탈로그 조회 시 글로벌 `e.mu.RLock()` 경합으로 멀티코어 환경에서 CPU 캐시라인 동기화 병목 유발 | `[x]` | `atomic.Pointer[map[string]*TableData]` 기반 불변 스냅샷 카탈로그 도입으로 락 경합 전면 제거 (`VPERF-18`) |
 | **REV-STOR-005** | P2 | 성능/동시성 | [`pkg/storage/memengine/tx.go:280-320`](pkg/storage/memengine/tx.go#L280) | 커밋 경로에서 샤드 락을 획득한 상태로 MessagePack 인코딩을 수행하여 다중 코어 간 락 대기 시간 급증 | `[x]` | Out-of-Lock WAL Pre-encoding 기법으로 샤드 락 획득 전에 행 바이트 사전 인코딩 완료 (`VPERF-17`) |
@@ -78,7 +79,7 @@
 
 | ID | 우선순위 | 구분 | 파일 및 라인 | 설명 | 상태 | 커밋 / 비고 |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
-| **REV-PROC-001** | P1 | 무결성 | [`pkg/proc/runtime/vm.go:910, 1048, 1063, 1152`](pkg/proc/runtime/vm.go#L910) | `vm_dispatcher.go`에서는 트리거 실행 에러를 반환하는 반면, `vm.go` 레거시 경로에서는 `_ = f.fireTriggers(...)`로 트리거 실패 에러를 무시하여 데이터 검증 위반을 침묵 통과시키는 무결성 결함 (Golden Rule 7 위반) | `[x]` | `vm.go` 모든 경로에서 트리거 실패 에러 반환 및 롤백 연동 완료 |
+| **REV-PROC-001** | P1 | 무결성 | [`pkg/proc/runtime/vm.go:910, 1048, 1063, 1152`](pkg/proc/runtime/vm.go#L910) | `vm_dispatcher.go`에서는 트리거 실행 에러를 반환하는 반면, `vm.go` 레거시 경로에서는 `_ = f.fireTriggers(...)`로 트리거 실패 에러를 무시하여 데이터 검증 위반을 침묵 통과시키는 무결성 결함 ([`RULE:ExplicitError`] 위반) | `[x]` | `vm.go` 모든 경로에서 트리거 실패 에러 반환 및 롤백 연동 완료 |
 | **REV-PROC-002** | P2 | 성능/할당 | [`pkg/proc/runtime/vm.go:170-210`](pkg/proc/runtime/vm.go#L170) | T-SQL 프로시저 및 대화형 쿼리 실행마다 VM 스택 프레임, 레지스터, 변수 맵을 힙에 신규 할당하여 GC 병목 유발 | `[x]` | `sync.Pool` 기반 `VMFrame` 레지스터/슬롯 재활용 및 핫패스 슬롯 직접 색인(`OpSlotDirect`) 완료 (`VPERF-1`~`VPERF-5`) |
 | **REV-PROC-003** | P2 | 성능/제로카피 | [`cmd/tpcc_kernel/main.go:140-180`](cmd/tpcc_kernel/main.go#L140) | 단순 행 존재 여부 확인 및 컬럼 검증 시 21개 컬럼 Go `Record` 맵을 무조건 생성하여 CPU 낭비 | `[x]` | 제로-카피 `tx.GetRow` API를 도입하여 맵 언패킹 없이 원시 튜플 직접 검증 완료 (`VPERF-18`) |
 | **REV-PROC-004** | P2 | 아키텍처 | [`pkg/proc/parser.go:30-60`](pkg/proc/parser.go#L30) | 공식 ANTLR4 T-SQL 파서 패키지와 Pratt 파서 간의 순환 참조 위험 및 과도한 결합 | `[x]` | `ProcedureFallbackParser` SPI 인터페이스를 정의하여 런타임 플러그형 등록으로 분리 완료 (`PROC-FALLBACK-1`) |
@@ -99,6 +100,7 @@
 | **REV-WIRE-007** | P2 | 프로토콜/성능 | [`pkg/wire/tds/tokens.go:120-160`](pkg/wire/tds/tokens.go#L120) | 다수의 NULL 컬럼을 포함하는 대량 행 전송 시 일반 ROW 토큰 사용으로 네트워크 대역폭 낭비 | `[x]` | TDS 7.2+ NBCROW(`0xD2`) 비트맵 압축 행 토큰 구현으로 NULL 바이트 전송 최소화 (`TDS-NBCROW-1`) |
 | **REV-WIRE-008** | P2 | 자원제한 | [`pkg/wire/server.go:1210-1240`](pkg/wire/server.go#L1210) | 장시간 대화형 세션에서 준비된 문장(`PREPARE`)이 무제한 누적되어 메모리 누수 유발 위험 | `[x]` | 세션별 LRU 기반 바운디드 준비된 문장 캐시(`maxPreparedPerSession = 256`) 적용 완료 (`PREP-1`) |
 | **REV-WIRE-009** | P1 | 원자성 | [`pkg/wire/copy.go:350-410`](pkg/wire/copy.go#L350) | PostgreSQL `COPY tbl FROM STDIN` 실행 시 세션 트랜잭션과 격리되어 자동 커밋 루프로 분할 실행되던 무결성 위험 | `[x]` | 세션 트랜잭션 핸들 강제 바인딩 및 오류 시 전체 롤백 보장 완료 (`COPY-SAFETY-1`) |
+| **REV-WIRE-010** | P1 | 취약점/DoS | [`pkg/wire/server.go:868-980`](pkg/wire/server.go#L868) | PGWire `handleParse` 및 `handleBind`에서 악의적이거나 비정상적인 음수/과도한 파라미터 크기(`numParamTypes < 0`, `numFormats < 0`, `numParams < 0`, `paramLen < -1`, `$999999999` 등) 수신 시 `make([]int32, ...)` 슬라이스 범위 초과 패닉 또는 OOM 유발 위험 ([`RULE:DefensiveIndexing`], [`RULE:BoundedBuffers`] 위반) | `[x]` | 0~10000 파라미터 바운드 검사 및 페이로드 잔여 길이 초과 방어 가드 적용 완료 |
 | **REV-API-001** | P3 | 예외처리 | [`pkg/api/handlers_procs.go:132`](pkg/api/handlers_procs.go#L132) | `handleExecProcedure`에서 `json.NewDecoder(r.Body).Decode(&req)` 에러를 무시(`_ = ...`)하여 잘못된 JSON 요청 본문 전송 시 HTTP 400 Bad Request 대신 빈 인자로 무경고 실행 | `[x]` | 잘못된 JSON 본문 전송 시 HTTP 400 Bad Request 명시적 반환 처리 |
 | **REV-API-002** | P1 | 보안 | [`cmd/lionsql/server.go:320-350`](cmd/lionsql/server.go#L320) | 외부 공용 IP(`0.0.0.0`) 바인딩 환경에서 기본 슈퍼유저 비밀번호(`1234567890`)로 기동을 허용하여 보안 침해 위험 | `[x]` | Production Security Guard 검증기를 통해 루프백 외 외부 바인딩 시 즉각 기동 차단 완료 (`PROD-SEC-1`) |
 | **REV-API-003** | P1 | 세션격리/STW | [`pkg/ui/dashboard.html, pkg/api/server.go`](pkg/ui/dashboard.html) | Web Studio 다중 사용자 동시 접속 시 `default` 세션 공유로 인한 트랜잭션 오염 위험 및 `/api/overview`의 `runtime.ReadMemStats` STW 부하 | `[x]` | 브라우저 탭별 고유 세션 ID(`getWebSessionId()`) 격리 및 1초 TTL `memStatsCache` 구현 완료 (`UI-CONCURRENCY-1`) |
@@ -110,7 +112,8 @@
 | ID | 우선순위 | 구분 | 파일 및 라인 | 설명 | 상태 | 커밋 / 비고 |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
 | **REV-CAT-001** | P2 | 안티패턴 | [`pkg/catalog/virtual/mssql.go, interceptor.go`](pkg/catalog/virtual/mssql.go) | 가상 카탈로그 핸들러 명칭에 외부 GUI 도구(`Beekeeper`, `DbGate`, `DBeaver`)를 하드코딩하고 `isDBeaver` 등 도구 탐지 플래그를 사용하던 안티패턴 | `[x]` | 객관적 스키마 함수(`execSysIndexesPrimaryKey`, `hasStorageSizeCols` 등)로 리팩토링 완료 (`57e51aa`) |
-| **REV-CAT-002** | P2 | 데이터안전성 | [`pkg/catalog/catalog.go:420-460`](pkg/catalog/catalog.go#L420) | CBO 통계 및 프로시저 메타데이터 디스크 저장 시 원자적 쓰기를 사용하지 않아 비정상 종료 시 손상 위험 | `[x]` | 임시 스왑 파일 및 원자적 이름 변경(`os.Rename`)을 통한 무손실 영속화 완비 (Golden Rule 1 준수) |
+| **REV-CAT-002** | P2 | 데이터안전성 | [`pkg/catalog/catalog.go:420-460`](pkg/catalog/catalog.go#L420) | CBO 통계 및 프로시저 메타데이터 디스크 저장 시 원자적 쓰기를 사용하지 않아 비정상 종료 시 손상 위험 | `[x]` | 임시 스왑 파일 및 원자적 이름 변경(`os.Rename`)을 통한 무손실 영속화 완비 ([`RULE:AtomicSaves`] 준수) |
+| **REV-CAT-003** | P2 | 정합성/안티패턴 | [`pkg/catalog/virtual/result.go:18`](pkg/catalog/virtual/result.go#L18) | 가상 카탈로그 행 필터링 시 `reEvalBinaryOp` 정규식을 사용하여 인용부호/이스케이프 및 PostgreSQL JSON 연산자(`->`, `->>`) 충돌 위험이 상존하던 결함 (`Invariant 7`, [`RULE:ModularAbstraction`] 위반) | `[x]` | `reEvalBinaryOp` 정규식 완전 제거 및 `sqlutil.ParseBinaryComparison` 모듈 도입 및 대체 완료 |
 
 ---
 
@@ -134,8 +137,8 @@
 
 ## 10. 코드 리뷰 종합 감사 지표 (Audit Summary)
 
-- **총 리뷰 및 조치 건수**: **33건**
-- **조치 완료 (`[x]`)**: **33건 (100%)**
+- **총 리뷰 및 조치 건수**: **36건**
+- **조치 완료 (`[x]`)**: **36건 (100%)**
 - **미해결 결함 (`[ ]`)**: **0건**
 - **동시성 검증**: `go test -tags wiredtiger -race ./...` (전체 22개 패키지 **100% PASS**, 데이터 레이스 **0건**)
 - **컴파일 무결성**: macOS, Linux, Windows 3개 플랫폼 크로스 빌드 **100% 무경고 통과**

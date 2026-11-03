@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	// DefaultMaxLogFileSize caps log files at 5MB per engineering guidelines (Rule 40).
+	// DefaultMaxLogFileSize caps log files at 5MB per engineering guidelines ([RULE:BoundedBuffers]).
 	DefaultMaxLogFileSize int64 = 5 * 1024 * 1024
 	// MaxRotatedBackups specifies maximum rotated historical log files to retain.
 	MaxRotatedBackups = 3

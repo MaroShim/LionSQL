@@ -177,3 +177,38 @@ func TestParseBetweenPredicate(t *testing.T) {
 		}
 	}
 }
+
+func TestParseBinaryComparison(t *testing.T) {
+	tests := []struct {
+		input      string
+		wantCol    string
+		wantFull   string
+		wantOp     string
+		wantTarget string
+		wantOk     bool
+	}{
+		{"[c].[name] = 'Orders'", "name", "c.name", "=", "Orders", true},
+		{"status != 'ACTIVE'", "status", "status", "!=", "ACTIVE", true},
+		{"price >= 100", "price", "price", ">=", "100", true},
+		{"title LIKE '%book%'", "title", "title", "LIKE", "%book%", true},
+		{"name NOT LIKE 'test%'", "name", "name", "NOT LIKE", "test%", true},
+		{"desc ~* 'abc'", "desc", "desc", "~*", "abc", true},
+		{"doc->>'key' = 'value'", "key", "doc->>'key'", "=", "value", true},
+		{"SELECT 1", "", "", "", "", false},
+	}
+
+	for _, tc := range tests {
+		comp, ok := ParseBinaryComparison(tc.input)
+		if ok != tc.wantOk {
+			t.Errorf("ParseBinaryComparison(%q) ok = %v; want %v", tc.input, ok, tc.wantOk)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if comp.Column != tc.wantCol || comp.FullColumn != tc.wantFull || comp.Op != tc.wantOp || comp.RightClean != tc.wantTarget {
+			t.Errorf("ParseBinaryComparison(%q) = %+v; want col=%s, full=%s, op=%s, target=%s",
+				tc.input, comp, tc.wantCol, tc.wantFull, tc.wantOp, tc.wantTarget)
+		}
+	}
+}

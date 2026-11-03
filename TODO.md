@@ -400,3 +400,11 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - [x] **`DURA-SOAK-F1`**: WiredTiger `WT_ROLLBACK`(-31800) 쓰기 충돌을 `storage.ErrSerializationFailure`로 래핑하여 PGWire `SQLSTATE 40001` 매핑
 - [x] **`DURA-SOAK-F2`**: 1시간 소크 실측을 통한 500MB 페이지 캐시 워밍업 분석 및 `/metrics` Go 힙/고루틴 수집과 캐시 상한 기준선 확립
 - [x] **`DURA-KILL-1 (Phase 1)`**: `cmd/crashtest` 하네스 완성, 3대 결함 수정 및 20라운드/엔진 (총 12.8만 건 tx) 강제 종료 복구 100% 무결성 입증
+
+### [x] M4. 코드 리뷰 감사 및 구조적 리팩토링 완결 (`ARCH-PRED` & `ARCH-RULE-SLUG`)
+- [x] **`ARCH-PRED-1` & `ARCH-PRED-2`**: 조건식·괄호(`Dyck Language`) 표준 파서(`pkg/sqlutil/predicate.go`) 구축, PostgreSQL JSON 연산자(`->`, `->>`) 충돌 방어, `reEvalBinaryOp` 정규식 완전 제거
+- [x] **`ARCH-RULE-SLUG`**: 골든 룰 불변 슬러그(`[RULE:xxx]`) 및 캐노니컬 명칭 체계(`Rule Reference Policy`) 수립, 전체 소스코드 주석 및 문서 내 휘발성 순번 완전 제거
+- [x] **`REV-ENG-011`**: `ALTER TABLE` 10개 서브 커맨드 내 스토리지 엔진 에러 무시(`_ = `) 결함 전면 해소 및 에러 반환 보장 ([`RULE:ExplicitError`])
+- [x] **`REV-WIRE-010`**: PGWire `handleParse` / `handleBind` 비정상/음수/과대 슬라이스 할당 가드 적용 ([`RULE:DefensiveIndexing`], [`RULE:BoundedBuffers`])
+- [x] **`REV-CAT-003`**: 가상 카탈로그 행 필터링 잔여 정규식 제거 및 `sqlutil.ParseBinaryComparison` 일원화 (`Invariant 7`, [`RULE:ModularAbstraction`])
+- [x] **감사 대시보드 동기화**: `CODE_REVIEW.ko.md`, `CODE_REVIEW.md`, `REFACTORING.ko.md` 최신화 완료 (누적 결함 36건 100% 조치 완료)

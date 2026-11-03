@@ -54,7 +54,7 @@ func (s *MemorySink) Publish(ctx context.Context, msg *OutboxMessage) error {
 	copied := *msg
 	s.messages = append(s.messages, &copied)
 
-	// Non-blocking notification for waiting tests (Golden Rule 29)
+	// Non-blocking notification for waiting tests ([RULE:NonBlockingSink])
 	select {
 	case s.notifyCh <- struct{}{}:
 	default:
@@ -93,7 +93,7 @@ func (s *MemorySink) SetFailUntil(attempts int, err error) {
 	s.publishCount = 0
 }
 
-// WaitForMessages waits until at least count messages are received or timeout expires (Golden Rule 17).
+// WaitForMessages waits until at least count messages are received or timeout expires ([RULE:DeterministicTesting]).
 func (s *MemorySink) WaitForMessages(count int, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for {

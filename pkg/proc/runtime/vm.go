@@ -58,7 +58,7 @@ type planCacheEntry struct {
 	program *proc.Program
 }
 
-// PlanCache stores precompiled native T-SQL bytecode programs with bounded LRU eviction (Golden Rule 29).
+// PlanCache stores precompiled native T-SQL bytecode programs with bounded LRU eviction ([RULE:BoundedBuffers]).
 type PlanCache struct {
 	mu       sync.RWMutex
 	capacity int

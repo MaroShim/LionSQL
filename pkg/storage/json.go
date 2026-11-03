@@ -9,7 +9,7 @@ import (
 )
 
 // jsonDOMCache stores parsed JSON roots keyed by document string.
-// Bounded to 1024 entries with FIFO eviction to strictly bound memory (Rule 23).
+// Bounded to 1024 entries with FIFO eviction to strictly bound memory ([RULE:BoundedBuffers]).
 type jsonDOMCache struct {
 	mu    sync.RWMutex
 	items map[string]any

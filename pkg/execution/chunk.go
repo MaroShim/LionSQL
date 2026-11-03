@@ -38,7 +38,7 @@ func PutChunk(c *Chunk) {
 	if c == nil {
 		return
 	}
-	// Defensive check: do not retain abnormally oversized chunks to bound memory (Rule 23)
+	// Defensive check: do not retain abnormally oversized chunks to bound memory ([RULE:BoundedBuffers])
 	if cap(c.Tuples) > DefaultChunkSize*4 {
 		return
 	}

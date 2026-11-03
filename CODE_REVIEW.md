@@ -44,13 +44,14 @@ All code reviews and bug remediations must strictly pass all 3 stages in order b
 | **REV-ENG-001** | P1 | Bug | [`pkg/engine/sqlexec_dml.go:18`](pkg/engine/sqlexec_dml.go#L18) | `reDmlInsertValues` mandatory `\s+INTO\s+` rejected valid `INSERT tbl VALUES (...)` syntax. Remedied by making `INTO` optional. | `[x]` | `db57751` |
 | **REV-ENG-002** | P3 | Message | [`pkg/engine/sqlexec_dml.go:1248`](pkg/engine/sqlexec_dml.go#L1248) | Copy-paste error in DELETE execution reporting `identify row for update`. Fixed to `identify row for delete`. | `[x]` | `db57751` |
 | **REV-ENG-003** | P2 | Vulnerability | [`pkg/engine/sqlexec_dml.go:248`](pkg/engine/sqlexec_dml.go#L248) | Fragile multi-whitespace/tab handling in UPSERT prefix routing. Replaced with normalized regex routing. | `[x]` | `db57751` |
-| **REV-ENG-004** | P1 | Bug/Panic | [`pkg/engine/sqlexec_eval.go:930`](pkg/engine/sqlexec_eval.go#L930) | Integer division by zero panic in `evalUpdateExpr`. Added defensive zero divisor guards. | `[x]` | Golden Rule 2 |
+| **REV-ENG-004** | P1 | Bug/Panic | [`pkg/engine/sqlexec_eval.go:930`](pkg/engine/sqlexec_eval.go#L930) | Integer division by zero panic in `evalUpdateExpr`. Added defensive zero divisor guards. | `[x]` | [`RULE:PanicRecovery`] |
 | **REV-ENG-005** | P2 | Correctness | [`pkg/engine/sqlexec_eval.go:137`](pkg/engine/sqlexec_eval.go#L137) | Escaped single-quote (`''`) handling in `splitLogicalConditions` causing split errors. Added quote escape scanner. | `[x]` | SQL Grammar |
 | **REV-ENG-006** | P2 | Bug | [`pkg/engine/sqlexec_dml.go:21`](pkg/engine/sqlexec_dml.go#L21) | Regex lazy matching in `UPDATE ... SET col = 'a WHERE b' OUTPUT ...` splitting inside literal. Solved by `ARCH-DML-1`. | `[x]` | `ParseDMLCommand` |
 | **REV-ENG-007** | P1 | Over-spec | [`pkg/engine/sqlexec_procs.go:1263`](pkg/engine/sqlexec_procs.go#L1263) | Parameter name switch in `sp_executesql` dropping queries on non-standard parameter names. Simplified to 100% ordinal slot mapping. | `[x]` | `57e51aa` |
 | **REV-ENG-008** | P2 | Architecture | [`pkg/engine/sqlexec_select.go`](pkg/engine/sqlexec_select.go) | Triple-execution path debt from legacy ad-hoc SELECT interpreter. Replaced with 2-Tier CBO/VDBE query engine. | `[x]` | `ARCH-2TIER-1` |
 | **REV-ENG-009** | P2 | Anti-pattern | [`pkg/storage/coerce.go:1`](pkg/storage/coerce.go) | Heuristic type guessing on string literals causing silent precision loss. Replaced with schema-driven explicit coercion. | `[x]` | `TYPE-GUESSING-1` |
 | **REV-ENG-010** | P1 | Performance/GC| [`pkg/execution/governor.go:20`](pkg/execution/governor.go) | Default `GOGC=100` triggering excessive GC cycles under high OLTP. Tuned to default `GOGC=200` with soft memory limit. | `[x]` | `VPERF-16` |
+| **REV-ENG-011** | P1 | Error Handling| [`pkg/engine/sqlexec_ddl.go:1439`](pkg/engine/sqlexec_ddl.go#L1439) | `ALTER TABLE` subcommands (`ADD/DROP CONSTRAINT`, `RENAME TO`, `RENAME COLUMN`, `DROP/SET NOT NULL`, `DROP COLUMN`) silently ignoring `AlterTable` / `CreateIndex` errors (`_ = `) and returning false success. Propagated errors explicitly. | `[x]` | [`RULE:ExplicitError`] |
 
 ---
 
@@ -58,8 +59,8 @@ All code reviews and bug remediations must strictly pass all 3 stages in order b
 
 | ID | Priority | Category | Target Location | Description & Remediation | Status | Reference |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
-| **REV-STOR-001** | P2 | Performance | [`pkg/storage/memengine/tx.go:1395`](pkg/storage/memengine/tx.go#L1395) | `fmt.Sscanf` reflection overhead and silent error swallowing in PK parsing. Replaced with zero-allocation `strconv` conversions. | `[x]` | Golden Rule 7 |
-| **REV-STOR-002** | P2 | Safety | [`pkg/storage/memengine/memengine.go:360`](pkg/storage/memengine/memengine.go#L360) | Silent swallowing of AOF compaction errors during startup. Propagated errors explicitly to halt corrupted initialization. | `[x]` | Golden Rule 7 |
+| **REV-STOR-001** | P2 | Performance | [`pkg/storage/memengine/tx.go:1395`](pkg/storage/memengine/tx.go#L1395) | `fmt.Sscanf` reflection overhead and silent error swallowing in PK parsing. Replaced with zero-allocation `strconv` conversions. | `[x]` | [`RULE:ExplicitError`] |
+| **REV-STOR-002** | P2 | Safety | [`pkg/storage/memengine/memengine.go:360`](pkg/storage/memengine/memengine.go#L360) | Silent swallowing of AOF compaction errors during startup. Propagated errors explicitly to halt corrupted initialization. | `[x]` | [`RULE:ExplicitError`] |
 | **REV-STOR-003** | P1 | Data Race | [`pkg/storage/memengine/tx.go:440`](pkg/storage/memengine/tx.go#L440) | Race condition where `defer tx.Rollback()` ran on reused transaction objects in `txPool`. Fixed by pool return strictly in `Rollback()`. | `[x]` | `VPERF-18` |
 | **REV-STOR-004** | P1 | Lock Cacheline | [`pkg/storage/memengine/memengine.go:50`](pkg/storage/memengine/memengine.go#L50) | Global `e.mu.RLock()` contention during table catalog lookups. Replaced with `atomic.Pointer[map[string]*TableData]` snapshot. | `[x]` | `VPERF-18` |
 | **REV-STOR-005** | P2 | Commit Stall | [`pkg/storage/memengine/tx.go:280`](pkg/storage/memengine/tx.go#L280) | In-lock MessagePack serialization causing multi-core commit stalls. Implemented Out-of-Lock WAL Pre-encoding. | `[x]` | `VPERF-17` |
@@ -78,7 +79,7 @@ All code reviews and bug remediations must strictly pass all 3 stages in order b
 
 | ID | Priority | Category | Target Location | Description & Remediation | Status | Reference |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
-| **REV-PROC-001** | P1 | Integrity | [`pkg/proc/runtime/vm.go:910`](pkg/proc/runtime/vm.go#L910) | Legacy VM path swallowing trigger execution errors (`_ = f.fireTriggers`). Propagated trigger errors and enforced rollback. | `[x]` | Golden Rule 7 |
+| **REV-PROC-001** | P1 | Integrity | [`pkg/proc/runtime/vm.go:910`](pkg/proc/runtime/vm.go#L910) | Legacy VM path swallowing trigger execution errors (`_ = f.fireTriggers`). Propagated trigger errors and enforced rollback. | `[x]` | [`RULE:ExplicitError`] |
 | **REV-PROC-002** | P2 | Performance/GC| [`pkg/proc/runtime/vm.go:170`](pkg/proc/runtime/vm.go#L170) | Allocating VM stack frames and register slices per query. Recycled via `sync.Pool` (`VMFrame`) with pre-resolved slots. | `[x]` | `VPERF-1`~`VPERF-5` |
 | **REV-PROC-003** | P2 | Zero-Copy | [`cmd/tpcc_kernel/main.go:140`](cmd/tpcc_kernel/main.go#L140) | Allocating 21-column Go `Record` maps on simple existence checks. Replaced with zero-copy `tx.GetRow` verification. | `[x]` | `VPERF-18` |
 | **REV-PROC-004** | P2 | Decoupling | [`pkg/proc/parser.go:30`](pkg/proc/parser.go#L30) | Tight coupling and circular import risks between Pratt parser and ANTLR4. Decoupled via `ProcedureFallbackParser` SPI. | `[x]` | `PROC-FALLBACK-1` |
@@ -99,7 +100,8 @@ All code reviews and bug remediations must strictly pass all 3 stages in order b
 | **REV-WIRE-007** | P2 | Bandwidth | [`pkg/wire/tds/tokens.go:120`](pkg/wire/tds/tokens.go#L120) | Standard ROW tokens wasting bandwidth on NULL fields. Implemented TDS 7.2+ NBCROW (`0xD2`) bitmap compression. | `[x]` | `TDS-NBCROW-1` |
 | **REV-WIRE-008** | P2 | Resource Leak | [`pkg/wire/server.go:1210`](pkg/wire/server.go#L1210) | Unbounded prepared statements per session risking memory leaks. Enforced bounded LRU cache (`maxPreparedPerSession = 256`). | `[x]` | `PREP-1` |
 | **REV-WIRE-009** | P1 | Atomicity | [`pkg/wire/copy.go:350`](pkg/wire/copy.go#L350) | `COPY FROM STDIN` operating outside ambient session transaction. Enforced transaction binding and rollback safety. | `[x]` | `COPY-SAFETY-1` |
-| **REV-API-001** | P3 | Bad Request | [`pkg/api/handlers_procs.go:132`](pkg/api/handlers_procs.go#L132) | Silently ignoring JSON decode errors in procedure execution HTTP endpoint. Returned explicit HTTP 400 Bad Request. | `[x]` | Golden Rule 7 |
+| **REV-WIRE-010** | P1 | Panic/DoS | [`pkg/wire/server.go:868-980`](pkg/wire/server.go#L868) | PGWire `handleParse` / `handleBind` allocating slices with untrusted counts (`numParamTypes < 0`, `numFormats < 0`, `numParams < 0`, `paramLen < -1`, `$999999999`) risking panics or OOM. Added strict defensive boundary and length guards. | `[x]` | [`RULE:DefensiveIndexing`], [`RULE:BoundedBuffers`] |
+| **REV-API-001** | P3 | Bad Request | [`pkg/api/handlers_procs.go:132`](pkg/api/handlers_procs.go#L132) | Silently ignoring JSON decode errors in procedure execution HTTP endpoint. Returned explicit HTTP 400 Bad Request. | `[x]` | [`RULE:ExplicitError`] |
 | **REV-API-002** | P1 | Security | [`cmd/lionsql/server.go:320`](cmd/lionsql/server.go#L320) | Permitting startup on public interfaces (`0.0.0.0`) with default password (`1234567890`). Added Production Security Guard. | `[x]` | `PROD-SEC-1` |
 | **REV-API-003** | P1 | Session/STW | [`pkg/ui/dashboard.html, pkg/api/server.go`](pkg/ui/dashboard.html) | Web Studio multi-user concurrent access sharing `default` session causing transaction cross-contamination, and `/api/overview` polling invoking `runtime.ReadMemStats` STWs. Implemented browser tab `getWebSessionId()` and 1-second TTL `memStatsCache`. | `[x]` | `UI-CONCURRENCY-1` |
 
@@ -110,7 +112,8 @@ All code reviews and bug remediations must strictly pass all 3 stages in order b
 | ID | Priority | Category | Target Location | Description & Remediation | Status | Reference |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
 | **REV-CAT-001** | P2 | Anti-pattern | [`pkg/catalog/virtual/mssql.go`](pkg/catalog/virtual/mssql.go) | Hardcoding external tool names (`isDBeaver`) in virtual views. Refactored into objective schema-based predicates. | `[x]` | `57e51aa` |
-| **REV-CAT-002** | P2 | Atomic Write | [`pkg/catalog/catalog.go:420`](pkg/catalog/catalog.go#L420) | Non-atomic disk writes for CBO statistics and procedure metadata. Enforced temporary swap files and atomic renames. | `[x]` | Golden Rule 1 |
+| **REV-CAT-002** | P2 | Atomic Write | [`pkg/catalog/catalog.go:420`](pkg/catalog/catalog.go#L420) | Non-atomic disk writes for CBO statistics and procedure metadata. Enforced temporary swap files and atomic renames. | `[x]` | [`RULE:AtomicSaves`] |
+| **REV-CAT-003** | P2 | Anti-pattern | [`pkg/catalog/virtual/result.go:18`](pkg/catalog/virtual/result.go#L18) | Filtering virtual catalog rows using `reEvalBinaryOp` regex risking quotes/escape bugs and JSON operator (`->`, `->>`) collisions. Replaced with `sqlutil.ParseBinaryComparison`. | `[x]` | `Invariant 7`, [`RULE:ModularAbstraction`] |
 
 ---
 
@@ -134,8 +137,8 @@ All code reviews and bug remediations must strictly pass all 3 stages in order b
 
 ## 10. Audit Summary & Quality Metrics
 
-- **Total Audited Items**: **33 cases**
-- **Resolved & Verified (`[x]`)**: **33 cases (100%)**
+- **Total Audited Items**: **36 cases**
+- **Resolved & Verified (`[x]`)**: **36 cases (100%)**
 - **Unresolved / Open Deficiencies (`[ ]`)**: **0 cases (0%)**
 - **Concurrency & Race Verification**: `go test -tags wiredtiger -race ./...` (100% PASS across 22 packages, 0 data races)
 - **Multi-Platform Compilation**: macOS, Linux, and Windows standalone executables pass with 0 warnings
