@@ -2,7 +2,7 @@
 
 Single-binary, high-concurrency OLTP database server supporting T-SQL and stored procedures
 
-[![Version](https://img.shields.io/badge/version-v0.90.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.90.1-blue.svg)](CHANGELOG.md)
 [![Go Version](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg?logo=go&logoColor=white)](go.mod)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](README.md)

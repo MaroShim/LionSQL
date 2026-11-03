@@ -7,6 +7,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.90.1] - 2026-11-04
+
+### Added
+- support --push-only option in release automation pipeline (1f8e6f2)
+- add babelfish-inspired t-sql stored procedure logic test suite (16bf49a)
+- integrate babelfish test suite, fix recursive cte delta and parameter tolerance (08e21f9)
+- add excel-style inline row creation for web studio records table (8d9d3ad)
+
+### Documentation
+- wrap t-sql table variable syntax in backticks to prevent github mention parsing (e704483)
+- document pointer-free flat record as prioritized implementation for OCC-HYPER-2 (ccf15e5)
+- reject TDS-MOD-1 file split in favor of git blame history preservation in AI pair programming (68744f1)
+- document technical reality and post-1.0 review notes for 14 isolated sqlite fuzz suites (564b299)
+- add architecture plan for empty IN predicate evaluation and option-flag avoidance principle (cfd5c26)
+
+### Changed
+- enrich release.sh with notes document and collapsible changelog delta (9a4c42d)
+- add complete set of official sqllogictest files and procedural suites (7e981cf)
+
 ### Added
 - add Babelfish-inspired T-SQL stored procedure logic test suite covering 9 domains and 19 procedures (TEST-BABEL-SLT-1)
 
