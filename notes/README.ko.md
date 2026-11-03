@@ -55,6 +55,8 @@
      - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: 클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 연동 설계 (Spec-Out 아키텍처 / 참고).
 
 7. **마일스톤 실전 검증 보고서 및 포스트모텀 (Integration Reports & Postmortems)**:
+   - **[`RELEASE_NOTES_v0.90.1.ko.md`](RELEASE_NOTES_v0.90.1.ko.md)** ([English](RELEASE_NOTES_v0.90.1.md)): LionSQL v0.90.1 공식 릴리즈 노트 (T-SQL Stored Procedure & 재귀 CTE 무결성 완치, Babelfish 2,900-Suite 연동, SQLLogicTest 107개 정착, Web Studio 인라인 그리드 혁신).
+   - **[`RELEASE_NOTES_v0.90.0.ko.md`](RELEASE_NOTES_v0.90.0.ko.md)** ([English](RELEASE_NOTES_v0.90.0.md)): LionSQL v0.90.0 GA 공식 릴리즈 노트 (100% 무손실 크래시 복구, 소크 테스트 완주, SQLLogicTest 90개 통과, 73만 tpmC 달성, 8대 에코시스템 연동 완주).
    - **[`SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md`](SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md)** ([English](SLT_FULL_SUITE_100_PERCENT_REPORT.md)): SQLLogicTest (SLT) 107개 풀세트(19,211 문장, 551,217 쿼리) 100% 무결점 통과 실측 보고서 및 8대 심층 엔진 결함(3VL, 별칭/슬롯 보존, 중첩 집계 등) 완치 기록.
    - **[`METABASE_INTEGRATION_REPORT.ko.md`](METABASE_INTEGRATION_REPORT.ko.md)**: Metabase BI 듀얼 프로토콜(PGWire :5433 & TDS :1433) 연동, 스키마 인트로스펙션, MBQL 비주얼 쿼리 빌더 다중 테이블 파생 조인, COUNT/SUM 집계, 시계열 분석 및 Native SQL 100% 무오류 검증 보고서.
    - **[`VAULTWARDEN_INTEGRATION_REPORT.ko.md`](VAULTWARDEN_INTEGRATION_REPORT.ko.md)**: Vaultwarden (Rust + Diesel ORM) 47개 마이그레이션 완주, 복합 PK upsert, 8바이트 Timestamp 인코딩 및 Bitwarden REST API E2E 100% 검증 보고서.
