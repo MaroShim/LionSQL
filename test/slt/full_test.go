@@ -62,3 +62,12 @@ func TestSQLLogicTest_Select4_InProc(t *testing.T) {
 func TestSQLLogicTest_Select5_InProc(t *testing.T) {
 	runSLTFile(t, "full/select5.slt")
 }
+
+func TestSQLLogicTest_RandomExpr0_InProc(t *testing.T) {
+	runSLTFile(t, "random/expr/slt_good_0.slt")
+}
+
+func TestSQLLogicTest_RandomAgg0_InProc(t *testing.T) {
+	runSLTFile(t, "random/aggregates/slt_good_0.slt")
+}
+

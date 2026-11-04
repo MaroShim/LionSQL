@@ -881,6 +881,15 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 		}
 
 		val, defAlias := s.evalScalarExpr(exprStr, cs)
+		if val == exprStr {
+			// If expression failed to evaluate as a recognized scalar, report error
+			p := proc.NewParser(proc.NewLexer(exprStr))
+			if ast := p.ParseExpr(); ast != nil {
+				if _, ok := ast.(*proc.FunctionCallExpr); ok {
+					return nil, fmt.Errorf("unknown scalar function or invalid expression: %s", exprStr)
+				}
+			}
+		}
 		if alias == "" {
 			alias = defAlias
 		}

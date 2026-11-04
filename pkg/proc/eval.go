@@ -933,6 +933,10 @@ func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[str
 		stArgs[i] = anyToStorageVal(v)
 	}
 
+	if !IsBuiltinFunction(name) && !isAggFn && uName != "ISNULL" && uName != "COALESCE" && uName != "NULLIF" {
+		return nil, fmt.Errorf("unknown scalar function %s", name)
+	}
+
 	res := EvalBuiltin(name, stArgs)
 	if res.IsNull {
 		return nil, nil
