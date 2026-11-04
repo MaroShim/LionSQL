@@ -194,6 +194,12 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   - [x] 2단계: `sqlexec_ddl.go` 단순 DDL 라우팅(View, Table, Index, Stats, Truncate, Reindex, Functions) 토크나이저 전환
   - [x] 3단계: `sqlexec_ddl.go` `CREATE TABLE` / `ALTER TABLE` 복합 제약조건 및 컬럼 파서 정규식 완전 박멸 (정규식 35+종 전량 제거, `"regexp"` import 0건)
   - [x] 회귀 검증: `regex_ddl_migration_test.go` E2E 및 서브쿼리 테스트, `pkg/engine` / `pkg/sqlutil` / `pkg/api` 100% PASS
+- [ ] **`GA-REGEX-FINAL-1`**: 엔진 프로덕션 경로 잔여 정규식 4대 영역 완전 제거 및 100% Zero-Regex 달성 (`Invariant 7` 완성)
+  - **1) T-SQL 페이징 치환기 (`sqlexec_select.go`)**: `mssqlTopRe`, `mssqlDistinctTopRe`, `mssqlOffsetFetchRe` ➔ `proc.Lexer` 토큰 스트림 기반 인라인 파싱 전환
+  - **2) SQLite 호환 테이블 IN 구문 (`sqlexec_select.go`)**: `reBareTableIn` (`WHERE x IN tbl`) ➔ `sqlutil.ParseInPredicate` 토크나이저 전환
+  - **3) JDBC 메타데이터 배치 치환기 (`sqlexec_jdbc_metadata.go`)**: `reJdbcTempSpExec`, `reJdbcSelectFrom` ➔ `sqlutil.FindTopLevelKeyword` 전환
+  - **4) 가상 카탈로그 GUI 필터링 (`virtual/mssql.go`, `virtual/pg.go`)**: `reMssqlObjectIDEq`, `reGuiRelnameEq` 등 9개 정규식 ➔ `sqlutil.ParseBinaryComparison` 전환
+  - **검증**: `go test -race ./...` 전수 PASS 및 SQLLogicTest/Babelfish/10대 실전 앱 회귀 검증
 - [x] **`GA-REGEX-NESTED-1`**: SQL 중첩/괄호/조건식 잔여 정규식 제거 및 sqlutil 추상화 모듈화 (`Invariant 7` 준수) — **[완료 (Pass)]**
   - [x] **아키텍처 불변식 명문화**: `GEMINI.md` (Invariant 7 영어 요약) 및 `notes/ENGINEERING_CONTEXT.ko.md` (제1절 ⑮) 촘스키 계층론(Type 3 정규 언어 vs Type 2 CFG) 기반 SQL 구문 정규식 금지 및 선형 포맷 허용 경계 정의
   - [x] **`pkg/sqlutil/predicate.go` 조건식 모듈 신설**: `ParseInPredicate`, `ParseIsNullPredicate`, `ParseAnyPredicate`, `ParseBetweenPredicate`, `StripParentheses` 추상화 및 단위 테스트(`predicate_test.go`) 100% PASS
