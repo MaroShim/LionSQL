@@ -560,6 +560,31 @@
       background: rgba(59, 130, 246, 0.12) !important;
       outline: 1px dashed var(--primary);
     }
+    /* Cell content truncation & expandable preview */
+    .cell-truncate-clamp {
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.35;
+      max-height: 4.05em;
+      transition: max-height 0.2s ease;
+      cursor: pointer;
+    }
+    .cell-truncate-clamp.expanded {
+      display: block;
+      -webkit-line-clamp: unset;
+      max-height: 350px;
+      overflow-y: auto;
+      background: var(--code-bg);
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
     .cell-input {
       width: 100%;
       box-sizing: border-box;
@@ -3194,7 +3219,11 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
                     if (val === null || val === undefined) {
                       return '<td style="color:var(--text-muted); font-style:italic;">NULL</td>';
                     }
-                    return `<td>${val}</td>`;
+                    const valStr = String(val);
+                    if (valStr.length > 50 || valStr.includes('\n')) {
+                      return `<td><div class="cell-truncate-clamp" onclick="this.classList.toggle('expanded');" title="Click to expand/collapse">${escapeHtml(valStr)}</div></td>`;
+                    }
+                    return `<td>${escapeHtml(valStr)}</td>`;
                   }).join('') + '</tr>';
                 }).join('');
               } else {
@@ -4004,12 +4033,15 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
               }
 
               let displayHtml = '';
+              const isLongText = valStr.length > 50 || valStr.includes('\n');
               if (val === null || val === undefined) {
                 displayHtml = '<span style="color:var(--text-muted); font-style:italic;">NULL</span>';
               } else if (isPK) {
                 displayHtml = `<span class="cell-pk-val">${escapeHtml(valStr)}</span>`;
               } else if (refTable && valStr) {
                 displayHtml = `<span class="cell-fk-val" style="font-family:monospace; font-weight:600;">${escapeHtml(valStr)}</span> <a href="javascript:void(0)" class="fk-jump-link" onclick="event.stopPropagation(); openFKRelationModal('${escapeHtml(refTable)}', '${escapeHtml(refCol)}', '${escapeHtml(valStr)}')" style="color:var(--primary); font-size:0.75rem; text-decoration:none; margin-left:3px; opacity:0.85; font-weight:700;" title="Jump to referenced ${escapeHtml(refTable)} (${escapeHtml(refCol)})">↗</a>`;
+              } else if (isLongText) {
+                displayHtml = `<div class="cell-truncate-clamp" onclick="event.stopPropagation(); this.classList.toggle('expanded');" title="Click to expand/collapse (Double-click cell to edit)">${escapeHtml(valStr)}</div>`;
               } else {
                 displayHtml = escapeHtml(valStr);
               }
@@ -4017,7 +4049,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
               if (isPK) {
                 rowHtml += `<td title="Primary Key (Read-Only)">${displayHtml}</td>`;
               } else {
-                rowHtml += `<td class="editable-cell" data-pk="${escapeHtml(pkVal)}" data-col="${escapeHtml(c)}" data-val="${escapeHtml(valStr)}" title="Double-click to edit" ondblclick="startInlineEdit(this)">${displayHtml}</td>`;
+                rowHtml += `<td class="editable-cell" data-pk="${escapeHtml(pkVal)}" data-col="${escapeHtml(c)}" data-val="${escapeHtml(valStr)}" title="${isLongText ? 'Click text to expand | Double-click cell to edit' : 'Double-click to edit'}" ondblclick="startInlineEdit(this)">${displayHtml}</td>`;
               }
             });
 
