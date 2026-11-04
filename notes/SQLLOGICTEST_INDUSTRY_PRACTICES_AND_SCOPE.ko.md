@@ -1,5 +1,6 @@
 # 데이터베이스 엔진 업계 SQLLogicTest (SLT) 실전 적용 기준 및 권장 범위
 
+> - **최종 갱신일**: 2026-11-01
 > - **최초 작성일**: 2026-11-01  
 > - **문서 상태**: 참조 표준 및 아키텍처 가이드 (Reference Standard)  
 > - **적용 대상**: DuckDB, CockroachDB, TiDB, Materialize, Apache DataFusion 및 LionSQL 엔진  

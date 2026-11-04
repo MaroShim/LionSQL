@@ -1,5 +1,9 @@
 # LionSQL Architecture Decision Records (ADR)
 
+> - **Created**: 2026-09-22
+> - **Last Updated**: 2026-10-25
+
+
 This document records the critical architectural decisions made throughout the design and development of LionSQL, explaining the context, problem statements, evaluated alternatives, decisions taken, and their engineering consequences.
 
 ---

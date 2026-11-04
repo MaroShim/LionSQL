@@ -1,5 +1,6 @@
 # Writable CTE Stored Procedure 바이트코드 Lowering 가속 설계 계획서 (`notes/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`)
 
+> - **최종 갱신일**: 2026-11-02
 > - **최초 작성일**: 2026-11-02
 > - **상태**: 구현 완료 및 검증 통과 (Completed & Verified)
 > - **과제 식별 코드**: `PERF-CTE-LOWERING-VDBE-1`

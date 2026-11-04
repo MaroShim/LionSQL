@@ -1,5 +1,9 @@
 # LionSQL TDS (Port 1433) Microsoft SQL Server Compatibility Verification Report
 
+> - **Created**: 2026-10-18
+> - **Last Updated**: 2026-11-04
+
+
 This report presents a comprehensive compatibility diagnostic of LionSQL's Microsoft SQL Server TDS (Tabular Data Stream 7.x/8.0) protocol listener (`127.0.0.1:1433`). Utilizing the official Microsoft Go driver (`github.com/microsoft/go-mssqldb v1.11.2`), we performed live end-to-end tests across **123 detailed scenarios** spanning session negotiation, DDL, CRUD, transactions, T-SQL scalar and window functions, RPC parameterization, VDBE stored procedures, system catalog views, and **production ORM patterns (EF Core, Dapper) with advanced T-SQL extensions**.
 
 ---

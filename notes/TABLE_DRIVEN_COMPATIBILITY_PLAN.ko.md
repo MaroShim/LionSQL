@@ -1,5 +1,6 @@
 # 10개 실전 서비스 호환 규칙 Table-Driven 구조 정식화 실행 계획서 (`notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`)
 
+> - **최종 갱신일**: 2026-11-01
 > - **최초 작성일**: 2026-11-01
 > - **과제 식별 코드**: `COMPAT-TABLE-DRIVEN-1`
 > - **상태**: 구현 및 검증 완료 (Completed)

@@ -1,5 +1,6 @@
 # LionSQL DDL 및 잔여 정규식 완전 제거(Lexer/AST 전환) 설계 계획서 (`notes/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`)
 
+> - **최종 갱신일**: 2026-11-04
 > - **최초 작성일**: 2026-11-02  
 > - **상태**: 구현 및 검증 완료 ( - Commit , 정규식 35+종 완전 제거)  
 > - **과제 식별 코드**: `GA-REGEX-DDL-1`  

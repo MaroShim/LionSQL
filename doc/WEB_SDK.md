@@ -1,5 +1,9 @@
 # LionSQL Official Web SDK & HTML Embedding Guide
 
+> - **Created**: 2026-10-03
+> - **Last Updated**: 2026-10-20
+
+
 The official **LionSQL Web SDK** provides a PocketBase-compatible, zero-dependency client library and HTML embedding patterns for Web Browsers, Node.js (v18+), Bun, Deno, Next.js, Nuxt, and Edge workers.
 
 ---

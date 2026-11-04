@@ -1,5 +1,9 @@
 # LionSQL T-SQL & SQL Syntax Reference Guide
 
+> - **Created**: 2026-09-22
+> - **Last Updated**: 2026-10-20
+
+
 This document provides the definitive syntax specification and usage reference for LionSQL's SQL and Microsoft T-SQL procedural dialect.
 
 ---

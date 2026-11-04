@@ -1,5 +1,7 @@
 # LionSQL Technical Documentation Directory (`doc/`)
 
+> - **Created**: 2026-09-29
+> - **Last Updated**: 2026-11-04
 > [Korean Version](README.ko.md)
 
 Welcome to the official technical documentation directory for **LionSQL**, an autonomous, high-concurrency embedded OLTP database engine and modern Backend-as-a-Service (BaaS) packaged into a single standalone static binary.
@@ -72,4 +74,4 @@ Operational procedures, high availability, security hardening, APIs, and backgro
 * **[`ADR.md`](ADR.md)**: Architecture Decision Records (ADR-001 ~ ADR-022).
 * **[`FOUNDATIONAL_DESIGN_DECISIONS.md`](FOUNDATIONAL_DESIGN_DECISIONS.md)** / **[`WHY_TSQL_GO_WIREDTIGER.md`](WHY_TSQL_GO_WIREDTIGER.md)**: Core technology selection rationales.
 * **Developer Handover & Knowledge Base**:
-  * Deep postmortems, negative knowledge, release notes, and architecture parking lot are located in **[`notes/README.md`](../notes/README.md)**.
+  * Deep postmortems, negative knowledge, release notes, and architecture candidates are located in **[`notes/README.md`](../notes/README.md)**.

@@ -1,5 +1,6 @@
 # LionSQL IOTA-SDK Go ERP 연동 및 엔터프라이즈 PostgreSQL 호환성 실전 검증 보고서 (`notes/IOTA_ERP_INTEGRATION_REPORT.ko.md`)
 
+> - **최종 갱신일**: 2026-11-02
 > - **문서 버전**: v1.0.0
 > - **최초 작성일**: 2026-10-31
 > - **대상 릴리즈**: v0.90.0-beta4+

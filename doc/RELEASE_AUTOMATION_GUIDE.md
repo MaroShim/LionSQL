@@ -1,5 +1,7 @@
 # LionSQL Release Automation Pipeline Guide (`doc/RELEASE_AUTOMATION_GUIDE.md`)
 
+> - **Created**: 2026-11-02
+> - **Last Updated**: 2026-11-02
 > [한국어 문서 (Korean Version)](RELEASE_AUTOMATION_GUIDE.ko.md)
 
 ## 1. Overview & Motivation

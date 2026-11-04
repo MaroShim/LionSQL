@@ -1,5 +1,9 @@
 # LionSQL HTTP REST & Web Management (Port 8090) Functionality Verification Report
 
+> - **Created**: 2026-10-19
+> - **Last Updated**: 2026-11-04
+
+
 ## 1. Executive Summary
 
 - **Test Target**: `127.0.0.1:8090` (LionSQL HTTP REST, Web Studio & CDC Stream Listener)

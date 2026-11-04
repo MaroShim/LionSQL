@@ -1,5 +1,9 @@
 # LionSQL High Availability & Disaster Recovery Architecture
 
+> - **Created**: 2026-09-23
+> - **Last Updated**: 2026-10-19
+
+
 LionSQL is architected to provide enterprise-grade High Availability (HA), continuous data durability, and disaster recovery (DR) across distributed environments. This document details the clustering topology, replication protocols, automatic failover mechanisms, and recovery service level agreements (SLAs).
 
 ---

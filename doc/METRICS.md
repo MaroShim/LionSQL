@@ -1,5 +1,9 @@
 # LionSQL Observability, Metrics & Telemetry Guide
 
+> - **Created**: 2026-09-23
+> - **Last Updated**: 2026-10-20
+
+
 LionSQL provides comprehensive telemetry, performance metrics, and health probe interfaces to ensure production observability across containerized and bare-metal environments. This guide details the metrics dictionary, Prometheus scraping integration, health probe endpoints, and Grafana dashboard recommendations.
 
 ---

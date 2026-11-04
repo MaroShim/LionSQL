@@ -1,5 +1,9 @@
 # LionSQL In-Engine Log Processing: GREP and AWK Reference Guide
 
+> - **Created**: 2026-10-02
+> - **Last Updated**: 2026-10-25
+
+
 This document specifies the design, syntax, and operational usage of LionSQL's native in-engine log processing operators: `GREP` and `AWK` (also aliased as `SPLIT_PART`).
 
 ---

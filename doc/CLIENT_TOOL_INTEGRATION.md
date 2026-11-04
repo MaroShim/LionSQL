@@ -1,5 +1,9 @@
 # LionSQL Client & GUI Tool Integration Guide (`doc/CLIENT_TOOL_INTEGRATION.md`)
 
+> - **Created**: 2026-10-08
+> - **Last Updated**: 2026-10-29
+
+
 This document provides a comprehensive integration and connectivity guide for GUI management tools, command-line interfaces (CLIs), and official language drivers communicating with LionSQL via PostgreSQL Wire Protocol v3 (`:5433`) and Microsoft SQL Server TDS Protocol (`:1433`).
 
 ---

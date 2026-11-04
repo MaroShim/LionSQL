@@ -1,5 +1,9 @@
 # Snapshot Isolation Across Storage Engines & DuckDB Analytical Integration
 
+> - **Created**: 2026-10-18
+> - **Last Updated**: 2026-10-25
+
+
 This technical whitepaper details the internal mechanics of Snapshot Isolation across LionSQL's dual storage engines (**WiredTiger MVCC** and **In-Memory OCC**), the fundamental distinctions in snapshot time-points between both engines, the architectural rationale behind Zero-Vacuum persistence, and the end-to-end consistency guarantees for **initial data synchronization and real-time CDC integration with DuckDB**.
 
 ---

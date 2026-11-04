@@ -1,5 +1,9 @@
 # LionSQL Production Deployment & Operations Runbook
 
+> - **Created**: 2026-09-22
+> - **Last Updated**: 2026-10-19
+
+
 This guide details deployment patterns, operational runbooks, process supervision, disaster recovery, and security hardening for LionSQL in production environments.
 
 ---

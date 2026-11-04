@@ -1,5 +1,6 @@
 # LionSQL Umami 웹 분석 플랫폼 연동 검증 보고서 (INTEG-UMAMI-1)
 
+> - **최종 갱신일**: 2026-11-01
 > - **최초 작성일**: 2026-11-01
 > - **상태**: 완료 (Completed)
 > - **대상 애플리케이션**: Umami v2 (공식 Docker 이미지 `ghcr.io/umami-software/umami:postgresql-latest`, Next.js 16.4.2 기반)

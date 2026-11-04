@@ -1,5 +1,9 @@
 # LionSQL Extension & Driver Development Guide
 
+> - **Created**: 2026-09-23
+> - **Last Updated**: 2026-10-20
+
+
 LionSQL is engineered around modular, decoupled interface contracts (Open-Closed Principle). Developers can extend LionSQL with custom storage backends, secondary procedure parsers, custom scalar functions, and alternative wire protocol frontends without modifying the database core.
 
 ---

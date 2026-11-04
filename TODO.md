@@ -305,10 +305,10 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 
 ---
 
-## Priority 3. Post-1.0 기술 과제 파킹랏 (Architecture Parking Lot & On-Demand Candidates)
+## Priority 3. Post-1.0 기술 후보 과제 (Architecture Candidates & On-Demand Backlog)
 
-> 상세 설계 및 난이도·영향도·우려사항 매트릭스: [`notes/POST_1.0_PARKING_LOT.ko.md`](notes/POST_1.0_PARKING_LOT.ko.md)
-> 성격: 의무적인 마일스톤이 아니며, 실제 비즈니스/성능 요구가 발생할 때 시동을 걸어 꺼내 쓰는 온디맨드 주차장(Parking Lot)
+> 상세 설계 및 난이도·영향도·우려사항 매트릭스: [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md)
+> 성격: 의무적인 마일스톤이 아니며, 실제 비즈니스/성능 요구가 발생할 때 시동을 걸어 꺼내 쓰는 온디맨드 후보 과제(Candidates)
 
 ### [ ] 3.1 `PERF-COMPLEX-QUERY-2` Complex Query Flat Hash Join & Direct Slot Projection
 - 오픈 어드레싱 정수 해시 테이블 기반 복합 쿼리 서브 50ms 목표 최적화 ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md))
@@ -324,6 +324,12 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 
 ### [ ] 3.5 `FRIENDLY-SQL` DuckDB-Style Friendly SQL 문법 지원
 - `SELECT * EXCLUDE`, `FROM <table>;`, `GROUP BY ALL`, CSV 파일 직접 조회 ([`notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md))
+
+### [ ] 3.6.1 `PKG-OFFLINE-DOCS` 배포 패키지 오프라인 문서 번들링 (`docs/index.html`)
+- **개념**: *"사람들은 터미널이 아니라 브라우저로 문서를 본다."*  
+- **기능**: DB 엔진 바이너리 순수성을 유지하면서 공식 배포 아카이브(`tar.gz`/`zip`) 내에 소스코드를 제외한 순수 문서(`docs/`)와 오프라인 브라우저 뷰어(`docs/index.html`) 번들링.
+- **특징**: 폐쇄망/에어갭 환경 100% 자립, 오프라인 문서 검색, SQL 예제 즉시 실행(`[Try in Studio]`) 연동.
+- **설계 참조**: [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
 
 ### [ ] 3.6 `WEB-SPA-1` 단일 바이너리 내장 SPA 웹 서버 호스팅
 - `--app`, `--public` 플래그를 통한 SPA 정적 웹 호스팅 및 네이티브 DB 서빙 ([`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md))

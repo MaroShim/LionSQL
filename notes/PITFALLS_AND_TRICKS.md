@@ -1,5 +1,9 @@
 # LionSQL Architectural Pitfalls & Engineering Landmines (`notes/PITFALLS_AND_TRICKS.md`)
 
+> - **Created**: 2026-10-03
+> - **Last Updated**: 2026-11-02
+
+
 This document records subtle architectural landmines, runtime hazards, and critical anti-patterns discovered across the LionSQL codebase.
 
 ---

@@ -1,5 +1,9 @@
 # LionSQL Declarative Schema Migrations & CLI Tooling Guide
 
+> - **Created**: 2026-10-17
+> - **Last Updated**: 2026-10-25
+
+
 This guide details the standalone `lionsql` command-line interface (CLI) and its declarative schema migration engine (`pkg/migrate`).
 
 ---

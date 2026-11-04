@@ -1,5 +1,7 @@
 # LionSQL Engineering Notes & Context Handover (`notes/`)
 
+> - **Created**: 2026-10-03
+> - **Last Updated**: 2026-11-04
 > [한국어 문서 (Korean Version)](README.ko.md)
 
 This directory serves as a persistent knowledge base (Shared Brain & Handover Notes) designed to help new AI agents or collaborating engineers quickly synchronize on **underlying architectural context, rejected alternatives (Negative Knowledge), production pitfalls, and user engineering philosophies** that cannot be fully captured from source code or official end-user documentation (`doc/`) alone when switching across machines or sessions.

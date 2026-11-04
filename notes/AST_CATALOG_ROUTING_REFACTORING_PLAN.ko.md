@@ -1,5 +1,6 @@
 # 심볼 테이블 및 AST 기반 쿼리 라우팅 리팩토링 계획서 (`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`)
 
+> - **최종 갱신일**: 2026-11-01
 > - **최초 작성일**: 2026-11-01
 > - **과제 식별 코드**: `ROUTING-AST-CATALOG-1`
 > - **진행 상태**: **100% 구현 및 검증 완료 (Pass) — Commit `03d0457`**

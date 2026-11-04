@@ -1,5 +1,9 @@
 # LionSQL Webhooks & Declarative Row-Level Security (RLS) Guide
 
+> - **Created**: 2026-09-29
+> - **Last Updated**: 2026-10-20
+
+
 LionSQL combines the performance and ACID transaction guarantees of an enterprise relational database with the developer velocity of a Backend-as-a-Service (BaaS).
 
 This document outlines the architecture, configuration, and practical usage of two core BaaS features:

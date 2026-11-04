@@ -1,5 +1,6 @@
 # LionSQL v0.90.1 릴리즈 노트 (`notes/RELEASE_NOTES_v0.90.1.ko.md`)
 
+> - **최종 갱신일**: 2026-11-04
 > - **최초 작성일**: 2026-11-04
 > - **릴리즈 버전**: `v0.90.1` (Patch Release)
 > - **마일스톤 주제**: **T-SQL Stored Procedure & 재귀 CTE 엔진 무결성 완치, SQLLogicTest 공식 코퍼스 정비, Web Studio 인라인 그리드 혁신**

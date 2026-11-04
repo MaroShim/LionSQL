@@ -1,5 +1,9 @@
 # LionSQL Migration Guide: Moving from Other Databases
 
+> - **Created**: 2026-09-22
+> - **Last Updated**: 2026-11-03
+
+
 This guide explains how to migrate schemas, data, and stored procedures to LionSQL from PostgreSQL, Microsoft SQL Server, SQLite, and MySQL.
 
 ---

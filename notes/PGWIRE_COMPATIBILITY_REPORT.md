@@ -1,5 +1,9 @@
 # LionSQL PostgreSQL Wire Protocol (Port 5433) Compatibility Report
 
+> - **Created**: 2026-10-18
+> - **Last Updated**: 2026-11-04
+
+
 ## 1. Executive Summary
 
 - **Test Target**: `127.0.0.1:5433` (LionSQL PGWire Listener, WiredTiger Storage Engine)

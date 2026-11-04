@@ -1,5 +1,6 @@
 # LionSQL 복합 쿼리 성능 튜닝 벤치마크 플랜 (SSB & Mini TPC-H) (`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`)
 
+> - **최종 갱신일**: 2026-10-29
 > - **최초 작성일**: 2026-10-29
 > - **문서 상태**: Approved (Active Roadmap)
 > - **연관 과제 ID**: `BENCH-SSB-1`, `BENCH-TPCH-1`

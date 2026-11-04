@@ -1,5 +1,9 @@
 # TDS RPC 파라미터 해석과 순수 위치 기반(Ordinal Positional) 폴백 장애 분석 (`notes/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`)
 
+> - **최초 작성일**: 2026-10-24
+> - **최종 갱신일**: 2026-10-24
+
+
 ## 1. 장애 개요 (Incident Overview)
 
 * **발생 일시**: 2026-10-24

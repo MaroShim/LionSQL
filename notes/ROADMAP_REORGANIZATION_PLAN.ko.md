@@ -1,5 +1,6 @@
 # LionSQL 전역 로드맵(ROADMAP.md) 재정비 실행 계획서 (`notes/ROADMAP_REORGANIZATION_PLAN.ko.md`)
 
+> - **최종 갱신일**: 2026-11-01
 > - **최초 작성일**: 2026-11-01
 > - **과제 식별 코드**: `DOC-ROADMAP-REORG-1`
 > - **상태**: 구현 및 반영 완료 (Completed) — `ROADMAP.md` 및 `TODO.md` 동기화 완료

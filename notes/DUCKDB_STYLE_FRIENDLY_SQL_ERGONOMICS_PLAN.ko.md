@@ -1,5 +1,6 @@
 # LionSQL 친화적 SQL 편의 문법(DuckDB 스타일) 전면 도입 마스터 플랜
 
+> - **최종 갱신일**: 2026-10-29
 > - **최초 작성일**: 2026-10-29
 > - **문서 상태**: Approved (Phase 1 최우선 구현 / Phase 2~3 후속 확장)
 > - **연관 과제 ID**: `FRIENDLY-SQL-P1` (우선 3대 문법), `FRIENDLY-SQL-P2` (파일 직접 쿼리 & DDL)

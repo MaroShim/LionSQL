@@ -1,5 +1,7 @@
 # LionSQL 공식 기술 문서 디렉토리 (`doc/`)
 
+> - **최초 작성일**: 2026-10-24
+> - **최종 갱신일**: 2026-11-04
 > [English Version](README.md)
 
 LionSQL은 단일 정적 바이너리로 패키징된 고동시성 임베디드 OLTP 데이터베이스 엔진이자 모던 Backend-as-a-Service (BaaS) 플랫폼입니다.  
@@ -73,4 +75,4 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
 * **[`ADR.md`](ADR.md)**: 초기 아키텍처 설계 결정 기록 (ADR-001 ~ ADR-022).
 * **[`FOUNDATIONAL_DESIGN_DECISIONS.md`](FOUNDATIONAL_DESIGN_DECISIONS.md)** / **[`WHY_TSQL_GO_WIREDTIGER.md`](WHY_TSQL_GO_WIREDTIGER.md)**: 핵심 기술 스택 채택 배경 및 설계 철학.
 * **개발자 이면 맥락 및 아키텍처 결정 기록**:
-  * 심층 포스트모텀, 기각된 대안(Negative Knowledge), 릴리스 노트 및 파킹랏은 **[`notes/README.ko.md`](../notes/README.ko.md)**를 참조하십시오.
+  * 심층 포스트모텀, 기각된 대안(Negative Knowledge), 릴리스 노트 및 후보 과제(Candidates)은 **[`notes/README.ko.md`](../notes/README.ko.md)**를 참조하십시오.

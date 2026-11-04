@@ -1,5 +1,9 @@
 # LionSQL Cron Jobs & Mailer Architecture Guide
 
+> - **Created**: 2026-09-29
+> - **Last Updated**: 2026-10-17
+
+
 LionSQL includes an embedded recurring **Cron Scheduler** and an outbound **SMTP Mailer** with built-in transactional email templates. Both services operate directly inside the standalone LionSQL binary without requiring external cron daemons (like `crontab` or `systemd timers`) or third-party mailing agents.
 
 ---

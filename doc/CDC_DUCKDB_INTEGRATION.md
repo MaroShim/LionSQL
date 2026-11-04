@@ -1,5 +1,9 @@
 # LionSQL Change Data Capture (CDC) & DuckDB Integration Guide
 
+> - **Created**: 2026-10-14
+> - **Last Updated**: 2026-10-18
+
+
 LionSQL is an enterprise-grade, high-concurrency embedded OLTP database engine designed to guarantee ACID durability and 16,000+ TPS write throughput. 
 
 This document specifies the **decoupled Change Data Capture (CDC) integration architecture**, enabling external analytics applications (Python, BI dashboards, backend microservices) to embed DuckDB for real-time, sub-millisecond OLAP aggregations while keeping LionSQL's core OLTP engine lightweight, safe, and unaffected.

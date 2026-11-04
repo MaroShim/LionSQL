@@ -1,5 +1,9 @@
 # LionSQL Pattern 1: S3 Pre-signed URL Direct Upload Architecture & Implementation Plan
 
+> - **Created**: 2026-10-17
+> - **Last Updated**: 2026-10-20
+
+
 This document outlines the technical design and phased implementation plan for **Pattern 1 (Client Direct Pre-signed URL Upload)**. Under this architecture, high-volume binary payload streaming and CPU-intensive image thumbnail processing are explicitly excluded from the database kernel (Spec-Out, `GEMINI.md` Section 8.7). Instead, clients upload directly to external object storage (AWS S3, MinIO, Cloudflare R2, etc.), while LionSQL securely stores relational references and metadata in structured columns.
 
 ---

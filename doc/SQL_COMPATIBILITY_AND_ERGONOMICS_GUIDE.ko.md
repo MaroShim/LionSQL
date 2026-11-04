@@ -1,5 +1,7 @@
 # LionSQL 다중 방언 SQL 호환성 및 개발자 편의 문법 가이드 (`doc/SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md`)
 
+> - **최초 작성일**: 2026-10-29
+> - **최종 갱신일**: 2026-11-02
 > [English Version](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md)
 >
 > - **문서 상태**: 정식 지원 (Production Ready / 100% Verified)

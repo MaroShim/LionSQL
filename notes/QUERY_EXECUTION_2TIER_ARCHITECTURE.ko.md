@@ -1,5 +1,9 @@
 # 아키텍처 결정 레코드 (ADR): 쿼리 실행 엔진 2-Tier 단일화 및 레거시 폴백 제거 (KISS-5 / REV-ENG-008)
 
+> - **최초 작성일**: 2026-10-24
+> - **최종 갱신일**: 2026-10-24
+
+
 - **상태**: 승인 및 적용 완료 (`Accepted & Implemented`)
 - **결정일자**: 2026-10-24
 - **도메인**: `pkg/engine`, `pkg/execution`, `pkg/proc/runtime`

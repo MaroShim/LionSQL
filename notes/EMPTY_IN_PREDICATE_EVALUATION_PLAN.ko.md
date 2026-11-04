@@ -1,5 +1,6 @@
 # [설계 계획서] 빈 괄호 IN () 문법 허용에 대한 아키텍처 분석 및 결정 계획서 (`notes/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`)
 
+> - **최종 갱신일**: 2026-11-03
 > - **최초 작성일**: 2026-11-03
 > - **상태**: 분석 완료 / 장기 백로그 검토 (Post-1.0 대기)
 > - **엔지니어링 철학**: [RULE:RadicalKISS] (불필요한 설정 플래그 배제 원칙), [RULE:PlanPersistence]

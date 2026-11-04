@@ -1,5 +1,6 @@
 # 세션 로컬 에페머럴 CTE 버퍼 아키텍처 및 Zero-DDL 최적화 계획 (Session Ephemeral CTE Buffer Plan)
 
+> - **최종 갱신일**: 2026-11-04
 > - **최초 작성일**: 2026-11-02
 > - **상태**: 에페머럴 슬라이스 커서 구현 및 검증 완료 ()
 > - **대상 모듈**: `pkg/engine/sqlexec_explain.go`, `pkg/engine/session.go`, `pkg/engine/sqlexec_select.go`, `pkg/storage/slice_cursor.go`

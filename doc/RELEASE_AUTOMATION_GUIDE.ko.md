@@ -1,5 +1,7 @@
 # LionSQL 릴리스 자동화 파이프라인 가이드 (`doc/RELEASE_AUTOMATION_GUIDE.ko.md`)
 
+> - **최초 작성일**: 2026-10-25
+> - **최종 갱신일**: 2026-11-02
 > [English Version](RELEASE_AUTOMATION_GUIDE.md)
 
 ## 1. 개요 및 목적 (Overview & Motivation)

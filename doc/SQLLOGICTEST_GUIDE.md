@@ -1,5 +1,9 @@
 # LionSQL SQLLogicTest (SLT) 1.0 GA Full Suite Verification Guide (`doc/SQLLOGICTEST_GUIDE.md`)
 
+> - **Created**: 2026-11-01
+> - **Last Updated**: 2026-11-01
+
+
 This guide explains how to fetch, run, and verify the international standard **SQLLogicTest (SLT)** test suite used by SQLite, DuckDB, and CockroachDB to certify SQL engine correctness in LionSQL.
 
 The LionSQL 1.0 GA Full Suite covers core edge cases, up to 64-table comma joins, B-Tree index scan paths, official SQL specifications, and synthetic algebraic expressions across **40,000+ queries**. With LionSQL's built-in parallel runner, the entire suite completes with **100% PASS in approximately 15 to 20 seconds**.

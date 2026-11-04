@@ -1,5 +1,6 @@
 # LionSQL 대규모 조인(10+ Tables) 최적화 설계 및 구현 계획서 (`notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`)
 
+> - **최종 갱신일**: 2026-11-01
 > - **최초 작성일**: 2026-11-01  
 > - **상태**: 완료 (Completed) — 제1·2방안 구현 및 SQLLogicTest 전수 검증 완료  
 > - **과제 식별 코드**: `OPT-LARGE-JOIN-1`  

@@ -1,5 +1,9 @@
 # LionSQL Local Testing and Regression Guide
 
+> - **Created**: 2026-10-21
+> - **Last Updated**: 2026-10-29
+
+
 This guide explains how to build, test, and regression-check LionSQL on a local machine. It consolidates the commands that were previously scattered across `CONTRIBUTING.md`, `README.md`, `GEMINI.md`, and `notes/ENGINEERING_CONTEXT.ko.md`.
 
 - [1. Prerequisites](#1-prerequisites)

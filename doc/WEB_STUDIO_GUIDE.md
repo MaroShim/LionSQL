@@ -1,5 +1,7 @@
 # LionSQL Web Studio User Guide
 
+> - **Created**: 2026-10-28
+> - **Last Updated**: 2026-10-28
 > [한국어 문서 (Korean Version)](WEB_STUDIO_GUIDE.ko.md)
 
 LionSQL Web Studio is an all-in-one browser-based database management and development tool embedded directly into the single LionSQL static binary (`embed.FS`). It operates with zero external web server dependencies (such as Nginx or Apache) and zero runtime dependencies (such as Node.js or Python).

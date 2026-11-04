@@ -1,5 +1,9 @@
 # LionSQL Genesis & Foundational Strategic Architectural Decisions
 
+> - **Created**: 2026-10-17
+> - **Last Updated**: 2026-10-17
+
+
 This document captures the foundational design decisions, architectural philosophy, and engineering trade-offs established at the inception of **LionSQL** that shaped its trajectory into a high-concurrency, standalone embedded OLTP database engine.
 
 ---

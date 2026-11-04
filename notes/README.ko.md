@@ -1,5 +1,7 @@
 # LionSQL Engineering Notes & Context Handover (`notes/`)
 
+> - **최초 작성일**: 2026-10-03
+> - **최종 갱신일**: 2026-11-04
 > [English Version](README.md)
 
 이 디렉토리는 다른 개발 환경(다른 머신, 새 세션)으로 이동했을 때, 새로운 AI 에이전트나 동료 엔지니어가 **코드와 공식 문서(`doc/`)만으로는 파악하기 힘든 개발 이면의 맥락, 기각된 대안(Negative Knowledge), 실전 주의사항(Pitfalls), 사용자의 엔지니어링 철학**을 즉시 동기화받을 수 있도록 정리한 영속적 지식 베이스(Shared Brain & Handover Notes)입니다.
@@ -42,7 +44,8 @@
      - **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 쿼리 라우팅 리팩토링 설계 및 검증 보고서 (문자열 휴리스틱 45개 전면 제거, 527ns 실측, 완료).
      - **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](ARCH_VDBE_ROUTING_1_PLAN.ko.md)**: AST 및 Dialect 타입 기반 2-Tier 쿼리 라우팅 정규화 계획서 (세션 접두사 문자열 꼼수 및 FROM 파생테이블 슬라이싱 완전 박멸, ARCH-VDBE-ROUTING-1).
    - **Post-1.0 아키텍처 및 장기 로드맵 계획서**:
-      - **[`POST_1.0_PARKING_LOT.ko.md`](POST_1.0_PARKING_LOT.ko.md)**: LionSQL Post-1.0 기술 과제 파킹랏 (Parking Lot, 언젠가 필요해지면 열어보는 온디맨드 기술 저장소).
+      - **[`POST_1.0_CANDIDATES.ko.md`](POST_1.0_CANDIDATES.ko.md)**: LionSQL Post-1.0 기술 과제 후보 과제 (Candidates, 사전 기술 분석 완료 및 온디맨드 채택 심사 목록).
+      - **[`OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](OFFLINE_DOCS_PACKAGING_PLAN.ko.md)**: 배포 패키지 오프라인 문서 번들링 및 브라우저 뷰어 설계 계획서 (PKG-OFFLINE-DOCS-1).
       - **[`PGWIRE_COMPATIBILITY_REPORT.md`](PGWIRE_COMPATIBILITY_REPORT.md)**: PostgreSQL Wire v3 프로토콜 기능 및 드라이버 호환성 검증 보고서.
       - **[`TDS_COMPATIBILITY_REPORT.md`](TDS_COMPATIBILITY_REPORT.md)**: Microsoft SQL Server TDS 7.x/8.0 프로토콜 및 T-SQL 호환성 검증 보고서.
       - **[`REST_API_COMPATIBILITY_REPORT.md`](REST_API_COMPATIBILITY_REPORT.md)**: HTTP REST JSON BaaS 및 Web Studio 삼각 프로토콜 패리티 검증 보고서.

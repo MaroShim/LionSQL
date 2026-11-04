@@ -1,5 +1,6 @@
 # Metabase BI 연동 검증 보고서 (`METABASE_INTEGRATION_REPORT.ko.md`)
 
+> - **최종 갱신일**: 2026-11-01
 > - **최초 작성일**: 2026-11-01
 > - **과제 식별 코드**: `INTEG-METABASE-1`
 > - **연동 대상**: [Metabase](https://github.com/metabase/metabase) (공식 Docker 이미지 `metabase/metabase:latest`, Clojure/JVM + JDBC)

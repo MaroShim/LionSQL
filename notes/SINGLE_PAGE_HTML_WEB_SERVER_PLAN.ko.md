@@ -1,5 +1,9 @@
 # LionSQL 단일 페이지 HTML (SPA) 호스팅 & 자체 DB 통합 웹서버 플랜 (`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`)
 
+> - **최초 작성일**: 2026-10-25
+> - **최종 갱신일**: 2026-10-25
+
+
 ## 1. 개요 및 비전 (Executive Summary & Vision)
 
 > **"단 하나의 바이너리로 데이터베이스와 웹 애플리케이션을 동시에 서비스한다."**

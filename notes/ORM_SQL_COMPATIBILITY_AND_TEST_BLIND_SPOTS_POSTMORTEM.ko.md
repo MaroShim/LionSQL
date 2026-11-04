@@ -1,5 +1,6 @@
 # Gitea XORM 실전 연동 결함 및 테스트 사각지대 사후 분석 보고서 (Postmortem)
 
+> - **최종 갱신일**: 2026-10-30
 > - **최초 작성일**: 2026-10-29
 > - **문서 상태**: 영구 보존 아키텍처 사후 분석 보고서 (Architecture Postmortem & Negative Knowledge)
 > - **대상 영역**: SQL 파서(`pkg/proc`), 쿼리 플래너(`pkg/planner`), 실행 엔진(`pkg/execution`), 가상 카탈로그(`pkg/catalog/virtual`)

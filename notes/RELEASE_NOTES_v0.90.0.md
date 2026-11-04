@@ -1,5 +1,6 @@
 # LionSQL v0.90.0 Release Notes (`notes/RELEASE_NOTES_v0.90.0.md`)
 
+> - **Created**: 2026-11-01
 > - **Initial Draft**: 2026-11-01
 > - **Last Updated**: 2026-11-03
 > - **Target Release**: `v0.90.0` (Official GA)

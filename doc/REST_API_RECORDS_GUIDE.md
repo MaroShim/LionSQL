@@ -1,5 +1,9 @@
 # LionSQL Auto-Generated RESTful Records CRUD API
 
+> - **Created**: 2026-09-29
+> - **Last Updated**: 2026-10-25
+
+
 LionSQL provides instant, zero-code **Auto-Generated RESTful CRUD APIs** for all database tables. The moment a table is created (via T-SQL DDL, SQL migration, or Web Studio), standard REST endpoints are automatically exposed under `/api/records/:table`.
 
 Frontend applications (React, Next.js, Vue, Flutter, iOS, Android) and backend microservices can interact directly with the database without writing boilerplate backend controllers, ORM models, or custom SQL wrappers.

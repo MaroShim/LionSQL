@@ -1,5 +1,9 @@
 # LionSQL Collation, Locale & Multi-Language Architecture & Implementation Plan
 
+> - **Created**: 2026-10-18
+> - **Last Updated**: 2026-10-18
+
+
 This technical specification details LionSQL's architectural strategy and phased implementation roadmap for Microsoft SQL Server Collation, Locale, and internationalization (i18n) compatibility. It establishes how LionSQL reconciles MSSQL's legacy CodePage and collation model with a modern, zero-allocation UTF-8 native storage engine while eradicating historical pain points such as "Collation Conflict (Error 468)."
 
 ---

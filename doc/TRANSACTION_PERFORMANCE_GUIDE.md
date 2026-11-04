@@ -1,5 +1,7 @@
 # LionSQL Transaction Performance & Workload Tuning Guide (`doc/TRANSACTION_PERFORMANCE_GUIDE.md`)
 
+> - **Created**: 2026-11-02
+> - **Last Updated**: 2026-11-02
 > [한국어 문서 (Korean Version)](TRANSACTION_PERFORMANCE_GUIDE.ko.md)
 
 This guide analyzes how LionSQL's storage backends, WAL synchronization policies, memory governor, and worker pool configurations impact transaction throughput (TPS), latency, and data durability (RPO), and provides recommended configuration profiles for common production workloads.

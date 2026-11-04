@@ -1,5 +1,6 @@
 # 실전 앱 연동 확장 마스터 플랜 (Answer / Vaultwarden / Metabase / Umami / NocoDB / Mattermost) (`notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md`)
 
+> - **최종 갱신일**: 2026-11-02
 > - **최초 작성일**: 2026-10-31
 > - **과제 식별 코드**: `INTEG-ANSWER-1`, `INTEG-VAULTWARDEN-1`, `INTEG-METABASE-1`, `INTEG-UMAMI-1`, `INTEG-WOODPECKER-1`, `INTEG-VIKUNJA-1` (완료) / `INTEG-NOCODB-1`, `INTEG-MATTERMOST-1` (v1.1.0 로드맵 이관)
 > - **목표**: 지금까지의 연동(Gitea, IOTA ERP, Grafana, Casdoor)으로 다져진 호환성 위에서, 실제 사용자가 많이 쓰는 오픈소스 앱 6종을 소스 무수정으로 LionSQL에 붙여 "실사용 가능성"을 입증하고, 그 과정에서 남은 호환성 결함을 제거

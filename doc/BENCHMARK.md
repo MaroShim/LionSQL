@@ -1,5 +1,9 @@
 # LionSQL Performance Tuning & Benchmark Guide
 
+> - **Created**: 2026-09-22
+> - **Last Updated**: 2026-10-31
+
+
 This document outlines the benchmark methodology, workload profiles, command-line arguments, and tuning recommendations for LionSQL under high-concurrency OLTP workloads.
 
 ---

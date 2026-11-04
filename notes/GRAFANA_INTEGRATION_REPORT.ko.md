@@ -1,5 +1,6 @@
 # LionSQL Grafana 듀얼 프로토콜 연동 및 관측성 플랫폼 호환성 실전 검증 보고서 (`notes/GRAFANA_INTEGRATION_REPORT.ko.md`)
 
+> - **최종 갱신일**: 2026-11-02
 > - **문서 버전**: v1.0.0
 > - **최초 작성일**: 2026-10-31
 > - **과제 식별 코드**: `GRAFANA-INTEGRATION-1`

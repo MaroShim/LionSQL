@@ -1,5 +1,9 @@
 # LionSQL Web Studio 사용 설명서 (User Guide)
 
+> - **최초 작성일**: 2026-10-19
+> - **최종 갱신일**: 2026-10-25
+
+
 LionSQL Web Studio는 별도의 외부 웹 서버(Nginx, Apache)나 런타임(Node.js, Python) 없이, LionSQL 단일 정적 바이너리(`embed.FS`)에 내장된 올인원 브라우저 기반 데이터베이스 관리 및 개발 도구입니다.
 
 로컬 개발 환경부터 클라우드 프로덕션 환경까지, 브라우저 접속만으로 스키마 설계, 데이터 CRUD, T-SQL 쿼리 실행, 실행 계획(EXPLAIN) 분석, REST API 코드 생성, 실시간 쿼리 감사 로그 조회, 무중단 핫 백업을 완벽하게 수행할 수 있습니다.

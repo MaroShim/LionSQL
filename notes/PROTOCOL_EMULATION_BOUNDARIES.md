@@ -1,5 +1,9 @@
 # LionSQL Multi-Protocol Emulation Boundaries & Scope (`notes/PROTOCOL_EMULATION_BOUNDARIES.md`)
 
+> - **Created**: 2026-10-10
+> - **Last Updated**: 2026-10-24
+
+
 ## 1. Overview & Core Architectural Identity
 
 LionSQL is architected as an **autonomous, high-concurrency embedded OLTP database engine** featuring a single unified VDBE bytecode virtual machine executing Microsoft T-SQL stored procedures and ANSI SQL queries.

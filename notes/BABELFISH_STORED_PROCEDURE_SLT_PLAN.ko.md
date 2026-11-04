@@ -1,4 +1,5 @@
 # Babelfish-Inspired T-SQL Stored Procedure Logic Test Suite Plan
+> - **최종 갱신일**: 2026-11-04
 > - **최초 작성일**: 2026-11-04
 > - **상태**: Completed (100% Pass, 0 Data Race)
 > - **목표**: SQLite Logic Test(SLT) 규격을 확장/특화하여 Babelfish for PostgreSQL의 T-SQL 테스트 스위트 패턴을 수용하는 독립 Stored Procedure 로직 테스트 스위트(`test/slt_proc/`)를 구축하고, 1.0 정식 릴리즈 전 T-SQL 프로시저 회귀를 0건으로 보장.

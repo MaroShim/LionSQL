@@ -1,4 +1,8 @@
 # LionSQL 아키텍처 결정 기록: DuckDB 및 MySQL 호환성 한계와 기각 사유
+
+> - **최초 작성일**: 2026-11-04
+> - **최종 갱신일**: 2026-11-04
+
 ## — LionSQL is NOT DuckDB: 엔터프라이즈 OLTP의 엄격함과 기각된 편의 기능 (`notes/DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`)
 
 > - **최초 작성일**: 2026-11-04  
@@ -6,7 +10,7 @@
 > - **주제**: DuckDB 스타일 친화적 SQL 및 MySQL 호환 기능 확장에 대한 기술 평가, 거부(Spec-Out) 사유, 불변 경계 확립  
 > - **연계 문서**:  
 >   - 핵심 아키텍처 불변식: [`notes/ENGINEERING_CONTEXT.ko.md`](ENGINEERING_CONTEXT.ko.md) (불변 원칙 13)  
->   - 포스트 1.0 파킹랏: [`notes/POST_1.0_PARKING_LOT.ko.md`](POST_1.0_PARKING_LOT.ko.md)  
+>   - 포스트 1.0 후보 과제(Candidates): [`notes/POST_1.0_CANDIDATES.ko.md`](POST_1.0_CANDIDATES.ko.md)  
 >   - 액티브 대시보드: [`TODO.md`](../TODO.md)  
 
 ---

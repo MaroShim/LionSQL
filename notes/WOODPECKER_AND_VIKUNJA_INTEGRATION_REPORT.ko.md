@@ -1,5 +1,6 @@
 # LionSQL Woodpecker CI 및 Vikunja 연동 검증 보고서 (INTEG-WOODPECKER-1, INTEG-VIKUNJA-1)
 
+> - **최종 갱신일**: 2026-11-01
 > - **최초 작성일**: 2026-11-01
 > - **상태**: 완료 (Completed)
 > - **대상 애플리케이션**:

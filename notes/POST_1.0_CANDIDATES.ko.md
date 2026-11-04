@@ -1,8 +1,9 @@
-# LionSQL Post-1.0 기술 과제 파킹랏 (`notes/POST_1.0_PARKING_LOT.ko.md`)
+# LionSQL Post-1.0 엔지니어링 후보 과제 (Candidates) (`notes/POST_1.0_CANDIDATES.ko.md`)
 
+> - **최종 갱신일**: 2026-11-04
 > - **최초 작성일**: 2026-11-04  
-> - **문서 성격**: **Architecture Parking Lot (언젠가 필요해지면 열어보는 온디맨드 기술 저장소)**  
-> - **핵심 원칙**: 본 문서는 의무적으로 완수해야 하는 개발 로드맵이 아니며, 이미 심층 설계와 스펙 분석이 완료되어 안전하게 주차(Parking)해 둔 기술 자산 목록입니다. 향후 특정 비즈니스 요구나 극단적인 하드웨어 스케일링 니즈가 실제로 발생할 때에만 온디맨드(On-Demand)로 시동을 걸어 착수합니다.  
+> - **문서 성격**: **Architecture Candidates (사전 기술 분석을 완료하고 실제 니즈 발생 시 채택을 심사하는 온디맨드 후보 과제)**  
+> - **핵심 원칙**: 본 문서는 의무적으로 완수해야 하는 개발 로드맵이 아니며, 이미 심층 설계와 스펙 분석이 완료되어 안전하게 준비해 둔 후보 과제(Candidates) 목록입니다. 향후 특정 비즈니스 요구나 극단적인 하드웨어 스케일링 니즈가 실제로 발생할 때에만 온디맨드(On-Demand)로 시동을 걸어 착수합니다.  
 > - **연계 문서**:  
 >   - 액티브 엔지니어링 대시보드: [`TODO.md`](../TODO.md)  
 >   - 전사 전략 로드맵: [`ROADMAP.md`](../ROADMAP.md)  
@@ -17,7 +18,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 
 1.0 이전의 잔여 작업은 기능 개발이 아닌 **초장기 운영 검증 게이트(`DURA-KILL-1` 1,000 라운드 사살 복구, `DURA-SOAK-1` 72시간 무중단 부하, 앱 섀도 모드 도그푸딩)**에 국한됩니다.
 
-본 문서는 의무적인 개발 부채가 아닌 **"언젠가 필요해지면 열어볼 서랍 속의 완성도 높은 설계 자산"**으로서, 11개 과제의 기술적 난이도, 시스템 파급 영향도, 핵심 우려사항(Risks & Caveats), 그리고 필요 시 착수할 수 있는 선택적 가이드를 보존하는 데 목적이 있습니다.
+본 문서는 의무적인 개발 부채가 아닌 **"언젠가 필요해지면 열어볼 서랍 속의 완성도 높은 후보 과제 자산"**으로서, 11개 과제의 기술적 난이도, 시스템 파급 영향도, 핵심 우려사항(Risks & Caveats), 그리고 필요 시 착수할 수 있는 선택적 가이드를 보존하는 데 목적이 있습니다.
 
 ---
 
@@ -25,7 +26,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 
 | 번호 | 과제 코드 | 과제명 | 구현 난이도 | 시스템 영향도 | ROI (효익) | 핵심 우려사항 (Risks & Caveats) | 추천 추진 페이즈 |
 | :---: | :--- | :--- | :---: | :---: | :---: | :--- | :---: |
-| **1** | **`FRIENDLY-SQL`** | DuckDB 스타일 편의 SQL (`* EXCLUDE`, `FROM tbl;` 등) | **낮음 (★☆☆)** | **국소 (Low)** | **매우 높음** | 문법 모호성(키워드/식별자 충돌) 및 ANSI 표준 호환성 훼손 우려 | **Phase 1 (Quick Win)** |
+| **1** | **`PKG-OFFLINE-DOCS`** | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | **낮음 (★☆☆)** | **배포 스크립트 (None)** | **매우 높음** | 릴리스 아카이브 생성 스크립트 작성 및 오프라인 HTML 뷰어 템플릿 제작 | **Phase 1 (DX Hero)** |
 | **2** | **`WEB-SPA-1`** | 단일 바이너리 내장 SPA 웹 서버 (`--app`, `--public`) | **낮음 (★☆☆)** | **국소 (Low)** | **높음** | 디렉토리 트래버설(`../`) 경로 보안 탈출 및 정적 파일 I/O 메모리 누수 | **Phase 1 (Zero Risk)** |
 | **3** | **`PERF-SERVER-PIPELINE`**| Generic LRU 커서 & ReadOnly 트랜잭션 자동 바이패스 | **중간 (★★☆)** | **중간 (Med)** | **높음** | 쓰기 함수/부수효과 오탐으로 인한 일관성 위반, LRU 락 경합 병목 | **Phase 2 (Throughput)** |
 | **4** | **`AUDIT-LOG-1`** | SHA-256 체이닝 불변 감사 로그 서브시스템 (SOC 2) | **중간 (★★☆)** | **중간 (Med)** | **중간** | 동기 I/O 지연으로 인한 TPS 급락, 감사 로그 디스크 공간 고갈 | **Phase 2 (Enterprise)** |
@@ -36,6 +37,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 | **9** | **`OCC-HYPER-2`** | In-Memory OCC Pointer-Free Flat Record (4~5x 메모리 압축)| **매우 높음 (★★★★)**| **광범위 (Critical)**| **극상 (Extreme)** | 엔진 전반 레이아웃 대수술로 인한 회귀 버그, 가변 길이 문자열 갱신 단편화 | **Phase 4 (Deep Kernel)** |
 | **10**| **`LOC-1~4`** | MSSQL Collation 및 유니코드 다국어 로케일 정렬/비교 | **높음 (★★★)** | **광범위 (High)** | **중간** | 로케일 키 인코딩 오버헤드로 인한 순수 ASCII 문자열 비교 성능 저하 | **Phase 4 (Specialized)**|
 | **11**| **`TDS-COMPAT-6`** | TDS 7.x/8.0 MARS (Multiple Active Result Sets) 스트리밍 | **매우 높음 (★★★★)**| **광범위 (Critical)**| **낮음~중간** | 복잡한 패킷 헤더 상태 머신으로 인한 교착 상태(Deadlock) 및 가치 대비 과도한 비용 | **Phase 5 (Deprioritized)**|
+| **-** | **`FRIENDLY-SQL`** | DuckDB 스타일 편의 SQL (`* EXCLUDE`, `FROM tbl;` 등) | **낮음 (★☆☆)** | **국소 (Low)** | **기각 (Spec-Out)** | 오타 침묵 위험 및 RDBMS 엄격성 훼손 (LionSQL is NOT DuckDB 철학) | **영구 보류 (Spec-Out)** |
 
 ---
 
@@ -75,7 +77,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
     - *표면적 장점*: 드라이버 연동 앱(안전)과 사람의 콘솔 타이핑(편의)을 분리.
     - *치명적 단점 (세련되지 못한 분열증)*: **"동일한 데이터베이스 엔진인데 Web Studio에서는 도는 쿼리가 DataGrip(PGWire)이나 SSMS(TDS)에서는 문법 에러가 나는 기괴한 파편화(Inconsistency)"**를 낳게 됨. 사용자 입장에서 직관성을 심각하게 파괴하는 안티패턴이 될 위험 농후.
   - **잠정 보류 결론 (Conclusion)**:
-    - 어떤 제어 방식을 택하든(Default On, Strict Mode, Dialect 분기) 뚜렷한 장단점과 설계적 결함이 공존하므로, **명확한 설계적 확신과 실제 사용자 요구가 수렴될 때까지 Parking Lot에 둔 채 성급한 구현을 영구 보류**함.
+    - 어떤 제어 방식을 택하든(Default On, Strict Mode, Dialect 분기) 뚜렷한 장단점과 설계적 결함이 공존하므로, **명확한 설계적 확신과 실제 사용자 요구가 수렴될 때까지 Candidates에 둔 채 성급한 구현을 영구 보류**함.
 
 #### 2. `WEB-SPA-1`: 단일 바이너리 내장 SPA 웹 서버 호스팅
 - **상세 설계서**: [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)
@@ -89,6 +91,19 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 - **주요 우려사항 (Key Caveats)**:
   - **경로 탈출(Directory Traversal) 취약점**: 악의적인 URL 인코딩(`%2e%2e%2f` 등)을 통한 시스템 파일 유출 위험 (`filepath.Clean` 및 상위 경로 격리 강제).
   - **대용량 정적 파일 I/O로 인한 DB 간섭**: 고용량 에셋(동영상, 거대 JS 번들) 요청이 폭주할 경우 DB 쿼리 서비스의 OS 소켓 및 버퍼 메모리를 잠식할 위험 (정적 서빙 대역폭/동시성 상한선 제한 필요).
+
+#### 3. `PKG-OFFLINE-DOCS`: 배포 패키지 오프라인 문서 번들링 (`docs/index.html`)
+- **상세 설계서**: [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
+- **개념 및 비전**: 
+  - *"현대 개발자는 터미널로 폴더를 뒤지지 않고 브라우저로 문서를 본다."*
+  - **DB 엔진 바이너리 순수성 보존**: 바이너리에 문서를 억지로 내장(`embed.FS`)하지 않고, 배포 압축 패키지(`tar.gz` / `.zip`) 내에 소스코드를 제외한 순수 배포용 문서(`docs/`)와 오프라인 브라우저 뷰어(`docs/index.html`)를 함께 번들링.
+  - **폐쇄망 완전 자립**: 인터넷이 차단된 에어갭 환경에서도 압축 해제 후 `docs/index.html`을 브라우저로 **더블 클릭**하기만 하면, 로컬 브라우저에서 목차 트리와 검색을 갖춘 완전한 공식 매뉴얼을 열람 가능.
+- **주요 구현 내용**:
+  1. 순수 바닐라 JS/CSS 기반 외부 CDN 의존성 0% 오프라인 브라우저 뷰어(`docs/index.html`) 작성.
+  2. 릴리스 스크립트(`scripts/release.sh`)에서 소스코드를 제외한 `doc/` 및 `guide/` 문서를 번들링하여 `lionsql-<os>-<arch>.tar.gz` 및 `.zip` 아카이브 생성.
+- **난이도 및 영향도**:
+  - **난이도**: **낮음 (★☆☆)** — 순수 릴리스 패키징 및 HTML 템플릿 스크립트 작업.
+  - **영향도**: **엔진 코어 영향 0 (Zero Engine Impact)** — Go 소스코드 수정 0줄, 바이너리 크기 증가 0바이트.
 
 ---
 
@@ -216,8 +231,9 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 
 ```
 [Phase 1: Quick-Wins & High ROI] (우려사항 극소, 체감 가치 극대화)
-  ├── 1. FRIENDLY-SQL (DuckDB 스타일 편의 SQL 문법)
-  └── 2. WEB-SPA-1 (단일 바이너리 내장 SPA 웹 서버)
+  ├── 1. PKG-OFFLINE-DOCS (Web Studio 내장 오프라인 문서 뷰어 /_/docs)
+  ├── 2. WEB-SPA-1 (단일 바이너리 내장 SPA 웹 서버)
+  └── [보류] FRIENDLY-SQL (LionSQL is NOT DuckDB 철학에 따라 영구 보류)
 
 [Phase 2: Throughput & Enterprise Extensibility] (처리량 확장 및 보안 거버넌스)
   ├── 3. PERF-SERVER-PIPELINE (Generic LRU & ReadOnly Auto-Bypass)

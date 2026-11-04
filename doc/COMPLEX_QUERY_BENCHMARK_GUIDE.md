@@ -1,5 +1,7 @@
 # LionSQL Complex Query Benchmark & Performance Guide (SSB Star Schema & Cross-DBMS)
 
+> - **Created**: 2026-10-29
+> - **Last Updated**: 2026-10-29
 > [한국어 문서 (Korean Version)](COMPLEX_QUERY_BENCHMARK_GUIDE.ko.md)
 
 > [!NOTE]

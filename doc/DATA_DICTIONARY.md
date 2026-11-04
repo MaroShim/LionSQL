@@ -1,5 +1,9 @@
 # LionSQL Data Dictionary & Virtual System Catalog
 
+> - **Created**: 2026-09-23
+> - **Last Updated**: 2026-10-24
+
+
 LionSQL provides built-in virtual system catalog views adhering to both Microsoft SQL Server (`sys.*`) and ANSI/ISO standard (`information_schema.*`) specifications. These virtual views allow standard database client tools—such as DBeaver, JetBrains DataGrip, SQL Server Management Studio (SSMS), Azure Data Studio, Navicat, and `psql`—to inspect schemas, tables, columns, indexes, procedures, and query optimizer statistics seamlessly.
 
 ---

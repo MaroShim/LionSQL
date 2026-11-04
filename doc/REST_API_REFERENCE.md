@@ -1,5 +1,9 @@
 # LionSQL HTTP REST API & Realtime SSE Specification
 
+> - **Created**: 2026-09-22
+> - **Last Updated**: 2026-10-25
+
+
 LionSQL provides an embedded, zero-dependency PocketBase-style HTTP REST API and Server-Sent Events (SSE) streaming engine on port `8090` (configurable via `-http`).
 
 ---

@@ -1,5 +1,9 @@
 # LionSQL User Manual
 
+> - **Created**: 2026-10-08
+> - **Last Updated**: 2026-11-03
+
+
 This document is the **official User Manual** for the LionSQL database engine, providing step-by-step guidance from initial installation and startup, through client connections and application development, to production operations and administration.
 
 ---

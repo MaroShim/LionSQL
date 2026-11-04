@@ -1,5 +1,9 @@
 # LionSQL Quantile & Percentile Analytics Specification
 
+> - **Created**: 2026-10-02
+> - **Last Updated**: 2026-10-25
+
+
 ## 1. Architectural Overview
 
 In high-concurrency OLAP and telemetry pipelines, computing percentiles (P50, P90, P95, P99) in client applications requires transferring uncompressed raw datasets across the network, leading to high network I/O, CPU overhead, and memory pressure.

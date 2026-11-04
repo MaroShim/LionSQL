@@ -1,5 +1,6 @@
 # LionSQL 서버 파이프라인(TDS to File System) 종단 최적화 마스터 플랜
 
+> - **최종 갱신일**: 2026-10-29
 > - **최초 작성일**: 2026-10-29
 > - **문서 상태**: Phase 1~2 구현 및 실측 검증 완료 (`[x]`), Phase 3~4는 v0.90.0 이후 착수 예정
 > - **연관 과제 ID**: `PERF-SERVER-PIPELINE-P1-P2` (Completed `[x]`), `PERF-SERVER-PIPELINE-P3-P4` (Post-1.0)

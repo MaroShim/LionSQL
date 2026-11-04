@@ -1,5 +1,9 @@
 # LionSQL System Architecture & Technical Specification
 
+> - **Created**: 2026-09-22
+> - **Last Updated**: 2026-10-24
+
+
 ## 1. Executive Summary & Architectural Vision
 
 LionSQL is an enterprise-grade, high-concurrency embedded OLTP database engine written in pure Go and Cgo (WiredTiger). Packaged as a single standalone binary with zero external operational dependencies, it combines multi-engine ACID storage, full Microsoft T-SQL procedural execution, multi-wire protocol interoperability (PostgreSQL and TDS/MSSQL), an embedded connection pooler, and an embedded web management studio.

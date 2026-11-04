@@ -1,5 +1,9 @@
 # LionSQL Security Policy & Threat Modeling
 
+> - **Created**: 2026-09-22
+> - **Last Updated**: 2026-10-19
+
+
 This document outlines LionSQL's security architecture, threat mitigations, authentication mechanisms, hardening guidelines, and responsible vulnerability disclosure policy.
 
 ---

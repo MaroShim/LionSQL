@@ -1,5 +1,7 @@
 # LionSQL Gitea 연동 및 엔터프라이즈 ORM 호환성 실전 검증 보고서 (`notes/GITEA_INTEGRATION_REPORT.ko.md`)
 
+> - **최초 작성일**: 2026-10-29
+> - **최종 갱신일**: 2026-11-02
 > - **작성일**: 2026-10-29 (최종 개정일: 2026-10-30)
 > - **대상 릴리즈**: v0.90.0-beta4
 > - **핵심 검증 대상**: Gitea v1.23+ (Go 풀스택 Git 호스팅 플랫폼) & XORM (Microsoft SQL Server TDS :1433 및 PostgreSQL Wire Protocol :5433)

@@ -1,5 +1,9 @@
 # LionSQL Enterprise Authentication SPI & External Directory Integration
 
+> - **Created**: 2026-10-17
+> - **Last Updated**: 2026-10-20
+
+
 This specification details LionSQL's authentication architecture, the Service Provider Interface (SPI) for enterprise directory integration (LDAP, Active Directory, PAM), and the security perimeter design that decouples core database authentication from third-party social identity providers.
 
 ---

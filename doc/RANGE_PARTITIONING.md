@@ -1,5 +1,9 @@
 # ClickHouse-Style Auto Rolling Range Partitioning & O(1) Fast Drop Partition
 
+> - **Created**: 2026-10-24
+> - **Last Updated**: 2026-10-24
+
+
 This document specifies the architecture, DDL syntax, lifecycle management, Cost-Based Optimizer (CBO) partition pruning, and storage engine mechanics of **ClickHouse-style Auto Rolling Range Partitioning** in LionSQL.
 
 ---

@@ -1,5 +1,7 @@
 # LionSQL 복합 쿼리 벤치마크 및 성능 가이드 (SSB Star Schema & Cross-DBMS)
 
+> - **최초 작성일**: 2026-10-29
+> - **최종 갱신일**: 2026-10-29
 > [English Version](COMPLEX_QUERY_BENCHMARK_GUIDE.md)
 
 > [!NOTE]

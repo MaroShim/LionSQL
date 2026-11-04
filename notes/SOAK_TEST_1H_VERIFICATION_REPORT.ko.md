@@ -1,5 +1,6 @@
 # LionSQL 1시간 장시간 부하(Soak Test) 실측 검증 및 메모리/내구성 분석 보고서 (`notes/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`)
 
+> - **최종 갱신일**: 2026-10-31
 > - **최초 작성일**: 2026-10-31
 > - **과제 식별 코드**: `DURA-SOAK-1`, `DURA-SOAK-F1`, `DURA-SOAK-F2`
 > - **검증 도구**: [`cmd/soaktest/main.go`](../cmd/soaktest/main.go)

@@ -1,5 +1,6 @@
 # LionSQL 플래너 슬림화 및 순수 AST 전환 설계 계획서 (`notes/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`)
 
+> - **최종 갱신일**: 2026-11-01
 > - **최초 작성일**: 2026-11-01  
 > - **상태**: 완료 (Completed) — Phase 1 (`PLANNER-SLIM-1`), Phase 2 (`PLANNER-AST-1`), Phase 3 (`PLANNER-AST-2`), Phase 4 (`ENGINE-AST-3`) 전량 구현 및 검증 완료  
 > - **과제 식별 코드**: `PLANNER-SLIM-1` & `PLANNER-AST-1` & `PLANNER-AST-2` & `ENGINE-AST-3`  

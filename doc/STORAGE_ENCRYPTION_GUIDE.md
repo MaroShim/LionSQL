@@ -1,5 +1,9 @@
 # LionSQL Production Storage & Filesystem Encryption Guide (Data-at-Rest)
 
+> - **Created**: 2026-10-16
+> - **Last Updated**: 2026-10-20
+
+
 This document provides architectural rationale, compliance mappings, and practical deployment procedures for securing LionSQL data at rest using storage and filesystem-level encryption in production environments.
 
 ---

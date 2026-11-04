@@ -1,5 +1,9 @@
 # LionSQL Reference Manual
 
+> - **Created**: 2026-10-08
+> - **Last Updated**: 2026-11-03
+
+
 This document is the **Official Reference Manual** encompassing all CLI commands, configuration parameters, SQL syntax and grammar specifications, data types, system built-in functions, virtual catalog views, REST API endpoints, and wire protocol specifications for the LionSQL database engine.
 
 For an introductory installation guide, quick start, and application tutorials, refer to the [User Manual (`USER_MANUAL.ko.md`)](USER_MANUAL.ko.md).

@@ -1,5 +1,9 @@
 # LionSQL Enterprise Immutable Audit Logging Architecture & Compliance Specification
 
+> - **Created**: 2026-10-17
+> - **Last Updated**: 2026-10-20
+
+
 - **Document Version**: 1.0 (Master Engineering Specification)
 - **Target Subsystem**: `pkg/audit/`
 - **Primary Compliance Standards**: PCI-DSS v4.0 (Req 10), SOC 2 Type II (CC 6.1-6.8), ISO/IEC 27001 (A.12.4), HIPAA Security Rule (45 CFR § 164.312(b)), Electronic Financial Supervision Regulation Article 13 (전자금융감독규정 제13조)

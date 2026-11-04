@@ -1,5 +1,9 @@
 # LionSQL Troubleshooting, Error Diagnostics & FAQ
 
+> - **Created**: 2026-09-22
+> - **Last Updated**: 2026-10-20
+
+
 This guide provides actionable solutions for common deployment, connectivity, query optimization, and storage engine issues encountered when operating LionSQL.
 
 ---

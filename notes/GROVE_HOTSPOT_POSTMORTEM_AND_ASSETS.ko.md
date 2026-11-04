@@ -1,5 +1,6 @@
 # Grove 벤치마크 핫스팟 분석 및 성능 정상화 포스트모템 (`notes/GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md`)
 
+> - **최종 갱신일**: 2026-11-02
 > - **최초 작성일**: 2026-11-02
 > - **상태**: 분석 및 검증 완료 (Completed Architecture Postmortem)
 > - **과제 식별 코드**: `PERF-GROVE-POSTMORTEM-1` (연관 과제: `PERF-GROVE-CONCURRENCY-1`, `PERF-REGRESSION-RECOVERY-1`)

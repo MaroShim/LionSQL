@@ -1,5 +1,6 @@
 # LionSQL v0.90.1 Release Notes (`notes/RELEASE_NOTES_v0.90.1.md`)
 
+> - **Last Updated**: 2026-11-04
 > - **Initial Date**: 2026-11-04
 > - **Release Version**: `v0.90.1` (Patch Release)
 > - **Milestone Theme**: **T-SQL Stored Procedure & Recursive CTE Engine Hardening, SQLLogicTest Official Corpus Integration, and Web Studio Inline Grid Innovation**

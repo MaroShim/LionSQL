@@ -1,5 +1,6 @@
 # ARCH-VDBE-ROUTING-1 아키텍처 정규화 계획 및 완료 보고서 (`notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md`)
 
+> - **최종 갱신일**: 2026-11-04
 > - **최초 작성일**: 2026-11-04
 > - **과제 식별 코드**: `ARCH-VDBE-ROUTING-1`
 > - **진행 상태**: **100% 구현 및 검증 완료 (Pass) — Commit `04999d9`**

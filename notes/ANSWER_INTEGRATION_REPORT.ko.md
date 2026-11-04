@@ -1,5 +1,6 @@
 # Apache Answer 연동 검증 보고서 (`ANSWER_INTEGRATION_REPORT.ko.md`)
 
+> - **최종 갱신일**: 2026-11-01
 > - **최초 작성일**: 2026-11-01
 > - **연동 대상**: [Apache Answer](https://github.com/apache/answer) (Go + XORM)
 > - **연동 프로토콜**: PostgreSQL Wire Protocol v3 (`TCP :5433`)

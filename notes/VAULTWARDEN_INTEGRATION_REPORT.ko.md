@@ -1,5 +1,6 @@
 # Vaultwarden 연동 검증 보고서 (`VAULTWARDEN_INTEGRATION_REPORT.ko.md`)
 
+> - **최종 갱신일**: 2026-11-02
 > - **최초 작성일**: 2026-11-01
 > - **과제 식별 코드**: `INTEG-VAULTWARDEN-1`
 > - **연동 대상**: [Vaultwarden](https://github.com/dani-garcia/vaultwarden) (Rust + Diesel ORM, Bitwarden API 호환)
