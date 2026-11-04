@@ -560,7 +560,7 @@
       background: rgba(59, 130, 246, 0.12) !important;
       outline: 1px dashed var(--primary);
     }
-    /* Cell content truncation & expandable preview */
+    /* Cell content truncation & modal view */
     .cell-truncate-clamp {
       display: -webkit-box;
       -webkit-line-clamp: 3;
@@ -571,19 +571,25 @@
       word-break: break-word;
       line-height: 1.35;
       max-height: 4.05em;
-      transition: max-height 0.2s ease;
       cursor: pointer;
+      font-size: 0.75rem; /* ~70% of standard body for compact density */
+      transition: color 0.15s, background-color 0.15s;
+      border-radius: 3px;
+      padding: 1px 3px;
     }
-    .cell-truncate-clamp.expanded {
-      display: block;
-      -webkit-line-clamp: unset;
-      max-height: 350px;
-      overflow-y: auto;
-      background: var(--code-bg);
-      padding: 6px 8px;
-      border-radius: 4px;
-      border: 1px solid var(--border);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    .cell-truncate-clamp:hover {
+      background: rgba(59, 130, 246, 0.12);
+      color: var(--primary);
+      text-decoration: underline;
+    }
+    .text-modal-content {
+      font-size: 0.78rem;
+      line-height: 1.5;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--text);
+      user-select: text;
     }
     .cell-input {
       width: 100%;
@@ -2425,7 +2431,94 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     </div>
   </div>
 
+  <!-- Text Preview / Full Content Modal -->
+  <div id="text-preview-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center;" onclick="if(event.target === this) closeTextPreviewModal();">
+    <div class="modal-card" style="width: 860px; max-width: 92vw; box-sizing: border-box; display: flex; flex-direction: column; max-height: 85vh; padding: 20px 24px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+        <div>
+          <h3 id="text-modal-title" style="font-size: 0.95rem; font-weight: 700; color: var(--text); margin: 0;">Field Content</h3>
+          <div id="text-modal-subtitle" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;"></div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button type="button" class="btn btn-secondary" style="padding: 3px 10px; font-size: 0.75rem;" onclick="copyTextModalContent()">Copy Content</button>
+          <button type="button" class="btn btn-secondary" style="padding: 3px 8px; font-size: 0.8rem;" onclick="closeTextPreviewModal()">✕</button>
+        </div>
+      </div>
+      <div style="flex: 1; overflow-y: auto; overflow-x: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px; margin-bottom: 14px;">
+        <pre id="text-modal-body" class="text-modal-content" style="margin: 0;"></pre>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <span id="text-modal-meta" style="font-size: 0.72rem; color: var(--text-muted);"></span>
+        <button type="button" class="btn btn-secondary" style="font-size: 0.8rem; padding: 5px 16px;" onclick="closeTextPreviewModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    let currentModalTextRaw = '';
+    function openTextPreviewModal(title, colName, content) {
+      currentModalTextRaw = content || '';
+      const modal = document.getElementById('text-preview-modal');
+      const titleEl = document.getElementById('text-modal-title');
+      const subEl = document.getElementById('text-modal-subtitle');
+      const bodyEl = document.getElementById('text-modal-body');
+      const metaEl = document.getElementById('text-modal-meta');
+
+      if (titleEl) titleEl.textContent = title || 'Field Content';
+      if (subEl) subEl.textContent = colName ? `Column: ${colName}` : '';
+      if (bodyEl) bodyEl.textContent = currentModalTextRaw;
+      if (metaEl) {
+        const lineCount = (currentModalTextRaw.match(/\n/g) || []).length + 1;
+        const charCount = currentModalTextRaw.length;
+        metaEl.textContent = `${charCount.toLocaleString()} characters · ${lineCount.toLocaleString()} lines`;
+      }
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeTextPreviewModal() {
+      const modal = document.getElementById('text-preview-modal');
+      if (modal) modal.style.display = 'none';
+      currentModalTextRaw = '';
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('text-preview-modal');
+        if (modal && modal.style.display === 'flex') {
+          closeTextPreviewModal();
+        }
+      }
+    });
+
+    function copyTextModalContent() {
+      if (!currentModalTextRaw) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(currentModalTextRaw).then(() => {
+          showToast('Content copied to clipboard', 'success');
+        }).catch(() => {
+          fallbackCopyText(currentModalTextRaw);
+        });
+      } else {
+        fallbackCopyText(currentModalTextRaw);
+      }
+    }
+
+    function fallbackCopyText(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast('Content copied to clipboard', 'success');
+      } catch (err) {
+        showToast('Failed to copy content', 'error');
+      }
+      document.body.removeChild(ta);
+    }
+
     function showToast(message, type = 'info') {
       let toastType = 'info';
       if (type === true || type === 'error') {
@@ -3213,15 +3306,18 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
               let thead = '<tr>' + out.columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
               let tbody = '';
               if (out.rows && out.rows.length > 0) {
-                tbody = out.rows.map(r => {
-                  return '<tr>' + out.columns.map(c => {
+                tbody = out.rows.map((r, rIdx) => {
+                  return '<tr>' + out.columns.map((c, cIdx) => {
                     const val = r[c];
                     if (val === null || val === undefined) {
                       return '<td style="color:var(--text-muted); font-style:italic;">NULL</td>';
                     }
                     const valStr = String(val);
                     if (valStr.length > 50 || valStr.includes('\n')) {
-                      return `<td><div class="cell-truncate-clamp" onclick="this.classList.toggle('expanded');" title="Click to expand/collapse">${escapeHtml(valStr)}</div></td>`;
+                      const cellKey = `qr_${rIdx}_${cIdx}`;
+                      window._queryTextCache = window._queryTextCache || {};
+                      window._queryTextCache[cellKey] = valStr;
+                      return `<td><div class="cell-truncate-clamp" onclick="openTextPreviewModal('SQL Query Result', '${escapeHtml(c)}', window._queryTextCache['${cellKey}']);" title="Click to view full text in modal">${escapeHtml(valStr)}</div></td>`;
                     }
                     return `<td>${escapeHtml(valStr)}</td>`;
                   }).join('') + '</tr>';
@@ -4003,12 +4099,13 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
             : `No records found in <strong>${escapeHtml(tbl)}</strong>. Click <strong>+ Add Row</strong> above to insert data.`;
           tbody = `<tr><td colspan="${cols.length + 1}" style="text-align:center; padding: 24px; color:var(--text-muted);">${emptyMsg}</td></tr>`;
         } else {
-          tbody = records.map(r => {
+          window._recordTextCache = {};
+          tbody = records.map((r, rIdx) => {
             const pkVal = r[pkColName] !== undefined && r[pkColName] !== null ? r[pkColName] : '';
             let rowHtml = `<tr class="record-row" data-pk="${escapeHtml(pkVal)}">`;
             rowHtml += `<td style="text-align: center;"><input type="checkbox" class="rec-check" data-pk="${escapeHtml(pkVal)}" onchange="toggleRowSelection(this)"></td>`;
 
-            cols.forEach(c => {
+            cols.forEach((c, cIdx) => {
               const val = r[c];
               const isPK = (c === pkColName);
               const valStr = (val === null || val === undefined) ? '' : String(val);
@@ -4041,7 +4138,9 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
               } else if (refTable && valStr) {
                 displayHtml = `<span class="cell-fk-val" style="font-family:monospace; font-weight:600;">${escapeHtml(valStr)}</span> <a href="javascript:void(0)" class="fk-jump-link" onclick="event.stopPropagation(); openFKRelationModal('${escapeHtml(refTable)}', '${escapeHtml(refCol)}', '${escapeHtml(valStr)}')" style="color:var(--primary); font-size:0.75rem; text-decoration:none; margin-left:3px; opacity:0.85; font-weight:700;" title="Jump to referenced ${escapeHtml(refTable)} (${escapeHtml(refCol)})">↗</a>`;
               } else if (isLongText) {
-                displayHtml = `<div class="cell-truncate-clamp" onclick="event.stopPropagation(); this.classList.toggle('expanded');" title="Click to expand/collapse (Double-click cell to edit)">${escapeHtml(valStr)}</div>`;
+                const cellKey = `rec_${rIdx}_${cIdx}`;
+                window._recordTextCache[cellKey] = valStr;
+                displayHtml = `<div class="cell-truncate-clamp" onclick="event.stopPropagation(); openTextPreviewModal('${escapeHtml(tbl)}', '${escapeHtml(c)}', window._recordTextCache['${cellKey}']);" title="Click to view full text in modal | Double-click cell to edit">${escapeHtml(valStr)}</div>`;
               } else {
                 displayHtml = escapeHtml(valStr);
               }
@@ -4049,7 +4148,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
               if (isPK) {
                 rowHtml += `<td title="Primary Key (Read-Only)">${displayHtml}</td>`;
               } else {
-                rowHtml += `<td class="editable-cell" data-pk="${escapeHtml(pkVal)}" data-col="${escapeHtml(c)}" data-val="${escapeHtml(valStr)}" title="${isLongText ? 'Click text to expand | Double-click cell to edit' : 'Double-click to edit'}" ondblclick="startInlineEdit(this)">${displayHtml}</td>`;
+                rowHtml += `<td class="editable-cell" data-pk="${escapeHtml(pkVal)}" data-col="${escapeHtml(c)}" data-val="${escapeHtml(valStr)}" title="${isLongText ? 'Click text to view modal | Double-click cell to edit' : 'Double-click to edit'}" ondblclick="startInlineEdit(this)">${displayHtml}</td>`;
               }
             });
 

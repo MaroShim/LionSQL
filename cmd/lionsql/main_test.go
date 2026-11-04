@@ -203,7 +203,7 @@ func TestLionsql_VersionOutput(t *testing.T) {
 		t.Fatalf("printVersion returned error: %v", err)
 	}
 	expectedStrings := []string{
-		"LionSQL v0.90.0",
+		"LionSQL v" + config.Version,
 		"Build Time:",
 		"Git Commit:",
 		"Go Runtime:",
@@ -224,8 +224,8 @@ func TestLionsql_VersionOutput(t *testing.T) {
 		if err != nil {
 			t.Fatalf("runServer(%q) returned error: %v", flagArg, err)
 		}
-		if !strings.Contains(out, "LionSQL v0.90.0") {
-			t.Errorf("expected runServer(%q) output to contain 'LionSQL v0.90.0', got:\n%s", flagArg, out)
+		if !strings.Contains(out, "LionSQL v"+config.Version) {
+			t.Errorf("expected runServer(%q) output to contain 'LionSQL v%s', got:\n%s", flagArg, config.Version, out)
 		}
 	}
 }

@@ -1,6 +1,6 @@
 # SPRINT TASKS BACKUP (LionSQL SSOT Mirror)
 
-> - **Last Synced**: 2026-11-04 19:54:14
+> - **Last Synced**: 2026-11-04 20:30:01
 > - **Primary Source of Truth (SSOT)**: LionSQL `sprint_tasks` Table
 > - **Backup File**: Auto-synced on task update & Git commit
 
@@ -19,7 +19,6 @@
 | `PENDING` | **`PERF-SERVER-PIPELINE-P3-P4`** | Ecosystem | P3 | 서버 파이프라인 Phase 3/4 | [`notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
 | `PENDING` | **`WEB-SPA-1`** | Ecosystem | P3 | 단일 바이너리 내장 SPA 웹 서버 호스팅 | [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) |  |
-| `IN_PROGRESS` | **`PERF-BENCH-WT-RESTORE-1`** | Performance | P1 | WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 |  |  |
 | `IN_PROGRESS` | **`1.8`** | Durability | P2 | 1.0 GA 검증 및 잔여 정리 | [`notes/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`](notes/GA_REGEX_DDL_REFACTORING_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`DURA-KILL-1`** | Durability | P2 | kill -9 크래시 복구 장기 라운드 검증 |  |  |
 | `IN_PROGRESS` | **`DURA-SLT-2`** | Durability | P2 | SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 | [`notes/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md) |  |
@@ -27,6 +26,7 @@
 | `IN_PROGRESS` | **`PERF-VDBE-EXTREME-OPT-1`** | Durability | P2 | T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 | [`notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 1 (`PERF-VDBE-SLOT-1`)*... |
 | `DONE` | **`DOGFOOD-SPRINT-1`** | Performance | P1 | LionSQL 자체 백엔드 기반 정형 스프린트/태스크 관리 시스템 구축 (Dogfooding) |  |  |
 | `DONE` | **`P-2`** | Performance | P1 | WiredTiger VDBE 바이너리 튜플 지연 역직렬화 |  | - [x] **Phase 1 (`BENCH-P2-BASE`)**: ... |
+| `DONE` | **`PERF-BENCH-WT-RESTORE-1`** | Performance | P1 | WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
 | `DONE` | **`BENCH-ALL-IN-ONE-1`** | Durability | P2 | 원클릭 벤치마크 및 종합 검증 스위트 (`scripts/run_all_benchmarks.sh`) 구축 |  | - [x] **Phase 1~4 (성능/와이어 실측)**: Bank... |
 | `DONE` | **`BUG-ADD-COL-NOT-NULL-1`** | Integrity | P2 | 기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug) |  |  |
@@ -299,11 +299,6 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [IN_PROGRESS] WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 `PERF-BENCH-WT-RESTORE-1`
-- **Domain**: Performance | **Priority**: P1 | **Updated**: 2026-11-04 19:52:01.602073 +0900 KST m=+40.687745959
-
----
-
 ### [IN_PROGRESS] 1.0 GA 검증 및 잔여 정리 `1.8`
 - **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-04T19:51:33.898185+09:00
 - **Plan Doc**: [`notes/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`](notes/GA_REGEX_DDL_REFACTORING_PLAN.ko.md)
@@ -466,6 +461,11 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - [x] **Phase 1 (`BENCH-P2-BASE`)**: 다중 컬럼 테이블 대상 조건부 스캔 사전 기준치 벤치마크 측정 (`2.77ms/op`, `6.3MB/op`, `30,983 allocs`)
 - [x] **Phase 2 (`IMPL-P2-LAZY`)**: `pkg/proc/runtime/vm_lazy.go` 및 `vm.go` 커서 스캔/UPDATE/DELETE/SELECT-INTO 경로 `RawTupleCursor` 기반 지연 필터링 및 조기 스킵 연동
 - [x] **Phase 3 (`VERIFY-P2-COMPARE`)**: 구현 전후 마이크로 벤치마크 실측 (`420µs/op`, 6.59배 가속, 메모리 8배 절감) 및 `go test -race` 100% PASS 검증 완료
+
+---
+
+### [DONE] WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 `PERF-BENCH-WT-RESTORE-1`
+- **Domain**: Performance | **Priority**: P1 | **Updated**: 2026-11-04 20:29:55.916488 +0900 KST m=+2315.025412418
 
 ---
 
