@@ -16,10 +16,15 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 
 ## Priority 1. 성능 회귀 정상화 및 회귀 방지 게이트 구축 (Active Sprint: Performance Regression Recovery)
 
-> 설계 및 실측 문서: [`notes/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](notes/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)  
-> 목표: Grove 핫스팟 대응 과정에서 유입된 키 래치 및 슬립 재시도를 완전 제거하여 186k / 120k / 690k tpmC 기준치를 복원하고, 파이프라인 내 경량 성능 회귀 게이트를 구축합니다.
+> 설계 및 실측 문서: [`notes/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](notes/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md), [`notes/LAZY_DECODING_P2_PLAN.ko.md`](notes/LAZY_DECODING_P2_PLAN.ko.md)  
+> 목표: Grove 핫스팟 대응 과정에서 유입된 키 래치 및 슬립 재시도를 완전 제거하여 186k / 120k / 690k tpmC 기준치를 복원하고, 파이프라인 내 경량 성능 회귀 게이트를 구축하며, P-2 바이너리 튜플 지연 역직렬화를 통해 스캔 경로 CPU 효율을 극대화합니다.
 
-### [x] 1.0 `PERF-REGRESSION-RECOVERY-1` 성능 회귀 정상화 및 회귀 방지 게이트 구축 (완료)
+### [x] 1.0 `P-2` WiredTiger VDBE 바이너리 튜플 지연 역직렬화 (완료)
+- [x] **Phase 1 (`BENCH-P2-BASE`)**: 다중 컬럼 테이블 대상 조건부 스캔 사전 기준치 벤치마크 측정 (`2.77ms/op`, `6.3MB/op`, `30,983 allocs`)
+- [x] **Phase 2 (`IMPL-P2-LAZY`)**: `pkg/proc/runtime/vm_lazy.go` 및 `vm.go` 커서 스캔/UPDATE/DELETE/SELECT-INTO 경로 `RawTupleCursor` 기반 지연 필터링 및 조기 스킵 연동
+- [x] **Phase 3 (`VERIFY-P2-COMPARE`)**: 구현 전후 마이크로 벤치마크 실측 (`420µs/op`, 6.59배 가속, 메모리 8배 절감) 및 `go test -race` 100% PASS 검증 완료
+
+### [x] 1.0.1 `PERF-REGRESSION-RECOVERY-1` 성능 회귀 정상화 및 회귀 방지 게이트 구축 (완료)
 - [x] **Phase 1 (`CLEAN-KEY-LATCH-1`)**: `KeyLatchManager` 및 `AcquireKeyLatch` 전량 삭제 (순수 Lock-Free OCC / MVCC B+Tree 복원)
 - [x] **Phase 2 (`CLEAN-RUN-RETRY-1`)**: `RunContext` 내 `time.After` 슬립 재시도 루프 제거 및 즉시 반환 복원
 - [x] **Phase 3 (`VERIFY-BENCH-RESTORE-1`)**: 3.3.4 송금 (In-Memory 130k~160k / WiredTiger 92k~108k) 및 3.5 TPC-C (53.5만~55만 tpmC) 복원 실측

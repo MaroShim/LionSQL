@@ -1294,7 +1294,15 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	}
 	var toUpdate []updateItem
 
+	// P-2 Optimization: Lazy decoding & selective filter for RawTupleCursor
+	fastChecks := f.extractFastEqConditions(tableSchema, data.WhereExpr)
+	rawCur, hasRaw := cursor.(storage.RawTupleCursor)
+
 	for cursor.Next() {
+		if hasRaw && canSkipRawTuple(rawCur, tableSchema, fastChecks) {
+			continue
+		}
+
 		rec, err := cursor.Record()
 		if err != nil {
 			break
@@ -1445,7 +1453,15 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 	}
 	var toDelete []delItem
 
+	// P-2 Optimization: Lazy decoding & selective filter for RawTupleCursor
+	fastChecks := f.extractFastEqConditions(tableSchema, data.WhereExpr)
+	rawCur, hasRaw := cursor.(storage.RawTupleCursor)
+
 	for cursor.Next() {
+		if hasRaw && canSkipRawTuple(rawCur, tableSchema, fastChecks) {
+			continue
+		}
+
 		rec, err := cursor.Record()
 		if err != nil {
 			break
@@ -1614,7 +1630,16 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 	}
 	defer cursor.Close()
 
+	// P-2 Optimization: Lazy decoding & selective filter for RawTupleCursor
+	tableSchema, _ := f.getTableSchema(data.Table)
+	fastChecks := f.extractFastEqConditions(tableSchema, data.WhereVal)
+	rawCur, hasRaw := cursor.(storage.RawTupleCursor)
+
 	for cursor.Next() {
+		if hasRaw && canSkipRawTuple(rawCur, tableSchema, fastChecks) {
+			continue
+		}
+
 		rec, err := cursor.Record()
 		if err != nil {
 			break
@@ -1810,8 +1835,17 @@ func (f *VMFrame) scanCursorRows(tableName string, whereExpr proc.Expr, userCols
 	}
 	defer cursor.Close()
 
+	// P-2 Optimization: Lazy decoding & selective filter for RawTupleCursor
+	tableSchema, _ := f.getTableSchema(tableName)
+	fastChecks := f.extractFastEqConditions(tableSchema, whereExpr)
+	rawCur, hasRaw := cursor.(storage.RawTupleCursor)
+
 	var result []storage.Record
 	for cursor.Next() {
+		if hasRaw && canSkipRawTuple(rawCur, tableSchema, fastChecks) {
+			continue
+		}
+
 		rec, err := cursor.Record()
 		if err != nil {
 			break

@@ -41,7 +41,7 @@
 | 코드 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 상세 및 검증 지표 | 대상 패키지 |
 | :---: | :--- | :--- | :---: | :--- | :--- |
 | **P-1** | **스토리지/트랜잭션** | **배치형 그룹 커밋 & 무경합 Fast-Path** | **완료** | `memengine` WAL 및 `wiredtiger` 리더/팔로워 그룹 커밋 구현. `FsyncAlways` 마이크로벤치마크 100배 가속(0.038ms/op), TPC-C 2.8K TPS 검증. | `pkg/storage/memengine`, `pkg/storage/wiredtiger` |
-| **P-2** | **스토리지/디코딩** | **바이너리 튜플 지연 역직렬화 (Lazy Decoding)** | **대기** | 풀 스캔 시 WHERE 절 컬럼만 선별 디코딩하고 조건 통과 행만 전체 언패킹하여 CPU 및 힙 할당 70% 삭감. `CREATE INDEX ... INCLUDE` 커버링 인덱스 결합. | `pkg/storage`, `pkg/execution`, `pkg/catalog` |
+| **P-2** | **스토리지/디코딩** | **바이너리 튜플 지연 역직렬화 (Lazy Decoding)** | **완료** | 풀 스캔 시 WHERE 절 컬럼만 선별 디코딩하고 탈락 행은 전체 언패킹을 건너뛰어(Skip) VDBE 쿼리 6.59배 가속 및 힙 할당 87.5% 삭감 완료. | `pkg/storage`, `pkg/proc/runtime` |
 | **P-3** | **와이어 프로토콜** | **제로카피 와이어 인코딩 & I/O 버퍼 결합** | **대기** | 중간 `[]any` 레코드 슬라이스 박싱을 제거하고 `sync.Pool` 버퍼에 바이너리 튜플 데이터를 직접 포맷팅하여 소켓 syscall 횟수 최소화. | `pkg/wire`, `pkg/storage` |
 | **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next)** | **대기** | Volcano 반복자에서 1행 단위 함수 호출 대신 64~1024건 청크 단위 배치 실행을 적용하여 대량 집계 및 스캔 지연 60% 단축. | `pkg/execution` |
 | **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱 & 단순 PK 조회 바이패스** | **완료** | `SELECT * FROM tbl WHERE id = ?` 단순 PK 점조회에 대해 FNV-1a 지문 해싱 및 바운디드 캐시 기반으로 파서/플래너/VDBE 우회 스토리지(`tx.Get`) 직결 반환. DDL 시 자동 무효화. | `pkg/engine`, `pkg/storage` |
