@@ -299,9 +299,14 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - 대상: `COMPAT-TABLE-DRIVEN-1`에서 정식화된 Go 구조체 테이블
 - 목표: 정식화된 구조체 테이블을 기반으로 필요 시 외부 텍스트 설정 파일(YAML/JSON 또는 embed.FS)로 분리하여 런타임 동적 규칙 주입 가능성 검토 (YAGNI 평가 후 결정)
 
-### [x] 2.10 `INTEG-NOCODB-MATTERMOST-DEFER-1` NocoDB 및 Mattermost 연동 1.0 이후(v1.1.0) 연기 확정 — **[완료 (Scope Locked)]**
-- 결정: 1.0 LTS 코어 안정성 및 내구성 검증에 집중하기 위해 NocoDB(`INTEG-NOCODB-1`) 및 Mattermost(`INTEG-MATTERMOST-1`) 연동을 `v1.1.0` (Priority 3.10, 3.11)으로 공식 이관
-- 결과: 1.0 정식 지원 10대 실전 앱(Gitea, Casdoor, Ghost, Affine, Answer, Vaultwarden, Metabase, Umami, Woodpecker, Vikunja) 연동 100% 완료 및 1.0 범위 확정 완료
+### [ ] 2.10 `APP-FAST-FAIL-EXPLORE-1` 신규 외부 앱 4종 Fast-Fail 호환성 탐색 (보류)
+- 상세 계획: [`notes/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md)
+- 원칙: **Fast-Fail 프로토콜** (서버 커널을 과도하게 수정해야 하거나 1시간 이상 소요 시 즉시 중단 및 Spec-Out 판정)
+- 탐색 결과 및 현황:
+  1. [ ] `INTEG-NOCODB-1` NocoDB (Node.js + Knex) Fast-Fail 호환성 탐색 (`PENDING`, 마이그레이션 체인이 수십 개에 달하고 비대하여 1.0 이후로 보류)
+  2. [ ] `INTEG-MATTERMOST-1` Mattermost (Go + pgx/squirrel) Fast-Fail 호환성 탐색 (`PENDING`)
+  3. [ ] `INTEG-GHOST-1` Ghost (Node.js + Knex/Bookshelf) Fast-Fail 호환성 탐색 (`PENDING`)
+  4. [ ] `INTEG-DIRECTUS-1` Directus (Node.js + Knex) Fast-Fail 호환성 탐색 (`PENDING`)
 
 ### [x] 2.11 `SQL-WRITABLE-CTE-1` PostgreSQL Writable CTE (`WITH ... INSERT/UPDATE/DELETE ... RETURNING`) 및 `::type[]` 캐스트 지원 — **[완료 (Pass)]**
 - 회귀 테스트: `pkg/engine/writable_cte_test.go`, `pkg/wire/writable_cte_pgwire_test.go`

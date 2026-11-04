@@ -16,6 +16,8 @@ Primary authoritative references covering fundamentals, SQL/T-SQL specifications
   * Comprehensive guide covering installation, startup, client tool connections, database development, and operations.
 * **[`REFERENCE_MANUAL.md`](REFERENCE_MANUAL.md)** ([Korean](REFERENCE_MANUAL.ko.md))
   * Exhaustive reference for CLI flags, configurations, SQL grammar, data types, built-in functions, virtual catalog views, REST APIs, and wire protocol specifications.
+* **[`FAQ.md`](FAQ.md)** ([Korean](FAQ.ko.md))
+  * Authoritative engineering FAQ answering the top 15 questions across architecture, performance, concurrency, durability, and operations.
 * **[`ARCHITECTURE.md`](ARCHITECTURE.md)**
   * End-to-end architectural blueprint (dual storage engines, 2-Tier CBO/VDBE query runtime, goroutine connection pooler).
 * **[`BENCHMARK.md`](BENCHMARK.md)**

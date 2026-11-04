@@ -17,6 +17,8 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
   * 설치, 기동, 클라이언트 도구 연동, 데이터베이스 개발 및 운영 유지보수 전 과정을 안내하는 공식 사용자 매뉴얼.
 * **[`REFERENCE_MANUAL.ko.md`](REFERENCE_MANUAL.ko.md)** ([English](REFERENCE_MANUAL.md))
   * CLI 플래그, 설정 파일, SQL 문법 및 구문, 데이터 타입, 내장 함수, 가상 카탈로그 뷰, REST API 및 와이어 프로토콜 기술 사양을 총망라하는 공식 레퍼런스 매뉴얼.
+* **[`FAQ.ko.md`](FAQ.ko.md)** ([English](FAQ.md))
+  * 아키텍처 불변식, 동시성/내구성, 프로토콜 호환성 및 극한의 성능 최적화를 망라하는 LionSQL 핵심 엔지니어링 FAQ 15선.
 * **[`ARCHITECTURE.md`](ARCHITECTURE.md)** (English)
   * LionSQL 전 계층 엔드투엔드 아키텍처 청사진 (듀얼 스토리지 백엔드, 2-Tier CBO/VDBE 쿼리 엔진, 고루틴 커넥션 풀러).
 * **[`BENCHMARK.md`](BENCHMARK.md)** (English)
