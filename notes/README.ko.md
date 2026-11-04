@@ -42,6 +42,8 @@
      - **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 쿼리 라우팅 리팩토링 설계 및 검증 보고서 (문자열 휴리스틱 45개 전면 제거, 527ns 실측, 완료).
      - **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](ARCH_VDBE_ROUTING_1_PLAN.ko.md)**: AST 및 Dialect 타입 기반 2-Tier 쿼리 라우팅 정규화 계획서 (세션 접두사 문자열 꼼수 및 FROM 파생테이블 슬라이싱 완전 박멸, ARCH-VDBE-ROUTING-1).
    - **Post-1.0 아키텍처 및 장기 로드맵 계획서**:
+      - **[`POST_1.0_PARKING_LOT.ko.md`](POST_1.0_PARKING_LOT.ko.md)**: LionSQL Post-1.0 기술 과제 파킹랏 (Parking Lot, 언젠가 필요해지면 열어보는 온디맨드 기술 저장소).
+      - **[`DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`](DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md)**: DuckDB 스타일 편의 SQL 및 MySQL 추가 호환성 기각 사유와 불변 경계 평가 노트 (ADR & Negative Knowledge).
      - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 성능 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Post-1.0 메모리 5배 압축 로드맵 (OCC-HYPER-2).
      - **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: TDS 네트워크 소켓 수신부터 VDBE 및 WAL 파일 시스템 사전 할당/적응형 그룹 커밋에 이르는 서버 수직 파이프라인 종단 최적화 마스터 플랜 (Phase 3/4 대기).
      - **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)**: LionSQL 복합 쿼리 성능 튜닝을 위한 2단계 하이브리드 표준 벤치마크 플랜 (SSB Star Schema & Mini TPC-H 5대 대표 쿼리, DuckDB/ClickHouse 비교 매트릭스).

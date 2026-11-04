@@ -305,9 +305,10 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 
 ---
 
-## Priority 3. Post-0.90.0 (`v1.1.0`) 아키텍처 로드맵 (Future Engine Roadmap)
+## Priority 3. Post-1.0 기술 과제 파킹랏 (Architecture Parking Lot & On-Demand Candidates)
 
-> 대상 릴리즈: `v1.1.0` (엔진 최적화 및 프로토콜 리팩토링)
+> 상세 설계 및 난이도·영향도·우려사항 매트릭스: [`notes/POST_1.0_PARKING_LOT.ko.md`](notes/POST_1.0_PARKING_LOT.ko.md)
+> 성격: 의무적인 마일스톤이 아니며, 실제 비즈니스/성능 요구가 발생할 때 시동을 걸어 꺼내 쓰는 온디맨드 주차장(Parking Lot)
 
 ### [ ] 3.1 `PERF-COMPLEX-QUERY-2` Complex Query Flat Hash Join & Direct Slot Projection
 - 오픈 어드레싱 정수 해시 테이블 기반 복합 쿼리 서브 50ms 목표 최적화 ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md))
@@ -327,7 +328,7 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 ### [ ] 3.6 `WEB-SPA-1` 단일 바이너리 내장 SPA 웹 서버 호스팅
 - `--app`, `--public` 플래그를 통한 SPA 정적 웹 호스팅 및 네이티브 DB 서빙 ([`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md))
 
-### [-] 3.7 `R-6` 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링)
+### [x] 3.7 `R-6` 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) — **[완료 (Pass)]**
 - 상세 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
 - [x] **Phase 1 (`R-6-P1`)**: `ClientSession` 내부 락 및 상태 은닉 (와이어의 `cs.Mu.Lock()` 직접 침범 제거, `ExecuteProgram` 세션 일원화)
 - [x] **Phase 2 (`TDS-MOD-1`)**: TDS 모놀리스(`server.go` 2.9k 라인) 파일 분할 영구 기각(Spec-Out) — AI 페어 프로그래밍 환경에서 Git Blame/히스토리 보존 가치가 파일 분할 이점보다 크므로 단일 파일 유지 결정
