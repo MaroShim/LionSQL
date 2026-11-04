@@ -23,8 +23,12 @@ LionSQL's **Tolerant Multi-Dialect Architecture** preserves the purity and sub-m
 To minimize typing friction during interactive querying and schema exploration, LionSQL supports concise MySQL-style syntax idioms.
 
 ### 2.1. Backtick Identifier Quoting (`` `column` ``)
-- **Background**: Web ORMs (GORM, Prisma, TypeORM, MyBatis) and open-source DDL scripts frequently quote identifiers with backticks (`` `table` ``).
-- **Behavior**: At the lexer level, backtick-quoted identifiers (`` `...` ``) are treated identically to T-SQL square brackets (`[...]`) and ANSI/PostgreSQL double quotes (`"..."`).
+- **Background & 1.0 Release Policy**: Web ORMs (GORM, Prisma, TypeORM, MyBatis) and open-source migration scripts frequently quote table and column identifiers with backticks (`` `table` ``). To maximize out-of-the-box compatibility without configuration friction, LionSQL preserves native backtick parsing across all wire listeners (TDS, PGWire, HTTP).
+- **Behavior**: At the zero-allocation lexer level, backtick-quoted identifiers (`` `...` ``) are treated identically to T-SQL square brackets (`[...]`) and ANSI/PostgreSQL double quotes (`"..."`).
+- **Official Specification Boundary**: Backticks are strictly supported as a **developer ergonomics and migration convenience feature**. The officially recommended identifier standards are:
+  - **T-SQL Standard**: Square brackets (`[table]`, `[column]`)
+  - **ANSI / PostgreSQL Standard**: Double quotes (`"table"`, `"column"`)
+  For strict cross-engine portability with vanilla Microsoft SQL Server or PostgreSQL instances, standard bracket or double-quote quoting is recommended.
 - **Example**:
   ```sql
   SELECT `id`, `name`, `balance` FROM `accounts` WHERE `status` = 'ACTIVE';

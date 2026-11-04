@@ -23,8 +23,12 @@ LionSQL의 **관용적 다중 방언(Tolerant Multi-Dialect) 아키텍처**는 �
 일상적인 쿼리 작성 및 스키마 탐색 시 개발자의 타이핑 피로도를 최소화하기 위해 MySQL 스타일의 단촐한(Concise) 편의 문법을 지원합니다.
 
 ### 2.1. 백틱(Backtick) 식별자 인용 (`` `column` ``)
-- **배경**: 웹 프레임워크(GORM, Prisma, TypeORM, MyBatis)나 오픈소스 DDL 스크립트는 식별자를 백틱(`` `table` ``)으로 감싸는 경우가 많습니다.
+- **배경 및 1.0 정책**: 웹 ORM(GORM, Prisma, TypeORM, MyBatis)이나 오픈소스 마이그레이션 DDL 스크립트는 식별자를 백틱(`` `table` ``)으로 감싸는 경우가 많습니다. LionSQL은 초기 설정 피로도 없이 즉시 작동할 수 있도록 모든 프로토콜(TDS, PGWire, HTTP)에서 백틱 파싱을 기본 유지합니다.
 - **동작**: 렉서 레벨에서 백틱(`` `...` ``)을 T-SQL의 대괄호(`[...]`) 및 ANSI/Postgres의 큰따옴표(`"..."`)와 완전히 동등한 식별자(Identifier)로 투명하게 처리합니다.
+- **공식 권장 식별자 규격 명시**: 백틱 지원은 어디까지나 **개발 편의 및 마이그레이션 호환성을 위한 구문 인체공학(Ergonomics)**입니다. 공식적인 권장 식별자 규격은 다음과 같습니다:
+  - **T-SQL 공식 권장**: 대괄호 (`[table]`, `[column]`)
+  - **ANSI / PostgreSQL 공식 권장**: 큰따옴표 (`"table"`, `"column"`)
+  순정 Microsoft SQL Server 또는 PostgreSQL로의 엄격한 상호 이식성이 요구되는 프로덕션 쿼리에서는 공식 권장 식별자(대괄호 또는 큰따옴표) 사용을 권장합니다.
 - **예시**:
   ```sql
   SELECT `id`, `name`, `balance` FROM `accounts` WHERE `status` = 'ACTIVE';
