@@ -2,19 +2,11 @@ package virtual
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
-)
-
-var (
-	reGuiNspnameEq     = regexp.MustCompile(`(?is)(?:n\.nspname|s\.table_schema)\s*=\s*'([^']+)'`)
-	reGuiRelnameEq     = regexp.MustCompile(`(?is)(?:pgc|c|s)\.(?:relname|table_name)\s*=\s*'([^']+)'`)
-	reGuiSrcRelnameEq  = regexp.MustCompile(`(?is)src_tbl\.relname\s*=\s*'([^']+)'`)
-	reGuiSrcNspnameEq  = regexp.MustCompile(`(?is)src_ns\.nspname\s*=\s*'([^']+)'`)
-	reGuiTableSchemaEq = regexp.MustCompile(`(?is)table_schema\s*=\s*'([^']+)'`)
 )
 
 func tableBaseOID(idx int) int {
@@ -103,8 +95,8 @@ func pgTypeMod(t storage.DataType, maxLen int) int {
 
 func execPgConstraintPrimaryKeySelect(src Source, sql string) (*Result, error) {
 	targetSchema := "public"
-	if m := reGuiNspnameEq.FindStringSubmatch(sql); len(m) == 2 {
-		targetSchema = m[1]
+	if sch, ok := sqlutil.ExtractEqualityFilter(sql, "n.nspname", "s.table_schema", "nspname", "table_schema"); ok {
+		targetSchema = sch
 	}
 
 	columns := []string{
@@ -220,8 +212,8 @@ func execPgTriggerSelect(src Source, sql string) (*Result, error) {
 
 func execProcSelect(src Source, sql string) (*Result, error) {
 	targetSchema := "public"
-	if m := reGuiNspnameEq.FindStringSubmatch(sql); len(m) == 2 {
-		targetSchema = m[1]
+	if sch, ok := sqlutil.ExtractEqualityFilter(sql, "n.nspname", "s.table_schema", "nspname", "table_schema"); ok {
+		targetSchema = sch
 	}
 
 	projStr, whereClause := parseVirtualSelectClauses(sql)
@@ -467,13 +459,13 @@ func execClassSelect(src Source, sql string) (*Result, error) {
 
 func execColumnMetadataSelect(src Source, sql string) (*Result, error) {
 	targetTable := ""
-	if m := reGuiRelnameEq.FindStringSubmatch(sql); len(m) == 2 {
-		targetTable = m[1]
+	if tbl, ok := sqlutil.ExtractEqualityFilter(sql, "pgc.relname", "c.relname", "s.relname", "pgc.table_name", "c.table_name", "s.table_name", "relname", "table_name"); ok {
+		targetTable = tbl
 	}
 
 	targetSchema := "public"
-	if m := reGuiNspnameEq.FindStringSubmatch(sql); len(m) == 2 {
-		targetSchema = m[1]
+	if sch, ok := sqlutil.ExtractEqualityFilter(sql, "n.nspname", "s.table_schema", "nspname", "table_schema"); ok {
+		targetSchema = sch
 	}
 
 	columns := []string{
@@ -567,13 +559,13 @@ func execColumnMetadataSelect(src Source, sql string) (*Result, error) {
 
 func execForeignKeySelect(src Source, sql string) (*Result, error) {
 	targetTable := ""
-	if m := reGuiSrcRelnameEq.FindStringSubmatch(sql); len(m) == 2 {
-		targetTable = m[1]
+	if tbl, ok := sqlutil.ExtractEqualityFilter(sql, "src_tbl.relname", "relname", "table_name"); ok {
+		targetTable = tbl
 	}
 
 	targetSchema := "public"
-	if m := reGuiSrcNspnameEq.FindStringSubmatch(sql); len(m) == 2 {
-		targetSchema = m[1]
+	if sch, ok := sqlutil.ExtractEqualityFilter(sql, "src_ns.nspname", "nspname", "table_schema"); ok {
+		targetSchema = sch
 	}
 
 	columns := []string{
@@ -652,8 +644,8 @@ func execInformationSchemaTablesWithPersistenceSelect(src Source, sql string) (*
 	var allRows []map[string]any
 
 	targetSchema := ""
-	if m := reGuiTableSchemaEq.FindStringSubmatch(sql); len(m) == 2 {
-		targetSchema = m[1]
+	if sch, ok := sqlutil.ExtractEqualityFilter(sql, "table_schema", "nspname"); ok {
+		targetSchema = sch
 	}
 
 	tables, _ := src.ListTables()

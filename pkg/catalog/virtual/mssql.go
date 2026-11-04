@@ -2,7 +2,6 @@ package virtual
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -11,12 +10,15 @@ import (
 	"lionsql/pkg/storage"
 )
 
-var (
-	reMssqlObjectIDEq     = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*['"]?(\d+)['"]?`)
-	reMssqlObjectIdCallEq = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*(?:[a-z0-9_]+\.)*object_id\s*\(\s*N?'([^']+)'(?:\s*,\s*N?'[^']+')?\s*\)`)
-	reMssqlTableNameEq    = regexp.MustCompile(`(?is)(?:table_name|c\.name|t\.name|ic\.table_name|\[?t\]?\.\[?name\]?|\[?c\]?\.\[?name\]?|\[?table_name\]?)\s*=\s*N?'([^']+)'`)
-	reMssqlSchemaNameEq   = regexp.MustCompile(`(?is)(?:table_schema|s\.name|ic\.table_schema|\[?s\]?\.\[?name\]?|\[?table_schema\]?)\s*=\s*N?'([^']+)'`)
-)
+// ExtractMssqlTableNameEq extracts table name equality filter from MSSQL catalog query.
+func ExtractMssqlTableNameEq(sql string) (string, bool) {
+	return sqlutil.ExtractEqualityFilter(sql, "table_name", "c.name", "t.name", "ic.table_name", "name")
+}
+
+// ExtractMssqlSchemaNameEq extracts schema name equality filter from MSSQL catalog query.
+func ExtractMssqlSchemaNameEq(sql string) (string, bool) {
+	return sqlutil.ExtractEqualityFilter(sql, "table_schema", "s.name", "ic.table_schema", "name")
+}
 
 func cleanTargetTableName(raw string) string {
 	s := strings.TrimSpace(raw)
@@ -40,13 +42,13 @@ func parseTargetObjectIDs(sql string, src Source) map[int]bool {
 			return res
 		}
 	}
-	if m := reMssqlObjectIDEq.FindStringSubmatch(sql); len(m) == 2 {
-		if id, err := strconv.Atoi(m[1]); err == nil {
+	if val, ok := sqlutil.ExtractEqualityFilter(sql, "object_id"); ok {
+		if id, err := strconv.Atoi(val); err == nil {
 			return map[int]bool{id: true}
 		}
 	}
-	if m := reMssqlObjectIdCallEq.FindStringSubmatch(sql); len(m) == 2 {
-		targetName := cleanTargetTableName(m[1])
+	if tblName, ok := sqlutil.ExtractObjectIdCall(sql); ok {
+		targetName := cleanTargetTableName(tblName)
 		if src != nil {
 			for tIdx, t := range src.GetSortedTables() {
 				if strings.EqualFold(t.Name, targetName) {
@@ -55,8 +57,8 @@ func parseTargetObjectIDs(sql string, src Source) map[int]bool {
 			}
 		}
 	}
-	if m := reMssqlTableNameEq.FindStringSubmatch(sql); len(m) == 2 {
-		targetName := cleanTargetTableName(m[1])
+	if tbl, ok := ExtractMssqlTableNameEq(sql); ok {
+		targetName := cleanTargetTableName(tbl)
 		if src != nil {
 			for tIdx, t := range src.GetSortedTables() {
 				if strings.EqualFold(t.Name, targetName) {
@@ -113,13 +115,13 @@ func execInformationSchemaColumnsWithComputed(src Source, sql string) (*Result, 
 	}
 
 	targetTable := ""
-	if m := reMssqlTableNameEq.FindStringSubmatch(sql); len(m) == 2 {
-		targetTable = cleanIdentifier(m[1])
+	if tbl, ok := ExtractMssqlTableNameEq(sql); ok {
+		targetTable = cleanIdentifier(tbl)
 	}
 
 	targetSchema := "dbo"
-	if m := reMssqlSchemaNameEq.FindStringSubmatch(sql); len(m) == 2 {
-		targetSchema = cleanIdentifier(m[1])
+	if sch, ok := ExtractMssqlSchemaNameEq(sql); ok {
+		targetSchema = cleanIdentifier(sch)
 	}
 
 	tables, _ := src.ListTables()

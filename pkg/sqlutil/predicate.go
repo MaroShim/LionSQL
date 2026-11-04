@@ -346,3 +346,362 @@ func ParseBinaryComparison(s string) (*BinaryComparison, bool) {
 
 	return nil, false
 }
+
+// DesugarBareTableIn rewrites SQLite-style bare table IN expressions:
+// `WHERE x IN table` -> `WHERE x IN (SELECT * FROM table)`
+// without using regular expressions, respecting string literals, comments, and identifiers.
+func DesugarBareTableIn(sql string) string {
+	upper := strings.ToUpper(sql)
+	if !strings.Contains(upper, "IN ") && !strings.Contains(upper, "IN\t") && !strings.Contains(upper, "IN\n") {
+		return sql
+	}
+
+	tokens := SplitTopLevelTokens(sql)
+	if len(tokens) < 3 {
+		return sql
+	}
+
+	// Reserved keywords that cannot be bare table names
+	reserved := map[string]bool{
+		"SELECT": true, "WHERE": true, "ORDER": true, "GROUP": true,
+		"HAVING": true, "LIMIT": true, "FROM": true, "JOIN": true,
+		"SET": true, "VALUES": true, "CASE": true, "WHEN": true,
+		"THEN": true, "ELSE": true, "END": true, "AND": true,
+		"OR": true, "NOT": true, "NULL": true, "TRUE": true, "FALSE": true,
+	}
+
+	var sb strings.Builder
+	n := len(sql)
+	inSingleQuote := false
+	inDoubleQuote := false
+	inLineComment := false
+	inBlockComment := false
+	depth := 0
+
+	for i := 0; i < n; i++ {
+		ch := sql[i]
+
+		// Comments
+		if inLineComment {
+			sb.WriteByte(ch)
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			sb.WriteByte(ch)
+			if ch == '*' && i+1 < n && sql[i+1] == '/' {
+				sb.WriteByte('/')
+				i++
+				inBlockComment = false
+			}
+			continue
+		}
+		if ch == '-' && i+1 < n && sql[i+1] == '-' {
+			sb.WriteString("--")
+			i++
+			inLineComment = true
+			continue
+		}
+		if ch == '/' && i+1 < n && sql[i+1] == '*' {
+			sb.WriteString("/*")
+			i++
+			inBlockComment = true
+			continue
+		}
+
+		// Quotes
+		if inSingleQuote {
+			sb.WriteByte(ch)
+			if ch == '\'' {
+				if i+1 < n && sql[i+1] == '\'' {
+					sb.WriteByte('\'')
+					i++
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			sb.WriteByte(ch)
+			if ch == '"' {
+				if i+1 < n && sql[i+1] == '"' {
+					sb.WriteByte('"')
+					i++
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+		if ch == '\'' {
+			inSingleQuote = true
+			sb.WriteByte(ch)
+			continue
+		}
+		if ch == '"' {
+			inDoubleQuote = true
+			sb.WriteByte(ch)
+			continue
+		}
+
+		// Track parentheses depth
+		if ch == '(' {
+			depth++
+			sb.WriteByte(ch)
+			continue
+		}
+		if ch == ')' {
+			if depth > 0 {
+				depth--
+			}
+			sb.WriteByte(ch)
+			continue
+		}
+
+		// Check for word IN
+		if (i == 0 || IsWordBoundary(sql[i-1])) && (ch == 'I' || ch == 'i') && i+1 < n && (sql[i+1] == 'N' || sql[i+1] == 'n') && (i+2 == n || IsWordBoundary(sql[i+2])) {
+			// Found IN keyword outside quotes/comments
+			sb.WriteString(sql[i : i+2])
+			i++ // advance past 'N'
+
+			// Scan forward to see the next non-whitespace token
+			j := i + 1
+			for j < n && (sql[j] == ' ' || sql[j] == '\t' || sql[j] == '\n' || sql[j] == '\r') {
+				j++
+			}
+
+			if j < n && sql[j] != '(' && sql[j] != '.' {
+				// Read identifier
+				startIdent := j
+				for j < n && (IsIdentChar(sql[j])) {
+					j++
+				}
+				ident := sql[startIdent:j]
+				if len(ident) > 0 && !reserved[strings.ToUpper(ident)] {
+					// Check character right after identifier is not '(' or '.'
+					k := j
+					for k < n && (sql[k] == ' ' || sql[k] == '\t' || sql[k] == '\n' || sql[k] == '\r') {
+						k++
+					}
+					if k == n || (sql[k] != '(' && sql[k] != '.') {
+						// Valid bare table IN!
+						// Write spaces between IN and ident
+						sb.WriteString(sql[i+1 : startIdent])
+						// Desugar to (SELECT * FROM ident)
+						sb.WriteString("(SELECT * FROM " + ident + ")")
+						i = j - 1
+						continue
+					}
+				}
+			}
+			continue
+		}
+
+		sb.WriteByte(ch)
+	}
+
+	return sb.String()
+}
+
+// ExtractEqualityFilter scans a SQL string for an equality predicate:
+// `<targetCol> = <literal>` or `<qualifier>.<targetCol> = <literal>`
+// respecting Dyck-balanced parentheses, string literals, and comments.
+// It returns the extracted string or integer literal (quotes and N prefixes stripped).
+func ExtractEqualityFilter(sql string, targetCols ...string) (string, bool) {
+	if len(sql) == 0 || len(targetCols) == 0 {
+		return "", false
+	}
+
+	targetMap := make(map[string]bool, len(targetCols))
+	for _, c := range targetCols {
+		targetMap[strings.ToUpper(c)] = true
+	}
+
+	// We scan top-level binary comparisons
+	n := len(sql)
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBracket := false
+	inLineComment := false
+	inBlockComment := false
+	depth := 0
+
+	for i := 0; i < n; i++ {
+		ch := sql[i]
+
+		// Comments
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && sql[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+		if ch == '-' && i+1 < n && sql[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && sql[i+1] == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
+
+		// Quotes & Brackets
+		if inSingleQuote {
+			if ch == '\'' {
+				if i+1 < n && sql[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			if ch == '"' {
+				if i+1 < n && sql[i+1] == '"' {
+					i++
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+		if inBracket {
+			if ch == ']' {
+				inBracket = false
+			}
+			continue
+		}
+
+		if ch == '\'' {
+			inSingleQuote = true
+			continue
+		}
+		if ch == '"' {
+			inDoubleQuote = true
+			continue
+		}
+		if ch == '[' {
+			inBracket = true
+			continue
+		}
+
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+
+		// Check for '=' operator at depth <= 1 (e.g. inside WHERE or JOIN ON)
+		if ch == '=' && i+1 < n && sql[i+1] != '=' && (i == 0 || (sql[i-1] != '!' && sql[i-1] != '<' && sql[i-1] != '>' && sql[i-1] != ':')) {
+			// Find left-hand side token
+			leftEnd := i - 1
+			for leftEnd >= 0 && (sql[leftEnd] == ' ' || sql[leftEnd] == '\t' || sql[leftEnd] == '\n' || sql[leftEnd] == '\r') {
+				leftEnd--
+			}
+			leftStart := leftEnd
+			for leftStart >= 0 && (IsIdentChar(sql[leftStart]) || sql[leftStart] == '.' || sql[leftStart] == '[' || sql[leftStart] == ']') {
+				leftStart--
+			}
+			leftIdent := strings.Trim(sql[leftStart+1:leftEnd+1], "[] ")
+			if idx := strings.LastIndex(leftIdent, "."); idx != -1 {
+				leftIdent = strings.Trim(leftIdent[idx+1:], "[] ")
+			}
+
+			// Find right-hand side token
+			rightStart := i + 1
+			for rightStart < n && (sql[rightStart] == ' ' || sql[rightStart] == '\t' || sql[rightStart] == '\n' || sql[rightStart] == '\r') {
+				rightStart++
+			}
+
+			if targetMap[strings.ToUpper(leftIdent)] && rightStart < n {
+				// Parse right value (literal string '...', N'...', or number)
+				val := ""
+				curr := rightStart
+				if curr < n && (sql[curr] == 'N' || sql[curr] == 'n') && curr+1 < n && sql[curr+1] == '\'' {
+					curr++ // skip N prefix
+				}
+				if curr < n && sql[curr] == '\'' {
+					// Read quoted string
+					curr++
+					valStart := curr
+					for curr < n {
+						if sql[curr] == '\'' {
+							if curr+1 < n && sql[curr+1] == '\'' {
+								curr += 2
+								continue
+							}
+							break
+						}
+						curr++
+					}
+					val = strings.ReplaceAll(sql[valStart:curr], "''", "'")
+					return val, true
+				} else {
+					// Read unquoted token/number or function call
+					valStart := curr
+					for curr < n && IsIdentChar(sql[curr]) {
+						curr++
+					}
+					val = sql[valStart:curr]
+					if len(val) > 0 {
+						return val, true
+					}
+				}
+			}
+		}
+	}
+
+	return "", false
+}
+
+// ExtractObjectIdCall checks if a condition contains `object_id('table_name')` or `object_id(N'table_name')`.
+// ExtractObjectIdCall checks if a condition contains `object_id('table_name')` or `object_id(N'table_name')`.
+func ExtractObjectIdCall(sql string) (string, bool) {
+	upper := strings.ToUpper(sql)
+	pos := 0
+	for {
+		idx := strings.Index(upper[pos:], "OBJECT_ID")
+		if idx == -1 {
+			break
+		}
+		actualIdx := pos + idx
+		rest := sql[actualIdx+9:]
+		trimRest := strings.TrimLeft(rest, " \t\r\n")
+		if strings.HasPrefix(trimRest, "(") {
+			closeP := FindMatchingParen(trimRest, 0)
+			if closeP != -1 {
+				args := SplitTopLevel(trimRest[1:closeP], ',')
+				if len(args) > 0 {
+					firstArg := strings.TrimSpace(args[0])
+					if strings.HasPrefix(strings.ToUpper(firstArg), "N'") && strings.HasSuffix(firstArg, "'") {
+						firstArg = firstArg[1:]
+					}
+					cleaned := strings.Trim(firstArg, "'\"[] \t\r\n")
+					if len(cleaned) > 0 {
+						return cleaned, true
+					}
+				}
+			}
+		}
+		pos = actualIdx + 9
+	}
+	return "", false
+}

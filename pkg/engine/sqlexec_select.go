@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1381,72 +1380,8 @@ func (s *Coordinator) execSetOpExplain(setQuery *planner.SetOpQuery, analyze boo
 	}, nil
 }
 
-var mssqlOffsetFetchRe = regexp.MustCompile(`(?is)\s+OFFSET\s+(\d+)\s+ROWS?\s+FETCH\s+(?:NEXT|FIRST)\s+(\d+)\s+ROWS?\s+ONLY`)
-var mssqlOffsetOnlyRe = regexp.MustCompile(`(?is)\s+OFFSET\s+(\d+)\s+ROWS?(?:\s*;|\s*$)`)
-var mssqlFetchOnlyRe = regexp.MustCompile(`(?is)\s+FETCH\s+(?:NEXT|FIRST)\s+(\d+)\s+ROWS?\s+ONLY`)
-var mssqlTopRe = regexp.MustCompile(`(?is)^(\s*SELECT\s+)TOP\s*\(?\s*(\d+)\s*\)?\s+(DISTINCT\s+)?(.*)$`)
-var mssqlDistinctTopRe = regexp.MustCompile(`(?is)^(\s*SELECT\s+DISTINCT\s+)TOP\s*\(?\s*(\d+)\s*\)?\s+(.*)$`)
-func stripMSSQLOption(sql string) string {
-	trimmed := strings.TrimRight(sql, "; \t\r\n")
-	optIdx := sqlutil.FindTopLevelKeyword(trimmed, "OPTION")
-	if optIdx != -1 {
-		rest := strings.TrimSpace(trimmed[optIdx+6:])
-		if strings.HasPrefix(rest, "(") && strings.HasSuffix(rest, ")") {
-			return trimmed[:optIdx]
-		}
-	}
-	return sql
-}
-
-func stripMSSQLNolock(sql string) string {
-	for {
-		upper := strings.ToUpper(sql)
-		idx := strings.Index(upper, "WITH")
-		if idx == -1 {
-			break
-		}
-		if idx > 0 && !isSep(upper[idx-1]) {
-			break
-		}
-		rest := strings.TrimLeft(sql[idx+4:], " \t\r\n")
-		if strings.HasPrefix(rest, "(") {
-			closeP := sqlutil.FindMatchingParen(rest, 0)
-			if closeP != -1 {
-				inside := strings.ToUpper(strings.TrimSpace(rest[1:closeP]))
-				if inside == "NOLOCK" || inside == "READUNCOMMITTED" {
-					sql = sql[:idx] + rest[closeP+1:]
-					continue
-				}
-			}
-		}
-		break
-	}
-	return sql
-}
-
 func normalizeMSSQLPagination(sql string) string {
-	sql = stripMSSQLNolock(sql)
-	sql = stripMSSQLOption(sql)
-
-	if mssqlOffsetFetchRe.MatchString(sql) {
-		sql = mssqlOffsetFetchRe.ReplaceAllString(sql, " LIMIT $2 OFFSET $1")
-	} else if mssqlFetchOnlyRe.MatchString(sql) {
-		sql = mssqlFetchOnlyRe.ReplaceAllString(sql, " LIMIT $1")
-	} else if mssqlOffsetOnlyRe.MatchString(sql) {
-		sql = mssqlOffsetOnlyRe.ReplaceAllString(sql, " OFFSET $1")
-	}
-
-	if sqlutil.ContainsKeyword(sql, "TOP", false) {
-		if !sqlutil.ContainsKeyword(sql, "LIMIT", false) {
-			if m := mssqlDistinctTopRe.FindStringSubmatch(sql); len(m) == 4 {
-				sql = fmt.Sprintf("%s%s LIMIT %s", m[1], m[3], m[2])
-			} else if m := mssqlTopRe.FindStringSubmatch(sql); len(m) == 5 {
-				dist := m[3]
-				sql = fmt.Sprintf("%s%s%s LIMIT %s", m[1], dist, m[4], m[2])
-			}
-		}
-	}
-	return sql
+	return sqlutil.NormalizeMSSQLPagination(sql)
 }
 
 func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
@@ -2102,30 +2037,8 @@ func isSingleQuotedLiteral(s string) bool {
 	return true
 }
 
-var reBareTableIn = regexp.MustCompile(`(?i)\b((?:NOT\s+)?IN)\s+([a-zA-Z_][a-zA-Z0-9_]*)(\s*[\(\.]?)`)
-
 func desugarBareTableIn(sql string) string {
-	upper := strings.ToUpper(sql)
-	if !strings.Contains(upper, "IN ") && !strings.Contains(upper, "IN\t") && !strings.Contains(upper, "IN\n") {
-		return sql
-	}
-	return reBareTableIn.ReplaceAllStringFunc(sql, func(match string) string {
-		sub := reBareTableIn.FindStringSubmatch(match)
-		if len(sub) < 4 {
-			return match
-		}
-		trailer := strings.TrimSpace(sub[3])
-		if trailer == "(" || trailer == "." {
-			return match
-		}
-		inWord := sub[1]
-		ident := sub[2]
-		switch strings.ToUpper(ident) {
-		case "SELECT", "WHERE", "ORDER", "GROUP", "HAVING", "LIMIT", "FROM", "JOIN", "SET", "VALUES", "CASE", "WHEN", "THEN", "ELSE", "END", "AND", "OR", "NOT", "NULL", "TRUE", "FALSE":
-			return match
-		}
-		return inWord + " (SELECT * FROM " + ident + ")" + sub[3]
-	})
+	return sqlutil.DesugarBareTableIn(sql)
 }
 
 

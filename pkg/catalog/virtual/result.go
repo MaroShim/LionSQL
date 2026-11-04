@@ -399,8 +399,8 @@ func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 		return false
 	}
 
-	if m := reMssqlObjectIdCallEq.FindStringSubmatch(whereStr); len(m) == 2 {
-		targetName := cleanTargetTableName(m[1])
+	if targetName, ok := sqlutil.ExtractObjectIdCall(whereStr); ok {
+		targetName = cleanTargetTableName(targetName)
 		tbl := getMapValueCaseInsensitive(rec, "tableName")
 		if tbl == nil {
 			tbl = getMapValueCaseInsensitive(rec, "table_name")

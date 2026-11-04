@@ -212,3 +212,131 @@ func TestParseBinaryComparison(t *testing.T) {
 		}
 	}
 }
+
+func TestDesugarBareTableIn(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "Bare table in",
+			input:    "SELECT * FROM t WHERE x IN tbl",
+			expected: "SELECT * FROM t WHERE x IN (SELECT * FROM tbl)",
+		},
+		{
+			name:     "NOT IN bare table",
+			input:    "SELECT * FROM t WHERE x NOT IN tbl",
+			expected: "SELECT * FROM t WHERE x NOT IN (SELECT * FROM tbl)",
+		},
+		{
+			name:     "Already has parens",
+			input:    "SELECT * FROM t WHERE x IN (SELECT id FROM tbl)",
+			expected: "SELECT * FROM t WHERE x IN (SELECT id FROM tbl)",
+		},
+		{
+			name:     "Literal list",
+			input:    "SELECT * FROM t WHERE x IN (1, 2, 3)",
+			expected: "SELECT * FROM t WHERE x IN (1, 2, 3)",
+		},
+		{
+			name:     "String literal with IN",
+			input:    "SELECT 'IN tbl' FROM t",
+			expected: "SELECT 'IN tbl' FROM t",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DesugarBareTableIn(tt.input)
+			if got != tt.expected {
+				t.Errorf("\nInput:    %s\nExpected: %s\nGot:      %s", tt.input, tt.expected, got)
+			}
+		})
+	}
+}
+
+func TestExtractEqualityFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		cols     []string
+		expected string
+		found    bool
+	}{
+		{
+			name:     "object_id number",
+			sql:      "SELECT * FROM sys.columns WHERE object_id = 1005",
+			cols:     []string{"object_id"},
+			expected: "1005",
+			found:    true,
+		},
+		{
+			name:     "qualified table_name",
+			sql:      "SELECT * FROM information_schema.tables WHERE t.table_name = 'users'",
+			cols:     []string{"table_name", "name"},
+			expected: "users",
+			found:    true,
+		},
+		{
+			name:     "N prefix unicode literal",
+			sql:      "SELECT * FROM sys.tables WHERE [name] = N'Orders'",
+			cols:     []string{"name"},
+			expected: "Orders",
+			found:    true,
+		},
+		{
+			name:     "pg relname",
+			sql:      "SELECT * FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE c.relname = 'accounts'",
+			cols:     []string{"relname"},
+			expected: "accounts",
+			found:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := ExtractEqualityFilter(tt.sql, tt.cols...)
+			if ok != tt.found {
+				t.Fatalf("expected found=%v, got=%v", tt.found, ok)
+			}
+			if got != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, got)
+			}
+		})
+	}
+}
+
+func TestExtractObjectIdCall(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+		found    bool
+	}{
+		{
+			name:     "object_id with literal",
+			input:    "SELECT * FROM sys.columns WHERE object_id = object_id('users')",
+			expected: "users",
+			found:    true,
+		},
+		{
+			name:     "object_id with N literal and schema",
+			input:    "WHERE c.object_id = sys.object_id(N'dbo.orders')",
+			expected: "dbo.orders",
+			found:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := ExtractObjectIdCall(tt.input)
+			if ok != tt.found {
+				t.Fatalf("expected found=%v, got=%v", tt.found, ok)
+			}
+			if got != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, got)
+			}
+		})
+	}
+}

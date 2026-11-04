@@ -40,22 +40,22 @@ func TestVirtualCatalogInterceptorBrackets(t *testing.T) {
 func TestMssqlRegexUnicodeAndBrackets(t *testing.T) {
 	// 1. Bracketed column name with Unicode literal N'...'
 	query1 := "SELECT * FROM sys.columns WHERE [t].[name] = N'Orders'"
-	m1 := reMssqlTableNameEq.FindStringSubmatch(query1)
-	if len(m1) != 2 || m1[1] != "Orders" {
-		t.Errorf("reMssqlTableNameEq failed on query1, got: %v", m1)
+	tbl1, ok1 := ExtractMssqlTableNameEq(query1)
+	if !ok1 || tbl1 != "Orders" {
+		t.Errorf("ExtractMssqlTableNameEq failed on query1, got: %v, %v", tbl1, ok1)
 	}
 
 	// 2. Standard single quote without Unicode prefix
 	query2 := "SELECT * FROM sys.columns WHERE t.name = 'Customers'"
-	m2 := reMssqlTableNameEq.FindStringSubmatch(query2)
-	if len(m2) != 2 || m2[1] != "Customers" {
-		t.Errorf("reMssqlTableNameEq failed on query2, got: %v", m2)
+	tbl2, ok2 := ExtractMssqlTableNameEq(query2)
+	if !ok2 || tbl2 != "Customers" {
+		t.Errorf("ExtractMssqlTableNameEq failed on query2, got: %v, %v", tbl2, ok2)
 	}
 
 	// 3. Schema name with Unicode literal
 	query3 := "SELECT * FROM sys.schemas WHERE [s].[name] = N'dbo'"
-	m3 := reMssqlSchemaNameEq.FindStringSubmatch(query3)
-	if len(m3) != 2 || m3[1] != "dbo" {
-		t.Errorf("reMssqlSchemaNameEq failed on query3, got: %v", m3)
+	sch3, ok3 := ExtractMssqlSchemaNameEq(query3)
+	if !ok3 || sch3 != "dbo" {
+		t.Errorf("ExtractMssqlSchemaNameEq failed on query3, got: %v, %v", sch3, ok3)
 	}
 }

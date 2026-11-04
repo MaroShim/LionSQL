@@ -2,16 +2,11 @@ package engine
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
 	"lionsql/pkg/catalog/virtual"
-)
-
-var (
-	reJdbcTempSpExec = regexp.MustCompile(`(?is)INSERT\s+INTO\s+@([a-zA-Z0-9_]+)\s+EXEC\s+(sp_[a-zA-Z0-9_]+)\s*(.*?);`)
-	reJdbcSelectFrom = regexp.MustCompile(`(?is)(SELECT\s+.*?\s+FROM\s+@[a-zA-Z0-9_]+.*)$`)
+	"lionsql/pkg/sqlutil"
 )
 
 func isJdbcMetadataBatch(query string) bool {
@@ -33,19 +28,45 @@ func parseJdbcSpArgs(raw string) []string {
 }
 
 func (s *Coordinator) execJdbcMetadataBatch(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
-	mExec := reJdbcTempSpExec.FindStringSubmatch(query)
-	if len(mExec) < 4 {
+	// Query structure:
+	// DECLARE @temp TABLE (...);
+	// INSERT INTO @temp EXEC sp_... <args>;
+	// SELECT ... FROM @temp ...;
+	stmts := sqlutil.SplitTopLevel(query, ';')
+	if len(stmts) == 0 {
 		return nil, fmt.Errorf("not a matched jdbc metadata batch")
 	}
 
-	spName := strings.ToLower(mExec[2])
-	rawArgs := mExec[3]
+	var execStmt string
+	var selectSQL string
 
-	selectMatch := reJdbcSelectFrom.FindStringSubmatch(query)
-	selectSQL := ""
-	if len(selectMatch) >= 2 {
-		selectSQL = selectMatch[1]
+	for _, stmt := range stmts {
+		trimmed := strings.TrimSpace(stmt)
+		upper := strings.ToUpper(trimmed)
+		if strings.HasPrefix(upper, "INSERT INTO @") && sqlutil.FindTopLevelKeyword(trimmed, "EXEC") != -1 {
+			execStmt = trimmed
+		} else if strings.HasPrefix(upper, "SELECT") && strings.Contains(upper, "FROM @") {
+			selectSQL = trimmed
+		}
 	}
+
+	if execStmt == "" {
+		return nil, fmt.Errorf("not a matched jdbc metadata batch: missing INSERT INTO @temp EXEC")
+	}
+
+	execIdx := sqlutil.FindTopLevelKeyword(execStmt, "EXEC")
+	if execIdx == -1 {
+		return nil, fmt.Errorf("missing EXEC in jdbc metadata batch")
+	}
+
+	afterExec := strings.TrimSpace(execStmt[execIdx+4:])
+	parts := strings.Fields(afterExec)
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("missing procedure name in jdbc metadata batch")
+	}
+
+	spName := strings.ToLower(parts[0])
+	rawArgs := strings.TrimSpace(afterExec[len(parts[0]):])
 
 	dbName := "master"
 	if cs != nil && cs.Database != "" {
