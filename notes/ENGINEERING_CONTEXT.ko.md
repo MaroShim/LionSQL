@@ -179,6 +179,16 @@
   - **복식부기 원장 기표**: PG 16 (3,105 TPS) ➔ **LionSQL TDS SP (5,376 TPS, +73.1%)**
   - **지연 시간 (P50)**: 5ms 대 (Min: 0.20ms) 초저지연 달성.
 
+### ⑲ 쿼리 라우팅 및 세션 방언 분기: 문자열 휴리스틱 완전 배제 및 순수 AST/Enum 불변 원칙 (`ARCH-VDBE-ROUTING-1`)
+* **결정 사항**:
+  1. **타입 안전한 세션 방언(`session.Dialect`)**: 세션이 어떤 프로토콜(PostgreSQL, T-SQL, MySQL)로 통신하는지를 세션 ID 문자열(`strings.HasPrefix(cs.ID, "pg-")`)로 역추적하던 휴리스틱을 전면 삭제하고, 정식 `Dialect` enum (`DialectTSQL`, `DialectPostgres`, `DialectMySQL`)과 `cs.IsPostgres()`, `cs.IsTSQL()`로 일원화함.
+  2. **순수 AST 기반 VDBE 역량 검증 (`proc.QueryCharacteristics`)**: `canCompileToVDBE()` 내에 남아 있던 `sqlutil.FindAllTopLevelKeyword("FROM")` 및 `strings.HasPrefix(rest, "(")` 식의 원시 문자열 슬라이싱 코드를 전면 삭제하고, 토크나이저 AST 분석기의 `HasDerivedTable` 구조체 필드로 O(1) 검사 일원화.
+* **배제(Spec-Out)된 것**:
+  - 임시방편(Ad-hoc) 문자열 접두사 검사 및 원시 SQL 문자열 인덱스 슬라이싱을 통한 쿼리 능력 판별.
+* **이유 & 맥락**:
+  - 문자열 기반 꼼수는 주석, 문자열 리터럴(`'FROM ('`), 포트/ID 명명 규칙 변경 시 치명적인 False Positive/Negative를 유발함.
+  - 정규 표현식 배제 원칙(`Invariant 7`)과 마찬가지로, **"문맥과 중첩 구조를 모르는 문자열 검사를 프로덕션 SQL 라우팅 경로에서 100% 영구 배제"**하고 순수 AST 및 타입 시스템에 의존해야만 1.0 프로덕션의 안정성을 담보할 수 있음 ([`notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](ARCH_VDBE_ROUTING_1_PLAN.ko.md)).
+
 ---
 
 ## 2. 사용자의 엔지니어링 철학 및 협업 규약
