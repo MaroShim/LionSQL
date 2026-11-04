@@ -813,3 +813,70 @@ func TestMemEngine_CapacityGuard(t *testing.T) {
 		t.Fatalf("account 2 not found: %v", err)
 	}
 }
+
+func TestMemengine_RenameTable_FKCacheAndWAL(t *testing.T) {
+	dir := t.TempDir()
+	eng := New()
+	if err := eng.Open(dir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	// 1. Create parent table
+	parentSchema := &storage.TableSchema{
+		Name: "parent_tbl",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+		},
+	}
+	if err := eng.CreateTable(parentSchema); err != nil {
+		t.Fatalf("CreateTable parent failed: %v", err)
+	}
+
+	// 2. Create child table referencing parent
+	childSchema := &storage.TableSchema{
+		Name: "child_tbl",
+		Columns: []storage.Column{
+			{Name: "cid", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "pid", Type: storage.TypeInt},
+		},
+		ForeignKeys: []storage.ForeignKeySchema{
+			{
+				Name:          "fk_child_parent",
+				ChildColumns:  []string{"pid"},
+				ParentTable:   "parent_tbl",
+				ParentColumns: []string{"id"},
+			},
+		},
+	}
+	if err := eng.CreateTable(childSchema); err != nil {
+		t.Fatalf("CreateTable child failed: %v", err)
+	}
+
+	// 3. Rename table
+	if err := eng.RenameTable("parent_tbl", "parent_renamed"); err != nil {
+		t.Fatalf("RenameTable failed: %v", err)
+	}
+
+	// Verify old table doesn't exist, new table exists
+	if _, err := eng.GetTable("parent_tbl"); err == nil {
+		t.Errorf("expected parent_tbl to not exist")
+	}
+	newTbl, err := eng.GetTable("parent_renamed")
+	if err != nil || newTbl == nil {
+		t.Fatalf("expected parent_renamed to exist: %v", err)
+	}
+
+	// Verify FK cache was rebuilt
+	eng.mu.RLock()
+	fkRefOld := eng.fkCache["parent_tbl"]
+	fkRefNew := eng.fkCache["parent_renamed"]
+	eng.mu.RUnlock()
+	if len(fkRefOld) != 0 {
+		t.Errorf("expected old table to have 0 FK references, got %d", len(fkRefOld))
+	}
+	if len(fkRefNew) != 1 {
+		t.Errorf("expected renamed table to have 1 FK reference, got %d", len(fkRefNew))
+	}
+}
+

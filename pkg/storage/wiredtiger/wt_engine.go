@@ -899,6 +899,16 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 
 	tbl.Name = newClean
 	e.tables[newClean] = tbl
+
+	// Update any foreign key definitions on other tables referencing oldClean
+	for _, otherTd := range e.tables {
+		for i := range otherTd.ForeignKeys {
+			if strings.EqualFold(otherTd.ForeignKeys[i].ParentTable, oldClean) {
+				otherTd.ForeignKeys[i].ParentTable = newClean
+			}
+		}
+	}
+
 	if err := e.saveCatalog(); err != nil {
 		return err
 	}

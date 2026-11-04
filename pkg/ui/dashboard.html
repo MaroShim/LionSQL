@@ -582,6 +582,46 @@
       color: var(--primary);
       text-decoration: underline;
     }
+    /* Minimalist floating text preview card */
+    .text-preview-card {
+      position: relative;
+      background: var(--card);
+      border-radius: 8px;
+      width: 880px;
+      max-width: 92vw;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      padding: 16px 20px 14px 20px;
+      box-sizing: border-box;
+    }
+    .text-preview-close-circle {
+      position: absolute;
+      top: -12px;
+      right: -12px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 0.85rem;
+      line-height: 1;
+      padding: 0;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+    }
+    .text-preview-close-circle:hover {
+      background: var(--border);
+      color: var(--text);
+      border-color: var(--text-muted);
+      transform: scale(1.08);
+    }
     .text-modal-content {
       font-size: 0.78rem;
       line-height: 1.5;
@@ -2431,48 +2471,80 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     </div>
   </div>
 
-  <!-- Text Preview / Full Content Modal -->
-  <div id="text-preview-modal" class="modal-overlay" style="display: none; align-items: center; justify-content: center;" onclick="if(event.target === this) closeTextPreviewModal();">
-    <div class="modal-card" style="width: 860px; max-width: 92vw; box-sizing: border-box; display: flex; flex-direction: column; max-height: 85vh; padding: 20px 24px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
-        <div>
-          <h3 id="text-modal-title" style="font-size: 0.95rem; font-weight: 700; color: var(--text); margin: 0;">Field Content</h3>
-          <div id="text-modal-subtitle" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;"></div>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <button type="button" class="btn btn-secondary" style="padding: 3px 10px; font-size: 0.75rem;" onclick="copyTextModalContent()">Copy Content</button>
-          <button type="button" class="btn btn-secondary" style="padding: 3px 8px; font-size: 0.8rem;" onclick="closeTextPreviewModal()">✕</button>
-        </div>
-      </div>
-      <div style="flex: 1; overflow-y: auto; overflow-x: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px; margin-bottom: 14px;">
+  <!-- Text Preview / Full Content Modal (Minimal Floating Preview positioned near click) -->
+  <div id="text-preview-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.35); z-index: 9999;" onclick="if(event.target === this) closeTextPreviewModal();">
+    <div id="text-preview-card" class="text-preview-card" style="position: absolute; margin: 0;">
+      <button type="button" class="text-preview-close-circle" title="Close (Esc)" onclick="closeTextPreviewModal()">✕</button>
+      <div style="flex: 1; overflow-y: auto; overflow-x: auto; padding: 4px 6px 8px 6px;">
         <pre id="text-modal-body" class="text-modal-content" style="margin: 0;"></pre>
       </div>
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <span id="text-modal-meta" style="font-size: 0.72rem; color: var(--text-muted);"></span>
-        <button type="button" class="btn btn-secondary" style="font-size: 0.8rem; padding: 5px 16px;" onclick="closeTextPreviewModal()">Close</button>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; margin-top: 4px;">
+        <span id="text-modal-meta" style="font-size: 0.72rem; color: var(--text-muted); opacity: 0.85;"></span>
+        <button type="button" class="btn btn-secondary" style="padding: 2px 10px; font-size: 0.72rem; border-radius: 4px;" onclick="copyTextModalContent()">Copy</button>
       </div>
     </div>
   </div>
 
   <script>
     let currentModalTextRaw = '';
-    function openTextPreviewModal(title, colName, content) {
+    function openTextPreviewModal(title, colName, content, ev) {
       currentModalTextRaw = content || '';
       const modal = document.getElementById('text-preview-modal');
-      const titleEl = document.getElementById('text-modal-title');
-      const subEl = document.getElementById('text-modal-subtitle');
+      const card = document.getElementById('text-preview-card');
       const bodyEl = document.getElementById('text-modal-body');
       const metaEl = document.getElementById('text-modal-meta');
 
-      if (titleEl) titleEl.textContent = title || 'Field Content';
-      if (subEl) subEl.textContent = colName ? `Column: ${colName}` : '';
       if (bodyEl) bodyEl.textContent = currentModalTextRaw;
       if (metaEl) {
         const lineCount = (currentModalTextRaw.match(/\n/g) || []).length + 1;
         const charCount = currentModalTextRaw.length;
-        metaEl.textContent = `${charCount.toLocaleString()} characters · ${lineCount.toLocaleString()} lines`;
+        metaEl.textContent = `${charCount.toLocaleString()} chars · ${lineCount.toLocaleString()} lines`;
       }
-      if (modal) modal.style.display = 'flex';
+      if (modal) {
+        modal.style.display = 'block';
+
+        // Dynamic positioning relative to click event
+        if (card) {
+          const clickX = (ev && typeof ev.clientX === 'number') ? ev.clientX : window.innerWidth / 2;
+          const clickY = (ev && typeof ev.clientY === 'number') ? ev.clientY : window.innerHeight / 2;
+
+          // Render first to measure card dimensions
+          card.style.visibility = 'hidden';
+          card.style.left = '0px';
+          card.style.top = '0px';
+
+          requestAnimationFrame(() => {
+            const cardWidth = card.offsetWidth || 800;
+            const cardHeight = card.offsetHeight || 300;
+            const margin = 16;
+
+            // Target Y: slightly above the click position (e.g. 15px above)
+            let topPos = clickY - cardHeight - 15;
+            // Target X: centered horizontally on the click or aligned left
+            let leftPos = clickX - (cardWidth * 0.25);
+
+            // If not enough room above, place it just below the click
+            if (topPos < margin) {
+              topPos = clickY + 20;
+            }
+            // Clamp within viewport
+            if (topPos + cardHeight > window.innerHeight - margin) {
+              topPos = Math.max(margin, window.innerHeight - cardHeight - margin);
+            }
+
+            if (leftPos + cardWidth > window.innerWidth - margin) {
+              leftPos = window.innerWidth - cardWidth - margin;
+            }
+            if (leftPos < margin) {
+              leftPos = margin;
+            }
+
+            card.style.left = `${Math.round(leftPos)}px`;
+            card.style.top = `${Math.round(topPos)}px`;
+            card.style.visibility = 'visible';
+          });
+        }
+      }
     }
 
     function closeTextPreviewModal() {
@@ -2482,13 +2554,15 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     }
 
     document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' || e.key === 'Esc' || e.keyCode === 27) {
         const modal = document.getElementById('text-preview-modal');
-        if (modal && modal.style.display === 'flex') {
+        if (modal && modal.style.display !== 'none') {
+          e.preventDefault();
+          e.stopPropagation();
           closeTextPreviewModal();
         }
       }
-    });
+    }, true);
 
     function copyTextModalContent() {
       if (!currentModalTextRaw) return;
@@ -3317,7 +3391,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
                       const cellKey = `qr_${rIdx}_${cIdx}`;
                       window._queryTextCache = window._queryTextCache || {};
                       window._queryTextCache[cellKey] = valStr;
-                      return `<td><div class="cell-truncate-clamp" onclick="openTextPreviewModal('SQL Query Result', '${escapeHtml(c)}', window._queryTextCache['${cellKey}']);" title="Click to view full text in modal">${escapeHtml(valStr)}</div></td>`;
+                      return `<td><div class="cell-truncate-clamp" onclick="openTextPreviewModal('SQL Query Result', '${escapeHtml(c)}', window._queryTextCache['${cellKey}'], event);" title="Click to view full text in modal">${escapeHtml(valStr)}</div></td>`;
                     }
                     return `<td>${escapeHtml(valStr)}</td>`;
                   }).join('') + '</tr>';
@@ -4140,7 +4214,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
               } else if (isLongText) {
                 const cellKey = `rec_${rIdx}_${cIdx}`;
                 window._recordTextCache[cellKey] = valStr;
-                displayHtml = `<div class="cell-truncate-clamp" onclick="event.stopPropagation(); openTextPreviewModal('${escapeHtml(tbl)}', '${escapeHtml(c)}', window._recordTextCache['${cellKey}']);" title="Click to view full text in modal | Double-click cell to edit">${escapeHtml(valStr)}</div>`;
+                displayHtml = `<div class="cell-truncate-clamp" onclick="event.stopPropagation(); openTextPreviewModal('${escapeHtml(tbl)}', '${escapeHtml(c)}', window._recordTextCache['${cellKey}'], event);" title="Click to view full text in modal | Double-click cell to edit">${escapeHtml(valStr)}</div>`;
               } else {
                 displayHtml = escapeHtml(valStr);
               }

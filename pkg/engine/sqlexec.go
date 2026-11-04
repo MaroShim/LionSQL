@@ -620,7 +620,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
-	// 0.005 Database Context Switching: USE <database> (Tolerant Virtual No-Op)
+	// 0.005 Database Context Switching: USE <database> / CREATE DATABASE <db> (Tolerant Virtual No-Op)
 	if dbName, ok := parseUseCommand(trimmed); ok {
 		if cs != nil {
 			cs.Mu.Lock()
@@ -633,6 +633,16 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			Success:    true,
 			Command:    "USE",
 			Messages:   []string{fmt.Sprintf("Database context set to %s.", dbName)},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// 0.006 Tolerant Virtual CREATE DATABASE <name> [ENCODING ...] (No-Op for single-catalog instances)
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE DATABASE") {
+		return &QueryResult{
+			Success:    true,
+			Command:    "CREATE DATABASE",
+			Messages:   []string{"CREATE DATABASE executed successfully."},
 			DurationUS: time.Since(start).Microseconds(),
 		}, nil
 	}

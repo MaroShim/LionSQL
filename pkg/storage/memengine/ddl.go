@@ -644,6 +644,26 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 
 	td.Schema.Name = newClean
 	e.tables[newClean] = td
+
+	// Update any foreign key definitions on other tables referencing oldClean
+	for _, otherTd := range e.tables {
+		for i := range otherTd.Schema.ForeignKeys {
+			if strings.EqualFold(otherTd.Schema.ForeignKeys[i].ParentTable, oldClean) {
+				otherTd.Schema.ForeignKeys[i].ParentTable = newClean
+			}
+		}
+	}
+
+	e.rebuildFKCacheLocked()
+
+	if !storage.IsTemporaryTable(newClean) {
+		if _, err := e.recordWALLocked([]WALOp{{
+			Type:  OpAlterTable,
+			Table: newClean,
+		}}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
