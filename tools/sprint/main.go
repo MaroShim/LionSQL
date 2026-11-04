@@ -7,11 +7,43 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
 const defaultEndpoint = "http://127.0.0.1:8090/api/sql"
+
+func ensureServerRunning(endpoint string) {
+	// Only auto-start if target is localhost:8090
+	if !strings.Contains(endpoint, "127.0.0.1:8090") && !strings.Contains(endpoint, "localhost:8090") {
+		return
+	}
+
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+	resp, err := client.Get("http://127.0.0.1:8090/health")
+	if err == nil {
+		resp.Body.Close()
+		return
+	}
+
+	// Not running, invoke scripts/sprint_server.sh start
+	scriptPath := "scripts/sprint_server.sh"
+	if _, err := os.Stat(scriptPath); err != nil {
+		// Try finding relative to binary
+		if exe, err := os.Executable(); err == nil {
+			cand := filepath.Join(filepath.Dir(exe), "..", "scripts", "sprint_server.sh")
+			if _, err := os.Stat(cand); err == nil {
+				scriptPath = cand
+			}
+		}
+	}
+
+	cmd := exec.Command(scriptPath, "start")
+	_ = cmd.Run()
+	time.Sleep(1 * time.Second)
+}
 
 type QueryReq struct {
 	Query string `json:"query"`
@@ -49,6 +81,8 @@ func getAuthToken(baseAPI string) (string, error) {
 }
 
 func execSQL(endpoint, sql string) (*QueryResp, error) {
+	ensureServerRunning(endpoint)
+
 	b, err := json.Marshal(QueryReq{Query: sql})
 	if err != nil {
 		return nil, err
@@ -251,9 +285,11 @@ func backupToFile(endpoint, filename string) error {
 		}
 		metrics := ""
 		if m, ok := r["metrics"].(string); ok && m != "" {
-			metrics = m
-			if len(metrics) > 40 {
-				metrics = metrics[:37] + "..."
+			runes := []rune(m)
+			if len(runes) > 40 {
+				metrics = string(runes[:37]) + "..."
+			} else {
+				metrics = m
 			}
 		}
 		sb.WriteString(fmt.Sprintf("| `%v` | **`%v`** | %v | P%v | %v | %v | %v |\n",
