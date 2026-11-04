@@ -19,10 +19,10 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 > 설계 및 실측 문서: [`notes/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](notes/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md), [`notes/LAZY_DECODING_P2_PLAN.ko.md`](notes/LAZY_DECODING_P2_PLAN.ko.md)  
 > 목표: Grove 핫스팟 대응 과정에서 유입된 키 래치 및 슬립 재시도를 완전 제거하여 186k / 120k / 690k tpmC 기준치를 복원하고, 파이프라인 내 경량 성능 회귀 게이트를 구축하며, P-2 바이너리 튜플 지연 역직렬화를 통해 스캔 경로 CPU 효율을 극대화합니다.
 
-### [-] 1.0 `DOGFOOD-SPRINT-1`: LionSQL 자체 백엔드 기반 정형 스프린트/태스크 관리 시스템 구축 (Dogfooding)
-- [ ] **Phase 1 (`SCHEMA-SPRINT`)**: `sprints`, `tasks`, `task_tags` 정형 테이블 스키마 DDL 작성 및 초기 데이터 마이그레이션
-- [ ] **Phase 2 (`CLI-SPRINT`)**: `cmd/sprint` 도구 구현 (`sprint init`, `sprint list`, `sprint update`, `sprint sync` 마크다운 뷰 자동 생성)
-- [ ] **Phase 3 (`UI-SPRINT`)**: LionSQL 내장 Web Studio(`/_/`) 연동 및 AI 에이전트 쿼리 연동 (문맥 누락 원천 차단)
+### [x] 1.0 `DOGFOOD-SPRINT-1`: LionSQL 자체 백엔드 기반 정형 스프린트/태스크 관리 시스템 구축 (Dogfooding)
+- [x] **Phase 1 (`SCHEMA-SPRINT`)**: `sprint_tasks` 정형 테이블 스키마 DDL 작성 및 초기 데이터(182건: TODO 62건 + BUG_ARCHIVE 120건) 마이그레이션
+- [x] **Phase 2 (`CLI-SPRINT`)**: `tools/sprint` 도구 구현 (`sprint init`, `sprint list`, `sprint set`, `sprint add`, `sprint backup` 마크다운 뷰 `SPRINT_TASKS_BACKUP.md` 자동 동기화)
+- [x] **Phase 3 (`UI-SPRINT`)**: LionSQL 내장 Web Studio(`/_/`) 테이블 조회 및 백엔드 REST API 영구 연동 (Git 백업과 DB SSOT 상호 보완 완성)
 
 ### [x] 1.0.1 `P-2` WiredTiger VDBE 바이너리 튜플 지연 역직렬화 (완료)
 - [x] **Phase 1 (`BENCH-P2-BASE`)**: 다중 컬럼 테이블 대상 조건부 스캔 사전 기준치 벤치마크 측정 (`2.77ms/op`, `6.3MB/op`, `30,983 allocs`)
