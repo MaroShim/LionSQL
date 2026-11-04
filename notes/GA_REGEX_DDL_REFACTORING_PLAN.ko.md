@@ -1,7 +1,7 @@
 # LionSQL DDL 및 잔여 정규식 완전 제거(Lexer/AST 전환) 설계 계획서 (`notes/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-02  
-> - **상태**: 구현 진행 중 (In Progress)  
+> - **상태**: 구현 및 검증 완료 ( - Commit , 정규식 35+종 완전 제거)  
 > - **과제 식별 코드**: `GA-REGEX-DDL-1`  
 > - **목표**: `sqlexec_ddl.go`, `sqlexec_eval.go`, `sqlexec_explain.go` 내의 모든 레거시 정규식(`regexp.MustCompile`)을 100% 제거하고, `proc.Lexer`, `sqlutil` 토크나이저 및 Pratt AST 파서로 전환하여 파싱 오류 원천 차단 및 무결성 확보  
 
