@@ -40,10 +40,25 @@ type EphemeralTable struct {
 	Recs   []storage.Record
 }
 
+// Dialect represents client wire protocol and SQL semantics family.
+type Dialect int
+
+const (
+	// DialectDefault is the default Microsoft T-SQL dialect (TDS, Web Studio).
+	DialectDefault Dialect = iota
+	// DialectTSQL is Microsoft SQL Server T-SQL dialect.
+	DialectTSQL
+	// DialectPostgres is PostgreSQL wire protocol v3 dialect.
+	DialectPostgres
+	// DialectMySQL is MySQL client compatibility dialect.
+	DialectMySQL
+)
+
 // ClientSession maintains interactive connection state: open transaction, session variables, and query cancellation context.
 type ClientSession struct {
 	ID              string
 	SPID            int
+	Dialect         Dialect
 	Session         storage.Session
 	Tx              storage.Transaction
 	TxFailed        bool // whether current transaction encountered an error ('E' in PGWire)
@@ -288,6 +303,22 @@ func (cs *ClientSession) TxStatus() byte {
 	return 'I'
 }
 
+// IsPostgres reports whether the session operates under PostgreSQL dialect semantics.
+func (cs *ClientSession) IsPostgres() bool {
+	if cs == nil {
+		return false
+	}
+	return cs.Dialect == DialectPostgres || strings.HasPrefix(cs.ID, "pg-")
+}
+
+// IsTSQL reports whether the session operates under Microsoft T-SQL dialect semantics.
+func (cs *ClientSession) IsTSQL() bool {
+	if cs == nil {
+		return true
+	}
+	return cs.Dialect == DialectTSQL || cs.Dialect == DialectDefault
+}
+
 // ExecuteProgram executes a compiled program in the session's active transaction if present,
 // or in an autocommit session. Mutex synchronization, transaction failure flags, and session
 // life cycles are completely encapsulated within this method.
@@ -299,7 +330,7 @@ func (cs *ClientSession) ExecuteProgram(
 	eng storage.Engine,
 	stmtLabel string,
 ) (res *runtime.ExecutionResult, txAborted bool, err error) {
-	if cs != nil && strings.HasPrefix(cs.ID, "pg-") && paramMap != nil {
+	if cs != nil && cs.IsPostgres() && paramMap != nil {
 		paramMap["identity_insert_all"] = true
 	}
 	if cs == nil {

@@ -107,6 +107,15 @@ func TestExtractQueryCharacteristics(t *testing.T) {
 			wantOutput:    false,
 			wantConflict:  false,
 		},
+		{
+			name:          "select with derived table in FROM",
+			sql:           `SELECT * FROM (SELECT id FROM users) AS u`,
+			wantType:      "SELECT",
+			wantTables:    []string{"users"},
+			wantReturning: false,
+			wantOutput:    false,
+			wantConflict:  false,
+		},
 	}
 
 	for _, tt := range tests {

@@ -333,13 +333,13 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [x] **Phase 2 (`TDS-MOD-1`)**: TDS 모놀리스(`server.go` 2.9k 라인) 파일 분할 영구 기각(Spec-Out) — AI 페어 프로그래밍 환경에서 Git Blame/히스토리 보존 가치가 파일 분할 이점보다 크므로 단일 파일 유지 결정
 - [x] **Phase 3 (`R-6-P3`)**: 서버 기동 시 `Coordinator` 최상위 인스턴스화 및 3대 리스너(PG, TDS, HTTP) 대등 주입 (역할 전도 해소)
 
-### [ ] 3.8 `ARCH-VDBE-ROUTING-1` AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring)
-- **목표**: `pkg/wire`의 문자열 매칭(`strings.Contains`) 휴리스틱을 완전 제거하고, AST 노드와 카탈로그 SSOT 기반의 견고한 역량 검증으로 전환
-- **세부 작업**:
-  - `proc.CanCompileAST(stmt)` 도입: AST 레벨에서 `RETURNING`, `ON CONFLICT` 등 VDBE 미지원 구문 O(1) 구조체 필드로 판별
-  - 가상 카탈로그 뷰 판별을 `catalog.IsVirtualTable(name)` SSOT로 일원화 (원시 문자열 키워드 목록 하드코딩 제거)
-  - `ClientSession.Dialect` enum (`DialectTSQL`, `DialectPostgres`) 도입하여 `strings.HasPrefix(cs.ID, "pg-")` 문자열 검사 및 암묵적 플래그 제거
-  - `pkg/proc`의 순수성 유지 (카탈로그와의 순환 참조 방지를 위해 함수/인터페이스 주입 방식 준수)
+### [x] 3.8 `ARCH-VDBE-ROUTING-1` AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) — **[완료 (Pass)]**
+- **설계 계획서**: [`notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md)
+- **목표**: `pkg/wire` 및 `pkg/engine`의 문자열 매칭(`strings.HasPrefix(cs.ID, "pg-")`, `FROM (` 슬라이싱) 휴리스틱을 완전 제거하고, AST 노드와 카탈로그/세션 Dialect 기반의 견고한 역량 검증으로 전환
+- [x] **`ClientSession.Dialect` 정식 enum 도입**: `DialectDefault`, `DialectTSQL`, `DialectPostgres`, `DialectMySQL` 타입 시스템 구축 및 `cs.IsPostgres()`, `cs.IsTSQL()` 제공으로 문자열 꼼수 박멸 (`pkg/engine/session.go`, `pkg/engine/coordinator_impl.go`, `pkg/api/server.go`)
+- [x] **PostgreSQL 트랜잭션 실패 규칙 및 Identity Insert 정규화**: `sqlexec.go`, `sqlexec_dml.go`, `sqlexec_select.go` 내 `strings.HasPrefix(cs.ID, "pg-")`를 `cs.IsPostgres()`로 전면 교체
+- [x] **파생 테이블 AST 특성 기반 판별**: `proc.QueryCharacteristics`에 `HasDerivedTable` 필드 추가 및 `canCompileToVDBE()` 내 `FROM (` 문자열 슬라이싱 휴리스틱 완전 삭제 (`pkg/proc/characteristics.go`, `pkg/wire/server.go`)
+- [x] **회귀 검증**: 3-Stage Pipeline (Build, Test `-race`) 100% PASS (0 data race)
 
 ### [ ] 3.9 기타 엔터프라이즈 기능 확장
 - [ ] `AUDIT-LOG-1`: 암호화 SHA-256 불변 감사 로그 서브시스템 ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md))

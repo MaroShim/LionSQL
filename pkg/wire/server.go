@@ -837,14 +837,8 @@ func canCompileToVDBE(query string, qc proc.QueryCharacteristics) bool {
 		return false
 	}
 	// Bypass complex relational algebra (joins, subqueries, derived tables) to Tier-2 CBO engine
-	if qc.HasJoin || qc.HasSubquery {
+	if qc.HasJoin || qc.HasSubquery || qc.HasDerivedTable {
 		return false
-	}
-	for _, fromIdx := range sqlutil.FindAllTopLevelKeyword(query, "FROM") {
-		rest := strings.TrimSpace(query[fromIdx+4:])
-		if strings.HasPrefix(rest, "(") {
-			return false
-		}
 	}
 	return true
 }

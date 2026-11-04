@@ -40,6 +40,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
      - **[`ROADMAP_REORGANIZATION_PLAN.ko.md`](ROADMAP_REORGANIZATION_PLAN.ko.md)** (Korean): Global roadmap reorganization and Phase 7 / quality gate expansion design plan (DOC-ROADMAP-REORG-1).
      - **[`TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md)** (Korean): Table-driven compatibility architecture design plan for 10 production services (COMPAT-TABLE-DRIVEN-1).
      - **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)** (Korean): Structural query routing refactoring architecture and verification report using symbol table and AST (eliminated 45 heuristics, 527ns verified, completed).
+     - **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](ARCH_VDBE_ROUTING_1_PLAN.ko.md)** (Korean): 2-Tier query routing normalization using AST and Dialect type (eliminated session ID prefix tricks and FROM derived table slicing heuristics, ARCH-VDBE-ROUTING-1).
    - **Post-1.0 Architecture & Roadmap Plans**:
      - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC performance optimization history, WiredTiger beat roadmap, 104k tpmC architecture, and post-1.0 memory compaction (OCC-HYPER-2).
      - **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)** (Korean): Vertical server pipeline optimization from TDS network socket read coalescing to WAL file system fallocate and adaptive group commit (Phase 3/4).

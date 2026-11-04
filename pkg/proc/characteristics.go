@@ -7,13 +7,14 @@ import (
 // QueryCharacteristics holds structural AST traits extracted from a query
 // without relying on fragile raw string substring heuristics.
 type QueryCharacteristics struct {
-	StatementType string   // "SELECT", "INSERT", "UPDATE", "DELETE", "DDL", "TX", "OTHER"
-	TargetTables  []string // Unique referenced table names (e.g. "users", "sys.tables")
-	HasReturning  bool     // Contains SQL RETURNING clause
-	HasOutput     bool     // Contains T-SQL OUTPUT clause
-	HasOnConflict bool     // Contains ON CONFLICT clause
-	HasJoin       bool     // References multiple tables via JOIN
-	HasSubquery   bool     // References subqueries or derived tables (e.g. FROM (SELECT ...))
+	StatementType  string   // "SELECT", "INSERT", "UPDATE", "DELETE", "DDL", "TX", "OTHER"
+	TargetTables   []string // Unique referenced table names (e.g. "users", "sys.tables")
+	HasReturning   bool     // Contains SQL RETURNING clause
+	HasOutput      bool     // Contains T-SQL OUTPUT clause
+	HasOnConflict  bool     // Contains ON CONFLICT clause
+	HasJoin        bool     // References multiple tables via JOIN
+	HasSubquery    bool     // References subqueries (e.g. nested SELECT)
+	HasDerivedTable bool    // References derived table subquery: FROM (SELECT ...)
 }
 
 // ExtractQueryCharacteristics tokenizes the SQL query and extracts structural traits,
@@ -82,7 +83,10 @@ func ExtractQueryCharacteristics(sql string) QueryCharacteristics {
 		// 3. Table references extraction: FROM, JOIN, INTO, UPDATE
 		isStandaloneUpdate := tok.Type == TokenUpdate && strings.ToUpper(prevTok.Literal) != "DO" && !qc.HasOnConflict
 		if tok.Type == TokenFrom || tok.Type == TokenJoin || tok.Type == TokenInto || isStandaloneUpdate {
-			tbl := readTableIdentifier(l)
+			hasOpenParen, tbl := readTableIdentifier(l)
+			if tok.Type == TokenFrom && hasOpenParen {
+				qc.HasDerivedTable = true
+			}
 			if tbl != "" {
 				norm := cleanTableRef(tbl)
 				if norm != "" && !tableSet[norm] {
@@ -98,12 +102,14 @@ func ExtractQueryCharacteristics(sql string) QueryCharacteristics {
 	return qc
 }
 
-func readTableIdentifier(l *Lexer) string {
+func readTableIdentifier(l *Lexer) (bool, string) {
+	hadParen := false
 	// Skip opening parens in parenthesized FROM clauses: FROM ("tbl" JOIN ...)
 	for {
 		if l.ch == ' ' || l.ch == '\t' || l.ch == '\r' || l.ch == '\n' {
 			l.readChar()
 		} else if l.ch == '(' {
+			hadParen = true
 			l.readChar()
 		} else {
 			break
@@ -113,18 +119,18 @@ func readTableIdentifier(l *Lexer) string {
 	tok := l.NextToken()
 	if tok.Type == TokenEOF || tok.Type == TokenSelect || tok.Type == TokenWith {
 		// Subquery or empty
-		return ""
+		return hadParen, ""
 	}
 
 	if tok.Type == TokenDoubleColon {
 		nextTok := l.NextToken()
-		return "::" + nextTok.Literal
+		return hadParen, "::" + nextTok.Literal
 	}
 
 	if tok.Type != TokenIdent && tok.Type != TokenString && tok.Type < 100 {
 		// Only consider identifiers, string-escaped idents, or unreserved keywords
 		if tok.Literal == "" {
-			return ""
+			return hadParen, ""
 		}
 	}
 
@@ -151,7 +157,7 @@ func readTableIdentifier(l *Lexer) string {
 		}
 	}
 
-	return strings.Join(parts, ".")
+	return hadParen, strings.Join(parts, ".")
 }
 
 func cleanTableRef(raw string) string {

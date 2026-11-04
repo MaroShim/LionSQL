@@ -408,8 +408,8 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 		default:
 		}
 
-		// In PostgreSQL mode (sessions prefixed with "pg-"), if transaction has failed, reject all commands except ROLLBACK
-		if cs != nil && strings.HasPrefix(cs.ID, "pg-") {
+		// In PostgreSQL mode, if transaction has failed, reject all commands except ROLLBACK
+		if cs.IsPostgres() {
 			cs.Mu.Lock()
 			failed := cs.TxFailed
 			cs.Mu.Unlock()
@@ -434,7 +434,7 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 					}
 				}
 				cs.Vars["error"] = errNum
-				if cs.Tx != nil && strings.HasPrefix(cs.ID, "pg-") {
+				if cs.Tx != nil && cs.IsPostgres() {
 					cs.TxFailed = true
 				}
 				cs.Mu.Unlock()
@@ -504,8 +504,8 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		return fmt.Errorf("no active transaction to commit on session %s", cs.ID)
 	}
 
-	// In PostgreSQL mode (sessions prefixed with "pg-"), if transaction has failed, COMMIT is converted to ROLLBACK
-	if cs.TxFailed && strings.HasPrefix(cs.ID, "pg-") {
+	// In PostgreSQL mode, if transaction has failed, COMMIT is converted to ROLLBACK
+	if cs.TxFailed && cs.IsPostgres() {
 		_ = cs.Tx.Rollback()
 		cs.Tx = nil
 		cs.TxFailed = false

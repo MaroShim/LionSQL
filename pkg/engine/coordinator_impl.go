@@ -321,15 +321,20 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 	c.spidCounter++
 
 	defaultDB := "postgres"
+	dialect := DialectDefault
 	if strings.HasPrefix(id, "tds-") {
 		defaultDB = "master"
+		dialect = DialectTSQL
+	} else if strings.HasPrefix(id, "pg-") {
+		dialect = DialectPostgres
 	}
 
 	cs := &ClientSession{
-		ID:            id,
-		SPID:          c.spidCounter,
-		Session:       sess,
-		Database:      defaultDB,
+		ID:              id,
+		SPID:            c.spidCounter,
+		Dialect:         dialect,
+		Session:         sess,
+		Database:        defaultDB,
 		Vars:            make(map[string]any),
 		TableVars:       make(map[string]string),
 		TempTableMap:    make(map[string]string),
@@ -468,6 +473,21 @@ func (c *Coordinator) SetSessionUser(id, user string) {
 		cs.Mu.Lock()
 		cs.User = user
 		cs.OriginalUser = user
+		cs.Mu.Unlock()
+	}
+}
+
+// SetSessionDialect explicitly sets the SQL dialect family for a session.
+func (c *Coordinator) SetSessionDialect(id string, dialect Dialect) {
+	if id == "" || id == "default" {
+		return
+	}
+	c.sessMu.RLock()
+	cs, exists := c.sessions[id]
+	c.sessMu.RUnlock()
+	if exists && cs != nil {
+		cs.Mu.Lock()
+		cs.Dialect = dialect
 		cs.Mu.Unlock()
 	}
 }

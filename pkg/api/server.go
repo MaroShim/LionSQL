@@ -406,6 +406,11 @@ func (s *Server) SetSessionUser(id, user string) {
 	s.coordinator.SetSessionUser(id, user)
 }
 
+// SetSessionDialect explicitly sets the SQL dialect family for an interactive session.
+func (s *Server) SetSessionDialect(id string, dialect engine.Dialect) {
+	s.coordinator.SetSessionDialect(id, dialect)
+}
+
 // CancelSessionQuery triggers cooperative cancellation for the currently active statement on sessionID.
 func (s *Server) CancelSessionQuery(sessionID string) bool {
 	return s.coordinator.CancelSessionQuery(sessionID)

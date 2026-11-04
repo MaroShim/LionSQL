@@ -72,6 +72,9 @@ type SQLCoordinator interface {
 	// SetSessionUser updates the active user principal on an interactive session for RBAC.
 	SetSessionUser(id, user string)
 
+	// SetSessionDialect explicitly sets the SQL dialect family for an interactive session.
+	SetSessionDialect(id string, dialect Dialect)
+
 	// AuthService returns the underlying authentication service.
 	AuthService() *auth.AuthService
 

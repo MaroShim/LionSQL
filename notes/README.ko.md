@@ -40,6 +40,7 @@
      - **[`ROADMAP_REORGANIZATION_PLAN.ko.md`](ROADMAP_REORGANIZATION_PLAN.ko.md)**: LionSQL 전역 로드맵(ROADMAP.md) 재정비 및 Phase 7/품질 게이트 확장 설계 계획서 (DOC-ROADMAP-REORG-1).
      - **[`TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md)**: 10개 실전 서비스 호환 규칙 Table-Driven 정식화 설계 계획서 (COMPAT-TABLE-DRIVEN-1).
      - **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 쿼리 라우팅 리팩토링 설계 및 검증 보고서 (문자열 휴리스틱 45개 전면 제거, 527ns 실측, 완료).
+     - **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](ARCH_VDBE_ROUTING_1_PLAN.ko.md)**: AST 및 Dialect 타입 기반 2-Tier 쿼리 라우팅 정규화 계획서 (세션 접두사 문자열 꼼수 및 FROM 파생테이블 슬라이싱 완전 박멸, ARCH-VDBE-ROUTING-1).
    - **Post-1.0 아키텍처 및 장기 로드맵 계획서**:
      - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 성능 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Post-1.0 메모리 5배 압축 로드맵 (OCC-HYPER-2).
      - **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: TDS 네트워크 소켓 수신부터 VDBE 및 WAL 파일 시스템 사전 할당/적응형 그룹 커밋에 이르는 서버 수직 파이프라인 종단 최적화 마스터 플랜 (Phase 3/4 대기).

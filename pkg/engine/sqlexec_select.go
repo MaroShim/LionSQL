@@ -1127,7 +1127,7 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 				params[k] = v
 			}
 		}
-		if strings.HasPrefix(cs.ID, "pg-") {
+		if cs.IsPostgres() {
 			if params == nil {
 				params = make(map[string]any)
 			}
@@ -1511,7 +1511,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION
 	if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
 		upperClean := strings.ToUpper(cleaned)
-		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean[6:], "SELECT") && !strings.Contains(cleaned, "->") {
+		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean, "CURRENT_SETTING") && !strings.Contains(upperClean, "PG_CANCEL_BACKEND") && !strings.Contains(upperClean, "PG_TERMINATE_BACKEND") && !strings.Contains(upperClean[6:], "SELECT") && !strings.Contains(cleaned, "->") {
 			res, err := s.execVDBESelect(cleaned, start, cs)
 			if err != nil {
 				return nil, err
