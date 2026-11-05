@@ -4,6 +4,11 @@
 
 이 디렉토리는 주요 오픈소스 애플리케이션 및 엔터프라이즈 서비스를 소스 코드 수정 없이(Zero-Modification) **LionSQL** 위에서 구동하기 위한 공식 구축·마이그레이션·운영 가이드를 모아둔 곳입니다.
 
+> [!TIP]
+> **가이드 작성 및 구동 원칙 (Strict Default & Tolerant Bootstrap)**:
+> 1. **표준 앱 (기본)**: ANSI/PostgreSQL 표준을 준수하는 대다수 앱은 어떠한 추가 플래그 없이 기본 명령(`lionsql start`)으로 설치 및 구동합니다.
+> 2. **비정규 DDL 앱**: NocoDB 등 비존재 객체 삭제나 비정규 마이그레이션을 던지는 특수 앱에 한하여, 최초 부트스트랩 시 `./bin/lionsql set tolerant_ddl on` (또는 `--tolerant-ddl`) 활성화 및 설치 완료 후 `off` 복원 절차를 명시합니다.
+
 ---
 
 ## 검증 완료 애플리케이션 일람표 (10대 서비스)

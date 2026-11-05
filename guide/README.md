@@ -4,6 +4,11 @@
 
 This directory contains official step-by-step deployment, migration, and operational guides for running popular open-source applications and enterprise services directly on **LionSQL** with zero source code modifications.
 
+> [!TIP]
+> **Integration Principles (Strict Default & Tolerant Bootstrap)**:
+> 1. **Standard Applications (Default)**: Applications adhering to ANSI/PostgreSQL standards deploy seamlessly using pure default commands (`lionsql start`) without extra flags.
+> 2. **Irregular DDL Applications**: For applications with non-standard migrations (e.g., NocoDB dropping non-existent objects), document enabling tolerant mode via `./bin/lionsql set tolerant_ddl on` (or `--tolerant-ddl`) during initial bootstrap and restoring it to `off` post-migration.
+
 ---
 
 ## Verified Application Matrix (10 Services)
