@@ -617,15 +617,24 @@ Checking LionSQL Environment & Storage Integrity...
 [OK] WAL LSN continuity check: PASSED
 Overall Result: HEALTHY (0 errors, 0 warnings)
 
-# 6. 무중단 런타임 설정 조회 및 변경 (get & set)
+# 6. 무중단 런타임 설정 조회 및 비상 해치 제어 (get & set)
 $ lionsql get
 KEY            VALUE   TYPE   DESCRIPTION
-tolerant_ddl   false   bool   Tolerant DDL bootstrap mode (skips non-existent drops, duplicate creates)
+tolerant_ddl   false   bool   EMERGENCY USE ONLY: Volatile bootstrap hatch for irregular third-party DDLs (auto-resets to strict on reboot)
 
 $ lionsql set tolerant_ddl on
 [sudo] Password for admin@lionsql.local: ********
 OK: tolerant_ddl set to true (in-memory volatile)
+[EMERGENCY WARNING] Tolerant DDL bootstrap hatch is now ACTIVE!
+                    Non-existent drops and duplicate creates will be silently bypassed.
+                    This mode is for emergency third-party bootstrap ONLY.
+                    Disable it immediately after migration via: lionsql set tolerant_ddl off
 ```
+
+> [!IMPORTANT]
+> **LionSQL 호환성 철학 및 Tolerant DDL 비상 해치 규정**:
+> 1. **정통적 호환성 제1원칙**: LionSQL은 PostgreSQL 표준 SQLSTATE 코드(`42704`, `42P01` 등)와 완벽한 문법 지원을 통해 Knex, GORM, Hibernate 등 외부 프레임워크가 표준 예외 처리를 통해 스스로 정상 동작하도록 지원하는 것을 최우선으로 합니다.
+> 2. **최후의 비상 레버 (Emergency Escape Hatch)**: 서드파티 오픈소스 패키지가 비표준 마이그레이션(예: 삭제 전 비존재 인덱스 무조건 DROP 등)을 하드코딩하여 소스코드를 직접 수정할 수 없는 환경에 한하여, 부트스트랩을 무음 통과시키기 위한 **"한시적 비상 탈출 수단"**으로만 `lionsql set tolerant_ddl on`을 제공합니다. 마이그레이션 완료 즉시 반드시 `off`로 복원해야 하며, 서버 재시작 시 안전을 위해 무조건 `strict` 모드로 자동 복원됩니다.
 
 ---
 

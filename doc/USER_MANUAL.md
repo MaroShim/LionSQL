@@ -617,15 +617,24 @@ Checking LionSQL Environment & Storage Integrity...
 [OK] WAL LSN continuity check: PASSED
 Overall Result: HEALTHY (0 errors, 0 warnings)
 
-# 6. Zero-Downtime Dynamic Configuration Control (get & set)
+# 6. Runtime Configuration & Emergency Hatch Control (get & set)
 $ lionsql get
 KEY            VALUE   TYPE   DESCRIPTION
-tolerant_ddl   false   bool   Tolerant DDL bootstrap mode (skips non-existent drops, duplicate creates)
+tolerant_ddl   false   bool   EMERGENCY USE ONLY: Volatile bootstrap hatch for irregular third-party DDLs (auto-resets to strict on reboot)
 
 $ lionsql set tolerant_ddl on
 [sudo] Password for admin@lionsql.local: ********
 OK: tolerant_ddl set to true (in-memory volatile)
+[EMERGENCY WARNING] Tolerant DDL bootstrap hatch is now ACTIVE!
+                    Non-existent drops and duplicate creates will be silently bypassed.
+                    This mode is for emergency third-party bootstrap ONLY.
+                    Disable it immediately after migration via: lionsql set tolerant_ddl off
 ```
+
+> [!IMPORTANT]
+> **LionSQL Compatibility Philosophy & Emergency Hatch Policy**:
+> 1. **Primary Standard Compatibility**: LionSQL prioritizes native PostgreSQL SQLSTATE error compliance (`42704`, `42P01`, etc.) so external ORMs and frameworks (Knex, GORM, Hibernate) handle schema idempotency cleanly via standard `TRY...CATCH` logic.
+> 2. **Emergency Escape Hatch (Last Resort)**: For third-party open-source applications hardcoding irregular migrations (e.g. dropping non-existent indexes without checks) where source modification is impractical, `lionsql set tolerant_ddl on` serves strictly as a **temporary, volatile emergency escape hatch**. It must be disabled immediately post-bootstrap, and automatically resets to strict mode on server restart.
 
 ---
 

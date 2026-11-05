@@ -190,8 +190,10 @@ func runSet(args []string) error {
 	_ = json.Unmarshal(setBody, &resData)
 	fmt.Printf("OK: %s set to %v (in-memory volatile)\n", resData.Key, resData.Value)
 	if strings.EqualFold(resData.Key, "tolerant_ddl") && (resData.Value == true || fmt.Sprintf("%v", resData.Value) == "true") {
-		fmt.Println("[WARNING] Tolerant DDL mode is now active! Typos and missing schema objects will be swallowed.")
-		fmt.Println("          Remember to disable it immediately after migration via: lionsql set tolerant_ddl off")
+		fmt.Println("[EMERGENCY WARNING] Tolerant DDL bootstrap hatch is now ACTIVE!")
+		fmt.Println("                    Non-existent drops and duplicate creates will be silently bypassed.")
+		fmt.Println("                    This mode is for emergency third-party bootstrap ONLY.")
+		fmt.Println("                    Disable it immediately after migration via: lionsql set tolerant_ddl off")
 	}
 	return nil
 }

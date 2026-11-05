@@ -71,7 +71,7 @@ LionSQL은 10개 실전 오픈소스 애플리케이션을 외부 코드 수정 
      ./bin/lionsql get
      # 결과:
      # KEY            VALUE   TYPE   DESCRIPTION
-     # tolerant_ddl   false   bool   Tolerant DDL bootstrap mode (skips non-existent drops, duplicate creates)
+     # tolerant_ddl   false   bool   EMERGENCY USE ONLY: Volatile bootstrap hatch for irregular third-party DDLs (auto-resets to strict on reboot)
      ```
 
 2. **상태 변경 명령 (`lionsql set <key> <value>`)**:
@@ -80,8 +80,10 @@ LionSQL은 10개 실전 오픈소스 애플리케이션을 외부 코드 수정 
      ./bin/lionsql set tolerant_ddl on
      [sudo] Password for admin@lionsql.local: ********
      OK: tolerant_ddl set to true (in-memory volatile)
-     [WARNING] Tolerant DDL mode is now active! Typos and missing schema objects will be swallowed.
-               Remember to disable it immediately after migration via: lionsql set tolerant_ddl off
+     [EMERGENCY WARNING] Tolerant DDL bootstrap hatch is now ACTIVE!
+                         Non-existent drops and duplicate creates will be silently bypassed.
+                         This mode is for emergency third-party bootstrap ONLY.
+                         Disable it immediately after migration via: lionsql set tolerant_ddl off
      ```
    - 스크립트/CI 환경 지원을 위해 `LIONSQL_ADMIN_PASS` 환경변수 또는 표준 입력 토큰을 수용 (`[RULE:ExecveSafety]`, `[RULE:HeadlessParity]`).
 

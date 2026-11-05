@@ -571,7 +571,7 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 			Key:         "tolerant_ddl",
 			Value:       s.TolerantDDL(),
 			Type:        "bool",
-			Description: "Tolerant DDL bootstrap mode (skips non-existent drops, duplicate creates)",
+			Description: "EMERGENCY USE ONLY: Volatile bootstrap hatch for irregular third-party DDLs (auto-resets to strict on reboot)",
 		},
 	}
 
