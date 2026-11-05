@@ -50,7 +50,7 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 > **운영 원칙**: 완벽 연동을 위해 무한정 시간을 쓰지 않고, **엄격한 30분 타임박스**를 두고 가볍게 찔러보며 엔진의 숨은 엣지 케이스를 발굴하는 테스트베드로만 활용 (비침습적 패치 우선, 무한 루프나 구조적 대수술 감지 시 30분 내 즉시 중단).
 - `INTEG-DIRECTUS-1`: Directus (30분 프로브 완료 ➔ PENDING 정리: 92개 마이그레이션 DDL 통과 확인, 이후 `@directus/schema` 인스펙터의 `information_schema.columns` LEFT JOIN `information_schema.tables` 및 `relnamespace IN ('public'::regnamespace)` 복합 쿼리 체인 식별 완료)
 - `INTEG-NOCODB-1`: NocoDB (30분 프로브 완료 ➔ PENDING 정리: 100+개 시스템 테이블 DDL 및 다중 마이그레이션 통과 확인, 이후 `nc_202610121136_file_references_url_index` 마이그레이션의 `DROP INDEX "nc_fr_file_url"` 비정규 인덱스 삭제 시 존재하지 않는 인덱스 예외 식별. **공식 해결 아키텍처 확정**: 코어 무결성을 훼손하지 않고 외부 앱 부트스트랩을 무음 통과시키는 **"설치 호환 모드 플래그(`--tolerant-ddl`)"** 도입 결정)
-- `INTEG-MATTERMOST-1`: Mattermost (Go + squirrel 쿼리 프로브)
+- `INTEG-MATTERMOST-1`: Mattermost (30분 프로브 완료 ➔ PENDING 정리: `SHOW server_version_num` 및 `ALTER TABLE tbl SET (...)` 스토리지 옵션 관용 통과 확인, 이후 `CREATE MATERIALIZED VIEW IF NOT EXISTS poststats` 마테리얼라이즈드 뷰 DDL 및 후속 `REFRESH` 수명주기 요구 식별)
 - `INTEG-GHOST-1`: Ghost (Bookshelf ORM 쿼리 프로브)
 
 ---

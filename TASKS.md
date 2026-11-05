@@ -149,7 +149,7 @@
 | `DONE` | **`INTEG-ANSWER-1`** | Durability | P2 | Apache Answer (Q&A 지식베이스) |  |  |
 | `PENDING` | **`INTEG-DIRECTUS-1`** | Ecosystem | P2 | Directus (Headless CMS/데이터 API) Fast-Fail 호환성 탐색 |  |  |
 | `PENDING` | **`INTEG-GHOST-1`** | Ecosystem | P2 | Ghost (블로그/출판 플랫폼) Fast-Fail 호환성 탐색 |  |  |
-| `IN_PROGRESS` | **`INTEG-MATTERMOST-1`** | Ecosystem | P3 | Mattermost (팀 협업 채팅) — **[v1.1.0 로드맵]** |  |  |
+| `PENDING` | **`INTEG-MATTERMOST-1`** | Ecosystem | P3 | Mattermost (팀 협업 채팅) — **[v1.1.0 로드맵]** |  |  |
 | `DONE` | **`INTEG-METABASE-1`** | Durability | P2 | Metabase (BI 대시보드) | [`notes/METABASE_INTEGRATION_PLAN.ko.md`](notes/METABASE_INTEGRATION_PLAN.ko.md) |  |
 | `PENDING` | **`INTEG-NOCODB-1`** | Ecosystem | P3 | NocoDB (노코드 DB 스튜디오) — **[v1.1.0 로드맵]** |  |  |
 | `DONE` | **`INTEG-NOCODB-MATTERMOST-DEFER-1`** | Durability | P2 | NocoDB 및 Mattermost 연동 1.0 이후(v1.1.0) 연기 확정 |  |  |
@@ -1891,12 +1891,16 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [IN_PROGRESS] Mattermost (팀 협업 채팅) — **[v1.1.0 로드맵]** `INTEG-MATTERMOST-1`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-05 13:04:26.020356 +0900 KST m=+58371.442690084
+### [PENDING] Mattermost (팀 협업 채팅) — **[v1.1.0 로드맵]** `INTEG-MATTERMOST-1`
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-05 13:11:00 KST
 
 **Details & Resolution**:
 - 스택: Go + `sqlx`/`squirrel` / PGWire (`TCP :5433`)
 - 대규모 팀 채널 및 메시지 인덱싱 검증
+- 30분 타임박스 프로브 완료:
+  - 1차: `SHOW server_version_num` 미인식 ➔ "150000" 정수 반환 매핑 규명 및 해결.
+  - 2차: `ALTER TABLE ... SET (autovacuum_vacuum_scale_factor = 0.1)` 스토리지 파라미터 미지원 ➔ Tolerant No-Op 처리 완료.
+  - 3차: `CREATE MATERIALIZED VIEW IF NOT EXISTS poststats AS ...` 마테리얼라이즈드 뷰 DDL 및 주기적 `REFRESH MATERIALIZED VIEW` 런타임 수명주기 요구 식별. 단순 뷰 대체 이상의 물리 뷰 관리 필요로 PENDING 보존.
 ## 4. Architectural Invariants & Spec-Out Invariants (13대 불변 원칙)
 To preserve sub-microsecond latency and single-binary simplicity, the following features are permanently **Spec-Out** (detailed rationales preserved in [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) and [`GEMINI.md`](GEMINI.md)):
 1. **Duplicate PL/pgSQL Interpreter**: Stored procedures unify on native T-SQL VDBE VM (`pkg/proc`).
