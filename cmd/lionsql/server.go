@@ -853,6 +853,15 @@ func runServer(args []string) error {
 		if cfg.Logging.DevMode {
 			fmt.Println(" [Developer Mode] Enabled (-dev: Real-time Wire Query & Error Tracing)")
 		}
+		if server.TolerantDDL() {
+			fmt.Println("--------------------------------------------------------------------------------")
+			fmt.Println(" [CRITICAL WARNING] TOLERANT DDL BOOTSTRAP MODE IS ACTIVE! (--tolerant-ddl)")
+			fmt.Println("                    Non-existent drops and duplicate schema creates are tolerated.")
+			fmt.Println("                    DDL typos, syntax bugs, and missing objects WILL BE SILENCED!")
+			fmt.Println("                    DO NOT leave active in production. Restore to strict mode via:")
+			fmt.Println("                    ./bin/lionsql set tolerant_ddl off")
+			log.Println("[LionSQL WARNING] Tolerant DDL bootstrap mode is active. Syntax typos may be silently swallowed!")
+		}
 		if cfg.Auth.AdminPass == "1234567890" {
 			fmt.Println("--------------------------------------------------------------------------------")
 			fmt.Println(" [SECURITY NOTICE] Default administrator credentials active on localhost (127.0.0.1).")
