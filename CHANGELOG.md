@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- add Materialized View Virtual Alias & Tolerant Refresh architecture plan for enterprise apps (`FEAT-MATVIEW-ALIAS-1`)
+- add pure-Go Vector Search (`FEAT-VECTOR-1`) and LSM Time-Series storage (`FEAT-TIMESERIES-LSM-1`) architecture plans for post-1.0
+- support `server_version_num` (150000) in `SHOW` dispatcher and current_setting for Go/Mattermost driver compatibility
+- support `ALTER TABLE ... SET (...)` storage parameter options as tolerant no-op for Mattermost migration compatibility
 - decouple sprint tool into shared core package (`tools/sprint/core`) and two dedicated binaries (`bin/sprint` for LionSQL dogfooding, `bin/sprint-lite` for standalone SQLite)
 - implement zero-allocation compact binary tuple serialization pipeline for memengine WAL (bf329d3)
 - add atomicity invariant test suite and formalize multi-step transaction boundaries in GEMINI.md (e78a0a6)
