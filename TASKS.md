@@ -142,6 +142,7 @@
 | `DONE` | **`DURA-SLT-1`** | Durability | P2 | SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 | [`notes/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/SQLLOGICTEST_INTEGRATION_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`DURA-SLT-2`** | Durability | P2 | SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 | [`notes/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`DURA-SOAK-1`** | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
+| `PENDING` | **`FEAT-MATVIEW-ALIAS-1`** | FEAT | P2 | Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) | [`notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TIMESERIES-LSM-1`** | FEAT | P2 | LSM Time-Series Chunk Storage & time_bucket | [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-VECTOR-1`** | FEAT | P2 | Pure-Go Vector Search Engine (pgvector compat) | [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `PENDING` | **`FRIENDLY-SQL`** | Ecosystem | P3 | DuckDB-Style Friendly SQL 문법 지원 | [`notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md) |  |
@@ -1844,6 +1845,12 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) `FEAT-MATVIEW-ALIAS-1`
+- **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-05T13:20:32.068575+09:00
+- **Plan Doc**: [`notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)
+
+---
+
 ### [PENDING] LSM Time-Series Chunk Storage & time_bucket `FEAT-TIMESERIES-LSM-1`
 - **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-05T12:33:06.401163+09:00
 - **Plan Doc**: [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)
@@ -1892,15 +1899,11 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] Mattermost (팀 협업 채팅) — **[v1.1.0 로드맵]** `INTEG-MATTERMOST-1`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-05 13:11:00 KST
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-05 13:11:45.094067 +0900 KST m=+58810.521521834
 
 **Details & Resolution**:
 - 스택: Go + `sqlx`/`squirrel` / PGWire (`TCP :5433`)
 - 대규모 팀 채널 및 메시지 인덱싱 검증
-- 30분 타임박스 프로브 완료:
-  - 1차: `SHOW server_version_num` 미인식 ➔ "150000" 정수 반환 매핑 규명 및 해결.
-  - 2차: `ALTER TABLE ... SET (autovacuum_vacuum_scale_factor = 0.1)` 스토리지 파라미터 미지원 ➔ Tolerant No-Op 처리 완료.
-  - 3차: `CREATE MATERIALIZED VIEW IF NOT EXISTS poststats AS ...` 마테리얼라이즈드 뷰 DDL 및 주기적 `REFRESH MATERIALIZED VIEW` 런타임 수명주기 요구 식별. 단순 뷰 대체 이상의 물리 뷰 관리 필요로 PENDING 보존.
 ## 4. Architectural Invariants & Spec-Out Invariants (13대 불변 원칙)
 To preserve sub-microsecond latency and single-binary simplicity, the following features are permanently **Spec-Out** (detailed rationales preserved in [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) and [`GEMINI.md`](GEMINI.md)):
 1. **Duplicate PL/pgSQL Interpreter**: Stored procedures unify on native T-SQL VDBE VM (`pkg/proc`).

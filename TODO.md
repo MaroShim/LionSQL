@@ -58,8 +58,11 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 ## 2. Post-1.0 Candidates & Deep Freezer (1.0 이후 후보 및 냉동 보관)
 
 ### 2.1 클라우드 유틸리티 및 엔터프라이즈 백로그
-1. **`S3-1~4` 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기** ([`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md))
-2. **`AUDIT-LOG-1` 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템** ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md))
+1. **`FEAT-MATVIEW-ALIAS-1` Materialized View Virtual Alias & Tolerant Refresh (`v1.1.0`)**
+   - **목표**: Mattermost, Discourse 등 엔터프라이즈 앱 부트스트랩을 위해 `CREATE MATERIALIZED VIEW`를 가상 뷰(Virtual View, `relkind='m'`)로 인라인 치환하고 `REFRESH MATERIALIZED VIEW`를 Tolerant No-Op(성공) 처리하여 수천 줄의 복잡도와 락 위험을 99% 절감.
+   - **설계 문서**: [`notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)
+2. **`S3-1~4` 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기** ([`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md))
+3. **`AUDIT-LOG-1` 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템** ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md))
 
 ### 2.2 고도화 스토리지 & AI/빅데이터 백로그 (Storage, AI & Replication)
 1. **`FEAT-VECTOR-1` 순수 Go 기반 Vector 임베딩 및 유사도 검색 (`v1.1.0`)**
