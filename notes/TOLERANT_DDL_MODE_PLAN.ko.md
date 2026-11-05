@@ -1,7 +1,7 @@
 # LionSQL Tolerant DDL Mode & Catalog Refactoring Architecture Plan (`TOLERANT_DDL_MODE_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-05
-> - **상태**: 승인 완료 (1.0 호환성 및 클린 리팩토링 로드맵: `v1.0.0-rc` / `v1.1.0`)
+> - **상태**: 구현 및 3단계 파이프라인 검증 완료 (`DONE`)
 > - **관련 과제**: `FEAT-TOLERANT-DDL-1` (Tolerant DDL Bootstrap Mode & Ad-hoc DDL Cleanup), `REFACTOR-CATALOG-INTERCEPTOR-1` (Table-Driven Catalog Interceptor Cleanup)
 > - **핵심 불변식**: `[RULE:SafeDefaults]` (안전한 기본값), `[RULE:RadicalKISS]` (KISS 및 Deletion-First), `[RULE:ExplicitError]` (명시적 에러 가시성)
 
@@ -115,3 +115,35 @@ LionSQL은 10개 실전 오픈소스 애플리케이션을 외부 코드 수정 
    - NocoDB 마이그레이션(`DROP INDEX nc_fr_file_url`) 통과 검증.
 3. **Phase 3: 가상 카탈로그 `interceptor.go` Table-Driven 리팩토링 (`REFACTOR-CATALOG-INTERCEPTOR-1`)**:
    - 순서 의존적 IF 블록을 제거하고 정적 매핑 테이블로 개편하여 Directus 스키마 인스펙션 쿼리 라우팅 정합성 확보.
+
+---
+
+## 5. 구현 및 검증 결과 보고서 (Implementation & Verification Complete)
+
+### 5.1 `FEAT-TOLERANT-DDL-1` 구현 결과
+1. **설정 파이프라인 및 안전한 기본값**:
+   - `pkg/config/config.go`에 `TolerantDDL bool` 필드 추가 (기본값: `false`, Strict 모드 유지).
+   - `--tolerant-ddl` 서버 플래그 및 `LIONSQL_TOLERANT_DDL` 환경변수 연동 완료.
+2. **무중단 동적 제어 CLI (`lionsql get` & `lionsql set`)**:
+   - `cmd/lionsql/cli_config.go`: 무암호 읽기 전용 `get`과 Unix `sudo` 스타일의 인터랙티브 터미널 암호 프롬프트(`term.ReadPassword`)를 탑재한 `set` 구현 완료.
+   - 실행 중인 인스턴스의 `POST /api/config` 엔드포인트 호출을 통해 인메모리 `atomic.Bool`을 무중단 원자적 전환.
+   - 디스크 설정 파일 변조 배제(`--persist` 제외)로 재시작 시 안전한 기본값 자동 복원 보장.
+3. **DDL 단일 관용 처리 파이프라인**:
+   - `sqlexec_ddl.go`: `DROP INDEX`, `DROP TABLE`, `DROP CONSTRAINT`, `DROP FOREIGN KEY`, `CREATE TABLE` 중복, `ALTER TABLE ADD COLUMN` 중복, `ALTER TABLE tbl SET (...)` 스토리지 옵션을 단일 `s.TolerantDDL()` 플래그로 일원화.
+
+### 5.2 `REFACTOR-CATALOG-INTERCEPTOR-1` 구현 결과
+1. **Table-Driven 정적 라우팅 테이블 (`RouteRule[]`) 전환**:
+   - `pkg/catalog/virtual/interceptor.go` 내의 약 330라인에 달하던 순차적 `if strings.Contains(...)` 체인을 전면 삭제.
+   - `catalogRouteTable ([]RouteRule)` 정적 테이블로 개편하여, 고유 시그니처 및 복합 조인(XORM GetIndexes, Primary Key, Foreign Key 등)이 우선 매칭되고 단일 테이블 조회가 후순위로 평가되도록 결정론적 디스패치 구조 확립.
+2. **순서 의존성(Order Sensitivity) 원천 박멸**:
+   - `pg_attribute` 조회가 `pg_index` 조회를 덮어쓰거나 가로채던 순서 버그 완전 해결.
+
+### 5.3 3단계 파이프라인 검증 통과 내역
+- **Stage 1 (Build)**: `bin/lionsql`, `bin/bench`, `bin/tpcc-runtime` 컴파일 완료.
+- **Stage 2 (Test)**:
+  - `pkg/engine/tolerant_ddl_test.go`: Strict vs Tolerant 모드 전환 및 비정규 DDL 허용 검증 통과.
+  - `pkg/api/config_api_test.go`: HTTP REST 설정 API 권한 및 동적 토글 검증 통과.
+  - `cmd/lionsql/cli_config_test.go`: CLI get/set 인터페이스 검증 통과.
+  - `pkg/catalog/virtual`: 가상 카탈로그 스위트 100% PASS.
+  - `pkg/engine`: 모든 외부 앱(Vaultwarden, Umami, Vikunja, WoodpeckerCI) 호환성 및 회귀 테스트 100% PASS (0 data race).
+- **Stage 3 (Commit)**: `a4221dd` (`FEAT-TOLERANT-DDL-1`), `5d01dfa` (`REFACTOR-CATALOG-INTERCEPTOR-1`).
