@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- decouple sprint tool into shared core package (`tools/sprint/core`) and two dedicated binaries (`bin/sprint` for LionSQL dogfooding, `bin/sprint-lite` for standalone SQLite)
+- implement zero-allocation compact binary tuple serialization pipeline for memengine WAL (bf329d3)
+- add atomicity invariant test suite and formalize multi-step transaction boundaries in GEMINI.md (e78a0a6)
+- enforce deterministic ID sorting for diff-stability and add bidirectional `restore` command to sprint tool
+- formalize dual-sync invariant between TODO dashboard and persistent sprint tasks database
+
+### Changed
+- format `TASKS.md` table sorted strictly by `id ASC` to eliminate git diff churn on status transitions
+- refactor TPC-C benchmark execution to run multi-statement procedures in single atomic transactions via `RunInTx` (5a285f1)
+
 ## [0.90.1] - 2026-11-04
 
 ### Added

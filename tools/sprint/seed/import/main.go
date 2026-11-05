@@ -49,5 +49,5 @@ func main() {
 
 	cmdBackup := exec.Command("./bin/sprint", "backup")
 	_ = cmdBackup.Run()
-	fmt.Println("SPRINT_TASKS_BACKUP.md updated.")
+	fmt.Println("TASKS.md updated.")
 }
