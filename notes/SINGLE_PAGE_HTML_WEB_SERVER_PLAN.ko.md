@@ -1,7 +1,7 @@
 # LionSQL 단일 페이지 HTML (SPA) 호스팅 & 자체 DB 통합 웹서버 플랜 (`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-10-25
-> - **최종 갱신일**: 2026-10-25
+> - **최종 갱신일**: 2026-11-05
 
 
 ## 1. 개요 및 비전 (Executive Summary & Vision)
@@ -50,7 +50,7 @@ LionSQL이 단일 페이지 HTML을 서빙하는 방식은 사용자 경험과 �
 
 | 모델 (Model) | 서빙 소스 | CLI 구동 예시 | 장점 | 권장 시나리오 |
 | :--- | :--- | :--- | :--- | :--- |
-| **Model 1: 파일 기반 바인딩 (File-Backed)** | 로컬 디스크 파일/디렉토리 | `lionsql serve --app=./index.html`<br>`lionsql serve --public=./dist` | 코드 수정 즉시 새로고침 반영, 빌드 도구(Vite/Webpack) 연동 용이 | 일반 웹 개발, 사내 대시보드, 지속적 변경 |
+| **Model 1: 로컬 파일/디렉토리 스마트 바인딩 (Local Smart Binding)** | 로컬 디스크 파일 또는 Flat 디렉토리 | `lionsql serve --app=./index.html`<br>`lionsql serve --app=./dist` | 단일 플래그(`--app`)로 파일/폴더 자동 감지, 코드 수정 즉시 새로고침 반영 | 일반 웹 개발, 사내 대시보드, 프론트엔드 빌드 연동 |
 | **Model 2: DB 내장 앱 (DB-Native App)** | LionSQL 시스템 테이블 (`sys_web_apps`) | `lionsql app deploy index.html`<br>`lionsql serve` | **DB 파일 하나에 프론트엔드와 데이터가 100% 통합 패키징**, 완전한 단일 파일 이전 | 프로덕션 배포, 에어갭(폐쇄망), 무설치 배포 |
 | **Model 3: Web Studio 드래그앤드롭 (Studio UI)** | Web Studio 전용 관리 탭 | 브라우저 UI에서 `.html` 파일 업로드 | CLI 없이 브라우저만으로 즉시 배포 가능 | 비개발자, 운영자, 프로토타이핑 |
 
@@ -69,12 +69,17 @@ flowchart TD
     Mux -->|"/ or /app/*"| SPAHandler["SPA Static Web Server"]
     SPAHandler --> CheckMode{"Serving Mode"}
     
-    CheckMode -->|"--app / --public"| DiskFS["OS Local File / Directory"]
+    CheckMode -->|"--app=<path>"| Detect{"os.Stat: File or Dir?"}
     CheckMode -->|"DB-Native"| TableFS["sys_web_apps Table (BLOB/CLOB)"]
     
-    DiskFS --> SPAFallback{"File Exists?"}
-    SPAFallback -->|Yes| ServeFile["Serve Static File (MIME + ETag + Gzip)"]
-    SPAFallback -->|No (Route)| ServeIndex["Fallback to index.html (HTML5 History API)"]
+    Detect -->|Single File| ServeDirect["Serve Single HTML Directly"]
+    Detect -->|Flat Directory| FlatCheck{"Safe Flat Asset?"}
+    
+    FlatCheck -->|No (Subdir / Hidden .)| Deny["Reject (403/404)"]
+    FlatCheck -->|Yes| SPAFallback{"Asset Exists?"}
+    
+    SPAFallback -->|Yes| ServeFile["Serve Static Asset (MIME + ETag)"]
+    SPAFallback -->|No (Route)| ServeIndex["Fallback to index.html (History API)"]
 ```
 
 ### 4.1. Pillar 1: 정적 파일 서빙 및 HTML5 History API Fallback
@@ -89,13 +94,32 @@ func (s *Server) handleSPAServe(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-### 4.2. Pillar 2: CLI 플래그 및 환경 설정 확장
-사용자가 원하는 파일이나 폴더를 손쉽게 지정할 수 있도록 CLI 인자를 추가합니다:
-* `--app <file>`: 단일 HTML 파일 지정 (예: `lionsql serve --app=./index.html`)
-  * 루트 경로(`GET /`) 접속 시 해당 HTML 파일을 즉시 렌더링.
-  * 기존 Web Studio는 `GET /_/`에 온전히 유지되어 관리자 대시보드와 사용자 앱이 충돌 없이 공존.
-* `--public <dir>`: 정적 웹 디렉토리 지정 (예: `lionsql serve --public=./dist`)
-  * `index.html`을 비롯한 번들 에셋(CSS, JS, 이미지, 폰트)을 일괄 서빙.
+### 4.2. Pillar 2: Radical KISS 단일 플래그 (`--app=<path>`) 및 자동 판별
+
+`[RULE:RadicalKISS]` 원칙에 의거하여, 파일과 디렉토리를 구별해 플래그를 증식(`--app`, `--public`)시키지 않고 **단 하나의 통합 플래그 `--app`**만을 제공합니다.
+엔진 기동 시 `os.Stat`으로 대상 경로를 즉각 자동 판별하여 최적의 서빙 모드로 전환합니다:
+
+* `--app=<path>`: 단일 파일 또는 Flat 디렉토리 경로 지정
+  - **단일 파일 지정 시** (예: `lionsql serve --app=./index.html`):
+    - 단일 파일 모드로 동작하며, 루트(`GET /`) 및 모든 하위 경로 요청에 대해 해당 HTML 파일을 직접 서빙.
+  - **디렉토리 지정 시** (예: `lionsql serve --app=./dist`):
+    - Flat 디렉토리 모드로 동작하며, 요청된 정적 에셋(JS, CSS, PNG)이 존재하면 해당 파일을, 그 외 모든 브라우저 네비게이션 라우트에 대해서는 디렉토리 내 `index.html`을 자동 Fallback 서빙.
+* 기존 Web Studio는 `GET /_/`에 온전히 유지되므로 관리자 대시보드와 사용자 웹앱이 완벽하게 공존합니다.
+
+```go
+// BindAppServer inspects the configured app path and determines the serving strategy.
+func BindAppServer(appPath string) (AppServerHandler, error) {
+    fi, err := os.Stat(appPath)
+    if err != nil {
+        return nil, fmt.Errorf("failed to open app path: %w", err)
+    }
+
+    if fi.IsDir() {
+        return newFlatDirectoryHandler(appPath), nil
+    }
+    return newSingleFileHandler(appPath), nil
+}
+```
 
 ### 4.3. Pillar 3: 데이터베이스 내장 앱 (DB-Native Stored Web Apps)
 단일 파일 데이터베이스의 정체성을 극대화하기 위해, HTML 코드를 DB 내에 저장하는 기능을 제공합니다:
@@ -118,7 +142,46 @@ func (s *Server) handleSPAServe(w http.ResponseWriter, r *http.Request) {
   ```
 * 이렇게 배포된 앱은 `--data-dir` 데이터 디렉토리(또는 단일 DB 파일)를 복사하는 것만으로 **프론트엔드와 백엔드 데이터가 통째로 복제·마이그레이션**됩니다.
 
-### 4.4. Pillar 4: 프론트엔드와의 Zero-Setup 인터랙션
+### 4.4. Pillar 4: Flat Directory 전용 보안 불변식 (Flat Directory Security Invariant)
+
+임베디드 데이터베이스 프로세스가 웹서버 역할을 겸할 때 가장 치명적인 취약점은 **경로 탈출(Directory Traversal)**과 **숨김 설정 파일 유출**입니다.
+이를 원천 봉쇄하기 위해 `--app=<dir>` 디렉토리 서빙 모드는 **"하위 계층(Subdirectory) 불허"** 및 **"도트(`.`) 시작 파일 불허"**라는 **Flat Directory 전용 서빙 원칙**을 엄격한 불변식으로 강제합니다:
+
+1. **디렉토리 계층(Subdirectory) 탐색 원천 불허**:
+   - 요청된 파일 경로에 슬래시(`/`)나 역슬래시(`\`) 등 하위 경로 구분자가 포함된 경우 즉시 `403 Forbidden` 또는 `404 Not Found`로 차단합니다.
+   - `../`나 `..\\`와 같은 Path Traversal 공격 패턴이 구문적으로 성립할 수 없도록 사전에 완전히 박멸합니다 (`[RULE:PathSecurity]`).
+2. **도트(`.`) 시작 히든 파일 및 상위 디렉토리 불허**:
+   - 파일명의 첫 글자가 `.`인 모든 파일(예: `.env`, `.git`, `.gitignore`, `.DS_Store`, `..`)은 서빙 대상에서 무조건 제외 및 차단합니다.
+   - 개발자가 빌드 디렉토리에 실수로 남겨둔 기밀 환경변수 파일이나 버전 관리 메타데이터 유출을 원천 방어합니다.
+3. **단일 심볼릭 링크(Symlink) 방어**:
+   - 파일 오픈 시 `os.Lstat`을 통해 정규 파일(Regular file) 여부를 검증하며, 외부 경로를 가리키는 심볼릭 링크 파일은 서빙하지 않습니다 (`[RULE:SymlinkSafety]`).
+4. **SPA 빌드 생태계와의 완벽한 조화**:
+   - Vite, esbuild, Webpack 등 최신 번들러는 `dist/` 최상위에 `index.html`, `bundle.js`, `style.css`, `logo.png` 등을 단일 Flat 구조로 손쉽게 출력할 수 있으므로, SPA 개발 생산성을 전혀 해치지 않으면서도 철통같은 보안을 달성합니다.
+
+```go
+// isSafeFlatAsset reports whether the requested asset filename complies with the Flat Directory Invariant.
+func isSafeFlatAsset(requestedPath string) bool {
+    // 1. 선행 슬래시 제거 후 단일 파일명 분리
+    clean := strings.TrimPrefix(requestedPath, "/")
+    if clean == "" || clean == "index.html" {
+        return true
+    }
+
+    // 2. 계층 경로(/, \) 포함 시 즉시 거부 (Subdirectory 차단)
+    if strings.ContainsAny(clean, "/\\") {
+        return false
+    }
+
+    // 3. 점(.)으로 시작하는 숨김 파일 거부 (.env, .git, .DS_Store, ..)
+    if strings.HasPrefix(clean, ".") {
+        return false
+    }
+
+    return true
+}
+```
+
+### 4.5. Pillar 5: 프론트엔드와의 Zero-Setup 인터랙션
 단일 HTML 파일 안에서 LionSQL 자체 DB와 상호작용하는 예시:
 
 ```html
@@ -163,13 +226,15 @@ func (s *Server) handleSPAServe(w http.ResponseWriter, r *http.Request) {
 
 ## 5. 단계별 구현 로드맵 (Phased Roadmap)
 
-### Phase 1: 파일 기반 단일 HTML & SPA 디렉토리 서빙 (`--app`, `--public`)
-1. `pkg/config`: `NetworkConfig.AppFile` (`--app`), `NetworkConfig.PublicDir` (`--public`) 추가.
+### Phase 1: 파일/디렉토리 스마트 감지 단일 플래그(`--app`) 및 Flat SPA 서빙
+1. `pkg/config`: `NetworkConfig.AppPath` (`--app=<path>`) 단일 필드 추가 (`os.Stat` IsDir 자동 감지).
 2. `pkg/api/server.go`:
-   - `GET /` 라우팅을 확장하여, `--app` 또는 `--public`이 설정되어 있으면 해당 SPA 서빙 핸들러 구동.
+   - `GET /` 라우팅을 확장하여, `--app`이 설정되어 있으면 해당 SPA 서빙 핸들러 구동.
    - 설정되지 않은 기본 상태에서는 기존대로 `/_/`(Web Studio)로 리다이렉트.
-   - HTML5 History API Fallback 및 Gzip/MIME 자동 판별 로직 추가.
-3. 테스트 작성: 단일 HTML 서빙, 하위 경로 Fallback, JS/CSS 에셋 서빙 통합 테스트.
+   - **단일 파일 모드**: 요청된 모든 경로에 대해 지정된 파일 직결 서빙.
+   - **디렉토리 모드 & Flat Directory 보안 필터(`isSafeFlatAsset`)**: 하위 디렉토리 계층(`/`, `\`) 및 도트(`.`) 시작 파일 원천 차단, 존재하지 않는 라우트는 `index.html`로 Fallback.
+   - Gzip 및 MIME 자동 판별 로직 추가.
+3. 테스트 작성: 단일 HTML 파일 서빙, Flat 디렉토리 에셋 서빙, 하위 경로 거부 및 `index.html` Fallback, 도트(`.`) 숨김 파일 차단 보안 테스트.
 
 ### Phase 2: DB 내장 앱 저장소 (`DB-Native Stored Web Apps`)
 1. `pkg/catalog` 또는 `pkg/api`: `__sys_apps` 시스템 테이블 스키마 초기화.

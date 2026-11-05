@@ -1,8 +1,8 @@
 # T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 설계 계획서 (`notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-02
-> - **최종 갱신일**: 2026-11-02 (7,100 TPS 튜닝 성과 및 Writable CTE Lowering 반영)
-> - **상태**: Phase 1~3 구현 완료 ( - 슬롯 0할당 및 DML 풀링, 평탄화 완료)
+> - **최종 갱신일**: 2026-11-05 (Phase 1~4 전수 완료: 84k TPS 게이트 검증 통과)
+> - **상태**: Phase 1~4 구현 및 실측 검증 100% 완료 (Pass)
 > - **과제 식별 코드**: `PERF-VDBE-EXTREME-OPT-1`
 > - **목표 성능**: T-SQL Stored Procedure 및 Lowered CTE 처리량 7,100 TPS ➔ **12,000 ~ 25,000+ TPS** (P50 50µs 초저지연 달성)
 > - **영향 범위**: `pkg/proc/runtime/`, `pkg/proc/`, `pkg/proc/bytecode.go`

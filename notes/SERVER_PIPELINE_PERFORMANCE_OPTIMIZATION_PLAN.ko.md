@@ -1,9 +1,9 @@
 # LionSQL 서버 파이프라인(TDS to File System) 종단 최적화 마스터 플랜
 
-> - **최종 갱신일**: 2026-10-29
+> - **최종 갱신일**: 2026-11-05 (Phase 3 ReadOnly 바이패스 & 범용 LRU 커서 영구 Spec-Out 반영)
 > - **최초 작성일**: 2026-10-29
-> - **문서 상태**: Phase 1~2 구현 및 실측 검증 완료 (`[x]`), Phase 3~4는 v0.90.0 이후 착수 예정
-> - **연관 과제 ID**: `PERF-SERVER-PIPELINE-P1-P2` (Completed `[x]`), `PERF-SERVER-PIPELINE-P3-P4` (Post-1.0)
+> - **문서 상태**: Phase 1~2 구현 및 실측 검증 완료 (`[x]`), Phase 3은 무결성 파괴 위험으로 영구 Spec-Out, Phase 4.2는 온디맨드 백로그
+> - **연관 과제 ID**: `PERF-SERVER-PIPELINE-P1-P2` (Completed `[x]`), `PERF-SERVER-PIPELINE-P3-P4` (Phase 3 Spec-Out 완료)
 > - **적용 대상**: `pkg/wire/tds/`, `pkg/engine/`, `pkg/proc/`, `pkg/storage/wiredtiger/`, `pkg/storage/memengine/`
 
 ---
@@ -24,13 +24,13 @@ LionSQL은 TPC-C 벤치마크를 통해 스토리지 커널(1.0M~1.4M tpmC) 및 
   ├─ 1.2. 32KB 패킷 크기 sync.Pool 다단계 풀링
   └─ 1.3. ConnectionSession 내 ClientSession 포인터 고정 (Lock 경합 제거)
        │
-[Phase 2: 쿼리 디코딩 & VDBE 파라미터 바인딩]
+[Phase 2: 쿼리 디코딩 & VDBE 파라미터 바인딩] (완료 [x])
   ├─ 2.1. RPC 파라미터 맵 힙 할당 제거 (슬라이스/풀링 구조체 직결)
   └─ 2.2. 이름 기반 프로시저 호출의 Direct PlanCache 바이트코드 디스패치
        │
-[Phase 3: 스토리지 엔진 & 커서 캐싱]
-  ├─ 3.1. WiredTiger 세션 레벨 범용 LRU 커서 캐시 (LRU Bounded Cursor Cache)
-  └─ 3.2. 순수 읽기 쿼리의 트랜잭션 및 WAL 완전 우회 (컴파일러 자동 감지 & ReadOnly 힌트)
+[Phase 3: 스토리지 엔진 & 커서 캐싱] (영구 Spec-Out 기각)
+  ├─ 3.1. [Spec-Out] WiredTiger 세션 레벨 범용 LRU 커서 캐시 (LRU Mutex 경합 병목)
+  └─ 3.2. [Spec-Out] 순수 읽기 쿼리의 트랜잭션/WAL 우회 (형식-실질 불일치 및 격리성 파괴)
        │
 [Phase 4: WAL & 디스크 파일 시스템 I/O]
   ├─ 4.1. [Spec-Out] WAL 세그먼트 파일 공간 사전 할당 (WiredTiger 100MB 기본 동작과 중복)
@@ -95,29 +95,23 @@ LionSQL은 TPC-C 벤치마크를 통해 스토리지 커널(1.0M~1.4M tpmC) 및 
 
 ---
 
-### Phase 3: 스토리지 엔진 & 커서 캐싱 최적화
+### Phase 3: [영구 Spec-Out] 스토리지 엔진 & 커서 캐싱 최적화 (기각)
 
-#### 3.1. WiredTiger 세션 레벨 범용 LRU 커서 캐시 (LRU Bounded Cursor Cache)
-- **현상 및 문제점**:
-  - 트랜잭션 수명주기 동안 반복 쿼리에서 B+Tree 테이블 커서를 매번 열고 닫거나 리셋(`C.go_wt_session_reset`)하는 과정에서 내부 btree/schema 검색 CGO 오버헤드가 발생함.
-- **구현 내용**:
-  - 특정 벤치마크 테이블 이름을 하드코딩하는 치팅(Benchmark Targeting) 방식을 전면 배제하고, SQLite/WiredTiger 자체 `cursor_cache` 표준 패턴에 따라 **세션별 최근 접근한 상위 N개(예: 16개) B+Tree 커서를 LRU 기반으로 재사용하는 범용 유한 커서 풀(Bounded Pool)** 구축.
-  - 트랜잭션 커밋/롤백 시 커서를 파괴하지 않고 `reset` 상태로 풀에 반환하여 핸들 재할당 CGO 오버헤드를 제로화.
-- **검증 기준**:
-  - WiredTiger CGO 커서 오픈 호출 빈도 80% 이상 감소 및 임의 테이블 워크로드 대상 일반성 검증.
+> **아키텍처 결정 (2026-11-05)**:
+> Phase 3에 제안되었던 **범용 LRU 커서 캐시(3.1)**와 **순수 읽기 쿼리의 트랜잭션/WAL 우회(3.2)**는 **심각한 ACID 격리성 파괴 및 락 경합 병목을 초래하므로 영구 Spec-Out(기각)** 처리합니다.
 
-#### 3.2. 순수 읽기 쿼리의 트랜잭션 및 WAL 완전 우회 (컴파일러 자동 감지 & ReadOnly 힌트)
-- **현상 및 문제점**:
-  - 단순 포인트 조회나 집계 읽기 작업(`SELECT`)도 불필요하게 쓰기 가능한 트랜잭션 컨텍스트를 경유하여 세션 할당 및 정리 비용을 소모함.
-- **구현 내용**:
-  - **1) VDBE 컴파일러의 정적 분석 자동 감지 (Zero-Hint Primary)**:
-    - 쿼리 내에 쓰기 opcode(`OpInsert`, `OpUpdate`, `OpDelete`, `OpTxBegin`) 및 부수 효과를 가진 함수가 없음을 파서/컴파일러 단계에서 감지하여 `prog.IsReadOnly = true`를 자동으로 태깅. 사용자가 힌트를 쓰지 않아도 트랜잭션 래퍼 없이 OCC 샤드 직접 읽기(Point-Lookup Shortcut) 또는 WiredTiger Snapshot Cursor 읽기만 수행하도록 분기.
-  - **2) 사용자 명시적 ReadOnly 힌트 수용 (Explicit Hints)**:
-    - **T-SQL 표준 힌트**: `SELECT ... OPTION (READ ONLY)`, `SELECT ... WITH (READONLY)`
-    - **옵티마이저 주석 힌트**: `SELECT /*+ READ_ONLY */ ...`
-    - **트랜잭션/세션 레벨 선언**: `BEGIN TRANSACTION READ ONLY;`, `SET TRANSACTION READ ONLY;`
-- **검증 기준**:
-  - 읽기 쿼리 평균 지연 시간 0.2ms 이하 유지 및 불필요한 트랜잭션 롤백 카운터 0 유지.
+#### 3.1. [Spec-Out] WiredTiger 세션 레벨 범용 LRU 커서 캐시
+- **기각 사유**:
+  - 수백 개의 고동시성 워커 스레드가 커서를 획득/반환하기 위해 단일 LRU 뮤텍스(Mutex)에 몰릴 경우, **캐시 조회 이점보다 중앙 락 경합(Lock Convoy) 병목이 훨씬 커져 전체 QPS가 급락하는 역효과**를 초래함.
+
+#### 3.2. [Spec-Out] 순수 읽기 쿼리의 트랜잭션 및 WAL 완전 우회 (ReadOnly Bypass)
+- **기각 사유 (형식과 실제의 괴리 및 격리성 파괴 딜레마)**:
+  - **1) 겉형식(Syntax)과 실질(Semantics)의 불일치**:
+    - 쿼리의 겉모습이 `SELECT ...` 구문이라 하더라도 내부에는 `NEXTVAL('seq')`, 임시 테이블 생성(`SELECT ... INTO #temp`), 세션 변수 조작(`SET @x = ...`), 부수효과(Side-Effect)를 가진 UDF 호출 등이 포함될 수 있음.
+    - 엔진이 이를 단순 읽기로 오판하여 트랜잭션 락/스냅샷을 바이패스하는 순간, **더티 리드(Dirty Read), 팬텀 리드, 쓰기 손실 등 ACID 트랜잭션 격리성이 치명적으로 파괴**됨.
+  - **2) 본말전도(배보다 배꼽)**:
+    - "이 쿼리가 100% 안전한 ReadOnly인가?"를 완벽히 가려내려면 복잡한 AST 심층 분석을 매번 수행해야 하므로, **바이패스로 얻는 미세한 이득보다 검증 오버헤드가 더 커지는 본말전도**가 발생함.
+  - **결론**: 형식과 실질이 다른 SQL의 본질적인 특성상 완벽한 안전성을 담보할 수 없으므로, **ReadOnly 자동 바이패스는 영구 기각(Spec-Out)**하고 표준 트랜잭션 경계를 엄격히 유지함.
 
 ---
 
