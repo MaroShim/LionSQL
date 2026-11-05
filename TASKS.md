@@ -1894,7 +1894,14 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] Ghost (블로그/출판 플랫폼) Fast-Fail 호환성 탐색 `INTEG-GHOST-1`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-05T12:33:06.403604+09:00
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-05 13:33:00 KST
+
+**Details & Resolution**:
+- 스택: Node.js + Bookshelf/Knex
+- 10분 타임박스 프로브 완료:
+  - Ghost v5.x 최신 공식 도커 배포판(`ghost:5-alpine`) 검사 결과, 데이터베이스 클라이언트로 `mysql2`와 `sqlite3` 2종만 지원하고 `pg` 패키지는 컨테이너 번들링에서 완전히 제거됨(`MODULE_NOT_FOUND`) 확인.
+  - LionSQL은 PostgreSQL v3(PGWire) 및 MS SQL Server(TDS) 전문 엔진이며, MySQL 네이티브 바이너리 와이어 리스너는 아키텍처 불변식에 따라 스펙아웃(`Spec-Out`) 상태임.
+  - Ghost 연동은 SQLite 파일 마운트 또는 사설 빌드 커스텀 드라이버 환경으로 한정되므로, 1.0 LTS 코어 스코프에서 `PENDING`으로 보존.
 
 ---
 
