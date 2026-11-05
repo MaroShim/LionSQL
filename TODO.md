@@ -1,444 +1,95 @@
-# LionSQL Task Backlog & Execution Roadmap (`TODO.md`)
+# LionSQL Active Engineering Sprint & Task Dashboard (`TODO.md`)
 
-This dashboard tracks active engineering sprint tasks, domain backlog matrices, and milestone completion histories for LionSQL.
-
+> **SSOT (Single Source of Truth) 원칙 공지**:
+> - LionSQL의 전체 180+건 정형 태스크 및 완료(`DONE`)된 버그 해결/리팩토링 이력은 **LionSQL 자체 DB(`sprint_tasks`)와 [`TASKS.md`](TASKS.md)**에 영구 보존됩니다.
+> - 본 `TODO.md`는 **1.0 릴리스 활성 스프린트(Active Sprint)와 검증 게이트에만 집중하는 경량 실시간 대시보드**입니다.
+> - CLI 관리: `./bin/sprint list`, `./bin/sprint set <ID> <STATUS>`, `./bin/sprint backup`
+>
 > **Core Architecture & Knowledge Base**:
-> - Strategic Roadmap: [`ROADMAP.md`](ROADMAP.md)
+> - Full Task & Bug Archive Mirror: [`TASKS.md`](TASKS.md)
 > - Defect Resolution Archive (107 cases): [`BUG_ARCHIVE.ko.md`](BUG_ARCHIVE.ko.md)
 > - Core Invariants & Engineering Context: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
-> - App Integration Expansion Plan: [`notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md`](notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md)
-> - Durability & Reliability Verification Plan: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
-> - Taxonomy & Task Identifier Definitions: [`notes/TAXONOMY.ko.md`](notes/TAXONOMY.ko.md)
->
-> **Engineering Principles**: 3-Stage Verification Pipeline (Build ➔ Test `-race` ➔ Commit), Zero Decorative Emojis, Radical KISS & Deletion-First.
+> - Strategic Roadmap: [`ROADMAP.md`](ROADMAP.md)
+> - Post-1.0 Candidates Matrix: [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md)
 
 ---
 
-## Priority 1. 성능 회귀 정상화 및 회귀 방지 게이트 구축 (Active Sprint: Performance Regression Recovery)
+## 1. Active Sprint: 1.0 Release Implementation & Gates (1.0 구현 및 검증 게이트)
 
-> 설계 및 실측 문서: [`notes/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](notes/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md), [`notes/LAZY_DECODING_P2_PLAN.ko.md`](notes/LAZY_DECODING_P2_PLAN.ko.md)  
-> 목표: Grove 핫스팟 대응 과정에서 유입된 키 래치 및 슬립 재시도를 완전 제거하여 186k / 120k / 690k tpmC 기준치를 복원하고, 파이프라인 내 경량 성능 회귀 게이트를 구축하며, P-2 바이너리 튜플 지연 역직렬화를 통해 스캔 경로 CPU 효율을 극대화합니다.
+LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **신뢰성 검증 게이트**입니다.
 
-### [x] 1.0 `DOGFOOD-SPRINT-1`: LionSQL 자체 백엔드 기반 정형 스프린트/태스크 관리 시스템 구축 (Dogfooding)
-- [x] **Phase 1 (`SCHEMA-SPRINT`)**: `sprint_tasks` 정형 테이블 스키마 DDL 작성 및 초기 데이터(182건: TODO 62건 + BUG_ARCHIVE 120건) 마이그레이션
-- [x] **Phase 2 (`CLI-SPRINT`)**: `tools/sprint` 도구 구현 (`sprint init`, `sprint list`, `sprint set`, `sprint add`, `sprint backup` 마크다운 뷰 `SPRINT_TASKS_BACKUP.md` 자동 동기화)
-- [x] **Phase 3 (`UI-SPRINT`)**: LionSQL 내장 Web Studio(`/_/`) 테이블 조회 및 백엔드 REST API 영구 연동 (Git 백업과 DB SSOT 상호 보완 완성)
+### 1.1 1.0 핵심 구현 트리오 (Core 1.0 Features)
+1. **`OCC-HYPER-2`: In-Memory OCC Pointer-Free Flat Record (4~5배 메모리 압축 & 프로덕션 디폴트 승격)**
+   - **목표**: Go GC 힙 포인터 100% 제거, 8B 캐시 정렬, NULL 비트맵, SSO 5대 튜닝 적용으로 24/7 P99 무지터 보장
+   - **안전장치**: 기존 튜플 구조는 `--occ-mode=raw` 벤치마크 플래그로 분리 보존하여 회귀 위험 0화
+   - **설계 문서**: [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
+2. **`WEB-SPA-1`: 단일 바이너리 내장 SPA 웹 서버 호스팅**
+   - **목표**: `--app=<path>` 단일 스마트 플래그 (파일/디렉토리 자동 감지)로 DB와 프론트엔드 동시 서빙
+   - **보안 불변식**: **Flat Directory Invariant** (하위 계층 `/`, `\` 및 도트(`.`) 시작 파일 원천 차단으로 Path Traversal 100% 봉쇄)
+   - **설계 문서**: [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)
+3. **`PKG-OFFLINE-DOCS`: 배포 패키지 오프라인 브라우저 문서 번들링**
+   - **목표**: 배포 아카이브(`tar.gz`/`zip`) 내 `docs/index.html` 번들링으로 폐쇄망/에어갭 100% 자립 지원
+   - **설계 문서**: [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
 
-### [x] 1.0.1 `P-2` WiredTiger VDBE 바이너리 튜플 지연 역직렬화 (완료)
-- [x] **Phase 1 (`BENCH-P2-BASE`)**: 다중 컬럼 테이블 대상 조건부 스캔 사전 기준치 벤치마크 측정 (`2.77ms/op`, `6.3MB/op`, `30,983 allocs`)
-- [x] **Phase 2 (`IMPL-P2-LAZY`)**: `pkg/proc/runtime/vm_lazy.go` 및 `vm.go` 커서 스캔/UPDATE/DELETE/SELECT-INTO 경로 `RawTupleCursor` 기반 지연 필터링 및 조기 스킵 연동
-- [x] **Phase 3 (`VERIFY-P2-COMPARE`)**: 구현 전후 마이크로 벤치마크 실측 (`420µs/op`, 6.59배 가속, 메모리 8배 절감) 및 `go test -race` 100% PASS 검증 완료
+### 1.2 1.0 신뢰성 검증 게이트 (Release Gates)
+1. **`DURA-KILL-1`: `kill -9` 크래시 복구 장기 라운드 검증**
+   - 상태: 진행 중 (100라운드 100% 무손실 복구 통과 완료, 릴리스 직전 500 ~ 1,000 라운드 최종 확인)
+   - 설계 문서: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
+2. **`DURA-SOAK-1`: 24h ~ 72h 장기 무중단 소크 테스트**
+   - 상태: 진행 중 (단기 연속 부하 통과, 24시간 ~ 72시간 연속 가동으로 자원 유계 입증)
+   - 설계 문서: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
+3. **`DURA-SLT-2`: SQLLogicTest 1.0 풀 스위트 듀얼 엔진 최종 인증**
+   - 상태: 107개 스위트 55만 쿼리 100% PASS 입증 완료 (`scripts/verify_0.90.sh`)
+   - 설계 문서: [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
+4. **`GA-VALID-3`: 연동 앱 섀도 모드 실운영 도그푸딩**
+   - 이미 100% 연동 통과된 실전 서비스(Vaultwarden, Umami, Answer 중 1~2종) 1~2주간 실운영 백그라운드 구동
+5. **`TUNE-DOC-SYNC-1`: 벤치마크 및 공식 문서 실측치 일괄 동기화**
+   - 1.0 GA 릴리스 직전 모든 최적화 실측치를 `doc/BENCHMARK.md` 및 `README.md`에 일괄 반영
 
-### [x] 1.0.2 `PERF-REGRESSION-RECOVERY-1` 성능 회귀 정상화 및 회귀 방지 게이트 구축 (완료)
-- [x] **Phase 1 (`CLEAN-KEY-LATCH-1`)**: `KeyLatchManager` 및 `AcquireKeyLatch` 전량 삭제 (순수 Lock-Free OCC / MVCC B+Tree 복원)
-- [x] **Phase 2 (`CLEAN-RUN-RETRY-1`)**: `RunContext` 내 `time.After` 슬립 재시도 루프 제거 및 즉시 반환 복원
-- [x] **Phase 3 (`VERIFY-BENCH-RESTORE-1`)**: 3.3.4 송금 (In-Memory 130k~160k / WiredTiger 92k~108k) 및 3.5 TPC-C (53.5만~55만 tpmC) 복원 실측
-- [x] **Phase 4 (`TEST-PERF-GATE-1`)**: `pkg/proc/runtime/perf_regression_gate_test.go` 신설하여 `go test -race` 파이프라인 내 1,000건 ACID 송금 성능 게이트 영구 구축 (0.12s 완주, 25k+ TPS 검증)
-
----
-
-## Priority 2. 신뢰성 및 내구성 자동화 검증 (Active Sprint: Durability & Reliability)
-
-> 설계 및 실측 문서: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)  
-> 목표: 실제 프로세스 강제 종료(`kill -9`)와 장시간 부하(`soak`) 환경에서 커밋 데이터 손실 0건 및 자원 유계를 입증합니다.
-
-### [-] 1.1 `DURA-KILL-1` kill -9 크래시 복구 장기 라운드 검증 (진행 중)
-- [x] **도구 구현 (`cmd/crashtest`)**: 다중 워커 계좌 이체 + SHA-256 커밋 장부(`crash_ledger`) + 4단계 정합성 오라클(D1 커밋 내구성, D2 원자성 `SUM(balance)=200,000`, D3 체크섬 일관성, D4 복구 가능성) 구현
-- [x] **변형 시나리오 구현**: `SIGKILL`, `SIGKILL+DOUBLE_KILL`(복구 중 재크래시 멱등성), `SIGKILL+TORN_WAL_TAIL`(로그 꼬리 절단 손상 복구), `SIGTERM` 대조군
-- [x] **크래시 결함 수정 4건**:
-  1. WiredTiger 유저 버퍼 유실 방지(`transaction_sync`)
-  2. `CREATE TABLE` 제약 조건 접두사 충돌(`checksum` 누락 방지)
-  3. PGWire 텍스트 파라미터 숫자 오인 방지
-  4. WiredTiger 세션 간 커서 비동기 해제 동시성 충돌(`go_wt_cursor_close` SIGSEGV) 완치 및 `force=true` 안전 드롭
-- [x] **100라운드 누적 완주**: WiredTiger 100/100 PASS (`344,129` tx 복구) & In-Memory OCC 100/100 PASS (`301,184` tx 복구, 간헐적 `SIGKILL` 직전 마지막 1건 tx AOF 플러시 타이밍 윈도우 별도 기록) — 단일 러닝 100라운드 연속 무손실 복구 입증
-- [ ] **초장기 라운드 누적 검증**: 500 ~ 5,000 라운드 장기 크래시 복구 무결성 검증
-
-### [-] 1.2 `DURA-SOAK-1` 24h ~ 72h 장기 소크 테스트 (진행 중)
-- [x] **소크 테스트 도구 구현 (`cmd/soaktest`)**: 8 워커 계좌 이체 + Prometheus 지표 수집 + RSS/FD/디스크/p99 추이 자동 판정 엔진
-- [x] **WiredTiger 스모크 완주**:
-  - `719,970` ops 완주, 커밋 장부 일치(`393,523` 행), 잔액 불변(`SUM(balance)=1,000,000`, 위반 0건)
-  - `open_fds = 28` 완전 고정 (핸들 누수 0), `p99 = 6.23ms` 성능 열화 0
-  - WiredTiger 500MB 캐시 워밍업 분석 완료 및 `/metrics` Go 힙/고루틴 수집 반영
-- [x] **In-Memory OCC 소크 완주 및 2대 동시성 결함 완치**:
-  - `Scan()` 찢긴 읽기(torn read) 결함 발굴 및 `snapshotRowsAndKeys` 카노니컬 샤드 RLock 스냅샷으로 완치.
-  - 다중 워커 계좌 이체 간 `KeyLatch` 상호 교차 대기 데드락 및 `CancelSessionQuery`의 `cs.Mu` 블로킹 결함 발굴, 25ms 타임아웃 `ErrSerializationFailure` (`SQLSTATE 40001`) 반환 및 `cancelMu` 분리로 원천 완치 (`pkg/storage/key_latch.go`, `pkg/engine/coordinator_impl.go`, `session.go`).
-  - 5분 연속 소크 완주: `60,000` ops (`32,986` commits 일치), 잔액 불변(`SUM(balance)=1,000,000`, 위반 0건), RSS 비율 1.00, FD 비율 1.00 (`24` 고정), 고루틴 비율 1.00 (`22` 고정), p99 비율 0.92 (`2.18ms ➔ 2.02ms`, 성능 열화 0) 전 지표 PASS.
-- [ ] **24시간 ~ 72시간 장기 소크 완주**: 장기 무중단 운영을 통한 극한의 메모리/고루틴/디스크 누수 0 검증
-
-### [x] 1.5 `PERF-CTE-EPHEMERAL-1` 세션 로컬 에페머럴 CTE 버퍼 및 Zero-DDL 최적화 — **[완료 (Pass)]**
-- 설계 계획서: [`notes/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md`](notes/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md)
-- [x] **에페머럴 인메모리 커서 표준화 (`storage.SliceCursor`)**: 순수 Go 슬라이스 기반 non-blocking 커서 제공
-
-### [x] 1.6 `TUNE-SP-FASTPATH-1` TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 — **[완료 (Pass)]**
-- 설계 계획서: [`notes/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md)
-- 목표: PGWire/TDS Prepared Statement에서 `EXEC <proc>` 구문의 정적 분석 및 파라미터 직결 바인딩을 구현하여 초당 29만 회의 문자열 직렬화/재파싱/메모리 할당을 제거하고 고동시성(100 워커) 처리량을 극대화합니다.
-- [x] **Phase 1 (`TUNE-SP-BIND-1`)**: SP 인자 매핑 헬퍼 및 메타데이터 정적 분석 구현 (`pkg/engine/proc_bind.go`, `pkg/engine/proc_bind_test.go`)
-- [x] **Phase 2 (`TUNE-SP-PGWIRE-1`)**: PGWire `handleParse` & `handleExecute` SP Fast-Path 직결 (Zero-Allocation VDBE 바인딩, `pkg/wire/server.go`, `pkg/wire/prep_sp_test.go`)
-- [x] **Phase 3 (`TUNE-SP-TDS-1`)**: TDS `handleRPCPrepare` & `handleRPCExecute` SP Fast-Path 직결 (`pkg/wire/tds/server.go`, `pkg/wire/tds/server_test.go`)
-- [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)**: 32W 및 100W 조건 TPC-C 실측 및 지속 처리량 검증 (16W/32Workers 순간 피크 **236,399 tpmC / 8,746 TPS**, 10초 지속 **178,355 tpmC / 6,612 TPS**, 10W/100Workers 지속 **119,854 tpmC / 4,443 TPS**)
-- [ ] **Phase 5 (`TUNE-DOC-SYNC-1`)**: `doc/BENCHMARK.md` 일괄 갱신 보류 (사용자 방침: 1.0 GA 릴리스 직전에 전체 실측치 일괄 동기화)
-
-### [x] 1.7 `TUNE-HOTSPOT-OCC-1` 고동시성 핫스팟 OCC 경합 완화 및 와이어 버퍼 풀링 — **[완료 (Pass)]**
-- 목표: 100 워커 등 고동시성 환경에서 단일 District/Warehouse 행 경합 시 발생하는 OCC 충돌 재시도(1.5만 회)를 완화하고, PGWire/TDS 응답 버퍼 할당을 풀링하여 지속 처리량 20만+ tpmC 도달.
-- [x] **Phase 1 (`TUNE-WIRE-BUF-1`)**: PGWire `WriteCommandComplete` 정적 태그 슬라이스 및 스택 버퍼(`[64]byte`) 적용으로 힙 할당 0화 (`pkg/wire/protocol.go`, `pkg/wire/command_tags.go`)
-- [x] **Phase 2 (`TUNE-TDS-UTF16-1`)**: TDS `BuildDone`/`BuildDoneProc`/`BuildReturnStatus` 리플렉션 100% 제거 및 `WriteDoneDirect`/`WriteReturnStatusDirect`/`WriteReturnValueIntDirect` 스택 인코딩 직결 (`pkg/wire/tds/token.go`, `pkg/wire/tds/server.go`)
-- [x] **Phase 3 (`TUNE-EPHEMERAL-VERIFY-1`)**: `-ephemeral` 순수 인메모리 모드에서 32W PGWire 10초 지속 **204,472 tpmC (7,616 TPS)** 및 TDS 10초 지속 **148,968 tpmC (5,546 TPS, 피크 197k)** 달성 검증
-
-### [x] 1.8 `BENCH-ALL-IN-ONE-1` 원클릭 벤치마크 및 종합 검증 스위트 (`scripts/run_all_benchmarks.sh`) 구축 — **[완료 (Pass)]**
-- 목표: `BENCHMARK.md`를 관통하는 7대 핵심 성능 및 정합성/내구성 벤치마크를 원클릭으로 순차 실행하고 요약표와 마크다운 리포트를 자동 생성.
-- [x] **Phase 0 (자동 빌드)**: `lionsql`, `bench`, `tpcc-kernel`, `tpcc-runtime`, `tpcc-client`, `sqllogictest` 6개 바이너리 일괄 컴파일
-- [x] **Phase 1~4 (성능/와이어 실측)**: Banking SP(142k+ TPS, 100% 검증), Storage Kernel TPC-C(246만+ tpmC), VDBE Runtime TPC-C(82.7만+ tpmC), Network PGWire(21.6만+ tpmC) 및 TDS(13.9만+ tpmC) 완주
-- [x] **Phase 5~6 (정합성/크래시 복구)**: SQLLogicTest 코어 32개 파일 167 쿼리 100% PASS, `kill -9` 돌발 사살 후 콜드 재기동 50/50 무손실 복구
-- [x] **Phase 7 (리포트 자동화 & 격리)**: 시스템 하드웨어 캡처, POSIX/Bash 3.2+ 호환, 완전 무잔여 `trap` 프로세스 사살, 마크다운 리포트(`notes/benchmark_runs/`) 보존 (`scripts/run_all_benchmarks.sh`, `scripts/README.md`)
-
-### [x] 1.6 `PERF-GROVE-CONCURRENCY-1` Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 — **[완료 (Pass)]**
-- 설계 계획서: [`notes/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md)
-- [x] **Phase 1 (`BUG-WIRE-OID-1700`)**: PGWire OID 1700 (NUMERIC/DECIMAL) 바이너리 Base-10000 인코더/디코더 구현 및 드라이버(`pgx`, `lib/pq`) 스캔 에러 완치 (`pkg/wire/numeric.go`, `numeric_test.go`)
-- [x] **Phase 2 (`PERF-HOTSPOT-LATCH-1`)**: 인-메모리 2,048-스트라이프 키 래치(Key-Striped Latch) 도입으로 핫스팟 UPDATE 경합 시 OCC Abort Storm 방지 및 50 동시 워커 16,000+ TPS 달성 (`pkg/storage/key_latch.go`, `hotspot_concurrency_test.go`)
-- [x] **Phase 3 (`PROC-SP-INSERT-SELECT-1`)**: Stored Procedure VDBE VM 내 `INSERT INTO ... SELECT` 바이트코드 브릿지(`execInsertSelect`) 지원 및 다중 테이블 복사/트랜잭션 정합성 검증 (`pkg/engine/sp_insert_select_test.go`)
-- [x] **Phase 4 (`PERF-PGWIRE-PIPELINE-1`)**: PGWire Describe 메타데이터(`ColumnOIDs`, `ColumnNames`, `NoData`) 캐싱으로 불필요한 Writable CTE 파싱/사전 실행 제거 및 파이프라인 처리량 대폭 가속 (`pkg/wire/metadata_cache_test.go`)
-- [x] **Phase 5 (`PERF-RETRY-WT-ROLLBACK-1`)**: WiredTiger `WT_ROLLBACK`(-31800) 및 OCC 충돌 시 MongoDB 표준 아키텍처 기반 인-커널 투명 재시도 안전망(WriteConflict Retry Loop, 지수 백오프 및 랜덤 마이크로 지터) 장착 완료 (`pkg/proc/runtime/vm.go`, `pkg/engine/sqlexec.go`, `pkg/engine/write_conflict_retry_test.go`)
-- [x] **Phase 6 (`DDL-TRUNCATE-MULTI-CASCADE-1` & `PROC-SP-TRUNCATE-1`)**: 다중 테이블 `TRUNCATE TABLE t1, t2, ...`, `CASCADE`, `RESTRICT`, `RESTART IDENTITY` 지원 및 외래키 상호 참조 해소, Stored Procedure VM 내 네이티브 `OpTruncate` 바이트코드 지원 완료 (`pkg/storage`, `pkg/engine/sqlexec_ddl.go`, `pkg/proc`, `pkg/engine/truncate_test.go`)
-- [ ] 1단계: 개인용 서비스(Vaultwarden / Umami / Answer)를 LionSQL에 연결해 섀도 모드 운영
-- [ ] 2단계: 프로젝트 자체 서비스(Gitea 등)로 확대 및 일 단위 백업/복원 리허설
-
-### [x] 1.7 `PERF-CTE-LOWERING-VDBE-1` Writable CTE Stored Procedure 바이트코드 Lowering 가속 — **[완료 (Pass)]**
-- 설계 계획서: [`notes/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)
-- [x] **Phase 1 (`CTE-LOWER-DETECT-1`)**: 선형 Writable CTE 쓰기 체인 패턴 판별기(`detectLinearWritableCTE`) 구현 (`pkg/engine/cte_lowering.go`)
-- [x] **Phase 2 (`CTE-LOWER-COMPILE-1`)**: Writable CTE 절을 VDBE 바이트코드 프로그램(`proc.Program`)으로 Lowering하는 컴파일러(`compileLinearWritableCTE`) 구현 및 T-SQL `OUTPUT ... INTO` / PostgreSQL `RETURNING ... INTO` 전역 바이트코드 엔진 확장 (`pkg/proc/`, `pkg/proc/runtime/`, `pkg/engine/cte_lowering.go`)
-- [x] **Phase 3 (`CTE-LOWER-COORD-1`)**: 코디네이터 `execCTE`에서 VDBE Fast-Path 즉시 실행 및 비선형/분석용/Array ANY CTE Volcano Fallback 파이프라인 연동 (`pkg/engine/sqlexec_explain.go`)
-- [x] **Phase 4 (`CTE-LOWER-VERIFY-1`)**: 3-Way Writable CTE(주문 + 품목 + 아웃박스) 및 50 워커 동시성 정합성/원자적 롤백/레이스 프리 검증 통과 (`pkg/engine/writable_cte_lowering_test.go`)
-
-### [-] 1.8 `PERF-VDBE-EXTREME-OPT-1` T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 (진행 중)
-- 설계 계획서: [`notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)
-- [x] **Phase 1 (`PERF-VDBE-SLOT-1`)**: 로컬 변수 제로-맵 슬롯 인덱싱 완전화 (`setVar` 6회 Map/문자열 할당 ➔ 0.2ns 배열 인덱스 직접 대입 완료, evalCtx lazy on-demand 동기화, `OpStoreVar`/`OpLoadVar`/`bindParams` 0-할당화 달성, TPC-C 54,858 tpmC 달성)
-- [x] **Phase 2 (`PERF-VDBE-DML-POOL-1`)**: DML 제로-맵 레코드 풀링(`rowScratch`), AST 산술 수식 직접 계산(`evalUpdateExprFast`), `canDirectInsert` 직결(`InsertRow`), 다중 키 교차 래치 무대기 데드락 방지(`timeout=0` fail-fast) 적용 (TransferFunds 165,187 TPS, TPC-C 636,434 tpmC / 23,576 TPS 달성)
-- [x] **Phase 3 (`PERF-VDBE-FLATTEN-1`)**: VM `Execute` 2단계 중첩 switch 호출 ➔ 단일 평탄화 인라인 루프 전환 (`execFlowOp`/`execComputeOp`/`execTxOp`/`execStorageOp`/`execCursorAndCallOp`/`execRelOp` 6개 중간 헬퍼 호출 제거, pc 하드웨어 레지스터 고정, 163,499 TPS 유지)
-- [ ] **Phase 4 (`PERF-VDBE-VERIFY-1`)**: 12,000 ~ 25,000+ TPS 달성 벤치마크 및 회귀 검증
-
-### [x] 1.4 `DURA-SLT-1` SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 — **[완료 (Pass)]**
-- 설계 계획서: [`notes/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/SQLLOGICTEST_INTEGRATION_PLAN.ko.md)
-- [x] **SLT 러너 구현 (`cmd/sqllogictest`, `pkg/slt`)**: 순수 Go 기반 표준 SLT 파일 파서, In-Process 및 PGWire 듀얼 모드, rowsort/valuesort/nosort 정렬 및 MD5 해시 대조 엔진
-- [x] **Phase 1 (코어 로직 & 구문 스위트)**: `select1.slt`, `where.slt`, `join.slt`, `null.slt`, `aggregate.slt` (100% PASS)
-- [x] **Phase 2 (화이트스페이스 & 엣지 케이스 스위트)**: 탭/개행/다중 공백(`whitespace.slt`), 키워드 식별자 충돌 및 리터럴 포함(`boundary.slt`), 복합 키워드 변형(`IF EXISTS`, `WITHIN GROUP`) (100% PASS)
-- [x] **Phase 2.5 (핵심 영역 고난도 스위트 1차~6차 확장)**: 조건 분기 및 단락 평가(`case_expr.slt`), 다중 컬럼/NULL/집계 고립(`distinct.slt`), IN/EXISTS/스칼라 서브쿼리(`subquery.slt`), 윈도우 함수(`window.slt`), 집합 연산(`setops.slt`), 내장 스칼라 함수(`functions.slt`), 복합 DML 변이(`dml_mutate.slt`), 범위 조건(`between.slt`), 리스트 조건(`in_list.slt`), 패턴 매칭(`like.slt`), 그룹 필터링(`group_having.slt`), 페이지네이션(`limit_offset.slt`), 공통 테이블 식(`cte.slt`), 사칙연산 우선순위/모듈로(`arithmetic.slt`), 타입 캐스팅(`cast_type.slt`), 3치 논리 및 드모르간 법칙(`boolean_3vl.slt`), 다중/셀프/안티/크로스 조인(`join_advanced.slt`), JSON 연산자(`json_ops.slt`), 다중 정렬 및 Upsert(`order_upsert.slt`), 중첩 대수식 스트레스(`expr_stress.slt`), 복합 집계 및 `COALESCE(SUM(...), 0)` 스트레스(`agg_stress.slt`), 파생 테이블 다중 조인(`derived_join.slt`), 트랜잭션 롤백 격리(`tx_isolation.slt`), 복합 3VL 불리언 논리(`boolean_logic_stress.slt`), 대규모 IN 및 NOT IN NULL 함정(`in_subquery_stress.slt`), 문자열 연결 및 이스케이프(`datetime_string_stress.slt`) (총 33개 파일, 240문장, 181쿼리 — `memory`/`wiredtiger` × `inproc`/`pgwire` 4대 매트릭스 전수 100% PASS)
-- [x] **엔진 버그 16건 발굴 및 완치**:
-  1. `HasPrefixKeyword` 다중 공백/탭/개행 DDL 라우팅 버그 완치
-  2. SQL 3-valued logic `NULL = NULL` 및 `val = NULL` UNKNOWN(falsy) 표준 정합성 완치
-  3. `BinaryExpr.String()` 연산자 우선순위 부모 괄호 탈락 (`(A OR B) AND C`) 및 우측 결합성(`a - (b + c)`) deparser 완치
-  4. SLT 러너 멀티컬럼 공백 포함 셀 파서 탭/길이 정합성 완치
-  5. `FunctionCallExpr` 내 `DISTINCT` 파싱 누락으로 인한 `COUNT(DISTINCT ...)` 평가 결함 완치
-  6. `BetweenExpr` (`NOT BETWEEN`) 평가 시 `NULL` 피연산자가 `true`로 오판되던 SQL 3VL 결함 완치
-  7. `InExpr` (`NOT IN`) 평가 시 `NULL` 대상 컬럼 및 리스트 내 `NULL` 원소(`x NOT IN (100, NULL)`)의 SQL 3VL UNKNOWN 정합성 완치
-  8. `%` 모듈로 연산자(`TokenPercent`) 렉서 토큰화, Pratt 파서 우선순위(`precProduct`), AST deparser(`%`) 및 `EvalRowExpr` 평가 지원 누락 완치
-  9. `UnaryExpr.String()` 내 `BinaryExpr` 괄호 보존(`NOT (x = 10)`, `-(a + b)`), `TokenNot` 파서 우선순위(`precNot`), 단항/논리 연산자(`NOT NULL`, `-NULL`, `FALSE AND NULL`, `TRUE OR NULL`) SQL 3VL 정합성 완치
-  10. Self-Join(`slt_emp2 e JOIN slt_emp2 m`) 시 동일 컬럼 별칭(`e.emp_name`, `m.emp_name`)이 `Tuple.ToMap()` 변환 중 덮어써지던 스키마 별칭 충돌 결함 완치
-  11. `CROSS JOIN` (`ON` 절 없는 카티션 곱) 파서 허용 및 `HashJoinIterator` 빈 키 매칭 기반 카티션 곱 실행 완치
-  12. `GROUP BY` 프로젝션 내 복합 집계 표현식(`COALESCE(SUM(o.amount), 0)`, `SUM(a) + SUM(b)`) 실행 시 내부 중첩 집계 함수를 누적하지 않고 첫 행만 참조하던 `AggregateIterator` 2-Pass 평가 결함 완치
-  13. `||` 문자열 연결 연산자(`TokenConcat`) 렉서 토큰화 및 Pratt 파서, Volcano/Row 수식 평가자 지원 완치
-  14. `NOT IN (SELECT ...)` 서브쿼리 내 `NULL` 키가 1개라도 포함된 경우 SQL 3VL UNKNOWN 규칙에 의해 모든 행이 suppress되어야 함에도 행이 반환되던 `HashJoinIterator` ANTI 조인 결함 완치
-  15. 프로젝션 내 스칼라 서브쿼리의 집계 함수(`(SELECT avg(c) FROM t1)`)가 외부 쿼리를 전역 집계 쿼리로 오인시켜 1행만 반환되던 CBO 플래너 `hasTopLevelAggregateExpr` 결함 완치
-  16. `ORDER BY 1, 2` 등 서수(Ordinal Position) 정렬 지정 시 프로젝션 이전에 실행되어 테이블 원본 컬럼으로 정렬되거나 무시되던 CBO 플래너 및 `SortIterator` 서수 인덱스 평가 결함 완치
-
-### [-] 1.5 `DURA-SLT-2` SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 (진행 중)
-- 설계 계획서: [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
-- 확장 로드맵: [`notes/SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md`](notes/SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md)
-- 업계 적용 및 권장 범위: [`notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md)
-- [x] **병렬 워커 풀(`-parallel N`) 및 4대 매트릭스 러너 완성**: `cmd/sqllogictest`에 `-engine wiredtiger` 디스크 격리 엔진, `-mode pgwire` 실제 PostgreSQL v3 TCP 소켓 실행기(`PGWireExecutor`), `-parallel N` 고루틴 워커 풀 구현 완료
-- [x] **Phase 1 (고위험 핵심 도메인 33개 스위트, 181개 쿼리 전수 인증)**: 다중 중첩 사칙연산, `COALESCE`+`NULLIF` 복합 대수식, 3VL 드모르간 항등식, `LEFT JOIN`+`GROUP BY`+`COALESCE(SUM(...), 0)`, 트랜잭션 격리, 복합 불리언 논리, 대규모 IN 및 NOT IN NULL 함정 검증 100% 완료
-- [x] **Phase 2 (SQLite 공식 `select1.test` ~ `select5.test` 10,706 쿼리 전수 100% PASS)**:
-  - `select1.test`: 1,031 쿼리 (2.29s)
-  - `select2.test`: 1,031 쿼리 (2.18s)
-  - `select3.test`: 3,351 쿼리 (5.88s)
-  - `select4.test`: 3,857 쿼리 (6.36s)
-  - `select5.test`: 1,436 쿼리 (5.67s, 최대 64개 테이블 콤마 조인)
-  - 총 10,706개 쿼리 전수 100% 무오류 인증 통과 (소요 시간 22.69s, 0 data races).
-  - BFS 기반 Spanning Tree 조인 키 추론(`pushdown.go`) 및 Greedy Join Ordering 필터 우선순위화(`planner.go`)로 최대 64개 테이블 조인 카테시안 폭발 완치.
-- [x] **Phase 2.5 (1.0 GA 풀세트 40,000+ 쿼리 스크립트 및 공식 가이드 완비)**:
-  - 설계 계획서: [`notes/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md)
-  - 원클릭 다운로드 스크립트: [`scripts/fetch_slt.sh`](scripts/fetch_slt.sh) (`--suite all|full|evidence|index|random`, 온디맨드 로컬 캐싱 지원)
-  - 공식 사용자 검증 가이드: [`doc/SQLLOGICTEST_GUIDE.ko.md`](doc/SQLLOGICTEST_GUIDE.ko.md) / [`doc/SQLLOGICTEST_GUIDE.md`](doc/SQLLOGICTEST_GUIDE.md)
-  - 고성능 병렬 러너: `bin/sqllogictest` 8코어 병렬 15~20초 완주 파이프라인
-- [x] **Phase 3 (SQLite 공식 `index` / `random` / `evidence` 스위트 확장)**: 인덱스 복합 스캔, 난수 대수식, 통계적 카디널리티 스트레스 테스트 연동 (107개 파일, 551,217 쿼리 전수 100% PASS)
-- [ ] **Phase 6 (1.0 릴리즈 게이트 통합)**: 1.0 릴리즈 직전 풀 스위트 듀얼 엔진 100% 무오류 인증
-
-### [x] 1.6 `OPT-LARGE-JOIN-1` 대규모 조인(10+ Tables) 최적화 — **[완료 (Pass)]**
-- 설계 계획서: [`notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)
-- [x] **제1방안 (베이스 테이블 동적 루트 선정)**: 단일 행 필터 보유 또는 최소 카디널리티 테이블을 시작 스캔 노드로 승격하여 조인 체인 중간 튜플 증폭 차단 (`pkg/planner/planner.go`)
-- [x] **제2방안 (공집합 조기 탈락 Fast-Fail)**: `1=0` 등 정적 모순 조건 감지 시 하위 10+개 테이블 스캔/해시 빌드를 바이패스하고 `EmptyIterator` 0ms 반환 (`pkg/planner`, `pkg/execution`)
-- [x] **제3방안 (Selinger DP 탐색 임계치 최적화)**: `MaxJoinDPThreshold = 6` 적용 (12 -> 6개로 축소, 4,096개 상태 공간 폭발 차단 및 7개 이상 조인은 Greedy 즉시 전환)
-
-### [x] 1.7 `PLANNER-SLIM-1` & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 — **[완료 (Pass)]**
-- 설계 계획서: [`notes/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)
-- [x] **1.1 `PLANNER-SLIM-1` (Sort-Merge Join 비용 지연 평가)**: 힌트 또는 양쪽 정렬 조건 부재 시 O(N log N) Sort-Merge 비용 수식 계산을 바이패스하여 핫패스 레이턴시 절감 (`pkg/planner/planner.go`)
-- [x] **1.2 `PLANNER-AST-1` (순수 AST 기본화 및 정규식 옵션 격리)**: Pratt AST 파서에 `OVER (...)` 윈도우 절 및 `WITH RECURSIVE` CTE 컬럼 리스트 네이티브 파싱을 완비하여 순수 AST 플래너를 디폴트(`false`)로 전환하고, 레거시 정규식 폴백은 `--enable-legacy-regex-planner` 옵션 뒤로 격리 (`pkg/proc`, `pkg/config`, `cmd/lionsql`, `pkg/planner`)
-- [x] **1.3 `PLANNER-AST-2` (플래너 하위 조건식·통계·서브쿼리 정규식 완전 제거)**: `bounds.go`, `stats.go`, `pruning.go`, `planner.go`, `decorrelate.go`, `explain.go` 내 조건식 정규식(22개)을 Pratt AST `proc.Expr` 및 `proc.Lexer` 기반으로 100% 교체
-- [x] **1.4 `ENGINE-AST-3` (엔진 관리·부가 명령어 정규식 완전 제거)**: `sqlexec.go`, `sqlexec_auth.go`, `sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_string_split.go`, `sqlexec_procs.go` 내 구문 정규식(40개)을 `proc.Lexer` 및 `sqlutil` 토큰 파서 기반으로 100% 교체
-
-### [-] 1.8 1.0 GA 검증 및 잔여 정리
-- 인수인계 및 실측 기록서: [`notes/GA_VALIDATION_HANDOFF_PLAN.ko.md`](notes/GA_VALIDATION_HANDOFF_PLAN.ko.md)
-- [x] **`SLT-FIX-1~4` 및 SLT 러너 5대 기술부채 전면 해소**: 설계 계획서 [`notes/SLT_EXTENDED_SUITE_FIXES_PLAN.ko.md`](notes/SLT_EXTENDED_SUITE_FIXES_PLAN.ko.md)
-  1. `SLT-FIX-1`: `pkg/slt/parser.go` 다중 `onlyif`/`skipif` 구조적 지시자 평가기(`shouldSkip`, OR 시맨틱스) 도입 및 조기 `halt` 오작동 완치
-  2. `SLT-FIX-2`: `pkg/planner/bounds.go` 및 `planner.go` 중첩 괄호 `AND` 평탄화, 동일 컬럼 다중 바운드 교집합 병합 및 인덱스 범위 잔여 필터 보존
-  3. `SLT-FIX-3`: `pkg/proc/` 및 `pkg/engine` `SELECT ALL` 수량자, 단항 `+` 연산자, `CAST(... AS SIGNED)` 및 `DIV` 정수 나눗셈 연산자 VDBE/Volcano 지원
-  4. `SLT-FIX-4`: `pkg/execution/aggregate.go` `GROUP BY` 사칙연산 프로젝션 AST 파싱 및 `matchColName` 식별자 오탐 차단
-  5. `SLT-RUNNER-DEBT`: `pkg/slt/` 및 `cmd/sqllogictest` 5대 기술부채 전면 해소 (`skipNext` 단일 불리언 제거, `ParseOptions`/`-target` 플래그로 타겟 방언 가변화, `FormatCell` `%.3f` SQLite SLT 표준 부동소수점 포맷팅, `statement error [pattern]` 에러 패턴 검증, `splitRowFields` 따옴표/탭/공백 안전 토크나이저 전환)
-- [x] **`GA-VALID-1`**: SQLite 공식 `index` / `random` / `evidence` 스위트 탐색 및 결함 전량 수정·검증 완료 (`test/slt/core/slt_extended_fixes.slt` 100% PASS)
-- [x] **`SLT-FULL-100`**: SQLLogicTest 107개 풀세트 (551,217 쿼리) 100% 무결점 완치 (`notes/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md`, `notes/SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md`, `scripts/verify_0.90.sh`)
-  - [x] 1. 프로젝션 별칭과 원본 컬럼명 충돌 및 동명 컬럼 슬롯 보존 완치 (`random/select/*` 10개 파일)
-  - [x] 2. `GROUP BY` 단항 부호 프로젝션 및 `HAVING NOT AVG(...) IS NULL` 중첩 집계 평가 완치 (`random/groupby/*` 14개 파일)
-  - [x] 3. SQLite 관용 문법 5종 (`total()`, 빈 `IN ()`, `CREATE TEMP VIEW`, `x IN table`, `CREATE TRIGGER ... UPDATE ON`) 및 테이블리스 집계 수용 (`evidence/*`, `random/expr/*`)
-  - [x] 4. `OR` + 서브쿼리 인덱스 바운드 방어 및 VDBE 3VL 비교 연산자(`OpEq`~`OpGte`, `OpBetween`) 정합성 완치 (`index/*`, `random/aggregates/*`)
-  - [x] 5. 107개 풀세트 (19,211 문장, 551,217 쿼리) 전수 재검증 100% PASS 입증 및 `scripts/verify_0.90.sh` 게이트 스크립트 작성 완료
-- [-] **`GA-VALID-2`**: `cmd/soaktest` 연속 부하(OCC `19,613` tx / WiredTiger `19,678` tx, RSS/FD/고루틴 1.00 무누수 PASS) 및 `cmd/crashtest` 100라운드 확장 실행 완료 (WiredTiger `100/100` PASS `344,129` tx, OCC `100/100` PASS `301,184` tx; 24h/72h 초장기 소크 대기)
-- [ ] **`GA-VALID-3`**: 연동 앱 2~3종 1~2주 도그푸딩
-- [x] **`TEST-BABEL-SLT-1`**: Babelfish 기반 T-SQL Stored Procedure 전용 SLT 로직 테스트 스위트 구축 — **[완료 (Pass)]**
-  - 설계 계획서: [`notes/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](notes/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)
-  - [x] Phase 1: 아키텍처 및 커버리지 계획 수립 (`notes/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`)
-  - [x] Phase 2: VDBE VM `OpPointSelect` 변수 전용 프로젝션(Variable-Only Assign) 결과셋 억제 보완 (`vm_dispatcher.go`)
-  - [x] Phase 3: `test/slt_proc/` 독립 스위트 디렉토리 및 고속 인메모리 테스트 러너(`slt_proc_test.go`) 구축
-  - [x] Phase 4: Babelfish T-SQL 6대 핵심 영역 `.slt` 파일 작성 및 전수 통과 (Variables, Flow, TryCatch, Tx, Cursors, DynamicSQL, 100% PASS, 0 Data Races)
-- [x] **`GA-REGEX-DDL-1`**: `sqlexec_ddl.go` 및 `sqlexec_eval.go`/`sqlexec_explain.go` 잔여 정규식 렉서 전환 — **[완료 (Pass)]**
-  - 설계 계획서: [`notes/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`](notes/GA_REGEX_DDL_REFACTORING_PLAN.ko.md)
-  - [x] 1단계: `sqlexec_eval.go` & `sqlexec_explain.go` 조건식/설명문/서브쿼리/LIKE 정규식 제거 (`sqlutil.MatchLike`, `findSubqueryFromKind`)
-  - [x] 2단계: `sqlexec_ddl.go` 단순 DDL 라우팅(View, Table, Index, Stats, Truncate, Reindex, Functions) 토크나이저 전환
-  - [x] 3단계: `sqlexec_ddl.go` `CREATE TABLE` / `ALTER TABLE` 복합 제약조건 및 컬럼 파서 정규식 완전 박멸 (정규식 35+종 전량 제거, `"regexp"` import 0건)
-  - [x] 회귀 검증: `regex_ddl_migration_test.go` E2E 및 서브쿼리 테스트, `pkg/engine` / `pkg/sqlutil` / `pkg/api` 100% PASS
-- [x] **`GA-REGEX-FINAL-1`**: 엔진 프로덕션 경로 잔여 정규식 4대 영역 완전 제거 및 100% Zero-Regex 달성 (`Invariant 7` 완성) — **[완료 (Pass)]**
-  - **1) T-SQL 페이징 치환기 (`sqlexec_select.go`)**: `mssqlTopRe`, `mssqlDistinctTopRe`, `mssqlOffsetFetchRe` ➔ `sqlutil.NormalizeMSSQLPagination` 모듈화 및 토크나이저 전환 (`"regexp"` 제거)
-  - **2) SQLite 호환 테이블 IN 구문 (`sqlexec_select.go`)**: `reBareTableIn` (`WHERE x IN tbl`) ➔ `sqlutil.DesugarBareTableIn` 토크나이저 전환 (`"regexp"` 제거)
-  - **3) JDBC 메타데이터 배치 치환기 (`sqlexec_jdbc_metadata.go`)**: `reJdbcTempSpExec`, `reJdbcSelectFrom` ➔ `sqlutil.SplitTopLevel` 및 `FindTopLevelKeyword` 전환 (`"regexp"` 제거)
-  - **4) 가상 카탈로그 GUI 필터링 (`virtual/mssql.go`, `virtual/pg.go`)**: `reMssqlObjectIDEq`, `reGuiRelnameEq` 등 9개 정규식 ➔ `sqlutil.ExtractEqualityFilter`, `ExtractObjectIdCall` 모듈화 전환 (`"regexp"` 제거)
-  - **검증**: `go test -tags wiredtiger -count=1 -v -race ./pkg/...` 전수 PASS 및 10대 실전 앱/메타베이스/드라이버 회귀 검증 완료 (0 data race)
-- [x] **`GA-REGEX-NESTED-1`**: SQL 중첩/괄호/조건식 잔여 정규식 제거 및 sqlutil 추상화 모듈화 (`Invariant 7` 준수) — **[완료 (Pass)]**
-  - [x] **아키텍처 불변식 명문화**: `GEMINI.md` (Invariant 7 영어 요약) 및 `notes/ENGINEERING_CONTEXT.ko.md` (제1절 ⑮) 촘스키 계층론(Type 3 정규 언어 vs Type 2 CFG) 기반 SQL 구문 정규식 금지 및 선형 포맷 허용 경계 정의
-  - [x] **`pkg/sqlutil/predicate.go` 조건식 모듈 신설**: `ParseInPredicate`, `ParseIsNullPredicate`, `ParseAnyPredicate`, `ParseBetweenPredicate`, `StripParentheses` 추상화 및 단위 테스트(`predicate_test.go`) 100% PASS
-  - [x] **엔진·실행기·가상 카탈로그 정규식 일괄 박멸**:
-    - `pkg/execution/aggregate.go`: 9개 집계함수 정규식 제거 및 Pratt AST 기반 파싱 전환 (`"regexp"` 제거)
-    - `pkg/execution/filter.go`: `inRe` 제거 및 `sqlutil.ParseInPredicate`/`ParseIsNullPredicate` 적용
-    - `pkg/catalog/virtual/result.go`: `reEvalInClause`, `reEvalAnyClause`, `reEvalIsNull`, `reEvalIsNotNull` 제거 및 `sqlutil` 조건식 파서 전환
-    - `pkg/catalog/virtual/mssql.go`: `reMssqlObjectIdIn`, `reMssqlParentObjectIdIn` 제거
-    - `pkg/engine/sqlexec_merge.go`: `VALUES`, `AS alias(cols)`, `INSERT...VALUES` 정규식 제거 및 `StripParentheses` 전환 (`"regexp"` 제거)
-    - `pkg/engine/sqlexec_derived.go`, `sqlexec_dbcc.go`, `sqlexec_select.go`: 인라인 파렌/토크나이저 전환
-    - `pkg/wire/server.go`, `pkg/wire/tds/server.go`: 문자열/주석 스캐너 및 인덱스 슬라이싱 전환
-  - [x] **회귀 검증**: 3-Stage Pipeline (Build, Test `-race`) 100% PASS (0 data race)
+### 1.3 [테스트베드] 타임박스 외부 앱 호환성 프로브 (Time-Boxed Probe Protocol)
+> **운영 원칙**: 완벽 연동을 위해 무한정 시간을 쓰지 않고, **엄격한 30분 타임박스**를 두고 가볍게 찔러보며 엔진의 숨은 엣지 케이스를 발굴하는 테스트베드로만 활용 (비침습적 패치 우선, 무한 루프나 구조적 대수술 감지 시 30분 내 즉시 중단).
+- `INTEG-DIRECTUS-1`: Directus (30분 프로브 완료 ➔ PENDING 정리: 92개 마이그레이션 DDL 통과 확인, 이후 `@directus/schema` 인스펙터의 `information_schema.columns` LEFT JOIN `information_schema.tables` 및 `relnamespace IN ('public'::regnamespace)` 복합 쿼리 체인 식별 완료)
+- `INTEG-NOCODB-1`: NocoDB (30분 프로브 완료 ➔ PENDING 정리: 100+개 시스템 테이블 DDL 및 다중 마이그레이션 통과 확인, 이후 `nc_202610121136_file_references_url_index` 마이그레이션의 `DROP INDEX "nc_fr_file_url"` 비정규 인덱스 삭제 시 존재하지 않는 인덱스 예외 식별. **공식 해결 아키텍처 확정**: 코어 무결성을 훼손하지 않고 외부 앱 부트스트랩을 무음 통과시키는 **"설치 호환 모드 플래그(`--tolerant-ddl`)"** 도입 결정)
+- `INTEG-MATTERMOST-1`: Mattermost (Go + squirrel 쿼리 프로브)
+- `INTEG-GHOST-1`: Ghost (Bookshelf ORM 쿼리 프로브)
 
 ---
 
-## Priority 2. 실전 오픈소스 앱 연동 확장 (Application Integration Expansion)
+## 2. Post-1.0 Candidates & Deep Freezer (1.0 이후 후보 및 냉동 보관)
 
-> 마스터 플랜: [`notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md`](notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md)  
-> 방식: 각 앱의 실제 마이그레이션 및 실운영 쿼리를 통과시키며 커널 호환성을 검증합니다. (계획 순서 준수)
+### 2.1 클라우드 유틸리티 및 엔터프라이즈 백로그
+1. **`S3-1~4` 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기** ([`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md))
+2. **`AUDIT-LOG-1` 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템** ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md))
 
-### [x] 2.1 `INTEG-ANSWER-1` Apache Answer (Q&A 지식베이스) — **[완료 (Pass)]**
-- 연동 보고서: [`notes/ANSWER_INTEGRATION_REPORT.ko.md`](notes/ANSWER_INTEGRATION_REPORT.ko.md)
-- 운영 가이드: [`guide/ANSWER_INTEGRATION_GUIDE.ko.md`](guide/ANSWER_INTEGRATION_GUIDE.ko.md) / [`guide/ANSWER_INTEGRATION_GUIDE.md`](guide/ANSWER_INTEGRATION_GUIDE.md)
-- 스택: Go + XORM / PGWire (`TCP :5433`)
-- 35개 테이블 스키마 자동 생성, VDBE 다중 행 배치 Identity 키 자동 발급, 관리자 로그인, 질문/답변 E2E 100% 무오류 완료 (Answer 소스 수정 0줄)
+### 2.2 고도화 스토리지 & AI/빅데이터 백로그 (Storage, AI & Replication)
+1. **`FEAT-VECTOR-1` 순수 Go 기반 Vector 임베딩 및 유사도 검색 (`v1.1.0`)**
+   - **목표**: `VECTOR(dim)` 타입, L2/Cosine/Dot 거리 연산자(`<->`, `<=>`), 멀티코어 병렬 Flat KNN 스캔 (LangChain/pgvector 호환).
+   - **설계 문서**: [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)
+2. **`FEAT-TIMESERIES-LSM-1` LSM 기반 초고속 Time Series 파티셔닝 & 불변 청크 스토리지 (`v1.2.0`)**
+   - **목표**: DDL `WITH (TYPE='TIMESERIES')`, WiredTiger 내장 `lsm:` 핸들러(경로 A) 및 순수 Go 일별 불변 청크 플러시(경로 B) 하이브리드 결합, `time_bucket()`, $O(1)$ 청크 드롭.
+   - **설계 문서**: [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)
+3. **`REPL-STREAM-BIN-1` Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍**
+   - **목표**: 복제 스트림 프로토콜을 기존 JSON-lines에서 AOF와 동일한 4바이트 길이 접두사 바이너리 프레임(`[4B length][MsgPack/Raw]`)으로 전환하여 Base64 인코딩 및 JSON 파싱 오버헤드를 100% 제거하고 네트워크 Zero-Copy 달성.
+   - **난이도/영향도**: 낮음~중간(★☆☆~★★☆) / 국소 (네트워크 송수신 레이어 한정)
+4. **`WAL-DELTA-1` Partial / Delta WAL 로깅 (UPDATE 변경분 컬럼 차분 기록)**
+   - **목표**: 대규모 컬럼 테이블에서 `UPDATE` 발생 시 전체 튜플을 재직렬화하지 않고, 변경된 컬럼만 Dirty 비트마스킹(`[DirtyMask][ColIdx, Val]`)하여 AOF 디스크 I/O와 복제 전송량을 최소화.
+   - **난이도/영향도**: 중간~높음(★★☆~★★★) / 엔진 내부 (트랜잭션 변경 감지, Delta 코덱, 리플레이 시 Read-Modify-Write 및 보조 인덱스 정합성 유지 필요)
 
-### [x] 2.2 `INTEG-VAULTWARDEN-1` Vaultwarden (비밀번호 관리) — **[완료 (Pass)]**
-- 연동 계획서: [`notes/VAULTWARDEN_INTEGRATION_PLAN.ko.md`](notes/VAULTWARDEN_INTEGRATION_PLAN.ko.md)
-- 연동 보고서: [`notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md`](notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md)
-- 운영 가이드: [`guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md) / [`guide/VAULTWARDEN_INTEGRATION_GUIDE.md`](guide/VAULTWARDEN_INTEGRATION_GUIDE.md)
-- 회귀 테스트: `pkg/engine/vaultwarden_compat_test.go`
-- 스택: Rust + Diesel ORM / PGWire (`TCP :5433`)
-- 47개 Diesel ORM 마이그레이션 100% 자동 완주, 29개 테이블 생성, 복합 기본 키 `ON CONFLICT DO UPDATE`, 8바이트 Timestamp OID 1114 인코딩, KDF/JWT/비밀번호 사이퍼 CRUD/동기화 E2E 무오류 통과 (Vaultwarden 소스 수정 0줄)
+### 2.3 초장기 냉동 보관 후보 (Deep Freezer Backlog)
+> 구현 난이도(★★★~★★★★)와 시스템 파급 위험도가 극히 높고 실무 효익 대비 오버헤드가 크므로, 특수 목적의 극단적 대규모 요구 전까지 **초장기 냉동 보관(Deep Freeze)**합니다.
+1. **`BENCH-TPCH-1` Mini TPC-H Suite & CBO 서브쿼리 Decorrelation**
+2. **`PERF-COMPLEX-QUERY-2` Complex Query Flat Hash Join & Direct Slot Projection**
+3. **`LOC-1~4` MSSQL Collation 및 유니코드 다국어 로케일 정렬/비교**
 
-### [x] 2.3 `ROUTING-AST-CATALOG-1` 심볼 테이블 & AST 기반 쿼리 라우팅 리팩토링 — **[완료 (Pass)]**
-- 계획서: [`notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)
-- 회귀 테스트: `pkg/wire/routing_ast_test.go`, `pkg/proc/characteristics_test.go`
-- 45개의 `strings.Contains`/`regexp` 문자열 휴리스틱 완전 삭제 완료
-- C 언어 typedef 심볼 테이블 방식의 AST 특성 추출기(`proc.ExtractQueryCharacteristics`) 및 카탈로그 심볼 조회(`virtual.IsVirtualTable`) 도입
-- `canCompileToVDBE`, `isVirtualCatalogQuery`, `virtual.IsVirtualCatalogJoinQuery`, `resolveColumnOIDs` 구조적 정상화
-- False Positive (유사 테이블명 오인) 및 False Negative (리터럴/주석 키워드로 인한 VDBE 차단) 100% 원천 해결
-
-### [x] 2.4 `INTEG-METABASE-1` Metabase (BI 대시보드) — **[완료 (Pass)]**
-- 연동 계획서: [`notes/METABASE_INTEGRATION_PLAN.ko.md`](notes/METABASE_INTEGRATION_PLAN.ko.md)
-- 연동 보고서: [`notes/METABASE_INTEGRATION_REPORT.ko.md`](notes/METABASE_INTEGRATION_REPORT.ko.md)
-- 운영 가이드: [`guide/METABASE_INTEGRATION_GUIDE.ko.md`](guide/METABASE_INTEGRATION_GUIDE.ko.md) / [`guide/METABASE_INTEGRATION_GUIDE.md`](guide/METABASE_INTEGRATION_GUIDE.md)
-- 회귀 테스트: `pkg/engine/metabase_compat_test.go`
-- 스택: Clojure/JVM + JDBC (`pgjdbc`, `mssql-jdbc`) / 듀얼 프로토콜 (PGWire + TDS)
-- 데이터 소스 등록(PGWire `:5433` & TDS `:1433`) 100% 무오류 통과, 스키마 인트로스펙션(테이블/컬럼/외래키/인덱스 350ms 내 완료), 비주얼 쿼리 빌더(MBQL 다중 테이블 파생 조인, COUNT/SUM 집계, `date_trunc` 시계열) 및 Native SQL 완벽 동작 검증 (Metabase 순정 컨테이너 소스 수정 0줄)
-
-### [x] 2.5 `INTEG-UMAMI-1` Umami (웹 애널리틱스) — **[완료]**
-- 상세 보고서: [`notes/UMAMI_INTEGRATION_REPORT.ko.md`](notes/UMAMI_INTEGRATION_REPORT.ko.md)
-- 운영 가이드: [`guide/UMAMI_INTEGRATION_GUIDE.ko.md`](guide/UMAMI_INTEGRATION_GUIDE.ko.md) / [`guide/UMAMI_INTEGRATION_GUIDE.md`](guide/UMAMI_INTEGRATION_GUIDE.md)
-- 단위 및 회귀 테스트: `pkg/engine/umami_compat_test.go` (`TestUmami_PrismaCanConnectQuery`, `TestUmami_PrismaTableNamespaceQuery`, `TestUmami_CountDerivedTableQuery`)
-- 스택: Next.js 16.4.2 + Prisma ORM / PGWire (`TCP :5433`)
-- Prisma 초기화 26개 마이그레이션(01~26) 100% 무오류 적용, 관리자 인증(`POST /api/auth/login`), 웹사이트 등록(`POST /api/websites`), 웹사이트 목록 조회(`GET /api/websites` 파생 테이블 집계), 웹 분석 이벤트 수집(`POST /api/send`), 통계 분석 쿼리(`GET /api/websites/{id}/stats` 복합 서브쿼리, GROUP BY 1, 2, HAVING, CASE WHEN) 완벽 검증 통과 (Umami 순정 컨테이너 소스 수정 0줄)
-
-### [x] 2.6 `INTEG-WOODPECKER-1` Woodpecker CI (CI/CD 엔진) — **[완료 (Pass)]**
-- 설계 계획서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)
-- 통합 보고서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
-- 운영 가이드: [`guide/WOODPECKER_INTEGRATION_GUIDE.ko.md`](guide/WOODPECKER_INTEGRATION_GUIDE.ko.md) / [`guide/WOODPECKER_INTEGRATION_GUIDE.md`](guide/WOODPECKER_INTEGRATION_GUIDE.md)
-- 회귀 테스트: `pkg/engine/woodpecker_compat_test.go`
-- 스택: Go + XORM / PGWire (`TCP :5433`)
-- 19개 테이블, 32개 XORM 마이그레이션 100% 무오류 자동 적용, 서버 헬스체크(`/healthz` 204), 버전 조회(`/version` v3.20.1), 웹 UI 서빙 완벽 동작 검증 (Woodpecker CI 순정 컨테이너 소스 수정 0줄)
-
-### [x] 2.7 `INTEG-VIKUNJA-1` Vikunja (프로젝트 칸반 & To-Do) — **[완료 (Pass)]**
-- 설계 계획서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)
-- 통합 보고서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
-- 운영 가이드: [`guide/VIKUNJA_INTEGRATION_GUIDE.ko.md`](guide/VIKUNJA_INTEGRATION_GUIDE.ko.md) / [`guide/VIKUNJA_INTEGRATION_GUIDE.md`](guide/VIKUNJA_INTEGRATION_GUIDE.md)
-- 회귀 테스트: `pkg/engine/vikunja_compat_test.go`
-- 스택: Go + XORM / PGWire (`TCP :5433`)
-- 80개 이상의 XORM 마이그레이션 100% 무오류 자동 적용, 사용자 회원가입(`POST /api/v1/register`), JWT 로그인(`POST /api/v1/login`, 복합 `OR` 술어 처리), 프로젝트 및 4대 뷰(List/Gantt/Table/Kanban) 생성(`PUT /api/v1/projects`), 칸반 태스크 생성 및 상태 변경(`PUT /api/v1/projects/:id/tasks`, `POST /api/v1/tasks/:id`), 재귀 CTE(`WITH RECURSIVE`) 프로젝트 계층 탐색, 웹 UI 서빙 완벽 동작 검증 (Vikunja 순정 컨테이너 소스 수정 0줄)
-
-### [x] 2.8 `COMPAT-TABLE-DRIVEN-1` 10개 실전 서비스 호환 규칙 Table-Driven 구조 및 안티패턴 키워드 매칭 전면 정식화 — **[완료 (Pass)]**
-- 설계 계획서: [`notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md)
-- 회귀 테스트: `pkg/wire/param_rules_test.go`, `pkg/wire/command_tags_test.go`, `pkg/engine/*_compat_test.go`, `pkg/engine/pk_bypass_test.go`, `pkg/planner/planner_test.go`
-- 대상 서비스: 10개 실전 서비스 (Gitea, Vaultwarden, Casdoor, Ghost, Answer, Affine, Metabase, Umami, Woodpecker, Vikunja)
-- 엔진(`pkg/engine`), 와이어(`pkg/wire`), 가상 카탈로그(`pkg/catalog/virtual`), 플래너(`pkg/planner`)에 흩어진 case-by-case 분기문 및 ad-hoc 원시 문자열 매칭을 Go 정적 구조체 테이블 및 `sqlutil` SSOT 토크나이저 원형으로 전면 정식화 완료:
-  1. `pkg/wire/param_rules.go`: 파라미터 OID 추론 규칙 테이블 (`defaultParamOIDRules`, `LookupParamOID`)
-  2. `pkg/wire/command_tags.go`: PGWire VDBE DML 커맨드 완료 태그 테이블 (`defaultCommandTagRules`, `formatPgCommandComplete`)
-  3. `pkg/catalog/virtual/sys_tables.go`: 가상 카탈로그 뷰 매핑 테이블 (`sysViewAliases`, `IsSysCatalogTable`), 기존 40줄 `switch norm` 제거
-  4. `pkg/planner/bounds.go`: `HasDisjunction` 공통 술어를 통한 복합 `OR` 단일 인덱스 색인 방어 일원화
-  5. 엔진/플래너/와이어 전반의 나이브 `strings.Contains`/`strings.Index` 키워드 매칭 안티패턴 전수 감사 및 `sqlutil.ContainsKeyword`/`FindTopLevelKeyword` 대체 완료 (PK 바이패스, DDL `IF [NOT] EXISTS`, DML `OUTPUT`/`RETURNING`, 윈도우 `OVER`/`BETWEEN...AND`, 서브쿼리 `NOT EXISTS`/`NOT IN`, `IS [NOT] NULL`)
-- 10개 실전 앱 회귀 테스트 100% 통과, 벤치마크 18.7만 TPS 유지 확인, 전체 25개 패키지 race detector 0 data race 검증 완료
-
-### [ ] 2.9 `COMPAT-DECLARATIVE-1` 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) — **[백로그 (2단계)]**
-- 대상: `COMPAT-TABLE-DRIVEN-1`에서 정식화된 Go 구조체 테이블
-- 목표: 정식화된 구조체 테이블을 기반으로 필요 시 외부 텍스트 설정 파일(YAML/JSON 또는 embed.FS)로 분리하여 런타임 동적 규칙 주입 가능성 검토 (YAGNI 평가 후 결정)
-
-### [ ] 2.10 `APP-FAST-FAIL-EXPLORE-1` 신규 외부 앱 4종 Fast-Fail 호환성 탐색 (보류)
-- 상세 계획: [`notes/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md)
-- 원칙: **Fast-Fail 프로토콜** (서버 커널을 과도하게 수정해야 하거나 1시간 이상 소요 시 즉시 중단 및 Spec-Out 판정)
-- 탐색 결과 및 현황:
-  1. [ ] `INTEG-NOCODB-1` NocoDB (Node.js + Knex) Fast-Fail 호환성 탐색 (`PENDING`, 마이그레이션 체인이 수십 개에 달하고 비대하여 1.0 이후로 보류)
-  2. [ ] `INTEG-MATTERMOST-1` Mattermost (Go + pgx/squirrel) Fast-Fail 호환성 탐색 (`PENDING`)
-  3. [ ] `INTEG-GHOST-1` Ghost (Node.js + Knex/Bookshelf) Fast-Fail 호환성 탐색 (`PENDING`)
-  4. [ ] `INTEG-DIRECTUS-1` Directus (Node.js + Knex) Fast-Fail 호환성 탐색 (`PENDING`)
-
-### [x] 2.11 `SQL-WRITABLE-CTE-1` PostgreSQL Writable CTE (`WITH ... INSERT/UPDATE/DELETE ... RETURNING`) 및 `::type[]` 캐스트 지원 — **[완료 (Pass)]**
-- 회귀 테스트: `pkg/engine/writable_cte_test.go`, `pkg/wire/writable_cte_pgwire_test.go`
-- 가이드 문서: [`doc/SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md`](doc/SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md), [`doc/SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md`](doc/SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md)
-- Grove 실전 서비스(`CreateWithOutbox`, `CreateJournal`, `ReserveWithTxReturning`) 5대 체크리스트 완벽 지원:
-  1. 다중 Writable CTE 나열 및 메인 `SELECT` 암묵적 크로스 조인(`FROM ins_order o, ins_item i, ins_outbox e`) 위치 기반 컬럼 매핑
-  2. 선행 `UPDATE ... RETURNING`의 갱신 후(Post-Update) 값을 후속 `INSERT ... SELECT`에서 참조
-  3. 조건 불충족(0행 매칭) 시 빈 CTE 스키마 유지(`pgx.ErrNoRows`) 및 미참조 쓰기 CTE(`ins_tx`) 무조건 실행(Materialize) 보장
-  4. 단일 문 원자적 트랜잭션 보장(Autocommit 암시적 트랜잭션 및 Savepoint 래핑, `UNIQUE` 위반 시 전체 롤백 및 SQLSTATE `23505` 반환)
-  5. 바인딩 파라미터(`$1 ~ $N`) 다중 CTE 재사용, `INSERT ... SELECT $4` 타깃 컬럼 기반 파라미터 OID 역추론, `::type` 및 `::type[]`(`ANY($1::text[])`) AST `CastExpr` 파싱 지원
-
-### [x] 2.12 `SQL-GOOSE-IDENTITY-1` PostgreSQL `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` 지원 및 goose 마이그레이션 호환 — **[완료 (Pass)]**
-- 회귀 테스트: `pkg/engine/identity_ddl_test.go`
-- goose 마이그레이션 이력 테이블(`goose_db_version`)의 `id integer PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY` DDL 파싱 지원
-- `reColDefault`가 `BY DEFAULT AS` 뒤의 `AS`를 컬럼 기본값으로 오인식하던 결함 완치
-- `isIdentity = true` Auto-Increment 승격 및 `Default = ""` 정규화로 다중 마이그레이션 버전 삽입 시 `duplicate key "AS"` (SQLSTATE 23505) 완치
+### 2.4 영구 기각 (Spec-Out Invariants)
+- **`FRIENDLY-SQL`**: DuckDB 스타일 문법 (`* EXCLUDE`, `FROM tbl;` 등) ➔ 오타 침묵 및 RDBMS 엄격성 훼손으로 기각
+- **`PERF-SERVER-PIPELINE-P3-P4`**: ReadOnly 자동 바이패스 ➔ 겉형식과 실질 불일치 및 격리성 파괴 위험으로 기각
 
 ---
 
-## Priority 3. Post-1.0 기술 후보 과제 (Architecture Candidates & On-Demand Backlog)
+## 3. Completed Milestones & Historical SSOT Link
 
-> 상세 설계 및 난이도·영향도·우려사항 매트릭스: [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md)
-> 성격: 의무적인 마일스톤이 아니며, 실제 비즈니스/성능 요구가 발생할 때 시동을 걸어 꺼내 쓰는 온디맨드 후보 과제(Candidates)
-
-### [ ] 3.1 `PERF-COMPLEX-QUERY-2` Complex Query Flat Hash Join & Direct Slot Projection
-- 오픈 어드레싱 정수 해시 테이블 기반 복합 쿼리 서브 50ms 목표 최적화 ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md))
-
-### [ ] 3.2 `BENCH-TPCH-1` Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation
-- TPC-H Q1, Q3, Q4, Q6, Q9 스위트 및 `EXISTS`/`IN` -> Semi-Join 자동 변환 ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md))
-
-### [ ] 3.3 `OCC-HYPER-2` In-Memory OCC Pointer-Free Flat Record & Memory Compaction
-- [우선 구현 옵션] 포인터리스 플랫 레코드(Pointer-Free Flat Record) 도입: 복잡한 Varint 압축 해제 오버헤드 없이 고정 오프셋 O(1) 직접 접근(0.5ns)을 유지하면서 Go GC 힙 포인터를 100% 제거하고 4~5배 메모리 압축 달성 ([`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md))
-
-### [ ] 3.4 `PERF-SERVER-PIPELINE-P3-P4` 서버 파이프라인 Phase 3/4
-- Generic LRU 커서 및 ReadOnly Auto-Bypass, 적응형 그룹 커밋 ([`notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md))
-
-### [ ] 3.5 `FRIENDLY-SQL` DuckDB-Style Friendly SQL 문법 지원
-- `SELECT * EXCLUDE`, `FROM <table>;`, `GROUP BY ALL`, CSV 파일 직접 조회 ([`notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md))
-
-### [ ] 3.6.1 `PKG-OFFLINE-DOCS` 배포 패키지 오프라인 문서 번들링 (`docs/index.html`)
-- **개념**: *"사람들은 터미널이 아니라 브라우저로 문서를 본다."*  
-- **기능**: DB 엔진 바이너리 순수성을 유지하면서 공식 배포 아카이브(`tar.gz`/`zip`) 내에 소스코드를 제외한 순수 문서(`docs/`)와 오프라인 브라우저 뷰어(`docs/index.html`) 번들링.
-- **특징**: 폐쇄망/에어갭 환경 100% 자립, 오프라인 문서 검색, SQL 예제 즉시 실행(`[Try in Studio]`) 연동.
-- **설계 참조**: [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
-
-### [ ] 3.6 `WEB-SPA-1` 단일 바이너리 내장 SPA 웹 서버 호스팅
-- `--app`, `--public` 플래그를 통한 SPA 정적 웹 호스팅 및 네이티브 DB 서빙 ([`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md))
-
-### [x] 3.7 `R-6` 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) — **[완료 (Pass)]**
-- 상세 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
-- [x] **Phase 1 (`R-6-P1`)**: `ClientSession` 내부 락 및 상태 은닉 (와이어의 `cs.Mu.Lock()` 직접 침범 제거, `ExecuteProgram` 세션 일원화)
-- [x] **Phase 2 (`TDS-MOD-1`)**: TDS 모놀리스(`server.go` 2.9k 라인) 파일 분할 영구 기각(Spec-Out) — AI 페어 프로그래밍 환경에서 Git Blame/히스토리 보존 가치가 파일 분할 이점보다 크므로 단일 파일 유지 결정
-- [x] **Phase 3 (`R-6-P3`)**: 서버 기동 시 `Coordinator` 최상위 인스턴스화 및 3대 리스너(PG, TDS, HTTP) 대등 주입 (역할 전도 해소)
-
-### [x] 3.8 `ARCH-VDBE-ROUTING-1` AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) — **[완료 (Pass)]**
-- **설계 계획서**: [`notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md)
-- **목표**: `pkg/wire` 및 `pkg/engine`의 문자열 매칭(`strings.HasPrefix(cs.ID, "pg-")`, `FROM (` 슬라이싱) 휴리스틱을 완전 제거하고, AST 노드와 카탈로그/세션 Dialect 기반의 견고한 역량 검증으로 전환
-- [x] **`ClientSession.Dialect` 정식 enum 도입**: `DialectDefault`, `DialectTSQL`, `DialectPostgres`, `DialectMySQL` 타입 시스템 구축 및 `cs.IsPostgres()`, `cs.IsTSQL()` 제공으로 문자열 꼼수 박멸 (`pkg/engine/session.go`, `pkg/engine/coordinator_impl.go`, `pkg/api/server.go`)
-- [x] **PostgreSQL 트랜잭션 실패 규칙 및 Identity Insert 정규화**: `sqlexec.go`, `sqlexec_dml.go`, `sqlexec_select.go` 내 `strings.HasPrefix(cs.ID, "pg-")`를 `cs.IsPostgres()`로 전면 교체
-- [x] **파생 테이블 AST 특성 기반 판별**: `proc.QueryCharacteristics`에 `HasDerivedTable` 필드 추가 및 `canCompileToVDBE()` 내 `FROM (` 문자열 슬라이싱 휴리스틱 완전 삭제 (`pkg/proc/characteristics.go`, `pkg/wire/server.go`)
-- [x] **회귀 검증**: 3-Stage Pipeline (Build, Test `-race`) 100% PASS (0 data race)
-
-### [ ] 3.9 기타 엔터프라이즈 기능 확장
-- [ ] `AUDIT-LOG-1`: 암호화 SHA-256 불변 감사 로그 서브시스템 ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md))
-- [ ] `TDS-COMPAT-6`: Multiple Result Sets (MARS) 스트리밍 (Dapper `QueryMultiple`)
-- [ ] `S3-1` ~ `S3-4`: 클라이언트 사이드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 ([`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md))
-- [ ] `LOC-1` ~ `LOC-4`: MSSQL Collation 및 로케일 정렬 지원 ([`notes/COLLATION_AND_LOCALE_PLAN.md`](notes/COLLATION_AND_LOCALE_PLAN.md))
-- [ ] `SEC-1` / `AUTH-1`: TDS 8.0 Pre-Login SSL/TLS 핸드셰이크 강화 및 클라이언트 사이드 OIDC 토큰 교환
-
-### [ ] 3.10 `INTEG-NOCODB-1` NocoDB (노코드 DB 스튜디오) — **[v1.1.0 로드맵]**
-- 스택: Node.js + Knex / 듀얼 프로토콜 (PGWire + TDS)
-- 메타데이터 자동 감지 및 스프레드시트 뷰 CRUD 검증
-
-### [ ] 3.11 `INTEG-MATTERMOST-1` Mattermost (팀 협업 채팅) — **[v1.1.0 로드맵]**
-- 스택: Go + `sqlx`/`squirrel` / PGWire (`TCP :5433`)
-- 대규모 팀 채널 및 메시지 인덱싱 검증
-
----
-
-## 4. Architectural Invariants & Spec-Out Invariants (13대 불변 원칙)
-
-To preserve sub-microsecond latency and single-binary simplicity, the following features are permanently **Spec-Out** (detailed rationales preserved in [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) and [`GEMINI.md`](GEMINI.md)):
-
-1. **Duplicate PL/pgSQL Interpreter**: Stored procedures unify on native T-SQL VDBE VM (`pkg/proc`).
-2. **Legacy XML DML / XQuery**: Standardized on modern JSON functions (`ISJSON`, `JSON_VALUE`) and native Go parsers.
-3. **In-Memory OCC Background Vacuum**: Workspace atomic swap/discard leaves zero dead tuples; vacuum workers rejected.
-4. **POSIX Shared Memory (Arrow IPC) Snapshots**: Standardized on CDC/WAL event streams.
-5. **Distributed 2PC Coordinators (XA / MS DTC)**: Standardized on 1-Writer Multi-Reader WAL replication.
-6. **In-Kernel OAuth2 Web Flows**: Standardized on Client-Side OIDC Token Exchange.
-7. **In-Kernel Blob File Storage**: Standardized on S3 pre-signed direct client uploads.
-8. **Immature Pure-Go Storage Engines**: Focused exclusively on WiredTiger MVCC and In-Memory OCC.
-9. **In-Kernel Slow-Query Webhooks**: Standardized on Prometheus `/metrics` and OpenTelemetry OTLP.
-10. **In-Kernel Wasm Sandbox**: Standardized on zero-allocation Go Native UDF SPI (`RegisterScalarFunction`).
-11. **Total Bytecode Translation for Complex Queries**: 2-Tier query engine (Tier 1 VDBE, Tier 2 Volcano CBO) invariant.
-12. **Pure Columnar Vectorization Engine Full Rewrite**: Rejected due to Row-storage I/O scan physical limits and single-binary KISS code complexity; standardized on 1,024-row chunk streaming (`ChunkedIterator`, `PullChunk`) and zero-unboxing slot optimizations.
-13. **MySQL-Specific DML & Legacy Tabular EXPLAIN Extensions (`ON DUPLICATE KEY UPDATE`, Comma `LIMIT offset, count`, 8-Column Tabular `EXPLAIN`)**: Permanently Spec-Out. Standard ANSI/MSSQL `MERGE` and PostgreSQL `ON CONFLICT DO UPDATE` already provide full functional coverage without 3-way transactional branching. Flat 8-column tabular `EXPLAIN` flattens and destroys modern hierarchical Volcano CBO plan trees (which even MySQL 8.0 deprecated in favor of `FORMAT=TREE`) and breaks PostgreSQL GUI visualizers. LionSQL standardizes exclusively on modern indented tree text and JSON plan representations, keeping MySQL syntax support strictly at Phase 1 ergonomics (`DESC`, `SHOW TABLES`, backticks).
-
----
-
-## Completed Milestones Archive (완료된 작업 이력)
-
-### [x] M1. v0.90.0 Feature Freeze & Production Hardening (100% PASS)
-- **Gate 1 (Multi-Wire)**: TDS (SSMS, DBeaver, Beekeeper, sqlcmd) & PGWire v3 (psql) live query parity 100% PASS
-- **Gate 2 (ACID & Concurrency)**: In-Memory OCC 1,046k tpmC / WiredTiger 833k tpmC, 0 data races under `-race`
-- **Gate 3 (HA & CDC)**: 1-Writer Multi-Reader WAL replication streaming, real-time CDC, live failover 100% PASS
-- **Gate 4 (Security & Governance)**: SQL RBAC Default Deny, TLS dynamic certificates, heap memory governor
-- **Gate 5 (Unified Binary)**: Single executable (`lionsql`), Web Studio suite, Windows standalone (`lionsql.exe`, 1ms timer)
-
-### [x] M2. v0.90.0 액티브 스프린트 완료 과제 (18개 전량 완료 아카이브)
-- [x] **`PERF-PGWIRE-PREP-TX`**: PGWire PreparedStatement 트랜잭션 내 VDBE 바이트코드 직접 바인딩 (`ExecuteInTxWithSessionContext`, `substituteParams` 제거, PGWire TPC-C 24.3만 tpmC 달성)
-- [x] **`CASDOOR-INTEGRATION-1`**: Casdoor IAM/SSO 듀얼 프로토콜 연동 (44 XORM 테이블, 복합 PK `\x1f`, `0x` Hex 바이너리)
-- [x] **`GRAFANA-INTEGRATION-1`**: Grafana 듀얼 프로토콜 연동 (내부 메타데이터 PGWire 785개 마이그레이션 완주 + PG/TDS 듀얼 쿼리 데이터소스)
-- [x] **`IOTA-ERP-1`**: iota-sdk Go ERP PGWire 연동 (47개 마이그레이션, binary UUID, TIMESTAMPTZ)
-- [x] **`GITEA-PGWIRE-1` & `GITEA-MOCK-SEED-1`**: Gitea 프로덕션 연동 (BIGSERIAL, RETURNING, pg_indexes, 모의 데이터 시더)
-- [x] **`BENCH-TPCC-RPC` & `PERF-TPCC-CLIENT`**: TPC-C 단일 왕복 RPC 벤치마크 및 클라이언트 최적화 (TDS 236k / PGWire 243k tpmC)
-- [x] **`PERF-SERVER-PIPELINE-P1-P2`**: TDS 파이프라인 최적화 (Syscall Coalescing, 32KB sync.Pool, Zero-Alloc RPC)
-- [x] **`PERF-WIRE-SOCKET-POOL` & `PERF-FASTPATH-PING`**: PGWire 32KB 버퍼 풀링 및 `SELECT 1` 무파싱 핑 패스트패스
-- [x] **`ORM-MIGRATE-1~3`**: 조건부 DDL 지원, XORM 컬럼 인트로스펙션, 할당 에일리어싱(`alias = expr`), `sys.fn_helpcollations()`
-- [x] **`S-MYSQL-1-P1` & `FUNC-DIALECT-7`**: MySQL 편의 문법(`DESC`, `SHOW TABLES`, 백틱) 및 고ROI 빌트인 함수 Best 7
-- [x] **`PROC-CURSOR-1`**: T-SQL Fast Forward-Only 읽기 전용 커서 및 `@@FETCH_STATUS`
-- [x] **`AUDIT-EXPR-1` & `PERF-COMPLEX-QUERY-1`**: 복합 쿼리 중첩 표현식 감사 및 AST 제로할당 평가기 튜닝
-- [x] **`BENCH-SSB-1`**: Star Schema Benchmark (SSB) 스위트 CLI 도구 완성
-
-### [x] M3. 내구성 및 신뢰성 1차 검증 완료 이력
-- [x] **`DURA-SOAK-F1`**: WiredTiger `WT_ROLLBACK`(-31800) 쓰기 충돌을 `storage.ErrSerializationFailure`로 래핑하여 PGWire `SQLSTATE 40001` 매핑
-- [x] **`DURA-SOAK-F2`**: 1시간 소크 실측을 통한 500MB 페이지 캐시 워밍업 분석 및 `/metrics` Go 힙/고루틴 수집과 캐시 상한 기준선 확립
-- [x] **`DURA-KILL-1 (Phase 1)`**: `cmd/crashtest` 하네스 완성, 3대 결함 수정 및 20라운드/엔진 (총 12.8만 건 tx) 강제 종료 복구 100% 무결성 입증
-
-### [x] M4. 코드 리뷰 감사 및 구조적 리팩토링 완결 (`ARCH-PRED` & `ARCH-RULE-SLUG`)
-- [x] **`ARCH-PRED-1` & `ARCH-PRED-2`**: 조건식·괄호(`Dyck Language`) 표준 파서(`pkg/sqlutil/predicate.go`) 구축, PostgreSQL JSON 연산자(`->`, `->>`) 충돌 방어, `reEvalBinaryOp` 정규식 완전 제거
-- [x] **`ARCH-RULE-SLUG`**: 골든 룰 불변 슬러그(`[RULE:xxx]`) 및 캐노니컬 명칭 체계(`Rule Reference Policy`) 수립, 전체 소스코드 주석 및 문서 내 휘발성 순번 완전 제거
-- [x] **`REV-ENG-011`**: `ALTER TABLE` 10개 서브 커맨드 내 스토리지 엔진 에러 무시(`_ = `) 결함 전면 해소 및 에러 반환 보장 ([`RULE:ExplicitError`])
-- [x] **`REV-WIRE-010`**: PGWire `handleParse` / `handleBind` 비정상/음수/과대 슬라이스 할당 가드 적용 ([`RULE:DefensiveIndexing`], [`RULE:BoundedBuffers`])
-- [x] **`REV-CAT-003`**: 가상 카탈로그 행 필터링 잔여 정규식 제거 및 `sqlutil.ParseBinaryComparison` 일원화 (`Invariant 7`, [`RULE:ModularAbstraction`])
-- [x] **감사 대시보드 동기화**: `CODE_REVIEW.ko.md`, `CODE_REVIEW.md`, `REFACTORING.ko.md` 최신화 완료 (누적 결함 36건 100% 조치 완료)
+- **전체 완료 태스크 및 버그 아카이브 (180+건)**: [`TASKS.md`](TASKS.md) (LionSQL DB 자동 동기화 미러)
+- **10대 실전 오픈소스 앱 연동 완료**: Answer, Vaultwarden, Metabase, Umami, Vikunja, Woodpecker CI, Gitea, Ghost, Casdoor, Affine
+- **VDBE VM 5대 혁신 (`PERF-VDBE-EXTREME-OPT-1`)**: 슬롯 배열 직접 인덱싱, DML 풀링, 평탄화 루프 전환 완료 (상시 84,766 TPS 통과)
+- **정규식 제로 불변식 (`Invariant 7`)**: 엔진 및 와이어 프로덕션 경로 정규식 100% 박멸 완료
