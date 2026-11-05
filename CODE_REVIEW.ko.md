@@ -4,7 +4,7 @@
 
 > [!NOTE]
 > - 영문 요약본: [`CODE_REVIEW.md`](CODE_REVIEW.md)
-> - 결함 조치 아카이브 (107건): [`BUG_ARCHIVE.ko.md`](BUG_ARCHIVE.ko.md)
+> - 결함 조치 아카이브 (107건): [`notes/archive/BUG_ARCHIVE.ko.md`](notes/archive/BUG_ARCHIVE.ko.md)
 > - 모듈형 아키텍처 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
 
 ---

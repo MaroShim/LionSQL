@@ -41,6 +41,41 @@ LionSQL은 10개 실전 오픈소스 애플리케이션을 외부 코드 수정 
 5. **`ALTER TABLE tbl SET (...)`**:
    - PostgreSQL 전용 스토리지 파라미터(autovacuum 팩터 등)를 No-Op 성공 처리.
 
+### 2.3 무중단 런타임 동적 제어: CLI 인터페이스 (`lionsql get` & `lionsql set`)
+서버를 재시작하지 않고도 운영 중인 인스턴스의 런타임 상태를 조회하고 안전하게 전환할 수 있도록, 상태 대칭성(State Symmetry)을 갖춘 **조회(`get`) 및 sudo 스타일 인터랙티브 인증 제어(`set`) 한 쌍의 CLI 명령**을 제공한다:
+
+1. **상태 조회 명령 (`lionsql get [key]`)**:
+   - 실행 중인 인스턴스의 런타임 파라미터를 읽기 전용(Read-Only)으로 무암호 조회:
+     ```bash
+     # 특정 키 조회
+     ./bin/lionsql get tolerant_ddl [--addr=http://127.0.0.1:8090]
+     # 결과: tolerant_ddl = off (default, strict)
+
+     # 전체 동적 설정 테이블 조회
+     ./bin/lionsql get
+     # 결과:
+     # KEY                     VALUE      TYPE     DESCRIPTION
+     # tolerant_ddl            off        bool     Tolerant DDL bootstrap mode
+     # log_level               info       string   Runtime logger verbosity
+     # slow_query_threshold    0ms        duration Slow query detection threshold
+     # read_only               off        bool     Emergency read-only safe mode
+     ```
+
+2. **상태 변경 명령 (`lionsql set <key> <value>`)**:
+   - 시스템 상태를 변조하므로 Unix의 `sudo`처럼 **실행 즉시 관리자 암호를 인터랙티브하게 검증** (`term.ReadPassword` 사용):
+     ```bash
+     ./bin/lionsql set tolerant_ddl on
+     [sudo] Password for admin@lionsql.local: ********
+     OK: tolerant_ddl set to 'on' (active on PID 93535)
+     ```
+   - 스크립트/CI 환경 지원을 위해 `LIONSQL_ADMIN_PASS` 환경변수 또는 표준 입력 토큰을 수용 (`[RULE:ExecveSafety]`, `[RULE:HeadlessParity]`).
+
+3. **순수 인메모리 휘발성 보장 (100% Volatile In-Memory & Safe Defaults)**:
+   - **`--persist` 안티패턴 배제**: 디스크 설정 파일(`lionsql.json`) 변조로 인한 주석 유실, 포맷 파괴, GitOps/IaC 설정 드리프트 및 권한 충돌을 원천 차단하기 위해 디스크 자동 덮어쓰기 기능은 명시적으로 제외한다 (`[RULE:RadicalKISS]`).
+   - 실행 중인 LionSQL HTTP 관리 엔드포인트(`POST /api/admin/config`)로 인증 요청을 전송하여, 인스턴스 내부 `atomic.Bool` / `atomic.Pointer` 플래그만 원자적으로 갱신한다 (`[RULE:AtomicFlags]`).
+   - 프로세스가 재시작되면 본래의 안전한 기본값(`false`) 또는 정적 설정 파일의 상태로 자동 복귀하여 의도치 않은 관용 모드 방치 사고를 원천 방지한다 (`[RULE:SafeDefaults]`).
+   - 영구적으로 기본 설정을 변경해야 하는 환경은 사용자가 직접 `lionsql.json`을 편집하거나 시작 플래그(`--tolerant-ddl`)로 지정하는 정석적인 방식을 따른다.
+
 ---
 
 ## 3. 코드베이스 대청소 (Deletion-First Refactoring)

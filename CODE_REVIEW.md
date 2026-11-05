@@ -4,7 +4,7 @@ This document tracks systematic static analysis, defect auditing, regression tes
 
 > [!NOTE]
 > - Detailed Korean audit tracker: [`CODE_REVIEW.ko.md`](CODE_REVIEW.ko.md)
-> - Defect resolution archive (107 cases): [`BUG_ARCHIVE.ko.md`](BUG_ARCHIVE.ko.md)
+> - Defect resolution archive (107 cases): [`notes/archive/BUG_ARCHIVE.ko.md`](notes/archive/BUG_ARCHIVE.ko.md)
 > - Subsystem modular architecture plan: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
 
 ---
