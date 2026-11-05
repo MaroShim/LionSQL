@@ -1,6 +1,6 @@
 # LionSQL Post-1.0 엔지니어링 후보 과제 (Candidates) (`notes/POST_1.0_CANDIDATES.ko.md`)
 
-> - **최종 갱신일**: 2026-11-04
+> - **최종 갱신일**: 2026-11-05 (Phase 3~4 초고난도 과제 Deep Freeze 냉동 보관 분류 및 PERF-SERVER-PIPELINE Spec-Out 반영)
 > - **최초 작성일**: 2026-11-04  
 > - **문서 성격**: **Architecture Candidates (사전 기술 분석을 완료하고 실제 니즈 발생 시 채택을 심사하는 온디맨드 후보 과제)**  
 > - **핵심 원칙**: 본 문서는 의무적으로 완수해야 하는 개발 로드맵이 아니며, 이미 심층 설계와 스펙 분석이 완료되어 안전하게 준비해 둔 후보 과제(Candidates) 목록입니다. 향후 특정 비즈니스 요구나 극단적인 하드웨어 스케일링 니즈가 실제로 발생할 때에만 온디맨드(On-Demand)로 시동을 걸어 착수합니다.  
@@ -28,10 +28,12 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 | :---: | :--- | :--- | :---: | :---: | :---: | :--- | :---: |
 | **1** | **`PKG-OFFLINE-DOCS`** | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | **낮음 (★☆☆)** | **배포 스크립트 (None)** | **매우 높음** | 릴리스 아카이브 생성 스크립트 작성 및 오프라인 HTML 뷰어 템플릿 제작 | **Phase 1 (DX Hero)** |
 | **2** | **`WEB-SPA-1`** | 단일 바이너리 내장 SPA 웹 서버 (`--app`, `--public`) | **낮음 (★☆☆)** | **국소 (Low)** | **높음** | 디렉토리 트래버설(`../`) 경로 보안 탈출 및 정적 파일 I/O 메모리 누수 | **Phase 1 (Zero Risk)** |
-| **3** | **`PERF-SERVER-PIPELINE`**| Generic LRU 커서 & ReadOnly 트랜잭션 자동 바이패스 | **중간 (★★☆)** | **중간 (Med)** | **높음** | 쓰기 함수/부수효과 오탐으로 인한 일관성 위반, LRU 락 경합 병목 | **Phase 2 (Throughput)** |
+| **-** | **`PERF-SERVER-PIPELINE`**| Generic LRU 커서 & ReadOnly 자동 바이패스 | **중간 (★★☆)** | **위험 (Critical)** | **기각 (Spec-Out)** | 겉형식(SELECT)과 실질(시퀀스/부수효과) 불일치로 인한 격리성 파괴 및 LRU 락 경합 | **영구 보류 (Spec-Out)** |
 | **4** | **`AUDIT-LOG-1`** | SHA-256 체이닝 불변 감사 로그 서브시스템 (SOC 2) | **중간 (★★☆)** | **중간 (Med)** | **중간** | 동기 I/O 지연으로 인한 TPS 급락, 감사 로그 디스크 공간 고갈 | **Phase 2 (Enterprise)** |
 | **5** | **`INTEG-NOCODB/MATTERMOST`** | NocoDB & Mattermost 실전 엔터프라이즈 앱 연동 검증 | **중간 (★★☆)** | **국소~중간** | **높음** | 앱 전용 비표준 복합 쿼리로 인한 가상 카탈로그 규칙 복잡화 | **Phase 2 (Ecosystem)** |
 | **6** | **`S3-1~4`** | 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기 | **중간 (★★☆)** | **독립적 (Low)** | **중간** | 서버-클라이언트 간 시계 오차(Clock Skew)로 인한 서명 만료 오류 | **Phase 2 (Utility)** |
+| **12**| **`REPL-STREAM-BIN-1`** | Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 | **낮음~중간 (★☆☆~★★☆)** | **국소 (Low)** | **높음** | 네트워크 스트리밍 프로토콜 바이너리화 및 프레이밍 동기화 | **Phase 2 (Replication)** |
+| **13**| **`WAL-DELTA-1`** | Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) | **중간~높음 (★★☆~★★★)** | **엔진 내부 (Med)** | **중간~높음** | 리플레이 시 Read-Modify-Write 오버헤드 및 보조 인덱스 변경 추적 정합성 | **Phase 2 (Engine Tuning)** |
 | **7** | **`BENCH-TPCH-1`** | CBO 서브쿼리 Decorrelation (`IN`/`EXISTS` ➔ Semi-Join) | **높음 (★★★)** | **높음 (High)** | **매우 높음** | `NULL` 3치 논리(3VL) 정합성 깨짐 및 서브쿼리 카디널리티 오산출로 인한 잘못된 플랜 | **Phase 3 (Optimizer)** |
 | **8** | **`PERF-COMPLEX-QUERY-2`**| Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) | **높음 (★★★)** | **중간 (Engine)** | **높음** | 고부하 해시 클러스터링/리사이징 시 순간 지연 및 메모리 스파이크 | **Phase 3 (Analytical)** |
 | **9** | **`OCC-HYPER-2`** | In-Memory OCC Pointer-Free Flat Record (4~5x 메모리 압축)| **매우 높음 (★★★★)**| **광범위 (Critical)**| **극상 (Extreme)** | 엔진 전반 레이아웃 대수술로 인한 회귀 버그, 가변 길이 문자열 갱신 단편화 | **Phase 4 (Deep Kernel)** |
@@ -109,18 +111,20 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 
 ### 도메인 B. 처리량 및 엔터프라이즈 보안 (Pipeline & Enterprise Governance)
 
-#### 3. `PERF-SERVER-PIPELINE-P3-P4`: 서버 파이프라인 Phase 3/4
+#### 3. `PERF-SERVER-PIPELINE-P3-P4`: 서버 파이프라인 Phase 3/4 — **[영구 보류 (Spec-Out)]**
 - **상세 설계서**: [`notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)
-- **주요 구현 내용**:
+- **주요 제안 내용**:
   1. Generic LRU 커서/Prepared Statement 캐시 도입.
   2. ReadOnly 쿼리에 대해 트랜잭션 락/OCC 스냅샷 생성 비용을 면제하는 자동 바이패스 경로 구축.
   3. 고동시성 쓰기 트래픽 감지 시 적응형 그룹 커밋(Adaptive Group Commit).
-- **난이도 및 영향도**:
-  - **난이도**: **중간 (★★☆)** — 캐시 동시성 제어 및 ReadOnly 감지 로직.
-  - **영향도**: **중간 (Med)** — `pkg/wire`와 `pkg/engine/coordinator_impl.go`의 쿼리 수신 핫패스에 개입.
-- **주요 우려사항 (Key Caveats)**:
-  - **ReadOnly 오탐으로 인한 데이터 불일치**: 쿼리 내부에 `NEXTVAL`, 임시 테이블 생성, 부수효과를 가진 사용자 정의 함수(UDF)가 포함되어 있음에도 ReadOnly로 오판하여 격리성 위반을 초래할 위험.
-  - **LRU 캐시 락 경합(Cache Contention)**: 수백 개의 워커가 단일 LRU 뮤텍스에 몰릴 경우 락 경합으로 인해 오히려 TPS가 하락하는 역효과 (샤딩된 캐시 또는 Lock-Free 슬롯 필요).
+- **영구 보류(Spec-Out) 확정 사유 (형식과 실제의 불일치 딜레마)**:
+  - **1) 겉형식(Syntax)과 실질(Semantics)의 불일치로 인한 격리성 파괴**:
+    - 쿼리의 겉모습이 `SELECT ...` 형태라 하더라도 내부에는 `NEXTVAL('seq')`, 임시 테이블 생성(`SELECT ... INTO #temp`), 세션 변수 조작(`SET @x = ...`), 부수효과(Side-Effect)를 가진 UDF 호출 등이 포함될 수 있습니다.
+    - 엔진이 이를 순수 읽기로 오판하여 트랜잭션 락/스냅샷을 바이패스하는 순간, **더티 리드(Dirty Read), 팬텀 리드, 쓰기 손실 등 ACID 트랜잭션 무결성이 치명적으로 파괴**됩니다.
+    - "이 쿼리가 100% 순수한 ReadOnly인가?"를 완벽히 가려내려면 복잡한 AST 심층 분석을 매번 수행해야 하므로, **바이패스로 얻는 미세한 이득보다 검증 오버헤드가 더 커지는 본말전도(배보다 배꼽)**가 발생합니다.
+  - **2) LRU 캐시 락 경합(Cache Contention)으로 인한 성능 역전**:
+    - 고동시성 워커(100~200개)가 단일 LRU 뮤텍스에 몰릴 경우 락 경합(Lock Convoy)으로 인해 오히려 전체 QPS가 급락하는 역효과를 초래합니다.
+  - **결론**: 형식과 실제가 다른 SQL의 본질적인 특성상 완벽한 안전성을 담보할 수 없으므로, **ReadOnly 자동 바이패스는 영구 기각(Spec-Out)**하고 표준 트랜잭션 경계를 엄격히 유지합니다.
 
 #### 4. `AUDIT-LOG-1`: SHA-256 불변 감사 로그 서브시스템
 - **상세 설계서**: [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md)
@@ -240,21 +244,19 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
   └── [보류] FRIENDLY-SQL (LionSQL is NOT DuckDB 철학에 따라 영구 보류)
 
 [Phase 2: Throughput & Enterprise Extensibility] (처리량 확장 및 보안 거버넌스)
-  ├── 3. PERF-SERVER-PIPELINE (Generic LRU & ReadOnly Auto-Bypass)
-  ├── 4. AUDIT-LOG-1 (SHA-256 체이닝 불변 감사 로그)
-  ├── 5. INTEG-NOCODB / MATTERMOST (실전 앱 연동 확장)
-  └── 6. S3-1~4 (클라이언트 사이드 S3 Pre-signed URL)
+  ├── 3. AUDIT-LOG-1 (SHA-256 체이닝 불변 감사 로그)
+  ├── 4. INTEG-NOCODB / MATTERMOST (실전 앱 연동 확장)
+  ├── 5. S3-1~4 (클라이언트 사이드 S3 Pre-signed URL)
+  └── [보류] PERF-SERVER-PIPELINE (ReadOnly 형식-실질 불일치 격리성 파괴 위험으로 영구 보류)
 
-[Phase 3: Deep Query Optimization] (대규모 복합 분석 쿼리 가속)
-  ├── 7. BENCH-TPCH-1 (CBO 서브쿼리 Decorrelation)
-  └── 8. PERF-COMPLEX-QUERY-2 (Open-Addressing 플랫 해시 조인)
+[Phase 3 & 4: Deep Freezer Backlog] (초고난도 & 시스템 파급 위험으로 초장기 냉동 보관)
+  ├── 6. BENCH-TPCH-1 (CBO 서브쿼리 Decorrelation: NULL 3VL 정합성 파괴 위험)
+  ├── 7. PERF-COMPLEX-QUERY-2 (Open-Addressing 플랫 해시 조인: 해시 충돌 및 메모리 스파이크 위험)
+  ├── 8. OCC-HYPER-2 (Pointer-Free Flat Record: 가변 문자열 단편화 및 인메모리 스토리지 전면 재작성)
+  └── 9. LOC-1~4 (MSSQL Collation 언어별 로케일: 문자열 비교 3~5배 급락 및 B+Tree 인덱스 순서 파괴)
 
-[Phase 4: Core Memory Revolution] (스토리지 및 메모리 아키텍처 대수술)
-  ├── 9. OCC-HYPER-2 (Pointer-Free Flat Record & Zero-GC)
-  └── 10. LOC-1~4 (MSSQL Collation & 다국어 로케일)
-
-[Phase 5: Deprioritized Niche Protocol] (필요 시 선택적 착수)
-  └── 11. TDS-COMPAT-6 (TDS MARS 인터리빙 스트리밍)
+[Phase 5: Deprioritized Niche Protocol] (실익 빈약으로 최후순위 유예)
+  └── 10. TDS-COMPAT-6 (TDS MARS 인터리빙 스트리밍)
 ```
 
 ---

@@ -86,6 +86,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 11. **Total Bytecode Translation for Complex Queries (`ARCH-2TIER-1`)**: Complex relational algebra (joins, window functions, CTEs) routes to the Volcano CBO engine (Tier 2); simple OLTP routes to VDBE bytecode (Tier 1).
 12. **Pure Columnar Vectorization Engine Full Rewrite**: Avoids extreme code complexity and row-store I/O physical limits; standardizes on 1,024-row chunk streaming (`ChunkedIterator`) and zero-unboxing slot optimizations.
 13. **MySQL-Specific DML & Legacy Tabular EXPLAIN Extensions (`ON DUPLICATE KEY UPDATE`, Comma `LIMIT offset, count`, 8-Column Tabular `EXPLAIN`) (`S-MYSQL-1-P2-P3`)**: Permanently excluded. PostgreSQL `ON CONFLICT DO UPDATE` and standard ANSI/MSSQL `MERGE` are already complete; adding MySQL DML splits OCC/MVCC conflict handling into 3 divergent paths and introduces parser grammar ambiguities. Flat 8-column tabular `EXPLAIN` flattens and destroys modern hierarchical Volcano CBO plan trees (which even MySQL 8.0 deprecated in favor of `FORMAT=TREE`) and breaks PostgreSQL GUI visualizers. LionSQL standardizes exclusively on modern indented tree text and JSON plan representations, keeping MySQL syntax support strictly at Phase 1 ergonomics (`DESC`, `SHOW TABLES`, backticks).
+14. **In-Memory Varint/Bit-Packing Record Compression (Option B in `OCC-HYPER-2`)**: Permanently excluded. Bit-level variable-width compression acts like CPU-heavy zip compression, requiring sequential decoding loops (25~50ns) on every single column access and destroying the 0.5ns sub-nanosecond $O(1)$ read performance of the in-memory engine. LionSQL exclusively adopts Option A (Pointer-Free Flat Record) for zero GC overhead and instant fixed-offset reads.
 
 ---
 
@@ -124,8 +125,11 @@ When releasing or bumping versions, synchronize all four locations in lockstep:
 3. `README.md` and `README.ko.md`
 4. `TODO.md`
 
-### Continuous Backlog Discipline (`TODO.md` Auto-Sync)
-When new requirements, ADRs, or implementation plans are agreed upon in conversation, proactively register them in `TODO.md` (Section 1 Priority Table and Section 2 Domain Backlog). Upon verification pass, immediately mark completed (`[x]`).
+### Continuous Backlog Discipline (`TODO.md` & Sprint DB Dual-Sync)
+When new requirements, ADRs, or implementation plans are agreed upon in conversation, **never retain them solely in ephemeral memory or markdown notes**.
+1. **Mandatory DB Registration**: Proactively register every new task into the LionSQL sprint database via `./bin/sprint add <ID> "<TITLE>" <DOMAIN> <PRIO> [PLAN_DOC]`, which automatically syncs to [`TASKS.md`](TASKS.md).
+2. **Dashboard Synchronization**: Synchronize active tasks and candidates into [`TODO.md`](TODO.md) under explicit taxonomy IDs.
+3. **Completion Lifecycle**: Upon 3-stage verification pass, update the status via `./bin/sprint set <ID> DONE` and mark completed (`[x]`) in `TODO.md`.
 
 ### Documentation Naming & Language Suffix Invariance (`*.ko.md`)
 - **Korean Markdown Files**: Any markdown document with Korean body text must strictly use the **`*.ko.md`** extension (e.g. `notes/*_PLAN.ko.md`, `doc/*_GUIDE.ko.md`, `README.ko.md`).
