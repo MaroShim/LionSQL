@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - formalize dual-sync invariant between TODO dashboard and persistent sprint tasks database
 
 ### Changed
+- refactor virtual catalog interceptor to table-driven static route table, eliminating sequential IF-chain order sensitivity (`REFACTOR-CATALOG-INTERCEPTOR-1`)
 - format `TASKS.md` table sorted strictly by `id ASC` to eliminate git diff churn on status transitions
 - refactor TPC-C benchmark execution to run multi-statement procedures in single atomic transactions via `RunInTx` (5a285f1)
 

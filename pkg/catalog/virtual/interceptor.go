@@ -183,153 +183,286 @@ func IsVirtualCatalogJoinQuery(sql string) bool {
 	return false
 }
 
+// RouteRule defines a single table-driven dispatch entry for virtual catalog queries.
+type RouteRule struct {
+	Name    string
+	Match   func(upper string, qc *proc.QueryCharacteristics) bool
+	Handler func(src Source, sql string) (*Result, error)
+}
+
+// catalogRouteTable is the authoritative, static dispatch table for virtual catalog queries.
+// Rules are evaluated with deterministic priority: most specific compound signatures first,
+// general fallbacks last.
+var catalogRouteTable = []RouteRule{
+	// --- Microsoft SQL Server (sys.* / INFORMATION_SCHEMA) ---
+	{
+		Name: "MSSQL_SysAllObjects",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.ALL_OBJECTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "EXTENDED_PROPERTIES"))
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysAllObjectsJoined(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_FnHelpCollations",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "FN_HELPCOLLATIONS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execFnHelpCollations(sql)
+		},
+	},
+	{
+		Name: "MSSQL_XORMGetIndexes",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			fromCols := strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS")
+			return !fromCols && strings.Contains(upper, "SYS.INDEXES") && strings.Contains(upper, "SYS.INDEX_COLUMNS") && strings.Contains(upper, "SYS.COLUMNS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execXORMIndexes(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_SysIndexesPrimary",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			fromCols := strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS")
+			return !fromCols && strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "1")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysIndexesPrimaryKey(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_SysIndexesSecondary",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			fromCols := strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS")
+			return !fromCols && strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "0")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysIndexesSecondary(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_SysIndexColumns",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			fromCols := strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS")
+			return !fromCols && strings.Contains(upper, "SYS.INDEX_COLUMNS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysIndexColumns(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_ColumnComments",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "COLUMNCOMMENT") && strings.Contains(upper, "SYS.COLUMNS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysColumnsExtendedPropertyComment(sql)
+		},
+	},
+	{
+		Name: "MSSQL_ColumnsJoinedWithTypes",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "SYS.TYPES") || strings.Contains(upper, "ISIDENTITY") || strings.Contains(upper, "IS_IDENTITY") || strings.Contains(upper, "DATATYPE") || strings.Contains(upper, "MAX_LENGTH"))
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysColumnsJoinedWithTypes(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_InfoSchemaColumnsComputed",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "INFORMATION_SCHEMA.COLUMNS") && strings.Contains(upper, "SYS.COMPUTED_COLUMNS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execInformationSchemaColumnsWithComputed(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_ReferentialConstraints",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execReferentialConstraintsForeignKey(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_TableRowCount",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "TABLEROWCOUNT") || (strings.Contains(upper, "SYS.TABLES") && strings.Contains(upper, "SYS.PARTITIONS"))
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysTablesRowCount(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_Parameters",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.PARAMETERS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysParameters(sql)
+		},
+	},
+	{
+		Name: "MSSQL_Triggers",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "TRIGGERNAME") || (strings.Contains(upper, "SYS.OBJECTS") && containsEq(upper, "TYPE", "'TR'"))
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysObjectsTriggers(sql)
+		},
+	},
+	{
+		Name: "MSSQL_CommentsSqlCode",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.SYSCOMMENTS") || strings.Contains(upper, "SYS.SQL_MODULES") || (strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "CODETEXT") || strings.Contains(upper, "DEFINITION")))
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysCommentsSqlCode(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_Programmables",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SQLOBJECTTYPE") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "('P', 'IF', 'FN', 'TF')"))
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysObjectsProgrammables(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_Views",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "SYS.SCHEMAS") && containsEq(upper, "TYPE", "'V'")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysObjectsViews(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_TablesMetadata",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.TABLES") && (strings.Contains(upper, "SYS.SCHEMAS") || strings.Contains(upper, "PURENAME") || strings.Contains(upper, "OBJECTCOMMENT"))
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysTablesMetadata(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_ObjectsMetadata",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "SYS.SCHEMAS") || strings.Contains(upper, "PURENAME"))
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysObjectsMetadata(src, sql)
+		},
+	},
+
+	// --- PostgreSQL (pg_* / INFORMATION_SCHEMA) ---
+	{
+		Name: "PG_InfoSchemaTablesPersistence",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "INFORMATION_SCHEMA.TABLES") && strings.Contains(upper, "PG_CLASS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execInformationSchemaTablesWithPersistenceSelect(src, sql)
+		},
+	},
+	{
+		Name: "PG_ForeignKeys",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "PG_CONSTRAINT") && (strings.Contains(upper, "SRC_TBL") || containsEq(upper, "CONTYPE", "'F'") || strings.Contains(upper, "REF_TABLE"))
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execForeignKeySelect(src, sql)
+		},
+	},
+	{
+		Name: "PG_ConstraintsPrimary",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "PG_CONSTRAINT") && !strings.Contains(upper, "PG_ATTRIBUTE")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execPgConstraintPrimaryKeySelect(src, sql)
+		},
+	},
+	{
+		Name: "PG_Indexes",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "PG_INDEX")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execPgIndexSelect(src, sql)
+		},
+	},
+	{
+		Name: "PG_Triggers",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "PG_TRIGGER")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execPgTriggerSelect(src, sql)
+		},
+	},
+	{
+		Name: "PG_ProceduresFunctions",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "PG_PROC") && strings.Contains(upper, "PG_NAMESPACE")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execProcSelect(src, sql)
+		},
+	},
+	{
+		Name: "PG_ShDescription",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "PG_SHDESCRIPTION")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execPgShdescriptionSelect(sql)
+		},
+	},
+	{
+		Name: "PG_Conversion",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "PG_CONVERSION")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execPgConversionSelect(sql)
+		},
+	},
+	{
+		Name: "PG_ColumnMetadataAttribute",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "PG_ATTRIBUTE")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execColumnMetadataSelect(src, sql)
+		},
+	},
+}
+
 // Execute routes and executes an intercepted virtual catalog join query against the provided Source.
 func Execute(src Source, sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
 	upper = strings.ReplaceAll(strings.ReplaceAll(upper, "[", ""), "]", "")
 
-	fromColumns := strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS")
-
-	// 1. SQL Server Primary Keys
-	if !fromColumns && strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "1") {
-		return execSysIndexesPrimaryKey(src, sql)
+	var qc *proc.QueryCharacteristics
+	if strings.Contains(upper, "FROM") || strings.Contains(upper, "JOIN") {
+		characteristics := proc.ExtractQueryCharacteristics(sql)
+		qc = &characteristics
 	}
 
-	// 2. SQL Server Secondary Indexes
-	if !fromColumns && strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "0") {
-		return execSysIndexesSecondary(src, sql)
-	}
-
-	// 2.5. SQL Server XORM GetIndexes (sys.indexes + sys.index_columns + sys.columns)
-	if !fromColumns && strings.Contains(upper, "SYS.INDEXES") && strings.Contains(upper, "SYS.INDEX_COLUMNS") && strings.Contains(upper, "SYS.COLUMNS") {
-		return execXORMIndexes(src, sql)
-	}
-
-	// 3. SQL Server Index Columns
-	if !fromColumns && strings.Contains(upper, "SYS.INDEX_COLUMNS") {
-		return execSysIndexColumns(src, sql)
-	}
-
-	// 4. SQL Server Columns joined with types
-	if strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "SYS.TYPES") || strings.Contains(upper, "ISIDENTITY") || strings.Contains(upper, "IS_IDENTITY") || strings.Contains(upper, "DATATYPE") || strings.Contains(upper, "MAX_LENGTH")) {
-		return execSysColumnsJoinedWithTypes(src, sql)
-	}
-
-	// 5. SQL Server Column comments (MS_Description)
-	if strings.Contains(upper, "COLUMNCOMMENT") && strings.Contains(upper, "SYS.COLUMNS") {
-		return execSysColumnsExtendedPropertyComment(sql)
-	}
-
-	// 6. SQL Server Information Schema columns with computed columns
-	if strings.Contains(upper, "INFORMATION_SCHEMA.COLUMNS") && strings.Contains(upper, "SYS.COMPUTED_COLUMNS") {
-		return execInformationSchemaColumnsWithComputed(src, sql)
-	}
-
-	// 7. SQL Server Referential Constraints (Foreign Keys)
-	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") {
-		return execReferentialConstraintsForeignKey(src, sql)
-	}
-
-	// 8. SQL Server Table row count & size
-	if strings.Contains(upper, "TABLEROWCOUNT") || (strings.Contains(upper, "SYS.TABLES") && strings.Contains(upper, "SYS.PARTITIONS")) {
-		return execSysTablesRowCount(src, sql)
-	}
-
-	// 9. SQL Server Parameters
-	if strings.Contains(upper, "SYS.PARAMETERS") {
-		return execSysParameters(sql)
-	}
-
-	// 10. SQL Server Triggers
-	if strings.Contains(upper, "TRIGGERNAME") || (strings.Contains(upper, "SYS.OBJECTS") && containsEq(upper, "TYPE", "'TR'")) {
-		return execSysObjectsTriggers(sql)
-	}
-
-	// 11. SQL Server SQL Code (syscomments / sys.sql_modules)
-	if strings.Contains(upper, "SYS.SYSCOMMENTS") || strings.Contains(upper, "SYS.SQL_MODULES") || (strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "CODETEXT") || strings.Contains(upper, "DEFINITION"))) {
-		return execSysCommentsSqlCode(src, sql)
-	}
-
-	// 12. SQL Server Programmables (procedures, functions)
-	if strings.Contains(upper, "SQLOBJECTTYPE") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "('P', 'IF', 'FN', 'TF')")) {
-		return execSysObjectsProgrammables(src, sql)
-	}
-
-	// 13. SQL Server Views
-	if strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "SYS.SCHEMAS") && containsEq(upper, "TYPE", "'V'") {
-		return execSysObjectsViews(src, sql)
-	}
-
-	// 14. SQL Server Tables metadata
-	if strings.Contains(upper, "SYS.TABLES") && (strings.Contains(upper, "SYS.SCHEMAS") || strings.Contains(upper, "PURENAME") || strings.Contains(upper, "OBJECTCOMMENT")) {
-		return execSysTablesMetadata(src, sql)
-	}
-
-	// 15. SQL Server Master Object metadata
-	if strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "SYS.SCHEMAS") || strings.Contains(upper, "PURENAME")) {
-		return execSysObjectsMetadata(src, sql)
-	}
-
-	// 15.5. SQL Server Collation List: fn_helpcollations()
-	if strings.Contains(upper, "FN_HELPCOLLATIONS") {
-		return execFnHelpCollations(sql)
-	}
-
-	// 16. PostgreSQL Information Schema tables with persistence
-	if strings.Contains(upper, "INFORMATION_SCHEMA.TABLES") && strings.Contains(upper, "PG_CLASS") {
-		return execInformationSchemaTablesWithPersistenceSelect(src, sql)
-	}
-
-	// 17. PostgreSQL Constraints: Foreign keys, Primary keys, Unique constraints
-	if strings.Contains(upper, "PG_CONSTRAINT") {
-		if strings.Contains(upper, "SRC_TBL") || containsEq(upper, "CONTYPE", "'F'") || strings.Contains(upper, "REF_TABLE") {
-			return execForeignKeySelect(src, sql)
-		}
-		if !strings.Contains(upper, "PG_ATTRIBUTE") {
-			return execPgConstraintPrimaryKeySelect(src, sql)
+	for _, rule := range catalogRouteTable {
+		if rule.Match(upper, qc) {
+			return rule.Handler(src, sql)
 		}
 	}
 
-	// 18. PostgreSQL Column metadata query: pg_attribute
-	if strings.Contains(upper, "PG_ATTRIBUTE") {
-		return execColumnMetadataSelect(src, sql)
-	}
-
-	// 18. PostgreSQL Indexes
-	if strings.Contains(upper, "PG_INDEX") {
-		return execPgIndexSelect(src, sql)
-	}
-
-	// 19. PostgreSQL Triggers
-	if strings.Contains(upper, "PG_TRIGGER") {
-		return execPgTriggerSelect(src, sql)
-	}
-
-	// 20. PostgreSQL Column metadata query: pg_attribute + pg_class
-	if strings.Contains(upper, "PG_ATTRIBUTE") && strings.Contains(upper, "PG_CLASS") {
-		return execColumnMetadataSelect(src, sql)
-	}
-
-	// 21. PostgreSQL Procedure / Function metadata query
-	if strings.Contains(upper, "PG_PROC") && strings.Contains(upper, "PG_NAMESPACE") {
-		return execProcSelect(src, sql)
-	}
-
-	// 22. PostgreSQL pg_shdescription queries
-	if strings.Contains(upper, "PG_SHDESCRIPTION") {
-		return execPgShdescriptionSelect(sql)
-	}
-
-	// 23. PostgreSQL pg_conversion query
-	if strings.Contains(upper, "PG_CONVERSION") {
-		return execPgConversionSelect(sql)
-	}
-
-	// 24. SQL Server sys.all_objects query
-	if strings.Contains(upper, "SYS.ALL_OBJECTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "EXTENDED_PROPERTIES")) {
-		return execSysAllObjectsJoined(src, sql)
-	}
-
-	// 25. PostgreSQL Class + Namespace: Tables and Views
+	// Default fallback: PostgreSQL Class + Namespace: Tables and Views
 	return execClassSelect(src, sql)
 }

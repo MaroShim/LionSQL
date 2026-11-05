@@ -177,7 +177,7 @@
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
 | `DONE` | **`PLANNER-SLIM-1`** | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
-| `PENDING` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
+| `DONE` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `PENDING` | **`REPL-STREAM-BIN-1`** | Replication | P2 | Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 |  |  |
 | `DONE` | **`ROUTING-AST-CATALOG-1`** | Durability | P2 | 심볼 테이블 & AST 기반 쿼리 라우팅 리팩토링 | [`notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`S3-1`** | Cloud | P2 | 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기 | [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md) |  |
@@ -2250,7 +2250,12 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Table-Driven Virtual Catalog Interceptor Refactoring `REFACTOR-CATALOG-INTERCEPTOR-1`
+### [DONE] Table-Driven Virtual Catalog Interceptor Refactoring `REFACTOR-CATALOG-INTERCEPTOR-1`
+- **Domain**: REFACTOR
+- **Priority**: P2
+- **Status**: DONE
+- **Plan**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
+- **Description**: Replaced 330-line sequential IF chain in interceptor.go with RouteRule static dispatch table, eliminating order-sensitivity and preventing catalog misrouting.
 - **Domain**: REFACTOR | **Priority**: P2 | **Updated**: 2026-11-05T13:39:47.991456+09:00
 - **Plan Doc**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
 
