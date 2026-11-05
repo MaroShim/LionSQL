@@ -7,7 +7,7 @@
 >
 > **Core Architecture & Knowledge Base**:
 > - Full Task & Bug Archive Mirror: [`TASKS.md`](TASKS.md)
-> - Defect Resolution Archive (107 cases): [`BUG_ARCHIVE.ko.md`](BUG_ARCHIVE.ko.md)
+> - Defect Resolution Archive (107 cases): [`notes/archive/BUG_ARCHIVE.ko.md`](notes/archive/BUG_ARCHIVE.ko.md)
 > - Core Invariants & Engineering Context: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 > - Strategic Roadmap: [`ROADMAP.md`](ROADMAP.md)
 > - Post-1.0 Candidates Matrix: [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md)
@@ -18,7 +18,7 @@
 
 LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **신뢰성 검증 게이트**입니다.
 
-### 1.1 1.0 핵심 구현 트리오 (Core 1.0 Features)
+### 1.1 1.0 핵심 구현 및 호환성 리팩토링 (Core 1.0 Features & Clean-up)
 1. **`OCC-HYPER-2`: In-Memory OCC Pointer-Free Flat Record (4~5배 메모리 압축 & 프로덕션 디폴트 승격)**
    - **목표**: Go GC 힙 포인터 100% 제거, 8B 캐시 정렬, NULL 비트맵, SSO 5대 튜닝 적용으로 24/7 P99 무지터 보장
    - **안전장치**: 기존 튜플 구조는 `--occ-mode=raw` 벤치마크 플래그로 분리 보존하여 회귀 위험 0화
@@ -30,6 +30,12 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 3. **`PKG-OFFLINE-DOCS`: 배포 패키지 오프라인 브라우저 문서 번들링**
    - **목표**: 배포 아카이브(`tar.gz`/`zip`) 내 `docs/index.html` 번들링으로 폐쇄망/에어갭 100% 자립 지원
    - **설계 문서**: [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
+4. **`FEAT-TOLERANT-DDL-1`: 서버 측 관용 DDL 부트스트랩 모드 (`--tolerant-ddl`) & 땜질 DDL 일괄 정리**
+   - **목표**: 기본 엄격 모드(`strict`) 유지 + `--tolerant-ddl` 활성화 시 부트스트랩 DDL 예외를 무음 통과시켜 `sqlexec_ddl.go` 곳곳의 분산 땜질 코드를 전면 일원화/삭제(`Deletion-First`).
+   - **설계 문서**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
+5. **`REFACTOR-CATALOG-INTERCEPTOR-1`: 가상 카탈로그 `interceptor.go` Table-Driven 라우터 전환**
+   - **목표**: 330여 줄의 순서 의존적 ad-hoc IF 체인을 정적 룩업 테이블로 전면 개편하여 Directus/NocoDB 쿼리 라우팅 정합성 확보.
+   - **설계 문서**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
 
 ### 1.2 1.0 신뢰성 검증 게이트 (Release Gates)
 1. **`DURA-KILL-1`: `kill -9` 크래시 복구 장기 라운드 검증**

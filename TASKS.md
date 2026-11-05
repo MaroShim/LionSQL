@@ -144,6 +144,7 @@
 | `IN_PROGRESS` | **`DURA-SOAK-1`** | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
 | `PENDING` | **`FEAT-MATVIEW-ALIAS-1`** | FEAT | P2 | Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) | [`notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TIMESERIES-LSM-1`** | FEAT | P2 | LSM Time-Series Chunk Storage & time_bucket | [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-TOLERANT-DDL-1`** | FEAT | P2 | Server-side Tolerant DDL Bootstrap Mode (--tolerant-ddl) | [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-VECTOR-1`** | FEAT | P2 | Pure-Go Vector Search Engine (pgvector compat) | [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `PENDING` | **`FRIENDLY-SQL`** | Ecosystem | P3 | DuckDB-Style Friendly SQL 문법 지원 | [`notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md) |  |
 | `PENDING` | **`GA-VALID-3`** | Ecosystem | P2 | 연동 앱 섀도 모드 실운영 도그푸딩 (Vaultwarden, Umami, Answer 등) |  |  |
@@ -176,6 +177,7 @@
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
 | `DONE` | **`PLANNER-SLIM-1`** | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
+| `PENDING` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `PENDING` | **`REPL-STREAM-BIN-1`** | Replication | P2 | Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 |  |  |
 | `DONE` | **`ROUTING-AST-CATALOG-1`** | Durability | P2 | 심볼 테이블 & AST 기반 쿼리 라우팅 리팩토링 | [`notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`S3-1`** | Cloud | P2 | 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기 | [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md) |  |
@@ -1857,6 +1859,12 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] Server-side Tolerant DDL Bootstrap Mode (--tolerant-ddl) `FEAT-TOLERANT-DDL-1`
+- **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-05T13:39:47.918898+09:00
+- **Plan Doc**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
+
+---
+
 ### [PENDING] Pure-Go Vector Search Engine (pgvector compat) `FEAT-VECTOR-1`
 - **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-05T12:33:06.401527+09:00
 - **Plan Doc**: [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)
@@ -1894,14 +1902,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] Ghost (블로그/출판 플랫폼) Fast-Fail 호환성 탐색 `INTEG-GHOST-1`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-05 13:33:00 KST
-
-**Details & Resolution**:
-- 스택: Node.js + Bookshelf/Knex
-- 10분 타임박스 프로브 완료:
-  - Ghost v5.x 최신 공식 도커 배포판(`ghost:5-alpine`) 검사 결과, 데이터베이스 클라이언트로 `mysql2`와 `sqlite3` 2종만 지원하고 `pg` 패키지는 컨테이너 번들링에서 완전히 제거됨(`MODULE_NOT_FOUND`) 확인.
-  - LionSQL은 PostgreSQL v3(PGWire) 및 MS SQL Server(TDS) 전문 엔진이며, MySQL 네이티브 바이너리 와이어 리스너는 아키텍처 불변식에 따라 스펙아웃(`Spec-Out`) 상태임.
-  - Ghost 연동은 SQLite 파일 마운트 또는 사설 빌드 커스텀 드라이버 환경으로 한정되므로, 1.0 LTS 코어 스코프에서 `PENDING`으로 보존.
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-05 13:33:10.043676 +0900 KST m=+60095.570109876
 
 ---
 
@@ -2241,6 +2242,12 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 **Details & Resolution**:
 - 상세 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
+
+---
+
+### [PENDING] Table-Driven Virtual Catalog Interceptor Refactoring `REFACTOR-CATALOG-INTERCEPTOR-1`
+- **Domain**: REFACTOR | **Priority**: P2 | **Updated**: 2026-11-05T13:39:47.991456+09:00
+- **Plan Doc**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
 
 ---
 

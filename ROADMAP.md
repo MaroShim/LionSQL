@@ -88,7 +88,7 @@ Driver Cert   & Zero-Race   Crash Recovery    Conformance   Security      Ops & 
      - Gitea (Git & Code Hosting), Woodpecker CI (CI/CD Pipelines)
      - Vaultwarden (Secret & Password Management), Casdoor (SSO & IAM)
      - Apache Answer (Q&A Knowledge Base), AFFiNE (Notion/Doc Workspace), Vikunja (Kanban & Task Management)
-     - Ghost (Headless CMS & Publishing), Metabase (BI & Analytics, Dual-Protocol), Umami (Web Analytics)
+     - Ghost (Headless CMS & Publishing, Spec-Out in v5 due to pg removal), Metabase (BI & Analytics, Dual-Protocol), Umami (Web Analytics)
    - Covering XORM, Diesel ORM, Prisma, Knex, and official JDBC drivers.
 5. **Gate 5: Enterprise Security & Object Governance (100% PASS)**:
    - TDE Transparent Data Encryption, SQL object-level RBAC (`GRANT`/`REVOKE`/`DENY`), HTTP JWT/API-Key RBAC, and general/slow query logging.
