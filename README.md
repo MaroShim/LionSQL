@@ -405,6 +405,8 @@ LionSQL provides a modern, unified CLI with first-class lifecycle commands:
 ./bin/lionsql doctor            # Verify environment, ports, and permissions
 ./bin/lionsql init-config       # Generate default lionsql.json configuration file
 ./bin/lionsql sql "SELECT 1"    # Quick interactive query execution
+./bin/lionsql get [key]         # Query runtime configuration parameter(s) from running instance
+./bin/lionsql set <key> <val>   # Dynamically update configuration (sudo-style password verification)
 ```
 
 ### Declarative Schema Migrations CLI (`lionsql migrate`)

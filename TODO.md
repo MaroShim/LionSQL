@@ -30,8 +30,8 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 3. **`PKG-OFFLINE-DOCS`: 배포 패키지 오프라인 브라우저 문서 번들링**
    - **목표**: 배포 아카이브(`tar.gz`/`zip`) 내 `docs/index.html` 번들링으로 폐쇄망/에어갭 100% 자립 지원
    - **설계 문서**: [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
-4. **`FEAT-TOLERANT-DDL-1`: 서버 측 관용 DDL 부트스트랩 모드 (`--tolerant-ddl`) & 땜질 DDL 일괄 정리**
-   - **목표**: 기본 엄격 모드(`strict`) 유지 + `--tolerant-ddl` 활성화 시 부트스트랩 DDL 예외를 무음 통과시켜 `sqlexec_ddl.go` 곳곳의 분산 땜질 코드를 전면 일원화/삭제(`Deletion-First`).
+4. **`FEAT-TOLERANT-DDL-1`: 서버 측 관용 DDL 부트스트랩 모드 (`--tolerant-ddl`) & sudo 스타일 런타임 제어 CLI (`get` & `set`)** [x]
+   - **완료 내용**: 기본 엄격 모드(`strict`) 유지 + `--tolerant-ddl` 및 `LIONSQL_TOLERANT_DDL` 지원. `lionsql get` 및 `lionsql set` 인터랙티브 인증 제어 CLI 탑재, 분산 DDL 땜질 코드 단일 파이프라인 일원화 완료.
    - **설계 문서**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
 5. **`REFACTOR-CATALOG-INTERCEPTOR-1`: 가상 카탈로그 `interceptor.go` Table-Driven 라우터 전환**
    - **목표**: 330여 줄의 순서 의존적 ad-hoc IF 체인을 정적 룩업 테이블로 전면 개편하여 Directus/NocoDB 쿼리 라우팅 정합성 확보.

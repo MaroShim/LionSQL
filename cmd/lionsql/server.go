@@ -110,6 +110,7 @@ func runServer(args []string) error {
 	outboxKafka := fs.String("outbox-kafka", "", "Kafka REST Proxy endpoint (e.g. http://localhost:8082)")
 	outboxRabbitMQ := fs.String("outbox-rabbitmq", "", "RabbitMQ Management API endpoint (e.g. http://localhost:15672)")
 	enableLegacyRegexPlanner := fs.Bool("enable-legacy-regex-planner", false, "Enable legacy regex-based SELECT planner fallback (default: false, pure AST mode)")
+	tolerantDDLFlag := fs.Bool("tolerant-ddl", false, "Enable tolerant DDL bootstrap mode (skips non-existent drops and duplicate creates during migrations)")
 
 	// Daemon control flags
 	var daemon bool
@@ -179,6 +180,9 @@ func runServer(args []string) error {
 	}
 	if visited["seed"] {
 		cfg.Server.AutoSeed = *autoSeed
+	}
+	if visited["tolerant-ddl"] {
+		cfg.Server.TolerantDDL = *tolerantDDLFlag
 	}
 	if visited["admin-email"] {
 		cfg.Auth.AdminEmail = *adminEmail
@@ -554,6 +558,9 @@ func runServer(args []string) error {
 	_, _ = authSvc.EnsureDefaultSuperuser(cfg.Auth.AdminEmail, cfg.Auth.AdminPass)
 
 	server := api.NewServerWithAuth(cat, eng, authSvc, cfg.Auth.Enabled)
+	if cfg.Server.TolerantDDL {
+		server.SetTolerantDDL(true)
+	}
 	if cfg.Resources.MaxWorkers > 0 || cfg.Resources.MaxIdleSessions > 0 {
 		poolCfg := api.DefaultPoolConfig()
 		if cfg.Resources.MaxWorkers > 0 {

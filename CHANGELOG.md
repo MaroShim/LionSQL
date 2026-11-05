@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- implement Tolerant DDL Bootstrap Mode (`--tolerant-ddl`) and `LIONSQL_TOLERANT_DDL` environment variable (`FEAT-TOLERANT-DDL-1`)
+- implement `lionsql get` and `lionsql set` CLI commands for dynamic runtime configuration control with sudo-style terminal password verification
+- unify ad-hoc duplicate table, index, column, constraint, and storage parameter DDL handling into single tolerant mode pipeline
 - add Materialized View Virtual Alias & Tolerant Refresh architecture plan for enterprise apps (`FEAT-MATVIEW-ALIAS-1`)
 - add pure-Go Vector Search (`FEAT-VECTOR-1`) and LSM Time-Series storage (`FEAT-TIMESERIES-LSM-1`) architecture plans for post-1.0
 - support `server_version_num` (150000) in `SHOW` dispatcher and current_setting for Go/Mattermost driver compatibility

@@ -403,6 +403,8 @@ LionSQL은 일급 라이프사이클 서브커맨드를 지원하는 현대적 �
 ./bin/lionsql doctor            # 환경, 네트워크 포트, 디렉터리 권한 사전 진단
 ./bin/lionsql init-config       # 기본 lionsql.json 설정 템플릿 생성
 ./bin/lionsql sql "SELECT 1"    # 빠른 대화형 원라인 쿼리 실행
+./bin/lionsql get [key]         # 실행 중인 인스턴스의 런타임 설정 파라미터 조회
+./bin/lionsql set <key> <val>   # 실행 중인 인스턴스의 설정 동적 변경 (sudo 스타일 암호 인증)
 ```
 
 ### 스키마 마이그레이션 CLI (`lionsql migrate`)

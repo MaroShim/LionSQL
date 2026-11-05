@@ -616,6 +616,15 @@ Checking LionSQL Environment & Storage Integrity...
 [OK] Catalog schema integrity: PASSED
 [OK] WAL LSN continuity check: PASSED
 Overall Result: HEALTHY (0 errors, 0 warnings)
+
+# 6. Zero-Downtime Dynamic Configuration Control (get & set)
+$ lionsql get
+KEY            VALUE   TYPE   DESCRIPTION
+tolerant_ddl   false   bool   Tolerant DDL bootstrap mode (skips non-existent drops, duplicate creates)
+
+$ lionsql set tolerant_ddl on
+[sudo] Password for admin@lionsql.local: ********
+OK: tolerant_ddl set to true (in-memory volatile)
 ```
 
 ---

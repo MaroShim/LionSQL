@@ -336,7 +336,7 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 	}
 
 	if err := s.engine.CreateTable(schema); err != nil {
-		if sqlutil.ContainsKeyword(query, "IF NOT EXISTS", false) && errors.Is(err, storage.ErrTableExists) {
+		if (sqlutil.ContainsKeyword(query, "IF NOT EXISTS", false) || s.TolerantDDL()) && errors.Is(err, storage.ErrTableExists) {
 			return &QueryResult{
 				Success:    true,
 				Command:    "CREATE TABLE",
@@ -387,7 +387,7 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 
 	tableName := cleanIdentifier(tokens[0])
 	if err := s.engine.DropTable(tableName); err != nil {
-		if sqlutil.ContainsKeyword(query, "IF EXISTS", false) && errors.Is(err, storage.ErrTableNotFound) {
+		if (sqlutil.ContainsKeyword(query, "IF EXISTS", false) || s.TolerantDDL()) && errors.Is(err, storage.ErrTableNotFound) {
 			return &QueryResult{
 				Success:    true,
 				Command:    "DROP TABLE",
@@ -670,7 +670,7 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 			ExprPath:    stmt.ExprPath,
 		}
 		if err := s.engine.CreateIndex(idxSchema); err != nil {
-			if stmt.IfNotExists || strings.Contains(strings.ToLower(err.Error()), "already exists") {
+			if stmt.IfNotExists || (s.TolerantDDL() && strings.Contains(strings.ToLower(err.Error()), "already exists")) {
 				return &QueryResult{
 					Success:    true,
 					Command:    "CREATE INDEX",
@@ -732,7 +732,7 @@ func (s *Coordinator) execDropIndex(query string, start time.Time) (*QueryResult
 			}
 		}
 		if tableName == "" {
-			if ifExists {
+			if ifExists || s.TolerantDDL() {
 				return &QueryResult{
 					Success:    true,
 					Command:    "DROP INDEX",
@@ -745,7 +745,7 @@ func (s *Coordinator) execDropIndex(query string, start time.Time) (*QueryResult
 	}
 
 	if err := s.engine.DropIndex(tableName, indexName); err != nil {
-		if ifExists {
+		if ifExists || s.TolerantDDL() {
 			return &QueryResult{
 				Success:    true,
 				Command:    "DROP INDEX",
@@ -1618,9 +1618,13 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		}
 	}
 
-	// 7. ALTER TABLE <table> DROP CONSTRAINT [IF EXISTS] <name>
-	if sqlutil.HasPrefixKeyword(body, "DROP CONSTRAINT") {
-		rest := strings.TrimSpace(body[len("DROP CONSTRAINT"):])
+	// 7. ALTER TABLE <table> (DROP CONSTRAINT | DROP FOREIGN KEY) [IF EXISTS] <name>
+	if sqlutil.HasPrefixKeyword(body, "DROP CONSTRAINT") || sqlutil.HasPrefixKeyword(body, "DROP FOREIGN KEY") {
+		prefixLen := len("DROP CONSTRAINT")
+		if sqlutil.HasPrefixKeyword(body, "DROP FOREIGN KEY") {
+			prefixLen = len("DROP FOREIGN KEY")
+		}
+		rest := strings.TrimSpace(body[prefixLen:])
 		if sqlutil.HasPrefixKeyword(rest, "IF EXISTS") {
 			rest = strings.TrimSpace(rest[len("IF EXISTS"):])
 		}
@@ -1945,7 +1949,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			}
 
 			if err := s.engine.AddColumn(tableName, col); err != nil {
-				if ifNotExists && strings.Contains(strings.ToLower(err.Error()), "already exists") {
+				if (ifNotExists || s.TolerantDDL()) && strings.Contains(strings.ToLower(err.Error()), "already exists") {
 					continue
 				}
 				return nil, err

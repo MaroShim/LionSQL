@@ -555,6 +555,78 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ConfigItem represents a runtime controllable configuration entry.
+type ConfigItem struct {
+	Key         string `json:"key"`
+	Value       any    `json:"value"`
+	Type        string `json:"type"`
+	Description string `json:"description"`
+}
+
+func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
+	key := strings.TrimSpace(r.URL.Query().Get("key"))
+
+	items := []ConfigItem{
+		{
+			Key:         "tolerant_ddl",
+			Value:       s.TolerantDDL(),
+			Type:        "bool",
+			Description: "Tolerant DDL bootstrap mode (skips non-existent drops, duplicate creates)",
+		},
+	}
+
+	if key != "" {
+		for _, it := range items {
+			if strings.EqualFold(it.Key, key) {
+				writeJSON(w, http.StatusOK, it)
+				return
+			}
+		}
+		writeError(w, http.StatusNotFound, fmt.Errorf("unknown config key: %q", key))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"configs": items,
+	})
+}
+
+func (s *Server) handleSetConfig(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Key   string `json:"key"`
+		Value any    `json:"value"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid json payload: %w", err))
+		return
+	}
+
+	key := strings.ToLower(strings.TrimSpace(req.Key))
+	switch key {
+	case "tolerant_ddl":
+		valStr := fmt.Sprintf("%v", req.Value)
+		valLower := strings.ToLower(strings.TrimSpace(valStr))
+		var enabled bool
+		switch valLower {
+		case "1", "true", "yes", "on":
+			enabled = true
+		case "0", "false", "no", "off":
+			enabled = false
+		default:
+			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid boolean value %q for tolerant_ddl (use on/off or true/false)", valStr))
+			return
+		}
+		s.SetTolerantDDL(enabled)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"success": true,
+			"key":     "tolerant_ddl",
+			"value":   enabled,
+		})
+	default:
+		writeError(w, http.StatusNotFound, fmt.Errorf("unknown or read-only config key: %q", req.Key))
+	}
+}
+
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

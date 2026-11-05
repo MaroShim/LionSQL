@@ -145,6 +145,22 @@ func (s *Server) DefaultWorkMem() int64 {
 	return s.coordinator.DefaultWorkMem()
 }
 
+// TolerantDDL returns whether tolerant DDL mode is active on the underlying coordinator.
+func (s *Server) TolerantDDL() bool {
+	if s.coordinator != nil {
+		return s.coordinator.TolerantDDL()
+	}
+	return false
+}
+
+// SetTolerantDDL atomically toggles tolerant DDL mode on the underlying coordinator.
+func (s *Server) SetTolerantDDL(enabled bool) {
+	if s.coordinator != nil {
+		s.coordinator.SetTolerantDDL(enabled)
+	}
+}
+
+
 func (s *Server) newPlanner() *planner.Planner {
 	p := planner.NewPlanner()
 	p.PartitionGetter = func(table string) []string {
@@ -499,6 +515,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/keys", s.wrapSuperuser(s.handleListAPIKeys))
 	s.mux.HandleFunc("POST /api/keys", s.wrapSuperuser(s.handleCreateAPIKey))
 	s.mux.HandleFunc("DELETE /api/keys/{id}", s.wrapSuperuser(s.handleRevokeAPIKey))
+
+	// Runtime Configuration Control (GET: Public read-only, POST: Superuser required)
+	s.mux.HandleFunc("GET /api/config", s.handleGetConfig)
+	s.mux.HandleFunc("POST /api/config", s.wrapSuperuser(s.handleSetConfig))
 
 	// Seed Sample Data
 	s.mux.HandleFunc("POST /api/seed", s.wrapAuth(s.handleSeed, false, ""))

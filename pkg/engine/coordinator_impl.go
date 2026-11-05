@@ -27,6 +27,7 @@ type Config struct {
 	EnableGeneralLog bool
 	AuthService      *auth.AuthService
 	EnableAuth       bool
+	TolerantDDL      bool
 	PoolConfig       PoolConfig
 }
 
@@ -66,6 +67,7 @@ type Coordinator struct {
 	schemaVersion      atomic.Uint64
 	autoAnalyzer       *AutoAnalyzer
 	startTime          time.Time
+	tolerantDDL        atomic.Bool
 }
 
 // NewCoordinator creates a new SQL Coordinator instance.
@@ -107,6 +109,7 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 		lastIdentities:     make(map[string]int64),
 		startTime:          time.Now(),
 	}
+	coord.tolerantDDL.Store(cfg.TolerantDDL)
 
 	coord.autoAnalyzer = NewAutoAnalyzer(coord, DefaultAutoAnalyzeConfig())
 	executor.SetIdentityProvider(coord)
@@ -626,4 +629,15 @@ func (c *Coordinator) getTableGetter(cs *ClientSession) execution.TableGetter {
 		return c.getTable(cs, name)
 	}
 }
+
+// TolerantDDL returns whether tolerant DDL mode is currently active.
+func (c *Coordinator) TolerantDDL() bool {
+	return c.tolerantDDL.Load()
+}
+
+// SetTolerantDDL atomically toggles the tolerant DDL bootstrap mode in memory.
+func (c *Coordinator) SetTolerantDDL(enabled bool) {
+	c.tolerantDDL.Store(enabled)
+}
+
 

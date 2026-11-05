@@ -49,6 +49,7 @@ func (s *Server) handleRevokeAPIKey(w http.ResponseWriter, r *http.Request) {
 
 type authLoginReq struct {
 	Email    string `json:"email"`
+	Identity string `json:"identity"`
 	Password string `json:"password"`
 }
 
@@ -59,7 +60,12 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, token, err := s.auth.Authenticate(req.Email, req.Password)
+	loginEmail := req.Email
+	if loginEmail == "" {
+		loginEmail = req.Identity
+	}
+
+	u, token, err := s.auth.Authenticate(loginEmail, req.Password)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, err)
 		return

@@ -28,6 +28,8 @@ Commands (기본 명령체계):
   init-config [path]     Generate a default lionsql.json configuration file
   migrate <subcommand>   Manage declarative database schema migrations (status, up, down)
   sql "<statement>"      Execute one-off SQL statements against the local database
+  get [key]              Query runtime configuration parameter(s) from running instance
+  set <key> <val>        Update runtime configuration parameter (sudo-like password prompt)
   backup <file>          Create a point-in-time database snapshot backup archive
   restore <file>         Restore database state from a backup archive
   version                Display version and storage engine information
@@ -49,6 +51,7 @@ Options by Category (옵션 상세):
     -engine <type>         Storage engine: wiredtiger (default, lock-free B+Tree) or memory (pure OCC)
     -ephemeral             Run in purely in-memory ephemeral mode with zero disk writes
     -seed                  Automatically seed demo e-commerce sample database on startup
+    -tolerant-ddl          Enable tolerant DDL bootstrap mode (skips non-existent drops, duplicate creates)
     -config <path>         Path to JSON configuration file (auto-detects ./lionsql.json)
 
   [Memory & Performance]
@@ -195,6 +198,16 @@ func main() {
 		}
 	case "sql":
 		if err := runSQL(subargs); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "get":
+		if err := runGet(subargs); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "set":
+		if err := runSet(subargs); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
