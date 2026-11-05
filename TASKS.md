@@ -144,7 +144,7 @@
 | `IN_PROGRESS` | **`DURA-SOAK-1`** | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
 | `PENDING` | **`FEAT-MATVIEW-ALIAS-1`** | FEAT | P2 | Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) | [`notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TIMESERIES-LSM-1`** | FEAT | P2 | LSM Time-Series Chunk Storage & time_bucket | [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
-| `DONE` | **`FEAT-TOLERANT-DDL-1`** | FEAT | P2 | Server-side Tolerant DDL Bootstrap Mode (--tolerant-ddl) & sudo-style dynamic CLI | [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-TOLERANT-DDL-1`** | FEAT | P2 | Dynamic Runtime Tolerant DDL CLI Switch & PostgreSQL 42704 SQLSTATE | [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-VECTOR-1`** | FEAT | P2 | Pure-Go Vector Search Engine (pgvector compat) | [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `PENDING` | **`FRIENDLY-SQL`** | Ecosystem | P3 | DuckDB-Style Friendly SQL 문법 지원 | [`notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md) |  |
 | `PENDING` | **`GA-VALID-3`** | Ecosystem | P2 | 연동 앱 섀도 모드 실운영 도그푸딩 (Vaultwarden, Umami, Answer 등) |  |  |
@@ -1859,12 +1859,12 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [DONE] Server-side Tolerant DDL Bootstrap Mode (--tolerant-ddl) & sudo-style dynamic CLI `FEAT-TOLERANT-DDL-1`
+### [DONE] Dynamic Runtime Tolerant DDL CLI Switch & PostgreSQL 42704 SQLSTATE `FEAT-TOLERANT-DDL-1`
 - **Domain**: FEAT
 - **Priority**: P2
 - **Status**: DONE
 - **Plan**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
-- **Description**: Implemented server-side tolerant DDL mode (--tolerant-ddl) with safe strict default, symmetrical `lionsql get` and `lionsql set` CLI commands with sudo-style interactive authentication, and unified DDL exception handling.
+- **Description**: Implemented dynamic runtime tolerant DDL control CLI (`lionsql set tolerant_ddl on/off`) with strict safe defaults, eliminating all static flags/env options, and mapped non-existent index drop errors to PostgreSQL standard SQLSTATE 42704 (undefined_object).
 - **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-05T13:39:47.918898+09:00
 - **Plan Doc**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
 

@@ -27,7 +27,6 @@ type Config struct {
 	EnableGeneralLog bool
 	AuthService      *auth.AuthService
 	EnableAuth       bool
-	TolerantDDL      bool
 	PoolConfig       PoolConfig
 }
 
@@ -109,7 +108,6 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 		lastIdentities:     make(map[string]int64),
 		startTime:          time.Now(),
 	}
-	coord.tolerantDDL.Store(cfg.TolerantDDL)
 
 	coord.autoAnalyzer = NewAutoAnalyzer(coord, DefaultAutoAnalyzeConfig())
 	executor.SetIdentityProvider(coord)

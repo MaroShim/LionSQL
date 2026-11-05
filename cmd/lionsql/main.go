@@ -51,7 +51,6 @@ Options by Category (옵션 상세):
     -engine <type>         Storage engine: wiredtiger (default, lock-free B+Tree) or memory (pure OCC)
     -ephemeral             Run in purely in-memory ephemeral mode with zero disk writes
     -seed                  Automatically seed demo e-commerce sample database on startup
-    -tolerant-ddl          Enable tolerant DDL bootstrap mode (skips non-existent drops, duplicate creates)
     -config <path>         Path to JSON configuration file (auto-detects ./lionsql.json)
 
   [Memory & Performance]

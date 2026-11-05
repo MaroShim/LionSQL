@@ -110,7 +110,6 @@ func runServer(args []string) error {
 	outboxKafka := fs.String("outbox-kafka", "", "Kafka REST Proxy endpoint (e.g. http://localhost:8082)")
 	outboxRabbitMQ := fs.String("outbox-rabbitmq", "", "RabbitMQ Management API endpoint (e.g. http://localhost:15672)")
 	enableLegacyRegexPlanner := fs.Bool("enable-legacy-regex-planner", false, "Enable legacy regex-based SELECT planner fallback (default: false, pure AST mode)")
-	tolerantDDLFlag := fs.Bool("tolerant-ddl", false, "Enable tolerant DDL bootstrap mode (skips non-existent drops and duplicate creates during migrations)")
 
 	// Daemon control flags
 	var daemon bool
@@ -180,9 +179,6 @@ func runServer(args []string) error {
 	}
 	if visited["seed"] {
 		cfg.Server.AutoSeed = *autoSeed
-	}
-	if visited["tolerant-ddl"] {
-		cfg.Server.TolerantDDL = *tolerantDDLFlag
 	}
 	if visited["admin-email"] {
 		cfg.Auth.AdminEmail = *adminEmail
@@ -558,9 +554,6 @@ func runServer(args []string) error {
 	_, _ = authSvc.EnsureDefaultSuperuser(cfg.Auth.AdminEmail, cfg.Auth.AdminPass)
 
 	server := api.NewServerWithAuth(cat, eng, authSvc, cfg.Auth.Enabled)
-	if cfg.Server.TolerantDDL {
-		server.SetTolerantDDL(true)
-	}
 	if cfg.Resources.MaxWorkers > 0 || cfg.Resources.MaxIdleSessions > 0 {
 		poolCfg := api.DefaultPoolConfig()
 		if cfg.Resources.MaxWorkers > 0 {
@@ -852,15 +845,6 @@ func runServer(args []string) error {
 		}
 		if cfg.Logging.DevMode {
 			fmt.Println(" [Developer Mode] Enabled (-dev: Real-time Wire Query & Error Tracing)")
-		}
-		if server.TolerantDDL() {
-			fmt.Println("--------------------------------------------------------------------------------")
-			fmt.Println(" [CRITICAL WARNING] TOLERANT DDL BOOTSTRAP MODE IS ACTIVE! (--tolerant-ddl)")
-			fmt.Println("                    Non-existent drops and duplicate schema creates are tolerated.")
-			fmt.Println("                    DDL typos, syntax bugs, and missing objects WILL BE SILENCED!")
-			fmt.Println("                    DO NOT leave active in production. Restore to strict mode via:")
-			fmt.Println("                    ./bin/lionsql set tolerant_ddl off")
-			log.Println("[LionSQL WARNING] Tolerant DDL bootstrap mode is active. Syntax typos may be silently swallowed!")
 		}
 		if cfg.Auth.AdminPass == "1234567890" {
 			fmt.Println("--------------------------------------------------------------------------------")

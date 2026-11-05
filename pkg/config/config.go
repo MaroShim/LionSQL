@@ -15,7 +15,6 @@ type ServerConfig struct {
 	Engine                   string `json:"engine"`
 	Ephemeral                bool   `json:"ephemeral"`
 	AutoSeed                 bool   `json:"auto_seed"`
-	TolerantDDL              bool   `json:"tolerant_ddl,omitempty"`
 	PIDFile                  string `json:"pid_file,omitempty"`
 	LogFile                  string `json:"log_file,omitempty"`
 	EnableLegacyRegexPlanner bool   `json:"enable_legacy_regex_planner,omitempty"`
@@ -256,11 +255,6 @@ func ApplyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("LIONSQL_ADMIN_EMAIL"); v != "" {
 		cfg.Auth.AdminEmail = v
-	}
-	if v := strings.TrimSpace(strings.ToLower(os.Getenv("LIONSQL_TOLERANT_DDL"))); v == "1" || v == "true" || v == "yes" || v == "on" {
-		cfg.Server.TolerantDDL = true
-	} else if v == "0" || v == "false" || v == "no" || v == "off" {
-		cfg.Server.TolerantDDL = false
 	}
 	if v := strings.TrimSpace(strings.ToLower(os.Getenv("LIONSQL_ENABLE_LEGACY_REGEX_PLANNER"))); v == "1" || v == "true" || v == "yes" {
 		cfg.Server.EnableLegacyRegexPlanner = true

@@ -428,6 +428,8 @@ func WriteError(w io.Writer, message string) error {
 	upper := strings.ToUpper(message)
 	if strings.Contains(upper, "SERIALIZATION FAILURE") {
 		code = "40001" // serialization_failure (retryable)
+	} else if strings.Contains(upper, "INDEX") && (strings.Contains(upper, "DOES NOT EXIST") || strings.Contains(upper, "NOT FOUND")) {
+		code = "42704" // undefined_object (standard PostgreSQL error code for non-existent index)
 	} else if strings.Contains(upper, "NOT FOUND") || strings.Contains(upper, "DOES NOT EXIST") {
 		code = "42P01" // undefined_table / undefined_relation
 	} else if strings.Contains(upper, "SYNTAX") {

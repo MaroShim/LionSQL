@@ -196,31 +196,12 @@ type RouteRule struct {
 var catalogRouteTable = []RouteRule{
 	// --- Microsoft SQL Server (sys.* / INFORMATION_SCHEMA) ---
 	{
-		Name: "MSSQL_SysAllObjects",
-		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
-			return strings.Contains(upper, "SYS.ALL_OBJECTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "EXTENDED_PROPERTIES"))
-		},
-		Handler: func(src Source, sql string) (*Result, error) {
-			return execSysAllObjectsJoined(src, sql)
-		},
-	},
-	{
 		Name: "MSSQL_FnHelpCollations",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
 			return strings.Contains(upper, "FN_HELPCOLLATIONS")
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execFnHelpCollations(sql)
-		},
-	},
-	{
-		Name: "MSSQL_XORMGetIndexes",
-		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
-			fromCols := strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS")
-			return !fromCols && strings.Contains(upper, "SYS.INDEXES") && strings.Contains(upper, "SYS.INDEX_COLUMNS") && strings.Contains(upper, "SYS.COLUMNS")
-		},
-		Handler: func(src Source, sql string) (*Result, error) {
-			return execXORMIndexes(src, sql)
 		},
 	},
 	{
@@ -244,6 +225,16 @@ var catalogRouteTable = []RouteRule{
 		},
 	},
 	{
+		Name: "MSSQL_XORMGetIndexes",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			fromCols := strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS")
+			return !fromCols && strings.Contains(upper, "SYS.INDEXES") && strings.Contains(upper, "SYS.INDEX_COLUMNS") && strings.Contains(upper, "SYS.COLUMNS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execXORMIndexes(src, sql)
+		},
+	},
+	{
 		Name: "MSSQL_SysIndexColumns",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
 			fromCols := strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS")
@@ -254,21 +245,21 @@ var catalogRouteTable = []RouteRule{
 		},
 	},
 	{
-		Name: "MSSQL_ColumnComments",
-		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
-			return strings.Contains(upper, "COLUMNCOMMENT") && strings.Contains(upper, "SYS.COLUMNS")
-		},
-		Handler: func(src Source, sql string) (*Result, error) {
-			return execSysColumnsExtendedPropertyComment(sql)
-		},
-	},
-	{
 		Name: "MSSQL_ColumnsJoinedWithTypes",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
 			return strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "SYS.TYPES") || strings.Contains(upper, "ISIDENTITY") || strings.Contains(upper, "IS_IDENTITY") || strings.Contains(upper, "DATATYPE") || strings.Contains(upper, "MAX_LENGTH"))
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execSysColumnsJoinedWithTypes(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_ColumnComments",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "COLUMNCOMMENT") && strings.Contains(upper, "SYS.COLUMNS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysColumnsExtendedPropertyComment(sql)
 		},
 	},
 	{
@@ -433,6 +424,15 @@ var catalogRouteTable = []RouteRule{
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execPgConversionSelect(sql)
+		},
+	},
+	{
+		Name: "MSSQL_SysAllObjects",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.ALL_OBJECTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "EXTENDED_PROPERTIES"))
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysAllObjectsJoined(src, sql)
 		},
 	},
 	{

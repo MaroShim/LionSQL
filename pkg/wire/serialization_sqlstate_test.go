@@ -18,6 +18,22 @@ func TestWriteError_SerializationFailureUsesSQLState40001(t *testing.T) {
 	}
 }
 
+func TestWriteError_IndexDoesNotExistUsesSQLState42704(t *testing.T) {
+	testCases := []string{
+		`index "nc_fr_file_url" does not exist`,
+		`index idx_user_id not found`,
+	}
+	for _, msg := range testCases {
+		var buf bytes.Buffer
+		if err := WriteError(&buf, msg); err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Contains(buf.Bytes(), []byte("C42704\x00")) {
+			t.Fatalf("for %q, expected SQLSTATE 42704 in ErrorResponse, got %q", msg, buf.String())
+		}
+	}
+}
+
 func TestDecodeTextParamValue_HexAndLeadingZeroStringsStayVarChar(t *testing.T) {
 	for _, s := range []string{"83920194837261e2", "0091827364512345", "1234e56"} {
 		v := decodeTextParamValue(s, 0)
