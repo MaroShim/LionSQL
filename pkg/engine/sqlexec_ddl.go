@@ -1967,6 +1967,16 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		}, nil
 	}
 
+	// 8. ALTER TABLE tbl SET (...) -> Storage parameters / Autovacuum options (Tolerant No-Op)
+	if sqlutil.HasPrefixKeyword(body, "SET") {
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Table %q storage parameters updated (no-op)", tableName)},
+		}, nil
+	}
+
 	return nil, fmt.Errorf("unsupported ALTER TABLE action: %s", body)
 }
 

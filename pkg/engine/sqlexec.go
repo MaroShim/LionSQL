@@ -1036,6 +1036,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				valStr = "read committed"
 			case "server_version":
 				valStr = "15.0 (LionSQL)"
+			case "server_version_num":
+				valStr = "150000"
 			case "server_encoding", "client_encoding":
 				valStr = "UTF8"
 			case "timezone", "time_zone":
