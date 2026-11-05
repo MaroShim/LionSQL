@@ -37,8 +37,19 @@ func formatBytes(b int64) string {
 	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
+// OCCMode defines the in-memory tuple layout representation.
+type OCCMode int
+
+const (
+	// OCCModeRaw is the production default: direct Go struct references for sub-nanosecond 0.2ns O(1) access.
+	OCCModeRaw OCCMode = 0
+	// OCCModeFlat is the pointer-free flat buffer mode for 4~5x memory compaction and zero GC scan.
+	OCCModeFlat OCCMode = 1
+)
+
 type Options struct {
 	DataDir       string
+	Mode          OCCMode       // OCCModeRaw (default: 0) or OCCModeFlat (1)
 	EnableAOF     bool          // Whether to write append-only log (wal.aof)
 	EnableRDB     bool          // Whether to periodically save and load RDB snapshots (tables.mpk)
 	FsyncPolicy   FsyncPolicy   // FsyncAlways, FsyncEverySec, FsyncNo
@@ -209,11 +220,20 @@ func (e *Engine) recordWALLocked(ops []WALOp) (WALRecord, error) {
 
 // New creates a new in-memory storage engine.
 func New() *Engine {
+	return NewWithOptions(DefaultOptions(""))
+}
+
+// NewWithOptions creates a new in-memory storage engine with custom persistence and mode options.
+func NewWithOptions(opts Options) *Engine {
 	e := &Engine{
+		opts:         opts,
 		tables:       make(map[string]*TableData),
 		fkCache:      make(map[string][]ChildFKRef),
-		fsyncPolicy:  FsyncEverySec,
-		aofThreshold: 64 * 1024 * 1024, // 64MB default compaction threshold
+		fsyncPolicy:  opts.FsyncPolicy,
+		aofThreshold: opts.AOFThreshold,
+	}
+	if e.aofThreshold <= 0 {
+		e.aofThreshold = 64 * 1024 * 1024
 	}
 	e.syncTablesAtomicLocked()
 	return e
@@ -319,8 +339,10 @@ func (e *Engine) Open(dir string) error {
 	e.mu.RLock()
 	thresh := e.aofThreshold
 	policy := e.fsyncPolicy
+	mode := e.opts.Mode
 	e.mu.RUnlock()
 	opts := DefaultOptions(dir)
+	opts.Mode = mode
 	if thresh > 0 {
 		opts.AOFThreshold = thresh
 	}

@@ -163,7 +163,7 @@
 | `DONE` | **`M1`** | Ecosystem | P3 | v0.90.0 Feature Freeze & Production Hardening (100% PASS) |  |  |
 | `DONE` | **`M2`** | Ecosystem | P3 | v0.90.0 액티브 스프린트 완료 과제 (18개 전량 완료 아카이브) |  | - [x] **`PERF-PGWIRE-PREP-TX`**: PGWi... |
 | `DONE` | **`M3`** | Ecosystem | P3 | 내구성 및 신뢰성 1차 검증 완료 이력 |  |  |
-| `PENDING` | **`OCC-HYPER-2`** | Ecosystem | P3 | In-Memory OCC Pointer-Free Flat Record & Memory Compaction |  |  |
+| `IN_PROGRESS` | **`OCC-HYPER-2`** | STORAGE | P2 | In-Memory OCC Pointer-Free Flat Record A/B Benchmark & Implementation | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`OPT-LARGE-JOIN-1`** | Durability | P2 | 대규모 조인(10+ Tables) 최적화 | [`notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`P-2`** | Performance | P1 | WiredTiger VDBE 바이너리 튜플 지연 역직렬화 |  | - [x] **Phase 1 (`BENCH-P2-BASE`)**: ... |
 | `DONE` | **`PERF-BENCH-WT-RESTORE-1`** | Performance | P1 | WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 |  |  |
@@ -2072,11 +2072,14 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] In-Memory OCC Pointer-Free Flat Record & Memory Compaction `OCC-HYPER-2`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-05T12:33:06.408302+09:00
+### [IN_PROGRESS] In-Memory OCC Pointer-Free Flat Record A/B Benchmark & Implementation `OCC-HYPER-2`
+- **Domain**: STORAGE | **Priority**: P2 | **Updated**: 2026-11-06T00:54:00+09:00
+- **Plan Doc**: [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
 
 **Phases & Checklist**:
-- [우선 구현 옵션] 포인터리스 플랫 레코드(Pointer-Free Flat Record) 도입: 복잡한 Varint 압축 해제 오버헤드 없이 고정 오프셋 O(1) 직접 접근(0.5ns)을 유지하면서 Go GC 힙 포인터를 100% 제거하고 4~5배 메모리 압축 달성 ([`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md))
+- [ ] Phase 1: Flat Record 고정폭/SSO/NULL비트맵 인코더/디코더 구현 및 포괄적 단위 테스트
+- [ ] Phase 2: `memengine` 샤드 레코드 모드 분기 (`OCCModeRaw` 디폴트 유지, `OCCModeFlat` 플래그 선택)
+- [ ] Phase 3: A/B 벤치마크 (Raw vs Flat) 메모리 풋프린트, GC Pause, TPS 계측 비교 보고서 작성
 
 ---
 

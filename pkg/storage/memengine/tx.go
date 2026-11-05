@@ -1911,10 +1911,26 @@ func (tx *Transaction) Commit() error {
 		sh := &td.shards[sIdx]
 		oldEntry, hadOld := sh.entries[ch.key]
 		oldRow := oldEntry.row
+		if td.mode == OCCModeFlat && len(oldEntry.flatBuf) > 0 && len(oldRow.Values) == 0 {
+			if decoded, err := td.layout.DecodeFlatToRow(&td.Schema, oldEntry.flatBuf); err == nil {
+				oldRow = decoded
+			}
+		}
 
 		switch ch.kind {
 		case changeInsert:
-			sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
+			if td.mode == OCCModeFlat {
+				if td.layout == nil {
+					td.layout = BuildFlatRecordLayout(&td.Schema)
+				}
+				if flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row); err == nil {
+					sh.entries[ch.key] = shardEntry{ver: 1, flatBuf: flatBuf}
+				} else {
+					sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
+				}
+			} else {
+				sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
+			}
 			if td.Schema.IsPartitioned() {
 				if partID, err := td.Schema.ComputePartitionKeyFromRow(ch.row); err == nil {
 					td.partMu.Lock()
@@ -1930,7 +1946,18 @@ func (tx *Transaction) Commit() error {
 				}
 			}
 		case changeUpdate:
-			sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
+			if td.mode == OCCModeFlat {
+				if td.layout == nil {
+					td.layout = BuildFlatRecordLayout(&td.Schema)
+				}
+				if flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row); err == nil {
+					sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, flatBuf: flatBuf}
+				} else {
+					sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
+				}
+			} else {
+				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
+			}
 			if td.Schema.IsPartitioned() {
 				var oldPartID, newPartID string
 				if hadOld {

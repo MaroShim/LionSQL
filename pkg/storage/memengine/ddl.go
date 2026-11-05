@@ -72,6 +72,10 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		Keys:       make([]string, 0),
 		Indexes:    make(map[string]*IndexData),
 		Partitions: make(map[string]map[string]struct{}),
+		mode:       e.opts.Mode,
+	}
+	if e.opts.Mode == OCCModeFlat {
+		td.layout = BuildFlatRecordLayout(schema)
 	}
 	td.initShards()
 	for _, idx := range schema.Indexes {
