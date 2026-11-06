@@ -30,17 +30,17 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 [ Phase 6: Production Hardening & Feature Freeze ] ► v0.90.0 (Betas 0~3) [COMPLETED]
   Unified CLI (lionsql) + Web Studio Suite + Memory Governor + OCC Tuning + TDS Positional + 2-Tier Engine
 
-[ Phase 7: Real-World Ecosystem & Durability Hardening ] ► v0.95.0 (Beta 4+) [IN PROGRESS]
-  10 Production Apps (Zero Code Change) + kill -9 Oracle (D1~D4) + 24h Soak Zero-Leak + Table-Driven Rules + 1.04M tpmC
+[ Phase 7: Real-World Ecosystem & Durability Hardening ] ► v0.91.0 - v0.95.0 [ACTIVE / v0.91.0 RELEASED]
+  10 Production Apps + 6 Golden Release Gates (release.sh) + kill -9 Oracle (D1~D4) + 409k SQLLogicTest + T-SQL 14-Suite + Embedded SPA + 1.04M tpmC + 100-Step Deep Audit
 
 [ Phase 8: Official 1.0 LTS Production Release ] ────► v1.0.0 LTS [READY FOR SIGN-OFF]
-  6 Quality Gates Passed + Always On Failover + Lossless CDC + LTS Packaging & Sign-off
+  6 Golden Release Gates Passed + 100-Step Audit Sign-Off + Always On Failover + Lossless CDC + LTS Packaging
 
 [ Phase 9: Scale-Up Query & Compact Storage ] ───────► v1.1.0 [PLANNED]
   Flat Hash Join & Mini TPC-H + OCC Compact Arena (5x) + Pure-Go Engine (CGO_ENABLED=0) + Immutable Audit Log
 
 [ Phase 10: Parallel Analytical OLAP & Extensibility ] ► v1.2.0+ [PLANNED]
-  Multi-Core ParallelSeqScan + Wasm UDF Sandbox + Friendly SQL + Embedded SPA Hosting
+  Multi-Core ParallelSeqScan + Wasm UDF Sandbox + Friendly SQL (Embedded SPA Hosting completed in Phase 7 ahead of schedule)
 ```
 
 ### High-Level Milestone Dashboard
@@ -53,10 +53,10 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 | **Phase 4** | `v0.13.0` - `v0.15.0` | **Modern Ecosystem, GUI Tool Interop & VDBE Acceleration**<br>pgx/v5 pipelining, DBeaver/SSMS interop, UUIDv7, VDBE opcode specialization (21k TPS peak). | **100% Completed** |
 | **Phase 5** | `v0.16.0` - `v0.24.0` | **Enterprise Governance, Security & Engine Decoupling**<br>Layer separation (`pkg/engine`), WAL group commit, RBAC, CBO DP join ordering, migrations CLI, prepared LRU cache. | **100% Completed** |
 | **Phase 6** | `v0.90.0`<br>(Betas 0~3) | **Production Hardening & Feature Freeze Baseline**<br>Single-binary CLI (`lionsql`), Web Studio suite, memory governor, OCC 5-point tuning, TDS positional mapping, 2-Tier query engine. | **100% Completed** |
-| **Phase 7** | `v0.95.0`<br>(Beta 4+) | **Real-World Ecosystem & Autonomous Durability Hardening**<br>10 production apps verified (Gitea ~ Vikunja), `crashtest` (`kill -9` D1~D4), `soaktest` (leak-free), AST routing, Table-Driven rules, 1.04M tpmC. | **In Progress (90%)** |
-| **Phase 8** | `v1.0.0 LTS` | **Official 1.0 Production Release & Long-Term Support**<br>6 Quality Gates verified, Always On HA, lossless CDC, certified drivers, release sign-off. | **Ready for Sign-off** |
+| **Phase 7** | `v0.91.0` - `v0.95.0`<br>(RC / Pre-1.0) | **Real-World Ecosystem, Durability Hardening & 6 Golden Release Gates**<br>10 production apps verified (Gitea ~ Vikunja), `scripts/release.sh` 6 Golden Release Gates automated, `crashtest` (`kill -9` D1~D4 WT sync fix), 409k SQLLogicTest Oracle, T-SQL 14-Suite, `soaktest` (leak-free), single-binary SPA hosting (`--app`), 100-step dual AI code audit, 1.04M tpmC. | **Active / v0.91.0 Released (95%)** |
+| **Phase 8** | `v1.0.0 LTS` | **Official 1.0 Production Release & Long-Term Support**<br>6 Golden Release Gates verified, 100-step audit completed, Always On HA, lossless CDC, certified drivers, LTS release sign-off. | **Ready for Sign-off** |
 | **Phase 9** | `v1.1.0` | **Scale-Up Complex Query & Compact Storage**<br>Flat hash join, Mini TPC-H suite, OCC compact arena (5x density), Pure-Go storage engine (`CGO_ENABLED=0`), immutable audit log. | **Planned** |
-| **Phase 10** | `v1.2.0+` | **Parallel Analytical Execution & Extensibility**<br>Multi-core `ParallelSeqScan` workers, Wasm UDF sandbox (`wazero`), DuckDB-style friendly SQL, embedded SPA web server. | **Planned** |
+| **Phase 10** | `v1.2.0+` | **Parallel Analytical Execution & Extensibility**<br>Multi-core `ParallelSeqScan` workers, Wasm UDF sandbox (`wazero`), DuckDB-style friendly SQL (Embedded SPA Hosting completed in Phase 7). | **Planned** |
 
 ---
 
