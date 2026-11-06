@@ -1,91 +1,128 @@
 # LionSQL Engineering Notes & Context Handover (`notes/`)
 
 > - **최초 작성일**: 2026-10-03
-> - **최종 갱신일**: 2026-11-04
+> - **최종 갱신일**: 2026-11-06
 > [English Version](README.md)
 
 이 디렉토리는 다른 개발 환경(다른 머신, 새 세션)으로 이동했을 때, 새로운 AI 에이전트나 동료 엔지니어가 **코드와 공식 문서(`doc/`)만으로는 파악하기 힘든 개발 이면의 맥락, 기각된 대안(Negative Knowledge), 실전 주의사항(Pitfalls), 사용자의 엔지니어링 철학**을 즉시 동기화받을 수 있도록 정리한 영속적 지식 베이스(Shared Brain & Handover Notes)입니다.
 
 ---
 
-## 문서 색인 (Index)
+## 1. 핵심 인지 체계 & 불변 원칙 (Core Philosophy & SSOT)
 
-1. **[`ENGINEERING_CONTEXT.ko.md`](ENGINEERING_CONTEXT.ko.md)** (한국어)
-   - **핵심 아키텍처 불변식(Core Invariants)**: 왜 이 방식을 택했고 무엇을 의도적으로 배제(Spec-Out)했는가
-   - **개발 철학 및 협업 규약**: 무조건 준수해야 하는 엔지니어링 원칙 (3단계 검증 파이프라인, 이모지 배제, KISS/YAGNI, 파일 분할 기준)
-   - **기술 스택 및 주요 컴포넌트**: VDBE 바이트코드 VM, 듀얼 파서, 듀얼 트랙 UDF, 멀티 프로토콜
+엔진 전반에 걸쳐 타협 없이 지켜져야 하는 핵심 불변식, 개발 철학, 위험 요소 및 전역 백로그 체계입니다.
 
-2. **[`PITFALLS_AND_TRICKS.md`](PITFALLS_AND_TRICKS.md)**
-   - **코드베이스 내 암초 지도(Landmines & Fragile Spots)**: 섣불리 건드리면 깨지기 쉬운 미묘한 포인트들
-   - **순환 참조 방지 SPI 패턴**: `pkg/proc`과 ANTLR4 폴백 파서 간 디커플링
-   - **샌드박스 및 네트워크 격리 이슈**: 테스트 환경에서의 로컬 루프백 소켓/HTTP 주의사항
-   - **원자적 파일 I/O 및 데이터 타입 직렬화**: 크래시 방지 파일 저장 규칙과 Decimal JSON 무결성
+* **[`ENGINEERING_CONTEXT.ko.md`](ENGINEERING_CONTEXT.ko.md)** (한국어)
+  * **핵심 아키텍처 불변식(Core Invariants 8선)**: Dual-Parser, 인스턴스 격리, Non-Blocking MVCC/OCC, 단일 정적 바이너리, 제로 정규식 파싱 원칙.
+  * **명시적 Spec-Out 철학**: 불필요한 레이어를 제거하고 YAGNI/KISS를 수호하기 위해 기각된 14대 기능과 그 이론적 배경.
+* **[`PITFALLS_AND_TRICKS.md`](PITFALLS_AND_TRICKS.md)**
+  * **코드베이스 내 암초 지도(Landmines & Fragile Spots)**: 순환 참조 방지 SPI 패턴, 샌드박스 소켓 격리, 원자적 파일 I/O 및 Decimal JSON 무결성.
+* **[`TAXONOMY.ko.md`](TAXONOMY.ko.md)** (한국어)
+  * **과제 식별 코드 체계 일람표**: 우선순위(`P1~P3`), 복합 쿼리 최적화(`VPERF`), 릴리스 게이트(`GA-REGEX`), 문법 완비(`S-1~S-7`) 마스터 인덱스.
+* **[`PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)**
+  * **다중 프로토콜 에뮬레이션 경계**: TDS(1433), PGWire(5433), MySQL 호환 구문의 수용 범위와 중단 기준.
+* **전역 로드맵 및 단일 진실 공급원 (SSOT Backlogs)**:
+  * **[`TODO.md`](../TODO.md)**: 3단계 우선순위 실시간 엔지니어링 대시보드 (Sprint DB와 100% 동기화).
+  * **[`ROADMAP.md`](../ROADMAP.md)**: 거시적 릴리즈 마일스톤(Phase 1~6) 및 아키텍처 진화 방향.
 
-3. **[`TAXONOMY.ko.md`](TAXONOMY.ko.md)** (한국어)
-   - **과제 식별 코드 체계 일람표**: `P1~P3`(우선순위), `P-1~P-5`(성능), `A~D`(CBO 9대 과제), `S-1~S-7`(문법 완비) 종합 정리
+---
 
-4. **[`PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)**
-   - **다중 프로토콜 에뮬레이션 경계 및 스코프**: TDS, PGWire, MySQL 프로토콜 에뮬레이션 범위 및 중단 기준, 패킷/토큰 처리 및 가상 No-Op 호환성 정책
+## 2. 1.0 릴리스 액티브 스프린트 (Release Gates & Active Audits)
 
-5. **프로젝트 전역 로드맵 및 백로그**:
-   - **[`TODO.md`](../TODO.md)**: 액티브 엔지니어링 백로그, 3계층 우선순위(Priority 1 내구성 스프린트, Priority 2 앱 연동, Priority 3 장기 로드맵) 및 완료 마일스톤(M1~M3)
-   - **[`ROADMAP.md`](../ROADMAP.md)**: 거시적 릴리즈 마일스톤(Phase 1~6), 아키텍처 진화 방향, 단계별 구현 완료 상태
+LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인 전수 감사 및 무결성 강화 프로젝트입니다.
 
-6. **도메인별 설계 및 작업 계획서 (Architecture & Execution Plans)**:
-   - **액티브 스프린트 (Priority 1 & 2)**:
-     - **[`PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`](PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md)**: LionSQL 1.0 릴리스 대비 전 소스코드 100단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 감사 계획서 (AUDIT-100-DUAL-REVIEW).
-     - **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)**: LionSQL Regular Expression 완전 퇴출 및 결정론적 파서 전환 종합 계획서 (6대 세부 파트 전체 구현 명세, 전역 전수 조사 매트릭스 및 사후 품질 강화 통합, GA-REGEX-DDL-1 ~ GA-REGEX-FINAL-3, SEC-PGWIRE-PARAM-1 단일 SSOT 마스터 플랜).
-     - **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)**: 대규모 조인(10+ Tables) 최적화 설계 및 구현 계획서 (베이스 테이블 동적 루트 선정 및 공집합 조기 탈락, OPT-LARGE-JOIN-1).
-     - **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)**: 플래너 슬림화 및 순수 AST 전환 설계 계획서 (Sort-Merge Join 지연 평가 및 정규식 폴백 옵션 격리, PLANNER-SLIM-1 & PLANNER-AST-1).
-     - **[`SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md)**: 데이터베이스 엔진 업계(DuckDB, CockroachDB, TiDB, DataFusion 등) SQLLogicTest 실전 적용 기준, 3단계 계층화(Tier 1~3) 및 권장 범위 표준 가이드.
-     - **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)**: 킬 테스트(크래시 복구), 소크 테스트(장시간 부하), 개밥 먹기 기반 내구성/운영 신뢰성 검증 계획서.
-     - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)**: 실전 앱 연동 확장 마스터 플랜 (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost 6종).
-     - **[`WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)**: Woodpecker CI 및 Vikunja 연동 검증 보고서 (재귀 CTE, 복합 OR 인덱스 분기, DML 커맨드 태그 보정 완료).
-     - **[`ROADMAP_REORGANIZATION_PLAN.ko.md`](ROADMAP_REORGANIZATION_PLAN.ko.md)**: LionSQL 전역 로드맵(ROADMAP.md) 재정비 및 Phase 7/품질 게이트 확장 설계 계획서 (DOC-ROADMAP-REORG-1).
-     - **[`TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md)**: 10개 실전 서비스 호환 규칙 Table-Driven 정식화 설계 계획서 (COMPAT-TABLE-DRIVEN-1).
-     - **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 쿼리 라우팅 리팩토링 설계 및 검증 보고서 (문자열 휴리스틱 45개 전면 제거, 527ns 실측, 완료).
-     - **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](ARCH_VDBE_ROUTING_1_PLAN.ko.md)**: AST 및 Dialect 타입 기반 2-Tier 쿼리 라우팅 정규화 계획서 (세션 접두사 문자열 꼼수 및 FROM 파생테이블 슬라이싱 완전 박멸, ARCH-VDBE-ROUTING-1).
-   - **Post-1.0 아키텍처 및 장기 로드맵 계획서**:
-      - **[`POST_1.0_CANDIDATES.ko.md`](POST_1.0_CANDIDATES.ko.md)**: LionSQL Post-1.0 기술 과제 후보 과제 (Candidates, 사전 기술 분석 완료 및 온디맨드 채택 심사 목록).
-      - **[`OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](OFFLINE_DOCS_PACKAGING_PLAN.ko.md)**: 배포 패키지 오프라인 문서 번들링 및 브라우저 뷰어 설계 계획서 (PKG-OFFLINE-DOCS-1).
-      - **[`PGWIRE_COMPATIBILITY_REPORT.md`](PGWIRE_COMPATIBILITY_REPORT.md)**: PostgreSQL Wire v3 프로토콜 기능 및 드라이버 호환성 검증 보고서.
-      - **[`TDS_COMPATIBILITY_REPORT.md`](TDS_COMPATIBILITY_REPORT.md)**: Microsoft SQL Server TDS 7.x/8.0 프로토콜 및 T-SQL 호환성 검증 보고서.
-      - **[`REST_API_COMPATIBILITY_REPORT.md`](REST_API_COMPATIBILITY_REPORT.md)**: HTTP REST JSON BaaS 및 Web Studio 삼각 프로토콜 패리티 검증 보고서.
-      - **[`DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`](DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md)**: DuckDB 스타일 편의 SQL 및 MySQL 추가 호환성 기각 사유와 불변 경계 평가 노트 (ADR & Negative Knowledge).
-     - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 성능 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Post-1.0 메모리 5배 압축 로드맵 (OCC-HYPER-2).
-     - **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: TDS 네트워크 소켓 수신부터 VDBE 및 WAL 파일 시스템 사전 할당/적응형 그룹 커밋에 이르는 서버 수직 파이프라인 종단 최적화 마스터 플랜 (Phase 3/4 대기).
-     - **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)**: LionSQL 복합 쿼리 성능 튜닝을 위한 2단계 하이브리드 표준 벤치마크 플랜 (SSB Star Schema & Mini TPC-H 5대 대표 쿼리, DuckDB/ClickHouse 비교 매트릭스).
-     - **[`DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)**: DuckDB 스타일의 친화적 SQL 손끝 편의 문법(`SELECT * EXCLUDE`, `FROM <table>;`, `GROUP BY ALL`) 도입 마스터 플랜 (Post-1.0 / v1.1.0).
-     - **[`EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)**: `WHERE col IN ()` 빈 괄호 평가 허용 여부에 대한 역사적 배경, 아키텍처 분석 및 옵션 플래그 배제 원칙 계획서 (Post-1.0 대기).
-    - **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)**: AWS Babelfish 기반 T-SQL Stored Procedure 전용 SLT 로직 테스트 스위트 구축 계획서 (1.0 릴리즈 게이트).
-    - **[`BABELFISH_INTEGRATION_REPORT.ko.md`](BABELFISH_INTEGRATION_REPORT.ko.md)**: Babelfish T-SQL 2,900-Suite 도입, 엣지 케이스 장애 추적(우여곡절), 코어 버그 수정 및 종합 호환성 검증 보고서.
-    - **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](MODULAR_ARCHITECTURE_PLAN.ko.md)**: 모듈러 아키텍처 및 세션 캡슐화 리팩토링 계획서.
-     - **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)**: 내장 SPA 정적 웹 파일 서빙 엔진 설계 계획서.
-     - **[`IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md)**: PCI-DSS v4.0 / SOC 2 규제 대응 SHA-256 해시 체이닝 불변 감사 로그 서브시스템 설계 (Post-1.0 / v1.1.0).
-     - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Microsoft SQL Server Collation 및 로케일 지원 설계 (Post-1.0 / v1.1.0).
-     - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: 클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 연동 설계 (Spec-Out 아키텍처 / 참고).
+* **[`PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`](PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md)**
+  * 전 소스코드 100단계 듀얼 AI(Gemini × Claude) 크로스 감사 마스터 플랜 및 10대 도메인 실시간 추적 매트릭스 (`AUDIT-100-DUAL-REVIEW`).
+* **[`PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md)**
+  * 100단계 전수 감사 과정에서 발굴된 실측 결함 누적 매트릭스 (Scope 001~020 스캔 완료, 18건 기록).
+* **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)**
+  * LionSQL 전역 정규식 완전 박멸 및 결정론적 토크나이저 전환 단일 SSOT 종합 계획서 (`GA-REGEX-DDL-1` ~ `GA-REGEX-FINAL-3`, `SEC-PGWIRE-PARAM-1`).
+* **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)**
+  * 킬 테스트(SIGKILL 즉시 복구), 소크 테스트, 개밥 먹기(Dogfooding) 기반 실전 운영 내구성 검증 계획서.
 
-7. **마일스톤 실전 검증 보고서 및 포스트모텀 (Integration Reports & Postmortems)**:
-   - **[`RELEASE_NOTES_v0.90.1.ko.md`](RELEASE_NOTES_v0.90.1.ko.md)** ([English](RELEASE_NOTES_v0.90.1.md)): LionSQL v0.90.1 공식 릴리즈 노트 (T-SQL Stored Procedure & 재귀 CTE 무결성 완치, Babelfish 2,900-Suite 연동, SQLLogicTest 107개 정착, Web Studio 인라인 그리드 혁신).
-   - **[`RELEASE_NOTES_v0.90.0.ko.md`](RELEASE_NOTES_v0.90.0.ko.md)** ([English](RELEASE_NOTES_v0.90.0.md)): LionSQL v0.90.0 GA 공식 릴리즈 노트 (100% 무손실 크래시 복구, 소크 테스트 완주, SQLLogicTest 90개 통과, 73만 tpmC 달성, 8대 에코시스템 연동 완주).
-   - **[`SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md`](SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md)** ([English](SLT_FULL_SUITE_100_PERCENT_REPORT.md)): SQLLogicTest (SLT) 107개 풀세트(19,211 문장, 551,217 쿼리) 100% 무결점 통과 실측 보고서 및 8대 심층 엔진 결함(3VL, 별칭/슬롯 보존, 중첩 집계 등) 완치 기록.
-   - **[`METABASE_INTEGRATION_REPORT.ko.md`](METABASE_INTEGRATION_REPORT.ko.md)**: Metabase BI 듀얼 프로토콜(PGWire :5433 & TDS :1433) 연동, 스키마 인트로스펙션, MBQL 비주얼 쿼리 빌더 다중 테이블 파생 조인, COUNT/SUM 집계, 시계열 분석 및 Native SQL 100% 무오류 검증 보고서.
-   - **[`VAULTWARDEN_INTEGRATION_REPORT.ko.md`](VAULTWARDEN_INTEGRATION_REPORT.ko.md)**: Vaultwarden (Rust + Diesel ORM) 47개 마이그레이션 완주, 복합 PK upsert, 8바이트 Timestamp 인코딩 및 Bitwarden REST API E2E 100% 검증 보고서.
-   - **[`ANSWER_INTEGRATION_REPORT.ko.md`](ANSWER_INTEGRATION_REPORT.ko.md)**: Apache Answer Q&A 플랫폼 35개 테이블 생성, VDBE 다중 행 배치 Identity 키 자동 발급 및 REST API E2E 검증 보고서.
-   - **[`GITEA_INTEGRATION_REPORT.ko.md`](GITEA_INTEGRATION_REPORT.ko.md)**: Gitea 풀스택 Git 플랫폼 듀얼 프로토콜(TDS :1433 & PGWire :5433) 연동 및 116개 테이블 실전 E2E 검증 완료 보고서.
-   - **[`IOTA_ERP_INTEGRATION_REPORT.ko.md`](IOTA_ERP_INTEGRATION_REPORT.ko.md)**: IOTA SDK Go ERP 연동, `pgx/v5` 엄격한 바이너리 프로토콜 완비 및 47개 스키마 순차 마이그레이션 100% 관통 검증 보고서.
-   - **[`GRAFANA_INTEGRATION_REPORT.ko.md`](GRAFANA_INTEGRATION_REPORT.ko.md)**: Grafana 785개 마이그레이션 완주, 봉투 암호화(`BYTEA`), CTE 파생 테이블 격리 및 듀얼 데이터 소스 쿼리 검증 보고서.
-   - **[`CASDOOR_INTEGRATION_REPORT.ko.md`](CASDOOR_INTEGRATION_REPORT.ko.md)**: Casdoor 44개 테이블 자동 생성, 복합 PK(`PRIMARY KEY (owner, name)`) 지원, TDS `VARBINARY` JSON 직렬화 및 듀얼 프로토콜 OIDC/RBAC E2E 검증 보고서.
-   - **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)**: 1시간 장시간 부하(Soak Test, 72만 ops / 39.3만 커밋) 실측 검증, `SQLSTATE 40001` 충돌 매핑 및 WiredTiger 500MB 캐시 수렴 분석 보고서.
-   - **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)**: Gitea XORM 실전 연동 중 노출된 DML/와일드카드/키워드 별칭 결함 원인 분석 및 "인간 작성 SQL vs ORM 기계 생성 SQL" 테스트 사각지대 영구 사후 분석 보고서 (Postmortem).
-   - **[`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)**: 키 래치 및 슬립 재시도 완전 제거를 통한 108k/160k TPS 성능 회귀 정상화 및 단위 테스트 내 경량 성능 회귀 방지 게이트 설계 계획서 (`PERF-REGRESSION-RECOVERY-1`).
-   - **[`GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md`](GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md)**: Grove 핫스팟 최적화 과정에서 도출된 핵심 가치 및 4대 영구 자산(VDBE 슬롯 인덱싱, OCC vs WT 엔진별 역할 분담, 락 컨보이/OS 타이머 퀀텀 실체 규명, 회귀 방지 게이트) 심층 포스트모텀.
-   - **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)**: TDS RPC `sp_executesql` 파라미터 해석 리그레션 분석, Beekeeper Studio 접속 크래시 원인 규명 및 순수 위치 기반(Ordinal Positional) 폴백 복원 포스트모텀.
-   - **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 확정 명세서.
-   - **[`BUG_ARCHIVE.ko.md`](archive/BUG_ARCHIVE.ko.md)**: 데이터 무결성 107대 결함 조치 아카이브 및 중간 방법론 이력 (`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`).
-   - **[`TEST_VERIFICATION_REPORT.ko.md`](archive/TEST_VERIFICATION_REPORT.ko.md)**: 단위 및 통합 테스트 스위트 회귀 검증 및 무경쟁(Race-Free) 진단 보고서.
-   - **[`RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](archive/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md)**: 1.0 릴리스 대비 아키텍처 감사 및 사전 피드백 이력.
-   - **[`LIONSQL_DEEP_CODE_REVIEW.ko.md`](archive/LIONSQL_DEEP_CODE_REVIEW.ko.md)**: 전체 390개 소스 파일(약 35만 라인)에 대한 아키텍처, 서브시스템별 심층 분석 및 엔지니어링 코드 리뷰 보고서.
+---
 
-8. **역사적 아카이브 (`notes/archive/`)**:
-   - 100% 구현 완료되어 설계 의도 및 검증 이력을 영구 보존하기 위해 이동된 과거 13개 계획서(Windows 데몬, 오버스펙 제거, Forward-only 커서, 단일 CLI 통합 등) 및 원본 백로그는 **[`notes/archive/README.md`](archive/README.md)**를 참조하십시오.
+## 3. 도메인별 심층 설계 계획서 (Architecture & Execution Plans)
+
+엔진의 각 핵심 서브시스템별 설계 및 리팩토링 명세서입니다.
+
+### 3.1. 스토리지 엔진 & 고동시성 트랜잭션 (Storage & OCC)
+* **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Option A 플랫 레코드 하드닝 (`OCC-HYPER`).
+* **[`FLAT_RECORD_RELIABILITY_PLAN.ko.md`](FLAT_RECORD_RELIABILITY_PLAN.ko.md)**: 포인터 없는 플랫 레코드 인코딩의 안정성 및 디코딩 신뢰성 검증 계획서.
+* **[`LAZY_DECODING_P2_PLAN.ko.md`](LAZY_DECODING_P2_PLAN.ko.md)**: 레코드 전체 언패킹 비용을 없애는 칼럼 단위 지연 디코딩(Lazy Decoding) 설계 계획서.
+* **[`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)**: 키 래치 완전 제거를 통한 160k TPS 회귀 복구 및 CI 성능 게이트 구축 계획서.
+
+### 3.2. 쿼리 엔진, 옵티마이저 & 파서 (Engine, Planner & Parser)
+* **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 단순 질의(VDBE)와 복합 관계대수(CBO)를 분리하는 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 명세서.
+* **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](ARCH_VDBE_ROUTING_1_PLAN.ko.md)**: AST 및 Dialect 타입 기반 2-Tier 쿼리 라우팅 정규화 계획서 (`ARCH-VDBE-ROUTING-1`).
+* **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 카탈로그 라우팅 리팩토링 검증 보고서 (527ns 실측).
+* **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)**: 10개 이상 테이블 조인 최적화 및 공집합 조기 탈락 설계 계획서 (`OPT-LARGE-JOIN-1`).
+* **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)**: 플래너 슬림화 및 순수 AST 전환 설계 계획서 (`PLANNER-SLIM-1`, `PLANNER-AST-1`).
+* **[`VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)**: 바이트코드 루프 언롤링, 레지스터 풀링, 분기 예측 최적화 극단 가속 계획서.
+* **[`WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)**: 쓰기 가능한 CTE(Writable CTE)를 VDBE 바이트코드로 직접 컴파일하는 Lowering 설계.
+* **[`SQL_PARSER_HARDENING_PLAN.ko.md`](SQL_PARSER_HARDENING_PLAN.ko.md)**: 리터럴 오염 방지 및 세미콜론 절단 방지를 위한 SQL 파서 하드닝 계획서.
+
+### 3.3. 와이어 프로토콜 & 네트워킹 (Wire & Protocols)
+* **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: 소켓 수신부터 VDBE 및 WAL 적응형 그룹 커밋에 이르는 서버 수직 파이프라인 최적화 마스터 플랜.
+* **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)**: 단일 정적 바이너리 내장 웹 스튜디오 및 SPA 서빙 아키텍처 계획서 (`WEB-SPA-1`).
+* **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](MODULAR_ARCHITECTURE_PLAN.ko.md)**: TDS/와이어 레이어 인터페이스 불변 파일 분리 및 모듈러 아키텍처 평가 계획서 (`TDS-MOD-1`).
+
+---
+
+## 4. 실전 앱 연동 & 무결성 실측 검증 보고서 (Verification Reports)
+
+실제 오픈소스 서비스 및 표준 벤치마크 스위트를 통해 검증된 실측 엔지니어링 보고서입니다.
+
+### 4.1. 10대 프로덕션 오픈소스 애플리케이션 E2E 검증
+* **[`METABASE_INTEGRATION_REPORT.ko.md`](METABASE_INTEGRATION_REPORT.ko.md)**: Metabase BI 듀얼 프로토콜 연동, MBQL 비주얼 쿼리 빌더 및 집계/시계열 100% 무오류 검증.
+* **[`VAULTWARDEN_INTEGRATION_REPORT.ko.md`](VAULTWARDEN_INTEGRATION_REPORT.ko.md)**: Vaultwarden (Rust Diesel ORM) 47개 마이그레이션 및 Bitwarden REST API 연동 완료.
+* **[`ANSWER_INTEGRATION_REPORT.ko.md`](ANSWER_INTEGRATION_REPORT.ko.md)**: Apache Answer Q&A 35개 테이블 생성 및 Identity 자동 발급 E2E 검증.
+* **[`GITEA_INTEGRATION_REPORT.ko.md`](GITEA_INTEGRATION_REPORT.ko.md)**: Gitea 듀얼 프로토콜 연동 및 116개 테이블 실전 E2E 검증 완료.
+* **[`WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)**: Woodpecker CI 및 Vikunja 재귀 CTE, 복합 OR 인덱스 분기 검증.
+* **[`GRAFANA_INTEGRATION_REPORT.ko.md`](GRAFANA_INTEGRATION_REPORT.ko.md)**: Grafana 785개 마이그레이션 완주, 봉투 암호화(`BYTEA`) 및 대시보드 연동 검증.
+* **[`CASDOOR_INTEGRATION_REPORT.ko.md`](CASDOOR_INTEGRATION_REPORT.ko.md)**: Casdoor 44개 테이블 자동 생성, 복합 PK 및 OIDC/RBAC E2E 검증.
+* **[`IOTA_ERP_INTEGRATION_REPORT.ko.md`](IOTA_ERP_INTEGRATION_REPORT.ko.md)**: IOTA SDK ERP 연동, `pgx/v5` 바이너리 프로토콜 완비 및 47개 마이그레이션 관통.
+* **[`UMAMI_INTEGRATION_REPORT.ko.md`](UMAMI_INTEGRATION_REPORT.ko.md)**: Umami 웹 분석 플랫폼 연동 검증 보고서.
+* **[`BABELFISH_INTEGRATION_REPORT.ko.md`](BABELFISH_INTEGRATION_REPORT.ko.md)**: AWS Babelfish T-SQL 저장 프로시저 호환성 검증 보고서.
+
+### 4.2. 표준 벤치마크 및 장기 부하 실측
+* **[`SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md`](SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md)** ([English](SLT_FULL_SUITE_100_PERCENT_REPORT.md))
+  * SQLite 공식 SQLLogicTest (SLT) 107개 풀세트(551,217 쿼리) 100% 무결점 통과 실측 보고서 및 8대 심층 엔진 결함 완치 기록.
+* **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)**
+  * 1시간 장시간 고부하(72만 ops / 39.3만 커밋) 실측 검증, `SQLSTATE 40001` 충돌 처리 및 WiredTiger 500MB 캐시 수렴 분석 보고서.
+* **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)**
+  * SSB (Star Schema Benchmark) 및 Mini TPC-H 5대 대표 쿼리 실측, DuckDB/ClickHouse 비교 분석 및 1.0 완료 동결 보고.
+
+---
+
+## 5. 엔지니어링 포스트모텀 & 네거티브 지식 (Postmortems & Negative Knowledge)
+
+실전 장애 극복 과정에서 얻은 교훈, 사각지대 분석 및 아키텍처 불변성을 지키기 위해 의도적으로 기각된 평가서입니다.
+
+* **[`DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`](DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md)**
+  * DuckDB 스타일 편의 문법(`SELECT * EXCLUDE`, `FROM <table>;`) 및 MySQL 추가 호환 구문의 기각 사유와 불변 경계 평가 (오타 침묵 방지 및 RDBMS 엄격성 수호).
+* **[`EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)**
+  * `WHERE col IN ()` 빈 괄호 평가 허용 여부에 대한 분석, 1.0 엄격 에러 유지 및 무분별한 토글 플래그 배제 원칙.
+* **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)**
+  * Gitea XORM 실전 연동 중 노출된 결함 원인 분석 및 "인간 작성 SQL vs ORM 기계 생성 SQL" 테스트 사각지대 영구 분석.
+* **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)**
+  * TDS RPC `sp_executesql` 파라미터 해석 리그레션 분석, Beekeeper Studio 접속 오류 규명 및 위치 기반(Ordinal Positional) 폴백 복원 포스트모텀.
+* **[`GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md`](GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md)**
+  * Grove 핫스팟 최적화 과정에서 도출된 핵심 자산(VDBE 슬롯 인덱싱, OCC vs WT 역할 분담, 락 컨보이/OS 타이머 퀀텀 실체) 심층 포스트모텀.
+
+---
+
+## 6. Post-1.0 후보 과제 & 역사적 아카이브 (Post-1.0 & Archives)
+
+* **[`POST_1.0_CANDIDATES.ko.md`](POST_1.0_CANDIDATES.ko.md)**
+  * LionSQL Post-1.0 기술 과제 풀 (사전 기술 분석 완료 및 온디맨드 채택 대기 목록).
+* **[`MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)**
+  * Materialized View 가상 뷰 알리아스 방식 도입 설계 (Post-1.0 이관 확정, `FEAT-MATVIEW-ALIAS-1`).
+* **[`POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)**
+  * HNSW 벡터 인덱스 및 시계열 압축 청크 아키텍처 설계 계획서.
+* **[`OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](OFFLINE_DOCS_PACKAGING_PLAN.ko.md)**
+  * 배포 패키지 오프라인 문서 번들링 및 내장 뷰어 설계 계획서 (`PKG-OFFLINE-DOCS-1`).
+* **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)**
+  * AWS Babelfish T-SQL Stored Procedure 전용 SLT 테스트 스위트 구축 계획서.
+* **역사적 아카이브 디렉토리 (`notes/archive/`)**:
+  * 100% 구현 완료되어 설계 의도 및 검증 이력을 보존하기 위해 보관된 과거 13개 계획서(Windows 데몬 분리, Forward-only 커서, 단일 CLI 통합 등) 및 원본 백로그는 **[`notes/archive/README.md`](archive/README.md)**를 참조하십시오.
