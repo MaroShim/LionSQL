@@ -3,11 +3,11 @@ package proc
 import (
 	"fmt"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -346,14 +346,7 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		if err != nil || patVal == nil {
 			return false, nil
 		}
-		pat := fmt.Sprintf("%v", patVal)
-		pat = strings.ReplaceAll(pat, "[_]", "\x00LITERALUNDERSCORE\x00")
-		pat = strings.ReplaceAll(pat, "[%]", "\x00LITERALPERCENT\x00")
-		pat = strings.ReplaceAll(regexp.QuoteMeta(pat), "%", ".*")
-		pat = strings.ReplaceAll(pat, "_", ".")
-		pat = strings.ReplaceAll(pat, "\x00LITERALUNDERSCORE\x00", "_")
-		pat = strings.ReplaceAll(pat, "\x00LITERALPERCENT\x00", "%")
-		matched, _ := regexp.MatchString("(?i)^"+pat+"$", fmt.Sprintf("%v", val))
+		matched := sqlutil.MatchLike(fmt.Sprintf("%v", patVal), fmt.Sprintf("%v", val), true)
 		if e.Not {
 			return !matched, nil
 		}
