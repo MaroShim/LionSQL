@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"math/bits"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -425,46 +424,18 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	var limitCount int64 = -1
 	var offsetCount int64 = 0
 
-	if pStr, fClause, wClause, gStr, hClause, oClause, lCount, offCount, ok := splitSelectClauses(mainSQL); ok {
-		projStr = pStr
-		fromClause = fClause
-		whereClause = wClause
-		groupByStr = gStr
-		havingClause = hClause
-		orderByClause = oClause
-		limitCount = lCount
-		offsetCount = offCount
-	} else {
-		selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?(?:\s+OFFSET\s+(\d+))?$`)
-		matches := selectRe.FindStringSubmatch(mainSQL)
-		if len(matches) < 3 {
-			return nil, fmt.Errorf("invalid SELECT statement for planning: %q", mainSQL)
-		}
-		projStr = strings.TrimSpace(matches[1])
-		fromClause = strings.TrimSpace(matches[2])
-		if len(matches) > 3 {
-			whereClause = strings.TrimSpace(matches[3])
-		}
-		if len(matches) > 4 {
-			groupByStr = strings.TrimSpace(matches[4])
-		}
-		if len(matches) > 5 {
-			havingClause = strings.TrimSpace(matches[5])
-		}
-		if len(matches) > 6 {
-			orderByClause = strings.TrimSpace(matches[6])
-		}
-		if len(matches) > 7 && matches[7] != "" {
-			if n, err := strconv.ParseInt(matches[7], 10, 64); err == nil {
-				limitCount = n
-			}
-		}
-		if len(matches) > 8 && matches[8] != "" {
-			if n, err := strconv.ParseInt(matches[8], 10, 64); err == nil {
-				offsetCount = n
-			}
-		}
+	pStr, fClause, wClause, gStr, hClause, oClause, lCount, offCount, ok := splitSelectClauses(mainSQL)
+	if !ok {
+		return nil, fmt.Errorf("invalid SELECT statement for planning: %q", mainSQL)
 	}
+	projStr = pStr
+	fromClause = fClause
+	whereClause = wClause
+	groupByStr = gStr
+	havingClause = hClause
+	orderByClause = oClause
+	limitCount = lCount
+	offsetCount = offCount
 
 	if whereClause != "" {
 		pExpr := proc.NewParser(proc.NewLexer(whereClause)).ParseExpr()
@@ -823,58 +794,102 @@ func parseFromAndJoins(fromClause string) (string, string, []*JoinInfo, error) {
 		return baseTable, baseAlias, joins, nil
 	}
 
-	joinPattern := regexp.MustCompile(`(?is)(?:(INNER|LEFT(?:\s+OUTER)?|RIGHT(?:\s+OUTER)?|FULL(?:\s+OUTER)?)\s+)?JOIN\s+([^\s]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s+ON\s+([^\s=]+)\s*=\s*([^\s=;]+)`)
-	matches := joinPattern.FindAllStringSubmatchIndex(fromClause, -1)
-	if len(matches) == 0 {
+	joinIndices := sqlutil.FindAllTopLevelKeyword(fromClause, "JOIN")
+	if len(joinIndices) == 0 {
 		baseTable, baseAlias := parseTableAndAlias(fromClause)
 		return baseTable, baseAlias, nil, nil
 	}
 
-	// Base table is before the first JOIN
-	firstJoinStart := matches[0][0]
-	basePart := strings.TrimSpace(fromClause[:firstJoinStart])
-	baseTable, baseAlias := parseTableAndAlias(basePart)
+	// First JOIN determines the base table
+	firstJoinIdx := joinIndices[0]
+	// Check if there is a join prefix word (INNER, LEFT, RIGHT, FULL, CROSS) right before JOIN
+	beforeFirstJoin := strings.TrimSpace(fromClause[:firstJoinIdx])
+	words := strings.Fields(beforeFirstJoin)
+	if len(words) > 0 {
+		lastWord := strings.ToUpper(words[len(words)-1])
+		if lastWord == "INNER" || lastWord == "LEFT" || lastWord == "RIGHT" || lastWord == "FULL" || lastWord == "CROSS" || lastWord == "OUTER" {
+			// Find prefix start
+			prefixLen := len(words[len(words)-1])
+			if len(words) > 1 && lastWord == "OUTER" {
+				secondLast := strings.ToUpper(words[len(words)-2])
+				if secondLast == "LEFT" || secondLast == "RIGHT" || secondLast == "FULL" {
+					prefixLen += len(words[len(words)-2]) + 1
+				}
+			}
+			beforeFirstJoin = strings.TrimSpace(beforeFirstJoin[:len(beforeFirstJoin)-prefixLen])
+		}
+	}
+	baseTable, baseAlias := parseTableAndAlias(beforeFirstJoin)
 
 	var joins []*JoinInfo
-	for _, m := range matches {
-		var joinType, rightTable, rightAlias, leftKey, rightKey string
-		if m[2] != -1 && m[3] != -1 {
-			joinType = fromClause[m[2]:m[3]]
-		}
-		if m[4] != -1 && m[5] != -1 {
-			rightTable = fromClause[m[4]:m[5]]
-		}
-		if m[6] != -1 && m[7] != -1 {
-			rightAlias = fromClause[m[6]:m[7]]
-		}
-		if m[8] != -1 && m[9] != -1 {
-			leftKey = fromClause[m[8]:m[9]]
-		}
-		if m[10] != -1 && m[11] != -1 {
-			rightKey = fromClause[m[10]:m[11]]
+	for k, jIdx := range joinIndices {
+		// Determine join type from text immediately preceding this JOIN
+		jType := "INNER"
+		before := strings.TrimSpace(fromClause[:jIdx])
+		bWords := strings.Fields(before)
+		if len(bWords) > 0 {
+			last := strings.ToUpper(bWords[len(bWords)-1])
+			if last == "LEFT" || (len(bWords) > 1 && strings.ToUpper(bWords[len(bWords)-2]) == "LEFT") {
+				jType = "LEFT"
+			} else if last == "RIGHT" || (len(bWords) > 1 && strings.ToUpper(bWords[len(bWords)-2]) == "RIGHT") {
+				jType = "RIGHT"
+			} else if last == "FULL" || (len(bWords) > 1 && strings.ToUpper(bWords[len(bWords)-2]) == "FULL") {
+				jType = "FULL"
+			} else if last == "CROSS" {
+				jType = "CROSS"
+			}
 		}
 
-		jType := "INNER"
-		uType := strings.ToUpper(strings.TrimSpace(joinType))
-		if strings.HasPrefix(uType, "LEFT") {
-			jType = "LEFT"
-		} else if strings.HasPrefix(uType, "RIGHT") {
-			jType = "RIGHT"
-		} else if strings.HasPrefix(uType, "FULL") {
-			jType = "FULL"
+		// Text after JOIN up to next JOIN or end
+		afterJoin := fromClause[jIdx+4:]
+		if k+1 < len(joinIndices) {
+			nextJIdx := joinIndices[k+1] - (jIdx + 4)
+			// Truncate before prefix words of the next JOIN
+			sub := strings.TrimSpace(afterJoin[:nextJIdx])
+			subWords := strings.Fields(sub)
+			if len(subWords) > 0 {
+				lastW := strings.ToUpper(subWords[len(subWords)-1])
+				if lastW == "INNER" || lastW == "LEFT" || lastW == "RIGHT" || lastW == "FULL" || lastW == "CROSS" || lastW == "OUTER" {
+					pLen := len(subWords[len(subWords)-1])
+					if len(subWords) > 1 && lastW == "OUTER" {
+						pLen += len(subWords[len(subWords)-2]) + 1
+					}
+					sub = strings.TrimSpace(sub[:len(sub)-pLen])
+				}
+			}
+			afterJoin = sub
 		}
-		rightTable = cleanIdent(rightTable)
-		rightAlias = cleanIdent(rightAlias)
-		if rightAlias == "" || strings.EqualFold(rightAlias, "ON") {
-			rightAlias = rightTable
+
+		// Parse table and ON clause
+		onIdx := sqlutil.FindTopLevelKeyword(afterJoin, "ON")
+		var tblPart, onPart string
+		if onIdx != -1 {
+			tblPart = strings.TrimSpace(afterJoin[:onIdx])
+			onPart = strings.TrimSpace(afterJoin[onIdx+2:])
+		} else {
+			tblPart = strings.TrimSpace(afterJoin)
+		}
+
+		rTable, rAlias := parseTableAndAlias(tblPart)
+		rTable = cleanIdent(rTable)
+		rAlias = cleanIdent(rAlias)
+		if rAlias == "" || strings.EqualFold(rAlias, "ON") {
+			rAlias = rTable
+		}
+
+		var leftKey, rightKey string
+		if onPart != "" {
+			l, r := sqlutil.SplitJoinCond(onPart)
+			leftKey = cleanIdent(l)
+			rightKey = cleanIdent(r)
 		}
 
 		joins = append(joins, &JoinInfo{
 			Type:     jType,
-			Table:    rightTable,
-			Alias:    rightAlias,
-			LeftKey:  cleanIdent(leftKey),
-			RightKey: cleanIdent(rightKey),
+			Table:    rTable,
+			Alias:    rAlias,
+			LeftKey:  leftKey,
+			RightKey: rightKey,
 		})
 	}
 

@@ -39,8 +39,8 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 4. **`FIX-SQLUTIL-PARSER-1`: `pkg/sqlutil` SQL 파서/정규화기 결함 보강 및 렉서 공통화** [x]
    - **완료 내용**: `NOLOCK` 리터럴 파괴 방지, 세미콜론(`;`) 보존, `TOP PERCENT/WITH TIES/UNION` 오변환 차단, `ANY/IN/IS NULL` 다중바이트/배열 파싱 결함 수정 및 UTF-8 안전 상태머신 모듈화 완료. 14대 probe 테스트 전수 PASS.
    - **설계 문서**: [`notes/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/SQL_PARSER_HARDENING_PLAN.ko.md)
-5. **`GA-REGEX-FINAL-2`: CBO Planner 및 VDBE 잔여 정규식 100% 완전 제거** [진행 중]
-   - **목표**: `planner.go` 거대 SELECT/JOIN 정규식 제거(결정론적 토크나이저 대체) 및 `vm.go` 쿼리 바인딩/LIKE 정규식 제거(`sqlutil.MatchLike` 통합)로 엔진 코어 Zero-Regex 달성
+5. **`GA-REGEX-FINAL-2`: CBO Planner 및 VDBE 잔여 정규식 100% 완전 제거** [x]
+   - **완료 내용**: `planner.go` 거대 SELECT/JOIN 정규식 제거(결정론적 토크나이저 대체) 및 `vm.go` 쿼리 바인딩/LIKE 정규식 제거(`sqlutil.MatchLike` 통합)로 엔진 코어 Zero-Regex 달성 완료.
    - **설계 문서**: [`notes/CBO_PLANNER_ZERO_REGEX_PLAN.ko.md`](notes/CBO_PLANNER_ZERO_REGEX_PLAN.ko.md)
 6. **`FEAT-TOLERANT-DDL-1`: 동적 런타임 관용 DDL 제어 CLI (`get` & `set`) 및 PostgreSQL SQLSTATE 42704 정합성** [x]
    - **완료 내용**: 기본 엄격 모드(`strict`) 유지. 정적 옵션(Flag/Env/JSON) 전면 배제 및 오직 `./bin/lionsql set tolerant_ddl on/off` 단일 수단만 제공(재시작 시 자동 복귀). Wire 프로토콜에서 인덱스 부재 에러 시 PostgreSQL 표준 `42704` SQLSTATE 매핑 완료.

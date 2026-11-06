@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -782,10 +781,124 @@ func (f *VMFrame) bindWhereVariables(where string) string {
 	})
 
 	for _, b := range bindings {
-		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(b.name) + `\b`)
-		res = re.ReplaceAllString(res, b.val)
+		res = replaceVariableBoundaries(res, b.name, b.val)
 	}
 	return res
+}
+
+func replaceVariableBoundaries(s, target, replacement string) string {
+	n := len(s)
+	tLen := len(target)
+	if n < tLen {
+		return s
+	}
+
+	var sb strings.Builder
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBracket := false
+	inLineComment := false
+	inBlockComment := false
+
+	for i := 0; i < n; i++ {
+		ch := s[i]
+
+		// Comments
+		if inLineComment {
+			sb.WriteByte(ch)
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			sb.WriteByte(ch)
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				sb.WriteByte('/')
+				i++
+				inBlockComment = false
+			}
+			continue
+		}
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			sb.WriteString("--")
+			i++
+			inLineComment = true
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			sb.WriteString("/*")
+			i++
+			inBlockComment = true
+			continue
+		}
+
+		// Quotes
+		if inSingleQuote {
+			sb.WriteByte(ch)
+			if ch == '\'' {
+				if i+1 < n && s[i+1] == '\'' {
+					sb.WriteByte('\'')
+					i++
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			sb.WriteByte(ch)
+			if ch == '"' {
+				if i+1 < n && s[i+1] == '"' {
+					sb.WriteByte('"')
+					i++
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+		if inBracket {
+			sb.WriteByte(ch)
+			if ch == ']' {
+				inBracket = false
+			}
+			continue
+		}
+
+		if ch == '\'' {
+			inSingleQuote = true
+			sb.WriteByte(ch)
+			continue
+		}
+		if ch == '"' {
+			inDoubleQuote = true
+			sb.WriteByte(ch)
+			continue
+		}
+		if ch == '[' {
+			inBracket = true
+			sb.WriteByte(ch)
+			continue
+		}
+
+		// Check word boundary matching
+		if i+tLen <= n && strings.EqualFold(s[i:i+tLen], target) {
+			// Boundary before: start of string or non-ident
+			leftOk := (i == 0 || !sqlutil.IsIdentChar(s[i-1]))
+			// Boundary after: end of string or non-ident
+			rightOk := (i+tLen == n || !sqlutil.IsIdentChar(s[i+tLen]))
+			if leftOk && rightOk {
+				sb.WriteString(replacement)
+				i += tLen - 1
+				continue
+			}
+		}
+
+		sb.WriteByte(ch)
+	}
+
+	return sb.String()
 }
 
 func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[string]any, []string, [][]any, error) {
@@ -2489,28 +2602,7 @@ func recordToMap(rec storage.Record) map[string]any {
 }
 
 func matchLike(str, pattern string) bool {
-	var b strings.Builder
-	b.WriteString("(?i)^")
-	for i := 0; i < len(pattern); i++ {
-		c := pattern[i]
-		switch c {
-		case '%':
-			b.WriteString(".*")
-		case '_':
-			b.WriteString(".")
-		case '.', '+', '?', '^', '$', '(', ')', '[', ']', '{', '}', '|', '\\':
-			b.WriteString("\\")
-			b.WriteByte(c)
-		default:
-			b.WriteByte(c)
-		}
-	}
-	b.WriteString("$")
-	re, err := regexp.Compile(b.String())
-	if err != nil {
-		return strings.EqualFold(str, pattern)
-	}
-	return re.MatchString(str)
+	return sqlutil.MatchLike(pattern, str, true)
 }
 
 func isTransientTable(name string) bool {
