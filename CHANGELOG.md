@@ -7,7 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.91.0] - 2026-11-06
+
 ### Added
+- **Embedded SPA Web Server Hosting (`WEB-SPA-1`)**: Serve single-page HTML files or flat frontend SPA builds (React, Vue, Svelte) alongside database APIs on port `:8090` without Nginx/Caddy; zero-network-hop in-process bus with zero CORS overhead and kernel `sendfile(2)` resource isolation.
+- **Root Compatibility Specifications**: Publish formal standalone compatibility specifications ([`COMPATIBILITY.ko.md`](COMPATIBILITY.ko.md) / [`COMPATIBILITY.md`](COMPATIBILITY.md)) standardizing on Microsoft SQL Server 2019 (15.0.2000.5) and PostgreSQL 14-16 wire protocols.
+- **Embedded Web App Hosting Guide**: Add comprehensive Korean and English operational guides ([`doc/WEB_APP_HOSTING_GUIDE.ko.md`](doc/WEB_APP_HOSTING_GUIDE.ko.md) / [`doc/WEB_APP_HOSTING_GUIDE.md`](doc/WEB_APP_HOSTING_GUIDE.md)) detailing architecture, benchmarks (45k-65k RPS, <0.5ms latency), Flat Directory Invariants, and full-stack tutorials.
+- **Core Engine Internals Indexing**: Formally link and catalog `doc/internal/` 7 core architectural specifications (VDBE bytecode ISA, CBO Volcano optimizer, Zero-Allocation memory pooling, Tuple binary codec) directly in the `doc/` catalog.
+- **Korean Historical Archive Index**: Reorganize `notes/archive/` into structured bilingual hubs with complete listings of completed execution plans and 107-defect bug resolution logs.
 - implement dynamic runtime configuration CLI commands (`lionsql get` and `lionsql set`) with sudo-style terminal password verification (`FEAT-TOLERANT-DDL-1`)
 - map non-existent index drop errors to standard PostgreSQL SQLSTATE `42704` (undefined_object) in wire protocol for migration framework compatibility (e.g., Knex/NocoDB)
 - unify ad-hoc duplicate table, index, column, constraint, and storage parameter DDL handling into single tolerant mode pipeline controlled strictly via dynamic CLI switch (`lionsql set tolerant_ddl on/off`)
@@ -21,10 +28,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - enforce deterministic ID sorting for diff-stability and add bidirectional `restore` command to sprint tool
 - formalize dual-sync invariant between TODO dashboard and persistent sprint tasks database
 
-### Changed
+### Changed & Refactored
+- **Total Elimination of Regular Expressions (`GA-REGEX`)**: Completely eradicate regular expressions across CBO planner, VDBE runtime, LIKE execution filters, and PGWire dollar parameters (`$N`) in favor of zero-allocation deterministic tokenizers and state machines (`sqlutil.ReplacePgParams`, `sqlutil.MatchLike`).
+- **T-SQL Bracket Wildcards in LIKE Operator**: Harden `sqlutil.MatchLike` with native T-SQL bracket wildcards (`[...]`, `[^...]`, `[_]`, `[%]`) and range evaluation for robust collation filtering and XORM introspection.
+- **In-Memory OCC Pointer-Free Flat Record Hardening (`OCC-HYPER-2`)**: Introduce flat record layout codec with immutable layouts, achieving 67.5% memory reduction while maintaining stable A/B validation.
 - refactor virtual catalog interceptor to table-driven static route table, eliminating sequential IF-chain order sensitivity (`REFACTOR-CATALOG-INTERCEPTOR-1`)
 - format `TASKS.md` table sorted strictly by `id ASC` to eliminate git diff churn on status transitions
 - refactor TPC-C benchmark execution to run multi-statement procedures in single atomic transactions via `RunInTx` (5a285f1)
+- reorganize `notes/` index into structured 6-tier architecture hub, separating active sprints, subsystem plans, verification reports, postmortems, and archives.
 
 ## [0.90.1] - 2026-11-04
 

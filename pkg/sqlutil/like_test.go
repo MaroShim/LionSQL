@@ -38,6 +38,15 @@ func TestMatchLike(t *testing.T) {
 		{"가%다", "가나다", false, true},
 		{"가_다", "가나다", false, true},
 		{"가_다", "가나다라", false, false},
+		{"%[_]CS[_]AS%", "Latin1_General_CS_AS", false, true},
+		{"%[_]CS[_]AS%", "Latin1_General_CI_AS", false, false},
+		{"%[%]%", "discount 50% off", false, true},
+		{"%[%]%", "discount 50 off", false, false},
+		{"[A-Z]%", "Apple", false, true},
+		{"[A-Z]%", "apple", false, false},
+		{"[A-Z]%", "apple", true, true},
+		{"[^0-9]%", "abc", false, true},
+		{"[^0-9]%", "123", false, false},
 	}
 
 	for _, tc := range tests {

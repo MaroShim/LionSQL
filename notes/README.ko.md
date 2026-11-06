@@ -33,8 +33,6 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 
 * **[`PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`](PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md)**
   * 전 소스코드 100단계 듀얼 AI(Gemini × Claude) 크로스 감사 마스터 플랜 및 10대 도메인 실시간 추적 매트릭스 (`AUDIT-100-DUAL-REVIEW`).
-* **[`PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md)**
-  * 100단계 전수 감사 과정에서 발굴된 실측 결함 누적 매트릭스 (Scope 001~020 스캔 완료, 18건 기록).
 * **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)**
   * LionSQL 전역 정규식 완전 박멸 및 결정론적 토크나이저 전환 단일 SSOT 종합 계획서 (`GA-REGEX-DDL-1` ~ `GA-REGEX-FINAL-3`, `SEC-PGWIRE-PARAM-1`).
 * **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)**
