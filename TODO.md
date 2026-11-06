@@ -41,10 +41,10 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **설계 문서**: [`notes/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/SQL_PARSER_HARDENING_PLAN.ko.md)
 5. **`GA-REGEX-FINAL-2`: CBO Planner 및 VDBE 잔여 정규식 100% 완전 제거** [x]
    - **완료 내용**: `planner.go` 거대 SELECT/JOIN 정규식 제거(결정론적 토크나이저 대체) 및 `vm.go` 쿼리 바인딩/LIKE 정규식 제거(`sqlutil.MatchLike` 통합)로 엔진 코어 Zero-Regex 달성 완료.
-   - **설계 문서**: [`notes/CBO_PLANNER_ZERO_REGEX_PLAN.ko.md`](notes/CBO_PLANNER_ZERO_REGEX_PLAN.ko.md) (종합: [`notes/ZERO_REGEX_MIGRATION_PLAN.ko.md`](notes/ZERO_REGEX_MIGRATION_PLAN.ko.md))
+   - **설계 문서**: [`notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 6. **`GA-REGEX-FINAL-3`: 쿼리 실행 런타임 LIKE 정규식 100% 완전 제거** [x]
    - **완료 내용**: `execution/filter.go`의 런타임 행 순회 `LIKE` 평가 시 정규식 컴파일을 `sqlutil.MatchLike`로 전면 교체하여 핫패스 GC 부하를 0으로 제거하고, `catalog/virtual/result.go`의 가상 카탈로그 `LIKE` 평가는 T-SQL 대괄호 이스케이프(`[_]`, `[%]`)를 보정하여 XORM 및 Collation 회귀 방어 완료.
-   - **설계 문서**: [`notes/RUNTIME_LIKE_ZERO_REGEX_PLAN.ko.md`](notes/RUNTIME_LIKE_ZERO_REGEX_PLAN.ko.md) (종합: [`notes/ZERO_REGEX_MIGRATION_PLAN.ko.md`](notes/ZERO_REGEX_MIGRATION_PLAN.ko.md))
+   - **설계 문서**: [`notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 7. **`FEAT-TOLERANT-DDL-1`: 동적 런타임 관용 DDL 제어 CLI (`get` & `set`) 및 PostgreSQL SQLSTATE 42704 정합성** [x]
    - **완료 내용**: 기본 엄격 모드(`strict`) 유지. 정적 옵션(Flag/Env/JSON) 전면 배제 및 오직 `./bin/lionsql set tolerant_ddl on/off` 단일 수단만 제공(재시작 시 자동 복귀). Wire 프로토콜에서 인덱스 부재 에러 시 PostgreSQL 표준 `42704` SQLSTATE 매핑 완료.
    - **설계 문서**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
@@ -53,7 +53,7 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **설계 문서**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
 9. **`SEC-PGWIRE-PARAM-1`: PGWire 달러 파라미터($N) 상태머신 토크나이저 전환 및 보안 강화** [x]
    - **완료 내용**: `pkg/wire/server.go`에서 `pgParamRe` 정규식을 전면 제거하고 `"regexp"` import를 완전 삭제. 작은따옴표(`'...'`), 큰따옴표(`"..."`), 달러 인용(`$$...$$`, `$tag$...$tag$`) 및 주석(`--`, `/* */`)을 완벽히 보존하는 `sqlutil.ReplacePgParams`, `TranslatePgParamsToAtParams`, `MaxPgParamIndex`를 개발하여 쿼리 변조 및 DoS 원천 차단 완료.
-   - **설계 문서**: [`notes/PGWIRE_PARAM_TRANSLATION_PLAN.ko.md`](notes/PGWIRE_PARAM_TRANSLATION_PLAN.ko.md)
+   - **설계 문서**: [`notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 
 ### 1.2 1.0 신뢰성 검증 게이트 (Release Gates)
 1. **`DURA-KILL-1`: `kill -9` 크래시 복구 장기 라운드 검증**
