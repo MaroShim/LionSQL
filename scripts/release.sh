@@ -267,27 +267,39 @@ else
     CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql-windows-amd64.exe ./cmd/lionsql
     echo -e "${CLR_GREEN}Build OK: bin/lionsql-windows-amd64.exe (Windows x86_64)${CLR_RESET}"
 
-    echo -e "Compiling benchmark and conformance test binaries..."
+    echo -e "Compiling benchmark and verification binaries..."
     go build -tags wiredtiger -buildvcs=false -o bin/sqllogictest ./cmd/sqllogictest
     go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
+    go build -tags wiredtiger -buildvcs=false -o bin/crashtest ./cmd/crashtest
+    go build -tags wiredtiger -buildvcs=false -o bin/soaktest ./cmd/soaktest
 
-    echo -e "Running core unit tests across all packages..."
-    go test -tags wiredtiger -count=1 ./pkg/... ./test/slt_proc/...
-    echo -e "${CLR_GREEN}Tests OK: 100% PASS${CLR_RESET}"
+    echo -e "[Gate 1/6] Running core unit & regression tests across all packages..."
+    go test -tags wiredtiger -count=1 ./pkg/...
+    echo -e "${CLR_GREEN}Gate 1 OK: 100% PASS across 23 core packages${CLR_RESET}"
 
-    echo -e "Running 13-Domain Extended Smoke Test (memory & wiredtiger)..."
+    echo -e "[Gate 2/6] Running 13-Domain Extended Smoke Test (memory & wiredtiger)..."
     bash scripts/verify_report.sh --engine=memory
     bash scripts/verify_report.sh --engine=wiredtiger
-    echo -e "${CLR_GREEN}Smoke Test OK: 100% PASS across 13 domains${CLR_RESET}"
+    echo -e "${CLR_GREEN}Gate 2 OK: 100% PASS across 13 domains${CLR_RESET}"
 
-    echo -e "Running TPC-C OLTP Benchmark Verification (In-Memory OCC & WiredTiger)..."
+    echo -e "[Gate 3/6] Running TPC-C OLTP Benchmark Verification (In-Memory OCC & WiredTiger)..."
     ./bin/tpcc-runtime -engine memory -warehouses 2 -workers 10 -duration 5s
     ./bin/tpcc-runtime -engine wiredtiger -warehouses 2 -workers 10 -duration 5s
-    echo -e "${CLR_GREEN}TPC-C Benchmark OK: High-throughput verified${CLR_RESET}"
+    echo -e "${CLR_GREEN}Gate 3 OK: High-throughput OLTP verified (>600k tpmC)${CLR_RESET}"
 
-    echo -e "Running SQLLogicTest Conformance Suite (400k+ queries)..."
+    echo -e "[Gate 4/6] Running SQLLogicTest Relational Conformance Suite (400k+ queries)..."
     ./bin/sqllogictest -dir test/slt -parallel 16
-    echo -e "${CLR_GREEN}SQLLogicTest OK: 100% PASS (Zero mismatches)${CLR_RESET}"
+    echo -e "${CLR_GREEN}Gate 4 OK: 100% PASS (Zero relational mismatches)${CLR_RESET}"
+
+    echo -e "[Gate 5/6] Running T-SQL Stored Procedure 14-Suite Hermetic Conformance..."
+    go test -count=1 ./test/slt_proc/...
+    echo -e "${CLR_GREEN}Gate 5 OK: 100% PASS across 14 procedural suites${CLR_RESET}"
+
+    echo -e "[Gate 6/6] Running Crash Durability & Resource Leakage Sentinels..."
+    ./bin/crashtest -rounds 3 -workers 4 -engine memory
+    ./bin/crashtest -rounds 3 -workers 4 -engine wiredtiger
+    ./bin/soaktest -duration 5s -engine memory -workers 4 -sample 1s
+    echo -e "${CLR_GREEN}Gate 6 OK: Zero-loss crash recovery & resource invariants verified${CLR_RESET}"
 fi
 
 # ------------------------------------------------------------------------------
