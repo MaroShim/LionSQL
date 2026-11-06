@@ -74,7 +74,26 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
 
 ---
 
-## 4. 엔지니어링 히스토리 및 아키텍처 기록 (ADR & Knowledge Base)
+## 4. 코어 엔진 내부 명세 (`doc/internal/`)
+
+LionSQL의 심층 하부 구현, 바이트코드 가상 머신(VDBE), 제로 할당 메모리 아키텍처 및 쿼리 플래너의 기술적 세부 명세입니다.
+
+* **[`internal/README.ko.md`](internal/README.ko.md)** ([English](internal/README.md))
+  * **코어 엔진 내부 명세 허브**: 하부 컴포넌트별 7대 핵심 기술 스펙 총괄 색인.
+* **스토리지 및 트랜잭션 내부 구조**:
+  * **[`internal/STORAGE.md`](internal/STORAGE.md)**: In-Memory OCC vs WiredTiger B+Tree 스토리지 엔진 인터페이스 및 물리 레이아웃.
+  * **[`internal/RECORD_BINARY_FORMAT.md`](internal/RECORD_BINARY_FORMAT.md)**: 콤팩트 바이너리 튜플 직렬화 및 고밀도 ZigZag Varint 인코딩 명세.
+  * **[`internal/TRANSACTION_CONCURRENCY.md`](internal/TRANSACTION_CONCURRENCY.md)**: 비차단 스냅샷 읽기, 워크스페이스 격리 및 MVCC/OCC 동시성 모델.
+* **실행 엔진 및 최적화**:
+  * **[`internal/ZERO_ALLOCATION_ARCHITECTURE.md`](internal/ZERO_ALLOCATION_ARCHITECTURE.md)**: 20,000+ TPS를 견인하는 제로 할당 메모리 및 버퍼 풀링 아키텍처.
+  * **[`internal/VDBE.md`](internal/VDBE.md)**: SQLite 스타일 T-SQL 바이트코드 VM 명령어 세트(ISA) 및 레지스터 풀링 명세.
+  * **[`internal/CBO_VOLCANO.md`](internal/CBO_VOLCANO.md)**: Volcano 반복자 파이프라인 및 64-버킷 균등 깊이 히스토그램 기반 비용 최적화기.
+* **네트워킹 및 와이어 프로토콜**:
+  * **[`internal/WIRE_PROTOCOLS.md`](internal/WIRE_PROTOCOLS.md)**: PostgreSQL v3 및 TDS 7.x/8.0 바이너리 프레이밍 및 고루틴 커넥션 풀러.
+
+---
+
+## 5. 엔지니어링 히스토리 및 아키텍처 기록 (ADR & Knowledge Base)
 
 * **[`ADR.md`](ADR.md)**: 초기 아키텍처 설계 결정 기록 (ADR-001 ~ ADR-022).
 * **[`FOUNDATIONAL_DESIGN_DECISIONS.md`](FOUNDATIONAL_DESIGN_DECISIONS.md)** / **[`WHY_TSQL_GO_WIREDTIGER.ko.md`](WHY_TSQL_GO_WIREDTIGER.ko.md)**: 핵심 기술 스택 채택 배경 및 설계 철학.

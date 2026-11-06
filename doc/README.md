@@ -73,7 +73,26 @@ Operational procedures, high availability, security hardening, APIs, and backgro
 
 ---
 
-## 4. Architectural History & Design Records (ADR & Knowledge Base)
+## 4. Core Engine Internals (`doc/internal/`)
+
+In-depth technical specifications covering LionSQL's lower-level engine mechanisms, bytecode virtual machine, memory architectures, and query optimization pipelines.
+
+* **[`internal/README.md`](internal/README.md)** ([Korean](internal/README.ko.md))
+  * **Core Engine Internals Hub**: Master index of 7 core technical specifications.
+* **Storage & Concurrency**:
+  * **[`internal/STORAGE.md`](internal/STORAGE.md)**: Storage engine abstraction contracts, In-Memory OCC vs WiredTiger physical directory layouts.
+  * **[`internal/RECORD_BINARY_FORMAT.md`](internal/RECORD_BINARY_FORMAT.md)**: Compact binary tuple serialization and high-density ZigZag Varint encoding.
+  * **[`internal/TRANSACTION_CONCURRENCY.md`](internal/TRANSACTION_CONCURRENCY.md)**: Non-blocking snapshot reads, private workspaces, and MVCC/OCC concurrency models.
+* **Execution & Performance**:
+  * **[`internal/ZERO_ALLOCATION_ARCHITECTURE.md`](internal/ZERO_ALLOCATION_ARCHITECTURE.md)**: Zero-allocation memory pooling driving 20k+ TPS throughput.
+  * **[`internal/VDBE.md`](internal/VDBE.md)**: SQLite-inspired T-SQL bytecode virtual machine ISA and register recycling specifications.
+  * **[`internal/CBO_VOLCANO.md`](internal/CBO_VOLCANO.md)**: Volcano iterator pipeline and cost-based optimizer with equi-depth histograms.
+* **Networking & Wire Protocols**:
+  * **[`internal/WIRE_PROTOCOLS.md`](internal/WIRE_PROTOCOLS.md)**: PostgreSQL v3 and TDS 7.x/8.0 binary framing and goroutine connection pooler.
+
+---
+
+## 5. Architectural History & Design Records (ADR & Knowledge Base)
 
 * **[`ADR.md`](ADR.md)**: Architecture Decision Records (ADR-001 ~ ADR-022).
 * **[`FOUNDATIONAL_DESIGN_DECISIONS.md`](FOUNDATIONAL_DESIGN_DECISIONS.md)** / **[`WHY_TSQL_GO_WIREDTIGER.md`](WHY_TSQL_GO_WIREDTIGER.md)**: Core technology selection rationales.
