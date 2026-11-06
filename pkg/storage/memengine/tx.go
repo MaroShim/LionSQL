@@ -1910,24 +1910,19 @@ func (tx *Transaction) Commit() error {
 		}
 		sh := &td.shards[sIdx]
 		oldEntry, hadOld := sh.entries[ch.key]
-		oldRow := oldEntry.row
-		if td.mode == OCCModeFlat && len(oldEntry.flatBuf) > 0 && len(oldRow.Values) == 0 {
-			if decoded, err := td.layout.DecodeFlatToRow(&td.Schema, oldEntry.flatBuf); err == nil {
-				oldRow = decoded
-			}
+		oldRow, err := oldEntry.materialize(td)
+		if err != nil {
+			return err
 		}
 
 		switch ch.kind {
 		case changeInsert:
-			if td.mode == OCCModeFlat {
-				if td.layout == nil {
-					td.layout = BuildFlatRecordLayout(&td.Schema)
+			if td.mode == OCCModeFlat && td.layout != nil {
+				flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row)
+				if err != nil {
+					return err
 				}
-				if flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row); err == nil {
-					sh.entries[ch.key] = shardEntry{ver: 1, flatBuf: flatBuf}
-				} else {
-					sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
-				}
+				sh.entries[ch.key] = shardEntry{ver: 1, flatBuf: flatBuf}
 			} else {
 				sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
 			}
@@ -1946,15 +1941,12 @@ func (tx *Transaction) Commit() error {
 				}
 			}
 		case changeUpdate:
-			if td.mode == OCCModeFlat {
-				if td.layout == nil {
-					td.layout = BuildFlatRecordLayout(&td.Schema)
+			if td.mode == OCCModeFlat && td.layout != nil {
+				flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row)
+				if err != nil {
+					return err
 				}
-				if flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row); err == nil {
-					sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, flatBuf: flatBuf}
-				} else {
-					sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
-				}
+				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, flatBuf: flatBuf}
 			} else {
 				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
 			}

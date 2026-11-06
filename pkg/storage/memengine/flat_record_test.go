@@ -3,6 +3,7 @@ package memengine
 import (
 	"fmt"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 	"unsafe"
@@ -577,5 +578,95 @@ func TestVerifyTableMode_FlatBufferStored(t *testing.T) {
 	}
 	if len(entry.row.Values) != 0 {
 		t.Fatalf("expected entry.row.Values to be 0 in flat mode, but got %d", len(entry.row.Values))
+	}
+}
+
+func TestFlatRecord_ConcurrentReadWriteRace(t *testing.T) {
+	opts := DefaultOptions("")
+	opts.Mode = OCCModeFlat
+	eng := NewWithOptions(opts)
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "test_concurrent_race",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	const numGoroutines = 8
+	const opsPerWorker = 100
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	for g := 0; g < numGoroutines; g++ {
+		go func(workerID int) {
+			defer wg.Done()
+			sess, err := eng.NewSession()
+			if err != nil {
+				return
+			}
+			defer sess.Close()
+
+			for i := 0; i < opsPerWorker; i++ {
+				rowID := int64(workerID*1000 + i)
+				tx, err := sess.BeginTx(storage.TxOptions{})
+				if err != nil {
+					continue
+				}
+				_ = tx.Insert("test_concurrent_race", storage.Record{
+					"id":  storage.IntValue(rowID),
+					"val": storage.StringValue(fmt.Sprintf("worker_%d_payload_%d", workerID, i)),
+				})
+				_ = tx.Commit()
+
+				// Concurrent read
+				rtx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+				if err == nil {
+					_, _ = rtx.Get("test_concurrent_race", storage.IntValue(rowID))
+					_ = rtx.Rollback()
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+}
+
+func TestFlatRecord_CorruptedBufferExplicitError(t *testing.T) {
+	opts := DefaultOptions("")
+	opts.Mode = OCCModeFlat
+	eng := NewWithOptions(opts)
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "test_corrupt",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	_ = eng.CreateTable(schema)
+
+	td := eng.tables["test_corrupt"]
+	// Manually inject corrupted flatBuf with impossible short length
+	sIdx := hashShard("bad_key")
+	sh := &td.shards[sIdx]
+	sh.mu.Lock()
+	sh.entries["bad_key"] = shardEntry{
+		ver:     1,
+		flatBuf: []byte{0xFF, 0x01}, // truncated buffer, shorter than layout min size
+	}
+	sh.mu.Unlock()
+
+	// getRowAndVer must return false without panic or returning empty corrupted row
+	_, _, ok := td.getRowAndVer("bad_key")
+	if ok {
+		t.Fatalf("expected getRowAndVer to fail on corrupted flatBuf, but got ok=true")
 	}
 }

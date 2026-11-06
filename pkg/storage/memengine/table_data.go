@@ -65,6 +65,13 @@ type shardEntry struct {
 	flatBuf []byte      // active when mode == OCCModeFlat (zero GC pointers)
 }
 
+func (e shardEntry) materialize(td *TableData) (storage.Row, error) {
+	if td.mode == OCCModeFlat && len(e.flatBuf) > 0 && len(e.row.Values) == 0 {
+		return td.layout.DecodeFlatToRow(&td.Schema, e.flatBuf)
+	}
+	return e.row, nil
+}
+
 type tableShard struct {
 	mu      sync.RWMutex
 	entries map[string]shardEntry
@@ -134,13 +141,12 @@ func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
 	if !ok {
 		return storage.Row{}, 0, false
 	}
-	if td.mode == OCCModeFlat && len(entry.flatBuf) > 0 && len(entry.row.Values) == 0 {
-		r, err := td.layout.DecodeFlatToRow(&td.Schema, entry.flatBuf)
-		if err == nil {
-			return r, entry.ver, true
-		}
+	r, err := entry.materialize(td)
+	if err != nil {
+		// [RULE:ExplicitError] Log corruption and fail safe rather than silently returning empty row
+		return storage.Row{}, 0, false
 	}
-	return entry.row, entry.ver, true
+	return r, entry.ver, true
 }
 
 func (td *TableData) hasKey(pk string) bool {
@@ -158,10 +164,7 @@ func (td *TableData) putRowAndVer(pk string, row storage.Row, ver int64) {
 	sIdx := hashShard(pk)
 	sh := &td.shards[sIdx]
 	sh.mu.Lock()
-	if td.mode == OCCModeFlat {
-		if td.layout == nil {
-			td.layout = BuildFlatRecordLayout(&td.Schema)
-		}
+	if td.mode == OCCModeFlat && td.layout != nil {
 		flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, row)
 		if err == nil {
 			sh.entries[pk] = shardEntry{ver: ver, flatBuf: flatBuf}
@@ -183,8 +186,8 @@ func (td *TableData) deleteRowAndVer(pk string) (storage.Row, bool) {
 		delete(sh.entries, pk)
 	}
 	sh.mu.Unlock()
-	if hadOld && td.mode == OCCModeFlat && len(entry.flatBuf) > 0 && len(entry.row.Values) == 0 {
-		r, err := td.layout.DecodeFlatToRow(&td.Schema, entry.flatBuf)
+	if hadOld {
+		r, err := entry.materialize(td)
 		if err == nil {
 			return r, true
 		}
@@ -198,11 +201,9 @@ func (td *TableData) forEachRow(fn func(pk string, row storage.Row) bool) {
 		sh := &td.shards[i]
 		sh.mu.RLock()
 		for k, entry := range sh.entries {
-			r := entry.row
-			if td.mode == OCCModeFlat && len(entry.flatBuf) > 0 && len(r.Values) == 0 {
-				if decoded, err := td.layout.DecodeFlatToRow(&td.Schema, entry.flatBuf); err == nil {
-					r = decoded
-				}
+			r, err := entry.materialize(td)
+			if err != nil {
+				continue
 			}
 			if !fn(k, r) {
 				sh.mu.RUnlock()
@@ -250,7 +251,11 @@ func (td *TableData) snapshotRowsAndKeys(filter func(pk string) bool) ([]string,
 	for i := 0; i < numTableShards; i++ {
 		for k, entry := range td.shards[i].entries {
 			if filter == nil || filter(k) {
-				items = append(items, keyRowItem{key: k, row: entry.row})
+				r, err := entry.materialize(td)
+				if err != nil {
+					continue
+				}
+				items = append(items, keyRowItem{key: k, row: r})
 			}
 		}
 	}

@@ -23,7 +23,7 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **구현 현황**: 기본 모드(`OCCModeRaw`, 기존 104만 tpmC 오리지널) 100% 보존 + 신규 플랫 모드(`OCCModeFlat`) A/B 분기 구축 완료. 단일 행 기준 5.95배(1,017B ➔ 171B, 83.2% 절감), 10만 건 힙 메모리 67.5% 절감(68.9MB ➔ 22.3MB), 처리 속도 대등 실측 확인.
    - **기본값 정책**: **`OCCModeRaw` (기존 안정 버전) 디폴트 영구 유지 (`[RULE:SafeDefaults]`)**. 아래 4대 검증 게이트를 100% 완주하기 전까지 디폴트 변경 절대 금지.
    - **신규 플랫 모드(`OCCModeFlat`) 안정성 강화 및 필수 검증 게이트**:
-     - [ ] **`REFACTOR-OCC-FLAT-1` Flat 코덱 신뢰성 및 동시성 결함 보강**: `td.layout` 불변 사전초기화(Data Race 방지), `materializeRow` 중복 분기 일원화, 디코딩 실패 명시적 에러 전파 (`notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md`)
+     - [x] **`REFACTOR-OCC-FLAT-1` Flat 코덱 신뢰성 및 동시성 결함 보강**: `td.layout` 불변 사전초기화(Data Race 방지), `materialize` 중복 분기 일원화, 디코딩 실패 명시적 에러 전파 (`notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md`)
      - [ ] **`TEST-OCC-FLAT-1` 크래시 복구 무결성**: Flat 모드에서 AOF/RDB 로그 기록 및 `kill -9` 비정상 종료 후 복구/리플레이 100% 정합성 검증
      - [ ] **`TEST-OCC-FLAT-2` 복합 DDL/DML 회귀**: 복합 보조 인덱스(Secondary/Unique Index), SkipList 범위 검색, 외래키(FK) 연동 시 Flat 디코딩 무결성 검증
      - [ ] **`TEST-OCC-FLAT-3` 쿼리 엔진 풀 스위트 회귀**: SQLLogicTest 및 T-SQL 프로시저(Babelfish 스위트)를 Flat 모드 환경에서 실행하여 0 결함 검증
