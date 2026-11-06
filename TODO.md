@@ -42,10 +42,13 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 5. **`GA-REGEX-FINAL-2`: CBO Planner 및 VDBE 잔여 정규식 100% 완전 제거** [x]
    - **완료 내용**: `planner.go` 거대 SELECT/JOIN 정규식 제거(결정론적 토크나이저 대체) 및 `vm.go` 쿼리 바인딩/LIKE 정규식 제거(`sqlutil.MatchLike` 통합)로 엔진 코어 Zero-Regex 달성 완료.
    - **설계 문서**: [`notes/CBO_PLANNER_ZERO_REGEX_PLAN.ko.md`](notes/CBO_PLANNER_ZERO_REGEX_PLAN.ko.md)
-6. **`FEAT-TOLERANT-DDL-1`: 동적 런타임 관용 DDL 제어 CLI (`get` & `set`) 및 PostgreSQL SQLSTATE 42704 정합성** [x]
+6. **`GA-REGEX-FINAL-3`: 쿼리 실행 런타임 LIKE 정규식 100% 완전 제거** [진행 중]
+   - **목표**: `execution/filter.go`, `proc/eval.go`, `catalog/virtual/result.go`의 런타임 행 순회 `LIKE` 평가 시 정규식 컴파일을 `sqlutil.MatchLike`로 전면 교체하여 GC 부하 제거
+   - **설계 문서**: [`notes/RUNTIME_LIKE_ZERO_REGEX_PLAN.ko.md`](notes/RUNTIME_LIKE_ZERO_REGEX_PLAN.ko.md)
+7. **`FEAT-TOLERANT-DDL-1`: 동적 런타임 관용 DDL 제어 CLI (`get` & `set`) 및 PostgreSQL SQLSTATE 42704 정합성** [x]
    - **완료 내용**: 기본 엄격 모드(`strict`) 유지. 정적 옵션(Flag/Env/JSON) 전면 배제 및 오직 `./bin/lionsql set tolerant_ddl on/off` 단일 수단만 제공(재시작 시 자동 복귀). Wire 프로토콜에서 인덱스 부재 에러 시 PostgreSQL 표준 `42704` SQLSTATE 매핑 완료.
    - **설계 문서**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
-7. **`REFACTOR-CATALOG-INTERCEPTOR-1`: 가상 카탈로그 `interceptor.go` Table-Driven 라우터 전환** [x]
+8. **`REFACTOR-CATALOG-INTERCEPTOR-1`: 가상 카탈로그 `interceptor.go` Table-Driven 라우터 전환** [x]
    - **완료 내용**: 330여 줄의 순서 의존적 ad-hoc IF 체인을 `RouteRule[]` 정적 디스패치 테이블로 전면 개편. 라우팅 순서 종속성 원천 차단 및 모든 외부 앱 회귀 테스트 통과.
    - **설계 문서**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
 
