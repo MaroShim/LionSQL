@@ -178,7 +178,7 @@ if [ "${PUSH_ONLY}" = true ]; then
                 # Extract changelog delta from CHANGELOG.md if present
                 if grep -q "## \[${VER}\]" "${CHANGELOG_FILE}"; then
                     CHANGELOG_DELTA="$(awk -v ver="## [${VER}]" '
-                        $0 ~ ver { p=1; next }
+                        index($0, ver) > 0 { p=1; next }
                         p && /^## \[/ { exit }
                         p { print }
                     ' "${CHANGELOG_FILE}" | sed -e :a -e '/^\n*$/{$d;N;};/\n$/ba')"
