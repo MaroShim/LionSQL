@@ -22,12 +22,13 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 1. **`OCC-HYPER-2`: In-Memory OCC Pointer-Free Flat Record A/B 모드 및 신뢰성 검증 게이트** [진행 중]
    - **구현 현황**: 기본 모드(`OCCModeRaw`, 기존 104만 tpmC 오리지널) 100% 보존 + 신규 플랫 모드(`OCCModeFlat`) A/B 분기 구축 완료. 단일 행 기준 5.95배(1,017B ➔ 171B, 83.2% 절감), 10만 건 힙 메모리 67.5% 절감(68.9MB ➔ 22.3MB), 처리 속도 대등 실측 확인.
    - **기본값 정책**: **`OCCModeRaw` (기존 안정 버전) 디폴트 영구 유지 (`[RULE:SafeDefaults]`)**. 아래 4대 검증 게이트를 100% 완주하기 전까지 디폴트 변경 절대 금지.
-   - **신규 플랫 모드(`OCCModeFlat`) 필수 검증 게이트**:
+   - **신규 플랫 모드(`OCCModeFlat`) 안정성 강화 및 필수 검증 게이트**:
+     - [ ] **`REFACTOR-OCC-FLAT-1` Flat 코덱 신뢰성 및 동시성 결함 보강**: `td.layout` 불변 사전초기화(Data Race 방지), `materializeRow` 중복 분기 일원화, 디코딩 실패 명시적 에러 전파 (`notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md`)
      - [ ] **`TEST-OCC-FLAT-1` 크래시 복구 무결성**: Flat 모드에서 AOF/RDB 로그 기록 및 `kill -9` 비정상 종료 후 복구/리플레이 100% 정합성 검증
      - [ ] **`TEST-OCC-FLAT-2` 복합 DDL/DML 회귀**: 복합 보조 인덱스(Secondary/Unique Index), SkipList 범위 검색, 외래키(FK) 연동 시 Flat 디코딩 무결성 검증
      - [ ] **`TEST-OCC-FLAT-3` 쿼리 엔진 풀 스위트 회귀**: SQLLogicTest 및 T-SQL 프로시저(Babelfish 스위트)를 Flat 모드 환경에서 실행하여 0 결함 검증
      - [ ] **`TEST-OCC-FLAT-4` 24h 장기 소크 및 가변 길이 UPDATE 단편화 검증**: VARCHAR 갱신이 반복되는 고부하 환경에서 메모리 단편화 및 P99 지연시간 지터 0ms 수호 검증
-   - **설계 문서**: [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
+   - **설계 문서**: [`notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md) & [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
 2. **`WEB-SPA-1`: 단일 바이너리 내장 SPA 웹 서버 호스팅**
    - **목표**: `--app=<path>` 단일 스마트 플래그 (파일/디렉토리 자동 감지)로 DB와 프론트엔드 동시 서빙
    - **보안 불변식**: **Flat Directory Invariant** (하위 계층 `/`, `\` 및 도트(`.`) 시작 파일 원천 차단으로 Path Traversal 100% 봉쇄)
