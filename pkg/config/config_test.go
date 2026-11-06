@@ -335,13 +335,18 @@ func TestApplyEnvOverrides_AdminCredentials(t *testing.T) {
 	os.Setenv("LIONSQL_ADMIN_PASS", "EnvPass999")
 	defer os.Unsetenv("LIONSQL_ADMIN_PASS")
 
+	// LIONSQL_APP
+	os.Setenv("LIONSQL_APP", "./dist")
+	defer os.Unsetenv("LIONSQL_APP")
+
 	cfg := config.DefaultConfig()
 	config.ApplyEnvOverrides(cfg)
 	if cfg.Auth.AdminPass != "EnvPass999" {
 		t.Errorf("expected AdminPass 'EnvPass999', got %q", cfg.Auth.AdminPass)
 	}
-
-
+	if cfg.Server.AppPath != "./dist" {
+		t.Errorf("expected AppPath './dist', got %q", cfg.Server.AppPath)
+	}
 }
 
 

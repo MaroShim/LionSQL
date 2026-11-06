@@ -187,7 +187,7 @@
 | `DONE` | **`TUNE-HOTSPOT-OCC-1`** | Durability | P2 | 고동시성 핫스팟 OCC 경합 완화 및 와이어 버퍼 풀링 |  | - [x] **Phase 3 (`TUNE-EPHEMERAL-VERI... |
 | `DONE` | **`TUNE-SP-FASTPATH-1`** | Durability | P2 | TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 | [`notes/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md) | - [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)... |
 | `PENDING` | **`WAL-DELTA-1`** | Engine | P2 | Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) |  |  |
-| `PENDING` | **`WEB-SPA-1`** | Ecosystem | P3 | 단일 바이너리 내장 SPA 웹 서버 호스팅 | [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) |  |
+| `DONE` | **`WEB-SPA-1`** | Ecosystem | P3 | 단일 바이너리 내장 SPA 웹 서버 호스팅 | [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) | - [x] **Flat Directory Invariant 및 --app 플래그 완비** |
 
 ---
 
@@ -2359,9 +2359,10 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] 단일 바이너리 내장 SPA 웹 서버 호스팅 `WEB-SPA-1`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-05T12:33:06.417551+09:00
+### [DONE] 단일 바이너리 내장 SPA 웹 서버 호스팅 `WEB-SPA-1`
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-06T11:45:00+09:00
 - **Plan Doc**: [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)
+- **Status Summary**: `--app=<path>` 단일 플래그, Flat Directory Invariant 및 HTML5 History API Fallback 서빙 완료. E2E 테스트 100% PASS.
 
 **Details & Resolution**:
 - `--app`, `--public` 플래그를 통한 SPA 정적 웹 호스팅 및 네이티브 DB 서빙 ([`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md))

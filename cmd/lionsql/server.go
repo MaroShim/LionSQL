@@ -102,6 +102,7 @@ func runServer(args []string) error {
 	configPath := fs.String("config", "", "Path to JSON configuration file (default: auto-detect ./lionsql.json or <dir>/lionsql.json)")
 	initConfig := fs.String("init-config", "", "Generate a default lionsql.json configuration file at specified path (or ./lionsql.json) and exit")
 	doctorFlag := fs.Bool("doctor", false, "Run self-diagnostic health checks on host environment, resources, ports, and storage engines and exit")
+	appPath := fs.String("app", "", "Path to single-page HTML file or flat static assets directory to host")
 	devFlag := fs.Bool("dev", false, "Enable developer mode (verbose wire query and parameter logging on stdout/stderr)")
 	outboxFlag := fs.Bool("outbox", false, "Enable Transactional Outbox broker dispatcher")
 	outboxTable := fs.String("outbox-table", "", "Filter outbox dispatcher to specific table (default: all)")
@@ -179,6 +180,9 @@ func runServer(args []string) error {
 	}
 	if visited["seed"] {
 		cfg.Server.AutoSeed = *autoSeed
+	}
+	if visited["app"] {
+		cfg.Server.AppPath = *appPath
 	}
 	if visited["admin-email"] {
 		cfg.Auth.AdminEmail = *adminEmail
@@ -596,6 +600,13 @@ func runServer(args []string) error {
 		}
 	}
 
+	if cfg.Server.AppPath != "" {
+		if err := server.SetAppPath(cfg.Server.AppPath); err != nil {
+			log.Fatalf("[LionSQL] Failed to bind SPA web app %q: %v", cfg.Server.AppPath, err)
+		}
+		log.Printf("[LionSQL] Bound SPA web app from %s (Flat Invariant Active)", cfg.Server.AppPath)
+	}
+
 	if cfg.Logging.SlowQuery.ThresholdMS > 0 {
 		server.SetSlowQueryThreshold(time.Duration(cfg.Logging.SlowQuery.ThresholdMS * float64(time.Millisecond)))
 	}
@@ -803,6 +814,9 @@ func runServer(args []string) error {
 			fmt.Println(" [Configuration]  Zero-Config (Built-in Defaults)")
 		}
 		if httpServer != nil && strings.Contains(cfg.Network.HTTPAddr, ":") {
+			if cfg.Server.AppPath != "" {
+				fmt.Printf(" [App Hosting]    http://%s/ -> %s (SPA Mode)\n", cfg.Network.HTTPAddr, cfg.Server.AppPath)
+			}
 			fmt.Printf(" [Web Dashboard]  http://%s/_/\n", cfg.Network.HTTPAddr)
 			fmt.Printf(" [HTTP API]       http://%s/api/health\n", cfg.Network.HTTPAddr)
 			fmt.Printf(" [CDC Stream]     http://%s/api/cdc/stream (NDJSON / SSE)\n", cfg.Network.HTTPAddr)

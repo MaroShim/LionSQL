@@ -29,9 +29,8 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
      - [ ] **`TEST-OCC-FLAT-3` 쿼리 엔진 풀 스위트 회귀**: SQLLogicTest 및 T-SQL 프로시저(Babelfish 스위트)를 Flat 모드 환경에서 실행하여 0 결함 검증
      - [ ] **`TEST-OCC-FLAT-4` 24h 장기 소크 및 가변 길이 UPDATE 단편화 검증**: VARCHAR 갱신이 반복되는 고부하 환경에서 메모리 단편화 및 P99 지연시간 지터 0ms 수호 검증
    - **설계 문서**: [`notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md) & [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
-2. **`WEB-SPA-1`: 단일 바이너리 내장 SPA 웹 서버 호스팅**
-   - **목표**: `--app=<path>` 단일 스마트 플래그 (파일/디렉토리 자동 감지)로 DB와 프론트엔드 동시 서빙
-   - **보안 불변식**: **Flat Directory Invariant** (하위 계층 `/`, `\` 및 도트(`.`) 시작 파일 원천 차단으로 Path Traversal 100% 봉쇄)
+2. **`WEB-SPA-1`: 단일 바이너리 내장 SPA 웹 서버 호스팅** [x]
+   - **완료 내용**: `--app=<path>` 단일 스마트 플래그 및 `LIONSQL_APP` 환경변수 지원. 단일 HTML 파일 및 Flat 정적 디렉토리 자동 감지, HTML5 History API 브라우저 라우트 Fallback 서빙. **Flat Directory Invariant** 엄격 적용으로 하위 계층 에셋 요청 및 도트(`.`) 숨김 파일 차단으로 Path Traversal 100% 원천 봉쇄. E2E 및 단위 테스트 100% 통과.
    - **설계 문서**: [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)
 3. **`PKG-OFFLINE-DOCS`: 배포 패키지 오프라인 브라우저 문서 번들링**
    - **목표**: 배포 아카이브(`tar.gz`/`zip`) 내 `docs/index.html` 번들링으로 폐쇄망/에어갭 100% 자립 지원

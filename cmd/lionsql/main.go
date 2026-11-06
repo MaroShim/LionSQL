@@ -39,6 +39,7 @@ Options by Category (옵션 상세):
 
   [Network & Wire Protocols]
     -http <addr>           HTTP service & Web Studio address (default: 127.0.0.1:8090, empty to disable)
+    -app <path>            Host single-page HTML file or flat static assets directory (SPA Mode)
     -pg <addr>             PostgreSQL v3 wire listen address (default: 127.0.0.1:5433, empty to disable)
     -tds <addr>            MS SQL Server TDS listen address (default: 127.0.0.1:1433, empty to disable)
     -tls                   Enable SSL/TLS encrypted wire connections
@@ -107,6 +108,7 @@ Examples:
   lionsql stop                    # Stop running background daemon
   lionsql restart                 # Restart running background daemon
   lionsql                         # Run LionSQL server in foreground (default)
+  lionsql -app=./dist             # Serve SPA web application along with database
   lionsql -dir=./mydb -http=:8090 # Start server on custom directory and port
   lionsql doctor                  # Run system health and diagnostic checks
   lionsql init-config             # Create default lionsql.json configuration

@@ -62,6 +62,7 @@ type Server struct {
 	cdcStreamer      *cdc.Streamer
 	outboxDispatcher *cdc.OutboxDispatcher
 	requestLogger    *RequestActivityLogger
+	appHandler       http.Handler
 	startTime        time.Time
 	memCache         memStatsCache
 }
@@ -442,6 +443,30 @@ func (s *Server) GetActiveQueries() []ActiveQueryInfo {
 	return s.coordinator.GetActiveQueries()
 }
 
+// SetAppHandler configures a custom HTTP handler for hosting SPA or static assets.
+func (s *Server) SetAppHandler(h http.Handler) {
+	s.appHandler = h
+}
+
+// SetAppPath binds an SPA or static assets directory/file path to the server.
+func (s *Server) SetAppPath(appPath string) error {
+	if strings.TrimSpace(appPath) == "" {
+		s.appHandler = nil
+		return nil
+	}
+	h, err := BindAppHandler(appPath)
+	if err != nil {
+		return err
+	}
+	s.appHandler = h
+	return nil
+}
+
+// AppHandler returns the configured SPA/static handler if any.
+func (s *Server) AppHandler() http.Handler {
+	return s.appHandler
+}
+
 // Handler returns the HTTP handler wrapped with request logging, CORS, security headers, and gzip compression middlewares.
 func (s *Server) Handler() http.Handler {
 	return requestLoggingMiddleware(s.requestLogger, gzipMiddleware(corsAndSecurityMiddleware(s.mux)))
@@ -453,8 +478,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) routes() {
-	// Dashboard & Root Redirect
+	// Dashboard, Web Studio & SPA Host Routing
 	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		if s.appHandler != nil {
+			s.appHandler.ServeHTTP(w, r)
+			return
+		}
 		if r.URL.Path == "/" {
 			http.Redirect(w, r, "/_/", http.StatusFound)
 			return
