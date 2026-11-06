@@ -246,3 +246,45 @@ LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집�
    - **"Rule of Two 원칙"**: 동일하거나 유사한 파싱, 조건 검증, 데이터 변환 로직이 코드베이스 내 2곳 이상에서 발견되거나 재사용 가능성이 명백한 경우, 각 파일마다 인라인 코드를 작성하는 것을 엄격히 금지합니다.
    - **도메인 코어 패키지 우선 승격**: 재사용 가능한 로직은 즉시 도메인 유틸리티 패키지(예: `pkg/sqlutil`, `pkg/proc`)에 단독 단위 테스트(`*_test.go`)를 갖춘 모듈식 API(예: `sqlutil.ParseInPredicate`, `sqlutil.StripParentheses`)로 승격(Externalize)시켜 시스템 전반의 DRY를 사수합니다.
    - **사전 자문(Self-Audit) 습관**: 새로운 헬퍼 로직을 특정 파일 안에 작성하기 전에 항상 먼저 자문합니다: *"이 로직이 특정 파일의 전유물인가, 아니면 도메인 공통 유틸리티인가?"* 공통 유틸리티라면 먼저 모듈을 만들고 호출부는 얇게 유지합니다.
+
+---
+
+## 부록 B: Zero-Regex 전면 퇴출 및 결정론적 파서 전환 연대기 (GA-REGEX-DDL-1 ~ GA-REGEX-FINAL-3)
+
+### 1. 전면 퇴출의 근본적 배경 (Why Zero-Regex?)
+SQL은 괄호의 짝이 무한히 중첩될 수 있는 비정규(Context-Free, Type 2 Dyck Language) 언어입니다. 유한 오토마타(FSM, Type 3)에 기반한 정규식(Regular Expression)으로 SQL 문법을 파싱하거나 절을 추출하려는 시도는 다음과 같은 구조적 결함을 필연적으로 야기합니다:
+1. **괄호 및 중첩 구조 파괴**: `WHERE x IN (SELECT y FROM t WHERE (a = 1))` 또는 `TOP (10)`과 같은 구조에서 정규식의 탐욕적(Greedy)/비탐욕적(Lazy) 매칭은 의도치 않은 지점에서 문자열을 잘라버려 쿼리를 오염시킵니다.
+2. **리터럴 및 주석 오염**: 문자열 리터럴(`'Price is $10'`)이나 주석(`/* ... */`) 내부에 포함된 키워드(`SELECT`, `JOIN`, `NOLOCK`)를 SQL 절로 오인식하여 쿼리 본문을 손상시킵니다.
+3. **런타임 힙 할당 및 GC 부하**: 쿼리 실행 런타임의 행 순회(Row iteration)에서 `regexp.Compile`이나 `regexp.MatchString`을 반복 호출하면 심각한 CPU 캐시 미스와 GC 압박이 발생합니다.
+
+이에 따라 LionSQL은 프로덕션 쿼리 파싱 및 런타임 핫패스에서 정규식을 100% 영구 퇴출하고 결정론적 토크나이저(`proc.Lexer`, `sqlutil`) 및 2-Tier AST 파서로 전면 전환을 단행하였습니다.
+
+### 2. 단계별 정규식 퇴출 연대기
+* **Phase 1 (`GA-REGEX-DDL-1`) - DDL 및 엔진 진입로 35+종 정규식 전면 제거**:
+  - 대상: `sqlexec_ddl.go`, `sqlexec_eval.go`, `sqlexec_explain.go`
+  - 내용: `reCreateTablePrefix`, `reAddColumn`, `reAlterColType`, `reColDefault`, `reInlineFK`, `reDropTable` 등 35개 이상의 레거시 정규식을 전량 제거하고 `proc.Lexer` 및 `sqlutil` 결정론적 상태머신으로 전환.
+* **Phase 2 (`FIX-SQLUTIL-PARSER-1`) - 결정론적 파서 14대 결함 치유 및 품질 강화**:
+  - 대상: `pkg/sqlutil` (`pagination.go`, `predicate.go`)
+  - 내용: 정규식 퇴출 직후 ad-hoc 파서에서 발견된 리터럴 파괴, 세미콜론 누락, `TOP PERCENT/WITH TIES/UNION` 오변환, `ANY/IN/IS NULL` 다중바이트 연산자 누락 등 14대 probe 결함을 완전 치유하고 단위 테스트로 고정.
+* **Phase 3 (`GA-REGEX-FINAL-1`) - 엔진 진입로 및 가상 카탈로그 잔여 정규식 제거**:
+  - 대상: `sqlexec_select.go` (T-SQL 페이징 치환기 `mssqlTopRe`, `mssqlOffsetFetchRe` 및 SQLite 호환 `reBareTableIn`), `sqlexec_jdbc_metadata.go`
+  - 내용: 쿼리 재작성기를 `sqlutil.NormalizeMSSQLPagination` 단일 결정론적 함수로 일원화.
+* **Phase 4 (`GA-REGEX-FINAL-2`) - CBO 플래너 및 VDBE 가상머신 잔여 정규식 제거**:
+  - 대상: `pkg/planner/planner.go` (`selectRe`, `joinPattern`), `pkg/proc/runtime/vm.go` (파라미터 바인딩 치환 및 LIKE)
+  - 내용: `splitSelectClauses` 단일화 및 `sqlutil.FindAllTopLevelKeyword("JOIN")` 기반 순수 토큰 분해로 대체, `vm.go`의 `"regexp"` import 완전 제거.
+* **Phase 5 (`GA-REGEX-FINAL-3`) - 쿼리 실행 런타임 LIKE 정규식 제거 및 일원화**:
+  - 대상: `pkg/execution/filter.go` (Volcano Seq Scan 필터 노드), `pkg/catalog/virtual/result.go`
+  - 내용: 행 순회 핫패스에서 `strings.ReplaceAll(regexp.QuoteMeta...)` 및 `regexp.MatchString`을 완전 퇴출하고 `sqlutil.MatchLike`로 전면 교체하여 0-할당 달성. 가상 카탈로그의 T-SQL 대괄호 이스케이프(`[_]`, `[%]`) 누락 결함 보정.
+
+### 3. 프로젝트 전역 정규식 허용/금지 최종 경계 매트릭스
+LionSQL은 무조건적인 문자열 정규식 혐오가 아닌, **언어학적 문맥(CFG vs Linear)**에 기반한 명확한 기술적 경계를 수호합니다:
+| 분류 | 영역 / 파일 | 허용 여부 | 사유 및 동작 원칙 |
+| :--- | :--- | :--- | :--- |
+| **엄격 금지 (Zero-Regex)** | SQL DDL/DML 파싱 및 쿼리 라우팅 | **금지 (100% 제거 완료)** | 괄호 중첩, 주석, 문자열 리터럴 오염 및 문법 파괴 원천 차단 |
+| **엄격 금지 (Zero-Regex)** | CBO 플래너 및 절(Clause) 분해 | **금지 (100% 제거 완료)** | 서브쿼리, 복합 조인 탐욕 매칭 방지 |
+| **엄격 금지 (Zero-Regex)** | 쿼리 실행기 런타임 행 순회 `LIKE` | **금지 (100% 제거 완료)** | 핫패스 행 순회 시 GC 부하 및 CPU 캐시 미스 방지 (`sqlutil.MatchLike`) |
+| **영구 허용 (불변식 7)** | SQL 내장 정규식 함수 (`REGEXP_LIKE`, `~`, `!~`) | **허용 (표준 기능)** | 사용자가 명시적으로 정규식 평가를 요청한 표준 기능 (`proc/builtins_string.go`) |
+| **영구 허용 (불변식 7)** | 마이그레이션 파일명 검증 (`migrate.go`) | **허용 (선형 포맷)** | `^\d{14}_.+\.(up\|down)\.sql$` 평면 정규 언어 검증 |
+| **영구 허용 (불변식 7)** | REST URL 파라미터 / 인증 플레이스홀더 (`api/`) | **허용 (선형 포맷)** | 선형 텍스트 치환 |
+| **영구 허용 (불변식 7)** | 테스트 러너 및 벤치마크 도구 (`babelfish_runner`, `tools/`) | **허용 (도구 전용)** | 런타임 엔진 외부의 비-프로덕션 테스트 하네스 |
+

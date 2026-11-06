@@ -14,6 +14,7 @@
    - **핵심 아키텍처 불변식(Core Invariants)**: 왜 이 방식을 택했고 무엇을 의도적으로 배제(Spec-Out)했는가
    - **개발 철학 및 협업 규약**: 무조건 준수해야 하는 엔지니어링 원칙 (3단계 검증 파이프라인, 이모지 배제, KISS/YAGNI, 파일 분할 기준)
    - **기술 스택 및 주요 컴포넌트**: VDBE 바이트코드 VM, 듀얼 파서, 듀얼 트랙 UDF, 멀티 프로토콜
+   - **부록 B**: Zero-Regex 전면 퇴출 및 결정론적 파서 전환 연대기 (`GA-REGEX-DDL-1` ~ `GA-REGEX-FINAL-3`) 통합 아카이브 수록
 
 2. **[`PITFALLS_AND_TRICKS.md`](PITFALLS_AND_TRICKS.md)**
    - **코드베이스 내 암초 지도(Landmines & Fragile Spots)**: 섣불리 건드리면 깨지기 쉬운 미묘한 포인트들
