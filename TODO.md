@@ -55,18 +55,21 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **설계 문서**: [`notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 
 ### 1.2 1.0 신뢰성 검증 게이트 (Release Gates)
-1. **`DURA-KILL-1`: `kill -9` 크래시 복구 장기 라운드 검증**
+1. **`AUDIT-100-DUAL-REVIEW`: 전 소스코드 100단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 감사** [준비 완료]
+   - **목표**: 릴리스 게이트 장기 부하 테스트 이전, Lionsql 엔진 본체 199개 순수 Go 소스코드를 100개 마이크로 스코프로 나누어 Gemini(심층 추론)와 Claude(공격적 엣지케이스)의 교차 검증으로 숨은 동시성 레이스, 데드락, 메모리 누수, 침묵하는 에러(`_ = err`), 경계값 결함을 선제 발굴 및 완치.
+   - **설계 문서**: [`notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`](notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md)
+2. **`DURA-KILL-1`: `kill -9` 크래시 복구 장기 라운드 검증**
    - 상태: 진행 중 (100라운드 100% 무손실 복구 통과 완료, 릴리스 직전 500 ~ 1,000 라운드 최종 확인)
    - 설계 문서: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
-2. **`DURA-SOAK-1`: 24h ~ 72h 장기 무중단 소크 테스트**
+3. **`DURA-SOAK-1`: 24h ~ 72h 장기 무중단 소크 테스트**
    - 상태: 진행 중 (단기 연속 부하 통과, 24시간 ~ 72시간 연속 가동으로 자원 유계 입증)
    - 설계 문서: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
-3. **`DURA-SLT-2`: SQLLogicTest 1.0 풀 스위트 듀얼 엔진 최종 인증**
+4. **`DURA-SLT-2`: SQLLogicTest 1.0 풀 스위트 듀얼 엔진 최종 인증**
    - 상태: 107개 스위트 55만 쿼리 100% PASS 입증 완료 (`scripts/verify_0.90.sh`)
    - 설계 문서: [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
-4. **`GA-VALID-3`: 연동 앱 섀도 모드 실운영 도그푸딩**
+5. **`GA-VALID-3`: 연동 앱 섀도 모드 실운영 도그푸딩**
    - 이미 100% 연동 통과된 실전 서비스(Vaultwarden, Umami, Answer 중 1~2종) 1~2주간 실운영 백그라운드 구동
-5. **`TUNE-DOC-SYNC-1`: 벤치마크 및 공식 문서 실측치 일괄 동기화**
+6. **`TUNE-DOC-SYNC-1`: 벤치마크 및 공식 문서 실측치 일괄 동기화**
    - 1.0 GA 릴리스 직전 모든 최적화 실측치를 `doc/BENCHMARK.md` 및 `README.md`에 일괄 반영
 
 ### 1.3 [테스트베드] 타임박스 외부 앱 호환성 프로브 (Time-Boxed Probe Protocol)

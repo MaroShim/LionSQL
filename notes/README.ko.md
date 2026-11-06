@@ -33,6 +33,7 @@
 
 6. **도메인별 설계 및 작업 계획서 (Architecture & Execution Plans)**:
    - **액티브 스프린트 (Priority 1 & 2)**:
+     - **[`PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`](PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md)**: LionSQL 1.0 릴리스 대비 전 소스코드 100단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 감사 계획서 (AUDIT-100-DUAL-REVIEW).
      - **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)**: LionSQL Regular Expression 완전 퇴출 및 결정론적 파서 전환 종합 계획서 (6대 세부 파트 전체 구현 명세, 전역 전수 조사 매트릭스 및 사후 품질 강화 통합, GA-REGEX-DDL-1 ~ GA-REGEX-FINAL-3, SEC-PGWIRE-PARAM-1 단일 SSOT 마스터 플랜).
      - **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)**: 대규모 조인(10+ Tables) 최적화 설계 및 구현 계획서 (베이스 테이블 동적 루트 선정 및 공집합 조기 탈락, OPT-LARGE-JOIN-1).
      - **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)**: 플래너 슬림화 및 순수 AST 전환 설계 계획서 (Sort-Merge Join 지연 평가 및 정규식 폴백 옵션 격리, PLANNER-SLIM-1 & PLANNER-AST-1).
