@@ -71,6 +71,11 @@ func ParseInPredicate(s string) (*InPredicate, bool) {
 		return nil, false
 	}
 
+	// Subquery IN (e.g. IN (SELECT ...)) is not a static item list
+	if HasPrefixKeyword(inner, "SELECT") {
+		return nil, false
+	}
+
 	items := SplitTopLevel(inner, ',')
 	return &InPredicate{
 		Column:     CleanLeafIdentifier(left),
@@ -93,22 +98,30 @@ type IsNullPredicate struct {
 // ParseIsNullPredicate extracts an IS NULL or IS NOT NULL clause from s at depth 0.
 func ParseIsNullPredicate(s string) (*IsNullPredicate, bool) {
 	s = strings.TrimSpace(s)
-	upper := strings.ToUpper(s)
-	if strings.HasSuffix(upper, " IS NOT NULL") {
-		col := strings.TrimSpace(s[:len(s)-12])
+	// Check if this condition is compound (contains top-level AND / OR); if so, do not parse as simple IsNull
+	if ContainsKeyword(s, "AND", false) || ContainsKeyword(s, "OR", false) {
+		return nil, false
+	}
+	isIdx := FindTopLevelKeyword(s, "IS")
+	if isIdx == -1 {
+		return nil, false
+	}
+	left := strings.TrimSpace(s[:isIdx])
+	right := strings.TrimSpace(s[isIdx+2:])
+	words := strings.Fields(strings.ToUpper(right))
+	if len(words) == 2 && words[0] == "NOT" && words[1] == "NULL" {
 		return &IsNullPredicate{
-			Column:     CleanLeafIdentifier(col),
-			FullColumn: CleanIdentifierParts(col),
-			RawCol:     col,
+			Column:     CleanLeafIdentifier(left),
+			FullColumn: CleanIdentifierParts(left),
+			RawCol:     left,
 			IsNot:      true,
 		}, true
 	}
-	if strings.HasSuffix(upper, " IS NULL") {
-		col := strings.TrimSpace(s[:len(s)-8])
+	if len(words) == 1 && words[0] == "NULL" {
 		return &IsNullPredicate{
-			Column:     CleanLeafIdentifier(col),
-			FullColumn: CleanIdentifierParts(col),
-			RawCol:     col,
+			Column:     CleanLeafIdentifier(left),
+			FullColumn: CleanIdentifierParts(left),
+			RawCol:     left,
 			IsNot:      false,
 		}, true
 	}
@@ -142,6 +155,18 @@ func ParseAnyPredicate(s string) (*AnyPredicate, bool) {
 	} else if strings.HasSuffix(left, "<>") {
 		op = "<>"
 		left = strings.TrimSpace(left[:len(left)-2])
+	} else if strings.HasSuffix(left, ">=") {
+		op = ">="
+		left = strings.TrimSpace(left[:len(left)-2])
+	} else if strings.HasSuffix(left, "<=") {
+		op = "<="
+		left = strings.TrimSpace(left[:len(left)-2])
+	} else if strings.HasSuffix(left, ">") {
+		op = ">"
+		left = strings.TrimSpace(left[:len(left)-1])
+	} else if strings.HasSuffix(left, "<") {
+		op = "<"
+		left = strings.TrimSpace(left[:len(left)-1])
 	} else if strings.HasSuffix(left, "=") {
 		op = "="
 		left = strings.TrimSpace(left[:len(left)-1])
@@ -154,14 +179,21 @@ func ParseAnyPredicate(s string) (*AnyPredicate, bool) {
 		return nil, false
 	}
 	inner = strings.TrimSpace(inner)
-	inner = strings.TrimPrefix(inner, "ARRAY[")
-	inner = strings.TrimPrefix(inner, "array[")
-	inner = strings.TrimSuffix(inner, "]")
-	inner = strings.Trim(inner, "'\"")
-	inner = strings.TrimPrefix(inner, "{")
-	inner = strings.TrimSuffix(inner, "}")
+	// Handle PostgreSQL literal formats: ARRAY['a','b'], '{a,b}'
+	if strings.HasPrefix(strings.ToUpper(inner), "ARRAY[") && strings.HasSuffix(inner, "]") {
+		inner = inner[6 : len(inner)-1]
+	} else if (strings.HasPrefix(inner, "'{") && strings.HasSuffix(inner, "}'")) ||
+		(strings.HasPrefix(inner, "\"{") && strings.HasSuffix(inner, "}\"")) {
+		inner = inner[2 : len(inner)-2]
+	} else if strings.HasPrefix(inner, "{") && strings.HasSuffix(inner, "}") {
+		inner = inner[1 : len(inner)-1]
+	}
 
-	items := SplitTopLevel(inner, ',')
+	rawItems := SplitTopLevel(inner, ',')
+	items := make([]string, 0, len(rawItems))
+	for _, it := range rawItems {
+		items = append(items, strings.Trim(strings.TrimSpace(it), "'\""))
+	}
 	return &AnyPredicate{
 		Column:     CleanLeafIdentifier(left),
 		FullColumn: CleanIdentifierParts(left),
@@ -242,6 +274,8 @@ func ParseBinaryComparison(s string) (*BinaryComparison, bool) {
 	inSingleQuote := false
 	inDoubleQuote := false
 	inBracket := false
+	inLineComment := false
+	inBlockComment := false
 
 	// Comparison operators to test at depth 0, ordered by descending length.
 	ops := []string{
@@ -253,6 +287,30 @@ func ParseBinaryComparison(s string) (*BinaryComparison, bool) {
 
 	for i := 0; i < n; i++ {
 		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
 
 		if inSingleQuote {
 			if ch == '\'' {
@@ -325,6 +383,10 @@ func ParseBinaryComparison(s string) (*BinaryComparison, bool) {
 					}
 					left := strings.TrimSpace(s[:i])
 					right := strings.TrimSpace(s[i+opLen:])
+					// Strip trailing SQL line comment from right if present
+					if commentIdx := strings.Index(right, "--"); commentIdx != -1 {
+						right = strings.TrimSpace(right[:commentIdx])
+					}
 					if left != "" && right != "" {
 						fullCol := CleanIdentifierParts(left)
 						if strings.Contains(left, "->") {
@@ -609,8 +671,8 @@ func ExtractEqualityFilter(sql string, targetCols ...string) (string, bool) {
 			continue
 		}
 
-		// Check for '=' operator at depth <= 1 (e.g. inside WHERE or JOIN ON)
-		if ch == '=' && i+1 < n && sql[i+1] != '=' && (i == 0 || (sql[i-1] != '!' && sql[i-1] != '<' && sql[i-1] != '>' && sql[i-1] != ':')) {
+		// Check for '=' operator at depth 0 only (prevent accidental matches inside subqueries)
+		if depth == 0 && ch == '=' && i+1 < n && sql[i+1] != '=' && (i == 0 || (sql[i-1] != '!' && sql[i-1] != '<' && sql[i-1] != '>' && sql[i-1] != ':')) {
 			// Find left-hand side token
 			leftEnd := i - 1
 			for leftEnd >= 0 && (sql[leftEnd] == ' ' || sql[leftEnd] == '\t' || sql[leftEnd] == '\n' || sql[leftEnd] == '\r') {
@@ -655,9 +717,12 @@ func ExtractEqualityFilter(sql string, targetCols ...string) (string, bool) {
 					val = strings.ReplaceAll(sql[valStart:curr], "''", "'")
 					return val, true
 				} else {
-					// Read unquoted token/number or function call
+					// Read unquoted token/number (supporting decimal '.', negative '-', and identifiers)
 					valStart := curr
-					for curr < n && IsIdentChar(sql[curr]) {
+					if curr < n && (sql[curr] == '-' || sql[curr] == '+') {
+						curr++
+					}
+					for curr < n && (IsIdentChar(sql[curr]) || sql[curr] == '.') {
 						curr++
 					}
 					val = sql[valStart:curr]
@@ -673,35 +738,31 @@ func ExtractEqualityFilter(sql string, targetCols ...string) (string, bool) {
 }
 
 // ExtractObjectIdCall checks if a condition contains `object_id('table_name')` or `object_id(N'table_name')`.
-// ExtractObjectIdCall checks if a condition contains `object_id('table_name')` or `object_id(N'table_name')`.
 func ExtractObjectIdCall(sql string) (string, bool) {
-	upper := strings.ToUpper(sql)
-	pos := 0
-	for {
-		idx := strings.Index(upper[pos:], "OBJECT_ID")
-		if idx == -1 {
-			break
-		}
-		actualIdx := pos + idx
-		rest := sql[actualIdx+9:]
-		trimRest := strings.TrimLeft(rest, " \t\r\n")
-		if strings.HasPrefix(trimRest, "(") {
-			closeP := FindMatchingParen(trimRest, 0)
-			if closeP != -1 {
-				args := SplitTopLevel(trimRest[1:closeP], ',')
-				if len(args) > 0 {
-					firstArg := strings.TrimSpace(args[0])
-					if strings.HasPrefix(strings.ToUpper(firstArg), "N'") && strings.HasSuffix(firstArg, "'") {
-						firstArg = firstArg[1:]
-					}
-					cleaned := strings.Trim(firstArg, "'\"[] \t\r\n")
-					if len(cleaned) > 0 {
-						return cleaned, true
+	// Look for both "OBJECT_ID" and "SYS.OBJECT_ID"
+	candidates := []string{"OBJECT_ID", "SYS.OBJECT_ID"}
+	for _, kw := range candidates {
+		indices := FindAllTopLevelKeyword(sql, kw)
+		for _, idx := range indices {
+			rest := sql[idx+len(kw):]
+			trimRest := strings.TrimLeft(rest, " \t\r\n")
+			if strings.HasPrefix(trimRest, "(") {
+				closeP := FindMatchingParen(trimRest, 0)
+				if closeP != -1 {
+					args := SplitTopLevel(trimRest[1:closeP], ',')
+					if len(args) > 0 {
+						firstArg := strings.TrimSpace(args[0])
+						if strings.HasPrefix(strings.ToUpper(firstArg), "N'") && strings.HasSuffix(firstArg, "'") {
+							firstArg = firstArg[1:]
+						}
+						cleaned := strings.Trim(firstArg, "'\"[] \t\r\n")
+						if len(cleaned) > 0 {
+							return cleaned, true
+						}
 					}
 				}
 			}
 		}
-		pos = actualIdx + 9
 	}
 	return "", false
 }

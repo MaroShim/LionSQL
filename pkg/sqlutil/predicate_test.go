@@ -326,6 +326,12 @@ func TestExtractObjectIdCall(t *testing.T) {
 			expected: "dbo.orders",
 			found:    true,
 		},
+		{
+			name:     "object_id with unicode preceding",
+			input:    "WHERE x = 'ı' AND object_id('dbo.t') > 0",
+			expected: "dbo.t",
+			found:    true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -338,5 +344,47 @@ func TestExtractObjectIdCall(t *testing.T) {
 				t.Errorf("expected %q, got %q", tt.expected, got)
 			}
 		})
+	}
+}
+
+func TestPredicate_HardeningProbes(t *testing.T) {
+	// 1. AnyPredicate operators and Array formatting
+	if p, ok := ParseAnyPredicate("a >= ANY(x)"); !ok || p.Op != ">=" || p.Column != "a" {
+		t.Fatalf("ParseAnyPredicate >= failed: got %+v, ok=%v", p, ok)
+	}
+	if p, ok := ParseAnyPredicate("n = ANY(ARRAY['a','b'])"); !ok || len(p.Items) != 2 || p.Items[0] != "a" || p.Items[1] != "b" {
+		t.Fatalf("ParseAnyPredicate ARRAY failed: got %+v, ok=%v", p, ok)
+	}
+	if p, ok := ParseAnyPredicate("n = ANY('{a,b}')"); !ok || len(p.Items) != 2 || p.Items[0] != "a" || p.Items[1] != "b" {
+		t.Fatalf("ParseAnyPredicate postgres set failed: got %+v, ok=%v", p, ok)
+	}
+
+	// 2. InPredicate subquery rejection
+	if _, ok := ParseInPredicate("x IN (SELECT a, b FROM t)"); ok {
+		t.Fatalf("expected ParseInPredicate to reject subquery IN, but got ok=true")
+	}
+
+	// 3. IsNullPredicate compound and newline tolerance
+	if _, ok := ParseIsNullPredicate("a = 1 AND b IS NULL"); ok {
+		t.Fatalf("expected ParseIsNullPredicate to reject compound AND condition, but got ok=true")
+	}
+	if p, ok := ParseIsNullPredicate("b\nIS NULL"); !ok || p.Column != "b" {
+		t.Fatalf("ParseIsNullPredicate newline failed: got %+v, ok=%v", p, ok)
+	}
+
+	// 4. BinaryComparison comment stripping
+	if p, ok := ParseBinaryComparison("a = 1 -- it's comment\n"); !ok || p.RightClean != "1" {
+		t.Fatalf("ParseBinaryComparison comment failed: got %+v, ok=%v", p, ok)
+	}
+
+	// 5. ExtractEqualityFilter decimal, negative, and nested subquery
+	if v, ok := ExtractEqualityFilter("SELECT * FROM t WHERE price = 1.5", "price"); !ok || v != "1.5" {
+		t.Fatalf("ExtractEqualityFilter decimal failed: got %q, ok=%v", v, ok)
+	}
+	if v, ok := ExtractEqualityFilter("SELECT * FROM t WHERE id = -5", "id"); !ok || v != "-5" {
+		t.Fatalf("ExtractEqualityFilter negative failed: got %q, ok=%v", v, ok)
+	}
+	if v, ok := ExtractEqualityFilter("SELECT * FROM t WHERE id IN (SELECT x FROM u WHERE name = 'zz')", "name"); ok {
+		t.Fatalf("expected ExtractEqualityFilter to ignore nested subquery equality, but got %q", v)
 	}
 }

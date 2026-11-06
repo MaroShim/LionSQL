@@ -50,6 +50,41 @@ func TestNormalizeMSSQLPagination(t *testing.T) {
 			input:    "SELECT TOP 10 * FROM orders WITH (NOLOCK) OPTION (RECOMPILE)",
 			expected: "SELECT * FROM orders LIMIT 10",
 		},
+		{
+			name:     "SELECT TOP with trailing semicolon preserved",
+			input:    "SELECT TOP 5 a FROM t;",
+			expected: "SELECT a FROM t LIMIT 5;",
+		},
+		{
+			name:     "SELECT TOP with PERCENT bypassed",
+			input:    "SELECT TOP 10 PERCENT a FROM t",
+			expected: "SELECT TOP 10 PERCENT a FROM t",
+		},
+		{
+			name:     "SELECT TOP with WITH TIES bypassed",
+			input:    "SELECT TOP 5 WITH TIES a FROM t ORDER BY a",
+			expected: "SELECT TOP 5 WITH TIES a FROM t ORDER BY a",
+		},
+		{
+			name:     "SELECT TOP with UNION bypassed",
+			input:    "SELECT TOP 5 a FROM t UNION SELECT a FROM u",
+			expected: "SELECT TOP 5 a FROM t UNION SELECT a FROM u",
+		},
+		{
+			name:     "NOLOCK inside string literal preserved",
+			input:    "SELECT * FROM t WHERE n = 'a with (nolock) b'",
+			expected: "SELECT * FROM t WHERE n = 'a with (nolock) b'",
+		},
+		{
+			name:     "NOLOCK with CTE preceding",
+			input:    "WITH c AS (SELECT 1 x) SELECT * FROM t WITH (NOLOCK)",
+			expected: "WITH c AS (SELECT 1 x) SELECT * FROM t",
+		},
+		{
+			name:     "NOLOCK with unicode characters",
+			input:    "SELECT 'ı' c FROM t WITH (NOLOCK)",
+			expected: "SELECT 'ı' c FROM t",
+		},
 	}
 
 	for _, tt := range tests {

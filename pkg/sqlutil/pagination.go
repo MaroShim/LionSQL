@@ -13,6 +13,7 @@ import (
 // - FETCH NEXT/FIRST <N> ROWS ONLY -> canonical LIMIT <N>
 // All operations are Dyck-language balanced and string-literal safe.
 func NormalizeMSSQLPagination(sql string) string {
+	hasSemicolon := strings.HasSuffix(strings.TrimSpace(sql), ";")
 	sql = StripMSSQLNolock(sql)
 	sql = StripMSSQLOption(sql)
 
@@ -21,6 +22,10 @@ func NormalizeMSSQLPagination(sql string) string {
 
 	// 2. Process TOP <N> at top-level SELECT
 	sql = normalizeTop(sql)
+
+	if hasSemicolon && !strings.HasSuffix(strings.TrimSpace(sql), ";") {
+		sql = strings.TrimSpace(sql) + ";"
+	}
 
 	return sql
 }
@@ -39,26 +44,28 @@ func StripMSSQLOption(sql string) string {
 
 func StripMSSQLNolock(sql string) string {
 	for {
-		upper := strings.ToUpper(sql)
-		idx := strings.Index(upper, "WITH")
-		if idx == -1 {
+		indices := FindAllTopLevelKeyword(sql, "WITH")
+		if len(indices) == 0 {
 			break
 		}
-		if idx > 0 && !IsWordBoundary(upper[idx-1]) {
-			break
-		}
-		rest := strings.TrimLeft(sql[idx+4:], " \t\r\n")
-		if strings.HasPrefix(rest, "(") {
-			closeP := FindMatchingParen(rest, 0)
-			if closeP != -1 {
-				inside := strings.ToUpper(strings.TrimSpace(rest[1:closeP]))
-				if inside == "NOLOCK" || inside == "READUNCOMMITTED" {
-					sql = sql[:idx] + rest[closeP+1:]
-					continue
+		found := false
+		for _, idx := range indices {
+			rest := strings.TrimLeft(sql[idx+4:], " \t\r\n")
+			if strings.HasPrefix(rest, "(") {
+				closeP := FindMatchingParen(rest, 0)
+				if closeP != -1 {
+					inside := strings.ToUpper(strings.TrimSpace(rest[1:closeP]))
+					if inside == "NOLOCK" || inside == "READUNCOMMITTED" {
+						sql = strings.TrimRight(sql[:idx], " \t\r\n") + rest[closeP+1:]
+						found = true
+						break
+					}
 				}
 			}
 		}
-		break
+		if !found {
+			break
+		}
 	}
 	return sql
 }
@@ -128,8 +135,13 @@ func normalizeTop(sql string) string {
 	if ContainsKeyword(sql, "LIMIT", false) {
 		return sql
 	}
+	// Bypass TOP if UNION, EXCEPT, INTERSECT, PERCENT, or WITH TIES is present at top-level
+	if ContainsKeyword(sql, "PERCENT", false) || ContainsKeyword(sql, "WITH TIES", false) ||
+		ContainsKeyword(sql, "UNION", false) || ContainsKeyword(sql, "EXCEPT", false) || ContainsKeyword(sql, "INTERSECT", false) {
+		return sql
+	}
 
-	trimmed := strings.TrimSpace(sql)
+	trimmed := strings.TrimRight(strings.TrimSpace(sql), ";")
 	upper := strings.ToUpper(trimmed)
 	if !strings.HasPrefix(upper, "SELECT") {
 		return sql
