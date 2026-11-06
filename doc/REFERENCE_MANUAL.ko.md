@@ -474,6 +474,7 @@ LionSQL 바이너리의 정식 릴리즈 버전, 빌드 태그, 대상 OS/아키
 | :--- | :---: | :---: | :--- | :--- |
 | **네트워크 설정** | | | | |
 | `-http` | string | `:8090` | `LION_HTTP_ADDR` | HTTP REST API 및 Web Studio 리스너 주소. 빈 문자열(`""`) 시 비활성화 |
+| `-app` | string | `""` | `LIONSQL_APP` | 호스팅할 단일 HTML 파일 또는 Flat SPA 디렉토리 경로 (자체 웹서버 기능) |
 | `-pg` | string | `:5433` | `LION_PG_ADDR` | PostgreSQL Wire Protocol v3 호환 TCP 리스너 주소. 빈 문자열 시 비활성화 |
 | `-tds` | string | `:1433` | `LION_TDS_ADDR` | Microsoft SQL Server TDS 7.x/8.0 호환 TCP 리스너 주소. 빈 문자열 시 비활성화 |
 | `-tls` | bool | `false` | `LION_TLS_ENABLED` | 전송 계층 보안(TLS/SSL) 암호화 레이어 활성화 |
@@ -674,6 +675,7 @@ $$\text{CLI Flags} > \text{Environment Variables} > \text{Config File (lionsql.j
 
 #### 2. `network` 섹션
 * **`http_addr`** (string): REST API 및 내장 Web Studio 리스너 TCP 주소 (기본값: `":8090"`).
+* **`app`** (string): 호스팅할 단일 HTML 파일 또는 Flat SPA 디렉토리 경로 (기본값: `""`, 비활성화).
 * **`pg_addr`** (string): PostgreSQL Wire Protocol v3 호환 TCP 리스너 주소 (기본값: `":5433"`).
 * **`tds_addr`** (string): MS SQL Server TDS 7.x/8.0 호환 TCP 리스너 주소 (기본값: `":1433"`).
 * **`tls.enabled`** (bool): 전송 계층 보안 암호화 활성화 여부 (기본값: `false`).
@@ -1044,6 +1046,11 @@ LionSQL은 ACID 트랜잭션 원자성을 완벽히 보장하며, 다중 명령�
 ---
 
 ## 제5장. 연산자 및 내장 함수 사양 (Functions & Operators Reference)
+
+> **T-SQL 및 SQL Server 버전 호환성 표준**:  
+> LionSQL의 T-SQL 문법, 절차적 제어문 및 내장 함수 카탈로그는 **Microsoft SQL Server 2019 (Version 15.0)**를 공식 기준(Baseline)으로 표준화되어 있습니다.  
+> 시스템 정보 조회 시 `SERVERPROPERTY('ProductVersion')`은 `'15.0.2000.5'`, `SERVERPROPERTY('EngineEdition')`은 `3`(Enterprise/Developer), `@@VERSION`은 SQL Server 2019 RTM 규격으로 응답하며, 네트워크 통신은 **TDS 7.4 (SQL Server 2012 ~ 2019)** 및 최신 **TDS 8.0 (SQL Server 2022 TLS 강제 암호화)** 사양을 완벽하게 지원합니다.  
+> `STRING_AGG`, `STRING_SPLIT`, `TRIM`, `JSON_VALUE`, `TRY_CONVERT`, `ROW_NUMBER` 등 SQL Server 2016~2019의 핵심 현대 함수들이 1급 시민으로 내장되어 있습니다.
 
 ### 5.1. 연산자 사양 및 우선순위 (Operator Precedence)
 

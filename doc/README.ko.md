@@ -40,6 +40,8 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
   * SSB (Star Schema Benchmark) 및 Mini TPC-H 복합 쿼리 실측 및 튜닝 가이드.
 * **[`WEB_STUDIO_GUIDE.ko.md`](WEB_STUDIO_GUIDE.ko.md)** ([English](WEB_STUDIO_GUIDE.md))
   * 내장 Web Studio (`TCP :8090 /_/`) 대시보드 및 엑셀 스타일 인라인 레코드 편집 가이드.
+* **[`WEB_APP_HOSTING_GUIDE.ko.md`](WEB_APP_HOSTING_GUIDE.ko.md)** ([English](WEB_APP_HOSTING_GUIDE.md))
+  * 단일 정적 바이너리로 DB와 SPA 웹 앱(단일 HTML/Flat 폴더)을 동시 호스팅하는 자체 웹서버 및 Same-Origin 활용 가이드.
 * **실전 오픈소스 애플리케이션 연동 가이드 (`guide/`)**:
   * 10대 프로덕션 오픈소스 앱(Answer, Vaultwarden, Metabase, Umami, Woodpecker, Vikunja, Gitea, Grafana, Casdoor, IOTA ERP) 연동 가이드는 **[`guide/README.ko.md`](../guide/README.ko.md)**를 참조하십시오.
 

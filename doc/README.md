@@ -39,6 +39,8 @@ Guides for client tools, query development, SQL ergonomics, and verification sui
   * Benchmarking and tuning guide for Star Schema Benchmark (SSB) and Mini TPC-H complex queries.
 * **[`WEB_STUDIO_GUIDE.md`](WEB_STUDIO_GUIDE.md)** ([Korean](WEB_STUDIO_GUIDE.ko.md))
   * Embedded Web Studio (`TCP :8090 /_/`) dashboard and Excel-style inline row creation guide.
+* **[`WEB_APP_HOSTING_GUIDE.md`](WEB_APP_HOSTING_GUIDE.md)** ([Korean](WEB_APP_HOSTING_GUIDE.ko.md))
+  * Embedded single-binary static SPA web app hosting guide (single HTML file or flat static directory with zero CORS).
 * **Production Application Integration Guides (`guide/`)**:
   * Real-world guides for 10 open-source apps (Answer, Vaultwarden, Metabase, Umami, Woodpecker, Vikunja, Gitea, Grafana, Casdoor, IOTA ERP) are located in **[`guide/README.md`](../guide/README.md)**.
 

@@ -31,7 +31,7 @@ From local development setups to cloud production deployments, users can design 
 Once the LionSQL server process starts, the Web Studio is immediately accessible on the HTTP management port (default: TCP `8090`).
 
 - **Default URL**: `http://127.0.0.1:8090/_/`
-- **Root Redirect**: Accessing the root URL (`http://127.0.0.1:8090/`) in a web browser safely returns an HTTP 302 redirect directly to the studio interface at `/_/`.
+- **Root Redirect**: Accessing the root URL (`http://127.0.0.1:8090/`) in a web browser safely returns an HTTP 302 redirect directly to the studio interface at `/_/`. (When `--app` is enabled to host a custom SPA web app, `/` serves the hosted web app, while the management studio remains permanently accessible at `http://127.0.0.1:8090/_/`. See [`WEB_APP_HOSTING_GUIDE.md`](WEB_APP_HOSTING_GUIDE.md) for details).
 
 ### 1.2. Administrator Authentication & Password Visibility Toggle
 When security authentication is enabled, administrative login credentials are required.

@@ -64,7 +64,7 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 
 ### 3.3. 와이어 프로토콜 & 네트워킹 (Wire & Protocols)
 * **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: 소켓 수신부터 VDBE 및 WAL 적응형 그룹 커밋에 이르는 서버 수직 파이프라인 최적화 마스터 플랜.
-* **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)**: 단일 정적 바이너리 내장 웹 스튜디오 및 SPA 서빙 아키텍처 계획서 (`WEB-SPA-1`).
+* **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)**: 단일 정적 바이너리 내장 웹 스튜디오 및 SPA 서빙 아키텍처 계획서 (`WEB-SPA-1`, 공식 가이드: [`doc/WEB_APP_HOSTING_GUIDE.ko.md`](../doc/WEB_APP_HOSTING_GUIDE.ko.md)).
 * **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](MODULAR_ARCHITECTURE_PLAN.ko.md)**: TDS/와이어 레이어 인터페이스 불변 파일 분리 및 모듈러 아키텍처 평가 계획서 (`TDS-MOD-1`).
 
 ---

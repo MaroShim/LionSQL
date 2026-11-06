@@ -64,7 +64,7 @@ Technical design specifications and refactoring blueprints organized by engine d
 
 ### 3.3. Wire Protocols & Networking
 * **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)** (Korean): Server vertical pipeline optimization from socket reception down to adaptive group commits.
-* **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)** (Korean): Embedded single-binary Web Studio and SPA hosting architecture (`WEB-SPA-1`).
+* **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)** (Korean): Embedded single-binary Web Studio and SPA hosting architecture (`WEB-SPA-1`, official guide: [`doc/WEB_APP_HOSTING_GUIDE.md`](../doc/WEB_APP_HOSTING_GUIDE.md)).
 * **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](MODULAR_ARCHITECTURE_PLAN.ko.md)** (Korean): TDS/Wire layer internal file decomposition without interface disruption (`TDS-MOD-1`).
 
 ---

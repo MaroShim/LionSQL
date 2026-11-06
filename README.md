@@ -8,14 +8,15 @@ Single-binary, high-concurrency OLTP database server supporting T-SQL and stored
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](README.md)
 [![Architecture](https://img.shields.io/badge/Architecture-PGWire%20%7C%20T--SQL%20%7C%20VDBE-blueviolet)](doc/ARCHITECTURE.md)
 [![Website](https://img.shields.io/badge/Website-lionsql.com-1b5e20)](https://lionsql.com)
+[![Compatibility: MSSQL 2019 & PG 15](https://img.shields.io/badge/compatibility-MSSQL%202019%20%7C%20PG%20Wire-orange.svg)](COMPATIBILITY.md)
 
-(한국어 문서는 [README.ko.md](README.ko.md)를 참조하세요.)
+(한국어 문서는 [README.ko.md](README.ko.md), 호환성 사양은 [COMPATIBILITY.ko.md](COMPATIBILITY.ko.md)를 참조하세요.)
 
 ---
 
 ## Overview
 
-LionSQL is a high-performance, embedded OLTP database engine that natively compiles and executes Microsoft SQL Server T-SQL & stored procedures and complex business logic on a sub-microsecond VDBE bytecode virtual machine, while simultaneously offering broad compatibility with PostgreSQL SQL dialects and the standard PGWire v3 protocol. It comes fully equipped with a built-in web management studio for real-time telemetry and schema administration, as well as an integrated goroutine connection pooler capable of handling tens of thousands of concurrent connections—eliminating the need for additional software to achieve a complete operational environment. Packaging this complete enterprise feature set into a single, ultra-compact static binary under 100MB (currently ~50MB) with zero external dependencies, LionSQL delivers blazing-fast transaction throughput of tens of thousands of transactions per second with predictable sub-millisecond latency and non-blocking snapshot isolation.
+LionSQL is a high-performance, embedded OLTP database engine that natively compiles and executes Microsoft SQL Server T-SQL & stored procedures and complex business logic on a sub-microsecond VDBE bytecode virtual machine, while simultaneously offering broad compatibility with PostgreSQL SQL dialects and the standard PGWire v3 protocol. It comes fully equipped with a built-in web management studio for real-time telemetry and schema administration, an embedded static SPA web server (`--app`) to host frontend web applications with zero CORS without Nginx, and an integrated goroutine connection pooler capable of handling tens of thousands of concurrent connections—eliminating the need for additional software to achieve a complete full-stack database and web hosting environment. Packaging this complete enterprise feature set into a single, ultra-compact static binary under 100MB (currently ~50MB) with zero external dependencies, LionSQL delivers blazing-fast transaction throughput of tens of thousands of transactions per second with predictable sub-millisecond latency and non-blocking snapshot isolation.
 
 > [!NOTE]
 > **Supported Operating Systems**: LionSQL officially supports **macOS** and **Linux** (`x86_64` and `arm64`). Standalone single-binary builds for **Windows** (`bin/lionsql.exe`, in-memory OCC engine) are also available.
@@ -30,12 +31,11 @@ LionSQL is a high-performance, embedded OLTP database engine that natively compi
         ┌────────────────────────────────┼────────────────────────────────┐
         │                                │                                │
         ▼                                ▼                                ▼
-[Postgres Wire v3]             [MSSQL TDS 7.x/8.0]             [Web Studio & BaaS API]
-  Port :5433                      Port :1433                      Port :8090 /_/
- (psql, DBeaver,                  (sqlcmd, SSMS,                  (Browser Dashboard,
+[Postgres Wire v3]             [MSSQL TDS 7.x/8.0]             [Web Studio & SPA Web Server]
+  Port :5433                      Port :1433                      Port :8090 (/_/, /)
+ (psql, DBeaver,                  (sqlcmd, SSMS,                  (Admin UI, SPA Web Hosting,
   GORM, Prisma)                    Azure Data Studio)              REST API, Realtime SSE,
-        │                                │                         Webhooks, RLS, Cron,
-        │                                │                         Mailer, JS/TS SDK)
+        │                                │                         Webhooks, RLS, Cron, JS SDK)
         └────────────────────────────────┼────────────────────────────────┘
                                          │
                                          ▼
@@ -129,6 +129,8 @@ LionSQL's core capabilities are organized across five foundational architectural
   Database kernel, wire protocol listeners, REST API, and web studio packaged into a single static executable with zero external runtime dependencies (officially supported on macOS and Linux).
 - **Embedded Web Management Studio (Port 8090)**:
   Zero-install browser dashboard (`/_/`) featuring visual schema explorer, inline data grid editor, SQL query console, real-time event stream viewer, and request activity logs.
+- **Single-Binary Static Web App Hosting (`--app`)**:
+  Host single HTML files or flat static frontend SPA builds directly on `:8090` without Nginx or Caddy, eliminating CORS while accessing database APIs under the same origin ([Guide](doc/WEB_APP_HOSTING_GUIDE.md)).
 - **Auto-Generated RESTful CRUD API**:
   Instant REST endpoints generated automatically for all tables upon creation, with boolean filtering, sorting, and pagination.
 - **JavaScript & TypeScript Client SDK**:

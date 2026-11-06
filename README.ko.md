@@ -8,14 +8,15 @@
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](README.ko.md)
 [![Architecture](https://img.shields.io/badge/Architecture-PGWire%20%7C%20T--SQL%20%7C%20VDBE-blueviolet)](doc/ARCHITECTURE.md)
 [![Website](https://img.shields.io/badge/Website-lionsql.com-1b5e20)](https://lionsql.com)
+[![Compatibility: MSSQL 2019 & PG 15](https://img.shields.io/badge/compatibility-MSSQL%202019%20%7C%20PG%20Wire-orange.svg)](COMPATIBILITY.ko.md)
 
-(English documentation is available at [README.md](README.md).)
+(English documentation is available at [README.md](README.md), and compatibility specifications at [COMPATIBILITY.md](COMPATIBILITY.md).)
 
 ---
 
 ## 1. 개요 (Overview)
 
-LionSQL은 Microsoft SQL Server의 T-SQL & 저장 프로시저(Stored Procedure)와 복잡한 비즈니스 로직을 네이티브 VDBE 가상 머신에서 마이크로초 단위로 고속 실행하며, 동시에 광범위한 PostgreSQL SQL 방언 및 와이어 프로토콜(PGWire v3) 호환성을 제공하는 고성능 임베디드 OLTP 데이터베이스 엔진입니다. 시스템 모니터링과 데이터 조작을 위한 실시간 웹 관리 어드민(Web Studio)과 수만 개 동시 연결을 감당하는 커넥션 풀러까지 내장하고 있어, 추가 소프트웨어 없이도 완전한 데이터베이스 운영 환경을 갖출 수 있습니다. 이 모든 엔터프라이즈 기능을 100MB 미만(약 50MB)의 극히 가벼운 단일 독립 정적 바이너리 하나에 집약하여, 초당 수만 건의 빠른 트랜잭션을 비차단 스냅샷 격리와 예측 가능한 초저지연으로 처리합니다.
+LionSQL은 Microsoft SQL Server의 T-SQL & 저장 프로시저(Stored Procedure)와 복잡한 비즈니스 로직을 네이티브 VDBE 가상 머신에서 마이크로초 단위로 고속 실행하며, 동시에 광범위한 PostgreSQL SQL 방언 및 와이어 프로토콜(PGWire v3) 호환성을 제공하는 고성능 임베디드 OLTP 데이터베이스 엔진입니다. 시스템 모니터링과 데이터 조작을 위한 실시간 웹 관리 어드민(Web Studio), Nginx 없이 단일 바이너리로 프론트엔드 웹 앱(SPA)을 직접 서빙하는 자체 웹 서버(`--app`), 그리고 수만 개 동시 연결을 감당하는 커넥션 풀러까지 내장하고 있어, 추가 소프트웨어 없이도 완전한 풀스택 데이터베이스 및 웹 운영 환경을 갖출 수 있습니다. 이 모든 엔터프라이즈 기능을 100MB 미만(약 50MB)의 극히 가벼운 단일 독립 정적 바이너리 하나에 집약하여, 초당 수만 건의 빠른 트랜잭션을 비차단 스냅샷 격리와 예측 가능한 초저지연으로 처리합니다.
 
 > [!NOTE]
 > **공식 지원 운영체제 (OS)**: LionSQL은 **macOS** 및 **Linux** (`x86_64` 및 `arm64`) 환경을 공식 지원합니다. Windows 환경용 독립 정적 바이너리(`bin/lionsql.exe`, 순수 Go 인메모리 OCC 엔진) 빌드도 제공됩니다.
@@ -29,12 +30,11 @@ LionSQL은 Microsoft SQL Server의 T-SQL & 저장 프로시저(Stored Procedure)
                                          │
         ┌────────────────────────────────┼────────────────────────────────┐
         ▼                                ▼                                ▼
-[Postgres Wire v3]             [MSSQL TDS 7.x/8.0]             [Web Studio & BaaS API]
-  포트 :5433                      포트 :1433                      포트 :8090 /_/
- (psql, DBeaver,                  (sqlcmd, SSMS,                  (브라우저 대시보드,
+[Postgres Wire v3]             [MSSQL TDS 7.x/8.0]             [Web Studio & SPA Web Server]
+  포트 :5433                      포트 :1433                      포트 :8090 (/_/, /)
+ (psql, DBeaver,                  (sqlcmd, SSMS,                  (브라우저 어드민, SPA 호스팅,
   GORM, Prisma)                    Azure Data Studio)              REST API, 실시간 SSE,
-                                                                   웹훅, RLS, 크론 잡,
-                                                                   메일러, JS/TS SDK)
+                                                                   웹훅, RLS, 크론, JS SDK)
         └────────────────────────────────┬────────────────────────────────┘
                                          │
                                          ▼
@@ -102,7 +102,7 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 - **프리페어드 스테이트먼트 바이트코드 캐싱**:
   파라미터화된 쿼리를 준비 단계에서 바이트코드로 직접 컴파일 및 캐싱하여, 반복 실행 시 쿼리 재파싱 오버헤드를 완전히 제거합니다.
 - **이중 파서 아키텍처 및 자동 폴백**:
-  - **초고속 경로**: 고주파 쿼리를 위한 마이크로초 미만 지연의 자체 Pratt 파서
+  - **초고속 경로**: 고빈도 쿼리를 위한 마이크로초 미만 지연의 자체 Pratt 파서
   - **전체 스펙 폴백**: 대괄호 이스케이프, 벤더 확장 옵션 등 복잡한 구문 인입 시 공식 Microsoft T-SQL 파서로 자동 폴백하여 완벽한 호환성을 보장
 - **Volcano 관계형 파이프라인 & 메모리 거버너**:
   Hash Join, Index Scan, GroupBy 등 조합 가능한 반복자 파이프라인과 스트리밍 배치를 제공하며, 대용량 정렬 시 메모리 한도를 초과하면 외부 머지 소트로 안전하게 디스크에 스필합니다.
@@ -127,6 +127,8 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
   DB 엔진, 프로토콜 리스너, REST API, 웹 관리 도구가 단 하나의 정적 파일로 빌드되어 외부 런타임 의존성이 전혀 없습니다 (공식 지원 OS: macOS, Linux).
 - **내장 웹 관리 스튜디오 (포트 8090)**:
   브라우저 대시보드(`/_/`), 테이블 스키마 탐색기, 데이터 그리드 편집기, SQL 쿼리 콘솔, 실시간 스트림 뷰어, 요청 활동 로그를 기본 제공합니다.
+- **단일 바이너리 내장 SPA 웹 앱 호스팅 (`--app`)**:
+  Nginx나 Caddy 없이 단일 HTML 파일 또는 Flat 정적 웹 에셋 폴더를 동일 포트(`:8090`)에서 직접 서비스하며, Same-Origin 환경에서 CORS 없이 DB API를 즉시 활용할 수 있습니다 ([가이드](doc/WEB_APP_HOSTING_GUIDE.ko.md)).
 - **자동 생성 RESTful CRUD API**:
   테이블 생성 즉시 REST API 엔드포인트가 자동 활성화되며, 불리언 필터링, 정렬, 페이지네이션을 지원합니다.
 - **JavaScript & TypeScript 클라이언트 SDK**:

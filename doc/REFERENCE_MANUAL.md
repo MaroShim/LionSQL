@@ -477,6 +477,7 @@ Prints the official release version, build tags, target OS/architecture, and Git
 | :--- | :---: | :---: | :--- | :--- |
 | **Network Configuration** | | | | |
 | `-http` | string | `:8090` | `LION_HTTP_ADDR` | TCP listener address for HTTP REST API and Web Studio. Empty string (`""`) disables it |
+| `-app` | string | `""` | `LIONSQL_APP` | Path to single HTML file or flat static SPA directory to host (embedded web server) |
 | `-pg` | string | `:5433` | `LION_PG_ADDR` | TCP listener address for PostgreSQL Wire Protocol v3. Empty string disables it |
 | `-tds` | string | `:1433` | `LION_TDS_ADDR` | TCP listener address for Microsoft SQL Server TDS 7.x/8.0. Empty string disables it |
 | `-tls` | bool | `false` | `LION_TLS_ENABLED` | Enable Transport Layer Security (TLS/SSL) encryption layer |
@@ -677,6 +678,7 @@ The following is the canonical schema for `lionsql.json` containing all configur
 
 #### 2. `network` Section
 * **`http_addr`** (string): TCP listener address for REST API and embedded Web Studio (default: `":8090"`).
+* **`app`** (string): Path to single HTML file or flat static SPA directory to host (default: `""`, disabled).
 * **`pg_addr`** (string): TCP listener address for PostgreSQL Wire Protocol v3 (default: `":5433"`).
 * **`tds_addr`** (string): TCP listener address for MS SQL Server TDS 7.x/8.0 (default: `":1433"`).
 * **`tls.enabled`** (bool): Whether Transport Layer Security encryption is activated (default: `false`).
@@ -1047,6 +1049,11 @@ LionSQL guarantees strict ACID transaction atomicity, managing multi-statement p
 ---
 
 ## Chapter 5. Functions & Operators Reference
+
+> **T-SQL & SQL Server Compatibility Baseline**:  
+> LionSQL's T-SQL grammar, procedural statements, and built-in function catalog are standardized against **Microsoft SQL Server 2019 (Version 15.0)** as the official baseline.  
+> System queries report `SERVERPROPERTY('ProductVersion')` as `'15.0.2000.5'`, `SERVERPROPERTY('EngineEdition')` as `3` (Enterprise / Developer), and `@@VERSION` in SQL Server 2019 RTM format. Network wire listeners fully support **TDS 7.4 (SQL Server 2012 - 2019)** as well as modern **TDS 8.0 (SQL Server 2022 direct TLS)**.  
+> Modern functions introduced in SQL Server 2016-2019 (`STRING_AGG`, `STRING_SPLIT`, `TRIM`, `JSON_VALUE`, `TRY_CONVERT`, and window functions) are implemented as first-class primitives.
 
 ### 5.1. Operator Precedence
 

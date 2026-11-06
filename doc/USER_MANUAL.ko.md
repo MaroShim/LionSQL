@@ -817,9 +817,32 @@ LionSQL 엔지니어링 팀에서 100% 정상 작동을 실측 검증한 6대 �
 7. **라이트 / 다크 테마 고대비(WCAG AAA) 지원**:
    - 우측 상단의 테마 토글(달/해 아이콘)로 즉시 전환되며, 라이트 모드에서도 높은 시인성의 보더와 배지가 적용됩니다.
 
+8. **단일 바이너리 내장 SPA 웹 앱 호스팅 (`--app`)**:
+   - 별도 웹서버 없이 `--app=./index.html` 또는 `--app=./dist` 플래그로 프론트엔드 정적 웹 앱을 동일 포트(`:8090`)에서 직접 서비스합니다. (상세 안내: [`doc/WEB_APP_HOSTING_GUIDE.ko.md`](WEB_APP_HOSTING_GUIDE.ko.md))
+
 ---
 
-### 4.5. 프로그래밍 언어별 공식 드라이버 연동 레시피
+### 4.5. 단일 파일 / 폴더 SPA 웹 앱 호스팅 (`--app`)
+
+LionSQL은 외부 웹 서버(Nginx, Caddy, Node.js)를 구축하지 않고도, 단 하나의 바이너리로 데이터베이스와 프론트엔드 웹 애플리케이션을 동시에 서비스할 수 있습니다.
+
+#### 주요 사용 시나리오
+1. **단일 HTML 파일 모드**:
+   - `lionsql server --app=./dashboard.html`
+   - Alpine.js, Tailwind CDN 등으로 구성된 셀프 컨테인드 단일 페이지 대시보드를 즉시 호스팅합니다.
+2. **Flat 디렉토리 SPA 모드**:
+   - `lionsql server --app=./dist`
+   - React, Vue, Svelte 등으로 빌드된 정적 에셋 폴더를 호스팅하며, 브라우저 라우팅을 위해 HTML5 History API 폴백(`index.html`)을 자동으로 제공합니다.
+
+#### Same-Origin 및 보안 특징
+- **Zero CORS**: 웹 UI와 DB API(`GET/POST /api/...`)가 동일한 `:8090` 포트에서 실행되므로 복잡한 CORS 설정이 일체 불필요합니다.
+- **Flat Directory Invariant**: 상위 디렉토리 탐색(`..`)과 숨김 파일(`.env`, `.git`) 접근을 원천 차단하여 안전한 웹 서빙을 보장합니다.
+
+자세한 활용법과 실전 튜토리얼은 **[`WEB_APP_HOSTING_GUIDE.ko.md`](WEB_APP_HOSTING_GUIDE.ko.md)**를 참조하십시오.
+
+---
+
+### 4.6. 프로그래밍 언어별 공식 드라이버 연동 레시피
 
 #### 1. Go (`database/sql` + `lib/pq` / `pgx`)
 ```go

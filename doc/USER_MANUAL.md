@@ -817,9 +817,32 @@ Manage all aspects of the database visually through any web browser (`http://loc
 7. **Light / Dark Theme High-Contrast (WCAG AAA) Support**:
    - Toggle instantly between themes via the sun/moon icon, featuring enhanced border contrast and badges in light mode.
 
+8. **Single-Binary Static Web App Hosting (`--app`)**:
+   - Serve frontend web applications alongside your database on `:8090` without external web servers using `--app=./index.html` or `--app=./dist`. (Details: [`doc/WEB_APP_HOSTING_GUIDE.md`](WEB_APP_HOSTING_GUIDE.md))
+
 ---
 
-### 4.5. Official Driver Integration Recipes by Programming Language
+### 4.5. Single File / Flat Folder SPA Web App Hosting (`--app`)
+
+LionSQL can host frontend web applications and high-concurrency database APIs simultaneously within a single static executable, completely eliminating the need for separate Nginx, Caddy, or Node.js daemons.
+
+#### Key Scenarios
+1. **Single HTML File Mode**:
+   - `lionsql server --app=./dashboard.html`
+   - Host self-contained dashboards (Alpine.js, Tailwind CDN) with instant live reloading.
+2. **Flat Directory SPA Mode**:
+   - `lionsql server --app=./dist`
+   - Host production builds (React, Vue, Svelte) with automatic HTML5 History API fallback to `index.html`.
+
+#### Same-Origin & Security Highlights
+- **Zero CORS**: Frontend UIs and backend APIs share port `:8090`, completely eliminating cross-origin preflight requests.
+- **Flat Directory Invariant**: Rejects path traversal (`..`) and hidden files (`.env`, `.git`) to ensure impenetrable static asset serving.
+
+For full tutorials and architecture details, consult **[`WEB_APP_HOSTING_GUIDE.md`](WEB_APP_HOSTING_GUIDE.md)**.
+
+---
+
+### 4.6. Official Driver Integration Recipes by Programming Language
 
 #### 1. Go (`database/sql` + `lib/pq` / `pgx`)
 ```go
