@@ -13,7 +13,6 @@ import (
 	"log"
 	"math"
 	"net"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -812,8 +811,6 @@ func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string) {
 	s.runAndWriteQuery(conn, query, true, sessID)
 }
 
-var pgParamRe = regexp.MustCompile(`\$(\d+)`)
-
 func isVirtualCatalogQuery(query string, qc proc.QueryCharacteristics) bool {
 	for _, tbl := range qc.TargetTables {
 		if virtual.IsVirtualTable(tbl) {
@@ -844,7 +841,7 @@ func canCompileToVDBE(query string, qc proc.QueryCharacteristics) bool {
 }
 
 func (s *Server) compileQueryToProgram(query string) (*proc.Program, error) {
-	translated := pgParamRe.ReplaceAllString(query, "@p$1")
+	translated := sqlutil.TranslatePgParamsToAtParams(query)
 	if cache := s.BytecodePlanCache(); cache != nil {
 		return cache.GetOrCompile(translated)
 	}
@@ -872,15 +869,7 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements *Prepared
 	}
 
 	// Infer parameter count if client passed 0 or fewer types than placeholders in queryStr
-	matches := pgParamRe.FindAllStringSubmatch(queryStr, -1)
-	maxIdx := 0
-	for _, m := range matches {
-		if len(m) == 2 {
-			if idx, err := strconv.Atoi(m[1]); err == nil && idx > maxIdx {
-				maxIdx = idx
-			}
-		}
-	}
+	maxIdx := sqlutil.MaxPgParamIndex(queryStr)
 	if maxIdx > 10000 {
 		_ = WriteError(conn, "parameter count exceeds maximum supported limit (10000)")
 		return
@@ -1182,15 +1171,7 @@ func decodeBinaryParam(b []byte, oid int32) string {
 }
 
 func buildPreviewSQL(query string, paramTypes []int32) string {
-	return pgParamRe.ReplaceAllStringFunc(query, func(match string) string {
-		sub := pgParamRe.FindStringSubmatch(match)
-		if len(sub) != 2 {
-			return match
-		}
-		idx, err := strconv.Atoi(sub[1])
-		if err != nil {
-			return match
-		}
+	return sqlutil.ReplacePgParams(query, func(idx int) string {
 		paramOID := int32(0)
 		if idx-1 >= 0 && idx-1 < len(paramTypes) {
 			paramOID = paramTypes[idx-1]
@@ -2697,88 +2678,12 @@ func substituteParams(sql string, params []string, paramTypes []int32, paramValu
 		formattedParams[i] = formatParamForSQL(val, pType, sv)
 	}
 
-	var b strings.Builder
-	b.Grow(n + len(params)*16)
-
-	inString := false
-	var quoteChar byte
-
-	for i := 0; i < n; {
-		ch := sql[i]
-
-		if inString {
-			b.WriteByte(ch)
-			if ch == quoteChar {
-				// Handle escaped quote: ''
-				if i+1 < n && sql[i+1] == quoteChar {
-					b.WriteByte(sql[i+1])
-					i += 2
-					continue
-				}
-				inString = false
-			}
-			i++
-			continue
+	return sqlutil.ReplacePgParams(sql, func(idx int) string {
+		if idx >= 1 && idx <= len(formattedParams) {
+			return formattedParams[idx-1]
 		}
-
-		// String literal start
-		if ch == '\'' {
-			inString = true
-			quoteChar = ch
-			b.WriteByte(ch)
-			i++
-			continue
-		}
-
-		// Line comment (-- ...)
-		if ch == '-' && i+1 < n && sql[i+1] == '-' {
-			b.WriteByte(ch)
-			b.WriteByte(sql[i+1])
-			i += 2
-			for i < n && sql[i] != '\n' {
-				b.WriteByte(sql[i])
-				i++
-			}
-			continue
-		}
-
-		// Block comment (/* ... */)
-		if ch == '/' && i+1 < n && sql[i+1] == '*' {
-			b.WriteByte(ch)
-			b.WriteByte(sql[i+1])
-			i += 2
-			for i < n {
-				if sql[i] == '*' && i+1 < n && sql[i+1] == '/' {
-					b.WriteByte('*')
-					b.WriteByte('/')
-					i += 2
-					break
-				}
-				b.WriteByte(sql[i])
-				i++
-			}
-			continue
-		}
-
-		// Dollar parameter: $1, $2, ...
-		if ch == '$' && i+1 < n && sql[i+1] >= '1' && sql[i+1] <= '9' {
-			j := i + 1
-			for j < n && sql[j] >= '0' && sql[j] <= '9' {
-				j++
-			}
-			numStr := sql[i+1 : j]
-			if idx, err := strconv.Atoi(numStr); err == nil && idx >= 1 && idx <= len(formattedParams) {
-				b.WriteString(formattedParams[idx-1])
-				i = j
-				continue
-			}
-		}
-
-		b.WriteByte(ch)
-		i++
-	}
-
-	return b.String()
+		return fmt.Sprintf("$%d", idx)
+	})
 }
 
 func typeToPgOID(t storage.DataType) int32 {

@@ -34,6 +34,7 @@
 6. **도메인별 설계 및 작업 계획서 (Architecture & Execution Plans)**:
    - **액티브 스프린트 (Priority 1 & 2)**:
      - **[`ZERO_REGEX_MIGRATION_PLAN.ko.md`](ZERO_REGEX_MIGRATION_PLAN.ko.md)**: Zero-Regex 전면 퇴출 및 결정론적 파서 전환 종합 마스터 플랜 (5대 단계별 구현 내역, 전수 조사 매트릭스 및 사후 품질 강화 통합, GA-REGEX-DDL-1 ~ GA-REGEX-FINAL-3).
+     - **[`PGWIRE_PARAM_TRANSLATION_PLAN.ko.md`](PGWIRE_PARAM_TRANSLATION_PLAN.ko.md)**: PGWire 달러 파라미터($N) 상태머신 토크나이저 전환 및 쿼리 변조/DoS 원천 차단 계획서 (SEC-PGWIRE-PARAM-1).
      - **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)**: 대규모 조인(10+ Tables) 최적화 설계 및 구현 계획서 (베이스 테이블 동적 루트 선정 및 공집합 조기 탈락, OPT-LARGE-JOIN-1).
      - **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)**: 플래너 슬림화 및 순수 AST 전환 설계 계획서 (Sort-Merge Join 지연 평가 및 정규식 폴백 옵션 격리, PLANNER-SLIM-1 & PLANNER-AST-1).
      - **[`SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md)**: 데이터베이스 엔진 업계(DuckDB, CockroachDB, TiDB, DataFusion 등) SQLLogicTest 실전 적용 기준, 3단계 계층화(Tier 1~3) 및 권장 범위 표준 가이드.

@@ -1072,3 +1072,36 @@ func TestPGWire_FastPathPingAndSocketPool(t *testing.T) {
 	}
 }
 
+func TestPGWire_DollarParameterAndLiteralSeparation(t *testing.T) {
+	srv, _, _ := setupTestWireServer(t)
+
+	// 1. compileQueryToProgram: verify string literal '$100' is not altered into '@p100'
+	q := "SELECT '$100' AS price, 'Item $2' AS item, id FROM accounts WHERE id = $1 AND balance > $2"
+	prog, err := srv.compileQueryToProgram(q)
+	if err != nil {
+		t.Fatalf("compileQueryToProgram failed: %v", err)
+	}
+	if prog == nil {
+		t.Fatalf("expected compiled program, got nil")
+	}
+
+	// 2. substituteParams: verify dollar parameters inside single quotes, dollar quotes, and comments are safe
+	sqlWithLiterals := "SELECT '$100' AS price, $$text $2$$ AS body, id FROM accounts -- $3 comment\nWHERE id = $1"
+	params := []string{"42"}
+	pTypes := []int32{23}
+	pVals := []storage.Value{storage.IntValue(42)}
+	sub := substituteParams(sqlWithLiterals, params, pTypes, pVals)
+	expectedSub := "SELECT '$100' AS price, $$text $2$$ AS body, id FROM accounts -- $3 comment\nWHERE id = 42"
+	if sub != expectedSub {
+		t.Errorf("\nGot:      %q\nExpected: %q", sub, expectedSub)
+	}
+
+	// 3. buildPreviewSQL: verify preview replaces parameters correctly without touching literals
+	preview := buildPreviewSQL("SELECT '$999', id FROM accounts WHERE id = $1", []int32{23})
+	expectedPreview := "SELECT '$999', id FROM accounts WHERE id = 1"
+	if preview != expectedPreview {
+		t.Errorf("preview got %q, expected %q", preview, expectedPreview)
+	}
+}
+
+

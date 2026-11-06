@@ -51,6 +51,9 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 8. **`REFACTOR-CATALOG-INTERCEPTOR-1`: 가상 카탈로그 `interceptor.go` Table-Driven 라우터 전환** [x]
    - **완료 내용**: 330여 줄의 순서 의존적 ad-hoc IF 체인을 `RouteRule[]` 정적 디스패치 테이블로 전면 개편. 라우팅 순서 종속성 원천 차단 및 모든 외부 앱 회귀 테스트 통과.
    - **설계 문서**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
+9. **`SEC-PGWIRE-PARAM-1`: PGWire 달러 파라미터($N) 상태머신 토크나이저 전환 및 보안 강화** [x]
+   - **완료 내용**: `pkg/wire/server.go`에서 `pgParamRe` 정규식을 전면 제거하고 `"regexp"` import를 완전 삭제. 작은따옴표(`'...'`), 큰따옴표(`"..."`), 달러 인용(`$$...$$`, `$tag$...$tag$`) 및 주석(`--`, `/* */`)을 완벽히 보존하는 `sqlutil.ReplacePgParams`, `TranslatePgParamsToAtParams`, `MaxPgParamIndex`를 개발하여 쿼리 변조 및 DoS 원천 차단 완료.
+   - **설계 문서**: [`notes/PGWIRE_PARAM_TRANSLATION_PLAN.ko.md`](notes/PGWIRE_PARAM_TRANSLATION_PLAN.ko.md)
 
 ### 1.2 1.0 신뢰성 검증 게이트 (Release Gates)
 1. **`DURA-KILL-1`: `kill -9` 크래시 복구 장기 라운드 검증**
