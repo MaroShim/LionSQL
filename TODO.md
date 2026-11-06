@@ -55,9 +55,10 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **설계 문서**: [`notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 
 ### 1.2 1.0 신뢰성 검증 게이트 (Release Gates)
-1. **`AUDIT-100-DUAL-REVIEW`: 전 소스코드 100단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 감사** [준비 완료]
+1. **`AUDIT-100-DUAL-REVIEW`: 전 소스코드 100단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 감사** [진행 중: 20/100 완료 (18건 결함 식별)]
    - **목표**: 릴리스 게이트 장기 부하 테스트 이전, Lionsql 엔진 본체 199개 순수 Go 소스코드를 100개 마이크로 스코프로 나누어 Gemini(심층 추론)와 Claude(공격적 엣지케이스)의 교차 검증으로 숨은 동시성 레이스, 데드락, 메모리 누수, 침묵하는 에러(`_ = err`), 경계값 결함을 선제 발굴 및 완치.
    - **설계 문서**: [`notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`](notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md)
+   - **감사 기록부 (SSOT)**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md) (결함 누적 로깅 중)
 2. **`DURA-KILL-1`: `kill -9` 크래시 복구 장기 라운드 검증**
    - 상태: 진행 중 (100라운드 100% 무손실 복구 통과 완료, 릴리스 직전 500 ~ 1,000 라운드 최종 확인)
    - 설계 문서: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
@@ -84,17 +85,20 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 ## 2. Post-1.0 Candidates & Deep Freezer (1.0 이후 후보 및 냉동 보관)
 
 ### 2.1 클라우드 유틸리티 및 엔터프라이즈 백로그
-1. **`FEAT-MATVIEW-ALIAS-1` Materialized View Virtual Alias & Tolerant Refresh (`v1.1.0`)**
+1. **`FEAT-MATVIEW-ALIAS-1` Materialized View Virtual Alias & Tolerant Refresh (1.0 이후)**
    - **목표**: Mattermost, Discourse 등 엔터프라이즈 앱 부트스트랩을 위해 `CREATE MATERIALIZED VIEW`를 가상 뷰(Virtual View, `relkind='m'`)로 인라인 치환하고 `REFRESH MATERIALIZED VIEW`를 Tolerant No-Op(성공) 처리하여 수천 줄의 복잡도와 락 위험을 99% 절감.
    - **설계 문서**: [`notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)
 2. **`S3-1~4` 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기** ([`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md))
 3. **`AUDIT-LOG-1` 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템** ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md))
+4. **`S-SYNTAX-EMPTY-PARENS` 빈 괄호 `IN ()` 문법 평가 정책 (미결 검토)**
+   - **내용**: `WHERE col IN ()` 빈 괄호 구문에 대해 ANSI/PG/MSSQL 표준 엄격 문법 에러(Syntax Error)를 유지할지, SQLite/MySQL 관용 상수 폴딩(`1=0`)을 수용할지에 대한 장단점 논의 미결 상태 유지 (1.0에서는 현행 엄격 에러 유지).
+   - **설계 문서**: [`notes/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](notes/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)
 
 ### 2.2 고도화 스토리지 & AI/빅데이터 백로그 (Storage, AI & Replication)
-1. **`FEAT-VECTOR-1` 순수 Go 기반 Vector 임베딩 및 유사도 검색 (`v1.1.0`)**
+1. **`FEAT-VECTOR-1` 순수 Go 기반 Vector 임베딩 및 유사도 검색 (1.0 이후)**
    - **목표**: `VECTOR(dim)` 타입, L2/Cosine/Dot 거리 연산자(`<->`, `<=>`), 멀티코어 병렬 Flat KNN 스캔 (LangChain/pgvector 호환).
    - **설계 문서**: [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)
-2. **`FEAT-TIMESERIES-LSM-1` LSM 기반 초고속 Time Series 파티셔닝 & 불변 청크 스토리지 (`v1.2.0`)**
+2. **`FEAT-TIMESERIES-LSM-1` LSM 기반 초고속 Time Series 파티셔닝 & 불변 청크 스토리지 (1.0 이후)**
    - **목표**: DDL `WITH (TYPE='TIMESERIES')`, WiredTiger 내장 `lsm:` 핸들러(경로 A) 및 순수 Go 일별 불변 청크 플러시(경로 B) 하이브리드 결합, `time_bucket()`, $O(1)$ 청크 드롭.
    - **설계 문서**: [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)
 3. **`REPL-STREAM-BIN-1` Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍**
@@ -111,7 +115,10 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 3. **`LOC-1~4` MSSQL Collation 및 유니코드 다국어 로케일 정렬/비교**
 
 ### 2.4 영구 기각 (Spec-Out Invariants)
-- **`FRIENDLY-SQL`**: DuckDB 스타일 문법 (`* EXCLUDE`, `FROM tbl;` 등) ➔ 오타 침묵 및 RDBMS 엄격성 훼손으로 기각
+- **`FRIENDLY-SQL` (`P-DUCKDB-1`)**: DuckDB 스타일 편의 문법 (`* EXCLUDE`, `FROM tbl;` 등) ➔ 오타 침묵 및 RDBMS 엄격성 훼손으로 영구 기각 ([`notes/DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`](notes/DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md))
+- **`TDS-MOD-1` (대규모 모놀리스 분할)**: TDS 2.9k 라인 대규모 파일 분할 ➔ Git Blame/히스토리 보존 가치 우선 및 1.0 회귀 위험 방지를 위해 기각 (공개 인터페이스 변경 없는 내부 경량 분리만 허용)
+- **`OCC-HYPER-2 Option B` (Varint/Bit 압축)**: 비트 패킹 레코드 압축 ➔ 0.5ns $O(1)$ 읽기 파괴로 영구 기각 (Pointer-Free Flat Record 및 결함 치료로 하드닝 완결)
+- **`PERF-COMPLEX-QUERY-COLUMNAR`**: 순수 Columnar Vectorization 전면 재작성 ➔ Row-store OLTP 엔진 한계 초과로 영구 기각 (1,024행 Chunked Iterator 수준에서 1.0 동결)
 - **`PERF-SERVER-PIPELINE-P3-P4`**: ReadOnly 자동 바이패스 ➔ 겉형식과 실질 불일치 및 격리성 파괴 위험으로 기각
 
 ---

@@ -2,7 +2,7 @@
 
 > - **최종 갱신일**: 2026-10-29
 > - **최초 작성일**: 2026-10-29
-> - **문서 상태**: Approved (Active Roadmap)
+> - **문서 상태**: 1.0 완료 및 현 상태 동결 (SSB 1.6~2.2배 우위 검증 완료, 순수 Columnar 전면 재작성은 Spec-Out 기각, Mini TPC-H는 Post-1.0 이관)
 > - **연관 과제 ID**: `BENCH-SSB-1`, `BENCH-TPCH-1`
 > - **적용 대상**: `pkg/execution/`, `pkg/planner/`, `cmd/ssb/`
 

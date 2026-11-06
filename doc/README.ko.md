@@ -75,6 +75,6 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
 ## 4. 엔지니어링 히스토리 및 아키텍처 기록 (ADR & Knowledge Base)
 
 * **[`ADR.md`](ADR.md)**: 초기 아키텍처 설계 결정 기록 (ADR-001 ~ ADR-022).
-* **[`FOUNDATIONAL_DESIGN_DECISIONS.md`](FOUNDATIONAL_DESIGN_DECISIONS.md)** / **[`WHY_TSQL_GO_WIREDTIGER.md`](WHY_TSQL_GO_WIREDTIGER.md)**: 핵심 기술 스택 채택 배경 및 설계 철학.
+* **[`FOUNDATIONAL_DESIGN_DECISIONS.md`](FOUNDATIONAL_DESIGN_DECISIONS.md)** / **[`WHY_TSQL_GO_WIREDTIGER.ko.md`](WHY_TSQL_GO_WIREDTIGER.ko.md)**: 핵심 기술 스택 채택 배경 및 설계 철학.
 * **개발자 이면 맥락 및 아키텍처 결정 기록**:
   * 심층 포스트모텀, 기각된 대안(Negative Knowledge), 릴리스 노트 및 후보 과제(Candidates)은 **[`notes/README.ko.md`](../notes/README.ko.md)**를 참조하십시오.
