@@ -94,32 +94,32 @@ LionSQL 본체 순수 Go 소스코드 199개 파일(테스트 및 자동생성 A
 ### 도메인 1: 스토리지 엔진 - In-Memory OCC Core (Scopes 1 ~ 12)
 | Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
 | :--- | :--- | :--- | :--- | :---: |
-| **001** | `pkg/storage/memengine/memengine.go` (1/2) | OCC 엔진 수명주기 및 테이블 카탈로그 맵 | 엔진 초기화, 동시 테이블 생성/삭제 맵 경쟁, Close 시 리소스 정리 | PENDING |
-| **002** | `pkg/storage/memengine/memengine.go` (2/2) | 읽기/쓰기 트랜잭션 시작 및 락 프리 읽기 스냅샷 | 스냅샷 생성 시 글로벌 버전 읽기 경쟁, 비정상 격리 누수 | PENDING |
-| **003** | `pkg/storage/memengine/table_data.go` (1/2) | 테이블 데이터 파티션 및 튜플 메모리 레이아웃 | 동시 행 삽입 시 메모리 정렬, 고밀도 행 추가 시 레이아웃 갱신 | PENDING |
-| **004** | `pkg/storage/memengine/table_data.go` (2/2) | 행 가시성(Visibility) 및 버전 체인 점검 | OCC 충돌 판정, 삭제된 행의 스냅샷 가시성 판단 오류 | PENDING |
-| **005** | `pkg/storage/memengine/tx.go` (1/3) | 트랜잭션 구조체 및 사설 워크스페이스 버퍼링 | 미커밋 상태 격리, 동시 다중 쓰기 버퍼 오버플로우 | PENDING |
-| **006** | `pkg/storage/memengine/tx.go` (2/3) | OCC 유효성 검증(Validation) 및 원자적 커밋 | Write-Write 충돌 고속 감지(`ErrWriteConflict`), 버전 증가 원자성 | PENDING |
-| **007** | `pkg/storage/memengine/tx.go` (3/3) | 롤백 처리 및 워크스페이스 폐기/재활용 | 롤백 시 잔류 포인터 정리, sync.Pool 재활용 시 상태 오염 | PENDING |
-| **008** | `pkg/storage/memengine/skiplist.go` | 락 프리 SkipList 인덱스 구현 | 동시 분기/합병 시 포인터 레이스, 범위 스캔(Range Scan) 경계값 | PENDING |
-| **009** | `pkg/storage/memengine/flat_record.go` (1/2) | Pointer-Free Flat Record 인코딩/디코딩 레이아웃 | 고정 길이/가변 길이 오프셋 계산 정합성, 버퍼 오버런 방어 | PENDING |
-| **010** | `pkg/storage/memengine/flat_record.go` (2/2) | Flat Record 제로-할당 슬라이스 추출기 | 슬라이스 재사용 동시성 안전성, NULL 비트맵 경계값 검증 | PENDING |
-| **011** | `pkg/storage/memengine/wal.go` | WAL 레코드 직렬화 및 동기화 루프 | 고동시성 fsync 그룹 커밋 경합, 디스크 풀(ENOSPC) 처리 | PENDING |
-| **012** | `pkg/storage/memengine/persistence.go`, `ddl.go` | AOF 로그 리플레이, 체크포인트 및 DDL 반영 | 복구 도중 부분 손상 레코드 처리, DDL 변경 시 인덱스 동기 재구축 | PENDING |
+| **001** | `pkg/storage/memengine/memengine.go` (1/2) | OCC 엔진 수명주기 및 테이블 카탈로그 맵 | 엔진 초기화, 동시 테이블 생성/삭제 맵 경쟁, Close 시 리소스 정리 | [x] LOGGED |
+| **002** | `pkg/storage/memengine/memengine.go` (2/2) | 읽기/쓰기 트랜잭션 시작 및 락 프리 읽기 스냅샷 | 스냅샷 생성 시 글로벌 버전 읽기 경쟁, 비정상 격리 누수 | [x] LOGGED |
+| **003** | `pkg/storage/memengine/table_data.go` (1/2) | 테이블 데이터 파티션 및 튜플 메모리 레이아웃 | 동시 행 삽입 시 메모리 정렬, 고밀도 행 추가 시 레이아웃 갱신 | [x] LOGGED |
+| **004** | `pkg/storage/memengine/table_data.go` (2/2) | 행 가시성(Visibility) 및 버전 체인 점검 | OCC 충돌 판정, 삭제된 행의 스냅샷 가시성 판단 오류 | [x] LOGGED |
+| **005** | `pkg/storage/memengine/tx.go` (1/3) | 트랜잭션 구조체 및 사설 워크스페이스 버퍼링 | 미커밋 상태 격리, 동시 다중 쓰기 버퍼 오버플로우 | [x] LOGGED |
+| **006** | `pkg/storage/memengine/tx.go` (2/3) | OCC 유효성 검증(Validation) 및 원자적 커밋 | Write-Write 충돌 고속 감지(`ErrWriteConflict`), 버전 증가 원자성 | [x] LOGGED |
+| **007** | `pkg/storage/memengine/tx.go` (3/3) | 롤백 처리 및 워크스페이스 폐기/재활용 | 롤백 시 잔류 포인터 정리, sync.Pool 재활용 시 상태 오염 | [x] LOGGED |
+| **008** | `pkg/storage/memengine/skiplist.go` | 락 프리 SkipList 인덱스 구현 | 동시 분기/합병 시 포인터 레이스, 범위 스캔(Range Scan) 경계값 | [x] LOGGED |
+| **009** | `pkg/storage/memengine/flat_record.go` (1/2) | Pointer-Free Flat Record 인코딩/디코딩 레이아웃 | 고정 길이/가변 길이 오프셋 계산 정합성, 버퍼 오버런 방어 | [x] LOGGED |
+| **010** | `pkg/storage/memengine/flat_record.go` (2/2) | Flat Record 제로-할당 슬라이스 추출기 | 슬라이스 재사용 동시성 안전성, NULL 비트맵 경계값 검증 | [x] LOGGED |
+| **011** | `pkg/storage/memengine/wal.go` | WAL 레코드 직렬화 및 동기화 루프 | 고동시성 fsync 그룹 커밋 경합, 디스크 풀(ENOSPC) 처리 | [x] LOGGED |
+| **012** | `pkg/storage/memengine/persistence.go`, `ddl.go` | AOF 로그 리플레이, 체크포인트 및 DDL 반영 | 복구 도중 부분 손상 레코드 처리, DDL 변경 시 인덱스 동기 재구축 | [x] LOGGED |
 
 ---
 
 ### 도메인 2: 스토리지 엔진 - WiredTiger MVCC Core & 공통 스토리지 (Scopes 13 ~ 24)
 | Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
 | :--- | :--- | :--- | :--- | :---: |
-| **013** | `pkg/storage/wiredtiger/wt_engine.go` (1/3) | CGo 수명주기, WT_CONNECTION 및 세션 풀러 | 세션 고갈 시 대기 타임아웃, CGo 포인터 누수 및 패닉 복구 | PENDING |
-| **014** | `pkg/storage/wiredtiger/wt_engine.go` (2/3) | WT 트랜잭션 바인딩 및 MVCC 충돌 제어 | `WT_ROLLBACK` 에러 변환, 타임스탬프 스냅샷 일관성 | PENDING |
-| **015** | `pkg/storage/wiredtiger/wt_engine.go` (3/3) | WT_CURSOR 순회 및 B+Tree 스키마 매핑 | 커서 재활용 시 초기화 누락, 다중 컬럼 복합 키 인코딩 | PENDING |
-| **016** | `pkg/storage/wiredtiger/wt_stub.go` | 비-CGo 환경 스텁(Stub) 구현체 | 순수 Go 빌드 시 컴파일 및 런타임 에러 전파 정합성 | PENDING |
-| **017** | `pkg/storage/engine.go` | Storage Engine 인터페이스 및 트랜잭션 명세 | 두 엔진 간 계약 불일치, 인터페이스 침묵 에러 | PENDING |
-| **018** | `pkg/storage/record.go`, `tuple.go` | 공통 튜플 및 레코드 추상화 | 컬럼 타입 불일치 시 패닉 방어, 튜플 슬라이스 복사 누락 | PENDING |
-| **019** | `pkg/storage/decimal.go` | 고정소수점 Decimal 연산 및 직렬화 | 64비트 정수 오버플로우, 반올림/버림 정밀도 유실 | PENDING |
-| **020** | `pkg/storage/value_codec.go`, `codec.go` | 바이너리 값 직렬화 및 정렬 보존 인코딩 | 바이트 역전, 음수/NaN 정렬 순서 뒤바뀜 결함 | PENDING |
+| **013** | `pkg/storage/wiredtiger/wt_engine.go` (1/3) | CGo 수명주기, WT_CONNECTION 및 세션 풀러 | 세션 고갈 시 대기 타임아웃, CGo 포인터 누수 및 패닉 복구 | [x] LOGGED |
+| **014** | `pkg/storage/wiredtiger/wt_engine.go` (2/3) | WT 트랜잭션 바인딩 및 MVCC 충돌 제어 | `WT_ROLLBACK` 에러 변환, 타임스탬프 스냅샷 일관성 | [x] LOGGED |
+| **015** | `pkg/storage/wiredtiger/wt_engine.go` (3/3) | WT_CURSOR 순회 및 B+Tree 스키마 매핑 | 커서 재활용 시 초기화 누락, 다중 컬럼 복합 키 인코딩 | [x] LOGGED |
+| **016** | `pkg/storage/wiredtiger/wt_stub.go` | 비-CGo 환경 스텁(Stub) 구현체 | 순수 Go 빌드 시 컴파일 및 런타임 에러 전파 정합성 | [x] LOGGED |
+| **017** | `pkg/storage/engine.go` | Storage Engine 인터페이스 및 트랜잭션 명세 | 두 엔진 간 계약 불일치, 인터페이스 침묵 에러 | [x] LOGGED |
+| **018** | `pkg/storage/record.go`, `tuple.go` | 공통 튜플 및 레코드 추상화 | 컬럼 타입 불일치 시 패닉 방어, 튜플 슬라이스 복사 누락 | [x] LOGGED |
+| **019** | `pkg/storage/decimal.go` | 고정소수점 Decimal 연산 및 직렬화 | 64비트 정수 오버플로우, 반올림/버림 정밀도 유실 | [x] LOGGED |
+| **020** | `pkg/storage/value_codec.go`, `codec.go` | 바이너리 값 직렬화 및 정렬 보존 인코딩 | 바이트 역전, 음수/NaN 정렬 순서 뒤바뀜 결함 | [x] LOGGED |
 | **021** | `pkg/storage/coerce.go`, `types_extended.go` | 타입 강제 변환 및 확장 SQL 타입 시스템 | 비호환 타입 강제 변환 시 런타임 패닉 방어 | PENDING |
 | **022** | `pkg/storage/json.go` | JSONB 바이너리 표현 및 경로 탐색기 | 불완전한 JSON 파싱 시 스택 고갈, 깊은 중첩 탐색 루프 | PENDING |
 | **023** | `pkg/storage/arena.go`, `slice_cursor.go` | 메모리 아레나 할당기 및 인메모리 커서 | 아레나 오프셋 재설정 누락, 댕글링 포인터 참조 | PENDING |
