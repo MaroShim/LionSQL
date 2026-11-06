@@ -14,7 +14,6 @@
    - **핵심 아키텍처 불변식(Core Invariants)**: 왜 이 방식을 택했고 무엇을 의도적으로 배제(Spec-Out)했는가
    - **개발 철학 및 협업 규약**: 무조건 준수해야 하는 엔지니어링 원칙 (3단계 검증 파이프라인, 이모지 배제, KISS/YAGNI, 파일 분할 기준)
    - **기술 스택 및 주요 컴포넌트**: VDBE 바이트코드 VM, 듀얼 파서, 듀얼 트랙 UDF, 멀티 프로토콜
-   - **부록 B**: Zero-Regex 전면 퇴출 및 결정론적 파서 전환 연대기 (`GA-REGEX-DDL-1` ~ `GA-REGEX-FINAL-3`) 통합 아카이브 수록
 
 2. **[`PITFALLS_AND_TRICKS.md`](PITFALLS_AND_TRICKS.md)**
    - **코드베이스 내 암초 지도(Landmines & Fragile Spots)**: 섣불리 건드리면 깨지기 쉬운 미묘한 포인트들
@@ -34,6 +33,7 @@
 
 6. **도메인별 설계 및 작업 계획서 (Architecture & Execution Plans)**:
    - **액티브 스프린트 (Priority 1 & 2)**:
+     - **[`ZERO_REGEX_MIGRATION_PLAN.ko.md`](ZERO_REGEX_MIGRATION_PLAN.ko.md)**: Zero-Regex 전면 퇴출 및 결정론적 파서 전환 종합 마스터 플랜 (5대 단계별 구현 내역, 전수 조사 매트릭스 및 사후 품질 강화 통합, GA-REGEX-DDL-1 ~ GA-REGEX-FINAL-3).
      - **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)**: 대규모 조인(10+ Tables) 최적화 설계 및 구현 계획서 (베이스 테이블 동적 루트 선정 및 공집합 조기 탈락, OPT-LARGE-JOIN-1).
      - **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)**: 플래너 슬림화 및 순수 AST 전환 설계 계획서 (Sort-Merge Join 지연 평가 및 정규식 폴백 옵션 격리, PLANNER-SLIM-1 & PLANNER-AST-1).
      - **[`SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md)**: 데이터베이스 엔진 업계(DuckDB, CockroachDB, TiDB, DataFusion 등) SQLLogicTest 실전 적용 기준, 3단계 계층화(Tier 1~3) 및 권장 범위 표준 가이드.
