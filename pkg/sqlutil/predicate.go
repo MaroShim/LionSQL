@@ -362,7 +362,7 @@ func ParseBinaryComparison(s string) (*BinaryComparison, bool) {
 			continue
 		}
 
-		if depth == 0 {
+		if depth == 0 && !inBracket {
 			rem := s[i:]
 			remUpper := strings.ToUpper(rem)
 			for _, op := range ops {

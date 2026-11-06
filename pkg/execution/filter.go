@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
 
 	"lionsql/pkg/proc"
@@ -326,10 +325,7 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 			case ">=":
 				return cmp >= 0
 			case " LIKE ":
-				pattern := strings.ReplaceAll(regexp.QuoteMeta(rightVal), "%", ".*")
-				pattern = strings.ReplaceAll(pattern, "_", ".")
-				matched, _ := regexp.MatchString("(?i)^"+pattern+"$", leftStr)
-				return matched
+				return sqlutil.MatchLike(rightVal, leftStr, true)
 			}
 		}
 	}

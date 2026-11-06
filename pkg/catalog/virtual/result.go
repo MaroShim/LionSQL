@@ -574,16 +574,24 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 			}
 			return false
 		case "LIKE", "ILIKE":
-			pattern := strings.ReplaceAll(regexp.QuoteMeta(target), "%", ".*")
+			pat := strings.ReplaceAll(target, "[_]", "\x00LITERALUNDERSCORE\x00")
+			pat = strings.ReplaceAll(pat, "[%]", "\x00LITERALPERCENT\x00")
+			pattern := strings.ReplaceAll(regexp.QuoteMeta(pat), "%", ".*")
 			pattern = strings.ReplaceAll(pattern, "_", ".")
+			pattern = strings.ReplaceAll(pattern, "\x00LITERALUNDERSCORE\x00", "_")
+			pattern = strings.ReplaceAll(pattern, "\x00LITERALPERCENT\x00", "%")
 			re, err := regexp.Compile("(?i)^" + pattern + "$")
 			if err != nil {
 				return false
 			}
 			return re.MatchString(strVal)
 		case "NOT LIKE", "NOT ILIKE":
-			pattern := strings.ReplaceAll(regexp.QuoteMeta(target), "%", ".*")
+			pat := strings.ReplaceAll(target, "[_]", "\x00LITERALUNDERSCORE\x00")
+			pat = strings.ReplaceAll(pat, "[%]", "\x00LITERALPERCENT\x00")
+			pattern := strings.ReplaceAll(regexp.QuoteMeta(pat), "%", ".*")
 			pattern = strings.ReplaceAll(pattern, "_", ".")
+			pattern = strings.ReplaceAll(pattern, "\x00LITERALUNDERSCORE\x00", "_")
+			pattern = strings.ReplaceAll(pattern, "\x00LITERALPERCENT\x00", "%")
 			re, err := regexp.Compile("(?i)^" + pattern + "$")
 			if err != nil {
 				return false
