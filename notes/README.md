@@ -19,7 +19,7 @@ Foundational engineering principles, architectural invariants, code landmines, a
   * **Codebase Landmines & Fragile Spots**: SPI decoupling against circular imports, sandbox network isolation, atomic file I/O, and Decimal JSON safety.
 * **[`TAXONOMY.ko.md`](TAXONOMY.ko.md)** (Korean)
   * **Task Identifier Taxonomy**: Consolidated reference for `P1~P3` (priority tasks), `VPERF` (complex queries), `GA-REGEX` (zero-regex gates), and `S-1~S-7` (syntax completeness).
-* **[`ARTICLE_HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md`](ARTICLE_HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md)** ([Korean](ARTICLE_HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md))
+* **[`HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md`](HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md)** ([Korean](HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md))
   * **The 6 Golden Release Gates Philosophy**: Technical whitepaper on how executing 6 automated mechanical verification gates on every single release elevates LionSQL to enterprise-grade mission-critical infrastructure.
 * **[`PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)**
   * **Multi-Protocol Emulation Boundaries**: TDS (1433), PGWire (5433), and MySQL wire compatibility scopes and cutoff boundaries.

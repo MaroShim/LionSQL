@@ -24,7 +24,7 @@ LionSQL `v0.91.0` 버전은 고성능 관계형 데이터베이스를 넘어 단
 - **WiredTiger 정전/SIGKILL 무손실 내구성 하드닝 (`wt_engine`)**:
   - `wt_engine.go` 설정 내 `transaction_sync=(enabled=true,method=none)`을 영구 복구하여 커밋 시 사용자 영역 로그를 OS 버퍼로 즉시 플러시, 불시의 `kill -9` 전원 차단 시에도 0건 유실 무손실 내구성 확립 (`bin/crashtest` 100% PASS 검증).
 - **6대 골든 릴리즈 검증 게이트 영구 탑재 (`scripts/release.sh`)**:
-  - 단위(100k TPS), 13대 도메인 스모크, TPC-C(>70만 tpmC), SQLLogicTest(41만 쿼리), T-SQL 프로시저 14대 스위트, SIGKILL 크래시 복구 오라클을 릴리즈 파이프라인에 영구 통합하고 기술 백서([`notes/ARTICLE_HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](ARTICLE_HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)) 발간.
+  - 단위(100k TPS), 13대 도메인 스모크, TPC-C(>70만 tpmC), SQLLogicTest(41만 쿼리), T-SQL 프로시저 14대 스위트, SIGKILL 크래시 복구 오라클을 릴리즈 파이프라인에 영구 통합하고 기술 백서([`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)) 발간.
 - **In-Memory OCC Pointer-Free Flat Record 고도화 (`OCC-HYPER-2`)**:
   - 포인터 프리 플랫 레코드 레이아웃 코덱 적용으로 67.5% 메모리 절감 및 Go GC 부하 배제, 서브 나노초 $O(1)$ 읽기 성능 확립.
 - **코어 내부 명세 및 히스토리 아카이브 체계화**:

@@ -1,4 +1,4 @@
-# 릴리즈마다 실행되는 6대 검증 게이트: LionSQL의 가치를 엔터프라이즈 급으로 격상시키는 엔지니어링 신뢰성 철학 (`notes/ARTICLE_HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`)
+# 릴리즈마다 실행되는 6대 검증 게이트: LionSQL의 가치를 엔터프라이즈 급으로 격상시키는 엔지니어링 신뢰성 철학 (`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`)
 
 > - **최초 작성일**: 2026-11-06
 > - **문서 성격**: 엔지니어링 아키텍처 칼럼 / 기술 백서 (Technical Whitepaper)

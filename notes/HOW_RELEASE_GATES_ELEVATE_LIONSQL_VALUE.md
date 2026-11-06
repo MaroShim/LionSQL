@@ -1,4 +1,4 @@
-# The 6 Golden Release Gates: Engineering Reliability Philosophy Elevating LionSQL to Enterprise Grade (`notes/ARTICLE_HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md`)
+# The 6 Golden Release Gates: Engineering Reliability Philosophy Elevating LionSQL to Enterprise Grade (`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md`)
 
 > - **Initial Date**: 2026-11-06
 > - **Document Kind**: Engineering Architecture Column / Technical Whitepaper
