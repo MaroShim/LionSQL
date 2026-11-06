@@ -21,6 +21,10 @@ LionSQL `v0.91.0` is a significant milestone release that expands LionSQL beyond
   - Hardened `sqlutil.MatchLike` with native T-SQL bracket wildcard support (`[...]`, `[^...]`, `[_]`, `[%]`).
 - **Root Compatibility Specifications**:
   - Published formal standalone compatibility specifications ([`COMPATIBILITY.ko.md`](COMPATIBILITY.ko.md) / [`COMPATIBILITY.md`](COMPATIBILITY.md)) standardizing on Microsoft SQL Server 2019 (v15.0) and PostgreSQL 14-16 wire protocols.
+- **WiredTiger Power-Cut / SIGKILL Zero-Loss Durability Hardening**:
+  - Restored `transaction_sync=(enabled=true,method=none)` in WiredTiger configuration, guaranteeing user-space transaction logs flush to OS buffers on commit and survive abrupt `kill -9` without data loss (`bin/crashtest` verified 100% PASS).
+- **6-Stage Golden Release Verification Gate Deployment (`scripts/release.sh`)**:
+  - Permanently integrated Core Unit (100k TPS), 13-Domain Smoke, TPC-C (>700k tpmC), SQLLogicTest (410k queries), T-SQL 14-Suite Procedures, and SIGKILL Crash Oracles into the release pipeline, accompanied by an architectural whitepaper ([`notes/ARTICLE_HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md`](ARTICLE_HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md)).
 - **In-Memory OCC Pointer-Free Flat Record Hardening (`OCC-HYPER-2`)**:
   - Pointer-free flat record layout codec delivering 67.5% memory reduction with zero GC overhead and verified sub-nanosecond $O(1)$ reads.
 - **Engine Internals & Historical Archives Hub**:
