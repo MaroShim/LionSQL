@@ -45,6 +45,12 @@ CLR_GRAY="\033[0;90m"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
+CHANGELOG_FILE="${ROOT_DIR}/CHANGELOG.md"
+VERSION_GO_FILE="${ROOT_DIR}/pkg/config/version.go"
+README_FILE="${ROOT_DIR}/README.md"
+README_KO_FILE="${ROOT_DIR}/README.ko.md"
+TODO_FILE="${ROOT_DIR}/TODO.md"
+
 # Defaults
 DRY_RUN=false
 SKIP_TESTS=false
