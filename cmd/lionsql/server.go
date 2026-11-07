@@ -555,8 +555,10 @@ func runServer(args []string) error {
 		return nil
 	}
 
-	// 8. Authentication & RBAC Service
-	authSvc := auth.NewAuthService(auth.Config{})
+	// 8. Authentication & RBAC Service (with persistent auth.json in DataDir, [ADR-026], P0-09)
+	authSvc := auth.NewAuthService(auth.Config{
+		DataDir: cfg.Server.DataDir,
+	})
 	_, _ = authSvc.EnsureDefaultSuperuser(cfg.Auth.AdminEmail, cfg.Auth.AdminPass)
 
 	server := api.NewServerWithAuth(cat, eng, authSvc, cfg.Auth.Enabled)

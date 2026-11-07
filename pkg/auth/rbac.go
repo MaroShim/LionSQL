@@ -99,6 +99,7 @@ func (s *AuthService) CreateLogin(name, password string) (*Login, error) {
 		UpdatedAt:    now,
 	}
 	s.logins[norm] = l
+	_ = s.saveLocked()
 	return l, nil
 }
 
@@ -141,6 +142,7 @@ func (s *AuthService) AlterLoginPassword(name, newPassword string) error {
 
 	l.PasswordHash = pwHash
 	l.UpdatedAt = now
+	_ = s.saveLocked()
 	return nil
 }
 
@@ -158,6 +160,7 @@ func (s *AuthService) DropLogin(name string) error {
 		return fmt.Errorf("%w: %s", ErrLoginNotFound, name)
 	}
 	delete(s.logins, norm)
+	_ = s.saveLocked()
 	return nil
 }
 
@@ -249,6 +252,7 @@ func (s *AuthService) CreateUser(name, loginName string, roles ...string) (*User
 		UpdatedAt: now,
 	}
 	s.dbUsers[normUser] = u
+	_ = s.saveLocked()
 	return u, nil
 }
 
@@ -267,6 +271,7 @@ func (s *AuthService) DropUser(name string) error {
 	}
 	delete(s.dbUsers, norm)
 	delete(s.grants, norm)
+	_ = s.saveLocked()
 	return nil
 }
 
@@ -320,6 +325,7 @@ func (s *AuthService) GrantTable(user, table string, priv Privilege) error {
 	}
 
 	s.grants[normUser][normTable][priv] = GrantAllow
+	_ = s.saveLocked()
 	return nil
 }
 
@@ -344,6 +350,7 @@ func (s *AuthService) RevokeTable(user, table string, priv Privilege) error {
 			delete(s.grants[normUser][normTable], PrivAll)
 		}
 	}
+	_ = s.saveLocked()
 	return nil
 }
 
@@ -367,6 +374,7 @@ func (s *AuthService) DenyTable(user, table string, priv Privilege) error {
 	}
 
 	s.grants[normUser][normTable][priv] = GrantDeny
+	_ = s.saveLocked()
 	return nil
 }
 

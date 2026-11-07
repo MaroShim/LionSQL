@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -69,12 +70,15 @@ type Claims struct {
 type Config struct {
 	SecretKey     []byte
 	TokenDuration time.Duration
+	DataDir       string // Path to directory where auth.json is persisted (empty = purely in-memory)
 }
 
 // AuthService manages superuser authentication, password verification, JWT lifecycles, and API Keys.
 type AuthService struct {
 	secret            []byte
 	tokenDuration     time.Duration
+	dataDir           string
+	dataFile          string
 	defaultAdminEmail string
 	users             map[string]*Superuser // keyed by normalized email
 	usersByID         map[string]*Superuser
@@ -98,9 +102,17 @@ func NewAuthService(cfg Config) *AuthService {
 	if dur <= 0 {
 		dur = 14 * 24 * time.Hour // Default 14 days (matching PocketBase standard)
 	}
+
+	var dataFile string
+	if cfg.DataDir != "" {
+		dataFile = filepath.Join(filepath.Clean(cfg.DataDir), "auth.json")
+	}
+
 	svc := &AuthService{
 		secret:        secret,
 		tokenDuration: dur,
+		dataDir:       cfg.DataDir,
+		dataFile:      dataFile,
 		users:         make(map[string]*Superuser),
 		usersByID:     make(map[string]*Superuser),
 		apiKeys:       make(map[string]*APIKey),
@@ -110,14 +122,37 @@ func NewAuthService(cfg Config) *AuthService {
 		grants:        make(map[string]map[string]map[Privilege]GrantType),
 	}
 
-	// Initialize standard built-in administrative principals
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+
+	// 1. Try restoring existing credentials from auth.json ([RULE:AtomicSaves])
+	restored, _ := svc.loadLocked()
+
+	// 2. Ensure built-in administrative principals always exist
 	now := time.Now().UTC()
-	svc.logins["sa"] = &Login{Name: "sa", IsDisabled: false, CreatedAt: now, UpdatedAt: now}
-	svc.logins["admin"] = &Login{Name: "admin", IsDisabled: false, CreatedAt: now, UpdatedAt: now}
-	svc.logins["postgres"] = &Login{Name: "postgres", IsDisabled: false, CreatedAt: now, UpdatedAt: now}
-	svc.dbUsers["dbo"] = &User{Name: "dbo", LoginName: "sa", Roles: []string{"db_owner"}, CreatedAt: now, UpdatedAt: now}
-	svc.dbUsers["guest"] = &User{Name: "guest", LoginName: "guest", Roles: []string{"public"}, CreatedAt: now, UpdatedAt: now}
-	svc.dbUsers["postgres"] = &User{Name: "postgres", LoginName: "postgres", Roles: []string{"db_owner"}, CreatedAt: now, UpdatedAt: now}
+	if _, ok := svc.logins["sa"]; !ok {
+		svc.logins["sa"] = &Login{Name: "sa", IsDisabled: false, CreatedAt: now, UpdatedAt: now}
+	}
+	if _, ok := svc.logins["admin"]; !ok {
+		svc.logins["admin"] = &Login{Name: "admin", IsDisabled: false, CreatedAt: now, UpdatedAt: now}
+	}
+	if _, ok := svc.logins["postgres"]; !ok {
+		svc.logins["postgres"] = &Login{Name: "postgres", IsDisabled: false, CreatedAt: now, UpdatedAt: now}
+	}
+	if _, ok := svc.dbUsers["dbo"]; !ok {
+		svc.dbUsers["dbo"] = &User{Name: "dbo", LoginName: "sa", Roles: []string{"db_owner"}, CreatedAt: now, UpdatedAt: now}
+	}
+	if _, ok := svc.dbUsers["guest"]; !ok {
+		svc.dbUsers["guest"] = &User{Name: "guest", LoginName: "guest", Roles: []string{"public"}, CreatedAt: now, UpdatedAt: now}
+	}
+	if _, ok := svc.dbUsers["postgres"]; !ok {
+		svc.dbUsers["postgres"] = &User{Name: "postgres", LoginName: "postgres", Roles: []string{"db_owner"}, CreatedAt: now, UpdatedAt: now}
+	}
+
+	// 3. If freshly created, persist initial state to disk
+	if !restored && dataFile != "" {
+		_ = svc.saveLocked()
+	}
 
 	return svc
 }
@@ -201,6 +236,7 @@ func (s *AuthService) EnsureDefaultSuperuser(email, password string) (*Superuser
 			u.PasswordHash = pwHash
 			u.UpdatedAt = now
 		}
+		_ = s.saveLocked()
 		return u, nil
 	}
 	u := &Superuser{
@@ -214,6 +250,7 @@ func (s *AuthService) EnsureDefaultSuperuser(email, password string) (*Superuser
 
 	s.users[normEmail] = u
 	s.usersByID[u.ID] = u
+	_ = s.saveLocked()
 	return u, nil
 }
 
@@ -398,6 +435,7 @@ func (s *AuthService) CreateAPIKey(name string, role APIKeyRole, allowedTables [
 
 	s.apiKeys[hashedKey] = keyObj
 	s.apiKeysByID[keyObj.ID] = keyObj
+	_ = s.saveLocked()
 
 	return keyObj, nil
 }
@@ -430,6 +468,7 @@ func (s *AuthService) RevokeAPIKey(id string) error {
 
 	delete(s.apiKeys, keyObj.HashedKey)
 	delete(s.apiKeysByID, id)
+	_ = s.saveLocked()
 	return nil
 }
 
