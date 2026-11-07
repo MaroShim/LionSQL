@@ -781,4 +781,74 @@ func TestFlatRecord_Regression_P0_02_SnapshotSyncMaterialization(t *testing.T) {
 	}
 }
 
+func TestFlatRecord_Regression_P0_04_AlterTableAddColumnPreservesExistingData(t *testing.T) {
+	opts := DefaultOptions("")
+	opts.Mode = OCCModeFlat
+	eng := NewWithOptions(opts)
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "users_alter_test",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+			{Name: "score", Type: storage.TypeInt},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	err := tx.Insert("users_alter_test", storage.Record{
+		"id":    storage.IntValue(1),
+		"name":  storage.StringValue("Alice"),
+		"score": storage.IntValue(100),
+	})
+	if err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Add new column via AddColumn
+	newCol := &storage.Column{
+		Name:     "grade",
+		Type:     storage.TypeVarChar,
+		Nullable: true,
+		Default:  "'A'",
+	}
+	if err := eng.AddColumn("users_alter_test", newCol); err != nil {
+		t.Fatalf("AddColumn failed: %v", err)
+	}
+
+	// Now read the row back!
+	readTx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx.Rollback()
+
+	rec, err := readTx.Get("users_alter_test", storage.IntValue(1))
+	if err != nil {
+		t.Fatalf("Get after AlterTable failed: %v", err)
+	}
+
+	// P0-04 BUG: Previous code destroyed all existing columns ("id", "name", "score"),
+	// leaving only the 1 newly added column or empty garbage!
+	if rec["id"].IVal != 1 {
+		t.Fatalf("[CRITICAL P0-04 REGRESSION] original column 'id' destroyed! got: %+v", rec)
+	}
+	if rec["name"].SVal != "Alice" {
+		t.Fatalf("[CRITICAL P0-04 REGRESSION] original column 'name' destroyed! got: %+v", rec)
+	}
+	if rec["score"].IVal != 100 {
+		t.Fatalf("[CRITICAL P0-04 REGRESSION] original column 'score' destroyed! got: %+v", rec)
+	}
+	if rec["grade"].SVal != "A" {
+		t.Fatalf("new column 'grade' mismatch: want 'A', got %q", rec["grade"].SVal)
+	}
+}
+
+
 

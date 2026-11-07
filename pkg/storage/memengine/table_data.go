@@ -362,16 +362,57 @@ func (td *TableData) removePartitionKey(partID, pk string) {
 
 func (td *TableData) addColumnValues(val storage.Value) {
 	td.ensureShardsInit()
+
+	var newLayout *FlatRecordLayout
+	var oldSchema storage.TableSchema
+	if td.mode == OCCModeFlat {
+		newLayout = BuildFlatRecordLayout(&td.Schema)
+		oldSchema = td.Schema
+		if len(oldSchema.Columns) > 1 {
+			oldSchema.Columns = oldSchema.Columns[:len(oldSchema.Columns)-1]
+		}
+	}
+
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
 		sh.mu.Lock()
 		for k, entry := range sh.entries {
-			sh.entries[k] = shardEntry{
-				ver: entry.ver,
-				row: storage.Row{Values: append(entry.row.Values, val)},
+			if td.mode == OCCModeFlat {
+				var origRow storage.Row
+				var err error
+				if len(entry.flatBuf) > 0 && len(entry.row.Values) == 0 && td.layout != nil {
+					origRow, err = td.layout.DecodeFlatToRow(&oldSchema, entry.flatBuf)
+				} else {
+					origRow = entry.row
+				}
+				if err != nil {
+					origRow = entry.row
+				}
+				newRow := storage.Row{Values: append(origRow.Values, val)}
+				newBuf, err := newLayout.EncodeRowToFlat(&td.Schema, newRow)
+				if err != nil {
+					sh.entries[k] = shardEntry{
+						ver: entry.ver,
+						row: newRow,
+					}
+				} else {
+					sh.entries[k] = shardEntry{
+						ver:     entry.ver,
+						flatBuf: newBuf,
+					}
+				}
+			} else {
+				sh.entries[k] = shardEntry{
+					ver: entry.ver,
+					row: storage.Row{Values: append(entry.row.Values, val)},
+				}
 			}
 		}
 		sh.mu.Unlock()
+	}
+
+	if newLayout != nil {
+		td.layout = newLayout
 	}
 }
 

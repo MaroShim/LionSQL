@@ -31,8 +31,8 @@
    - `syncShardsToMapsLocked`에서 `entry.materialize(td)`를 호출하여 플랫 버퍼 데이터를 역직렬화 대입하도록 수정함으로써 디스크 스냅샷 및 체크포인트 동기화 시 데이터 유실 결함 완치.
 3. **`P0-03` [WAL 재생 I/O 에러 시 정상 후속 레코드 영구 절삭 삭제]** [완료] (`wal.go:343-345, 377-379` / 결함 11-3)
    - 일시적 파일 읽기 I/O 오류 또는 중간 손상 발생 시 정상 후속 트랜잭션을 디스크에서 임의로 Truncate하던 결함 완치 (4-State MECE 분류, 물리적 파일 끝 입증 시에만 테일 절삭 허용 및 Fail-Closed 보호, Invariant ㉒ & ADR-027 확립).
-4. **`P0-04` [ALTER TABLE ADD COLUMN 시 FlatRecord 기존 데이터 전량 파괴]** (`table_data.go:359-372` / 결함 11-4)
-   - FlatRecord 모드에서 컬럼 추가 시 기존 컬럼들을 디코딩하지 않고 빈 로에 덮어써 기존 데이터 영구 소멸.
+4. **`P0-04` [ALTER TABLE ADD COLUMN 시 FlatRecord 기존 데이터 전량 파괴]** [완료] (`table_data.go:359-372` / 결함 11-4)
+   - FlatRecord 모드에서 컬럼 추가 시 기존 행들을 구 스키마로 안전하게 역직렬화한 뒤 신규 컬럼 값을 덧붙여 새 레이아웃으로 재인코딩하도록 수정함으로써 기존 데이터 전량 증발 결함 완치.
 5. **`P0-05` [파티션 키 갱신 시 `partMu` 미보호 동시 맵 쓰기 크래시]** (`table_data.go:335-357` / 결함 11-5)
    - `addPartitionKey`/`removePartitionKey`에서 선언된 뮤텍스를 획득하지 않아 동시 트랜잭션 시 `concurrent map writes` 패닉.
 6. **`P0-15` [WAL 아카이브 회전 중 신규 트랜잭션 Truncate 절삭 유실]** (`wal_archive.go:154-173` / 결함 9-1)
