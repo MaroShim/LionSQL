@@ -13,11 +13,11 @@
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
 * **1단계 (135단계 전수 광역 스캔)**: 135 / 135 (100.0%) 완주 완료 (총 134건 결함 식별)
-* **2단계 (7대 핵심 코어 심층 재스캔)**: 5 / 7 구역 완료 (구역 1: 7건, 구역 2: 5건, 구역 3: 6건, 구역 4: 5건, 구역 5: 5건 발굴, 구역 6~7 진행 중)
-* **총 누적 식별 결함**: 총 162건 (1단계 134건 + 2단계 28건)
-  - Critical: 13건 (+2)
-  - High: 73건 (+3)
-  - Medium: 61건 (+0)
+* **2단계 (7대 핵심 코어 심층 재스캔)**: 7 / 7 (100.0%) 전 구역 완주 완료 (구역 1: 7건, 구역 2: 5건, 구역 3: 6건, 구역 4: 5건, 구역 5: 5건, 구역 6: 5건, 구역 7: 5건 발굴)
+* **총 누적 식별 결함**: 총 172건 (1단계 134건 + 2단계 38건)
+  - Critical: 16건 (+3)
+  - High: 78건 (+5)
+  - Medium: 63건 (+2)
   - Low: 15건 (+0)
 
 ---
@@ -2654,6 +2654,123 @@
   - **결과**: 단일 악의적 TCP 연결만으로도 서버의 모든 힙 메모리를 고갈시켜 프로세스 전체를 OOM 크래시시키는 DoS 공격 가능.
 * **권장 수정안**:
   - 최대 허용 메시지 크기(예: `const MaxTDSMessageSize = 64 * 1024 * 1024`)를 상수로 정의하고, 누적 크기가 이를 초과할 경우 즉시 에러를 반환하고 연결을 종료하도록 경계 검사 추가.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
+### [심층 구역 6] T-SQL 렉서 & 파서 코어 (T-SQL Lexer & Pratt Parser Core)
+* **점검 대상 파일**: `pkg/proc/lexer.go`, `pkg/proc/parser.go`, `pkg/proc/parser_expr.go`, `pkg/proc/parser_dml.go`, `pkg/proc/token.go` (총 3,337 라인 전수 스캔)
+* **핵심 분석 초점**: 데이터 타입 매핑 정밀도 왜곡, UTF-8 멀티바이트 문자 렉싱 파편화, 이항 연산자 AST Nil Pointer Dereference 패닉, T-SQL SELECT INTO 테이블 생성 문법 거부, 서브쿼리 WITH CTE 구문 파싱 누락.
+
+#### [발굴 결함 6-1] `proc/parser.go`: `parseDataType`에서 `DECIMAL`/`NUMERIC`/`MONEY`를 `TypeFloat`으로 매핑하여 금융/회계 부동소수점 오차 유발
+* **심각도**: `Critical`
+* **위치**: `pkg/proc/parser.go:255-280` (`parseDataType`)
+* **현상 및 원인 분석**:
+  - LionSQL 스토리지 엔진에는 임의 정밀도 십진수를 다루는 `storage.TypeDecimal`이 온전히 구현되어 있음에도, 파서의 `parseDataType` 스위치문에서 `DECIMAL`, `NUMERIC`, `MONEY`를 모두 부동소수점 타입인 `storage.TypeFloat`으로 강제 매핑함.
+  - **결과**: T-SQL 저장 프로시저 및 DDL/DML에서 `DECIMAL(18, 4)`로 선언된 금융/회계 컬럼 및 변수가 IEEE 754 부동소수점(Float64)으로 처리되어 이진 부동소수점 오차(Precision Loss) 및 금액 계산 부정확 초래.
+* **권장 수정안**:
+  - `case "DECIMAL", "NUMERIC", "MONEY": return storage.TypeDecimal`로 정확한 데이터 타입 매핑 복구.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 6-2] `proc/lexer.go`: `isLetter(ch byte)`에서 UTF-8 멀티바이트 단일 바이트를 룬으로 오변환하여 비-ASCII 식별자 파편화 및 오인식
+* **심각도**: `High`
+* **위치**: `pkg/proc/lexer.go:497-499` (`isLetter`)
+* **현상 및 원인 분석**:
+  - `isLetter(ch byte)`가 `byte` 매개변수를 직접 `rune(ch)`로 변환하여 `unicode.IsLetter`를 호출함.
+  - 한글, 한자, 일본어 등 다중바이트 UTF-8 문자의 첫 바이트(예: 0xEA)를 단일 바이트 룬(0x00EA, Latin-1 `ê`)으로 왜곡 평가하며, 후속 바이트들은 식별자 문자로 인식되지 못하고 토크나이저에서 쪼개짐 (`[RULE:CharSanitization]`).
+  - **결과**: 한글 테이블명, 컬럼명, 변수명이 여러 개의 `TokenIllegal` 또는 엉뚱한 식별자로 파편화되어 파싱 에러 발생.
+* **권장 수정안**:
+  - `utf8.DecodeRuneInString`을 사용하여 올바른 다중바이트 룬 단위로 문자를 소비하고 판별하도록 렉서 구조 개선.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 6-3] `proc/parser_expr.go`: 이항 연산자 파싱 중 오른쪽 표현식 실패 시 `&BinaryExpr{Right: nil}` 반환으로 인한 런타임 Nil Pointer Dereference 패닉
+* **심각도**: `High`
+* **위치**: `pkg/proc/parser_expr.go:180-194` (`parseExpression`)
+* **현상 및 원인 분석**:
+  - 이항 연산자 파싱 경로(`default:`)에서 `rightExp := p.parseExpression(opPrec)`를 호출한 뒤, `rightExp`의 nil 여부를 전혀 검증하지 않고 `&BinaryExpr{Left: leftExp, Op: op, Right: rightExp}`를 조립하여 반환함.
+  - 쿼리에 구문 오류가 있거나 오른쪽 피연산자가 없는 경우(`WHERE a = ;` 또는 `SELECT a + FROM t`), `Right == nil`인 비정상 AST 노드가 생성되어 후속 컴파일러(`compiler.go`)나 평가기(`eval.go`)로 전달됨.
+  - **결과**: 컴파일러나 VM에서 `b.Right.Compile(...)` 호출 시 `panic: runtime error: invalid memory address or nil pointer dereference` 발생 (`[RULE:PanicRecovery]`, `[RULE:LexicalSafety]`).
+* **권장 수정안**:
+  - `if rightExp == nil { return nil }` 검사를 배치하여 피연산자 누락 시 안전하게 파싱 에러 반환.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 6-4] `proc/parser_dml.go`: `parseSelect`에서 `SELECT ... INTO` 문법 시 `@variable`만 강제하여 표준 T-SQL 테이블 생성 구문 전체 거부
+* **심각도**: `High`
+* **위치**: `pkg/proc/parser_dml.go:12-21` (`parseSelect`)
+* **현상 및 원인 분석**:
+  - `SELECT col INTO ...` 파싱 시 `INTO` 다음 토큰이 `@variable`이 아니면 무조건 `expected @variable after INTO, got ...` 에러를 반환하며 즉각 중단함.
+  - T-SQL 표준 및 실무에서 가장 광범위하게 쓰이는 `SELECT * INTO #temp FROM src` 또는 `SELECT * INTO new_table FROM src` 물리/임시 테이블 생성 구문을 전혀 파싱하지 못하고 거부함.
+* **권장 수정안**:
+  - `INTO` 뒤 토큰이 `@variable`이 아니더라도 `TokenIdent`이면 `SelectIntoTableStmt`로 분기하여 정상적인 임시/신규 테이블 생성 구문으로 파싱하도록 확장.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 6-5] `proc/parser_dml.go`: `JOIN` 서브쿼리에서 `WITH` CTE 구문 감지 시 `parseWith()` 미호출로 인한 파싱 실패 오류
+* **심각도**: `Medium`
+* **위치**: `pkg/proc/parser_dml.go:839-850` (`parseGeneralSelect`)
+* **현상 및 원인 분석**:
+  - `JOIN (WITH cte AS (...) SELECT ...)` 형태의 CTE가 내장된 서브쿼리를 파싱할 때 `p.peekTokenIs(TokenWith)`를 감지하여 괄호를 열지만, 본체 파싱 시 `parseWith()`를 호출하지 않고 `parseGeneralSelect()`를 호출함.
+  - `parseGeneralSelect()`는 `WITH` 키워드를 처리하는 로직이 없어, 첫 단어인 `WITH`를 일반 컬럼 식별자로 오인하여 연쇄적인 파싱 에러를 유발함.
+* **권장 수정안**:
+  - 서브쿼리 진입 시 `if p.curTokenIs(TokenWith) { subSel, err = p.parseWith() }` 분기 추가.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
+### [심층 구역 7] 시스템 카탈로그 & DDL 메타데이터 코어 (System Catalog & DDL Metadata Core)
+* **점검 대상 파일**: `pkg/catalog/catalog.go`, `pkg/catalog/virtual/interceptor.go`, `pkg/catalog/virtual/mssql.go` (총 2,238 라인 전수 스캔)
+* **핵심 분석 초점**: DDL 변경사항 영속화 누락 및 재시작 시 영구 유실, 복합 대괄호 식별자 카탈로그 검색 실패, 포인터 미복사 반환으로 인한 동시성 Data Race, 가상 카탈로그 라우팅 시 리터럴 대괄호 무차별 삭제 오염.
+
+#### [발굴 결함 7-1] `catalog/catalog.go`: `AlterTrigger` 시 디스크 영속화(`persistObjectsLocked`) 누락으로 인한 서버 재시작 시 트리거 수정사항 영구 유실
+* **심각도**: `Critical`
+* **위치**: `pkg/catalog/catalog.go:376-390` (`AlterTrigger`)
+* **현상 및 원인 분석**:
+  - `RegisterTrigger`, `CreateTrigger`, `DropTrigger`는 모두 변경 후 디스크 파일(`catalog_objects.json`)에 원자적으로 저장하는 `persistObjectsLocked()`를 호출하지만, `AlterTrigger`는 영속화 호출이 완전히 누락됨.
+  - 인메모리 맵(`c.triggers[key]`)만 갱신하고 디스크에 쓰지 않기 때문에, 트리거를 `ALTER TRIGGER`로 수정한 뒤 서버를 재시작하면 이전 버전의 트리거로 되돌아가는 치명적 DDL 수정사항 유실(Silent Loss of DDL Alter) 발생.
+* **권장 수정안**:
+  - `AlterTrigger` 하단에 `if c.persistenceDir != "" { _ = c.persistObjectsLocked() }` 영속화 호출 추가.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 7-2] `catalog/catalog.go`: `CreateStatistics` 영속화 누락 및 `CatalogObjects` 직렬화 구조체 누락으로 인한 확장 통계 메타데이터 영구 증발
+* **심각도**: `Critical`
+* **위치**: `pkg/catalog/catalog.go:790-796`, `507-512` (`CreateStatistics`, `CatalogObjects`)
+* **현상 및 원인 분석**:
+  - `CreateStatistics`가 확장 통계 메타데이터(`c.statistics`)를 인메모리 맵에만 저장하고 디스크 영속화를 일체 수행하지 않음.
+  - 또한 카탈로그 직렬화 DTO인 `CatalogObjects` 구조체에 `Statistics []*StatisticDef` 필드가 아예 존재하지 않아, 시스템 저장 및 복원 경로가 원천적으로 누락되어 있음.
+  - **결과**: 사용자가 CBO 최적화를 위해 생성한 다중 컬럼 확장 통계(`CREATE STATISTICS`)가 서버 재부팅 시마다 전부 증발하여 CBO 플래너 성능 저하 유발.
+* **권장 수정안**:
+  - `CatalogObjects`에 `Statistics` 필드를 추가하고, `persistObjectsLocked` 및 `loadObjectsFileLocked`에 통계 직렬화/역직렬화 파이프라인 통합.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 7-3] `catalog/catalog.go`: `cleanCatalogIdent`의 나이브한 `Trim` 로직으로 인한 `[dbo].[my_proc]` 복합 식별자 오염 및 카탈로그 검색 실패
+* **심각도**: `High`
+* **위치**: `pkg/catalog/catalog.go:116-122` (`cleanCatalogIdent`)
+* **현상 및 원인 분석**:
+  - `cleanCatalogIdent`가 `strings.Trim(s, "[]\"'`")`을 사용하는데, 이는 문자열의 맨 앞과 맨 뒤의 대괄호만 제거함.
+  - `[dbo].[my_proc]` 형태의 식별자가 들어올 경우 중간의 `].[ `가 보존되어 `dbo].[my_proc`이 되고, `strings.HasPrefix(..., "dbo.")` 검사를 통과하지 못함.
+  - **결과**: 카탈로그 맵의 키가 `dbo].[my_proc`으로 오염되어, 정상적인 `my_proc` 호출 시 `ErrProcNotFound`가 발생하는 심각한 식별자 정규화 결함 초래 (`[RULE:ModularAbstraction]`).
+* **권장 수정안**:
+  - `sqlutil.CleanSchemaPrefix` 또는 `strings.Split(s, ".")`를 사용하여 각 파트별로 괄호를 안전하게 벗겨내는 정규화 로직 적용.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 7-4] `catalog/catalog.go`: `GetView`에서 내부 포인터 복사 없이 `*View` 원본 객체를 직접 반환하여 동시 쿼리 실행 시 메모리 Data Race 유발
+* **심각도**: `High`
+* **위치**: `pkg/catalog/catalog.go:752-761` (`GetView`)
+* **현상 및 원인 분석**:
+  - `GetProcedure`, `GetFunction`, `GetTrigger`는 모두 `cp := *obj; return &cp, nil` 형태로 내부 포인터를 얕은 복사하여 반환함으로써 카탈로그 락(`c.mu.RUnlock()`) 해제 후의 동시성 변조를 방지함.
+  - 반면 `GetView`는 카탈로그 맵의 원본 포인터 `return v, nil`을 그대로 반환함.
+  - **결과**: 호출자 고루틴이 뷰 메타데이터를 참조하는 동안 다른 트랜잭션이 `CreateOrReplaceView`나 `DropView`를 실행하면 메모리 Data Race가 발생하여 프로세스 불안정 초래 (`[RULE:ConcurrencySafety]`).
+* **권장 수정안**:
+  - `cp := *v; return &cp, nil` 복사본 반환 패턴으로 통일.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 7-5] `catalog/virtual/interceptor.go`: 가상 카탈로그 라우팅 시 문자열 리터럴 검사 없이 SQL 전체 대괄호 무차별 삭제 오염
+* **심각도**: `Medium`
+* **위치**: `pkg/catalog/virtual/interceptor.go:452` (`Execute`)
+* **현상 및 원인 분석**:
+  - 가상 카탈로그 쿼리 라우팅 전 `upper = strings.ReplaceAll(strings.ReplaceAll(upper, "[", ""), "]", "")`을 무차별 실행함.
+  - SQL 문자열 리터럴 내부에 대괄호가 포함되어 있는 경우(예: `WHERE relname = '[temp]'` 또는 `LIKE '[A-Z]%'`), 리터럴 내부의 대괄호까지 전부 제거되어 쿼리 검색 조건이 파괴됨.
+* **권장 수정안**:
+  - 문자열 리터럴 외부의 식별자 대괄호만 선별적으로 제거하거나 정규 파서 AST 라우팅 적용.
 * **판정**: `DEFECT_LOGGED`
 
 ---
