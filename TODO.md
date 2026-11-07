@@ -63,9 +63,12 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **목표**: 1차 광역 스캔의 조기 종료 편향(스코프당 1건 제한)을 극복하기 위해, 스토리지 코어(`wt_engine.go`, `memengine.go`), 트랜잭션 코디네이터(`coordinator.go`), 바이트코드 컴파일러/VM(`compiler.go`, `vm.go`), CBO 플래너/실행기(`planner.go`, `hash_join.go`), 멀티 와이어/복제(`server.go`, `packet.go`), T-SQL 렉서/파서, 시스템 카탈로그, SQL 실행 엔진 본체, 백업/PITR, 고급 분석 오퍼레이터, 인메모리 잔여, CDC & 보안/RBAC 12대 핵심 구역에 대해 1건 제한을 완전히 철폐하고 파일 끝까지 다중 결함($N$건)을 전수 발굴하여 SSOT에 증분 누적.
    - **설계 문서**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) 제6장
    - **감사 기록부 (SSOT)**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
-3. **`AUDIT-TRIAGE-POST`: [3단계] 통합 Triage 회의 및 결함 분류 로드맵 (Post-Audit Triage & Action Plan)** [진행 중]
-   - **목표**: 1차 광역 감사(135단계) 및 2차 코어 심층 재스캔으로 발굴된 전체 결함을 4대 등급(P0: Must Fix, P1: Should Fix, P2: Won't Fix, P3: Spec-Out/By-Design)으로 분류하여, `[RULE:RadicalKISS]` 원칙에 따라 복잡도를 통제하고 1.0 필수 패치 범위만 선별 확정.
-   - **설계 문서**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) 제7장
+3. **`AUDIT-TRIAGE-POST`: [3단계] 통합 Triage 회의 및 결함 분류 로드맵 (Post-Audit Triage & Action Plan)** [x] 완주 완료 (197건 전수 분류 및 P0 Must Fix 30선 확정)
+   - **목표**: 1차 광역 감사(135단계) 및 2차 코어 심층 재스캔으로 발굴된 전체 197건 결함을 4대 등급(P0: 30건, P1: 50건, P2: 92건, P3: 25건)으로 분류하여, `[RULE:RadicalKISS]` 원칙에 따라 복잡도를 통제하고 1.0 필수 패치 범위 선별 확정.
+   - **Triage 보고서**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md)
+4. **`AUDIT-PATCH-P0`: [4단계] 전수 감사 P0 (Must Fix 30선) 결함 TDD 순차 패치 및 회귀 검증** [진행 중]
+   - **목표**: 데이터 손상/유실, 서버 크래시/OOM, 보안 백도어, 카탈로그 영속화 누락 등 30개 P0 핵심 결함에 대해 5개 집중 배치(Batch 1~5)로 분할하여 TDD Red ➔ Green 회귀 테스트 및 `go test -race` 0건 완치.
+   - **실행 계획**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) 제4장
 4. **`DOC-REVAMP-10`: 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜** [계획 수립 / 대기]
    - **목표**: 오버스펙(별도 VitePress 웹사이트, Swagger 중복 번들링 등)을 배제하고 실질적 가치 중심의 10대 알짜 과제 집중 완수 (1단계: 핵심 영문 4종 국문화, 14대 Spec-Out 기각 결정 단일 카탈로그, 내장 SPA 웹 서버 1분 스타터 예제, 마크다운 링크 깨짐 자동 검사기 / 2단계: T-SQL 3초 치트시트, SQLSTATE 트러블슈팅 사전, 사용자 여정 네비게이션, 오픈소스 가이드 메타 카드, 벤치마크 Mermaid 차트화, MSSQL 이전 체크리스트).
    - **설계 문서**: [`notes/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)
