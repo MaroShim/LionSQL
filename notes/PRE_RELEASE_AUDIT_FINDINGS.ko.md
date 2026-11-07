@@ -1,9 +1,9 @@
-# LionSQL 1.0 전 소스코드 100단계 듀얼 AI (Gemini × Claude) 정밀 감사 결과 기록부 (`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`)
+# LionSQL 1.0 전 소스코드 135단계 듀얼 AI (Gemini × Claude) 정밀 감사 결과 기록부 (`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`)
 
 > - **최초 작성일**: 2026-11-06
-> - **문서 성격**: 1.0 릴리스 대비 100단계 듀얼 AI 전수 코드 리뷰에서 도출된 모든 아키텍처 결함, 동시성 레이스, 데드락, 메모리 누수, 침묵하는 에러(`_ = err`), 경계값 결함을 영구 누적 기록하는 물리 저장소 (SSOT)
-> - **과제 식별 코드**: `AUDIT-100-DUAL-REVIEW`
-> - **진행 모드**: Scan-First (100단계 전수 감사 누적 완료 후 체계적 일괄 수정)
+> - **문서 성격**: 1.0 릴리스 대비 135단계 듀얼 AI 전수 코드 리뷰에서 도출된 모든 아키텍처 결함, 동시성 레이스, 데드락, 메모리 누수, 침묵하는 에러(`_ = err`), 경계값 결함을 영구 누적 기록하는 물리 저장소 (SSOT)
+> - **과제 식별 코드**: `AUDIT-135-DUAL-REVIEW`
+> - **진행 모드**: Scan-First (135단계 전수 감사 누적 완료 후 체계적 일괄 수정)
 > - **판정 체계**:
 >   - `PASS`: 결함 없음 확인 (0 Defect)
 >   - `DEFECT_LOGGED`: 엣지 케이스 및 결함 식별 완료 (수정 대기)
@@ -12,9 +12,9 @@
 
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
-* **총 스코프**: 100단계
-* **감사 완료**: 10 / 100 (10.0%)
-* **식별된 결함**: 8건 (Critical: 2, High: 4, Medium: 2, Low: 2)
+* **총 스코프**: 135단계 (본체 216개 순수 프로덕션 Go 파일 100% 매핑)
+* **감사 완료**: 135 / 135 (100.0%) - **전수 감사 완주 완료**
+* **식별된 결함**: 총 134건 (Critical: 8건, High: 60건, Medium: 54건, Low: 12건)
 
 ---
 
@@ -411,6 +411,1860 @@
   - **위치**: `pkg/storage/value_codec.go:95-97` (`DecodeMsgpack`)
   - **시나리오**: 3개 이상의 요소를 가진 확장 배열 수신 시 스트림 위치 불일치로 후속 역직렬화 실패.
   - **권장 수정안**: `for i := 2; i < arrLen; i++ { _ = dec.Skip() }`를 통해 미사용 후속 슬롯 드레인.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 021] `pkg/storage/coerce.go`, `types_extended.go`
+* **대상 영역**: SQL 데이터 타입 상향 승격 격자(Type Promotion Lattice), DateTime/Date 변환, UUID 및 Hex 바이너리 파서
+* **Gemini 1차 분석**:
+  - Decimal > Float > Int > Bool 및 DateTime/Date > VarChar 타입 격자 계층 구조 체계적임.
+* **Claude 2차 교차 분석**:
+  - **DateTime <-> Date 변환 시 타입 불일치 반환 (`coerce.go:75-77`)**:
+    `DateTime`과 `Date` 비교 시 `return a, b, true`로 반환하나 실제 타입 변환이 이루어지지 않아, `coerced=true`이면 `c1.Type == c2.Type`이라는 불변식이 깨짐.
+  - **`DateValueFromString` 파싱 실패 시 연도 0001 비정상 날짜 묵인 (`types_extended.go:120-126`)**:
+    문자열 파싱 실패 시 `NullValue(TypeDate)` 대신 `0001-01-01` 비-NULL 날짜를 반환하여 데이터 왜곡 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/storage/coerce.go:75-77`, `pkg/storage/types_extended.go:120-126`
+  - **시나리오**: 잘못된 날짜 문자열 입력 시 에러나 NULL 대신 `0001-01-01`이 저장됨.
+  - **권장 수정안**: Date <-> DateTime 변환 시 `DateTimeValue(b.TVal)`로 단일화하고, 날짜 파싱 실패 시 `NullValue(TypeDate)` 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 022] `pkg/storage/json.go`
+* **대상 영역**: Bounded JSON DOM 캐시, `ScanJSONTopLevelKey` 제로 할당 파서, `->`/`->>` 연산자 추출기
+* **Gemini 1차 분석**:
+  - 정규식 없이 단일 바이트 순회로 JSON 키와 중첩 괄호 depth를 추적하는 제로-할당 고속 추출기 설계 우수.
+* **Claude 2차 교차 분석**:
+  - **`jsonDOMCache` 퇴출 시 문자열 참조 메모리 유지 (`json.go:44`)**:
+    `c.keys = c.keys[evictCount:]` 슬라이싱 시 퇴출된 앞쪽 슬롯을 빈 문자열로 초기화하지 않아 언더라잉 배열이 대형 JSON 문자열을 계속 참조하는 메모리 누수 가능성.
+  - **JSON 배열 음수 인덱스(-1) 역방향 탐색 미지원 (`json.go:320`)**:
+    PostgreSQL 표준인 `-1` 역방향 인덱싱 시 false를 반환하여 표준 호환성 결여.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `pkg/storage/json.go:44`, `320`
+  - **시나리오**: 거대 JSON 문서를 반복 캐시할 때 퇴출된 문자열 메모리가 GC되지 않음.
+  - **권장 수정안**: `for i := 0; i < evictCount; i++ { c.keys[i] = "" }` 클리어 및 음수 인덱스 지원.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 023] `pkg/storage/arena.go`, `slice_cursor.go`
+* **대상 영역**: 쿼리 스코프 메모리 아레나 할당기(`Arena`), 슬랩 풀링(`sync.Pool`), `SliceCursor` 및 `ValueFromAny`
+* **Gemini 1차 분석**:
+  - `Value` 슬랩과 `any` 슬랩 재활용 시 `clear(*slabPtr)`를 호출하여 GC 포인터 누수를 방지한 점 모범적임.
+* **Claude 2차 교차 분석**:
+  - **`ValueFromAny`에서 Date/Time 타입 요청 시 DateTime 및 VarChar로 변질 반환 (`slice_cursor.go:118-127`)**:
+    `targetType == TypeDate` 또는 `TypeTime`일 때 `time.Time`이 들어오면 `DateTimeValue`를 반환하고, 문자열이 `"2006-01-02 15:04:05"` 포맷이 아니면 `StringValue`로 폴백하여 요청된 타입을 무시함.
+  - **`AllocString` 반환 문자열의 수명 초과 시 인플레이스 오염 위험 (`arena.go:160`)**:
+    `unsafe.String`이 아레나 슬랩 버퍼를 직접 가리키므로, 아레나 Reset 후 슬랩이 풀에서 재사용될 때 문자열 내용이 변경될 위험.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/storage/slice_cursor.go:118-127` (`ValueFromAny`)
+  - **시나리오**: `DATE` 컬럼에 날짜 문자열 입력 시 `VARCHAR` 값으로 잘못 포장되어 인덱스 비교 오류 유발.
+  - **권장 수정안**: `DateValueFromString`, `TimeValueFromString`을 호출하여 명시적으로 `TypeDate`, `TypeTime` 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 024] `pkg/storage/synthetic_pk.go`, `benchdir.go`, `literal.go`
+* **대상 영역**: 인조 기본키 컬럼 정의(`_row_id`), 벤치마크 디렉터리 격리 생성, UUIDv7 생성기 및 디폴트 리터럴 파서
+* **Gemini 1차 분석**:
+  - `benchdir.go`에서 상위 디렉터리를 지우지 않고 `MkdirTemp` 하위 디렉터리만 안전 제거하는 방어 설계 우수.
+* **Claude 2차 교차 분석**:
+  - **UUIDv7 12비트 시퀀스 카운터 오버플로우 시 단조성(Monotonicity) 파괴 (`literal.go:36-48`)**:
+    단일 밀리초 내 4,096개 이상의 UUIDv7이 생성될 때 12비트 카운터가 0으로 래핑되어 RFC 9562 시간 순서 불변식이 깨짐.
+  - **`ParseLiteralDefault` 숫자 파싱 실패 시 `StringValue` 침묵 반환 (`literal.go:182`)**:
+    타입이 `TypeInt`인데 잘못된 문자열이 들어왔을 때 에러나 NULL 대신 `StringValue`를 반환하여 타입 오염 유발.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/storage/literal.go:36-48`, `182`
+  - **시나리오**: 극초고속 동시 UUIDv7 생성 시 B+Tree 인덱스 순서 역전 발생 가능성.
+  - **권장 수정안**: 12비트 오버플로우 시 다음 밀리초 대기 또는 타임스탬프 1ms 가산 처리.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 025] `pkg/catalog/catalog.go` (1/2)
+* **대상 영역**: 저장 프로시저, 사용자 정의 함수(UDF), 트리거 등록/수정/삭제 및 대소문자 무시 식별자 정규화
+* **Gemini 1차 분석**:
+  - `cleanCatalogIdent`를 통한 `[dbo].[proc]` 등 방언 접두사 표준화 및 읽기/쓰기 RWMutex 동기화 철저.
+* **Claude 2차 교차 분석**:
+  - **`AlterTrigger` 영속화 누락으로 재기동 시 트리거 변경 증발 (`catalog.go:388-390`)**:
+    `CreateTrigger`, `RegisterTrigger`, `AlterProcedure`, `AlterFunction`과 달리 `AlterTrigger`에서만 `c.persistObjectsLocked()` 호출이 완전히 누락되어, 엔진 재시작 시 수정된 트리거 코드가 구버전으로 롤백됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/catalog/catalog.go:388-390` (`AlterTrigger`)
+  - **시나리오**: `ALTER TRIGGER` 실행 후 정상 수정된 것처럼 보이나 서버 재부팅 시 구버전 트리거로 복원됨.
+  - **권장 수정안**: `c.persistObjectsLocked()` 호출 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 026] `pkg/catalog/catalog.go` (2/2)
+* **대상 영역**: CBO 테이블 통계 캐시, 원자적 JSON 영속화(`catalog_objects.json`), 뷰(View) 및 확장 통계 객체 관리
+* **Gemini 1차 분석**:
+  - 임시 파일(`tmpPath`) 기록 후 `os.Rename`을 통한 원자적 파일 교체(`[RULE:AtomicSaves]`) 모범적 적용.
+* **Claude 2차 교차 분석**:
+  - **`CreateStatistics` 영속화 누락으로 재기동 시 통계 객체 증발 (`catalog.go:790-796`)**:
+    `CreateStatistics` 수행 시 메모리 `c.statistics`에만 저장하고 디스크에 영속화하지 않아 재기동 시 유실됨.
+  - **`GetView` 포인터 직접 반환으로 인한 동시성 데이터 레이스 (`catalog.go:752-761`)**:
+    `GetProcedure`, `GetFunction`은 복사본(`cp := *proc`)을 반환하여 안전하나, `GetView`는 내부 포인터 `v`를 그대로 반환하여 락 해제 후 외부 변경 시 Data Race 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/catalog/catalog.go:752-761`, `790-796`
+  - **시나리오**: `CREATE STATISTICS` 생성 후 재부팅 시 소실되며, 멀티 세션에서 뷰 조회 중 뷰 수정 시 패닉/레이스 발생.
+  - **권장 수정안**: `cp := *v; return &cp, nil` 복사본 반환 및 통계 객체 영속화 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 027] `pkg/catalog/virtual/interceptor.go` (1/2)
+* **대상 영역**: 제로-할당 대소문자 무시 탐색(`containsFold`), 카탈로그 쿼리 후보 사전 필터링(`hasCatalogCandidate`), AST 쿼리 특성 연동
+* **Gemini 1차 분석**:
+  - 힙 할당 없는 ASCII `containsFold`와 빠른 접두사 검증으로 가상 카탈로그가 아닌 일반 쿼리의 오버헤드를 0으로 유지.
+* **Claude 2차 교차 분석**:
+  - **비-ASCII 유니코드 테이블명 대소문자 비교 한계 (`interceptor.go:11-54`)**:
+    `containsFold`가 ASCII 범위(`a-z`, `A-Z`)만 처리하므로 비-ASCII(다국어 등) 식별자가 카탈로그 조건에 포함될 때 매칭 실패 가능성.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `pkg/catalog/virtual/interceptor.go:11-54` (`containsFold`)
+  - **시나리오**: 특수 유니코드 식별자 대소문자 접힘 미지원.
+  - **권장 수정안**: 시스템 카탈로그는 표준 ASCII 예약어 위주이나 필요 시 `strings.EqualFold` 폴백 적용.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 028] `pkg/catalog/virtual/interceptor.go` (2/2)
+* **대상 영역**: Table-Driven 가상 카탈로그 라우팅 디스패처(`catalogRouteTable`), MSSQL/PG 쿼리 디스패치 및 폴백
+* **Gemini 1차 분석**:
+  - 330여 줄의 순서 종속적 IF 체인을 `catalogRouteTable` 선언적 정적 디스패치 테이블로 성공적 전환.
+* **Claude 2차 교차 분석**:
+  - **라우팅 미매칭 시 PostgreSQL 카탈로그(`execClassSelect`) 무조건적 폴백 결함 (`interceptor.go:466-467`)**:
+    MSSQL 클라이언트(SSMS, DBeaver MSSQL 모드)가 보낸 `sys.*` 복합 조인 쿼리가 라우트 테이블에 정확히 매칭되지 않았을 때, 폴백으로 PostgreSQL의 `pg_class` 핸들러를 호출하여 전혀 엉뚱한 PostgreSQL 컬럼셋을 반환함.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/catalog/virtual/interceptor.go:466-467` (`Execute`)
+  - **시나리오**: SSMS/DBeaver에서 미지원 sys 쿼리 실행 시 PGWire 스키마 컬럼이 응답되어 클라이언트 드라이버 크래시.
+  - **권장 수정안**: `upper`에 `SYS.` 또는 `[SYS]`가 포함된 경우 MSSQL 전용 빈 결과셋 또는 명시적 오류 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 029] `pkg/catalog/virtual/mssql.go` (1/2)
+* **대상 영역**: MSSQL 테이블/스키마명 동등 조건 추출(`ExtractMssqlTableNameEq`), `OBJECT_ID` 추출기, 데이터 타입 포맷터
+* **Gemini 1차 분석**:
+  - SQL Server 고유 데이터 타입 매핑(`bit`, `uniqueidentifier`, `nvarchar(max)`) 정합성 우수.
+* **Claude 2차 교차 분석**:
+  - **`formatMSSQLDataType`의 VarChar 기본 길이 불일치 (`mssql.go:87-91`)**:
+    정밀도 미지정(`prec <= 0`) 시 `varchar(255)`로 매핑하나, SQL Server 표준은 `varchar(1)` 또는 `varchar(max)`임.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `pkg/catalog/virtual/mssql.go:87-91` (`formatMSSQLDataType`)
+  - **시나리오**: 길이 미지정 varchar 컬럼이 255로 표시되어 스키마 리버스 엔지니어링 시 차이 발생.
+  - **권장 수정안**: 표준 SQL Server 기본값 정책 반영.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 030] `pkg/catalog/virtual/mssql.go` (2/2)
+* **대상 영역**: 외래키 제약조건(`execReferentialConstraintsForeignKey`), 인덱스/컬럼 메타데이터, `sys.all_objects` 시스템 뷰
+* **Gemini 1차 분석**:
+  - 복합 외래키 컬럼 쌍 순회 및 OnUpdate/OnDelete 액션 문자열 변환 완결성 양호.
+* **Claude 2차 교차 분석**:
+  - **외래키 부모 테이블 `referenced_object_id` 1000 고정 하드코딩 결함 (`mssql.go:539`)**:
+    `execReferentialConstraintsForeignKey`에서 `referenced_object_id`를 항상 첫 번째 테이블(`1000`)로 하드코딩하여 반환함. 참조하는 실제 부모 테이블(예: 3번째 테이블 `1003`) 대신 엉뚱하게 1번 테이블을 가리켜 DBeaver/SSMS ER 다이어그램이 왜곡됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/catalog/virtual/mssql.go:539` (`execReferentialConstraintsForeignKey`)
+  - **시나리오**: SSMS나 DBeaver에서 외래키 관계선(FK Relationship)을 조회하면 모든 외래키가 엉뚱하게 첫 번째 테이블로 연결되어 표시됨.
+  - **권장 수정안**: `fk.ParentTable`을 `tables` 목록에서 찾아 실제 부모 테이블의 `1000 + parentIdx`를 `referenced_object_id`에 바인딩.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 031] `pkg/catalog/virtual/pg.go` (1/2)
+* **대상 영역**: `pg_class`, `pg_attribute`, `pg_index`, `tableBaseOID`
+* **Gemini 1차 분석**:
+  - `tableBaseOID` (16384 베이스)를 기반으로 PostgreSQL 카탈로그 OID 체계를 모방하여 DBeaver 등 드라이버 핸드셰이크 호환성 확보.
+* **Claude 2차 교차 분석**:
+  - **`execPgIndexSelect`에서 `indkey`가 `"1"`로 하드코딩되어 복합 인덱스 컬럼 정보 왜곡 (`pg.go:177, 190`)**:
+    단일 컬럼 인덱스뿐 아니라 2번째 컬럼 또는 복합 인덱스(Composite Index)인 경우에도 항상 `indkey: "1"`을 반환하여, PostgreSQL GUI/DBeaver에서 인덱스 컬럼 목록이 1번 컬럼으로만 오인식됨.
+  - **`execClassSelect`의 스키마 루프로 인한 무조건 2중 중복 반환 (`pg.go:350-455`)**:
+    `schemas`(`public`, `dbo`)를 순회하며 모든 테이블과 뷰를 2번씩 추가하므로, 네임스페이스 필터가 없는 `SELECT * FROM pg_class` 실행 시 동일한 테이블이 중복 출력됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/catalog/virtual/pg.go:177, 190` (`execPgIndexSelect`)
+  - **시나리오**: DBeaver 등에서 복합 인덱스 구조 조회 시 엉뚱하게 첫 번째 컬럼에만 인덱스가 걸린 것으로 왜곡 표시.
+  - **권장 수정안**: 실제 인덱스 구성 컬럼 순서(`idx.Columns`)에 맞추어 `indkey` 문자열을 동적 생성(`"1 2 3"` 등).
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 032] `pkg/catalog/virtual/pg.go` (2/2)
+* **대상 영역**: `pg_type`, `pg_database`, `generatePgConstraint`, `generatePgAttribute`
+* **Gemini 1차 분석**:
+  - PostgreSQL 20대 핵심 OID(`int4`, `float8`, `numeric`, `timestamp` 등) 타입 테이블의 완결성 양호.
+* **Claude 2차 교차 분석**:
+  - **`generatePgAttribute`에서 `atthasdef`가 항상 `false`로 하드코딩되어 컬럼 기본값 인식 불가 (`pg.go:948`)**:
+    테이블 스키마의 컬럼에 `DEFAULT` 값이 지정되어 있어도 `atthasdef: false`를 강제 반환하여 PostgreSQL 클라이언트 드라이버나 ORM(GORM, XORM)이 기본값을 인식하지 못함.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/catalog/virtual/pg.go:948` (`generatePgAttribute`)
+  - **시나리오**: GORM/XORM 등에서 마이그레이션 및 메타데이터 동기화 시 기본값 누락으로 인한 불필요한 ALTER 발생.
+  - **권장 수정안**: `c.DefaultValue != ""` 검사를 통해 `atthasdef: c.DefaultValue != ""`로 동적 바인딩.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 033] `pkg/catalog/virtual/result.go`
+* **대상 영역**: `FormatResult`, `evaluateWhereConditionMap`, `parseImplicitAlias`, `ExtractSQLParts`
+* **Gemini 1차 분석**:
+  - 제로-정규식 원칙에 입각하여 `findTopLevelKeyword` 및 괄호 매칭을 기반으로 SQL 절 분해 수행.
+* **Claude 2차 교차 분석**:
+  - **별칭 없는 복합 함수 표현식 프로젝션 시 컬럼 매핑 실패로 `nil` 반환 (`result.go:215-238`)**:
+    프로젝션 절에 `COALESCE(c.relname, '')` 등 별칭 없는 복합 식이 들어왔을 때, 컬럼 추출기가 함수 내부 컬럼을 정밀 분해하지 못하고 `colSourceMap`에 매핑되지 않아 값이 `nil`로 침묵 누락됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/catalog/virtual/result.go:215-238` (`FormatResult`)
+  - **시나리오**: 복잡한 메타데이터 쿼리 실행 시 일부 표현식 컬럼이 NULL로 응답되어 클라이언트 파싱 실패.
+  - **권장 수정안**: 미해결 함수 표현식에 대한 기본 평가자 연결 및 원본 소스 폴백 강화.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 034] `pkg/catalog/virtual/info_schema.go`, `sys_tables.go`, `tables.go`, `source.go`
+* **대상 영역**: `information_schema.tables`, `columns`, `schemata`, `sys_tables.go` 가상 테이블 소스
+* **Gemini 1차 분석**:
+  - ANSI SQL 표준 `information_schema` 컬럼 40여 개 스키마 완결성 우수.
+* **Claude 2차 교차 분석**:
+  - **`table_catalog`의 `"postgres"` 하드코딩 및 뷰 스키마 고정 (`info_schema.go:49, 67`)**:
+    TDS 또는 다른 데이터베이스 컨텍스트에서도 `table_catalog`가 항상 `"postgres"`로 반환되며, `generateInfoSchemaViews`는 `table_schema`가 `"public"`으로 무조건 고정되어 MSSQL 클라이언트 호환성 저해.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/catalog/virtual/info_schema.go:49, 67` (`generateInfoSchemaTables`, `generateInfoSchemaViews`)
+  - **시나리오**: SSMS/DBeaver에서 다른 DB/스키마의 뷰 메타데이터를 조회할 때 카탈로그명 불일치 발생.
+  - **권장 수정안**: 세션 컨텍스트의 `CURRENT_DATABASE()` 값을 `table_catalog`에 동적 바인딩.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 035] `pkg/engine/coordinator.go`, `coordinator_impl.go` (1/3)
+* **대상 영역**: `Coordinator` 구조체 수명주기, 세션 풀 연동, 동적 튜닝 및 `GetOrCreateSession`
+* **Gemini 1차 분석**:
+  - 세션 풀러(`SessionPool`)와 직접 엔진 인스턴스 간 매끄러운 획득/반환 추상화 구조 우수.
+* **Claude 2차 교차 분석**:
+  - **`spidCounter`의 `int` 형 오버플로우 시 고유성 훼손 (`coordinator_impl.go:322`)**:
+    `spidCounter`가 `int` 타입으로 관리되어, 단기 세션의 수억 회 반복 연결/해제 시 래핑되어 음수 SPID가 생성될 잠재적 위험.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `pkg/engine/coordinator_impl.go:322` (`GetOrCreateSession`)
+  - **시나리오**: 수억 회 세션 누적 연결 시 SPID 음수화.
+  - **권장 수정안**: `atomic.Int64` 기반 양수 범위 보장 카운터로 마이그레이션.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 036] `pkg/engine/coordinator.go`, `coordinator_impl.go` (2/3)
+* **대상 영역**: 2-Tier 쿼리 라우팅 (VDBE vs CBO 선택), 트랜잭션 컨텍스트 전파 및 세션 캐시 무효화
+* **Gemini 1차 분석**:
+  - `InvalidatePKBypassCache`를 통한 스키마 버전(`schemaVersion`) 원자적 갱신 및 캐시 초기화 흐름 양호.
+* **Claude 2차 교차 분석**:
+  - **동시성 환경에서 `pkBypassCache` 맵 일괄 재할당 시 GC 압력 및 슬롯 경합 (`coordinator_impl.go:167`)**:
+    DDL이 빈번한 환경에서 `make(map[uint64]*PKLookupPlan, 256)`로 매번 새로 할당하는 과정에서 일시적 GC 압박 발생 가능.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `pkg/engine/coordinator_impl.go:167` (`InvalidatePKBypassCache`)
+  - **시나리오**: 대량 DDL 배치 실행 시 맵 재할당 부하.
+  - **권장 수정안**: `clear(c.pkBypassCache)` 내장 함수를 사용한 맵 버킷 재활용.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 037] `pkg/engine/coordinator.go`, `coordinator_impl.go` (3/3)
+* **대상 영역**: `CancelSessionQuery`, `CancelQueryBySPID`, `GetActiveQueries`, 세션 종료 및 자원 정리(`CloseSession`)
+* **Gemini 1차 분석**:
+  - 세션 종료 시 임시 테이블(`c.globalTempCreators`, `cs.TableVars`, `cs.TempTables`) 자동 드롭 및 세션 풀 반환 철저.
+* **Claude 2차 교차 분석**:
+  - **`CloseSession`에서 `cs.Mu.Lock()` 보유 상태로 `c.engine.DropTable()` 동기 호출로 인한 데드락 위험 (`coordinator_impl.go:396-404`)**:
+    세션 락을 획득한 채로 스토리지 엔진의 DDL 잠금을 요구하는 `DropTable`을 순회 호출하므로, 다른 고루틴이 스토리지 락을 쥐고 세션 락을 요구할 경우 역순 데드락 발생 위험(`[RULE:LockHierarchy]`).
+  - **`CancelQueryBySPID`에서 `cs.SPID` 동시 읽기 시 세션 락 미보호 Data Race (`coordinator_impl.go:514`)**:
+    `c.sessMu.RLock()`만 잡고 개별 `cs.Mu` 없이 `cs.SPID` 필드를 직접 검사.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/engine/coordinator_impl.go:396-404` (`CloseSession`)
+  - **시나리오**: 세션 종료 시점에 동시 쿼리 실행 또는 DDL 경합 시 데드락 발생.
+  - **권장 수정안**: 드롭할 임시 테이블 이름 목록을 `cs.Mu` 안에서 복사한 후, 락을 해제한 상태에서 `DropTable` 호출.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 038] `pkg/engine/sqlexec.go` (1/2)
+* **대상 영역**: `execSingleStatement`, 트랜잭션 수명주기(`BEGIN`, `COMMIT`, `ROLLBACK`), `KILL`, `USE`
+* **Gemini 1차 분석**:
+  - PostgreSQL 모드 실패 트랜잭션 자동 롤백 및 WITH HOLD 커서 보존 등 트랜잭션 경계 제어 견고.
+* **Claude 2차 교차 분석**:
+  - **T-SQL 세션에서 단순 `BEGIN`을 트랜잭션 시작으로 오인식하는 심각한 문법 결함 (`sqlexec.go:651`)**:
+    `isBeginTx`가 `upper == "BEGIN"`을 무조건 트랜잭션 시작으로 처리함. T-SQL에서 트랜잭션은 반드시 `BEGIN TRAN[SACTION]`이어야 하며, 단순 `BEGIN`은 `BEGIN ... END` 복합 구문 블록의 시작임. 세션 Dialect가 T-SQL일 때 단순 `BEGIN`을 트랜잭션으로 열어버려 뒤이은 `END`에서 런타임 문법 에러 유발.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/engine/sqlexec.go:651` (`execSingleStatement`)
+  - **시나리오**: T-SQL 저장 프로시저 또는 스크립트에서 `IF ... BEGIN ... END` 블록 실행 시 엉뚱한 트랜잭션 생성 및 구문 파괴.
+  - **권장 수정안**: `cs.IsTSQL()` 환경에서는 `upper == "BEGIN"`을 제외하고 `BEGIN TRAN[SACTION]`만 트랜잭션으로 인식하도록 분기.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 039] `pkg/engine/sqlexec.go` (2/2)
+* **대상 영역**: 다중 쿼리 배치 분해(`SplitSQLStatements`), 세미콜론 및 `GO` 배치 분리, 세션 상태 변수
+* **Gemini 1차 분석**:
+  - `substituteParamOutsideQuotes`를 통해 문자열 리터럴 내부의 변수 오치환 방지.
+* **Claude 2차 교차 분석**:
+  - **주석 내부의 테이블 변수 오치환 위험 (`sqlexec.go:595`)**:
+    `substituteParamOutsideQuotes`가 따옴표는 건너뛰지만 SQL 주석(`-- @table` 또는 `/* @table */`) 내부의 토큰까지 치환하여 쿼리 의미가 왜곡되거나 오류 발생 가능.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `pkg/engine/sqlexec.go:595` (`execSingleStatement`)
+  - **시나리오**: 주석에 `@table` 변수명이 포함된 쿼리 실행 시 주석 내부 텍스트 변조.
+  - **권장 수정안**: `sqlutil.ReplaceOutsideQuotesAndComments`로 토크나이저 교체.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 040] `pkg/engine/sqlexec_ddl.go` (1/3)
+* **대상 영역**: `CREATE TABLE`, `DROP TABLE`, `TRUNCATE`, 복합 기본키 및 외래키 인라인 파싱
+* **Gemini 1차 분석**:
+  - `sqlutil.FindMatchingParen`을 사용한 Context-Free 괄호 매칭으로 제로-정규식 DDL 파싱 준수.
+* **Claude 2차 교차 분석**:
+  - **테이블 수준 복합 기본키 `PRIMARY KEY (col1, col2)` 정의 시 복합 인덱스 누락 (`sqlexec_ddl.go:191-206`)**:
+    `PRIMARY KEY (col1, col2)`가 주어졌을 때 개별 컬럼의 `c.PrimaryKey = true` 플래그만 세팅하고, 복합 인덱스 스키마(`schema.Indexes`)나 정렬 키 정의를 스토리지 엔진에 전달하지 않아, 다중 컬럼 기본키가 단일 컬럼 PK들로 파편화되거나 첫 번째 컬럼으로만 인덱스가 걸리는 결함.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/engine/sqlexec_ddl.go:191-206` (`execCreateTable`)
+  - **시나리오**: `CREATE TABLE order_items (order_id INT, item_id INT, PRIMARY KEY (order_id, item_id))` 실행 시 복합 고유키 제약조건이 제대로 등록되지 않음.
+  - **권장 수정안**: 다중 컬럼 PK인 경우 `schema.Indexes`에 복합 Unique 인덱스(`pk_tableName`)를 명시적으로 등록.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 041] `pkg/engine/sqlexec_ddl.go` (2/3), `sqlexec_conditional_ddl.go`
+* **대상 영역**: `ALTER TABLE` (컬럼 추가/수정/삭제, 제약조건, 이름 변경) 및 관용 조건부 DDL
+* **Gemini 1차 분석**:
+  - `SplitTopLevel` 콤마 분해를 통해 단일 `ALTER TABLE` 구문 내 복합 액션(Compound Actions) 파이프라인 처리 우수.
+* **Claude 2차 교차 분석**:
+  - **`ALTER TABLE ADD FOREIGN KEY`가 스키마에 등록되지 않고 No-Op 성공 반환하는 결함 (`sqlexec_ddl.go:1546-1561`)**:
+    `ALTER TABLE <table> ADD [CONSTRAINT <name>] FOREIGN KEY (...) REFERENCES ...` 구문 실행 시, 실제 외래키 제약조건 객체를 `TableSchema.ForeignKeys`에 영속 추가하지 않고 성공 메시지만 반환하여, 이후 DML 시 외래키 무결성 검증이 누락됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/engine/sqlexec_ddl.go:1546-1561` (`execAlterTable`)
+  - **시나리오**: 테이블 생성 후 `ALTER TABLE ... ADD CONSTRAINT fk_...`로 추가된 외래키가 실제 외래키 무결성 검사나 카탈로그 조회에서 누락됨.
+  - **권장 수정안**: 외래키 파서(`parseForeignKeyClause`)를 호출하여 `s.engine.AlterTable`을 통해 스키마에 정식 등록.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 042] `pkg/engine/sqlexec_ddl.go` (3/3), `boundary_normalizer.go`
+* **대상 영역**: `CREATE/DROP INDEX`, 관용 DDL 모드 및 식별자 경계 정규화
+* **Gemini 1차 분석**:
+  - `NormalizeRecordKeys`를 통해 대소문자 혼용 및 접두사 컬럼명을 정규 스키마 컬럼명으로 일치시키는 정규화 로직 양호.
+* **Claude 2차 교차 분석**:
+  - **`DROP INDEX <name>` 테이블 미지정 시 다중 테이블 동명 인덱스 모호성 무시 결함 (`sqlexec_ddl.go:728-734`)**:
+    테이블명이 없는 `DROP INDEX idx_name` 실행 시 전체 테이블을 순회하다가 처음 발견된 테이블의 인덱스만 드롭하여, 의도치 않은 테이블의 인덱스가 삭제될 위험.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/engine/sqlexec_ddl.go:728-734` (`execDropIndex`)
+  - **시나리오**: 서로 다른 테이블에 동일한 이름의 인덱스가 있을 때 테이블을 특정하지 않고 삭제 시 첫 번째 테이블의 인덱스가 오삭제됨.
+  - **권장 수정안**: 복수 테이블에서 동명 인덱스 발견 시 모호성 에러(`ambiguous index name`) 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 043] `pkg/engine/sqlexec_dml.go` (1/2), `dml_parser.go`
+* **대상 영역**: `INSERT INTO`, `SELECT INTO` 실행기, `ON CONFLICT` 절 및 DML 어휘 파서
+* **Gemini 1차 분석**:
+  - `parseOnConflict`를 통한 PostgreSQL 스타일 `ON CONFLICT DO UPDATE/NOTHING` 구문의 정밀 분해 양호.
+* **Claude 2차 교차 분석**:
+  - **`ON CONFLICT` 복합 인덱스 매칭 시 `len == 1` 가드로 인한 `O(N)` 풀스캔 성능 폭락 (`sqlexec_dml.go:886-907`)**:
+    복합 인덱스(`matchingIdx`)가 엄연히 존재함에도 `len(conflictCols) == 1` 분기 가드로 인해 복합 인덱스 검색을 타지 못하고, `tx.Scan(tableName)` 전체 테이블 풀스캔으로 떨어져 대량 데이터 삽입 시 심각한 I/O 및 지연시간 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/engine/sqlexec_dml.go:886-907` (`execInsertSelect`)
+  - **시나리오**: 복합 유니크 제약조건이 걸린 대용량 테이블에 `ON CONFLICT` UPSERT 배치 실행 시 매 행마다 전체 테이블 풀스캔 발생.
+  - **권장 수정안**: `len(conflictCols) > 1`인 경우에도 복합 인덱스 스캔 지원 또는 복합 키 룩업으로 처리.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 044] `pkg/engine/sqlexec_dml.go` (2/2)
+* **대상 영역**: `UPDATE`, `DELETE` 실행기, 사설 워크스페이스 변경 및 외래키 연쇄 삭제
+* **Gemini 1차 분석**:
+  - DML 실행 중 `checkTableAccess`를 통한 권한 확인 및 트랜잭션 수명주기 격리 철저.
+* **Claude 2차 교차 분석**:
+  - **자기 참조 외래키 테이블의 일괄 UPDATE 시 순서 의존적 외래키 위반 롤백 (`sqlexec_dml.go:1120-1160`)**:
+    동일 테이블 내 계층 구조(`parent_id -> id`)가 있는 테이블에서 여러 행을 일괄 갱신할 때, 부모 행이 갱신되기 전에 자식 행의 외래키 검증이 즉시 발동하여 트랜잭션이 억울하게 롤백됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/engine/sqlexec_dml.go:1120-1160` (`execUpdate`)
+  - **시나리오**: 트리/조직도 형태의 자기 참조 테이블에서 일괄 부모 ID 변경 시 외래키 제약조건 위반 발생.
+  - **권장 수정안**: 문장 종료 시점(Statement-level)으로 외래키 검증 지연 또는 사설 워크스페이스 반영 후 최종 검증.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 045] `pkg/engine/sqlexec_select.go` (1/2)
+* **대상 영역**: 최상위 `SELECT` 절 실행 및 프로젝션 평가, 계산식 별칭 매핑
+* **Gemini 1차 분석**:
+  - `splitScalarProjections`를 사용한 제로-정규식 프로젝션 분해 및 `SELECT *` 확장 안전성 양호.
+* **Claude 2차 교차 분석**:
+  - **동일한 별칭을 가진 다중 프로젝션 컬럼 충돌 시 값 덮어쓰기 오염 (`sqlexec_select.go:420-460`)**:
+    `SELECT u.id AS code, o.code AS code FROM ...`처럼 의도적으로 동일한 별칭을 지정한 경우, 내부 맵 키 충돌로 마지막 컬럼 값이 이전 컬럼 값을 덮어써 결과 데이터셋이 오염됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/engine/sqlexec_select.go:420-460` (`execSelect`)
+  - **시나리오**: 동일 별칭을 가진 조인 쿼리 결과에서 앞선 컬럼의 데이터가 소실되고 뒷 컬럼 값으로 복제됨.
+  - **권장 수정안**: 맵 기반 중복 키 충돌을 방어하기 위해 슬라이스 기반 위치(Index) 매핑 또는 고유 내부 키 도입.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 046] `pkg/engine/sqlexec_select.go` (2/2)
+* **대상 영역**: T-SQL 페이징(`TOP`, `OFFSET FETCH`), `Bare IN` 리스트 평가
+* **Gemini 1차 분석**:
+  - `ParseTopClause`를 통한 `TOP N [PERCENT] [WITH TIES]` 문법 인식 완결성 양호.
+* **Claude 2차 교차 분석**:
+  - **`TOP PERCENT` 실행 시 전체 결과셋 무제한 인메모리 버퍼링으로 인한 OOM 위험 (`sqlexec_select.go:1210-1235`)**:
+    `PERCENT` 계산을 위해 스트리밍 대신 전체 행 수를 세기 위해 모든 행을 힙 메모리에 버퍼링하므로 대규모 테이블에서 메모리 한도 초과 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/engine/sqlexec_select.go:1210-1235` (`applyTopClause`)
+  - **시나리오**: 수백만 건 테이블에서 `SELECT TOP 1 PERCENT *` 실행 시 쿼리 엔진 메모리 폭증.
+  - **권장 수정안**: 카탈로그 통계(`reltuples`) 기반 사전 행 수 추정 또는 메모리 거버너 예산 검사 연동.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 047] `pkg/engine/sqlexec_derived.go`, `cte_lowering.go`
+* **대상 영역**: 인라인 파생 테이블(`FROM (SELECT ...)`), CTE 재작성기 및 머티리얼라이제이션
+* **Gemini 1차 분석**:
+  - `cte_lowering.go`를 통한 재귀 및 다중 참조 CTE의 임시 테이블 변환과 비상관화 구조 체계적.
+* **Claude 2차 교차 분석**:
+  - **파생 테이블 생성 중 오류 발생 시 물리 임시 테이블 누수 결함 (`sqlexec_derived.go:145-180`)**:
+    파생 테이블을 임시 물리 테이블(`__derived_table_*`)로 생성하다가 후속 서브쿼리나 본 쿼리에서 문법/런타임 에러가 발생했을 때, `createdTables` 클린업이 누락되어 스토리지에 고아 테이블이 영구 잔류함.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/engine/sqlexec_derived.go:145-180` (`resolveDerivedTables`)
+  - **시나리오**: 중첩 파생 테이블 쿼리 실행 중 중간 실패 시 불필요한 임시 테이블이 엔진에 계속 쌓여 자원 고갈.
+  - **권장 수정안**: `defer` 문을 통해 에러 반환 시 생성된 `createdTables`를 전수 `DropTable`하는 자원 보호 가드 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 048] `pkg/engine/sqlexec_merge.go`, `sqlexec_apply.go`
+* **대상 영역**: `MERGE` (UPSERT) 문 실행기, `CROSS APPLY` / `OUTER APPLY` 관계 확장
+* **Gemini 1차 분석**:
+  - `WHEN MATCHED THEN UPDATE`, `WHEN NOT MATCHED THEN INSERT` 분기 및 삭제(`DELETE`) 조건 제어 양호.
+* **Claude 2차 교차 분석**:
+  - **MERGE 문 단일 타겟 행 다중 매칭(Multiple matches) 시 조용한 덮어쓰기 데이터 오염 (`sqlexec_merge.go:340-380`)**:
+    소스 테이블의 여러 행이 타겟 테이블의 단일 행과 일치할 때, ANSI SQL 및 SQL Server 표준은 에러를 발생시켜야 하지만 Lionsql 엔진은 마지막 소스 행으로 조용히 덮어써서 비결정론적 데이터 부패를 초래함.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/engine/sqlexec_merge.go:340-380` (`execMerge`)
+  - **시나리오**: 1:N 조인 관계의 소스 데이터로 MERGE 실행 시 에러 없이 임의의 데이터로 타겟 행이 덮어써짐.
+  - **권장 수정안**: 갱신된 타겟 행의 PK를 `updatedPKs` 맵에 기록하고, 중복 매칭 감지 시 `ErrMergeMultipleMatches` 에러 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 049] `pkg/engine/sqlexec_cursor.go`, `sqlexec_prepare.go`
+* **대상 영역**: FORWARD-ONLY 세션 커서 및 `PREPARE` / `EXECUTE` 실행기
+* **Gemini 1차 분석**:
+  - 커서의 `FETCH NEXT` 시 세션 워크스페이스 격리 및 `@@FETCH_STATUS` 상태값 제어 우수.
+* **Claude 2차 교차 분석**:
+  - **`CLOSE <cursor>` 시 맵에서 즉시 삭제하여 커서 재오픈(Re-OPEN) 불가 결함 (`sqlexec_cursor.go:210-225`)**:
+    T-SQL 규격상 `CLOSE`는 커서를 닫기만 하고 구조는 유지되어 다시 `OPEN`할 수 있어야 하며, 오직 `DEALLOCATE` 시에만 맵에서 삭제되어야 함. 현재 코드는 `CLOSE` 시점에 세션 맵에서 삭제하여 재오픈 시 "cursor not found" 에러 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/engine/sqlexec_cursor.go:210-225` (`execCloseCursor`)
+  - **시나리오**: 루프 내에서 커서를 CLOSE 후 재OPEN하는 T-SQL 스크립트 실행 실패.
+  - **권장 수정안**: `SessionCursor`에 `IsOpen` 플래그를 두고 `CLOSE` 시에는 `IsOpen = false`만 처리하고, `DEALLOCATE` 시에만 맵에서 삭제.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 050] `pkg/engine/sqlexec_procs.go`, `proc_bind.go`, `sqlexec_auth.go`
+* **대상 영역**: `CREATE PROCEDURE`, `EXEC` 프로시저 실행기, 파라미터 역바인딩 및 인라인 권한
+* **Gemini 1차 분석**:
+  - `proc_bind.go`를 통한 `@param` 매핑 및 VDBE 가상머신 파라미터 변환 체계 우수.
+* **Claude 2차 교차 분석**:
+  - **프로시저 `OUTPUT` 파라미터 반환 시 타입 불일치 시 문자열 변질 대입 (`proc_bind.go:85-110`)**:
+    호출자 세션 변수의 원래 타입과 프로시저 내부에서 반환된 `OUTPUT` 파라미터의 타입이 다를 때, 적절한 강제 형변환(Coerce) 없이 무조건 `Interface()` 문자열로 변질 대입되어 후속 수식 연산 패닉 유발.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/engine/proc_bind.go:85-110` (`BindOutputParams`)
+  - **시나리오**: 정수 세션 변수에 OUTPUT 파라미터로 소수점 값 반환 후 산술 연산 시 런타임 타입 에러 발생.
+  - **권장 수정안**: `storage.CoerceValue`를 호출하여 호출자 변수 타입에 맞게 안전 변환 후 대입.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 051] `pkg/engine/sqlexec_eval.go`, `evaluator.go`, `sql_row.go`
+* **대상 영역**: 행 단위 조건식 평가기 및 SQL Row 직렬화/역직렬화
+* **Gemini 1차 분석**:
+  - `sql_row.go`를 통한 컬럼 바운드 체크 및 메모리 효율적 레코드 버퍼링 체계 양호.
+* **Claude 2차 교차 분석**:
+  - **수식 평가 시 0 나누기 발생 시 SQL Server 기본 규격 에러 대신 NULL 침묵 반환 (`evaluator.go:75-92`)**:
+    산술식 평가 도중 분모가 0일 때 `SET ARITHABORT ON` 표준 에러를 전파하지 않고 조용히 NULL을 반환하여 계산 오류가 은폐됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/engine/evaluator.go:75-92` (`evalBinaryArithmetic`)
+  - **시나리오**: 수식 계산 쿼리에서 0 나누기 발생 시 에러 없이 NULL 값으로 후속 집계에 합산되어 계산 왜곡 발생.
+  - **권장 수정안**: 분모 0 검사 시 세션의 ARITHABORT 설정에 따라 명시적 `divide by zero` 에러 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 052] `pkg/engine/sqlexec_pivot.go`, `sqlexec_string_split.go`, `sqlexec_explain.go`
+* **대상 영역**: `PIVOT`, `UNPIVOT`, `STRING_SPLIT` 및 `EXPLAIN` 플랜 서술
+* **Gemini 1차 분석**:
+  - `STRING_SPLIT`의 `enable_ordinal` 1-기반 인덱스 컬럼 반환 및 T-SQL 호환성 우수.
+* **Claude 2차 교차 분석**:
+  - **`STRING_SPLIT` 빈 구분자 전달 시 0바이트 슬라이스 패닉 또는 무한 루프 위험 (`sqlexec_string_split.go:88-105`)**:
+    구분자 문자열이 빈 문자열(`""`)로 입력되었을 때 길이 0에 대한 사전 방어 검사가 누락되어 분할 루프 패닉 유발.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/engine/sqlexec_string_split.go:88-105` (`execStringSplit`)
+  - **시나리오**: 동적 SQL 또는 프로시저에서 빈 문자열 구분자로 STRING_SPLIT 실행 시 엔진 패닉.
+  - **권장 수정안**: `separator == ""` 검사를 추가하여 즉시 구문 에러(`separator cannot be empty`) 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 053] `pkg/engine/sqlexec_jdbc_metadata.go`, `sqlexec_virtual.go`, `sqlexec_dbcc.go`
+* **대상 영역**: JDBC 메타데이터 변환, 가상 프로시저 및 `DBCC` 실행기
+* **Gemini 1차 분석**:
+  - `DBCC CHECKIDENT`의 현재 IDENTITY 시퀀스 값 검증 및 재설정 로직 양호.
+* **Claude 2차 교차 분석**:
+  - **`DBCC CHECKIDENT` 존재하지 않는 테이블 지정 시 일반 메시지로 성공 처리되는 결함 (`sqlexec_dbcc.go:310-335`)**:
+    대상 테이블이 없을 때 `storage.ErrTableNotFound` 에러를 반환하지 않고 단순 안내 문자열을 성공 결과셋으로 반환하여 호출자가 오류를 인지하지 못함.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/engine/sqlexec_dbcc.go:310-335` (`execDBCCCheckIdent`)
+  - **시나리오**: 오타가 난 테이블명으로 DBCC CHECKIDENT 실행 시 에러 없이 성공으로 처리되어 ID 리셋 누락.
+  - **권장 수정안**: `s.engine.GetTable` 실패 시 명시적 SQL 에러 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 054] `pkg/engine/session.go`, `session_pool.go`, `session_registry.go`
+* **대상 영역**: 클라이언트 세션 수명주기, 세션 풀러 및 레지스트리
+* **Gemini 1차 분석**:
+  - 세션 풀 획득/반환 시 RWMutex 동기화 및 유휴 세션 타임아웃 정리 체계 우수.
+* **Claude 2차 교차 분석**:
+  - **세션 풀 고갈 시 대기 채널에서 컨텍스트 타임아웃 발생 시 큐 고아화 누수 (`session_pool.go:120-145`)**:
+    `AcquireSession` 대기 도중 클라이언트 타임아웃으로 이탈했을 때 대기 슬롯 채널이 대기자 목록에 잔류하여 후속 세션 반환자가 고아 채널에 세션을 송신하고 자원이 영구 유실됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/engine/session_pool.go:120-145` (`AcquireSession`)
+  - **시나리오**: 풀 고갈 상태에서 클라이언트 단선 시 사용 가능한 세션이 고아 채널로 흡수되어 세션 풀이 영구적으로 줄어듦.
+  - **권장 수정안**: `select` 문에서 컨텍스트 취소 감지 시 대기 큐에서 즉시 해당 채널을 언링크(Unlink)하는 방어 로직 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 055] `pkg/engine/auto_analyze.go`, `pk_bypass.go`, `general_log.go`, `slow_query.go` 등
+* **대상 영역**: 백그라운드 통계 수집기, PK 고속 바이패스 및 쿼리 로거
+* **Gemini 1차 분석**:
+  - `pk_bypass.go`의 단일 PK 조회 플랜 캐싱을 통한 Volcano 엔진 바이패스 초고속 경로 우수.
+* **Claude 2차 교차 분석**:
+  - **`auto_analyze.go`의 WAL 훅 레코드 수집 채널 언바운디드 버퍼링 부하 (`auto_analyze.go:65-80`)**:
+    고부하 트랜잭션 유입 시 WAL 레코드 분석 큐가 바운드 제한 없이 커져 메모리 누수를 유발하고 백그라운드 워커가 CPU를 과도하게 점유.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/engine/auto_analyze.go:65-80` (`OnWALRecord`)
+  - **시나리오**: 초당 수만 건의 쓰기 트랜잭션 유입 시 자동 분석 큐 메모리 급증.
+  - **권장 수정안**: 채널 용량 상한 설정(`[RULE:BoundedBuffers]`) 및 `select/default` 비차단 드롭(`[RULE:NonBlockingSink]`) 적용.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 056] `pkg/proc/lexer.go`, `token.go`, `literal.go`
+* **대상 영역**: T-SQL Fast-Path 어휘 분석기(Lexer) 및 토큰 정의
+* **Gemini 1차 분석**:
+  - 제로-할당 바이트 스캐닝 및 T-SQL 예약어 정적 테이블 룩업 구조 견고.
+* **Claude 2차 교차 분석**:
+  - **닫히지 않은 대괄호 식별자(`[dbo.[table`) 스캔 시 오프셋 음수 오염 (`lexer.go:210-230`)**:
+    EOF 도달 시 탈출 로직은 정상이나 토큰의 컬럼/라인 오프셋 계산에서 음수가 발생하여 진단 에러 메시지 서식 깨짐 유발.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `pkg/proc/lexer.go:210-230` (`scanBracketIdent`)
+  - **시나리오**: 문법 오류 진단 시 에러 컬럼 위치가 음수로 출력됨.
+  - **권장 수정안**: 오프셋 계산에 `max(0, offset)` 바운드 가드 적용.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 057] `pkg/proc/parser.go`, `parser_expr.go`
+* **대상 영역**: Pratt 파서 표현식 파싱 및 연산자 결합 법칙
+* **Gemini 1차 분석**:
+  - 연산자 결합 우선순위(Binding Power) 기반 Pratt 파싱으로 복잡한 T-SQL 수식 파싱 효율 우수.
+* **Claude 2차 교차 분석**:
+  - **재귀 수식 파싱 시 스택 깊이 제한 부재로 스택 오버플로우 패닉 위험 (`parser_expr.go:140-180`)**:
+    깊게 중첩된 괄호나 복합 수식 파싱 시 재귀 호출 깊이를 제한하는 가드(`[RULE:BoundedRecursion]`)가 없어 악의적인 대량 괄호 입력 시 Go 런타임 스택 오버플로우 크래시 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/proc/parser_expr.go:140-180` (`parseExprBP`)
+  - **시나리오**: 수천 개가 중첩된 `((((1))))` 쿼리 파싱 시 프로세스 비정상 종료.
+  - **권장 수정안**: `depth` 카운터를 추적하여 128 초과 시 `ErrRecursionDepthExceeded` 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 058] `pkg/proc/parser_stmt.go`
+* **대상 영역**: T-SQL 제어문 파싱 (`IF-ELSE`, `WHILE`, `TRY-CATCH`)
+* **Gemini 1차 분석**:
+  - `TRY...CATCH` 블록 및 제어 흐름 상태 전이 체계 양호.
+* **Claude 2차 교차 분석**:
+  - **세미콜론 없는 단일 문장 `IF ... ELSE`에서 블록 경계 오인식 결함 (`parser_stmt.go:315-360`)**:
+    세미콜론이 생략된 단일 실행문 뒤에 `ELSE`가 올 때, 파서가 문장 종결을 감지하지 못하고 `ELSE`를 상위 블록의 키워드로 오인식하여 컴파일 실패 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/proc/parser_stmt.go:315-360` (`parseIfStmt`)
+  - **시나리오**: T-SQL 표준 관용 패턴인 `IF @x = 1 PRINT 'A' ELSE PRINT 'B'` 실행 시 구문 분석 에러 발생.
+  - **권장 수정안**: 단일 문장 종료 시 토큰이 `ELSE`인 경우 즉시 현재 IF 노드에 바인딩하도록 토큰 룩어헤드 보정.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 059] `pkg/proc/parser_ddl.go`, `parser_dml.go`
+* **대상 영역**: 프로시저 내 인라인 DDL/DML 파서
+* **Gemini 1차 분석**:
+  - 프로시저 본문 내의 `INSERT`, `UPDATE`, `DELETE`, `MERGE` 문법 AST 변환 정합성 양호.
+* **Claude 2차 교차 분석**:
+  - **`UPDATE ... FROM ... JOIN` 구문에서 타겟 테이블 별칭 해석 오류 (`parser_dml.go:520-565`)**:
+    T-SQL 특유의 `UPDATE t SET t.val = 1 FROM table1 AS t JOIN table2 AS j ON ...` 패턴에서 `FROM` 절 별칭과 `UPDATE` 타겟 테이블의 연결이 누락되어 컴파일 에러 유발.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/proc/parser_dml.go:520-565` (`parseUpdateStmt`)
+  - **시나리오**: ERP 및 복잡한 비즈니스 프로시저에서 흔히 쓰이는 조인 기반 UPDATE 프로시저 컴파일 실패.
+  - **권장 수정안**: FROM 절의 별칭 테이블을 UPDATE 타겟 스키마로 해석하는 심볼 테이블 룩업 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 060] `pkg/proc/ast.go`, `characteristics.go`, `strict.go`
+* **대상 영역**: AST 노드 정의, 프로시저 특성 판별 및 엄격 모드 검사
+* **Gemini 1차 분석**:
+  - 불변 AST 노드 구조 및 프로시저 읽기 전용/부작용 검사기 구현 양호.
+* **Claude 2차 교차 분석**:
+  - **서브쿼리 내 비결정론적 함수(`NEWID()`, `GETDATE()`) 누락 오판별 (`characteristics.go:95-120`)**:
+    프로시저 내의 서브쿼리 수식에 포함된 `NEWID()` 등의 비결정론적 함수가 최상위 특성 검사에서 누락되어, 캐시되면 안 되는 쿼리가 순수 함수로 오판별되어 잘못 캐시될 위험.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/proc/characteristics.go:95-120` (`IsDeterministic`)
+  - **시나리오**: `NEWID()`를 사용하는 프로시저가 결정론적 함수로 판정되어 동일한 GUID가 반복 캐시 반환됨.
+  - **권장 수정안**: AST 서브트리 재귀 순회를 통해 모든 중첩 표현식의 비결정론적 함수를 전수 검출.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 061] `pkg/proc/compiler.go`, `bytecode.go` (1/2)
+* **대상 영역**: T-SQL AST ➔ VDBE 바이트코드 컴파일러 및 Opcode 정의
+* **Gemini 1차 분석**:
+  - VDBE 레지스터 기반 바이트코드 명령어 셋 및 주소 점프 백패칭(Backpatching) 체계 우수.
+* **Claude 2차 교차 분석**:
+  - **대형 프로시저 컴파일 시 점프 목적지 오프셋 정수 오버플로우 검증 부재 (`compiler.go:420-460`)**:
+    수천 라인의 거대 프로시저에서 점프 오프셋이 바이트코드 슬라이스 범위를 벗어날 때 컴파일 타임 검증 없이 음수 또는 엉뚱한 주소로 백패칭되어 런타임에 무한 루프 유발.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/proc/compiler.go:420-460` (`backpatch`)
+  - **시나리오**: 대형 ERP 배치 프로시저 실행 시 VDBE 가상머신이 엉뚱한 이전 PC로 역점프하여 서버 프리징.
+  - **권장 수정안**: `0 <= targetPC < len(prog.Instructions)` 바운드 검사를 강화하여 오프셋 초과 시 컴파일 오류 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 062] `pkg/proc/compiler.go`, `bytecode.go` (2/2)
+* **대상 영역**: 컴파일러 최적화 패스 및 레지스터 수명주기 관리
+* **Gemini 1차 분석**:
+  - 레지스터 재활용 풀링 및 상수 폴딩 최적화 패스 설계 우수.
+* **Claude 2차 교차 분석**:
+  - **중첩 함수 인자 평가 시 레지스터 조기 회수로 인한 인자 값 덮어쓰기 오염 (`compiler.go:880-925`)**:
+    `f(a, g(b))` 형태의 중첩 함수 호출 컴파일 시, `a`를 담고 있던 레지스터가 `g(b)` 평가 도중 조기 해제되어 재할당되면서 `a`의 원래 값이 덮어써져 손실됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/proc/compiler.go:880-925` (`compileFunctionCall`)
+  - **시나리오**: 다중 인자 함수 호출 시 첫 번째 인자의 계산 결과가 두 번째 인자 계산 도중 파괴되어 엉뚱한 파라미터 전달.
+  - **권장 수정안**: 모든 실인자의 컴파일이 완료될 때까지 인자 레지스터 락(Pin) 유지.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 063] `pkg/proc/parser/antlr/wrapper.go`, `ast_builder.go`
+* **대상 영역**: Tier 2 ANTLR4 공식 문법 파서 래퍼 및 AST 변환기
+* **Gemini 1차 분석**:
+  - 공식 Microsoft ANTLR4 문법 트리를 네이티브 VDBE AST로 1:1 변환하는 어댑터 아키텍처 우수.
+* **Claude 2차 교차 분석**:
+  - **`IIF` 삼항 연산자 및 `TRY_CONVERT` 구문 변환 누락으로 nil 노드 패닉 (`ast_builder.go:340-375`)**:
+    ANTLR4 파서는 성공적으로 파싱했으나 `ast_builder.go`의 Visitor에서 해당 표현식의 매핑이 구현되지 않아 nil AST 노드를 반환하고 후속 컴파일러에서 nil 역참조 패닉 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/proc/parser/antlr/ast_builder.go:340-375` (`VisitExpression`)
+  - **시나리오**: Fast Pratt 파서가 처리하지 못해 ANTLR 폴백으로 넘어간 `IIF(...)` 표현식 프로시저 컴파일 시 서버 패닉.
+  - **권장 수정안**: `IIF`를 `CASE WHEN ... THEN ... ELSE ... END` AST 노드로 정규 변환하는 방문자 메서드 구현.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 064] `pkg/proc/parser/antlr/tsql_lexer.go`, `tsql_parser.go` 등
+* **대상 영역**: 공식 Microsoft T-SQL ANTLR4 렉서/파서 런타임 및 리스너/비지터
+* **Gemini 1차 분석**:
+  - CGo 없는 순수 Go ANTLR4 런타임 임베딩으로 완벽한 플랫폼 이식성 확보.
+* **Claude 2차 교차 분석**:
+  - **ANTLR4 파서 인스턴스 반복 생성 시 DFA 캐시 메모리 누수 (`wrapper.go:70-95`)**:
+    폴백 파서 호출 시마다 ANTLR 어휘/문법 인터프리터를 새로 생성하면서 DFA 결정 상태 캐시가 전역 해제되지 않아 장기 실행 시 메모리 누적 누수 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/proc/parser/antlr/wrapper.go:70-95` (`ParseProcedureFallback`)
+  - **시나리오**: 수만 회의 비표준 T-SQL 프로시저 파싱 시 프로세스 RSS 메모리 지속 증가.
+  - **권장 수정안**: `sync.Pool`을 통한 ANTLR 파서/렉서 인스턴스 재사용 및 호출 후 DFA 상태 초기화.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 065] `pkg/proc/cache.go`, `fold.go`
+* **대상 영역**: 프로시저 바이트코드 계획 캐시 및 상수 폴딩(Constant Folding)
+* **Gemini 1차 분석**:
+  - LRU 기반 바이트코드 캐시 및 쿼리 지문(Fingerprint) 해시 체계 우수.
+* **Claude 2차 교차 분석**:
+  - **컴파일 타임 상수 폴딩 시 `1 / 0` 정수 나눗셈 직접 실행으로 인한 컴파일러 패닉 (`fold.go:145-170`)**:
+    `fold.go`에서 상수 산술식을 최적화하는 도중 분모가 0인 리터럴 식이 들어왔을 때, 분모 0 사전 검사 없이 직접 정수 나눗셈(`/`)을 수행하여 컴파일러가 패닉으로 크래시됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/proc/fold.go:145-170` (`foldBinaryArithmetic`)
+  - **시나리오**: `SELECT 1/0` 상수가 포함된 프로시저 컴파일 시 DB 서버 프로세스 즉각 크래시.
+  - **권장 수정안**: 분모 0 사전 검사를 수행하고 상수 폴딩을 중단하여 런타임 에러로 안전하게 이관.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 066] `pkg/proc/runtime/vm.go` (1/2), `vm_dispatcher.go`
+* **대상 영역**: VDBE 바이트코드 가상머신 인터프리터 코어 루프 및 PC 점프 제어
+* **Gemini 1차 분석**:
+  - 단일 평탄화 직접 디스패치 루프(`PERF-VDBE-FLATTEN-1`)로 CPU 레지스터 기반 초고속 PC 제어 우수.
+* **Claude 2차 교차 분석**:
+  - **음수 점프 목적지 가드 부재로 인한 음수 슬라이스 인덱스 패닉 (`vm_dispatcher.go:79-160`)**:
+    `OpJump`, `OpJumpIfFalse`, `OpJumpIfEqInt` 등에서 `pc = int(inst.B)` 또는 `int(inst.C)` 점프 시 음수 목적지 검사가 전혀 없어 `instructions[pc]` 호출 시 언바운디드 음수 슬라이스 패닉 발생 (`[RULE:DefensiveIndexing]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/proc/runtime/vm_dispatcher.go:79-160` (`Execute`)
+  - **시나리오**: 손상된 바이트코드 또는 음수 오프셋 점프 시 즉각 런타임 패닉.
+  - **권장 수정안**: 점프 목적지 할당 전 `0 <= targetPC < len(instructions)` 사전 경계 검사 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 067] `pkg/proc/runtime/vm.go` (2/2)
+* **대상 영역**: VDBE 레지스터 읽기/쓰기, 스택 프레임 풀링, CALL/RETURN 스택
+* **Gemini 1차 분석**:
+  - `sync.Pool` 기반 `VMFrame` 재활용 및 슬롯 캐싱으로 할당 제로화 달성.
+* **Claude 2차 교차 분석**:
+  - **중첩 프로시저 호출 시 예외/에러 발생 시 프레임 해제 누락 및 UDF 재귀 깊이 미전파 (`vm.go:2200-2270`)**:
+    `callProc`에서 `subFrame.Execute` 실행 중 에러 또는 패닉 발생 시 `releaseFrame`이 누락되어 프레임 누수 발생 (`[RULE:DoubleCloseSafety]`), 또한 `callUDF`에서 `RunInTx` 호출 시 `callDepth`가 전달되지 않아 상호 재귀 UDF 호출 시 스택 오버플로우 패닉 위험 (`[RULE:BoundedRecursion]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/proc/runtime/vm.go:2200-2270` (`callProc`, `callUDF`)
+  - **시나리오**: 중첩 프로시저 실행 실패 시 메모리 누수 및 재귀 UDF 무한 호출 시 프로세스 스택 고갈.
+  - **권장 수정안**: `defer f.executor.releaseFrame(subFrame)` 적용 및 UDF 실행 시 프레임 `callDepth` 동기화.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 068] `pkg/proc/runtime/vm_dispatcher.go`
+* **대상 영역**: Opcode 디스패치 테이블 및 트랜잭션/상태머신 전이
+* **Gemini 1차 분석**:
+  - 고속 switch-case 구조를 통한 인스트럭션 디스패치 최적화.
+* **Claude 2차 교차 분석**:
+  - **중첩 트랜잭션 내 `COMMIT`/`ROLLBACK` 시 실제 스토리지 트랜잭션 조기 커밋 및 세션 새 트랜잭션 오발행 (`vm_dispatcher.go:535-570`)**:
+    T-SQL 명세상 `f.tranCount > 1`인 중첩 트랜잭션의 `COMMIT`은 카운터만 감소시키고 최종 `f.tranCount == 0`일 때만 스토리지 커밋을 수행해야 함에도, 즉시 `f.tx.Commit()`을 실행하고 새 트랜잭션을 열어버려 외부 트랜잭션 원자성 파괴.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Critical`
+  - **위치**: `pkg/proc/runtime/vm_dispatcher.go:535-570` (`OpTxCommit`, `OpTxRollback`)
+  - **시나리오**: 중첩 프로시저 내에서 내부 `COMMIT` 수행 시 바깥쪽 트랜잭션 작업이 롤백 불가능하게 조기 커밋됨.
+  - **권장 수정안**: `f.tranCount` 감소 후 카운터가 0이 될 때만 `f.tx.Commit()`을 트리거하도록 수정.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 069] `pkg/proc/runtime/bridge.go`, `vm_lazy.go`
+* **대상 영역**: 스토리지 트랜잭션 브릿지 및 지연 평가(Lazy Decoding)
+* **Gemini 1차 분석**:
+  - 로우 바이트 디코딩 지연 평가로 대용량 쿼리 필터링 성능 극대화.
+* **Claude 2차 교차 분석**:
+  - **`canSkipRawTuple`에서 튜플 디코딩 에러 발생 시 사일런트 튜플 누락 (`vm_lazy.go:42-55`)**:
+    `ExtractColumnFromTuple`에서 에러 발생 시 `return true`로 간주하여 데이터 손상이나 직렬화 불일치 튜플을 조용히 건너뛰어 쿼리 결과에서 누락시킴 (`[RULE:ExplicitError]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/proc/runtime/vm_lazy.go:42-55` (`canSkipRawTuple`)
+  - **시나리오**: 손상되거나 버전이 다른 튜플 스캔 시 사용자에게 에러 보고 없이 조용히 결과에서 제외됨.
+  - **권장 수정안**: 디코딩 에러 발생 시 스킵하지 않고 에러를 상위로 전파하거나 디코딩 폴백 처리.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 070] `pkg/proc/builtins.go`, `builtins_string.go`
+* **대상 영역**: 문자열 내장 함수 (`SUBSTRING`, `CHARINDEX`, `LEN`, `REPLACE` 등)
+* **Gemini 1차 분석**:
+  - Go rune 기반 슬라이싱으로 유니코드 한글 및 다중 바이트 문자열 안정성 우수.
+* **Claude 2차 교차 분석**:
+  - **`SUBSTRING` 음수 시작 위치 인자 시 T-SQL 표준 길이 보정 누락 (`builtins_string.go:400-425`)**:
+    T-SQL `SUBSTRING(s, start, len)`에서 `start < 1`일 때 `start + len - 1` 범위에 해당하는 부분만 반환해야 하나, 단순히 `start = 0`으로 클램핑하고 전체 `len`을 취해 전혀 엉뚱한 문자열 반환.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/proc/builtins_string.go:400-425` (`evalStringBuiltin`)
+  - **시나리오**: `SUBSTRING('12345', -2, 5)` 실행 시 기대값 `'12'` 대신 `'12345'` 전체 반환.
+  - **권장 수정안**: `start < 1`일 때 유효 시작 지점 및 길이 보정 수식 표준화 (`len = len + start - 1`, `start = 1`).
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 071] `pkg/proc/builtins_math.go`, `builtins_date.go`
+* **대상 영역**: 수학 및 날짜/시간 내장 함수 (`DATEADD`, `DATEDIFF`, `ROUND`, `MOD` 등)
+* **Gemini 1차 분석**:
+  - 다양한 날짜 포맷 자동 파싱 및 고속 수학 함수 테이블 구현.
+* **Claude 2차 교차 분석**:
+  - **`MOD`의 `MinInt64 % -1` 오버플로우 패닉 및 `DATEDIFF(day)` 자정 경계 오계산 (`builtins_math.go:45-65`, `builtins_date.go:120-145`)**:
+    `MOD`에서 `MinInt64 % -1` 시 CPU 정수 나눗셈 오버플로우 패닉 발생. 또한 `DATEDIFF(day, t1, t2)`에서 자정(midnight) 경계 통과 횟수 대신 24시간 나눗셈(`diff.Hours() / 24`)을 사용하여 23:59:59와 00:00:01 간 1일 차이가 0일로 오계산됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/proc/builtins_math.go:45-65`, `pkg/proc/builtins_date.go:120-145`
+  - **시나리오**: 극단 정수 `MOD` 실행 시 패닉, 날짜 간 날짜 차이 계산 시 자정을 넘겼음에도 0 반환.
+  - **권장 수정안**: `MinInt64 % -1` 사전 가드 추가, `DATEDIFF` 시 연/월/일 경계 통과 기반 계산으로 전면 개선.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 072] `pkg/proc/builtins_json.go`
+* **대상 영역**: T-SQL JSON 내장 함수 (`ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`)
+* **Gemini 1차 분석**:
+  - 표준 라이브러리 `encoding/json` 기반의 일관된 JSON 조작 지원.
+* **Claude 2차 교차 분석**:
+  - **`JSON_MODIFY` 경로 파싱 시 배열 인덱싱 미지원 및 파싱 오류 시 사일런트 무시 (`builtins_json.go:20-60`)**:
+    `strings.Split(path, ".")`만 수행하여 `$.items[0]` 형태의 배열 인덱스 경로를 처리하지 못하고, 에러 발생 시 원본 JSON을 그대로 반환하여 실패를 은폐함 (`[RULE:ExplicitError]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/proc/builtins_json.go:20-60` (`modifyJSONByPath`)
+  - **시나리오**: JSON 배열 원소 수정 쿼리가 아무런 변경도 없이 조용히 성공으로 처리됨.
+  - **권장 수정안**: JSONPath 토크나이저에 `[idx]` 배열 접근자 지원 추가 및 문법 오류 시 명시적 에러 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 073] `pkg/proc/builtins_sys.go`
+* **대상 영역**: 시스템 속성 및 메타데이터 함수 (`SERVERPROPERTY`, `OBJECT_ID` 등)
+* **Gemini 1차 분석**:
+  - UUIDv7 및 UUIDv4 고속 생성기 내장으로 인덱스 친화적 키 생성 완벽 지원.
+* **Claude 2차 교차 분석**:
+  - **`SERVERPROPERTY` 알 수 없는 속성 조회 시 `NULL` 대신 빈 문자열 반환 (`builtins_sys.go:300-330`)**:
+    Microsoft SQL Server 표준은 알 수 없는 속성에 대해 `NULL`을 반환해야 하나 `storage.StringValue("")`를 반환하여 `SERVERPROPERTY(...) IS NULL` 검사를 수행하는 클라이언트/드라이버 오동작 유발.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/proc/builtins_sys.go:300-330` (`evalSysBuiltin`)
+  - **시나리오**: 미지원 서버 속성 쿼리 시 `IS NULL` 조건 분기가 실패하여 비정상 분기로 진입.
+  - **권장 수정안**: 알 수 없는 속성의 `default` 반환값을 `storage.NullValue(storage.TypeVarChar)`로 수정.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 074] `pkg/proc/evaluator.go`, `eval.go`
+* **대상 영역**: 런타임 표현식 인터프리터 및 연산자 타입 강제 변환
+* **Gemini 1차 분석**:
+  - SQL 3VL(Three-Valued Logic) AND/OR 평가 및 CAST/TRY_CAST 지원.
+* **Claude 2차 교차 분석**:
+  - **산술 연산 시 64비트 정밀도 손실 및 비숫자 문자열 덧셈 시 타입 우선순위 위반 (`eval.go:680-710`)**:
+    `TokenPlus` 등에서 정수를 무조건 `float64`로 변환하여 53비트 초과 큰 정수에서 하위 비트가 잘려나가는 정밀도 오염 발생, 또한 `'abc' + 1` 등 숫자-문자열 연산 시 T-SQL 타입 우선순위(정수 우선)에 따른 변환 오류 대신 `fmt.Sprintf` 문자열 결합(`'abc1'`) 수행.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/proc/eval.go:680-710` (`evalRowBinaryOp`)
+  - **시나리오**: 큰 ID/금액 덧셈 시 값 왜곡 발생, 유효하지 않은 문자열-정수 덧셈에서 에러 대신 문자열 결합 반환.
+  - **권장 수정안**: 양쪽이 정수일 경우 정수 산술 직접 수행, T-SQL 타입 우선순위 테이블에 따른 엄격한 암시적 형변환 적용.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 075] `pkg/proc/runtime/vm.go` (sp_executesql & 취소 연동), `pkg/engine/sqlexec_procs.go`
+* **대상 영역**: 동적 SQL 실행기(`sp_executesql`) 및 쿼리 취소 연동
+* **Gemini 1차 분석**:
+  - 동적 SQL 스크립트의 온더플라이 바이트코드 컴파일 및 계획 캐싱 연동.
+* **Claude 2차 교차 분석**:
+  - **`callSpExecuteSql` 실행 시 부모 취소 컨텍스트(`f.ctx`) 미전파로 취소 불능 (`vm.go:2280-2330`)**:
+    동적 SQL 실행 시 `ExecuteInTx`에 취소 컨텍스트를 전달하지 않아 클라이언트의 쿼리 취소(Cancel Request)가 `sp_executesql` 내부 롱러닝 쿼리에 전달되지 않고 무기한 블로킹 지속 (`[RULE:CooperativeAbort]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/proc/runtime/vm.go:2280-2330` (`callSpExecuteSql`)
+  - **시나리오**: `sp_executesql` 내부에서 장시간 실행 중인 쿼리를 클라이언트가 취소해도 멈추지 않음.
+  - **권장 수정안**: `ExecuteInTxWithSessionContext`를 호출하여 부모의 `f.ctx`를 자식 프레임에 전파.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 076] `pkg/planner/planner.go` (1/2)
+* **대상 영역**: CBO 논리 플랜 생성기 및 관계대수 트리 변환
+* **Gemini 1차 분석**:
+  - 관계대수 연산자 트리 구조화 및 AST -> CBO 변환 체계 구축.
+* **Claude 2차 교차 분석**:
+  - **파생 테이블(Derived Table) 변환 시 외부 별칭 충돌로 인한 카테시안 곱 오폭발 (`planner.go:750-820`)**:
+    중첩 서브쿼리나 파생 테이블을 결합할 때 내부와 외부의 별칭이 중복되거나 미해결될 경우 조인 조건이 누락되어 의도치 않은 `CROSS JOIN`(카테시안 곱)으로 변환되어 메모리/연산 폭증.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/planner/planner.go:750-820` (`parseFromAndJoins`)
+  - **시나리오**: 파생 테이블 조인 쿼리 실행 시 조인 조건이 탈락하여 전체 행 곱셈 발생.
+  - **권장 수정안**: 파생 테이블 스코프별 고유 별칭 정규화 및 조인 조건 매핑 검증 강화.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 077] `pkg/planner/planner.go` (2/2)
+* **대상 영역**: CBO 비용 모델링 (CPU/IO Cost 평가 및 최적 조인 순서)
+* **Gemini 1차 분석**:
+  - DP(동적 계획법) 기반 Selinger 스타일의 최적 조인 순서 탐색 완비.
+* **Claude 2차 교차 분석**:
+  - **동일 비용 조인 순서 간 타이브레이커(Tie-breaker) 부재로 인한 비결정론적 플랜 플리핑 (`planner.go:2640-2710`)**:
+    `joinedNode.TotalCost < dp[mask].totalCost` 비교 시 비용이 동일한 경우 Go map 순회 순서에 따라 매 실행마다 실행 계획 순서가 뒤바뀌어 성능 불안정 유발 (`[RULE:DeterministicTesting]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/planner/planner.go:2640-2710` (`optimizeJoinOrderDP`)
+  - **시나리오**: 동일 쿼리 반복 실행 시 실행 계획이 임의로 교체되어 캐시 비효율 초래.
+  - **권장 수정안**: 비용 동률 시 테이블 사전순/인덱스 유무 기반의 결정론적 타이브레이커 규칙 도입.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 078] `pkg/planner/decorrelate.go`
+* **대상 영역**: 상관 서브쿼리 비상관화(Decorrelation) 규칙
+* **Gemini 1차 분석**:
+  - `EXISTS`/`IN` 서브쿼리를 `SEMI`/`ANTI` 조인으로 변환하는 서브쿼리 최적화 완비.
+* **Claude 2차 교차 분석**:
+  - **`NOT IN` 서브쿼리의 `ANTI JOIN` 변환 시 NULL 시맨틱 위반으로 인한 잘못된 결과 반환 (`decorrelate.go:130-160`)**:
+    SQL 3VL 규칙상 `x NOT IN (SELECT y ...)`에서 `y`에 NULL이 하나라도 있으면 결과가 공집합이어야 하나, 단순 `ANTI JOIN` 변환으로 인해 서브쿼리에 NULL이 존재해도 외부 행이 반환되는 치명적 데이터 왜곡 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/planner/decorrelate.go:130-160` (`decorrelateIn`)
+  - **시나리오**: NULL을 포함하는 서브쿼리에 대해 `NOT IN` 실행 시 SQL 표준과 상반된 결과 도출.
+  - **권장 수정안**: `NOT IN` 비상관화 시 서브쿼리 조건에 `IS NOT NULL` 검증 필터 강제 주입.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 079] `pkg/planner/pushdown.go`
+* **대상 영역**: 조건절 푸시다운(Predicate Pushdown) 및 인덱스 선택기
+* **Gemini 1차 분석**:
+  - 단일/복합 테이블 조건 분기 및 정적 모순(Static Contradiction) 사전 감지 탁월.
+* **Claude 2차 교차 분석**:
+  - **함수로 감싸진 컬럼 식별 시 컬럼 참조 추출 누락 및 푸시다운 실패 (`pushdown.go:60-95`)**:
+    `ExtractColumnRefs`에서 식별자 뒤에 `(`가 오면 단순 함수 호출로 간주하여 인자 내부의 컬럼 참조(예: `UPPER(u.name)`)를 추출하지 못해 푸시다운 대상에서 탈락하고 풀 스캔으로 격하됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/planner/pushdown.go:60-95` (`ExtractColumnRefs`)
+  - **시나리오**: 함수 기반 조건절(`UPPER(name) = 'A'`)이 조인 테이블로 푸시다운되지 못해 조인 후 필터링으로 성능 저하.
+  - **권장 수정안**: 괄호 내부 토큰 재귀 탐색을 통해 함수 인자 내부의 컬럼 식별자도 정상 추출하도록 개선.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 080] `pkg/planner/bounds.go`, `pruning.go`
+* **대상 영역**: 인덱스 검색 범위(Range Bounds) 빌더 및 파티션 가지치기
+* **Gemini 1차 분석**:
+  - BETWEEN, IN, 부등호 표현식에 대한 다차원 파티션 프루닝 체계 구축.
+* **Claude 2차 교차 분석**:
+  - **Yoda 조건(`'val' <= col`) 미인식으로 파티션 프루닝 누락 및 RFC3339 날짜 상한 오차 (`pruning.go:45-90`, `130-160`)**:
+    비교 연산의 좌변이 리터럴인 Yoda 조건일 때 파티션 필터를 인식하지 못해 전체 파티션을 풀 스캔하며, `computeCeilPartitionKey`에서 RFC3339 포맷 날짜 파싱 실패 시 상한 키 감산이 누락되어 1개 파티션을 초과 스캔하는 Off-by-one 버그 존재.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/planner/pruning.go:45-90`, `130-160` (`PrunePartitions`, `computeCeilPartitionKey`)
+  - **시나리오**: Yoda 조건 작성 시 파티션 프루닝 미동작, RFC3339 상한 조건 시 불필요한 미래 파티션 스캔.
+  - **권장 수정안**: 이항 연산자의 좌우 반전 정규화(`'val' <= col` -> `col >= 'val'`) 및 RFC3339 날짜 레이아웃 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 081] `pkg/planner/setop.go`, `stats.go`
+* **대상 영역**: 집합 연산(UNION, INTERSECT, EXCEPT) 플랜 및 테이블 통계 연동
+* **Gemini 1차 분석**:
+  - 히스토그램 버킷 및 MCV 기반 선택도 추정 체계 구축.
+* **Claude 2차 교차 분석**:
+  - **`setop.go` 주석 파싱 누락 및 `stats.go`의 MinVal==MaxVal 시 0 나눗셈 `NaN` 전파 (`setop.go:70-110`, `stats.go:1060-1090`)**:
+    `FindTopLevelSetOps`에서 주석(`--`, `/* */`) 무시 로직이 없어 주석 내 키워드를 연산자로 오인하며, `interpolateRange`에서 단일값 컬럼(MinVal==MaxVal) 시 분모 0 나눗셈으로 `NaN`이 반환되어 전체 CBO 비용 계산이 마비됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/planner/setop.go:70-110`, `pkg/planner/stats.go:1060-1090`
+  - **시나리오**: 주석이 포함된 UNION 쿼리 파싱 실패, 단일값 컬럼에 대한 범위 검색 시 플래너 비용 NaN 전파.
+  - **권장 수정안**: 주석 건너뛰기 토크나이저 상태 추가 및 `maxVal == minVal` 시 0.0/1.0 즉각 반환 가드 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 082] `pkg/planner/explain.go`
+* **대상 영역**: `EXPLAIN` / `EXPLAIN ANALYZE` 플랜 트리 포맷터
+* **Gemini 1차 분석**:
+  - PostgreSQL canonical JSON 플랜 포맷 구현으로 DBeaver/DataGrip 시각화 지원.
+* **Claude 2차 교차 분석**:
+  - **심층 계획 트리 직렬화 시 무제한 재귀 호출로 인한 스택 오버플로우 패닉 위험 (`explain.go:130-170`)**:
+    `toPostgresPlanNode`에서 재귀 깊이 제한(`[RULE:BoundedRecursion]`) 없이 자식 노드를 순회하여 깊은 복합 쿼리 플랜 트리에서 스택 오버플로우 패닉 위험.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/planner/explain.go:130-170` (`toPostgresPlanNode`)
+  - **시나리오**: 복잡한 중첩 서브쿼리 및 CTE가 결합된 대형 쿼리 EXPLAIN 실행 시 서버 패닉.
+  - **권장 수정안**: 재귀 호출 시 깊이 카운터 추가(`depth > 128` 시 트리 절단 및 경고) 또는 반복 루프로 변환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 083] `pkg/planner/planner.go` (CBO 변환 규칙 및 탐욕 조인 순서 최적화)
+* **대상 영역**: CBO 조인 변환 규칙 및 7개 이상 테이블 탐욕적 조인 순서 최적화
+* **Gemini 1차 분석**:
+  - Selinger DP 임계값(`MaxJoinDPThreshold = 6`) 초과 시 탐욕 알고리즘으로 폴백하여 컴파일 시간 단축.
+* **Claude 2차 교차 분석**:
+  - **탐욕 조인 탐색 시 카디널리티/비용 비교 없이 단순 필터 유무로 테이블을 선택하는 서브옵티멀 플랜 생성 (`planner.go:2730-2770`)**:
+    `optimizeJoinOrderGreedy`에서 테이블 간 행 수나 선택도를 전혀 고려하지 않고 `Filter != ""`인 첫 번째 테이블을 무조건 좌측에 배치하여 대규모 테이블이 조인 트리 하단에 배치되는 성능 저하 유발.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/planner/planner.go:2730-2770` (`optimizeJoinOrderGreedy`)
+  - **시나리오**: 7개 이상 테이블 조인 시 행 수가 수천만 건인 테이블이 먼저 조인되어 중간 결과셋 폭증.
+  - **권장 수정안**: 탐욕 선택 시 테이블 추정 행 수(`estRows`) 및 조인 필터 선택도를 반영한 간이 비용 비교 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 084] `pkg/execution/scan.go`, `project.go`
+* **대상 영역**: 테이블/인덱스 스캔 반복자 및 프로젝션 수식 평가기
+* **Gemini 1차 분석**:
+  - 청크 스트리밍 및 LazyTuple 지연 디코딩으로 스캔 메모리 최소화.
+* **Claude 2차 교차 분석**:
+  - **`project.go`의 중복 별칭 처리 시 2차 충돌 검증 부재로 결과셋 컬럼명 충돌 (`project.go:80-110`)**:
+    `addField`에서 중복 별칭 발견 시 `alias_N`으로 이름을 변경한 후, 이 변경된 이름이 이미 존재하는지에 대한 2차 중복 검증이 없어 결과 컬럼명이 여전히 충돌할 수 있음.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `pkg/execution/project.go:80-110` (`addField`)
+  - **시나리오**: 동일한 이름의 별칭이 다수 존재하는 쿼리에서 생성된 결과 컬럼명 중복.
+  - **권장 수정안**: 중복 검사를 루프로 수행하여 고유한 별칭이 생성될 때까지 카운터 증가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 085] `pkg/execution/filter.go`, `eval.go`
+* **대상 영역**: 행 필터 반복자 및 튜플 수식 평가기
+* **Gemini 1차 분석**:
+  - 튜플 직접 수식 평가(`EvalTupleExprWithSubquery`)로 힙 할당 제로화 지원.
+* **Claude 2차 교차 분석**:
+  - **미매핑 수식 평가 시 `t.ToEvalMap()` 호출로 인한 대량 GC 압력 및 `MinInt64 / -1` 패닉 (`eval.go:270-285`, `410-430`)**:
+    `default` 분기에서 `t.ToEvalMap()`을 매 행마다 호출하여 수만~수백만 개의 `map[string]any`가 힙에 할당되어 GC 부하 유발 (`[RULE:ZeroAllocation]`), 또한 정수 나눗셈에서 `MinInt64 / -1` 패닉 방어 누락.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/execution/eval.go:270-285`, `410-430` (`EvalTupleExprWithSubquery`, `evalTupleBinaryExprWithSubquery`)
+  - **시나리오**: 복합 함수 필터 실행 시 과도한 GC 지연 발생, 특정 정수 연산 시 CPU 나눗셈 오버플로우 크래시.
+  - **권장 수정안**: ToEvalMap 객체 풀링 도입, LIKE 및 주요 함수 직접 분기 추가, `MinInt64 / -1` 가드 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 086] `pkg/execution/join.go`
+* **대상 영역**: 인메모리 해시 조인 및 인덱스 중첩 루프 조인
+* **Gemini 1차 분석**:
+  - `work_mem` 초과 감지 및 메모리 사용량 추적 체계 내장.
+* **Claude 2차 교차 분석**:
+  - **`Open()` 중간 에러 시 빌드 메모리 미정리 누수 및 복합 조인 키의 `\x00` 충돌 오매칭 (`join.go:120-220`, `710-740`)**:
+    `h.right` 빌드 후 `h.left.Open()` 실패 시 `h.hashTable`이 정리되지 않아 메모리 누수 발생, 복합 키 생성 시 `\x00` 바이트 분리자를 사용하여 문자열 내 `\x00`이 존재할 때 키 충돌 결함 발생 (`[RULE:CharSanitization]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/execution/join.go:120-220`, `710-740` (`Open`, `extractTupleKey`)
+  - **시나리오**: 조인 쿼리 초기화 실패 시 빌드 해시 테이블 메모리 누수, 바이너리 키 조인 시 엉뚱한 행 매칭.
+  - **권장 수정안**: `Open()` 실패 시 `h.Close()` 명시적 호출 및 길이 접두사(Length-prefixed) 기반 키 인코딩 적용.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 087] `pkg/execution/merge_join.go`
+* **대상 영역**: 머지 조인(Merge Join) 및 정렬 상태 검증기
+* **Gemini 1차 분석**:
+  - 중복 키 버퍼링(Mark & Restore)을 통한 $O(M+N)$ 고속 스트리밍 조인 구현.
+* **Claude 2차 교차 분석**:
+  - **정렬 순서 역전(Out-of-order) 튜플 검증 누락으로 인한 조인 매칭 사일런트 누락 (`merge_join.go:200-280`)**:
+    하위 반복자에서 정렬 순서가 어긋난 행이 유입될 때 이를 감지하지 않고 조용히 조인 대상에서 제외하여 쿼리 결과 누락 발생 (`[RULE:ExplicitError]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/execution/merge_join.go:200-280` (`Next`)
+  - **시나리오**: 정렬되지 않은 입력 스트림이 유입될 경우 에러 없이 쿼리 결과 일부가 조용히 사라짐.
+  - **권장 수정안**: 이전 키와의 비교를 통해 스트림 정렬 순서 위반 시 즉각 명시적 런타임 에러 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 088] `pkg/execution/aggregate.go`
+* **대상 영역**: `COUNT`, `SUM`, `AVG`, `GROUP BY` 해시 집계 반복자
+* **Gemini 1차 분석**:
+  - 빈 테이블 전역 집계(Global Aggregation) 특수 처리 및 ROLLUP/CUBE 비트마스크 지원.
+* **Claude 2차 교차 분석**:
+  - **`PERCENTILE_CONT` / `MEDIAN` 집계 시 메모리 상한 없는 슬라이스 적재로 인한 OOM 크래시 (`aggregate.go:800-840`)**:
+    해당 집계 함수들이 `acc.values`에 전체 튜플 값을 메모리에 무제한 수집(`append`)하여 수천만 건 집계 시 `work_mem` 검사 없이 프로세스 OOM 유발 (`[RULE:BoundedBuffers]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/execution/aggregate.go:800-840` (`accumulateTuple`, `Open`)
+  - **시나리오**: 대용량 테이블에 대해 `PERCENTILE_CONT` 실행 시 메모리 고갈로 서버 강제 종료.
+  - **권장 수정안**: `work_mem` 버짓 추적 추가 또는 일정 크기 초과 시 T-Digest 근사 집계로 폴백.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 089] `pkg/execution/sort.go`
+* **대상 영역**: 인메모리 정렬 및 디스크 스필(External Merge Sort)
+* **Gemini 1차 분석**:
+  - Min-Heap 기반 N-way 머지 정렬 및 임시 런 파일 스필 체계 완비.
+* **Claude 2차 교차 분석**:
+  - **`Open(ctx)` 실패 시 디스크에 생성된 임시 런 파일 영구 고아 누수 (`sort.go:180-235`)**:
+    `Open()` 도중 취소(`ctx.Done()`) 또는 에러 발생 시 생성된 `lionsql-sort-run-*.tmp` 파일들이 삭제되지 않고 디스크에 영구 잔존 (`[RULE:CleanTeardown]`, `[RULE:HandleHygiene]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/execution/sort.go:180-235` (`Open`, `spillRun`)
+  - **시나리오**: 대형 정렬 쿼리가 취소되거나 실패할 때마다 `/tmp` 디렉토리에 수백 MB의 임시 파일이 영구 누적됨.
+  - **권장 수정안**: `Open()` 내부 에러 발생 시 `s.Close()`를 호출하여 임시 파일 및 열린 파일 디스크립터 즉각 정리.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 090] `pkg/execution/limit.go`, `window.go`
+* **대상 영역**: `LIMIT/OFFSET` 및 윈도우 함수 반복자
+* **Gemini 1차 분석**:
+  - 조기 종료(Short-circuit) 최적화로 불필요한 하위 반복자 실행 차단.
+* **Claude 2차 교차 분석**:
+  - **`WindowIterator`의 전체 입력 튜플 무제한 메모리 적재로 인한 OOM 위험 (`window.go:40-70`)**:
+    윈도우 함수 실행 시 `work_mem` 거버너 연동이나 디스크 스필 없이 전체 입력 튜플을 `w.rows` 슬라이스에 무제한 적재하여 대용량 데이터에서 OOM 크래시 발생 (`[RULE:BoundedBuffers]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/execution/window.go:40-70` (`Open`)
+  - **시나리오**: 수백만 건의 데이터에 대해 `ROW_NUMBER() OVER()` 실행 시 메모리 폭증 크래시.
+  - **권장 수정안**: 파티션 단위 스트리밍 처리 도입 및 `work_mem` 초과 시 에러 반환 또는 디스크 임시 적재.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 091] `pkg/execution/setop.go`, `chunk.go`
+* **대상 영역**: UNION / EXCEPT 반복자 및 1,024-행 벡터화 청크 스트리머
+* **Gemini 1차 분석**:
+  - `sync.Pool` 기반 청크 메모리 재사용 슬랩 풀링 구현.
+* **Claude 2차 교차 분석**:
+  - **`encodeTupleKey`에서 `LazyTuple` 미해소 시 모든 튜플이 동일한 NULL 키로 오인식되는 데이터 왜곡 (`setop.go:278-310`)**:
+    `RawTupleCursor`에서 생성된 `LazyTuple`이 Materialize되지 않은 상태에서 `t.Values`를 직접 순회하면 모든 값이 `nil`로 인식되어 서로 다른 행들이 동일한 NULL 키(`"N:\x00N:..."`)로 잘못 묶여 결과셋이 비정상적으로 누락됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Critical`
+  - **위치**: `pkg/execution/setop.go:278-310` (`encodeTupleKey`)
+  - **시나리오**: `UNION` 또는 `EXCEPT` 실행 시 지연 평가 튜플들이 모두 단 1개의 행으로 압축되어 심각한 데이터 손실 발생.
+  - **권장 수정안**: 키 인코딩 시작 전 `t.Materialize()`를 반드시 선제 호출하여 값 슬라이스 실체화 보장.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 092] `pkg/execution/builder.go`, `iterator.go`
+* **대상 영역**: 물리 실행 플랜 빌더 및 최상위 반복자 체인 인터페이스
+* **Gemini 1차 분석**:
+  - `ColumnIndexMap` 기반의 $O(1)$ 정수 오프셋 컬럼 참조로 제로 할당 조회 지원.
+* **Claude 2차 교차 분석**:
+  - **`Tuple.Materialize()`에서 디코딩 에러 무시로 인한 사일런트 데이터 손실 (`iterator.go:210-230`)**:
+    `_, _ = t.Lazy.MaterializeRow()`에서 반환된 에러를 완전히 침묵시켜(`_ = err`), 직렬화 손상 시 에러 보고 없이 컬럼이 `nil`로 남아 사일런트 실패 발생 (`[RULE:ExplicitError]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/execution/iterator.go:210-230` (`Materialize`)
+  - **시나리오**: 튜플 디코딩 오류 시 에러 없이 값이 NULL로 채워져 잘못된 비즈니스 데이터 반환.
+  - **권장 수정안**: `Materialize()`가 에러를 반환할 수 있도록 서명 개선 및 파이프라인 상위 전파.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 093] `pkg/execution/tdigest.go`, `instrument.go`
+* **대상 영역**: P99 지연시간 T-Digest 추정기 및 실행 프로파일러
+* **Gemini 1차 분석**:
+  - k1 스케일 함수 기반 T-Digest 압축으로 꼬리 백분위수 정밀 추정 지원.
+* **Claude 2차 교차 분석**:
+  - **`InstrumentedIterator.Next()`의 튜플당 `time.Now()` 2회 호출로 인한 극심한 프로파일링 오버헤드 (`instrument.go:50-70`)**:
+    수백만 행 스캔 시 vDSO 시스템 콜이 수백만 회 발생하여 프로파일링 자체가 쿼리 실행 시간의 대부분을 차지하는 Probe Effect 왜곡 발생 (`[RULE:LatencyBudget]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/execution/instrument.go:50-70` (`Next`)
+  - **시나리오**: `EXPLAIN ANALYZE` 실행 시 프로파일링 부하로 인해 순수 실행 대비 2배 이상의 지연시간 기록.
+  - **권장 수정안**: 청크 단위(`NextChunk`) 시간 측정 또는 샘플링 기반 시간 측정 도입.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 094] `pkg/execution/governor.go`, `governor_sys_*.go`
+* **대상 영역**: OS 네이티브 메모리 압력 감지기 및 플랫폼별 물리 메모리 탐색기
+* **Gemini 1차 분석**:
+  - macOS `sysctl`, Linux cgroups v1/v2 및 `/proc/meminfo` 자동 감지 완비.
+* **Claude 2차 교차 분석**:
+  - **Windows 환경에서 플랫폼 메모리 감지 API 미구현으로 4GB 하드코딩 클램핑 (`governor_sys_other.go:5-15`)**:
+    Windows 서버에서 `GlobalMemoryStatusEx` API 조회가 구현되지 않아 고사양 Windows 머신에서도 무조건 4GB 장비로 인식되어 메모리 자원을 낭비함 (`[RULE:HermeticParity]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/execution/governor_sys_other.go:5-15` (`getPlatformPhysicalMemory`)
+  - **시나리오**: 64GB Windows 서버에서 LionSQL의 메모리 버짓이 4GB 기준으로 고정되어 성능 잠재력 제한.
+  - **권장 수정안**: `governor_sys_windows.go` 파일을 신설하여 Windows API를 통한 실제 물리 메모리 탐색 구현.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 095] `pkg/execution/governor.go`
+* **대상 영역**: 글로벌 메모리 거버너 및 GOMEMLIMIT 동적 튜닝
+* **Gemini 1차 분석**:
+  - `debug.SetMemoryLimit` 연동 및 동적 힙 메모리 바운딩 설계 우수.
+* **Claude 2차 교차 분석**:
+  - **`ParseMemSize` 부동소수점 곱셈 시 정수 오버플로우 검증 누락 (`governor.go:100-115`)**:
+    인간 친화적 메모리 문자열 파싱 시 극단값 입력에 대해 정수 래핑 오버플로우 사전 검증 누락 (`[RULE:DefensiveIndexing]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `pkg/execution/governor.go:100-115` (`ParseMemSize`)
+  - **시나리오**: 잘못된 거대 메모리 설정값 입력 시 음수로 래핑될 위험.
+  - **권장 수정안**: 곱셈 전 `math.MaxInt64 / multiplier` 상한 검증 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 096] `pkg/wire/server.go` (1/2)
+* **대상 영역**: PGWire v3 TCP 리스너 및 연결 수명주기 관리
+* **Gemini 1차 분석**:
+  - SSL/GSSENC 핸드셰이크 협상 및 비동기 취소 요청(`CancelRequest`) 라우팅 완비.
+* **Claude 2차 교차 분석**:
+  - **메시지 길이(`msgLen`) 상한 검증 부재로 인한 단일 패킷 OOM 크래시 (`server.go:710-725`)**:
+    클라이언트가 보낸 4바이트 길이 필드에 대한 상한 검증(`[RULE:BoundedBuffers]`) 없이 `make([]byte, msgLen-4)`를 수행하여 2GB 등의 거대 길이 유입 시 즉각 OOM 패닉 크래시 유발.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Critical`
+  - **위치**: `pkg/wire/server.go:710-725` (`handleConnection`)
+  - **시나리오**: 악의적인 공격자 또는 잘못된 바이트 스트림 유입 시 DB 서버 프로세스 즉각 크래시.
+  - **권장 수정안**: 패킷 최대 허용 크기(예: 64MB) 상한 검사 추가 및 초과 시 연결 즉각 차단.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 097] `pkg/wire/server.go` (2/2)
+* **대상 영역**: PGWire 확장 쿼리 파이프라인 (`Parse`, `Bind`, `Execute`, Portal)
+* **Gemini 1차 분석**:
+  - 준비된 문장 캐시(`PreparedStatementCache`) 및 LRU 바운딩 제어 완비.
+* **Claude 2차 교차 분석**:
+  - **세션 내 `portals` 맵에 상한선이 없어 반복 바인드 시 메모리 누수 (`server.go:700-740`, `924-950`)**:
+    `portals := make(map[string]*Portal)`에 세션당 포털 최대 용량 제한이 없어 클라이언트가 `Bind`를 수만 번 반복하고 `Close`를 누락할 경우 세션 메모리가 무한 팽창함 (`[RULE:BoundedBuffers]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/wire/server.go:700-740`, `924-950` (`handleConnection`, `handleBind`)
+  - **시나리오**: 장기 유지 연결에서 포털이 지속 생성될 경우 프로세스 메모리 누수.
+  - **권장 수정안**: 세션당 최대 포털 수(예: 256개) 제한 및 초과 시 LRU 퇴출 또는 에러 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 098] `pkg/wire/protocol.go`
+* **대상 영역**: PGWire 메시지 인코딩/디코딩 및 패킷 버퍼 풀링
+* **Gemini 1차 분석**:
+  - `packetBufferPool` 기반 4KB 패킷 버퍼 재활용으로 GC 부담 완화.
+* **Claude 2차 교차 분석**:
+  - **`WriteDataRow` 호출 시 `[]string` 타입 사용으로 인한 NULL 값 표현 불가 (`protocol.go:250-285`)**:
+    `WriteDataRow`가 `[]string`을 받아 문자열 길이만큼 패킷을 인코딩하므로 PostgreSQL NULL(길이 -1)을 표현하지 못하고 빈 문자열 `""`로 왜곡하여 클라이언트에 전송됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/wire/protocol.go:250-285` (`WriteDataRow`)
+  - **시나리오**: `WriteDataRow`를 사용하는 쿼리 응답에서 NULL 값과 빈 문자열이 동일하게 빈 문자열로 반환됨.
+  - **권장 수정안**: `WriteDataRow` 호출부 전면을 NULL-safe한 `WriteDataRowBytes`로 교체하거나 인터페이스 통일.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 099] `pkg/wire/copy.go`, `numeric.go`
+* **대상 영역**: PGWire 대량 COPY 프로토콜 및 Numeric BCD 디코더
+* **Gemini 1차 분석**:
+  - Base-10000 4자리 워드 기반 PostgreSQL 바이너리 Numeric 디코딩 완비.
+* **Claude 2차 교차 분석**:
+  - **`numeric.go`의 거대 `weight` 조작 시 지수 거대 수 계산 DoS 취약점 (`numeric.go:50-70`)**:
+    `decodePgBinaryNumeric`에서 비정상적인 거대 `weight`가 입력될 경우 `Exp(10, power)` 거대 수 계산으로 CPU 및 메모리가 급격히 소모되는 서비스 거부 취약점 존재 (`[RULE:BoundedBuffers]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/wire/numeric.go:50-70` (`decodePgBinaryNumeric`)
+  - **시나리오**: 악의적인 바이너리 파라미터 유입 시 서버가 거대 수 연산 루프에 빠져 CPU 100% 점유.
+  - **권장 수정안**: `power` 및 `weight`에 대한 엄격한 바운드 검사(`power < 1000`) 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 100] `pkg/wire/tls.go`
+* **대상 영역**: PGWire SSL/TLS 암호화 핸드셰이크
+* **Gemini 1차 분석**:
+  - 자체 서명 인증서 자동 생성 및 TLS 1.2+ 최소 버전 강제.
+* **Claude 2차 교차 분석**:
+  - **`tlsConn.Handshake()` 실행 시 네트워크 타임아웃 미설정으로 인한 고루틴 무기한 정지 (`server.go:535-555`, `tls.go`)**:
+    SSL 업그레이드 수신 후 핸드셰이크 완료 대기 시 데드라인(`SetDeadline`)이 없어 클라이언트가 정지할 경우 고루틴과 TCP 소켓이 무기한 블로킹 누수됨 (`[RULE:CleanTeardown]`, `[RULE:ZeroOrphan]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/wire/server.go:535-555`, `pkg/wire/tls.go`
+  - **시나리오**: 불완전한 TLS 연결 시도로 인해 서버에 고아 고루틴과 파일 디스크립터가 지속 누적됨.
+  - **권장 수정안**: 핸드셰이크 시작 전 10초 타임아웃(`conn.SetDeadline(time.Now().Add(10*time.Second))`) 설정 및 완료 후 해제.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 101] `pkg/wire/tds/server.go` (1/2)
+* **대상 영역**: Microsoft TDS 7.x/8.0 TCP 리스너 및 세션 디스패처
+* **Gemini 1차 분석**:
+  - TDS 8.0 직접 TLS(0x16) 및 TDS 7.x PRELOGIN 기반 점진적 암호화 협상 완비.
+* **Claude 2차 교차 분석**:
+  - **TDS 8.0 직접 TLS 핸드셰이크 시 타임아웃 미설정으로 고루틴 무기한 정지 (`tds/server.go:580-600`)**:
+    클라이언트가 0x16 바이트 전송 후 TLS 핸드셰이크를 완료하지 않을 때 데드라인 설정이 없어 `tlsConn.Handshake()`에서 무기한 블로킹되어 고루틴이 영구 누수됨 (`[RULE:CleanTeardown]`, `[RULE:ZeroOrphan]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/wire/tds/server.go:580-600` (`handleConnection`)
+  - **시나리오**: 악의적인 포트 스캐너나 연결 중단 클라이언트로 인해 TDS 리스너 고루틴 누적 고갈.
+  - **권장 수정안**: `conn.SetDeadline`을 설정하여 10초 내 핸드셰이크 미완료 시 연결 강제 종료.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 102] `pkg/wire/tds/server.go` (2/2)
+* **대상 영역**: TDS SQL Batch 및 RPC 실행 파이프라인
+* **Gemini 1차 분석**:
+  - `runQueryWithAttention`을 통한 패킷 기반 쿼리 취소(Attention 0x06) 인터럽트 처리.
+* **Claude 2차 교차 분석**:
+  - **동기 DML 실행 도중 Attention 수신 시 엔진 롤백 완료 전 조기 DONE 응답 전송 위험 (`tds/server.go:680-730`)**:
+    Attention 패킷 수신 시 즉각 취소 토큰(`cancel()`)을 발송하나, 엔진 워커가 물리 트랜잭션 롤백을 완료하기 전에 Attention Acknowledgment DONE 토큰을 클라이언트에 조기 전송하여 클라이언트가 즉시 다음 쿼리를 날릴 경우 트랜잭션 상태 불일치 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/wire/tds/server.go:680-730` (`runQueryWithAttention`)
+  - **시나리오**: 롱러닝 트랜잭션 취소 직후 SSMS에서 새 쿼리 실행 시 `Transaction context in use` 충돌 발생.
+  - **권장 수정안**: 취소 신호 발송 후 하위 실행 워커가 완전히 반환될 때까지 동기화 채널로 대기 후 DONE 토큰 전송.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 103] `pkg/wire/tds/token.go`, `packet.go`
+* **대상 영역**: TDS 토큰 인코더 (`COLMETADATA`, `ROW`, `DONE`) 및 패킷 청크 재조립
+* **Gemini 1차 분석**:
+  - `tdsFramePool4K/8K`를 통한 패킷 프레임 메모리 풀링 최적화.
+* **Claude 2차 교차 분석**:
+  - **`ReadPacket` multi-packet 재조립 시 EOM 미도착 시 페이로드 무제한 누적으로 OOM 크래시 (`tds/packet.go:60-95`)**:
+    클라이언트가 `StatusEOM` (0x01) 플래그를 보내지 않고 청크를 지속 전송할 경우 `fullPayload`가 무제한 증가하여 프로세스 OOM 크래시 유발 (`[RULE:BoundedBuffers]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Critical`
+  - **위치**: `pkg/wire/tds/packet.go:60-95` (`ReadPacket`)
+  - **시나리오**: 악의적인 TDS 클라이언트가 무한 청크 패킷 스트림을 주입하여 서버 즉각 강제 종료.
+  - **권장 수정안**: 재조립 페이로드 최대 크기 상한(예: 64MB) 검사 추가 및 초과 시 에러 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 104] `pkg/wire/tds/login.go`, `crypto.go`, `tls.go`
+* **대상 영역**: TDS 7.x/8.0 로그인 패킷 디코딩 및 PRELOGIN 캡슐화 TLS 핸드셰이크
+* **Gemini 1차 분석**:
+  - `TDSHandshakeConn`을 통한 TDS 0x12 PRELOGIN 패킷 내 TLS 레코드 캡슐화 완비.
+* **Claude 2차 교차 분석**:
+  - **`TDSHandshakeConn.Read`에서 PRELOGIN 캡슐화 TLS 핸드셰이크 중 네트워크 타임아웃 부재 (`tds/tls.go:45-75`)**:
+    캡슐화된 TLS 핸드셰이크 도중 패킷 도착 대기 시 데드라인이 없어 클라이언트가 정지할 경우 영구 블로킹 누수 발생 (`[RULE:CleanTeardown]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/wire/tds/tls.go:45-75` (`TDSHandshakeConn.Read`)
+  - **시나리오**: 비정상적인 SSMS/드라이버 연결 시도로 인해 서버에 정체된 소켓과 고루틴 누적.
+  - **권장 수정안**: `Read` 시작 시 기본 읽기 데드라인 설정 및 타임아웃 검사 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 105] `pkg/wire/tds/rpc.go`, `server.go`
+* **대상 영역**: `sp_executesql`, `sp_prepare` 파라미터 RPC 파서 및 SQL 바인딩 빌더
+* **Gemini 1차 분석**:
+  - `substituteParamsSinglePass` 단일 패스 스캔으로 T-SQL 파라미터 치환 고속 처리.
+* **Claude 2차 교차 분석**:
+  - **`formatSQLValue`에서 복합 타입/Decimal 포맷 시 작은따옴표 이스케이프 미처리 (`tds/server.go:1770-1793`)**:
+    `default` 분기에서 `fmt.Sprintf("'%v'", val)`를 호출하여 내부에 작은따옴표(`'`)가 포함된 객체나 비표준 문자열이 들어올 경우 SQL 인젝션 및 문법 에러 위험.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/wire/tds/server.go:1770-1793` (`formatSQLValue`)
+  - **시나리오**: 특수 문자가 포함된 파라미터를 RPC로 전달 시 구문 파싱 에러 또는 SQL 오동작.
+  - **권장 수정안**: 모든 문자열 변환 경로에 대해 `strings.ReplaceAll(s, "'", "''")` 이스케이프 강제.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 106] `pkg/replication/manager.go`, `stream.go`
+* **대상 영역**: 1-Writer Multi-Reader WAL 복제 코디네이터
+* **Gemini 1차 분석**:
+  - 상태 머신 기반의 Always On 가용성 그룹 복제 관리자 구조.
+* **Claude 2차 교차 분석**:
+  - **LSN 시퀀스 역전 발생 시 레플리카의 무조건적 역전 수용 위험 (`manager.go:150-180`)**:
+    프라이머리 노드가 비정상 복구로 인해 과거 LSN으로 되돌아갔을 때, 레플리카가 LSN 단조 증가 검증 없이 역전된 레코드를 덮어써 데이터 역전 손상 발생 (`[RULE:ExplicitError]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/replication/manager.go:150-180`
+  - **시나리오**: 프라이머리 장애 복구 후 롤백된 LSN 스트림 유입 시 레플리카 데이터 불일치 오염.
+  - **권장 수정안**: 유입되는 LSN이 레플리카의 `LastLSN`보다 작을 경우 즉각 복제 중단 및 전체 재동기화 플래그 발행.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 107] `pkg/replication/client.go`, `broadcaster.go`
+* **대상 영역**: 레플리카 WAL 수신 클라이언트 및 변경사항 브로드캐스터
+* **Gemini 1차 분석**:
+  - `WALBroadcaster` 링 버퍼를 통한 신규 구독 레플리카 히스토리 고속 리플레이.
+* **Claude 2차 교차 분석**:
+  - **느린 레플리카 버퍼 포화 시 WAL 레코드 사일런트 드롭으로 인한 데이터 불일치 (`broadcaster.go:50-70`)**:
+    `Broadcast`에서 레플리카 채널 버퍼가 가득 찼을 때 `default`로 새 WAL 레코드를 조용히 버려 레플리카에 WAL 누락(Gap)이 발생하고 데이터가 영구 불일치됨 (`[RULE:ExplicitError]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Critical`
+  - **위치**: `pkg/replication/broadcaster.go:50-70` (`Broadcast`)
+  - **시나리오**: 부하 상황에서 슬로우 레플리카에 일부 커밋 데이터가 누락되어 복제본 데이터 손상.
+  - **권장 수정안**: 레코드 드롭 시 해당 구독자의 연결을 강제 종료하고 프라이머리가 재동기화(Resync)를 요구하도록 수정.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 108] `pkg/replication/failover.go`, `handlers.go`, `types.go`
+* **대상 영역**: Always On 자동 장애조치 및 쿼럼 선거
+* **Gemini 1차 분석**:
+  - Raft-like 최고 LSN 우선순위 기반 리더 선출 및 쿼럼 계산.
+* **Claude 2차 교차 분석**:
+  - **호스트명/IP 표기 차이 시 자기 자신에게 투표 요청을 보내 데드락 또는 쿼럼 왜곡 (`failover.go:100-130`)**:
+    `cleanPeer == candidateURL` 비교 시 `localhost:8090`과 `127.0.0.1:8090`의 형식 차이로 인해 자기 자신을 피어로 오인하여 자가 투표 요청을 날려 타임아웃 지연 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/replication/failover.go:100-130` (`ElectLeader`)
+  - **시나리오**: 페일오버 선거 도중 자가 투표 타임아웃으로 인해 리더 선출이 수 초간 지연됨.
+  - **권장 수정안**: IP/Port 정규화(`net.SplitHostPort`)를 통한 자가 주소 필터링 강화.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 109] `pkg/backup/backup.go`, `restore.go`
+* **대상 영역**: 스냅샷 백업 및 전체 복원 파이프라인
+* **Gemini 1차 분석**:
+  - 비차단 읽기 전용 스냅샷 트랜잭션을 통한 온라인 백업 지원.
+* **Claude 2차 교차 분석**:
+  - **`restore.go`의 tar 압축 해제 시 심볼릭 링크 헤더 검증 부재로 임의 파일 덮어쓰기 취약점 (`restore.go:70-100`)**:
+    `cleanName` 검사만 수행하고 `tar.TypeSymlink` 헤더에 대한 검증이 없어 악의적으로 조작된 백업 파일 복원 시 호스트 파일 시스템 이탈 위험 (`[RULE:SymlinkSafety]`, `[RULE:PathSecurity]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/backup/restore.go:70-100` (`RestoreBackup`)
+  - **시나리오**: 조작된 tar.gz 백업 복원 시 임의 시스템 파일 덮어쓰기 공격 가능.
+  - **권장 수정안**: 일반 파일(`tar.TypeReg`) 및 디렉토리(`tar.TypeDir`) 이외의 모든 헤더 즉각 거부.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 110] `pkg/backup/pitr.go`, `wal_archive.go`
+* **대상 영역**: 시점 복구(PITR) 및 지속적 WAL 아카이빙 엔진
+* **Gemini 1차 분석**:
+  - 세그먼트 체크섬 검증 및 LSN 연속성 기반 시점 복구 엔진.
+* **Claude 2차 교차 분석**:
+  - **`ApplyWALRecordWithOptions`에서 DDL 훅 실패 시 스토리지-카탈로그 동기화 붕괴 (`pitr.go:50-70`)**:
+    메모리 엔진에 WAL을 적용한 후 카탈로그 갱신(`ddlHook`)에서 에러가 발생했을 때 롤백 처리가 없어 스토리지에는 테이블이 생성되었으나 카탈로그 메타데이터에는 누락되는 분열 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/backup/pitr.go:50-70` (`ApplyWALRecordWithOptions`)
+  - **시나리오**: PITR 복구 도중 DDL 처리 실패 시 스키마 메타데이터 불일치로 복구 중단.
+  - **권장 수정안**: DDL 훅 실행 실패 시 즉각 에러를 반환하고 트랜잭션 단위 롤백 보장.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 111] `pkg/cdc/dispatcher.go`, `streamer.go`
+* **대상 영역**: Transactional Outbox 및 실시간 CDC 스트리머
+* **Gemini 1차 분석**:
+  - 원자적 WAL 커밋 훅 연동 및 링 버퍼 기반 CDC 이벤트 발행.
+* **Claude 2차 교차 분석**:
+  - **구독자 버퍼 포화 시 사일런트 이벤트 드롭으로 인한 외부 시스템 데이터 유실 (`streamer.go:70-90`)**:
+    `select / default`로 버퍼 가득 참 시 이벤트를 조용히 버려 카프카 등 다운스트림 브로커에 변경사항이 영구 누락됨 (`[RULE:ExplicitError]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/cdc/streamer.go:70-90` (`OnWALRecord`)
+  - **시나리오**: 트래픽 폭증 시 CDC 컨슈머에 데이터 누락이 발생하여 외부 캐시/검색엔진 정합성 파괴.
+  - **권장 수정안**: 드롭 발생 시 경고 로그 및 드롭 메트릭 카운트 기록, 구독자에게 에러 이벤트 전송.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 112] `pkg/cdc/event.go`, `outbox.go`, `outbox_sinks.go`
+* **대상 영역**: CDC 이벤트 직렬화 및 외부 싱크 어댑터
+* **Gemini 1차 분석**:
+  - 원자적 체크포인트 저장(`[RULE:AtomicSaves]`) 및 At-least-once 전달 보장.
+* **Claude 2차 교차 분석**:
+  - **단일 브로커 싱크 장애 시 전체 Outbox 디스패치 파이프라인 정체(Head-of-Line Blocking) (`outbox.go:210-240`)**:
+    복수 싱크 등록 시 특정 1개 싱크가 네트워크 지연/실패를 겪을 때 동기 순차 전송으로 인해 다른 정상 싱크까지 함께 대기되어 전체 디스패처가 멈춤.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/cdc/outbox.go:210-240` (`dispatchLoop`)
+  - **시나리오**: 웹훅 싱크 1개의 응답 지연으로 인해 카프카 메시지 발행까지 수 초간 지연.
+  - **권장 수정안**: 싱크별 독립 고루틴 및 버퍼 큐 분리 또는 비동기 병렬 Publish 적용.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 113] `pkg/slt/runner.go`, `parser.go`
+* **대상 영역**: SQLLogicTest 내장 러너 및 스크립트 파서
+* **Gemini 1차 분석**:
+  - SQLLogicTest 표준 규격 파싱 및 MD5 결과 해시 검증 완비.
+* **Claude 2차 교차 분석**:
+  - **대용량 SLT 파일 파싱 시 전체 레코드 일괄 슬라이스 적재로 인한 메모리 폭증 (`slt/parser.go:60-120`)**:
+    수십만 줄의 SLT 파일을 파싱할 때 스트리밍 파싱 대신 전체 `[]Record`를 메모리에 한 번에 적재하여 메모리 낭비 유발 (`[RULE:BoundedBuffers]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/slt/parser.go:60-120` (`ParseFile`)
+  - **시나리오**: 수백 MB의 SQLLogicTest 스크립트 실행 시 메모리 수 GB 점유.
+  - **권장 수정안**: 레코드 반복자(Iterator) 패턴을 도입하여 파일 스트리밍 파싱 지원.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 114] `pkg/sqlutil/predicate.go`, `tokenizer.go`
+* **대상 영역**: 괄호 균형 Context-Free 조건식 파서 및 토크나이저
+* **Gemini 1차 분석**:
+  - Dyck 언어 기반 괄호 매칭 및 주석/따옴표/브래킷 스킵 지원.
+* **Claude 2차 교차 분석**:
+  - **`FindMatchingParen`에서 닫는 괄호가 먼저 나오는 비정상 구문 입력 시 언더플로우 가드 누락 (`tokenizer.go:1090-1110`)**:
+    `depth--` 시 `depth < 0`이 되는 비정상 구문에서 즉각 에러 반환 없이 음수 depth인 채로 루프를 지속하여 잘못된 인덱스를 반환할 위험 (`[RULE:DefensiveIndexing]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `pkg/sqlutil/tokenizer.go:1090-1110` (`FindMatchingParen`)
+  - **시나리오**: 비정상적인 닫는 괄호가 포함된 SQL 파싱 시 잘못된 서브쿼리 경계값 반환.
+  - **권장 수정안**: `depth < 0` 발생 시 즉각 `-1`을 반환하는 언더플로우 방어 가드 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 115] `pkg/sqlutil/like.go`, `params.go`
+* **대상 영역**: 고속 제로할당 LIKE 매처 및 $N 파라미터 변환기
+* **Gemini 1차 분석**:
+  - 되추적(Backtracking) 기반의 정밀 제로-정규식 T-SQL 와일드카드 매처.
+* **Claude 2차 교차 분석**:
+  - **`matchBracket`에서 첫 번째 문자가 `]`인 이스케이프 브래킷(`[]abc]`) 파싱 실패 (`like.go:80-110`)**:
+    T-SQL 표준에서 브래킷 집합의 첫 글자가 `]`인 경우 집합 종결이 아닌 리터럴 `]`로 처리해야 하나, 단순 `]` 검색으로 첫 글자에서 바로 브래킷을 닫아버려 문법 오인식 발생.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/sqlutil/like.go:80-110` (`matchBracket`)
+  - **시나리오**: `[]abc]` 패턴 매칭 시 빈 브래킷으로 인식되어 올바른 일치 실패.
+  - **권장 수정안**: 브래킷 시작 직후(`start == pIdx+1` 또는 `negate && start == pIdx+2`)의 `]`는 리터럴로 건너뛰고 다음 `]`를 닫는 기호로 검색하도록 수정.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 116] `pkg/sqlutil/casing.go`, `comparator.go`, `pagination.go`
+* **대상 영역**: 대소문자 무시 식별자 정규화, 다형성 비교기, MSSQL TOP/OFFSET 페이지네이션 변환기
+* **Gemini 1차 분석**:
+  - `CanonicalIdent`, `CompareAny`, `NormalizeMSSQLPagination` 등의 고속 헬퍼 집합.
+* **Claude 2차 교차 분석**:
+  - **`normalizeTop`에서 `strings.Index` 기반 서브스트링 검색으로 인한 SQL 텍스트 훼손 (`pagination.go:203-209`)**:
+    `afterTop := head[topPos+3:]` 이후 `idxLimit := strings.Index(afterTop, limitToken)`을 수행할 때 토큰 경계 검증이 없어, `SELECT TOP 1 100 FROM t` 또는 `SELECT TOP (10) col1` 등의 쿼리에서 `limitToken`(`1`)이 뒤따르는 숫자 리터럴이나 컬럼명 내에 먼저 출현할 경우 잘못된 인덱스를 잘라내어 프로젝션 SQL 구문을 손상시킴 (`[RULE:DefensiveIndexing]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/sqlutil/pagination.go:203-209` (`normalizeTop`)
+  - **시나리오**: `SELECT TOP 1 100` 등 숫자 상수를 포함하는 쿼리 변환 시 엉뚱한 위치가 잘려 문법 오류 발생.
+  - **권장 수정안**: `SplitTopLevelTokens`에서 토큰 인덱스를 기반으로 정확한 경계를 계산하거나 정밀 렉서 토큰 위치를 추적하여 치환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 117] `pkg/auth/auth.go`, `provider.go`
+* **대상 영역**: 슈퍼유저 인증, Salted SHA256 해시, JWT 서명/검증, API 키 발급 및 외부 AuthProvider SPI
+* **Gemini 1차 분석**:
+  - SecretKey 자동 생성, Base64Url JWT 발급 및 `subtle.ConstantTimeCompare` 서명 검증 양호.
+* **Claude 2차 교차 분석**:
+  - **`Authenticate` 사용자 부재 시 조기 리턴으로 인한 사용자 열거 타이밍 오라클 취약점 (`auth.go:220-229`)**:
+    `s.users[normEmail]`이 존재하지 않을 때 `VerifyPassword` 연산을 수행하지 않고 즉각 `ErrInvalidCredentials`를 반환하여 마이크로초 단위 응답 시간 차이로 유효한 관리자 이메일을 역추적 가능. 또한 `RegisterProvider`로 등록된 외부 `s.providers`가 `Authenticate` 경로에서 전혀 호출되지 않고 무시됨.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/auth/auth.go:220-229` (`Authenticate`)
+  - **시나리오**: 외부 공격자가 로그인 엔드포인트 응답 지연을 측정하여 시스템에 등록된 계정 이메일을 전수 열거.
+  - **권장 수정안**: 유저가 없더라도 더미 해시 검증을 상시 수행하여 타이밍 중립성을 확보하고 등록된 AuthProvider 호출 체인 연결.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 118] `pkg/auth/rbac.go`
+* **대상 영역**: T-SQL 스타일 역할 기반 접근 제어(RBAC), GRANT/REVOKE/DENY 권한 매트릭스
+* **Gemini 1차 분석**:
+  - 표준 MSSQL 데이터베이스 주체(`dbo`, `guest`, `sa`, 고정 데이터베이스 역할) 모델링 양호.
+* **Claude 2차 교차 분석**:
+  - **다중 역할 할당 시 `GrantDeny`가 조기 `GrantAllow` 리턴에 의해 무력화되는 권한 승격 결함 (`rbac.go:440-451`)**:
+    `for _, r := range u.Roles` 루프에서 한 역할이 `roleGranted == true`이면 즉각 `true, nil`을 반환하여, 이후에 순회되는 다른 역할의 명시적 `GrantDeny`가 평가되지 않고 우회됨. MSSQL/RBAC 대원칙인 "명시적 DENY는 모든 GRANT를 압도한다" 위반.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/auth/rbac.go:440-451` (`HasTablePermission`)
+  - **시나리오**: Role A(GRANT)와 Role B(DENY)를 동시에 가진 유저가 슬라이스 순서에 따라 차단되지 않고 테이블에 비인가 접근.
+  - **권장 수정안**: 루프에서 모든 역할을 먼저 검사하여 단 하나라도 `roleDenied`가 있으면 즉시 거부하고, 루프 종료 후 허용 여부를 판정하도록 2패스 평가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 119] `pkg/config/config.go`, `version.go`, `build_pure.go`, `build_wiredtiger.go`
+* **대상 영역**: 구성 설정 모델, 자동 탐색 우선순위 계층, 빌드 태그 상수, 프로덕션 보안 가드
+* **Gemini 1차 분석**:
+  - `[RULE:ConfigHierarchy]` (CLI > Env > File > Default) 및 루프백 인터페이스 검증기 충실.
+* **Claude 2차 교차 분석**:
+  - **`AutoDiscoverConfig`에서 손상된 JSON 파일 에러 사일런트 억제 결함 (`config.go:218-233`)**:
+    디스크에 `lionsql.json`이 존재하지만 문법 오류 등으로 `LoadFromFile`이 실패할 때(`err != nil`), 에러를 보고하거나 중단하지 않고 조용히 기본값 `DefaultConfig()`로 대체함 (`[RULE:ExplicitError]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/config/config.go:218-233` (`AutoDiscoverConfig`)
+  - **시나리오**: 운영자가 JSON 문법 오류를 낸 설정 파일을 배포했을 때, 에러 알림 없이 기본 비밀번호/포트로 구동되어 보안 위험 초래.
+  - **권장 수정안**: 설정 파일이 존재함에도 파싱에 실패하면 즉각 파싱 에러를 상위로 전파하여 기동을 차단.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 120] `pkg/api/server.go`, `middleware.go`, `request_logger.go`
+* **대상 영역**: REST API HTTP 라우터, CORS/보안 미들웨어, Gzip 압축, 요청 로깅
+* **Gemini 1차 분석**:
+  - 표준 미들웨어 체인, 풀 기반 Gzip 압축 및 헤더 설정 양호.
+* **Claude 2차 교차 분석**:
+  - **`Transfer-Encoding: chunked` 요청 시 바디 크기 제한 우회 DoS 취약점 (`middleware.go:78-82`)**:
+    `if r.Body != nil && r.ContentLength > 0` 가드로 인해 `ContentLength == -1`인 Chunked 전송 스트림 요청에 `http.MaxBytesReader`가 적용되지 않아 대용량 페이로드 메모리 고갈 DoS 유발 가능 (`[RULE:BoundedBuffers]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/api/middleware.go:78-82` (`corsAndSecurityMiddleware`)
+  - **시나리오**: 악의적 클라이언트가 Chunked 인코딩으로 기가바이트 크기의 JSON 본문을 전송하여 서버 OOM 유도.
+  - **권장 수정안**: `r.ContentLength != 0`인 모든 바디에 무조건 `http.MaxBytesReader`를 적용.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 121] `pkg/api/handlers_records.go`, `records_filter.go`
+* **대상 영역**: HTTP 레코드 CRUD 엔드포인트 및 URL 필터 파서/평가기
+* **Gemini 1차 분석**:
+  - 재귀 하강 필터 파서, AND/OR 우선순위 및 다형성 조건 매칭 기능 양호.
+* **Claude 2차 교차 분석**:
+  - **`matchLike`에서 행 순회 루프마다 `regexp.Compile` 동적 컴파일 수행 (`records_filter.go:203-235`)**:
+    테이블 레코드 필터링 시 매 행마다 정규식을 빌드하고 컴파일하여 극심한 GC 압박 및 CPU 낭비 발생. `[RULE:ZeroAllocation]`, `[RULE:ModularAbstraction]`, Invariant 7 (Zero-Regex SQL Parsing) 위반.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/api/records_filter.go:203-235` (`matchLike`)
+  - **시나리오**: 수만 건의 레코드 검색 시 `col like '%abc%'` 필터로 인해 초당 수만 회의 정규식 컴파일이 발생하여 지연시간 급증.
+  - **권장 수정안**: 중복된 ad-hoc 정규식 매처를 제거하고 `pkg/sqlutil`의 고속 제로할당 비정규식 `MatchLike` 호출로 일원화.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 122] `pkg/api/handlers_tables.go`, `handlers_import_export.go`
+* **대상 영역**: 테이블 스키마 관리, DDL DTO 매핑, CSV/JSON 데이터 임포트/익스포트
+* **Gemini 1차 분석**:
+  - 멀티파트 폼 및 스트리밍 CSV/JSON 변환 파이프라인 양호.
+* **Claude 2차 교차 분석**:
+  - **대용량 CSV 임포트 시 무제한 단일 OCC 트랜잭션 적재 및 PK 타임스탬프 덮어쓰기 결함 (`handlers_import_export.go:189-194`, `300-306`)**:
+    수십만 행의 CSV 임포트를 단일 트랜잭션 메모리 워크스페이스에 통째로 적재하여 OOM을 유발하고, 정수 PK가 누락되거나 0일 때 `time.Now().UnixNano()/1ms + rowIdx`로 대체하여 기존 0번 PK를 손상시키거나 키 충돌 유발.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/api/handlers_import_export.go:189-194`, `300-306` (`handleImportTable`)
+  - **시나리오**: 대형 CSV 임포트 중 OCC 메모리 부족 에러 발생 및 유효한 0값 Primary Key 손실.
+  - **권장 수정안**: 1,000행 단위 청크 배치 커밋을 적용하고, PK 자동 생성은 명시적인 자동증가 컬럼에만 한정.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 123] `pkg/api/handlers_auth.go`, `handlers_admin.go`
+* **대상 영역**: 인증 핸들러, SQL 즉시 실행, 쿼리 모니터링/취소, 백업/복원 REST 엔드포인트
+* **Gemini 1차 분석**:
+  - 세션 기반 SQL 실행, 실시간 쿼리 취소 채널 및 Prometheus 지표 엔드포인트 제공.
+* **Claude 2차 교차 분석**:
+  - **쿼리 모니터링 및 취소 엔드포인트 인증 미들웨어 누락 (`server.go:557-558`, `handlers_admin.go:97-132`)**:
+    `POST /api/query/cancel`과 `GET /api/queries/active`가 `wrapAuth` 없이 노출되어 있어, 비인가 외부 사용자가 현재 실행 중인 민감 SQL 쿼리를 조회하거나 다른 사용자의 쿼리를 임의 취소하여 서비스 거부 유발 가능.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/api/server.go:557-558` (`handleQueryCancel`, `handleListActiveQueries`)
+  - **시나리오**: 공격자가 인증 없이 실행 중인 모든 쿼리 정보를 탈취하고 핵심 트랜잭션을 강제 취소.
+  - **권장 수정안**: 두 엔드포인트에 `wrapAuth(..., false, "")`를 적용하여 인증된 관리자만 접근 가능하도록 격리.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 124] `pkg/api/rls.go`, `rls_handlers.go`
+* **대상 영역**: 행 단위 보안(RLS) 규칙 관리, `@auth.*` 토큰 치환 및 필터 합성
+* **Gemini 1차 분석**:
+  - REST 레코드 엔드포인트 대상의 세밀한 권한 제어 규칙 컴파일 기능 구현.
+* **Claude 2차 교차 분석**:
+  - **`POST /api/sql` 쿼리 실행 시 RLS 정책 전면 우회 결함 (`server.go:556`, `handlers_admin.go:28-65`)**:
+    RLS 규칙이 오직 `/api/tables/{name}/records` 엔드포인트에만 바인딩되어 있고, SQL 쿼리를 직접 수행하는 `/api/sql`에서는 RLS 필터 주입이 전혀 이루어지지 않아 SQL 실행 권한을 가진 비관리자가 RLS를 완전히 우회.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/api/handlers_admin.go:28-65` (`handleExecuteSQL`)
+  - **시나리오**: 테넌트 격리 RLS가 걸려 있는 데이터베이스에서 비관리자가 `/api/sql`로 `SELECT * FROM tbl`을 실행하여 타 테넌트 데이터 전체 열람.
+  - **권장 수정안**: 비-슈퍼유저 세션에서 SQL 실행 시 카탈로그 RLS 룰을 쿼리 계획서 WHERE 절에 의무 주입하거나 권한 검증 분기 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 125] `pkg/api/handlers_procs.go`, `engine_aliases.go`, `sdk.go`
+* **대상 영역**: 저장 프로시저 등록, T-SQL 바이트코드 컴파일 트리거, REST 실행 엔드포인트
+* **Gemini 1차 분석**:
+  - 프로시저 플랜 캐시 연동 및 인자 정규화(`@arg` vs `arg`) 지원 양호.
+* **Claude 2차 교차 분석**:
+  - **`handleExecProc`에서 프로시저가 생성한 `SELECT` 결과 집합 응답 누락 (`handlers_procs.go:180-210`)**:
+    프로시저 실행 결과인 `res.ResultSets`를 HTTP JSON 응답에 포함하지 않고 `return_code`, `duration_ms`, `logs`만 반환하여, 데이터를 조회하는 프로시저의 결과를 클라이언트가 받아볼 수 없음.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/api/handlers_procs.go:180-210` (`handleExecProc`)
+  - **시나리오**: REST API를 통해 조회 프로시저를 호출했을 때 빈 메타데이터만 수신되고 실제 행 데이터가 누락됨.
+  - **권장 수정안**: `res.ResultSets`를 응답 JSON DTO에 직렬화하여 반환.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 126] `pkg/api/cron.go`, `cron_handlers.go`
+* **대상 영역**: 백그라운드 크론 스케줄러, 표준 5필드 크론 표현식 검증, 비동기 작업 실행기
+* **Gemini 1차 분석**:
+  - 1초 단위 틱 기반 정확한 스케줄 평가 및 동시 실행 중복 방지 키 구현.
+* **Claude 2차 교차 분석**:
+  - **크론 작업 고루틴 비동기 실행 시 `WaitGroup` 누락 및 패닉 복구 부재 (`cron.go:126, 130-152`)**:
+    `go cs.executeJob(ctx, job)` 실행 시 `cs.wg.Add(1)`을 호출하지 않아 서버 셧다운(`Stop()`) 시 진행 중인 크론 작업이 대기 없이 즉각 중단되며 (`[RULE:ZeroOrphan]`), 개별 작업 내부의 런타임 패닉을 잡는 `recover()`가 없어 크론 작업 오류가 서버 전체 프로세스 크래시 유발 (`[RULE:PanicRecovery]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/api/cron.go:126, 130-152` (`evaluate`, `executeJob`)
+  - **시나리오**: 크론 작업 도중 패닉이 발생하면 LionSQL 엔진 전체가 비정상 종료됨.
+  - **권장 수정안**: `cs.wg.Add(1)`로 작업 수명주기를 트래킹하고 `defer cs.wg.Done()` 및 `defer func() { recover() }()` 패닉 격리 훅 추가.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 127] `pkg/api/mailer.go`, `mailer_handlers.go`, `webhook.go`, `webhook_handlers.go`, `realtime.go`
+* **대상 영역**: SMTP 메일 발송기, 웹훅 디스패처/재시도 엔진, SSE 실시간 브로드캐스터
+* **Gemini 1차 분석**:
+  - 지수 백오프 기반 웹훅 재시도, HMAC SHA256 웹훅 서명, SSE 비차단 브로드캐스트 양호.
+* **Claude 2차 교차 분석**:
+  - **웹훅 재시도 루프 내 `select` 문에서의 조기 탈출 오류 (`webhook.go:424-430`)**:
+    `case <-d.ctx.Done(): break` 수행 시 Go 언어 문법상 `select` 문만 탈출하고 외부의 `for` 재시도 루프를 탈출하지 못해, 서버 종료 중에도 남은 재시도를 끝까지 수행하며 지연 발생 (`[RULE:CooperativeAbort]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/api/webhook.go:424-430` (`deliverWithRetry`)
+  - **시나리오**: 서버 셧다운 시 웹훅 재시도가 즉각 중단되지 않고 최대 타임아웃까지 셧다운을 블로킹.
+  - **권장 수정안**: 레이블을 지정한 `break retryLoop` 또는 즉시 `return delivery`로 조기 종료.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 128] `pkg/api/spa.go`, `pkg/ui/embed.go`, `pkg/ui/dashboard.html`
+* **대상 영역**: 싱글 페이지 웹 애플리케이션(SPA) 정적 핸들러, 플랫 디렉토리 검증기, 임베디드 웹 스튜디오 UI
+* **Gemini 1차 분석**:
+  - `..` 경로 탐색 방어, 숨김 파일 거부, 내장 웹 콘솔 UI 제공.
+* **Claude 2차 교차 분석**:
+  - **서브디렉토리를 포함하는 표준 웹 빌드 자산 경로 무조건 차단 결함 (`spa.go:33-36`)**:
+    `isSafeFlatAsset`이 `strings.ContainsAny(clean, "/\\")` 조건을 적용하여 Vite/Webpack 등 표준 번들러가 생성하는 `assets/main.js`, `static/css/app.css`와 같은 서브디렉토리 에셋을 무조건 404로 거부함.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `pkg/api/spa.go:33-36` (`isSafeFlatAsset`)
+  - **시나리오**: 사용자가 직접 빌드한 프론트엔드 정적 디렉토리를 바인딩했을 때 CSS/JS 번들이 로드되지 않고 화면이 깨짐.
+  - **권장 수정안**: 서브디렉토리 전체 금지 대신 루트 디렉토리 외부로 벗어나는 디렉토리 탐색(`..`) 및 은닉 파일만 선별 거부하도록 완화.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 129] `cmd/lionsql/server.go`, `main.go`
+* **대상 영역**: 서버 메인 엔트리포인트, CLI 플래그 파싱, 컴포넌트 오케스트레이션, Graceful Shutdown
+* **Gemini 1차 분석**:
+  - 멀티 프로토콜 리스너 바인딩, 구성 계층 적용, 시그널 트랩 구현.
+* **Claude 2차 교차 분석**:
+  - **고정 1.5초 셧다운 타임아웃 초과 시 스토리지 엔진 강제 종료 및 이중 Close 위험 (`server.go:886-917`)**:
+    `ctx, cancel := context.WithTimeout(..., 1500*time.Millisecond)` 타임아웃 발생 시 메인 루틴이 즉각 리턴하여 백그라운드에서 진행 중이던 `eng.Close()`의 디스크 플러시가 도중에 잘릴 수 있으며, `defer tdsServer.Close()`와 셧다운 루틴에서 `tdsServer.Close()`가 중복 호출되어 이중 Close 위험 노출 (`[RULE:DoubleCloseSafety]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `cmd/lionsql/server.go:886-917` (`runServer`)
+  - **시나리오**: 쓰기 트랜잭션이 많은 상태에서 SIGINT 수신 시 WAL 플러시가 완료되기 전 프로세스가 종료되어 복구 시간 증가.
+  - **권장 수정안**: 스토리지 엔진의 `Close()`는 타임아웃 고루틴 밖에서 확정적으로 동기 대기하고, 리스너들에 `sync.Once`를 적용하여 이중 Close 방어.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 130] `cmd/lionsql/daemon.go`, `daemon_unix.go`, `daemon_windows.go`
+* **대상 영역**: 백그라운드 데몬 프로세스 포크, PID 파일 수명주기, 데몬 상태 점검/종료/재시작
+* **Gemini 1차 분석**:
+  - OS별 시스템 호출 분리(`daemon_unix.go`, `daemon_windows.go`), `[RULE:ExecveSafety]` 준수.
+* **Claude 2차 교차 분석**:
+  - **부모 프로세스 로그 파일 디스크립터 누수 및 비원자적 PID 파일 저장 (`daemon.go:184, 204`)**:
+    `startDaemon`에서 `logFd`를 연 후 부모 프로세스 종료 전 닫지 않으며, PID 파일을 `os.WriteFile`로 직접 덮어써 쓰기 도중 크래시 시 손상된 PID 파일이 남음 (`[RULE:AtomicSaves]`). 또한 PID 재활용 시 프로세스 이름 검증 없이 타 프로세스에 시그널을 보낼 위험 존재.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Medium`
+  - **위치**: `cmd/lionsql/daemon.go:184, 204` (`startDaemon`)
+  - **시나리오**: 데몬 기동 실패 또는 비정상 재시작 시 PID 파일이 비어 있거나 손상되어 `lionsql stop` 실패.
+  - **권장 수정안**: PID 파일 저장을 원자적 임시파일 스왑(`[RULE:AtomicSaves]`)으로 변경하고 부모의 `logFd`를 즉시 닫음.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 131] `cmd/lionsql/daemon_windows.go`
+* **대상 영역**: Windows 1ms 고해상도 멀티미디어 타이머(`winmm.dll`) 설정 및 스케줄러 튜닝
+* **Gemini 1차 분석**:
+  - Windows 기본 15.6ms 슬립 양자를 1ms로 극복하는 `timeBeginPeriod(1)` 호출 구현.
+* **Claude 2차 교차 분석**:
+  - **`timeEndPeriod` 클린 언로드 및 해제 훅 부재 (`daemon_windows.go:25-53`)**:
+    `init()`에서 `timeBeginPeriod(1)`을 요청한 후, 프로세스 종료나 컴포넌트 언로드 시 `timeEndPeriod(1)`을 호출하는 정리 코드가 일체 호출되지 않음 (`[RULE:DoubleCloseSafety]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `cmd/lionsql/daemon_windows.go:25-53` (`timeBeginPeriod`, `timeEndPeriod`)
+  - **시나리오**: Windows 환경에서 프로세스 종료 훅 부재로 인한 타이머 리소스 해제 불완전.
+  - **권장 수정안**: 프로세스 셧다운 훅에 `timeEndPeriod(1)`을 `sync.Once`로 연결하여 대칭적 정리 보장.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 132] `cmd/lionsql/doctor.go`
+* **대상 영역**: 자가 진단 유틸리티(`--doctor`), 호스트 환경, 파일시스템, 포트 바인딩, 엔진 자가 검증
+* **Gemini 1차 분석**:
+  - 6대 카테고리(런타임, 파일시스템, 네트워크, 스토리지, 파서/VDBE, 보안) 종합 진단 리포트 생성.
+* **Claude 2차 교차 분석**:
+  - **In-Memory OCC 엔진 진단 실패 시 `Close()` 누락으로 임시 디렉토리 핸들 잠김 (`doctor.go:210-230`)**:
+    트랜잭션 시작이나 커밋이 실패할 경우 `memEng.Close()`가 호출되지 않아 Windows 환경에서 `defer os.RemoveAll(memTmp)` 시 파일 잠금 에러가 발생하여 진단 후 임시 폴더가 삭제되지 않고 방치됨 (`[RULE:HandleHygiene]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `cmd/lionsql/doctor.go:210-230` (`checkStorageEngines`)
+  - **시나리오**: Windows에서 `--doctor` 실행 시 테스트 실패 시점에 임시 디렉토리 삭제 거부 오류 발생.
+  - **권장 수정안**: `defer memEng.Close()`를 생성 직후 등록하여 예외 경로에서도 엔진 리소스 확정 해제.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 133] `cmd/lionsql/cli_config.go`, `sql.go`
+* **대상 영역**: CLI 설정 조회/변경(`get`, `set`), 일회성 SQL 실행기(`sql`)
+* **Gemini 1차 분석**:
+  - 터미널 비밀번호 비표시 입력(`term.ReadPassword`), 테이블 서식 출력 지원.
+* **Claude 2차 교차 분석**:
+  - **비밀번호 입력 중 Ctrl+C 인터럽트 시 터미널 에코 모드 복구 부재 및 DB 락 충돌 안내 미흡 (`cli_config.go:116`, `sql.go:34-40`)**:
+    `term.ReadPassword` 입력 도중 SIGINT가 들어오면 터미널 Raw 모드가 복구되지 않아 쉘이 깨질 위험이 있으며 (`[RULE:PanicRecovery]`), `lionsql sql` 실행 시 서버 데몬이 이미 실행 중이면 친절한 안내 없이 WiredTiger 락 에러로 즉시 실패함.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `Low`
+  - **위치**: `cmd/lionsql/cli_config.go:116`, `cmd/lionsql/sql.go:34-40`
+  - **시나리오**: CLI에서 비밀번호 입력 도중 취소했을 때 사용자 터미널 입력이 화면에 보이지 않게 됨.
+  - **권장 수정안**: 시그널 트랩을 통해 터미널 상태 복구 훅을 등록하고, 엔진 락 실패 시 "서버 가동 중 - HTTP/PGWire로 접속 권장" 안내 메시지 출력.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 134] `cmd/lionsql/migrate.go`, `pkg/migrate/migrate.go`
+* **대상 영역**: 스키마 마이그레이션 CLI(`new`, `up`, `down`, `status`) 및 마이그레이션 엔진
+* **Gemini 1차 분석**:
+  - 타임스탬프 기반 양방향(`up`/`down`) 마이그레이션 버전 관리 및 `_migrations` 메타데이터 추적 양호.
+* **Claude 2차 교차 분석**:
+  - **다중 DDL/DML 마이그레이션 파일의 비원자적 실행 및 인라인 주석 파싱 훼손 (`migrate.go:255-263`, `410-420`)**:
+    마이그레이션 파일 내의 여러 구문을 개별적으로 자동 커밋 실행하여 중간 구문 실패 시 이전 구문이 롤백되지 않고 데이터베이스가 반쯤 적용된 비정상 상태로 남음 (`[RULE:AtomicSaves]`). 또한 `cleanAndSplitSQL`이 줄 단위로 `--`를 단순 제거하여 멀티라인 문자열 리터럴 내부의 `--` 텍스트를 파괴함.
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `pkg/migrate/migrate.go:255-263`, `410-420` (`Up`, `cleanAndSplitSQL`)
+  - **시나리오**: 3개 테이블을 만드는 마이그레이션 중 3번째 테이블 생성 실패 시 앞의 2개 테이블은 이미 영구 생성되어 재실행 불가.
+  - **권장 수정안**: 단일 마이그레이션 파일 단위로 트랜잭션을 바인딩하고, 주석 제거는 `sqlutil`의 토크나이저를 활용하여 문자열 리터럴 보존.
+* **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+### [Scope 135] `cmd/bench/main.go`, `cmd/tpcc_runtime/main.go`, `cmd/soaktest/main.go`, `cmd/crashtest/main.go`
+* **대상 영역**: 고동시성 OLTP 벤치마크, TPC-C 런타임, 침적 테스트(Soak), 강제 크래시 복구 검증기
+* **Gemini 1차 분석**:
+  - 멀티 워커 트랜잭션 부하 생성, 레이턴시 통계 집계, 단계별 무결성 검증 파이프라인 우수.
+* **Claude 2차 교차 분석**:
+  - **테스트 러너 강제 중단 시 자식 LionSQL 프로세스 고아화 누수 (`cmd/soaktest/main.go:116-160`, `cmd/crashtest/main.go:114-160`)**:
+    `soaktest`와 `crashtest`가 백그라운드 자식 프로세스로 `lionsql` 서버를 스폰하지만 메인 러너에 SIGINT/SIGTERM 핸들러(`signal.Notify`)가 등록되어 있지 않아 사용자가 Ctrl+C로 중단할 때 자식 프로세스가 종료되지 않고 백그라운드에 남아 포트와 DB 락을 영구 점유함 (`[RULE:CleanTeardown]`).
+* **합의된 결함 (Defect)**:
+  - **심각도**: `High`
+  - **위치**: `cmd/soaktest/main.go:116-160`, `cmd/crashtest/main.go:114-160`
+  - **시나리오**: 개발자가 침적 테스트 도중 Ctrl+C를 눌렀으나 백그라운드에 `lionsql`이 계속 살아 있어 다음 빌드/테스트 시 포트 충돌 발생.
+  - **권장 수정안**: `signal.Notify`를 등록하여 인터럽트 발생 시 스폰된 자식 프로세스에 즉각 `gracefulStop` 및 SIGKILL 에스컬레이션을 수행하도록 테어다운 보장.
 * **최종 판정**: `DEFECT_LOGGED`
 
 ---

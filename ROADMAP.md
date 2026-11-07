@@ -31,13 +31,13 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
   Unified CLI (lionsql) + Web Studio Suite + Memory Governor + OCC Tuning + TDS Positional + 2-Tier Engine
 
 [ Phase 7: Real-World Ecosystem & Durability Hardening ] ► v0.91.0 - v0.95.0 [ACTIVE / v0.91.0 RELEASED]
-  10 Production Apps + 6 Golden Release Gates (release.sh) + kill -9 Oracle (D1~D4) + 409k SQLLogicTest + T-SQL 14-Suite + Embedded SPA + 1.04M tpmC + 100-Step Deep Audit
+  10 Production Apps + 6 Golden Release Gates (release.sh) + kill -9 Oracle (D1~D4) + 409k SQLLogicTest + T-SQL 14-Suite + Embedded SPA + OCC-Dense (5.95x Memory Compaction & Zero-GC) + 1.04M tpmC + 100-Step Deep Audit
 
 [ Phase 8: Official 1.0 LTS Production Release ] ────► v1.0.0 LTS [READY FOR SIGN-OFF]
   6 Golden Release Gates Passed + 100-Step Audit Sign-Off + Always On Failover + Lossless CDC + LTS Packaging
 
 [ Phase 9: Scale-Up Query & Compact Storage ] ───────► v1.1.0 [PLANNED]
-  Flat Hash Join & Mini TPC-H + OCC Compact Arena (5x) + Pure-Go Engine (CGO_ENABLED=0) + Immutable Audit Log
+  Flat Hash Join & Mini TPC-H + OCC-Dense Default Graduation + Pure-Go Engine (CGO_ENABLED=0) + Immutable Audit Log
 
 [ Phase 10: Parallel Analytical OLAP & Extensibility ] ► v1.2.0+ [PLANNED]
   Multi-Core ParallelSeqScan + Wasm UDF Sandbox + Friendly SQL (Embedded SPA Hosting completed in Phase 7 ahead of schedule)
@@ -53,48 +53,60 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 | **Phase 4** | `v0.13.0` - `v0.15.0` | **Modern Ecosystem, GUI Tool Interop & VDBE Acceleration**<br>pgx/v5 pipelining, DBeaver/SSMS interop, UUIDv7, VDBE opcode specialization (21k TPS peak). | **100% Completed** |
 | **Phase 5** | `v0.16.0` - `v0.24.0` | **Enterprise Governance, Security & Engine Decoupling**<br>Layer separation (`pkg/engine`), WAL group commit, RBAC, CBO DP join ordering, migrations CLI, prepared LRU cache. | **100% Completed** |
 | **Phase 6** | `v0.90.0`<br>(Betas 0~3) | **Production Hardening & Feature Freeze Baseline**<br>Single-binary CLI (`lionsql`), Web Studio suite, memory governor, OCC 5-point tuning, TDS positional mapping, 2-Tier query engine. | **100% Completed** |
-| **Phase 7** | `v0.91.0` - `v0.95.0`<br>(RC / Pre-1.0) | **Real-World Ecosystem, Durability Hardening & 6 Golden Release Gates**<br>10 production apps verified (Gitea ~ Vikunja), `scripts/release.sh` 6 Golden Release Gates automated, `crashtest` (`kill -9` D1~D4 WT sync fix), 409k SQLLogicTest Oracle, T-SQL 14-Suite, `soaktest` (leak-free), single-binary SPA hosting (`--app`), 100-step dual AI code audit, 1.04M tpmC. | **Active / v0.91.0 Released (95%)** |
+| **Phase 7** | `v0.91.0` - `v0.95.0`<br>(RC / Pre-1.0) | **Real-World Ecosystem, Durability Hardening & 6 Golden Release Gates**<br>10 production apps verified (Gitea ~ Vikunja), `scripts/release.sh` 6 Golden Release Gates automated, `crashtest` (`kill -9` D1~D4 WT sync fix), 409k SQLLogicTest Oracle, T-SQL 14-Suite, `soaktest` (leak-free), single-binary SPA hosting (`--app`), **`OCC-Dense` pointer-free flat record architecture (5.95x memory compaction, 67.5% heap reduction, Zero-GC) undergoing 4 reliability gates**, 100-step dual AI code audit, 1.04M tpmC. | **Active / v0.91.0 Released (95%)** |
 | **Phase 8** | `v1.0.0 LTS` | **Official 1.0 Production Release & Long-Term Support**<br>6 Golden Release Gates verified, 100-step audit completed, Always On HA, lossless CDC, certified drivers, LTS release sign-off. | **Ready for Sign-off** |
-| **Phase 9** | `v1.1.0` | **Scale-Up Complex Query & Compact Storage**<br>Flat hash join, Mini TPC-H suite, OCC compact arena (5x density), Pure-Go storage engine (`CGO_ENABLED=0`), immutable audit log. | **Planned** |
+| **Phase 9** | `v1.1.0` | **Scale-Up Complex Query & Compact Storage**<br>Flat hash join, Mini TPC-H suite, `OCC-Dense` default graduation upon 4-gate sign-off, Pure-Go storage engine (`CGO_ENABLED=0`), immutable audit log. | **Planned** |
 | **Phase 10** | `v1.2.0+` | **Parallel Analytical Execution & Extensibility**<br>Multi-core `ParallelSeqScan` workers, Wasm UDF sandbox (`wazero`), DuckDB-style friendly SQL (Embedded SPA Hosting completed in Phase 7). | **Planned** |
 
 ---
 
-## 2. LionSQL 1.0 / v1.0.0 LTS Production Readiness & Exit Criteria
+## 2. LionSQL 1.0 / v1.0.0 LTS Production Readiness & The 6 Golden Release Gates
 
-To tag the official **LionSQL 1.0 / v1.0.0 LTS** release, the database engine must satisfy six non-negotiable quality gates:
+To tag the official **LionSQL 1.0 / v1.0.0 LTS** release, every candidate build must strictly pass the **6 Golden Release Verification Gates** permanently automated in [`scripts/release.sh`](scripts/release.sh) (detailed in [`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)), alongside enterprise ecosystem criteria:
 
 ```
-                      [ LionSQL v1.0.0 LTS 6 Quality Gates ]
-                                         │
-    ┌─────────────┬─────────────┬────────┴────────┬─────────────┬─────────────┐
-    ▼             ▼             ▼                 ▼             ▼             ▼
-[ Gate 1 ]    [ Gate 2 ]    [ Gate 3 ]        [ Gate 4 ]    [ Gate 5 ]    [ Gate 6 ]
-Multi-Wire    ACID Concur   Durability &      Ecosystem     Enterprise    Autonomous
-Driver Cert   & Zero-Race   Crash Recovery    Conformance   Security      Ops & Soak
-(100% PASS)   (20k+ TPS)    (kill -9 D1~D4)   (10 Apps OK)  (TDE & RBAC)  (24h Soak OK)
+                  [ The 6 Golden Release Verification Gates (scripts/release.sh) ]
+                                                │
+    ┌─────────────┬─────────────┬───────────────┴───────────────┬─────────────┬─────────────┐
+    ▼             ▼             ▼                               ▼             ▼             ▼
+[ Gate 1 ]    [ Gate 2 ]    [ Gate 3 ]                      [ Gate 4 ]    [ Gate 5 ]    [ Gate 6 ]
+Core Unit &   13-Domain     TPC-C Extreme                   SQLLogicTest  T-SQL 14-     SIGKILL Crash
+100k TPS      E2E Smoke     Load Benchmark                  409k Oracle   Proc Suites   & Soak Leak
+(23 pkgs OK)  (Dual Engine) (>700k tpmC)                    (90 files OK) (100% PASS)   (D1~D4 / 0 FDs)
 ```
 
-1. **Gate 1: Multi-Protocol & Driver Conformance (100% PASS)**:
-   - Certified zero-regression compatibility across Go (`pgx/v5`, `lib/pq`, `go-mssqldb`), Python (`psycopg3`, `pymssql`), Java JDBC (`pgjdbc`, `mssql-jdbc`), C ODBC (`psqlODBC`), and enterprise GUIs (DBeaver, SSMS, Azure Data Studio, Beekeeper Studio).
-2. **Gate 2: ACID Concurrency & Zero Data Race**:
-   - Zero data races across all 25 packages (`go test -tags wiredtiger -count=1 -race ./...` 100% PASS).
-   - Sustained TPC-C throughput: $\ge 20,000\text{ TPS}$ (In-Memory OCC) and $\ge 16,800\text{ TPS}$ (WiredTiger MVCC) under full write durability (`FsyncAlways`).
-3. **Gate 3: Durability & Crash Recovery Oracle (D1~D4 100% PASS)**:
-   - Automated crash verification via `cmd/crashtest`: 100% data integrity under non-graceful termination (`kill -9`), double-kill idempotency, torn WAL log-tail recovery, and DDL transaction interleaving.
-   - Zero uncommitted leaks, zero committed row loss, and consistent checksum verification across both storage engines.
-4. **Gate 4: Production Ecosystem Conformance (10 Real-World Apps Zero Code Change)**:
-   - 10 stock, unmodified open-source applications running flawlessly against LionSQL:
-     - Gitea (Git & Code Hosting), Woodpecker CI (CI/CD Pipelines)
-     - Vaultwarden (Secret & Password Management), Casdoor (SSO & IAM)
-     - Apache Answer (Q&A Knowledge Base), AFFiNE (Notion/Doc Workspace), Vikunja (Kanban & Task Management)
-     - Ghost (Headless CMS & Publishing, Spec-Out in v5 due to pg removal), Metabase (BI & Analytics, Dual-Protocol), Umami (Web Analytics)
-   - Covering XORM, Diesel ORM, Prisma, Knex, and official JDBC drivers.
-5. **Gate 5: Enterprise Security & Object Governance (100% PASS)**:
-   - TDE Transparent Data Encryption, SQL object-level RBAC (`GRANT`/`REVOKE`/`DENY`), HTTP JWT/API-Key RBAC, and general/slow query logging.
-6. **Gate 6: Autonomous Operational Tooling & Long-Term Soak Stability**:
-   - In-tree declarative schema migration CLI (`lionsql migrate`) and online non-blocking snapshot hot backup/restore (`POST /api/backup`).
-   - Sustained multi-client soak test verification via `cmd/soaktest`: zero memory leaks, bounded file descriptors (`open_fds` invariant), zero disk bloat, and stable p99 latency under 24h+ continuous workloads.
+### 2.1. The 6 Automated Release Verification Gates (`scripts/release.sh`)
+1. **Gate 1: Core Unit & Inline Performance Gate (23 Core Packages, 100k+ TPS Inline)**:
+   - Executes `go test -tags wiredtiger ./pkg/...` across all 23 core packages.
+   - Enforces the 100,000+ TPS inline execution speed gate (`BenchmarkFastPath`) and zero data races.
+2. **Gate 2: 13-Domain E2E Integration Smoke Suite (Dual-Engine 100% PASS)**:
+   - Automated via `scripts/verify_report.sh` across both In-Memory OCC and WiredTiger backends.
+   - 13 domains verified: DDL/DML, Transactions, CBO Optimizer, Multi-Wire Listeners, BaaS REST APIs, RBAC, RLS, Hot Backup/Restore, CDC Streams, Connection Pooling, Cron Scheduler, and Mailer.
+3. **Gate 3: TPC-C OLTP Extreme Load Benchmark (>700k tpmC Saturation)**:
+   - Executes `bin/tpcc-runtime` under high-concurrency 100-terminal load.
+   - Threshold: In-Memory OCC $\ge 750,000\text{ tpmC}$ and WiredTiger MVCC $\ge 680,000\text{ tpmC}$ under strict ACID boundaries.
+4. **Gate 4: SQLLogicTest Relational Oracle (409,194 Queries, 100% Conformance)**:
+   - Executes SQLite/PostgreSQL SQLLogicTest standard test files (`bin/sqllogictest test/slt/core/`).
+   - 90 files and 409,194 queries pass with 100% identical row sets and zero syntax or type coercion errors.
+5. **Gate 5: T-SQL Stored Procedure 14-Suite Convergence (100% PASS)**:
+   - Executes `test/slt_proc/` covering Microsoft SQL Server procedural grammar:
+   - Variables (`@var`), control flow (`IF/ELSE`, `WHILE`), `TRY...CATCH`, nested transactions, forward-only cursors, return codes, dynamic SQL (`sp_executesql`), table variables (`@table`), `GOTO`/labels, recursive CTEs, and parameter binds.
+6. **Gate 6: `SIGKILL` Crash Recovery Oracle & Leak-Free Soak Sentinel**:
+   - `bin/crashtest`: 4-point consistency oracles (D1 Commit Durability, D2 Atomicity, D3 Checksum Consistency, D4 Recoverability) under unexpected process termination (`kill -9`) with verified WiredTiger `transaction_sync` durability.
+   - `bin/soaktest`: Verifies zero descriptor leaks (`open_fds`), zero memory/goroutine growth, and sub-1ms p99 latency under continuous workload.
+
+### 2.2. Enterprise Ecosystem & Governance Criteria (100% Validated)
+- **Multi-Protocol & Driver Conformance**: Certified zero-regression compatibility across Go (`pgx/v5`, `lib/pq`, `go-mssqldb`), Python (`psycopg3`, `pymssql`), Java JDBC (`pgjdbc`, `mssql-jdbc`), C ODBC (`psqlODBC`), and enterprise GUIs (DBeaver, SSMS, Azure Data Studio, Beekeeper Studio).
+- **Production Ecosystem Conformance (10 Real-World Apps Zero Code Change)**:
+  - 10 stock, unmodified open-source applications running flawlessly against LionSQL:
+    - Gitea (Git & Code Hosting), Woodpecker CI (CI/CD Pipelines)
+    - Vaultwarden (Secret & Password Management), Casdoor (SSO & IAM)
+    - Apache Answer (Q&A Knowledge Base), AFFiNE (Notion/Doc Workspace), Vikunja (Kanban & Task Management)
+    - Metabase (BI & Analytics, Dual-Protocol), Umami (Web Analytics), IOTA ERP (Enterprise Resource Planning)
+  - Covering XORM, Diesel ORM, Prisma, Knex, and official JDBC drivers.
+- **Enterprise Security & Object Governance**: TDE Transparent Data Encryption, SQL object-level RBAC (`GRANT`/`REVOKE`/`DENY`), HTTP JWT/API-Key RBAC, and general/slow query logging.
+- **Autonomous Operational Tooling**: In-tree declarative schema migration CLI (`lionsql migrate`) and online non-blocking snapshot hot backup/restore (`POST /api/backup`).
+- **100-Step Deep Code Review Sign-Off (`AUDIT-100-DUAL-REVIEW`)**: 199 Go source files across 100 micro-scopes audited via Gemini & Claude dual review for edge-case immunity prior to final LTS tagging.
 
 ---
 
@@ -158,7 +170,17 @@ Driver Cert   & Zero-Race   Crash Recovery    Conformance   Security      Ops & 
 * **TDS RPC Positional Mapping & Tool Audit (`TDS-RPC-AUDIT-1`, `TOOL-AUDIT-1`)**:
   Eliminated parameter name dependencies in `sp_prepare` / `sp_prepexec`, achieving verified compatibility with Beekeeper Studio, SSMS, DbGate, and DBeaver under 300+ concurrent connection stress tests.
 
-### 3.7. Phase 7: Real-World Ecosystem & Autonomous Durability Hardening (`v0.95.0`, Active Milestone)
+### 3.7. Phase 7: Real-World Ecosystem, Durability Hardening & v0.91.0 Release (`v0.91.0` ~ `v0.95.0`, Active Milestone)
+* **Official Release `v0.91.0` & Multi-Platform Static Binaries**:
+  Packaged and published official standalone static binaries for macOS (arm64), Linux (amd64), and Windows (amd64) with zero external dynamic dependencies.
+* **The 6 Golden Release Verification Gates (`scripts/release.sh`)**:
+  Permanently integrated 6 mandatory automated verification gates into `scripts/release.sh` (Core Unit & 100k TPS, 13-Domain Smoke, TPC-C >700k tpmC, SQLLogicTest 409k queries, T-SQL 14-Suite, and SIGKILL Crash/Leak Sentinels), accompanied by technical whitepaper ([`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)).
+* **WiredTiger Crash Durability Hotfix (`crashtest`)**:
+  Real-time detection and resolution of `transaction_sync=(enabled=true,method=none)` in `pkg/storage/wiredtiger/wt_engine.go` during Gate 6 crash testing, achieving 100% data integrity and zero committed row loss across 3 rounds of 7,853 transactions under non-graceful `kill -9` termination.
+* **Single-Binary Embedded SPA Web Server Hosting (`WEB-SPA-1`)**:
+  Delivered ahead of schedule (pulled forward from Phase 10). Implemented `--app=<path>` smart flag and `LIONSQL_APP` env var supporting single-file HTML and flat directory hosting with HTML5 History API fallback and strict Flat Directory Invariant (path traversal immunity).
+* **Pre-Release 100-Step Dual AI Code Review (`AUDIT-100-DUAL-REVIEW`)**:
+  Initiated comprehensive source code audit across all 199 pure Go files divided into 100 micro-scopes via Gemini (deep semantic reasoning) and Claude (adversarial edge cases). Scopes 001~020 completed with 18 defects cataloged and scheduled in [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md).
 * **10 Real-World Production App Integrations (Zero Code Change)**:
   Completed end-to-end integration and permanent hermetic regression test suites for 10 production applications:
   - **Gitea** (116 tables, XORM, dual TDS/PGWire)
@@ -181,6 +203,8 @@ Driver Cert   & Zero-Race   Crash Recovery    Conformance   Security      Ops & 
   Formalizing ad-hoc wire/catalog/engine branches into Go static struct dispatch tables (Parameter OID inference, Command tag normalization, Virtual view mapping, Dialect rewrite rules).
 * **In-Memory OCC Hyper-Scaling**:
   Achieved 1,040,000 tpmC throughput under monotonic versioning, lockless catalog snapshots, and 0-alloc lazy serialization.
+* **High-Density In-Memory Engine: `OCC-Dense` (`OCC-HYPER-2`)**:
+  Implemented pointer-free flat record architecture (`pkg/storage/memengine`), flattening row data into CPU cacheline-friendly byte buffers with 8-byte aligned slots, NULL bitmasks, and Small String Optimization (SSO). Achieved $5.95\times$ single-row compression (1,017B ➔ 171B, 83.2% reduction) and 67.5% heap reduction on 100k rows (68.9MB ➔ 22.3MB) while reducing GC-tracked heap pointers to exactly 0 (complete elimination of GC pause jitter). Safely isolated behind an A/B dual-mode architecture keeping `OCCModeRaw` (original 1.04M tpmC engine) as the production default (`[RULE:SafeDefaults]`), while actively verifying `OCC-Dense` against 4 mandatory reliability gates (crash recovery, secondary indexes/DDL, full SLT/T-SQL suites, and 24h soak).
 * **WiredTiger VDBE Lazy Tuple Decoding (`P-2`)**:
   Integrated `RawTupleCursor` with zero-allocation direct column extraction (`ExtractColumnFromTuple`) in VDBE scan/DML paths (`scanCursorRows`, `execUpdateWhere`, `execDeleteWhere`, `execSelectInto`), accelerating selective table scans by 6.59x, reducing heap allocations by 87.5%, and driving WiredTiger TPC-C throughput past 813,000 tpmC.
 
@@ -226,8 +250,8 @@ CGO_ENABLED=0 distribution OCC compact arena (5x)    PCI-DSS v4.0 / SOC2       M
 - **Objective**: Implement open-addressing integer flat hash join and direct slot projection to target sub-50ms execution on complex analytical queries ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)).
 - **Deliverables**: TPC-H Q1, Q3, Q4, Q6, Q9 suite and automated CBO subquery decorrelation (`EXISTS`/`IN` -> Semi-Join).
 
-### 5.3. In-Memory OCC Compact Arena Memory Compaction (`v1.1.0`)
-- **Objective**: Compact arena memory compression providing $5\times$ higher density for in-memory transactional workloads ([`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)).
+### 5.3. High-Density In-Memory Engine: `OCC-Dense` Default Graduation (`v1.1.0`)
+- **Objective**: Following the Phase 7 A/B implementation of pointer-free flat records (`OCC-Dense`, 5.95x row compression, 67.5% heap reduction, Zero-GC pointers), graduate `OCC-Dense` to the default storage engine mode upon completion of the 4 mandatory reliability gates (crash recovery, secondary indexes/DDL, full SLT/T-SQL suites, and 24h soak) ([`notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md) & [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)).
 
 ### 5.4. Enterprise Cryptographic Immutable Audit Log (`pkg/audit`) (`v1.1.0`)
 - **Objective**: Implement SHA-256 hash-chained tamper-evident audit logging ($H_n = \text{SHA256}(H_{n-1} \parallel R_n)$) with lock-free MPSC ring buffers and offline verification CLI (`lionsql audit verify`).
@@ -279,9 +303,15 @@ CGO_ENABLED=0 distribution OCC compact arena (5x)    PCI-DSS v4.0 / SOC2       M
 | **Phase 7** | AST 심볼 테이블 기반 쿼리 라우팅 리팩토링 (`ROUTING-AST-CATALOG-1`) | Query Routing | `v0.95.0` | **Completed** | [`notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md) |
 | **Phase 7** | 호환성 규칙 Table-Driven 정식화 (`COMPAT-TABLE-DRIVEN-1`) | Compatibility | `v0.95.0` | **In Progress** | [`notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md) |
 | **Phase 7** | In-Memory OCC 104만 tpmC 초격차 성능 달성 | Storage Engine | `v0.95.0` | **Completed** | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
+| **Phase 7** | 고집적 포인터리스 인메모리 엔진 `OCC-Dense` A/B 구현 및 4대 신뢰성 게이트 검증 | Storage Engine | `v0.95.0` | **In Progress** | [`notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |
+| **Phase 7** | `v0.91.0` 공식 릴리스 및 3대 플랫폼 정적 바이너리 배포 | Release | `v0.91.0` | **Completed** | [`CHANGELOG.md`](CHANGELOG.md) |
+| **Phase 7** | 6대 골든 릴리즈 검증 게이트 자동화 (`scripts/release.sh`) | Quality & CI | `v0.91.0` | **Completed** | [`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md) |
+| **Phase 7** | WiredTiger `SIGKILL` 크래시 내구성 핫픽스 (`wt_engine.go`) | Storage & WAL | `v0.91.0` | **Completed** | [`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md) |
+| **Phase 7** | 단일 바이너리 내장 SPA 웹 서버 호스팅 (`WEB-SPA-1`) | Tooling & UI | `v0.91.0` | **Completed** | [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) |
+| **Phase 7** | 전 소스코드 100단계 듀얼 AI 코드 감사 (`AUDIT-100-DUAL-REVIEW`) | Quality & Audit | `v0.95.0` | **In Progress** | [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md) |
 | **Phase 8** | 공식 LionSQL v1.0.0 LTS 출시 및 6대 게이트 최종 사인오프 | Release | `v1.0.0 LTS` | **Ready for Sign-off** | [`CHANGELOG.md`](CHANGELOG.md) |
 | **Phase 9** | Mini TPC-H 벤치마크 및 CBO 서브쿼리 Decorrelation | Query Planner | `v1.1.0` | **Planned** | [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |
-| **Phase 9** | In-Memory OCC 컴팩트 아레나 메모리 압축 (`OCC-HYPER-2`) | Storage Engine | `v1.1.0` | **Planned** | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
+| **Phase 9** | `OCC-Dense` 디폴트 승격 및 4대 신뢰성 게이트 졸업 (`OCC-HYPER-2`) | Storage Engine | `v1.1.0` | **Planned** | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
 | **Phase 9** | Pure-Go 네이티브 영속 스토리지 엔진 백엔드 | Storage Engine | `v1.1.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#51-pure-go-persistent-storage-engine-backend-v110) |
 | **Phase 9** | Enterprise Cryptographic Immutable Audit Log (`pkg/audit`) | Security & Audit | `v1.1.0` | **Planned** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **Phase 10** | Multi-Core Parallel Analytical Query Execution | Query Execution | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#55-multi-core-parallel-analytical-query-execution-v120) |

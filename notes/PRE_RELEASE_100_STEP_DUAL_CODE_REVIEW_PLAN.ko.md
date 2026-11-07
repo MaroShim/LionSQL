@@ -1,9 +1,9 @@
-# LionSQL 1.0 릴리스 대비 전 소스코드 100단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 감사 계획서 (`notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`)
+# LionSQL 1.0 릴리스 대비 전 소스코드 135단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 감사 계획서 (`notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-06
 > - **문서 성격**: 1.0 릴리스 신뢰성 검증 게이트(kill -9 크래시 복구, 72h 소크, SQLLogicTest) 진입 이전, Lionsql 엔진 본체 199개 순수 Go 소스코드 전 구역을 100개 마이크로 스코프로 세분화하여 Gemini와 Claude의 교차 검증으로 숨은 버그, 동시성 레이스, 데드락, 엣지 케이스를 선제 발굴·완치하기 위한 전수 감사 마스터 플랜
 > - **과제 식별 코드**: `AUDIT-100-DUAL-REVIEW`
-> - **상태**: [ ] In Planning (계획 수립 완료 및 실행 대기)
+> - **상태**: [x] Completed (135/135 전수 감사 완주 및 결함 기록 완료)
 > - **핵심 불변식**:
 >   - `[RULE:ExplicitError]` (Never silently swallow errors, No `_ = err`)
 >   - `[RULE:LockHierarchy]` (Strict Lock Hierarchy, Deadlock Prevention)
@@ -13,7 +13,7 @@
 
 ---
 
-## 1. 아키텍처 배경 및 목적 (Why 100-Step Dual-Model Review?)
+## 1. 아키텍처 배경 및 목적 (Why 135-Step Dual-Model Review?)
 
 ### 1.1 배경: 무작위 장기 부하 테스트의 한계
 장기 소크 테스트(72h Soak)나 `kill -9` 반복 크래시 복구 테스트는 시스템 전체의 거시적 안정성을 확인하는 데 필수적이지만, 다음과 같은 **희귀한 엣지 케이스(Rare Edge Cases)**는 수십 시간의 부하 테스트에서도 발견되지 않고 프로덕션 배포 후에야 치명적 데이터 오염이나 패닉으로 폭발할 수 있습니다:
@@ -81,7 +81,7 @@
 
 ## 3. 전 소스코드 100단계 마이크로 스코프 분할 매트릭스 (100 Micro-Scopes Matrix)
 
-LionSQL 본체 순수 Go 소스코드 199개 파일(테스트 및 자동생성 ANTLR 제외)을 10대 도메인, 총 100개 마이크로 스코프로 완벽히 분할하였습니다.
+LionSQL 본체 순수 Go 소스코드 216개 파일(테스트 및 자동생성 ANTLR 제외)을 13대 도메인, 총 135개 마이크로 스코프로 완벽히 분할하였습니다.
 
 > **실시간 진행 상태(Status) 추적 및 세션 보존 규격**:
 > 작업을 언제든 중단하거나 새로운 세션에서 재개하더라도 아래 표의 상태를 통해 정확한 지점을 추적합니다:
@@ -120,140 +120,193 @@ LionSQL 본체 순수 Go 소스코드 199개 파일(테스트 및 자동생성 A
 | **018** | `pkg/storage/record.go`, `tuple.go` | 공통 튜플 및 레코드 추상화 | 컬럼 타입 불일치 시 패닉 방어, 튜플 슬라이스 복사 누락 | [x] LOGGED |
 | **019** | `pkg/storage/decimal.go` | 고정소수점 Decimal 연산 및 직렬화 | 64비트 정수 오버플로우, 반올림/버림 정밀도 유실 | [x] LOGGED |
 | **020** | `pkg/storage/value_codec.go`, `codec.go` | 바이너리 값 직렬화 및 정렬 보존 인코딩 | 바이트 역전, 음수/NaN 정렬 순서 뒤바뀜 결함 | [x] LOGGED |
-| **021** | `pkg/storage/coerce.go`, `types_extended.go` | 타입 강제 변환 및 확장 SQL 타입 시스템 | 비호환 타입 강제 변환 시 런타임 패닉 방어 | PENDING |
-| **022** | `pkg/storage/json.go` | JSONB 바이너리 표현 및 경로 탐색기 | 불완전한 JSON 파싱 시 스택 고갈, 깊은 중첩 탐색 루프 | PENDING |
-| **023** | `pkg/storage/arena.go`, `slice_cursor.go` | 메모리 아레나 할당기 및 인메모리 커서 | 아레나 오프셋 재설정 누락, 댕글링 포인터 참조 | PENDING |
-| **024** | `pkg/storage/synthetic_pk.go`, `benchdir.go`, `literal.go` | 인조 기본키 생성기 및 리터럴 유틸리티 | 동시 기본키 생성 시 중복 충돌, 벤치 디렉터리 경로 보안 | PENDING |
+| **021** | `pkg/storage/coerce.go`, `types_extended.go` | 타입 강제 변환 및 확장 SQL 타입 시스템 | 비호환 타입 강제 변환 시 런타임 패닉 방어 | [x] LOGGED |
+| **022** | `pkg/storage/json.go` | JSONB 바이너리 표현 및 경로 탐색기 | 불완전한 JSON 파싱 시 스택 고갈, 깊은 중첩 탐색 루프 | [x] LOGGED |
+| **023** | `pkg/storage/arena.go`, `slice_cursor.go` | 메모리 아레나 할당기 및 인메모리 커서 | 아레나 오프셋 재설정 누락, 댕글링 포인터 참조 | [x] LOGGED |
+| **024** | `pkg/storage/synthetic_pk.go`, `benchdir.go`, `literal.go` | 인조 기본키 생성기 및 리터럴 유틸리티 | 동시 기본키 생성 시 중복 충돌, 벤치 디렉터리 경로 보안 | [x] LOGGED |
 
 ---
 
 ### 도메인 3: 카탈로그 & 가상 시스템 메타데이터 (Scopes 25 ~ 34)
 | Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
 | :--- | :--- | :--- | :--- | :---: |
-| **025** | `pkg/catalog/catalog.go` (1/2) | 테이블/인덱스/프로시저 스키마 카탈로그 맵 | 대소문자 구분(Collation) 정합성, 스키마 락 계층 | PENDING |
-| **026** | `pkg/catalog/catalog.go` (2/2) | 컬럼 메타데이터, 제약조건(PK/FK/Check) 관리 | 복합 외래키 캐스케이드 사이클 검출, 중복 인덱스 방어 | PENDING |
-| **027** | `pkg/catalog/virtual/interceptor.go` (1/2) | 가상 카탈로그 라우팅 디스패처 (Table-Driven) | 순서 종속성 배제, 라우트 미매칭 시 폴백 정합성 | PENDING |
-| **028** | `pkg/catalog/virtual/interceptor.go` (2/2) | 세션 환경변수 및 가상 쿼리 변환 | TDS/PGWire 세션 변수(`@@SPID`, `DB_NAME()`) 격리 | PENDING |
-| **029** | `pkg/catalog/virtual/mssql.go` (1/2) | `sys.tables`, `sys.columns`, `sys.indexes` 뷰 | DBeaver/SSMS 메타데이터 조회 시 누락/잘림 결함 | PENDING |
-| **030** | `pkg/catalog/virtual/mssql.go` (2/2) | `sys.procedures`, `sys.types`, `sys.objects` 뷰 | 프로시저 파라미터 매핑 및 SQL Server 고유 타입 ID 일치 | PENDING |
-| **031** | `pkg/catalog/virtual/pg.go` (1/2) | `pg_catalog.pg_class`, `pg_attribute`, `pg_namespace` | PostgreSQL GUI(DBeaver, Beekeeper) OID 매핑 정합성 | PENDING |
-| **032** | `pkg/catalog/virtual/pg.go` (2/2) | `pg_type`, `pg_database`, `information_schema` 뷰 | 드라이버 연결 시 초기 핸드셰이크 쿼리 응답 완결성 | PENDING |
-| **033** | `pkg/catalog/virtual/result.go` | 가상 카탈로그 결과셋 빌더 및 조건 필터 | T-SQL 와일드카드 대괄호(`[_]`, `[%]`) 및 POSIX `~` 매칭 | PENDING |
-| **034** | `pkg/catalog/virtual/schema.go`, `system_views.go` | 가상 스키마 정의 및 시스템 내장 테이블 | 정적 스키마 불변성, 널 세이프티(Null-Safety) | PENDING |
+| **025** | `pkg/catalog/catalog.go` (1/2) | 테이블/인덱스/프로시저 스키마 카탈로그 맵 | 대소문자 구분(Collation) 정합성, 스키마 락 계층 | [x] LOGGED |
+| **026** | `pkg/catalog/catalog.go` (2/2) | 컬럼 메타데이터, 제약조건(PK/FK/Check) 관리 | 복합 외래키 캐스케이드 사이클 검출, 중복 인덱스 방어 | [x] LOGGED |
+| **027** | `pkg/catalog/virtual/interceptor.go` (1/2) | 가상 카탈로그 라우팅 디스패처 (Table-Driven) | 순서 종속성 배제, 라우트 미매칭 시 폴백 정합성 | [x] LOGGED |
+| **028** | `pkg/catalog/virtual/interceptor.go` (2/2) | 세션 환경변수 및 가상 쿼리 변환 | TDS/PGWire 세션 변수(`@@SPID`, `DB_NAME()`) 격리 | [x] LOGGED |
+| **029** | `pkg/catalog/virtual/mssql.go` (1/2) | `sys.tables`, `sys.columns`, `sys.indexes` 뷰 | DBeaver/SSMS 메타데이터 조회 시 누락/잘림 결함 | [x] LOGGED |
+| **030** | `pkg/catalog/virtual/mssql.go` (2/2) | `sys.procedures`, `sys.types`, `sys.objects` 뷰 | 프로시저 파라미터 매핑 및 SQL Server 고유 타입 ID 일치 | [x] LOGGED |
+| **031** | `pkg/catalog/virtual/pg.go` (1/2) | `pg_catalog.pg_class`, `pg_attribute`, `pg_namespace` | PostgreSQL GUI(DBeaver, Beekeeper) OID 매핑 정합성 | [x] LOGGED |
+| **032** | `pkg/catalog/virtual/pg.go` (2/2) | `pg_type`, `pg_database`, `information_schema` 뷰 | 드라이버 연결 시 초기 핸드셰이크 쿼리 응답 완결성 | [x] LOGGED |
+| **033** | `pkg/catalog/virtual/result.go` | 가상 카탈로그 결과셋 빌더 및 조건 필터 | T-SQL 와일드카드 대괄호(`[_]`, `[%]`) 및 POSIX `~` 매칭 | [x] LOGGED |
+| **034** | `pkg/catalog/virtual/info_schema.go`, `sys_tables.go`, `tables.go`, `source.go` | 가상 스키마 정의 및 시스템 내장 테이블 | 정적 스키마 불변성, 널 세이프티(Null-Safety) | [x] LOGGED |
 
 ---
 
-### 도메인 4: 통합 쿼리 코디네이터 & DDL/DML 실행기 (Scopes 35 ~ 50)
+### 도메인 4: 통합 쿼리 코디네이터 & DDL/DML 실행기 (Scopes 35 ~ 55)
 | Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
 | :--- | :--- | :--- | :--- | :---: |
-| **035** | `pkg/engine/coordinator.go` (1/3) | 글로벌 쿼리 코디네이터 및 세션 수명주기 | 세션 풀러 반환 누락, 비정상 클라이언트 단선 감지 | PENDING |
-| **036** | `pkg/engine/coordinator.go` (2/3) | 2-Tier 라우팅 엔진 (VDBE vs CBO 선택) | 쿼리 특성 판별 오류, 트랜잭션 핸들 누락 전달 | PENDING |
-| **037** | `pkg/engine/coordinator.go` (3/3) | 타임아웃 거버너, SPID 쿼리 취소 (`KILL`) | 협력적 취소 컨텍스트 전파, 취소 시 고루틴 잔류 방어 | PENDING |
-| **038** | `pkg/engine/sqlexec.go` (1/2) | 통합 SQL 실행 진입로 및 트랜잭션 래퍼 | 오토커밋과 명시적 `BEGIN TRAN` 경계 불일치 | PENDING |
-| **039** | `pkg/engine/sqlexec.go` (2/2) | 다중 쿼리 배치(Batch) 분해 및 세미콜론 분리 | 문자열 리터럴/주석 내부 세미콜론 오분할 방지 | PENDING |
-| **040** | `pkg/engine/sqlexec_ddl.go` (1/3) | `CREATE TABLE`, `DROP TABLE`, `TRUNCATE` | 식별자 정규화, 실패 시 원자적 롤백 및 테이블 잠금 | PENDING |
-| **041** | `pkg/engine/sqlexec_ddl.go` (2/3) | `ALTER TABLE` (컬럼 추가/수정/삭제, 제약조건) | 기존 데이터와 새 제약조건 불일치 검증, 타입 변경 롤백 | PENDING |
-| **042** | `pkg/engine/sqlexec_ddl.go` (3/3) | `CREATE INDEX`, `DROP INDEX`, 관용 DDL 모드 | 인덱스 빌드 도중 크래시 방어, `tolerant_ddl` 상태 전이 | PENDING |
-| **043** | `pkg/engine/sqlexec_dml.go` (1/2) | `INSERT INTO`, `SELECT INTO` 실행기 | 기본값(DEFAULT), IDENTITY/AUTO_INCREMENT 증가 원자성 | PENDING |
-| **044** | `pkg/engine/sqlexec_dml.go` (2/2) | `UPDATE`, `DELETE`, `MERGE` 실행기 | 자기 참조(Self-referencing) 갱신 시 무한 루프, 외래키 검증 | PENDING |
-| **045** | `pkg/engine/sqlexec_select.go` (1/2) | 최상위 `SELECT` 절 실행 및 프로젝션 평가 | `SELECT *` 확장 시 컬럼 순서 보존, 별칭(Alias) 충돌 | PENDING |
-| **046** | `pkg/engine/sqlexec_select.go` (2/2) | T-SQL 페이징(`TOP`, `OFFSET FETCH`) 및 Bare IN | 중첩 서브쿼리 페이징 오변환 방어, 0-행 결과셋 처리 | PENDING |
-| **047** | `pkg/engine/sqlexec_procs.go` | `CREATE PROCEDURE`, `EXEC` 프로시저 실행기 | 프로시저 재컴파일 플래그, 파라미터 방향(IN/OUT) 매핑 | PENDING |
-| **048** | `pkg/engine/sqlexec_eval.go` | 행 단위 조건식 평가 및 서브쿼리 계산 | NULL 3치 논리(True/False/Unknown), 단락 평가(Short-circuit) | PENDING |
-| **049** | `pkg/engine/sqlexec_pivot.go`, `sqlexec_explain.go` | `PIVOT`, `UNPIVOT` 및 `EXPLAIN` 쿼리 플랜 서술 | 동적 피벗 컬럼 타입 불일치, 순환 참조 플랜 트리 직렬화 | PENDING |
-| **050** | `pkg/engine/sqlexec_jdbc_metadata.go` | DBeaver/JDBC 메타데이터 배치 변환기 | 임시 테이블 생성 및 즉시 `SELECT` 실행 시 스코프 누수 | PENDING |
+| **035** | `pkg/engine/coordinator.go`, `coordinator_impl.go` (1/3) | 글로벌 쿼리 코디네이터 및 세션 수명주기 | 세션 풀러 반환 누락, 비정상 클라이언트 단선 감지 | [x] LOGGED |
+| **036** | `pkg/engine/coordinator.go`, `coordinator_impl.go` (2/3) | 2-Tier 라우팅 엔진 (VDBE vs CBO 선택) | 쿼리 특성 판별 오류, 트랜잭션 핸들 누락 전달 | [x] LOGGED |
+| **037** | `pkg/engine/coordinator.go`, `coordinator_impl.go` (3/3) | 타임아웃 거버너, SPID 쿼리 취소 (`KILL`) | 협력적 취소 컨텍스트 전파, 취소 시 고루틴 잔류 방어 | [x] LOGGED |
+| **038** | `pkg/engine/sqlexec.go` (1/2) | 통합 SQL 실행 진입로 및 트랜잭션 래퍼 | 오토커밋과 명시적 `BEGIN TRAN` 경계 불일치 | [x] LOGGED |
+| **039** | `pkg/engine/sqlexec.go` (2/2) | 다중 쿼리 배치(Batch) 분해 및 세미콜론 분리 | 문자열 리터럴/주석 내부 세미콜론 오분할 방지 | [x] LOGGED |
+| **040** | `pkg/engine/sqlexec_ddl.go` (1/3) | `CREATE TABLE`, `DROP TABLE`, `TRUNCATE` | 식별자 정규화, 실패 시 원자적 롤백 및 테이블 잠금 | [x] LOGGED |
+| **041** | `pkg/engine/sqlexec_ddl.go` (2/3), `sqlexec_conditional_ddl.go` | `ALTER TABLE` (컬럼/제약조건/이름변경) 및 관용 조건부 DDL | 기존 데이터와 제약조건 불일치 검증, 타입 변경 롤백, 조건부 DDL 무결성 | [x] LOGGED |
+| **042** | `pkg/engine/sqlexec_ddl.go` (3/3), `boundary_normalizer.go` | `CREATE/DROP INDEX`, 관용 DDL 모드 및 식별자 경계 정규화 | 인덱스 빌드 도중 크래시 방어, `tolerant_ddl` 상태 전이, 대괄호/백틱 정규화 | [x] LOGGED |
+| **043** | `pkg/engine/sqlexec_dml.go` (1/2), `dml_parser.go` | `INSERT INTO`, `SELECT INTO` 실행기 및 DML 어휘 파서 | 기본값(DEFAULT), IDENTITY/AUTO_INCREMENT 증가 원자성, 대량 INSERT 바운드 | [x] LOGGED |
+| **044** | `pkg/engine/sqlexec_dml.go` (2/2) | `UPDATE`, `DELETE` 실행기 및 다중 조건 절 | 자기 참조(Self-referencing) 갱신 시 무한 루프, 외래키 삭제/수정 제약조건 검증 | [x] LOGGED |
+| **045** | `pkg/engine/sqlexec_select.go` (1/2) | 최상위 `SELECT` 절 실행 및 프로젝션 평가 | `SELECT *` 확장 시 컬럼 순서 보존, 별칭(Alias) 충돌, 계산식 프로젝션 | [x] LOGGED |
+| **046** | `pkg/engine/sqlexec_select.go` (2/2) | T-SQL 페이징(`TOP`, `OFFSET FETCH`) 및 Bare IN | 중첩 서브쿼리 페이징 오변환 방어, 0-행 결과셋 처리, TOP PERCENT 계산 정합성 | [x] LOGGED |
+| **047** | `pkg/engine/sqlexec_derived.go`, `cte_lowering.go` | 인라인 파생 테이블(`FROM/JOIN subquery`) 및 CTE 재작성기 | 상관 서브쿼리 비상관화, CTE 이름 충돌 및 다중 참조 시 머티리얼라이즈 무결성 | [x] LOGGED |
+| **048** | `pkg/engine/sqlexec_merge.go`, `sqlexec_apply.go` | `MERGE` (UPSERT) 문 및 `CROSS/OUTER APPLY` 실행기 | WHEN MATCHED / NOT MATCHED 동시 경합, APPLY 행 확장 시 NULL 전파 정합성 | [x] LOGGED |
+| **049** | `pkg/engine/sqlexec_cursor.go`, `sqlexec_prepare.go` | FORWARD-ONLY 세션 커서 및 `PREPARE` / `EXECUTE` 실행기 | 커서 WITH HOLD 수명주기, 미해제 커서 메모리 누수, 준비된 문장 파라미터 캐시 | [x] LOGGED |
+| **050** | `pkg/engine/sqlexec_procs.go`, `proc_bind.go`, `sqlexec_auth.go` | `CREATE PROCEDURE`, `EXEC` 프로시저 실행기 및 인라인 권한 | 프로시저 재컴파일 플래그, 파라미터 방향(IN/OUT) 매핑, 중첩 프로시저 호출 스택 | [x] LOGGED |
+| **051** | `pkg/engine/sqlexec_eval.go`, `evaluator.go`, `sql_row.go` | 행 단위 조건식 평가기 및 SQL Row 직렬화/역직렬화 | NULL 3치 논리(True/False/Unknown), 단락 평가(Short-circuit), 연산자 우선순위 | [x] LOGGED |
+| **052** | `pkg/engine/sqlexec_pivot.go`, `sqlexec_string_split.go`, `sqlexec_explain.go` | `PIVOT`, `UNPIVOT`, `STRING_SPLIT` 및 `EXPLAIN` 플랜 서술 | 동적 피벗 컬럼 타입 불일치, 순환 참조 플랜 트리 직렬화, 구분자 분할 바운드 | [x] LOGGED |
+| **053** | `pkg/engine/sqlexec_jdbc_metadata.go`, `sqlexec_virtual.go`, `sqlexec_dbcc.go` | JDBC 메타데이터 변환, 가상 프로시저 및 `DBCC` 실행기 | 임시 테이블 생성 즉시 SELECT 스코프 누수, DBCC CHECKTABLE 잠금 안전성 | [x] LOGGED |
+| **054** | `pkg/engine/session.go`, `session_pool.go`, `session_registry.go` | 클라이언트 세션 수명주기, 세션 풀러 및 레지스트리 | 세션 고아화 방어, 풀 반환 누락 누수, 다중 스레드 세션 변수 경합 (`[RULE:LockHierarchy]`) | [x] LOGGED |
+| **055** | `pkg/engine/auto_analyze.go`, `pk_bypass.go`, `general_log.go`, `slow_query.go`, `metrics.go`, `rotating_logger.go`, `query_utils.go` | 백그라운드 통계 수집기, PK 고속 바이패스 및 쿼리 로거 | WAL 훅 비동기 큐 언바운디드 성장 방어, 슬로우 쿼리 파일 로테이션 디스크 풀 방어 | [x] LOGGED |
 
 ---
 
-### 도메인 5: T-SQL 파서 (Tier 1 Pratt Parser) & 바이트코드 컴파일러 (Scopes 51 ~ 60)
+### 도메인 5: T-SQL 파서 (Tier 1 Pratt Parser) & 바이트코드 컴파일러 (Scopes 56 ~ 65)
 | Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
 | :--- | :--- | :--- | :--- | :---: |
-| **051** | `pkg/proc/lexer.go` | 제로-할당 T-SQL 고속 토크나이저 | 주석 미닫힘, 특수 유니코드, 대괄호 식별자(`[dbo].[t]`) 처리 | PENDING |
-| **052** | `pkg/proc/parser.go` (1/2) | DDL 및 제어문(`IF`, `WHILE`, `TRY...CATCH`) 파서 | 제어 블록 중첩 깊이 초과(`[RULE:BoundedRecursion]`), 에러 전파 | PENDING |
-| **053** | `pkg/proc/parser.go` (2/2) | 트랜잭션문(`BEGIN`, `COMMIT`, `ROLLBACK`) 파서 | 세이브포인트(Savepoint) 파싱 누락, 중첩 트랜잭션 문법 | PENDING |
-| **054** | `pkg/proc/parser_dml.go` (1/2) | `SELECT`, `FROM`, `JOIN` 구문 파서 | 서브쿼리 괄호 불일치, 복합 테이블 조인 파싱 모호성 | PENDING |
-| **055** | `pkg/proc/parser_dml.go` (2/2) | `INSERT`, `UPDATE`, `DELETE`, `MERGE` 파서 | `OUTPUT` 절 파싱, 복합 `SET` 표현식 분해 | PENDING |
-| **056** | `pkg/proc/parser_expr.go` | 연산자 우선순위(Pratt) 표현식 파서 | 복합 수식 우선순위 역전, 단항 연산자(`+`, `-`, `NOT`) 중복 | PENDING |
-| **057** | `pkg/proc/ast.go` | AST 노드 구조체 정의 및 인터페이스 | AST 노드 딥카피 시 포인터 공유 결함, Nil 인터페이스 패닉 | PENDING |
-| **058** | `pkg/proc/eval.go` | AST 표현식 인터프리터 (상수 폴딩 및 기본식) | 0으로 나누기(`DivideByZero`), 오버플로우, LIKE 평가 | PENDING |
-| **059** | `pkg/proc/compiler.go` (1/2) | T-SQL AST ➔ VDBE 바이트코드 변환기 | 분기 점프 레이블 오프셋 계산 착오, 스택 불일치 | PENDING |
-| **060** | `pkg/proc/compiler.go` (2/2), `cache.go` | 바이트코드 최적화 및 플랜 캐시 | 캐시 키 충돌, 파라미터화된 쿼리 플랜 오염 방어 | PENDING |
+| **056** | `pkg/proc/lexer.go`, `token.go`, `literal.go` | T-SQL Fast-Path 어휘 분석기(Lexer) 및 토큰 정의 | Unclosed 따옴표/주석 시 무한 루프 차단, 대괄호 식별자 탈출, 특수 리터럴 | [x] LOGGED |
+| **057** | `pkg/proc/parser.go`, `parser_expr.go` | Pratt 파서 표현식 파싱 및 연산자 결합 법칙 | 재귀 깊이 스택 오버플로우 방어 (`[RULE:BoundedRecursion]`), CASE WHEN 중첩 | [x] LOGGED |
+| **058** | `pkg/proc/parser_stmt.go` | T-SQL 제어문 파싱 (`IF-ELSE`, `WHILE`, `TRY-CATCH`) | GOTO/LABEL 순환 참조, 중첩 블록 스코프 변수 은닉(Shadowing) | [x] LOGGED |
+| **059** | `pkg/proc/parser_ddl.go`, `parser_dml.go` | 프로시저 내 인라인 DDL/DML 파서 | 파서 에러 전파 무결성, 불완전 DDL 파싱 시 부분 AST 오염 방어 | [x] LOGGED |
+| **060** | `pkg/proc/ast.go`, `characteristics.go`, `strict.go` | AST 노드 정의, 프로시저 특성 판별 및 엄격 모드 검사 | AST 노드 깊은 복사(Deep Copy) 안전성, 부작용(Side-effect) 없는 쿼리 판별 | [x] LOGGED |
+| **061** | `pkg/proc/compiler.go`, `bytecode.go` (1/2) | T-SQL AST ➔ VDBE 바이트코드 컴파일러 및 Opcode 정의 | 점프 오프셋(Jump Offset) 인덱스 바운드, 레지스터 할당 오버플로우 방어 | [x] LOGGED |
+| **062** | `pkg/proc/compiler.go`, `bytecode.go` (2/2) | 컴파일러 최적화 패스 및 레지스터 수명주기 관리 | 미사용 레지스터 반환, 루프 내부 불변식 코드 외곽 이동 정합성 | [x] LOGGED |
+| **063** | `pkg/proc/parser/antlr/wrapper.go`, `ast_builder.go` | Tier 2 ANTLR4 공식 문법 파서 래퍼 및 AST 변환기 | Fast Pratt 파서 실패 시 ANTLR 폴백 전이 무결성, ANTLR AST 노드 변환 누락 방어 | [x] LOGGED |
+| **064** | `pkg/proc/parser/antlr/tsql_lexer.go`, `tsql_parser.go`, `tsqlparser_base_listener.go`, `tsqlparser_base_visitor.go`, `tsqlparser_listener.go`, `tsqlparser_visitor.go` | 공식 Microsoft T-SQL ANTLR4 렉서/파서 런타임 및 리스너/비지터 | 대용량 T-SQL 스크립트 파싱 메모리 폭증 방어, 토큰 스트림 리셋 안전성 | [x] LOGGED |
+| **065** | `pkg/proc/cache.go`, `fold.go` | 프로시저 바이트코드 계획 캐시 및 상수 폴딩(Constant Folding) | 캐시 키 해시 충돌 방어, 컴파일 타임 0 나누기(Division by Zero) 패닉 방어 | [x] LOGGED |
 
 ---
 
-### 도메인 6: T-SQL VDBE 런타임 가상머신 (Scopes 61 ~ 70)
+### 도메인 6: T-SQL VDBE 런타임 가상머신 & 빌트인 함수 (Scopes 66 ~ 75)
 | Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
 | :--- | :--- | :--- | :--- | :---: |
-| **061** | `pkg/proc/runtime/vm.go` (1/3) | VDBE VM 메인 실행 루프 및 레지스터 뱅크 | 레지스터 인덱스 경계 초과, 스택 프레임 메모리 누수 | PENDING |
-| **062** | `pkg/proc/runtime/vm.go` (2/3) | 산술, 논리, 비교 및 점프 Opcode 실행 | 알 수 없는 Opcode 처리, 무한 루프 탈출 타임아웃 | PENDING |
-| **063** | `pkg/proc/runtime/vm.go` (3/3) | 관계형 쿼리 실행 직결 및 바인딩 치환 | 파라미터 치환 시 단어 경계(`\b`) 오탐, 트랜잭션 전파 | PENDING |
-| **064** | `pkg/proc/runtime/vm_dispatcher.go` | Opcode 디스패치 테이블 및 고속 루프 | 함수 포인터 디스패치 유효성, 상태 머신 전이 무결성 | PENDING |
-| **065** | `pkg/proc/runtime/frame.go` | VM 콜스택 프레임 및 변수 스코프 관리 | 중첩 프로시저 호출 시 변수 섀도잉(Shadowing) 누락 | PENDING |
-| **066** | `pkg/proc/runtime/opcodes.go` | 바이트코드 Opcode 정의 및 역어셈블러 | Opcode 열거형 불일치, 디버그 트레이스 포맷 안전성 | PENDING |
-| **067** | `pkg/proc/runtime/cursor.go` | VDBE 내부 커서(FORWARD_ONLY 등) 제어 | 커서 닫힘 후 읽기 시도, 버퍼링 커서 메모리 초과 | PENDING |
-| **068** | `pkg/proc/runtime/context.go` | VM 실행 컨텍스트 및 취소 시그널링 | 실행 중단 시그널 수신 시 즉시 탈출 여부 | PENDING |
-| **069** | `pkg/proc/builtins_string.go` | 문자열 내장 함수 (`SUBSTRING`, `PATINDEX` 등) | 인덱스 1-based 변환 오류, 음수 길이 입력 방어 | PENDING |
-| **070** | `pkg/proc/builtins_math.go`, `builtins_date.go` | 수학 및 날짜/시간 내장 함수 | 윤년 계산, 시간대 변환 오차, 부동소수점 비정상값(NaN) | PENDING |
+| **066** | `pkg/proc/runtime/vm.go` (1/2) | VDBE 바이트코드 가상머신 인터프리터 코어 루프 | PC(Program Counter) 언바운디드 점프 가드, 인터럽트 신호 협력적 검사 | `[x] LOGGED` |
+| **067** | `pkg/proc/runtime/vm.go` (2/2) | VDBE 레지스터 읽기/쓰기, 스택 프레임, CALL/RETURN | 레지스터 경계 검사 (`0 <= r < maxReg`), 중첩 프로시저 호출 프레임 누수 방어 | `[x] LOGGED` |
+| **068** | `pkg/proc/runtime/vm_dispatcher.go` | Opcode 디스패치 테이블 및 고속 루프 | 함수 포인터 디스패치 유효성, 상태 머신 전이 무결성 | `[x] LOGGED` |
+| **069** | `pkg/proc/runtime/bridge.go`, `vm_lazy.go` | 스토리지 트랜잭션 브릿지 및 지연 레지스터 바인딩 | VDBE 트랜잭션 핸들 누수 방어, 지연 평가 서브쿼리 캐시 정합성 | `[x] LOGGED` |
+| **070** | `pkg/proc/builtins.go`, `builtins_string.go` | 문자열 내장 함수 (`SUBSTRING`, `CHARINDEX`, `LEN`, `REPLACE` 등) | UTF-8 다중 바이트 슬라이싱 패닉 방어, 음수 인덱스/길이 바운드 가드 | `[x] LOGGED` |
+| **071** | `pkg/proc/builtins_math.go`, `builtins_date.go` | 수학 및 날짜/시간 내장 함수 (`DATEADD`, `DATEDIFF`, `ROUND` 등) | 날짜 래핑 오버플로우, 부동소수점 NaN/Inf 변환 패닉 방어 | `[x] LOGGED` |
+| **072** | `pkg/proc/builtins_json.go` | T-SQL JSON 내장 함수 (`ISJSON`, `JSON_VALUE`, `JSON_QUERY` 등) | 잘못된 JSON 경로 표현식 패닉 방어, 거대 JSON 페이로드 파싱 메모리 한도 | `[x] LOGGED` |
+| **073** | `pkg/proc/builtins_sys.go` | 시스템 속성 및 메타데이터 함수 (`SERVERPROPERTY`, `OBJECT_ID` 등) | NULL 객체 조회 시 안전한 NULL 반환, 세션 SPID 및 DB_NAME() 격리 | `[x] LOGGED` |
+| **074** | `pkg/proc/evaluator.go`, `eval.go` | 런타임 표현식 인터프리터 및 연산자 타입 강제 변환 | 암시적 타입 변환 규칙(Type Precedence) 엄격 준수, 정수 오버플로우 방어 | `[x] LOGGED` |
+| **075** | `pkg/proc/runtime/vm.go`, `pkg/engine/sqlexec_procs.go` | 동적 SQL 실행기(`sp_executesql`) 및 쿼리 취소 연동 | 동적 SQL 문자열 내 주석 인젝션 방어, 런타임 실행 중단 전파 | `[x] LOGGED` |
 
 ---
 
-### 도메인 7: Volcano Cost-Based Optimizer (CBO) 플래너 (Scopes 71 ~ 78)
+### 도메인 7: Volcano Cost-Based Optimizer (CBO) 플래너 (Scopes 76 ~ 83)
 | Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
 | :--- | :--- | :--- | :--- | :---: |
-| **071** | `pkg/planner/planner.go` (1/3) | 논리 플랜(Logical Plan) 생성 및 절 분해 | 복합 JOIN/WHERE 절 분해 시 조건 누락 방어 | PENDING |
-| **072** | `pkg/planner/planner.go` (2/3) | 물리 플랜(Physical Plan) 변환 및 인덱스 선택 | 잘못된 인덱스 선택으로 인한 전체 스캔 전락 방어 | PENDING |
-| **073** | `pkg/planner/planner.go` (3/3) | 대규모 조인(10+ Tables) 루트 선정 및 동적 가지치기 | 공집합 조기 탈락(Empty-set early prune) 로직 무결성 | PENDING |
-| **074** | `pkg/planner/cbo.go` | 비용 모델(Cost Model) 계산기 | 0 나누기 방어, 부동소수점 언더플로우로 인한 비용 역전 | PENDING |
-| **075** | `pkg/planner/stats.go` | 통계 정보 수집기 및 카디널리티 추정기 | 통계 부재 시 기본값 감쇄 계수, 히스토그램 버킷 경계값 | PENDING |
-| **076** | `pkg/planner/memo.go` | Volcano Memo 구조 및 동등 그룹(Equivalence) | 동일 표현식 중복 탐색 방지, Memo 메모리 상한선 | PENDING |
-| **077** | `pkg/planner/rules.go` | 변환 규칙(Transformation Rules) 엔진 | 규칙 적용 무한 루프, 조건 밀어내기(Predicate Pushdown) 유효성 | PENDING |
-| **078** | `pkg/planner/explain.go` | 텍스트/JSON 실행 계획 포맷터 | 계층 트리 순회 시 스택 오버플로우 방어 | PENDING |
+| **076** | `pkg/planner/planner.go` (1/2) | CBO 논리 플랜 생성기 및 관계대수 트리 변환 | 카테시안 곱(Cartesian Product) 오폭발 방어, 프로젝션 푸시다운 누락 방어 | `[x] LOGGED` |
+| **077** | `pkg/planner/planner.go` (2/2) | CBO 비용 모델링 (CPU/IO Cost 평가 및 최적 조인 순서) | 동일 비용 조인 순서의 비결정론적 플랜 플리핑 방어, 기하급수 검색 가지치기 | `[x] LOGGED` |
+| **078** | `pkg/planner/decorrelate.go` | 상관 서브쿼리 비상관화(Decorrelation) 규칙 | 서브쿼리 널 세이프티(Null-rejecting predicate) 검증, 다중 상관 참조 평탄화 | `[x] LOGGED` |
+| **079** | `pkg/planner/pushdown.go` | 조건절 푸시다운(Predicate Pushdown) 및 인덱스 선택기 | 조인 이전 인덱스 스캔 푸시다운 유효성, 타입 불일치 시 인덱스 무효화 방어 | `[x] LOGGED` |
+| **080** | `pkg/planner/bounds.go`, `pruning.go` | 인덱스 검색 범위(Range Bounds) 빌더 및 파티션 가지치기 | BETWEEN, IN, 부등호 복합 범위 경계값 오차(Off-by-one), 빈 파티션 스킵 | `[x] LOGGED` |
+| **081** | `pkg/planner/setop.go`, `stats.go` | 집합 연산(UNION, INTERSECT, EXCEPT) 플랜 및 테이블 통계 연동 | 중복 제거 해시 누수, 히스토그램 버킷 경계값 카디널리티 추정 정밀도 | `[x] LOGGED` |
+| **082** | `pkg/planner/explain.go` | `EXPLAIN` / `EXPLAIN ANALYZE` 플랜 트리 포맷터 | 순환 참조 플랜 트리 직렬화 스택 오버플로우 방어, Volcano 연산자 시간 누적 오차 | `[x] LOGGED` |
+| **083** | `pkg/planner/planner.go` (CBO 규칙/탐욕 조인) | 동등 그룹 및 CBO 조인 변환 규칙 엔진 | 탐욕 조인 순서 최적화 시 카디널리티 비교, 메모리 유계성 | `[x] LOGGED` |
 
 ---
 
-### 도메인 8: Volcano 실행 반복자 (Execution Engine) & 메모리 거버너 (Scopes 79 ~ 86)
+### 도메인 8: Volcano 실행 반복자 (Execution Engine) & 메모리 거버너 (Scopes 84 ~ 95)
 | Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
 | :--- | :--- | :--- | :--- | :---: |
-| **079** | `pkg/execution/filter.go` | 행 순회 필터 반복자 (Scan + Predicate) | 0-할당 `MatchLike` 연동 무결성, NULL 술어 필터링 | PENDING |
-| **080** | `pkg/execution/join.go`, `hash_join.go` | Nested Loop Join 및 Hash Join 반복자 | 해시 충돌(Hash collision) 시 키 비교, 빌드 테이블 널 처리 | PENDING |
-| **081** | `pkg/execution/merge_join.go` | Sort-Merge Join 반복자 | 중복 키(Duplicates) 처리 시 롤백 커서 포인터 정합성 | PENDING |
-| **082** | `pkg/execution/aggregate.go` | `COUNT`, `SUM`, `AVG`, `GROUP BY` 반복자 | 빈 테이블 집계 시 NULL 반환(COUNT 제외), 그룹 키 해시 누수 | PENDING |
-| **083** | `pkg/execution/sort.go` | 인메모리 정렬 및 External Merge Sort | 정렬 메모리 초과 시 디스크 스필(Spill) 파일 누수 방어 | PENDING |
-| **084** | `pkg/execution/limit.go`, `window.go` | `LIMIT/OFFSET` 및 윈도우 함수 반복자 | 음수 오프셋, `ROW_NUMBER() OVER(PARTITION BY...)` 경계 | PENDING |
-| **085** | `pkg/execution/memory.go` | 글로벌 메모리 예산 거버너 (`work_mem`) | 연산자 메모리 초과 감지 시 강제 중단 및 복구 | PENDING |
-| **086** | `pkg/execution/tuning.go` | Go 런타임 GOMEMLIMIT, GOGC 동적 튜닝 | 비정상 환경변수 파싱 시 기본값 복귀 안전성 | PENDING |
+| **084** | `pkg/execution/scan.go`, `project.go` | 테이블 스캔, 인덱스 레인지 스캔 및 프로젝션 반복자 | 스캔 도중 트랜잭션 사설 워크스페이스 격리, 컬럼 오프셋 바운드 체크 | `[x] LOGGED` |
+| **085** | `pkg/execution/filter.go`, `eval.go` | 행 필터 반복자 및 제로-정규식 LIKE/BETWEEN 조건 평가기 | 핫패스 메모리 할당 제로화, MatchLike T-SQL 와일드카드 일치 | `[x] LOGGED` |
+| **086** | `pkg/execution/join.go` | 인메모리 해시 조인(Hash Join) 및 중첩 루프 조인(Nested Loop) | 해시 빌드 테이블 OOM 방어, 외부 조인(LEFT/RIGHT/FULL) NULL 패딩 무결성 | `[x] LOGGED` |
+| **087** | `pkg/execution/merge_join.go` | 머지 조인(Merge Join) 및 정렬 상태 검증기 | 정렬되지 않은 입력 스트림 진입 시 패닉 방어, NULL 키 조인 매칭 배제 | `[x] LOGGED` |
+| **088** | `pkg/execution/aggregate.go` | `COUNT`, `SUM`, `AVG`, `GROUP BY` 해시 집계 반복자 | 빈 테이블 집계 시 NULL 반환(COUNT 제외), 그룹 키 해시 충돌 및 메모리 누수 | `[x] LOGGED` |
+| **089** | `pkg/execution/sort.go` | 인메모리 정렬 및 External Merge Sort | 정렬 메모리 초과 시 디스크 스필(Spill) 임시 파일 누수 방어 | `[x] LOGGED` |
+| **090** | `pkg/execution/limit.go`, `window.go` | `LIMIT/OFFSET` 및 윈도우 함수(`ROW_NUMBER`, `RANK`, `DENSE_RANK`) | 음수 오프셋, OVER(PARTITION BY... ORDER BY...) 경계값 분할 | `[x] LOGGED` |
+| **091** | `pkg/execution/setop.go`, `chunk.go` | UNION / EXCEPT 반복자 및 1,024-행 벡터화 청크 스트리머 | 청크 메모리 재사용 슬랩 풀링 무결성, 0-행 청크 종료 조건 | `[x] LOGGED` |
+| **092** | `pkg/execution/builder.go`, `iterator.go` | 물리 실행 플랜 빌더 및 최상위 반복자 체인 인터페이스 | 반복자 Close() 호출의 멱등성 보장 (`[RULE:DoubleCloseSafety]`), 자원 회수 | `[x] LOGGED` |
+| **093** | `pkg/execution/tdigest.go`, `instrument.go` | P99 지연시간 T-Digest 추정기 및 실행 프로파일러 | 극단값 수렴 시 NaN 방어, 프로파일링 오버헤드 16ms 예산 준수 | `[x] LOGGED` |
+| **094** | `pkg/execution/governor.go`, `governor_sys_*.go` | OS 네이티브 메모리 압력 감지기 및 `work_mem` 거버너 | OS별 시스템 메모리 고갈 감지 시 즉각적 쿼리 메모리 축소 및 회복 | `[x] LOGGED` |
+| **095** | `pkg/execution/governor.go` (메모리 제어) | 글로벌 메모리 거버너 및 GOMEMLIMIT 동적 튜닝 | 연산자 메모리 초과 시 안전한 취소, 비정상 환경변수 파싱 복귀 | `[x] LOGGED` |
 
 ---
 
-### 도메인 9: 네트워크 와이어 프로토콜 - PGWire & TDS (Scopes 87 ~ 94)
+### 도메인 9: 네트워크 와이어 프로토콜 - PGWire & TDS (Scopes 96 ~ 105)
 | Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
 | :--- | :--- | :--- | :--- | :---: |
-| **087** | `pkg/wire/server.go` (1/2) | PGWire v3 TCP 리스너 및 연결 핸들러 | 악의적 대용량 패킷 OOM 방어, 연결 급작 단선 처리 | PENDING |
-| **088** | `pkg/wire/server.go` (2/2) | PGWire 확장 쿼리(`Parse`, `Bind`, `Execute`) | `$1` 파라미터 변환 상태머신(`sqlutil.ReplacePgParams`) 무결성 | PENDING |
-| **089** | `pkg/wire/protocol.go`, `auth.go` | PGWire 메시지 인코딩/디코딩 및 MD5/Cleartext 인증 | 버퍼 오버런, 잘못된 패킷 길이 필드로 인한 패닉 방어 | PENDING |
-| **090** | `pkg/wire/tds/server.go` (1/2) | Microsoft TDS 7.x/8.0 TCP 리스너 | Prelogin 핸드셰이크 협상, TLS 업그레이드 누락 방어 | PENDING |
-| **091** | `pkg/wire/tds/server.go` (2/2) | TDS SQL Batch 및 RPC 실행기 | SSMS 특수 쿼리 파싱, TDS 토큰 스트림 직렬화 정합성 | PENDING |
-| **092** | `pkg/wire/tds/token.go` | TDS 토큰 인코더 (`COLMETADATA`, `ROW`, `DONE`) | 컬럼 정밀도/스케일 바이트 오버플로우, Nullability 비트 | PENDING |
-| **093** | `pkg/wire/tds/login.go`, `crypto.go` | TDS 로그인 패킷 디코딩 및 패스워드 암호화 | XOR 4비트 암호 해독 바운드 체크, 로그인 거부 토큰 | PENDING |
-| **094** | `pkg/wire/tds/rpc.go` | `sp_executesql`, `sp_prepare` 파라미터 RPC 파서 | RPC 데이터 타입 ID 매핑 오류, OUT 파라미터 반환 누락 | PENDING |
+| **096** | `pkg/wire/server.go` (1/2) | PGWire v3 TCP 리스너 및 연결 핸들러 | 악의적 대용량 패킷 OOM 방어, 연결 급작 단선(Broken Pipe) 클린업 | `[x] LOGGED` |
+| **097** | `pkg/wire/server.go` (2/2) | PGWire 확장 쿼리(`Parse`, `Bind`, `Execute`) | $1 파라미터 변환 상태머신(`sqlutil.ReplacePgParams`) 무결성, Portal 누수 방어 | `[x] LOGGED` |
+| **098** | `pkg/wire/protocol.go` | PGWire 메시지 인코딩/디코딩 및 패킷 버퍼 풀링 | 버퍼 오버런, 잘못된 패킷 길이 필드로 인한 패닉 방어 | `[x] LOGGED` |
+| **099** | `pkg/wire/copy.go`, `command_tags.go`, `numeric.go`, `param_rules.go` | PGWire 대량 COPY 프로토콜, 명령 태그 및 Numeric 직렬화 | COPY FROM EOF 감지 누락 무한 대기 방어, BCD 고정소수점 변환 바운드 | `[x] LOGGED` |
+| **100** | `pkg/wire/tls.go` | PGWire SSL/TLS 암호화 핸드셰이크 | STARTTLS 협상 실패 시 연결 강제 종료, 인증서 로딩 에러 핸들링 | `[x] LOGGED` |
+| **101** | `pkg/wire/tds/server.go` (1/2) | Microsoft TDS 7.x/8.0 TCP 리스너 및 세션 디스패처 | Prelogin 핸드셰이크 협상, TDS 패킷 청크 재조립 버퍼 오버플로우 방어 | `[x] LOGGED` |
+| **102** | `pkg/wire/tds/server.go` (2/2) | TDS SQL Batch 및 RPC 실행 파이프라인 | SSMS 특수 쿼리 파싱, TDS 토큰 스트림 직렬화 정합성, 멀티문 결과셋 반환 | `[x] LOGGED` |
+| **103** | `pkg/wire/tds/token.go`, `packet.go` | TDS 토큰 인코더 (`COLMETADATA`, `ROW`, `DONE`, `ENVCHANGE`) | 컬럼 정밀도/스케일 바이트 오버플로우, Nullability 비트맵 직렬화 정합성 | `[x] LOGGED` |
+| **104** | `pkg/wire/tds/login.go`, `crypto.go`, `tls.go` | TDS 7.x/8.0 로그인 패킷 디코딩 및 비밀번호 암호화 | XOR 4비트 암호 해독 바운드 체크, TLS 1.3 암호화 핸드셰이크 | `[x] LOGGED` |
+| **105** | `pkg/wire/tds/rpc.go` | `sp_executesql`, `sp_prepare` 파라미터 RPC 파서 | RPC 데이터 타입 ID 매핑 오류, OUT 파라미터 반환 누락, 타입 불일치 에러 전파 | `[x] LOGGED` |
 
 ---
 
-### 도메인 10: 서버 인프라, HA 복제, 백업/PITR, CDC & 웹 서버 (Scopes 95 ~ 100)
+### 도메인 10: 서버 인프라, HA 복제, 백업/PITR & CDC (Scopes 106 ~ 113)
 | Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
 | :--- | :--- | :--- | :--- | :---: |
-| **095** | `pkg/replication/manager.go`, `stream.go` | 1-Writer Multi-Reader WAL 복제 엔진 | LSN 시퀀스 역전, 레플리카 지연 감지 및 재연결 루프 | PENDING |
-| **096** | `pkg/replication/failover.go` | Always On 자동 장애조치 및 쿼럼 선거 | 스플릿 브레인(Split-Brain) 방어, 투표 데드락 방지 | PENDING |
-| **097** | `pkg/backup/backup.go`, `restore.go`, `pitr.go` | 스냅샷 백업, 복원 및 시점 복구(PITR) | 아카이브 파일 체크섬 검증, 복원 도중 비정상 종료 정합성 | PENDING |
-| **098** | `pkg/cdc/dispatcher.go`, `streamer.go` | Transactional Outbox 및 실시간 CDC 스트리머 | Outbox 큐 언바운디드 성장 방어, 느린 컨슈머 백프레셔 | PENDING |
-| **099** | `pkg/api/spa.go`, `pkg/api/server.go` | 단일 바이너리 SPA 웹서버 & REST API | Flat Directory Invariant 위반 차단, History Fallback 충돌 | PENDING |
-| **100** | `cmd/lionsql/server.go`, `daemon.go`, `timer.go` | 메인 서버 부트스트랩, 데몬 라이프사이클, 1ms 타이머 | 클린 테어다운(`SIGTERM` ➔ `SIGKILL`), Windows 1ms 고해상도 타이머 | PENDING |
+| **106** | `pkg/replication/manager.go`, `stream.go` | 1-Writer Multi-Reader WAL 복제 코디네이터 | LSN 시퀀스 역전 감지, 레플리카 지연(Lag) 감지 및 재연결 루프 | `[x] LOGGED` |
+| **107** | `pkg/replication/client.go`, `broadcaster.go` | 레플리카 WAL 수신 클라이언트 및 변경사항 브로드캐스터 | 비정상 연결 단선 시 재시도 백오프, 브로드캐스트 채널 블로킹 방어 | `[x] LOGGED` |
+| **108** | `pkg/replication/failover.go`, `handlers.go`, `types.go` | Always On 자동 장애조치 및 쿼럼 선거 | 스플릿 브레인(Split-Brain) 방어, 투표 데드락 방지, 복제 핸들러 안전성 | `[x] LOGGED` |
+| **109** | `pkg/backup/backup.go`, `restore.go` | 스냅샷 백업 및 전체 복원 파이프라인 | 아카이브 체크섬 검증, 복원 도중 비정상 종료 시 원자적 롤백 | `[x] LOGGED` |
+| **110** | `pkg/backup/pitr.go`, `wal_archive.go` | 시점 복구(PITR) 및 지속적 WAL 아카이빙 엔진 | WAL 아카이브 LSN 연속성 검증, 시점 복구 목표 타임스탬프 도달 정확성 | `[x] LOGGED` |
+| **111** | `pkg/cdc/dispatcher.go`, `streamer.go` | Transactional Outbox 및 실시간 CDC 스트리머 | Outbox 큐 언바운디드 성장 방어, 느린 컨슈머 백프레셔 제어 | `[x] LOGGED` |
+| **112** | `pkg/cdc/event.go`, `outbox.go`, `outbox_sinks.go` | CDC 이벤트 직렬화 및 외부 싱크 어댑터 | 이벤트 JSON 직렬화 정밀도, 네트워크 실패 시 Outbox 재시도 안전성 | `[x] LOGGED` |
+| **113** | `pkg/slt/runner.go`, `parser.go` | SQLLogicTest 내장 러너 및 스크립트 파서 | 대용량 SLT 파일 파싱 시 메모리 누수 방지, 슬로우 쿼리 타임아웃 격리 | `[x] LOGGED` |
+
+---
+
+### 도메인 11: SQL 유틸리티, 공통 파서, 보안/인증 및 엔진 설정 (Scopes 114 ~ 119)
+| Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
+| :--- | :--- | :--- | :--- | :---: |
+| **114** | `pkg/sqlutil/predicate.go`, `tokenizer.go` | 괄호 균형 Context-Free 조건식 파서 및 토크나이저 | Dyck 언어 균형 괄호 매칭, 따옴표/주석 내부 키워드 오인식 원천 차단 | `[x] LOGGED` |
+| **115** | `pkg/sqlutil/like.go`, `params.go` | 고속 제로할당 LIKE 매처 및 $N/$tag$ 파라미터 변환기 | T-SQL 와일드카드([_], [%]) 특수문자 오탈출 방어, DoS 유발 정규식 원천 배제 | `[x] LOGGED` |
+| **116** | `pkg/sqlutil/casing.go`, `comparator.go`, `pagination.go` | 대소문자 무시 정규화, 동적 Any 비교기 및 LIMIT/OFFSET 파서 | ASCII 고속 폴딩 경계 검사, 복합 타입 비교 시 패닉 방어, 페이징 오버플로우 | `[x] LOGGED` |
+| **117** | `pkg/auth/auth.go`, `provider.go` | 사용자 인증 서비스, 패스워드 해싱 및 인증 프로바이더 | 타이밍 공격 방어(`subtle.ConstantTimeCompare`), 슈퍼유저 기본 계정 보안 | `[x] LOGGED` |
+| **118** | `pkg/auth/rbac.go` | 역할 기반 접근 제어(RBAC) 권한 검사기 | 권한 상속 그래프 순환 참조 방지, 미인가 DDL/DML 실행 차단 무결성 | `[x] LOGGED` |
+| **119** | `pkg/config/config.go`, `version.go`, `build_pure.go`, `build_wiredtiger.go` | 전역 설정 로더, SSOT 버전 및 CGo/Pure 빌드 태그 | 잘못된 설정 파일 파싱 시 안전한 기본값 복귀, 빌드 태그 격리 무결성 | `[x] LOGGED` |
+
+---
+
+### 도메인 12: REST API, RLS 보안, 백그라운드 서비스 & 내장 웹 SPA (Scopes 120 ~ 128)
+| Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
+| :--- | :--- | :--- | :--- | :---: |
+| **120** | `pkg/api/server.go`, `middleware.go`, `request_logger.go` | REST HTTP API 서버 부트스트랩, 보안 미들웨어 및 로거 | CORS 헤더 인젝션 방어, Panic 복구 미들웨어, 대용량 Body DoS 차단 | `[x] LOGGED` |
+| **121** | `pkg/api/handlers_records.go`, `records_filter.go` | REST Records CRUD 엔드포인트 및 URL 필터 파서 | URL 쿼리 파라미터 SQL 인젝션 방어, 대용량 페이지네이션 메모리 보호 | `[x] LOGGED` |
+| **122** | `pkg/api/handlers_tables.go`, `handlers_import_export.go` | 테이블 스키마 메타데이터 API 및 CSV/JSON 임포트/익스포트 | 임포트 파일 역직렬화 악성 페이로드 방어, 임시 버퍼 파일 누수 방어 | `[x] LOGGED` |
+| **123** | `pkg/api/handlers_auth.go`, `handlers_admin.go` | 사용자 로그인, JWT 토큰 발급 및 관리자 엔드포인트 | JWT 서명 검증 무결성, 토큰 탈취 방어, 슈퍼유저 권한 승격 차단 | `[x] LOGGED` |
+| **124** | `pkg/api/rls.go`, `rls_handlers.go` | 행 단위 보안(Row-Level Security) 정책 엔진 및 API | 세션 사용자 기반 RLS 조건절 누락 방어, 서브쿼리 바이패스 원천 차단 | `[x] LOGGED` |
+| **125** | `pkg/api/handlers_procs.go`, `engine_aliases.go`, `sdk.go` | 저장 프로시저 HTTP 실행 API, 엔진 별칭 및 Go SDK 클라이언트 | HTTP 요청 프로시저 파라미터 매핑 정합성, SDK 연결 풀 누수 방어 | `[x] LOGGED` |
+| **126** | `pkg/api/cron.go`, `cron_handlers.go` | 내장 크론(Cron) 스케줄러 엔진 및 잡 관리 API | 크론 잡 패닉 격리, 서버 셧다운 시 백그라운드 워커 클린 테어다운 | `[x] LOGGED` |
+| **127** | `pkg/api/mailer.go`, `mailer_handlers.go`, `webhook.go`, `webhook_handlers.go`, `realtime.go` | SMTP 메일러, 웹훅 디스패처 및 웹소켓 실시간 이벤트 | 웹훅 재시도 큐 누수 방어, 고아 웹소켓 커넥션 정리, 비동기 알림 데드락 방지 | `[x] LOGGED` |
+| **128** | `pkg/api/spa.go`, `pkg/ui/embed.go`, `pkg/ui/dashboard.html` | 내장 SPA 웹 서버, `embed.FS` 정적 에셋 및 History API Fallback | Flat Directory Invariant 엄격 검증, SPA Fallback 라우팅 충돌 방지, 에셋 누수 | `[x] LOGGED` |
+
+---
+
+### 도메인 13: CLI, 데몬, 마이그레이션 도구 & 닥터 (Scopes 129 ~ 135)
+| Scope | 대상 소스 파일 | 핵심 역할 | 중점 엣지 케이스 감사 포인트 | 상태 |
+| :--- | :--- | :--- | :--- | :---: |
+| **129** | `cmd/lionsql/server.go`, `main.go` | 엔진 메인 진입로, CLI 플래그 파싱 및 `--app` SPA 자동 브라우저 런처 | Headless 환경 브라우저 오픈 패닉 방어, 잘못된 플래그 시 안전한 오류 안내 | `[x] LOGGED` |
+| **130** | `cmd/lionsql/daemon.go`, `daemon_unix.go`, `daemon_windows.go` | OS별 백그라운드 데몬 프로세스 포크 및 라이프사이클 관리 | PID 파일 락 안전성, 부모-자식 고아 프로세스 방지, Windows 서비스 디스패처 | `[x] LOGGED` |
+| **131** | `cmd/lionsql/timer.go` | Windows 1ms 고해상도 타이머 및 고정밀 스케줄러 | `timeBeginPeriod` 1ms 클린 언로드 (Double-Close 방지), 타이머 드리프트 보정 | `[x] LOGGED` |
+| **132** | `cmd/lionsql/doctor.go` | 시스템 환경 진단 도구 (`lionsql doctor`) | 포트 충돌, 디스크 여유 공간, OS 권한 및 메모리 한도 자동 진단 무결성 | `[x] LOGGED` |
+| **133** | `cmd/lionsql/cli_config.go`, `sql.go` | 대화형 CLI SQL 클라이언트 및 설정 관리자 | Ctrl+C 시 쿼리 협력적 취소, 비밀번호 숨김 입력, 결과셋 표 포맷터 | `[x] LOGGED` |
+| **134** | `cmd/lionsql/migrate.go`, `pkg/migrate/migrate.go` | 데이터베이스 버전 마이그레이션 러너 | 마이그레이션 실패 시 원자적 롤백, 버전 체크섬 검증, 락 타임아웃 | `[x] LOGGED` |
+| **135** | `cmd/bench/main.go`, `cmd/tpcc_*/main.go`, `cmd/soaktest/main.go`, `cmd/crashtest/main.go` | 내장 벤치마크 및 신뢰성 도구 CLI 러너 체인 | 테스트 픽스처 누수 방어, 돌발 프로세스 사살(SIGKILL) 후 리소스 정리 | `[x] LOGGED` |
 
 ---
 
 ## 4. 듀얼 감사 실행 워크플로우 (Per-Scope Execution Loop)
 
-각 스코프(1~100)는 다음의 4단계 라이프사이클을 엄격히 준수하여 순차적으로 진행합니다:
+각 스코프(1~135)는 다음의 4단계 라이프사이클을 엄격히 준수하여 순차적으로 진행합니다:
 
 ```mermaid
 sequenceDiagram
@@ -309,10 +362,23 @@ Scope <ID> 소스코드와 Model A(Gemini)의 1차 감사 결과를 교차 검�
 
 ---
 
-## 6. 결론 및 신뢰성 검증 게이트(Release Gates)와의 연계
+## 6. 135단계 완료 후 Triage 회의 및 결함 분류 로드맵 (Post-Audit Triage & Action Plan)
 
-본 100단계 듀얼 AI 정밀 코드 리뷰 계획은 LionSQL 1.0의 품질을 궁극의 엔터프라이즈 레벨로 끌어올리는 사전 정지 작업입니다:
-1. **사전 결함 0화**: 100개 스코프를 완주함으로써 알려지지 않은 런타임 패닉, 데이터 레이스, 데드락 지점을 사전에 박멸합니다.
+135단계 전수 감사의 목적은 잠재적 취약점과 엣지 케이스를 가감 없이 객관적으로 수집·전수 표면화하는 것입니다. 발굴된 모든 결함을 무분별하게 코드로 패치하려 하면 복잡도가 폭증하여 `[RULE:RadicalKISS]`를 위반할 수 있으므로, 100단계 감사 완료 즉시 공식 **Triage(결함 분류) 회의**를 소집하여 아래 4분면 매트릭스에 따라 결함을 엄격히 분류하고 조치 계획을 확정합니다:
+
+| 분류 등급 | 판정 기준 및 성격 | 조치 원칙 | 대상 예시 |
+| :--- | :--- | :--- | :--- |
+| **P0: Must Fix** | 데이터 손상, 크래시/패닉, 데이터 레이스, 카탈로그 영속화 누락, 보안 취약점 | 1.0 릴리즈 전 무조건 패치 & TDD 회귀 테스트 추가 | 카탈로그 영속화 누락(`AlterTrigger`, `CreateStatistics`), 외래키 ID 하드코딩 등 |
+| **P1: Should Fix** | 명확한 표준 SQL 동작 불일치, 일반적 시나리오 메모리 누수, 직렬화 불일치 | 1.0 패치 세트에 포함하여 순차적 반영 | 데이터 변환 타입 불일치, 캐시 퇴출 누락 등 |
+| **P2: Won't Fix** | 실무 발생 가능성이 극히 희박한 극단적 엣지 케이스, 실익 대비 복잡도 과다 | 사유 명시 후 정식 기각 (복잡도 억제 및 단순성 유지) | 유니코드 특수 언어(터키어 점 없는 i 등) 대소문자 폴딩 지원 등 |
+| **P3: Spec-Out (By-Design)** | LionSQL 핵심 아키텍처 원칙(KISS, OCC Fast-Fail, 2-Tier Fallback 등)에 따른 의도적 설계 | 결함 목록에서 제외하고 아키텍처 문서에 근거 명시 | Fast Pratt 파서의 복잡한 T-SQL 억지 수용(ANTLR Fallback 위임), OCC 충돌 시 2PL 락 대기 요구 등 |
+
+---
+
+## 7. 결론 및 신뢰성 검증 게이트(Release Gates)와의 연계
+
+본 135단계 듀얼 AI 정밀 코드 리뷰 계획은 LionSQL 1.0의 품질을 궁극의 엔터프라이즈 레벨로 끌어올리는 사전 정지 작업입니다:
+1. **사전 결함 0화**: 135개 스코프를 완주함으로써 알려지지 않은 런타임 패닉, 데이터 레이스, 데드락 지점을 사전에 박멸합니다.
 2. **신뢰성 게이트 가속**: 코어 코드베이스의 논리 무결성이 사전에 입증되므로, 이후 진행될 `DURA-KILL-1`(kill -9 1,000라운드), `DURA-SOAK-1`(72h 장기 소크), `DURA-SLT-2`(SQLLogicTest 듀얼 엔진) 검증이 불필요한 디버깅 지연 없이 원패스(One-Pass)로 완주할 수 있는 확고한 토대가 마련됩니다.
 
 본 계획서는 `[RULE:PlanPersistence]`에 의거하여 영구 보존됩니다.

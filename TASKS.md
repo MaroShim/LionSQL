@@ -13,6 +13,8 @@
 | `DONE` | **`ARCH-PRED`** | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
 | `PENDING` | **`AUDIT-LOG-1`** | Integrity | P2 | 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템 | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |  |
+| `DONE` | **`AUDIT-135-DUAL-REVIEW`** | Integrity | P1 | 전 소스코드 135단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 감사 | [`notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`](notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md) | 135/135 완주 (134건 결함 식별 완료) |
+| `PENDING` | **`AUDIT-TRIAGE-POST`** | Integrity | P1 | 135단계 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 | [`notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`](notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md) | 제6장 매트릭스 분류 |
 | `DONE` | **`BENCH-ALL-IN-ONE-1`** | Durability | P2 | 원클릭 벤치마크 및 종합 검증 스위트 (`scripts/run_all_benchmarks.sh`) 구축 |  | - [x] **Phase 1~4 (성능/와이어 실측)**: Bank... |
 | `PENDING` | **`BENCH-TPCH-1`** | Ecosystem | P3 | Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation | [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |  |
 | `DONE` | **`BUG-ADD-COL-NOT-NULL-1`** | Integrity | P2 | 기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug) |  |  |
@@ -296,6 +298,42 @@
 ### [PENDING] 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템 `AUDIT-LOG-1`
 - **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-05T12:33:06.337895+09:00
 - **Plan Doc**: [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md)
+
+---
+
+### [DONE] 전 소스코드 135단계 듀얼 AI 정밀 코드 리뷰 및 엣지 케이스 감사 `AUDIT-135-DUAL-REVIEW`
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-07T17:25:00+09:00
+- **Plan Doc**: [`notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`](notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md)
+- **SSOT Finding Register**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
+- **Metrics**: 135/135 스코프 완주 (총 134건 결함 식별 및 등록 완료)
+
+**Phases & Checklist**:
+- [x] Scopes 001 ~ 012 (도메인 1: 스토리지 엔진 - In-Memory OCC Core) 완주
+- [x] Scopes 013 ~ 024 (도메인 2: 스토리지 엔진 - WiredTiger MVCC Core & 공통 스토리지) 완주
+- [x] Scopes 025 ~ 034 (도메인 3: 카탈로그 & 가상 시스템 메타데이터) 완주
+- [x] Scopes 035 ~ 055 (도메인 4: 통합 쿼리 코디네이터 & DDL/DML 실행기) 완주
+- [x] Scopes 056 ~ 065 (도메인 5: T-SQL 파서 & 바이트코드 컴파일러) 완주
+- [x] Scopes 066 ~ 075 (도메인 6: T-SQL VDBE 런타임 가상머신) 완주
+- [x] Scopes 076 ~ 083 (도메인 7: Volcano Cost-Based Optimizer 플래너) 완주
+- [x] Scopes 084 ~ 095 (도메인 8: Volcano 실행 반복자 & 메모리 거버너) 완주
+- [x] Scopes 096 ~ 105 (도메인 9: 네트워크 와이어 프로토콜 - PGWire & TDS) 완주
+- [x] Scopes 106 ~ 113 (도메인 10: 서버 인프라, HA 복제, 백업/PITR & CDC) 완주
+- [x] Scopes 114 ~ 119 (도메인 11: SQL 유틸리티, 공통 파서, 보안/인증 및 엔진 설정) 완주
+- [x] Scopes 120 ~ 128 (도메인 12: REST API, RLS 보안, 백그라운드 서비스 & 내장 웹 SPA) 완주
+- [x] Scopes 129 ~ 135 (도메인 13: CLI, 데몬, 마이그레이션 도구 & 닥터) 완주
+
+---
+
+### [PENDING] 135단계 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 `AUDIT-TRIAGE-POST`
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-07T16:27:00+09:00
+- **Plan Doc**: [`notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`](notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md) 제6장
+- **SSOT Finding Register**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
+
+**Phases & Checklist**:
+- [ ] P0 (Must Fix) 선별: 데이터 손상, 크래시, 데드락, 카탈로그 영속화 누락 ➔ 1.0 릴리즈 전 필수 패치 및 TDD 회귀 테스트
+- [ ] P1 (Should Fix) 선별: 표준 SQL 동작 불일치, 일반적 메모리 누수 ➔ 1.0 패치 세트 편입
+- [ ] P2 (Won't Fix) 기각: 실무 발생 희박한 극단 엣지 케이스 ➔ 복잡도 억제 사유 명시 후 클로즈
+- [ ] P3 (Spec-Out / By-Design) 확인: KISS, Fast-Fail 원칙 등에 입각한 의도적 설계 ➔ 아키텍처 문서 명시
 
 ---
 
