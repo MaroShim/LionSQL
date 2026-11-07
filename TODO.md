@@ -59,11 +59,11 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **목표**: 릴리스 게이트 장기 부하 테스트 이전, Lionsql 엔진 본체 216개 순수 Go 소스코드 전수를 13대 도메인, 총 135개 마이크로 스코프로 완전 분할하여 Gemini(심층 추론)와 Claude(공격적 엣지케이스)의 교차 검증으로 숨은 동시성 레이스, 데드락, 메모리 누수, 침묵하는 에러(`_ = err`), 경계값 결함을 0의 누락도 없이 선제 발굴 및 완치.
    - **설계 문서**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md)
    - **감사 기록부 (SSOT)**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
-2. **`AUDIT-CORE-DEEP-RESCAN`: [2단계] 12대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan)** [진행 중] (11/12 구역 완주, 최종 구역 12 심층 릴레이 스캔 진행 중)
-   - **목표**: 1차 광역 스캔의 조기 종료 편향(스코프당 1건 제한)을 극복하기 위해, 스토리지 코어(`wt_engine.go`, `memengine.go`), 트랜잭션 코디네이터(`coordinator.go`), 바이트코드 컴파일러/VM(`compiler.go`, `vm.go`), CBO 플래너/실행기(`planner.go`, `hash_join.go`), 멀티 와이어/복제(`server.go`, `packet.go`) 5대 구역에 대해 1건 제한을 완전히 철폐하고 파일 끝까지 다중 결함($N$건)을 전수 발굴하여 SSOT에 증분 누적.
+2. **`AUDIT-CORE-DEEP-RESCAN`: [2단계] 12대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan)** [x] 완주 완료 (12/12 전 구역 완주, 총 63건 심층 결함 발굴 완료)
+   - **목표**: 1차 광역 스캔의 조기 종료 편향(스코프당 1건 제한)을 극복하기 위해, 스토리지 코어(`wt_engine.go`, `memengine.go`), 트랜잭션 코디네이터(`coordinator.go`), 바이트코드 컴파일러/VM(`compiler.go`, `vm.go`), CBO 플래너/실행기(`planner.go`, `hash_join.go`), 멀티 와이어/복제(`server.go`, `packet.go`), T-SQL 렉서/파서, 시스템 카탈로그, SQL 실행 엔진 본체, 백업/PITR, 고급 분석 오퍼레이터, 인메모리 잔여, CDC & 보안/RBAC 12대 핵심 구역에 대해 1건 제한을 완전히 철폐하고 파일 끝까지 다중 결함($N$건)을 전수 발굴하여 SSOT에 증분 누적.
    - **설계 문서**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) 제6장
    - **감사 기록부 (SSOT)**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
-3. **`AUDIT-TRIAGE-POST`: [3단계] 통합 Triage 회의 및 결함 분류 로드맵 (Post-Audit Triage & Action Plan)** [대기]
+3. **`AUDIT-TRIAGE-POST`: [3단계] 통합 Triage 회의 및 결함 분류 로드맵 (Post-Audit Triage & Action Plan)** [진입 대기]
    - **목표**: 1차 광역 감사(135단계) 및 2차 코어 심층 재스캔으로 발굴된 전체 결함을 4대 등급(P0: Must Fix, P1: Should Fix, P2: Won't Fix, P3: Spec-Out/By-Design)으로 분류하여, `[RULE:RadicalKISS]` 원칙에 따라 복잡도를 통제하고 1.0 필수 패치 범위만 선별 확정.
    - **설계 문서**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) 제7장
 4. **`DOC-REVAMP-10`: 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜** [계획 수립 / 대기]

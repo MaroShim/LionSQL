@@ -13,10 +13,10 @@
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
 * **1단계 (135단계 전수 광역 스캔)**: 135 / 135 (100.0%) 완주 완료 (총 134건 결함 식별)
-* **2단계 (12대 핵심 코어 심층 재스캔)**: 11 / 12 구역 완료 (구역 1~11: 58건 발굴 완료, 구역 12 진행 중)
-* **총 누적 식별 결함**: 총 192건 (1단계 134건 + 2단계 58건)
-  - Critical: 25건 (+3)
-  - High: 86건 (+2)
+* **2단계 (12대 핵심 코어 심층 재스캔)**: 12 / 12 구역 전수 완주 완료 (구역 1~12: 총 63건 심층 결함 발굴 완료)
+* **총 누적 식별 결함**: 총 197건 (1단계 134건 + 2단계 63건)
+  - Critical: 28건 (+3)
+  - High: 88건 (+2)
   - Medium: 66건 (+0)
   - Low: 15건 (+0)
 
@@ -3012,5 +3012,69 @@
 * **판정**: `DEFECT_LOGGED`
 
 ---
+
+### [2단계 심층 구역 12] CDC 스트리밍 & 인증/RBAC 보안 코어 (CDC Streaming & Auth/RBAC Security Core)
+* **대상 소스**: `pkg/cdc/streamer.go` (237 라인), `pkg/cdc/outbox.go` (457 라인), `pkg/auth/auth.go` (477 라인), `pkg/auth/rbac.go` (463 라인)
+* **핵심 분석 관점**: 빈 사용자 권한 우회 백도어, 롤 DENY 우선순위 무시, Outbox 브로커 전송 실패 시 무음 드롭 유실, CDC 히스토리 재생 무음 드롭, 보안 메타데이터 영속화 누락
+
+#### [발굴 결함 12-1] `auth/rbac.go`: `HasTablePermission`에서 빈 사용자(`normUser == ""`)를 관리자 우회로 취급하여 미인증 세션에 전체 테이블 권한을 부여하는 백도어
+* **심각도**: `Critical`
+* **위치**: `pkg/auth/rbac.go:380-383` (`HasTablePermission`)
+* **현상 및 원인 분석**:
+  - 라인 381에서 관리자 우회 조건으로 `if normUser == "" || normUser == "sa" || normUser == "admin" || normUser == "dbo" { return true, nil }`를 선언함.
+  - 네트워크 세션이나 연결 풀에서 사용자 컨텍스트가 올바르게 주입되지 않았거나 빈 문자열(`""`)로 설정된 경우, 아무런 인증을 거치지 않은 비인가/익명 세션이 최고 관리자 권한(`sa`, `dbo`)과 동일하게 취급되어 모든 테이블에 대해 `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `DROP`을 무제한 수행할 수 있음.
+  - **결과**: 인증 정보가 누락된 잘못된 요청이 거부(`401 Unauthorized` / `ErrPermissionDenied`)되는 대신 시스템 최고 권한으로 모든 데이터를 변조/탈취할 수 있는 치명적 보안 취약점.
+* **권장 수정안**:
+  - 관리자 우회 조건에서 `normUser == ""`를 즉각 제거하고, 빈 사용자는 `public` 또는 `guest` 최소 권한으로 평가하거나 즉시 `ErrPermissionDenied`를 반환하도록 수정.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 12-2] `auth/rbac.go`: 다중 롤 검사 시 첫 번째 롤의 GRANT 발견 즉시 조기 반환하여 후속 롤에 설정된 명시적 DENY를 무시하는 보안 결함
+* **심각도**: `Critical`
+* **위치**: `pkg/auth/rbac.go:440-451` (`HasTablePermission`)
+* **현상 및 원인 분석**:
+  - 사용자가 다수의 롤(예: `analyst`, `restricted_users`)을 부여받은 경우, 라인 443에서 롤을 순회하며 권한을 검사함.
+  - 만약 첫 번째 롤(`analyst`)에서 `roleGranted == true`가 나오면 라인 448에서 즉시 `return true, nil`로 함수가 종료됨.
+  - 그 결과, 뒤따르는 두 번째 롤(`restricted_users`)에 해당 테이블에 대한 명시적 거부(`DENY SELECT ON sensitive_table`)가 등록되어 있더라도 해당 검사에 도달하지 못하고 통과됨.
+  - **결과**: "명시적 DENY는 모든 GRANT보다 언제나 우선한다(Explicit DENY always takes precedence)"는 데이터베이스 보안의 절대 원칙이 무너져 기밀 데이터 무단 열람 발생.
+* **권장 수정안**:
+  - 롤 검사 루프를 2단계로 분리: 먼저 사용자가 속한 모든 롤에 대해 `roleDenied`가 하나라도 있는지 전수 검사하고, DENY가 단 하나도 없을 때만 `roleGranted` 여부를 평가하도록 변경.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 12-3] `cdc/outbox.go`: 브로커 싱크 발행 실패(`publishToAllSinks` 에러) 시 메시지를 재전송하지 않고 채널에서 폐기하여 메시지 영구 유실 및 At-Least-Once 보장 파괴
+* **심각도**: `Critical`
+* **위치**: `pkg/cdc/outbox.go:223-228` (`dispatchLoop`)
+* **현상 및 원인 분석**:
+  - `dispatchLoop`에서 `d.publishToAllSinks(msg)`를 호출하여 외부 브로커(Kafka, RabbitMQ 등)로 메시지를 발행함.
+  - 만약 네트워크 단절이나 브로커 장애로 재시도 한도(`MaxRetries`)를 초과하여 에러가 반환된 경우, 라인 224에서 `d.failedCount.Add(1)`만 기록하고 루프가 계속 진행되어 다음 이벤트(`ev, ok := <-ch`)를 소비함.
+  - 실패한 메시지는 메모리 채널에서 이미 꺼내졌으므로(dequeued) 재발행되지 않고 버려지며, 후속 이벤트가 성공적으로 발행되면 `lastAckLSN`이 전진하여 체크포인트에 저장됨.
+  - **결과**: 트랜잭셔널 아웃박스의 핵심 보장인 최소 1회 전달(At-Least-Once Delivery)이 깨지고 비즈니스 이벤트가 영구 증발함 (`[RULE:ExplicitError]`, `[RULE:AtomicSaves]`).
+* **권장 수정안**:
+  - 싱크 발행 실패 시 루프를 즉시 일시 정지(Pause)하고 동일 메시지를 지수 백오프로 재시도하거나, 별도의 데드 레터 큐(Dead Letter Queue, DLQ)에 격리 저장하여 전송 성공 전까지 `lastAckLSN` 전진을 방지.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 12-4] `auth/rbac.go`: `logins`, `dbUsers`, `grants` 메타데이터의 디스크 영속화 부재로 서버 재시작 시 커스텀 보안 설정 전량 증발
+* **심각도**: `High`
+* **위치**: `pkg/auth/rbac.go:74-103`, `220-253`, `304-324` (`CreateLogin`, `CreateUser`, `GrantTable`)
+* **현상 및 원인 분석**:
+  - T-SQL DDL 또는 관리자 콘솔을 통해 생성된 로그인(`s.logins`), 데이터베이스 유저(`s.dbUsers`), 권한 부여 내역(`s.grants`), API 키(`s.apiKeys`)가 `AuthService`의 단순 인메모리 맵에만 보관됨.
+  - 시스템 카탈로그 테이블(`sys.server_principals`, `sys.database_principals` 등)이나 전용 보안 저장소 파일로 영속화하는 로직이 전혀 구현되어 있지 않음.
+  - **결과**: LionSQL 데몬 재부팅 시 기본 빌트인 계정(`sa`, `admin`, `postgres`, `dbo`, `guest`)을 제외한 고객의 모든 사용자 계정과 테이블 보안 권한이 전량 증발하여 시스템 운영 불능 초래 (`[RULE:AtomicSaves]`).
+* **권장 수정안**:
+  - 계정/유저 생성 및 `GRANT`/`DENY` 수행 시 시스템 카탈로그의 물리 테이블로 원자적 영속화(`PersistSecurityState`)를 수행하고, 엔진 부팅 시 이를 로드하여 복원하도록 연동.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 12-5] `cdc/streamer.go`: `Subscribe` 히스토리 재생 시 링 버퍼 이벤트 수가 버퍼 용량을 초과할 때 `select/default`로 무음 드롭하여 데이터 불일치 유발
+* **심각도**: `High`
+* **위치**: `pkg/cdc/streamer.go:119-130` (`Subscribe`)
+* **현상 및 원인 분석**:
+  - 새로운 구독자가 특정 `fromLSN`을 지정하여 과거 이벤트를 재생(Replay)할 때, 재생해야 할 이벤트 수가 채널 버퍼 크기(`bufSize`, 기본 1024)를 초과하면 라인 126의 `default:`로 빠져 초과 이벤트들을 아무런 경고나 에러 없이 무음 드롭(Silent Drop)함.
+  - 또한, 요청된 `fromLSN`이 링 버퍼의 보관 기간을 초과하여 이미 덮어씌워진(Evicted) 경우에도 이를 클라이언트에 알리지 않고 남아있는 최신 이벤트만 일부 전송함.
+  - **결과**: CDC를 수신하는 외부 다운스트림(캐시, 검색엔진, 데이터웨어하우스)이 이벤트 누락을 감지하지 못하고 데이터가 영구적으로 불일치되는 심각한 왜곡 발생 (`[RULE:ExplicitError]`).
+* **권장 수정안**:
+  - 요청된 `fromLSN`이 링 버퍼에서 이미 증발한 경우 `ErrLSNTooOld` 에러를 반환하여 전체 스냅샷 복제를 유도하고, 히스토리 재생 시에는 채널 버퍼 오버플로 시 무음 드롭 대신 블로킹 또는 임시 버퍼 슬라이스를 거쳐 안전하게 전달.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
 
 
