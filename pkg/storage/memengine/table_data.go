@@ -337,6 +337,9 @@ func cloneRow(r storage.Row) storage.Row {
 }
 
 func (td *TableData) addPartitionKey(partID, pk string) {
+	td.partMu.Lock()
+	defer td.partMu.Unlock()
+
 	if td.Partitions == nil {
 		td.Partitions = make(map[string]map[string]struct{})
 	}
@@ -349,6 +352,9 @@ func (td *TableData) addPartitionKey(partID, pk string) {
 }
 
 func (td *TableData) removePartitionKey(partID, pk string) {
+	td.partMu.Lock()
+	defer td.partMu.Unlock()
+
 	if td.Partitions == nil {
 		return
 	}

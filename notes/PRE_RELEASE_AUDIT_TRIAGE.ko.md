@@ -33,8 +33,8 @@
    - 일시적 파일 읽기 I/O 오류 또는 중간 손상 발생 시 정상 후속 트랜잭션을 디스크에서 임의로 Truncate하던 결함 완치 (4-State MECE 분류, 물리적 파일 끝 입증 시에만 테일 절삭 허용 및 Fail-Closed 보호, Invariant ㉒ & ADR-027 확립).
 4. **`P0-04` [ALTER TABLE ADD COLUMN 시 FlatRecord 기존 데이터 전량 파괴]** [완료] (`table_data.go:359-372` / 결함 11-4)
    - FlatRecord 모드에서 컬럼 추가 시 기존 행들을 구 스키마로 안전하게 역직렬화한 뒤 신규 컬럼 값을 덧붙여 새 레이아웃으로 재인코딩하도록 수정함으로써 기존 데이터 전량 증발 결함 완치.
-5. **`P0-05` [파티션 키 갱신 시 `partMu` 미보호 동시 맵 쓰기 크래시]** (`table_data.go:335-357` / 결함 11-5)
-   - `addPartitionKey`/`removePartitionKey`에서 선언된 뮤텍스를 획득하지 않아 동시 트랜잭션 시 `concurrent map writes` 패닉.
+5. **`P0-05` [파티션 키 갱신 시 `partMu` 미보호 동시 맵 쓰기 크래시]** [완료] (`table_data.go:335-357` / 결함 11-5)
+   - `addPartitionKey`/`removePartitionKey` 내부 자체 락 캡슐화 및 `ddl.go:GetPartitions`/`DropPartition`의 `partMu` RLock/Lock 보호 적용으로 동시 트랜잭션 시 `concurrent map read and map write` 패닉 및 Data Race 완치.
 6. **`P0-15` [WAL 아카이브 회전 중 신규 트랜잭션 Truncate 절삭 유실]** (`wal_archive.go:154-173` / 결함 9-1)
    - 아카이브 복사 완료 직후 신규 트랜잭션이 유입되었을 때 락 미보호로 `writer.Truncate()`에 의해 잘려나가는 치명적 데이터 손실.
 7. **`P0-16` [백업 복원 실패 시 이전 상태 롤백 부재 반파 DB 방치]** (`restore.go:121-220` / 결함 9-2)

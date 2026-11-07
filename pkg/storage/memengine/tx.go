@@ -1928,9 +1928,7 @@ func (tx *Transaction) Commit() error {
 			}
 			if td.Schema.IsPartitioned() {
 				if partID, err := td.Schema.ComputePartitionKeyFromRow(ch.row); err == nil {
-					td.partMu.Lock()
 					td.addPartitionKey(partID, ch.key)
-					td.partMu.Unlock()
 				}
 			}
 			for _, idxData := range td.Indexes {
@@ -1957,14 +1955,12 @@ func (tx *Transaction) Commit() error {
 				}
 				newPartID, _ = td.Schema.ComputePartitionKeyFromRow(ch.row)
 				if oldPartID != newPartID {
-					td.partMu.Lock()
 					if oldPartID != "" {
 						td.removePartitionKey(oldPartID, ch.key)
 					}
 					if newPartID != "" {
 						td.addPartitionKey(newPartID, ch.key)
 					}
-					td.partMu.Unlock()
 				}
 			}
 			for _, idxData := range td.Indexes {
@@ -1982,9 +1978,7 @@ func (tx *Transaction) Commit() error {
 			delete(sh.entries, ch.key)
 			if td.Schema.IsPartitioned() && hadOld {
 				if partID, err := td.Schema.ComputePartitionKeyFromRow(oldRow); err == nil {
-					td.partMu.Lock()
 					td.removePartitionKey(partID, ch.key)
-					td.partMu.Unlock()
 				}
 			}
 			if hadOld {

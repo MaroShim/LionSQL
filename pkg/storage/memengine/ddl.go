@@ -485,6 +485,9 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 	td.mu.Lock()
 	defer td.mu.Unlock()
 
+	td.partMu.Lock()
+	defer td.partMu.Unlock()
+
 	if !td.Schema.IsPartitioned() {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotPartitioned, tableName)
 	}
@@ -537,6 +540,9 @@ func (e *Engine) GetPartitions(tableName string) ([]storage.PartitionInfo, error
 	if !td.Schema.IsPartitioned() {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotPartitioned, tableName)
 	}
+
+	td.partMu.RLock()
+	defer td.partMu.RUnlock()
 
 	res := make([]storage.PartitionInfo, 0, len(td.Partitions))
 	for name, set := range td.Partitions {
