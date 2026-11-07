@@ -13,11 +13,11 @@
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
 * **1단계 (135단계 전수 광역 스캔)**: 135 / 135 (100.0%) 완주 완료 (총 134건 결함 식별)
-* **2단계 (5대 핵심 코어 심층 재스캔)**: 4 / 5 구역 완료 (구역 1: 7건, 구역 2: 5건, 구역 3: 6건, 구역 4: 5건 심층 결함 발굴)
-* **총 누적 식별 결함**: 총 157건 (1단계 134건 + 2단계 23건)
-  - Critical: 11건 (+1)
-  - High: 70건 (+2)
-  - Medium: 61건 (+2)
+* **2단계 (5대 핵심 코어 심층 재스캔)**: 5 / 5 (100.0%) 전 구역 완주 완료 (구역 1: 7건, 구역 2: 5건, 구역 3: 6건, 구역 4: 5건, 구역 5: 5건 심층 결함 발굴)
+* **총 누적 식별 결함**: 총 162건 (1단계 134건 + 2단계 28건)
+  - Critical: 13건 (+2)
+  - High: 73건 (+3)
+  - Medium: 61건 (+0)
   - Low: 15건 (+0)
 
 ---
@@ -2589,6 +2589,71 @@
   - **결과**: `len(innerIndex.Columns) == 0`인 인덱스가 카탈로그에 존재할 경우 `panic: runtime error: index out of range [0]` 발생으로 쿼리 컴파일 스레드가 크래시됨 (`[RULE:DefensiveIndexing]`).
 * **권장 수정안**:
   - `if len(innerIndex.Columns) == 0 { continue }` 방어적 슬라이스 길이 검사 추가.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
+### [심층 구역 5] 멀티 와이어 & 복제 엔진 (Multi-Wire Protocols & HA Replication Core)
+* **점검 대상 파일**: `pkg/wire/server.go`, `pkg/wire/tds/packet.go`, `pkg/replication/manager.go`, `pkg/replication/broadcaster.go`, `pkg/replication/client.go` (총 4,058 라인 전수 스캔)
+* **핵심 분석 초점**: WAL 스트리밍 무음 유실 및 복제본 정합성 파괴, 결정론적 Cancel 시크릿 키 추측 및 하이재킹 공격, TDS 다중 패킷 프레임 무제한 OOM 취약점, SSL 핸드셰이크 경로 쿼리 취소 오류.
+
+#### [발굴 결함 5-1] `replication/broadcaster.go`: 슬로우 레플리카 버퍼 포화 시 WAL 레코드 무음 드롭(`default`)으로 인한 복제본 데이터 영구 손상
+* **심각도**: `Critical`
+* **위치**: `pkg/replication/broadcaster.go:61-68` (`WALBroadcaster.Broadcast`)
+* **현상 및 원인 분석**:
+  - 고부하 상황에서 특정 슬로우 레플리카(Subscriber)의 수신 채널 버퍼(`sub.ch`)가 포화되었을 때, `select { case sub.ch <- rec: default: }`로 무음 드롭(Silent Drop)하고 그냥 통과함.
+  - WAL은 순차적인 원자성 로그 스트림이므로, 중간의 단 1건이라도 레코드가 누락되면 복제본의 상태 머신은 복구 불가능하게 깨지거나 LSN 갭(Gap)이 발생하여 원본과 영구히 다른 데이터를 유지하게 됨.
+  - **결과**: 레플리카가 장애를 인지하지 못한 채 중간 트랜잭션을 건너뛰고 다음 커밋을 적용하여 영구적인 데이터 손상(Corrupted Replica) 초래 (`[RULE:ExplicitError]`).
+* **권장 수정안**:
+  - 버퍼 오버플로우 발생 시 무음 드롭을 절대 금지하고, 해당 지연 레플리카를 슬로우 노드로 분류하여 연결을 강제 퇴출(Evict/Disconnect)시키고 전체 동기화(Full Catch-up)를 유도하도록 변경.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 5-2] `wire/server.go`: `CancelRequest` 시크릿 키의 결정론적 선형 생성(`pid * 10007 + 42`)으로 인한 취소 키 예측 및 세션 DoS 공격 취약점
+* **심각도**: `Critical`
+* **위치**: `pkg/wire/server.go:663-667` (`handleConnection`)
+* **현상 및 원인 분석**:
+  - PGWire 연결 생성 시 클라이언트에게 발급하는 백엔드 취소 키(`secretKey`)를 `uint32(connID*10007 + 42)`라는 고정된 선형 산술식으로 계산함.
+  - 백엔드 프로세스 ID(`pid`) 역시 `uint32(connID)`로 1부터 순차 증가하므로, 악의적인 사용자는 자신의 `pid`로부터 다른 세션의 `pid`와 해당 `secretKey`를 100% 확률로 역산/추측할 수 있음.
+  - **결과**: 공격자가 무작위 또는 특정 사용자의 세션 `pid`에 대해 위조된 `CancelRequest` 패킷을 전송하여 다른 사용자의 실행 중인 장기 트랜잭션과 쿼리를 임의로 중단시키는 Cancel Hijacking 및 DoS 공격 가능 (`[RULE:PathSecurity]`).
+* **권장 수정안**:
+  - `crypto/rand`를 사용하여 암호학적으로 안전한 32비트 난수로 `secretKey`를 발급하도록 수정:
+    ```go
+    var secretKey uint32
+    _ = binary.Read(crand.Reader, binary.BigEndian, &secretKey)
+    ```
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 5-3] `replication/client.go`: 로컬 엔진 WAL 적용 실패 에러 무음 삼킴(`_ = err`) 및 실패한 LSN 허위 전진/보고
+* **심각도**: `High`
+* **위치**: `pkg/replication/client.go:201-211` (`streamOnce`)
+* **현상 및 원인 분석**:
+  - 레플리카 노드가 Primary로부터 수신한 WAL 레코드를 로컬 스토리지 엔진에 반영하는 `backup.ApplyWALRecordToEngine(c.eng, rec)` 실행 중 에러가 발생해도, 아무런 처리나 리턴 없이 에러를 무음 삼킴(`_ = err`).
+  - 더 심각하게는 에러가 발생했음에도 불구하고 바로 다음 줄에서 `if rec.LSN > c.lastLSN.Load() { c.lastLSN.Store(rec.LSN) }`을 실행하여 성공한 것처럼 LSN 카운터를 전진시키고 Primary에게 ACK를 보냄.
+  - **결과**: 레플리카 로컬 디스크나 OCC 엔진에 변경사항이 전혀 반영되지 않았음에도 시스템은 정상 동기화된 것으로 간주하여 데이터 불일치 상태가 영구 고착화됨 (`[RULE:ExplicitError]`).
+* **권장 수정안**:
+  - `ApplyWALRecordToEngine` 에러 시 즉시 `return fmt.Errorf("failed to apply WAL record LSN %d: %w", rec.LSN, err)`로 스트림을 중단하고 재시도 또는 재동기화 단계로 진입.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 5-4] `wire/server.go`: SSL 핸드셰이크 경로의 `CancelRequest` 처리에서 `CancelSessionQuery` 대신 `CloseSession` 오호출로 인한 세션 강제 파괴 버그
+* **심각도**: `High`
+* **위치**: `pkg/wire/server.go:573-593` (`handleConnection`)
+* **현상 및 원인 분석**:
+  - 클라이언트가 SSL 암호화 핸드셰이크를 통과한 직후 취소 요청(`code == 80877102`)을 전송했을 때, 실행 중인 쿼리만 취소해야 함에도 `s.coordinator.CloseSession(targetSessID)`를 호출함.
+  - 비-SSL 취소 처리부(라인 530)에서는 정상적으로 `s.coordinator.CancelSessionQuery(targetSessID)`를 호출하고 있으나, SSL 경로에서는 잘못된 메서드를 호출하여 세션 자체를 완전히 파괴해버림.
+  - **결과**: SSL 환경에서 클라이언트가 실행 중인 쿼리를 취소하려 할 때, 쿼리만 취소되는 것이 아니라 클라이언트의 연결 세션 자체가 완전히 닫혀 연결이 끊어지는 오동작 발생.
+* **권장 수정안**:
+  - 라인 590의 `s.coordinator.CloseSession(targetSessID)`를 `s.coordinator.CancelSessionQuery(targetSessID)`로 즉각 수정.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 5-5] `wire/tds/packet.go`: `ReadPacket`의 멀티 패킷 TDS 프레임 누적 시 페이로드 상한 미검사로 인한 악의적 OOM DoS 취약점
+* **심각도**: `High`
+* **위치**: `pkg/wire/tds/packet.go:53-91` (`ReadPacket`)
+* **현상 및 원인 분석**:
+  - TDS 프로토콜에서 여러 패킷으로 분할 전송되는 대형 메시지를 조립할 때, 루프 내에서 누적 버퍼 `fullPayload`의 크기를 제한하는 가드가 완전히 부재함 (`[RULE:BoundedBuffers]`).
+  - 악의적인 클라이언트가 `StatusEOM` 비트를 설정하지 않고 계속해서 4KB 청크를 무한 스트리밍할 경우, 서버는 `fullPayload = append(fullPayload, chunk...)`를 반복하며 메모리를 기하급수적으로 소비함.
+  - **결과**: 단일 악의적 TCP 연결만으로도 서버의 모든 힙 메모리를 고갈시켜 프로세스 전체를 OOM 크래시시키는 DoS 공격 가능.
+* **권장 수정안**:
+  - 최대 허용 메시지 크기(예: `const MaxTDSMessageSize = 64 * 1024 * 1024`)를 상수로 정의하고, 누적 크기가 이를 초과할 경우 즉시 에러를 반환하고 연결을 종료하도록 경계 검사 추가.
 * **판정**: `DEFECT_LOGGED`
 
 ---
