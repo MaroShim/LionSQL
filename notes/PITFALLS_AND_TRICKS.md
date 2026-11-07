@@ -138,3 +138,25 @@ This document records subtle architectural landmines, runtime hazards, and criti
 - **Required Idiom**:
   - Ordinal positional fallback: ordinal slot 0 (`i == 0`) is unconditionally treated as the target SQL query, regardless of whether parameter names are omitted, `@stmt`, or driver-specific variants (`@statement`, `@sql`).
   - Eliminate tool-specific hardcoded branching (Golden Rule 15 KISS).
+
+---
+
+## 15. IEEE 754 Zero-Division & `NaN` Poisoning in CBO Cost Calculations (P0-28)
+- **Problem**: When a table is newly created or empty (`estimatedTotal == 0`), computing unique index selectivity via `sel = 1.0 / float64(estimatedTotal)` performs a floating-point divide-by-zero (`1.0 / 0.0`), which silently yields `+Inf` without triggering a Go runtime panic. Subsequently, multiplying `float64(estimatedTotal) * sel` yields `0.0 * (+Inf) = NaN` (Not a Number). Under the IEEE 754 standard, all relational comparisons against `NaN` (`NaN < cost`, `NaN > cost`, `NaN == cost`) unconditionally evaluate to `false`. As a result, the optimizer's best-plan check (`indexScanCost < tableScanCost`) always fails, silently disqualifying the $O(1)$ unique index and forcing the CBO planner to fall back to a Full Table Scan!
+- **Forbidden Anti-Pattern**: Never divide by table cardinality or row counts without guarding against zero:
+  ```go
+  // FORBIDDEN: Produces +Inf and subsequent NaN on empty tables
+  sel = 1.0 / float64(estimatedTotal)
+  estRows := int64(math.Ceil(float64(estimatedTotal) * sel)) // 0 * +Inf = NaN!
+  ```
+- **Required Idiom**:
+  Always clamp cardinality to at least 1 prior to division:
+  ```go
+  totalRows := estimatedTotal
+  if totalRows <= 0 {
+      totalRows = 1
+  }
+  sel = 1.0 / float64(totalRows)
+  ```
+  Ensure cost accumulator loops never produce or propagate `math.IsNaN(cost)`.
+
