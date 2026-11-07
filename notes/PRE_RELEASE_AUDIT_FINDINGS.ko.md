@@ -13,11 +13,11 @@
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
 * **1단계 (135단계 전수 광역 스캔)**: 135 / 135 (100.0%) 완주 완료 (총 134건 결함 식별)
-* **2단계 (12대 핵심 코어 심층 재스캔)**: 8 / 12 구역 완료 (구역 1~8: 43건 발굴 완료, 구역 9~12 진행 중)
-* **총 누적 식별 결함**: 총 177건 (1단계 134건 + 2단계 43건)
-  - Critical: 18건 (+2)
-  - High: 80건 (+2)
-  - Medium: 64건 (+1)
+* **2단계 (12대 핵심 코어 심층 재스캔)**: 9 / 12 구역 완료 (구역 1~9: 48건 발굴 완료, 구역 10~12 진행 중)
+* **총 누적 식별 결함**: 총 182건 (1단계 134건 + 2단계 48건)
+  - Critical: 20건 (+2)
+  - High: 82건 (+2)
+  - Medium: 65건 (+1)
   - Low: 15건 (+0)
   - Critical: 16건 (+3)
   - High: 78건 (+5)
@@ -2835,6 +2835,65 @@
   - **결과**: DB 타깃 테이블에 `O'Reilly`가 아닌 이스케이프된 `O''Reilly` 문자열이 원시 형태 그대로 삽입되어 데이터 오염 초래.
 * **권장 수정안**:
   - `vStr = strings.ReplaceAll(vStr, "''", "'")` 언이스케이프 로직 추가.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
+### [심층 구역 9] 백업, 복구 & PITR 시점 복구 (Backup, Restore & PITR Core)
+* **점검 대상 파일**: `pkg/backup/backup.go`, `pkg/backup/restore.go`, `pkg/backup/pitr.go`, `pkg/backup/wal_archive.go` (총 1,894 라인 전수 스캔)
+* **핵심 분석 초점**: WAL 회전 시 락 미보호 트랜잭션 유실, 복원 실패 시 롤백 부재로 인한 반파 DB 방치, 외래키 의존성 무시 복원으로 인한 인서트 실패, 백업 중 라이브 카탈로그 참조 스냅샷 불일치.
+
+#### [발굴 결함 9-1] `backup/wal_archive.go`: `RotateAndArchive` 시 락 미보호로 인해 아카이브 복사 직후 유입된 신규 트랜잭션이 `writer.Truncate()`에 의해 영구 잘려나가는 데이터 유실
+* **심각도**: `Critical`
+* **위치**: `pkg/backup/wal_archive.go:154-173` (`RotateAndArchive`)
+* **현상 및 원인 분석**:
+  - `RotateAndArchive`는 WAL 세그먼트를 복사(`ArchiveSegment`)한 직후 `writer.Truncate()`를 호출하여 활성 WAL 파일을 초기화함.
+  - 그러나 복사와 `Truncate` 사이에 WAL 라이터 락(`writer.mu`)을 유지하지 않으므로, 복사가 끝난 나노초 직후 동시 트랜잭션이 커밋되어 활성 WAL 파일에 새 레코드를 쓰는 경쟁 상태(Race Condition)가 발생함.
+  - **결과**: `writer.Truncate()`가 실행되면서 방금 커밋된 신규 트랜잭션의 WAL 데이터가 아카이브에도 복사되지 못하고 디스크에서도 즉시 잘려나가 영구 증발(Silent Data Truncation Loss)함 (`[RULE:AtomicSaves]`).
+* **권장 수정안**:
+  - `writer.Rotate()` 내부에서 `writer.mu.Lock()`을 쥔 상태로 새 파일 디스크립터를 원자적으로 교체(Atomic Swap)하고 이전 파일을 아카이빙하도록 구조 개선.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 9-2] `backup/restore.go`: `RestoreBackup` 실패 시 이전 상태 롤백 부재로 인한 반파 데이터베이스(Half-Restored Corrupted DB) 방치
+* **심각도**: `Critical`
+* **위치**: `pkg/backup/restore.go:121-220` (`RestoreBackup`)
+* **현상 및 원인 분석**:
+  - `RestoreBackup`은 `opts.DropExisting == true`일 때 기존 테이블들을 먼저 삭제한 뒤 아카이브의 테이블들을 순차적으로 복원함.
+  - 복원 도중 중간 테이블(예: 5번째 테이블)에서 디스크 용량 부족이나 손상된 레코드로 인해 에러가 반환될 경우, 이미 삭제된 이전 테이블들은 복구되지 않고 앞부분 테이블들만 커밋된 상태로 함수가 즉각 종료됨.
+  - **결과**: 기존 데이터는 이미 삭제되었고 복원 데이터는 절반만 남은 반파(Half-Restored) 상태로 방치되어 데이터베이스 복구가 불가능해짐 (`[RULE:ExplicitError]`, `[RULE:AtomicSaves]`).
+* **권장 수정안**:
+  - 복원 시작 전 원본 데이터 디렉터리를 스냅샷 격리하거나, 임시 네임스페이스에 전체 복원을 완료한 뒤 원자적 심볼릭 링크/디렉터리 스왑을 수행하도록 변경.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 9-3] `backup/restore.go`: 복원 시 외래키(FK) 의존성 순서(Topological Sort) 미고려로 인한 자식-부모 테이블 복원 실패
+* **심각도**: `High`
+* **위치**: `pkg/backup/restore.go:121-140`, `150-200` (`RestoreBackup`)
+* **현상 및 원인 분석**:
+  - 아카이브에서 테이블을 재생성하고 데이터를 넣을 때, 테이블 간의 외래키(Foreign Key) 참조 관계를 분석하지 않고 `tables` 슬라이스에 저장된 순서대로 복원함.
+  - 자식 테이블(예: `orders`)이 부모 테이블(예: `customers`)보다 먼저 복원되는 경우, `orders` 레코드 삽입 시 부모 키가 존재하지 않아 외래키 위반(`ErrForeignKeyViolation`) 에러가 발생하며 전체 복원이 중단됨.
+* **권장 수정안**:
+  - 데이터 복원 루프 동안 일시적으로 외래키 제약조건 검사를 비활성화(`session.SetEnforceFK(false)`)하거나, 외래키 그래프를 위상 정렬(Topological Sort)하여 부모 ➔ 자식 순서로 복원하도록 보정.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 9-4] `backup/backup.go`: `CreateBackup`에서 스냅샷 트랜잭션 대신 엔진의 현재 라이브 카탈로그(`eng.ListTables()`)를 조회하여 스냅샷 불일치 발생
+* **심각도**: `High`
+* **위치**: `pkg/backup/backup.go:58-62` (`CreateBackup`)
+* **현상 및 원인 분석**:
+  - 라인 50에서 읽기 전용 스냅샷 트랜잭션 `tx`를 생성했음에도, 테이블 목록을 수집할 때는 `eng.ListTables()`를 호출하여 엔진의 최신 라이브 카탈로그를 조회함.
+  - 백업 도중 다른 세션이 테이블을 `CREATE TABLE`하거나 `DROP TABLE`하는 DDL을 수행할 경우, 스냅샷 `tx`에서는 보이지 않는 테이블을 스캔하려 하거나 이미 삭제된 테이블을 스캔하려 하여 백업 작업이 에러와 함께 실패함.
+* **권장 수정안**:
+  - 스냅샷 트랜잭션 `tx`가 관리하는 트랜잭션 격리 카탈로그 스냅샷으로부터 테이블 목록을 조회하도록 수정.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 9-5] `backup/pitr.go`: `RestorePITR`에서 DDL WAL 연산 재생 시 상위 `cat *catalog.Catalog` 메타데이터 동기화 누락
+* **심각도**: `Medium`
+* **위치**: `pkg/backup/pitr.go:43-56`, `289-293` (`ApplyWALRecordWithOptions`, `RestorePITR`)
+* **현상 및 원인 분석**:
+  - `RestorePITR` 실행 시 `ApplyWALRecordToEngine(eng, rec)`를 호출하는데, 이는 `ddlHook`이 `nil`인 상태로 호출됨.
+  - WAL에 기록된 `OpCreateTable`, `OpDropTable`, `OpCreateIndex` 등의 DDL 연산이 스토리지 엔진에는 반영되지만 상위 카탈로그 인스턴스(`cat`)에는 통보되지 않음.
+  - **결과**: PITR 시점 복구가 완료된 후 애플리케이션이 쿼리를 실행했을 때, 카탈로그 캐시와 물리 스토리지 간의 불일치로 인해 테이블 누락 오류 발생.
+* **권장 수정안**:
+  - `RestorePITR`에서 `ApplyWALRecordWithOptions`를 호출하고, DDL 발생 시 `cat.InvalidateTableStats` 및 카탈로그 동기화 콜백을 필수로 바인딩.
 * **판정**: `DEFECT_LOGGED`
 
 ---
