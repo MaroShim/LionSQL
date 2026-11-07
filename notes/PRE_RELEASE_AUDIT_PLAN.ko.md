@@ -362,7 +362,7 @@ Scope <ID> 소스코드와 Model A(Gemini)의 1차 감사 결과를 교차 검�
 
 ---
 
-## 6. 2단계: 7대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Phase 2: Deep Core Precision Rescan)
+## 6. 2단계: 12대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Phase 2: Deep Core Precision Rescan)
 
 ### 6.1 1차 전수 감사(135단계)의 구조적 편향 및 한계 분석 (Cadence Bias Postmortem)
 1차 135단계 전수 감사 완료 결과, **135개 스코프 중 134개 스코프에서 정확히 1건의 결함(`DEFECT_LOGGED`)이 도출되고 1개 스코프만 `PASS`**라는 통계적으로 비자연스러운 기계적 균일성이 집계되었습니다.
@@ -370,13 +370,13 @@ Scope <ID> 소스코드와 Model A(Gemini)의 1차 감사 결과를 교차 검�
 1. **스코프당 1건 조기 종료 편향 (Early Termination Bias)**:
    - "스코프(1~2개 파일)마다 대표 결함 1건을 합의하여 서식에 등록하면 다음 스코프로 이동한다"는 템플릿의 절차적 한계로 인해, 감사자가 1건의 유의미한 결함을 발견하는 즉시 해당 스코프 감사를 종료해버리는 조기 탈출 오류가 발생함.
 2. **복잡도 파레토 법칙(Pareto Principle)과의 불일치**:
-   - 수천 라인의 동시성 락, CGo 포인터 조작, 트랜잭션 롤백, 레지스터 수명주기, 복잡한 파서 백트래킹 및 카탈로그 동기화가 집약된 **초고복잡도 코어 엔진 모듈**(`wt_engine.go`, `compiler.go`, `planner.go`, `parser.go`, `catalog.go` 등)에서도 단 1건의 결함만 기록된 반면,
+   - 수천 라인의 동시성 락, CGo 포인터 조작, 트랜잭션 롤백, 레지스터 수명주기, 복잡한 파서 백트래킹 및 카탈로그 동기화, SQL 실행기 DDL/DML, 백업/PITR이 집약된 **초고복잡도 코어 엔진 모듈**에서도 단 1건의 결함만 기록된 반면,
    - 상대적으로 단순한 유틸리티나 CLI 도구에서도 서식을 채우기 위해 사소한 가드 누락(Low/Medium)을 억지로 1건씩 발굴하여 기록함.
 3. **잠재적 위험**:
    - 실제로 프로덕션 크래시나 치명적 데이터 손상을 일으킬 수 있는 코어 엔진의 제2, 제3의 잠재 결함이 1차 감사에서 누락되어 은폐되었을 위험이 존재함.
 
-### 6.2 7대 고복잡도 핵심 코어 구역 및 심층 감사 포인트
-1차 감사의 조기 종료 한계를 극복하기 위해, 다음 7대 핵심 코어 구역에 대해서는 **"1건 제한 완전 철폐" 원칙**을 적용하여 파일의 처음부터 끝까지 다중 결함(Multiple Defects)을 전수 발굴하는 심층 재스캔을 수행합니다:
+### 6.2 12대 고복잡도 핵심 코어 구역 및 심층 감사 포인트 (미점검 핵심 1~5 전수 포함)
+1차 감사의 조기 종료 한계를 완벽히 극복하기 위해, 다음 12대 핵심 코어 구역에 대해서는 **"1건 제한 완전 철폐" 원칙**을 적용하여 파일의 처음부터 끝까지 다중 결함(Multiple Defects)을 전수 발굴하는 심층 재스캔을 수행합니다:
 
 | 핵심 코어 구역 | 대상 핵심 파일 | 중점 심층 다중 감사 포인트 |
 | :--- | :--- | :--- |
@@ -387,6 +387,11 @@ Scope <ID> 소스코드와 Model A(Gemini)의 1차 감사 결과를 교차 검�
 | **5. 멀티 와이어 & 복제 엔진** | `pkg/wire/server.go`, `pkg/wire/tds/packet.go`<br>`pkg/replication/manager.go`, `broadcaster.go` | 파이프라인 패킷 청크 버퍼 오버플로우, 비동기 복제 연결 끊김 시 메인 엔진 데드락, TLS 핸드셰이크 블로킹 누수 |
 | **6. T-SQL 렉서 & 파서 코어** | `pkg/proc/lexer.go`, `pkg/proc/parser.go`<br>`pkg/proc/token.go` | 백트래킹 무한 루프, 미완성 토큰 렉싱 시 슬라이스 패닉, 중첩 서브쿼리 괄호 불일치, 연산자 우선순위 왜곡, ANTLR Fallback 누락 |
 | **7. 시스템 카탈로그 & DDL 메타데이터 코어** | `pkg/catalog/catalog.go`<br>`pkg/catalog/system_views.go`, `types.go` | 동시 DDL 카탈로그 맵 Data Race, 영속화 실패 시 메모리 카탈로그 불일치, 외래키/인덱스 메타데이터 갱신 누락, 락 미보호 조회 |
+| **8. SQL 실행 엔진 본체 (미점검 1)** | `pkg/engine/sqlexec_dml.go`, `sqlexec_ddl.go`<br>`sqlexec_merge.go`, `sqlexec_cursor.go` | DML/DDL 트랜잭션 롤백 잔류, MERGE 동시성 충돌 및 OCC 재시도, 커서 핸들 누수, DDL 실패 시 인덱스 불일치 |
+| **9. 백업, 복구 & PITR 시점 복구 (미점검 2)** | `pkg/backup/backup.go`, `restore.go`<br>`pkg/backup/pitr.go`, `wal_archive.go` | 백업 중 동시 쓰기 시 체크포인트 손상, PITR LSN 재생 시 갭(Gap) 및 롤포워드 실패, 아카이브 파일 디스크립터 누수 |
+| **10. 고급 분석 실행 오퍼레이터 (미점검 3)** | `pkg/execution/aggregate.go`, `window.go`<br>`pkg/execution/merge_join.go`, `setop.go` | Decimal 집계 누적 시 정밀도 오버플로우, Window 프레임 오프셋 언더플로우 패닉, Merge Join 양측 정렬 상태 깨짐 시 무한루프 |
+| **11. 인메모리 스토리지 코어 잔여 (미점검 4)** | `pkg/storage/memengine/skiplist.go`, `table_data.go`<br>`pkg/storage/memengine/flat_record.go`, `wal.go` | SkipList 동시 삽입/삭제 Lock-Free 포인터 레이스, Flat Record 디코딩 경계값 초과, WAL 레코드 바이너리 직렬화 오버플로우 |
+| **12. CDC 스트리밍 & 인증/RBAC 보안 (미점검 5)** | `pkg/cdc/streamer.go`, `outbox.go`<br>`pkg/auth/auth.go`, `pkg/auth/rbac.go` | Outbox 메시지 릴레이 시 채널 블로킹 및 고루틴 누수, CDC LSN 커밋 누락, RBAC 권한 검사 우회 및 토큰 검증 취약점 |
 
 ### 6.3 심층 재스캔 실행 규칙 및 Findings SSOT 보강 프로토콜
 1. **무제한 결함 발굴 원칙**: 1건을 찾았다고 멈추지 않고, 파일 전체의 함수/경로를 끝까지 추적하여 식별되는 모든 취약점을 가감 없이 전수 도출한다 (`Defect 1, Defect 2, Defect 3...`).

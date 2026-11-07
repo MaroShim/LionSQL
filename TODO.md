@@ -59,7 +59,7 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **목표**: 릴리스 게이트 장기 부하 테스트 이전, Lionsql 엔진 본체 216개 순수 Go 소스코드 전수를 13대 도메인, 총 135개 마이크로 스코프로 완전 분할하여 Gemini(심층 추론)와 Claude(공격적 엣지케이스)의 교차 검증으로 숨은 동시성 레이스, 데드락, 메모리 누수, 침묵하는 에러(`_ = err`), 경계값 결함을 0의 누락도 없이 선제 발굴 및 완치.
    - **설계 문서**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md)
    - **감사 기록부 (SSOT)**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
-2. **`AUDIT-CORE-DEEP-RESCAN`: [2단계] 7대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan)** [x] 완주 완료 (7/7 전 구역 완주, 총 38건 심층 결함 발굴 완료)
+2. **`AUDIT-CORE-DEEP-RESCAN`: [2단계] 12대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan)** [진행 중] (7/12 구역 완주, 구역 8~12 미점검 핵심 1~5 심층 릴레이 스캔 진행 중)
    - **목표**: 1차 광역 스캔의 조기 종료 편향(스코프당 1건 제한)을 극복하기 위해, 스토리지 코어(`wt_engine.go`, `memengine.go`), 트랜잭션 코디네이터(`coordinator.go`), 바이트코드 컴파일러/VM(`compiler.go`, `vm.go`), CBO 플래너/실행기(`planner.go`, `hash_join.go`), 멀티 와이어/복제(`server.go`, `packet.go`) 5대 구역에 대해 1건 제한을 완전히 철폐하고 파일 끝까지 다중 결함($N$건)을 전수 발굴하여 SSOT에 증분 누적.
    - **설계 문서**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) 제6장
    - **감사 기록부 (SSOT)**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
