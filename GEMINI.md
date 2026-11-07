@@ -127,7 +127,7 @@ When releasing or bumping versions, synchronize all four locations in lockstep:
 
 ### Continuous Backlog Discipline (`TODO.md` & Sprint DB Dual-Sync)
 When new requirements, ADRs, or implementation plans are agreed upon in conversation, **never retain them solely in ephemeral memory or markdown notes**.
-1. **Mandatory DB Registration**: Proactively register every new task into the LionSQL sprint database via `./bin/sprint add <ID> "<TITLE>" <DOMAIN> <PRIO> [PLAN_DOC]`, which automatically syncs to [`TASKS.md`](TASKS.md).
+1. **Mandatory DB Registration**: Proactively register every new task into the SQLite sprint database via `./bin/sprint add <ID> "<TITLE>" <DOMAIN> <PRIO> [PLAN_DOC]`, which automatically syncs to [`TASKS.md`](TASKS.md).
 2. **Dashboard Synchronization**: Synchronize active tasks and candidates into [`TODO.md`](TODO.md) under explicit taxonomy IDs.
 3. **Completion Lifecycle**: Upon 3-stage verification pass, update the status via `./bin/sprint set <ID> DONE` and mark completed (`[x]`) in `TODO.md`.
 

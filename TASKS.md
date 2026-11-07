@@ -15,7 +15,7 @@
 | `DONE` | **`AUDIT-135-DUAL-REVIEW`** | Integrity | P1 | 전 소스코드 135단계 듀얼 AI 정밀 코드 리뷰 및 엣지 케이스 감사 | [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) | 135/135 스코프 완주 (총 134건 결함 식별 및 등록 완료) |
 | `DONE` | **`AUDIT-CORE-DEEP-RESCAN`** | Integrity | P1 | 12대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan) | [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) |  |
 | `PENDING` | **`AUDIT-LOG-1`** | Integrity | P2 | 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템 | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |  |
-| `PENDING` | **`AUDIT-TRIAGE-POST`** | Integrity | P1 | 전수 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 | [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) |  |
+| `IN_PROGRESS` | **`AUDIT-TRIAGE-POST`** | Integrity | P1 | 전수 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 | [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) |  |
 | `DONE` | **`BENCH-ALL-IN-ONE-1`** | Durability | P2 | 원클릭 벤치마크 및 종합 검증 스위트 (`scripts/run_all_benchmarks.sh`) 구축 |  | - [x] **Phase 1~4 (성능/와이어 실측)**: Bank... |
 | `PENDING` | **`BENCH-TPCH-1`** | Ecosystem | P3 | Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation | [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |  |
 | `DONE` | **`BUG-ADD-COL-NOT-NULL-1`** | Integrity | P2 | 기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug) |  |  |
@@ -344,8 +344,8 @@
 
 ---
 
-### [PENDING] 전수 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 `AUDIT-TRIAGE-POST`
-- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-07 10:32:54
+### [IN_PROGRESS] 전수 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 `AUDIT-TRIAGE-POST`
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-07 10:39:57
 - **Plan Doc**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md)
 
 **Phases & Checklist**:
