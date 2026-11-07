@@ -332,7 +332,7 @@
 - **Principle**: 스코프당 1건 제한 완전 철폐, 파일 끝까지 다중 결함($N$건) 가감 없이 전수 발굴 및 누적
 
 **Phases & Checklist**:
-- [ ] 핵심 코어 1구역: 스토리지 엔진 코어 (`wt_engine.go`, `memengine.go`, `tx.go`) 심층 전수 재스캔
+- [x] 핵심 코어 1구역: 스토리지 엔진 코어 (`wt_engine.go`, `memengine.go`, `tx.go`, `persistence.go`) 완주 (7건 심층 결함 발굴)
 - [ ] 핵심 코어 2구역: 트랜잭션 코디네이터 (`coordinator.go`, `session_pool.go`) 심층 전수 재스캔
 - [ ] 핵심 코어 3구역: 바이트코드 컴파일러 & VDBE VM (`compiler.go`, `runtime/vm.go`) 심층 전수 재스캔
 - [ ] 핵심 코어 4구역: CBO 플래너 & 실행 오퍼레이터 (`planner.go`, `hash_join.go`, `sort.go`) 심층 전수 재스캔

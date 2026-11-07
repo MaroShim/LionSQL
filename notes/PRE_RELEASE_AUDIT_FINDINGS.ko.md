@@ -12,9 +12,13 @@
 
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
-* **총 스코프**: 135단계 (본체 216개 순수 프로덕션 Go 파일 100% 매핑)
-* **감사 완료**: 135 / 135 (100.0%) - **전수 감사 완주 완료**
-* **식별된 결함**: 총 134건 (Critical: 8건, High: 60건, Medium: 54건, Low: 12건)
+* **1단계 (135단계 전수 광역 스캔)**: 135 / 135 (100.0%) 완주 완료 (총 134건 결함 식별)
+* **2단계 (5대 핵심 코어 심층 재스캔)**: 1 / 5 구역 완료 (구역 1: 스토리지 코어 완주, 7건 심층 결함 발굴)
+* **총 누적 식별 결함**: 총 141건 (1단계 134건 + 2단계 7건)
+  - Critical: 9건 (+1)
+  - High: 63건 (+3)
+  - Medium: 56건 (+2)
+  - Low: 13건 (+1)
 
 ---
 
@@ -2266,5 +2270,109 @@
   - **시나리오**: 개발자가 침적 테스트 도중 Ctrl+C를 눌렀으나 백그라운드에 `lionsql`이 계속 살아 있어 다음 빌드/테스트 시 포트 충돌 발생.
   - **권장 수정안**: `signal.Notify`를 등록하여 인터럽트 발생 시 스폰된 자식 프로세스에 즉각 `gracefulStop` 및 SIGKILL 에스컬레이션을 수행하도록 테어다운 보장.
 * **최종 판정**: `DEFECT_LOGGED`
+
+---
+
+## 제2부. 2단계: 5대 핵심 코어 구역 심층 전수 재스캔 감사 기록부 (Phase 2: Deep Core Precision Rescan Findings)
+
+> **핵심 원칙**: 1차 감사의 스코프당 1건 조기 종료 편향(Cadence/Early Termination Bias)을 완전 배제하고, 파일 끝까지 다중 결함($N$건)을 가감 없이 전수 발굴 및 누적 기록한다.
+
+---
+
+### [심층 구역 1] 스토리지 엔진 코어 (WiredTiger MVCC & In-Memory OCC Core)
+* **대상 핵심 파일**:
+  - `pkg/storage/wiredtiger/wt_engine.go` (2,664 라인)
+  - `pkg/storage/memengine/memengine.go` (455 라인)
+  - `pkg/storage/memengine/tx.go` (2,418 라인)
+  - `pkg/storage/memengine/persistence.go` (391 라인)
+  - **총 분석 규모**: 5,928 라인
+* **중점 점검 영역**: 체크포인트 도중 커밋 역전, AOF 컴팩션 시 데이터 유실, 롤백 시 더티 슬롯 및 세션 잔류, 스냅샷 격리 파괴, Use-After-Free 크래시, 인덱스 부분 반영 원자성 훼손.
+
+#### [발굴 결함 1-1] `memengine/persistence.go`: 비동기 AOF Rewrite Compaction 시 동시 트랜잭션 데이터 영구 유실 및 락 미보호 Data Race
+* **심각도**: `Critical`
+* **위치**: `pkg/storage/memengine/memengine.go:195-204`, `pkg/storage/memengine/persistence.go:270-283`, `332-338`
+* **현상 및 원인 분석**:
+  - `finishWALCommitLocked`에서 AOF 로그 파일이 `aofThreshold`를 초과하면 백그라운드 고루틴(`go func()`)을 생성하여 `e.rewriteAOFLocked()`를 비동기로 실행함.
+  - **결함 A (Data Race & Panic)**: 비동기 고루틴 내부에서 `e.mu`를 전혀 획득하지 않고 `saveDiskLocked()`를 호출함. `saveDiskLocked()`는 `e.tables` 맵을 직접 range 순회하는데, 동시 실행 중인 DDL(`CreateTable`, `DropTable`)이 `e.mu.Lock()` 상태에서 `e.tables`를 수정할 경우 Go 런타임의 `fatal error: concurrent map iteration and map write` 패닉이 발생함.
+  - **결함 B (Silent Data Loss - 치명적 데이터 영구 유실)**:
+    1. 비동기 고루틴이 $T_1$ 시점에 `saveDiskLocked()`로 디스크 스냅샷(`tables.mpk`)을 덤프함.
+    2. 스냅샷 생성 중에도 메인 엔진의 트랜잭션들은 계속 커밋되며 `e.wal.writeFrame()`을 통해 AOF에 새 로그를 기록함.
+    3. 스냅샷 덤프가 끝나자마자 279라인에서 `e.wal.Truncate()`를 무조건 호출하여 AOF 파일을 0바이트로 잘라버림.
+    4. **결과**: $T_1$ 스냅샷 생성 이후부터 `Truncate()` 직전까지 커밋된 모든 트랜잭션의 데이터는 $T_1$ 스냅샷에도 없고, AOF 로그에서도 영구 삭제되어 크래시 발생 시 완전히 증발함 (`[RULE:AtomicSaves]`).
+* **권장 수정안**:
+  - AOF Rewrite 시 단순히 Truncate하지 않고, 스냅샷 시작 시점의 LSN을 캡처한 후 스냅샷 생성 중에 추가된 델타 로그를 유지하거나 Redis처럼 AOF rewrite buffer를 두어 스왑해야 함. 또한 `rewriteAOF` 진입 및 스냅샷 복사 시 `e.mu.RLock()`으로 `e.tables`의 일관된 스냅샷 뷰를 복제한 후 디스크 I/O를 수행해야 함.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 1-2] `memengine/tx.go`: Commit 6단계 인덱스 갱신 실패 시 부분 적용(Partial Apply) 롤백 부재로 인한 인메모리 영구 불일치
+* **심각도**: `High`
+* **위치**: `pkg/storage/memengine/tx.go:1977-1980` (`Commit`)
+* **현상 및 원인 분석**:
+  - `tx.Commit()` 6단계에서 실제 테이블 샤드 엔트리(`sh.entries[ch.key]`)에 새 버전을 반영하고 이전 인덱스 엔트리를 삭제한 후, `idxData.Insert(newKey, ch.key, incVals)`를 호출함.
+  - 만약 `idxData.Insert`에서 유니크 인덱스 충돌이나 정합성 오류로 에러(`err != nil`)가 반환되면, 아무런 복구 로직 없이 `return err`로 함수를 즉각 탈출함.
+  - `defer unlockAll()`로 락은 해제되지만, 이미 `sh.entries`에는 새로운 행 데이터와 증가된 버전이 반영되어 있고, 이전 인덱스 엔트리는 지워진 채 새 인덱스는 추가되지 않은 **반쯤 적용된(Half-Applied) 불일치 상태**가 인메모리에 영구 잔류함 (ACID Atomicity 파괴, `[RULE:AtomicSaves]`).
+* **권장 수정안**:
+  - 5단계 유니크 사전 검증을 완벽히 수행하여 6단계 진입 후에는 실패하지 않는 no-fail contract를 확립하거나, 6단계 인덱스 반영 실패 시 이미 변경된 `sh.entries` 및 선행 인덱스 엔트리를 원래대로 복원하는 역연산(Undo) 핸들러를 바인딩해야 함.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 1-3] `wiredtiger/wt_engine.go`: 트랜잭션 Commit 실패(`WT_ROLLBACK`) 시 세션 리셋 누락으로 인한 더티 상태 잔류
+* **심각도**: `High`
+* **위치**: `pkg/storage/wiredtiger/wt_engine.go:2318-2323` (`Commit`)
+* **현상 및 원인 분석**:
+  - `ret := C.go_wt_session_commit(tx.sess.sess, nil)`을 실행한 후, `ret != 0`인 경우 2320라인에서 `return wtOpError(...)`로 즉시 반환함.
+  - 세션 리소스를 정리하고 WiredTiger 내부 상태를 정상화하는 `C.go_wt_session_reset(tx.sess.sess)`(2322라인)은 오직 커밋 성공(`ret == 0`) 시에만 호출됨.
+  - WiredTiger에서 커밋 충돌(`WT_ROLLBACK`) 등으로 커밋이 실패했을 때 `session->reset`을 호출하지 않으면 세션에 미해제된 내부 락이나 트랜잭션 컨텍스트가 더티하게 잔류하여, 해당 세션을 재사용하는 후속 트랜잭션에서 `WT_SESSION::begin_transaction`이 연쇄 실패하거나 스윕 서버(Sweep Server)가 세션을 강제 종료시키는 결함 발생.
+* **권장 수정안**:
+  ```go
+  ret := C.go_wt_session_commit(tx.sess.sess, nil)
+  _ = C.go_wt_session_reset(tx.sess.sess) // 에러 여부와 무관하게 무조건 세션 리셋 보장
+  if ret != 0 {
+      return wtOpError("commit_transaction", int(ret))
+  }
+  ```
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 1-4] `wiredtiger/wt_engine.go`: DropTable/TruncateTable 시 활성 커서 보유 고루틴 Use-After-Free 크래시
+* **심각도**: `High`
+* **위치**: `pkg/storage/wiredtiger/wt_engine.go:555-570`, `1123-1135` (`DropTable`, `evictCursors`)
+* **현상 및 원인 분석**:
+  - `DropTable`에서 `e.evictAllCursors`를 호출하지만, `evictCursors`는 유휴 커서 풀(`cursorPool`)에 대기 중인 커서만 `toClose`로 이동시킬 뿐, 현재 동시 실행 중인 트랜잭션/반복자가 열어두고 읽고 있는 활성 커서(`allCursors`)는 대기하거나 안전하게 닫지 못함.
+  - 이후 569라인에서 `C.go_wt_session_drop(sess, uri)`("force=true")가 즉각 호출되어 WiredTiger C 레벨에서 해당 테이블 B-Tree 파일과 메타데이터를 강제로 삭제함.
+  - 동시에 해당 테이블을 스캔하고 있던 다른 세션의 Go 고루틴이 활성 `WT_CURSOR*`의 `next()`나 `get_val()`을 호출하는 순간 해제된 C 구조체를 역참조(Use-After-Free)하여 프로세스가 즉시 SIGSEGV로 비정상 종료됨 (`[RULE:PanicRecovery]`, `[RULE:CleanTeardown]`).
+* **권장 수정안**:
+  - 테이블 드롭/트렁케이트 전 해당 테이블에 활성 커서가 존재하는지 참조 카운트(Ref Counter)를 검사하고, 진행 중인 읽기 트랜잭션이 완료될 때까지 안전하게 대기(Graceful Drain)하거나 취소 에러를 명시적으로 전달하는 보호 메커니즘 구축.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 1-5] `memengine/tx.go`: 정상 Commit 트랜잭션의 `txPool` 반환 누락으로 인한 풀링 무효화 및 GC 압박
+* **심각도**: `Medium`
+* **위치**: `pkg/storage/memengine/tx.go:185-191`, `2068-2080`
+* **현상 및 원인 분석**:
+  - `memengine`은 트랜잭션 할당 오버헤드를 0으로 만들기 위해 `txPool = sync.Pool{...}`을 정의하고 `releaseToPoolLocked()`를 구현함.
+  - 그러나 `releaseToPoolLocked()`는 `Rollback()`(2079라인)에서만 호출될 뿐, 워크로드의 99% 이상을 차지하는 `Commit()`(2068라인) 성공 경로에서는 어디서도 호출되지 않고 그냥 리턴됨.
+  - 결과적으로 성공 커밋된 모든 `Transaction` 구조체와 내부 맵들이 재활용되지 못하고 GC 가비지로 버려져, `sync.Pool` 도입 목적이 무력화되고 초당 수만 건의 OLTP 처리 시 불필요한 GC Pause 지터가 유발됨 (`[RULE:ZeroAllocation]`).
+* **권장 수정안**:
+  - `Commit()` 성공 완료 직전(또는 호출자가 LSN 조회를 마친 후 재사용 가능하도록) 트랜잭션 상태를 `clear()`하고 `releaseToPoolLocked()`를 정상 호출하여 풀로 회수.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 1-6] `wiredtiger/wt_engine.go`: `opts.SnapshotLSN` / `opts.SnapshotTimestamp` C API 미전달로 인한 스냅샷 격리 불일치
+* **심각도**: `Medium`
+* **위치**: `pkg/storage/wiredtiger/wt_engine.go:1280-1299` (`BeginTx`)
+* **현상 및 원인 분석**:
+  - `BeginTx(opts)`에서 호출자가 지정한 `opts.SnapshotLSN` 및 `opts.SnapshotTimestamp`를 Go 구조체 필드에 저장하지만, 정작 WiredTiger C API 호출인 `C.go_wt_session_begin(s.sess, nil)`에는 `nil` 설정을 전달함.
+  - WiredTiger가 타임스탬프 기반 MVCC 읽기를 지원하려면 `read_timestamp=<hex>` 설정 문자열을 `begin_transaction`에 전달해야 함.
+  - 타임스탬프 설정이 누락되어 WiredTiger 엔진은 과거 시점의 스냅샷 대신 트랜잭션 시작 순간의 최신 상태를 읽게 되며, HA 복제 스트림 리플레이나 PITR 시점 복원 쿼리 시 엔진 간 격리 수준 불일치 발생.
+* **권장 수정안**:
+  - `opts.SnapshotTimestamp`가 명시된 경우 WiredTiger 타임스탬프 형식(`read_timestamp=%x`)의 설정 문자열을 생성하여 `go_wt_session_begin`에 전달.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 1-7] `memengine/tx.go`: Savepoint 동일 이름 재정의 시 `spNames` 중복 및 롤백 인덱스 정합성 결함
+* **심각도**: `Low`
+* **위치**: `pkg/storage/memengine/tx.go:2107-2117`, `2149-2154`
+* **현상 및 원인 분석**:
+  - `Savepoint` 생성 시 기존에 동일한 이름이 있으면 `tx.savepoints[normName]`을 덮어쓰지만, `tx.spNames` 슬라이스에서는 기존 위치를 그대로 두고 `found`로 처리함.
+  - 이후 `RollbackTo` 또는 `ReleaseSavepoint` 실행 시 첫 번째 매칭되는 `idx`를 찾아 그 뒤의 세이브포인트들을 슬라이스에서 잘라냄(`tx.spNames = tx.spNames[:idx]`).
+  - 만약 동일 이름이 재사용되었을 경우 실제 세이브포인트 생성 순서와 `spNames`의 물리적 인덱스 순서가 뒤틀려, 나중에 정의된 세이브포인트가 조기 삭제되거나 이전 세이브포인트가 잔류하는 정합성 왜곡 가능.
+* **권장 수정안**:
+  - 동일한 이름의 세이브포인트가 재정의되면 기존 인덱스 위치에서 제거하고 가장 마지막 위치에 새로 추가하거나 표준 LIFO 스택 구조로 일원화 관리.
+* **판정**: `DEFECT_LOGGED`
 
 ---
