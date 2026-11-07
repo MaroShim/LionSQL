@@ -13,12 +13,12 @@
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
 * **1단계 (135단계 전수 광역 스캔)**: 135 / 135 (100.0%) 완주 완료 (총 134건 결함 식별)
-* **2단계 (5대 핵심 코어 심층 재스캔)**: 2 / 5 구역 완료 (구역 1: 7건, 구역 2: 5건 심층 결함 발굴)
-* **총 누적 식별 결함**: 총 146건 (1단계 134건 + 2단계 12건)
-  - Critical: 9건 (+1)
-  - High: 65건 (+5)
-  - Medium: 58건 (+4)
-  - Low: 14건 (+2)
+* **2단계 (5대 핵심 코어 심층 재스캔)**: 3 / 5 구역 완료 (구역 1: 7건, 구역 2: 5건, 구역 3: 6건 심층 결함 발굴)
+* **총 누적 식별 결함**: 총 152건 (1단계 134건 + 2단계 18건)
+  - Critical: 10건 (+2)
+  - High: 68건 (+8)
+  - Medium: 59건 (+5)
+  - Low: 15건 (+3)
 
 ---
 
@@ -2442,6 +2442,83 @@
   - 사용자가 오타나 잘못된 `SELECT * FROM #not_exist`를 반복 실행할 경우 실제 존재하지도 않는 팬텀 임시 테이블명이 세션 메모리에 무한 누적되며, 세션 종료(`CloseSession`) 시 수백 건의 무의미한 `DropTable` 시스템 콜 실패를 유발함.
 * **권장 수정안**:
   - 단순 이름 해석(`Resolve`)과 실제 임시 테이블 등록(`RegisterTempTable`)의 책임을 분리하여, 실제 DDL 성공 시에만 `TempTables`에 추적 등록되도록 개선.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
+### [심층 구역 3] 바이트코드 컴파일러 & VDBE VM (Bytecode Compiler & VDBE VM)
+* **대상 핵심 파일**:
+  - `pkg/proc/compiler.go` (1,506 라인)
+  - `pkg/proc/runtime/vm.go` (2,724 라인)
+  - `pkg/proc/runtime/vm_dispatcher.go` (1,793 라인)
+  - **총 분석 규모**: 6,023 라인
+* **중점 점검 영역**: 중첩 트랜잭션(`@@TRANCOUNT`) 무시 조기 커밋, 음수 레지스터 인덱싱 패닉, 트리거 재귀 한도 초과 침묵 에러, UDF 무한 재귀 스택 오버플로우, 커서 무보호 타입 단언 크래시.
+
+#### [발굴 결함 3-1] `runtime/vm_dispatcher.go`: `OpTxCommit`의 중첩 트랜잭션(`@@TRANCOUNT`) 무시 및 무조건 물리 커밋으로 인한 원자성 파괴
+* **심각도**: `Critical`
+* **위치**: `pkg/proc/runtime/vm_dispatcher.go:536-552` (`OpTxCommit`)
+* **현상 및 원인 분석**:
+  - `OpTxBegin`은 중첩 트랜잭션 진입 시 단순히 `f.tranCount++`만 수행함.
+  - 그러나 `OpTxCommit`은 `f.tranCount`가 1보다 큰 중첩 상태(`f.tranCount > 1`)임에도 불구하고 `f.tranCount--`와 함께 무조건 `f.tx.Commit()`을 실행하여 물리 트랜잭션을 디스크에 조기 커밋해버림.
+  - **영향**: T-SQL 표준 명세상 내부 `COMMIT`은 `@@TRANCOUNT`만 1 감소시키고 최외곽 `COMMIT`(`tranCount == 0`) 시점에만 물리 커밋이 일어나야 함. LionSQL은 내부 블록 커밋 시 즉시 디스크에 커밋해버리므로, 이후 외부 블록에서 오류로 인해 `ROLLBACK TRANSACTION`이 발생해도 이미 커밋된 데이터를 되돌릴 수 없는 **심각한 ACID Atomicity 파괴 및 데이터 영구 오염**이 발생함.
+  - 추가로, 커밋 직후 `f.session.BeginTx()`로 새로 생성된 `newTx`가 `ClientSession.Tx`에 반영되지 않아, 프로시저 종료 후 세션의 트랜잭션 포인터가 이미 닫힌 이전 `tx`를 가리켜 이후 모든 SQL 실행 시 `ErrTxClosed` 에러가 발생함.
+* **권장 수정안**:
+  - `OpTxCommit` 실행 시 `f.tranCount == 1`일 때에만 `f.tx.Commit()`을 수행하고, `f.tranCount > 1`일 때는 카운터만 감소시키도록 수정. 또한 트랜잭션 스왑 시 `ClientSession.Tx`를 항상 동기화해야 함.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 3-2] `runtime/vm.go` & `runtime/vm_dispatcher.go`: `callProc`, `callUDF`, `OpCallBuiltin`의 음수 레지스터 인덱스(`regIdx = -1`) 슬라이스 범위 초과 패닉
+* **심각도**: `High`
+* **위치**: `pkg/proc/runtime/vm.go:2220-2222`, `2254-2257`, `pkg/proc/runtime/vm_dispatcher.go:1491-1493`
+* **현상 및 원인 분석**:
+  - 프로시저, UDF, 내장 함수 호출 시 인자 레지스터 목록(`ArgRegs`)을 순회하며 `if int(regIdx) < len(f.regs)` 형태로 상한선만 검사하고, 하한선(`regIdx >= 0`)을 전혀 검증하지 않음.
+  - 컴파일러가 기본값이나 옵셔널 파라미터, 또는 바인딩되지 않은 슬롯에 대해 `-1`을 센티넬 값으로 전달할 경우, `-1 < len(f.regs)`는 `true`로 통과됨.
+  - **결과**: `f.regs[regIdx]`를 직접 역참조하여 `panic: runtime error: index out of range [-1]`이 발생하고 VM 실행 스레드가 즉각 크래시됨 (`[RULE:DefensiveIndexing]`).
+* **권장 수정안**:
+  - 모든 레지스터 참조부에 `if regIdx >= 0 && int(regIdx) < len(f.regs)` 방어적 경계 검사를 필수 적용.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 3-3] `runtime/vm.go`: `fireTriggers` 재귀 깊이 초과(32) 시 에러 침묵(`return nil`)으로 인한 비즈니스 트리거 무음 스킵
+* **심각도**: `High`
+* **위치**: `pkg/proc/runtime/vm.go:1134-1136` (`fireTriggers`)
+* **현상 및 원인 분석**:
+  - 상호 연쇄 트리거나 재귀 트리거가 실행되어 `f.callDepth >= 32`에 도달했을 때, 재귀 한도 초과 에러(Max Trigger Recursion Exceeded)를 호출자에게 전파하지 않고 침묵하며 `return nil`을 반환함.
+  - **결과**: 트리거 실행이 아무런 에러 메시지나 경고 없이 조용히 중단(무음 실패)되어, 감사 로그 기록, 재고 정합성 차감, 외래키 카스케이드 처리 등이 조용히 누락되는 심각한 데이터 정합성 왜곡 초래 (`[RULE:ExplicitError]`).
+* **권장 수정안**:
+  ```go
+  if f.callDepth >= 32 {
+      return fmt.Errorf("maximum trigger recursion depth (32) exceeded on table %q", tableName)
+  }
+  ```
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 3-4] `runtime/vm.go`: `callUDF` 함수 호출 시 재귀 깊이(`callDepth`) 미검사로 인한 무한 재귀 스택 고갈
+* **심각도**: `High`
+* **위치**: `pkg/proc/runtime/vm.go:2207-2234` (`callUDF`)
+* **현상 및 원인 분석**:
+  - `callProc`은 `f.callDepth >= 64` 가드를 두고 재귀를 통제하고 있으나, 스칼라 UDF를 실행하는 `callUDF`는 `f.callDepth`를 전혀 검사하지 않고 새로운 프레임을 생성하여 무제한 호출함.
+  - 사용자가 자기 자신을 재귀 호출하는 팩토리얼/피보나치 UDF나 상호 재귀 UDF를 작성할 경우, Go 고루틴 스택과 힙 메모리가 무제한 팽창하여 프로세스 OOM 크래시 발생 (`[RULE:BoundedRecursion]`).
+* **권장 수정안**:
+  - `callUDF` 진입 시 `if f.callDepth >= 64` 검사를 추가하고, 서브 프레임 생성 시 `subFrame.callDepth = f.callDepth + 1`을 바인딩하여 재귀 상한을 엄격히 강제.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 3-5] `runtime/vm_dispatcher.go`: 커서 Opcode(`OpCursorClose`, `OpCursorDealloc`, `OpCursorFetch`)의 무보호 Type Assertion 패닉
+* **심각도**: `Medium`
+* **위치**: `pkg/proc/runtime/vm_dispatcher.go:1438`, `1471`, `1481`
+* **현상 및 원인 분석**:
+  - `OpCursorOpen`은 `switch data := f.aux(&inst).(type)`로 안전하게 타입 검사를 수행하지만, `OpCursorFetch`, `OpCursorClose`, `OpCursorDealloc`은 `f.aux(&inst).(*proc.CursorData)` 또는 `f.aux(&inst).(string)`으로 무보호 강제 타입 변환을 수행함.
+  - 손상된 바이트코드나 Aux 데이터 슬롯 불일치 시 `interface conversion: interface {} is nil, not string` 패닉이 발생하여 VM 프레임이 강제 중단됨 (`[RULE:PanicRecovery]`).
+* **권장 수정안**:
+  - `data, ok := f.aux(&inst).(string)` 2-value 타입 단언을 적용하여 타입 불일치 시 패닉 대신 명시적 런타임 에러 반환.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 3-6] `runtime/vm_dispatcher.go`: 이미 열린 커서 재 `OPEN` 및 닫힌 커서 `CLOSE` 시 표준 T-SQL 에러 미발생
+* **심각도**: `Low`
+* **위치**: `pkg/proc/runtime/vm_dispatcher.go:1418-1435`, `1470-1476`
+* **현상 및 원인 분석**:
+  - T-SQL 표준 명세에서는 이미 열린 커서에 `OPEN`을 호출하면 "Cursor is already open" 에러가 발생해야 하지만, LionSQL은 이를 무시하고 테이블을 다시 스캔하여 인덱스를 0으로 초기화함.
+  - 반대로 이미 닫힌 커서에 `CLOSE`를 호출해도 "Cursor is not open" 에러를 내지 않고 조용히 성공 처리함.
+* **권장 수정안**:
+  - `cur.isOpen` 상태 플래그를 검사하여 중복 OPEN 시 `ErrCursorAlreadyOpen`, 미오픈 CLOSE 시 `ErrCursorNotOpen`을 표준 반환하도록 보정.
 * **판정**: `DEFECT_LOGGED`
 
 ---
