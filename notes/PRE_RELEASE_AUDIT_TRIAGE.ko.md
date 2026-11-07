@@ -131,8 +131,8 @@
 
 | 배치 번호 | 대상 도메인 | 포함 결함 (P0) | 핵심 목표 |
 | :---: | :--- | :---: | :--- |
-| **Batch 1** | **보안 및 접근 제어 (Security & RBAC)** | P0-06 ~ P0-10 (5건) | 빈 유저 백도어 차단, DENY 우선순위 확립, Outbox 메시지 유실 방지 |
-| **Batch 2** | **스토리지 & 영속성 (Storage & WAL)** | P0-01 ~ P0-05 (5건) | FlatRecord 오프셋 충돌 해소, 스냅샷 빈 로 증발 방지, WAL 절삭 차단 |
+| **Batch 1** | **보안 및 접근 제어 (Security & RBAC)** | P0-06 ~ P0-10 (5건) [완료] | 빈 유저 백도어 차단, DENY 우선순위 확립, Outbox 메시지 유실 방지 |
+| **Batch 2** | **스토리지 & 영속성 (Storage & WAL)** | P0-01 ~ P0-05 (5건) [완료] | FlatRecord 오프셋 충돌 해소, 스냅샷 빈 로 증발 방지, WAL 절삭 차단, ALTER TABLE 보존, 파티션 락 동시성 완치 |
 | **Batch 3** | **백업, 복원 & 카탈로그 (Backup & Catalog)** | P0-15 ~ P0-17, P0-20 ~ P0-22 (6건) | 복원 트랜잭션 롤백, FK 위상 정렬 복원, 트리거/통계 영속화 |
 | **Batch 4** | **T-SQL 렉서, 파서 & CBO (Parser & CBO)** | P0-23 ~ P0-25, P0-28 (4건) | DECIMAL 실수 오차 퇴치, UTF-8 식별자 보장, LEFT JOIN 보존 |
 | **Batch 5** | **실행 오퍼레이터 & 런타임 (Execution & VM)** | P0-11 ~ P0-14, P0-18 ~ P0-19, P0-26, P0-27, P0-29, P0-30 (10건) | CUBE/Window OOM DoS 방어, Merge 풀스캔 해소, 와이어 락 누수 차단 |
