@@ -378,7 +378,7 @@ func (s *AuthService) HasTablePermission(user, table string, priv Privilege) (bo
 	normTable := strings.ToLower(strings.TrimSpace(table))
 
 	// Administrator bypass
-	if normUser == "" || normUser == "sa" || normUser == "admin" || normUser == "dbo" {
+	if normUser == "sa" || normUser == "admin" || normUser == "dbo" {
 		return true, nil
 	}
 

@@ -139,7 +139,7 @@ func TestRBAC_TablePermissionsGrantRevokeDeny(t *testing.T) {
 	}
 
 	// 5. Admin bypass
-	for _, adminUser := range []string{"sa", "admin", "dbo", ""} {
+	for _, adminUser := range []string{"sa", "admin", "dbo"} {
 		allowed, _ = svc.HasTablePermission(adminUser, "any_secret_table", auth.PrivDelete)
 		if !allowed {
 			t.Errorf("expected admin %q to bypass all checks", adminUser)
@@ -244,3 +244,32 @@ func TestRBAC_ExternalAuthProvider(t *testing.T) {
 		t.Fatalf("expected built-in sa login to succeed with master pass")
 	}
 }
+
+// TestRBAC_Regression_P0_06_AnonymousUserMustBeDenied verifies that empty or unauthenticated users
+// can NEVER bypass table permissions as an administrator (Defect P0-06).
+func TestRBAC_Regression_P0_06_AnonymousUserMustBeDenied(t *testing.T) {
+	svc := auth.NewAuthService(auth.Config{})
+
+	// 1. Unauthenticated or empty principals must be denied access to private tables
+	for _, unauth := range []string{"", "   ", "anonymous"} {
+		allowed, err := svc.HasTablePermission(unauth, "credit_cards", auth.PrivSelect)
+		if err != nil {
+			t.Fatalf("unexpected error checking permission for %q: %v", unauth, err)
+		}
+		if allowed {
+			t.Fatalf("[CRITICAL P0-06 REGRESSION] unauthenticated user %q was granted admin bypass on credit_cards table!", unauth)
+		}
+	}
+
+	// 2. Only genuine administrators (sa, admin, dbo) must bypass permission checks
+	for _, adminUser := range []string{"sa", "admin", "dbo"} {
+		allowed, err := svc.HasTablePermission(adminUser, "credit_cards", auth.PrivSelect)
+		if err != nil {
+			t.Fatalf("unexpected error checking admin %q: %v", adminUser, err)
+		}
+		if !allowed {
+			t.Fatalf("expected genuine admin %q to bypass checks", adminUser)
+		}
+	}
+}
+
