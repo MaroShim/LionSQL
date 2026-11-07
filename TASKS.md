@@ -339,7 +339,7 @@
 - [x] 핵심 코어 5구역: 멀티 와이어 & 복제 엔진 (`wire/server.go`, `tds/packet.go`, `replication/broadcaster.go`, `replication/client.go`) 완주 (5건 심층 결함 발굴)
 - [x] 핵심 코어 6구역: T-SQL 렉서 & 파서 코어 (`pkg/proc/lexer.go`, `pkg/proc/parser.go`, `pkg/proc/parser_expr.go`, `pkg/proc/parser_dml.go`) 완주 (5건 심층 결함 발굴)
 - [x] 핵심 코어 7구역: 시스템 카탈로그 & DDL 메타데이터 코어 (`pkg/catalog/catalog.go`, `pkg/catalog/virtual/interceptor.go`) 완주 (5건 심층 결함 발굴)
-- [ ] 핵심 코어 8구역: SQL 실행 엔진 본체 (`pkg/engine/sqlexec_dml.go`, `sqlexec_ddl.go`, `sqlexec_merge.go`, `sqlexec_cursor.go`) 심층 전수 재스캔
+- [x] 핵심 코어 8구역: SQL 실행 엔진 본체 (`pkg/engine/sqlexec_dml.go`, `sqlexec_ddl.go`, `sqlexec_merge.go`, `sqlexec_cursor.go`) 완주 (5건 심층 결함 발굴)
 - [ ] 핵심 코어 9구역: 백업, 복구 & PITR 시점 복구 (`pkg/backup/backup.go`, `restore.go`, `pitr.go`, `wal_archive.go`) 심층 전수 재스캔
 - [ ] 핵심 코어 10구역: 고급 분석 실행 오퍼레이터 (`pkg/execution/aggregate.go`, `window.go`, `merge_join.go`, `setop.go`) 심층 전수 재스캔
 - [ ] 핵심 코어 11구역: 인메모리 스토리지 코어 잔여 (`pkg/storage/memengine/skiplist.go`, `table_data.go`, `flat_record.go`, `wal.go`) 심층 전수 재스캔

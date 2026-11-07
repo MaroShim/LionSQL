@@ -13,8 +13,12 @@
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
 * **1단계 (135단계 전수 광역 스캔)**: 135 / 135 (100.0%) 완주 완료 (총 134건 결함 식별)
-* **2단계 (12대 핵심 코어 심층 재스캔)**: 7 / 12 구역 완료 (구역 1~7: 38건 발굴 완료, 구역 8~12 진행 중)
-* **총 누적 식별 결함**: 총 172건 (1단계 134건 + 2단계 38건)
+* **2단계 (12대 핵심 코어 심층 재스캔)**: 8 / 12 구역 완료 (구역 1~8: 43건 발굴 완료, 구역 9~12 진행 중)
+* **총 누적 식별 결함**: 총 177건 (1단계 134건 + 2단계 43건)
+  - Critical: 18건 (+2)
+  - High: 80건 (+2)
+  - Medium: 64건 (+1)
+  - Low: 15건 (+0)
   - Critical: 16건 (+3)
   - High: 78건 (+5)
   - Medium: 63건 (+2)
@@ -2771,6 +2775,66 @@
   - SQL 문자열 리터럴 내부에 대괄호가 포함되어 있는 경우(예: `WHERE relname = '[temp]'` 또는 `LIKE '[A-Z]%'`), 리터럴 내부의 대괄호까지 전부 제거되어 쿼리 검색 조건이 파괴됨.
 * **권장 수정안**:
   - 문자열 리터럴 외부의 식별자 대괄호만 선별적으로 제거하거나 정규 파서 AST 라우팅 적용.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
+### [심층 구역 8] SQL 실행 엔진 본체 (SQL Execution Runtime Core)
+* **점검 대상 파일**: `pkg/engine/sqlexec_dml.go`, `pkg/engine/sqlexec_ddl.go`, `pkg/engine/sqlexec_merge.go`, `pkg/engine/sqlexec_cursor.go` (총 4,809 라인 전수 스캔)
+* **핵심 분석 초점**: MERGE 타깃 무제한 풀스캔 OOM, UPDATE/DELETE 디스크 I/O 에러 시 무음 탈출 및 부분 커밋 데이터 오염, WITHOUT HOLD 커서 트랜잭션 경계 누수, DROP TABLE 외래키 참조 무결성 검증 누락.
+
+#### [발굴 결함 8-1] `engine/sqlexec_merge.go`: `MERGE` 문 실행 시 타깃 테이블 무제한 풀스캔 힙 적재 및 $O(M \times N)$ 비색인 루프로 인한 OOM DoS 크래시
+* **심각도**: `Critical`
+* **위치**: `pkg/engine/sqlexec_merge.go:106-114`, `146-157` (`execMerge`)
+* **현상 및 원인 분석**:
+  - `MERGE` 문을 실행할 때 대상 테이블(`parsed.targetTable`) 전체를 `targetCursor.Record()`를 통해 무조건 전체 풀스캔하여 `targetRows` 슬라이스에 전량 인메모리 힙 적재함.
+  - 대상 테이블이 수백만~수천만 행 이상인 대형 테이블인 경우, 수 GB의 메모리가 일시에 할당되어 Go 런타임 OOM 크래시가 발생함 (`[RULE:BoundedBuffers]`).
+  - 또한 매칭 로직이 $O(M \times N)$ 비색인 전수 중첩 루프로 구현되어 있어, 소스와 타깃 레코드 곱연산으로 인한 CPU 스톨 및 트랜잭션 타임아웃을 유발함.
+* **권장 수정안**:
+  - 타깃 테이블의 PK/유니크 인덱스를 통한 $O(1)$ 점조회(Point Lookup) 방식으로 변경하고, 전체 메모리 버퍼링을 제거하여 스트리밍 파이프라인으로 전환.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 8-2] `engine/sqlexec_dml.go`: `execUpdate` 및 `execDelete` 스캔 중 I/O 에러 시 무음 탈출(`break`)로 인한 치명적 부분 커밋 데이터 오염
+* **심각도**: `Critical`
+* **위치**: `pkg/engine/sqlexec_dml.go:1128-1132`, `1290-1293` (`execUpdate`, `execDelete`)
+* **현상 및 원인 분석**:
+  - `execUpdate`와 `execDelete`의 레코드 수집 루프(`for cursor.Next()`)에서 `rec, err := cursor.Record(); if err != nil { break }` 형태로 I/O 읽기 실패나 스토리지 에러를 무음 삼키고 조기 탈출함 (`[RULE:ExplicitError]`).
+  - 에러가 무시된 상태에서 후속 `tx.Update()` / `tx.Delete()` 루프로 직행하여, 읽기에 성공한 앞부분 행들만 물리 디스크에 반영하고 `tx.Commit()`을 완료함.
+  - **결과**: 조건에 부합하는 전체 레코드 중 앞부분 30%만 수정/삭제되고 나머지 70%는 그대로 방치되는 끔찍한 부분 적용(Partial Apply) 데이터 정합성 파괴 초래.
+* **권장 수정안**:
+  - `if err != nil { if isEphemeral { _ = tx.Rollback() }; return nil, fmt.Errorf("cursor record scan failed: %w", err) }`로 명시적 롤백 및 에러 반환.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 8-3] `engine/sqlexec_cursor.go`: `WITHOUT HOLD` 커서가 트랜잭션 종료 시 자동 정리되지 않고 세션에 영구 잔류하는 라이프사이클 위반
+* **심각도**: `High`
+* **위치**: `pkg/engine/sqlexec_cursor.go:87-97`, `pkg/engine/session.go:71` (`execDeclareCursor`)
+* **현상 및 원인 분석**:
+  - SQL 표준 및 PostgreSQL 명세에 따르면 `WITH HOLD` 옵션 없이 선언된 기본 커서는 트랜잭션이 `COMMIT` 또는 `ROLLBACK`되는 즉시 자동으로 파기(Close)되어야 함.
+  - 그러나 LionSQL의 세션 트랜잭션 커밋/롤백 핸들러(`session.go:CommitTx`, `RollbackTx`)에는 `cs.Cursors`를 정리하는 로직이 완전히 누락되어 있음.
+  - **결과**: 트랜잭션이 종료된 후에도 커서가 세션 메모리에 영구 잔류하여, 이미 만료된 이전 스냅샷의 행을 계속해서 클라이언트에게 리턴하는 트랜잭션 격리 파괴 및 메모리 누수 발생.
+* **권장 수정안**:
+  - `cs.CommitTx()` 및 `cs.RollbackTx()`에 `for name, cur := range cs.Cursors { if !cur.WithHold { delete(cs.Cursors, name) } }` 정리 핸들러 바인딩.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 8-4] `engine/sqlexec_ddl.go`: `execDropTable` 실행 시 외래키 참조 무결성 검증 누락으로 인한 부모 테이블 무단 삭제
+* **심각도**: `High`
+* **위치**: `pkg/engine/sqlexec_ddl.go:389-415` (`execDropTable`)
+* **현상 및 원인 분석**:
+  - 테이블을 삭제할 때 트리거는 검사하여 삭제하지만, 다른 자식 테이블들이 `FOREIGN KEY REFERENCES <tableName>(id)`로 해당 테이블을 참조하고 있는지 여부를 전혀 검사하지 않음.
+  - 자식 테이블에 데이터가 엄연히 존재하는 상태에서 부모 테이블이 아무런 제약 없이 삭제됨 (`s.engine.DropTable`).
+  - **결과**: 자식 테이블의 외래키가 존재하지 않는 가상의 고아 테이블을 가리키게 되어, 데이터베이스 전역의 참조 무결성(Referential Integrity)이 완전히 파괴됨.
+* **권장 수정안**:
+  - 카탈로그의 모든 테이블을 순회하여 해당 테이블을 참조하는 자식 외래키가 존재하는 경우 `RESTRICT` 에러(`cannot drop table %q because other objects depend on it`)를 발생시키고 차단.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 8-5] `engine/sqlexec_merge.go`: `MERGE (VALUES ...)` 소스 파싱 시 작은따옴표 이스케이프(`''`) 언이스케이프 누락
+* **심각도**: `Medium`
+* **위치**: `pkg/engine/sqlexec_merge.go:364` (`loadMergeSourceRows`)
+* **현상 및 원인 분석**:
+  - `MERGE INTO ... USING (VALUES ('O''Reilly'))` 형태로 작은따옴표가 이스케이프된 튜플을 파싱할 때 `vStr = strings.Trim(vStr, "'\"")`만 수행하고 내부의 `''`를 `'`로 치환하는 언이스케이프를 수행하지 않음.
+  - **결과**: DB 타깃 테이블에 `O'Reilly`가 아닌 이스케이프된 `O''Reilly` 문자열이 원시 형태 그대로 삽입되어 데이터 오염 초래.
+* **권장 수정안**:
+  - `vStr = strings.ReplaceAll(vStr, "''", "'")` 언이스케이프 로직 추가.
 * **판정**: `DEFECT_LOGGED`
 
 ---
