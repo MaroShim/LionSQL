@@ -141,6 +141,95 @@ func TestCDC_Streamer_HistoricalReplay(t *testing.T) {
 	}
 }
 
+// TestCDC_Streamer_Regression_P0_10_HistoricalReplayBufferOverflowNoDrop verifies that
+// when historical events exceed the subscriber's channel buffer capacity, events are NEVER silently
+// dropped, guaranteeing gapless historical replay (P0-10).
+func TestCDC_Streamer_Regression_P0_10_HistoricalReplayBufferOverflowNoDrop(t *testing.T) {
+	const historyEvents = 50
+	const subscriberBufSize = 10 // Intentionally much smaller than history events to trigger overflow
+
+	streamer := NewStreamer(100)
+	defer streamer.Close()
+
+	// 1. Commit 50 sequential events into the streamer's ring buffer
+	for i := int64(1); i <= historyEvents; i++ {
+		streamer.OnWALRecord(memengine.WALRecord{
+			LSN:       i,
+			Timestamp: time.Now().UnixNano(),
+			Ops: []memengine.WALOp{
+				{
+					Type:   memengine.OpInsert,
+					Table:  "orders",
+					Key:    "ord",
+					Record: storage.Record{"id": storage.IntValue(i)},
+				},
+			},
+		})
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// 2. Subscribe starting from LSN 1 with a small buffer size (10)
+	// (Should replay all events with LSN > 1, i.e. 49 events)
+	ch, unsub, err := streamer.Subscribe(ctx, 1, "", subscriberBufSize)
+	if err != nil {
+		t.Fatalf("failed to subscribe: %v", err)
+	}
+	defer unsub()
+
+	// 3. Consume all 49 events concurrently as they stream out
+	const expectedReplayCount = historyEvents - 1
+	received := make([]int64, 0, expectedReplayCount)
+	for i := 0; i < expectedReplayCount; i++ {
+		select {
+		case ev, ok := <-ch:
+			if !ok {
+				t.Fatalf("channel closed prematurely after %d events", len(received))
+			}
+			received = append(received, ev.LSN)
+		case <-ctx.Done():
+			t.Fatalf("[CRITICAL P0-10 REGRESSION] Timed out waiting for historical events. Received only %d/%d (events %d~%d were silently dropped!)",
+				len(received), expectedReplayCount, len(received)+2, historyEvents)
+		}
+	}
+
+	// 4. Verify all 49 events were delivered sequentially with zero gap
+	for i := 0; i < expectedReplayCount; i++ {
+		expectedLSN := int64(i + 2)
+		if received[i] != expectedLSN {
+			t.Errorf("expected received[%d] == LSN %d, got %d", i, expectedLSN, received[i])
+		}
+	}
+
+	// 5. Test fromLSN = 0 replays all 50 events without gaps
+	chAll, unsubAll, err := streamer.Subscribe(ctx, 0, "", subscriberBufSize)
+	if err != nil {
+		t.Fatalf("failed to subscribe from LSN 0: %v", err)
+	}
+	defer unsubAll()
+
+	receivedAll := make([]int64, 0, historyEvents)
+	for i := 0; i < historyEvents; i++ {
+		select {
+		case ev, ok := <-chAll:
+			if !ok {
+				t.Fatalf("channel closed prematurely for LSN 0 replay after %d events", len(receivedAll))
+			}
+			receivedAll = append(receivedAll, ev.LSN)
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for LSN 0 full replay, got %d/%d", len(receivedAll), historyEvents)
+		}
+	}
+
+	for i := 0; i < historyEvents; i++ {
+		expectedLSN := int64(i + 1)
+		if receivedAll[i] != expectedLSN {
+			t.Errorf("expected receivedAll[%d] == LSN %d, got %d", i, expectedLSN, receivedAll[i])
+		}
+	}
+}
+
 func TestCDC_Streamer_ServeHTTP_NDJSON(t *testing.T) {
 	streamer := NewStreamer(100)
 	defer streamer.Close()

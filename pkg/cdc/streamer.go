@@ -106,25 +106,25 @@ func (s *Streamer) Subscribe(ctx context.Context, fromLSN int64, tableFilter str
 	}
 
 	subID := fmt.Sprintf("sub_%d", s.nextSubID.Add(1))
-	ch := make(chan ChangeEvent, bufSize)
+	liveCh := make(chan ChangeEvent, bufSize)
+	outCh := make(chan ChangeEvent, bufSize)
+
 	sub := &subscriber{
 		id:          subID,
-		ch:          ch,
+		ch:          liveCh,
 		tableFilter: tableFilter,
 		fromLSN:     fromLSN,
 	}
 
 	s.mu.Lock()
-	// Replay missed historical events if fromLSN is behind
-	if fromLSN > 0 && s.historyLen > 0 {
+	// Collect missed historical events under s.mu.Lock without blocking or silent drops ([P0-10])
+	var historicalEvents []ChangeEvent
+	if fromLSN >= 0 && s.historyLen > 0 {
 		for i := 0; i < s.historyLen; i++ {
 			ev := s.history[(s.historyHead+i)%s.historyCap]
 			if ev.LSN > fromLSN {
 				if tableFilter == "" || strings.EqualFold(tableFilter, ev.Table) {
-					select {
-					case ch <- ev:
-					default:
-					}
+					historicalEvents = append(historicalEvents, ev)
 				}
 			}
 		}
@@ -132,9 +132,44 @@ func (s *Streamer) Subscribe(ctx context.Context, fromLSN int64, tableFilter str
 	s.subscribers[subID] = sub
 	s.mu.Unlock()
 
+	subCtx, subCancel := context.WithCancel(ctx)
+
+	// Lossless Bridge goroutine: guarantees strict FIFO ordering (Historical -> Live)
+	// and backpressure without silent drops ([RULE:ZeroOrphan], [P0-10]).
+	go func() {
+		defer close(outCh)
+
+		// 1. Replay all historical events first
+		for _, ev := range historicalEvents {
+			select {
+			case <-subCtx.Done():
+				return
+			case outCh <- ev:
+			}
+		}
+
+		// 2. Transition seamlessly to live events
+		for {
+			select {
+			case <-subCtx.Done():
+				return
+			case ev, ok := <-liveCh:
+				if !ok {
+					return
+				}
+				select {
+				case <-subCtx.Done():
+					return
+				case outCh <- ev:
+				}
+			}
+		}
+	}()
+
 	var once sync.Once
 	cancel := func() {
 		once.Do(func() {
+			subCancel()
 			s.mu.Lock()
 			if existing, ok := s.subscribers[subID]; ok {
 				delete(s.subscribers, subID)
@@ -144,7 +179,7 @@ func (s *Streamer) Subscribe(ctx context.Context, fromLSN int64, tableFilter str
 		})
 	}
 
-	return ch, cancel, nil
+	return outCh, cancel, nil
 }
 
 // ServeHTTP implements the HTTP streaming endpoint (e.g. GET /api/cdc/stream).
