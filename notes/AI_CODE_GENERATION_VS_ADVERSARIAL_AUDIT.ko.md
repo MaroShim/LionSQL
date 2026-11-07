@@ -76,7 +76,37 @@ AI 에이전트에게 기능을 요청할 때, 프롬프트는 보통 국소적�
 
 인간이 며칠 밤을 새워도 놓치기 쉬운 **'전체 코드베이스 대상 정적 전수 교차 대조'**를 AI는 단 수 초 만에 오차 없이 수행해 버리는 것입니다.
 
-### 3.4 듀얼 AI(Gemini × Claude) 크로스체크의 시너지
+### 3.4 '집합론적 대칭성 검사'로 찾아낸 P0-23 결함: 사람은 넘어가지만 AI는 못 참는 차집합의 마법
+동시성 락 누락보다 더 소름 돋는 사례가 바로 `P0-23` [DECIMAL/NUMERIC을 Float 매핑하여 금융 부동소수점 오차 유발] 결함이었습니다:
+```go
+// pkg/proc/parser.go
+func parseDataType(s string) storage.DataType {
+	switch strings.ToUpper(s) {
+	...
+	case "FLOAT", "DECIMAL", "DOUBLE", "NUMERIC", "REAL", "FLOAT4", "FLOAT8", "MONEY":
+		return storage.TypeFloat
+```
+이 2줄짜리 코드는 컴파일 에러도 없고, 런타임 패닉도 안 나며, 기존 테스트도 100% 통과합니다. 인간 엔지니어가 코드를 훑어보면 *"아, 소수점 있는 타입들을 모아서 처리하는구나"* 하고 자연스럽게 뇌가 속아 넘어갑니다.
+
+그런데 감사 모드의 AI는 이를 다음과 같은 **3단계 연역적 집합론 추론**으로 적발했습니다:
+
+1. **정의된 기준 집합(Domain Axiom) 인덱싱**:
+   - 스토리지 코어(`pkg/storage/engine.go`)에 선언된 공인 데이터 타입 열거형(Enum) 전수를 수집합니다:
+     $$S_{storage} = \{ \text{TypeInt}, \text{TypeVarChar}, \text{TypeFloat}, \mathbf{TypeDecimal}, \text{TypeBool}, \text{TypeDateTime}, \dots \}$$
+2. **파서 반환값의 치역 집합(Range Set) 추출 및 차집합 계산**:
+   - 파서(`proc/parser.go`)의 `parseDataType`이 `return`하는 타입들을 기계적으로 수집합니다:
+     $$S_{parser} = \{ \text{TypeInt}, \text{TypeVarChar}, \text{TypeFloat}, \text{TypeBool}, \text{TypeDateTime}, \dots \}$$
+   - 두 집합의 **차집합(Set Difference)**을 연산합니다:
+     $$S_{storage} \setminus S_{parser} = \{ \mathbf{TypeDecimal} \}$$
+   - AI가 즉각 경보를 울립니다: *"엔진 심장부에는 엄연히 `TypeDecimal`이 존재하는데, 파서의 반환 집합에는 `TypeDecimal`이 단 1개도 없다! 어디선가 매핑이 끊겼다!"*
+3. **도메인 상식(Domain Semantics)과의 충돌 확정**:
+   - 파서에서 `DECIMAL`, `NUMERIC`, `MONEY`가 어디로 흘러가는지 역추적하여 `return storage.TypeFloat`을 찾아냅니다.
+   - *"DECIMAL은 금융/회계용 고정소수점 타입이다. 이를 IEEE 754 부동소수점(`TypeFloat`)으로 강등하는 것은 상용 데이터베이스 엔진에서 절대 용납될 수 없는 치명적인 정밀도 손실 안티패턴이다!"*
+   - 결국 프로토타입 첫날(2026-09-15) 임시로 짰던 코드가 한 달 넘게 방치되어 있었다는 역사적 빚이 밝혀진 것입니다.
+
+인간은 **문맥의 흐름(Flow)**을 읽느라 "대충 소수점 숫자 처리하는구나" 하고 넘어가지만, AI는 **타입 시스템의 수학적 대칭성(Symmetry)과 차집합**을 기계적으로 대조하기 때문에 이런 은폐된 결함을 놓치지 않고 수면 위로 끄집어냅니다.
+
+### 3.5 듀얼 AI(Gemini × Claude) 크로스체크의 시너지
 이번 전수 감사에서는 단일 모델의 편향을 방지하기 위해 상이한 아키텍처를 지닌 두 거대 모델을 교차 투입했습니다:
 - **Gemini**: 전체 아키텍처의 인과관계와 불변식(ACID 트랜잭션 경계, WAL 영속성 무손실, 스냅샷 정합성)을 거시적으로 조망하고,
 - **Claude**: 구석구석 숨어있는 포인터 누수, 비트 오프셋 충돌, 동시성 레이스, 침묵하는 에러(`_ = err`)를 미시적으로 집요하게 파헤쳤습니다.
