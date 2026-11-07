@@ -101,6 +101,10 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 
 ## 2. Post-1.0 Candidates & Deep Freezer (1.0 이후 후보 및 냉동 보관)
 
+### 2.0 1.0 전수 감사 결과 기반 P2 이관 백로그 및 P3 아키텍처 불변 SSOT
+- [ ] **`P2-BACKLOG` Post-1.0 v1.1.0 P2 이관 백로그 전수 카탈로그 (총 92건)**: 128단 중첩 서브쿼리, 10만 건 IN-List, 극한 마진 엣지 케이스를 1.0 코드 복잡도 억제(`[RULE:RadicalKISS]`)를 위해 v1.1.0으로 안전하게 이관 완료. ([`notes/POST_1.0_CANDIDATES.ko.md#4-post-10-v110-p2-이관-백로그-전수-카탈로그-총-92건`](notes/POST_1.0_CANDIDATES.ko.md))
+- [x] **`P3-INVARIANTS` By-Design & Spec-Out 영구 아키텍처 불변 목록 (총 25건)**: PL/pgSQL 단일 VM 통합, Non-blocking 2PL 배제, Vacuum 불필요 등 25건 아키텍처 철학 명문화 및 코드 수정 배제 종결. ([`notes/POST_1.0_CANDIDATES.ko.md#5-lionsql-by-design--spec-out-영구-아키텍처-불변-목록-p3-총-25건`](notes/POST_1.0_CANDIDATES.ko.md), [`GEMINI.md`](GEMINI.md))
+
 ### 2.1 클라우드 유틸리티 및 엔터프라이즈 백로그
 1. **`FEAT-MATVIEW-ALIAS-1` Materialized View Virtual Alias & Tolerant Refresh (1.0 이후)**
    - **목표**: Mattermost, Discourse 등 엔터프라이즈 앱 부트스트랩을 위해 `CREATE MATERIALIZED VIEW`를 가상 뷰(Virtual View, `relkind='m'`)로 인라인 치환하고 `REFRESH MATERIALIZED VIEW`를 Tolerant No-Op(성공) 처리하여 수천 줄의 복잡도와 락 위험을 99% 절감.
