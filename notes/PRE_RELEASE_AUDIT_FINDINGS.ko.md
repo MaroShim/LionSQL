@@ -13,12 +13,12 @@
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
 * **1단계 (135단계 전수 광역 스캔)**: 135 / 135 (100.0%) 완주 완료 (총 134건 결함 식별)
-* **2단계 (5대 핵심 코어 심층 재스캔)**: 3 / 5 구역 완료 (구역 1: 7건, 구역 2: 5건, 구역 3: 6건 심층 결함 발굴)
-* **총 누적 식별 결함**: 총 152건 (1단계 134건 + 2단계 18건)
-  - Critical: 10건 (+2)
-  - High: 68건 (+8)
-  - Medium: 59건 (+5)
-  - Low: 15건 (+3)
+* **2단계 (5대 핵심 코어 심층 재스캔)**: 4 / 5 구역 완료 (구역 1: 7건, 구역 2: 5건, 구역 3: 6건, 구역 4: 5건 심층 결함 발굴)
+* **총 누적 식별 결함**: 총 157건 (1단계 134건 + 2단계 23건)
+  - Critical: 11건 (+1)
+  - High: 70건 (+2)
+  - Medium: 61건 (+2)
+  - Low: 15건 (+0)
 
 ---
 
@@ -2519,6 +2519,76 @@
   - 반대로 이미 닫힌 커서에 `CLOSE`를 호출해도 "Cursor is not open" 에러를 내지 않고 조용히 성공 처리함.
 * **권장 수정안**:
   - `cur.isOpen` 상태 플래그를 검사하여 중복 OPEN 시 `ErrCursorAlreadyOpen`, 미오픈 CLOSE 시 `ErrCursorNotOpen`을 표준 반환하도록 보정.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
+### [심층 구역 4] CBO 플래너 & 실행 오퍼레이터 (CBO Planner & Volcano Operators Core)
+* **점검 대상 파일**: `pkg/planner/planner.go`, `pkg/execution/join.go`, `pkg/execution/sort.go`, `pkg/execution/builder.go` (총 4,887 라인 전수 스캔)
+* **핵심 분석 초점**: Zero-Division NaN 계산 왜곡, External Sort 디스크 파일 누수, Join Iterator 자원 누수, Min-Heap 스트림 디코딩 무음 에러, 인덱스 컬럼 슬라이스 인덱싱 패닉.
+
+#### [발굴 결함 4-1] `planner/planner.go`: 빈 테이블의 유니크 인덱스 비용 계산 시 Zero-Division `1.0 / 0.0 = +Inf` 나눗셈으로 인한 `estRows = NaN -> 0` 비용 왜곡
+* **심각도**: `Critical`
+* **위치**: `pkg/planner/planner.go:1482`, `1604` (`calculateIndexCost`)
+* **현상 및 원인 분석**:
+  - 테이블이 비어 있거나 카디널리티가 0인 상태(`estimatedTotal == 0`)에서 유니크 인덱스나 동등 조건 비용을 산출할 때 `selectivity = 1.0 / float64(estimatedTotal)` 연산을 수행함.
+  - Go 부동소수점 연산에서 `1.0 / 0.0`은 런타임 패닉을 내지 않고 `+Inf`를 반환하며, 이후 `estRows = selectivity * float64(estimatedTotal)`는 `+Inf * 0.0 = NaN`이 됨.
+  - **결과**: `math.IsNaN(estRows)` 상태에서 비용 누적 비교 시 모든 부등호 연산(`<`, `>`)이 `false`로 평가되어, 최적의 유니크 인덱스 대신 전체 테이블 풀 스캔(Full Table Scan) 플랜이 무조건 선택되는 심각한 CBO 플래너 선택 오류 초래.
+* **권장 수정안**:
+  - `if estimatedTotal <= 0 { estimatedTotal = 1 }` 방어 로직을 배치하여 0 나누기 원천 차단.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 4-2] `execution/sort.go`: Spill to Disk 도중 I/O 에러 또는 중단 시 생성된 임시 런 파일(`/tmp/lionsql-sort-run-*.tmp`) 및 파일 디스크립터 영구 누수
+* **심각도**: `High`
+* **위치**: `pkg/execution/sort.go:181-209`, `303-317` (`spillToDisk`, `Open`, `Close`)
+* **현상 및 원인 분석**:
+  - External Merge Sort 수행 중 메모리 한도 초과로 `/tmp/lionsql-sort-run-*.tmp` 파일을 생성하고 청크를 기록할 때, 도중에 디스크 Full이나 컨텍스트 취소로 에러가 반환되면 이미 생성된 `s.runFiles`의 일부가 닫히지 않고 삭제되지도 않음 (`[RULE:HandleHygiene]`).
+  - 또한 `SortIterator.Open()` 실패 시 `Close()`가 호출되지 않으면 파일 디스크립터와 디스크 파일이 영구히 잔류하여 OS `/tmp` 파티션을 고갈시킴.
+* **권장 수정안**:
+  - `spillToDisk` 실패 시 생성된 파일들을 즉시 닫고 `os.Remove`하는 롤백 핸들러 배치. `SortIterator.Close()`에서 `s.runFiles` 및 `s.runReaders`를 `defer`를 통해 원자적으로 전부 닫고 언링크(`os.Remove`)하도록 보장.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 4-3] `execution/join.go`: `HashJoinIterator.Close()`에서 `h.left.Close()`만 호출하고 `h.right.Close()` 누락으로 인한 빌드 측 이터레이터 리소스 영구 누수
+* **심각도**: `High`
+* **위치**: `pkg/execution/join.go:386-400` (`HashJoinIterator.Close`)
+* **현상 및 원인 분석**:
+  - `HashJoinIterator.Close()` 구현에서 탐색 측(Probe) 하위 이터레이터인 `h.left.Close()`는 호출하지만, 빌드 측(Build) 하위 이터레이터인 `h.right.Close()` 호출이 완전히 누락됨.
+  - 빌드 측 하위 트리가 테이블 스캔 커서나 정렬 임시 파일, 인덱스 락을 쥐고 있는 경우, 부모 쿼리가 종료되어도 하위 리소스가 결코 해제되지 않고 누수됨 (`[RULE:HandleHygiene]`).
+* **권장 수정안**:
+  ```go
+  func (h *HashJoinIterator) Close() error {
+      var errLeft, errRight error
+      if h.left != nil {
+          errLeft = h.left.Close()
+      }
+      if h.right != nil {
+          errRight = h.right.Close()
+      }
+      if errLeft != nil { return errLeft }
+      return errRight
+  }
+  ```
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 4-4] `execution/sort.go`: `SortIterator.NextChunk`의 Min-Heap 디코딩 중 I/O 에러(`err != io.EOF`)를 무음 삼키고 조기 종료하여 정렬 데이터 손실
+* **심각도**: `Medium`
+* **위치**: `pkg/execution/sort.go:353-356` (`SortIterator.NextChunk`)
+* **현상 및 원인 분석**:
+  - 임시 파일 런들을 병합(K-way Merge)하는 Min-Heap 스트림 디코딩 과정에서 `dec.Decode(&row)` 시 에러가 발생했을 때, `if err == io.EOF`뿐만 아니라 일반 I/O 에러나 디스크 손상 에러도 무조건 해당 런의 정상 종료로 간주하고 무음 삼켜버림 (`[RULE:ExplicitError]`).
+  - **결과**: 디스크 읽기 실패 시 에러가 보고되지 않고 쿼리 결과에서 중간 레코드 수천~수만 건이 누락된 채 조기 리턴되는 심각한 데이터 손실(Data Loss) 발생.
+* **권장 수정안**:
+  - `if err != nil && err != io.EOF { return nil, fmt.Errorf("sort merge decode run file failed: %w", err) }`로 명시적 분기 및 에러 전파.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 4-5] `planner/planner.go`: Nested Loop Join 계획 수립 시 표현식 인덱스에 대한 `innerIndex.Columns[0]` 무검사 접근 슬라이스 패닉
+* **심각도**: `Medium`
+* **위치**: `pkg/planner/planner.go:2984` (`planNestedLoopJoin`)
+* **현상 및 원인 분석**:
+  - 최적의 Join 인덱스를 매칭하는 과정에서 인덱스 컬럼 목록의 길이를 확인하지 않고 `col := innerIndex.Columns[0]`을 직접 역참조함.
+  - 함수 기반 표현식 인덱스(Expression Index)나 가상 컬럼 인덱스의 경우 `Columns`가 비어 있고 표현식 트리가 등록되어 있을 수 있음.
+  - **결과**: `len(innerIndex.Columns) == 0`인 인덱스가 카탈로그에 존재할 경우 `panic: runtime error: index out of range [0]` 발생으로 쿼리 컴파일 스레드가 크래시됨 (`[RULE:DefensiveIndexing]`).
+* **권장 수정안**:
+  - `if len(innerIndex.Columns) == 0 { continue }` 방어적 슬라이스 길이 검사 추가.
 * **판정**: `DEFECT_LOGGED`
 
 ---

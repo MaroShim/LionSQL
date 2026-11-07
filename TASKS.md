@@ -335,7 +335,7 @@
 - [x] 핵심 코어 1구역: 스토리지 엔진 코어 (`wt_engine.go`, `memengine.go`, `tx.go`, `persistence.go`) 완주 (7건 심층 결함 발굴)
 - [x] 핵심 코어 2구역: 트랜잭션 코디네이터 (`coordinator.go`, `coordinator_impl.go`, `session.go`, `session_pool.go`) 완주 (5건 심층 결함 발굴)
 - [x] 핵심 코어 3구역: 바이트코드 컴파일러 & VDBE VM (`compiler.go`, `runtime/vm.go`, `vm_dispatcher.go`) 완주 (6건 심층 결함 발굴)
-- [ ] 핵심 코어 4구역: CBO 플래너 & 실행 오퍼레이터 (`planner.go`, `hash_join.go`, `sort.go`) 심층 전수 재스캔
+- [x] 핵심 코어 4구역: CBO 플래너 & 실행 오퍼레이터 (`planner.go`, `join.go`, `sort.go`, `builder.go`) 완주 (5건 심층 결함 발굴)
 - [ ] 핵심 코어 5구역: 멀티 와이어 & 복제 엔진 (`wire/server.go`, `tds/packet.go`, `broadcaster.go`) 심층 전수 재스캔
 
 ---
