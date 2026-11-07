@@ -1321,8 +1321,11 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 	schema, leftStats = optimizeRootTable(q, schema, leftStats, rightSchemas, rightStats)
 
 	estimatedTotal := int64(100)
-	if leftStats != nil && leftStats.RowCount > 0 {
+	if leftStats != nil {
 		estimatedTotal = leftStats.RowCount
+	}
+	if estimatedTotal <= 0 {
+		estimatedTotal = 1
 	}
 
 	seqPages := float64(estimatedTotal) / float64(RowsPerPageDefault)
@@ -1478,13 +1481,17 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 						continue
 					}
 					sel := 0.1
+					totalRows := estimatedTotal
+					if totalRows <= 0 {
+						totalRows = 1
+					}
 					if idx.Unique && (op == "=" || op == "==") {
-						sel = 1.0 / float64(estimatedTotal)
+						sel = 1.0 / float64(totalRows)
 					} else if leftStats != nil {
 						sel = leftStats.EstimateSelectivity(colName, op, valStr)
 					}
 
-					estRows := int64(math.Ceil(float64(estimatedTotal) * sel))
+					estRows := int64(math.Ceil(float64(totalRows) * sel))
 					if estRows < 1 {
 						estRows = 1
 					}
@@ -1600,10 +1607,14 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 									continue
 								}
 								sel := 0.1
-								if idx.Unique {
-									sel = 1.0 / float64(estimatedTotal)
+								totalRows := estimatedTotal
+								if totalRows <= 0 {
+									totalRows = 1
 								}
-								estRows := int64(math.Ceil(float64(estimatedTotal) * sel))
+								if idx.Unique {
+									sel = 1.0 / float64(totalRows)
+								}
+								estRows := int64(math.Ceil(float64(totalRows) * sel))
 								if estRows < 1 {
 									estRows = 1
 								}

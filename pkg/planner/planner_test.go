@@ -599,3 +599,70 @@ func TestPlanner_PureASTDefault_And_LegacyRegexOption(t *testing.T) {
 		t.Fatal("expected IsDefaultLegacyRegexFallbackEnabled() to be true after toggle")
 	}
 }
+
+func TestPlanner_Regression_P0_28_EmptyTableZeroDivisionAndLeftJoinPreservation(t *testing.T) {
+	p := planner.NewPlanner()
+
+	// 1. Zero-Division & NaN prevention on empty table with unique index
+	schema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "email", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{
+				Name:    "idx_users_email",
+				Columns: []string{"email"},
+				Unique:  true,
+			},
+		},
+	}
+
+	q, err := p.ParseSelect("SELECT id, email FROM users WHERE email = 'alice@example.com'")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+
+	// Empty table stats with RowCount: 0
+	emptyStats := planner.NewTableStats("users", 0)
+	plan := p.BuildJoinPlanWithStats(q, schema, emptyStats, nil, nil)
+	if plan == nil {
+		t.Fatal("expected non-nil plan for empty table")
+	}
+
+	lines := planner.FormatPlanText(plan, false)
+	fullText := strings.Join(lines, "\n")
+
+	if !strings.Contains(fullText, "Index Scan") && !strings.Contains(fullText, "Index Only Scan") {
+		t.Fatalf("[P0-28 REGRESSION] expected unique index scan for empty table, got plan:\n%s", fullText)
+	}
+
+	// 2. LEFT JOIN preservation: verify LEFT join is not mutated to INNER join
+	ordersSchema := &storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "user_id", Type: storage.TypeInt},
+			{Name: "amount", Type: storage.TypeFloat},
+		},
+	}
+
+	qJoin, err := p.ParseSelect("SELECT u.id, o.amount FROM users u LEFT JOIN orders o ON u.id = o.user_id WHERE u.id = 1")
+	if err != nil {
+		t.Fatalf("ParseSelect with LEFT JOIN failed: %v", err)
+	}
+
+	joinPlan := p.BuildJoinPlan(qJoin, schema, 100, ordersSchema, 500)
+	if joinPlan == nil {
+		t.Fatal("expected non-nil join plan")
+	}
+
+	joinLines := planner.FormatPlanText(joinPlan, false)
+	joinText := strings.Join(joinLines, "\n")
+	if !strings.Contains(joinText, "Left") && !strings.Contains(joinText, "LEFT") {
+		t.Fatalf("[P0-28 REGRESSION] expected join to preserve LEFT outer join, got:\n%s", joinText)
+	}
+}
+
+
