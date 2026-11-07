@@ -65,8 +65,8 @@
     - 파서가 정밀 금융 타입을 `TypeFloat`으로 매핑하던 결함 완치 (Native/ANTLR4 파서에서 `DECIMAL`/`NUMERIC`/`MONEY`를 `TypeDecimal`로 분리 매핑 및 `Precision/Scale` 파싱 보존 연동 완료).
 18. **`P0-24` [UTF-8 멀티바이트 비-ASCII 식별자 파편화]** [완료] (`proc/lexer.go:497-499` / 결함 6-2)
     - 바이트 단위 검사로 인해 한글/한자 식별자 첫 바이트가 깨지던 결함 완치 (`utf8.DecodeRuneInString` 기반 완전한 룬 렉서 개편 및 다국어 식별자 회귀 테스트 완료).
-19. **`P0-25` [이항 연산자 오른쪽 파싱 실패 시 Nil Dereference 패닉]** (`proc/parser_expr.go:180-194` / 결함 6-3)
-    - 표현식 파싱 실패 시 `&BinaryExpr{Right: nil}`을 반환하여 VM 컴파일 단계에서 런타임 패닉 크래시.
+19. **`P0-25` [이항 연산자 오른쪽 파싱 실패 시 Nil Dereference 패닉]** [완료] (`proc/parser_expr.go:180-194` / 결함 6-3)
+    - 표현식 파싱 실패 시 `&BinaryExpr{Right: nil}` 생성 차단, 파서 명시적 구문 에러 기록 및 `nil` 안전 반환으로 다운스트림 Nil Dereference 패닉 원천 차단 완치.
 
 ### 그룹 D: SQL 실행 엔진, CBO 플래너 및 조인/집계 오퍼레이터 (7건)
 20. **`P0-11` [GROUP BY CUBE 컬럼 수 상한 미검사 $2^N$ 할당 OOM DoS]** (`execution/aggregate.go:538-545` / 결함 10-1)

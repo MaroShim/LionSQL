@@ -729,4 +729,35 @@ func TestParser_Regression_P0_23_DecimalNumericMoneyMappedToTypeDecimal(t *testi
 	}
 }
 
+func TestParser_Regression_P0_25_BinaryExprNilRightHandSide(t *testing.T) {
+	// Malformed expressions missing right operand
+	malformedInputs := []string{
+		"1 + ;",
+		"a = ;",
+		"x AND ;",
+		"10 * ;",
+		"col / ;",
+		"price - ;",
+	}
+
+	for _, sql := range malformedInputs {
+		p := proc.NewParser(proc.NewLexer(sql))
+		expr := p.ParseExpr()
+
+		if expr != nil {
+			// If not nil, it must not be a BinaryExpr with a nil Right!
+			if bin, ok := expr.(*proc.BinaryExpr); ok {
+				if bin.Right == nil {
+					t.Fatalf("[P0-25 REGRESSION] parsing %q returned BinaryExpr with nil Right! Causes nil deref panic in compiler/eval", sql)
+				}
+			}
+		}
+
+		if len(p.Errors()) == 0 {
+			t.Fatalf("[P0-25 REGRESSION] expected parser errors for malformed expression %q, but got 0 errors", sql)
+		}
+	}
+}
+
+
 

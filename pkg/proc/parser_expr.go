@@ -76,17 +76,26 @@ func (p *Parser) parseExpression(precedence int) Expr {
 			if p.curTokenIs(TokenLike) {
 				p.nextToken() // eat LIKE
 				pattern := p.parseExpression(precSum)
+				if pattern == nil {
+					p.addError("expected pattern expression after NOT LIKE")
+					return nil
+				}
 				leftExp = &LikeExpr{Expr: leftExp, Not: true, Pattern: pattern}
 				break
 			}
 			if p.curTokenIs(TokenBetween) {
 				p.nextToken() // eat BETWEEN
 				low := p.parseExpression(precAnd)
-				if !p.curTokenIs(TokenAnd) {
+				if low == nil || !p.curTokenIs(TokenAnd) {
+					p.addError("expected AND after NOT BETWEEN low expression")
 					return nil
 				}
 				p.nextToken() // eat AND
 				high := p.parseExpression(precAnd)
+				if high == nil {
+					p.addError("expected high expression after NOT BETWEEN ... AND")
+					return nil
+				}
 				leftExp = &BetweenExpr{Expr: leftExp, Not: true, Low: low, High: high}
 				break
 			}
@@ -129,6 +138,10 @@ func (p *Parser) parseExpression(precedence int) Expr {
 				break
 			}
 			rightExp := p.parseExpression(precedences[TokenNot])
+			if rightExp == nil {
+				p.addError(fmt.Sprintf("expected expression after NOT at line %d:%d", p.curToken.Line, p.curToken.Col))
+				return nil
+			}
 			leftExp = &BinaryExpr{
 				Left:  leftExp,
 				Op:    TokenNot,
@@ -138,16 +151,25 @@ func (p *Parser) parseExpression(precedence int) Expr {
 		case TokenBetween:
 			p.nextToken() // eat BETWEEN
 			low := p.parseExpression(precAnd)
-			if !p.curTokenIs(TokenAnd) {
+			if low == nil || !p.curTokenIs(TokenAnd) {
+				p.addError("expected AND after BETWEEN low expression")
 				return nil
 			}
 			p.nextToken() // eat AND
 			high := p.parseExpression(precAnd)
+			if high == nil {
+				p.addError("expected high expression after BETWEEN ... AND")
+				return nil
+			}
 			leftExp = &BetweenExpr{Expr: leftExp, Not: false, Low: low, High: high}
 
 		case TokenLike:
 			p.nextToken() // eat LIKE
 			pattern := p.parseExpression(precSum)
+			if pattern == nil {
+				p.addError(fmt.Sprintf("expected pattern expression after LIKE at line %d:%d", p.curToken.Line, p.curToken.Col))
+				return nil
+			}
 			leftExp = &LikeExpr{Expr: leftExp, Not: false, Pattern: pattern}
 
 		case TokenIs:
@@ -186,6 +208,10 @@ func (p *Parser) parseExpression(precedence int) Expr {
 			}
 			p.nextToken()
 			rightExp := p.parseExpression(opPrec)
+			if rightExp == nil {
+				p.addError(fmt.Sprintf("expected expression after operator %v at line %d:%d", op, p.curToken.Line, p.curToken.Col))
+				return nil
+			}
 			leftExp = &BinaryExpr{
 				Left:  leftExp,
 				Op:    op,
