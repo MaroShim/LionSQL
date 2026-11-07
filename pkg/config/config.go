@@ -306,19 +306,30 @@ func (c *Config) NonLoopbackServiceAddresses() []string {
 	return addrs
 }
 
+// DefaultAdminPass is the default superuser password permitted exclusively on local loopback.
+const DefaultAdminPass = "1234567890"
+
+// DefaultAdminPassWarning is the fail-visible security notification required as the very last line of startup banners and logs.
+const DefaultAdminPassWarning = "WARNING: DEFAULT SUPERUSER PASSWORD HAS NOT BEEN CHANGED! CHANGE PASSWORD IMMEDIATELY TO PREVENT UNAUTHORIZED ACCESS!"
+
 // ValidateSecurityGuard enforces production safety rules (PROD-SEC-1).
 // The default superuser password ("1234567890") is strictly permitted ONLY
 // when all active network listeners are bound exclusively to loopback addresses (127.0.0.1, localhost).
 // If any service binds to an external interface (e.g. 0.0.0.0) with default password, it returns an error.
 func (c *Config) ValidateSecurityGuard() error {
-	if c.Auth.AdminPass != "1234567890" && strings.TrimSpace(c.Auth.AdminPass) != "" {
+	if c.Auth.AdminPass != DefaultAdminPass && strings.TrimSpace(c.Auth.AdminPass) != "" {
 		return nil
 	}
 	externalServices := c.NonLoopbackServiceAddresses()
 	if len(externalServices) > 0 {
-		return fmt.Errorf("insecure default administrator password ('1234567890') is prohibited when binding to external/non-loopback interfaces: %s", strings.Join(externalServices, ", "))
+		return fmt.Errorf("insecure default administrator password ('%s') is prohibited when binding to external/non-loopback interfaces: %s", DefaultAdminPass, strings.Join(externalServices, ", "))
 	}
 	return nil
+}
+
+// IsDefaultAdminPassword checks whether the administrator password is the default value or empty.
+func (c *Config) IsDefaultAdminPassword() bool {
+	return c.Auth.AdminPass == DefaultAdminPass || strings.TrimSpace(c.Auth.AdminPass) == ""
 }
 
 // WriteToFileAtomic writes configuration to disk via a temporary swap file and atomic rename.

@@ -19,7 +19,10 @@
 LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **신뢰성 검증 게이트**입니다.
 
 ### 1.1 1.0 핵심 구현 및 호환성 리팩토링 (Core 1.0 Features & Clean-up)
-1. **`OCC-HYPER-2`: In-Memory OCC Pointer-Free Flat Record A/B 모드 및 신뢰성 검증 게이트** [진행 중]
+1. **`SEC-BOOT-DEFAULT-PASS-WARN`: 초기 패스워드 미변경 시 부팅 출력 최후행 대문자 보안 경고 불변식** [x]
+   - **완료 내용**: 어떤 실행 모드(CLI, 데몬, 포트 옵션)든 슈퍼유저 패스워드가 기본값(`1234567890`) 또는 비어있을 때 부팅 화면 콘솔 및 로그의 **가장 마지막 줄(The Very Last Line)**에 비밀번호 리터럴을 노출하지 않는 **100% 대문자(ALL CAPS)** 보안 경고를 반드시 출력하도록 보장 (`cmd/lionsql/server.go`, `daemon.go`, `pkg/config/config.go`). 단위 테스트 5종 전수 PASS.
+   - **설계 문서**: [`notes/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md`](notes/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md)
+2. **`OCC-HYPER-2`: In-Memory OCC Pointer-Free Flat Record A/B 모드 및 신뢰성 검증 게이트** [진행 중]
    - **구현 현황**: 기본 모드(`OCCModeRaw`, 기존 104만 tpmC 오리지널) 100% 보존 + 신규 플랫 모드(`OCCModeFlat`) A/B 분기 구축 완료. 단일 행 기준 5.95배(1,017B ➔ 171B, 83.2% 절감), 10만 건 힙 메모리 67.5% 절감(68.9MB ➔ 22.3MB), 처리 속도 대등 실측 확인.
    - **기본값 정책**: **`OCCModeRaw` (기존 안정 버전) 디폴트 영구 유지 (`[RULE:SafeDefaults]`)**. 아래 4대 검증 게이트를 100% 완주하기 전까지 디폴트 변경 절대 금지.
    - **신규 플랫 모드(`OCCModeFlat`) 안정성 강화 및 필수 검증 게이트**:
@@ -108,7 +111,14 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **설계 문서**: [`notes/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](notes/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)
 
 ### 2.2 고도화 스토리지 & AI/빅데이터 백로그 (Storage, AI & Replication)
-1. **`FEAT-VECTOR-1` 순수 Go 기반 Vector 임베딩 및 유사도 검색 (1.0 이후)**
+1. **`FEAT-PUREGO-WT-ENGINE` WiredTiger 호환 자체 Pure-Go MVCC 스토리지 엔진 구현 및 CGo 분리 (Post-1.0)**
+   - **목표**: Pebble/bbolt는 LSM/COW 구조상 타임스탬프 기반 MVCC 및 미세 튜플 락을 지원하지 못하므로 부적합. WiredTiger의 엔진 계약 인터페이스(`pkg/storage/wiredtiger` SPI)와 100% 호환되는 **자체 순수 Go MVCC B+Tree 스토리지 엔진**을 개발하여:
+     1. **성능 극대화**: CGo 호출 오버헤드(cgo call overhead 40~100ns)를 제거하여 Go 런타임 스케줄러와 완전 밀착.
+     2. **Windows 네이티브 영속 스토리지 완벽 자립**: Windows 환경에서 CGo 제약으로 인해 인메모리 모드에 머물던 한계를 극복하고, `CGO_ENABLED=0` 순수 단일 정적 바이너리로 3대 OS(macOS/Linux/Windows) 모두에서 완전한 디스크 영속 MVCC 스토리지 지원 (`[RULE:HermeticParity]`, `[RULE:StaticBinary]`).
+2. **`RESEARCH-INPROCESS-REBOOT-USE` In-Process Graceful Reboot 기반 물리 서브폴더 USE DB 전환 (Post-1.0)**
+   - **목표**: 복잡한 멀티테넌시 대신, 프로세스는 상시 1개 활성 DB만 집중 처리하되 `USE <dbname>` 시 와이어 소켓을 유지한 채 내부에서 기존 엔진 Close ➔ 서브폴더 신규 엔진 Open으로 핫스왑. 다른 활성 세션 존재 시 즉시 `SQLSTATE 55006 (object_in_use)` 에러를 반환하여 안전성 극대화.
+   - **설계 문서**: [`notes/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md`](notes/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md)
+3. **`FEAT-VECTOR-1` 순수 Go 기반 Vector 임베딩 및 유사도 검색 (1.0 이후)**
    - **목표**: `VECTOR(dim)` 타입, L2/Cosine/Dot 거리 연산자(`<->`, `<=>`), 멀티코어 병렬 Flat KNN 스캔 (LangChain/pgvector 호환).
    - **설계 문서**: [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)
 2. **`FEAT-TIMESERIES-LSM-1` LSM 기반 초고속 Time Series 파티셔닝 & 불변 청크 스토리지 (1.0 이후)**

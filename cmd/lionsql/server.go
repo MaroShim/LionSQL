@@ -323,6 +323,7 @@ func runServer(args []string) error {
 				cfg.Network.PGAddr,
 				cfg.Network.TDSAddr,
 				cfg.Server.Engine,
+				cfg.Auth.AdminPass,
 			) {
 				return nil
 			}
@@ -371,6 +372,7 @@ func runServer(args []string) error {
 			cfg.Network.PGAddr,
 			cfg.Network.TDSAddr,
 			cfg.Server.Engine,
+			cfg.Auth.AdminPass,
 		) {
 			return nil
 		}
@@ -804,70 +806,35 @@ func runServer(args []string) error {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		fmt.Println("--------------------------------------------------------------------------------")
-		fmt.Printf(" LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v%s)\n", config.Version)
-		fmt.Printf(" %s\n", config.CompactVersion())
-		fmt.Println("--------------------------------------------------------------------------------")
-		if loadedConfigPath != "" {
-			fmt.Printf(" [Configuration]  %s (JSON Config File)\n", loadedConfigPath)
-		} else {
-			fmt.Println(" [Configuration]  Zero-Config (Built-in Defaults)")
-		}
-		if httpServer != nil && strings.Contains(cfg.Network.HTTPAddr, ":") {
-			if cfg.Server.AppPath != "" {
-				fmt.Printf(" [App Hosting]    http://%s/ -> %s (SPA Mode)\n", cfg.Network.HTTPAddr, cfg.Server.AppPath)
-			}
-			fmt.Printf(" [Web Dashboard]  http://%s/_/\n", cfg.Network.HTTPAddr)
-			fmt.Printf(" [HTTP API]       http://%s/api/health\n", cfg.Network.HTTPAddr)
-			fmt.Printf(" [CDC Stream]     http://%s/api/cdc/stream (NDJSON / SSE)\n", cfg.Network.HTTPAddr)
-		} else {
-			fmt.Println(" [Web Dashboard]  Disabled (opted out)")
-			fmt.Println(" [HTTP API]       Disabled (opted out)")
-		}
-		fmt.Printf(" [Superuser Auth] %s (JWT Auth: %v)\n", cfg.Auth.AdminEmail, cfg.Auth.Enabled)
-		fmt.Println(" [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / Azure Data Studio")
-		if wireServer != nil && strings.Contains(cfg.Network.PGAddr, ":") {
-			fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (PostgreSQL v3 protocol, psql / pgx)\n", strings.Split(cfg.Network.PGAddr, ":")[1])
-		} else {
-			fmt.Println(" [Postgres Wire]  Disabled (opted out)")
-		}
-		if tdsServer != nil && strings.Contains(cfg.Network.TDSAddr, ":") {
-			fmt.Printf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (TDS 7.x/8.0 protocol, sqlcmd / SSMS)\n", strings.Split(cfg.Network.TDSAddr, ":")[1])
-		} else {
-			fmt.Println(" [TDS / MSSQL]    Disabled (opted out)")
-		}
-		fmt.Printf(" [Data Directory] %s\n", cfg.Server.DataDir)
-		fmt.Printf(" [Storage Engine] %s\n", cfg.Server.Engine)
 		stats := server.Pool().Stats()
-		fmt.Printf(" [Session Pooler] Max Workers: %d, Max Idle Sessions: %d (No PgBouncer required)\n", stats.MaxWorkers, stats.MaxIdleSessions)
-		fmt.Printf(" [Memory Governor] max_memory: %s (Go runtime GC soft limit), work_mem: %s (External Merge Sort & HashJoin guard)\n", execution.FormatMemMB(execution.GetGlobalMemoryLimit()), execution.FormatMemSize(server.DefaultWorkMem()))
-		if server.SlowQueries().LogFilePath() != "" {
-			fmt.Printf(" [Slow Query Log] %s (Threshold: %v)\n", server.SlowQueries().LogFilePath(), server.SlowQueries().Threshold())
-		}
-		if server.GeneralLog().IsEnabled() {
-			genPath := server.GeneralLog().LogFilePath()
-			if genPath == "" {
-				genPath = "in-memory only"
-			}
-			fmt.Printf(" [General Log]    %s (Enabled: true)\n", genPath)
+		bCtx := bannerContext{
+			LoadedConfigPath: loadedConfigPath,
+			HasHTTP:          httpServer != nil && strings.Contains(cfg.Network.HTTPAddr, ":"),
+			HasPG:            wireServer != nil && strings.Contains(cfg.Network.PGAddr, ":"),
+			HasTDS:           tdsServer != nil && strings.Contains(cfg.Network.TDSAddr, ":"),
+			StatsWorkers:     stats.MaxWorkers,
+			StatsIdle:        stats.MaxIdleSessions,
+			WorkMem:          execution.FormatMemSize(server.DefaultWorkMem()),
+			GlobalMemLimit:   execution.GetGlobalMemoryLimit(),
+			SlowLogPath:      server.SlowQueries().LogFilePath(),
+			SlowThreshold:    server.SlowQueries().Threshold(),
+			GenLogEnabled:    server.GeneralLog().IsEnabled(),
+			GenLogPath:       server.GeneralLog().LogFilePath(),
 		}
 		if repMgr != nil {
-			fmt.Printf(" [Replication]    Role: %s, Node: %s (HistoryCap: %d)\n", repMgr.Role(), cfg.Replication.NodeID, cfg.Replication.HistoryCap)
+			bCtx.RepRole = string(repMgr.Role())
+			bCtx.RepNodeID = cfg.Replication.NodeID
+			bCtx.RepHistoryCap = cfg.Replication.HistoryCap
 		}
 		if outboxDispatcher != nil {
-			fmt.Printf(" [Outbox Broker]  Active (Sinks: %d, Table Filter: '%s')\n", len(outboxDispatcher.Sinks()), cfg.Outbox.TableFilter)
+			bCtx.OutboxSinks = len(outboxDispatcher.Sinks())
+			bCtx.OutboxFilter = cfg.Outbox.TableFilter
 		}
-		if cfg.Logging.DevMode {
-			fmt.Println(" [Developer Mode] Enabled (-dev: Real-time Wire Query & Error Tracing)")
+
+		fmt.Print(renderStartupBanner(cfg, bCtx))
+		if cfg.IsDefaultAdminPassword() {
+			log.Println(config.DefaultAdminPassWarning)
 		}
-		if cfg.Auth.AdminPass == "1234567890" {
-			fmt.Println("--------------------------------------------------------------------------------")
-			fmt.Println(" [SECURITY NOTICE] Default administrator credentials active on localhost (127.0.0.1).")
-			fmt.Println("                   (admin@lionsql.local / 1234567890)")
-			fmt.Println("                   Set -admin-pass or LIONSQL_ADMIN_PASS before exposing to external networks.")
-		}
-		fmt.Println("--------------------------------------------------------------------------------")
-		fmt.Println("Press Ctrl+C to stop server")
 
 		if httpServer != nil {
 			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -917,4 +884,107 @@ func runServer(args []string) error {
 	}
 
 	return nil
+}
+
+type bannerContext struct {
+	LoadedConfigPath string
+	HasHTTP          bool
+	HasPG            bool
+	HasTDS           bool
+	StatsWorkers     int
+	StatsIdle        int
+	WorkMem          string
+	GlobalMemLimit   int64
+	SlowLogPath      string
+	SlowThreshold    time.Duration
+	GenLogEnabled    bool
+	GenLogPath       string
+	RepRole          string
+	RepNodeID        string
+	RepHistoryCap    int
+	OutboxSinks      int
+	OutboxFilter     string
+}
+
+func renderStartupBanner(cfg *config.Config, ctx bannerContext) string {
+	var b strings.Builder
+	b.WriteString("--------------------------------------------------------------------------------\n")
+	b.WriteString(fmt.Sprintf(" LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v%s)\n", config.Version))
+	b.WriteString(fmt.Sprintf(" %s\n", config.CompactVersion()))
+	b.WriteString("--------------------------------------------------------------------------------\n")
+
+	if ctx.LoadedConfigPath != "" {
+		b.WriteString(fmt.Sprintf(" [Configuration]  %s (JSON Config File)\n", ctx.LoadedConfigPath))
+	} else {
+		b.WriteString(" [Configuration]  Zero-Config (Built-in Defaults)\n")
+	}
+
+	if ctx.HasHTTP && strings.Contains(cfg.Network.HTTPAddr, ":") {
+		if cfg.Server.AppPath != "" {
+			b.WriteString(fmt.Sprintf(" [App Hosting]    http://%s/ -> %s (SPA Mode)\n", cfg.Network.HTTPAddr, cfg.Server.AppPath))
+		}
+		b.WriteString(fmt.Sprintf(" [Web Dashboard]  http://%s/_/\n", cfg.Network.HTTPAddr))
+		b.WriteString(fmt.Sprintf(" [HTTP API]       http://%s/api/health\n", cfg.Network.HTTPAddr))
+		b.WriteString(fmt.Sprintf(" [CDC Stream]     http://%s/api/cdc/stream (NDJSON / SSE)\n", cfg.Network.HTTPAddr))
+	} else {
+		b.WriteString(" [Web Dashboard]  Disabled (opted out)\n")
+		b.WriteString(" [HTTP API]       Disabled (opted out)\n")
+	}
+
+	b.WriteString(fmt.Sprintf(" [Superuser Auth] %s (JWT Auth: %v)\n", cfg.Auth.AdminEmail, cfg.Auth.Enabled))
+	b.WriteString(" [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / Azure Data Studio\n")
+
+	if ctx.HasPG && strings.Contains(cfg.Network.PGAddr, ":") {
+		b.WriteString(fmt.Sprintf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (PostgreSQL v3 protocol, psql / pgx)\n", strings.Split(cfg.Network.PGAddr, ":")[1]))
+	} else {
+		b.WriteString(" [Postgres Wire]  Disabled (opted out)\n")
+	}
+
+	if ctx.HasTDS && strings.Contains(cfg.Network.TDSAddr, ":") {
+		b.WriteString(fmt.Sprintf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (TDS 7.x/8.0 protocol, sqlcmd / SSMS)\n", strings.Split(cfg.Network.TDSAddr, ":")[1]))
+	} else {
+		b.WriteString(" [TDS / MSSQL]    Disabled (opted out)\n")
+	}
+
+	b.WriteString(fmt.Sprintf(" [Data Directory] %s\n", cfg.Server.DataDir))
+	b.WriteString(fmt.Sprintf(" [Storage Engine] %s\n", cfg.Server.Engine))
+	if ctx.StatsWorkers > 0 || ctx.StatsIdle > 0 {
+		b.WriteString(fmt.Sprintf(" [Session Pooler] Max Workers: %d, Max Idle Sessions: %d (No PgBouncer required)\n", ctx.StatsWorkers, ctx.StatsIdle))
+	}
+	if ctx.WorkMem != "" {
+		b.WriteString(fmt.Sprintf(" [Memory Governor] max_memory: %s (Go runtime GC soft limit), work_mem: %s (External Merge Sort & HashJoin guard)\n", execution.FormatMemMB(ctx.GlobalMemLimit), ctx.WorkMem))
+	}
+	if ctx.SlowLogPath != "" {
+		b.WriteString(fmt.Sprintf(" [Slow Query Log] %s (Threshold: %v)\n", ctx.SlowLogPath, ctx.SlowThreshold))
+	}
+	if ctx.GenLogEnabled {
+		genPath := ctx.GenLogPath
+		if genPath == "" {
+			genPath = "in-memory only"
+		}
+		b.WriteString(fmt.Sprintf(" [General Log]    %s (Enabled: true)\n", genPath))
+	}
+	if ctx.RepRole != "" {
+		b.WriteString(fmt.Sprintf(" [Replication]    Role: %s, Node: %s (HistoryCap: %d)\n", ctx.RepRole, ctx.RepNodeID, ctx.RepHistoryCap))
+	}
+	if ctx.OutboxSinks > 0 {
+		b.WriteString(fmt.Sprintf(" [Outbox Broker]  Active (Sinks: %d, Table Filter: '%s')\n", ctx.OutboxSinks, ctx.OutboxFilter))
+	}
+	if cfg.Logging.DevMode {
+		b.WriteString(" [Developer Mode] Enabled (-dev: Real-time Wire Query & Error Tracing)\n")
+	}
+
+	b.WriteString("--------------------------------------------------------------------------------\n")
+	b.WriteString("Press Ctrl+C to stop server\n")
+
+	// The Very Last Line Invariant:
+	// If the superuser password is unchanged (default or empty), output the ALL-CAPS security notice
+	// at the absolute end of the startup banner.
+	if cfg.IsDefaultAdminPassword() {
+		b.WriteString("--------------------------------------------------------------------------------\n")
+		b.WriteString(config.DefaultAdminPassWarning)
+		b.WriteString("\n")
+	}
+
+	return b.String()
 }

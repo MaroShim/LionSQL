@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"lionsql/pkg/config"
 )
 
 // handleDaemonCommands processes daemon control flags (-stop, -status, -restart, -daemon).
@@ -24,6 +26,7 @@ func handleDaemonCommands(
 	pgAddr string,
 	tdsAddr string,
 	engineType string,
+	adminPass string,
 ) bool {
 	if pidFile == "" {
 		pidFile = filepath.Join(dataDir, "lionsql.pid")
@@ -49,13 +52,13 @@ func handleDaemonCommands(
 		fmt.Println("[LionSQL] Restarting daemon...")
 		stopDaemon(pidFile)
 		time.Sleep(500 * time.Millisecond)
-		startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineType)
+		startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineType, adminPass)
 		return true
 	}
 
 	// 4. Start Daemon Command
 	if daemonFlag {
-		startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineType)
+		startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineType, adminPass)
 		return true
 	}
 
@@ -153,7 +156,7 @@ func stopDaemon(pidFile string) {
 	fmt.Printf("[LionSQL] Daemon (PID %d) stopped successfully.\n", pid)
 }
 
-func startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineType string) {
+func startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineType, adminPass string) {
 	// Check if already running
 	if pid, err := readPidFile(pidFile); err == nil && isProcessAlive(pid) {
 		fmt.Printf("[LionSQL] Daemon is already running with PID %d.\n", pid)
@@ -214,27 +217,42 @@ func startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineTyp
 		os.Exit(1)
 	}
 
-	fmt.Println("============================================================")
-	fmt.Println("  LionSQL Server Started in Daemon Mode (Background)")
-	fmt.Println("============================================================")
-	fmt.Printf(" Process ID (PID): %d\n", childPID)
-	fmt.Printf(" Storage Engine:   %s\n", engineType)
-	fmt.Printf(" Data Directory:   %s\n", dataDir)
-	fmt.Printf(" Log File:         %s\n", logFile)
-	fmt.Printf(" PID File:         %s\n", pidFile)
+	fmt.Print(renderDaemonStartupOutput(childPID, engineType, dataDir, logFile, pidFile, httpAddr, pgAddr, tdsAddr, adminPass))
+}
+
+func renderDaemonStartupOutput(childPID int, engineType, dataDir, logFile, pidFile, httpAddr, pgAddr, tdsAddr, adminPass string) string {
+	var b strings.Builder
+	b.WriteString("============================================================\n")
+	b.WriteString("  LionSQL Server Started in Daemon Mode (Background)\n")
+	b.WriteString("============================================================\n")
+	b.WriteString(fmt.Sprintf(" Process ID (PID): %d\n", childPID))
+	b.WriteString(fmt.Sprintf(" Storage Engine:   %s\n", engineType))
+	b.WriteString(fmt.Sprintf(" Data Directory:   %s\n", dataDir))
+	b.WriteString(fmt.Sprintf(" Log File:         %s\n", logFile))
+	b.WriteString(fmt.Sprintf(" PID File:         %s\n", pidFile))
 	if strings.Contains(httpAddr, ":") {
-		fmt.Printf(" Web Admin UI:     http://%s/_/\n", httpAddr)
+		b.WriteString(fmt.Sprintf(" Web Admin UI:     http://%s/_/\n", httpAddr))
 	}
 	if strings.Contains(pgAddr, ":") {
-		fmt.Printf(" PostgreSQL Wire:  psql -h 127.0.0.1 -p %s\n", strings.Split(pgAddr, ":")[1])
+		b.WriteString(fmt.Sprintf(" PostgreSQL Wire:  psql -h 127.0.0.1 -p %s\n", strings.Split(pgAddr, ":")[1]))
 	}
 	if strings.Contains(tdsAddr, ":") {
-		fmt.Printf(" TDS / MSSQL:      sqlcmd -S 127.0.0.1,%s\n", strings.Split(tdsAddr, ":")[1])
+		b.WriteString(fmt.Sprintf(" TDS / MSSQL:      sqlcmd -S 127.0.0.1,%s\n", strings.Split(tdsAddr, ":")[1]))
 	}
-	fmt.Println("------------------------------------------------------------")
-	fmt.Println(" Commands:")
-	fmt.Println("   Check status:   lionsql status (or -status)")
-	fmt.Println("   Stop daemon:    lionsql stop (or -stop)")
-	fmt.Println("   Restart daemon: lionsql restart (or -restart)")
-	fmt.Println("============================================================")
+	b.WriteString("------------------------------------------------------------\n")
+	b.WriteString(" Commands:\n")
+	b.WriteString("   Check status:   lionsql status (or -status)\n")
+	b.WriteString("   Stop daemon:    lionsql stop (or -stop)\n")
+	b.WriteString("   Restart daemon: lionsql restart (or -restart)\n")
+	b.WriteString("============================================================\n")
+
+	// The Very Last Line Invariant:
+	// If the superuser password is unchanged (default or empty), output the ALL-CAPS security notice
+	// as the absolute final line of daemon startup messages.
+	if adminPass == config.DefaultAdminPass || strings.TrimSpace(adminPass) == "" {
+		b.WriteString(config.DefaultAdminPassWarning)
+		b.WriteString("\n")
+	}
+
+	return b.String()
 }

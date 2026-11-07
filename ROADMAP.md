@@ -314,6 +314,7 @@ CGO_ENABLED=0 distribution OCC compact arena (5x)    PCI-DSS v4.0 / SOC2       M
 | **Phase 9** | `OCC-Dense` 디폴트 승격 및 4대 신뢰성 게이트 졸업 (`OCC-HYPER-2`) | Storage Engine | `v1.1.0` | **Planned** | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
 | **Phase 9** | Pure-Go 네이티브 영속 스토리지 엔진 백엔드 | Storage Engine | `v1.1.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#51-pure-go-persistent-storage-engine-backend-v110) |
 | **Phase 9** | Enterprise Cryptographic Immutable Audit Log (`pkg/audit`) | Security & Audit | `v1.1.0` | **Planned** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
+| **Post-1.0** | [초안/연구] In-Process Reboot 기반 물리 서브폴더 USE DB 전환 (`RESEARCH-INPROCESS-REBOOT-USE`) | Research & Engine | `Post-1.0` | **Draft Plan** | [`notes/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md`](notes/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md) |
 | **Phase 10** | Multi-Core Parallel Analytical Query Execution | Query Execution | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#55-multi-core-parallel-analytical-query-execution-v120) |
 | **Phase 10** | WebAssembly Runtime Sandbox UDF (`wazero`) | Extensibility | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#56-webassembly-runtime-sandbox-udf-wazero-v120) |
 | **Spec-Out** | In-Kernel OAuth2 Social Web Login | Auth & BaaS | - | **Spec-Out** | [`doc/ENTERPRISE_AUTHENTICATION_SPI.md`](doc/ENTERPRISE_AUTHENTICATION_SPI.md) |
