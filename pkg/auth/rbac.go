@@ -438,15 +438,19 @@ func (s *AuthService) HasTablePermission(user, table string, priv Privilege) (bo
 
 	// 2. Check user's assigned custom roles (u.Roles)
 	if u != nil && len(u.Roles) > 0 {
+		anyRoleGranted := false
 		for _, r := range u.Roles {
 			normRole := strings.ToLower(strings.TrimSpace(r))
 			roleGranted, roleDenied := checkSubject(normRole)
 			if roleDenied {
-				return false, nil // Explicit DENY takes precedence
+				return false, nil // Explicit DENY in any assigned role strictly overrides all grants
 			}
 			if roleGranted {
-				return true, nil
+				anyRoleGranted = true
 			}
+		}
+		if anyRoleGranted {
+			return true, nil
 		}
 	}
 

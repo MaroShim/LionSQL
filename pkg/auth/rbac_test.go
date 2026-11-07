@@ -273,3 +273,50 @@ func TestRBAC_Regression_P0_06_AnonymousUserMustBeDenied(t *testing.T) {
 	}
 }
 
+// TestRBAC_Regression_P0_07_MultipleRolesDenyPrecedence verifies that any explicit DENY
+// in assigned roles strictly overrides any GRANT regardless of role evaluation order (Defect P0-07).
+func TestRBAC_Regression_P0_07_MultipleRolesDenyPrecedence(t *testing.T) {
+	svc := auth.NewAuthService(auth.Config{})
+
+	// 1. Create user with multiple roles: analyst (GRANT) and restricted_finance (DENY)
+	_, err := svc.CreateLogin("charlie", "Secret1234!")
+	if err != nil {
+		t.Fatalf("CreateLogin failed: %v", err)
+	}
+	u, err := svc.CreateUser("charlie", "charlie")
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+	// Crucial: "analyst" comes first in slice, "restricted_finance" comes second
+	u.Roles = []string{"analyst", "restricted_finance"}
+
+	// 2. Grant SELECT to analyst
+	if err := svc.GrantTable("analyst", "salaries", auth.PrivSelect); err != nil {
+		t.Fatalf("GrantTable failed: %v", err)
+	}
+
+	// 3. Explicitly DENY SELECT to restricted_finance
+	if err := svc.DenyTable("restricted_finance", "salaries", auth.PrivSelect); err != nil {
+		t.Fatalf("DenyTable failed: %v", err)
+	}
+
+	// 4. Check permission: charlie must be DENIED access because restricted_finance has DENY!
+	allowed, err := svc.HasTablePermission("charlie", "salaries", auth.PrivSelect)
+	if err != nil {
+		t.Fatalf("unexpected error checking permission: %v", err)
+	}
+	if allowed {
+		t.Fatalf("[CRITICAL P0-07 REGRESSION] charlie was GRANTED permission because 'analyst' evaluated first, ignoring 'restricted_finance' DENY!")
+	}
+
+	// 5. Check inverse order: restricted_finance first, analyst second -> must also be DENIED
+	u.Roles = []string{"restricted_finance", "analyst"}
+	allowed, err = svc.HasTablePermission("charlie", "salaries", auth.PrivSelect)
+	if err != nil {
+		t.Fatalf("unexpected error checking permission: %v", err)
+	}
+	if allowed {
+		t.Fatalf("[CRITICAL P0-07 REGRESSION] charlie was GRANTED permission in inverse role order!")
+	}
+}
+
