@@ -13,11 +13,11 @@
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
 * **1단계 (135단계 전수 광역 스캔)**: 135 / 135 (100.0%) 완주 완료 (총 134건 결함 식별)
-* **2단계 (12대 핵심 코어 심층 재스캔)**: 10 / 12 구역 완료 (구역 1~10: 53건 발굴 완료, 구역 11~12 진행 중)
-* **총 누적 식별 결함**: 총 187건 (1단계 134건 + 2단계 53건)
-  - Critical: 22건 (+2)
-  - High: 84건 (+2)
-  - Medium: 66건 (+1)
+* **2단계 (12대 핵심 코어 심층 재스캔)**: 11 / 12 구역 완료 (구역 1~11: 58건 발굴 완료, 구역 12 진행 중)
+* **총 누적 식별 결함**: 총 192건 (1단계 134건 + 2단계 58건)
+  - Critical: 25건 (+3)
+  - High: 86건 (+2)
+  - Medium: 66건 (+0)
   - Low: 15건 (+0)
 
 ---
@@ -2949,4 +2949,68 @@
 * **판정**: `DEFECT_LOGGED`
 
 ---
+
+### [2단계 심층 구역 11] 인메모리 스토리지 코어 잔여 (In-Memory OCC Remainder & FlatRecord/AOF)
+* **대상 소스**: `pkg/storage/memengine/skiplist.go` (331 라인), `pkg/storage/memengine/table_data.go` (375 라인), `pkg/storage/memengine/flat_record.go` (329 라인), `pkg/storage/memengine/wal.go` (382 라인)
+* **핵심 분석 관점**: FlatRecord 직렬화/역직렬화 오프셋 충돌, 스냅샷 동기화 시 Row 구체화 누락, WAL 재생 시 I/O 에러 파일 절삭 위험, 동시 맵 쓰기 방어
+
+#### [발굴 결함 11-1] `storage/memengine/flat_record.go`: FlatRecord 가변 힙 오프셋(`vOff`)의 바이트 패턴이 `0xFF`를 가질 때 인라인 스트링 오인식으로 인한 데이터 영구 오염
+* **심각도**: `Critical`
+* **위치**: `pkg/storage/memengine/flat_record.go:163-166`, `267-283` (`EncodeRowToFlat`, `DecodeFlatToRow`)
+* **현상 및 원인 분석**:
+  - 가변 길이 문자열/바이너리 필드를 FlatRecord로 인코딩할 때, 길이가 4바이트 이하이면 `slot[1] = 0xFF`로 태깅하고 인라인 저장함. 길이가 4바이트 초과이면 `varHeap`에 저장하고 `slot[0:4]`에 32비트 리틀엔디언 정수로 오프셋(`vOff`)을 기록함.
+  - 디코딩 루프(라인 267)는 `slot[1] == 0xFF` 여부만으로 인라인 스몰 스트링 여부를 판별함.
+  - **치명적 문제**: 만약 `varHeap`의 오프셋 `vOff`가 `65280` (`0x0000FF00`) 등 2번째 바이트가 `0xFF`인 정수 값을 갖게 되면, 리틀엔디언 인코딩 결과 `slot[1]`이 우연히 `0xFF`가 됨.
+  - 디코더는 이를 인라인 스트링으로 오인식하여 힙 오프셋 포인터 바이트를 텍스트 데이터로 읽어버리고, 실제 힙 데이터는 무시됨.
+  - **결과**: 대용량 문자열이 누적될수록 특정 오프셋 경계에서 가변 필드 데이터가 영구히 오염되거나 잘려나가는 잠재적 데이터 파괴 (`[RULE:DefensiveIndexing]`).
+* **권장 수정안**:
+  - 태그 비트를 가변 오프셋 정수와 겹치는 바이트(`slot[1]`)에 두지 말고, 8바이트 슬롯의 상위 비트(예: `slot[7]` 또는 64비트 정수의 최상위 플래그 비트)로 분리 격리하여 충돌 공간 제거.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 11-2] `storage/memengine/table_data.go`: `syncShardsToMapsLocked`에서 FlatRecord 모드 고려 없이 `entry.row`를 직렬화 맵에 대입하여 스냅샷 저장 시 데이터 전량 증발
+* **심각도**: `Critical`
+* **위치**: `pkg/storage/memengine/table_data.go:292-307` (`syncShardsToMapsLocked`)
+* **현상 및 원인 분석**:
+  - 디스크 백업 및 주기적 스냅샷 영속화(`persistence.go:301`) 시 `td.syncShardsToMapsLocked()`를 호출하여 샤드 엔트리들을 `td.Rows` 맵에 동기화함.
+  - 라인 302에서 `td.Rows[k] = entry.row`를 수행하는데, `td.mode == OCCModeFlat`인 경우 메모리 절약을 위해 `entry.row.Values`는 `nil`이며 데이터는 `entry.flatBuf`에만 존재함.
+  - `entry.materialize(td)`를 호출하지 않고 `entry.row`를 그대로 대입함으로써, `td.Rows`에는 빈 로(`{Values: nil}`)들만 적재됨.
+  - **결과**: FlatRecord 최적화 모드가 활성화된 테이블의 경우 디스크 스냅샷 저장 시 모든 컬럼 값이 증발하여 빈 레코드만 영속화되는 치명적 데이터 유실 (`[RULE:AtomicSaves]`).
+* **권장 수정안**:
+  - `syncShardsToMapsLocked` 내부 루프에서 `r, _ := entry.materialize(td)`를 호출하여 구체화된 `storage.Row`를 `td.Rows[k]`에 대입하도록 수정.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 11-3] `storage/memengine/wal.go`: `ReplayWAL`에서 I/O 에러 시 단순 break 처리 후 테일 잘림으로 오인하여 정상 WAL 레코드들을 영구 절삭 삭제하는 데이터 유실
+* **심각도**: `Critical`
+* **위치**: `pkg/storage/memengine/wal.go:343-345`, `377-379` (`ReplayWAL`)
+* **현상 및 원인 분석**:
+  - AOF WAL 로그를 재생할 때 `io.ReadFull(reader, lenBuf[:])` 또는 `UnmarshalMsgPack` 중 에러가 발생하면, `io.EOF` 여부와 상관없이 일반 파일 읽기 I/O 에러(디스크 일시 장애, I/O 버퍼 오류 등)마저 단순히 `break`로 루프를 탈출함.
+  - 그 직후 라인 377-379에서 `stat.Size() > validOffset`이면 파일 끝부분에 쓰다 만 쓰레기(Torn Write)가 남은 것으로 간주하고 `file.Truncate(validOffset)`를 무조건 실행함.
+  - **치명적 문제**: 일시적 디스크 I/O 오류나 중간 섹터 오류가 발생했을 뿐인데, 그 시점 이후에 기록된 정상적이고 커밋된 모든 후속 트랜잭션 WAL 레코드들을 영구적으로 잘라내어(Truncate) 디스크에서 영구 삭제해버림 (`[RULE:ExplicitError]`, `[RULE:AtomicSaves]`).
+* **권장 수정안**:
+  - `err == io.EOF` 또는 `err == io.ErrUnexpectedEOF`인 경우에만 테일 잘림 복구(`Truncate`)를 허용하고, 그 외의 실제 I/O 에러 발생 시에는 절삭을 절대 수행하지 않고 에러를 즉시 상위로 반환하여 관리자가 개입할 수 있도록 방어.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 11-4] `storage/memengine/table_data.go`: `addColumnValues` 실행 시 FlatRecord 모드일 때 빈 `entry.row`에 덮어쓰기하여 `ALTER TABLE ADD COLUMN` 시 기존 데이터 전량 파괴
+* **심각도**: `High`
+* **위치**: `pkg/storage/memengine/table_data.go:359-372` (`addColumnValues`)
+* **현상 및 원인 분석**:
+  - 새 컬럼을 추가하는 DDL(`ALTER TABLE ADD COLUMN`) 실행 시 기존 레코드들에 기본값을 채우기 위해 `td.addColumnValues(val)`를 호출함.
+  - 샤드 엔트리를 갱신할 때 `storage.Row{Values: append(entry.row.Values, val)}` 형태로 덮어쓰고 `flatBuf`는 소멸시킴.
+  - 만약 테이블이 FlatRecord 모드(`OCCModeFlat`)라면 `entry.row.Values`는 길이가 0이므로, 결과적으로 기존의 모든 컬럼 데이터는 증발하고 새로 추가된 컬럼 1개만 남은 1-컬럼 로로 대체됨.
+* **권장 수정안**:
+  - `td.mode == OCCModeFlat`인 경우 기존 `entry.materialize(td)`로 전체 컬럼을 복원한 후 새 컬럼을 추가하고, 새 스키마의 레이아웃으로 다시 Flat 인코딩하여 저장하도록 보정.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 11-5] `storage/memengine/table_data.go`: `addPartitionKey` 및 `removePartitionKey`에서 `partMu` 뮤텍스 미획득으로 인한 동시 맵 쓰기 크래시
+* **심각도**: `High`
+* **위치**: `pkg/storage/memengine/table_data.go:335-357` (`addPartitionKey`, `removePartitionKey`)
+* **현상 및 원인 분석**:
+  - `TableData` 구조체에 `partMu sync.RWMutex`가 선언되어 있으나, 파티션 키를 등록하고 삭제하는 `addPartitionKey` 및 `removePartitionKey` 메서드 내부에서 `td.partMu.Lock()`을 획득하지 않고 내부 중첩 맵(`td.Partitions[partID][pk]`)을 직접 조작함.
+  - 여러 워커 트랜잭션이 파티션 테이블에 대해 동시에 `INSERT` 또는 `DELETE`를 수행할 경우 `fatal error: concurrent map writes` 런타임 패닉으로 전체 서버 프로세스가 크래시됨 (`[RULE:ConcurrencySafety]`).
+* **권장 수정안**:
+  - 두 메서드 시작 시 `td.partMu.Lock()` 및 `defer td.partMu.Unlock()`을 반드시 적용하여 동시성 레이스 차단.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
 
