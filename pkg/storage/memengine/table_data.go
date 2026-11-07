@@ -299,7 +299,11 @@ func (td *TableData) syncShardsToMapsLocked() {
 		sh := &td.shards[i]
 		sh.mu.RLock()
 		for k, entry := range sh.entries {
-			td.Rows[k] = entry.row
+			row, err := entry.materialize(td)
+			if err != nil {
+				row = entry.row
+			}
+			td.Rows[k] = row
 			td.Versions[k] = entry.ver
 		}
 		sh.mu.RUnlock()

@@ -722,3 +722,63 @@ func TestFlatRecord_Regression_P0_01_HeapOffsetTagCollisionNoCorruption(t *testi
 	}
 }
 
+// TestFlatRecord_Regression_P0_02_SnapshotSyncMaterialization verifies that
+// in OCCModeFlat, syncShardsToMapsLocked materializes rows from flatBuf rather than
+// populating td.Rows with empty unmaterialized row shells (P0-02).
+func TestFlatRecord_Regression_P0_02_SnapshotSyncMaterialization(t *testing.T) {
+	opts := DefaultOptions("")
+	opts.Mode = OCCModeFlat
+	eng := NewWithOptions(opts)
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "accounts_flat",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "owner", Type: storage.TypeVarChar},
+			{Name: "balance", Type: storage.TypeFloat},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	err := tx.Insert("accounts_flat", storage.Record{
+		"id":      storage.IntValue(101),
+		"owner":   storage.StringValue("AliceCorp"),
+		"balance": storage.FloatValue(54321.0),
+	})
+	if err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	td := eng.tables["accounts_flat"]
+	if td.mode != OCCModeFlat {
+		t.Fatalf("expected table mode OCCModeFlat, got %v", td.mode)
+	}
+
+	// Trigger snapshot synchronization
+	td.syncShardsToMapsLocked()
+
+	// Verify that td.Rows contains materialized data rather than an empty row shell
+	row, exists := td.Rows["101"]
+	if !exists {
+		t.Fatalf("expected row '101' in td.Rows after snapshot sync")
+	}
+
+	if len(row.Values) == 0 {
+		t.Fatalf("[CRITICAL P0-02 REGRESSION] td.Rows['101'] contains empty unmaterialized shell! Data evaporated on snapshot sync")
+	}
+
+	if row.Values[0].IVal != 101 || row.Values[1].SVal != "AliceCorp" || row.Values[2].FVal != 54321.0 {
+		t.Fatalf("row values corrupted or empty: %+v", row.Values)
+	}
+}
+
+
