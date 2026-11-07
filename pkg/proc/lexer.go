@@ -3,6 +3,7 @@ package proc
 import (
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Lexer tokenizes T-SQL procedural scripts.
@@ -10,7 +11,7 @@ type Lexer struct {
 	input   string
 	pos     int
 	readPos int
-	ch      byte
+	ch      rune
 	line    int
 	col     int
 }
@@ -29,19 +30,22 @@ func NewLexer(input string) *Lexer {
 func (l *Lexer) readChar() {
 	if l.readPos >= len(l.input) {
 		l.ch = 0
+		l.pos = l.readPos
 	} else {
-		l.ch = l.input[l.readPos]
+		r, w := utf8.DecodeRuneInString(l.input[l.readPos:])
+		l.ch = r
+		l.pos = l.readPos
+		l.readPos += w
 	}
-	l.pos = l.readPos
-	l.readPos++
 	l.col++
 }
 
-func (l *Lexer) peekChar() byte {
+func (l *Lexer) peekChar() rune {
 	if l.readPos >= len(l.input) {
 		return 0
 	}
-	return l.input[l.readPos]
+	r, _ := utf8.DecodeRuneInString(l.input[l.readPos:])
+	return r
 }
 
 // NextToken returns the next lexical token.
@@ -287,7 +291,7 @@ func (l *Lexer) readQuotedIdentifier() string {
 		if l.ch == '"' {
 			if l.peekChar() == '"' {
 				// Escaped quote ""
-				b.WriteByte('"')
+				b.WriteRune('"')
 				l.readChar()
 				l.readChar()
 				continue
@@ -295,7 +299,7 @@ func (l *Lexer) readQuotedIdentifier() string {
 			l.readChar() // skip closing quote
 			break
 		}
-		b.WriteByte(l.ch)
+		b.WriteRune(l.ch)
 		l.readChar()
 	}
 	// Check if dot-qualified e.g. "dbo"."customers"
@@ -343,7 +347,7 @@ func (l *Lexer) readBacktickIdentifier() string {
 		if l.ch == '`' {
 			if l.peekChar() == '`' {
 				// Escaped backtick ``
-				b.WriteByte('`')
+				b.WriteRune('`')
 				l.readChar()
 				l.readChar()
 				continue
@@ -351,7 +355,7 @@ func (l *Lexer) readBacktickIdentifier() string {
 			l.readChar() // skip closing backtick
 			break
 		}
-		b.WriteByte(l.ch)
+		b.WriteRune(l.ch)
 		l.readChar()
 	}
 	// Check if dot-qualified e.g. `dbo`.`customers`
@@ -480,7 +484,7 @@ func (l *Lexer) readString() string {
 		if l.ch == '\'' {
 			if l.peekChar() == '\'' {
 				// Escaped quote ''
-				b.WriteByte('\'')
+				b.WriteRune('\'')
 				l.readChar()
 				l.readChar()
 				continue
@@ -488,16 +492,16 @@ func (l *Lexer) readString() string {
 			l.readChar() // skip closing quote
 			break
 		}
-		b.WriteByte(l.ch)
+		b.WriteRune(l.ch)
 		l.readChar()
 	}
 	return b.String()
 }
 
-func isLetter(ch byte) bool {
-	return unicode.IsLetter(rune(ch)) || ch == '_' || ch == '#'
+func isLetter(ch rune) bool {
+	return unicode.IsLetter(ch) || ch == '_' || ch == '#'
 }
 
-func isDigit(ch byte) bool {
+func isDigit(ch rune) bool {
 	return '0' <= ch && ch <= '9'
 }

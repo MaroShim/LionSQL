@@ -63,8 +63,8 @@
     - 카탈로그 내부 `*View` 구조체를 딥카피 없이 반환하여 여러 쿼리가 동시에 참조 시 메모리 레이스 발생.
 17. **`P0-23` [DECIMAL/NUMERIC을 Float 매핑하여 금융 부동소수점 오차 유발]** [완료] (`proc/parser.go:255-280` / 결함 6-1)
     - 파서가 정밀 금융 타입을 `TypeFloat`으로 매핑하던 결함 완치 (Native/ANTLR4 파서에서 `DECIMAL`/`NUMERIC`/`MONEY`를 `TypeDecimal`로 분리 매핑 및 `Precision/Scale` 파싱 보존 연동 완료).
-18. **`P0-24` [UTF-8 멀티바이트 비-ASCII 식별자 파편화]** (`proc/lexer.go:497-499` / 결함 6-2)
-    - 바이트 단위 검사로 인해 한글/한자 테이블명 및 컬럼명 첫 바이트가 깨지는 현상.
+18. **`P0-24` [UTF-8 멀티바이트 비-ASCII 식별자 파편화]** [완료] (`proc/lexer.go:497-499` / 결함 6-2)
+    - 바이트 단위 검사로 인해 한글/한자 식별자 첫 바이트가 깨지던 결함 완치 (`utf8.DecodeRuneInString` 기반 완전한 룬 렉서 개편 및 다국어 식별자 회귀 테스트 완료).
 19. **`P0-25` [이항 연산자 오른쪽 파싱 실패 시 Nil Dereference 패닉]** (`proc/parser_expr.go:180-194` / 결함 6-3)
     - 표현식 파싱 실패 시 `&BinaryExpr{Right: nil}`을 반환하여 VM 컴파일 단계에서 런타임 패닉 크래시.
 
