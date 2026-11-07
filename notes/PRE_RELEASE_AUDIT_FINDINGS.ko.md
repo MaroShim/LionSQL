@@ -13,12 +13,12 @@
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
 * **1단계 (135단계 전수 광역 스캔)**: 135 / 135 (100.0%) 완주 완료 (총 134건 결함 식별)
-* **2단계 (5대 핵심 코어 심층 재스캔)**: 1 / 5 구역 완료 (구역 1: 스토리지 코어 완주, 7건 심층 결함 발굴)
-* **총 누적 식별 결함**: 총 141건 (1단계 134건 + 2단계 7건)
+* **2단계 (5대 핵심 코어 심층 재스캔)**: 2 / 5 구역 완료 (구역 1: 7건, 구역 2: 5건 심층 결함 발굴)
+* **총 누적 식별 결함**: 총 146건 (1단계 134건 + 2단계 12건)
   - Critical: 9건 (+1)
-  - High: 63건 (+3)
-  - Medium: 56건 (+2)
-  - Low: 13건 (+1)
+  - High: 65건 (+5)
+  - Medium: 58건 (+4)
+  - Low: 14건 (+2)
 
 ---
 
@@ -2373,6 +2373,75 @@
   - 만약 동일 이름이 재사용되었을 경우 실제 세이브포인트 생성 순서와 `spNames`의 물리적 인덱스 순서가 뒤틀려, 나중에 정의된 세이브포인트가 조기 삭제되거나 이전 세이브포인트가 잔류하는 정합성 왜곡 가능.
 * **권장 수정안**:
   - 동일한 이름의 세이브포인트가 재정의되면 기존 인덱스 위치에서 제거하고 가장 마지막 위치에 새로 추가하거나 표준 LIFO 스택 구조로 일원화 관리.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
+### [심층 구역 2] 트랜잭션 코디네이터 & 세션 풀 (Transaction Coordinator & Session Pool)
+* **대상 핵심 파일**:
+  - `pkg/engine/coordinator.go` (83 라인)
+  - `pkg/engine/coordinator_impl.go` (641 라인)
+  - `pkg/engine/session.go` (532 라인)
+  - `pkg/engine/session_pool.go` (243 라인)
+  - **총 분석 규모**: 1,499 라인
+* **중점 점검 영역**: 세션 다중화 누수, 동시성 락 계층 위반, Autocommit CGo 동시성 레이스, 슬로우 쿼리 전역 블로킹, 팬텀 임시 테이블 누적.
+
+#### [발굴 결함 2-1] `engine/coordinator_impl.go` & `engine/session_pool.go`: `SessionPool`의 1:1 영구 바인딩으로 인한 세션 다중화 무효화 및 유휴 연결 폭증 시 WiredTiger 세션 고갈
+* **심각도**: `High`
+* **위치**: `pkg/engine/coordinator_impl.go:308-317`, `pkg/engine/session_pool.go:148-179` (`GetOrCreateSession`, `AcquireSession`)
+* **현상 및 원인 분석**:
+  - `SessionPool`은 "수천 개의 클라이언트 연결에 대해 스토리지 엔진 세션을 다중화(Multiplexing)"하도록 설계되었음.
+  - 그러나 `Coordinator.GetOrCreateSession`은 클라이언트 연결이 맺어지는 순간 `c.pool.AcquireSession()`을 호출하여 스토리지 세션을 1:1로 할당받은 뒤 `cs.Session`에 영구 바인딩함. 이 세션은 클라이언트가 완전히 접속을 끊을 때(`CloseSession`)까지 절대 풀에 반환되지 않음.
+  - 실제 쿼리 실행 제어는 `AcquireWorker(ctx)`(고루틴 슬롯)로만 제한되고, 물리적 스토리지 세션은 유휴(Idle) 상태인 수천 개의 연결에 1:1로 묶여 있음.
+  - **결과**: WiredTiger의 기본 엔진 세션 상한(`session_max=2000`)에 도달하면, 비록 쿼리를 수행하지 않는 유휴 연결이더라도 신규 접속이 즉시 실패하여 연결 거부 및 DoS 상태가 초래됨.
+* **권장 수정안**:
+  - 트랜잭션이 없는 일반 쿼리(Autocommit)의 경우 `ExecuteProgram` 또는 쿼리 실행 직전에만 `SessionPool.AcquireSession()`을 대여받고 쿼리 완료 후 즉시 `ReleaseSession()`하도록 풀러 다중화 라이프사이클을 정상화해야 함.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 2-2] `engine/session.go`: Autocommit 모드 실행 시 `cs.Mu` 조기 언락으로 인한 동일 세션 동시 쿼리 `WT_SESSION` CGo Data Race
+* **심각도**: `High`
+* **위치**: `pkg/engine/session.go:367-386` (`ExecuteProgram`)
+* **현상 및 원인 분석**:
+  - 트랜잭션이 열려 있지 않은 Autocommit 모드에서 `cs.Session != nil`일 때, 세션 포인터를 `sess = cs.Session`으로 복사한 뒤 379라인에서 `cs.Mu.Unlock()`을 호출하여 락을 조기에 풀어버림.
+  - 이후 385라인에서 락이 풀린 상태로 `exec.RunContext(ctx, prog, stmtLabel, paramMap, sess)`를 실행함.
+  - 만약 HTTP API나 파이프라인 PGWire 프로토콜을 통해 동일 세션(`ClientSession`)으로 두 개 이상의 비동기 쿼리가 동시에 도달할 경우, 스레드 세이프하지 않은 단일 WiredTiger C 세션 핸들(`WT_SESSION*`)을 복수의 Go 워커 스레드가 동시 조작하게 됨.
+  - **결과**: WiredTiger C 엔진 내부의 메모리 오염 또는 `concurrent call to session` 패닉 및 프로세스 SIGSEGV 비정상 종료 유발 (`[RULE:PanicRecovery]`, `[RULE:ConcurrencySafety]`).
+* **권장 수정안**:
+  - Autocommit 실행 시 세션 뮤텍스를 쿼리 완료 시까지 유지하거나, 동시 쿼리 유입 시 별도의 임시 세션을 풀에서 할당받아 실행하도록 동시성 분기 격리.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 2-3] `engine/coordinator_impl.go`: `GetActiveQueries()`의 광역 RLock 유지 및 개별 세션 락 순회로 인한 전역 Cascading Stall 위험
+* **심각도**: `Medium`
+* **위치**: `pkg/engine/coordinator_impl.go:529-548` (`GetActiveQueries`)
+* **현상 및 원인 분석**:
+  - `GetActiveQueries()`는 실행 중인 쿼리 목록을 수집하기 위해 `c.sessMu.RLock()`을 획득한 상태에서 `for _, cs := range c.sessions` 루프를 돌며 각 세션의 `cs.Mu.Lock()`을 순차적으로 획득함.
+  - 만약 특정 세션이 무거운 락이나 장기 슬로우 쿼리로 인해 `cs.Mu.Lock()`을 오래 쥐고 있다면, `c.sessMu.RLock()`이 장시간 반환되지 않고 묶이게 됨.
+  - 이때 신규 클라이언트 연결 생성(`GetOrCreateSession`)이나 연결 종료(`CloseSession`)가 호출되면 `c.sessMu.Lock()`(Writer)을 요청하게 됨. Go의 `sync.RWMutex` 구현은 대기 중인 Writer가 있을 경우 이후 들어오는 모든 Reader(`GetSession`, `CancelSessionQuery` 등)를 대기열에 세움.
+  - **결과**: 단 하나의 세션 지연이 전체 코디네이터의 세션 조회 및 취소 API를 전면 마비시키는 연쇄 정체(Cascading Stall) 발생 (`[RULE:LockHierarchy]`).
+* **권장 수정안**:
+  - `c.sessMu.RLock()` 상태에서는 대상 세션 포인터들의 슬라이스만 즉시 복제하여 RLock을 0ms 내에 반환하고, 복제된 슬라이스를 순회하면서 개별 `cs.Mu.Lock()`을 획득하도록 락 스코프를 축소해야 함.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 2-4] `engine/session_pool.go`: 풀 내부 락(`p.mu`)을 쥔 상태에서 외부 CGo 블로킹 `sess.Close()` 호출로 인한 데드락 위험
+* **심각도**: `Medium`
+* **위치**: `pkg/engine/session_pool.go:159-161`, `197-199` (`AcquireSession`, `ReleaseSession`)
+* **현상 및 원인 분석**:
+  - `AcquireSession`에서 유휴 TTL이 만료된 세션을 닫거나 `ReleaseSession`에서 유휴 풀이 가득 찼을 때, 풀 내부 뮤텍스(`p.mu.Lock()`)를 획득한 상태에서 `_ = sess.Close()`를 직접 동기 호출함.
+  - WiredTiger 엔진의 `sess.Close()`는 CGo를 경유하여 엔진 레벨의 `sessMu` 및 WiredTiger C 내부 연결 락을 획득함.
+  - 엔진 셧다운이나 백그라운드 리셋 등 다른 고루틴이 엔진 락을 잡고 풀을 조회하는 경로와 맞물릴 경우 엄격한 락 순서가 뒤집혀 데드락 발생 위험 존재 (`[RULE:LockHierarchy]`).
+* **권장 수정안**:
+  - 닫아야 할 세션 포인터를 로컬 변수로 빼내고 `p.mu.Unlock()`을 먼저 수행한 뒤 락 밖에서 `sess.Close()`를 실행.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 2-5] `engine/session.go`: 존재하지 않는 임시 테이블 단순 참조 시 `TempTableMap` 팬텀 슬롯 메모리 누적
+* **심각도**: `Low`
+* **위치**: `pkg/engine/session.go:188-210` (`ResolveTempTableName`)
+* **현상 및 원인 분석**:
+  - `#temp` 접두사를 가진 테이블명이 쿼리 문맥에 등장할 때마다 `ResolveTempTableName`이 호출됨.
+  - 이 함수는 실제로 `CREATE TABLE #foo`가 성공했는지 여부를 따지지 않고, 참조된 적 없는 `#foo`에 대해 물리 이름(`__temp_<sessID>_foo`)을 생성하여 `cs.TempTableMap`과 `cs.TempTables` 슬라이스에 즉시 등록함.
+  - 사용자가 오타나 잘못된 `SELECT * FROM #not_exist`를 반복 실행할 경우 실제 존재하지도 않는 팬텀 임시 테이블명이 세션 메모리에 무한 누적되며, 세션 종료(`CloseSession`) 시 수백 건의 무의미한 `DropTable` 시스템 콜 실패를 유발함.
+* **권장 수정안**:
+  - 단순 이름 해석(`Resolve`)과 실제 임시 테이블 등록(`RegisterTempTable`)의 책임을 분리하여, 실제 DDL 성공 시에만 `TempTables`에 추적 등록되도록 개선.
 * **판정**: `DEFECT_LOGGED`
 
 ---
