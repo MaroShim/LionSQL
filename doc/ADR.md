@@ -34,6 +34,8 @@ This document records the critical architectural decisions made throughout the d
 - [ADR-022: Hybrid Expression B-Tree Indexing for Semi-Structured JSON Documents](#adr-022-hybrid-expression-b-tree-indexing-for-semi-structured-json-documents)
 - [ADR-023: Instance-Based Database Isolation & Multi-Database Catalog Multiplexing Spec-Out](#adr-023-instance-based-database-isolation--multi-database-catalog-multiplexing-spec-out)
 - [ADR-024: Decoupled CDC Event Streaming vs POSIX Shared Memory (Arrow IPC) Exclusion for OLAP Analytics](#adr-024-decoupled-cdc-event-streaming-vs-posix-shared-memory-arrow-ipc-exclusion-for-olap-analytics)
+- [ADR-025: Unified SQL Abstraction Layer - Type Promotion Lattice, Strict NULL Propagation, and Synthetic Row Identity](#adr-025-unified-sql-abstraction-layer---type-promotion-lattice-strict-null-propagation-and-synthetic-row-identity)
+- [ADR-026: Transactional Outbox Sender Contract - Backpressure Pause and Zero-Data-Loss Guarantee](#adr-026-transactional-outbox-sender-contract---backpressure-pause-and-zero-data-loss-guarantee)
 
 ---
 
@@ -710,6 +712,34 @@ Standardize four core abstractions forming the Unified SQL Abstraction Layer:
 - **Positive**: Eliminates 200+ lines of duplicated comparison and NULL-guarding boilerplate; guarantees symmetric heterogeneous comparisons and deterministic float equality; unifies synthetic primary key metadata across parser, query planner, and VDBE; resolves case-sensitivity defects across the engine.
 - **Negative**: Requires new scalar functions and synthetic column generators to adhere to the standardized helper APIs.
 - **Compliance**: Adheres to Golden Rule 11 (Defensive Indexing & Overflow Guard), Golden Rule 15 (Radical KISS, DRY & Deletion-First), Golden Rule 19 (Modular Interface Abstraction), and `notes/SQL_ABSTRACTION_LAYER_PLAN.md`.
+
+---
+
+## ADR-026: Transactional Outbox Sender Contract - Backpressure Pause and Zero-Data-Loss Guarantee
+
+### Status
+Accepted
+
+### Context
+In `pkg/cdc/outbox.go`, the `dispatchLoop` consumed CDC events from a channel and forwarded them to configured `BrokerSink`s (Kafka REST, RabbitMQ HTTP, or generic Webhooks).
+When a broker sink returned a transient network error or failed after `MaxRetries`, the dispatcher logged a warning but continued the loop, consuming the next message from the channel.
+This created two critical liabilities:
+1. **Silent Message Loss**: Messages failed during transient broker downtime were completely dropped from memory while the channel continued draining.
+2. **Checkpoint Corruption**: If a subsequent event (e.g. LSN 102) succeeded, `lastAckLSN` and the disk checkpoint advanced to 102, permanently skipping the dropped event (LSN 101) even across server restarts.
+3. **Causal Inversion**: Draining subsequent mutations out-of-order violated relational causality (e.g. `UPDATE` dispatched while previous `INSERT` dropped).
+
+### Decision
+Enforce the **Strict Sender Contract & Zero-Data-Loss Guarantee** in `OutboxDispatcher`:
+1. **Sender Stalls on Unreachable Receiver**: The dispatcher worker exists solely to faithfully deliver messages. If the receiver is unreachable, the dispatcher must NOT advance to subsequent messages. It must pause, applying exponential backoff (`InitialBackoff` -> `MaxBackoff`), retrying until delivery succeeds.
+2. **Channel-Head Retention**: Never read a subsequent `ChangeEvent` from the channel until the active message is fully acknowledged by all registered sinks.
+3. **Cooperative Graceful Shutdown (`ctx.Done()`)**: When the server terminates, the dispatch loop aborts immediately without advancing `lastAckLSN`. On subsequent restart, checkpoint recovery safely resumes streaming from the exact unacknowledged LSN.
+4. **Natural Backpressure**: Pausing the sender fills the bounded channel buffer (`Streamer`), applying natural backpressure up the CDC pipeline rather than masking broker outages with data loss.
+
+### Consequences
+- **Positive**: Guarantees true At-Least-Once delivery and strict FIFO causal ordering; completely eliminates silent event drops during broker outages; maintains checkpoint integrity.
+- **Negative**: Long broker outages pause outbox streaming, buffering events up to channel capacity before applying backpressure.
+- **Compliance**: Adheres to Golden Rule 1 (Atomic Saves & Safety), Golden Rule 7 (Explicit Error Visibility), Golden Rule 15 (Radical KISS), and `notes/ENGINEERING_CONTEXT.ko.md` Invariant 21.
+
 
 
 

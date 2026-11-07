@@ -66,6 +66,7 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
   * **[`WEBHOOKS_AND_RLS.md`](WEBHOOKS_AND_RLS.md)**: 실시간 웹훅 및 행 수준 보안(RLS).
   * **[`CRON_AND_MAILER.md`](CRON_AND_MAILER.md)**: 내장 크론 스케줄러 및 SMTP 메일러.
   * **[`CDC_DUCKDB_INTEGRATION.md`](CDC_DUCKDB_INTEGRATION.md)**: 실시간 CDC 이벤트 스트리밍.
+  * **[`TRANSACTIONAL_OUTBOX_GUIDE.md`](TRANSACTIONAL_OUTBOX_GUIDE.md)**: 네이티브 아웃박스 브로커 릴레이 (Kafka, RabbitMQ, Webhook).
 * **세부 기능 및 스토리지 가이드**:
   * **[`RANGE_PARTITIONING.md`](RANGE_PARTITIONING.md)**: 시계열 자동 롤링 레인지 파티셔닝.
   * **[`JSON_INDEXING_GUIDE.md`](JSON_INDEXING_GUIDE.md)**: 반정형 JSON B-Tree 표현식 인덱싱.

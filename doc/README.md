@@ -65,6 +65,7 @@ Operational procedures, high availability, security hardening, APIs, and backgro
   * **[`WEBHOOKS_AND_RLS.md`](WEBHOOKS_AND_RLS.md)**: Real-time webhooks and Row-Level Security (RLS).
   * **[`CRON_AND_MAILER.md`](CRON_AND_MAILER.md)**: Embedded cron scheduler and SMTP mailer.
   * **[`CDC_DUCKDB_INTEGRATION.md`](CDC_DUCKDB_INTEGRATION.md)**: Real-time CDC streaming.
+  * **[`TRANSACTIONAL_OUTBOX_GUIDE.md`](TRANSACTIONAL_OUTBOX_GUIDE.md)**: Native Transactional Outbox broker relay (Kafka, RabbitMQ, Webhooks).
 * **Storage & Features**:
   * **[`RANGE_PARTITIONING.md`](RANGE_PARTITIONING.md)**: Automated rolling time-series range partitioning.
   * **[`JSON_INDEXING_GUIDE.md`](JSON_INDEXING_GUIDE.md)**: Semi-structured JSON B-Tree indexing.
