@@ -33,10 +33,10 @@ Foundational engineering principles, architectural invariants, code landmines, a
 
 Active verification audits and hardening projects driving LionSQL toward the 1.0 General Availability release.
 
-* **[`PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`](PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md)** (Korean)
-  * 100-step dual AI (Gemini × Claude) cross-audit master plan across all 10 engine domains (`AUDIT-100-DUAL-REVIEW`).
+* **[`PRE_RELEASE_AUDIT_PLAN.ko.md`](PRE_RELEASE_AUDIT_PLAN.ko.md)** (Korean)
+  * 135-step dual AI (Gemini × Claude) cross-audit master plan across all 13 engine domains (`AUDIT-135-DUAL-REVIEW`).
 * **[`PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md)** (Korean)
-  * Consolidated matrix of defect findings discovered during the 100-step pre-release audit (Scopes 001-020 completed, 18 defects logged).
+  * Consolidated matrix of defect findings discovered during the pre-release audit (135/135 completed, 134 defects logged).
 * **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)** (Korean)
   * Unified SSOT plan for total elimination of regular expressions in favor of deterministic tokenizers (`GA-REGEX-DDL-1` - `GA-REGEX-FINAL-3`, `SEC-PGWIRE-PARAM-1`).
 * **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)** (Korean)

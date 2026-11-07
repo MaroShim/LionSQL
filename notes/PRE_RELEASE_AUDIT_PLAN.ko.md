@@ -1,8 +1,8 @@
-# LionSQL 1.0 릴리스 대비 전 소스코드 135단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 감사 계획서 (`notes/PRE_RELEASE_100_STEP_DUAL_CODE_REVIEW_PLAN.ko.md`)
+# LionSQL 1.0 릴리스 대비 전 소스코드 135단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 감사 계획서 (`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-06
-> - **문서 성격**: 1.0 릴리스 신뢰성 검증 게이트(kill -9 크래시 복구, 72h 소크, SQLLogicTest) 진입 이전, Lionsql 엔진 본체 199개 순수 Go 소스코드 전 구역을 100개 마이크로 스코프로 세분화하여 Gemini와 Claude의 교차 검증으로 숨은 버그, 동시성 레이스, 데드락, 엣지 케이스를 선제 발굴·완치하기 위한 전수 감사 마스터 플랜
-> - **과제 식별 코드**: `AUDIT-100-DUAL-REVIEW`
+> - **문서 성격**: 1.0 릴리스 신뢰성 검증 게이트(kill -9 크래시 복구, 72h 소크, SQLLogicTest) 진입 이전, Lionsql 엔진 본체 216개 순수 Go 소스코드 전 구역을 13대 도메인 135개 마이크로 스코프로 세분화하여 Gemini와 Claude의 교차 검증으로 숨은 버그, 동시성 레이스, 데드락, 엣지 케이스를 선제 발굴·완치하기 위한 전수 감사 마스터 플랜
+> - **과제 식별 코드**: `AUDIT-135-DUAL-REVIEW`
 > - **상태**: [x] Completed (135/135 전수 감사 완주 및 결함 기록 완료)
 > - **핵심 불변식**:
 >   - `[RULE:ExplicitError]` (Never silently swallow errors, No `_ = err`)
