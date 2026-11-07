@@ -1014,6 +1014,8 @@ type ColumnDef struct {
 	Type       storage.DataType
 	PrimaryKey bool
 	Nullable   bool
+	Precision  int
+	Scale      int
 }
 
 // CreateTableStmt represents CREATE TABLE ...

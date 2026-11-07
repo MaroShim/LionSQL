@@ -61,8 +61,8 @@
     - 확장 통계 생성 시 카탈로그 직렬화 구조체에 필드가 누락되어 재부팅 시 CBO 통계 메타데이터 증발.
 16. **`P0-22` [GetView 내부 포인터 직접 반환 동시 실행 시 Data Race]** (`catalog/catalog.go:752-761` / 결함 7-4)
     - 카탈로그 내부 `*View` 구조체를 딥카피 없이 반환하여 여러 쿼리가 동시에 참조 시 메모리 레이스 발생.
-17. **`P0-23` [DECIMAL/NUMERIC을 Float 매핑하여 금융 부동소수점 오차 유발]** (`proc/parser.go:255-280` / 결함 6-1)
-    - 파서가 정밀 금융 타입을 `TypeFloat`으로 매핑하여 반올림 오차 및 원화/달러 계산 왜곡 발생.
+17. **`P0-23` [DECIMAL/NUMERIC을 Float 매핑하여 금융 부동소수점 오차 유발]** [완료] (`proc/parser.go:255-280` / 결함 6-1)
+    - 파서가 정밀 금융 타입을 `TypeFloat`으로 매핑하던 결함 완치 (Native/ANTLR4 파서에서 `DECIMAL`/`NUMERIC`/`MONEY`를 `TypeDecimal`로 분리 매핑 및 `Precision/Scale` 파싱 보존 연동 완료).
 18. **`P0-24` [UTF-8 멀티바이트 비-ASCII 식별자 파편화]** (`proc/lexer.go:497-499` / 결함 6-2)
     - 바이트 단위 검사로 인해 한글/한자 테이블명 및 컬럼명 첫 바이트가 깨지는 현상.
 19. **`P0-25` [이항 연산자 오른쪽 파싱 실패 시 Nil Dereference 패닉]** (`proc/parser_expr.go:180-194` / 결함 6-3)

@@ -601,19 +601,7 @@ func (p *Parser) parseCreateTable() (*CreateTableStmt, error) {
 			colName := cleanSchemaPrefix(ident)
 			p.nextToken()
 
-			dt := parseDataType(p.curToken.Literal)
-			p.nextToken()
-
-			// Skip optional length e.g. VARCHAR(255)
-			if p.curTokenIs(TokenLParen) {
-				p.nextToken()
-				if p.curTokenIs(TokenInt) {
-					p.nextToken()
-				}
-				if p.curTokenIs(TokenRParen) {
-					p.nextToken()
-				}
-			}
+			dt, prec, scale := p.parseTypeSpec()
 
 			isPK := false
 			isNotNull := false
@@ -643,6 +631,8 @@ func (p *Parser) parseCreateTable() (*CreateTableStmt, error) {
 				Type:       dt,
 				PrimaryKey: isPK,
 				Nullable:   !isNotNull,
+				Precision:  prec,
+				Scale:      scale,
 			})
 		}
 

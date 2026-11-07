@@ -678,3 +678,55 @@ func TestParseSQL_AggregateAllQuantifier(t *testing.T) {
 	}
 }
 
+func TestParser_Regression_P0_23_DecimalNumericMoneyMappedToTypeDecimal(t *testing.T) {
+	sql := `CREATE TABLE financial_ledger (
+		id INT PRIMARY KEY,
+		balance DECIMAL(18, 4),
+		tax NUMERIC(10, 2),
+		fee MONEY,
+		rate FLOAT
+	);`
+
+	stmt, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+
+	createStmt, ok := stmt.(*proc.CreateTableStmt)
+	if !ok {
+		t.Fatalf("expected *CreateTableStmt, got %T", stmt)
+	}
+
+	cols := createStmt.Columns
+	if len(cols) != 5 {
+		t.Fatalf("expected 5 columns, got %d", len(cols))
+	}
+
+	// 1. balance DECIMAL(18, 4) MUST be TypeDecimal
+	if cols[1].Type != storage.TypeDecimal {
+		t.Fatalf("[P0-23 REGRESSION] balance type want TypeDecimal, got %v (incorrectly degraded to TypeFloat!)", cols[1].Type)
+	}
+	if cols[1].Precision != 18 || cols[1].Scale != 4 {
+		t.Errorf("balance precision/scale mismatch: want (18, 4), got (%d, %d)", cols[1].Precision, cols[1].Scale)
+	}
+
+	// 2. tax NUMERIC(10, 2) MUST be TypeDecimal
+	if cols[2].Type != storage.TypeDecimal {
+		t.Fatalf("[P0-23 REGRESSION] tax type want TypeDecimal, got %v (incorrectly degraded to TypeFloat!)", cols[2].Type)
+	}
+	if cols[2].Precision != 10 || cols[2].Scale != 2 {
+		t.Errorf("tax precision/scale mismatch: want (10, 2), got (%d, %d)", cols[2].Precision, cols[2].Scale)
+	}
+
+	// 3. fee MONEY MUST be TypeDecimal
+	if cols[3].Type != storage.TypeDecimal {
+		t.Fatalf("[P0-23 REGRESSION] fee type want TypeDecimal, got %v (incorrectly degraded to TypeFloat!)", cols[3].Type)
+	}
+
+	// 4. rate FLOAT MUST be TypeFloat
+	if cols[4].Type != storage.TypeFloat {
+		t.Fatalf("rate type want TypeFloat, got %v", cols[4].Type)
+	}
+}
+
+
