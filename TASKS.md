@@ -353,7 +353,7 @@
 - **Plan Doc**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md)
 
 **Phases & Checklist**:
-- [ ] Batch 1: 보안 및 접근 제어 코어 (P0-06 ~ P0-10, 5건) TDD 패치
+- [x] Batch 1: 보안 및 접근 제어 코어 (P0-06 ~ P0-10, 5건) TDD 패치
 - [ ] Batch 2: 스토리지, FlatRecord & WAL 영속성 (P0-01 ~ P0-05, 5건) TDD 패치
 - [ ] Batch 3: 백업, 복원 & 카탈로그 메타데이터 (P0-15 ~ P0-17, P0-20 ~ P0-22, 6건) TDD 패치
 - [ ] Batch 4: T-SQL 렉서, 파서 & CBO 플래너 (P0-23 ~ P0-25, P0-28, 4건) TDD 패치
