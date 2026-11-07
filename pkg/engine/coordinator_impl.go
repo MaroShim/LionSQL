@@ -114,6 +114,7 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 	executor.SetQueryExecutor(func(ctx context.Context, sql string, tx storage.Transaction, vars map[string]storage.Value) ([]map[string]any, []string, error) {
 		cs := &ClientSession{
 			ID:   "internal-vm-subquery",
+			User: "sa",
 			Tx:   tx,
 			Vars: make(map[string]any, len(vars)*2),
 		}

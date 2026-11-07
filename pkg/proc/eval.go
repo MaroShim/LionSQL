@@ -346,7 +346,15 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		if err != nil || patVal == nil {
 			return false, nil
 		}
-		matched := sqlutil.MatchLike(fmt.Sprintf("%v", patVal), fmt.Sprintf("%v", val), true)
+		strVal := fmt.Sprintf("%v", val)
+		if sv, ok := val.(storage.Value); ok {
+			strVal = fmt.Sprintf("%v", sv.Interface())
+		}
+		strPat := fmt.Sprintf("%v", patVal)
+		if sv, ok := patVal.(storage.Value); ok {
+			strPat = fmt.Sprintf("%v", sv.Interface())
+		}
+		matched := sqlutil.MatchLike(strPat, strVal, true)
 		if e.Not {
 			return !matched, nil
 		}

@@ -191,9 +191,15 @@ func parseSetUserOrExecAs(query string) (user string, isExecAs bool, ok bool) {
 
 // checkTableAccess checks whether the current session user has permission to access a relation.
 func (s *Coordinator) checkTableAccess(cs *ClientSession, table string, priv auth.Privilege) error {
-	if s.auth == nil {
+	// In-process system execution (cs == nil) runs with internal superuser privileges
+	if cs == nil {
 		return nil
 	}
+	// Fail-Closed: If a client connection reaches here without an auth service, deny explicitly
+	if s.auth == nil {
+		return fmt.Errorf("authentication service is uninitialized (fail-closed)")
+	}
+
 	cleanTbl := cleanIdentifier(table)
 	// Virtual system catalog views or temporary tables bypass custom table grants
 	if strings.HasPrefix(strings.ToLower(cleanTbl), "sys.") ||

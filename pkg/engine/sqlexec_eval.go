@@ -274,6 +274,9 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 			}
 
 			strVal := fmt.Sprintf("%v", val)
+			if sv, ok := val.(storage.Value); ok {
+				strVal = fmt.Sprintf("%v", sv.Interface())
+			}
 			switch strings.TrimSpace(op) {
 			case "=":
 				if isBool {

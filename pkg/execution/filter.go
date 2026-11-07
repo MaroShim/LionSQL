@@ -300,6 +300,9 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 			}
 
 			leftStr := fmt.Sprintf("%v", val)
+			if sv, ok := val.(storage.Value); ok {
+				leftStr = fmt.Sprintf("%v", sv.Interface())
+			}
 			var parsedRight any
 			if rightIsQuoted {
 				parsedRight = rightVal

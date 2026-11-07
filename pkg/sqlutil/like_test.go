@@ -47,6 +47,7 @@ func TestMatchLike(t *testing.T) {
 		{"[A-Z]%", "apple", true, true},
 		{"[^0-9]%", "abc", false, true},
 		{"[^0-9]%", "123", false, false},
+		{"100%", "100% Cotton", true, true},
 	}
 
 	for _, tc := range tests {

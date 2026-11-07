@@ -49,14 +49,14 @@ func MatchLike(pattern, str string, caseInsensitive bool) bool {
 					goto backtrack
 				}
 			}
-			if pRunes[pIdx] == '_' || matchRune(pRunes[pIdx], sRunes[sIdx], caseInsensitive) {
-				pIdx++
-				sIdx++
-				continue
-			} else if pRunes[pIdx] == '%' {
+			if pRunes[pIdx] == '%' {
 				starIdx = pIdx
 				sMatch = sIdx
 				pIdx++
+				continue
+			} else if pRunes[pIdx] == '_' || matchRune(pRunes[pIdx], sRunes[sIdx], caseInsensitive) {
+				pIdx++
+				sIdx++
 				continue
 			}
 		}
