@@ -15,8 +15,54 @@ var (
 	ErrFlatRecordInvalid   = errors.New("flat record invalid layout")
 )
 
-// Small String Optimization threshold: strings <= 8 bytes are stored inline.
-const ssoMaxLen = 8
+// Small String Optimization threshold: strings/bytes <= 7 bytes are stored inline in slot[0..6]
+// with slot[7] holding the ssoFlag | length. Strings > 7 bytes are stored in the variable heap area
+// with slot[0..3] holding uint32 offset, slot[4..6] holding uint24 length, and slot[7] holding 0x00 ([P0-01]).
+const (
+	ssoMaxLen = 7
+	ssoFlag   = 0x80
+)
+
+// encodeVarSlot encodes variable-length data into an 8-byte fixed slot ([P0-01]).
+// Prevents offset-tag collision where vOff byte 1 equaled 0xFF.
+func encodeVarSlot(slot []byte, raw []byte, varHeap *[]byte) {
+	if len(raw) <= ssoMaxLen {
+		copy(slot[:len(raw)], raw)
+		for j := len(raw); j < 7; j++ {
+			slot[j] = 0
+		}
+		slot[7] = ssoFlag | byte(len(raw))
+	} else {
+		vOff := uint32(len(*varHeap))
+		vLen := uint32(len(raw))
+		binary.LittleEndian.PutUint32(slot[0:4], vOff)
+		slot[4] = byte(vLen)
+		slot[5] = byte(vLen >> 8)
+		slot[6] = byte(vLen >> 16)
+		slot[7] = 0x00 // Explicit Heap Tag: completely isolated from vOff
+		*varHeap = append(*varHeap, raw...)
+	}
+}
+
+// decodeVarSlot extracts variable-length data from an 8-byte fixed slot and variable heap area ([P0-01]).
+func decodeVarSlot(slot []byte, varArea []byte) ([]byte, error) {
+	if (slot[7] & ssoFlag) != 0 {
+		inlineLen := int(slot[7] & 0x7F)
+		if inlineLen > ssoMaxLen {
+			return nil, ErrFlatRecordInvalid
+		}
+		raw := make([]byte, inlineLen)
+		copy(raw, slot[:inlineLen])
+		return raw, nil
+	}
+
+	vOff := binary.LittleEndian.Uint32(slot[0:4])
+	vLen := uint32(slot[4]) | (uint32(slot[5]) << 8) | (uint32(slot[6]) << 16)
+	if int(vOff+vLen) > len(varArea) {
+		return nil, ErrFlatRecordTruncated
+	}
+	return varArea[vOff : vOff+vLen], nil
+}
 
 // FlatRecordLayout computes fixed offsets and sizes for columns of a TableSchema.
 type FlatRecordLayout struct {
@@ -133,77 +179,22 @@ func (l *FlatRecordLayout) EncodeRowToFlat(schema *storage.TableSchema, row stor
 
 		case storage.TypeVarChar, storage.TypeJSON, storage.TypeUUID:
 			s := val.SVal
-			strBytes := unsafe.Slice(unsafe.StringData(s), len(s))
-			if len(strBytes) <= ssoMaxLen {
-				// SSO (Small String Optimization): store directly in the 8-byte slot with length in high byte
-				copy(slot[:ssoMaxLen], strBytes)
-				// High 4 bits: flag 0x80 means SSO, lower 4 bits is length
-				// Actually: slot has 8 bytes. If len <= 7, we can use slot[7] as len.
-				// To keep it simple: slot[0..3] = varOffset/len.
-				// Even cleaner:
-				// If len <= 8:
-				// Use 1 byte for length in a dedicated way, or tag:
-				// Let's use standard layout:
-				// slot[0..3] = uint32(len)
-				// if len <= 4: inline in slot[4..7].
-				// But to allow full 8 bytes SSO:
-				// We can append to varHeap if len > 8.
-			}
-			// For general variable data:
-			if len(strBytes) <= 4 {
-				// Inline up to 4 bytes:
-				// slot[0] = length, slot[1..3] unused, slot[4..7] data
-				slot[0] = byte(len(strBytes))
-				slot[1] = 0xFF // inline tag
-				copy(slot[4:4+len(strBytes)], strBytes)
-			} else {
-				// Store in varHeap
-				vOff := uint32(len(varHeap))
-				vLen := uint32(len(strBytes))
-				slot[0] = 0
-				slot[1] = 0x00 // heap tag
-				binary.LittleEndian.PutUint32(slot[0:4], vOff)
-				binary.LittleEndian.PutUint32(slot[4:8], vLen)
-				varHeap = append(varHeap, strBytes...)
-			}
+			raw := unsafe.Slice(unsafe.StringData(s), len(s))
+			encodeVarSlot(slot, raw, &varHeap)
 
 		case storage.TypeBinary:
-			raw := val.BinVal
-			if len(raw) <= 4 {
-				slot[0] = byte(len(raw))
-				slot[1] = 0xFF // inline tag
-				copy(slot[4:4+len(raw)], raw)
-			} else {
-				vOff := uint32(len(varHeap))
-				vLen := uint32(len(raw))
-				binary.LittleEndian.PutUint32(slot[0:4], vOff)
-				binary.LittleEndian.PutUint32(slot[4:8], vLen)
-				varHeap = append(varHeap, raw...)
-			}
+			raw := unsafe.Slice(unsafe.StringData(val.BinVal), len(val.BinVal))
+			encodeVarSlot(slot, raw, &varHeap)
 
 		case storage.TypeDecimal:
 			decStr := val.Decimal().String()
 			raw := unsafe.Slice(unsafe.StringData(decStr), len(decStr))
-			if len(raw) <= 4 {
-				slot[0] = byte(len(raw))
-				slot[1] = 0xFF
-				copy(slot[4:4+len(raw)], raw)
-			} else {
-				vOff := uint32(len(varHeap))
-				vLen := uint32(len(raw))
-				binary.LittleEndian.PutUint32(slot[0:4], vOff)
-				binary.LittleEndian.PutUint32(slot[4:8], vLen)
-				varHeap = append(varHeap, raw...)
-			}
+			encodeVarSlot(slot, raw, &varHeap)
 
 		default:
 			str := val.String()
 			raw := unsafe.Slice(unsafe.StringData(str), len(str))
-			vOff := uint32(len(varHeap))
-			vLen := uint32(len(raw))
-			binary.LittleEndian.PutUint32(slot[0:4], vOff)
-			binary.LittleEndian.PutUint32(slot[4:8], vLen)
-			varHeap = append(varHeap, raw...)
+			encodeVarSlot(slot, raw, &varHeap)
 		}
 	}
 
@@ -264,64 +255,32 @@ func (l *FlatRecordLayout) DecodeFlatToRow(schema *storage.TableSchema, buf []by
 			}
 
 		case storage.TypeVarChar, storage.TypeJSON, storage.TypeUUID:
-			if slot[1] == 0xFF {
-				// Inlined small string
-				inlineLen := int(slot[0])
-				if inlineLen > 4 {
-					return storage.Row{}, ErrFlatRecordInvalid
-				}
-				s := string(slot[4 : 4+inlineLen])
-				vals[i] = storage.Value{Type: col.Type, SVal: s}
-			} else {
-				vOff := binary.LittleEndian.Uint32(slot[0:4])
-				vLen := binary.LittleEndian.Uint32(slot[4:8])
-				if int(vOff+vLen) > len(varArea) {
-					return storage.Row{}, ErrFlatRecordTruncated
-				}
-				s := string(varArea[vOff : vOff+vLen])
-				vals[i] = storage.Value{Type: col.Type, SVal: s}
+			raw, err := decodeVarSlot(slot, varArea)
+			if err != nil {
+				return storage.Row{}, err
 			}
+			vals[i] = storage.Value{Type: col.Type, SVal: string(raw)}
 
 		case storage.TypeBinary:
-			if slot[1] == 0xFF {
-				inlineLen := int(slot[0])
-				raw := make([]byte, inlineLen)
-				copy(raw, slot[4:4+inlineLen])
-				vals[i] = storage.BinaryValue(raw)
-			} else {
-				vOff := binary.LittleEndian.Uint32(slot[0:4])
-				vLen := binary.LittleEndian.Uint32(slot[4:8])
-				if int(vOff+vLen) > len(varArea) {
-					return storage.Row{}, ErrFlatRecordTruncated
-				}
-				raw := make([]byte, vLen)
-				copy(raw, varArea[vOff:vOff+vLen])
-				vals[i] = storage.BinaryValue(raw)
+			raw, err := decodeVarSlot(slot, varArea)
+			if err != nil {
+				return storage.Row{}, err
 			}
+			vals[i] = storage.BinaryValue(raw)
 
 		case storage.TypeDecimal:
-			var s string
-			if slot[1] == 0xFF {
-				inlineLen := int(slot[0])
-				s = string(slot[4 : 4+inlineLen])
-			} else {
-				vOff := binary.LittleEndian.Uint32(slot[0:4])
-				vLen := binary.LittleEndian.Uint32(slot[4:8])
-				if int(vOff+vLen) > len(varArea) {
-					return storage.Row{}, ErrFlatRecordTruncated
-				}
-				s = string(varArea[vOff : vOff+vLen])
+			raw, err := decodeVarSlot(slot, varArea)
+			if err != nil {
+				return storage.Row{}, err
 			}
-			vals[i] = storage.DecimalValue(s)
+			vals[i] = storage.DecimalValue(string(raw))
 
 		default:
-			vOff := binary.LittleEndian.Uint32(slot[0:4])
-			vLen := binary.LittleEndian.Uint32(slot[4:8])
-			if int(vOff+vLen) > len(varArea) {
-				return storage.Row{}, ErrFlatRecordTruncated
+			raw, err := decodeVarSlot(slot, varArea)
+			if err != nil {
+				return storage.Row{}, err
 			}
-			s := string(varArea[vOff : vOff+vLen])
-			vals[i] = storage.Value{Type: col.Type, SVal: s}
+			vals[i] = storage.Value{Type: col.Type, SVal: string(raw)}
 		}
 	}
 

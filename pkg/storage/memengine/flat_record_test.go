@@ -670,3 +670,55 @@ func TestFlatRecord_CorruptedBufferExplicitError(t *testing.T) {
 		t.Fatalf("expected getRowAndVer to fail on corrupted flatBuf, but got ok=true")
 	}
 }
+
+// TestFlatRecord_Regression_P0_01_HeapOffsetTagCollisionNoCorruption verifies that when
+// heap offset vOff has byte 1 set to 0xFF (e.g. vOff = 65280, 0x0000FF00), the decoder does NOT
+// mistake the heap pointer for an inlined small string and corrupt data (P0-01).
+func TestFlatRecord_Regression_P0_01_HeapOffsetTagCollisionNoCorruption(t *testing.T) {
+	schema := &storage.TableSchema{
+		Name: "collision_table",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "col_padding", Type: storage.TypeVarChar},
+			{Name: "target_col", Type: storage.TypeVarChar},
+		},
+	}
+
+	layout := BuildFlatRecordLayout(schema)
+	if layout == nil {
+		t.Fatalf("failed to build flat record layout")
+	}
+
+	// Create padding of exactly 65280 bytes (0x0000FF00) so that the subsequent column's
+	// heap offset vOff will have byte 1 equal to 0xFF.
+	paddingBytes := make([]byte, 65280)
+	for i := range paddingBytes {
+		paddingBytes[i] = 'A'
+	}
+	paddingStr := string(paddingBytes)
+	expectedTarget := "ExactTargetStringValueThatMustNotBeCorrupted"
+
+	row := storage.Row{
+		Values: []storage.Value{
+			storage.IntValue(1),
+			storage.StringValue(paddingStr),
+			storage.StringValue(expectedTarget),
+		},
+	}
+
+	flatBuf, err := layout.EncodeRowToFlat(schema, row)
+	if err != nil {
+		t.Fatalf("EncodeRowToFlat failed: %v", err)
+	}
+
+	decodedRow, err := layout.DecodeFlatToRow(schema, flatBuf)
+	if err != nil {
+		t.Fatalf("[CRITICAL P0-01 REGRESSION] DecodeFlatToRow failed due to heap offset collision: %v", err)
+	}
+
+	if decodedRow.Values[2].SVal != expectedTarget {
+		t.Fatalf("[CRITICAL P0-01 REGRESSION] target_col corrupted! Got %q, want %q",
+			decodedRow.Values[2].SVal, expectedTarget)
+	}
+}
+
