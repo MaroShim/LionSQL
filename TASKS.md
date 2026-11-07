@@ -14,7 +14,8 @@
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
 | `PENDING` | **`AUDIT-LOG-1`** | Integrity | P2 | 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템 | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |  |
 | `DONE` | **`AUDIT-135-DUAL-REVIEW`** | Integrity | P1 | 전 소스코드 135단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 감사 | [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) | 135/135 완주 (134건 결함 식별 완료) |
-| `PENDING` | **`AUDIT-TRIAGE-POST`** | Integrity | P1 | 135단계 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 | [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) | 제6장 매트릭스 분류 |
+| `PENDING` | **`AUDIT-CORE-DEEP-RESCAN`** | Integrity | P1 | 5대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan) | [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) | 제6장 5대 코어 구역 무제한 결함 발굴 |
+| `PENDING` | **`AUDIT-TRIAGE-POST`** | Integrity | P1 | 전수 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 | [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) | 제7장 매트릭스 분류 |
 | `DONE` | **`BENCH-ALL-IN-ONE-1`** | Durability | P2 | 원클릭 벤치마크 및 종합 검증 스위트 (`scripts/run_all_benchmarks.sh`) 구축 |  | - [x] **Phase 1~4 (성능/와이어 실측)**: Bank... |
 | `PENDING` | **`BENCH-TPCH-1`** | Ecosystem | P3 | Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation | [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |  |
 | `DONE` | **`BUG-ADD-COL-NOT-NULL-1`** | Integrity | P2 | 기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug) |  |  |
@@ -324,9 +325,24 @@
 
 ---
 
-### [PENDING] 135단계 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 `AUDIT-TRIAGE-POST`
-- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-07T16:27:00+09:00
+### [PENDING] 5대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan) `AUDIT-CORE-DEEP-RESCAN`
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-07T17:50:00+09:00
 - **Plan Doc**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) 제6장
+- **SSOT Finding Register**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
+- **Principle**: 스코프당 1건 제한 완전 철폐, 파일 끝까지 다중 결함($N$건) 가감 없이 전수 발굴 및 누적
+
+**Phases & Checklist**:
+- [ ] 핵심 코어 1구역: 스토리지 엔진 코어 (`wt_engine.go`, `memengine.go`, `tx.go`) 심층 전수 재스캔
+- [ ] 핵심 코어 2구역: 트랜잭션 코디네이터 (`coordinator.go`, `session_pool.go`) 심층 전수 재스캔
+- [ ] 핵심 코어 3구역: 바이트코드 컴파일러 & VDBE VM (`compiler.go`, `runtime/vm.go`) 심층 전수 재스캔
+- [ ] 핵심 코어 4구역: CBO 플래너 & 실행 오퍼레이터 (`planner.go`, `hash_join.go`, `sort.go`) 심층 전수 재스캔
+- [ ] 핵심 코어 5구역: 멀티 와이어 & 복제 엔진 (`wire/server.go`, `tds/packet.go`, `broadcaster.go`) 심층 전수 재스캔
+
+---
+
+### [PENDING] 전수 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 `AUDIT-TRIAGE-POST`
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-07T17:50:00+09:00
+- **Plan Doc**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) 제7장
 - **SSOT Finding Register**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
 
 **Phases & Checklist**:

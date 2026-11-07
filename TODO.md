@@ -55,28 +55,32 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **설계 문서**: [`notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 
 ### 1.2 1.0 신뢰성 검증 게이트 (Release Gates)
-1. **`AUDIT-135-DUAL-REVIEW`: 전 소스코드 135단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 전수 감사** [x] 완주 완료 (135/135 완주, 총 134건 결함 식별 완료)
+1. **`AUDIT-135-DUAL-REVIEW`: [1단계] 전 소스코드 135단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 전수 감사** [x] 완주 완료 (135/135 완주, 총 134건 결함 식별 완료)
    - **목표**: 릴리스 게이트 장기 부하 테스트 이전, Lionsql 엔진 본체 216개 순수 Go 소스코드 전수를 13대 도메인, 총 135개 마이크로 스코프로 완전 분할하여 Gemini(심층 추론)와 Claude(공격적 엣지케이스)의 교차 검증으로 숨은 동시성 레이스, 데드락, 메모리 누수, 침묵하는 에러(`_ = err`), 경계값 결함을 0의 누락도 없이 선제 발굴 및 완치.
    - **설계 문서**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md)
-   - **감사 기록부 (SSOT)**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md) (결함 누적 로깅 중)
-2. **`AUDIT-TRIAGE-POST`: 135단계 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정** [대기]
-   - **목표**: 135단계 전수 감사로 발굴된 전체 결함을 4대 등급(P0: Must Fix, P1: Should Fix, P2: Won't Fix, P3: Spec-Out/By-Design)으로 분류하여, `[RULE:RadicalKISS]` 원칙에 따라 복잡도를 통제하고 1.0 필수 패치 범위만 선별 확정.
+   - **감사 기록부 (SSOT)**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
+2. **`AUDIT-CORE-DEEP-RESCAN`: [2단계] 5대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan)** [대기]
+   - **목표**: 1차 광역 스캔의 조기 종료 편향(스코프당 1건 제한)을 극복하기 위해, 스토리지 코어(`wt_engine.go`, `memengine.go`), 트랜잭션 코디네이터(`coordinator.go`), 바이트코드 컴파일러/VM(`compiler.go`, `vm.go`), CBO 플래너/실행기(`planner.go`, `hash_join.go`), 멀티 와이어/복제(`server.go`, `packet.go`) 5대 구역에 대해 1건 제한을 완전히 철폐하고 파일 끝까지 다중 결함($N$건)을 전수 발굴하여 SSOT에 증분 누적.
    - **설계 문서**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) 제6장
-3. **`DOC-REVAMP-10`: 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜** [계획 수립 / 대기]
+   - **감사 기록부 (SSOT)**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
+3. **`AUDIT-TRIAGE-POST`: [3단계] 통합 Triage 회의 및 결함 분류 로드맵 (Post-Audit Triage & Action Plan)** [대기]
+   - **목표**: 1차 광역 감사(135단계) 및 2차 코어 심층 재스캔으로 발굴된 전체 결함을 4대 등급(P0: Must Fix, P1: Should Fix, P2: Won't Fix, P3: Spec-Out/By-Design)으로 분류하여, `[RULE:RadicalKISS]` 원칙에 따라 복잡도를 통제하고 1.0 필수 패치 범위만 선별 확정.
+   - **설계 문서**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) 제7장
+4. **`DOC-REVAMP-10`: 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜** [계획 수립 / 대기]
    - **목표**: 오버스펙(별도 VitePress 웹사이트, Swagger 중복 번들링 등)을 배제하고 실질적 가치 중심의 10대 알짜 과제 집중 완수 (1단계: 핵심 영문 4종 국문화, 14대 Spec-Out 기각 결정 단일 카탈로그, 내장 SPA 웹 서버 1분 스타터 예제, 마크다운 링크 깨짐 자동 검사기 / 2단계: T-SQL 3초 치트시트, SQLSTATE 트러블슈팅 사전, 사용자 여정 네비게이션, 오픈소스 가이드 메타 카드, 벤치마크 Mermaid 차트화, MSSQL 이전 체크리스트).
    - **설계 문서**: [`notes/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)
-3. **`DURA-KILL-1`: `kill -9` 크래시 복구 장기 라운드 검증**
+5. **`DURA-KILL-1`: `kill -9` 크래시 복구 장기 라운드 검증**
    - 상태: 진행 중 (100라운드 100% 무손실 복구 통과 완료, 릴리스 직전 500 ~ 1,000 라운드 최종 확인)
    - 설계 문서: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
-4. **`DURA-SOAK-1`: 24h ~ 72h 장기 무중단 소크 테스트**
+6. **`DURA-SOAK-1`: 24h ~ 72h 장기 무중단 소크 테스트**
    - 상태: 진행 중 (단기 연속 부하 통과, 24시간 ~ 72시간 연속 가동으로 자원 유계 입증)
    - 설계 문서: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
-5. **`DURA-SLT-2`: SQLLogicTest 1.0 풀 스위트 듀얼 엔진 최종 인증**
+7. **`DURA-SLT-2`: SQLLogicTest 1.0 풀 스위트 듀얼 엔진 최종 인증**
    - 상태: 107개 스위트 55만 쿼리 100% PASS 입증 완료 (`scripts/verify_0.90.sh`)
    - 설계 문서: [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
-6. **`GA-VALID-3`: 연동 앱 섀도 모드 실운영 도그푸딩**
+8. **`GA-VALID-3`: 연동 앱 섀도 모드 실운영 도그푸딩**
    - 이미 100% 연동 통과된 실전 서비스(Vaultwarden, Umami, Answer 중 1~2종) 1~2주간 실운영 백그라운드 구동
-7. **`TUNE-DOC-SYNC-1`: 벤치마크 및 공식 문서 실측치 일괄 동기화**
+9. **`TUNE-DOC-SYNC-1`: 벤치마크 및 공식 문서 실측치 일괄 동기화**
    - 1.0 GA 릴리스 직전 모든 최적화 실측치를 `doc/BENCHMARK.md` 및 `README.md`에 일괄 반영
 
 ### 1.3 [테스트베드] 타임박스 외부 앱 호환성 프로브 (Time-Boxed Probe Protocol)
