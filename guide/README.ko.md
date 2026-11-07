@@ -11,13 +11,14 @@
 
 ---
 
-## 검증 완료 애플리케이션 일람표 (10대 서비스)
+## 검증 완료 애플리케이션 일람표 (11대 서비스)
 
 | 애플리케이션 | 분야 | 언어 / ORM 스택 | 지원 와이어 프로토콜 | 한국어 가이드 | 영문 가이드 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Gitea** | DevOps / Git 호스팅 | Go + XORM | PGWire (`:5433`) & TDS (`:1433`) | [`GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md) | [`GITEA_INTEGRATION_GUIDE.md`](GITEA_INTEGRATION_GUIDE.md) |
 | **Grafana** | 관측성 및 대시보드 | Go + XORM / SQL 플러그인 | PGWire (`:5433`) & TDS (`:1433`) | [`GRAFANA_INTEGRATION_GUIDE.ko.md`](GRAFANA_INTEGRATION_GUIDE.ko.md) | [`GRAFANA_INTEGRATION_GUIDE.md`](GRAFANA_INTEGRATION_GUIDE.md) |
 | **Metabase** | BI 및 데이터 분석 | Clojure/JVM + JDBC | PGWire (`:5433`) & TDS (`:1433`) | [`METABASE_INTEGRATION_GUIDE.ko.md`](METABASE_INTEGRATION_GUIDE.ko.md) | [`METABASE_INTEGRATION_GUIDE.md`](METABASE_INTEGRATION_GUIDE.md) |
+| **DuckDB** | 고성능 임베디드 OLAP / HTAP | C++ / Python / CLI | PGWire (`:5433`) & REST CDC (`:8090`) | [`DUCKDB_INTEGRATION_GUIDE.ko.md`](DUCKDB_INTEGRATION_GUIDE.ko.md) | [`DUCKDB_INTEGRATION_GUIDE.md`](DUCKDB_INTEGRATION_GUIDE.md) |
 | **Vaultwarden** | 비밀번호 관리 (Bitwarden) | Rust + Diesel ORM | PGWire (`:5433`) | [`VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](VAULTWARDEN_INTEGRATION_GUIDE.ko.md) | [`VAULTWARDEN_INTEGRATION_GUIDE.md`](VAULTWARDEN_INTEGRATION_GUIDE.md) |
 | **Casdoor** | 통합 인증 IAM / OIDC SSO | Go + XORM + Casbin | PGWire (`:5433`) & TDS (`:1433`) | [`CASDOOR_INTEGRATION_GUIDE.ko.md`](CASDOOR_INTEGRATION_GUIDE.ko.md) | [`CASDOOR_INTEGRATION_GUIDE.md`](CASDOOR_INTEGRATION_GUIDE.md) |
 | **Umami** | 웹 애널리틱스 | Node.js / Next.js + Prisma | PGWire (`:5433`) | [`UMAMI_INTEGRATION_GUIDE.ko.md`](UMAMI_INTEGRATION_GUIDE.ko.md) | [`UMAMI_INTEGRATION_GUIDE.md`](UMAMI_INTEGRATION_GUIDE.md) |

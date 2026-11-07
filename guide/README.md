@@ -11,13 +11,14 @@ This directory contains official step-by-step deployment, migration, and operati
 
 ---
 
-## Verified Application Matrix (10 Services)
+## Verified Application Matrix (11 Services)
 
 | Application | Category | Language / ORM | Wire Protocol(s) | English Guide | Korean Guide |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Gitea** | DevOps / Git Hosting | Go + XORM | PGWire (`:5433`) & TDS (`:1433`) | [`GITEA_INTEGRATION_GUIDE.md`](GITEA_INTEGRATION_GUIDE.md) | [`GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md) |
 | **Grafana** | Observability & Dashboards | Go + XORM / SQL Plugins | PGWire (`:5433`) & TDS (`:1433`) | [`GRAFANA_INTEGRATION_GUIDE.md`](GRAFANA_INTEGRATION_GUIDE.md) | [`GRAFANA_INTEGRATION_GUIDE.ko.md`](GRAFANA_INTEGRATION_GUIDE.ko.md) |
 | **Metabase** | BI & Analytics | Clojure/JVM + JDBC | PGWire (`:5433`) & TDS (`:1433`) | [`METABASE_INTEGRATION_GUIDE.md`](METABASE_INTEGRATION_GUIDE.md) | [`METABASE_INTEGRATION_GUIDE.ko.md`](METABASE_INTEGRATION_GUIDE.ko.md) |
+| **DuckDB** | High-Performance Embedded OLAP / HTAP | C++ / Python / CLI | PGWire (`:5433`) & REST CDC (`:8090`) | [`DUCKDB_INTEGRATION_GUIDE.md`](DUCKDB_INTEGRATION_GUIDE.md) | [`DUCKDB_INTEGRATION_GUIDE.ko.md`](DUCKDB_INTEGRATION_GUIDE.ko.md) |
 | **Vaultwarden** | Password Manager (Bitwarden) | Rust + Diesel ORM | PGWire (`:5433`) | [`VAULTWARDEN_INTEGRATION_GUIDE.md`](VAULTWARDEN_INTEGRATION_GUIDE.md) | [`VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](VAULTWARDEN_INTEGRATION_GUIDE.ko.md) |
 | **Casdoor** | IAM / OIDC SSO | Go + XORM + Casbin | PGWire (`:5433`) & TDS (`:1433`) | [`CASDOOR_INTEGRATION_GUIDE.md`](CASDOOR_INTEGRATION_GUIDE.md) | [`CASDOOR_INTEGRATION_GUIDE.ko.md`](CASDOOR_INTEGRATION_GUIDE.ko.md) |
 | **Umami** | Web Analytics | Node.js / Next.js + Prisma | PGWire (`:5433`) | [`UMAMI_INTEGRATION_GUIDE.md`](UMAMI_INTEGRATION_GUIDE.md) | [`UMAMI_INTEGRATION_GUIDE.ko.md`](UMAMI_INTEGRATION_GUIDE.ko.md) |
