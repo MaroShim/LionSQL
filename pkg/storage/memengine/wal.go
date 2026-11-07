@@ -329,6 +329,8 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 
 	var maxLSN int64
 	var validOffset int64
+	fileSize := stat.Size()
+	isTailTorn := false
 
 	// Binary MessagePack length-prefixed frames
 	reader := bufio.NewReaderSize(file, 64*1024)
@@ -336,29 +338,58 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 
 	for {
 		var lenBuf [4]byte
-		_, err := io.ReadFull(reader, lenBuf[:])
-		if err == io.EOF || err == io.ErrUnexpectedEOF {
+		n, err := io.ReadFull(reader, lenBuf[:])
+		if err == io.EOF {
+			// Case 1: Clean EOF exactly on record boundary.
 			break
 		}
+		if err == io.ErrUnexpectedEOF {
+			// Case 2-a: Header incomplete at tail.
+			// Must verify that this is truly the physical end of file.
+			if validOffset+int64(n) == fileSize {
+				isTailTorn = true
+				break
+			}
+			return maxLSN, fmt.Errorf("wal: premature unexpected EOF reading header at offset %d (file size %d)", validOffset, fileSize)
+		}
 		if err != nil {
-			break
+			// Case 3: Fatal OS / hardware I/O read error. Zero truncation.
+			return maxLSN, fmt.Errorf("wal: fatal I/O read error at offset %d: %w", validOffset, err)
 		}
 
 		frameLen := binary.BigEndian.Uint32(lenBuf[:])
-		if frameLen == 0 || frameLen > 64*1024*1024 { // Cap at 64MB per tx batch; torn/corrupt length
-			break
+		if frameLen == 0 || frameLen > 64*1024*1024 { // Cap at 64MB per tx batch
+			// Check if this is an incomplete torn frame at the physical tail of the file.
+			if validOffset+4 == fileSize {
+				isTailTorn = true
+				break
+			}
+			// Case 4: Mid-file corruption. Never truncate intact subsequent tail!
+			return maxLSN, fmt.Errorf("wal: corrupted frame length %d at offset %d (file size %d)", frameLen, validOffset, fileSize)
 		}
 
 		payload := make([]byte, frameLen)
-		if _, err := io.ReadFull(reader, payload); err != nil {
-			// Torn write in payload: fewer bytes than frameLen available
-			break
+		pn, err := io.ReadFull(reader, payload)
+		if err != nil {
+			if (err == io.EOF || err == io.ErrUnexpectedEOF) && validOffset+4+int64(pn) == fileSize {
+				// Case 2-b: Torn write in payload at exact physical tail.
+				isTailTorn = true
+				break
+			}
+			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				return maxLSN, fmt.Errorf("wal: premature EOF reading payload at offset %d (file size %d)", validOffset+4, fileSize)
+			}
+			return maxLSN, fmt.Errorf("wal: fatal I/O read error for payload at offset %d: %w", validOffset+4, err)
 		}
 
 		var rec WALRecord
 		if err := UnmarshalMsgPack(payload, &rec); err != nil {
-			// Torn write or corrupted payload at tail
-			break
+			// Corrupted payload. Check if this is the physical tail.
+			if validOffset+4+int64(frameLen) == fileSize {
+				isTailTorn = true
+				break
+			}
+			return maxLSN, fmt.Errorf("wal: corrupted payload unmarshal at offset %d (file size %d): %w", validOffset+4, fileSize, err)
 		}
 
 		if err := applyFn(rec); err != nil {
@@ -372,10 +403,12 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 		validOffset += int64(4 + frameLen)
 	}
 
-	// If a torn write left truncated garbage at the tail of the WAL file,
-	// truncate the file back to the last known valid record boundary.
-	if stat.Size() > validOffset {
-		_ = file.Truncate(validOffset)
+	// Strictly restrict truncation to verified tail torn writes.
+	// Never truncate on clean EOF, I/O errors, or mid-file corruption ([RULE:ExplicitError], ADR-027).
+	if isTailTorn && fileSize > validOffset {
+		if err := file.Truncate(validOffset); err != nil {
+			return maxLSN, fmt.Errorf("wal: failed to truncate torn tail at offset %d: %w", validOffset, err)
+		}
 	}
 
 	return maxLSN, nil

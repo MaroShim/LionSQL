@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -437,4 +438,149 @@ func TestMemEngine_WAL_CompactBinaryTupleZeroCopy(t *testing.T) {
 		t.Fatalf("recovered record mismatch: %+v", rec)
 	}
 }
+
+func TestWAL_Regression_P0_03_MidFileCorruptionDoesNotTruncateValidTail(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lionsql_wal_mid_corrupt_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	aofPath := filepath.Join(tempDir, "wal.aof")
+	wal, err := NewWALWriter(aofPath, FsyncAlways)
+	if err != nil {
+		t.Fatalf("NewWALWriter failed: %v", err)
+	}
+
+	// Write 3 records
+	for i := int64(1); i <= 3; i++ {
+		rec := WALRecord{
+			LSN: i,
+			Ops: []WALOp{
+				{Type: OpInsert, Table: "t", Record: storage.Record{"id": storage.IntValue(i)}},
+			},
+		}
+		if err := wal.Append(rec); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
+	}
+	if err := wal.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	origStat, err := os.Stat(aofPath)
+	if err != nil {
+		t.Fatalf("Stat failed: %v", err)
+	}
+	origSize := origStat.Size()
+
+	// Read entire file to find record boundaries
+	data, err := os.ReadFile(aofPath)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+
+	// Record 1 starts at offset 0. Frame length is 4 bytes BigEndian.
+	rec1Len := binary.BigEndian.Uint32(data[0:4])
+	rec2Offset := 4 + rec1Len
+
+	// Corrupt record 2's frame length to 0xFFFFFFFF (> 64MB)
+	binary.BigEndian.PutUint32(data[rec2Offset:rec2Offset+4], 0xFFFFFFFF)
+	if err := os.WriteFile(aofPath, data, 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	// Now try to replay WAL
+	var appliedLSNs []int64
+	_, replayErr := ReplayWAL(aofPath, func(rec WALRecord) error {
+		appliedLSNs = append(appliedLSNs, rec.LSN)
+		return nil
+	})
+
+	// P0-03 BUG: Previously replayErr was nil, and file was truncated to rec2Offset!
+	if replayErr == nil {
+		t.Fatalf("expected error on mid-file corruption, got nil (silent recovery illusion!)")
+	}
+
+	// Check file size: MUST NOT be truncated!
+	afterStat, err := os.Stat(aofPath)
+	if err != nil {
+		t.Fatalf("Stat after replay failed: %v", err)
+	}
+	if afterStat.Size() != origSize {
+		t.Fatalf("file was illegally truncated on mid-file corruption! origSize=%d, afterSize=%d", origSize, afterStat.Size())
+	}
+}
+
+func TestWAL_Regression_P0_03_TailTornWriteTruncatesCleanly(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lionsql_wal_tail_torn_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	aofPath := filepath.Join(tempDir, "wal.aof")
+	wal, err := NewWALWriter(aofPath, FsyncAlways)
+	if err != nil {
+		t.Fatalf("NewWALWriter failed: %v", err)
+	}
+
+	// Write 2 valid records
+	for i := int64(1); i <= 2; i++ {
+		rec := WALRecord{
+			LSN: i,
+			Ops: []WALOp{
+				{Type: OpInsert, Table: "t", Record: storage.Record{"id": storage.IntValue(i)}},
+			},
+		}
+		if err := wal.Append(rec); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
+	}
+	if err := wal.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	validStat, err := os.Stat(aofPath)
+	if err != nil {
+		t.Fatalf("Stat failed: %v", err)
+	}
+	validSize := validStat.Size()
+
+	// Append 2 bytes of torn write garbage at tail
+	f, err := os.OpenFile(aofPath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatalf("OpenFile failed: %v", err)
+	}
+	if _, err := f.Write([]byte{0xDE, 0xAD}); err != nil {
+		t.Fatalf("Write garbage failed: %v", err)
+	}
+	f.Close()
+
+	// Replay WAL: Should successfully recover records 1 and 2, and cleanly truncate the 2 garbage bytes
+	var appliedLSNs []int64
+	maxLSN, replayErr := ReplayWAL(aofPath, func(rec WALRecord) error {
+		appliedLSNs = append(appliedLSNs, rec.LSN)
+		return nil
+	})
+	if replayErr != nil {
+		t.Fatalf("expected clean tail recovery, got err: %v", replayErr)
+	}
+	if maxLSN != 2 {
+		t.Fatalf("expected maxLSN=2, got %d", maxLSN)
+	}
+	if len(appliedLSNs) != 2 || appliedLSNs[0] != 1 || appliedLSNs[1] != 2 {
+		t.Fatalf("unexpected applied LSNs: %+v", appliedLSNs)
+	}
+
+	// File size should now be back to validSize
+	afterStat, err := os.Stat(aofPath)
+	if err != nil {
+		t.Fatalf("Stat after replay failed: %v", err)
+	}
+	if afterStat.Size() != validSize {
+		t.Fatalf("tail torn garbage was not truncated cleanly! want %d, got %d", validSize, afterStat.Size())
+	}
+}
+
 
