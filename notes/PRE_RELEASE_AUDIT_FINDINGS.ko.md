@@ -13,15 +13,11 @@
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
 * **1단계 (135단계 전수 광역 스캔)**: 135 / 135 (100.0%) 완주 완료 (총 134건 결함 식별)
-* **2단계 (12대 핵심 코어 심층 재스캔)**: 9 / 12 구역 완료 (구역 1~9: 48건 발굴 완료, 구역 10~12 진행 중)
-* **총 누적 식별 결함**: 총 182건 (1단계 134건 + 2단계 48건)
-  - Critical: 20건 (+2)
-  - High: 82건 (+2)
-  - Medium: 65건 (+1)
-  - Low: 15건 (+0)
-  - Critical: 16건 (+3)
-  - High: 78건 (+5)
-  - Medium: 63건 (+2)
+* **2단계 (12대 핵심 코어 심층 재스캔)**: 10 / 12 구역 완료 (구역 1~10: 53건 발굴 완료, 구역 11~12 진행 중)
+* **총 누적 식별 결함**: 총 187건 (1단계 134건 + 2단계 53건)
+  - Critical: 22건 (+2)
+  - High: 84건 (+2)
+  - Medium: 66건 (+1)
   - Low: 15건 (+0)
 
 ---
@@ -2897,3 +2893,60 @@
 * **판정**: `DEFECT_LOGGED`
 
 ---
+
+### [2단계 심층 구역 10] 고급 분석 실행 오퍼레이터 (Advanced Analytics & Join Operators Core)
+* **대상 소스**: `pkg/execution/aggregate.go` (1,133 라인), `pkg/execution/window.go` (603 라인), `pkg/execution/merge_join.go` (466 라인), `pkg/execution/setop.go` (377 라인)
+* **핵심 분석 관점**: 대용량 그룹핑 메모리 한계, 윈도우 프레임 경계 검증, Merge Join 버퍼링 오버플로, 부분 집계 왜곡 방지
+
+#### [발굴 결함 10-1] `execution/aggregate.go`: `GROUP BY CUBE` 실행 시 컬럼 수 상한 미검사로 $2^{N}$ 비트마스크 폭발 및 런타임 OOM DoS 크래시
+* **심각도**: `Critical`
+* **위치**: `pkg/execution/aggregate.go:538-545` (`buildGroupingSets`)
+* **현상 및 원인 분석**:
+  - `CUBE(a, b, c, ...)` 구문 파싱 및 실행 트리 생성 시, 큐브를 구성하는 컬럼 수($N$)에 대한 방어적 상한선(예: 최대 16개 또는 32개)을 검사하지 않음.
+  - 라인 540에서 `totalCombinations := 1 << nKeys`를 계산하고 슬라이스를 할당(`make([][]int, totalCombinations)`)함.
+  - 만약 악의적이거나 비정상적인 쿼리에서 31개 이상의 컬럼을 `CUBE`로 지정할 경우, 32비트 정수 오버플로 음수 할당 패닉이 발생하거나 수 기가바이트의 슬라이스 할당으로 인해 전체 데이터베이스 엔진이 OOM(Out-Of-Memory) 크래시됨 (`[RULE:BoundedBuffers]`, `[RULE:DefensiveIndexing]`).
+* **권장 수정안**:
+  - `CUBE` 키 개수 상한(`MaxCubeKeys = 16`, 최대 65,536개 조합)을 두고 초과 시 `ErrExceededMaxCubeKeys` 에러를 즉시 반환하도록 방어적 제한 적용.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 10-2] `execution/window.go`: `WindowIterator.Open()`에서 하위 스트림 전체를 메모리에 무제한 적재하여 대용량 테이블 윈도우 함수 실행 시 OOM 크래시
+* **심각도**: `Critical`
+* **위치**: `pkg/execution/window.go:42-53` (`WindowIterator.Open`)
+* **현상 및 원인 분석**:
+  - 윈도우 연산(`ROW_NUMBER()`, `RANK()`, `SUM() OVER (...)`)을 수행하기 위해 `Open()` 단계에서 하위 이터레이터(`w.child`)의 모든 청크/로를 단일 인메모리 슬라이스 `w.rows`에 무제한 누적(`w.rows = append(w.rows, row)`)함.
+  - 수천만 건 이상의 대형 테이블에 대해 파티션 없는 윈도우 함수를 실행할 경우, 엔진의 가용 RAM 용량을 초과하여 프로세스 전체가 즉각 강제 종료(OOM-kill)됨 (`[RULE:BoundedBuffers]`).
+* **권장 수정안**:
+  - 파티션별(`PARTITION BY`) 경계를 감지하여 파티션 단위로 버퍼를 청소/방출하거나, 파티션이 없거나 버퍼 임계치(예: 100,000건 또는 64MB) 초과 시 디스크 기반 스필(Spill-to-Disk) 또는 청크 기반 윈도우 슬라이딩 윈도우 버퍼로 전환.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 10-3] `execution/merge_join.go`: Merge Join의 우측 중복 키 버퍼링(`m.bufferedRight`) 시 상한선 부재로 동일 키 대량 중복 시 메모리 스톨
+* **심각도**: `High`
+* **위치**: `pkg/execution/merge_join.go:335-356` (`PullChunk`, `bufferedRight`)
+* **현상 및 원인 분석**:
+  - Sort-Merge Join 실행 중 일대다(1:N) 또는 다대다(M:N) 조인 키 일치가 발생할 때, 우측 테이블의 동일 키 로들을 `m.bufferedRight` 슬라이스에 전부 복사해두고 좌측의 동일 키 로들과 카테시안 곱을 수행함.
+  - 우측 테이블에 동일한 조인 키(예: `status = 1` 또는 `NULL`)가 수백만 건 존재하는 스큐(Skewed) 데이터셋의 경우, `bufferedRight` 슬라이스가 기가바이트 단위로 팽창하며 GC 및 메모리 압박으로 엔진이 스톨됨.
+* **권장 수정안**:
+  - `bufferedRight` 버퍼 최대 로 수(예: 65,536건) 상한을 설정하고 초과 시 임시 스필 버퍼를 사용하거나, CBO 플래너가 데이터 스큐가 심한 컬럼에는 Merge Join 대신 Hash Join을 선택하도록 비용 모델 보정.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 10-4] `execution/aggregate.go`: `PullChunk` 스트리밍 중 I/O 에러 시 누적된 일부 레코드만으로 집계를 계산해버리는 부분 집계 왜곡 위험
+* **심각도**: `High`
+* **위치**: `pkg/execution/aggregate.go:575-578`, `603-606` (`HashAggregateIterator.PullChunk`)
+* **현상 및 원인 분석**:
+  - `PullChunk` 루프에서 자식 이터레이터로부터 데이터를 읽을 때, `err != io.EOF`인 실제 에러(디스크 읽기 실패, 네트워크 단절 등)가 발생했음에도 상위로 에러를 즉각 전파하지 않고, 현재까지 읽혀진 불완전한 해시 맵(`a.groups`)을 기반으로 결과 집합을 생성하여 반환할 수 있는 흐름이 존재함.
+  - **결과**: `SUM()`, `COUNT()` 등의 집계 함수가 에러로 중단되지 않고 실제 값보다 적은 잘못된 금융/통계 수치를 정상 결과인 것처럼 클라이언트에 반환하는 심각한 정합성 왜곡(`[RULE:ExplicitError]`).
+* **권장 수정안**:
+  - `child.PullChunk`에서 `io.EOF` 이외의 임의의 에러 발생 시 즉시 그룹핑 해시 테이블을 무효화하고 해당 에러를 즉각 상위 호출자에게 반환.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 10-5] `execution/window.go`: `FrameFollowing` 오프셋 계산 시 `startIdx = total` 경계값 초과 슬라이스 인덱싱 잠재 위험
+* **심각도**: `Medium`
+* **위치**: `pkg/execution/window.go:525-528` (`calculateFrameBounds`)
+* **현상 및 원인 분석**:
+  - 윈도우 프레임 절(`ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING` 등)에서 `startIdx` 및 `endIdx`를 계산할 때, 파티션의 총 로 수(`total`)와 비교하는 과정에서 오프셋 덧셈 연산 시 `endIdx > total` 방어는 있으나 `startIdx`가 `total`과 같아지는 경우 빈 프레임 처리가 불명확하여 하위 집계 평가 루프에서 슬라이스 범위 초과 패닉 가능성이 존재함 (`[RULE:DefensiveIndexing]`).
+* **권장 수정안**:
+  - `startIdx >= total` 또는 `startIdx > endIdx`인 경우 즉시 빈 프레임(결과 `NULL`)을 반환하는 방어적 가드를 선제 배치.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
