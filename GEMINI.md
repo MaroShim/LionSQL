@@ -68,6 +68,10 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
 2. **Canonical Domain Package Primacy**: Whenever a pattern or domain concept appears or is needed in 2 or more locations (e.g. SQL predicate parsing, identifier cleanup, paren extraction, data type formatting), immediately externalize and factor it into a cohesive, modular abstraction within the canonical domain package (`pkg/sqlutil`, `pkg/proc`, etc.) accompanied by isolated unit tests.
 3. **KISS Call Sites through Encapsulated Complexity**: KISS and YAGNI mean simplifying caller call sites through clean, single-responsibility modules—not bloating multiple caller functions with copy-pasted inline string manipulation heuristics.
 
+### Invariant 9: WAL Crash Recovery & Zero-Truncate Invariant (Fail-Closed Recovery)
+1. **Zero Unverified Truncation**: Under no circumstances may the WAL recovery engine (`wal.go`) invoke `file.Truncate()` on I/O errors or mid-file corruption. Truncation is strictly restricted to verified partial torn frames at the physical tail of the file (`stat.Size() == validOffset + remainingBytes`).
+2. **Fail-Closed on Read Failures**: Hardware or OS read errors (`syscall.EIO`, read timeouts, permission loss) must immediately halt engine startup with an explicit diagnostic error (`[RULE:ExplicitError]`), guaranteeing zero silent data loss and protecting all intact committed transactions.
+
 ---
 
 ## 3. Explicit Spec-Out Decisions (Engine Simplicity & KISS)

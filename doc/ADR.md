@@ -36,6 +36,7 @@ This document records the critical architectural decisions made throughout the d
 - [ADR-024: Decoupled CDC Event Streaming vs POSIX Shared Memory (Arrow IPC) Exclusion for OLAP Analytics](#adr-024-decoupled-cdc-event-streaming-vs-posix-shared-memory-arrow-ipc-exclusion-for-olap-analytics)
 - [ADR-025: Unified SQL Abstraction Layer - Type Promotion Lattice, Strict NULL Propagation, and Synthetic Row Identity](#adr-025-unified-sql-abstraction-layer---type-promotion-lattice-strict-null-propagation-and-synthetic-row-identity)
 - [ADR-026: Transactional Outbox Sender Contract - Backpressure Pause and Zero-Data-Loss Guarantee](#adr-026-transactional-outbox-sender-contract---backpressure-pause-and-zero-data-loss-guarantee)
+- [ADR-027: Deterministic WAL Tail Recovery & Fail-Closed Durability Invariant](#adr-027-deterministic-wal-tail-recovery--fail-closed-durability-invariant)
 
 ---
 
@@ -739,6 +740,35 @@ Enforce the **Strict Sender Contract & Zero-Data-Loss Guarantee** in `OutboxDisp
 - **Positive**: Guarantees true At-Least-Once delivery and strict FIFO causal ordering; completely eliminates silent event drops during broker outages; maintains checkpoint integrity.
 - **Negative**: Long broker outages pause outbox streaming, buffering events up to channel capacity before applying backpressure.
 - **Compliance**: Adheres to Golden Rule 1 (Atomic Saves & Safety), Golden Rule 7 (Explicit Error Visibility), Golden Rule 15 (Radical KISS), and `notes/ENGINEERING_CONTEXT.ko.md` Invariant 21.
+
+---
+
+## ADR-027: Deterministic WAL Tail Recovery & Fail-Closed Durability Invariant
+
+### Status
+Accepted
+
+### Context
+In `pkg/storage/memengine/wal.go`, the `ReplayWAL` function scanned binary MessagePack frames during crash recovery.
+When encountering any read error (`err != nil`) or malformed frame length/unmarshaling failure, the loop broke unconditionally and executed `file.Truncate(validOffset)` while swallowing any truncation error (`_ = file.Truncate(...)`) and returning `nil`.
+This introduced severe durability risks:
+1. **Catastrophic Data Destruction on Transient I/O**: Transient OS disk contention, permissions issues, or hardware `syscall.EIO` caused `ReplayWAL` to mistake I/O errors for EOF, truncating and permanently deleting valid subsequent committed transactions from disk.
+2. **Silent Recovery Illusion**: After truncating undamaged records, the engine returned `nil` error, allowing the server to boot successfully without warning administrators of massive data loss.
+3. **Mid-File Corruption Cascading Truncation**: Bit flips or bad sectors in the middle of a file caused all newer intact transactions recorded after that offset to be wiped out.
+
+### Decision
+Enforce the **Deterministic WAL Tail Recovery & Fail-Closed Durability Invariant**:
+1. **Strict 4-State MECE Classification**:
+   - **Clean EOF**: `io.ReadFull` returns `io.EOF` (0 bytes). Clean termination; zero truncation.
+   - **Legitimate Tail Torn Write**: `io.ErrUnexpectedEOF` on header or EOF during payload read, **strictly verified** to reside at the physical end of file (`validOffset + remainingBytes == stat.Size()`). Truncate exclusively to `validOffset` and check `file.Truncate` errors explicitly.
+   - **Fatal I/O Read Error**: Any `err != nil && err != io.EOF && err != io.ErrUnexpectedEOF` immediately aborts startup with `fmt.Errorf("wal: fatal I/O read error at offset %d: %w", validOffset, err)`. Zero truncation permitted.
+   - **Mid-File Corruption**: Invalid frame length or payload unmarshaling failure when not at EOF immediately aborts startup with a corruption error containing byte offset diagnostics. Zero truncation permitted.
+2. **Fail-Closed Durability**: Never boot silently with data truncation. Halt execution so administrators can inspect storage health and preserve intact transaction logs.
+
+### Consequences
+- **Positive**: Eliminates self-inflicted data loss from transient read errors; protects uncorrupted transactions following mid-file bad sectors; complies strictly with ACID durability.
+- **Negative**: Server fails to boot on storage I/O errors, requiring administrator intervention (which is the desired, safe behavior for database recovery).
+- **Compliance**: Adheres to Golden Rule [AtomicSaves], [ExplicitError], and `notes/ENGINEERING_CONTEXT.ko.md` Invariant 22.
 
 
 

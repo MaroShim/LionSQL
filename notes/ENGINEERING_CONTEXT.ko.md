@@ -219,6 +219,23 @@
 
 ---
 
+### ㉒ WAL 복구 무손실 & 절삭 통제 불변식 (Fail-Closed & Zero-Truncate Invariant)
+* **결정 사항**:
+  * 인메모리 OCC 스토리지 엔진의 WAL/AOF 디스크 복구 엔진(`pkg/storage/memengine/wal.go`)은 서버 기동 시 트랜잭션 로그를 재생할 때 **데이터 무손실(Zero Data Loss)**과 **안전한 복구 실패(Fail-Closed)**를 절대 헌법으로 수호해야 한다.
+  * WAL 파일 순차 스캔 중 읽기 이벤트는 수학적/물리적으로 다음 4대 케이스로 완전 분할(MECE)하여 처리한다:
+    1. **정상 종료 (Clean EOF at Record Boundary)**: `io.ReadFull` 시 0바이트 읽힘(`err == io.EOF`). 정상 종료이며 파일 절삭(`Truncate`)은 일절 수행하지 않는다.
+    2. **적법한 크래시 테일 잔여물 (Tail Torn Write at EOF)**: 헤더 읽기 중 `io.ErrUnexpectedEOF`가 발생하거나 헤더는 읽었으나 페이로드 바이트를 채우지 못하고 파일이 끝난 경우. 반드시 **`validOffset + 잔여바이트 == stat.Size()`로 뒤에 후속 데이터가 전혀 없는 물리적 파일의 맨 끝(Tail)임이 증명된 경우에 한해서만** `file.Truncate(validOffset)`를 수행하여 쓰다 만 마지막 조각만 잘라낸다. 절삭 실패 에러는 결코 무음 처리하지 않고(`_ = err` 금지) 명시적으로 반환한다 (`[RULE:ExplicitError]`).
+    3. **디스크/OS I/O 읽기 장애 (I/O Read Failure: EIO, Permission, Timeout)**: `err != nil && err != io.EOF && err != io.ErrUnexpectedEOF`인 하드웨어/OS 장애 발생 시, **절대 Truncate를 호출하지 않고(파일 변경 일절 금지)** 즉시 `fmt.Errorf("wal: fatal I/O read error at offset %d: %w", validOffset, err)`로 부팅을 즉시 중단(Fail-Closed)하여 후속 정상 커밋 데이터를 보호한다.
+    4. **파일 중간 데이터 손상 (Mid-File Corruption / Bit-Flip)**: 프레임 길이 비정상(`frameLen == 0 || frameLen > 64MB`) 또는 언마샬링 실패인데 파일 끝이 아닌 경우, **뒤에 남아있는 후속 정상 트랜잭션을 연쇄 파괴하는 Truncate를 절대 금지**하며, 즉시 정확한 바이트 오프셋 진단 정보와 함께 손상 에러를 반환하여 복구를 중단한다.
+* **배제(Spec-Out) 및 엄격 금지된 것**:
+  * **일시적 I/O 에러를 EOF로 오인하여 정상 데이터 Truncate 영구 삭제**: 디스크 일시 점유/EIO 발생 시 루프를 빠져나와 뒤쪽 수만 건의 정상 트랜잭션을 디스크에서 잘라버리는 행위 영구 금지.
+  * **데이터 소멸 후 정상 부팅 기만 (Silent Recovery Illusion)**: 데이터가 잘려나갔음에도 에러를 삼키고 `return maxLSN, nil`로 성공 보고하는 행위 영구 금지.
+* **이유 & 시스템 계약(Contract)**:
+  * 데이터베이스의 제1 존립 근거는 어떤 상황에서도 "고객이 커밋한 데이터를 엔진 스스로 파괴하지 않는 것"이다.
+  * 일시적인 디스크 오류나 중간 1건의 오염이 발생했을 때 시스템이 취해야 할 올바른 자세는 임의로 데이터를 잘라내고 정상인 척 속이는 것이 아니라, **즉시 기동을 멈추고(Fail-Closed) 데이터 유실 없이 관리자에게 알리는 것**이다.
+
+---
+
 ## 2. 사용자의 엔지니어링 철학 및 협업 규약
 
 LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집니다:
