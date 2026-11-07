@@ -424,3 +424,92 @@ func TestRabbitMQHTTPSink(t *testing.T) {
 		t.Errorf("Expected non-empty Basic Auth header")
 	}
 }
+
+// TestOutboxDispatcher_Regression_P0_08_ReceiverDowntimeNoDataLoss verifies that when an external
+// broker receiver experiences extended downtime, the dispatcher pauses in place (applying backpressure)
+// and never drops head-of-line messages or delivers them out-of-order ([ADR-026], P0-08).
+func TestOutboxDispatcher_Regression_P0_08_ReceiverDowntimeNoDataLoss(t *testing.T) {
+	streamer := cdc.NewStreamer(100)
+	defer streamer.Close()
+
+	cfg := cdc.DefaultDispatcherConfig()
+	cfg.MaxRetries = 2
+	cfg.InitialBackoff = 10 * time.Millisecond
+	cfg.MaxBackoff = 50 * time.Millisecond
+
+	dispatcher := cdc.NewOutboxDispatcher(streamer, cfg)
+	sink := cdc.NewMemorySink("stall_and_retry_sink")
+
+	// Fail the first 4 attempts.
+	// If MaxRetries is 2 and the loop drops messages on failure, LSN 401 will be discarded after 3 attempts,
+	// and LSN 402 will be published on attempt 5, causing permanent data loss and out-of-order dispatch.
+	sink.SetFailUntil(4, fmt.Errorf("connection refused: broker temporarily unavailable"))
+	dispatcher.RegisterSink(sink)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := dispatcher.Start(ctx); err != nil {
+		t.Fatalf("Failed to start outbox dispatcher: %v", err)
+	}
+	defer dispatcher.Stop()
+
+	// Commit 2 sequential transactions
+	rec1 := memengine.WALRecord{
+		LSN:       401,
+		Timestamp: time.Now().UnixNano(),
+		Ops: []memengine.WALOp{
+			{
+				Type:  memengine.OpInsert,
+				Table: "orders",
+				Key:   "ord_401",
+				Record: storage.Record{
+					"id":     storage.IntValue(401),
+					"status": storage.StringValue("CREATED"),
+				},
+			},
+		},
+	}
+	rec2 := memengine.WALRecord{
+		LSN:       402,
+		Timestamp: time.Now().UnixNano(),
+		Ops: []memengine.WALOp{
+			{
+				Type:  memengine.OpUpdate,
+				Table: "orders",
+				Key:   "ord_401",
+				Record: storage.Record{
+					"id":     storage.IntValue(401),
+					"status": storage.StringValue("PAID"),
+				},
+			},
+		},
+	}
+
+	streamer.OnWALRecord(rec1)
+	streamer.OnWALRecord(rec2)
+
+	// Wait for BOTH messages to be delivered deterministically
+	if !sink.WaitForMessages(2, 3*time.Second) {
+		t.Fatalf("Expected 2 messages to be delivered without data loss, but got %d (P0-08 silent drop bug)", sink.Count())
+	}
+
+	msgs := sink.Messages()
+	if len(msgs) != 2 {
+		t.Fatalf("Expected exactly 2 messages in sink, got %d", len(msgs))
+	}
+
+	// Verify strict FIFO causal ordering: LSN 401 MUST precede LSN 402
+	if msgs[0].LSN != 401 {
+		t.Errorf("FIFO order violated: expected first message LSN 401, got %d", msgs[0].LSN)
+	}
+	if msgs[1].LSN != 402 {
+		t.Errorf("FIFO order violated: expected second message LSN 402, got %d", msgs[1].LSN)
+	}
+
+	stats := dispatcher.Stats()
+	if stats.LastAckLSN != 402 {
+		t.Errorf("Expected LastAckLSN 402, got %d", stats.LastAckLSN)
+	}
+}
+

@@ -220,17 +220,31 @@ func (d *OutboxDispatcher) dispatchLoop(ch <-chan ChangeEvent, cancelSub func())
 				continue
 			}
 
-			if err := d.publishToAllSinks(msg); err != nil {
-				d.failedCount.Add(1)
-				// Note: On failure, we do NOT advance lastAckLSN, guaranteeing at-least-once delivery
-			} else {
-				d.lastAckLSN.Store(ev.LSN)
-				d.dispatchedCount.Add(1)
-				d.mu.Lock()
-				d.lastDispatchAt = time.Now()
-				d.mu.Unlock()
-				d.saveCheckpoint(ev.LSN)
+			// Head-of-line retention: stall and retry until all sinks accept the message
+			// or the context is cancelled ([ADR-026], Invariant 21). Never silently drop messages.
+			for {
+				if err := d.publishToAllSinks(msg); err != nil {
+					d.failedCount.Add(1)
+					if d.ctx.Err() != nil {
+						return
+					}
+					// Pause and wait for receiver recovery or context cancellation
+					select {
+					case <-d.ctx.Done():
+						return
+					case <-time.After(d.config.MaxBackoff):
+					}
+					continue
+				}
+				break
 			}
+
+			d.lastAckLSN.Store(ev.LSN)
+			d.dispatchedCount.Add(1)
+			d.mu.Lock()
+			d.lastDispatchAt = time.Now()
+			d.mu.Unlock()
+			d.saveCheckpoint(ev.LSN)
 		}
 	}
 }
