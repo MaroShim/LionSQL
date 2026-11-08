@@ -75,9 +75,9 @@
     - `MaxCubeColumns = 12` (최대 4,096개 그룹 세트, MSSQL 표준 호환) 상한선 가드레일을 설치하고 12개 초과 시 `ErrTooManyCubeColumns` 에러를 즉시 반환하여 힙 고갈 프로세스 크래시 DoS 원천 차단 완치 (`[RULE:BoundedBuffers]`).
 22. **`P0-12` [Window 함수 하위 스트림 무제한 힙 적재 OOM 크래시]** [완료] (`execution/window.go:42-53` / 결함 10-2)
     - `WindowIterator`에 `workMem` (기본 64MB, `DefaultWorkMem`) 및 `accumMemory` 실시간 튜플 크기 추적(`EstimateTupleSize`) 가드레일을 설치하고, 메모리 한도 초과 시 `ErrWindowWorkMemExceeded` 에러를 즉시 반환하여 힙 고갈 OOM 크래시 DoS 원천 차단 완치 (`[RULE:BoundedBuffers]`).
-22. **`P0-13` [Merge Join 우측 중복 키 무제한 슬라이스 팽창 메모리 스톨]** (`execution/merge_join.go:335-356` / 결함 10-3)
-    - 우측 동일 조인 키 대량 중복 시 버퍼가 기가바이트 단위로 팽창하여 GC 압박 및 엔진 스톨.
-23. **`P0-14` [PullChunk I/O 에러 시 불완전 누적 그룹 부분 집계 왜곡 반환]** (`execution/aggregate.go:575-578` / 결함 10-4)
+23. **`P0-13` [Merge Join 우측 중복 키 무제한 슬라이스 팽창 메모리 스톨]** [완료] (`execution/merge_join.go:335-356` / 결함 10-3)
+    - `MergeJoinIterator`에 `workMem` (기본 64MB) 및 `bufMemory` 실시간 튜플 크기 추적(`EstimateTupleSize`) 가드레일을 설치하고, 동일 조인 키 버퍼링 한도 초과 시 `ErrMergeJoinWorkMemExceeded` 에러를 즉시 반환하여 힙 고갈 메모리 스톨 및 OOM 크래시 DoS 원천 차단 완치 (`[RULE:BoundedBuffers]`).
+24. **`P0-14` [PullChunk I/O 에러 시 불완전 누적 그룹 부분 집계 왜곡 반환]** (`execution/aggregate.go:575-578` / 결함 10-4)
     - 스트리밍 I/O 읽기 에러 발생 시 에러 전파 대신 부분 데이터 집계 결과를 정상치로 반환하는 정합성 왜곡.
 24. **`P0-18` [MERGE 문 타깃 테이블 무제한 풀스캔 힙 적재 OOM DoS]** (`engine/sqlexec_merge.go:106-114` / 결함 8-1)
     - 대용량 타깃 테이블에 대해 비인덱스 풀스캔 및 $O(M \times N)$ 비효율 루프로 인한 런타임 락업.

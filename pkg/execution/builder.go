@@ -263,7 +263,11 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 			rightIter = sIter
 		}
 
-		op = NewMergeJoinIterator(leftIter, rightIter, plan.JoinType, leftKey, rightKey)
+		mIter := NewMergeJoinIterator(leftIter, rightIter, plan.JoinType, leftKey, rightKey)
+		if opts.WorkMem > 0 {
+			mIter.SetWorkMem(opts.WorkMem)
+		}
+		op = mIter
 
 	case planner.NodeNestedLoop:
 		if len(plan.Children) < 2 {

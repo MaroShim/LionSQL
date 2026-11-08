@@ -2,11 +2,15 @@ package execution
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"sync"
 )
+
+// ErrMergeJoinWorkMemExceeded is returned when the buffered duplicate keys in MergeJoin exceed work_mem.
+var ErrMergeJoinWorkMemExceeded = errors.New("merge join memory budget exceeded")
 
 // MergeJoinIterator implements an O(M+N) single-pass Sort-Merge Join between two sorted relations.
 // Both child iterators are expected to stream tuples ordered by their respective join keys.
@@ -32,6 +36,8 @@ type MergeJoinIterator struct {
 	// Mark & Restore buffer for duplicate keys on the right relation
 	bufferedRight []Tuple
 	bufIdx        int
+	workMem       int64
+	bufMemory     int64
 
 	leftColsCount  int
 	rightColsCount int
@@ -55,6 +61,14 @@ func NewMergeJoinIterator(left, right Iterator, joinType, leftKey, rightKey stri
 		joinType: jType,
 		leftKey:  strings.TrimSpace(leftKey),
 		rightKey: strings.TrimSpace(rightKey),
+		workMem:  DefaultWorkMem,
+	}
+}
+
+// SetWorkMem sets the maximum memory budget for buffering duplicate keys ([RULE:BoundedBuffers]).
+func (m *MergeJoinIterator) SetWorkMem(bytes int64) {
+	if bytes > 0 {
+		m.workMem = bytes
 	}
 }
 
@@ -334,6 +348,7 @@ func (m *MergeJoinIterator) Next(ctx context.Context) (Tuple, error) {
 
 			// Buffer all contiguous Right tuples that share this identical key.
 			m.bufferedRight = []Tuple{m.curRight}
+			m.bufMemory = EstimateTupleSize(m.curRight)
 			targetRight := m.curRight
 
 			for {
@@ -347,6 +362,12 @@ func (m *MergeJoinIterator) Next(ctx context.Context) (Tuple, error) {
 					return Tuple{}, err
 				}
 				if sameJoinKey(nextRight, targetRight, m.rightKey) {
+					tSize := EstimateTupleSize(nextRight)
+					if m.workMem > 0 && m.bufMemory+tSize > m.workMem {
+						return Tuple{}, fmt.Errorf("%w: %s > work_mem (%s)",
+							ErrMergeJoinWorkMemExceeded, FormatMemSize(m.bufMemory+tSize), FormatMemSize(m.workMem))
+					}
+					m.bufMemory += tSize
 					m.bufferedRight = append(m.bufferedRight, nextRight)
 				} else {
 					m.curRight = nextRight
@@ -364,6 +385,8 @@ func (m *MergeJoinIterator) Close() error {
 	var firstErr error
 	m.closeOnce.Do(func() {
 		m.closed = true
+		m.bufferedRight = nil
+		m.bufMemory = 0
 		if m.left != nil {
 			if err := m.left.Close(); err != nil && firstErr == nil {
 				firstErr = err
