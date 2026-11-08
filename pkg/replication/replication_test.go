@@ -59,6 +59,67 @@ func TestWALBroadcaster_SubscribeAndBroadcast(t *testing.T) {
 	}
 }
 
+// TestP0_34_Broadcaster_BufferOverflow_ClosesChannelAndPreventsSilentDrop tests that
+// when a subscriber's channel buffer overflows under high load, the broadcaster does NOT
+// silently drop records while leaving the subscriber open (which would cause unrecoverable LSN gaps
+// on the replica). Instead, it immediately marks the gap, evicts the slow subscriber, and closes
+// the channel, forcing the replica to detect stream disconnect and reconnect/resync safely.
+func TestP0_34_Broadcaster_BufferOverflow_ClosesChannelAndPreventsSilentDrop(t *testing.T) {
+	b := replication.NewWALBroadcaster(100)
+	defer b.Close()
+
+	// 1. Subscribe with tiny buffer (capacity = 3)
+	bufSize := 3
+	ch, cancel, err := b.Subscribe("slow-replica", "127.0.0.1:5002", 0, bufSize)
+	if err != nil {
+		t.Fatalf("Subscribe failed: %v", err)
+	}
+	defer cancel()
+
+	// 2. Broadcast 3 records to completely fill the channel buffer
+	for lsn := int64(1); lsn <= int64(bufSize); lsn++ {
+		b.Broadcast(memengine.WALRecord{LSN: lsn, Ops: []memengine.WALOp{{Type: memengine.OpCreateTable}}})
+	}
+
+	// 3. Broadcast 4th record: buffer is now full!
+	// Under buggy implementation: LSN 4 is silently dropped, channel stays open.
+	// Under correct P0-34 fix: slow subscriber is evicted and channel is closed immediately!
+	b.Broadcast(memengine.WALRecord{LSN: 4, Ops: []memengine.WALOp{{Type: memengine.OpCreateTable}}})
+
+	// 4. Drain the first 3 buffered records (LSN 1, 2, 3)
+	for expectedLSN := int64(1); expectedLSN <= int64(bufSize); expectedLSN++ {
+		select {
+		case rec, ok := <-ch:
+			if !ok {
+				t.Fatalf("channel was prematurely closed before reading buffered record LSN %d", expectedLSN)
+			}
+			if rec.LSN != expectedLSN {
+				t.Fatalf("expected LSN %d, got %d", expectedLSN, rec.LSN)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("timeout reading buffered record LSN %d", expectedLSN)
+		}
+	}
+
+	// 5. Subsequent read on ch MUST observe channel closed (ok == false)!
+	// If the buggy silent-drop implementation is present, ch will hang or remain open.
+	select {
+	case rec, ok := <-ch:
+		if ok {
+			t.Fatalf("SILENT DROP BUG DETECTED: channel remained open and received LSN %d after buffer overflow (gap unhandled!)", rec.LSN)
+		}
+		// ok == false: channel closed as expected!
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("SILENT DROP BUG DETECTED: channel was NOT closed on buffer overflow, slow subscriber is still hanging open!")
+	}
+
+	// 6. Verify that subscriber was removed from broadcaster active subscribers
+	subscribers := b.GetReplicas(4)
+	if len(subscribers) != 0 {
+		t.Fatalf("expected slow subscriber to be evicted from active list, but %d subscribers remain", len(subscribers))
+	}
+}
+
 func TestManager_RoleAndPromote(t *testing.T) {
 	eng := memengine.New()
 

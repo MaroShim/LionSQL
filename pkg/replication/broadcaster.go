@@ -25,6 +25,7 @@ type subscriber struct {
 	ackedLSN   int64
 	lastSeen   time.Time
 	connected  time.Time
+	hasGap     bool // marked true if channel buffer overflowed, resulting in eviction
 }
 
 // NewWALBroadcaster creates a broadcaster with a ring buffer for recent WAL records.
@@ -59,12 +60,22 @@ func (b *WALBroadcaster) Broadcast(rec memengine.WALRecord) {
 	}
 
 	// 2. Non-blocking fan-out to all active replica subscribers ([RULE:NonBlockingSink])
-	for _, sub := range b.subscribers {
+	var slowSubscribers []string
+	for id, sub := range b.subscribers {
 		select {
 		case sub.ch <- rec:
 		default:
-			// If buffer is full, subscriber is lagging; in high load, channel buffer absorbs spikes
+			// Buffer overflow: subscriber is lagging behind.
+			// Do NOT silently drop WAL records (which causes corrupt data gaps, [RULE:ExplicitError]).
+			// Fail-closed: close the channel immediately and evict the slow subscriber
+			// so the replica detects disconnect and safely reconnects/resyncs from its last LSN.
+			sub.hasGap = true
+			close(sub.ch)
+			slowSubscribers = append(slowSubscribers, id)
 		}
+	}
+	for _, id := range slowSubscribers {
+		delete(b.subscribers, id)
 	}
 }
 
