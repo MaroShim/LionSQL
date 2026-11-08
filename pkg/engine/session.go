@@ -62,6 +62,7 @@ type ClientSession struct {
 	Session         storage.Session
 	Tx              storage.Transaction
 	TxFailed        bool // whether current transaction encountered an error ('E' in PGWire)
+	TranCount       int  // T-SQL @@TRANCOUNT transaction nesting depth (0 = autocommit)
 	Vars            map[string]any
 	TableVars       map[string]string // @table_var -> physical table name
 	TempTables      []string          // session-scoped #temp_tables
@@ -78,8 +79,51 @@ type ClientSession struct {
 	QueryStartTime  time.Time
 	CancelRequested bool
 	IsReadOnlyFn    func() bool // reports whether the engine/host is running in read-only replica mode
+	sessInUse       bool        // whether Session is currently leased to an active autocommit execution
+	activeQueries   int         // number of active top-level queries on this session
+	closed          bool        // whether CloseSession has been called on this session
+	releaseOnDrain  func(storage.Session) // callback to release storage session when in-flight queries drain
 	cancelMu        sync.Mutex  // dedicated lock for cooperative cancellation to avoid deadlocks with cs.Mu
 	Mu              sync.Mutex
+}
+
+// checkAndDrainClosedLocked checks whether the session was marked closed while queries were in-flight,
+// and if all queries have completed, detaches the session and returns the drain release callback.
+// MUST be called while holding cs.Mu.
+func (cs *ClientSession) checkAndDrainClosedLocked() (storage.Session, func(storage.Session)) {
+	if cs.closed && cs.activeQueries <= 0 && !cs.sessInUse && cs.Session != nil {
+		drainSess := cs.Session
+		drainFn := cs.releaseOnDrain
+		cs.Session = nil
+		cs.releaseOnDrain = nil
+		return drainSess, drainFn
+	}
+	return nil, nil
+}
+
+// GetQueryContext safely returns the active query context for this session, or context.Background() if none is set.
+func (cs *ClientSession) GetQueryContext() context.Context {
+	if cs == nil {
+		return context.Background()
+	}
+	cs.Mu.Lock()
+	ctx := cs.QueryCtx
+	cs.Mu.Unlock()
+	if ctx != nil {
+		return ctx
+	}
+	return context.Background()
+}
+
+// HasCancelFunc reports whether an active statement cancellation function is set under cancelMu.
+func (cs *ClientSession) HasCancelFunc() bool {
+	if cs == nil {
+		return false
+	}
+	cs.cancelMu.Lock()
+	has := cs.CancelFunc != nil
+	cs.cancelMu.Unlock()
+	return has
 }
 
 // SetCancel sets the active statement cancellation function under cancelMu.
@@ -364,24 +408,30 @@ func (cs *ClientSession) ExecuteProgram(
 	}
 
 	// Autocommit under existing or temporary session
-	var sess storage.Session
-	var shouldClose bool
-	if cs.Session != nil {
-		sess = cs.Session
-	} else if eng != nil {
-		sess, err = eng.NewSession()
-		if err != nil {
+	if cs.Session != nil && !cs.sessInUse {
+		cs.sessInUse = true
+		sess := cs.Session
+		cs.Mu.Unlock()
+		defer func() {
+			cs.Mu.Lock()
+			cs.sessInUse = false
+			drainSess, drainFn := cs.checkAndDrainClosedLocked()
 			cs.Mu.Unlock()
-			return nil, false, err
-		}
-		shouldClose = true
+			if drainFn != nil {
+				drainFn(drainSess)
+			}
+		}()
+		res, err = exec.RunContext(ctx, prog, stmtLabel, paramMap, sess)
+		return res, false, err
 	}
 	cs.Mu.Unlock()
 
-	if sess != nil {
-		if shouldClose {
-			defer sess.Close()
+	if eng != nil {
+		sess, err := eng.NewSession()
+		if err != nil {
+			return nil, false, err
 		}
+		defer sess.Close()
 		res, err = exec.RunContext(ctx, prog, stmtLabel, paramMap, sess)
 		return res, false, err
 	}

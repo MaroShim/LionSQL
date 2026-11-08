@@ -473,7 +473,12 @@ func (s *Coordinator) tryExecuteLoweredLinearWritableCTE(ctx context.Context, ct
 
 	if activeTx == nil {
 		// Run in implicit transaction managed by executor.RunContext with automatic conflict retry!
-		execRes, err := s.executor.RunContext(ctx, prog, "LINEAR_WRITABLE_CTE", nil, session)
+		sess, closeFn, err := s.acquireSessionForQuery(cs)
+		if err != nil {
+			return nil, err
+		}
+		defer closeFn()
+		execRes, err := s.executor.RunContext(ctx, prog, "LINEAR_WRITABLE_CTE", nil, sess)
 		if err != nil {
 			return nil, err
 		}

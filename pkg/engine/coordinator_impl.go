@@ -352,14 +352,36 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 }
 
 func (c *Coordinator) acquireSessionForQuery(cs *ClientSession) (storage.Session, func(), error) {
-	if cs != nil && cs.Session != nil {
-		return cs.Session, func() {}, nil
+	if cs != nil {
+		cs.Mu.Lock()
+		if cs.Session != nil && !cs.sessInUse {
+			cs.sessInUse = true
+			sess := cs.Session
+			cs.Mu.Unlock()
+			return sess, func() {
+				cs.Mu.Lock()
+				cs.sessInUse = false
+				drainSess, drainFn := cs.checkAndDrainClosedLocked()
+				cs.Mu.Unlock()
+				if drainFn != nil {
+					drainFn(drainSess)
+				}
+			}, nil
+		}
+		cs.Mu.Unlock()
+	}
+	if c.pool != nil {
+		sess, err := c.pool.AcquireSession()
+		if err != nil {
+			return nil, nil, err
+		}
+		return sess, func() { c.pool.ReleaseSession(sess) }, nil
 	}
 	sess, err := c.engine.NewSession()
 	if err != nil {
 		return nil, nil, err
 	}
-	return sess, func() { sess.Close() }, nil
+	return sess, func() { _ = sess.Close() }, nil
 }
 
 // CloseSession gracefully closes and unregisters a client session.
@@ -394,14 +416,11 @@ func (c *Coordinator) CloseSession(id string) {
 	}
 
 	if exists && cs != nil {
-		cs.Mu.Lock()
-
 		// 1. Immediately cancel in-flight queries and rollback active transaction first
 		// to guarantee zero leaked storage locks and instant release of resources.
-		if cs.CancelFunc != nil {
-			cs.CancelRequested = true
-			cs.CancelFunc()
-		}
+		cs.CancelQuery()
+
+		cs.Mu.Lock()
 		if cs.Tx != nil {
 			_ = cs.Tx.Rollback()
 			cs.Tx = nil
@@ -426,9 +445,27 @@ func (c *Coordinator) CloseSession(id string) {
 			clear(cs.Cursors)
 		}
 
+		cs.closed = true
 		storageSess := cs.Session
+		inFlight := cs.activeQueries > 0 || cs.sessInUse
+
 		if !isDefault {
-			cs.Session = nil
+			if inFlight {
+				// In-flight queries are actively running on this session!
+				// Delegate release to the query cleanup defer so other connections
+				// cannot acquire this WT_SESSION* while it is still in-flight.
+				cs.releaseOnDrain = func(sess storage.Session) {
+					if c.pool != nil {
+						c.pool.ReleaseSession(sess)
+					} else {
+						_ = sess.Close()
+					}
+				}
+				storageSess = nil // do not release immediately; wait for in-flight drain
+			} else {
+				cs.Session = nil
+				cs.sessInUse = false
+			}
 		}
 		cs.Mu.Unlock()
 
@@ -545,13 +582,20 @@ func (c *Coordinator) CancelQueryBySPID(spid int) bool {
 // GetActiveQueries returns snapshot metadata of currently running queries.
 func (c *Coordinator) GetActiveQueries() []ActiveQueryInfo {
 	c.sessMu.RLock()
-	defer c.sessMu.RUnlock()
+	sessions := make([]*ClientSession, 0, len(c.sessions))
+	for _, cs := range c.sessions {
+		if cs != nil {
+			sessions = append(sessions, cs)
+		}
+	}
+	c.sessMu.RUnlock()
 
 	now := time.Now()
 	var active []ActiveQueryInfo
-	for _, cs := range c.sessions {
+	for _, cs := range sessions {
+		hasCancel := cs.HasCancelFunc()
 		cs.Mu.Lock()
-		if cs.RunningQuery != "" && cs.CancelFunc != nil {
+		if cs.RunningQuery != "" && hasCancel {
 			active = append(active, ActiveQueryInfo{
 				SessionID:  cs.ID,
 				SPID:       cs.SPID,

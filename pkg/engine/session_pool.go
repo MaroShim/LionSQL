@@ -152,20 +152,31 @@ func (p *SessionPool) AcquireSession() (storage.Session, error) {
 		return nil, ErrPoolClosed
 	}
 
+	var expired []storage.Session
+	var acquired storage.Session
 	for len(p.idleSessions) > 0 {
 		n := len(p.idleSessions)
 		item := p.idleSessions[n-1]
+		p.idleSessions[n-1] = idleSessionItem{}
 		p.idleSessions = p.idleSessions[:n-1]
 		if p.config.IdleSessionTTL > 0 && time.Since(item.idleTime) > p.config.IdleSessionTTL {
-			_ = item.sess.Close()
+			expired = append(expired, item.sess)
 			continue
 		}
-		p.mu.Unlock()
-		atomic.AddInt64(&p.activeSessions, 1)
-		atomic.AddInt64(&p.totalAcquired, 1)
-		return item.sess, nil
+		acquired = item.sess
+		break
 	}
 	p.mu.Unlock()
+
+	for _, s := range expired {
+		_ = s.Close()
+	}
+
+	if acquired != nil {
+		atomic.AddInt64(&p.activeSessions, 1)
+		atomic.AddInt64(&p.totalAcquired, 1)
+		return acquired, nil
+	}
 
 	// Create new session from engine
 	sess, err := p.engine.NewSession()
@@ -192,9 +203,8 @@ func (p *SessionPool) ReleaseSession(sess storage.Session) {
 	}
 
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	if p.closed || len(p.idleSessions) >= p.config.MaxIdleSessions {
+		p.mu.Unlock()
 		_ = sess.Close()
 		return
 	}
@@ -203,6 +213,7 @@ func (p *SessionPool) ReleaseSession(sess storage.Session) {
 		sess:     sess,
 		idleTime: time.Now(),
 	})
+	p.mu.Unlock()
 }
 
 // Stats returns a snapshot of current connection pool and worker metrics.
@@ -228,16 +239,17 @@ func (p *SessionPool) Stats() PoolStats {
 // Close closes all idle sessions in the pool.
 func (p *SessionPool) Close() error {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	if p.closed {
+		p.mu.Unlock()
 		return nil
 	}
 	p.closed = true
+	toClose := p.idleSessions
+	p.idleSessions = nil
+	p.mu.Unlock()
 
-	for _, item := range p.idleSessions {
+	for _, item := range toClose {
 		_ = item.sess.Close()
 	}
-	p.idleSessions = nil
 	return nil
 }
