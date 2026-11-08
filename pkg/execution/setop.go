@@ -133,7 +133,7 @@ func (s *SetOpIterator) Open(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("set operator right child materialization error: %w", err)
 			}
-			key := encodeTupleKey(t)
+			key := encodeTupleKey(&t)
 			s.rightSet[key] = struct{}{}
 		}
 	}
@@ -188,7 +188,7 @@ func (s *SetOpIterator) nextUnion(ctx context.Context) (Tuple, error) {
 		if !s.leftDone {
 			t, err := s.left.Next(ctx)
 			if err == nil {
-				key := encodeTupleKey(t)
+				key := encodeTupleKey(&t)
 				if _, exists := s.seen[key]; !exists {
 					s.seen[key] = struct{}{}
 					t.Index = s.colIndexMap
@@ -206,7 +206,7 @@ func (s *SetOpIterator) nextUnion(ctx context.Context) (Tuple, error) {
 		if err != nil {
 			return Tuple{}, err
 		}
-		key := encodeTupleKey(t)
+		key := encodeTupleKey(&t)
 		if _, exists := s.seen[key]; !exists {
 			s.seen[key] = struct{}{}
 			t.Index = s.colIndexMap
@@ -221,7 +221,7 @@ func (s *SetOpIterator) nextIntersect(ctx context.Context) (Tuple, error) {
 		if err != nil {
 			return Tuple{}, err
 		}
-		key := encodeTupleKey(t)
+		key := encodeTupleKey(&t)
 		if _, inRight := s.rightSet[key]; inRight {
 			if _, emitted := s.seen[key]; !emitted {
 				s.seen[key] = struct{}{}
@@ -238,7 +238,7 @@ func (s *SetOpIterator) nextExcept(ctx context.Context) (Tuple, error) {
 		if err != nil {
 			return Tuple{}, err
 		}
-		key := encodeTupleKey(t)
+		key := encodeTupleKey(&t)
 		if _, inRight := s.rightSet[key]; !inRight {
 			if _, emitted := s.seen[key]; !emitted {
 				s.seen[key] = struct{}{}
@@ -275,7 +275,12 @@ func (s *SetOpIterator) ColIndexMap() *ColumnIndexMap {
 	return s.colIndexMap
 }
 
-func encodeTupleKey(t Tuple) string {
+func encodeTupleKey(t *Tuple) string {
+	if t == nil {
+		return ""
+	}
+	t.Materialize() // Regression P0-33: Decode underlying LazyTuple before computing hash key
+
 	var sb strings.Builder
 	for i, v := range t.Values {
 		if i > 0 {

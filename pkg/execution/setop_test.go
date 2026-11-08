@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"lionsql/pkg/execution"
+	"lionsql/pkg/storage"
 )
 
 func collectTuples(t *testing.T, it execution.Iterator) []map[string]any {
@@ -176,3 +177,118 @@ func TestSetOp_SchemaMismatchError(t *testing.T) {
 		t.Fatalf("expected schema mismatch error, got nil")
 	}
 }
+
+func TestSetOp_Regression_P0_33_LazyTupleMaterializationInUnionAndExcept(t *testing.T) {
+	schema := &storage.TableSchema{
+		Name: "test_setop_lazy",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt},
+			{Name: "val", Type: storage.TypeVarChar},
+		},
+	}
+
+	makeLazyTuple := func(id int64, val string) execution.Tuple {
+		row := storage.Row{
+			Values: []storage.Value{
+				storage.IntValue(id),
+				storage.StringValue(val),
+			},
+		}
+		data, err := storage.EncodeRow(schema, row)
+		if err != nil {
+			t.Fatalf("EncodeRow failed: %v", err)
+		}
+		lazy, err := storage.NewLazyTuple(schema, data)
+		if err != nil {
+			t.Fatalf("NewLazyTuple failed: %v", err)
+		}
+
+		colMap := execution.NewColumnIndexMapFromCols([]string{"id", "val"})
+		return execution.Tuple{
+			Values: make([]any, 2), // Un-materialized: all values are nil!
+			Index:  colMap,
+			Lazy:   lazy,
+		}
+	}
+
+	// 1. UNION Distinct with 3 distinct LazyTuples across left and right
+	left := newLazyMockIterator([]string{"id", "val"},
+		makeLazyTuple(1, "A"),
+		makeLazyTuple(2, "B"),
+	)
+	right := newLazyMockIterator([]string{"id", "val"},
+		makeLazyTuple(2, "B"), // duplicate
+		makeLazyTuple(3, "C"),
+	)
+
+	unionIt := execution.NewSetOpIterator(left, right, execution.SetOpUnion)
+	unionRows := collectTuples(t, unionIt)
+
+	// If LazyTuple is not materialized during key encoding, all rows share the same nil key "N:\x00N:"
+	// and UNION collapses them into a single row (data loss)!
+	if len(unionRows) != 3 {
+		t.Fatalf("DATA LOSS DETECTED (P0-33): expected 3 distinct rows from LazyTuple UNION, got %d: %+v", len(unionRows), unionRows)
+	}
+
+	// 2. EXCEPT with LazyTuples: (1, A) and (2, B) EXCEPT (2, B) and (3, C) -> should return exactly (1, A)
+	leftExcept := newLazyMockIterator([]string{"id", "val"},
+		makeLazyTuple(1, "A"),
+		makeLazyTuple(2, "B"),
+	)
+	rightExcept := newLazyMockIterator([]string{"id", "val"},
+		makeLazyTuple(2, "B"),
+		makeLazyTuple(3, "C"),
+	)
+
+	exceptIt := execution.NewSetOpIterator(leftExcept, rightExcept, execution.SetOpExcept)
+	exceptRows := collectTuples(t, exceptIt)
+
+	if len(exceptRows) != 1 {
+		t.Fatalf("EXCEPT DATA CORRUPTION (P0-33): expected exactly 1 row (1, A), got %d: %+v", len(exceptRows), exceptRows)
+	}
+	if exceptRows[0]["id"] != int64(1) || exceptRows[0]["val"] != "A" {
+		t.Errorf("expected (1, A), got %+v", exceptRows[0])
+	}
+}
+
+type lazyMockIterator struct {
+	schema      []string
+	colIndexMap *execution.ColumnIndexMap
+	tuples      []execution.Tuple
+	idx         int
+}
+
+func newLazyMockIterator(cols []string, tuples ...execution.Tuple) *lazyMockIterator {
+	return &lazyMockIterator{
+		schema:      cols,
+		colIndexMap: execution.NewColumnIndexMapFromCols(cols),
+		tuples:      tuples,
+	}
+}
+
+func (m *lazyMockIterator) Open(ctx context.Context) error {
+	m.idx = 0
+	return nil
+}
+
+func (m *lazyMockIterator) Next(ctx context.Context) (execution.Tuple, error) {
+	if m.idx >= len(m.tuples) {
+		return execution.Tuple{}, io.EOF
+	}
+	t := m.tuples[m.idx]
+	m.idx++
+	return t, nil
+}
+
+func (m *lazyMockIterator) Close() error {
+	return nil
+}
+
+func (m *lazyMockIterator) Schema() []string {
+	return m.schema
+}
+
+func (m *lazyMockIterator) ColIndexMap() *execution.ColumnIndexMap {
+	return m.colIndexMap
+}
+
