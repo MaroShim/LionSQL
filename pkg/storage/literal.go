@@ -170,6 +170,20 @@ func ParseLiteralDefault(s string, targetType DataType) Value {
 		if f, err := strconv.ParseFloat(s, 64); err == nil {
 			return IntValue(int64(f))
 		}
+		if parts := strings.Split(s, "<<"); len(parts) == 2 {
+			lhs, err1 := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+			rhs, err2 := strconv.ParseUint(strings.TrimSpace(parts[1]), 10, 64)
+			if err1 == nil && err2 == nil && rhs < 64 {
+				return IntValue(int64(uint64(lhs) << rhs))
+			}
+		}
+		if parts := strings.Split(s, ">>"); len(parts) == 2 {
+			lhs, err1 := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64)
+			rhs, err2 := strconv.ParseUint(strings.TrimSpace(parts[1]), 10, 64)
+			if err1 == nil && err2 == nil && rhs < 64 {
+				return IntValue(lhs >> rhs)
+			}
+		}
 	case TypeFloat:
 		if f, err := strconv.ParseFloat(s, 64); err == nil {
 			return FloatValue(f)
