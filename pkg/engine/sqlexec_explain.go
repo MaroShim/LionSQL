@@ -661,7 +661,7 @@ func (s *Coordinator) AnalyzeTable(tbl string) (*planner.TableStats, error) {
 	for cursor.Next() {
 		rec, err := cursor.Record()
 		if err != nil {
-			break
+			return nil, fmt.Errorf("ANALYZE failed to read record on %q: %w", tbl, err)
 		}
 		rowCount++
 		for _, c := range schema.Columns {

@@ -81,8 +81,8 @@
     - 스트리밍 I/O 읽기 에러나 컨텍스트 취소 시 `_ = a.child.Close()`를 즉각 호출하여 하위 커서/파일 핸들 영구 누수를 차단하고, `a.tuples = nil` 무효화 및 Fail-Closed TDD 회귀 검증을 통해 불완전 부분 집계 유출 원천 차단 완치 (`[RULE:HandleHygiene]`, `[RULE:ExplicitError]`).
 25. **`P0-18` [MERGE 문 타깃 테이블 무제한 풀스캔 힙 적재 OOM DoS]** [완료] (`engine/sqlexec_merge.go:106-250` / 결함 8-1)
     - `ON t.pk = s.id` 조건 시 타깃 테이블 풀스캔 없이 `tx.Get()`으로 직접 매칭하는 Zero-Fullscan Fast Streaming Path를 구현하고, 비인덱스 풀스캔 시 `DefaultMergeMaxTargetRows = 50000` 상한 가드레일(`ErrMergeTargetTableTooLarge`)을 적용하여 대용량 테이블 대상 OOM DoS 크래시 원천 차단 완치 (`[RULE:BoundedBuffers]`).
-25. **`P0-19` [UPDATE/DELETE 스캔 중 I/O 에러 시 무음 탈출 부분 커밋 데이터 오염]** (`engine/sqlexec_dml.go:1128-1132` / 결함 8-2)
-    - 중간 행 스캔 중 에러 발생 시 `break`로 빠져나가 앞부분 행들만 수정/삭제 커밋되어 데이터 정합성 파괴.
+25. **`P0-19` [UPDATE/DELETE 스캔 중 I/O 에러 시 무음 탈출 부분 커밋 데이터 오염]** [완료] (`engine/sqlexec_dml.go:1128-1132`, `1289-1293`, `proc/runtime/vm.go` / 결함 8-2)
+    - 스캔 도중 I/O 에러 시 `break`로 무음 탈출하여 앞부분 행들만 커밋하던 결함을 전면 제거하고, 즉각 트랜잭션 롤백 및 Fail-Closed 에러 전파(`[RULE:ExplicitError]`, `[RULE:AtomicSaves]`)와 Fault Injection TDD 회귀 검증을 통해 부분 갱신/삭제 정합성 파괴 완치.
 26. **`P0-28` [빈 테이블 유니크 인덱스 Zero-Division NaN 및 LEFT JOIN 보존]** [완료] (`planner/planner.go:1482, 1604`, `planner/pushdown.go:342-365` / 결함 4-1)
     - 빈 테이블/Zero 카디널리티 유니크 인덱스 비용 계산 시 `1.0 / 0.0`으로 인한 `+Inf` 및 `NaN` 전파 방어벽 구축, `math.IsNaN`으로 인한 인덱스 탈락 및 풀 테이블 스캔 왜곡 완치, 외부 조인(LEFT JOIN) 보존 무결성 검증 완료.
 

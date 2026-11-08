@@ -1694,7 +1694,10 @@ vmLoop:
 		for cursor.Next() {
 			rec, err := cursor.Record()
 			if err != nil {
-				break
+				if catchErr := f.handleCatch(fmt.Errorf("OpIndexScan record error on %s: %w", data.Table, err), &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
 			}
 			rowMap := recordToMap(rec)
 

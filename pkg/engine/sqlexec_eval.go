@@ -665,7 +665,7 @@ func (s *Coordinator) execIndexSelect(qInfo *planner.QueryInfo, tableName string
 	for cursor.Next() {
 		rec, err := cursor.Record()
 		if err != nil {
-			break
+			return nil, false
 		}
 		// Post-filter: apply full WHERE clause to handle non-indexed conditions.
 		if !evaluateWhereCondition(rec, whereClause) {

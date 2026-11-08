@@ -1128,7 +1128,10 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	for cursor.Next() {
 		rec, err := cursor.Record()
 		if err != nil {
-			break
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, fmt.Errorf("failed to read record during UPDATE scan: %w", err)
 		}
 
 		if whereClause != "" && !evaluateWhereCondition(rec, whereClause) {
@@ -1289,7 +1292,10 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 	for cursor.Next() {
 		rec, err := cursor.Record()
 		if err != nil {
-			break
+			if isEphemeral && tx != nil {
+				_ = tx.Rollback()
+			}
+			return nil, fmt.Errorf("failed to read record during DELETE scan: %w", err)
 		}
 
 		if whereClause != "" && !evaluateWhereCondition(rec, whereClause) {

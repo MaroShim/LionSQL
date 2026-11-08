@@ -1418,7 +1418,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 
 		rec, err := cursor.Record()
 		if err != nil {
-			break
+			return 0, fmt.Errorf("failed to read record during UPDATE scan: %w", err)
 		}
 		rowMap := recordToMap(rec)
 
@@ -1577,7 +1577,7 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 
 		rec, err := cursor.Record()
 		if err != nil {
-			break
+			return 0, fmt.Errorf("failed to read record during DELETE scan: %w", err)
 		}
 		rowMap := recordToMap(rec)
 
@@ -1657,7 +1657,10 @@ func (f *VMFrame) execTruncate(tableName string) error {
 	var pks []storage.Value
 	for cursor.Next() {
 		rec, err := cursor.Record()
-		if err != nil || rec == nil {
+		if err != nil {
+			return fmt.Errorf("failed to read record during TRUNCATE scan: %w", err)
+		}
+		if rec == nil {
 			continue
 		}
 		if isCompPK {
@@ -1755,7 +1758,7 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 
 		rec, err := cursor.Record()
 		if err != nil {
-			break
+			return storage.NullValue(storage.TypeUnknown), fmt.Errorf("failed to read record during scan: %w", err)
 		}
 		rowMap := recordToMap(rec)
 
@@ -1961,7 +1964,7 @@ func (f *VMFrame) scanCursorRows(tableName string, whereExpr proc.Expr, userCols
 
 		rec, err := cursor.Record()
 		if err != nil {
-			break
+			return nil, nil, fmt.Errorf("failed to read record during cursor scan: %w", err)
 		}
 		if whereExpr != nil {
 			rowContext := f.buildRowEvalMap(recordToMap(rec))
