@@ -13,12 +13,12 @@
 ## 전역 감사 진행 현황 (Summary Dashboard)
 
 * **1단계 (135단계 전수 광역 스캔)**: 135 / 135 (100.0%) 완주 완료 (총 134건 결함 식별)
-* **2단계 (12대 핵심 코어 심층 재스캔)**: 12 / 12 구역 전수 완주 완료 (구역 1~12: 총 63건 심층 결함 발굴 완료)
-* **총 누적 식별 결함**: 총 197건 (1단계 134건 + 2단계 63건)
-  - Critical: 28건 (+3)
-  - High: 88건 (+2)
-  - Medium: 66건 (+0)
-  - Low: 15건 (+0)
+* **2단계 (15대 핵심 코어 심층 재스캔)**: 15 / 15 구역 전수 완주 완료 (구역 1~15: 총 72건 심층 결함 발굴 완료)
+* **총 누적 식별 결함**: 총 206건 (1단계 134건 + 2단계 72건)
+  - Critical: 29건 (+1)
+  - High: 91건 (+3)
+  - Medium: 70건 (+4)
+  - Low: 16건 (+1)
 
 ---
 
@@ -3078,3 +3078,129 @@
 
 
 
+
+
+### [2단계 심층 구역 13] REST API, Web Studio & SPA 웹 서버 (BaaS, SPA & RLS Core)
+* **대상 핵심 파일**:
+  - `pkg/api/spa.go` (169 라인)
+  - `pkg/api/handlers_records.go` (803 라인)
+  - `pkg/api/rls.go` (265 라인)
+  - `pkg/api/webhook.go` (515 라인)
+  - `pkg/api/cron.go` (280 라인)
+  - **총 분석 규모**: 2,032 라인
+* **중점 점검 영역**: SPA 디렉토리 트래버설 탈출, REST CRUD 무제한 힙 적재 OOM, RLS 필터 인젝션 우회, 웹훅/크론 메타데이터 영속성 부재, 백그라운드 고루틴 누수.
+
+#### [발굴 결함 13-1] `api/handlers_records.go`: `GET /api/records/:table` 대용량 테이블 페이징 시 무제한 전수 힙 적재로 인한 OOM DoS
+* **심각도**: `High`
+* **위치**: `pkg/api/handlers_records.go:186-221` (`handleGetRecords`)
+* **현상 및 원인 분석**:
+  - 클라이언트가 `?page=1&perPage=10`을 요청하더라도, `cursor.Next()` 루프에서 전체 테이블의 모든 레코드를 순회하며 `recordToJSONMap`을 생성하여 메모리 슬라이스 `records = append(records, row)`에 무제한 누적함.
+  - 수백만 행을 가진 대용량 테이블을 조회할 경우 기가바이트 단위의 힙 메모리가 순간적으로 점유되어 Go GC 쓰래싱 및 프로세스 OOM 크래시 발생 (`[RULE:BoundedBuffers]`).
+  - 또한 189라인에서 `rec, err := cursor.Record(); if err != nil { continue }`로 I/O 에러를 무음 스킵하여 손상된 레코드가 침묵 실패됨 (`[RULE:ExplicitError]`).
+* **권장 수정안**:
+  - 정렬 파라미터가 없거나 인덱스 순서와 일치하는 경우, `(page-1)*perPage`를 건너뛴 후 `perPage` 건만 채우면 즉시 루프를 `break`하는 스트리밍 조기 종료(Early Termination) 및 힙 할당 상한 가드 구축.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 13-2] `api/rls.go`: `ApplyListRule` 괄호 미격리 및 연산자 우선순위 역전으로 인한 RLS 필터 인젝션 & 보안 우회
+* **심각도**: `Critical` (보안 격리 파괴)
+* **위치**: `pkg/api/rls.go:115` (`ApplyListRule`)
+* **현상 및 원인 분석**:
+  - `ApplyListRule`은 테이블의 RLS 보안 규칙과 클라이언트가 전달한 필터 문자열을 단순 결합할 때 `fmt.Sprintf("(%s) && (%s)", resolvedRule, clientFilter)` 형태를 사용함.
+  - 만약 공격자가 `?filter=status=active) || (1=1`과 같이 닫는 괄호와 `||` (OR) 연산자를 포함한 악의적 필터를 주입할 경우, 합성된 표현식이 `((tenant_id = '123')) && (status=active) || (1=1)`로 파싱됨.
+  - `||` 연산자가 최상위에서 평가되므로 우측 `(1=1)`이 참이 되어 좌측의 테넌트/사용자 RLS 조건이 완전히 무력화되고, 타 테넌트의 모든 기밀 레코드가 무단 유출됨 (`[RULE:CharSanitization]`).
+* **권장 수정안**:
+  - 클라이언트 필터를 단순 문자열 포맷팅으로 이어붙이지 말고, `clientFilter`를 독립된 AST로 먼저 안전하게 파싱하여 검증한 뒤 `&AndFilter{Exprs: []FilterExpr{rlsExpr, clientExpr}}` 객체 트리로 결합하여 괄호 탈출 인젝션을 원천 차단.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 13-3] `api/webhook.go` & `api/cron.go`: 웹훅 및 크론 스케줄 메타데이터의 디스크 영속화 부재로 서버 재시작 시 전량 증발
+* **심각도**: `High`
+* **위치**: `pkg/api/webhook.go:190`, `pkg/api/cron.go:88`
+* **현상 및 원인 분석**:
+  - REST API 및 관리자 콘솔을 통해 등록된 웹훅(`d.webhooks`)과 크론 스케줄 작업(`s.jobs`)이 단순 인메모리 맵에만 보관됨.
+  - 서버 데몬 재시작 시 디스크에 저장된 설정이 없어 등록된 모든 웹훅과 자동화 스케줄이 전량 증발함 (`[RULE:AtomicSaves]`).
+* **권장 수정안**:
+  - `auth.json`과 동일하게 `webhooks.json` 및 `cron.json`으로 원자적 저장 및 부팅 시 자동 복원 로직 연동.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 13-4] `api/spa.go`: 현대 SPA 빌드 서브디렉토리 정적 에셋(`/assets/*.js`) 404 차단 비호환
+* **심각도**: `Medium`
+* **위치**: `pkg/api/spa.go:35-37` (`isSafeFlatAsset`)
+* **현상 및 원인 분석**:
+  - `isSafeFlatAsset` 검사에서 `filepath.Ext(clean) != "" && strings.ContainsAny(clean, "/\\")` 조건을 통해 서브디렉토리를 일체 불허함.
+  - Vite, React, Vue, Next.js 등 현대 프론트엔드 빌드 툴체인이 생성하는 표준 번들 구조(`dist/assets/index-abc.js`, `dist/static/css/app.css`)의 모든 에셋 요청이 디렉토리 트래버설로 오인되어 404 Not Found로 차단됨.
+* **권장 수정안**:
+  - 상위 경로(`..`) 및 은닉 파일(`.`)만 엄격히 차단하고, 루트 디렉토리 내부의 하위 정적 에셋 서브디렉토리는 안전하게 서비스할 수 있도록 경로 검증 로직 개선.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
+### [2단계 심층 구역 14] SQL 실행 엔진 잔여 고급 쿼리 (Advanced SQL Execution Engine Core)
+* **대상 핵심 파일**:
+  - `pkg/engine/sqlexec_apply.go` (460 라인)
+  - `pkg/engine/sqlexec_pivot.go` (1,336 라인)
+  - `pkg/engine/sqlexec_select.go` (2,049 라인)
+  - `pkg/engine/cte_lowering.go` (320 라인)
+  - **총 분석 규모**: 4,165 라인
+* **중점 점검 영역**: CROSS/OUTER APPLY $N+1$ 파싱 및 메모리 곱셈, Volcano 서브쿼리 세션 재귀 호출 데드락, PIVOT 복합 리터럴 괄호 파싱 왜곡.
+
+#### [발굴 결함 14-1] `engine/sqlexec_apply.go`: `CROSS/OUTER APPLY` 좌우측 카르테시안 결합 시 무제한 힙 적재 OOM DoS 및 $N+1$ 파싱 오버헤드
+* **심각도**: `High`
+* **위치**: `pkg/engine/sqlexec_apply.go:72-100` (`execApplySelect`)
+* **현상 및 원인 분석**:
+  - 좌측 행 $M$개에 대해 매 반복마다 `execSelect` 서브쿼리를 문자열로 동적 생성하여 파싱·실행하고, 결합된 결과 행을 슬라이스 `nextRows`에 무제한 누적함.
+  - 대량 데이터 조회 시 $O(M \times K)$ 크기의 중간 맵 객체가 힙 메모리를 고갈시켜 OOM 크래시를 유발함 (`[RULE:BoundedBuffers]`).
+* **권장 수정안**:
+  - 바이트코드 VDBE VM 또는 스트리밍 파이프라인으로 Lowering하거나, 최대 누적 행 수 상한(Cap) 및 페이징 선제 푸시다운 적용.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 14-2] `engine/sqlexec_select.go`: Volcano 서브쿼리 실행 시 `ExecuteSessionSQL` 재귀 호출로 인한 세션 트랜잭션 문맥 격리 충돌
+* **심각도**: `Medium`
+* **위치**: `pkg/engine/sqlexec_select.go:136-148` (`opts.SubqueryExecutor`)
+* **현상 및 원인 분석**:
+  - 메인 트랜잭션이 열려 있는 상태에서 Volcano 반복자가 행마다 서브쿼리를 평가할 때 `ExecuteSessionSQL(cs.ID, sql)`을 재귀적으로 호출함.
+  - 세션 뮤텍스 경합 및 하위 쿼리의 독립 트랜잭션 개설 시도로 인해 세션 내부 상태 불일치 및 교착(Deadlock) 위험 존재 (`[RULE:LockHierarchy]`).
+* **권장 수정안**:
+  - 서브쿼리 실행 시 신규 세션을 열지 않고 상위 트랜잭션 핸들(`tx`)을 직접 상속받는 격리된 리더 커서 컨텍스트 바인딩.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 14-3] `engine/sqlexec_pivot.go`: PIVOT 절 매칭 괄호 탐색 시 이스케이프 문자열 내 괄호 오인식 파싱 에러
+* **심각도**: `Medium`
+* **위치**: `pkg/engine/sqlexec_pivot.go:88-92` (`parsePivotInnerBody`)
+* **현상 및 원인 분석**:
+  - `findMatchingParen` 호출 시 컬럼 리터럴 내에 특수문자나 이스케이프된 따옴표/괄호가 포함되어 있을 경우 괄호 깊이 카운터가 오작동하여 정상적인 PIVOT 구문이 문법 에러로 거부됨.
+* **권장 수정안**:
+  - 문자열 리터럴 및 식별자 대괄호 상태를 완벽히 추적하는 `sqlutil.FindMatchingParen`으로 교체.
+* **판정**: `DEFECT_LOGGED`
+
+---
+
+### [2단계 심층 구역 15] 복제(Replication) & CLI 서버 데몬 (Replication & Daemon Lifecycle Core)
+* **대상 핵심 파일**:
+  - `pkg/replication/failover.go` (375 라인)
+  - `pkg/replication/handlers.go` (280 라인)
+  - `cmd/lionsql/daemon.go` (258 라인)
+  - `cmd/lionsql/server.go` (390 라인)
+  - **총 분석 규모**: 1,303 라인
+* **중점 점검 영역**: Always On 자동 리더 선출 시 분산 브로드캐스트 고아 고루틴, 데몬 PID 파일 비원자적 덮어쓰기 손상, 시그널 테어다운 데드락.
+
+#### [발굴 결함 15-1] `replication/failover.go`: 리더 선출 후 `broadcastLeaderAnnouncement` 비동기 고루틴 고아(Orphan) 방치 및 종료 동기화 누락
+* **심각도**: `Medium`
+* **위치**: `pkg/replication/failover.go:192` (`becomeLeader`)
+* **현상 및 원인 분석**:
+  - 리더 선출 성공 후 피어 노드들에 리더십을 알리는 `broadcastLeaderAnnouncement`를 실행할 때 `go m.broadcastLeaderAnnouncement(...)`로 비동기 스폰함.
+  - 해당 고루틴이 `m.failoverWg`나 컨텍스트에 묶이지 않은 채 방치되어, 인스턴스 종료(`Close`) 시에도 네트워크 I/O를 수행하며 Data Race 및 핸들 누수를 유발함 (`[RULE:ZeroOrphan]`).
+* **권장 수정안**:
+  - `m.failoverWg.Add(1)`로 고루틴 수명주기를 매니저 컨텍스트와 동기화하고 `Close()` 시 정상 테어다운 대기 보장.
+* **판정**: `DEFECT_LOGGED`
+
+#### [발굴 결함 15-2] `cmd/lionsql/daemon.go`: 데몬 기동 시 PID 파일 직접 덮어쓰기로 인한 비원자적 파일 손상 위험
+* **심각도**: `Low`
+* **위치**: `cmd/lionsql/daemon.go:207` (`startDaemon`)
+* **현상 및 원인 분석**:
+  - 백그라운드 프로세스 기동 후 `os.WriteFile(pidFile, []byte(strconv.Itoa(childPID)), 0644)`를 직접 호출함.
+  - 파일 쓰기 도중 시스템 크래시나 전원 차단 시 0바이트 빈 파일이나 불완전한 PID 파일이 디스크에 잔류하여, 이후 `lionsql status`나 `lionsql stop` 명령이 오작동하거나 엉뚱한 프로세스 종료를 시도할 수 있음 (`[RULE:AtomicSaves]`).
+* **권장 수정안**:
+  - 임시 파일(`.pid.tmp.<pid>`)에 먼저 쓰고 `os.Rename`으로 교체하는 원자적 저장(`[RULE:AtomicSaves]`) 적용.
+* **판정**: `DEFECT_LOGGED`
+
+---
