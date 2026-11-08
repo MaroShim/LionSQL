@@ -587,7 +587,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			s.mu.Unlock()
 
 			if targetSessID != "" {
-				s.coordinator.CloseSession(targetSessID)
+				s.coordinator.CancelSessionQuery(targetSessID)
 			}
 			return
 		}

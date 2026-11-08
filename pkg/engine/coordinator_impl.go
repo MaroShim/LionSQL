@@ -395,20 +395,9 @@ func (c *Coordinator) CloseSession(id string) {
 
 	if exists && cs != nil {
 		cs.Mu.Lock()
-		if c.engine != nil {
-			for _, physTable := range cs.TableVars {
-				_ = c.engine.DropTable(physTable)
-			}
-			for _, tempTbl := range cs.TempTables {
-				_ = c.engine.DropTable(tempTbl)
-			}
-		}
-		cs.TableVars = nil
-		cs.TempTables = nil
-		cs.TempTableMap = nil
-		cs.EphemeralTables = nil
-		cs.PreparedStmts = nil
 
+		// 1. Immediately cancel in-flight queries and rollback active transaction first
+		// to guarantee zero leaked storage locks and instant release of resources.
 		if cs.CancelFunc != nil {
 			cs.CancelRequested = true
 			cs.CancelFunc()
@@ -417,11 +406,38 @@ func (c *Coordinator) CloseSession(id string) {
 			_ = cs.Tx.Rollback()
 			cs.Tx = nil
 		}
+		cs.TxFailed = false
+
+		// 2. Snapshot table variable & temp table names to drop outside lock ([RULE:LockHierarchy])
+		var toDropLocal []string
+		for _, physTable := range cs.TableVars {
+			toDropLocal = append(toDropLocal, physTable)
+		}
+		for _, tempTbl := range cs.TempTables {
+			toDropLocal = append(toDropLocal, tempTbl)
+		}
+
+		cs.TableVars = nil
+		cs.TempTables = nil
+		cs.TempTableMap = nil
+		cs.EphemeralTables = nil
+		cs.PreparedStmts = nil
+		if cs.Cursors != nil {
+			clear(cs.Cursors)
+		}
+
 		storageSess := cs.Session
 		if !isDefault {
 			cs.Session = nil
 		}
 		cs.Mu.Unlock()
+
+		// 3. Drop tables outside cs.Mu lock to prevent lock hierarchy deadlocks
+		if c.engine != nil {
+			for _, tbl := range toDropLocal {
+				_ = c.engine.DropTable(tbl)
+			}
+		}
 
 		if storageSess != nil && !isDefault {
 			if c.pool != nil {

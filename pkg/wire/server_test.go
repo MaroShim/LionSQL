@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/engine"
@@ -1103,5 +1104,90 @@ func TestPGWire_DollarParameterAndLiteralSeparation(t *testing.T) {
 		t.Errorf("preview got %q, expected %q", preview, expectedPreview)
 	}
 }
+
+func TestPGWire_Regression_P0_26_DisconnectRollback(t *testing.T) {
+	srv, eng, _ := setupTestWireServer(t)
+	defer eng.Close()
+	defer srv.Close()
+
+	// Helper to send query and receive ready status byte
+	sendQuery := func(conn net.Conn, sql string) (byte, []byte, error) {
+		q := sql + "\x00"
+		qBuf := make([]byte, 1+4+len(q))
+		qBuf[0] = 'Q'
+		binary.BigEndian.PutUint32(qBuf[1:5], uint32(4+len(q)))
+		copy(qBuf[5:], q)
+		if _, err := conn.Write(qBuf); err != nil {
+			return 0, nil, err
+		}
+
+		var lastStatus byte
+		var lastErrorPayload []byte
+		for {
+			header := make([]byte, 5)
+			if _, err := io.ReadFull(conn, header); err != nil {
+				return 0, nil, err
+			}
+			msgType := header[0]
+			msgLen := binary.BigEndian.Uint32(header[1:5])
+			payload := make([]byte, msgLen-4)
+			if _, err := io.ReadFull(conn, payload); err != nil {
+				return 0, nil, err
+			}
+			if msgType == MsgErrorResponse {
+				lastErrorPayload = payload
+			}
+			if msgType == MsgReadyForQuery {
+				lastStatus = payload[0]
+				break
+			}
+		}
+		return lastStatus, lastErrorPayload, nil
+	}
+
+	// 1. Client 1 connects and opens a transaction modifying row id=1
+	client1 := connectPGClient(t, srv)
+	status, _, err := sendQuery(client1, "BEGIN")
+	if err != nil || status != 'T' {
+		t.Fatalf("client 1 BEGIN failed: status=%c err=%v", status, err)
+	}
+
+	status, _, err = sendQuery(client1, "UPDATE accounts SET balance = 500 WHERE id = 1")
+	if err != nil || status != 'T' {
+		t.Fatalf("client 1 UPDATE failed: status=%c err=%v", status, err)
+	}
+
+	// 2. Abruptly disconnect client 1 (socket Close) without committing
+	_ = client1.Close()
+	time.Sleep(20 * time.Millisecond)
+
+	// 3. Client 2 connects: verify Alice's balance was rolled back to 1000
+	client2 := connectPGClient(t, srv)
+	defer client2.Close()
+
+	status, _, err = sendQuery(client2, "SELECT balance FROM accounts WHERE id = 1")
+	if err != nil || status != 'I' {
+		t.Fatalf("client 2 SELECT failed: status=%c err=%v", status, err)
+	}
+
+	// 4. Client 2 modifies row id=1 and commits: must succeed with 0 lock leak
+	status, _, err = sendQuery(client2, "BEGIN")
+	if err != nil || status != 'T' {
+		t.Fatalf("client 2 BEGIN failed: status=%c err=%v", status, err)
+	}
+
+	status, _, err = sendQuery(client2, "UPDATE accounts SET balance = 2000 WHERE id = 1")
+	if err != nil || status != 'T' {
+		t.Fatalf("client 2 UPDATE failed (row lock leaked!): status=%c err=%v", status, err)
+	}
+
+	status, _, err = sendQuery(client2, "COMMIT")
+	if err != nil || status != 'I' {
+		t.Fatalf("client 2 COMMIT failed: status=%c err=%v", status, err)
+	}
+
+	t.Logf("[P0-26 PASS] Client disconnect over wire successfully triggered automatic rollback and freed row locks")
+}
+
 
 
