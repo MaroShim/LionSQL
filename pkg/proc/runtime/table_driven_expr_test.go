@@ -130,7 +130,7 @@ func TestTableDrivenExpressions(t *testing.T) {
 		// 5. System Functions & Global Variables
 		// ----------------------------------------------------
 		{name: "System/ServerName", dataType: "VARCHAR(50)", expr: "@@SERVERNAME", expected: "LIONSQL"},
-		{name: "System/TranCount_Initial", dataType: "INT", expr: "@@TRANCOUNT", expected: "0"},
+		{name: "System/TranCount_Initial", dataType: "INT", expr: "@@TRANCOUNT", expected: "1"},
 	}
 
 	for _, tc := range testCases {

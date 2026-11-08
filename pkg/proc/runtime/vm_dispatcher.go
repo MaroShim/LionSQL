@@ -534,26 +534,29 @@ vmLoop:
 		f.tranCount++
 
 	case proc.OpTxCommit:
-		if f.tranCount > 0 {
+		if f.tranCount > 1 {
+			// Nested transaction COMMIT: decrement tranCount only, do not commit physically!
 			f.tranCount--
-		}
-		if f.tx != nil {
-			if err := f.tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
-				return nil, err
+		} else if f.tranCount == 1 {
+			// Outermost transaction COMMIT: commit physically to storage
+			f.tranCount = 0
+			if f.tx != nil {
+				if err := f.tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
+					return nil, err
+				}
 			}
-		}
-		if f.session != nil {
-			newTx, err := f.session.BeginTx(storage.TxOptions{})
-			if err != nil {
-				return nil, err
+			if f.session != nil {
+				newTx, err := f.session.BeginTx(storage.TxOptions{})
+				if err != nil {
+					return nil, err
+				}
+				f.tx = newTx
 			}
-			f.tx = newTx
 		}
 
 	case proc.OpTxRollback:
-		if f.tranCount > 0 {
-			f.tranCount--
-		}
+		// T-SQL Standard: ROLLBACK without savepoint unconditionally resets tranCount to 0 and rolls back physically
+		f.tranCount = 0
 		if f.tx != nil {
 			if err := f.tx.Rollback(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
 				return nil, err
