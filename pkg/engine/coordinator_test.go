@@ -3,11 +3,14 @@ package engine_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/engine"
+	"lionsql/pkg/proc"
 	"lionsql/pkg/replication"
+	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 )
 
@@ -1152,6 +1155,19 @@ func TestCoordinator_SSMS_VirtualCatalogQueries(t *testing.T) {
 		t.Fatalf("expected dm_os_sys_info rows, got 0")
 	}
 
+	// 6-1. sys.dm_os_host_info (SSMS Object Explorer connection requirement)
+	resHostInfo, err := coord.ExecuteSQL("SELECT host_platform, host_distribution, host_release, os_architecture FROM sys.dm_os_host_info")
+	if err != nil {
+		t.Fatalf("sys.dm_os_host_info failed: %v", err)
+	}
+	if len(resHostInfo.Rows) == 0 {
+		t.Fatalf("expected dm_os_host_info rows, got 0")
+	}
+	rowMap := resHostInfo.Rows[0]
+	if rowMap["host_platform"] == "" || rowMap["os_architecture"] == "" {
+		t.Fatalf("expected non-empty host_platform and os_architecture, got %v", rowMap)
+	}
+
 	// 7. sys.endpoints
 	resEndpoints, err := coord.ExecuteSQL("SELECT endpoint_id, name, protocol_desc, state_desc FROM sys.endpoints")
 	if err != nil {
@@ -1468,6 +1484,63 @@ func TestCoordinator_ContradictionPruningFastFail(t *testing.T) {
 	}
 	if fmt.Sprintf("%v", resAgg.Rows[0]["total_count"]) != "0" {
 		t.Fatalf("expected count 0, got %v", resAgg.Rows[0]["total_count"])
+	}
+}
+
+func TestCoordinator_Regression_P0_37_QueryPanicRecovery(t *testing.T) {
+	coord, _, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	// Register a scalar UDF that deliberately panics
+	proc.RegisterScalarFunction("PANIC_UDF", func(args []storage.Value) storage.Value {
+		panic("deliberate catastrophic UDF panic in engine")
+	})
+
+	sessID := "panic_session"
+	// 1. Begin a transaction in the session
+	_, err := coord.ExecuteSessionSQL(sessID, "BEGIN TRANSACTION;")
+	if err != nil {
+		t.Fatalf("BEGIN TRANSACTION failed: %v", err)
+	}
+
+	// 2. Execute query invoking the panicking UDF.
+	// Without P0-37 panic recovery, this would crash the entire process/goroutine.
+	res, err := coord.ExecuteSessionSQL(sessID, "SELECT PANIC_UDF();")
+	if err == nil && (res == nil || res.Success) {
+		t.Fatalf("expected query with panicking UDF to fail, but got success")
+	}
+
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	} else if res != nil && !res.Success {
+		errMsg = res.Error
+	}
+	if !strings.Contains(errMsg, "panic") && !strings.Contains(errMsg, "deliberate catastrophic UDF panic") {
+		t.Fatalf("expected error message to mention panic, got: %v", errMsg)
+	}
+
+	// 3. Verify that the session has rolled back its aborted transaction and can execute subsequent queries normally
+	cs, err := coord.GetOrCreateSession(sessID)
+	if err != nil {
+		t.Fatalf("GetOrCreateSession failed: %v", err)
+	}
+	cs.Mu.Lock()
+	txActive := cs.Tx != nil
+	tranCount := cs.TranCount
+	cs.Mu.Unlock()
+
+	if txActive || tranCount != 0 {
+		t.Errorf("expected transaction to be rolled back and cleaned up after panic, but txActive=%v, tranCount=%d", txActive, tranCount)
+	}
+
+	// 4. Run a normal query on the same session to confirm engine viability
+	resNormal, err := coord.ExecuteSessionSQL(sessID, "SELECT 42 AS answer;")
+	if err != nil || !resNormal.Success {
+		t.Fatalf("subsequent query after panic recovery failed: %v (res: %v)", err, resNormal)
+	}
+	if len(resNormal.Rows) != 1 || fmt.Sprintf("%v", resNormal.Rows[0]["answer"]) != "42" {
+		t.Fatalf("expected answer 42, got: %v", resNormal.Rows)
 	}
 }
 

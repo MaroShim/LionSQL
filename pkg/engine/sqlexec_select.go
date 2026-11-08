@@ -133,14 +133,14 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		cs.Mu.Unlock()
 	}
 
+	ctx := cs.GetQueryContext()
+
 	opts.SubqueryExecutor = func(sql string) ([]map[string]any, []string, error) {
-		var res *QueryResult
-		var err error
+		sessID := "default"
 		if cs != nil {
-			res, err = s.ExecuteSessionSQL(cs.ID, sql)
-		} else {
-			res, err = s.ExecuteSQL(sql)
+			sessID = cs.ID
 		}
+		res, err := s.ExecuteSessionSQLContext(context.WithValue(ctx, reentrantQueryKey{}, true), sessID, sql)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -152,10 +152,6 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		return nil, fmt.Errorf("failed to build volcano executor: %w", err)
 	}
 
-	ctx := context.Background()
-	if cs != nil && cs.QueryCtx != nil {
-		ctx = cs.QueryCtx
-	}
 	if err := exec.Open(ctx); err != nil {
 		if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
 			return nil, fmt.Errorf("canceling statement due to user request")
@@ -287,11 +283,7 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 	// EXISTS(subquery)
 	if strings.HasPrefix(upper, "EXISTS(") && strings.HasSuffix(upper, ")") {
 		subSQL := strings.TrimSpace(trimmed[len("EXISTS(") : len(trimmed)-1])
-		sessID := "default"
-		if cs != nil {
-			sessID = cs.ID
-		}
-		if res, err := s.ExecuteSessionSQL(sessID, subSQL); err == nil && len(res.Rows) > 0 {
+		if res, err := s.executeNestedSessionSQL(cs, subSQL); err == nil && len(res.Rows) > 0 {
 			return true, "exists"
 		}
 		return false, "exists"
@@ -346,8 +338,14 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		}
 		return int64(51), "@@spid"
 	case "@@TRANCOUNT":
-		if cs != nil && cs.Tx != nil {
-			return int64(1), "@@trancount"
+		if cs != nil {
+			cs.Mu.Lock()
+			tc := int64(cs.TranCount)
+			if tc == 0 && cs.Tx != nil {
+				tc = 1
+			}
+			cs.Mu.Unlock()
+			return tc, "@@trancount"
 		}
 		return int64(0), "@@trancount"
 	case "@@ROWCOUNT":
@@ -1144,10 +1142,7 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 		cs.Mu.Unlock()
 	}
 
-	ctx := context.Background()
-	if cs != nil && cs.QueryCtx != nil {
-		ctx = cs.QueryCtx
-	}
+	ctx := cs.GetQueryContext()
 	execRes, err := s.executor.ExecuteInTxContext(ctx, prog, params, tx, nil)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
@@ -1304,10 +1299,7 @@ func (s *Coordinator) execSetOpSelect(setQuery *planner.SetOpQuery, start time.T
 	}
 
 	// 5. Open and materialize results
-	ctx := context.Background()
-	if cs != nil && cs.QueryCtx != nil {
-		ctx = cs.QueryCtx
-	}
+	ctx := cs.GetQueryContext()
 	if err := currIter.Open(ctx); err != nil {
 		if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
 			return nil, fmt.Errorf("canceling statement due to user request")

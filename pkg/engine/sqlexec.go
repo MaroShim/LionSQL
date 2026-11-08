@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -306,15 +308,36 @@ func parseTimeoutDuration(s string) (time.Duration, error) {
 	return ParseTimeoutDuration(s)
 }
 
+type reentrantQueryKey struct{}
+
+// executeNestedSessionSQL runs a subquery or internal SQL statement within an already-active
+// worker slot and preserves the parent query's cancellation context and active query metadata.
+func (s *Coordinator) executeNestedSessionSQL(cs *ClientSession, query string) (*QueryResult, error) {
+	ctx := context.Background()
+	sessID := "default"
+	if cs != nil {
+		sessID = cs.ID
+		cs.Mu.Lock()
+		if cs.QueryCtx != nil {
+			ctx = cs.QueryCtx
+		}
+		cs.Mu.Unlock()
+	}
+	return s.ExecuteSessionSQLContext(context.WithValue(ctx, reentrantQueryKey{}, true), sessID, query)
+}
+
 // ExecuteSQL parses and runs one or more SQL statements against the engine and catalog on the default session.
 func (s *Coordinator) ExecuteSQL(query string) (*QueryResult, error) {
 	return s.ExecuteSessionSQL("default", query)
 }
 
 // ExecuteSessionSQLContext runs SQL statements within a specific client session and cancellation context.
-func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID string, query string) (*QueryResult, error) {
+func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID string, query string) (retRes *QueryResult, retErr error) {
+	isNested, _ := ctx.Value(reentrantQueryKey{}).(bool)
+
 	// Acquire worker slot from built-in connection pool to prevent thread thrashing
-	if s.Pool() != nil {
+	// (skipped for nested subqueries/dynamic SQL that already run inside a parent worker slot)
+	if !isNested && s.Pool() != nil {
 		if err := s.Pool().AcquireWorker(ctx); err != nil {
 			return nil, err
 		}
@@ -330,25 +353,57 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 	var queryCtx context.Context
 	var cancel context.CancelFunc
 
-	if timeout := cs.GetQueryTimeout(); timeout > 0 {
-		queryCtx, cancel = context.WithTimeout(ctx, timeout)
+	var hasTimeout bool
+	if isNested {
+		queryCtx = ctx
 	} else {
-		queryCtx, cancel = context.WithCancel(ctx)
-	}
-	defer cancel()
+		if timeout := cs.GetQueryTimeout(); timeout > 0 {
+			hasTimeout = true
+			queryCtx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
+		} else {
+			queryCtx, cancel = context.WithCancel(ctx)
+		}
+		queryCtx = context.WithValue(queryCtx, reentrantQueryKey{}, true)
 
-	cs.Mu.Lock()
-	cs.QueryCtx = queryCtx
-	cs.RunningQuery = query
-	cs.QueryStartTime = overallStart
-	cs.Mu.Unlock()
-	cs.SetCancel(cancel)
+		cs.Mu.Lock()
+		cs.activeQueries++
+		cs.QueryCtx = queryCtx
+		cs.RunningQuery = query
+		cs.QueryStartTime = overallStart
+		cs.Mu.Unlock()
+		cs.SetCancel(cancel)
+	}
 
 	stmts := splitStatements(query)
 	var lastRes *QueryResult
 	var execErr error
 
 	defer func() {
+		// [RULE:PanicRecovery] Global panic interceptor protecting engine stability and session state
+		if r := recover(); r != nil {
+			stack := string(debug.Stack())
+			log.Printf("[PANIC-RECOVERY] session %s recovered from query panic: %v\n%s", sessionID, r, stack)
+			if cs != nil {
+				cs.Mu.Lock()
+				if cs.Tx != nil {
+					_ = cs.Tx.Rollback()
+					cs.Tx = nil
+					cs.TranCount = 0
+				}
+				cs.TxFailed = false
+				cs.Vars["error"] = int64(50000)
+				cs.Mu.Unlock()
+			}
+			execErr = fmt.Errorf("internal engine panic during query execution: %v", r)
+			lastRes = &QueryResult{
+				Success: false,
+				Error:   execErr.Error(),
+			}
+			retErr = execErr
+			retRes = lastRes
+		}
+
 		dur := time.Since(overallStart)
 		cmd := "UNKNOWN"
 		rowsAffected := int64(0)
@@ -376,11 +431,27 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 			s.Metrics().RecordQuery(cmd, dur, isErr, isSlow)
 		}
 
-		cs.ClearCancel()
-		cs.Mu.Lock()
-		cs.QueryCtx = nil
-		cs.RunningQuery = ""
-		cs.Mu.Unlock()
+		if !isNested {
+			cs.Mu.Lock()
+			cs.activeQueries--
+			lastActive := cs.activeQueries <= 0
+			if lastActive {
+				cs.activeQueries = 0
+				cs.QueryCtx = nil
+				cs.RunningQuery = ""
+			}
+			drainSess, drainFn := cs.checkAndDrainClosedLocked()
+			cs.Mu.Unlock()
+			if lastActive {
+				cs.ClearCancel()
+				if !hasTimeout && ctx.Done() != nil {
+					cancel()
+				}
+			}
+			if drainFn != nil {
+				drainFn(drainSess)
+			}
+		}
 	}()
 
 	if isJdbcMetadataBatch(query) {
@@ -399,6 +470,13 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 	for _, stmt := range stmts {
 		select {
 		case <-queryCtx.Done():
+			if cs != nil {
+				cs.Mu.Lock()
+				if cs.Tx != nil {
+					cs.TxFailed = true
+				}
+				cs.Mu.Unlock()
+			}
 			if errors.Is(queryCtx.Err(), context.DeadlineExceeded) {
 				execErr = fmt.Errorf("canceling statement due to statement timeout")
 			} else {
@@ -408,12 +486,13 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 		default:
 		}
 
-		// In PostgreSQL mode, if transaction has failed, reject all commands except ROLLBACK
-		if cs.IsPostgres() {
+		// If transaction has failed (e.g. in PostgreSQL mode or after statement timeout), reject all commands except ROLLBACK (or COMMIT which rolls back in CommitSessionTx)
+		if cs != nil {
 			cs.Mu.Lock()
 			failed := cs.TxFailed
+			isPG := cs.IsPostgres()
 			cs.Mu.Unlock()
-			if failed && !isRollbackOrResetQuery(stmt) {
+			if failed && !isRollbackOrResetQuery(stmt) && (isPG || !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(stmt)), "COMMIT")) {
 				execErr = fmt.Errorf("current transaction is aborted, commands ignored until end of transaction block")
 				return nil, execErr
 			}
@@ -421,6 +500,9 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 
 		res, err := s.execSingleStatement(cs, stmt)
 		if err != nil {
+			isTimeoutOrCancel := errors.Is(err, context.DeadlineExceeded) ||
+				errors.Is(err, context.Canceled) ||
+				(queryCtx.Err() != nil && (errors.Is(queryCtx.Err(), context.DeadlineExceeded) || errors.Is(queryCtx.Err(), context.Canceled)))
 			if cs != nil {
 				cs.Mu.Lock()
 				errNum := int64(50000)
@@ -434,7 +516,7 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 					}
 				}
 				cs.Vars["error"] = errNum
-				if cs.Tx != nil && cs.IsPostgres() {
+				if cs.Tx != nil && (cs.IsPostgres() || isTimeoutOrCancel) {
 					cs.TxFailed = true
 				}
 				cs.Mu.Unlock()
@@ -475,7 +557,12 @@ func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) e
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()
 	if cs.Tx != nil {
-		return fmt.Errorf("transaction already active on session %s", cs.ID)
+		if cs.IsPostgres() {
+			return fmt.Errorf("transaction already active on session %s", cs.ID)
+		}
+		// T-SQL dialect: nested BEGIN TRANSACTION increments @@TRANCOUNT without error
+		cs.TranCount++
+		return nil
 	}
 	if ro, ok := cs.Vars["transaction_read_only"].(bool); ok && ro {
 		opts.ReadOnly = true
@@ -488,6 +575,7 @@ func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) e
 		return fmt.Errorf("failed to start transaction: %w", err)
 	}
 	cs.Tx = tx
+	cs.TranCount = 1
 	cs.TxFailed = false
 	return nil
 }
@@ -504,10 +592,11 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		return fmt.Errorf("no active transaction to commit on session %s", cs.ID)
 	}
 
-	// In PostgreSQL mode, if transaction has failed, COMMIT is converted to ROLLBACK
-	if cs.TxFailed && cs.IsPostgres() {
+	// If transaction has failed, ROLLBACK the underlying transaction across all dialects
+	if cs.TxFailed {
 		_ = cs.Tx.Rollback()
 		cs.Tx = nil
+		cs.TranCount = 0
 		cs.TxFailed = false
 		if cs.Cursors != nil {
 			cs.Cursors = make(map[string]*SessionCursor)
@@ -515,11 +604,24 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		if s.Metrics() != nil {
 			s.Metrics().RecordTransaction("rollback")
 		}
+		if cs.IsPostgres() {
+			return nil
+		}
+		return fmt.Errorf("current transaction is aborted, commands ignored until end of transaction block")
+	}
+
+	if cs.TranCount > 1 {
+		// T-SQL nested transaction: decrement tranCount only, do not physically commit
+		cs.TranCount--
+		if s.Metrics() != nil {
+			s.Metrics().RecordTransaction("commit")
+		}
 		return nil
 	}
 
 	err = cs.Tx.Commit()
 	cs.Tx = nil
+	cs.TranCount = 0
 	cs.TxFailed = false
 	// Close non-WITH HOLD cursors on COMMIT
 	if cs.Cursors != nil {
@@ -558,6 +660,7 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 	}
 	err = cs.Tx.Rollback()
 	cs.Tx = nil
+	cs.TranCount = 0
 	cs.TxFailed = false
 	// Close all cursors on ROLLBACK (per PostgreSQL specification)
 	if cs.Cursors != nil {

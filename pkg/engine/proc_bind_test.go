@@ -185,3 +185,19 @@ END;
 		}
 	})
 }
+
+func TestBuildSpExecuteSQL_NoCascadingSubstitution(t *testing.T) {
+	for i := 0; i < 20; i++ {
+		stmt := "SELECT * FROM tbl WHERE a = @p1 AND b = @p2"
+		namedArgs := map[string]string{
+			"@p1": "@p2",
+			"@p2": "999",
+		}
+		res := buildSpExecuteSQL(stmt, "@p1 VARCHAR, @p2 INT", namedArgs, nil)
+		expected := "SELECT * FROM tbl WHERE a = @p2 AND b = 999"
+		if res != expected {
+			t.Fatalf("Cascading substitution occurred at iter %d! Expected %q, got %q", i, expected, res)
+		}
+	}
+}
+

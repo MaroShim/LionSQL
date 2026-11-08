@@ -4,12 +4,21 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"log"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
+
+// DefaultCronJobTimeout defines the maximum execution duration for an individual cron job.
+const DefaultCronJobTimeout = 30 * time.Second
+
+// ErrJobAlreadyRunning indicates that a cron job was triggered while a previous invocation is still executing.
+var ErrJobAlreadyRunning = errors.New("cron job is already running")
 
 // CronJob defines a scheduled recurring job executed by the internal CronScheduler.
 type CronJob struct {
@@ -24,6 +33,8 @@ type CronJob struct {
 	LastStatus     string    `json:"last_status,omitempty"` // "success" or "error"
 	LastDurationMs int64     `json:"last_duration_ms,omitempty"`
 	LastError      string    `json:"last_error,omitempty"`
+
+	isRunning bool // runtime concurrency guard preventing overlapping runs (not serialized)
 }
 
 // CronExecutor is a callback function invoked by the scheduler when a job triggers.
@@ -36,6 +47,7 @@ type CronScheduler struct {
 	executor     CronExecutor
 	cancel       context.CancelFunc
 	wg           sync.WaitGroup
+	jobWg        sync.WaitGroup    // tracks active job goroutines for graceful stop
 	lastRanKey   map[string]string // jobID -> "YYYY-MM-DD HH:MM" to prevent duplicate runs within same minute
 	tickInterval time.Duration
 }
@@ -86,7 +98,7 @@ func (cs *CronScheduler) Start(parentCtx context.Context) {
 	}()
 }
 
-// Stop gracefully shuts down the background scheduler.
+// Stop gracefully shuts down the background scheduler and waits for any running jobs.
 func (cs *CronScheduler) Stop() {
 	cs.mu.Lock()
 	cancel := cs.cancel
@@ -97,6 +109,7 @@ func (cs *CronScheduler) Stop() {
 		cancel()
 	}
 	cs.wg.Wait()
+	cs.jobWg.Wait()
 }
 
 // evaluate checks all registered jobs against current time t.
@@ -120,35 +133,61 @@ func (cs *CronScheduler) evaluate(ctx context.Context, t time.Time) {
 
 	for _, job := range dueJobs {
 		cs.mu.Lock()
+		if job.isRunning {
+			cs.mu.Unlock()
+			continue // Skip execution if previous invocation is still running
+		}
 		cs.lastRanKey[job.ID] = minuteKey
 		cs.mu.Unlock()
 
-		go cs.executeJob(ctx, job)
+		cs.jobWg.Add(1)
+		go func(j *CronJob) {
+			defer cs.jobWg.Done()
+			_ = cs.executeJob(ctx, j)
+		}(job)
 	}
 }
 
-func (cs *CronScheduler) executeJob(ctx context.Context, job *CronJob) {
-	start := time.Now()
-	var err error
-	if cs.executor != nil {
-		execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		err = cs.executor(execCtx, job.CommandType, job.Command)
-		cancel()
-	}
-
-	duration := time.Since(start).Milliseconds()
-
+func (cs *CronScheduler) executeJob(ctx context.Context, job *CronJob) (execErr error) {
 	cs.mu.Lock()
-	defer cs.mu.Unlock()
-	job.LastRun = start
-	job.LastDurationMs = duration
-	if err != nil {
-		job.LastStatus = "error"
-		job.LastError = err.Error()
-	} else {
-		job.LastStatus = "success"
-		job.LastError = ""
+	if job.isRunning {
+		cs.mu.Unlock()
+		return ErrJobAlreadyRunning
 	}
+	job.isRunning = true
+	cs.mu.Unlock()
+
+	start := time.Now()
+	defer func() {
+		// [RULE:PanicRecovery] Shield scheduler goroutine against arbitrary executor/callback panics
+		if r := recover(); r != nil {
+			stack := string(debug.Stack())
+			log.Printf("[CRON-PANIC-RECOVERY] cron job %s (%s) recovered from panic: %v\n%s", job.ID, job.Name, r, stack)
+			execErr = fmt.Errorf("cron job panicked: %v", r)
+		}
+
+		duration := time.Since(start).Milliseconds()
+
+		cs.mu.Lock()
+		job.isRunning = false
+		job.LastRun = start
+		job.LastDurationMs = duration
+		if execErr != nil {
+			job.LastStatus = "error"
+			job.LastError = execErr.Error()
+		} else {
+			job.LastStatus = "success"
+			job.LastError = ""
+		}
+		cs.mu.Unlock()
+	}()
+
+	if cs.executor != nil {
+		execCtx, cancel := context.WithTimeout(ctx, DefaultCronJobTimeout)
+		defer cancel()
+		execErr = cs.executor(execCtx, job.CommandType, job.Command)
+	}
+	return execErr
 }
 
 // RunJobNow triggers an immediate manual execution of a specific cron job.
@@ -160,7 +199,12 @@ func (cs *CronScheduler) RunJobNow(ctx context.Context, id string) error {
 		return fmt.Errorf("cron job %q not found", id)
 	}
 
-	cs.executeJob(ctx, job)
+	cs.jobWg.Add(1)
+	defer cs.jobWg.Done()
+	err := cs.executeJob(ctx, job)
+	if errors.Is(err, ErrJobAlreadyRunning) {
+		return err
+	}
 	return nil
 }
 

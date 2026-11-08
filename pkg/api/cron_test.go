@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -188,5 +190,146 @@ func TestCronAPI_Endpoints(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("DELETE /api/crons/:id expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCronScheduler_JobOverlapPrevention(t *testing.T) {
+	var activeCount int64
+	var maxActive int64
+	started := make(chan struct{})
+	unblock := make(chan struct{})
+
+	cs := NewCronScheduler(func(ctx context.Context, cmdType, cmd string) error {
+		cur := atomic.AddInt64(&activeCount, 1)
+		defer atomic.AddInt64(&activeCount, -1)
+
+		for {
+			old := atomic.LoadInt64(&maxActive)
+			if cur <= old || atomic.CompareAndSwapInt64(&maxActive, old, cur) {
+				break
+			}
+		}
+
+		select {
+		case started <- struct{}{}:
+		default:
+		}
+
+		select {
+		case <-unblock:
+		case <-ctx.Done():
+		}
+		return nil
+	})
+
+	job := &CronJob{
+		Name:        "Long Job",
+		Schedule:    "* * * * *",
+		CommandType: "sql",
+		Command:     "SELECT 1",
+		Enabled:     true,
+	}
+	if err := cs.AddJob(job); err != nil {
+		t.Fatalf("AddJob failed: %v", err)
+	}
+
+	// 1. Run first invocation asynchronously
+	go func() {
+		_ = cs.RunJobNow(context.Background(), job.ID)
+	}()
+
+	// Wait until first invocation enters executor
+	<-started
+
+	// 2. Try second invocation asynchronously while first is still running
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- cs.RunJobNow(context.Background(), job.ID)
+	}()
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatalf("expected error or rejection for overlapping job invocation")
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatalf("second job invocation blocked instead of rejecting overlap")
+	}
+
+	// 3. Unblock the first execution
+	close(unblock)
+	cs.Stop()
+
+	if atomic.LoadInt64(&maxActive) != 1 {
+		t.Fatalf("expected max concurrent active instances to be 1, got %d", atomic.LoadInt64(&maxActive))
+	}
+}
+
+func TestCronScheduler_PanicRecovery(t *testing.T) {
+	cs := NewCronScheduler(func(ctx context.Context, cmdType, cmd string) error {
+		panic("deliberate catastrophic cron panic")
+	})
+
+	job := &CronJob{
+		Name:        "Panicking Job",
+		Schedule:    "* * * * *",
+		CommandType: "sql",
+		Command:     "SELECT 1",
+		Enabled:     true,
+	}
+	if err := cs.AddJob(job); err != nil {
+		t.Fatalf("AddJob failed: %v", err)
+	}
+
+	// RunJobNow should not panic the calling/runner goroutine
+	err := cs.RunJobNow(context.Background(), job.ID)
+	if err == nil {
+		// If RunJobNow returns nil, job.LastStatus must reflect the error
+		j, _ := cs.GetJob(job.ID)
+		if j.LastStatus != "error" || !strings.Contains(j.LastError, "panic") {
+			t.Fatalf("expected error with panic details, got status=%q err=%q", j.LastStatus, j.LastError)
+		}
+	} else if !strings.Contains(err.Error(), "panic") {
+		t.Fatalf("expected error to mention panic, got: %v", err)
+	}
+}
+
+func TestCronScheduler_GracefulStopWaitsForRunningJobs(t *testing.T) {
+	var completed atomic.Bool
+	started := make(chan struct{})
+
+	cs := NewCronScheduler(func(ctx context.Context, cmdType, cmd string) error {
+		close(started)
+		// Simulate 50ms of work
+		time.Sleep(50 * time.Millisecond)
+		completed.Store(true)
+		return nil
+	})
+
+	job := &CronJob{
+		Name:        "Async Job",
+		Schedule:    "* * * * *",
+		CommandType: "sql",
+		Command:     "SELECT 1",
+		Enabled:     true,
+	}
+	if err := cs.AddJob(job); err != nil {
+		t.Fatalf("AddJob failed: %v", err)
+	}
+
+	cs.Start(context.Background())
+
+	// Trigger job
+	go func() {
+		_ = cs.RunJobNow(context.Background(), job.ID)
+	}()
+
+	<-started
+	// Call Stop while job is executing
+	cs.Stop()
+
+	// When Stop returns, the job must have completed cleanly
+	if !completed.Load() {
+		t.Fatalf("cs.Stop() returned before running job finished")
 	}
 }

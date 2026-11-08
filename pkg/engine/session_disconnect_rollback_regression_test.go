@@ -119,6 +119,78 @@ func TestSession_Regression_P0_26_DisconnectRollback(t *testing.T) {
 	t.Logf("[P0-26 PASS] Session disconnect cleanly rolled back transaction and freed all row locks")
 }
 
+// TestSession_Regression_P0_26_DisconnectDuringInFlightQuery_NoEarlyPoolRelease verifies that
+// when CloseSession is invoked while a query is still in-flight on cs.Session,
+// the storage session is NOT prematurely released back to SessionPool while the query goroutine
+// is still executing (preventing CGo WT_SESSION* concurrent access races), and is safely
+// reclaimed only after the in-flight query has completed.
+func TestSession_Regression_P0_26_DisconnectDuringInFlightQuery_NoEarlyPoolRelease(t *testing.T) {
+	memEng := memengine.New()
+	cat := catalog.New(memEng)
+	coord := NewCoordinator(cat, memEng, Config{})
+	defer coord.Close()
+
+	sessID := "inflight-sess"
+	cs, err := coord.GetOrCreateSession(sessID)
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	cs.Mu.Lock()
+	underlyingSess := cs.Session
+	cs.Mu.Unlock()
+	if underlyingSess == nil {
+		t.Fatalf("expected underlying storage session on cs")
+	}
+
+	queryRunning := make(chan struct{})
+	queryFinished := make(chan struct{})
+
+	// Spawn in-flight query goroutine that leases cs.Session
+	go func() {
+		defer close(queryFinished)
+		sess, closeFn, acqErr := coord.acquireSessionForQuery(cs)
+		if acqErr != nil {
+			t.Errorf("acquireSessionForQuery failed: %v", acqErr)
+			return
+		}
+		defer closeFn()
+
+		close(queryRunning)
+
+		// Simulate active engine execution work taking 40ms
+		time.Sleep(40 * time.Millisecond)
+		_ = sess
+	}()
+
+	<-queryRunning
+
+	// While query is actively in-flight on underlyingSess, client disconnects
+	coord.CloseSession(sessID)
+
+	// Step 1: Verify that while query is still in-flight, underlyingSess was NOT dumped to pool
+	statsDuring := coord.pool.Stats()
+	if statsDuring.IdleSessions != 0 {
+		t.Fatalf("DATA RACE VIOLATION: storage session was prematurely released to SessionPool while query was still in-flight (IdleSessions=%d)", statsDuring.IdleSessions)
+	}
+
+	// Step 2: Wait for in-flight query to finish and drain
+	<-queryFinished
+
+	// Step 3: Verify that after query drain, the session was cleanly reclaimed into the pool
+	statsAfter := coord.pool.Stats()
+	if statsAfter.IdleSessions != 1 {
+		t.Fatalf("expected 1 idle session in pool after query drain, got %d", statsAfter.IdleSessions)
+	}
+
+	// Reacquire from pool and verify it's the exact same underlying session
+	reacquired, err := coord.pool.AcquireSession()
+	if err != nil || reacquired != underlyingSess {
+		t.Fatalf("expected reacquired session to match drained underlyingSess, got %v (err: %v)", reacquired, err)
+	}
+	coord.pool.ReleaseSession(reacquired)
+}
+
 // TestSession_Regression_P0_26_ConcurrentCloseAndDDL tests that CloseSession does not deadlock
 // when concurrent DDL operations occur on the storage engine (validates Lock Hierarchy).
 func TestSession_Regression_P0_26_ConcurrentCloseAndDDL(t *testing.T) {

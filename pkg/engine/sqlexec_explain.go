@@ -716,10 +716,7 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 	}
 
 	execSubquery := func(sql string) (*QueryResult, error) {
-		if cs != nil {
-			return s.ExecuteSessionSQL(cs.ID, sql)
-		}
-		return s.ExecuteSQL(sql)
+		return s.executeNestedSessionSQL(cs, sql)
 	}
 
 	result := whereClause
