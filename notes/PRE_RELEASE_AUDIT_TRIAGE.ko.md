@@ -53,8 +53,10 @@
     - `logins`, `dbUsers`, `grants`, `apiKeys`, `superusers`가 디스크에 영속화되지 않아 데몬 재시작 시 커스텀 보안 설정 전량 증발하던 결함 완치 (`auth.json` 원자적 세이브 및 부팅 시 자동 로드 복원, Rule 1 준수).
 13. **`P0-10` [CDC 히스토리 재생 시 버퍼 오버플로 무음 드롭 데이터 갭 유발]** [완료] (`cdc/streamer.go:119-130` / 결함 12-5)
     - 과거 LSN 재생 시 수신 채널 버퍼 초과분을 무음 드롭(`default:`)하여 구독자에게 데이터 불일치 초래하던 결함 완치 (Lossless Bridge 2단계 핸드오버 및 무유실 순차 스트리밍, Rule 29 준수).
-14. **`P0-31` [RLS 필터 괄호 미격리로 인한 테넌트 인젝션 보안 우회]** (`api/rls.go:115` / 결함 13-2)
-    - `ApplyListRule`에서 테넌트 룰과 클라이언트 전달 필터를 문자열 단순 결합(`rule && clientFilter`)할 때 최상위 괄호 미격리로 인해 `?filter=status=active) || (1=1` 주입 시 타사 테넌트 레코드가 전량 유출되는 치명적 보안 취약점. AST 레벨의 `&AndFilter{}` 결합으로 완치 필요.
+14. **`P0-31` [RLS 필터 괄호 미격리로 인한 테넌트 인젝션 보안 우회]** [완료] (`api/rls.go:87-116`, `api/handlers_records.go:138-158`, `api/records_filter.go:436`, `engine/sqlexec_procs.go:1423-1492` / 결함 13-2)
+    - `ApplyListRule`의 문자열 포맷팅 결합(`fmt.Sprintf("(%s) && (%s)")`)을 전면 제거하고, RLS 룰을 순수 AST 노드로 분리 파싱하는 `GetListRuleExpr` 도입 및 핸들러 레벨의 `&AndFilter{ruleAST, clientAST}` 순수 AST 구조적 결합으로 전환.
+    - `ParseFilter` 끝단에 엄격한 `tokEOF` 검증 가드를 신설하여 짝 맞지 않는 닫는 괄호 및 후속 쓰레기 토큰 주입을 400 Bad Request로 즉시 차단.
+    - 엔진 `sp_executesql`의 `buildSpExecuteSQL` 다중 패스 루프를 $O(N)$ 단일 패스 스캐너(`substituteParamsSinglePass`)로 전면 교체하여 파라미터 간 연쇄 2차 확장(Cascading Double Expansion) 및 순회 순서 비결정성 원천 차단 완치 (TDD 회귀 검증 통과).
 
 ### 그룹 C: T-SQL 렉서, 파서 및 카탈로그 메타데이터 (6건)
 14. **`P0-20` [AlterTrigger 영속화 누락 재부팅 시 DDL 수정사항 유실]** [완료] (`catalog/catalog.go:376-390` / 결함 7-1)
@@ -89,26 +91,36 @@
 ### 그룹 E: 가상머신, 와이어 프로토콜 및 동시성 트랜잭션 (5건)
 27. **`P0-26` [네트워크 비정상 단절 시 트랜잭션 롤백 누락 락 영구 누수]** [완료] (`engine/coordinator_impl.go:396-434`, `wire/server.go:590` / 결함 5-1)
     - 클라이언트 연결 끊김 시 열려 있던 활성 트랜잭션을 최우선(Rollback-First)으로 즉각 롤백하여 스토리지 로우 락을 즉각 반납하고, 임시 테이블 드롭을 `cs.Mu.Unlock()` 이후 호출하도록 개선하여 데드락 원천 차단 완치 (`[RULE:LockHierarchy]`, `[RULE:HandleHygiene]`).
-28. **`P0-27` [TDS & PGWire 패킷 길이 검증 누락 OOM DoS 동시 방어]** (`wire/tds/packet.go:88-102`, `wire/server.go:710-725`, `copy.go:297-305` / 결함 5-2 & Scope 096)
-    - TDS 포트(:1433) 및 PGWire 포트(:5433)에서 악의적 클라이언트가 보낸 비정상 거대 패킷 헤더(2GB 등) 유입 시 힙 메모리 고갈 OOM 패닉 크래시 유발 방어 (`MaxTDSPacketSize = 32768`, `MaxTDSMessageSize = 64MB`, `MaxPGMessageSize = 64MB`, `[RULE:BoundedBuffers]`).
-29. **`P0-29` [sync.Pool 레지스터 재활용 잔류 포인터 메모리 레이스]** (`proc/runtime/vm.go:112-124` / 결함 3-1)
-    - VDBE VM 풀링 시 레지스터 포인터를 명시적으로 클리어하지 않아 다른 세션과 데이터 포인터 경합.
-30. **`P0-30` [타임아웃 롤백 중 동시 커밋 시 고아 트랜잭션 방치]** (`engine/coordinator_impl.go:275-295` / 결함 2-1)
-    - 타임아웃 감지 고루틴과 클라이언트 요청 고루틴의 상태 전이 레이스로 인해 트랜잭션 핸들 누수.
-31. **`P0-32` [중첩 트랜잭션 내부 `COMMIT` 시 외부 트랜잭션 조기 물리 커밋 및 ACID 원자성 파괴 방지]** (`proc/runtime/vm_dispatcher.go:535-570` / Scope 068)
-    - T-SQL 스토어드 프로시저 내에서 `f.tranCount > 1`인 중첩 트랜잭션 COMMIT 시 카운터만 감소시키고 최종 `tranCount == 0`일 때만 스토리지 물리 커밋을 수행하도록 보장하여 외부 트랜잭션 롤백 불가 및 All-or-Nothing 붕괴 원천 차단 (Invariant 6).
+28. **`P0-27` [TDS & PGWire 패킷 길이 검증 누락 OOM DoS 동시 방어]** [완료] (`wire/tds/packet.go:88-102`, `wire/server.go:710-725`, `copy.go:297-305` / 결함 5-2 & Scope 096)
+    - TDS 포트(:1433) 및 PGWire 포트(:5433)에서 악의적 클라이언트가 보낸 비정상 거대 패킷 헤더(2GB 등) 유입 시 힙 메모리 고갈 OOM 패닉 크래시 유발 방어 (`MaxTDSPacketSize = 32768`, `MaxTDSMessageSize = 64MB`, `MaxPGMessageSize = 64MB`, `MaxPGStartupSize = 64KB`, `[RULE:BoundedBuffers]`).
+29. **`P0-29` [sync.Pool 레지스터/슬라이스 재활용 잔류 포인터 GC 누수 일괄 박멸]** [완료] (`proc/runtime/vm.go:725-780`, `execution/iterator.go:385`, `execution/chunk.go:37`, `storage/memengine/tx.go:185` / 결함 3-1)
+    - VDBE VM `VMFrame.resetForPool`, Volcano `ReleaseValuesSlice` 및 `PutChunk`의 `clear(s[:cap(s)])`, In-Memory `tx.resetForPoolLocked`를 전면 구축하여 슬라이스 cap 뒤쪽 잔류 포인터로 인한 영구 메모리 누수 원천 차단 완치 (`[RULE:ZeroAllocation]`).
+30. **`P0-30` [트랜잭션 코디네이터 & 세션 동시성 5대 Lock Scope Shrinking 완치]** [완료] (`engine/coordinator_impl.go:354`, `engine/session_pool.go`, `engine/sqlexec.go` / 결함 2-1, 2-3, 2-4, D-1~D-8)
+    - 신규 거대 락 추가 없이 Lock Scope Shrinking 원칙으로 (1) `acquireSessionForQuery`의 `cs.sessInUse` 5ns 원자적 확인 및 동시 Autocommit/서브쿼리 시 `SessionPool` 임시 세션 폴백(`WT_SESSION*` 동시 접근 원천 차단), (2) `reentrantQueryKey{}` 기반 재귀 쿼리 부모 워커 슬롯 재사용(`AcquireWorker` 세마포어 고갈 데드락 원천 차단), (3) `SessionPool` `p.mu.Unlock()` 이후 `sess.Close()` 호출(`p.mu -> CGo` 역전 차단), (4) `GetActiveQueries` Copy-First 스냅샷(`sessMu.RLock -> cs.Mu.Lock` 체인 해체), (5) 타임아웃/취소 시 방언 불문 `cs.TxFailed = true` 마킹 및 `COMMIT` 시 강제 물리 롤백 완치 ([`notes/P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md`](P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md)).
+31. **`P0-32` [중첩 트랜잭션 내부 `COMMIT` 시 외부 트랜잭션 조기 물리 커밋 및 ACID 원자성 파괴 방지]** [완료] (`proc/runtime/vm_dispatcher.go:535-570`, `proc/runtime/vm.go:608`, `engine/sqlexec.go:529-635` / Scope 068)
+    - T-SQL 명세상 `f.tranCount > 1`인 중첩 트랜잭션 COMMIT 시 카운터만 감소시키고 최종 `f.tranCount == 0`일 때만 스토리지 물리 커밋을 수행하도록 가드를 설치하고, 중첩 ROLLBACK 시 무조건 `tranCount = 0` 리셋 및 전체 롤백, 외부 트랜잭션 진입 시 부모 트랜잭션 뎁스 보존, 대화형 세션 `ClientSession.TranCount` 및 `@@TRANCOUNT` 동기화 TDD 회귀 검증 완료 (ACID All-or-Nothing 및 Invariant 6 보장).
 
 ### 그룹 F: 쿼리 실행, 복제 무결성 및 외부 API 보안 가드레일 (5건 - 신규 승격)
-32. **`P0-33` [UNION/EXCEPT에서 `LazyTuple` 미해소 시 단 1개 행 압축 결과셋 증발 방지]** (`execution/setop.go:278-310` / Scope 091)
-    - 지연 평가 튜플(`LazyTuple`)이 Materialize되지 않은 채 `encodeTupleKey`로 넘어가 `t.Values`가 전부 `nil`로 인식되어 서로 다른 행들이 전부 동일한 NULL 키(`"N:\x00N:..."`)로 잘못 묶여 결과셋이 단 1행만 반환되고 대량 유실되는 치명적 데이터 왜곡 방어.
-33. **`P0-34` [복제 브로드캐스터 버퍼 포화 시 WAL 레코드 사일런트 드롭 및 레플리카 데이터 영구 오염 방지]** (`replication/broadcaster.go:50-70` / Scope 107)
-    - 슬로우 레플리카 채널 버퍼 포화 시 `default:`로 새 WAL 레코드를 조용히 버려 레플리카에 WAL 구멍(Gap)이 발생하던 결함 차단 (`[RULE:ExplicitError]`). 레코드 드롭 시 구독자 연결 강제 종료 및 Resync 요구 fail-closed 확립.
-34. **`P0-35` [REST API `Transfer-Encoding: chunked` 요청 시 바디 크기 제한 전면 우회 OOM DoS 방어]** (`api/middleware.go:78-82` / Scope 120)
-    - `r.ContentLength > 0` 가드로 인해 Chunked 전송 스트림(`ContentLength == -1`) 요청 시 `MaxBytesReader` 보호가 전면 무력화되던 취약점 차단 (`[RULE:BoundedBuffers]`).
-35. **`P0-36` [REST API 대용량 테이블 페이징 시 무제한 힙 적재 OOM DoS 방어]** (`api/handlers_records.go:186-221` / 결함 13-1)
-    - `GET /api/records/:table` 조회 시 상한 가드레일 없이 수백만 건의 행을 한 번에 슬라이스로 메모리에 적재하여 프로세스 OOM 패닉 유발 방지. 1,000건 디폴트 상한 및 스트리밍 조기 탈출 가드레일 확립 (`[RULE:BoundedBuffers]`).
-36. **`P0-37` [크론 작업 고루틴 비동기 실행 시 패닉 미복구로 인한 전체 서버 프로세스 크래시 방지]** (`api/cron.go:126-152` / Scope 126)
-    - 백그라운드 크론 작업 고루틴에 `recover()`를 설치하여 개별 작업 오류가 서버 전체 프로세스 크래시로 번지지 않도록 완치 (`[RULE:PanicRecovery]`, `[RULE:ZeroOrphan]`).
+32. **`P0-33` [UNION/EXCEPT에서 `LazyTuple` 미해소 시 단 1개 행 압축 결과셋 증발 방지]** [완료] (`execution/setop.go:136-315` / Scope 091)
+    - 지연 평가 튜플(`LazyTuple`)이 `encodeTupleKey`에서 디코딩되지 않아 `t.Values`가 전부 `nil`로 인식되어 서로 다른 행들이 전부 동일한 NULL 키(`"N:\x00N:..."`)로 잘못 묶여 결과셋이 단 1행만 반환되고 대량 유실되던 치명적 결함 완치.
+    - `encodeTupleKey(t *Tuple)`에 포인터 진입 및 선행 `t.Materialize()` 강제 디코딩을 구축하여 집합 연산 고유 해시 키 정합성 100% 확립 (`UNION ALL`은 제로 오버헤드 보존, TDD 회귀 검증 통과).
+33. **`P0-34` [복제 브로드캐스터 버퍼 포화 시 WAL 레코드 사일런트 드롭 방지 및 Fail-Closed 구독자 퇴출]** [완료] (`replication/broadcaster.go:50-75` / Scope 107)
+    - 슬로우 레플리카 채널 버퍼 포화 시 `default:`로 새 WAL 레코드를 조용히 버려 레플리카에 WAL 구멍(Gap)이 발생하던 결함 차단 (`[RULE:ExplicitError]`, `[RULE:NonBlockingSink]`). 버퍼 포화 시 `sub.hasGap = true` 마킹 및 채널을 즉시 닫고 구독자 맵에서 퇴출하여, Primary의 Non-blocking 쓰기 처리량을 100% 보존하면서도 레플리카가 연결 끊김을 즉시 인지하고 LSN 재동기화(Resync)를 수행하도록 Fail-Closed TDD 회귀 검증 완료.
+34. **`P0-35` [REST API `Transfer-Encoding: chunked` 요청 시 바디 크기 제한 전면 우회 OOM DoS 방어]** [완료] (`api/middleware.go:78-82` / Scope 120)
+    - `r.ContentLength > 0` 가드로 인해 Chunked 전송 스트림(`ContentLength == -1`) 요청 시 `MaxBytesReader` 보호가 전면 무력화되던 취약점 차단 (`[RULE:BoundedBuffers]`). `r.Body != nil` 조건만으로 `http.MaxBytesReader`를 무조건 래핑하도록 단일화하여 무제한 스트리밍 OOM DoS 공격 차단 TDD 회귀 검증 완료.
+35. **`P0-36` [REST API 대용량 테이블 페이징 시 무제한 힙 적재 OOM DoS 방어]** [완료] (`api/handlers_records.go:113-380` / 결함 13-1)
+    - `perPage` 상한선을 기존 비현실적인 500건에서 글로벌 표준(GitHub/Stripe) 수준인 **최대 100건(`MaxPageSize = 100`)**으로 엄격 하향 조정.
+    - 정렬이 없는 일반 페이징(`sort == ""`) 시 100만 건 전수 역직렬화 누적을 전면 철폐하고, 요청된 윈도우(`[targetStart, targetEnd)`)에 해당하는 행만 최대 `perPage`(최대 100건)개의 맵을 생성하는 **단일 윈도우 스트리밍 가드레일** 구축 (메모리 99.9% 절감).
+    - 인메모리 정렬(`sort != ""`) 시 무제한 힙 폭발을 방지하는 **최대 1,000건 유계 상한(`maxRecordsScanLimit = 1000`)** 가드레일을 설치하여 OOM DoS 원천 차단 완치 (`[RULE:BoundedBuffers]`, TDD 회귀 검증 통과).
+36. **`P0-37` [전사 세션 글로벌 패닉 완충망 및 크론 격리/동기화 모델 구축]** [완료] (`pkg/engine/sqlexec.go`, `pkg/api/cron.go` / Scope 126)
+    - **아키텍처 피벗 & 통찰**: 감사 원안의 "자식 프로세스(Child Process) 격리 및 SIGKILL"은 동일 데이터 디렉토리에 2개 이상의 프로세스가 접근할 수 없는 프로세스당 단일 카탈로그 원칙(`Invariant 2`) 및 WiredTiger 배타적 파일 락(`WiredTiger.lock`)에 정면 위배되는 허구의 오버스펙이었음을 실증 규명.
+    - **전사 세션 글로벌 패닉 완충망(`[RULE:PanicRecovery]`)**: 크론뿐만 아니라 PGWire, TDS, REST, 배치 등 모든 SQL/프로시저 쿼리의 단일 진입점인 `ExecuteSessionSQLContext` 최상단에 `defer recover()` 글로벌 패닉 인터셉터를 설치. 예기치 않은 런타임 패닉 발생 시 스택 트레이스 진단 로깅, 즉시 트랜잭션 안전 롤백(`TxFailed = false`), 에러 결과 반환 및 후속 쿼리 정상 재개 무결성 확립.
+    - **크론 격리 및 라이프사이클 동기화(`[RULE:CleanTeardown]`, `[RULE:ZeroOrphan]`)**:
+      - `job.isRunning` 원자적 플래그 가드를 구축하여 이전 주기 미완료 작업의 중복 실행(Job Overlap) 원천 차단.
+      - 5-field cron의 1분 해상도 대비 30초 강제 상한 타임아웃(`DefaultCronJobTimeout = 30 * time.Second`)을 적용하여 다음 주기까지 30초의 리소스 회수 안전 마진 확보.
+      - `executeJob` 내 2차 `recover()` 완충망으로 임의의 executor/콜백 패닉 시에도 스케줄러 고루틴 사살 방어.
+      - `CronScheduler.jobWg` 추적기를 신설하여 `Stop()` 호출 시 실행 중인 비동기 크론 작업이 완전히 완료될 때까지 안전하게 대기하는 Graceful Stop 완비.
+      - TDD 회귀 테스트(`TestCoordinator_Regression_P0_37_QueryPanicRecovery`, `TestCronScheduler_JobOverlapPrevention`, `TestCronScheduler_PanicRecovery`, `TestCronScheduler_GracefulStopWaitsForRunningJobs`) 100% PASS 검증 완료.
 
 ---
 
@@ -181,7 +193,7 @@
 | **Batch 2** | **스토리지 & 영속성 (Storage & WAL)** | P0-01 ~ P0-05 (5건) [완료] | FlatRecord 오프셋 충돌 해소, 스냅샷 빈 로 증발 방지, WAL 절삭 차단, ALTER TABLE 보존, 파티션 락 동시성 완치 |
 | **Batch 3** | **백업, 복원 & 카탈로그 (Backup & Catalog)** | P0-15 ~ P0-17, P0-20 ~ P0-22 (6건) [완료] | 복원 트랜잭션 롤백, FK 위상 정렬 복원, 트리거/통계 영속화, 뷰 동시성 딥카피 |
 | **Batch 4** | **T-SQL 렉서, 파서 & CBO (Parser & CBO)** | P0-23 ~ P0-25, P0-28 (4건) [완료] | DECIMAL 실수 오차 퇴치, UTF-8 식별자 보장, 유니크 인덱스 NaN 왜곡 차단, LEFT JOIN 보존 |
-| **Batch 5** | **실행 오퍼레이터 & VM 런타임 & 프로토콜/API 무결성** | P0-11 ~ P0-14, P0-18 ~ P0-19, P0-26 (완료 7건)<br>P0-27, P0-29, P0-30, P0-31, P0-32 ~ P0-37 (잔여 10건, 총 17건) | CUBE/Window OOM DoS 방어, 와이어(TDS/PG) 64MB 상한, 중첩 트랜잭션 ACID 보장, SetOp 결과셋 누락 방지, 복제 사일런트 드롭 방지, Chunked/페이징 OOM DoS 방어, 크론 패닉 방지 |
+| **Batch 5** | **실행 오퍼레이터 & VM 런타임 & 프로토콜/API 무결성** | P0-11 ~ P0-14, P0-18 ~ P0-19, P0-26, P0-27, P0-29 ~ P0-37 (17건) [전량 완료] | CUBE/Window OOM DoS 방어, 와이어(TDS/PG) 64MB 상한, 코디네이터 세션 동시성 완치, 중첩 트랜잭션 ACID 보장, SetOp 결과셋 누락 방지, 복제 사일런트 드롭 방지, Chunked/페이징 OOM DoS 방어, 전사 세션 패닉 방충망 & 크론 격리 |
 
 ---
 

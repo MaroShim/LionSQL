@@ -37,6 +37,18 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
   * 전 소스코드 135단계 듀얼 AI(Gemini × Claude) 크로스 감사 마스터 플랜 및 13대 도메인 매트릭스 (`AUDIT-135-DUAL-REVIEW`).
 * **[`PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md)**
   * 135단계 전수 감사 과정에서 발굴된 실측 결함 누적 매트릭스 (135/135 완주, 총 134건 결함 기록 완료).
+* **[`PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md)**
+  * 1단계/2단계 전수 감사 발굴 206건 결함 분류(P0~P3) 및 1.0 필수 패치 37선 확정 보고서 (`AUDIT-TRIAGE-POST`).
+* **[`P0_AUDIT_COMPREHENSIVE_RETROSPECTIVE.ko.md`](P0_AUDIT_COMPREHENSIVE_RETROSPECTIVE.ko.md)**
+  * 1.0 전수 감사 P0 (Must Fix 37선) 전량 완치 종합 회고 및 엔지니어링 포스트모템 (5대 도메인 결함 분석, 5대 핵심 아키텍처 피벗, Negative Knowledge 및 0-Race 품질 백서).
+* **1.0 P0 핵심 아키텍처 플랜 & 심층 분석 백서**:
+  * **[`P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md`](P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md)**: WAL 비정상 절삭 방지 및 4-State MECE Fail-Closed 복구 아키텍처 (`Invariant 9`, `ADR-027`).
+  * **[`P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md`](P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md)**: 네트워크 단절 시 트랜잭션 최우선 롤백 및 DDL 데드락 방지 세션 드레인 아키텍처.
+  * **[`P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md`](P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md)**: Go `sync.Pool` 슬라이스 용량 비대화 실측 및 잔류 포인터 GC 누수 박멸 포스트모템.
+  * **[`P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md`](P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md)**: 세션 동시성 격착, Lock Scope Shrinking 및 서브쿼리 교착 차단 심층 기술 토론.
+  * **[`P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md`](P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md)**: RLS 순수 AST 구조적 결합 테넌트 격리 및 `sp_executesql` $O(N)$ Single-Pass 선형 스캐너 아키텍처.
+  * **[`P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md`](P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md)**: 중첩 트랜잭션 조기 물리 커밋 방지 및 T-SQL `@@TRANCOUNT` ACID 원자성 수호 아키텍처 (`Invariant 6`).
+  * **[`P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md`](P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md)**: 크론 자식 프로세스 환상 탈피, 전사 세션 글로벌 패닉 완충망(`[RULE:PanicRecovery]`) 및 동시성 격리 아키텍처.
 * **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)**
   * LionSQL 전역 정규식 완전 박멸 및 결정론적 토크나이저 전환 단일 SSOT 종합 계획서 (`GA-REGEX-DDL-1` ~ `GA-REGEX-FINAL-3`, `SEC-PGWIRE-PARAM-1`).
 * **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)**
