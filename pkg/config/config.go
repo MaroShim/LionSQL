@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -138,12 +139,23 @@ type Config struct {
 	Outbox      OutboxConfig      `json:"outbox,omitempty"`
 }
 
+// DefaultEngine returns the default storage engine backend for the current platform.
+// On Windows (runtime.GOOS == "windows"), the default is "memory" (In-Memory OCC with persistence)
+// to ensure out-of-the-box execution for standalone Zero-CGo Windows binaries.
+// On non-Windows platforms (macOS, Linux), the default is "wiredtiger" (Lock-Free B+Tree MVCC).
+func DefaultEngine() string {
+	if runtime.GOOS == "windows" {
+		return "memory"
+	}
+	return "wiredtiger"
+}
+
 // DefaultConfig returns the production-ready zero-config baseline.
 func DefaultConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
 			DataDir:  "data",
-			Engine:   "wiredtiger",
+			Engine:   DefaultEngine(),
 			AutoSeed: false,
 		},
 		Outbox: OutboxConfig{

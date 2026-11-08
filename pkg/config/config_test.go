@@ -3,10 +3,24 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"lionsql/pkg/config"
 )
+
+func TestDefaultEngine_Platform(t *testing.T) {
+	eng := config.DefaultEngine()
+	if runtime.GOOS == "windows" {
+		if eng != "memory" {
+			t.Fatalf("expected default engine 'memory' on windows, got %q", eng)
+		}
+	} else {
+		if eng != "wiredtiger" {
+			t.Fatalf("expected default engine 'wiredtiger' on %s, got %q", runtime.GOOS, eng)
+		}
+	}
+}
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := config.DefaultConfig()
@@ -14,8 +28,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Server.DataDir != "data" {
 		t.Errorf("expected data_dir 'data', got %q", cfg.Server.DataDir)
 	}
-	if cfg.Server.Engine != "wiredtiger" {
-		t.Errorf("expected engine 'wiredtiger', got %q", cfg.Server.Engine)
+	if cfg.Server.Engine != config.DefaultEngine() {
+		t.Errorf("expected engine %q, got %q", config.DefaultEngine(), cfg.Server.Engine)
 	}
 	if cfg.Server.AutoSeed {
 		t.Errorf("expected auto_seed false")
@@ -73,8 +87,8 @@ func TestLoadFromFile_PartialJSON(t *testing.T) {
 		t.Errorf("expected http_addr '0.0.0.0:9999', got %q", cfg.Network.HTTPAddr)
 	}
 	// Defaults preserved
-	if cfg.Server.Engine != "wiredtiger" {
-		t.Errorf("expected default engine 'wiredtiger', got %q", cfg.Server.Engine)
+	if cfg.Server.Engine != config.DefaultEngine() {
+		t.Errorf("expected default engine %q, got %q", config.DefaultEngine(), cfg.Server.Engine)
 	}
 	if cfg.Network.PGAddr != "127.0.0.1:5433" {
 		t.Errorf("expected default pg_addr '127.0.0.1:5433', got %q", cfg.Network.PGAddr)
@@ -159,8 +173,8 @@ func TestAutoDiscoverConfig_StrictLegacyIgnore(t *testing.T) {
 	if path != "" {
 		t.Errorf("expected empty path for legacy other_config.json, got %q", path)
 	}
-	if cfg.Server.Engine != "wiredtiger" {
-		t.Errorf("expected default engine 'wiredtiger', got %q", cfg.Server.Engine)
+	if cfg.Server.Engine != config.DefaultEngine() {
+		t.Errorf("expected default engine %q, got %q", config.DefaultEngine(), cfg.Server.Engine)
 	}
 }
 

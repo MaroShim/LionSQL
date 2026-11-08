@@ -9,6 +9,7 @@ import (
 	"text/tabwriter"
 
 	"lionsql/pkg/catalog"
+	"lionsql/pkg/config"
 	"lionsql/pkg/engine"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
@@ -20,7 +21,7 @@ func runSQL(args []string) error {
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "dir", "data", "Path to database data directory")
-	engineType := fs.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
+	engineType := fs.String("engine", config.DefaultEngine(), "Storage engine backend (wiredtiger, memory)")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
 		return err
 	}

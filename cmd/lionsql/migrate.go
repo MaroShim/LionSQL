@@ -8,6 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"lionsql/pkg/config"
 	"lionsql/pkg/migrate"
 )
 
@@ -63,7 +64,7 @@ func runMigrateUp(args []string) error {
 	migrationsDir := fs.String("dir", "migrations", "Path to migrations directory")
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
-	engineType := fs.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
+	engineType := fs.String("engine", config.DefaultEngine(), "Storage engine backend (wiredtiger, memory)")
 	steps := fs.Int("steps", 0, "Number of migrations to apply (default: 0 = all pending)")
 	fs.IntVar(steps, "n", 0, "Number of migrations to apply (default: 0 = all pending)")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
@@ -101,7 +102,7 @@ func runMigrateDown(args []string) error {
 	migrationsDir := fs.String("dir", "migrations", "Path to migrations directory")
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
-	engineType := fs.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
+	engineType := fs.String("engine", config.DefaultEngine(), "Storage engine backend (wiredtiger, memory)")
 	steps := fs.Int("steps", 1, "Number of migrations to revert (default: 1)")
 	fs.IntVar(steps, "n", 1, "Number of migrations to revert (default: 1)")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
@@ -139,7 +140,7 @@ func runMigrateStatus(args []string) error {
 	migrationsDir := fs.String("dir", "migrations", "Path to migrations directory")
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
-	engineType := fs.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
+	engineType := fs.String("engine", config.DefaultEngine(), "Storage engine backend (wiredtiger, memory)")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
 		return err
 	}

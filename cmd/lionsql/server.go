@@ -69,7 +69,7 @@ func runServer(args []string) error {
 	fs.StringVar(dataDir, "data", defaultDataDir, "Alias for -dir")
 	fs.StringVar(dataDir, "data-dir", defaultDataDir, "Alias for -dir")
 
-	engineType := fs.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
+	engineType := fs.String("engine", config.DefaultEngine(), "Storage engine backend (wiredtiger, memory)")
 	ephemeralFlag := fs.Bool("ephemeral", false, "Run in purely in-memory ephemeral mode with zero disk persistence")
 	autoSeed := fs.Bool("seed", false, "Automatically seed demo sample database (scripts/demo_seed.sql) on startup")
 	adminEmail := fs.String("admin-email", "admin@lionsql.local", "Default superuser email")

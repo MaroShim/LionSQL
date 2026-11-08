@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"lionsql/pkg/config"
 	"lionsql/pkg/execution"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
@@ -22,7 +23,7 @@ func main() {
 	numAccounts := flag.Int("accounts", 10000, "Number of initial accounts")
 	numWorkers := flag.Int("workers", 100, "Concurrent client workers")
 	totalOps := flag.Int("ops", 50000, "Total number of transfer transactions to execute")
-	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
+	engineType := flag.String("engine", config.DefaultEngine(), "Storage engine backend (wiredtiger, memory)")
 	dataDir := flag.String("dir", "data/bench_wt", "Data directory for benchmark storage")
 	keepDir := flag.Bool("keep-dir", false, "Preserve benchmark data directory after completion")
 	flag.Parse()
