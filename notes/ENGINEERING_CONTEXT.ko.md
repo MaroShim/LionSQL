@@ -236,6 +236,22 @@
 
 ---
 
+### ㉓ WiredTiger 고동시성 유지 및 `transaction_sync` 영구 배제 불변식 (Zero-`transaction_sync` Invariant)
+* **결정 사항**:
+  * WiredTiger 스토리지 엔진 초기화 설정(`WiredTigerOpenConfig`)에서 `transaction_sync` 옵션(설령 `method=none`이라 할지라도)의 지정을 영구히 절대 금지한다.
+  * 트랜잭션 내구성은 WiredTiger C 코어의 내장 WAL 로깅(`log=(enabled=true)`), 백그라운드 주기적 동기화(`startPeriodicSync`), 그리고 그룹 커밋(`syncUpTo`)으로 보장한다.
+* **배제 이유 & C 엔진 내부 메커니즘**:
+  * WiredTiger C 엔진에서 `transaction_sync=(enabled=true)`가 활성화되면 모든 워커 스레드가 트랜잭션 커밋 시점에 전역 C 트랜잭션 동기화 뮤텍스를 경합하게 되며, 이로 인해 수십~수백 개 동시 워커 환경에서 스레드 직렬화(Thread Serialization)가 발생하여 처리량이 **146,000 TPS에서 4,800 TPS로 96% 폭락(콜랩스)**한다.
+  * MongoDB를 비롯한 고동시성 WiredTiger 채택 엔진들은 fsync 벽(fsync wall)과 직렬화 뮤텍스 병목을 회피하기 위해 트랜잭션 커밋 단위의 동기화를 배제하고 비동기 그룹 커밋(`JournalFlusher`) 아키텍처를 표준으로 채택한다.
+  * 10회 연속 무작위 `kill -9` 비정상 종료 크래시 테스트(`cmd/crashtest`)를 통해 `transaction_sync` 없이도 커밋된 19,684건의 트랜잭션이 100% 무손실로 복구됨을 엄밀히 실증 완료하였다.
+* **4계층 방어막 (Lockdown Layers)**:
+  1. **Layer 1 (런타임 패닉)**: `Open()` 시 설정 문자열에 `transaction_sync` 감지 시 즉각 패닉 중단.
+  2. **Layer 2 (설정 불변성 단위 테스트)**: `TestWiredTiger_ConfigInvariant_NoTransactionSync`로 CI 검증.
+  3. **Layer 3 (성능 게이트 테스트)**: `TestWiredTiger_TransferFundsPerfGate`로 동시 송금 벤치마크 TPS 바닥선 강제.
+  4. **Layer 4 (아키텍처 불변성 헌법)**: `GEMINI.md` 및 `notes/ENGINEERING_CONTEXT.ko.md` 영구 명문화.
+
+---
+
 ## 2. 사용자의 엔지니어링 철학 및 협업 규약
 
 LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집니다:

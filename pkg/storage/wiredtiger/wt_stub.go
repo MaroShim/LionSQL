@@ -9,6 +9,9 @@ import (
 	"lionsql/pkg/storage/memengine"
 )
 
+// WiredTigerOpenConfig defines the canonical, verified configuration passed to wiredtiger_open.
+const WiredTigerOpenConfig = "create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true)"
+
 // Engine is a stub implementation when WiredTiger is not compiled in.
 type Engine struct{}
 

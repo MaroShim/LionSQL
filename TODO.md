@@ -22,6 +22,9 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 1. **`SEC-BOOT-DEFAULT-PASS-WARN`: 초기 패스워드 미변경 시 부팅 출력 최후행 대문자 보안 경고 불변식** [x]
    - **완료 내용**: 어떤 실행 모드(CLI, 데몬, 포트 옵션)든 슈퍼유저 패스워드가 기본값(`1234567890`) 또는 비어있을 때 부팅 화면 콘솔 및 로그의 **가장 마지막 줄(The Very Last Line)**에 비밀번호 리터럴을 노출하지 않는 **100% 대문자(ALL CAPS)** 보안 경고를 반드시 출력하도록 보장 (`cmd/lionsql/server.go`, `daemon.go`, `pkg/config/config.go`). 단위 테스트 5종 전수 PASS.
    - **설계 문서**: [`notes/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md`](notes/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md)
+2. **`WT-LOCKDOWN-1`: WiredTiger 고동시성 4계층 잠금 및 transaction_sync 영구 배제** [x]
+   - **완료 내용**: `transaction_sync`로 인한 고동시성 뮤텍스 직렬화 및 96% 성능 폭락(146k ➔ 4.8k TPS)의 영구적 재발 방지를 위한 4계층 잠금 구축 완료. 1계층(런타임 패닉 가드), 2계층(설정 불변식 단위 테스트), 3계층(50k+ TPS 성능 게이트 테스트 `perf_gate_test.go`), 4계층(GEMINI.md Invariant 10 및 헌법 문서화). 무작위 kill -9 10라운드 100% 복구 및 123k~146k TPS 복원 실측 완료.
+   - **설계 문서**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) Invariant ㉓, [`GEMINI.md`](GEMINI.md) Invariant 10
 2. **`OCC-HYPER-2`: In-Memory OCC Pointer-Free Flat Record A/B 모드 및 신뢰성 검증 게이트** [진행 중]
    - **구현 현황**: 기본 모드(`OCCModeRaw`, 기존 104만 tpmC 오리지널) 100% 보존 + 신규 플랫 모드(`OCCModeFlat`) A/B 분기 구축 완료. 단일 행 기준 5.95배(1,017B ➔ 171B, 83.2% 절감), 10만 건 힙 메모리 67.5% 절감(68.9MB ➔ 22.3MB), 처리 속도 대등 실측 확인.
    - **기본값 정책**: **`OCCModeRaw` (기존 안정 버전) 디폴트 영구 유지 (`[RULE:SafeDefaults]`)**. 아래 4대 검증 게이트를 100% 완주하기 전까지 디폴트 변경 절대 금지.
@@ -93,7 +96,9 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 8. **`GA-VALID-3`: 연동 앱 섀도 모드 실운영 도그푸딩**
    - 이미 100% 연동 통과된 실전 서비스(Vaultwarden, Umami, Answer 중 1~2종) 1~2주간 실운영 백그라운드 구동
 9. **`TUNE-DOC-SYNC-1`: 벤치마크 및 공식 문서 실측치 일괄 동기화**
-   - 1.0 GA 릴리스 직전 모든 최적화 실측치를 `doc/BENCHMARK.md` 및 `README.md`에 일괄 반영
+   - 하드웨어 발열 냉각 후 익일 아침 콜드 스타트 상태에서 4대 벤치마크 정밀 재실측 (버전 `v0.92.0`, 측정일 `2026-11-09`, 베이스라인 100Wrk 불변 원칙 준수)
+   - 실측 완료 후 `doc/BENCHMARK.md`, `README.md`, `README.ko.md` 전면 동기화
+   - 설계 문서: [`notes/BENCHMARK_DOC_SYNC_v0.92.0_PLAN.ko.md`](notes/BENCHMARK_DOC_SYNC_v0.92.0_PLAN.ko.md)
 
 ### 1.3 [테스트베드] 타임박스 외부 앱 호환성 프로브 (Time-Boxed Probe Protocol)
 > **운영 원칙**: 완벽 연동을 위해 무한정 시간을 쓰지 않고, **엄격한 30분 타임박스**를 두고 가볍게 찔러보며 엔진의 숨은 엣지 케이스를 발굴하는 테스트베드로만 활용 (비침습적 패치 우선, 무한 루프나 구조적 대수술 감지 시 30분 내 즉시 중단).

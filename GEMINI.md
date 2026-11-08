@@ -72,6 +72,19 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
 1. **Zero Unverified Truncation**: Under no circumstances may the WAL recovery engine (`wal.go`) invoke `file.Truncate()` on I/O errors or mid-file corruption. Truncation is strictly restricted to verified partial torn frames at the physical tail of the file (`stat.Size() == validOffset + remainingBytes`).
 2. **Fail-Closed on Read Failures**: Hardware or OS read errors (`syscall.EIO`, read timeouts, permission loss) must immediately halt engine startup with an explicit diagnostic error (`[RULE:ExplicitError]`), guaranteeing zero silent data loss and protecting all intact committed transactions.
 
+### Invariant 10: WiredTiger High-Concurrency & Zero-`transaction_sync` Invariant
+1. **Strict Prohibition of `transaction_sync` in `wiredtiger_open`**:
+   - `transaction_sync` (including `(enabled=true,method=none)`) must **NEVER** be specified in WiredTiger connection configuration strings (`WiredTigerOpenConfig`).
+   - In WiredTiger's C kernel, enabling `transaction_sync` forces all transaction commits through a single global C transaction lock/synchronization path, collapsing multi-core concurrent transaction throughput from 146,000 TPS to under 5,000 TPS (a 96% regression).
+2. **Durability via Group Commit and Periodic Flushing**:
+   - Durability is guaranteed through continuous write-ahead logging (`log=(enabled=true)`), WiredTiger's internal group commit, and background periodic log flushing (`startPeriodicSync` at 1s intervals).
+   - Random `kill -9` crash recovery testing (`cmd/crashtest`) strictly confirms 100% durable recovery with zero transaction loss without `transaction_sync`.
+3. **Multi-Layer Defensive Lockdown**:
+   - Layer 1 (Runtime Panic): `wt_engine.go` panics during `Open()` if `transaction_sync` appears in the open config.
+   - Layer 2 (Unit Invariant Test): `wt_engine_test.go` verifies `WiredTigerOpenConfig` omits `transaction_sync`.
+   - Layer 3 (Performance Gate Test): `perf_gate_test.go` runs a concurrent transfer benchmark to ensure TPS never regresses below 50,000 TPS.
+   - Layer 4 (Architecture Contract): Codified in `GEMINI.md` and `notes/ENGINEERING_CONTEXT.ko.md`.
+
 ---
 
 ## 3. Explicit Spec-Out Decisions (Engine Simplicity & KISS)

@@ -197,6 +197,7 @@
 | `DONE` | **`TUNE-SP-FASTPATH-1`** | Durability | P2 | TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 | [`notes/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md) | - [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)... |
 | `PENDING` | **`WAL-DELTA-1`** | Engine | P2 | Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) |  |  |
 | `DONE` | **`WEB-SPA-1`** | Ecosystem | P3 | 단일 바이너리 내장 SPA 웹 서버 호스팅 | [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) |  |
+| `DONE` | **`WT-LOCKDOWN-1`** | Storage | P1 | WiredTiger 고동시성 4계층 잠금 및 transaction_sync 영구 배제 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 
 ---
 
@@ -2464,6 +2465,12 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 **Details & Resolution**:
 - `--app`, `--public` 플래그를 통한 SPA 정적 웹 호스팅 및 네이티브 DB 서빙 ([`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md))
+
+---
+
+### [DONE] WiredTiger 고동시성 4계층 잠금 및 transaction_sync 영구 배제 `WT-LOCKDOWN-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-08 12:09:17
+- **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 
 ---
 

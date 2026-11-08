@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -1184,4 +1185,18 @@ func TestWiredTiger_ForeignKeyIntegrityAndCascade(t *testing.T) {
 		t.Fatalf("expected book 100 to be cascaded deleted, but it still exists")
 	}
 }
+
+// TestWiredTiger_ConfigInvariant_NoTransactionSync enforces that WiredTigerOpenConfig
+// strictly omits 'transaction_sync' (PERF-WT-CONFIG-1 / Invariant 10).
+// 'transaction_sync=(enabled=true)' causes a 96% throughput collapse across multi-worker
+// workloads due to C global transaction mutex serialization.
+func TestWiredTiger_ConfigInvariant_NoTransactionSync(t *testing.T) {
+	if strings.Contains(WiredTigerOpenConfig, "transaction_sync") {
+		t.Fatalf("CRITICAL REGRESSION: WiredTigerOpenConfig must NEVER contain 'transaction_sync' (found in %q). It collapses 100-worker concurrency from 146k TPS to 4.8k TPS.", WiredTigerOpenConfig)
+	}
+	if !strings.Contains(WiredTigerOpenConfig, "log=(enabled=true)") {
+		t.Fatalf("CRITICAL DURABILITY VIOLATION: WiredTigerOpenConfig must enable WAL logging via log=(enabled=true)")
+	}
+}
+
 
