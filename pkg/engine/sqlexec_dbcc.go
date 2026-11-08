@@ -886,6 +886,38 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 			},
 		}
 
+	case "sys.dm_os_host_info", "sysdmoshostinfo", "sys_dm_os_host_info":
+		columns = []string{
+			"host_platform", "host_distribution", "host_release",
+			"host_service_pack_level", "os_architecture", "host_sku",
+		}
+		platform := "Windows"
+		dist := "Windows"
+		release := "10.0"
+		if runtime.GOOS == "darwin" {
+			platform = "macOS"
+			dist = "Darwin"
+			release = "24.0"
+		} else if runtime.GOOS == "linux" {
+			platform = "Linux"
+			dist = "Linux"
+			release = "6.0"
+		}
+		arch := "64-bit"
+		if runtime.GOARCH == "386" || runtime.GOARCH == "arm" {
+			arch = "32-bit"
+		}
+		allRows = []map[string]any{
+			{
+				"host_platform":           platform,
+				"host_distribution":       dist,
+				"host_release":            release,
+				"host_service_pack_level": "",
+				"os_architecture":         arch,
+				"host_sku":                48,
+			},
+		}
+
 	case "sys.endpoints", "sysendpoints", "sys_endpoints":
 		columns = []string{
 			"endpoint_id", "principal_id", "name", "protocol", "protocol_desc",

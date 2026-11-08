@@ -26,6 +26,7 @@ This directory contains official step-by-step deployment, migration, and operati
 | **Woodpecker CI** | CI/CD Pipeline Engine | Go + XORM | PGWire (`:5433`) | [`WOODPECKER_INTEGRATION_GUIDE.md`](WOODPECKER_INTEGRATION_GUIDE.md) | [`WOODPECKER_INTEGRATION_GUIDE.ko.md`](WOODPECKER_INTEGRATION_GUIDE.ko.md) |
 | **Vikunja** | Project & Kanban Management | Go + XORM | PGWire (`:5433`) | [`VIKUNJA_INTEGRATION_GUIDE.md`](VIKUNJA_INTEGRATION_GUIDE.md) | [`VIKUNJA_INTEGRATION_GUIDE.ko.md`](VIKUNJA_INTEGRATION_GUIDE.ko.md) |
 | **IOTA-SDK ERP** | Enterprise ERP Framework | Go + `pgx/v5` + `goose` | PGWire (`:5433`) | [`IOTA_ERP_INTEGRATION_GUIDE.md`](IOTA_ERP_INTEGRATION_GUIDE.md) | [`IOTA_ERP_INTEGRATION_GUIDE.ko.md`](IOTA_ERP_INTEGRATION_GUIDE.ko.md) |
+| **SSMS** | Official Database Management GUI | Microsoft Windows Desktop | TDS (`:1433`) | [`SSMS_INTEGRATION_GUIDE.md`](SSMS_INTEGRATION_GUIDE.md) | [`SSMS_INTEGRATION_GUIDE.ko.md`](SSMS_INTEGRATION_GUIDE.ko.md) |
 
 ---
 
