@@ -37,13 +37,13 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
   P1 (53 Items) Enterprise Polish + 6 Golden Release Gates Automation + Soak Test Verification
 
 [ Phase 8: Official 1.0 LTS Production Release ] ────► v1.0.0 LTS [TARGET Q4 2026]
-  6 Golden Release Gates Passed + 100-Step Audit Sign-Off + Always On Failover + Lossless CDC + LTS Packaging (C-WiredTiger + OCC)
+  6 Golden Release Gates Passed + 100-Step Audit Sign-Off + Always On Failover + Lossless CDC + LTS Packaging (WiredTiger MVCC + In-Memory OCC)
 
-[ Phase 9: Scale-Up Query & Kitty Engine Preview ] ──► v1.1.0 - v1.2.0 [TARGET Q1-Q2 2027]
-  Flat Hash Join & Mini TPC-H + OCC-Dense Default Graduation + Pure-Go Kitty Engine Preview (--storage=kitty) + Immutable Audit Log
+[ Phase 9: Scale-Up Query & Pure-Go Storage Preview ] ──► v1.1.0 - v1.2.0 [TARGET Q1-Q2 2027]
+  Flat Hash Join & Mini TPC-H + OCC-Dense Default Graduation + Pure-Go Native Engine Preview (--storage=purego) + Immutable Audit Log
 
-[ Phase 10: Zero-CGo Independence: Kitty Engine LTS ] ► v1.5.0 LTS [TARGET Q3-Q4 2027]
-  Kitty Engine Production Graduation + Complete CGo (C-WiredTiger) Deprecation + 100% Pure-Go Autonomous Static Binary + Parallel OLAP
+[ Phase 10: Multi-Engine Expansion: Pure-Go LTS ] ────► v1.5.0 LTS [TARGET Q3-Q4 2027]
+  Native Pure-Go Storage Production Graduation + Dual Persistent Engine Spectrum (WiredTiger CGo + Pure-Go CGo-Free) + Parallel OLAP
 
 [ Phase 11: Distributed Scale-Out & Next-Gen Cloud ] ─► v2.0.0+ [TARGET 2028+]
   Raft Consensus Multi-Node Replication + Distributed Sharding + Dynamic Partition Rebalancing (Major Breaking Architecture)
@@ -61,9 +61,9 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 | **Phase 6** | `v0.90.0`<br>(Betas 0~3) | **Production Hardening & Feature Freeze Baseline**<br>Single-binary CLI (`lionsql`), Web Studio suite, memory governor, OCC 5-point tuning, TDS positional mapping, 2-Tier query engine. | **100% Completed** |
 | **Phase 7A** | `v0.92.0` | **P0 Zero-Defect Reliability Baseline**<br>Comprehensive 100-scope code audit with P0 (Must-Fix 31 items) 100% resolved. Zero OOM/crash/corruption/security injection guaranteed. Tagged as foundational reliability baseline. | **Active / 74% Complete** |
 | **Phase 7B** | `v0.93.0` - `v0.95.0`<br>(RC1) | **P1 Hardening, Durability Verification & 6 Golden Release Gates**<br>P1 (53 items) enterprise stabilization, 10 production apps verified, `scripts/release.sh` 6 Golden Release Gates automated, `crashtest` (D1~D4), SQLLogicTest 409k, T-SQL 14-Suite, `soaktest` zero leaks. | **Scheduled** |
-| **Phase 8** | `v1.0.0 LTS` | **Official 1.0 Production Release & Long-Term Support**<br>6 Golden Release Gates verified, 100-step audit sign-off, Always On HA, lossless CDC, certified drivers, LTS release sign-off (C-WiredTiger + In-Memory OCC). | **Target Q4 2026** |
-| **Phase 9** | `v1.1.0` - `v1.2.0` | **Scale-Up Complex Query & Kitty Engine Experimental Preview**<br>Flat hash join, Mini TPC-H suite, `OCC-Dense` default graduation, Pure-Go B+Tree **Kitty Engine experimental preview (`--storage=kitty`, `CGO_ENABLED=0`)**, immutable audit log, multi-core `ParallelSeqScan`. | **Target Q1-Q2 2027** |
-| **Phase 10** | `v1.5.0 LTS` | **Zero-CGo Independence: Kitty Engine Production Graduation**<br>Kitty Engine promoted to primary default on-disk engine; complete CGo (C-WiredTiger) deprecation and retirement. 100% Pure-Go autonomous single binary distribution across all OS/arch with zero external C toolchain dependencies. | **Target Q3-Q4 2027** |
+| **Phase 8** | `v1.0.0 LTS` | **Official 1.0 Production Release & Long-Term Support**<br>6 Golden Release Gates verified, 100-step audit sign-off, Always On HA, lossless CDC, certified drivers, LTS release sign-off (WiredTiger MVCC + In-Memory OCC). | **Target Q4 2026** |
+| **Phase 9** | `v1.1.0` - `v1.2.0` | **Scale-Up Complex Query & Native Pure-Go Engine Preview**<br>Flat hash join, Mini TPC-H suite, `OCC-Dense` default graduation, Native Pure-Go B+Tree storage engine preview (`--storage=purego`, `CGO_ENABLED=0`), immutable audit log, multi-core `ParallelSeqScan`. | **Target Q1-Q2 2027** |
+| **Phase 10** | `v1.5.0 LTS` | **Multi-Engine Portfolio Expansion: Pure-Go Production LTS**<br>Native Pure-Go storage engine promoted to first-class production tier, coexisting permanently alongside WiredTiger. Full static binary distribution without external C toolchains for lightweight edge/container deployments. | **Target Q3-Q4 2027** |
 | **Phase 11** | `v2.0.0+` | **Distributed Scale-Out & Next-Gen Cloud Architecture**<br>Multi-node Raft consensus replication, distributed horizontal sharding, dynamic partition rebalancing, enterprise cross-datacenter active-active federation. | **Target 2028+** |
 
 ---
@@ -245,24 +245,25 @@ The following capabilities represent strategic architectural expansions planned 
                                    │
          ┌─────────────────────────┼─────────────────────────┬─────────────────────────┐
          ▼                         ▼                         ▼                         ▼
-[ v1.1.0-v1.2.0: Scale-Up ] [ v1.2.0: Kitty Preview ] [ v1.5.0 LTS: Pure-Go ]   [ v2.0.0+: Cloud Scale ]
-Flat Hash Join & TPC-H     Native Go B+Tree engine   Full CGo Deprecation       Raft Consensus Cluster
-OCC-Dense Default          Opt-in (--storage=kitty)  100% Autonomous Pure-Go    Distributed Sharding
+[ v1.1.0-v1.2.0: Scale-Up ] [ v1.2.0: Pure-Go Preview ] [ v1.5.0 LTS: Multi-Engine ] [ v2.0.0+: Cloud Scale ]
+Flat Hash Join & TPC-H     Native Go B+Tree engine   Dual Persistent Engines    Raft Consensus Cluster
+OCC-Dense Default          Opt-in (--storage=purego) WiredTiger + Pure-Go       Distributed Sharding
 ```
 
-### 5.1. Kitty Engine: Native Pure-Go B+Tree Storage Engine (Experimental `v1.2.0` -> Default `v1.5.0 LTS`)
-- **Objective & Architectural Heritage**:
-  - Implement **Kitty Engine**, a 100% pure-Go ground-up reimplementation of WiredTiger's lock-free hazard-pointer B+Tree, MVCC timestamped transaction model, and block manager.
-  - Satisfies LionSQL's canonical `storage.Engine` interface contract with zero dynamic CGo runtime dependencies.
+### 5.1. Native Pure-Go B+Tree Storage Engine (Experimental `v1.2.0` -> Production LTS `v1.5.0`)
+- **Objective & Multi-Engine Architectural Spectrum**:
+  - Implement a 100% pure-Go persistent storage backend satisfying the canonical `storage.Engine` interface, featuring a lock-free hazard-pointer B+Tree, MVCC timestamped transaction isolation, and autonomous block caching.
+  - **Permanent Multi-Engine Coexistence (Zero Deprecation)**:
+    - **WiredTiger MVCC Engine (CGo / Enterprise High-Performance Tier)**: Permanently retained as LionSQL's battle-tested, high-throughput storage flagship for hardware-saturating on-premises and enterprise production workloads.
+    - **Native Pure-Go Storage Engine (CGo-Free / Cloud-Native Tier)**: Introduced as an autonomous, zero-dependency alternative enabling pure `CGO_ENABLED=0` compilation, simplified cross-platform deployment, and frictionless operation in lightweight distroless containers and Windows environments.
 - **Phased Graduation Trajectory**:
   - **`v1.2.0` (Experimental Developer Preview)**:
-    Shipped as an opt-in storage backend (`--storage=kitty` or `LIONSQL_STORAGE=kitty`) under `CGO_ENABLED=0` builds, enabling field testing, crash durability benchmarking, and community verification across edge platforms.
-  - **`v1.5.0 LTS` (Production Default Graduation & CGo Retirement)**:
-    Upon satisfying the 6 Golden Release Verification Gates and crash-test oracles, Kitty Engine graduates to the primary default on-disk storage engine.
-    **C-WiredTiger and CGo dependencies are permanently retired**, achieving a fully autonomous, single-binary, pure-Go database executable across macOS, Linux, and Windows.
+    Shipped as an opt-in storage backend (`--storage=purego` or `LIONSQL_STORAGE=purego`) under `CGO_ENABLED=0` builds, enabling field testing, crash durability benchmarking, and community verification across edge platforms.
+  - **`v1.5.0 LTS` (Production Tier Graduation)**:
+    Upon satisfying the 6 Golden Release Verification Gates and crash-test oracles, the Native Pure-Go engine graduates to a full first-class production engine alongside WiredTiger, establishing a complete multi-tier storage portfolio.
 - **SemVer Versioning Rationale (`v1.5.0` vs. `v2.0.0`)**:
-  - Replacing the on-disk storage engine while preserving 100% binary wire protocol (PGWire v3, TDS 7.x/8.0), SQL procedural syntax, and client driver compatibility introduces **zero breaking changes** to client applications.
-  - Adhering to Semantic Versioning (SemVer), this milestone is designated as **`v1.5.0 LTS`**—a milestone symbolizing architectural maturity and pure-Go self-containment without imposing enterprise upgrade friction.
+  - Expanding storage engine choices while preserving 100% binary wire protocol (PGWire v3, TDS 7.x/8.0), SQL procedural syntax, and client driver compatibility introduces **zero breaking changes** to client applications.
+  - Adhering to Semantic Versioning (SemVer), this milestone is designated as **`v1.5.0 LTS`**—a milestone symbolizing architectural maturity and multi-engine flexibility without imposing enterprise upgrade friction.
 
 ### 5.2. Scale-Up Complex Query Engine & Mini TPC-H Suite (`v1.1.0`)
 - **Objective**: Implement open-addressing integer flat hash join and direct slot projection to target sub-50ms execution on complex analytical queries ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)).
@@ -338,10 +339,10 @@ OCC-Dense Default          Opt-in (--storage=kitty)  100% Autonomous Pure-Go    
 | **Phase 9** | Mini TPC-H 벤치마크 및 CBO 서브쿼리 Decorrelation | Query Planner | `v1.1.0` | **Planned** | [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |
 | **Phase 9** | `OCC-Dense` 디폴트 승격 및 4대 신뢰성 게이트 졸업 (`OCC-HYPER-2`) | Storage Engine | `v1.1.0` | **Planned** | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
 | **Phase 9** | Enterprise Cryptographic Immutable Audit Log (`pkg/audit`) | Security & Audit | `v1.1.0` | **Planned** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
-| **Phase 9** | Pure-Go B+Tree Kitty Engine 실험적 프리뷰 (`--storage=kitty`, `CGO_ENABLED=0`) | Storage Engine | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#51-kitty-engine-native-pure-go-btree-storage-engine-experimental-v120---default-v150-lts) |
+| **Phase 9** | Native Pure-Go B+Tree 엔진 실험적 프리뷰 (`--storage=purego`, `CGO_ENABLED=0`) | Storage Engine | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#51-native-pure-go-btree-storage-engine-experimental-v120---production-lts-v150) |
 | **Phase 9** | Multi-Core Parallel Analytical Query Execution (`ParallelSeqScan`) | Query Execution | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#55-multi-core-parallel-analytical-query-execution-v120) |
 | **Phase 9** | WebAssembly Runtime Sandbox UDF (`wazero`) | Extensibility | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#56-webassembly-runtime-sandbox-udf-wazero-v120) |
-| **Phase 10** | **Kitty Engine 정식 디폴트 승격 및 CGo(C-WiredTiger) 완전 퇴출 (100% Pure-Go LTS)** | Storage Engine | `v1.5.0 LTS` | **Target Q3-Q4 2027** | [`ROADMAP.md`](ROADMAP.md#51-kitty-engine-native-pure-go-btree-storage-engine-experimental-v120---default-v150-lts) |
+| **Phase 10** | **Native Pure-Go 엔진 정식 프로덕션 승격 (WiredTiger 엔터프라이즈 티어와 영구 공존)** | Storage Engine | `v1.5.0 LTS` | **Target Q3-Q4 2027** | [`ROADMAP.md`](ROADMAP.md#51-native-pure-go-btree-storage-engine-experimental-v120---production-lts-v150) |
 | **Post-1.0** | [초안/연구] In-Process Reboot 기반 물리 서브폴더 USE DB 전환 (`RESEARCH-INPROCESS-REBOOT-USE`) | Research & Engine | `Post-1.0` | **Draft Plan** | [`notes/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md`](notes/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md) |
 | **Phase 11** | Raft Consensus 기반 멀티 노드 복제 클러스터링 및 분산 수평 샤딩 | Cloud & Scale-Out | `v2.0.0+` | **Target 2028+** | [`ROADMAP.md`](ROADMAP.md#57-distributed-scale-out--next-gen-cloud-architecture-v200) |
 | **Spec-Out** | In-Kernel OAuth2 Social Web Login | Auth & BaaS | - | **Spec-Out** | [`doc/ENTERPRISE_AUTHENTICATION_SPI.md`](doc/ENTERPRISE_AUTHENTICATION_SPI.md) |
