@@ -120,8 +120,8 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 			perPage = l
 		}
 	}
-	if perPage > 500 {
-		perPage = 500
+	if perPage > 100 {
+		perPage = 100
 	}
 
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
@@ -134,21 +134,15 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enforce declarative Row-Level Security (ListRule)
+	// Enforce declarative Row-Level Security (ListRule) via pure AST composition (Regression Guard P0-31)
 	if s.rls != nil {
 		authCtx := s.extractAuthContext(r)
-		rawFilter := r.URL.Query().Get("filter")
-		effectiveFilter, rlsErr := s.rls.ApplyListRule(tableName, rawFilter, authCtx)
+		rlsExpr, rlsErr := s.rls.GetListRuleExpr(tableName, authCtx)
 		if rlsErr != nil {
 			writeError(w, http.StatusForbidden, rlsErr)
 			return
 		}
-		if effectiveFilter != rawFilter {
-			rlsExpr, err := ParseFilter(effectiveFilter)
-			if err != nil {
-				writeError(w, http.StatusBadRequest, fmt.Errorf("rls filter parse error: %w", err))
-				return
-			}
+		if rlsExpr != nil {
 			if filterExpr == nil {
 				filterExpr = rlsExpr
 			} else {
@@ -183,45 +177,81 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 	}
 	defer cursor.Close()
 
-	records := make([]map[string]any, 0)
-	for cursor.Next() {
-		rec, err := cursor.Record()
-		if err != nil {
-			continue
-		}
-		row := recordToJSONMap(rec, schema)
+	const maxRecordsScanLimit = 1000
 
-		// Search filter
-		if search != "" {
-			searchLower := strings.ToLower(search)
-			matched := false
-			for _, v := range row {
-				if v == nil {
-					continue
-				}
-				str := fmt.Sprint(v)
-				if strings.Contains(strings.ToLower(str), searchLower) {
-					matched = true
-					break
-				}
-			}
-			if !matched {
+	targetStart := (page - 1) * perPage
+	targetEnd := targetStart + perPage
+
+	var pagedRecords []map[string]any
+	var totalItems int
+
+	if sortParam == "" {
+		// Fast-Path (No Sort): Streaming pagination with bounded in-memory buffer.
+		// Never accumulates full table rows into heap; only holds up to perPage items.
+		pagedRecords = make([]map[string]any, 0, perPage)
+		searchLower := strings.ToLower(search)
+
+		for cursor.Next() {
+			rec, err := cursor.Record()
+			if err != nil {
 				continue
 			}
-		}
 
-		// Filter expression
-		if filterExpr != nil {
-			if !filterExpr.Matches(row, schema) {
+			// Fast-path without search & filter: deserialize ONLY when within page window
+			if search == "" && filterExpr == nil {
+				if totalItems >= targetStart && len(pagedRecords) < perPage {
+					pagedRecords = append(pagedRecords, recordToJSONMap(rec, schema))
+				}
+				totalItems++
 				continue
+			}
+
+			row := recordToJSONMap(rec, schema)
+
+			// Search filter
+			if search != "" && !matchesSearch(row, searchLower) {
+				continue
+			}
+
+			// Filter expression
+			if filterExpr != nil && !filterExpr.Matches(row, schema) {
+				continue
+			}
+
+			if totalItems >= targetStart && len(pagedRecords) < perPage {
+				pagedRecords = append(pagedRecords, row)
+			}
+			totalItems++
+		}
+	} else {
+		// Slow-Path (In-Memory Sort): Collect up to maxRecordsScanLimit to prevent OOM DoS.
+		records := make([]map[string]any, 0)
+		searchLower := strings.ToLower(search)
+
+		for cursor.Next() {
+			rec, err := cursor.Record()
+			if err != nil {
+				continue
+			}
+			row := recordToJSONMap(rec, schema)
+
+			// Search filter
+			if search != "" && !matchesSearch(row, searchLower) {
+				continue
+			}
+
+			// Filter expression
+			if filterExpr != nil && !filterExpr.Matches(row, schema) {
+				continue
+			}
+
+			totalItems++
+			if len(records) < maxRecordsScanLimit {
+				records = append(records, row)
 			}
 		}
 
-		records = append(records, row)
-	}
-
-	// Sort if sort parameter is provided (supports multi-column sort like sort=-id,name or sort=-balance)
-	if sortParam != "" {
+		// Sort if sort parameter is provided (supports multi-column sort like sort=-id,name or sort=-balance)
 		type sortItem struct {
 			col    string
 			isDesc bool
@@ -346,25 +376,23 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 				return false
 			})
 		}
+
+		scannedItems := len(records)
+		if start := targetStart; start < scannedItems {
+			end := targetEnd
+			if end > scannedItems {
+				end = scannedItems
+			}
+			pagedRecords = records[start:end]
+		} else {
+			pagedRecords = make([]map[string]any, 0)
+		}
 	}
 
 	// Pagination
-	totalItems := len(records)
 	totalPages := 0
 	if totalItems > 0 {
 		totalPages = (totalItems + perPage - 1) / perPage
-	}
-
-	var pagedRecords []map[string]any
-	start := (page - 1) * perPage
-	if start < totalItems {
-		end := start + perPage
-		if end > totalItems {
-			end = totalItems
-		}
-		pagedRecords = records[start:end]
-	} else {
-		pagedRecords = make([]map[string]any, 0)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -377,6 +405,19 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 		"records":    pagedRecords,
 		"items":      pagedRecords,
 	})
+}
+
+func matchesSearch(row map[string]any, searchLower string) bool {
+	for _, v := range row {
+		if v == nil {
+			continue
+		}
+		str := fmt.Sprint(v)
+		if strings.Contains(strings.ToLower(str), searchLower) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) handleGetSingleRecord(w http.ResponseWriter, r *http.Request) {
