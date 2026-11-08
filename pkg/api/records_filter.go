@@ -437,6 +437,9 @@ func ParseFilter(filterStr string) (FilterExpr, error) {
 	if err != nil {
 		return nil, err
 	}
+	if p.peek().typ != tokEOF {
+		return nil, fmt.Errorf("unexpected trailing token %q", p.peek().val)
+	}
 	return expr, nil
 }
 

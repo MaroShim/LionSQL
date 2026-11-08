@@ -229,4 +229,41 @@ func TestDynamicSQL_DMLAndDDL(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for empty sp_executesql, got nil")
 	}
+
+	// 7. Anti-Cascading / Double Expansion Regression Guard (P0-31)
+	_, err = s.ExecuteSQL("CREATE TABLE dyn_cascade_guard (id INT PRIMARY KEY, tag VARCHAR(50), val INT);")
+	if err != nil {
+		t.Fatalf("failed to create dyn_cascade_guard: %v", err)
+	}
+	_, err = s.ExecuteSQL("INSERT INTO dyn_cascade_guard VALUES (1, '@target', 100), (2, 'real_target', 200);")
+	if err != nil {
+		t.Fatalf("failed to insert data: %v", err)
+	}
+
+	// Client passes @p1 = '@target', @target = 'real_target'
+	// If cascading substitution occurred, WHERE tag = @p1 would become WHERE tag = @target,
+	// and then WHERE tag = 'real_target', mistakenly updating row 2 instead of row 1!
+	cascadeQuery := "EXEC sp_executesql N'UPDATE dyn_cascade_guard SET val = 999 WHERE tag = @p1', N'@p1 VARCHAR(50), @target VARCHAR(50)', @p1 = '@target', @target = 'real_target';"
+	_, err = s.ExecuteSQL(cascadeQuery)
+	if err != nil {
+		t.Fatalf("EXEC sp_executesql cascade test failed: %v", err)
+	}
+
+	// Verify row 1 was updated (tag = '@target') and row 2 was untouched!
+	chkRes, err := s.ExecuteSQL("SELECT id, val FROM dyn_cascade_guard ORDER BY id;")
+	if err != nil {
+		t.Fatalf("verification SELECT failed: %v", err)
+	}
+	if len(chkRes.Rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(chkRes.Rows))
+	}
+	// Row 1 should have val = 999
+	if chkRes.Rows[0]["val"] != int64(999) && chkRes.Rows[0]["val"] != 999 {
+		t.Fatalf("expected row 1 val = 999, got %v", chkRes.Rows[0]["val"])
+	}
+	// Row 2 should remain val = 200
+	if chkRes.Rows[1]["val"] != int64(200) && chkRes.Rows[1]["val"] != 200 {
+		t.Fatalf("SECURITY VIOLATION: Row 2 was mistakenly modified due to cascading double expansion! Got %v", chkRes.Rows[1]["val"])
+	}
 }
+

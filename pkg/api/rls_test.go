@@ -256,3 +256,84 @@ func TestRLS_RulesManagementAPI(t *testing.T) {
 		t.Fatalf("expected RLS rules to be deleted")
 	}
 }
+
+func TestRLS_Regression_P0_31_FilterInjectionBreakout(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	cat := catalog.New(eng)
+
+	server := NewServer(cat, eng)
+	defer eng.Close()
+	defer server.Webhooks().Close()
+
+	// 1. Create table "tenants_data"
+	ddl := `
+	CREATE TABLE tenants_data (
+		id INT PRIMARY KEY,
+		tenant_id VARCHAR(50) NOT NULL,
+		secret_data VARCHAR(100) NOT NULL
+	);
+	`
+	if _, err := server.ExecuteSQL(ddl); err != nil {
+		t.Fatalf("failed to create tenants_data table: %v", err)
+	}
+
+	// 2. Seed data for two distinct tenants
+	_, _ = server.ExecuteSQL("INSERT INTO tenants_data (id, tenant_id, secret_data) VALUES (1, 'tenant_alice', 'Alice Secret Document');")
+	_, _ = server.ExecuteSQL("INSERT INTO tenants_data (id, tenant_id, secret_data) VALUES (2, 'tenant_bob', 'Bob Confidential Financials');")
+
+	// 3. Configure RLS rule: tenant_id must strictly match the authenticated user's tenant_id
+	listRule := "tenant_id = @auth.tenant_id"
+	err := server.RLS().SetRules(&TableRules{
+		TableName: "tenants_data",
+		ListRule:  &listRule,
+	})
+	if err != nil {
+		t.Fatalf("failed to set RLS rules: %v", err)
+	}
+
+	// 4. Attack Payload A: Breakout via trailing parenthesis closure
+	// Must be rejected with 400 Bad Request by strict parser tokEOF guard
+	attackURLA := "/api/records/tenants_data?filter=secret_data%20%3D%20'foo')%20%7C%7C%20(1%20%3D%201"
+	reqA := httptest.NewRequest(http.MethodGet, attackURLA, nil)
+	reqA.Header.Set("X-User-ID", "alice")
+	reqA.Header.Set("X-Tenant-ID", "tenant_alice")
+
+	recA := httptest.NewRecorder()
+	server.ServeHTTP(recA, reqA)
+	if recA.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for malformed parenthesis injection, got %d: %s", recA.Code, recA.Body.String())
+	}
+
+	// 5. Attack Payload B: Balanced parenthesis containing OR tautology on valid column (id > 0)
+	// Client filter is valid: (secret_data = 'foo' || id > 0)
+	// In the fixed architecture, pure AST conjunction (&AndFilter{ruleAST, clientAST})
+	// MUST ensure Bob's confidential data is NEVER leaked, while Alice still sees her own record!
+	attackURLB := "/api/records/tenants_data?filter=(secret_data%20%3D%20'foo'%20%7C%7C%20id%20%3E%200)"
+	reqB := httptest.NewRequest(http.MethodGet, attackURLB, nil)
+	reqB.Header.Set("X-User-ID", "alice")
+	reqB.Header.Set("X-Tenant-ID", "tenant_alice")
+
+	recB := httptest.NewRecorder()
+	server.ServeHTTP(recB, reqB)
+	if recB.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for balanced filter, got %d: %s", recB.Code, recB.Body.String())
+	}
+
+	var respB struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(recB.Body.Bytes(), &respB); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	for _, item := range respB.Items {
+		if item["tenant_id"] == "tenant_bob" {
+			t.Fatalf("CRITICAL SECURITY VIOLATION: Alice accessed Bob's data through OR 1=1! Leaked item: %+v", item)
+		}
+	}
+	if len(respB.Items) != 1 || respB.Items[0]["tenant_id"] != "tenant_alice" {
+		t.Fatalf("expected Alice to only see her own 1 record, got %+v", respB.Items)
+	}
+}
+

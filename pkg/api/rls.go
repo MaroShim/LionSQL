@@ -84,8 +84,30 @@ func (m *RLSManager) DeleteRules(table string) {
 	delete(m.rules, strings.ToLower(strings.TrimSpace(table)))
 }
 
+// GetListRuleExpr resolves and compiles the table's ListRule into an independent FilterExpr AST.
+// Returns (nil, nil) if no rule is defined or if the user is a superuser/admin.
+func (m *RLSManager) GetListRuleExpr(table string, auth *AuthContext) (FilterExpr, error) {
+	if auth != nil && (auth.IsSuperuser || auth.Role == "admin") {
+		// Superusers/Admins bypass RLS restrictions
+		return nil, nil
+	}
+
+	rules, exists := m.GetRules(table)
+	if !exists || rules.ListRule == nil {
+		return nil, nil
+	}
+
+	ruleStr := strings.TrimSpace(*rules.ListRule)
+	if ruleStr == "" {
+		return nil, ErrRLSLocked
+	}
+
+	resolvedRule := SubstituteAuthTokens(ruleStr, auth)
+	return ParseFilter(resolvedRule)
+}
+
 // ApplyListRule combines a client-provided filter string with the table's ListRule.
-// Returns the synthesized filter string to be evaluated by the query engine.
+// Deprecated: Prefer GetListRuleExpr for structural AST composition without string concatenation.
 func (m *RLSManager) ApplyListRule(table, clientFilter string, auth *AuthContext) (string, error) {
 	if auth != nil && (auth.IsSuperuser || auth.Role == "admin") {
 		// Superusers/Admins bypass RLS restrictions

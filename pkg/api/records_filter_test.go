@@ -115,3 +115,24 @@ func TestRecordsFilter_QueryParams(t *testing.T) {
 		t.Errorf("expected rowFailName not to match")
 	}
 }
+
+func TestRecordsFilter_InvalidSyntaxAndTrailingTokens(t *testing.T) {
+	invalidFilters := []string{
+		"status = 'active')",
+		"status = 'active') || (1 = 1",
+		"(status = 'active'",
+		"status = 'active' trailing_garbage",
+		"status =",
+		"= 'active'",
+	}
+
+	for _, f := range invalidFilters {
+		t.Run(f, func(t *testing.T) {
+			_, err := ParseFilter(f)
+			if err == nil {
+				t.Fatalf("expected parse error for invalid filter %q, but got nil", f)
+			}
+		})
+	}
+}
+

@@ -1004,10 +1004,7 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	procName, args := ParseProcArgs(query)
 
-	ctx := context.Background()
-	if cs != nil && cs.QueryCtx != nil {
-		ctx = cs.QueryCtx
-	}
+	ctx := cs.GetQueryContext()
 
 	// 1. Dynamic SQL execution: EXEC ('SELECT ...') or EXEC (@sqlVar)
 	if procName == "" && len(args) > 0 {
@@ -1113,20 +1110,11 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 	if activeTx != nil {
 		res, err = s.executor.ExecuteInTxWithSessionContext(ctx, prog, argMap, activeTx, sess, nil)
 	} else {
-		var session storage.Session
-		var shouldClose bool
-		if sess != nil {
-			session = sess
-		} else {
-			session, err = s.engine.NewSession()
-			if err != nil {
-				return nil, err
-			}
-			shouldClose = true
+		session, closeFn, acqErr := s.acquireSessionForQuery(cs)
+		if acqErr != nil {
+			return nil, acqErr
 		}
-		if shouldClose {
-			defer session.Close()
-		}
+		defer closeFn()
 		res, err = s.executor.RunContext(ctx, prog, procName, argMap, session)
 	}
 	if err != nil {
@@ -1215,10 +1203,11 @@ func (s *Coordinator) execDynamicStringExec(args []string, start time.Time, cs *
 		return &QueryResult{Success: true, Command: "EXEC", DurationUS: time.Since(start).Microseconds()}, nil
 	}
 
+	nestedCtx := context.WithValue(ctx, reentrantQueryKey{}, true)
 	if cs != nil {
-		return s.ExecuteSessionSQLContext(ctx, cs.ID, dynamicSQL)
+		return s.ExecuteSessionSQLContext(nestedCtx, cs.ID, dynamicSQL)
 	}
-	return s.ExecuteSQL(dynamicSQL)
+	return s.ExecuteSessionSQLContext(nestedCtx, "default", dynamicSQL)
 }
 
 func findTopLevelEquals(s string) int {
@@ -1326,12 +1315,13 @@ func (s *Coordinator) execSpExecuteSQL(args []string, start time.Time, cs *Clien
 
 	boundSQL := buildSpExecuteSQL(stmt, paramsDecl, namedArgs, posArgs)
 
+	nestedCtx := context.WithValue(ctx, reentrantQueryKey{}, true)
 	var res *QueryResult
 	var err error
 	if cs != nil {
-		res, err = s.ExecuteSessionSQLContext(ctx, cs.ID, boundSQL)
+		res, err = s.ExecuteSessionSQLContext(nestedCtx, cs.ID, boundSQL)
 	} else {
-		res, err = s.ExecuteSQL(boundSQL)
+		res, err = s.ExecuteSessionSQLContext(nestedCtx, "default", boundSQL)
 	}
 	if err != nil {
 		return nil, err
@@ -1430,31 +1420,36 @@ func buildSpExecuteSQL(stmt string, paramsDecl string, namedArgs map[string]stri
 		allBindings[strings.ToLower(pName)] = val
 	}
 
-	// 3. Substitute parameters in statement outside string literals
-	for pName, formattedVal := range allBindings {
-		stmt = substituteParamOutsideQuotes(stmt, pName, formattedVal)
-	}
-
-	return stmt
+	// 3. Substitute parameters in statement outside string literals via deterministic Single-Pass scanner (Anti-Cascading P0-31)
+	return substituteParamsSinglePass(stmt, allBindings)
 }
 
-func substituteParamOutsideQuotes(query string, paramName string, formattedVal string) string {
-	if !strings.HasPrefix(paramName, "@") {
-		paramName = "@" + paramName
+func substituteParamsSinglePass(query string, bindings map[string]string) string {
+	if len(query) == 0 || len(bindings) == 0 {
+		return query
+	}
+
+	normBindings := make(map[string]string, len(bindings))
+	for k, v := range bindings {
+		if !strings.HasPrefix(k, "@") {
+			k = "@" + k
+		}
+		normBindings[strings.ToLower(k)] = v
 	}
 
 	var b strings.Builder
+	b.Grow(len(query) + len(bindings)*16)
+
 	inString := false
 	var quoteChar rune
 	runes := []rune(query)
-	paramRunes := []rune(paramName)
-	paramLen := len(paramRunes)
 
 	isRuneIdentChar := func(r rune) bool {
 		return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
 	}
 
-	for i := 0; i < len(runes); {
+	i := 0
+	for i < len(runes) {
 		ch := runes[i]
 		if inString {
 			b.WriteRune(ch)
@@ -1467,38 +1462,75 @@ func substituteParamOutsideQuotes(query string, paramName string, formattedVal s
 				inString = false
 			}
 			i++
-		} else {
-			if ch == '\'' || ch == '"' {
-				inString = true
-				quoteChar = ch
-				b.WriteRune(ch)
-				i++
-			} else if ch == '@' {
-				isDoubleAtParam := strings.HasPrefix(paramName, "@@")
-				prevIsAt := i > 0 && runes[i-1] == '@'
-				nextIsAt := i+1 < len(runes) && runes[i+1] == '@'
-				if !isDoubleAtParam && (prevIsAt || nextIsAt) {
-					b.WriteRune(ch)
-					i++
-					continue
-				}
-				if i+paramLen <= len(runes) && strings.EqualFold(string(runes[i:i+paramLen]), paramName) {
-					endIdx := i + paramLen
-					if endIdx == len(runes) || !isRuneIdentChar(runes[endIdx]) {
-						b.WriteString(formattedVal)
-						i = endIdx
-						continue
-					}
-				}
-				b.WriteRune(ch)
-				i++
-			} else {
-				b.WriteRune(ch)
+			continue
+		}
+
+		if ch == '\'' || ch == '"' {
+			inString = true
+			quoteChar = ch
+			b.WriteRune(ch)
+			i++
+			continue
+		}
+
+		// Line comment (-- ...)
+		if ch == '-' && i+1 < len(runes) && runes[i+1] == '-' {
+			b.WriteRune(ch)
+			b.WriteRune(runes[i+1])
+			i += 2
+			for i < len(runes) && runes[i] != '\n' {
+				b.WriteRune(runes[i])
 				i++
 			}
+			continue
 		}
+
+		// Block comment (/* ... */)
+		if ch == '/' && i+1 < len(runes) && runes[i+1] == '*' {
+			b.WriteRune(ch)
+			b.WriteRune(runes[i+1])
+			i += 2
+			for i < len(runes) {
+				if runes[i] == '*' && i+1 < len(runes) && runes[i+1] == '/' {
+					b.WriteRune('*')
+					b.WriteRune('/')
+					i += 2
+					break
+				}
+				b.WriteRune(runes[i])
+				i++
+			}
+			continue
+		}
+
+		if ch == '@' {
+			// Extract full identifier starting with @ (e.g. @param or @@version)
+			start := i
+			i++
+			if i < len(runes) && runes[i] == '@' {
+				i++ // handle @@
+			}
+			for i < len(runes) && isRuneIdentChar(runes[i]) {
+				i++
+			}
+			ident := strings.ToLower(string(runes[start:i]))
+			if rep, ok := normBindings[ident]; ok {
+				b.WriteString(rep)
+			} else {
+				b.WriteString(string(runes[start:i]))
+			}
+			continue
+		}
+
+		b.WriteRune(ch)
+		i++
 	}
+
 	return b.String()
+}
+
+func substituteParamOutsideQuotes(query string, paramName string, formattedVal string) string {
+	return substituteParamsSinglePass(query, map[string]string{paramName: formattedVal})
 }
 
 // execAnonymousBlock compiles and executes ad-hoc anonymous control-flow statements (IF...ELSE, WHILE, BEGIN...END).
