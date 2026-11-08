@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -13,6 +14,13 @@ import (
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
+
+// MaxCubeColumns defines the maximum allowed dimension columns for GROUP BY CUBE.
+// Bounded to 12 columns to guarantee maximum 4,096 grouping sets, matching Microsoft SQL Server limit ([RULE:BoundedBuffers]).
+const MaxCubeColumns = 12
+
+// ErrTooManyCubeColumns is returned when a CUBE clause exceeds the maximum allowed dimensions.
+var ErrTooManyCubeColumns = errors.New("CUBE clause exceeds maximum allowed dimensions")
 
 type aggFuncType int
 
@@ -535,6 +543,10 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 				}
 			}
 		case proc.GroupByCube:
+			if nKeys > MaxCubeColumns {
+				return fmt.Errorf("%w: %d columns specified, maximum allowed is %d (limit: 4,096 grouping sets)",
+					ErrTooManyCubeColumns, nKeys, MaxCubeColumns)
+			}
 			totalComb := 1 << nKeys
 			masks = make([]uint32, totalComb)
 			for m := 0; m < totalComb; m++ {
