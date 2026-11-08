@@ -21,7 +21,7 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 ### 1.1 1.0 핵심 구현 및 호환성 리팩토링 (Core 1.0 Features & Clean-up)
 1. **`SEC-BOOT-DEFAULT-PASS-WARN`: 초기 패스워드 미변경 시 부팅 출력 최후행 대문자 보안 경고 불변식** [x]
    - **완료 내용**: 어떤 실행 모드(CLI, 데몬, 포트 옵션)든 슈퍼유저 패스워드가 기본값(`1234567890`) 또는 비어있을 때 부팅 화면 콘솔 및 로그의 **가장 마지막 줄(The Very Last Line)**에 비밀번호 리터럴을 노출하지 않는 **100% 대문자(ALL CAPS)** 보안 경고를 반드시 출력하도록 보장 (`cmd/lionsql/server.go`, `daemon.go`, `pkg/config/config.go`). 단위 테스트 5종 전수 PASS.
-   - **설계 문서**: [`notes/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md`](notes/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md`](notes/plans/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md)
 2. **`WT-LOCKDOWN-1`: WiredTiger 고동시성 4계층 잠금 및 transaction_sync 영구 배제** [x]
    - **완료 내용**: `transaction_sync`로 인한 고동시성 뮤텍스 직렬화 및 96% 성능 폭락(146k ➔ 4.8k TPS)의 영구적 재발 방지를 위한 4계층 잠금 구축 완료. 1계층(런타임 패닉 가드), 2계층(설정 불변식 단위 테스트), 3계층(50k+ TPS 성능 게이트 테스트 `perf_gate_test.go`), 4계층(GEMINI.md Invariant 10 및 헌법 문서화). 무작위 kill -9 10라운드 100% 복구 및 123k~146k TPS 복원 실측 완료.
    - **설계 문서**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) Invariant ㉓, [`GEMINI.md`](GEMINI.md) Invariant 10
@@ -29,45 +29,45 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **구현 현황**: 기본 모드(`OCCModeRaw`, 기존 104만 tpmC 오리지널) 100% 보존 + 신규 플랫 모드(`OCCModeFlat`) A/B 분기 구축 완료. 단일 행 기준 5.95배(1,017B ➔ 171B, 83.2% 절감), 10만 건 힙 메모리 67.5% 절감(68.9MB ➔ 22.3MB), 처리 속도 대등 실측 확인.
    - **기본값 정책**: **`OCCModeRaw` (기존 안정 버전) 디폴트 영구 유지 (`[RULE:SafeDefaults]`)**. 아래 4대 검증 게이트를 100% 완주하기 전까지 디폴트 변경 절대 금지.
    - **신규 플랫 모드(`OCCModeFlat`) 안정성 강화 및 필수 검증 게이트**:
-     - [x] **`REFACTOR-OCC-FLAT-1` Flat 코덱 신뢰성 및 동시성 결함 보강**: `td.layout` 불변 사전초기화(Data Race 방지), `materialize` 중복 분기 일원화, 디코딩 실패 명시적 에러 전파 (`notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md`)
+     - [x] **`REFACTOR-OCC-FLAT-1` Flat 코덱 신뢰성 및 동시성 결함 보강**: `td.layout` 불변 사전초기화(Data Race 방지), `materialize` 중복 분기 일원화, 디코딩 실패 명시적 에러 전파 (`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`)
      - [ ] **`TEST-OCC-FLAT-1` 크래시 복구 무결성**: Flat 모드에서 AOF/RDB 로그 기록 및 `kill -9` 비정상 종료 후 복구/리플레이 100% 정합성 검증
      - [ ] **`TEST-OCC-FLAT-2` 복합 DDL/DML 회귀**: 복합 보조 인덱스(Secondary/Unique Index), SkipList 범위 검색, 외래키(FK) 연동 시 Flat 디코딩 무결성 검증
      - [ ] **`TEST-OCC-FLAT-3` 쿼리 엔진 풀 스위트 회귀**: SQLLogicTest 및 T-SQL 프로시저(Babelfish 스위트)를 Flat 모드 환경에서 실행하여 0 결함 검증
      - [ ] **`TEST-OCC-FLAT-4` 24h 장기 소크 및 가변 길이 UPDATE 단편화 검증**: VARCHAR 갱신이 반복되는 고부하 환경에서 메모리 단편화 및 P99 지연시간 지터 0ms 수호 검증
-   - **설계 문서**: [`notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md) & [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) & [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
 2. **`WEB-SPA-1`: 단일 바이너리 내장 SPA 웹 서버 호스팅** [x]
    - **완료 내용**: `--app=<path>` 단일 스마트 플래그 및 `LIONSQL_APP` 환경변수 지원. 단일 HTML 파일 및 Flat 정적 디렉토리 자동 감지, HTML5 History API 브라우저 라우트 Fallback 서빙. **Flat Directory Invariant** 엄격 적용으로 하위 계층 에셋 요청 및 도트(`.`) 숨김 파일 차단으로 Path Traversal 100% 원천 봉쇄. E2E 및 단위 테스트 100% 통과.
-   - **설계 문서**: [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)
 3. **`PKG-OFFLINE-DOCS`: 배포 패키지 오프라인 브라우저 문서 번들링**
    - **목표**: 배포 아카이브(`tar.gz`/`zip`) 내 `docs/index.html` 번들링으로 폐쇄망/에어갭 100% 자립 지원
-   - **설계 문서**: [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
 4. **`FIX-SQLUTIL-PARSER-1`: `pkg/sqlutil` SQL 파서/정규화기 결함 보강 및 렉서 공통화** [x]
    - **완료 내용**: `NOLOCK` 리터럴 파괴 방지, 세미콜론(`;`) 보존, `TOP PERCENT/WITH TIES/UNION` 오변환 차단, `ANY/IN/IS NULL` 다중바이트/배열 파싱 결함 수정 및 UTF-8 안전 상태머신 모듈화 완료. 14대 probe 테스트 전수 PASS.
-   - **설계 문서**: [`notes/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/SQL_PARSER_HARDENING_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md)
 5. **`GA-REGEX-FINAL-2`: CBO Planner 및 VDBE 잔여 정규식 100% 완전 제거** [x]
    - **완료 내용**: `planner.go` 거대 SELECT/JOIN 정규식 제거(결정론적 토크나이저 대체) 및 `vm.go` 쿼리 바인딩/LIKE 정규식 제거(`sqlutil.MatchLike` 통합)로 엔진 코어 Zero-Regex 달성 완료.
-   - **설계 문서**: [`notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 6. **`GA-REGEX-FINAL-3`: 쿼리 실행 런타임 LIKE 정규식 100% 완전 제거** [x]
    - **완료 내용**: `execution/filter.go`의 런타임 행 순회 `LIKE` 평가 시 정규식 컴파일을 `sqlutil.MatchLike`로 전면 교체하여 핫패스 GC 부하를 0으로 제거하고, `catalog/virtual/result.go`의 가상 카탈로그 `LIKE` 평가는 T-SQL 대괄호 이스케이프(`[_]`, `[%]`)를 보정하여 XORM 및 Collation 회귀 방어 완료.
-   - **설계 문서**: [`notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 7. **`FEAT-TOLERANT-DDL-1`: 동적 런타임 관용 DDL 제어 CLI (`get` & `set`) 및 PostgreSQL SQLSTATE 42704 정합성** [x]
    - **완료 내용**: 기본 엄격 모드(`strict`) 유지. 정적 옵션(Flag/Env/JSON) 전면 배제 및 오직 `./bin/lionsql set tolerant_ddl on/off` 단일 수단만 제공(재시작 시 자동 복귀). Wire 프로토콜에서 인덱스 부재 에러 시 PostgreSQL 표준 `42704` SQLSTATE 매핑 완료.
-   - **설계 문서**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md)
 8. **`REFACTOR-CATALOG-INTERCEPTOR-1`: 가상 카탈로그 `interceptor.go` Table-Driven 라우터 전환** [x]
    - **완료 내용**: 330여 줄의 순서 의존적 ad-hoc IF 체인을 `RouteRule[]` 정적 디스패치 테이블로 전면 개편. 라우팅 순서 종속성 원천 차단 및 모든 외부 앱 회귀 테스트 통과.
-   - **설계 문서**: [`notes/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/TOLERANT_DDL_MODE_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md)
 9. **`SEC-PGWIRE-PARAM-1`: PGWire 달러 파라미터($N) 상태머신 토크나이저 전환 및 보안 강화** [x]
    - **완료 내용**: `pkg/wire/server.go`에서 `pgParamRe` 정규식을 전면 제거하고 `"regexp"` import를 완전 삭제. 작은따옴표(`'...'`), 큰따옴표(`"..."`), 달러 인용(`$$...$$`, `$tag$...$tag$`) 및 주석(`--`, `/* */`)을 완벽히 보존하는 `sqlutil.ReplacePgParams`, `TranslatePgParamsToAtParams`, `MaxPgParamIndex`를 개발하여 쿼리 변조 및 DoS 원천 차단 완료.
-   - **설계 문서**: [`notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 
 ### 1.2 1.0 신뢰성 검증 게이트 (Release Gates)
 1. **`AUDIT-135-DUAL-REVIEW`: [1단계] 전 소스코드 135단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 전수 감사** [x] 완주 완료 (135/135 완주, 총 134건 결함 식별 완료)
    - **목표**: 릴리스 게이트 장기 부하 테스트 이전, Lionsql 엔진 본체 216개 순수 Go 소스코드 전수를 13대 도메인, 총 135개 마이크로 스코프로 완전 분할하여 Gemini(심층 추론)와 Claude(공격적 엣지케이스)의 교차 검증으로 숨은 동시성 레이스, 데드락, 메모리 누수, 침묵하는 에러(`_ = err`), 경계값 결함을 0의 누락도 없이 선제 발굴 및 완치.
-   - **설계 문서**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md)
    - **감사 기록부 (SSOT)**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
 2. **`AUDIT-CORE-DEEP-RESCAN`: [2단계] 15대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan)** [x] 완주 완료 (15/15 전 구역 완주, 총 72건 심층 결함 발굴 완료, 누적 총 206건)
    - **목표**: 1차 광역 스캔의 조기 종료 편향(스코프당 1건 제한)을 극복하기 위해, 스토리지 코어(`wt_engine.go`, `memengine.go`), 트랜잭션 코디네이터(`coordinator.go`), 바이트코드 컴파일러/VM(`compiler.go`, `vm.go`), CBO 플래너/실행기(`planner.go`, `hash_join.go`), 멀티 와이어/복제(`server.go`, `packet.go`), T-SQL 렉서/파서, 시스템 카탈로그, SQL 실행 엔진 본체, 백업/PITR, 고급 분석 오퍼레이터, 인메모리 잔여, CDC & 보안/RBAC, REST API & SPA 서버, SQL 잔여 고급 실행기, 복제 & CLI 데몬 등 15대 핵심 구역에 대해 1건 제한을 완전히 철폐하고 파일 끝까지 다중 결함($N$건)을 전수 발굴하여 SSOT에 증분 누적.
-   - **설계 문서**: [`notes/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/PRE_RELEASE_AUDIT_PLAN.ko.md) 제6장
+   - **설계 문서**: [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) 제6장
    - **감사 기록부 (SSOT)**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
 3. **`AUDIT-TRIAGE-POST`: [3단계] 통합 Triage 회의 및 결함 분류 로드맵 (Post-Audit Triage & Action Plan)** [x] 완주 완료 (197건 전수 분류 및 P0 Must Fix 30선 확정)
    - **목표**: 1차 광역 감사(135단계) 및 2차 코어 심층 재스캔(15대 구역)으로 발굴된 총 206건 결함을 4대 등급(P0: 37건, P1: 47건, P2: 97건, P3: 25건)으로 분류하여, `[RULE:RadicalKISS]` 원칙에 따라 복잡도를 통제하고 1.0 필수 패치 범위 선별 확정.
@@ -83,16 +83,16 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **실행 계획**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) 제4장
 4. **`DOC-REVAMP-10`: 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜** [계획 수립 / 대기]
    - **목표**: 오버스펙(별도 VitePress 웹사이트, Swagger 중복 번들링 등)을 배제하고 실질적 가치 중심의 10대 알짜 과제 집중 완수 (1단계: 핵심 영문 4종 국문화, 14대 Spec-Out 기각 결정 단일 카탈로그, 내장 SPA 웹 서버 1분 스타터 예제, 마크다운 링크 깨짐 자동 검사기 / 2단계: T-SQL 3초 치트시트, SQLSTATE 트러블슈팅 사전, 사용자 여정 네비게이션, 오픈소스 가이드 메타 카드, 벤치마크 Mermaid 차트화, MSSQL 이전 체크리스트).
-   - **설계 문서**: [`notes/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)
 5. **`DURA-KILL-1`: `kill -9` 크래시 복구 장기 라운드 검증**
    - 상태: 진행 중 (100라운드 100% 무손실 복구 통과 완료, 릴리스 직전 500 ~ 1,000 라운드 최종 확인)
-   - 설계 문서: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
+   - 설계 문서: [`notes/plans/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/plans/DURABILITY_VERIFICATION_PLAN.ko.md)
 6. **`DURA-SOAK-1`: 24h ~ 72h 장기 무중단 소크 테스트**
    - 상태: 진행 중 (단기 연속 부하 통과, 24시간 ~ 72시간 연속 가동으로 자원 유계 입증)
-   - 설계 문서: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
+   - 설계 문서: [`notes/plans/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/plans/DURABILITY_VERIFICATION_PLAN.ko.md)
 7. **`DURA-SLT-2`: SQLLogicTest 1.0 풀 스위트 듀얼 엔진 최종 인증**
    - 상태: 107개 스위트 55만 쿼리 100% PASS 입증 완료 (`scripts/verify_0.90.sh`)
-   - 설계 문서: [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
+   - 설계 문서: [`notes/plans/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
 8. **`GA-VALID-3`: 연동 앱 섀도 모드 실운영 도그푸딩**
    - 이미 100% 연동 통과된 실전 서비스(Vaultwarden, Umami, Answer 중 1~2종) 1~2주간 실운영 백그라운드 구동
 9. **`TUNE-DOC-SYNC-1`: 벤치마크 및 공식 문서 실측치 일괄 동기화**
@@ -118,12 +118,12 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 ### 2.1 클라우드 유틸리티 및 엔터프라이즈 백로그
 1. **`FEAT-MATVIEW-ALIAS-1` Materialized View Virtual Alias & Tolerant Refresh (1.0 이후)**
    - **목표**: Mattermost, Discourse 등 엔터프라이즈 앱 부트스트랩을 위해 `CREATE MATERIALIZED VIEW`를 가상 뷰(Virtual View, `relkind='m'`)로 인라인 치환하고 `REFRESH MATERIALIZED VIEW`를 Tolerant No-Op(성공) 처리하여 수천 줄의 복잡도와 락 위험을 99% 절감.
-   - **설계 문서**: [`notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)
-2. **`S3-1~4` 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기** ([`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md))
-3. **`AUDIT-LOG-1` 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템** ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md))
+   - **설계 문서**: [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)
+2. **`S3-1~4` 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기** ([`notes/plans/S3_PRESIGNED_STORAGE_PLAN.md`](notes/plans/S3_PRESIGNED_STORAGE_PLAN.md))
+3. **`AUDIT-LOG-1` 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템** ([`notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md))
 4. **`S-SYNTAX-EMPTY-PARENS` 빈 괄호 `IN ()` 문법 평가 정책 (미결 검토)**
    - **내용**: `WHERE col IN ()` 빈 괄호 구문에 대해 ANSI/PG/MSSQL 표준 엄격 문법 에러(Syntax Error)를 유지할지, SQLite/MySQL 관용 상수 폴딩(`1=0`)을 수용할지에 대한 장단점 논의 미결 상태 유지 (1.0에서는 현행 엄격 에러 유지).
-   - **설계 문서**: [`notes/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](notes/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](notes/plans/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)
 
 ### 2.2 고도화 스토리지 & AI/빅데이터 백로그 (Storage, AI & Replication)
 1. **`FEAT-PUREGO-WT-ENGINE` WiredTiger 호환 자체 Pure-Go MVCC 스토리지 엔진 구현 및 CGo 분리 (Post-1.0)**
@@ -132,7 +132,7 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
      2. **Windows 네이티브 영속 스토리지 완벽 자립**: Windows 환경에서 CGo 제약으로 인해 인메모리 모드에 머물던 한계를 극복하고, `CGO_ENABLED=0` 순수 단일 정적 바이너리로 3대 OS(macOS/Linux/Windows) 모두에서 완전한 디스크 영속 MVCC 스토리지 지원 (`[RULE:HermeticParity]`, `[RULE:StaticBinary]`).
 2. **`RESEARCH-INPROCESS-REBOOT-USE` In-Process Graceful Reboot 기반 물리 서브폴더 USE DB 전환 (Post-1.0)**
    - **목표**: 복잡한 멀티테넌시 대신, 프로세스는 상시 1개 활성 DB만 집중 처리하되 `USE <dbname>` 시 와이어 소켓을 유지한 채 내부에서 기존 엔진 Close ➔ 서브폴더 신규 엔진 Open으로 핫스왑. 다른 활성 세션 존재 시 즉시 `SQLSTATE 55006 (object_in_use)` 에러를 반환하여 안전성 극대화.
-   - **설계 문서**: [`notes/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md`](notes/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md)
+   - **설계 문서**: [`notes/plans/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md`](notes/plans/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md)
 3. **`FEAT-VECTOR-1` 순수 Go 기반 Vector 임베딩 및 유사도 검색 (1.0 이후)**
    - **목표**: `VECTOR(dim)` 타입, L2/Cosine/Dot 거리 연산자(`<->`, `<=>`), 멀티코어 병렬 Flat KNN 스캔 (LangChain/pgvector 호환).
    - **설계 문서**: [`notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)

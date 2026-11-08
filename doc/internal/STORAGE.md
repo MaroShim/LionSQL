@@ -80,6 +80,10 @@ WiredTiger durability is controlled via `SetFsyncPolicy()` and `FsyncPolicy()`:
 - **`FsyncAlways`**: Enforces strict zero-loss durability using a **Leader/Follower Group Commit** mechanism. Concurrent commits serialize on `syncMu`; the leader thread issues `session->log_flush(session, "sync=on")` covering all accumulated sequence writes, and follower threads wake up immediately once their target write sequence is synced without issuing redundant physical disk barriers.
 - **`FsyncNone`**: Journal entries are written to OS cache without explicit `log_flush("sync=on")`.
 
+> [!IMPORTANT]
+> **Zero-`transaction_sync` Invariant (`GEMINI.md` Invariant 10)**  
+> Never specify `transaction_sync` in `WiredTigerOpenConfig`. Enabling transaction sync forces WiredTiger to serialize all transaction commits through a single C global mutex, collapsing multi-worker throughput from 146,000 TPS to 4,800 TPS. Durability is strictly maintained via `log=(enabled=true)` and background/group flush. For detailed postmortem and benchmarks, see [`notes/WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md`](../../notes/WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md).
+
 ---
 
 ## 3. Pure-Go In-Memory Engine (`pkg/storage/memengine/`)

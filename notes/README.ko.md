@@ -19,6 +19,8 @@
   * **코드베이스 내 암초 지도(Landmines & Fragile Spots)**: 순환 참조 방지 SPI 패턴, 샌드박스 소켓 격리, 원자적 파일 I/O 및 Decimal JSON 무결성.
 * **[`TAXONOMY.ko.md`](TAXONOMY.ko.md)** (한국어)
   * **과제 식별 코드 체계 일람표**: 우선순위(`P1~P3`), 복합 쿼리 최적화(`VPERF`), 릴리스 게이트(`GA-REGEX`), 문법 완비(`S-1~S-7`) 마스터 인덱스.
+* **[`WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md`](WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md)** (한국어)
+  * **WiredTiger 고동시성 락 직렬화 분석 및 4계층 봉인 포스트모텀**: `transaction_sync` 옵션으로 인한 96% 성능 급락(146k ➔ 4.8k TPS)의 C 라이브러리 내부 원인, MongoDB 실태 조사, 10회 연속 `kill -9` 100% 무손실 복구 실증 및 영구 재발 방지 4계층 잠금 체계.
 * **[`HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)** ([English](HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md))
   * **6대 골든 릴리즈 게이트 엔지니어링 신뢰성 철학**: 릴리즈마다 기계적으로 실행되는 6대 검증 게이트(단위, 13대 도메인 스모크, TPC-C 75만 tpmC, SLT 41만 쿼리, T-SQL 14대 스위트, SIGKILL 전원 차단 무손실 복구)가 어떻게 데이터베이스의 가치를 엔터프라이즈 미션 크리티컬 인프라로 격상시키는가에 대한 기술 백서.
 * **[`PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)**
@@ -33,7 +35,7 @@
 
 LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인 전수 감사 및 무결성 강화 프로젝트입니다.
 
-* **[`PRE_RELEASE_AUDIT_PLAN.ko.md`](PRE_RELEASE_AUDIT_PLAN.ko.md)**
+* **[`PRE_RELEASE_AUDIT_PLAN.ko.md`](plans/PRE_RELEASE_AUDIT_PLAN.ko.md)**
   * 전 소스코드 135단계 듀얼 AI(Gemini × Claude) 크로스 감사 마스터 플랜 및 13대 도메인 매트릭스 (`AUDIT-135-DUAL-REVIEW`).
 * **[`PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md)**
   * 135단계 전수 감사 과정에서 발굴된 실측 결함 누적 매트릭스 (135/135 완주, 총 134건 결함 기록 완료).
@@ -42,23 +44,23 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 * **[`P0_AUDIT_COMPREHENSIVE_RETROSPECTIVE.ko.md`](P0_AUDIT_COMPREHENSIVE_RETROSPECTIVE.ko.md)**
   * 1.0 전수 감사 P0 (Must Fix 37선) 전량 완치 종합 회고 및 엔지니어링 포스트모템 (5대 도메인 결함 분석, 5대 핵심 아키텍처 피벗, Negative Knowledge 및 0-Race 품질 백서).
 * **1.0 P0 핵심 아키텍처 플랜 & 심층 분석 백서**:
-  * **[`P0_01_04_FLATRECORD_BINARY_LAYOUT_AND_SCHEMA_EVOLUTION_PLAN.ko.md`](P0_01_04_FLATRECORD_BINARY_LAYOUT_AND_SCHEMA_EVOLUTION_PLAN.ko.md)**: FlatRecord 힙 오프셋 충돌 해소(`slot[7]` 격리 태그) 및 `ALTER TABLE ADD COLUMN` 스키마 에볼루션 아키텍처.
-  * **[`P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md`](P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md)**: WAL 비정상 절삭 방지 및 4-State MECE Fail-Closed 복구 아키텍처 (`Invariant 9`, `ADR-027`).
-  * **[`P0_08_CDC_OUTBOX_AT_LEAST_ONCE_BACKPRESSURE_PLAN.ko.md`](P0_08_CDC_OUTBOX_AT_LEAST_ONCE_BACKPRESSURE_PLAN.ko.md)**: CDC Outbox 외부 브로커 전송 실패 시 무음 폐기 방지 및 지수 백오프 백프레셔 (`ADR-026`).
-  * **[`P0_10_34_REPLICATION_CDC_LOSSLESS_STREAMING_PLAN.ko.md`](P0_10_34_REPLICATION_CDC_LOSSLESS_STREAMING_PLAN.ko.md)**: CDC Lossless Bridge 2단계 핸드오버 및 복제 브로드캐스터 Fail-Closed 슬로우 레플리카 격리 (`[RULE:NonBlockingSink]`, `[RULE:ExplicitError]`).
-  * **[`P0_11_12_13_OPERATOR_BOUNDED_WORKMEM_GUARD_PLAN.ko.md`](P0_11_12_13_OPERATOR_BOUNDED_WORKMEM_GUARD_PLAN.ko.md)**: 쿼리 실행 오퍼레이터(CUBE 12차원 상한, Window/MergeJoin 64MB WorkMem 실시간 추적) 유계 메모리 가드레일 (`[RULE:BoundedBuffers]`).
-  * **[`P0_15_WAL_ARCHIVE_ATOMIC_ROTATION_PLAN.ko.md`](P0_15_WAL_ARCHIVE_ATOMIC_ROTATION_PLAN.ko.md)**: WAL 아카이브 회전 중 신규 트랜잭션 Truncate 절삭 방지 및 원자적 세그먼트 스왑 아키텍처.
-  * **[`P0_16_RESTORE_ATOMIC_ROLLBACK_AND_FK_TOPOSORT_PLAN.ko.md`](P0_16_RESTORE_ATOMIC_ROLLBACK_AND_FK_TOPOSORT_PLAN.ko.md)**: 백업 복원 실패 시 원본 스냅샷 원자적 롤백 및 Kahn 외래키 위상 정렬 복원 아키텍처.
-  * **[`P0_18_19_DML_STREAMING_AND_FAIL_CLOSED_ROLLBACK_PLAN.ko.md`](P0_18_19_DML_STREAMING_AND_FAIL_CLOSED_ROLLBACK_PLAN.ko.md)**: MERGE 문 PK 다이렉트 스트리밍(5만 행 유계 상한) 및 DML 스캔 중 I/O 에러 시 Fail-Closed 원자적 롤백.
-  * **[`P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md`](P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md)**: 네트워크 단절 시 트랜잭션 최우선 롤백 및 DDL 데드락 방지 세션 드레인 아키텍처.
+  * **[`P0_01_04_FLATRECORD_BINARY_LAYOUT_AND_SCHEMA_EVOLUTION_PLAN.ko.md`](plans/P0_01_04_FLATRECORD_BINARY_LAYOUT_AND_SCHEMA_EVOLUTION_PLAN.ko.md)**: FlatRecord 힙 오프셋 충돌 해소(`slot[7]` 격리 태그) 및 `ALTER TABLE ADD COLUMN` 스키마 에볼루션 아키텍처.
+  * **[`P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md`](plans/P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md)**: WAL 비정상 절삭 방지 및 4-State MECE Fail-Closed 복구 아키텍처 (`Invariant 9`, `ADR-027`).
+  * **[`P0_08_CDC_OUTBOX_AT_LEAST_ONCE_BACKPRESSURE_PLAN.ko.md`](plans/P0_08_CDC_OUTBOX_AT_LEAST_ONCE_BACKPRESSURE_PLAN.ko.md)**: CDC Outbox 외부 브로커 전송 실패 시 무음 폐기 방지 및 지수 백오프 백프레셔 (`ADR-026`).
+  * **[`P0_10_34_REPLICATION_CDC_LOSSLESS_STREAMING_PLAN.ko.md`](plans/P0_10_34_REPLICATION_CDC_LOSSLESS_STREAMING_PLAN.ko.md)**: CDC Lossless Bridge 2단계 핸드오버 및 복제 브로드캐스터 Fail-Closed 슬로우 레플리카 격리 (`[RULE:NonBlockingSink]`, `[RULE:ExplicitError]`).
+  * **[`P0_11_12_13_OPERATOR_BOUNDED_WORKMEM_GUARD_PLAN.ko.md`](plans/P0_11_12_13_OPERATOR_BOUNDED_WORKMEM_GUARD_PLAN.ko.md)**: 쿼리 실행 오퍼레이터(CUBE 12차원 상한, Window/MergeJoin 64MB WorkMem 실시간 추적) 유계 메모리 가드레일 (`[RULE:BoundedBuffers]`).
+  * **[`P0_15_WAL_ARCHIVE_ATOMIC_ROTATION_PLAN.ko.md`](plans/P0_15_WAL_ARCHIVE_ATOMIC_ROTATION_PLAN.ko.md)**: WAL 아카이브 회전 중 신규 트랜잭션 Truncate 절삭 방지 및 원자적 세그먼트 스왑 아키텍처.
+  * **[`P0_16_RESTORE_ATOMIC_ROLLBACK_AND_FK_TOPOSORT_PLAN.ko.md`](plans/P0_16_RESTORE_ATOMIC_ROLLBACK_AND_FK_TOPOSORT_PLAN.ko.md)**: 백업 복원 실패 시 원본 스냅샷 원자적 롤백 및 Kahn 외래키 위상 정렬 복원 아키텍처.
+  * **[`P0_18_19_DML_STREAMING_AND_FAIL_CLOSED_ROLLBACK_PLAN.ko.md`](plans/P0_18_19_DML_STREAMING_AND_FAIL_CLOSED_ROLLBACK_PLAN.ko.md)**: MERGE 문 PK 다이렉트 스트리밍(5만 행 유계 상한) 및 DML 스캔 중 I/O 에러 시 Fail-Closed 원자적 롤백.
+  * **[`P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md`](plans/P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md)**: 네트워크 단절 시 트랜잭션 최우선 롤백 및 DDL 데드락 방지 세션 드레인 아키텍처.
   * **[`P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md`](P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md)**: Go `sync.Pool` 슬라이스 용량 비대화 실측 및 잔류 포인터 GC 누수 박멸 포스트모템 (`[RULE:ZeroAllocation]`).
   * **[`P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md`](P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md)**: 세션 동시성 격착, Lock Scope Shrinking 및 서브쿼리 교착 차단 심층 기술 토론.
-  * **[`P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md`](P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md)**: RLS 순수 AST 구조적 결합 테넌트 격리 및 `sp_executesql` $O(N)$ Single-Pass 선형 스캐너 아키텍처.
-  * **[`P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md`](P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md)**: 중첩 트랜잭션 조기 물리 커밋 방지 및 T-SQL `@@TRANCOUNT` ACID 원자성 수호 아키텍처 (`Invariant 6`).
-  * **[`P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md`](P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md)**: 크론 자식 프로세스 환상 탈피, 전사 세션 글로벌 패닉 완충망(`[RULE:PanicRecovery]`) 및 동시성 격리 아키텍처.
-* **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)**
+  * **[`P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md`](plans/P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md)**: RLS 순수 AST 구조적 결합 테넌트 격리 및 `sp_executesql` $O(N)$ Single-Pass 선형 스캐너 아키텍처.
+  * **[`P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md`](plans/P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md)**: 중첩 트랜잭션 조기 물리 커밋 방지 및 T-SQL `@@TRANCOUNT` ACID 원자성 수호 아키텍처 (`Invariant 6`).
+  * **[`P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md`](plans/P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md)**: 크론 자식 프로세스 환상 탈피, 전사 세션 글로벌 패닉 완충망(`[RULE:PanicRecovery]`) 및 동시성 격리 아키텍처.
+* **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)**
   * LionSQL 전역 정규식 완전 박멸 및 결정론적 토크나이저 전환 단일 SSOT 종합 계획서 (`GA-REGEX-DDL-1` ~ `GA-REGEX-FINAL-3`, `SEC-PGWIRE-PARAM-1`).
-* **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)**
+* **[`DURABILITY_VERIFICATION_PLAN.ko.md`](plans/DURABILITY_VERIFICATION_PLAN.ko.md)**
   * 킬 테스트(SIGKILL 즉시 복구), 소크 테스트, 개밥 먹기(Dogfooding) 기반 실전 운영 내구성 검증 계획서.
 
 ---
@@ -68,25 +70,25 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 엔진의 각 핵심 서브시스템별 설계 및 리팩토링 명세서입니다.
 
 ### 3.1. 스토리지 엔진 & 고동시성 트랜잭션 (Storage & OCC)
-* **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Option A 플랫 레코드 하드닝 (`OCC-HYPER`).
-* **[`FLAT_RECORD_RELIABILITY_PLAN.ko.md`](FLAT_RECORD_RELIABILITY_PLAN.ko.md)**: 포인터 없는 플랫 레코드 인코딩의 안정성 및 디코딩 신뢰성 검증 계획서.
-* **[`LAZY_DECODING_P2_PLAN.ko.md`](LAZY_DECODING_P2_PLAN.ko.md)**: 레코드 전체 언패킹 비용을 없애는 칼럼 단위 지연 디코딩(Lazy Decoding) 설계 계획서.
-* **[`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)**: 키 래치 완전 제거를 통한 160k TPS 회귀 복구 및 CI 성능 게이트 구축 계획서.
+* **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Option A 플랫 레코드 하드닝 (`OCC-HYPER`).
+* **[`FLAT_RECORD_RELIABILITY_PLAN.ko.md`](plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)**: 포인터 없는 플랫 레코드 인코딩의 안정성 및 디코딩 신뢰성 검증 계획서.
+* **[`LAZY_DECODING_P2_PLAN.ko.md`](plans/LAZY_DECODING_P2_PLAN.ko.md)**: 레코드 전체 언패킹 비용을 없애는 칼럼 단위 지연 디코딩(Lazy Decoding) 설계 계획서.
+* **[`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](plans/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)**: 키 래치 완전 제거를 통한 160k TPS 회귀 복구 및 CI 성능 게이트 구축 계획서.
 
 ### 3.2. 쿼리 엔진, 옵티마이저 & 파서 (Engine, Planner & Parser)
 * **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 단순 질의(VDBE)와 복합 관계대수(CBO)를 분리하는 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 명세서.
-* **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](ARCH_VDBE_ROUTING_1_PLAN.ko.md)**: AST 및 Dialect 타입 기반 2-Tier 쿼리 라우팅 정규화 계획서 (`ARCH-VDBE-ROUTING-1`).
-* **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 카탈로그 라우팅 리팩토링 검증 보고서 (527ns 실측).
-* **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)**: 10개 이상 테이블 조인 최적화 및 공집합 조기 탈락 설계 계획서 (`OPT-LARGE-JOIN-1`).
-* **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)**: 플래너 슬림화 및 순수 AST 전환 설계 계획서 (`PLANNER-SLIM-1`, `PLANNER-AST-1`).
-* **[`VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)**: 바이트코드 루프 언롤링, 레지스터 풀링, 분기 예측 최적화 극단 가속 계획서.
-* **[`WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)**: 쓰기 가능한 CTE(Writable CTE)를 VDBE 바이트코드로 직접 컴파일하는 Lowering 설계.
-* **[`SQL_PARSER_HARDENING_PLAN.ko.md`](SQL_PARSER_HARDENING_PLAN.ko.md)**: 리터럴 오염 방지 및 세미콜론 절단 방지를 위한 SQL 파서 하드닝 계획서.
+* **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md)**: AST 및 Dialect 타입 기반 2-Tier 쿼리 라우팅 정규화 계획서 (`ARCH-VDBE-ROUTING-1`).
+* **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](plans/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 카탈로그 라우팅 리팩토링 검증 보고서 (527ns 실측).
+* **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)**: 10개 이상 테이블 조인 최적화 및 공집합 조기 탈락 설계 계획서 (`OPT-LARGE-JOIN-1`).
+* **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)**: 플래너 슬림화 및 순수 AST 전환 설계 계획서 (`PLANNER-SLIM-1`, `PLANNER-AST-1`).
+* **[`VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)**: 바이트코드 루프 언롤링, 레지스터 풀링, 분기 예측 최적화 극단 가속 계획서.
+* **[`WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)**: 쓰기 가능한 CTE(Writable CTE)를 VDBE 바이트코드로 직접 컴파일하는 Lowering 설계.
+* **[`SQL_PARSER_HARDENING_PLAN.ko.md`](plans/SQL_PARSER_HARDENING_PLAN.ko.md)**: 리터럴 오염 방지 및 세미콜론 절단 방지를 위한 SQL 파서 하드닝 계획서.
 
 ### 3.3. 와이어 프로토콜 & 네트워킹 (Wire & Protocols)
-* **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: 소켓 수신부터 VDBE 및 WAL 적응형 그룹 커밋에 이르는 서버 수직 파이프라인 최적화 마스터 플랜.
-* **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)**: 단일 정적 바이너리 내장 웹 스튜디오 및 SPA 서빙 아키텍처 계획서 (`WEB-SPA-1`, 공식 가이드: [`doc/WEB_APP_HOSTING_GUIDE.ko.md`](../doc/WEB_APP_HOSTING_GUIDE.ko.md)).
-* **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](MODULAR_ARCHITECTURE_PLAN.ko.md)**: TDS/와이어 레이어 인터페이스 불변 파일 분리 및 모듈러 아키텍처 평가 계획서 (`TDS-MOD-1`).
+* **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: 소켓 수신부터 VDBE 및 WAL 적응형 그룹 커밋에 이르는 서버 수직 파이프라인 최적화 마스터 플랜.
+* **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)**: 단일 정적 바이너리 내장 웹 스튜디오 및 SPA 서빙 아키텍처 계획서 (`WEB-SPA-1`, 공식 가이드: [`doc/WEB_APP_HOSTING_GUIDE.ko.md`](../doc/WEB_APP_HOSTING_GUIDE.ko.md)).
+* **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](plans/MODULAR_ARCHITECTURE_PLAN.ko.md)**: TDS/와이어 레이어 인터페이스 불변 파일 분리 및 모듈러 아키텍처 평가 계획서 (`TDS-MOD-1`).
 
 ---
 
@@ -95,23 +97,23 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 실제 오픈소스 서비스 및 표준 벤치마크 스위트를 통해 검증된 실측 엔지니어링 보고서입니다.
 
 ### 4.1. 10대 프로덕션 오픈소스 애플리케이션 E2E 검증
-* **[`METABASE_INTEGRATION_REPORT.ko.md`](METABASE_INTEGRATION_REPORT.ko.md)**: Metabase BI 듀얼 프로토콜 연동, MBQL 비주얼 쿼리 빌더 및 집계/시계열 100% 무오류 검증.
-* **[`VAULTWARDEN_INTEGRATION_REPORT.ko.md`](VAULTWARDEN_INTEGRATION_REPORT.ko.md)**: Vaultwarden (Rust Diesel ORM) 47개 마이그레이션 및 Bitwarden REST API 연동 완료.
-* **[`ANSWER_INTEGRATION_REPORT.ko.md`](ANSWER_INTEGRATION_REPORT.ko.md)**: Apache Answer Q&A 35개 테이블 생성 및 Identity 자동 발급 E2E 검증.
-* **[`GITEA_INTEGRATION_REPORT.ko.md`](GITEA_INTEGRATION_REPORT.ko.md)**: Gitea 듀얼 프로토콜 연동 및 116개 테이블 실전 E2E 검증 완료.
-* **[`WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)**: Woodpecker CI 및 Vikunja 재귀 CTE, 복합 OR 인덱스 분기 검증.
-* **[`GRAFANA_INTEGRATION_REPORT.ko.md`](GRAFANA_INTEGRATION_REPORT.ko.md)**: Grafana 785개 마이그레이션 완주, 봉투 암호화(`BYTEA`) 및 대시보드 연동 검증.
-* **[`CASDOOR_INTEGRATION_REPORT.ko.md`](CASDOOR_INTEGRATION_REPORT.ko.md)**: Casdoor 44개 테이블 자동 생성, 복합 PK 및 OIDC/RBAC E2E 검증.
-* **[`IOTA_ERP_INTEGRATION_REPORT.ko.md`](IOTA_ERP_INTEGRATION_REPORT.ko.md)**: IOTA SDK ERP 연동, `pgx/v5` 바이너리 프로토콜 완비 및 47개 마이그레이션 관통.
-* **[`UMAMI_INTEGRATION_REPORT.ko.md`](UMAMI_INTEGRATION_REPORT.ko.md)**: Umami 웹 분석 플랫폼 연동 검증 보고서.
-* **[`BABELFISH_INTEGRATION_REPORT.ko.md`](BABELFISH_INTEGRATION_REPORT.ko.md)**: AWS Babelfish T-SQL 저장 프로시저 호환성 검증 보고서.
+* **[`METABASE_INTEGRATION_REPORT.ko.md`](reports/METABASE_INTEGRATION_REPORT.ko.md)**: Metabase BI 듀얼 프로토콜 연동, MBQL 비주얼 쿼리 빌더 및 집계/시계열 100% 무오류 검증.
+* **[`VAULTWARDEN_INTEGRATION_REPORT.ko.md`](reports/VAULTWARDEN_INTEGRATION_REPORT.ko.md)**: Vaultwarden (Rust Diesel ORM) 47개 마이그레이션 및 Bitwarden REST API 연동 완료.
+* **[`ANSWER_INTEGRATION_REPORT.ko.md`](reports/ANSWER_INTEGRATION_REPORT.ko.md)**: Apache Answer Q&A 35개 테이블 생성 및 Identity 자동 발급 E2E 검증.
+* **[`GITEA_INTEGRATION_REPORT.ko.md`](reports/GITEA_INTEGRATION_REPORT.ko.md)**: Gitea 듀얼 프로토콜 연동 및 116개 테이블 실전 E2E 검증 완료.
+* **[`WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](reports/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)**: Woodpecker CI 및 Vikunja 재귀 CTE, 복합 OR 인덱스 분기 검증.
+* **[`GRAFANA_INTEGRATION_REPORT.ko.md`](reports/GRAFANA_INTEGRATION_REPORT.ko.md)**: Grafana 785개 마이그레이션 완주, 봉투 암호화(`BYTEA`) 및 대시보드 연동 검증.
+* **[`CASDOOR_INTEGRATION_REPORT.ko.md`](reports/CASDOOR_INTEGRATION_REPORT.ko.md)**: Casdoor 44개 테이블 자동 생성, 복합 PK 및 OIDC/RBAC E2E 검증.
+* **[`IOTA_ERP_INTEGRATION_REPORT.ko.md`](reports/IOTA_ERP_INTEGRATION_REPORT.ko.md)**: IOTA SDK ERP 연동, `pgx/v5` 바이너리 프로토콜 완비 및 47개 마이그레이션 관통.
+* **[`UMAMI_INTEGRATION_REPORT.ko.md`](reports/UMAMI_INTEGRATION_REPORT.ko.md)**: Umami 웹 분석 플랫폼 연동 검증 보고서.
+* **[`BABELFISH_INTEGRATION_REPORT.ko.md`](reports/BABELFISH_INTEGRATION_REPORT.ko.md)**: AWS Babelfish T-SQL 저장 프로시저 호환성 검증 보고서.
 
 ### 4.2. 표준 벤치마크 및 장기 부하 실측
-* **[`SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md`](SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md)** ([English](SLT_FULL_SUITE_100_PERCENT_REPORT.md))
+* **[`SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md`](reports/SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md)** ([English](reports/SLT_FULL_SUITE_100_PERCENT_REPORT.md))
   * SQLite 공식 SQLLogicTest (SLT) 107개 풀세트(551,217 쿼리) 100% 무결점 통과 실측 보고서 및 8대 심층 엔진 결함 완치 기록.
-* **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)**
+* **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](reports/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)**
   * 1시간 장시간 고부하(72만 ops / 39.3만 커밋) 실측 검증, `SQLSTATE 40001` 충돌 처리 및 WiredTiger 500MB 캐시 수렴 분석 보고서.
-* **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)**
+* **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)**
   * SSB (Star Schema Benchmark) 및 Mini TPC-H 5대 대표 쿼리 실측, DuckDB/ClickHouse 비교 분석 및 1.0 완료 동결 보고.
 
 ---
@@ -122,7 +124,7 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 
 * **[`DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`](DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md)**
   * DuckDB 스타일 편의 문법(`SELECT * EXCLUDE`, `FROM <table>;`) 및 MySQL 추가 호환 구문의 기각 사유와 불변 경계 평가 (오타 침묵 방지 및 RDBMS 엄격성 수호).
-* **[`EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)**
+* **[`EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](plans/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)**
   * `WHERE col IN ()` 빈 괄호 평가 허용 여부에 대한 분석, 1.0 엄격 에러 유지 및 무분별한 토글 플래그 배제 원칙.
 * **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)**
   * Gitea XORM 실전 연동 중 노출된 결함 원인 분석 및 "인간 작성 SQL vs ORM 기계 생성 SQL" 테스트 사각지대 영구 분석.
@@ -137,13 +139,13 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 
 * **[`POST_1.0_CANDIDATES.ko.md`](POST_1.0_CANDIDATES.ko.md)**
   * LionSQL Post-1.0 기술 과제 풀 (사전 기술 분석 완료 및 온디맨드 채택 대기 목록).
-* **[`MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)**
+* **[`MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)**
   * Materialized View 가상 뷰 알리아스 방식 도입 설계 (Post-1.0 이관 확정, `FEAT-MATVIEW-ALIAS-1`).
 * **[`POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)**
   * HNSW 벡터 인덱스 및 시계열 압축 청크 아키텍처 설계 계획서.
-* **[`OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](OFFLINE_DOCS_PACKAGING_PLAN.ko.md)**
+* **[`OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)**
   * 배포 패키지 오프라인 문서 번들링 및 내장 뷰어 설계 계획서 (`PKG-OFFLINE-DOCS-1`).
-* **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)**
+* **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](plans/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)**
   * AWS Babelfish T-SQL Stored Procedure 전용 SLT 테스트 스위트 구축 계획서.
 * **역사적 아카이브 디렉토리 (`notes/archive/`)**:
   * 100% 구현 완료되어 설계 의도 및 검증 이력을 보존하기 위해 보관된 과거 13개 계획서(Windows 데몬 분리, Forward-only 커서, 단일 CLI 통합 등) 및 원본 백로그는 **[`notes/archive/README.md`](archive/README.md)**를 참조하십시오.
