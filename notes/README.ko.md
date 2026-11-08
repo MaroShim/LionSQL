@@ -41,13 +41,24 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
   * 1단계/2단계 전수 감사 발굴 206건 결함 분류(P0~P3) 및 1.0 필수 패치 37선 확정 보고서 (`AUDIT-TRIAGE-POST`).
 * **[`P0_AUDIT_COMPREHENSIVE_RETROSPECTIVE.ko.md`](P0_AUDIT_COMPREHENSIVE_RETROSPECTIVE.ko.md)**
   * 1.0 전수 감사 P0 (Must Fix 37선) 전량 완치 종합 회고 및 엔지니어링 포스트모템 (5대 도메인 결함 분석, 5대 핵심 아키텍처 피벗, Negative Knowledge 및 0-Race 품질 백서).
-* **1.0 P0 핵심 아키텍처 플랜 & 심층 분석 백서**:
+* **1.0 P0 핵심 아키텍처 플랜 & 심층 분석 백서 (총 16종)**:
+  * **[`P0_01_04_FLATRECORD_BINARY_LAYOUT_AND_SCHEMA_EVOLUTION_PLAN.ko.md`](P0_01_04_FLATRECORD_BINARY_LAYOUT_AND_SCHEMA_EVOLUTION_PLAN.ko.md)**: FlatRecord 힙 오프셋 충돌 해소(`slot[7]` 격리 태그) 및 `ALTER TABLE ADD COLUMN` 스키마 에볼루션 아키텍처.
   * **[`P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md`](P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md)**: WAL 비정상 절삭 방지 및 4-State MECE Fail-Closed 복구 아키텍처 (`Invariant 9`, `ADR-027`).
+  * **[`P0_06_07_09_RBAC_SECURITY_AND_PERSISTENCE_PLAN.ko.md`](P0_06_07_09_RBAC_SECURITY_AND_PERSISTENCE_PLAN.ko.md)**: RBAC 보안 거버넌스, 명시적 `DENY` 절대 우선권, 익명 백도어 차단 및 `auth.json` 원자적 영속화 (`[RULE:AtomicSaves]`).
+  * **[`P0_08_CDC_OUTBOX_AT_LEAST_ONCE_BACKPRESSURE_PLAN.ko.md`](P0_08_CDC_OUTBOX_AT_LEAST_ONCE_BACKPRESSURE_PLAN.ko.md)**: CDC Outbox 외부 브로커 전송 실패 시 무음 폐기 방지 및 지수 백오프 백프레셔 (`ADR-026`).
+  * **[`P0_10_34_REPLICATION_CDC_LOSSLESS_STREAMING_PLAN.ko.md`](P0_10_34_REPLICATION_CDC_LOSSLESS_STREAMING_PLAN.ko.md)**: CDC Lossless Bridge 2단계 핸드오버 및 복제 브로드캐스터 Fail-Closed 슬로우 레플리카 격리 (`[RULE:NonBlockingSink]`, `[RULE:ExplicitError]`).
+  * **[`P0_11_12_13_OPERATOR_BOUNDED_WORKMEM_GUARD_PLAN.ko.md`](P0_11_12_13_OPERATOR_BOUNDED_WORKMEM_GUARD_PLAN.ko.md)**: 쿼리 실행 오퍼레이터(CUBE 12차원 상한, Window/MergeJoin 64MB WorkMem 실시간 추적) 유계 메모리 가드레일 (`[RULE:BoundedBuffers]`).
+  * **[`P0_15_WAL_ARCHIVE_ATOMIC_ROTATION_PLAN.ko.md`](P0_15_WAL_ARCHIVE_ATOMIC_ROTATION_PLAN.ko.md)**: WAL 아카이브 회전 중 신규 트랜잭션 Truncate 절삭 방지 및 원자적 세그먼트 스왑 아키텍처.
+  * **[`P0_16_RESTORE_ATOMIC_ROLLBACK_AND_FK_TOPOSORT_PLAN.ko.md`](P0_16_RESTORE_ATOMIC_ROLLBACK_AND_FK_TOPOSORT_PLAN.ko.md)**: 백업 복원 실패 시 원본 스냅샷 원자적 롤백 및 Kahn 외래키 위상 정렬 복원 아키텍처.
+  * **[`P0_18_19_DML_STREAMING_AND_FAIL_CLOSED_ROLLBACK_PLAN.ko.md`](P0_18_19_DML_STREAMING_AND_FAIL_CLOSED_ROLLBACK_PLAN.ko.md)**: MERGE 문 PK 다이렉트 스트리밍(5만 행 유계 상한) 및 DML 스캔 중 I/O 에러 시 Fail-Closed 원자적 롤백.
+  * **[`P0_23_DECIMAL_FIXED_POINT_PRECISION_PLAN.ko.md`](P0_23_DECIMAL_FIXED_POINT_PRECISION_PLAN.ko.md)**: 금융 부동소수점 오차 퇴치를 위한 듀얼 파서 레벨의 고정소수점 `TypeDecimal(Precision, Scale)` 무손실 보존 아키텍처.
   * **[`P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md`](P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md)**: 네트워크 단절 시 트랜잭션 최우선 롤백 및 DDL 데드락 방지 세션 드레인 아키텍처.
-  * **[`P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md`](P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md)**: Go `sync.Pool` 슬라이스 용량 비대화 실측 및 잔류 포인터 GC 누수 박멸 포스트모템.
+  * **[`P0_27_35_WIRE_AND_HTTP_BOUNDED_PAYLOAD_LIMIT_PLAN.ko.md`](P0_27_35_WIRE_AND_HTTP_BOUNDED_PAYLOAD_LIMIT_PLAN.ko.md)**: 와이어 프로토콜(TDS 32KB/64MB, PGWire 64MB) 및 HTTP Chunked 스트림(32MB) 유계 페이로드 DoS 방어벽 (`[RULE:BoundedBuffers]`).
+  * **[`P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md`](P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md)**: Go `sync.Pool` 슬라이스 용량 비대화 실측 및 잔류 포인터 GC 누수 박멸 포스트모템 (`[RULE:ZeroAllocation]`).
   * **[`P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md`](P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md)**: 세션 동시성 격착, Lock Scope Shrinking 및 서브쿼리 교착 차단 심층 기술 토론.
   * **[`P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md`](P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md)**: RLS 순수 AST 구조적 결합 테넌트 격리 및 `sp_executesql` $O(N)$ Single-Pass 선형 스캐너 아키텍처.
   * **[`P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md`](P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md)**: 중첩 트랜잭션 조기 물리 커밋 방지 및 T-SQL `@@TRANCOUNT` ACID 원자성 수호 아키텍처 (`Invariant 6`).
+  * **[`P0_33_36_SETOP_MATERIALIZATION_AND_REST_STREAMING_PLAN.ko.md`](P0_33_36_SETOP_MATERIALIZATION_AND_REST_STREAMING_PLAN.ko.md)**: Volcano 집합 연산자(UNION/EXCEPT) `LazyTuple` 즉시 구체화 및 REST API 단일 윈도우 페이징 스트리밍(100건 상한) 아키텍처.
   * **[`P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md`](P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md)**: 크론 자식 프로세스 환상 탈피, 전사 세션 글로벌 패닉 완충망(`[RULE:PanicRecovery]`) 및 동시성 격리 아키텍처.
 * **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)**
   * LionSQL 전역 정규식 완전 박멸 및 결정론적 토크나이저 전환 단일 SSOT 종합 계획서 (`GA-REGEX-DDL-1` ~ `GA-REGEX-FINAL-3`, `SEC-PGWIRE-PARAM-1`).
