@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -9,6 +10,13 @@ import (
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
+
+// DefaultMergeMaxTargetRows defines the safety upper limit of target rows loaded into memory
+// for non-indexed full-scan MERGE queries to prevent OOM crashes ([RULE:BoundedBuffers]).
+const DefaultMergeMaxTargetRows = 50000
+
+// ErrMergeTargetTableTooLarge is returned when a full-scan MERGE target table exceeds the in-memory row limit.
+var ErrMergeTargetTableTooLarge = errors.New("MERGE target table scan exceeded in-memory row limit")
 
 type mergeClauseType int
 
@@ -96,27 +104,6 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 		return nil, fmt.Errorf("failed to load MERGE source: %w", err)
 	}
 
-	// 2. Load target rows
-	targetCursor, err := tx.Scan(parsed.targetTable)
-	if err != nil {
-		return nil, fmt.Errorf("failed to scan target table %q: %w", parsed.targetTable, err)
-	}
-	defer targetCursor.Close()
-
-	var targetRows []storage.Record
-	for targetCursor.Next() {
-		rec, err := targetCursor.Record()
-		if err != nil {
-			return nil, err
-		}
-		targetRows = append(targetRows, cloneRecord(rec))
-	}
-	initialTargetCount := len(targetRows)
-
-	matchedTargetKeys := make(map[string]bool)
-	newlyInsertedKeys := make(map[string]bool)
-	var rowsAffected int64
-
 	// Detect identity column on target table
 	var identityCol *storage.Column
 	for i := range targetSchema.Columns {
@@ -130,19 +117,214 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 	if identityCol != nil {
 		if lastID, ok := s.GetTableLastIdentity(targetSchema.Name); ok {
 			maxID = lastID
-		} else {
-			for _, tr := range targetRows {
-				if v, ok := tr[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
-					if v.IVal > maxID {
-						maxID = v.IVal
-					}
-				}
-			}
-			s.SetTableLastIdentity(targetSchema.Name, maxID)
 		}
 	}
 
-	// 3. Process each Source row
+	hasBySourceClause := false
+	for _, cl := range parsed.clauses {
+		if cl.clauseType == mergeNotMatchedSourceDelete || cl.clauseType == mergeNotMatchedSourceUpdate {
+			hasBySourceClause = true
+			break
+		}
+	}
+
+	sourcePKExpr, hasPKDirectLookup := extractMergePKEquality(parsed.onCondition, parsed.targetTable, parsed.targetAlias, pkCol.Name)
+
+	matchedTargetKeys := make(map[string]bool)
+	newlyInsertedKeys := make(map[string]bool)
+	var rowsAffected int64
+
+	// Path A: Fast Direct Primary Key Lookup (Zero Target Full-Scan Heap Allocation)
+	if !hasBySourceClause && hasPKDirectLookup {
+		for _, sRow := range sourceRows {
+			evalMap := buildMergeEvalMap(nil, sRow, parsed.targetTable, parsed.targetAlias, parsed.sourceRaw, parsed.sourceAlias)
+			pkVal := evalMergeExpr(sourcePKExpr, evalMap, pkCol.Type)
+
+			var tRec storage.Record
+			var matchedEvalMap map[string]any
+			isMatched := false
+
+			if !pkVal.IsNull {
+				rec, err := tx.Get(parsed.targetTable, pkVal)
+				if err == nil && rec != nil && len(rec) > 0 {
+					chkEvalMap := buildMergeEvalMap(rec, sRow, parsed.targetTable, parsed.targetAlias, parsed.sourceRaw, parsed.sourceAlias)
+					if evaluateWhereConditionMap(chkEvalMap, parsed.onCondition) {
+						tRec = rec
+						matchedEvalMap = chkEvalMap
+						isMatched = true
+					}
+				}
+			}
+
+			if isMatched {
+				pkKey := pkVal.String()
+				matchedTargetKeys[pkKey] = true
+
+				for _, clause := range parsed.clauses {
+					if clause.clauseType != mergeMatchedUpdate && clause.clauseType != mergeMatchedDelete {
+						continue
+					}
+					if clause.andCond != "" && !evaluateWhereConditionMap(matchedEvalMap, clause.andCond) {
+						continue
+					}
+
+					if clause.clauseType == mergeMatchedDelete {
+						if err := tx.Delete(parsed.targetTable, pkVal); err != nil {
+							return nil, fmt.Errorf("MERGE DELETE failed: %w", err)
+						}
+						rowsAffected++
+						break
+					} else if clause.clauseType == mergeMatchedUpdate {
+						updatedRec := cloneRecord(tRec)
+						for _, pair := range clause.setPairs {
+							colName := stripQualifier(pair.column)
+							col, _, found := targetSchema.FindColumn(colName)
+							if !found {
+								return nil, fmt.Errorf("column %q not found in target table %q", colName, parsed.targetTable)
+							}
+							val := evalMergeExpr(pair.expr, matchedEvalMap, col.Type)
+							updatedRec[col.Name] = val
+						}
+						if err := tx.Update(parsed.targetTable, pkVal, updatedRec); err != nil {
+							return nil, fmt.Errorf("MERGE UPDATE failed: %w", err)
+						}
+						rowsAffected++
+						break
+					}
+				}
+			} else {
+				for _, clause := range parsed.clauses {
+					if clause.clauseType != mergeNotMatchedInsert {
+						continue
+					}
+					if clause.andCond != "" && !evaluateWhereConditionMap(evalMap, clause.andCond) {
+						continue
+					}
+
+					cols := clause.insertCols
+					if len(cols) == 0 {
+						for _, c := range targetSchema.Columns {
+							if identityCol != nil && c.Identity && len(clause.insertVals) < len(targetSchema.Columns) {
+								continue
+							}
+							cols = append(cols, c.Name)
+						}
+					}
+
+					if len(cols) != len(clause.insertVals) {
+						return nil, fmt.Errorf("MERGE INSERT column count (%d) does not match value count (%d)", len(cols), len(clause.insertVals))
+					}
+
+					newRec := make(storage.Record)
+					for i, colName := range cols {
+						cleanedCol := stripQualifier(colName)
+						col, _, found := targetSchema.FindColumn(cleanedCol)
+						if !found {
+							return nil, fmt.Errorf("column %q not found in target table %q", cleanedCol, parsed.targetTable)
+						}
+						val := evalMergeExpr(clause.insertVals[i], evalMap, col.Type)
+						newRec[col.Name] = val
+					}
+
+					for _, col := range targetSchema.Columns {
+						if _, hasCol := newRec[col.Name]; !hasCol && col.Default != "" {
+							newRec[col.Name] = parseLiteralValue(col.Default, col.Type)
+						}
+					}
+
+					if identityCol != nil {
+						if _, hasIdent := newRec[identityCol.Name]; !hasIdent {
+							maxID++
+							newRec[identityCol.Name] = storage.IntValue(maxID)
+							if cs != nil {
+								cs.Mu.Lock()
+								cs.Vars["identity"] = maxID
+								cs.Vars["scope_identity"] = maxID
+								cs.Mu.Unlock()
+							}
+							s.SetTableLastIdentity(targetSchema.Name, maxID)
+						} else {
+							if v, ok := newRec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
+								if cs != nil {
+									cs.Mu.Lock()
+									cs.Vars["identity"] = v.IVal
+									cs.Vars["scope_identity"] = v.IVal
+									cs.Mu.Unlock()
+								}
+								s.SetTableLastIdentity(targetSchema.Name, v.IVal)
+								if v.IVal > maxID {
+									maxID = v.IVal
+								}
+							}
+						}
+					}
+
+					if err := tx.Insert(parsed.targetTable, newRec); err != nil {
+						return nil, fmt.Errorf("MERGE INSERT failed: %w", err)
+					}
+					if insPKVal, ok := newRec[pkCol.Name]; ok {
+						newlyInsertedKeys[insPKVal.String()] = true
+					}
+					rowsAffected++
+					break
+				}
+			}
+		}
+
+		if isEphemeral {
+			if err := tx.Commit(); err != nil {
+				return nil, fmt.Errorf("commit error: %w", err)
+			}
+			tx = nil
+		}
+
+		if cs != nil {
+			cs.Mu.Lock()
+			cs.Vars["@@rowcount"] = int(rowsAffected)
+			cs.Mu.Unlock()
+		}
+
+		return &QueryResult{
+			Success:      true,
+			Command:      "MERGE",
+			RowsAffected: rowsAffected,
+			Messages:     []string{fmt.Sprintf("(%d rows affected)", rowsAffected)},
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// Path B: Fallback Full-Scan Target Table with Memory Guardrail ([RULE:BoundedBuffers])
+	targetCursor, err := tx.Scan(parsed.targetTable)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan target table %q: %w", parsed.targetTable, err)
+	}
+	defer targetCursor.Close()
+
+	var targetRows []storage.Record
+	for targetCursor.Next() {
+		if len(targetRows) >= DefaultMergeMaxTargetRows {
+			return nil, fmt.Errorf("%w: target table %q scan exceeded %d rows limit without indexed primary key direct match", ErrMergeTargetTableTooLarge, parsed.targetTable, DefaultMergeMaxTargetRows)
+		}
+		rec, err := targetCursor.Record()
+		if err != nil {
+			return nil, err
+		}
+		targetRows = append(targetRows, cloneRecord(rec))
+	}
+	initialTargetCount := len(targetRows)
+
+	if identityCol != nil && maxID == 0 {
+		for _, tr := range targetRows {
+			if v, ok := tr[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
+				if v.IVal > maxID {
+					maxID = v.IVal
+				}
+			}
+		}
+		s.SetTableLastIdentity(targetSchema.Name, maxID)
+	}
+
+	// 3. Process each Source row (Fallback)
 	for _, sRow := range sourceRows {
 		matchedTargetIdx := -1
 		var matchedEvalMap map[string]any
@@ -756,4 +938,61 @@ func stripQualifier(col string) string {
 		return col[idx+1:]
 	}
 	return col
+}
+
+func extractMergePKEquality(onCondition, targetTable, targetAlias, pkColName string) (sourceExpr string, ok bool) {
+	if onCondition == "" || pkColName == "" {
+		return "", false
+	}
+	p := proc.NewParser(proc.NewLexer(onCondition))
+	expr := p.ParseExpr()
+	if expr == nil || len(p.Errors()) > 0 {
+		return "", false
+	}
+	return inspectPKEquality(expr, targetTable, targetAlias, pkColName)
+}
+
+func inspectPKEquality(expr proc.Expr, targetTable, targetAlias, pkColName string) (string, bool) {
+	bin, ok := expr.(*proc.BinaryExpr)
+	if !ok {
+		return "", false
+	}
+	if bin.Op == proc.TokenEq {
+		leftStr := strings.TrimSpace(bin.Left.String())
+		rightStr := strings.TrimSpace(bin.Right.String())
+
+		if isTargetPKRef(leftStr, targetTable, targetAlias, pkColName) {
+			return rightStr, true
+		}
+		if isTargetPKRef(rightStr, targetTable, targetAlias, pkColName) {
+			return leftStr, true
+		}
+	}
+	if bin.Op == proc.TokenAnd {
+		if src, found := inspectPKEquality(bin.Left, targetTable, targetAlias, pkColName); found {
+			return src, true
+		}
+		if src, found := inspectPKEquality(bin.Right, targetTable, targetAlias, pkColName); found {
+			return src, true
+		}
+	}
+	return "", false
+}
+
+func isTargetPKRef(exprStr, targetTable, targetAlias, pkColName string) bool {
+	clean := cleanIdentifier(exprStr)
+	if strings.EqualFold(clean, pkColName) {
+		return true
+	}
+	parts := strings.Split(clean, ".")
+	if len(parts) == 2 {
+		tbl := parts[0]
+		col := parts[1]
+		if strings.EqualFold(col, pkColName) {
+			if strings.EqualFold(tbl, targetTable) || (targetAlias != "" && strings.EqualFold(tbl, targetAlias)) {
+				return true
+			}
+		}
+	}
+	return false
 }
