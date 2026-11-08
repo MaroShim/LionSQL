@@ -38,6 +38,8 @@ const (
 const (
 	HeaderSize        = 8
 	DefaultPacketSize = 4096
+	MaxTDSPacketSize  = 32768            // 32 KB (TDS 7.x/8.0 spec maximum single packet frame size)
+	MaxTDSMessageSize = 64 * 1024 * 1024 // 64 MB (bounded buffer limit for assembled logical message)
 )
 
 // Packet represents a full logical TDS message (reassembled from one or more physical packets).
@@ -68,11 +70,14 @@ func ReadPacket(r io.Reader) (*Packet, error) {
 		pSPID := binary.BigEndian.Uint16(hdr[4:6])
 		pID := hdr[6]
 
-		if length < HeaderSize {
-			return nil, fmt.Errorf("invalid TDS packet length: %d (minimum %d)", length, HeaderSize)
+		if length < HeaderSize || length > MaxTDSPacketSize {
+			return nil, fmt.Errorf("invalid TDS packet length: %d (must be between %d and %d)", length, HeaderSize, MaxTDSPacketSize)
 		}
 
 		payloadLen := int(length) - HeaderSize
+		if len(fullPayload)+payloadLen > MaxTDSMessageSize {
+			return nil, fmt.Errorf("TDS message size exceeds maximum limit (%d > %d)", len(fullPayload)+payloadLen, MaxTDSMessageSize)
+		}
 		chunk := make([]byte, payloadLen)
 		if _, err := io.ReadFull(r, chunk); err != nil {
 			return nil, fmt.Errorf("failed to read TDS packet payload: %w", err)

@@ -296,7 +296,9 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 
 		msgType := msgHeader[0]
 		msgLen := binary.BigEndian.Uint32(msgHeader[1:5])
-		if msgLen < 4 {
+		if msgLen < 4 || msgLen > MaxPGMessageSize {
+			_ = WriteError(conn, "COPY message length exceeds maximum limit")
+			_ = s.writeReady(conn, sessID)
 			return
 		}
 		payload := make([]byte, msgLen-4)

@@ -2,6 +2,7 @@ package tds
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -128,4 +129,59 @@ func BenchmarkTDS_BuildRow(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = BuildRow(cols, vals)
 	}
+}
+
+// Regression test for P0-27: TDS Packet OOM DoS Guard
+func TestTDS_ReadPacket_OOMGuard_P0_27(t *testing.T) {
+	t.Run("ExceedSinglePacketFrameSize", func(t *testing.T) {
+		// Header with length 40000 (> MaxTDSPacketSize 32768)
+		hdr := make([]byte, HeaderSize)
+		hdr[0] = PacketSQLBatch
+		hdr[1] = StatusEOM
+		hdr[2] = byte(40000 >> 8)
+		hdr[3] = byte(40000 & 0xFF)
+
+		r := bytes.NewReader(hdr)
+		_, err := ReadPacket(r)
+		if err == nil {
+			t.Fatalf("expected error for packet length exceeding MaxTDSPacketSize, got nil")
+		}
+		if !strings.Contains(err.Error(), "invalid TDS packet length") {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+	})
+
+	t.Run("InvalidLengthSmallerThanHeader", func(t *testing.T) {
+		hdr := make([]byte, HeaderSize)
+		hdr[0] = PacketSQLBatch
+		hdr[1] = StatusEOM
+		hdr[2] = 0
+		hdr[3] = 4 // < HeaderSize (8)
+
+		r := bytes.NewReader(hdr)
+		_, err := ReadPacket(r)
+		if err == nil {
+			t.Fatalf("expected error for packet length < HeaderSize, got nil")
+		}
+	})
+
+	t.Run("NormalPacketSuccess", func(t *testing.T) {
+		payload := []byte("SELECT 1;")
+		pktLen := HeaderSize + len(payload)
+		buf := make([]byte, pktLen)
+		buf[0] = PacketSQLBatch
+		buf[1] = StatusEOM
+		buf[2] = byte(pktLen >> 8)
+		buf[3] = byte(pktLen & 0xFF)
+		copy(buf[HeaderSize:], payload)
+
+		r := bytes.NewReader(buf)
+		pkt, err := ReadPacket(r)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if string(pkt.Payload) != "SELECT 1;" {
+			t.Fatalf("expected payload %q, got %q", "SELECT 1;", string(pkt.Payload))
+		}
+	})
 }

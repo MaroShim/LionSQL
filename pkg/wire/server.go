@@ -53,6 +53,12 @@ type pgActiveConn struct {
 	secretKey uint32
 }
 
+const (
+	MaxPGStartupSize  = 64 * 1024            // 64 KB (Startup parameter upper bound)
+	MaxPGPasswordSize = 8 * 1024             // 8 KB (Password message upper bound)
+	MaxPGMessageSize  = 64 * 1024 * 1024     // 64 MB (General query/bind/copy payload upper bound)
+)
+
 var bufioWriterPool = sync.Pool{
 	New: func() any {
 		return bufio.NewWriterSize(nil, 32768)
@@ -604,6 +610,10 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	var startupPayload []byte
 	startupLen := binary.BigEndian.Uint32(buf[:4])
+	if startupLen < 8 || startupLen > MaxPGStartupSize {
+		_ = WriteError(conn, "invalid startup packet length")
+		return
+	}
 	if startupLen > 8 {
 		startupPayload = make([]byte, startupLen-8)
 		if _, err := io.ReadFull(conn, startupPayload); err != nil {
@@ -644,7 +654,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 			return
 		}
 		pwLen := binary.BigEndian.Uint32(pwHeader[1:5])
-		if pwLen < 4 {
+		if pwLen < 4 || pwLen > MaxPGPasswordSize {
+			_ = WriteErrorWithCode(conn, "password message exceeds maximum length", "54000")
 			return
 		}
 		pwPayload := make([]byte, pwLen-4)
@@ -710,7 +721,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 		msgType := msgHeader[0]
 		msgLen := binary.BigEndian.Uint32(msgHeader[1:5])
 
-		if msgLen < 4 {
+		if msgLen < 4 || msgLen > MaxPGMessageSize {
+			_ = WriteErrorWithCode(conn, "message length exceeds maximum limit", "54000")
 			return
 		}
 		payload := make([]byte, msgLen-4)

@@ -1189,5 +1189,58 @@ func TestPGWire_Regression_P0_26_DisconnectRollback(t *testing.T) {
 	t.Logf("[P0-26 PASS] Client disconnect over wire successfully triggered automatic rollback and freed row locks")
 }
 
+// Regression test for P0-27 & Scope 096: PGWire Packet OOM DoS Guard
+func TestPGWire_Regression_P0_27_OOMGuard(t *testing.T) {
+	memEng := memengine.New()
+	defer memEng.Close()
+	cat := catalog.New(memEng)
+	coord := engine.NewCoordinator(cat, memEng, engine.DefaultConfig())
+	defer coord.Close()
+
+	srv := NewServer("127.0.0.1:0", cat, memEng)
+
+	t.Run("ExceedStartupMessageSize", func(t *testing.T) {
+		clientConn, serverConn := net.Pipe()
+		defer clientConn.Close()
+
+		go srv.handleConnection(serverConn)
+
+		// Send 8-byte header with length = 100 * 1024 (> 64KB) and protocol 3.0
+		var buf [8]byte
+		binary.BigEndian.PutUint32(buf[:4], 100*1024)
+		binary.BigEndian.PutUint32(buf[4:8], 196608) // Protocol 3.0
+
+		_, _ = clientConn.Write(buf[:])
+
+		// Server should reply with ErrorResponse ('E') or close connection
+		reply := make([]byte, 1)
+		_, err := clientConn.Read(reply)
+		if err != nil && err != io.EOF {
+			t.Fatalf("unexpected read error: %v", err)
+		}
+	})
+
+	t.Run("ExceedQueryMessageSize", func(t *testing.T) {
+		clientConn := connectPGClient(t, srv)
+
+		// Send oversized query message (2GB msgLen)
+		var msgHdr [5]byte
+		msgHdr[0] = 'Q'
+		binary.BigEndian.PutUint32(msgHdr[1:5], 0x7FFFFFFF) // 2GB length
+		_, _ = clientConn.Write(msgHdr[:])
+
+		// Server must reject with ErrorResponse ('E') or close connection without OOM panic
+		resp := make([]byte, 1024)
+		n, err := clientConn.Read(resp)
+		if err == nil && n > 0 {
+			if resp[0] != 'E' {
+				t.Fatalf("expected error response 'E', got %c", resp[0])
+			}
+			t.Logf("Server successfully responded with ErrorResponse on 2GB packet: %s", string(resp[:n]))
+		}
+	})
+}
+
+
 
 
