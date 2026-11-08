@@ -1,6 +1,6 @@
 # LionSQL Frequently Asked Questions (FAQ) (`doc/FAQ.md`)
 
-> **Document Version**: v0.90.1  
+> **Document Version**: v0.91.0  
 > **Korean Version**: [`doc/FAQ.ko.md`](FAQ.ko.md)  
 > **Core Architecture & Knowledge Base**: [`notes/ENGINEERING_CONTEXT.ko.md`](../notes/ENGINEERING_CONTEXT.ko.md), [`doc/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -11,7 +11,7 @@ Frequently asked questions regarding LionSQL's design philosophy, internal archi
 ## I. Engine & Runtime Architecture
 
 ### Q1. In a nutshell, what is LionSQL?
-> **A.** LionSQL is an autonomous, high-concurrency OLTP database engine implemented in Go and packaged into a **single standalone static binary**. It strictly excludes external sidecars (such as PgBouncer, Redis, or Nginx), consolidating connection pooling, core storage, wire listeners, and embedded Web Studio into a single executable (`lionsql`).
+> **A.** LionSQL is an autonomous, high-concurrency OLTP database engine implemented in Go and packaged into a **single standalone static binary**. It strictly excludes external sidecars (such as PgBouncer, Redis, or Nginx), consolidating connection pooling, core storage, wire listeners, embedded Web Studio, and zero-dependency SPA web hosting (`--app`) into a single executable (`lionsql`).
 
 ### Q2. How does LionSQL execute T-SQL stored procedures in sub-microseconds?
 > **A.** It utilizes an SQLite-style **VDBE (Virtual Database Engine) bytecode VM**. SQL/T-SQL statements are compiled into sequential low-level bytecode instructions. Through `sync.Pool` register recycling and direct array slot indexing (0.2ns), AST traversal overhead and heap allocations are virtually eliminated.
@@ -51,7 +51,7 @@ Frequently asked questions regarding LionSQL's design philosophy, internal archi
 > **A.** LionSQL enforces one isolated database catalog per process (`--data-dir`) to prevent noisy-neighbor memory leaks. However, for 100% compatibility with SSMS, DBeaver, and migration scripts, statements like `USE master` or `USE [SalesDB]` are accepted as **tolerant virtual no-ops**, synchronizing TDS environment tokens (`ENVCHANGE`) without error.
 
 ### Q11. Which production open-source applications are validated with LionSQL?
-> **A.** 10 major applications run on LionSQL with zero container source modifications: **Gitea, Casdoor, Metabase, Vaultwarden, Umami, Vikunja, Woodpecker CI, Apache Answer, iota-sdk, and Grafana**.
+> **A.** 10 major applications run on LionSQL with zero container source modifications: **Gitea, Grafana, Metabase, Vaultwarden, Casdoor, Umami, Apache Answer, Woodpecker CI, Vikunja, and IOTA-SDK ERP**. In particular, **Grafana** serves as a core observability partner, visualizing LionSQL's embedded Prometheus time-series metrics (`:8090/metrics`) while concurrently running live analytical SQL dashboards.
 
 ---
 
@@ -64,7 +64,7 @@ Frequently asked questions regarding LionSQL's design philosophy, internal archi
 > It maximizes multi-core hardware saturation without distributed network overhead.
 
 ### Q13. Why were regular expressions completely eliminated from query execution?
-> **A.** Regular expressions (Chomsky Type 3 regular languages) lack stack memory and cannot reliably parse context-free SQL grammars with balanced parentheses (Dyck languages). Regexes cause greedy truncation and literal/comment contamination. All query routing, DDL/DML compilation, and filter evaluations utilize deterministic tokenizers (`proc.Lexer`, `sqlutil`).
+> **A.** Regular expressions (Chomsky Type 3 regular languages) lack stack memory and cannot reliably parse context-free SQL grammars with balanced parentheses (Dyck languages). Regexes cause greedy truncation and literal/comment contamination. In LionSQL v0.91.0, regular expressions have been 100% eliminated across all production query paths and replaced with deterministic zero-allocation state machine tokenizers (`proc.Lexer`, `sqlutil`) (`Invariant 7`).
 
 ---
 

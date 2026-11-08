@@ -1,6 +1,6 @@
 # LionSQL 자주 묻는 질문 (FAQ) (`doc/FAQ.ko.md`)
 
-> **문서 버전**: v0.90.1 기준  
+> **문서 버전**: v0.91.0 기준  
 > **영문 버전**: [`doc/FAQ.md`](FAQ.md)  
 > **핵심 설계 및 아키텍처 문서**: [`notes/ENGINEERING_CONTEXT.ko.md`](../notes/ENGINEERING_CONTEXT.ko.md), [`doc/ARCHITECTURE.md`](ARCHITECTURE.md)
 
@@ -11,7 +11,7 @@ LionSQL의 설계 철학, 내부 아키텍처, 성능 최적화 및 프로토콜
 ## I. 엔진 정체성 및 실행 아키텍처 (Engine & Runtime Architecture)
 
 ### Q1. LionSQL은 한마디로 어떤 데이터베이스인가요?
-> **A.** Go로 구현된 **단일 독립 정적 바이너리(Single Static Binary)** 형태의 초고동시성 OLTP 데이터베이스 엔진입니다. 외장 커넥션 풀러(PgBouncer), 캐시(Redis), 웹 프록시(Nginx) 같은 사이드카 데몬을 완전히 배제하고, 커넥션 풀러·스토리지·와이어 리스너·Web Studio를 단 하나의 실행 파일(`lionsql`)로 완결했습니다.
+> **A.** Go로 구현된 **단일 독립 정적 바이너리(Single Static Binary)** 형태의 초고동시성 OLTP 데이터베이스 엔진입니다. 외장 커넥션 풀러(PgBouncer), 캐시(Redis), 웹 프록시(Nginx) 같은 사이드카 데몬을 완전히 배제하고, 커넥션 풀러·스토리지·와이어 리스너·Web Studio 및 내장 웹 호스팅(`--app`)을 단 하나의 실행 파일(`lionsql`)로 완결했습니다.
 
 ### Q2. 저장 프로시저(Stored Procedure)를 어떻게 Go 엔진에서 서브 마이크로초(µs)로 실행하나요?
 > **A.** SQLite 스타일의 **VDBE(Virtual Database Engine) 바이트코드 VM**을 사용합니다. SQL/T-SQL 구문을 파싱한 뒤 일련의 저수준 바이트코드 명령어로 컴파일하고, `sync.Pool` 기반 가상 레지스터 재활용과 배열 슬롯 직접 인덱싱(0.2ns)을 통해 AST 순회 오버헤드와 힙 메모리 할당을 0으로 쥐어짜 냈습니다.
@@ -51,7 +51,7 @@ LionSQL의 설계 철학, 내부 아키텍처, 성능 최적화 및 프로토콜
 > **A.** LionSQL은 노이즈 네이버 메모리 누수를 원천 차단하기 위해 프로세스당 1개의 격리된 데이터베이스 카탈로그를 고수합니다. 하지만 SSMS, DBeaver, 각종 ORM 마이그레이션 스크립트와의 100% 호환성을 위해 `USE master`, `USE [SalesDB]` 등의 구문을 **가상 무동작(Tolerant Virtual No-Op)**으로 정상 수용하며 세션 환경 변수를 동기화합니다.
 
 ### Q11. 기존 오픈소스 애플리케이션들을 실제로 연결해 쓸 수 있나요?
-> **A.** 네. 이미 **Gitea, Casdoor, Metabase, Vaultwarden, Umami, Vikunja, Woodpecker CI, Apache Answer, iota-sdk, Grafana** 등 10대 주요 실전 서비스의 마이그레이션과 실운영 쿼리가 순정 컨테이너 소스 수정 0줄로 100% 무오류 연동 및 검증되었습니다.
+> **A.** 네. 이미 **Gitea, Grafana, Metabase, Vaultwarden, Casdoor, Umami, Apache Answer, Woodpecker CI, Vikunja, IOTA-SDK ERP** 등 10대 주요 실전 서비스의 마이그레이션과 실운영 쿼리가 순정 컨테이너 소스 수정 0줄로 100% 무오류 연동 및 검증되었습니다. 특히 **Grafana**는 LionSQL의 내장 Prometheus 메트릭스(`:8090/metrics`) 관측성 모니터링과 SQL 실시간 데이터 소스 양방향 모두에서 핵심 파트너로 완벽히 동작합니다.
 
 ---
 
@@ -64,7 +64,7 @@ LionSQL의 설계 철학, 내부 아키텍처, 성능 최적화 및 프로토콜
 > 복잡하고 취약한 분산 네트워크 2PC 없이 단일 서버 하드웨어 자원을 극한으로 포화시킵니다.
 
 ### Q13. 왜 SQL 파싱 경로에서 정규 표현식(Regex)을 완전히 제거했나요?
-> **A.** 정규 표현식(Chomsky Type 3 정규 언어)은 스택 메모리가 없어 괄호가 중첩된 SQL(Type 2 문맥 자유 언어)을 구조적으로 파싱할 수 없기 때문입니다. 정규식을 쓰면 따옴표 안의 리터럴이나 주석을 잘못 자르거나 조건을 누락하는 침묵형 데이터 왜곡이 발생하기 때문에, 전 프로덕션 경로를 결정론적 토크나이저(`proc.Lexer`, `sqlutil`)로 100% 교체했습니다.
+> **A.** 정규 표현식(Chomsky Type 3 정규 언어)은 스택 메모리가 없어 괄호가 중첩된 SQL(Type 2 문맥 자유 언어)을 구조적으로 파싱할 수 없기 때문입니다. 정규식을 쓰면 따옴표 안의 리터럴이나 주석을 잘못 자르거나 조건을 누락하는 침묵형 데이터 왜곡이 발생하기 때문에, LionSQL v0.91.0은 전 프로덕션 쿼리 경로의 정규식을 100% 박멸하고 결정론적 상태 머신 토크나이저(`proc.Lexer`, `sqlutil`)로 전면 교체했습니다 (`Invariant 7`).
 
 ---
 
