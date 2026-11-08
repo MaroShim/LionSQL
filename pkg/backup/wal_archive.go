@@ -150,25 +150,32 @@ func (a *WALArchiver) ArchiveSegment(walPath string) (*ArchivedSegment, error) {
 	return &seg, nil
 }
 
-// RotateAndArchive forces sync on the active WAL writer, archives the current file, and resets it.
+// RotateAndArchive forces atomic rotation on the active WAL writer, archives the rotated segment,
+// and safely cleans up without any truncation race condition.
 func (a *WALArchiver) RotateAndArchive(writer *memengine.WALWriter, walPath string) (*ArchivedSegment, error) {
+	cleanWalPath := filepath.Clean(walPath)
+
 	if writer != nil {
-		if err := writer.Sync(); err != nil {
-			return nil, fmt.Errorf("failed to sync WAL writer before rotation: %w", err)
+		// Atomic rotation: rename active WAL to frozen temp file and immediately open new active WAL
+		rotatedPath := fmt.Sprintf("%s.frozen.%d", cleanWalPath, time.Now().UnixNano())
+		if err := writer.Rotate(rotatedPath); err != nil {
+			return nil, fmt.Errorf("atomic WAL rotation failed: %w", err)
 		}
+		defer os.Remove(rotatedPath)
+
+		// Archive the frozen segment (which is completely immutable and isolated from new writes)
+		seg, err := a.ArchiveSegment(rotatedPath)
+		if err != nil {
+			return nil, err
+		}
+		return seg, nil
 	}
 
-	seg, err := a.ArchiveSegment(walPath)
+	// Fallback when writer is nil (offline/standalone archiving)
+	seg, err := a.ArchiveSegment(cleanWalPath)
 	if err != nil {
 		return nil, err
 	}
-
-	if writer != nil {
-		if err := writer.Truncate(); err != nil {
-			return nil, fmt.Errorf("failed to reset active WAL file after archive: %w", err)
-		}
-	}
-
 	return seg, nil
 }
 

@@ -256,6 +256,49 @@ func (w *WALWriter) Size() int64 {
 	return w.bytesTotal
 }
 
+// Rotate atomically syncs and closes the active WAL file, renames it to rotatedPath,
+// and immediately opens a fresh active WAL file at the original path.
+// This guarantees zero transaction log truncation or data loss during archiving.
+func (w *WALWriter) Rotate(rotatedPath string) error {
+	w.syncMu.Lock()
+	defer w.syncMu.Unlock()
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.closed || w.file == nil {
+		return fmt.Errorf("WAL writer is closed")
+	}
+
+	// 1. Flush any pending buffers to disk
+	if err := w.file.Sync(); err != nil {
+		return fmt.Errorf("failed to sync WAL file before rotation: %w", err)
+	}
+
+	// 2. Close current file descriptor
+	if err := w.file.Close(); err != nil {
+		return fmt.Errorf("failed to close WAL file for rotation: %w", err)
+	}
+
+	// 3. Atomically rename current file to rotatedPath
+	if err := os.Rename(w.path, rotatedPath); err != nil {
+		// Attempt to reopen original if rename failed
+		reopenFile, _ := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		w.file = reopenFile
+		return fmt.Errorf("failed to rename WAL file to %s: %w", rotatedPath, err)
+	}
+
+	// 4. Open fresh active WAL file at original path
+	newFile, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create fresh WAL file after rotation: %w", err)
+	}
+
+	w.file = newFile
+	w.bytesTotal = 0
+	w.syncedSeq = w.writeSeq
+	return nil
+}
+
 // Truncate safely resets the WAL file to 0 bytes after an AOF rewrite.
 func (w *WALWriter) Truncate() error {
 	w.syncMu.Lock()

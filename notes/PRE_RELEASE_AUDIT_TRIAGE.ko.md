@@ -35,8 +35,8 @@
    - FlatRecord 모드에서 컬럼 추가 시 기존 행들을 구 스키마로 안전하게 역직렬화한 뒤 신규 컬럼 값을 덧붙여 새 레이아웃으로 재인코딩하도록 수정함으로써 기존 데이터 전량 증발 결함 완치.
 5. **`P0-05` [파티션 키 갱신 시 `partMu` 미보호 동시 맵 쓰기 크래시]** [완료] (`table_data.go:335-357` / 결함 11-5)
    - `addPartitionKey`/`removePartitionKey` 내부 자체 락 캡슐화 및 `ddl.go:GetPartitions`/`DropPartition`의 `partMu` RLock/Lock 보호 적용으로 동시 트랜잭션 시 `concurrent map read and map write` 패닉 및 Data Race 완치.
-6. **`P0-15` [WAL 아카이브 회전 중 신규 트랜잭션 Truncate 절삭 유실]** (`wal_archive.go:154-173` / 결함 9-1)
-   - 아카이브 복사 완료 직후 신규 트랜잭션이 유입되었을 때 락 미보호로 `writer.Truncate()`에 의해 잘려나가는 치명적 데이터 손실.
+6. **`P0-15` [WAL 아카이브 회전 중 신규 트랜잭션 Truncate 절삭 유실]** [완료] (`wal_archive.go:154-173` / 결함 9-1)
+   - `RotateAndArchive` 실행 중 신규 트랜잭션 유입 시 `Truncate()`에 의해 잘려나가던 결함 완치 (`WALWriter.Rotate` 원자적 파일 교체 메서드 도입 및 동결 세그먼트 완전 격리 복사/회수 아키텍처 확립, TDD 회귀 테스트 통과).
 7. **`P0-16` [백업 복원 실패 시 이전 상태 롤백 부재 반파 DB 방치]** (`restore.go:121-220` / 결함 9-2)
    - 중간 테이블 복원 실패 시 기존 삭제된 테이블들이 롤백되지 않아 데이터베이스가 영구 반파 상태로 파괴됨.
 8. **`P0-17` [백업 복원 시 외래키(FK) 의존 위상 정렬 누락 복원 실패]** (`restore.go:121-140, 150-200` / 결함 9-3)
