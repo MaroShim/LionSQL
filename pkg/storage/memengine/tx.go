@@ -182,10 +182,54 @@ type Transaction struct {
 	inPool            bool
 }
 
+func (tx *Transaction) resetForPoolLocked() {
+	tx.engine = nil
+	tx.snapshotLSN = 0
+	tx.snapshotTimestamp = 0
+	tx.commitLSN = 0
+	tx.commitTimestamp = 0
+
+	// Downsize maps if oversized, else clear() to prevent GC memory retention ([RULE:BoundedBuffers])
+	if len(tx.tableCache) > 64 {
+		tx.tableCache = make(map[string]*TableData, 4)
+	} else if tx.tableCache != nil {
+		clear(tx.tableCache)
+	}
+
+	for _, m := range tx.baseVers {
+		clear(m)
+	}
+	clear(tx.baseVers)
+
+	for _, m := range tx.local {
+		clear(m)
+	}
+	clear(tx.local)
+
+	for _, m := range tx.deleted {
+		clear(m)
+	}
+	clear(tx.deleted)
+
+	if len(tx.changes) > 128 {
+		tx.changes = make(map[string]rowChange, 16)
+	} else if tx.changes != nil {
+		clear(tx.changes)
+	}
+
+	clear(tx.savepoints)
+	tx.spNames = tx.spNames[:0]
+	clear(tx.tableSet)
+	clear(tx.shardMasks)
+	tx.tableNames = tx.tableNames[:0]
+	tx.neededShards = tx.neededShards[:0]
+}
+
 func (tx *Transaction) releaseToPoolLocked() {
 	if tx.inPool {
 		return
 	}
+	tx.resetForPoolLocked()
 	tx.inPool = true
 	txPool.Put(tx)
 }

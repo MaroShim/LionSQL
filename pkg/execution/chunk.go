@@ -42,8 +42,9 @@ func PutChunk(c *Chunk) {
 	if cap(c.Tuples) > DefaultChunkSize*4 {
 		return
 	}
-	for i := range c.Tuples {
-		c.Tuples[i] = Tuple{}
+	// Zero out backing array up to capacity to eliminate GC retention of previous batch tuples ([RULE:ZeroAllocation])
+	if cap(c.Tuples) > 0 {
+		clear(c.Tuples[:cap(c.Tuples)])
 	}
 	c.Reset()
 	chunkPool.Put(c)

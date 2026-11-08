@@ -539,6 +539,9 @@ func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName 
 	frame := e.newFrame(prog, tx)
 	frame.session = session
 	frame.ctx = ctx
+	if tx != nil {
+		frame.tranCount = 1
+	}
 	defer e.releaseFrame(frame)
 
 	// Bind parameters
@@ -605,6 +608,9 @@ func (e *Executor) ExecuteInTxWithSessionContext(ctx context.Context, prog *proc
 	frame := e.newFrame(prog, tx)
 	frame.session = session
 	frame.ctx = ctx
+	if tx != nil {
+		frame.tranCount = 1
+	}
 	defer e.releaseFrame(frame)
 
 	if transientTables != nil {
@@ -720,13 +726,67 @@ func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame
 	return f
 }
 
+func (f *VMFrame) resetForPool() {
+	if f == nil {
+		return
+	}
+	// 1. Clear slice backing arrays up to capacity to prevent GC leaks of previous pointers ([RULE:ZeroAllocation])
+	if cap(f.regs) > 0 {
+		clear(f.regs[:cap(f.regs)])
+		f.regs = f.regs[:0]
+	}
+	if cap(f.slots) > 0 {
+		clear(f.slots[:cap(f.slots)])
+		f.slots = f.slots[:0]
+	}
+	if cap(f.rowScratch) > 0 {
+		clear(f.rowScratch[:cap(f.rowScratch)])
+		f.rowScratch = f.rowScratch[:0]
+	}
+
+	// 2. Clear or downsize maps if oversized ([RULE:BoundedBuffers])
+	if len(f.vars) > 64 {
+		f.vars = make(map[string]storage.Value, 16)
+	} else if f.vars != nil {
+		clear(f.vars)
+	}
+
+	if len(f.evalCtx) > 64 {
+		f.evalCtx = make(map[string]any, 32)
+	} else if f.evalCtx != nil {
+		clear(f.evalCtx)
+	}
+
+	// 3. Clean up open cursors and transient tables ([RULE:HandleHygiene])
+	clear(f.cursors)
+	clear(f.transientTables)
+
+	// 4. Detach all execution results, sessions, and contexts
+	f.rows = nil
+	f.columns = nil
+	f.values = nil
+	f.ctx = nil
+	f.tx = nil
+	f.session = nil
+	f.prog = nil
+	f.executor = nil
+	f.catchStack = f.catchStack[:0]
+	f.logs = f.logs[:0]
+	f.rowCount = 0
+	f.tranCount = 0
+	f.lastIdentity = 0
+	f.lastError = 0
+	f.lastErrorMsg = ""
+	f.lastErrorLine = 0
+	f.fetchStatus = -1
+	f.evalCtxDirty = true
+}
+
 func (e *Executor) releaseFrame(frame *VMFrame) {
 	if frame == nil {
 		return
 	}
-	frame.tx = nil
-	frame.session = nil
-	frame.prog = nil
+	frame.resetForPool()
 	e.framePool.Put(frame)
 }
 

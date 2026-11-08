@@ -388,7 +388,11 @@ func ReleaseValuesSlice(s []any) {
 	if cap(s) > 128 {
 		return
 	}
-	s = s[:0]
+	// Zero out backing array up to capacity to eliminate GC retention of previous query objects ([RULE:ZeroAllocation])
+	if cap(s) > 0 {
+		clear(s[:cap(s)])
+		s = s[:0]
+	}
 	tupleValuesPool.Put(&s)
 }
 
