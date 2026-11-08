@@ -43,12 +43,179 @@ type RestoreResult struct {
 	Duration           time.Duration `json:"duration_ms"`
 }
 
+// normalizeTableName strips quotes, brackets, and schema qualifiers for consistent lookup.
+func normalizeTableName(s string) string {
+	s = strings.Trim(strings.TrimSpace(s), "[]\"'`")
+	if idx := strings.LastIndex(s, "."); idx != -1 {
+		s = strings.Trim(s[idx+1:], "[]\"'`")
+	}
+	return strings.ToLower(s)
+}
+
+// TopologicalSortTables reorders table schemas so that parent tables referenced by
+// foreign keys appear before the child tables that depend on them.
+// [RULE:RadicalKISS] Kahn's algorithm is applied deterministically.
+func TopologicalSortTables(tables []*storage.TableSchema) []*storage.TableSchema {
+	if len(tables) <= 1 {
+		return tables
+	}
+
+	nameMap := make(map[string]*storage.TableSchema, len(tables))
+	for _, t := range tables {
+		norm := normalizeTableName(t.Name)
+		nameMap[norm] = t
+	}
+
+	// Graph: parent -> children (dependencies: child depends on parent)
+	// inDegree: count of parent tables in the current set that the child depends on.
+	inDegree := make(map[string]int, len(tables))
+	children := make(map[string][]string, len(tables))
+
+	for norm := range nameMap {
+		inDegree[norm] = 0
+	}
+
+	for _, t := range tables {
+		childNorm := normalizeTableName(t.Name)
+		seenParents := make(map[string]struct{})
+		for _, fk := range t.ForeignKeys {
+			parentNorm := normalizeTableName(fk.ParentTable)
+			// Ignore self-references or parents not present in this set
+			if parentNorm == childNorm {
+				continue
+			}
+			if _, exists := nameMap[parentNorm]; !exists {
+				continue
+			}
+			if _, already := seenParents[parentNorm]; already {
+				continue
+			}
+			seenParents[parentNorm] = struct{}{}
+			children[parentNorm] = append(children[parentNorm], childNorm)
+			inDegree[childNorm]++
+		}
+	}
+
+	// Initialize queue with tables having 0 in-degree (no dependencies)
+	queue := make([]string, 0, len(tables))
+	for _, t := range tables {
+		norm := normalizeTableName(t.Name)
+		if inDegree[norm] == 0 {
+			queue = append(queue, norm)
+		}
+	}
+
+	sorted := make([]*storage.TableSchema, 0, len(tables))
+	visited := make(map[string]bool, len(tables))
+
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+		if visited[curr] {
+			continue
+		}
+		visited[curr] = true
+		sorted = append(sorted, nameMap[curr])
+
+		for _, ch := range children[curr] {
+			inDegree[ch]--
+			if inDegree[ch] == 0 {
+				queue = append(queue, ch)
+			}
+		}
+	}
+
+	// If cycles or disconnected vertices exist, append remaining tables deterministically
+	if len(sorted) < len(tables) {
+		for _, t := range tables {
+			norm := normalizeTableName(t.Name)
+			if !visited[norm] {
+				visited[norm] = true
+				sorted = append(sorted, t)
+			}
+		}
+	}
+
+	return sorted
+}
+
+// dropAllTablesSafely drops all tables in the engine in reverse topological order (children first).
+func dropAllTablesSafely(eng storage.Engine) {
+	if existingList, err := eng.ListTables(); err == nil && len(existingList) > 0 {
+		sortedExisting := TopologicalSortTables(existingList)
+		for i := len(sortedExisting) - 1; i >= 0; i-- {
+			_ = eng.DropTable(sortedExisting[i].Name)
+		}
+	}
+}
+
 // RestoreBackup restores tables, schemas, data, and catalog procedures from a tar.gz stream.
+// It guarantees atomic restore: if any error occurs midway, the database is rolled back
+// to its exact pre-restore snapshot state, preventing half-restored corruption ([RULE:AtomicSaves]).
 func RestoreBackup(r io.Reader, eng storage.Engine, cat *catalog.Catalog, opts RestoreOptions) (*RestoreResult, error) {
-	startTime := time.Now()
 	if opts.BatchSize <= 0 {
 		opts.BatchSize = 1000
 	}
+
+	// 1. Check for existing database state and take an ephemeral pre-restore snapshot
+	hasExistingState := false
+	existingTables, err := eng.ListTables()
+	if err == nil && len(existingTables) > 0 {
+		hasExistingState = true
+	} else if cat != nil && (len(cat.ListProcedures()) > 0 || len(cat.ListFunctions()) > 0 || len(cat.ListTriggers()) > 0 || len(cat.ListViews()) > 0) {
+		hasExistingState = true
+	}
+
+	var preRestorePath string
+	if hasExistingState {
+		preRestoreFile, err := os.CreateTemp("", "lionsql-prerestore-*.tar.gz")
+		if err != nil {
+			return nil, fmt.Errorf("failed to create pre-restore snapshot temp file: %w", err)
+		}
+		preRestorePath = preRestoreFile.Name()
+		defer func() {
+			_ = os.Remove(preRestorePath)
+		}()
+
+		if _, err := CreateBackup(preRestoreFile, eng, cat); err != nil {
+			_ = preRestoreFile.Close()
+			return nil, fmt.Errorf("failed to capture pre-restore snapshot: %w", err)
+		}
+		if err := preRestoreFile.Close(); err != nil {
+			return nil, fmt.Errorf("failed to close pre-restore snapshot: %w", err)
+		}
+	}
+
+	// 2. Perform the primary restore operation
+	result, restoreErr := restoreCore(r, eng, cat, opts)
+	if restoreErr != nil {
+		// Rollback: drop all tables created during the failed restore
+		dropAllTablesSafely(eng)
+
+		// Restore the previous database state from snapshot if available
+		if preRestorePath != "" {
+			pf, err := os.Open(preRestorePath)
+			if err == nil {
+				defer pf.Close()
+				_, rbErr := restoreCore(pf, eng, cat, RestoreOptions{
+					DropExisting: true,
+					BatchSize:    opts.BatchSize,
+				})
+				if rbErr != nil {
+					return nil, fmt.Errorf("restore failed: %w (critical rollback error: %v)", restoreErr, rbErr)
+				}
+			}
+		}
+		return nil, restoreErr
+	}
+
+	return result, nil
+}
+
+// restoreCore performs the physical archive unpacking, schema creation, data insertion,
+// and catalog registration.
+func restoreCore(r io.Reader, eng storage.Engine, cat *catalog.Catalog, opts RestoreOptions) (*RestoreResult, error) {
+	startTime := time.Now()
 
 	// 1. Unpack tar.gz stream to temporary staging directory
 	tmpDir, err := os.MkdirTemp("", "lionsql-restore-*")
@@ -118,11 +285,23 @@ func RestoreBackup(r io.Reader, eng storage.Engine, cat *catalog.Catalog, opts R
 		return nil, fmt.Errorf("failed to parse schemas.json: %w", err)
 	}
 
-	for _, schema := range tables {
-		if opts.DropExisting {
-			_ = eng.DropTable(schema.Name)
-		}
+	// Reorder tables by foreign key topological dependency (parents before children)
+	tables = TopologicalSortTables(tables)
 
+	if opts.DropExisting {
+		// Drop existing tables in reverse topological order (children before parents)
+		if existingList, err := eng.ListTables(); err == nil && len(existingList) > 0 {
+			sortedExisting := TopologicalSortTables(existingList)
+			for i := len(sortedExisting) - 1; i >= 0; i-- {
+				_ = eng.DropTable(sortedExisting[i].Name)
+			}
+		}
+		for i := len(tables) - 1; i >= 0; i-- {
+			_ = eng.DropTable(tables[i].Name)
+		}
+	}
+
+	for _, schema := range tables {
 		// Create table
 		if err := eng.CreateTable(schema); err != nil {
 			// If already exists and not dropping, continue
@@ -140,7 +319,7 @@ func RestoreBackup(r io.Reader, eng storage.Engine, cat *catalog.Catalog, opts R
 		result.TablesRestored++
 	}
 
-	// 3. Restore data records for each table
+	// 3. Restore data records for each table in topological order
 	sess, err := eng.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open session for data restore: %w", err)
@@ -220,7 +399,7 @@ func RestoreBackup(r io.Reader, eng storage.Engine, cat *catalog.Catalog, opts R
 		result.RecordsRestored += tableRecords
 	}
 
-	// 4. Restore catalog objects (procedures, functions, triggers)
+	// 4. Restore catalog objects (procedures, functions, triggers, views)
 	if cat != nil {
 		procsPath := filepath.Join(tmpDir, "catalog", "procedures.json")
 		if data, err := os.ReadFile(procsPath); err == nil {

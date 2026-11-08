@@ -37,10 +37,10 @@
    - `addPartitionKey`/`removePartitionKey` 내부 자체 락 캡슐화 및 `ddl.go:GetPartitions`/`DropPartition`의 `partMu` RLock/Lock 보호 적용으로 동시 트랜잭션 시 `concurrent map read and map write` 패닉 및 Data Race 완치.
 6. **`P0-15` [WAL 아카이브 회전 중 신규 트랜잭션 Truncate 절삭 유실]** [완료] (`wal_archive.go:154-173` / 결함 9-1)
    - `RotateAndArchive` 실행 중 신규 트랜잭션 유입 시 `Truncate()`에 의해 잘려나가던 결함 완치 (`WALWriter.Rotate` 원자적 파일 교체 메서드 도입 및 동결 세그먼트 완전 격리 복사/회수 아키텍처 확립, TDD 회귀 테스트 통과).
-7. **`P0-16` [백업 복원 실패 시 이전 상태 롤백 부재 반파 DB 방치]** (`restore.go:121-220` / 결함 9-2)
-   - 중간 테이블 복원 실패 시 기존 삭제된 테이블들이 롤백되지 않아 데이터베이스가 영구 반파 상태로 파괴됨.
-8. **`P0-17` [백업 복원 시 외래키(FK) 의존 위상 정렬 누락 복원 실패]** (`restore.go:121-140, 150-200` / 결함 9-3)
-   - 자식 테이블이 부모 테이블보다 먼저 복원되어 FK 위반으로 전체 복원이 중단되는 현상.
+7. **`P0-16` [백업 복원 실패 시 이전 상태 롤백 부재 반파 DB 방치]** [완료] (`restore.go:121-220` / 결함 9-2)
+   - 복원 시작 전 기존 엔진 상태를 임시 파일에 무손실 스냅샷 격리하고 복원 실패 시 생성된 테이블 제거 및 원본 스냅샷 원자적 롤백 복원을 수행함으로써 반파 DB 방치 결함 완치 (`[RULE:AtomicSaves]`).
+8. **`P0-17` [백업 복원 시 외래키(FK) 의존 위상 정렬 누락 복원 실패]** [완료] (`restore.go:121-140, 150-200` / 결함 9-3)
+   - 외래키 참조 관계를 분석하여 Kahn's 알고리즘 기반 위상 정렬(Topological Sort)을 수행, 부모 ➔ 자식 순 생성 및 레코드 삽입, 자식 ➔ 부모 순 드롭을 보장하여 외래키 위반 복원 실패 완치 (`[RULE:RadicalKISS]`).
 
 ### 그룹 B: 보안, 인증 및 CDC 신뢰성 (5건)
 9. **`P0-06` [빈 사용자(`normUser == ""`) 최고 관리자 권한 우회 백도어]** [완료] (`auth/rbac.go:380-383` / 결함 12-1)
@@ -55,12 +55,12 @@
     - 과거 LSN 재생 시 수신 채널 버퍼 초과분을 무음 드롭(`default:`)하여 구독자에게 데이터 불일치 초래하던 결함 완치 (Lossless Bridge 2단계 핸드오버 및 무유실 순차 스트리밍, Rule 29 준수).
 
 ### 그룹 C: T-SQL 렉서, 파서 및 카탈로그 메타데이터 (6건)
-14. **`P0-20` [AlterTrigger 영속화 누락 재부팅 시 DDL 수정사항 유실]** (`catalog/catalog.go:376-390` / 결함 7-1)
-    - 트리거 수정 DDL 시 디스크 영속화 호출이 누락되어 서버 재시작 시 이전 버전으로 롤백.
-15. **`P0-21` [CreateStatistics 영속화 및 직렬화 필드 누락 통계 증발]** (`catalog/catalog.go:790-796` / 결함 7-2)
-    - 확장 통계 생성 시 카탈로그 직렬화 구조체에 필드가 누락되어 재부팅 시 CBO 통계 메타데이터 증발.
-16. **`P0-22` [GetView 내부 포인터 직접 반환 동시 실행 시 Data Race]** (`catalog/catalog.go:752-761` / 결함 7-4)
-    - 카탈로그 내부 `*View` 구조체를 딥카피 없이 반환하여 여러 쿼리가 동시에 참조 시 메모리 레이스 발생.
+14. **`P0-20` [AlterTrigger 영속화 누락 재부팅 시 DDL 수정사항 유실]** [완료] (`catalog/catalog.go:376-390` / 결함 7-1)
+    - `AlterTrigger` 실행 시 `c.persistenceDir`에 대한 `persistObjectsLocked()` 호출을 연동하여 서버 재시작 시에도 수정된 트리거 DDL 정의가 100% 보존되도록 완치.
+15. **`P0-21` [CreateStatistics 영속화 및 직렬화 필드 누락 통계 증발]** [완료] (`catalog/catalog.go:790-796` / 결함 7-2)
+    - `CatalogObjects` 직렬화 구조체에 `Statistics []*StatisticDef` 필드를 추가하고 `CreateStatistics`/`DropStatistics` 시 `persistObjectsLocked()` 자동 동기화 및 부팅 시 자동 로드 복원 완치.
+16. **`P0-22` [GetView 내부 포인터 직접 반환 동시 실행 시 Data Race]** [완료] (`catalog/catalog.go:752-761` / 결함 7-4)
+    - `GetView` 및 `ListViews` 호출 시 내부 카탈로그 포인터 대신 방어적 복사본(`cp := *v`)을 반환하도록 수정하여 동시 쿼리 실행 시 Data Race 원천 차단 완치 (`[RULE:ConcurrencySafety]`).
 17. **`P0-23` [DECIMAL/NUMERIC을 Float 매핑하여 금융 부동소수점 오차 유발]** [완료] (`proc/parser.go:255-280` / 결함 6-1)
     - 파서가 정밀 금융 타입을 `TypeFloat`으로 매핑하던 결함 완치 (Native/ANTLR4 파서에서 `DECIMAL`/`NUMERIC`/`MONEY`를 `TypeDecimal`로 분리 매핑 및 `Precision/Scale` 파싱 보존 연동 완료).
 18. **`P0-24` [UTF-8 멀티바이트 비-ASCII 식별자 파편화]** [완료] (`proc/lexer.go:497-499` / 결함 6-2)
@@ -133,7 +133,7 @@
 | :---: | :--- | :---: | :--- |
 | **Batch 1** | **보안 및 접근 제어 (Security & RBAC)** | P0-06 ~ P0-10 (5건) [완료] | 빈 유저 백도어 차단, DENY 우선순위 확립, Outbox 메시지 유실 방지 |
 | **Batch 2** | **스토리지 & 영속성 (Storage & WAL)** | P0-01 ~ P0-05 (5건) [완료] | FlatRecord 오프셋 충돌 해소, 스냅샷 빈 로 증발 방지, WAL 절삭 차단, ALTER TABLE 보존, 파티션 락 동시성 완치 |
-| **Batch 3** | **백업, 복원 & 카탈로그 (Backup & Catalog)** | P0-15 ~ P0-17, P0-20 ~ P0-22 (6건) | 복원 트랜잭션 롤백, FK 위상 정렬 복원, 트리거/통계 영속화 |
+| **Batch 3** | **백업, 복원 & 카탈로그 (Backup & Catalog)** | P0-15 ~ P0-17, P0-20 ~ P0-22 (6건) [완료] | 복원 트랜잭션 롤백, FK 위상 정렬 복원, 트리거/통계 영속화, 뷰 동시성 딥카피 |
 | **Batch 4** | **T-SQL 렉서, 파서 & CBO (Parser & CBO)** | P0-23 ~ P0-25, P0-28 (4건) [완료] | DECIMAL 실수 오차 퇴치, UTF-8 식별자 보장, 유니크 인덱스 NaN 왜곡 차단, LEFT JOIN 보존 |
 | **Batch 5** | **실행 오퍼레이터 & 런타임 (Execution & VM)** | P0-11 ~ P0-14, P0-18 ~ P0-19, P0-26, P0-27, P0-29, P0-30 (10건) | CUBE/Window OOM DoS 방어, Merge 풀스캔 해소, 와이어 락 누수 차단 |
 

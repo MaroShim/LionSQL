@@ -386,6 +386,9 @@ func (c *Catalog) AlterTrigger(trg *Trigger) error {
 	trg.CreatedAt = existing.CreatedAt
 	trg.UpdatedAt = time.Now()
 	c.triggers[key] = trg
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -505,10 +508,11 @@ func (c *Catalog) InvalidateTableStats(tableName string) {
 
 // CatalogObjects encapsulates serializable catalog metadata objects for persistence.
 type CatalogObjects struct {
-	Procedures []*Procedure `json:"procedures,omitempty"`
-	Functions  []*Function  `json:"functions,omitempty"`
-	Triggers   []*Trigger   `json:"triggers,omitempty"`
-	Views      []*View      `json:"views,omitempty"`
+	Procedures []*Procedure    `json:"procedures,omitempty"`
+	Functions  []*Function     `json:"functions,omitempty"`
+	Triggers   []*Trigger      `json:"triggers,omitempty"`
+	Views      []*View         `json:"views,omitempty"`
+	Statistics []*StatisticDef `json:"statistics,omitempty"`
 }
 
 // SetPersistenceDir sets the directory where catalog statistics and metadata objects are persisted.
@@ -568,6 +572,14 @@ func (c *Catalog) listViewsLocked() []*View {
 	return res
 }
 
+func (c *Catalog) listStatisticsLocked() []*StatisticDef {
+	res := make([]*StatisticDef, 0, len(c.statistics))
+	for _, s := range c.statistics {
+		res = append(res, s)
+	}
+	return res
+}
+
 func (c *Catalog) persistObjectsLocked() error {
 	if c.persistenceDir == "" {
 		return nil
@@ -583,6 +595,7 @@ func (c *Catalog) persistObjectsLocked() error {
 		Functions:  c.listFunctionsLocked(),
 		Triggers:   c.listTriggersLocked(),
 		Views:      c.listViewsLocked(),
+		Statistics: c.listStatisticsLocked(),
 	}
 
 	data, err := json.MarshalIndent(objs, "", "  ")
@@ -633,6 +646,10 @@ func (c *Catalog) loadObjectsFileLocked(targetPath string) error {
 	for _, v := range objs.Views {
 		key := strings.ToLower(cleanCatalogIdent(v.Name))
 		c.views[key] = v
+	}
+	for _, s := range objs.Statistics {
+		key := strings.ToLower(cleanCatalogIdent(s.TableName) + "." + cleanCatalogIdent(s.Name))
+		c.statistics[key] = s
 	}
 	return nil
 }
@@ -749,6 +766,7 @@ func (c *Catalog) CreateOrReplaceView(v *View) {
 }
 
 // GetView retrieves a view by name.
+// Returns a defensive copy to prevent data races and unauthorized internal mutations ([RULE:ConcurrencySafety]).
 func (c *Catalog) GetView(name string) (*View, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -757,7 +775,8 @@ func (c *Catalog) GetView(name string) (*View, error) {
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", ErrViewNotFound, name)
 	}
-	return v, nil
+	cp := *v
+	return &cp, nil
 }
 
 // DropView removes a view by name. Returns ErrViewNotFound if not registered.
@@ -776,12 +795,14 @@ func (c *Catalog) DropView(name string) error {
 }
 
 // ListViews returns all registered views.
+// Returns defensive copies to ensure safe concurrent access.
 func (c *Catalog) ListViews() []*View {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	result := make([]*View, 0, len(c.views))
 	for _, v := range c.views {
-		result = append(result, v)
+		cp := *v
+		result = append(result, &cp)
 	}
 	return result
 }
@@ -792,6 +813,9 @@ func (c *Catalog) CreateStatistics(stat *StatisticDef) error {
 	defer c.mu.Unlock()
 	key := strings.ToLower(cleanCatalogIdent(stat.TableName) + "." + cleanCatalogIdent(stat.Name))
 	c.statistics[key] = stat
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -817,6 +841,10 @@ func (c *Catalog) DropStatistics(tableName, statName string) error {
 	} else {
 		key := strings.ToLower(cleanTbl + "." + cleanStat)
 		delete(c.statistics, key)
+	}
+
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
 	}
 
 	if ts, ok := c.tableStats[cleanTbl]; ok && ts != nil {
