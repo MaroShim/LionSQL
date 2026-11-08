@@ -105,4 +105,36 @@ func TestMiddleware_RequestBodyLimit(t *testing.T) {
 	if rec.Code == http.StatusRequestEntityTooLarge {
 		t.Errorf("unexpected 413 for normal payload")
 	}
+
+	// 2. Regression P0-35: Chunked transfer (ContentLength == -1) exceeding DefaultMaxRequestBodySize
+	// Must be wrapped by MaxBytesReader and rejected on read.
+	oversizedStream := io.LimitReader(zeroByteReader{}, DefaultMaxRequestBodySize+1024)
+	chunkedReq := httptest.NewRequest(http.MethodPost, "/api/test/oversized", io.NopCloser(oversizedStream))
+	chunkedReq.ContentLength = -1 // Chunked transfer has ContentLength == -1
+
+	testHandler := corsAndSecurityMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := io.ReadAll(r.Body)
+		if err == nil {
+			t.Fatalf("expected MaxBytesError for chunked request exceeding size limit, but got nil")
+		}
+		var maxBytesErr *http.MaxBytesError
+		if !strings.Contains(err.Error(), "request body too large") && !strings.Contains(err.Error(), "http: request body too large") {
+			t.Errorf("expected request body too large error, got: %v", err)
+		}
+		_ = maxBytesErr
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+	}))
+
+	chunkedRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(chunkedRec, chunkedReq)
 }
+
+type zeroByteReader struct{}
+
+func (z zeroByteReader) Read(p []byte) (n int, err error) {
+	for i := range p {
+		p[i] = 'A'
+	}
+	return len(p), nil
+}
+

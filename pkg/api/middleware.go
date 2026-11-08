@@ -75,8 +75,8 @@ func corsAndSecurityMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// 4. Request Body Size Limit Guard (DoS defense)
-		if r.Body != nil && r.ContentLength > 0 {
+		// 4. Request Body Size Limit Guard (DoS defense: protect both fixed-length and chunked streams)
+		if r.Body != nil {
 			r.Body = http.MaxBytesReader(w, r.Body, DefaultMaxRequestBodySize)
 		}
 
