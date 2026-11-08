@@ -20,7 +20,7 @@
 
 ---
 
-## 2. P0 (Must Fix, 1.0 필수 패치 30선) 상세 명세
+## 2. P0 (Must Fix, 1.0 필수 패치 31선) 상세 명세
 
 아래 30건은 데이터베이스 엔진의 핵심 존립 근거인 **데이터 내구성(Durability), 무결성(Integrity), 보안(Security), 가용성(Availability)**을 위협하므로 1.0 출시 전 반드시 TDD(Test-Driven Development)로 완치되어야 합니다.
 
@@ -77,8 +77,8 @@
     - `WindowIterator`에 `workMem` (기본 64MB, `DefaultWorkMem`) 및 `accumMemory` 실시간 튜플 크기 추적(`EstimateTupleSize`) 가드레일을 설치하고, 메모리 한도 초과 시 `ErrWindowWorkMemExceeded` 에러를 즉시 반환하여 힙 고갈 OOM 크래시 DoS 원천 차단 완치 (`[RULE:BoundedBuffers]`).
 23. **`P0-13` [Merge Join 우측 중복 키 무제한 슬라이스 팽창 메모리 스톨]** [완료] (`execution/merge_join.go:335-356` / 결함 10-3)
     - `MergeJoinIterator`에 `workMem` (기본 64MB) 및 `bufMemory` 실시간 튜플 크기 추적(`EstimateTupleSize`) 가드레일을 설치하고, 동일 조인 키 버퍼링 한도 초과 시 `ErrMergeJoinWorkMemExceeded` 에러를 즉시 반환하여 힙 고갈 메모리 스톨 및 OOM 크래시 DoS 원천 차단 완치 (`[RULE:BoundedBuffers]`).
-24. **`P0-14` [PullChunk I/O 에러 시 불완전 누적 그룹 부분 집계 왜곡 반환]** (`execution/aggregate.go:575-578` / 결함 10-4)
-    - 스트리밍 I/O 읽기 에러 발생 시 에러 전파 대신 부분 데이터 집계 결과를 정상치로 반환하는 정합성 왜곡.
+24. **`P0-14` [PullChunk I/O 에러 시 자식 리소스 누수 및 불완전 집계 노출 방지]** [완료] (`execution/aggregate.go:587-621` / 결함 10-4)
+    - 스트리밍 I/O 읽기 에러나 컨텍스트 취소 시 `_ = a.child.Close()`를 즉각 호출하여 하위 커서/파일 핸들 영구 누수를 차단하고, `a.tuples = nil` 무효화 및 Fail-Closed TDD 회귀 검증을 통해 불완전 부분 집계 유출 원천 차단 완치 (`[RULE:HandleHygiene]`, `[RULE:ExplicitError]`).
 24. **`P0-18` [MERGE 문 타깃 테이블 무제한 풀스캔 힙 적재 OOM DoS]** (`engine/sqlexec_merge.go:106-114` / 결함 8-1)
     - 대용량 타깃 테이블에 대해 비인덱스 풀스캔 및 $O(M \times N)$ 비효율 루프로 인한 런타임 락업.
 25. **`P0-19` [UPDATE/DELETE 스캔 중 I/O 에러 시 무음 탈출 부분 커밋 데이터 오염]** (`engine/sqlexec_dml.go:1128-1132` / 결함 8-2)

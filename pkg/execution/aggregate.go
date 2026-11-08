@@ -544,6 +544,7 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 			}
 		case proc.GroupByCube:
 			if nKeys > MaxCubeColumns {
+				_ = a.child.Close()
 				return fmt.Errorf("%w: %d columns specified, maximum allowed is %d (limit: 4,096 grouping sets)",
 					ErrTooManyCubeColumns, nKeys, MaxCubeColumns)
 			}
@@ -580,12 +581,16 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
+				_ = a.child.Close()
+				a.tuples = nil
 				return ctx.Err()
 			default:
 			}
 
 			err := PullChunk(ctx, a.child, inChunk, DefaultChunkSize)
 			if err != nil && err != io.EOF {
+				_ = a.child.Close()
+				a.tuples = nil
 				return err
 			}
 			if inChunk.Len() == 0 && err == io.EOF {
@@ -608,12 +613,16 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
+				_ = a.child.Close()
+				a.tuples = nil
 				return ctx.Err()
 			default:
 			}
 
 			err := PullChunk(ctx, a.child, inChunk, DefaultChunkSize)
 			if err != nil && err != io.EOF {
+				_ = a.child.Close()
+				a.tuples = nil
 				return err
 			}
 			if inChunk.Len() == 0 && err == io.EOF {
