@@ -73,8 +73,8 @@
 ### 그룹 D: SQL 실행 엔진, CBO 플래너 및 조인/집계 오퍼레이터 (7건)
 21. **`P0-11` [GROUP BY CUBE 컬럼 수 상한 미검사 $2^N$ 할당 OOM DoS]** [완료] (`execution/aggregate.go:538-545` / 결함 10-1)
     - `MaxCubeColumns = 12` (최대 4,096개 그룹 세트, MSSQL 표준 호환) 상한선 가드레일을 설치하고 12개 초과 시 `ErrTooManyCubeColumns` 에러를 즉시 반환하여 힙 고갈 프로세스 크래시 DoS 원천 차단 완치 (`[RULE:BoundedBuffers]`).
-22. **`P0-12` [Window 함수 하위 스트림 무제한 힙 적재 OOM 크래시]** (`execution/window.go:42-53` / 결함 10-2)
-    - 파티션 없는 대용량 테이블 윈도우 함수 실행 시 전체 테이블을 단일 슬라이스에 누적하여 힙 고갈 크래시.
+22. **`P0-12` [Window 함수 하위 스트림 무제한 힙 적재 OOM 크래시]** [완료] (`execution/window.go:42-53` / 결함 10-2)
+    - `WindowIterator`에 `workMem` (기본 64MB, `DefaultWorkMem`) 및 `accumMemory` 실시간 튜플 크기 추적(`EstimateTupleSize`) 가드레일을 설치하고, 메모리 한도 초과 시 `ErrWindowWorkMemExceeded` 에러를 즉시 반환하여 힙 고갈 OOM 크래시 DoS 원천 차단 완치 (`[RULE:BoundedBuffers]`).
 22. **`P0-13` [Merge Join 우측 중복 키 무제한 슬라이스 팽창 메모리 스톨]** (`execution/merge_join.go:335-356` / 결함 10-3)
     - 우측 동일 조인 키 대량 중복 시 버퍼가 기가바이트 단위로 팽창하여 GC 압박 및 엔진 스톨.
 23. **`P0-14` [PullChunk I/O 에러 시 불완전 누적 그룹 부분 집계 왜곡 반환]** (`execution/aggregate.go:575-578` / 결함 10-4)

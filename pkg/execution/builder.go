@@ -175,7 +175,11 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		if cErr != nil {
 			return nil, cErr
 		}
-		op = NewWindowIterator(child, plan.WindowDefs)
+		wIter := NewWindowIterator(child, plan.WindowDefs)
+		if opts.WorkMem > 0 {
+			wIter.SetWorkMem(opts.WorkMem)
+		}
+		op = wIter
 
 	case planner.NodeHashJoin:
 		if len(plan.Children) < 2 {

@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -13,6 +14,9 @@ import (
 	"lionsql/pkg/proc"
 )
 
+// ErrWindowWorkMemExceeded is returned when the window function materialization exceeds work_mem.
+var ErrWindowWorkMemExceeded = errors.New("window function memory budget exceeded")
+
 // WindowIterator evaluates SQL window functions over partitions of materialized rows.
 type WindowIterator struct {
 	child       Iterator
@@ -21,6 +25,8 @@ type WindowIterator struct {
 	currIdx     int
 	schema      []string
 	colIndexMap *ColumnIndexMap
+	workMem     int64
+	accumMemory int64
 }
 
 // NewWindowIterator creates a new Volcano iterator for window functions.
@@ -29,6 +35,14 @@ func NewWindowIterator(child Iterator, defs []planner.WindowDef) *WindowIterator
 		child:      child,
 		windowDefs: defs,
 		currIdx:    0,
+		workMem:    DefaultWorkMem,
+	}
+}
+
+// SetWorkMem sets the maximum memory budget for materializing window rows ([RULE:BoundedBuffers]).
+func (w *WindowIterator) SetWorkMem(bytes int64) {
+	if bytes > 0 {
+		w.workMem = bytes
 	}
 }
 
@@ -41,6 +55,7 @@ func (w *WindowIterator) Open(ctx context.Context) error {
 	}
 
 	w.rows = nil
+	w.accumMemory = 0
 	for {
 		t, err := w.child.Next(ctx)
 		if err == io.EOF {
@@ -49,6 +64,13 @@ func (w *WindowIterator) Open(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		tSize := EstimateTupleSize(t)
+		if w.workMem > 0 && w.accumMemory+tSize > w.workMem {
+			_ = w.child.Close()
+			return fmt.Errorf("%w: %s > work_mem (%s)",
+				ErrWindowWorkMemExceeded, FormatMemSize(w.accumMemory+tSize), FormatMemSize(w.workMem))
+		}
+		w.accumMemory += tSize
 		w.rows = append(w.rows, t)
 	}
 
@@ -588,6 +610,8 @@ func (w *WindowIterator) Next(ctx context.Context) (Tuple, error) {
 }
 
 func (w *WindowIterator) Close() error {
+	w.rows = nil
+	w.accumMemory = 0
 	if w.child != nil {
 		return w.child.Close()
 	}
