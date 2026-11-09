@@ -8,7 +8,7 @@ import (
 )
 
 // Version is the authoritative single source of truth for the LionSQL release version.
-const Version = "0.91.0"
+const Version = "0.92.0"
 
 // Injected via ldflags or auto-detected via debug.ReadBuildInfo()
 var (
