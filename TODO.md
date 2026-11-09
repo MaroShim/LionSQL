@@ -1,9 +1,15 @@
 # LionSQL Active Engineering Sprint & Task Dashboard (`TODO.md`)
 
+> **[MANDATORY DIRECTIVE / 필수 준수 명령 (`[RULE:ContinuousBacklog]`)]**:
+> **이 `TODO.md` 문서에 항목을 추가, 수정, 상태 변경(`Pending` ➔ `In Progress` ➔ `Completed [x]`)할 때는 반드시 스프린트 DB(`.sprint.db` / `sprint_tasks`)와 [`TASKS.md`](TASKS.md)에도 동시에 반영(Dual-Sync)해야 합니다. 마크다운 파일만 수정하고 DB 업데이트를 누락하는 행위는 엄격히 금지됩니다.**
+> - **신규 항목 등록**: `./bin/sprint add <ID> "<TITLE>" <DOMAIN> <PRIO> [PLAN_DOC]`
+> - **상태 변경 (진행/완료)**: `./bin/sprint set <ID> <PENDING|IN_PROGRESS|DONE>`
+> - **상세 내역 갱신 후 백업 미러링**: `./bin/sprint backup TASKS.md`
+> - **전체 목록 및 상세 조회**: `./bin/sprint list`, `./bin/sprint show <ID>`
+>
 > **SSOT (Single Source of Truth) 원칙 공지**:
-> - LionSQL의 전체 180+건 정형 태스크 및 완료(`DONE`)된 버그 해결/리팩토링 이력은 **LionSQL 자체 DB(`sprint_tasks`)와 [`TASKS.md`](TASKS.md)**에 영구 보존됩니다.
+> - LionSQL의 전체 정형 태스크 및 완료(`DONE`)된 버그 해결/리팩토링 이력은 **스프린트 DB(`sprint_tasks`)와 [`TASKS.md`](TASKS.md)**에 영구 보존됩니다.
 > - 본 `TODO.md`는 **1.0 릴리스 활성 스프린트(Active Sprint)와 검증 게이트에만 집중하는 경량 실시간 대시보드**입니다.
-> - CLI 관리: `./bin/sprint list`, `./bin/sprint set <ID> <STATUS>`, `./bin/sprint backup`
 >
 > **Core Architecture & Knowledge Base**:
 > - Full Task & Bug Archive Mirror: [`TASKS.md`](TASKS.md)
