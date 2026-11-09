@@ -340,8 +340,12 @@ func (w *WALWriter) Close() error {
 
 		w.closed = true
 		if w.file != nil {
-			_ = w.file.Sync()
-			err = w.file.Close()
+			if syncErr := w.file.Sync(); syncErr != nil && err == nil {
+				err = syncErr
+			}
+			if closeErr := w.file.Close(); closeErr != nil && err == nil {
+				err = closeErr
+			}
 			w.file = nil
 		}
 	})

@@ -429,6 +429,17 @@ func (e *Engine) OpenWithOptions(opts Options) error {
 	return nil
 }
 
+// Sync forces immediate synchronization of all pending write-ahead log buffers to disk ([RULE:ExplicitError], Scope-129).
+func (e *Engine) Sync() error {
+	e.mu.Lock()
+	wal := e.wal
+	e.mu.Unlock()
+	if wal != nil {
+		return wal.Sync()
+	}
+	return nil
+}
+
 func (e *Engine) Close() error {
 	e.mu.Lock()
 	if e.closed {

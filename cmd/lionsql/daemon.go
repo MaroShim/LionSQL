@@ -197,14 +197,18 @@ func startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineTyp
 	setDaemonSysProcAttr(cmd)
 
 	if err := cmd.Start(); err != nil {
+		_ = logFd.Close()
 		fmt.Printf("[LionSQL] Failed to launch daemon process: %v\n", err)
 		os.Exit(1)
 	}
 
+	// [RULE:HandleHygiene] Close log file descriptor in parent process now that child has inherited it
+	_ = logFd.Close()
+
 	childPID := cmd.Process.Pid
 
-	// Write PID file
-	if err := os.WriteFile(filepath.Clean(pidFile), []byte(strconv.Itoa(childPID)), 0644); err != nil {
+	// Write PID file atomically ([RULE:AtomicSaves])
+	if err := writePidFileAtomic(pidFile, childPID); err != nil {
 		fmt.Printf("[LionSQL] Warning: Failed to write PID file %s: %v\n", pidFile, err)
 	}
 
@@ -255,4 +259,37 @@ func renderDaemonStartupOutput(childPID int, engineType, dataDir, logFile, pidFi
 	}
 
 	return b.String()
+}
+
+// writePidFileAtomic writes the PID file via a temporary swap file and atomic rename ([RULE:AtomicSaves], Scope-130).
+func writePidFileAtomic(pidFile string, pid int) error {
+	cleanPath := filepath.Clean(pidFile)
+	dir := filepath.Dir(cleanPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	tmpFile, err := os.CreateTemp(dir, ".pid_*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmpFile.Name()
+	defer func() {
+		_ = os.Remove(tmpName)
+	}()
+
+	if _, err := tmpFile.WriteString(strconv.Itoa(pid)); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, cleanPath)
 }

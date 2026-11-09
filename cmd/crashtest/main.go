@@ -35,6 +35,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -125,6 +126,23 @@ func main() {
 	withVariants := flag.Bool("variants", true, "Include double-kill, graceful SIGTERM, and WAL tail-corruption rounds")
 	keep := flag.Bool("keep", false, "Keep data directory after completion (always kept on failure)")
 	flag.Parse()
+
+	// [RULE:CleanTeardown] Trap interrupt signals and ensure active child server is killed cleanly
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		activeServerMu.Lock()
+		cmd := activeCmd
+		waitCh := activeWaitCh
+		activeServerMu.Unlock()
+		if cmd != nil {
+			fmt.Fprintln(os.Stderr, "\ncrashtest: interrupted, killing active child server ([RULE:CleanTeardown])...")
+			killNow(cmd, waitCh)
+		}
+		os.Exit(130)
+	}()
+	defer signal.Stop(sigCh)
 
 	code, err := runCrashTest(*binPath, *engine, *rounds, *workers, *accounts, *pgPort, *password, *minRun, *maxRun, *withDDL, *withVariants, *keep)
 	if err != nil {
@@ -524,6 +542,28 @@ func verifyOracle(db *sql.DB, accounts int, ledger *ledgerState) (int, error) {
 	return promoted, nil
 }
 
+var (
+	activeServerMu sync.Mutex
+	activeCmd      *exec.Cmd
+	activeWaitCh   <-chan error
+)
+
+func registerActiveServer(cmd *exec.Cmd, waitCh <-chan error) {
+	activeServerMu.Lock()
+	activeCmd = cmd
+	activeWaitCh = waitCh
+	activeServerMu.Unlock()
+}
+
+func unregisterActiveServer(cmd *exec.Cmd) {
+	activeServerMu.Lock()
+	if activeCmd == cmd {
+		activeCmd = nil
+		activeWaitCh = nil
+	}
+	activeServerMu.Unlock()
+}
+
 func startServer(absBin, dataDir, engine string, pgPort int, baseDir string, tag int) (*exec.Cmd, <-chan error, string, error) {
 	// Clean up stale pid file if left behind by SIGKILL.
 	_ = os.Remove(filepath.Join(dataDir, "lionsql.pid"))
@@ -549,6 +589,7 @@ func startServer(absBin, dataDir, engine string, pgPort int, baseDir string, tag
 		waitCh <- srv.Wait()
 		_ = logFile.Close()
 	}()
+	registerActiveServer(srv, waitCh)
 	return srv, waitCh, logPath, nil
 }
 
@@ -582,6 +623,7 @@ func openAndWait(dsn string, timeout time.Duration, serverDone <-chan error) (*s
 }
 
 func killNow(cmd *exec.Cmd, waitCh <-chan error) {
+	defer unregisterActiveServer(cmd)
 	if cmd == nil || cmd.Process == nil {
 		return
 	}
@@ -599,6 +641,7 @@ func gracefulStop(cmd *exec.Cmd, waitCh <-chan error) {
 }
 
 func gracefulStopTimed(cmd *exec.Cmd, waitCh <-chan error, limit time.Duration) error {
+	defer unregisterActiveServer(cmd)
 	if cmd == nil || cmd.Process == nil {
 		return nil
 	}

@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -387,8 +386,8 @@ func runServer(args []string) error {
 			os.Exit(1)
 		}
 
-		// Record PID for this foreground process
-		_ = os.WriteFile(filepath.Clean(resolvedPidFile), []byte(strconv.Itoa(os.Getpid())), 0644)
+		// Record PID for this foreground process atomically ([RULE:AtomicSaves], Scope-130)
+		_ = writePidFileAtomic(resolvedPidFile, os.Getpid())
 		defer func() {
 			if curPid, err := readPidFile(resolvedPidFile); err == nil && curPid == os.Getpid() {
 				_ = os.Remove(resolvedPidFile)
@@ -869,6 +868,11 @@ func runServer(args []string) error {
 		if httpServer != nil {
 			_ = httpServer.Shutdown(ctx)
 			_ = httpServer.Close()
+		}
+		if syncer, ok := eng.(storage.Syncer); ok {
+			if err := syncer.Sync(); err != nil {
+				log.Printf("[LionSQL] Warning: Failed to sync storage engine during shutdown: %v", err)
+			}
 		}
 		_ = server.Close()
 		_ = eng.Close()

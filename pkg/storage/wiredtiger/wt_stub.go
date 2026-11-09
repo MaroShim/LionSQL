@@ -45,6 +45,8 @@ func (e *Engine) FsyncPolicy() memengine.FsyncPolicy { return memengine.FsyncEve
 
 func (e *Engine) SyncCount() int64 { return 0 }
 
+func (e *Engine) Sync() error { return nil }
+
 func (e *Engine) NewSession() (storage.Session, error) {
 	return nil, fmt.Errorf("wiredtiger storage engine not enabled")
 }

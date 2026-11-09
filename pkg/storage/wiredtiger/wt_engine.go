@@ -253,6 +253,24 @@ func (e *Engine) SyncCount() int64 {
 	return e.syncCount.Load()
 }
 
+// Sync forces flushing of all committed transactions to the WiredTiger write-ahead log ([RULE:ExplicitError], Scope-129).
+func (e *Engine) Sync() error {
+	e.mu.Lock()
+	if e.closed || e.conn == nil {
+		e.mu.Unlock()
+		return nil
+	}
+	conn := e.conn
+	e.mu.Unlock()
+
+	var sess *C.WT_SESSION
+	if ret := C.go_wt_open_session(conn, &sess); ret != 0 {
+		return fmt.Errorf("wiredtiger open session for sync failed with code %d", ret)
+	}
+	defer C.go_wt_session_close(sess)
+	return e.syncUpTo(sess, e.writeSeq.Load())
+}
+
 // syncUpTo performs leader/follower group commit via WT_SESSION::log_flush(sync=on).
 // The first waiter on syncMu flushes all committed transactions up to writeSeq in a
 // single disk sync; followers covered by that flush return immediately without a syscall.

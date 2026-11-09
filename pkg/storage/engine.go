@@ -1024,3 +1024,9 @@ type Engine interface {
 	AlterTable(tableName string, mutator func(schema *TableSchema) error) error
 }
 
+// Syncer is an optional interface implemented by storage engines that support
+// explicit disk synchronization of pending write-ahead log buffers ([RULE:ExplicitError], Scope-129).
+type Syncer interface {
+	Sync() error
+}
+

@@ -111,11 +111,11 @@
 4. **`Scope-100` / `101` / `104` PGWire & TDS 핸드셰이크 `SetReadDeadline` 부여** (`pkg/wire/server.go`, `pkg/wire/tds/server.go`): 초기 스타트업/프리로그인/TLS 협상 패킷 읽기 시 유한 `ReadDeadline`(`HandshakeTimeout = 10s`)을 설정하고 로그인 완료 시 리셋하여 Slowloris 연결 고갈 방어.
 - **검증 완료**: `pkg/api`, `pkg/replication`, `pkg/wire` 3개 패키지 단위 Red ➔ Green 전환 및 `-race` 검증 100% PASS.
 
-### Mini-Batch M5 (`pkg/api/webhook.go`, `cmd/lionsql`, `cmd/soaktest`): 웹훅 중단, 서버 종료 WAL Sync, 데몬/하네스 정리 (3건) [대기]
-1. **`Scope-127` 웹훅 재시도 컨텍스트 즉시 중단** (`pkg/api/webhook.go`): 웹훅 전송 실패 후 백오프 대기 중 서버 종료(`ctx.Done()`) 시 `time.Sleep` 대신 `select`로 즉시 탈출 (`[RULE:CooperativeAbort]`).
-2. **`Scope-129` 서버 종료 시 WAL `Sync()` 보장** (`cmd/lionsql/server.go`): Graceful Shutdown 시 스토리지 엔진 `Close()` 과정에서 미플러시 WAL 버퍼가 디스크에 확정 동기화되도록 보장.
-3. **`Scope-130` & `135` 데몬 PID 원자적 쓰기/FD 정리 및 테스트 하네스 자식 프로세스 정리** (`cmd/lionsql/daemon.go`, `cmd/soaktest/main.go`, `cmd/crashtest/main.go`): 데몬 기동 시 PID 파일을 임시 파일 + Rename 원자적 쓰기(`[RULE:AtomicSaves]`)로 기록하고 부모 프로세스의 `logFd`를 닫으며, 테스트 하네스에 `signal.Notify`를 등록해 인터럽트 시 자식 프로세스를 확실히 종료 (`[RULE:CleanTeardown]`).
-- **검증 계획**: `pkg/api` 및 `cmd/lionsql`에 Red 테스트 선작성 후 Green 전환 및 `-race` 검증.
+### Mini-Batch M5 (`pkg/api/webhook.go`, `cmd/lionsql`, `cmd/soaktest`): 웹훅 중단, 서버 종료 WAL Sync, 데몬/하네스 정리 (3건) [x] 완료
+1. **`Scope-127` 웹훅 재시도 컨텍스트 즉시 중단** (`pkg/api/webhook.go`): 웹훅 전송 실패 후 백오프 대기 중 서버 종료(`ctx.Done()`) 시 `select` 레이블 루프 즉시 탈출 (`[RULE:CooperativeAbort]`).
+2. **`Scope-129` 서버 종료 시 WAL `Sync()` 보장** (`cmd/lionsql/server.go`, `pkg/storage/engine.go`): Graceful Shutdown 시 `storage.Syncer`를 호출하여 미플러시 WAL 버퍼가 디스크에 확정 동기화되도록 보장 (`[RULE:ExplicitError]`).
+3. **`Scope-130` & `135` 데몬 PID 원자적 쓰기/FD 정리 및 테스트 하네스 자식 프로세스 정리** (`cmd/lionsql/daemon.go`, `cmd/soaktest/main.go`, `cmd/crashtest/main.go`): 데몬 기동 시 PID 파일을 임시 파일 + Rename 원자적 쓰기(`[RULE:AtomicSaves]`)로 기록하고 부모 프로세스의 `logFd`를 닫으며(`[RULE:HandleHygiene]`), 테스트 하네스에 `signal.Notify`를 등록해 인터럽트 시 자식 프로세스를 확실히 종료 (`[RULE:CleanTeardown]`).
+- **검증 완료**: `pkg/api/p1_batch_m5_webhook_test.go` 및 `cmd/lionsql/p1_batch_m5_daemon_test.go` PASS (-race 100% 통과).
 
 ---
 

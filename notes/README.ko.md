@@ -25,6 +25,8 @@
   * **6대 골든 릴리즈 게이트 엔지니어링 신뢰성 철학**: 릴리즈마다 기계적으로 실행되는 6대 검증 게이트(단위, 13대 도메인 스모크, TPC-C 75만 tpmC, SLT 41만 쿼리, T-SQL 14대 스위트, SIGKILL 전원 차단 무손실 복구)가 어떻게 데이터베이스의 가치를 엔터프라이즈 미션 크리티컬 인프라로 격상시키는가에 대한 기술 백서.
 * **[`PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)**
   * **다중 프로토콜 에뮬레이션 경계**: TDS(1433), PGWire(5433), MySQL 호환 구문의 수용 범위와 중단 기준.
+* **[`TSQL_COMPATIBILITY_MATRIX.ko.md`](TSQL_COMPATIBILITY_MATRIX.ko.md)** (한국어)
+  * **T-SQL 호환성 전수 매트릭스 및 갭 분석**: 연산자, 프로시저 제어 구문, 커서, 내장 함수(100여종), 시스템 변수, 트랜잭션 옵션 전수 분석 및 미구현(Gap) 로드맵.
 * **전역 로드맵 및 단일 진실 공급원 (SSOT Backlogs)**:
   * **[`TODO.md`](../TODO.md)**: 3단계 우선순위 실시간 엔지니어링 대시보드 (Sprint DB와 100% 동기화).
   * **[`ROADMAP.md`](../ROADMAP.md)**: 거시적 릴리즈 마일스톤(Phase 1~6) 및 아키텍처 진화 방향.

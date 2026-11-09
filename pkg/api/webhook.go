@@ -375,7 +375,15 @@ func (d *WebhookDispatcher) deliverWithRetry(wh *Webhook, payload map[string]any
 	var success bool
 	start := time.Now()
 
+retryLoop:
 	for attempt := 1; attempt <= MaxWebhookRetries; attempt++ {
+		if d.ctx.Err() != nil {
+			if lastErr == nil {
+				lastErr = d.ctx.Err()
+			}
+			break retryLoop
+		}
+
 		delivery.AttemptCount = attempt
 
 		reqCtx, reqCancel := context.WithTimeout(d.ctx, DefaultWebhookTimeout)
@@ -423,7 +431,10 @@ func (d *WebhookDispatcher) deliverWithRetry(wh *Webhook, payload map[string]any
 		if attempt < MaxWebhookRetries {
 			select {
 			case <-d.ctx.Done():
-				break
+				if lastErr == nil {
+					lastErr = d.ctx.Err()
+				}
+				break retryLoop
 			case <-time.After(d.retryBackoff * time.Duration(attempt)):
 			}
 		}
