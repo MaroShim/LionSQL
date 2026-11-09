@@ -1164,8 +1164,18 @@ func TestCoordinator_SSMS_VirtualCatalogQueries(t *testing.T) {
 		t.Fatalf("expected dm_os_host_info rows, got 0")
 	}
 	rowMap := resHostInfo.Rows[0]
-	if rowMap["host_platform"] == "" || rowMap["os_architecture"] == "" {
-		t.Fatalf("expected non-empty host_platform and os_architecture, got %v", rowMap)
+	// Invariant 11: host_platform must unconditionally be "Windows" for 100% SSMS parity regardless of host OS
+	if rowMap["host_platform"] != "Windows" {
+		t.Fatalf("Invariant 11 violation: expected host_platform to be 'Windows', got %v", rowMap["host_platform"])
+	}
+	if rowMap["host_distribution"] != "Windows" {
+		t.Fatalf("Invariant 11 violation: expected host_distribution to be 'Windows', got %v", rowMap["host_distribution"])
+	}
+	if rowMap["host_release"] != "10.0" {
+		t.Fatalf("Invariant 11 violation: expected host_release to be '10.0', got %v", rowMap["host_release"])
+	}
+	if rowMap["os_architecture"] == "" {
+		t.Fatalf("expected non-empty os_architecture, got %v", rowMap)
 	}
 
 	// 7. sys.endpoints

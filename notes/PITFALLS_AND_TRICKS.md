@@ -160,3 +160,26 @@ This document records subtle architectural landmines, runtime hazards, and criti
   ```
   Ensure cost accumulator loops never produce or propagate `math.IsNaN(cost)`.
 
+---
+
+## 16. TDS & SSMS Host Platform Invariant: Never Return 'macOS' or Host-Specific OS
+- **Problem**: When implementing system catalog views like `sys.dm_os_host_info` or TDS environment detection batches, returning the host OS directly (`runtime.GOOS == "darwin" -> "macOS"`) causes Microsoft SQL Server Management Studio (SSMS) Object Explorer to crash on connect with:
+  `System.InvalidOperationException: Operation is not valid due to the current state of the object` in `ObjectExplorerControl.BuildDataModel(SqlOlapConnectionInfoBase ci)`.
+  SSMS and SMO have no internal representation or Enum member for `macOS`, because Microsoft never released a native macOS SQL Server engine.
+- **Forbidden Anti-Pattern**:
+  Never check `runtime.GOOS` to report `"macOS"`, `"Darwin"`, or `"Linux"` in TDS responses or SQL Server system views:
+  ```go
+  // FORBIDDEN: Crashes SSMS Object Explorer
+  if runtime.GOOS == "darwin" {
+      platform = "macOS"
+  }
+  ```
+- **Required Idiom**:
+  Always unconditionally return `"Windows"`, `"Windows"`, and `"10.0"` in `sys.dm_os_host_info` and TDS handshake batches regardless of host OS:
+  ```go
+  platform := "Windows"
+  dist := "Windows"
+  release := "10.0"
+  ```
+  TDS clients must always see a 100% standard Windows-hosted SQL Server instance.
+

@@ -85,6 +85,22 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
    - Layer 3 (Performance Gate Test): `perf_gate_test.go` runs a concurrent transfer benchmark to ensure TPS never regresses below 50,000 TPS.
    - Layer 4 (Architecture Contract): Codified in `GEMINI.md` and `notes/ENGINEERING_CONTEXT.ko.md`.
 
+### Invariant 11: TDS Windows Host Platform Parity Invariant (Permanent 'Windows' Emulation)
+1. **Strict Prohibition of Returning 'macOS' or Host-Specific Non-Windows OS in TDS/System Views**:
+   - TDS protocol (`:1433`), SSMS environment detection batches, and SQL Server system views (`sys.dm_os_host_info`) must **NEVER** inspect `runtime.GOOS` or return `"macOS"` or `"Linux"`.
+   - In Microsoft SQL Server architecture, there has never existed a native macOS SQL Server engine, and client tools (SSMS, SMO, ADO.NET) have no enum or handling for `macOS`. Returning `"macOS"` causes SSMS `ObjectExplorerControl.BuildDataModel` to throw `System.InvalidOperationException: Operation is not valid due to the current state of the object`.
+2. **Permanent 'Windows' Invariance for 100% Client Tool Compatibility**:
+   - `sys.dm_os_host_info` must unconditionally return:
+     - `host_platform`: `"Windows"`
+     - `host_distribution`: `"Windows"`
+     - `host_release`: `"10.0"`
+   - TDS environment detection batch (`handleSsmsEnvironmentBatch`) must unconditionally return `host_platform = "Windows"`.
+   - Regardless of whether LionSQL runs on macOS, Linux, or Windows, all TDS and SQL Server client tools must perceive the engine as a 100% standard Windows-hosted SQL Server.
+3. **Multi-Layer Defensive Lockdown**:
+   - Layer 1 (Unit Test Assertion): `pkg/wire/tds/server_test.go` (`TestTDS_SSMS_EnvironmentBatch`) asserts `host_platform` is strictly `"Windows"` and fails if `"macOS"` or `"Linux"` appears.
+   - Layer 2 (Catalog Test Assertion): `pkg/engine/coordinator_test.go` (`TestCoordinator_SSMS_VirtualCatalogQueries`) asserts `sys.dm_os_host_info` returns `"Windows"`, `"Windows"`, `"10.0"`.
+   - Layer 3 (Architecture Contract): Codified in `GEMINI.md` and `notes/ENGINEERING_CONTEXT.ko.md`.
+
 ---
 
 ## 3. Explicit Spec-Out Decisions (Engine Simplicity & KISS)

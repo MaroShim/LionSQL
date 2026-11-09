@@ -429,7 +429,7 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		case "DATABASEENGINETYPE":
 			return int64(1), "databaseenginetype"
 		case "EDITIONID":
-			return int64(1804893836), "editionid"
+			return int64(-2117995310), "editionid"
 		case "INSTANCENAME":
 			return "MSSQLSERVER", "instancename"
 		case "MACHINENAME", "SERVERNAME":

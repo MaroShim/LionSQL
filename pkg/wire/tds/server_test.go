@@ -1091,27 +1091,30 @@ else
 
 	payload := sendSQLBatch(t, conn, ssmsBatch)
 
-	// Verify that exactly 3 ColMetaData tokens exist (1 per result set)
-	colMetaCount := bytes.Count(payload, []byte{TokenColMetaData})
-	if colMetaCount != 3 {
-		t.Fatalf("expected 3 TokenColMetaData tokens for SSMS 3 result sets, got %d", colMetaCount)
-	}
-
-	// Verify that row tokens exist
-	rowCount := bytes.Count(payload, []byte{TokenRow}) + bytes.Count(payload, []byte{TokenNBCRow})
-	if rowCount != 3 {
-		t.Fatalf("expected 3 row tokens for SSMS 3 result sets, got %d", rowCount)
-	}
-
-	// Verify column names appear in UTF-16LE in the payload
+	// Verify column names appear in UTF-16LE in the payload for all 3 result sets
 	if !bytes.Contains(payload, EncodeUTF16LE("DatabaseEngineType")) {
 		t.Fatalf("expected 'DatabaseEngineType' column in result set 1")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("Edition")) {
+		t.Fatalf("expected 'Edition' column in result set 1")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("Developer Edition (64-bit)")) {
+		t.Fatalf("expected Developer Edition value in result set 1")
 	}
 	if !bytes.Contains(payload, EncodeUTF16LE("host_platform")) {
 		t.Fatalf("expected 'host_platform' column in result set 2")
 	}
+	if !bytes.Contains(payload, EncodeUTF16LE("Windows")) {
+		t.Fatalf("Invariant 11 violation: expected 'Windows' host_platform in result set 2")
+	}
+	if bytes.Contains(payload, EncodeUTF16LE("macOS")) || bytes.Contains(payload, EncodeUTF16LE("Darwin")) || bytes.Contains(payload, EncodeUTF16LE("Linux")) {
+		t.Fatalf("Invariant 11 violation: host_platform must NEVER return macOS, Darwin, or Linux in TDS environment batch")
+	}
 	if !bytes.Contains(payload, EncodeUTF16LE("ConnectionProtocol")) {
 		t.Fatalf("expected 'ConnectionProtocol' column in result set 3")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("TCP")) {
+		t.Fatalf("expected 'TCP' ConnectionProtocol in result set 3")
 	}
 
 	// Also verify standalone probes

@@ -252,6 +252,24 @@
 
 ---
 
+### ㉔ TDS Windows 호스트 플랫폼 고정 불변식 (Permanent 'Windows' Host Platform Invariant)
+* **결정 사항**:
+  * TDS 프로토콜(`:1433`) 리스너, SSMS 환경 감지 배치(`handleSsmsEnvironmentBatch`), 및 SQL Server 시스템 뷰(`sys.dm_os_host_info`)에서 `runtime.GOOS`를 감지하여 `"macOS"`(또는 `"Darwin"`, `"Linux"`)를 클라이언트에게 노출하는 것을 영구히 절대 금지한다.
+  * LionSQL이 실행되는 실제 물리/가상 머신(macOS, Linux, Windows 컨테이너 등)과 무관하게, `sys.dm_os_host_info` 및 TDS 핸드셰이크는 무조건 다음 값을 고정 반환한다:
+    * `host_platform`: `"Windows"`
+    * `host_distribution`: `"Windows"`
+    * `host_release`: `"10.0"`
+* **배제 이유 & 클라이언트 호환성 메커니즘**:
+  * Microsoft SQL Server 제품군 역사상 macOS 네이티브 엔진은 존재하지 않으며, SQL Server Management Studio(SSMS), SMO(Server Management Objects), ADO.NET 라이브러리의 내부 플랫폼 열거형(PlatformType Enum)에는 `macOS`에 대한 정의가 아예 존재하지 않는다.
+  * 만약 호스트 감지 로직에 의해 `"macOS"`가 반환되면, SSMS의 `ObjectExplorerControl.BuildDataModel` 메서드 내부에서 처리되지 않는 플랫폼 예외가 발생하여 **`System.InvalidOperationException: 객체의 현재 상태 때문에 작업이 유효하지 않습니다`**가 발생하며 Object Explorer 트리 로딩 전체가 다운된다.
+  * PGWire(`:5433`)에서 Go 언어 런타임 엔진임에도 `PostgreSQL 14.x` 표준 버전과 카탈로그를 가상으로 제공하여 `psql`이 완전무결하게 구동되는 것과 마찬가지로, TDS 프로토콜의 본질 역시 클라이언트 관점에서 100% 표준 Windows SQL Server로 보이는 것이다.
+* **3계층 방어막 (Lockdown Layers)**:
+  1. **Layer 1 (TDS 핸드셰이크 단위 테스트)**: `pkg/wire/tds/server_test.go` (`TestTDS_SSMS_EnvironmentBatch`)에서 `host_platform`이 strictly `"Windows"`인지 검증하고 `"macOS"`/`"Darwin"`/`"Linux"` 반환 시 즉시 테스트 실패.
+  2. **Layer 2 (가상 카탈로그 통합 테스트)**: `pkg/engine/coordinator_test.go` (`TestCoordinator_SSMS_VirtualCatalogQueries`)에서 `sys.dm_os_host_info`의 `host_platform`과 `host_distribution`이 `"Windows"`, `host_release`가 `"10.0"`인지 검증.
+  3. **Layer 3 (아키텍처 불변성 헌법)**: `GEMINI.md`, `notes/ENGINEERING_CONTEXT.ko.md`, `notes/PITFALLS_AND_TRICKS.md` 영구 명문화.
+
+---
+
 ## 2. 사용자의 엔지니어링 철학 및 협업 규약
 
 LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집니다:

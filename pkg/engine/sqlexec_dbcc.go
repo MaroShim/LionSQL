@@ -891,18 +891,13 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 			"host_platform", "host_distribution", "host_release",
 			"host_service_pack_level", "os_architecture", "host_sku",
 		}
+		// [RULE:Invariant11] Permanent "Windows" Host Platform Invariant:
+		// SSMS Object Explorer and SMO fail with InvalidOperationException if host_platform is "macOS" or anything
+		// other than standard Windows. To ensure 100% client tool parity across all platforms, sys.dm_os_host_info
+		// unconditionally returns "Windows" / "Windows" / "10.0". NEVER re-introduce runtime.GOOS checks here.
 		platform := "Windows"
 		dist := "Windows"
 		release := "10.0"
-		if runtime.GOOS == "darwin" {
-			platform = "macOS"
-			dist = "Darwin"
-			release = "24.0"
-		} else if runtime.GOOS == "linux" {
-			platform = "Linux"
-			dist = "Linux"
-			release = "6.0"
-		}
 		arch := "64-bit"
 		if runtime.GOARCH == "386" || runtime.GOARCH == "arm" {
 			arch = "32-bit"

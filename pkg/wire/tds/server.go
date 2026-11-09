@@ -13,7 +13,6 @@ import (
 	"io"
 	"log"
 	"net"
-	sysruntime "runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -2943,7 +2942,7 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 			colType = TypeIntN
 			colSize = 4
 		} else if strings.Contains(upper, "EDITIONID") {
-			val = int64(1804893836)
+			val = int64(-2117995310)
 			colType = TypeIntN
 			colSize = 8
 		} else if strings.Contains(upper, "ENGINEEDITION") {
@@ -2997,7 +2996,7 @@ func (s *Server) handleSsmsEnvironmentBatch(conn net.Conn, trimmed string, sess 
 	vals1 := []any{
 		int32(1),                         // Standalone SQL Server (1)
 		"Developer Edition (64-bit)",     // Edition
-		int64(1804893836),                // EditionID
+		int64(-2117995310),               // EditionID (Developer Edition 64-bit)
 		int32(3),                         // DatabaseEngineEdition (3 = Enterprise / Developer)
 		"15.0.2000.5",                    // ProductVersion (SQL Server 2019)
 		int32(251660240),                 // MicrosoftVersion (0x0F0007D0)
@@ -3006,12 +3005,10 @@ func (s *Server) handleSsmsEnvironmentBatch(conn net.Conn, trimmed string, sess 
 	}
 
 	// Result Set 2: host_platform
+	// [RULE:Invariant11] Permanent "Windows" Host Platform Invariant:
+	// Client tools (SSMS, SMO, ADO.NET) have no enum or handling for macOS and break on non-Windows
+	// host_platform in ObjectExplorerControl.BuildDataModel. Unconditionally return "Windows" regardless of host OS.
 	platform := "Windows"
-	if sysruntime.GOOS == "darwin" {
-		platform = "macOS"
-	} else if sysruntime.GOOS == "linux" {
-		platform = "Linux"
-	}
 	cols2 := []ColumnInfo{
 		{Name: "host_platform", Type: TypeNVarChar, Size: 128, Nullable: true},
 	}

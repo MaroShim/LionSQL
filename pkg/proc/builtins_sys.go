@@ -306,7 +306,7 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		case "DATABASEENGINETYPE":
 			return storage.IntValue(1)
 		case "EDITIONID":
-			return storage.IntValue(1804893836)
+			return storage.IntValue(-2117995310)
 		case "INSTANCENAME":
 			return storage.StringValue("MSSQLSERVER")
 		case "MACHINENAME", "SERVERNAME":
