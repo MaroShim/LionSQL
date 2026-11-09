@@ -145,11 +145,15 @@ All code modifications, refactorings, and feature additions must strictly pass a
 > **Exception (Pure Documentation Commits)**: Markdown-only modifications (`*.md`, `*.ko.md`) without Go source code changes may bypass build and test stages and commit immediately.
 
 ### Build Tags & Platform Targets Cheat Sheet
-- **Production Unix Binary (macOS/Linux)**: `go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql`
-- **Pure-Go In-Memory Binary (Zero CGo)**: `go build -buildvcs=false -o bin/lionsql ./cmd/lionsql`
+To ensure `(built: ..., commit: ...)` is stamped into binary metadata across all targets:
+```bash
+LDFLAGS="-s -w -X 'lionsql/pkg/config.BuildDate=$(date "+%Y-%m-%d %H:%M:%S %Z")' -X 'lionsql/pkg/config.GitCommit=$(git rev-parse --short HEAD)'"
+```
+- **Production Unix Binary (macOS/Linux)**: `go build -tags wiredtiger -ldflags="$LDFLAGS" -buildvcs=false -o bin/lionsql ./cmd/lionsql`
+- **Pure-Go In-Memory Binary (Zero CGo)**: `go build -ldflags="$LDFLAGS" -buildvcs=false -o bin/lionsql ./cmd/lionsql`
 - **Windows Standalone Binaries (Zero CGo, 1ms Timer Enabled)**:
-  - amd64: `CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql.exe ./cmd/lionsql`
-  - arm64: `CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -buildvcs=false -o bin/lionsql-arm64.exe ./cmd/lionsql`
+  - amd64: `CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$LDFLAGS" -buildvcs=false -o bin/lionsql.exe ./cmd/lionsql`
+  - arm64: `CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags="$LDFLAGS" -buildvcs=false -o bin/lionsql-arm64.exe ./cmd/lionsql`
 
 ### Version Single Source of Truth (SSOT)
 When releasing or bumping versions, synchronize all four locations in lockstep:
