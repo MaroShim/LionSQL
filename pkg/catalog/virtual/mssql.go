@@ -779,6 +779,91 @@ func execSysTablesMetadata(src Source, sql string) (*Result, error) {
 	return FormatResultWithSQL(columns, allRows, sql)
 }
 
+func execSysTablesJoinedIndexes(src Source, sql string) (*Result, error) {
+	columns := []string{
+		"Name", "name", "Schema", "schema", "Urn", "urn", "CreateDate", "create_date",
+		"IsMemoryOptimized", "is_memory_optimized", "HasClusteredColumnStoreIndex",
+		"RemoteDataArchiveEnabled", "TemporalType", "temporal_type", "IsPartitioned",
+		"HasSparseColumn", "IsNode", "is_node", "IsEdge", "is_edge",
+		"HasNonClusteredIndex", "HasClusteredIndex", "HasPrimaryClusteredIndex",
+		"HasXmlIndex", "HasXmlData", "HasSpatialData", "HasNonClusteredColumnStoreIndex",
+		"object_id", "schema_id", "type", "type_desc",
+	}
+	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	var allRows []map[string]any
+
+	tables := src.GetSortedTables()
+	for tIdx, t := range tables {
+		hasPK := false
+		for _, col := range t.Columns {
+			if col.PrimaryKey {
+				hasPK = true
+				break
+			}
+		}
+
+		urn := fmt.Sprintf("Server[@Name='LIONSQL']/Database[@Name='master']/Table[@Name='%s' and @Schema='dbo']", t.Name)
+
+		row := map[string]any{
+			"Name":                            t.Name,
+			"name":                            t.Name,
+			"tbl.name":                        t.Name,
+			"Schema":                          "dbo",
+			"schema":                          "dbo",
+			"schema_name":                     "dbo",
+			"Urn":                             urn,
+			"CreateDate":                      defaultDate,
+			"create_date":                     defaultDate,
+			"tbl.create_date":                 defaultDate,
+			"IsMemoryOptimized":               false,
+			"is_memory_optimized":             false,
+			"tbl.is_memory_optimized":         false,
+			"HasClusteredColumnStoreIndex":    false,
+			"RemoteDataArchiveEnabled":        false,
+			"TemporalType":                    int32(0),
+			"temporal_type":                   int32(0),
+			"tbl.temporal_type":               int32(0),
+			"IsPartitioned":                   false,
+			"HasSparseColumn":                 false,
+			"IsNode":                          false,
+			"is_node":                         false,
+			"tbl.is_node":                     false,
+			"IsEdge":                          false,
+			"is_edge":                         false,
+			"tbl.is_edge":                     false,
+			"HasNonClusteredIndex":            false,
+			"HasClusteredIndex":               true,
+			"HasPrimaryClusteredIndex":        hasPK,
+			"HasXmlIndex":                     false,
+			"HasXmlData":                      false,
+			"HasSpatialData":                  false,
+			"HasNonClusteredColumnStoreIndex": false,
+			"object_id":                       1000 + tIdx,
+			"tbl.object_id":                   1000 + tIdx,
+			"schema_id":                       1,
+			"tbl.schema_id":                   1,
+			"type":                            "U",
+			"type_desc":                       "USER_TABLE",
+			"is_ms_shipped":                   false,
+			"tbl.is_ms_shipped":               false,
+			"is_filetable":                    false,
+			"tbl.is_filetable":                false,
+			"is_external":                     false,
+			"tbl.is_external":                 false,
+			"idx.object_id":                   1000 + tIdx,
+			"idx.index_id":                    1,
+			"idx.type":                        1,
+			"idx.is_primary_key":              hasPK,
+			"idx.is_unique_constraint":        false,
+			"dsidx.data_space_id":             1,
+			"dsidx.type":                      "FG",
+		}
+		allRows = append(allRows, row)
+	}
+
+	return FormatResultWithSQL(columns, allRows, sql)
+}
+
 func execSysObjectsViews(src Source, sql string) (*Result, error) {
 	columns := []string{"pureName", "pure_name", "name", "schemaName", "schema_name", "objectId", "object_id", "createDate", "create_date", "modifyDate", "modify_date", "type", "type_desc"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)

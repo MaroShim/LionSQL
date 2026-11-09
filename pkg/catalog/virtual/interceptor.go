@@ -335,6 +335,15 @@ var catalogRouteTable = []RouteRule{
 		},
 	},
 	{
+		Name: "MSSQL_SysTablesJoinedIndexes",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.TABLES") && (strings.Contains(upper, "SYS.INDEXES") || strings.Contains(upper, "DATA_SPACES"))
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysTablesJoinedIndexes(src, sql)
+		},
+	},
+	{
 		Name: "MSSQL_TablesMetadata",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
 			return strings.Contains(upper, "SYS.TABLES") && (strings.Contains(upper, "SYS.SCHEMAS") || strings.Contains(upper, "PURENAME") || strings.Contains(upper, "OBJECTCOMMENT"))

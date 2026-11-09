@@ -1467,7 +1467,7 @@ WHERE
         then 1
     else 0
 end
-             AS bit)='0')
+             AS bit)='0' and tbl.is_filetable='0' and CAST(tbl.is_memory_optimized AS bit)='0' and tbl.temporal_type='0' and CAST(tbl.is_external AS bit)='0' and CAST(tbl.is_node AS bit)='0' and CAST(tbl.is_edge AS bit)='0')
 ORDER BY
 [Schema] ASC,[Name] ASC`
 
@@ -1477,6 +1477,9 @@ ORDER BY
 	}
 	if len(resComplexTbl.Rows) == 0 {
 		t.Fatalf("expected non-zero rows for complex table query, got 0")
+	}
+	if fmt.Sprintf("%v", resComplexTbl.Rows[0]["Name"]) != "users" {
+		t.Fatalf("expected table 'users', got %v", resComplexTbl.Rows[0]["Name"])
 	}
 
 	// 17. SSMS User Database Query
