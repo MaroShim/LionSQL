@@ -4,6 +4,7 @@ package main
 
 import (
 	"os/exec"
+	"sync"
 	"syscall"
 )
 
@@ -40,4 +41,17 @@ func setDaemonSysProcAttr(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true, // Detach process from terminal session
 	}
+}
+
+var (
+	platformTimerOnce        sync.Once
+	platformTimerCleanupHook func()
+)
+
+func cleanupPlatformTimer() {
+	platformTimerOnce.Do(func() {
+		if platformTimerCleanupHook != nil {
+			platformTimerCleanupHook()
+		}
+	})
 }

@@ -48,16 +48,18 @@
 3. **`결함 10-5`** (`pkg/execution/window.go:525-528`): 윈도우 프레임 `FrameFollowing` 오프셋 계산 시 `startIdx > total` 슬라이스 상한 클램핑 방어.
 4. **`결함 4-5`** (`pkg/planner/planner.go`): Nested Loop Join 계획 수립 시 표현식 인덱스에 대해 `len(innerIndex.Columns) > 0` 확인 후 `Columns[0]` 참조.
 
-### Mini-Batch 5: `pkg/engine` & `pkg/proc` — 커서 상태머신, MERGE 이스케이프, 임시테이블 (4건) [완료]
-1. **`결함 8-5`** (`pkg/engine/sqlexec_merge.go:364`): `MERGE (VALUES ...)` 소스 파싱 시 작은따옴표 이스케이프(`''` ➔ `'`) 언이스케이프 적용.
-2. **`Scope-049`** (`pkg/engine/sqlexec_cursor.go:210`): `CLOSE <cursor>` 시 커서 정의를 맵에서 삭제하지 않고 `IsOpen = false`로 전환하여 `DEALLOCATE` 전 재오픈(`OPEN`) 지원.
-3. **`결함 3-6`** (`pkg/proc/runtime/vm_dispatcher.go:1451, 1505`): VM 커서에서 이미 열린 커서 중복 `OPEN` 및 닫힌 커서 `CLOSE` 시 표준 에러 반환.
-4. **`결함 2-5`** (`pkg/engine/session.go:188`): 존재하지 않는 `#temp` 테이블 단순 조회 시 `TempTableMap`에 팬텀 슬롯이 누적되지 않도록 생성(DDL)과 조회(Resolve) 분리.
+### Mini-Batch 5: `pkg/engine` & `pkg/proc` — 커서 상태머신, MERGE 이스케이프, 임시테이블 (4건) [완료: `990ff01`]
+1. **`결함 8-5`** (`pkg/engine/sqlexec_merge.go:544-553`): `MERGE (VALUES ...)` 소스 파싱 시 작은따옴표 이스케이프(`''` ➔ `'`) 및 큰따옴표(`""` ➔ `"`) 언이스케이프 적용.
+2. **`Scope-049`** (`pkg/engine/sqlexec_cursor.go:86-98, 343-511`): `CLOSE <cursor>` 시 커서 정의를 맵에서 삭제하지 않고 `IsOpen = false`로 전환하여 `DEALLOCATE` 전 재오픈(`OPEN`) 지원.
+3. **`결함 3-6`** (`pkg/proc/runtime/vm_dispatcher.go:1451-1549`): VM 커서에서 이미 열린 커서 중복 `OPEN` 및 닫힌 커서 `CLOSE` 시 표준 에러 반환.
+4. **`결함 2-5`** (`pkg/engine/session.go:231-335`): 존재하지 않는 `#temp` 테이블 단순 조회 시 `TempTableMap`에 팬텀 슬롯이 누적되지 않도록 생성(`RegisterTempTable`)과 조회(`ResolveTempTableName`) 분리.
+- **검증 테스트**: `TestP1_Batch5_MergeUnescapeCursorReopenAndTempTableNoPhantom` (`pkg/engine/sqlexec_cursor_test.go`), `TestP1_Batch5_VMCursorDuplicateOpenAndClosedCloseErrors` (`pkg/proc/runtime/cursor_test.go`) — PASS.
 
-### Mini-Batch 6: `cmd/lionsql` — CLI, Doctor 및 Windows 타이머 정리 (3건) [대기]
-1. **`Scope-132`** (`cmd/lionsql/doctor.go:210`): `--doctor` 스토리지 점검 실패 시 임시 디렉터리 삭제 전 엔진 `Close()` 보장.
-2. **`Scope-133`** (`cmd/lionsql/cli_config.go:116`): CLI 패스워드 입력 중 `SIGINT`(Ctrl+C) 수신 시 터미널 에코 복구 훅 보장.
-3. **`Scope-131`** (`cmd/lionsql/daemon_windows.go:25`): Windows 데몬 종료 시 `timeEndPeriod(1)` 대칭 호출 보장.
+### Mini-Batch 6: `cmd/lionsql` — CLI, Doctor 및 Windows 타이머 정리 (3건) [완료]
+1. **`Scope-132`** (`cmd/lionsql/doctor.go:188-221`): `--doctor` 스토리지 점검(`probeStorageEngine`) 시 `eng.Open()` 직후 `defer func() { _ = eng.Close() }()`를 등록하여 중간 단계 에러 발생 시에도 임시 디렉터리 삭제 전 엔진 `Close()` 보장.
+2. **`Scope-133`** (`cmd/lionsql/cli_config.go:114-135, 211-247`, `cmd/lionsql/sql.go:89-125`): CLI 패스워드 입력(`readPasswordInteractive`) 중 `SIGINT`/`SIGTERM` 수신 시 `term.Restore` 복구 훅(`sync.Once`) 호출 보장 및 `lionsql sql` 실행 시 데몬 가동 중이면 명확한 접속 안내 출력.
+3. **`Scope-131`** (`cmd/lionsql/daemon_windows.go:56-68`, `cmd/lionsql/daemon_unix.go:47-58`, `cmd/lionsql/main.go:124`, `cmd/lionsql/server.go:875`): Windows 데몬 및 CLI 종료 시 `cleanupPlatformTimer()`(`sync.Once`)를 통해 `timeEndPeriod(1)` 대칭 호출 보장.
+- **검증 테스트**: `TestP1_Batch6_DoctorCloseOnErrorTerminalRestoreAndTimerCleanup` (`cmd/lionsql/doctor_test.go`) — PASS.
 
 ---
 

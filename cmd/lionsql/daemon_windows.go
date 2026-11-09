@@ -5,6 +5,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"sync"
 	"syscall"
 )
 
@@ -50,6 +51,21 @@ func timeEndPeriod(period uint32) error {
 		return syscall.Errno(r)
 	}
 	return nil
+}
+
+var (
+	platformTimerOnce        sync.Once
+	platformTimerCleanupHook func()
+)
+
+// cleanupPlatformTimer releases the 1ms timer resolution requested in init() ([RULE:DoubleCloseSafety]).
+func cleanupPlatformTimer() {
+	platformTimerOnce.Do(func() {
+		_ = timeEndPeriod(1)
+		if platformTimerCleanupHook != nil {
+			platformTimerCleanupHook()
+		}
+	})
 }
 
 // isProcessAlive returns true if the process with the given PID is currently active on Windows.

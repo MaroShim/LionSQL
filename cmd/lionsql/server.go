@@ -872,6 +872,7 @@ func runServer(args []string) error {
 		}
 		_ = server.Close()
 		_ = eng.Close()
+		cleanupPlatformTimer()
 		close(shutdownDone)
 	}()
 

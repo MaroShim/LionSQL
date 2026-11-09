@@ -121,6 +121,8 @@ func printVersion() {
 }
 
 func main() {
+	defer cleanupPlatformTimer()
+
 	// Intercept help flags immediately
 	if len(os.Args) > 1 && (os.Args[1] == "-h" || os.Args[1] == "-help" || os.Args[1] == "--help" || os.Args[1] == "-?" || os.Args[1] == "help") {
 		printUsage()

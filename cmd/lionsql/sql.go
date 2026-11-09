@@ -90,16 +90,28 @@ func openCoordinator(dataDir, engineType string) (storage.Engine, *engine.Coordi
 	cleanDir := filepath.Clean(dataDir)
 	var eng storage.Engine
 
+	pidFile := filepath.Join(cleanDir, "lionsql.pid")
+	daemonActive := false
+	if pid, err := readPidFile(pidFile); err == nil && isProcessAlive(pid) {
+		daemonActive = true
+	}
+
 	switch engineType {
 	case "wiredtiger":
 		eng = wiredtiger.New()
 		if err := eng.Open(cleanDir); err != nil {
+			if daemonActive {
+				return nil, nil, fmt.Errorf("failed to open wiredtiger storage at %q (LionSQL daemon is currently running on this data directory; connect via HTTP/PGWire/TDS or stop the daemon first): %w", cleanDir, err)
+			}
 			return nil, nil, fmt.Errorf("failed to open wiredtiger storage at %q: %w", cleanDir, err)
 		}
 	case "memory":
 		memEng := memengine.New()
 		opts := memengine.DefaultOptions(cleanDir)
 		if err := memEng.OpenWithOptions(opts); err != nil {
+			if daemonActive {
+				return nil, nil, fmt.Errorf("failed to open memory storage at %q (LionSQL daemon is currently running on this data directory; connect via HTTP/PGWire/TDS or stop the daemon first): %w", cleanDir, err)
+			}
 			return nil, nil, fmt.Errorf("failed to open memory storage: %w", err)
 		}
 		eng = memEng

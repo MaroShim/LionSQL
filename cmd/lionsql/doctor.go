@@ -182,6 +182,46 @@ func (d *Doctor) checkNetworkPorts() {
 	}
 }
 
+// probeStorageEngine opens the given storage engine in dir, creates a probe table,
+// runs an insert/commit transaction, and drops the probe table.
+// Guaranteed to close the engine on all return paths after Open succeeds ([RULE:HandleHygiene]).
+func probeStorageEngine(eng storage.Engine, dir, probeTable, colName, colVal string, rowID int64) (string, error) {
+	if err := eng.Open(dir); err != nil {
+		return "Open", err
+	}
+	defer func() { _ = eng.Close() }()
+
+	schema := &storage.TableSchema{
+		Name: probeTable,
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: colName, Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		return "CreateTable", err
+	}
+	sess, sErr := eng.NewSession()
+	if sErr != nil {
+		return "NewSession", sErr
+	}
+	defer func() { _ = sess.Close() }()
+
+	tx, tErr := sess.BeginTx(storage.TxOptions{})
+	if tErr != nil {
+		return "BeginTx", tErr
+	}
+	_ = tx.Insert(probeTable, storage.Record{
+		"id":    storage.IntValue(rowID),
+		colName: storage.StringValue(colVal),
+	})
+	if cErr := tx.Commit(); cErr != nil {
+		return "Commit", cErr
+	}
+	_ = eng.DropTable(probeTable)
+	return "", nil
+}
+
 // 4. Storage Engines Integrity
 func (d *Doctor) checkStorageEngines() {
 	cat := "4. Storage Engines Integrity"
@@ -193,42 +233,11 @@ func (d *Doctor) checkStorageEngines() {
 	} else {
 		defer func() { _ = os.RemoveAll(memTmp) }()
 		memEng := memengine.New()
-		if err := memEng.Open(memTmp); err != nil {
-			d.addResult(cat, "In-Memory OCC Engine", "Engine Open failed", "FAIL", err)
+		step, pErr := probeStorageEngine(memEng, memTmp, "__doctor_occ_probe__", "val", "probe", 1)
+		if pErr != nil {
+			d.addResult(cat, "In-Memory OCC Engine", step+" failed", "FAIL", pErr)
 		} else {
-			schema := &storage.TableSchema{
-				Name: "__doctor_occ_probe__",
-				Columns: []storage.Column{
-					{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
-					{Name: "val", Type: storage.TypeVarChar},
-				},
-			}
-			if err := memEng.CreateTable(schema); err != nil {
-				d.addResult(cat, "In-Memory OCC Engine", "CreateTable failed", "FAIL", err)
-			} else {
-				sess, sErr := memEng.NewSession()
-				if sErr != nil {
-					d.addResult(cat, "In-Memory OCC Engine", "NewSession failed", "FAIL", sErr)
-				} else {
-					tx, tErr := sess.BeginTx(storage.TxOptions{})
-					if tErr != nil {
-						d.addResult(cat, "In-Memory OCC Engine", "BeginTx failed", "FAIL", tErr)
-					} else {
-						_ = tx.Insert("__doctor_occ_probe__", storage.Record{
-							"id":  storage.IntValue(1),
-							"val": storage.StringValue("probe"),
-						})
-						if cErr := tx.Commit(); cErr != nil {
-							d.addResult(cat, "In-Memory OCC Engine", "Commit failed", "FAIL", cErr)
-						} else {
-							_ = memEng.DropTable("__doctor_occ_probe__")
-							_ = memEng.Close()
-							d.addResult(cat, "In-Memory OCC Engine", "DDL, MVCC transaction & rollback verified", "OK", nil)
-						}
-					}
-					_ = sess.Close()
-				}
-			}
+			d.addResult(cat, "In-Memory OCC Engine", "DDL, MVCC transaction & rollback verified", "OK", nil)
 		}
 	}
 
@@ -241,39 +250,19 @@ func (d *Doctor) checkStorageEngines() {
 	defer func() { _ = os.RemoveAll(wtTmp) }()
 
 	wtEng := wiredtiger.New()
-	if err := wtEng.Open(wtTmp); err != nil {
-		if strings.Contains(err.Error(), "not enabled in this build") {
-			d.addResult(cat, "WiredTiger B+Tree Engine", "Stub fallback (build with -tags wiredtiger for native B+Tree)", "WARN", nil)
+	step, pErr := probeStorageEngine(wtEng, wtTmp, "__doctor_wt_probe__", "data", "wiredtiger_ok", 100)
+	if pErr != nil {
+		if step == "Open" {
+			if strings.Contains(pErr.Error(), "not enabled in this build") {
+				d.addResult(cat, "WiredTiger B+Tree Engine", "Stub fallback (build with -tags wiredtiger for native B+Tree)", "WARN", nil)
+			} else {
+				d.addResult(cat, "WiredTiger B+Tree Engine", fmt.Sprintf("Open error: %v", pErr), "WARN", pErr)
+			}
 		} else {
-			d.addResult(cat, "WiredTiger B+Tree Engine", fmt.Sprintf("Open error: %v", err), "WARN", err)
+			d.addResult(cat, "WiredTiger B+Tree Engine", step+" failed", "FAIL", pErr)
 		}
 	} else {
-		schema := &storage.TableSchema{
-			Name: "__doctor_wt_probe__",
-			Columns: []storage.Column{
-				{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
-				{Name: "data", Type: storage.TypeVarChar},
-			},
-		}
-		if err := wtEng.CreateTable(schema); err != nil {
-			d.addResult(cat, "WiredTiger B+Tree Engine", "CreateTable failed", "FAIL", err)
-		} else {
-			sess, sErr := wtEng.NewSession()
-			if sErr == nil {
-				tx, tErr := sess.BeginTx(storage.TxOptions{})
-				if tErr == nil {
-					_ = tx.Insert("__doctor_wt_probe__", storage.Record{
-						"id":   storage.IntValue(100),
-						"data": storage.StringValue("wiredtiger_ok"),
-					})
-					_ = tx.Commit()
-				}
-				_ = sess.Close()
-			}
-			_ = wtEng.DropTable("__doctor_wt_probe__")
-			_ = wtEng.Close()
-			d.addResult(cat, "WiredTiger B+Tree Engine", "Native CGo B+Tree ACID & hazard pointers verified", "OK", nil)
-		}
+		d.addResult(cat, "WiredTiger B+Tree Engine", "Native CGo B+Tree ACID & hazard pointers verified", "OK", nil)
 	}
 }
 

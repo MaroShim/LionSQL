@@ -9,7 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -109,11 +112,18 @@ func runSet(args []string) error {
 		password = os.Getenv("LIONSQL_ADMIN_PASS")
 	}
 	if password == "" {
-		if !term.IsTerminal(int(os.Stdin.Fd())) {
+		fd := int(os.Stdin.Fd())
+		if !term.IsTerminal(fd) {
 			return fmt.Errorf("terminal prompt not available; provide password via LIONSQL_ADMIN_PASS or --pass flag")
 		}
+		oldState, stateErr := term.GetState(fd)
+		restoreFn := func() {
+			if stateErr == nil && oldState != nil {
+				_ = term.Restore(fd, oldState)
+			}
+		}
 		fmt.Fprintf(os.Stderr, "[sudo] Password for %s: ", *adminEmail)
-		passBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
+		passBytes, err := readPasswordInteractive(fd, term.ReadPassword, restoreFn, nil)
 		fmt.Fprintln(os.Stderr)
 		if err != nil {
 			return fmt.Errorf("failed to read password: %w", err)
@@ -196,4 +206,42 @@ func runSet(args []string) error {
 		fmt.Println("                    Disable it immediately after migration via: lionsql set tolerant_ddl off")
 	}
 	return nil
+}
+
+func readPasswordInteractive(fd int, readFn func(int) ([]byte, error), restoreFn func(), sigCh <-chan os.Signal) ([]byte, error) {
+	var restoreOnce sync.Once
+	safeRestore := func() {
+		restoreOnce.Do(func() {
+			if restoreFn != nil {
+				restoreFn()
+			}
+		})
+	}
+	defer safeRestore()
+
+	var localSigCh chan os.Signal
+	if sigCh == nil {
+		localSigCh = make(chan os.Signal, 1)
+		signal.Notify(localSigCh, os.Interrupt, syscall.SIGTERM)
+		defer signal.Stop(localSigCh)
+		sigCh = localSigCh
+	}
+
+	type passResult struct {
+		b   []byte
+		err error
+	}
+	resCh := make(chan passResult, 1)
+	go func() {
+		b, err := readFn(fd)
+		resCh <- passResult{b: b, err: err}
+	}()
+
+	select {
+	case sig := <-sigCh:
+		safeRestore()
+		return nil, fmt.Errorf("password prompt interrupted by signal %v", sig)
+	case res := <-resCh:
+		return res.b, res.err
+	}
 }
