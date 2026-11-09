@@ -1027,6 +1027,14 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 			DurationUS: time.Since(start).Microseconds(),
 			Messages:   []string{"Babelfish configuration synchronized"},
 		}, nil
+	case "sp_syspolicy_configure", "sp_syspolicy_set_config_enabled", "sp_syspolicy_set_config_history_retention":
+		// Tolerant virtual No-Op for SSMS Policy-Based Management configuration
+		return &QueryResult{
+			Success:    true,
+			Command:    "EXEC",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"Policy-Based Management configuration synchronized"},
+		}, nil
 	case "sp_help", "sp_spaceused", "sp_who", "sp_who2", "sp_lock", "sp_rename", "sp_tables", "sp_columns", "sp_pkeys", "sp_fkeys":
 		return s.execBuiltinSystemProc(procLower, args, start, cs)
 	}

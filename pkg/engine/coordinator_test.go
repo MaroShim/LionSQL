@@ -1219,6 +1219,26 @@ func TestCoordinator_SSMS_VirtualCatalogQueries(t *testing.T) {
 	if !foundUsersTable {
 		t.Fatalf("expected 'users' table in sys.all_objects, got %v", resAllObj.Rows)
 	}
+
+	// 10. msdb.dbo.syspolicy_configuration & syspolicy_policies
+	resPolicyCfg, err := coord.ExecuteSQL("SELECT current_value FROM msdb.dbo.syspolicy_configuration WHERE name = 'Enabled'")
+	if err != nil {
+		t.Fatalf("syspolicy_configuration failed: %v", err)
+	}
+	if len(resPolicyCfg.Rows) != 1 {
+		t.Fatalf("expected 1 row for syspolicy_configuration Enabled, got %d", len(resPolicyCfg.Rows))
+	}
+	if enabledVal, ok := resPolicyCfg.Rows[0]["current_value"].(bool); !ok || enabledVal != false {
+		t.Fatalf("expected Enabled = false (bool), got %v (%T)", resPolicyCfg.Rows[0]["current_value"], resPolicyCfg.Rows[0]["current_value"])
+	}
+
+	resPolicyList, err := coord.ExecuteSQL("SELECT policy_id, name, is_enabled FROM msdb.dbo.syspolicy_policies")
+	if err != nil {
+		t.Fatalf("syspolicy_policies failed: %v", err)
+	}
+	if len(resPolicyList.Columns) < 3 {
+		t.Fatalf("expected at least 3 columns for syspolicy_policies, got %v", resPolicyList.Columns)
+	}
 }
 
 func TestReplicaSessionZeroAllocationFastPath(t *testing.T) {

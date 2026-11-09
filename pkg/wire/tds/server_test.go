@@ -1262,6 +1262,29 @@ func TestTDS_SSMS_SecurityBuiltins(t *testing.T) {
 	}
 }
 
+func TestTDS_SSMS_DmfPolicyStore(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	// SSMS PolicyStore.get_Enabled() query
+	query := `SELECT current_value FROM msdb.dbo.syspolicy_configuration WHERE name = 'Enabled';`
+	payload := sendSQLBatch(t, conn, query)
+
+	if !bytes.Contains(payload, EncodeUTF16LE("current_value")) {
+		t.Fatalf("expected 'current_value' column in response")
+	}
+
+	// Verify that current_value for Enabled is TypeBitN with size 1
+	colMetaIdx := bytes.Index(payload, []byte{TokenColMetaData})
+	if colMetaIdx == -1 {
+		t.Fatalf("missing TokenColMetaData in response")
+	}
+	if !bytes.Contains(payload[colMetaIdx:], []byte{TypeBitN, 1}) {
+		t.Fatalf("expected TypeBitN with size 1 for Enabled boolean")
+	}
+}
+
 
 
 

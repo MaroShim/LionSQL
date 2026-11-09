@@ -964,6 +964,81 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 			},
 		)
 
+	case "syspolicy_configuration", "dbo.syspolicy_configuration", "sys.syspolicy_configuration":
+		columns = []string{"name", "current_value", "description"}
+		allRows = []map[string]any{
+			{"name": "Enabled", "current_value": false, "description": "Determines whether Policy-Based Management is enabled"},
+			{"name": "HistoryRetentionInDays", "current_value": int32(0), "description": "Number of days to retain history"},
+			{"name": "LogOnSuccess", "current_value": false, "description": "Whether to log successful policy evaluations"},
+		}
+
+	case "syspolicy_policies", "dbo.syspolicy_policies", "sys.syspolicy_policies":
+		columns = []string{
+			"policy_id", "name", "condition_id", "root_condition_id", "date_created",
+			"execution_mode", "policy_category", "schedule_uid", "description",
+			"help_text", "help_link", "object_set_id", "is_enabled", "job_id",
+		}
+		allRows = []map[string]any{}
+
+	case "syspolicy_conditions", "dbo.syspolicy_conditions", "sys.syspolicy_conditions":
+		columns = []string{
+			"condition_id", "name", "facet_id", "expression", "is_name_condition",
+			"date_created", "modify_date", "created_by", "modified_by",
+		}
+		allRows = []map[string]any{}
+
+	case "syspolicy_facets", "dbo.syspolicy_facets", "sys.syspolicy_facets":
+		columns = []string{"facet_id", "name", "description"}
+		allRows = []map[string]any{}
+
+	case "syspolicy_policy_categories", "dbo.syspolicy_policy_categories", "sys.syspolicy_policy_categories":
+		columns = []string{"policy_category_id", "name"}
+		allRows = []map[string]any{}
+
+	case "syspolicy_target_sets", "dbo.syspolicy_target_sets", "sys.syspolicy_target_sets":
+		columns = []string{"target_set_id", "object_set_id", "type_skeleton", "type"}
+		allRows = []map[string]any{}
+
+	case "syspolicy_target_set_levels", "dbo.syspolicy_target_set_levels", "sys.syspolicy_target_set_levels":
+		columns = []string{"target_set_level_id", "target_set_id", "level_name", "condition_id"}
+		allRows = []map[string]any{}
+
+	case "syspolicy_policy_execution_history", "dbo.syspolicy_policy_execution_history", "sys.syspolicy_policy_execution_history":
+		columns = []string{"history_id", "policy_id", "start_date", "end_date", "result"}
+		allRows = []map[string]any{}
+
+	case "syspolicy_policy_execution_history_details", "dbo.syspolicy_policy_execution_history_details", "sys.syspolicy_policy_execution_history_details":
+		columns = []string{"detail_id", "history_id", "target_query_expression", "result", "exception_message", "exception"}
+		allRows = []map[string]any{}
+
+	case "sysjobs", "dbo.sysjobs", "sys.sysjobs":
+		columns = []string{"job_id", "name", "enabled", "description", "start_step_id", "category_id", "owner_sid", "notify_level_eventlog", "notify_level_email", "date_created", "date_modified", "version_number"}
+		allRows = []map[string]any{}
+
+	case "syscategories", "dbo.syscategories", "sys.syscategories":
+		columns = []string{"category_id", "category_type", "name"}
+		allRows = []map[string]any{}
+
+	case "sysjobsteps", "dbo.sysjobsteps", "sys.sysjobsteps":
+		columns = []string{"job_id", "step_id", "step_name", "subsystem", "command", "flags"}
+		allRows = []map[string]any{}
+
+	case "sysschedules", "dbo.sysschedules", "sys.sysschedules":
+		columns = []string{"schedule_id", "schedule_uid", "name", "enabled", "freq_type", "freq_interval"}
+		allRows = []map[string]any{}
+
+	case "sysjobhistory", "dbo.sysjobhistory", "sys.sysjobhistory":
+		columns = []string{"instance_id", "job_id", "step_id", "step_name", "sql_message_id", "sql_severity", "message", "run_status", "run_date", "run_time", "run_duration"}
+		allRows = []map[string]any{}
+
+	case "sysalerts", "dbo.sysalerts", "sys.sysalerts":
+		columns = []string{"id", "name", "message_id", "severity", "enabled", "delay_between_responses", "last_occurrence_date", "last_occurrence_time"}
+		allRows = []map[string]any{}
+
+	case "sysoperators", "dbo.sysoperators", "sys.sysoperators":
+		columns = []string{"id", "name", "enabled", "email_address", "last_email_date", "last_email_time"}
+		allRows = []map[string]any{}
+
 	case "sys.master_files", "sysmasterfiles", "sys_master_files":
 		columns = []string{"database_id", "file_id", "file_guid", "type", "type_desc", "data_space_id", "name", "physical_name", "state", "state_desc", "size", "max_size", "growth", "is_media_read_only", "is_read_only", "is_sparse", "is_percent_growth"}
 		allRows = append(allRows,

@@ -19,8 +19,11 @@ func IsVirtualTable(tableName string) bool {
 	if strings.Contains(norm, ".") {
 		parts := strings.Split(norm, ".")
 		if len(parts) == 3 {
-			// strip database prefix, e.g. "lionsql.sys.tables" -> "sys.tables"
-			norm = parts[1] + "." + parts[2]
+			if parts[1] == "" || parts[1] == "dbo" || parts[1] == "public" {
+				norm = parts[2]
+			} else {
+				norm = parts[1] + "." + parts[2]
+			}
 		}
 	}
 	norm = strings.TrimPrefix(norm, "dbo.")

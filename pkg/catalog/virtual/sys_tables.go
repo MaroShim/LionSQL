@@ -36,6 +36,24 @@ var sysViewAliases = map[string]struct{}{
 	"sys.syscomments": {}, "syscomments": {}, "sys_syscomments": {},
 	"sys.sql_modules": {}, "syssqlmodules": {}, "sys_sql_modules": {},
 	"fn_helpcollations": {}, "sys.fn_helpcollations": {},
+	// Policy-Based Management (DMF) catalog views
+	"syspolicy_configuration": {}, "sys.syspolicy_configuration": {}, "dbo.syspolicy_configuration": {},
+	"syspolicy_policies": {}, "sys.syspolicy_policies": {}, "dbo.syspolicy_policies": {},
+	"syspolicy_conditions": {}, "sys.syspolicy_conditions": {}, "dbo.syspolicy_conditions": {},
+	"syspolicy_facets": {}, "sys.syspolicy_facets": {}, "dbo.syspolicy_facets": {},
+	"syspolicy_policy_categories": {}, "sys.syspolicy_policy_categories": {}, "dbo.syspolicy_policy_categories": {},
+	"syspolicy_target_sets": {}, "sys.syspolicy_target_sets": {}, "dbo.syspolicy_target_sets": {},
+	"syspolicy_target_set_levels": {}, "sys.syspolicy_target_set_levels": {}, "dbo.syspolicy_target_set_levels": {},
+	"syspolicy_policy_execution_history": {}, "sys.syspolicy_policy_execution_history": {}, "dbo.syspolicy_policy_execution_history": {},
+	"syspolicy_policy_execution_history_details": {}, "sys.syspolicy_policy_execution_history_details": {}, "dbo.syspolicy_policy_execution_history_details": {},
+	// SQL Server Agent / msdb catalog views
+	"sysjobs": {}, "sys.sysjobs": {}, "dbo.sysjobs": {},
+	"syscategories": {}, "sys.syscategories": {}, "dbo.syscategories": {},
+	"sysjobsteps": {}, "sys.sysjobsteps": {}, "dbo.sysjobsteps": {},
+	"sysschedules": {}, "sys.sysschedules": {}, "dbo.sysschedules": {},
+	"sysjobhistory": {}, "sys.sysjobhistory": {}, "dbo.sysjobhistory": {},
+	"sysalerts": {}, "sys.sysalerts": {}, "dbo.sysalerts": {},
+	"sysoperators": {}, "sys.sysoperators": {}, "dbo.sysoperators": {},
 }
 
 // IsSysCatalogTable reports whether norm identifies any registered sys.* view or alias in the table.
