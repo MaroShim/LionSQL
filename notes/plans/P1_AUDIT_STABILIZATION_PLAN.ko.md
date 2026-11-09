@@ -14,9 +14,9 @@
 | 단계 | 난이도 | 전체 건수 | 완료 건수 | 잔여 건수 | 진척률 | 기술적 특성 및 실행 전략 |
 | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
 | **1단계** | **하 (Low)** | 21건 | **21건** | **0건** | **100.0%** | 슬라이스/오버플로우 방어, `Close()` 누락 보강, 언이스케이프 (**6개 미니 배치 전량 완료**) |
-| **2단계** | **중 (Medium)** | 18건 | **5건** | **13건** | **27.8%** | 카탈로그 영속화, 커서/트랜잭션 수명주기, ReadDeadline, 가드레일 (**Mini-Batch M1 완료, M2~M5 대기**) |
+| **2단계** | **중 (Medium)** | 18건 | **8건** | **10건** | **44.4%** | 카탈로그 영속화, 커서/트랜잭션 수명주기, ReadDeadline, 가드레일 (**Mini-Batch M1~M2 완료, M3~M5 대기**) |
 | **3단계** | **상 (High)** | 8건 | **0건** | **8건** | **0.0%** | 커밋 Undo 롤백, CGo 커서 Ref-Count 드레인, AOF 델타 버퍼링 (**심층 설계 후 선별 적용**) |
-| **합계** | **P1 전체** | **47건** | **26건** | **21건** | **55.3%** | **Strict Red ➔ Green TDD + 3단계 파이프라인 (`Build ➔ Test -race ➔ Commit`)** |
+| **합계** | **P1 전체** | **47건** | **29건** | **18건** | **61.7%** | **Strict Red ➔ Green TDD + 3단계 파이프라인 (`Build ➔ Test -race ➔ Commit`)** |
 
 ### 1.2 미니 배치(Mini-Batch)별 진행 트래커
 | 단계 | 미니 배치 ID | 대상 패키지 / 도메인 | 건수 | 상태 | 커밋 해시 / 검증 테스트 |
@@ -28,7 +28,7 @@
 | **1단계 (하)** | **Mini-Batch 5** | `pkg/engine` & `pkg/proc` (커서/MERGE/임시테이블) | 4건 | **[x] 완료** | `990ff01` (`TestP1_Batch5_MergeUnescapeCursorReopen...` 외) |
 | **1단계 (하)** | **Mini-Batch 6** | `cmd/lionsql` (Doctor Close, 터미널 복구, 타이머) | 3건 | **[x] 완료** | `cc5850c` (`TestP1_Batch6_DoctorCloseOnError...`) |
 | **2단계 (중)** | **Mini-Batch M1** | `pkg/catalog` & `pkg/engine` (카탈로그 영속화/DDL) | 5건 | **[x] 완료** | `TestP1_BatchM1_CleanCatalogIdentCompoundBrackets`, `TestP1_BatchM1_AlterViewFKAndPgAttribute` |
-| **2단계 (중)** | **Mini-Batch M2** | `pkg/engine` & `pkg/execution` (실행 가드레일/정리) | 3건 | **[ ] 대기** | 도메인 B-1: `14-1` (APPLY 상한), `4-2` (Sort Spill), `Scope-047` |
+| **2단계 (중)** | **Mini-Batch M2** | `pkg/engine` & `pkg/execution` (실행 가드레일/정리) | 3건 | **[x] 완료** | `TestP1_BatchM2_ApplyRowLimit`, `TestP1_BatchM2_SortOpenErrorRemovesSpillFiles`, `TestP1_BatchM2_DerivedTableErrorCleansTempTables` |
 | **2단계 (중)** | **Mini-Batch M3** | `pkg/engine` & `pkg/proc` (트랜잭션/커서/파서 위임) | 3건 | **[ ] 대기** | 도메인 B-2: `8-3` (WITHOUT HOLD), `Scope-038`, `6-4` & `6-5` |
 | **2단계 (중)** | **Mini-Batch M4** | `pkg/api`, `pkg/replication`, `pkg/wire` (와이어/SPA) | 4건 | **[ ] 대기** | 도메인 C-1: `13-4`, `5-3`, `5-4` & `Scope-097`, `Scope-100/101/104` |
 | **2단계 (중)** | **Mini-Batch M5** | `pkg/api`, `cmd/lionsql`, `cmd/soaktest` (웹훅/데몬) | 3건 | **[ ] 대기** | 도메인 C-2: `Scope-127`, `Scope-129`, `Scope-130` & `135` |

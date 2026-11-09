@@ -1576,6 +1576,10 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	if hasDerivedTables(cleaned) {
 		rewritten, tempTables, err := s.resolveDerivedTables(cleaned, start, cs)
 		if err != nil {
+			// Scope-047: roll back any derived temp tables materialized before the failure.
+			for _, tbl := range tempTables {
+				_ = s.engine.DropTable(tbl)
+			}
 			return nil, err
 		}
 		defer func() {

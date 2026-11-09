@@ -11,6 +11,10 @@ import (
 	"lionsql/pkg/sqlutil"
 )
 
+// maxApplyRows caps the number of rows accumulated by CROSS/OUTER APPLY expansion
+// ([RULE:BoundedBuffers]). It is a variable so tests can lower it deterministically.
+var maxApplyRows = 100000
+
 // hasApply reports whether the query contains a CROSS APPLY or OUTER APPLY join.
 func hasApply(query string) bool {
 	return sqlutil.ContainsKeyword(query, "CROSS APPLY", false) ||
@@ -116,6 +120,10 @@ func (s *Coordinator) execApplySelect(query string, start time.Time, cs *ClientS
 					}
 				}
 				nextRows = append(nextRows, combined)
+			}
+
+			if len(nextRows) > maxApplyRows {
+				return nil, fmt.Errorf("APPLY result exceeds the row limit of %d rows; add a selective predicate or TOP/LIMIT to the APPLY subquery", maxApplyRows)
 			}
 		}
 

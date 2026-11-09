@@ -103,6 +103,7 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
      - [x] **Mini-Batch 6 (`cmd/lionsql`, 3건)**: `--doctor` 실패 시 임시 폴더 삭제 전 엔진 `Close()`(`Scope-132`), CLI 비밀번호 입력 Ctrl+C 취소 시 터미널 복구 및 데몬 실행 중 `sql` 락 안내(`Scope-133`), Windows 데몬 종료 시 `timeEndPeriod(1)` 대칭 호출(`Scope-131`) 완료 (`cc5850c`). (**난이도 하 21건 100% 완주 완료**)
    - **진행 현황 (난이도 중 18건 — 5개 미니배치 M1~M5)**:
      - [x] **Mini-Batch M1 (`pkg/catalog` & `pkg/engine`, 5건)**: `ALTER VIEW` / `CREATE OR ALTER VIEW` 및 디스크 영속화 동기화, `cleanCatalogIdent` 복합 브래킷 식별자(`[dbo].[my_proc]`) 정규화(`7-3`), WiredTiger `DropTable` 외래키 참조 테이블 존재 시 드롭 차단 및 `CASCADE` 연동(`8-4`), `ALTER TABLE ADD FOREIGN KEY` 실제 스키마 반영 및 카탈로그 영속화(`Scope-041`), `pg_attribute.atthasdef` 기본값/IDENTITY 매핑(`Scope-032`) 완료.
+     - [x] **Mini-Batch M2 (`pkg/engine` & `pkg/execution`, 3건)**: `CROSS/OUTER APPLY` 10만 행 상한 가드레일(`14-1`), 외부 정렬 `Open()` 실패 시 spill 임시 파일 즉시 삭제(`4-2` / `Scope-089`), 파생 테이블 구체화 실패 시 `#__dt_*` 임시 테이블 롤백 드롭(`Scope-047`) 완료.
 4. **`DOC-REVAMP-10`: 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜** [계획 수립 / 대기]
    - **목표**: 오버스펙(별도 VitePress 웹사이트, Swagger 중복 번들링 등)을 배제하고 실질적 가치 중심의 10대 알짜 과제 집중 완수 (1단계: 핵심 영문 4종 국문화, 14대 Spec-Out 기각 결정 단일 카탈로그, 내장 SPA 웹 서버 1분 스타터 예제, 마크다운 링크 깨짐 자동 검사기 / 2단계: T-SQL 3초 치트시트, SQLSTATE 트러블슈팅 사전, 사용자 여정 네비게이션, 오픈소스 가이드 메타 카드, 벤치마크 Mermaid 차트화, MSSQL 이전 체크리스트).
    - **설계 문서**: [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)

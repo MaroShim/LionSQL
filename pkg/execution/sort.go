@@ -209,13 +209,21 @@ func (s *SortIterator) spillRun() error {
 	return nil
 }
 
-func (s *SortIterator) Open(ctx context.Context) error {
+func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 	if s.child == nil {
 		return fmt.Errorf("sort: child iterator is nil")
 	}
 	if err := s.child.Open(ctx); err != nil {
 		return err
 	}
+
+	// [RULE:HandleHygiene] Any failure after spilling must release run files and handles
+	// immediately, because callers do not Close() an iterator whose Open() failed.
+	defer func() {
+		if retErr != nil {
+			s.releaseSpillResources()
+		}
+	}()
 
 	if s.workMem <= 0 {
 		s.workMem = DefaultWorkMem
@@ -394,23 +402,27 @@ func (s *SortIterator) Close() error {
 	s.outChunk.Reset()
 	s.outIdx = 0
 
+	s.releaseSpillResources()
+
+	if s.child != nil {
+		return s.child.Close()
+	}
+	return nil
+}
+
+// releaseSpillResources closes open run-file handles and removes all temporary run files.
+func (s *SortIterator) releaseSpillResources() {
 	for _, f := range s.openFiles {
 		_ = f.Close()
 	}
 	s.openFiles = nil
 	s.decoders = nil
 
-	// Clean up all temporary run files
 	for _, path := range s.runFiles {
 		_ = os.Remove(path)
 	}
 	s.runFiles = nil
 	s.mHeap = nil
-
-	if s.child != nil {
-		return s.child.Close()
-	}
-	return nil
 }
 
 func (s *SortIterator) Schema() []string {
