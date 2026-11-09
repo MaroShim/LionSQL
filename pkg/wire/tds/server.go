@@ -1420,6 +1420,11 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		return
 	}
 
+	// SSMS SMO Root Server Object Explorer Initialization Batch (#SVer + xp_msver + Server_Urn)
+	if s.handleSsmsServerInitBatch(conn, trimmed, sess, extraTokens, true) {
+		return
+	}
+
 	// System function / version short-circuit
 	if cols, vals, ok := matchVersionQuery(trimmed); ok {
 		if s.DevMode() {
@@ -2503,6 +2508,11 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		return
 	}
 
+	// SSMS SMO Root Server Object Explorer Initialization Batch (#SVer + xp_msver + Server_Urn)
+	if s.handleSsmsServerInitBatch(conn, trimmed, sess, nil, false) {
+		return
+	}
+
 	// System function / version short-circuit
 	if cols, vals, ok := matchVersionQuery(trimmed); ok {
 		if s.DevMode() {
@@ -3055,6 +3065,79 @@ func (s *Server) handleSsmsEnvironmentBatch(conn net.Conn, trimmed string, sess 
 	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 	if s.DevMode() {
 		log.Printf("[DEV][TDS][Success] query=SSMS Environment Detection Batch cols=[DatabaseEngineType,...], [host_platform], [ConnectionProtocol] rows=3 result sets duration=0µs")
+	}
+	return true
+}
+
+// handleSsmsServerInitBatch handles the canonical Microsoft SMO Root Server Object Explorer Initialization batch.
+// SSMS Object Explorer executes this multi-statement batch (#SVer temp table + xp_msver + sys.dm_os_host_info + SELECT [Server_Name]...)
+// to construct the root server hierarchy in ObjectExplorerControl.BuildDataModel(SqlOlapConnectionInfoBase ci).
+func (s *Server) handleSsmsServerInitBatch(conn net.Conn, trimmed string, sess *ConnectionSession, extraTokens func(*bytes.Buffer), isRPC bool) bool {
+	upper := strings.ToUpper(trimmed)
+	if !strings.Contains(upper, "#SVER") || !strings.Contains(upper, "XP_MSVER") || !strings.Contains(upper, "SERVER_URN") {
+		return false
+	}
+
+	cols := []ColumnInfo{
+		{Name: "Server_Name", Type: TypeNVarChar, Size: 256, Nullable: true},
+		{Name: "Server_Urn", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "Server_ServerType", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "Server_Status", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "Server_IsContainedAuthentication", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "VersionMajor", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "VersionMinor", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "BuildNumber", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "IsSingleUser", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "Edition", Type: TypeNVarChar, Size: 256, Nullable: true},
+		{Name: "EngineEdition", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "IsXTPSupported", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "VersionString", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "HostPlatform", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "IsFullTextInstalled", Type: TypeBitN, Size: 1, Nullable: true},
+	}
+
+	serverName := "MSSQLSERVER"
+	vals := []any{
+		serverName,                                    // Server_Name
+		fmt.Sprintf("Server[@Name='%s']", serverName), // Server_Urn
+		nil,                                           // Server_ServerType
+		int32(1),                                      // Server_Status (0x0001 = Online)
+		int32(0),                                      // Server_IsContainedAuthentication
+		int32(15),                                     // VersionMajor (SQL Server 2019)
+		int32(0),                                      // VersionMinor
+		int32(2000),                                   // BuildNumber
+		false,                                         // IsSingleUser
+		"Developer Edition (64-bit)",                  // Edition
+		int32(3),                                      // EngineEdition (3 = Enterprise / Developer)
+		false,                                         // IsXTPSupported
+		"15.0.2000.5",                                 // VersionString
+		"Windows",                                     // HostPlatform (Invariant 11)
+		false,                                         // IsFullTextInstalled
+	}
+
+	var buf bytes.Buffer
+	buf.Write(BuildColMetaData(cols))
+	buf.Write(sess.buildRow(cols, vals))
+
+	doneStatus := DoneFinal
+	if sess.inTx {
+		doneStatus |= DoneInXact
+	}
+
+	if isRPC {
+		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
+		if extraTokens != nil {
+			extraTokens(&buf)
+		}
+		buf.Write(BuildReturnStatus(0))
+		buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
+	} else {
+		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, 1))
+	}
+
+	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+	if s.DevMode() {
+		log.Printf("[DEV][TDS][Success] query=SSMS SMO Server Discovery Batch cols=[Server_Name, Server_Urn, ... HostPlatform] rows=1 duration=0µs")
 	}
 	return true
 }

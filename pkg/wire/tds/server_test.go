@@ -1131,6 +1131,72 @@ else
 	}
 }
 
+func TestTDS_SSMS_ServerInitBatch(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	smoServerInitBatch := `create table #SVer(ID int,  Name  sysname, Internal_Value int, Value nvarchar(512))
+          insert #SVer exec master.dbo.xp_msver
+          insert #SVer select t.*
+          from sys.dm_os_host_info
+          CROSS APPLY (
+          VALUES
+          (1001, 'host_platform', 0, host_platform),
+          (1002, 'host_distribution', 0, host_distribution),
+          (1003, 'host_release', 0, host_release),
+          (1004, 'host_service_pack_level', 0, host_service_pack_level),
+          (1005, 'host_sku', host_sku, ''),
+          (1006, 'HardwareGeneration', '', ''),
+          (1007, 'ServiceTier', '', ''),
+          (1008, 'ReservedStorageSizeMB', '0', '0'),
+          (1009, 'UsedStorageSizeMB', '0', '0')
+          ) t(id, [name], internal_value, [value])
+
+SELECT
+CAST(
+        serverproperty(N'Servername')
+       AS sysname) AS [Server_Name],
+'Server[@Name=' + quotename(CAST(
+        serverproperty(N'Servername')
+       AS sysname),'''') + ']' AS [Server_Urn],
+CAST(null AS int) AS [Server_ServerType],
+CAST(0x0001 AS int) AS [Server_Status],
+0 AS [Server_IsContainedAuthentication],
+(@@microsoftversion / 0x1000000) & 0xff AS [VersionMajor],
+(@@microsoftversion / 0x10000) & 0xff AS [VersionMinor],
+@@microsoftversion & 0xffff AS [BuildNumber],
+CAST(SERVERPROPERTY('IsSingleUser') AS bit) AS [IsSingleUser],
+CAST(SERVERPROPERTY(N'Edition') AS sysname) AS [Edition],
+CAST(SERVERPROPERTY('EngineEdition') AS int) AS [EngineEdition],
+CAST(ISNULL(SERVERPROPERTY(N'IsXTPSupported'), 0) AS bit) AS [IsXTPSupported],
+SERVERPROPERTY(N'ProductVersion') AS [VersionString],
+( select Value from #SVer where Name =N'host_platform') AS [HostPlatform],
+CAST(FULLTEXTSERVICEPROPERTY('IsFullTextInstalled') AS bit) AS [IsFullTextInstalled]
+ORDER BY
+[Server_Name] ASC
+
+        drop table #SVer`
+
+	payload := sendSQLBatch(t, conn, smoServerInitBatch)
+
+	if !bytes.Contains(payload, EncodeUTF16LE("Server_Name")) {
+		t.Fatalf("expected 'Server_Name' column in SMO server init response")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("Server_Urn")) {
+		t.Fatalf("expected 'Server_Urn' column in SMO server init response")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("HostPlatform")) {
+		t.Fatalf("expected 'HostPlatform' column in SMO server init response")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("Windows")) {
+		t.Fatalf("expected 'Windows' HostPlatform value in SMO server init response")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("MSSQLSERVER")) {
+		t.Fatalf("expected 'MSSQLSERVER' value in SMO server init response")
+	}
+}
+
 
 
 
