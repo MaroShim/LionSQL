@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-08
 > - **과제 식별 코드**: `P0-10`, `P0-34` (CDC & 1-Writer Multi-Reader 복제 스트리밍 하위)
-> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md)
+> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](../PRE_RELEASE_AUDIT_TRIAGE.ko.md)
 > - **핵심 적용 규칙**: `[RULE:NonBlockingSink]`, `[RULE:ExplicitError]`, `[RULE:ZeroOrphan]`, `[RULE:BoundedBuffers]`
 > - **관련 커밋**:
 >   - `dacd070` `fix(cdc): eliminate historical replay silent drop via lossless bridge streaming (P0-10)`

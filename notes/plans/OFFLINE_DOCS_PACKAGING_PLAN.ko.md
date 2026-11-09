@@ -6,9 +6,9 @@
 > - **과제 식별 코드**: `PKG-OFFLINE-DOCS-1`  
 > - **목표**: Go 바이너리에 문서를 억지로 임베딩하지 않고, 공식 배포 압축 패키지(`tar.gz` / `zip`) 내에 소스코드를 제외한 순수 배포용 문서(`docs/`)와 오프라인 브라우저 뷰어를 함께 번들링하여 폐쇄망/에어갭 환경에서도 완벽한 브라우징 경험을 제공.  
 > - **연계 문서**:  
->   - 릴리스 자동화 가이드: [`doc/RELEASE_AUTOMATION_GUIDE.ko.md`](../doc/RELEASE_AUTOMATION_GUIDE.ko.md)  
->   - 릴리스 스크립트: [`scripts/release.sh`](../scripts/release.sh)  
->   - 포스트 1.0 후보 과제(Candidates): [`notes/POST_1.0_CANDIDATES.ko.md`](POST_1.0_CANDIDATES.ko.md)  
+>   - 릴리스 자동화 가이드: [`doc/RELEASE_AUTOMATION_GUIDE.ko.md`](../../doc/RELEASE_AUTOMATION_GUIDE.ko.md)  
+>   - 릴리스 스크립트: [`scripts/release.sh`](../../scripts/release.sh)  
+>   - 포스트 1.0 후보 과제(Candidates): [`notes/POST_1.0_CANDIDATES.ko.md`](../POST_1.0_CANDIDATES.ko.md)  
 
 ---
 

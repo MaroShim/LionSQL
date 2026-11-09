@@ -5,7 +5,7 @@ This document tracks systematic static analysis, defect auditing, regression tes
 > [!NOTE]
 > - Detailed Korean audit tracker: [`CODE_REVIEW.ko.md`](CODE_REVIEW.ko.md)
 > - Defect resolution archive (107 cases): [`notes/archive/BUG_ARCHIVE.ko.md`](notes/archive/BUG_ARCHIVE.ko.md)
-> - Subsystem modular architecture plan: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
+> - Subsystem modular architecture plan: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md)
 
 ---
 
@@ -97,7 +97,7 @@ All code reviews and bug remediations must strictly pass all 3 stages in order b
 | **REV-WIRE-004** | P1 | Defect | [`pkg/wire/tds/server.go:2536`](pkg/wire/tds/server.go#L2536) | Queries with 2+ `SERVERPROPERTY` calls hijacked into synthetic 4-column result sets. Removed hijacking in favor of VDBE engine. | `[x]` | `57e51aa` |
 | **REV-WIRE-005** | P2 | Defect | [`pkg/wire/tds/server.go:937`](pkg/wire/tds/server.go#L937) | Unsupported numeric `ProcID` returning silent `DoneFinal` without errors. Returned explicit `TokenError` (Msg 2812). | `[x]` | [MS-TDS] Protocol |
 | **REV-WIRE-006** | P1 | Parameter Bug | [`pkg/wire/tds/server.go:1030`](pkg/wire/tds/server.go#L1030) | Parameter case mismatches (`@p1` vs `@P1`) dropping bound values. Standardized on ordinal positional mapping. | `[x]` | `TDS-RPC-AUDIT-1` |
-| **REV-WIRE-007** | P2 | Bandwidth | [`pkg/wire/tds/tokens.go:120`](pkg/wire/tds/tokens.go#L120) | Standard ROW tokens wasting bandwidth on NULL fields. Implemented TDS 7.2+ NBCROW (`0xD2`) bitmap compression. | `[x]` | `TDS-NBCROW-1` |
+| **REV-WIRE-007** | P2 | Bandwidth | [`pkg/wire/tds/tokens.go:120`](pkg/wire/tds/token.go#L120) | Standard ROW tokens wasting bandwidth on NULL fields. Implemented TDS 7.2+ NBCROW (`0xD2`) bitmap compression. | `[x]` | `TDS-NBCROW-1` |
 | **REV-WIRE-008** | P2 | Resource Leak | [`pkg/wire/server.go:1210`](pkg/wire/server.go#L1210) | Unbounded prepared statements per session risking memory leaks. Enforced bounded LRU cache (`maxPreparedPerSession = 256`). | `[x]` | `PREP-1` |
 | **REV-WIRE-009** | P1 | Atomicity | [`pkg/wire/copy.go:350`](pkg/wire/copy.go#L350) | `COPY FROM STDIN` operating outside ambient session transaction. Enforced transaction binding and rollback safety. | `[x]` | `COPY-SAFETY-1` |
 | **REV-WIRE-010** | P1 | Panic/DoS | [`pkg/wire/server.go:868-980`](pkg/wire/server.go#L868) | PGWire `handleParse` / `handleBind` allocating slices with untrusted counts (`numParamTypes < 0`, `numFormats < 0`, `numParams < 0`, `paramLen < -1`, `$999999999`) risking panics or OOM. Added strict defensive boundary and length guards. | `[x]` | [`RULE:DefensiveIndexing`], [`RULE:BoundedBuffers`] |
@@ -131,7 +131,7 @@ All code reviews and bug remediations must strictly pass all 3 stages in order b
 
 | ID | Priority | Category | Target Location | Description & Remediation | Status | Reference |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
-| **REV-ARCH-001** | P2 | Encapsulation | [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md) | Wire protocol adapters directly accessing storage engine and session mutex locks. Designed `R-6` SPI decoupled contracts. | `[x]` | Post-1.0 (`v1.1.0+`) |
+| **REV-ARCH-001** | P2 | Encapsulation | [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) | Wire protocol adapters directly accessing storage engine and session mutex locks. Designed `R-6` SPI decoupled contracts. | `[x]` | Post-1.0 (`v1.1.0+`) |
 
 ---
 

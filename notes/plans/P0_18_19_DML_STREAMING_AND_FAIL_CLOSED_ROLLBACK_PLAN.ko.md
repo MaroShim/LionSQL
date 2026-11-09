@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-08
 > - **과제 식별 코드**: `P0-18`, `P0-19` (DML Engine & ACID 정합성 하위)
-> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md)
+> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](../PRE_RELEASE_AUDIT_TRIAGE.ko.md)
 > - **핵심 적용 규칙**: `[RULE:BoundedBuffers]`, `[RULE:AtomicSaves]`, `[RULE:ExplicitError]`, `[RULE:ZeroAllocation]`
 > - **관련 커밋**:
 >   - `bdcec4a` `fix(engine): resolve P0-18 by streaming direct PK lookups and bounding full-scan buffer in MERGE`

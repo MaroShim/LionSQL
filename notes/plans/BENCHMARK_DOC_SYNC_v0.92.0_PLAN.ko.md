@@ -5,7 +5,7 @@
 > - **문서 버전**: v1.1
 > - **상태**: 측정 대기 (Scheduled for Next Morning after System Thermal Cool-down)
 > - **연관 과제 ID**: `TUNE-DOC-SYNC-1` (벤치마크 및 공식 문서 실측치 일괄 동기화)
-> - **대상 문서**: [`doc/BENCHMARK.md`](../doc/BENCHMARK.md), [`README.md`](../README.md), [`README.ko.md`](../README.ko.md)
+> - **대상 문서**: [`doc/BENCHMARK.md`](../../doc/BENCHMARK.md), [`README.md`](../README.md), [`README.ko.md`](../README.ko.md)
 > - **측정 원칙**: 버전(`v0.92.0`), 측정 일자(`2026-11-09`), 하드웨어 환경(Apple M1, 8-Core, 16GB, Cold-Start) 명시 필수, 베이스라인 파라미터(100Wrk, 10k Acc, 50k Ops) 무변형 100% 보존.
 
 ---
@@ -14,7 +14,7 @@
 
 LionSQL은 37건의 P0 심층 결함 패치(`P0-01` ~ `P0-37`)와 Gate 4 비트 시프트 연산 정합성 보정을 거치며, `P0-29`(sync.Pool 슬라이스 제로잉을 통한 GC 마킹 부하 박멸) 및 `P0-30`(세션 레벨 락 범위 축소) 최적화에 힘입어 **In-Memory OCC 81.9만 tpmC (30,236 TPS) 돌파 및 P99 꼬리 지연시간 84% 단축(17ms ➔ 2.8ms)**이라는 역대 최고 성능 상태를 달성했습니다.
 
-그러나 현재 [`doc/BENCHMARK.md`](../doc/BENCHMARK.md)와 [`README.md`](../README.md)에 등재된 공식 수치는 과거 v0.90.0 ~ v0.91.0 시점의 레거시 측정치(In-Memory 60.3만 tpmC, 단편적인 이전 로그 등)에 머물러 있어, 실제 최신 엔진의 정밀한 성능 특성과 내구성/정합성 개선 결과를 사용자 및 엔터프라이즈 도입 검토자에게 온전히 전달하지 못하고 있습니다.
+그러나 현재 [`doc/BENCHMARK.md`](../../doc/BENCHMARK.md)와 [`README.md`](../README.md)에 등재된 공식 수치는 과거 v0.90.0 ~ v0.91.0 시점의 레거시 측정치(In-Memory 60.3만 tpmC, 단편적인 이전 로그 등)에 머물러 있어, 실제 최신 엔진의 정밀한 성능 특성과 내구성/정합성 개선 결과를 사용자 및 엔터프라이즈 도입 검토자에게 온전히 전달하지 못하고 있습니다.
 
 장시간 연속된 빌드/테스트/스트레스 실행으로 인한 CPU 서멀 스로틀링(Thermal Throttling) 영향을 완전 배제하기 위해 시스템을 충분히 쿨링한 후, **익일 아침 콜드 스타트 상태에서 4대 벤치마크를 정밀 재실측**하고, **버전(`v0.92.0`)과 측정 일자를 명시하여 `BENCHMARK.md` 전체 수치 테이블을 투명하게 갱신**합니다. 베이스라인 파라미터는 어떠한 인위적 변경 없이 100% 원형을 유지합니다.
 
@@ -52,7 +52,7 @@ LionSQL은 37건의 P0 심층 결함 패치(`P0-01` ~ `P0-37`)와 Gate 4 비트 
 
 ## 3. 동기화 대상 문서 및 세부 섹션 (SSOT Target Files)
 
-### 1) [`doc/BENCHMARK.md`](../doc/BENCHMARK.md)
+### 1) [`doc/BENCHMARK.md`](../../doc/BENCHMARK.md)
 * **제2절 (하드웨어 환경)**: Apple M1 (8-core, 16GB, macOS ARM64), Go 1.24+ 런타임 정보 최신화.
 * **제3.3절 (`cmd/bench` 송금 프로시저)**:
   - In-Memory OCC 실행 로그 덤프 및 통계 테이블 갱신

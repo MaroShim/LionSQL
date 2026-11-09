@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-08
 > - **과제 식별 코드**: `P0-06`, `P0-07`, `P0-09` (Security & RBAC 거버넌스 하위)
-> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md)
+> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](../PRE_RELEASE_AUDIT_TRIAGE.ko.md)
 > - **핵심 적용 규칙**: `[RULE:AtomicSaves]`, `[RULE:SafeDefaults]`, `[RULE:ExplicitError]`, `[RULE:RadicalKISS]`
 > - **관련 커밋**:
 >   - `df23626` `fix(auth): eliminate anonymous user admin bypass backdoor (P0-06)`

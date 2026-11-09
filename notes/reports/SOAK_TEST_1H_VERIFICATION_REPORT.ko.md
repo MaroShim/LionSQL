@@ -3,8 +3,8 @@
 > - **최종 갱신일**: 2026-10-31
 > - **최초 작성일**: 2026-10-31
 > - **과제 식별 코드**: `DURA-SOAK-1`, `DURA-SOAK-F1`, `DURA-SOAK-F2`
-> - **검증 도구**: [`cmd/soaktest/main.go`](../cmd/soaktest/main.go)
-> - **관련 계획서**: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)
+> - **검증 도구**: [`cmd/soaktest/main.go`](../../cmd/soaktest/main.go)
+> - **관련 계획서**: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](../plans/DURABILITY_VERIFICATION_PLAN.ko.md)
 > - **상태**: 1단계(1시간 WiredTiger PGWire 소크 및 초기 발견 이슈 2건 조치) 완료 (`[x]`)
 
 ---
@@ -76,9 +76,9 @@
 ### 4.1. `DURA-SOAK-F1`: WiredTiger 쓰기 충돌(`WT_ROLLBACK`)의 PostgreSQL `SQLSTATE 40001` 표준 매핑
 - **현상**: 초기 40초 스모크 실행에서 동시 계좌 업데이트 시 발생하는 WiredTiger의 `WT_ROLLBACK` (`-31800`) 오류가 일반 에러 문자열(`cursor_update failed with code -31800`)로 반환되어, PGWire 프로토콜 계층이 이를 내부 서버 오류(`SQLSTATE XX000`)로 클라이언트에 전달했다.
 - **조치**:
-  - [`pkg/storage/wiredtiger/wt_engine.go`](../pkg/storage/wiredtiger/wt_engine.go)에 `wtOpError(op string, ret int)` 헬퍼를 도입하여 `WT_ROLLBACK` 반환 시 표준 센티널 에러인 `storage.ErrSerializationFailure`로 래핑하도록 개선했다 (`cursor_insert`, `cursor_update`, `cursor_remove`, `commit_transaction`, `cursor put` 일괄 적용).
-  - [`pkg/wire/protocol.go`](../pkg/wire/protocol.go)의 `WriteError`에서 `SERIALIZATION FAILURE` 포함 시 PostgreSQL 표준 재시도 가능 코드인 **`SQLSTATE 40001` (`serialization_failure`)**을 반환하도록 매핑했다.
-  - 단위 테스트([`wt_error_test.go`](../pkg/storage/wiredtiger/wt_error_test.go), [`serialization_sqlstate_test.go`](../pkg/wire/serialization_sqlstate_test.go))를 추가하여 검증했다.
+  - [`pkg/storage/wiredtiger/wt_engine.go`](../../pkg/storage/wiredtiger/wt_engine.go)에 `wtOpError(op string, ret int)` 헬퍼를 도입하여 `WT_ROLLBACK` 반환 시 표준 센티널 에러인 `storage.ErrSerializationFailure`로 래핑하도록 개선했다 (`cursor_insert`, `cursor_update`, `cursor_remove`, `commit_transaction`, `cursor put` 일괄 적용).
+  - [`pkg/wire/protocol.go`](../../pkg/wire/protocol.go)의 `WriteError`에서 `SERIALIZATION FAILURE` 포함 시 PostgreSQL 표준 재시도 가능 코드인 **`SQLSTATE 40001` (`serialization_failure`)**을 반환하도록 매핑했다.
+  - 단위 테스트([`wt_error_test.go`](../../pkg/storage/wiredtiger/wt_error_test.go), [`serialization_sqlstate_test.go`](../../pkg/wire/serialization_sqlstate_test.go))를 추가하여 검증했다.
 
 ### 4.2. `DURA-SOAK-F2`: 메모리(`RSS`) 증가 곡선 규명 및 `/metrics` 런타임 지표 연동
 - **현상**: 40초 스모크 테스트에서 RSS가 `54MB ➔ 79MB`로 증가하고, 1시간 테스트에서도 12~18분 구간(`335MB`) 대비 54~60분 구간(`610~765MB`)의 단순 비율이 `2.20`으로 나타나 이것이 메모리 누수인지 페이지 캐시 워밍업인지 규명이 필요했다.
@@ -87,5 +87,5 @@
   2. 초당 200 ops(초당 약 110건의 `soak_log` INSERT 및 220건의 `soak_accounts` UPDATE) 속도에서는 B+Tree 페이지 캐시 500MB가 채워지는 데 약 35분이 소요된다.
   3. 실제로 36~44분 구간에서 `612~660MB`에 도달한 뒤 더 이상 선형 증가하지 않고, WiredTiger eviction 스레드(`threads_min=4,threads_max=8`)에 의해 58~60분 구간에는 **`610MB`로 감소하며 안정화**되었다.
 - **도구 고도화**:
-  - OS `RSS`만으로는 CGo(WiredTiger 캐시)와 Go 힙/고루틴 누수를 분리할 수 없으므로, [`cmd/soaktest/main.go`](../cmd/soaktest/main.go)가 자식 서버의 Prometheus `/metrics` 엔드포인트를 주기적으로 스크래핑하여 **`heap_kb` (`lionsql_memory_alloc_bytes`)**와 **`goroutines` (`lionsql_goroutines`)**를 함께 수집·판정하도록 업그레이드했다.
+  - OS `RSS`만으로는 CGo(WiredTiger 캐시)와 Go 힙/고루틴 누수를 분리할 수 없으므로, [`cmd/soaktest/main.go`](../../cmd/soaktest/main.go)가 자식 서버의 Prometheus `/metrics` 엔드포인트를 주기적으로 스크래핑하여 **`heap_kb` (`lionsql_memory_alloc_bytes`)**와 **`goroutines` (`lionsql_goroutines`)**를 함께 수집·판정하도록 업그레이드했다.
   - 또한 엔진의 설정된 페이지 캐시 상한(`-rss-ceiling-mb 800`) 내에서의 정상 워밍업을 누수로 오판하지 않도록 기준선 로직을 보정했다.

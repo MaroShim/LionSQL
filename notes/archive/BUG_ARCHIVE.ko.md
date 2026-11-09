@@ -5,9 +5,9 @@
 > [!NOTE]
 > 본 결함 조치 트랙은 초기 코드베이스의 급속한 무결성 안정화를 위해 사용된 중간 방법론(Interim Methodology)이며, 현재 107건 전수 조치 및 100% 회귀 검증(Build & Race-Test)이 완료되었습니다.
 > 이후의 신규 결함 추적, 정적 분석 및 구조적 아키텍처 개편은 다음의 전용 대시보드를 통해 진행됩니다:
-> - **코드 리뷰 및 결함 감사 트래커**: [`CODE_REVIEW.ko.md`](CODE_REVIEW.ko.md)
-> - **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](REFACTORING.ko.md)
-> - **전체 과제 분류 체계**: [`notes/TAXONOMY.ko.md`](notes/TAXONOMY.ko.md)
+> - **코드 리뷰 및 결함 감사 트래커**: [`CODE_REVIEW.ko.md`](../../CODE_REVIEW.ko.md)
+> - **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](../../REFACTORING.ko.md)
+> - **전체 과제 분류 체계**: [`notes/TAXONOMY.ko.md`](../TAXONOMY.ko.md)
 > - **활성 엔지니어링 백로그**: [`TODO.ko.md`](TODO.ko.md)
 
 ---
@@ -484,7 +484,7 @@
 | **P2** | **엔진/Upsert** | **`ON CONFLICT (col)` 충돌 컬럼 대소문자 정규화로 Upsert 유니크 위반 방지 (`BUG-UPSERT-1`)** | `pkg/engine/sqlexec_dml.go` | **완료 (`[x]`)** | - |
 | **P2** | **엔진/조회** | **`evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 (`BUG-WHERE-1`)** | `pkg/engine/sqlexec_eval.go` | **완료 (`[x]`)** | - |
 | **P2** | **엔진/옵티마이저** | **`EXPLAIN` 서브쿼리 평탄화 시 무작위 맵 순회 제거 및 서브쿼리 컬럼 키 정합 (`BUG-EXP-1`)** | `pkg/engine/sqlexec_explain.go` | **완료 (`[x]`)** | - |
-| **P1** | **아키텍처/추상화** | **통합 SQL 추상화 레이어 구축 (`storage.Record` 1급 객체화, `SQLRow`, 경계 정규화) (`SQL-ABSTRACT-1`)** | `pkg/storage`, `pkg/engine` | **완료 (`[x]`)** | [`notes/SQL_ABSTRACTION_LAYER_PLAN.md`](notes/SQL_ABSTRACTION_LAYER_PLAN.md) |
+| **P1** | **아키텍처/추상화** | **통합 SQL 추상화 레이어 구축 (`storage.Record` 1급 객체화, `SQLRow`, 경계 정규화) (`SQL-ABSTRACT-1`)** | `pkg/storage`, `pkg/engine` | **완료 (`[x]`)** | [`notes/SQL_ABSTRACTION_LAYER_PLAN.md`](../plans/SQL_ABSTRACTION_LAYER_PLAN.md) |
 | **P1** | **엔진/무결성** | **PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 안티패턴 제거 및 가상 PK(`_row_id`) 보장 (`BUG-DDL-PK-1`)** | `pkg/engine/sqlexec_ddl.go`, `pkg/api/handlers_tables.go` | **완료 (`[x]`)** | - |
 | **P1** | **엔진/무결성** | **`SELECT INTO` 및 파생 테이블의 일시적 고유 컬럼 임의 PK 지정 및 0건 시 `Columns[0]` PK 지정 제거 (`BUG-SELECT-INTO-PK-1`)** | `pkg/engine/sqlexec_select.go`, `pkg/engine/sqlexec_derived.go` | **완료 (`[x]`)** | - |
 | **P1** | **실행/조인** | **`IndexNestedLoopJoin` 구성 시 인덱스 미일치 시 `Indexes[0]`을 임의 선택하여 조인 오염시키는 결함 방지 (Hash Join 안전 전환) (`BUG-JOIN-IDX-1`)** | `pkg/execution/builder.go` | **완료 (`[x]`)** | - |
@@ -602,8 +602,8 @@
 ## 4. 연계 문서 및 진실 공급원 (SSOT)
 
 - **활성 엔지니어링 백로그**: [`TODO.ko.md`](TODO.ko.md)
-- **코드 리뷰 및 결함 감사 트래커**: [`CODE_REVIEW.ko.md`](CODE_REVIEW.ko.md)
-- **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](REFACTORING.ko.md)
-- **전체 식별 코드 분류 체계**: [`notes/TAXONOMY.ko.md`](notes/TAXONOMY.ko.md)
-- **중장기 거시 릴리즈 로드맵**: [`ROADMAP.md`](ROADMAP.md)
+- **코드 리뷰 및 결함 감사 트래커**: [`CODE_REVIEW.ko.md`](../../CODE_REVIEW.ko.md)
+- **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](../../REFACTORING.ko.md)
+- **전체 식별 코드 분류 체계**: [`notes/TAXONOMY.ko.md`](../TAXONOMY.ko.md)
+- **중장기 거시 릴리즈 로드맵**: [`ROADMAP.md`](../../ROADMAP.md)
 

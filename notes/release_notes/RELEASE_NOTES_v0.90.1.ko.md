@@ -19,7 +19,7 @@ LionSQL `v0.90.1`은 `v0.90.0` GA 이후 현업 엔터프라이즈 환경에서 
   - `DROP FUNCTION` / `DROP FUNCTION IF EXISTS` 카탈로그 연동 및 UDF 캐시 동적 무효화 파이프라인 안착.
 - **AWS Babelfish 2,900-Suite 실전 검증 완주**:
   - 2,900개 파일과 116,884개 배치를 크래시/패닉 없이 단 12초~2분 내에 완주하며, **68,000개에 육박하는 배치 정상 통과(Batch Pass Rate 58.16%)** 달성.
-  - 관련 기술 분석 및 디버깅 여정을 [`notes/BABELFISH_INTEGRATION_REPORT.ko.md`](BABELFISH_INTEGRATION_REPORT.ko.md)에 상세 수록.
+  - 관련 기술 분석 및 디버깅 여정을 [`notes/BABELFISH_INTEGRATION_REPORT.ko.md`](../reports/BABELFISH_INTEGRATION_REPORT.ko.md)에 상세 수록.
 - **SQLLogicTest (SLT) 107개 공식 코퍼스 및 절차형 스위트 14종 영구 정착**:
   - SQLite 공식 대규모 스위트(`full`, `evidence`, `random`, `index`) 107개 전수 정착.
   - Stored Procedure 회귀 방지를 위한 14개 절차형 스위트(`test/slt_proc/`) 신설 및 **100% PASS (Race 0)** 달성.

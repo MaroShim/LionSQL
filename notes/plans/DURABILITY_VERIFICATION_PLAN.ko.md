@@ -5,7 +5,7 @@
 > - **과제 식별 코드**: `DURA-KILL-1`, `DURA-SOAK-1`, `DURA-DOGFOOD-1`
 > - **목표**: 연동 호환성(앱이 돈다)과 별개로, "장시간 안정적으로 돌고, 비정상 종료 후에도 커밋된 데이터를 잃지 않는다"는 운영 신뢰성을 자동화된 테스트로 입증
 > - **상태**: 1차 100라운드 무손실 및 5분/1시간 소크 완주 (`Active In Progress` - 24h~72h 대기)
-> - **관련 문서**: [`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md), [`../BUG_ARCHIVE.ko.md`](../BUG_ARCHIVE.ko.md)
+> - **관련 문서**: [`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md), [`../BUG_ARCHIVE.ko.md`](../archive/BUG_ARCHIVE.ko.md)
 
 ---
 

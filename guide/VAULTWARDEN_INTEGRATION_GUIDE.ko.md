@@ -7,8 +7,8 @@
 > - **지원 유선 프로토콜**:
 >   - **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
 > - **참조 문서**:
->   - 실전 연동 검증 보고서: [`notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md`](../notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md)
->   - 모듈러 아키텍처 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
+>   - 실전 연동 검증 보고서: [`notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md`](../notes/reports/VAULTWARDEN_INTEGRATION_REPORT.ko.md)
+>   - 모듈러 아키텍처 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md)
 
 ---
 

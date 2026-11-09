@@ -177,6 +177,6 @@ GO
 ---
 
 ## 7. Related Documentation
-- [Client Tool Integration Guide (`CLIENT_TOOL_INTEGRATION.md`)](../docs/CLIENT_TOOL_INTEGRATION.md)
-- [T-SQL Language Reference (`TSQL_REFERENCE.md`)](../docs/TSQL_REFERENCE.md)
-- [LionSQL Web Studio Guide (`WEB_STUDIO_GUIDE.md`)](../docs/WEB_STUDIO_GUIDE.md)
+- [Client Tool Integration Guide (`CLIENT_TOOL_INTEGRATION.md`)](../doc/CLIENT_TOOL_INTEGRATION.md)
+- [T-SQL Language Reference (`TSQL_REFERENCE.md`)](../doc/TSQL_REFERENCE.md)
+- [LionSQL Web Studio Guide (`WEB_STUDIO_GUIDE.md`)](../doc/WEB_STUDIO_GUIDE.md)

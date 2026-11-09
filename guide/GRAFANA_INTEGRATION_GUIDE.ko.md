@@ -9,8 +9,8 @@
 >   - 쿼리 데이터 소스 1: `grafana-postgresql-datasource` (`lib/pq`, TCP `:5433`)
 >   - 쿼리 데이터 소스 2: `mssql` (`github.com/microsoft/go-mssqldb`, TDS 7.x/8.0, TCP `:1433`)
 > - **참조 문서**:
->   - 실전 연동 검증 보고서: [`notes/GRAFANA_INTEGRATION_REPORT.ko.md`](../notes/GRAFANA_INTEGRATION_REPORT.ko.md)
->   - 아키텍처 계획서: [`notes/GRAFANA_INTEGRATION_PLAN.ko.md`](../notes/GRAFANA_INTEGRATION_PLAN.ko.md)
+>   - 실전 연동 검증 보고서: [`notes/GRAFANA_INTEGRATION_REPORT.ko.md`](../notes/reports/GRAFANA_INTEGRATION_REPORT.ko.md)
+>   - 아키텍처 계획서: [`notes/GRAFANA_INTEGRATION_PLAN.ko.md`](../notes/reports/GRAFANA_INTEGRATION_REPORT.ko.md)
 >   - 영문 가이드: [`guide/GRAFANA_INTEGRATION_GUIDE.md`](GRAFANA_INTEGRATION_GUIDE.md)
 
 ---

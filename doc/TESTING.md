@@ -437,5 +437,5 @@ If a regression is confirmed, bisect by reverting changes one at a time, or use 
 - [CONTRIBUTING.md](../CONTRIBUTING.md): contribution rules and the pull request checklist.
 - [BENCHMARK.md](BENCHMARK.md): recorded benchmark results and methodology.
 - [internal/TRANSACTION_CONCURRENCY.md](internal/TRANSACTION_CONCURRENCY.md): concurrency model and benchmark history.
-- [TEST_VERIFICATION_REPORT.ko.md](TEST_VERIFICATION_REPORT.ko.md): past verification results.
+- [TEST_VERIFICATION_REPORT.ko.md](../notes/reports/TEST_VERIFICATION_REPORT.ko.md): past verification results.
 - [internal/ZERO_ALLOCATION_ARCHITECTURE.md](internal/ZERO_ALLOCATION_ARCHITECTURE.md): hot-path allocation rules.

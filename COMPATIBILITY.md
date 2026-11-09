@@ -91,6 +91,6 @@ SELECT version();
 ## 6. Related References
 
 - Comprehensive CLI & Configuration Reference: **[`doc/REFERENCE_MANUAL.md`](doc/REFERENCE_MANUAL.md)**
-- TDS Protocol Empirical Verification Report: **[`notes/TDS_COMPATIBILITY_REPORT.md`](notes/TDS_COMPATIBILITY_REPORT.md)**
-- PGWire Protocol Empirical Verification Report: **[`notes/PGWIRE_COMPATIBILITY_REPORT.md`](notes/PGWIRE_COMPATIBILITY_REPORT.md)**
+- TDS Protocol Empirical Verification Report: **[`notes/TDS_COMPATIBILITY_REPORT.md`](notes/reports/TDS_COMPATIBILITY_REPORT.md)**
+- PGWire Protocol Empirical Verification Report: **[`notes/PGWIRE_COMPATIBILITY_REPORT.md`](notes/reports/PGWIRE_COMPATIBILITY_REPORT.md)**
 - Production Open-Source Integration Guides: **[`guide/README.md`](guide/README.md)**

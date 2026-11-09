@@ -6,8 +6,8 @@
 > - **대상 릴리즈**: v0.90.0-beta4
 > - **핵심 검증 대상**: Gitea v1.23+ (Go 풀스택 Git 호스팅 플랫폼) & XORM (Microsoft SQL Server TDS :1433 및 PostgreSQL Wire Protocol :5433)
 > - **연계 핵심 문서**:
->   - **기술 포스트모템**: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) (엔터프라이즈 ORM SQL 호환성 분석 및 테스트 사각지대 심층 회고)
->   - **공식 실전 가이드**: [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](../guide/GITEA_INTEGRATION_GUIDE.ko.md) (LionSQL 기반 Gitea 듀얼 프로토콜 구축 및 프로덕션 운영 매뉴얼)
+>   - **기술 포스트모템**: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](../ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) (엔터프라이즈 ORM SQL 호환성 분석 및 테스트 사각지대 심층 회고)
+>   - **공식 실전 가이드**: [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](../../guide/GITEA_INTEGRATION_GUIDE.ko.md) (LionSQL 기반 Gitea 듀얼 프로토콜 구축 및 프로덕션 운영 매뉴얼)
 
 ---
 
@@ -22,7 +22,7 @@ LionSQL은 단일 정적 바이너리로 구동되는 고동시성 임베디드 
 1. **실제 엔터프라이즈 웹 애플리케이션 백엔드로서의 실증**:
    Gitea는 전 세계 수많은 조직에서 소스 코드 관리 및 CI/CD 워크플로의 코어로 사용하는 고부하 프로덕션 웹 서비스입니다. 이번 연동 성공은 LionSQL이 실제 복잡한 비즈니스 로직과 트랜잭션을 처리하는 메인 RDBMS로 완벽히 동작할 수 있음을 입증한 최초의 실증 사례입니다.
 2. **복합 ORM 프레임워크(XORM)의 극단적 검증 통과**:
-   ORM은 수동 SQL 작성과 달리 엔진의 SQL 파서, 가상 카탈로그, 메타데이터 리버스 엔지니어링, 트랜잭션 수명주기, 데이터 타입 엄격성을 기계적으로 극한까지 검증합니다. (상세 분석: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) 참조)
+   ORM은 수동 SQL 작성과 달리 엔진의 SQL 파서, 가상 카탈로그, 메타데이터 리버스 엔지니어링, 트랜잭션 수명주기, 데이터 타입 엄격성을 기계적으로 극한까지 검증합니다. (상세 분석: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](../ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) 참조)
 3. **116개 프로덕션 테이블 DDL/DML 생애주기 무결성 입증**:
    Gitea가 요구하는 사용자 계정, 리포지토리, 이슈, 커밋 상태, OAuth2, 웹훅, LFS 등 116개 테이블의 스키마 생성 및 초기 시드 트랜잭션이 단 한 건의 데이터 레이스나 패닉 없이 무결하게 실행되었습니다.
 4. **TDS(:1433) 및 PGWire(:5433) 듀얼 프로토콜 전방위 검증**:
@@ -76,7 +76,7 @@ flowchart TD
 
 ## 3. 실전 DML 및 런타임 호환성 돌파 (`GITEA-MOCK-SEED-1`)
 
-스키마가 생성된 이후, 실제 사용자가 로그인하고 Git 저장소 및 이슈를 조작하는 런타임 환경에서 발생하는 복합 DML 구문 장벽을 전면 격파했습니다. (상세 내용: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) Section 3 참조)
+스키마가 생성된 이후, 실제 사용자가 로그인하고 Git 저장소 및 이슈를 조작하는 런타임 환경에서 발생하는 복합 DML 구문 장벽을 전면 격파했습니다. (상세 내용: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](../ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) Section 3 참조)
 
 1. **`UPDATE ... FROM <source>` 및 `DELETE FROM` 테이블 한정 구문**:
    - MSSQL 고유의 `UPDATE [user] SET [num_repos] = [num_repos] + 1 FROM [user] INNER JOIN ...` 구문 지원.
@@ -92,7 +92,7 @@ flowchart TD
 
 ## 4. 듀얼 프로토콜 완성: PostgreSQL Wire Protocol (:5433) 연동 (`GITEA-PGWIRE-1`)
 
-Gitea를 `db_type = postgres`로 구동하는 엔터프라이즈 환경을 위해, PostgreSQL 유선 프로토콜 계층에 필요한 필수 RDBMS 기능을 완벽히 구현했습니다. (상세 분석: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) Section 5 참조)
+Gitea를 `db_type = postgres`로 구동하는 엔터프라이즈 환경을 위해, PostgreSQL 유선 프로토콜 계층에 필요한 필수 RDBMS 기능을 완벽히 구현했습니다. (상세 분석: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](../ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) Section 5 참조)
 
 ```mermaid
 sequenceDiagram
@@ -125,7 +125,7 @@ sequenceDiagram
 
 ## 5. Gitea 전체 비즈니스 라이프사이클 E2E 실전 검증
 
-단순 부팅을 넘어, 실제 프로덕션 환경의 모든 Git 및 협업 라이프사이클을 모의하는 자동화 시더([`scripts/seed_gitea_mock_data.go`](../scripts/seed_gitea_mock_data.go))를 작성하여 TDS(:1433)와 PGWire(:5433) 양쪽 모두에서 **100% 무결점 통과(All Pass)**를 달성했습니다.
+단순 부팅을 넘어, 실제 프로덕션 환경의 모든 Git 및 협업 라이프사이클을 모의하는 자동화 시더([`scripts/seed_gitea_mock_data.go`](../../scripts/seed_gitea_mock_data.go))를 작성하여 TDS(:1433)와 PGWire(:5433) 양쪽 모두에서 **100% 무결점 통과(All Pass)**를 달성했습니다.
 
 | 비즈니스 라이프사이클 단계 | 검증 항목 | 검증 결과 |
 | :--- | :--- | :---: |
@@ -147,7 +147,7 @@ sequenceDiagram
 | **연결 드라이버** | `com.microsoft.sqlserver`, `go-mssqldb` | `lib/pq`, `pgx` |
 | **주요 장점** | T-SQL 고유 저장 프로시저 및 VDBE 바이트코드 직접 바인딩 최적화 | 범용 오픈소스 클라이언트 호환성 및 풍부한 커넥션 풀링 생태계 |
 | **권장 스토리지 엔진** | In-Memory OCC (초고속 인스턴스) / WiredTiger (대용량 디스크) | 동일 지원 (In-Memory OCC / WiredTiger) |
-| **상세 설정 매뉴얼** | [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](../guide/GITEA_INTEGRATION_GUIDE.ko.md) 2.1절 참조 | [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](../guide/GITEA_INTEGRATION_GUIDE.ko.md) 2.2절 참조 |
+| **상세 설정 매뉴얼** | [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](../../guide/GITEA_INTEGRATION_GUIDE.ko.md) 2.1절 참조 | [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](../../guide/GITEA_INTEGRATION_GUIDE.ko.md) 2.2절 참조 |
 
 ---
 
@@ -156,7 +156,7 @@ sequenceDiagram
 Gitea의 완전한 실전 라이프사이클 검증 성공은 LionSQL이 실험실 단계를 완전히 벗어나 **"실제 고부하 프로덕션 웹 애플리케이션을 지탱하는 엔터프라이즈 RDBMS"** 단계에 도달했음을 선언하는 마일스톤입니다.
 
 1. **테스트 사각지대 전면 해소**:
-   - 단위 테스트 위주의 검증에서 벗어나, 대형 ORM의 실전 쿼리 패턴을 흡수함으로써 엔진 신뢰도를 근본적으로 격상했습니다. (상세 내용: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md))
+   - 단위 테스트 위주의 검증에서 벗어나, 대형 ORM의 실전 쿼리 패턴을 흡수함으로써 엔진 신뢰도를 근본적으로 격상했습니다. (상세 내용: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](../ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md))
 2. **타 엔터프라이즈 애플리케이션 확장 기반 확보**:
    - Gitea 외에도 Redmine, Nextcloud, Grafana 등 타 오픈소스 엔터프라이즈 소프트웨어 연동을 위한 탄탄한 기술적 표준 토대를 확립했습니다.
 3. **v0.90.0-beta4 완전 탑재**:

@@ -6,7 +6,7 @@ LionSQL의 테스트, 데이터 시딩, 자동화 검증을 위한 보조 스크
 
 ## 1. 확장 통합 스모크 테스트 (`scripts/verify_report.sh`)
 
-[`notes/TEST_VERIFICATION_REPORT.ko.md`](../notes/TEST_VERIFICATION_REPORT.ko.md)에 기술된 **13대 핵심 아키텍처 및 무결성 도메인**을 단일 스크립트로 신속하게 일괄 검증하는 확장 스모크 테스트 도구입니다.
+[`notes/TEST_VERIFICATION_REPORT.ko.md`](../notes/reports/TEST_VERIFICATION_REPORT.ko.md)에 기술된 **13대 핵심 아키텍처 및 무결성 도메인**을 단일 스크립트로 신속하게 일괄 검증하는 확장 스모크 테스트 도구입니다.
 
 ### 1.1 기본 전제 조건
 `bin/` 디렉터리에 핵심 바이너리가 컴파일되어 있어야 합니다:

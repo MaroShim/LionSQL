@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-08
 > - **과제 식별 코드**: `P0-01`, `P0-04` (`OCC-HYPER-2` FlatRecord 아키텍처 하위)
-> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md)
+> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](../PRE_RELEASE_AUDIT_TRIAGE.ko.md)
 > - **핵심 적용 규칙**: `[RULE:ZeroAllocation]`, `[RULE:BoundedBuffers]`, `[RULE:RadicalKISS]`, `[RULE:ExplicitError]`
 > - **관련 커밋**:
 >   - `eef5db6` `fix(storage): isolate SSO tag byte to eliminate flat record heap offset collision (P0-01)`

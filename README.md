@@ -541,7 +541,7 @@ LionSQL strictly adheres to a **3-Stage Verification Pipeline** for every change
    Requires 100% PASS across all packages with **0 data races**.
 
    - **Extended Integration Smoke Test**:
-     Verifies all 13 core architecture domains from [`notes/TEST_VERIFICATION_REPORT.ko.md`](notes/TEST_VERIFICATION_REPORT.ko.md) in ~3 seconds (see [`scripts/README.md`](scripts/README.md)):
+     Verifies all 13 core architecture domains from [`notes/TEST_VERIFICATION_REPORT.ko.md`](notes/reports/TEST_VERIFICATION_REPORT.ko.md) in ~3 seconds (see [`scripts/README.md`](scripts/README.md)):
      ```bash
      # Default run (In-Memory OCC)
      ./scripts/verify_report.sh
@@ -551,7 +551,7 @@ LionSQL strictly adheres to a **3-Stage Verification Pipeline** for every change
      ```
 
    - **SQLLogicTest (SLT) 107-Suite Full Corpus (551,217 Queries) Oracle Verification (100% PASS)**:
-     Runs full black-box regression across official SQLite test suites (`select1~5.test`), specification clauses (`evidence/*`), B-Tree index paths (`index/*`), synthetic fuzzing expressions (`random/*`), and curated edge suites (see [Verification Report](notes/SLT_FULL_SUITE_100_PERCENT_REPORT.md), [Guide](doc/SQLLOGICTEST_GUIDE.md), and [Babelfish T-SQL Integration Report](notes/BABELFISH_INTEGRATION_REPORT.ko.md)):
+     Runs full black-box regression across official SQLite test suites (`select1~5.test`), specification clauses (`evidence/*`), B-Tree index paths (`index/*`), synthetic fuzzing expressions (`random/*`), and curated edge suites (see [Verification Report](notes/reports/SLT_FULL_SUITE_100_PERCENT_REPORT.md), [Guide](doc/SQLLOGICTEST_GUIDE.md), and [Babelfish T-SQL Integration Report](notes/reports/BABELFISH_INTEGRATION_REPORT.ko.md)):
      ```bash
      # 1. Fetch 1.0 GA full suite (on-demand caching)
      ./scripts/fetch_slt.sh

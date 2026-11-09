@@ -211,7 +211,7 @@
      - 1차에서 공식 명칭(`@stmt`, `@params`)과 일치하지 않는 경우, 클라이언트가 이름을 생략했든(`""`) 임의의 식별자(`@statement`, `@sql`)를 붙였든 상관없이 **0번째 인자(`i == 0`)는 무조건 실행할 쿼리문으로 위치 매핑**해야 함.
   2. **특정 드라이버 전용 하드코딩 배제 (Golden Rule #15 KISS / Anti-Over-Engineering)**:
      - `@statement`, `@parameters` 같은 특정 라이브러리의 임의 식별자를 코드 레벨에 하드코딩하지 말고, 표준적인 위치 기반 폴백 메커니즘 하나로 단순하게 해결해야 함.
-     - 상세 분석은 [`notes/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)를 참조.
+     - 상세 분석은 [`notes/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](../TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)를 참조.
 
 
 

@@ -507,7 +507,7 @@ LionSQL의 모든 내부 문서, 아키텍처 결정 기록(ADR), 프로토콜 �
 - **[공식 레퍼런스 매뉴얼](doc/REFERENCE_MANUAL.ko.md)**: CLI 플래그, 설정 파일, SQL 문법, 함수, API 전체를 총망라한 레퍼런스 매뉴얼.
 - **[선언적 스키마 마이그레이션 CLI 가이드](doc/SCHEMA_MIGRATION_GUIDE.md)**: `lionsql migrate` 명령어, 버전 관리 규약, CI/CD 및 쿠버네티스 패턴.
 - **[엔터프라이즈 인증 SPI 및 디렉터리 연동](doc/ENTERPRISE_AUTHENTICATION_SPI.md)**: `AuthProvider` SPI, LDAP/Active Directory 연동, 경계 보안 아키텍처.
-- **[불변 감사 로그 아키텍처 및 구현 계획](notes/IMMUTABLE_AUDIT_LOG_PLAN.md)**: PCI-DSS v4.0, SOC 2 Type II 대응 SHA-256 해시 체이닝 감사 로그.
+- **[불변 감사 로그 아키텍처 및 구현 계획](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md)**: PCI-DSS v4.0, SOC 2 Type II 대응 SHA-256 해시 체이닝 감사 로그.
 - **[T-SQL 및 SQL 구문 레퍼런스 가이드](doc/TSQL_REFERENCE.md)**: 프로시저, 함수, 트리거, 제어 흐름문 전체 언어 레퍼런스.
 - **[클라이언트 도구 연동 가이드](doc/CLIENT_TOOL_INTEGRATION.md)**: DBeaver, SSMS, Azure Data Studio, Beekeeper, JDBC, ODBC 연동 가이드.
 - **[성능 튜닝 및 벤치마크 가이드](doc/BENCHMARK.md)**: 고동시성 뱅킹 벤치마크, TPS 측정치, 메모리 튜닝 가이드.
@@ -540,7 +540,7 @@ LionSQL은 모든 코드 변경, 리팩토링, 기능 추가 시 엄격한 **3�
    모든 패키지에서 100% PASS를 달성해야 하며, **데이터 레이스(Data Race)가 0건**이어야 합니다.
 
    - **확장 통합 스모크 테스트 (Extended Smoke Test)**:
-     [`notes/TEST_VERIFICATION_REPORT.ko.md`](notes/TEST_VERIFICATION_REPORT.ko.md)의 13대 핵심 아키텍처 도메인을 약 3초 만에 일괄 자동 검증합니다 ([`scripts/README.md`](scripts/README.md) 참조):
+     [`notes/TEST_VERIFICATION_REPORT.ko.md`](notes/reports/TEST_VERIFICATION_REPORT.ko.md)의 13대 핵심 아키텍처 도메인을 약 3초 만에 일괄 자동 검증합니다 ([`scripts/README.md`](scripts/README.md) 참조):
      ```bash
      # 1. 기본 실행 (In-Memory OCC 초고속 검증)
      ./scripts/verify_report.sh
@@ -550,7 +550,7 @@ LionSQL은 모든 코드 변경, 리팩토링, 기능 추가 시 엄격한 **3�
      ```
 
    - **SQLLogicTest (SLT) 107개 풀세트 (551,217 쿼리) 블랙박스 정합성 오라클 검증 (100% PASS)**:
-     SQLite 공식 대규모 스위트(`select1~5.test`), 표준 명세(`evidence/*`), B-Tree 인덱스 경로(`index/*`), 난수 대수식/집계(`random/*`) 및 LionSQL 정선 엣지 케이스를 원클릭으로 일괄 검증합니다 (상세 실측 보고서: [검증 보고서](notes/SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md), [운영 가이드](doc/SQLLOGICTEST_GUIDE.ko.md), [Babelfish T-SQL 통합 보고서](notes/BABELFISH_INTEGRATION_REPORT.ko.md)):
+     SQLite 공식 대규모 스위트(`select1~5.test`), 표준 명세(`evidence/*`), B-Tree 인덱스 경로(`index/*`), 난수 대수식/집계(`random/*`) 및 LionSQL 정선 엣지 케이스를 원클릭으로 일괄 검증합니다 (상세 실측 보고서: [검증 보고서](notes/reports/SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md), [운영 가이드](doc/SQLLOGICTEST_GUIDE.ko.md), [Babelfish T-SQL 통합 보고서](notes/reports/BABELFISH_INTEGRATION_REPORT.ko.md)):
      ```bash
      # 1. 1.0 GA 공식 풀세트 다운로드 (온디맨드 캐싱)
      ./scripts/fetch_slt.sh

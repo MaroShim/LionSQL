@@ -145,7 +145,7 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
   * LionSQL Post-1.0 기술 과제 풀 (사전 기술 분석 완료 및 온디맨드 채택 대기 목록).
 * **[`MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)**
   * Materialized View 가상 뷰 알리아스 방식 도입 설계 (Post-1.0 이관 확정, `FEAT-MATVIEW-ALIAS-1`).
-* **[`POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)**
+* **[`POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)**
   * HNSW 벡터 인덱스 및 시계열 압축 청크 아키텍처 설계 계획서.
 * **[`OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)**
   * 배포 패키지 오프라인 문서 번들링 및 내장 뷰어 설계 계획서 (`PKG-OFFLINE-DOCS-1`).

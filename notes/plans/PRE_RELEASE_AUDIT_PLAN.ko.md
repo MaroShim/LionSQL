@@ -395,7 +395,7 @@ Scope <ID> 소스코드와 Model A(Gemini)의 1차 감사 결과를 교차 검�
 
 ### 6.3 심층 재스캔 실행 규칙 및 Findings SSOT 보강 프로토콜
 1. **무제한 결함 발굴 원칙**: 1건을 찾았다고 멈추지 않고, 파일 전체의 함수/경로를 끝까지 추적하여 식별되는 모든 취약점을 가감 없이 전수 도출한다 (`Defect 1, Defect 2, Defect 3...`).
-2. **SSOT Findings 기록부 연계**: 새로 발굴된 다중 결함은 [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md)의 해당 스코프 항목 하위에 `[심층 2차 재스캔 추가 발굴 결함]` 블록으로 누적 증분 기록한다.
+2. **SSOT Findings 기록부 연계**: 새로 발굴된 다중 결함은 [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](../PRE_RELEASE_AUDIT_FINDINGS.ko.md)의 해당 스코프 항목 하위에 `[심층 2차 재스캔 추가 발굴 결함]` 블록으로 누적 증분 기록한다.
 3. **Triage 연계**: 심층 재스캔을 거친 후 P0 (Must Fix) 후보군을 최종 취합하여 1.0 릴리스 패치 세트로 확정한다.
 
 ---

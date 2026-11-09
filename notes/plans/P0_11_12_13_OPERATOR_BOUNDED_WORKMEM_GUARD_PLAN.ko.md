@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-08
 > - **과제 식별 코드**: `P0-11`, `P0-12`, `P0-13` (Volcano Query Execution Engine 메모리 안정성 하위)
-> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md)
+> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](../PRE_RELEASE_AUDIT_TRIAGE.ko.md)
 > - **핵심 적용 규칙**: `[RULE:BoundedBuffers]`, `[RULE:ExplicitError]`, `[RULE:HandleHygiene]`, `[RULE:RadicalKISS]`
 > - **관련 커밋**:
 >   - `0fef9b0` `fix(execution): resolve P0-11 by bounding GROUP BY CUBE to 12 columns to prevent 2^N OOM crash`

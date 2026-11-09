@@ -93,6 +93,6 @@ SELECT version();
 ## 6. 추가 참조 문서
 
 - 상세 시스템 규격 및 전체 CLI/설정: **[`doc/REFERENCE_MANUAL.ko.md`](doc/REFERENCE_MANUAL.ko.md)**
-- TDS 프로토콜 실측 보고서: **[`notes/TDS_COMPATIBILITY_REPORT.md`](notes/TDS_COMPATIBILITY_REPORT.md)**
-- PGWire 프로토콜 실측 보고서: **[`notes/PGWIRE_COMPATIBILITY_REPORT.md`](notes/PGWIRE_COMPATIBILITY_REPORT.md)**
+- TDS 프로토콜 실측 보고서: **[`notes/TDS_COMPATIBILITY_REPORT.md`](notes/reports/TDS_COMPATIBILITY_REPORT.md)**
+- PGWire 프로토콜 실측 보고서: **[`notes/PGWIRE_COMPATIBILITY_REPORT.md`](notes/reports/PGWIRE_COMPATIBILITY_REPORT.md)**
 - 실전 10대 오픈소스 연동 가이드: **[`guide/README.ko.md`](guide/README.ko.md)**

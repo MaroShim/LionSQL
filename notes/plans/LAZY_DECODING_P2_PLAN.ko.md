@@ -10,8 +10,8 @@
 >   - **메모리 할당 횟수**: `30,983 allocs/op` ➔ **`4,801 allocs/op` (84.5% 할당 횟수 감소)**  
 >   - **정합성 검증**: `go test -tags wiredtiger -v -race` 100% PASS (0 data race)  
 > - **연계 문서**:  
->   - 액티브 대시보드: [`TODO.md`](../TODO.md)  
->   - 태스크 체계: [`notes/TAXONOMY.ko.md`](TAXONOMY.ko.md) (`P-2`)  
+>   - 액티브 대시보드: [`TODO.md`](../../TODO.md)  
+>   - 태스크 체계: [`notes/TAXONOMY.ko.md`](../TAXONOMY.ko.md) (`P-2`)  
 
 ---
 

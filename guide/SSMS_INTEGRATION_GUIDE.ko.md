@@ -179,6 +179,6 @@ GO
 ---
 
 ## 7. 관련 참고 문서
-- [LionSQL 클라이언트 도구 연동 종합 가이드 (`CLIENT_TOOL_INTEGRATION.md`)](../docs/CLIENT_TOOL_INTEGRATION.md)
-- [T-SQL 문법 레퍼런스 매뉴얼 (`TSQL_REFERENCE.md`)](../docs/TSQL_REFERENCE.md)
-- [LionSQL 웹 스튜디오 가이드 (`WEB_STUDIO_GUIDE.ko.md`)](../docs/WEB_STUDIO_GUIDE.ko.md)
+- [LionSQL 클라이언트 도구 연동 종합 가이드 (`CLIENT_TOOL_INTEGRATION.md`)](../doc/CLIENT_TOOL_INTEGRATION.md)
+- [T-SQL 문법 레퍼런스 매뉴얼 (`TSQL_REFERENCE.md`)](../doc/TSQL_REFERENCE.md)
+- [LionSQL 웹 스튜디오 가이드 (`WEB_STUDIO_GUIDE.ko.md`)](../doc/WEB_STUDIO_GUIDE.ko.md)

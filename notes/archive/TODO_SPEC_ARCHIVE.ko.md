@@ -1,10 +1,10 @@
 # LionSQL Engineering P1 과제 세부 명세 및 수락 기준 아카이브
 
-이 문서는 LionSQL의 `v0.90.0` 스프린트 완료 이전에 [TODO.ko.md](../TODO.ko.md) 제2절 하단에 유지되었던 **P1 핵심 과제별 세부 명세 및 수락 기준(Acceptance Criteria)**의 원문을 보존하는 공식 아카이브 문서입니다.
+이 문서는 LionSQL의 `v0.90.0` 스프린트 완료 이전에 [TODO.ko.md](TODO.ko.md) 제2절 하단에 유지되었던 **P1 핵심 과제별 세부 명세 및 수락 기준(Acceptance Criteria)**의 원문을 보존하는 공식 아카이브 문서입니다.
 
 > [!NOTE]
-> 활성 엔지니어링 백로그 및 마감 대시보드는 [TODO.ko.md](../TODO.ko.md)를 참조하세요.
-> 107대 결함 조치 아카이브는 [BUG_ARCHIVE.ko.md](../BUG_ARCHIVE.ko.md)에 보존되어 있습니다.
+> 활성 엔지니어링 백로그 및 마감 대시보드는 [TODO.ko.md](TODO.ko.md)를 참조하세요.
+> 107대 결함 조치 아카이브는 [BUG_ARCHIVE.ko.md](BUG_ARCHIVE.ko.md)에 보존되어 있습니다.
 > 각 기능별 영구 공식 기술 문서는 본문의 관련 링크를 참조하세요.
 
 ---
@@ -23,11 +23,11 @@
   3. **대량 조인(`HashJoinIterator`) Fail-Fast 회로 차단기 (Circuit Breaker)**:
      - 복잡한 디스크 스필러 오버엔지니어링(YAGNI, Golden Rule 15)을 배제하고, Build 단계에서 `buildMemory > workMem` 도달 시 즉시 안전한 중단 및 에러 반환 (`hash join memory budget exceeded: ... > work_mem`).
      - 비정상적인 카테시안 조인 또는 초대용량 해시 조인으로부터 다른 정상 OLTP 쿼리들을 완벽히 격리 보호.
-* **영구 기술 문서**: [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](../doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md)
+* **영구 기술 문서**: [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](../../doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md)
 
 #### 2. [Post-1.0 (v1.1.0) 연기] 엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`pkg/audit`, `AUDIT-LOG-1`)
 * **마일스톤 분류**: 1.0 LTS 출시 기준 일원화(Gate 4는 기존 TDE, RBAC, HTTP 감사 추적으로 충족)에 따라 **Post-1.0 (`v1.1.0`)** 마일스톤으로 연기 확정.
-* **표준 규격**: PCI-DSS v4.0 Requirement 10, SOC 2 Type II, HIPAA §164.312(b) ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md))
+* **표준 규격**: PCI-DSS v4.0 Requirement 10, SOC 2 Type II, HIPAA §164.312(b) ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](../plans/IMMUTABLE_AUDIT_LOG_PLAN.md))
 * **핵심 아키텍처 및 구현 요구사항**:
   1. **SHA-256 해시 체이닝 (Cryptographic Hash Chaining)**:
      - 각 감사 레코드는 이전 레코드의 해시값을 포함하여 연결 ($H_n = \text{SHA256}(H_{n-1} \parallel R_n)$).
@@ -58,7 +58,7 @@
   4. **T-SQL 내장 스칼라 함수 확장 (`pkg/proc/builtins_s3.go`, `pkg/engine`)**:
      - `S3_PRESIGNED_PUT_URL('avatars/user.png')` 및 `S3_PRESIGNED_GET_URL(...)` 스칼라 함수 등록.
      - Stored Procedure 및 대화형 쿼리에서 직접 업로드 링크 생성 지원.
-* **영구 기술 문서**: [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)
+* **영구 기술 문서**: [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](../plans/S3_PRESIGNED_STORAGE_PLAN.md)
 
 #### 4. 크리티컬 패스 5대 무할당 최적화 완결 (A~E) (`PERF-1`) (`pkg/engine`, `pkg/wire/tds`)
 * **과제 개요**: TDS 네트워크 수신부터 쿼리 분할, 파라미터 바인딩, 엔진 실행, 결과 행 직렬화에 이르는 핫패스 전수 진단 및 5대 병목(A~E) 전면 제거 (완료 `[x]`).
@@ -98,7 +98,7 @@
   4. **PostgreSQL 표준 포맷 호환성 (`pkg/planner/planner.go`, `explain.go`)**:
      - Text 형식: `(cost=0.00..0.00 rows=10 width=0) (actual time=0.000..0.250 rows=10 loops=1)`
      - JSON 형식: `"Actual Startup Time"`, `"Actual Total Time"`, `"Actual Rows"`, `"Actual Loops"` 완전 직렬화.
-* **영구 기술 문서**: [`doc/INTERNALS_CBO_AND_STATISTICS.md`](../doc/INTERNALS_CBO_AND_STATISTICS.md)
+* **영구 기술 문서**: [`doc/INTERNALS_CBO_AND_STATISTICS.md`](../../doc/internal/CBO_VOLCANO.md)
 
 #### 6. LionSQL 1.0 릴리즈 사전 점검 및 정합성 액션 플랜 (`notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`)
 * **과제 개요**: 1.0 LTS 정식 출시를 앞두고 실시된 전수 아키텍처 리뷰에서 도출된 핵심 개선 과제 (보안 이스케이프, 임시 객체 누수, 브랜드 단일화, 릴리즈 게이트 일치화).
@@ -144,11 +144,11 @@
   12. **`VPERF-10` (`pkg/engine`, `pkg/wire/tds`)**: `Row -> Tuple -> map[string]any -> TDS Wire` 맵 제거 및 `RawRows` 슬라이스 직결 (전체 프로토콜/엔진 공용 구조체 영향 최소화를 위해 v1.1.0 이관).
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
-* **영구 기술 문서**: [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](../doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md)
+* **영구 기술 문서**: [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](../../doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md)
 
 #### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 107대 결함 전수 조치 아카이브 (`BUG-107`)
 * **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 및 DateTime-VarChar 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, MERGE IDENTITY 누락, 복합 PK 파싱 절단, COPY 프로토콜 세션 우회 및 데이터 변조, 쉼표 오절단, RBAC 커스텀 롤 누락, 따옴표 이스케이프 분해 파괴, 샤드 초기화 경쟁 크래시, VDBE 미존재 PK 크래시, EXEC 프로시저 및 TDS RPC 트랜잭션 우회, Simple CASE 누락, 산술식 0값 변조, 윈도우 함수 RANGE 피어 누락, OCC 동일 트랜잭션 유니크 충돌 사일런트 커밋, HTTP API DATETIME 빈 문자열 방출, PITR DDL 에러 침묵 등으로 인해 발생하는 107대 치명적 무결성 결함을 원천 해결 완료.
 * **조치 이력 및 세부 내역 아카이브**:
   - 본 107대 결함 트랙은 LionSQL의 데이터 무결성 조기 안정화를 위해 추진된 중간 단계 방법론(Interim Methodology)으로 100% 조치 완료(`[x]`)되었습니다.
-  - 107개 결함의 상세 파일 경로, 버그 발생 원인, 수정 코드 및 증적 일람은 별도의 독립 아카이브 문서인 [**`BUG_ARCHIVE.ko.md`**](../BUG_ARCHIVE.ko.md)로 분리 이관되었습니다.
-  - 향후 결함 감사, 정적 분석 및 구조적 리팩토링은 [`CODE_REVIEW.ko.md`](../CODE_REVIEW.ko.md) 및 [`REFACTORING.ko.md`](../REFACTORING.ko.md)에서 지속 관리됩니다.
+  - 107개 결함의 상세 파일 경로, 버그 발생 원인, 수정 코드 및 증적 일람은 별도의 독립 아카이브 문서인 [**`BUG_ARCHIVE.ko.md`**](BUG_ARCHIVE.ko.md)로 분리 이관되었습니다.
+  - 향후 결함 감사, 정적 분석 및 구조적 리팩토링은 [`CODE_REVIEW.ko.md`](../../CODE_REVIEW.ko.md) 및 [`REFACTORING.ko.md`](../../REFACTORING.ko.md)에서 지속 관리됩니다.

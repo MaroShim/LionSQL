@@ -7,7 +7,7 @@
 > - **Database Driver**: `jackc/pgx/v5` (`pgxpool`)
 > - **Wire Protocol**: **PostgreSQL Wire Protocol v3** (default TCP `:5433`)
 > - **Related Documents**:
->   - Verification Report: [`notes/IOTA_ERP_INTEGRATION_REPORT.ko.md`](../notes/IOTA_ERP_INTEGRATION_REPORT.ko.md)
+>   - Verification Report: [`notes/IOTA_ERP_INTEGRATION_REPORT.ko.md`](../notes/reports/IOTA_ERP_INTEGRATION_REPORT.ko.md)
 >   - Gitea Integration Guide: [`guide/GITEA_INTEGRATION_GUIDE.md`](GITEA_INTEGRATION_GUIDE.md)
 
 ---

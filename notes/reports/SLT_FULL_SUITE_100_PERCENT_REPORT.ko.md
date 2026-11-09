@@ -5,8 +5,8 @@
 > - **작성일**: 2026-11-02
 > - **상태**: 완료 (100% PASS / 불일치 0건)
 > - **과제 식별 코드**: `SLT-FULL-100` (상위 과제: `DURA-SLT-2`, `GA-VALID-1`)
-> - **관련 계획서**: [`notes/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md`](SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md)
-> - **자동화 검증 게이트**: [`scripts/verify_0.90.sh`](../scripts/verify_0.90.sh)
+> - **관련 계획서**: [`notes/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md`](../plans/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md)
+> - **자동화 검증 게이트**: [`scripts/verify_0.90.sh`](../../scripts/verify_0.90.sh)
 
 ---
 
@@ -48,17 +48,17 @@ LionSQL `v0.90.0` 릴리즈 품질 게이트의 핵심 과제인 **SQLLogicTest 
   1. `SELECT - tab2.col2 - col1 * 40 AS col1 FROM tab2` 실행 시, 계산된 수식 결과 대신 원본 테이블의 `col1` 컬럼값이 반환됨 (`random/select/*`).
   2. `SELECT 52 AS col0, 13 AS col0` 또는 `SELECT dept_id, COUNT(*), COUNT(discount)` 실행 시, 결과 행을 `map[string]any`로만 전달하여 동일한 컬럼 키(`col0` 또는 `count`)의 앞선 값이 뒤의 값으로 덮어써짐 (`random/expr/*`, `core/agg_stress.slt` PGWire).
 - **원인**:
-  - Volcano [`ProjectIterator`](../pkg/execution/project.go)에서 원본 튜플의 컬럼명을 먼저 조회한 뒤 표현식을 평가하거나, VDBE [`OpResultRow`](../pkg/proc/runtime/vm_dispatcher.go) 및 PGWire [`server.go`](../pkg/wire/server.go)에서 위치 기반 슬라이스(`Values [][]any`) 없이 `map[string]any`만 사용해 동명 컬럼이 유실됨.
+  - Volcano [`ProjectIterator`](../../pkg/execution/project.go)에서 원본 튜플의 컬럼명을 먼저 조회한 뒤 표현식을 평가하거나, VDBE [`OpResultRow`](../../pkg/proc/runtime/vm_dispatcher.go) 및 PGWire [`server.go`](../../pkg/wire/server.go)에서 위치 기반 슬라이스(`Values [][]any`) 없이 `map[string]any`만 사용해 동명 컬럼이 유실됨.
 - **해결**:
   - `ProjectIterator`에서 명시적 수식/별칭 프로젝션이 원본 컬럼보다 우선하도록 평가 순서를 바로잡음.
-  - VDBE `OpResultRow`, `execScalarSelect`, 그리고 PGWire 패킷 직렬화기(`handleExecute`, `writeExecutionResult`, `runAndWriteQueryWithFormats`)에 위치 기반 `Values [][]any` 슬롯을 일관되게 연결하고, SLT 러너([`runner.go`](../pkg/slt/runner.go))에서 동명 컬럼을 `col#1`, `col#2`로 분리 매핑하여 위치 무결성을 보장함.
+  - VDBE `OpResultRow`, `execScalarSelect`, 그리고 PGWire 패킷 직렬화기(`handleExecute`, `writeExecutionResult`, `runAndWriteQueryWithFormats`)에 위치 기반 `Values [][]any` 슬롯을 일관되게 연결하고, SLT 러너([`runner.go`](../../pkg/slt/runner.go))에서 동명 컬럼을 `col#1`, `col#2`로 분리 매핑하여 위치 무결성을 보장함.
 
 ### 2.2 VDBE 바이트코드 VM 비교 연산자 및 `OpBetween`의 SQL 3-Valued Logic (3VL) 정합성 완치
 - **증상**:
   - `SELECT CASE WHEN NOT NULL < 71 THEN 1 ELSE 0 END` 쿼리가 `0` 대신 `1`을 반환함.
   - `SELECT * FROM tab0 WHERE 90 NOT BETWEEN NULL AND 88` 쿼리가 참(`90 <= 88`이 확정 거짓이므로 전체 `BETWEEN`은 거짓, 따라서 `NOT BETWEEN`은 참)이어야 함에도 행을 누락함 (`random/expr/*`, `random/aggregates/*`).
 - **원인**:
-  - [`vm_dispatcher.go`](../pkg/proc/runtime/vm_dispatcher.go)의 `OpEq`, `OpNeq`, `OpLt`, `OpLte`, `OpGt`, `OpGte`, `OpLike` 오프코드가 피연산자 중 하나가 `NULL`일 때 `storage.NullValue(storage.TypeBool)`(UNKNOWN) 대신 `storage.BoolValue(false)`를 레지스터에 기록하여, 직후 실행되는 `OpNot`이 이를 `TRUE`로 반전시킴.
+  - [`vm_dispatcher.go`](../../pkg/proc/runtime/vm_dispatcher.go)의 `OpEq`, `OpNeq`, `OpLt`, `OpLte`, `OpGt`, `OpGte`, `OpLike` 오프코드가 피연산자 중 하나가 `NULL`일 때 `storage.NullValue(storage.TypeBool)`(UNKNOWN) 대신 `storage.BoolValue(false)`를 레지스터에 기록하여, 직후 실행되는 `OpNot`이 이를 `TRUE`로 반전시킴.
   - `OpBetween` 역시 상한(`val <= high`)이 확정 `FALSE`일 때 좌변 `NULL` 여부를 불문하고 `FALSE`로 단락 평가(short-circuit)해야 하는 3VL 규칙(`UNKNOWN AND FALSE = FALSE`)을 누락함.
 - **해결**:
   - 모든 비교 오프코드가 `NULL` 피연산자 입력 시 `storage.NullValue(storage.TypeBool)`을 반환하도록 수정하고, `OpBetween`에 3VL 단락 평가(`lowCmp > 0 || highCmp < 0`이면 확정 `false`)를 구현함.
@@ -67,15 +67,15 @@ LionSQL `v0.90.0` 릴리즈 품질 게이트의 핵심 과제인 **SQLLogicTest 
 - **증상**:
   - `SELECT col0 FROM tab1 GROUP BY col0 HAVING NOT AVG(DISTINCT col0) IS NULL` 실행 시 0행이 반환됨 (`random/groupby/slt_good_8.test`).
 - **원인**:
-  - [`aggregate.go`](../pkg/execution/aggregate.go)의 AST 순회기 `extractAggFromAST`에 `*proc.IsNullExpr`, `*proc.LikeExpr`, `*proc.WithinGroupExpr` 케이스가 누락되어 `IS NULL` 내부의 `AVG(DISTINCT col0)`이 보조 집계 필드로 등록되지 않음.
+  - [`aggregate.go`](../../pkg/execution/aggregate.go)의 AST 순회기 `extractAggFromAST`에 `*proc.IsNullExpr`, `*proc.LikeExpr`, `*proc.WithinGroupExpr` 케이스가 누락되어 `IS NULL` 내부의 `AVG(DISTINCT col0)`이 보조 집계 필드로 등록되지 않음.
 - **해결**:
-  - `extractAggFromAST`에 세 AST 노드 타입 순회를 추가하고, Pratt 파서 [`parser_expr.go`](../pkg/proc/parser_expr.go)의 `parseFunctionCall`에서 `DISTINCT`뿐만 아니라 `ALL` 수량자(`AVG(ALL col0)`, `COUNT(ALL col0)`)도 파싱하도록 보강함.
+  - `extractAggFromAST`에 세 AST 노드 타입 순회를 추가하고, Pratt 파서 [`parser_expr.go`](../../pkg/proc/parser_expr.go)의 `parseFunctionCall`에서 `DISTINCT`뿐만 아니라 `ALL` 수량자(`AVG(ALL col0)`, `COUNT(ALL col0)`)도 파싱하도록 보강함.
 
 ### 2.4 테이블리스 스칼라 쿼리(`SELECT` without `FROM`)의 집계 함수 및 단항 부호 처리 완치
 - **증상**:
   - `SELECT DISTINCT COUNT(*)`, `SELECT - SUM(DISTINCT - 57)` 등 `FROM` 절이 없는 스칼라 집계 쿼리에서 `COUNT(*)`가 `0`, `SUM(-57)`이 `NULL`로 반환됨 (`random/expr/*`).
 - **원인**:
-  - SQL 표준에서 `FROM` 절 없는 `SELECT`는 단일 암묵적 행(1 implicit row)에 대해 평가되므로 `COUNT(*)`는 `1`, `SUM(x)`/`AVG(x)`/`MIN(x)`/`MAX(x)`는 `x` 자체를 반환해야 하나, 스칼라 평가기 [`eval.go`](../pkg/proc/eval.go)의 `evalRowFunction`이 `0` 또는 `nil`을 반환함. 또한 `execScalarSelect`가 `SELECT DISTINCT` 접두사를 제거하지 못함.
+  - SQL 표준에서 `FROM` 절 없는 `SELECT`는 단일 암묵적 행(1 implicit row)에 대해 평가되므로 `COUNT(*)`는 `1`, `SUM(x)`/`AVG(x)`/`MIN(x)`/`MAX(x)`는 `x` 자체를 반환해야 하나, 스칼라 평가기 [`eval.go`](../../pkg/proc/eval.go)의 `evalRowFunction`이 `0` 또는 `nil`을 반환함. 또한 `execScalarSelect`가 `SELECT DISTINCT` 접두사를 제거하지 못함.
 - **해결**:
   - `execScalarSelect`에서 `ALL`/`DISTINCT` 수량자 루프 스트리핑을 추가하고, `evalRowFunction`이 단일 행 스칼라 문맥에서 표준 SQL 집계 결과를 반환하도록 수정함.
 
@@ -85,7 +85,7 @@ LionSQL `v0.90.0` 릴리즈 품질 게이트의 핵심 과제인 **SQLLogicTest 
 - **원인**:
   - 최상위 조건절에 `OR`(`HasDisjunction`)가 존재함에도 좌변의 범위 조건만으로 단일 인덱스 스캔 바운드를 좁혀 스캔 단계에서 우변 대상 행을 조기 탈락시킴.
 - **해결**:
-  - [`bounds.go`](../pkg/planner/bounds.go) 및 [`planner.go`](../pkg/planner/planner.go)에서 최상위 `OR` 결합 시 단일 인덱스 레인지 바운드 축소를 차단하고 전체 필터 평가를 거치도록 방어함.
+  - [`bounds.go`](../../pkg/planner/bounds.go) 및 [`planner.go`](../../pkg/planner/planner.go)에서 최상위 `OR` 결합 시 단일 인덱스 레인지 바운드 축소를 차단하고 전체 필터 평가를 거치도록 방어함.
 
 ### 2.6 SQLite 관용 문법 5종 수용 (`evidence/*`)
 - **내용**:
@@ -98,17 +98,17 @@ LionSQL `v0.90.0` 릴리즈 품질 게이트의 핵심 과제인 **SQLLogicTest 
 ### 2.7 `SELECT` vs `UPDATE` 0 나눗셈(Divide-by-Zero) 시맨틱 분리
 - **내용**:
   - SQLite/SLT 호환 `SELECT` 수식에서는 `x / 0`이 에러 대신 `NULL`로 평가되어야 하는 반면, 엔터프라이즈 T-SQL `UPDATE` 문(`UPDATE products SET qty = qty / 0`)에서는 즉시 에러와 함께 DML 롤백이 발생해야 함(`TestGroup5_UpdateDivideByZero_DML_Rollback`).
-  - [`eval.go`](../pkg/proc/eval.go)에 `EvalUpdateRowExpr`을 분리하여 VDBE [`vm.go`](../pkg/proc/runtime/vm.go) 및 [`vm_dispatcher.go`](../pkg/proc/runtime/vm_dispatcher.go)의 `UPDATE` 할당 루프에서는 0 나눗셈 시 엄격한 에러 및 롤백이 수행되도록 양립시킴.
+  - [`eval.go`](../../pkg/proc/eval.go)에 `EvalUpdateRowExpr`을 분리하여 VDBE [`vm.go`](../../pkg/proc/runtime/vm.go) 및 [`vm_dispatcher.go`](../../pkg/proc/runtime/vm_dispatcher.go)의 `UPDATE` 할당 루프에서는 0 나눗셈 시 엄격한 에러 및 롤백이 수행되도록 양립시킴.
 
 ### 2.8 SLT 정수형(`I`) 컬럼의 부동소수점 반올림 오차 제거
 - **내용**:
-  - SLT 표준 러너(C 구현체)는 쿼리 타입 시그니처가 `I`(Integer)일 때 부동소수점 결과를 반올림(`%.0f`)하지 않고 0 방향으로 절사(`(int64)v`, truncation toward zero)함. [`runner.go`](../pkg/slt/runner.go)의 `FormatCell`에서 `colType == 'I'`일 때 `strconv.FormatInt(int64(v), 10)`으로 절사하도록 수정하여 음수/소수 나눗셈 오차를 완전히 제거함.
+  - SLT 표준 러너(C 구현체)는 쿼리 타입 시그니처가 `I`(Integer)일 때 부동소수점 결과를 반올림(`%.0f`)하지 않고 0 방향으로 절사(`(int64)v`, truncation toward zero)함. [`runner.go`](../../pkg/slt/runner.go)의 `FormatCell`에서 `colType == 'I'`일 때 `strconv.FormatInt(int64(v), 10)`으로 절사하도록 수정하여 음수/소수 나눗셈 오차를 완전히 제거함.
 
 ---
 
 ## 3. `v0.90.0` 통합 검증 게이트 스크립트 (`scripts/verify_0.90.sh`)
 
-릴리즈 직전 언제든 동일한 품질 기준을 원클릭으로 재현할 수 있도록 [`scripts/verify_0.90.sh`](../scripts/verify_0.90.sh)를 구축하였습니다:
+릴리즈 직전 언제든 동일한 품질 기준을 원클릭으로 재현할 수 있도록 [`scripts/verify_0.90.sh`](../../scripts/verify_0.90.sh)를 구축하였습니다:
 
 1. **Stage 1 (Build)**: `bin/lionsql`, `bin/sqllogictest`, `bin/bench`, `bin/tpcc-runtime` (`-tags wiredtiger`) 정적 바이너리 컴파일
 2. **Stage 2 (Unit & Race Test)**: 전 패키지 `go test -tags wiredtiger -count=1 -short -race ./...` (데이터 레이스 0건 검증)
@@ -167,7 +167,7 @@ v0.90.0 릴리즈 게이트 안정화 과정에서 SQLite 전용 비표준 문�
    - 무거운 Cascades 옵티마이저를 매번 구동하는 엔진들은 "쿼리 플래닝 시간 > 실제 데이터 스캔 시간" 역전 현상으로 느려지는 반면, LionSQL은 제로 할당에 가까운 Pratt 파서와 VDBE/경량 Volcano 2-Tier 라우팅으로 즉시 실행합니다.
 2. **`select4.test` & `select5.test` (최대 64개 테이블 조인) 상태 공간 폭발 억제**:
    - 다수의 RDBMS가 `random/*` 스위트에서는 빠르다가도 `select5.test`(최대 64-way 콤마 조인)에서 지수적 조인 순서 탐색이나 카테시안 곱 폭발에 빠져 수 분~수십 분 동안 정체됩니다.
-   - LionSQL은 [`OPT-LARGE-JOIN-1`](LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) 최적화(Selinger DP 탐색 임계치 `MaxJoinDPThreshold = 6` 제한 + BFS 기반 Spanning Tree 조인 키 추론 + 단일 행 필터/최소 카디널리티 베이스 테이블 동적 루트 선정 + `1=0` 공집합 Fast-Fail)를 통해 `select5.test`의 732개 고난도 다중 조인을 **12.67초** 만에 주파합니다.
+   - LionSQL은 [`OPT-LARGE-JOIN-1`](../plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) 최적화(Selinger DP 탐색 임계치 `MaxJoinDPThreshold = 6` 제한 + BFS 기반 Spanning Tree 조인 키 추론 + 단일 행 필터/최소 카디널리티 베이스 테이블 동적 루트 선정 + `1=0` 공집합 Fast-Fail)를 통해 `select5.test`의 732개 고난도 다중 조인을 **12.67초** 만에 주파합니다.
 3. **무경합 고루틴 워커 풀(`-parallel 8`) 및 파일별 독립 인메모리 인스턴스**:
    - 각 테스트 파일이 공유 락이나 글로벌 카탈로그 경합 없이 독립된 `Coordinator` + `memengine` 인스턴스에서 병렬 실행되어 멀티코어 CPU를 100% 활용합니다.
    - 결과적으로 **순수 Go로 작성된 엔진이면서도 C/C++ 임베디드 엔진(SQLite, DuckDB)과 동일한 체급(30~50초대)**에서 55만 쿼리를 돌파하며, 일반 클라이언트-서버 RDBMS 및 Go 기반 분산 SQL 엔진 대비 **5배~20배 이상 빠른 검증 속도**를 제공합니다.

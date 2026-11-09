@@ -19,7 +19,7 @@ LionSQL `v0.90.1` is a major patch release following `v0.90.0` GA that resolves 
   - Implemented `DROP FUNCTION` / `DROP FUNCTION IF EXISTS` with dynamic catalog updates and executor UDF cache invalidation.
 - **AWS Babelfish 2,900-Suite Verification**:
   - Executed all 2,900 files and 116,884 T-SQL batches without crashes or panics in 12s ~ 2m, achieving **67,981 passing batches (58.16% pass rate)**.
-  - Comprehensive engineering report published in [`notes/BABELFISH_INTEGRATION_REPORT.ko.md`](BABELFISH_INTEGRATION_REPORT.ko.md).
+  - Comprehensive engineering report published in [`notes/BABELFISH_INTEGRATION_REPORT.ko.md`](../reports/BABELFISH_INTEGRATION_REPORT.ko.md).
 - **SQLLogicTest (SLT) 107-Suite Full Corpus & 14 Procedural Suites**:
   - Fully integrated SQLite official large-scale suites (`full`, `evidence`, `random`, `index`).
   - Added 14 hermetic procedural suites (`test/slt_proc/`) covering stored procedures, CTE deltas, and UDF lifecycles with **100% PASS (0 data races)**.

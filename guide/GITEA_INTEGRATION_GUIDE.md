@@ -9,7 +9,7 @@
 >   - **Microsoft SQL Server TDS 7.x/8.0** (default TCP `:1433`)
 > - **Related Documents**:
 >   - Architecture Postmortem: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](../notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)
->   - Verification Report: [`notes/GITEA_INTEGRATION_REPORT.ko.md`](../notes/GITEA_INTEGRATION_REPORT.ko.md)
+>   - Verification Report: [`notes/GITEA_INTEGRATION_REPORT.ko.md`](../notes/reports/GITEA_INTEGRATION_REPORT.ko.md)
 
 ---
 

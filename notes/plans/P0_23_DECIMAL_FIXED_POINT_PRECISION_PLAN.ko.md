@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-08
 > - **과제 식별 코드**: `P0-23` (Parser & Financial Precision Integrity 하위)
-> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md), [`notes/AI_CODE_GENERATION_VS_ADVERSARIAL_AUDIT.ko.md`](AI_CODE_GENERATION_VS_ADVERSARIAL_AUDIT.ko.md)
+> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](../PRE_RELEASE_AUDIT_TRIAGE.ko.md), [`notes/AI_CODE_GENERATION_VS_ADVERSARIAL_AUDIT.ko.md`](../AI_CODE_GENERATION_VS_ADVERSARIAL_AUDIT.ko.md)
 > - **핵심 적용 규칙**: `[RULE:SafeDefaults]`, `[RULE:ExplicitError]`, `[RULE:RadicalKISS]`
 > - **관련 커밋**: `b3c9e7b` `fix(proc): map DECIMAL, NUMERIC, and MONEY to TypeDecimal with precision and scale (P0-23)`
 

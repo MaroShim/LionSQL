@@ -112,7 +112,7 @@ Hard-learned operational lessons, test blind-spot analyses, and explicit evaluat
   * Pool of candidates for Post-1.0 technical exploration (vetted and queued for on-demand review).
 * **[`MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)** (Korean)
   * Virtual view alias approach for Materialized Views (transferred to Post-1.0, `FEAT-MATVIEW-ALIAS-1`).
-* **[`POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)** (Korean)
+* **[`POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)** (Korean)
   * Architectural design for HNSW vector indexing and time-series compressed chunking.
 * **[`OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)** (Korean)
   * Offline documentation bundling and embedded web viewer design (`PKG-OFFLINE-DOCS-1`).

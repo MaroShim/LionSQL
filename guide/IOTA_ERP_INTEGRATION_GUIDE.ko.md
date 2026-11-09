@@ -7,7 +7,7 @@
 > - **데이터베이스 드라이버**: `jackc/pgx/v5` (`pgxpool`)
 > - **지원 유선 프로토콜**: **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
 > - **참조 문서**:
->   - 실전 연동 검증 보고서: [`notes/IOTA_ERP_INTEGRATION_REPORT.ko.md`](../notes/IOTA_ERP_INTEGRATION_REPORT.ko.md)
+>   - 실전 연동 검증 보고서: [`notes/IOTA_ERP_INTEGRATION_REPORT.ko.md`](../notes/reports/IOTA_ERP_INTEGRATION_REPORT.ko.md)
 >   - Gitea 연동 가이드: [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md)
 
 ---

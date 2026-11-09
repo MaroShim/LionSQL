@@ -38,10 +38,10 @@ LionSQL은 단일 정적 바이너리 내에 고성능 OLTP 엔진(In-Memory OCC
 
 #### 과제 1. `DOC-KO-CORE-1`: 핵심 영문 문서 4종 한글 공식화 (`*.ko.md`)
 - **대상 파일**:
-  1. [`doc/ARCHITECTURE.md`](../doc/ARCHITECTURE.md) ➔ `doc/ARCHITECTURE.ko.md`
-  2. [`doc/BENCHMARK.md`](../doc/BENCHMARK.md) ➔ `doc/BENCHMARK.ko.md`
-  3. [`doc/CLIENT_TOOL_INTEGRATION.md`](../doc/CLIENT_TOOL_INTEGRATION.md) ➔ `doc/CLIENT_TOOL_INTEGRATION.ko.md`
-  4. [`doc/internal/VDBE.md`](../doc/internal/VDBE.md) ➔ `doc/internal/VDBE.ko.md`
+  1. [`doc/ARCHITECTURE.md`](../../doc/ARCHITECTURE.md) ➔ `doc/ARCHITECTURE.ko.md`
+  2. [`doc/BENCHMARK.md`](../../doc/BENCHMARK.md) ➔ `doc/BENCHMARK.ko.md`
+  3. [`doc/CLIENT_TOOL_INTEGRATION.md`](../../doc/CLIENT_TOOL_INTEGRATION.md) ➔ `doc/CLIENT_TOOL_INTEGRATION.ko.md`
+  4. [`doc/internal/VDBE.md`](../../doc/internal/VDBE.md) ➔ `doc/internal/VDBE.ko.md`
 - **목표**: 영문 원본의 기술적 깊이를 100% 보존하면서 자연스러운 한글 공식 문서로 구축하고 카탈로그 동기화.
 
 #### 과제 2. `DOC-SPEC-OUT-1`: 14대 기각 결정(Negative Knowledge) 전용 카탈로그 신설
@@ -84,4 +84,4 @@ LionSQL은 단일 정적 바이너리 내에 고성능 OLTP 엔진(In-Memory OCC
 
 ## 4. 백로그 동기화 (`TODO.md`)
 
-본 계획서의 10대 과제는 `[RULE:ContinuousBacklog]`에 따라 최상위 [`TODO.md`](../TODO.md)의 **`1.2 1.0 신뢰성 검증 게이트 (Release Gates)`**에 **`DOC-REVAMP-10`**으로 등록되어 추적 관리됩니다.
+본 계획서의 10대 과제는 `[RULE:ContinuousBacklog]`에 따라 최상위 [`TODO.md`](../../TODO.md)의 **`1.2 1.0 신뢰성 검증 게이트 (Release Gates)`**에 **`DOC-REVAMP-10`**으로 등록되어 추적 관리됩니다.

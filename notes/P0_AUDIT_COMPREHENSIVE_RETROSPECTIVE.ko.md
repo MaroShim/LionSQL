@@ -50,12 +50,12 @@ LionSQL 1.0 상용 정식 릴리스를 목전에 두고 수행된 1차 광역 �
 ### (2) 실제 적용된 고효율 하이브리드 전략
 우리가 실제로 채택한 전략은 **"사소한 버그는 TDD로 즉각 완치하고, 구조적/철학적 피벗이 필요한 대형 이슈만 고밀도 아키텍처 플랜/포스트모템으로 남긴다"**였습니다:
 - **심층 아키텍처 문서화 대상**:
-  - `P0-03`: [`notes/P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md`](P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md) (ADR-027, WAL Fail-Closed 복구 불변식)
-  - `P0-26`: [`notes/P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md`](P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md) (네트워크 단절 롤백 및 DDL 데드락 차단)
+  - `P0-03`: [`notes/P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md`](plans/P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md) (ADR-027, WAL Fail-Closed 복구 불변식)
+  - `P0-26`: [`notes/P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md`](plans/P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md) (네트워크 단절 롤백 및 DDL 데드락 차단)
   - `P0-29`: [`notes/P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md`](P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md) (Go 런타임 `sync.Pool` 슬라이스 용량 비대화 실측 및 GC 누수 박멸)
   - `P0-30`: [`notes/P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md`](P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md) (세션 동시성 격착, Lock Scope Shrinking, 서브쿼리 교착 차단)
-  - `P0-32`: [`notes/P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md`](P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md) (중첩 트랜잭션 내부 COMMIT 조기 물리 커밋 방지 및 ACID 수호)
-  - `P0-37`: [`notes/P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md`](P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md) (크론 격리 허구성 타파 및 전사 세션 패닉 복구망)
+  - `P0-32`: [`notes/P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md`](plans/P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md) (중첩 트랜잭션 내부 COMMIT 조기 물리 커밋 방지 및 ACID 수호)
+  - `P0-37`: [`notes/P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md`](plans/P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md) (크론 격리 허구성 타파 및 전사 세션 패닉 복구망)
 - **일반 버그 대상**:
   - [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md)의 단일 SSOT 문서에 원인과 패치 내역을 체계적으로 누적 기록하고, 실패하는 TDD 테스트 코드로 스펙을 영구 증명.
 
@@ -172,4 +172,4 @@ LionSQL은 이번 37선 전수 감사 결함 완치를 통해 다음과 같은 �
 
 이제 LionSQL은 상용 엔터프라이즈 환경에서 미션 크리티컬 OLTP 워크로드를 감당할 수 있는 **1.0 GA(General Availability)** 수준의 기저 신뢰성을 확고히 입증했습니다.
 
-다음 단계는 기 수립된 경량 P1 안정화 항목 선별과 공식 문서/엔지니어링 지식 체계 고도화 마스터 플랜([`notes/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md))으로 이어집니다.
+다음 단계는 기 수립된 경량 P1 안정화 항목 선별과 공식 문서/엔지니어링 지식 체계 고도화 마스터 플랜([`notes/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md))으로 이어집니다.

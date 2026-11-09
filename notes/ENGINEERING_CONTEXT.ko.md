@@ -98,7 +98,7 @@
   * **KISS & YAGNI 및 OLTP 코어 보호 (Golden Rule 15)**: 대용량 바이너리 청크 스트리밍과 무거운 래스터 이미지 변환 연산은 Go 런타임 힙 메모리 할당과 CPU를 급격히 점유하여 고동시성 OLTP 트랜잭션의 서브밀리초 지연 시간(p99)을 훼손합니다.
 ### ⑭ 1.0 기능 스코프 및 단일 바이너리 경계 원칙 (Single Binary & Scope Consolidation)
 * **결정 사항**:
-  1. **단일 바이너리(`lionsql`) 완전 통합**: `bin/server`를 제거하고 단일 실행 파일 `bin/lionsql`이 포그라운드 서버 기동 및 데몬 라이프사이클(`start`, `stop`, `restart`, `status`), 마이그레이션(`migrate`), CLI 도구(`sql`, `doctor`)를 모두 일원화 처리 ([`notes/UNIFIED_CLI_PLAN.md`](notes/UNIFIED_CLI_PLAN.md)).
+  1. **단일 바이너리(`lionsql`) 완전 통합**: `bin/server`를 제거하고 단일 실행 파일 `bin/lionsql`이 포그라운드 서버 기동 및 데몬 라이프사이클(`start`, `stop`, `restart`, `status`), 마이그레이션(`migrate`), CLI 도구(`sql`, `doctor`)를 모두 일원화 처리 ([`notes/UNIFIED_CLI_PLAN.md`](plans/UNIFIED_CLI_PLAN.md)).
   2. **내장 5필드 크론 잡 스케줄러 유지**: SQL Server Agent 대체 및 OS 독립적인 배치 실행(`sys.cron_jobs`)을 위해 1.0 코어에 유지하되 유휴 시 무오버헤드 보장.
   3. **내장 SMTP 메일러 유지 (기본 비활성화)**: PocketBase 스타일의 BaaS 완결성을 위해 유지하되, 보안 격리를 위해 기본값은 비활성화(Opt-In).
   4. **Kafka / RabbitMQ Outbox 직접 릴레이 절충안 유지**: 코어는 순수 CDC 스트림(`GET /api/cdc/stream`) PULL 파이프라인을 표준으로 하되, 외부 브로커 푸시는 명시적 `-outbox` 플래그로만 기동되는 옵트인 격리 구조를 유지하여 코어 OLTP의 무결점 안정성을 완벽히 보호함.
@@ -146,7 +146,7 @@
 * **배제 이유 & 맥락**:
   1. **Row 저장소의 물리적 스캔 I/O 한계**: LionSQL은 In-Memory OCC 및 WiredTiger 기반의 Row 지향 OLTP 엔진임. 메모리에서 1,024개 행을 컬럼으로 전치(Row-to-Column Pivot)하더라도, 스토리지 스캔 단계에서 모든 컬럼을 읽어야 하므로 컬럼형 DBMS의 핵심인 디스크/메모리 I/O 대역폭 절감 효과가 발생하지 않음.
   2. **KISS 원칙 및 코드 복잡도 급증 방지**: 데이터 타입별 `ColumnVector` 슬라이스, NULL 비트맵, 벡터화 표현식 평가기 등 수만 라인의 중복 계층 추가는 임베디드 OLTP 엔진으로서 과도한 오버엔지니어링(YAGNI)임.
-  3. **실용적 대안**: 이미 구축된 1,024개 행 단위 배치 스트리밍(`ChunkedIterator`, `PullChunk`) 파이프라인을 유지하며, 핫패스 `any` 인터페이스 언박싱 제거 및 연산자 해시 테이블 슬라이스 최적화로 복잡 쿼리 목표 지연시간을 달성함 ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)).
+  3. **실용적 대안**: 이미 구축된 1,024개 행 단위 배치 스트리밍(`ChunkedIterator`, `PullChunk`) 파이프라인을 유지하며, 핫패스 `any` 인터페이스 언박싱 제거 및 연산자 해시 테이블 슬라이스 최적화로 복잡 쿼리 목표 지연시간을 달성함 ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)).
 
 ---
 
@@ -191,7 +191,7 @@
   - 임시방편(Ad-hoc) 문자열 접두사 검사 및 원시 SQL 문자열 인덱스 슬라이싱을 통한 쿼리 능력 판별.
 * **이유 & 맥락**:
   - 문자열 기반 꼼수는 주석, 문자열 리터럴(`'FROM ('`), 포트/ID 명명 규칙 변경 시 치명적인 False Positive/Negative를 유발함.
-  - 정규 표현식 배제 원칙(`Invariant 7`)과 마찬가지로, **"문맥과 중첩 구조를 모르는 문자열 검사를 프로덕션 SQL 라우팅 경로에서 100% 영구 배제"**하고 순수 AST 및 타입 시스템에 의존해야만 1.0 프로덕션의 안정성을 담보할 수 있음 ([`notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](ARCH_VDBE_ROUTING_1_PLAN.ko.md)).
+  - 정규 표현식 배제 원칙(`Invariant 7`)과 마찬가지로, **"문맥과 중첩 구조를 모르는 문자열 검사를 프로덕션 SQL 라우팅 경로에서 100% 영구 배제"**하고 순수 AST 및 타입 시스템에 의존해야만 1.0 프로덕션의 안정성을 담보할 수 있음 ([`notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md)).
 
 ---
 
@@ -200,7 +200,7 @@
 * **배제 이유 & 맥락**:
   1. **단순 Zip 압축의 한계**: 옵션 B는 비트 단위 가변 인코딩으로 데이터 크기를 줄이는 단순 "Zip 압축"에 가깝습니다.
   2. **컬럼 읽기 시 CPU 디코딩 오버헤드**: 컬럼을 읽을 때마다 앞선 컬럼들을 순차 디코딩(25~50ns)해야 하므로, 인메모리 엔진의 본질인 0.5ns급 초저지연 $O(1)$ 직접 읽기 성능이 심각하게 훼손됩니다.
-  3. **본질적 목적 수호**: 인메모리 DB를 채택하는 본질은 극초저지연과 수십만 TPS입니다. 단순 RAM 몇십 MB를 추가 절감하기 위해 매 쿼리마다 CPU 압축 해제 부하를 감수하는 것은 주객전도이며, Go GC 포인터 0개화와 4~5배 메모리 절감(300~400B)은 옵션 A(고정 오프셋 플랫 레코드)만으로도 완벽히 달성됩니다 ([`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)).
+  3. **본질적 목적 수호**: 인메모리 DB를 채택하는 본질은 극초저지연과 수십만 TPS입니다. 단순 RAM 몇십 MB를 추가 절감하기 위해 매 쿼리마다 CPU 압축 해제 부하를 감수하는 것은 주객전도이며, Go GC 포인터 0개화와 4~5배 메모리 절감(300~400B)은 옵션 A(고정 오프셋 플랫 레코드)만으로도 완벽히 달성됩니다 ([`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)).
 
 ---
 

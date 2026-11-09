@@ -55,7 +55,7 @@
 
 > [!TIP]
 > **자동화 스모크 테스트 실행**:
-> 본 보고서에 기술된 13대 도메인은 [`scripts/verify_report.sh`](../scripts/verify_report.sh)를 통해 단 3초 만에 일괄 자동 회귀 검증할 수 있습니다 ([`scripts/README.md`](../scripts/README.md) 참조):
+> 본 보고서에 기술된 13대 도메인은 [`scripts/verify_report.sh`](../../scripts/verify_report.sh)를 통해 단 3초 만에 일괄 자동 회귀 검증할 수 있습니다 ([`scripts/README.md`](../../scripts/README.md) 참조):
 > ```bash
 > ./scripts/verify_report.sh                    # In-Memory OCC 엔진 기준 13대 도메인 자동 검증
 > ./scripts/verify_report.sh --engine=wiredtiger # WiredTiger 디스크 B+Tree 엔진 기준 13대 도메인 자동 검증

@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-08
 > - **과제 식별 코드**: `P0-33`, `P0-36` (Volcano Set-Op Materialization & REST Streaming 하위)
-> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md)
+> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](../PRE_RELEASE_AUDIT_TRIAGE.ko.md)
 > - **핵심 적용 규칙**: `[RULE:BoundedBuffers]`, `[RULE:ZeroAllocation]`, `[RULE:ExplicitError]`, `[RULE:RadicalKISS]`
 > - **관련 커밋**:
 >   - `829eb78` `fix(execution): resolve P0-33 by eagerly materializing LazyTuples before set-operation deduplication`

@@ -50,7 +50,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 ### 도메인 A. 개발자 경험 및 편의성 (Ergonomics & Standalone Ecosystem)
 
 #### 1. `FRIENDLY-SQL`: DuckDB 스타일 편의 SQL 문법 지원
-- **상세 설계서**: [`notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)
+- **상세 설계서**: [`notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)
 - **주요 구현 내용**:
   1. `SELECT * EXCLUDE (col1, col2) FROM tbl`: 와일드카드 프로젝션에서 특정 컬럼 제외.
   2. `FROM tbl;`: `SELECT *` 생략형 테이블 전체 스캔 구문 허용.
@@ -82,7 +82,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
     - 어떤 제어 방식을 택하든(Default On, Strict Mode, Dialect 분기) 뚜렷한 장단점과 설계적 결함이 공존하므로, **명확한 설계적 확신과 실제 사용자 요구가 수렴될 때까지 Candidates에 둔 채 성급한 구현을 영구 보류**함.
 
 #### 2. `WEB-SPA-1`: 단일 바이너리 내장 SPA 웹 서버 호스팅
-- **상세 설계서**: [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)
+- **상세 설계서**: [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)
 - **주요 구현 내용**:
   1. `--app <dir>` 및 `--public <dir>` CLI 플래그 추가.
   2. React/Vue/Svelte 빌드 정적 자산을 DB 엔진과 동일한 단일 바이너리에서 HTTP 서빙.
@@ -95,7 +95,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
   - **대용량 정적 파일 I/O로 인한 DB 간섭**: 고용량 에셋(동영상, 거대 JS 번들) 요청이 폭주할 경우 DB 쿼리 서비스의 OS 소켓 및 버퍼 메모리를 잠식할 위험 (정적 서빙 대역폭/동시성 상한선 제한 필요).
 
 #### 3. `PKG-OFFLINE-DOCS`: 배포 패키지 오프라인 문서 번들링 (`docs/index.html`)
-- **상세 설계서**: [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
+- **상세 설계서**: [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
 - **개념 및 비전**: 
   - *"현대 개발자는 터미널로 폴더를 뒤지지 않고 브라우저로 문서를 본다."*
   - **DB 엔진 바이너리 순수성 보존**: 바이너리에 문서를 억지로 내장(`embed.FS`)하지 않고, 배포 압축 패키지(`tar.gz` / `.zip`) 내에 소스코드를 제외한 순수 배포용 문서(`docs/`)와 오프라인 브라우저 뷰어(`docs/index.html`)를 함께 번들링.
@@ -112,7 +112,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 ### 도메인 B. 처리량 및 엔터프라이즈 보안 (Pipeline & Enterprise Governance)
 
 #### 3. `PERF-SERVER-PIPELINE-P3-P4`: 서버 파이프라인 Phase 3/4 — **[영구 보류 (Spec-Out)]**
-- **상세 설계서**: [`notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)
+- **상세 설계서**: [`notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)
 - **주요 제안 내용**:
   1. Generic LRU 커서/Prepared Statement 캐시 도입.
   2. ReadOnly 쿼리에 대해 트랜잭션 락/OCC 스냅샷 생성 비용을 면제하는 자동 바이패스 경로 구축.
@@ -127,7 +127,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
   - **결론**: 형식과 실제가 다른 SQL의 본질적인 특성상 완벽한 안전성을 담보할 수 없으므로, **ReadOnly 자동 바이패스는 영구 기각(Spec-Out)**하고 표준 트랜잭션 경계를 엄격히 유지합니다.
 
 #### 4. `AUDIT-LOG-1`: SHA-256 불변 감사 로그 서브시스템
-- **상세 설계서**: [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md)
+- **상세 설계서**: [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](plans/IMMUTABLE_AUDIT_LOG_PLAN.md)
 - **주요 구현 내용**:
   1. 모든 DDL 변경, 사용자 권한 수정, 주요 DML 이력을 기록하는 Append-Only 전용 로그 블록.
   2. 이전 블록의 SHA-256 해시를 다음 레코드에 포함하는 해시 체인 구조.
@@ -150,7 +150,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
   - **특화 쿼리로 인한 카탈로그 복잡도 증가**: NocoDB가 요구하는 방대한 시스템 카탈로그 뷰(`pg_attribute`, `information_schema`)의 희귀 컬럼 요구로 인해 가상 카탈로그 코드가 복잡해질 우려.
 
 #### 6. `S3-1` ~ `S3-4`: Client-Side S3 Pre-signed URL 직접 업로드 및 SigV4 서명기
-- **상세 설계서**: [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)
+- **상세 설계서**: [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](plans/S3_PRESIGNED_STORAGE_PLAN.md)
 - **주요 구현 내용**:
   1. 순수 Go 기반 AWS Signature Version 4 (SigV4) 서명 생성기 구현.
   2. SQL 내장 함수 `GENERATE_S3_PRESIGNED_URL(bucket, key, method, expire)` 제공.
@@ -166,7 +166,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 ### 도메인 C. 옵티마이저 & 분석 성능 쥐어짜기 (CBO & Analytical Performance)
 
 #### 7. `BENCH-TPCH-1`: Mini TPC-H 스위트 및 CBO 서브쿼리 Decorrelation
-- **상세 설계서**: [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)
+- **상세 설계서**: [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)
 - **주요 구현 내용**:
   1. 상관 서브쿼리(`WHERE EXISTS`, `WHERE col IN`)를 CBO 플래너에서 Semi-Join / Anti-Join으로 재작성(Decorrelation).
   2. TPC-H 복합 분석 핵심 쿼리(Q1, Q3, Q4, Q6, Q9) 전용 벤치마크 하네스 구축.
@@ -178,7 +178,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
   - **잘못된 카디널리티 추정으로 인한 플랜 역주행**: 서브쿼리 카디널리티를 잘못 추정하여 대규모 테이블을 Nested Loop로 풀거나 메모리 초과 해시 조인을 생성하여 성능이 오히려 극단적으로 악화될 위험.
 
 #### 8. `PERF-COMPLEX-QUERY-2`: Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join)
-- **상세 설계서**: [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)
+- **상세 설계서**: [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)
 - **주요 구현 내용**:
   1. Go 맵 기반 해시 조인을 CPU 캐시 친화적인 단일 연속 메모리 슬라이스 오픈 어드레싱 해시 테이블로 전환.
   2. 정수 조인 키에 대해 해시 계산을 바이패스하고 비트 연산으로 슬롯 직결.
@@ -194,7 +194,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 ### 도메인 D. 코어 스토리지 & 프로토콜 딥 아키텍처 (Deep Kernel Redesign)
 
 #### 9. `OCC-HYPER-2`: In-Memory OCC Pointer-Free Flat Record & Memory Compaction
-- **상세 설계서**: [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
+- **상세 설계서**: [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
 - **주요 구현 내용**:
   1. 레코드 표현을 Go 인터페이스 슬라이스(`[]any`)에서 오프셋 기반 단일 연속 바이트(`[]byte`)로 전면 개편.
   2. 튜플 언박싱 없이 고정 오프셋 O(1) 직접 읽기(0.5ns) 달성.
@@ -212,7 +212,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
   - **반드시 1.0 릴리스 이후 별도 격리 브랜치에서 고립 개발 필수**.
 
 #### 10. `LOC-1` ~ `LOC-4`: MSSQL Collation 및 유니코드 다국어 로케일
-- **상세 설계서**: [`notes/COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)
+- **상세 설계서**: [`notes/COLLATION_AND_LOCALE_PLAN.md`](plans/COLLATION_AND_LOCALE_PLAN.md)
 - **주요 구현 내용**:
   1. `Korean_Wansung_CI_AS`, `SQL_Latin1_General_CP1_CI_AS` 등 대소문자 무시(CI), 악센트 구분(AS) 지원.
   2. B+Tree 인덱스 키 생성기 및 정렬 연산자에 언어별 로케일 가중치 키(Collation Key) 인코딩 통합.

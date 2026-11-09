@@ -1827,7 +1827,7 @@ TDS frames maintain an **8-byte Common Header** at the start of every packet:
 #### 10.6. Developer Context, Backlog & Engineering Principles
 * [`ROADMAP.md`](../ROADMAP.md)
   - Milestone achievements across versions (Phases 1 through 6) and future strategic roadmaps.
-* [`TODO.md`](../TODO.md) (Korean: [`TODO.ko.md`](../TODO.ko.md))
+* [`TODO.md`](../TODO.md) (Korean: [`TODO.ko.md`](../notes/archive/TODO.ko.md))
   - Operational engineering dashboard tracking prioritized tasks (P1, P2, P3), CBO metrics, domain backlogs, and recent milestone status.
 * [`CHANGELOG.md`](../CHANGELOG.md)
   - Release changelogs documenting feature additions, fixes, and refactoring across versions following Keep a Changelog standards.

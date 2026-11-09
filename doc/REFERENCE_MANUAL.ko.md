@@ -1822,13 +1822,13 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
 #### 10.6. 개발자 엔지니어링 핸드오버 및 로드맵 문서 (Developer Context & Backlog)
 * [`ROADMAP.md`](../ROADMAP.md)
   * 버전별 개발 마일스톤(Phase 1~6) 달성 현황 및 향후 중장기 핵심 로드맵.
-* [`TODO.ko.md`](../TODO.ko.md)
+* [`TODO.ko.md`](../notes/archive/TODO.ko.md)
   * 차기 착수 우선순위 과제(P1, P2, P3), CBO 및 성능 매트릭스, 도메인별 대기 백로그 및 최근 마일스톤 트래커.
 * [`CHANGELOG.md`](../CHANGELOG.md)
   * 버전별 릴리즈 변경 내역 및 기능 추가/수정 기록 (Keep a Changelog 표준).
 * [`notes/ENGINEERING_CONTEXT.ko.md`](../notes/ENGINEERING_CONTEXT.ko.md)
   * 아키텍처 불변 규칙, 대안 기술 Spec-Out 사유, 협업 엔지니어링 원칙.
-* [`notes/PITFALLS_AND_TRICKS.ko.md`](../notes/PITFALLS_AND_TRICKS.ko.md)
+* [`notes/PITFALLS_AND_TRICKS.ko.md`](../notes/archive/PITFALLS_AND_TRICKS.ko.md)
   * 순환 참조 방지, wiredtiger 빌드 태그, 샌드박스 네트워크 격리, 소수점 JSON 직렬화 등 개발 시 주의점.
 
 

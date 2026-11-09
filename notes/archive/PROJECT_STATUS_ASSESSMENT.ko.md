@@ -26,18 +26,18 @@
 ### 2.1. 계층 구조 역전 해소: SQL 실행 코디네이터 패키지 분리 (`pkg/engine`) — **[조치 완료]**
 * **초기 현상**: HTTP REST 웹 핸들러를 담당하던 `pkg/api`에 15,000+ 라인의 SQL 실행 오케스트레이션 로직(`sqlexec*.go`)이 집중되어 계층 역전 발생.
 * **조치 결과 (완료)**:
-  - SQL 오케스트레이션 및 세션/트랜잭션 조율 로직을 코어 전용 패키지인 [`pkg/engine`](../pkg/engine)으로 완전 추출 및 독립 승격.
+  - SQL 오케스트레이션 및 세션/트랜잭션 조율 로직을 코어 전용 패키지인 [`pkg/engine`](../../pkg/engine)으로 완전 추출 및 독립 승격.
   - PGWire(`pkg/wire`), TDS(`pkg/wire/tds`), HTTP REST(`pkg/api`)가 상호 순환 참조 없이 오직 코어 `pkg/engine`만을 단방향 호출하는 클린 아키텍처 확립.
 
 ### 2.2. CBO 조인 알고리즘 및 대규모 조인 탐색 확장 — **[조치 완료]**
 * **초기 현상**: Hash Join과 Index Nested Loop Join만 존재하여 정렬된 스트림에 대한 Sort-Merge Join 부재 및 $N > 4$ 조인 순열 탐색 오버헤드 지적.
 * **조치 결과 (완료)**:
   1. **Sort-Merge Join 연산자 구현 (`B-3`, 커밋 `52e6232`)**:
-     - [`pkg/execution/merge_join.go`](../pkg/execution/merge_join.go)에 $O(M+N)$ 단일 패스 스트리밍 조인 엔진 `MergeJoinIterator` 완비.
+     - [`pkg/execution/merge_join.go`](../../pkg/execution/merge_join.go)에 $O(M+N)$ 단일 패스 스트리밍 조인 엔진 `MergeJoinIterator` 완비.
      - 6대 조인 타입(`INNER`, `LEFT`, `RIGHT`, `FULL`, `SEMI`, `ANTI`) 지원.
      - $N:M$ 중복 키 직교곱 처리를 위한 **Mark & Restore 슬라이딩 윈도우 버퍼** 구현.
-     - 실행 빌더([`pkg/execution/builder.go`](../pkg/execution/builder.go))에서 미정렬 자식 스트림에 대해 메모리 거버너 연동 `NewSortIterator` 자동 주입.
-     - CBO 플래너([`pkg/planner/planner.go`](../pkg/planner/planner.go))에서 $O(M+N)$ 스트리밍 비용 모델 반영 및 힌트(`OPTION (MERGE JOIN)`, `INNER MERGE JOIN`) 연동.
+     - 실행 빌더([`pkg/execution/builder.go`](../../pkg/execution/builder.go))에서 미정렬 자식 스트림에 대해 메모리 거버너 연동 `NewSortIterator` 자동 주입.
+     - CBO 플래너([`pkg/planner/planner.go`](../../pkg/planner/planner.go))에서 $O(M+N)$ 스트리밍 비용 모델 반영 및 힌트(`OPTION (MERGE JOIN)`, `INNER MERGE JOIN`) 연동.
   2. **Selinger DP 대규모 조인 최적화 (`C-5`)**:
      - $N > 4$ 테이블 조인에 대해 동적 프로그래밍(DP) 기반 Left-Deep 탐색 알고리즘을 도입하여 최적 조인 순서를 서브밀리초 단위로 결정.
 

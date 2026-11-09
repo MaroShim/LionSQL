@@ -5,7 +5,7 @@
 > - **과제 식별 코드**: `INTEG-ANSWER-1`, `INTEG-VAULTWARDEN-1`, `INTEG-METABASE-1`, `INTEG-UMAMI-1`, `INTEG-WOODPECKER-1`, `INTEG-VIKUNJA-1` (완료) / `INTEG-NOCODB-1`, `INTEG-MATTERMOST-1` (v1.1.0 로드맵 이관)
 > - **목표**: 지금까지의 연동(Gitea, IOTA ERP, Grafana, Casdoor)으로 다져진 호환성 위에서, 실제 사용자가 많이 쓰는 오픈소스 앱 6종을 소스 무수정으로 LionSQL에 붙여 "실사용 가능성"을 입증하고, 그 과정에서 남은 호환성 결함을 제거
 > - **상태**: 1.0 연동 완료 및 범위 확정 (`Completed` - NocoDB/Mattermost v1.1.0 연기 확정)
-> - **연동 보고서**: [`ANSWER_INTEGRATION_REPORT.ko.md`](ANSWER_INTEGRATION_REPORT.ko.md), [`VAULTWARDEN_INTEGRATION_REPORT.ko.md`](VAULTWARDEN_INTEGRATION_REPORT.ko.md), [`METABASE_INTEGRATION_REPORT.ko.md`](METABASE_INTEGRATION_REPORT.ko.md), [`UMAMI_INTEGRATION_REPORT.ko.md`](UMAMI_INTEGRATION_REPORT.ko.md), [`WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
+> - **연동 보고서**: [`ANSWER_INTEGRATION_REPORT.ko.md`](../reports/ANSWER_INTEGRATION_REPORT.ko.md), [`VAULTWARDEN_INTEGRATION_REPORT.ko.md`](../reports/VAULTWARDEN_INTEGRATION_REPORT.ko.md), [`METABASE_INTEGRATION_REPORT.ko.md`](../reports/METABASE_INTEGRATION_REPORT.ko.md), [`UMAMI_INTEGRATION_REPORT.ko.md`](../reports/UMAMI_INTEGRATION_REPORT.ko.md), [`WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](../reports/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
 > - **연기 결정**: NocoDB(`INTEG-NOCODB-1`), Mattermost(`INTEG-MATTERMOST-1`) ➔ v1.1.0 로드맵 이관
 > - **제외 결정**: Keycloak (후보에서 제외)
 

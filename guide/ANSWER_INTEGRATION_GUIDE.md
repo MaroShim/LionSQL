@@ -7,8 +7,8 @@
 > - **Supported Protocol**:
 >   - **PostgreSQL Wire Protocol v3** (Default TCP `:5433`)
 > - **Reference Documents**:
->   - Live Integration Report: [`notes/ANSWER_INTEGRATION_REPORT.ko.md`](../notes/ANSWER_INTEGRATION_REPORT.ko.md)
->   - Modular Architecture Plan: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
+>   - Live Integration Report: [`notes/ANSWER_INTEGRATION_REPORT.ko.md`](../notes/reports/ANSWER_INTEGRATION_REPORT.ko.md)
+>   - Modular Architecture Plan: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md)
 
 ---
 

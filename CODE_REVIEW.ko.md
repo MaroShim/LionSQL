@@ -5,7 +5,7 @@
 > [!NOTE]
 > - 영문 요약본: [`CODE_REVIEW.md`](CODE_REVIEW.md)
 > - 결함 조치 아카이브 (107건): [`notes/archive/BUG_ARCHIVE.ko.md`](notes/archive/BUG_ARCHIVE.ko.md)
-> - 모듈형 아키텍처 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
+> - 모듈형 아키텍처 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md)
 
 ---
 
@@ -97,7 +97,7 @@
 | **REV-WIRE-004** | P1 | 결함 | [`pkg/wire/tds/server.go:2536-2550`](pkg/wire/tds/server.go#L2536) | `matchVersionQuery`에서 `SERVERPROPERTY` 2개 이상 포함 시 임의 쿼리를 강제로 4개 컬럼(`version, productVersion, engineEdition, versionText`)으로 하이재킹하던 치명적 결함 | `[x]` | 다중 컬럼 하이재킹 전면 제거 및 정규 VDBE 스칼라 엔진 위임 완료 (`57e51aa`) |
 | **REV-WIRE-005** | P2 | 결함 | [`pkg/wire/tds/server.go:937`](pkg/wire/tds/server.go#L937) | `handleRPC` default 절에서 미지원 숫자형 `ProcID`(예: `sp_cursoropen` = 2 등) 수신 시 `rpc.ProcName`이 비어 있어 에러 없이 `DoneFinal`을 즉시 반환하여 클라이언트 행(hang) 또는 침묵 오류 유발 위험 | `[x]` | 미지원 ProcID에 대해 명시적 `TokenError` (Msg 2812) 및 실패 Done 토큰 반환 |
 | **REV-WIRE-006** | P1 | 정합성 | [`pkg/wire/tds/server.go:1030-1070`](pkg/wire/tds/server.go#L1030) | TDS RPC 실행 시 파라미터명 대소문자 차이(`@p1` vs `@P1`)나 비표준 명칭으로 인해 매핑이 누락되던 결함 | `[x]` | 100% 서수 위치 기반(Ordinal Positional) 매핑 체계로 일원화 완료 (`TDS-RPC-AUDIT-1`) |
-| **REV-WIRE-007** | P2 | 프로토콜/성능 | [`pkg/wire/tds/tokens.go:120-160`](pkg/wire/tds/tokens.go#L120) | 다수의 NULL 컬럼을 포함하는 대량 행 전송 시 일반 ROW 토큰 사용으로 네트워크 대역폭 낭비 | `[x]` | TDS 7.2+ NBCROW(`0xD2`) 비트맵 압축 행 토큰 구현으로 NULL 바이트 전송 최소화 (`TDS-NBCROW-1`) |
+| **REV-WIRE-007** | P2 | 프로토콜/성능 | [`pkg/wire/tds/tokens.go:120-160`](pkg/wire/tds/token.go#L120) | 다수의 NULL 컬럼을 포함하는 대량 행 전송 시 일반 ROW 토큰 사용으로 네트워크 대역폭 낭비 | `[x]` | TDS 7.2+ NBCROW(`0xD2`) 비트맵 압축 행 토큰 구현으로 NULL 바이트 전송 최소화 (`TDS-NBCROW-1`) |
 | **REV-WIRE-008** | P2 | 자원제한 | [`pkg/wire/server.go:1210-1240`](pkg/wire/server.go#L1210) | 장시간 대화형 세션에서 준비된 문장(`PREPARE`)이 무제한 누적되어 메모리 누수 유발 위험 | `[x]` | 세션별 LRU 기반 바운디드 준비된 문장 캐시(`maxPreparedPerSession = 256`) 적용 완료 (`PREP-1`) |
 | **REV-WIRE-009** | P1 | 원자성 | [`pkg/wire/copy.go:350-410`](pkg/wire/copy.go#L350) | PostgreSQL `COPY tbl FROM STDIN` 실행 시 세션 트랜잭션과 격리되어 자동 커밋 루프로 분할 실행되던 무결성 위험 | `[x]` | 세션 트랜잭션 핸들 강제 바인딩 및 오류 시 전체 롤백 보장 완료 (`COPY-SAFETY-1`) |
 | **REV-WIRE-010** | P1 | 취약점/DoS | [`pkg/wire/server.go:868-980`](pkg/wire/server.go#L868) | PGWire `handleParse` 및 `handleBind`에서 악의적이거나 비정상적인 음수/과도한 파라미터 크기(`numParamTypes < 0`, `numFormats < 0`, `numParams < 0`, `paramLen < -1`, `$999999999` 등) 수신 시 `make([]int32, ...)` 슬라이스 범위 초과 패닉 또는 OOM 유발 위험 ([`RULE:DefensiveIndexing`], [`RULE:BoundedBuffers`] 위반) | `[x]` | 0~10000 파라미터 바운드 검사 및 페이로드 잔여 길이 초과 방어 가드 적용 완료 |
@@ -131,7 +131,7 @@
 
 | ID | 우선순위 | 구분 | 파일 및 라인 | 설명 | 상태 | 커밋 / 비고 |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
-| **REV-ARCH-001** | P2 | 결합도/캡슐화 | [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md) | 와이어 프로토콜이 코디네이터 외에 스토리지 엔진 및 `ClientSession` 내부 락(`cs.Mu.Lock()`)을 직접 조작하는 경계 누수 | `[x]` | `R-6` 계획 수립 및 5대 핵심 SPI 인터페이스 명세 완료 (Post-1.0 `v1.1.0+` 로드맵 배치) |
+| **REV-ARCH-001** | P2 | 결합도/캡슐화 | [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) | 와이어 프로토콜이 코디네이터 외에 스토리지 엔진 및 `ClientSession` 내부 락(`cs.Mu.Lock()`)을 직접 조작하는 경계 누수 | `[x]` | `R-6` 계획 수립 및 5대 핵심 SPI 인터페이스 명세 완료 (Post-1.0 `v1.1.0+` 로드맵 배치) |
 
 ---
 

@@ -60,7 +60,7 @@ LionSQL은 과거 플래너(`pkg/planner`)와 와이어(`pkg/wire`), DML 실행�
    - `reCreateTablePrefix`: `CREATE TABLE /* 주석 */ [dbo].[users] (`와 같은 T-SQL 주석이나 대괄호 스키마 접두사 파싱 시 매칭 실패 또는 오추출 위험.
    - `reAddColumn`, `reAlterColType`: `ALTER TABLE t ADD col VARCHAR(64) DEFAULT 'a, b'`처럼 문자열 리터럴 내에 쉼표(`,`)나 공백이 포함된 경우 엉뚱한 위치에서 컬럼 타입이 잘려 파싱 에러 발생.
    - `reColDefault`: `DEFAULT 'str'`뿐 아니라 `GENERATED ALWAYS AS IDENTITY` 뒤의 `AS`를 기본값으로 오인식하거나, 복합 표현식(`DEFAULT (getdate())`)을 불완전하게 추출하는 문제.
-   - `reInlineFK`, `reTableFK`: 대괄호 및 멀티파트 식별자(`[schema].[table]([col])`) 처리 시 정규식 탐욕성(Greedy)으로 인한 괄호 불일치.
+   - `reInlineFK`, `reTableFK`: 대괄호 및 멀티파트 식별자(`[schema].`[table].[col]``) 처리 시 정규식 탐욕성(Greedy)으로 인한 괄호 불일치.
    - `reDropTable`, `reTruncateTable`, `reCreateView`, `reDropView`, `reCreateIndex`, `reDropIndex`: 단순한 DDL 라우팅마저 거대한 정규식 매칭에 의존.
 2. `sqlexec_eval.go` 내의 조건식 정규식 (`reEvalInClause`, `reEvalEqCondition`):
    - `WHERE col IN ('a', 'b')` 및 `WHERE col = val`을 파싱할 때 리터럴 내 따옴표나 괄호가 포함된 경우 정규식이 오작동.
@@ -99,7 +99,7 @@ DDL 및 쿼리 파싱에서 정규식을 걷어내면서 공통 유틸리티로 
 1. **`parser.go` (`SplitTopLevelTokens`)**:
    - 중첩 괄호(`((a, b), c)`) 및 이스케이프 따옴표(`'O''Reilly'`)의 완벽한 상태머신 추적.
 2. **`tokens.go` (`CleanIdentifier`)**:
-   - 대괄호(`[col]`), 백틱(`` `col` ``), 큰따옴표(`"col"`) 및 스키마 접두어(`dbo.users.id`) 복합 분해 지원.
+   - 대괄호(`col`), 백틱(`` `col` ``), 큰따옴표(`"col"`) 및 스키마 접두어(`dbo.users.id`) 복합 분해 지원.
 3. **`ddl.go` (`ParseColumnDef`)**:
    - `DECIMAL(10, 2)`, `VARCHAR(MAX)`, `COLLATE Latin1_General_CI_AS` 등 복합 데이터 타입 파싱 정밀화.
 4. **`predicate.go` (`ExtractEqualityFilter`)**:

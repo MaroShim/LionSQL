@@ -4,8 +4,8 @@
 > - **Date**: 2026-11-02
 > - **Status**: Completed (100% PASS / 0 Mismatches)
 > - **Task ID**: `SLT-FULL-100` (Parent Tasks: `DURA-SLT-2`, `GA-VALID-1`)
-> - **Related Architecture Plan**: [`notes/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md`](SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md)
-> - **Automated Release Verification Gate**: [`scripts/verify_0.90.sh`](../scripts/verify_0.90.sh)
+> - **Related Architecture Plan**: [`notes/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md`](../plans/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md)
+> - **Automated Release Verification Gate**: [`scripts/verify_0.90.sh`](../../scripts/verify_0.90.sh)
 
 ---
 
@@ -47,17 +47,17 @@ During the verification of 551,217 fuzzing and boundary queries, we uncovered an
   1. Executing `SELECT - tab2.col2 - col1 * 40 AS col1 FROM tab2` returned the original table's `col1` value rather than the calculated expression result (`random/select/*`).
   2. Executing `SELECT 52 AS col0, 13 AS col0` or `SELECT dept_id, COUNT(*), COUNT(discount)` returned only one entry because rows were transported solely as `map[string]any`, overwriting earlier column values sharing the same name (`random/expr/*`, `core/agg_stress.slt` PGWire).
 - **Root Cause**:
-  - In the Volcano [`ProjectIterator`](../pkg/execution/project.go), source tuple column names were looked up before expressions were evaluated. In VDBE [`OpResultRow`](../pkg/proc/runtime/vm_dispatcher.go) and PGWire [`server.go`](../pkg/wire/server.go), row values were serialized without ordinal positional slots (`Values [][]any`), leading to key collisions.
+  - In the Volcano [`ProjectIterator`](../../pkg/execution/project.go), source tuple column names were looked up before expressions were evaluated. In VDBE [`OpResultRow`](../../pkg/proc/runtime/vm_dispatcher.go) and PGWire [`server.go`](../../pkg/wire/server.go), row values were serialized without ordinal positional slots (`Values [][]any`), leading to key collisions.
 - **Resolution**:
   - Fixed evaluation precedence in `ProjectIterator` so explicit expressions and aliases take priority over source table columns.
-  - Linked ordinal positional `Values [][]any` slots consistently through VDBE `OpResultRow`, `execScalarSelect`, and PGWire packet serializers (`handleExecute`, `writeExecutionResult`, `runAndWriteQueryWithFormats`). The SLT runner ([`runner.go`](../pkg/slt/runner.go)) now isolates duplicate column names into `col#1`, `col#2` to ensure positional integrity.
+  - Linked ordinal positional `Values [][]any` slots consistently through VDBE `OpResultRow`, `execScalarSelect`, and PGWire packet serializers (`handleExecute`, `writeExecutionResult`, `runAndWriteQueryWithFormats`). The SLT runner ([`runner.go`](../../pkg/slt/runner.go)) now isolates duplicate column names into `col#1`, `col#2` to ensure positional integrity.
 
 ### 2.2 VDBE Bytecode VM Comparison Operators & `OpBetween` SQL 3-Valued Logic (3VL) Conformance
 - **Symptoms**:
   - `SELECT CASE WHEN NOT NULL < 71 THEN 1 ELSE 0 END` returned `1` instead of `0`.
   - `SELECT * FROM tab0 WHERE 90 NOT BETWEEN NULL AND 88` failed to return rows even though `90 <= 88` is decisively `FALSE`, making the entire `BETWEEN` condition `FALSE` and `NOT BETWEEN` strictly `TRUE` (`random/expr/*`, `random/aggregates/*`).
 - **Root Cause**:
-  - In [`vm_dispatcher.go`](../pkg/proc/runtime/vm_dispatcher.go), comparison opcodes (`OpEq`, `OpNeq`, `OpLt`, `OpLte`, `OpGt`, `OpGte`, `OpLike`) recorded `storage.BoolValue(false)` into registers on `NULL` operands instead of `storage.NullValue(storage.TypeBool)` (UNKNOWN), causing a subsequent `OpNot` to invert it to `TRUE`.
+  - In [`vm_dispatcher.go`](../../pkg/proc/runtime/vm_dispatcher.go), comparison opcodes (`OpEq`, `OpNeq`, `OpLt`, `OpLte`, `OpGt`, `OpGte`, `OpLike`) recorded `storage.BoolValue(false)` into registers on `NULL` operands instead of `storage.NullValue(storage.TypeBool)` (UNKNOWN), causing a subsequent `OpNot` to invert it to `TRUE`.
   - `OpBetween` missed the 3VL short-circuit rule (`UNKNOWN AND FALSE = FALSE`): when the upper bound `val <= high` is decisively `FALSE`, the result is `FALSE` regardless of whether the lower bound is `NULL`.
 - **Resolution**:
   - Updated all comparison opcodes to return `storage.NullValue(storage.TypeBool)` on `NULL` inputs.
@@ -67,16 +67,16 @@ During the verification of 551,217 fuzzing and boundary queries, we uncovered an
 - **Symptoms**:
   - `SELECT col0 FROM tab1 GROUP BY col0 HAVING NOT AVG(DISTINCT col0) IS NULL` returned 0 rows (`random/groupby/slt_good_8.test`).
 - **Root Cause**:
-  - The AST walker `extractAggFromAST` in [`aggregate.go`](../pkg/execution/aggregate.go) lacked traversal handlers for `*proc.IsNullExpr`, `*proc.LikeExpr`, and `*proc.WithinGroupExpr`, dropping `AVG(DISTINCT col0)` from being registered as a secondary aggregate field.
+  - The AST walker `extractAggFromAST` in [`aggregate.go`](../../pkg/execution/aggregate.go) lacked traversal handlers for `*proc.IsNullExpr`, `*proc.LikeExpr`, and `*proc.WithinGroupExpr`, dropping `AVG(DISTINCT col0)` from being registered as a secondary aggregate field.
 - **Resolution**:
   - Added AST traversal for these three node types in `extractAggFromAST`.
-  - Enhanced the Pratt parser [`parser_expr.go`](../pkg/proc/parser_expr.go) in `parseFunctionCall` to recognize both `DISTINCT` and `ALL` quantifiers (`AVG(ALL col0)`, `COUNT(ALL col0)`).
+  - Enhanced the Pratt parser [`parser_expr.go`](../../pkg/proc/parser_expr.go) in `parseFunctionCall` to recognize both `DISTINCT` and `ALL` quantifiers (`AVG(ALL col0)`, `COUNT(ALL col0)`).
 
 ### 2.4 Tableless Scalar Queries (`SELECT` without `FROM`) with Aggregate Functions and Unary Signs
 - **Symptoms**:
   - Scalar aggregate queries lacking a `FROM` clause like `SELECT DISTINCT COUNT(*)` and `SELECT - SUM(DISTINCT - 57)` returned `COUNT(*) = 0` and `SUM(-57) = NULL` (`random/expr/*`).
 - **Root Cause**:
-  - Under SQL standards, a `SELECT` without `FROM` evaluates over one implicit row: `COUNT(*)` must return `1`, and `SUM(x)`/`AVG(x)`/`MIN(x)`/`MAX(x)` must return `x` itself. However, `evalRowFunction` in [`eval.go`](../pkg/proc/eval.go) returned `0` or `nil`, and `execScalarSelect` failed to strip `SELECT DISTINCT` prefixes.
+  - Under SQL standards, a `SELECT` without `FROM` evaluates over one implicit row: `COUNT(*)` must return `1`, and `SUM(x)`/`AVG(x)`/`MIN(x)`/`MAX(x)` must return `x` itself. However, `evalRowFunction` in [`eval.go`](../../pkg/proc/eval.go) returned `0` or `nil`, and `execScalarSelect` failed to strip `SELECT DISTINCT` prefixes.
 - **Resolution**:
   - Added prefix stripping for `ALL`/`DISTINCT` in `execScalarSelect`.
   - Updated `evalRowFunction` to return standard SQL scalar aggregate results in single-row tableless contexts.
@@ -87,7 +87,7 @@ During the verification of 551,217 fuzzing and boundary queries, we uncovered an
 - **Root Cause**:
   - When the top-level predicate contained a disjunction (`HasDisjunction`), the planner narrowed the single-index scan range solely based on the left-hand range condition, discarding qualifying rows for the right-hand subquery during the storage scan stage.
 - **Resolution**:
-  - In [`bounds.go`](../pkg/planner/bounds.go) and [`planner.go`](../pkg/planner/planner.go), blocked index range truncation when top-level `OR` disjunctions are present, ensuring full filter evaluation.
+  - In [`bounds.go`](../../pkg/planner/bounds.go) and [`planner.go`](../../pkg/planner/planner.go), blocked index range truncation when top-level `OR` disjunctions are present, ensuring full filter evaluation.
 
 ### 2.6 Acceptance of 5 SQLite Idiomatic Syntaxes (`evidence/*`)
 - **Implemented Ergonomics**:
@@ -101,18 +101,18 @@ During the verification of 551,217 fuzzing and boundary queries, we uncovered an
 - **Resolution**:
   - In SQLite/SLT query expressions (`SELECT`), `x / 0` evaluates to `NULL` without error.
   - In enterprise T-SQL `UPDATE` statements (`UPDATE products SET qty = qty / 0`), division by zero must immediately abort with an error and trigger a DML transaction rollback (`TestGroup5_UpdateDivideByZero_DML_Rollback`).
-  - Separated `EvalUpdateRowExpr` in [`eval.go`](../pkg/proc/eval.go) from standard evaluation, ensuring strict error rollback during `UPDATE` assignments in VDBE [`vm.go`](../pkg/proc/runtime/vm.go) and [`vm_dispatcher.go`](../pkg/proc/runtime/vm_dispatcher.go).
+  - Separated `EvalUpdateRowExpr` in [`eval.go`](../../pkg/proc/eval.go) from standard evaluation, ensuring strict error rollback during `UPDATE` assignments in VDBE [`vm.go`](../../pkg/proc/runtime/vm.go) and [`vm_dispatcher.go`](../../pkg/proc/runtime/vm_dispatcher.go).
 
 ### 2.8 Removal of Floating-Point Rounding Error on SLT Integer (`I`) Columns
 - **Resolution**:
   - The standard SLT C-runner truncates floating-point values toward zero (`(int64)v`) when the query signature specifies an integer column (`I`), rather than rounding (`%.0f`).
-  - Updated `FormatCell` in [`runner.go`](../pkg/slt/runner.go) to use `strconv.FormatInt(int64(v), 10)` when `colType == 'I'`, eliminating negative fractional truncation errors.
+  - Updated `FormatCell` in [`runner.go`](../../pkg/slt/runner.go) to use `strconv.FormatInt(int64(v), 10)` when `colType == 'I'`, eliminating negative fractional truncation errors.
 
 ---
 
 ## 3. `v0.90.0` Integrated Release Verification Gate (`scripts/verify_0.90.sh`)
 
-To allow instant, one-click reproduction of release quality criteria at any time, we built the automated verification pipeline [`scripts/verify_0.90.sh`](../scripts/verify_0.90.sh):
+To allow instant, one-click reproduction of release quality criteria at any time, we built the automated verification pipeline [`scripts/verify_0.90.sh`](../../scripts/verify_0.90.sh):
 
 1. **Stage 1 (Build)**: Compiles static production binaries `bin/lionsql`, `bin/sqllogictest`, `bin/bench`, and `bin/tpcc-runtime` (`-tags wiredtiger`).
 2. **Stage 2 (Unit & Race Tests)**: Runs `go test -tags wiredtiger -count=1 -short -race ./...` across all packages, verifying 0 data races.
@@ -171,7 +171,7 @@ When running the identical SQLLogicTest corpus (`551,217` queries, `19,211` stat
    - Engines that invoke heavy Cascades optimizers suffer from planning inversion (planning time > data scan time). LionSQL executes instantly through its zero-allocation Pratt parser and 2-tier VDBE/Volcano routing.
 2. **State-Space Explosion Suppression on Large Joins (`select4/5.test` up to 64-way joins)**:
    - Many RDBMSs freeze on `select5.test` due to factorial join order search and Cartesian product explosions.
-   - LionSQL's [`OPT-LARGE-JOIN-1`](LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) optimization (Selinger DP threshold capped at `MaxJoinDPThreshold = 6` + BFS Spanning Tree join key deduction + dynamic root selection by single-row filter/minimum cardinality + `1=0` empty set fast-fail) completes all 732 complex joins in `select5.test` in **12.67s**.
+   - LionSQL's [`OPT-LARGE-JOIN-1`](../plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) optimization (Selinger DP threshold capped at `MaxJoinDPThreshold = 6` + BFS Spanning Tree join key deduction + dynamic root selection by single-row filter/minimum cardinality + `1=0` empty set fast-fail) completes all 732 complex joins in `select5.test` in **12.67s**.
 3. **Contention-Free Goroutine Worker Pool (`-parallel 8`) and Isolated Per-File Memory Instances**:
    - Each test file runs in an isolated `Coordinator` + `memengine` instance without shared catalog mutexes or global lock contention, saturating 100% of multi-core CPU capacity.
    - Despite being implemented in pure Go, LionSQL matches C/C++ embedded engines (SQLite, DuckDB) in the **30-50s tier**, running **5x to 20x faster** than traditional client-server DBMSs and Go-based distributed SQL systems.
