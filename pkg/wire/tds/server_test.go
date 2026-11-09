@@ -1068,6 +1068,66 @@ func TestTDS_FastPathPing(t *testing.T) {
 	}
 }
 
+func TestTDS_SSMS_EnvironmentBatch(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	ssmsBatch := `DECLARE @edition sysname;
+SET @edition = cast(SERVERPROPERTY(N'EDITION') as sysname);
+SELECT case when @edition = N'SQL Azure' then 2 else 1 end as 'DatabaseEngineType',
+@edition AS Edition,
+CONVERT(bigint, SERVERPROPERTY(N'EditionID')) AS EditionID,
+SERVERPROPERTY('EngineEdition') AS DatabaseEngineEdition,
+SERVERPROPERTY('ProductVersion') AS ProductVersion,
+@@MICROSOFTVERSION AS MicrosoftVersion,
+case when serverproperty('EngineEdition') = 12 then 1 when serverproperty('EngineEdition') = 11 and @@version like 'Microsoft Azure SQL Data Warehouse%' then 1 else 0 end as IsFabricServer,
+convert(sysname, SERVERPROPERTY(N'Collation')) AS Collation;
+select host_platform from sys.dm_os_host_info
+if @edition = N'SQL Azure'
+  select 'TCP' as ConnectionProtocol
+else
+  exec ('select CONVERT(nvarchar(40),CONNECTIONPROPERTY(''net_transport'')) as ConnectionProtocol')`
+
+	payload := sendSQLBatch(t, conn, ssmsBatch)
+
+	// Verify that exactly 3 ColMetaData tokens exist (1 per result set)
+	colMetaCount := bytes.Count(payload, []byte{TokenColMetaData})
+	if colMetaCount != 3 {
+		t.Fatalf("expected 3 TokenColMetaData tokens for SSMS 3 result sets, got %d", colMetaCount)
+	}
+
+	// Verify that row tokens exist
+	rowCount := bytes.Count(payload, []byte{TokenRow}) + bytes.Count(payload, []byte{TokenNBCRow})
+	if rowCount != 3 {
+		t.Fatalf("expected 3 row tokens for SSMS 3 result sets, got %d", rowCount)
+	}
+
+	// Verify column names appear in UTF-16LE in the payload
+	if !bytes.Contains(payload, EncodeUTF16LE("DatabaseEngineType")) {
+		t.Fatalf("expected 'DatabaseEngineType' column in result set 1")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("host_platform")) {
+		t.Fatalf("expected 'host_platform' column in result set 2")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("ConnectionProtocol")) {
+		t.Fatalf("expected 'ConnectionProtocol' column in result set 3")
+	}
+
+	// Also verify standalone probes
+	queryDbEngine := "SELECT SERVERPROPERTY('DatabaseEngineType') AS DatabaseEngineType;"
+	respEngine := sendSQLBatch(t, conn, queryDbEngine)
+	if !bytes.Contains(respEngine, EncodeUTF16LE("DatabaseEngineType")) {
+		t.Fatalf("expected 'DatabaseEngineType' column in standalone query")
+	}
+
+	queryMsVer := "SELECT @@MICROSOFTVERSION AS MicrosoftVersion;"
+	respMsVer := sendSQLBatch(t, conn, queryMsVer)
+	if !bytes.Contains(respMsVer, EncodeUTF16LE("MicrosoftVersion")) {
+		t.Fatalf("expected 'MicrosoftVersion' column in @@MICROSOFTVERSION query")
+	}
+}
+
 
 
 

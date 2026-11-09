@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"net"
+	sysruntime "runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1415,6 +1416,11 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		return
 	}
 
+	// SSMS connection environment batch short-circuit (returns 3 result sets: server info, host_platform, connection protocol)
+	if s.handleSsmsEnvironmentBatch(conn, trimmed, sess, extraTokens, true) {
+		return
+	}
+
 	// System function / version short-circuit
 	if cols, vals, ok := matchVersionQuery(trimmed); ok {
 		if s.DevMode() {
@@ -2493,6 +2499,11 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		return
 	}
 
+	// SSMS connection environment batch short-circuit (returns 3 result sets: server info, host_platform, connection protocol)
+	if s.handleSsmsEnvironmentBatch(conn, trimmed, sess, nil, false) {
+		return
+	}
+
 	// System function / version short-circuit
 	if cols, vals, ok := matchVersionQuery(trimmed); ok {
 		if s.DevMode() {
@@ -2881,6 +2892,26 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 		return cols, vals, true
 	}
 
+	// 2.1. Standard standalone single @@MICROSOFTVERSION probe
+	if strings.Contains(upper, "@@MICROSOFTVERSION") && !strings.Contains(upper, ",") && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
+		colName := "MicrosoftVersion"
+		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
+			alias := strings.TrimSpace(trimmed[asIdx+4:])
+			if commaIdx := strings.Index(alias, ","); commaIdx != -1 {
+				alias = alias[:commaIdx]
+			}
+			alias = strings.Trim(alias, ";, []\"'\r\n\t")
+			if alias != "" {
+				colName = alias
+			}
+		}
+		cols := []ColumnInfo{
+			{Name: colName, Type: TypeIntN, Size: 4, Nullable: false},
+		}
+		vals := []any{int32(251660240)}
+		return cols, vals, true
+	}
+
 	// 3. Standalone single-expression SERVERPROPERTY(...) probe only
 	if strings.Contains(upper, "SERVERPROPERTY") && !strings.Contains(upper, ",") && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
 		colName := "property"
@@ -2907,7 +2938,15 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 		var val any = "15.0.2000.5"
 		colType := TypeNVarChar
 		colSize := 128
-		if strings.Contains(upper, "ENGINEEDITION") {
+		if strings.Contains(upper, "DATABASEENGINETYPE") {
+			val = int32(1)
+			colType = TypeIntN
+			colSize = 4
+		} else if strings.Contains(upper, "EDITIONID") {
+			val = int64(1804893836)
+			colType = TypeIntN
+			colSize = 8
+		} else if strings.Contains(upper, "ENGINEEDITION") {
 			val = int32(3)
 			colType = TypeIntN
 			colSize = 4
@@ -2926,6 +2965,101 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 	}
 
 	return nil, nil, false
+}
+
+// handleSsmsEnvironmentBatch detects and answers the multi-result-set handshake batch
+// executed by SSMS (SQL Server Management Studio 18/19/20) Object Explorer upon connection.
+// SSMS expects 3 distinct result sets in a single response stream:
+// 1. Server metadata (DatabaseEngineType, Edition, EditionID, DatabaseEngineEdition, ProductVersion, MicrosoftVersion, IsFabricServer, Collation)
+// 2. Operating system host platform (host_platform from sys.dm_os_host_info)
+// 3. Connection network protocol (ConnectionProtocol from CONNECTIONPROPERTY('net_transport'))
+func (s *Server) handleSsmsEnvironmentBatch(conn net.Conn, trimmed string, sess *ConnectionSession, extraTokens func(buf *bytes.Buffer), isRPC bool) bool {
+	upper := strings.ToUpper(trimmed)
+	if !(strings.Contains(upper, "DATABASEENGINETYPE") && (strings.Contains(upper, "SYS.DM_OS_HOST_INFO") || strings.Contains(upper, "ISFABRICSERVER") || strings.Contains(upper, "CONNECTIONPROTOCOL"))) {
+		return false
+	}
+
+	if s.DevMode() {
+		log.Printf("[DEV][TDS][Query] SSMS Environment Detection Batch")
+	}
+
+	// Result Set 1: Server and Engine Metadata
+	cols1 := []ColumnInfo{
+		{Name: "DatabaseEngineType", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "Edition", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "EditionID", Type: TypeIntN, Size: 8, Nullable: true},
+		{Name: "DatabaseEngineEdition", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "ProductVersion", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "MicrosoftVersion", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "IsFabricServer", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "Collation", Type: TypeNVarChar, Size: 128, Nullable: true},
+	}
+	vals1 := []any{
+		int32(1),                         // Standalone SQL Server (1)
+		"Developer Edition (64-bit)",     // Edition
+		int64(1804893836),                // EditionID
+		int32(3),                         // DatabaseEngineEdition (3 = Enterprise / Developer)
+		"15.0.2000.5",                    // ProductVersion (SQL Server 2019)
+		int32(251660240),                 // MicrosoftVersion (0x0F0007D0)
+		int32(0),                         // IsFabricServer
+		"SQL_Latin1_General_CP1_CI_AS",   // Collation
+	}
+
+	// Result Set 2: host_platform
+	platform := "Windows"
+	if sysruntime.GOOS == "darwin" {
+		platform = "macOS"
+	} else if sysruntime.GOOS == "linux" {
+		platform = "Linux"
+	}
+	cols2 := []ColumnInfo{
+		{Name: "host_platform", Type: TypeNVarChar, Size: 128, Nullable: true},
+	}
+	vals2 := []any{platform}
+
+	// Result Set 3: ConnectionProtocol
+	cols3 := []ColumnInfo{
+		{Name: "ConnectionProtocol", Type: TypeNVarChar, Size: 128, Nullable: true},
+	}
+	vals3 := []any{"TCP"}
+
+	var buf bytes.Buffer
+
+	// Result Set 1: Metadata + Row + Done (DoneMore)
+	buf.Write(BuildColMetaData(cols1))
+	buf.Write(sess.buildRow(cols1, vals1))
+	buf.Write(BuildDone(TokenDone, DoneMore|DoneCount, 0xC1, 1))
+
+	// Result Set 2: Metadata + Row + Done (DoneMore)
+	buf.Write(BuildColMetaData(cols2))
+	buf.Write(sess.buildRow(cols2, vals2))
+	buf.Write(BuildDone(TokenDone, DoneMore|DoneCount, 0xC1, 1))
+
+	// Result Set 3: Metadata + Row + Final Done
+	buf.Write(BuildColMetaData(cols3))
+	buf.Write(sess.buildRow(cols3, vals3))
+
+	doneStatus := DoneFinal
+	if sess.inTx {
+		doneStatus |= DoneInXact
+	}
+
+	if isRPC {
+		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
+		if extraTokens != nil {
+			extraTokens(&buf)
+		}
+		buf.Write(BuildReturnStatus(0))
+		buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
+	} else {
+		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, 1))
+	}
+
+	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+	if s.DevMode() {
+		log.Printf("[DEV][TDS][Success] query=SSMS Environment Detection Batch cols=[DatabaseEngineType,...], [host_platform], [ConnectionProtocol] rows=3 result sets duration=0µs")
+	}
+	return true
 }
 
 // tdsErrorDescriber is an interface implemented by errors providing structured TDS error information.

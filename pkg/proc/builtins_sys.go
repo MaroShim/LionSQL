@@ -128,14 +128,14 @@ func isSysBuiltin(name string) bool {
 	switch name {
 	case "ISNULL", "COALESCE", "NULLIF", "IFNULL", "NVL", "ISNUMERIC", "IIF", "CHOOSE", "GREATEST", "LEAST",
 		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID", "SETVAL", "NEXTVAL",
-		"SCOPE_IDENTITY", "SERVERPROPERTY",
+		"SCOPE_IDENTITY", "SERVERPROPERTY", "CONNECTIONPROPERTY",
 		"ERROR_NUMBER", "ERROR_MESSAGE", "ERROR_LINE", "ERROR_SEVERITY", "ERROR_STATE", "ERROR_PROCEDURE", "@@ERROR",
 		"OBJECT_ID", "OBJECT_NAME", "COL_LENGTH", "COL_NAME", "SCHEMA_NAME", "SCHEMA_ID", "DB_NAME", "DB_ID", "APP_NAME", "IDENT_CURRENT",
 		"DATABASEPROPERTYEX", "OBJECTPROPERTY", "COLUMNPROPERTY", "INDEXPROPERTY", "OBJECT_SCHEMA_NAME", "TYPE_ID", "TYPE_NAME",
 		"HOST_NAME", "HOST_ID", "CURRENT_USER", "USER_NAME", "SUSER_NAME", "SUSER_SNAME", "USER_ID", "SUSER_ID",
 		"CURRENT_SCHEMA", "CURRENT_SCHEMAS", "CURRENT_DATABASE",
 		"IS_SRVROLEMEMBER", "IS_MEMBER", "HAS_PERMS_BY_NAME", "PWDENCRYPT", "PWDCOMPARE",
-		"@@VERSION", "VERSION", "@@SERVERNAME", "@@SPID", "SPID", "@@MAX_CONNECTIONS", "@@LANGUAGE",
+		"@@VERSION", "VERSION", "@@MICROSOFTVERSION", "@@SERVERNAME", "@@SPID", "SPID", "@@MAX_CONNECTIONS", "@@LANGUAGE",
 		"@@TRANCOUNT", "TRANCOUNT", "@@LOCK_TIMEOUT", "LOCK_TIMEOUT", "@@OPTIONS", "OPTIONS", "@@NESTLEVEL", "NESTLEVEL",
 		"@@FETCH_STATUS", "FETCH_STATUS",
 		"@@CPU_BUSY", "@@IO_BUSY", "@@IDLE",
@@ -303,6 +303,10 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 			return storage.StringValue("Developer Edition (64-bit)")
 		case "ENGINEEDITION":
 			return storage.IntValue(3)
+		case "DATABASEENGINETYPE":
+			return storage.IntValue(1)
+		case "EDITIONID":
+			return storage.IntValue(1804893836)
 		case "INSTANCENAME":
 			return storage.StringValue("MSSQLSERVER")
 		case "MACHINENAME", "SERVERNAME":
@@ -314,6 +318,31 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		default:
 			return storage.StringValue("")
 		}
+
+	case "CONNECTIONPROPERTY":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		prop := strings.ToLower(strings.TrimSpace(valToString(args[0])))
+		switch prop {
+		case "net_transport":
+			return storage.StringValue("TCP")
+		case "protocol_type":
+			return storage.StringValue("TSQL")
+		case "auth_scheme":
+			return storage.StringValue("SQL")
+		case "local_net_address":
+			return storage.StringValue("127.0.0.1")
+		case "local_tcp_port":
+			return storage.IntValue(1433)
+		case "client_net_address":
+			return storage.StringValue("127.0.0.1")
+		default:
+			return storage.StringValue("")
+		}
+
+	case "@@MICROSOFTVERSION":
+		return storage.IntValue(251660240)
 
 	// ----------------------------------------------------
 	// 7. Error Handling & Execution Context (Group A)

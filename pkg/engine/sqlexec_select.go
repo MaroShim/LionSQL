@@ -426,6 +426,10 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 			return "Developer Edition (64-bit)", "edition"
 		case "ENGINEEDITION":
 			return int64(3), "engineedition"
+		case "DATABASEENGINETYPE":
+			return int64(1), "databaseenginetype"
+		case "EDITIONID":
+			return int64(1804893836), "editionid"
 		case "INSTANCENAME":
 			return "MSSQLSERVER", "instancename"
 		case "MACHINENAME", "SERVERNAME":
@@ -437,6 +441,33 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		default:
 			return "", strings.ToLower(arg)
 		}
+	}
+
+	// CONNECTIONPROPERTY('prop')
+	if strings.HasPrefix(upper, "CONNECTIONPROPERTY(") && strings.HasSuffix(upper, ")") {
+		arg := strings.TrimSpace(trimmed[len("CONNECTIONPROPERTY(") : len(trimmed)-1])
+		arg = strings.Trim(arg, "'\"")
+		switch strings.ToLower(arg) {
+		case "net_transport":
+			return "TCP", "connectionprotocol"
+		case "protocol_type":
+			return "TSQL", "protocol_type"
+		case "auth_scheme":
+			return "SQL", "auth_scheme"
+		case "local_net_address":
+			return "127.0.0.1", "local_net_address"
+		case "local_tcp_port":
+			return int64(1433), "local_tcp_port"
+		case "client_net_address":
+			return "127.0.0.1", "client_net_address"
+		default:
+			return "", strings.ToLower(arg)
+		}
+	}
+
+	// @@MICROSOFTVERSION
+	if upper == "@@MICROSOFTVERSION" {
+		return int64(251660240), "microsoftversion"
 	}
 
 	// SCHEMA_NAME(id)

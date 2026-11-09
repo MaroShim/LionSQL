@@ -256,7 +256,7 @@ func parseDataType(s string) storage.DataType {
 	switch strings.ToUpper(s) {
 	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL", "INT2", "INT4", "INT8", "SIGNED", "UNSIGNED":
 		return storage.TypeInt
-	case "VARCHAR", "TEXT", "NVARCHAR", "CHAR", "BPCHAR":
+	case "VARCHAR", "TEXT", "NVARCHAR", "CHAR", "BPCHAR", "SYSNAME":
 		return storage.TypeVarChar
 	case "FLOAT", "DOUBLE", "REAL", "FLOAT4", "FLOAT8":
 		return storage.TypeFloat
