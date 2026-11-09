@@ -86,7 +86,7 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 
 > [!TIP]
 > **애플리케이션 권장 프로토콜: PostgreSQL Wire (`:5433`)**
-> LionSQL은 두 프로토콜을 동시에 완벽 지원하지만, **T-SQL 저장 프로시저(`EXEC sp_name @p1=$1;`)를 실행하는 환경에서도 일반 애플리케이션 연결에는 PGWire(:5433) 사용을 강력히 권장합니다.** PGWire는 Microsoft TDS의 무거운 바이너리 RPC 스트림 대비 프레임 오버헤드가 극히 적고 확장 쿼리 파이프라이닝(`Bind`+`Execute`+`Sync`)을 단일 TCP 패킷으로 일괄 처리하여 실측 처리량이 더 높으며(141,000+ tpmC / 5,170+ TPS), Go (`pgx`, `lib/pq`), Node.js, Python, Java 등 전 언어 생태계에서 인증서 신뢰 이슈 없는 성숙한 드라이버를 제공합니다. TDS(:1433)는 주로 SSMS, Azure Data Studio, 레거시 .NET `SqlClient` 등 Microsoft 전용 도구 연동에 사용하는 것이 이상적입니다.
+> LionSQL은 두 프로토콜을 동시에 완벽 지원하지만, **T-SQL 저장 프로시저(`EXEC sp_name @p1=$1;`)를 실행하는 환경에서도 일반 애플리케이션 연결에는 PGWire(:5433) 사용을 강력히 권장합니다.** PGWire는 Microsoft TDS의 무거운 바이너리 RPC 스트림 대비 프레임 오버헤드가 극히 적고 확장 쿼리 파이프라이닝(`Bind`+`Execute`+`Sync`)을 단일 TCP 패킷으로 일괄 처리하여 실측 처리량이 더 높으며(376,000+ tpmC / 13,900+ TPS), Go (`pgx`, `lib/pq`), Node.js, Python, Java 등 전 언어 생태계에서 인증서 신뢰 이슈 없는 성숙한 드라이버를 제공합니다. TDS(:1433)는 주로 SSMS, Azure Data Studio, 레거시 .NET `SqlClient` 등 Microsoft 전용 도구 연동에 사용하는 것이 이상적입니다.
 
 ### 2.2. 엔터프라이즈 T-SQL 절차적 런타임
 - **저장 프로시저, 함수 및 트리거**:
@@ -111,8 +111,8 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 
 ### 2.4. 고성능 스토리지 & ACID 트랜잭션
 - **이중 스토리지 백엔드**:
-  - **In-Memory OCC 엔진**: 동시성 SkipList 인덱스와 낙관적 동시성 제어(OCC)를 기반으로 초당 186,000건 이상의 초고속 트랜잭션을 처리합니다 (TPC-C 최대 779,000+ tpmC, 3.6% 초저 Abort율).
-  - **WiredTiger MVCC 디스크 엔진**: 락프리 B+Tree 구조로 완전한 ACID 내구성을 보장하며 초당 120,000건 이상의 트랜잭션을 안정적으로 처리합니다 (TPC-C 최대 833,000+ tpmC).
+  - **In-Memory OCC 엔진**: 동시성 SkipList 인덱스와 낙관적 동시성 제어(OCC)를 기반으로 초당 218,000건 이상의 초고속 트랜잭션을 처리합니다 (스토리지 커널 TPC-C 최대 1,066,000+ tpmC, T-SQL VDBE 런타임 759,000+ tpmC, 네트워크 유선 376,000+ tpmC, 0.00%~3.4% 초저 Abort율).
+  - **WiredTiger MVCC 디스크 엔진**: 락프리 B+Tree 구조로 완전한 ACID 내구성을 보장하며 초당 141,000건 이상의 트랜잭션을 안정적으로 처리합니다 (스토리지 커널 TPC-C 최대 1,184,000+ tpmC, T-SQL VDBE 런타임 863,000+ tpmC, 네트워크 유선 352,000+ tpmC).
 - **테이블 팽창 없는 무중단 MVCC**:
   다중 버전 업데이트 체인을 메모리에서 관리하여 최신 커밋 버전만 디스크에 기록하므로, 별도의 Vacuum 프로세스나 테이블 팽창(Bloat)으로 인한 성능 저하가 발생하지 않습니다.
 - **비차단 스냅샷 격리 (Snapshot Isolation)**:

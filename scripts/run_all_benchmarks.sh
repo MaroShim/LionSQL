@@ -44,6 +44,7 @@ SKIP_BUILD=false
 CUSTOM_REPORT_FILE=""
 PG_PORT=5433
 TDS_PORT=1433
+COOLDOWN_SECS=5
 
 # Parse Command-Line Flags
 for arg in "$@"; do
@@ -56,6 +57,12 @@ for arg in "$@"; do
             ;;
         --engine=*)
             ENGINE="${arg#*=}"
+            ;;
+        --cooldown=*)
+            COOLDOWN_SECS="${arg#*=}"
+            ;;
+        --no-cooldown)
+            COOLDOWN_SECS=0
             ;;
         --save-report)
             SAVE_REPORT=true
@@ -82,6 +89,8 @@ for arg in "$@"; do
             echo ""
             echo "Options:"
             echo "  --engine=<eng>        Storage engine backend: memory (default), wiredtiger, all"
+            echo "  --cooldown=<sec>      Cooldown duration between benchmark workloads (default: 5s, 0 to disable)"
+            echo "  --no-cooldown         Disable cooldown pauses entirely"
             echo "  --save-report         Save Markdown benchmark report to notes/benchmark_runs/"
             echo "  --output=<path>       Specify custom output path for Markdown report"
             echo "  --skip-build          Skip Phase 0 compilation if binaries are already compiled"
@@ -211,6 +220,15 @@ add_phase_key() {
     ALL_PHASE_KEYS+=("$1")
 }
 
+# Cooldown and Resource Drain Helper
+cooldown_pause() {
+    local secs="${1:-$COOLDOWN_SECS}"
+    if [ "$secs" -gt 0 ]; then
+        echo -e "    ${CLR_GRAY}[Cooldown ${secs}s] Allowing socket drain, dirty page flush, and CPU thermal recovery...${CLR_RESET}"
+        sleep "$secs"
+    fi
+}
+
 # Helper to determine engines to execute
 ENGINES=()
 if [ "$ENGINE" = "all" ]; then
@@ -256,6 +274,7 @@ for eng in "${ENGINES[@]}"; do
         echo -e "    [${CLR_RED}FAIL${CLR_RESET}] Engine ${CLR_BOLD}${eng}${CLR_RESET}: Invariant failed or aborted"
     fi
     rm -rf "$bench_dir"
+    cooldown_pause
 done
 
 # ------------------------------------------------------------------------------
@@ -297,6 +316,7 @@ for eng in "${ENGINES[@]}"; do
         echo -e "    [${CLR_RED}FAIL${CLR_RESET}] Engine ${CLR_BOLD}${eng}${CLR_RESET}: Benchmark failed to record tpmC"
     fi
     rm -rf "$kernel_dir"
+    cooldown_pause
 done
 
 # ------------------------------------------------------------------------------
@@ -343,6 +363,7 @@ for eng in "${ENGINES[@]}"; do
         echo -e "    [${CLR_RED}FAIL${CLR_RESET}] Engine ${CLR_BOLD}${eng}${CLR_RESET}: Benchmark run failed"
     fi
     rm -rf "$runtime_dir"
+    cooldown_pause
 done
 
 # ------------------------------------------------------------------------------
@@ -350,6 +371,7 @@ done
 # ------------------------------------------------------------------------------
 log_header "[Phase 4/7] Client-Server Network TPC-C Benchmark (PGWire & TDS)"
 for eng in "${ENGINES[@]}"; do
+    cooldown_pause 3
     log_sub "Launching background server for engine=${eng}..."
     server_dir="${TEMP_BASE}/server_${eng}"
     mkdir -p "$server_dir"
@@ -431,6 +453,7 @@ for eng in "${ENGINES[@]}"; do
     fi
     
     # 4.2 Microsoft SQL Server TDS Protocol
+    cooldown_pause 3
     log_sub "Running client TPC-C over TDS (:1433) for engine=${eng}..."
     out_tds=$("${BIN_DIR}/tpcc-client" -protocol=tds -host=127.0.0.1 -port="$TDS_PORT" -user=sa -password=1234567890 -warehouses="$net_wh" -workers="$net_workers" -duration="$net_dur" 2>&1 | tee -a "$LOG_FILE")
     
@@ -466,11 +489,13 @@ for eng in "${ENGINES[@]}"; do
     fi
     wait "$srv_pid" 2>/dev/null || true
     rm -rf "$server_dir"
+    cooldown_pause
 done
 
 # ------------------------------------------------------------------------------
 # Phase 5: SQLLogicTest SQLite Compatibility Conformance Suite (cmd/sqllogictest)
 # ------------------------------------------------------------------------------
+cooldown_pause 3
 log_header "[Phase 5/7] SQLLogicTest Core Conformance Suite (32 Files)"
 slt_out=$("${BIN_DIR}/sqllogictest" -dir=test/slt/core -parallel=8 2>&1 | tee -a "$LOG_FILE")
 slt_passed=$(echo "$slt_out" | grep "Files:" | awk '{print $4}' | tr -d ',')
@@ -495,6 +520,7 @@ fi
 # ------------------------------------------------------------------------------
 # Phase 6: Cold Restart & Crash Durability (Abrupt SIGKILL Invariant)
 # ------------------------------------------------------------------------------
+cooldown_pause 3
 log_header "[Phase 6/7] Cold Restart & Crash Durability Verification (SIGKILL)"
 crash_dir="${TEMP_BASE}/crash_p6"
 mkdir -p "$crash_dir"

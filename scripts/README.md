@@ -101,4 +101,7 @@ LionSQL 초기 기동 후 실습용 전자상거래/ERP 예제 데이터베이�
 
 # 3. 스토리지 엔진 상호 비교 (In-Memory OCC vs WiredTiger)
 ./scripts/run_all_benchmarks.sh --engine=all
+
+# 4. 워크로드 간 쿨다운 갭 지정 (소켓 드레인 및 CPU 써멀 회복, 기본값: 5초)
+./scripts/run_all_benchmarks.sh --engine=all --cooldown=5
 ```
