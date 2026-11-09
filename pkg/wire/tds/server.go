@@ -3082,7 +3082,44 @@ func (s *Server) handleSsmsEnvironmentBatch(conn net.Conn, trimmed string, sess 
 // to construct the root server hierarchy in ObjectExplorerControl.BuildDataModel(SqlOlapConnectionInfoBase ci).
 func (s *Server) handleSsmsServerInitBatch(conn net.Conn, trimmed string, sess *ConnectionSession, extraTokens func(*bytes.Buffer), isRPC bool) bool {
 	upper := strings.ToUpper(trimmed)
-	if !strings.Contains(upper, "#SVER") || !strings.Contains(upper, "XP_MSVER") || !strings.Contains(upper, "SERVER_URN") {
+	if !strings.Contains(upper, "#SVER") || !strings.Contains(upper, "XP_MSVER") {
+		return false
+	}
+
+	if !strings.Contains(upper, "SERVER_URN") {
+		// Standalone SMO HostPlatform discovery batch (#SVer + xp_msver + select HostPlatform)
+		if strings.Contains(upper, "HOSTPLATFORM") || strings.Contains(upper, "HOST_PLATFORM") {
+			cols := []ColumnInfo{
+				{Name: "HostPlatform", Type: TypeNVarChar, Size: 128, Nullable: true},
+			}
+			vals := []any{"Windows"}
+
+			var buf bytes.Buffer
+			buf.Write(BuildColMetaData(cols))
+			buf.Write(sess.buildRow(cols, vals))
+
+			doneStatus := DoneFinal
+			if sess.inTx {
+				doneStatus |= DoneInXact
+			}
+
+			if isRPC {
+				buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
+				if extraTokens != nil {
+					extraTokens(&buf)
+				}
+				buf.Write(BuildReturnStatus(0))
+				buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
+			} else {
+				buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, 1))
+			}
+
+			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+			if s.DevMode() {
+				log.Printf("[DEV][TDS][Success] query=SSMS SMO HostPlatform Batch cols=[HostPlatform] rows=1 duration=0µs")
+			}
+			return true
+		}
 		return false
 	}
 

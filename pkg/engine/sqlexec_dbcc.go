@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"lionsql/pkg/catalog/virtual"
+	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
@@ -310,42 +311,20 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 		}
 	}
 
-	// Order by
-	if orderByClause != "" && len(filteredRows) > 0 {
-		orderItems := sqlutil.ParseOrderBy(orderByClause)
-		if len(orderItems) > 0 {
-			sort.Slice(filteredRows, func(i, j int) bool {
-				for _, item := range orderItems {
-					orderCol := cleanIdentifier(item.Column)
-					v1 := filteredRows[i][orderCol]
-					v2 := filteredRows[j][orderCol]
-					cmp := sqlutil.CompareAny(v1, v2)
-					if cmp == 0 {
-						continue
-					}
-					if item.Desc {
-						return cmp > 0
-					}
-					return cmp < 0
-				}
-				return false
-			})
-		}
-	}
-
-	// Limit
-	if limitCount >= 0 && len(filteredRows) > limitCount {
-		filteredRows = filteredRows[:limitCount]
+	type virtualProjCol struct {
+		outName string
+		rawCol  string
+		expr    proc.Expr
 	}
 
 	// Projection
 	var selectedCols []string
-	colSourceMap := make(map[string]string)
+	var projCols []virtualProjCol
 	trimmedProj := strings.TrimSpace(projStr)
 	if trimmedProj == "*" || trimmedProj == "" || strings.HasSuffix(trimmedProj, ".*") {
 		selectedCols = columns
 		for _, col := range columns {
-			colSourceMap[col] = col
+			projCols = append(projCols, virtualProjCol{outName: col, rawCol: col})
 		}
 	} else {
 		for _, c := range sqlutil.SplitTopLevel(projStr, ',') {
@@ -356,7 +335,7 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 			if cTrimmed == "*" || strings.HasSuffix(cTrimmed, ".*") {
 				for _, col := range columns {
 					selectedCols = append(selectedCols, col)
-					colSourceMap[col] = col
+					projCols = append(projCols, virtualProjCol{outName: col, rawCol: col})
 				}
 				continue
 			}
@@ -373,7 +352,7 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 				}
 			}
 			rawCol := strings.ToLower(cleanIdentifier(colExpr))
-			if strings.Contains(rawCol, ".") {
+			if strings.Contains(rawCol, ".") && !strings.Contains(rawCol, "(") {
 				rawCol = rawCol[strings.LastIndex(rawCol, ".")+1:]
 			}
 			outName := alias
@@ -381,15 +360,28 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 				outName = rawCol
 			}
 			selectedCols = append(selectedCols, outName)
-			colSourceMap[outName] = rawCol
+
+			var astExpr proc.Expr
+			if strings.ContainsAny(colExpr, "()+*/-|^") || sqlutil.HasPrefixKeyword(colExpr, "CASE") || sqlutil.HasPrefixKeyword(colExpr, "CAST") {
+				p := proc.NewParser(proc.NewLexer(colExpr))
+				if e := p.ParseExpr(); e != nil && len(p.Errors()) == 0 {
+					astExpr = e
+				}
+			}
+			projCols = append(projCols, virtualProjCol{
+				outName: outName,
+				rawCol:  rawCol,
+				expr:    astExpr,
+			})
 		}
 	}
 
 	finalRows := make([]map[string]any, 0, len(filteredRows))
-	for _, fr := range filteredRows {
-		row := make(map[string]any, len(selectedCols))
-		for _, col := range selectedCols {
-			src := colSourceMap[col]
+	for i, fr := range filteredRows {
+		row := make(map[string]any, len(projCols))
+		for _, pc := range projCols {
+			col := pc.outName
+			src := pc.rawCol
 			if src == "" {
 				src = col
 			}
@@ -397,11 +389,57 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 				row[col] = v
 			} else if v, ok := fr[strings.ToLower(col)]; ok {
 				row[col] = v
+			} else if pc.expr != nil {
+				if v, err := proc.EvalRowExpr(pc.expr, fr, nil); err == nil && v != nil {
+					row[col] = v
+				} else {
+					row[col] = nil
+				}
 			} else {
 				row[col] = nil
 			}
 		}
+		_ = i
 		finalRows = append(finalRows, row)
+	}
+
+	// Order by
+	if orderByClause != "" && len(finalRows) > 0 {
+		orderItems := sqlutil.ParseOrderBy(orderByClause)
+		if len(orderItems) > 0 {
+			sort.Slice(finalRows, func(i, j int) bool {
+				for _, item := range orderItems {
+					orderCol := cleanIdentifier(item.Column)
+					v1 := getRowValueCaseInsensitive(finalRows[i], orderCol)
+					v2 := getRowValueCaseInsensitive(finalRows[j], orderCol)
+					if v1 == nil && v2 == nil {
+						v1 = getRowValueCaseInsensitive(filteredRows[i], orderCol)
+						v2 = getRowValueCaseInsensitive(filteredRows[j], orderCol)
+					}
+					if v1 == nil && v2 == nil && (strings.ContainsAny(item.Column, "()+*/-|^") || sqlutil.HasPrefixKeyword(item.Column, "CAST") || sqlutil.HasPrefixKeyword(item.Column, "CASE")) {
+						p := proc.NewParser(proc.NewLexer(item.Column))
+						if e := p.ParseExpr(); e != nil && len(p.Errors()) == 0 {
+							v1, _ = proc.EvalRowExpr(e, filteredRows[i], nil)
+							v2, _ = proc.EvalRowExpr(e, filteredRows[j], nil)
+						}
+					}
+					cmp := sqlutil.CompareAny(v1, v2)
+					if cmp == 0 {
+						continue
+					}
+					if item.Desc {
+						return cmp > 0
+					}
+					return cmp < 0
+				}
+				return false
+			})
+		}
+	}
+
+	// Limit
+	if limitCount >= 0 && len(finalRows) > limitCount {
+		finalRows = finalRows[:limitCount]
 	}
 
 	return &QueryResult{
@@ -414,13 +452,41 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 	}, nil
 }
 
+func getRowValueCaseInsensitive(row map[string]any, key string) any {
+	if row == nil || key == "" {
+		return nil
+	}
+	if v, ok := row[key]; ok {
+		return v
+	}
+	lower := strings.ToLower(key)
+	if v, ok := row[lower]; ok {
+		return v
+	}
+	for k, v := range row {
+		if strings.EqualFold(k, key) {
+			return v
+		}
+	}
+	return nil
+}
+
 func (s *Coordinator) isVirtualCatalogTable(tableName string) bool {
 	return virtual.IsVirtualTable(tableName)
 }
 
-func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, orderByClause string, limitCount int, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, orderByClause string, limitCount int, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	norm := strings.ToLower(cleanIdentifier(tableName))
 	norm = strings.TrimPrefix(norm, "dbo.")
+
+	currDb := "master"
+	if cs != nil {
+		cs.Mu.Lock()
+		if cs.Database != "" {
+			currDb = cs.Database
+		}
+		cs.Mu.Unlock()
+	}
 
 	// Delegate pg_catalog.* and information_schema.* to the dedicated handler.
 	if virtual.IsPgCatalogTable(norm) {
@@ -522,7 +588,7 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 			"recovery_model", "recovery_model_desc", "page_verify_option",
 			"page_verify_option_desc", "is_auto_create_stats_on", "is_auto_update_stats_on",
 			"containment", "containment_desc", "is_fulltext_enabled", "is_distributor",
-			"is_cdc_enabled", "is_encrypted",
+			"is_cdc_enabled", "is_encrypted", "catalog_collation_type", "catalog_collation_type_desc",
 		}
 		dbList := []struct {
 			name string
@@ -567,8 +633,22 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 					"is_distributor":                false,
 					"is_cdc_enabled":                false,
 					"is_encrypted":                  false,
+					"catalog_collation_type":        int64(0),
+					"catalog_collation_type_desc":   "DATABASE_DEFAULT",
 				},
 			)
+		}
+
+	case "sys.resource_governor_configuration", "sysresourcegovernorconfiguration", "sys_resource_governor_configuration":
+		columns = []string{
+			"classifier_function_id", "is_enabled", "max_outstanding_io_per_volume",
+		}
+		allRows = []map[string]any{
+			{
+				"classifier_function_id":        int32(0),
+				"is_enabled":                    false,
+				"max_outstanding_io_per_volume": int32(0),
+			},
 		}
 
 	case "sys.procedures", "sysprocedures", "sys_procedures":
@@ -1113,6 +1193,15 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 
 	default:
 		return nil, fmt.Errorf("unsupported virtual system table: %s", tableName)
+	}
+
+	for _, r := range allRows {
+		if _, ok := r["db_name"]; !ok {
+			r["db_name"] = currDb
+		}
+		if _, ok := r["current_database"]; !ok {
+			r["current_database"] = currDb
+		}
 	}
 
 	return buildVirtualCatalogResult(columns, allRows, projStr, whereClause, orderByClause, limitCount, start)

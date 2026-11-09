@@ -1595,7 +1595,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 
 		// Intercept Virtual System Catalog Views (sys.* and information_schema.*)
 		if s.isVirtualCatalogTable(tableName) {
-			return s.execVirtualCatalogSelect(tableName, strings.Join(qInfo.Projections, ", "), qInfo.WhereClause, qInfo.OrderByClause, int(qInfo.LimitCount), start)
+			return s.execVirtualCatalogSelect(tableName, strings.Join(qInfo.Projections, ", "), qInfo.WhereClause, qInfo.OrderByClause, int(qInfo.LimitCount), start, cs)
 		}
 
 		// RBAC Permission Check for primary table and joined relations

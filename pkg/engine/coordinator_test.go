@@ -258,6 +258,11 @@ func TestCoordinator_InsertIntoSelect(t *testing.T) {
 		t.Fatalf("expected 2 rows in #temp_users, got %d", res.RowsAffected)
 	}
 
+	// Verify idempotent re-creation of session-scoped temp table
+	if _, err := coord.ExecuteSessionSQL(tempSess, `CREATE TABLE #temp_users (uid INT PRIMARY KEY, uname VARCHAR(50));`); err != nil {
+		t.Fatalf("Idempotent CREATE #temp_users re-creation failed: %v", err)
+	}
+
 	// 8. ON CONFLICT DO UPDATE
 	_, err = coord.ExecuteSQL(`INSERT INTO dst_active (user_id, user_name, user_score)
 		SELECT id, username, score + 10 FROM src_users WHERE active = 1
@@ -1375,14 +1380,43 @@ ORDER BY
 		t.Fatalf("expected at least 1 table row (users), got %v", resTbl)
 	}
 	foundUsers := false
+	var usersRow map[string]any
 	for _, r := range resTbl.Rows {
 		if r["Name"] == "users" {
 			foundUsers = true
+			usersRow = r
 			break
 		}
 	}
 	if !foundUsers {
 		t.Fatalf("expected 'users' table in SSMS table list, got: %v", resTbl.Rows)
+	}
+	if usersRow["Schema"] != "dbo" {
+		t.Fatalf("expected Schema='dbo', got %v", usersRow["Schema"])
+	}
+	if usersRow["Urn"] == nil || !strings.Contains(fmt.Sprintf("%v", usersRow["Urn"]), "Table[@Name='users'") {
+		t.Fatalf("expected valid Table URN, got %v", usersRow["Urn"])
+	}
+	if isOwned, ok := usersRow["IsSchemaOwned"].(bool); !ok || !isOwned {
+		t.Fatalf("expected IsSchemaOwned=true, got %v", usersRow["IsSchemaOwned"])
+	}
+
+	// 14. SSMS Resource Governor Query
+	qSSMSRG := `SELECT
+'Server[@Name=' + quotename(CAST(serverproperty(N'Servername') AS sysname),'''') + ']' + '/ResourceGovernor' AS [Urn]
+FROM
+sys.resource_governor_configuration AS c
+ORDER BY
+CAST(c.is_enabled AS bit) ASC`
+	resRG, err := coord.ExecuteSQL(qSSMSRG)
+	if err != nil {
+		t.Fatalf("SSMS resource governor query failed: %v", err)
+	}
+	if resRG == nil || len(resRG.Rows) == 0 {
+		t.Fatalf("expected 1 row for resource governor, got %v", resRG)
+	}
+	if resRG.Rows[0]["Urn"] == nil || !strings.Contains(fmt.Sprintf("%v", resRG.Rows[0]["Urn"]), "/ResourceGovernor") {
+		t.Fatalf("expected ResourceGovernor URN, got %v", resRG.Rows[0]["Urn"])
 	}
 }
 

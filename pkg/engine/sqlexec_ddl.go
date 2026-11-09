@@ -336,15 +336,23 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 	}
 
 	if err := s.engine.CreateTable(schema); err != nil {
-		if (sqlutil.ContainsKeyword(query, "IF NOT EXISTS", false) || s.TolerantDDL()) && errors.Is(err, storage.ErrTableExists) {
-			return &QueryResult{
-				Success:    true,
-				Command:    "CREATE TABLE",
-				DurationUS: time.Since(start).Microseconds(),
-				Messages:   []string{fmt.Sprintf("Table %q already exists (skipped)", tableName)},
-			}, nil
+		if strings.HasPrefix(tableName, "__temp_") && errors.Is(err, storage.ErrTableExists) {
+			_ = s.engine.DropTable(tableName)
+			if retryErr := s.engine.CreateTable(schema); retryErr == nil {
+				err = nil
+			}
 		}
-		return nil, err
+		if err != nil {
+			if (sqlutil.ContainsKeyword(query, "IF NOT EXISTS", false) || s.TolerantDDL()) && errors.Is(err, storage.ErrTableExists) {
+				return &QueryResult{
+					Success:    true,
+					Command:    "CREATE TABLE",
+					DurationUS: time.Since(start).Microseconds(),
+					Messages:   []string{fmt.Sprintf("Table %q already exists (skipped)", tableName)},
+				}, nil
+			}
+			return nil, err
+		}
 	}
 
 	if strings.HasPrefix(tableName, "##") {

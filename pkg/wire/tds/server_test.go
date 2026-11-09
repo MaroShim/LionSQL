@@ -1197,6 +1197,35 @@ ORDER BY
 	}
 }
 
+func TestTDS_SSMS_HostPlatformBatch(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	smoHostPlatformBatch := `create table #SVer(ID int,  Name  sysname, Internal_Value int, Value nvarchar(512))
+          insert #SVer exec master.dbo.xp_msver
+          insert #SVer select t.*
+          from sys.dm_os_host_info
+          CROSS APPLY (
+          VALUES
+          (1001, 'host_platform', 0, host_platform)
+          ) t(id, [name], internal_value, [value])
+
+SELECT
+( select Value from #SVer where Name =N'host_platform') AS [HostPlatform]
+
+        drop table #SVer`
+
+	payload := sendSQLBatch(t, conn, smoHostPlatformBatch)
+
+	if !bytes.Contains(payload, EncodeUTF16LE("HostPlatform")) {
+		t.Fatalf("expected 'HostPlatform' column in SMO host platform response")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("Windows")) {
+		t.Fatalf("expected 'Windows' HostPlatform value in SMO host platform response")
+	}
+}
+
 func TestTDS_SSMS_DacStoreEngineInfo(t *testing.T) {
 	srv := setupTestServer(t)
 	conn := connectClient(t, srv)

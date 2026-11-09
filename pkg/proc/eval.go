@@ -925,6 +925,16 @@ func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[str
 		return nil, nil
 	}
 
+	if (uName == "DB_NAME" || uName == "CURRENT_DATABASE") && len(args) == 0 && row != nil {
+		for _, k := range []string{"db_name", "current_database", "database_name", "database"} {
+			if v, ok := row[k]; ok && v != nil {
+				if s, ok := v.(string); ok && s != "" {
+					return s, nil
+				}
+			}
+		}
+	}
+
 	stArgs := make([]storage.Value, len(args))
 	for i, a := range args {
 		v, err := EvalRowExpr(a, row, execSubquery)
