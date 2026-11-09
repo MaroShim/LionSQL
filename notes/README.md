@@ -118,5 +118,8 @@ Hard-learned operational lessons, test blind-spot analyses, and explicit evaluat
   * Offline documentation bundling and embedded web viewer design (`PKG-OFFLINE-DOCS-1`).
 * **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](plans/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)** (Korean)
   * Babelfish T-SQL Stored Procedure dedicated SLT test suite creation plan.
+* **Official Release Notes Archive (`notes/release_notes/`)**:
+  * **[`RELEASE_NOTES_v0.92.0.md`](release_notes/RELEASE_NOTES_v0.92.0.md)** ([Korean](release_notes/RELEASE_NOTES_v0.92.0.ko.md)): LionSQL v0.92.0 official release notes (37 P0 defect remediations, WiredTiger lock removal, all-time high TPC-C throughput).
+  * **[`RELEASE_NOTES_v0.91.0.md`](release_notes/RELEASE_NOTES_v0.91.0.md)** ([Korean](release_notes/RELEASE_NOTES_v0.91.0.ko.md)): LionSQL v0.91.0 official release notes (embedded SPA web server, total regex elimination).
 * **Historical Archive (`notes/archive/`)**:
   * 13 historical execution plans (Windows daemon decoupling, forward-only cursors, unified CLI, etc.) permanently archived upon 100% completion are indexed in **[`notes/archive/README.md`](archive/README.md)**.

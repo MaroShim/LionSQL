@@ -151,5 +151,8 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
   * 배포 패키지 오프라인 문서 번들링 및 내장 뷰어 설계 계획서 (`PKG-OFFLINE-DOCS-1`).
 * **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](plans/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)**
   * AWS Babelfish T-SQL Stored Procedure 전용 SLT 테스트 스위트 구축 계획서.
+* **공식 릴리즈 노트 아카이브 (`notes/release_notes/`)**:
+  * **[`RELEASE_NOTES_v0.92.0.ko.md`](release_notes/RELEASE_NOTES_v0.92.0.ko.md)** ([English](release_notes/RELEASE_NOTES_v0.92.0.md)): LionSQL v0.92.0 공식 릴리즈 노트 (37선 P0 전수 결함 완치, WiredTiger 고동시성 락 해제, TPC-C 역대 최고 성능).
+  * **[`RELEASE_NOTES_v0.91.0.ko.md`](release_notes/RELEASE_NOTES_v0.91.0.ko.md)** ([English](release_notes/RELEASE_NOTES_v0.91.0.md)): LionSQL v0.91.0 공식 릴리즈 노트 (단일 바이너리 내장 SPA 웹 서버, 전역 정규식 박멸).
 * **역사적 아카이브 디렉토리 (`notes/archive/`)**:
   * 100% 구현 완료되어 설계 의도 및 검증 이력을 보존하기 위해 보관된 과거 13개 계획서(Windows 데몬 분리, Forward-only 커서, 단일 CLI 통합 등) 및 원본 백로그는 **[`notes/archive/README.md`](archive/README.md)**를 참조하십시오.
