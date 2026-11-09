@@ -951,7 +951,7 @@ func renderStartupBanner(cfg *config.Config, ctx bannerContext) string {
 		b.WriteString(fmt.Sprintf(" [Session Pooler] Max Workers: %d, Max Idle Sessions: %d (No PgBouncer required)\n", ctx.StatsWorkers, ctx.StatsIdle))
 	}
 	if ctx.WorkMem != "" {
-		b.WriteString(fmt.Sprintf(" [Memory Governor] max_memory: %s (Go runtime GC soft limit), work_mem: %s (External Merge Sort & HashJoin guard)\n", execution.FormatMemMB(ctx.GlobalMemLimit), ctx.WorkMem))
+		b.WriteString(fmt.Sprintf(" [Memory Governor] max_memory: %s (Go runtime GC soft limit)\n                   work_mem:   %s (External Merge Sort & HashJoin guard)\n", execution.FormatMemMB(ctx.GlobalMemLimit), ctx.WorkMem))
 	}
 	if ctx.SlowLogPath != "" {
 		b.WriteString(fmt.Sprintf(" [Slow Query Log] %s (Threshold: %v)\n", ctx.SlowLogPath, ctx.SlowThreshold))

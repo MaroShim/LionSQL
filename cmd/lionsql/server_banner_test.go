@@ -97,3 +97,23 @@ func TestDaemonStartupOutput_CustomPassword_NoWarning(t *testing.T) {
 		t.Fatalf("daemon output must NOT contain warning when custom password is set")
 	}
 }
+
+func TestStartupBanner_MemoryGovernorAlignment(t *testing.T) {
+	cfg := config.DefaultConfig()
+	ctx := bannerContext{
+		HasHTTP:        true,
+		WorkMem:        "64MB",
+		GlobalMemLimit: 4096 * 1024 * 1024,
+	}
+
+	banner := renderStartupBanner(cfg, ctx)
+	expectedMaxMem := " [Memory Governor] max_memory: 4096MB (Go runtime GC soft limit)"
+	expectedWorkMem := "                   work_mem:   64MB (External Merge Sort & HashJoin guard)"
+
+	if !strings.Contains(banner, expectedMaxMem) {
+		t.Fatalf("expected banner to contain %q, but got:\n%s", expectedMaxMem, banner)
+	}
+	if !strings.Contains(banner, expectedWorkMem) {
+		t.Fatalf("expected banner to contain %q, but got:\n%s", expectedWorkMem, banner)
+	}
+}
