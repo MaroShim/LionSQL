@@ -393,10 +393,17 @@ func (h *HashJoinIterator) Close() error {
 	h.inIdx = 0
 	h.outChunk.Reset()
 	h.outIdx = 0
+	var errLeft, errRight error
 	if h.left != nil {
-		return h.left.Close()
+		errLeft = h.left.Close()
 	}
-	return nil
+	if h.right != nil {
+		errRight = h.right.Close()
+	}
+	if errLeft != nil {
+		return errLeft
+	}
+	return errRight
 }
 
 func (h *HashJoinIterator) Schema() []string {

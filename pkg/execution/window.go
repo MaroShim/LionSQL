@@ -442,13 +442,19 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 	for i := 0; i < total; i++ {
 		rowIdx := indices[i]
 		startK, endK := getFrameBounds(frame, i, total, w.rows, indices, winDef.OrderByKeys)
-		if endK < startK {
+		if startK >= total || endK < 0 || endK < startK {
 			if fn == "COUNT" {
 				winValues[rowIdx] = int64(0)
 			} else {
 				winValues[rowIdx] = nil
 			}
 			continue
+		}
+		if startK < 0 {
+			startK = 0
+		}
+		if endK >= total {
+			endK = total - 1
 		}
 
 		switch fn {
@@ -528,6 +534,9 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 }
 
 func getFrameBounds(frame *planner.WindowFrame, i, total int, rows []Tuple, indices []int, orderKeys []planner.SortKeyDef) (int, int) {
+	if total <= 0 {
+		return 0, -1
+	}
 	if frame == nil {
 		return 0, total - 1
 	}
@@ -538,18 +547,18 @@ func getFrameBounds(frame *planner.WindowFrame, i, total int, rows []Tuple, indi
 		startIdx = 0
 	case planner.FramePreceding:
 		startIdx = i - frame.Start.Offset
-		if startIdx < 0 {
-			startIdx = 0
-		}
 	case planner.FrameCurrentRow:
 		startIdx = i
 	case planner.FrameFollowing:
 		startIdx = i + frame.Start.Offset
-		if startIdx >= total {
-			startIdx = total
-		}
 	case planner.FrameUnboundedFollowing:
 		startIdx = total - 1
+	}
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	if startIdx >= total {
+		startIdx = total
 	}
 
 	endIdx := total - 1
@@ -560,26 +569,26 @@ func getFrameBounds(frame *planner.WindowFrame, i, total int, rows []Tuple, indi
 		endIdx = total - 1
 	case planner.FrameFollowing:
 		endIdx = i + frame.End.Offset
-		if endIdx >= total {
-			endIdx = total - 1
-		}
 	case planner.FramePreceding:
 		endIdx = i - frame.End.Offset
-		if endIdx < 0 {
-			endIdx = -1
-		}
 	case planner.FrameUnboundedPreceding:
 		endIdx = 0
+	}
+	if endIdx < 0 {
+		endIdx = -1
+	}
+	if endIdx >= total {
+		endIdx = total - 1
 	}
 
 	// SQL standard RANGE mode: expand peer rows having identical ORDER BY values
 	if frame.Unit == planner.FrameRange && len(orderKeys) > 0 && len(rows) > 0 && len(indices) == total && i >= 0 && i < total {
-		if frame.Start.Type == planner.FrameCurrentRow {
+		if frame.Start.Type == planner.FrameCurrentRow && startIdx >= 0 && startIdx <= total {
 			for startIdx > 0 && sameSortKeys(rows[indices[startIdx-1]], rows[indices[i]], orderKeys) {
 				startIdx--
 			}
 		}
-		if frame.End.Type == planner.FrameCurrentRow {
+		if frame.End.Type == planner.FrameCurrentRow && endIdx >= -1 && endIdx < total {
 			for endIdx+1 < total && sameSortKeys(rows[indices[endIdx+1]], rows[indices[i]], orderKeys) {
 				endIdx++
 			}

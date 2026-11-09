@@ -42,7 +42,7 @@
 3. **`Scope-003`** (`pkg/storage/memengine/table_data.go:149, 180`): Flat 모드 버퍼 인코딩/디코딩 실패 시 무음 무시 대신 명시적 폴백/진단 보장.
 - **검증 테스트**: `TestP1_Batch3_ReopenNoGoroutineLeakAndCorruptMaterialize` (`pkg/storage/memengine/flat_record_test.go`), `TestP1_Batch3_SessionResetAfterCommitConflict` (`pkg/storage/wiredtiger/wt_engine_test.go`) — PASS.
 
-### Mini-Batch 4: `pkg/execution` & `pkg/planner` — 실행 이터레이터 정리 및 플래너 경계 방어 (4건) [대기]
+### Mini-Batch 4: `pkg/execution` & `pkg/planner` — 실행 이터레이터 정리 및 플래너 경계 방어 (4건) [완료]
 1. **`결함 4-3`** (`pkg/execution/join.go`): `HashJoinIterator.Close()`에서 `h.left.Close()` 외에 누락된 `h.right.Close()` 호출을 추가하여 빌드 측 커서/리소스 누수 차단.
 2. **`결함 4-4`** (`pkg/execution/sort.go`): `SortIterator.NextChunk`의 Min-Heap 디코딩 중 `io.EOF`가 아닌 디스크 I/O 에러 발생 시 무음 종료 대신 즉시 에러 반환.
 3. **`결함 10-5`** (`pkg/execution/window.go:525-528`): 윈도우 프레임 `FrameFollowing` 오프셋 계산 시 `startIdx > total` 슬라이스 상한 클램핑 방어.

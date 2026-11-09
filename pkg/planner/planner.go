@@ -2903,11 +2903,14 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		innerIndex = nil
 	} else if joinForceIndex != "" && rSchema != nil {
 		for i := range rSchema.Indexes {
-			if strings.EqualFold(rSchema.Indexes[i].Name, joinForceIndex) {
+			if strings.EqualFold(rSchema.Indexes[i].Name, joinForceIndex) && len(rSchema.Indexes[i].Columns) > 0 {
 				innerIndex = &rSchema.Indexes[i]
 				break
 			}
 		}
+	}
+	if innerIndex != nil && len(innerIndex.Columns) == 0 {
+		innerIndex = nil
 	}
 
 	// Sort-Merge Join Cost Lazy Evaluation (PLANNER-SLIM-1):

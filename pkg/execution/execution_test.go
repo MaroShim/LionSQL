@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"lionsql/pkg/execution"
@@ -968,6 +971,137 @@ func TestVectorizedChunk_Pool(t *testing.T) {
 	execution.PutChunk(nil)
 	execution.ReleaseChunk(nil)
 }
+
+type closeTrackingIterator struct {
+	*mockIterator
+	closed int
+}
+
+func (c *closeTrackingIterator) Close() error {
+	c.closed++
+	return c.mockIterator.Close()
+}
+
+func TestP1_Batch4_JoinCloseSortErrAndWindowBounds(t *testing.T) {
+	ctx := context.Background()
+
+	// 1. Defect 4-3: HashJoinIterator.Close() must close BOTH left and right children.
+	t.Run("Defect_4_3_HashJoinClosesBothChildren", func(t *testing.T) {
+		left := &closeTrackingIterator{
+			mockIterator: newMockIterator([]string{"id"}, map[string]any{"id": int64(1)}),
+		}
+		right := &closeTrackingIterator{
+			mockIterator: newMockIterator([]string{"id"}, map[string]any{"id": int64(1)}),
+		}
+		hj := execution.NewHashJoinIterator(left, right, "INNER", "id", "id")
+		if err := hj.Close(); err != nil {
+			t.Fatalf("unexpected error on Close: %v", err)
+		}
+		if left.closed == 0 || right.closed == 0 {
+			t.Fatalf("expected both left and right iterators to be closed on HashJoinIterator.Close(), got left.closed=%d right.closed=%d", left.closed, right.closed)
+		}
+	})
+
+	// 2. Defect 4-4: SortIterator external merge must propagate non-EOF decode errors instead of silently truncating.
+	t.Run("Defect_4_4_SortExternalMergePropagatesCorruptRunError", func(t *testing.T) {
+		tempDir := t.TempDir()
+		var rows []map[string]any
+		for i := 0; i < 60; i++ {
+			rows = append(rows, map[string]any{
+				"id":      int64(100 - i),
+				"payload": strings.Repeat("x", 1024),
+			})
+		}
+		mock := newMockIterator([]string{"id", "payload"}, rows...)
+		sorter := execution.NewSortIterator(mock, "id ASC")
+		sorter.SetWorkMem(8192) // each run holds ~8 rows (> 8KB so it exceeds the 4KB bufio.Reader buffer)
+		sorter.SetTempDir(tempDir)
+
+		if err := sorter.Open(ctx); err != nil {
+			t.Fatalf("SortIterator.Open failed: %v", err)
+		}
+		defer sorter.Close()
+
+		if sorter.SpillCount() == 0 {
+			t.Fatalf("expected external spill runs to be created")
+		}
+
+		// Corrupt the spilled run files beyond the initial 4KB bufio.Reader buffer so mid-merge Decode() fails
+		entries, err := os.ReadDir(tempDir)
+		if err != nil || len(entries) == 0 {
+			t.Fatalf("expected run files in tempDir: %v", err)
+		}
+		for _, entry := range entries {
+			p := filepath.Join(tempDir, entry.Name())
+			f, err := os.OpenFile(p, os.O_WRONLY, 0644)
+			if err == nil {
+				_, _ = f.WriteAt([]byte("{{{CORRUPT_JSON_STREAM}}}\n"), 5000)
+				_ = f.Close()
+			}
+		}
+
+		var gotErr error
+		for {
+			_, err := sorter.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				gotErr = err
+				break
+			}
+		}
+		if gotErr == nil {
+			t.Fatalf("expected non-EOF corruption error from SortIterator.Next(), but error was silently swallowed")
+		}
+	})
+
+	// 3. Defect 10-5: Window frame with out-of-range or negative offsets must clamp safely without panicking.
+	t.Run("Defect_10_5_WindowFrameOutOfBoundsSafe", func(t *testing.T) {
+		mock := newMockIterator([]string{"id", "val"},
+			map[string]any{"id": int64(1), "val": int64(10)},
+			map[string]any{"id": int64(2), "val": int64(10)},
+		)
+		winDefs := []planner.WindowDef{
+			{
+				Function:    "SUM",
+				Args:        []string{"val"},
+				Alias:       "sum_following",
+				OrderByKeys: []planner.SortKeyDef{{Column: "id", Direction: "ASC"}},
+				Frame: &planner.WindowFrame{
+					Unit:  planner.FrameRange,
+					Start: planner.FrameBound{Type: planner.FrameFollowing, Offset: 10},
+					End:   planner.FrameBound{Type: planner.FrameCurrentRow},
+				},
+			},
+			{
+				Function:    "SUM",
+				Args:        []string{"val"},
+				Alias:       "sum_negative_offset",
+				OrderByKeys: []planner.SortKeyDef{{Column: "id", Direction: "ASC"}},
+				Frame: &planner.WindowFrame{
+					Unit:  planner.FrameRows,
+					Start: planner.FrameBound{Type: planner.FramePreceding, Offset: -10},
+					End:   planner.FrameBound{Type: planner.FramePreceding, Offset: -10},
+				},
+			},
+		}
+		winIter := execution.NewWindowIterator(mock, winDefs)
+		if err := winIter.Open(ctx); err != nil {
+			t.Fatalf("WindowIterator.Open failed: %v", err)
+		}
+		defer winIter.Close()
+
+		row, err := winIter.Next(ctx)
+		if err != nil {
+			t.Fatalf("WindowIterator.Next failed: %v", err)
+		}
+		if row.Get("sum_following") != nil || row.Get("sum_negative_offset") != nil {
+			t.Fatalf("unexpected window frame results: sum_following=%v (want nil), sum_negative_offset=%v (want nil)", row.Get("sum_following"), row.Get("sum_negative_offset"))
+		}
+	})
+}
+
 
 
 

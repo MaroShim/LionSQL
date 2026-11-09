@@ -311,7 +311,11 @@ func (s *SortIterator) Open(ctx context.Context) error {
 		s.decoders = append(s.decoders, dec)
 
 		var firstTuple Tuple
-		if err := dec.Decode(&firstTuple); err == nil {
+		if err := dec.Decode(&firstTuple); err != nil {
+			if err != io.EOF {
+				return fmt.Errorf("sort merge decode run file %q failed: %w", runPath, err)
+			}
+		} else {
 			heap.Push(s.mHeap, heapItem{tuple: firstTuple, runIdx: i})
 		}
 	}
@@ -350,7 +354,11 @@ func (s *SortIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 
 		// Advance reader of the stream that just emitted top
 		var nextTuple Tuple
-		if err := s.decoders[top.runIdx].Decode(&nextTuple); err == nil {
+		if err := s.decoders[top.runIdx].Decode(&nextTuple); err != nil {
+			if err != io.EOF {
+				return fmt.Errorf("sort merge decode run file failed: %w", err)
+			}
+		} else {
 			heap.Push(s.mHeap, heapItem{tuple: nextTuple, runIdx: top.runIdx})
 		}
 	}

@@ -665,4 +665,45 @@ func TestPlanner_Regression_P0_28_EmptyTableZeroDivisionAndLeftJoinPreservation(
 	}
 }
 
+func TestP1_Batch4_PlannerExprIndexLoopJoinNoPanic(t *testing.T) {
+	p := planner.NewPlanner()
+
+	leftSchema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+
+	// Expression index where Columns slice is empty and Expressions is populated
+	rightSchema := &storage.TableSchema{
+		Name: "profiles",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "user_id", Type: storage.TypeInt},
+			{Name: "bio", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{
+				Name:       "idx_expr_bio",
+				Columns:    nil,
+				Expression: "LOWER(bio)",
+			},
+		},
+	}
+
+	q, err := p.ParseSelect("SELECT u.id, p.bio FROM users u INNER LOOP JOIN profiles p WITH (INDEX(idx_expr_bio)) ON u.id = p.user_id")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+
+	// Must not panic when building join plan with expression index on inner relation
+	plan := p.BuildJoinPlan(q, leftSchema, 10, rightSchema, 1000)
+	if plan == nil {
+		t.Fatal("expected non-nil join plan")
+	}
+}
+
+
 
