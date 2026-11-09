@@ -33,11 +33,13 @@ func TestIsSafeFlatAsset(t *testing.T) {
 		{"/dashboard/analytics", true},
 		{"/users/123", true},
 
-		// Rejected: Subdirectory traversal for asset files
-		{"/sub/app.js", false},
-		{"sub/app.js", false},
-		{"/a/b/c.png", false},
-		{"assets\\style.css", false},
+		// Allowed: Subdirectory asset files (e.g. Vite/Webpack /assets/*, /static/*)
+		{"/sub/app.js", true},
+		{"sub/app.js", true},
+		{"/a/b/c.png", true},
+		{"assets\\style.css", true},
+
+		// Rejected: Directory traversal
 		{"../secret.txt", false},
 		{"/../secret.txt", false},
 		{"..\\secret.txt", false},

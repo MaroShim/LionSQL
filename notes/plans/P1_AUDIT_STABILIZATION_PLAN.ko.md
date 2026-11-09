@@ -30,7 +30,7 @@
 | **2단계 (중)** | **Mini-Batch M1** | `pkg/catalog` & `pkg/engine` (카탈로그 영속화/DDL) | 5건 | **[x] 완료** | `TestP1_BatchM1_CleanCatalogIdentCompoundBrackets`, `TestP1_BatchM1_AlterViewFKAndPgAttribute` |
 | **2단계 (중)** | **Mini-Batch M2** | `pkg/engine` & `pkg/execution` (실행 가드레일/정리) | 3건 | **[x] 완료** | `TestP1_BatchM2_ApplyRowLimit`, `TestP1_BatchM2_SortOpenErrorRemovesSpillFiles`, `TestP1_BatchM2_DerivedTableErrorCleansTempTables` |
 | **2단계 (중)** | **Mini-Batch M3** | `pkg/engine` & `pkg/proc` (트랜잭션/커서/파서 위임) | 3건 | **[x] 완료** | `TestP1_BatchM3_JoinWithCTEAndSelectInto`, `TestP1_BatchM3_CursorLifecycleAndBeginEnd` |
-| **2단계 (중)** | **Mini-Batch M4** | `pkg/api`, `pkg/replication`, `pkg/wire` (와이어/SPA) | 4건 | **[ ] 대기** | 도메인 C-1: `13-4`, `5-3`, `5-4` & `Scope-097`, `Scope-100/101/104` |
+| **2단계 (중)** | **Mini-Batch M4** | `pkg/api`, `pkg/replication`, `pkg/wire` (와이어/SPA) | 4건 | **[x] 완료** | `TestP1_BatchM4_SPAAssetsSubfolders`, `TestP1_BatchM4_ReplicaWALApplyErrorPropagation`, `TestP1_BatchM4_WirePortalLimit` |
 | **2단계 (중)** | **Mini-Batch M5** | `pkg/api`, `cmd/lionsql`, `cmd/soaktest` (웹훅/데몬) | 3건 | **[ ] 대기** | 도메인 C-2: `Scope-127`, `Scope-129`, `Scope-130` & `135` |
 | **3단계 (상)** | **High- Complexity** | `pkg/storage`, `pkg/backup`, `pkg/migrate` | 8건 | **[ ] 대기** | 심층 동시성/역연산 설계 후 선별 적용 또는 v1.1.0 이관 심사 |
 
@@ -104,12 +104,12 @@
 3. **`결함 6-4` & `6-5` Native 파서 `SELECT ... INTO` 및 `JOIN (WITH ...)` 서브쿼리 위임** (`pkg/proc/parser_dml.go`, `ast.go`): Native Pratt 파서에서 `SELECT ... INTO <target_table>` 테이블 생성 및 `JOIN (WITH cte AS ...)` 파생 서브쿼리 지원.
 - **검증 완료**: `TestP1_BatchM3_JoinWithCTEAndSelectInto` 및 `TestP1_BatchM3_CursorLifecycleAndBeginEnd` PASS (-race 100% 통과).
 
-### Mini-Batch M4 (`pkg/api`, `pkg/replication`, `pkg/wire`): 와이어 타임아웃/상한, SPA 에셋 및 복제 에러 전파 (4건) [대기]
-1. **`결함 13-4` 내장 SPA 웹 서버(`/assets/*.js`) 서브폴더 정적 에셋 허용** (`pkg/api/spa.go:35-37`): Path Traversal(`..`) 및 숨김 파일(`/.`)은 엄격히 차단하되, Vite/React/Vue 빌드 결과물의 표준 하위 정적 에셋 경로(`/assets/*`, `/static/*` 등) 서빙 지원.
+### Mini-Batch M4 (`pkg/api`, `pkg/replication`, `pkg/wire`): 와이어 타임아웃/상한, SPA 에셋 및 복제 에러 전파 (4건) [x] 완료
+1. **`결함 13-4` 내장 SPA 웹 서버(`/assets/*.js`) 서브폴더 정적 에셋 허용** (`pkg/api/spa.go`): Path Traversal(`..`) 및 숨김 파일(`/.`)은 엄격히 차단하되, Vite/React/Vue 빌드 결과물의 표준 하위 정적 에셋 경로(`/assets/*`, `/static/*` 등) 안전 서빙 지원.
 2. **`결함 5-3` 레플리카 WAL 적용 실패 에러 무음 삼킴 제거** (`pkg/replication/client.go`): 레플리카에서 Primary WAL 레코드 리플레이 실패 시 무음 무시하고 LSN을 전진시키지 않도록 명시적 에러 반환 및 재동기화 유도 (`[RULE:ExplicitError]`).
-3. **`결함 5-4` & `Scope-097` PGWire SSL 경로 `CancelRequest` 정상 호출 및 장기 연결 Portal 상한 가드** (`pkg/wire/server.go`): TLS 핸드셰이크 전/후 `CancelRequest` 패킷이 `CancelSessionQuery`를 정상 호출하도록 연결하고, 단일 세션 내 미해제 Portal 누적 상한(예: 1,024개) 가드 적용 (`[RULE:BoundedBuffers]`).
-4. **`Scope-100` / `101` / `104` PGWire & TDS 핸드셰이크 `SetReadDeadline` 부여** (`pkg/wire/tls.go`, `pkg/wire/tds/server.go`, `pkg/wire/tds/tls.go`): 초기 스타트업/프리로그인/TLS 협상 패킷 읽기 시 유한 `ReadDeadline`(예: 10~30초)을 설정하여 Slowloris 연결 고갈 방어.
-- **검증 계획**: `pkg/api`, `pkg/replication`, `pkg/wire`에 Red 테스트 선작성 후 Green 전환 및 `-race` 검증.
+3. **`결함 5-4` & `Scope-097` PGWire SSL 경로 `CancelRequest` 정상 호출 및 장기 연결 Portal 상한 가드** (`pkg/wire/server.go`): TLS 핸드셰이크 전/후 `CancelRequest` 중복 로직 통합(`handleCancelRequest`) 및 단일 세션 내 미해제 Portal 누적 상한(`MaxSessionPortals = 1024`) 가드 적용 (`[RULE:BoundedBuffers]`).
+4. **`Scope-100` / `101` / `104` PGWire & TDS 핸드셰이크 `SetReadDeadline` 부여** (`pkg/wire/server.go`, `pkg/wire/tds/server.go`): 초기 스타트업/프리로그인/TLS 협상 패킷 읽기 시 유한 `ReadDeadline`(`HandshakeTimeout = 15s`)을 설정하고 로그인 완료 시 리셋하여 Slowloris 연결 고갈 방어.
+- **검증 완료**: `pkg/api`, `pkg/replication`, `pkg/wire` 3개 패키지 단위 Red ➔ Green 전환 및 `-race` 검증 100% PASS.
 
 ### Mini-Batch M5 (`pkg/api/webhook.go`, `cmd/lionsql`, `cmd/soaktest`): 웹훅 중단, 서버 종료 WAL Sync, 데몬/하네스 정리 (3건) [대기]
 1. **`Scope-127` 웹훅 재시도 컨텍스트 즉시 중단** (`pkg/api/webhook.go`): 웹훅 전송 실패 후 백오프 대기 중 서버 종료(`ctx.Done()`) 시 `time.Sleep` 대신 `select`로 즉시 탈출 (`[RULE:CooperativeAbort]`).

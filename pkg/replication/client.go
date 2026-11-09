@@ -60,6 +60,13 @@ func (c *ReplicationClient) SetOnTermReceived(fn func(term int64)) {
 	c.onTermReceived = fn
 }
 
+// SetHTTPClient sets a custom HTTP client (useful for hermetic tests with mock transports).
+func (c *ReplicationClient) SetHTTPClient(client *http.Client) {
+	if client != nil {
+		c.httpClient = client
+	}
+}
+
 // LastLSN returns the latest LSN applied by this client.
 func (c *ReplicationClient) LastLSN() int64 {
 	return c.lastLSN.Load()
@@ -200,7 +207,7 @@ func (c *ReplicationClient) streamOnce(ctx context.Context) error {
 
 		// Apply WAL record to local engine
 		if err := backup.ApplyWALRecordToEngine(c.eng, rec); err != nil {
-			// Fail-safe log or error
+			return fmt.Errorf("failed to apply WAL record (LSN=%d): %w", rec.LSN, err)
 		}
 
 		if rec.LSN > c.lastLSN.Load() {

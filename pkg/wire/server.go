@@ -366,6 +366,12 @@ type Portal struct {
 // DefaultMaxPreparedPerSession is the maximum number of prepared statements retained per connection session.
 const DefaultMaxPreparedPerSession = 256
 
+// MaxSessionPortals is the maximum number of active portals allowed per connection session ([RULE:BoundedBuffers]).
+const MaxSessionPortals = 1024
+
+// HandshakeTimeout defines the maximum duration allowed for client handshake & authentication before aborting Slowloris connections.
+const HandshakeTimeout = 15 * time.Second
+
 type pgPreparedEntry struct {
 	name string
 	stmt *PreparedStatement
@@ -501,8 +507,32 @@ func getParamNames(pIdx int) (string, string, string) {
 	return fmt.Sprintf("p%d", pIdx), fmt.Sprintf("@p%d", pIdx), fmt.Sprintf("$%d", pIdx)
 }
 
+func (s *Server) handleCancelRequest(conn net.Conn) {
+	cancelBuf := make([]byte, 8)
+	if _, err := io.ReadFull(conn, cancelBuf); err != nil {
+		return
+	}
+	targetPID := binary.BigEndian.Uint32(cancelBuf[:4])
+	targetKey := binary.BigEndian.Uint32(cancelBuf[4:8])
+
+	s.mu.Lock()
+	active, exists := s.activeConns[targetPID]
+	var targetSessID string
+	if exists && active.secretKey == targetKey {
+		targetSessID = active.sessID
+	}
+	s.mu.Unlock()
+
+	if targetSessID != "" {
+		s.coordinator.CancelSessionQuery(targetSessID)
+	}
+}
+
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
+
+	// Scope-100: Set finite read deadline on initial handshake to prevent Slowloris connection exhaustion
+	_ = conn.SetReadDeadline(time.Now().Add(HandshakeTimeout))
 
 	connID := atomic.AddUint64(&s.connCounter, 1)
 	sessID := fmt.Sprintf("pg-%d", connID)
@@ -516,25 +546,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	code := binary.BigEndian.Uint32(buf[4:8])
 	if code == 80877102 {
-		// CancelRequest (length=16, code=80877102, PID=4B, SecretKey=4B)
-		cancelBuf := make([]byte, 8)
-		if _, err := io.ReadFull(conn, cancelBuf); err != nil {
-			return
-		}
-		targetPID := binary.BigEndian.Uint32(cancelBuf[:4])
-		targetKey := binary.BigEndian.Uint32(cancelBuf[4:8])
-
-		s.mu.Lock()
-		active, exists := s.activeConns[targetPID]
-		var targetSessID string
-		if exists && active.secretKey == targetKey {
-			targetSessID = active.sessID
-		}
-		s.mu.Unlock()
-
-		if targetSessID != "" {
-			s.coordinator.CancelSessionQuery(targetSessID)
-		}
+		s.handleCancelRequest(conn)
 		return
 	}
 
@@ -577,24 +589,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 		code = binary.BigEndian.Uint32(buf[4:8])
 		if code == 80877102 {
-			cancelBuf := make([]byte, 8)
-			if _, err := io.ReadFull(conn, cancelBuf); err != nil {
-				return
-			}
-			targetPID := binary.BigEndian.Uint32(cancelBuf[:4])
-			targetKey := binary.BigEndian.Uint32(cancelBuf[4:8])
-
-			s.mu.Lock()
-			active, exists := s.activeConns[targetPID]
-			var targetSessID string
-			if exists && active.secretKey == targetKey {
-				targetSessID = active.sessID
-			}
-			s.mu.Unlock()
-
-			if targetSessID != "" {
-				s.coordinator.CancelSessionQuery(targetSessID)
-			}
+			s.handleCancelRequest(conn)
 			return
 		}
 	} else {
@@ -707,6 +702,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 	if err := WriteReadyForQuery(conn); err != nil {
 		return
 	}
+
+	// Handshake and authentication complete: reset read deadline for interactive session
+	_ = conn.SetReadDeadline(time.Time{})
 
 	statements := NewPreparedStatementCache(s.getMaxPreparedPerSession())
 	portals := make(map[string]*Portal)
@@ -1011,6 +1009,14 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements *PreparedS
 			for i := 0; i < int(numResultFormats); i++ {
 				_ = binary.Read(r, binary.BigEndian, &resultFormats[i])
 			}
+		}
+	}
+
+	// Scope-097: Guard against unbounded portal accumulation ([RULE:BoundedBuffers])
+	if len(portals) >= MaxSessionPortals {
+		if _, exists := portals[portalName]; !exists {
+			_ = WriteErrorWithCode(conn, fmt.Sprintf("portal limit exceeded: maximum %d active portals allowed per session", MaxSessionPortals), "54000")
+			return
 		}
 	}
 

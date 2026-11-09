@@ -558,8 +558,14 @@ func (sess *ConnectionSession) writePacket(w io.Writer, pType byte, payload []by
 	return WritePacketWithSize(w, pType, sess.SPID, payload, pktSize)
 }
 
+// HandshakeTimeout defines the maximum duration allowed for TDS prelogin/login before aborting.
+const HandshakeTimeout = 15 * time.Second
+
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
+
+	// Scope-101/104: Handshake read deadline to prevent Slowloris connection starvation
+	_ = conn.SetReadDeadline(time.Now().Add(HandshakeTimeout))
 
 	s.mu.Lock()
 	tlsCfg := s.tlsConfig
@@ -672,6 +678,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		case PacketLogin7:
 			s.handleLogin7(conn, p, sess)
+			// Reset read deadline after successful login for normal interactive session
+			_ = conn.SetReadDeadline(time.Time{})
 
 		case PacketSQLBatch:
 			pendingPkt = s.runQueryWithAttention(conn, p, sess, packetChan, errChan, func(ctx context.Context) {

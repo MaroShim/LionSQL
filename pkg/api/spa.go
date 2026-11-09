@@ -9,10 +9,10 @@ import (
 	"strings"
 )
 
-// isSafeFlatAsset checks whether the requested asset filename complies with the Flat Directory Invariant:
+// isSafeFlatAsset checks whether the requested asset filename complies with path safety invariants:
 // 1. No path traversal elements ("..")
 // 2. No dot-prefixed hidden files or directories (".env", ".git", etc.)
-// 3. For asset files (with an extension), they must reside directly in the flat root (no "/" or "\")
+// 3. Subdirectory paths are safely permitted (e.g. "/assets/*.js", "/static/*") provided they do not escape the root
 func isSafeFlatAsset(requestedPath string) bool {
 	clean := strings.TrimPrefix(requestedPath, "/")
 	if clean == "" || clean == "index.html" {
@@ -25,15 +25,13 @@ func isSafeFlatAsset(requestedPath string) bool {
 	}
 
 	// 2. Reject dot-prefixed hidden files or hidden segments (.env, .git, etc.)
-	for _, part := range strings.Split(clean, "/") {
+	parts := strings.FieldsFunc(clean, func(r rune) bool {
+		return r == '/' || r == '\\'
+	})
+	for _, part := range parts {
 		if strings.HasPrefix(part, ".") {
 			return false
 		}
-	}
-
-	// 3. Asset files (with extension) must be flat (no subdirectories)
-	if filepath.Ext(clean) != "" && strings.ContainsAny(clean, "/\\") {
-		return false
 	}
 
 	return true
@@ -128,9 +126,14 @@ func (h *flatDirectoryHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// 3. For asset files (with an extension), attempt to serve from the flat root
+	// 3. For asset files (with an extension), attempt to serve from disk
 	if filepath.Ext(clean) != "" {
-		targetPath := filepath.Join(h.dirPath, clean)
+		targetPath := filepath.Join(h.dirPath, filepath.FromSlash(clean))
+		rel, relErr := filepath.Rel(h.dirPath, targetPath)
+		if relErr != nil || strings.HasPrefix(rel, "..") {
+			http.NotFound(w, r)
+			return
+		}
 		fi, err := os.Lstat(targetPath)
 		if err == nil && fi.Mode().IsRegular() {
 			ext := filepath.Ext(clean)
