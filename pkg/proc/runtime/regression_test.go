@@ -1638,4 +1638,100 @@ END;
 	}
 }
 
+// TestP1_Batch1_VMSafetyAndRecursionGuards verifies:
+// 1. Negative register index guard in OpCallBuiltin, callProc, and callUDF (Defect 3-2)
+// 2. Trigger recursion depth limit (32) returns explicit error instead of silent nil (Defect 3-3)
+// 3. UDF recursion depth limit (64) prevents infinite stack overflow (Defect 3-4)
+// 4. Cursor opcodes (OpCursorFetch, OpCursorClose, OpCursorDealloc) safely handle invalid Aux types without panic (Defect 3-5)
+func TestP1_Batch1_VMSafetyAndRecursionGuards(t *testing.T) {
+	eng := setupRegressionDB(t)
+	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	// 1. Negative register index in OpCallBuiltin should not panic
+	negRegProg := &proc.Program{
+		Name:         "neg_reg_test",
+		NumRegisters: 2,
+		AuxData:      []any{nil, &proc.CallData{Name: "UPPER", ArgRegs: []int32{-1}}},
+		Instructions: []proc.Instruction{
+			{Op: proc.OpCallBuiltin, A: 0, Aux: 1},
+			{Op: proc.OpReturn, A: 0},
+		},
+	}
+	if _, err := executor.Run(negRegProg, "neg_reg_test", nil, session); err != nil {
+		t.Fatalf("unexpected error on negative ArgReg in OpCallBuiltin: %v", err)
+	}
+
+	// 2. Trigger recursion depth (32) exceeded should return explicit error
+	updTrgSQL := `
+CREATE PROCEDURE trg_self_update AS
+BEGIN
+    UPDATE accounts SET balance = balance + 1 WHERE id = 1;
+END;
+`
+	trgProg, err := proc.Compile(updTrgSQL)
+	if err != nil {
+		t.Fatalf("compile update trigger failed: %v", err)
+	}
+	executor.RegisterTrigger("trg_self_update", "accounts", "UPDATE", trgProg)
+
+	_, err = executor.Run(trgProg, "trg_self_update", nil, session)
+	if err == nil || !strings.Contains(err.Error(), "maximum trigger recursion depth (32) exceeded") {
+		t.Fatalf("expected trigger recursion depth error, got: %v", err)
+	}
+	executor.UnregisterTrigger("trg_self_update")
+
+	// 3. UDF infinite recursion should hit depth guard (64) and return error instead of stack overflow
+	udfProg := &proc.Program{
+		Name:         "fn_inf",
+		NumRegisters: 2,
+		AuxData:      []any{nil, &proc.CallData{Name: "fn_inf", ArgRegs: []int32{-1}}},
+		Instructions: []proc.Instruction{
+			{Op: proc.OpCallUDF, A: 0, Aux: 1},
+			{Op: proc.OpReturn, A: 0},
+		},
+	}
+	executor.RegisterUDF("fn_inf", udfProg)
+	_, err = executor.Run(udfProg, "fn_inf", nil, session)
+	if err == nil || !strings.Contains(err.Error(), "maximum UDF call depth (64) exceeded") {
+		t.Fatalf("expected UDF recursion depth error, got: %v", err)
+	}
+
+	// 4. Cursor opcodes with nil/invalid Aux should return structured error without panic
+	badCursorProgs := []*proc.Program{
+		{
+			Name:    "bad_fetch",
+			AuxData: []any{nil, "not_cursor_data"},
+			Instructions: []proc.Instruction{
+				{Op: proc.OpCursorFetch, Aux: 1},
+			},
+		},
+		{
+			Name:    "bad_close",
+			AuxData: []any{nil, 12345},
+			Instructions: []proc.Instruction{
+				{Op: proc.OpCursorClose, Aux: 1},
+			},
+		},
+		{
+			Name: "bad_dealloc",
+			Instructions: []proc.Instruction{
+				{Op: proc.OpCursorDealloc, Aux: 0},
+			},
+		},
+	}
+	for _, bp := range badCursorProgs {
+		if _, err := executor.Run(bp, bp.Name, nil, session); err == nil {
+			t.Errorf("expected error for malformed cursor opcode in %s, got nil", bp.Name)
+		}
+	}
+}
+
+
 

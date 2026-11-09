@@ -1470,7 +1470,10 @@ vmLoop:
 		}
 
 	case proc.OpCursorFetch:
-		data := f.aux(&inst).(*proc.CursorData)
+		data, ok := f.aux(&inst).(*proc.CursorData)
+		if !ok || data == nil {
+			return nil, fmt.Errorf("invalid cursor fetch metadata")
+		}
 		curName := cleanSymbol(data.Name)
 		cur, exists := f.cursors[curName]
 		if !exists || !cur.isOpen || cur.idx >= len(cur.rows) {
@@ -1503,7 +1506,11 @@ vmLoop:
 		}
 
 	case proc.OpCursorClose:
-		curName := cleanSymbol(f.aux(&inst).(string))
+		rawName, ok := f.aux(&inst).(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid cursor close target")
+		}
+		curName := cleanSymbol(rawName)
 		if cur, exists := f.cursors[curName]; exists {
 			cur.isOpen = false
 			cur.rows = nil // immediately release row buffer memory ([RULE:BoundedBuffers])
@@ -1513,17 +1520,24 @@ vmLoop:
 		}
 
 	case proc.OpCursorDealloc:
-		curName := cleanSymbol(f.aux(&inst).(string))
+		rawName, ok := f.aux(&inst).(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid cursor deallocate target")
+		}
+		curName := cleanSymbol(rawName)
 		if cur, exists := f.cursors[curName]; exists {
 			cur.rows = nil
 			delete(f.cursors, curName)
 		}
 
 	case proc.OpCallBuiltin:
-		callData := f.aux(&inst).(*proc.CallData)
+		callData, ok := f.aux(&inst).(*proc.CallData)
+		if !ok || callData == nil {
+			return nil, fmt.Errorf("invalid builtin call metadata")
+		}
 		var args []storage.Value
 		for _, regIdx := range callData.ArgRegs {
-			if int(regIdx) < len(f.regs) {
+			if regIdx >= 0 && int(regIdx) < len(f.regs) {
 				args = append(args, f.regs[regIdx])
 			}
 		}

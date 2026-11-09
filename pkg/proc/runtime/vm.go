@@ -1192,7 +1192,7 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 		return nil
 	}
 	if f.callDepth >= 32 {
-		return nil
+		return fmt.Errorf("maximum trigger recursion depth (32) exceeded on table %q", tableName)
 	}
 	trgs := f.executor.GetTriggers(tableName, event)
 	if len(trgs) == 0 {
@@ -2268,6 +2268,10 @@ func (f *VMFrame) evalUpdateExprFast(expr proc.Expr, tableSchema *storage.TableS
 }
 
 func (f *VMFrame) callUDF(fnName string, argRegs []int32) (storage.Value, error) {
+	if f.callDepth >= 64 {
+		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("maximum UDF call depth (64) exceeded (possible infinite recursion)")
+	}
+
 	f.executor.mu.RLock()
 	udf, ok := f.executor.udfs[cleanSymbol(fnName)]
 	f.executor.mu.RUnlock()
@@ -2280,13 +2284,24 @@ func (f *VMFrame) callUDF(fnName string, argRegs []int32) (storage.Value, error)
 	for i, p := range udf.Program.Params {
 		if i < len(argRegs) {
 			regIdx := argRegs[i]
-			if int(regIdx) < len(f.regs) {
+			if regIdx >= 0 && int(regIdx) < len(f.regs) {
 				params[p.Name] = valToAny(f.regs[regIdx])
 			}
 		}
 	}
 
-	retVal, logs, err := f.executor.RunInTx(udf.Program, params, f.tx, f.transientTables)
+	subFrame := f.executor.newFrame(udf.Program, f.tx)
+	subFrame.callDepth = f.callDepth + 1
+	if f.transientTables != nil {
+		for k, v := range f.transientTables {
+			subFrame.transientTables[k] = v
+		}
+	}
+	subFrame.bindParams(params)
+	retVal, err := subFrame.Execute(0)
+	logs := subFrame.logs
+	f.executor.releaseFrame(subFrame)
+
 	if len(logs) > 0 {
 		f.logs = append(f.logs, logs...)
 	}
@@ -2315,7 +2330,7 @@ func (f *VMFrame) callProc(procName string, argRegs []int32) (storage.Value, err
 	for i, p := range prog.Params {
 		if i < len(argRegs) {
 			regIdx := argRegs[i]
-			if int(regIdx) < len(f.regs) {
+			if regIdx >= 0 && int(regIdx) < len(f.regs) {
 				params[p.Name] = valToAny(f.regs[regIdx])
 			}
 		}
@@ -2344,7 +2359,7 @@ func (f *VMFrame) callSpExecuteSql(argRegs []int32) error {
 		return fmt.Errorf("sp_executesql requires at least 1 parameter (@stmt)")
 	}
 	regIdx := argRegs[0]
-	if int(regIdx) >= len(f.regs) {
+	if regIdx < 0 || int(regIdx) >= len(f.regs) {
 		return fmt.Errorf("invalid register for sp_executesql statement")
 	}
 	val := f.regs[regIdx]
@@ -2368,7 +2383,7 @@ func (f *VMFrame) callSpExecuteSql(argRegs []int32) error {
 	paramMap := make(map[string]any)
 	if len(argRegs) > 2 {
 		for i, reg := range argRegs[2:] {
-			if int(reg) < len(f.regs) {
+			if reg >= 0 && int(reg) < len(f.regs) {
 				pVal := valToAny(f.regs[reg])
 				pIdx := i + 1
 				paramMap[fmt.Sprintf("p%d", pIdx)] = pVal
