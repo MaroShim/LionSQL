@@ -58,7 +58,7 @@ func decodeVarSlot(slot []byte, varArea []byte) ([]byte, error) {
 
 	vOff := binary.LittleEndian.Uint32(slot[0:4])
 	vLen := uint32(slot[4]) | (uint32(slot[5]) << 8) | (uint32(slot[6]) << 16)
-	if int(vOff+vLen) > len(varArea) {
+	if uint64(vOff)+uint64(vLen) > uint64(len(varArea)) {
 		return nil, ErrFlatRecordTruncated
 	}
 	return varArea[vOff : vOff+vLen], nil

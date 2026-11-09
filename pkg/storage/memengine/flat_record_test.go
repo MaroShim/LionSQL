@@ -850,5 +850,37 @@ func TestFlatRecord_Regression_P0_04_AlterTableAddColumnPreservesExistingData(t 
 	}
 }
 
+// TestP1_Batch2_FlatRecordAndSkipListBounds verifies:
+// 1. decodeVarSlot 64-bit overflow guard when vOff + vLen wraps 32-bit uint32 (Scope-010)
+// 2. SkipList.Delete defensive forward-slice bounds check (Scope-008)
+func TestP1_Batch2_FlatRecordAndSkipListBounds(t *testing.T) {
+	// 1. Scope-010: Craft a slot where vOff = 0xFFFFFFF0 and vLen = 0x000020 (wraps uint32 to 0x10)
+	slot := []byte{0xF0, 0xFF, 0xFF, 0xFF, 0x20, 0x00, 0x00, 0x00}
+	varArea := make([]byte, 32)
+	if _, err := decodeVarSlot(slot, varArea); err != ErrFlatRecordTruncated {
+		t.Fatalf("expected ErrFlatRecordTruncated on 32-bit vOff+vLen wraparound, got: %v", err)
+	}
+
+	// 2. Scope-008: SkipList Delete with artificially truncated node forward slice does not panic
+	sl := NewSkipList(false)
+	_ = sl.Insert(storage.IntValue(10), "pk1")
+	_ = sl.Insert(storage.IntValue(20), "pk2")
+
+	// Artificially force head level higher than target node's forward slice length
+	sl.level = 4
+	if sl.head.forward[0] != nil {
+		node := sl.head.forward[0]
+		node.forward = node.forward[:1]
+		for i := 1; i < 4; i++ {
+			sl.head.forward[i] = node
+		}
+	}
+	sl.Delete(storage.IntValue(10), "pk1")
+	if _, found := sl.Search(storage.IntValue(10)); found {
+		t.Fatalf("expected key 10 to be deleted from SkipList")
+	}
+}
+
+
 
 

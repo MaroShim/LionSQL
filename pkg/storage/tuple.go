@@ -323,7 +323,7 @@ func DecodeTupleToRowWithArena(schema *TableSchema, data []byte, arena *Arena) (
 // DecodeTupleValue decodes a single column value of colType from data starting at offset.
 // It returns the decoded Value and the next offset in data.
 func DecodeTupleValue(colType DataType, data []byte, offset int) (Value, int, error) {
-	if offset > len(data) {
+	if offset < 0 || offset > len(data) {
 		return Value{}, offset, ErrTupleBufferTooShort
 	}
 	switch colType {
@@ -364,66 +364,73 @@ func DecodeTupleValue(colType DataType, data []byte, offset int) (Value, int, er
 
 	case TypeTime:
 		strLen, n := binary.Uvarint(data[offset:])
-		if n <= 0 || offset+n+int(strLen) > len(data) {
+		if n <= 0 || strLen > uint64(len(data)) || uint64(offset)+uint64(n)+strLen > uint64(len(data)) {
 			return Value{}, offset, ErrTupleBufferTooShort
 		}
-		sVal := string(data[offset+n : offset+n+int(strLen)])
-		return Value{Type: TypeTime, SVal: sVal}, offset + n + int(strLen), nil
+		end := offset + n + int(strLen)
+		sVal := string(data[offset+n : end])
+		return Value{Type: TypeTime, SVal: sVal}, end, nil
 
 	case TypeBinary:
 		binLen, n := binary.Uvarint(data[offset:])
-		if n <= 0 || offset+n+int(binLen) > len(data) {
+		if n <= 0 || binLen > uint64(len(data)) || uint64(offset)+uint64(n)+binLen > uint64(len(data)) {
 			return Value{}, offset, ErrTupleBufferTooShort
 		}
-		bVal := data[offset+n : offset+n+int(binLen)]
-		return BinaryValue(bVal), offset + n + int(binLen), nil
+		end := offset + n + int(binLen)
+		bVal := data[offset+n : end]
+		return BinaryValue(bVal), end, nil
 
 	case TypeDecimal:
 		decLen, n := binary.Uvarint(data[offset:])
-		if n <= 0 || offset+n+int(decLen) > len(data) {
+		if n <= 0 || decLen > uint64(len(data)) || uint64(offset)+uint64(n)+decLen > uint64(len(data)) {
 			return Value{}, offset, ErrTupleBufferTooShort
 		}
-		sVal := string(data[offset+n : offset+n+int(decLen)])
-		return DecimalValue(sVal), offset + n + int(decLen), nil
+		end := offset + n + int(decLen)
+		sVal := string(data[offset+n : end])
+		return DecimalValue(sVal), end, nil
 
 	case TypeVarChar:
 		strLen, n := binary.Uvarint(data[offset:])
-		if n <= 0 || offset+n+int(strLen) > len(data) {
+		if n <= 0 || strLen > uint64(len(data)) || uint64(offset)+uint64(n)+strLen > uint64(len(data)) {
 			return Value{}, offset, ErrTupleBufferTooShort
 		}
-		sVal := string(data[offset+n : offset+n+int(strLen)])
-		return StringValue(sVal), offset + n + int(strLen), nil
+		end := offset + n + int(strLen)
+		sVal := string(data[offset+n : end])
+		return StringValue(sVal), end, nil
 
 	case TypeJSON:
 		strLen, n := binary.Uvarint(data[offset:])
-		if n <= 0 || offset+n+int(strLen) > len(data) {
+		if n <= 0 || strLen > uint64(len(data)) || uint64(offset)+uint64(n)+strLen > uint64(len(data)) {
 			return Value{}, offset, ErrTupleBufferTooShort
 		}
-		sVal := string(data[offset+n : offset+n+int(strLen)])
-		return JSONValue(sVal), offset + n + int(strLen), nil
+		end := offset + n + int(strLen)
+		sVal := string(data[offset+n : end])
+		return JSONValue(sVal), end, nil
 
 	case TypeUUID:
 		strLen, n := binary.Uvarint(data[offset:])
-		if n <= 0 || offset+n+int(strLen) > len(data) {
+		if n <= 0 || strLen > uint64(len(data)) || uint64(offset)+uint64(n)+strLen > uint64(len(data)) {
 			return Value{}, offset, ErrTupleBufferTooShort
 		}
-		sVal := string(data[offset+n : offset+n+int(strLen)])
-		return UUIDValue(sVal), offset + n + int(strLen), nil
+		end := offset + n + int(strLen)
+		sVal := string(data[offset+n : end])
+		return UUIDValue(sVal), end, nil
 
 	default:
 		strLen, n := binary.Uvarint(data[offset:])
-		if n <= 0 || offset+n+int(strLen) > len(data) {
+		if n <= 0 || strLen > uint64(len(data)) || uint64(offset)+uint64(n)+strLen > uint64(len(data)) {
 			return Value{}, offset, ErrTupleBufferTooShort
 		}
-		sVal := string(data[offset+n : offset+n+int(strLen)])
-		return StringValue(sVal), offset + n + int(strLen), nil
+		end := offset + n + int(strLen)
+		sVal := string(data[offset+n : end])
+		return StringValue(sVal), end, nil
 	}
 }
 
 // SkipTupleColumn skips over the column value at offset without any string or heap allocations.
 // It returns the next offset in data.
 func SkipTupleColumn(colType DataType, data []byte, offset int) (int, error) {
-	if offset > len(data) {
+	if offset < 0 || offset > len(data) {
 		return offset, ErrTupleBufferTooShort
 	}
 	switch colType {
@@ -450,7 +457,7 @@ func SkipTupleColumn(colType DataType, data []byte, offset int) (int, error) {
 		fallthrough
 	default:
 		strLen, n := binary.Uvarint(data[offset:])
-		if n <= 0 || offset+n+int(strLen) > len(data) {
+		if n <= 0 || strLen > uint64(len(data)) || uint64(offset)+uint64(n)+strLen > uint64(len(data)) {
 			return offset, ErrTupleBufferTooShort
 		}
 		return offset + n + int(strLen), nil

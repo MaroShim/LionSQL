@@ -488,5 +488,25 @@ func TestExtractColumnFromTuple_And_DecodeInto(t *testing.T) {
 	}
 }
 
+// TestP1_Batch2_TupleUvarintOverflowGuard verifies that corrupted Uvarint lengths
+// that would wrap around signed int arithmetic (e.g. math.MaxUint64) return ErrTupleBufferTooShort instead of panicking (Scope-018).
+func TestP1_Batch2_TupleUvarintOverflowGuard(t *testing.T) {
+	// 10-byte Uvarint encoding of math.MaxUint64 (0xFFFFFFFFFFFFFFFF)
+	corruptData := []byte{
+		0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01,
+		0x41, 0x42, 0x43,
+	}
+	types := []DataType{TypeVarChar, TypeBinary, TypeDecimal, TypeTime, TypeJSON, TypeUUID}
+	for _, dt := range types {
+		if _, _, err := DecodeTupleValue(dt, corruptData, 0); err != ErrTupleBufferTooShort {
+			t.Errorf("DecodeTupleValue(%v) expected ErrTupleBufferTooShort on uvarint overflow, got %v", dt, err)
+		}
+		if _, err := SkipTupleColumn(dt, corruptData, 0); err != ErrTupleBufferTooShort {
+			t.Errorf("SkipTupleColumn(%v) expected ErrTupleBufferTooShort on uvarint overflow, got %v", dt, err)
+		}
+	}
+}
+
+
 
 

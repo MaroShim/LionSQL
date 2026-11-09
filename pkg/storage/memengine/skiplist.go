@@ -164,7 +164,11 @@ func (sl *SkipList) Delete(key storage.Value, pk string) {
 		if update[i].forward[i] != curr {
 			break
 		}
-		update[i].forward[i] = curr.forward[i]
+		if i < len(curr.forward) {
+			update[i].forward[i] = curr.forward[i]
+		} else {
+			update[i].forward[i] = nil
+		}
 	}
 
 	// Adjust active maximum level
