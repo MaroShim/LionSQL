@@ -70,3 +70,18 @@ query III rowsort
 SELECT id, a + b, b * c FROM slt_arith WHERE id = 4;
 ----
 4 NULL NULL
+
+# Bitwise Operations (AND, OR, XOR, NOT)
+query IIII rowsort
+SELECT 10 | 6, 12 & 4, 10 ^ 6, ~1;
+----
+14 4 12 -2
+
+# Bitwise Operations on Table Columns
+query IIII rowsort
+SELECT id, a | c, a & c, a ^ c FROM slt_arith WHERE id <= 3;
+----
+1 15 0 15
+2 -6 0 -6
+3 19 1 18
+
