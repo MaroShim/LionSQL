@@ -1493,6 +1493,60 @@ WHERE
 	if len(resUserDb.Rows) != 1 || resUserDb.Rows[0]["Database_Name"] != "lionsql" {
 		t.Fatalf("expected 1 user database 'lionsql', got %+v", resUserDb.Rows)
 	}
+
+	// 18. SSMS Synonyms Query
+	qSSMSSynonyms := `SELECT
+s.name AS [Name],
+SCHEMA_NAME(s.schema_id) AS [Schema],
+'Server[@Name=' + quotename(CAST(serverproperty(N'Servername') AS sysname),'''') + ']' + '/Database[@Name=' + quotename(db_name(),'''') + ']' + '/Synonym[@Name=' + quotename(s.name,'''') + ' and @Schema=' + quotename(SCHEMA_NAME(s.schema_id),'''') + ']' AS [Urn],
+s.create_date AS [CreateDate],
+ISNULL(ss.name, N'') AS [Owner]
+FROM
+sys.synonyms AS s
+LEFT OUTER JOIN sys.database_principals AS ss ON ss.principal_id = ISNULL(s.principal_id, (OBJECTPROPERTY(s.object_id, 'OwnerId')))
+ORDER BY
+[Schema] ASC,[Name] ASC`
+	if _, err := coord.ExecuteSQL(qSSMSSynonyms); err != nil {
+		t.Fatalf("SSMS synonyms query failed: %v", err)
+	}
+
+	// 19. SSMS Stored Procedures Query
+	qSSMSProcs := `SELECT
+sp.name AS [Name],
+SCHEMA_NAME(sp.schema_id) AS [Schema],
+'Server[@Name=' + quotename(CAST(serverproperty(N'Servername') AS sysname),'''') + ']' + '/Database[@Name=' + quotename(db_name(),'''') + ']' + '/StoredProcedure[@Name=' + quotename(sp.name,'''') + ' and @Schema=' + quotename(SCHEMA_NAME(sp.schema_id),'''') + ']' AS [Urn],
+sp.create_date AS [CreateDate],
+ISNULL(ssp.name, N'') AS [Owner],
+CAST(CASE WHEN ISNULL(smsp.definition, ssmsp.definition) IS NULL THEN 1 ELSE 0 END AS bit) AS [IsEncrypted],
+CASE WHEN sp.type = N'P' THEN 1 WHEN sp.type = N'PC' THEN 2 ELSE 1 END AS [ImplementationType],
+ISNULL(sm.uses_native_compilation,0) AS [IsNativelyCompiled]
+FROM
+sys.all_objects AS sp
+LEFT OUTER JOIN sys.database_principals AS ssp ON ssp.principal_id = ISNULL(sp.principal_id, (OBJECTPROPERTY(sp.object_id, 'OwnerId')))
+LEFT OUTER JOIN sys.sql_modules AS smsp ON smsp.object_id = sp.object_id
+LEFT OUTER JOIN sys.system_sql_modules AS ssmsp ON ssmsp.object_id = sp.object_id
+LEFT OUTER JOIN sys.all_sql_modules AS sm ON sm.object_id = sp.object_id
+WHERE
+(sp.type = 'P' OR sp.type = 'RF' OR sp.type='PC')and(CAST(
+ case
+    when sp.is_ms_shipped = 1 then 1
+    when exists (
+        select
+            1
+        from
+            sys.extended_properties
+        where
+            major_id = sp.object_id and
+            minor_id = 0 and
+            class = 1 and
+            name = N'microsoft_database_tools_support')
+        then 1
+    else 0
+end
+             AS bit)='0' and ISNULL(sm.uses_native_compilation,0)='0')`
+	if _, err := coord.ExecuteSQL(qSSMSProcs); err != nil {
+		t.Fatalf("SSMS procs query failed: %v", err)
+	}
 }
 
 func TestReplicaSessionZeroAllocationFastPath(t *testing.T) {

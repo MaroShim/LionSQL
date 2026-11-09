@@ -1139,6 +1139,28 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 		columns = []string{"class", "class_desc", "major_id", "minor_id", "name", "value"}
 		allRows = []map[string]any{}
 
+	case "sys.synonyms", "syssynonyms", "sys_synonyms":
+		columns = []string{
+			"name", "object_id", "principal_id", "schema_id", "parent_object_id",
+			"type", "type_desc", "create_date", "modify_date", "is_ms_shipped",
+			"is_published", "is_schema_published", "base_object_name",
+		}
+		allRows = []map[string]any{}
+
+	case "sys.sql_modules", "syssqlmodules", "sys_sql_modules",
+		"sys.all_sql_modules", "sysallsqlmodules", "sys_all_sql_modules",
+		"sys.system_sql_modules", "syssystemsqlmodules", "sys_system_sql_modules":
+		columns = []string{
+			"object_id", "definition", "uses_ansi_nulls", "uses_quoted_identifier",
+			"is_schema_bound", "uses_database_collation", "is_recompiled",
+			"null_on_null_input", "execute_as_principal_id", "uses_native_compilation",
+		}
+		allRows = []map[string]any{}
+
+	case "sys.syscomments", "syscomments", "sys_syscomments":
+		columns = []string{"id", "number", "colid", "status", "ctext", "texttype", "language", "encrypted", "compressed", "text"}
+		allRows = []map[string]any{}
+
 	case "sys.database_files", "sysdatabasefiles", "sys_database_files":
 		columns = []string{"file_id", "file_guid", "type", "type_desc", "data_space_id", "name", "physical_name", "state", "state_desc", "size", "max_size", "growth", "is_media_read_only", "is_read_only", "is_sparse", "is_percent_growth"}
 		allRows = append(allRows,

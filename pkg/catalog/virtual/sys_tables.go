@@ -31,6 +31,7 @@ var sysViewAliases = map[string]struct{}{
 	"sys.endpoints": {}, "sysendpoints": {}, "sys_endpoints": {},
 	"sys.data_spaces": {}, "sysdataspaces": {}, "sys_data_spaces": {},
 	"sys.extended_properties": {}, "sysextendedproperties": {}, "sys_extended_properties": {},
+	"sys.synonyms": {}, "syssynonyms": {}, "sys_synonyms": {},
 	"sys.database_files": {}, "sysdatabasefiles": {}, "sys_database_files": {},
 	"sys.master_files": {}, "sysmasterfiles": {}, "sys_master_files": {},
 	"sys.all_objects": {}, "sysallobjects": {}, "sys_all_objects": {},
@@ -38,6 +39,8 @@ var sysViewAliases = map[string]struct{}{
 	"sys.all_views": {}, "sysallviews": {}, "sys_all_views": {},
 	"sys.syscomments": {}, "syscomments": {}, "sys_syscomments": {},
 	"sys.sql_modules": {}, "syssqlmodules": {}, "sys_sql_modules": {},
+	"sys.all_sql_modules": {}, "sysallsqlmodules": {}, "sys_all_sql_modules": {},
+	"sys.system_sql_modules": {}, "syssystemsqlmodules": {}, "sys_system_sql_modules": {},
 	"fn_helpcollations": {}, "sys.fn_helpcollations": {},
 	// Policy-Based Management (DMF) catalog views
 	"syspolicy_configuration": {}, "sys.syspolicy_configuration": {}, "dbo.syspolicy_configuration": {},
