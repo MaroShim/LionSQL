@@ -1249,6 +1249,19 @@ func TestTDS_SSMS_HasDbAccess(t *testing.T) {
 	}
 }
 
+func TestTDS_SSMS_SecurityBuiltins(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	query := `SELECT IS_SRVROLEMEMBER('sysadmin') AS is_admin, HAS_PERMS_BY_NAME(null, null, 'VIEW SERVER STATE') AS can_view, ORIGINAL_LOGIN() AS orig_user;`
+	payload := sendSQLBatch(t, conn, query)
+
+	if !bytes.Contains(payload, EncodeUTF16LE("is_admin")) || !bytes.Contains(payload, EncodeUTF16LE("can_view")) || !bytes.Contains(payload, EncodeUTF16LE("orig_user")) {
+		t.Fatalf("expected columns in response: %s", string(payload))
+	}
+}
+
 
 
 

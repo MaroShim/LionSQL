@@ -297,7 +297,20 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 	case "CURRENT_SCHEMAS(TRUE)", "CURRENT_SCHEMAS(FALSE)", "CURRENT_SCHEMAS":
 		return "{dbo,public}", "current_schemas"
 	case "CURRENT_USER", "USER", "SESSION_USER":
+		if cs != nil && strings.HasPrefix(cs.ID, "tds-") {
+			return "sa", "current_user"
+		}
 		return "postgres", "current_user"
+	case "SYSTEM_USER", "SYSTEM_USER()":
+		if cs != nil && strings.HasPrefix(cs.ID, "tds-") {
+			return "sa", "system_user"
+		}
+		return "postgres", "system_user"
+	case "ORIGINAL_LOGIN()", "ORIGINAL_LOGIN":
+		if cs != nil && strings.HasPrefix(cs.ID, "tds-") {
+			return "sa", "original_login"
+		}
+		return "postgres", "original_login"
 	case "VERSION()":
 		return "PostgreSQL 15.0 (LionSQL OLTP & Stored Procedure Server)", "version"
 	case "DB_NAME()", "DB_NAME":
@@ -483,6 +496,26 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 	// PERMISSIONS()
 	if strings.HasPrefix(upper, "PERMISSIONS(") && strings.HasSuffix(upper, ")") {
 		return int32(0x0FFFFFFF), "permissions"
+	}
+
+	// IS_SRVROLEMEMBER('role')
+	if strings.HasPrefix(upper, "IS_SRVROLEMEMBER(") && strings.HasSuffix(upper, ")") {
+		return int32(1), "is_srvrolemember"
+	}
+
+	// IS_MEMBER('role')
+	if strings.HasPrefix(upper, "IS_MEMBER(") && strings.HasSuffix(upper, ")") {
+		return int32(1), "is_member"
+	}
+
+	// HAS_PERMS_BY_NAME(securable, securable_class, permission)
+	if strings.HasPrefix(upper, "HAS_PERMS_BY_NAME(") && strings.HasSuffix(upper, ")") {
+		return int32(1), "has_perms_by_name"
+	}
+
+	// FILEPROPERTY, FILEGROUPPROPERTY, FULLTEXTSERVICEPROPERTY
+	if (strings.HasPrefix(upper, "FILEPROPERTY(") || strings.HasPrefix(upper, "FILEGROUPPROPERTY(") || strings.HasPrefix(upper, "FULLTEXTSERVICEPROPERTY(")) && strings.HasSuffix(upper, ")") {
+		return int32(1), strings.ToLower(trimmed[:strings.Index(trimmed, "(")])
 	}
 
 	// SCHEMA_NAME(id)
