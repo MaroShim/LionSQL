@@ -121,7 +121,11 @@ func Compile(sql string) (*Program, error) {
 		return CompileStatement(sql)
 	}
 
-	if strings.HasPrefix(upper, "IF ") || strings.HasPrefix(upper, "WHILE ") || strings.HasPrefix(upper, "BEGIN ") || upper == "BEGIN" {
+	trimmedUpper := strings.TrimSpace(upper)
+	if strings.HasPrefix(upper, "IF ") || strings.HasPrefix(upper, "IF\n") || strings.HasPrefix(upper, "IF\t") ||
+		strings.HasPrefix(upper, "WHILE ") || strings.HasPrefix(upper, "WHILE\n") || strings.HasPrefix(upper, "WHILE\t") ||
+		strings.HasPrefix(upper, "BEGIN ") || strings.HasPrefix(upper, "BEGIN\n") || strings.HasPrefix(upper, "BEGIN\t") ||
+		strings.HasPrefix(upper, "BEGIN\r") || trimmedUpper == "BEGIN" {
 		return CompileAnonymousBlock(sql)
 	}
 

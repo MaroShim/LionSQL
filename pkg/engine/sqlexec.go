@@ -599,7 +599,11 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		cs.TranCount = 0
 		cs.TxFailed = false
 		if cs.Cursors != nil {
-			cs.Cursors = make(map[string]*SessionCursor)
+			for _, cur := range cs.Cursors {
+				cur.IsOpen = false
+				cur.Rows = nil
+				cur.Pos = 0
+			}
 		}
 		if s.Metrics() != nil {
 			s.Metrics().RecordTransaction("rollback")
@@ -625,9 +629,11 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 	cs.TxFailed = false
 	// Close non-WITH HOLD cursors on COMMIT
 	if cs.Cursors != nil {
-		for name, cur := range cs.Cursors {
+		for _, cur := range cs.Cursors {
 			if !cur.WithHold {
-				delete(cs.Cursors, name)
+				cur.IsOpen = false
+				cur.Rows = nil
+				cur.Pos = 0
 			}
 		}
 	}
@@ -662,9 +668,13 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 	cs.Tx = nil
 	cs.TranCount = 0
 	cs.TxFailed = false
-	// Close all cursors on ROLLBACK (per PostgreSQL specification)
+	// Close all cursors on ROLLBACK (per SQL standard lifecycle)
 	if cs.Cursors != nil {
-		cs.Cursors = make(map[string]*SessionCursor)
+		for _, cur := range cs.Cursors {
+			cur.IsOpen = false
+			cur.Rows = nil
+			cur.Pos = 0
+		}
 	}
 	if err != nil {
 		return fmt.Errorf("rollback error: %w", err)
@@ -1354,9 +1364,14 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.28 Control-flow & Anonymous Blocks: IF ... ELSE, WHILE ..., BEGIN ... END
-	if strings.HasPrefix(upper, "IF ") || strings.HasPrefix(upper, "WHILE ") ||
-		(strings.HasPrefix(upper, "BEGIN ") && !isBeginTransaction(trimmed[5:])) {
+	if sqlutil.HasPrefixKeyword(trimmed, "IF") || sqlutil.HasPrefixKeyword(trimmed, "WHILE") {
 		return s.execAnonymousBlock(trimmed, start, cs)
+	}
+	if sqlutil.HasPrefixKeyword(trimmed, "BEGIN") {
+		idx := sqlutil.FindTopLevelKeyword(trimmed, "BEGIN")
+		if idx != -1 && !isBeginTransaction(trimmed[idx+5:]) {
+			return s.execAnonymousBlock(trimmed, start, cs)
+		}
 	}
 
 	// 0.3 Substitute session variables in SQL query if present

@@ -913,6 +913,7 @@ const (
 type GeneralSelectStmt struct {
 	CTEs         []CTEClause
 	Projections  []Projection
+	IntoTable    string
 	From         TableRef
 	Joins        []JoinClause
 	Where        Expr
@@ -960,6 +961,10 @@ func (s *GeneralSelectStmt) String() string {
 		projStrs = append(projStrs, p.String())
 	}
 	b.WriteString(strings.Join(projStrs, ", "))
+	if s.IntoTable != "" {
+		b.WriteString(" INTO ")
+		b.WriteString(s.IntoTable)
+	}
 	if s.From.Name != "" {
 		b.WriteString(" FROM ")
 		b.WriteString(s.From.String())

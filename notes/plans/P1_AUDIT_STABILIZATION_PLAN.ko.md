@@ -29,7 +29,7 @@
 | **1단계 (하)** | **Mini-Batch 6** | `cmd/lionsql` (Doctor Close, 터미널 복구, 타이머) | 3건 | **[x] 완료** | `cc5850c` (`TestP1_Batch6_DoctorCloseOnError...`) |
 | **2단계 (중)** | **Mini-Batch M1** | `pkg/catalog` & `pkg/engine` (카탈로그 영속화/DDL) | 5건 | **[x] 완료** | `TestP1_BatchM1_CleanCatalogIdentCompoundBrackets`, `TestP1_BatchM1_AlterViewFKAndPgAttribute` |
 | **2단계 (중)** | **Mini-Batch M2** | `pkg/engine` & `pkg/execution` (실행 가드레일/정리) | 3건 | **[x] 완료** | `TestP1_BatchM2_ApplyRowLimit`, `TestP1_BatchM2_SortOpenErrorRemovesSpillFiles`, `TestP1_BatchM2_DerivedTableErrorCleansTempTables` |
-| **2단계 (중)** | **Mini-Batch M3** | `pkg/engine` & `pkg/proc` (트랜잭션/커서/파서 위임) | 3건 | **[ ] 대기** | 도메인 B-2: `8-3` (WITHOUT HOLD), `Scope-038`, `6-4` & `6-5` |
+| **2단계 (중)** | **Mini-Batch M3** | `pkg/engine` & `pkg/proc` (트랜잭션/커서/파서 위임) | 3건 | **[x] 완료** | `TestP1_BatchM3_JoinWithCTEAndSelectInto`, `TestP1_BatchM3_CursorLifecycleAndBeginEnd` |
 | **2단계 (중)** | **Mini-Batch M4** | `pkg/api`, `pkg/replication`, `pkg/wire` (와이어/SPA) | 4건 | **[ ] 대기** | 도메인 C-1: `13-4`, `5-3`, `5-4` & `Scope-097`, `Scope-100/101/104` |
 | **2단계 (중)** | **Mini-Batch M5** | `pkg/api`, `cmd/lionsql`, `cmd/soaktest` (웹훅/데몬) | 3건 | **[ ] 대기** | 도메인 C-2: `Scope-127`, `Scope-129`, `Scope-130` & `135` |
 | **3단계 (상)** | **High- Complexity** | `pkg/storage`, `pkg/backup`, `pkg/migrate` | 8건 | **[ ] 대기** | 심층 동시성/역연산 설계 후 선별 적용 또는 v1.1.0 이관 심사 |
@@ -98,11 +98,11 @@
 3. **`Scope-047` 파생 테이블 구체화 중 에러 시 물리 임시 테이블 롤백 드롭** (`pkg/engine/sqlexec_derived.go:145-180`): 파생 테이블(`FROM (SELECT ...)`) 구체화 도중 에러가 발생할 경우 생성된 물리 임시 테이블(`__derived_*`)을 즉시 `DropTable`로 정리.
 - **검증 계획**: `pkg/execution/execution_test.go` 및 `pkg/engine`에 Red 테스트 선작성 후 Green 전환 및 `-race` 검증.
 
-### Mini-Batch M3 (`pkg/engine` & `pkg/proc`): 트랜잭션/커서 수명주기 및 파서 위임 (3건) [대기]
-1. **`결함 8-3` `WITHOUT HOLD` 커서 트랜잭션 종료 시 자동 닫기** (`pkg/engine/sqlexec_cursor.go:87-97`, `session.go`): `COMMIT` 또는 `ROLLBACK` 시 세션의 활성 커서 중 `Hold == false`(`WITHOUT HOLD`)인 커서를 자동으로 닫아(`IsOpen = false`) 표준 커서 수명주기 보장.
-2. **`Scope-038` T-SQL 단순 `BEGIN ... END` 블록의 트랜잭션 오인식 차단** (`pkg/engine/sqlexec.go:651`): `BEGIN ATOMIC`이나 프로시저성 `BEGIN <stmt> END` 블록이 `BEGIN TRANSACTION`으로 오인식되지 않도록 구문 판별 정밀화.
-3. **`결함 6-4` & `6-5` Native 파서 `SELECT ... INTO` 및 `JOIN (WITH ...)` 서브쿼리 위임** (`pkg/proc/parser_dml.go`): Native Pratt 파서에서 `SELECT ... INTO` 구문과 `JOIN (WITH cte AS ...)` 파생 서브쿼리 구문을 무음 탈락시키지 않고 정확히 파싱하거나 Tier 2 ANTLR4 폴백/엔진으로 위임.
-- **검증 계획**: `pkg/engine/sqlexec_cursor_test.go` 및 `pkg/proc`에 Red 테스트 선작성 후 Green 전환 및 `-race` 검증.
+### Mini-Batch M3 (`pkg/engine` & `pkg/proc`): 트랜잭션/커서 수명주기 및 파서 위임 (3건) [x] 완료
+1. **`결함 8-3` `WITHOUT HOLD` 커서 트랜잭션 종료 시 자동 닫기** (`pkg/engine/sqlexec.go`, `sqlexec_cursor.go`): `COMMIT` 또는 `ROLLBACK` 시 세션의 활성 커서 중 `WithoutHold`인 커서를 자동으로 닫아(`IsOpen = false`, `Rows = nil`, `Pos = 0`) 표준 커서 수명주기 보장 및 재오픈 지원.
+2. **`Scope-038` T-SQL 단순 `BEGIN ... END` 블록의 트랜잭션 오인식 차단** (`pkg/engine/sqlexec.go`, `pkg/proc/compiler.go`): 프로시저성 `BEGIN <stmt> END` 블록이 `BEGIN TRANSACTION`으로 오인식되지 않도록 라우팅 판별 정밀화 (`sqlutil.HasPrefixKeyword` / `!isBeginTransaction`).
+3. **`결함 6-4` & `6-5` Native 파서 `SELECT ... INTO` 및 `JOIN (WITH ...)` 서브쿼리 위임** (`pkg/proc/parser_dml.go`, `ast.go`): Native Pratt 파서에서 `SELECT ... INTO <target_table>` 테이블 생성 및 `JOIN (WITH cte AS ...)` 파생 서브쿼리 지원.
+- **검증 완료**: `TestP1_BatchM3_JoinWithCTEAndSelectInto` 및 `TestP1_BatchM3_CursorLifecycleAndBeginEnd` PASS (-race 100% 통과).
 
 ### Mini-Batch M4 (`pkg/api`, `pkg/replication`, `pkg/wire`): 와이어 타임아웃/상한, SPA 에셋 및 복제 에러 전파 (4건) [대기]
 1. **`결함 13-4` 내장 SPA 웹 서버(`/assets/*.js`) 서브폴더 정적 에셋 허용** (`pkg/api/spa.go:35-37`): Path Traversal(`..`) 및 숨김 파일(`/.`)은 엄격히 차단하되, Vite/React/Vue 빌드 결과물의 표준 하위 정적 에셋 경로(`/assets/*`, `/static/*` 등) 서빙 지원.

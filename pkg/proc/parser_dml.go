@@ -11,51 +11,68 @@ func (p *Parser) parseSelect() (Statement, error) {
 
 	if p.curTokenIs(TokenIdent) && p.peekTokenIs(TokenInto) {
 		colName := p.curToken.Literal
-		p.nextToken() // eat col
-		p.nextToken() // eat INTO
+		p.nextToken() // eat colName; now curToken is INTO, peekToken is after INTO
 
-		if !p.curTokenIs(TokenVariable) {
-			return nil, fmt.Errorf("expected @variable after INTO, got %s", p.curToken.Literal)
-		}
-		varName := p.curToken.Literal
-		p.nextToken()
-
-		if !p.curTokenIs(TokenFrom) {
-			return nil, fmt.Errorf("expected FROM, got %s", p.curToken.Literal)
-		}
-		p.nextToken()
-
-		if !p.curTokenIs(TokenIdent) {
-			return nil, fmt.Errorf("expected table name, got %s", p.curToken.Literal)
-		}
-		tblName := p.curToken.Literal
-		p.nextToken()
-
-		var whereCol string
-		var whereVal Expr
-		if p.curTokenIs(TokenWhere) {
+		if p.peekTokenIs(TokenVariable) {
+			p.nextToken() // eat INTO
+			varName := p.curToken.Literal
 			p.nextToken()
-			if p.curTokenIs(TokenIdent) && p.peekTokenIs(TokenEq) {
-				whereCol = p.curToken.Literal
-				p.nextToken()
-				p.nextToken() // eat =
-				whereVal = p.parseExpression(precLowest)
-			} else {
-				whereVal = p.parseExpression(precLowest)
+
+			if !p.curTokenIs(TokenFrom) {
+				return nil, fmt.Errorf("expected FROM, got %s", p.curToken.Literal)
 			}
+			p.nextToken()
+
+			if !p.curTokenIs(TokenIdent) {
+				return nil, fmt.Errorf("expected table name, got %s", p.curToken.Literal)
+			}
+			tblName := p.curToken.Literal
+			p.nextToken()
+
+			var whereCol string
+			var whereVal Expr
+			if p.curTokenIs(TokenWhere) {
+				p.nextToken()
+				if p.curTokenIs(TokenIdent) && p.peekTokenIs(TokenEq) {
+					whereCol = p.curToken.Literal
+					p.nextToken()
+					p.nextToken() // eat =
+					whereVal = p.parseExpression(precLowest)
+				} else {
+					whereVal = p.parseExpression(precLowest)
+				}
+			}
+
+			if p.curTokenIs(TokenSemicolon) {
+				p.nextToken()
+			}
+
+			return &SelectIntoStmt{
+				Column:   colName,
+				IntoVar:  varName,
+				Table:    tblName,
+				WhereCol: whereCol,
+				WhereVal: whereVal,
+			}, nil
 		}
 
+		// Not TokenVariable: SELECT col INTO <table_name> FROM ...
+		p.nextToken() // eat INTO; curToken is target table
+		intoTbl := p.curToken.Literal
+		p.nextToken() // eat target table
+		stmt := &GeneralSelectStmt{
+			Limit:       -1,
+			Projections: []Projection{{Expr: &ColumnRefExpr{Name: colName}}},
+			IntoTable:   intoTbl,
+		}
+		res, err := p.parseGeneralSelectClauses(stmt)
+		if err != nil {
+			return nil, err
+		}
 		if p.curTokenIs(TokenSemicolon) {
 			p.nextToken()
 		}
-
-		return &SelectIntoStmt{
-			Column:   colName,
-			IntoVar:  varName,
-			Table:    tblName,
-			WhereCol: whereCol,
-			WhereVal: whereVal,
-		}, nil
+		return res, nil
 	}
 
 	stmt, err := p.parseGeneralSelect()
@@ -573,7 +590,7 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	}
 
 	// 1. Projections
-	for !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenRParen) {
+	for !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenInto) && !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenRParen) {
 		if p.curTokenIs(TokenVariable) && p.peekTokenIs(TokenEq) {
 			varName := p.curToken.Literal
 			p.nextToken() // eat @var
@@ -615,6 +632,18 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 		}
 	}
 
+	if p.curTokenIs(TokenInto) {
+		p.nextToken() // eat INTO
+		if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenVariable) {
+			stmt.IntoTable = p.curToken.Literal
+			p.nextToken()
+		}
+	}
+
+	return p.parseGeneralSelectClauses(stmt)
+}
+
+func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSelectStmt, error) {
 	// 2. FROM clause
 	fromParens := 0
 	if p.curTokenIs(TokenFrom) {
@@ -627,10 +656,16 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 
 		if p.curTokenIs(TokenLParen) {
 			p.nextToken() // eat (
-			if p.curTokenIs(TokenSelect) {
-				p.nextToken() // eat SELECT
+			var subSel *GeneralSelectStmt
+			var err error
+			if p.curTokenIs(TokenWith) {
+				subSel, err = p.parseWith()
+			} else {
+				if p.curTokenIs(TokenSelect) {
+					p.nextToken() // eat SELECT
+				}
+				subSel, err = p.parseGeneralSelect()
 			}
-			subSel, err := p.parseGeneralSelect()
 			if err != nil {
 				return nil, err
 			}
@@ -838,10 +873,16 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 
 		if p.curTokenIs(TokenLParen) && (p.peekTokenIs(TokenSelect) || p.peekTokenIs(TokenWith)) {
 			p.nextToken() // eat (
-			if p.curTokenIs(TokenSelect) {
-				p.nextToken() // eat SELECT
+			var subSel *GeneralSelectStmt
+			var err error
+			if p.curTokenIs(TokenWith) {
+				subSel, err = p.parseWith()
+			} else {
+				if p.curTokenIs(TokenSelect) {
+					p.nextToken() // eat SELECT
+				}
+				subSel, err = p.parseGeneralSelect()
 			}
-			subSel, err := p.parseGeneralSelect()
 			if err != nil {
 				return nil, err
 			}

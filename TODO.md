@@ -104,6 +104,9 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **진행 현황 (난이도 중 18건 — 5개 미니배치 M1~M5)**:
      - [x] **Mini-Batch M1 (`pkg/catalog` & `pkg/engine`, 5건)**: `ALTER VIEW` / `CREATE OR ALTER VIEW` 및 디스크 영속화 동기화, `cleanCatalogIdent` 복합 브래킷 식별자(`[dbo].[my_proc]`) 정규화(`7-3`), WiredTiger `DropTable` 외래키 참조 테이블 존재 시 드롭 차단 및 `CASCADE` 연동(`8-4`), `ALTER TABLE ADD FOREIGN KEY` 실제 스키마 반영 및 카탈로그 영속화(`Scope-041`), `pg_attribute.atthasdef` 기본값/IDENTITY 매핑(`Scope-032`) 완료.
      - [x] **Mini-Batch M2 (`pkg/engine` & `pkg/execution`, 3건)**: `CROSS/OUTER APPLY` 10만 행 상한 가드레일(`14-1`), 외부 정렬 `Open()` 실패 시 spill 임시 파일 즉시 삭제(`4-2` / `Scope-089`), 파생 테이블 구체화 실패 시 `#__dt_*` 임시 테이블 롤백 드롭(`Scope-047`) 완료.
+     - [x] **Mini-Batch M3 (`pkg/engine` & `pkg/proc`, 3건)**: `WITHOUT HOLD` 커서 트랜잭션 종료 시 자동 닫기(`IsOpen = false`) 및 재오픈 라이프사이클 보장(`8-3`), T-SQL `BEGIN ... END` 익명 블록 트랜잭션 오인식 차단(`Scope-038`), Native Pratt 파서 `SELECT ... INTO` 및 `JOIN (WITH ...)` 서브쿼리 문법 지원(`6-4` & `6-5`) 완료.
+     - [ ] **Mini-Batch M4 (`pkg/api`, `pkg/replication`, `pkg/wire`, 4건)**: 내장 SPA 정적 에셋 서브폴더(`/assets/*.js`) 지원(`13-4`), 레플리카 WAL 적용 에러 전파(`5-3`), PGWire SSL `CancelRequest` 정상 연결 & Portal 1,024 상한(`5-4` / `Scope-097`), PGWire & TDS 핸드셰이크 `SetReadDeadline` 타임아웃 부여(`Scope-100/101/104`).
+     - [ ] **Mini-Batch M5 (`pkg/api`, `cmd/lionsql`, `cmd/soaktest`, 3건)**: 웹훅 재시도 컨텍스트 즉시 중단(`Scope-127`), 서버 종료 시 잔여 버퍼 영속화 보장(`Scope-129`), Windows 데몬 서비스 및 소크 하네스 종료 정리(`Scope-130/135`).
 4. **`DOC-REVAMP-10`: 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜** [계획 수립 / 대기]
    - **목표**: 오버스펙(별도 VitePress 웹사이트, Swagger 중복 번들링 등)을 배제하고 실질적 가치 중심의 10대 알짜 과제 집중 완수 (1단계: 핵심 영문 4종 국문화, 14대 Spec-Out 기각 결정 단일 카탈로그, 내장 SPA 웹 서버 1분 스타터 예제, 마크다운 링크 깨짐 자동 검사기 / 2단계: T-SQL 3초 치트시트, SQLSTATE 트러블슈팅 사전, 사용자 여정 네비게이션, 오픈소스 가이드 메타 카드, 벤치마크 Mermaid 차트화, MSSQL 이전 체크리스트).
    - **설계 문서**: [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)
@@ -122,6 +125,9 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - 하드웨어 발열 냉각 후 익일 아침 콜드 스타트 상태에서 4대 벤치마크 정밀 재실측 완료 (버전 `v0.92.0`, 측정일 `2026-11-09`, 전 티어 +16%~+86% 도약 확인)
    - 실측 완료 후 `doc/BENCHMARK.md`, `README.md`, `README.ko.md` 전면 동기화 및 37건 P0 결함 수정 연계 디스커션 완료
    - 설계 문서: [`notes/BENCHMARK_DOC_SYNC_v0.92.0_PLAN.ko.md`](notes/plans/BENCHMARK_DOC_SYNC_v0.92.0_PLAN.ko.md)
+10. **`ARCH-ANTLR-ORACLE-1`: ANTLR4 기반 T-SQL 문법 검증 및 미지원 기능 정밀 진단 오라클 아키텍처** [계획 수립 / 대기]
+    - **목표**: Pratt 파서가 쿼리/프로시저 파싱에 실패했을 때 즉시 raw syntax error를 던지는 대신, ANTLR4를 문법 오라클로 활용하여 "유효한 T-SQL 문법이지만 1.0 엔진 미지원"(`FeatureNotSupportedError [42000]`)과 "실제 사용자 구문 오류"를 정밀하게 분리 진단.
+    - **설계 문서**: [`notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md`](notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md)
 
 ### 1.3 [테스트베드] 타임박스 외부 앱 호환성 프로브 (Time-Boxed Probe Protocol)
 > **운영 원칙**: 완벽 연동을 위해 무한정 시간을 쓰지 않고, **엄격한 30분 타임박스**를 두고 가볍게 찔러보며 엔진의 숨은 엣지 케이스를 발굴하는 테스트베드로만 활용 (비침습적 패치 우선, 무한 루프나 구조적 대수술 감지 시 30분 내 즉시 중단).
