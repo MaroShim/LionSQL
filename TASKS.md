@@ -10,6 +10,10 @@
 | :---: | :---: | :---: | :---: | :--- | :--- | :--- |
 | `IN_PROGRESS` | **`1.8`** | Durability | P2 | 1.0 GA 검증 및 잔여 정리 | [`notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`](notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`3.9`** | Ecosystem | P3 | 기타 엔터프라이즈 기능 확장 |  |  |
+| `PENDING` | **`AI-STARTER-1`** | Ecosystem | P2 | AI 에이전트용 컨텍스트 문서 (llms.txt, AGENTS.md 템플릿) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
+| `PENDING` | **`AI-STARTER-2`** | Ecosystem | P2 | 랜딩 AI 앱 스타터 섹션 및 Go/Node/Python 최소 예제 | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
+| `PENDING` | **`AI-STARTER-3`** | Ecosystem | P2 | 호환성 매트릭스 문서 (되는 것/안 되는 것) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
+| `PENDING` | **`AI-STARTER-4`** | Research | P3 | Go 임베디드 모드 타당성 조사 (SQLite 대비) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-PRED`** | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
 | `DONE` | **`AUDIT-135-DUAL-REVIEW`** | Integrity | P1 | 전 소스코드 135단계 듀얼 AI 정밀 코드 리뷰 및 엣지 케이스 감사 | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) | 135/135 스코프 완주 (총 134건 결함 식별 및 등록 완료) |
@@ -272,6 +276,30 @@
 - [ ] `S3-1` ~ `S3-4`: 클라이언트 사이드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 ([`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md))
 - [ ] `LOC-1` ~ `LOC-4`: MSSQL Collation 및 로케일 정렬 지원 ([`notes/COLLATION_AND_LOCALE_PLAN.md`](notes/COLLATION_AND_LOCALE_PLAN.md))
 - [ ] `SEC-1` / `AUTH-1`: TDS 8.0 Pre-Login SSL/TLS 핸드셰이크 강화 및 클라이언트 사이드 OIDC 토큰 교환
+
+---
+
+### [PENDING] AI 에이전트용 컨텍스트 문서 (llms.txt, AGENTS.md 템플릿) `AI-STARTER-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-09 07:57:37
+- **Plan Doc**: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
+
+---
+
+### [PENDING] 랜딩 AI 앱 스타터 섹션 및 Go/Node/Python 최소 예제 `AI-STARTER-2`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-09 07:57:37
+- **Plan Doc**: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
+
+---
+
+### [PENDING] 호환성 매트릭스 문서 (되는 것/안 되는 것) `AI-STARTER-3`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-09 07:57:38
+- **Plan Doc**: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
+
+---
+
+### [PENDING] Go 임베디드 모드 타당성 조사 (SQLite 대비) `AI-STARTER-4`
+- **Domain**: Research | **Priority**: P3 | **Updated**: 2026-11-09 07:57:38
+- **Plan Doc**: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
 
 ---
 

@@ -87,9 +87,10 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **실행 계획**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) 제4장
 4. **`AUDIT-PATCH-P1`: [5단계] 전수 감사 P1 (Should Fix 47선) 난이도별(하/중/상) 순차 안정화 패치** [진행 중]
    - **목표**: P1 47건을 난이도 하(21건, 6개 미니배치) ➔ 중(18건) ➔ 상(8건)으로 분류하여 TDD 및 `-race` 기반으로 순차 적용.
+   - **설계 문서**: [`notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md`](notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md)
    - **진행 현황 (난이도 하 21건 — 6개 미니배치)**:
      - [x] **Mini-Batch 1 (`pkg/proc/runtime`, 4건)**: 음수 레지스터 인덱스(`regIdx >= 0`) 방어(`3-2`), 트리거 재귀 깊이(32) 초과 명시적 에러 반환(`3-3`), 스칼라 UDF 재귀 깊이(64) 상한 가드(`3-4`), 커서/내장함수 Opcode 안전 Type Assertion(`3-5`) 완료 (`1fcc772`).
-     - [ ] **Mini-Batch 2 (`pkg/storage` 코덱 & SkipList, 3건)**: `DecodeFlatToRow` 64비트 오프셋 오버플로우 가드(`Scope-010`), `DecodeTupleValue` 64비트 길이 가드(`Scope-018`), `SkipList.Delete` 슬라이스 경계 방어(`Scope-008`).
+     - [x] **Mini-Batch 2 (`pkg/storage` 코덱 & SkipList, 3건)**: `DecodeFlatToRow` 64비트 오프셋 오버플로우 가드(`Scope-010`), `DecodeTupleValue` 64비트 길이 가드(`Scope-018`), `SkipList.Delete` 슬라이스 경계 방어(`Scope-008`) 완료.
      - [ ] **Mini-Batch 3 (`pkg/storage` 라이프사이클, 3건)**: WiredTiger `Commit` 실패 시 `wt_session_reset` 보장(`1-3`), `memengine.OpenWithOptions` 재호출 시 기존 `stopCh` 정리(`Scope-001`), Flat 모드 코덱 실패 진단 로깅(`Scope-003`).
      - [ ] **Mini-Batch 4 (`pkg/execution` & `pkg/planner`, 4건)**: `HashJoinIterator.Close()` 시 `h.right.Close()` 호출(`4-3`), `SortIterator` Min-Heap 디코딩 I/O 에러 전파(`4-4`), `Window` `FrameFollowing` 슬라이스 상한 클램핑(`10-5`), `planner.go` 표현식 인덱스 빈 `Columns` 경계 방어(`4-5`).
      - [ ] **Mini-Batch 5 (`pkg/engine` & `pkg/proc`, 4건)**: `MERGE (VALUES ...)` 작은따옴표(`''`) 언이스케이프(`8-5`), `CLOSE <cursor>` 시 맵 삭제 대신 `IsOpen = false` 전환(`Scope-049`), VM 커서 중복 `OPEN` / 미오픈 `CLOSE` 표준 에러(`3-6`), `#temp` 미존재 테이블 단순 조회 시 팬텀 등록 방지(`2-5`).
@@ -158,6 +159,13 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 4. **`WAL-DELTA-1` Partial / Delta WAL 로깅 (UPDATE 변경분 컬럼 차분 기록)**
    - **목표**: 대규모 컬럼 테이블에서 `UPDATE` 발생 시 전체 튜플을 재직렬화하지 않고, 변경된 컬럼만 Dirty 비트마스킹(`[DirtyMask][ColIdx, Val]`)하여 AOF 디스크 I/O와 복제 전송량을 최소화.
    - **난이도/영향도**: 중간~높음(★★☆~★★★) / 엔진 내부 (트랜잭션 변경 감지, Delta 코덱, 리플레이 시 Read-Modify-Write 및 보조 인덱스 정합성 유지 필요)
+
+### 2.2.1 AI 앱 스타터 포지셔닝 (AI-Friendly Backend Positioning, Post-1.0)
+> "SQLite처럼 가벼운 PostgreSQL 호환 서버 DB"로서 AI 생성 서비스의 기본 백엔드가 되기 위한 문서/포지셔닝/임베디드 트랙. 설계 문서: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
+1. **`AI-STARTER-1`** AI 에이전트용 컨텍스트 문서 (`llms.txt`, `AGENTS.md` 템플릿) - Pending (최우선)
+2. **`AI-STARTER-3`** 호환성 매트릭스 문서 (되는 것/안 되는 것) - Pending
+3. **`AI-STARTER-2`** 랜딩 "AI 앱 스타터" 섹션 및 Go/Node/Python 최소 예제 - Pending
+4. **`AI-STARTER-4`** Go 임베디드 모드 타당성 조사 (SQLite 대비) - Pending (연구)
 
 ### 2.3 초장기 냉동 보관 후보 (Deep Freezer Backlog)
 > 구현 난이도(★★★~★★★★)와 시스템 파급 위험도가 극히 높고 실무 효익 대비 오버헤드가 크므로, 특수 목적의 극단적 대규모 요구 전까지 **초장기 냉동 보관(Deep Freeze)**합니다.

@@ -283,6 +283,10 @@ OCC-Dense Default          Opt-in (--storage=purego) WiredTiger + Pure-Go       
 ### 5.6. WebAssembly Runtime Sandbox UDF (`wazero`) (`v1.2.0`)
 - **Objective**: Embed the pure-Go `wazero` Wasm runtime to execute dynamically loaded WebAssembly scalar functions (`CREATE FUNCTION ... AS WASM`) in isolated memory sandboxes.
 
+### 5.6.1. AI App Starter Positioning & Agent-Friendly Documentation (`v1.1.0`)
+- **Objective**: Position LionSQL as "a SQLite-light, PostgreSQL-compatible server database" for AI-generated services, leveraging the single binary, dual wire protocols, built-in BaaS (REST, webhooks, RLS, SSE), and SQLLogicTest 100% evidence.
+- **Deliverables**: `llms.txt` / `AGENTS.md` agent context (`AI-STARTER-1`), compatibility matrix (`AI-STARTER-3`), landing page starter section with Go/Node/Python examples (`AI-STARTER-2`), and an in-process embedded mode feasibility study (`AI-STARTER-4`) ([`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)).
+
 ### 5.7. Distributed Scale-Out & Next-Gen Cloud Architecture (`v2.0.0+`)
 - **Objective**: Implement multi-node Raft consensus replication and distributed horizontal sharding for large-scale enterprise deployments.
 - **Scope & Breaking Boundary**:
