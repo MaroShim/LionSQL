@@ -30,7 +30,7 @@ LionSQL `v0.92.0` is a landmark milestone release that resolves all 37 critical 
   - Codified the **5-second cooldown gap protocol (`--cooldown=5`)** in benchmark harnesses to guarantee host kernel TCP `TIME_WAIT` socket drain and CPU thermal recovery.
 
 - **SSMS Official Integration Guide & Virtual System Views**:
-  - Published comprehensive Microsoft SQL Server Management Studio (SSMS 19/20) integration guide ([`guide/SSMS_INTEGRATION_GUIDE.md`](../../guide/SSMS_INTEGRATION_GUIDE.md) / [Korean](../../guide/SSMS_INTEGRATION_GUIDE.ko.md)).
+  - Published comprehensive Microsoft SQL Server Management Studio (SSMS 19/20) integration guide ([`guide/SSMS_INTEGRATION_GUIDE.md`](https://github.com/MaroShim/LionSQL/blob/main/guide/SSMS_INTEGRATION_GUIDE.md) / [Korean](https://github.com/MaroShim/LionSQL/blob/main/guide/SSMS_INTEGRATION_GUIDE.ko.md)).
   - Expanded virtual system views with `sys.dm_os_host_info` for seamless GUI introspection.
 
 ---

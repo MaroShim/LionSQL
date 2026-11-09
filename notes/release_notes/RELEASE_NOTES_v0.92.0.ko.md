@@ -30,7 +30,7 @@ LionSQL `v0.92.0` 버전은 135단계 전수 감사(Full-Spectrum Codebase Audit
   - 고빈도 루프백 측정 시 OS TCP `TIME_WAIT` 소켓 드레인 및 CPU 써멀 안정을 보장하는 **5초 쿨다운 프로토콜(`--cooldown=5`)** 탑재.
 
 - **SSMS 공식 연동 가이드 발간 및 가상 시스템 뷰 확충**:
-  - Microsoft SQL Server Management Studio (SSMS 19/20) 완벽 연동 가이드 발간 ([`guide/SSMS_INTEGRATION_GUIDE.ko.md`](../../guide/SSMS_INTEGRATION_GUIDE.ko.md) / [English](../../guide/SSMS_INTEGRATION_GUIDE.md)).
+  - Microsoft SQL Server Management Studio (SSMS 19/20) 완벽 연동 가이드 발간 ([`guide/SSMS_INTEGRATION_GUIDE.ko.md`](https://github.com/MaroShim/LionSQL/blob/main/guide/SSMS_INTEGRATION_GUIDE.ko.md) / [English](https://github.com/MaroShim/LionSQL/blob/main/guide/SSMS_INTEGRATION_GUIDE.md)).
   - `sys.dm_os_host_info` 가상 시스템 뷰 지원으로 GUI 인트로스펙션 호환성 극대화.
 
 ---
