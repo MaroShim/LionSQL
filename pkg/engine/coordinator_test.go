@@ -1418,6 +1418,81 @@ CAST(c.is_enabled AS bit) ASC`
 	if resRG.Rows[0]["Urn"] == nil || !strings.Contains(fmt.Sprintf("%v", resRG.Rows[0]["Urn"]), "/ResourceGovernor") {
 		t.Fatalf("expected ResourceGovernor URN, got %v", resRG.Rows[0]["Urn"])
 	}
+
+	// 15. SSMS Collation Property Query (COLLATIONPROPERTY)
+	qSSMSCollation := `SELECT COLLATIONPROPERTY((select collation_name from sys.databases where name = ISNULL('master', db_name())), 'LCID') AS [LCID], COLLATIONPROPERTY((select collation_name from sys.databases where name = ISNULL('master', db_name())), 'ComparisonStyle') AS [ComparisonStyle]`
+	resCollation, err := coord.ExecuteSQL(qSSMSCollation)
+	if err != nil {
+		t.Fatalf("SSMS collation property query failed: %v", err)
+	}
+	if len(resCollation.Rows) != 1 {
+		t.Fatalf("expected 1 row for collation property, got %d", len(resCollation.Rows))
+	}
+	if fmt.Sprintf("%v", resCollation.Rows[0]["LCID"]) != "1033" {
+		t.Fatalf("expected LCID=1033, got %v", resCollation.Rows[0]["LCID"])
+	}
+	if fmt.Sprintf("%v", resCollation.Rows[0]["ComparisonStyle"]) != "196609" {
+		t.Fatalf("expected ComparisonStyle=196609, got %v", resCollation.Rows[0]["ComparisonStyle"])
+	}
+
+	// 16. SSMS Complex Table Enumeration Query with sys.indexes & sys.data_spaces & sys.extended_properties
+	qSSMSComplexTables := `SELECT
+tbl.name AS [Name],
+SCHEMA_NAME(tbl.schema_id) AS [Schema],
+'Server[@Name=' + quotename(CAST(serverproperty(N'Servername') AS sysname),'''') + ']' + '/Database[@Name=' + quotename(db_name(),'''') + ']' + '/Table[@Name=' + quotename(tbl.name,'''') + ' and @Schema=' + quotename(SCHEMA_NAME(tbl.schema_id),'''') + ']' AS [Urn],
+tbl.create_date AS [CreateDate],
+CAST(tbl.is_memory_optimized AS bit) AS [IsMemoryOptimized],
+CAST(CASE idx.type WHEN 5 THEN 1 ELSE 0 END AS bit) AS [HasClusteredColumnStoreIndex],
+CAST(CASE idx.index_id WHEN 1 THEN 1 ELSE 0 END AS bit) AS [HasClusteredIndex],
+CAST(case idx.index_id when 1 then case when (idx.is_primary_key + 2*idx.is_unique_constraint = 1) then 1 else 0 end else 0 end AS bit) AS [HasPrimaryClusteredIndex]
+FROM
+sys.tables AS tbl
+INNER JOIN sys.indexes AS idx ON
+        idx.object_id = tbl.object_id and (idx.index_id < '2'  or (tbl.is_memory_optimized = 1 and idx.index_id = (select min(index_id) from sys.indexes where object_id = tbl.object_id)))
+LEFT OUTER JOIN sys.data_spaces AS dsidx ON dsidx.data_space_id = idx.data_space_id
+WHERE
+(CAST(
+ case
+    when tbl.is_ms_shipped = 1 then 1
+    when exists (
+        select
+            1
+        from
+            sys.extended_properties
+        where
+            major_id = tbl.object_id and
+            minor_id = 0 and
+            class = 1 and
+            name = N'microsoft_database_tools_support')
+        then 1
+    else 0
+end
+             AS bit)='0')
+ORDER BY
+[Schema] ASC,[Name] ASC`
+
+	resComplexTbl, err := coord.ExecuteSQL(qSSMSComplexTables)
+	if err != nil {
+		t.Fatalf("SSMS complex table query failed: %v", err)
+	}
+	if len(resComplexTbl.Rows) == 0 {
+		t.Fatalf("expected non-zero rows for complex table query, got 0")
+	}
+
+	// 17. SSMS User Database Query
+	qSSMSUserDb := `SELECT
+dtb.name AS [Database_Name]
+FROM
+master.sys.databases AS dtb
+WHERE
+(CAST(case when dtb.name in ('master','model','msdb','tempdb') then 1 else dtb.is_distributor end AS bit)=0)`
+	resUserDb, err := coord.ExecuteSQL(qSSMSUserDb)
+	if err != nil {
+		t.Fatalf("SSMS user db query failed: %v", err)
+	}
+	if len(resUserDb.Rows) != 1 || resUserDb.Rows[0]["Database_Name"] != "lionsql" {
+		t.Fatalf("expected 1 user database 'lionsql', got %+v", resUserDb.Rows)
+	}
 }
 
 func TestReplicaSessionZeroAllocationFastPath(t *testing.T) {

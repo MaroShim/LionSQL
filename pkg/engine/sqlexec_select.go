@@ -478,6 +478,28 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		}
 	}
 
+	// COLLATIONPROPERTY('collation', 'property')
+	if strings.HasPrefix(upper, "COLLATIONPROPERTY(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("COLLATIONPROPERTY(") : len(trimmed)-1])
+		parts := sqlutil.SplitTopLevel(inner, ',')
+		if len(parts) >= 2 {
+			prop := strings.ToUpper(strings.Trim(strings.TrimSpace(parts[1]), "'\""))
+			switch prop {
+			case "LCID":
+				return int32(1033), "lcid"
+			case "COMPARISONSTYLE":
+				return int32(196609), "comparisonstyle"
+			case "CODEPAGE":
+				return int32(1252), "codepage"
+			case "VERSION":
+				return int32(0), "version"
+			default:
+				return int32(0), strings.ToLower(prop)
+			}
+		}
+		return int32(1033), "collationproperty"
+	}
+
 	// @@MICROSOFTVERSION
 	if upper == "@@MICROSOFTVERSION" {
 		return int64(251660240), "microsoftversion"

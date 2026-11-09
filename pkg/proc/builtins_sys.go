@@ -128,7 +128,7 @@ func isSysBuiltin(name string) bool {
 	switch name {
 	case "ISNULL", "COALESCE", "NULLIF", "IFNULL", "NVL", "ISNUMERIC", "IIF", "CHOOSE", "GREATEST", "LEAST",
 		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID", "SETVAL", "NEXTVAL",
-		"SCOPE_IDENTITY", "SERVERPROPERTY", "CONNECTIONPROPERTY",
+		"SCOPE_IDENTITY", "SERVERPROPERTY", "CONNECTIONPROPERTY", "COLLATIONPROPERTY",
 		"ERROR_NUMBER", "ERROR_MESSAGE", "ERROR_LINE", "ERROR_SEVERITY", "ERROR_STATE", "ERROR_PROCEDURE", "@@ERROR",
 		"OBJECT_ID", "OBJECT_NAME", "COL_LENGTH", "COL_NAME", "SCHEMA_NAME", "SCHEMA_ID", "DB_NAME", "DB_ID", "APP_NAME", "IDENT_CURRENT",
 		"DATABASEPROPERTYEX", "OBJECTPROPERTY", "COLUMNPROPERTY", "INDEXPROPERTY", "OBJECT_SCHEMA_NAME", "TYPE_ID", "TYPE_NAME",
@@ -318,6 +318,24 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 			return storage.IntValue(0)
 		default:
 			return storage.StringValue("")
+		}
+
+	case "COLLATIONPROPERTY":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		prop := strings.ToUpper(strings.Trim(strings.TrimSpace(valToString(args[1])), "'\""))
+		switch prop {
+		case "LCID":
+			return storage.IntValue(1033)
+		case "COMPARISONSTYLE":
+			return storage.IntValue(196609)
+		case "CODEPAGE":
+			return storage.IntValue(1252)
+		case "VERSION":
+			return storage.IntValue(0)
+		default:
+			return storage.IntValue(0)
 		}
 
 	case "CONNECTIONPROPERTY":

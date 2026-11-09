@@ -516,6 +516,9 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 			"table_name", "name", "object_id", "schema_id", "table_type", "table_schema",
 			"column_count", "create_date", "modify_date", "principal_id", "is_ms_shipped",
 			"is_replicated", "max_column_id_used", "lob_data_space_id", "filestream_data_space_id",
+			"is_memory_optimized", "durability", "durability_desc", "temporal_type", "temporal_type_desc",
+			"is_filetable", "is_external", "is_node", "is_edge", "is_tracked_by_cdc", "lock_on_bulk_load",
+			"uses_ansi_nulls", "is_published", "is_auto_cleanup_types",
 		}
 		for i, t := range tables {
 			allRows = append(allRows, map[string]any{
@@ -534,6 +537,20 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 				"max_column_id_used":       len(t.Columns),
 				"lob_data_space_id":        0,
 				"filestream_data_space_id": 0,
+				"is_memory_optimized":      false,
+				"durability":               0,
+				"durability_desc":          "SCHEMA_AND_DATA",
+				"temporal_type":            0,
+				"temporal_type_desc":       "NON_TEMPORAL_TABLE",
+				"is_filetable":             false,
+				"is_external":              false,
+				"is_node":                  false,
+				"is_edge":                  false,
+				"is_tracked_by_cdc":        false,
+				"lock_on_bulk_load":        false,
+				"uses_ansi_nulls":          true,
+				"is_published":             false,
+				"is_auto_cleanup_types":    false,
 			})
 		}
 
@@ -566,14 +583,93 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 		}
 
 	case "sys.indexes", "sysindexes", "sys_indexes":
-		columns = []string{"table_name", "index_name", "is_unique", "columns"}
-		for _, t := range tables {
-			for _, idx := range t.Indexes {
+		columns = []string{
+			"object_id", "name", "index_name", "index_id", "type", "type_desc",
+			"is_unique", "data_space_id", "ignore_dup_key", "is_primary_key",
+			"is_unique_constraint", "fill_factor", "is_padded", "is_disabled",
+			"is_hypothetical", "allow_row_locks", "allow_page_locks", "has_filter",
+			"filter_definition", "auto_created", "table_name", "columns",
+		}
+		for i, t := range tables {
+			objID := 1000 + i
+			hasPK := false
+			if pkCol, _ := t.PrimaryKeyColumn(); pkCol != nil {
+				hasPK = true
 				allRows = append(allRows, map[string]any{
-					"table_name": t.Name,
-					"index_name": idx.Name,
-					"is_unique":  idx.Unique,
-					"columns":    strings.Join(idx.Columns, ", "),
+					"object_id":            objID,
+					"name":                 "PK_" + t.Name,
+					"index_name":           "PK_" + t.Name,
+					"index_id":             1,
+					"type":                 1,
+					"type_desc":            "CLUSTERED",
+					"is_unique":            true,
+					"data_space_id":        1,
+					"ignore_dup_key":       false,
+					"is_primary_key":       true,
+					"is_unique_constraint": true,
+					"fill_factor":          0,
+					"is_padded":            false,
+					"is_disabled":          false,
+					"is_hypothetical":      false,
+					"allow_row_locks":      true,
+					"allow_page_locks":     true,
+					"has_filter":           false,
+					"filter_definition":    nil,
+					"auto_created":         false,
+					"table_name":           t.Name,
+					"columns":              pkCol.Name,
+				})
+			}
+			if !hasPK {
+				allRows = append(allRows, map[string]any{
+					"object_id":            objID,
+					"name":                 nil,
+					"index_name":           nil,
+					"index_id":             0,
+					"type":                 0,
+					"type_desc":            "HEAP",
+					"is_unique":            false,
+					"data_space_id":        1,
+					"ignore_dup_key":       false,
+					"is_primary_key":       false,
+					"is_unique_constraint": false,
+					"fill_factor":          0,
+					"is_padded":            false,
+					"is_disabled":          false,
+					"is_hypothetical":      false,
+					"allow_row_locks":      true,
+					"allow_page_locks":     true,
+					"has_filter":           false,
+					"filter_definition":    nil,
+					"auto_created":         false,
+					"table_name":           t.Name,
+					"columns":              "",
+				})
+			}
+			for idxSeq, idx := range t.Indexes {
+				allRows = append(allRows, map[string]any{
+					"object_id":            objID,
+					"name":                 idx.Name,
+					"index_name":           idx.Name,
+					"index_id":             2 + idxSeq,
+					"type":                 2,
+					"type_desc":            "NONCLUSTERED",
+					"is_unique":            idx.Unique,
+					"data_space_id":        1,
+					"ignore_dup_key":       false,
+					"is_primary_key":       false,
+					"is_unique_constraint": false,
+					"fill_factor":          0,
+					"is_padded":            false,
+					"is_disabled":          false,
+					"is_hypothetical":      false,
+					"allow_row_locks":      true,
+					"allow_page_locks":     true,
+					"has_filter":           false,
+					"filter_definition":    nil,
+					"auto_created":         false,
+					"table_name":           t.Name,
+					"columns":              strings.Join(idx.Columns, ", "),
 				})
 			}
 		}
@@ -598,6 +694,7 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 			{"tempdb", 2},
 			{"model", 3},
 			{"msdb", 4},
+			{"lionsql", 5},
 		}
 		for _, db := range dbList {
 			allRows = append(allRows,
@@ -1031,6 +1128,16 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 			{"endpoint_id": 1, "principal_id": 1, "name": "Dedicated Admin Connection", "protocol": 2, "protocol_desc": "TCP", "type": 2, "type_desc": "TSQL", "state": 0, "state_desc": "STARTED", "is_admin_endpoint": true},
 			{"endpoint_id": 2, "principal_id": 1, "name": "TSQL Default TCP", "protocol": 2, "protocol_desc": "TCP", "type": 2, "type_desc": "TSQL", "state": 0, "state_desc": "STARTED", "is_admin_endpoint": false},
 		}
+
+	case "sys.data_spaces", "sysdataspaces", "sys_data_spaces":
+		columns = []string{"data_space_id", "name", "type", "type_desc", "is_default", "is_system"}
+		allRows = []map[string]any{
+			{"data_space_id": 1, "name": "PRIMARY", "type": "FG", "type_desc": "ROWS_FILEGROUP", "is_default": true, "is_system": false},
+		}
+
+	case "sys.extended_properties", "sysextendedproperties", "sys_extended_properties":
+		columns = []string{"class", "class_desc", "major_id", "minor_id", "name", "value"}
+		allRows = []map[string]any{}
 
 	case "sys.database_files", "sysdatabasefiles", "sys_database_files":
 		columns = []string{"file_id", "file_guid", "type", "type_desc", "data_space_id", "name", "physical_name", "state", "state_desc", "size", "max_size", "growth", "is_media_read_only", "is_read_only", "is_sparse", "is_percent_growth"}

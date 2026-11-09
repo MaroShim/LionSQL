@@ -29,6 +29,8 @@ var sysViewAliases = map[string]struct{}{
 	"sys.dm_os_host_info": {}, "sysdmoshostinfo": {}, "sys_dm_os_host_info": {},
 	"sys.resource_governor_configuration": {}, "sysresourcegovernorconfiguration": {}, "sys_resource_governor_configuration": {},
 	"sys.endpoints": {}, "sysendpoints": {}, "sys_endpoints": {},
+	"sys.data_spaces": {}, "sysdataspaces": {}, "sys_data_spaces": {},
+	"sys.extended_properties": {}, "sysextendedproperties": {}, "sys_extended_properties": {},
 	"sys.database_files": {}, "sysdatabasefiles": {}, "sys_database_files": {},
 	"sys.master_files": {}, "sysmasterfiles": {}, "sys_master_files": {},
 	"sys.all_objects": {}, "sysallobjects": {}, "sys_all_objects": {},
