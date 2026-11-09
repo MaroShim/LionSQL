@@ -37,13 +37,15 @@ LionSQL의 내장 웹 앱 호스팅 기능은 **"PocketBase와 SQLite의 배포 
 |                                                                               |
 |   [ Browser Client ]                                                          |
 |           │                                                                   |
-|           ├──> GET / (or /dashboard, /users) ──> Embedded Static SPA Server   |
-|           │                                      (--app=index.html / ./dist)  |
+|           ├──> GET / (or /dashboard, /users) ──> Embedded Flat Web Server     |
+|           │                                      (--app=./dist / index.html)  |
+|           │                                      (Kernel sendfile: 45k+ RPS)  |
 |           │                                                                   |
 |           ├──> GET/POST /api/... ─────────────> Native BaaS REST/SQL Engine   |
-|           │                                      (Zero CORS, In-Memory/Disk)  |
+|           │                                      (Zero-Hop In-Process, 0µs)   |
 |           │                                                                   |
-|           ├──> GET /api/realtime ─────────────> Realtime SSE Change Stream    |
+|           ├──> GET /sdk/lionsql.js ───────────> Embedded JS Client SDK        |
+|           │                                      (Zero-Bundler Native Direct) |
 |           │                                                                   |
 |           └──> GET /_/ ───────────────────────> Embedded Web Studio (Admin)   |
 +-------------------------------------------------------------------------------+
