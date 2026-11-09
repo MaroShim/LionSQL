@@ -16,6 +16,7 @@
 | `DONE` | **`AUDIT-CORE-DEEP-RESCAN`** | Integrity | P1 | 12대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan) | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) |  |
 | `PENDING` | **`AUDIT-LOG-1`** | Integrity | P2 | 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템 | [`notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md) |  |
 | `DONE` | **`AUDIT-PATCH-P0`** | Integrity | P1 | 전수 감사 P0 (Must Fix 37선) 결함 TDD 순차 패치 및 회귀 검증 | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |  |
+| `IN_PROGRESS` | **`AUDIT-PATCH-P1`** | Core | P1 | 1.0 전수 감사 P1 (Should Fix 47선) 난이도별(하/중/상) 순차 안정화 패치 | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |  |
 | `DONE` | **`AUDIT-TRIAGE-POST`** | Integrity | P1 | 전수 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) |  |
 | `DONE` | **`BENCH-ALL-IN-ONE-1`** | Durability | P2 | 원클릭 벤치마크 및 종합 검증 스위트 (`scripts/run_all_benchmarks.sh`) 구축 |  | - [x] **Phase 1~4 (성능/와이어 실측)**: Bank... |
 | `PENDING` | **`BENCH-TPCH-1`** | Ecosystem | P3 | Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation | [`notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |  |
@@ -193,6 +194,7 @@
 | `DONE` | **`SQL-GOOSE-IDENTITY-1`** | Durability | P2 | PostgreSQL `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` 지원 및 goose 마이그레이션 호환 |  |  |
 | `DONE` | **`SQL-WRITABLE-CTE-1`** | Durability | P2 | PostgreSQL Writable CTE (`WITH ... INSERT/UPDATE/DELETE ... RETURNING`) 및 `::type[]` 캐스트 지원 |  |  |
 | `DONE` | **`SSMS-OE-COMPAT-1`** | Ecosystem | P2 | SSMS Object Explorer 호환성 (sys.resource_governor_configuration, HostPlatform 배치 및 가상 카탈로그 수식 평가) |  |  |
+| `IN_PROGRESS` | **`SSMS-OE-COMPAT-2`** | Ecosystem | P2 | SSMS Object Explorer 호환성 고도화 (Phase 1~4 테이블 목록 표시 완료, Phase 5 SMO NullReferenceException 및 하위 노드 바인딩) | [`notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`](notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md) |  |
 | `DONE` | **`TUNE-DOC-SYNC-1`** | Documentation | P2 | 1.0 GA 벤치마크 및 공식 문서 실측치 일괄 동기화 |  |  |
 | `DONE` | **`TUNE-HOTSPOT-OCC-1`** | Durability | P2 | 고동시성 핫스팟 OCC 경합 완화 및 와이어 버퍼 풀링 |  | - [x] **Phase 3 (`TUNE-EPHEMERAL-VERI... |
 | `DONE` | **`TUNE-SP-FASTPATH-1`** | Durability | P2 | TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 | [`notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md) | - [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)... |
@@ -362,6 +364,12 @@
 - [ ] Batch 3: 백업, 복원 & 카탈로그 메타데이터 (P0-15 ~ P0-17, P0-20 ~ P0-22, 6건) TDD 패치
 - [ ] Batch 4: T-SQL 렉서, 파서 & CBO 플래너 (P0-23 ~ P0-25, P0-28, 4건) TDD 패치
 - [ ] Batch 5: 실행 오퍼레이터, 와이어 & 동시성 VM (P0-11 ~ P0-14, P0-18 ~ P0-19, P0-26, P0-27, P0-29, P0-30, 10건) TDD 패치
+
+---
+
+### [IN_PROGRESS] 1.0 전수 감사 P1 (Should Fix 47선) 난이도별(하/중/상) 순차 안정화 패치 `AUDIT-PATCH-P1`
+- **Domain**: Core | **Priority**: P1 | **Updated**: 2026-11-09 07:44:19
+- **Plan Doc**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md)
 
 ---
 
@@ -2418,6 +2426,12 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ### [DONE] SSMS Object Explorer 호환성 (sys.resource_governor_configuration, HostPlatform 배치 및 가상 카탈로그 수식 평가) `SSMS-OE-COMPAT-1`
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-09 05:34:10
+
+---
+
+### [IN_PROGRESS] SSMS Object Explorer 호환성 고도화 (Phase 1~4 테이블 목록 표시 완료, Phase 5 SMO NullReferenceException 및 하위 노드 바인딩) `SSMS-OE-COMPAT-2`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-09 07:44:19
+- **Plan Doc**: [`notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`](notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md)
 
 ---
 
