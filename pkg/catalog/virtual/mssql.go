@@ -796,6 +796,10 @@ func execSysTablesJoinedIndexes(src Source, sql string) (*Result, error) {
 	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	var allRows []map[string]any
 
+	if src == nil {
+		return FormatResultWithSQL(columns, allRows, sql)
+	}
+
 	currDb := "master"
 	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
 		if cur := dbs.GetCurrentDatabase(); cur != "" {

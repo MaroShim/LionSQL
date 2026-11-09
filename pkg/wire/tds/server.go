@@ -3048,15 +3048,20 @@ func (s *Server) handleSsmsEnvironmentBatch(conn net.Conn, trimmed string, sess 
 
 	var buf bytes.Buffer
 
+	doneType := TokenDone
+	if isRPC {
+		doneType = TokenDoneInProc
+	}
+
 	// Result Set 1: Metadata + Row + Done (DoneMore)
 	buf.Write(BuildColMetaData(cols1))
 	buf.Write(sess.buildRow(cols1, vals1))
-	buf.Write(BuildDone(TokenDone, DoneMore|DoneCount, 0xC1, 1))
+	buf.Write(BuildDone(doneType, DoneMore|DoneCount, 0xC1, 1))
 
 	// Result Set 2: Metadata + Row + Done (DoneMore)
 	buf.Write(BuildColMetaData(cols2))
 	buf.Write(sess.buildRow(cols2, vals2))
-	buf.Write(BuildDone(TokenDone, DoneMore|DoneCount, 0xC1, 1))
+	buf.Write(BuildDone(doneType, DoneMore|DoneCount, 0xC1, 1))
 
 	// Result Set 3: Metadata + Row + Final Done
 	buf.Write(BuildColMetaData(cols3))

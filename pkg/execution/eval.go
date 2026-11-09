@@ -2,6 +2,7 @@ package execution
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"lionsql/pkg/proc"
@@ -419,26 +420,34 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 			case proc.TokenAsterisk:
 				return lInt * rInt, true
 			case proc.TokenSlash, proc.TokenDiv:
-				if rInt == 0 {
-					return nil, false
+				if rInt == 0 || (lInt == math.MinInt64 && rInt == -1) {
+					return nil, true
 				}
 				return lInt / rInt, true
 			case proc.TokenPercent:
 				if rInt == 0 {
-					return nil, false
+					return nil, true
+				}
+				if lInt == math.MinInt64 && rInt == -1 {
+					return int64(0), true
 				}
 				return lInt % rInt, true
 			}
+			return nil, false
 		}
 		if e.Op == proc.TokenDiv {
 			lF, lOkF := toFloat64(left)
 			rF, rOkF := toFloat64(right)
 			if lOkF && rOkF {
 				rI := int64(rF)
+				lI := int64(lF)
 				if rI == 0 {
 					return nil, true
 				}
-				return int64(lF) / rI, true
+				if lI == math.MinInt64 && rI == -1 {
+					return nil, false
+				}
+				return lI / rI, true
 			}
 			return nil, false
 		}

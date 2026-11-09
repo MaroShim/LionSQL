@@ -353,3 +353,35 @@ func TestP1_BatchM1_AlterViewFKAndPgAttribute(t *testing.T) {
 	})
 }
 
+// TestServerSideCursor_OpenAlreadyOpenFails verifies that calling OPEN on an already-open cursor returns an error.
+func TestServerSideCursor_OpenAlreadyOpenFails(t *testing.T) {
+	coord := setupCursorTestDB(t)
+	sessID := "sess-open-cur"
+
+	_, err := coord.ExecuteSessionSQL(sessID, "DECLARE cur_open CURSOR FOR SELECT id FROM t_cursor_users;")
+	if err != nil {
+		t.Fatalf("DECLARE CURSOR failed: %v", err)
+	}
+	// Cursor is open immediately after DECLARE: calling OPEN must fail
+	_, err = coord.ExecuteSessionSQL(sessID, "OPEN cur_open;")
+	if err == nil || !strings.Contains(err.Error(), "already open") {
+		t.Fatalf("expected 'already open' error on opening already-open cursor, got: %v", err)
+	}
+
+	// CLOSE cur_open
+	if _, err := coord.ExecuteSessionSQL(sessID, "CLOSE cur_open;"); err != nil {
+		t.Fatalf("CLOSE failed: %v", err)
+	}
+
+	// Now OPEN succeeds
+	if _, err := coord.ExecuteSessionSQL(sessID, "OPEN cur_open;"); err != nil {
+		t.Fatalf("OPEN after CLOSE failed: %v", err)
+	}
+
+	// Second OPEN must fail with already open
+	_, err = coord.ExecuteSessionSQL(sessID, "OPEN cur_open;")
+	if err == nil || !strings.Contains(err.Error(), "already open") {
+		t.Fatalf("expected 'already open' error on second OPEN, got: %v", err)
+	}
+}
+

@@ -342,7 +342,7 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		if len(args) == 0 || args[0].IsNull {
 			return storage.NullValue(storage.TypeVarChar)
 		}
-		prop := strings.ToLower(strings.TrimSpace(valToString(args[0])))
+		prop := strings.ToLower(strings.Trim(strings.TrimSpace(valToString(args[0])), "'\""))
 		switch prop {
 		case "net_transport":
 			return storage.StringValue("TCP")

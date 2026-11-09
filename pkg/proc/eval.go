@@ -732,6 +732,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 				if i2 == 0 {
 					return nil, nil
 				}
+				if i1 == math.MinInt64 && i2 == -1 {
+					return nil, fmt.Errorf("arithmetic overflow error encountered")
+				}
 				return i1 / i2, nil
 			}
 		}
@@ -760,6 +763,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 			if i2 == 0 {
 				return nil, nil
 			}
+			if int64(n1) == math.MinInt64 && i2 == -1 {
+				return nil, fmt.Errorf("arithmetic overflow error encountered")
+			}
 			return int64(n1) / i2, nil
 		}
 		return nil, fmt.Errorf("cannot integer-divide non-numeric values")
@@ -771,10 +777,15 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		n1, isNum1 := toArithmeticFloat(left)
 		n2, isNum2 := toArithmeticFloat(right)
 		if isNum1 && isNum2 {
-			if int64(n2) == 0 {
+			i1 := int64(n1)
+			i2 := int64(n2)
+			if i2 == 0 {
 				return nil, ErrDivisionByZero
 			}
-			return int64(n1) % int64(n2), nil
+			if i1 == math.MinInt64 && i2 == -1 {
+				return int64(0), nil
+			}
+			return i1 % i2, nil
 		}
 		return nil, fmt.Errorf("cannot modulo non-numeric values")
 

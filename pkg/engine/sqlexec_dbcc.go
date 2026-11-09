@@ -376,7 +376,11 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 		}
 	}
 
-	finalRows := make([]map[string]any, 0, len(filteredRows))
+	type catalogRowPair struct {
+		src   map[string]any
+		final map[string]any
+	}
+	pairs := make([]catalogRowPair, len(filteredRows))
 	for i, fr := range filteredRows {
 		row := make(map[string]any, len(projCols))
 		for _, pc := range projCols {
@@ -399,28 +403,27 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 				row[col] = nil
 			}
 		}
-		_ = i
-		finalRows = append(finalRows, row)
+		pairs[i] = catalogRowPair{src: fr, final: row}
 	}
 
 	// Order by
-	if orderByClause != "" && len(finalRows) > 0 {
+	if orderByClause != "" && len(pairs) > 0 {
 		orderItems := sqlutil.ParseOrderBy(orderByClause)
 		if len(orderItems) > 0 {
-			sort.Slice(finalRows, func(i, j int) bool {
+			sort.Slice(pairs, func(i, j int) bool {
 				for _, item := range orderItems {
 					orderCol := cleanIdentifier(item.Column)
-					v1 := getRowValueCaseInsensitive(finalRows[i], orderCol)
-					v2 := getRowValueCaseInsensitive(finalRows[j], orderCol)
+					v1 := getRowValueCaseInsensitive(pairs[i].final, orderCol)
+					v2 := getRowValueCaseInsensitive(pairs[j].final, orderCol)
 					if v1 == nil && v2 == nil {
-						v1 = getRowValueCaseInsensitive(filteredRows[i], orderCol)
-						v2 = getRowValueCaseInsensitive(filteredRows[j], orderCol)
+						v1 = getRowValueCaseInsensitive(pairs[i].src, orderCol)
+						v2 = getRowValueCaseInsensitive(pairs[j].src, orderCol)
 					}
 					if v1 == nil && v2 == nil && (strings.ContainsAny(item.Column, "()+*/-|^") || sqlutil.HasPrefixKeyword(item.Column, "CAST") || sqlutil.HasPrefixKeyword(item.Column, "CASE")) {
 						p := proc.NewParser(proc.NewLexer(item.Column))
 						if e := p.ParseExpr(); e != nil && len(p.Errors()) == 0 {
-							v1, _ = proc.EvalRowExpr(e, filteredRows[i], nil)
-							v2, _ = proc.EvalRowExpr(e, filteredRows[j], nil)
+							v1, _ = proc.EvalRowExpr(e, pairs[i].src, nil)
+							v2, _ = proc.EvalRowExpr(e, pairs[j].src, nil)
 						}
 					}
 					cmp := sqlutil.CompareAny(v1, v2)
@@ -435,6 +438,11 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 				return false
 			})
 		}
+	}
+
+	finalRows := make([]map[string]any, len(pairs))
+	for i, pair := range pairs {
+		finalRows[i] = pair.final
 	}
 
 	// Limit

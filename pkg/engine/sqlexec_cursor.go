@@ -425,6 +425,10 @@ func (s *Coordinator) execOpenCursor(query string, start time.Time, cs *ClientSe
 		cs.Mu.Unlock()
 		return nil, fmt.Errorf("cursor %q does not exist", target)
 	}
+	if cur.IsOpen {
+		cs.Mu.Unlock()
+		return nil, fmt.Errorf("cursor %q is already open", target)
+	}
 	cursorQuery := cur.Query
 	cs.Mu.Unlock()
 

@@ -11,6 +11,7 @@ import (
 
 	"lionsql/pkg/execution"
 	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 )
@@ -1098,6 +1099,34 @@ func TestP1_Batch4_JoinCloseSortErrAndWindowBounds(t *testing.T) {
 		}
 		if row.Get("sum_following") != nil || row.Get("sum_negative_offset") != nil {
 			t.Fatalf("unexpected window frame results: sum_following=%v (want nil), sum_negative_offset=%v (want nil)", row.Get("sum_following"), row.Get("sum_negative_offset"))
+		}
+	})
+
+	// 4. MinInt64 divide/modulo overflow safety ([RULE:DefensiveIndexing])
+	t.Run("MinInt64_DivideAndModOverflowSafety", func(t *testing.T) {
+		tup := execution.NewTupleFromMap(map[string]any{
+			"a": int64(-9223372036854775808),
+			"b": int64(-1),
+		}, []string{"a", "b"})
+		divExpr := &proc.BinaryExpr{
+			Left:  &proc.ColumnRefExpr{Name: "a"},
+			Op:    proc.TokenSlash,
+			Right: &proc.ColumnRefExpr{Name: "b"},
+		}
+		// Must not panic and must return nil (SQL NULL) on overflow
+		val, ok := execution.EvalTupleExpr(tup, divExpr)
+		if !ok || val != nil {
+			t.Fatalf("expected overflow divide to return nil (NULL), got val=%v ok=%v", val, ok)
+		}
+
+		modExpr := &proc.BinaryExpr{
+			Left:  &proc.ColumnRefExpr{Name: "a"},
+			Op:    proc.TokenPercent,
+			Right: &proc.ColumnRefExpr{Name: "b"},
+		}
+		modVal, modOk := execution.EvalTupleExpr(tup, modExpr)
+		if !modOk || modVal != int64(0) {
+			t.Fatalf("expected overflow modulo to return 0, got val=%v ok=%v", modVal, modOk)
 		}
 	})
 }
