@@ -834,9 +834,6 @@ func runServer(args []string) error {
 		}
 
 		fmt.Print(renderStartupBanner(cfg, bCtx))
-		if cfg.IsDefaultAdminPassword() {
-			log.Println(config.DefaultAdminPassWarning)
-		}
 
 		if httpServer != nil {
 			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {

@@ -33,6 +33,11 @@ func TestStartupBanner_DefaultPassword_LastLineMustBeWarning(t *testing.T) {
 	if strings.Contains(lastLine, "1234567890") {
 		t.Errorf("warning must NOT leak password literal '1234567890', but found it in: %q", lastLine)
 	}
+
+	// Verify the warning appears exactly once in the banner
+	if count := strings.Count(banner, config.DefaultAdminPassWarning); count != 1 {
+		t.Fatalf("expected warning to appear exactly once in banner, got %d times", count)
+	}
 }
 
 func TestStartupBanner_EmptyPassword_LastLineMustBeWarning(t *testing.T) {
