@@ -108,7 +108,7 @@
 1. **`결함 13-4` 내장 SPA 웹 서버(`/assets/*.js`) 서브폴더 정적 에셋 허용** (`pkg/api/spa.go`): Path Traversal(`..`) 및 숨김 파일(`/.`)은 엄격히 차단하되, Vite/React/Vue 빌드 결과물의 표준 하위 정적 에셋 경로(`/assets/*`, `/static/*` 등) 안전 서빙 지원.
 2. **`결함 5-3` 레플리카 WAL 적용 실패 에러 무음 삼킴 제거** (`pkg/replication/client.go`): 레플리카에서 Primary WAL 레코드 리플레이 실패 시 무음 무시하고 LSN을 전진시키지 않도록 명시적 에러 반환 및 재동기화 유도 (`[RULE:ExplicitError]`).
 3. **`결함 5-4` & `Scope-097` PGWire SSL 경로 `CancelRequest` 정상 호출 및 장기 연결 Portal 상한 가드** (`pkg/wire/server.go`): TLS 핸드셰이크 전/후 `CancelRequest` 중복 로직 통합(`handleCancelRequest`) 및 단일 세션 내 미해제 Portal 누적 상한(`MaxSessionPortals = 1024`) 가드 적용 (`[RULE:BoundedBuffers]`).
-4. **`Scope-100` / `101` / `104` PGWire & TDS 핸드셰이크 `SetReadDeadline` 부여** (`pkg/wire/server.go`, `pkg/wire/tds/server.go`): 초기 스타트업/프리로그인/TLS 협상 패킷 읽기 시 유한 `ReadDeadline`(`HandshakeTimeout = 15s`)을 설정하고 로그인 완료 시 리셋하여 Slowloris 연결 고갈 방어.
+4. **`Scope-100` / `101` / `104` PGWire & TDS 핸드셰이크 `SetReadDeadline` 부여** (`pkg/wire/server.go`, `pkg/wire/tds/server.go`): 초기 스타트업/프리로그인/TLS 협상 패킷 읽기 시 유한 `ReadDeadline`(`HandshakeTimeout = 10s`)을 설정하고 로그인 완료 시 리셋하여 Slowloris 연결 고갈 방어.
 - **검증 완료**: `pkg/api`, `pkg/replication`, `pkg/wire` 3개 패키지 단위 Red ➔ Green 전환 및 `-race` 검증 100% PASS.
 
 ### Mini-Batch M5 (`pkg/api/webhook.go`, `cmd/lionsql`, `cmd/soaktest`): 웹훅 중단, 서버 종료 WAL Sync, 데몬/하네스 정리 (3건) [대기]

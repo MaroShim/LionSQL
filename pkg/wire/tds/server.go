@@ -559,7 +559,7 @@ func (sess *ConnectionSession) writePacket(w io.Writer, pType byte, payload []by
 }
 
 // HandshakeTimeout defines the maximum duration allowed for TDS prelogin/login before aborting.
-const HandshakeTimeout = 15 * time.Second
+const HandshakeTimeout = 10 * time.Second
 
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()

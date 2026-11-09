@@ -370,7 +370,7 @@ const DefaultMaxPreparedPerSession = 256
 const MaxSessionPortals = 1024
 
 // HandshakeTimeout defines the maximum duration allowed for client handshake & authentication before aborting Slowloris connections.
-const HandshakeTimeout = 15 * time.Second
+const HandshakeTimeout = 10 * time.Second
 
 type pgPreparedEntry struct {
 	name string
