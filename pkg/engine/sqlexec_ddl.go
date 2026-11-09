@@ -361,11 +361,9 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 			creatorID = cs.ID
 		}
 		s.RegisterGlobalTemp(tableName, creatorID)
-	} else if strings.HasPrefix(tableName, "#") {
+	} else if strings.HasPrefix(tableName, "#") || strings.HasPrefix(strings.ToLower(tableName), "__temp_") {
 		if cs != nil {
-			cs.Mu.Lock()
-			cs.TempTables = append(cs.TempTables, tableName)
-			cs.Mu.Unlock()
+			cs.RegisterTempTable(tableName)
 		}
 	}
 

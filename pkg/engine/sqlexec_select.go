@@ -1136,11 +1136,9 @@ func (s *Coordinator) execSelectInto(targetTable, projections, fromClause string
 			creatorID = cs.ID
 		}
 		s.RegisterGlobalTemp(targetTable, creatorID)
-	} else if strings.HasPrefix(targetTable, "#") {
+	} else if strings.HasPrefix(targetTable, "#") || strings.HasPrefix(strings.ToLower(targetTable), "__temp_") {
 		if cs != nil {
-			cs.Mu.Lock()
-			cs.TempTables = append(cs.TempTables, targetTable)
-			cs.Mu.Unlock()
+			cs.RegisterTempTable(targetTable)
 		}
 	}
 

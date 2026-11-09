@@ -187,3 +187,77 @@ func TestServerSideCursor_TransactionHoldAndRollback(t *testing.T) {
 	// Clean up hold cursor
 	_, _ = coord.ExecuteSessionSQL(sessID, "CLOSE ALL;")
 }
+
+func TestP1_Batch5_MergeUnescapeCursorReopenAndTempTableNoPhantom(t *testing.T) {
+	coord := setupCursorTestDB(t)
+	sessID := "sess-p1-batch5"
+
+	// 1. Defect 8-5: MERGE (VALUES ...) must unescape '' to '
+	t.Run("Defect_8_5_MergeValuesSingleQuoteUnescape", func(t *testing.T) {
+		mergeSQL := `
+MERGE INTO t_cursor_users AS t
+USING (VALUES (10, 'O''Reilly', 50)) AS s (id, name, age)
+ON t.id = s.id
+WHEN NOT MATCHED THEN
+    INSERT (id, name, age) VALUES (s.id, s.name, s.age);
+`
+		if _, err := coord.ExecuteSessionSQL(sessID, mergeSQL); err != nil {
+			t.Fatalf("MERGE failed: %v", err)
+		}
+		res, err := coord.ExecuteSessionSQL(sessID, "SELECT name FROM t_cursor_users WHERE id = 10;")
+		if err != nil || len(res.Rows) != 1 {
+			t.Fatalf("SELECT after MERGE failed: err=%v rows=%v", err, res)
+		}
+		gotName := fmt.Sprintf("%v", res.Rows[0]["name"])
+		if gotName != "O'Reilly" {
+			t.Fatalf("expected unescaped 'O'Reilly', got %q", gotName)
+		}
+	})
+
+	// 2. Scope-049: CLOSE <cursor> must retain cursor definition (IsOpen=false) so OPEN <cursor> can re-open it before DEALLOCATE
+	t.Run("Scope_049_CursorCloseReopenAndDeallocate", func(t *testing.T) {
+		if _, err := coord.ExecuteSessionSQL(sessID, "DECLARE cur_reopen CURSOR FOR SELECT id, name FROM t_cursor_users WHERE id <= 2 ORDER BY id;"); err != nil {
+			t.Fatalf("DECLARE CURSOR failed: %v", err)
+		}
+		res1, err := coord.ExecuteSessionSQL(sessID, "FETCH NEXT FROM cur_reopen;")
+		if err != nil || len(res1.Rows) != 1 || fmt.Sprintf("%v", res1.Rows[0]["name"]) != "Alice" {
+			t.Fatalf("first FETCH failed: err=%v rows=%v", err, res1)
+		}
+		if _, err := coord.ExecuteSessionSQL(sessID, "CLOSE cur_reopen;"); err != nil {
+			t.Fatalf("CLOSE cur_reopen failed: %v", err)
+		}
+		// Re-open the closed cursor
+		if _, err := coord.ExecuteSessionSQL(sessID, "OPEN cur_reopen;"); err != nil {
+			t.Fatalf("expected OPEN cur_reopen to succeed after CLOSE, got error: %v", err)
+		}
+		res2, err := coord.ExecuteSessionSQL(sessID, "FETCH NEXT FROM cur_reopen;")
+		if err != nil || len(res2.Rows) != 1 || fmt.Sprintf("%v", res2.Rows[0]["name"]) != "Alice" {
+			t.Fatalf("FETCH after re-OPEN failed: err=%v rows=%v", err, res2)
+		}
+		if _, err := coord.ExecuteSessionSQL(sessID, "CLOSE cur_reopen;"); err != nil {
+			t.Fatalf("second CLOSE cur_reopen failed: %v", err)
+		}
+		if _, err := coord.ExecuteSessionSQL(sessID, "DEALLOCATE cur_reopen;"); err != nil {
+			t.Fatalf("DEALLOCATE cur_reopen failed: %v", err)
+		}
+		if _, err := coord.ExecuteSessionSQL(sessID, "OPEN cur_reopen;"); err == nil {
+			t.Fatalf("expected error on OPEN after DEALLOCATE, got nil")
+		}
+	})
+
+	// 3. Defect 2-5: Querying a non-existent #temp table must NOT register phantom entries in cs.TempTableMap / cs.TempTables
+	t.Run("Defect_2_5_NoPhantomTempTableRegistrationOnFailedSelect", func(t *testing.T) {
+		_, err := coord.ExecuteSessionSQL(sessID, "SELECT * FROM #non_existent_phantom_tbl;")
+		if err == nil {
+			t.Fatalf("expected error selecting from non-existent #temp table")
+		}
+		cs := coord.GetSession(sessID)
+		if cs == nil {
+			t.Fatalf("expected session %q to exist", sessID)
+		}
+		if phys, exists := cs.GetTempTablePhysical("#non_existent_phantom_tbl"); exists {
+			t.Fatalf("expected #non_existent_phantom_tbl NOT to be registered in TempTableMap on failed SELECT, but got %q", phys)
+		}
+	})
+}
+

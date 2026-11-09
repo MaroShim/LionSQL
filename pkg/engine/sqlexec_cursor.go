@@ -90,6 +90,7 @@ func (s *Coordinator) execDeclareCursor(query string, start time.Time, cs *Clien
 		Columns:    res.Columns,
 		Rows:       res.Rows,
 		Pos:        0,
+		IsOpen:     true,
 		WithHold:   withHold,
 		Scroll:     scroll,
 		Binary:     binary,
@@ -343,6 +344,9 @@ func (s *Coordinator) execFetchCursor(query string, start time.Time, cs *ClientS
 	if !exists {
 		return nil, fmt.Errorf("cursor %q does not exist", cursorName)
 	}
+	if !cur.IsOpen {
+		return nil, fmt.Errorf("cursor %q is not open", cursorName)
+	}
 
 	fetched := advanceCursor(cur, dir, count, isAll)
 
@@ -381,6 +385,9 @@ func (s *Coordinator) execMoveCursor(query string, start time.Time, cs *ClientSe
 	if !exists {
 		return nil, fmt.Errorf("cursor %q does not exist", cursorName)
 	}
+	if !cur.IsOpen {
+		return nil, fmt.Errorf("cursor %q is not open", cursorName)
+	}
 
 	movedRows := advanceCursor(cur, dir, count, isAll)
 	countMoved := len(movedRows)
@@ -390,6 +397,56 @@ func (s *Coordinator) execMoveCursor(query string, start time.Time, cs *ClientSe
 		Command:      fmt.Sprintf("MOVE %d", countMoved),
 		RowsAffected: int64(countMoved),
 		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+// execOpenCursor handles OPEN <name> to re-open a previously closed server-side cursor.
+func (s *Coordinator) execOpenCursor(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if cs == nil {
+		return nil, fmt.Errorf("active session required for cursor open")
+	}
+
+	trimmed := strings.TrimSpace(query)
+	trimmed = strings.TrimRight(trimmed, ";")
+	upper := strings.ToUpper(trimmed)
+	rest := strings.TrimSpace(trimmed[len("OPEN"):])
+	if strings.HasPrefix(upper, "OPEN ") {
+		rest = strings.TrimSpace(trimmed[5:])
+	}
+
+	target := cleanIdentifier(rest)
+	if target == "" {
+		return nil, fmt.Errorf("syntax error: cursor name required for OPEN")
+	}
+
+	cs.Mu.Lock()
+	cur, exists := cs.Cursors[target]
+	if !exists {
+		cs.Mu.Unlock()
+		return nil, fmt.Errorf("cursor %q does not exist", target)
+	}
+	cursorQuery := cur.Query
+	cs.Mu.Unlock()
+
+	res, err := s.execSelect(cursorQuery, start, cs)
+	if err != nil {
+		return nil, fmt.Errorf("cursor query execution failed: %w", err)
+	}
+
+	cs.Mu.Lock()
+	if cur, exists := cs.Cursors[target]; exists {
+		cur.Columns = res.Columns
+		cur.Rows = res.Rows
+		cur.Pos = 0
+		cur.IsOpen = true
+	}
+	cs.Mu.Unlock()
+
+	return &QueryResult{
+		Success:    true,
+		Command:    "OPEN CURSOR",
+		Messages:   []string{fmt.Sprintf("Cursor %q opened.", target)},
+		DurationUS: time.Since(start).Microseconds(),
 	}, nil
 }
 
@@ -414,7 +471,11 @@ func (s *Coordinator) execCloseCursor(query string, start time.Time, cs *ClientS
 	defer cs.Mu.Unlock()
 
 	if upperTarget == "ALL" {
-		cs.Cursors = make(map[string]*SessionCursor)
+		for _, cur := range cs.Cursors {
+			cur.IsOpen = false
+			cur.Rows = nil
+			cur.Pos = 0
+		}
 		return &QueryResult{
 			Success:    true,
 			Command:    "CLOSE CURSOR",
@@ -427,11 +488,14 @@ func (s *Coordinator) execCloseCursor(query string, start time.Time, cs *ClientS
 		return nil, fmt.Errorf("syntax error: cursor name required for CLOSE")
 	}
 
-	if _, exists := cs.Cursors[target]; !exists {
+	cur, exists := cs.Cursors[target]
+	if !exists {
 		return nil, fmt.Errorf("cursor %q does not exist", target)
 	}
 
-	delete(cs.Cursors, target)
+	cur.IsOpen = false
+	cur.Rows = nil
+	cur.Pos = 0
 
 	return &QueryResult{
 		Success:    true,

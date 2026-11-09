@@ -48,7 +48,7 @@
 3. **`결함 10-5`** (`pkg/execution/window.go:525-528`): 윈도우 프레임 `FrameFollowing` 오프셋 계산 시 `startIdx > total` 슬라이스 상한 클램핑 방어.
 4. **`결함 4-5`** (`pkg/planner/planner.go`): Nested Loop Join 계획 수립 시 표현식 인덱스에 대해 `len(innerIndex.Columns) > 0` 확인 후 `Columns[0]` 참조.
 
-### Mini-Batch 5: `pkg/engine` & `pkg/proc` — 커서 상태머신, MERGE 이스케이프, 임시테이블 (4건) [대기]
+### Mini-Batch 5: `pkg/engine` & `pkg/proc` — 커서 상태머신, MERGE 이스케이프, 임시테이블 (4건) [완료]
 1. **`결함 8-5`** (`pkg/engine/sqlexec_merge.go:364`): `MERGE (VALUES ...)` 소스 파싱 시 작은따옴표 이스케이프(`''` ➔ `'`) 언이스케이프 적용.
 2. **`Scope-049`** (`pkg/engine/sqlexec_cursor.go:210`): `CLOSE <cursor>` 시 커서 정의를 맵에서 삭제하지 않고 `IsOpen = false`로 전환하여 `DEALLOCATE` 전 재오픈(`OPEN`) 지원.
 3. **`결함 3-6`** (`pkg/proc/runtime/vm_dispatcher.go:1451, 1505`): VM 커서에서 이미 열린 커서 중복 `OPEN` 및 닫힌 커서 `CLOSE` 시 표준 에러 반환.

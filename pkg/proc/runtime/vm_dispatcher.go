@@ -1452,11 +1452,25 @@ vmLoop:
 			curName := cleanSymbol(data)
 			cur, exists := f.cursors[curName]
 			if !exists {
-				return nil, fmt.Errorf("cursor %s does not exist", curName)
+				err := fmt.Errorf("cursor %s does not exist", curName)
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
+			}
+			if cur.isOpen {
+				err := fmt.Errorf("cursor %s is already open", curName)
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
 			}
 			rows, cols, err := f.scanCursorRows(cur.table, cur.whereExpr, cur.columns)
 			if err != nil {
-				return nil, err
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
 			}
 			if len(cur.orderBy) > 0 && len(rows) > 1 {
 				f.sortCursorRows(rows, cur.orderBy)
@@ -1512,11 +1526,22 @@ vmLoop:
 		}
 		curName := cleanSymbol(rawName)
 		if cur, exists := f.cursors[curName]; exists {
+			if !cur.isOpen {
+				err := fmt.Errorf("cursor %s is not open", curName)
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
+			}
 			cur.isOpen = false
 			cur.rows = nil // immediately release row buffer memory ([RULE:BoundedBuffers])
 			cur.idx = 0
 		} else {
-			return nil, fmt.Errorf("cursor %s does not exist", curName)
+			err := fmt.Errorf("cursor %s does not exist", curName)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 
 	case proc.OpCursorDealloc:

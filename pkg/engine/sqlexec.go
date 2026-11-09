@@ -1199,7 +1199,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execMoveCursor(trimmed, start, cs)
 	}
 
-	// 0.078 Server-Side SQL Cursors: CLOSE
+	// 0.078 Server-Side SQL Cursors: OPEN / CLOSE
+	if strings.HasPrefix(upper, "OPEN ") || upper == "OPEN" {
+		return s.execOpenCursor(trimmed, start, cs)
+	}
 	if strings.HasPrefix(upper, "CLOSE ") || upper == "CLOSE" {
 		return s.execCloseCursor(trimmed, start, cs)
 	}

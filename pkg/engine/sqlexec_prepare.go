@@ -142,6 +142,9 @@ func (s *Coordinator) execDeallocate(query string, start time.Time, cs *ClientSe
 		if cs != nil {
 			cs.Mu.Lock()
 			cs.PreparedStmts = make(map[string]*PreparedStatement)
+			if cs.Cursors != nil {
+				clear(cs.Cursors)
+			}
 			cs.Mu.Unlock()
 		}
 		return &QueryResult{
@@ -160,6 +163,10 @@ func (s *Coordinator) execDeallocate(query string, start time.Time, cs *ClientSe
 	if cs != nil {
 		cs.Mu.Lock()
 		delete(cs.PreparedStmts, strings.ToLower(stmtName))
+		if cs.Cursors != nil {
+			delete(cs.Cursors, stmtName)
+			delete(cs.Cursors, strings.ToLower(stmtName))
+		}
 		cs.Mu.Unlock()
 	}
 

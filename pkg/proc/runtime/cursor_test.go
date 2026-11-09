@@ -270,3 +270,39 @@ END;
 		t.Errorf("Expected 32 (3 active, 2 suspended), got %v", res.ReturnValue)
 	}
 }
+
+func TestP1_Batch5_VMCursorDuplicateOpenAndClosedCloseErrors(t *testing.T) {
+	eng := setupCursorTestDB(t)
+	defer eng.Close()
+
+	// 1. Defect 3-6a: Opening an already-open cursor in VM must return an error
+	tsqlDupOpen := `
+CREATE PROCEDURE DupOpenCursorProc
+AS
+BEGIN
+    DECLARE cur CURSOR FOR SELECT id FROM accounts;
+    OPEN cur;
+    OPEN cur;
+    CLOSE cur;
+    DEALLOCATE cur;
+END;
+`
+	if _, err := runCursorProc(t, eng, tsqlDupOpen, "DupOpenCursorProc", nil); err == nil {
+		t.Fatalf("expected error when opening an already-open cursor in VM, got nil")
+	}
+
+	// 2. Defect 3-6b: Closing a cursor that is not open in VM must return an error
+	tsqlCloseUnopened := `
+CREATE PROCEDURE CloseUnopenedCursorProc
+AS
+BEGIN
+    DECLARE cur CURSOR FOR SELECT id FROM accounts;
+    CLOSE cur;
+    DEALLOCATE cur;
+END;
+`
+	if _, err := runCursorProc(t, eng, tsqlCloseUnopened, "CloseUnopenedCursorProc", nil); err == nil {
+		t.Fatalf("expected error when closing a cursor that is not open in VM, got nil")
+	}
+}
+

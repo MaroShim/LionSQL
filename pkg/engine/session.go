@@ -27,6 +27,7 @@ type SessionCursor struct {
 	Columns    []string
 	Rows       []map[string]any
 	Pos        int // next row index to fetch (0-indexed)
+	IsOpen     bool
 	WithHold   bool
 	Scroll     bool
 	Binary     bool
@@ -227,7 +228,7 @@ func parseTimeoutDurationVal(v any) time.Duration {
 	return 0
 }
 
-// ResolveTempTableName returns the physical table name for a session-scoped temporary table.
+// ResolveTempTableName returns the physical table name for a session-scoped temporary table without registering it.
 // If it is not a local temporary table (e.g. ##global_temp, or ordinary table), it returns the input unchanged.
 func (cs *ClientSession) ResolveTempTableName(tbl string) string {
 	if cs == nil || !strings.HasPrefix(tbl, "#") || strings.HasPrefix(tbl, "##") || strings.HasPrefix(tbl, "#__") {
@@ -235,22 +236,60 @@ func (cs *ClientSession) ResolveTempTableName(tbl string) string {
 	}
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()
-	if cs.TempTableMap == nil {
-		cs.TempTableMap = make(map[string]string)
-	}
 	lower := strings.ToLower(tbl)
-	if phys, exists := cs.TempTableMap[lower]; exists {
-		return phys
+	if cs.TempTableMap != nil {
+		if phys, exists := cs.TempTableMap[lower]; exists {
+			return phys
+		}
 	}
-	// Generate mangled physical name
+	// Deterministically compute mangled physical name without phantom registration
 	clean := strings.TrimPrefix(lower, "#")
 	sessID := cs.ID
 	if sessID == "" {
 		sessID = "default"
 	}
-	phys := fmt.Sprintf("__temp_%s_%s", sessID, clean)
-	cs.TempTableMap[lower] = phys
-	cs.TempTables = append(cs.TempTables, phys)
+	return fmt.Sprintf("__temp_%s_%s", sessID, clean)
+}
+
+// RegisterTempTable registers a newly created local temporary table (either #name or __temp_<sessID>_<name>).
+func (cs *ClientSession) RegisterTempTable(tbl string) string {
+	if cs == nil {
+		return tbl
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.TempTableMap == nil {
+		cs.TempTableMap = make(map[string]string)
+	}
+	sessID := cs.ID
+	if sessID == "" {
+		sessID = "default"
+	}
+	prefix := fmt.Sprintf("__temp_%s_", strings.ToLower(sessID))
+	lower := strings.ToLower(tbl)
+	var userKey, phys string
+	if strings.HasPrefix(lower, prefix) {
+		clean := strings.TrimPrefix(lower, prefix)
+		userKey = "#" + clean
+		phys = lower
+	} else if strings.HasPrefix(lower, "#") && !strings.HasPrefix(lower, "##") && !strings.HasPrefix(lower, "#__") {
+		userKey = lower
+		clean := strings.TrimPrefix(lower, "#")
+		phys = fmt.Sprintf("__temp_%s_%s", sessID, clean)
+	} else {
+		return tbl
+	}
+	cs.TempTableMap[userKey] = phys
+	found := false
+	for _, existing := range cs.TempTables {
+		if existing == phys {
+			found = true
+			break
+		}
+	}
+	if !found {
+		cs.TempTables = append(cs.TempTables, phys)
+	}
 	return phys
 }
 
@@ -270,7 +309,7 @@ func (cs *ClientSession) GetTempTablePhysical(tbl string) (string, bool) {
 
 // UnregisterTempTable unregisters a dropped local temporary table.
 func (cs *ClientSession) UnregisterTempTable(tbl string) {
-	if cs == nil || !strings.HasPrefix(tbl, "#") || strings.HasPrefix(tbl, "##") || strings.HasPrefix(tbl, "#__") {
+	if cs == nil {
 		return
 	}
 	cs.Mu.Lock()
@@ -279,6 +318,23 @@ func (cs *ClientSession) UnregisterTempTable(tbl string) {
 		return
 	}
 	lower := strings.ToLower(tbl)
+	if strings.HasPrefix(lower, "__temp_") {
+		for k, v := range cs.TempTableMap {
+			if strings.EqualFold(v, lower) {
+				delete(cs.TempTableMap, k)
+			}
+		}
+		for i, t := range cs.TempTables {
+			if strings.EqualFold(t, lower) {
+				cs.TempTables = append(cs.TempTables[:i], cs.TempTables[i+1:]...)
+				break
+			}
+		}
+		return
+	}
+	if !strings.HasPrefix(lower, "#") || strings.HasPrefix(lower, "##") || strings.HasPrefix(lower, "#__") {
+		return
+	}
 	phys, exists := cs.TempTableMap[lower]
 	if exists {
 		delete(cs.TempTableMap, lower)

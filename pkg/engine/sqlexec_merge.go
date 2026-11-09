@@ -543,7 +543,13 @@ func (s *Coordinator) loadMergeSourceRows(parsed *parsedMerge, tx storage.Transa
 				r := make(map[string]any)
 				for i, v := range vals {
 					vStr := strings.TrimSpace(v)
-					vStr = strings.Trim(vStr, "'\"")
+					if len(vStr) >= 2 && vStr[0] == '\'' && vStr[len(vStr)-1] == '\'' {
+						vStr = strings.ReplaceAll(vStr[1:len(vStr)-1], "''", "'")
+					} else if len(vStr) >= 2 && vStr[0] == '"' && vStr[len(vStr)-1] == '"' {
+						vStr = strings.ReplaceAll(vStr[1:len(vStr)-1], `""`, `"`)
+					} else {
+						vStr = strings.Trim(vStr, "'\"")
+					}
 					var colName string
 					if i < len(cols) {
 						colName = cols[i]
