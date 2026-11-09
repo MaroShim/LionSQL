@@ -192,6 +192,7 @@
 | `DONE` | **`SEC-BOOT-DEFAULT-PASS-WARN`** | SEC | P2 | 초기 패스워드 미변경 시 부팅 출력 최후행 대문자 보안 경고 불변식 | [`notes/plans/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md`](notes/plans/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md) |  |
 | `DONE` | **`SQL-GOOSE-IDENTITY-1`** | Durability | P2 | PostgreSQL `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` 지원 및 goose 마이그레이션 호환 |  |  |
 | `DONE` | **`SQL-WRITABLE-CTE-1`** | Durability | P2 | PostgreSQL Writable CTE (`WITH ... INSERT/UPDATE/DELETE ... RETURNING`) 및 `::type[]` 캐스트 지원 |  |  |
+| `DONE` | **`SSMS-OE-COMPAT-1`** | Ecosystem | P2 | SSMS Object Explorer 호환성 (sys.resource_governor_configuration, HostPlatform 배치 및 가상 카탈로그 수식 평가) |  |  |
 | `DONE` | **`TUNE-DOC-SYNC-1`** | Documentation | P2 | 1.0 GA 벤치마크 및 공식 문서 실측치 일괄 동기화 |  |  |
 | `DONE` | **`TUNE-HOTSPOT-OCC-1`** | Durability | P2 | 고동시성 핫스팟 OCC 경합 완화 및 와이어 버퍼 풀링 |  | - [x] **Phase 3 (`TUNE-EPHEMERAL-VERI... |
 | `DONE` | **`TUNE-SP-FASTPATH-1`** | Durability | P2 | TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 | [`notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md) | - [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)... |
@@ -2412,6 +2413,11 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 3. 조건 불충족(0행 매칭) 시 빈 CTE 스키마 유지(`pgx.ErrNoRows`) 및 미참조 쓰기 CTE(`ins_tx`) 무조건 실행(Materialize) 보장
 4. 단일 문 원자적 트랜잭션 보장(Autocommit 암시적 트랜잭션 및 Savepoint 래핑, `UNIQUE` 위반 시 전체 롤백 및 SQLSTATE `23505` 반환)
 5. 바인딩 파라미터(`$1 ~ $N`) 다중 CTE 재사용, `INSERT ... SELECT $4` 타깃 컬럼 기반 파라미터 OID 역추론, `::type` 및 `::type[]`(`ANY($1::text[])`) AST `CastExpr` 파싱 지원
+
+---
+
+### [DONE] SSMS Object Explorer 호환성 (sys.resource_governor_configuration, HostPlatform 배치 및 가상 카탈로그 수식 평가) `SSMS-OE-COMPAT-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-09 05:34:10
 
 ---
 
