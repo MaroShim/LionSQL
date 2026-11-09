@@ -250,23 +250,23 @@ fi
 echo ""
 echo -e "${CLR_BLUE}[2/5] Running Verification Pipeline...${CLR_RESET}"
 
+echo "Compiling 3 official release binaries..."
+# 1. macOS Apple Silicon (arm64)
+go build -tags wiredtiger -buildvcs=false -o bin/lionsql-darwin-arm64 ./cmd/lionsql
+cp bin/lionsql-darwin-arm64 bin/lionsql
+echo -e "${CLR_GREEN}Build OK: bin/lionsql-darwin-arm64 (macOS Apple Silicon)${CLR_RESET}"
+
+# 2. Linux amd64 (Pure Go Zero-Cgo)
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o bin/lionsql-linux-amd64 ./cmd/lionsql
+echo -e "${CLR_GREEN}Build OK: bin/lionsql-linux-amd64 (Linux x86_64)${CLR_RESET}"
+
+# 3. Windows amd64 (Pure Go Zero-Cgo, 1ms timer)
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql-windows-amd64.exe ./cmd/lionsql
+echo -e "${CLR_GREEN}Build OK: bin/lionsql-windows-amd64.exe (Windows x86_64)${CLR_RESET}"
+
 if [ "${SKIP_TESTS}" = true ]; then
     echo -e "${CLR_YELLOW}Skipping test pipeline (--skip-tests specified).${CLR_RESET}"
 else
-    echo -e "Compiling 3 official release binaries..."
-    # 1. macOS Apple Silicon (arm64)
-    go build -tags wiredtiger -buildvcs=false -o bin/lionsql-darwin-arm64 ./cmd/lionsql
-    cp bin/lionsql-darwin-arm64 bin/lionsql
-    echo -e "${CLR_GREEN}Build OK: bin/lionsql-darwin-arm64 (macOS Apple Silicon)${CLR_RESET}"
-
-    # 2. Linux amd64 (Pure Go Zero-Cgo)
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o bin/lionsql-linux-amd64 ./cmd/lionsql
-    echo -e "${CLR_GREEN}Build OK: bin/lionsql-linux-amd64 (Linux x86_64)${CLR_RESET}"
-
-    # 3. Windows amd64 (Pure Go Zero-Cgo, 1ms timer)
-    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql-windows-amd64.exe ./cmd/lionsql
-    echo -e "${CLR_GREEN}Build OK: bin/lionsql-windows-amd64.exe (Windows x86_64)${CLR_RESET}"
-
     echo -e "Compiling benchmark and verification binaries..."
     go build -tags wiredtiger -buildvcs=false -o bin/sqllogictest ./cmd/sqllogictest
     go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
