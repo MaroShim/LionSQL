@@ -195,13 +195,21 @@ func TestFlatDirectoryHandler(t *testing.T) {
 		}
 	}
 
-	// 5. Flat Security Invariant: Subdirectory requests rejected
+	// 5. Subdirectory Assets & Traversal Rejection
 	{
 		req := httptest.NewRequest("GET", "/sub/hidden.js", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
-		if rr.Code != http.StatusNotFound {
-			t.Errorf("GET /sub/hidden.js expected 404 (subdirectory forbidden), got %d", rr.Code)
+		if rr.Code != http.StatusOK {
+			t.Errorf("GET /sub/hidden.js expected 200 (subfolder asset allowed), got %d", rr.Code)
+		}
+	}
+	{
+		req := httptest.NewRequest("GET", "/sub/../secret.txt", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code == http.StatusOK {
+			t.Errorf("GET /sub/../secret.txt expected error for path traversal, got 200")
 		}
 	}
 

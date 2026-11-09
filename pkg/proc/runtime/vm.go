@@ -427,7 +427,8 @@ type VMFrame struct {
 	columns         []string
 	values          [][]any
 	rowCount        int64
-	cursorRows      int64
+	cursorRows       int64
+	lastOpenedCursor string
 	fetchStatus     int
 	tranCount       int
 	lastIdentity    int64
@@ -2485,11 +2486,15 @@ func storageIntDiv(a, b storage.Value) (storage.Value, error) {
 	}
 	n1, _ := toFloatNum(a)
 	n2, _ := toFloatNum(b)
+	i1 := int64(n1)
 	i2 := int64(n2)
 	if i2 == 0 {
-		return storage.NullValue(storage.TypeUnknown), nil
+		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("divide by zero error encountered")
 	}
-	return storage.IntValue(int64(n1) / i2), nil
+	if i1 == math.MinInt64 && i2 == -1 {
+		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("arithmetic overflow error encountered")
+	}
+	return storage.IntValue(i1 / i2), nil
 }
 
 func storageMod(a, b storage.Value) (storage.Value, error) {
@@ -2498,11 +2503,15 @@ func storageMod(a, b storage.Value) (storage.Value, error) {
 	}
 	n1, _ := toFloatNum(a)
 	n2, _ := toFloatNum(b)
+	i1 := int64(n1)
 	i2 := int64(n2)
 	if i2 == 0 {
 		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("divide by zero error encountered")
 	}
-	return storage.IntValue(int64(n1) % i2), nil
+	if i1 == math.MinInt64 && i2 == -1 {
+		return storage.IntValue(0), nil
+	}
+	return storage.IntValue(i1 % i2), nil
 }
 
 func storageNeg(a storage.Value) storage.Value {

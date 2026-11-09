@@ -274,10 +274,17 @@ vmLoop:
 			if ctx == nil {
 				ctx = context.Background()
 			}
+			timer := time.NewTimer(dur)
 			select {
 			case <-ctx.Done():
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 				return nil, ctx.Err()
-			case <-time.After(dur):
+			case <-timer.C:
 			}
 		}
 		continue vmLoop
@@ -1522,6 +1529,7 @@ vmLoop:
 			}
 			cur.idx = 0
 			cur.isOpen = true
+			f.lastOpenedCursor = curName
 			f.cursorRows = int64(len(rows))
 		}
 
@@ -1578,7 +1586,10 @@ vmLoop:
 			cur.isOpen = false
 			cur.rows = nil // immediately release row buffer memory ([RULE:BoundedBuffers])
 			cur.idx = 0
-			f.cursorRows = 0
+			if f.lastOpenedCursor == curName {
+				f.cursorRows = 0
+				f.lastOpenedCursor = ""
+			}
 		} else {
 			err := fmt.Errorf("cursor %s does not exist", curName)
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
@@ -1596,6 +1607,10 @@ vmLoop:
 		if cur, exists := f.cursors[curName]; exists {
 			cur.rows = nil
 			delete(f.cursors, curName)
+		}
+		if f.lastOpenedCursor == curName {
+			f.cursorRows = 0
+			f.lastOpenedCursor = ""
 		}
 
 	case proc.OpCallBuiltin:
@@ -1912,29 +1927,29 @@ vmLoop:
 }
 
 func parseTsqlDelay(val storage.Value, isDelay bool) (time.Duration, error) {
-	str := ""
-	if !val.IsNull {
-		str = strings.TrimSpace(val.SVal)
+	if val.IsNull {
+		return 0, fmt.Errorf("WAITFOR delay/time expression cannot be NULL")
 	}
+	str := strings.TrimSpace(valToString(val))
 	if str == "" {
-		return 0, nil
+		return 0, fmt.Errorf("WAITFOR delay/time expression cannot be empty")
 	}
 	parts := strings.Split(str, ":")
 	if len(parts) != 3 {
 		return 0, fmt.Errorf("invalid time format for WAITFOR: %q (expected 'hh:mm:ss[.fff]')", str)
 	}
 	hours, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 0, fmt.Errorf("invalid hours in WAITFOR: %w", err)
+	if err != nil || hours < 0 || hours > 24 {
+		return 0, fmt.Errorf("invalid hours in WAITFOR: %q (must be between 0 and 24)", parts[0])
 	}
 	mins, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return 0, fmt.Errorf("invalid minutes in WAITFOR: %w", err)
+	if err != nil || mins < 0 || mins >= 60 {
+		return 0, fmt.Errorf("invalid minutes in WAITFOR: %q (must be between 0 and 59)", parts[1])
 	}
 	secParts := strings.Split(parts[2], ".")
 	secs, err := strconv.Atoi(secParts[0])
-	if err != nil {
-		return 0, fmt.Errorf("invalid seconds in WAITFOR: %w", err)
+	if err != nil || secs < 0 || secs >= 60 {
+		return 0, fmt.Errorf("invalid seconds in WAITFOR: %q (must be between 0 and 59)", secParts[0])
 	}
 	var millis int
 	if len(secParts) > 1 {
@@ -1945,10 +1960,17 @@ func parseTsqlDelay(val storage.Value, isDelay bool) (time.Duration, error) {
 		for len(fraction) < 3 {
 			fraction += "0"
 		}
-		millis, _ = strconv.Atoi(fraction)
+		var mErr error
+		millis, mErr = strconv.Atoi(fraction)
+		if mErr != nil || millis < 0 {
+			return 0, fmt.Errorf("invalid milliseconds in WAITFOR: %q", secParts[1])
+		}
 	}
 
 	if isDelay {
+		if hours == 24 && (mins > 0 || secs > 0 || millis > 0) {
+			return 0, fmt.Errorf("WAITFOR DELAY cannot exceed 24 hours")
+		}
 		dur := time.Duration(hours)*time.Hour +
 			time.Duration(mins)*time.Minute +
 			time.Duration(secs)*time.Second +
@@ -1957,6 +1979,9 @@ func parseTsqlDelay(val storage.Value, isDelay bool) (time.Duration, error) {
 	}
 
 	// WAITFOR TIME 'hh:mm:ss'
+	if hours == 24 {
+		hours = 0
+	}
 	now := time.Now()
 	target := time.Date(now.Year(), now.Month(), now.Day(), hours, mins, secs, millis*1e6, now.Location())
 	if target.Before(now) {

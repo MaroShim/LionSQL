@@ -1,6 +1,7 @@
 package runtime_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -241,4 +242,115 @@ END
 	if res.ReturnValue != int64(2) {
 		t.Fatalf("expected @@CURSOR_ROWS to return 2, got %v (%T)", res.ReturnValue, res.ReturnValue)
 	}
+}
+
+// TestPriorityGroupA_AuditRemediations tests post-audit hardening fixes:
+// 1. MinInt64 % -1 integer overflow panic guard ([RULE:DefensiveIndexing])
+// 2. WAITFOR DELAY out-of-range validation ([RULE:DefensiveIndexing])
+// 3. Multi-cursor @@CURSOR_ROWS preservation when a non-last cursor is closed
+func TestPriorityGroupA_AuditRemediations(t *testing.T) {
+	eng, session := setupPriorityGroupADB(t)
+	defer eng.Close()
+	defer session.Close()
+
+	executor := runtime.NewExecutor(runtime.NewPlanCache())
+
+	// 1. MinInt64 % -1 guard
+	t.Run("MinInt64ModNegOneGuard", func(t *testing.T) {
+		script := `
+CREATE PROCEDURE TestMinInt64Mod
+AS
+BEGIN
+    DECLARE @x BIGINT = -9223372036854775808;
+    SET @x %= -1;
+    RETURN @x;
+END
+`
+		l := proc.NewLexer(script)
+		p := proc.NewParser(l)
+		plan, err := p.ParseProcedure()
+		if err != nil {
+			t.Fatalf("ParseProcedure failed: %v", err)
+		}
+		prog, err := proc.CompileProcedure(plan)
+		if err != nil {
+			t.Fatalf("CompileProcedure failed: %v", err)
+		}
+		res, err := executor.Run(prog, "TestMinInt64Mod", nil, session)
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if res.ReturnValue != int64(0) {
+			t.Fatalf("expected MinInt64 %% -1 to return 0, got %v", res.ReturnValue)
+		}
+	})
+
+	// 2. WAITFOR DELAY out-of-range rejection
+	t.Run("WaitforDelayValidation", func(t *testing.T) {
+		invalidDelays := []string{
+			"WAITFOR DELAY '-01:00:00';",
+			"WAITFOR DELAY '25:00:00';",
+			"WAITFOR DELAY '00:65:00';",
+		}
+		for _, inv := range invalidDelays {
+			script := fmt.Sprintf(`
+CREATE PROCEDURE TestWaitforInvalid
+AS
+BEGIN
+    %s
+    RETURN 1;
+END
+`, inv)
+			l := proc.NewLexer(script)
+			p := proc.NewParser(l)
+			plan, err := p.ParseProcedure()
+			if err != nil {
+				t.Fatalf("ParseProcedure failed for %s: %v", inv, err)
+			}
+			prog, err := proc.CompileProcedure(plan)
+			if err != nil {
+				t.Fatalf("CompileProcedure failed for %s: %v", inv, err)
+			}
+			_, runErr := executor.Run(prog, "TestWaitforInvalid", nil, session)
+			if runErr == nil {
+				t.Fatalf("expected error for invalid delay %q, got nil", inv)
+			}
+		}
+	})
+
+	// 3. Multi-cursor @@CURSOR_ROWS tracking
+	t.Run("MultiCursorRowsPreserved", func(t *testing.T) {
+		script := `
+CREATE PROCEDURE TestMultiCursorRows
+AS
+BEGIN
+    DECLARE @res INT;
+    DECLARE cur1 CURSOR FOR SELECT * FROM accounts;
+    DECLARE cur2 CURSOR FOR SELECT * FROM accounts WHERE id = 1;
+    OPEN cur1; -- 2 rows
+    OPEN cur2; -- 1 row (now last opened)
+    CLOSE cur1; -- closing cur1 should NOT reset @@CURSOR_ROWS to 0 because cur2 is last opened
+    SET @res = @@CURSOR_ROWS;
+    CLOSE cur2; -- closing last opened cur2 should reset to 0
+    RETURN @res;
+END
+`
+		l := proc.NewLexer(script)
+		p := proc.NewParser(l)
+		plan, err := p.ParseProcedure()
+		if err != nil {
+			t.Fatalf("ParseProcedure failed: %v", err)
+		}
+		prog, err := proc.CompileProcedure(plan)
+		if err != nil {
+			t.Fatalf("CompileProcedure failed: %v", err)
+		}
+		res, err := executor.Run(prog, "TestMultiCursorRows", nil, session)
+		if err != nil {
+			t.Fatalf("Run failed: %v", err)
+		}
+		if res.ReturnValue != int64(1) {
+			t.Fatalf("expected @@CURSOR_ROWS to preserve last opened cursor rows (1), got %v", res.ReturnValue)
+		}
+	})
 }

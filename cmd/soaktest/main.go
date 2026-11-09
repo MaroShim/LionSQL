@@ -193,11 +193,17 @@ func run(binPath, engine string, duration, sampleEvery time.Duration, workers, r
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
+	doneCh := make(chan struct{})
+	defer close(doneCh)
 	go func() {
-		<-sigCh
-		fmt.Fprintln(os.Stderr, "\nsoaktest: received interrupt, cleanly terminating server ([RULE:CleanTeardown])...")
-		cleanup()
-		os.Exit(130)
+		select {
+		case <-sigCh:
+			fmt.Fprintln(os.Stderr, "\nsoaktest: received interrupt, cleanly terminating server ([RULE:CleanTeardown])...")
+			cleanup()
+			os.Exit(130)
+		case <-doneCh:
+			return
+		}
 	}()
 
 	dsn := fmt.Sprintf("host=127.0.0.1 port=%d user=postgres password=%s dbname=postgres sslmode=disable", pgPort, password)
