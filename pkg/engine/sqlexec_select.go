@@ -446,7 +446,7 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		case "INSTANCENAME":
 			return "MSSQLSERVER", "instancename"
 		case "MACHINENAME", "SERVERNAME":
-			return "LionSQL", "servername"
+			return "MSSQLSERVER", "servername"
 		case "COLLATION":
 			return "SQL_Latin1_General_CP1_CI_AS", "collation"
 		case "ISCLUSTERED", "ISHADRENABLED", "ISINTEGRATEDSECURITYONLY":
@@ -615,15 +615,28 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		return nil, "object_name"
 	}
 
-	// QUOTENAME('name')
+	// QUOTENAME('name', [quoteChar])
 	if strings.HasPrefix(upper, "QUOTENAME(") && strings.HasSuffix(upper, ")") {
 		inner := strings.TrimSpace(trimmed[len("QUOTENAME(") : len(trimmed)-1])
-		arg := inner
-		if commaIdx := strings.Index(inner, ","); commaIdx != -1 {
-			arg = strings.TrimSpace(inner[:commaIdx])
+		parts := sqlutil.SplitTopLevel(inner, ',')
+		clean := strings.Trim(strings.TrimSpace(parts[0]), "'\"")
+		openChar, closeChar := "[", "]"
+		if len(parts) >= 2 {
+			q := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
+			switch q {
+			case "'":
+				openChar, closeChar = "'", "'"
+			case "\"":
+				openChar, closeChar = "\"", "\""
+			case "(":
+				openChar, closeChar = "(", ")"
+			case "{":
+				openChar, closeChar = "{", "}"
+			case "<":
+				openChar, closeChar = "<", ">"
+			}
 		}
-		clean := strings.Trim(strings.TrimSpace(arg), "'\"")
-		return "[" + clean + "]", "quotename"
+		return openChar + clean + closeChar, "quotename"
 	}
 
 	// IDENT_CURRENT('tableName')
@@ -1518,7 +1531,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 
 	// 0. Virtual catalog multi-table JOIN intercept (e.g. pg_class JOIN pg_namespace, sys.columns JOIN sys.types)
 	if virtual.IsVirtualCatalogJoinQuery(cleaned) {
-		return s.execVirtualCatalogJoinSelect(cleaned, start)
+		return s.execVirtualCatalogJoinSelect(cleaned, start, cs)
 	}
 
 	// 0. PIVOT: SELECT ... FROM ... PIVOT (...) ...

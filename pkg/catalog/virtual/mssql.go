@@ -782,15 +782,27 @@ func execSysTablesMetadata(src Source, sql string) (*Result, error) {
 func execSysTablesJoinedIndexes(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"Name", "name", "Schema", "schema", "Urn", "urn", "CreateDate", "create_date",
+		"ModifyDate", "modify_date", "Owner", "owner",
 		"IsMemoryOptimized", "is_memory_optimized", "HasClusteredColumnStoreIndex",
 		"RemoteDataArchiveEnabled", "TemporalType", "temporal_type", "IsPartitioned",
 		"HasSparseColumn", "IsNode", "is_node", "IsEdge", "is_edge",
 		"HasNonClusteredIndex", "HasClusteredIndex", "HasPrimaryClusteredIndex",
 		"HasXmlIndex", "HasXmlData", "HasSpatialData", "HasNonClusteredColumnStoreIndex",
+		"HistoryTableID", "history_table_id", "HistoryTableName", "history_table_name",
+		"HistoryTableSchema", "history_table_schema",
+		"IsFileTable", "is_filetable", "IsExternal", "is_external",
 		"object_id", "schema_id", "type", "type_desc",
 	}
 	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	var allRows []map[string]any
+
+	currDb := "master"
+	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
+		if cur := dbs.GetCurrentDatabase(); cur != "" {
+			currDb = cur
+		}
+	}
+	serverName := "MSSQLSERVER"
 
 	tables := src.GetSortedTables()
 	for tIdx, t := range tables {
@@ -802,7 +814,7 @@ func execSysTablesJoinedIndexes(src Source, sql string) (*Result, error) {
 			}
 		}
 
-		urn := fmt.Sprintf("Server[@Name='LIONSQL']/Database[@Name='master']/Table[@Name='%s' and @Schema='dbo']", t.Name)
+		urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']", serverName, currDb, t.Name)
 
 		row := map[string]any{
 			"Name":                            t.Name,
@@ -815,6 +827,10 @@ func execSysTablesJoinedIndexes(src Source, sql string) (*Result, error) {
 			"CreateDate":                      defaultDate,
 			"create_date":                     defaultDate,
 			"tbl.create_date":                 defaultDate,
+			"ModifyDate":                      defaultDate,
+			"modify_date":                     defaultDate,
+			"Owner":                           "dbo",
+			"owner":                           "dbo",
 			"IsMemoryOptimized":               false,
 			"is_memory_optimized":             false,
 			"tbl.is_memory_optimized":         false,
@@ -838,6 +854,18 @@ func execSysTablesJoinedIndexes(src Source, sql string) (*Result, error) {
 			"HasXmlData":                      false,
 			"HasSpatialData":                  false,
 			"HasNonClusteredColumnStoreIndex": false,
+			"HistoryTableID":                  int32(0),
+			"history_table_id":                int32(0),
+			"HistoryTableName":               "",
+			"history_table_name":             "",
+			"HistoryTableSchema":             "",
+			"history_table_schema":           "",
+			"IsFileTable":                    false,
+			"is_filetable":                   false,
+			"tbl.is_filetable":               false,
+			"IsExternal":                     false,
+			"is_external":                    false,
+			"tbl.is_external":                false,
 			"object_id":                       1000 + tIdx,
 			"tbl.object_id":                   1000 + tIdx,
 			"schema_id":                       1,
@@ -846,10 +874,6 @@ func execSysTablesJoinedIndexes(src Source, sql string) (*Result, error) {
 			"type_desc":                       "USER_TABLE",
 			"is_ms_shipped":                   false,
 			"tbl.is_ms_shipped":               false,
-			"is_filetable":                    false,
-			"tbl.is_filetable":                false,
-			"is_external":                     false,
-			"tbl.is_external":                 false,
 			"idx.object_id":                   1000 + tIdx,
 			"idx.index_id":                    1,
 			"idx.type":                        1,

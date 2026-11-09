@@ -1677,7 +1677,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	// 6. DQL: WITH (Common Table Expressions) / SELECT
 	if strings.HasPrefix(upper, "WITH") && len(trimmed) > 4 && (trimmed[4] == ' ' || trimmed[4] == '\t' || trimmed[4] == '\n' || trimmed[4] == '\r') {
 		if virtual.IsVirtualCatalogJoinQuery(trimmed) {
-			return s.execVirtualCatalogJoinSelect(trimmed, start)
+			return s.execVirtualCatalogJoinSelect(trimmed, start, cs)
 		}
 		return s.execCTE(trimmed, start, cs)
 	}

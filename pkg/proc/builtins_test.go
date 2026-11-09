@@ -995,8 +995,8 @@ func TestBuiltin_TSQLExpansions(t *testing.T) {
 	if ver := EvalBuiltin("@@VERSION", nil); !strings.Contains(ver.SVal, "Microsoft SQL Server") {
 		t.Errorf("@@VERSION expected SQL Server header, got %q", ver.SVal)
 	}
-	if srv := EvalBuiltin("@@SERVERNAME", nil); srv.SVal != "LIONSQL" {
-		t.Errorf("@@SERVERNAME expected 'LIONSQL', got %q", srv.SVal)
+	if srv := EvalBuiltin("@@SERVERNAME", nil); srv.SVal != "MSSQLSERVER" {
+		t.Errorf("@@SERVERNAME expected 'MSSQLSERVER', got %q", srv.SVal)
 	}
 	if spid := EvalBuiltin("@@SPID", nil); spid.IVal != 51 {
 		t.Errorf("@@SPID expected 51, got %d", spid.IVal)

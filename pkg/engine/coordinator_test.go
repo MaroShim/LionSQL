@@ -1478,6 +1478,9 @@ ORDER BY
 	if len(resComplexTbl.Rows) == 0 {
 		t.Fatalf("expected non-zero rows for complex table query, got 0")
 	}
+	for k, v := range resComplexTbl.Rows[0] {
+		t.Logf("col [%s] = %v (%T)", k, v, v)
+	}
 	if fmt.Sprintf("%v", resComplexTbl.Rows[0]["Name"]) != "users" {
 		t.Fatalf("expected table 'users', got %v", resComplexTbl.Rows[0]["Name"])
 	}

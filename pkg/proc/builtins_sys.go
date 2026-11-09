@@ -311,7 +311,7 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		case "INSTANCENAME":
 			return storage.StringValue("MSSQLSERVER")
 		case "MACHINENAME", "SERVERNAME":
-			return storage.StringValue("LionSQL")
+			return storage.StringValue("MSSQLSERVER")
 		case "COLLATION":
 			return storage.StringValue("SQL_Latin1_General_CP1_CI_AS")
 		case "ISCLUSTERED", "ISHADRENABLED", "ISINTEGRATEDSECURITYONLY":
@@ -488,7 +488,7 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		return storage.StringValue("Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) / LionSQL Embedded Engine")
 
 	case "@@SERVERNAME":
-		return storage.StringValue("LIONSQL")
+		return storage.StringValue("MSSQLSERVER")
 
 	case "@@SPID", "SPID":
 		return storage.IntValue(51)

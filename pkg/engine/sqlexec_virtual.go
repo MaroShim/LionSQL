@@ -135,8 +135,29 @@ func (s *Coordinator) GetTableRowCount(name string) int64 {
 	return 0
 }
 
-func (s *Coordinator) execVirtualCatalogJoinSelect(sql string, start time.Time) (*QueryResult, error) {
-	res, err := virtual.Execute(s, sql)
+type sessionSource struct {
+	virtual.Source
+	currDb string
+}
+
+func (ss *sessionSource) GetCurrentDatabase() string {
+	if ss.currDb != "" {
+		return ss.currDb
+	}
+	return "master"
+}
+
+func (s *Coordinator) execVirtualCatalogJoinSelect(sql string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	currDb := "master"
+	if cs != nil {
+		cs.Mu.Lock()
+		if cs.Database != "" {
+			currDb = cs.Database
+		}
+		cs.Mu.Unlock()
+	}
+	src := &sessionSource{Source: s, currDb: currDb}
+	res, err := virtual.Execute(src, sql)
 	if err != nil {
 		return nil, err
 	}
