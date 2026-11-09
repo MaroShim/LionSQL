@@ -8,14 +8,31 @@
 
 ---
 
-## 1. 난이도별 분류 총괄 매트릭스 (Difficulty Matrix)
+## 1. 난이도별 분류 총괄 매트릭스 및 실시간 진행 현황 (Progress Dashboard)
 
-| 난이도 | 건수 | 비중 | 기술적 특성 및 리스크 수준 | 실행 전략 |
-| :---: | :---: | :---: | :--- | :--- |
-| **하 (Low)** | **21건** | 44.7% | 슬라이스/정수 오버플로우 경계 방어(`0 <= idx < len`), `Close()` 누락 보강, 단순 문자열 언이스케이프, 침묵 에러(`return nil`) 제거 (수정 5~20줄, **락 구조 변경 0건, 부작용 제로**) | **패키지별 6개 미니 배치(3~4건씩) TDD 즉각 격파** |
-| **중 (Medium)** | **18건** | 38.3% | 세션/커서/임시테이블 수명주기 훅, 카탈로그 디스크 영속화 연동, 소켓 ReadDeadline 부여, 파서 부분 분기 위임 (단일 모듈 내 상태 관리) | **도메인별 묶음 패치 순차 진행** |
-| **상 (High)** | **8건** | 17.0% | 스토리지 커밋 역연산(Undo) 롤백, CGo 활성 커서 Ref-Count 드레인, 비동기 AOF Rewrite 델타 버퍼링 등 코어 동시성/락 구조 변경 수반 | **개별 심층 설계 후 선별 적용 또는 v1.1.0 이관 심사** |
-| **합계** | **47건** | **100.0%** | **전수 감사 P1 (Should Fix) 전체** | **3단계 파이프라인 (`Build ➔ Test -race ➔ Commit`) 엄수** |
+### 1.1 난이도별 총괄 요약
+| 단계 | 난이도 | 전체 건수 | 완료 건수 | 잔여 건수 | 진척률 | 기술적 특성 및 실행 전략 |
+| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **1단계** | **하 (Low)** | 21건 | **21건** | **0건** | **100.0%** | 슬라이스/오버플로우 방어, `Close()` 누락 보강, 언이스케이프 (**6개 미니 배치 전량 완료**) |
+| **2단계** | **중 (Medium)** | 18건 | **5건** | **13건** | **27.8%** | 카탈로그 영속화, 커서/트랜잭션 수명주기, ReadDeadline, 가드레일 (**Mini-Batch M1 완료, M2~M5 대기**) |
+| **3단계** | **상 (High)** | 8건 | **0건** | **8건** | **0.0%** | 커밋 Undo 롤백, CGo 커서 Ref-Count 드레인, AOF 델타 버퍼링 (**심층 설계 후 선별 적용**) |
+| **합계** | **P1 전체** | **47건** | **26건** | **21건** | **55.3%** | **Strict Red ➔ Green TDD + 3단계 파이프라인 (`Build ➔ Test -race ➔ Commit`)** |
+
+### 1.2 미니 배치(Mini-Batch)별 진행 트래커
+| 단계 | 미니 배치 ID | 대상 패키지 / 도메인 | 건수 | 상태 | 커밋 해시 / 검증 테스트 |
+| :---: | :--- | :--- | :---: | :---: | :--- |
+| **1단계 (하)** | **Mini-Batch 1** | `pkg/proc/runtime` (VM 경계 및 재귀 가드) | 4건 | **[x] 완료** | `1fcc772` (`TestP1_Batch1_VMSafetyAndRecursionGuards`) |
+| **1단계 (하)** | **Mini-Batch 2** | `pkg/storage` (64비트 오버플로우 & SkipList) | 3건 | **[x] 완료** | `f56f7d2` (`TestP1_Batch2_TupleUvarintOverflowGuard` 외) |
+| **1단계 (하)** | **Mini-Batch 3** | `pkg/storage` (WT 세션 리셋 & 고루틴 정리) | 3건 | **[x] 완료** | `03f37c9` (`TestP1_Batch3_SessionResetAfterCommitConflict` 외) |
+| **1단계 (하)** | **Mini-Batch 4** | `pkg/execution` & `pkg/planner` (이터레이터/바운드) | 4건 | **[x] 완료** | `5e7bfce` (`TestP1_Batch4_JoinCloseSortErrAndWindowBounds` 외) |
+| **1단계 (하)** | **Mini-Batch 5** | `pkg/engine` & `pkg/proc` (커서/MERGE/임시테이블) | 4건 | **[x] 완료** | `990ff01` (`TestP1_Batch5_MergeUnescapeCursorReopen...` 외) |
+| **1단계 (하)** | **Mini-Batch 6** | `cmd/lionsql` (Doctor Close, 터미널 복구, 타이머) | 3건 | **[x] 완료** | `cc5850c` (`TestP1_Batch6_DoctorCloseOnError...`) |
+| **2단계 (중)** | **Mini-Batch M1** | `pkg/catalog` & `pkg/engine` (카탈로그 영속화/DDL) | 5건 | **[x] 완료** | `TestP1_BatchM1_CleanCatalogIdentCompoundBrackets`, `TestP1_BatchM1_AlterViewFKAndPgAttribute` |
+| **2단계 (중)** | **Mini-Batch M2** | `pkg/engine` & `pkg/execution` (실행 가드레일/정리) | 3건 | **[ ] 대기** | 도메인 B-1: `14-1` (APPLY 상한), `4-2` (Sort Spill), `Scope-047` |
+| **2단계 (중)** | **Mini-Batch M3** | `pkg/engine` & `pkg/proc` (트랜잭션/커서/파서 위임) | 3건 | **[ ] 대기** | 도메인 B-2: `8-3` (WITHOUT HOLD), `Scope-038`, `6-4` & `6-5` |
+| **2단계 (중)** | **Mini-Batch M4** | `pkg/api`, `pkg/replication`, `pkg/wire` (와이어/SPA) | 4건 | **[ ] 대기** | 도메인 C-1: `13-4`, `5-3`, `5-4` & `Scope-097`, `Scope-100/101/104` |
+| **2단계 (중)** | **Mini-Batch M5** | `pkg/api`, `cmd/lionsql`, `cmd/soaktest` (웹훅/데몬) | 3건 | **[ ] 대기** | 도메인 C-2: `Scope-127`, `Scope-129`, `Scope-130` & `135` |
+| **3단계 (상)** | **High- Complexity** | `pkg/storage`, `pkg/backup`, `pkg/migrate` | 8건 | **[ ] 대기** | 심층 동시성/역연산 설계 후 선별 적용 또는 v1.1.0 이관 심사 |
 
 ---
 
@@ -63,31 +80,42 @@
 
 ---
 
-## 3. [2단계] 난이도 '중 (Medium)' 18건 분류 목록
+## 3. [2단계] 난이도 '중 (Medium)' 18건 — 5대 미니 배치(Mini-Batch M1~M5) 실행 계획
 
-### 도메인 A: 카탈로그 영속화 및 DDL 무결성 (5건)
-1. **뷰(View) 수정 시 디스크 영속화 동기화** (`pkg/catalog/catalog.go:340-355`): `CreateView`/`AlterView`/`DropView` 시 `persistObjectsLocked()` 호출 연동.
-2. **`결함 7-3` 복합 식별자 정규화** (`pkg/catalog/catalog.go`): `cleanCatalogIdent`에서 `[dbo].[my_proc]` 대괄호/스키마 분리 정규화.
-3. **`결함 8-4` `DROP TABLE` 외래키 참조 검증** (`pkg/engine/sqlexec_ddl.go`): 자식 테이블이 외래키로 참조 중인 부모 테이블 무단 삭제 차단.
-4. **`Scope-041` `ALTER TABLE ADD FOREIGN KEY` 스키마 반영** (`pkg/engine/sqlexec_ddl.go:1546`): 파싱된 FK 제약조건을 실제 스키마에 등록.
-5. **`Scope-032` `pg_attribute` 기본값 매핑 보강** (`pkg/catalog/virtual/pg.go:948`): ORM 마이그레이션 시 반복 `ALTER` 방지.
+1단계(난이도 '하' 21건)와 동일하게 **Strict Red ➔ Green TDD**(실패하는 회귀 테스트 선작성 및 FAIL 확인 ➔ 운영 코드 패치 ➔ `go test -race` PASS 확인) 원칙에 따라 패키지 경계별로 3~5건씩 묶어 **5개 미니 배치(Mini-Batch M1 ~ M5)**로 순차 집행합니다.
 
-### 도메인 B: 쿼리 실행기 가드레일 및 문법 위임 (6건)
-6. **`결함 14-1` `CROSS/OUTER APPLY` 10만 행 상한 가드레일** (`pkg/engine/sqlexec_apply.go:72-100`).
-7. **`결함 4-2` / `Scope-089` External Sort Spill 실패 시 임시 파일 즉시 삭제** (`pkg/execution/sort.go:181-235`).
-8. **`결함 8-3` `WITHOUT HOLD` 커서 트랜잭션 종료 시 자동 닫기** (`pkg/engine/sqlexec_cursor.go:87-97`).
-9. **`Scope-047` 파생 테이블 구체화 중 에러 시 물리 임시 테이블 롤백 드롭** (`pkg/engine/sqlexec_derived.go:145-180`).
-10. **`Scope-038` T-SQL 단순 `BEGIN ... END` 블록의 트랜잭션 오인식 차단** (`pkg/engine/sqlexec.go:651`).
-11. **`결함 6-4` & `6-5` Native 파서 `SELECT ... INTO` 및 `JOIN (WITH ...)` 서브쿼리 위임** (`pkg/proc/parser_dml.go`).
+### Mini-Batch M1 (`pkg/catalog` & `pkg/engine/sqlexec_ddl.go`): 카탈로그 영속화 및 DDL 무결성 (5건) [대기]
+1. **뷰(View) 수정 시 디스크 영속화 동기화** (`pkg/catalog/catalog.go:340-355`): `CreateView`/`AlterView`/`DropView` 실행 시 `persistObjectsLocked()`를 호출하여 서버 재기동 후에도 뷰 변경사항 영속화 보장.
+2. **`결함 7-3` 복합 식별자 정규화** (`pkg/catalog/catalog.go`): `cleanCatalogIdent`에서 `[dbo].[my_proc]`, `dbo.my_proc` 등 대괄호 및 스키마 접두어가 포함된 식별자를 일관되게 정규화하여 생성/조회/드롭 시 이름 불일치 방지.
+3. **`결함 8-4` `DROP TABLE` 외래키 참조 검증** (`pkg/engine/sqlexec_ddl.go`): 자식 테이블이 외래키(Foreign Key)로 참조 중인 부모 테이블을 무단 삭제(`DROP TABLE`)하려 할 때 참조 무결성 에러 반환.
+4. **`Scope-041` `ALTER TABLE ADD FOREIGN KEY` 스키마 반영** (`pkg/engine/sqlexec_ddl.go:1546`): `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY` 구문에서 파싱된 외래키 제약조건을 실제 테이블 스키마(`ForeignKeys`) 및 스토리지 메타데이터에 등록.
+5. **`Scope-032` `pg_attribute` 기본값 매핑 보강** (`pkg/catalog/virtual/pg.go:948`): `pg_attribute.atthasdef` 및 `pg_attrdef` 가상 카탈로그 매핑을 정밀화하여 ORM 마이그레이션 시 불필요한 반복 `ALTER TABLE` 발생 방지.
+- **검증 계획**: `pkg/catalog` 및 `pkg/engine`에 Red 테스트 선작성 후 Green 전환 및 `-race` 검증.
 
-### 도메인 C: 네트워크 타임아웃, 복제 에러 전파 및 데몬 (7건)
-12. **`결함 13-4` 내장 SPA 웹 서버(`/assets/*.js`) 서브폴더 정적 에셋 허용** (`pkg/api/spa.go:35-37`).
-13. **`결함 5-3` 레플리카 WAL 적용 실패 에러 무음 삼킴 제거** (`pkg/replication/client.go`).
-14. **`결함 5-4` PGWire SSL 경로 `CancelRequest`의 `CancelSessionQuery` 정상 호출** (`pkg/wire/server.go`).
-15. **`Scope-100` / `101` / `104` PGWire & TDS 핸드셰이크 `SetReadDeadline` 부여** (`pkg/wire/tls.go`, `pkg/wire/tds/server.go`, `tls.go`).
-16. **`Scope-097` PGWire 장기 연결 Portal 개수 상한 가드** (`pkg/wire/server.go:924`).
-17. **`Scope-127` & `129` 웹훅 재시도 컨텍스트 즉시 중단 및 서버 종료 시 WAL `Sync()` 보장** (`pkg/api/webhook.go`, `cmd/lionsql/server.go`).
-18. **`Scope-130` & `135` 데몬 PID 원자적 쓰기 및 테스트 하네스 자식 프로세스 정리** (`cmd/lionsql/daemon.go`, `cmd/soaktest/main.go`).
+### Mini-Batch M2 (`pkg/engine` & `pkg/execution`): 쿼리 실행기 가드레일 및 임시 리소스 정리 (3건) [대기]
+1. **`결함 14-1` `CROSS/OUTER APPLY` 10만 행 상한 가드레일** (`pkg/engine/sqlexec_apply.go:72-100`): `APPLY` 연산 결과 누적 행 수가 상한(100,000행)을 초과할 때 무제한 OOM 대신 명시적 가드레일 에러 반환 (`[RULE:BoundedBuffers]`).
+2. **`결함 4-2` / `Scope-089` External Sort Spill 실패 시 임시 파일 즉시 삭제** (`pkg/execution/sort.go:181-235`): 외부 병합 정렬(`spillToDisk`) 중 인코딩/쓰기 에러 발생 시 열린 파일 핸들을 닫고 생성된 임시 런 파일을 즉시 삭제(`os.Remove`)하여 디스크 누수 차단 (`[RULE:HandleHygiene]`).
+3. **`Scope-047` 파생 테이블 구체화 중 에러 시 물리 임시 테이블 롤백 드롭** (`pkg/engine/sqlexec_derived.go:145-180`): 파생 테이블(`FROM (SELECT ...)`) 구체화 도중 에러가 발생할 경우 생성된 물리 임시 테이블(`__derived_*`)을 즉시 `DropTable`로 정리.
+- **검증 계획**: `pkg/execution/execution_test.go` 및 `pkg/engine`에 Red 테스트 선작성 후 Green 전환 및 `-race` 검증.
+
+### Mini-Batch M3 (`pkg/engine` & `pkg/proc`): 트랜잭션/커서 수명주기 및 파서 위임 (3건) [대기]
+1. **`결함 8-3` `WITHOUT HOLD` 커서 트랜잭션 종료 시 자동 닫기** (`pkg/engine/sqlexec_cursor.go:87-97`, `session.go`): `COMMIT` 또는 `ROLLBACK` 시 세션의 활성 커서 중 `Hold == false`(`WITHOUT HOLD`)인 커서를 자동으로 닫아(`IsOpen = false`) 표준 커서 수명주기 보장.
+2. **`Scope-038` T-SQL 단순 `BEGIN ... END` 블록의 트랜잭션 오인식 차단** (`pkg/engine/sqlexec.go:651`): `BEGIN ATOMIC`이나 프로시저성 `BEGIN <stmt> END` 블록이 `BEGIN TRANSACTION`으로 오인식되지 않도록 구문 판별 정밀화.
+3. **`결함 6-4` & `6-5` Native 파서 `SELECT ... INTO` 및 `JOIN (WITH ...)` 서브쿼리 위임** (`pkg/proc/parser_dml.go`): Native Pratt 파서에서 `SELECT ... INTO` 구문과 `JOIN (WITH cte AS ...)` 파생 서브쿼리 구문을 무음 탈락시키지 않고 정확히 파싱하거나 Tier 2 ANTLR4 폴백/엔진으로 위임.
+- **검증 계획**: `pkg/engine/sqlexec_cursor_test.go` 및 `pkg/proc`에 Red 테스트 선작성 후 Green 전환 및 `-race` 검증.
+
+### Mini-Batch M4 (`pkg/api`, `pkg/replication`, `pkg/wire`): 와이어 타임아웃/상한, SPA 에셋 및 복제 에러 전파 (4건) [대기]
+1. **`결함 13-4` 내장 SPA 웹 서버(`/assets/*.js`) 서브폴더 정적 에셋 허용** (`pkg/api/spa.go:35-37`): Path Traversal(`..`) 및 숨김 파일(`/.`)은 엄격히 차단하되, Vite/React/Vue 빌드 결과물의 표준 하위 정적 에셋 경로(`/assets/*`, `/static/*` 등) 서빙 지원.
+2. **`결함 5-3` 레플리카 WAL 적용 실패 에러 무음 삼킴 제거** (`pkg/replication/client.go`): 레플리카에서 Primary WAL 레코드 리플레이 실패 시 무음 무시하고 LSN을 전진시키지 않도록 명시적 에러 반환 및 재동기화 유도 (`[RULE:ExplicitError]`).
+3. **`결함 5-4` & `Scope-097` PGWire SSL 경로 `CancelRequest` 정상 호출 및 장기 연결 Portal 상한 가드** (`pkg/wire/server.go`): TLS 핸드셰이크 전/후 `CancelRequest` 패킷이 `CancelSessionQuery`를 정상 호출하도록 연결하고, 단일 세션 내 미해제 Portal 누적 상한(예: 1,024개) 가드 적용 (`[RULE:BoundedBuffers]`).
+4. **`Scope-100` / `101` / `104` PGWire & TDS 핸드셰이크 `SetReadDeadline` 부여** (`pkg/wire/tls.go`, `pkg/wire/tds/server.go`, `pkg/wire/tds/tls.go`): 초기 스타트업/프리로그인/TLS 협상 패킷 읽기 시 유한 `ReadDeadline`(예: 10~30초)을 설정하여 Slowloris 연결 고갈 방어.
+- **검증 계획**: `pkg/api`, `pkg/replication`, `pkg/wire`에 Red 테스트 선작성 후 Green 전환 및 `-race` 검증.
+
+### Mini-Batch M5 (`pkg/api/webhook.go`, `cmd/lionsql`, `cmd/soaktest`): 웹훅 중단, 서버 종료 WAL Sync, 데몬/하네스 정리 (3건) [대기]
+1. **`Scope-127` 웹훅 재시도 컨텍스트 즉시 중단** (`pkg/api/webhook.go`): 웹훅 전송 실패 후 백오프 대기 중 서버 종료(`ctx.Done()`) 시 `time.Sleep` 대신 `select`로 즉시 탈출 (`[RULE:CooperativeAbort]`).
+2. **`Scope-129` 서버 종료 시 WAL `Sync()` 보장** (`cmd/lionsql/server.go`): Graceful Shutdown 시 스토리지 엔진 `Close()` 과정에서 미플러시 WAL 버퍼가 디스크에 확정 동기화되도록 보장.
+3. **`Scope-130` & `135` 데몬 PID 원자적 쓰기/FD 정리 및 테스트 하네스 자식 프로세스 정리** (`cmd/lionsql/daemon.go`, `cmd/soaktest/main.go`, `cmd/crashtest/main.go`): 데몬 기동 시 PID 파일을 임시 파일 + Rename 원자적 쓰기(`[RULE:AtomicSaves]`)로 기록하고 부모 프로세스의 `logFd`를 닫으며, 테스트 하네스에 `signal.Notify`를 등록해 인터럽트 시 자식 프로세스를 확실히 종료 (`[RULE:CleanTeardown]`).
+- **검증 계획**: `pkg/api` 및 `cmd/lionsql`에 Red 테스트 선작성 후 Green 전환 및 `-race` 검증.
 
 ---
 

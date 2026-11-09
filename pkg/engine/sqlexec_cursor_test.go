@@ -2,11 +2,14 @@ package engine_test
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/engine"
 	"lionsql/pkg/storage/memengine"
+	"lionsql/pkg/storage/wiredtiger"
 )
 
 func setupCursorTestDB(t *testing.T) *engine.Coordinator {
@@ -257,6 +260,95 @@ WHEN NOT MATCHED THEN
 		}
 		if phys, exists := cs.GetTempTablePhysical("#non_existent_phantom_tbl"); exists {
 			t.Fatalf("expected #non_existent_phantom_tbl NOT to be registered in TempTableMap on failed SELECT, but got %q", phys)
+		}
+	})
+}
+
+func TestP1_BatchM1_AlterViewFKAndPgAttribute(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "lionsql_m1_test_*")
+	if err != nil {
+		t.Fatalf("MkdirTemp failed: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	wtEng := wiredtiger.New()
+	if err := wtEng.Open(tmpDir); err != nil {
+		t.Fatalf("wtEng.Open failed: %v", err)
+	}
+	defer func() { _ = wtEng.Close() }()
+
+	cat := catalog.New(wtEng)
+	if err := cat.SetPersistenceDir(tmpDir); err != nil {
+		t.Fatalf("SetPersistenceDir failed: %v", err)
+	}
+	coord := engine.NewCoordinator(cat, wtEng, engine.Config{})
+	sessID := "sess-m1"
+
+	// 1. View Persistence & ALTER VIEW support
+	t.Run("Item1_AlterViewAndPersistence", func(t *testing.T) {
+		if _, err := coord.ExecuteSessionSQL(sessID, "CREATE TABLE m1_items (id INT PRIMARY KEY, price INT DEFAULT 100);"); err != nil {
+			t.Fatalf("CREATE TABLE failed: %v", err)
+		}
+		if _, err := coord.ExecuteSessionSQL(sessID, "INSERT INTO m1_items (id, price) VALUES (1, 100), (2, 250);"); err != nil {
+			t.Fatalf("INSERT failed: %v", err)
+		}
+		if _, err := coord.ExecuteSessionSQL(sessID, "CREATE VIEW v_m1_items AS SELECT id, price FROM m1_items;"); err != nil {
+			t.Fatalf("CREATE VIEW failed: %v", err)
+		}
+		// Execute T-SQL standard ALTER VIEW
+		if _, err := coord.ExecuteSessionSQL(sessID, "ALTER VIEW v_m1_items AS SELECT id, price FROM m1_items WHERE price > 150;"); err != nil {
+			t.Fatalf("ALTER VIEW failed: %v", err)
+		}
+		// Reload catalog from disk to verify ALTER VIEW persisted
+		catReload := catalog.New(wtEng)
+		if err := catReload.SetPersistenceDir(tmpDir); err != nil {
+			t.Fatalf("catReload.SetPersistenceDir failed: %v", err)
+		}
+		v, err := catReload.GetView("v_m1_items")
+		if err != nil || v == nil || !strings.Contains(v.Query, "price > 150") {
+			t.Fatalf("expected persisted altered view query with 'price > 150', got v=%+v err=%v", v, err)
+		}
+	})
+
+	// 2. Scope-041 & Defect 8-4: ALTER TABLE ADD FOREIGN KEY registers FK in schema, and DROP TABLE on parent is blocked
+	t.Run("Scope041_And_Defect8_4_AlterTableAddFKAndDropParentBlocked", func(t *testing.T) {
+		if _, err := coord.ExecuteSessionSQL(sessID, "CREATE TABLE m1_parents (id INT PRIMARY KEY);"); err != nil {
+			t.Fatalf("CREATE TABLE m1_parents failed: %v", err)
+		}
+		if _, err := coord.ExecuteSessionSQL(sessID, "CREATE TABLE m1_children (id INT PRIMARY KEY, parent_id INT);"); err != nil {
+			t.Fatalf("CREATE TABLE m1_children failed: %v", err)
+		}
+		if _, err := coord.ExecuteSessionSQL(sessID, "ALTER TABLE m1_children ADD CONSTRAINT fk_child_parent FOREIGN KEY (parent_id) REFERENCES m1_parents(id);"); err != nil {
+			t.Fatalf("ALTER TABLE ADD FOREIGN KEY failed: %v", err)
+		}
+
+		// Verify FK is actually registered on m1_children schema
+		childTbl, err := wtEng.GetTable("m1_children")
+		if err != nil {
+			t.Fatalf("GetTable(m1_children) failed: %v", err)
+		}
+		if len(childTbl.ForeignKeys) == 0 {
+			t.Fatalf("Scope-041: expected ForeignKeys to be registered on m1_children after ALTER TABLE ADD FOREIGN KEY, got 0")
+		}
+
+		// Defect 8-4: Dropping parent table while referenced by child table FK must be blocked
+		if _, err := coord.ExecuteSessionSQL(sessID, "DROP TABLE m1_parents;"); err == nil {
+			t.Fatalf("Defect 8-4: expected DROP TABLE m1_parents to fail because m1_children references it via FK, but succeeded")
+		}
+	})
+
+	// 3. Scope-032: pg_attribute.atthasdef reflects column default
+	t.Run("Scope032_PgAttributeHasDef", func(t *testing.T) {
+		res, err := coord.ExecuteSessionSQL(sessID, "SELECT attname, atthasdef FROM pg_catalog.pg_attribute WHERE attname = 'price';")
+		if err != nil {
+			t.Fatalf("SELECT from pg_attribute failed: %v", err)
+		}
+		if len(res.Rows) == 0 {
+			t.Fatalf("expected row for column 'price' in pg_attribute")
+		}
+		hasDef := res.Rows[0]["atthasdef"]
+		if hasDef != true && fmt.Sprintf("%v", hasDef) != "true" {
+			t.Fatalf("Scope-032: expected atthasdef=true for column 'price' with DEFAULT 100, got %v", hasDef)
 		}
 	})
 }

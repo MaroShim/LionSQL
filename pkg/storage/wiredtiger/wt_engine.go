@@ -566,6 +566,19 @@ func (e *Engine) DropTable(tableName string) error {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
+	// Verify no other table has a foreign key referencing this table
+	for otherName, otherTbl := range e.tables {
+		if strings.EqualFold(otherName, tbl.Name) {
+			continue
+		}
+		for _, fk := range otherTbl.ForeignKeys {
+			if strings.EqualFold(fk.ParentTable, tbl.Name) {
+				return fmt.Errorf("%w: table %q is referenced by foreign key constraint %q on table %q",
+					storage.ErrDependentObjectsExist, tableName, fk.Name, otherName)
+			}
+		}
+	}
+
 	e.evictAllCursors(tbl.Name)
 	if tbl.PhysicalName != "" && tbl.PhysicalName != tbl.Name {
 		e.evictAllCursors(tbl.PhysicalName)
@@ -940,6 +953,11 @@ func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.Table
 
 	if err := mutator(t); err != nil {
 		return err
+	}
+	if !storage.IsTemporaryTable(t.Name) {
+		if err := e.saveCatalog(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -392,6 +392,25 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 	}
 
 	tableName := cleanIdentifier(tokens[0])
+	if sqlutil.ContainsKeyword(rest, "CASCADE", false) {
+		if tables, err := s.engine.ListTables(); err == nil {
+			for _, otherTbl := range tables {
+				if strings.EqualFold(otherTbl.Name, tableName) {
+					continue
+				}
+				_ = s.engine.AlterTable(otherTbl.Name, func(sch *storage.TableSchema) error {
+					filtered := sch.ForeignKeys[:0]
+					for _, fk := range sch.ForeignKeys {
+						if !strings.EqualFold(fk.ParentTable, tableName) {
+							filtered = append(filtered, fk)
+						}
+					}
+					sch.ForeignKeys = filtered
+					return nil
+				})
+			}
+		}
+	}
 	if err := s.engine.DropTable(tableName); err != nil {
 		if (sqlutil.ContainsKeyword(query, "IF EXISTS", false) || s.TolerantDDL()) && errors.Is(err, storage.ErrTableNotFound) {
 			return &QueryResult{
@@ -1315,7 +1334,7 @@ func parseForeignKeyClause(def string, defaultChildCol string, defaultName strin
 	return &fk, true
 }
 
-// execCreateView handles CREATE [OR REPLACE] [TEMP|TEMPORARY] VIEW [IF NOT EXISTS] name AS <select>.
+// execCreateView handles CREATE [OR REPLACE|OR ALTER] [TEMP|TEMPORARY] VIEW [IF NOT EXISTS] name AS <select> and ALTER VIEW name AS <select>.
 func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
@@ -1327,7 +1346,8 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 	beforeAS := strings.TrimSpace(cleaned[:asIdx])
 	selectQuery := strings.TrimSpace(cleaned[asIdx+2:])
 
-	orReplace := sqlutil.ContainsKeyword(beforeAS, "OR REPLACE", false)
+	isAlter := sqlutil.HasPrefixKeyword(beforeAS, "ALTER VIEW")
+	orReplace := sqlutil.ContainsKeyword(beforeAS, "OR REPLACE", false) || sqlutil.ContainsKeyword(beforeAS, "OR ALTER", false)
 	ifNotExists := sqlutil.ContainsKeyword(beforeAS, "IF NOT EXISTS", false)
 
 	viewIdx := sqlutil.FindTopLevelKeyword(beforeAS, "VIEW")
@@ -1352,7 +1372,13 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 		Query: selectQuery,
 	}
 
-	if orReplace {
+	cmdName := "CREATE VIEW"
+	if isAlter {
+		cmdName = "ALTER VIEW"
+		if err := s.catalog.AlterView(view); err != nil {
+			return nil, err
+		}
+	} else if orReplace {
 		s.catalog.CreateOrReplaceView(view)
 	} else {
 		if err := s.catalog.CreateView(view); err != nil {
@@ -1360,7 +1386,7 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 				// Silently succeed when IF NOT EXISTS is specified
 				return &QueryResult{
 					Success:      true,
-					Command:      "CREATE VIEW",
+					Command:      cmdName,
 					RowsAffected: 0,
 					DurationUS:   time.Since(start).Microseconds(),
 				}, nil
@@ -1373,7 +1399,7 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 
 	return &QueryResult{
 		Success:      true,
-		Command:      "CREATE VIEW",
+		Command:      cmdName,
 		RowsAffected: 0,
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
@@ -1558,11 +1584,53 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 				cName = cleanIdentifier(cTokens[0])
 			}
 		}
+		fk, ok := parseForeignKeyClause(body, "", cName)
+		if !ok || fk == nil {
+			return nil, fmt.Errorf("invalid FOREIGN KEY syntax in ALTER TABLE")
+		}
+		fk.ChildTable = tableName
+
+		// Verify referenced parent table exists and resolve default parent PK column if omitted
+		if !strings.EqualFold(fk.ParentTable, tableName) {
+			parentTbl, err := s.engine.GetTable(fk.ParentTable)
+			if err != nil || parentTbl == nil {
+				return nil, fmt.Errorf("%w: referenced parent table %q does not exist", storage.ErrTableNotFound, fk.ParentTable)
+			}
+			fk.ParentTable = parentTbl.Name
+			if len(fk.ParentColumns) == 0 {
+				pkCol, err := parentTbl.PrimaryKeyColumn()
+				if err != nil || pkCol == nil {
+					return nil, fmt.Errorf("referenced parent table %q has no primary key", fk.ParentTable)
+				}
+				fk.ParentColumns = []string{pkCol.Name}
+			}
+		}
+
+		if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			if strings.EqualFold(fk.ParentTable, sch.Name) && len(fk.ParentColumns) == 0 {
+				pkCol, err := sch.PrimaryKeyColumn()
+				if err != nil || pkCol == nil {
+					return fmt.Errorf("referenced parent table %q has no primary key", fk.ParentTable)
+				}
+				fk.ParentColumns = []string{pkCol.Name}
+			}
+			for _, childCol := range fk.ChildColumns {
+				if _, _, found := sch.FindColumn(childCol); !found {
+					return fmt.Errorf("%w: %s", storage.ErrColumnNotFound, childCol)
+				}
+			}
+			sch.ForeignKeys = append(sch.ForeignKeys, *fk)
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+		s.InvalidatePKBypassCache()
+
 		return &QueryResult{
 			Success:    true,
 			Command:    "ALTER TABLE",
 			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{fmt.Sprintf("Foreign key constraint %q added to table %q", cName, tableName)},
+			Messages:   []string{fmt.Sprintf("Foreign key constraint %q added to table %q", fk.Name, tableName)},
 		}, nil
 	}
 

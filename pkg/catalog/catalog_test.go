@@ -264,3 +264,27 @@ func TestCatalog_ExtendedStatistics(t *testing.T) {
 		t.Fatalf("expected stat_geo to be dropped")
 	}
 }
+
+func TestP1_BatchM1_CleanCatalogIdentCompoundBrackets(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	// Defect 7-3: Registering a procedure with [dbo].[my_proc] and retrieving with my_proc or dbo.[my_proc]
+	p := &catalog.Procedure{
+		Name: "[dbo].[my_proc]",
+		Body: "CREATE PROCEDURE [dbo].[my_proc] AS BEGIN SELECT 1; END;",
+	}
+	if err := cat.CreateProcedure(p); err != nil {
+		t.Fatalf("CreateProcedure failed: %v", err)
+	}
+
+	got, err := cat.GetProcedure("my_proc")
+	if err != nil || got == nil {
+		t.Fatalf("expected GetProcedure('my_proc') to find '[dbo].[my_proc]', got err=%v", err)
+	}
+	got2, err := cat.GetProcedure("dbo.[my_proc]")
+	if err != nil || got2 == nil {
+		t.Fatalf("expected GetProcedure('dbo.[my_proc]') to find '[dbo].[my_proc]', got err=%v", err)
+	}
+}

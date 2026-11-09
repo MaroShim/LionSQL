@@ -689,6 +689,7 @@ func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.Table
 	if err := mutator(&td.Schema); err != nil {
 		return err
 	}
+	e.rebuildFKCacheLocked()
 	return nil
 }
 

@@ -1450,8 +1450,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execDropTrigger(trimmed, start)
 	}
 
-	// 1.5 DDL: CREATE VIEW / CREATE OR REPLACE VIEW / CREATE TEMP VIEW / DROP VIEW
-	if strings.HasPrefix(upper, "CREATE VIEW") || strings.HasPrefix(upper, "CREATE OR REPLACE VIEW") || strings.HasPrefix(upper, "CREATE TEMP VIEW") || strings.HasPrefix(upper, "CREATE TEMPORARY VIEW") {
+	// 1.5 DDL: CREATE VIEW / CREATE OR REPLACE VIEW / CREATE OR ALTER VIEW / ALTER VIEW / CREATE TEMP VIEW / DROP VIEW
+	if strings.HasPrefix(upper, "CREATE VIEW") || strings.HasPrefix(upper, "CREATE OR REPLACE VIEW") || strings.HasPrefix(upper, "CREATE OR ALTER VIEW") || strings.HasPrefix(upper, "ALTER VIEW") || strings.HasPrefix(upper, "CREATE TEMP VIEW") || strings.HasPrefix(upper, "CREATE TEMPORARY VIEW") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}

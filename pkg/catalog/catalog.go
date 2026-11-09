@@ -114,11 +114,11 @@ func (c *Catalog) Engine() storage.Engine {
 }
 
 func cleanCatalogIdent(name string) string {
-	s := strings.Trim(strings.TrimSpace(name), "[]\"'`")
-	if strings.HasPrefix(strings.ToLower(s), "dbo.") {
-		s = s[4:]
+	s := strings.TrimSpace(name)
+	if idx := strings.LastIndex(s, "."); idx != -1 {
+		s = s[idx+1:]
 	}
-	return strings.Trim(s, "[]\"'`")
+	return strings.Trim(strings.TrimSpace(s), "[]\"'`")
 }
 
 // RegisterProcedure saves or updates a stored procedure in the catalog (upsert semantics).
@@ -763,6 +763,24 @@ func (c *Catalog) CreateOrReplaceView(v *View) {
 	if c.persistenceDir != "" {
 		_ = c.persistObjectsLocked()
 	}
+}
+
+// AlterView updates an existing view and persists the catalog to disk.
+func (c *Catalog) AlterView(v *View) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := strings.ToLower(cleanCatalogIdent(v.Name))
+	existing, exists := c.views[key]
+	if !exists {
+		return fmt.Errorf("%w: %s", ErrViewNotFound, v.Name)
+	}
+	v.CreatedAt = existing.CreatedAt
+	v.UpdatedAt = time.Now()
+	c.views[key] = v
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
+	return nil
 }
 
 // GetView retrieves a view by name.

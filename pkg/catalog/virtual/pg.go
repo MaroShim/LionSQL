@@ -945,7 +945,7 @@ func generatePgAttribute(src Source, whereClause string) ([]string, []map[string
 				"attstorage":     "x",
 				"attcompression": "",
 				"attnotnull":     !c.Nullable,
-				"atthasdef":      false,
+				"atthasdef":      c.Default != "" || c.Identity,
 				"atthasmissing":  false,
 				"attidentity":    "",
 				"attgenerated":   "",
