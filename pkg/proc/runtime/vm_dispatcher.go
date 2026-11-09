@@ -1,11 +1,13 @@
 package runtime
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
@@ -257,6 +259,29 @@ vmLoop:
 		f.logs = append(f.logs, valToString(v))
 		continue vmLoop
 
+	case proc.OpWaitfor:
+		v := f.regs[inst.A]
+		isDelay := inst.B == 1
+		dur, err := parseTsqlDelay(v, isDelay)
+		if err != nil {
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
+		}
+		if dur > 0 {
+			ctx := f.ctx
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(dur):
+			}
+		}
+		continue vmLoop
+
 
 // --- Compute, Variables, Registers ---
 	case proc.OpLoadConst:
@@ -266,10 +291,16 @@ vmLoop:
 
 	case proc.OpLoadVar:
 		slot := inst.B
+		varName, _ := f.aux(&inst).(string)
+		if strings.HasPrefix(varName, "@@") {
+			if v, found := f.getVar(varName); found {
+				f.regs[inst.A] = v
+				continue vmLoop
+			}
+		}
 		if slot >= 0 && int(slot) < len(f.slots) {
 			f.regs[inst.A] = f.slots[slot]
 		} else {
-			varName, _ := f.aux(&inst).(string)
 			v, found := f.getVar(varName)
 			if !found {
 				v = storage.StringValue(varName)
@@ -353,6 +384,16 @@ vmLoop:
 
 	case proc.OpIntDiv:
 		res, err := storageIntDiv(f.regs[inst.B], f.regs[inst.C])
+		if err != nil {
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
+		}
+		f.regs[inst.A] = res
+
+	case proc.OpMod:
+		res, err := storageMod(f.regs[inst.B], f.regs[inst.C])
 		if err != nil {
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
 				return nil, catchErr
@@ -1481,6 +1522,7 @@ vmLoop:
 			}
 			cur.idx = 0
 			cur.isOpen = true
+			f.cursorRows = int64(len(rows))
 		}
 
 	case proc.OpCursorFetch:
@@ -1536,6 +1578,7 @@ vmLoop:
 			cur.isOpen = false
 			cur.rows = nil // immediately release row buffer memory ([RULE:BoundedBuffers])
 			cur.idx = 0
+			f.cursorRows = 0
 		} else {
 			err := fmt.Errorf("cursor %s does not exist", curName)
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
@@ -1866,5 +1909,59 @@ vmLoop:
 		}
 	}
 	return nil, nil
+}
+
+func parseTsqlDelay(val storage.Value, isDelay bool) (time.Duration, error) {
+	str := ""
+	if !val.IsNull {
+		str = strings.TrimSpace(val.SVal)
+	}
+	if str == "" {
+		return 0, nil
+	}
+	parts := strings.Split(str, ":")
+	if len(parts) != 3 {
+		return 0, fmt.Errorf("invalid time format for WAITFOR: %q (expected 'hh:mm:ss[.fff]')", str)
+	}
+	hours, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, fmt.Errorf("invalid hours in WAITFOR: %w", err)
+	}
+	mins, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, fmt.Errorf("invalid minutes in WAITFOR: %w", err)
+	}
+	secParts := strings.Split(parts[2], ".")
+	secs, err := strconv.Atoi(secParts[0])
+	if err != nil {
+		return 0, fmt.Errorf("invalid seconds in WAITFOR: %w", err)
+	}
+	var millis int
+	if len(secParts) > 1 {
+		fraction := secParts[1]
+		if len(fraction) > 3 {
+			fraction = fraction[:3]
+		}
+		for len(fraction) < 3 {
+			fraction += "0"
+		}
+		millis, _ = strconv.Atoi(fraction)
+	}
+
+	if isDelay {
+		dur := time.Duration(hours)*time.Hour +
+			time.Duration(mins)*time.Minute +
+			time.Duration(secs)*time.Second +
+			time.Duration(millis)*time.Millisecond
+		return dur, nil
+	}
+
+	// WAITFOR TIME 'hh:mm:ss'
+	now := time.Now()
+	target := time.Date(now.Year(), now.Month(), now.Day(), hours, mins, secs, millis*1e6, now.Location())
+	if target.Before(now) {
+		target = target.Add(24 * time.Hour)
+	}
+	return target.Sub(now), nil
 }
 

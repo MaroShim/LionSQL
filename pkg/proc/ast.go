@@ -530,6 +530,21 @@ type LabelStmt struct {
 func (s *LabelStmt) stmtNode() {}
 func (s *LabelStmt) String() string { return fmt.Sprintf("%s:", s.Label) }
 
+// WaitforStmt represents WAITFOR DELAY 'time' or WAITFOR TIME 'time'
+type WaitforStmt struct {
+	IsDelay bool
+	Value   Expr
+}
+
+func (s *WaitforStmt) stmtNode() {}
+func (s *WaitforStmt) String() string {
+	kind := "DELAY"
+	if !s.IsDelay {
+		kind = "TIME"
+	}
+	return fmt.Sprintf("WAITFOR %s %s", kind, s.Value)
+}
+
 // CaseWhen represents a single WHEN cond THEN result arm
 type CaseWhen struct {
 	Condition Expr

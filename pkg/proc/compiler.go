@@ -1013,6 +1013,18 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		}
 		return nil
 
+	case *WaitforStmt:
+		valReg, err := c.compileExpr(s.Value)
+		if err != nil {
+			return err
+		}
+		mode := int32(0)
+		if s.IsDelay {
+			mode = 1
+		}
+		c.emit(OpWaitfor, valReg, mode, 0, nil)
+		return nil
+
 	case *GeneralSelectStmt:
 		// 1. Scalar SELECT without FROM (e.g. SELECT 1 + 1 AS res, 'hello' AS msg, GETDATE())
 		if s.From.Name == "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !s.IsExplain && !hasAggregates(s.Projections) {
@@ -1234,6 +1246,8 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 			c.emit(OpDiv, leftReg, leftReg, rightReg, nil)
 		case TokenDiv:
 			c.emit(OpIntDiv, leftReg, leftReg, rightReg, nil)
+		case TokenPercent:
+			c.emit(OpMod, leftReg, leftReg, rightReg, nil)
 		case TokenEq:
 			if isInt {
 				c.emit(OpEqInt, leftReg, leftReg, rightReg, nil)

@@ -161,9 +161,23 @@ const (
 	TokenReturning
 	TokenConflict
 	TokenDiv
+	TokenPlusAssign      // +=
+	TokenMinusAssign     // -=
+	TokenAsteriskAssign  // *=
+	TokenSlashAssign     // /=
+	TokenModuloAssign    // %=
+	TokenBitAndAssign    // &=
+	TokenBitXorAssign    // ^=
+	TokenBitOrAssign     // |=
+	TokenWaitfor         // WAITFOR
+	TokenDelay           // DELAY
+	TokenTime            // TIME
 )
 
 var keywords = map[string]TokenType{
+	"WAITFOR":       TokenWaitfor,
+	"DELAY":         TokenDelay,
+	"TIME":          TokenTime,
 	"RETURNING":     TokenReturning,
 	"CONFLICT":      TokenConflict,
 	"CAST":          TokenCast,
@@ -351,6 +365,22 @@ func (t TokenType) String() string {
 		return "^"
 	case TokenBitwiseNot:
 		return "~"
+	case TokenPlusAssign:
+		return "+="
+	case TokenMinusAssign:
+		return "-="
+	case TokenAsteriskAssign:
+		return "*="
+	case TokenSlashAssign:
+		return "/="
+	case TokenModuloAssign:
+		return "%="
+	case TokenBitAndAssign:
+		return "&="
+	case TokenBitXorAssign:
+		return "^="
+	case TokenBitOrAssign:
+		return "|="
 	default:
 		for k, v := range keywords {
 			if v == t {
@@ -358,6 +388,31 @@ func (t TokenType) String() string {
 			}
 		}
 		return fmt.Sprintf("Token(%d)", int(t))
+	}
+}
+
+// IsCompoundAssign reports whether tok is a T-SQL compound assignment operator
+// (+=, -=, *=, /=, %=, &=, ^=, |=), and returns the corresponding binary operator token.
+func IsCompoundAssign(tok TokenType) (TokenType, bool) {
+	switch tok {
+	case TokenPlusAssign:
+		return TokenPlus, true
+	case TokenMinusAssign:
+		return TokenMinus, true
+	case TokenAsteriskAssign:
+		return TokenAsterisk, true
+	case TokenSlashAssign:
+		return TokenSlash, true
+	case TokenModuloAssign:
+		return TokenPercent, true
+	case TokenBitAndAssign:
+		return TokenBitwiseAnd, true
+	case TokenBitXorAssign:
+		return TokenBitwiseXor, true
+	case TokenBitOrAssign:
+		return TokenBitwiseOr, true
+	default:
+		return TokenIllegal, false
 	}
 }
 

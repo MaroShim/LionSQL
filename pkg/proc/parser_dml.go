@@ -288,12 +288,24 @@ func (p *Parser) parseUpdate() (Statement, error) {
 		colName := cleanSchemaPrefix(p.curToken.Literal)
 		p.nextToken()
 
-		if !p.curTokenIs(TokenEq) && !p.curTokenIs(TokenAssign) {
+		var compoundBinaryOp TokenType
+		var isCompound bool
+		if op, ok := IsCompoundAssign(p.curToken.Type); ok {
+			compoundBinaryOp = op
+			isCompound = true
+		} else if !p.curTokenIs(TokenEq) && !p.curTokenIs(TokenAssign) {
 			return nil, fmt.Errorf("expected = in UPDATE SET, got %s", p.curToken.Literal)
 		}
 		p.nextToken()
 
 		valExpr := p.parseExpression(precLowest)
+		if isCompound {
+			valExpr = &BinaryExpr{
+				Left:  &ColumnRefExpr{Name: colName},
+				Op:    compoundBinaryOp,
+				Right: valExpr,
+			}
+		}
 		assigns = append(assigns, UpdateAssignment{Column: colName, Value: valExpr})
 
 		if p.curTokenIs(TokenComma) {

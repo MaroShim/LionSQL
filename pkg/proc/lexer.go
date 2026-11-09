@@ -63,7 +63,13 @@ func (l *Lexer) NextToken() Token {
 	case '=':
 		tok = Token{Type: TokenEq, Literal: "=", Line: tokLine, Col: tokCol}
 	case '+':
-		tok = Token{Type: TokenPlus, Literal: "+", Line: tokLine, Col: tokCol}
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TokenPlusAssign, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		} else {
+			tok = Token{Type: TokenPlus, Literal: "+", Line: tokLine, Col: tokCol}
+		}
 	case '-':
 		if l.peekChar() == '>' {
 			l.readChar()
@@ -73,15 +79,37 @@ func (l *Lexer) NextToken() Token {
 			} else {
 				tok = Token{Type: TokenJSONExtract, Literal: "->", Line: tokLine, Col: tokCol}
 			}
+		} else if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TokenMinusAssign, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
 		} else {
 			tok = Token{Type: TokenMinus, Literal: "-", Line: tokLine, Col: tokCol}
 		}
 	case '*':
-		tok = Token{Type: TokenAsterisk, Literal: "*", Line: tokLine, Col: tokCol}
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TokenAsteriskAssign, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		} else {
+			tok = Token{Type: TokenAsterisk, Literal: "*", Line: tokLine, Col: tokCol}
+		}
 	case '/':
-		tok = Token{Type: TokenSlash, Literal: "/", Line: tokLine, Col: tokCol}
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TokenSlashAssign, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		} else {
+			tok = Token{Type: TokenSlash, Literal: "/", Line: tokLine, Col: tokCol}
+		}
 	case '%':
-		tok = Token{Type: TokenPercent, Literal: "%", Line: tokLine, Col: tokCol}
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TokenModuloAssign, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		} else {
+			tok = Token{Type: TokenPercent, Literal: "%", Line: tokLine, Col: tokCol}
+		}
 	case ',':
 		tok = Token{Type: TokenComma, Literal: ",", Line: tokLine, Col: tokCol}
 	case ';':
@@ -131,6 +159,10 @@ func (l *Lexer) NextToken() Token {
 			ch := l.ch
 			l.readChar()
 			tok = Token{Type: TokenConcat, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		} else if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TokenBitOrAssign, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
 		} else {
 			tok = Token{Type: TokenBitwiseOr, Literal: "|", Line: tokLine, Col: tokCol}
 		}
@@ -139,11 +171,21 @@ func (l *Lexer) NextToken() Token {
 			ch := l.ch
 			l.readChar()
 			tok = Token{Type: TokenAnd, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		} else if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TokenBitAndAssign, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
 		} else {
 			tok = Token{Type: TokenBitwiseAnd, Literal: "&", Line: tokLine, Col: tokCol}
 		}
 	case '^':
-		tok = Token{Type: TokenBitwiseXor, Literal: "^", Line: tokLine, Col: tokCol}
+		if l.peekChar() == '=' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TokenBitXorAssign, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		} else {
+			tok = Token{Type: TokenBitwiseXor, Literal: "^", Line: tokLine, Col: tokCol}
+		}
 	case '~':
 		tok = Token{Type: TokenBitwiseNot, Literal: "~", Line: tokLine, Col: tokCol}
 	case '\'':

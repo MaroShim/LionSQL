@@ -427,6 +427,7 @@ type VMFrame struct {
 	columns         []string
 	values          [][]any
 	rowCount        int64
+	cursorRows      int64
 	fetchStatus     int
 	tranCount       int
 	lastIdentity    int64
@@ -1102,6 +1103,9 @@ func (f *VMFrame) getVar(name string) (storage.Value, bool) {
 		}
 		if strings.EqualFold(name, "@@FETCH_STATUS") || strings.EqualFold(clean, "FETCH_STATUS") || strings.EqualFold(clean, "@FETCH_STATUS") {
 			return storage.IntValue(int64(f.fetchStatus)), true
+		}
+		if strings.EqualFold(name, "@@CURSOR_ROWS") || strings.EqualFold(clean, "CURSOR_ROWS") || strings.EqualFold(clean, "@CURSOR_ROWS") {
+			return storage.IntValue(f.cursorRows), true
 		}
 		if strings.EqualFold(name, "@@TRANCOUNT") || strings.EqualFold(clean, "TRANCOUNT") || strings.EqualFold(clean, "@TRANCOUNT") {
 			return storage.IntValue(int64(f.tranCount)), true
@@ -2486,6 +2490,19 @@ func storageIntDiv(a, b storage.Value) (storage.Value, error) {
 		return storage.NullValue(storage.TypeUnknown), nil
 	}
 	return storage.IntValue(int64(n1) / i2), nil
+}
+
+func storageMod(a, b storage.Value) (storage.Value, error) {
+	if a.IsNull || b.IsNull {
+		return storage.NullValue(storage.TypeUnknown), nil
+	}
+	n1, _ := toFloatNum(a)
+	n2, _ := toFloatNum(b)
+	i2 := int64(n2)
+	if i2 == 0 {
+		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("divide by zero error encountered")
+	}
+	return storage.IntValue(int64(n1) % i2), nil
 }
 
 func storageNeg(a storage.Value) storage.Value {

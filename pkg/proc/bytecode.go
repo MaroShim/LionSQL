@@ -47,6 +47,7 @@ const (
 	OpMul
 	OpDiv
 	OpIntDiv
+	OpMod
 	OpNeg
 	OpNot
 	OpAnd
@@ -126,10 +127,17 @@ const (
 
 	// Type Cast & Conversion
 	OpCast
+
+	// Time Delay & Pause
+	OpWaitfor
 )
 
 func (op OpCode) String() string {
 	switch op {
+	case OpMod:
+		return "MOD"
+	case OpWaitfor:
+		return "WAITFOR"
 	case OpResultRow:
 		return "RESULT_ROW"
 	case OpPointSelect:

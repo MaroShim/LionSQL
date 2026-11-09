@@ -73,6 +73,8 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return p.parseExec()
 	case TokenGoto:
 		return p.parseGoto()
+	case TokenWaitfor:
+		return p.parseWaitfor()
 	case TokenIdent:
 		if p.peekTokenIs(TokenColon) {
 			label := p.curToken.Literal
@@ -521,12 +523,17 @@ func (p *Parser) parseDeclare() (Statement, error) {
 func (p *Parser) parseSet() (Statement, error) {
 	p.nextToken() // eat SET
 
-	// 1. Variable assignment: SET @var = expr
+	// 1. Variable assignment: SET @var = expr or compound SET @var += expr
 	if p.curTokenIs(TokenVariable) {
 		varName := p.curToken.Literal
 		p.nextToken()
 
-		if !p.curTokenIs(TokenEq) && !p.curTokenIs(TokenAssign) {
+		var compoundBinaryOp TokenType
+		var isCompound bool
+		if op, ok := IsCompoundAssign(p.curToken.Type); ok {
+			compoundBinaryOp = op
+			isCompound = true
+		} else if !p.curTokenIs(TokenEq) && !p.curTokenIs(TokenAssign) {
 			return nil, fmt.Errorf("expected = in SET, got %s", p.curToken.Literal)
 		}
 		p.nextToken()
@@ -534,6 +541,14 @@ func (p *Parser) parseSet() (Statement, error) {
 		expr := p.parseExpression(precLowest)
 		if expr == nil {
 			return nil, fmt.Errorf("expected expression in SET %s", varName)
+		}
+
+		if isCompound {
+			expr = &BinaryExpr{
+				Left:  &VariableExpr{Name: varName},
+				Op:    compoundBinaryOp,
+				Right: expr,
+			}
 		}
 
 		if p.curTokenIs(TokenSemicolon) {
@@ -835,5 +850,34 @@ func (p *Parser) parseExec() (Statement, error) {
 	}
 
 	return &ExecStmt{ProcName: name, Args: args, ReturnVar: returnVar}, nil
+}
+
+func (p *Parser) parseWaitfor() (Statement, error) {
+	p.nextToken() // eat WAITFOR
+
+	isDelay := true
+	if p.curTokenIs(TokenDelay) {
+		isDelay = true
+		p.nextToken()
+	} else if p.curTokenIs(TokenTime) {
+		isDelay = false
+		p.nextToken()
+	} else {
+		return nil, fmt.Errorf("expected DELAY or TIME after WAITFOR, got %s", p.curToken.Literal)
+	}
+
+	valExpr := p.parseExpression(precLowest)
+	if valExpr == nil {
+		return nil, fmt.Errorf("expected time expression after WAITFOR")
+	}
+
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+
+	return &WaitforStmt{
+		IsDelay: isDelay,
+		Value:   valExpr,
+	}, nil
 }
 
