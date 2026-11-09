@@ -643,6 +643,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/logs/requests", s.wrapSuperuser(s.handleClearRequestLogs))
 
 	// Official Client SDK Static Distribution
+	s.mux.HandleFunc("GET /sdk", s.handleServeSDKIndex)
+	s.mux.HandleFunc("GET /sdk/", s.handleServeSDKIndex)
 	s.mux.HandleFunc("GET /sdk/lionsql.js", s.handleServeSDKJS)
 	s.mux.HandleFunc("GET /sdk/lionsql.d.ts", s.handleServeSDKDTS)
 }

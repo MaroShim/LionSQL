@@ -42,4 +42,18 @@ func TestSDK_StaticAssetServing(t *testing.T) {
 	if !strings.Contains(w.Body.String(), "export default class LionSQL") {
 		t.Fatalf("expected DTS body to contain export default class LionSQL")
 	}
+
+	// 3. Verify GET /sdk and /sdk/ redirect to /sdk/lionsql.js
+	for _, path := range []string{"/sdk", "/sdk/"} {
+		req = httptest.NewRequest("GET", path, nil)
+		w = httptest.NewRecorder()
+		server.ServeHTTP(w, req)
+
+		if w.Code != http.StatusFound {
+			t.Fatalf("GET %s expected 302 Found, got %d", path, w.Code)
+		}
+		if loc := w.Header().Get("Location"); loc != "/sdk/lionsql.js" {
+			t.Fatalf("GET %s expected redirect to /sdk/lionsql.js, got %q", path, loc)
+		}
+	}
 }

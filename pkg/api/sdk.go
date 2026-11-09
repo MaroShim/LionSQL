@@ -11,6 +11,10 @@ var lionsqlJSSource []byte
 //go:embed sdk/lionsql.d.ts
 var lionsqlDTSSource []byte
 
+func (s *Server) handleServeSDKIndex(w http.ResponseWriter, r *http.Request) {
+	http.Redirect(w, r, "/sdk/lionsql.js", http.StatusFound)
+}
+
 func (s *Server) handleServeSDKJS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
