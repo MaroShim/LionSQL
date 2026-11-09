@@ -171,7 +171,7 @@ if [ "${PUSH_ONLY}" = true ]; then
 
             # Check if comprehensive release notes exist in notes/ (e.g. notes/RELEASE_NOTES_v0.90.0.md)
             GH_NOTES_CONTENT=""
-            NOTES_DOC_MD="${ROOT_DIR}/notes/RELEASE_NOTES_${TAG}.md"
+            NOTES_DOC_MD="${ROOT_DIR}/notes/release_notes/RELEASE_NOTES_${TAG}.md"
             if [ -f "${NOTES_DOC_MD}" ]; then
                 echo -e "Found formal release notes in ${CLR_BOLD}${NOTES_DOC_MD}${CLR_RESET}."
                 GH_NOTES_CONTENT="$(cat "${NOTES_DOC_MD}")"
@@ -449,8 +449,8 @@ rm -f "${README_KO_FILE}.bak"
 echo -e "Updated: ${CLR_BOLD}README.md & README.ko.md badges${CLR_RESET}"
 
 # 4.4. Ensure Formal Release Notes exist in notes/ (Auto-scaffold if missing)
-NOTES_DOC_MD="${ROOT_DIR}/notes/RELEASE_NOTES_${TAG}.md"
-NOTES_DOC_KO="${ROOT_DIR}/notes/RELEASE_NOTES_${TAG}.ko.md"
+NOTES_DOC_MD="${ROOT_DIR}/notes/release_notes/RELEASE_NOTES_${TAG}.md"
+NOTES_DOC_KO="${ROOT_DIR}/notes/release_notes/RELEASE_NOTES_${TAG}.ko.md"
 NOTES_README_KO="${ROOT_DIR}/notes/README.ko.md"
 NOTES_README_EN="${ROOT_DIR}/notes/README.md"
 
@@ -575,7 +575,7 @@ else
 
             # Check if comprehensive release notes exist in notes/ (e.g. notes/RELEASE_NOTES_v0.90.0.md)
             GH_NOTES_CONTENT=""
-            NOTES_DOC_MD="${ROOT_DIR}/notes/RELEASE_NOTES_${TAG}.md"
+            NOTES_DOC_MD="${ROOT_DIR}/notes/release_notes/RELEASE_NOTES_${TAG}.md"
             if [ -f "${NOTES_DOC_MD}" ]; then
                 echo -e "Found formal release notes in ${CLR_BOLD}${NOTES_DOC_MD}${CLR_RESET}."
                 GH_NOTES_CONTENT="$(cat "${NOTES_DOC_MD}")"
