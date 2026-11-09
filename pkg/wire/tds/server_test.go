@@ -1197,6 +1197,36 @@ ORDER BY
 	}
 }
 
+func TestTDS_SSMS_DacStoreEngineInfo(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	query := `SELECT
+CAST(SERVERPROPERTY('EngineEdition') AS int) AS [EngineEdition],
+CAST(0 AS bit) AS [IsFabricServer]`
+
+	payload := sendSQLBatch(t, conn, query)
+
+	if !bytes.Contains(payload, EncodeUTF16LE("EngineEdition")) {
+		t.Fatalf("expected 'EngineEdition' column")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("IsFabricServer")) {
+		t.Fatalf("expected 'IsFabricServer' column")
+	}
+
+	// Verify that EngineEdition was inferred as TypeIntN with size 4 (0x04)
+	colMetaIdx := bytes.Index(payload, []byte{TokenColMetaData})
+	if colMetaIdx == -1 {
+		t.Fatalf("missing TokenColMetaData in response")
+	}
+	metaPayload := payload[colMetaIdx:]
+	// TypeIntN is 0x26 (38). Check that 0x26, 0x04 exists for TypeIntN length 4
+	if !bytes.Contains(metaPayload, []byte{TypeIntN, 4}) {
+		t.Fatalf("expected TypeIntN with size 4 for EngineEdition, got different metadata")
+	}
+}
+
 
 
 
