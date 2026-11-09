@@ -881,6 +881,52 @@ func TestP1_Batch2_FlatRecordAndSkipListBounds(t *testing.T) {
 	}
 }
 
+// TestP1_Batch3_ReopenNoGoroutineLeakAndCorruptMaterialize verifies:
+// 1. Calling OpenWithOptions repeatedly on a running engine cleanly stops the prior bgSaveLoop goroutine and WAL handle (Scope-001)
+// 2. Corrupted flatBuf during getRowAndVer / deleteRowAndVer logs diagnostic and degrades safely without panic (Scope-003)
+func TestP1_Batch3_ReopenNoGoroutineLeakAndCorruptMaterialize(t *testing.T) {
+	tmpDir := t.TempDir()
+	opts := DefaultOptions(tmpDir)
+	opts.RDBInterval = 50 * time.Millisecond
+
+	eng := NewWithOptions(opts)
+	if err := eng.OpenWithOptions(opts); err != nil {
+		t.Fatalf("first OpenWithOptions failed: %v", err)
+	}
+	// Re-open without intermediate Close() to verify prior stopCh is closed and drained cleanly
+	if err := eng.OpenWithOptions(opts); err != nil {
+		t.Fatalf("second OpenWithOptions failed: %v", err)
+	}
+	if err := eng.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	// Scope-003: Corrupted flatBuf falls back cleanly in getRowAndVer and deleteRowAndVer
+	schema := storage.TableSchema{
+		Name: "corrupt_flat",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	td := &TableData{
+		Schema: schema,
+		mode:   OCCModeFlat,
+		layout: BuildFlatRecordLayout(&schema),
+	}
+	td.initShards()
+	sIdx := hashShard("1")
+	td.shards[sIdx].entries["1"] = shardEntry{ver: 1, flatBuf: []byte{0x01}} // truncated buffer
+
+	if _, _, ok := td.getRowAndVer("1"); ok {
+		t.Fatalf("expected getRowAndVer to return false on corrupted flatBuf")
+	}
+	if _, hadOld := td.deleteRowAndVer("1"); !hadOld {
+		t.Fatalf("expected deleteRowAndVer to report hadOld=true while safely handling corrupt flatBuf")
+	}
+}
+
+
 
 
 

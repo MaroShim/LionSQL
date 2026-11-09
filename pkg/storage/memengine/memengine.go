@@ -355,6 +355,17 @@ func (e *Engine) Open(dir string) error {
 // OpenWithOptions initializes the engine with explicit Redis-style persistence options.
 func (e *Engine) OpenWithOptions(opts Options) error {
 	e.mu.Lock()
+	if e.stopCh != nil {
+		close(e.stopCh)
+		e.stopCh = nil
+		e.mu.Unlock()
+		e.bgWg.Wait()
+		e.mu.Lock()
+	}
+	if e.wal != nil {
+		_ = e.wal.Close()
+		e.wal = nil
+	}
 	defer e.mu.Unlock()
 
 	e.closed = false

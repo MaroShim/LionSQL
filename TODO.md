@@ -90,8 +90,8 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **설계 문서**: [`notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md`](notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md)
    - **진행 현황 (난이도 하 21건 — 6개 미니배치)**:
      - [x] **Mini-Batch 1 (`pkg/proc/runtime`, 4건)**: 음수 레지스터 인덱스(`regIdx >= 0`) 방어(`3-2`), 트리거 재귀 깊이(32) 초과 명시적 에러 반환(`3-3`), 스칼라 UDF 재귀 깊이(64) 상한 가드(`3-4`), 커서/내장함수 Opcode 안전 Type Assertion(`3-5`) 완료 (`1fcc772`).
-     - [x] **Mini-Batch 2 (`pkg/storage` 코덱 & SkipList, 3건)**: `DecodeFlatToRow` 64비트 오프셋 오버플로우 가드(`Scope-010`), `DecodeTupleValue` 64비트 길이 가드(`Scope-018`), `SkipList.Delete` 슬라이스 경계 방어(`Scope-008`) 완료.
-     - [ ] **Mini-Batch 3 (`pkg/storage` 라이프사이클, 3건)**: WiredTiger `Commit` 실패 시 `wt_session_reset` 보장(`1-3`), `memengine.OpenWithOptions` 재호출 시 기존 `stopCh` 정리(`Scope-001`), Flat 모드 코덱 실패 진단 로깅(`Scope-003`).
+     - [x] **Mini-Batch 2 (`pkg/storage` 코덱 & SkipList, 3건)**: `DecodeFlatToRow` 64비트 오프셋 오버플로우 가드(`Scope-010`), `DecodeTupleValue` 64비트 길이 가드(`Scope-018`), `SkipList.Delete` 슬라이스 경계 방어(`Scope-008`) 완료 (`f56f7d2`).
+     - [x] **Mini-Batch 3 (`pkg/storage` 라이프사이클, 3건)**: WiredTiger `Commit` 실패 시 `wt_session_reset` 보장(`1-3`), `memengine.OpenWithOptions` 재호출 시 기존 `stopCh` 정리(`Scope-001`), Flat 모드 코덱 실패 진단 로깅(`Scope-003`) 완료.
      - [ ] **Mini-Batch 4 (`pkg/execution` & `pkg/planner`, 4건)**: `HashJoinIterator.Close()` 시 `h.right.Close()` 호출(`4-3`), `SortIterator` Min-Heap 디코딩 I/O 에러 전파(`4-4`), `Window` `FrameFollowing` 슬라이스 상한 클램핑(`10-5`), `planner.go` 표현식 인덱스 빈 `Columns` 경계 방어(`4-5`).
      - [ ] **Mini-Batch 5 (`pkg/engine` & `pkg/proc`, 4건)**: `MERGE (VALUES ...)` 작은따옴표(`''`) 언이스케이프(`8-5`), `CLOSE <cursor>` 시 맵 삭제 대신 `IsOpen = false` 전환(`Scope-049`), VM 커서 중복 `OPEN` / 미오픈 `CLOSE` 표준 에러(`3-6`), `#temp` 미존재 테이블 단순 조회 시 팬텀 등록 방지(`2-5`).
      - [ ] **Mini-Batch 6 (`cmd/lionsql`, 3건)**: `--doctor` 실패 시 임시 폴더 삭제 전 엔진 `Close()`(`Scope-132`), CLI 비밀번호 입력 Ctrl+C 취소 시 터미널 복구(`Scope-133`), Windows 데몬 종료 시 `timeEndPeriod(1)` 대칭 호출(`Scope-131`).

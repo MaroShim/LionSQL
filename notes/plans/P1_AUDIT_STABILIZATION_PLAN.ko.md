@@ -36,10 +36,11 @@
 3. **`Scope-008`** (`pkg/storage/memengine/skiplist.go:163-168`): `SkipList.Delete` 노드 언링크 루프에서 `i < len(curr.forward)` 방어 조건을 추가하여 비정상 레벨 불일치 시 슬라이스 패닉 원천 차단.
 - **검증 테스트**: `TestP1_Batch2_TupleUvarintOverflowGuard` (`pkg/storage/tuple_test.go`), `TestP1_Batch2_FlatRecordAndSkipListBounds` (`pkg/storage/memengine/flat_record_test.go`) — PASS.
 
-### Mini-Batch 3: `pkg/storage` — 스토리지 엔진 라이프사이클 및 진단 안전성 (3건) [대기]
+### Mini-Batch 3: `pkg/storage` — 스토리지 엔진 라이프사이클 및 진단 안전성 (3건) [완료]
 1. **`결함 1-3`** (`pkg/storage/wiredtiger/wt_engine.go:2318-2323`): WiredTiger `Commit` 실패(`WT_ROLLBACK` 등) 시에도 `C.go_wt_session_reset(tx.sess.sess)`을 반드시 호출하여 세션 내부 더티 상태 잔류 방지.
 2. **`Scope-001`** (`pkg/storage/memengine/memengine.go:357`): `OpenWithOptions` 재호출 시 기존 `stopCh`가 열려 있으면 먼저 닫아 이전 `bgSaveLoop` 고루틴 영구 누수 차단.
 3. **`Scope-003`** (`pkg/storage/memengine/table_data.go:149, 180`): Flat 모드 버퍼 인코딩/디코딩 실패 시 무음 무시 대신 명시적 폴백/진단 보장.
+- **검증 테스트**: `TestP1_Batch3_ReopenNoGoroutineLeakAndCorruptMaterialize` (`pkg/storage/memengine/flat_record_test.go`), `TestP1_Batch3_SessionResetAfterCommitConflict` (`pkg/storage/wiredtiger/wt_engine_test.go`) — PASS.
 
 ### Mini-Batch 4: `pkg/execution` & `pkg/planner` — 실행 이터레이터 정리 및 플래너 경계 방어 (4건) [대기]
 1. **`결함 4-3`** (`pkg/execution/join.go`): `HashJoinIterator.Close()`에서 `h.left.Close()` 외에 누락된 `h.right.Close()` 호출을 추가하여 빌드 측 커서/리소스 누수 차단.

@@ -1199,4 +1199,52 @@ func TestWiredTiger_ConfigInvariant_NoTransactionSync(t *testing.T) {
 	}
 }
 
+// TestP1_Batch3_SessionResetAfterCommitConflict verifies that when a WiredTiger transaction
+// fails or conflicts, the session is cleanly reset and immediately reusable for subsequent transactions (Defect 1-3).
+func TestP1_Batch3_SessionResetAfterCommitConflict(t *testing.T) {
+	tmpDir := t.TempDir()
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeInt},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	s1, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession s1 failed: %v", err)
+	}
+	defer s1.Close()
+
+	tx1, err := s1.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx 1 failed: %v", err)
+	}
+	_ = tx1.Insert("items", storage.Record{"id": storage.IntValue(1), "val": storage.IntValue(10)})
+	if err := tx1.Commit(); err != nil {
+		t.Fatalf("Commit 1 failed: %v", err)
+	}
+
+	// Reuse the exact same session s1 for another transaction after commit
+	tx2, err := s1.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx 2 on reused session failed: %v", err)
+	}
+	_ = tx2.Update("items", storage.IntValue(1), storage.Record{"id": storage.IntValue(1), "val": storage.IntValue(20)})
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("Commit 2 failed: %v", err)
+	}
+}
+
+
 

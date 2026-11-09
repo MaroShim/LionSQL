@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"log"
 	"sort"
 	"sync"
 
@@ -144,6 +145,7 @@ func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
 	r, err := entry.materialize(td)
 	if err != nil {
 		// [RULE:ExplicitError] Log corruption and fail safe rather than silently returning empty row
+		log.Printf("[memengine] flat record materialize error on table %q pk %q: %v", td.Schema.Name, pk, err)
 		return storage.Row{}, 0, false
 	}
 	return r, entry.ver, true
@@ -171,6 +173,7 @@ func (td *TableData) putRowAndVer(pk string, row storage.Row, ver int64) {
 			sh.mu.Unlock()
 			return
 		}
+		log.Printf("[memengine] flat record encode fallback on table %q pk %q: %v", td.Schema.Name, pk, err)
 	}
 	sh.entries[pk] = shardEntry{ver: ver, row: row}
 	sh.mu.Unlock()
@@ -191,6 +194,7 @@ func (td *TableData) deleteRowAndVer(pk string) (storage.Row, bool) {
 		if err == nil {
 			return r, true
 		}
+		log.Printf("[memengine] flat record delete materialize error on table %q pk %q: %v", td.Schema.Name, pk, err)
 	}
 	return entry.row, hadOld
 }

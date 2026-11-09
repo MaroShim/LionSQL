@@ -2330,10 +2330,10 @@ func (tx *WTTx) Commit() error {
 	tx.sess.resetCursors()
 
 	ret := C.go_wt_session_commit(tx.sess.sess, nil)
+	_ = C.go_wt_session_reset(tx.sess.sess)
 	if ret != 0 {
 		return wtOpError("commit_transaction", int(ret))
 	}
-	_ = C.go_wt_session_reset(tx.sess.sess)
 
 	if !hasWrites || tx.opts.ReadOnly {
 		tx.commitLSN = tx.snapshotLSN
