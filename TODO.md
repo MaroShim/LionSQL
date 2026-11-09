@@ -95,9 +95,9 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - 설계 문서: [`notes/plans/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
 8. **`GA-VALID-3`: 연동 앱 섀도 모드 실운영 도그푸딩**
    - 이미 100% 연동 통과된 실전 서비스(Vaultwarden, Umami, Answer 중 1~2종) 1~2주간 실운영 백그라운드 구동
-9. **`TUNE-DOC-SYNC-1`: 벤치마크 및 공식 문서 실측치 일괄 동기화**
-   - 하드웨어 발열 냉각 후 익일 아침 콜드 스타트 상태에서 4대 벤치마크 정밀 재실측 (버전 `v0.92.0`, 측정일 `2026-11-09`, 베이스라인 100Wrk 불변 원칙 준수)
-   - 실측 완료 후 `doc/BENCHMARK.md`, `README.md`, `README.ko.md` 전면 동기화
+9. [x] **`TUNE-DOC-SYNC-1`: 벤치마크 및 공식 문서 실측치 일괄 동기화 (완료)**
+   - 하드웨어 발열 냉각 후 익일 아침 콜드 스타트 상태에서 4대 벤치마크 정밀 재실측 완료 (버전 `v0.92.0`, 측정일 `2026-11-09`, 전 티어 +16%~+86% 도약 확인)
+   - 실측 완료 후 `doc/BENCHMARK.md`, `README.md`, `README.ko.md` 전면 동기화 및 37건 P0 결함 수정 연계 디스커션 완료
    - 설계 문서: [`notes/BENCHMARK_DOC_SYNC_v0.92.0_PLAN.ko.md`](notes/BENCHMARK_DOC_SYNC_v0.92.0_PLAN.ko.md)
 
 ### 1.3 [테스트베드] 타임박스 외부 앱 호환성 프로브 (Time-Boxed Probe Protocol)
