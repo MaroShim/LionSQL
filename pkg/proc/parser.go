@@ -13,13 +13,15 @@ const (
 	precLowest
 	precOr
 	precAnd
+	precBitwiseOr   // | ^
+	precBitwiseAnd  // &
 	precNot
 	precEquals      // = != <> IN BETWEEN LIKE IS
 	precLessGreater // < > <= >=
 	precSum         // + -
 	precProduct     // * /
 	precJSON        // -> ->>
-	precPrefix      // -X, NOT X
+	precPrefix      // -X, ~X, NOT X
 )
 
 // PrecLowest represents the lowest operator precedence level for expression parsing.
@@ -28,6 +30,9 @@ const PrecLowest = precLowest
 var precedences = map[TokenType]int{
 	TokenOr:              precOr,
 	TokenAnd:             precAnd,
+	TokenBitwiseOr:       precBitwiseOr,
+	TokenBitwiseXor:      precBitwiseOr,
+	TokenBitwiseAnd:      precBitwiseAnd,
 	TokenNot:             precEquals,
 	TokenIn:              precEquals,
 	TokenBetween:         precEquals,

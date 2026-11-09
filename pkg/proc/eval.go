@@ -186,6 +186,11 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			return nil, fmt.Errorf("cannot negate non-numeric value: %v", val)
 		case TokenNot:
 			return !isTruthyValue(val), nil
+		case TokenBitwiseNot:
+			if i, ok := isInteger(val); ok {
+				return ^i, nil
+			}
+			return nil, fmt.Errorf("cannot bitwise NOT non-integer value: %v", val)
 		}
 
 	case *BinaryExpr:
@@ -822,6 +827,24 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 			return nil, nil
 		}
 		return fmt.Sprintf("%v%v", left, right), nil
+
+	case TokenBitwiseOr, TokenBitwiseAnd, TokenBitwiseXor:
+		if isNullVal(left) || isNullVal(right) {
+			return nil, nil
+		}
+		i1, ok1 := isInteger(left)
+		i2, ok2 := isInteger(right)
+		if ok1 && ok2 {
+			switch op {
+			case TokenBitwiseOr:
+				return i1 | i2, nil
+			case TokenBitwiseAnd:
+				return i1 & i2, nil
+			case TokenBitwiseXor:
+				return i1 ^ i2, nil
+			}
+		}
+		return nil, fmt.Errorf("bitwise operands must be integers")
 	}
 
 	return nil, fmt.Errorf("unsupported binary operator %v", op)
@@ -1012,7 +1035,7 @@ func isInteger(v any) (int64, bool) {
 			return val.IVal, true
 		}
 	case string:
-		if iv, err := strconv.ParseInt(strings.TrimSpace(val), 10, 64); err == nil {
+		if iv, err := strconv.ParseInt(strings.TrimSpace(val), 0, 64); err == nil {
 			return iv, true
 		}
 	}

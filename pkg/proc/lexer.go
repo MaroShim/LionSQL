@@ -132,8 +132,20 @@ func (l *Lexer) NextToken() Token {
 			l.readChar()
 			tok = Token{Type: TokenConcat, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
 		} else {
-			tok = Token{Type: TokenIllegal, Literal: string(l.ch), Line: tokLine, Col: tokCol}
+			tok = Token{Type: TokenBitwiseOr, Literal: "|", Line: tokLine, Col: tokCol}
 		}
+	case '&':
+		if l.peekChar() == '&' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TokenAnd, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		} else {
+			tok = Token{Type: TokenBitwiseAnd, Literal: "&", Line: tokLine, Col: tokCol}
+		}
+	case '^':
+		tok = Token{Type: TokenBitwiseXor, Literal: "^", Line: tokLine, Col: tokCol}
+	case '~':
+		tok = Token{Type: TokenBitwiseNot, Literal: "~", Line: tokLine, Col: tokCol}
 	case '\'':
 		tok.Type = TokenString
 		tok.Literal = l.readString()

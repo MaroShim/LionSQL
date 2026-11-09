@@ -68,14 +68,18 @@ func binaryPrecedence(op TokenType) int {
 		return 1
 	case TokenAnd:
 		return 2
-	case TokenNot:
+	case TokenBitwiseOr, TokenBitwiseXor:
 		return 3
-	case TokenEq, TokenNeq, TokenLt, TokenLte, TokenGt, TokenGte, TokenLike:
+	case TokenBitwiseAnd:
 		return 4
-	case TokenPlus, TokenMinus:
+	case TokenNot:
 		return 5
-	case TokenAsterisk, TokenSlash, TokenDiv, TokenPercent:
+	case TokenEq, TokenNeq, TokenLt, TokenLte, TokenGt, TokenGte, TokenLike:
 		return 6
+	case TokenPlus, TokenMinus:
+		return 7
+	case TokenAsterisk, TokenSlash, TokenDiv, TokenPercent:
+		return 8
 	default:
 		return 0
 	}
@@ -114,6 +118,12 @@ type UnaryExpr struct {
 func (e *UnaryExpr) exprNode() {}
 func (e *UnaryExpr) String() string {
 	if e.Expr != nil {
+		if e.Op == TokenBitwiseNot {
+			if _, isBin := e.Expr.(*BinaryExpr); isBin {
+				return fmt.Sprintf("~(%s)", e.Expr.String())
+			}
+			return fmt.Sprintf("~%s", e.Expr.String())
+		}
 		if _, isBin := e.Expr.(*BinaryExpr); isBin {
 			return fmt.Sprintf("%s (%s)", e.Op.String(), e.Expr.String())
 		}

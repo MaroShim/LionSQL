@@ -3,6 +3,8 @@ package proc
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"lionsql/pkg/storage"
@@ -317,6 +319,11 @@ func evalExpr(expr Expr, ctx *ExecutionContext) (storage.Value, error) {
 			return storage.Value{}, fmt.Errorf("cannot negate non-numeric type %s", val.Type)
 		case TokenNot:
 			return storage.BoolValue(!isTruthy(val)), nil
+		case TokenBitwiseNot:
+			if val.Type == storage.TypeInt {
+				return storage.IntValue(^val.IVal), nil
+			}
+			return storage.Value{}, fmt.Errorf("cannot bitwise NOT non-integer type %s", val.Type)
 		}
 
 	case *BinaryExpr:
@@ -399,6 +406,27 @@ func evalBinary(op TokenType, left, right storage.Value) (storage.Value, error) 
 		return storage.BoolValue(isTruthy(left) && isTruthy(right)), nil
 	case TokenOr:
 		return storage.BoolValue(isTruthy(left) || isTruthy(right)), nil
+	case TokenBitwiseOr:
+		i1, ok1 := asInt64Val(left)
+		i2, ok2 := asInt64Val(right)
+		if ok1 && ok2 {
+			return storage.IntValue(i1 | i2), nil
+		}
+		return storage.Value{}, fmt.Errorf("bitwise OR requires integer operands")
+	case TokenBitwiseAnd:
+		i1, ok1 := asInt64Val(left)
+		i2, ok2 := asInt64Val(right)
+		if ok1 && ok2 {
+			return storage.IntValue(i1 & i2), nil
+		}
+		return storage.Value{}, fmt.Errorf("bitwise AND requires integer operands")
+	case TokenBitwiseXor:
+		i1, ok1 := asInt64Val(left)
+		i2, ok2 := asInt64Val(right)
+		if ok1 && ok2 {
+			return storage.IntValue(i1 ^ i2), nil
+		}
+		return storage.Value{}, fmt.Errorf("bitwise XOR requires integer operands")
 	}
 
 	return storage.Value{}, fmt.Errorf("invalid binary operator %v on %s and %s", op, left.Type, right.Type)
@@ -456,4 +484,19 @@ func isTruthy(v storage.Value) bool {
 	default:
 		return false
 	}
+}
+
+func asInt64Val(v storage.Value) (int64, bool) {
+	if v.IsNull {
+		return 0, false
+	}
+	if v.Type == storage.TypeInt {
+		return v.IVal, true
+	}
+	if v.Type == storage.TypeVarChar {
+		if iv, err := strconv.ParseInt(strings.TrimSpace(v.SVal), 0, 64); err == nil {
+			return iv, true
+		}
+	}
+	return 0, false
 }

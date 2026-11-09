@@ -327,6 +327,10 @@ func (p *Parser) parsePrefix() Expr {
 		p.nextToken()
 		right := p.parseExpression(precPrefix)
 		return &UnaryExpr{Op: TokenMinus, Expr: right}
+	case TokenBitwiseNot:
+		p.nextToken()
+		right := p.parseExpression(precPrefix)
+		return &UnaryExpr{Op: TokenBitwiseNot, Expr: right}
 	case TokenNot:
 		p.nextToken() // eat NOT
 		if p.curTokenIs(TokenExists) {

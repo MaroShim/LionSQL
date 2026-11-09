@@ -377,6 +377,38 @@ vmLoop:
 	case proc.OpOr:
 		f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) || isTruthy(f.regs[inst.C]))
 
+	case proc.OpBitOr:
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.IntValue(vb.IVal | vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.NullValue(storage.TypeInt)
+		}
+
+	case proc.OpBitAnd:
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.IntValue(vb.IVal & vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.NullValue(storage.TypeInt)
+		}
+
+	case proc.OpBitXor:
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.IntValue(vb.IVal ^ vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.NullValue(storage.TypeInt)
+		}
+
+	case proc.OpBitNot:
+		vb := f.regs[inst.B]
+		if vb.Type == storage.TypeInt && !vb.IsNull {
+			f.regs[inst.A] = storage.IntValue(^vb.IVal)
+		} else {
+			f.regs[inst.A] = storage.NullValue(storage.TypeInt)
+		}
+
 	case proc.OpEq, proc.OpEqInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
 		if vb.IsNull || vc.IsNull {

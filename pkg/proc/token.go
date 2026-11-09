@@ -38,6 +38,10 @@ const (
 	TokenJSONExtractText // ->>
 	TokenDoubleColon     // ::
 	TokenConcat          // ||
+	TokenBitwiseOr       // |
+	TokenBitwiseAnd      // &
+	TokenBitwiseXor      // ^
+	TokenBitwiseNot      // ~
 
 	// Keywords
 	TokenCreate
@@ -339,6 +343,14 @@ func (t TokenType) String() string {
 		return "->>"
 	case TokenDoubleColon:
 		return "::"
+	case TokenBitwiseOr:
+		return "|"
+	case TokenBitwiseAnd:
+		return "&"
+	case TokenBitwiseXor:
+		return "^"
+	case TokenBitwiseNot:
+		return "~"
 	default:
 		for k, v := range keywords {
 			if v == t {

@@ -729,6 +729,24 @@ func TestParser_Regression_P0_23_DecimalNumericMoneyMappedToTypeDecimal(t *testi
 	}
 }
 
+func TestParser_BitwiseOperators(t *testing.T) {
+	sql := `SELECT 0x200 | 0x40 AS bit_or, 12 & 4 AS bit_and, 10 ^ 6 AS bit_xor, ~1 AS bit_not FROM users;`
+	stmt, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for bitwise operators: %v", err)
+	}
+	sel, ok := stmt.(*proc.GeneralSelectStmt)
+	if !ok {
+		t.Fatalf("expected GeneralSelectStmt, got %T", stmt)
+	}
+	if len(sel.Projections) != 4 {
+		t.Fatalf("expected 4 projections, got %d", len(sel.Projections))
+	}
+	if sel.From.Name != "users" {
+		t.Fatalf("expected from 'users', got %q", sel.From.Name)
+	}
+}
+
 func TestParser_Regression_P0_25_BinaryExprNilRightHandSide(t *testing.T) {
 	// Malformed expressions missing right operand
 	malformedInputs := []string{

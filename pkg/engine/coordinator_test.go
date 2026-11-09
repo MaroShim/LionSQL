@@ -1239,6 +1239,151 @@ func TestCoordinator_SSMS_VirtualCatalogQueries(t *testing.T) {
 	if len(resPolicyList.Columns) < 3 {
 		t.Fatalf("expected at least 3 columns for syspolicy_policies, got %v", resPolicyList.Columns)
 	}
+
+	// 11. SSMS Object Explorer Database Discovery Query (from ssms7.txt)
+	qSSMS := `SELECT
+dtb.name AS [Database_Name],
+'Server[@Name=' + quotename(CAST(
+        serverproperty(N'Servername')
+       AS sysname),'''') + ']' + '/Database[@Name=' + quotename(dtb.name,'''') + ']' AS [Database_Urn],
+dtb.containment AS [Database_ContainmentType],
+dtb.recovery_model AS [Database_RecoveryModel],
+ISNULL(suser_sname(dtb.owner_sid),'') AS [Database_Owner],
+dtb.compatibility_level AS [Database_CompatibilityLevel],
+
+        case
+        when dtb.collation_name is null then 0x200
+        else 0
+        end |
+        case
+        when 1 = dtb.is_in_standby then 0x40
+        else 0
+        end |
+        case dtb.state
+        when 1 then 0x2
+        when 2 then 0x8
+        when 3 then 0x4
+        when 4 then 0x10
+        when 5 then 0x100
+        when 6 then 0x20
+        else 1
+        end
+       AS [Database_Status],
+CAST(
+        case
+        when SERVERPROPERTY('EngineEdition') = 6 then cast(1 as bit)
+        else cast(0 as bit)
+        end
+       AS bit) AS [Database_IsSqlDw],
+case when SERVERPROPERTY('EngineEdition') = 8 then SERVERPROPERTY('IsFullTextInstalled') else dtb.is_fulltext_enabled end AS [Database_IsFullTextEnabled],
+dtb.recovery_model AS [RecoveryModel],
+dtb.user_access AS [UserAccess],
+dtb.is_read_only AS [ReadOnly],
+dtb.name AS [Database_DatabaseName2]
+FROM
+master.sys.databases AS dtb
+
+WHERE
+(CAST(isnull(dtb.source_database_id, 0) AS bit)='1')
+ORDER BY
+[Database_Name] ASC`
+
+	// 11. SSMS Object Explorer System Database Discovery Query (from ssms7.txt)
+	qSSMSSystem := `SELECT
+dtb.name AS [Database_Name],
+'Server[@Name=' + quotename(CAST(
+        serverproperty(N'Servername')
+       AS sysname),'''') + ']' + '/Database[@Name=' + quotename(dtb.name,'''') + ']' AS [Database_Urn],
+dtb.containment AS [Database_ContainmentType],
+dtb.recovery_model AS [Database_RecoveryModel],
+ISNULL(suser_sname(dtb.owner_sid),'') AS [Database_Owner],
+dtb.compatibility_level AS [Database_CompatibilityLevel],
+
+        case
+        when dtb.collation_name is null then 0x200
+        else 0
+        end |
+        case
+        when 1 = dtb.is_in_standby then 0x40
+        else 0
+        end |
+        case dtb.state
+        when 1 then 0x2
+        when 2 then 0x8
+        when 3 then 0x4
+        when 4 then 0x10
+        when 5 then 0x100
+        when 6 then 0x20
+        else 1
+        end
+       AS [Database_Status],
+CAST(
+        case
+        when SERVERPROPERTY('EngineEdition') = 6 then cast(1 as bit)
+        else cast(0 as bit)
+        end
+       AS bit) AS [Database_IsSqlDw],
+case when SERVERPROPERTY('EngineEdition') = 8 then SERVERPROPERTY('IsFullTextInstalled') else dtb.is_fulltext_enabled end AS [Database_IsFullTextEnabled],
+dtb.recovery_model AS [RecoveryModel],
+dtb.user_access AS [UserAccess],
+dtb.is_read_only AS [ReadOnly],
+dtb.name AS [Database_DatabaseName2]
+FROM
+master.sys.databases AS dtb
+
+WHERE
+(CAST(case when dtb.name in ('master','model','msdb','tempdb') then 1 else dtb.is_distributor end AS bit)='1')
+ORDER BY
+[Database_Name] ASC`
+
+	resDbSys, err := coord.ExecuteSQL(qSSMSSystem)
+	if err != nil {
+		t.Fatalf("SSMS system database discovery query failed: %v", err)
+	}
+	if resDbSys == nil || len(resDbSys.Rows) < 4 {
+		t.Fatalf("expected 4 system database rows (master, tempdb, model, msdb), got %v", resDbSys)
+	}
+
+	// 12. SSMS Snapshot Discovery Query (should return 0 rows without errors)
+	resDbSnap, err := coord.ExecuteSQL(qSSMS)
+	if err != nil {
+		t.Fatalf("SSMS snapshot discovery query failed: %v", err)
+	}
+	if resDbSnap == nil {
+		t.Fatalf("expected non-nil snapshot result")
+	}
+
+	// 13. SSMS Table Enumeration Query
+	qSSMSTables := `SELECT
+tbl.name AS [Name],
+'Server[@Name=' + quotename(CAST(serverproperty(N'Servername') AS sysname),'''') + ']' + '/Database[@Name=' + quotename(db_name(),'''') + ']' + '/Table[@Name=' + quotename(tbl.name,'''') + ' and @Schema=' + quotename(SCHEMA_NAME(tbl.schema_id),'''') + ']' AS [Urn],
+tbl.object_id AS [ID],
+tbl.create_date AS [CreateDate],
+tbl.modify_date AS [DateLastModified],
+SCHEMA_NAME(tbl.schema_id) AS [Schema],
+CAST(case when tbl.principal_id is null then 1 else 0 end AS bit) AS [IsSchemaOwned]
+FROM
+sys.tables AS tbl
+ORDER BY
+[Schema] ASC,[Name] ASC`
+
+	resTbl, err := coord.ExecuteSQL(qSSMSTables)
+	if err != nil {
+		t.Fatalf("SSMS table enumeration query failed: %v", err)
+	}
+	if resTbl == nil || len(resTbl.Rows) == 0 {
+		t.Fatalf("expected at least 1 table row (users), got %v", resTbl)
+	}
+	foundUsers := false
+	for _, r := range resTbl.Rows {
+		if r["Name"] == "users" {
+			foundUsers = true
+			break
+		}
+	}
+	if !foundUsers {
+		t.Fatalf("expected 'users' table in SSMS table list, got: %v", resTbl.Rows)
+	}
 }
 
 func TestReplicaSessionZeroAllocationFastPath(t *testing.T) {

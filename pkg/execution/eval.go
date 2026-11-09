@@ -142,6 +142,11 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 				return !bVal, true
 			}
 			return nil, false
+		case proc.TokenBitwiseNot:
+			if iVal, ok := toInt64(val); ok {
+				return ^iVal, true
+			}
+			return nil, false
 		default:
 			return nil, false
 		}
@@ -384,8 +389,23 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 		return nil, true
 	}
 
-	// 1. Arithmetic Operators (+, -, *, /, DIV, %)
+	// 1. Arithmetic Operators (+, -, *, /, DIV, %) and Bitwise Operators (|, &, ^)
 	switch e.Op {
+	case proc.TokenBitwiseOr, proc.TokenBitwiseAnd, proc.TokenBitwiseXor:
+		lInt, lOk := toInt64(left)
+		rInt, rOk := toInt64(right)
+		if lOk && rOk {
+			switch e.Op {
+			case proc.TokenBitwiseOr:
+				return lInt | rInt, true
+			case proc.TokenBitwiseAnd:
+				return lInt & rInt, true
+			case proc.TokenBitwiseXor:
+				return lInt ^ rInt, true
+			}
+		}
+		return nil, false
+
 	case proc.TokenPlus, proc.TokenMinus, proc.TokenAsterisk, proc.TokenSlash, proc.TokenDiv, proc.TokenPercent:
 		// Fast-path: both operands are integer
 		lInt, lOk := toInt64(left)

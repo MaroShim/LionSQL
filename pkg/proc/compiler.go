@@ -1138,11 +1138,11 @@ func (c *Compiler) isIntegerExpr(e Expr) bool {
 		return ok && t == storage.TypeInt
 	case *BinaryExpr:
 		switch expr.Op {
-		case TokenPlus, TokenMinus, TokenAsterisk:
+		case TokenPlus, TokenMinus, TokenAsterisk, TokenBitwiseOr, TokenBitwiseAnd, TokenBitwiseXor:
 			return c.isIntegerExpr(expr.Left) && c.isIntegerExpr(expr.Right)
 		}
 	case *UnaryExpr:
-		if expr.Op == TokenMinus || expr.Op == TokenPlus {
+		if expr.Op == TokenMinus || expr.Op == TokenPlus || expr.Op == TokenBitwiseNot {
 			return c.isIntegerExpr(expr.Expr)
 		}
 	}
@@ -1190,6 +1190,8 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 			c.emit(OpNeg, valReg, valReg, 0, nil)
 		case TokenNot:
 			c.emit(OpNot, valReg, valReg, 0, nil)
+		case TokenBitwiseNot:
+			c.emit(OpBitNot, valReg, valReg, 0, nil)
 		default:
 			return 0, fmt.Errorf("unsupported unary operator: %v", e.Op)
 		}
@@ -1268,6 +1270,12 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 			c.emit(OpAnd, leftReg, leftReg, rightReg, nil)
 		case TokenOr:
 			c.emit(OpOr, leftReg, leftReg, rightReg, nil)
+		case TokenBitwiseOr:
+			c.emit(OpBitOr, leftReg, leftReg, rightReg, nil)
+		case TokenBitwiseAnd:
+			c.emit(OpBitAnd, leftReg, leftReg, rightReg, nil)
+		case TokenBitwiseXor:
+			c.emit(OpBitXor, leftReg, leftReg, rightReg, nil)
 		default:
 			return 0, fmt.Errorf("unsupported binary operator: %v", e.Op)
 		}

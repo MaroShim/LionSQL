@@ -446,18 +446,28 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 
 	switch norm {
 	case "sys.tables", "systables", "sys_tables":
-		columns = []string{"table_name", "name", "object_id", "schema_id", "table_type", "table_schema", "column_count", "create_date", "modify_date"}
+		columns = []string{
+			"table_name", "name", "object_id", "schema_id", "table_type", "table_schema",
+			"column_count", "create_date", "modify_date", "principal_id", "is_ms_shipped",
+			"is_replicated", "max_column_id_used", "lob_data_space_id", "filestream_data_space_id",
+		}
 		for i, t := range tables {
 			allRows = append(allRows, map[string]any{
-				"table_name":   t.Name,
-				"name":         t.Name,
-				"object_id":    1000 + i,
-				"schema_id":    1,
-				"table_type":   "BASE TABLE",
-				"table_schema": "dbo",
-				"column_count": len(t.Columns),
-				"create_date":  defaultDate,
-				"modify_date":  defaultDate,
+				"table_name":               t.Name,
+				"name":                     t.Name,
+				"object_id":                1000 + i,
+				"schema_id":                1,
+				"table_type":               "BASE TABLE",
+				"table_schema":             "dbo",
+				"column_count":             len(t.Columns),
+				"create_date":              defaultDate,
+				"modify_date":              defaultDate,
+				"principal_id":             nil,
+				"is_ms_shipped":            false,
+				"is_replicated":            false,
+				"max_column_id_used":       len(t.Columns),
+				"lob_data_space_id":        0,
+				"filestream_data_space_id": 0,
 			})
 		}
 
@@ -511,36 +521,55 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 			"snapshot_isolation_state_desc", "is_read_committed_snapshot_on",
 			"recovery_model", "recovery_model_desc", "page_verify_option",
 			"page_verify_option_desc", "is_auto_create_stats_on", "is_auto_update_stats_on",
+			"containment", "containment_desc", "is_fulltext_enabled", "is_distributor",
+			"is_cdc_enabled", "is_encrypted",
 		}
-		allRows = append(allRows,
-			map[string]any{
-				"name":                          "master",
-				"schema_name":                   "dbo",
-				"database_id":                   1,
-				"source_database_id":            nil,
-				"owner_sid":                     nil,
-				"create_date":                   defaultDate,
-				"compatibility_level":           150,
-				"collation_name":                "SQL_Latin1_General_CP1_CI_AS",
-				"user_access":                   0,
-				"user_access_desc":              "MULTI_USER",
-				"is_read_only":                  false,
-				"is_auto_close_on":              false,
-				"is_auto_shrink_on":             false,
-				"state":                         0,
-				"state_desc":                    "ONLINE",
-				"is_in_standby":                 false,
-				"snapshot_isolation_state":      1,
-				"snapshot_isolation_state_desc": "ON",
-				"is_read_committed_snapshot_on": true,
-				"recovery_model":                1,
-				"recovery_model_desc":           "FULL",
-				"page_verify_option":            2,
-				"page_verify_option_desc":       "CHECKSUM",
-				"is_auto_create_stats_on":       true,
-				"is_auto_update_stats_on":       true,
-			},
-		)
+		dbList := []struct {
+			name string
+			id   int
+		}{
+			{"master", 1},
+			{"tempdb", 2},
+			{"model", 3},
+			{"msdb", 4},
+		}
+		for _, db := range dbList {
+			allRows = append(allRows,
+				map[string]any{
+					"name":                          db.name,
+					"schema_name":                   "dbo",
+					"database_id":                   db.id,
+					"source_database_id":            nil,
+					"owner_sid":                     nil,
+					"create_date":                   defaultDate,
+					"compatibility_level":           150,
+					"collation_name":                "SQL_Latin1_General_CP1_CI_AS",
+					"user_access":                   0,
+					"user_access_desc":              "MULTI_USER",
+					"is_read_only":                  false,
+					"is_auto_close_on":              false,
+					"is_auto_shrink_on":             false,
+					"state":                         0,
+					"state_desc":                    "ONLINE",
+					"is_in_standby":                 false,
+					"snapshot_isolation_state":      1,
+					"snapshot_isolation_state_desc": "ON",
+					"is_read_committed_snapshot_on": true,
+					"recovery_model":                1,
+					"recovery_model_desc":           "FULL",
+					"page_verify_option":            2,
+					"page_verify_option_desc":       "CHECKSUM",
+					"is_auto_create_stats_on":       true,
+					"is_auto_update_stats_on":       true,
+					"containment":                   0,
+					"containment_desc":              "NONE",
+					"is_fulltext_enabled":           false,
+					"is_distributor":                false,
+					"is_cdc_enabled":                false,
+					"is_encrypted":                  false,
+				},
+			)
+		}
 
 	case "sys.procedures", "sysprocedures", "sys_procedures":
 		columns = []string{"routine_name", "routine_type", "routine_schema", "created_date"}

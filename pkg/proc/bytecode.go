@@ -63,6 +63,12 @@ const (
 	OpIsNull
 	OpIsNotNull
 
+	// Bitwise Operations
+	OpBitAnd
+	OpBitOr
+	OpBitXor
+	OpBitNot
+
 	// Specialized Integer Arithmetic & Comparison (Hot-Path Inlining)
 	OpAddInt
 	OpSubInt
@@ -218,6 +224,14 @@ func (op OpCode) String() string {
 		return "LIKE"
 	case OpBetween:
 		return "BETWEEN"
+	case OpBitAnd:
+		return "BIT_AND"
+	case OpBitOr:
+		return "BIT_OR"
+	case OpBitXor:
+		return "BIT_XOR"
+	case OpBitNot:
+		return "BIT_NOT"
 	case OpIn:
 		return "IN"
 	case OpIsNull:

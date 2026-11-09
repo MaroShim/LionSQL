@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -704,6 +705,11 @@ func toInt64(v any) (int64, bool) {
 			return 1, true
 		}
 		return 0, true
+	case string:
+		if iv, err := strconv.ParseInt(strings.TrimSpace(n), 0, 64); err == nil {
+			return iv, true
+		}
+		return 0, false
 	case storage.Value:
 		if n.Type == storage.TypeBool {
 			if n.BVal {
