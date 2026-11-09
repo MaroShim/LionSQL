@@ -134,7 +134,7 @@ func isSysBuiltin(name string) bool {
 		"DATABASEPROPERTYEX", "OBJECTPROPERTY", "COLUMNPROPERTY", "INDEXPROPERTY", "OBJECT_SCHEMA_NAME", "TYPE_ID", "TYPE_NAME",
 		"HOST_NAME", "HOST_ID", "CURRENT_USER", "USER_NAME", "SUSER_NAME", "SUSER_SNAME", "USER_ID", "SUSER_ID",
 		"CURRENT_SCHEMA", "CURRENT_SCHEMAS", "CURRENT_DATABASE",
-		"IS_SRVROLEMEMBER", "IS_MEMBER", "HAS_PERMS_BY_NAME", "PWDENCRYPT", "PWDCOMPARE",
+		"IS_SRVROLEMEMBER", "IS_MEMBER", "HAS_PERMS_BY_NAME", "HAS_DBACCESS", "PERMISSIONS", "PWDENCRYPT", "PWDCOMPARE",
 		"@@VERSION", "VERSION", "@@MICROSOFTVERSION", "@@SERVERNAME", "@@SPID", "SPID", "@@MAX_CONNECTIONS", "@@LANGUAGE",
 		"@@TRANCOUNT", "TRANCOUNT", "@@LOCK_TIMEOUT", "LOCK_TIMEOUT", "@@OPTIONS", "OPTIONS", "@@NESTLEVEL", "NESTLEVEL",
 		"@@FETCH_STATUS", "FETCH_STATUS",
@@ -666,6 +666,16 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 
 	case "HAS_PERMS_BY_NAME":
 		return storage.IntValue(1)
+
+	case "HAS_DBACCESS":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		// Return 1 (accessible) for all system and user databases in LionSQL
+		return storage.IntValue(1)
+
+	case "PERMISSIONS":
+		return storage.IntValue(0x0FFFFFFF)
 
 	case "PWDENCRYPT":
 		if len(args) == 0 || args[0].IsNull {

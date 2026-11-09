@@ -470,6 +470,21 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		return int64(251660240), "microsoftversion"
 	}
 
+	// HAS_DBACCESS('dbname')
+	if strings.HasPrefix(upper, "HAS_DBACCESS(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("HAS_DBACCESS(") : len(trimmed)-1])
+		clean := strings.Trim(strings.TrimSpace(inner), "'\"[]")
+		if clean == "" {
+			return nil, "has_dbaccess"
+		}
+		return int32(1), "has_dbaccess"
+	}
+
+	// PERMISSIONS()
+	if strings.HasPrefix(upper, "PERMISSIONS(") && strings.HasSuffix(upper, ")") {
+		return int32(0x0FFFFFFF), "permissions"
+	}
+
 	// SCHEMA_NAME(id)
 	if strings.HasPrefix(upper, "SCHEMA_NAME(") && strings.HasSuffix(upper, ")") {
 		return "dbo", "schema_name"

@@ -1227,6 +1227,28 @@ CAST(0 AS bit) AS [IsFabricServer]`
 	}
 }
 
+func TestTDS_SSMS_HasDbAccess(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	query := `SELECT has_dbaccess('msdb') AS has_access;`
+	payload := sendSQLBatch(t, conn, query)
+
+	if !bytes.Contains(payload, EncodeUTF16LE("has_access")) {
+		t.Fatalf("expected 'has_access' column in response")
+	}
+
+	// Verify that has_access is TypeIntN with size 4
+	colMetaIdx := bytes.Index(payload, []byte{TokenColMetaData})
+	if colMetaIdx == -1 {
+		t.Fatalf("missing TokenColMetaData in response")
+	}
+	if !bytes.Contains(payload[colMetaIdx:], []byte{TypeIntN, 4}) {
+		t.Fatalf("expected TypeIntN with size 4 for has_dbaccess")
+	}
+}
+
 
 
 
