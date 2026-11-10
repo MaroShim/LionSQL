@@ -896,6 +896,24 @@ func TestMemengine_RenameTable_FKCacheAndWAL(t *testing.T) {
 	if _, err := eng2.GetTable("parent_renamed"); err != nil {
 		t.Errorf("after reopen: expected parent_renamed to exist: %v", err)
 	}
+
+	// 5. Test mixed-case rename across AOF replay
+	if err := eng2.RenameTable("PARENT_RENAMED", "Parent_Final"); err != nil {
+		t.Fatalf("RenameTable with mixed case failed: %v", err)
+	}
+	if err := eng2.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	eng3 := New()
+	if err := eng3.Open(dir); err != nil {
+		t.Fatalf("Reopen 3 failed: %v", err)
+	}
+	defer eng3.Close()
+
+	if _, err := eng3.GetTable("parent_final"); err != nil {
+		t.Errorf("expected parent_final to exist case-insensitively after reopen: %v", err)
+	}
 }
 
 func TestP1_High_Scope005_DeleteThenInsertSamePKInSameTx(t *testing.T) {

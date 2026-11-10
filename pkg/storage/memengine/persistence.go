@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -88,13 +89,13 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			e.tables[op.Schema.Name] = td
 		case OpDropTable:
 			hasDDL = true
-			delete(e.tables, op.Table)
+			sqlutil.MapDeleteFold(e.tables, op.Table)
 		case OpRenameTable:
 			hasDDL = true
 			oldName := op.Key
 			newName := op.Table
-			if td, exists := e.tables[oldName]; exists {
-				delete(e.tables, oldName)
+			if td, exists := sqlutil.MapGetFold(e.tables, oldName); exists {
+				sqlutil.MapDeleteFold(e.tables, oldName)
 				td.Schema.Name = newName
 				e.tables[newName] = td
 				for _, otherTd := range e.tables {
@@ -107,7 +108,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				e.rebuildFKCacheLocked()
 			}
 		case OpAlterTable:
-			if td, exists := e.tables[op.Table]; exists && op.Column != nil {
+			if td, exists := sqlutil.MapGetFold(e.tables, op.Table); exists && op.Column != nil {
 				td.Schema.Columns = append(td.Schema.Columns, *op.Column)
 				fillVal := storage.NullValue(op.Column.Type)
 				if strings.TrimSpace(op.Column.Default) != "" {
@@ -116,7 +117,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				td.addColumnValues(fillVal)
 			}
 		case OpTruncateTable:
-			if td, exists := e.tables[op.Table]; exists {
+			if td, exists := sqlutil.MapGetFold(e.tables, op.Table); exists {
 				td.truncateShardsLocked()
 				td.Partitions = make(map[string]map[string]struct{})
 				for _, idx := range td.Indexes {
@@ -125,7 +126,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				}
 			}
 		case OpDropPartition:
-			if td, exists := e.tables[op.Table]; exists {
+			if td, exists := sqlutil.MapGetFold(e.tables, op.Table); exists {
 				if pksSet, ok := td.Partitions[op.Key]; ok {
 					for pk := range pksSet {
 						oldRow, hadOld := td.deleteRowAndVer(pk)
@@ -144,7 +145,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if op.IndexSchema == nil {
 				continue
 			}
-			td, exists := e.tables[op.IndexSchema.TableName]
+			td, exists := sqlutil.MapGetFold(e.tables, op.IndexSchema.TableName)
 			if !exists {
 				continue
 			}
@@ -166,17 +167,17 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				td.Schema.Indexes = append(td.Schema.Indexes, *op.IndexSchema)
 			}
 		case OpDropIndex:
-			td, exists := e.tables[op.Table]
+			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
 				continue
 			}
-			delete(td.Indexes, op.IndexName)
+			sqlutil.MapDeleteFold(td.Indexes, op.IndexName)
 			_, idxPos, idxFound := td.Schema.FindIndex(op.IndexName)
 			if idxFound {
 				td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], td.Schema.Indexes[idxPos+1:]...)
 			}
 		case OpInsert:
-			td, exists := e.tables[op.Table]
+			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
 				continue
 			}
@@ -204,7 +205,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				_ = idxData.Insert(newKey, op.Key)
 			}
 		case OpUpdate:
-			td, exists := e.tables[op.Table]
+			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
 				continue
 			}
@@ -247,7 +248,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				_ = idxData.Insert(newKey, op.Key)
 			}
 		case OpDelete:
-			td, exists := e.tables[op.Table]
+			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
 				continue
 			}
