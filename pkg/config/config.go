@@ -13,7 +13,9 @@ import (
 // ServerConfig defines server storage and process parameters.
 type ServerConfig struct {
 	DataDir                  string `json:"data_dir"`
-	Engine                   string `json:"engine"`
+	Disk                     string `json:"disk,omitempty"`
+	Memory                   string `json:"memory,omitempty"`
+	Engine                   string `json:"engine,omitempty"` // [Deprecated] Kept for backward compatibility; maps to Disk
 	Ephemeral                bool   `json:"ephemeral"`
 	AutoSeed                 bool   `json:"auto_seed"`
 	PIDFile                  string `json:"pid_file,omitempty"`
@@ -139,10 +141,26 @@ type Config struct {
 	Outbox      OutboxConfig      `json:"outbox,omitempty"`
 }
 
-// DefaultEngine returns the default storage engine backend for the current platform.
-// On Windows (runtime.GOOS == "windows"), the default is "memory" (In-Memory OCC with persistence)
+// DefaultDisk returns the default disk persistence backend for the current platform.
+// On Windows (runtime.GOOS == "windows"), the default is "none" (In-Memory OCC)
 // to ensure out-of-the-box execution for standalone Zero-CGo Windows binaries.
 // On non-Windows platforms (macOS, Linux), the default is "wiredtiger" (Lock-Free B+Tree MVCC).
+func DefaultDisk() string {
+	if runtime.GOOS == "windows" {
+		return "none"
+	}
+	return "wiredtiger"
+}
+
+// DefaultMemory returns the default in-memory tuple layout representation.
+// In Stage 1, this defaults to "performance" (raw Go struct pointers).
+// In Stage 2, this will be promoted to "compact" (pointer-free flat buffer).
+func DefaultMemory() string {
+	return "performance"
+}
+
+// DefaultEngine returns the default storage engine backend for the current platform.
+// Deprecated: use DefaultDisk() instead. Kept for backward compatibility.
 func DefaultEngine() string {
 	if runtime.GOOS == "windows" {
 		return "memory"
@@ -150,11 +168,62 @@ func DefaultEngine() string {
 	return "wiredtiger"
 }
 
+// GetDisk returns the normalized disk persistence backend ("wiredtiger" or "none").
+// It prioritizes Disk if set, otherwise maps from legacy Engine, and finally DefaultDisk().
+func (s *ServerConfig) GetDisk() string {
+	if s == nil {
+		return DefaultDisk()
+	}
+	d := strings.ToLower(strings.TrimSpace(s.Disk))
+	if d != "" {
+		switch d {
+		case "wiredtiger", "wt":
+			return "wiredtiger"
+		case "none", "off", "memory", "mem":
+			return "none"
+		default:
+			return d
+		}
+	}
+	e := strings.ToLower(strings.TrimSpace(s.Engine))
+	if e != "" {
+		switch e {
+		case "memory", "mem", "none", "off":
+			return "none"
+		case "wiredtiger", "wt":
+			return "wiredtiger"
+		default:
+			return e
+		}
+	}
+	return DefaultDisk()
+}
+
+// GetMemory returns the normalized in-memory tuple layout representation ("compact" or "performance").
+func (s *ServerConfig) GetMemory() string {
+	if s == nil {
+		return DefaultMemory()
+	}
+	m := strings.ToLower(strings.TrimSpace(s.Memory))
+	switch m {
+	case "compact", "flat":
+		return "compact"
+	case "performance", "raw", "fast", "speed":
+		return "performance"
+	case "":
+		return DefaultMemory()
+	default:
+		return m
+	}
+}
+
 // DefaultConfig returns the production-ready zero-config baseline.
 func DefaultConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
 			DataDir:  "data",
+			Disk:     DefaultDisk(),
+			Memory:   DefaultMemory(),
 			Engine:   DefaultEngine(),
 			AutoSeed: false,
 		},

@@ -41,11 +41,27 @@ func formatBytes(b int64) string {
 type OCCMode int
 
 const (
-	// OCCModeRaw is the production default: direct Go struct references for sub-nanosecond 0.2ns O(1) access.
+	// OCCModeRaw is the direct Go struct references mode for sub-nanosecond 0.2ns O(1) access.
 	OCCModeRaw OCCMode = 0
 	// OCCModeFlat is the pointer-free flat buffer mode for 4~5x memory compaction and zero GC scan.
 	OCCModeFlat OCCMode = 1
+
+	// Unified --memory mode aliases ([RULE:RadicalKISS])
+	OCCModePerformance OCCMode = 0
+	OCCModeCompact     OCCMode = 1
 )
+
+// ParseOCCMode parses a memory layout representation string into an OCCMode.
+func ParseOCCMode(s string) (OCCMode, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "compact", "flat":
+		return OCCModeCompact, nil
+	case "performance", "raw", "fast", "speed", "":
+		return OCCModePerformance, nil
+	default:
+		return OCCModePerformance, fmt.Errorf("unknown memory layout: %q (expected 'compact' or 'performance')", s)
+	}
+}
 
 type Options struct {
 	DataDir       string

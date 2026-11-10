@@ -9,6 +9,76 @@ import (
 	"lionsql/pkg/config"
 )
 
+func TestDefaultDiskAndMemory_Platform(t *testing.T) {
+	disk := config.DefaultDisk()
+	mem := config.DefaultMemory()
+
+	if runtime.GOOS == "windows" {
+		if disk != "none" {
+			t.Fatalf("expected default disk 'none' on windows, got %q", disk)
+		}
+	} else {
+		if disk != "wiredtiger" {
+			t.Fatalf("expected default disk 'wiredtiger' on %s, got %q", runtime.GOOS, disk)
+		}
+	}
+
+	if mem != "performance" {
+		t.Fatalf("expected default memory 'performance', got %q", mem)
+	}
+}
+
+func TestServerConfig_GetDiskAndMemory(t *testing.T) {
+	// Case 1: Pure Disk & Memory explicit
+	s1 := &config.ServerConfig{
+		Disk:   "wiredtiger",
+		Memory: "compact",
+	}
+	if s1.GetDisk() != "wiredtiger" {
+		t.Errorf("expected wiredtiger, got %q", s1.GetDisk())
+	}
+	if s1.GetMemory() != "compact" {
+		t.Errorf("expected compact, got %q", s1.GetMemory())
+	}
+
+	// Case 2: Legacy Engine fallback (memory -> none)
+	s2 := &config.ServerConfig{
+		Engine: "memory",
+	}
+	if s2.GetDisk() != "none" {
+		t.Errorf("expected legacy engine 'memory' to map to disk 'none', got %q", s2.GetDisk())
+	}
+	if s2.GetMemory() != config.DefaultMemory() {
+		t.Errorf("expected default memory, got %q", s2.GetMemory())
+	}
+
+	// Case 3: Legacy Engine fallback (wiredtiger -> wiredtiger)
+	s3 := &config.ServerConfig{
+		Engine: "wiredtiger",
+	}
+	if s3.GetDisk() != "wiredtiger" {
+		t.Errorf("expected legacy engine 'wiredtiger' to map to disk 'wiredtiger', got %q", s3.GetDisk())
+	}
+
+	// Case 4: Disk overrides Engine
+	s4 := &config.ServerConfig{
+		Disk:   "none",
+		Engine: "wiredtiger",
+	}
+	if s4.GetDisk() != "none" {
+		t.Errorf("expected disk 'none' to override legacy engine 'wiredtiger', got %q", s4.GetDisk())
+	}
+
+	// Case 5: Empty config falls back to defaults
+	var s5 *config.ServerConfig
+	if s5.GetDisk() != config.DefaultDisk() {
+		t.Errorf("expected default disk, got %q", s5.GetDisk())
+	}
+	if s5.GetMemory() != config.DefaultMemory() {
+		t.Errorf("expected default memory, got %q", s5.GetMemory())
+	}
+}
+
 func TestDefaultEngine_Platform(t *testing.T) {
 	eng := config.DefaultEngine()
 	if runtime.GOOS == "windows" {

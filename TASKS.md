@@ -146,6 +146,8 @@
 | `DONE` | **`BUG-WT-INDEX-DESC-1`** | Integrity | P2 | WiredTiger IndexScanDesc 역정렬 스텁 결함 해결 (WT Index Desc Bug) |  |  |
 | `DONE` | **`BUG-WT-SWEEP-1`** | Integrity | P2 | WiredTiger 60분 유휴 세션 경고 방지 및 세션 리셋 (WT Sweep Server Bug) |  |  |
 | `DONE` | **`BUG-WT-UNIQUE-INDEX-UNENFORCED-1`** | Integrity | P2 | WiredTiger 스토리지 엔진 보조 유니크 인덱스 제약 검증 및 색인 누락 방지 (WT Unique Index Bug) |  |  |
+| `PENDING` | **`CFG-MEMORY-COMPACT-DEFAULT-1`** | STORAGE | P1 | 인메모리 컴팩트(compact) 모드 4대 게이트 검증 및 기본값 공식 승격 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
+| `DONE` | **`CFG-STORAGE-OPT-1`** | CONFIG | P1 | 스토리지 옵션 계층 분리(--disk/--memory) 및 하위 호환성 매핑 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
 | `PENDING` | **`COMPAT-DECLARATIVE-1`** | Durability | P2 | 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) |  |  |
 | `DONE` | **`COMPAT-TABLE-DRIVEN-1`** | Durability | P2 | 10개 실전 서비스 호환 규칙 Table-Driven 구조 및 안티패턴 키워드 매칭 전면 정식화 | [`notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md) |  |
 | `PENDING` | **`DOC-REVAMP-10`** | Documentation | P2 | 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 | [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md) |  |
@@ -1857,6 +1859,18 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 **Details & Resolution**:
 `insertLocked`/`updateLocked` 시 유니크 인덱스 제약 검증 및 `IndexScan`의 풀 테이블 스캔 폴백을 B-Tree 커서 검색으로 개편
+
+---
+
+### [PENDING] 인메모리 컴팩트(compact) 모드 4대 게이트 검증 및 기본값 공식 승격 `CFG-MEMORY-COMPACT-DEFAULT-1`
+- **Domain**: STORAGE | **Priority**: P1 | **Updated**: 2026-11-10 01:24:23
+- **Plan Doc**: [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md)
+
+---
+
+### [DONE] 스토리지 옵션 계층 분리(--disk/--memory) 및 하위 호환성 매핑 `CFG-STORAGE-OPT-1`
+- **Domain**: CONFIG | **Priority**: P1 | **Updated**: 2026-11-10 01:40:41
+- **Plan Doc**: [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md)
 
 ---
 

@@ -21,7 +21,9 @@ func runSQL(args []string) error {
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "dir", "data", "Path to database data directory")
-	engineType := fs.String("engine", config.DefaultEngine(), "Storage engine backend (wiredtiger, memory)")
+	diskType := fs.String("disk", config.DefaultDisk(), "Disk persistence backend (wiredtiger, none)")
+	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation (compact, performance)")
+	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (wiredtiger, memory; use -disk instead)")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
 		return err
 	}
@@ -32,7 +34,16 @@ func runSQL(args []string) error {
 	}
 	query := strings.Join(queries, " ")
 
-	eng, coord, err := openCoordinator(*dataDir, *engineType)
+	resolvedDisk := *diskType
+	if *engineType != "" {
+		if strings.ToLower(*engineType) == "memory" {
+			resolvedDisk = "none"
+		} else {
+			resolvedDisk = *engineType
+		}
+	}
+
+	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, *memoryType)
 	if err != nil {
 		return err
 	}
@@ -87,6 +98,10 @@ func reorderArgs(args []string) []string {
 }
 
 func openCoordinator(dataDir, engineType string) (storage.Engine, *engine.Coordinator, error) {
+	return openCoordinatorWithOptions(dataDir, engineType, config.DefaultMemory())
+}
+
+func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.Engine, *engine.Coordinator, error) {
 	cleanDir := filepath.Clean(dataDir)
 	var eng storage.Engine
 
@@ -96,8 +111,9 @@ func openCoordinator(dataDir, engineType string) (storage.Engine, *engine.Coordi
 		daemonActive = true
 	}
 
-	switch engineType {
-	case "wiredtiger":
+	normDisk := strings.ToLower(strings.TrimSpace(diskType))
+	switch normDisk {
+	case "wiredtiger", "wt":
 		eng = wiredtiger.New()
 		if err := eng.Open(cleanDir); err != nil {
 			if daemonActive {
@@ -105,9 +121,12 @@ func openCoordinator(dataDir, engineType string) (storage.Engine, *engine.Coordi
 			}
 			return nil, nil, fmt.Errorf("failed to open wiredtiger storage at %q: %w", cleanDir, err)
 		}
-	case "memory":
+	case "none", "memory", "mem":
 		memEng := memengine.New()
 		opts := memengine.DefaultOptions(cleanDir)
+		if mode, err := memengine.ParseOCCMode(memoryType); err == nil {
+			opts.Mode = mode
+		}
 		if err := memEng.OpenWithOptions(opts); err != nil {
 			if daemonActive {
 				return nil, nil, fmt.Errorf("failed to open memory storage at %q (LionSQL daemon is currently running on this data directory; connect via HTTP/PGWire/TDS or stop the daemon first): %w", cleanDir, err)
@@ -116,7 +135,7 @@ func openCoordinator(dataDir, engineType string) (storage.Engine, *engine.Coordi
 		}
 		eng = memEng
 	default:
-		return nil, nil, fmt.Errorf("unknown engine %q (expected wiredtiger or memory)", engineType)
+		return nil, nil, fmt.Errorf("unknown disk storage %q (expected wiredtiger or none)", diskType)
 	}
 
 	cat := catalog.New(eng)

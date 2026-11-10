@@ -68,7 +68,9 @@ func runServer(args []string) error {
 	fs.StringVar(dataDir, "data", defaultDataDir, "Alias for -dir")
 	fs.StringVar(dataDir, "data-dir", defaultDataDir, "Alias for -dir")
 
-	engineType := fs.String("engine", config.DefaultEngine(), "Storage engine backend (wiredtiger, memory)")
+	diskType := fs.String("disk", config.DefaultDisk(), "Disk persistence backend (wiredtiger, none)")
+	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation (compact, performance)")
+	engineType := fs.String("engine", config.DefaultEngine(), "[Deprecated] Storage engine backend (wiredtiger, memory; use -disk instead)")
 	ephemeralFlag := fs.Bool("ephemeral", false, "Run in purely in-memory ephemeral mode with zero disk persistence")
 	autoSeed := fs.Bool("seed", false, "Automatically seed demo sample database (scripts/demo_seed.sql) on startup")
 	adminEmail := fs.String("admin-email", "admin@lionsql.local", "Default superuser email")
@@ -170,6 +172,12 @@ func runServer(args []string) error {
 	}
 	if visited["dir"] || visited["data"] || visited["data-dir"] {
 		cfg.Server.DataDir = *dataDir
+	}
+	if visited["disk"] {
+		cfg.Server.Disk = *diskType
+	}
+	if visited["memory"] {
+		cfg.Server.Memory = *memoryType
 	}
 	if visited["engine"] {
 		cfg.Server.Engine = *engineType
@@ -321,7 +329,7 @@ func runServer(args []string) error {
 				cfg.Network.HTTPAddr,
 				cfg.Network.PGAddr,
 				cfg.Network.TDSAddr,
-				cfg.Server.Engine,
+				cfg.Server.GetDisk(),
 				cfg.Auth.AdminPass,
 			) {
 				return nil
@@ -370,7 +378,7 @@ func runServer(args []string) error {
 			cfg.Network.HTTPAddr,
 			cfg.Network.PGAddr,
 			cfg.Network.TDSAddr,
-			cfg.Server.Engine,
+			cfg.Server.GetDisk(),
 			cfg.Auth.AdminPass,
 		) {
 			return nil
@@ -434,10 +442,17 @@ func runServer(args []string) error {
 
 	// 5. Initialize Storage Engine Backend
 	var eng storage.Engine
-	switch cfg.Server.Engine {
+	resolvedDisk := cfg.Server.GetDisk()
+	resolvedMemory := cfg.Server.GetMemory()
+	memMode, err := memengine.ParseOCCMode(resolvedMemory)
+	if err != nil {
+		log.Fatalf("[LionSQL] Invalid memory layout configuration: %v", err)
+	}
+
+	switch resolvedDisk {
 	case "wiredtiger":
 		if cfg.Server.Ephemeral {
-			log.Fatalf("[LionSQL] Ephemeral mode (-ephemeral) is only supported with -engine=memory. WiredTiger is a disk-persistent engine.")
+			log.Fatalf("[LionSQL] Ephemeral mode (-ephemeral) is only supported with -disk=none (or -engine=memory). WiredTiger is a disk-persistent engine.")
 		}
 		if err := os.MkdirAll(cfg.Server.DataDir, 0755); err != nil {
 			log.Fatalf("[LionSQL] Failed to create data directory: %v", err)
@@ -447,23 +462,24 @@ func runServer(args []string) error {
 			log.Fatalf("[LionSQL] Failed to open WiredTiger storage: %v", err)
 		}
 		eng = wtEng
-	case "memory":
+	case "none":
 		memEng := memengine.New()
 		opts := memengine.DefaultOptions(cfg.Server.DataDir)
+		opts.Mode = memMode
 		if cfg.Server.Ephemeral {
 			opts.EnableAOF = false
 			opts.EnableRDB = false
 			opts.DataDir = ""
-			log.Printf("[LionSQL] In-Memory engine running in EPHEMERAL mode (pure in-memory, zero disk persistence)")
+			log.Printf("[LionSQL] In-Memory engine running in EPHEMERAL mode (pure in-memory, zero disk persistence, layout: %s)", resolvedMemory)
 		} else {
-			log.Printf("[LionSQL] In-Memory engine running in PERSISTENT mode (AOF: %v, RDB: %v, dir: %s)", opts.EnableAOF, opts.EnableRDB, cfg.Server.DataDir)
+			log.Printf("[LionSQL] In-Memory engine running in PERSISTENT mode (AOF: %v, RDB: %v, dir: %s, layout: %s)", opts.EnableAOF, opts.EnableRDB, cfg.Server.DataDir, resolvedMemory)
 		}
 		if err := memEng.OpenWithOptions(opts); err != nil {
 			log.Fatalf("Failed to open storage engine: %v", err)
 		}
 		eng = memEng
 	default:
-		log.Fatalf("[LionSQL] Unknown storage engine: %s (supported: wiredtiger, memory)", cfg.Server.Engine)
+		log.Fatalf("[LionSQL] Unknown storage engine: %s (supported: wiredtiger, none)", resolvedDisk)
 	}
 	defer eng.Close()
 
@@ -951,7 +967,7 @@ func renderStartupBanner(cfg *config.Config, ctx bannerContext) string {
 	}
 
 	b.WriteString(fmt.Sprintf(" [Data Directory] %s\n", cfg.Server.DataDir))
-	b.WriteString(fmt.Sprintf(" [Storage Engine] %s\n", cfg.Server.Engine))
+	b.WriteString(fmt.Sprintf(" [Storage Engine] Disk: %s | Memory: %s\n", cfg.Server.GetDisk(), cfg.Server.GetMemory()))
 	if ctx.StatsWorkers > 0 || ctx.StatsIdle > 0 {
 		b.WriteString(fmt.Sprintf(" [Session Pooler] Max Workers: %d, Max Idle Sessions: %d (No PgBouncer required)\n", ctx.StatsWorkers, ctx.StatsIdle))
 	}

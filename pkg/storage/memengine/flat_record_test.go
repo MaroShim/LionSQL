@@ -926,7 +926,38 @@ func TestP1_Batch3_ReopenNoGoroutineLeakAndCorruptMaterialize(t *testing.T) {
 	}
 }
 
+func TestParseOCCMode(t *testing.T) {
+	cases := []struct {
+		input       string
+		expected    OCCMode
+		expectError bool
+	}{
+		{"compact", OCCModeCompact, false},
+		{"COMPACT", OCCModeCompact, false},
+		{"flat", OCCModeFlat, false},
+		{"performance", OCCModePerformance, false},
+		{"PERFORMANCE", OCCModePerformance, false},
+		{"raw", OCCModeRaw, false},
+		{"fast", OCCModePerformance, false},
+		{"speed", OCCModePerformance, false},
+		{"", OCCModePerformance, false},
+		{"unknown_mode", OCCModePerformance, true},
+	}
 
-
-
+	for _, tc := range cases {
+		mode, err := ParseOCCMode(tc.input)
+		if tc.expectError {
+			if err == nil {
+				t.Errorf("input %q: expected error, got nil", tc.input)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("input %q: unexpected error: %v", tc.input, err)
+			}
+			if mode != tc.expected {
+				t.Errorf("input %q: expected mode %v, got %v", tc.input, tc.expected, mode)
+			}
+		}
+	}
+}
 

@@ -31,7 +31,13 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 2. **`WT-LOCKDOWN-1`: WiredTiger 고동시성 4계층 잠금 및 transaction_sync 영구 배제** [x]
    - **완료 내용**: `transaction_sync`로 인한 고동시성 뮤텍스 직렬화 및 96% 성능 폭락(146k ➔ 4.8k TPS)의 영구적 재발 방지를 위한 4계층 잠금 구축 완료. 1계층(런타임 패닉 가드), 2계층(설정 불변식 단위 테스트), 3계층(50k+ TPS 성능 게이트 테스트 `perf_gate_test.go`), 4계층(GEMINI.md Invariant 10 및 헌법 문서화). 무작위 kill -9 10라운드 100% 복구 및 123k~146k TPS 복원 실측 완료.
    - **설계 문서**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) Invariant ㉓, [`GEMINI.md`](GEMINI.md) Invariant 10
-2. **`OCC-HYPER-2`: In-Memory OCC Pointer-Free Flat Record A/B 모드 및 신뢰성 검증 게이트** [진행 중]
+3. **`CFG-STORAGE-OPT-1`: 스토리지 옵션 계층 분리 (`--disk` / `--memory`) 및 하위 호환성 매핑** [x]
+   - **완료 내용**: `--engine` 단일 플래그의 모호성을 해소하고 디스크 영속성(`--disk=<wiredtiger|none>`)과 인메모리 튜플 레이아웃(`--memory=<compact|performance>`)을 직교적으로 분리. 기존 `--engine` 옵션과의 100% 하위 호환 매핑 및 단위/통합 테스트 전수 검증 완료.
+   - **설계 문서**: [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md)
+4. **`CFG-MEMORY-COMPACT-DEFAULT-1`: 인메모리 컴팩트(`compact`) 모드 4대 게이트 검증 및 기본값 공식 승격** [진행 중]
+   - **목표**: 4대 필수 검증 게이트(SLT, 크래시 복구, DDL/DML, 회귀 레이스) 완료 후 `compact` 모드를 LionSQL 1.0의 공식 기본값으로 승격.
+   - **설계 문서**: [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md)
+4. **`OCC-HYPER-2`: In-Memory OCC Pointer-Free Flat Record A/B 모드 및 신뢰성 검증 게이트** [진행 중]
    - **구현 현황**: 기본 모드(`OCCModeRaw`, 기존 104만 tpmC 오리지널) 100% 보존 + 신규 플랫 모드(`OCCModeFlat`) A/B 분기 구축 완료. 단일 행 기준 5.95배(1,017B ➔ 171B, 83.2% 절감), 10만 건 힙 메모리 67.5% 절감(68.9MB ➔ 22.3MB), 처리 속도 대등 실측 확인.
    - **기본값 정책**: **`OCCModeRaw` (기존 안정 버전) 디폴트 영구 유지 (`[RULE:SafeDefaults]`)**. 아래 4대 검증 게이트를 100% 완주하기 전까지 디폴트 변경 절대 금지.
    - **신규 플랫 모드(`OCCModeFlat`) 안정성 강화 및 필수 검증 게이트**:
