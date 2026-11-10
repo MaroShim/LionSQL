@@ -46,6 +46,46 @@ func TestP1_BatchM2_ApplyRowLimit(t *testing.T) {
 	}
 }
 
+// Defect 14-1 (Part 2): APPLY left-side input rows must also be capped to prevent unbounded loops.
+func TestP1_BatchM2_ApplyLeftRowLimit(t *testing.T) {
+	coord := newM2Coordinator(t)
+
+	old := maxApplyLeftRows
+	maxApplyLeftRows = 2
+	defer func() { maxApplyLeftRows = old }()
+
+	_, err := coord.ExecuteSessionSQL("sess-m2", "SELECT a.id, b.v FROM m2_t a CROSS APPLY (SELECT v FROM m2_u WHERE k = 999) b;")
+	if err == nil {
+		t.Fatalf("expected APPLY left table limit error (3 left rows > 2), got nil")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "apply left table") {
+		t.Fatalf("expected error mentioning APPLY left table limit, got: %v", err)
+	}
+}
+
+// Invariant 6 & T-SQL Msg 530: Recursive CTE must terminate with explicit error when exceeding MAXRECURSION.
+func TestP1_BatchM2_RecursiveCTE_MaxRecursion_Msg530(t *testing.T) {
+	coord := newM2Coordinator(t)
+
+	// 1. Default MAXRECURSION = 100
+	_, err := coord.ExecuteSessionSQL("sess-m2", "WITH cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM cte) SELECT * FROM cte;")
+	if err == nil {
+		t.Fatalf("expected MAXRECURSION 100 error for infinite recursive CTE, got nil")
+	}
+	if !strings.Contains(err.Error(), "The maximum recursion 100 has been exhausted") {
+		t.Fatalf("expected T-SQL Msg 530 error mentioning 100 exhausted, got: %v", err)
+	}
+
+	// 2. Custom OPTION (MAXRECURSION 5)
+	_, err = coord.ExecuteSessionSQL("sess-m2", "WITH cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM cte) SELECT * FROM cte OPTION (MAXRECURSION 5);")
+	if err == nil {
+		t.Fatalf("expected MAXRECURSION 5 error for custom option, got nil")
+	}
+	if !strings.Contains(err.Error(), "The maximum recursion 5 has been exhausted") {
+		t.Fatalf("expected T-SQL Msg 530 error mentioning 5 exhausted, got: %v", err)
+	}
+}
+
 // Scope-047: a failing derived table must not leave materialized temp tables behind.
 func TestP1_BatchM2_DerivedTableErrorCleansTempTables(t *testing.T) {
 	coord := newM2Coordinator(t)

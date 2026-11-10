@@ -15,6 +15,10 @@ import (
 // ([RULE:BoundedBuffers]). It is a variable so tests can lower it deterministically.
 var maxApplyRows = 100000
 
+// maxApplyLeftRows caps the number of left-side input rows processed by CROSS/OUTER APPLY
+// to prevent excessive subquery execution loops on unbounded scans ([RULE:BoundedBuffers]).
+var maxApplyLeftRows = 100000
+
 // hasApply reports whether the query contains a CROSS APPLY or OUTER APPLY join.
 func hasApply(query string) bool {
 	return sqlutil.ContainsKeyword(query, "CROSS APPLY", false) ||
@@ -58,6 +62,9 @@ func (s *Coordinator) execApplySelect(query string, start time.Time, cs *ClientS
 	}
 
 	currentRows := leftRes.Rows
+	if len(currentRows) > maxApplyLeftRows {
+		return nil, fmt.Errorf("APPLY left table exceeds the row limit of %d rows; add a selective WHERE predicate or TOP/LIMIT to the outer query", maxApplyLeftRows)
+	}
 	leftAlias := leftTableRef.Alias
 	if leftAlias == "" {
 		leftAlias = leftTableRef.Name

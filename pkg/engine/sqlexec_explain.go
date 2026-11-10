@@ -1255,8 +1255,12 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 				cs.RegisterEphemeralTable(workTempName, wSchema, wRows, wRecs)
 			}
 
+			maxRecursion := parseMaxRecursion(query)
 			recSQLWithWork := replaceIdentOutsideQuotes(recSQL, cte.Name, workTempName)
-			for iter := 0; iter < 100; iter++ {
+			for iter := 0; ; iter++ {
+				if maxRecursion > 0 && iter >= maxRecursion {
+					return nil, fmt.Errorf("The statement terminated. The maximum recursion %d has been exhausted before statement completion.", maxRecursion)
+				}
 				recRes, recErr := s.execSingleStatement(cs, recSQLWithWork)
 				if recErr != nil || recRes == nil || len(recRes.Rows) == 0 {
 					break
@@ -1360,4 +1364,32 @@ func replaceIdentOutsideQuotes(sqlStr, oldIdent, newIdent string) string {
 		i++
 	}
 	return sb.String()
+}
+
+// parseMaxRecursion extracts the recursion limit from OPTION (MAXRECURSION <n>) if present,
+// defaulting to 100 as per SQL Server T-SQL semantics ([RULE:SafeDefaults]).
+func parseMaxRecursion(sql string) int {
+	idx := sqlutil.FindTopLevelKeyword(sql, "MAXRECURSION")
+	if idx == -1 {
+		idx = strings.Index(strings.ToUpper(sql), "MAXRECURSION")
+	}
+	if idx == -1 {
+		return 100
+	}
+	rest := strings.TrimSpace(sql[idx+len("MAXRECURSION"):])
+	if strings.HasPrefix(rest, "(") {
+		rest = strings.TrimSpace(rest[1:])
+	}
+	var numStr string
+	for _, r := range rest {
+		if r >= '0' && r <= '9' {
+			numStr += string(r)
+		} else if numStr != "" {
+			break
+		}
+	}
+	if n, err := strconv.Atoi(numStr); err == nil {
+		return n
+	}
+	return 100
 }
