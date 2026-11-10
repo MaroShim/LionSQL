@@ -46,6 +46,9 @@ func evalMathBuiltin(upper string, args []storage.Value) storage.Value {
 			if args[1].IVal == 0 {
 				return storage.NullValue(storage.TypeInt)
 			}
+			if args[0].IVal == math.MinInt64 && args[1].IVal == -1 {
+				return storage.IntValue(0)
+			}
 			return storage.IntValue(args[0].IVal % args[1].IVal)
 		}
 		n1, ok1 := toFloatNum(args[0])

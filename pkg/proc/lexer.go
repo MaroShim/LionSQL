@@ -53,7 +53,13 @@ func (l *Lexer) NextToken() Token {
 	l.skipWhitespaceAndComments()
 
 	tokLine := l.line
+	if tokLine < 1 {
+		tokLine = 1
+	}
 	tokCol := l.col
+	if tokCol < 1 {
+		tokCol = 1
+	}
 
 	var tok Token
 

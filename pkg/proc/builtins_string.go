@@ -406,18 +406,23 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 			return storage.NullValue(storage.TypeVarChar)
 		}
 		runes := []rune(valToString(args[0]))
-		start := int(args[1].IVal) - 1 // T-SQL is 1-indexed
+		rawStart := int(args[1].IVal) // T-SQL is 1-indexed
 		length := int(args[2].IVal)
-		if length <= 0 {
+		if length <= 0 || rawStart+length-1 < 1 {
 			return storage.StringValue("")
 		}
-		if start < 0 {
+		start := 0
+		count := length
+		if rawStart < 1 {
 			start = 0
+			count = rawStart + length - 1
+		} else {
+			start = rawStart - 1
 		}
 		if start >= len(runes) {
 			return storage.StringValue("")
 		}
-		end := start + length
+		end := start + count
 		if end > len(runes) {
 			end = len(runes)
 		}

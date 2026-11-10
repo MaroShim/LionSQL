@@ -120,7 +120,7 @@ func DateValue(t time.Time) Value {
 func DateValueFromString(s string) Value {
 	t, err := ParseDate(s)
 	if err != nil {
-		t = time.Time{}
+		return NullValue(TypeDate)
 	}
 	return DateValue(t)
 }

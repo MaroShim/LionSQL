@@ -1099,6 +1099,9 @@ func FindMatchingParen(s string, openIdx int) int {
 			if depth == 0 {
 				return i
 			}
+			if depth < 0 {
+				return -1
+			}
 		}
 	}
 

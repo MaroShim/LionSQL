@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -28,6 +29,12 @@ func EvalBinaryOp(op byte, leftVal, rightVal storage.Value, targetType storage.D
 	if op == '/' || op == '%' {
 		if rightF == 0 || (targetType == storage.TypeInt && rightI == 0) {
 			return storage.NullValue(targetType), fmt.Errorf("divide by zero error encountered")
+		}
+		if targetType == storage.TypeInt && leftI == math.MinInt64 && rightI == -1 {
+			if op == '/' {
+				return storage.NullValue(targetType), fmt.Errorf("arithmetic overflow error converting expression to data type int")
+			}
+			return storage.IntValue(0), nil
 		}
 	}
 

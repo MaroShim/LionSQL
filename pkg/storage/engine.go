@@ -57,11 +57,7 @@ func FastRandN(n int) int {
 	if n <= 0 {
 		return 0
 	}
-	v := time.Now().UnixNano() % int64(n)
-	if v < 0 {
-		v = -v
-	}
-	return int(v)
+	return int(uint64(time.Now().UnixNano()) % uint64(n))
 }
 
 // DataType represents the column data type.

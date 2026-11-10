@@ -186,6 +186,7 @@
 | `DONE` | **`OPT-LARGE-JOIN-1`** | Durability | P2 | 대규모 조인(10+ Tables) 최적화 | [`notes/plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`P-2`** | Performance | P1 | WiredTiger VDBE 바이너리 튜플 지연 역직렬화 |  | - [x] **Phase 1 (`BENCH-P2-BASE`)**: ... |
 | `PENDING` | **`P2-BACKLOG`** | Engine | P3 | Post-1.0 P2 Deferred Audit Items (92 Cases) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
+| `DONE` | **`P2-STABILIZE-AB-1`** | engine | P2 | P2 그룹 A/B 경계값 클램핑 및 내장함수 정합성 가드 10건 보강 | [`notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md`](notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`P3-INVARIANTS`** | Architecture | P3 | By-Design & Spec-Out Architecture Invariants (25 Cases) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`PERF-BENCH-WT-RESTORE-1`** | Performance | P1 | WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 |  |  |
 | `PENDING` | **`PERF-COMPLEX-QUERY-2`** | Ecosystem | P3 | Complex Query Flat Hash Join & Direct Slot Projection | [`notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |  |
@@ -2316,6 +2317,12 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ### [PENDING] Post-1.0 P2 Deferred Audit Items (92 Cases) `P2-BACKLOG`
 - **Domain**: Engine | **Priority**: P3 | **Updated**: 2026-11-07 16:50:45
 - **Plan Doc**: [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md)
+
+---
+
+### [DONE] P2 그룹 A/B 경계값 클램핑 및 내장함수 정합성 가드 10건 보강 `P2-STABILIZE-AB-1`
+- **Domain**: engine | **Priority**: P2 | **Updated**: 2026-11-10 07:52:38
+- **Plan Doc**: [`notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md`](notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md)
 
 ---
 

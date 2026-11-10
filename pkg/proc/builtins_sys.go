@@ -317,7 +317,7 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		case "ISCLUSTERED", "ISHADRENABLED", "ISINTEGRATEDSECURITYONLY":
 			return storage.IntValue(0)
 		default:
-			return storage.StringValue("")
+			return storage.NullValue(storage.TypeVarChar)
 		}
 
 	case "COLLATIONPROPERTY":

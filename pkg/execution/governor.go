@@ -2,6 +2,7 @@ package execution
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"runtime/debug"
 	"strconv"
@@ -100,12 +101,23 @@ func ParseMemSize(s string) (int64, error) {
 	val, err := strconv.ParseInt(numStr, 10, 64)
 	if err != nil {
 		if fVal, fErr := strconv.ParseFloat(numStr, 64); fErr == nil {
-			return int64(fVal * float64(multiplier)), nil
+			bytes := int64(fVal * float64(multiplier))
+			if bytes <= 0 {
+				return DefaultWorkMem, nil
+			}
+			return bytes, nil
 		}
 		return 0, fmt.Errorf("invalid memory size %q: %w", s, err)
 	}
 
-	return val * multiplier, nil
+	if val <= 0 {
+		return DefaultWorkMem, nil
+	}
+	bytes := val * multiplier
+	if bytes <= 0 || bytes/multiplier != val {
+		return math.MaxInt64, nil
+	}
+	return bytes, nil
 }
 
 // FormatMemSize formats bytes into a clean, human-readable string (e.g. "64MB", "128kB").

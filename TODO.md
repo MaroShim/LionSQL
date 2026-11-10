@@ -65,6 +65,9 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 7. **`FEAT-TABLE-VAR-1`: T-SQL 테이블 변수(`DECLARE @tbl TABLE`) 지원 및 DML/배치 라이프사이클 통합** [x]
    - **완료 내용**: 세션 배치(`ExecuteSessionSQL`), 익명 블록(`BEGIN ... END`), 저장 프로시저(`CREATE PROCEDURE`) 전반에 걸친 Microsoft SQL Server T-SQL 테이블 변수(`DECLARE @tbl TABLE (...)`) 지원 완료. DDL/DML 파서(`ParseColumnDefs`, TokenVariable 테이블명 수용), 바이트코드 연산자(`OpDeclareTable`), VDBE 런타임 스토리지 분리(`__tv_<frame>_<time>_<name>`), 자동 프레임 소멸(`DropTable`), DML 연산(`INSERT INTO @tbl VALUES / SELECT`, `SELECT FROM @tbl`, `UPDATE @tbl`, `DELETE FROM @tbl`, `JOIN @tbl`) 전수 검증 및 Race-free 100% PASS 달성.
    - **설계 문서**: [`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md)
+8. **`P2-STABILIZE-AB-1`: P2 그룹 A/B 경계값 클램핑 및 내장함수 정합성 가드 10건 보강** [x]
+   - **완료 내용**: P2 백로그 중 사이드이펙트 없는 초저난도 알짜 10건(그룹 A 6건, 그룹 B 4건) 구현 완료: ① `FastRandN` 비부호 정수 모듈로 음수 방어(`Scope-017`), ② 렉서 1-based 컬럼/라인 클램핑(`Scope-056`), ③ `MOD(MinInt64, -1)` 런타임 오버플로우 방어(`Scope-071`), ④ `ParseMemSize` 거대 바이트 오버플로우 가드(`Scope-095`), ⑤ `FindMatchingParen` 음수 깊이 스캔 즉시 탈출(`Scope-114`), ⑥ `STRING_SPLIT` 빈 구분자 방어(`Scope-052`), ⑦ `SUBSTRING` 1-based 음수 시작 오프셋 T-SQL 공식 보정(`Scope-070`), ⑧ `SERVERPROPERTY` 미지원 속성 SQL NULL 반환(`Scope-073`), ⑨ 식 평가기 0 나누기 및 `MinInt64 / -1` 패닉 방어(`Scope-051`), ⑩ `DateValueFromString` 잘못된 문자열 변환 시 NULL 처리로 `0001-01-01` 제로타임 오염 차단(`Scope-021`). 전용 테스트 `p2_group_ab_stabilization_test.go` 및 레이스 검증 100% PASS.
+   - **설계 문서**: [`notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md`](notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md)
 8. **`FEAT-TOLERANT-DDL-1`: 동적 런타임 관용 DDL 제어 CLI (`get` & `set`) 및 PostgreSQL SQLSTATE 42704 정합성** [x]
    - **완료 내용**: 기본 엄격 모드(`strict`) 유지. 정적 옵션(Flag/Env/JSON) 전면 배제 및 오직 `./bin/lionsql set tolerant_ddl on/off` 단일 수단만 제공(재시작 시 자동 복귀). Wire 프로토콜에서 인덱스 부재 에러 시 PostgreSQL 표준 `42704` SQLSTATE 매핑 완료.
    - **설계 문서**: [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md)
