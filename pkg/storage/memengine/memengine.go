@@ -37,35 +37,45 @@ func formatBytes(b int64) string {
 	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
 
-// OCCMode defines the in-memory tuple layout representation.
-type OCCMode int
+// MemoryMode defines the in-memory tuple layout representation.
+type MemoryMode int
 
 const (
-	// OCCModeRaw is the direct Go struct references mode for sub-nanosecond 0.2ns O(1) access.
-	OCCModeRaw OCCMode = 0
-	// OCCModeFlat is the pointer-free flat buffer mode for 4~5x memory compaction and zero GC scan.
-	OCCModeFlat OCCMode = 1
+	// MemoryPerformance uses direct Go struct references for sub-nanosecond 0.2ns O(1) access.
+	MemoryPerformance MemoryMode = 0
+	// MemoryCompact uses pointer-free flat byte buffers for 83% memory compaction and zero GC scan.
+	MemoryCompact MemoryMode = 1
 
-	// Unified --memory mode aliases ([RULE:RadicalKISS])
-	OCCModePerformance OCCMode = 0
-	OCCModeCompact     OCCMode = 1
+	// Legacy aliases for backward compatibility during transition
+	OCCModeRaw         = MemoryPerformance
+	OCCModeFlat        = MemoryCompact
+	OCCModePerformance = MemoryPerformance
+	OCCModeCompact     = MemoryCompact
 )
 
-// ParseOCCMode parses a memory layout representation string into an OCCMode.
-func ParseOCCMode(s string) (OCCMode, error) {
+// OCCMode is a legacy alias for MemoryMode.
+type OCCMode = MemoryMode
+
+// ParseMemoryMode parses a memory layout representation string into a MemoryMode.
+func ParseMemoryMode(s string) (MemoryMode, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "compact", "flat":
-		return OCCModeCompact, nil
+		return MemoryCompact, nil
 	case "performance", "raw", "fast", "speed", "":
-		return OCCModePerformance, nil
+		return MemoryPerformance, nil
 	default:
-		return OCCModePerformance, fmt.Errorf("unknown memory layout: %q (expected 'compact' or 'performance')", s)
+		return MemoryPerformance, fmt.Errorf("unknown memory mode: %q (expected 'compact' or 'performance')", s)
 	}
+}
+
+// ParseOCCMode is a legacy alias for ParseMemoryMode.
+func ParseOCCMode(s string) (MemoryMode, error) {
+	return ParseMemoryMode(s)
 }
 
 type Options struct {
 	DataDir       string
-	Mode          OCCMode       // OCCModeRaw (default: 0) or OCCModeFlat (1)
+	Mode          MemoryMode    // MemoryPerformance (0) or MemoryCompact (1)
 	EnableAOF     bool          // Whether to write append-only log (wal.aof)
 	EnableRDB     bool          // Whether to periodically save and load RDB snapshots (tables.mpk)
 	FsyncPolicy   FsyncPolicy   // FsyncAlways, FsyncEverySec, FsyncNo

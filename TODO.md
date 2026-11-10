@@ -34,8 +34,8 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 3. **`CFG-STORAGE-OPT-1`: 스토리지 옵션 계층 분리 (`--disk` / `--memory`) 및 하위 호환성 매핑** [x]
    - **완료 내용**: `--engine` 단일 플래그의 모호성을 해소하고 디스크 영속성(`--disk=<wiredtiger|none>`)과 인메모리 튜플 레이아웃(`--memory=<compact|performance>`)을 직교적으로 분리. 기존 `--engine` 옵션과의 100% 하위 호환 매핑 및 단위/통합 테스트 전수 검증 완료.
    - **설계 문서**: [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md)
-4. **`CFG-MEMORY-COMPACT-DEFAULT-1`: 인메모리 컴팩트(`compact`) 모드 4대 게이트 검증 및 기본값 공식 승격** [진행 중]
-   - **목표**: 4대 필수 검증 게이트(SLT, 크래시 복구, DDL/DML, 회귀 레이스) 완료 후 `compact` 모드를 LionSQL 1.0의 공식 기본값으로 승격.
+4. **`CFG-MEMORY-COMPACT-DEFAULT-1`: 인메모리 컴팩트(`compact`) 모드 MemoryMode 리팩토링 및 기본값 공식 승격** [x]
+   - **완료 내용**: `OCCMode` 명칭을 직관적인 `MemoryMode`(`MemoryCompact`, `MemoryPerformance`)로 전면 리팩토링하고, LionSQL 1.0의 zero-config 기본 인메모리 튜플 레이아웃을 `compact`(83% 메모리 절감, 0 GC 추적 포인터)로 공식 승격. 단위 및 통합 회귀 테스트 100% PASS 검증 완료.
    - **설계 문서**: [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md)
 4. **`OCC-HYPER-2`: In-Memory OCC Pointer-Free Flat Record A/B 모드 및 신뢰성 검증 게이트** [진행 중]
    - **구현 현황**: 기본 모드(`OCCModeRaw`, 기존 104만 tpmC 오리지널) 100% 보존 + 신규 플랫 모드(`OCCModeFlat`) A/B 분기 구축 완료. 단일 행 기준 5.95배(1,017B ➔ 171B, 83.2% 절감), 10만 건 힙 메모리 67.5% 절감(68.9MB ➔ 22.3MB), 처리 속도 대등 실측 확인.

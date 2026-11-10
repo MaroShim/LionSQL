@@ -62,12 +62,12 @@ const numTableShards = 256
 
 type shardEntry struct {
 	ver     int64
-	row     storage.Row // active when mode == OCCModeRaw
-	flatBuf []byte      // active when mode == OCCModeFlat (zero GC pointers)
+	row     storage.Row // active when mode == MemoryPerformance
+	flatBuf []byte      // active when mode == MemoryCompact (zero GC pointers)
 }
 
 func (e shardEntry) materialize(td *TableData) (storage.Row, error) {
-	if td.mode == OCCModeFlat && len(e.flatBuf) > 0 && len(e.row.Values) == 0 {
+	if td.mode == MemoryCompact && len(e.flatBuf) > 0 && len(e.row.Values) == 0 {
 		return td.layout.DecodeFlatToRow(&td.Schema, e.flatBuf)
 	}
 	return e.row, nil
@@ -86,8 +86,8 @@ type TableData struct {
 	shards     [numTableShards]tableShard
 	initOnce   sync.Once
 	shardsInit bool
-	mode       OCCMode                        // OCCModeRaw (default: 0) or OCCModeFlat (1)
-	layout     *FlatRecordLayout              // Precomputed layout when mode == OCCModeFlat
+	mode       MemoryMode                     // MemoryPerformance (default: 0) or MemoryCompact (1)
+	layout     *FlatRecordLayout              // Precomputed layout when mode == MemoryCompact
 	Schema     storage.TableSchema            `json:"schema"`
 	Rows       map[string]storage.Row         `json:"rows,omitempty"`     // For snapshot persistence & backward compatibility
 	Versions   map[string]int64               `json:"versions,omitempty"` // For snapshot persistence
@@ -166,7 +166,7 @@ func (td *TableData) putRowAndVer(pk string, row storage.Row, ver int64) {
 	sIdx := hashShard(pk)
 	sh := &td.shards[sIdx]
 	sh.mu.Lock()
-	if td.mode == OCCModeFlat && td.layout != nil {
+	if td.mode == MemoryCompact && td.layout != nil {
 		flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, row)
 		if err == nil {
 			sh.entries[pk] = shardEntry{ver: ver, flatBuf: flatBuf}
@@ -375,7 +375,7 @@ func (td *TableData) addColumnValues(val storage.Value) {
 
 	var newLayout *FlatRecordLayout
 	var oldSchema storage.TableSchema
-	if td.mode == OCCModeFlat {
+	if td.mode == MemoryCompact {
 		newLayout = BuildFlatRecordLayout(&td.Schema)
 		oldSchema = td.Schema
 		if len(oldSchema.Columns) > 1 {
@@ -387,7 +387,7 @@ func (td *TableData) addColumnValues(val storage.Value) {
 		sh := &td.shards[i]
 		sh.mu.Lock()
 		for k, entry := range sh.entries {
-			if td.mode == OCCModeFlat {
+			if td.mode == MemoryCompact {
 				var origRow storage.Row
 				var err error
 				if len(entry.flatBuf) > 0 && len(entry.row.Values) == 0 && td.layout != nil {

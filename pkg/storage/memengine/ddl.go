@@ -74,7 +74,7 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		Partitions: make(map[string]map[string]struct{}),
 		mode:       e.opts.Mode,
 	}
-	if e.opts.Mode == OCCModeFlat {
+	if e.opts.Mode == MemoryCompact {
 		td.layout = BuildFlatRecordLayout(schema)
 	}
 	td.initShards()

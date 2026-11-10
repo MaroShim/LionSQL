@@ -68,9 +68,9 @@ func runServer(args []string) error {
 	fs.StringVar(dataDir, "data", defaultDataDir, "Alias for -dir")
 	fs.StringVar(dataDir, "data-dir", defaultDataDir, "Alias for -dir")
 
-	diskType := fs.String("disk", config.DefaultDisk(), "Disk persistence backend (wiredtiger, none)")
-	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation (compact, performance)")
-	engineType := fs.String("engine", config.DefaultEngine(), "[Deprecated] Storage engine backend (wiredtiger, memory; use -disk instead)")
+	diskType := fs.String("disk", "", "Disk persistence backend: wiredtiger or none (default: wiredtiger on unix, none on windows)")
+	memoryType := fs.String("memory", "", "In-memory tuple representation: compact (default) or performance")
+	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (wiredtiger, memory; use -disk instead)")
 	ephemeralFlag := fs.Bool("ephemeral", false, "Run in purely in-memory ephemeral mode with zero disk persistence")
 	autoSeed := fs.Bool("seed", false, "Automatically seed demo sample database (scripts/demo_seed.sql) on startup")
 	adminEmail := fs.String("admin-email", "admin@lionsql.local", "Default superuser email")
@@ -444,7 +444,7 @@ func runServer(args []string) error {
 	var eng storage.Engine
 	resolvedDisk := cfg.Server.GetDisk()
 	resolvedMemory := cfg.Server.GetMemory()
-	memMode, err := memengine.ParseOCCMode(resolvedMemory)
+	memMode, err := memengine.ParseMemoryMode(resolvedMemory)
 	if err != nil {
 		log.Fatalf("[LionSQL] Invalid memory layout configuration: %v", err)
 	}

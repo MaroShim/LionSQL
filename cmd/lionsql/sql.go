@@ -124,7 +124,7 @@ func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.E
 	case "none", "memory", "mem":
 		memEng := memengine.New()
 		opts := memengine.DefaultOptions(cleanDir)
-		if mode, err := memengine.ParseOCCMode(memoryType); err == nil {
+		if mode, err := memengine.ParseMemoryMode(memoryType); err == nil {
 			opts.Mode = mode
 		}
 		if err := memEng.OpenWithOptions(opts); err != nil {

@@ -23,8 +23,8 @@ func TestDefaultDiskAndMemory_Platform(t *testing.T) {
 		}
 	}
 
-	if mem != "performance" {
-		t.Fatalf("expected default memory 'performance', got %q", mem)
+	if mem != "compact" {
+		t.Fatalf("expected default memory 'compact', got %q", mem)
 	}
 }
 

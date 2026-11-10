@@ -75,7 +75,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				Partitions: make(map[string]map[string]struct{}),
 				mode:       e.opts.Mode,
 			}
-			if e.opts.Mode == OCCModeFlat {
+			if e.opts.Mode == MemoryCompact {
 				td.layout = BuildFlatRecordLayout(op.Schema)
 			}
 			td.initShards()

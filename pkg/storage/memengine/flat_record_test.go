@@ -926,26 +926,26 @@ func TestP1_Batch3_ReopenNoGoroutineLeakAndCorruptMaterialize(t *testing.T) {
 	}
 }
 
-func TestParseOCCMode(t *testing.T) {
+func TestParseMemoryMode(t *testing.T) {
 	cases := []struct {
 		input       string
-		expected    OCCMode
+		expected    MemoryMode
 		expectError bool
 	}{
-		{"compact", OCCModeCompact, false},
-		{"COMPACT", OCCModeCompact, false},
-		{"flat", OCCModeFlat, false},
-		{"performance", OCCModePerformance, false},
-		{"PERFORMANCE", OCCModePerformance, false},
-		{"raw", OCCModeRaw, false},
-		{"fast", OCCModePerformance, false},
-		{"speed", OCCModePerformance, false},
-		{"", OCCModePerformance, false},
-		{"unknown_mode", OCCModePerformance, true},
+		{"compact", MemoryCompact, false},
+		{"COMPACT", MemoryCompact, false},
+		{"flat", MemoryCompact, false},
+		{"performance", MemoryPerformance, false},
+		{"PERFORMANCE", MemoryPerformance, false},
+		{"raw", MemoryPerformance, false},
+		{"fast", MemoryPerformance, false},
+		{"speed", MemoryPerformance, false},
+		{"", MemoryPerformance, false},
+		{"unknown_mode", MemoryPerformance, true},
 	}
 
 	for _, tc := range cases {
-		mode, err := ParseOCCMode(tc.input)
+		mode, err := ParseMemoryMode(tc.input)
 		if tc.expectError {
 			if err == nil {
 				t.Errorf("input %q: expected error, got nil", tc.input)
@@ -957,6 +957,12 @@ func TestParseOCCMode(t *testing.T) {
 			if mode != tc.expected {
 				t.Errorf("input %q: expected mode %v, got %v", tc.input, tc.expected, mode)
 			}
+		}
+
+		// Also verify legacy alias ParseOCCMode produces identical output
+		aliasMode, aliasErr := ParseOCCMode(tc.input)
+		if tc.expectError != (aliasErr != nil) || aliasMode != mode {
+			t.Errorf("input %q: ParseOCCMode did not match ParseMemoryMode", tc.input)
 		}
 	}
 }

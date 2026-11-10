@@ -1961,7 +1961,7 @@ func (tx *Transaction) Commit() error {
 
 		switch ch.kind {
 		case changeInsert:
-			if td.mode == OCCModeFlat && td.layout != nil {
+			if td.mode == MemoryCompact && td.layout != nil {
 				flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row)
 				if err != nil {
 					return err
@@ -1983,7 +1983,7 @@ func (tx *Transaction) Commit() error {
 				}
 			}
 		case changeUpdate:
-			if td.mode == OCCModeFlat && td.layout != nil {
+			if td.mode == MemoryCompact && td.layout != nil {
 				flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row)
 				if err != nil {
 					return err
