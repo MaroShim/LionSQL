@@ -830,6 +830,107 @@ func TestWiredTiger_TruncateTable(t *testing.T) {
 	_ = txOpen.Rollback()
 }
 
+func TestP1_High_Scope013_DropTable_EvictIndexCursors(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_drop_evict_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("failed to open engine: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "customer_id", Type: storage.TypeInt, Nullable: false},
+			{Name: "status", Type: storage.TypeVarChar, Nullable: false},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_orders_customer", TableName: "orders", Columns: []string{"customer_id"}},
+			{Name: "idx_orders_status", TableName: "orders", Columns: []string{"status"}},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	// Insert sample records
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	for i := 1; i <= 20; i++ {
+		err = tx.Insert("orders", storage.Record{
+			"id":          storage.IntValue(int64(i)),
+			"customer_id": storage.IntValue(int64(100 + i%3)),
+			"status":      storage.StringValue("PENDING"),
+		})
+		if err != nil {
+			t.Fatalf("Insert failed: %v", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Perform queries that use table scan and index scan to ensure cursors are opened and cached in sess.cursorPool
+	txRead, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx read failed: %v", err)
+	}
+	cur, err := txRead.Scan("orders")
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	for cur.Next() {
+	}
+	_ = cur.Close()
+
+	custVal := storage.IntValue(101)
+	idxCur, err := txRead.IndexScan("orders", "idx_orders_customer", &custVal, &custVal)
+	if err != nil {
+		t.Fatalf("IndexScan failed: %v", err)
+	}
+	for idxCur.Next() {
+	}
+	_ = idxCur.Close()
+	_ = txRead.Rollback()
+
+	// Verify that cursorPool in sess actually holds cached cursors for the table and its indexes
+	wtSess, ok := sess.(*WTSession)
+	if !ok {
+		t.Fatalf("expected *WTSession")
+	}
+	wtSess.mu.Lock()
+	cachedCount := len(wtSess.cursorPool)
+	wtSess.mu.Unlock()
+	if cachedCount == 0 {
+		t.Fatalf("expected cursorPool to contain cached cursors before DropTable, got 0")
+	}
+
+	// Now call DropTable. Without Scope-013 fix (index URI eviction and flushPendingCloses),
+	// this would fail with EBUSY because the cursors are still open in the C kernel.
+	if err := eng.DropTable("orders"); err != nil {
+		t.Fatalf("DropTable failed with active cached cursors (Scope-013 EBUSY regression): %v", err)
+	}
+
+	// Verify table is no longer in catalog
+	if _, err := eng.GetTable("orders"); err == nil {
+		t.Errorf("expected orders table to not exist after DropTable")
+	}
+}
+
 func TestWiredTiger_DuplicatePrimaryKey_ErrKeyExists(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "wt_dup_pk_*")
 	if err != nil {
