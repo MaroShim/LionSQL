@@ -130,3 +130,38 @@ INNER JOIN __db_hrdb_employees e ON o.SalesPersonID = e.EmployeeID;
   - `sys.tables` 및 `sys.databases` 가상 투영 연동
 - **Phase 3**: 3-Part Name 크로스 DB 조인 지원
   - `<dbname>.<schema>.<table>` 구문 인식 및 파스 타임 매핑 완료
+
+---
+
+## 8. 필수 회귀 테스트(Regression Test) 스펙 및 엣지 케이스 검증 요건
+
+본 아키텍처 구현 시, 다음 6대 엣지 케이스를 반드시 **독립된 회귀 테스트(`pkg/engine/logical_namespace_regression_test.go` 및 `pkg/proc/runtime/table_var_regression_test.go`)**로 작성하여 `-race` 100% 통과를 강제해야 합니다 (`[RULE:PipelineVerification]`, `[RULE:DeterministicTesting]`):
+
+### 1) [Edge-1] 세션 DB 전환 시 임시 테이블 보존 (Session Switch Retention)
+- **시나리오**: `USE SalesDB;`에서 `CREATE TABLE #t (val INT);`를 생성한 후, `USE HRDB;`로 데이터베이스를 전환하고 `SELECT * FROM #t;`를 수행.
+- **단언(Assertion)**: 임시 테이블이 특정 DB 프리픽스(`__db_salesdb_`)에 종속되지 않고 세션 스코프(`__temp_<sessID>_t`)로 유지되어 `USE` 전환 후에도 100% 정상 조회되어야 함.
+
+### 2) [Edge-2] 크로스 컨텍스트 복사/조인 (`__var_` + `__db_` 단일 쿼리 동시 사용)
+- **시나리오**: 프로시저 내부에서 `INSERT INTO @LocalTbl SELECT * FROM SalesDB.dbo.Orders WHERE Status = 'PAID';` 실행.
+- **단언(Assertion)**: 타깃은 로컬 테이블 변수(`__var_`), 소스는 원격 DB 테이블(`__db_`)인 복합 쿼리가 파서 및 실행기에서 충돌 없이 해석되어 정확한 행 수가 복사되어야 함.
+
+### 3) [Edge-3] `tempdb..#temp` 명시적 3-Part 메타데이터 조회
+- **시나리오**: `IF OBJECT_ID('tempdb..#TempOrders') IS NOT NULL` 또는 `SELECT * FROM tempdb.dbo.#TempOrders;` 실행.
+- **단언(Assertion)**: 리라이터가 `tempdb`를 일반 데이터베이스로 오인식하여 `__db_tempdb_#TempOrders`를 찾지 않고, 세션 임시 테이블 `__temp_<sessID>_TempOrders`로 정확히 매핑하여 올바른 Object ID 및 결과셋을 반환해야 함.
+
+### 4) [Edge-4] 전역 임시 테이블(`##global`) 크로스 세션 & 크로스 DB 공유
+- **시나리오**: 세션 1이 `master` DB에서 `CREATE TABLE ##GlobalConfig (k VARCHAR(20), v INT);` 생성. 세션 2가 `USE FinanceDB;` 상태에서 `SELECT * FROM ##GlobalConfig;` 조회.
+- **단언(Assertion)**: `__gtemp_` 포맷으로 관리되어 세션 ID 및 DB 컨텍스트에 구애받지 않고 모든 세션/DB에서 100% 공유되어야 함.
+
+### 5) [Edge-5] 동일 이름 4계층 동시 공존 (Name Collision Zero Integrity)
+- **시나리오**: 동일한 세션에서 같은 이름 `orders`를 각각 다음 4가지로 동시에 생성하고 쿼리:
+  1. 기본 `master` 테이블: `orders` (무접두사)
+  2. 네임스페이스 DB 테이블: `SalesDB.dbo.orders` (`__db_salesdb_orders`)
+  3. 세션 임시 테이블: `#orders` (`__temp_sess_orders`)
+  4. 로컬 테이블 변수: `@orders` (`__var_sess_f1_orders`)
+- **단언(Assertion)**: 각각 다른 데이터(예: ID=1, ID=2, ID=3, ID=4)를 삽입했을 때, 4개 테이블의 조회 결과가 단 1비트의 데이터 침범이나 오염 없이 완전히 독립적으로 격리되어야 함.
+
+### 6) [Edge-6] 프로시저 재귀 호출 시 프레임별 `@tbl` 격리 (Recursive Frame Isolation)
+- **시나리오**: 스토어드 프로시저가 자기 자신을 3단계 재귀 호출(Depth 1 ➔ Depth 2 ➔ Depth 3)하면서 매 단계마다 `DECLARE @tbl TABLE (depth INT);`를 선언하고 채움.
+- **단언(Assertion)**: `frameID` 기반의 접두사 분리로 인해 하위 프레임의 `@tbl`이 상위 프레임의 `@tbl`을 덮어쓰지 않아야 하며, 재귀가 역순으로 반환(Return)될 때마다 각 프레임의 테이블 변수가 순차적으로 `DROP`되어 최종적으로 메모리 누수가 0이어야 함.
+
