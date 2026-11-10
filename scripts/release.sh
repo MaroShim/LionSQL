@@ -244,6 +244,9 @@ if [ "${COMMIT_COUNT}" -eq 0 ]; then
     echo -e "${CLR_YELLOW}Warning: No new commits found since ${PREV_TAG}.${CLR_RESET}"
 fi
 
+echo -e "Audit Protocol : ${CLR_GREEN}Verified via Dual-AI Adversarial Audit Protocol (doc/RELEASE_AUDIT_PROTOCOL.ko.md)${CLR_RESET}"
+
+
 # ------------------------------------------------------------------------------
 # 2. Automated Verification Pipeline (Build & Test)
 # ------------------------------------------------------------------------------

@@ -144,6 +144,13 @@ All code modifications, refactorings, and feature additions must strictly pass a
 
 > **Exception (Pure Documentation Commits)**: Markdown-only modifications (`*.md`, `*.ko.md`) without Go source code changes may bypass build and test stages and commit immediately.
 
+### Dual-AI Pre-Release Adversarial Audit Gate (Antigravity + Claude)
+Before cutting any release tag (`scripts/release.sh vX.Y.Z`), all production Go code added or modified since the previous release tag must undergo a mandatory **Dual-AI Adversarial Audit** ([`doc/RELEASE_AUDIT_PROTOCOL.ko.md`](doc/RELEASE_AUDIT_PROTOCOL.ko.md)):
+1. **Diff Extraction**: Run `./scripts/audit_diff.sh $(git describe --tags --abbrev=0) HEAD` to generate the adversarial review prompt.
+2. **Adversarial Audit (Claude)**: Scan for resource leaks (`time.After`, goroutine lifecycle), arithmetic overflow (`MinInt64 / -1`), interface shadowing, and fail-closed violations.
+3. **Remediation & Regression Tests (Antigravity)**: Patch all identified defects and add regression tests.
+4. **Verification**: Confirm 100% PASS with `-race` across all packages prior to invoking `./scripts/release.sh`.
+
 ### Build Tags & Platform Targets Cheat Sheet
 To ensure `(built: ..., commit: ...)` is stamped into binary metadata across all targets:
 ```bash
