@@ -3204,3 +3204,37 @@
 * **판정**: `DEFECT_LOGGED`
 
 ---
+
+## 3. 증분 듀얼 AI (Antigravity × Claude) 정밀 감사 (`2eb8712` ➔ `18cbb31`)
+
+> - **감사 수행일**: 2026-11-10
+> - **감사 기준선 (Base)**: `2eb8712` (P1 감사 패치 완결 커밋)
+> - **감사 대상선 (Target)**: `18cbb31` (P2 그룹 A/B 가드 반영 커밋)
+> - **감사 대상 파일**: 26개 프로덕션 Go 소스코드 (총 2,221 diff 라인)
+> - **점검 4대 축**:
+>   1. 자원 및 동시성 누수 (테이블 변수 물리 테이블 수명주기, sync.Pool 재사용, 고루틴)
+>   2. 비대칭 경계값 및 산술 안정성 (`MinInt64 / -1`, `MinInt64 % -1`, 음수 슬라이스 인덱스)
+>   3. 예외 처리 및 Fail-Closed 원칙 (에러 전파, 서브쿼리 UNKNOWN 3VL 평가)
+>   4. 인터페이스 임베딩 및 영구 불변식 (Zero-Regex, Windows TDS Parity 등)
+
+### 발굴 및 조치 사항 요약
+
+1. **`vm_dispatcher.go` 테이블 변수 재선언 시 물리 테이블 누수 방어 (`AUDIT-INC-1`)**:
+   - **위치**: `pkg/proc/runtime/vm_dispatcher.go:709` (`OpDeclareTable`)
+   - **현상**: 단일 프로시저 프레임 루프 내에서 동일 테이블 변수명이 반복 선언될 경우, 기존 물리 테이블(`__tv_*`)이 즉시 드롭되지 않고 프레임 종료까지 힙에 잔류하는 문제 발견.
+   - **조치**: 신규 테이블 변수 생성 전 기존 `f.tableVars[varName]` 존재 여부를 검사하여 선제적 `DropTable` 호출 보강 완료.
+   - **판정**: **완치 (`RESOLVED`)**
+
+2. **`sqlexec_explain.go` ALL 정량 서브쿼리 NULL 원소 3VL 평가 정합성 (`AUDIT-INC-2`)**:
+   - **위치**: `pkg/engine/sqlexec_explain.go:960-975` (`resolveSubqueriesWithSession`)
+   - **현상**: `col > ALL (SELECT ...)` 실행 시 서브쿼리 결과에 `NULL`이 포함되어 있을 경우, SQL 표준 3VL(Three-Valued Logic)에 따라 전체 조건이 `UNKNOWN`(= False in WHERE)이 되어야 하나, 최대/최소값 치환 시 NULL이 필터링되어 잘못 True로 평가될 수 있는 엣지 케이스 발견.
+   - **조치**: `hasNullVal` 감지 시 `kw == "ALL"`에 대해 `replacement = "1=0"`으로 치환하여 3VL 표준 정합성 수호 완료.
+   - **판정**: **완치 (`RESOLVED`)**
+
+3. **기타 24개 파일 전수 검증 결과**:
+   - `pkg/sqlutil/params.go`: 정규식 없는 $O(N)$ 상태머신 토크나이저 검증 PASS.
+   - `pkg/proc/lexer.go`: 레거시 비교 연산자(`!<`, `!>`) 공백 분리 파싱 및 1-based 클램핑 검증 PASS.
+   - `pkg/storage/engine.go`: `FastRandN` 비부호 정수 모듈로 검증 PASS.
+   - `pkg/execution/governor.go`: 메모리 거버너 파서 오버플로우 방어 검증 PASS.
+   - **감사 최종 판정**: **100% PASS (0 Data Race, 0 Panic, 0 Leak)**
+

@@ -708,6 +708,12 @@ vmLoop:
 
 		if f.tableVars == nil {
 			f.tableVars = make(map[string]string)
+		} else if oldPhys, exists := f.tableVars[varName]; exists {
+			if f.executor != nil {
+				if tm := f.executor.getTableManager(); tm != nil {
+					_ = tm.DropTable(oldPhys)
+				}
+			}
 		}
 		f.tableVars[varName] = physTable
 

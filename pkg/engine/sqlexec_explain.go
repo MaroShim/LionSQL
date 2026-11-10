@@ -956,15 +956,21 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 				replacement = "1=0"
 			}
 		} else {
+			hasNullVal := false
 			var vals []any
 			for _, r := range innerRes.Rows {
 				row := NewSQLRow(r, innerRes.Columns)
 				if rowVal, ok := row.GetFirst(); ok {
+					if rowVal == nil {
+						hasNullVal = true
+					}
 					vals = append(vals, rowVal)
 				}
 			}
 
-			if (kw == "ANY" || kw == "SOME") && normOp == "=" {
+			if kw == "ALL" && hasNullVal {
+				replacement = "1=0"
+			} else if (kw == "ANY" || kw == "SOME") && normOp == "=" {
 				var strVals []string
 				for _, v := range vals {
 					strVals = append(strVals, formatSubqueryVal(v))
