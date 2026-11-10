@@ -234,6 +234,74 @@ func TestMemEngine_WAL_AOFRewriteAndCompaction(t *testing.T) {
 	}
 }
 
+func TestMemEngine_WAL2_DualWAL_CompactionAndCrashRecovery(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lionsql_wal2_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	eng := New()
+	eng.SetFsyncPolicy(FsyncAlways)
+	if err := eng.Open(tempDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+
+	schema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	_ = eng.CreateTable(schema)
+
+	sess, _ := eng.NewSession()
+	for i := int64(1); i <= 10; i++ {
+		tx, _ := sess.BeginTx(storage.TxOptions{})
+		_ = tx.Insert("users", storage.Record{"id": storage.IntValue(i), "name": storage.StringValue(fmt.Sprintf("user_%d", i))})
+		_ = tx.Commit()
+	}
+
+	// Trigger RewriteAOF (which rotates active.wal -> compacting.wal)
+	if err := eng.RewriteAOF(); err != nil {
+		t.Fatalf("RewriteAOF failed: %v", err)
+	}
+
+	// Insert more records after compaction (writes to new active.wal)
+	for i := int64(11); i <= 20; i++ {
+		tx, _ := sess.BeginTx(storage.TxOptions{})
+		_ = tx.Insert("users", storage.Record{"id": storage.IntValue(i), "name": storage.StringValue(fmt.Sprintf("user_%d", i))})
+		_ = tx.Commit()
+	}
+
+	// Close engine without saving disk (simulating abrupt exit)
+	_ = eng.wal.Close()
+
+	// Reopen engine
+	reopened := New()
+	if err := reopened.Open(tempDir); err != nil {
+		t.Fatalf("Reopen failed: %v", err)
+	}
+	defer reopened.Close()
+
+	rSess, _ := reopened.NewSession()
+	rTx, _ := rSess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer rTx.Rollback()
+
+	cur, err := rTx.Scan("users")
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	cnt := 0
+	for cur.Next() {
+		cnt++
+	}
+	if cnt != 20 {
+		t.Fatalf("expected 20 users across WAL2 generation boundary, got %d", cnt)
+	}
+}
+
 func TestMemEngine_WAL_FsyncPolicies(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "lionsql_fsync_*")
 	if err != nil {

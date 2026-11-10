@@ -11,6 +11,7 @@ import (
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/config"
 	"lionsql/pkg/engine"
+	"lionsql/pkg/pathutil"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 	"lionsql/pkg/storage/wiredtiger"
@@ -103,6 +104,9 @@ func openCoordinator(dataDir, engineType string) (storage.Engine, *engine.Coordi
 
 func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.Engine, *engine.Coordinator, error) {
 	cleanDir := filepath.Clean(dataDir)
+	if err := pathutil.ValidateDir(cleanDir, false); err != nil {
+		return nil, nil, fmt.Errorf("data directory validation error: %w", err)
+	}
 	var eng storage.Engine
 
 	pidFile := filepath.Join(cleanDir, "lionsql.pid")

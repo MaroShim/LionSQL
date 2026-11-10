@@ -412,20 +412,43 @@ func (e *Engine) OpenWithOptions(opts Options) error {
 		}
 
 		// 1. Load baseline snapshot (RDB) if enabled
+		var snapLSN int64
 		if opts.EnableRDB {
-			e.loadDiskLocked()
+			snapLSN = e.loadDiskLocked()
+			e.nextLSN.Store(snapLSN)
 		}
 
-		// 2. Replay subsequent AOF log records if enabled
+		// 2. Replay subsequent AOF log records if enabled (SQLite WAL2 dual-file recovery)
 		if opts.EnableAOF {
+			compactingPath := filepath.Join(e.dataDir, "wal.aof.compacting")
 			aofPath := filepath.Join(e.dataDir, "wal.aof")
-			maxLSN, err := ReplayWAL(aofPath, func(rec WALRecord) error {
+
+			replayHandler := func(rec WALRecord) error {
+				if rec.LSN <= snapLSN {
+					return nil // Skip records already baked into tables.mpk
+				}
 				return e.applyWALRecordLocked(rec)
-			})
+			}
+
+			// If a crash occurred during AOF compaction, replay the compacting WAL first
+			if _, err := os.Stat(compactingPath); err == nil {
+				maxLSN, rErr := ReplayWAL(compactingPath, replayHandler)
+				if rErr != nil {
+					return fmt.Errorf("compacting WAL replay error: %w", rErr)
+				}
+				if maxLSN > e.nextLSN.Load() {
+					e.nextLSN.Store(maxLSN)
+				}
+				_ = os.Remove(compactingPath)
+			}
+
+			maxLSN, err := ReplayWAL(aofPath, replayHandler)
 			if err != nil {
 				return fmt.Errorf("WAL replay error: %w", err)
 			}
-			e.nextLSN.Store(maxLSN)
+			if maxLSN > e.nextLSN.Load() {
+				e.nextLSN.Store(maxLSN)
+			}
 
 			// 3. Open WAL writer for future append-only logging
 			walWriter, err := NewWALWriter(aofPath, e.fsyncPolicy)

@@ -28,16 +28,16 @@ func (e *Engine) bgSaveLoop(stopCh <-chan struct{}, interval time.Duration, minC
 			}
 			changes := e.changesSinceSave.Load()
 			if changes >= minChanges {
+				e.changesSinceSave.Store(0)
+				e.mu.Unlock()
 				if e.opts.EnableAOF && e.wal != nil {
-					// Redis AOF -> RDB compaction: dump snapshot to RDB and truncate AOF
-					_ = e.rewriteAOFLocked()
+					_ = e.RewriteAOF()
 				} else if e.opts.EnableRDB {
-					// Pure RDB periodic snapshot
 					_ = e.saveDiskLocked()
 				}
-				e.changesSinceSave.Store(0)
+			} else {
+				e.mu.Unlock()
 			}
-			e.mu.Unlock()
 		}
 	}
 }
@@ -277,7 +277,14 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 	return nil
 }
 
-// RewriteAOF generates a fresh snapshot (tables.json) and truncates the AOF log file.
+// SnapshotContainer encapsulates in-memory tables and the snapshot LSN boundary.
+type SnapshotContainer struct {
+	SnapshotLSN int64                 `msgpack:"snapshot_lsn"`
+	Tables      map[string]*TableData `msgpack:"tables"`
+}
+
+// RewriteAOF generates a fresh snapshot (tables.mpk) using SQLite WAL2-style Dual-WAL rotation,
+// rotating active.wal to compacting.wal in ~1 microsecond so incoming transactions are never stalled ([발굴 결함 1-1]).
 func (e *Engine) RewriteAOF() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -288,18 +295,33 @@ func (e *Engine) rewriteAOFLocked() error {
 	if e.dataDir == "" || e.wal == nil {
 		return nil
 	}
-	// 1. Atomically save full current in-memory snapshot
-	if err := e.saveDiskLocked(); err != nil {
+	compactingWAL := filepath.Join(e.dataDir, "wal.aof.compacting")
+
+	// 1. Atomically rotate active WAL file under short-lived lock (WAL2 Ping-Pong)
+	e.walOrderMu.Lock()
+	snapLSN := e.nextLSN.Load()
+	err := e.wal.Rotate(compactingWAL)
+	e.walOrderMu.Unlock()
+
+	if err != nil {
+		return fmt.Errorf("AOF rewrite rotate error: %w", err)
+	}
+
+	// 2. Dump in-memory snapshot with snapLSN (non-blocking for incoming commits)
+	if err := e.saveDiskSnapshotLocked(snapLSN); err != nil {
 		return fmt.Errorf("AOF rewrite snapshot error: %w", err)
 	}
-	// 2. Truncate AOF log file
-	if err := e.wal.Truncate(); err != nil {
-		return fmt.Errorf("AOF truncate error: %w", err)
-	}
+
+	// 3. Remove the frozen compacting WAL file after snapshot commitment
+	_ = os.Remove(compactingWAL)
 	return nil
 }
 
 func (e *Engine) saveDiskLocked() error {
+	return e.saveDiskSnapshotLocked(e.nextLSN.Load())
+}
+
+func (e *Engine) saveDiskSnapshotLocked(snapLSN int64) error {
 	if e.dataDir == "" {
 		return nil
 	}
@@ -332,7 +354,12 @@ func (e *Engine) saveDiskLocked() error {
 		td.mu.RLock()
 		td.partMu.RLock()
 	}
-	data, err := MarshalMsgPack(persistTables)
+
+	container := SnapshotContainer{
+		SnapshotLSN: snapLSN,
+		Tables:      persistTables,
+	}
+	data, err := MarshalMsgPack(container)
 	for i := len(tNames) - 1; i >= 0; i-- {
 		td := persistTables[tNames[i]]
 		td.partMu.RUnlock()
@@ -355,20 +382,28 @@ func (e *Engine) saveDiskLocked() error {
 	return os.Rename(tmpFile, targetFile)
 }
 
-func (e *Engine) loadDiskLocked() {
+func (e *Engine) loadDiskLocked() int64 {
 	if e.dataDir == "" {
-		return
+		return 0
 	}
 
 	mpkFile := filepath.Join(e.dataDir, "tables.mpk")
 	data, err := os.ReadFile(mpkFile)
 	if err != nil || len(data) == 0 {
-		return
+		return 0
 	}
 
+	var snapLSN int64
 	var loaded map[string]*TableData
-	if err := UnmarshalMsgPack(data, &loaded); err != nil || loaded == nil {
-		return
+
+	var container SnapshotContainer
+	if err := UnmarshalMsgPack(data, &container); err == nil && container.Tables != nil {
+		snapLSN = container.SnapshotLSN
+		loaded = container.Tables
+	} else {
+		if err := UnmarshalMsgPack(data, &loaded); err != nil || loaded == nil {
+			return 0
+		}
 	}
 
 	e.tables = make(map[string]*TableData)
@@ -404,5 +439,6 @@ func (e *Engine) loadDiskLocked() {
 		}
 	}
 	e.rebuildFKCacheLocked()
+	return snapLSN
 }
 

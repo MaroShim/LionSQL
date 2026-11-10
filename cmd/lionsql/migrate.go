@@ -10,6 +10,7 @@ import (
 
 	"lionsql/pkg/config"
 	"lionsql/pkg/migrate"
+	"lionsql/pkg/pathutil"
 )
 
 func runMigrate(args []string) error {
@@ -41,6 +42,9 @@ func runMigrateNew(args []string) error {
 	if err := fs.Parse(reorderArgs(args)); err != nil {
 		return err
 	}
+	if err := pathutil.ValidateDir(*migrationsDir, true); err != nil {
+		return fmt.Errorf("migrations directory validation error: %w", err)
+	}
 
 	nonFlags := fs.Args()
 	if len(nonFlags) == 0 {
@@ -71,6 +75,9 @@ func runMigrateUp(args []string) error {
 	fs.IntVar(steps, "n", 0, "Number of migrations to apply (default: 0 = all pending)")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
 		return err
+	}
+	if err := pathutil.ValidateDir(*migrationsDir, true); err != nil {
+		return fmt.Errorf("migrations directory validation error: %w", err)
 	}
 
 	resolvedDisk := *diskType
@@ -121,6 +128,9 @@ func runMigrateDown(args []string) error {
 	if err := fs.Parse(reorderArgs(args)); err != nil {
 		return err
 	}
+	if err := pathutil.ValidateDir(*migrationsDir, true); err != nil {
+		return fmt.Errorf("migrations directory validation error: %w", err)
+	}
 
 	resolvedDisk := *diskType
 	if *engineType != "" {
@@ -167,6 +177,9 @@ func runMigrateStatus(args []string) error {
 	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (use -disk and -memory instead)")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
 		return err
+	}
+	if err := pathutil.ValidateDir(*migrationsDir, true); err != nil {
+		return fmt.Errorf("migrations directory validation error: %w", err)
 	}
 
 	resolvedDisk := *diskType

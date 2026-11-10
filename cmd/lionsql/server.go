@@ -22,6 +22,7 @@ import (
 	"lionsql/pkg/cdc"
 	"lionsql/pkg/config"
 	"lionsql/pkg/execution"
+	"lionsql/pkg/pathutil"
 	"lionsql/pkg/planner"
 	_ "lionsql/pkg/proc/parser/antlr"
 	"lionsql/pkg/replication"
@@ -449,6 +450,12 @@ func runServer(args []string) error {
 		log.Fatalf("[LionSQL] Invalid memory layout configuration: %v", err)
 	}
 
+	if !cfg.Server.Ephemeral {
+		if err := pathutil.ValidateDir(cfg.Server.DataDir, true); err != nil {
+			log.Fatalf("[LionSQL] Data directory validation failed: %v", err)
+		}
+	}
+
 	switch resolvedDisk {
 	case "wiredtiger":
 		if cfg.Server.Ephemeral {
@@ -493,6 +500,9 @@ func runServer(args []string) error {
 
 	// 7. Handle Standalone WAL Archiving / Backup / Restore operations
 	if *backupTarget != "" {
+		if err := pathutil.ValidateRegularFile(*backupTarget, false); err != nil {
+			log.Fatalf("[LionSQL] Backup target path validation failed: %v", err)
+		}
 		log.Printf("[LionSQL] Initiating online snapshot backup to %s...", *backupTarget)
 		manifest, err := backup.CreateBackupFile(*backupTarget, eng, cat)
 		if err != nil {
@@ -504,9 +514,15 @@ func runServer(args []string) error {
 	}
 
 	if *archiveWalFile != "" {
+		if err := pathutil.ValidateRegularFile(*archiveWalFile, true); err != nil {
+			log.Fatalf("[LionSQL] Archive WAL file path validation failed: %v", err)
+		}
 		archiveDir := *walArchiveDir
 		if archiveDir == "" {
 			archiveDir = filepath.Join(cfg.Server.DataDir, "wal_archive")
+		}
+		if err := pathutil.ValidateDir(archiveDir, true); err != nil {
+			log.Fatalf("[LionSQL] WAL archive directory validation failed: %v", err)
 		}
 		archiver, err := backup.NewWALArchiver(archiveDir)
 		if err != nil {
@@ -525,6 +541,14 @@ func runServer(args []string) error {
 		archiveDir := *walArchiveDir
 		if archiveDir == "" {
 			archiveDir = filepath.Join(cfg.Server.DataDir, "wal_archive")
+		}
+		if err := pathutil.ValidateDir(archiveDir, true); err != nil {
+			log.Fatalf("[LionSQL] WAL archive directory validation failed: %v", err)
+		}
+		if *restoreSource != "" {
+			if err := pathutil.ValidateRegularFile(*restoreSource, true); err != nil {
+				log.Fatalf("[LionSQL] Restore source path validation failed: %v", err)
+			}
 		}
 
 		var targetTime time.Time
@@ -767,6 +791,12 @@ func runServer(args []string) error {
 	if (pgEnabled || tdsEnabled) && cfg.Network.TLS.IsEnabled() {
 		var tlsConfig *tls.Config
 		if cfg.Network.TLS.CertFile != "" && cfg.Network.TLS.KeyFile != "" {
+			if err := pathutil.ValidateRegularFile(cfg.Network.TLS.CertFile, true); err != nil {
+				log.Fatalf("[LionSQL] TLS certificate path validation failed: %v", err)
+			}
+			if err := pathutil.ValidateRegularFile(cfg.Network.TLS.KeyFile, true); err != nil {
+				log.Fatalf("[LionSQL] TLS key path validation failed: %v", err)
+			}
 			tlsCfg, err := wire.LoadTLSConfig(cfg.Network.TLS.CertFile, cfg.Network.TLS.KeyFile)
 			if err != nil {
 				log.Fatalf("[LionSQL] Failed to load TLS certificate and key: %v", err)

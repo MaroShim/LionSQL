@@ -183,3 +183,31 @@ This document records subtle architectural landmines, runtime hazards, and criti
   ```
   TDS clients must always see a 100% standard Windows-hosted SQL Server instance.
 
+---
+
+## 17. OS Boundary Path & File Sanitization (Pipe/FIFO/Device Node/Symlink Loop Trap)
+- **Problem & AI Blind Spot**:
+  Automated code audits and AI reviewers frequently suffer from "happy-path internal logic bias", assuming CLI and configuration paths (`--data-dir`, `-config`, `-logfile`, `-wal-archive`) will always point to normal filesystem locations. In reality, external inputs can pass non-regular files:
+  1. **Named Pipes (FIFO)**: If a user or malicious script passes an unread FIFO to `-config` or `-logfile`, the process enters an **unbounded blocking hang** on `os.ReadFile` or `logFd.Write`, freezing the entire database process before or during execution.
+  2. **Device Nodes**: Passing `/dev/null` or `/dev/urandom` to `--data-dir` causes confusing kernel errors (`ENOTDIR`) or corrupted writes.
+  3. **Symlink Loops**: Cyclic symlinks (`ln -s a b; ln -s b a`) cause `ELOOP` failures or traversal exhaustion.
+- **Forbidden Anti-Pattern**:
+  Never rely on bare `os.MkdirAll(dir, 0755)` or `os.ReadFile(file)` without validating the file mode at the OS boundary:
+  ```go
+  // FORBIDDEN: Blindly creating directory without validating existing file type
+  if err := os.MkdirAll(dir, 0755); err != nil { ... }
+  ```
+- **Required Idiom**:
+  Always validate paths through the canonical `pkg/pathutil` modular abstraction (`[RULE:ModularAbstraction]`, `[RULE:SymlinkSafety]`, `[RULE:PathSecurity]`):
+  ```go
+  // Directory validation (resolves symlinks, rejects FIFOs/devices/regular files, probes writeability):
+  if err := pathutil.ValidateDir(cfg.Server.DataDir, true); err != nil {
+      log.Fatalf("Data directory error: %v", err)
+  }
+
+  // Regular file validation (rejects directories, FIFOs, devices, sockets):
+  if err := pathutil.ValidateRegularFile(cfg.Server.LogFile, false); err != nil {
+      log.Fatalf("Log file error: %v", err)
+  }
+  ```
+
