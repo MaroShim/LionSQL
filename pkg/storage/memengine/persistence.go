@@ -89,6 +89,23 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 		case OpDropTable:
 			hasDDL = true
 			delete(e.tables, op.Table)
+		case OpRenameTable:
+			hasDDL = true
+			oldName := op.Key
+			newName := op.Table
+			if td, exists := e.tables[oldName]; exists {
+				delete(e.tables, oldName)
+				td.Schema.Name = newName
+				e.tables[newName] = td
+				for _, otherTd := range e.tables {
+					for i := range otherTd.Schema.ForeignKeys {
+						if strings.EqualFold(otherTd.Schema.ForeignKeys[i].ParentTable, oldName) {
+							otherTd.Schema.ForeignKeys[i].ParentTable = newName
+						}
+					}
+				}
+				e.rebuildFKCacheLocked()
+			}
 		case OpAlterTable:
 			if td, exists := e.tables[op.Table]; exists && op.Column != nil {
 				td.Schema.Columns = append(td.Schema.Columns, *op.Column)

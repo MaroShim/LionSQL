@@ -252,14 +252,27 @@ func Up(ctx context.Context, coord engine.SQLCoordinator, dir string, steps int)
 		stmts := cleanAndSplitSQL(string(content))
 		start := time.Now()
 
+		// Begin transaction for atomic migration step (Scope-134)
+		if _, err := coord.ExecuteSessionSQLContext(ctx, "migration", "BEGIN TRANSACTION;"); err != nil {
+			return appliedRecords, fmt.Errorf("migration %s begin transaction failed: %w", mf.Version, err)
+		}
+
+		var migrationErr error
 		for stmtIdx, stmt := range stmts {
 			res, err := coord.ExecuteSessionSQLContext(ctx, "migration", stmt)
 			if err != nil {
-				return appliedRecords, fmt.Errorf("migration %s statement %d failed: %w", mf.Version, stmtIdx+1, err)
+				migrationErr = fmt.Errorf("migration %s statement %d failed: %w", mf.Version, stmtIdx+1, err)
+				break
 			}
 			if res != nil && res.Error != "" {
-				return appliedRecords, fmt.Errorf("migration %s statement %d error: %s", mf.Version, stmtIdx+1, res.Error)
+				migrationErr = fmt.Errorf("migration %s statement %d error: %s", mf.Version, stmtIdx+1, res.Error)
+				break
 			}
+		}
+
+		if migrationErr != nil {
+			_, _ = coord.ExecuteSessionSQLContext(ctx, "migration", "ROLLBACK TRANSACTION;")
+			return appliedRecords, migrationErr
 		}
 
 		durationMS := time.Since(start).Milliseconds()
@@ -272,7 +285,12 @@ func Up(ctx context.Context, coord engine.SQLCoordinator, dir string, steps int)
 		)
 
 		if _, err := coord.ExecuteSessionSQLContext(ctx, "migration", recordSQL); err != nil {
+			_, _ = coord.ExecuteSessionSQLContext(ctx, "migration", "ROLLBACK TRANSACTION;")
 			return appliedRecords, fmt.Errorf("failed to record migration %s in _migrations table: %w", mf.Version, err)
+		}
+
+		if _, err := coord.ExecuteSessionSQLContext(ctx, "migration", "COMMIT TRANSACTION;"); err != nil {
+			return appliedRecords, fmt.Errorf("failed to commit migration %s transaction: %w", mf.Version, err)
 		}
 
 		appliedRecords = append(appliedRecords, &MigrationRecord{
@@ -343,14 +361,27 @@ func Down(ctx context.Context, coord engine.SQLCoordinator, dir string, steps in
 		stmts := cleanAndSplitSQL(string(content))
 		start := time.Now()
 
+		// Begin transaction for atomic rollback step (Scope-134)
+		if _, err := coord.ExecuteSessionSQLContext(ctx, "migration", "BEGIN TRANSACTION;"); err != nil {
+			return revertedRecords, fmt.Errorf("rollback %s begin transaction failed: %w", mf.Version, err)
+		}
+
+		var rollbackErr error
 		for stmtIdx, stmt := range stmts {
 			res, err := coord.ExecuteSessionSQLContext(ctx, "migration", stmt)
 			if err != nil {
-				return revertedRecords, fmt.Errorf("rollback %s statement %d failed: %w", mf.Version, stmtIdx+1, err)
+				rollbackErr = fmt.Errorf("rollback %s statement %d failed: %w", mf.Version, stmtIdx+1, err)
+				break
 			}
 			if res != nil && res.Error != "" {
-				return revertedRecords, fmt.Errorf("rollback %s statement %d error: %s", mf.Version, stmtIdx+1, res.Error)
+				rollbackErr = fmt.Errorf("rollback %s statement %d error: %s", mf.Version, stmtIdx+1, res.Error)
+				break
 			}
+		}
+
+		if rollbackErr != nil {
+			_, _ = coord.ExecuteSessionSQLContext(ctx, "migration", "ROLLBACK TRANSACTION;")
+			return revertedRecords, rollbackErr
 		}
 
 		durationMS := time.Since(start).Milliseconds()
@@ -358,7 +389,12 @@ func Down(ctx context.Context, coord engine.SQLCoordinator, dir string, steps in
 		// Remove from _migrations table
 		delSQL := fmt.Sprintf("DELETE FROM _migrations WHERE version = '%s';", escapeSQL(mf.Version))
 		if _, err := coord.ExecuteSessionSQLContext(ctx, "migration", delSQL); err != nil {
+			_, _ = coord.ExecuteSessionSQLContext(ctx, "migration", "ROLLBACK TRANSACTION;")
 			return revertedRecords, fmt.Errorf("failed to remove migration %s from _migrations table: %w", mf.Version, err)
+		}
+
+		if _, err := coord.ExecuteSessionSQLContext(ctx, "migration", "COMMIT TRANSACTION;"); err != nil {
+			return revertedRecords, fmt.Errorf("failed to commit rollback %s transaction: %w", mf.Version, err)
 		}
 
 		rec := applied[mf.Version]

@@ -47,7 +47,8 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 			for _, op := range rec.Ops {
 				switch op.Type {
 				case memengine.OpCreateTable, memengine.OpDropTable, memengine.OpTruncateTable,
-					memengine.OpCreateIndex, memengine.OpDropIndex, memengine.OpDropPartition:
+					memengine.OpCreateIndex, memengine.OpDropIndex, memengine.OpDropPartition,
+					memengine.OpRenameTable, memengine.OpAlterTable:
 					ddlHook(op)
 				}
 			}
@@ -164,6 +165,16 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 			}
 			if err := eng.DropIndex(op.Table, op.IndexName); err != nil && err != storage.ErrTableNotFound {
 				return fmt.Errorf("pitr apply drop index %s on %s failed: %w", op.IndexName, op.Table, err)
+			}
+			if ddlHook != nil {
+				ddlHook(op)
+			}
+		case memengine.OpRenameTable:
+			if err := commitTx(); err != nil {
+				return err
+			}
+			if err := eng.RenameTable(op.Key, op.Table); err != nil && err != storage.ErrTableNotFound {
+				return fmt.Errorf("pitr apply rename table %s to %s failed: %w", op.Key, op.Table, err)
 			}
 			if ddlHook != nil {
 				ddlHook(op)
@@ -286,8 +297,24 @@ func RestorePITR(baseBackupPath string, archiveDir string, eng storage.Engine, c
 				return ErrPITRTargetReached
 			}
 
+			// Synchronize catalog stats on DDL mutations ([발굴 결함 9-5])
+			var ddlHook func(op memengine.WALOp)
+			if cat != nil {
+				ddlHook = func(op memengine.WALOp) {
+					switch op.Type {
+					case memengine.OpCreateTable, memengine.OpDropTable, memengine.OpTruncateTable,
+						memengine.OpCreateIndex, memengine.OpDropIndex, memengine.OpDropPartition,
+						memengine.OpRenameTable, memengine.OpAlterTable:
+						cat.InvalidateTableStats(op.Table)
+						if op.Key != "" {
+							cat.InvalidateTableStats(op.Key)
+						}
+					}
+				}
+			}
+
 			// Apply WAL operations
-			if err := ApplyWALRecordToEngine(eng, rec); err != nil {
+			if err := ApplyWALRecordWithOptions(eng, rec, ddlHook); err != nil {
 				return err
 			}
 

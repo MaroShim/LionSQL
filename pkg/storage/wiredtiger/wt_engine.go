@@ -1177,11 +1177,15 @@ func (s *WTSession) evictCursors(tableName string) {
 	if s.closed || s.sess == nil {
 		return
 	}
-	uri := "table:" + tableName
-	if pool, ok := s.cursorPool[uri]; ok && len(pool) > 0 {
-		s.toClose = append(s.toClose, pool...)
-		delete(s.cursorPool, uri)
+	prefixTable := "table:" + tableName
+	prefixIndex := "index:" + tableName + ":"
+	for curURI, pool := range s.cursorPool {
+		if curURI == prefixTable || strings.HasPrefix(curURI, prefixIndex) {
+			s.toClose = append(s.toClose, pool...)
+			delete(s.cursorPool, curURI)
+		}
 	}
+	s.flushPendingClosesLocked()
 }
 
 func (s *WTSession) Close() error {
@@ -1341,11 +1345,17 @@ func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error)
 		snapTS = time.Now().UnixNano()
 	}
 
+	var snapTables []*storage.TableSchema
+	if opts.ReadOnly {
+		snapTables, _ = s.engine.ListTables()
+	}
+
 	return &WTTx{
 		sess:              s,
 		opts:              opts,
 		snapshotLSN:       snapLSN,
 		snapshotTimestamp: snapTS,
+		snapTables:        snapTables,
 	}, nil
 }
 
@@ -1380,6 +1390,7 @@ type WTTx struct {
 	walOps            []memengine.WALOp
 	spWALIndices      map[string]int
 	tableCache        map[string]*storage.TableSchema
+	snapTables        []*storage.TableSchema
 }
 
 func (tx *WTTx) getTableLocked(tableName string) (*storage.TableSchema, error) {
@@ -1403,6 +1414,18 @@ func (tx *WTTx) getTableLocked(tableName string) (*storage.TableSchema, error) {
 	}
 	tx.tableCache[tableName] = tbl
 	return tbl, nil
+}
+
+// ListTables returns the list of table schemas visible to this transaction snapshot ([RULE:BoundedLookup]).
+func (tx *WTTx) ListTables() ([]*storage.TableSchema, error) {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	if tx.snapTables != nil {
+		res := make([]*storage.TableSchema, len(tx.snapTables))
+		copy(res, tx.snapTables)
+		return res, nil
+	}
+	return tx.sess.engine.ListTables()
 }
 
 // SnapshotLSN returns the snapshot LSN bound at transaction start.
@@ -1779,7 +1802,7 @@ func (tx *WTTx) checkUniqueIndexesLocked(tableName string, tbl *storage.TableSch
 		if keyVal.IsNull {
 			continue
 		}
-		cur, err := tx.scanLocked(tableName)
+		cur, err := tx.indexScanLocked(tableName, idx.Name, &keyVal, &keyVal)
 		if err != nil {
 			return err
 		}
@@ -2069,7 +2092,13 @@ func (tx *WTTx) ScanPartitions(tableName string, partitions []string) (storage.C
 }
 
 func (tx *WTTx) IndexScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
-	cur, err := tx.Scan(tableName)
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	return tx.indexScanLocked(tableName, indexName, low, high)
+}
+
+func (tx *WTTx) indexScanLocked(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
+	cur, err := tx.scanLocked(tableName)
 	if err != nil {
 		return nil, err
 	}

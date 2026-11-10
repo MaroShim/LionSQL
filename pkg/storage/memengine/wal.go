@@ -33,6 +33,7 @@ type WALOpType string
 const (
 	OpCreateTable   WALOpType = "CREATE_TABLE"
 	OpDropTable     WALOpType = "DROP_TABLE"
+	OpRenameTable   WALOpType = "RENAME_TABLE"
 	OpCreateIndex   WALOpType = "CREATE_INDEX"
 	OpDropIndex     WALOpType = "DROP_INDEX"
 	OpInsert        WALOpType = "INSERT"

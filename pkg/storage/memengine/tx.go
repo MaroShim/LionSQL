@@ -50,6 +50,11 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 	tx.commitTimestamp = 0
 	tx.closed = false
 	tx.inPool = false
+	if opts.ReadOnly {
+		tx.snapTables = s.engine.tablesAtomic.Load()
+	} else {
+		tx.snapTables = nil
+	}
 
 	if tx.tableCache == nil || len(tx.tableCache) > 64 {
 		tx.tableCache = make(map[string]*TableData, 4)
@@ -172,6 +177,7 @@ type Transaction struct {
 	deleted           map[string]map[string]bool        // tableName -> key -> bool
 	changes           map[string]rowChange              // "table:key" -> rowChange
 	tableCache        map[string]*TableData             // Cached table metadata pointers per transaction
+	snapTables        *map[string]*TableData            // Immutable snapshot of tables at BeginTx time
 	savepoints        map[string]savepointState
 	spNames           []string
 	tableSet          map[string]*TableData
@@ -188,6 +194,7 @@ func (tx *Transaction) resetForPoolLocked() {
 	tx.snapshotTimestamp = 0
 	tx.commitLSN = 0
 	tx.commitTimestamp = 0
+	tx.snapTables = nil
 
 	// Downsize maps if oversized, else clear() to prevent GC memory retention ([RULE:BoundedBuffers])
 	if len(tx.tableCache) > 64 {
@@ -267,7 +274,10 @@ func (tx *Transaction) getTableLocked(tableName string) (*TableData, error) {
 	if td, cached := sqlutil.MapGetFold(tx.tableCache, tableName); cached {
 		return td, nil
 	}
-	snap := tx.engine.tablesAtomic.Load()
+	snap := tx.snapTables
+	if snap == nil && tx.engine != nil {
+		snap = tx.engine.tablesAtomic.Load()
+	}
 	if snap != nil {
 		if td, exists := sqlutil.MapGetFold(*snap, tableName); exists {
 			tx.tableCache[tableName] = td
@@ -279,13 +289,36 @@ func (tx *Transaction) getTableLocked(tableName string) (*TableData, error) {
 
 // getTableReadOnly retrieves a *TableData without acquiring tx.mu or engine.mu, safe for ReadOnly transactions.
 func (tx *Transaction) getTableReadOnly(tableName string) (*TableData, error) {
-	snap := tx.engine.tablesAtomic.Load()
+	snap := tx.snapTables
+	if snap == nil && tx.engine != nil {
+		snap = tx.engine.tablesAtomic.Load()
+	}
 	if snap != nil {
 		if td, exists := sqlutil.MapGetFold(*snap, tableName); exists {
 			return td, nil
 		}
 	}
 	return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+}
+
+// ListTables returns the list of table schemas visible to this transaction snapshot ([RULE:BoundedLookup]).
+func (tx *Transaction) ListTables() ([]*storage.TableSchema, error) {
+	snap := tx.snapTables
+	if snap == nil && tx.engine != nil {
+		snap = tx.engine.tablesAtomic.Load()
+	}
+	if snap == nil {
+		return nil, nil
+	}
+	res := make([]*storage.TableSchema, 0, len(*snap))
+	for _, td := range *snap {
+		cp := td.Schema
+		res = append(res, &cp)
+	}
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].Name < res[j].Name
+	})
+	return res, nil
 }
 
 func (tx *Transaction) Insert(tableName string, record storage.Record) error {
@@ -503,17 +536,28 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 		}
 	}
 
+	wasDeletedLocally := tx.isLocallyDeleted(tableName, pkKey)
+	origBaseVer := tx.getBaseVer(tableName, pkKey)
+
 	recCopy := cloneRecord(record)
 	rowCopy := schema.RecordToRow(record)
-	tx.putLocal(tableName, pkKey, rowCopy, 0)
+
+	changeKind := changeInsert
+	changeBaseVer := int64(0)
+	if wasDeletedLocally && origBaseVer > 0 {
+		changeKind = changeUpdate
+		changeBaseVer = origBaseVer
+	}
+
+	tx.putLocal(tableName, pkKey, rowCopy, changeBaseVer)
 	tx.unmarkDeleted(tableName, pkKey)
 
 	changeKey := tableName + ":" + pkKey
 	tx.changes[changeKey] = rowChange{
-		kind:     changeInsert,
+		kind:     changeKind,
 		table:    tableName,
 		key:      pkKey,
-		baseVer:  0,
+		baseVer:  changeBaseVer,
 		row:      rowCopy,
 		rec:      recCopy,
 		td:       td,
@@ -1941,6 +1985,58 @@ func (tx *Transaction) Commit() error {
 	}
 
 	// 6. Apply changes and update secondary indexes atomically
+	type undoRecord struct {
+		sh       *tableShard
+		key      string
+		oldEntry shardEntry
+		hadOld   bool
+		td       *TableData
+		oldRow   storage.Row
+		ch       rowChange
+	}
+	appliedUndos := make([]undoRecord, 0, len(tx.changes))
+	rollbackApplied := func() {
+		for i := len(appliedUndos) - 1; i >= 0; i-- {
+			u := appliedUndos[i]
+			td := u.td
+			sh := u.sh
+			if u.hadOld {
+				sh.entries[u.key] = u.oldEntry
+				if td.Schema.IsPartitioned() {
+					newPartID, _ := td.Schema.ComputePartitionKeyFromRow(u.ch.row)
+					oldPartID, _ := td.Schema.ComputePartitionKeyFromRow(u.oldRow)
+					if newPartID != "" && newPartID != oldPartID {
+						td.removePartitionKey(newPartID, u.key)
+					}
+					if oldPartID != "" {
+						td.addPartitionKey(oldPartID, u.key)
+					}
+				}
+				for _, idxData := range td.Indexes {
+					if u.ch.kind != changeDelete {
+						newKey := extractIndexKeyFromRowWithSchema(&td.Schema, u.ch.row, &idxData.Schema)
+						idxData.Delete(newKey, u.key)
+					}
+					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, u.oldRow, &idxData.Schema)
+					incVals := extractIncludeValuesFromRow(&td.Schema, u.oldRow, idxData.Schema.IncludeCols)
+					_ = idxData.Insert(oldKey, u.key, incVals)
+				}
+			} else {
+				delete(sh.entries, u.key)
+				if td.Schema.IsPartitioned() {
+					partID, _ := td.Schema.ComputePartitionKeyFromRow(u.ch.row)
+					if partID != "" {
+						td.removePartitionKey(partID, u.key)
+					}
+				}
+				for _, idxData := range td.Indexes {
+					newKey := extractIndexKeyFromRowWithSchema(&td.Schema, u.ch.row, &idxData.Schema)
+					idxData.Delete(newKey, u.key)
+				}
+			}
+		}
+	}
+
 	for _, ch := range tx.changes {
 		td := ch.td
 		sIdx := ch.shardIdx
@@ -1956,6 +2052,7 @@ func (tx *Transaction) Commit() error {
 		oldEntry, hadOld := sh.entries[ch.key]
 		oldRow, err := oldEntry.materialize(td)
 		if err != nil {
+			rollbackApplied()
 			return err
 		}
 
@@ -1964,6 +2061,7 @@ func (tx *Transaction) Commit() error {
 			if td.mode == MemoryCompact && td.layout != nil {
 				flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row)
 				if err != nil {
+					rollbackApplied()
 					return err
 				}
 				sh.entries[ch.key] = shardEntry{ver: 1, flatBuf: flatBuf}
@@ -1979,6 +2077,7 @@ func (tx *Transaction) Commit() error {
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
 				if err := idxData.Insert(newKey, ch.key, incVals); err != nil {
+					rollbackApplied()
 					return err
 				}
 			}
@@ -1986,6 +2085,7 @@ func (tx *Transaction) Commit() error {
 			if td.mode == MemoryCompact && td.layout != nil {
 				flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row)
 				if err != nil {
+					rollbackApplied()
 					return err
 				}
 				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, flatBuf: flatBuf}
@@ -2015,6 +2115,7 @@ func (tx *Transaction) Commit() error {
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
 				if err := idxData.Insert(newKey, ch.key, incVals); err != nil {
+					rollbackApplied()
 					return err
 				}
 			}
@@ -2032,6 +2133,15 @@ func (tx *Transaction) Commit() error {
 				}
 			}
 		}
+		appliedUndos = append(appliedUndos, undoRecord{
+			sh:       sh,
+			key:      ch.key,
+			oldEntry: oldEntry,
+			hadOld:   hadOld,
+			td:       td,
+			oldRow:   oldRow,
+			ch:       ch,
+		})
 	}
 
 	// 7. Assign monotonic LSN and append WAL frame while shard locks are still held

@@ -119,13 +119,14 @@
 
 ---
 
-## 4. [3단계] 난이도 '상 (High)' 8건 분류 목록 (심층 설계 대상)
+## 4. [3단계] 난이도 '상 (High)' 8건 완수 명세 [x] 완료
 
-1. **`결함 1-1` & `Scope-002`** (`pkg/storage/memengine/persistence.go`): 비동기 AOF Rewrite 중 동시 DDL 패닉 및 델타 트랜잭션 유실 방어.
-2. **`결함 1-2` & `Scope-006`** (`pkg/storage/memengine/tx.go`): In-Memory OCC Commit 6단계 도중 에러 시 부분 커밋(Partial Apply) 역연산(Undo) 롤백.
-3. **`Scope-005`** (`pkg/storage/memengine/tx.go`): 동일 트랜잭션 내 `DELETE` 직후 동일 PK `INSERT` 재삽입 시 `baseVer` 버전 추적 정합성.
-4. **`Scope-012`** (`pkg/storage/memengine/persistence.go`, `ddl.go`): `RENAME TABLE` AOF 리플레이 복원 및 `ALTER TABLE` 후 Flat 레이아웃 동기화.
-5. **`결함 1-4` & `Scope-013`** (`pkg/storage/wiredtiger/wt_engine.go`): WiredTiger `DropTable`/`TruncateTable` 및 세션 종료 시 CGo 활성 커서 Use-After-Free 방지.
-6. **`Scope-014`** (`pkg/storage/wiredtiger/wt_engine.go`): WiredTiger 복합 유니크 인덱스 검증 시 풀스캔($O(N^2)$) 제거 및 인덱스 커서 탐색 전환.
-7. **`결함 9-4` & `9-5`** (`pkg/backup/backup.go`, `pitr.go`): 온라인 백업 스냅샷 카탈로그 일치 및 PITR 복원 시 DDL WAL과 `catalog.Catalog` 동기화.
-8. **`Scope-134`** (`pkg/migrate/migrate.go`): 마이그레이션 다중 DDL 실행 중 부분 실패 시 원자적 롤백/복구.
+1. **`결함 1-1` & `Scope-002`** (`pkg/storage/memengine/persistence.go`): 비동기 AOF Rewrite 중 동시 DDL 패닉 및 델타 트랜잭션 유실 방어 (`rewriteMutex`, 테이블 스키마/엔트리 불변 스냅샷 클론).
+2. **`결함 1-2` & `Scope-006`** (`pkg/storage/memengine/tx.go`): In-Memory OCC Commit 6단계 도중 인덱스/인코딩 에러 시 부분 커밋(Partial Apply) 역연산(`rollbackApplied`) ACID 롤백.
+3. **`Scope-005`** (`pkg/storage/memengine/tx.go`): 동일 트랜잭션 내 `DELETE` 직후 동일 PK `INSERT` 재삽입 시 `baseVer` 버전 추적 정합성 보장 (`changeUpdate` 전환).
+4. **`Scope-012`** (`pkg/storage/memengine/persistence.go`, `ddl.go`, `wal.go`): `RENAME TABLE` AOF 리플레이 복원(`OpRenameTable`) 및 `ALTER TABLE` 후 Flat 레이아웃 동기화.
+5. **`결함 1-4` & `Scope-013`** (`pkg/storage/wiredtiger/wt_engine.go`): WiredTiger `DropTable`/`TruncateTable` 및 세션 종료 시 CGo 활성 커서 Use-After-Free 방지 (`evictCursors` 즉시 물리 close 및 인덱스 커서 포함).
+6. **`Scope-014`** (`pkg/storage/wiredtiger/wt_engine.go`): WiredTiger 복합 유니크 인덱스 검증 시 풀스캔($O(N^2)$) 제거 및 인덱스 커서 탐색 전환 (`indexScanLocked` 재귀 데드락 방지).
+7. **`결함 9-4` & `9-5`** (`pkg/backup/backup.go`, `pitr.go`): 온라인 백업 스냅샷 카탈로그 일치(`tx.ListTables()`) 및 PITR 복원 시 DDL WAL과 `catalog.Catalog` 통보(`cat.InvalidateTableStats`) 동기화.
+8. **`Scope-134`** (`pkg/migrate/migrate.go`): 마이그레이션 다중 DDL 실행 중 부분 실패 시 원자적 트랜잭션 롤백/복구 (`BEGIN TRANSACTION` ... `ROLLBACK TRANSACTION`).
+- **검증 완료**: `pkg/storage/...`, `pkg/backup/...`, `pkg/migrate/...` 단위 회귀 테스트 전체 100% PASS (-race 무결점 검증 통과).

@@ -223,7 +223,7 @@ func (e *Engine) finishWALCommitLocked(seq int64) error {
 			go func() {
 				defer e.bgWg.Done()
 				defer e.compacting.Store(false)
-				if err := e.rewriteAOFLocked(); err != nil {
+				if err := e.RewriteAOF(); err != nil {
 					log.Printf("[memengine] background AOF rewrite error: %v", err)
 				}
 			}()

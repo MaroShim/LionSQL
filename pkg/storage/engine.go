@@ -985,6 +985,7 @@ type Transaction interface {
 	IndexScan(tableName string, indexName string, low, high *Value) (Cursor, error)
 	IndexOnlyScan(tableName string, indexName string, low, high *Value) (Cursor, error)
 	IndexScanDesc(tableName string, indexName string, low, high *Value) (Cursor, error)
+	ListTables() ([]*TableSchema, error)
 	Commit() error
 	Rollback() error
 	Savepoint(name string) error

@@ -668,8 +668,9 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 
 	if !storage.IsTemporaryTable(newClean) {
 		if _, err := e.recordWALLocked([]WALOp{{
-			Type:  OpAlterTable,
+			Type:  OpRenameTable,
 			Table: newClean,
+			Key:   oldClean,
 		}}); err != nil {
 			return err
 		}

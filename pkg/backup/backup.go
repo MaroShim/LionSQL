@@ -55,10 +55,10 @@ func CreateBackup(w io.Writer, eng storage.Engine, cat *catalog.Catalog) (*Manif
 		_ = tx.Rollback()
 	}()
 
-	// 2. Fetch schema definitions
-	tables, err := eng.ListTables()
+	// 2. Fetch schema definitions from transaction snapshot ([발굴 결함 9-4])
+	tables, err := tx.ListTables()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list tables: %w", err)
+		return nil, fmt.Errorf("failed to list snapshot tables: %w", err)
 	}
 
 	// 3. Prepare temp directory for table data streaming

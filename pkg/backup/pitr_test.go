@@ -9,6 +9,7 @@ import (
 
 	"lionsql/pkg/backup"
 	"lionsql/pkg/catalog"
+	"lionsql/pkg/planner"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 )
@@ -295,4 +296,106 @@ func TestPITR_RestoreToTimestampAndLSN(t *testing.T) {
 
 	t.Logf("PITR tests successfully passed: T2 replayed %d records, T1 replayed %d records",
 		resA.WALRecordsReplayed, resB.WALRecordsReplayed)
+}
+
+// TestP1_High_Defect9_5_RestorePITR_DDLSyncCatalog verifies that RestorePITR synchronizes DDL
+// mutations with catalog.Catalog, calling InvalidateTableStats on DDL operations ([발굴 결함 9-5]).
+func TestP1_High_Defect9_5_RestorePITR_DDLSyncCatalog(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "lionsql_pitr_ddl_sync_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	archiveDir := filepath.Join(tmpDir, "archive")
+	walPath := filepath.Join(tmpDir, "active.wal")
+
+	archiver, err := backup.NewWALArchiver(archiveDir)
+	if err != nil {
+		t.Fatalf("NewWALArchiver failed: %v", err)
+	}
+
+	writer, err := memengine.NewWALWriter(walPath, memengine.FsyncAlways)
+	if err != nil {
+		t.Fatalf("NewWALWriter failed: %v", err)
+	}
+
+	t0 := time.Now().UnixNano()
+	// Record 1: CreateTable "products"
+	prodSchema := &storage.TableSchema{
+		Name: "products",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "price", Type: storage.TypeFloat},
+		},
+	}
+	_ = writer.Append(memengine.WALRecord{
+		LSN:       1,
+		Timestamp: t0 + 1000,
+		Ops: []memengine.WALOp{
+			{
+				Type:   memengine.OpCreateTable,
+				Table:  "products",
+				Schema: prodSchema,
+			},
+		},
+	})
+
+	// Record 2: DropTable "customers"
+	_ = writer.Append(memengine.WALRecord{
+		LSN:       2,
+		Timestamp: t0 + 2000,
+		Ops: []memengine.WALOp{
+			{
+				Type:  memengine.OpDropTable,
+				Table: "customers",
+			},
+		},
+	})
+
+	_, err = archiver.RotateAndArchive(writer, walPath)
+	if err != nil {
+		t.Fatalf("RotateAndArchive failed: %v", err)
+	}
+	writer.Close()
+
+	// Target engine and catalog
+	targetEng := memengine.New()
+	_ = targetEng.Open("")
+	defer targetEng.Close()
+	targetCat := catalog.New(targetEng)
+
+	// Pre-seed customers table and stats in catalog
+	custSchema := &storage.TableSchema{
+		Name: "customers",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+		},
+	}
+	_ = targetEng.CreateTable(custSchema)
+	targetCat.SetTableStats("customers", planner.NewTableStats("customers", 50))
+	if _, ok := targetCat.ListTableStats()["customers"]; !ok {
+		t.Fatalf("expected customers stats to be cached before PITR")
+	}
+
+	// Run RestorePITR with cat passed
+	res, err := backup.RestorePITR("", archiveDir, targetEng, targetCat, backup.PITROptions{
+		RestoreOptions: backup.DefaultRestoreOptions(),
+	})
+	if err != nil {
+		t.Fatalf("RestorePITR failed: %v", err)
+	}
+	if res.WALRecordsReplayed != 2 {
+		t.Errorf("expected 2 WAL records replayed, got %d", res.WALRecordsReplayed)
+	}
+
+	// Verify catalog stats for "customers" were invalidated upon OpDropTable
+	if _, ok := targetCat.ListTableStats()["customers"]; ok {
+		t.Errorf("expected customers table stats to be invalidated in catalog after PITR OpDropTable")
+	}
+
+	// Verify "products" table was created and accessible in targetEng
+	if _, err := targetEng.GetTable("products"); err != nil {
+		t.Errorf("expected products table to exist in engine after PITR OpCreateTable, got: %v", err)
+	}
 }

@@ -878,5 +878,94 @@ func TestMemengine_RenameTable_FKCacheAndWAL(t *testing.T) {
 	if len(fkRefNew) != 1 {
 		t.Errorf("expected renamed table to have 1 FK reference, got %d", len(fkRefNew))
 	}
+
+	// 4. Reopen from disk and verify renamed table is preserved across AOF replay (Scope-012)
+	if err := eng.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	eng2 := New()
+	if err := eng2.Open(dir); err != nil {
+		t.Fatalf("Reopen failed: %v", err)
+	}
+	defer eng2.Close()
+
+	if _, err := eng2.GetTable("parent_tbl"); err == nil {
+		t.Errorf("after reopen: expected parent_tbl to not exist")
+	}
+	if _, err := eng2.GetTable("parent_renamed"); err != nil {
+		t.Errorf("after reopen: expected parent_renamed to exist: %v", err)
+	}
+}
+
+func TestP1_High_Scope005_DeleteThenInsertSamePKInSameTx(t *testing.T) {
+	eng := New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "test_reinsert",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	// 1. Initial insert of row id=1
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx1, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx1.Insert("test_reinsert", storage.Record{
+		"id":   storage.IntValue(1),
+		"name": storage.StringValue("initial"),
+	}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx1.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// 2. In a second transaction, delete row id=1, then insert row id=1 with new name, then commit
+	tx2, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx2.Delete("test_reinsert", storage.IntValue(1)); err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+	if err := tx2.Insert("test_reinsert", storage.Record{
+		"id":   storage.IntValue(1),
+		"name": storage.StringValue("reinserted"),
+	}); err != nil {
+		t.Fatalf("Insert after delete failed: %v", err)
+	}
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("Commit after delete+insert failed: %v", err)
+	}
+
+	// 3. Verify row has updated value
+	tx3, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx3.Rollback()
+
+	rec, err := tx3.Get("test_reinsert", storage.IntValue(1))
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if rec["name"].String() != "reinserted" {
+		t.Fatalf("expected 'reinserted', got %v", rec["name"])
+	}
 }
 

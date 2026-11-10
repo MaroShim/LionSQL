@@ -301,3 +301,56 @@ func TestConcurrentWritesDuringBackup(t *testing.T) {
 		t.Errorf("restored records mismatch: manifest=%d restored=%d", manifest.TotalRecords, res.RecordsRestored)
 	}
 }
+
+// TestP1_High_Defect9_4_CreateBackup_ConcurrentDDL_SnapshotIsolation verifies that CreateBackup
+// uses the snapshot transaction's ListTables() rather than the live engine catalog, preventing
+// backup failure or data mismatch when concurrent DDL (CreateTable / DropTable) executes.
+func TestP1_High_Defect9_4_CreateBackup_ConcurrentDDL_SnapshotIsolation(t *testing.T) {
+	eng, cat := setupTestDB(t)
+	defer eng.Close()
+
+	stopCh := make(chan struct{})
+	var wg sync.WaitGroup
+
+	// Background worker performing continuous CREATE TABLE and DROP TABLE
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		idx := 0
+		for {
+			select {
+			case <-stopCh:
+				return
+			default:
+				tblName := fmt.Sprintf("ephemeral_%d", idx)
+				schema := &storage.TableSchema{
+					Name: tblName,
+					Columns: []storage.Column{
+						{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+					},
+				}
+				_ = eng.CreateTable(schema)
+				time.Sleep(500 * time.Microsecond)
+				_ = eng.DropTable(tblName)
+				idx++
+			}
+		}
+	}()
+
+	// Execute CreateBackup while concurrent DDL is actively modifying live tables
+	for i := 0; i < 5; i++ {
+		var buf bytes.Buffer
+		manifest, err := CreateBackup(&buf, eng, cat)
+		if err != nil {
+			close(stopCh)
+			wg.Wait()
+			t.Fatalf("iteration %d: CreateBackup failed during concurrent DDL: %v", i, err)
+		}
+		if manifest.TablesCount < 2 {
+			t.Errorf("iteration %d: expected at least 2 baseline tables, got %d", i, manifest.TablesCount)
+		}
+	}
+
+	close(stopCh)
+	wg.Wait()
+}
