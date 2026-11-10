@@ -103,10 +103,20 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
      - **[Batch 4 종결]**: P0-23(DECIMAL/NUMERIC/MONEY 파서의 TypeFloat 강등 오매핑 차단 및 Precision/Scale 보존 TypeDecimal 정규 매핑 완치), P0-24(UTF-8 멀티바이트 비-ASCII 식별자 byte 캐스팅 파편화 방지 및 utf8.DecodeRuneInString 기반 룬 렉서 완치), P0-25(이항/BETWEEN/LIKE 연산자 오른쪽 파싱 실패 시 Right nil 조립 차단 및 에러 전파 완치), P0-28(빈 테이블/Zero Cardinality CBO 유니크 인덱스 비용 산출 시 0 나누기 +Inf/NaN 전파 및 Full Scan 왜곡 방지, LEFT JOIN 보존 완치)
      - **[Batch 5 종결]**: P0-11(GROUP BY CUBE 컬럼 12개 상한 가드레일), P0-12(Window 함수 하위 스트림 workMem 64MB 가드레일), P0-13(Merge Join 중복 키 버퍼링 workMem 64MB 가드레일), P0-14(Aggregate PullChunk I/O 에러 시 자식 리소스 누수 방지), P0-18(MERGE 문 PK 직접 룩업 스트리밍 및 비인덱스 풀스캔 5만행 상한 가드레일 OOM DoS 완치), P0-19(UPDATE/DELETE 스캔 중 I/O 에러 시 무음 탈출 방지 및 Fail-Closed 즉각 롤백 완치), P0-26(네트워크 비정상 단절 시 트랜잭션 최우선 즉각 롤백 및 cs.Mu 언락 후 DDL 드롭 데드락 차단 + 인플레이트 쿼리 세션 드레인 위임 완치), P0-27(TDS & PGWire 패킷 64MB 상한 OOM DoS 동시 차단 완치), P0-29(VDBE VM, Volcano Executor, In-Memory OCC 4대 sync.Pool cap 전수 zeroing GC 누수 일괄 박멸 완치), P0-30(트랜잭션 코디네이터 & 세션 동시성 5대 Lock Scope Shrinking 완치), P0-32(중첩 트랜잭션 내부 COMMIT 시 조기 물리 커밋 방지 및 ACID 원자성 / @@TRANCOUNT 동기화 완치), P0-34(복제 브로드캐스터 버퍼 포화 시 WAL 레코드 사일런트 드롭 방지 및 Fail-Closed 슬로우 구독자 퇴출 완치), P0-35(REST API Transfer-Encoding: chunked 요청 시 바디 크기 제한 우회 OOM DoS 방어 완치), P0-31(RLS 필터 괄호 미격리 테넌트 인젝션 차단 & ParseFilter tokEOF 가드 & sp_executesql Single-Pass Anti-Cascading 완치), P0-36(REST API 페이징 perPage 최대 100건 상한, 스트리밍 조기 역직렬화 생략 & 정렬 최대 1,000건 유계 버퍼 OOM DoS 완치), P0-33(UNION/EXCEPT에서 LazyTuple 미해소 시 단 1개 행 압축 결과셋 증발 방지 및 t.Materialize 강제 완치), P0-37(전사 세션 및 쿼리 글로벌 패닉 완충망 [RULE:PanicRecovery] 설치 & 크론 작업 Concurrency Guard 및 30초 상한 Graceful Stop 라이프사이클 동기화 완치) 전수 완료 (37/37 전량 종결!).
    - **실행 계획**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) 제4장
-4. **`AUDIT-PATCH-P1`: [5단계] 전수 감사 P1 (Should Fix 47선) 난이도별(하/중/상) 순차 안정화 패치** [진행 중]
-   - **목표**: P1 47건을 난이도 하(21건, 6개 미니배치) ➔ 중(18건) ➔ 상(8건)으로 분류하여 TDD 및 `-race` 기반으로 순차 적용.
+4. **`AUDIT-PATCH-P1`: [5단계] 전수 감사 P1 (Should Fix 47선) 난이도별(하/중/상) 순차 안정화 패치** [x] 완료
+   - **목표**: P1 47건을 난이도 하(21건, 6개 미니배치) ➔ 중(18건, 5개 미니배치) ➔ 상(8건)으로 분류하여 TDD 및 `-race` 기반으로 100% 전수 완주.
    - **설계 문서**: [`notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md`](notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md)
-   - **진행 현황 (난이도 하 21건 — 6개 미니배치)**:
+   - **진행 현황 (난이도 하 21건 — 6개 미니배치)**: [x] 전원 완료 (`1fcc772` ~ `cc5850c`)
+   - **진행 현황 (난이도 중 18건 — 5개 미니배치 M1~M5)**: [x] 전원 완료 (`c6c9563` ~ `5b52165`)
+   - **진행 현황 (난이도 상 8건 — High-Complexity)**: [x] 전원 완료 (`c3e6a4d`, `50a4669`, `6b31913`, `4cab724`, `5b52165`)
+     - [x] **AOF 압축 지연 (`Scope-002`)**: SQLite WAL2 듀얼 WAL 원자적 핑퐁 회전(`wal.aof.compacting`)으로 커밋 지연 0화 완료 (`50a4669`).
+     - [x] **OCC 커밋 부분 실패 (`Scope-006`)**: 6단계 커밋 실패 시 샤드/인덱스/파티션 `appliedUndos` 역연산 자동 롤백 스택 구축 완료 (`c3e6a4d`).
+     - [x] **Delete-then-Insert Anomaly (`Scope-005`)**: 동일 트랜잭션 동일 PK 삭제 후 재삽입 시 `changeUpdate` 자동 전이 및 원본 버전 보존 Mutation Coalescing 완료 (`c3e6a4d`, 포스트모템 문서화).
+     - [x] **RENAME TABLE 복구 (`Scope-012`)**: `OpRenameTable` WAL 등록 및 AOF 리플레이 파이프라인 전면 대소문자 무감도(`sqlutil.MapGetFold`) 강화 완료 (`6b31913`).
+     - [x] **WiredTiger EBUSY (`Scope-013`)**: 테이블/인덱스 B-Tree URI 커서 즉시 퇴출 및 C 커널 물리 Close 보장, 전용 단위 테스트 추가 완료 (`4cab724`).
+     - [x] **UNIQUE 풀 스캔 (`Scope-014`)**: $O(N)$ 전수 조사 제거 및 $O(\log N)$ B-Tree 인덱스 포인트 룩업 전환 완료 (`c3e6a4d`).
+     - [x] **백업 스냅샷 불일치 (`결함 9-4/9-5`)**: 트랜잭션 `tx.ListTables()` 격리 및 PITR DDL 카탈로그 통계 캐시 실시간 동기화 완료 (`c3e6a4d`).
+     - [x] **마이그레이션 원자성 (`Scope-134`)**: `Up()` / `Down()` 단일 파일 실행 시 `BEGIN TRANSACTION` 래핑 및 에러 시 `ROLLBACK` 보장 완료 (`c3e6a4d`).
      - [x] **Mini-Batch 1 (`pkg/proc/runtime`, 4건)**: 음수 레지스터 인덱스(`regIdx >= 0`) 방어(`3-2`), 트리거 재귀 깊이(32) 초과 명시적 에러 반환(`3-3`), 스칼라 UDF 재귀 깊이(64) 상한 가드(`3-4`), 커서/내장함수 Opcode 안전 Type Assertion(`3-5`) 완료 (`1fcc772`).
      - [x] **Mini-Batch 2 (`pkg/storage` 코덱 & SkipList, 3건)**: `DecodeFlatToRow` 64비트 오프셋 오버플로우 가드(`Scope-010`), `DecodeTupleValue` 64비트 길이 가드(`Scope-018`), `SkipList.Delete` 슬라이스 경계 방어(`Scope-008`) 완료 (`f56f7d2`).
      - [x] **Mini-Batch 3 (`pkg/storage` 라이프사이클, 3건)**: WiredTiger `Commit` 실패 시 `wt_session_reset` 보장(`1-3`), `memengine.OpenWithOptions` 재호출 시 기존 `stopCh` 정리(`Scope-001`), Flat 모드 코덱 실패 진단 로깅(`Scope-003`) 완료 (`03f37c9`).
