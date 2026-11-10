@@ -165,3 +165,20 @@ INNER JOIN __db_hrdb_employees e ON o.SalesPersonID = e.EmployeeID;
 - **시나리오**: 스토어드 프로시저가 자기 자신을 3단계 재귀 호출(Depth 1 ➔ Depth 2 ➔ Depth 3)하면서 매 단계마다 `DECLARE @tbl TABLE (depth INT);`를 선언하고 채움.
 - **단언(Assertion)**: `frameID` 기반의 접두사 분리로 인해 하위 프레임의 `@tbl`이 상위 프레임의 `@tbl`을 덮어쓰지 않아야 하며, 재귀가 역순으로 반환(Return)될 때마다 각 프레임의 테이블 변수가 순차적으로 `DROP`되어 최종적으로 메모리 누수가 0이어야 함.
 
+---
+
+## 9. WiredTiger 임시 테이블/테이블 변수 인메모리 하이브리드 바이패스 불변식 (`PERF-HYBRID-TEMPMEM-1`)
+
+### 1) 배경 및 핵심 문제
+- WiredTiger 엔진은 테이블 생성 시 `C.go_wt_session_create(sess, "table:<name>", ...)`를 호출하여 디스크에 실제 `<name>.wt` B+Tree 파일을 생성함.
+- 임시 테이블(`#temp`)과 테이블 변수(`@tbl`)가 WiredTiger CGo 경로를 그대로 타게 되면:
+  - 동시 다중 세션 및 프로시저 루프 실행 시 초당 수백 회의 디스크 파일 생성(`open/create`) 및 삭제(`unlink`) 발생.
+  - OS 파일시스템 디렉터리 락(Lock) 경합, inode 낭비, CGo 호출 오버헤드로 인한 극심한 성능 저하 초래.
+
+### 2) 하이브리드 바이패스 아키텍처 (Hybrid In-Memory Bypass)
+- **영구 불변식 (Permanent Invariant)**:
+  - 메인 스토리지 엔진이 WiredTiger(`--engine=wiredtiger`)로 기동 중이더라도,
+  - 식별자가 `storage.IsTemporaryTable(name)`에 해당하는 **`__temp_*` (임시 테이블) 및 `__var_*` (테이블 변수)는 WiredTiger CGo를 호출하지 않고, 내부 경량 In-Memory OCC 엔진(`pkg/storage/memengine`)으로 메모리 라우팅**함.
+  - 임시 테이블과 테이블 변수는 디스크 영속성(Durability)이 필요 없는 100% 휘발성 데이터이므로, 순수 Go 힙 메모리에서 0.5ns 속도로 생성/소멸되어 **디스크 파일 생성 0개, 파일시스템 I/O 0개**를 완벽하게 달성함.
+
+

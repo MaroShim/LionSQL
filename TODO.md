@@ -69,6 +69,12 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
    - **완료 내역 (Phase 1~4)**: ① Windows Host Platform Parity(`Invariant 11`) 및 비트 연산자(`&`, `|`, `^`, `~`)/시스템 함수(`HAS_DBACCESS`, `PERMISSIONS`, `COLLATIONPROPERTY` 등) 구현, ② `msdb` 정책 스토어(`syspolicy_*`) 및 `sys.databases` 50+ 컬럼 지원으로 Databases 목록 출력 달성, ③ 가상 카탈로그 복합 수식 평가기(`evalCatalogExpr`) 및 `sys.synonyms`/`sys.sql_modules` 추가, ④ `sys.tables JOIN sys.indexes` 전용 라우팅 핸들러(`MSSQL_SysTablesJoinedIndexes`) 구현으로 **Tables 폴더 내 실제 사용자 테이블 목록 출력 성공**, ⑤ `MSSQLSERVER` URN 루트 서버명 일원화 및 `QUOTENAME(..., '''')` 작은따옴표 버그 수정(`v0.92.0`, `d221482`).
    - **잔여 과제 (Phase 5)**: `d221482` 기준 SMO `NullReferenceException` 해소 여부 최종 확인, 강타입 `SqlDataReader` 대응 컬럼 타입(`BIT`/`INT`) 매핑 정밀화, 테이블 하위 노드(`Columns`, `Indexes`, `Keys`) 확장 핸들러 연동.
    - **설계 문서**: [`notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`](notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md)
+11. **`ARCH-LOGICAL-NAMESPACE-1`: 프리픽스 기반 논리적 네임스페이스 및 테이블 변수 통합 아키텍처** [Pending]
+   - **목표**: 물리 서브폴더 In-Process Reboot 방식의 동시성 파탄을 영구 폐기하고, 5계층 무충돌 접두사(`__db_`, `__temp_`, `__var_`, `__dt_`) 기반의 단일 스토리지 커널 네임스페이스 매핑 및 초고속 크로스 DB 로컬 조인 지원.
+   - **설계 문서**: [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)
+12. **`PERF-HYBRID-TEMPMEM-1`: WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스** [Pending]
+   - **목표**: WiredTiger 엔진 모드에서 `__temp_*` 및 `__var_*` 테이블 생성/삭제 시 물리 디스크 `.wt` 파일을 생성하지 않고, 내부 경량 In-Memory OCC 엔진(`memengine`)으로 메모리 라우팅하여 파일시스템 I/O 병목 및 inode 고갈을 100% 원천 차단.
+   - **설계 문서**: [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)
 
 ### 1.2 1.0 신뢰성 검증 게이트 (Release Gates)
 1. **`AUDIT-135-DUAL-REVIEW`: [1단계] 전 소스코드 135단계 듀얼 AI (Gemini × Claude) 정밀 코드 리뷰 및 엣지 케이스 전수 감사** [x] 완주 완료 (135/135 완주, 총 134건 결함 식별 완료)
