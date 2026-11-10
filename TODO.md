@@ -183,13 +183,10 @@ LionSQL 1.0 릴리스를 완성하기 위한 **3대 핵심 구현 과제**와 **
 3. **`REPL-STREAM-BIN-1` Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍**
    - **목표**: 복제 스트림 프로토콜을 기존 JSON-lines에서 AOF와 동일한 4바이트 길이 접두사 바이너리 프레임(`[4B length][MsgPack/Raw]`)으로 전환하여 Base64 인코딩 및 JSON 파싱 오버헤드를 100% 제거하고 네트워크 Zero-Copy 달성.
    - **난이도/영향도**: 낮음~중간(★☆☆~★★☆) / 국소 (네트워크 송수신 레이어 한정)
-4. **`PERF-OCC-DELTA-1` In-Memory OCC Delta-only Workspace & In-Place Patching (Post-1.0)**
-   - **목표**: 와이드 로우 UPDATE 시 전체 로우 복사 및 언패킹 비용을 제거하고, 변경된 컬럼 인덱스와 새 값 델타(Delta)만 트랜잭션 작업 공간에 보관 후 커밋 시 직접 패치하여 Throughput 극대화 및 메모리 할당 80% 절감.
-   - **설계 문서**: [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
-5. **`PERF-OCC-ZERO-LOCK-1` In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 (Post-1.0)**
+4. **`PERF-OCC-ZERO-LOCK-1` In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 (Post-1.0)**
    - **목표**: 읽기 트랜잭션의 테이블 맵 참조 및 스냅샷 조회 시 발생하는 `RLock()` 원자적 카운터 갱신을 `atomic.Pointer`와 세대(Epoch/Generation) 카운터 기반으로 전환하여 다중 코어 환경의 CPU 캐시라인 경합을 완전 제거.
    - **설계 문서**: [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
-4. **`WAL-DELTA-1` Partial / Delta WAL 로깅 (UPDATE 변경분 컬럼 차분 기록)**
+5. **`WAL-DELTA-1` Partial / Delta WAL 로깅 (UPDATE 변경분 컬럼 차분 기록)**
    - **목표**: 대규모 컬럼 테이블에서 `UPDATE` 발생 시 전체 튜플을 재직렬화하지 않고, 변경된 컬럼만 Dirty 비트마스킹(`[DirtyMask][ColIdx, Val]`)하여 AOF 디스크 I/O와 복제 전송량을 최소화.
    - **난이도/영향도**: 중간~높음(★★☆~★★★) / 엔진 내부 (트랜잭션 변경 감지, Delta 코덱, 리플레이 시 Read-Modify-Write 및 보조 인덱스 정합성 유지 필요)
 
