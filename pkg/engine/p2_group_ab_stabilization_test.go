@@ -181,3 +181,75 @@ func TestP2_GroupB_Scope021_InvalidDateStringConversion(t *testing.T) {
 		t.Fatalf("expected IsNull for invalid date string, got %v", d)
 	}
 }
+
+func TestAuditIncremental_TableVarRedeclarationDropOldTable(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	spSQL := `
+CREATE PROCEDURE ProcRedeclareTableVar
+AS
+BEGIN
+    DECLARE @counter INT = 0;
+    WHILE @counter < 3
+    BEGIN
+        DECLARE @tmp TABLE (id INT, val VARCHAR(20));
+        INSERT INTO @tmp VALUES (@counter, 'test');
+        SET @counter = @counter + 1;
+    END;
+    SELECT id, val FROM @tmp;
+END;
+`
+	_, err := coord.ExecuteSQL(spSQL)
+	if err != nil {
+		t.Fatalf("CREATE PROCEDURE failed: %v", err)
+	}
+
+	res, err := coord.ExecuteSQL("EXEC ProcRedeclareTableVar;")
+	if err != nil || !res.Success {
+		t.Fatalf("EXEC ProcRedeclareTableVar failed: %v", err)
+	}
+	if len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["id"]) != "2" {
+		t.Fatalf("expected 1 row with id=2, got: %v", res.Rows)
+	}
+}
+
+func TestAuditIncremental_QuantifiedSubqueryNull3VL(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	_, err := coord.ExecuteSQL("CREATE TABLE nums (val INT);")
+	if err != nil {
+		t.Fatalf("CREATE TABLE nums failed: %v", err)
+	}
+	_, err = coord.ExecuteSQL("INSERT INTO nums VALUES (10), (NULL), (20);")
+	if err != nil {
+		t.Fatalf("INSERT nums failed: %v", err)
+	}
+
+	_, err = coord.ExecuteSQL("CREATE TABLE candidates (c INT);")
+	if err != nil {
+		t.Fatalf("CREATE TABLE candidates failed: %v", err)
+	}
+	_, err = coord.ExecuteSQL("INSERT INTO candidates VALUES (5), (15), (25), (100);")
+	if err != nil {
+		t.Fatalf("INSERT candidates failed: %v", err)
+	}
+
+	// SQL 3VL: c > ALL (10, NULL, 20) -> for any c, comparison with NULL is UNKNOWN,
+	// and AND of any booleans with UNKNOWN is either FALSE or UNKNOWN, never TRUE.
+	// Therefore, WHERE clause must return 0 rows!
+	res, err := coord.ExecuteSQL("SELECT c FROM candidates WHERE c > ALL (SELECT val FROM nums);")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with > ALL query failed: %v", err)
+	}
+	if len(res.Rows) != 0 {
+		t.Fatalf("expected 0 rows due to 3VL UNKNOWN result, but got %d rows: %v", len(res.Rows), res.Rows)
+	}
+}
