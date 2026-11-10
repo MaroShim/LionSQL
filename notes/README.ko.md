@@ -60,6 +60,7 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
   * **[`P0_27_35_WIRE_AND_HTTP_BOUNDED_PAYLOAD_LIMIT_PLAN.ko.md`](plans/P0_27_35_WIRE_AND_HTTP_BOUNDED_PAYLOAD_LIMIT_PLAN.ko.md)**: TDS/PGWire 64MB 패킷 프레임 상한 및 HTTP Chunked 스트림 32MB 바디 제한 DoS 방어벽.
   * **[`P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md`](P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md)**: Go `sync.Pool` 슬라이스 용량 비대화 실측 및 잔류 포인터 GC 누수 박멸 포스트모템 (`[RULE:ZeroAllocation]`).
   * **[`P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md`](P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md)**: 세션 동시성 격착, Lock Scope Shrinking 및 서브쿼리 교착 차단 심층 기술 토론.
+  * **[`IN_MEMORY_OCC_DELETE_INSERT_ANOMALY_POSTMORTEM.ko.md`](IN_MEMORY_OCC_DELETE_INSERT_ANOMALY_POSTMORTEM.ko.md)**: 동일 트랜잭션 내 동일 키 DELETE 후 INSERT 시 위양성 쓰기 충돌(`Scope-005`) 포스트모템 및 Mutation Coalescing 아키텍처.
   * **[`P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md`](plans/P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md)**: RLS 순수 AST 구조적 결합 테넌트 격리 및 `sp_executesql` $O(N)$ Single-Pass 선형 스캐너 아키텍처.
   * **[`P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md`](plans/P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md)**: 중첩 트랜잭션 조기 물리 커밋 방지 및 T-SQL `@@TRANCOUNT` ACID 원자성 수호 아키텍처 (`Invariant 6`).
   * **[`P0_33_36_SETOP_MATERIALIZATION_AND_REST_STREAMING_PLAN.ko.md`](plans/P0_33_36_SETOP_MATERIALIZATION_AND_REST_STREAMING_PLAN.ko.md)**: 집합 연산(`UNION/EXCEPT`) LazyTuple 조기 구체화 누락 결과셋 증발 방지 및 REST API 단일 윈도우 스트리밍.
