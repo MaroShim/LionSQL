@@ -24,11 +24,11 @@ LionSQL은 단일 정적 바이너리 내에서 초고속 OLTP 트랜잭션과 �
    - 단일 행 포인트 조회             - 다자간 조인 (Hash/Merge/NL Join)
    - 단순 PK DML 연산               - 서브쿼리 탈상관화 (EXISTS, IN)
    - T-SQL 저장 프로시저             - Window 함수, CTE, 정렬/집계
-   - TPC-C 104만 tpmC               - Star Schema 복합 분석 쿼리
+   - TPC-C 최대 118만 tpmC          - Star Schema 복합 분석 쿼리
    - 마이크로초 단위 응답             - ChunkedIterator (1,024-Row 스트리밍)
 ```
 
-1. **Tier 1 (OLTP Direct / VDBE Bytecode)**: 마이크로초 수준의 단일 행 포인트 조회, 단순 PK 연산, 단방향 커서, T-SQL 저장 프로시저 비즈니스 트랜잭션 루프를 처리합니다 (현재 TPC-C 104만 tpmC, TransferFunds 21만 TPS).
+1. **Tier 1 (OLTP Direct / VDBE Bytecode)**: 마이크로초 수준의 단일 행 포인트 조회, 단순 PK 연산, 단방향 커서, T-SQL 저장 프로시저 비즈니스 트랜잭션 루프를 처리합니다 (현재 TPC-C 스토리지 118만 tpmC / VDBE 86만 tpmC, TransferFunds 21.8만 TPS).
 2. **Tier 2 (Volcano CBO / 반복자 관계 대수 엔진)**: 다자간 조인(Hash/Merge/Nested Loop Join), 서브쿼리 탈상관화(`EXISTS`, `IN`), Window 함수, CTE, 정렬(`ORDER BY`), 집계(`GROUP BY`) 등 분석형 복합 쿼리를 담당합니다.
 
 본 가이드는 Tier 2 Volcano 엔진의 복합 쿼리 처리 능력을 객관적으로 검증하기 위해 도입된 **Star Schema Benchmark (SSB)** 표준의 구조, 실행 방법 및 실측 성능을 다룹니다.
@@ -210,7 +210,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/ssb ./cmd/ssb
 
 ```
 [초당 트랜잭션 처리량 (OLTP TPS / tpmC) - 높은 것이 우수]
-LionSQL      ████████████████████████████████ 1,046,000 tpmC (스토리지), 603,000 tpmC (VDBE)
+LionSQL      ████████████████████████████████ 1,184,000 tpmC (스토리지), 863,000 tpmC (VDBE)
 PostgreSQL   ████████                        ~120,000 tpmC
 SQLite       ████                            ~45,000 tpmC
 DuckDB       █                               ~5,000 tpmC (트랜잭션/동시 쓰기 취약)

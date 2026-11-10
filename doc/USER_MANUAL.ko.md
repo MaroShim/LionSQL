@@ -185,7 +185,7 @@ LionSQL은 이러한 양극단의 장점을 단일 바이너리에 결합하여,
    - **HTTP REST & Server-Sent Events (`TCP :8090`)**: 무설정 자동 CRUD REST API, 실시간 SSE 스트림, 브라우저 기반 GUI 관리 스튜디오를 동시 제공합니다.
    > [!TIP]
    > **애플리케이션 권장 프로토콜: PGWire (`:5433`)**
-   > T-SQL 저장 프로시저(`EXEC ...`)를 주로 사용하는 환경이더라도 백엔드 애플리케이션 및 마이크로서비스 연동 시에는 **PGWire(:5433) 프로토콜 사용을 강력히 권장**합니다. TDS 대비 패킷 오버헤드가 적고 파이프라이닝을 지원하여 실측 네트워크 처리량(141k tpmC / 5,177 TPS)이 더 높으며, 모든 언어 생태계(Go, Python, Node, Java)에서 가장 성숙한 드라이버 지원을 받을 수 있습니다. TDS(:1433)는 주로 SSMS, Azure Data Studio 등 레거시 MS 관리 도구 전용으로 사용하는 것이 최적입니다.
+   > T-SQL 저장 프로시저(`EXEC ...`)를 주로 사용하는 환경이더라도 백엔드 애플리케이션 및 마이크로서비스 연동 시에는 **PGWire(:5433) 프로토콜 사용을 강력히 권장**합니다. TDS 대비 패킷 오버헤드가 적고 파이프라이닝을 지원하여 실측 네트워크 처리량(376,000+ tpmC / 13,900+ TPS)이 더 높으며, 모든 언어 생태계(Go, Python, Node, Java)에서 가장 성숙한 드라이버 지원을 받을 수 있습니다. TDS(:1433)는 주로 SSMS, Azure Data Studio 등 레거시 MS 관리 도구 전용으로 사용하는 것이 최적입니다.
 3. **고동시성 듀얼 스토리지 엔진 (Dual Storage Engine)**:
    - 영속성 중심의 디스크 B+Tree MVCC 스토리지(WiredTiger)와 초고속 마이크로초 단위 응답을 보장하는 인메모리 OCC 스토리지(Pure-Go SkipList)를 상황에 맞게 플래그 하나로 선택할 수 있습니다.
 4. **마이크로초 T-SQL VDBE 바이트코드 가상 머신**:
@@ -278,22 +278,22 @@ LionSQL은 외부 공유 라이브러리나 런타임 설치가 필요 없는 �
 #### 1. 운영체제별 아카이브 다운로드 및 설치
 * **macOS (Apple Silicon M1/M2/M3/M4, ARM64)**:
   ```bash
-  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0-feature-freeze/lionsql-v0.90.0-darwin-arm64.tar.gz
-  tar -xzf lionsql-v0.90.0-darwin-arm64.tar.gz
+  curl -LO https://github.com/your-org/lionsql/releases/download/v0.92.0/lionsql-v0.92.0-darwin-arm64.tar.gz
+  tar -xzf lionsql-v0.92.0-darwin-arm64.tar.gz
   chmod +x lionsql
   sudo mv lionsql /usr/local/bin/
   ```
 * **Linux (Ubuntu / Debian / RHEL / Rocky, x86_64)**:
   ```bash
-  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0-feature-freeze/lionsql-v0.90.0-linux-amd64.tar.gz
-  tar -xzf lionsql-v0.90.0-linux-amd64.tar.gz
+  curl -LO https://github.com/your-org/lionsql/releases/download/v0.92.0/lionsql-v0.92.0-linux-amd64.tar.gz
+  tar -xzf lionsql-v0.92.0-linux-amd64.tar.gz
   chmod +x lionsql
   sudo mv lionsql /usr/local/bin/
   ```
 * **Linux (ARM64 / AWS Graviton)**:
   ```bash
-  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0-feature-freeze/lionsql-v0.90.0-linux-arm64.tar.gz
-  tar -xzf lionsql-v0.90.0-linux-arm64.tar.gz
+  curl -LO https://github.com/your-org/lionsql/releases/download/v0.92.0/lionsql-v0.92.0-linux-arm64.tar.gz
+  tar -xzf lionsql-v0.92.0-linux-arm64.tar.gz
   chmod +x lionsql
   sudo mv lionsql /usr/local/bin/
   ```
@@ -302,10 +302,10 @@ LionSQL은 외부 공유 라이브러리나 런타임 설치가 필요 없는 �
 설치 후 터미널에서 버전을 조회하여 정상 동작 여부를 확인합니다:
 ```bash
 $ lionsql version
-LionSQL v0.90.0 (darwin/arm64) [tags: wiredtiger]
+LionSQL v0.92.0 (darwin/arm64) [tags: wiredtiger]
 Git Commit: 477a4cb6
 Go Version: go1.24.0
-Build Date: 2024-10-19T08:30:00Z
+Build Date: 2026-11-09T08:30:00Z
 Storage Backends: WiredTiger MVCC, In-Memory OCC
 ```
 
@@ -347,7 +347,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-kernel ./cmd/tpcc_kernel
 
 ```
 ================================================================================
-  LionSQL High-Concurrency Embedded OLTP Database Server (v0.90.0)
+  LionSQL High-Concurrency Embedded OLTP Database Server (v0.92.0)
 ================================================================================
  [Engine Core]    WiredTiger Lock-Free B+Tree MVCC Storage
  [Data Directory] ./data
@@ -365,7 +365,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-kernel ./cmd/tpcc_kernel
 별도의 터미널 창에서 헬스체크 엔드포인트를 호출하여 기동 상태를 즉시 검증합니다:
 ```bash
 $ curl -s http://127.0.0.1:8090/api/health
-{"status":"ok","version":"0.90.0","engine":"wiredtiger","uptime_seconds":5}
+{"status":"ok","version":"0.92.0","engine":"wiredtiger","uptime_seconds":5}
 ```
 
 ---

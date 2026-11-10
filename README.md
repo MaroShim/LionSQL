@@ -186,22 +186,25 @@ Upon startup, the console displays the connection endpoints:
 
 ```text
 --------------------------------------------------------------------------------
- LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v0.90.0)
+ LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v0.92.0)
+ (built: 2026-11-09 14:00:00 KST, commit: 2eb8712, go1.24 darwin/arm64) [tags: wiredtiger]
 --------------------------------------------------------------------------------
  [Configuration]  Zero-Config (Built-in Defaults)
  [Web Dashboard]  http://127.0.0.1:8090/_/
  [HTTP API]       http://127.0.0.1:8090/api/health
  [CDC Stream]     http://127.0.0.1:8090/api/cdc/stream (NDJSON / SSE)
- [Superuser Auth] admin@lionsql.local (JWT Auth: true)
+ [Superuser Auth] admin@lionsql.local (JWT Auth: false)
  [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / Azure Data Studio
  [Postgres Wire]  psql -h 127.0.0.1 -p 5433 (PostgreSQL v3 protocol, psql / pgx)
  [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 (TDS 7.x/8.0 protocol, sqlcmd / SSMS)
  [Data Directory] data
- [Storage Engine] wiredtiger
+ [Storage Engine] Disk: wiredtiger | Memory: compact
  [Session Pooler] Max Workers: 32, Max Idle Sessions: 64 (No PgBouncer required)
- [Memory Governor] max_memory: 2867MB (Go runtime GC soft limit), work_mem: 64MB (External Merge Sort & HashJoin guard)
- [Replication]    Role: PRIMARY, Node:  (HistoryCap: 10000)
+ [Memory Governor] max_memory: 2867MB (Go runtime GC soft limit)
+                   work_mem:   64MB (External Merge Sort & HashJoin guard)
+ [Replication]    Role: PRIMARY, Node: node-1 (HistoryCap: 10000)
 --------------------------------------------------------------------------------
+Press Ctrl+C to stop server
 ```
 
 ### 3. Accessing the Web Studio

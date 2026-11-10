@@ -185,7 +185,7 @@ LionSQL unites the best of both paradigms within a single binary, delivering **t
    - **HTTP REST & Server-Sent Events (`TCP :8090`)**: Provides zero-config automated CRUD REST APIs, real-time SSE streams, and a browser-based GUI management studio concurrently.
    > [!TIP]
    > **Recommended Application Protocol: PGWire (`:5433`)**
-   > Even in environments that extensively utilize T-SQL stored procedures (`EXEC ...`), **using the PGWire (:5433) protocol is strongly recommended** for backend applications and microservices integration. Compared to TDS, it features lower packet overhead and supports pipelining, yielding higher measured network throughput (141k tpmC / 5,177 TPS), alongside the most mature driver support across every language ecosystem (Go, Python, Node, Java). TDS (:1433) is optimally reserved for legacy Microsoft management tools such as SSMS and Azure Data Studio.
+   > Even in environments that extensively utilize T-SQL stored procedures (`EXEC ...`), **using the PGWire (:5433) protocol is strongly recommended** for backend applications and microservices integration. Compared to TDS, it features lower packet overhead and supports pipelining, yielding higher measured network throughput (376,000+ tpmC / 13,900+ TPS), alongside the most mature driver support across every language ecosystem (Go, Python, Node, Java). TDS (:1433) is optimally reserved for legacy Microsoft management tools such as SSMS and Azure Data Studio.
 3. **High-Concurrency Dual Storage Engines**:
    - Seamlessly switch between a persistence-oriented disk B+Tree MVCC storage engine (WiredTiger) and an in-memory OCC storage engine (Pure-Go SkipList) delivering microsecond responses via a single configuration flag.
 4. **Sub-Microsecond T-SQL VDBE Bytecode Virtual Machine**:
@@ -278,22 +278,22 @@ LionSQL is distributed as a self-contained single static binary requiring no ext
 #### 1. Downloading and Installing Platform Archives
 * **macOS (Apple Silicon M1/M2/M3/M4, ARM64)**:
   ```bash
-  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0-feature-freeze/lionsql-v0.90.0-darwin-arm64.tar.gz
-  tar -xzf lionsql-v0.90.0-darwin-arm64.tar.gz
+  curl -LO https://github.com/your-org/lionsql/releases/download/v0.92.0/lionsql-v0.92.0-darwin-arm64.tar.gz
+  tar -xzf lionsql-v0.92.0-darwin-arm64.tar.gz
   chmod +x lionsql
   sudo mv lionsql /usr/local/bin/
   ```
 * **Linux (Ubuntu / Debian / RHEL / Rocky, x86_64)**:
   ```bash
-  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0-feature-freeze/lionsql-v0.90.0-linux-amd64.tar.gz
-  tar -xzf lionsql-v0.90.0-linux-amd64.tar.gz
+  curl -LO https://github.com/your-org/lionsql/releases/download/v0.92.0/lionsql-v0.92.0-linux-amd64.tar.gz
+  tar -xzf lionsql-v0.92.0-linux-amd64.tar.gz
   chmod +x lionsql
   sudo mv lionsql /usr/local/bin/
   ```
 * **Linux (ARM64 / AWS Graviton)**:
   ```bash
-  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0-feature-freeze/lionsql-v0.90.0-linux-arm64.tar.gz
-  tar -xzf lionsql-v0.90.0-linux-arm64.tar.gz
+  curl -LO https://github.com/your-org/lionsql/releases/download/v0.92.0/lionsql-v0.92.0-linux-arm64.tar.gz
+  tar -xzf lionsql-v0.92.0-linux-arm64.tar.gz
   chmod +x lionsql
   sudo mv lionsql /usr/local/bin/
   ```
@@ -302,10 +302,10 @@ LionSQL is distributed as a self-contained single static binary requiring no ext
 After installation, verify proper operation by checking the version in your terminal:
 ```bash
 $ lionsql version
-LionSQL v0.90.0 (darwin/arm64) [tags: wiredtiger]
+LionSQL v0.92.0 (darwin/arm64) [tags: wiredtiger]
 Git Commit: 477a4cb6
 Go Version: go1.24.0
-Build Date: 2024-10-19T08:30:00Z
+Build Date: 2026-11-09T08:30:00Z
 Storage Backends: WiredTiger MVCC, In-Memory OCC
 ```
 
@@ -347,7 +347,7 @@ The terminal outputs the startup banner:
 
 ```
 ================================================================================
-  LionSQL High-Concurrency Embedded OLTP Database Server (v0.90.0)
+  LionSQL High-Concurrency Embedded OLTP Database Server (v0.92.0)
 ================================================================================
  [Engine Core]    WiredTiger Lock-Free B+Tree MVCC Storage
  [Data Directory] ./data
@@ -365,7 +365,7 @@ The terminal outputs the startup banner:
 In a separate terminal window, immediately verify startup health via the health check endpoint:
 ```bash
 $ curl -s http://127.0.0.1:8090/api/health
-{"status":"ok","version":"0.90.0","engine":"wiredtiger","uptime_seconds":5}
+{"status":"ok","version":"0.92.0","engine":"wiredtiger","uptime_seconds":5}
 ```
 
 ---

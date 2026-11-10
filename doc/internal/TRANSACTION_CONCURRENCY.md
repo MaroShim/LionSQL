@@ -164,9 +164,13 @@ for attempt := 0; attempt <= maxRetries; attempt++ {
 ```
 
 - **In-Memory OCC Benchmark Results**:
-  - High-concurrency harness (10 Warehouses, 100 Workers): Achieves a **99.8%** commit success rate on first attempt, delivering **1,251,489 tpmC** and **43,832 TPS**.
-  - Standard OLTP harness (2 Warehouses, 20 Workers): Delivers **763,496 tpmC** and **28,300 TPS** (Native Go API) and **475,781 tpmC** / **17,803 TPS** on T-SQL VDBE bytecode VM with 2.17% serialization abort rate.
-- **WiredTiger MVCC Benchmark Results**: Delivers **507,456 tpmC** and **17,294 TPS** (Native) and **298,426 tpmC** / **10,936 TPS** (VDBE Bytecode) with sub-2ms median latency.
+  - Storage Kernel harness (`cmd/tpcc_kernel`, 10 Warehouses, 100 Workers): Delivers **1,066,827 tpmC** and **39,748 TPS** (97.7% New-Order completion, 1.88% overall abort rate).
+  - T-SQL VDBE Runtime harness (`cmd/tpcc_runtime`, 16 Warehouses, 32 Workers): Delivers **759,102 tpmC** and **28,110 TPS** on precompiled T-SQL VDBE bytecode VM with 0.07% serialization abort rate.
+  - Banking Transfer SP (`cmd/bench`): Delivers **218,282 TPS** (P50: 23 µs).
+- **WiredTiger MVCC Benchmark Results**:
+  - Storage Kernel harness (`cmd/tpcc_kernel`, 10 Warehouses, 100 Workers): Delivers **1,184,785 tpmC** and **41,905 TPS** with Invariant 10 zero-lock B+Tree scaling.
+  - T-SQL VDBE Runtime harness (`cmd/tpcc_runtime`, 16 Warehouses, 32 Workers): Delivers **863,101 tpmC** and **31,794 TPS** with sub-millisecond median latency.
+  - Banking Transfer SP (`cmd/bench`): Delivers **141,472 TPS** (P50: 24 µs).
 
 ---
 

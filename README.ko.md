@@ -184,22 +184,25 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql.
 
 ```text
 --------------------------------------------------------------------------------
- LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v0.90.0)
+ LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v0.92.0)
+ (built: 2026-11-09 14:00:00 KST, commit: 2eb8712, go1.24 darwin/arm64) [tags: wiredtiger]
 --------------------------------------------------------------------------------
  [Configuration]  Zero-Config (Built-in Defaults)
  [Web Dashboard]  http://127.0.0.1:8090/_/
  [HTTP API]       http://127.0.0.1:8090/api/health
  [CDC Stream]     http://127.0.0.1:8090/api/cdc/stream (NDJSON / SSE)
- [Superuser Auth] admin@lionsql.local (JWT Auth: true)
+ [Superuser Auth] admin@lionsql.local (JWT Auth: false)
  [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / Azure Data Studio
  [Postgres Wire]  psql -h 127.0.0.1 -p 5433 (PostgreSQL v3 protocol, psql / pgx)
  [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 (TDS 7.x/8.0 protocol, sqlcmd / SSMS)
  [Data Directory] data
- [Storage Engine] wiredtiger
+ [Storage Engine] Disk: wiredtiger | Memory: compact
  [Session Pooler] Max Workers: 32, Max Idle Sessions: 64 (No PgBouncer required)
- [Memory Governor] max_memory: 2867MB (Go runtime GC soft limit), work_mem: 64MB (External Merge Sort & HashJoin guard)
- [Replication]    Role: PRIMARY, Node:  (HistoryCap: 10000)
+ [Memory Governor] max_memory: 2867MB (Go runtime GC soft limit)
+                   work_mem:   64MB (External Merge Sort & HashJoin guard)
+ [Replication]    Role: PRIMARY, Node: node-1 (HistoryCap: 10000)
 --------------------------------------------------------------------------------
+Press Ctrl+C to stop server
 ```
 
 ### 3.3. 웹 스튜디오 접속
@@ -485,7 +488,7 @@ LionSQL의 모든 내부 문서, 아키텍처 결정 기록(ADR), 프로토콜 �
 
 ### 아키텍처 및 핵심 엔진 명세서
 - **[초기 설계 결정 및 아키텍처 철학](doc/FOUNDATIONAL_DESIGN_DECISIONS.md)**: WiredTiger MVCC, Go 언어 선택, T-SQL VDBE 가상 머신, PGWire 호환성, Antigravity AI 협업 방법론의 기술적 배경.
-- **[Zero-Allocation 메모리 아키텍처](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md)**: 20k TPS를 달성한 무할당 버퍼 풀링, TDS 프레임 풀링, CGO 커서 재사용, 가상 카탈로그 인터셉터 최적화.
+- **[Zero-Allocation 메모리 아키텍처](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md)**: 20k~218k+ TPS를 견인하는 무할당 버퍼 풀링, TDS 프레임 풀링, CGO 커서 재사용, 가상 카탈로그 인터셉터 최적화.
 - **[시스템 아키텍처 종합 명세서](doc/ARCHITECTURE.md)**: Volcano 실행기, 이중 파서 디커플링, 이중 스토리지 백엔드 종합 설계.
 - **[아키텍처 결정 기록 (ADR)](doc/ADR.md)**: 프로젝트의 22대 핵심 아키텍처 결정 기록 (ADR-001 ~ ADR-022).
 - **[VDBE 바이트코드 가상 머신 내부 구조](doc/internal/VDBE.md)**: 레지스터 할당, ISA 명령어 셋, 절차적 런타임 실행 메커니즘.

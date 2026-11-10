@@ -22,7 +22,7 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
 * **[`ARCHITECTURE.md`](ARCHITECTURE.md)** (English)
   * LionSQL 전 계층 엔드투엔드 아키텍처 청사진 (듀얼 스토리지 백엔드, 2-Tier CBO/VDBE 쿼리 엔진, 고루틴 커넥션 풀러).
 * **[`BENCHMARK.md`](BENCHMARK.md)** (English)
-  * TPC-C (104만 tpmC), 은행 송금 SP (16만 TPS), SQLLogicTest 107개 전수 검증, WiredTiger vs OCC 비교 등 공식 실측 벤치마크.
+  * TPC-C (최대 118만 tpmC), 은행 송금 SP (21.8만 TPS), SQLLogicTest 107개 전수 검증, WiredTiger vs OCC 비교 등 공식 실측 벤치마크.
 
 ---
 
@@ -86,7 +86,7 @@ LionSQL의 심층 하부 구현, 바이트코드 가상 머신(VDBE), 제로 할
   * **[`internal/RECORD_BINARY_FORMAT.md`](internal/RECORD_BINARY_FORMAT.md)**: 콤팩트 바이너리 튜플 직렬화 및 고밀도 ZigZag Varint 인코딩 명세.
   * **[`internal/TRANSACTION_CONCURRENCY.md`](internal/TRANSACTION_CONCURRENCY.md)**: 비차단 스냅샷 읽기, 워크스페이스 격리 및 MVCC/OCC 동시성 모델.
 * **실행 엔진 및 최적화**:
-  * **[`internal/ZERO_ALLOCATION_ARCHITECTURE.md`](internal/ZERO_ALLOCATION_ARCHITECTURE.md)**: 20,000+ TPS를 견인하는 제로 할당 메모리 및 버퍼 풀링 아키텍처.
+  * **[`internal/ZERO_ALLOCATION_ARCHITECTURE.md`](internal/ZERO_ALLOCATION_ARCHITECTURE.md)**: 20,000+ ~ 218,000+ TPS를 견인하는 제로 할당 메모리 및 버퍼 풀링 아키텍처.
   * **[`internal/VDBE.md`](internal/VDBE.md)**: SQLite 스타일 T-SQL 바이트코드 VM 명령어 세트(ISA) 및 레지스터 풀링 명세.
   * **[`internal/CBO_VOLCANO.md`](internal/CBO_VOLCANO.md)**: Volcano 반복자 파이프라인 및 64-버킷 균등 깊이 히스토그램 기반 비용 최적화기.
 * **네트워킹 및 와이어 프로토콜**:

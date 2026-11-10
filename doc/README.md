@@ -21,7 +21,7 @@ Primary authoritative references covering fundamentals, SQL/T-SQL specifications
 * **[`ARCHITECTURE.md`](ARCHITECTURE.md)**
   * End-to-end architectural blueprint (dual storage engines, 2-Tier CBO/VDBE query runtime, goroutine connection pooler).
 * **[`BENCHMARK.md`](BENCHMARK.md)**
-  * Official verified benchmarks: TPC-C (1.04M tpmC), Banking SP (160k TPS), SQLLogicTest 107 full suite, and WiredTiger vs OCC comparisons.
+  * Official verified benchmarks: TPC-C (up to 1.18M tpmC), Banking SP (218k TPS), SQLLogicTest 107 full suite, and WiredTiger vs OCC comparisons.
 
 ---
 
@@ -85,7 +85,7 @@ In-depth technical specifications covering LionSQL's lower-level engine mechanis
   * **[`internal/RECORD_BINARY_FORMAT.md`](internal/RECORD_BINARY_FORMAT.md)**: Compact binary tuple serialization and high-density ZigZag Varint encoding.
   * **[`internal/TRANSACTION_CONCURRENCY.md`](internal/TRANSACTION_CONCURRENCY.md)**: Non-blocking snapshot reads, private workspaces, and MVCC/OCC concurrency models.
 * **Execution & Performance**:
-  * **[`internal/ZERO_ALLOCATION_ARCHITECTURE.md`](internal/ZERO_ALLOCATION_ARCHITECTURE.md)**: Zero-allocation memory pooling driving 20k+ TPS throughput.
+  * **[`internal/ZERO_ALLOCATION_ARCHITECTURE.md`](internal/ZERO_ALLOCATION_ARCHITECTURE.md)**: Zero-allocation memory pooling driving 20k~218k+ TPS throughput.
   * **[`internal/VDBE.md`](internal/VDBE.md)**: SQLite-inspired T-SQL bytecode virtual machine ISA and register recycling specifications.
   * **[`internal/CBO_VOLCANO.md`](internal/CBO_VOLCANO.md)**: Volcano iterator pipeline and cost-based optimizer with equi-depth histograms.
 * **Networking & Wire Protocols**:

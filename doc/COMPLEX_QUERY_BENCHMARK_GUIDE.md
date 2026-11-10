@@ -24,11 +24,11 @@ LionSQL adopts a **permanent 2-Tier query execution engine architecture** within
     - Single-row point lookups          - Multi-way joins (Hash/Merge/NL Join)
     - Simple PK DML operations          - Subquery decorrelation (EXISTS, IN)
     - T-SQL stored procedures           - Window functions, CTEs, sorting/aggregation
-    - TPC-C 1,046,000 tpmC              - Star Schema analytical queries
+    - TPC-C up to 1,184,000 tpmC        - Star Schema analytical queries
     - Microsecond interactive latency   - ChunkedIterator (1,024-row streaming)
 ```
 
-1. **Tier 1 (OLTP Direct / VDBE Bytecode)**: Handles microsecond-level single-row point lookups, primary key mutations, forward-only cursors, and procedural T-SQL transaction loops (currently sustaining 1,046,000 tpmC on TPC-C and 210,000 TPS on TransferFunds).
+1. **Tier 1 (OLTP Direct / VDBE Bytecode)**: Handles microsecond-level single-row point lookups, primary key mutations, forward-only cursors, and procedural T-SQL transaction loops (currently sustaining up to 1,184,000 tpmC on storage / 863,000 tpmC on VDBE, and 218,000 TPS on TransferFunds).
 2. **Tier 2 (Volcano CBO / Iterator Relational Algebra Engine)**: Manages multi-way joins (Hash, Merge, Nested Loop), subquery decorrelation (`EXISTS`, `IN`), window functions, common table expressions (CTEs), sorting (`ORDER BY`), and aggregations (`GROUP BY`).
 
 This guide details the **Star Schema Benchmark (SSB)**, adopted as the core benchmark to empirically validate the operator efficiency and scaling characteristics of the Tier 2 Volcano engine.
@@ -210,7 +210,7 @@ Measured with direct tuple AST evaluation (`pkg/execution/eval.go`) and precompi
 
 ```
 [ Transactional Throughput (OLTP TPS / tpmC) - Higher is Better ]
-LionSQL      ████████████████████████████████ 1,046,000 tpmC (Storage), 603,000 tpmC (VDBE)
+LionSQL      ████████████████████████████████ 1,184,000 tpmC (Storage), 863,000 tpmC (VDBE)
 PostgreSQL   ████████                        ~120,000 tpmC
 SQLite       ████                            ~45,000 tpmC
 DuckDB       █                               ~5,000 tpmC (Weak write concurrency & ACID)

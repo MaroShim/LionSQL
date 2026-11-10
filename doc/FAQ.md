@@ -59,8 +59,8 @@ Frequently asked questions regarding LionSQL's design philosophy, internal archi
 
 ### Q12. What throughput (TPS / tpmC) does LionSQL achieve on a single node?
 > **A.** 
-> - **In-Memory OCC**: **237,000+ TPS** (Banking SP) and **1,046,000+ tpmC** (TPC-C).
-> - **WiredTiger**: **167,000+ TPS** (Banking SP) and **833,000+ tpmC** (TPC-C).  
+> - **In-Memory OCC**: **218,000+ TPS** (TransferFunds SP), and on TPC-C sustains **1,066,000+ tpmC** / 39,700+ TPS (Storage Kernel), **759,000+ tpmC** / 28,100+ TPS (VDBE Runtime), and **376,000+ tpmC** / 13,900+ TPS over network wire (PGWire).
+> - **WiredTiger**: **141,000+ TPS** (TransferFunds SP), and on TPC-C sustains **1,184,000+ tpmC** / 41,900+ TPS (Storage Kernel), **863,000+ tpmC** / 31,700+ TPS (VDBE Runtime), and **352,000+ tpmC** / 13,000+ TPS over network wire (PGWire).  
 > It maximizes multi-core hardware saturation without distributed network overhead.
 
 ### Q13. Why were regular expressions completely eliminated from query execution?
