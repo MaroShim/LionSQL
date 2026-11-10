@@ -812,7 +812,14 @@ func TestSQLExecutor_VirtualCatalogViews(t *testing.T) {
 	if err != nil || !res.Success {
 		t.Fatalf("query sys.indexes failed: %v", err)
 	}
-	if len(res.Rows) < 1 || res.Rows[0]["index_name"] != "idx_user_name" {
+	foundIdx := false
+	for _, r := range res.Rows {
+		if r["index_name"] == "idx_user_name" {
+			foundIdx = true
+			break
+		}
+	}
+	if !foundIdx {
 		t.Fatalf("expected idx_user_name in sys.indexes, got: %+v", res.Rows)
 	}
 

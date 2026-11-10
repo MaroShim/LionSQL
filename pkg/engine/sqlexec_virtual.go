@@ -147,6 +147,13 @@ func (ss *sessionSource) GetCurrentDatabase() string {
 	return "master"
 }
 
+func (ss *sessionSource) GetTableRowCount(name string) int64 {
+	if cp, ok := ss.Source.(interface{ GetTableRowCount(string) int64 }); ok {
+		return cp.GetTableRowCount(name)
+	}
+	return 0
+}
+
 func (s *Coordinator) execVirtualCatalogJoinSelect(sql string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	currDb := "master"
 	if cs != nil {
