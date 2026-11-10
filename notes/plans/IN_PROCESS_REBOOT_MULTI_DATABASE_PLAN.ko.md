@@ -1,9 +1,14 @@
-# LionSQL In-Process Graceful Reboot 기반 물리 서브폴더 `USE <dbname>` 전환 아키텍처 설계 초안 (`notes/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md`)
+# [SUPERSEDED / 폐기됨] LionSQL In-Process Graceful Reboot 기반 물리 서브폴더 `USE <dbname>` 전환 아키텍처 초안
 
 > - **최초 작성일**: 2026-11-07
-> - **문서 성격**: 1.0 이후(Post-1.0) 차기 아키텍처 연구 및 아이디어 인큐베이션 설계 초안 (Research & Draft Architecture)
-> - **과제 식별 코드**: `RESEARCH-INPROCESS-REBOOT-USE`
-> - **핵심 철학**: `[RULE:RadicalKISS]`, `[RULE:CleanTeardown]`, Invariant 2 (Single-Catalog per Process Primacy)
+> - **폐기 일자**: 2026-11-10
+> - **상태**: **[SUPERSEDED / 공식 폐기]**
+> - **대체 아키텍처**: [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) (프리픽스 기반 논리적 네임스페이스 아키텍처)
+> - **폐기 사유 (Root Cause)**:
+>   1. **동시 다중 세션 파탄 (Global Blocking)**: 프로세스 전체가 1개의 물리 폴더 엔진만 서비스하므로, 다중 클라이언트(세션 A가 `SalesDB`, 세션 B가 `HRDB`) 접근 시 엔진 언로드/리부팅 핑퐁 트래싱(Thrashing) 발생.
+>   2. **크로스 데이터베이스 조인(Cross-DB Join) 원천 불가**: 단일 시점 1개 디스크 폴더만 마운트되어 `SalesDB.Orders JOIN HRDB.Employees` 조인 불가능.
+>   3. **CGo/WiredTiger 런타임 불안정성**: 빈번한 CGo 엔진 Close/Open에 따른 메모리 단편화 및 핸들 누수 위험.
+>   4. **오버스펙(Over-Engineering)**: 데이터베이스의 본질인 "논리적 네임스페이스"를 "물리적 엔진 스위칭"이라는 거대한 기계 장치로 해결하려 했던 설계 오류.
 
 ---
 
