@@ -127,30 +127,62 @@ func (l *Lexer) NextToken() Token {
 	case ')':
 		tok = Token{Type: TokenRParen, Literal: ")", Line: tokLine, Col: tokCol}
 	case '!':
-		if l.peekChar() == '=' {
-			ch := l.ch
-			l.readChar()
-			tok = Token{Type: TokenNeq, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		// In T-SQL, '!' is only valid in !=, !<, !>, optionally separated by whitespace (BABEL-3379 / BABEL-4114)
+		pPos := l.readPos
+		for pPos < len(l.input) && (l.input[pPos] == ' ' || l.input[pPos] == '\t' || l.input[pPos] == '\r' || l.input[pPos] == '\n') {
+			pPos++
+		}
+		if pPos < len(l.input) {
+			nextCh := l.input[pPos]
+			if nextCh == '=' {
+				for l.readPos <= pPos {
+					l.readChar()
+				}
+				tok = Token{Type: TokenNeq, Literal: "!=", Line: tokLine, Col: tokCol}
+			} else if nextCh == '<' {
+				for l.readPos <= pPos {
+					l.readChar()
+				}
+				tok = Token{Type: TokenGte, Literal: "!<", Line: tokLine, Col: tokCol}
+			} else if nextCh == '>' {
+				for l.readPos <= pPos {
+					l.readChar()
+				}
+				tok = Token{Type: TokenLte, Literal: "!>", Line: tokLine, Col: tokCol}
+			} else {
+				tok = Token{Type: TokenIllegal, Literal: string(l.ch), Line: tokLine, Col: tokCol}
+			}
 		} else {
 			tok = Token{Type: TokenIllegal, Literal: string(l.ch), Line: tokLine, Col: tokCol}
 		}
 	case '<':
-		if l.peekChar() == '=' {
-			ch := l.ch
-			l.readChar()
-			tok = Token{Type: TokenLte, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
-		} else if l.peekChar() == '>' {
-			ch := l.ch
-			l.readChar()
-			tok = Token{Type: TokenNeq, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		pPos := l.readPos
+		for pPos < len(l.input) && (l.input[pPos] == ' ' || l.input[pPos] == '\t' || l.input[pPos] == '\r' || l.input[pPos] == '\n') {
+			pPos++
+		}
+		if pPos < len(l.input) && (l.input[pPos] == '=' || l.input[pPos] == '>') {
+			nextCh := l.input[pPos]
+			for l.readPos <= pPos {
+				l.readChar()
+			}
+			if nextCh == '=' {
+				tok = Token{Type: TokenLte, Literal: "<=", Line: tokLine, Col: tokCol}
+			} else {
+				tok = Token{Type: TokenNeq, Literal: "<>", Line: tokLine, Col: tokCol}
+			}
 		} else {
 			tok = Token{Type: TokenLt, Literal: "<", Line: tokLine, Col: tokCol}
 		}
 	case '>':
-		if l.peekChar() == '=' {
-			ch := l.ch
-			l.readChar()
-			tok = Token{Type: TokenGte, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		pPos := l.readPos
+		for pPos < len(l.input) && (l.input[pPos] == ' ' || l.input[pPos] == '\t' || l.input[pPos] == '\r' || l.input[pPos] == '\n') {
+			pPos++
+		}
+		if pPos < len(l.input) && l.input[pPos] == '=' {
+			for l.readPos <= pPos {
+				l.readChar()
+			}
+			tok = Token{Type: TokenGte, Literal: ">=", Line: tokLine, Col: tokCol}
 		} else {
 			tok = Token{Type: TokenGt, Literal: ">", Line: tokLine, Col: tokCol}
 		}

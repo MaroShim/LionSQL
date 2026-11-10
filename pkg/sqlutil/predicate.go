@@ -142,11 +142,16 @@ type AnyPredicate struct {
 func ParseAnyPredicate(s string) (*AnyPredicate, bool) {
 	s = strings.TrimSpace(s)
 	anyIdx := FindTopLevelKeyword(s, "ANY")
+	kwLen := 3
+	if anyIdx == -1 {
+		anyIdx = FindTopLevelKeyword(s, "SOME")
+		kwLen = 4
+	}
 	if anyIdx == -1 {
 		return nil, false
 	}
 	left := strings.TrimSpace(s[:anyIdx])
-	right := strings.TrimSpace(s[anyIdx+3:])
+	right := strings.TrimSpace(s[anyIdx+kwLen:])
 
 	op := "="
 	if strings.HasSuffix(left, "!=") {
@@ -159,6 +164,12 @@ func ParseAnyPredicate(s string) (*AnyPredicate, bool) {
 		op = ">="
 		left = strings.TrimSpace(left[:len(left)-2])
 	} else if strings.HasSuffix(left, "<=") {
+		op = "<="
+		left = strings.TrimSpace(left[:len(left)-2])
+	} else if strings.HasSuffix(left, "!<") {
+		op = ">="
+		left = strings.TrimSpace(left[:len(left)-2])
+	} else if strings.HasSuffix(left, "!>") {
 		op = "<="
 		left = strings.TrimSpace(left[:len(left)-2])
 	} else if strings.HasSuffix(left, ">") {
@@ -281,7 +292,7 @@ func ParseBinaryComparison(s string) (*BinaryComparison, bool) {
 	ops := []string{
 		"NOT ILIKE", "NOT LIKE", "ILIKE", "LIKE",
 		"!~*", "!~", "~*", "~",
-		"!=", "<>", ">=", "<=",
+		"!=", "<>", ">=", "<=", "!<", "!>",
 		"=", ">", "<",
 	}
 
@@ -392,11 +403,17 @@ func ParseBinaryComparison(s string) (*BinaryComparison, bool) {
 						if strings.Contains(left, "->") {
 							fullCol = left
 						}
+						normOp := op
+						if normOp == "!<" {
+							normOp = ">="
+						} else if normOp == "!>" {
+							normOp = "<="
+						}
 						return &BinaryComparison{
 							Column:     CleanLeafIdentifier(left),
 							FullColumn: fullCol,
 							RawCol:     left,
-							Op:         op,
+							Op:         normOp,
 							RightRaw:   right,
 							RightClean: strings.Trim(right, "'\""),
 						}, true

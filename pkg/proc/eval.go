@@ -484,6 +484,116 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			return v, nil
 		}
 		return nil, nil
+
+	case *QuantifiedComparisonExpr:
+		val, err := EvalRowExpr(e.Expr, row, execSubquery)
+		if err != nil || isNullVal(val) {
+			return nil, nil
+		}
+		var targetVals []any
+		if e.Query != nil {
+			if execSubquery == nil {
+				return nil, fmt.Errorf("subquery executor not available for quantified expression")
+			}
+			sql := e.Query.String()
+			subRows, cols, err := execSubquery(sql)
+			if err != nil {
+				return nil, err
+			}
+			for _, r := range subRows {
+				if r == nil {
+					targetVals = append(targetVals, nil)
+					continue
+				}
+				var foundVal any
+				if len(cols) > 0 {
+					if v, ok := r[cols[0]]; ok {
+						foundVal = v
+					} else {
+						for k, v := range r {
+							if strings.EqualFold(k, cols[0]) {
+								foundVal = v
+								break
+							}
+						}
+					}
+				} else {
+					for _, v := range r {
+						foundVal = v
+						break
+					}
+				}
+				targetVals = append(targetVals, foundVal)
+			}
+		} else {
+			for _, item := range e.List {
+				iVal, err := EvalRowExpr(item, row, execSubquery)
+				if err != nil {
+					return nil, err
+				}
+				targetVals = append(targetVals, iVal)
+			}
+		}
+
+		if (e.Quantifier == TokenAny || e.Quantifier == TokenSome) && len(targetVals) == 1 {
+			if sVal, ok := targetVals[0].(string); ok {
+				trimmed := strings.TrimSpace(sVal)
+				if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "'{") ||
+					strings.HasPrefix(strings.ToUpper(trimmed), "ARRAY[") {
+					return evalRowAnyComparison(e.Op, val, sVal)
+				}
+			}
+		}
+
+		if len(targetVals) == 0 {
+			if e.Quantifier == TokenAll {
+				return true, nil
+			}
+			return false, nil
+		}
+
+		isAll := e.Quantifier == TokenAll
+		hasNull := false
+
+		for _, tVal := range targetVals {
+			if isNullVal(tVal) {
+				hasNull = true
+				continue
+			}
+			cmpRes, err := evalRowBinaryOp(e.Op, val, tVal)
+			if err != nil {
+				return nil, err
+			}
+			if isNullVal(cmpRes) {
+				hasNull = true
+				continue
+			}
+			boolRes, ok := cmpRes.(bool)
+			if !ok {
+				continue
+			}
+			if isAll {
+				if !boolRes {
+					return false, nil
+				}
+			} else { // ANY or SOME
+				if boolRes {
+					return true, nil
+				}
+			}
+		}
+
+		if isAll {
+			if hasNull {
+				return nil, nil
+			}
+			return true, nil
+		} else {
+			if hasNull {
+				return nil, nil
+			}
+			return false, nil
+		}
 	}
 
 	return nil, fmt.Errorf("unsupported AST expression: %T", expr)

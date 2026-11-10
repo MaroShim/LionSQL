@@ -172,12 +172,18 @@ const (
 	TokenWaitfor         // WAITFOR
 	TokenDelay           // DELAY
 	TokenTime            // TIME
+	TokenAll             // ALL
+	TokenAny             // ANY
+	TokenSome            // SOME
 )
 
 var keywords = map[string]TokenType{
 	"WAITFOR":       TokenWaitfor,
 	"DELAY":         TokenDelay,
 	"TIME":          TokenTime,
+	"ALL":           TokenAll,
+	"ANY":           TokenAny,
+	"SOME":          TokenSome,
 	"RETURNING":     TokenReturning,
 	"CONFLICT":      TokenConflict,
 	"CAST":          TokenCast,
@@ -381,6 +387,12 @@ func (t TokenType) String() string {
 		return "^="
 	case TokenBitOrAssign:
 		return "|="
+	case TokenAll:
+		return "ALL"
+	case TokenAny:
+		return "ANY"
+	case TokenSome:
+		return "SOME"
 	default:
 		for k, v := range keywords {
 			if v == t {

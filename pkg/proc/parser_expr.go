@@ -199,6 +199,75 @@ func (p *Parser) parseExpression(precedence int) Expr {
 				Try:        false,
 			}
 
+		case TokenEq, TokenNeq, TokenLt, TokenLte, TokenGt, TokenGte:
+			if p.peekTokenIs(TokenAll) || p.peekTokenIs(TokenAny) || p.peekTokenIs(TokenSome) {
+				op := p.curToken.Type
+				p.nextToken() // eat op
+				quantifier := p.curToken.Type
+				p.nextToken() // eat ALL/ANY/SOME
+				if !p.curTokenIs(TokenLParen) {
+					p.addError(fmt.Sprintf("expected '(' after %v at line %d:%d", quantifier, p.curToken.Line, p.curToken.Col))
+					return nil
+				}
+				p.nextToken() // eat '('
+				if p.curTokenIs(TokenSelect) {
+					p.nextToken() // eat SELECT
+					sel, err := p.parseGeneralSelect()
+					if err != nil {
+						return nil
+					}
+					if !p.curTokenIs(TokenRParen) {
+						p.addError("expected ')' after subquery")
+						return nil
+					}
+					p.nextToken() // eat ')'
+					leftExp = &QuantifiedComparisonExpr{
+						Expr:       leftExp,
+						Op:         op,
+						Quantifier: quantifier,
+						Query:      sel,
+					}
+				} else {
+					var list []Expr
+					for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+						item := p.parseExpression(precLowest)
+						if item != nil {
+							list = append(list, item)
+						}
+						if p.curTokenIs(TokenComma) {
+							p.nextToken()
+						} else {
+							break
+						}
+					}
+					if !p.curTokenIs(TokenRParen) {
+						p.addError("expected ')' after list")
+						return nil
+					}
+					p.nextToken() // eat ')'
+					leftExp = &QuantifiedComparisonExpr{
+						Expr:       leftExp,
+						Op:         op,
+						Quantifier: quantifier,
+						List:       list,
+					}
+				}
+				break
+			}
+			op := p.curToken.Type
+			opPrec := precedences[op]
+			p.nextToken()
+			rightExp := p.parseExpression(opPrec)
+			if rightExp == nil {
+				p.addError(fmt.Sprintf("expected expression after operator %v at line %d:%d", op, p.curToken.Line, p.curToken.Col))
+				return nil
+			}
+			leftExp = &BinaryExpr{
+				Left:  leftExp,
+				Op:    op,
+				Right: rightExp,
+			}
+
 		default:
 			op := p.curToken.Type
 			opPrec := precedences[op]
@@ -618,7 +687,7 @@ func (p *Parser) parseFunctionCall(name string) Expr {
 			p.addError("COUNT(DISTINCT *) is not allowed")
 			return nil
 		}
-	} else if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ALL") {
+	} else if p.curTokenIs(TokenAll) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ALL")) {
 		p.nextToken() // eat ALL
 	}
 

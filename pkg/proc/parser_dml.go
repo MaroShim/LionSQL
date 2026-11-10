@@ -566,11 +566,11 @@ func (p *Parser) parseTableHints() []string {
 func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	stmt := &GeneralSelectStmt{Limit: -1}
 
-	for p.curTokenIs(TokenDistinct) || p.curTokenIs(TokenTop) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ALL")) {
+	for p.curTokenIs(TokenDistinct) || p.curTokenIs(TokenTop) || p.curTokenIs(TokenAll) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ALL")) {
 		if p.curTokenIs(TokenDistinct) {
 			stmt.Distinct = true
 			p.nextToken() // eat DISTINCT
-		} else if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ALL") {
+		} else if p.curTokenIs(TokenAll) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ALL")) {
 			p.nextToken() // eat ALL (default SQL quantifier)
 		} else if p.curTokenIs(TokenTop) {
 			p.nextToken() // eat TOP

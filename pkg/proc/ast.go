@@ -724,6 +724,34 @@ func (e *ScalarSubqueryExpr) String() string {
 	return fmt.Sprintf("(SELECT %s FROM %s)", e.Column, e.Table)
 }
 
+// QuantifiedComparisonExpr represents Expr Op (ALL | ANY | SOME) (Subquery | List)
+type QuantifiedComparisonExpr struct {
+	Expr       Expr
+	Op         TokenType // TokenEq, TokenNeq, TokenLt, TokenLte, TokenGt, TokenGte
+	Quantifier TokenType // TokenAll, TokenAny, TokenSome
+	Query      *GeneralSelectStmt
+	List       []Expr
+}
+
+func (e *QuantifiedComparisonExpr) exprNode() {}
+func (e *QuantifiedComparisonExpr) String() string {
+	qStr := "ANY"
+	if e.Quantifier == TokenAll {
+		qStr = "ALL"
+	} else if e.Quantifier == TokenSome {
+		qStr = "SOME"
+	}
+	opStr := e.Op.String()
+	if e.Query != nil {
+		return fmt.Sprintf("%s %s %s (%s)", e.Expr.String(), opStr, qStr, e.Query.String())
+	}
+	var items []string
+	for _, item := range e.List {
+		items = append(items, item.String())
+	}
+	return fmt.Sprintf("%s %s %s (%s)", e.Expr.String(), opStr, qStr, strings.Join(items, ", "))
+}
+
 // UpdateWhereStmt represents UPDATE table SET col1 = expr1, ... [OUTPUT ...] WHERE <arbitrary condition>
 type UpdateWhereStmt struct {
 	Table       string

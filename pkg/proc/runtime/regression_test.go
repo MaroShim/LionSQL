@@ -1733,5 +1733,43 @@ END;
 	}
 }
 
+func TestRegression_TSQL_LegacyComparisonAndQuantified(t *testing.T) {
+	eng := setupRegressionDB(t)
+	defer eng.Close()
+
+	tsql := `
+CREATE PROCEDURE CheckLegacyOps
+AS
+BEGIN
+    DECLARE @res INT;
+    SET @res = 0;
+    IF 5 !< 3
+    BEGIN
+        SET @res = @res + 1;
+    END;
+    IF 3 !> 5
+    BEGIN
+        SET @res = @res + 10;
+    END;
+    IF 10 ! < 2
+    BEGIN
+        SET @res = @res + 100;
+    END;
+    IF 2 ! > 10
+    BEGIN
+        SET @res = @res + 1000;
+    END;
+    RETURN @res;
+END;
+`
+	res, err := runProc(t, eng, tsql, "CheckLegacyOps", nil)
+	if err != nil {
+		t.Fatalf("execution failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res.ReturnValue) != "1111" {
+		t.Fatalf("expected 1111, got %v", res.ReturnValue)
+	}
+}
+
 
 

@@ -20,6 +20,7 @@ type subqueryKind int
 const (
 	subqueryKindExists subqueryKind = iota
 	subqueryKindIn
+	subqueryKindQuantified
 	subqueryKindScalar
 )
 
@@ -518,6 +519,76 @@ func findSubqueryFromKind(s string, kind subqueryKind, startOffset int) (matchSt
 			}
 		}
 
+	case subqueryKindQuantified:
+		for _, kw := range []string{"ALL", "ANY", "SOME"} {
+			indices := sqlutil.FindAllTopLevelKeyword(sub, kw)
+			for _, idx := range indices {
+				actualIdx := idx + startOffset
+				afterKw := s[actualIdx+len(kw):]
+				trimmed := strings.TrimLeft(afterKw, " \t\n")
+				if strings.HasPrefix(trimmed, "(") {
+					openParenIdx := actualIdx + len(kw) + (len(afterKw) - len(trimmed))
+					closeParenIdx := sqlutil.FindMatchingParen(s, openParenIdx)
+					if closeParenIdx != -1 {
+						inner := strings.TrimSpace(s[openParenIdx+1 : closeParenIdx])
+						if sqlutil.HasPrefixKeyword(inner, "SELECT") || (strings.HasPrefix(inner, "(") && sqlutil.HasPrefixKeyword(inner[1:], "SELECT")) {
+							before := strings.TrimRight(s[:actualIdx], " \t\n")
+							ops := []string{"!=", "<>", ">=", "<=", "!<", "!>", "=", ">", "<"}
+							matchedOp := ""
+							for _, op := range ops {
+								if strings.HasSuffix(before, op) {
+									matchedOp = op
+									break
+								}
+							}
+							if matchedOp == "" {
+								continue
+							}
+							beforeOp := strings.TrimRight(before[:len(before)-len(matchedOp)], " \t\n")
+							if len(beforeOp) == 0 {
+								continue
+							}
+							lhsEnd := len(beforeOp)
+							lhsStart := lhsEnd
+							lastChar := beforeOp[lhsEnd-1]
+							if lastChar == ')' {
+								depth := 1
+								for i := lhsEnd - 2; i >= 0; i-- {
+									if beforeOp[i] == ')' {
+										depth++
+									} else if beforeOp[i] == '(' {
+										depth--
+										if depth == 0 {
+											lhsStart = i
+											break
+										}
+									}
+								}
+							} else if lastChar == ']' {
+								if openBracket := strings.LastIndex(beforeOp, "["); openBracket != -1 {
+									lhsStart = openBracket
+								}
+							} else if lastChar == '\'' || lastChar == '"' {
+								if openQuote := strings.LastIndex(beforeOp[:lhsEnd-1], string(lastChar)); openQuote != -1 {
+									lhsStart = openQuote
+								}
+							} else {
+								for lhsStart > 0 {
+									prev := beforeOp[lhsStart-1]
+									if sqlutil.IsIdentChar(prev) || prev == '.' || prev == '@' || prev == '#' {
+										lhsStart--
+									} else {
+										break
+									}
+								}
+							}
+							return lhsStart, closeParenIdx + 1, s[lhsStart:openParenIdx], inner, true
+						}
+					}
+				}
+			}
+		}
+
 	case subqueryKindScalar:
 		for i := startOffset; i < len(s); i++ {
 			if s[i] == '(' {
@@ -821,7 +892,138 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		offset = mStart + len(replacement)
 	}
 
-	// 3. Scalar Subquery in comparisons: e.g. > (SELECT ...), = (SELECT ...)
+	// 3. Quantified Subqueries: col op (ALL|ANY|SOME) (SELECT ...)
+	offset = 0
+	for {
+		mStart, mEnd, prefix, innerSQL, found := findSubqueryFromKind(result, subqueryKindQuantified, offset)
+		if !found {
+			break
+		}
+		if len(outerNames) > 0 && sqlutil.IsCorrelatedSubquery(innerSQL, outerNames) {
+			offset = mEnd
+			continue
+		}
+		pTrimmed := strings.TrimSpace(prefix)
+		var kw string
+		upperP := strings.ToUpper(pTrimmed)
+		if strings.HasSuffix(upperP, "ALL") {
+			kw = "ALL"
+		} else if strings.HasSuffix(upperP, "ANY") {
+			kw = "ANY"
+		} else if strings.HasSuffix(upperP, "SOME") {
+			kw = "SOME"
+		}
+		if kw == "" {
+			offset = mEnd
+			continue
+		}
+		beforeKw := strings.TrimRight(pTrimmed[:len(pTrimmed)-len(kw)], " \t\n")
+		ops := []string{"!=", "<>", ">=", "<=", "!<", "!>", "=", ">", "<"}
+		var matchedOp string
+		for _, op := range ops {
+			if strings.HasSuffix(beforeKw, op) {
+				matchedOp = op
+				break
+			}
+		}
+		if matchedOp == "" {
+			offset = mEnd
+			continue
+		}
+		lhs := strings.TrimSpace(beforeKw[:len(beforeKw)-len(matchedOp)])
+
+		innerRes, err := execSubquery(innerSQL)
+		if err != nil {
+			offset = mEnd
+			continue
+		}
+		if len(innerRes.Columns) > 1 {
+			return "", fmt.Errorf("subquery must return only one column, returned %d", len(innerRes.Columns))
+		}
+
+		normOp := matchedOp
+		if normOp == "!<" {
+			normOp = ">="
+		} else if normOp == "!>" {
+			normOp = "<="
+		}
+
+		replacement := "1=0"
+		if len(innerRes.Rows) == 0 {
+			if kw == "ALL" {
+				replacement = "1=1"
+			} else {
+				replacement = "1=0"
+			}
+		} else {
+			var vals []any
+			for _, r := range innerRes.Rows {
+				row := NewSQLRow(r, innerRes.Columns)
+				if rowVal, ok := row.GetFirst(); ok {
+					vals = append(vals, rowVal)
+				}
+			}
+
+			if (kw == "ANY" || kw == "SOME") && normOp == "=" {
+				var strVals []string
+				for _, v := range vals {
+					strVals = append(strVals, formatSubqueryVal(v))
+				}
+				replacement = fmt.Sprintf("%s IN (%s)", lhs, strings.Join(strVals, ", "))
+			} else if kw == "ALL" && (normOp == "<>" || normOp == "!=") {
+				var strVals []string
+				for _, v := range vals {
+					strVals = append(strVals, formatSubqueryVal(v))
+				}
+				replacement = fmt.Sprintf("%s NOT IN (%s)", lhs, strings.Join(strVals, ", "))
+			} else {
+				minVal, maxVal := findMinMaxSubqueryVals(vals)
+				if kw == "ALL" {
+					switch normOp {
+					case ">":
+						replacement = fmt.Sprintf("%s > %s", lhs, formatSubqueryVal(maxVal))
+					case ">=":
+						replacement = fmt.Sprintf("%s >= %s", lhs, formatSubqueryVal(maxVal))
+					case "<":
+						replacement = fmt.Sprintf("%s < %s", lhs, formatSubqueryVal(minVal))
+					case "<=":
+						replacement = fmt.Sprintf("%s <= %s", lhs, formatSubqueryVal(minVal))
+					case "=":
+						if allValsEqual(vals) {
+							replacement = fmt.Sprintf("%s = %s", lhs, formatSubqueryVal(vals[0]))
+						} else {
+							replacement = "1=0"
+						}
+					default:
+						replacement = "1=1"
+					}
+				} else { // ANY or SOME
+					switch normOp {
+					case ">":
+						replacement = fmt.Sprintf("%s > %s", lhs, formatSubqueryVal(minVal))
+					case ">=":
+						replacement = fmt.Sprintf("%s >= %s", lhs, formatSubqueryVal(minVal))
+					case "<":
+						replacement = fmt.Sprintf("%s < %s", lhs, formatSubqueryVal(maxVal))
+					case "<=":
+						replacement = fmt.Sprintf("%s <= %s", lhs, formatSubqueryVal(maxVal))
+					case "!=", "<>":
+						if allValsEqual(vals) {
+							replacement = fmt.Sprintf("%s <> %s", lhs, formatSubqueryVal(vals[0]))
+						} else {
+							replacement = "1=1"
+						}
+					default:
+						replacement = "1=0"
+					}
+				}
+			}
+		}
+		result = result[:mStart] + replacement + result[mEnd:]
+		offset = mStart + len(replacement)
+	}
+
+	// 4. Scalar Subquery in comparisons: e.g. > (SELECT ...), = (SELECT ...)
 	offset = 0
 	for {
 		mStart, mEnd, _, innerSQL, found := findSubqueryFromKind(result, subqueryKindScalar, offset)
@@ -1392,4 +1594,36 @@ func parseMaxRecursion(sql string) int {
 		return n
 	}
 	return 100
+}
+
+func findMinMaxSubqueryVals(vals []any) (any, any) {
+	if len(vals) == 0 {
+		return nil, nil
+	}
+	minVal, maxVal := vals[0], vals[0]
+	for _, v := range vals[1:] {
+		if v == nil {
+			continue
+		}
+		if minVal == nil || sqlutil.CompareAny(v, minVal) < 0 {
+			minVal = v
+		}
+		if maxVal == nil || sqlutil.CompareAny(v, maxVal) > 0 {
+			maxVal = v
+		}
+	}
+	return minVal, maxVal
+}
+
+func allValsEqual(vals []any) bool {
+	if len(vals) <= 1 {
+		return true
+	}
+	first := vals[0]
+	for _, v := range vals[1:] {
+		if sqlutil.CompareAny(first, v) != 0 {
+			return false
+		}
+	}
+	return true
 }

@@ -224,7 +224,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		return !ok || val == nil
 	}
 
-	ops := []string{" NOT LIKE ", " NOT ILIKE ", "!=", "<>", "<=", ">=", "=", "<", ">", " LIKE ", " ILIKE "}
+	ops := []string{" NOT LIKE ", " NOT ILIKE ", "!=", "<>", "<=", ">=", "!<", "!>", "=", "<", ">", " LIKE ", " ILIKE "}
 	for _, op := range ops {
 		idx := strings.Index(strings.ToUpper(whereStr), op)
 		if idx != -1 {
@@ -298,7 +298,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 					}
 				}
 				return !strings.EqualFold(strVal, rightVal) && !strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(rightVal, " "))
-			case ">", ">=", "<", "<=":
+			case ">", ">=", "!<", "<", "<=", "!>":
 				isStringCol := false
 				if _, ok := val.(string); ok {
 					isStringCol = true
@@ -312,11 +312,11 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 					switch strings.TrimSpace(op) {
 					case ">":
 						return cmp > 0
-					case ">=":
+					case ">=", "!<":
 						return cmp >= 0
 					case "<":
 						return cmp < 0
-					case "<=":
+					case "<=", "!>":
 						return cmp <= 0
 					}
 				}
@@ -328,11 +328,11 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 					switch strings.TrimSpace(op) {
 					case ">":
 						return n1 > n2
-					case ">=":
+					case ">=", "!<":
 						return n1 >= n2
 					case "<":
 						return n1 < n2
-					case "<=":
+					case "<=", "!>":
 						return n1 <= n2
 					}
 				}
