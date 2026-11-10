@@ -630,6 +630,14 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		}
 		return nil
 
+	case *DeclareTableStmt:
+		c.emit(OpDeclareTable, 0, 0, 0, &TableVarData{
+			Name:       s.Name,
+			Columns:    s.Columns,
+			RawColDefs: s.RawColDefs,
+		})
+		return nil
+
 	case *DeclareStmt:
 		varName := cleanVarName(s.Name)
 		slot := c.getOrAllocSlot(varName)

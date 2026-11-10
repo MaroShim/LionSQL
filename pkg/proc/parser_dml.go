@@ -23,7 +23,7 @@ func (p *Parser) parseSelect() (Statement, error) {
 			}
 			p.nextToken()
 
-			if !p.curTokenIs(TokenIdent) {
+			if !p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenVariable) {
 				return nil, fmt.Errorf("expected table name, got %s", p.curToken.Literal)
 			}
 			tblName := p.curToken.Literal
@@ -167,109 +167,12 @@ func (p *Parser) parseOutputCols() []string {
 }
 
 func (p *Parser) parseInsert() (Statement, error) {
-	p.nextToken() // eat INSERT
-	if p.curTokenIs(TokenInto) {
-		p.nextToken()
-	}
-	if !p.curTokenIs(TokenIdent) {
-		return nil, fmt.Errorf("expected table name in INSERT, got %s", p.curToken.Literal)
-	}
-	tblName := cleanSchemaPrefix(p.curToken.Literal)
-	p.nextToken()
-
-	var cols []string
-	if p.curTokenIs(TokenLParen) {
-		p.nextToken()
-		for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
-			if !p.curTokenIs(TokenIdent) {
-				return nil, fmt.Errorf("expected column name in INSERT, got %s", p.curToken.Literal)
-			}
-			cols = append(cols, cleanSchemaPrefix(p.curToken.Literal))
-			p.nextToken()
-			if p.curTokenIs(TokenComma) {
-				p.nextToken()
-			}
-		}
-		if !p.curTokenIs(TokenRParen) {
-			return nil, fmt.Errorf("expected ) closing columns in INSERT")
-		}
-		p.nextToken()
-	}
-
-	outputCols, intoVars := p.parseOutputClause()
-
-	if p.curTokenIs(TokenSelect) {
-		p.nextToken() // eat SELECT
-		sel, err := p.parseGeneralSelect()
-		if err != nil {
-			return nil, err
-		}
-		if p.curTokenIs(TokenReturning) {
-			rCols, rVars := p.parseReturningClause()
-			outputCols = append(outputCols, rCols...)
-			intoVars = append(intoVars, rVars...)
-		}
-		if p.curTokenIs(TokenSemicolon) {
-			p.nextToken()
-		}
-		return &GeneralInsertStmt{
-			Table:      tblName,
-			Columns:    cols,
-			OutputCols: outputCols,
-			IntoVars:   intoVars,
-			Select:     sel,
-		}, nil
-	}
-
-	if !p.curTokenIs(TokenValues) {
-		return nil, fmt.Errorf("expected VALUES or SELECT after table name")
-	}
-	p.nextToken()
-
-	if !p.curTokenIs(TokenLParen) {
-		return nil, fmt.Errorf("expected ( after VALUES")
-	}
-	p.nextToken()
-
-	var vals []Expr
-	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
-		expr := p.parseExpression(precLowest)
-		if expr == nil {
-			return nil, fmt.Errorf("expected value expression in INSERT")
-		}
-		vals = append(vals, expr)
-		if p.curTokenIs(TokenComma) {
-			p.nextToken()
-		}
-	}
-
-	if !p.curTokenIs(TokenRParen) {
-		return nil, fmt.Errorf("expected ) after VALUES")
-	}
-	p.nextToken()
-
-	if p.curTokenIs(TokenReturning) {
-		rCols, rVars := p.parseReturningClause()
-		outputCols = append(outputCols, rCols...)
-		intoVars = append(intoVars, rVars...)
-	}
-
-	if p.curTokenIs(TokenSemicolon) {
-		p.nextToken()
-	}
-
-	return &InsertStmt{
-		Table:      tblName,
-		Columns:    cols,
-		Values:     vals,
-		OutputCols: outputCols,
-		IntoVars:   intoVars,
-	}, nil
+	return p.parseGeneralInsert()
 }
 
 func (p *Parser) parseUpdate() (Statement, error) {
 	p.nextToken() // eat UPDATE
-	if !p.curTokenIs(TokenIdent) {
+	if !p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenVariable) {
 		return nil, fmt.Errorf("expected table name in UPDATE, got %s", p.curToken.Literal)
 	}
 	tblName := cleanSchemaPrefix(p.curToken.Literal)
@@ -369,7 +272,7 @@ func (p *Parser) parseDelete() (Statement, error) {
 	if p.curTokenIs(TokenFrom) {
 		p.nextToken()
 	}
-	if !p.curTokenIs(TokenIdent) {
+	if !p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenVariable) {
 		return nil, fmt.Errorf("expected table name in DELETE, got %s", p.curToken.Literal)
 	}
 	tblName := cleanSchemaPrefix(p.curToken.Literal)
@@ -706,7 +609,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				Hints:    fromHints,
 			}
 		} else {
-			if !p.curTokenIs(TokenIdent) {
+			if !p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenVariable) {
 				return nil, fmt.Errorf("expected table name after FROM, got %s", p.curToken.Literal)
 			}
 			tblName := cleanSchemaPrefix(p.curToken.Literal)
@@ -944,7 +847,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				p.nextToken() // eat (
 			}
 
-			if !p.curTokenIs(TokenIdent) {
+			if !p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenVariable) {
 				return nil, fmt.Errorf("expected table name in JOIN, got %s", p.curToken.Literal)
 			}
 			jTbl := cleanSchemaPrefix(p.curToken.Literal)
@@ -1225,7 +1128,7 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 	if p.curTokenIs(TokenInto) {
 		p.nextToken()
 	}
-	if !p.curTokenIs(TokenIdent) {
+	if !p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenVariable) {
 		return nil, fmt.Errorf("expected table name in INSERT, got %s", p.curToken.Literal)
 	}
 	tblName := cleanSchemaPrefix(p.curToken.Literal)

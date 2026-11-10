@@ -86,6 +86,7 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 	executor := runtime.NewExecutor(cache)
 	if eng != nil {
 		executor.SetTableGetter(eng.GetTable)
+		executor.SetTableManager(eng)
 	}
 
 	pool := NewSessionPool(eng, cfg.PoolConfig)

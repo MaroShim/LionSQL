@@ -98,6 +98,7 @@ const (
 	OpDeleteWhere
 	OpSelectInto
 	OpTruncate
+	OpDeclareTable
 
 	// Cursor Operations
 	OpCursorOpen
@@ -292,6 +293,8 @@ func (op OpCode) String() string {
 		return "SELECT_INTO"
 	case OpTruncate:
 		return "TRUNCATE"
+	case OpDeclareTable:
+		return "DECLARE_TABLE"
 	case OpCursorOpen:
 		return "CURSOR_OPEN"
 	case OpCursorFetch:
@@ -362,6 +365,13 @@ type DMLData struct {
 	Select      *GeneralSelectStmt
 	OutputCols  []string
 	IntoVars    []string
+}
+
+// TableVarData holds metadata for table variable declaration.
+type TableVarData struct {
+	Name       string
+	Columns    []ColumnDef
+	RawColDefs string
 }
 
 // SelectIntoData holds metadata for SELECT INTO operations.

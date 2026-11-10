@@ -204,3 +204,115 @@ func MaxPgParamIndex(sql string) int {
 	})
 	return maxIdx
 }
+
+func isRuneIdentChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+}
+
+// SubstituteParamsSinglePass substitutes parameter placeholders (e.g. @param) outside strings and comments in a single pass.
+func SubstituteParamsSinglePass(query string, bindings map[string]string) string {
+	if len(bindings) == 0 {
+		return query
+	}
+
+	normBindings := make(map[string]string, len(bindings))
+	for k, v := range bindings {
+		if !strings.HasPrefix(k, "@") {
+			k = "@" + k
+		}
+		normBindings[strings.ToLower(k)] = v
+	}
+
+	var b strings.Builder
+	b.Grow(len(query) + 32)
+
+	inString := false
+	var quoteChar rune
+	runes := []rune(query)
+
+	i := 0
+	for i < len(runes) {
+		ch := runes[i]
+		if inString {
+			b.WriteRune(ch)
+			if ch == quoteChar {
+				if i+1 < len(runes) && runes[i+1] == quoteChar {
+					b.WriteRune(runes[i+1])
+					i += 2
+					continue
+				}
+				inString = false
+			}
+			i++
+			continue
+		}
+
+		if ch == '\'' || ch == '"' {
+			inString = true
+			quoteChar = ch
+			b.WriteRune(ch)
+			i++
+			continue
+		}
+
+		// Line comment (-- ...)
+		if ch == '-' && i+1 < len(runes) && runes[i+1] == '-' {
+			b.WriteRune(ch)
+			b.WriteRune(runes[i+1])
+			i += 2
+			for i < len(runes) && runes[i] != '\n' {
+				b.WriteRune(runes[i])
+				i++
+			}
+			continue
+		}
+
+		// Block comment (/* ... */)
+		if ch == '/' && i+1 < len(runes) && runes[i+1] == '*' {
+			b.WriteRune(ch)
+			b.WriteRune(runes[i+1])
+			i += 2
+			for i < len(runes) {
+				if runes[i] == '*' && i+1 < len(runes) && runes[i+1] == '/' {
+					b.WriteRune('*')
+					b.WriteRune('/')
+					i += 2
+					break
+				}
+				b.WriteRune(runes[i])
+				i++
+			}
+			continue
+		}
+
+		if ch == '@' {
+			// Extract full identifier starting with @ (e.g. @param or @@version)
+			start := i
+			i++
+			if i < len(runes) && runes[i] == '@' {
+				i++ // handle @@
+			}
+			for i < len(runes) && isRuneIdentChar(runes[i]) {
+				i++
+			}
+			ident := strings.ToLower(string(runes[start:i]))
+			if rep, ok := normBindings[ident]; ok {
+				b.WriteString(rep)
+			} else {
+				b.WriteString(string(runes[start:i]))
+			}
+			continue
+		}
+
+		b.WriteRune(ch)
+		i++
+	}
+
+	return b.String()
+}
+
+// SubstituteParamOutsideQuotes substitutes a single parameter name (e.g. @var) outside strings and comments.
+func SubstituteParamOutsideQuotes(query string, paramName string, formattedVal string) string {
+	return SubstituteParamsSinglePass(query, map[string]string{paramName: formattedVal})
+}
+

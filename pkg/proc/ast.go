@@ -235,6 +235,32 @@ func (s *DeclareStmt) String() string {
 	return fmt.Sprintf("DECLARE %s %s", s.Name, s.Type)
 }
 
+// DeclareTableStmt represents DECLARE @var TABLE (colDefs...)
+type DeclareTableStmt struct {
+	Name       string
+	Columns    []ColumnDef
+	RawColDefs string
+}
+
+func (s *DeclareTableStmt) stmtNode() {}
+func (s *DeclareTableStmt) String() string {
+	if len(s.Columns) > 0 {
+		var parts []string
+		for _, c := range s.Columns {
+			pkStr := ""
+			if c.PrimaryKey {
+				pkStr = " PRIMARY KEY"
+			}
+			parts = append(parts, fmt.Sprintf("%s %s%s", c.Name, c.Type, pkStr))
+		}
+		return fmt.Sprintf("DECLARE %s TABLE (%s)", s.Name, strings.Join(parts, ", "))
+	}
+	if s.RawColDefs != "" {
+		return fmt.Sprintf("DECLARE %s TABLE (%s)", s.Name, s.RawColDefs)
+	}
+	return fmt.Sprintf("DECLARE %s TABLE", s.Name)
+}
+
 // SetStmt represents SET @var = Expr
 type SetStmt struct {
 	Name  string

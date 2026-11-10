@@ -82,7 +82,7 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
 | **로컬 변수** | `DECLARE @x INT, @name VARCHAR(50);` | **완전 지원** | 모든 기본 SQL 데이터 타입 매핑 지원 |
 | **세션 임시 테이블** | `CREATE TABLE #temp (id INT, val VARCHAR(50));` | **완전 지원** | 세션 전용 네임스페이스 격리, `SELECT ... INTO #temp` 지원 |
 | **전역 임시 테이블** | `CREATE TABLE ##global_temp (...)` | **부분 지원** | 세션 간 공유되나 인스턴스 전역 수명주기 정합성 점검 필요 |
-| **테이블 변수** | `DECLARE @tbl TABLE (id INT, val VARCHAR(50));` | **미구현 (후보)** | 현재 파서에서 더미 `VARCHAR`로 파싱되어 실제 `INSERT/SELECT` 불가 |
+| **테이블 변수** | `DECLARE @tbl TABLE (id INT, val VARCHAR(50));` | **완전 지원** | 세션 배치, 익명 블록, 저장 프로시저 완벽 지원 (`INSERT`, `SELECT`, `UPDATE`, `DELETE`, `JOIN`, 프레임/세션 자동 정리) |
 | **사용자 정의 테이블 타입** | `CREATE TYPE MyTableType AS TABLE (...)` | **미구현 (후보)** | Stored Procedure에 테이블을 매개변수로 넘기는 TVP 전제 조건 |
 | **테이블 반환 함수 (TVF)** | `CREATE FUNCTION fn() RETURNS TABLE AS RETURN ...` | **미구현 (후보)** | 현재 스칼라 UDF(`RETURNS INT`)만 지원하며 인라인 TVF는 미구현 |
 
@@ -166,11 +166,11 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
    - 커서가 열릴 때 적격 행 수를 실시간 추적하고 닫힐 때 0으로 리셋하는 세션 카운터 지원 완료.
 
 ### 우선순위 그룹 B: 실무 체감도 '중~상' (다음 구현 후보)
-4. **테이블 변수 (`DECLARE @tbl TABLE (...)`)**:
-   - 현재는 더미 VARCHAR로 파싱되어 DML 실행 시 실패함.
-   - 세션 내부 임시 테이블(`#temp`)의 가상 네임스페이스(`__var_@tbl_sessID`)로 매핑하여 실제 테이블 스키마를 동적 생성하면 온전한 DML 지원 가능.
-5. **`STRING_SPLIT(str, sep)`**:
-   - 문자열 CSV를 행으로 쪼개는 함수. 테이블 반환 함수(TVF) 구조 또는 가상 서브쿼리 구체화 필요.
+4. **테이블 변수 (`DECLARE @tbl TABLE (...)`)** [완전 지원]:
+   - 세션 배치(`ExecuteSessionSQL`), 익명 블록, 저장 프로시저(`CREATE PROCEDURE`) 전반에 걸친 Microsoft SQL Server T-SQL 테이블 변수 지원 완료.
+   - 격리된 물리 테이블(`__tv_<frame>_<time>_<name>`) 동적 생성 및 프레임 소멸 시 자동 드롭, DML(`INSERT INTO @tbl VALUES / SELECT`, `SELECT FROM @tbl`, `UPDATE @tbl`, `DELETE FROM @tbl`, `JOIN @tbl`) 완벽 연동.
+5. **`STRING_SPLIT(str, sep)`** [완전 지원]:
+   - 문자열 구분자 분할 내장 테이블 반환 연산 지원 완료.
 
 ### 우선순위 그룹 C: 엔터프라이즈 특화 (Low ROI, 높은 구현 복잡도 또는 Spec-Out 대상)
 6. **사용자 정의 테이블 타입 (`CREATE TYPE ... AS TABLE`) 및 TVP**:

@@ -664,8 +664,56 @@ vmLoop:
 
 
 // --- Storage DML ---
+	case proc.OpDeclareTable:
+		data := f.aux(&inst).(*proc.TableVarData)
+		varName := strings.ToLower(data.Name)
+		if !strings.HasPrefix(varName, "@") {
+			varName = "@" + varName
+		}
+		physTable := fmt.Sprintf("__tv_%p_%d_%s", f, time.Now().UnixNano(), strings.TrimPrefix(varName, "@"))
+
+		cols := data.Columns
+		if len(cols) == 0 && data.RawColDefs != "" {
+			p := proc.NewParser(proc.NewLexer(data.RawColDefs))
+			if parsedCols, err := p.ParseColumnDefs(); err == nil {
+				cols = parsedCols
+			}
+		}
+
+		schema := &storage.TableSchema{
+			Name:    physTable,
+			Columns: make([]storage.Column, len(cols)),
+		}
+		for i, c := range cols {
+			schema.Columns[i] = storage.Column{
+				Name:       c.Name,
+				Type:       c.Type,
+				PrimaryKey: c.PrimaryKey,
+				Nullable:   c.Nullable,
+				Precision:  c.Precision,
+				Scale:      c.Scale,
+			}
+		}
+		if !schema.HasPrimaryKey() {
+			schema.EnsurePrimaryKey("_row_id")
+		}
+
+		if f.executor != nil {
+			if tm := f.executor.getTableManager(); tm != nil {
+				if err := tm.CreateTable(schema); err != nil {
+					return nil, fmt.Errorf("failed to create table variable %s: %w", data.Name, err)
+				}
+			}
+		}
+
+		if f.tableVars == nil {
+			f.tableVars = make(map[string]string)
+		}
+		f.tableVars[varName] = physTable
+
 	case proc.OpInsert:
 		data := f.aux(&inst).(*proc.DMLData)
+		targetTable := f.resolveTable(data.Table)
 		if data.Select != nil {
 			cnt, err := f.execInsertSelect(data)
 			if err != nil {
@@ -677,13 +725,13 @@ vmLoop:
 			f.rowCount = cnt
 			continue vmLoop
 		}
-		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "INSERT")
+		hasTriggers := f.executor != nil && f.executor.HasTriggers(targetTable, "INSERT")
 
 		cols := data.Columns
 		var tableSchema *storage.TableSchema
 		var identityCol *storage.Column
 		if tg := f.executor.getTableGetter(); tg != nil {
-			if schema, err := tg(data.Table); err == nil && schema != nil {
+			if schema, err := tg(targetTable); err == nil && schema != nil {
 				tableSchema = schema
 				for idx := range schema.Columns {
 					if schema.Columns[idx].Identity {
@@ -694,7 +742,7 @@ vmLoop:
 
 				identityInsertAllowed := false
 				if val, ok := f.vars["identity_insert_table"]; ok && val.Type == storage.TypeVarChar {
-					if strings.EqualFold(val.SVal, data.Table) {
+					if strings.EqualFold(val.SVal, targetTable) || strings.EqualFold(val.SVal, data.Table) {
 						identityInsertAllowed = true
 					}
 				}
@@ -720,7 +768,7 @@ vmLoop:
 		}
 
 		// Fast-path Direct Row Insert: bypass Record map allocations when schema matches and no triggers exist
-		canDirectInsert := !isTransientTable(data.Table) && tableSchema != nil && !hasTriggers && len(cols) == len(tableSchema.Columns) && len(data.ValExprs) == len(tableSchema.Columns) && identityCol == nil
+		canDirectInsert := !isTransientTable(targetTable) && tableSchema != nil && !hasTriggers && len(cols) == len(tableSchema.Columns) && len(data.ValExprs) == len(tableSchema.Columns) && identityCol == nil
 		if canDirectInsert {
 			for i, col := range cols {
 				if !strings.EqualFold(col, tableSchema.Columns[i].Name) {
@@ -756,8 +804,8 @@ vmLoop:
 				}
 			}
 			if allFast {
-				if err := f.tx.InsertRow(data.Table, storage.Row{Values: f.rowScratch}); err != nil {
-					if catchErr := f.handleCatch(fmt.Errorf("insert error on %s: %w", data.Table, err), &pc); catchErr != nil {
+				if err := f.tx.InsertRow(targetTable, storage.Row{Values: f.rowScratch}); err != nil {
+					if catchErr := f.handleCatch(fmt.Errorf("insert error on %s: %w", targetTable, err), &pc); catchErr != nil {
 						return nil, catchErr
 					}
 					continue vmLoop
@@ -871,14 +919,14 @@ vmLoop:
 			}
 		}
 
-		if err := f.tx.Insert(data.Table, rec); err != nil {
+		if err := f.tx.Insert(targetTable, rec); err != nil {
 			if errors.Is(err, storage.ErrKeyExists) || errors.Is(err, storage.ErrUniqueViolation) {
-				if catchErr := f.handleCatch(fmt.Errorf("duplicate key value violates unique constraint on %q: %w", data.Table, err), &pc); catchErr != nil {
+				if catchErr := f.handleCatch(fmt.Errorf("duplicate key value violates unique constraint on %q: %w", targetTable, err), &pc); catchErr != nil {
 					return nil, catchErr
 				}
 				continue vmLoop
 			}
-			if catchErr := f.handleCatch(fmt.Errorf("insert error on %s: %w", data.Table, err), &pc); catchErr != nil {
+			if catchErr := f.handleCatch(fmt.Errorf("insert error on %s: %w", targetTable, err), &pc); catchErr != nil {
 				return nil, catchErr
 			}
 			continue vmLoop
@@ -927,14 +975,15 @@ vmLoop:
 			}
 		}
 		if hasTriggers {
-			if err := f.fireTriggers(data.Table, "INSERT", []map[string]any{rowMap}, nil); err != nil {
+			if err := f.fireTriggers(targetTable, "INSERT", []map[string]any{rowMap}, nil); err != nil {
 				return nil, err
 			}
 		}
 
 	case proc.OpUpdate:
 		data := f.aux(&inst).(*proc.DMLData)
-		if data.WhereCol != "" && !f.isPKCol(data.Table, data.WhereCol) {
+		targetTable := f.resolveTable(data.Table)
+		if data.WhereCol != "" && !f.isPKCol(targetTable, data.WhereCol) {
 			data.WhereExpr = &proc.BinaryExpr{
 				Left:  &proc.ColumnRefExpr{Name: data.WhereCol},
 				Op:    proc.TokenEq,
@@ -962,7 +1011,7 @@ vmLoop:
 
 		var tableSchema *storage.TableSchema
 		if tg := f.executor.getTableGetter(); tg != nil {
-			if schema, err := tg(data.Table); err == nil && schema != nil {
+			if schema, err := tg(targetTable); err == nil && schema != nil {
 				tableSchema = schema
 			}
 		}
@@ -970,7 +1019,7 @@ vmLoop:
 		if tableSchema != nil {
 			for _, a := range data.Assignments {
 				if _, _, ok := tableSchema.FindColumn(a.Column); !ok {
-					if catchErr := f.handleCatch(fmt.Errorf("column %q does not exist in table %q", a.Column, data.Table), &pc); catchErr != nil {
+					if catchErr := f.handleCatch(fmt.Errorf("column %q does not exist in table %q", a.Column, targetTable), &pc); catchErr != nil {
 						return nil, catchErr
 					}
 					continue vmLoop
@@ -978,11 +1027,11 @@ vmLoop:
 			}
 		}
 
-		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "UPDATE")
+		hasTriggers := f.executor != nil && f.executor.HasTriggers(targetTable, "UPDATE")
 
 		// Fast-path Direct Row Update: bypass Record map allocations when no triggers exist
-		if !isTransientTable(data.Table) && tableSchema != nil && !hasTriggers {
-			oldRow, err := f.tx.GetRow(data.Table, pkVal)
+		if !isTransientTable(targetTable) && tableSchema != nil && !hasTriggers {
+			oldRow, err := f.tx.GetRow(targetTable, pkVal)
 			if err != nil {
 				if errors.Is(err, storage.ErrKeyNotFound) {
 					f.rowCount = 0
@@ -1045,7 +1094,7 @@ vmLoop:
 					}
 				}
 
-				if err := f.tx.UpdateRow(data.Table, pkVal, updatedRow); err != nil {
+				if err := f.tx.UpdateRow(targetTable, pkVal, updatedRow); err != nil {
 					if errors.Is(err, storage.ErrKeyNotFound) {
 						f.rowCount = 0
 						continue vmLoop
@@ -1091,8 +1140,8 @@ vmLoop:
 		}
 
 		var oldRec storage.Record
-		if !isTransientTable(data.Table) {
-			oldRec, _ = f.tx.Get(data.Table, pkVal)
+		if !isTransientTable(targetTable) {
+			oldRec, _ = f.tx.Get(targetTable, pkVal)
 		}
 
 		rowCtx := f.buildRowEvalMap(recordToMap(oldRec))
@@ -1125,7 +1174,7 @@ vmLoop:
 			rec.Set(colName, stVal)
 		}
 
-		if err := f.tx.Update(data.Table, pkVal, rec); err != nil {
+		if err := f.tx.Update(targetTable, pkVal, rec); err != nil {
 			if errors.Is(err, storage.ErrKeyNotFound) {
 				f.rowCount = 0
 				continue vmLoop
@@ -1191,7 +1240,7 @@ vmLoop:
 			for k, v := range rec {
 				newRow[k] = valToAny(v)
 			}
-			if err := f.fireTriggers(data.Table, "UPDATE", []map[string]any{newRow}, []map[string]any{oldRow}); err != nil {
+			if err := f.fireTriggers(targetTable, "UPDATE", []map[string]any{newRow}, []map[string]any{oldRow}); err != nil {
 				return nil, err
 			}
 		}
@@ -1209,7 +1258,8 @@ vmLoop:
 
 	case proc.OpDelete:
 		data := f.aux(&inst).(*proc.DMLData)
-		if data.WhereCol != "" && !f.isPKCol(data.Table, data.WhereCol) {
+		targetTable := f.resolveTable(data.Table)
+		if data.WhereCol != "" && !f.isPKCol(targetTable, data.WhereCol) {
 			data.WhereExpr = &proc.BinaryExpr{
 				Left:  &proc.ColumnRefExpr{Name: data.WhereCol},
 				Op:    proc.TokenEq,
@@ -1235,13 +1285,13 @@ vmLoop:
 			pkVal = toStorageValue(pkAny)
 		}
 
-		hasTriggersDelete := f.executor != nil && f.executor.HasTriggers(data.Table, "DELETE")
+		hasTriggersDelete := f.executor != nil && f.executor.HasTriggers(targetTable, "DELETE")
 		var oldRec storage.Record
-		if !isTransientTable(data.Table) && (len(data.OutputCols) > 0 || hasTriggersDelete) {
-			oldRec, _ = f.tx.Get(data.Table, pkVal)
+		if !isTransientTable(targetTable) && (len(data.OutputCols) > 0 || hasTriggersDelete) {
+			oldRec, _ = f.tx.Get(targetTable, pkVal)
 		}
 
-		if err := f.tx.Delete(data.Table, pkVal); err != nil {
+		if err := f.tx.Delete(targetTable, pkVal); err != nil {
 			if errors.Is(err, storage.ErrKeyNotFound) {
 				f.rowCount = 0
 				continue vmLoop
@@ -1282,10 +1332,10 @@ vmLoop:
 				f.rowCount = int64(len(f.rows))
 			}
 		}
-		hasTriggersDel := f.executor != nil && f.executor.HasTriggers(data.Table, "DELETE")
+		hasTriggersDel := f.executor != nil && f.executor.HasTriggers(targetTable, "DELETE")
 		if oldRec != nil && hasTriggersDel {
 			oldRow := recordToMap(oldRec)
-			if err := f.fireTriggers(data.Table, "DELETE", nil, []map[string]any{oldRow}); err != nil {
+			if err := f.fireTriggers(targetTable, "DELETE", nil, []map[string]any{oldRow}); err != nil {
 				return nil, err
 			}
 		}
@@ -1343,7 +1393,7 @@ vmLoop:
 			pkVal = toStorageValue(vAny)
 		}
 
-		tableName := cleanSymbol(data.Table)
+		tableName := f.resolveTable(data.Table)
 		if !f.isPKCol(tableName, data.WhereCol) {
 			sql := f.prog.QuerySQL
 			if sql == "" {
@@ -1489,7 +1539,7 @@ vmLoop:
 		case *proc.CursorData:
 			f.cursors[cleanSymbol(data.Name)] = &cursorState{
 				name:      cleanSymbol(data.Name),
-				table:     data.Table,
+				table:     f.resolveTable(data.Table),
 				columns:   data.Columns,
 				whereExpr: data.WhereExpr,
 				orderBy:   data.OrderBy,
@@ -1743,6 +1793,13 @@ vmLoop:
 		}
 		if sql == "" {
 			return nil, fmt.Errorf("OpRelQuery: empty query SQL")
+		}
+
+		if len(f.tableVars) > 0 {
+			for varName, physTable := range f.tableVars {
+				sql = sqlutil.SubstituteParamOutsideQuotes(sql, "@"+strings.TrimPrefix(varName, "@"), "["+physTable+"]")
+			}
+			queryData = nil
 		}
 
 		rows, cols, vals, err := f.execRelQuery(sql, queryData)

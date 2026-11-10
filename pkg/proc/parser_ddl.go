@@ -569,6 +569,26 @@ func (p *Parser) parseCreateTable() (*CreateTableStmt, error) {
 	}
 	p.nextToken()
 
+	cols, err := p.parseColumnDefs()
+	if err != nil {
+		return nil, err
+	}
+
+	if p.curTokenIs(TokenRParen) {
+		p.nextToken()
+	}
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+
+	return &CreateTableStmt{
+		Name:        tableName,
+		IfNotExists: ifNotExists,
+		Columns:     cols,
+	}, nil
+}
+
+func (p *Parser) parseColumnDefs() ([]ColumnDef, error) {
 	var cols []ColumnDef
 	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
 		if p.curTokenIs(TokenIdent) {
@@ -642,19 +662,12 @@ func (p *Parser) parseCreateTable() (*CreateTableStmt, error) {
 			break
 		}
 	}
+	return cols, nil
+}
 
-	if p.curTokenIs(TokenRParen) {
-		p.nextToken()
-	}
-	if p.curTokenIs(TokenSemicolon) {
-		p.nextToken()
-	}
-
-	return &CreateTableStmt{
-		Name:        tableName,
-		IfNotExists: ifNotExists,
-		Columns:     cols,
-	}, nil
+// ParseColumnDefs parses column definitions inside parenthesis.
+func (p *Parser) ParseColumnDefs() ([]ColumnDef, error) {
+	return p.parseColumnDefs()
 }
 
 

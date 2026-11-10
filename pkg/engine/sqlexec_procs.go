@@ -1433,112 +1433,11 @@ func buildSpExecuteSQL(stmt string, paramsDecl string, namedArgs map[string]stri
 }
 
 func substituteParamsSinglePass(query string, bindings map[string]string) string {
-	if len(query) == 0 || len(bindings) == 0 {
-		return query
-	}
-
-	normBindings := make(map[string]string, len(bindings))
-	for k, v := range bindings {
-		if !strings.HasPrefix(k, "@") {
-			k = "@" + k
-		}
-		normBindings[strings.ToLower(k)] = v
-	}
-
-	var b strings.Builder
-	b.Grow(len(query) + len(bindings)*16)
-
-	inString := false
-	var quoteChar rune
-	runes := []rune(query)
-
-	isRuneIdentChar := func(r rune) bool {
-		return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
-	}
-
-	i := 0
-	for i < len(runes) {
-		ch := runes[i]
-		if inString {
-			b.WriteRune(ch)
-			if ch == quoteChar {
-				if i+1 < len(runes) && runes[i+1] == quoteChar {
-					b.WriteRune(runes[i+1])
-					i += 2
-					continue
-				}
-				inString = false
-			}
-			i++
-			continue
-		}
-
-		if ch == '\'' || ch == '"' {
-			inString = true
-			quoteChar = ch
-			b.WriteRune(ch)
-			i++
-			continue
-		}
-
-		// Line comment (-- ...)
-		if ch == '-' && i+1 < len(runes) && runes[i+1] == '-' {
-			b.WriteRune(ch)
-			b.WriteRune(runes[i+1])
-			i += 2
-			for i < len(runes) && runes[i] != '\n' {
-				b.WriteRune(runes[i])
-				i++
-			}
-			continue
-		}
-
-		// Block comment (/* ... */)
-		if ch == '/' && i+1 < len(runes) && runes[i+1] == '*' {
-			b.WriteRune(ch)
-			b.WriteRune(runes[i+1])
-			i += 2
-			for i < len(runes) {
-				if runes[i] == '*' && i+1 < len(runes) && runes[i+1] == '/' {
-					b.WriteRune('*')
-					b.WriteRune('/')
-					i += 2
-					break
-				}
-				b.WriteRune(runes[i])
-				i++
-			}
-			continue
-		}
-
-		if ch == '@' {
-			// Extract full identifier starting with @ (e.g. @param or @@version)
-			start := i
-			i++
-			if i < len(runes) && runes[i] == '@' {
-				i++ // handle @@
-			}
-			for i < len(runes) && isRuneIdentChar(runes[i]) {
-				i++
-			}
-			ident := strings.ToLower(string(runes[start:i]))
-			if rep, ok := normBindings[ident]; ok {
-				b.WriteString(rep)
-			} else {
-				b.WriteString(string(runes[start:i]))
-			}
-			continue
-		}
-
-		b.WriteRune(ch)
-		i++
-	}
-
-	return b.String()
+	return sqlutil.SubstituteParamsSinglePass(query, bindings)
 }
 
 func substituteParamOutsideQuotes(query string, paramName string, formattedVal string) string {
-	return substituteParamsSinglePass(query, map[string]string{paramName: formattedVal})
+	return sqlutil.SubstituteParamOutsideQuotes(query, paramName, formattedVal)
 }
 
 // execAnonymousBlock compiles and executes ad-hoc anonymous control-flow statements (IF...ELSE, WHILE, BEGIN...END).

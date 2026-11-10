@@ -451,22 +451,22 @@ func (p *Parser) parseDeclare() (Statement, error) {
 	// Check for table variable declaration: DECLARE @var TABLE (...)
 	if p.curTokenIs(TokenTable) {
 		p.nextToken() // eat TABLE
+		var cols []ColumnDef
 		if p.curTokenIs(TokenLParen) {
-			p.nextToken()
-			depth := 1
-			for depth > 0 && !p.curTokenIs(TokenEOF) {
-				if p.curTokenIs(TokenLParen) {
-					depth++
-				} else if p.curTokenIs(TokenRParen) {
-					depth--
-				}
+			p.nextToken() // eat (
+			var err error
+			cols, err = p.parseColumnDefs()
+			if err != nil {
+				return nil, err
+			}
+			if p.curTokenIs(TokenRParen) {
 				p.nextToken()
 			}
 		}
 		if p.curTokenIs(TokenSemicolon) {
 			p.nextToken()
 		}
-		return &DeclareStmt{Name: name, Type: parseDataType("VARCHAR")}, nil
+		return &DeclareTableStmt{Name: name, Columns: cols}, nil
 	}
 
 	// Normal variable declaration

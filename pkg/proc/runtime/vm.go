@@ -175,6 +175,13 @@ func (c *PlanCache) Clear() {
 	c.byName = make(map[string]*proc.Program)
 }
 
+// TableManager defines the storage interface for managing physical tables for table variables.
+type TableManager interface {
+	CreateTable(schema *storage.TableSchema) error
+	DropTable(tableName string) error
+	GetTable(tableName string) (*storage.TableSchema, error)
+}
+
 // IdentityProvider defines the interface for reading and updating table identity/sequence values.
 type IdentityProvider interface {
 	GetTableLastIdentity(tableName string) (int64, bool)
@@ -189,6 +196,7 @@ type Executor struct {
 	triggers       map[string]map[string][]*TriggerEntry // table (lower) -> event (upper) -> entries
 	framePool      sync.Pool
 	tableGetter    execution.TableGetter
+	tableManager   TableManager
 	queryExecutor  QueryExecutor
 	identProvider  IdentityProvider
 	identMu        sync.RWMutex
@@ -291,6 +299,19 @@ func (e *Executor) getTableGetter() execution.TableGetter {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.tableGetter
+}
+
+// SetTableManager configures the physical table lifecycle manager for table variables.
+func (e *Executor) SetTableManager(tm TableManager) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.tableManager = tm
+}
+
+func (e *Executor) getTableManager() TableManager {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.tableManager
 }
 
 // Cache returns the underlying bytecode PlanCache.
@@ -421,6 +442,7 @@ type VMFrame struct {
 	evalCtx         map[string]any
 	cursors         map[string]*cursorState
 	transientTables map[string][]map[string]any
+	tableVars       map[string]string
 	catchStack      []int
 	logs            []string
 	rows            []map[string]any
@@ -491,17 +513,39 @@ func (f *VMFrame) getStorageVarsMap() map[string]storage.Value {
 	return vars
 }
 
+func (f *VMFrame) resolveTable(name string) string {
+	raw := strings.TrimSpace(name)
+	if f.tableVars != nil {
+		lower := strings.ToLower(raw)
+		if phys, ok := f.tableVars[lower]; ok {
+			return phys
+		}
+		if !strings.HasPrefix(lower, "@") {
+			if phys, ok := f.tableVars["@"+lower]; ok {
+				return phys
+			}
+		}
+	}
+	return cleanSymbol(raw)
+}
+
 func (f *VMFrame) getTableSchema(tableName string) (*storage.TableSchema, error) {
+	resolved := f.resolveTable(tableName)
 	if f.tx != nil {
 		if tg, ok := f.tx.(interface{ GetTable(string) (*storage.TableSchema, error) }); ok {
-			if schema, err := tg.GetTable(tableName); err == nil && schema != nil {
+			if schema, err := tg.GetTable(resolved); err == nil && schema != nil {
 				return schema, nil
 			}
 		}
 	}
 	if f.executor != nil {
+		if tm := f.executor.getTableManager(); tm != nil {
+			if schema, err := tm.GetTable(resolved); err == nil && schema != nil {
+				return schema, nil
+			}
+		}
 		if tg := f.executor.getTableGetter(); tg != nil {
-			return tg(tableName)
+			return tg(resolved)
 		}
 	}
 	return nil, storage.ErrTableNotFound
@@ -704,6 +748,11 @@ func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame
 	f.rowScratch = f.rowScratch[:0]
 	clear(f.cursors)
 	clear(f.transientTables)
+	if f.tableVars == nil {
+		f.tableVars = make(map[string]string)
+	} else {
+		clear(f.tableVars)
+	}
 	f.catchStack = f.catchStack[:0]
 	f.logs = f.logs[:0]
 
@@ -762,6 +811,18 @@ func (f *VMFrame) resetForPool() {
 	// 3. Clean up open cursors and transient tables ([RULE:HandleHygiene])
 	clear(f.cursors)
 	clear(f.transientTables)
+
+	// Clean up table variables and drop physical tables ([RULE:CleanTeardown])
+	if len(f.tableVars) > 0 {
+		if f.executor != nil {
+			if tm := f.executor.getTableManager(); tm != nil {
+				for _, phys := range f.tableVars {
+					_ = tm.DropTable(phys)
+				}
+			}
+		}
+		clear(f.tableVars)
+	}
 
 	// 4. Detach all execution results, sessions, and contexts
 	f.rows = nil
@@ -1242,6 +1303,11 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 	}
 
 	selectSQL := data.Select.String()
+	if len(f.tableVars) > 0 {
+		for varName, physTable := range f.tableVars {
+			selectSQL = sqlutil.SubstituteParamOutsideQuotes(selectSQL, "@"+strings.TrimPrefix(varName, "@"), "["+physTable+"]")
+		}
+	}
 	rows, cols, err := qe(f.ctx, selectSQL, f.tx, f.getStorageVarsMap())
 	if err != nil {
 		return 0, fmt.Errorf("INSERT INTO ... SELECT query execution failed: %w", err)
@@ -1251,7 +1317,8 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 		return 0, nil
 	}
 
-	tableSchema, err := f.getTableSchema(data.Table)
+	targetTable := f.resolveTable(data.Table)
+	tableSchema, err := f.getTableSchema(targetTable)
 	if err != nil {
 		return 0, fmt.Errorf("table %q not found: %w", data.Table, err)
 	}
@@ -1269,7 +1336,7 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 		return 0, fmt.Errorf("column count mismatch: target table %q expects %d columns, but SELECT produced %d columns", data.Table, len(targetCols), len(cols))
 	}
 
-	hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "INSERT")
+	hasTriggers := f.executor != nil && f.executor.HasTriggers(targetTable, "INSERT")
 	var newRows []map[string]any
 	if hasTriggers {
 		newRows = make([]map[string]any, 0, len(rows))
@@ -1303,7 +1370,7 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 			}
 		}
 
-		if err := f.tx.Insert(data.Table, rec); err != nil {
+		if err := f.tx.Insert(targetTable, rec); err != nil {
 			return insertedCount, fmt.Errorf("insert error into %s: %w", data.Table, err)
 		}
 		insertedCount++
@@ -1322,21 +1389,22 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 }
 
 func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
-	if schema, err := f.getTableSchema(data.Table); err == nil && schema != nil {
+	targetTable := f.resolveTable(data.Table)
+	if schema, err := f.getTableSchema(targetTable); err == nil && schema != nil {
 		for _, a := range data.Assignments {
 			if _, _, ok := schema.FindColumn(a.Column); !ok {
-				return 0, fmt.Errorf("column %q does not exist in table %q", a.Column, data.Table)
+				return 0, fmt.Errorf("column %q does not exist in table %q", a.Column, targetTable)
 			}
 		}
 	}
 
 	var pkValExpr proc.Expr
-	if colName, valExpr, ok := extractSimpleEq(data.WhereExpr); ok && f.isPKCol(data.Table, colName) {
+	if colName, valExpr, ok := extractSimpleEq(data.WhereExpr); ok && f.isPKCol(targetTable, colName) {
 		pkValExpr = valExpr
 	} else if data.WhereExpr != nil {
 		eqs := extractAllEqConditions(data.WhereExpr)
 		for col, expr := range eqs {
-			if f.isPKCol(data.Table, col) {
+			if f.isPKCol(targetTable, col) {
 				pkValExpr = expr
 				break
 			}
@@ -1347,7 +1415,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		evalCtx := f.buildRowEvalMap(nil)
 		pkAny, _ := proc.EvalRowExpr(pkValExpr, evalCtx, nil)
 		pkVal := toStorageValue(pkAny)
-		oldRec, err := f.tx.Get(data.Table, pkVal)
+		oldRec, err := f.tx.Get(targetTable, pkVal)
 		if err == nil && oldRec != nil {
 			oldRowMap := recordToMap(oldRec)
 			rowCtx := f.buildRowEvalMap(oldRowMap)
@@ -1359,7 +1427,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			for k, v := range oldRowMap {
 				newRowMap[k] = v
 			}
-			tableSchema, _ := f.getTableSchema(data.Table)
+			tableSchema, _ := f.getTableSchema(targetTable)
 			for _, a := range data.Assignments {
 				vAny, err := proc.EvalUpdateRowExpr(a.Value, rowCtx, nil)
 				if err != nil {
@@ -1385,8 +1453,8 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 				recUpdates.Set(colName, stVal)
 				newRowMap[colName] = valToAny(stVal)
 			}
-			if err := f.tx.Update(data.Table, pkVal, recUpdates); err != nil {
-				return 0, fmt.Errorf("update error on %s: %w", data.Table, err)
+			if err := f.tx.Update(targetTable, pkVal, recUpdates); err != nil {
+				return 0, fmt.Errorf("update error on %s: %w", targetTable, err)
 			}
 			if len(data.OutputCols) > 0 {
 				if len(data.IntoVars) > 0 {
@@ -1438,8 +1506,8 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 					f.rowCount = int64(len(f.rows))
 				}
 			}
-			if err := f.fireTriggers(data.Table, "UPDATE", []map[string]any{newRowMap}, []map[string]any{oldRowMap}); err != nil {
-				return 0, fmt.Errorf("trigger error on %s: %w", data.Table, err)
+			if err := f.fireTriggers(targetTable, "UPDATE", []map[string]any{newRowMap}, []map[string]any{oldRowMap}); err != nil {
+				return 0, fmt.Errorf("trigger error on %s: %w", targetTable, err)
 			}
 			return 1, nil
 		}
@@ -1449,20 +1517,20 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	var cursor storage.Cursor
 	var err error
 
-	if idxName, lowVal, highVal, ok := f.findMatchingIndex(data.Table, data.WhereExpr); ok {
-		cursor, err = f.tx.IndexScan(data.Table, idxName, lowVal, highVal)
+	if idxName, lowVal, highVal, ok := f.findMatchingIndex(targetTable, data.WhereExpr); ok {
+		cursor, err = f.tx.IndexScan(targetTable, idxName, lowVal, highVal)
 	}
 
 	if cursor == nil || err != nil {
-		cursor, err = f.tx.Scan(data.Table)
+		cursor, err = f.tx.Scan(targetTable)
 		if err != nil {
-			return 0, fmt.Errorf("updateWhere scan error on %s: %w", data.Table, err)
+			return 0, fmt.Errorf("updateWhere scan error on %s: %w", targetTable, err)
 		}
 	}
 	defer cursor.Close()
 
-	tableSchema, _ := f.getTableSchema(data.Table)
-	hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "UPDATE")
+	tableSchema, _ := f.getTableSchema(targetTable)
+	hasTriggers := f.executor != nil && f.executor.HasTriggers(targetTable, "UPDATE")
 
 	type updateItem struct {
 		pk      storage.Value
@@ -1572,7 +1640,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		newRows = make([]map[string]any, 0, len(toUpdate))
 	}
 	for _, item := range toUpdate {
-		if err := f.tx.Update(data.Table, item.pk, item.updates); err == nil {
+		if err := f.tx.Update(targetTable, item.pk, item.updates); err == nil {
 			updatedCount++
 			if hasTriggers {
 				oldRows = append(oldRows, item.oldRow)
@@ -1582,25 +1650,26 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	}
 
 	if hasTriggers && updatedCount > 0 {
-		if err := f.fireTriggers(data.Table, "UPDATE", newRows, oldRows); err != nil {
-			return 0, fmt.Errorf("trigger error on %s: %w", data.Table, err)
+		if err := f.fireTriggers(targetTable, "UPDATE", newRows, oldRows); err != nil {
+			return 0, fmt.Errorf("trigger error on %s: %w", targetTable, err)
 		}
 	}
 	return updatedCount, nil
 }
 
 func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
-	if colName, valExpr, ok := extractSimpleEq(data.WhereExpr); ok && f.isPKCol(data.Table, colName) {
+	targetTable := f.resolveTable(data.Table)
+	if colName, valExpr, ok := extractSimpleEq(data.WhereExpr); ok && f.isPKCol(targetTable, colName) {
 		evalCtx := f.buildRowEvalMap(nil)
 		pkAny, _ := proc.EvalRowExpr(valExpr, evalCtx, nil)
 		pkVal := toStorageValue(pkAny)
-		oldRec, err := f.tx.Get(data.Table, pkVal)
+		oldRec, err := f.tx.Get(targetTable, pkVal)
 		if err == nil && oldRec != nil {
-			if err := f.tx.Delete(data.Table, pkVal); err != nil {
-				return 0, fmt.Errorf("delete error on %s: %w", data.Table, err)
+			if err := f.tx.Delete(targetTable, pkVal); err != nil {
+				return 0, fmt.Errorf("delete error on %s: %w", targetTable, err)
 			}
-			if err := f.fireTriggers(data.Table, "DELETE", nil, []map[string]any{recordToMap(oldRec)}); err != nil {
-				return 0, fmt.Errorf("trigger error on %s: %w", data.Table, err)
+			if err := f.fireTriggers(targetTable, "DELETE", nil, []map[string]any{recordToMap(oldRec)}); err != nil {
+				return 0, fmt.Errorf("trigger error on %s: %w", targetTable, err)
 			}
 			return 1, nil
 		}
@@ -1610,20 +1679,20 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 	var cursor storage.Cursor
 	var err error
 
-	if idxName, lowVal, highVal, ok := f.findMatchingIndex(data.Table, data.WhereExpr); ok {
-		cursor, err = f.tx.IndexScan(data.Table, idxName, lowVal, highVal)
+	if idxName, lowVal, highVal, ok := f.findMatchingIndex(targetTable, data.WhereExpr); ok {
+		cursor, err = f.tx.IndexScan(targetTable, idxName, lowVal, highVal)
 	}
 
 	if cursor == nil || err != nil {
-		cursor, err = f.tx.Scan(data.Table)
+		cursor, err = f.tx.Scan(targetTable)
 		if err != nil {
-			return 0, fmt.Errorf("deleteWhere scan error on %s: %w", data.Table, err)
+			return 0, fmt.Errorf("deleteWhere scan error on %s: %w", targetTable, err)
 		}
 	}
 	defer cursor.Close()
 
-	tableSchema, _ := f.getTableSchema(data.Table)
-	hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "DELETE")
+	tableSchema, _ := f.getTableSchema(targetTable)
+	hasTriggers := f.executor != nil && f.executor.HasTriggers(targetTable, "DELETE")
 
 	type delItem struct {
 		pk  storage.Value
@@ -1682,7 +1751,7 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 		deletedRows = make([]map[string]any, 0, len(toDelete))
 	}
 	for _, item := range toDelete {
-		if err := f.tx.Delete(data.Table, item.pk); err == nil {
+		if err := f.tx.Delete(targetTable, item.pk); err == nil {
 			deletedCount++
 			if hasTriggers {
 				deletedRows = append(deletedRows, item.row)
@@ -1691,8 +1760,8 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 	}
 
 	if hasTriggers && len(deletedRows) > 0 {
-		if err := f.fireTriggers(data.Table, "DELETE", nil, deletedRows); err != nil {
-			return 0, fmt.Errorf("trigger error on %s: %w", data.Table, err)
+		if err := f.fireTriggers(targetTable, "DELETE", nil, deletedRows); err != nil {
+			return 0, fmt.Errorf("trigger error on %s: %w", targetTable, err)
 		}
 	}
 	return deletedCount, nil
