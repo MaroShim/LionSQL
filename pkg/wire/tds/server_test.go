@@ -1314,6 +1314,53 @@ func TestTDS_SSMS_DmfPolicyStore(t *testing.T) {
 	}
 }
 
+func TestTDS_ALL_HEADERS_Validation_AuditFull008(t *testing.T) {
+	// 1. Valid ALL_HEADERS with Transaction Descriptor (Type 2, TotalLength = 22, HeaderLength = 18)
+	validHdr := make([]byte, 22)
+	binary.LittleEndian.PutUint32(validHdr[0:4], 22) // TotalLength
+	binary.LittleEndian.PutUint32(validHdr[4:8], 18) // HeaderLength
+	binary.LittleEndian.PutUint16(validHdr[8:10], 2) // HeaderType: Transaction Descriptor
+	copy(validHdr[10:], []byte("123456789012"))      // Data
+
+	sqlQuery := "SELECT 42;"
+	payloadWithHdr := append(validHdr, EncodeUTF16LE(sqlQuery)...)
+
+	totalLen, ok := parseAllHeaders(payloadWithHdr)
+	if !ok || totalLen != 22 {
+		t.Fatalf("expected valid ALL_HEADERS with len 22, got (%d, %v)", totalLen, ok)
+	}
+
+	extracted := extractSQLBatchQuery(payloadWithHdr)
+	if extracted != sqlQuery {
+		t.Fatalf("expected extracted query %q, got %q", sqlQuery, extracted)
+	}
+
+	// 2. AUDIT-FULL-008 Collision Case: Large RPC (e.g. 800KB) with ProcID 10 (sp_executesql)
+	// Byte sequence: 0xFFFF (NameLen), 0x000A (ProcID 10)
+	// uint32(LittleEndian) = 0x000AFFFF = 720,895 bytes
+	largeRPC := make([]byte, 800000)
+	binary.LittleEndian.PutUint16(largeRPC[0:2], 0xFFFF) // NameLen = 0xFFFF (ProcID follows)
+	binary.LittleEndian.PutUint16(largeRPC[2:4], 0x000A) // ProcID = 10 (sp_executesql)
+	binary.LittleEndian.PutUint16(largeRPC[4:6], 0x0000) // OptionFlags = 0
+	// Bytes 8:10 are not 1, 2, or 3
+	binary.LittleEndian.PutUint16(largeRPC[8:10], 0xCAFE)
+
+	// parseAllHeaders MUST return false!
+	_, ok = parseAllHeaders(largeRPC)
+	if ok {
+		t.Fatalf("AUDIT-FULL-008: parseAllHeaders falsely identified ProcID 0x000AFFFF as ALL_HEADERS!")
+	}
+
+	// parseRPCRequest MUST successfully parse ProcID == 10 and not seek forward 720KB
+	rpc, err := parseRPCRequest(largeRPC[:6])
+	if err != nil {
+		t.Fatalf("parseRPCRequest failed on large RPC header: %v", err)
+	}
+	if rpc.ProcID != 10 {
+		t.Fatalf("expected ProcID 10, got %d", rpc.ProcID)
+	}
+}
+
 
 
 

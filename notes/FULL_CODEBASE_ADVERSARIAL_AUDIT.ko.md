@@ -1659,7 +1659,7 @@
 | `AUDIT-FULL-005` | High | `pkg/proc/runtime/vm_dispatcher.go:667` | OpDeclareTable 나노초 타이머 충돌로 동일 임시 테이블명 생성 및 신규 테이블 자가 삭제 | 완치 (수정 완료) |
 | `AUDIT-FULL-006` | Medium | `pkg/engine/sqlexec_explain.go:1016` | <> ANY 정량 서브쿼리를 distinct 값에 대해 1=1로 재작성하여 3VL NULL 행 유출 결함 | 완치 (수정 완료) |
 | `AUDIT-FULL-007` | Medium | `pkg/storage/wiredtiger/wt_engine.go:614` | C.go_wt_session_drop 리턴코드 무시로 고아 파일 잔존 및 후속 CREATE TABLE 실패 | 미수정 |
-| `AUDIT-FULL-008` | High | `pkg/wire/tds/server.go:1000` | ALL_HEADERS 4바이트 길이 오인식으로 인한 대용량 RPC(sp_executesql) 스트림 오절단 및 연결 단절 | 미수정 |
+| `AUDIT-FULL-008` | High | `pkg/wire/tds/server.go:1000` | ALL_HEADERS 4바이트 길이 오인식으로 인한 대용량 RPC(sp_executesql) 스트림 오절단 및 연결 단절 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-009` | High | `pkg/storage/memengine/ddl.go:681` | AlterTable 시 WAL 영속화 전면 누락 및 FK CASCADE SET NULL 시 비동기화 맵 읽기 | 미수정 |
 | `AUDIT-FULL-010` | Critical | `pkg/storage/wiredtiger/wt_engine.go:1205` | releaseCursor에서 세션 락 없이 reset 호출(CGo Use-After-Free) 및 닫힌 세션 커서 이중 닫기(Double-Free SIGSEGV) | 완치 (수정 완료) |
 | `AUDIT-FULL-011` | High | `pkg/storage/wiredtiger/wt_engine.go:680` | TruncateTables 시 PhysicalName 누락으로 인한 EBUSY 에러 및 데이터 삭제 실패 은폐 | 미수정 |

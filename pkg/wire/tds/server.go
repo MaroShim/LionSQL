@@ -984,19 +984,37 @@ func (s *Server) handleSQLBatch(conn net.Conn, pkt *Packet, sess *ConnectionSess
 	s.executeQueryAndRespond(conn, query, sess, ctx)
 }
 
+// parseAllHeaders checks if payload starts with a valid [MS-TDS] 2.2.5.3 ALL_HEADERS structure.
+// If valid, it returns the total header length and true; otherwise it returns 0 and false.
+func parseAllHeaders(payload []byte) (int, bool) {
+	if len(payload) < 10 {
+		return 0, false
+	}
+	totalLen := int(binary.LittleEndian.Uint32(payload[:4]))
+	if totalLen < 10 || totalLen > len(payload) {
+		return 0, false
+	}
+	hdrLen := int(binary.LittleEndian.Uint32(payload[4:8]))
+	if hdrLen < 6 || hdrLen > totalLen-4 {
+		return 0, false
+	}
+	hdrType := binary.LittleEndian.Uint16(payload[8:10])
+	// HeaderType: 1 = Query Notifications, 2 = Transaction Descriptor, 3 = Trace Activity
+	if hdrType != 1 && hdrType != 2 && hdrType != 3 {
+		return 0, false
+	}
+	return totalLen, true
+}
+
 func extractSQLBatchQuery(payload []byte) string {
 	if len(payload) == 0 {
 		return ""
 	}
 
 	// Check for ALL_HEADERS (TDS 7.2+)
-	if len(payload) >= 4 {
-		totalHeadersLen := binary.LittleEndian.Uint32(payload[:4])
-		if totalHeadersLen >= 4 && int(totalHeadersLen) < len(payload) {
-			// Header contains transaction descriptor or query notifications
-			sqlBytes := payload[totalHeadersLen:]
-			return strings.TrimSpace(strings.Trim(DecodeUTF16LE(sqlBytes), "\x00"))
-		}
+	if totalHeadersLen, ok := parseAllHeaders(payload); ok {
+		sqlBytes := payload[totalHeadersLen:]
+		return strings.TrimSpace(strings.Trim(DecodeUTF16LE(sqlBytes), "\x00"))
 	}
 
 	// Direct UTF-16LE payload
@@ -1897,13 +1915,8 @@ func parseRPCRequest(payload []byte) (*parsedRPC, error) {
 	r := bytes.NewReader(payload)
 
 	// Check for ALL_HEADERS in RPC
-	if len(payload) >= 4 {
-		var totalHeadersLen uint32
-		if err := binary.Read(r, binary.LittleEndian, &totalHeadersLen); err == nil && totalHeadersLen >= 4 && int(totalHeadersLen) < len(payload) {
-			_, _ = r.Seek(int64(totalHeadersLen), io.SeekStart)
-		} else {
-			_, _ = r.Seek(0, io.SeekStart)
-		}
+	if totalHeadersLen, ok := parseAllHeaders(payload); ok {
+		_, _ = r.Seek(int64(totalHeadersLen), io.SeekStart)
 	}
 
 	var nameLen uint16
@@ -2408,8 +2421,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 	}
 
 	body := payload
-	totalHeadersLen := binary.LittleEndian.Uint32(payload[:4])
-	if totalHeadersLen >= 4 && int(totalHeadersLen) < len(payload) {
+	if totalHeadersLen, ok := parseAllHeaders(payload); ok {
 		body = payload[totalHeadersLen:]
 	}
 

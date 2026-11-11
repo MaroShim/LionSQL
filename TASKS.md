@@ -23,6 +23,7 @@
 | `DONE` | **`AUDIT-CROSS-CONTAINS`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사: strings.Contains 기반 SQL 키워드/연산자 단순 매칭 안티패턴 발굴 및 토크나이저 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`AUDIT-CROSS-PREFIX`** | `1.0-GA` | Engine | P2 | 코드베이스 전수 조사: strings.HasPrefix/HasSuffix 기반 SQL 구문/예약어 경계 미검사 안티패턴 발굴 및 HasPrefixKeyword 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`AUDIT-CROSS-SPLIT`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사: strings.Split 기반 SQL 절/파라미터/WHERE 단순 분할 안티패턴 발굴 및 sqlutil 분할 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-FULL-008`** | `Protocol` | --milestone | P1 | TDS ALL_HEADERS 길이 및 헤더 타입(1,2,3) 검증을 통한 대용량 RPC(sp_executesql) 스트림 손상 방지 | [`--category`](--category) |  |
 | `DONE` | **`AUDIT-FULL-032`** | `1.0-GA` | Protocol | P1 | formatParamForSQL의 NUMERIC OID 1700 고정밀 Decimal 유실 방지 (float64 다운캐스팅 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`AUDIT-FULL-13DOM`** |  | Integrity | P1 | 전 13대 도메인(175개 파일, 113,056 LOC) 듀얼 AI 라인 단위 적대적 감사 완료 및 40개 결함 도출 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `IN_PROGRESS` | **`AUDIT-FULL-PATCH`** | `1.0-GA` | Integrity | P1 | 전수 감사 발굴 40대 결함(Critical 2건 완치, High 26건, Med/Low 12건) TDD 순차 패치 및 무결점 회귀 검증 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
@@ -466,6 +467,13 @@
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-11 12:23:58
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+
+---
+
+### [DONE] TDS ALL_HEADERS 길이 및 헤더 타입(1,2,3) 검증을 통한 대용량 RPC(sp_executesql) 스트림 손상 방지 `AUDIT-FULL-008`
+- **Domain**: --milestone | **Priority**: P1 | **Updated**: 2026-11-11 15:19:03
+- **Milestone**: `Protocol`
+- **Plan Doc**: [`--category`](--category)
 
 ---
 
