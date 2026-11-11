@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -12,10 +13,15 @@ import (
 
 // BackupToFile dumps the sprint_tasks table to Markdown strictly ordered by id ASC (Diff-Stable Invariant).
 func BackupToFile(backend Backend, filename string) error {
-	query := "SELECT id, status, domain, priority, title, plan_doc, metrics, target_files, phases, description, created_at, updated_at FROM sprint_tasks ORDER BY id ASC;"
+	query := "SELECT id, status, COALESCE(milestone, '') AS milestone, domain, priority, title, plan_doc, metrics, target_files, phases, description, created_at, updated_at FROM sprint_tasks ORDER BY id ASC;"
 	res, err := backend.Exec(query)
 	if err != nil {
-		return err
+		if migErr := EnsureMilestoneColumn(backend); migErr == nil {
+			res, err = backend.Exec(query)
+		}
+		if err != nil {
+			return err
+		}
 	}
 
 	var sb strings.Builder
@@ -24,10 +30,14 @@ func BackupToFile(backend Backend, filename string) error {
 	sb.WriteString(fmt.Sprintf("> - **Primary Source of Truth (SSOT)**: %s `sprint_tasks` Table\n", backend.Name()))
 	sb.WriteString("> - **Backup File**: Auto-synced on task update & Git commit\n\n")
 	sb.WriteString("## 1. Quick Status Overview\n\n")
-	sb.WriteString("| Status | ID | Domain | Priority | Title | Plan Doc | Metrics |\n")
-	sb.WriteString("| :---: | :---: | :---: | :---: | :--- | :--- | :--- |\n")
+	sb.WriteString("| Status | ID | Milestone | Domain | Priority | Title | Plan Doc | Metrics |\n")
+	sb.WriteString("| :---: | :---: | :---: | :---: | :---: | :--- | :--- | :--- |\n")
 
 	for _, r := range res.Rows {
+		milestone := ""
+		if ms, ok := r["milestone"].(string); ok && ms != "" {
+			milestone = fmt.Sprintf("`%s`", ms)
+		}
 		planDoc := ""
 		if pd, ok := r["plan_doc"].(string); ok && pd != "" {
 			planDoc = fmt.Sprintf("[`%s`](%s)", pd, pd)
@@ -41,8 +51,8 @@ func BackupToFile(backend Backend, filename string) error {
 				metrics = m
 			}
 		}
-		sb.WriteString(fmt.Sprintf("| `%v` | **`%v`** | %v | P%v | %v | %v | %v |\n",
-			r["status"], r["id"], r["domain"], r["priority"], r["title"], planDoc, metrics))
+		sb.WriteString(fmt.Sprintf("| `%v` | **`%v`** | %s | %v | P%v | %v | %v | %v |\n",
+			r["status"], r["id"], milestone, r["domain"], r["priority"], r["title"], planDoc, metrics))
 	}
 	sb.WriteString("\n---\n\n")
 
@@ -50,6 +60,9 @@ func BackupToFile(backend Backend, filename string) error {
 	for _, r := range res.Rows {
 		sb.WriteString(fmt.Sprintf("### [%v] %s `%s`\n", r["status"], r["title"], r["id"]))
 		sb.WriteString(fmt.Sprintf("- **Domain**: %v | **Priority**: P%v | **Updated**: %v\n", r["domain"], r["priority"], r["updated_at"]))
+		if ms, ok := r["milestone"].(string); ok && ms != "" {
+			sb.WriteString(fmt.Sprintf("- **Milestone**: `%s`\n", ms))
+		}
 		if pd, ok := r["plan_doc"].(string); ok && pd != "" {
 			sb.WriteString(fmt.Sprintf("- **Plan Doc**: [`%s`](%s)\n", pd, pd))
 		}
@@ -72,7 +85,31 @@ func BackupToFile(backend Backend, filename string) error {
 		sb.WriteString("\n---\n\n")
 	}
 
-	return os.WriteFile(filename, []byte(sb.String()), 0644)
+	dir := filepath.Dir(filename)
+	tmpFile, err := os.CreateTemp(dir, ".tasks_backup_*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmpFile.Name()
+	if _, err := tmpFile.WriteString(sb.String()); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmpFile.Chmod(0644); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, filename); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return nil
 }
 
 // RestoreFromFile parses a TASKS.md file and reconstructs the sprint_tasks table 1:1.
@@ -83,14 +120,16 @@ func RestoreFromFile(backend Backend, filename string) (int, error) {
 	}
 	defer file.Close()
 
-	// Ensure table exists before restoring
+	// Ensure table and milestone column exist before restoring
 	_ = backend.Init()
+	_ = EnsureMilestoneColumn(backend)
 
 	var tasks []ParsedTask
 	taskMap := make(map[string]*ParsedTask)
 
 	reHeader := regexp.MustCompile(`^###\s+\[([A-Z_]+)\]\s+(.*?)\s+` + "`" + `([A-Za-z0-9_\-\.]+)` + "`" + `$`)
 	reMeta := regexp.MustCompile(`^-\s+\*\*Domain\*\*:\s+(.*?)\s+\|\s+\*\*Priority\*\*:\s+P(\d+)(?:\s+\|\s+\*\*Updated\*\*:\s+(.*))?$`)
+	reMilestone := regexp.MustCompile(`^-\s+\*\*Milestone\*\*:\s+` + "`" + `?([^` + "`" + `]+)` + "`" + `?$`)
 	rePlanDoc := regexp.MustCompile(`^-\s+\*\*Plan Doc\*\*:\s+\[` + "`" + `([^` + "`" + `]+)` + "`" + `\]\(([^)]+)\)`)
 	reTargetFiles := regexp.MustCompile(`^-\s+\*\*Target Files\*\*:\s+` + "`" + `(.*)` + "`" + `$`)
 	reMetrics := regexp.MustCompile(`^-\s+\*\*Metrics\*\*:\s+(.*)$`)
@@ -163,6 +202,10 @@ func RestoreFromFile(backend Backend, filename string) (int, error) {
 				}
 				continue
 			}
+			if m := reMilestone.FindStringSubmatch(trimmed); len(m) > 1 {
+				cur.Milestone = strings.TrimSpace(m[1])
+				continue
+			}
 			if m := rePlanDoc.FindStringSubmatch(trimmed); len(m) > 1 {
 				cur.PlanDoc = m[1]
 				continue
@@ -190,10 +233,10 @@ func RestoreFromFile(backend Backend, filename string) (int, error) {
 	// Insert or replace into sprint_tasks table
 	for _, t := range tasks {
 		upsertSQL := fmt.Sprintf(`DELETE FROM sprint_tasks WHERE id = '%s';
-INSERT INTO sprint_tasks (id, domain, title, priority, status, plan_doc, metrics, target_files, phases, description)
-VALUES ('%s', '%s', '%s', %d, '%s', '%s', '%s', '%s', '%s', '%s');`,
+INSERT INTO sprint_tasks (id, domain, title, priority, status, milestone, plan_doc, metrics, target_files, phases, description)
+VALUES ('%s', '%s', '%s', %d, '%s', '%s', '%s', '%s', '%s', '%s', '%s');`,
 			EscapeSQL(t.ID),
-			EscapeSQL(t.ID), EscapeSQL(t.Domain), EscapeSQL(t.Title), t.Priority, EscapeSQL(t.Status),
+			EscapeSQL(t.ID), EscapeSQL(t.Domain), EscapeSQL(t.Title), t.Priority, EscapeSQL(t.Status), EscapeSQL(t.Milestone),
 			EscapeSQL(t.PlanDoc), EscapeSQL(t.Metrics), EscapeSQL(t.TargetFiles), EscapeSQL(t.Phases), EscapeSQL(t.Description))
 
 		if _, err := backend.Exec(upsertSQL); err != nil {

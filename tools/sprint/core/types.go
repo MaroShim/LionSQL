@@ -23,6 +23,7 @@ type ParsedTask struct {
 	Title       string
 	Priority    int
 	Status      string
+	Milestone   string
 	PlanDoc     string
 	Metrics     string
 	TargetFiles string
