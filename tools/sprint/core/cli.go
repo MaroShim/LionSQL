@@ -3,8 +3,22 @@ package core
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 )
+
+func statusOrder(status any) int {
+	switch strings.ToUpper(fmt.Sprint(status)) {
+	case "IN_PROGRESS":
+		return 0
+	case "PENDING":
+		return 1
+	case "DONE":
+		return 2
+	default:
+		return 3
+	}
+}
 
 // RunCLI handles common subcommands for sprint tasks CLI across all backends.
 func RunCLI(backend Backend, appTitle string, args []string) {
@@ -23,7 +37,7 @@ func RunCLI(backend Backend, appTitle string, args []string) {
 		fmt.Printf("Table 'sprint_tasks' successfully initialized in %s.\n", backend.Name())
 
 	case "list":
-		query := "SELECT id, status, domain, priority, title, plan_doc, metrics FROM sprint_tasks ORDER BY status DESC, priority ASC, id ASC;"
+		query := "SELECT id, status, domain, priority, title, plan_doc, metrics FROM sprint_tasks ORDER BY priority ASC, id ASC;"
 		res, err := backend.Exec(query)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "List error: %v\n", err)
@@ -33,6 +47,9 @@ func RunCLI(backend Backend, appTitle string, args []string) {
 			fmt.Println("No tasks found in sprint_tasks.")
 			return
 		}
+		sort.SliceStable(res.Rows, func(i, j int) bool {
+			return statusOrder(res.Rows[i]["status"]) < statusOrder(res.Rows[j]["status"])
+		})
 		fmt.Println("==========================================================================================")
 		fmt.Printf(" %-12s | %-16s | %-10s | %-4s | %s\n", "STATUS", "ID", "DOMAIN", "PRIO", "TITLE")
 		fmt.Println("------------------------------------------------------------------------------------------")
