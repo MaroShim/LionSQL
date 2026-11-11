@@ -69,7 +69,7 @@ func runMigrateUp(args []string) error {
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
 	diskType := fs.String("disk", config.DefaultDisk(), "Disk persistence backend (wiredtiger, none)")
-	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation (compact, performance)")
+	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance (deprecated, scheduled for post-1.0 removal)")
 	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (use -disk and -memory instead)")
 	steps := fs.Int("steps", 0, "Number of migrations to apply (default: 0 = all pending)")
 	fs.IntVar(steps, "n", 0, "Number of migrations to apply (default: 0 = all pending)")
@@ -121,7 +121,7 @@ func runMigrateDown(args []string) error {
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
 	diskType := fs.String("disk", config.DefaultDisk(), "Disk persistence backend (wiredtiger, none)")
-	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation (compact, performance)")
+	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance (deprecated, scheduled for post-1.0 removal)")
 	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (use -disk and -memory instead)")
 	steps := fs.Int("steps", 1, "Number of migrations to revert (default: 1)")
 	fs.IntVar(steps, "n", 1, "Number of migrations to revert (default: 1)")
@@ -173,7 +173,7 @@ func runMigrateStatus(args []string) error {
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
 	diskType := fs.String("disk", config.DefaultDisk(), "Disk persistence backend (wiredtiger, none)")
-	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation (compact, performance)")
+	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance (deprecated, scheduled for post-1.0 removal)")
 	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (use -disk and -memory instead)")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
 		return err

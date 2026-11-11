@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"lionsql/pkg/config"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestStartupBanner_DefaultPassword_LastLineMustBeWarning(t *testing.T) {
@@ -115,5 +116,48 @@ func TestStartupBanner_MemoryGovernorAlignment(t *testing.T) {
 	}
 	if !strings.Contains(banner, expectedWorkMem) {
 		t.Fatalf("expected banner to contain %q, but got:\n%s", expectedWorkMem, banner)
+	}
+}
+
+func TestStartupBanner_MemoryPerformanceDeprecationNotice(t *testing.T) {
+	ctx := bannerContext{
+		HasHTTP: true,
+	}
+
+	// Default compact mode must remain clean without deprecation notice.
+	defaultCfg := config.DefaultConfig()
+	defaultCfg.Auth.AdminPass = "strong-non-default-pass"
+	defaultBanner := renderStartupBanner(defaultCfg, ctx)
+	if !strings.Contains(defaultBanner, "Memory: compact\n") {
+		t.Fatalf("expected default banner to show clean Memory: compact, got:\n%s", defaultBanner)
+	}
+	if strings.Contains(defaultBanner, "DEPRECATED") {
+		t.Fatalf("did not expect DEPRECATED tag for default compact mode, got:\n%s", defaultBanner)
+	}
+
+	// Performance mode stays operational in v1.0 while emitting explicit deprecation label in banner.
+	perfCfg := config.DefaultConfig()
+	perfCfg.Auth.AdminPass = "strong-non-default-pass"
+	perfCfg.Server.Memory = "performance"
+	if got := perfCfg.Server.GetMemory(); got != "performance" {
+		t.Fatalf("expected GetMemory() to remain %q in v1.0, got %q", "performance", got)
+	}
+	perfBanner := renderStartupBanner(perfCfg, ctx)
+	if !strings.Contains(perfBanner, "Memory: performance [DEPRECATED: use compact]\n") {
+		t.Fatalf("expected performance banner to include deprecation notice, got:\n%s", perfBanner)
+	}
+
+	// Last-line invariant must stay intact even with deprecation notice.
+	lines := strings.Split(strings.TrimSpace(perfBanner), "\n")
+	if lastLine := strings.TrimSpace(lines[len(lines)-1]); lastLine != "Press Ctrl+C to stop server" {
+		t.Fatalf("expected last line invariant preserved, got %q", lastLine)
+	}
+
+	// Verify helper notice output for both modes.
+	if notice := memoryPerformanceDeprecationNotice(memengine.MemoryPerformance); !strings.Contains(notice, "DEPRECATED") || !strings.Contains(notice, "compact") {
+		t.Fatalf("expected deprecation notice for MemoryPerformance, got %q", notice)
+	}
+	if notice := memoryPerformanceDeprecationNotice(memengine.MemoryCompact); notice != "" {
+		t.Fatalf("expected empty notice for MemoryCompact, got %q", notice)
 	}
 }

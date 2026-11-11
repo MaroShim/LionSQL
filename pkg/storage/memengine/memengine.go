@@ -42,13 +42,18 @@ type MemoryMode int
 
 const (
 	// MemoryPerformance uses direct Go struct references for sub-nanosecond 0.2ns O(1) access.
+	//
+	// Deprecated: Use MemoryCompact instead. Scheduled for removal post-1.0.
 	MemoryPerformance MemoryMode = 0
 	// MemoryCompact uses pointer-free flat byte buffers for 83% memory compaction and zero GC scan.
 	MemoryCompact MemoryMode = 1
 
-	// Legacy aliases for backward compatibility during transition
-	OCCModeRaw         = MemoryPerformance
-	OCCModeFlat        = MemoryCompact
+	// Legacy aliases for backward compatibility during transition.
+
+	// Deprecated: Use MemoryCompact instead. Scheduled for removal post-1.0.
+	OCCModeRaw  = MemoryPerformance
+	OCCModeFlat = MemoryCompact
+	// Deprecated: Use MemoryCompact instead. Scheduled for removal post-1.0.
 	OCCModePerformance = MemoryPerformance
 	OCCModeCompact     = MemoryCompact
 )

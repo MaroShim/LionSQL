@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,13 +18,38 @@ import (
 	"lionsql/pkg/storage/wiredtiger"
 )
 
+// memoryPerformanceDeprecationNotice returns a deprecation warning message when MemoryPerformance is selected,
+// or an empty string otherwise. MemoryPerformance remains functional in v1.0 and is scheduled for post-1.0 removal.
+func memoryPerformanceDeprecationNotice(mode memengine.MemoryMode) string {
+	if mode != memengine.MemoryPerformance {
+		return ""
+	}
+	return "[LionSQL] DEPRECATED: -memory=performance is deprecated and scheduled for removal post-1.0; use -memory=compact (default)."
+}
+
+func warnIfMemoryPerformanceDeprecated(mode memengine.MemoryMode) {
+	if msg := memoryPerformanceDeprecationNotice(mode); msg != "" {
+		log.Print(msg)
+	}
+}
+
+func formatMemoryBannerValue(mem string) string {
+	trimmed := strings.TrimSpace(mem)
+	if trimmed != "" {
+		if mode, err := memengine.ParseMemoryMode(trimmed); err == nil && mode == memengine.MemoryPerformance {
+			return trimmed + " [DEPRECATED: use compact]"
+		}
+	}
+	return mem
+}
+
 func runSQL(args []string) error {
 	fs := flag.NewFlagSet("sql", flag.ContinueOnError)
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "dir", "data", "Path to database data directory")
 	diskType := fs.String("disk", config.DefaultDisk(), "Disk persistence backend (wiredtiger, none)")
-	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation (compact, performance)")
+	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance (deprecated, scheduled for post-1.0 removal)")
 	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (wiredtiger, memory; use -disk instead)")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
 		return err
@@ -130,6 +156,7 @@ func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.E
 		opts := memengine.DefaultOptions(cleanDir)
 		if mode, err := memengine.ParseMemoryMode(memoryType); err == nil {
 			opts.Mode = mode
+			warnIfMemoryPerformanceDeprecated(mode)
 		}
 		if err := memEng.OpenWithOptions(opts); err != nil {
 			if daemonActive {

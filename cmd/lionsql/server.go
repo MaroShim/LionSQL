@@ -70,7 +70,7 @@ func runServer(args []string) error {
 	fs.StringVar(dataDir, "data-dir", defaultDataDir, "Alias for -dir")
 
 	diskType := fs.String("disk", "", "Disk persistence backend: wiredtiger or none (default: wiredtiger on unix, none on windows)")
-	memoryType := fs.String("memory", "", "In-memory tuple representation: compact (default) or performance")
+	memoryType := fs.String("memory", "", "In-memory tuple representation: compact (default) or performance (deprecated, scheduled for post-1.0 removal)")
 	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (wiredtiger, memory; use -disk instead)")
 	ephemeralFlag := fs.Bool("ephemeral", false, "Run in purely in-memory ephemeral mode with zero disk persistence")
 	autoSeed := fs.Bool("seed", false, "Automatically seed demo sample database (scripts/demo_seed.sql) on startup")
@@ -449,6 +449,7 @@ func runServer(args []string) error {
 	if err != nil {
 		log.Fatalf("[LionSQL] Invalid memory layout configuration: %v", err)
 	}
+	warnIfMemoryPerformanceDeprecated(memMode)
 
 	if !cfg.Server.Ephemeral {
 		if err := pathutil.ValidateDir(cfg.Server.DataDir, true); err != nil {
@@ -997,7 +998,7 @@ func renderStartupBanner(cfg *config.Config, ctx bannerContext) string {
 	}
 
 	b.WriteString(fmt.Sprintf(" [Data Directory] %s\n", cfg.Server.DataDir))
-	b.WriteString(fmt.Sprintf(" [Storage Engine] Disk: %s | Memory: %s\n", cfg.Server.GetDisk(), cfg.Server.GetMemory()))
+	b.WriteString(fmt.Sprintf(" [Storage Engine] Disk: %s | Memory: %s\n", cfg.Server.GetDisk(), formatMemoryBannerValue(cfg.Server.GetMemory())))
 	if ctx.StatsWorkers > 0 || ctx.StatsIdle > 0 {
 		b.WriteString(fmt.Sprintf(" [Session Pooler] Max Workers: %d, Max Idle Sessions: %d (No PgBouncer required)\n", ctx.StatsWorkers, ctx.StatsIdle))
 	}
