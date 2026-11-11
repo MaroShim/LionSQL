@@ -34,7 +34,7 @@
 | `PENDING` | **`AUDIT-LOG-1`** | `v1.3.0` | Integrity | P2 | 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템 | [`notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md) |  |
 | `DONE` | **`AUDIT-PATCH-P0`** |  | Integrity | P1 | 전수 감사 P0 (Must Fix 37선) 결함 TDD 순차 패치 및 회귀 검증 | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |  |
 | `DONE` | **`AUDIT-PATCH-P1`** |  | Core | P1 | 1.0 전수 감사 P1 (Should Fix 47선) 난이도별(하/중/상) 순차 안정화 패치 | [`notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md`](notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md) | 1단계(하 21건), 2단계(중 18건), 3단계(상 8건) P1 ... |
-| `PENDING` | **`AUDIT-STRINGS-CATALOG`** | `1.0-GA` | Catalog | P1 | 코드베이스 전수 조사 Phase 2: pkg/catalog 가상 뷰 인터셉터 strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
+| `DONE` | **`AUDIT-STRINGS-CATALOG`** | `1.0-GA` | Catalog | P1 | 코드베이스 전수 조사 Phase 2: pkg/catalog 가상 뷰 인터셉터 strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
 | `PENDING` | **`AUDIT-STRINGS-ENGINE`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사 Phase 3: pkg/engine 핵심 실행/DDL/DML strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
 | `PENDING` | **`AUDIT-STRINGS-PLANNER`** | `1.0-GA` | Planner | P1 | 코드베이스 전수 조사 Phase 4: pkg/planner 및 pkg/proc strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-STRINGS-WIRE`** | `1.0-GA` | Protocol | P1 | 코드베이스 전수 조사 Phase 1: pkg/wire 및 TDS 프로토콜 레이어 strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
@@ -631,8 +631,8 @@
 
 ---
 
-### [PENDING] 코드베이스 전수 조사 Phase 2: pkg/catalog 가상 뷰 인터셉터 strings.* 안티패턴 전수 제거 및 sqlutil 전환 `AUDIT-STRINGS-CATALOG`
-- **Domain**: Catalog | **Priority**: P1 | **Updated**: 2026-11-11 12:23:58
+### [DONE] 코드베이스 전수 조사 Phase 2: pkg/catalog 가상 뷰 인터셉터 strings.* 안티패턴 전수 제거 및 sqlutil 전환 `AUDIT-STRINGS-CATALOG`
+- **Domain**: Catalog | **Priority**: P1 | **Updated**: 2026-11-11 12:47:15
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`GEMINI.md`](GEMINI.md)
 

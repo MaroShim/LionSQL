@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 )
 
 // containsFold returns true if s contains substr (case-insensitive for ASCII).
@@ -461,7 +462,7 @@ func Execute(src Source, sql string) (*Result, error) {
 	upper = strings.ReplaceAll(strings.ReplaceAll(upper, "[", ""), "]", "")
 
 	var qc *proc.QueryCharacteristics
-	if strings.Contains(upper, "FROM") || strings.Contains(upper, "JOIN") {
+	if sqlutil.ContainsKeyword(sql, "FROM", false) || sqlutil.ContainsKeyword(sql, "JOIN", false) {
 		characteristics := proc.ExtractQueryCharacteristics(sql)
 		qc = &characteristics
 	}

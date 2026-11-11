@@ -559,8 +559,7 @@ func execXORMIndexes(src Source, sql string) (*Result, error) {
 	if whereClause != "" {
 		conds := sqlutil.SplitAndConditions(whereClause)
 		for _, c := range conds {
-			upperC := strings.ToUpper(c)
-			if strings.Contains(upperC, "OBJECT_NAME") || strings.Contains(upperC, "OBJECT_ID") || strings.Contains(upperC, "IS_PRIMARY_KEY") {
+			if sqlutil.ContainsKeyword(c, "OBJECT_NAME", true) || sqlutil.ContainsKeyword(c, "OBJECT_ID", true) || sqlutil.ContainsKeyword(c, "IS_PRIMARY_KEY", true) {
 				continue
 			}
 			remConds = append(remConds, c)
