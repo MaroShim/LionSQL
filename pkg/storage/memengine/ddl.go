@@ -77,6 +77,7 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 	if e.opts.Mode == MemoryCompact {
 		td.layout = BuildFlatRecordLayout(schema)
 	}
+	td.refreshSnapSchemaLocked()
 	td.initShards()
 	for _, idx := range schema.Indexes {
 		td.Indexes[idx.Name] = &IndexData{
@@ -499,7 +500,7 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 
 	// Delete all rows in partition and purge secondary index references
 	for pk := range pksSet {
-		oldRow, hadOld := td.deleteRowAndVer(pk)
+		oldRow, hadOld := td.deleteRowAndVerLocked(pk)
 		if hadOld {
 			for _, idxData := range td.Indexes {
 				oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
@@ -612,23 +613,9 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 		return fmt.Errorf("cannot add NOT NULL column %q with no default value to non-empty table %q", col.Name, tableName)
 	}
 
-	td.Schema.Columns = append(td.Schema.Columns, *col)
-	fillVal := storage.NullValue(col.Type)
-	if strings.TrimSpace(col.Default) != "" {
-		fillVal = storage.ParseLiteralDefault(col.Default, col.Type)
-	}
-	td.addColumnValues(fillVal)
-
-	if !storage.IsTemporaryTable(td.Schema.Name) {
-		if _, err := e.recordWALLocked([]WALOp{{
-			Type:   OpAlterTable,
-			Table:  td.Schema.Name,
-			Column: col,
-		}}); err != nil {
-			return err
-		}
-	}
-	return nil
+	trialSchema := td.Schema.Clone()
+	trialSchema.Columns = append(trialSchema.Columns, *col)
+	return e.applySchemaMigrationLocked(td, &trialSchema, !storage.IsTemporaryTable(td.Schema.Name))
 }
 
 func (e *Engine) RenameTable(oldName, newName string) error {
@@ -652,16 +639,26 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 		}
 	}
 
+	td.mu.Lock()
 	td.Schema.Name = newClean
+	td.refreshSnapSchemaLocked()
+	td.mu.Unlock()
 	e.tables[newClean] = td
 
 	// Update any foreign key definitions on other tables referencing oldClean
 	for _, otherTd := range e.tables {
+		otherTd.mu.Lock()
+		changed := false
 		for i := range otherTd.Schema.ForeignKeys {
 			if strings.EqualFold(otherTd.Schema.ForeignKeys[i].ParentTable, oldClean) {
 				otherTd.Schema.ForeignKeys[i].ParentTable = newClean
+				changed = true
 			}
 		}
+		if changed {
+			otherTd.refreshSnapSchemaLocked()
+		}
+		otherTd.mu.Unlock()
 	}
 
 	e.rebuildFKCacheLocked()
@@ -687,11 +684,12 @@ func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.Table
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
-	if err := mutator(&td.Schema); err != nil {
+	trialSchema := td.Schema.Clone()
+	if err := mutator(&trialSchema); err != nil {
 		return err
 	}
-	e.rebuildFKCacheLocked()
-	return nil
+
+	return e.applySchemaMigrationLocked(td, &trialSchema, !storage.IsTemporaryTable(td.Schema.Name))
 }
 
 func cleanTablePrefix(s string) string {

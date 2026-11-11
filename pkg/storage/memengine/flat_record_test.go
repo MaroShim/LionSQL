@@ -802,7 +802,9 @@ func TestFlatRecord_Regression_P0_02_SnapshotSyncMaterialization(t *testing.T) {
 	}
 
 	// Trigger snapshot synchronization
-	td.syncShardsToMapsLocked()
+	if err := td.syncShardsToMapsLocked(); err != nil {
+		t.Fatalf("syncShardsToMapsLocked failed: %v", err)
+	}
 
 	// Verify that td.Rows contains materialized data rather than an empty row shell
 	row, exists := td.Rows["101"]

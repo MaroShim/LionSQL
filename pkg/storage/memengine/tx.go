@@ -1338,26 +1338,30 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 	if err != nil {
 		return nil, err
 	}
-	tableName = td.Schema.Name
+	snapSchema, _ := td.snapshotSchemaAndLayout()
+	tableName = snapSchema.Name
 
 	tx.engine.mu.RLock()
 	var keys []string
 	var entries []shardEntry
+	var snapLayout *FlatRecordLayout
 	if tx.opts.ReadOnly || (len(tx.local[tableName]) == 0 && len(tx.deleted[tableName]) == 0) {
-		keys, entries = td.snapshotEntriesAndKeys(nil)
+		keys, entries, snapSchema, snapLayout = td.snapshotEntriesAndKeysWithLayout(nil)
 		tx.engine.mu.RUnlock()
 		return &memCursor{
-			tx:        tx,
-			tableName: tableName,
-			td:        td,
-			keys:      keys,
-			entries:   entries,
-			idx:       -1,
+			tx:         tx,
+			tableName:  tableName,
+			td:         td,
+			snapSchema: snapSchema,
+			snapLayout: snapLayout,
+			keys:       keys,
+			entries:    entries,
+			idx:        -1,
 		}, nil
 	}
 
 	// Non-readonly with uncommitted local mutations: snapshot base entries and overlay local changes
-	keys, entries = td.snapshotEntriesAndKeys(func(k string) bool {
+	keys, entries, snapSchema, snapLayout = td.snapshotEntriesAndKeysWithLayout(func(k string) bool {
 		return !tx.isLocallyDeleted(tableName, k)
 	})
 	tx.engine.mu.RUnlock()
@@ -1390,12 +1394,14 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 	}
 
 	return &memCursor{
-		tx:        tx,
-		tableName: tableName,
-		td:        td,
-		keys:      mergedKeys,
-		entries:   mergedEntries,
-		idx:       -1,
+		tx:         tx,
+		tableName:  tableName,
+		td:         td,
+		snapSchema: snapSchema,
+		snapLayout: snapLayout,
+		keys:       mergedKeys,
+		entries:    mergedEntries,
+		idx:        -1,
 	}, nil
 }
 
@@ -1415,9 +1421,10 @@ func (tx *Transaction) ScanPartitions(tableName string, partitions []string) (st
 	if err != nil {
 		return nil, err
 	}
-	tableName = td.Schema.Name
+	snapSchema, snapLayout := td.snapshotSchemaAndLayout()
+	tableName = snapSchema.Name
 
-	if !td.Schema.IsPartitioned() {
+	if !snapSchema.IsPartitioned() {
 		return tx.Scan(tableName)
 	}
 
@@ -1449,7 +1456,7 @@ func (tx *Transaction) ScanPartitions(tableName string, partitions []string) (st
 				if tx.isLocallyDeleted(tableName, pk) {
 					continue
 				}
-				partID, err := td.Schema.ComputePartitionKeyFromRow(locRow)
+				partID, err := snapSchema.ComputePartitionKeyFromRow(locRow)
 				if err == nil && partSet[partID] {
 					keySet[pk] = struct{}{}
 				}
@@ -1464,11 +1471,13 @@ func (tx *Transaction) ScanPartitions(tableName string, partitions []string) (st
 	sort.Strings(keys)
 
 	return &memCursor{
-		tx:        tx,
-		tableName: tableName,
-		td:        td,
-		keys:      keys,
-		idx:       -1,
+		tx:         tx,
+		tableName:  tableName,
+		td:         td,
+		snapSchema: snapSchema,
+		snapLayout: snapLayout,
+		keys:       keys,
+		idx:        -1,
 	}, nil
 }
 
@@ -1484,7 +1493,8 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 	if err != nil {
 		return nil, err
 	}
-	tableName = td.Schema.Name
+	snapSchema, snapLayout := td.snapshotSchemaAndLayout()
+	tableName = snapSchema.Name
 
 	tx.engine.mu.RLock()
 	idxData, exists := td.Indexes[indexName]
@@ -1500,11 +1510,13 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 		candidatePKs := idxData.ScanRange(low, high)
 		tx.engine.mu.RUnlock()
 		return &memCursor{
-			tx:        tx,
-			tableName: tableName,
-			td:        td,
-			keys:      candidatePKs,
-			idx:       -1,
+			tx:         tx,
+			tableName:  tableName,
+			td:         td,
+			snapSchema: snapSchema,
+			snapLayout: snapLayout,
+			keys:       candidatePKs,
+			idx:        -1,
 		}, nil
 	}
 
@@ -1531,7 +1543,7 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 		}
 
 		if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
-			idxVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, &idxData.Schema)
+			idxVal := extractIndexKeyFromRowWithSchema(snapSchema, locRow, &idxData.Schema)
 			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 				items = append(items, indexScanItem{pk: pk, idxKey: idxVal})
 			}
@@ -1547,7 +1559,7 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 				continue
 			}
 			seen[pk] = true
-			idxVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, &idxData.Schema)
+			idxVal := extractIndexKeyFromRowWithSchema(snapSchema, locRow, &idxData.Schema)
 			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 				items = append(items, indexScanItem{pk: pk, idxKey: idxVal})
 			}
@@ -1568,11 +1580,13 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 	}
 
 	return &memCursor{
-		tx:        tx,
-		tableName: tableName,
-		td:        td,
-		keys:      pks,
-		idx:       -1,
+		tx:         tx,
+		tableName:  tableName,
+		td:         td,
+		snapSchema: snapSchema,
+		snapLayout: snapLayout,
+		keys:       pks,
+		idx:        -1,
 	}, nil
 }
 
@@ -1642,7 +1656,8 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 	if err != nil {
 		return nil, err
 	}
-	tableName = td.Schema.Name
+	snapSchema, snapLayout := td.snapshotSchemaAndLayout()
+	tableName = snapSchema.Name
 
 	tx.engine.mu.RLock()
 	idxData, exists := td.Indexes[indexName]
@@ -1654,7 +1669,7 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 		return nil, fmt.Errorf("%w: %s on table %s", storage.ErrIndexNotFound, indexName, tableName)
 	}
 
-	pkCol, _ := td.Schema.PrimaryKeyColumn()
+	pkCol, _ := snapSchema.PrimaryKeyColumn()
 	candidateEntries := idxData.ScanRangeEntries(low, high)
 	tx.engine.mu.RUnlock()
 
@@ -1680,12 +1695,12 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 			}
 
 			if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
-				idxVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, &idxData.Schema)
+				idxVal := extractIndexKeyFromRowWithSchema(snapSchema, locRow, &idxData.Schema)
 				if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 					pks = append(pks, pk)
 					keyMap[pk] = indexOnlyPayload{
 						key:         idxVal,
-						includeVals: extractIncludeValuesFromRow(&td.Schema, locRow, idxData.Schema.IncludeCols),
+						includeVals: extractIncludeValuesFromRow(snapSchema, locRow, idxData.Schema.IncludeCols),
 					}
 				}
 				continue
@@ -1705,13 +1720,13 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 				if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
 					continue
 				}
-				idxVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, &idxData.Schema)
+				idxVal := extractIndexKeyFromRowWithSchema(snapSchema, locRow, &idxData.Schema)
 				if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 					pks = append(pks, pk)
 					seen[pk] = true
 					keyMap[pk] = indexOnlyPayload{
 						key:         idxVal,
-						includeVals: extractIncludeValuesFromRow(&td.Schema, locRow, idxData.Schema.IncludeCols),
+						includeVals: extractIncludeValuesFromRow(snapSchema, locRow, idxData.Schema.IncludeCols),
 					}
 				}
 			}
@@ -1735,8 +1750,10 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 		}
 		if len(idxData.Schema.Columns) > 1 {
 			if td != nil {
-				if row, _, exists := td.getRowAndVer(pk); exists {
-					return td.Schema.RowToRecord(row), true
+				if entry, curSch, curLay, exists := td.getEntryWithLayout(pk); exists {
+					if row, err := entry.materializeWithLayout(td.mode, curSch, curLay, nil); err == nil {
+						return curSch.RowToRecord(row), true
+					}
 				}
 			}
 		}
@@ -1756,12 +1773,14 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 	}
 
 	return &memCursor{
-		tx:        tx,
-		tableName: tableName,
-		td:        td,
-		keys:      pks,
-		idx:       -1,
-		resolver:  resolver,
+		tx:         tx,
+		tableName:  tableName,
+		td:         td,
+		snapSchema: snapSchema,
+		snapLayout: snapLayout,
+		keys:       pks,
+		idx:        -1,
+		resolver:   resolver,
 	}, nil
 }
 
@@ -2477,6 +2496,8 @@ type memCursor struct {
 	tx          *Transaction
 	tableName   string
 	td          *TableData
+	snapSchema  *storage.TableSchema
+	snapLayout  *FlatRecordLayout
 	keys        []string
 	entries     []shardEntry
 	idx         int
@@ -2536,9 +2557,11 @@ func (c *memCursor) Next() bool {
 			continue
 		}
 		if c.td != nil {
-			entry, exists := c.td.getEntryAndVer(pk)
+			entry, schemaSnap, layoutSnap, exists := c.td.getEntryWithLayout(pk)
 			if exists {
 				c.curEntry = entry
+				c.snapSchema = schemaSnap
+				c.snapLayout = layoutSnap
 				c.hasCurEntry = true
 				c.curRow = entry.row
 				c.curRec = nil
@@ -2561,7 +2584,11 @@ func (c *memCursor) Record() (storage.Record, error) {
 		if err != nil {
 			return nil, err
 		}
-		c.curRec = c.td.Schema.RowToRecord(row)
+		schema := c.snapSchema
+		if schema == nil {
+			schema, _ = c.td.snapshotSchemaAndLayout()
+		}
+		c.curRec = schema.RowToRecord(row)
 	}
 	return c.curRec, nil
 }
@@ -2573,16 +2600,21 @@ func (c *memCursor) Row() (storage.Row, error) {
 	if len(c.curRow.Values) > 0 {
 		return c.curRow, nil
 	}
+	schema := c.snapSchema
+	layout := c.snapLayout
+	if schema == nil && c.td != nil {
+		schema, layout = c.td.snapshotSchemaAndLayout()
+	}
 	if c.hasCurEntry && c.td != nil {
-		row, err := c.curEntry.materializeWithArena(c.td, nil)
+		row, err := c.curEntry.materializeWithLayout(c.td.mode, schema, layout, nil)
 		if err != nil {
 			return storage.Row{}, err
 		}
 		c.curRow = row
 		return row, nil
 	}
-	if c.curRec != nil && c.td != nil {
-		c.curRow = c.td.Schema.RecordToRow(c.curRec)
+	if c.curRec != nil && schema != nil {
+		c.curRow = schema.RecordToRow(c.curRec)
 	}
 	return c.curRow, nil
 }
@@ -2599,11 +2631,16 @@ func (c *memCursor) RowWithArena(arena *storage.Arena) (storage.Row, error) {
 	if len(c.curRow.Values) > 0 {
 		return c.curRow, nil
 	}
-	if c.hasCurEntry && c.td != nil {
-		return c.curEntry.materializeWithArena(c.td, arena)
+	schema := c.snapSchema
+	layout := c.snapLayout
+	if schema == nil && c.td != nil {
+		schema, layout = c.td.snapshotSchemaAndLayout()
 	}
-	if c.curRec != nil && c.td != nil {
-		return c.td.Schema.RecordToRowWithArena(c.curRec, arena), nil
+	if c.hasCurEntry && c.td != nil {
+		return c.curEntry.materializeWithLayout(c.td.mode, schema, layout, arena)
+	}
+	if c.curRec != nil && schema != nil {
+		return schema.RecordToRowWithArena(c.curRec, arena), nil
 	}
 	return c.curRow, nil
 }
@@ -2616,6 +2653,8 @@ func (c *memCursor) Close() error {
 	c.hasCurEntry = false
 	c.curRec = nil
 	c.curRow = storage.Row{}
+	c.snapSchema = nil
+	c.snapLayout = nil
 	c.resolver = nil
 	c.tx = nil
 	c.td = nil

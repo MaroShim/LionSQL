@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"fmt"
 	"log"
 	"sort"
 	"sync"
@@ -77,6 +78,13 @@ func (e shardEntry) materializeWithArena(td *TableData, arena *storage.Arena) (s
 	return e.row, nil
 }
 
+func (e shardEntry) materializeWithLayout(mode MemoryMode, schema *storage.TableSchema, layout *FlatRecordLayout, arena *storage.Arena) (storage.Row, error) {
+	if mode == MemoryCompact && len(e.flatBuf) > 0 && len(e.row.Values) == 0 && layout != nil && schema != nil {
+		return layout.DecodeFlatToRowWithArena(schema, e.flatBuf, arena)
+	}
+	return e.row, nil
+}
+
 type tableShard struct {
 	mu      sync.RWMutex
 	entries map[string]shardEntry
@@ -92,12 +100,46 @@ type TableData struct {
 	shardsInit bool
 	mode       MemoryMode                     // MemoryPerformance (default: 0) or MemoryCompact (1)
 	layout     *FlatRecordLayout              // Precomputed layout when mode == MemoryCompact
+	snapSchema *storage.TableSchema           // Immutable schema snapshot updated alongside layout under mu.Lock
 	Schema     storage.TableSchema            `json:"schema"`
 	Rows       map[string]storage.Row         `json:"rows,omitempty"`     // For snapshot persistence & backward compatibility
 	Versions   map[string]int64               `json:"versions,omitempty"` // For snapshot persistence
 	Keys       []string                       `json:"keys,omitempty"`
 	Indexes    map[string]*IndexData          `json:"indexes,omitempty"`
 	Partitions map[string]map[string]struct{} `json:"partitions,omitempty"`
+}
+
+func (td *TableData) getImmutableSchemaLocked() *storage.TableSchema {
+	if td.snapSchema != nil {
+		return td.snapSchema
+	}
+	cp := td.Schema.Clone()
+	return &cp
+}
+
+func (td *TableData) refreshSnapSchemaLocked() {
+	cp := td.Schema.Clone()
+	td.snapSchema = &cp
+}
+
+func (td *TableData) snapshotSchemaAndLayout() (*storage.TableSchema, *FlatRecordLayout) {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+	return td.getImmutableSchemaLocked(), td.layout
+}
+
+func (td *TableData) getEntryWithLayout(pk string) (shardEntry, *storage.TableSchema, *FlatRecordLayout, bool) {
+	td.ensureShardsInit()
+	td.mu.RLock()
+	schemaSnap := td.getImmutableSchemaLocked()
+	layoutSnap := td.layout
+	sIdx := hashShard(pk)
+	sh := &td.shards[sIdx]
+	sh.mu.RLock()
+	entry, ok := sh.entries[pk]
+	sh.mu.RUnlock()
+	td.mu.RUnlock()
+	return entry, schemaSnap, layoutSnap, ok
 }
 
 func hashShard(key string) int {
@@ -158,14 +200,14 @@ func (td *TableData) getEntryAndVer(pk string) (shardEntry, bool) {
 }
 
 func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
-	entry, ok := td.getEntryAndVer(pk)
+	entry, schemaSnap, layoutSnap, ok := td.getEntryWithLayout(pk)
 	if !ok {
 		return storage.Row{}, 0, false
 	}
-	r, err := entry.materialize(td)
+	r, err := entry.materializeWithLayout(td.mode, schemaSnap, layoutSnap, nil)
 	if err != nil {
 		// [RULE:ExplicitError] Log corruption and fail safe rather than silently returning empty row
-		log.Printf("[memengine] flat record materialize error on table %q pk %q: %v", td.Schema.Name, pk, err)
+		log.Printf("[memengine] flat record materialize error on table %q pk %q: %v", schemaSnap.Name, pk, err)
 		return storage.Row{}, 0, false
 	}
 	return r, entry.ver, true
@@ -191,8 +233,10 @@ func (td *TableData) putRowAndVer(pk string, row storage.Row, ver int64) {
 	sh.mu.Unlock()
 }
 
-func (td *TableData) deleteRowAndVer(pk string) (storage.Row, bool) {
+func (td *TableData) deleteRowAndVerLocked(pk string) (storage.Row, bool) {
 	td.ensureShardsInit()
+	schemaSnap := td.getImmutableSchemaLocked()
+	layoutSnap := td.layout
 	sIdx := hashShard(pk)
 	sh := &td.shards[sIdx]
 	sh.mu.Lock()
@@ -202,22 +246,32 @@ func (td *TableData) deleteRowAndVer(pk string) (storage.Row, bool) {
 	}
 	sh.mu.Unlock()
 	if hadOld {
-		r, err := entry.materialize(td)
+		r, err := entry.materializeWithLayout(td.mode, schemaSnap, layoutSnap, nil)
 		if err == nil {
 			return r, true
 		}
-		log.Printf("[memengine] flat record delete materialize error on table %q pk %q: %v", td.Schema.Name, pk, err)
+		log.Printf("[memengine] flat record delete materialize error on table %q pk %q: %v", schemaSnap.Name, pk, err)
 	}
 	return entry.row, hadOld
 }
 
+func (td *TableData) deleteRowAndVer(pk string) (storage.Row, bool) {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+	return td.deleteRowAndVerLocked(pk)
+}
+
 func (td *TableData) forEachRow(fn func(pk string, row storage.Row) bool) {
 	td.ensureShardsInit()
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+	schemaSnap := td.getImmutableSchemaLocked()
+	layoutSnap := td.layout
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
 		sh.mu.RLock()
 		for k, entry := range sh.entries {
-			r, err := entry.materialize(td)
+			r, err := entry.materializeWithLayout(td.mode, schemaSnap, layoutSnap, nil)
 			if err != nil {
 				continue
 			}
@@ -243,8 +297,17 @@ func (td *TableData) rowCount() int64 {
 }
 
 func (td *TableData) snapshotEntriesAndKeys(filter func(pk string) bool) ([]string, []shardEntry) {
+	keys, entries, _, _ := td.snapshotEntriesAndKeysWithLayout(filter)
+	return keys, entries
+}
+
+func (td *TableData) snapshotEntriesAndKeysWithLayout(filter func(pk string) bool) ([]string, []shardEntry, *storage.TableSchema, *FlatRecordLayout) {
 	td.ensureShardsInit()
-	// Strict canonical order (0 to 255) to prevent deadlocks ([RULE:LockHierarchy])
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+	schemaSnap := td.getImmutableSchemaLocked()
+	layoutSnap := td.layout
+	// Strict canonical order (td.mu -> shards[0..255]) to prevent deadlocks ([RULE:LockHierarchy])
 	for i := 0; i < numTableShards; i++ {
 		td.shards[i].mu.RLock()
 	}
@@ -282,7 +345,7 @@ func (td *TableData) snapshotEntriesAndKeys(filter func(pk string) bool) ([]stri
 		keys[i] = item.key
 		entries[i] = item.entry
 	}
-	return keys, entries
+	return keys, entries, schemaSnap, layoutSnap
 }
 
 func (td *TableData) collectKeys(filter func(pk string) bool) []string {
@@ -301,31 +364,45 @@ func (td *TableData) collectKeys(filter func(pk string) bool) []string {
 	return keys
 }
 
-func (td *TableData) syncShardsToMapsLocked() {
+func (td *TableData) syncShardsToMapsLocked() error {
 	td.mu.Lock()
 	defer td.mu.Unlock()
+	return td.syncShardsToMapsAlreadyLocked()
+}
+
+func (td *TableData) syncShardsToMapsAlreadyLocked() error {
 	td.ensureShardsInit()
 	td.Rows = make(map[string]storage.Row)
 	td.Versions = make(map[string]int64)
+	schemaSnap := td.getImmutableSchemaLocked()
+	layoutSnap := td.layout
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
 		sh.mu.RLock()
 		for k, entry := range sh.entries {
-			row, err := entry.materialize(td)
+			row, err := entry.materializeWithLayout(td.mode, schemaSnap, layoutSnap, nil)
 			if err != nil {
-				row = entry.row
+				sh.mu.RUnlock()
+				td.Rows = nil
+				td.Versions = nil
+				return fmt.Errorf("failed to materialize flat record for table %q pk %q: %w", schemaSnap.Name, k, err)
 			}
 			td.Rows[k] = row
 			td.Versions[k] = entry.ver
 		}
 		sh.mu.RUnlock()
 	}
+	return nil
+}
+
+func (td *TableData) clearShardsSyncMapsAlreadyLocked() {
+	td.Rows = nil
+	td.Versions = nil
 }
 
 func (td *TableData) clearShardsSyncMapsLocked() {
 	td.mu.Lock()
-	td.Rows = nil
-	td.Versions = nil
+	td.clearShardsSyncMapsAlreadyLocked()
 	td.mu.Unlock()
 }
 
@@ -378,60 +455,79 @@ func (td *TableData) removePartitionKey(partID, pk string) {
 	}
 }
 
-func (td *TableData) addColumnValues(val storage.Value) {
+func (td *TableData) addColumnValues(val storage.Value) error {
 	td.ensureShardsInit()
 
 	var newLayout *FlatRecordLayout
 	var oldSchema storage.TableSchema
 	if td.mode == MemoryCompact {
 		newLayout = BuildFlatRecordLayout(&td.Schema)
-		oldSchema = td.Schema
+		oldSchema = td.Schema.Clone()
 		if len(oldSchema.Columns) > 1 {
 			oldSchema.Columns = oldSchema.Columns[:len(oldSchema.Columns)-1]
+		}
+	}
+
+	var staged [numTableShards]map[string]shardEntry
+	for i := 0; i < numTableShards; i++ {
+		sh := &td.shards[i]
+		sh.mu.RLock()
+		staged[i] = make(map[string]shardEntry, len(sh.entries))
+		var stageErr error
+		for k, entry := range sh.entries {
+			if td.mode == MemoryCompact {
+				var origRow storage.Row
+				if len(entry.flatBuf) > 0 && len(entry.row.Values) == 0 && td.layout != nil {
+					var err error
+					origRow, err = td.layout.DecodeFlatToRow(&oldSchema, entry.flatBuf)
+					if err != nil {
+						stageErr = err
+						break
+					}
+				} else {
+					origRow = entry.row
+				}
+				newVals := make([]storage.Value, len(origRow.Values)+1)
+				copy(newVals, origRow.Values)
+				newVals[len(origRow.Values)] = val
+				newRow := storage.Row{Values: newVals}
+				newBuf, err := newLayout.EncodeRowToFlat(&td.Schema, newRow)
+				if err != nil {
+					stageErr = err
+					break
+				}
+				staged[i][k] = shardEntry{
+					ver:     entry.ver,
+					flatBuf: newBuf,
+				}
+			} else {
+				newVals := make([]storage.Value, len(entry.row.Values)+1)
+				copy(newVals, entry.row.Values)
+				newVals[len(entry.row.Values)] = val
+				staged[i][k] = shardEntry{
+					ver: entry.ver,
+					row: storage.Row{Values: newVals},
+				}
+			}
+		}
+		sh.mu.RUnlock()
+		if stageErr != nil {
+			return stageErr
 		}
 	}
 
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
 		sh.mu.Lock()
-		for k, entry := range sh.entries {
-			if td.mode == MemoryCompact {
-				var origRow storage.Row
-				var err error
-				if len(entry.flatBuf) > 0 && len(entry.row.Values) == 0 && td.layout != nil {
-					origRow, err = td.layout.DecodeFlatToRow(&oldSchema, entry.flatBuf)
-				} else {
-					origRow = entry.row
-				}
-				if err != nil {
-					origRow = entry.row
-				}
-				newRow := storage.Row{Values: append(origRow.Values, val)}
-				newBuf, err := newLayout.EncodeRowToFlat(&td.Schema, newRow)
-				if err != nil {
-					sh.entries[k] = shardEntry{
-						ver: entry.ver,
-						row: newRow,
-					}
-				} else {
-					sh.entries[k] = shardEntry{
-						ver:     entry.ver,
-						flatBuf: newBuf,
-					}
-				}
-			} else {
-				sh.entries[k] = shardEntry{
-					ver: entry.ver,
-					row: storage.Row{Values: append(entry.row.Values, val)},
-				}
-			}
-		}
+		sh.entries = staged[i]
 		sh.mu.Unlock()
 	}
 
 	if newLayout != nil {
 		td.layout = newLayout
 	}
+	td.refreshSnapSchemaLocked()
+	return nil
 }
 
 // Engine implements storage.Engine in pure Go with optional atomic disk snapshot persistence and WAL (AOF) logging.

@@ -247,6 +247,43 @@ type TableSchema struct {
 	Partition    *PartitionDef      `json:"partition,omitempty"`
 }
 
+// Clone returns a deep copy of TableSchema so callers can mutate trial copies safely.
+func (s TableSchema) Clone() TableSchema {
+	out := s
+	if s.Columns != nil {
+		out.Columns = append([]Column(nil), s.Columns...)
+	}
+	if s.Indexes != nil {
+		out.Indexes = make([]IndexSchema, len(s.Indexes))
+		for i, idx := range s.Indexes {
+			out.Indexes[i] = idx
+			if idx.Columns != nil {
+				out.Indexes[i].Columns = append([]string(nil), idx.Columns...)
+			}
+			if idx.IncludeCols != nil {
+				out.Indexes[i].IncludeCols = append([]string(nil), idx.IncludeCols...)
+			}
+		}
+	}
+	if s.ForeignKeys != nil {
+		out.ForeignKeys = make([]ForeignKeySchema, len(s.ForeignKeys))
+		for i, fk := range s.ForeignKeys {
+			out.ForeignKeys[i] = fk
+			if fk.ChildColumns != nil {
+				out.ForeignKeys[i].ChildColumns = append([]string(nil), fk.ChildColumns...)
+			}
+			if fk.ParentColumns != nil {
+				out.ForeignKeys[i].ParentColumns = append([]string(nil), fk.ParentColumns...)
+			}
+		}
+	}
+	if s.Partition != nil {
+		pCopy := *s.Partition
+		out.Partition = &pCopy
+	}
+	return out
+}
+
 // TableURI returns the WiredTiger table URI ("table:<physical_name>").
 func (s *TableSchema) TableURI() string {
 	if s == nil {

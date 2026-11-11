@@ -3,6 +3,7 @@ package memengine
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math"
 	"time"
 	"unsafe"
@@ -13,35 +14,59 @@ import (
 var (
 	ErrFlatRecordTruncated = errors.New("flat record buffer truncated")
 	ErrFlatRecordInvalid   = errors.New("flat record invalid layout")
+	ErrFlatRecordTooLarge  = errors.New("flat record value or heap exceeds compact limit")
 )
 
 // Small String Optimization threshold: strings/bytes <= 7 bytes are stored inline in slot[0..6]
 // with slot[7] holding the ssoFlag | length. Strings > 7 bytes are stored in the variable heap area
 // with slot[0..3] holding uint32 offset, slot[4..6] holding uint24 length, and slot[7] holding 0x00 ([P0-01]).
 const (
-	ssoMaxLen = 7
-	ssoFlag   = 0x80
+	ssoMaxLen     = 7
+	ssoFlag       = 0x80
+	maxVarSlotLen = (1 << 24) - 1 // 16 MiB - 1: max 24-bit vLen in slot[4..6]
 )
 
+func validateVarSlotBounds(heapLen uint64, rawLen int, maxHeapOffset uint64) error {
+	if rawLen < 0 || rawLen > maxVarSlotLen {
+		return fmt.Errorf("%w: variable column length %d exceeds max %d bytes", ErrFlatRecordTooLarge, rawLen, maxVarSlotLen)
+	}
+	if heapLen > maxHeapOffset || uint64(rawLen) > maxHeapOffset-heapLen {
+		return fmt.Errorf("%w: variable heap size (%d + %d) exceeds 32-bit offset limit (%d)", ErrFlatRecordTooLarge, heapLen, rawLen, maxHeapOffset)
+	}
+	return nil
+}
+
 // encodeVarSlot encodes variable-length data into an 8-byte fixed slot ([P0-01]).
-// Prevents offset-tag collision where vOff byte 1 equaled 0xFF.
-func encodeVarSlot(slot []byte, raw []byte, varHeap *[]byte) {
+// Fails closed with ErrFlatRecordTooLarge if raw exceeds 16 MiB - 1 or varHeap would overflow uint32 offsets.
+func encodeVarSlot(slot []byte, raw []byte, varHeap *[]byte) error {
 	if len(raw) <= ssoMaxLen {
 		copy(slot[:len(raw)], raw)
 		for j := len(raw); j < 7; j++ {
 			slot[j] = 0
 		}
 		slot[7] = ssoFlag | byte(len(raw))
-	} else {
-		vOff := uint32(len(*varHeap))
-		vLen := uint32(len(raw))
-		binary.LittleEndian.PutUint32(slot[0:4], vOff)
-		slot[4] = byte(vLen)
-		slot[5] = byte(vLen >> 8)
-		slot[6] = byte(vLen >> 16)
-		slot[7] = 0x00 // Explicit Heap Tag: completely isolated from vOff
-		*varHeap = append(*varHeap, raw...)
+		return nil
 	}
+	if err := validateVarSlotBounds(uint64(len(*varHeap)), len(raw), math.MaxUint32); err != nil {
+		return err
+	}
+	vOff := uint32(len(*varHeap))
+	vLen := uint32(len(raw))
+	binary.LittleEndian.PutUint32(slot[0:4], vOff)
+	slot[4] = byte(vLen)
+	slot[5] = byte(vLen >> 8)
+	slot[6] = byte(vLen >> 16)
+	slot[7] = 0x00 // Explicit Heap Tag: completely isolated from vOff
+	*varHeap = append(*varHeap, raw...)
+	return nil
+}
+
+func encodeVarStringSlot(slot []byte, s string, varHeap *[]byte) error {
+	var raw []byte
+	if len(s) > 0 {
+		raw = unsafe.Slice(unsafe.StringData(s), len(s))
+	}
+	return encodeVarSlot(slot, raw, varHeap)
 }
 
 // decodeVarSlot extracts variable-length data from an 8-byte fixed slot and variable heap area ([P0-01]).
@@ -146,6 +171,16 @@ func (l *FlatRecordLayout) EncodeRowToFlat(schema *storage.TableSchema, row stor
 			continue
 		}
 
+		if val.Type != col.Type {
+			targetCol := col
+			targetCol.Nullable = true
+			convVal, err := storage.ConvertValueToColumn(val, targetCol)
+			if err != nil {
+				return nil, err
+			}
+			val = convVal
+		}
+
 		offset := l.FixedOffsets[i]
 		slot := buf[offset : offset+8]
 
@@ -158,9 +193,6 @@ func (l *FlatRecordLayout) EncodeRowToFlat(schema *storage.TableSchema, row stor
 
 		case storage.TypeBool:
 			b := val.BVal
-			if val.Type != storage.TypeBool {
-				b = storage.BoolValueFromAny(val).BVal
-			}
 			if b {
 				slot[0] = 1
 			} else {
@@ -176,9 +208,11 @@ func (l *FlatRecordLayout) EncodeRowToFlat(schema *storage.TableSchema, row stor
 			if !val.TVal.IsZero() {
 				secs = val.TVal.Unix()
 			} else if secs == 0 && val.SVal != "" {
-				if parsed, err := storage.ParseDate(val.SVal); err == nil {
-					secs = parsed.Unix()
+				parsed, err := storage.ParseDate(val.SVal)
+				if err != nil {
+					return nil, fmt.Errorf("column %q: %w", col.Name, err)
 				}
+				secs = parsed.Unix()
 			}
 			binary.LittleEndian.PutUint64(slot, uint64(secs))
 
@@ -192,30 +226,33 @@ func (l *FlatRecordLayout) EncodeRowToFlat(schema *storage.TableSchema, row stor
 			} else if val.IVal != 0 {
 				ns = val.IVal
 			} else if val.SVal != "" {
-				if _, parsedNs, err := storage.ParseTime(val.SVal); err == nil {
-					ns = parsedNs
+				_, parsedNs, err := storage.ParseTime(val.SVal)
+				if err != nil {
+					return nil, fmt.Errorf("column %q: %w", col.Name, err)
 				}
+				ns = parsedNs
 			}
 			binary.LittleEndian.PutUint64(slot, uint64(ns))
 
 		case storage.TypeVarChar, storage.TypeJSON, storage.TypeUUID:
-			s := val.SVal
-			raw := unsafe.Slice(unsafe.StringData(s), len(s))
-			encodeVarSlot(slot, raw, &varHeap)
+			if err := encodeVarStringSlot(slot, val.SVal, &varHeap); err != nil {
+				return nil, err
+			}
 
 		case storage.TypeBinary:
-			raw := unsafe.Slice(unsafe.StringData(val.BinVal), len(val.BinVal))
-			encodeVarSlot(slot, raw, &varHeap)
+			if err := encodeVarStringSlot(slot, val.BinVal, &varHeap); err != nil {
+				return nil, err
+			}
 
 		case storage.TypeDecimal:
-			decStr := val.Decimal().String()
-			raw := unsafe.Slice(unsafe.StringData(decStr), len(decStr))
-			encodeVarSlot(slot, raw, &varHeap)
+			if err := encodeVarStringSlot(slot, val.Decimal().String(), &varHeap); err != nil {
+				return nil, err
+			}
 
 		default:
-			str := val.String()
-			raw := unsafe.Slice(unsafe.StringData(str), len(str))
-			encodeVarSlot(slot, raw, &varHeap)
+			if err := encodeVarStringSlot(slot, val.String(), &varHeap); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -231,7 +268,9 @@ func (l *FlatRecordLayout) DecodeFlatToRow(schema *storage.TableSchema, buf []by
 	return l.DecodeFlatToRowWithArena(schema, buf, nil)
 }
 
-// DecodeFlatToRowWithArena reconstructs a storage.Row using arena slab pooling when arena is non-nil.
+// DecodeFlatToRowWithArena reconstructs a storage.Row using arena slab pooling for the
+// Value slice when arena is non-nil. String payloads are allocated on the Go heap so
+// returned Rows remain memory-safe after PutArena(arena).
 func (l *FlatRecordLayout) DecodeFlatToRowWithArena(schema *storage.TableSchema, buf []byte, arena *storage.Arena) (storage.Row, error) {
 	if l == nil || schema == nil {
 		return storage.Row{}, errors.New("nil layout or schema")
@@ -286,7 +325,7 @@ func (l *FlatRecordLayout) DecodeFlatToRowWithArena(schema *storage.TableSchema,
 			if err != nil {
 				return storage.Row{}, err
 			}
-			vals[i] = storage.Value{Type: col.Type, SVal: arena.AllocStringBytes(raw)}
+			vals[i] = storage.Value{Type: col.Type, SVal: string(raw)}
 
 		case storage.TypeBinary:
 			raw, err := decodeVarSlot(slot, varArea)
@@ -300,14 +339,18 @@ func (l *FlatRecordLayout) DecodeFlatToRowWithArena(schema *storage.TableSchema,
 			if err != nil {
 				return storage.Row{}, err
 			}
-			vals[i] = storage.DecimalValue(arena.AllocStringBytes(raw))
+			var decView string
+			if len(raw) > 0 {
+				decView = unsafe.String(unsafe.SliceData(raw), len(raw))
+			}
+			vals[i] = storage.DecimalValue(decView)
 
 		default:
 			raw, err := decodeVarSlot(slot, varArea)
 			if err != nil {
 				return storage.Row{}, err
 			}
-			vals[i] = storage.Value{Type: col.Type, SVal: arena.AllocStringBytes(raw)}
+			vals[i] = storage.Value{Type: col.Type, SVal: string(raw)}
 		}
 	}
 

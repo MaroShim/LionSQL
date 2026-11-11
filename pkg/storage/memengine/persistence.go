@@ -108,13 +108,18 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				e.rebuildFKCacheLocked()
 			}
 		case OpAlterTable:
-			if td, exists := sqlutil.MapGetFold(e.tables, op.Table); exists && op.Column != nil {
-				td.Schema.Columns = append(td.Schema.Columns, *op.Column)
-				fillVal := storage.NullValue(op.Column.Type)
-				if strings.TrimSpace(op.Column.Default) != "" {
-					fillVal = storage.ParseLiteralDefault(op.Column.Default, op.Column.Type)
+			if td, exists := sqlutil.MapGetFold(e.tables, op.Table); exists {
+				if op.Schema != nil {
+					if err := e.applySchemaMigrationLocked(td, op.Schema, false); err != nil {
+						return err
+					}
+				} else if op.Column != nil {
+					trialSchema := td.Schema.Clone()
+					trialSchema.Columns = append(trialSchema.Columns, *op.Column)
+					if err := e.applySchemaMigrationLocked(td, &trialSchema, false); err != nil {
+						return err
+					}
 				}
-				td.addColumnValues(fillVal)
 			}
 		case OpTruncateTable:
 			if td, exists := sqlutil.MapGetFold(e.tables, op.Table); exists {
@@ -318,6 +323,13 @@ func (e *Engine) rewriteAOFLocked() error {
 	return nil
 }
 
+// SaveSnapshot forces an immediate durable disk snapshot dump of all tables and returns any error.
+func (e *Engine) SaveSnapshot() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.saveDiskLocked()
+}
+
 func (e *Engine) saveDiskLocked() error {
 	return e.saveDiskSnapshotLocked(e.nextLSN.Load())
 }
@@ -337,23 +349,35 @@ func (e *Engine) saveDiskSnapshotLocked(snapLSN int64) error {
 		persistTables[name] = td
 	}
 
-	for _, td := range persistTables {
-		td.syncShardsToMapsLocked()
-		td.mu.Lock()
-		for _, idx := range td.Indexes {
-			idx.SyncEntries()
-		}
-		td.mu.Unlock()
-	}
 	tNames := make([]string, 0, len(persistTables))
 	for name := range persistTables {
 		tNames = append(tNames, name)
 	}
 	sort.Strings(tNames)
+
+	// Acquire table locks in canonical sorted order ([RULE:LockHierarchy])
 	for _, name := range tNames {
 		td := persistTables[name]
-		td.mu.RLock()
+		td.mu.Lock()
 		td.partMu.RLock()
+	}
+	defer func() {
+		for i := len(tNames) - 1; i >= 0; i-- {
+			td := persistTables[tNames[i]]
+			td.partMu.RUnlock()
+			td.clearShardsSyncMapsAlreadyLocked()
+			td.mu.Unlock()
+		}
+	}()
+
+	for _, name := range tNames {
+		td := persistTables[name]
+		if err := td.syncShardsToMapsAlreadyLocked(); err != nil {
+			return err
+		}
+		for _, idx := range td.Indexes {
+			idx.SyncEntries()
+		}
 	}
 
 	container := SnapshotContainer{
@@ -361,15 +385,6 @@ func (e *Engine) saveDiskSnapshotLocked(snapLSN int64) error {
 		Tables:      persistTables,
 	}
 	data, err := MarshalMsgPack(container)
-	for i := len(tNames) - 1; i >= 0; i-- {
-		td := persistTables[tNames[i]]
-		td.partMu.RUnlock()
-		td.mu.RUnlock()
-	}
-	// Immediately free the temporary cloned maps so they do not linger in heap and trigger GC pressure.
-	for _, td := range persistTables {
-		td.clearShardsSyncMapsLocked()
-	}
 	if err != nil {
 		return fmt.Errorf("failed to encode tables to MessagePack: %w", err)
 	}
