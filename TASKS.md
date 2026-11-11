@@ -263,10 +263,10 @@
 | `DONE` | **`TEST-OCC-FLAT-3`** |  | Storage | P2 | Flat 모드 쿼리 엔진 풀 스위트 회귀 검증 (SLT 및 Babelfish) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `PENDING` | **`TEST-OCC-FLAT-4`** | `1.0-GA` | Storage | P2 | Flat 모드 24h 장기 소크 및 가변 길이 UPDATE 단편화 검증 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `PENDING` | **`TSQL-FUNC-AT-TIME-ZONE`** | `v1.1.0` | Engine | P2 | AT TIME ZONE 시간대 변환 구문 및 함수 (IANA/Windows Timezone) | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
-| `PENDING` | **`TSQL-FUNC-COMPRESS`** | `v1.1.0` | Engine | P2 | COMPRESS 및 DECOMPRESS GZIP 바이너리 압축/해제 내장 함수 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
+| `PENDING` | **`TSQL-FUNC-COMPRESS`** | `1.0-GA` | Engine | P2 | COMPRESS 및 DECOMPRESS GZIP 바이너리 압축/해제 내장 함수 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
 | `PENDING` | **`TSQL-FUNC-PARSE`** | `v1.1.0` | Engine | P2 | PARSE 및 TRY_PARSE 문화권(Culture) 기반 문자열 파싱 함수 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
 | `PENDING` | **`TSQL-MULTI-TVF-1`** | `v1.6.0` | Engine | P2 | T-SQL 멀티-스테이트먼트 테이블 반환 함수 (Multi-Statement TVF) | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
-| `PENDING` | **`TSQL-SYSVAR-DATEFIRST-DBTS`** | `v1.1.0` | Engine | P2 | @@DATEFIRST 및 @@DBTS 시스템 세션/타임스탬프 변수 지원 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
+| `PENDING` | **`TSQL-SYSVAR-DATEFIRST-DBTS`** | `1.0-GA` | Engine | P2 | @@DATEFIRST 및 @@DBTS 시스템 세션/타임스탬프 변수 지원 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
 | `PENDING` | **`TSQL-TVP-TYPE-1`** | `v1.6.0` | Engine | P3 | T-SQL 사용자 정의 테이블 타입(CREATE TYPE ... AS TABLE) 및 TVP 매개변수 지원 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
 | `DONE` | **`TUNE-DOC-SYNC-1`** |  | Documentation | P2 | 1.0 GA 벤치마크 및 공식 문서 실측치 일괄 동기화 |  |  |
 | `DONE` | **`TUNE-HOTSPOT-OCC-1`** |  | Durability | P2 | 고동시성 핫스팟 OCC 경합 완화 및 와이어 버퍼 풀링 |  | - [x] **Phase 3 (`TUNE-EPHEMERAL-VERI... |
@@ -3117,8 +3117,8 @@ T-SQL AT TIME ZONE 절 지원 및 IANA/Windows 타임존 데이터셋 연동 날
 ---
 
 ### [PENDING] COMPRESS 및 DECOMPRESS GZIP 바이너리 압축/해제 내장 함수 `TSQL-FUNC-COMPRESS`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 16:23:03
-- **Milestone**: `v1.1.0`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 01:53:00
+- **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md)
 
 **Details & Resolution**:
@@ -3147,8 +3147,8 @@ CREATE FUNCTION ... RETURNS @table TABLE (...) AS BEGIN ... END 형태의 절차
 ---
 
 ### [PENDING] @@DATEFIRST 및 @@DBTS 시스템 세션/타임스탬프 변수 지원 `TSQL-SYSVAR-DATEFIRST-DBTS`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 16:23:03
-- **Milestone**: `v1.1.0`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 01:53:00
+- **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md)
 
 **Details & Resolution**:
