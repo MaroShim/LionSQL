@@ -626,8 +626,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/procs/{name}/exec", s.wrapAuth(s.handleExecProc, false, ""))
 
 	// Online Snapshot Hot Backup & Restore API
-	s.mux.HandleFunc("POST /api/backup", s.wrapAuth(s.handleBackup, true, ""))
-	s.mux.HandleFunc("GET /api/backup", s.wrapAuth(s.handleBackup, false, ""))
+	s.mux.HandleFunc("POST /api/backup", s.wrapSuperuser(s.handleBackup))
+	s.mux.HandleFunc("GET /api/backup", s.wrapSuperuser(s.handleBackup))
 	s.mux.HandleFunc("POST /api/restore", s.wrapSuperuser(s.handleRestore))
 
 	// Webhooks Management & Notification Dispatch API

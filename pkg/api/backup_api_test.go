@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"lionsql/pkg/auth"
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/storage/memengine"
 )
@@ -158,5 +159,84 @@ func TestAPI_BackupFileAndRestoreFilePath(t *testing.T) {
 	_ = json.Unmarshal(tablesRec.Body.Bytes(), &tables)
 	if len(tables) == 0 {
 		t.Fatalf("expected tables on restored server, got 0")
+	}
+}
+
+func TestAPI_Backup_RequiresSuperuser_AuditFull037(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	authSvc := auth.NewAuthService(auth.Config{})
+	_, _ = authSvc.EnsureDefaultSuperuser("admin@lionsql.local", "SuperMasterSecret123!")
+
+	// 1. Create a table-restricted API key (allowed_tables: ["guest_book"] only)
+	keyObj, err := authSvc.CreateAPIKey("ThirdPartyIntegrationKey", auth.RoleReadOnly, []string{"guest_book"})
+	if err != nil {
+		t.Fatalf("failed to create API key: %v", err)
+	}
+
+	server := NewServerWithAuth(cat, eng, authSvc, true) // enableAuth = true
+
+	// 2. Unauthenticated GET /api/backup -> 401 Unauthorized
+	req1 := httptest.NewRequest(http.MethodGet, "/api/backup", nil)
+	rec1 := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec1, req1)
+	if rec1.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 Unauthorized for unauthenticated GET /api/backup, got %d: %s", rec1.Code, rec1.Body.String())
+	}
+
+	// 3. AUDIT-FULL-037 Test: Attempt privilege escalation via table-restricted API key
+	req2 := httptest.NewRequest(http.MethodGet, "/api/backup", nil)
+	req2.Header.Set("X-API-Key", keyObj.Key)
+	rec2 := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec2, req2)
+
+	// MUST be rejected because /api/backup requires Superuser JWT, not a table-scoped API key!
+	if rec2.Code != http.StatusUnauthorized {
+		t.Fatalf("AUDIT-FULL-037: privilege escalation detected! Table-scoped API key was allowed to access /api/backup (code %d)", rec2.Code)
+	}
+
+	// 4. Same test for POST /api/backup with API key
+	postBody, _ := json.Marshal(map[string]string{"target": "/tmp/evil_backup.tar.gz"})
+	req3 := httptest.NewRequest(http.MethodPost, "/api/backup", bytes.NewReader(postBody))
+	req3.Header.Set("X-API-Key", keyObj.Key)
+	req3.Header.Set("Content-Type", "application/json")
+	rec3 := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec3, req3)
+
+	if rec3.Code != http.StatusUnauthorized {
+		t.Fatalf("AUDIT-FULL-037: privilege escalation detected on POST /api/backup with API key (code %d)", rec3.Code)
+	}
+
+	// 5. Login as Superuser and get valid JWT Bearer token
+	loginPayload, _ := json.Marshal(map[string]string{
+		"identity": "admin@lionsql.local",
+		"password": "SuperMasterSecret123!",
+	})
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginRec := httptest.NewRecorder()
+	server.Handler().ServeHTTP(loginRec, loginReq)
+
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("failed to login superuser: %d: %s", loginRec.Code, loginRec.Body.String())
+	}
+	var authRes struct {
+		Token string `json:"token"`
+	}
+	_ = json.Unmarshal(loginRec.Body.Bytes(), &authRes)
+	if authRes.Token == "" {
+		t.Fatalf("expected valid token from login")
+	}
+
+	// 6. Superuser with Bearer token can successfully access GET /api/backup
+	req4 := httptest.NewRequest(http.MethodGet, "/api/backup", nil)
+	req4.Header.Set("Authorization", "Bearer "+authRes.Token)
+	rec4 := httptest.NewRecorder()
+	server.Handler().ServeHTTP(rec4, req4)
+
+	if rec4.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for superuser GET /api/backup, got %d: %s", rec4.Code, rec4.Body.String())
 	}
 }

@@ -1688,7 +1688,7 @@
 | `AUDIT-FULL-034` | High | `pkg/wire/tds/token.go:224` | TDS US_VARCHAR/B_VARCHAR 길이 헤더에 UTF-8 바이트 수를 기록하여 한글 등 비ASCII 문자열 프레이밍 파탄 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-035` | High | `pkg/api/server.go:531` | 쿼리 취소, 실행 중인 쿼리 목록, 슬로우/일반 로그 파일, 실시간 CDC 스트림 등 관리자 엔드포인트 무인증 노출 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-036` | Medium | `pkg/api/records_filter.go:230` | REST API 레코드 필터 LIKE 평가 시 후보 행마다 regexp.Compile 동적 재컴파일로 인한 CPU/GC 병목 | 조치 완료 (TDD 검증) |
-| `AUDIT-FULL-037` | High | `pkg/api/server.go:606` | 단일 테이블 권한의 API Key로 /api/backup 호출 시 전체 데이터베이스 백업 다운로드 권한 상승 및 유출 | 미수정 |
+| `AUDIT-FULL-037` | High | `pkg/api/server.go:606` | 단일 테이블 권한의 API Key로 /api/backup 호출 시 전체 데이터베이스 백업 다운로드 권한 상승 및 유출 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-038` | Medium | `pkg/api/handlers_import_export.go:190` | CSV/JSON 테이블 임포트 시 밀리초 타임스탬프 기반 PK 생성으로 인한 32비트 INT 오버플로우 및 충돌 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-039` | High | `pkg/auth/auth.go:367` | 로그아웃 세션 무효화 TokenKey 디스크 비동기화로 인한 재부팅 시 파기된 JWT 토큰 부활 결함 | 미수정 |
 | `AUDIT-FULL-040` | High | `pkg/replication/handlers.go:12` | HA 복제/승격/강등/투표/WAL 스트림 엔드포인트 무인증 노출로 인한 클러스터 탈취 및 데이터 유출 결함 | 미수정 |
