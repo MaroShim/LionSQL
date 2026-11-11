@@ -732,7 +732,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		case 'Q': // Simple Query
 			query := string(bytes.TrimRight(payload, "\x00"))
 			trimmed := strings.TrimSpace(query)
-			if strings.HasPrefix(strings.ToUpper(trimmed), "COPY ") {
+			if sqlutil.HasPrefixKeyword(trimmed, "COPY") {
 				s.handleCopy(conn, trimmed, sessID)
 			} else {
 				s.handleSimpleQuery(conn, query, sessID)
@@ -1313,15 +1313,15 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		}
 	}
 
-	upper := strings.ToUpper(strings.TrimSpace(query))
-	if strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "WITH") {
+	trimmedQ := strings.TrimSpace(query)
+	if sqlutil.HasPrefixKeyword(trimmedQ, "SELECT") && !sqlutil.HasPrefixKeyword(trimmedQ, "WITH") {
 		fromIdx := sqlutil.FindTopLevelKeyword(query, "FROM")
 		if fromIdx != -1 {
 			selectPart := strings.TrimSpace(query[:fromIdx])
-			if strings.HasPrefix(strings.ToUpper(selectPart), "SELECT") {
+			if sqlutil.HasPrefixKeyword(selectPart, "SELECT") {
 				selectPart = strings.TrimSpace(selectPart[6:])
 			}
-			if strings.HasPrefix(strings.ToUpper(selectPart), "DISTINCT") {
+			if sqlutil.HasPrefixKeyword(selectPart, "DISTINCT") {
 				selectPart = strings.TrimSpace(selectPart[8:])
 			}
 			qc := proc.ExtractQueryCharacteristics(query)
@@ -1465,7 +1465,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 	}
 }
 
-	if strings.HasPrefix(upper, "SHOW ") {
+	if sqlutil.HasPrefixKeyword(query, "SHOW") {
 		if res, err := s.coordinator.ExecuteSessionSQL("default", query); err == nil && len(res.Columns) > 0 {
 			cols := make([]ColumnMeta, len(res.Columns))
 			for i, c := range res.Columns {
@@ -1478,15 +1478,15 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		}
 	}
 
-	if strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH") {
-		if isStandaloneVersionQuery(upper) {
+	if sqlutil.HasPrefixKeyword(query, "SELECT") || sqlutil.HasPrefixKeyword(query, "WITH") {
+		if isStandaloneVersionQuery(query) {
 			cols := []ColumnMeta{{Name: "version", DataType: 25}}
 			recordCols(cols)
 			applyFormats(cols)
 			_ = WriteRowDescription(conn, cols)
 			return
 		}
-		if strings.HasPrefix(upper, "WITH") && isWritableWithQuery(query) {
+		if sqlutil.HasPrefixKeyword(query, "WITH") && isWritableWithQuery(query) {
 			cols, hasResult := s.describeWithQueryColumns(query)
 			if !hasResult || len(cols) == 0 {
 				if stmt != nil {
@@ -1516,7 +1516,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 			_ = WriteRowDescription(conn, cols)
 			return
 		}
-		if strings.HasPrefix(upper, "WITH") {
+		if sqlutil.HasPrefixKeyword(query, "WITH") {
 			if cols, hasResult := s.describeWithQueryColumns(query); hasResult && len(cols) > 0 {
 				recordCols(cols)
 				applyFormats(cols)
@@ -1527,19 +1527,18 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 
 		// Fallback: extract projected column names from query (or CTE main query)
 		analysisSQL := query
-		if strings.HasPrefix(upper, "WITH") {
+		if sqlutil.HasPrefixKeyword(query, "WITH") {
 			if _, main := planner.ParseCTEs(query); main != "" {
 				analysisSQL = main
 			}
 		}
-		analysisUpper := strings.ToUpper(strings.TrimSpace(analysisSQL))
-		if strings.HasPrefix(analysisUpper, "SELECT") {
+		if sqlutil.HasPrefixKeyword(analysisSQL, "SELECT") {
 			if fIdx := sqlutil.FindTopLevelKeyword(analysisSQL, "FROM"); fIdx != -1 {
 				sPart := strings.TrimSpace(analysisSQL[:fIdx])
-				if strings.HasPrefix(strings.ToUpper(sPart), "SELECT") {
+				if sqlutil.HasPrefixKeyword(sPart, "SELECT") {
 					sPart = strings.TrimSpace(sPart[6:])
 				}
-				if strings.HasPrefix(strings.ToUpper(sPart), "DISTINCT") {
+				if sqlutil.HasPrefixKeyword(sPart, "DISTINCT") {
 					sPart = strings.TrimSpace(sPart[8:])
 				}
 				rawCols := sqlutil.SplitTopLevel(sPart, ',')
@@ -1570,7 +1569,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		}
 	}
 
-	if strings.HasPrefix(upper, "EXEC") || strings.HasPrefix(upper, "CALL") {
+	if sqlutil.HasPrefixKeyword(query, "EXEC") || sqlutil.HasPrefixKeyword(query, "CALL") {
 		procName, _ := engine.ParseProcArgs(query)
 		if procName != "" {
 			var prog *proc.Program
@@ -1815,7 +1814,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 		sampleRow = res.Rows[0]
 	}
 	queryForOIDs := portal.Statement.Query
-	if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(queryForOIDs)), "EXEC") || strings.HasPrefix(strings.ToUpper(strings.TrimSpace(queryForOIDs)), "CALL") {
+	if sqlutil.HasPrefixKeyword(queryForOIDs, "EXEC") || sqlutil.HasPrefixKeyword(queryForOIDs, "CALL") {
 		procName, _ := engine.ParseProcArgs(queryForOIDs)
 		if procName != "" && s.catalog != nil {
 			if procMeta, err := s.catalog.GetProcedure(procName); err == nil && procMeta != nil {
@@ -2113,8 +2112,7 @@ func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow ma
 			}
 		}
 		if oid == 0 {
-			upperCol := strings.ToUpper(cleanCol)
-			if strings.Contains(upperCol, "COUNT") {
+			if sqlutil.HasPrefixKeyword(cleanCol, "COUNT") || strings.EqualFold(cleanCol, "COUNT") {
 				oid = 20 // int8
 			} else if sampleRow != nil {
 				val := getRowValue(sampleRow, colName)
@@ -2136,13 +2134,15 @@ func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow ma
 
 func isStandaloneVersionQuery(query string) bool {
 	trimmed := strings.TrimRight(strings.TrimSpace(query), ";")
-	upper := strings.ToUpper(trimmed)
-	if upper == "SELECT VERSION()" || upper == "SELECT @@VERSION" || upper == "VALUES(VERSION())" {
+	if strings.EqualFold(trimmed, "SELECT VERSION()") || strings.EqualFold(trimmed, "SELECT @@VERSION") || strings.EqualFold(trimmed, "VALUES(VERSION())") {
 		return true
 	}
-	if strings.HasPrefix(upper, "SELECT") && !strings.Contains(upper, ",") && !strings.Contains(upper, "FROM") && !strings.Contains(upper, "WHERE") {
-		fields := strings.Fields(upper)
-		if len(fields) == 2 && (fields[1] == "VERSION()" || fields[1] == "@@VERSION") {
+	if sqlutil.HasPrefixKeyword(trimmed, "SELECT") &&
+		sqlutil.FindTopLevelChar(trimmed, ',') == -1 &&
+		!sqlutil.ContainsKeyword(trimmed, "FROM", false) &&
+		!sqlutil.ContainsKeyword(trimmed, "WHERE", false) {
+		rem := strings.TrimSpace(trimmed[6:])
+		if strings.EqualFold(rem, "VERSION()") || strings.EqualFold(rem, "@@VERSION") {
 			return true
 		}
 	}

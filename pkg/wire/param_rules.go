@@ -551,13 +551,11 @@ func (s *Server) inferStmtDMLParamTypes(stmtSQL string, count int, oids []int32)
 			if colOID == 0 {
 				continue
 			}
-			upperWhere := strings.ToUpper(dml.Where)
-			upperCol := strings.ToUpper(c.Name)
-			if !strings.Contains(upperWhere, upperCol) {
+			if !sqlutil.ContainsKeyword(dml.Where, c.Name, true) {
 				continue
 			}
-			for _, clause := range strings.Split(dml.Where, "AND") {
-				if strings.Contains(strings.ToUpper(clause), upperCol) {
+			for _, clause := range sqlutil.SplitAndConditions(dml.Where) {
+				if sqlutil.ContainsKeyword(clause, c.Name, true) {
 					for _, pIdx := range findAllParamIdxsInExpr(clause, count) {
 						if oids[pIdx-1] == 0 {
 							oids[pIdx-1] = colOID
@@ -570,31 +568,23 @@ func (s *Server) inferStmtDMLParamTypes(stmtSQL string, count int, oids []int32)
 }
 
 func inferExplicitCastParamTypes(query string, count int, oids []int32) {
-	for i := 0; i < len(query); i++ {
-		if query[i] == '$' && i+1 < len(query) && query[i+1] >= '0' && query[i+1] <= '9' {
-			j := i + 1
-			for j < len(query) && query[j] >= '0' && query[j] <= '9' {
-				j++
-			}
-			pIdx, err := strconv.Atoi(query[i+1 : j])
-			if err == nil && pIdx >= 1 && pIdx <= count {
-				rem := strings.TrimSpace(query[j:])
-				if strings.HasPrefix(rem, "::") {
-					castRest := strings.TrimSpace(rem[2:])
-					k := 0
-					for k < len(castRest) && ((castRest[k] >= 'a' && castRest[k] <= 'z') || (castRest[k] >= 'A' && castRest[k] <= 'Z') || (castRest[k] >= '0' && castRest[k] <= '9') || castRest[k] == '_' || castRest[k] == '[' || castRest[k] == ']') {
-						k++
-					}
-					if k > 0 {
-						if castOID := castNameToPgOID(castRest[:k]); castOID != 0 {
-							oids[pIdx-1] = castOID
-						}
+	sqlutil.ScanPgParams(query, func(tok sqlutil.PgParamToken) {
+		if tok.Index >= 1 && tok.Index <= count {
+			rem := strings.TrimSpace(query[tok.End:])
+			if strings.HasPrefix(rem, "::") {
+				castRest := strings.TrimSpace(rem[2:])
+				k := 0
+				for k < len(castRest) && ((castRest[k] >= 'a' && castRest[k] <= 'z') || (castRest[k] >= 'A' && castRest[k] <= 'Z') || (castRest[k] >= '0' && castRest[k] <= '9') || castRest[k] == '_' || castRest[k] == '[' || castRest[k] == ']') {
+					k++
+				}
+				if k > 0 {
+					if castOID := castNameToPgOID(castRest[:k]); castOID != 0 {
+						oids[tok.Index-1] = castOID
 					}
 				}
 			}
-			i = j - 1
 		}
-	}
+	})
 }
 
 func (s *Server) inferParamTypes(query string, count int) []int32 {
@@ -612,7 +602,7 @@ func (s *Server) inferParamTypes(query string, count int) []int32 {
 
 	// 1. Try CTE-aware DML / SELECT parameter resolution
 	trimmed := strings.TrimSpace(query)
-	if strings.HasPrefix(strings.ToUpper(trimmed), "WITH") {
+	if sqlutil.HasPrefixKeyword(trimmed, "WITH") {
 		ctes, mainSQL := planner.ParseCTEs(trimmed)
 		for _, cte := range ctes {
 			s.inferStmtDMLParamTypes(cte.InnerSQL, count, oids)

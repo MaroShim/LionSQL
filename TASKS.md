@@ -20,9 +20,9 @@
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** |  | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
 | `DONE` | **`AUDIT-135-DUAL-REVIEW`** |  | Integrity | P1 | 전 소스코드 135단계 듀얼 AI 정밀 코드 리뷰 및 엣지 케이스 감사 | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) | 135/135 스코프 완주 (총 134건 결함 식별 및 등록 완료) |
 | `DONE` | **`AUDIT-CORE-DEEP-RESCAN`** |  | Integrity | P1 | 12대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan) | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) |  |
-| `PENDING` | **`AUDIT-CROSS-CONTAINS`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사: strings.Contains 기반 SQL 키워드/연산자 단순 매칭 안티패턴 발굴 및 토크나이저 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `PENDING` | **`AUDIT-CROSS-PREFIX`** | `1.0-GA` | Engine | P2 | 코드베이스 전수 조사: strings.HasPrefix/HasSuffix 기반 SQL 구문/예약어 경계 미검사 안티패턴 발굴 및 HasPrefixKeyword 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `PENDING` | **`AUDIT-CROSS-SPLIT`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사: strings.Split 기반 SQL 절/파라미터/WHERE 단순 분할 안티패턴 발굴 및 sqlutil 분할 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-CROSS-CONTAINS`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사: strings.Contains 기반 SQL 키워드/연산자 단순 매칭 안티패턴 발굴 및 토크나이저 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-CROSS-PREFIX`** | `1.0-GA` | Engine | P2 | 코드베이스 전수 조사: strings.HasPrefix/HasSuffix 기반 SQL 구문/예약어 경계 미검사 안티패턴 발굴 및 HasPrefixKeyword 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-CROSS-SPLIT`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사: strings.Split 기반 SQL 절/파라미터/WHERE 단순 분할 안티패턴 발굴 및 sqlutil 분할 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`AUDIT-FULL-13DOM`** |  | Integrity | P1 | 전 13대 도메인(175개 파일, 113,056 LOC) 듀얼 AI 라인 단위 적대적 감사 완료 및 40개 결함 도출 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `IN_PROGRESS` | **`AUDIT-FULL-PATCH`** | `1.0-GA` | Integrity | P1 | 전수 감사 발굴 40대 결함(Critical 2건 완치, High 26건, Med/Low 12건) TDD 순차 패치 및 무결점 회귀 검증 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `IN_PROGRESS` | **`AUDIT-FULL-SQL-CORE`** | `1.0-GA` | Engine | P1 | 전수 감사 잔여 Parser/Planner/Exec/Catalog 결함 패치 (AUDIT-FULL-005, 006, 014~022, 024~029) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
@@ -34,6 +34,10 @@
 | `PENDING` | **`AUDIT-LOG-1`** | `v1.3.0` | Integrity | P2 | 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템 | [`notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md) |  |
 | `DONE` | **`AUDIT-PATCH-P0`** |  | Integrity | P1 | 전수 감사 P0 (Must Fix 37선) 결함 TDD 순차 패치 및 회귀 검증 | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |  |
 | `DONE` | **`AUDIT-PATCH-P1`** |  | Core | P1 | 1.0 전수 감사 P1 (Should Fix 47선) 난이도별(하/중/상) 순차 안정화 패치 | [`notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md`](notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md) | 1단계(하 21건), 2단계(중 18건), 3단계(상 8건) P1 ... |
+| `PENDING` | **`AUDIT-STRINGS-CATALOG`** | `1.0-GA` | Catalog | P1 | 코드베이스 전수 조사 Phase 2: pkg/catalog 가상 뷰 인터셉터 strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
+| `PENDING` | **`AUDIT-STRINGS-ENGINE`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사 Phase 3: pkg/engine 핵심 실행/DDL/DML strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
+| `PENDING` | **`AUDIT-STRINGS-PLANNER`** | `1.0-GA` | Planner | P1 | 코드베이스 전수 조사 Phase 4: pkg/planner 및 pkg/proc strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
+| `DONE` | **`AUDIT-STRINGS-WIRE`** | `1.0-GA` | Protocol | P1 | 코드베이스 전수 조사 Phase 1: pkg/wire 및 TDS 프로토콜 레이어 strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-TRIAGE-POST`** |  | Integrity | P1 | 전수 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) |  |
 | `DONE` | **`BENCH-ALL-IN-ONE-1`** |  | Durability | P2 | 원클릭 벤치마크 및 종합 검증 스위트 (`scripts/run_all_benchmarks.sh`) 구축 |  | - [x] **Phase 1~4 (성능/와이어 실측)**: Bank... |
 | `DONE` | **`BENCH-TPCH-1`** |  | Ecosystem | P3 | Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation 영구 대체 기각 (Replaced by PERF-SUBQUERY-MEMO-1, Spec-Out) | [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |  |
@@ -439,22 +443,22 @@
 
 ---
 
-### [PENDING] 코드베이스 전수 조사: strings.Contains 기반 SQL 키워드/연산자 단순 매칭 안티패턴 발굴 및 토크나이저 전환 `AUDIT-CROSS-CONTAINS`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-11 12:12:48
+### [DONE] 코드베이스 전수 조사: strings.Contains 기반 SQL 키워드/연산자 단순 매칭 안티패턴 발굴 및 토크나이저 전환 `AUDIT-CROSS-CONTAINS`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-11 12:23:58
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 
 ---
 
-### [PENDING] 코드베이스 전수 조사: strings.HasPrefix/HasSuffix 기반 SQL 구문/예약어 경계 미검사 안티패턴 발굴 및 HasPrefixKeyword 전환 `AUDIT-CROSS-PREFIX`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 12:12:48
+### [DONE] 코드베이스 전수 조사: strings.HasPrefix/HasSuffix 기반 SQL 구문/예약어 경계 미검사 안티패턴 발굴 및 HasPrefixKeyword 전환 `AUDIT-CROSS-PREFIX`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 12:23:58
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 
 ---
 
-### [PENDING] 코드베이스 전수 조사: strings.Split 기반 SQL 절/파라미터/WHERE 단순 분할 안티패턴 발굴 및 sqlutil 분할 전환 `AUDIT-CROSS-SPLIT`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-11 12:12:48
+### [DONE] 코드베이스 전수 조사: strings.Split 기반 SQL 절/파라미터/WHERE 단순 분할 안티패턴 발굴 및 sqlutil 분할 전환 `AUDIT-CROSS-SPLIT`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-11 12:23:58
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 
@@ -624,6 +628,34 @@
 - [x] Mini-Batch 6 (cmd/lionsql, 3건): Scope-132, Scope-133, Scope-131 (cc5850c)
 - [ ] 2단계 난이도 중 (Medium, 18건): 도메인 A(5건), 도메인 B(6건), 도메인 C(7건)
 - [ ] 3단계 난이도 상 (High, 8건)
+
+---
+
+### [PENDING] 코드베이스 전수 조사 Phase 2: pkg/catalog 가상 뷰 인터셉터 strings.* 안티패턴 전수 제거 및 sqlutil 전환 `AUDIT-STRINGS-CATALOG`
+- **Domain**: Catalog | **Priority**: P1 | **Updated**: 2026-11-11 12:23:58
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`GEMINI.md`](GEMINI.md)
+
+---
+
+### [PENDING] 코드베이스 전수 조사 Phase 3: pkg/engine 핵심 실행/DDL/DML strings.* 안티패턴 전수 제거 및 sqlutil 전환 `AUDIT-STRINGS-ENGINE`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-11 12:23:58
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`GEMINI.md`](GEMINI.md)
+
+---
+
+### [PENDING] 코드베이스 전수 조사 Phase 4: pkg/planner 및 pkg/proc strings.* 안티패턴 전수 제거 및 sqlutil 전환 `AUDIT-STRINGS-PLANNER`
+- **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-11 12:23:58
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`GEMINI.md`](GEMINI.md)
+
+---
+
+### [DONE] 코드베이스 전수 조사 Phase 1: pkg/wire 및 TDS 프로토콜 레이어 strings.* 안티패턴 전수 제거 및 sqlutil 전환 `AUDIT-STRINGS-WIRE`
+- **Domain**: Protocol | **Priority**: P1 | **Updated**: 2026-11-11 12:45:40
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`GEMINI.md`](GEMINI.md)
 
 ---
 

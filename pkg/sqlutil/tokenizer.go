@@ -950,7 +950,14 @@ func ContainsKeyword(s string, keyword string, allowInsideParens bool) bool {
 // 2. It is flanked by word boundaries (spaces, punctuation, or string start/end).
 // Returns -1 if not found.
 func FindTopLevelKeyword(s string, keyword string) int {
-	indices := scanKeyword(s, keyword, false, true)
+	return FindKeyword(s, keyword, false)
+}
+
+// FindKeyword finds the byte index of a keyword in s outside single/double quotes, brackets, and comments.
+// If allowInsideParens is true, occurrences inside nested parentheses are matched.
+// Returns -1 if not found.
+func FindKeyword(s string, keyword string, allowInsideParens bool) int {
+	indices := scanKeyword(s, keyword, allowInsideParens, true)
 	if len(indices) == 0 {
 		return -1
 	}

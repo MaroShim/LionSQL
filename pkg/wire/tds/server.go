@@ -2861,13 +2861,12 @@ func isTimeString(s string) bool {
 }
 
 func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
-	upper := strings.ToUpper(trimmed)
-	if !strings.Contains(upper, "SELECT") {
+	if !sqlutil.ContainsKeyword(trimmed, "SELECT", false) {
 		return nil, nil, false
 	}
 
 	// 1. DbGate 4-column version & edition detection query (requires @@VERSION, PRODUCTVERSION, ENGINEEDITION, and VERSIONTEXT)
-	if strings.Contains(upper, "@@VERSION") && strings.Contains(upper, "PRODUCTVERSION") && strings.Contains(upper, "ENGINEEDITION") && strings.Contains(upper, "VERSIONTEXT") {
+	if sqlutil.ContainsKeyword(trimmed, "@@VERSION", false) && sqlutil.ContainsKeyword(trimmed, "PRODUCTVERSION", false) && sqlutil.ContainsKeyword(trimmed, "ENGINEEDITION", false) && sqlutil.ContainsKeyword(trimmed, "VERSIONTEXT", false) {
 		cols := []ColumnInfo{
 			{Name: "version", Type: TypeNVarChar, Size: 4000, Nullable: false},
 			{Name: "productVersion", Type: TypeNVarChar, Size: 128, Nullable: false},
@@ -2884,11 +2883,11 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 	}
 
 	// 2. Standard standalone single @@VERSION probe
-	if strings.Contains(upper, "@@VERSION") && !strings.Contains(upper, ",") && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
+	if sqlutil.ContainsKeyword(trimmed, "@@VERSION", false) && sqlutil.FindTopLevelChar(trimmed, ',') == -1 && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
 		colName := "version"
 		if asIdx := sqlutil.FindTopLevelKeyword(trimmed, "AS"); asIdx != -1 {
 			alias := strings.TrimSpace(trimmed[asIdx+len("AS"):])
-			if commaIdx := strings.Index(alias, ","); commaIdx != -1 {
+			if commaIdx := sqlutil.FindTopLevelChar(alias, ','); commaIdx != -1 {
 				alias = alias[:commaIdx]
 			}
 			alias = strings.Trim(alias, ";, []\"'\r\n\t")
@@ -2906,11 +2905,11 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 	}
 
 	// 2.1. Standard standalone single @@MICROSOFTVERSION probe
-	if strings.Contains(upper, "@@MICROSOFTVERSION") && !strings.Contains(upper, ",") && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
+	if sqlutil.ContainsKeyword(trimmed, "@@MICROSOFTVERSION", false) && sqlutil.FindTopLevelChar(trimmed, ',') == -1 && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
 		colName := "MicrosoftVersion"
 		if asIdx := sqlutil.FindTopLevelKeyword(trimmed, "AS"); asIdx != -1 {
 			alias := strings.TrimSpace(trimmed[asIdx+len("AS"):])
-			if commaIdx := strings.Index(alias, ","); commaIdx != -1 {
+			if commaIdx := sqlutil.FindTopLevelChar(alias, ','); commaIdx != -1 {
 				alias = alias[:commaIdx]
 			}
 			alias = strings.Trim(alias, ";, []\"'\r\n\t")
@@ -2926,25 +2925,36 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 	}
 
 	// 3. Standalone single-expression SERVERPROPERTY(...) probe only
-	if strings.Contains(upper, "SERVERPROPERTY") && !strings.Contains(upper, ",") && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
+	if sqlutil.ContainsKeyword(trimmed, "SERVERPROPERTY", false) && sqlutil.FindTopLevelChar(trimmed, ',') == -1 && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
 		colName := "property"
+		propName := ""
 		if asIdx := sqlutil.FindTopLevelKeyword(trimmed, "AS"); asIdx != -1 {
 			alias := strings.TrimSpace(trimmed[asIdx+len("AS"):])
-			if commaIdx := strings.Index(alias, ","); commaIdx != -1 {
+			if commaIdx := sqlutil.FindTopLevelChar(alias, ','); commaIdx != -1 {
 				alias = alias[:commaIdx]
 			}
 			alias = strings.Trim(alias, ";, []\"'\r\n\t")
 			if alias != "" {
 				colName = alias
 			}
-		} else if spIdx := sqlutil.FindTopLevelKeyword(trimmed, "SERVERPROPERTY"); spIdx != -1 {
-			if openParen := strings.Index(trimmed[spIdx:], "("); openParen != -1 {
+		}
+		if spIdx := sqlutil.FindTopLevelKeyword(trimmed, "SERVERPROPERTY"); spIdx != -1 {
+			if openParen := sqlutil.FindTopLevelChar(trimmed[spIdx:], '('); openParen != -1 {
 				absOpen := spIdx + openParen
 				if closeParen := sqlutil.FindMatchingParen(trimmed, absOpen); closeParen != -1 {
 					argStr := trimmed[absOpen+1 : closeParen]
-					arg := strings.Trim(strings.TrimSpace(argStr), "'\" ")
+					arg := strings.TrimSpace(argStr)
+					if (strings.HasPrefix(arg, "N'") || strings.HasPrefix(arg, "n'")) && strings.HasSuffix(arg, "'") && len(arg) >= 3 {
+						arg = arg[2 : len(arg)-1]
+					} else if (strings.HasPrefix(arg, "'") || strings.HasPrefix(arg, "\"")) && len(arg) >= 2 {
+						arg = arg[1 : len(arg)-1]
+					}
+					arg = strings.TrimSpace(arg)
 					if arg != "" {
-						colName = arg
+						propName = arg
+						if colName == "property" {
+							colName = arg
+						}
 					}
 				}
 			}
@@ -2952,23 +2962,24 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 		var val any = "15.0.2000.5"
 		colType := TypeNVarChar
 		colSize := 128
-		if strings.Contains(upper, "DATABASEENGINETYPE") {
+		switch strings.ToUpper(propName) {
+		case "DATABASEENGINETYPE":
 			val = int32(1)
 			colType = TypeIntN
 			colSize = 4
-		} else if strings.Contains(upper, "EDITIONID") {
+		case "EDITIONID":
 			val = int64(-2117995310)
 			colType = TypeIntN
 			colSize = 8
-		} else if strings.Contains(upper, "ENGINEEDITION") {
+		case "ENGINEEDITION":
 			val = int32(3)
 			colType = TypeIntN
 			colSize = 4
-		} else if strings.Contains(upper, "COLLATION") {
+		case "COLLATION":
 			val = "SQL_Latin1_General_CP1_CI_AS"
-		} else if strings.Contains(upper, "EDITION") {
+		case "EDITION":
 			val = "Developer Edition (64-bit)"
-		} else if strings.Contains(upper, "PRODUCTLEVEL") {
+		case "PRODUCTLEVEL":
 			val = "RTM"
 		}
 		cols := []ColumnInfo{

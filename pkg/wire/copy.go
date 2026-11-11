@@ -101,19 +101,22 @@ func ParseCopyStmt(query string) (*CopyStmt, error) {
 
 	// Parse table name and optional column list from dirPart
 	dirPart = strings.TrimSpace(dirPart)
-	if strings.Contains(dirPart, "(") && strings.Contains(dirPart, ")") {
-		openParen := strings.Index(dirPart, "(")
-		closeParen := strings.LastIndex(dirPart, ")")
-		tableName := strings.TrimSpace(dirPart[:openParen])
-		colsStr := dirPart[openParen+1 : closeParen]
+	if openParen := sqlutil.FindTopLevelChar(dirPart, '('); openParen != -1 {
+		closeParen := sqlutil.FindMatchingParen(dirPart, openParen)
+		if closeParen > openParen {
+			tableName := strings.TrimSpace(dirPart[:openParen])
+			colsStr := dirPart[openParen+1 : closeParen]
 
-		stmt.TableName = cleanTableName(tableName)
-		for _, col := range strings.Split(colsStr, ",") {
-			c := strings.TrimSpace(col)
-			c = cleanIdentifier(c)
-			if c != "" {
-				stmt.Columns = append(stmt.Columns, c)
+			stmt.TableName = cleanTableName(tableName)
+			for _, col := range sqlutil.SplitTopLevel(colsStr, ',') {
+				c := strings.TrimSpace(col)
+				c = cleanIdentifier(c)
+				if c != "" {
+					stmt.Columns = append(stmt.Columns, c)
+				}
 			}
+		} else {
+			stmt.TableName = cleanTableName(dirPart)
 		}
 	} else {
 		stmt.TableName = cleanTableName(dirPart)
@@ -124,19 +127,18 @@ func ParseCopyStmt(query string) (*CopyStmt, error) {
 	}
 
 	// Parse options in rest
-	upperOptions := strings.ToUpper(strings.TrimSpace(rest))
-	if strings.Contains(upperOptions, "CSV") || strings.Contains(upperOptions, "FORMAT CSV") {
+	if sqlutil.ContainsKeyword(rest, "CSV", true) {
 		stmt.Format = FormatCSV
 		stmt.Delimiter = ','
 		stmt.NullStr = ""
 	}
-	if strings.Contains(upperOptions, "HEADER") {
+	if sqlutil.ContainsKeyword(rest, "HEADER", true) {
 		stmt.Header = true
 	}
 
 	// Custom delimiter
-	if dIdx := strings.Index(upperOptions, "DELIMITER "); dIdx != -1 {
-		dSub := strings.TrimSpace(rest[dIdx+10:])
+	if dIdx := sqlutil.FindKeyword(rest, "DELIMITER", true); dIdx != -1 {
+		dSub := strings.TrimSpace(rest[dIdx+len("DELIMITER"):])
 		if len(dSub) > 1 && (dSub[0] == 'E' || dSub[0] == 'e') && (dSub[1] == '\'' || dSub[1] == '"') {
 			dSub = dSub[1:]
 		}
@@ -167,10 +169,10 @@ func ParseCopyStmt(query string) (*CopyStmt, error) {
 	}
 
 	// Custom NULL representation
-	if nIdx := strings.Index(upperOptions, "NULL "); nIdx != -1 {
-		nSub := strings.TrimSpace(rest[nIdx+5:])
-		if strings.HasPrefix(strings.ToUpper(nSub), "AS ") {
-			nSub = strings.TrimSpace(nSub[3:])
+	if nIdx := sqlutil.FindKeyword(rest, "NULL", true); nIdx != -1 {
+		nSub := strings.TrimSpace(rest[nIdx+len("NULL"):])
+		if sqlutil.HasPrefixKeyword(nSub, "AS") {
+			nSub = strings.TrimSpace(nSub[2:])
 		}
 		var nullStr string
 		if len(nSub) > 0 && (nSub[0] == '\'' || nSub[0] == '"') {
@@ -340,6 +342,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 	} else {
 		// Tab-separated or delimited text format
 		scanner := bufio.NewScanner(&dataBuf)
+		scanner.Buffer(make([]byte, 1024*1024), 64*1024*1024)
 		for scanner.Scan() {
 			line := scanner.Text()
 			if line == "\\." {
@@ -350,6 +353,11 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			}
 			fields := splitCopyTextLine(line, stmt.Delimiter)
 			rows = append(rows, fields)
+		}
+		if err := scanner.Err(); err != nil {
+			_ = WriteError(conn, fmt.Sprintf("COPY scan error: %v", err))
+			_ = s.writeReady(conn, sessID)
+			return
 		}
 	}
 
