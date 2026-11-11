@@ -271,7 +271,7 @@
 | `DONE` | **`TUNE-DOC-SYNC-1`** |  | Documentation | P2 | 1.0 GA 벤치마크 및 공식 문서 실측치 일괄 동기화 |  |  |
 | `DONE` | **`TUNE-HOTSPOT-OCC-1`** |  | Durability | P2 | 고동시성 핫스팟 OCC 경합 완화 및 와이어 버퍼 풀링 |  | - [x] **Phase 3 (`TUNE-EPHEMERAL-VERI... |
 | `DONE` | **`TUNE-SP-FASTPATH-1`** |  | Durability | P2 | TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 | [`notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md) | - [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)... |
-| `PENDING` | **`WAL-DELTA-1`** | `v1.2.0` | Engine | P2 | Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) |  |  |
+| `DONE` | **`WAL-DELTA-1`** | `Spec-Out` | Engine | P2 | Partial / Delta WAL 로깅 영구 기각 (Spec-Out) (Read-Modify-Write 복구 지연 및 보조인덱스 정합성 보호) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`WEB-SPA-1`** |  | Ecosystem | P3 | 단일 바이너리 내장 SPA 웹 서버 호스팅 | [`notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) |  |
 | `DONE` | **`WT-LOCKDOWN-1`** |  | Storage | P1 | WiredTiger 고동시성 4계층 잠금 및 transaction_sync 영구 배제 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 
@@ -3211,9 +3211,13 @@ SQL Server 호환성 매트릭스 §9.9 잔여 항목(Post-1.0). 클라이언트
 
 ---
 
-### [PENDING] Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) `WAL-DELTA-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 16:23:03
-- **Milestone**: `v1.2.0`
+### [DONE] Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) 영구 기각 (Spec-Out) `WAL-DELTA-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 01:57:00
+- **Milestone**: `Spec-Out`
+- **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
+
+**Details & Resolution**:
+- **영구 기각(Spec-Out) 결정**: UPDATE 시 변경된 컬럼만 부분 로깅하는 델타 방식은 (1) 크래시 복구(Replay) 및 복제 스트리밍 시 매 레코드마다 원본 행을 먼저 읽어와야 하는 치명적 Read-Modify-Write 오버헤드로 RTO 급증, (2) 변경되지 않은 컬럼이 포함된 복합 보조 인덱스의 이전 키 갱신 정합성 파괴, (3) FlatRecord 가변 길이 컬럼 재정렬 비용, (4) OS 4KB 페이지 캐시 및 LionSQL 그룹 커밋(`wal.GroupCommit`)에 의해 실질 물리 I/O 절감 효과가 0에 수렴하는 한계로 인해 영구 기각(Spec-Out) 결정. LionSQL은 복구 속도가 O(1)로 가장 단순하고 안전한 Full-Row WAL 로깅 방식을 단일 표준으로 유지함 (언제든지 온디맨드 재검토 가능).
 
 ---
 

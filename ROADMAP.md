@@ -280,8 +280,8 @@ Cross-DB Join & Sonic     Storage Engine Preview    AI Agent Starter Suite    Me
   - **Unified Projection Pushdown & LazyTuple Elimination (`PERF-PROJECTION-PUSHDOWN-1`)**:
     - Eliminate legacy `LazyTuple` complexity across WiredTiger and MemoryCompact engines.
     - Introduce planner-driven projection pushdown decoding (`DecodeTupleSelectedWithArena` / `DecodeFlatSelectedWithArena`), decoding only requested columns directly into unified `ArenaRowCursor` slabs across all three storage engines (WiredTiger, MemoryCompact, Pure-Go).
-  - **Partial / Delta WAL Logging (`WAL-DELTA-1`)**:
-    - Log column difference bitmasks on UPDATE transactions to eliminate write amplification and accelerate WAL replay.
+  - **Partial / Delta WAL Logging (`WAL-DELTA-1`, Permanently Spec-Out)**:
+    - Permanently Spec-Out due to severe Read-Modify-Write replay penalty during crash recovery, secondary index corruption risks, and negligible physical I/O benefits under 4KB OS pages and WAL group commit. Full-Row WAL logging remains the single verified standard.
   - **Permanent Multi-Engine Coexistence (Zero Deprecation)**:
     - **WiredTiger MVCC Engine (CGo / Enterprise High-Performance Tier)**: Permanently retained as LionSQL's battle-tested, high-throughput storage flagship for hardware-saturating on-premises and enterprise production workloads.
     - **Native Pure-Go Storage Engine (CGo-Free / Cloud-Native Tier)**: Introduced as an autonomous, zero-dependency alternative enabling pure `CGO_ENABLED=0` compilation, simplified cross-platform deployment, and frictionless operation in lightweight distroless containers and Windows environments.
