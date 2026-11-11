@@ -287,6 +287,19 @@
 
 ---
 
+### ㉗ Compact OCC (`FlatRecord`) 8바이트 슬롯 레이아웃 및 16 MiB / 4 GiB 상한 계약 (Fail-Closed Boundary)
+* **구조적 특성 및 설계 트레이드오프**:
+  * In-Memory `MemoryCompact` 엔진은 GC 포인터 제로화와 $O(1)$ 컬럼 오프셋(`FixedOffsets[i]`) 조회를 위해, 모든 컬럼을 균일하게 **8바이트 고정 슬롯(`slot[0..7]`)**에 배치한다 (`[NullBitmap][Fixed Slots × 8B][varHeap]`).
+  * 가변형 컬럼(`VarChar`, `JSON`, `UUID`, `Binary`, `Decimal`)은 `slot[7]` 최상위 바이트를 태그로 구분하여 **`len <= 7` 바이트는 SSO 인라인(`0x80|len`)**, 초과분은 `varHeap` 참조(`slot[0..3]` = `uint32` `vOff`, `slot[4..6]` = **`uint24` `vLen`**, `slot[7] = 0x00`)로 저장한다.
+  * 반면 디스크 B+Tree 엔진인 WiredTiger([`pkg/storage/tuple.go`](file:///Users/maro/Projects/SQLion/pkg/storage/tuple.go))는 순차 Uvarint 가변 길이 직렬화를 사용하므로 `16 MiB` 상한이 존재하지 않는다.
+* **결정 사항 (`FIX-OCC-COMPACT-AUDIT-1` Finding 4, Option A)**:
+  * In-Memory OLTP 핫 패스(`8B` 고정 슬롯, `O(1)` 디코딩)와 포맷 단순성을 유지하기 위해 64-bit 확장 헤더를 도입하지 않고 **Fail-Closed 상한 가드**를 확정한다:
+    * 단일 가변 컬럼 최대 크기: **`16 MiB - 1` (`0xFFFFFF` = `16,777,215` bytes)**
+    * 1개 행 내 누적 가변 힙(`varHeap`) 최대 크기: **`4 GiB - 1` (`math.MaxUint32` bytes)**
+  * 상한 초과 시 무음 비트 절삭이나 wrap-around를 허용하지 않고 즉시 `ErrFlatRecordTooLarge`를 반환해 쓰기/마이그레이션을 Fail-Closed로 중단한다.
+
+---
+
 ## 2. 사용자의 엔지니어링 철학 및 협업 규약
 
 LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집니다:

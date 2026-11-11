@@ -25,6 +25,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - mark `-memory=performance`, `MemoryPerformance`, and legacy aliases (`OCCModeRaw`, `OCCModePerformance`) as deprecated in CLI help text, startup runtime log warning (`memoryPerformanceDeprecationNotice`), startup banner (`[DEPRECATED: use compact]`), and Go doc comments while preserving full v1.0 compatibility prior to post-1.0 removal (`DEPRECATE-OCC-PERF-1`)
 
 ### Fixed
+- harden `MemoryCompact` storage engine against 6 audit defects (`FIX-OCC-COMPACT-AUDIT-1`):
+  - eliminate `Arena.AllocStringBytes` QueryResult use-after-free by retaining variable string allocations on Go heap while pooling row slices (Finding 1)
+  - implement atomic 2-phase staging schema migration for `Engine.AlterTable` with PK/FK drop guards, cascade secondary index cleanup, fail-closed row re-encoding, and single WAL `OpAlterTable` replay (Finding 2)
+  - capture immutable schema/layout generations in `memCursor` and route `AddColumn` through 2-phase migration to prevent concurrent scan/DDL race panics and fail-closed on row conversion errors (Finding 3)
+  - guard `encodeVarSlot` 24-bit length (16 MiB - 1) and 32-bit varHeap (4 GiB - 1) boundaries with `ErrFlatRecordTooLarge` fail-closed rejection to prevent silent data corruption (Finding 4)
+  - eliminate silent corruption and empty row shells in `syncShardsToMapsLocked` with fail-closed error propagation and consolidate snapshot lock window (Finding 5)
+  - enforce defensive type conversion and coercion in `EncodeRowToFlat` with fail-closed rejection and preserve `TypeBinary` wire parity (Finding 6)
+  - eliminate self-deadlock in `TableData.deleteRowAndVerLocked` during `DropPartition` and prevent nil shard map allocation on empty table migrations
 - restore `TableData.mode` and `TableData.layout` prior to shard initialization in `loadDiskLocked`, re-encode RDB (`tables.mpk`) rows via `buildShardEntry`, and clear redundant post-recovery `Rows`/`Versions` maps so AOF+RDB restarts preserve pure `MemoryCompact` layout (`TEST-OCC-FLAT-1`)
 - add `TableSchema.ResolveRowPK` and use it in `findMatchingChildPKsUnderLock` so foreign key `ON DELETE`/`ON UPDATE` cascades resolve composite primary keys accurately (`TEST-OCC-FLAT-2`)
 - add 8-byte fixed slot encoding/decoding for `TypeTime` (`storage.TimeValue`) and restore complete `storage.DateValue` metadata for `TypeDate` in `pkg/storage/memengine/flat_record.go` (`TEST-OCC-FLAT-3`)
