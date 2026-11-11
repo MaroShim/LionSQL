@@ -42,6 +42,11 @@ func TestTranslatePgParamsToAtParams(t *testing.T) {
 			expected: `SELECT "col$1", "$2" FROM t WHERE id = @p1`,
 		},
 		{
+			name:     "unquoted identifier with dollar preserved",
+			input:    `SELECT col$1 FROM t WHERE id = $1`,
+			expected: `SELECT col$1 FROM t WHERE id = @p1`,
+		},
+		{
 			name:     "dollar quotes preserved",
 			input:    "SELECT $$Hello $1 and $2 world$$ FROM t WHERE id = $1",
 			expected: "SELECT $$Hello $1 and $2 world$$ FROM t WHERE id = @p1",

@@ -208,7 +208,7 @@ var catalogRouteTable = []RouteRule{
 		Name: "MSSQL_XORMGetIndexes",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
 			fromCols := strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS")
-			return !fromCols && strings.Contains(upper, "SYS.INDEXES") && strings.Contains(upper, "SYS.INDEX_COLUMNS") && strings.Contains(upper, "SYS.COLUMNS")
+			return !fromCols && strings.Contains(upper, "OBJECT_NAME") && strings.Contains(upper, "SYS.INDEXES") && strings.Contains(upper, "SYS.INDEX_COLUMNS") && strings.Contains(upper, "SYS.COLUMNS")
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execXORMIndexes(src, sql)
@@ -218,7 +218,7 @@ var catalogRouteTable = []RouteRule{
 		Name: "MSSQL_SysIndexesPrimary",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
 			fromCols := strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS")
-			return !fromCols && !strings.Contains(upper, "SYS.INDEX_COLUMNS") && strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "1")
+			return !fromCols && strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "1")
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execSysIndexesPrimaryKey(src, sql)
@@ -228,7 +228,7 @@ var catalogRouteTable = []RouteRule{
 		Name: "MSSQL_SysIndexesSecondary",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
 			fromCols := strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS")
-			return !fromCols && !strings.Contains(upper, "SYS.INDEX_COLUMNS") && strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "0")
+			return !fromCols && strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "0")
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execSysIndexesSecondary(src, sql)

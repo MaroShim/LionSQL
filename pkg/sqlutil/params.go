@@ -85,6 +85,12 @@ func ScanPgParams(sql string, onParam func(token PgParamToken)) {
 
 		// 5. Dollar parameter ($1, $2...) or Dollar-quoted string ($$...$$ / $tag$...$tag$)
 		if ch == '$' {
+			// Skip if preceded by identifier character (e.g. col$1)
+			if i > 0 && IsIdentChar(sql[i-1]) {
+				i++
+				continue
+			}
+
 			// Check if this is a parameter: $ followed by digits 1-9
 			if i+1 < n && sql[i+1] >= '1' && sql[i+1] <= '9' {
 				j := i + 1

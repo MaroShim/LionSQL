@@ -1,7 +1,6 @@
 package wire
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -634,12 +633,20 @@ func (s *Server) inferParamTypes(query string, count int) []int32 {
 	return oids
 }
 
+// InferParamOID resolves the parameter OID for a given parameter index in a SQL query.
+func InferParamOID(query string, paramIndex int) int32 {
+	return inferParamOID(query, paramIndex)
+}
+
 func inferParamOID(query string, paramIndex int) int32 {
-	upper := strings.ToUpper(query)
-	pName := fmt.Sprintf("$%d", paramIndex)
-	idx := strings.Index(upper, pName)
-	if idx != -1 {
-		prefix := strings.TrimSpace(upper[:idx])
+	var resolvedOID int32
+
+	sqlutil.ScanPgParams(query, func(token sqlutil.PgParamToken) {
+		if resolvedOID != 0 || token.Index != paramIndex {
+			return
+		}
+		rawPrefix := query[:token.Start]
+		prefix := strings.TrimSpace(strings.ToUpper(rawPrefix))
 		isAny := false
 		if strings.HasSuffix(prefix, "(") {
 			prefix = strings.TrimSpace(strings.TrimSuffix(prefix, "("))
@@ -658,10 +665,11 @@ func inferParamOID(query string, paramIndex int) int32 {
 				}
 				lastToken = strings.Trim(lastToken, "[]\"'`")
 				if oid := LookupParamOID(lastToken, isAny); oid != 0 {
-					return oid
+					resolvedOID = oid
 				}
 			}
 		}
-	}
-	return 0
+	})
+
+	return resolvedOID
 }

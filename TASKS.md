@@ -502,8 +502,8 @@
 
 **Phases & Checklist**:
 - [ ] **`AUDIT-FULL-008` (High)**: `tds/server.go:1000` `ALL_HEADERS` 4바이트 길이 오인식으로 인한 대용량 RPC(`sp_executesql`) 스트림 오절단 수정
-- [ ] **`AUDIT-FULL-023` (Medium)**: `wire/copy.go:436` `COPY FROM STDIN` 밀리초 타임스탬프 PK 충돌 및 int32 오버플로우 방지
-- [ ] **`AUDIT-FULL-030` (High)**: `param_rules.go:637` `inferParamOID` `$1` vs `$10..$19` 접두어 오추론 수정
+- [x] **`AUDIT-FULL-023` (Medium)**: `wire/copy.go:436` `COPY FROM STDIN` 밀리초 타임스탬프 PK 충돌 및 int32 오버플로우 방지
+- [x] **`AUDIT-FULL-030` (High)**: `param_rules.go:637` `inferParamOID` `$1` vs `$10..$19` 접두어 오추론 수정
 - [ ] **`AUDIT-FULL-031` (High)**: `wire/copy.go:342` `handleCopyIn` `bufio.Scanner` 64KB 초과 에러 무시로 인한 데이터 유실 차단
 - [ ] **`AUDIT-FULL-032` (High)**: `wire/server.go:2619` `formatParamForSQL` `NUMERIC OID 1700` float64 정밀도 절단 및 지수표기 왜곡 수정
 - [ ] **`AUDIT-FULL-033` (High)**: `tds/server.go:680` TDS 로그인 실패 좀비 소켓 및 미인증 세션 SQL Batch 실행 보안 우회 차단
@@ -511,7 +511,7 @@
 - [ ] **`AUDIT-FULL-035` (High)**: `api/server.go:531` 쿼리 취소/목록/로그/CDC 관리자 엔드포인트 인증 적용
 - [ ] **`AUDIT-FULL-036` (Medium)**: `records_filter.go:230` REST API 필터 LIKE 평가 시 후보 행마다 `regexp.Compile` 제거
 - [ ] **`AUDIT-FULL-037` (High)**: `api/server.go:606` 단일 테이블 API Key의 `/api/backup` 전체 DB 백업 다운로드 권한 상승 차단
-- [ ] **`AUDIT-FULL-038` (Medium)**: `handlers_import_export.go:190` CSV/JSON 임포트 타임스탬프 PK 충돌 및 int32 오버플로우 수정
+- [x] **`AUDIT-FULL-038` (Medium)**: `handlers_import_export.go:190` CSV/JSON 임포트 타임스탬프 PK 충돌 및 int32 오버플로우 수정
 - [ ] **`AUDIT-FULL-039` (High)**: `auth.go:367` 로그아웃 무효화 `TokenKey` 디스크 동기화로 재부팅 시 파기 토큰 부활 차단
 - [ ] **`AUDIT-FULL-040` (High)**: `replication/handlers.go:12` HA 복제/승격/강등/투표/WAL 스트림 엔드포인트 인증/인가 강제
 
