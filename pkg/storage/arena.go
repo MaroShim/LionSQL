@@ -160,6 +160,20 @@ func (a *Arena) AllocString(s string) string {
 	return unsafe.String(unsafe.SliceData(buf), len(buf))
 }
 
+// AllocStringBytes copies b into arena memory and returns an arena-backed string.
+// If a is nil, it falls back to string(b).
+func (a *Arena) AllocStringBytes(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	if a == nil {
+		return string(b)
+	}
+	buf := a.Alloc(len(b))
+	copy(buf, b)
+	return unsafe.String(unsafe.SliceData(buf), len(buf))
+}
+
 // AllocValues allocates a slice of n storage.Value structs from value slabs.
 // If a is nil, it falls back to make([]Value, n).
 func (a *Arena) AllocValues(n int) []Value {

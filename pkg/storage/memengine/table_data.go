@@ -67,8 +67,12 @@ type shardEntry struct {
 }
 
 func (e shardEntry) materialize(td *TableData) (storage.Row, error) {
+	return e.materializeWithArena(td, nil)
+}
+
+func (e shardEntry) materializeWithArena(td *TableData, arena *storage.Arena) (storage.Row, error) {
 	if td.mode == MemoryCompact && len(e.flatBuf) > 0 && len(e.row.Values) == 0 {
-		return td.layout.DecodeFlatToRow(&td.Schema, e.flatBuf)
+		return td.layout.DecodeFlatToRowWithArena(&td.Schema, e.flatBuf, arena)
 	}
 	return e.row, nil
 }
@@ -132,13 +136,18 @@ func (td *TableData) ensureShardsInit() {
 	td.initOnce.Do(td.initShardsInternal)
 }
 
-func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
+func (td *TableData) getEntryAndVer(pk string) (shardEntry, bool) {
 	td.ensureShardsInit()
 	sIdx := hashShard(pk)
 	sh := &td.shards[sIdx]
 	sh.mu.RLock()
 	entry, ok := sh.entries[pk]
 	sh.mu.RUnlock()
+	return entry, ok
+}
+
+func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
+	entry, ok := td.getEntryAndVer(pk)
 	if !ok {
 		return storage.Row{}, 0, false
 	}
@@ -230,7 +239,7 @@ func (td *TableData) rowCount() int64 {
 	return total
 }
 
-func (td *TableData) snapshotRowsAndKeys(filter func(pk string) bool) ([]string, []storage.Row) {
+func (td *TableData) snapshotEntriesAndKeys(filter func(pk string) bool) ([]string, []shardEntry) {
 	td.ensureShardsInit()
 	// Strict canonical order (0 to 255) to prevent deadlocks ([RULE:LockHierarchy])
 	for i := 0; i < numTableShards; i++ {
@@ -247,19 +256,15 @@ func (td *TableData) snapshotRowsAndKeys(filter func(pk string) bool) ([]string,
 		total += len(td.shards[i].entries)
 	}
 
-	type keyRowItem struct {
-		key string
-		row storage.Row
+	type keyEntryItem struct {
+		key   string
+		entry shardEntry
 	}
-	items := make([]keyRowItem, 0, total)
+	items := make([]keyEntryItem, 0, total)
 	for i := 0; i < numTableShards; i++ {
 		for k, entry := range td.shards[i].entries {
 			if filter == nil || filter(k) {
-				r, err := entry.materialize(td)
-				if err != nil {
-					continue
-				}
-				items = append(items, keyRowItem{key: k, row: r})
+				items = append(items, keyEntryItem{key: k, entry: entry})
 			}
 		}
 	}
@@ -269,12 +274,12 @@ func (td *TableData) snapshotRowsAndKeys(filter func(pk string) bool) ([]string,
 	})
 
 	keys := make([]string, len(items))
-	rows := make([]storage.Row, len(items))
+	entries := make([]shardEntry, len(items))
 	for i, item := range items {
 		keys[i] = item.key
-		rows[i] = item.row
+		entries[i] = item.entry
 	}
-	return keys, rows
+	return keys, entries
 }
 
 func (td *TableData) collectKeys(filter func(pk string) bool) []string {

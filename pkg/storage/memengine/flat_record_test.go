@@ -398,6 +398,44 @@ func BenchmarkMemEngine_AB_Scan(b *testing.B) {
 			_ = cur.Close()
 		}
 	})
+
+	b.Run("ModeFlat_Scan1000_Arena", func(b *testing.B) {
+		opts := DefaultOptions("")
+		opts.Mode = OCCModeFlat
+		eng := NewWithOptions(opts)
+		_ = eng.Open("")
+		defer eng.Close()
+		_ = eng.CreateTable(schema)
+		sess, _ := eng.NewSession()
+		defer sess.Close()
+
+		tx, _ := sess.BeginTx(storage.TxOptions{})
+		for i := 1; i <= 1000; i++ {
+			_ = tx.Insert("bench_scan_ab", storage.Record{
+				"id":      storage.IntValue(int64(i)),
+				"code":    storage.StringValue("KRW"),
+				"name":    storage.StringValue("User Account Record"),
+				"balance": storage.FloatValue(float64(i) * 100),
+			})
+		}
+		_ = tx.Commit()
+
+		txRead, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+		defer txRead.Rollback()
+
+		b.ResetTimer()
+		b.ReportAllocs()
+		for i := 0; i < b.N; i++ {
+			arena := storage.GetArena()
+			cur, _ := txRead.Scan("bench_scan_ab")
+			arenaCur := cur.(storage.ArenaRowCursor)
+			for cur.Next() {
+				_, _ = arenaCur.RowWithArena(arena)
+			}
+			_ = cur.Close()
+			storage.PutArena(arena)
+		}
+	})
 }
 
 func BenchmarkMemEngine_MemoryFootprint_100k(b *testing.B) {
@@ -964,6 +1002,123 @@ func TestParseMemoryMode(t *testing.T) {
 		if tc.expectError != (aliasErr != nil) || aliasMode != mode {
 			t.Errorf("input %q: ParseOCCMode did not match ParseMemoryMode", tc.input)
 		}
+	}
+}
+
+func TestDecodeFlatToRowWithArena_And_CursorOwnership(t *testing.T) {
+	schema := &storage.TableSchema{
+		Name: "flat_arena_test",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "sso", Type: storage.TypeVarChar},
+			{Name: "long_str", Type: storage.TypeVarChar},
+			{Name: "amt", Type: storage.TypeDecimal},
+			{Name: "flag", Type: storage.TypeBool},
+			{Name: "nullable", Type: storage.TypeVarChar, Nullable: true},
+		},
+	}
+
+	opts := DefaultOptions("")
+	opts.Mode = MemoryCompact
+	eng := NewWithOptions(opts)
+	if err := eng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	for i := 1; i <= 5; i++ {
+		if err := tx.Insert("flat_arena_test", storage.Record{
+			"id":       storage.IntValue(int64(i)),
+			"sso":      storage.StringValue("USD"),
+			"long_str": storage.StringValue(fmt.Sprintf("long-payload-value-%d", i)),
+			"amt":      storage.DecimalValue("123.45"),
+			"flag":     storage.BoolValue(i%2 == 0),
+			"nullable": storage.NullValue(storage.TypeVarChar),
+		}); err != nil {
+			t.Fatalf("Insert failed: %v", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	readTx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx read failed: %v", err)
+	}
+	defer readTx.Rollback()
+
+	// 1. Standard Cursor.Row() preserves independent slice ownership after cur.Close()
+	cur, err := readTx.Scan("flat_arena_test")
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	var collected []storage.Row
+	for cur.Next() {
+		r, err := cur.Row()
+		if err != nil {
+			t.Fatalf("Row failed: %v", err)
+		}
+		collected = append(collected, r)
+	}
+	_ = cur.Close()
+	if len(collected) != 5 {
+		t.Fatalf("expected 5 rows, got %d", len(collected))
+	}
+	for i, r := range collected {
+		expectedID := int64(i + 1)
+		if r.Values[0].IVal != expectedID || r.Values[1].SVal != "USD" ||
+			r.Values[2].SVal != fmt.Sprintf("long-payload-value-%d", expectedID) ||
+			r.Values[3].String() != "123.45" || !r.Values[5].IsNull {
+			t.Fatalf("row %d mutated or corrupted after collection/close: %+v", i, r.Values)
+		}
+	}
+
+	// 2. ArenaRowCursor.RowWithArena(arena) produces identical decoded values within arena scope
+	arena := storage.GetArena()
+	defer storage.PutArena(arena)
+	cur2, err := readTx.Scan("flat_arena_test")
+	if err != nil {
+		t.Fatalf("Scan 2 failed: %v", err)
+	}
+	defer cur2.Close()
+
+	arenaCur, ok := cur2.(storage.ArenaRowCursor)
+	if !ok {
+		t.Fatalf("expected memCursor to implement storage.ArenaRowCursor")
+	}
+	idx := 0
+	for cur2.Next() {
+		r, err := arenaCur.RowWithArena(arena)
+		if err != nil {
+			t.Fatalf("RowWithArena failed: %v", err)
+		}
+		exp := collected[idx]
+		if r.Values[0].IVal != exp.Values[0].IVal ||
+			r.Values[1].SVal != exp.Values[1].SVal ||
+			r.Values[2].SVal != exp.Values[2].SVal ||
+			r.Values[3].String() != exp.Values[3].String() ||
+			r.Values[4].BVal != exp.Values[4].BVal ||
+			!r.Values[5].IsNull {
+			t.Fatalf("arena row %d mismatch: got %+v, want %+v", idx, r.Values, exp.Values)
+		}
+		idx++
+	}
+	if idx != 5 {
+		t.Fatalf("expected 5 arena rows, got %d", idx)
 	}
 }
 

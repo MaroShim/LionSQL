@@ -51,9 +51,7 @@ func decodeVarSlot(slot []byte, varArea []byte) ([]byte, error) {
 		if inlineLen > ssoMaxLen {
 			return nil, ErrFlatRecordInvalid
 		}
-		raw := make([]byte, inlineLen)
-		copy(raw, slot[:inlineLen])
-		return raw, nil
+		return slot[:inlineLen], nil
 	}
 
 	vOff := binary.LittleEndian.Uint32(slot[0:4])
@@ -207,6 +205,11 @@ func (l *FlatRecordLayout) EncodeRowToFlat(schema *storage.TableSchema, row stor
 
 // DecodeFlatToRow reconstructs a storage.Row from the flat byte buffer.
 func (l *FlatRecordLayout) DecodeFlatToRow(schema *storage.TableSchema, buf []byte) (storage.Row, error) {
+	return l.DecodeFlatToRowWithArena(schema, buf, nil)
+}
+
+// DecodeFlatToRowWithArena reconstructs a storage.Row using arena slab pooling when arena is non-nil.
+func (l *FlatRecordLayout) DecodeFlatToRowWithArena(schema *storage.TableSchema, buf []byte, arena *storage.Arena) (storage.Row, error) {
 	if l == nil || schema == nil {
 		return storage.Row{}, errors.New("nil layout or schema")
 	}
@@ -215,7 +218,7 @@ func (l *FlatRecordLayout) DecodeFlatToRow(schema *storage.TableSchema, buf []by
 	}
 
 	numCols := l.NumColumns
-	vals := make([]storage.Value, numCols)
+	vals := arena.AllocValues(numCols)
 	varArea := buf[l.TotalFixedLen:]
 
 	for i, col := range schema.Columns {
@@ -259,7 +262,7 @@ func (l *FlatRecordLayout) DecodeFlatToRow(schema *storage.TableSchema, buf []by
 			if err != nil {
 				return storage.Row{}, err
 			}
-			vals[i] = storage.Value{Type: col.Type, SVal: string(raw)}
+			vals[i] = storage.Value{Type: col.Type, SVal: arena.AllocStringBytes(raw)}
 
 		case storage.TypeBinary:
 			raw, err := decodeVarSlot(slot, varArea)
@@ -273,14 +276,14 @@ func (l *FlatRecordLayout) DecodeFlatToRow(schema *storage.TableSchema, buf []by
 			if err != nil {
 				return storage.Row{}, err
 			}
-			vals[i] = storage.DecimalValue(string(raw))
+			vals[i] = storage.DecimalValue(arena.AllocStringBytes(raw))
 
 		default:
 			raw, err := decodeVarSlot(slot, varArea)
 			if err != nil {
 				return storage.Row{}, err
 			}
-			vals[i] = storage.Value{Type: col.Type, SVal: string(raw)}
+			vals[i] = storage.Value{Type: col.Type, SVal: arena.AllocStringBytes(raw)}
 		}
 	}
 

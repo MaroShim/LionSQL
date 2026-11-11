@@ -983,6 +983,13 @@ type RawTupleCursor interface {
 	RawTuple() ([]byte, bool)
 }
 
+// ArenaRowCursor is an optional interface implemented by cursors that can decode
+// rows into a caller-managed Arena without altering Cursor.Row() ownership semantics.
+type ArenaRowCursor interface {
+	Cursor
+	RowWithArena(arena *Arena) (Row, error)
+}
+
 // TxOptions configures transaction behaviors.
 type TxOptions struct {
 	ReadOnly          bool

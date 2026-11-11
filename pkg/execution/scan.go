@@ -70,8 +70,8 @@ func (s *SeqScanIterator) Open(ctx context.Context) error {
 	return nil
 }
 
-func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
-	if s.cursor == nil || s.eof {
+func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.TableSchema, alias string, colMap *ColumnIndexMap, arena *storage.Arena, eof *bool, dest *Chunk) error {
+	if cursor == nil || *eof {
 		return io.EOF
 	}
 	dest.Reset()
@@ -81,11 +81,12 @@ func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 	default:
 	}
 
-	rawCur, hasRaw := s.cursor.(storage.RawTupleCursor)
+	rawCur, hasRaw := cursor.(storage.RawTupleCursor)
+	arenaCur, hasArena := cursor.(storage.ArenaRowCursor)
 
 	for dest.Len() < DefaultChunkSize {
-		if !s.cursor.Next() {
-			s.eof = true
+		if !cursor.Next() {
+			*eof = true
 			if dest.Len() > 0 {
 				return nil
 			}
@@ -94,16 +95,16 @@ func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 
 		if hasRaw {
 			if rawData, ok := rawCur.RawTuple(); ok {
-				if lazy, err := storage.NewLazyTuple(s.schema, rawData); err == nil {
+				if lazy, err := storage.NewLazyTuple(schema, rawData); err == nil {
 					var vals []any
-					if s.arena != nil {
-						vals = s.arena.AllocAnySlice(len(s.schema.Columns))
+					if arena != nil {
+						vals = arena.AllocAnySlice(len(schema.Columns))
 					} else {
-						vals = make([]any, len(s.schema.Columns))
+						vals = make([]any, len(schema.Columns))
 					}
 					dest.Tuples = append(dest.Tuples, Tuple{
 						Values: vals,
-						Index:  s.colIndexMap,
+						Index:  colMap,
 						Lazy:   lazy,
 					})
 					continue
@@ -111,21 +112,32 @@ func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 			}
 		}
 
-		if row, err := s.cursor.Row(); err == nil {
-			dest.Tuples = append(dest.Tuples, FormatRowWithArena(row, s.schema, s.alias, s.colIndexMap, s.arena))
+		if hasArena && arena != nil {
+			if row, err := arenaCur.RowWithArena(arena); err == nil {
+				dest.Tuples = append(dest.Tuples, FormatRowWithArena(row, schema, alias, colMap, arena))
+				continue
+			}
+		}
+
+		if row, err := cursor.Row(); err == nil {
+			dest.Tuples = append(dest.Tuples, FormatRowWithArena(row, schema, alias, colMap, arena))
 			continue
 		}
 
-		rec, err := s.cursor.Record()
+		rec, err := cursor.Record()
 		if err != nil {
 			if dest.Len() > 0 {
 				return nil
 			}
 			return err
 		}
-		dest.Tuples = append(dest.Tuples, FormatRecord(rec, s.schema, s.alias, s.colIndexMap))
+		dest.Tuples = append(dest.Tuples, FormatRecord(rec, schema, alias, colMap))
 	}
 	return nil
+}
+
+func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
+	return fillScanChunk(ctx, s.cursor, s.schema, s.alias, s.colIndexMap, s.arena, &s.eof, dest)
 }
 
 func (s *SeqScanIterator) Next(ctx context.Context) (Tuple, error) {
@@ -240,61 +252,7 @@ func (s *IndexScanIterator) Open(ctx context.Context) error {
 }
 
 func (s *IndexScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
-	if s.cursor == nil || s.eof {
-		return io.EOF
-	}
-	dest.Reset()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
-	rawCur, hasRaw := s.cursor.(storage.RawTupleCursor)
-
-	for dest.Len() < DefaultChunkSize {
-		if !s.cursor.Next() {
-			s.eof = true
-			if dest.Len() > 0 {
-				return nil
-			}
-			return io.EOF
-		}
-
-		if hasRaw {
-			if rawData, ok := rawCur.RawTuple(); ok {
-				if lazy, err := storage.NewLazyTuple(s.schema, rawData); err == nil {
-					var vals []any
-					if s.arena != nil {
-						vals = s.arena.AllocAnySlice(len(s.schema.Columns))
-					} else {
-						vals = make([]any, len(s.schema.Columns))
-					}
-					dest.Tuples = append(dest.Tuples, Tuple{
-						Values: vals,
-						Index:  s.colIndexMap,
-						Lazy:   lazy,
-					})
-					continue
-				}
-			}
-		}
-
-		if row, err := s.cursor.Row(); err == nil {
-			dest.Tuples = append(dest.Tuples, FormatRowWithArena(row, s.schema, s.alias, s.colIndexMap, s.arena))
-			continue
-		}
-
-		rec, err := s.cursor.Record()
-		if err != nil {
-			if dest.Len() > 0 {
-				return nil
-			}
-			return err
-		}
-		dest.Tuples = append(dest.Tuples, FormatRecord(rec, s.schema, s.alias, s.colIndexMap))
-	}
-	return nil
+	return fillScanChunk(ctx, s.cursor, s.schema, s.alias, s.colIndexMap, s.arena, &s.eof, dest)
 }
 
 func (s *IndexScanIterator) Next(ctx context.Context) (Tuple, error) {

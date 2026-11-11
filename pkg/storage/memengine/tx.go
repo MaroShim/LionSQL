@@ -1340,38 +1340,38 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 
 	tx.engine.mu.RLock()
 	var keys []string
-	var rows []storage.Row
+	var entries []shardEntry
 	if tx.opts.ReadOnly || (len(tx.local[tableName]) == 0 && len(tx.deleted[tableName]) == 0) {
-		keys, rows = td.snapshotRowsAndKeys(nil)
+		keys, entries = td.snapshotEntriesAndKeys(nil)
 		tx.engine.mu.RUnlock()
 		return &memCursor{
 			tx:        tx,
 			tableName: tableName,
 			td:        td,
 			keys:      keys,
-			rows:      rows,
+			entries:   entries,
 			idx:       -1,
 		}, nil
 	}
 
-	// Non-readonly with uncommitted local mutations: snapshot base rows and overlay local changes
-	keys, rows = td.snapshotRowsAndKeys(func(k string) bool {
+	// Non-readonly with uncommitted local mutations: snapshot base entries and overlay local changes
+	keys, entries = td.snapshotEntriesAndKeys(func(k string) bool {
 		return !tx.isLocallyDeleted(tableName, k)
 	})
 	tx.engine.mu.RUnlock()
 
-	itemMap := make(map[string]storage.Row, len(keys))
+	itemMap := make(map[string]shardEntry, len(keys))
 	for i, k := range keys {
 		if locRow, ok := tx.getLocal(tableName, k); ok {
-			itemMap[k] = locRow
+			itemMap[k] = shardEntry{row: locRow}
 		} else {
-			itemMap[k] = rows[i]
+			itemMap[k] = entries[i]
 		}
 	}
 	if localRows, ok := tx.local[tableName]; ok {
 		for k, r := range localRows {
 			if !tx.isLocallyDeleted(tableName, k) {
-				itemMap[k] = r
+				itemMap[k] = shardEntry{row: r}
 			}
 		}
 	}
@@ -1382,9 +1382,9 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 	}
 	sort.Strings(mergedKeys)
 
-	mergedRows := make([]storage.Row, len(mergedKeys))
+	mergedEntries := make([]shardEntry, len(mergedKeys))
 	for i, k := range mergedKeys {
-		mergedRows[i] = itemMap[k]
+		mergedEntries[i] = itemMap[k]
 	}
 
 	return &memCursor{
@@ -1392,7 +1392,7 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 		tableName: tableName,
 		td:        td,
 		keys:      mergedKeys,
-		rows:      mergedRows,
+		entries:   mergedEntries,
 		idx:       -1,
 	}, nil
 }
@@ -2472,16 +2472,18 @@ func cloneRecord(r storage.Record) storage.Record {
 }
 
 type memCursor struct {
-	tx        *Transaction
-	tableName string
-	td        *TableData
-	keys      []string
-	rows      []storage.Row
-	idx       int
-	curRow    storage.Row
-	curRec    storage.Record
-	closed    bool
-	resolver  func(pk string) (storage.Record, bool)
+	tx          *Transaction
+	tableName   string
+	td          *TableData
+	keys        []string
+	entries     []shardEntry
+	idx         int
+	curEntry    shardEntry
+	hasCurEntry bool
+	curRow      storage.Row
+	curRec      storage.Record
+	closed      bool
+	resolver    func(pk string) (storage.Record, bool)
 }
 
 func (c *memCursor) Next() bool {
@@ -2493,10 +2495,14 @@ func (c *memCursor) Next() bool {
 		if c.idx >= len(c.keys) {
 			c.curRec = nil
 			c.curRow = storage.Row{}
+			c.curEntry = shardEntry{}
+			c.hasCurEntry = false
 			return false
 		}
-		if len(c.rows) > c.idx {
-			c.curRow = c.rows[c.idx]
+		if len(c.entries) > c.idx {
+			c.curEntry = c.entries[c.idx]
+			c.hasCurEntry = true
+			c.curRow = c.curEntry.row
 			c.curRec = nil
 			return true
 		}
@@ -2511,6 +2517,8 @@ func (c *memCursor) Next() bool {
 			}
 			if inLocal {
 				c.curRow = locRow
+				c.curEntry = shardEntry{}
+				c.hasCurEntry = false
 				c.curRec = nil
 				return true
 			}
@@ -2518,17 +2526,19 @@ func (c *memCursor) Next() bool {
 		if c.resolver != nil {
 			if rec, ok := c.resolver(pk); ok {
 				c.curRec = rec
-				if c.td != nil {
-					c.curRow = c.td.Schema.RecordToRow(rec)
-				}
+				c.curRow = storage.Row{}
+				c.curEntry = shardEntry{}
+				c.hasCurEntry = false
 				return true
 			}
 			continue
 		}
 		if c.td != nil {
-			row, _, exists := c.td.getRowAndVer(pk)
+			entry, exists := c.td.getEntryAndVer(pk)
 			if exists {
-				c.curRow = row
+				c.curEntry = entry
+				c.hasCurEntry = true
+				c.curRow = entry.row
 				c.curRec = nil
 				return true
 			}
@@ -2536,19 +2546,62 @@ func (c *memCursor) Next() bool {
 	}
 }
 
+func (c *memCursor) isValidPosition() bool {
+	return !c.closed && (c.hasCurEntry || c.curRec != nil || len(c.curRow.Values) > 0)
+}
+
 func (c *memCursor) Record() (storage.Record, error) {
-	if c.closed || (c.curRec == nil && len(c.curRow.Values) == 0) {
+	if !c.isValidPosition() {
 		return nil, fmt.Errorf("cursor out of range or closed")
 	}
 	if c.curRec == nil && c.td != nil {
-		c.curRec = c.td.Schema.RowToRecord(c.curRow)
+		row, err := c.Row()
+		if err != nil {
+			return nil, err
+		}
+		c.curRec = c.td.Schema.RowToRecord(row)
 	}
 	return c.curRec, nil
 }
 
 func (c *memCursor) Row() (storage.Row, error) {
-	if c.closed || (c.curRec == nil && len(c.curRow.Values) == 0) {
+	if !c.isValidPosition() {
 		return storage.Row{}, fmt.Errorf("cursor out of range or closed")
+	}
+	if len(c.curRow.Values) > 0 {
+		return c.curRow, nil
+	}
+	if c.hasCurEntry && c.td != nil {
+		row, err := c.curEntry.materializeWithArena(c.td, nil)
+		if err != nil {
+			return storage.Row{}, err
+		}
+		c.curRow = row
+		return row, nil
+	}
+	if c.curRec != nil && c.td != nil {
+		c.curRow = c.td.Schema.RecordToRow(c.curRec)
+	}
+	return c.curRow, nil
+}
+
+// RowWithArena implements storage.ArenaRowCursor to decode rows directly into
+// caller-managed Arena slabs while preserving Cursor.Row() ownership invariants.
+func (c *memCursor) RowWithArena(arena *storage.Arena) (storage.Row, error) {
+	if arena == nil {
+		return c.Row()
+	}
+	if !c.isValidPosition() {
+		return storage.Row{}, fmt.Errorf("cursor out of range or closed")
+	}
+	if len(c.curRow.Values) > 0 {
+		return c.curRow, nil
+	}
+	if c.hasCurEntry && c.td != nil {
+		return c.curEntry.materializeWithArena(c.td, arena)
+	}
+	if c.curRec != nil && c.td != nil {
+		return c.td.Schema.RecordToRowWithArena(c.curRec, arena), nil
 	}
 	return c.curRow, nil
 }
@@ -2556,7 +2609,9 @@ func (c *memCursor) Row() (storage.Row, error) {
 func (c *memCursor) Close() error {
 	c.closed = true
 	c.keys = nil
-	c.rows = nil
+	c.entries = nil
+	c.curEntry = shardEntry{}
+	c.hasCurEntry = false
 	c.curRec = nil
 	c.curRow = storage.Row{}
 	c.resolver = nil
