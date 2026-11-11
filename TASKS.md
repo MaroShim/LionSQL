@@ -33,9 +33,9 @@
 | `DONE` | **`AUDIT-FULL-039`** | `Security` | --milestone | P1 | RevokeAllTokens 호출 시 saveLocked 디스크 영속화를 수행하여 재부팅 시 파기된 JWT 토큰 부활 방지 | [`--category`](--category) |  |
 | `DONE` | **`AUDIT-FULL-13DOM`** |  | Integrity | P1 | 전 13대 도메인(175개 파일, 113,056 LOC) 듀얼 AI 라인 단위 적대적 감사 완료 및 40개 결함 도출 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `IN_PROGRESS` | **`AUDIT-FULL-PATCH`** | `1.0-GA` | Integrity | P1 | 전수 감사 발굴 40대 결함(Critical 2건 완치, High 26건, Med/Low 12건) TDD 순차 패치 및 무결점 회귀 검증 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `IN_PROGRESS` | **`AUDIT-FULL-SQL-CORE`** | `1.0-GA` | Engine | P1 | 전수 감사 잔여 Parser/Planner/Exec/Catalog 결함 패치 (AUDIT-FULL-005, 006, 014~022, 024~029) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `PENDING` | **`AUDIT-FULL-STORAGE-WT`** | `1.0-GA` | Storage | P1 | 전수 감사 잔여 Storage/WT 결함 패치 (AUDIT-FULL-002, 007, 011, 012, 013) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `PENDING` | **`AUDIT-FULL-WIRE-SEC`** | `1.0-GA` | Protocol | P1 | 전수 감사 잔여 Wire/TDS 프레이밍 및 API/Auth/Replication 보안 결함 패치 (AUDIT-FULL-008, 023, 030~040) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-FULL-SQL-CORE`** | `1.0-GA` | Engine | P1 | 전수 감사 잔여 Parser/Planner/Exec/Catalog 결함 패치 (AUDIT-FULL-005, 006, 014~022, 024~029) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `IN_PROGRESS` | **`AUDIT-FULL-STORAGE-WT`** | `1.0-GA` | Storage | P1 | 전수 감사 잔여 Storage/WT 결함 패치 (AUDIT-FULL-002, 007, 011, 012, 013) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-FULL-WIRE-SEC`** | `1.0-GA` | Protocol | P1 | 전수 감사 잔여 Wire/TDS 프레이밍 및 API/Auth/Replication 보안 결함 패치 (AUDIT-FULL-008, 023, 030~040) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`AUDIT-INDEX-A`** | `1.0-GA` | Engine | P1 | strings.Index 전수 교체 패턴 A: SQL 예약어(WITH, FOR, AS, SERVERPROPERTY) 단순 매칭 토크나이저 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`AUDIT-INDEX-B`** | `1.0-GA` | Engine | P2 | strings.Index 전수 교체 패턴 B: DDL/DML/MERGE/PIVOT 단순 괄호 탐색의 FindMatchingParen 균형 파서 전수 교체 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`AUDIT-INDEX-C`** | `1.0-GA` | Engine | P1 | strings.Index 전수 교체 패턴 C: WHERE 및 PK 바이패스 등호(=) 리터럴 오염 방지 및 토크나이저 연동 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
@@ -548,8 +548,8 @@
 
 ---
 
-### [IN_PROGRESS] 전수 감사 잔여 Parser/Planner/Exec/Catalog 결함 패치 (AUDIT-FULL-005, 006, 014~022, 024~029) `AUDIT-FULL-SQL-CORE`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-11 16:23:02
+### [DONE] 전수 감사 잔여 Parser/Planner/Exec/Catalog 결함 패치 (AUDIT-FULL-005, 006, 014~022, 024~029) `AUDIT-FULL-SQL-CORE`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 01:50:00
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 - **Target Files**: `pkg/proc/lexer.go, pkg/proc/parser_dml.go, pkg/proc/eval.go, pkg/proc/runtime/vm_dispatcher.go, pkg/engine/coordinator_impl.go, pkg/engine/session.go, pkg/engine/sqlexec_auth.go, pkg/engine/sqlexec_explain.go, pkg/execution/eval.go, pkg/execution/builder.go, pkg/planner/bounds.go, pkg/planner/decorrelate.go, pkg/sqlutil/tokenizer.go, pkg/catalog/virtual/result.go, pkg/catalog/virtual/mssql.go`
@@ -559,8 +559,8 @@
 - [x] **`AUDIT-FULL-006` (Medium)**: `sqlexec_explain.go:1016` `<> ANY` 정량 서브쿼리 distinct 값 `1=1` 재작성으로 인한 3VL NULL 행 유출 수정
 - [x] **`AUDIT-FULL-014` (High)**: `proc/lexer.go:259` 지수 표기법(`1e5`, `1.5E-3`) 및 단독 점 소수점(`.5`) 인식 추가
 - [x] **`AUDIT-FULL-015` (High)**: `parser_dml.go:224` `UPDATE/DELETE ... FROM` 서브쿼리 내부 `WHERE` 조기 탈출 수정
-- [ ] **`AUDIT-FULL-016` (Medium)**: `proc/eval.go:346` `LikeExpr` 및 `evalRowAnyComparison` NULL 입력 시 3VL `nil` 반환 보장
-- [ ] **`AUDIT-FULL-017` (High)**: `coordinator_impl.go:150` `IDENTITY` 채번 비원자적 시퀀스 경합 수정
+- [x] **`AUDIT-FULL-016` (Medium)**: `proc/eval.go:346` `LikeExpr` 및 `evalRowAnyComparison` NULL 입력 시 3VL `nil` 반환 보장
+- [x] **`AUDIT-FULL-017` (High)**: `coordinator_impl.go:150` `IDENTITY` 채번 비원자적 시퀀스 경합 수정
 - [x] **`AUDIT-FULL-018` (Medium)**: `session.go:455` TDS Prepared 실패 시 비조건적 `TxFailed` 마킹 개선
 - [x] **`AUDIT-FULL-019` (Low)**: `sqlexec_auth.go:212` `checkTableAccess` 락 없는 `cs.User` 읽기 Data Race 해소
 - [x] **`AUDIT-FULL-020` (High)**: `execution/eval.go:316` `evalTupleBinaryExprWithSubquery` AND 우측 서브쿼리 실행 컨텍스트 전달
@@ -574,12 +574,12 @@
 - [x] **`AUDIT-FULL-029` (High)**: `virtual/mssql.go:539` `execReferentialConstraintsForeignKey` `referenced_object_id` `1000` 고정 수정
 
 **Details & Resolution**:
-전수 감사(notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 Parser/VDBE/Planner/Execution/Sqlutil/VirtualCatalog 도메인 17대 잔여 결함 패치 wave.
+전수 감사(notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 Parser/VDBE/Planner/Execution/Sqlutil/VirtualCatalog 도메인 17대 잔여 결함 패치 wave 100% 완료.
 
 ---
 
-### [PENDING] 전수 감사 잔여 Storage/WT 결함 패치 (AUDIT-FULL-002, 007, 011, 012, 013) `AUDIT-FULL-STORAGE-WT`
-- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-11 16:23:02
+### [IN_PROGRESS] 전수 감사 잔여 Storage/WT 결함 패치 (AUDIT-FULL-002, 007, 011, 012, 013) `AUDIT-FULL-STORAGE-WT`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-12 01:50:00
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 - **Target Files**: `pkg/storage/memengine/memengine.go, pkg/storage/wiredtiger/wt_engine.go`
@@ -587,25 +587,26 @@
 **Phases & Checklist**:
 - [x] **`AUDIT-FULL-001` (High)**: `table_data.go:458` / `flat_record.go:286` Instant DDL defensive boundary guard & TableData DDL lock
 - [x] **`AUDIT-FULL-004` (High)**: `persistence.go:332` `saveDiskSnapshotLocked` 시 `e.tablesAtomic.Load()` 불변 스냅샷 순회로 동시 DDL 패닉 차단
-- [ ] **`AUDIT-FULL-002` (Low)**: `memengine.go:521` `Engine.Close()` 시 RDB 저장 에러 발생 시 WAL Close 에러 침묵 은폐 해소 (`errors.Join` / 복합 에러 반환)
+- [x] **`AUDIT-FULL-009` (High)**: `tx.go:869` 외래키 `ON DELETE/UPDATE SET NULL` 시 비보호 전역 맵 접근 제거 및 스냅샷 카탈로그 전환
+- [x] **`AUDIT-FULL-002` (Low)**: `memengine.go:521` `Engine.Close()` 시 RDB 저장 에러 발생 시 WAL Close 에러 침묵 은폐 해소 (`errors.Join` / 복합 에러 반환)
 - [ ] **`AUDIT-FULL-007` (Medium)**: `wt_engine.go:614` `C.go_wt_session_drop` 리턴코드 무시로 고아 파일 잔존 및 후속 `CREATE TABLE` 실패 방어
 - [ ] **`AUDIT-FULL-011` (High)**: `wt_engine.go:680` `TruncateTables` 시 `PhysicalName` 누락으로 인한 `EBUSY` 에러 및 데이터 삭제 실패 은폐 수정
 - [ ] **`AUDIT-FULL-012` (High)**: `wt_engine.go:861` `AddColumn` 시 세션/커서 오픈 실패 무시로 기존 행 재작성 누락 및 카탈로그 불일치 수정
 - [ ] **`AUDIT-FULL-013` (Medium)**: `wt_engine.go:257` `Sync` 시 락 해제 후 세션 오픈 경합 및 `RenameTable` WAL 누락 수정
 
 **Details & Resolution**:
-전수 감사(notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 Storage/WiredTiger 도메인 잔여 결함 패치 wave. (참고: AUDIT-FULL-001/009는 잔여 항목으로 단계적 처리)
+전수 감사(notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 Storage In-Memory OCC 도메인 5건 100% 종결 (`AUDIT-FULL-001`, `002`, `003`, `004`, `009`). WiredTiger 도메인 잔여 4건(007, 011, 012, 013) 패치 예정.
 
 ---
 
-### [PENDING] 전수 감사 잔여 Wire/TDS 프레이밍 및 API/Auth/Replication 보안 결함 패치 (AUDIT-FULL-008, 023, 030~040) `AUDIT-FULL-WIRE-SEC`
-- **Domain**: Protocol | **Priority**: P1 | **Updated**: 2026-11-11 16:23:02
+### [DONE] 전수 감사 잔여 Wire/TDS 프레이밍 및 API/Auth/Replication 보안 결함 패치 (AUDIT-FULL-008, 023, 030~040) `AUDIT-FULL-WIRE-SEC`
+- **Domain**: Protocol | **Priority**: P1 | **Updated**: 2026-11-12 01:50:00
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 - **Target Files**: `pkg/wire/server.go, pkg/wire/param_rules.go, pkg/wire/copy.go, pkg/wire/tds/server.go, pkg/wire/tds/token.go, pkg/api/server.go, pkg/api/records_filter.go, pkg/api/handlers_import_export.go, pkg/auth/auth.go, pkg/replication/handlers.go`
 
 **Phases & Checklist**:
-- [ ] **`AUDIT-FULL-008` (High)**: `tds/server.go:1000` `ALL_HEADERS` 4바이트 길이 오인식으로 인한 대용량 RPC(`sp_executesql`) 스트림 오절단 수정
+- [x] **`AUDIT-FULL-008` (High)**: `tds/server.go:1000` `ALL_HEADERS` 4바이트 길이 오인식으로 인한 대용량 RPC(`sp_executesql`) 스트림 오절단 수정
 - [x] **`AUDIT-FULL-023` (Medium)**: `wire/copy.go:436` `COPY FROM STDIN` 밀리초 타임스탬프 PK 충돌 및 int32 오버플로우 방지
 - [x] **`AUDIT-FULL-030` (High)**: `param_rules.go:637` `inferParamOID` `$1` vs `$10..$19` 접두어 오추론 수정
 - [x] **`AUDIT-FULL-031` (High)**: `wire/copy.go:342` `handleCopyIn` `bufio.Scanner` 64KB 초과 에러 무시로 인한 데이터 유실 차단
@@ -620,7 +621,7 @@
 - [x] **`AUDIT-FULL-040` (High)**: `replication/handlers.go:12` HA 복제/승격/강등/투표/WAL 스트림 엔드포인트 인증/인가 강제
 
 **Details & Resolution**:
-전수 감사(notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 PGWire/TDS 프로토콜 프레이밍 및 API/Auth/Replication 무인증 보안 13대 결함 패치 wave.
+전수 감사(notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 PGWire/TDS 프로토콜 프레이밍 및 API/Auth/Replication 무인증 보안 13대 결함 패치 wave 100% 완료 및 TDD 검증 통과.
 
 ---
 
