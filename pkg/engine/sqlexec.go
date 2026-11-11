@@ -368,6 +368,7 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 
 		cs.Mu.Lock()
 		cs.activeQueries++
+		cs.lastUsedAt = overallStart
 		cs.QueryCtx = queryCtx
 		cs.RunningQuery = query
 		cs.QueryStartTime = overallStart
@@ -434,6 +435,7 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 		if !isNested {
 			cs.Mu.Lock()
 			cs.activeQueries--
+			cs.lastUsedAt = time.Now()
 			lastActive := cs.activeQueries <= 0
 			if lastActive {
 				cs.activeQueries = 0
@@ -548,14 +550,62 @@ func (s *Coordinator) ExecuteSessionSQL(sessionID string, query string) (*QueryR
 	return s.ExecuteSessionSQLContext(context.Background(), sessionID, query)
 }
 
+func (s *Coordinator) ensureClientStorageSession(cs *ClientSession) error {
+	cs.Mu.Lock()
+	cs.lastUsedAt = time.Now()
+	needsSess := !cs.closed && cs.Session == nil
+	cs.Mu.Unlock()
+	if !needsSess {
+		return nil
+	}
+
+	var acquired storage.Session
+	var acqErr error
+	if s.pool != nil {
+		acquired, acqErr = s.pool.AcquireSession()
+	} else if s.engine != nil {
+		acquired, acqErr = s.engine.NewSession()
+	}
+	if acqErr != nil {
+		return fmt.Errorf("failed to acquire session for transaction: %w", acqErr)
+	}
+	if acquired == nil {
+		return fmt.Errorf("no storage engine session available")
+	}
+
+	cs.Mu.Lock()
+	cs.lastUsedAt = time.Now()
+	if !cs.closed && cs.Session == nil {
+		cs.Session = acquired
+		acquired = nil
+	}
+	cs.Mu.Unlock()
+
+	if acquired != nil {
+		if s.pool != nil {
+			s.pool.ReleaseSession(acquired)
+		} else {
+			_ = acquired.Close()
+		}
+	}
+	return nil
+}
+
 // BeginSessionTx starts a transaction on the given session directly without query parsing overhead.
 func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) error {
 	cs, err := s.GetOrCreateSession(sessionID)
 	if err != nil {
 		return err
 	}
+	if err := s.ensureClientStorageSession(cs); err != nil {
+		return err
+	}
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()
+	cs.lastUsedAt = time.Now()
+	if cs.closed {
+		return fmt.Errorf("session %s is closed", cs.ID)
+	}
 	if cs.Tx != nil {
 		if cs.IsPostgres() {
 			return fmt.Errorf("transaction already active on session %s", cs.ID)
@@ -563,6 +613,9 @@ func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) e
 		// T-SQL dialect: nested BEGIN TRANSACTION increments @@TRANCOUNT without error
 		cs.TranCount++
 		return nil
+	}
+	if cs.Session == nil {
+		return fmt.Errorf("no storage engine session available")
 	}
 	if ro, ok := cs.Vars["transaction_read_only"].(bool); ok && ro {
 		opts.ReadOnly = true
@@ -588,6 +641,7 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 	}
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()
+	cs.lastUsedAt = time.Now()
 	if cs.Tx == nil {
 		return fmt.Errorf("no active transaction to commit on session %s", cs.ID)
 	}
@@ -661,6 +715,7 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 	}
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()
+	cs.lastUsedAt = time.Now()
 	if cs.Tx == nil {
 		return fmt.Errorf("no active transaction to rollback on session %s", cs.ID)
 	}

@@ -80,11 +80,12 @@ type ClientSession struct {
 	QueryStartTime  time.Time
 	CancelRequested bool
 	IsReadOnlyFn    func() bool // reports whether the engine/host is running in read-only replica mode
-	sessInUse       bool        // whether Session is currently leased to an active autocommit execution
-	activeQueries   int         // number of active top-level queries on this session
-	closed          bool        // whether CloseSession has been called on this session
+	sessInUse       bool                  // whether Session is currently leased to an active autocommit execution
+	activeQueries   int                   // number of active top-level queries on this session
+	closed          bool                  // whether CloseSession has been called on this session
+	lastUsedAt      time.Time             // last query/transaction activity timestamp for idle session reclamation
 	releaseOnDrain  func(storage.Session) // callback to release storage session when in-flight queries drain
-	cancelMu        sync.Mutex  // dedicated lock for cooperative cancellation to avoid deadlocks with cs.Mu
+	cancelMu        sync.Mutex            // dedicated lock for cooperative cancellation to avoid deadlocks with cs.Mu
 	Mu              sync.Mutex
 }
 
@@ -447,6 +448,7 @@ func (cs *ClientSession) ExecuteProgram(
 	}
 
 	cs.Mu.Lock()
+	cs.lastUsedAt = time.Now()
 	if cs.TxFailed {
 		cs.Mu.Unlock()
 		return nil, true, nil
@@ -456,6 +458,7 @@ func (cs *ClientSession) ExecuteProgram(
 		tx := cs.Tx
 		sess := cs.Session
 		res, err = exec.ExecuteInTxWithSessionContext(ctx, prog, paramMap, tx, sess, nil)
+		cs.lastUsedAt = time.Now()
 		if err != nil {
 			cs.TxFailed = true
 		}
@@ -471,6 +474,7 @@ func (cs *ClientSession) ExecuteProgram(
 		defer func() {
 			cs.Mu.Lock()
 			cs.sessInUse = false
+			cs.lastUsedAt = time.Now()
 			drainSess, drainFn := cs.checkAndDrainClosedLocked()
 			cs.Mu.Unlock()
 			if drainFn != nil {

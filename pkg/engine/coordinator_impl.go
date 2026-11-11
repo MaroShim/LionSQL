@@ -22,21 +22,25 @@ import (
 
 // Config defines options for initializing a Coordinator.
 type Config struct {
-	DefaultWorkMem   int64
-	SlowThreshold    time.Duration
-	EnableGeneralLog bool
-	AuthService      *auth.AuthService
-	EnableAuth       bool
-	PoolConfig       PoolConfig
+	DefaultWorkMem       int64
+	SlowThreshold        time.Duration
+	EnableGeneralLog     bool
+	AuthService          *auth.AuthService
+	EnableAuth           bool
+	PoolConfig           PoolConfig
+	ClientSessionIdleTTL time.Duration // Idle duration after which an inactive ClientSession releases its pinned storage session (default 5m)
+	SessionSweepInterval time.Duration // Interval for checking idle ClientSessions (default 5m)
 }
 
 // DefaultConfig returns default configuration parameters.
 func DefaultConfig() Config {
 	return Config{
-		DefaultWorkMem:   execution.DefaultWorkMem,
-		SlowThreshold:    DefaultSlowQueryThreshold,
-		EnableGeneralLog: false,
-		PoolConfig:       DefaultPoolConfig(),
+		DefaultWorkMem:       execution.DefaultWorkMem,
+		SlowThreshold:        DefaultSlowQueryThreshold,
+		EnableGeneralLog:     false,
+		PoolConfig:           DefaultPoolConfig(),
+		ClientSessionIdleTTL: 5 * time.Minute,
+		SessionSweepInterval: 5 * time.Minute,
 	}
 }
 
@@ -64,9 +68,13 @@ type Coordinator struct {
 	lastIdentities     map[string]int64
 	lastIdentMu        sync.RWMutex
 	schemaVersion      atomic.Uint64
-	autoAnalyzer       *AutoAnalyzer
-	startTime          time.Time
-	tolerantDDL        atomic.Bool
+	autoAnalyzer         *AutoAnalyzer
+	startTime            time.Time
+	tolerantDDL          atomic.Bool
+	clientSessionIdleTTL time.Duration
+	stopCh               chan struct{}
+	bgWg                 sync.WaitGroup
+	closeOnce            sync.Once
 }
 
 // NewCoordinator creates a new SQL Coordinator instance.
@@ -91,24 +99,44 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 
 	pool := NewSessionPool(eng, cfg.PoolConfig)
 
-	coord := &Coordinator{
-		catalog:            cat,
-		engine:             eng,
-		planCache:          proc.NewPlanCache(),
-		executor:           executor,
-		auth:               cfg.AuthService,
-		enableAuth:         cfg.EnableAuth,
-		pool:               pool,
-		sessions:           make(map[string]*ClientSession),
-		globalTempCreators: make(map[string]string),
-		defaultWorkMem:     cfg.DefaultWorkMem,
-		metrics:            NewMetricsCollector(),
-		slowQueries:        NewSlowQueryLogger(cfg.SlowThreshold),
-		generalLog:         NewGeneralLogger(cfg.EnableGeneralLog),
-		pkBypassCache:      make(map[uint64]*PKLookupPlan, 256),
-		lastIdentities:     make(map[string]int64),
-		startTime:          time.Now(),
+	clientIdleTTL := cfg.ClientSessionIdleTTL
+	if clientIdleTTL <= 0 {
+		clientIdleTTL = 5 * time.Minute
 	}
+	sweepInterval := cfg.SessionSweepInterval
+	if sweepInterval <= 0 {
+		sweepInterval = 5 * time.Minute
+		if clientIdleTTL < sweepInterval {
+			sweepInterval = clientIdleTTL
+		}
+		if sweepInterval < 10*time.Millisecond {
+			sweepInterval = 10 * time.Millisecond
+		}
+	}
+
+	coord := &Coordinator{
+		catalog:              cat,
+		engine:               eng,
+		planCache:            proc.NewPlanCache(),
+		executor:             executor,
+		auth:                 cfg.AuthService,
+		enableAuth:           cfg.EnableAuth,
+		pool:                 pool,
+		sessions:             make(map[string]*ClientSession),
+		globalTempCreators:   make(map[string]string),
+		defaultWorkMem:       cfg.DefaultWorkMem,
+		metrics:              NewMetricsCollector(),
+		slowQueries:          NewSlowQueryLogger(cfg.SlowThreshold),
+		generalLog:           NewGeneralLogger(cfg.EnableGeneralLog),
+		pkBypassCache:        make(map[uint64]*PKLookupPlan, 256),
+		lastIdentities:       make(map[string]int64),
+		startTime:            time.Now(),
+		clientSessionIdleTTL: clientIdleTTL,
+		stopCh:               make(chan struct{}),
+	}
+
+	coord.bgWg.Add(1)
+	go coord.idleSessionReapLoop(sweepInterval)
 
 	coord.autoAnalyzer = NewAutoAnalyzer(coord, DefaultAutoAnalyzeConfig())
 	executor.SetIdentityProvider(coord)
@@ -343,10 +371,11 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 		TempTableMap:    make(map[string]string),
 		EphemeralTables: make(map[string]*EphemeralTable),
 		PreparedStmts:   make(map[string]*PreparedStatement),
-		Cursors:       make(map[string]*SessionCursor),
-		User:          "dbo",
-		OriginalUser:  "dbo",
-		IsReadOnlyFn:  c.IsReadOnly,
+		Cursors:         make(map[string]*SessionCursor),
+		User:            "dbo",
+		OriginalUser:    "dbo",
+		IsReadOnlyFn:    c.IsReadOnly,
+		lastUsedAt:      time.Now(),
 	}
 	c.sessions[id] = cs
 	return cs, nil
@@ -355,6 +384,7 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 func (c *Coordinator) acquireSessionForQuery(cs *ClientSession) (storage.Session, func(), error) {
 	if cs != nil {
 		cs.Mu.Lock()
+		cs.lastUsedAt = time.Now()
 		if cs.Session != nil && !cs.sessInUse {
 			cs.sessInUse = true
 			sess := cs.Session
@@ -362,6 +392,7 @@ func (c *Coordinator) acquireSessionForQuery(cs *ClientSession) (storage.Session
 			return sess, func() {
 				cs.Mu.Lock()
 				cs.sessInUse = false
+				cs.lastUsedAt = time.Now()
 				drainSess, drainFn := cs.checkAndDrainClosedLocked()
 				cs.Mu.Unlock()
 				if drainFn != nil {
@@ -383,6 +414,58 @@ func (c *Coordinator) acquireSessionForQuery(cs *ClientSession) (storage.Session
 		return nil, nil, err
 	}
 	return sess, func() { _ = sess.Close() }, nil
+}
+
+func (c *Coordinator) idleSessionReapLoop(interval time.Duration) {
+	defer c.bgWg.Done()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.stopCh:
+			return
+		case <-ticker.C:
+			c.ReapIdleClientSessions(c.clientSessionIdleTTL)
+		}
+	}
+}
+
+// ReapIdleClientSessions detaches and returns pinned storage sessions from idle ClientSessions
+// that have no active transaction (cs.Tx == nil) and no in-flight queries (!cs.sessInUse).
+func (c *Coordinator) ReapIdleClientSessions(idleTTL time.Duration) int {
+	if idleTTL <= 0 {
+		return 0
+	}
+	now := time.Now()
+
+	c.sessMu.RLock()
+	snapshot := make([]*ClientSession, 0, len(c.sessions))
+	for _, cs := range c.sessions {
+		if cs != nil {
+			snapshot = append(snapshot, cs)
+		}
+	}
+	c.sessMu.RUnlock()
+
+	var detached []storage.Session
+	for _, cs := range snapshot {
+		cs.Mu.Lock()
+		if !cs.closed && cs.Tx == nil && !cs.sessInUse && cs.activeQueries == 0 && cs.Session != nil && now.Sub(cs.lastUsedAt) >= idleTTL {
+			detached = append(detached, cs.Session)
+			cs.Session = nil
+		}
+		cs.Mu.Unlock()
+	}
+
+	for _, sess := range detached {
+		if c.pool != nil {
+			c.pool.ReleaseSession(sess)
+		} else {
+			_ = sess.Close()
+		}
+	}
+	return len(detached)
 }
 
 // CloseSession gracefully closes and unregisters a client session.
@@ -617,6 +700,13 @@ func (c *Coordinator) AutoAnalyzer() *AutoAnalyzer {
 
 // Close gracefully closes the coordinator, session pool, and active sessions.
 func (c *Coordinator) Close() error {
+	c.closeOnce.Do(func() {
+		if c.stopCh != nil {
+			close(c.stopCh)
+		}
+		c.bgWg.Wait()
+	})
+
 	c.sessMu.Lock()
 	sessIDs := make([]string, 0, len(c.sessions))
 	for id := range c.sessions {
