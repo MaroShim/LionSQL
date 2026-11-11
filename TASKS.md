@@ -30,6 +30,7 @@
 | `DONE` | **`AUDIT-FULL-035`** | `Security` | --milestone | P1 | REST API 관리자 엔드포인트(쿼리취소, 활성쿼리, 로그, 실시간CDC스트림) wrapSuperuser 및 wrapAuth 인증 가드 장착 | [`--category`](--category) |  |
 | `DONE` | **`AUDIT-FULL-036`** | `Performance` | --milestone | P1 | REST API 레코드 필터 LIKE 평가 시 매 행 동적 regexp.Compile 제거 및 sqlutil.MatchLike 위임으로 CPU/GC 병목 해소 | [`--category`](--category) |  |
 | `DONE` | **`AUDIT-FULL-037`** | `Security` | --milestone | P1 | /api/backup 엔드포인트 권한을 wrapSuperuser로 격상하여 일반/테이블제한 API Key를 통한 전체 DB 덤프 유출(권한상승) 방지 | [`--category`](--category) |  |
+| `DONE` | **`AUDIT-FULL-039`** | `Security` | --milestone | P1 | RevokeAllTokens 호출 시 saveLocked 디스크 영속화를 수행하여 재부팅 시 파기된 JWT 토큰 부활 방지 | [`--category`](--category) |  |
 | `DONE` | **`AUDIT-FULL-13DOM`** |  | Integrity | P1 | 전 13대 도메인(175개 파일, 113,056 LOC) 듀얼 AI 라인 단위 적대적 감사 완료 및 40개 결함 도출 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `IN_PROGRESS` | **`AUDIT-FULL-PATCH`** | `1.0-GA` | Integrity | P1 | 전수 감사 발굴 40대 결함(Critical 2건 완치, High 26건, Med/Low 12건) TDD 순차 패치 및 무결점 회귀 검증 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `IN_PROGRESS` | **`AUDIT-FULL-SQL-CORE`** | `1.0-GA` | Engine | P1 | 전수 감사 잔여 Parser/Planner/Exec/Catalog 결함 패치 (AUDIT-FULL-005, 006, 014~022, 024~029) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
@@ -519,6 +520,13 @@
 
 ### [DONE] /api/backup 엔드포인트 권한을 wrapSuperuser로 격상하여 일반/테이블제한 API Key를 통한 전체 DB 덤프 유출(권한상승) 방지 `AUDIT-FULL-037`
 - **Domain**: --milestone | **Priority**: P1 | **Updated**: 2026-11-11 15:41:41
+- **Milestone**: `Security`
+- **Plan Doc**: [`--category`](--category)
+
+---
+
+### [DONE] RevokeAllTokens 호출 시 saveLocked 디스크 영속화를 수행하여 재부팅 시 파기된 JWT 토큰 부활 방지 `AUDIT-FULL-039`
+- **Domain**: --milestone | **Priority**: P1 | **Updated**: 2026-11-11 15:51:10
 - **Milestone**: `Security`
 - **Plan Doc**: [`--category`](--category)
 

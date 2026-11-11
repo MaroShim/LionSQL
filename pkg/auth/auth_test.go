@@ -176,3 +176,64 @@ func TestAuth_APIKeys(t *testing.T) {
 		t.Fatalf("Expected ErrInvalidAPIKey after revocation, got %v", err)
 	}
 }
+
+func TestAuthService_RevokeAllTokens_PersistedAcrossRestart_AuditFull039(t *testing.T) {
+	dataDir := t.TempDir()
+	serverSecret := []byte("MasterServerSecretKey123456789012")
+
+	// 1. Initial service instance
+	svc1 := NewAuthService(Config{
+		DataDir:       dataDir,
+		SecretKey:     serverSecret,
+		TokenDuration: 1 * time.Hour,
+	})
+
+	user, err := svc1.EnsureDefaultSuperuser("admin@lionsql.local", "SuperAdminSecret999!")
+	if err != nil {
+		t.Fatalf("EnsureDefaultSuperuser failed: %v", err)
+	}
+
+	// 2. Authenticate and obtain active JWT token
+	_, token, err := svc1.Authenticate("admin@lionsql.local", "SuperAdminSecret999!")
+	if err != nil {
+		t.Fatalf("Authenticate failed: %v", err)
+	}
+
+	// Verify token is initially valid
+	if _, err := svc1.ValidateToken(token); err != nil {
+		t.Fatalf("expected token to be valid initially, got: %v", err)
+	}
+
+	// 3. User logs out: Revoke all tokens
+	if err := svc1.RevokeAllTokens(user.ID); err != nil {
+		t.Fatalf("RevokeAllTokens failed: %v", err)
+	}
+
+	// Token must be immediately revoked in memory
+	if _, err := svc1.ValidateToken(token); err != ErrTokenRevoked {
+		t.Fatalf("expected ErrTokenRevoked after revocation, got: %v", err)
+	}
+
+	// 4. Simulate complete server reboot: initialize brand-new AuthService reading from same auth.json
+	svc2 := NewAuthService(Config{
+		DataDir:       dataDir,
+		SecretKey:     serverSecret,
+		TokenDuration: 1 * time.Hour,
+	})
+
+	// 5. AUDIT-FULL-039 Assertion: Token MUST NOT resurrect after reboot!
+	// If TokenKey was not persisted to disk, svc2 would restore the old TokenKey and validate successfully.
+	_, err = svc2.ValidateToken(token)
+	if err != ErrTokenRevoked {
+		t.Fatalf("AUDIT-FULL-039: token resurrection detected after reboot! Expected ErrTokenRevoked, got: %v", err)
+	}
+
+	// 6. Verify newly issued token on svc2 works normally
+	_, freshToken, err := svc2.Authenticate("admin@lionsql.local", "SuperAdminSecret999!")
+	if err != nil {
+		t.Fatalf("Authenticate on svc2 failed: %v", err)
+	}
+	if _, err := svc2.ValidateToken(freshToken); err != nil {
+		t.Fatalf("expected fresh token to be valid, got: %v", err)
+	}
+}

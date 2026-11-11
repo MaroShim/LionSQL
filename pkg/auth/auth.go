@@ -375,7 +375,7 @@ func (s *AuthService) RevokeAllTokens(userID string) error {
 
 	u.TokenKey = generateRandomKey(16)
 	u.UpdatedAt = time.Now().UTC()
-	return nil
+	return s.saveLocked()
 }
 
 // RefreshToken validates an existing valid token and issues a fresh one.
