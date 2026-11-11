@@ -2185,6 +2185,7 @@ func (tx *Transaction) Commit() error {
 			var err error
 			walRec, walSeq, err = tx.engine.appendWALFrameLocked(ops)
 			if err != nil {
+				rollbackApplied()
 				return err
 			}
 		} else {

@@ -1268,16 +1268,17 @@ func (s *WTSession) releaseCursor(uri string, cur *C.WT_CURSOR) {
 	if cur == nil {
 		return
 	}
-	C.go_wt_cursor_reset(cur)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.closed || s.sess == nil {
-		delete(s.allCursors, cur)
-		C.go_wt_cursor_close(cur)
+		// Session has already been closed; s.Close() closed all cursors in s.allCursors.
+		// Avoid double-close and use-after-free.
 		return
 	}
+
+	C.go_wt_cursor_reset(cur)
 	s.flushPendingClosesLocked()
 
 	if s.cursorPool == nil {
