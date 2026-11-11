@@ -38,7 +38,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	}
 
 	for i, proj := range qInfo.Projections {
-		if strings.Contains(strings.ToUpper(proj), "SELECT") {
+		if sqlutil.ContainsKeyword(proj, "SELECT", true) && sqlutil.FindTopLevelChar(proj, '(') != -1 {
 			if resolved, err := s.resolveSubqueriesWithSession(proj, cs, outerNames...); err == nil && resolved != proj {
 				qInfo.Projections[i] = resolved
 			}
@@ -1017,8 +1017,8 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 			}
 		}
 
-		if strings.Contains(strings.ToUpper(exprStr), "SELECT") {
-			if alias == "" && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(exprStr)), "EXISTS") {
+		if sqlutil.ContainsKeyword(exprStr, "SELECT", true) {
+			if alias == "" && sqlutil.HasPrefixKeyword(exprStr, "EXISTS") {
 				alias = "exists"
 			}
 			if resolved, err := s.resolveSubqueriesWithSession(exprStr, cs); err == nil && resolved != exprStr {

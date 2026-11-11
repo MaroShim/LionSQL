@@ -278,9 +278,9 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		isGeneratedIdentity := sqlutil.ContainsKeyword(cDefTrimmed, "AS IDENTITY", false) ||
 			(sqlutil.ContainsKeyword(cDefTrimmed, "GENERATED", false) && sqlutil.ContainsKeyword(cDefTrimmed, "IDENTITY", false))
 		isSerial := rawType == "SERIAL" || rawType == "BIGSERIAL" || rawType == "SMALLSERIAL"
-		isPK := strings.Contains(cUpper, "PRIMARY KEY")
-		isNotNull := strings.Contains(cUpper, "NOT NULL") || isPK || isSerial || isGeneratedIdentity
-		isIdentity := strings.Contains(cUpper, "IDENTITY") || strings.Contains(cUpper, "AUTO_INCREMENT") || isSerial || isGeneratedIdentity
+		isPK := sqlutil.ContainsKeyword(cDefTrimmed, "PRIMARY KEY", false)
+		isNotNull := sqlutil.ContainsKeyword(cDefTrimmed, "NOT NULL", false) || isPK || isSerial || isGeneratedIdentity
+		isIdentity := sqlutil.ContainsKeyword(cDefTrimmed, "IDENTITY", false) || sqlutil.ContainsKeyword(cDefTrimmed, "AUTO_INCREMENT", false) || isSerial || isGeneratedIdentity
 
 		defaultExpr := parseColumnDefault(cDefTrimmed)
 
@@ -295,7 +295,7 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 			Default:    defaultExpr,
 		})
 
-		if strings.Contains(cUpper, "REFERENCES") {
+		if sqlutil.ContainsKeyword(cDefTrimmed, "REFERENCES", false) {
 			if fk, ok := parseForeignKeyClause(cDefTrimmed, colName, ""); ok {
 				fk.ChildTable = tableName
 				schema.ForeignKeys = append(schema.ForeignKeys, *fk)
@@ -1706,7 +1706,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		tokens := sqlutil.SplitTopLevelTokens(rest)
 		if len(tokens) > 0 {
 			cName := cleanIdentifier(tokens[0])
-			if strings.HasSuffix(strings.ToLower(cName), "_pkey") || strings.Contains(cleaned, "PRIMARY KEY") {
+			if strings.HasSuffix(strings.ToLower(cName), "_pkey") || sqlutil.ContainsKeyword(cleaned, "PRIMARY KEY", false) {
 				if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 					for i := range sch.Columns {
 						sch.Columns[i].PrimaryKey = false

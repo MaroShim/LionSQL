@@ -140,13 +140,12 @@ func parsePKLookupQuery(query string) (*pkParsedQuery, bool) {
 	}
 
 	// Must start with SELECT
-	upperQ := strings.ToUpper(q)
-	if !strings.HasPrefix(upperQ, "SELECT") || (len(q) > 6 && q[6] != ' ' && q[6] != '\t' && q[6] != '\n') {
+	if !sqlutil.HasPrefixKeyword(q, "SELECT") {
 		return nil, false
 	}
 
 	// Reject queries with complex construct characters
-	if strings.Contains(q, "(") || strings.Contains(q, ")") {
+	if sqlutil.FindTopLevelChar(q, '(') != -1 || sqlutil.FindTopLevelChar(q, ')') != -1 {
 		return nil, false
 	}
 
@@ -158,9 +157,11 @@ func parsePKLookupQuery(query string) (*pkParsedQuery, bool) {
 	}
 
 	// Strip optional LIMIT 1
-	if strings.HasSuffix(upperQ, " LIMIT 1") {
-		q = strings.TrimSpace(q[:len(q)-len(" LIMIT 1")])
-		upperQ = strings.ToUpper(q)
+	if lIdx := sqlutil.FindTopLevelKeyword(q, "LIMIT"); lIdx != -1 {
+		rem := strings.TrimSpace(q[lIdx+len("LIMIT"):])
+		if rem == "1" {
+			q = strings.TrimSpace(q[:lIdx])
+		}
 	}
 
 	// Check and strip optional TOP 1 after SELECT
@@ -192,7 +193,7 @@ func parsePKLookupQuery(query string) (*pkParsedQuery, bool) {
 	wherePart := strings.TrimSpace(restAfterFrom[whereIdx+5:])
 
 	// Disallow multi-table FROM
-	if strings.Contains(tablePart, ",") || tablePart == "" || projStr == "" || wherePart == "" {
+	if sqlutil.FindTopLevelChar(tablePart, ',') != -1 || tablePart == "" || projStr == "" || wherePart == "" {
 		return nil, false
 	}
 
@@ -243,10 +244,10 @@ func parsePKLookupQuery(query string) (*pkParsedQuery, bool) {
 	if projStr == "*" {
 		isSelectAll = true
 	} else {
-		rawCols := strings.Split(projStr, ",")
+		rawCols := sqlutil.SplitTopLevel(projStr, ',')
 		for _, c := range rawCols {
 			c = strings.TrimSpace(c)
-			if c == "" || strings.Contains(strings.ToUpper(c), " AS ") {
+			if c == "" || sqlutil.FindTopLevelKeyword(c, "AS") != -1 {
 				return nil, false
 			}
 			sc := cleanIdentifier(c)

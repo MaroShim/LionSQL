@@ -11,11 +11,11 @@ import (
 
 // isDeclareCursorQuery reports whether query is a SQL server-side cursor declaration.
 func isDeclareCursorQuery(query string) bool {
-	upper := strings.ToUpper(strings.TrimSpace(query))
-	if !strings.HasPrefix(upper, "DECLARE ") {
+	trimmed := strings.TrimSpace(query)
+	if !sqlutil.HasPrefixKeyword(trimmed, "DECLARE") {
 		return false
 	}
-	return strings.Contains(upper, " CURSOR ") || strings.HasSuffix(upper, " CURSOR")
+	return sqlutil.ContainsKeyword(trimmed, "CURSOR", false)
 }
 
 // execDeclareCursor handles DECLARE <name> [BINARY] [INSENSITIVE] [NO SCROLL|SCROLL] CURSOR [WITH|WITHOUT HOLD] FOR <query>.
@@ -57,14 +57,13 @@ func (s *Coordinator) execDeclareCursor(query string, start time.Time, cs *Clien
 	var scroll bool
 	var binary bool
 
-	upperHeader := strings.ToUpper(header)
-	if strings.Contains(upperHeader, "WITH HOLD") {
+	if sqlutil.ContainsKeyword(header, "WITH HOLD", false) {
 		withHold = true
 	}
-	if strings.Contains(upperHeader, "SCROLL") && !strings.Contains(upperHeader, "NO SCROLL") {
+	if sqlutil.ContainsKeyword(header, "SCROLL", false) && !sqlutil.ContainsKeyword(header, "NO SCROLL", false) {
 		scroll = true
 	}
-	if strings.Contains(upperHeader, "BINARY") {
+	if sqlutil.ContainsKeyword(header, "BINARY", false) {
 		binary = true
 	}
 

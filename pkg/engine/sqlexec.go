@@ -828,9 +828,9 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	if isBeginTx {
 		opts := storage.TxOptions{}
-		if strings.Contains(upper, "READ ONLY") {
+		if sqlutil.ContainsKeyword(trimmed, "READ ONLY", false) {
 			opts.ReadOnly = true
-		} else if strings.Contains(upper, "READ WRITE") {
+		} else if sqlutil.ContainsKeyword(trimmed, "READ WRITE", false) {
 			if s.IsReadOnly() {
 				return nil, fmt.Errorf("cannot start read-write transaction on read-only replica: %w", replication.ErrReadOnlyReplica)
 			}
@@ -1083,8 +1083,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 
 		// E. SET <option> ON / OFF / <val> (e.g. SET NOCOUNT ON, SET ANSI_NULLS ON, SET NOCOUNT, ANSI_NULLS ON)
-		if !strings.Contains(rest, "=") && !strings.Contains(strings.ToUpper(rest), " TO ") {
-			rawItems := strings.Split(rest, ",")
+		if sqlutil.FindTopLevelChar(rest, '=') == -1 && !sqlutil.ContainsKeyword(rest, "TO", false) {
+			rawItems := sqlutil.SplitTopLevel(rest, ',')
 			var msgs []string
 			cs.Mu.Lock()
 			for _, item := range rawItems {
