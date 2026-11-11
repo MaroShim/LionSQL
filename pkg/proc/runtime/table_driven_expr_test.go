@@ -75,6 +75,7 @@ func TestTableDrivenExpressions(t *testing.T) {
 		{name: "String/Func_LEN", dataType: "INT", expr: "LEN('Hello World')", expected: "11"},
 		{name: "String/Func_LEN_Empty", dataType: "INT", expr: "LEN('')", expected: "0"},
 		{name: "String/Func_TRIM", dataType: "VARCHAR(50)", expr: "TRIM('   clean me   ')", expected: "clean me"},
+		{name: "String/Func_TRIM_Cutset", dataType: "VARCHAR(50)", expr: "TRIM('.,! ', '...hello world!!.')", expected: "hello world"},
 		{name: "String/Func_LTRIM", dataType: "VARCHAR(50)", expr: "LTRIM('   left side')", expected: "left side"},
 		{name: "String/Func_RTRIM", dataType: "VARCHAR(50)", expr: "RTRIM('right side   ')", expected: "right side"},
 		{name: "String/Func_SUBSTRING_Middle", dataType: "VARCHAR(50)", expr: "SUBSTRING('LionSQL Engine', 1, 7)", expected: "LionSQL"},
