@@ -3,10 +3,10 @@ package api
 import (
 	"fmt"
 	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -201,37 +201,7 @@ func unquote(s string) string {
 }
 
 func matchLike(pattern, s string) bool {
-	pattern = strings.ToLower(pattern)
-	s = strings.ToLower(s)
-	if pattern == "%" {
-		return true
-	}
-	if !strings.Contains(pattern, "%") && !strings.Contains(pattern, "_") {
-		return pattern == s
-	}
-
-	var buf strings.Builder
-	buf.WriteString("^")
-	for i := 0; i < len(pattern); i++ {
-		c := pattern[i]
-		switch c {
-		case '%':
-			buf.WriteString(".*")
-		case '_':
-			buf.WriteString(".")
-		case '.', '+', '?', '^', '$', '(', ')', '[', ']', '{', '}', '|', '\\':
-			buf.WriteByte('\\')
-			buf.WriteByte(c)
-		default:
-			buf.WriteByte(c)
-		}
-	}
-	buf.WriteString("$")
-	re, err := regexp.Compile(buf.String())
-	if err != nil {
-		return false
-	}
-	return re.MatchString(s)
+	return sqlutil.MatchLike(pattern, s, true)
 }
 
 // Token types for the filter parser.
