@@ -2547,9 +2547,17 @@ func formatParamForSQL(val string, pType int32, sv storage.Value) string {
 		if i, err := strconv.ParseInt(strings.TrimSpace(val), 10, 64); err == nil {
 			return fmt.Sprintf("%d", i)
 		}
-	case 700, 701, 1700: // FLOAT4, FLOAT8, NUMERIC
+	case 700, 701: // FLOAT4, FLOAT8
 		if f, err := strconv.ParseFloat(strings.TrimSpace(val), 64); err == nil {
 			return fmt.Sprintf("%g", f)
+		}
+	case 1700: // NUMERIC / DECIMAL
+		trimmed := strings.TrimSpace(val)
+		if dec, err := storage.ParseDecimal(trimmed); err == nil {
+			return dec.String()
+		}
+		if isPureIntegerString(trimmed) || isPureFloatString(trimmed) {
+			return trimmed
 		}
 	case 16: // BOOL
 		if strings.EqualFold(val, "true") || val == "t" || val == "1" {
@@ -2574,6 +2582,8 @@ func formatParamForSQL(val string, pType int32, sv storage.Value) string {
 		return fmt.Sprintf("%d", sv.IVal)
 	case storage.TypeFloat:
 		return fmt.Sprintf("%g", sv.FVal)
+	case storage.TypeDecimal:
+		return sv.String()
 	case storage.TypeBool:
 		if sv.BVal {
 			return "true"

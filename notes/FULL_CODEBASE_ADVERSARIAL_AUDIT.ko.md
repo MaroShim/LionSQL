@@ -1682,8 +1682,8 @@
 | `AUDIT-FULL-028` | High | `pkg/catalog/virtual/mssql.go:456` | execXORMIndexes의 OBJECT_NAME 파싱 시 후속 AND 조건 포함으로 인한 보조 인덱스 조회 100% 누락 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-029` | High | `pkg/catalog/virtual/mssql.go:539` | execReferentialConstraintsForeignKey의 referenced_object_id 1000 고정으로 인한 외래키 부모 테이블 바인딩 오류 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-030` | High | `pkg/wire/param_rules.go:637` | inferParamOID의 단순 strings.Index 매칭으로 인한 $1과 $10..$19 파라미터 접두어 오추론 결함 | 조치 완료 (TDD 검증) |
-| `AUDIT-FULL-031` | High | `pkg/wire/copy.go:342` | handleCopyIn의 bufio.Scanner 64KB 초과 시 에러 무시로 인한 대용량 행 조기 중단 및 데이터 침묵 유실 | 미수정 |
-| `AUDIT-FULL-032` | High | `pkg/wire/server.go:2619` | formatParamForSQL의 NUMERIC OID 1700을 float64로 변환하여 발생하는 IEEE-754 유효숫자 절단 및 지수표기법 왜곡 | 미수정 |
+| `AUDIT-FULL-031` | High | `pkg/wire/copy.go:342` | handleCopyIn의 bufio.Scanner 64KB 초과 시 에러 무시로 인한 대용량 행 조기 중단 및 데이터 침묵 유실 | 조치 완료 (TDD 검증) |
+| `AUDIT-FULL-032` | High | `pkg/wire/server.go:2619` | formatParamForSQL의 NUMERIC OID 1700을 float64로 변환하여 발생하는 IEEE-754 유효숫자 절단 및 지수표기법 왜곡 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-033` | High | `pkg/wire/tds/server.go:680` | TDS 연결 시 로그인 실패 좀비 소켓 및 미인증 세션의 SQL Batch 임의 실행 보안 우회 결함 | 미수정 |
 | `AUDIT-FULL-034` | High | `pkg/wire/tds/token.go:224` | TDS US_VARCHAR/B_VARCHAR 길이 헤더에 UTF-8 바이트 수를 기록하여 한글 등 비ASCII 문자열 프레이밍 파탄 | 미수정 |
 | `AUDIT-FULL-035` | High | `pkg/api/server.go:531` | 쿼리 취소, 실행 중인 쿼리 목록, 슬로우/일반 로그 파일, 실시간 CDC 스트림 등 관리자 엔드포인트 무인증 노출 | 미수정 |

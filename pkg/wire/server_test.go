@@ -1241,6 +1241,32 @@ func TestPGWire_Regression_P0_27_OOMGuard(t *testing.T) {
 	})
 }
 
+func TestFormatParamForSQL_NumericPrecision(t *testing.T) {
+	// AUDIT-FULL-032: High-precision NUMERIC must not be downcast to float64 or converted to exponential notation
+	highPrec := "123456789012345678.90"
+	got := formatParamForSQL(highPrec, 1700, storage.Value{})
+	if got != highPrec {
+		t.Fatalf("expected exact decimal representation %q, got %q", highPrec, got)
+	}
+
+	largeDec := "99999999999999999999.123456"
+	got2 := formatParamForSQL(largeDec, 1700, storage.Value{})
+	if got2 != largeDec {
+		t.Fatalf("expected exact decimal representation %q, got %q", largeDec, got2)
+	}
+
+	// Also check storage.TypeDecimal in storage.Value
+	dVal, err := storage.ParseDecimal(highPrec)
+	if err != nil {
+		t.Fatalf("failed to parse decimal: %v", err)
+	}
+	sv := storage.DecimalValueFromDecimal(dVal)
+	got3 := formatParamForSQL(highPrec, 0, sv)
+	if got3 != highPrec {
+		t.Fatalf("expected exact decimal from sv.TypeDecimal %q, got %q", highPrec, got3)
+	}
+}
+
 
 
 
