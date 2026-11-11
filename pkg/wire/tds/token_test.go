@@ -556,3 +556,90 @@ func TestWriteRowDirect_CaseInsensitive(t *testing.T) {
 		t.Fatalf("expected 0 NULL bits in bitmap, got 0x%02X", nbcRes[1])
 	}
 }
+
+func TestTDS_BVarcharAndUSVarchar_AuditFull034(t *testing.T) {
+	// 1. BuildColMetaData with Korean column name: "사용자이름" (5 characters, 15 UTF-8 bytes)
+	koreanCol := ColumnInfo{
+		Name:     "사용자이름",
+		Type:     TypeIntN,
+		Size:     4,
+		Nullable: true,
+	}
+	colMeta := BuildColMetaData([]ColumnInfo{koreanCol})
+
+	// Format of COLMETADATA:
+	// byte 0: TokenColMetaData (0x81)
+	// byte 1..2: ColCount (1)
+	// byte 3..6: UserType (0)
+	// byte 7..8: Flags (0x0001)
+	// byte 9: Type (TypeIntN = 0x26)
+	// byte 10: Size (4)
+	// byte 11: ColName B_VARCHAR length (must be 5 UTF-16 characters, NOT 15 UTF-8 bytes!)
+	if colMeta[0] != TokenColMetaData {
+		t.Fatalf("expected TokenColMetaData (0x81), got 0x%02X", colMeta[0])
+	}
+	cchName := int(colMeta[11])
+	if cchName != 5 {
+		t.Fatalf("AUDIT-FULL-034: expected B_VARCHAR char count 5 for '사용자이름', got %d (UTF-8 byte count would be 15!)", cchName)
+	}
+	// The UTF-16LE bytes must be exactly cchName * 2 = 10 bytes
+	u16Bytes := colMeta[12 : 12+cchName*2]
+	decodedName := DecodeUTF16LE(u16Bytes)
+	if decodedName != "사용자이름" {
+		t.Fatalf("expected decoded name '사용자이름', got %q", decodedName)
+	}
+
+	// 2. BuildError with non-ASCII characters:
+	// Msg: "테스트오류" (5 chars, 15 UTF-8 bytes)
+	// Server: "라이언" (3 chars, 9 UTF-8 bytes)
+	// Proc: "프로시저" (4 chars, 12 UTF-8 bytes)
+	errBytes := BuildError(50000, 1, 16, "테스트오류", "라이언", "프로시저", 1)
+	if errBytes[0] != TokenError {
+		t.Fatalf("expected TokenError (0xAA), got 0x%02X", errBytes[0])
+	}
+	// Payload begins at offset 3 (after Token byte 0 and Length uint16 1..2)
+	payload := errBytes[3:]
+	// ErrorNumber: 4 bytes (0..3)
+	// State: 1 byte (4)
+	// Class: 1 byte (5)
+	// MsgText: US_VARCHAR (uint16 LE at 6..7, must be 5, followed by 10 bytes)
+	msgCharCount := binary.LittleEndian.Uint16(payload[6:8])
+	if msgCharCount != 5 {
+		t.Fatalf("AUDIT-FULL-034: expected US_VARCHAR msg char count 5, got %d", msgCharCount)
+	}
+	offset := 8 + int(msgCharCount)*2
+	// ServerName: B_VARCHAR (1 byte at offset, must be 3, followed by 6 bytes)
+	serverCharCount := int(payload[offset])
+	if serverCharCount != 3 {
+		t.Fatalf("AUDIT-FULL-034: expected B_VARCHAR server char count 3, got %d", serverCharCount)
+	}
+	offset += 1 + serverCharCount*2
+	// ProcName: B_VARCHAR (1 byte at offset, must be 4, followed by 8 bytes)
+	procCharCount := int(payload[offset])
+	if procCharCount != 4 {
+		t.Fatalf("AUDIT-FULL-034: expected B_VARCHAR proc char count 4, got %d", procCharCount)
+	}
+
+	// 3. BuildLoginAck with Korean progName: "라이언SQL" (7 chars: 3 CJK + 3 ASCII + 1? 라이언=3, SQL=3 -> 6 chars)
+	loginAck := BuildLoginAck("라이언SQL", 15, 0, 2000)
+	// Payload at offset 3:
+	// byte 0: Interface (0x01)
+	// byte 1..4: TDSVersion (0x74000004)
+	// byte 5: ProgName B_VARCHAR length
+	progAckPayload := loginAck[3:]
+	progCharCount := int(progAckPayload[5])
+	if progCharCount != 6 {
+		t.Fatalf("AUDIT-FULL-034: expected LoginAck prog char count 6, got %d", progCharCount)
+	}
+
+	// 4. BuildEnvChangeDatabase with Korean DB: "한글DB" (4 chars)
+	envDB := BuildEnvChangeDatabase("한글DB", "master")
+	// Payload at offset 3:
+	// byte 0: Type (EnvChangeDatabase = 1)
+	// byte 1: NewValue B_VARCHAR length (must be 4)
+	envPayload := envDB[3:]
+	newDBCharCount := int(envPayload[1])
+	if newDBCharCount != 4 {
+		t.Fatalf("AUDIT-FULL-034: expected EnvChangeDatabase newDB char count 4, got %d", newDBCharCount)
+	}
+}

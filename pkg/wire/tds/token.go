@@ -208,6 +208,40 @@ func ParsePrelogin(payload []byte) map[byte][]byte {
 	return options
 }
 
+// writeBVarchar writes a B_VARCHAR (1-byte UTF-16 character count + UTF-16LE bytes) to buf.
+// Per MS-TDS 2.2.5.1.2, character count represents the number of UTF-16 code units (2 bytes per unit).
+func writeBVarchar(buf *bytes.Buffer, s string) {
+	if s == "" {
+		buf.WriteByte(0)
+		return
+	}
+	u16 := EncodeUTF16LE(s)
+	cch := len(u16) / 2
+	if cch > 255 {
+		cch = 255
+		u16 = u16[:510]
+	}
+	buf.WriteByte(byte(cch))
+	buf.Write(u16)
+}
+
+// writeUSVarchar writes a US_VARCHAR (2-byte LE UTF-16 character count + UTF-16LE bytes) to buf.
+// Per MS-TDS 2.2.5.1.2, character count represents the number of UTF-16 code units (2 bytes per unit).
+func writeUSVarchar(buf *bytes.Buffer, s string) {
+	if s == "" {
+		_ = binary.Write(buf, binary.LittleEndian, uint16(0))
+		return
+	}
+	u16 := EncodeUTF16LE(s)
+	cch := len(u16) / 2
+	if cch > 65535 {
+		cch = 65535
+		u16 = u16[:131070]
+	}
+	_ = binary.Write(buf, binary.LittleEndian, uint16(cch))
+	buf.Write(u16)
+}
+
 // BuildLoginAck builds a LOGINACK token (0xAD) byte slice.
 func BuildLoginAck(progName string, major, minor byte, build uint16) []byte {
 	var buf bytes.Buffer
@@ -220,9 +254,7 @@ func BuildLoginAck(progName string, major, minor byte, build uint16) []byte {
 	_ = binary.Write(&payload, binary.BigEndian, uint32(0x74000004))
 
 	// ProgName: B_VARCHAR (1 byte character length + UTF-16LE)
-	u16Name := EncodeUTF16LE(progName)
-	payload.WriteByte(byte(len(progName)))
-	payload.Write(u16Name)
+	writeBVarchar(&payload, progName)
 
 	// Server Version
 	payload.WriteByte(major)
@@ -242,12 +274,10 @@ func BuildEnvChangeDatabase(newDB, oldDB string) []byte {
 	payload.WriteByte(EnvChangeDatabase)
 
 	// NewValue: B_VARCHAR (1B char count + UTF-16LE)
-	payload.WriteByte(byte(len(newDB)))
-	payload.Write(EncodeUTF16LE(newDB))
+	writeBVarchar(&payload, newDB)
 
 	// OldValue: B_VARCHAR
-	payload.WriteByte(byte(len(oldDB)))
-	payload.Write(EncodeUTF16LE(oldDB))
+	writeBVarchar(&payload, oldDB)
 
 	var buf bytes.Buffer
 	buf.WriteByte(TokenEnvChange)
@@ -261,11 +291,8 @@ func BuildEnvChangePacketSize(newSize, oldSize string) []byte {
 	var payload bytes.Buffer
 	payload.WriteByte(EnvChangePacketSize)
 
-	payload.WriteByte(byte(len(newSize)))
-	payload.Write(EncodeUTF16LE(newSize))
-
-	payload.WriteByte(byte(len(oldSize)))
-	payload.Write(EncodeUTF16LE(oldSize))
+	writeBVarchar(&payload, newSize)
+	writeBVarchar(&payload, oldSize)
 
 	var buf bytes.Buffer
 	buf.WriteByte(TokenEnvChange)
@@ -407,12 +434,7 @@ func WriteReturnValueIntDirect(buf *bytes.Buffer, paramOrdinal uint16, paramName
 	binary.LittleEndian.PutUint16(hdr[:], paramOrdinal)
 	buf.Write(hdr[:])
 
-	if paramName != "" {
-		buf.WriteByte(byte(len(paramName)))
-		WriteUTF16LEDirect(buf, paramName)
-	} else {
-		buf.WriteByte(0)
-	}
+	writeBVarchar(buf, paramName)
 
 	var tail [12]byte
 	tail[0] = 0x01 // StatusFlags: Output parameter
@@ -437,16 +459,13 @@ func BuildError(number int32, state byte, class byte, msg, serverName, procName 
 	payload.WriteByte(class) // Severity
 
 	// MsgText: US_VARCHAR (uint16 char length + UTF-16LE)
-	_ = binary.Write(&payload, binary.LittleEndian, uint16(len(msg)))
-	payload.Write(EncodeUTF16LE(msg))
+	writeUSVarchar(&payload, msg)
 
 	// ServerName: B_VARCHAR
-	payload.WriteByte(byte(len(serverName)))
-	payload.Write(EncodeUTF16LE(serverName))
+	writeBVarchar(&payload, serverName)
 
 	// ProcName: B_VARCHAR
-	payload.WriteByte(byte(len(procName)))
-	payload.Write(EncodeUTF16LE(procName))
+	writeBVarchar(&payload, procName)
 
 	// LineNumber: int32 LE (TDS 7.2+)
 	_ = binary.Write(&payload, binary.LittleEndian, lineNum)
@@ -466,14 +485,14 @@ func BuildInfo(number int32, state byte, class byte, msg, serverName, procName s
 	payload.WriteByte(state)
 	payload.WriteByte(class)
 
-	_ = binary.Write(&payload, binary.LittleEndian, uint16(len(msg)))
-	payload.Write(EncodeUTF16LE(msg))
+	// MsgText: US_VARCHAR (uint16 char length + UTF-16LE)
+	writeUSVarchar(&payload, msg)
 
-	payload.WriteByte(byte(len(serverName)))
-	payload.Write(EncodeUTF16LE(serverName))
+	// ServerName: B_VARCHAR
+	writeBVarchar(&payload, serverName)
 
-	payload.WriteByte(byte(len(procName)))
-	payload.Write(EncodeUTF16LE(procName))
+	// ProcName: B_VARCHAR
+	writeBVarchar(&payload, procName)
 
 	_ = binary.Write(&payload, binary.LittleEndian, lineNum)
 
@@ -586,8 +605,7 @@ func BuildColMetaData(cols []ColumnInfo) []byte {
 		}
 
 		// ColName: B_VARCHAR (1B char count + UTF-16LE)
-		buf.WriteByte(byte(len(col.Name)))
-		buf.Write(EncodeUTF16LE(col.Name))
+		writeBVarchar(&buf, col.Name)
 	}
 
 	return buf.Bytes()

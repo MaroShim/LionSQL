@@ -26,6 +26,7 @@
 | `DONE` | **`AUDIT-FULL-008`** | `Protocol` | --milestone | P1 | TDS ALL_HEADERS 길이 및 헤더 타입(1,2,3) 검증을 통한 대용량 RPC(sp_executesql) 스트림 손상 방지 | [`--category`](--category) |  |
 | `DONE` | **`AUDIT-FULL-032`** | `1.0-GA` | Protocol | P1 | formatParamForSQL의 NUMERIC OID 1700 고정밀 Decimal 유실 방지 (float64 다운캐스팅 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`AUDIT-FULL-033`** | `Protocol` | --milestone | P1 | TDS 미인증 세션의 SQL Batch 임의 실행 방지 및 로그인 실패 후 좀비 세션 강제 종료 (인증 우회 방지) | [`--category`](--category) |  |
+| `DONE` | **`AUDIT-FULL-034`** | `Protocol` | --milestone | P1 | TDS B_VARCHAR/US_VARCHAR 헤더를 UTF-16 문자 수(코드 유닛)로 산출하여 한글/비ASCII 문자열 프레이밍 파탄 방지 | [`--category`](--category) |  |
 | `DONE` | **`AUDIT-FULL-13DOM`** |  | Integrity | P1 | 전 13대 도메인(175개 파일, 113,056 LOC) 듀얼 AI 라인 단위 적대적 감사 완료 및 40개 결함 도출 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `IN_PROGRESS` | **`AUDIT-FULL-PATCH`** | `1.0-GA` | Integrity | P1 | 전수 감사 발굴 40대 결함(Critical 2건 완치, High 26건, Med/Low 12건) TDD 순차 패치 및 무결점 회귀 검증 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `IN_PROGRESS` | **`AUDIT-FULL-SQL-CORE`** | `1.0-GA` | Engine | P1 | 전수 감사 잔여 Parser/Planner/Exec/Catalog 결함 패치 (AUDIT-FULL-005, 006, 014~022, 024~029) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
@@ -487,6 +488,13 @@
 
 ### [DONE] TDS 미인증 세션의 SQL Batch 임의 실행 방지 및 로그인 실패 후 좀비 세션 강제 종료 (인증 우회 방지) `AUDIT-FULL-033`
 - **Domain**: --milestone | **Priority**: P1 | **Updated**: 2026-11-11 15:22:40
+- **Milestone**: `Protocol`
+- **Plan Doc**: [`--category`](--category)
+
+---
+
+### [DONE] TDS B_VARCHAR/US_VARCHAR 헤더를 UTF-16 문자 수(코드 유닛)로 산출하여 한글/비ASCII 문자열 프레이밍 파탄 방지 `AUDIT-FULL-034`
+- **Domain**: --milestone | **Priority**: P1 | **Updated**: 2026-11-11 15:24:55
 - **Milestone**: `Protocol`
 - **Plan Doc**: [`--category`](--category)
 
