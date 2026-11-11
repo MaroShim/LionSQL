@@ -268,5 +268,107 @@ func TestXORMMSSQL_GetIndexes_WithTrailingWhere(t *testing.T) {
 	if res.Rows[0]["IS_UNIQUE"] != true {
 		t.Errorf("expected IS_UNIQUE true, got %v", res.Rows[0]["IS_UNIQUE"])
 	}
+
+	// 2. Bracket and schema-qualified table name: '[dbo].[users]'
+	qBracket := `SELECT 
+		IXS.NAME AS INDEX_NAME, 
+		COL.NAME AS COLUMN_NAME, 
+		IXS.IS_UNIQUE AS IS_UNIQUE 
+	FROM [SYS].[INDEXES] IXS 
+	INNER JOIN [SYS].[INDEX_COLUMNS] IXCS ON IXS.OBJECT_ID = IXCS.OBJECT_ID AND IXS.INDEX_ID = IXCS.INDEX_ID 
+	INNER JOIN [SYS].[COLUMNS] COL ON IXCS.OBJECT_ID = COL.OBJECT_ID AND IXCS.COLUMN_ID = COL.COLUMN_ID 
+	WHERE OBJECT_NAME(IXS.OBJECT_ID) = '[dbo].[users]' AND IXS.IS_PRIMARY_KEY = 0`
+
+	resBracket, err := virtual.Execute(src, qBracket)
+	if err != nil {
+		t.Fatalf("virtual.Execute failed with bracket query: %v", err)
+	}
+	if len(resBracket.Rows) != 1 {
+		t.Fatalf("expected 1 row for [dbo].[users], got %d", len(resBracket.Rows))
+	}
+
+	// 3. Primary key query (IS_PRIMARY_KEY = 1)
+	qPK := `SELECT 
+		IXS.NAME AS INDEX_NAME, 
+		COL.NAME AS COLUMN_NAME, 
+		IXS.IS_UNIQUE AS IS_UNIQUE 
+	FROM SYS.INDEXES IXS 
+	INNER JOIN SYS.INDEX_COLUMNS IXCS ON IXS.OBJECT_ID = IXCS.OBJECT_ID AND IXS.INDEX_ID = IXCS.INDEX_ID 
+	INNER JOIN SYS.COLUMNS COL ON IXCS.OBJECT_ID = COL.OBJECT_ID AND IXCS.COLUMN_ID = COL.COLUMN_ID 
+	WHERE OBJECT_NAME(IXS.OBJECT_ID) = 'users' AND IXS.IS_PRIMARY_KEY = 1`
+
+	resPK, err := virtual.Execute(src, qPK)
+	if err != nil {
+		t.Fatalf("virtual.Execute failed with PK query: %v", err)
+	}
+	if len(resPK.Rows) != 1 {
+		t.Fatalf("expected 1 PK row, got %d", len(resPK.Rows))
+	}
+	if resPK.Rows[0]["COLUMN_NAME"] != "id" {
+		t.Errorf("expected PK column 'id', got %v", resPK.Rows[0]["COLUMN_NAME"])
+	}
+
+	// 4. Composite index with ordering by KEY_ORDINAL (ASC and DESC)
+	ordersTbl := &storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "user_id", Type: storage.TypeInt},
+			{Name: "status", Type: storage.TypeVarChar, Precision: 20},
+		},
+		Indexes: []storage.IndexSchema{
+			{
+				Name:    "idx_orders_composite",
+				Columns: []string{"user_id", "status"},
+			},
+		},
+	}
+	srcComposite := &mockVirtualSource{
+		tables: []*storage.TableSchema{ordersTbl},
+	}
+
+	qAsc := `SELECT 
+		IXS.NAME AS INDEX_NAME, 
+		COL.NAME AS COLUMN_NAME, 
+		IXCS.KEY_ORDINAL AS KEY_ORDINAL 
+	FROM SYS.INDEXES IXS 
+	INNER JOIN SYS.INDEX_COLUMNS IXCS ON IXS.OBJECT_ID = IXCS.OBJECT_ID AND IXS.INDEX_ID = IXCS.INDEX_ID 
+	INNER JOIN SYS.COLUMNS COL ON IXCS.OBJECT_ID = COL.OBJECT_ID AND IXCS.COLUMN_ID = COL.COLUMN_ID 
+	WHERE OBJECT_NAME(IXS.OBJECT_ID) = 'orders' AND IXS.IS_PRIMARY_KEY = 0
+	ORDER BY IXCS.KEY_ORDINAL ASC`
+
+	resAsc, err := virtual.Execute(srcComposite, qAsc)
+	if err != nil {
+		t.Fatalf("virtual.Execute failed with qAsc: %v", err)
+	}
+	if len(resAsc.Rows) != 2 {
+		t.Fatalf("expected 2 composite index rows, got %d", len(resAsc.Rows))
+	}
+	if resAsc.Rows[0]["COLUMN_NAME"] != "user_id" || resAsc.Rows[1]["COLUMN_NAME"] != "status" {
+		t.Errorf("expected [user_id, status] in ASC order, got [%v, %v]", resAsc.Rows[0]["COLUMN_NAME"], resAsc.Rows[1]["COLUMN_NAME"])
+	}
+
+	qDesc := `SELECT 
+		IXS.NAME AS INDEX_NAME, 
+		COL.NAME AS COLUMN_NAME, 
+		IXCS.KEY_ORDINAL AS KEY_ORDINAL 
+	FROM SYS.INDEXES IXS 
+	INNER JOIN SYS.INDEX_COLUMNS IXCS ON IXS.OBJECT_ID = IXCS.OBJECT_ID AND IXS.INDEX_ID = IXCS.INDEX_ID 
+	INNER JOIN SYS.COLUMNS COL ON IXCS.OBJECT_ID = COL.OBJECT_ID AND IXCS.COLUMN_ID = COL.COLUMN_ID 
+	WHERE OBJECT_NAME(IXS.OBJECT_ID) = 'orders' AND IXS.IS_PRIMARY_KEY = 0
+	ORDER BY IXCS.KEY_ORDINAL DESC`
+
+	resDesc, err := virtual.Execute(srcComposite, qDesc)
+	if err != nil {
+		t.Fatalf("virtual.Execute failed with qDesc: %v", err)
+	}
+	if len(resDesc.Rows) != 2 {
+		t.Fatalf("expected 2 composite index rows, got %d", len(resDesc.Rows))
+	}
+	if resDesc.Rows[0]["COLUMN_NAME"] != "status" || resDesc.Rows[1]["COLUMN_NAME"] != "user_id" {
+		t.Errorf("expected [status, user_id] in DESC order, got [%v, %v]", resDesc.Rows[0]["COLUMN_NAME"], resDesc.Rows[1]["COLUMN_NAME"])
+	}
 }
+
+
 

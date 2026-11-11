@@ -454,12 +454,21 @@ func execSysIndexColumns(src Source, sql string) (*Result, error) {
 }
 
 func execXORMIndexes(src Source, sql string) (*Result, error) {
-	columns := []string{"INDEX_NAME", "COLUMN_NAME", "IS_UNIQUE"}
+	columns := []string{"INDEX_NAME", "COLUMN_NAME", "IS_UNIQUE", "key_ordinal", "column_id", "index_id"}
 	targetTable := ""
 	if tbl, ok := sqlutil.ExtractEqualityFilter(sql, "object_name(ixs.object_id)", "object_name(i.object_id)", "object_name(object_id)", "object_name", "table_name"); ok {
 		targetTable = tbl
 	} else if tbl, ok := sqlutil.ExtractObjectIdCall(sql); ok {
 		targetTable = tbl
+	}
+	targetTable = sqlutil.CleanLeafIdentifier(targetTable)
+
+	upper := strings.ToUpper(sql)
+	wantPK := containsEq(upper, "IS_PRIMARY_KEY", "1")
+	wantSecondary := containsEq(upper, "IS_PRIMARY_KEY", "0")
+	if !wantPK && !wantSecondary {
+		wantPK = true
+		wantSecondary = true
 	}
 
 	tables := src.GetSortedTables()
@@ -470,25 +479,77 @@ func execXORMIndexes(src Source, sql string) (*Result, error) {
 			continue
 		}
 		objID := 1000 + tIdx
-		for _, idx := range t.Indexes {
-			for _, colName := range idx.Columns {
+
+		// 1. Primary Key Index (if requested)
+		if wantPK {
+			pkName := "PK_" + t.Name
+			var pkCols []string
+			for _, col := range t.Columns {
+				if col.PrimaryKey {
+					pkCols = append(pkCols, col.Name)
+				}
+			}
+			for colOrdinal, colName := range pkCols {
+				keyOrdinal := int64(colOrdinal + 1)
 				allRows = append(allRows, map[string]any{
-					"INDEX_NAME":         idx.Name,
+					"INDEX_NAME":         pkName,
 					"COLUMN_NAME":        colName,
-					"IS_UNIQUE":          idx.Unique,
-					"name":               idx.Name,
+					"IS_UNIQUE":          true,
+					"name":               pkName,
 					"column_name":        colName,
-					"is_unique":          idx.Unique,
-					"ixs.name":           idx.Name,
+					"is_unique":          true,
+					"ixs.name":           pkName,
 					"col.name":           colName,
-					"ixs.is_unique":      idx.Unique,
-					"is_primary_key":     false,
-					"ixs.is_primary_key": 0,
+					"ixs.is_unique":      true,
+					"is_primary_key":     true,
+					"ixs.is_primary_key": 1,
+					"key_ordinal":        keyOrdinal,
+					"ixcs.key_ordinal":   keyOrdinal,
+					"column_id":          keyOrdinal,
+					"ixcs.column_id":     keyOrdinal,
+					"col.column_id":      keyOrdinal,
+					"index_id":           int64(1),
+					"ixs.index_id":       int64(1),
+					"ixcs.index_id":      int64(1),
 					"tableName":          t.Name,
 					"table_name":         t.Name,
 					"object_id":          objID,
 					"ixs.object_id":      objID,
 				})
+			}
+		}
+
+		// 2. Secondary Indexes (if requested)
+		if wantSecondary {
+			for idxNum, idx := range t.Indexes {
+				for colOrdinal, colName := range idx.Columns {
+					keyOrdinal := int64(colOrdinal + 1)
+					allRows = append(allRows, map[string]any{
+						"INDEX_NAME":         idx.Name,
+						"COLUMN_NAME":        colName,
+						"IS_UNIQUE":          idx.Unique,
+						"name":               idx.Name,
+						"column_name":        colName,
+						"is_unique":          idx.Unique,
+						"ixs.name":           idx.Name,
+						"col.name":           colName,
+						"ixs.is_unique":      idx.Unique,
+						"is_primary_key":     false,
+						"ixs.is_primary_key": 0,
+						"key_ordinal":        keyOrdinal,
+						"ixcs.key_ordinal":   keyOrdinal,
+						"column_id":          keyOrdinal,
+						"ixcs.column_id":     keyOrdinal,
+						"col.column_id":      keyOrdinal,
+						"index_id":           int64(idxNum + 2),
+						"ixs.index_id":       int64(idxNum + 2),
+						"ixcs.index_id":      int64(idxNum + 2),
+						"tableName":          t.Name,
+						"table_name":         t.Name,
+						"object_id":          objID,
+						"ixs.object_id":      objID,
+					})
+				}
 			}
 		}
 	}
