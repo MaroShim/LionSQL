@@ -38,29 +38,14 @@ func isBeginTransaction(rest string) bool {
 	if len(rest) == 0 || rest[0] == ';' {
 		return true
 	}
-	upper := strings.ToUpper(rest)
-	if strings.HasPrefix(upper, "TRANSACTION") {
-		after := upper[len("TRANSACTION"):]
-		return len(after) == 0 || !IsIdentChar(after[0])
-	}
-	if strings.HasPrefix(upper, "TRAN") {
-		after := upper[len("TRAN"):]
-		return len(after) == 0 || !IsIdentChar(after[0])
-	}
-	if strings.HasPrefix(upper, "WORK") {
-		after := upper[len("WORK"):]
-		return len(after) == 0 || !IsIdentChar(after[0])
-	}
-	if strings.HasPrefix(upper, "DISTRIBUTED") {
-		after := upper[len("DISTRIBUTED"):]
-		if len(after) == 0 || !IsIdentChar(after[0]) {
-			return true
-		}
-	}
-	if strings.HasPrefix(upper, "READ") || strings.HasPrefix(upper, "ISOLATION") || strings.HasPrefix(upper, "DEFERRABLE") || strings.HasPrefix(upper, "NOT") {
-		return true
-	}
-	return false
+	return sqlutil.HasPrefixKeyword(rest, "TRANSACTION") ||
+		sqlutil.HasPrefixKeyword(rest, "TRAN") ||
+		sqlutil.HasPrefixKeyword(rest, "WORK") ||
+		sqlutil.HasPrefixKeyword(rest, "DISTRIBUTED") ||
+		sqlutil.HasPrefixKeyword(rest, "READ") ||
+		sqlutil.HasPrefixKeyword(rest, "ISOLATION") ||
+		sqlutil.HasPrefixKeyword(rest, "DEFERRABLE") ||
+		sqlutil.HasPrefixKeyword(rest, "NOT")
 }
 
 func isProcOrFuncHeader(s string) bool {
@@ -72,36 +57,22 @@ func isProcOrFuncHeader(s string) bool {
 	if ch != 'C' && ch != 'c' && ch != 'A' && ch != 'a' {
 		return false
 	}
-	sUpper := strings.ToUpper(s)
-	return strings.HasPrefix(sUpper, "CREATE PROCEDURE") ||
-		strings.HasPrefix(sUpper, "CREATE PROC") ||
-		strings.HasPrefix(sUpper, "CREATE OR ALTER PROCEDURE") ||
-		strings.HasPrefix(sUpper, "CREATE OR ALTER PROC") ||
-		strings.HasPrefix(sUpper, "ALTER PROCEDURE") ||
-		strings.HasPrefix(sUpper, "ALTER PROC") ||
-		strings.HasPrefix(sUpper, "CREATE FUNCTION") ||
-		strings.HasPrefix(sUpper, "CREATE OR ALTER FUNCTION") ||
-		strings.HasPrefix(sUpper, "ALTER FUNCTION") ||
-		strings.HasPrefix(sUpper, "CREATE TRIGGER") ||
-		strings.HasPrefix(sUpper, "CREATE OR ALTER TRIGGER") ||
-		strings.HasPrefix(sUpper, "ALTER TRIGGER")
+	return sqlutil.HasPrefixKeyword(s, "CREATE PROCEDURE") ||
+		sqlutil.HasPrefixKeyword(s, "CREATE PROC") ||
+		sqlutil.HasPrefixKeyword(s, "CREATE OR ALTER PROCEDURE") ||
+		sqlutil.HasPrefixKeyword(s, "CREATE OR ALTER PROC") ||
+		sqlutil.HasPrefixKeyword(s, "ALTER PROCEDURE") ||
+		sqlutil.HasPrefixKeyword(s, "ALTER PROC") ||
+		sqlutil.HasPrefixKeyword(s, "CREATE FUNCTION") ||
+		sqlutil.HasPrefixKeyword(s, "CREATE OR ALTER FUNCTION") ||
+		sqlutil.HasPrefixKeyword(s, "ALTER FUNCTION") ||
+		sqlutil.HasPrefixKeyword(s, "CREATE TRIGGER") ||
+		sqlutil.HasPrefixKeyword(s, "CREATE OR ALTER TRIGGER") ||
+		sqlutil.HasPrefixKeyword(s, "ALTER TRIGGER")
 }
 
 func isIfHeader(s string) bool {
-	s = StripLeadingComments(s)
-	if len(s) < 2 {
-		return false
-	}
-	ch := s[0]
-	if ch != 'I' && ch != 'i' {
-		return false
-	}
-	sUpper := strings.ToUpper(s)
-	if strings.HasPrefix(sUpper, "IF") {
-		rest := sUpper[2:]
-		return len(rest) == 0 || !IsIdentChar(rest[0])
-	}
-	return false
+	return sqlutil.HasPrefixKeyword(StripLeadingComments(s), "IF")
 }
 
 func hasNextTokenElse(s string, idx int) bool {
@@ -324,24 +295,19 @@ func CleanSavepointName(raw string) string {
 	return strings.TrimSpace(raw)
 }
 
-// TrimAnyPrefix returns original sliced past the first matching prefix matched case-insensitively against upper.
+// TrimAnyPrefix returns original sliced past the first matching prefix matched case-insensitively using sqlutil.
 func TrimAnyPrefix(upper, original string, prefixes ...string) (string, bool) {
-	for _, p := range prefixes {
-		if strings.HasPrefix(upper, p) {
-			return original[len(p):], true
-		}
-	}
-	return "", false
+	return sqlutil.TrimAnyPrefixKeyword(original, prefixes...)
 }
 
 // IsRollbackOrResetQuery reports whether query is a transaction rollback or session reset command.
 func IsRollbackOrResetQuery(q string) bool {
-	upper := strings.ToUpper(strings.TrimSpace(q))
-	return strings.HasPrefix(upper, "ROLLBACK") ||
-		strings.HasPrefix(upper, "DISCARD") ||
-		strings.HasPrefix(upper, "RESET") ||
-		strings.HasPrefix(upper, "DEALLOCATE") ||
-		strings.HasPrefix(upper, "UNLISTEN")
+	q = StripLeadingComments(q)
+	return sqlutil.HasPrefixKeyword(q, "ROLLBACK") ||
+		sqlutil.HasPrefixKeyword(q, "DISCARD") ||
+		sqlutil.HasPrefixKeyword(q, "RESET") ||
+		sqlutil.HasPrefixKeyword(q, "DEALLOCATE") ||
+		sqlutil.HasPrefixKeyword(q, "UNLISTEN")
 }
 
 // ParseSessionVarValue converts a T-SQL literal string to a native Go value (bool, int64, float64, string).

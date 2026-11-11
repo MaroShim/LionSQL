@@ -816,15 +816,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0. Interactive Transactions: BEGIN / COMMIT / ROLLBACK
-	isBeginTx := upper == "BEGIN" ||
-		strings.HasPrefix(upper, "BEGIN TRANSACTION") ||
-		strings.HasPrefix(upper, "BEGIN TRAN") ||
-		strings.HasPrefix(upper, "BEGIN WORK") ||
-		strings.HasPrefix(upper, "BEGIN READ") ||
-		strings.HasPrefix(upper, "BEGIN ISOLATION") ||
-		strings.HasPrefix(upper, "BEGIN DEFERRABLE") ||
-		strings.HasPrefix(upper, "BEGIN NOT DEFERRABLE") ||
-		strings.HasPrefix(upper, "START TRANSACTION")
+	isBeginTx := (sqlutil.HasPrefixKeyword(trimmed, "BEGIN") && isBeginTransaction(trimmed[len("BEGIN"):])) ||
+		sqlutil.HasPrefixKeyword(trimmed, "START TRANSACTION")
 
 	if isBeginTx {
 		opts := storage.TxOptions{}
@@ -847,7 +840,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
-	if strings.HasPrefix(upper, "COMMIT") {
+	if sqlutil.HasPrefixKeyword(trimmed, "COMMIT") {
 		if err := s.CommitSessionTx(cs.ID); err != nil {
 			return nil, err
 		}
@@ -859,7 +852,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
-	if namePart, ok := trimAnyPrefix(upper, trimmed, "SAVE TRANSACTION ", "SAVE TRAN ", "SAVEPOINT "); ok {
+	if namePart, ok := trimAnyPrefix(upper, trimmed, "SAVE TRANSACTION", "SAVE TRAN", "SAVEPOINT"); ok {
 		cs.Mu.Lock()
 		defer cs.Mu.Unlock()
 		if cs.Tx == nil {
@@ -880,7 +873,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
-	if namePart, ok := trimAnyPrefix(upper, trimmed, "RELEASE SAVEPOINT ", "RELEASE "); ok {
+	if namePart, ok := trimAnyPrefix(upper, trimmed, "RELEASE SAVEPOINT", "RELEASE"); ok {
 		cs.Mu.Lock()
 		defer cs.Mu.Unlock()
 		if cs.Tx == nil {
@@ -901,11 +894,11 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
-	if strings.HasPrefix(upper, "ROLLBACK") {
+	if sqlutil.HasPrefixKeyword(trimmed, "ROLLBACK") {
 		var spName string
-		if rest, ok := trimAnyPrefix(upper, trimmed, "ROLLBACK WORK TO SAVEPOINT ", "ROLLBACK TO SAVEPOINT ", "ROLLBACK TO "); ok {
+		if rest, ok := trimAnyPrefix(upper, trimmed, "ROLLBACK WORK TO SAVEPOINT", "ROLLBACK TO SAVEPOINT", "ROLLBACK TO"); ok {
 			spName = cleanSavepointName(rest)
-		} else if rest, ok := trimAnyPrefix(upper, trimmed, "ROLLBACK TRANSACTION ", "ROLLBACK TRAN "); ok {
+		} else if rest, ok := trimAnyPrefix(upper, trimmed, "ROLLBACK TRANSACTION", "ROLLBACK TRAN"); ok {
 			rem := cleanSavepointName(rest)
 			if rem != "" && !strings.EqualFold(rem, "WORK") {
 				spName = rem
@@ -942,7 +935,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.045 Connection Pool Reset: DISCARD ALL / RESET ALL / DEALLOCATE ALL / UNLISTEN *
-	if strings.HasPrefix(upper, "DISCARD ") || upper == "RESET ALL" || strings.HasPrefix(upper, "DEALLOCATE ALL") || strings.HasPrefix(upper, "UNLISTEN ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DISCARD") ||
+		sqlutil.HasPrefixKeyword(trimmed, "RESET ALL") ||
+		sqlutil.HasPrefixKeyword(trimmed, "DEALLOCATE ALL") ||
+		sqlutil.HasPrefixKeyword(trimmed, "UNLISTEN") {
 		if cs != nil {
 			cs.Mu.Lock()
 			if s.engine != nil {
@@ -957,7 +953,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			cs.TempTables = nil
 			cs.TempTableMap = nil
 			cs.EphemeralTables = nil
-			if strings.HasPrefix(upper, "DISCARD ALL") || upper == "RESET ALL" || strings.HasPrefix(upper, "DEALLOCATE ALL") {
+			if sqlutil.HasPrefixKeyword(trimmed, "DISCARD ALL") || sqlutil.HasPrefixKeyword(trimmed, "RESET ALL") || sqlutil.HasPrefixKeyword(trimmed, "DEALLOCATE ALL") {
 				cs.PreparedStmts = nil
 			}
 			cs.Mu.Unlock()
@@ -970,13 +966,12 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.046 T-SQL & Standard Configuration Parameters: SET
-	if strings.HasPrefix(upper, "SET ") && !strings.HasPrefix(trimmed, "SET @") {
-		rest := strings.TrimSpace(trimmed[4:])
-		upperRest := strings.ToUpper(rest)
+	if sqlutil.HasPrefixKeyword(trimmed, "SET") && !strings.HasPrefix(trimmed, "SET @") {
+		rest := strings.TrimSpace(trimmed[3:])
 
 		// A. SET TRANSACTION ISOLATION LEVEL <level>
-		if strings.HasPrefix(upperRest, "TRANSACTION ISOLATION LEVEL ") {
-			level := strings.TrimSpace(rest[len("TRANSACTION ISOLATION LEVEL "):])
+		if rem, ok := sqlutil.TrimPrefixKeyword(rest, "TRANSACTION ISOLATION LEVEL"); ok {
+			level := strings.TrimSpace(rem)
 			cs.Mu.Lock()
 			cs.Vars["transaction_isolation"] = strings.ToLower(level)
 			cs.Mu.Unlock()
@@ -989,8 +984,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 
 		// B. SET TRANSACTION READ ONLY / READ WRITE
-		if strings.HasPrefix(upperRest, "TRANSACTION READ ") {
-			mode := strings.TrimSpace(rest[len("TRANSACTION READ "):])
+		if rem, ok := sqlutil.TrimPrefixKeyword(rest, "TRANSACTION READ"); ok {
+			mode := strings.TrimSpace(rem)
 			cs.Mu.Lock()
 			cs.Vars["transaction_read_only"] = strings.EqualFold(mode, "ONLY")
 			cs.Mu.Unlock()
@@ -1003,12 +998,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 
 		// C. SET TIME ZONE <tz>
-		if strings.HasPrefix(upperRest, "TIME ZONE ") || strings.HasPrefix(upperRest, "TIMEZONE ") {
-			idx := strings.Index(rest, " ")
-			if strings.HasPrefix(upperRest, "TIME ZONE ") {
-				idx = len("TIME ZONE ")
-			}
-			tz := strings.Trim(strings.TrimSpace(rest[idx:]), "=';\" ")
+		if rem, ok := sqlutil.TrimAnyPrefixKeyword(rest, "TIME ZONE", "TIMEZONE"); ok {
+			tz := strings.Trim(strings.TrimSpace(rem), "=';\" ")
 			cs.Mu.Lock()
 			cs.Vars["timezone"] = tz
 			cs.Mu.Unlock()
@@ -1021,8 +1012,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 
 		// D. SET NAMES <enc>
-		if strings.HasPrefix(upperRest, "NAMES ") {
-			enc := strings.Trim(strings.TrimSpace(rest[len("NAMES "):]), "=';\" ")
+		if rem, ok := sqlutil.TrimPrefixKeyword(rest, "NAMES"); ok {
+			enc := strings.Trim(strings.TrimSpace(rem), "=';\" ")
 			cs.Mu.Lock()
 			cs.Vars["client_encoding"] = enc
 			cs.Mu.Unlock()
@@ -1035,11 +1026,11 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 
 		// E0. SET IDENTITY_INSERT [schema.]table ON|OFF
-		if strings.HasPrefix(strings.ToUpper(rest), "IDENTITY_INSERT") {
-			parts := strings.Fields(rest)
-			if len(parts) >= 3 {
-				targetTable := cleanIdentifier(parts[1])
-				state := strings.ToUpper(strings.Trim(parts[2], ";'\""))
+		if rem, ok := sqlutil.TrimPrefixKeyword(rest, "IDENTITY_INSERT"); ok {
+			parts := strings.Fields(rem)
+			if len(parts) >= 2 {
+				targetTable := cleanIdentifier(parts[0])
+				state := strings.ToUpper(strings.Trim(parts[1], ";'\""))
 				if state != "ON" && state != "OFF" {
 					return nil, fmt.Errorf("syntax error: SET IDENTITY_INSERT requires ON or OFF")
 				}
@@ -1255,25 +1246,25 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.076 Server-Side SQL Cursors: FETCH
-	if strings.HasPrefix(upper, "FETCH ") || upper == "FETCH" {
+	if sqlutil.HasPrefixKeyword(trimmed, "FETCH") {
 		return s.execFetchCursor(trimmed, start, cs)
 	}
 
 	// 0.077 Server-Side SQL Cursors: MOVE
-	if strings.HasPrefix(upper, "MOVE ") || upper == "MOVE" {
+	if sqlutil.HasPrefixKeyword(trimmed, "MOVE") {
 		return s.execMoveCursor(trimmed, start, cs)
 	}
 
 	// 0.078 Server-Side SQL Cursors: OPEN / CLOSE
-	if strings.HasPrefix(upper, "OPEN ") || upper == "OPEN" {
+	if sqlutil.HasPrefixKeyword(trimmed, "OPEN") {
 		return s.execOpenCursor(trimmed, start, cs)
 	}
-	if strings.HasPrefix(upper, "CLOSE ") || upper == "CLOSE" {
+	if sqlutil.HasPrefixKeyword(trimmed, "CLOSE") {
 		return s.execCloseCursor(trimmed, start, cs)
 	}
 
 	// 0.08 T-SQL DECLARE variables: DECLARE @var [type] [= expr], ... or DECLARE @table TABLE (...)
-	if strings.HasPrefix(upper, "DECLARE ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DECLARE") {
 		if rawVarName, colDefs, isTbl, hasCols := parseTableVarDecl(trimmed); isTbl && hasCols {
 			varName := strings.ToLower(rawVarName)
 			if !strings.HasPrefix(varName, "@") {
@@ -1404,15 +1395,15 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.25 Prepared Statements: PREPARE / DEALLOCATE / DROP PREPARE
-	if strings.HasPrefix(upper, "PREPARE ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "PREPARE") {
 		return s.execPrepare(trimmed, start, cs)
 	}
-	if strings.HasPrefix(upper, "DEALLOCATE ") || strings.HasPrefix(upper, "DROP PREPARE ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DEALLOCATE") || sqlutil.HasPrefixKeyword(trimmed, "DROP PREPARE") {
 		return s.execDeallocate(trimmed, start, cs)
 	}
 
 	// 0.27 Conditional DDL statements: IF [NOT] EXISTS (...) <DDL>, IF OBJECT_ID(...) <DDL>
-	if strings.HasPrefix(upper, "IF ") || strings.HasPrefix(upper, "IF\t") || strings.HasPrefix(upper, "IF\n") {
+	if sqlutil.HasPrefixKeyword(trimmed, "IF") {
 		if res, handled, err := s.tryExecConditionalDDL(trimmed, start, cs); handled {
 			return res, err
 		}
@@ -1465,55 +1456,55 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	cs.Mu.Unlock()
 
 	// 0.4 Query Execution Plan: EXPLAIN [ANALYZE]
-	if strings.HasPrefix(upper, "EXPLAIN") {
+	if sqlutil.HasPrefixKeyword(trimmed, "EXPLAIN") {
 		return s.execExplain(trimmed, start)
 	}
 
 	// 0.5 CBO Statistics Collection: ANALYZE [TABLE] [table_name]
-	if strings.HasPrefix(upper, "ANALYZE") && !strings.HasPrefix(upper, "ANALYZE SELECT") {
+	if sqlutil.HasPrefixKeyword(trimmed, "ANALYZE") && !sqlutil.HasPrefixKeyword(trimmed, "ANALYZE SELECT") {
 		return s.execAnalyze(trimmed, start)
 	}
 
 	// 0.6 T-SQL Database Console Commands: DBCC
-	if strings.HasPrefix(upper, "DBCC ") || upper == "DBCC" {
+	if sqlutil.HasPrefixKeyword(trimmed, "DBCC") {
 		return s.execDBCC(trimmed, start, cs)
 	}
 
 	// 1. Procedural DDL: CREATE PROCEDURE / ALTER PROCEDURE / DROP PROCEDURE / CREATE FUNCTION / CREATE TRIGGER
-	if strings.HasPrefix(upper, "CREATE PROCEDURE") || strings.HasPrefix(upper, "CREATE PROC") ||
-		strings.HasPrefix(upper, "CREATE OR ALTER PROCEDURE") || strings.HasPrefix(upper, "CREATE OR ALTER PROC") ||
-		strings.HasPrefix(upper, "ALTER PROCEDURE") || strings.HasPrefix(upper, "ALTER PROC") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE PROCEDURE") || sqlutil.HasPrefixKeyword(trimmed, "CREATE PROC") ||
+		sqlutil.HasPrefixKeyword(trimmed, "CREATE OR ALTER PROCEDURE") || sqlutil.HasPrefixKeyword(trimmed, "CREATE OR ALTER PROC") ||
+		sqlutil.HasPrefixKeyword(trimmed, "ALTER PROCEDURE") || sqlutil.HasPrefixKeyword(trimmed, "ALTER PROC") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
 		return s.execCreateProcedure(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "DROP PROCEDURE") || strings.HasPrefix(upper, "DROP PROC") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DROP PROCEDURE") || sqlutil.HasPrefixKeyword(trimmed, "DROP PROC") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
 		return s.execDropProcedure(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "CREATE FUNCTION") || strings.HasPrefix(upper, "CREATE OR ALTER FUNCTION") || strings.HasPrefix(upper, "ALTER FUNCTION") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE FUNCTION") || sqlutil.HasPrefixKeyword(trimmed, "CREATE OR ALTER FUNCTION") || sqlutil.HasPrefixKeyword(trimmed, "ALTER FUNCTION") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
 		return s.execCreateFunction(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "DROP FUNCTION") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DROP FUNCTION") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
 		return s.execDropFunction(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "CREATE TRIGGER") || strings.HasPrefix(upper, "CREATE OR ALTER TRIGGER") || strings.HasPrefix(upper, "ALTER TRIGGER") ||
-		strings.HasPrefix(upper, "CREATE TEMP TRIGGER") || strings.HasPrefix(upper, "CREATE TEMPORARY TRIGGER") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE TRIGGER") || sqlutil.HasPrefixKeyword(trimmed, "CREATE OR ALTER TRIGGER") || sqlutil.HasPrefixKeyword(trimmed, "ALTER TRIGGER") ||
+		sqlutil.HasPrefixKeyword(trimmed, "CREATE TEMP TRIGGER") || sqlutil.HasPrefixKeyword(trimmed, "CREATE TEMPORARY TRIGGER") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
 		return s.execCreateTrigger(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "DROP TRIGGER") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DROP TRIGGER") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1521,13 +1512,13 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 1.5 DDL: CREATE VIEW / CREATE OR REPLACE VIEW / CREATE OR ALTER VIEW / ALTER VIEW / CREATE TEMP VIEW / DROP VIEW
-	if strings.HasPrefix(upper, "CREATE VIEW") || strings.HasPrefix(upper, "CREATE OR REPLACE VIEW") || strings.HasPrefix(upper, "CREATE OR ALTER VIEW") || strings.HasPrefix(upper, "ALTER VIEW") || strings.HasPrefix(upper, "CREATE TEMP VIEW") || strings.HasPrefix(upper, "CREATE TEMPORARY VIEW") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE VIEW") || sqlutil.HasPrefixKeyword(trimmed, "CREATE OR REPLACE VIEW") || sqlutil.HasPrefixKeyword(trimmed, "CREATE OR ALTER VIEW") || sqlutil.HasPrefixKeyword(trimmed, "ALTER VIEW") || sqlutil.HasPrefixKeyword(trimmed, "CREATE TEMP VIEW") || sqlutil.HasPrefixKeyword(trimmed, "CREATE TEMPORARY VIEW") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
 		return s.execCreateView(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "DROP VIEW") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DROP VIEW") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1535,46 +1526,46 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 1.6 RBAC DCL / Security: LOGIN, USER, GRANT, REVOKE, DENY, SETUSER, EXECUTE AS USER, REVERT
-	if strings.HasPrefix(upper, "CREATE LOGIN ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE LOGIN") {
 		return s.execCreateLogin(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "ALTER LOGIN ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "ALTER LOGIN") {
 		return s.execAlterLogin(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "DROP LOGIN ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DROP LOGIN") {
 		return s.execDropLogin(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "CREATE USER ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE USER") {
 		return s.execCreateUser(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "DROP USER ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DROP USER") {
 		return s.execDropUser(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "GRANT ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "GRANT") {
 		return s.execGrant(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "REVOKE ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "REVOKE") {
 		return s.execRevoke(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "DENY ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DENY") {
 		return s.execDeny(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "SETUSER") || strings.HasPrefix(upper, "EXECUTE AS USER") || strings.HasPrefix(upper, "EXEC AS USER") || upper == "REVERT" || upper == "REVERT;" {
+	if sqlutil.HasPrefixKeyword(trimmed, "SETUSER") || sqlutil.HasPrefixKeyword(trimmed, "EXECUTE AS USER") || sqlutil.HasPrefixKeyword(trimmed, "EXEC AS USER") || sqlutil.HasPrefixKeyword(trimmed, "REVERT") {
 		return s.execSetUser(trimmed, start, cs)
 	}
 
 	// 2. Procedure Invocation: EXEC / CALL / sp_*
-	if strings.HasPrefix(upper, "EXEC ") || strings.HasPrefix(upper, "EXECUTE ") || strings.HasPrefix(upper, "EXEC(") || strings.HasPrefix(upper, "EXECUTE(") || strings.HasPrefix(upper, "CALL ") || strings.HasPrefix(upper, "SP_") {
+	if sqlutil.HasPrefixKeyword(trimmed, "EXEC") || sqlutil.HasPrefixKeyword(trimmed, "EXECUTE") || sqlutil.HasPrefixKeyword(trimmed, "CALL") || strings.HasPrefix(strings.ToUpper(trimmed), "SP_") {
 		return s.execProcedureCall(trimmed, start, cs)
 	}
 
 	// 2.1 User Exception: RAISERROR
-	if strings.HasPrefix(upper, "RAISERROR ") || strings.HasPrefix(upper, "RAISERROR(") || upper == "RAISERROR" || upper == "RAISERROR;" {
+	if sqlutil.HasPrefixKeyword(trimmed, "RAISERROR") {
 		return s.execRaiserror(trimmed, start)
 	}
 
 	// 2.2 User Exception: THROW
-	if strings.HasPrefix(upper, "THROW ") || strings.HasPrefix(upper, "THROW;") || upper == "THROW" || upper == "THROW;" {
+	if sqlutil.HasPrefixKeyword(trimmed, "THROW") {
 		return s.execThrow(trimmed, start)
 	}
 
@@ -1748,7 +1739,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 6. DQL: WITH (Common Table Expressions) / SELECT
-	if strings.HasPrefix(upper, "WITH") && len(trimmed) > 4 && (trimmed[4] == ' ' || trimmed[4] == '\t' || trimmed[4] == '\n' || trimmed[4] == '\r') {
+	if sqlutil.HasPrefixKeyword(trimmed, "WITH") {
 		if virtual.IsVirtualCatalogJoinQuery(trimmed) {
 			return s.execVirtualCatalogJoinSelect(trimmed, start, cs)
 		}
@@ -1840,17 +1831,15 @@ func (e *SQLError) TdsErrorInfo() (int32, byte, byte) {
 
 func (s *Coordinator) execRaiserror(raw string, start time.Time) (*QueryResult, error) {
 	rem := strings.TrimSpace(raw)
-	upper := strings.ToUpper(rem)
-	if strings.HasPrefix(upper, "RAISERROR") {
-		rem = strings.TrimSpace(rem[9:])
+	if remAfter, ok := sqlutil.TrimPrefixKeyword(rem, "RAISERROR"); ok {
+		rem = remAfter
 	}
 	rem = strings.TrimRight(rem, ";")
 	rem = strings.TrimSpace(rem)
 
 	// If wrapped in parentheses: RAISERROR(...)
 	if strings.HasPrefix(rem, "(") {
-		closeIdx := strings.LastIndex(rem, ")")
-		if closeIdx != -1 {
+		if closeIdx := sqlutil.FindMatchingParen(rem, 0); closeIdx != -1 {
 			rem = strings.TrimSpace(rem[1:closeIdx])
 		}
 	}
@@ -1931,9 +1920,8 @@ func (s *Coordinator) execRaiserror(raw string, start time.Time) (*QueryResult, 
 
 func (s *Coordinator) execThrow(raw string, start time.Time) (*QueryResult, error) {
 	rem := strings.TrimSpace(raw)
-	upper := strings.ToUpper(rem)
-	if strings.HasPrefix(upper, "THROW") {
-		rem = strings.TrimSpace(rem[5:])
+	if remAfter, ok := sqlutil.TrimPrefixKeyword(rem, "THROW"); ok {
+		rem = remAfter
 	}
 	rem = strings.TrimRight(rem, ";")
 	rem = strings.TrimSpace(rem)

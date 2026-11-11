@@ -808,6 +808,64 @@ func HasPrefixKeyword(s string, keyword string) bool {
 	return false
 }
 
+// TrimPrefixKeyword tests if s begins with the given keyword (case-insensitively, respecting comments/spaces and word boundaries).
+// If it matches, it returns the remainder of the string after the keyword (with leading/trailing whitespace trimmed) and true.
+// Otherwise it returns original s and false.
+func TrimPrefixKeyword(s string, keyword string) (string, bool) {
+	words := strings.Fields(keyword)
+	if len(words) == 0 {
+		return s, false
+	}
+	n := len(s)
+	inLineComment := false
+	inBlockComment := false
+	for i := 0; i < n; i++ {
+		ch := s[i]
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
+		if isWhitespaceByte(ch) {
+			continue
+		}
+		endIdx, ok := matchWordsAt(s, i, words)
+		if ok {
+			return strings.TrimSpace(s[endIdx:]), true
+		}
+		return s, false
+	}
+	return s, false
+}
+
+// TrimAnyPrefixKeyword tries each keyword prefix in order and returns the trimmed remainder upon the first match.
+func TrimAnyPrefixKeyword(s string, keywords ...string) (string, bool) {
+	for _, kw := range keywords {
+		if rem, ok := TrimPrefixKeyword(s, kw); ok {
+			return rem, true
+		}
+	}
+	return s, false
+}
+
 // scanKeyword scans s for standalone occurrences of keyword outside single quotes,
 // double quotes, brackets, and comments.
 // If keyword consists of multiple words (e.g. "IF EXISTS", "WITHIN GROUP"), arbitrary

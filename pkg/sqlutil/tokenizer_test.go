@@ -512,3 +512,39 @@ func TestTokenizer_Comments_ApostrophesAndKeywords(t *testing.T) {
 		t.Errorf("FindTopLevelArithmeticOp: expected operator '-' after newline, got op=%c at idx=%d", op, idx)
 	}
 }
+
+func TestTrimPrefixKeyword(t *testing.T) {
+	tests := []struct {
+		sql     string
+		prefix  string
+		wantRem string
+		wantOk  bool
+	}{
+		{"SAVE TRANSACTION sp1;", "SAVE TRANSACTION", "sp1;", true},
+		{"/* comment */ save tran sp_test", "SAVE TRAN", "sp_test", true},
+		{"SAVEPOINT sp1", "SAVEPOINT", "sp1", true},
+		{"SAVEPOINT", "SAVEPOINT", "", true},
+		{"SAVEPOINT_EXTRA", "SAVEPOINT", "SAVEPOINT_EXTRA", false},
+		{"ROLLBACK TO SAVEPOINT sp2", "ROLLBACK TO SAVEPOINT", "sp2", true},
+		{"SELECT 1", "INSERT", "SELECT 1", false},
+	}
+
+	for _, tt := range tests {
+		rem, ok := TrimPrefixKeyword(tt.sql, tt.prefix)
+		if ok != tt.wantOk || rem != tt.wantRem {
+			t.Errorf("TrimPrefixKeyword(%q, %q) = (%q, %v), want (%q, %v)", tt.sql, tt.prefix, rem, ok, tt.wantRem, tt.wantOk)
+		}
+	}
+
+	// TrimAnyPrefixKeyword
+	rem, ok := TrimAnyPrefixKeyword("ROLLBACK WORK TO SAVEPOINT sp3", "ROLLBACK WORK TO SAVEPOINT", "ROLLBACK TO")
+	if !ok || rem != "sp3" {
+		t.Errorf("TrimAnyPrefixKeyword failed: got (%q, %v), want (sp3, true)", rem, ok)
+	}
+
+	rem, ok = TrimAnyPrefixKeyword("ROLLBACK TO sp4", "ROLLBACK WORK TO SAVEPOINT", "ROLLBACK TO")
+	if !ok || rem != "sp4" {
+		t.Errorf("TrimAnyPrefixKeyword fallback failed: got (%q, %v), want (sp4, true)", rem, ok)
+	}
+}
+
