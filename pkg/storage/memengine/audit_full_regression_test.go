@@ -1,9 +1,12 @@
 package memengine
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"lionsql/pkg/storage"
 )
@@ -90,4 +93,62 @@ func TestRegression_AUDIT_FULL_003_WALAppendFailureRollback(t *testing.T) {
 	if err2 == nil && rec2 != nil {
 		t.Fatalf("AUDIT-FULL-003 violation: uncommitted row 2 leaked into in-memory table after commit failure")
 	}
+}
+
+// TestRegression_AUDIT_FULL_004_ConcurrentSnapshotAndDDL verifies that concurrent DDL operations
+// (CreateTable, DropTable) and disk snapshotting (SaveSnapshot) execute simultaneously without triggering
+// Go runtime "fatal error: concurrent map iteration and map write" panics.
+func TestRegression_AUDIT_FULL_004_ConcurrentSnapshotAndDDL(t *testing.T) {
+	tempDir := t.TempDir()
+	eng := New()
+	if err := eng.Open(tempDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	var wg sync.WaitGroup
+	stopCh := make(chan struct{})
+
+	// Worker 1: Rapidly creates and drops tables (mutates e.tables under e.mu.Lock())
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		iter := 0
+		for {
+			select {
+			case <-stopCh:
+				return
+			default:
+				tblName := fmt.Sprintf("tbl_concur_%d", iter%10)
+				schema := &storage.TableSchema{
+					Name: tblName,
+					Columns: []storage.Column{
+						{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+					},
+				}
+				_ = eng.CreateTable(schema)
+				_ = eng.DropTable(tblName)
+				iter++
+			}
+		}
+	}()
+
+	// Worker 2: Concurrently dumps snapshots (reads table catalog)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-stopCh:
+				return
+			default:
+				_ = eng.SaveSnapshot()
+			}
+		}
+	}()
+
+	// Let them contend concurrently
+	time.Sleep(200 * time.Millisecond)
+	close(stopCh)
+	wg.Wait()
 }

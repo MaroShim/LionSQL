@@ -582,6 +582,7 @@
 - **Target Files**: `pkg/storage/memengine/memengine.go, pkg/storage/wiredtiger/wt_engine.go`
 
 **Phases & Checklist**:
+- [x] **`AUDIT-FULL-004` (High)**: `persistence.go:332` `saveDiskSnapshotLocked` 시 `e.tablesAtomic.Load()` 불변 스냅샷 순회로 동시 DDL 패닉 차단
 - [ ] **`AUDIT-FULL-002` (Low)**: `memengine.go:521` `Engine.Close()` 시 RDB 저장 에러 발생 시 WAL Close 에러 침묵 은폐 해소 (`errors.Join` / 복합 에러 반환)
 - [ ] **`AUDIT-FULL-007` (Medium)**: `wt_engine.go:614` `C.go_wt_session_drop` 리턴코드 무시로 고아 파일 잔존 및 후속 `CREATE TABLE` 실패 방어
 - [ ] **`AUDIT-FULL-011` (High)**: `wt_engine.go:680` `TruncateTables` 시 `PhysicalName` 누락으로 인한 `EBUSY` 에러 및 데이터 삭제 실패 은폐 수정
@@ -589,7 +590,7 @@
 - [ ] **`AUDIT-FULL-013` (Medium)**: `wt_engine.go:257` `Sync` 시 락 해제 후 세션 오픈 경합 및 `RenameTable` WAL 누락 수정
 
 **Details & Resolution**:
-전수 감사(notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 Storage/WiredTiger 도메인 잔여 결함 패치 wave. (참고: AUDIT-FULL-001/004/009는 FIX-OCC-COMPACT-AUDIT-1에서 통합 처리)
+전수 감사(notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 Storage/WiredTiger 도메인 잔여 결함 패치 wave. (참고: AUDIT-FULL-001/009는 잔여 항목으로 단계적 처리)
 
 ---
 

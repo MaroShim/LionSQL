@@ -34,7 +34,7 @@ func (e *Engine) bgSaveLoop(stopCh <-chan struct{}, interval time.Duration, minC
 				if e.opts.EnableAOF && e.wal != nil {
 					_ = e.RewriteAOF()
 				} else if e.opts.EnableRDB {
-					_ = e.saveDiskLocked()
+					_ = e.SaveSnapshot()
 				}
 			} else {
 				e.mu.Unlock()
@@ -341,8 +341,16 @@ func (e *Engine) saveDiskSnapshotLocked(snapLSN int64) error {
 	e.diskMu.Lock()
 	defer e.diskMu.Unlock()
 
-	persistTables := make(map[string]*TableData)
-	for name, td := range e.tables {
+	// [RULE:ConcurrencySafety] Load immutable atomic tables snapshot to prevent concurrent map iteration panic during DDL (AUDIT-FULL-004)
+	var sourceTables map[string]*TableData
+	if snapPtr := e.tablesAtomic.Load(); snapPtr != nil {
+		sourceTables = *snapPtr
+	} else {
+		sourceTables = e.tables
+	}
+
+	persistTables := make(map[string]*TableData, len(sourceTables))
+	for name, td := range sourceTables {
 		if storage.IsTemporaryTable(name) {
 			continue
 		}
