@@ -167,7 +167,7 @@ INNER JOIN __db_hrdb_employees e ON o.SalesPersonID = e.EmployeeID;
 
 ---
 
-## 9. WiredTiger 임시 테이블/테이블 변수 인메모리 하이브리드 바이패스 불변식 (`PERF-HYBRID-TEMPMEM-1`)
+## 9. WiredTiger 임시 테이블/테이블 변수 인메모리 하이브리드 바이패스 불변식 (`PERF-HYBRID-TEMPMEM-1`, `DONE`)
 
 ### 1) 배경 및 핵심 문제
 - WiredTiger 엔진은 테이블 생성 시 `C.go_wt_session_create(sess, "table:<name>", ...)`를 호출하여 디스크에 실제 `<name>.wt` B+Tree 파일을 생성함.

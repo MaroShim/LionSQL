@@ -80,9 +80,9 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
 | 개체 / 컨텍스트 분류 | T-SQL 문법 | 상태 | LionSQL 현황 및 세부사항 |
 | :--- | :--- | :--- | :--- |
 | **로컬 변수** | `DECLARE @x INT, @name VARCHAR(50);` | **완전 지원** | 모든 기본 SQL 데이터 타입 매핑 지원 |
-| **세션 임시 테이블** | `CREATE TABLE #temp (id INT, val VARCHAR(50));` | **완전 지원** | 세션 전용 네임스페이스 격리(`__temp_<sessionID>_<name>`), `SELECT ... INTO #temp` 지원 (`PERF-HYBRID-TEMPMEM-1` 인메모리 바이패스 `IN_PROGRESS`) |
+| **세션 임시 테이블** | `CREATE TABLE #temp (id INT, val VARCHAR(50));` | **완전 지원** | 세션 전용 네임스페이스 격리(`__temp_<sessionID>_<name>`), `SELECT ... INTO #temp` 지원 (`PERF-HYBRID-TEMPMEM-1` 인메모리 바이패스 `DONE`) |
 | **전역 임시 테이블** | `CREATE TABLE ##global_temp (...)` | **부분 지원** | 세션 간 공유되나 `##global` 전용 전역 수명주기 및 크로스 DB 격리(`__gtemp_`) 정합성 점검 필요 |
-| **테이블 변수** | `DECLARE @tbl TABLE (id INT, val VARCHAR(50));` | **완전 지원** | 세션 배치, 익명 블록, 저장 프로시저 완벽 지원(`__tv_*`), `INSERT`/`SELECT`/`UPDATE`/`DELETE`/`JOIN` 및 자동 정리 (`PERF-HYBRID-TEMPMEM-1` 인메모리 바이패스 `IN_PROGRESS`) |
+| **테이블 변수** | `DECLARE @tbl TABLE (id INT, val VARCHAR(50));` | **완전 지원** | 세션 배치, 익명 블록, 저장 프로시저 완벽 지원(`__tv_*`), `INSERT`/`SELECT`/`UPDATE`/`DELETE`/`JOIN` 및 자동 정리 (`PERF-HYBRID-TEMPMEM-1` 인메모리 바이패스 `DONE`) |
 | **DB 컨텍스트 전환** | `USE <dbname>;` | **부분 지원 (가상 No-op)** | `DB_NAME()` 및 TDS `0xE3 ENVCHANGE` 토큰은 전환되나, 현재 단일 카탈로그 공유 (`__db_<dbname>_*` 논리 격리 및 3-Part 크로스 DB 조인은 `ARCH-LOGICAL-NAMESPACE-1` `PENDING`) |
 | **사용자 정의 테이블 타입** | `CREATE TYPE MyTableType AS TABLE (...)` | **미구현 (후보)** | Stored Procedure에 테이블을 매개변수로 넘기는 TVP 전제 조건 |
 | **테이블 반환 함수 (TVF)** | `CREATE FUNCTION fn() RETURNS TABLE AS RETURN ...` | **부분 지원 (인라인 TVF)** | 인라인 TVF(`RETURNS TABLE AS RETURN (SELECT ...)`) 등록 및 호출 지원 완료 (`pkg/engine/sqlexec_ddl.go`); 멀티-스테이트먼트 TVF는 미구현 |
@@ -171,10 +171,10 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
    - 문자열 구분자 분할 내장 테이블 반환 연산(`enable_ordinal`, `@var`, `CROSS APPLY`) 지원 완료 (`pkg/engine/sqlexec_string_split.go`).
 6. **인라인 테이블 반환 함수 (`CREATE FUNCTION ... RETURNS TABLE`)** [`부분 지원`]:
    - 단일 `SELECT` 인라인 TVF 등록/조회 지원 완료 (`멀티-스테이트먼트 TVF`는 미구현).
+7. **임시 테이블/테이블 변수 인메모리 하이브리드 바이패스 (`PERF-HYBRID-TEMPMEM-1`)** [`DONE`]:
+   - WiredTiger 모드에서 `__temp_*`, `__tv_*`, `__var_*`, `#*` 테이블의 `.wt` 디스크 파일 생성 및 CGo I/O를 생략하고 내장 `memengine`으로 라우팅 완료 (`pkg/storage/wiredtiger/wt_engine.go`).
 
 ### 진행 중 및 잔여 확장 후보 (Active & Candidate Gaps)
-7. **임시 테이블/테이블 변수 인메모리 하이브리드 바이패스 (`PERF-HYBRID-TEMPMEM-1`)** [`IN_PROGRESS`]:
-   - WiredTiger 모드에서 `__temp_*`, `__tv_*`(`__var_*`)의 `.wt` 디스크 파일 생성을 생략하고 `pkg/storage/memengine`으로 메모리 우회 라우팅.
 8. **논리 네임스페이스 DB 프리픽스 & 크로스 DB 조인 (`ARCH-LOGICAL-NAMESPACE-1`)** [`PENDING`]:
    - 현재 가상 No-op 상태인 `USE <dbname>`을 `__db_<dbname>_*` 물리 접두사 격리 및 3-Part Name 크로스 DB 조인으로 확장 ([`LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)).
 9. **사용자 정의 테이블 타입 (`CREATE TYPE ... AS TABLE`) 및 TVP** [`미구현`]:
@@ -191,5 +191,5 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
 LionSQL은 T-SQL의 **핵심 제어 흐름(TRY/CATCH, WHILE, IF, GOTO, RETURN, sp_executesql, FORWARD_ONLY CURSOR), 복합 대입·레거시/정량 연산자(`+=`, `!<`, `!>`, `ALL`/`ANY`/`SOME`), 테이블 변수(`DECLARE @tbl TABLE`), 임시 테이블(`#temp`), 인라인 TVF/`STRING_SPLIT`, 140종 이상의 내장 함수 및 트랜잭션**을 갖추고 있습니다.
 
 현재 시점의 실무 연계 우선순위는 다음과 같습니다:
-- **진행 중 (`IN_PROGRESS`)**: `PERF-HYBRID-TEMPMEM-1`을 구현해 WiredTiger 모드에서도 `#temp`와 `@tbl`이 디스크 파일 생성 없이 메모리 속도 그대로 동작하도록 마무리합니다.
+- **완료 (`DONE`)**: `PERF-HYBRID-TEMPMEM-1` 구현 완료 — WiredTiger 모드에서도 `#temp`와 `@tbl`이 `.wt` 디스크 파일 생성 0개, 혼합 트랜잭션/세이브포인트 호환으로 동작합니다.
 - **차기 확장 (`PENDING`)**: 멀티 DB 워크로드 요구 시 `ARCH-LOGICAL-NAMESPACE-1`을 통해 `USE <dbname>` 가상 No-op을 `__db_<dbname>_*` 논리 네임스페이스 격리로 승격합니다.

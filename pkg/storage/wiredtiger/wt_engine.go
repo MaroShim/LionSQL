@@ -205,12 +205,15 @@ import (
 	"lionsql/pkg/storage/memengine"
 )
 
-// Engine implements storage.Engine via the WiredTiger C API.
+// Engine implements storage.Engine via the WiredTiger C API, routing
+// session-scoped temporary tables and table variables transparently to an
+// embedded ephemeral in-memory OCC engine ([PERF-HYBRID-TEMPMEM-1]).
 type Engine struct {
 	mu          sync.RWMutex
 	conn        *C.WT_CONNECTION
 	homeDir     string
 	tables      map[string]*storage.TableSchema
+	tempEng     *memengine.Engine
 	nextLSN     atomic.Int64
 	walHook     func(rec memengine.WALRecord)
 	hasHook     atomic.Bool
@@ -232,6 +235,7 @@ type Engine struct {
 func New() *Engine {
 	e := &Engine{
 		tables:   make(map[string]*storage.TableSchema),
+		tempEng:  memengine.New(),
 		sessions: make(map[*WTSession]struct{}),
 	}
 	e.fsyncPolicy.Store(int32(memengine.FsyncEverySec))
@@ -418,6 +422,9 @@ func (e *Engine) Open(dir string) error {
 	e.conn = conn
 	e.closed = false
 	e.connClosed.Store(false)
+	if e.tempEng == nil {
+		e.tempEng = memengine.New()
+	}
 
 	e.loadCatalog()
 
@@ -502,6 +509,10 @@ func (e *Engine) Close() error {
 		_ = s.Close()
 	}
 
+	if e.tempEng != nil {
+		_ = e.tempEng.Close()
+	}
+
 	e.syncMu.Lock()
 	defer e.syncMu.Unlock()
 	e.mu.Lock()
@@ -519,6 +530,10 @@ func (e *Engine) Close() error {
 }
 
 func (e *Engine) CreateTable(schema *storage.TableSchema) error {
+	if schema != nil && storage.IsTemporaryTable(schema.Name) {
+		return e.tempEng.CreateTable(schema)
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -531,14 +546,10 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 
 	if schema.PhysicalName == "" {
 		phys := schema.Name
-		if storage.IsTemporaryTable(schema.Name) {
-			phys = fmt.Sprintf("%s_%d", schema.Name, time.Now().UnixNano())
-		} else {
-			for _, existing := range e.tables {
-				if strings.EqualFold(existing.PhysicalName, phys) || (existing.PhysicalName == "" && strings.EqualFold(existing.Name, phys)) {
-					phys = fmt.Sprintf("%s_v%d", schema.Name, time.Now().UnixNano())
-					break
-				}
+		for _, existing := range e.tables {
+			if strings.EqualFold(existing.PhysicalName, phys) || (existing.PhysicalName == "" && strings.EqualFold(existing.Name, phys)) {
+				phys = fmt.Sprintf("%s_v%d", schema.Name, time.Now().UnixNano())
+				break
 			}
 		}
 		schema.PhysicalName = phys
@@ -562,20 +573,22 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 	}
 
 	e.tables[schema.Name] = schema
-	if !storage.IsTemporaryTable(schema.Name) {
-		if err := e.saveCatalog(); err != nil {
-			return err
-		}
-		e.recordWALLocked([]memengine.WALOp{{
-			Type:   memengine.OpCreateTable,
-			Table:  schema.Name,
-			Schema: schema,
-		}})
+	if err := e.saveCatalog(); err != nil {
+		return err
 	}
+	e.recordWALLocked([]memengine.WALOp{{
+		Type:   memengine.OpCreateTable,
+		Table:  schema.Name,
+		Schema: schema,
+	}})
 	return nil
 }
 
 func (e *Engine) DropTable(tableName string) error {
+	if storage.IsTemporaryTable(tableName) {
+		return e.tempEng.DropTable(tableName)
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -614,19 +627,46 @@ func (e *Engine) DropTable(tableName string) error {
 	C.go_wt_session_drop(sess, uri)
 
 	sqlutil.MapDeleteFold(e.tables, tableName)
-	if !storage.IsTemporaryTable(tbl.Name) {
-		if err := e.saveCatalog(); err != nil {
-			return err
-		}
-		e.recordWALLocked([]memengine.WALOp{{
-			Type:  memengine.OpDropTable,
-			Table: tbl.Name,
-		}})
+	if err := e.saveCatalog(); err != nil {
+		return err
 	}
+	e.recordWALLocked([]memengine.WALOp{{
+		Type:  memengine.OpDropTable,
+		Table: tbl.Name,
+	}})
 	return nil
 }
 
 func (e *Engine) TruncateTables(tableNames []string, cascade bool) error {
+	var permNames, tempNames []string
+	for _, name := range tableNames {
+		if storage.IsTemporaryTable(name) {
+			tempNames = append(tempNames, name)
+		} else {
+			permNames = append(permNames, name)
+		}
+	}
+	if len(tempNames) > 0 && len(permNames) == 0 {
+		return e.tempEng.TruncateTables(tempNames, cascade)
+	}
+	for _, name := range tempNames {
+		if _, err := e.tempEng.GetTable(name); err != nil {
+			return err
+		}
+	}
+
+	if len(permNames) > 0 {
+		if err := e.truncatePermTables(permNames, cascade); err != nil {
+			return err
+		}
+	}
+	if len(tempNames) > 0 {
+		return e.tempEng.TruncateTables(tempNames, cascade)
+	}
+	return nil
+}
+
+func (e *Engine) truncatePermTables(tableNames []string, cascade bool) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -708,6 +748,10 @@ func (e *Engine) TruncateTable(tableName string) error {
 }
 
 func (e *Engine) DropPartition(tableName, partitionName string) error {
+	if storage.IsTemporaryTable(tableName) {
+		return e.tempEng.DropPartition(tableName, partitionName)
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -764,6 +808,10 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 }
 
 func (e *Engine) GetPartitions(tableName string) ([]storage.PartitionInfo, error) {
+	if storage.IsTemporaryTable(tableName) {
+		return e.tempEng.GetPartitions(tableName)
+	}
+
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -815,6 +863,10 @@ func (e *Engine) GetPartitions(tableName string) ([]storage.PartitionInfo, error
 }
 
 func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
+	if storage.IsTemporaryTable(tableName) {
+		return e.tempEng.AddColumn(tableName, col)
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -911,6 +963,15 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 }
 
 func (e *Engine) RenameTable(oldName, newName string) error {
+	oldTemp := storage.IsTemporaryTable(oldName)
+	newTemp := storage.IsTemporaryTable(newName)
+	if oldTemp && newTemp {
+		return e.tempEng.RenameTable(oldName, newName)
+	}
+	if oldTemp != newTemp {
+		return fmt.Errorf("cannot rename across temporary and permanent table namespaces (%q -> %q)", oldName, newName)
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -961,6 +1022,10 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 }
 
 func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.TableSchema) error) error {
+	if storage.IsTemporaryTable(tableName) {
+		return e.tempEng.AlterTable(tableName, mutator)
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -972,15 +1037,17 @@ func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.Table
 	if err := mutator(t); err != nil {
 		return err
 	}
-	if !storage.IsTemporaryTable(t.Name) {
-		if err := e.saveCatalog(); err != nil {
-			return err
-		}
+	if err := e.saveCatalog(); err != nil {
+		return err
 	}
 	return nil
 }
 
 func (e *Engine) GetTable(tableName string) (*storage.TableSchema, error) {
+	if storage.IsTemporaryTable(tableName) {
+		return e.tempEng.GetTable(tableName)
+	}
+
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
@@ -1010,11 +1077,19 @@ func (e *Engine) GetTable(tableName string) (*storage.TableSchema, error) {
 
 func (e *Engine) ListTables() ([]*storage.TableSchema, error) {
 	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	res := make([]*storage.TableSchema, 0, len(e.tables))
 	for _, t := range e.tables {
 		res = append(res, t)
+	}
+	tempEng := e.tempEng
+	e.mu.RUnlock()
+
+	if tempEng != nil {
+		tempTables, err := tempEng.ListTables()
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, tempTables...)
 	}
 	sort.Slice(res, func(i, j int) bool {
 		return res[i].Name < res[j].Name
@@ -1023,6 +1098,10 @@ func (e *Engine) ListTables() ([]*storage.TableSchema, error) {
 }
 
 func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
+	if index != nil && storage.IsTemporaryTable(index.TableName) {
+		return e.tempEng.CreateIndex(index)
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -1057,17 +1136,19 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	if err := e.saveCatalog(); err != nil {
 		return err
 	}
-	if !storage.IsTemporaryTable(t.Name) {
-		e.recordWALLocked([]memengine.WALOp{{
-			Type:        memengine.OpCreateIndex,
-			Table:       t.Name,
-			IndexSchema: index,
-		}})
-	}
+	e.recordWALLocked([]memengine.WALOp{{
+		Type:        memengine.OpCreateIndex,
+		Table:       t.Name,
+		IndexSchema: index,
+	}})
 	return nil
 }
 
 func (e *Engine) DropIndex(tableName, indexName string) error {
+	if storage.IsTemporaryTable(tableName) {
+		return e.tempEng.DropIndex(tableName, indexName)
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -1085,13 +1166,11 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 	if err := e.saveCatalog(); err != nil {
 		return err
 	}
-	if !storage.IsTemporaryTable(tableName) {
-		e.recordWALLocked([]memengine.WALOp{{
-			Type:      memengine.OpDropIndex,
-			Table:     tableName,
-			IndexName: indexName,
-		}})
-	}
+	e.recordWALLocked([]memengine.WALOp{{
+		Type:      memengine.OpDropIndex,
+		Table:     tableName,
+		IndexName: indexName,
+	}})
 	return nil
 }
 
@@ -1152,11 +1231,32 @@ func fastCString(str string, stackBuf []byte) (*C.char, func()) {
 type WTSession struct {
 	engine     *Engine
 	sess       *C.WT_SESSION
+	tempSess   storage.Session
 	mu         sync.Mutex
 	closed     bool
 	cursorPool map[string][]*C.WT_CURSOR
 	allCursors map[*C.WT_CURSOR]struct{}
 	toClose    []*C.WT_CURSOR
+}
+
+func (s *WTSession) getTempSession() (storage.Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, fmt.Errorf("session is closed")
+	}
+	if s.tempSess != nil {
+		return s.tempSess, nil
+	}
+	if s.engine == nil || s.engine.tempEng == nil {
+		return nil, fmt.Errorf("temporary storage engine is not initialized")
+	}
+	ts, err := s.engine.tempEng.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	s.tempSess = ts
+	return ts, nil
 }
 
 func (s *WTSession) flushPendingClosesLocked() {
@@ -1202,6 +1302,11 @@ func (s *WTSession) Close() error {
 	s.closed = true
 
 	s.flushPendingClosesLocked()
+
+	if s.tempSess != nil {
+		_ = s.tempSess.Close()
+		s.tempSess = nil
+	}
 
 	for cur := range s.allCursors {
 		C.go_wt_cursor_close(cur)
@@ -1374,9 +1479,10 @@ type wtUndoOp struct {
 	oldData []byte
 }
 
-// WTTx manages ACID mutations in WiredTiger.
+// WTTx manages ACID mutations in WiredTiger and routes temporary tables to tempTx lazily.
 type WTTx struct {
 	sess              *WTSession
+	tempTx            storage.Transaction
 	opts              storage.TxOptions
 	snapshotLSN       int64
 	snapshotTimestamp int64
@@ -1388,10 +1494,27 @@ type WTTx struct {
 	undoLog           []wtUndoOp
 	savepoints        map[string]int
 	spNames           []string
+	tempSpPreCreated  map[string]bool
 	walOps            []memengine.WALOp
 	spWALIndices      map[string]int
 	tableCache        map[string]*storage.TableSchema
 	snapTables        []*storage.TableSchema
+}
+
+func (tx *WTTx) ensureTempTxLocked() (storage.Transaction, error) {
+	if tx.tempTx != nil {
+		return tx.tempTx, nil
+	}
+	ts, err := tx.sess.getTempSession()
+	if err != nil {
+		return nil, err
+	}
+	ttx, err := ts.BeginTx(tx.opts)
+	if err != nil {
+		return nil, err
+	}
+	tx.tempTx = ttx
+	return ttx, nil
 }
 
 func (tx *WTTx) getTableLocked(tableName string) (*storage.TableSchema, error) {
@@ -1486,6 +1609,13 @@ func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 	if tx.opts.ReadOnly {
 		return storage.ErrReadOnlyTransaction
 	}
+	if storage.IsTemporaryTable(tableName) {
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return err
+		}
+		return ttx.Insert(tableName, record)
+	}
 
 	tbl, err := tx.getTableLocked(tableName)
 	if err != nil {
@@ -1503,6 +1633,13 @@ func (tx *WTTx) InsertRow(tableName string, row storage.Row) error {
 	}
 	if tx.opts.ReadOnly {
 		return storage.ErrReadOnlyTransaction
+	}
+	if storage.IsTemporaryTable(tableName) {
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return err
+		}
+		return ttx.InsertRow(tableName, row)
 	}
 
 	tbl, err := tx.getTableLocked(tableName)
@@ -1617,6 +1754,13 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 	if tx.opts.ReadOnly {
 		return storage.ErrReadOnlyTransaction
 	}
+	if storage.IsTemporaryTable(tableName) {
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return err
+		}
+		return ttx.Update(tableName, pk, record)
+	}
 
 	tbl, err := tx.getTableLocked(tableName)
 	if err != nil {
@@ -1634,6 +1778,13 @@ func (tx *WTTx) UpdateRow(tableName string, pk storage.Value, row storage.Row) e
 	}
 	if tx.opts.ReadOnly {
 		return storage.ErrReadOnlyTransaction
+	}
+	if storage.IsTemporaryTable(tableName) {
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return err
+		}
+		return ttx.UpdateRow(tableName, pk, row)
 	}
 
 	tbl, err := tx.getTableLocked(tableName)
@@ -1733,6 +1884,13 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 	}
 	if tx.opts.ReadOnly {
 		return storage.ErrReadOnlyTransaction
+	}
+	if storage.IsTemporaryTable(tableName) {
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return err
+		}
+		return ttx.Delete(tableName, pk)
 	}
 
 	return tx.deleteLocked(tableName, pk)
@@ -1989,12 +2147,32 @@ func (tx *WTTx) checkReferencingFKsOnDeleteLocked(tableName string, pk storage.V
 func (tx *WTTx) Get(tableName string, pk storage.Value) (storage.Record, error) {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
+	if tx.closed {
+		return nil, storage.ErrTxClosed
+	}
+	if storage.IsTemporaryTable(tableName) {
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return nil, err
+		}
+		return ttx.Get(tableName, pk)
+	}
 	return tx.getLocked(tableName, pk)
 }
 
 func (tx *WTTx) GetRow(tableName string, pk storage.Value) (storage.Row, error) {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
+	if tx.closed {
+		return storage.Row{}, storage.ErrTxClosed
+	}
+	if storage.IsTemporaryTable(tableName) {
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return storage.Row{}, err
+		}
+		return ttx.GetRow(tableName, pk)
+	}
 	return tx.getRowLocked(tableName, pk)
 }
 
@@ -2061,6 +2239,16 @@ func (tx *WTTx) getRowLocked(tableName string, pk storage.Value) (storage.Row, e
 func (tx *WTTx) Scan(tableName string) (storage.Cursor, error) {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
+	if tx.closed {
+		return nil, storage.ErrTxClosed
+	}
+	if storage.IsTemporaryTable(tableName) {
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return nil, err
+		}
+		return ttx.Scan(tableName)
+	}
 	return tx.scanLocked(tableName)
 }
 
@@ -2089,12 +2277,34 @@ func (tx *WTTx) scanLocked(tableName string) (storage.Cursor, error) {
 }
 
 func (tx *WTTx) ScanPartitions(tableName string, partitions []string) (storage.Cursor, error) {
+	if storage.IsTemporaryTable(tableName) {
+		tx.mu.Lock()
+		defer tx.mu.Unlock()
+		if tx.closed {
+			return nil, storage.ErrTxClosed
+		}
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return nil, err
+		}
+		return ttx.ScanPartitions(tableName, partitions)
+	}
 	return tx.Scan(tableName)
 }
 
 func (tx *WTTx) IndexScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
+	if tx.closed {
+		return nil, storage.ErrTxClosed
+	}
+	if storage.IsTemporaryTable(tableName) {
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return nil, err
+		}
+		return ttx.IndexScan(tableName, indexName, low, high)
+	}
 	return tx.indexScanLocked(tableName, indexName, low, high)
 }
 
@@ -2124,6 +2334,18 @@ func (tx *WTTx) indexScanLocked(tableName string, indexName string, low, high *s
 }
 
 func (tx *WTTx) IndexOnlyScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
+	if storage.IsTemporaryTable(tableName) {
+		tx.mu.Lock()
+		defer tx.mu.Unlock()
+		if tx.closed {
+			return nil, storage.ErrTxClosed
+		}
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return nil, err
+		}
+		return ttx.IndexOnlyScan(tableName, indexName, low, high)
+	}
 	return tx.IndexScan(tableName, indexName, low, high)
 }
 
@@ -2169,6 +2391,18 @@ func (c *wtSliceCursor) Close() error {
 }
 
 func (tx *WTTx) IndexScanDesc(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
+	if storage.IsTemporaryTable(tableName) {
+		tx.mu.Lock()
+		defer tx.mu.Unlock()
+		if tx.closed {
+			return nil, storage.ErrTxClosed
+		}
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return nil, err
+		}
+		return ttx.IndexScanDesc(tableName, indexName, low, high)
+	}
 	cur, err := tx.IndexScan(tableName, indexName, low, high)
 	if err != nil {
 		return nil, err
@@ -2392,13 +2626,25 @@ func (tx *WTTx) Commit() error {
 	tx.undoLog = nil
 	tx.savepoints = nil
 	tx.spNames = nil
+	tx.tempSpPreCreated = nil
+	tempTx := tx.tempTx
+	tx.tempTx = nil
 
 	tx.sess.resetCursors()
 
 	ret := C.go_wt_session_commit(tx.sess.sess, nil)
 	_ = C.go_wt_session_reset(tx.sess.sess)
 	if ret != 0 {
+		if tempTx != nil {
+			_ = tempTx.Rollback()
+		}
 		return wtOpError("commit_transaction", int(ret))
+	}
+
+	if tempTx != nil {
+		if err := tempTx.Commit(); err != nil {
+			return err
+		}
 	}
 
 	if !hasWrites || tx.opts.ReadOnly {
@@ -2440,10 +2686,16 @@ func (tx *WTTx) Rollback() error {
 	tx.undoLog = nil
 	tx.savepoints = nil
 	tx.spNames = nil
+	tx.tempSpPreCreated = nil
+	tempTx := tx.tempTx
+	tx.tempTx = nil
 
 	tx.sess.resetCursors()
 
 	ret := C.go_wt_session_rollback(tx.sess.sess, nil)
+	if tempTx != nil {
+		_ = tempTx.Rollback()
+	}
 	if ret != 0 {
 		return fmt.Errorf("rollback_transaction failed with code %d", ret)
 	}
@@ -2462,6 +2714,18 @@ func (tx *WTTx) Savepoint(name string) error {
 	normName := strings.ToLower(strings.TrimSpace(name))
 	if normName == "" {
 		return fmt.Errorf("savepoint name cannot be empty")
+	}
+
+	if tx.tempTx != nil {
+		if err := tx.tempTx.Savepoint(name); err != nil {
+			return err
+		}
+		delete(tx.tempSpPreCreated, normName)
+	} else {
+		if tx.tempSpPreCreated == nil {
+			tx.tempSpPreCreated = make(map[string]bool)
+		}
+		tx.tempSpPreCreated[normName] = true
 	}
 
 	if tx.savepoints == nil {
@@ -2500,6 +2764,15 @@ func (tx *WTTx) RollbackTo(name string) error {
 		return fmt.Errorf("%w: %s", storage.ErrSavepointNotFound, name)
 	}
 
+	if tx.tempTx != nil {
+		if tx.tempSpPreCreated[normName] {
+			_ = tx.tempTx.Rollback()
+			tx.tempTx = nil
+		} else if err := tx.tempTx.RollbackTo(name); err != nil {
+			return err
+		}
+	}
+
 	// Undo operations in reverse order down to targetLen
 	for i := len(tx.undoLog) - 1; i >= targetLen; i-- {
 		op := tx.undoLog[i]
@@ -2531,6 +2804,7 @@ func (tx *WTTx) RollbackTo(name string) error {
 		for i := idx + 1; i < len(tx.spNames); i++ {
 			delete(tx.savepoints, tx.spNames[i])
 			delete(tx.spWALIndices, tx.spNames[i])
+			delete(tx.tempSpPreCreated, tx.spNames[i])
 		}
 		tx.spNames = tx.spNames[:idx+1]
 	}
@@ -2551,6 +2825,12 @@ func (tx *WTTx) ReleaseSavepoint(name string) error {
 		return fmt.Errorf("%w: %s", storage.ErrSavepointNotFound, name)
 	}
 
+	if tx.tempTx != nil && !tx.tempSpPreCreated[normName] {
+		if err := tx.tempTx.ReleaseSavepoint(name); err != nil {
+			return err
+		}
+	}
+
 	idx := -1
 	for i, n := range tx.spNames {
 		if n == normName {
@@ -2562,6 +2842,7 @@ func (tx *WTTx) ReleaseSavepoint(name string) error {
 		for i := idx; i < len(tx.spNames); i++ {
 			delete(tx.savepoints, tx.spNames[i])
 			delete(tx.spWALIndices, tx.spNames[i])
+			delete(tx.tempSpPreCreated, tx.spNames[i])
 		}
 		tx.spNames = tx.spNames[:idx]
 	}

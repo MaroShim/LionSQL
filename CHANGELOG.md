@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- route temporary tables and table variables (`#`, `__temp_`, `__tv_`, `__var_`) transparently to an embedded ephemeral `memengine` inside the WiredTiger storage engine with zero `.wt` disk files and full mixed-transaction/savepoint parity (`PERF-HYBRID-TEMPMEM-1`)
 - add T-SQL compatibility matrix regression tests for inline TVFs (`RETURNS TABLE`), `TRIM` 2-argument cutset, virtual `USE <dbname>` session contexts, and `SET` session options (`COMPAT-TSQL-MATRIX-1`)
 - register `COMPAT-TSQL-MATRIX-1` sprint tracking task for `notes/TSQL_COMPATIBILITY_MATRIX.ko.md` verification and sync
 
