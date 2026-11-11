@@ -7,6 +7,7 @@ import (
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -26,9 +27,7 @@ func ResolvePreparedProcedure(query string, cat *catalog.Catalog, cache *runtime
 		return nil
 	}
 	trimmed := strings.TrimSpace(query)
-	upper := strings.ToUpper(trimmed)
-	if !strings.HasPrefix(upper, "EXEC ") && !strings.HasPrefix(upper, "EXECUTE ") && !strings.HasPrefix(upper, "CALL ") &&
-		!strings.HasPrefix(upper, "EXEC(") && !strings.HasPrefix(upper, "EXECUTE(") {
+	if !sqlutil.HasPrefixKeyword(trimmed, "EXEC") && !sqlutil.HasPrefixKeyword(trimmed, "EXECUTE") && !sqlutil.HasPrefixKeyword(trimmed, "CALL") {
 		return nil
 	}
 

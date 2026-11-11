@@ -302,7 +302,7 @@ func parseInsertBody(st *DMLStatement, sc *dmlScanner) error {
 		if cut == len(body) {
 			if openP := sqlutil.FindTopLevelChar(body, '('); openP != -1 {
 				rem := strings.TrimSpace(body[openP+1:])
-				if strings.HasPrefix(strings.ToUpper(rem), "SELECT") {
+				if sqlutil.HasPrefixKeyword(rem, "SELECT") {
 					cut = openP
 				}
 			}
@@ -349,7 +349,7 @@ func parseUpdateBody(st *DMLStatement, sc *dmlScanner) error {
 
 func parseDeleteBody(st *DMLStatement, sc *dmlScanner) error {
 	head, out, where := splitOutputWhere(sc.s[sc.pos:])
-	if head != "" && !strings.HasPrefix(strings.ToUpper(head), "USING ") {
+	if head != "" && !sqlutil.HasPrefixKeyword(head, "USING") {
 		return fmt.Errorf("invalid DELETE syntax")
 	}
 	st.Output, st.Where = out, where

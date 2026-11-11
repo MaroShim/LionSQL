@@ -86,8 +86,7 @@ func extractStringSplitTailClauses(rest string) (alias, whereClause, orderByClau
 
 func isStringSplitSelect(query string) bool {
 	trimmed := strings.TrimSpace(query)
-	upper := strings.ToUpper(trimmed)
-	if !strings.HasPrefix(upper, "SELECT") {
+	if !sqlutil.HasPrefixKeyword(trimmed, "SELECT") {
 		return false
 	}
 	fromIdx := sqlutil.FindTopLevelKeyword(trimmed, "FROM")
@@ -95,17 +94,18 @@ func isStringSplitSelect(query string) bool {
 		return false
 	}
 	// The immediate table after the first FROM must be STRING_SPLIT
-	afterFrom := strings.TrimSpace(upper[fromIdx+4:])
-	afterFrom = strings.TrimPrefix(afterFrom, "DBO.")
-	afterFrom = strings.TrimPrefix(afterFrom, "[DBO].")
+	afterFrom := strings.TrimSpace(trimmed[fromIdx+4:])
+	if rem, ok := sqlutil.TrimPrefixKeyword(afterFrom, "DBO."); ok {
+		afterFrom = rem
+	} else if rem, ok := sqlutil.TrimPrefixKeyword(afterFrom, "[DBO]."); ok {
+		afterFrom = rem
+	}
 	afterFrom = strings.TrimPrefix(afterFrom, "[")
-	return strings.HasPrefix(afterFrom, "STRING_SPLIT(") || strings.HasPrefix(afterFrom, "STRING_SPLIT (") ||
-		strings.HasPrefix(afterFrom, "STRING_SPLIT](") || strings.HasPrefix(afterFrom, "STRING_SPLIT] (")
+	return sqlutil.HasPrefixKeyword(afterFrom, "STRING_SPLIT") || sqlutil.HasPrefixKeyword(afterFrom, "STRING_SPLIT]")
 }
 
 func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimSpace(query)
-	upper := strings.ToUpper(cleaned)
 
 	// 1. Find FROM STRING_SPLIT(
 	fromIdx := sqlutil.FindTopLevelKeyword(cleaned, "FROM")
@@ -115,12 +115,12 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 	projStr := strings.TrimSpace(cleaned[6:fromIdx])
 
 	isDistinct := false
-	if strings.HasPrefix(strings.ToUpper(projStr), "DISTINCT ") {
+	if rem, ok := sqlutil.TrimPrefixKeyword(projStr, "DISTINCT"); ok {
 		isDistinct = true
-		projStr = strings.TrimSpace(projStr[8:])
+		projStr = rem
 	}
 
-	splitIdx := strings.Index(upper[fromIdx:], "STRING_SPLIT")
+	splitIdx := sqlutil.FindKeyword(cleaned[fromIdx:], "STRING_SPLIT", false)
 	if splitIdx == -1 {
 		return nil, fmt.Errorf("invalid STRING_SPLIT query: missing STRING_SPLIT")
 	}
@@ -205,9 +205,7 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 	}
 
 	// 8. Check for aggregate COUNT projection
-	upperProj := strings.ToUpper(projStr)
-	if upperProj == "COUNT(*)" || upperProj == "COUNT(1)" || upperProj == "COUNT(VALUE)" ||
-		strings.HasPrefix(upperProj, "COUNT(*)") || strings.HasPrefix(upperProj, "COUNT(1)") || strings.HasPrefix(upperProj, "COUNT(VALUE)") {
+	if sqlutil.HasPrefixKeyword(projStr, "COUNT(*)") || sqlutil.HasPrefixKeyword(projStr, "COUNT(1)") || sqlutil.HasPrefixKeyword(projStr, "COUNT(VALUE)") {
 		colName := "count"
 		if asIdx := sqlutil.FindTopLevelKeyword(projStr, "AS"); asIdx != -1 {
 			colName = cleanIdentifier(strings.TrimSpace(projStr[asIdx+len("AS"):]))

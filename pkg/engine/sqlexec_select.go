@@ -315,12 +315,15 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 	}
 
 	// EXISTS(subquery)
-	if strings.HasPrefix(upper, "EXISTS(") && strings.HasSuffix(upper, ")") {
-		subSQL := strings.TrimSpace(trimmed[len("EXISTS(") : len(trimmed)-1])
-		if res, err := s.executeNestedSessionSQL(cs, subSQL); err == nil && len(res.Rows) > 0 {
-			return true, "exists"
+	if sqlutil.HasPrefixKeyword(trimmed, "EXISTS") {
+		after := strings.TrimSpace(trimmed[6:])
+		if strings.HasPrefix(after, "(") && strings.HasSuffix(after, ")") {
+			subSQL := strings.TrimSpace(after[1 : len(after)-1])
+			if res, err := s.executeNestedSessionSQL(cs, subSQL); err == nil && len(res.Rows) > 0 {
+				return true, "exists"
+			}
+			return false, "exists"
 		}
-		return false, "exists"
 	}
 
 	switch upper {
@@ -973,17 +976,16 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 
 func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	upper := strings.ToUpper(cleaned)
-	if !strings.HasPrefix(upper, "SELECT") {
+	if !sqlutil.HasPrefixKeyword(cleaned, "SELECT") {
 		return nil, fmt.Errorf("invalid SELECT statement")
 	}
 
 	rawList := strings.TrimSpace(cleaned[6:])
 	for {
-		if len(rawList) >= 4 && strings.EqualFold(rawList[:3], "ALL") && (rawList[3] == ' ' || rawList[3] == '\t' || rawList[3] == '\n' || rawList[3] == '\r') {
-			rawList = strings.TrimSpace(rawList[3:])
-		} else if len(rawList) >= 9 && strings.EqualFold(rawList[:8], "DISTINCT") && (rawList[8] == ' ' || rawList[8] == '\t' || rawList[8] == '\n' || rawList[8] == '\r') {
-			rawList = strings.TrimSpace(rawList[8:])
+		if rem, ok := sqlutil.TrimPrefixKeyword(rawList, "ALL"); ok {
+			rawList = rem
+		} else if rem, ok := sqlutil.TrimPrefixKeyword(rawList, "DISTINCT"); ok {
+			rawList = rem
 		} else {
 			break
 		}
@@ -1582,7 +1584,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	}
 
 	// 0. SELECT ... INTO <target_table> FROM ...
-	if strings.HasPrefix(strings.ToUpper(cleaned), "SELECT") {
+	if sqlutil.HasPrefixKeyword(cleaned, "SELECT") {
 		intoIdx := sqlutil.FindTopLevelKeyword(cleaned, "INTO")
 		fromIdx := sqlutil.FindTopLevelKeyword(cleaned, "FROM")
 		if intoIdx != -1 && fromIdx != -1 && intoIdx < fromIdx {
@@ -1837,9 +1839,9 @@ func parseAggItem(proj string) aggItem {
 	}
 
 	isDistinct := false
-	if strings.HasPrefix(strings.ToUpper(argCol), "DISTINCT ") {
+	if rem, ok := sqlutil.TrimPrefixKeyword(argCol, "DISTINCT"); ok {
 		isDistinct = true
-		argCol = strings.TrimSpace(argCol[9:])
+		argCol = rem
 	}
 	argCol = cleanIdentifier(argCol)
 

@@ -28,12 +28,11 @@ func detectLinearWritableCTE(ctes []planner.CTEInfo, mainSQL string) bool {
 		cteNames[nameLower] = true
 
 		inner := strings.TrimSpace(cte.InnerSQL)
-		upper := strings.ToUpper(inner)
 
 		// Must be INSERT, UPDATE, or DELETE
-		isInsert := strings.HasPrefix(upper, "INSERT")
-		isUpdate := strings.HasPrefix(upper, "UPDATE")
-		isDelete := strings.HasPrefix(upper, "DELETE")
+		isInsert := sqlutil.HasPrefixKeyword(inner, "INSERT")
+		isUpdate := sqlutil.HasPrefixKeyword(inner, "UPDATE")
+		isDelete := sqlutil.HasPrefixKeyword(inner, "DELETE")
 		if !isInsert && !isUpdate && !isDelete {
 			return false
 		}
@@ -56,8 +55,7 @@ func detectLinearWritableCTE(ctes []planner.CTEInfo, mainSQL string) bool {
 
 	// 2. Main SQL must be a simple SELECT without complex analytical/join structures
 	mainTrimmed := strings.TrimSpace(mainSQL)
-	mainUpper := strings.ToUpper(mainTrimmed)
-	if !strings.HasPrefix(mainUpper, "SELECT") {
+	if !sqlutil.HasPrefixKeyword(mainTrimmed, "SELECT") {
 		return false
 	}
 	if sqlutil.ContainsKeyword(mainTrimmed, "UNION", false) ||

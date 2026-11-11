@@ -25,9 +25,7 @@ const (
 )
 
 func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, error) {
-	upper := strings.ToUpper(strings.TrimSpace(query))
-	if strings.HasPrefix(upper, "EXPLAIN BYTECODE ") {
-		innerSQL := strings.TrimSpace(query[len("EXPLAIN BYTECODE "):])
+	if innerSQL, ok := sqlutil.TrimPrefixKeyword(query, "EXPLAIN BYTECODE"); ok {
 		prog, err := proc.Compile(innerSQL)
 		if err != nil {
 			return nil, fmt.Errorf("EXPLAIN BYTECODE compilation error: %w", err)
@@ -55,15 +53,14 @@ func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, 
 	if err != nil {
 		opts = planner.ExplainOptions{Costs: true, Format: planner.FormatText}
 		innerExplainSQL = query
-		if strings.HasPrefix(upper, "EXPLAIN ANALYZE ") {
-			innerExplainSQL = strings.TrimSpace(query[len("EXPLAIN ANALYZE "):])
+		if rem, ok := sqlutil.TrimPrefixKeyword(query, "EXPLAIN ANALYZE"); ok {
+			innerExplainSQL = rem
 			opts.Analyze = true
-		} else if strings.HasPrefix(upper, "EXPLAIN ") {
-			innerExplainSQL = strings.TrimSpace(query[len("EXPLAIN "):])
+		} else if rem, ok := sqlutil.TrimPrefixKeyword(query, "EXPLAIN"); ok {
+			innerExplainSQL = rem
 		}
 	}
 
-	innerUpper := strings.ToUpper(strings.TrimSpace(innerExplainSQL))
 	if !strings.ContainsAny(innerExplainSQL, " \t\r\n();") {
 		cleanedTable := cleanIdentifier(innerExplainSQL)
 		if cleanedTable != "" {
@@ -72,7 +69,7 @@ func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, 
 			}
 		}
 	}
-	if strings.HasPrefix(innerUpper, "INSERT ") || strings.HasPrefix(innerUpper, "UPDATE ") || strings.HasPrefix(innerUpper, "DELETE ") {
+	if sqlutil.HasPrefixKeyword(innerExplainSQL, "INSERT") || sqlutil.HasPrefixKeyword(innerExplainSQL, "UPDATE") || sqlutil.HasPrefixKeyword(innerExplainSQL, "DELETE") {
 		return s.execDMLExplain(innerExplainSQL, opts, start)
 	}
 	if setQuery, ok := planner.FindTopLevelSetOps(innerExplainSQL); ok && setQuery != nil && len(setQuery.Segments) >= 2 {
@@ -343,19 +340,18 @@ func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, 
 }
 
 func (s *Coordinator) execDMLExplain(dmlSQL string, opts planner.ExplainOptions, start time.Time) (*QueryResult, error) {
-	upper := strings.ToUpper(strings.TrimSpace(dmlSQL))
 	p := s.newPlanner()
 
 	var dmlType, tableName, whereCond string
 	tokens := sqlutil.SplitTopLevelTokens(dmlSQL)
-	if strings.HasPrefix(upper, "INSERT ") {
+	if sqlutil.HasPrefixKeyword(dmlSQL, "INSERT") {
 		dmlType = "INSERT"
 		if len(tokens) >= 3 && strings.EqualFold(tokens[1], "INTO") {
 			tableName = cleanIdentifier(tokens[2])
 		} else if len(tokens) >= 2 {
 			tableName = cleanIdentifier(tokens[1])
 		}
-	} else if strings.HasPrefix(upper, "UPDATE ") {
+	} else if sqlutil.HasPrefixKeyword(dmlSQL, "UPDATE") {
 		dmlType = "UPDATE"
 		if len(tokens) >= 2 {
 			tableName = cleanIdentifier(tokens[1])
@@ -363,7 +359,7 @@ func (s *Coordinator) execDMLExplain(dmlSQL string, opts planner.ExplainOptions,
 		if wIdx := sqlutil.FindTopLevelKeyword(dmlSQL, "WHERE"); wIdx != -1 {
 			whereCond = strings.TrimSpace(dmlSQL[wIdx+5:])
 		}
-	} else if strings.HasPrefix(upper, "DELETE ") {
+	} else if sqlutil.HasPrefixKeyword(dmlSQL, "DELETE") {
 		dmlType = "DELETE"
 		idx := 1
 		if len(tokens) >= 2 && strings.EqualFold(tokens[1], "FROM") {
