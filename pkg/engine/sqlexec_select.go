@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"lionsql/pkg/auth"
@@ -135,16 +136,49 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 
 	ctx := cs.GetQueryContext()
 
+	type subqueryMemoEntry struct {
+		rows []map[string]any
+		cols []string
+		err  error
+	}
+
+	const maxSubqueryMemoEntries = 4096
+	var memoMu sync.RWMutex
+	subMemo := make(map[string]subqueryMemoEntry, 64)
+
 	opts.SubqueryExecutor = func(sql string) ([]map[string]any, []string, error) {
 		sessID := "default"
 		if cs != nil {
 			sessID = cs.ID
 		}
-		res, err := s.ExecuteSessionSQLContext(context.WithValue(ctx, reentrantQueryKey{}, true), sessID, sql)
-		if err != nil {
-			return nil, nil, err
+		rawExec := func(q string) ([]map[string]any, []string, error) {
+			res, err := s.ExecuteSessionSQLContext(context.WithValue(ctx, reentrantQueryKey{}, true), sessID, q)
+			if err != nil {
+				return nil, nil, err
+			}
+			return res.Rows, res.Columns, nil
 		}
-		return res.Rows, res.Columns, nil
+
+		if sqlutil.IsVolatileSubquery(sql) {
+			return rawExec(sql)
+		}
+
+		memoMu.RLock()
+		if entry, ok := subMemo[sql]; ok {
+			memoMu.RUnlock()
+			return entry.rows, entry.cols, entry.err
+		}
+		memoMu.RUnlock()
+
+		rows, cols, err := rawExec(sql)
+		if err == nil {
+			memoMu.Lock()
+			if len(subMemo) < maxSubqueryMemoEntries {
+				subMemo[sql] = subqueryMemoEntry{rows: rows, cols: cols, err: err}
+			}
+			memoMu.Unlock()
+		}
+		return rows, cols, err
 	}
 
 	exec, err := execution.BuildExecutorWithOptions(plan, tx, s.getTableGetter(cs), opts)

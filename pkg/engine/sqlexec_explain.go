@@ -803,6 +803,10 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 			offset = mEnd
 			continue
 		}
+		if sqlutil.IsVolatileSubquery(innerSQL) {
+			offset = mEnd
+			continue
+		}
 		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
 			// If inner query failed (e.g. contains outer reference), skip so planner can decorrelate
@@ -833,6 +837,10 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 			break
 		}
 		if len(outerNames) > 0 && sqlutil.IsCorrelatedSubquery(innerSQL, outerNames) {
+			offset = mEnd
+			continue
+		}
+		if sqlutil.IsVolatileSubquery(innerSQL) {
 			offset = mEnd
 			continue
 		}
@@ -900,6 +908,10 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 			break
 		}
 		if len(outerNames) > 0 && sqlutil.IsCorrelatedSubquery(innerSQL, outerNames) {
+			offset = mEnd
+			continue
+		}
+		if sqlutil.IsVolatileSubquery(innerSQL) {
 			offset = mEnd
 			continue
 		}
@@ -1037,6 +1049,10 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 			break
 		}
 		if len(outerNames) > 0 && sqlutil.IsCorrelatedSubquery(innerSQL, outerNames) {
+			offset = mEnd
+			continue
+		}
+		if sqlutil.IsVolatileSubquery(innerSQL) {
 			offset = mEnd
 			continue
 		}

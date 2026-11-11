@@ -37,13 +37,22 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
   P1 (53 Items) Enterprise Polish + 6 Golden Release Gates Automation + Soak Test Verification
 
 [ Phase 8: Official 1.0 LTS Production Release ] ────► v1.0.0 LTS [TARGET Q4 2026]
-  6 Golden Release Gates Passed + 100-Step Audit Sign-Off + Always On Failover + Lossless CDC + LTS Packaging (WiredTiger MVCC + In-Memory OCC)
+  6 Golden Release Gates Passed + 100-Step Audit Sign-Off + Subquery Memoization (PERF-SUBQUERY-MEMO-1) + Always On Failover + Lossless CDC + LTS Packaging (WiredTiger MVCC + In-Memory OCC)
 
-[ Phase 9: Scale-Up Query & Pure-Go Storage Preview ] ──► v1.1.0 - v1.2.0 [TARGET Q1-Q2 2027]
-  Flat Hash Join & Mini TPC-H + Native Pure-Go Engine Preview (--storage=purego) + Immutable Audit Log
+[ Phase 9A: Logical Namespace & Cross-DB Engine ] ──► v1.1.0 [TARGET Q1 2027]
+  Prefix-Based Logical Database Namespace (__db_<dbname>_*) + Local Cross-DB Join + Virtual Catalog Transparency
+
+[ Phase 9B: Native Pure-Go Storage Engine Preview ] ─► v1.2.0 [TARGET Q1-Q2 2027]
+  Native Pure-Go B+Tree Storage Preview (--storage=purego, CGO_ENABLED=0) + Zero-CGo Edge Deployment
+
+[ Phase 9C: Enterprise Governance & AI Ecosystem ] ──► v1.3.0 [TARGET Q2 2027]
+  Immutable Cryptographic Audit Log (SHA-256) + AI App Starter Ecosystem
+
+[ Phase 9D: Parallel OLAP & Extensibility Sandbox ] ─► v1.4.0 [TARGET Q3 2027]
+  Multi-Core Parallel Analytical Query (ParallelSeqScan) + WebAssembly UDF Sandbox (wazero)
 
 [ Phase 10: Multi-Engine Expansion: Pure-Go LTS ] ────► v1.5.0 LTS [TARGET Q3-Q4 2027]
-  Native Pure-Go Storage Production Graduation + Dual Persistent Engine Spectrum (WiredTiger CGo + Pure-Go CGo-Free) + Parallel OLAP
+  Native Pure-Go Storage Production Graduation + Dual Persistent Engine Spectrum (WiredTiger CGo + Pure-Go CGo-Free)
 
 [ Phase 11: Distributed Scale-Out & Next-Gen Cloud ] ─► v2.0.0+ [TARGET 2028+]
   Raft Consensus Multi-Node Replication + Distributed Sharding + Dynamic Partition Rebalancing (Major Breaking Architecture)
@@ -62,7 +71,10 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 | **Phase 7A** | `v0.92.0` | **P0 Zero-Defect Reliability Baseline**<br>Comprehensive 100-scope code audit with P0 (Must-Fix 31 items) 100% resolved. Zero OOM/crash/corruption/security injection guaranteed. Tagged as foundational reliability baseline. | **Active / 74% Complete** |
 | **Phase 7B** | `v0.93.0` - `v0.95.0`<br>(RC1) | **P1 Hardening, Durability Verification & 6 Golden Release Gates**<br>P1 (53 items) enterprise stabilization, 10 production apps verified, `scripts/release.sh` 6 Golden Release Gates automated, `crashtest` (D1~D4), SQLLogicTest 409k, T-SQL 14-Suite, `soaktest` zero leaks. | **Scheduled** |
 | **Phase 8** | `v1.0.0 LTS` | **Official 1.0 Production Release & Long-Term Support**<br>6 Golden Release Gates verified, 100-step audit sign-off, Always On HA, lossless CDC, certified drivers, LTS release sign-off (WiredTiger MVCC + In-Memory OCC). | **Target Q4 2026** |
-| **Phase 9** | `v1.1.0` - `v1.2.0` | **Scale-Up Complex Query & Native Pure-Go Engine Preview**<br>Flat hash join, Mini TPC-H suite, Native Pure-Go B+Tree storage engine preview (`--storage=purego`, `CGO_ENABLED=0`), immutable audit log, multi-core `ParallelSeqScan`. | **Target Q1-Q2 2027** |
+| **Phase 9A** | `v1.1.0` | **Logical Namespace & Local Cross-DB Engine**<br>Prefix-based logical database namespace (`__db_<dbname>_*`), local cross-DB join, virtual catalog transparent filtering. | **Target Q1 2027** |
+| **Phase 9B** | `v1.2.0` | **Native Pure-Go B+Tree Engine Preview**<br>Native Pure-Go B+Tree storage engine developer preview (`--storage=purego`, `CGO_ENABLED=0`) for zero-CGo edge deployments. | **Target Q1-Q2 2027** |
+| **Phase 9C** | `v1.3.0` | **Scale-Up Complex Query & Enterprise Governance**<br>Flat hash join, Mini TPC-H suite, cryptographic immutable audit log (`pkg/audit`, SHA-256), AI App Starter context. | **Target Q2 2027** |
+| **Phase 9D** | `v1.4.0` | **Parallel OLAP & Extensibility Sandbox**<br>Multi-core parallel analytical query execution (`ParallelSeqScan`), WebAssembly runtime sandbox UDF (`wazero`). | **Target Q3 2027** |
 | **Phase 10** | `v1.5.0 LTS` | **Multi-Engine Portfolio Expansion: Pure-Go Production LTS**<br>Native Pure-Go storage engine promoted to first-class production tier, coexisting permanently alongside WiredTiger. Full static binary distribution without external C toolchains for lightweight edge/container deployments. | **Target Q3-Q4 2027** |
 | **Phase 11** | `v2.0.0+` | **Distributed Scale-Out & Next-Gen Cloud Architecture**<br>Multi-node Raft consensus replication, distributed horizontal sharding, dynamic partition rebalancing, enterprise cross-datacenter active-active federation. | **Target 2028+** |
 
@@ -243,49 +255,51 @@ The following capabilities represent strategic architectural expansions planned 
 ```
                   [ Post-1.0 Architectural Evolution ]
                                    │
-         ┌─────────────────────────┼─────────────────────────┬─────────────────────────┐
-         ▼                         ▼                         ▼                         ▼
-[ v1.1.0-v1.2.0: Scale-Up ] [ v1.2.0: Pure-Go Preview ] [ v1.5.0 LTS: Multi-Engine ] [ v2.0.0+: Cloud Scale ]
-Flat Hash Join & TPC-H     Native Go B+Tree engine   Dual Persistent Engines    Raft Consensus Cluster
-OCC-Dense Default          Opt-in (--storage=purego) WiredTiger + Pure-Go       Distributed Sharding
+         ┌─────────────────────────┼─────────────────────────┬─────────────────────────┬─────────────────────────┐
+         ▼                         ▼                         ▼                         ▼                         ▼
+    [ v1.1.0 ]                [ v1.2.0 ]                [ v1.3.0 ]                [ v1.4.0 ]               [ v1.5.0 LTS ]
+Logical Namespace &       Native Pure-Go B+Tree     Scale-Up Query &          Multi-Core Parallel      Dual Multi-Engine
+Local Cross-DB Join       Storage Engine Preview    Immutable Audit Log       OLAP & Wasm UDF          Production Graduation
+(__db_<dbname>_*)         (--storage=purego)        (Flat Hash, TPC-H, SHA)   (ParallelSeqScan)        (WiredTiger + Pure-Go)
 ```
 
-### 5.1. Native Pure-Go B+Tree Storage Engine (Experimental `v1.2.0` -> Production LTS `v1.5.0`)
+### 5.1. Logical Database Namespace & Local Cross-DB Join (`v1.1.0`)
+- **Objective**: Implement prefix-based logical database namespaces (`__db_<dbname>_*`) to provide 100% collision-free multi-database separation and sub-microsecond local cross-database joins without physical process reboot overhead ([`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)).
+- **Deliverables**:
+  - `USE <dbname>` logical context binding with `__db_<dbname>_*` physical table routing (`ARCH-LOGICAL-NAMESPACE-1`).
+  - 3-Part Name resolution (`SalesDB.dbo.Orders`) in SELECT, JOIN, DML, and subqueries.
+  - Transparent virtual catalog filtering in `sys.databases` and `sys.tables` (stripping internal prefix).
+  - Cross-database relational joins executed directly in-memory via Volcano Hash Join with zero IPC overhead.
+
+### 5.2. Native Pure-Go B+Tree Storage Engine (Experimental `v1.2.0` -> Production LTS `v1.5.0`)
 - **Objective & Multi-Engine Architectural Spectrum**:
-  - Implement a 100% pure-Go persistent storage backend satisfying the canonical `storage.Engine` interface, featuring a lock-free hazard-pointer B+Tree, MVCC timestamped transaction isolation, and autonomous block caching.
+  - Implement a 100% pure-Go persistent storage backend satisfying the canonical `storage.Engine` interface, featuring a lock-free hazard-pointer B+Tree, MVCC timestamped transaction isolation, and autonomous block caching (`FEAT-PUREGO-WT-ENGINE`).
   - **Permanent Multi-Engine Coexistence (Zero Deprecation)**:
     - **WiredTiger MVCC Engine (CGo / Enterprise High-Performance Tier)**: Permanently retained as LionSQL's battle-tested, high-throughput storage flagship for hardware-saturating on-premises and enterprise production workloads.
     - **Native Pure-Go Storage Engine (CGo-Free / Cloud-Native Tier)**: Introduced as an autonomous, zero-dependency alternative enabling pure `CGO_ENABLED=0` compilation, simplified cross-platform deployment, and frictionless operation in lightweight distroless containers and Windows environments.
 - **Phased Graduation Trajectory**:
   - **`v1.2.0` (Experimental Developer Preview)**:
-    Shipped as an opt-in storage backend (`--storage=purego` or `LIONSQL_STORAGE=purego`) under `CGO_ENABLED=0` builds, enabling field testing, crash durability benchmarking, and community verification across edge platforms.
+    Shipped as a focused, standalone opt-in storage backend (`--storage=purego` or `LIONSQL_STORAGE=purego`) under `CGO_ENABLED=0` builds, enabling field testing, crash durability benchmarking, and community verification across edge platforms.
   - **`v1.5.0 LTS` (Production Tier Graduation)**:
     Upon satisfying the 6 Golden Release Verification Gates and crash-test oracles, the Native Pure-Go engine graduates to a full first-class production engine alongside WiredTiger, establishing a complete multi-tier storage portfolio.
 - **SemVer Versioning Rationale (`v1.5.0` vs. `v2.0.0`)**:
   - Expanding storage engine choices while preserving 100% binary wire protocol (PGWire v3, TDS 7.x/8.0), SQL procedural syntax, and client driver compatibility introduces **zero breaking changes** to client applications.
   - Adhering to Semantic Versioning (SemVer), this milestone is designated as **`v1.5.0 LTS`**—a milestone symbolizing architectural maturity and multi-engine flexibility without imposing enterprise upgrade friction.
 
-### 5.2. Scale-Up Complex Query Engine & Mini TPC-H Suite (`v1.1.0`)
-- **Objective**: Implement open-addressing integer flat hash join and direct slot projection to target sub-50ms execution on complex analytical queries ([`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)).
-- **Deliverables**: TPC-H Q1, Q3, Q4, Q6, Q9 suite and automated CBO subquery decorrelation (`EXISTS`/`IN` -> Semi-Join).
-
-### 5.3. High-Density In-Memory Engine: `OCC-Dense` Default Graduation (`v1.1.0`)
-- **Objective**: Following the Phase 7 A/B implementation of pointer-free flat records (`OCC-Dense`, 5.95x row compression, 67.5% heap reduction, Zero-GC pointers), graduate `OCC-Dense` to the default storage engine mode upon completion of the 4 mandatory reliability gates (crash recovery, secondary indexes/DDL, full SLT/T-SQL suites, and 24h soak) ([`notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) & [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)).
-
-### 5.4. Enterprise Cryptographic Immutable Audit Log (`pkg/audit`) (`v1.1.0`)
-- **Objective**: Implement SHA-256 hash-chained tamper-evident audit logging ($H_n = \text{SHA256}(H_{n-1} \parallel R_n)$) with lock-free MPSC ring buffers and offline verification CLI (`lionsql audit verify`).
+### 5.3. Enterprise Cryptographic Immutable Audit Log (`pkg/audit`) (`v1.3.0`)
+- **Objective**: Implement SHA-256 hash-chained tamper-evident audit logging ($H_n = \text{SHA256}(H_{n-1} \parallel R_n)$) with lock-free MPSC ring buffers and offline verification CLI (`lionsql audit verify`) (`AUDIT-LOG-1`).
 - **Compliance Scope**: PCI-DSS v4.0 Req 10, SOC 2 Type II, HIPAA §164.312(b) ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md)).
 
-### 5.5. Multi-Core Parallel Analytical Query Execution (`v1.2.0`)
+### 5.4. AI App Starter Positioning & Agent-Friendly Documentation (`v1.3.0`)
+- **Objective**: Position LionSQL as "a SQLite-light, PostgreSQL-compatible server database" for AI-generated services, leveraging the single binary, dual wire protocols, built-in BaaS (REST, webhooks, RLS, SSE), and SQLLogicTest 100% evidence ([`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)).
+- **Deliverables**: `llms.txt` / `AGENTS.md` agent context (`AI-STARTER-1`), compatibility matrix (`AI-STARTER-3`), landing page starter section with Go/Node/Python examples (`AI-STARTER-2`), and an in-process embedded mode feasibility study (`AI-STARTER-4`).
+
+### 5.5. Multi-Core Parallel Analytical Query Execution (`v1.4.0`)
 - **Objective**: Multi-threaded Volcano execution (`ParallelSeqScan`) partitioning large table scans across worker pools.
 - **Benefit**: Accelerated analytical query execution on multi-core servers without impacting concurrent OLTP transactions.
 
-### 5.6. WebAssembly Runtime Sandbox UDF (`wazero`) (`v1.2.0`)
+### 5.6. WebAssembly Runtime Sandbox UDF (`wazero`) (`v1.4.0`)
 - **Objective**: Embed the pure-Go `wazero` Wasm runtime to execute dynamically loaded WebAssembly scalar functions (`CREATE FUNCTION ... AS WASM`) in isolated memory sandboxes.
-
-### 5.6.1. AI App Starter Positioning & Agent-Friendly Documentation (`v1.1.0`)
-- **Objective**: Position LionSQL as "a SQLite-light, PostgreSQL-compatible server database" for AI-generated services, leveraging the single binary, dual wire protocols, built-in BaaS (REST, webhooks, RLS, SSE), and SQLLogicTest 100% evidence.
-- **Deliverables**: `llms.txt` / `AGENTS.md` agent context (`AI-STARTER-1`), compatibility matrix (`AI-STARTER-3`), landing page starter section with Go/Node/Python examples (`AI-STARTER-2`), and an in-process embedded mode feasibility study (`AI-STARTER-4`) ([`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)).
 
 ### 5.7. Distributed Scale-Out & Next-Gen Cloud Architecture (`v2.0.0+`)
 - **Objective**: Implement multi-node Raft consensus replication and distributed horizontal sharding for large-scale enterprise deployments.
@@ -340,12 +354,14 @@ OCC-Dense Default          Opt-in (--storage=purego) WiredTiger + Pure-Go       
 | **Phase 7A** | 100단계 듀얼 AI 전수 감사 P0(31선) 완치 및 신뢰성 베이스라인 태깅 | Quality & Audit | `v0.92.0` | **In Progress** | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |
 | **Phase 7B** | P1(53선) 엔터프라이즈 완결성 및 6대 게이트 최종 검증 (`v1.0.0-rc1`) | Quality & Hardening | `v0.95.0` | **Scheduled** | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |
 | **Phase 8** | 공식 LionSQL v1.0.0 LTS 출시 및 6대 게이트 최종 사인오프 | Release | `v1.0.0 LTS` | **Target Q4 2026** | [`CHANGELOG.md`](CHANGELOG.md) |
-| **Phase 9** | Mini TPC-H 벤치마크 및 CBO 서브쿼리 Decorrelation | Query Planner | `v1.1.0` | **Planned** | [`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |
-| **Phase 9** | Enterprise Cryptographic Immutable Audit Log (`pkg/audit`) | Security & Audit | `v1.1.0` | **Planned** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md) |
-| **Phase 9** | Native Pure-Go B+Tree 엔진 실험적 프리뷰 (`--storage=purego`, `CGO_ENABLED=0`) | Storage Engine | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#51-native-pure-go-btree-storage-engine-experimental-v120---production-lts-v150) |
-| **Phase 9** | Multi-Core Parallel Analytical Query Execution (`ParallelSeqScan`) | Query Execution | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#55-multi-core-parallel-analytical-query-execution-v120) |
-| **Phase 9** | WebAssembly Runtime Sandbox UDF (`wazero`) | Extensibility | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#56-webassembly-runtime-sandbox-udf-wazero-v120) |
-| **Phase 10** | **Native Pure-Go 엔진 정식 프로덕션 승격 (WiredTiger 엔터프라이즈 티어와 영구 공존)** | Storage Engine | `v1.5.0 LTS` | **Target Q3-Q4 2027** | [`ROADMAP.md`](ROADMAP.md#51-native-pure-go-btree-storage-engine-experimental-v120---production-lts-v150) |
+| **Phase 8** | 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 (`PERF-SUBQUERY-MEMO-1`) | Query Engine | `v1.0.0 LTS` | **In Progress** | [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |
+| **Phase 9A** | 프리픽스 기반 논리적 네임스페이스 및 로컬 크로스 DB 조인 (`ARCH-LOGICAL-NAMESPACE-1`) | Query Engine | `v1.1.0` | **Planned** | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |
+| **Phase 9B** | Native Pure-Go B+Tree 엔진 단일 포커스 프리뷰 (`FEAT-PUREGO-WT-ENGINE`, `--storage=purego`, `CGO_ENABLED=0`) | Storage Engine | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#52-native-pure-go-btree-storage-engine-experimental-v120---production-lts-v150) |
+| **Phase 9C** | Enterprise Cryptographic Immutable Audit Log (`AUDIT-LOG-1`, `pkg/audit`) | Security & Audit | `v1.3.0` | **Planned** | [`notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md) |
+| **Phase 9C** | AI App Starter Positioning & Agent-Friendly Documentation (`AI-STARTER-1~3`) | Ecosystem | `v1.3.0` | **Planned** | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |
+| **Phase 9D** | Multi-Core Parallel Analytical Query Execution (`ParallelSeqScan`) | Query Execution | `v1.4.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#56-multi-core-parallel-analytical-query-execution-v140) |
+| **Phase 9D** | WebAssembly Runtime Sandbox UDF (`wazero`) | Extensibility | `v1.4.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#57-webassembly-runtime-sandbox-udf-wazero-v140) |
+| **Phase 10** | **Native Pure-Go 엔진 정식 프로덕션 승격 (WiredTiger 엔터프라이즈 티어와 영구 공존)** | Storage Engine | `v1.5.0 LTS` | **Target Q3-Q4 2027** | [`ROADMAP.md`](ROADMAP.md#52-native-pure-go-btree-storage-engine-experimental-v120---production-lts-v150) |
 | **Post-1.0** | [초안/연구] In-Process Reboot 기반 물리 서브폴더 USE DB 전환 (`RESEARCH-INPROCESS-REBOOT-USE`) | Research & Engine | `Post-1.0` | **Draft Plan** | [`notes/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md`](notes/plans/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md) |
 | **Phase 11** | Raft Consensus 기반 멀티 노드 복제 클러스터링 및 분산 수평 샤딩 | Cloud & Scale-Out | `v2.0.0+` | **Target 2028+** | [`ROADMAP.md`](ROADMAP.md#57-distributed-scale-out--next-gen-cloud-architecture-v200) |
 | **Spec-Out** | In-Kernel OAuth2 Social Web Login | Auth & BaaS | - | **Spec-Out** | [`doc/ENTERPRISE_AUTHENTICATION_SPI.md`](doc/ENTERPRISE_AUTHENTICATION_SPI.md) |

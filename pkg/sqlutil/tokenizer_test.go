@@ -442,3 +442,33 @@ func TestHasPrefixKeyword(t *testing.T) {
 		})
 	}
 }
+
+func TestIsVolatileSubquery(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+		want bool
+	}{
+		{"Empty string", "", false},
+		{"Deterministic SELECT", "SELECT AVG(salary) FROM emp WHERE dept_id = 1", false},
+		{"Deterministic subquery with string containing RAND", "SELECT * FROM t WHERE name = 'BRAND_NEW'", false},
+		{"NEWID call", "SELECT NEWID()", true},
+		{"NEWID7 call", "SELECT NEWID7()", true},
+		{"RAND call", "SELECT RAND()", true},
+		{"GETDATE call", "SELECT GETDATE()", true},
+		{"NOW call", "SELECT NOW()", true},
+		{"UUID call", "SELECT UUID()", true},
+		{"CURRENT_TIMESTAMP identifier", "SELECT CURRENT_TIMESTAMP", true},
+		{"Volatile inside subquery with comment", "SELECT /* comment */ NEWID() FROM tbl", true},
+		{"Volatile inside string literal is not volatile", "SELECT * FROM t WHERE val = 'NEWID()'", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsVolatileSubquery(tt.sql)
+			if got != tt.want {
+				t.Errorf("IsVolatileSubquery(%q) = %v; want %v", tt.sql, got, tt.want)
+			}
+		})
+	}
+}

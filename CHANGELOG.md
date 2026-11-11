@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- implement per-query bounded subquery memoization with 4,096-entry cap, volatile expression bypass (NEWID, RAND, GETDATE, NOW, etc.), and thread safety in Volcano query execution (`PERF-SUBQUERY-MEMO-1`, `ADR-030`)
 - add `MemoryCompact` durability, composite DDL/DML, SkipList, FK, `ArenaRowCursor`, and extended-type reliability suite in `pkg/storage/memengine/flat_reliability_test.go` (`TEST-OCC-FLAT-1`, `TEST-OCC-FLAT-2`), verified alongside `test/slt` (`InProc`), `test/slt_proc` 14-suite T-SQL compatibility, and 4-round `SIGKILL` `crashtest` (`TEST-OCC-FLAT-3`)
 - document `compact` default rationale and pre-v1.0 `performance` mode deprecation (`DEPRECATE-OCC-PERF-1`) across `doc/ADR.md` (`ADR-028`), `notes/ENGINEERING_CONTEXT.ko.md` (`㉕`), `notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`, `doc/TRANSACTION_PERFORMANCE_GUIDE*.md`, and `doc/USER_MANUAL*.md`
 - document `ArenaRowCursor` scan decode design (`Option A`) vs. rejected single-buffer reuse (`Option B`) and `Lazy FlatTuple` (`Option C`) across `doc/ADR.md` (`ADR-029`), `notes/ENGINEERING_CONTEXT.ko.md` (`㉖`), and `notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md` (Section 8)
@@ -25,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - mark `-memory=performance`, `MemoryPerformance`, and legacy aliases (`OCCModeRaw`, `OCCModePerformance`) as deprecated in CLI help text, startup runtime log warning (`memoryPerformanceDeprecationNotice`), startup banner (`[DEPRECATED: use compact]`), and Go doc comments while preserving full v1.0 compatibility prior to post-1.0 removal (`DEPRECATE-OCC-PERF-1`)
 
 ### Fixed
+- fix parameterization in `sqlutil.ParameterizeSubquery` to prioritize qualified outer column tokens over unqualified tokens, preventing inner column name mutation in correlated subqueries (`PERF-SUBQUERY-MEMO-1`)
+- prevent compile-time constant-folding of non-deterministic volatile scalar subqueries in `sqlexec_explain.go` (`PERF-SUBQUERY-MEMO-1`)
 - harden `MemoryCompact` storage engine against 6 audit defects (`FIX-OCC-COMPACT-AUDIT-1`):
   - eliminate `Arena.AllocStringBytes` QueryResult use-after-free by retaining variable string allocations on Go heap while pooling row slices (Finding 1)
   - implement atomic 2-phase staging schema migration for `Engine.AlterTable` with PK/FK drop guards, cascade secondary index cleanup, fail-closed row re-encoding, and single WAL `OpAlterTable` replay (Finding 2)

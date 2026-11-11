@@ -1512,8 +1512,22 @@ func ParameterizeSubquery(subquerySQL string, row map[string]any) string {
 	if len(row) == 0 {
 		return subquerySQL
 	}
+	// Check if row contains qualified keys (e.g. "e.dept_id", "emp.dept_id")
+	hasQualified := false
+	for k := range row {
+		if strings.Contains(k, ".") {
+			hasQualified = true
+			break
+		}
+	}
+
 	replacements := make(map[string]string, len(row)*2)
 	for k, v := range row {
+		// If qualified keys exist, only qualified references should be substituted
+		// to prevent corrupting inner subquery unqualified column names.
+		if hasQualified && !strings.Contains(k, ".") {
+			continue
+		}
 		lit := FormatSQLLiteral(v)
 		normKey := strings.ToLower(CleanIdentifierParts(k))
 		replacements[normKey] = lit
@@ -1590,6 +1604,128 @@ func IsCorrelatedSubquery(innerSQL string, outerNames []string) bool {
 				if normOuters[tblPrefix] {
 					return true
 				}
+			}
+			continue
+		}
+		i++
+	}
+	return false
+}
+
+var volatileFuncs = map[string]bool{
+	"RAND":                true,
+	"RANDOM":              true,
+	"NEWID":               true,
+	"NEWID7":              true,
+	"NEWSEQUENTIALID":     true,
+	"UUID":                true,
+	"UUIDV7":              true,
+	"UUID_GENERATE_V7":    true,
+	"GEN_RANDOM_UUID":     true,
+	"GETDATE":             true,
+	"GETUTCDATE":          true,
+	"SYSDATETIME":         true,
+	"SYSUTCDATETIME":      true,
+	"SYSDATETIMEOFFSET":   true,
+	"CURRENT_TIMESTAMP":   true,
+	"NOW":                 true,
+	"CLOCK_TIMESTAMP":     true,
+	"TIMEOFDAY":           true,
+	"STATEMENT_TIMESTAMP": true,
+	"SYSDATE":             true,
+}
+
+// IsVolatileSubquery reports whether subquerySQL contains non-deterministic functions
+// (e.g. RAND, NEWID, UUID, GETDATE, NOW, CURRENT_TIMESTAMP, etc.) that must not be
+// memoized across outer tuple iterations or folded into static constants at compile time.
+func IsVolatileSubquery(sql string) bool {
+	if sql == "" {
+		return false
+	}
+	upper := strings.ToUpper(sql)
+	// Fast path: return false if none of the volatile substrings exist
+	if !strings.Contains(upper, "RAND") &&
+		!strings.Contains(upper, "NEWID") &&
+		!strings.Contains(upper, "UUID") &&
+		!strings.Contains(upper, "DATE") &&
+		!strings.Contains(upper, "TIME") &&
+		!strings.Contains(upper, "NOW") {
+		return false
+	}
+
+	n := len(sql)
+	inSingleQuote := false
+	i := 0
+	for i < n {
+		ch := sql[i]
+		if inSingleQuote {
+			if ch == '\'' {
+				if i+1 < n && sql[i+1] == '\'' {
+					i += 2
+					continue
+				}
+				inSingleQuote = false
+			}
+			i++
+			continue
+		}
+		if ch == '\'' {
+			inSingleQuote = true
+			i++
+			continue
+		}
+
+		// Skip single-line comments (-- ...)
+		if ch == '-' && i+1 < n && sql[i+1] == '-' {
+			i += 2
+			for i < n && sql[i] != '\n' && sql[i] != '\r' {
+				i++
+			}
+			continue
+		}
+		// Skip multi-line comments (/* ... */)
+		if ch == '/' && i+1 < n && sql[i+1] == '*' {
+			i += 2
+			for i+1 < n && !(sql[i] == '*' && sql[i+1] == '/') {
+				i++
+			}
+			if i+1 < n {
+				i += 2
+			}
+			continue
+		}
+
+		if ch == '[' || ch == '"' || ch == '`' || unicode.IsLetter(rune(ch)) || ch == '_' {
+			start := i
+			for i < n {
+				c := sql[i]
+				if c == '[' {
+					i++
+					for i < n && sql[i] != ']' {
+						i++
+					}
+					if i < n {
+						i++
+					}
+				} else if c == '"' || c == '`' {
+					quote := c
+					i++
+					for i < n && sql[i] != quote {
+						i++
+					}
+					if i < n {
+						i++
+					}
+				} else if unicode.IsLetter(rune(c)) || unicode.IsDigit(rune(c)) || c == '_' {
+					i++
+				} else {
+					break
+				}
+			}
+			token := sql[start:i]
+			clean := strings.ToUpper(CleanIdentifier(token))
+			if volatileFuncs[clean] {
+				return true
 			}
 			continue
 		}
