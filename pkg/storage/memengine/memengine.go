@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -524,9 +525,6 @@ func (e *Engine) Close() error {
 		walErr = e.wal.Close()
 		e.wal = nil
 	}
-	if saveErr != nil {
-		return saveErr
-	}
-	return walErr
+	return errors.Join(saveErr, walErr)
 }
 

@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -422,5 +423,42 @@ func TestRegression_AUDIT_FULL_009_FKCascadeSetNull_ConcurrentDDL(t *testing.T) 
 		if !exists || !pVal.IsNull {
 			t.Fatalf("Child %d parent_id expected NULL, got %+v", i, pVal)
 		}
+	}
+}
+
+// TestRegression_AUDIT_FULL_002_CloseMultiErrorJoining verifies that if both RDB snapshot save
+// and WAL close encounter I/O errors during Engine.Close(), both errors are joined and reported
+// without silently suppressing the WAL error.
+func TestRegression_AUDIT_FULL_002_CloseMultiErrorJoining(t *testing.T) {
+	tempDir := t.TempDir()
+	eng := NewWithOptions(Options{
+		EnableRDB:   true,
+		FsyncPolicy: FsyncEverySec,
+	})
+	if err := eng.Open(tempDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+
+	// 1. Manually close the underlying WAL file descriptor to induce a walErr on Close()
+	if eng.wal != nil && eng.wal.file != nil {
+		_ = eng.wal.file.Close()
+	}
+
+	// 2. Corrupt dataDir to a non-existent unwritable path to induce a saveErr on saveDiskLocked()
+	eng.dataDir = filepath.Join(tempDir, "non_existent_subdir", "deeply_nested", "cannot_save")
+
+	// 3. Close the engine; both saveErr and walErr should be triggered and joined
+	closeErr := eng.Close()
+	if closeErr == nil {
+		t.Fatalf("expected close error, got nil")
+	}
+
+	// Verify that the joined error contains both errors (save error and closed file error)
+	errStr := closeErr.Error()
+	if errStr == "" {
+		t.Fatalf("expected non-empty error string from joined error")
+	}
+	if !errors.Is(closeErr, os.ErrClosed) {
+		t.Fatalf("expected joined error to contain os.ErrClosed, got: %v", closeErr)
 	}
 }

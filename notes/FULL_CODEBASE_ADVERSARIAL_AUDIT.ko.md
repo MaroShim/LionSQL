@@ -101,7 +101,9 @@
     }
     return walErr
     ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `DEFECT_FIXED (완치)`
+  - Go 1.20 표준 `errors.Join(saveErr, walErr)`를 적용하여 RDB 스냅샷 저장 에러와 WAL 파일 닫기 에러가 동시에 발생하더라도 두 에러를 모두 온전히 결합하여 호출자에게 투명하게 보고 (`[RULE:ExplicitError]`).
+  - `TestRegression_AUDIT_FULL_002_CloseMultiErrorJoining` TDD 회귀 검증 완료.
 
 ---
 
@@ -248,7 +250,7 @@
 
 | 파일 경로 | 파일 크기 | 라인 수 | 감사 상태 | 검출된 결함 코드 | 최종 판정 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `pkg/storage/memengine/memengine.go` | 14.3 KB | 526 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-002` | `DEFECT_LOGGED` |
+| `pkg/storage/memengine/memengine.go` | 14.3 KB | 526 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-002` | `PASS` |
 | `pkg/storage/memengine/table_data.go` | 10.9 KB | 430 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-001` | `PASS` |
 | `pkg/storage/memengine/flat_record.go` | 7.8 KB | 288 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-001` (연계) | `PASS` |
 | `pkg/storage/memengine/tx.go` | 69.6 KB | 2,566 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-003`, `AUDIT-FULL-009` | `PASS` |
@@ -257,7 +259,7 @@
 | `pkg/storage/memengine/ddl.go` | 18.1 KB | 705 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-001`, `AUDIT-FULL-009` | `PASS` |
 | `pkg/storage/memengine/skiplist.go` | 7.9 KB | 335 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/storage/memengine/codec.go` | 0.4 KB | 15 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
-| **Domain 1 총계** | **154.5 KB** | **5,773 LOC** | **100% 전수 검증 완료** | **총 5건 식별** (Crit:1, High:3, Low:1) | **감사 완료 (PAUSE)** |
+| **Domain 1 총계** | **154.5 KB** | **5,773 LOC** | **100% 전수 검증 완료** | **총 5건 식별** (Crit:1, High:3, Low:1) | **감사 및 결함 수정 100% 종결 (`ALL_FIXED`)** |
 
 ---
 
@@ -1655,7 +1657,7 @@
 | 결함 코드 | 심각도 | 발생 위치 | 결함 요약 및 영향도 | 상태 |
 | :--- | :--- | :--- | :--- | :--- |
 | `AUDIT-FULL-001` | High | `pkg/storage/memengine/table_data.go:373` | ALTER TABLE ADD COLUMN 동시 읽기 시 FlatRecord 레이아웃 불일치로 인한 슬라이스 바운드 초과 패닉 | 조치 완료 (TDD 검증) |
-| `AUDIT-FULL-002` | Low | `pkg/storage/memengine/memengine.go:521` | Engine.Close() 시 RDB 저장 에러 발생 시 WAL Close 에러 침묵 은폐 | 미수정 |
+| `AUDIT-FULL-002` | Low | `pkg/storage/memengine/memengine.go:521` | Engine.Close() 시 RDB 저장 에러 발생 시 WAL Close 에러 침묵 은폐 | 완치 (수정 완료) |
 | `AUDIT-FULL-003` | Critical | `pkg/storage/memengine/tx.go:2186` | Commit() 시 WAL 추가 실패 후 rollbackApplied() 누락으로 인한 메모리 유령 커밋 및 ACID 파괴 | 완치 (수정 완료) |
 | `AUDIT-FULL-004` | High | `pkg/storage/memengine/persistence.go:332` | RDB 스냅샷 직렬화 중 비동기화 tables 맵 순회로 인한 동시 DDL 패닉 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-005` | High | `pkg/proc/runtime/vm_dispatcher.go:667` | OpDeclareTable 나노초 타이머 충돌로 동일 임시 테이블명 생성 및 신규 테이블 자가 삭제 | 완치 (수정 완료) |
