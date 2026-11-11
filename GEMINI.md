@@ -101,6 +101,31 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
    - Layer 2 (Catalog Test Assertion): `pkg/engine/coordinator_test.go` (`TestCoordinator_SSMS_VirtualCatalogQueries`) asserts `sys.dm_os_host_info` returns `"Windows"`, `"Windows"`, `"10.0"`.
    - Layer 3 (Architecture Contract): Codified in `GEMINI.md` and `notes/ENGINEERING_CONTEXT.ko.md`.
 
+### Invariant 12: Context-Blind `strings.*` SQL Parsing Prohibition & Mandatory `sqlutil` Primacy
+1. **Fundamental Unfitness of Flat `strings.*` for Context-Free SQL Grammars**:
+   - Go standard library `strings` package functions (`Index`, `Contains`, `Split`, `HasPrefix`, `HasSuffix`, `LastIndex`) operate on flat byte streams with zero grammatical awareness.
+   - SQL contains nested syntactic contexts: string literals (`'...'`, `"..."`), identifier brackets (`[...]`), comments (`--`, `/* */`), and parentheses (`(...)`).
+   - Calling raw `strings.*` directly on SQL statements, clauses, predicates, projections, or expressions introduces 4 fatal defect categories:
+     1. **Literal Contamination**: Substring matches inside string values (e.g. `'DANCING WITH THE STARS'` matched by `" WITH "`, `'A=B'` matched by `"="`).
+     2. **Comment Contamination**: False positive keyword matches inside comments (`-- SELECT ...`).
+     3. **Early Parenthesis Truncation**: Matching the inner closing parenthesis `)` of a function call (`CONCAT('a', ')')`) instead of the true outer clause boundary.
+     4. **Partial Identifier Collision**: Substring matching inside identifiers (e.g. `$1` matching inside `$10`, `AS` matching inside `LAST_NAME`, `WITH` matching inside `WITHIN_GROUP`).
+2. **Mandatory Canonical `pkg/sqlutil` Primacy**:
+   - All query routing, clause compilation, keyword matching, token splitting, parameter extraction, and parenthesis balancing on SQL strings must exclusively utilize deterministic, context-aware `pkg/sqlutil` primitives:
+     - Keyword detection: `sqlutil.FindTopLevelKeyword`, `sqlutil.HasPrefixKeyword`, `sqlutil.ContainsKeyword`
+     - Clause/expression splitting: `sqlutil.SplitTopLevel`, `sqlutil.SplitSetClauses`, `sqlutil.SplitDeclarations`
+     - Parameter handling: `sqlutil.ScanPgParams`, `sqlutil.TranslatePgParamsToAtParams`
+     - Parenthesis matching: `sqlutil.FindMatchingParen`
+     - Operator/character lookup: `sqlutil.FindTopLevelChar`, `sqlutil.ExtractEqualityFilter`
+3. **Strict Boundary: Permitted vs. Strictly Prohibited**:
+   - **Permitted (Flat, Non-Grammatical Strings Only)**:
+     - Pure leaf identifier formatting without SQL syntax (e.g. `strings.Trim(col, "[]\"'`")`)
+     - Log formatting, error messages, and URL/path construction
+     - Go runtime timestamps (`strings.Index(str, " m=")`)
+     - Built-in SQL functions that natively execute substring search (`CHARINDEX`, `INSTR`, `POSITION`)
+   - **Strictly Prohibited**:
+     - Raw `strings.Index`, `strings.Contains`, `strings.Split`, `strings.HasPrefix` on unparsed SQL queries, DDL/DML clauses, WHERE predicates, or function argument lists.
+
 ---
 
 ## 3. Explicit Spec-Out Decisions (Engine Simplicity & KISS)

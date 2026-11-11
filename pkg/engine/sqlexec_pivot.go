@@ -85,7 +85,7 @@ func parsePivotInnerBody(pivotBody string) (aggFunc, aggCol, pivotCol, rawPivotV
 			return "", "", "", "", false
 		}
 	}
-	closeP := findMatchingParen(s, openP)
+	closeP := sqlutil.FindMatchingParen(s, openP)
 	if closeP == -1 {
 		return "", "", "", "", false
 	}
@@ -246,19 +246,7 @@ func parsePivotQuery(query string) (*pivotParsedQuery, error) {
 	}
 	openParen += pivotIdx
 
-	depth = 0
-	closeParen := -1
-	for i := openParen; i < len(trimmed); i++ {
-		if trimmed[i] == '(' {
-			depth++
-		} else if trimmed[i] == ')' {
-			depth--
-			if depth == 0 {
-				closeParen = i
-				break
-			}
-		}
-	}
+	closeParen := sqlutil.FindMatchingParen(trimmed, openParen)
 	if closeParen == -1 {
 		return nil, fmt.Errorf("malformed PIVOT syntax: missing closing parenthesis")
 	}
@@ -862,19 +850,7 @@ func parseUnpivotQuery(query string) (*unpivotParsedQuery, error) {
 	}
 	openParen += unpivotIdx
 
-	depth = 0
-	closeParen := -1
-	for i := openParen; i < len(trimmed); i++ {
-		if trimmed[i] == '(' {
-			depth++
-		} else if trimmed[i] == ')' {
-			depth--
-			if depth == 0 {
-				closeParen = i
-				break
-			}
-		}
-	}
+	closeParen := sqlutil.FindMatchingParen(trimmed, openParen)
 	if closeParen == -1 {
 		return nil, fmt.Errorf("malformed UNPIVOT syntax: missing closing parenthesis")
 	}

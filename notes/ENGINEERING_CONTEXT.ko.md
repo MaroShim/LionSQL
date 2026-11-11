@@ -309,6 +309,25 @@
 
 ---
 
+### ㉙ 문맥 무시 strings.* SQL 파싱 금지 및 sqlutil 최우선 불변식 (Invariant 12)
+* **결정 사항**: SQL 쿼리, 절(Clause), 술어(Predicate), 인자 목록을 대상으로 Go 표준 라이브러리 `strings` 패키지 함수(`Index`, `Contains`, `Split`, `HasPrefix`, `HasSuffix`, `LastIndex`)를 직접 호출하는 것을 영구 금지하고, 결정론적 문맥 인식 모듈인 `pkg/sqlutil` 원시 함수 사용을 의무화함 (`Invariant 12`, `AUDIT-INDEX-*`).
+* **도입 배경 및 배제 근거**:
+  1. **Chomsky 2형 문맥 자유 문법(CFG)과 단순 바이트 스트림의 괴리**: Go 표준 `strings.*` 함수는 따옴표 리터럴(`'...'`), 대괄호/쌍따옴표 식별자(`[...]`, `"..."`), 주석(`--`, `/* */`), 중첩 괄호(`(...)`)에 대한 구문론적 문맥을 전혀 인지하지 못하는 평면 바이트 스캔임.
+  2. **4대 치명적 결함 원천 차단**:
+     - **리터럴 오염 (Literal Contamination)**: 문자열 데이터 내부의 키워드/연산자 매칭 (`'DANCING WITH THE STARS'`의 `WITH`, `'A=B'`의 `=`).
+     - **주석 오염 (Comment Contamination)**: 주석 블록 내 키워드를 실제 절로 오인 (`-- SELECT ...`).
+     - **조기 괄호 절단 (Early Parenthesis Truncation)**: 내포된 함수 괄호(`CONCAT('a', ')')`)를 전체 절의 닫는 괄호로 조기 인식해 구문 파괴.
+     - **식별자 부분 충돌 (Identifier Partial Collision)**: 접두사/접미사 유사 식별자 오인식 (`$1`이 `$10`의 접두사로 매칭, `AS`가 `LAST_NAME`과 충돌).
+  3. **표준 sqlutil 원시 함수 단일화**:
+     - 키워드 탐색: `sqlutil.FindTopLevelKeyword`, `sqlutil.HasPrefixKeyword`, `sqlutil.ContainsKeyword`
+     - 절/표현식 분할: `sqlutil.SplitTopLevel`, `sqlutil.SplitSetClauses`, `sqlutil.SplitDeclarations`
+     - 파라미터 스캔: `sqlutil.ScanPgParams`, `sqlutil.TranslatePgParamsToAtParams`
+     - 괄호 쌍 탐색: `sqlutil.FindMatchingParen`
+     - 연산자 탐색: `sqlutil.FindTopLevelChar`, `sqlutil.ExtractEqualityFilter`
+  4. **허용 경계**: SQL 문법 구조가 개입되지 않는 평면 문자열(식별자 트림, 로그/에러 메시지 포맷, Go 런타임 타임스탬프, SQL 내장 `CHARINDEX`/`INSTR` 구현)에 한해서만 표준 `strings.*` 사용 허용.
+
+---
+
 ## 2. 사용자의 엔지니어링 철학 및 협업 규약
 
 LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집니다:

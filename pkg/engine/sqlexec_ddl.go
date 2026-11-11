@@ -73,7 +73,7 @@ func parseDecimalPrecisionScale(cDef string) (int, int) {
 	if openIdx == -1 {
 		return 18, 2
 	}
-	closeIdx := strings.Index(rest, ")")
+	closeIdx := sqlutil.FindMatchingParen(rest, openIdx)
 	if closeIdx == -1 || closeIdx <= openIdx {
 		return 18, 2
 	}
@@ -190,8 +190,8 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 
 		if strings.HasPrefix(cUpper, "PRIMARY KEY") || (isConstraintClause && strings.Contains(cUpper, "PRIMARY KEY")) {
 			// e.g. PRIMARY KEY (id) or PRIMARY KEY (col1, col2) or CONSTRAINT pk_foo PRIMARY KEY (col1, col2)
-			if openIdx := strings.Index(cDefTrimmed, "("); openIdx != -1 {
-				if closeIdx := strings.LastIndex(cDefTrimmed, ")"); closeIdx > openIdx {
+			if openIdx := sqlutil.FindTopLevelChar(cDefTrimmed, '('); openIdx != -1 {
+				if closeIdx := sqlutil.FindMatchingParen(cDefTrimmed, openIdx); closeIdx > openIdx {
 					innerCols := cDefTrimmed[openIdx+1 : closeIdx]
 					for _, pkCol := range sqlutil.SplitTopLevel(innerCols, ',') {
 						cleaned := cleanIdentifier(pkCol)
@@ -220,8 +220,8 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 			if isConstraintClause && len(tokens) >= 2 {
 				cName = cleanIdentifier(tokens[1])
 			}
-			if openIdx := strings.Index(cDefTrimmed, "("); openIdx != -1 {
-				if closeIdx := strings.LastIndex(cDefTrimmed, ")"); closeIdx > openIdx {
+			if openIdx := sqlutil.FindTopLevelChar(cDefTrimmed, '('); openIdx != -1 {
+				if closeIdx := sqlutil.FindMatchingParen(cDefTrimmed, openIdx); closeIdx > openIdx {
 					innerCols := cDefTrimmed[openIdx+1 : closeIdx]
 					var uniqueCols []string
 					for _, col := range sqlutil.SplitTopLevel(innerCols, ',') {
@@ -311,9 +311,11 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 	if rawPartition != "" {
 		fn := "COLUMN"
 		col := rawPartition
-		if openIdx := strings.Index(rawPartition, "("); openIdx != -1 && strings.HasSuffix(rawPartition, ")") {
-			fn = strings.ToUpper(strings.TrimSpace(rawPartition[:openIdx]))
-			col = strings.TrimSpace(rawPartition[openIdx+1 : len(rawPartition)-1])
+		if openIdx := sqlutil.FindTopLevelChar(rawPartition, '('); openIdx != -1 {
+			if closeIdx := sqlutil.FindMatchingParen(rawPartition, openIdx); closeIdx != -1 {
+				fn = strings.ToUpper(strings.TrimSpace(rawPartition[:openIdx]))
+				col = strings.TrimSpace(rawPartition[openIdx+1 : closeIdx])
+			}
 		}
 		col = cleanIdentifier(col)
 
@@ -910,11 +912,10 @@ func (s *Coordinator) execDropFunction(query string, start time.Time) (*QueryRes
 	}
 
 	// Support comma-separated multiple functions e.g. DROP FUNCTION f1(), f2() or f1, f2
-	parts := strings.Split(rest, ",")
-	for _, p := range parts {
+	for _, p := range sqlutil.SplitTopLevel(rest, ',') {
 		name := strings.TrimSpace(p)
-		// Strip parameter parentheses e.g. f1() or f1(INT)
-		if idx := strings.Index(name, "("); idx != -1 {
+		// Strip parameter parentheses e.g. f1() or f1(INT, VARCHAR)
+		if idx := sqlutil.FindTopLevelChar(name, '('); idx != -1 {
 			name = strings.TrimSpace(name[:idx])
 		}
 		name = cleanIdentifier(name)

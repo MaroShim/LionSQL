@@ -300,8 +300,11 @@ func parseInsertBody(st *DMLStatement, sc *dmlScanner) error {
 			}
 		}
 		if cut == len(body) {
-			if i := strings.Index(body, "(SELECT"); i != -1 {
-				cut = i
+			if openP := sqlutil.FindTopLevelChar(body, '('); openP != -1 {
+				rem := strings.TrimSpace(body[openP+1:])
+				if strings.HasPrefix(strings.ToUpper(rem), "SELECT") {
+					cut = openP
+				}
 			}
 		}
 		st.Output = strings.TrimSpace(body[:cut])

@@ -133,7 +133,7 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 	}
 
 	// 2. Find matching closing parenthesis
-	closeParen := findMatchingParen(cleaned, openParen)
+	closeParen := sqlutil.FindMatchingParen(cleaned, openParen)
 	if closeParen == -1 {
 		return nil, fmt.Errorf("invalid STRING_SPLIT query: unclosed parenthesis")
 	}
@@ -145,7 +145,7 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 	alias, whereClause, orderByClause, limitCount, offsetCount := extractStringSplitTailClauses(rest)
 
 	// 4. Parse STRING_SPLIT arguments: string, separator [, enable_ordinal]
-	args := parseStringSplitArgs(argsRaw)
+	args := sqlutil.SplitTopLevel(argsRaw, ',')
 	if len(args) < 2 {
 		return nil, fmt.Errorf("STRING_SPLIT requires at least 2 arguments (string, separator)")
 	}
@@ -303,13 +303,6 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 	}, nil
 }
 
-func findMatchingParen(s string, openIdx int) int {
-	return sqlutil.FindMatchingParen(s, openIdx)
-}
-
-func parseStringSplitArgs(argsRaw string) []string {
-	return sqlutil.SplitTopLevel(argsRaw, ',')
-}
 
 func resolveArgString(arg string, cs *ClientSession) string {
 	arg = strings.TrimSpace(arg)
