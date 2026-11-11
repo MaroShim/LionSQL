@@ -125,5 +125,88 @@ func TestMSSQL_ReferentialConstraints_ReferencedObjectID(t *testing.T) {
 	if row["referenced_object_id"] != 1001 {
 		t.Errorf("expected referenced_object_id 1001 (t2_orders), got %v", row["referenced_object_id"])
 	}
+
+	// 2. Bracket and schema-qualified parent table name ([dbo].[t2_orders]), unnamed FK, and non-existent parent table
+	srcEdge := &mockSource{
+		tables: []*storage.TableSchema{
+			{
+				Name: "t1_users",
+				Columns: []storage.Column{
+					{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+				},
+			},
+			{
+				Name: "t2_orders",
+				Columns: []storage.Column{
+					{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+				},
+			},
+			{
+				Name: "t3_items",
+				Columns: []storage.Column{
+					{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+					{Name: "order_id", Type: storage.TypeInt},
+					{Name: "cust_id", Type: storage.TypeInt},
+					{Name: "ghost_id", Type: storage.TypeInt},
+				},
+				ForeignKeys: []storage.ForeignKeySchema{
+					{
+						// Unnamed FK with bracket/schema parent table
+						Name:          "",
+						ChildTable:    "t3_items",
+						ChildColumns:  []string{"order_id"},
+						ParentTable:   "[dbo].[t2_orders]",
+						ParentColumns: []string{"id"},
+					},
+					{
+						// Explicit schema parent table
+						Name:          "fk_items_cust",
+						ChildTable:    "t3_items",
+						ChildColumns:  []string{"cust_id"},
+						ParentTable:   "sales.customers",
+						ParentColumns: []string{"id"},
+					},
+					{
+						// Non-existent parent table: must resolve to 0, NOT 1000 (t1_users)
+						Name:          "fk_items_ghost",
+						ChildTable:    "t3_items",
+						ChildColumns:  []string{"ghost_id"},
+						ParentTable:   "ghost_table",
+						ParentColumns: []string{"id"},
+					},
+				},
+			},
+		},
+	}
+
+	resEdge, err := virtual.Execute(srcEdge, q)
+	if err != nil {
+		t.Fatalf("virtual.Execute failed: %v", err)
+	}
+	if len(resEdge.Rows) != 3 {
+		t.Fatalf("expected 3 FK rows, got %d", len(resEdge.Rows))
+	}
+
+	// Row 0: Bracket-qualified [dbo].[t2_orders] and unnamed FK
+	r0 := resEdge.Rows[0]
+	if r0["referenced_object_id"] != 1001 {
+		t.Errorf("expected referenced_object_id 1001 for [dbo].[t2_orders], got %v", r0["referenced_object_id"])
+	}
+	if r0["constraintName"] != "FK_t3_items_t2_orders" {
+		t.Errorf("expected generated constraintName 'FK_t3_items_t2_orders', got %v", r0["constraintName"])
+	}
+
+	// Row 1: sales.customers
+	r1 := resEdge.Rows[1]
+	if r1["refSchemaName"] != "sales" {
+		t.Errorf("expected refSchemaName 'sales', got %v", r1["refSchemaName"])
+	}
+
+	// Row 2: ghost_table
+	r2 := resEdge.Rows[2]
+	if r2["referenced_object_id"] != 0 {
+		t.Errorf("expected referenced_object_id 0 for non-existent parent table, got %v", r2["referenced_object_id"])
+	}
 }
+
 

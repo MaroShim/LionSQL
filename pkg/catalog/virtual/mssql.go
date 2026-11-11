@@ -576,6 +576,7 @@ func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, erro
 		"schemaName", "schema_name", "pureName", "pure_name", "name",
 		"columnName", "column_name", "refSchemaName", "ref_schema_name",
 		"refTableName", "ref_table_name", "parent_table", "ref_table",
+		"child_table", "referenced_table",
 		"refColumnName", "ref_column_name", "constraintName", "constraint_name",
 		"updateAction", "update_action", "deleteAction", "delete_action",
 		"objectId", "object_id", "parent_object_id", "referenced_object_id",
@@ -591,13 +592,26 @@ func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, erro
 			continue
 		}
 		for _, fk := range t.ForeignKeys {
-			refObjID := 1000
+			cleanParent := sqlutil.CleanLeafIdentifier(fk.ParentTable)
+			refSchema := "dbo"
+			trimmedParent := strings.Trim(strings.TrimSpace(fk.ParentTable), "[]\"'`")
+			if dot := strings.Index(trimmedParent, "."); dot != -1 {
+				refSchema = strings.Trim(trimmedParent[:dot], "[]\"'`")
+			}
+
+			refObjID := 0
 			for rIdx, rt := range tables {
-				if strings.EqualFold(rt.Name, fk.ParentTable) {
+				if strings.EqualFold(rt.Name, cleanParent) {
 					refObjID = 1000 + rIdx
 					break
 				}
 			}
+
+			fkName := fk.Name
+			if fkName == "" {
+				fkName = fmt.Sprintf("FK_%s_%s", t.Name, cleanParent)
+			}
+
 			upAction := fk.OnUpdate.String()
 			delAction := fk.OnDelete.String()
 			maxCols := len(fk.ChildColumns)
@@ -610,19 +624,21 @@ func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, erro
 					"schema_name":          "dbo",
 					"pureName":             t.Name,
 					"pure_name":            t.Name,
-					"name":                 fk.Name,
+					"name":                 fkName,
 					"columnName":           "",
 					"column_name":          "",
-					"refSchemaName":        "dbo",
-					"ref_schema_name":      "dbo",
-					"refTableName":         fk.ParentTable,
-					"ref_table_name":       fk.ParentTable,
+					"refSchemaName":        refSchema,
+					"ref_schema_name":      refSchema,
+					"refTableName":         cleanParent,
+					"ref_table_name":       cleanParent,
 					"parent_table":         t.Name,
-					"ref_table":            fk.ParentTable,
+					"child_table":          t.Name,
+					"ref_table":            cleanParent,
+					"referenced_table":     cleanParent,
 					"refColumnName":        "",
 					"ref_column_name":      "",
-					"constraintName":       fk.Name,
-					"constraint_name":      fk.Name,
+					"constraintName":       fkName,
+					"constraint_name":      fkName,
 					"updateAction":         upAction,
 					"update_action":        upAction,
 					"deleteAction":         delAction,
@@ -648,19 +664,21 @@ func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, erro
 					"schema_name":          "dbo",
 					"pureName":             t.Name,
 					"pure_name":            t.Name,
-					"name":                 fk.Name,
+					"name":                 fkName,
 					"columnName":           childCol,
 					"column_name":          childCol,
-					"refSchemaName":        "dbo",
-					"ref_schema_name":      "dbo",
-					"refTableName":         fk.ParentTable,
-					"ref_table_name":       fk.ParentTable,
+					"refSchemaName":        refSchema,
+					"ref_schema_name":      refSchema,
+					"refTableName":         cleanParent,
+					"ref_table_name":       cleanParent,
 					"parent_table":         t.Name,
-					"ref_table":            fk.ParentTable,
+					"child_table":          t.Name,
+					"ref_table":            cleanParent,
+					"referenced_table":     cleanParent,
 					"refColumnName":        parentCol,
 					"ref_column_name":      parentCol,
-					"constraintName":       fk.Name,
-					"constraint_name":      fk.Name,
+					"constraintName":       fkName,
+					"constraint_name":      fkName,
 					"updateAction":         upAction,
 					"update_action":        upAction,
 					"deleteAction":         delAction,
