@@ -2848,17 +2848,22 @@ func tryPointLookup(tx storage.Transaction, qInfo *planner.QueryInfo, schema *st
 			return nil, nil, false
 		}
 	}
-	if strings.ContainsAny(where, "<>!") {
+	if sqlutil.FindTopLevelChar(where, '<') != -1 ||
+		sqlutil.FindTopLevelChar(where, '>') != -1 ||
+		sqlutil.FindTopLevelChar(where, '!') != -1 {
 		return nil, nil, false
 	}
 
-	parts := strings.Split(where, "=")
-	if len(parts) != 2 {
+	eqIdx := sqlutil.FindTopLevelChar(where, '=')
+	if eqIdx == -1 {
+		return nil, nil, false
+	}
+	if sqlutil.FindTopLevelChar(where[eqIdx+1:], '=') != -1 {
 		return nil, nil, false
 	}
 
-	colPart := strings.TrimSpace(parts[0])
-	valPart := strings.TrimSpace(parts[1])
+	colPart := strings.TrimSpace(where[:eqIdx])
+	valPart := strings.TrimSpace(where[eqIdx+1:])
 
 	if schema.IsCompositePK() {
 		return nil, nil, false

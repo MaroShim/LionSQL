@@ -77,9 +77,8 @@ func NewCompiler() *Compiler {
 // Compile parses and compiles a T-SQL script into a bytecode Program.
 func Compile(sql string) (*Program, error) {
 	trimmed := strings.TrimSpace(sql)
-	upper := strings.ToUpper(trimmed)
 
-	if strings.HasPrefix(upper, "CREATE PROCEDURE") || strings.HasPrefix(upper, "CREATE PROC") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE PROCEDURE") || sqlutil.HasPrefixKeyword(trimmed, "CREATE PROC") {
 		lexer := NewLexer(sql)
 		parser := NewParser(lexer)
 		stmt, err := parser.ParseProcedure()
@@ -98,7 +97,7 @@ func Compile(sql string) (*Program, error) {
 		return CompileProcedure(stmt)
 	}
 
-	if strings.HasPrefix(upper, "CREATE FUNCTION") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE FUNCTION") {
 		stmt, err := ParseFunction(sql)
 		if err != nil {
 			return nil, DiagnoseParseFailure(sql, err)
@@ -106,7 +105,7 @@ func Compile(sql string) (*Program, error) {
 		return CompileFunction(stmt)
 	}
 
-	if strings.HasPrefix(upper, "CREATE TRIGGER") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE TRIGGER") {
 		stmt, err := ParseTrigger(sql)
 		if err != nil {
 			return nil, DiagnoseParseFailure(sql, err)
@@ -114,11 +113,11 @@ func Compile(sql string) (*Program, error) {
 		return CompileTrigger(stmt)
 	}
 
-	if strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH") {
+	if sqlutil.HasPrefixKeyword(trimmed, "SELECT") || sqlutil.HasPrefixKeyword(trimmed, "WITH") {
 		return CompileQuery(sql)
 	}
 
-	if strings.HasPrefix(upper, "INSERT") || strings.HasPrefix(upper, "UPDATE") || strings.HasPrefix(upper, "DELETE") {
+	if sqlutil.HasPrefixKeyword(trimmed, "INSERT") || sqlutil.HasPrefixKeyword(trimmed, "UPDATE") || sqlutil.HasPrefixKeyword(trimmed, "DELETE") {
 		return CompileStatement(sql)
 	}
 

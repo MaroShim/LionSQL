@@ -559,7 +559,7 @@ func FindIndexAndBounds(schema *storage.TableSchema, whereClause string) (*stora
 			}
 		}
 
-		conds := strings.Split(whereClause, " AND ")
+		conds := sqlutil.SplitAndConditions(whereClause)
 		for _, cond := range conds {
 			cond = strings.TrimSpace(cond)
 			p := proc.NewParser(proc.NewLexer(cond))
