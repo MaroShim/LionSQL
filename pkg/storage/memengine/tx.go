@@ -862,12 +862,16 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 						}
 					}
 				case storage.ActionSetNull:
+					var childSchema *storage.TableSchema
+					if childTd, err := tx.getTableLocked(cr.ChildTable); err == nil && childTd != nil {
+						childSchema = childTd.SnapshotSchema()
+					}
 					for _, cpk := range matchingChildPKs {
-						patch := make(storage.Record)
+						patch := make(storage.Record, len(cr.FK.ChildColumns))
 						for _, cCol := range cr.FK.ChildColumns {
 							colType := storage.TypeVarChar
-							if childTd, ok := tx.engine.tables[cr.ChildTable]; ok {
-								if col, _, found := childTd.Schema.FindColumn(cCol); found {
+							if childSchema != nil {
+								if col, _, found := childSchema.FindColumn(cCol); found {
 									colType = col.Type
 								}
 							}
@@ -940,12 +944,16 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 					}
 				}
 			case storage.ActionSetNull:
+				var childSchema *storage.TableSchema
+				if childTd, err := tx.getTableLocked(cr.ChildTable); err == nil && childTd != nil {
+					childSchema = childTd.SnapshotSchema()
+				}
 				for _, cpk := range matchingChildPKs {
-					nullPatch := make(storage.Record)
+					nullPatch := make(storage.Record, len(cr.FK.ChildColumns))
 					for _, cCol := range cr.FK.ChildColumns {
 						colType := storage.TypeVarChar
-						if childTd, ok := tx.engine.tables[cr.ChildTable]; ok {
-							if col, _, found := childTd.Schema.FindColumn(cCol); found {
+						if childSchema != nil {
+							if col, _, found := childSchema.FindColumn(cCol); found {
 								colType = col.Type
 							}
 						}
@@ -1011,27 +1019,16 @@ func (tx *Transaction) validateForeignKeysUnderLock(childTable string, record st
 }
 
 func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, childRecord storage.Record) (bool, error) {
-	tx.engine.mu.RLock()
-	parentTd, ok := tx.engine.tables[fk.ParentTable]
-	if !ok {
-		for name, t := range tx.engine.tables {
-			if strings.EqualFold(name, fk.ParentTable) {
-				parentTd = t
-				ok = true
-				break
-			}
-		}
-	}
-	if !ok {
-		tx.engine.mu.RUnlock()
+	parentTd, err := tx.getTableLocked(fk.ParentTable)
+	if err != nil {
 		return false, fmt.Errorf("%w: referenced table %q not found", storage.ErrTableNotFound, fk.ParentTable)
 	}
+	parentSchema := parentTd.SnapshotSchema()
 
 	parentCols := fk.ParentColumns
 	if len(parentCols) == 0 {
-		pkCol, err := parentTd.Schema.PrimaryKeyColumn()
+		pkCol, err := parentSchema.PrimaryKeyColumn()
 		if err != nil || pkCol == nil {
-			tx.engine.mu.RUnlock()
 			return false, fmt.Errorf("referenced table %q has no primary key", fk.ParentTable)
 		}
 		parentCols = []string{pkCol.Name}
@@ -1041,15 +1038,13 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 	for i, cCol := range fk.ChildColumns {
 		val, ok := childRecord.Get(cCol)
 		if !ok || val.IsNull {
-			tx.engine.mu.RUnlock()
 			return true, nil
 		}
 		childVals[i] = val
 	}
 
-	parentPkCol, _ := parentTd.Schema.PrimaryKeyColumn()
+	parentPkCol, _ := parentSchema.PrimaryKeyColumn()
 	if parentPkCol != nil && len(parentCols) == 1 && strings.EqualFold(parentCols[0], parentPkCol.Name) {
-		tx.engine.mu.RUnlock()
 		parentKey := childVals[0].String()
 		if tx.isLocallyDeleted(fk.ParentTable, parentKey) {
 			return false, nil
@@ -1057,14 +1052,7 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 		if _, inLocal := tx.getLocal(fk.ParentTable, parentKey); inLocal {
 			return true, nil
 		}
-		tx.engine.mu.RLock()
-		if pTd, ok := tx.engine.tables[fk.ParentTable]; ok {
-			inEngine := pTd.hasKey(parentKey)
-			tx.engine.mu.RUnlock()
-			return inEngine, nil
-		}
-		tx.engine.mu.RUnlock()
-		return false, nil
+		return parentTd.hasKey(parentKey), nil
 	}
 
 	matched := false
@@ -1075,13 +1063,12 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 		if _, inLocal := tx.getLocal(fk.ParentTable, pkStr); inLocal {
 			return true
 		}
-		if rowMatchesFK(&parentTd.Schema, row, parentCols, childVals) {
+		if rowMatchesFK(parentSchema, row, parentCols, childVals) {
 			matched = true
 			return false
 		}
 		return true
 	})
-	tx.engine.mu.RUnlock()
 	if matched {
 		return true, nil
 	}
@@ -1091,7 +1078,7 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 			if tx.isLocallyDeleted(fk.ParentTable, pkStr) {
 				continue
 			}
-			if rowMatchesFK(&parentTd.Schema, row, parentCols, childVals) {
+			if rowMatchesFK(parentSchema, row, parentCols, childVals) {
 				return true, nil
 			}
 		}
@@ -1101,38 +1088,20 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 }
 
 func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk storage.ForeignKeySchema, parentRecord storage.Record) ([]storage.Value, error) {
-	tx.engine.mu.RLock()
-	childTd, exists := tx.engine.tables[childTable]
-	if !exists {
-		for name, t := range tx.engine.tables {
-			if strings.EqualFold(name, childTable) {
-				childTd = t
-				exists = true
-				break
-			}
-		}
-	}
-	if !exists {
-		tx.engine.mu.RUnlock()
+	childTd, err := tx.getTableLocked(childTable)
+	if err != nil {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, childTable)
 	}
-	childSchema := childTd.Schema
+	childSchema := childTd.SnapshotSchema()
 	if _, err := childSchema.PrimaryKeyColumn(); err != nil {
-		tx.engine.mu.RUnlock()
 		return nil, err
 	}
 
 	pCols := fk.ParentColumns
 	if len(pCols) == 0 {
-		var parentTd *TableData
-		for name, t := range tx.engine.tables {
-			if strings.EqualFold(name, fk.ParentTable) {
-				parentTd = t
-				break
-			}
-		}
-		if parentTd != nil {
-			if pkCol, err := parentTd.Schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
+		if parentTd, err := tx.getTableLocked(fk.ParentTable); err == nil && parentTd != nil {
+			parentSchema := parentTd.SnapshotSchema()
+			if pkCol, err := parentSchema.PrimaryKeyColumn(); err == nil && pkCol != nil {
 				pCols = []string{pkCol.Name}
 			}
 		}
@@ -1142,7 +1111,6 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 	for i, pCol := range pCols {
 		val, ok := parentRecord.Get(pCol)
 		if !ok || val.IsNull {
-			tx.engine.mu.RUnlock()
 			return nil, nil
 		}
 		parentValues[i] = val
@@ -1156,21 +1124,20 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 		if _, inLocal := tx.getLocal(childTable, pkStr); inLocal {
 			return true
 		}
-		if rowMatchesFK(&childSchema, row, fk.ChildColumns, parentValues) {
+		if rowMatchesFK(childSchema, row, fk.ChildColumns, parentValues) {
 			if childPK, ok := childSchema.ResolveRowPK(row); ok {
 				matchingPKs = append(matchingPKs, childPK)
 			}
 		}
 		return true
 	})
-	tx.engine.mu.RUnlock()
 
 	if localRows, ok := tx.local[childTable]; ok {
 		for pkStr, row := range localRows {
 			if tx.isLocallyDeleted(childTable, pkStr) {
 				continue
 			}
-			if rowMatchesFK(&childSchema, row, fk.ChildColumns, parentValues) {
+			if rowMatchesFK(childSchema, row, fk.ChildColumns, parentValues) {
 				if childPK, ok := childSchema.ResolveRowPK(row); ok {
 					matchingPKs = append(matchingPKs, childPK)
 				}

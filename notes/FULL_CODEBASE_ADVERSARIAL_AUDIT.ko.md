@@ -238,7 +238,9 @@
            }
        }
        ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `DEFECT_FIXED (완치)`
+  - Part A (AlterTable WAL): `applySchemaMigrationLocked`에서 `persistWAL` 활성화 시 `OpAlterTable` AOF/WAL 영속화 및 `persistence.go` 리플레이가 기검증됨.
+  - Part B (FK CASCADE SET NULL): `tx.go` 864~879, 942~957, 1017~1149라인에서 비보호 전역 `tx.engine.tables` 직접 조회를 완전 제거하고, 트랜잭션 전용 `tx.getTableLocked` 및 `childTd.SnapshotSchema()`를 사용하도록 전환하여 동시 DDL 중 맵 충돌 패닉 및 데이터 레이스를 원천 차단함. `TestRegression_AUDIT_FULL_009_FKCascadeSetNull_ConcurrentDDL` TDD 회귀 검증 완료.
 
 ---
 
@@ -249,10 +251,10 @@
 | `pkg/storage/memengine/memengine.go` | 14.3 KB | 526 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-002` | `DEFECT_LOGGED` |
 | `pkg/storage/memengine/table_data.go` | 10.9 KB | 430 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-001` | `PASS` |
 | `pkg/storage/memengine/flat_record.go` | 7.8 KB | 288 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-001` (연계) | `PASS` |
-| `pkg/storage/memengine/tx.go` | 69.6 KB | 2,566 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-003`, `AUDIT-FULL-009` | `DEFECT_LOGGED` |
+| `pkg/storage/memengine/tx.go` | 69.6 KB | 2,566 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-003`, `AUDIT-FULL-009` | `PASS` |
 | `pkg/storage/memengine/persistence.go` | 11.8 KB | 445 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-004` | `PASS` |
 | `pkg/storage/memengine/wal.go` | 13.7 KB | 463 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-003` (연계) | `PASS` (자체 로직 무결) |
-| `pkg/storage/memengine/ddl.go` | 18.1 KB | 705 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-001`, `AUDIT-FULL-009` | `DEFECT_LOGGED` |
+| `pkg/storage/memengine/ddl.go` | 18.1 KB | 705 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-001`, `AUDIT-FULL-009` | `PASS` |
 | `pkg/storage/memengine/skiplist.go` | 7.9 KB | 335 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/storage/memengine/codec.go` | 0.4 KB | 15 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | **Domain 1 총계** | **154.5 KB** | **5,773 LOC** | **100% 전수 검증 완료** | **총 5건 식별** (Crit:1, High:3, Low:1) | **감사 완료 (PAUSE)** |
@@ -1660,7 +1662,7 @@
 | `AUDIT-FULL-006` | Medium | `pkg/engine/sqlexec_explain.go:1016` | <> ANY 정량 서브쿼리를 distinct 값에 대해 1=1로 재작성하여 3VL NULL 행 유출 결함 | 완치 (수정 완료) |
 | `AUDIT-FULL-007` | Medium | `pkg/storage/wiredtiger/wt_engine.go:614` | C.go_wt_session_drop 리턴코드 무시로 고아 파일 잔존 및 후속 CREATE TABLE 실패 | 미수정 |
 | `AUDIT-FULL-008` | High | `pkg/wire/tds/server.go:1000` | ALL_HEADERS 4바이트 길이 오인식으로 인한 대용량 RPC(sp_executesql) 스트림 오절단 및 연결 단절 | 조치 완료 (TDD 검증) |
-| `AUDIT-FULL-009` | High | `pkg/storage/memengine/ddl.go:681` | AlterTable 시 WAL 영속화 전면 누락 및 FK CASCADE SET NULL 시 비동기화 맵 읽기 | 미수정 |
+| `AUDIT-FULL-009` | High | `pkg/storage/memengine/ddl.go:681` | AlterTable 시 WAL 영속화 전면 누락 및 FK CASCADE SET NULL 시 비동기화 맵 읽기 | 완치 (수정 완료) |
 | `AUDIT-FULL-010` | Critical | `pkg/storage/wiredtiger/wt_engine.go:1205` | releaseCursor에서 세션 락 없이 reset 호출(CGo Use-After-Free) 및 닫힌 세션 커서 이중 닫기(Double-Free SIGSEGV) | 완치 (수정 완료) |
 | `AUDIT-FULL-011` | High | `pkg/storage/wiredtiger/wt_engine.go:680` | TruncateTables 시 PhysicalName 누락으로 인한 EBUSY 에러 및 데이터 삭제 실패 은폐 | 미수정 |
 | `AUDIT-FULL-012` | High | `pkg/storage/wiredtiger/wt_engine.go:861` | AddColumn 시 세션/커서 오픈 실패 무시로 기존 행 재작성 누락 및 카탈로그 불일치 | 미수정 |

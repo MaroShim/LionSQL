@@ -285,3 +285,142 @@ func TestRegression_AUDIT_FULL_001_InstantDDL_And_ConcurrentReadRace(t *testing.
 	close(stopReaders)
 	wg.Wait()
 }
+
+// TestRegression_AUDIT_FULL_009_FKCascadeSetNull_ConcurrentDDL verifies that foreign key
+// ON DELETE SET NULL cascade operations do not access unsynchronized tx.engine.tables directly,
+// preventing concurrent map read and map write panics when DDL runs concurrently.
+func TestRegression_AUDIT_FULL_009_FKCascadeSetNull_ConcurrentDDL(t *testing.T) {
+	tempDir := t.TempDir()
+	eng := New()
+	if err := eng.Open(tempDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	// 1. Create parent table
+	parentSchema := &storage.TableSchema{
+		Name: "fk_parent",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(parentSchema); err != nil {
+		t.Fatalf("CreateTable parent failed: %v", err)
+	}
+
+	// 2. Create child table with ON DELETE SET NULL
+	childSchema := &storage.TableSchema{
+		Name: "fk_child",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "parent_id", Type: storage.TypeInt, Nullable: true},
+			{Name: "child_name", Type: storage.TypeVarChar},
+		},
+		ForeignKeys: []storage.ForeignKeySchema{
+			{
+				Name:          "fk_child_parent",
+				ChildColumns:  []string{"parent_id"},
+				ParentTable:   "fk_parent",
+				ParentColumns: []string{"id"},
+				OnDelete:      storage.ActionSetNull,
+				OnUpdate:      storage.ActionSetNull,
+			},
+		},
+	}
+	if err := eng.CreateTable(childSchema); err != nil {
+		t.Fatalf("CreateTable child failed: %v", err)
+	}
+
+	// 3. Populate rows
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	txInit, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx init failed: %v", err)
+	}
+	for i := int64(1); i <= 50; i++ {
+		if err := txInit.Insert("fk_parent", storage.Record{
+			"id":   storage.IntValue(i),
+			"name": storage.StringValue(fmt.Sprintf("Parent_%d", i)),
+		}); err != nil {
+			t.Fatalf("Insert parent %d failed: %v", i, err)
+		}
+		if err := txInit.Insert("fk_child", storage.Record{
+			"id":         storage.IntValue(i),
+			"parent_id":  storage.IntValue(i),
+			"child_name": storage.StringValue(fmt.Sprintf("Child_%d", i)),
+		}); err != nil {
+			t.Fatalf("Insert child %d failed: %v", i, err)
+		}
+	}
+	if err := txInit.Commit(); err != nil {
+		t.Fatalf("Commit init failed: %v", err)
+	}
+
+	// 4. Concurrently run DDL while deleting parents to trigger SET NULL
+	stopDDL := make(chan struct{})
+	var wg sync.WaitGroup
+
+	// DDL goroutine rapidly mutating e.tables
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ddlIdx := 0
+		for {
+			select {
+			case <-stopDDL:
+				return
+			default:
+				tblName := fmt.Sprintf("temp_ddl_churn_%d", ddlIdx%10)
+				_ = eng.CreateTable(&storage.TableSchema{
+					Name: tblName,
+					Columns: []storage.Column{
+						{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+					},
+				})
+				_ = eng.DropTable(tblName)
+				ddlIdx++
+			}
+		}
+	}()
+
+	// Deleter deleting parent rows (triggers SET NULL on child rows)
+	for i := int64(1); i <= 50; i++ {
+		txDel, err := sess.BeginTx(storage.TxOptions{})
+		if err != nil {
+			t.Fatalf("BeginTx del failed: %v", err)
+		}
+		if err := txDel.Delete("fk_parent", storage.IntValue(i)); err != nil {
+			t.Fatalf("Delete parent %d failed: %v", i, err)
+		}
+		if err := txDel.Commit(); err != nil {
+			t.Fatalf("Commit del %d failed: %v", i, err)
+		}
+	}
+
+	close(stopDDL)
+	wg.Wait()
+
+	// Verify all child rows now have NULL parent_id
+	txVerify, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx verify failed: %v", err)
+	}
+	defer txVerify.Rollback()
+
+	for i := int64(1); i <= 50; i++ {
+		childRec, err := txVerify.Get("fk_child", storage.IntValue(i))
+		if err != nil {
+			t.Fatalf("Get child %d failed: %v", i, err)
+		}
+		pVal, exists := childRec.Get("parent_id")
+		if !exists || !pVal.IsNull {
+			t.Fatalf("Child %d parent_id expected NULL, got %+v", i, pVal)
+		}
+	}
+}
