@@ -7,7 +7,7 @@
 > [!NOTE]
 > This document serves as the official technical guide for LionSQL's Tier 2 Volcano CBO complex query execution engine, detailing the Star Schema Benchmark (SSB) 4-flight query specifications, standalone benchmark CLI tool (`bin/ssb`) usage, and empirical performance comparisons against leading database management systems (DuckDB, PostgreSQL, SQLite).
 > 
-> For in-depth engineering sprint history, task checklists, and architectural decision records (ADRs), refer to the developer sprint plan at [**`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`**](../notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md).
+> For in-depth engineering sprint history, task checklists, and architectural decision records (ADRs), refer to the developer sprint plan at [**`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`**](../notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md).
 
 ---
 
@@ -247,7 +247,7 @@ LionSQL accelerates complex analytical queries to sub-50ms latencies while prese
 ## 8. Engineering Plans & Reference Documents
 
 * **Detailed Engineering Plan & Task Checklist**:  
-  [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](../notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)
+  [`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](../notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)
 * **2-Tier Query Execution Engine Architecture Specification**:  
   [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)
 * **OLTP Transactional Benchmarks & Tuning Guide**:  

@@ -40,7 +40,7 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
   6 Golden Release Gates Passed + 100-Step Audit Sign-Off + Always On Failover + Lossless CDC + LTS Packaging (WiredTiger MVCC + In-Memory OCC)
 
 [ Phase 9: Scale-Up Query & Pure-Go Storage Preview ] ──► v1.1.0 - v1.2.0 [TARGET Q1-Q2 2027]
-  Flat Hash Join & Mini TPC-H + OCC-Dense Default Graduation + Pure-Go Native Engine Preview (--storage=purego) + Immutable Audit Log
+  Flat Hash Join & Mini TPC-H + Native Pure-Go Engine Preview (--storage=purego) + Immutable Audit Log
 
 [ Phase 10: Multi-Engine Expansion: Pure-Go LTS ] ────► v1.5.0 LTS [TARGET Q3-Q4 2027]
   Native Pure-Go Storage Production Graduation + Dual Persistent Engine Spectrum (WiredTiger CGo + Pure-Go CGo-Free) + Parallel OLAP
@@ -62,7 +62,7 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 | **Phase 7A** | `v0.92.0` | **P0 Zero-Defect Reliability Baseline**<br>Comprehensive 100-scope code audit with P0 (Must-Fix 31 items) 100% resolved. Zero OOM/crash/corruption/security injection guaranteed. Tagged as foundational reliability baseline. | **Active / 74% Complete** |
 | **Phase 7B** | `v0.93.0` - `v0.95.0`<br>(RC1) | **P1 Hardening, Durability Verification & 6 Golden Release Gates**<br>P1 (53 items) enterprise stabilization, 10 production apps verified, `scripts/release.sh` 6 Golden Release Gates automated, `crashtest` (D1~D4), SQLLogicTest 409k, T-SQL 14-Suite, `soaktest` zero leaks. | **Scheduled** |
 | **Phase 8** | `v1.0.0 LTS` | **Official 1.0 Production Release & Long-Term Support**<br>6 Golden Release Gates verified, 100-step audit sign-off, Always On HA, lossless CDC, certified drivers, LTS release sign-off (WiredTiger MVCC + In-Memory OCC). | **Target Q4 2026** |
-| **Phase 9** | `v1.1.0` - `v1.2.0` | **Scale-Up Complex Query & Native Pure-Go Engine Preview**<br>Flat hash join, Mini TPC-H suite, `OCC-Dense` default graduation, Native Pure-Go B+Tree storage engine preview (`--storage=purego`, `CGO_ENABLED=0`), immutable audit log, multi-core `ParallelSeqScan`. | **Target Q1-Q2 2027** |
+| **Phase 9** | `v1.1.0` - `v1.2.0` | **Scale-Up Complex Query & Native Pure-Go Engine Preview**<br>Flat hash join, Mini TPC-H suite, Native Pure-Go B+Tree storage engine preview (`--storage=purego`, `CGO_ENABLED=0`), immutable audit log, multi-core `ParallelSeqScan`. | **Target Q1-Q2 2027** |
 | **Phase 10** | `v1.5.0 LTS` | **Multi-Engine Portfolio Expansion: Pure-Go Production LTS**<br>Native Pure-Go storage engine promoted to first-class production tier, coexisting permanently alongside WiredTiger. Full static binary distribution without external C toolchains for lightweight edge/container deployments. | **Target Q3-Q4 2027** |
 | **Phase 11** | `v2.0.0+` | **Distributed Scale-Out & Next-Gen Cloud Architecture**<br>Multi-node Raft consensus replication, distributed horizontal sharding, dynamic partition rebalancing, enterprise cross-datacenter active-active federation. | **Target 2028+** |
 
@@ -266,7 +266,7 @@ OCC-Dense Default          Opt-in (--storage=purego) WiredTiger + Pure-Go       
   - Adhering to Semantic Versioning (SemVer), this milestone is designated as **`v1.5.0 LTS`**—a milestone symbolizing architectural maturity and multi-engine flexibility without imposing enterprise upgrade friction.
 
 ### 5.2. Scale-Up Complex Query Engine & Mini TPC-H Suite (`v1.1.0`)
-- **Objective**: Implement open-addressing integer flat hash join and direct slot projection to target sub-50ms execution on complex analytical queries ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)).
+- **Objective**: Implement open-addressing integer flat hash join and direct slot projection to target sub-50ms execution on complex analytical queries ([`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)).
 - **Deliverables**: TPC-H Q1, Q3, Q4, Q6, Q9 suite and automated CBO subquery decorrelation (`EXISTS`/`IN` -> Semi-Join).
 
 ### 5.3. High-Density In-Memory Engine: `OCC-Dense` Default Graduation (`v1.1.0`)
@@ -332,7 +332,7 @@ OCC-Dense Default          Opt-in (--storage=purego) WiredTiger + Pure-Go       
 | **Phase 7** | AST 심볼 테이블 기반 쿼리 라우팅 리팩토링 (`ROUTING-AST-CATALOG-1`) | Query Routing | `v0.95.0` | **Completed** | [`notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](notes/plans/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md) |
 | **Phase 7** | 호환성 규칙 Table-Driven 정식화 (`COMPAT-TABLE-DRIVEN-1`) | Compatibility | `v0.95.0` | **In Progress** | [`notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md) |
 | **Phase 7** | In-Memory OCC 104만 tpmC 초격차 성능 달성 | Storage Engine | `v0.95.0` | **Completed** | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
-| **Phase 7** | 고집적 포인터리스 인메모리 엔진 `OCC-Dense` A/B 구현 및 4대 신뢰성 게이트 검증 | Storage Engine | `v0.95.0` | **In Progress** | [`notes/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |
+| **Phase 7** | 고집적 포인터리스 인메모리 엔진 `OCC-Dense` (`MemoryCompact`) 기본값 승격 및 통합 | Storage Engine | `v0.95.0` | **Completed** | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |
 | **Phase 7** | `v0.91.0` 공식 릴리스 및 3대 플랫폼 정적 바이너리 배포 | Release | `v0.91.0` | **Completed** | [`CHANGELOG.md`](CHANGELOG.md) |
 | **Phase 7** | 6대 골든 릴리즈 검증 게이트 자동화 (`scripts/release.sh`) | Quality & CI | `v0.91.0` | **Completed** | [`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md) |
 | **Phase 7** | WiredTiger `SIGKILL` 크래시 내구성 핫픽스 (`wt_engine.go`) | Storage & WAL | `v0.91.0` | **Completed** | [`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md) |
@@ -340,8 +340,7 @@ OCC-Dense Default          Opt-in (--storage=purego) WiredTiger + Pure-Go       
 | **Phase 7A** | 100단계 듀얼 AI 전수 감사 P0(31선) 완치 및 신뢰성 베이스라인 태깅 | Quality & Audit | `v0.92.0` | **In Progress** | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |
 | **Phase 7B** | P1(53선) 엔터프라이즈 완결성 및 6대 게이트 최종 검증 (`v1.0.0-rc1`) | Quality & Hardening | `v0.95.0` | **Scheduled** | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |
 | **Phase 8** | 공식 LionSQL v1.0.0 LTS 출시 및 6대 게이트 최종 사인오프 | Release | `v1.0.0 LTS` | **Target Q4 2026** | [`CHANGELOG.md`](CHANGELOG.md) |
-| **Phase 9** | Mini TPC-H 벤치마크 및 CBO 서브쿼리 Decorrelation | Query Planner | `v1.1.0` | **Planned** | [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |
-| **Phase 9** | `OCC-Dense` 디폴트 승격 및 4대 신뢰성 게이트 졸업 (`OCC-HYPER-2`) | Storage Engine | `v1.1.0` | **Planned** | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
+| **Phase 9** | Mini TPC-H 벤치마크 및 CBO 서브쿼리 Decorrelation | Query Planner | `v1.1.0` | **Planned** | [`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |
 | **Phase 9** | Enterprise Cryptographic Immutable Audit Log (`pkg/audit`) | Security & Audit | `v1.1.0` | **Planned** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **Phase 9** | Native Pure-Go B+Tree 엔진 실험적 프리뷰 (`--storage=purego`, `CGO_ENABLED=0`) | Storage Engine | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#51-native-pure-go-btree-storage-engine-experimental-v120---production-lts-v150) |
 | **Phase 9** | Multi-Core Parallel Analytical Query Execution (`ParallelSeqScan`) | Query Execution | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#55-multi-core-parallel-analytical-query-execution-v120) |

@@ -86,7 +86,7 @@ Driver Cert   & Zero-Race   Crash Recovery    Conformance   Security      Ops & 
 | **Phase 7** | 호환성 규칙 Table-Driven 정식화 (`COMPAT-TABLE-DRIVEN-1`) | Compatibility | `v0.95.0` | **In Progress** | [`notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md) |
 | **Phase 7** | In-Memory OCC 104만 tpmC 초격차 성능 최적화 | Storage Engine | `v0.95.0` | **Completed** | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
 | **Phase 8** | 공식 LionSQL v1.0.0 LTS 출시 및 6대 게이트 최종 사인오프 | Release | `v1.0.0 LTS` | **Ready for Sign-off** | [`CHANGELOG.md`](../../CHANGELOG.md) |
-| **Post-1.0** | Mini TPC-H 벤치마크 및 CBO 서브쿼리 Decorrelation | Query Planner | `v1.1.0` | **Planned** | [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |
+| **Post-1.0** | Mini TPC-H 벤치마크 및 CBO 서브쿼리 Decorrelation | Query Planner | `v1.1.0` | **Planned** | [`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |
 | **Post-1.0** | In-Memory OCC 컴팩트 아레나 메모리 압축 (`OCC-HYPER-2`) | Storage Engine | `v1.1.0` | **Planned** | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
 
 ---

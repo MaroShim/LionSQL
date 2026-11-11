@@ -121,6 +121,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 13. **MySQL-Specific DML & Legacy Tabular EXPLAIN Extensions (`ON DUPLICATE KEY UPDATE`, Comma `LIMIT offset, count`, 8-Column Tabular `EXPLAIN`) (`S-MYSQL-1-P2-P3`)**: Permanently excluded. PostgreSQL `ON CONFLICT DO UPDATE` and standard ANSI/MSSQL `MERGE` are already complete; adding MySQL DML splits OCC/MVCC conflict handling into 3 divergent paths and introduces parser grammar ambiguities. Flat 8-column tabular `EXPLAIN` flattens and destroys modern hierarchical Volcano CBO plan trees (which even MySQL 8.0 deprecated in favor of `FORMAT=TREE`) and breaks PostgreSQL GUI visualizers. LionSQL standardizes exclusively on modern indented tree text and JSON plan representations, keeping MySQL syntax support strictly at Phase 1 ergonomics (`DESC`, `SHOW TABLES`, backticks).
 14. **In-Memory Varint/Bit-Packing Record Compression (Option B in `OCC-HYPER-2`)**: Permanently excluded. Bit-level variable-width compression acts like CPU-heavy zip compression, requiring sequential decoding loops (25~50ns) on every single column access and destroying the 0.5ns sub-nanosecond $O(1)$ read performance of the in-memory engine. LionSQL exclusively adopts Option A (Pointer-Free Flat Record) for zero GC overhead and instant fixed-offset reads.
 15. **In-Memory Partial Column Delta Workspace (`PERF-OCC-DELTA-1`)**: Permanently Spec-Out. Maintaining on-the-fly overlay delta chains across mid-transaction reads, secondary index checks, and variable-length re-alignments introduces severe code complexity and subtle transaction anomalies for marginal write-only throughput gains. LionSQL standardizes exclusively on the atomized row-level FlatRecord workspace (`MemoryCompact`), which already delivers 83% memory reduction and sub-microsecond write latency with zero GC scan overhead.
+16. **Intra-Query Parallelism (`ARCH-INTRA-QUERY-PARALLEL-1`)**: Permanently Spec-Out. Splitting a single analytical query across multiple worker goroutines/cores introduces massive Exchange/Merge synchronization complexity and starves concurrent OLTP transactions on multi-core servers. LionSQL focuses strictly on inter-query concurrency and sub-millisecond OLTP; heavy multi-core analytical OLAP workloads are explicitly delegated to specialized engines (e.g., DuckDB integration).
+17. **Complex Aggregate Subquery AST Decorrelation & Mini TPC-H Suite (`BENCH-TPCH-1`)**: Permanently Replaced / Spec-Out. While Tier-1 `[NOT] EXISTS` / `IN` Semi-Join decorrelation is already complete (`pkg/planner/decorrelate.go`), Kim's Group-By Pushdown AST rewriting for aggregate correlated subqueries introduces severe Count Bug (`COUNT(*) = 0` vs `NULL`) and SQL 3VL distortion risks. Replaced permanently by a bounded per-query memoization cache (`PERF-SUBQUERY-MEMO-1`), guaranteeing 100% SQL semantic safety with up to 1,000x practical speedup.
 
 ---
 
@@ -164,17 +166,16 @@ LDFLAGS="-s -w -X 'lionsql/pkg/config.BuildDate=$(date "+%Y-%m-%d %H:%M:%S %Z")'
   - arm64: `CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -ldflags="$LDFLAGS" -buildvcs=false -o bin/lionsql-arm64.exe ./cmd/lionsql`
 
 ### Version Single Source of Truth (SSOT)
-When releasing or bumping versions, synchronize all four locations in lockstep:
+When releasing or bumping versions, synchronize all three locations in lockstep:
 1. `pkg/config/version.go` (`const Version = "..."`)
 2. `CHANGELOG.md`
 3. `README.md` and `README.ko.md`
-4. `TODO.md`
 
-### Continuous Backlog Discipline (`TODO.md` & Sprint DB Dual-Sync)
+### Continuous Backlog Discipline (Sprint DB & `TASKS.md` Dual-Sync — `TODO.md` Deprecated)
 When new requirements, ADRs, or implementation plans are agreed upon in conversation, **never retain them solely in ephemeral memory or markdown notes**.
-1. **Mandatory DB Registration**: Proactively register every new task into the SQLite sprint database via `./bin/sprint add <ID> "<TITLE>" <DOMAIN> <PRIO> [PLAN_DOC]`, which automatically syncs to [`TASKS.md`](TASKS.md).
-2. **Dashboard Synchronization**: Synchronize active tasks and candidates into [`TODO.md`](TODO.md) under explicit taxonomy IDs.
-3. **Completion Lifecycle**: Upon 3-stage verification pass, update the status via `./bin/sprint set <ID> DONE` and mark completed (`[x]`) in `TODO.md`.
+1. **Mandatory DB Registration (Sole SSOT)**: Proactively register every new task into the SQLite sprint database via `./bin/sprint add <ID> "<TITLE>" <DOMAIN> <PRIO> [PLAN_DOC]`, and mirror via `./bin/sprint backup TASKS.md` into [`TASKS.md`](TASKS.md).
+2. **`TODO.md` Deprecated**: Do **NOT** read, add, or update tasks in `TODO.md`. `TODO.md` is officially deprecated as a pure redirect stub pointing to [`TASKS.md`](TASKS.md) and `./bin/sprint`.
+3. **Completion Lifecycle**: Upon 3-stage verification pass, update the status via `./bin/sprint set <ID> DONE && ./bin/sprint backup TASKS.md`.
 
 ### Documentation Naming & Language Suffix Invariance (`*.ko.md`)
 - **Korean Markdown Files**: Any markdown document with Korean body text must strictly use the **`*.ko.md`** extension (e.g. `notes/*_PLAN.ko.md`, `doc/*_GUIDE.ko.md`, `README.ko.md`).
@@ -197,5 +198,5 @@ For deep architectural context, negative knowledge, and historical postmortems, 
 - [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md): In-Memory OCC performance optimization history, WiredTiger beat roadmap, and 104k tpmC architecture.
 - [`notes/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](notes/plans/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md): Windows daemon decoupling and 1ms timer architecture.
 - [`notes/README.md`](notes/README.md) / [`notes/README.ko.md`](notes/README.ko.md): Master index of all completed architecture plans.
-- [`TODO.md`](TODO.md): Active operational engineering dashboard.
+- [`TASKS.md`](TASKS.md): Active Single Source of Truth (SSOT) task & sprint database mirror (`TODO.md` deprecated).
 - [`ROADMAP.md`](ROADMAP.md): Strategic release horizons and milestone gates.

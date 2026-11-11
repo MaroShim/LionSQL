@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- add background `SessionPool` TTL/reset sweep loop and idle `ClientSession` storage reclamation (`BUG-WT-SWEEP-3`) to eliminate 60-minute WiredTiger `sweep-server` idle session warnings
+
+### Removed
+- remove superseded `notes/plans/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md` (covered by `SLT_FULL_SUITE_100_PERCENT_REPORT`)
+
 ## [0.92.0] - 2026-11-09
 
 ### Added

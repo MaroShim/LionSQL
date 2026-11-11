@@ -90,7 +90,7 @@ Empirical verification benchmarks and production application test reports.
 ### 4.2. Standard Benchmarks & Soak Load Testing
 * **[`SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md`](reports/SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md)** ([English](reports/SLT_FULL_SUITE_100_PERCENT_REPORT.md)): SQLite official SQLLogicTest (107 suites, 551,217 queries) 100% flawless pass report and cures for 8 deep engine defects.
 * **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](reports/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)** (Korean): 1-hour soak stress test (720k ops / 393k commits), `SQLSTATE 40001` conflict handling, and WiredTiger 500MB cache convergence.
-* **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)** (Korean): SSB Star Schema & Mini TPC-H representative queries, DuckDB/ClickHouse comparison, and 1.0 freeze status.
+* **[`COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)** (Korean): SSB Star Schema & Mini TPC-H representative queries, DuckDB/ClickHouse comparison, and 1.0 freeze status.
 
 ---
 

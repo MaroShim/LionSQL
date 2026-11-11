@@ -120,7 +120,7 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
   * SQLite 공식 SQLLogicTest (SLT) 107개 풀세트(551,217 쿼리) 100% 무결점 통과 실측 보고서 및 8대 심층 엔진 결함 완치 기록.
 * **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](reports/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)**
   * 1시간 장시간 고부하(72만 ops / 39.3만 커밋) 실측 검증, `SQLSTATE 40001` 충돌 처리 및 WiredTiger 500MB 캐시 수렴 분석 보고서.
-* **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)**
+* **[`COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)**
   * SSB (Star Schema Benchmark) 및 Mini TPC-H 5대 대표 쿼리 실측, DuckDB/ClickHouse 비교 분석 및 1.0 완료 동결 보고.
 
 ---

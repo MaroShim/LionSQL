@@ -4,7 +4,6 @@
 > - **Date**: 2026-11-02
 > - **Status**: Completed (100% PASS / 0 Mismatches)
 > - **Task ID**: `SLT-FULL-100` (Parent Tasks: `DURA-SLT-2`, `GA-VALID-1`)
-> - **Related Architecture Plan**: [`notes/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md`](../plans/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md)
 > - **Automated Release Verification Gate**: [`scripts/verify_0.90.sh`](../../scripts/verify_0.90.sh)
 
 ---

@@ -1,6 +1,6 @@
 # TASKS (Sprint SSOT Register & Mirror)
 
-> - **Last Synced**: 2026-11-10
+> - **Last Synced**: 2026-11-11
 > - **Primary Source of Truth (SSOT)**: SQLite `sprint_tasks` Table
 > - **Backup File**: Auto-synced on task update & Git commit
 
@@ -15,17 +15,20 @@
 | `PENDING` | **`AI-STARTER-3`** | Ecosystem | P2 | 호환성 매트릭스 문서 (되는 것/안 되는 것) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
 | `PENDING` | **`AI-STARTER-4`** | Research | P3 | Go 임베디드 모드 타당성 조사 (SQLite 대비) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-ANTLR-ORACLE-1`** | Architecture | P2 | ANTLR4 기반 T-SQL 문법 검증 및 미지원 기능 정밀 진단 오라클 아키텍처 | [`notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md`](notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-LOGICAL-NAMESPACE-1`** | ENGINE | P2 | 프리픽스 기반 논리적 네임스페이스 및 테이블 변수 통합 아키텍처 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
+| `DONE` | **`ARCH-INTRA-QUERY-PARALLEL-1`** | Architecture | P3 | 단일 쿼리 멀티코어 병렬 실행 (Intra-Query Parallelism) 영구 기각 (Spec-Out) | [`GEMINI.md`](GEMINI.md) |  |
+| `PENDING` | **`ARCH-LOGICAL-NAMESPACE-1`** | ENGINE | P2 | [1.0(?)] 프리픽스 기반 논리적 네임스페이스 및 USE <dbname> 물리 매핑 아키텍처 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-PRED`** | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
 | `DONE` | **`AUDIT-135-DUAL-REVIEW`** | Integrity | P1 | 전 소스코드 135단계 듀얼 AI 정밀 코드 리뷰 및 엣지 케이스 감사 | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) | 135/135 스코프 완주 (총 134건 결함 식별 및 등록 완료) |
 | `DONE` | **`AUDIT-CORE-DEEP-RESCAN`** | Integrity | P1 | 12대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan) | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) |  |
+| `DONE` | **`AUDIT-FULL-13DOM`** | Integrity | P1 | 전 13대 도메인(175개 파일, 113,056 LOC) 듀얼 AI 라인 단위 적대적 감사 완료 및 40개 결함 도출 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `IN_PROGRESS` | **`AUDIT-FULL-PATCH`** | Integrity | P1 | 전수 감사 발굴 40대 결함(Critical 2건 완치, High 26건, Med/Low 12건) TDD 순차 패치 및 무결점 회귀 검증 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`AUDIT-LOG-1`** | Integrity | P2 | 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템 | [`notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md) |  |
 | `DONE` | **`AUDIT-PATCH-P0`** | Integrity | P1 | 전수 감사 P0 (Must Fix 37선) 결함 TDD 순차 패치 및 회귀 검증 | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |  |
 | `DONE` | **`AUDIT-PATCH-P1`** | Core | P1 | 1.0 전수 감사 P1 (Should Fix 47선) 난이도별(하/중/상) 순차 안정화 패치 | [`notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md`](notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md) | 1단계(하 21건), 2단계(중 18건), 3단계(상 8건) P1 ... |
 | `DONE` | **`AUDIT-TRIAGE-POST`** | Integrity | P1 | 전수 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) |  |
 | `DONE` | **`BENCH-ALL-IN-ONE-1`** | Durability | P2 | 원클릭 벤치마크 및 종합 검증 스위트 (`scripts/run_all_benchmarks.sh`) 구축 |  | - [x] **Phase 1~4 (성능/와이어 실측)**: Bank... |
-| `PENDING` | **`BENCH-TPCH-1`** | Ecosystem | P3 | Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation | [`notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |  |
+| `DONE` | **`BENCH-TPCH-1`** | Ecosystem | P3 | Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation 영구 대체 기각 (Replaced by PERF-SUBQUERY-MEMO-1, Spec-Out) | [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`BUG-ADD-COL-NOT-NULL-1`** | Integrity | P2 | 기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug) |  |  |
 | `DONE` | **`BUG-AGG-MIXED-NUM-DEC-1`** | Integrity | P2 | AggregateIterator Decimal-정수 혼합 합계 유실 방지 (Agg Mixed Decimal Bug) |  |  |
 | `DONE` | **`BUG-API-CREATE-DEFAULT-1`** | Integrity | P2 | HTTP API 레코드 생성 시 NOT NULL DEFAULT 필드 주입 (API Create Default Bug) |  |  |
@@ -145,6 +148,7 @@
 | `DONE` | **`BUG-WT-INDEX-COMP-1`** | Integrity | P2 | WiredTiger 복합 인덱스 정합성 (WT Composite Index Bug) |  |  |
 | `DONE` | **`BUG-WT-INDEX-DESC-1`** | Integrity | P2 | WiredTiger IndexScanDesc 역정렬 스텁 결함 해결 (WT Index Desc Bug) |  |  |
 | `DONE` | **`BUG-WT-SWEEP-1`** | Integrity | P2 | WiredTiger 60분 유휴 세션 경고 방지 및 세션 리셋 (WT Sweep Server Bug) |  |  |
+| `DONE` | **`BUG-WT-SWEEP-3`** | Integrity | P2 | SessionPool 백그라운드 TTL/스윕 루프 및 유휴 ClientSession.Session 회수 |  |  |
 | `DONE` | **`BUG-WT-UNIQUE-INDEX-UNENFORCED-1`** | Integrity | P2 | WiredTiger 스토리지 엔진 보조 유니크 인덱스 제약 검증 및 색인 누락 방지 (WT Unique Index Bug) |  |  |
 | `DONE` | **`CFG-MEMORY-COMPACT-DEFAULT-1`** | STORAGE | P1 | 인메모리 컴팩트(compact) 모드 4대 게이트 검증 및 기본값 공식 승격 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
 | `DONE` | **`CFG-STORAGE-OPT-1`** | CONFIG | P1 | 스토리지 옵션 계층 분리(--disk/--memory) 및 하위 호환성 매핑 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
@@ -156,7 +160,7 @@
 | `DONE` | **`DURA-SLT-1`** | Durability | P2 | SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 | [`notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`DURA-SLT-2`** | Durability | P2 | SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 | [`notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`DURA-SOAK-1`** | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
-| `PENDING` | **`FEAT-MATVIEW-ALIAS-1`** | FEAT | P2 | Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) | [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-MATVIEW-ALIAS-1`** | FEAT | P2 | [1.0(?)] Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) | [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PUREGO-WT-ENGINE`** | Storage | P3 | WiredTiger 호환 자체 Pure-Go MVCC 스토리지 엔진 구현 및 CGo 분리 (Post-1.0) |  |  |
 | `DONE` | **`FEAT-TABLE-VAR-1`** | Engine | P2 | T-SQL 테이블 변수(DECLARE @tbl TABLE) 지원 및 DML/배치 라이프사이클 통합 | [`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TIMESERIES-LSM-1`** | FEAT | P2 | LSM Time-Series Chunk Storage & time_bucket | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
@@ -182,14 +186,14 @@
 | `DONE` | **`M1`** | Ecosystem | P3 | v0.90.0 Feature Freeze & Production Hardening (100% PASS) |  |  |
 | `DONE` | **`M2`** | Ecosystem | P3 | v0.90.0 액티브 스프린트 완료 과제 (18개 전량 완료 아카이브) |  | - [x] **`PERF-PGWIRE-PREP-TX`**: PGWi... |
 | `DONE` | **`M3`** | Ecosystem | P3 | 내구성 및 신뢰성 1차 검증 완료 이력 |  |  |
-| `IN_PROGRESS` | **`OCC-HYPER-2`** | STORAGE | P2 | In-Memory OCC Pointer-Free Flat Record A/B Benchmark & Implementation | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
+| `DONE` | **`OCC-HYPER-2`** | STORAGE | P2 | In-Memory OCC Pointer-Free Flat Record A/B Benchmark & Implementation | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`OPT-LARGE-JOIN-1`** | Durability | P2 | 대규모 조인(10+ Tables) 최적화 | [`notes/plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`P-2`** | Performance | P1 | WiredTiger VDBE 바이너리 튜플 지연 역직렬화 |  | - [x] **Phase 1 (`BENCH-P2-BASE`)**: ... |
 | `PENDING` | **`P2-BACKLOG`** | Engine | P3 | Post-1.0 P2 Deferred Audit Items (92 Cases) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`P2-STABILIZE-AB-1`** | engine | P2 | P2 그룹 A/B 경계값 클램핑 및 내장함수 정합성 가드 10건 보강 | [`notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md`](notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`P3-INVARIANTS`** | Architecture | P3 | By-Design & Spec-Out Architecture Invariants (25 Cases) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`PERF-BENCH-WT-RESTORE-1`** | Performance | P1 | WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 |  |  |
-| `PENDING` | **`PERF-COMPLEX-QUERY-2`** | Ecosystem | P3 | Complex Query Flat Hash Join & Direct Slot Projection | [`notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-COMPLEX-QUERY-2`** | Ecosystem | P3 | Complex Query Flat Hash Join & Direct Slot Projection | [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-COMPLEX-QUERY-COLUMNAR`** | Architecture | P3 | 순수 Columnar Vectorization 전면 재작성 영구 기각 (Spec-Out) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-CTE-EPHEMERAL-1`** | Durability | P2 | 세션 로컬 에페머럴 CTE 버퍼 및 Zero-DDL 최적화 | [`notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md`](notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md) |  |
 | `DONE` | **`PERF-CTE-LOWERING-VDBE-1`** | Durability | P2 | Writable CTE Stored Procedure 바이트코드 Lowering 가속 | [`notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md) |  |
@@ -198,7 +202,9 @@
 | `PENDING` | **`PERF-OCC-ZERO-LOCK-1`** | Storage | P2 | In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 (읽기 RLock 완전 제거) | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
 | `DONE` | **`PERF-SERVER-PIPELINE-P3-P4`** | Ecosystem | P3 | 서버 파이프라인 Phase 3/4 | [`notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-SUBQUERY-MEMO-1`** | Engine | P2 | [1.0(?)] 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 | [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-VDBE-EXTREME-OPT-1`** | Durability | P2 | T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 | [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 1 (`PERF-VDBE-SLOT-1`)*... |
+| `IN_PROGRESS` | **`PERF-WIRE-ZEROALLOC-1`** | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
 | `DONE` | **`PLANNER-SLIM-1`** | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
@@ -232,7 +238,7 @@
 ## 2. Detailed Task Specifications & Execution Records
 
 ### [IN_PROGRESS] 1.0 GA 검증 및 잔여 정리 `1.8`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`](notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md)
 - **Target Files**: `cmd/soaktest, cmd/crashtest, pkg/engine, pkg/sqlutil, pkg/api, pkg/sqlutil/predicate.go`
 
@@ -289,7 +295,7 @@
 ---
 
 ### [PENDING] 기타 엔터프라이즈 기능 확장 `3.9`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:10
 
 **Phases & Checklist**:
 - [ ] `AUDIT-LOG-1`: 암호화 SHA-256 불변 감사 로그 서브시스템 ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md))
@@ -301,43 +307,49 @@
 ---
 
 ### [PENDING] AI 에이전트용 컨텍스트 문서 (llms.txt, AGENTS.md 템플릿) `AI-STARTER-1`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-09 07:57:37
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
 
 ---
 
 ### [PENDING] 랜딩 AI 앱 스타터 섹션 및 Go/Node/Python 최소 예제 `AI-STARTER-2`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-09 07:57:37
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
 
 ---
 
 ### [PENDING] 호환성 매트릭스 문서 (되는 것/안 되는 것) `AI-STARTER-3`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-09 07:57:38
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
 
 ---
 
 ### [PENDING] Go 임베디드 모드 타당성 조사 (SQLite 대비) `AI-STARTER-4`
-- **Domain**: Research | **Priority**: P3 | **Updated**: 2026-11-09 07:57:38
+- **Domain**: Research | **Priority**: P3 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
 
 ---
 
 ### [PENDING] ANTLR4 기반 T-SQL 문법 검증 및 미지원 기능 정밀 진단 오라클 아키텍처 `ARCH-ANTLR-ORACLE-1`
-- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-09 21:52:36
+- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md`](notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md)
 
 ---
 
-### [PENDING] 프리픽스 기반 논리적 네임스페이스 및 테이블 변수 통합 아키텍처 `ARCH-LOGICAL-NAMESPACE-1`
-- **Domain**: ENGINE | **Priority**: P2 | **Updated**: 2026-11-10 00:53:23
+### [DONE] 단일 쿼리 멀티코어 병렬 실행 (Intra-Query Parallelism) 영구 기각 (Spec-Out) `ARCH-INTRA-QUERY-PARALLEL-1`
+- **Domain**: Architecture | **Priority**: P3 | **Updated**: 2026-11-11 00:22:10
+- **Plan Doc**: [`GEMINI.md`](GEMINI.md)
+
+---
+
+### [PENDING] [1.0(?)] 프리픽스 기반 논리적 네임스페이스 및 USE <dbname> 물리 매핑 아키텍처 `ARCH-LOGICAL-NAMESPACE-1`
+- **Domain**: ENGINE | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)
 
 ---
 
 ### [DONE] & `ARCH-RULE-SLUG`) `ARCH-PRED`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: `pkg/sqlutil/predicate.go`
 
 **Phases & Checklist**:
@@ -351,7 +363,7 @@
 ---
 
 ### [DONE] AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) `ARCH-VDBE-ROUTING-1`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md)
 - **Target Files**: `pkg/engine/session.go, pkg/engine/coordinator_impl.go, pkg/api/server.go, pkg/proc/characteristics.go, pkg/wire/server.go`
 
@@ -368,7 +380,7 @@
 ---
 
 ### [DONE] 전 소스코드 135단계 듀얼 AI 정밀 코드 리뷰 및 엣지 케이스 감사 `AUDIT-135-DUAL-REVIEW`
-- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md)
 - **Metrics**: 135/135 스코프 완주 (총 134건 결함 식별 및 등록 완료)
 
@@ -390,7 +402,7 @@
 ---
 
 ### [DONE] 12대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan) `AUDIT-CORE-DEEP-RESCAN`
-- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md)
 
 **Phases & Checklist**:
@@ -409,14 +421,26 @@
 
 ---
 
+### [DONE] 전 13대 도메인(175개 파일, 113,056 LOC) 듀얼 AI 라인 단위 적대적 감사 완료 및 40개 결함 도출 `AUDIT-FULL-13DOM`
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-11 00:22:10
+- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+
+---
+
+### [IN_PROGRESS] 전수 감사 발굴 40대 결함(Critical 2건 완치, High 26건, Med/Low 12건) TDD 순차 패치 및 무결점 회귀 검증 `AUDIT-FULL-PATCH`
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-11 00:22:10
+- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+
+---
+
 ### [PENDING] 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템 `AUDIT-LOG-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md)
 
 ---
 
 ### [DONE] 전수 감사 P0 (Must Fix 37선) 결함 TDD 순차 패치 및 회귀 검증 `AUDIT-PATCH-P0`
-- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-08 09:59:06
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md)
 
 **Phases & Checklist**:
@@ -429,7 +453,7 @@
 ---
 
 ### [DONE] 1.0 전수 감사 P1 (Should Fix 47선) 난이도별(하/중/상) 순차 안정화 패치 `AUDIT-PATCH-P1`
-- **Domain**: Core | **Priority**: P1 | **Updated**: 2026-11-10 02:59:02
+- **Domain**: Core | **Priority**: P1 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md`](notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md)
 - **Metrics**: 1단계(하 21건), 2단계(중 18건), 3단계(상 8건) P1 47건 전원 100% 완주 완료
 
@@ -446,7 +470,7 @@
 ---
 
 ### [DONE] 전수 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 `AUDIT-TRIAGE-POST`
-- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-11 00:22:10
 - **Plan Doc**: [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md)
 
 **Phases & Checklist**:
@@ -458,7 +482,7 @@
 ---
 
 ### [DONE] 원클릭 벤치마크 및 종합 검증 스위트 (`scripts/run_all_benchmarks.sh`) 구축 `BENCH-ALL-IN-ONE-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Metrics**: - [x] **Phase 1~4 (성능/와이어 실측)**: Banking SP(142k+ TPS, 100% 검증), Storage Kernel TPC-C(246만+ tpmC), VDBE Runtime TPC-C(82.7만+ tpmC), Network PGWire(21.6만+ tpmC) 및 TDS(13.9만+ tpmC) 완주
 
 **Phases & Checklist**:
@@ -472,17 +496,18 @@
 
 ---
 
-### [PENDING] Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation `BENCH-TPCH-1`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:55
-- **Plan Doc**: [`notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)
+### [DONE] Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation 영구 대체 기각 (Replaced by PERF-SUBQUERY-MEMO-1, Spec-Out) `BENCH-TPCH-1`
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:10
+- **Plan Doc**: [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)
 
 **Details & Resolution**:
-- TPC-H Q1, Q3, Q4, Q6, Q9 스위트 및 `EXISTS`/`IN` -> Semi-Join 자동 변환 ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md))
+- 1단계 `EXISTS`/`IN` Semi-Join 탈상관화는 이미 완료됨(`pkg/planner/decorrelate.go`).
+- 집계 포함 상관 서브쿼리의 복잡한 AST 재작성(Kim's Decorrelation)은 Count Bug/3VL 결함 위험으로 구현 안 함(Spec-Out) 확정하고, 단일 쿼리 스코프 유계 메모이제이션 캐시(`PERF-SUBQUERY-MEMO-1`)로 영구 대체함 (`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md` §9).
 
 ---
 
 ### [DONE] 기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug) `BUG-ADD-COL-NOT-NULL-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/storage/memengine/ddl.go:500-502``
 
 **Details & Resolution**:
@@ -494,7 +519,7 @@
 ---
 
 ### [DONE] AggregateIterator Decimal-정수 혼합 합계 유실 방지 (Agg Mixed Decimal Bug) `BUG-AGG-MIXED-NUM-DEC-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/execution/aggregate.go:408-428, 573-594``
 
 **Details & Resolution**:
@@ -506,7 +531,7 @@
 ---
 
 ### [DONE] HTTP API 레코드 생성 시 NOT NULL DEFAULT 필드 주입 (API Create Default Bug) `BUG-API-CREATE-DEFAULT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/api/handlers_records.go:437-462``
 
 **Details & Resolution**:
@@ -518,7 +543,7 @@
 ---
 
 ### [DONE] HTTP API 레코드 조회 시 DATETIME 빈 문자열 직렬화 방지 (API JSON DateTime Bug) `BUG-API-JSON-DATETIME-EMPTY-STR-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/api/handlers_records.go:53`, `pkg/storage/engine.go:466``
 
 **Details & Resolution**:
@@ -530,7 +555,7 @@
 ---
 
 ### [DONE] HTTP API 레코드 직렬화 시 DECIMAL 실수 부동소수점 정밀도 손실 방지 (API Decimal Loss Bug) `BUG-API-JSON-DECIMAL-PRECISION-LOSS-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/api/handlers_records.go:46-51``
 
 **Details & Resolution**:
@@ -542,7 +567,7 @@
 ---
 
 ### [DONE] HTTP API 레코드 밀리초 PK 충돌 및 UUID 누락 해결 (API PK Gen Bug) `BUG-API-PK-GEN-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/api/handlers_records.go:449-455``
 
 **Details & Resolution**:
@@ -554,7 +579,7 @@
 ---
 
 ### [DONE] CROSS/OUTER APPLY 정규식 및 맵 순회 왜곡 방지 (Apply Regex Bug) `BUG-APPLY-REGEX-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/engine/sqlexec_apply.go:214-222``
 
 **Details & Resolution**:
@@ -566,7 +591,7 @@
 ---
 
 ### [DONE] 수식 0 초기화 방지 (Arithmetic Bug) `BUG-ARITH-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/engine/sqlexec_eval.go:925``
 
 **Details & Resolution**:
@@ -578,7 +603,7 @@
 ---
 
 ### [DONE] UPDATE 산술식 유연성 및 0 리셋 방지 (Arith Expr Zero Bug) `BUG-ARITH-EXPR-ZERO-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/engine/sqlexec_eval.go:19, 920-966``
 
 **Details & Resolution**:
@@ -590,7 +615,7 @@
 ---
 
 ### [DONE] 내장 슈퍼유저 비밀번호 인증 완전 우회 백도어 해결 (Auth Admin PW Bypass Bug) `BUG-AUTH-ADMIN-PW-BYPASS-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/wire/server.go:561-565`, `pkg/wire/tds/server.go:702-706``
 
 **Details & Resolution**:
@@ -602,7 +627,7 @@ PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무�
 ---
 
 ### [DONE] RBAC 사용자 커스텀 롤 테이블 권한 전수 누락 방지 (RBAC Role Grant Bug) `BUG-AUTH-RBAC-ROLE-GRANT-IGNORE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/auth/rbac.go:371-432``
 
 **Details & Resolution**:
@@ -614,7 +639,7 @@ PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무�
 ---
 
 ### [DONE] 백업 아카이브 생성 및 복원 시 뷰(View) 메타데이터 전무 누락 방지 (Backup Restore View Bug) `BUG-BACKUP-RESTORE-VIEW-OMISSION-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 
 **Details & Resolution**:
 `CreateBackup`/`RestoreBackup`에 `catalog/views.json` 직렬화 및 복원 파이프라인을 추가하여 뷰 정의 영구 유실 방어
@@ -622,7 +647,7 @@ PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무�
 ---
 
 ### [DONE] 인덱스 바운드 무작위 추출 방지 (Index Bound Bug) `BUG-BOUNDS-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/planner/bounds.go:389``
 
 **Details & Resolution**:
@@ -634,7 +659,7 @@ PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무�
 ---
 
 ### [DONE] 컬럼 대소문자 정규화 (Case-Insensitive) `BUG-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/storage/engine.go:317``
 
 **Details & Resolution**:
@@ -646,7 +671,7 @@ PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무�
 ---
 
 ### [DONE] 가상 카탈로그 복합 외래키 쉼표 병합 및 액션 왜곡 방지 (Catalog Multi Col FK Bug) `BUG-CATALOG-FK-MULTI-COL-ACTIONS-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/catalog/virtual/mssql.go:369-375``
 
 **Details & Resolution**:
@@ -658,7 +683,7 @@ PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무�
 ---
 
 ### [DONE] 가상 카탈로그 3-part/4-part 식별자 파싱 결함 해결 (Catalog Ident Bug) `BUG-CATALOG-IDENT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/catalog/virtual/result.go:372``
 
 **Details & Resolution**:
@@ -670,7 +695,7 @@ PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무�
 ---
 
 ### [DONE] 가상 카탈로그 대괄호 식별자 인터셉트 보장 (Catalog Bracket Bug) `BUG-CATALOG-INTERCEPT-BRACKET-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:10
 - **Target Files**: ``pkg/catalog/virtual/interceptor.go:113-160``
 
 **Details & Resolution**:
@@ -682,7 +707,7 @@ PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무�
 ---
 
 ### [DONE] 가상 카탈로그 N'...' 리터럴 및 대괄호 식별자 매칭 (Catalog Regex Unicode Bug) `BUG-CATALOG-MSSQL-REGEX-UNICODE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/catalog/virtual/mssql.go:17-18``
 
 **Details & Resolution**:
@@ -694,7 +719,7 @@ PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무�
 ---
 
 ### [DONE] 서버 재기동 시 프로시저/함수/뷰/트리거 영구 증발 방지 (Catalog Object Persistence Bug) `BUG-CATALOG-OBJECT-PERSISTENCE-OMISSION-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 인메모리 맵 보관 객체들을 WAL 레코드 또는 `catalog_objects.json`으로 영속화하여 데이터베이스 재시작 후 메타데이터 복원 보장
@@ -702,7 +727,7 @@ PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무�
 ---
 
 ### [DONE] 가상 카탈로그 ORDER BY 콤마 잔존 정렬 무력화 방지 (Catalog Order By Bug) `BUG-CATALOG-ORDERBY-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/catalog/virtual/result.go:34`, `pkg/engine/sqlexec_dbcc.go:310``
 
 **Details & Resolution**:
@@ -714,7 +739,7 @@ PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무�
 ---
 
 ### [DONE] 코디네이터 집계 MIN/MAX 비숫자형 파싱 실패 시 NULL 반환 방지 (Coord Agg MinMax Bug) `BUG-COORD-AGG-MIN-MAX-NON-NUMERIC-NIL-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 `strconv.ParseFloat` 전용 파싱을 문자열/일시/불리언 비교 인터페이스로 확장하여 문자열 및 날짜 컬럼의 극값 유실 해결
@@ -722,7 +747,7 @@ PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무�
 ---
 
 ### [DONE] COPY FROM DELIMITER 후속 옵션 따옴표 변조 방지 (Copy Delimiter Bug) `BUG-COPY-DELIM-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/wire/copy.go:136-145``
 
 **Details & Resolution**:
@@ -734,7 +759,7 @@ DELIMITER 뒤 후속 옵션 존재 시 닫는 따옴표(`'`)를 구분자로 파
 ---
 
 ### [DONE] COPY FROM 정수 PK 0 보존 (Copy PK Zero Bug) `BUG-COPY-PK-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/wire/copy.go:338-342``
 
 **Details & Resolution**:
@@ -746,7 +771,7 @@ PGWire `COPY FROM` 시 정수 기본키 `0`을 미지정으로 오해하여 Unix
 ---
 
 ### [DONE] CTE 임의 PK 강제 및 VARCHAR 타입 파괴 해결 (CTE Materialize Bug) `BUG-CTE-MATERIALIZE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_explain.go:862-868``
 
 **Details & Resolution**:
@@ -758,7 +783,7 @@ PGWire `COPY FROM` 시 정수 기본키 `0`을 미지정으로 오해하여 Unix
 ---
 
 ### [DONE] TODATETIMEOFFSET 정수 분 단위 오프셋 시간 오해석 방지 (ToDateTimeOffset Mins Bug) `BUG-DATE-TODATETIMEOFFSET-INT-MINS-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/builtins_date.go:441-458, 733``
 
 **Details & Resolution**:
@@ -770,7 +795,7 @@ T-SQL 규격 정수 오프셋(분 단위)을 시간 단위로 60배 왜곡 포�
 ---
 
 ### [DONE] DATEADD/EOMONTH 증분 NULL 시 NULL 정규 반환 (DateAdd NULL Bug) `BUG-DATEADD-NULL-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/builtins_date.go:567-584, 635-645``
 
 **Details & Resolution**:
@@ -782,7 +807,7 @@ T-SQL 규격 정수 오프셋(분 단위)을 시간 단위로 60배 왜곡 포�
 ---
 
 ### [DONE] CREATE TABLE 복합 기본키 콤마 분해 및 스키마 보존 (DDL Composite PK Bug) `BUG-DDL-COMPOSITE-PK-PARSE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_ddl.go:89-98``
 
 **Details & Resolution**:
@@ -794,7 +819,7 @@ T-SQL 규격 정수 오프셋(분 단위)을 시간 단위로 60배 왜곡 포�
 ---
 
 ### [DONE] PK 임의 추측 방지 (DDL PK Guess Bug) `BUG-DDL-PK-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_ddl.go:185`, `pkg/api/handlers_tables.go:162``
 
 **Details & Resolution**:
@@ -806,7 +831,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] CREATE TABLE splitColumnDefs 따옴표 추적 (DDL Split Quote Bug) `BUG-DDL-SPLIT-QUOTE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_ddl.go:737-767``
 
 **Details & Resolution**:
@@ -818,7 +843,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 비상관화 and 접미 단순 Trim 결함 해결 (Decorrelate Trim Bug) `BUG-DECORRELATE-TRIM-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/planner/decorrelate.go:501-508, 473``
 
 **Details & Resolution**:
@@ -830,7 +855,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 0건 파생테이블 Columns[0] 임의 PK 지정 및 제약 파괴 방지 (Derived Table PK Bug) `BUG-DERIVED-TABLE-PK-GUESS-EMPTY-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_derived.go:116-118``
 
 **Details & Resolution**:
@@ -842,7 +867,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 코디네이터 UPDATE 산술식 미지원 및 0값/타입변조 방지 (Eval Update Arith Bug) `BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_eval.go:920-965``
 
 **Details & Resolution**:
@@ -854,7 +879,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 비-id PK 테이블 DML 시 무작위 컬럼 PK 간주 해결 (DML Random PK Bug) `BUG-DML-PK-RANDOM-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_dml.go:1071-1078, 1228-1235``
 
 **Details & Resolution**:
@@ -866,7 +891,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] DML/DDL PK 식별 실패 시 임의 순회 행 훼손 방지 (DML PK Guess Bug) `BUG-DML-PK-RANDOM-GUESS-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/runtime/vm.go:940-945, 1076-1081`, `pkg/engine/sqlexec_dml.go:1071-1078, 1228-1235`, `pkg/engine/sqlexec_ddl.go:349, 363-366``
 
 **Details & Resolution**:
@@ -878,7 +903,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] DropIndex 대소문자 정규화 및 좀비 인덱스 방지 (Drop Index Case Bug) `BUG-DROP-INDEX-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/ddl.go:148-154``
 
 **Details & Resolution**:
@@ -890,7 +915,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] WHERE IN 절 문자열 리터럴 쉼표 오절단 방지 (Eval IN Comma Bug) `BUG-EVAL-IN-COMMA-SPLIT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_eval.go:360``
 
 **Details & Resolution**:
@@ -902,7 +927,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] evalRowBinaryOp 불일치 비교 NULL 3가 논리 보장 (Eval NEQ NULL Bug) `BUG-EVAL-NEQ-NULL-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/eval.go:341-347``
 
 **Details & Resolution**:
@@ -914,7 +939,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] AggregateIterator DISTINCT 집계 무시 및 전체 행 집계 왜곡 방지 (Agg Distinct Ignored Bug) `BUG-EXEC-AGG-DISTINCT-IGNORED-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 정규식 `(?:DISTINCT\s+)?` 일치 시 `isDistinct` 플래그 보존 및 `groupAccumulator` 고유값 셋 추적으로 중복 집계 왜곡 차단
@@ -922,7 +947,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 복합 조인 조건 '=' 분해 파괴 및 무제한 카테시안 곱 왜곡 방지 (Join Cond Split Bug) `BUG-EXEC-BUILDER-JOIN-COND-SPLIT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 `parseJoinCond`에서 다중 복합 조건(`k1=v1 AND k2=v2`) 지원으로 빈 문자열("") 해시 매칭 및 카테시안 왜곡 해결
@@ -930,7 +955,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] HashJoin/MergeJoin 문자열 조인 키 대소문자 무관 매칭 보장 (Join Str Case Bug) `BUG-EXEC-JOIN-STR-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/execution/join.go:184, 291`, `pkg/execution/merge_join.go:297``
 
 **Details & Resolution**:
@@ -942,7 +967,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] EXEC 프로시저 호출 시 외부 트랜잭션 세션 우회 및 독립 자동 커밋 방지 (Exec Proc Tx Bypass Bug) `BUG-EXEC-PROC-TX-BYPASS-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_procs.go:988-992, 1026``
 
 **Details & Resolution**:
@@ -954,7 +979,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] EXPLAIN 서브쿼리 무작위 치환 방지 (Explain Bug) `BUG-EXP-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_explain.go:703, 723, 760``
 
 **Details & Resolution**:
@@ -966,7 +991,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 외래키 부모 컬럼 대소문자 정규화 (FK Case Bug) `BUG-FK-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/tx.go:940-946``
 
 **Details & Resolution**:
@@ -978,7 +1003,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 외래키 자식 컬럼 대소문자 정규화 (FK Child Case Bug) `BUG-FK-CHILD-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/tx.go:853-860``
 
 **Details & Resolution**:
@@ -990,7 +1015,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 외래키 부모 테이블 대소문자 정규화 (FK Parent Table Case Bug) `BUG-FK-PARENT-TABLE-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/tx.go:932``
 
 **Details & Resolution**:
@@ -1002,7 +1027,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] FOR JSON PATH 테이블 별칭 중첩 객체 오해석 방지 (For JSON Alias Bug) `BUG-FOR-JSON-TABLE-ALIAS-WRAPPER-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_pivot.go:1071-1084``
 
 **Details & Resolution**:
@@ -1014,7 +1039,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] HTTP API 테이블 생성 시 임의 PK 승격 제거 (HTTP Table PK Bug) `BUG-HTTP-TABLE-PK-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/api/handlers_tables.go:147, 160-163``
 
 **Details & Resolution**:
@@ -1026,7 +1051,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 세컨더리 인덱스 키 추출 대소문자 정규화 (Index Key Case Bug) `BUG-INDEX-KEY-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/ddl.go:172, 211, 222``
 
 **Details & Resolution**:
@@ -1038,7 +1063,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 인덱스 스캔 다중 정렬 무시 및 정렬 누락 방지 (Index Scan Order By Bug) `BUG-INDEX-SCAN-ORDERBY-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_eval.go:661, 692, 814``
 
 **Details & Resolution**:
@@ -1050,7 +1075,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 조인 인덱스 임의 선택 방지 (Join Index Guess Bug) `BUG-JOIN-IDX-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/execution/builder.go:256``
 
 **Details & Resolution**:
@@ -1062,7 +1087,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 조인 조건 단순 Split 파싱 결함 수정 (Join Parse Bug) `BUG-JOIN-PARSE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/execution/builder.go:315`, `pkg/wire/server.go:1064, 1586``
 
 **Details & Resolution**:
@@ -1074,7 +1099,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] MemEngine 로컬 삽입 행 인덱스 정렬 보장 (MemEngine Index Order Bug) `BUG-MEM-INDEX-LOCAL-ORDER-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/tx.go:1264-1277``
 
 **Details & Resolution**:
@@ -1086,7 +1111,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] TableData 샤드 지연 초기화 동시성 경쟁 런타임 패닉 방지 (MemEngine Shard Init Race Bug) `BUG-MEM-SHARD-INIT-RACE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/table_data.go:87-116, 120``
 
 **Details & Resolution**:
@@ -1098,7 +1123,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] SkipList 유니크 인덱스 재인덱싱 시 커버링 컬럼 복사본 갱신 방지 (SkipList Unique Include Bug) `BUG-MEM-SKIPLIST-UNIQUE-INCLUDE-COPY-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/skiplist.go:86-90``
 
 **Details & Resolution**:
@@ -1110,7 +1135,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] MemEngine IndexScan 인덱스명 대소문자 무관 탐색 보장 (MemEngine Index Case Bug) `BUG-MEM-TX-INDEX-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/tx.go:1229``
 
 **Details & Resolution**:
@@ -1122,7 +1147,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] 트랜잭션 커밋 시 테이블 대소문자 사일런트 쓰기 증발 방지 (MemEngine Tx Case Bug) `BUG-MEM-TX-TABLE-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/tx.go:244, 1479, 1546, 1622``
 
 **Details & Resolution**:
@@ -1134,7 +1159,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] WAL 복구 시 CREATE TABLE 인라인 인덱스 등록 누락 방지 (WAL Create Table Index Bug) `BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/persistence.go:61-70``
 
 **Details & Resolution**:
@@ -1146,7 +1171,7 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 ---
 
 ### [DONE] MERGE WHEN NOT MATCHED IDENTITY 자동 채번 보장 (Merge Identity PK Bug) `BUG-MERGE-IDENTITY-PK-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_merge.go:180-205``
 
 **Details & Resolution**:
@@ -1158,7 +1183,7 @@ MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화
 ---
 
 ### [DONE] MERGE 구문 내 신규 삽입 행의 SOURCE 미일치 오인 즉각 삭제 방지 (Merge Self Destruct Bug) `BUG-MERGE-NOT-MATCHED-SOURCE-SELF-DESTRUCT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 `WHEN NOT MATCHED` 삽입 행의 `matchedTargetKeys` 등록으로 동일 MERGE 문 내 `NOT MATCHED BY SOURCE`의 자가 삭제 방어
@@ -1166,7 +1191,7 @@ MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화
 ---
 
 ### [DONE] MERGE SET 절 다중 인자 수식 보존 (Merge Set Bug) `BUG-MERGE-SET-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_merge.go:646-658``
 
 **Details & Resolution**:
@@ -1178,7 +1203,7 @@ MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화
 ---
 
 ### [DONE] 단일 트랜잭션 내 다중 유니크 충돌 사일런트 커밋 방지 (OCC Intra Tx Unique Bug) `BUG-OCC-COMMIT-INTRA-TX-UNIQUE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/tx.go:1557-1588, 1645, 1674``
 
 **Details & Resolution**:
@@ -1190,7 +1215,7 @@ MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화
 ---
 
 ### [DONE] MemEngine updateLocked 유니크 인덱스 사전 검증 누락 방지 (OCC Update Unique Bug) `BUG-OCC-UPDATE-UNIQUE-CHECK-OMISSION-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/tx.go:481-568``
 
 **Details & Resolution**:
@@ -1202,7 +1227,7 @@ MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화
 ---
 
 ### [DONE] ORDER BY 다중 컬럼 및 대소문자 정합성 (Order By Bug) `BUG-ORDER-BY-SPLIT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/catalog/virtual/result.go:34`, `pkg/engine/sqlexec_dbcc.go:310`, `pkg/engine/sqlexec_pivot.go:421, 946`, `pkg/engine/sqlexec_select.go:1857, 2253``
 
 **Details & Resolution**:
@@ -1214,7 +1239,7 @@ MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화
 ---
 
 ### [DONE] Pratt 파서 Simple CASE 피연산자 누락 및 문법 거부 방지 (Parser Simple Case Bug) `BUG-PARSER-SIMPLE-CASE-OMISSION-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/parser_expr.go:445-475`, `pkg/proc/ast.go:486``
 
 **Details & Resolution**:
@@ -1226,7 +1251,7 @@ MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화
 ---
 
 ### [DONE] PGWire Describe 단순 문자열 분해 OID 왜곡 방지 (PGWire Describe Bug) `BUG-PGWIRE-DESCRIBE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/wire/server.go:1064, 1099, 1586``
 
 **Details & Resolution**:
@@ -1238,7 +1263,7 @@ MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화
 ---
 
 ### [DONE] PGWire 파라미터 경계 인식 치환 (PGWire Param Bug) `BUG-PGWIRE-PARAM-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/wire/server.go:992``
 
 **Details & Resolution**:
@@ -1250,7 +1275,7 @@ MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화
 ---
 
 ### [DONE] PGWire 사전 컴파일 바이트코드 실행 시 트랜잭션 우회 방지 (PGWire Prep Tx Bypass Bug) `BUG-PGWIRE-PREP-EXEC-TX-BYPASS-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 `handleExecute` 패스트패스에서 신규 독립 세션(`NewSession`) 강제 생성을 중단하고 활성 세션 컨텍스트 및 트랜잭션 바인딩
@@ -1258,7 +1283,7 @@ MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화
 ---
 
 ### [DONE] PITR WAL 재생 시 DDL 실행 에러 침묵 및 복구 실패 은폐 방지 (PITR DDL Swallow Bug) `BUG-PITR-DDL-SILENT-SWALLOW-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/backup/pitr.go:112, 121, 129, 137, 146, 155``
 
 **Details & Resolution**:
@@ -1270,7 +1295,7 @@ DDL 실행 실패(`CreateTable`, `DropTable` 등) 시 에러 즉시 전파로 �
 ---
 
 ### [DONE] PIVOT COUNT 집계 시 빈 카테고리 0 정규 반환 (Pivot Count NULL Bug) `BUG-PIVOT-COUNT-NULL-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_pivot.go:292-357``
 
 **Details & Resolution**:
@@ -1282,7 +1307,7 @@ DDL 실행 실패(`CreateTable`, `DropTable` 등) 시 에러 즉시 전파로 �
 ---
 
 ### [DONE] PIVOT/UNPIVOT ORDER BY 절 쉼표 분해 왜곡 방지 (Pivot Order By Split Bug) `BUG-PIVOT-ORDER-BY-SPLIT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_pivot.go:420-425, 946-950``
 
 **Details & Resolution**:
@@ -1294,7 +1319,7 @@ DDL 실행 실패(`CreateTable`, `DropTable` 등) 시 에러 즉시 전파로 �
 ---
 
 ### [DONE] 무결성 결함 수정 (Integrity Bug) `BUG-PK-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076``
 
 **Details & Resolution**:
@@ -1306,7 +1331,7 @@ DDL 실행 실패(`CreateTable`, `DropTable` 등) 시 에러 즉시 전파로 �
 ---
 
 ### [DONE] CBO 선택도 추정 시 컬럼명 대소문자 불일치 0.33 휴리스틱 추락 방지 (CBO Selectivity Case Bug) `BUG-PLANNER-CBO-SELECTIVITY-CASE-SENSITIVE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 `EstimateSelectivity`의 `ts.Columns` 직접 맵 조회를 `findColumnStats`로 대체하여 대소문자 무관 통계 조회 보장
@@ -1314,7 +1339,7 @@ DDL 실행 실패(`CreateTable`, `DropTable` 등) 시 에러 즉시 전파로 �
 ---
 
 ### [DONE] OR 조건 하위 서브쿼리 불법 SEMI 조인 변환 및 'and' 식별자 파괴 방지 (Subquery Decorrelate Bug) `BUG-PLANNER-DECORRELATE-OR-SUBQUERY-CORRUPT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 OR 분기 내 서브쿼리 무단 변환 차단 및 `removeClause`의 경계 인식 토큰화로 `brand` 등 컬럼명 절단 및 문법 오류 해결
@@ -1322,7 +1347,7 @@ OR 분기 내 서브쿼리 무단 변환 차단 및 `removeClause`의 경계 인
 ---
 
 ### [DONE] CBO/SetOp 다중 정렬 키 콤마 잔존 해결 (Planner OrderBy Bug) `BUG-PLANNER-ORDERBY-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/planner/planner.go:1327`, `pkg/planner/setop.go:326``
 
 **Details & Resolution**:
@@ -1334,7 +1359,7 @@ CBO 및 SetOp 플래너 다중 정렬 시 `strings.Fields` 콤마 잔존(`"a,"`)
 ---
 
 ### [DONE] WHERE 절 이스케이프 따옴표 및 대괄호 식별자 AND 오절단 방지 (Planner Split AND Bug) `BUG-PLANNER-SPLIT-AND-QUOTE-ESCAPE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/planner/decorrelate.go:429-434`, `pkg/planner/pushdown.go:172``
 
 **Details & Resolution**:
@@ -1346,7 +1371,7 @@ CBO 및 SetOp 플래너 다중 정렬 시 `strings.Fields` 콤마 잔존(`"a,"`)
 ---
 
 ### [DONE] 단순 CASE 문(Simple CASE) 파싱 및 컴파일 보장 (Simple CASE Bug) `BUG-PROC-SIMPLE-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/parser_expr.go:445-478`, `pkg/proc/ast.go:486`, `pkg/proc/compiler.go:1276-1315``
 
 **Details & Resolution**:
@@ -1358,7 +1383,7 @@ CBO 및 SetOp 플래너 다중 정렬 시 `strings.Fields` 콤마 잔존(`"a,"`)
 ---
 
 ### [DONE] 수식 내 AS 오분해 방지 (Project Cast AS Bug) `BUG-PROJ-CAST-AS-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/execution/project.go:82`, `pkg/wire/server.go:1106``
 
 **Details & Resolution**:
@@ -1370,7 +1395,7 @@ CBO 및 SetOp 플래너 다중 정렬 시 `strings.Fields` 콤마 잔존(`"a,"`)
 ---
 
 ### [DONE] 사일런트 유실 방지 (Silent Loss Bug) `BUG-RECORD-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_dml.go:415, 1080`, `pkg/storage/tuple.go:63``
 
 **Details & Resolution**:
@@ -1382,7 +1407,7 @@ DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 �
 ---
 
 ### [DONE] GROUP BY 및 집계함수 대소문자 정합성 보장 (Select Agg Case Bug) `BUG-SELECT-AGG-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_select.go:2020-2224``
 
 **Details & Resolution**:
@@ -1394,7 +1419,7 @@ DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 �
 ---
 
 ### [DONE] SELECT INTO PK 임의 추측 방지 (Select Into PK Bug) `BUG-SELECT-INTO-PK-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_select.go:930-965`, `pkg/engine/sqlexec_derived.go:94-118``
 
 **Details & Resolution**:
@@ -1406,7 +1431,7 @@ DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 �
 ---
 
 ### [DONE] sp_executesql OUT 접미 변수명 오절단 방지 (SP Suffix OUT Bug) `BUG-SP-EXEC-SUFFIX-OUT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_procs.go:1204-1209``
 
 **Details & Resolution**:
@@ -1418,7 +1443,7 @@ DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 �
 ---
 
 ### [DONE] sp_executesql 복합 파라미터 타입 파싱 보존 (SP Param Decimal Bug) `BUG-SP-PARAM-DECIMAL-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_procs.go:1285-1300``
 
 **Details & Resolution**:
@@ -1430,7 +1455,7 @@ DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 �
 ---
 
 ### [DONE] VALUES 튜플 중첩 수식 콤마 분해 정합성 (Split Values Bug) `BUG-SPLIT-VALUES-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_eval.go:84-106`, `sqlexec_dml.go:405``
 
 **Details & Resolution**:
@@ -1442,7 +1467,7 @@ DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 �
 ---
 
 ### [DONE] DateTime-VarChar 상호 변환 누락 비교 역전 방지 (Storage Cmp DateTime Bug) `BUG-STORAGE-CMP-DATETIME-STR-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/engine.go:466, 742-772``
 
 **Details & Resolution**:
@@ -1454,7 +1479,7 @@ DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 �
 ---
 
 ### [DONE] Value.Compare Int-Float 상호 강제변환 보장 (Compare Int-Float Bug) `BUG-STORAGE-CMP-INT-FLOAT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/engine.go:734-755``
 
 **Details & Resolution**:
@@ -1466,7 +1491,7 @@ DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 �
 ---
 
 ### [DONE] 실수 6자리 문자열 포맷팅 동등 비교 왜곡 방지 (Storage Equal Float Bug) `BUG-STORAGE-EQUAL-FLOAT-STR-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/engine.go:666``
 
 **Details & Resolution**:
@@ -1478,7 +1503,7 @@ DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 �
 ---
 
 ### [DONE] 스토리지 엔진 테이블명 대소문자 미구분 맵 조회 실패 및 중복 생성 방지 (Storage Table Case Bug) `BUG-STORAGE-TABLE-CASE-SENSITIVITY-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정규화(`EqualFold` / `ToLower`)하여 `ErrTableNotFound` 및 동명이인 테이블 방어
@@ -1486,7 +1511,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] 세션 임시테이블 스냅샷/WAL 영속화 및 재기동 후 영구 누수 방지 (Temp Table Persist Bug) `BUG-STORAGE-TEMP-TABLE-PERSIST-LEAK-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 `saveDiskLocked` 및 WAL 재생 시 `__temp_*` / `__tv_*` 필터링으로 종료 세션 임시 객체의 영구 카탈로그 오염 차단
@@ -1494,7 +1519,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] 스토리지 Update 레코드 컬럼명 대소문자 정규화 (Storage Update Case Bug) `BUG-STORAGE-UPDATE-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/tx.go:502`, `pkg/storage/wiredtiger/wt_engine.go:1298``
 
 **Details & Resolution**:
@@ -1506,7 +1531,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] CHARINDEX/STRPOS의 NULL 인자 수신 시 0 반환 삼치논리 왜곡 방지 (CharIndex NULL Zero Bug) `BUG-STR-CHARINDEX-NULL-ZERO-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 `CHARINDEX`와 `STRPOS`에서 NULL 인자 입력 시 0(검색실패) 대신 `NULL` 정상 전파로 ANSI/T-SQL 삼치논리 정합성 보장
@@ -1514,7 +1539,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] 문자열 함수 NULL 전파 보장 (String NULL Bug) `BUG-STR-NULL-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/builtins_string.go:316-435``
 
 **Details & Resolution**:
@@ -1526,7 +1551,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] STRING_SPLIT 빈 구분자 콤마 임의 간주 제거 (String Split Sep Bug) `BUG-STRING-SPLIT-SEP-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_string_split.go:116-118``
 
 **Details & Resolution**:
@@ -1538,7 +1563,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] 스칼라 서브쿼리 무작위 반환 방지 (Subquery Bug) `BUG-SUBQ-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/eval.go:316-318``
 
 **Details & Resolution**:
@@ -1550,7 +1575,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] 테이블명 대소문자 무관 탐색 보장 (Table Case Bug) `BUG-TABLE-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/ddl.go:458`, `pkg/storage/wiredtiger/wt_engine.go:745``
 
 **Details & Resolution**:
@@ -1562,7 +1587,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] TDS 행 직렬화 대소문자 정규화 (TDS Row Case Bug) `BUG-TDS-ROW-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/wire/tds/token.go:774, 912, 923``
 
 **Details & Resolution**:
@@ -1574,7 +1599,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] TDS sp_executesql 파라미터명 미인식 순서 왜곡 방지 (TDS RPC Param Name Bug) `BUG-TDS-RPC-PARAM-NAME-ORDER-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/wire/tds/server.go:1205-1216``
 
 **Details & Resolution**:
@@ -1586,7 +1611,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] TDS RPC 사전 컴파일 플랜 실행 시 세션/트랜잭션 우회 방지 (TDS RPC Prep Tx Bypass Bug) `BUG-TDS-RPC-PREP-TX-BYPASS-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/wire/tds/server.go:1031-1035, 1114-1117``
 
 **Details & Resolution**:
@@ -1598,7 +1623,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] RecordToRow 대소문자 일치로 인한 NULL 덮어쓰기 방지 (Tuple Case Bug) `BUG-TUPLE-RECORD-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/tuple.go:63, 98``
 
 **Details & Resolution**:
@@ -1610,7 +1635,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] 코디네이터 UPDATE SET 절 쉼표 오절단 방지 (Update Set Comma Bug) `BUG-UPDATE-SET-COMMA-SPLIT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_dml.go:1045-1052``
 
 **Details & Resolution**:
@@ -1622,7 +1647,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] UPDATE SET 절 다중 인자 수식 사일런트 유실 방지 (Update Set Split Bug) `BUG-UPDATE-SET-SPLIT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_dml.go:1045``
 
 **Details & Resolution**:
@@ -1634,7 +1659,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] Upsert 충돌 정합성 (Upsert Bug) `BUG-UPSERT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_dml.go:492, 841``
 
 **Details & Resolution**:
@@ -1646,7 +1671,7 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 ---
 
 ### [DONE] VDBE 복합 인덱스 인코딩 정합성 (VM Composite Index Bug) `BUG-VM-COMP-IDX-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/runtime/vm.go:1232-1237``
 
 **Details & Resolution**:
@@ -1658,7 +1683,7 @@ VDBE VM에서 복합 인덱스를 단일 인덱스로 착각하고 비인코딩 
 ---
 
 ### [DONE] VDBE DML 컬럼명 대소문자 정규화 및 값 보존 (VM DML Col Case Bug) `BUG-VM-DML-COL-CASE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/runtime/vm_dispatcher.go:598-608, 665-671`, `pkg/storage/tuple.go:63`, `pkg/storage/memengine/tx.go:502-508``
 
 **Details & Resolution**:
@@ -1670,7 +1695,7 @@ Record 컬럼 대소문자 차이로 인한 `RecordToRow`/`updateLocked` 값 유
 ---
 
 ### [DONE] VDBE OpUpdate/OpDelete PK 미존재 시 ErrKeyNotFound 예외 크래시 방지 (VM DML PK Not Found Bug) `BUG-VM-DML-PK-NOT-FOUND-CRASH-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/runtime/vm_dispatcher.go:671, 719``
 
 **Details & Resolution**:
@@ -1682,7 +1707,7 @@ VDBE 단일 PK 수정/삭제 시 대상 행 미존재 시 에러 중단 대신 �
 ---
 
 ### [DONE] VDBE OpInsert 상수 리터럴 기본값 주입 보장 (VM Insert Default Bug) `BUG-VM-INSERT-DEFAULT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/runtime/vm_dispatcher.go:611-626``
 
 **Details & Resolution**:
@@ -1694,7 +1719,7 @@ VDBE 단일 PK 수정/삭제 시 대상 행 미존재 시 에러 중단 대신 �
 ---
 
 ### [DONE] VDBE 변수대입 무작위 순회 방지 (IntoVar Bug) `BUG-VM-INTO-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/runtime/vm_dispatcher.go:1046, 1128``
 
 **Details & Resolution**:
@@ -1706,7 +1731,7 @@ VDBE `SELECT ... INTO @var` 무작위 맵 순회 제거 및 `cols[0]` 결정론�
 ---
 
 ### [DONE] VDBE 스칼라 서브쿼리 nil 패닉 및 컬럼 침묵 버림 방지 (VM Subquery Nil Bug) `BUG-VM-SUBQ-NIL-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/parser_expr.go:321`, `pkg/proc/compiler.go:1358``
 
 **Details & Resolution**:
@@ -1718,7 +1743,7 @@ VDBE `SELECT ... INTO @var` 무작위 맵 순회 제거 및 `cols[0]` 결정론�
 ---
 
 ### [DONE] VDBE UPDATE 컬럼명 정규화 (VM Update Silent Loss) `BUG-VM-UPDATE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/proc/runtime/vm_dispatcher.go:668`, `pkg/proc/runtime/vm.go:959``
 
 **Details & Resolution**:
@@ -1730,7 +1755,7 @@ VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 대소문자 미정규화로 인한 
 ---
 
 ### [DONE] MemEngine WAL 테일 절단 시 기동 실패 방지 (WAL Torn Write Boot Bug) `BUG-WAL-TORN-BOOT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:55
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/memengine/wal.go:349`, `pkg/storage/memengine/memengine.go:311``
 
 **Details & Resolution**:
@@ -1742,7 +1767,7 @@ VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 대소문자 미정규화로 인한 
 ---
 
 ### [DONE] WHERE IN 절 정합성 (WHERE IN Bug) `BUG-WHERE-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/engine/sqlexec_eval.go:339``
 
 **Details & Resolution**:
@@ -1754,7 +1779,7 @@ VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 대소문자 미정규화로 인한 
 ---
 
 ### [DONE] 윈도우 함수 RANGE 피어 프레임 집계 왜곡 방지 (Window Range Peer Bug) `BUG-WINDOW-RANGE-PEER-EVAL-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/execution/window.go:303-309, 480-510`, `pkg/planner/planner.go:63, 1713``
 
 **Details & Resolution**:
@@ -1766,7 +1791,7 @@ VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 대소문자 미정규화로 인한 
 ---
 
 ### [DONE] COPY TO STDOUT 텍스트 포맷 탭/줄바꿈 이스케이프 보장 (Copy Out Unescaped Bug) `BUG-WIRE-COPY-OUT-UNESCAPED-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/wire/copy.go:488-497``
 
 **Details & Resolution**:
@@ -1778,7 +1803,7 @@ VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 대소문자 미정규화로 인한 
 ---
 
 ### [DONE] COPY FROM STDIN 파싱 에러 침묵 및 0값/현재시각 변조 방지 (Copy Silent Corrupt Bug) `BUG-WIRE-COPY-SILENT-CORRUPT-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/wire/copy.go:518-545``
 
 **Details & Resolution**:
@@ -1790,7 +1815,7 @@ VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 대소문자 미정규화로 인한 
 ---
 
 ### [DONE] COPY FROM STDIN 트랜잭션 세션 우회 및 독립 자동 커밋 방지 (Copy Tx Bypass Bug) `BUG-WIRE-COPY-TX-BYPASS-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/wire/copy.go:183, 302-358``
 
 **Details & Resolution**:
@@ -1802,7 +1827,7 @@ VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 대소문자 미정규화로 인한 
 ---
 
 ### [DONE] PGWire 파라미터 치환 시 재귀 치환 왜곡 및 숫자형 문자열 따옴표 탈락 방지 (PG Param Substitute Bug) `BUG-WIRE-PG-PARAM-SUBSTITUTION-INJECTION-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 `strings.ReplaceAll` 대신 단일 패스 토큰화 치환 적용 및 파라미터 실제 데이터 타입 보존으로 파라미터 재귀 오염 해결
@@ -1810,7 +1835,7 @@ VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 대소문자 미정규화로 인한 
 ---
 
 ### [DONE] WiredTiger 외래키 무결성 검증 구축 (WT FK Bug) `BUG-WT-FK-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/wiredtiger/wt_engine.go:1195-1380``
 
 **Details & Resolution**:
@@ -1822,7 +1847,7 @@ WiredTiger `Insert`/`Update`/`Delete` 시 외래키 참조 무결성 검사 및 
 ---
 
 ### [DONE] WiredTiger 복합 인덱스 정합성 (WT Composite Index Bug) `BUG-WT-INDEX-COMP-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/wiredtiger/wt_engine.go:1588-1590, 1617-1620``
 
 **Details & Resolution**:
@@ -1834,7 +1859,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [DONE] WiredTiger IndexScanDesc 역정렬 스텁 결함 해결 (WT Index Desc Bug) `BUG-WT-INDEX-DESC-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/wiredtiger/wt_engine.go:1532-1534``
 
 **Details & Resolution**:
@@ -1846,7 +1871,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [DONE] WiredTiger 60분 유휴 세션 경고 방지 및 세션 리셋 (WT Sweep Server Bug) `BUG-WT-SWEEP-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: ``pkg/storage/wiredtiger/wt_engine.go:265`, `pkg/engine/session_pool.go:184``
 
 **Details & Resolution**:
@@ -1857,8 +1882,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] SessionPool 백그라운드 TTL/스윕 루프 및 유휴 ClientSession.Session 회수 `BUG-WT-SWEEP-3`
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:51:02
+
+---
+
 ### [DONE] WiredTiger 스토리지 엔진 보조 유니크 인덱스 제약 검증 및 색인 누락 방지 (WT Unique Index Bug) `BUG-WT-UNIQUE-INDEX-UNENFORCED-1`
-- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 `insertLocked`/`updateLocked` 시 유니크 인덱스 제약 검증 및 `IndexScan`의 풀 테이블 스캔 폴백을 B-Tree 커서 검색으로 개편
@@ -1866,19 +1896,19 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [DONE] 인메모리 컴팩트(compact) 모드 4대 게이트 검증 및 기본값 공식 승격 `CFG-MEMORY-COMPACT-DEFAULT-1`
-- **Domain**: STORAGE | **Priority**: P1 | **Updated**: 2026-11-10 01:55:53
+- **Domain**: STORAGE | **Priority**: P1 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md)
 
 ---
 
 ### [DONE] 스토리지 옵션 계층 분리(--disk/--memory) 및 하위 호환성 매핑 `CFG-STORAGE-OPT-1`
-- **Domain**: CONFIG | **Priority**: P1 | **Updated**: 2026-11-10 01:40:41
+- **Domain**: CONFIG | **Priority**: P1 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md)
 
 ---
 
 ### [PENDING] 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) `COMPAT-DECLARATIVE-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 - 대상: `COMPAT-TABLE-DRIVEN-1`에서 정식화된 Go 구조체 테이블
@@ -1887,7 +1917,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [DONE] 10개 실전 서비스 호환 규칙 Table-Driven 구조 및 안티패턴 키워드 매칭 전면 정식화 `COMPAT-TABLE-DRIVEN-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md)
 
 **Details & Resolution**:
@@ -1905,13 +1935,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 `DOC-REVAMP-10`
-- **Domain**: Documentation | **Priority**: P2 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Documentation | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)
 
 ---
 
 ### [DONE] LionSQL 자체 백엔드 기반 정형 스프린트/태스크 관리 시스템 구축 (Dogfooding) `DOGFOOD-SPRINT-1`
-- **Domain**: Performance | **Priority**: P1 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Performance | **Priority**: P1 | **Updated**: 2026-11-11 00:22:11
 
 **Phases & Checklist**:
 - [x] **Phase 1 (`SCHEMA-SPRINT`)**: `sprint_tasks` 정형 테이블 스키마 DDL 작성 및 초기 데이터(182건: TODO 62건 + BUG_ARCHIVE 120건) 마이그레이션
@@ -1921,7 +1951,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [IN_PROGRESS] kill -9 크래시 복구 장기 라운드 검증 `DURA-KILL-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: `cmd/crashtest`
 
 **Phases & Checklist**:
@@ -1940,7 +1970,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [DONE] SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 `DURA-SLT-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md)
 - **Target Files**: `cmd/sqllogictest, pkg/slt`
 
@@ -1973,7 +2003,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [DONE] SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 `DURA-SLT-2`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md)
 - **Target Files**: `cmd/sqllogictest`
 
@@ -2004,7 +2034,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [IN_PROGRESS] 24h ~ 72h 장기 소크 테스트 `DURA-SOAK-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: `cmd/soaktest`
 
 **Phases & Checklist**:
@@ -2023,14 +2053,14 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) `FEAT-MATVIEW-ALIAS-1`
-- **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+### [PENDING] [1.0(?)] Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) `FEAT-MATVIEW-ALIAS-1`
+- **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)
 
 ---
 
 ### [PENDING] WiredTiger 호환 자체 Pure-Go MVCC 스토리지 엔진 구현 및 CGo 분리 (Post-1.0) `FEAT-PUREGO-WT-ENGINE`
-- **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 1. CGo 호출 오버헤드 제거 및 Go 고루틴 스케줄러 밀착 극강 성능 달성
@@ -2039,37 +2069,37 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [DONE] T-SQL 테이블 변수(DECLARE @tbl TABLE) 지원 및 DML/배치 라이프사이클 통합 `FEAT-TABLE-VAR-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-10 06:52:57
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md)
 
 ---
 
 ### [PENDING] LSM Time-Series Chunk Storage & time_bucket `FEAT-TIMESERIES-LSM-1`
-- **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)
 
 ---
 
 ### [DONE] Dynamic Runtime Tolerant DDL CLI Switch & PostgreSQL 42704 SQLSTATE `FEAT-TOLERANT-DDL-1`
-- **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md)
 
 ---
 
 ### [PENDING] Pure-Go Vector Search Engine (pgvector compat) `FEAT-VECTOR-1`
-- **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: FEAT | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md)
 
 ---
 
 ### [DONE] pkg/sqlutil SQL 파서/정규화기 결함 보강 및 렉서 공통화 `FIX-SQLUTIL-PARSER-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md)
 
 ---
 
 ### [DONE] DuckDB-Style Friendly SQL 문법 지원 `FRIENDLY-SQL`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)
 
 **Details & Resolution**:
@@ -2078,24 +2108,24 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [DONE] CBO Planner 및 VDBE 잔여 정규식 100% 완전 제거 `GA-REGEX-FINAL-2`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 
 ---
 
 ### [DONE] 쿼리 실행 런타임 LIKE 정규식 100% 완전 제거 `GA-REGEX-FINAL-3`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 
 ---
 
 ### [PENDING] 연동 앱 섀도 모드 실운영 도그푸딩 (Vaultwarden, Umami, Answer 등) `GA-VALID-3`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 ---
 
 ### [DONE] Apache Answer (Q&A 지식베이스) `INTEG-ANSWER-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 - 연동 보고서: [`notes/ANSWER_INTEGRATION_REPORT.ko.md`](notes/ANSWER_INTEGRATION_REPORT.ko.md)
@@ -2106,17 +2136,17 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] Directus (Headless CMS/데이터 API) Fast-Fail 호환성 탐색 `INTEG-DIRECTUS-1`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 ---
 
 ### [PENDING] Ghost (블로그/출판 플랫폼) Fast-Fail 호환성 탐색 `INTEG-GHOST-1`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 ---
 
 ### [PENDING] Mattermost (팀 협업 채팅) — **[v1.1.0 로드맵]** `INTEG-MATTERMOST-1`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 - 스택: Go + `sqlx`/`squirrel` / PGWire (`TCP :5433`)
@@ -2141,7 +2171,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Metabase (BI 대시보드) `INTEG-METABASE-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/METABASE_INTEGRATION_PLAN.ko.md`](notes/plans/METABASE_INTEGRATION_PLAN.ko.md)
 
 **Details & Resolution**:
@@ -2155,7 +2185,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] NocoDB (노코드 DB 스튜디오) — **[v1.1.0 로드맵]** `INTEG-NOCODB-1`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 - 스택: Node.js + Knex / 듀얼 프로토콜 (PGWire + TDS)
@@ -2164,7 +2194,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] NocoDB 및 Mattermost 연동 1.0 이후(v1.1.0) 연기 확정 `INTEG-NOCODB-MATTERMOST-DEFER-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 - 결정: 1.0 LTS 코어 안정성 및 내구성 검증에 집중하기 위해 NocoDB(`INTEG-NOCODB-1`) 및 Mattermost(`INTEG-MATTERMOST-1`) 연동을 `v1.1.0` (Priority 3.10, 3.11)으로 공식 이관
@@ -2173,7 +2203,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Umami (웹 애널리틱스) `INTEG-UMAMI-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 - 상세 보고서: [`notes/UMAMI_INTEGRATION_REPORT.ko.md`](notes/UMAMI_INTEGRATION_REPORT.ko.md)
@@ -2185,7 +2215,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Vaultwarden (비밀번호 관리) `INTEG-VAULTWARDEN-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/VAULTWARDEN_INTEGRATION_PLAN.ko.md`](notes/plans/VAULTWARDEN_INTEGRATION_PLAN.ko.md)
 
 **Details & Resolution**:
@@ -2199,7 +2229,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Vikunja (프로젝트 칸반 & To-Do) `INTEG-VIKUNJA-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)
 
 **Details & Resolution**:
@@ -2213,7 +2243,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Woodpecker CI (CI/CD 엔진) `INTEG-WOODPECKER-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)
 
 **Details & Resolution**:
@@ -2227,13 +2257,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] MSSQL Collation 및 유니코드 다국어 로케일 정렬/비교 `LOC-1`
-- **Domain**: Engine | **Priority**: P3 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Engine | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/COLLATION_AND_LOCALE_PLAN.md`](notes/plans/COLLATION_AND_LOCALE_PLAN.md)
 
 ---
 
 ### [DONE] v0.90.0 Feature Freeze & Production Hardening (100% PASS) `M1`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 - **Gate 1 (Multi-Wire)**: TDS (SSMS, DBeaver, Beekeeper, sqlcmd) & PGWire v3 (psql) live query parity 100% PASS
@@ -2245,7 +2275,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] v0.90.0 액티브 스프린트 완료 과제 (18개 전량 완료 아카이브) `M2`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Metrics**: - [x] **`PERF-PGWIRE-PREP-TX`**: PGWire PreparedStatement 트랜잭션 내 VDBE 바이트코드 직접 바인딩 (`ExecuteInTxWithSessionContext`, `substituteParams` 제거, PGWire TPC-C 24.3만 tpmC 달성) | - [x] **`BENCH-TPCC-RPC` & `PERF-TPCC-CLIENT`**: TPC-C 단일 왕복 RPC 벤치마크 및 클라이언트 최적화 (TDS 236k / PGWire 243k tpmC)
 
 **Phases & Checklist**:
@@ -2266,7 +2296,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] 내구성 및 신뢰성 1차 검증 완료 이력 `M3`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: `cmd/crashtest`
 
 **Phases & Checklist**:
@@ -2276,8 +2306,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [IN_PROGRESS] In-Memory OCC Pointer-Free Flat Record A/B Benchmark & Implementation `OCC-HYPER-2`
-- **Domain**: STORAGE | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+### [DONE] In-Memory OCC Pointer-Free Flat Record A/B Benchmark & Implementation `OCC-HYPER-2`
+- **Domain**: STORAGE | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
 
 **Phases & Checklist**:
@@ -2288,7 +2318,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] 대규모 조인(10+ Tables) 최적화 `OPT-LARGE-JOIN-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)
 - **Target Files**: `pkg/planner/planner.go, pkg/execution`
 
@@ -2303,7 +2333,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] WiredTiger VDBE 바이너리 튜플 지연 역직렬화 `P-2`
-- **Domain**: Performance | **Priority**: P1 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Performance | **Priority**: P1 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: `pkg/proc/runtime/vm_lazy.go`
 - **Metrics**: - [x] **Phase 1 (`BENCH-P2-BASE`)**: 다중 컬럼 테이블 대상 조건부 스캔 사전 기준치 벤치마크 측정 (`2.77ms/op`, `6.3MB/op`, `30,983 allocs`) | - [x] **Phase 3 (`VERIFY-P2-COMPARE`)**: 구현 전후 마이크로 벤치마크 실측 (`420µs/op`, 6.59배 가속, 메모리 8배 절감) 및 `go test -race` 100% PASS 검증 완료
 
@@ -2315,45 +2345,45 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] Post-1.0 P2 Deferred Audit Items (92 Cases) `P2-BACKLOG`
-- **Domain**: Engine | **Priority**: P3 | **Updated**: 2026-11-07 16:50:45
+- **Domain**: Engine | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md)
 
 ---
 
 ### [DONE] P2 그룹 A/B 경계값 클램핑 및 내장함수 정합성 가드 10건 보강 `P2-STABILIZE-AB-1`
-- **Domain**: engine | **Priority**: P2 | **Updated**: 2026-11-10 07:52:38
+- **Domain**: engine | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md`](notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md)
 
 ---
 
 ### [DONE] By-Design & Spec-Out Architecture Invariants (25 Cases) `P3-INVARIANTS`
-- **Domain**: Architecture | **Priority**: P3 | **Updated**: 2026-11-07 16:50:52
+- **Domain**: Architecture | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md)
 
 ---
 
 ### [DONE] WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 `PERF-BENCH-WT-RESTORE-1`
-- **Domain**: Performance | **Priority**: P1 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Performance | **Priority**: P1 | **Updated**: 2026-11-11 00:22:11
 
 ---
 
 ### [PENDING] Complex Query Flat Hash Join & Direct Slot Projection `PERF-COMPLEX-QUERY-2`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:56
-- **Plan Doc**: [`notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
+- **Plan Doc**: [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)
 
 **Details & Resolution**:
-- 오픈 어드레싱 정수 해시 테이블 기반 복합 쿼리 서브 50ms 목표 최적화 ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md))
+- 오픈 어드레싱 정수 해시 테이블 기반 복합 쿼리 서브 50ms 목표 최적화 ([`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md))
 
 ---
 
 ### [DONE] 순수 Columnar Vectorization 전면 재작성 영구 기각 (Spec-Out) `PERF-COMPLEX-QUERY-COLUMNAR`
-- **Domain**: Architecture | **Priority**: P3 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Architecture | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 
 ---
 
 ### [DONE] 세션 로컬 에페머럴 CTE 버퍼 및 Zero-DDL 최적화 `PERF-CTE-EPHEMERAL-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md`](notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md)
 
 **Phases & Checklist**:
@@ -2365,7 +2395,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Writable CTE Stored Procedure 바이트코드 Lowering 가속 `PERF-CTE-LOWERING-VDBE-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)
 - **Target Files**: `pkg/engine/cte_lowering.go, pkg/proc/, pkg/proc/runtime/, pkg/engine/sqlexec_explain.go, pkg/engine/writable_cte_lowering_test.go`
 
@@ -2381,7 +2411,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 `PERF-GROVE-CONCURRENCY-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md)
 - **Target Files**: `pkg/wire/numeric.go, pkg/storage/key_latch.go, pkg/engine/sp_insert_select_test.go, pkg/wire/metadata_cache_test.go, pkg/proc/runtime/vm.go, pkg/engine/sqlexec.go, pkg/engine/write_conflict_retry_test.go, pkg/engine/sqlexec_ddl.go, pkg/engine/truncate_test.go`
 - **Metrics**: - [x] **Phase 2 (`PERF-HOTSPOT-LATCH-1`)**: 인-메모리 2,048-스트라이프 키 래치(Key-Striped Latch) 도입으로 핫스팟 UPDATE 경합 시 OCC Abort Storm 방지 및 50 동시 워커 16,000+ TPS 달성 (`pkg/storage/key_latch.go`, `hotspot_concurrency_test.go`)
@@ -2402,19 +2432,19 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 `PERF-HYBRID-TEMPMEM-1`
-- **Domain**: STORAGE | **Priority**: P2 | **Updated**: 2026-11-10 00:53:23
+- **Domain**: STORAGE | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)
 
 ---
 
 ### [PENDING] In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 (읽기 RLock 완전 제거) `PERF-OCC-ZERO-LOCK-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-10 04:08:08
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
 
 ---
 
 ### [DONE] 성능 회귀 정상화 및 회귀 방지 게이트 구축 `PERF-REGRESSION-RECOVERY-1`
-- **Domain**: Performance | **Priority**: P1 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Performance | **Priority**: P1 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: `pkg/proc/runtime/perf_regression_gate_test.go`
 - **Metrics**: - [x] **Phase 3 (`VERIFY-BENCH-RESTORE-1`)**: 3.3.4 송금 (In-Memory 130k~160k / WiredTiger 92k~108k) 및 3.5 TPC-C (53.5만~55만 tpmC) 복원 실측 | - [x] **Phase 4 (`TEST-PERF-GATE-1`)**: `pkg/proc/runtime/perf_regression_gate_test.go` 신설하여 `go test -race` 파이프라인 내 1,000건 ACID 송금 성능 게이트 영구 구축 (0.12s 완주, 25k+ TPS 검증)
 
@@ -2427,7 +2457,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] 서버 파이프라인 Phase 3/4 `PERF-SERVER-PIPELINE-P3-P4`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)
 
 **Details & Resolution**:
@@ -2435,8 +2465,14 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [PENDING] [1.0(?)] 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 `PERF-SUBQUERY-MEMO-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
+- **Plan Doc**: [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)
+
+---
+
 ### [DONE] T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 `PERF-VDBE-EXTREME-OPT-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)
 - **Metrics**: - [x] **Phase 1 (`PERF-VDBE-SLOT-1`)**: 로컬 변수 제로-맵 슬롯 인덱싱 완전화 (`setVar` 6회 Map/문자열 할당 ➔ 0.2ns 배열 인덱스 직접 대입 완료, evalCtx lazy on-demand 동기화, `OpStoreVar`/`OpLoadVar`/`bindParams` 0-할당화 달성, TPC-C 54,858 tpmC 달성) | - [x] **Phase 2 (`PERF-VDBE-DML-POOL-1`)**: DML 제로-맵 레코드 풀링(`rowScratch`), AST 산술 수식 직접 계산(`evalUpdateExprFast`), `canDirectInsert` 직결(`InsertRow`), 다중 키 교차 래치 무대기 데드락 방지(`timeout=0` fail-fast) 적용 (TransferFunds 165,187 TPS, TPC-C 636,434 tpmC / 23,576 TPS 달성) | - [x] **Phase 3 (`PERF-VDBE-FLATTEN-1`)**: VM `Execute` 2단계 중첩 switch 호출 ➔ 단일 평탄화 인라인 루프 전환 (`execFlowOp`/`execComputeOp`/`execTxOp`/`execStorageOp`/`execCursorAndCallOp`/`execRelOp` 6개 중간 헬퍼 호출 제거, pc 하드웨어 레지스터 고정, 163,499 TPS 유지) | - [ ] **Phase 4 (`PERF-VDBE-VERIFY-1`)**: 12,000 ~ 25,000+ TPS 달성 벤치마크 및 회귀 검증
 
@@ -2451,8 +2487,14 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [IN_PROGRESS] 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 `PERF-WIRE-ZEROALLOC-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-11 00:22:11
+- **Plan Doc**: [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md)
+
+---
+
 ### [PENDING] 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) `PKG-OFFLINE-DOCS`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
 
 **Details & Resolution**:
@@ -2464,7 +2506,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 `PLANNER-SLIM-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)
 - **Target Files**: `pkg/planner/planner.go, pkg/proc, pkg/config, cmd/lionsql`
 
@@ -2480,7 +2522,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) `R-6`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md)
 
 **Phases & Checklist**:
@@ -2494,30 +2536,30 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] Table-Driven Virtual Catalog Interceptor Refactoring `REFACTOR-CATALOG-INTERCEPTOR-1`
-- **Domain**: REFACTOR | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: REFACTOR | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md)
 
 ---
 
 ### [DONE] Flat 코덱 신뢰성 및 동시성 결함 보강 `REFACTOR-OCC-FLAT-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)
 
 ---
 
 ### [PENDING] Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 `REPL-STREAM-BIN-1`
-- **Domain**: Replication | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Replication | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 ---
 
 ### [PENDING] [Post-1.0 초안] In-Process Graceful Reboot 기반 물리 서브폴더 USE DB 전환 아키텍처 연구 `RESEARCH-INPROCESS-REBOOT-USE`
-- **Domain**: Research | **Priority**: P3 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Research | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md`](notes/plans/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md)
 
 ---
 
 ### [DONE] 심볼 테이블 & AST 기반 쿼리 라우팅 리팩토링 `ROUTING-AST-CATALOG-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](notes/plans/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)
 
 **Details & Resolution**:
@@ -2531,31 +2573,31 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] 빈 괄호 IN () 문법 평가 정책 (미결 검토) `S-SYNTAX-EMPTY-PARENS`
-- **Domain**: Engine | **Priority**: P3 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Engine | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](notes/plans/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)
 
 ---
 
 ### [PENDING] 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기 `S3-1`
-- **Domain**: Cloud | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Cloud | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/S3_PRESIGNED_STORAGE_PLAN.md`](notes/plans/S3_PRESIGNED_STORAGE_PLAN.md)
 
 ---
 
 ### [DONE] 초기 패스워드 미변경 시 부팅 출력 최후행 대문자 보안 경고 불변식 `SEC-BOOT-DEFAULT-PASS-WARN`
-- **Domain**: SEC | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: SEC | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md`](notes/plans/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md)
 
 ---
 
 ### [DONE] PGWire 달러 파라미터() 상태머신 토크나이저 전환 및 보안 강화 `SEC-PGWIRE-PARAM-1`
-- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-09 09:07:03
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 
 ---
 
 ### [DONE] PostgreSQL `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` 지원 및 goose 마이그레이션 호환 `SQL-GOOSE-IDENTITY-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 - 회귀 테스트: `pkg/engine/identity_ddl_test.go`
@@ -2566,7 +2608,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] PostgreSQL Writable CTE (`WITH ... INSERT/UPDATE/DELETE ... RETURNING`) 및 `::type[]` 캐스트 지원 `SQL-WRITABLE-CTE-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 **Details & Resolution**:
 - 회귀 테스트: `pkg/engine/writable_cte_test.go`, `pkg/wire/writable_cte_pgwire_test.go`
@@ -2581,53 +2623,53 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] SSMS Object Explorer 호환성 (sys.resource_governor_configuration, HostPlatform 배치 및 가상 카탈로그 수식 평가) `SSMS-OE-COMPAT-1`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-09 05:34:10
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 ---
 
 ### [IN_PROGRESS] SSMS Object Explorer 호환성 고도화 (Phase 1~4 테이블 목록 표시 완료, Phase 5 SMO NullReferenceException 및 하위 노드 바인딩) `SSMS-OE-COMPAT-2`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-09 07:44:19
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`](notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md)
 
 ---
 
 ### [DONE] TDS 대규모 파일 모듈 분할 기각 (Spec-Out) `TDS-MOD-1`
-- **Domain**: Architecture | **Priority**: P3 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Architecture | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 
 ---
 
 ### [PENDING] Flat 모드 크래시 복구 무결성 검증 (AOF/RDB 및 kill -9) `TEST-OCC-FLAT-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)
 
 ---
 
 ### [PENDING] Flat 모드 복합 DDL/DML 회귀 검증 (복합 보조 인덱스, SkipList, FK) `TEST-OCC-FLAT-2`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)
 
 ---
 
 ### [PENDING] Flat 모드 쿼리 엔진 풀 스위트 회귀 검증 (SLT 및 Babelfish) `TEST-OCC-FLAT-3`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)
 
 ---
 
 ### [PENDING] Flat 모드 24h 장기 소크 및 가변 길이 UPDATE 단편화 검증 `TEST-OCC-FLAT-4`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-09 09:06:51
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)
 
 ---
 
 ### [DONE] 1.0 GA 벤치마크 및 공식 문서 실측치 일괄 동기화 `TUNE-DOC-SYNC-1`
-- **Domain**: Documentation | **Priority**: P2 | **Updated**: 2026-11-09 00:47:19
+- **Domain**: Documentation | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 ---
 
 ### [DONE] 고동시성 핫스팟 OCC 경합 완화 및 와이어 버퍼 풀링 `TUNE-HOTSPOT-OCC-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Target Files**: `pkg/wire/protocol.go, pkg/wire/command_tags.go, pkg/wire/tds/token.go, pkg/wire/tds/server.go`
 - **Metrics**: - [x] **Phase 3 (`TUNE-EPHEMERAL-VERIFY-1`)**: `-ephemeral` 순수 인메모리 모드에서 32W PGWire 10초 지속 **204,472 tpmC (7,616 TPS)** 및 TDS 10초 지속 **148,968 tpmC (5,546 TPS, 피크 197k)** 달성 검증
 
@@ -2642,7 +2684,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 `TUNE-SP-FASTPATH-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md)
 - **Target Files**: `pkg/engine/proc_bind.go, pkg/engine/proc_bind_test.go, pkg/wire/server.go, pkg/wire/prep_sp_test.go, pkg/wire/tds/server.go, pkg/wire/tds/server_test.go`
 - **Metrics**: - [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)**: 32W 및 100W 조건 TPC-C 실측 및 지속 처리량 검증 (16W/32Workers 순간 피크 **236,399 tpmC / 8,746 TPS**, 10초 지속 **178,355 tpmC / 6,612 TPS**, 10W/100Workers 지속 **119,854 tpmC / 4,443 TPS**)
@@ -2661,12 +2703,12 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) `WAL-DELTA-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 
 ---
 
 ### [DONE] 단일 바이너리 내장 SPA 웹 서버 호스팅 `WEB-SPA-1`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-07 14:02:56
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)
 
 **Details & Resolution**:
@@ -2675,7 +2717,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [DONE] WiredTiger 고동시성 4계층 잠금 및 transaction_sync 영구 배제 `WT-LOCKDOWN-1`
-- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-08 12:09:17
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 
 ---

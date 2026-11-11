@@ -34,7 +34,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 | **6** | **`S3-1~4`** | 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기 | **중간 (★★☆)** | **독립적 (Low)** | **중간** | 서버-클라이언트 간 시계 오차(Clock Skew)로 인한 서명 만료 오류 | **Phase 2 (Utility)** |
 | **12**| **`REPL-STREAM-BIN-1`** | Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 | **낮음~중간 (★☆☆~★★☆)** | **국소 (Low)** | **높음** | 네트워크 스트리밍 프로토콜 바이너리화 및 프레이밍 동기화 | **Phase 2 (Replication)** |
 | **13**| **`WAL-DELTA-1`** | Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) | **중간~높음 (★★☆~★★★)** | **엔진 내부 (Med)** | **중간~높음** | 리플레이 시 Read-Modify-Write 오버헤드 및 보조 인덱스 변경 추적 정합성 | **Phase 2 (Engine Tuning)** |
-| **7** | **`BENCH-TPCH-1`** | CBO 서브쿼리 Decorrelation (`IN`/`EXISTS` ➔ Semi-Join) | **높음 (★★★)** | **높음 (High)** | **매우 높음** | `NULL` 3치 논리(3VL) 정합성 깨짐 및 서브쿼리 카디널리티 오산출로 인한 잘못된 플랜 | **Phase 3 (Optimizer)** |
+| **7** | **`BENCH-TPCH-1`** | CBO 서브쿼리 Decorrelation (`IN`/`EXISTS` ➔ Semi-Join) | **높음 (★★★)** | **높음 (High)** | **대체 기각 (Spec-Out)** | `NULL` 3치 논리(3VL) 및 Count Bug 위험 ➔ **`PERF-SUBQUERY-MEMO-1`** 로 영구 대체 | **영구 기각 (Replaced)** |
 | **8** | **`PERF-COMPLEX-QUERY-2`**| Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) | **높음 (★★★)** | **중간 (Engine)** | **높음** | 고부하 해시 클러스터링/리사이징 시 순간 지연 및 메모리 스파이크 | **Phase 3 (Analytical)** |
 | **9** | **`OCC-HYPER-2`** | In-Memory OCC Pointer-Free Flat Record (4~5x 메모리 압축)| **매우 높음 (★★★★)**| **광범위 (Critical)**| **극상 (Extreme)** | 엔진 전반 레이아웃 대수술로 인한 회귀 버그, 가변 길이 문자열 갱신 단편화 | **Phase 4 (Deep Kernel)** |
 | **10**| **`LOC-1~4`** | MSSQL Collation 및 유니코드 다국어 로케일 정렬/비교 | **높음 (★★★)** | **광범위 (High)** | **중간** | 로케일 키 인코딩 오버헤드로 인한 순수 ASCII 문자열 비교 성능 저하 | **Phase 4 (Specialized)**|
@@ -165,20 +165,15 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 
 ### 도메인 C. 옵티마이저 & 분석 성능 쥐어짜기 (CBO & Analytical Performance)
 
-#### 7. `BENCH-TPCH-1`: Mini TPC-H 스위트 및 CBO 서브쿼리 Decorrelation
-- **상세 설계서**: [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)
-- **주요 구현 내용**:
-  1. 상관 서브쿼리(`WHERE EXISTS`, `WHERE col IN`)를 CBO 플래너에서 Semi-Join / Anti-Join으로 재작성(Decorrelation).
-  2. TPC-H 복합 분석 핵심 쿼리(Q1, Q3, Q4, Q6, Q9) 전용 벤치마크 하네스 구축.
-- **난이도 및 영향도**:
-  - **난이도**: **높음 (★★★)** — 상관 서브쿼리의 외부 참조 변수 바인딩 해제 및 조인 트리 재작성.
-  - **영향도**: **높음 (High)** — `pkg/planner` 전반의 플랜 생성 경로에 광범위한 영향.
-- **주요 우려사항 (Key Caveats)**:
-  - **SQL 3-Valued Logic (`NULL`) 정합성 파손**: `NOT IN (SELECT col FROM t)` 서브쿼리 결과에 `NULL`이 하나라도 포함될 경우 전체 결과가 공집합이 되어야 하는 SQL 표준 3VL 정합성이 Anti-Join 변환 시 왜곡될 위험.
-  - **잘못된 카디널리티 추정으로 인한 플랜 역주행**: 서브쿼리 카디널리티를 잘못 추정하여 대규모 테이블을 Nested Loop로 풀거나 메모리 초과 해시 조인을 생성하여 성능이 오히려 극단적으로 악화될 위험.
+#### 7. `BENCH-TPCH-1`: Mini TPC-H 스위트 및 CBO 서브쿼리 Decorrelation ➔ **[영구 대체 및 구현 안 함 (Spec-Out)]**
+- **상태**: **영구 기각 (Replaced by [`PERF-SUBQUERY-MEMO-1`](plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md#9-bench-tpch-1-영구-대체-및-상관-서브쿼리-유계-메모이제이션-perf-subquery-memo-1))**
+- **대체 및 기각 사유**:
+  1. 1단계 `[NOT] EXISTS`/`IN` Semi-Join 탈상관화는 이미 [`pkg/planner/decorrelate.go`](../../pkg/planner/decorrelate.go)로 완료됨.
+  2. 집계 포함 상관 서브쿼리에 대한 Kim's AST 재작성은 **Count Bug(`COUNT(*)=0` vs `NULL`)** 및 3VL 정합성 훼손 위험이 극심하여 **구현 안 함(Spec-Out)** 확정.
+  3. 대신 30줄의 **단일 쿼리 스코프 유계 메모이제이션 캐시(`PERF-SUBQUERY-MEMO-1`, `1.0(?)` 후보)**로 100% 의미 무결성 보장과 최대 1,000배 성능 개선을 대체 달성 (`COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md` §9 통합).
 
 #### 8. `PERF-COMPLEX-QUERY-2`: Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join)
-- **상세 설계서**: [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)
+- **상세 설계서**: [`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)
 - **주요 구현 내용**:
   1. Go 맵 기반 해시 조인을 CPU 캐시 친화적인 단일 연속 메모리 슬라이스 오픈 어드레싱 해시 테이블로 전환.
   2. 정수 조인 키에 대해 해시 계산을 바이패스하고 비트 연산으로 슬롯 직결.

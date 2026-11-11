@@ -5,7 +5,6 @@
 > - **작성일**: 2026-11-02
 > - **상태**: 완료 (100% PASS / 불일치 0건)
 > - **과제 식별 코드**: `SLT-FULL-100` (상위 과제: `DURA-SLT-2`, `GA-VALID-1`)
-> - **관련 계획서**: [`notes/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md`](../plans/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md)
 > - **자동화 검증 게이트**: [`scripts/verify_0.90.sh`](../../scripts/verify_0.90.sh)
 
 ---

@@ -1,10 +1,10 @@
-# LionSQL 복합 쿼리 성능 튜닝 벤치마크 플랜 (SSB & Mini TPC-H) (`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`)
+# LionSQL 복합 쿼리 성능 튜닝 및 최적화 마스터 플랜 (`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`)
 
-> - **최종 갱신일**: 2026-10-29
+> - **최종 갱신일**: 2026-11-11 (BENCH-TPCH-1 AST 재작성 영구 대체 및 PERF-SUBQUERY-MEMO-1 통합)
 > - **최초 작성일**: 2026-10-29
-> - **문서 상태**: 1.0 완료 및 현 상태 동결 (SSB 1.6~2.2배 우위 검증 완료, 순수 Columnar 전면 재작성은 Spec-Out 기각, Mini TPC-H는 Post-1.0 이관)
-> - **연관 과제 ID**: `BENCH-SSB-1`, `BENCH-TPCH-1`
-> - **적용 대상**: `pkg/execution/`, `pkg/planner/`, `cmd/ssb/`
+> - **문서 상태**: SSB 1.6~2.2배 우위 검증 완료 / 순수 Columnar 및 BENCH-TPCH-1(복합 AST 탈상관화) 영구 기각(Spec-Out) / `PERF-SUBQUERY-MEMO-1` (`1.0(?)` 후보) 통합 명세
+> - **연관 과제 ID**: `BENCH-SSB-1`, `BENCH-TPCH-1` (Replaced/Spec-Out), `PERF-SUBQUERY-MEMO-1` (`1.0(?)`)
+> - **적용 대상**: `pkg/execution/`, `pkg/planner/`, `pkg/engine/sqlexec_select.go`, `cmd/ssb/`
 
 ---
 
@@ -211,7 +211,7 @@ ORDER BY d_year, c_nation;
 
 ## 7. 검증 체크리스트 및 작업 순서
 
-- [x] **Step 1**: `notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md` 플랜 디스크 영구 저장 및 `TODO.md` 등록 (`[x]`).
+- [x] **Step 1**: `notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md` 플랜 디스크 영구 저장 및 `TODO.md` 등록 (`[x]`).
 - [x] **Step 2**: `pkg/execution/ssb_test.go` 및 데이터 생성기 구현 (SF 0.001 / 0.01).
 - [x] **Step 3**: `cmd/ssb/main.go` 독립 실행형 벤치마크 CLI 작성 및 컴파일 파이프라인 연동.
 - [x] **Step 4**: `go test -bench BenchmarkSSB` 성능 베이스라인 측정 및 결과 기록 (`[x]`).
@@ -336,3 +336,72 @@ LionSQL      ████ 186 ms (Row 기반 중 최상위, PG/SQLite 압도)
 PostgreSQL   ████████ 390 ms
 SQLite       ████████████████████████████ 1,270 ms
 ```
+
+
+---
+
+## 9. `BENCH-TPCH-1` 영구 대체 및 상관 서브쿼리 유계 메모이제이션 (`PERF-SUBQUERY-MEMO-1`)
+
+> - **대체 결정 (2026-11-11)**: 기존 Post-1.0 후보였던 `BENCH-TPCH-1`(집계 포함 상관 서브쿼리의 복잡한 Group-By/Left Join AST 재작성 및 Mini TPC-H 스위트)는 **영구 대체 및 구현 미진행(Spec-Out)**으로 종결하고, 아래의 초경량·무결성 방식인 **`PERF-SUBQUERY-MEMO-1` (`1.0(?)` 후보)**로 단일 통합합니다.
+
+### 9.1. 배경 및 AST 재작성 대체 근거
+LionSQL의 서브쿼리 처리 현황은 다음과 같습니다:
+- **비상관 스칼라 서브쿼리 (`WHERE sal > (SELECT AVG(sal) FROM emp)`)**: `sqlexec_explain.go`의 상수 폴딩(Constant Folding)에 의해 단 1회 평가 후 상수로 치환되어 $O(N)$ 실행.
+- **단순 존재 상관 서브쿼리 (`[NOT] EXISTS`, `[NOT] IN`)**: `pkg/planner/decorrelate.go`를 통해 Semi-Join / Anti-Join으로 자동 변환되어 $O(N + M)$ 실행.
+- **집계 포함 상관 스칼라 서브쿼리 (`WHERE sal > (SELECT AVG(sal) FROM emp WHERE dept_id = e.dept_id)`)**: 외부 테이블 각 행마다 `opts.SubqueryExecutor(paramSQL)`를 재실행하여 $O(N^2)$ 비용 발생.
+
+#### 왜 Kim's AST 재작성(`BENCH-TPCH-1`) 대신 "쿼리 내 메모이제이션"을 채택하는가?
+1. **완벽한 의미적 안전성 (`[RULE:RadicalKISS]`)**:
+   - 옵티마이저에서 Group-By + Left Join으로 AST를 강제 재작성하는 기법(Kim's Decorrelation)은 `COUNT(*)` 사용 시 매칭 행이 없을 때 `0` 대신 `NULL`이 반환되는 유명한 **Count Bug (3VL 결함)** 및 다중 상관 변수 처리 시 버그 위험이 매우 큽니다.
+   - 반면 **파라미터 바인딩된 서브쿼리 결과 캐싱(Memoization)**은 SQL 실행 의미론(Semantics)을 단 0.1%도 바꾸지 않으므로 **Count Bug나 3VL 결함이 원천적으로 불가능**합니다.
+2. **압도적인 실전 성능 개선 (최대 1,000배 가속)**:
+   - 직원 1만 명, 부서 10개 기준: 부서 ID(`dept_id`)별로 치환된 `paramSQL` 문자열은 고작 10종류뿐입니다.
+   - 쿼리 단위 메모이제이션을 적용하면 서브쿼리 실실행 횟수가 **10,000회 ➔ 10회**로 99.9% 감소합니다.
+3. **극도의 단순성**:
+   - 약 30~40줄 내외의 국소 패치만으로 즉시 구현 및 검증이 가능하여, 1.0 이전(`1.0(?)`)에도 부담 없이 탑재 가능합니다.
+
+### 9.2. 세부 아키텍처 설계 (Guardrails)
+1. **실행 단위 수명주기 격리 (Per-Query Lifecycle)**:
+   - 캐시는 전역(Global)이 아닌 **`ExecuteVolcanoSelect` 내부의 단일 최상위 쿼리 수명주기 동안에만 생존**합니다. 쿼리 종료 즉시 회수되므로 Stale Cache 위험 0%.
+2. **유계 버퍼 상한 (`[RULE:BoundedBuffers]`)**:
+   - 고유 키 카디널리티가 높은 쿼리에서의 메모리 폭주를 막기 위해 최대 엔트리 수를 **`maxSubqueryMemoEntries = 4096`**으로 엄격히 제한합니다.
+3. **비결정적(Volatile) 함수 바이패스 가드**:
+   - `RAND`, `RANDOM`, `NEWID`, `UUID`, `GETDATE`, `NOW`, `CURRENT_TIMESTAMP`, `SYSDATETIME`, `CLOCK_TIMESTAMP` 키워드가 포함된 서브쿼리는 캐싱을 우회합니다.
+
+```go
+const maxSubqueryMemoEntries = 4096
+type subqueryMemoEntry struct {
+    rows []map[string]any
+    cols []string
+    err  error
+}
+// 단일 최상위 쿼리 스코프 캐시
+var subMemo map[string]subqueryMemoEntry
+
+opts.SubqueryExecutor = func(sql string) ([]map[string]any, []string, error) {
+    if isVolatileSubquerySQL(sql) {
+        return runUncachedSubquery(sql)
+    }
+    if subMemo != nil {
+        if hit, ok := subMemo[sql]; ok {
+            return hit.rows, hit.cols, hit.err
+        }
+    }
+    rows, cols, err := runUncachedSubquery(sql)
+    if err == nil {
+        if subMemo == nil {
+            subMemo = make(map[string]subqueryMemoEntry, 64)
+        }
+        if len(subMemo) < maxSubqueryMemoEntries {
+            subMemo[sql] = subqueryMemoEntry{rows: rows, cols: cols, err: err}
+        }
+    }
+    return rows, cols, err
+}
+```
+
+### 9.3. 수용 기준 (Acceptance Criteria)
+- 집계(`AVG`, `SUM`, `COUNT`, `MAX`, `MIN`) 포함 상관 스칼라 서브쿼리 및 `COUNT(*) = 0` / `NULL` 케이스 결과 100% 정합성.
+- `RAND()` 등 비결정적 함수 포함 시 미캐싱 보장.
+- 10,000행 / 10개 그룹 상관 서브쿼리 벤치마크에서 지연시간 90% 이상 단축 및 `4096` 상한 준수.
+- `go build` -> `go test -race ./...` 통과.

@@ -7,7 +7,7 @@
 > [!NOTE]
 > 본 문서는 LionSQL의 2계층 Volcano CBO 복합 쿼리 엔진 성능, Star Schema Benchmark(SSB) 4대 비행 쿼리 명세, 독립형 벤치마크 CLI(`bin/ssb`) 사용법, 그리고 타 대표 DBMS(DuckDB, PostgreSQL, SQLite)와의 객관적 실측 성능 비교를 제공하는 공식 기술 가이드입니다.
 > 
-> 세부적인 엔지니어링 스프린트 작업 내역, 단계별 체크리스트, 내부 아키텍처 결정 배경(ADR)에 대한 심층 정보는 개발자 설계 플랜인 [**`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`**](../notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)를 참고하십시오.
+> 세부적인 엔지니어링 스프린트 작업 내역, 단계별 체크리스트, 내부 아키텍처 결정 배경(ADR)에 대한 심층 정보는 개발자 설계 플랜인 [**`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`**](../notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)를 참고하십시오.
 
 ---
 
@@ -247,7 +247,7 @@ LionSQL은 Row 기반 저장소의 장점을 극대화하면서 분석 지연시
 ## 8. 엔지니어링 계획 및 참고 문서
 
 * **상세 엔지니어링 계획 및 구현 체크리스트**:  
-  [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](../notes/plans/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)
+  [`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](../notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)
 * **2-Tier 쿼리 실행 엔진 아키텍처 명세**:  
   [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)
 * **OLTP 트랜잭션 벤치마크 및 튜닝 가이드**:  
