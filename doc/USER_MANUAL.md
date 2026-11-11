@@ -644,9 +644,9 @@ For an in-depth analysis, refer to [`TRANSACTION_PERFORMANCE_GUIDE.md`](TRANSACT
 
 #### Recipe 1: Ultra-Fast Local Testing and CI Pipelines (In-Memory Ephemeral)
 ```bash
-lionsql serve -engine memory -ephemeral -fsync off -max-memory 2GB
+lionsql serve -disk none -memory compact -ephemeral -fsync off -max-memory 2GB
 ```
-* Completely eliminates disk file I/O, executing unit tests in pure RAM at 25,000+ TPS.
+* Completely eliminates disk file I/O while using the default pointer-free `compact` in-memory layout for minimal heap footprint and GC jitter. (Legacy `-engine memory` maps automatically to `-disk none`; `-memory performance` is deprecated in v1.0 and scheduled for removal post-1.0.)
 
 #### Recipe 2: Standard Enterprise Production OLTP (Recommended Default)
 ```bash

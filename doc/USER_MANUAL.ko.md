@@ -644,9 +644,9 @@ OK: tolerant_ddl set to true (in-memory volatile)
 
 #### 레시피 1: 초고속 로컬 테스트 및 CI 파이프라인 (In-Memory Ephemeral)
 ```bash
-lionsql serve -engine memory -ephemeral -fsync off -max-memory 2GB
+lionsql serve -disk none -memory compact -ephemeral -fsync off -max-memory 2GB
 ```
-* 디스크 파일 I/O를 100% 차단하고 순수 RAM에서 25,000+ TPS로 초고속 단위 테스트를 수행합니다.
+* 디스크 파일 I/O를 100% 차단하고 포인터리스 `compact` 인메모리 레이아웃(기본값)으로 최소 메모리 및 최소 GC 지터 상태에서 초고속 테스트를 수행합니다. (레거시 `-engine memory` 플래그도 `-disk none`으로 자동 매핑되며, `-memory performance`는 v1.0 이후 제거 예정인 Deprecated 옵션입니다.)
 
 #### 레시피 2: 표준 엔터프라이즈 프로덕션 OLTP (권장 기본값)
 ```bash

@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-10
 > - **문서 성격**: 스토리지 엔진 옵션 직교화 및 1.0 인메모리 Flat 컴팩트 레코드 기본값 승격 아키텍처 사양서
-> - **과제 식별 코드**: `CFG-STORAGE-OPT-1` (Stage 1: 옵션 계층 분리), `CFG-MEMORY-COMPACT-DEFAULT-1` (Stage 2: 기본값 컴팩트 전환)
+> - **과제 식별 코드**: `CFG-STORAGE-OPT-1` (Stage 1: 옵션 계층 분리), `CFG-MEMORY-COMPACT-DEFAULT-1` (Stage 2: 기본값 컴팩트 전환), `DEPRECATE-OCC-PERF-1` (Stage 3: `performance` 모드 Deprecate 명기 및 후속 제거)
 > - **적용 원칙**: `[RULE:RadicalKISS]`, `[RULE:PlanPersistence]`, `[RULE:SafeDefaults]`, `[RULE:ContinuousBacklog]`, Invariant 3 (Non-Blocking OCC/MVCC), Invariant 4 (Standalone Single Binary)
 
 ---
@@ -95,6 +95,17 @@ LionSQL은 초기 설계에서 단일 플래그인 `--engine=<wiredtiger|memory>
 - **기본값 전환**:
   - `DefaultMemory()` 반환값을 `"performance"`에서 **`"compact"`**로 공식 변경.
   - 별도 옵션 지정 없이 기동 시 `compact` 모드가 기본 적용되어 최소 메모리/제로 GC로 가동.
+
+---
+
+### [Stage 3] `performance` 모드 Deprecate 명기 및 후속 제거 로드맵 (2026-11-11 추가 결정, `DEPRECATE-OCC-PERF-1`)
+- **배경 및 실측 근거 ([`WIRE_TEMP_OCC_BENCH_20261111.ko.md`](../benchmark_runs/WIRE_TEMP_OCC_BENCH_20261111.ko.md))**:
+  - 단위 마이크로벤치마크(`BenchmarkMemEngine_AB_Scan`)에서는 행 디코딩 비용 때문에 `performance` (`ModeRaw_Scan1000`, `167,475 ns`, `7 allocs`)가 `compact` (`ModeFlat_Scan1000`, `311,051 ns`, `4,007 allocs`)보다 빠르게 측정되었습니다.
+  - 그러나 실제 클라이언트-서버 동시성 워크로드(Apple M1, `tpcc-client` 16Wh, 32W, durable `everysec` WAL, TDS TCP) 실측 결과, `compact` 모드가 **`100,134.22 tpmC` / `3,722.76 TPS` (P50 `6.21ms`, P99 `68.43ms`)** 를 기록해 `performance` 모드(**`69,764.85 tpmC` / `2,541.97 TPS`**, P50 `8.73ms`, P99 `109.43ms`)를 **+46.4% TPS 및 -37.5% P99 지연으로 압도**했습니다.
+  - **역전 원인**: `compact` 모드는 1만 행 기준 힙 메모리를 **60.8% 절감**(`7.657 MB` -> `3.001 MB`)하고 Go GC 포인터 추적 대상 힙 객체(`row.Values []storage.Value`)를 제거하여, 다중 워커 동시 실행 환경에서 Go GC Mark/STW가 전체 코어를 멈추는 꼬리 지연(P99 스파이크)을 원천 차단합니다. 반면 `performance` 모드는 포인터 스캔 부하가 동시 접속 환경에서 급증해 실전 처리량이 오히려 붕괴합니다.
+- **결정 사항**:
+  1. **v1.0 호환성 유지 + 공식 Deprecate 명기 (`DEPRECATE-OCC-PERF-1`)**: v1.0 릴리즈에서는 기존 스크립트 및 설정 호환을 위해 `--memory=performance` 옵션을 즉시 삭제하지 않고 유지하되, CLI 도움말/기동 경고 및 공식 매뉴얼/ADR에 **Deprecated** 상태를 명기합니다.
+  2. **Post-1.0 제거 및 코드 단순화**: v1.0 이후 버전에서 `MemoryPerformance`(`OCCModeRaw`) 이중 분기 및 `shardEntry.row` 레거시 경로를 단계적으로 제거하여 엔진을 `compact` 단일 아키텍처로 단순화합니다 (`[RULE:RadicalKISS]`).
 
 ---
 
@@ -205,6 +216,12 @@ func ParseOCCMode(s string) (OCCMode, error) {
    - **도메인**: Storage / Engine
    - **우선순위**: Priority 1
    - **상태**: Pending (Stage 1 완료 후 즉시 착수)
+
+3. **`DEPRECATE-OCC-PERF-1` (Stage 3)**:
+   - **제목**: v1.0 이전 OCC performance 모드(-memory=performance) Deprecate 명기 (v1.0 옵션 유지)
+   - **도메인**: Storage
+   - **우선순위**: Priority 2
+   - **상태**: Pending
 
 ---
 

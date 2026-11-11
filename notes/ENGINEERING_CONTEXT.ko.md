@@ -270,6 +270,23 @@
 
 ---
 
+### ㉕ 인메모리 `performance`(Raw Slice) 모드 Deprecate 및 Post-1.0 제거
+* **결정 사항**:
+  * 인메모리 OCC 엔진의 기본 및 권장 레이아웃은 포인터리스 플랫 레코드(`--memory=compact`)로 고정하며, 기존 포인터 슬라이스 기반 `--memory=performance`(`MemoryPerformance`)는 v1.0에서 **Deprecated**로 명기한 뒤 v1.0 이후 제거한다 (`DEPRECATE-OCC-PERF-1`, `ADR-028`).
+* **근거**:
+  * 단일 스레드 순차 스캔 마이크로벤치마크(`ModeRaw_Scan1000` `167.5µs` vs `ModeFlat_Scan1000` `311.1µs`)와 달리, 실제 동시성 TCP OLTP(`tpcc-client` 32W, durable `everysec` WAL)에서는 `compact`가 힙 점유율 `-60.8%` 및 GC 포인터 0개화 효과로 `performance` 대비 **+46.4% 높은 TPS (`3,722.76` vs `2,541.97 TPS`)** 와 **-37.5% 낮은 P99 지연**을 기록하였다 ([`WIRE_TEMP_OCC_BENCH_20261111.ko.md`](benchmark_runs/WIRE_TEMP_OCC_BENCH_20261111.ko.md)).
+
+---
+
+### ㉖ FlatRecord 디코딩 시 커서 단일 버퍼 재사용 및 제2의 Lazy FlatTuple 계층 배제 (Spec-Out)
+* **결정 사항**:
+  * `FlatRecord` 스캔 디코딩 할당 최적화 시 **Option A (`decodeVarSlot` SSO 중복 할당 제거 + 쿼리 스코프 `ArenaRowCursor.RowWithArena`)** 만 채택하고, **Option B(커서 단일 버퍼 재사용)** 및 **Option C(Lazy FlatTuple 계층 도입)** 는 영구 배제(Spec-Out)한다 (`PERF-OCC-FLAT-DECODE-1`, `ADR-029`).
+* **배제 근거**:
+  1. **Option B(커서 단일 버퍼 재사용) — Slice Aliasing 데이터 오염**: `storage.Row`는 슬라이스(`Values []storage.Value`)를 포함하므로, `memCursor.Row()`가 단일 백킹 버퍼를 덮어쓰면 `rows = append(rows, row)` 형태로 행을 수집하는 호출부(`wt_engine.go`, `Sort`, `HashJoin` 등)에서 이전 행들이 마지막 행으로 조용히 덮어써지는 치명적 에일리어싱 버그가 발생한다. `RowInto` 보조 메서드 추가 역시 `Cursor` 계약을 비대화하므로 배제한다.
+  2. **Option C(Lazy FlatTuple 이중화) — 실행 계층 복잡도**: WiredTiger용 Binary Tuple(`0x01`)에 이어 FlatRecord 전용 `LazyTuple` 구현을 별도 유지하면 투영/평가/조인 계층에 포맷 분기가 중복되며, 제한적 이득 대비 유지보수 복잡도가 과도하다.
+
+---
+
 ## 2. 사용자의 엔지니어링 철학 및 협업 규약
 
 LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집니다:

@@ -8,11 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- document `compact` default rationale and pre-v1.0 `performance` mode deprecation (`DEPRECATE-OCC-PERF-1`) across `doc/ADR.md` (`ADR-028`), `notes/ENGINEERING_CONTEXT.ko.md` (`㉕`), `notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`, `doc/TRANSACTION_PERFORMANCE_GUIDE*.md`, and `doc/USER_MANUAL*.md`
+- document `ArenaRowCursor` scan decode design (`Option A`) vs. rejected single-buffer reuse (`Option B`) and `Lazy FlatTuple` (`Option C`) across `doc/ADR.md` (`ADR-029`), `notes/ENGINEERING_CONTEXT.ko.md` (`㉖`), and `notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md` (Section 8)
+- add `2026-11-11` comparative benchmark report (`notes/benchmark_runs/WIRE_TEMP_OCC_BENCH_20261111.ko.md`) documenting zero-alloc wire streaming, WiredTiger temp-table bypass, OCC `compact` vs `performance`, and live TCP TPC-C results
 - route temporary tables and table variables (`#`, `__temp_`, `__tv_`, `__var_`) transparently to an embedded ephemeral `memengine` inside the WiredTiger storage engine with zero `.wt` disk files and full mixed-transaction/savepoint parity (`PERF-HYBRID-TEMPMEM-1`)
 - add T-SQL compatibility matrix regression tests for inline TVFs (`RETURNS TABLE`), `TRIM` 2-argument cutset, virtual `USE <dbname>` session contexts, and `SET` session options (`COMPAT-TSQL-MATRIX-1`)
 - register `COMPAT-TSQL-MATRIX-1` sprint tracking task for `notes/TSQL_COMPATIBILITY_MATRIX.ko.md` verification and sync
 
 ### Changed
+- optimize `MemoryCompact` scan decoding via Option A (`PERF-OCC-FLAT-DECODE-1`): remove redundant SSO byte-slice allocation in `decodeVarSlot`, add `Arena.AllocStringBytes` and `DecodeFlatToRowWithArena`, defer FlatRecord decoding until row read (`snapshotEntriesAndKeys`), and wire `ArenaRowCursor.RowWithArena` into `fillScanChunk` (`SeqScanIterator` / `IndexScanIterator`), dropping `ModeFlat_Scan1000` from 4,007 to 7 allocs/op with `Arena`
 - eliminate per-row/per-column wire heap allocations and introduce bounded 16KB/512-row PGWire chunked streaming (`writePgDataRows`, `0 allocs/op` across 100k rows) and pooled incremental TDS packet streaming with direct `res.Values` slot indexing (`tdsStreamWriter`, `writeTdsTextColumn`, `writePLPUTF16LE`) (`PERF-WIRE-ZEROALLOC-1`)
 
 ### Fixed

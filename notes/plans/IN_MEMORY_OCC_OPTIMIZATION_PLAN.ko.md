@@ -351,3 +351,37 @@ LionSQL 인메모리 OCC 엔진(`pkg/storage/memengine`)의 Go 힙 메모리 점
 2. **`TEST-OCC-FLAT-2` 복합 DDL/DML 회귀**: 복합 보조 인덱스(Secondary/Unique Index), SkipList 범위 검색, 외래키(FK) 연동 시 Flat 디코딩 무결성 검증
 3. **`TEST-OCC-FLAT-3` 쿼리 엔진 풀 스위트 회귀**: SQLLogicTest 및 T-SQL 프로시저(Babelfish 스위트)를 Flat 모드 환경에서 실행하여 0 결함 검증
 4. **`TEST-OCC-FLAT-4` 24h 장기 소크 및 가변 길이 UPDATE 단편화 검증**: VARCHAR 갱신이 반복되는 고부하 환경에서 메모리 단편화 및 P99 지연시간 지터 0ms 수호 검증
+
+---
+
+## 8. 후속 최적화(2026-11-11): FlatRecord 스캔 디코딩 할당 제거 (`PERF-OCC-FLAT-DECODE-1`)
+
+> - **작성일**: 2026-11-11
+> - **대상 태스크**: `PERF-OCC-FLAT-DECODE-1`
+> - **실측 근거**: [`notes/benchmark_runs/WIRE_TEMP_OCC_BENCH_20261111.ko.md`](../benchmark_runs/WIRE_TEMP_OCC_BENCH_20261111.ko.md)
+
+### 8.1 문제 정의: 순차 스캔 시 행 디코딩 할당 병목
+`compact`(`MemoryCompact`) 모드는 1만 행 기준 힙 점유율 `-60.8%` 및 GC 포인터 0개화로 동시성 TPC-C에서 우위를 보였으나, `BenchmarkMemEngine_AB_Scan` 기준 `ModeFlat_Scan1000`(`311,051 ns`, **`4,007 allocs/op`**)으로 `ModeRaw_Scan1000`(`167,475 ns`, `7 allocs/op`) 대비 행당 4회의 디코딩 힙 할당이 남아 있었습니다:
+1. `snapshotRowsAndKeys`가 `Scan()` 시점에 전 행을 선행 디코딩(`DecodeFlatToRow`)
+2. 행마다 `vals := make([]storage.Value, numCols)` 1회 할당
+3. `decodeVarSlot`에서 7B 이하 SSO 문자열마다 임시 `[]byte` 1회 + `string(raw)` 1회 = 2회 할당
+
+### 8.2 대안 평가 및 최종 결정 (Option A 단독 채택)
+
+| 대안 | 핵심 메커니즘 | 결정 | 사유 |
+| :--- | :--- | :---: | :--- |
+| **Option A** | `decodeVarSlot` SSO 불필요 `[]byte` 할당 제거 + `storage.Arena` 슬랩(`ArenaRowCursor.RowWithArena` -> `DecodeFlatToRowWithArena`) + 스캔 시 지연 디코딩(`snapshotEntriesAndKeys`) | **채택** | `Cursor.Row()` 값 소유권 계약을 100% 보존하면서도 쿼리 스코프(`SeqScanIterator`, `IndexScanIterator`)에서 `[]storage.Value`와 문자열 할당을 `Arena` 슬랩으로 흡수 |
+| **Option B** | `memCursor.Row()` 내부 단일 `scratchVals []storage.Value` 버퍼 재사용 | **기각 (Spec-Out)** | Go 슬라이스 참조 특성상 `rows = append(rows, row)` 형태로 행을 수집하는 호출부에서 이전 행이 마지막 행으로 덮어써지는 **Slice Aliasing 데이터 오염** 유발. 별도 `RowInto` 메서드 추가 역시 `Cursor` 계약을 불필요하게 비대화 (`[RULE:RadicalKISS]`) |
+| **Option C** | FlatRecord 전용 `Lazy FlatTuple` 계층 별도 도입 | **기각 (Spec-Out)** | WiredTiger용 `0x01` Binary Tuple `LazyTuple` 외에 제2의 지연 튜플 포맷을 실행 엔진 전반에 분기 추가할 경우, 제한적 이득 대비 복잡도 증가가 과도함 |
+
+### 8.3 Option A 구현 완료 및 `BenchmarkMemEngine_AB_Scan` 검증 결과 (`DONE`)
+- **구현 내역**:
+  1. `pkg/storage/arena.go`: `Arena.AllocStringBytes(b []byte) string` 추가 (`byteSlabPool` 기반 무힙 복사).
+  2. `pkg/storage/engine.go`: 선택적 SPI `ArenaRowCursor` (`RowWithArena(arena *Arena) (Row, error)`) 도입 (기존 `Cursor.Row()` 소유권 불변).
+  3. `pkg/storage/memengine/flat_record.go`: `decodeVarSlot`의 SSO `make([]byte, inlineLen)` 불필요 할당 제거(`slot[:inlineLen]` 반환) 및 `DecodeFlatToRowWithArena` 구현.
+  4. `pkg/storage/memengine/table_data.go`, `tx.go`: `snapshotEntriesAndKeys` / `getEntryAndVer` 기반 스캔 시 선행 디코딩 제거 및 `memCursor.RowWithArena` 구현.
+  5. `pkg/execution/scan.go`: `SeqScanIterator`와 `IndexScanIterator`의 청크 수집 루프를 `fillScanChunk` 헬퍼로 통합하고 `ArenaRowCursor.RowWithArena(s.arena)` 경로 연결.
+- **검증 결과 (Apple M1, `-benchmem -count=3`)**:
+  - `ModeFlat_Scan1000` (`cur.Row()`): `4,007 allocs/op` -> **`3,007 allocs/op`** (SSO 중복 할당 제거)
+  - `ModeFlat_Scan1000_Arena` (`RowWithArena(arena)`): **`7 allocs/op`**, `155,417 ~ 157,555 B/op`, `284,110 ~ 359,738 ns/op` (**`ModeRaw_Scan1000`과 동일한 7 allocs/op 달성**)
+  - 전체 30개 패키지(`go test -tags wiredtiger -count=1 -race ./...`) 100% PASS (0 Data Race).

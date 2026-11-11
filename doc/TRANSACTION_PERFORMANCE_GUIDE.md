@@ -1,7 +1,7 @@
 # LionSQL Transaction Performance & Workload Tuning Guide (`doc/TRANSACTION_PERFORMANCE_GUIDE.md`)
 
 > - **Created**: 2026-11-02
-> - **Last Updated**: 2026-11-02
+> - **Last Updated**: 2026-11-11
 > [한국어 문서 (Korean Version)](TRANSACTION_PERFORMANCE_GUIDE.ko.md)
 
 This guide analyzes how LionSQL's storage backends, WAL synchronization policies, memory governor, and worker pool configurations impact transaction throughput (TPS), latency, and data durability (RPO), and provides recommended configuration profiles for common production workloads.
@@ -32,12 +32,14 @@ Eliminates disk I/O bottlenecks for workloads where sub-millisecond response tim
 * **Recommended Flags**:
   ```bash
   lionsql serve \
-    -engine memory \
+    -disk none \
+    -memory compact \
     -ephemeral \
     -fsync off \
     -max-memory 4GB \
     -max-workers 256
   ```
+  > (The legacy `-engine memory` flag maps transparently to `-disk none` for backward compatibility.)
 * **Performance Characteristics**:
   - **Throughput**: **20,000 ~ 25,000+ TPS** (> 540,000 tpmC on TPC-C)
   - **Latency**: Median P50 **0.05 ms**, Tail P99 **< 1.0 ms**
@@ -119,15 +121,23 @@ Optimized for bulk-loading millions of rows or executing large multi-table joins
 
 ## 3. Core Parameter Impact Analysis
 
-### 3.1. `-engine` (Storage Engine Selection)
-* **`wiredtiger` (Default)**:
+### 3.1. `-disk` / `-memory` (Storage Backend & In-Memory Layout Selection)
+* **`-disk wiredtiger`** (Unix default; legacy alias `-engine wiredtiger`):
   - Disk-backed lock-free B+Tree and MVCC architecture.
   - Safely manages datasets much larger than available RAM (tens to hundreds of GBs).
   - Reduces disk footprint by 50~70% via Snappy page compression.
-* **`memory`**:
-  - Pure heap-based sharded concurrent maps and Optimistic Concurrency Control (OCC).
+  - Session temporary tables (`#temp`) and table variables (`@tbl`) automatically bypass disk B+Tree overhead via hybrid in-memory execution.
+* **`-disk none`** (Windows default; legacy alias `-engine memory`):
+  - Pure heap-based 256-shard concurrent Optimistic Concurrency Control (OCC).
   - Eliminates disk I/O to achieve sub-microsecond (~100ns) point read/write latency.
   - Best suited for workloads with partitioned key spaces; high write contention on hot keys may trigger OCC fast-fail retries (`40001`).
+* **`-memory compact`** (Default, **Production Recommended**):
+  - Encodes in-memory rows into pointer-free contiguous `FlatRecord` byte buffers.
+  - Reduces heap footprint by **~60.8%** compared to raw pointer slices and eliminates per-row Go GC pointer graphs.
+  - Under concurrent client-server OLTP, eliminating GC mark/STW pressure yields **+46% higher TPS** and substantially lower P99 tail latency than `-memory performance` ([`ADR-028`](ADR.md#adr-028-pointer-free-flat-record-compact-as-default-in-memory-layout-and-deprecation-of-raw-slice-mode-performance)).
+* **`-memory performance`** (**Deprecated in v1.0, Scheduled for Removal Post-1.0**):
+  - Legacy layout storing materialized Go `[]storage.Value` slices per row.
+  - Underperforms `compact` in real multi-worker OLTP due to Go GC pointer-scanning overhead despite faster raw single-thread scan microbenchmarks. Retained in v1.0 solely for compatibility and deprecated prior to v1.0.
 
 ### 3.2. `-fsync` (WAL & Transaction Journal Synchronization Mode)
 | Mode | Behavior | Relative TPS | Power-Loss RPO Risk |

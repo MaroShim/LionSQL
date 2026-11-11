@@ -155,6 +155,7 @@
 | `PENDING` | **`COMPAT-DECLARATIVE-1`** | Durability | P2 | 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) |  |  |
 | `DONE` | **`COMPAT-TABLE-DRIVEN-1`** | Durability | P2 | 10개 실전 서비스 호환 규칙 Table-Driven 구조 및 안티패턴 키워드 매칭 전면 정식화 | [`notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`COMPAT-TSQL-MATRIX-1`** | Ecosystem | P2 | SQL Server 호환성 매트릭스(TSQL_COMPATIBILITY_MATRIX.ko.md) 구현 진행 중 항목 체크 및 동기화 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
+| `PENDING` | **`DEPRECATE-OCC-PERF-1`** | Storage | P2 | v1.0 이전 OCC performance 모드(-memory=performance) Deprecate 명기 (v1.0 옵션 유지) |  |  |
 | `PENDING` | **`DOC-REVAMP-10`** | Documentation | P2 | 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 | [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md) |  |
 | `DONE` | **`DOGFOOD-SPRINT-1`** | Performance | P1 | LionSQL 자체 백엔드 기반 정형 스프린트/태스크 관리 시스템 구축 (Dogfooding) |  |  |
 | `IN_PROGRESS` | **`DURA-KILL-1`** | Durability | P2 | kill -9 크래시 복구 장기 라운드 검증 |  |  |
@@ -200,7 +201,9 @@
 | `DONE` | **`PERF-CTE-LOWERING-VDBE-1`** | Durability | P2 | Writable CTE Stored Procedure 바이트코드 Lowering 가속 | [`notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-GROVE-CONCURRENCY-1`** | Durability | P2 | Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 | [`notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 2 (`PERF-HOTSPOT-LATCH-... |
 | `DONE` | **`PERF-HYBRID-TEMPMEM-1`** | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
+| `DONE` | **`PERF-OCC-FLAT-DECODE-1`** | Storage | P2 | FlatRecord 스캔 디코딩 할당 최적화 (Option A: SSO 2중 할당 제거 및 Arena 슬랩 풀링) |  |  |
 | `PENDING` | **`PERF-OCC-ZERO-LOCK-1`** | Storage | P2 | In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 (읽기 RLock 완전 제거) | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | Engine | P3 | WiredTiger LazyTuple 제거 및 Projection Pushdown 기반 선택 컬럼 디코딩(DecodeTupleSelectedWithArena + ArenaRowCursor) 교체 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
 | `DONE` | **`PERF-SERVER-PIPELINE-P3-P4`** | Ecosystem | P3 | 서버 파이프라인 Phase 3/4 | [`notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-SUBQUERY-MEMO-1`** | Engine | P2 | [1.0(?)] 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 | [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |  |
@@ -1941,6 +1944,11 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] v1.0 이전 OCC performance 모드(-memory=performance) Deprecate 명기 (v1.0 옵션 유지) `DEPRECATE-OCC-PERF-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 02:14:58
+
+---
+
 ### [PENDING] 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 `DOC-REVAMP-10`
 - **Domain**: Documentation | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)
@@ -2444,9 +2452,19 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [DONE] FlatRecord 스캔 디코딩 할당 최적화 (Option A: SSO 2중 할당 제거 및 Arena 슬랩 풀링) `PERF-OCC-FLAT-DECODE-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 02:38:13
+
+---
+
 ### [PENDING] In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 (읽기 RLock 완전 제거) `PERF-OCC-ZERO-LOCK-1`
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
+
+---
+
+### [PENDING] WiredTiger LazyTuple 제거 및 Projection Pushdown 기반 선택 컬럼 디코딩(DecodeTupleSelectedWithArena + ArenaRowCursor) 교체 (Post-1.0) `PERF-PROJECTION-PUSHDOWN-1`
+- **Domain**: Engine | **Priority**: P3 | **Updated**: 2026-11-11 02:57:38
 
 ---
 

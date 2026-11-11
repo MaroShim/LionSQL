@@ -1,7 +1,7 @@
 # LionSQL Architecture Decision Records (ADR)
 
 > - **Created**: 2026-09-22
-> - **Last Updated**: 2026-10-25
+> - **Last Updated**: 2026-11-11
 
 
 This document records the critical architectural decisions made throughout the design and development of LionSQL, explaining the context, problem statements, evaluated alternatives, decisions taken, and their engineering consequences.
@@ -37,6 +37,8 @@ This document records the critical architectural decisions made throughout the d
 - [ADR-025: Unified SQL Abstraction Layer - Type Promotion Lattice, Strict NULL Propagation, and Synthetic Row Identity](#adr-025-unified-sql-abstraction-layer---type-promotion-lattice-strict-null-propagation-and-synthetic-row-identity)
 - [ADR-026: Transactional Outbox Sender Contract - Backpressure Pause and Zero-Data-Loss Guarantee](#adr-026-transactional-outbox-sender-contract---backpressure-pause-and-zero-data-loss-guarantee)
 - [ADR-027: Deterministic WAL Tail Recovery & Fail-Closed Durability Invariant](#adr-027-deterministic-wal-tail-recovery--fail-closed-durability-invariant)
+- [ADR-028: Pointer-Free Flat Record (`compact`) as Default In-Memory Layout and Deprecation of Raw Slice Mode (`performance`)](#adr-028-pointer-free-flat-record-compact-as-default-in-memory-layout-and-deprecation-of-raw-slice-mode-performance)
+- [ADR-029: Arena-Scoped Cursor Row Decoding (`ArenaRowCursor`) vs. Single-Buffer Reuse and Lazy FlatTuple](#adr-029-arena-scoped-cursor-row-decoding-arenarowcursor-vs-single-buffer-reuse-and-lazy-flattuple)
 
 ---
 
@@ -769,6 +771,54 @@ Enforce the **Deterministic WAL Tail Recovery & Fail-Closed Durability Invariant
 - **Positive**: Eliminates self-inflicted data loss from transient read errors; protects uncorrupted transactions following mid-file bad sectors; complies strictly with ACID durability.
 - **Negative**: Server fails to boot on storage I/O errors, requiring administrator intervention (which is the desired, safe behavior for database recovery).
 - **Compliance**: Adheres to Golden Rule [AtomicSaves], [ExplicitError], and `notes/ENGINEERING_CONTEXT.ko.md` Invariant 22.
+
+---
+
+## ADR-028: Pointer-Free Flat Record (`compact`) as Default In-Memory Layout and Deprecation of Raw Slice Mode (`performance`)
+
+### Status
+Accepted
+
+### Context
+LionSQL introduced orthogonal storage configuration flags (`--disk=<wiredtiger|none>` and `--memory=<compact|performance>`) backed by two distinct in-memory tuple representations in `pkg/storage/memengine`:
+1. `performance` (`MemoryPerformance`): Stores materialized Go `storage.Row` (`[]storage.Value`) slices directly per shard entry, avoiding decode overhead during sequential scans (`BenchmarkMemEngine_AB_Scan` `ModeRaw_Scan1000`: `167,475 ns`, `7 allocs`), at the cost of numerous heap pointers scanned by Go's GC.
+2. `compact` (`MemoryCompact`): Encodes rows as pointer-free FlatRecord byte buffers (`[]byte`), cutting 10k-row heap footprint by 60.8% (`3.001 MB` vs `7.657 MB`) and eliminating per-row GC pointer graphs, while incurring row-decoding allocations during full scans (`ModeFlat_Scan1000`: `311,051 ns`, `4,007 allocs`).
+
+End-to-end client-server TPC-C benchmarks (`WIRE_TEMP_OCC_BENCH_20261111.ko.md`, 16 warehouses, 32 concurrent workers, durable `everysec` WAL over TDS TCP) demonstrated that `compact` outperforms `performance` by **+46.4% TPS (`3,722.76` vs `2,541.97 TPS`)** and lowers **P99 latency by 37.5% (`68.43 ms` vs `109.43 ms`)**, because eliminating Go GC mark-phase pointer pressure dominates real multi-worker OLTP throughput.
+
+### Decision
+- Retain `--memory=compact` as the permanent production default.
+- Mark `--memory=performance` (`MemoryPerformance`) as **Deprecated** prior to v1.0 (`DEPRECATE-OCC-PERF-1`), keeping the flag functional through v1.0 for backward compatibility and scheduling removal of the legacy raw-slice path post-1.0 (`[RULE:RadicalKISS]`).
+
+### Consequences
+- **Positive**: Dramatically lowers heap footprint and GC tail latency in multi-core OLTP; simplifies `memengine` maintenance post-1.0 by eliminating dual row representations.
+- **Negative**: Requires a deprecation cycle for users migrating away from explicit `--memory=performance` flags prior to v2.0.
+- **Compliance**: Adheres to `[RULE:RadicalKISS]`, `[RULE:SafeDefaults]`, and `notes/ENGINEERING_CONTEXT.ko.md` Invariant 25.
+
+---
+
+## ADR-029: Arena-Scoped Cursor Row Decoding (`ArenaRowCursor`) vs. Single-Buffer Reuse and Lazy FlatTuple
+
+### Status
+Accepted
+
+### Context
+Decoding `MemoryCompact` FlatRecord rows during sequential scans (`ModeFlat_Scan1000`) originally performed 4 heap allocations per row (`4,007 allocs/op` per 1,000 rows: eager snapshot materialization, `[]storage.Value` slice creation, and two allocations per SSO variable-width field). Three optimization designs were evaluated:
+- **Option A**: Eliminate duplicate SSO `[]byte` allocation in `decodeVarSlot`, defer decoding until row read, and decode query scans into caller-managed `storage.Arena` slabs via an optional `ArenaRowCursor.RowWithArena(arena)` SPI.
+- **Option B**: Reuse a single `scratchVals []storage.Value` buffer inside `memCursor.Row()` across consecutive `Next()` steps (or add a parallel `RowInto` method).
+- **Option C**: Build a dedicated `Lazy FlatTuple` implementation parallel to WiredTiger's `0x01` Binary Tuple `LazyTuple`.
+
+### Decision
+Adopt **Option A** exclusively and permanently reject **Option B** and **Option C** (`PERF-OCC-FLAT-DECODE-1`):
+1. **Option B Rejected (Slice Aliasing Corruption / Interface Bloat)**: Reusing a single backing array in `Cursor.Row()` breaks Go slice-ownership expectations, silently overwriting previously collected rows whenever callers materialize slices (`rows = append(rows, row)`). Adding `RowInto` bloats the `storage.Cursor` interface.
+2. **Option C Rejected (Dual Lazy Format Complexity)**: Maintaining two distinct lazy tuple implementations across scan, projection, and join operators adds pervasive branching for marginal gain.
+3. **Option A Adopted**: `Arena.AllocValues` and `Arena.AllocStringBytes` provide independent, non-overlapping slices within the query execution `Arena`, reducing 1,000-row scan allocations from `4,007` to `7 allocs/op` (`ModeFlat_Scan1000_Arena`) while keeping standard `Cursor.Row()` heap-owned and aliasing-free.
+
+### Consequences
+- **Positive**: Eliminates 99.8% of FlatRecord scan allocations in SQL execution (`SeqScanIterator`, `IndexScanIterator`) with zero cursor aliasing hazards and minimal surface area.
+- **Negative**: Direct `Cursor.Row()` callers without an execution `Arena` retain standard heap allocation for returned row slices to preserve post-`Close()` lifetime safety.
+- **Compliance**: Adheres to `[RULE:RadicalKISS]`, `[RULE:ModularInterface]`, `[RULE:ZeroAllocation]`, and `notes/ENGINEERING_CONTEXT.ko.md` Invariant 26.
+
 
 
 

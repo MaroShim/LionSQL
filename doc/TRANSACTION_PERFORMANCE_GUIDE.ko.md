@@ -1,7 +1,7 @@
 # LionSQL 트랜잭션 성능 및 워크로드별 옵션 튜닝 가이드 (`doc/TRANSACTION_PERFORMANCE_GUIDE.ko.md`)
 
 > - **최초 작성일**: 2026-10-19
-> - **최종 갱신일**: 2026-11-02
+> - **최종 갱신일**: 2026-11-11
 > [English Version](TRANSACTION_PERFORMANCE_GUIDE.md)
 
 본 문서는 LionSQL 데이터베이스 엔진의 스토리지 백엔드, WAL 동기화 정책, 메모리 거버너 및 워커 풀 설정 옵션이 트랜잭션 처리량(TPS), 지연 시간(Latency), 데이터 내구성(Durability/RPO)에 미치는 영향을 분석하고, 워크로드 유형에 따른 최적의 옵션 조합 가이드를 제공합니다.
@@ -34,12 +34,14 @@
 * **권장 옵션 조합**:
   ```bash
   lionsql serve \
-    -engine memory \
+    -disk none \
+    -memory compact \
     -ephemeral \
     -fsync off \
     -max-memory 4GB \
     -max-workers 256
   ```
+  > (기존 `-engine memory` 플래그도 하위 호환용으로 `-disk none`과 동일하게 동작합니다.)
 * **성능 지표**:
   - **처리량**: **20,000 ~ 25,000+ TPS** (TPC-C 기준 > 540,000 tpmC)
   - **지연 시간**: Median P50 **0.05 ms**, Tail P99 **< 1.0 ms**
@@ -121,15 +123,23 @@
 
 ## 3. 핵심 파라미터별 성능 영향 분석
 
-### 3.1. `-engine` (스토리지 엔진 선택)
-* **`wiredtiger` (기본값)**:
+### 3.1. `-disk` / `-memory` (스토리지 백엔드 및 인메모리 레이아웃 선택)
+* **`-disk wiredtiger`** (Unix 기본값, 레거시 `-engine wiredtiger`와 동일):
   - 디스크 기반 Lock-free B+Tree 및 MVCC 아키텍처.
   - 가용 RAM보다 훨씬 큰 대용량 데이터셋(수십~수백 GB)을 안전하게 처리.
   - 페이지 압축(Snappy)을 통해 디스크 용량을 50~70% 절감.
-* **`memory`**:
-  - 순수 힙 메모리 기반 동시성 스킵리스트(Concurrent SkipList) 및 낙관적 동시성 제어(OCC).
+  - 세션 임시 테이블(`#temp`) 및 테이블 변수(`@tbl`)는 디스크 오버헤드를 우회해 순수 인메모리 OCC 엔진으로 하이브리드 가속됩니다.
+* **`-disk none`** (Windows 기본값, 레거시 `-engine memory`와 동일):
+  - 순수 힙 메모리 기반 256샤드 낙관적 동시성 제어(OCC).
   - 포인터 간접 참조 및 디스크 I/O가 제거되어 단순 읽기/쓰기 시 서브마이크로초(~100ns) 레이턴시 달성.
   - 쓰기 충돌이 빈번한 워크로드에서는 OCC 재시도 오버헤드가 발생할 수 있으므로 격리된 키 공간 처리에 최적.
+* **`-memory compact`** (기본값, **프로덕션 권장**):
+  - 행 데이터를 포인터 없는 연속 바이트 버퍼(`FlatRecord`)로 인코딩합니다.
+  - 기존 포인터 슬라이스 구조(`performance`) 대비 힙 점유율을 **약 60.8% 절감**하고 Go 런타임 GC 포인터 추적 대상 객체를 제거합니다.
+  - 다중 워커 동시 실행 서버 환경에서는 GC Mark/STW 병목이 사라져 오히려 `performance` 대비 **+46% 이상 높은 실전 TPS**와 현저히 낮은 P99 꼬리 지연을 제공합니다 ([`ADR-028`](ADR.md#adr-028-pointer-free-flat-record-compact-as-default-in-memory-layout-and-deprecation-of-raw-slice-mode-performance)).
+* **`-memory performance`** (**Deprecated in v1.0, Post-1.0 제거 예정**):
+  - Go 슬라이스 기반 원시 행 구조체(`[]storage.Value`)를 유지하는 레거시 모드입니다.
+  - 단일 스레드 순차 스캔 마이크로벤치마크 외 실전 다중 접속 OLTP에서는 GC 부하로 처리량과 P99 지연이 모두 열위하므로 **사용을 권장하지 않습니다**. v1.0 릴리즈에서는 하위 호환성을 위해 플래그를 유지하나 이후 버전에서 제거됩니다.
 
 ### 3.2. `-fsync` (WAL 및 트랜잭션 저널 동기화 모드)
 | 모드 | 동작 방식 | TPS 영향 | 정전 시 데이터 손실 위험 (RPO) |
