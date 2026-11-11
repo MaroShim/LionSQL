@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- add `MemoryCompact` durability, composite DDL/DML, SkipList, FK, `ArenaRowCursor`, and extended-type reliability suite in `pkg/storage/memengine/flat_reliability_test.go` (`TEST-OCC-FLAT-1`, `TEST-OCC-FLAT-2`), verified alongside `test/slt` (`InProc`), `test/slt_proc` 14-suite T-SQL compatibility, and 4-round `SIGKILL` `crashtest` (`TEST-OCC-FLAT-3`)
 - document `compact` default rationale and pre-v1.0 `performance` mode deprecation (`DEPRECATE-OCC-PERF-1`) across `doc/ADR.md` (`ADR-028`), `notes/ENGINEERING_CONTEXT.ko.md` (`㉕`), `notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`, `doc/TRANSACTION_PERFORMANCE_GUIDE*.md`, and `doc/USER_MANUAL*.md`
 - document `ArenaRowCursor` scan decode design (`Option A`) vs. rejected single-buffer reuse (`Option B`) and `Lazy FlatTuple` (`Option C`) across `doc/ADR.md` (`ADR-029`), `notes/ENGINEERING_CONTEXT.ko.md` (`㉖`), and `notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md` (Section 8)
 - add `2026-11-11` comparative benchmark report (`notes/benchmark_runs/WIRE_TEMP_OCC_BENCH_20261111.ko.md`) documenting zero-alloc wire streaming, WiredTiger temp-table bypass, OCC `compact` vs `performance`, and live TCP TPC-C results
@@ -16,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - register `COMPAT-TSQL-MATRIX-1` sprint tracking task for `notes/TSQL_COMPATIBILITY_MATRIX.ko.md` verification and sync
 
 ### Changed
+- set `memengine.DefaultOptions` `Mode` to `MemoryCompact` so all in-process Go callers align with CLI (`config.DefaultMemory()`) (`TEST-OCC-FLAT-1`, `TEST-OCC-FLAT-3`)
 - optimize `MemoryCompact` scan decoding via Option A (`PERF-OCC-FLAT-DECODE-1`): remove redundant SSO byte-slice allocation in `decodeVarSlot`, add `Arena.AllocStringBytes` and `DecodeFlatToRowWithArena`, defer FlatRecord decoding until row read (`snapshotEntriesAndKeys`), and wire `ArenaRowCursor.RowWithArena` into `fillScanChunk` (`SeqScanIterator` / `IndexScanIterator`), dropping `ModeFlat_Scan1000` from 4,007 to 7 allocs/op with `Arena`
 - eliminate per-row/per-column wire heap allocations and introduce bounded 16KB/512-row PGWire chunked streaming (`writePgDataRows`, `0 allocs/op` across 100k rows) and pooled incremental TDS packet streaming with direct `res.Values` slot indexing (`tdsStreamWriter`, `writeTdsTextColumn`, `writePLPUTF16LE`) (`PERF-WIRE-ZEROALLOC-1`)
 
@@ -23,6 +25,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - mark `-memory=performance`, `MemoryPerformance`, and legacy aliases (`OCCModeRaw`, `OCCModePerformance`) as deprecated in CLI help text, startup runtime log warning (`memoryPerformanceDeprecationNotice`), startup banner (`[DEPRECATED: use compact]`), and Go doc comments while preserving full v1.0 compatibility prior to post-1.0 removal (`DEPRECATE-OCC-PERF-1`)
 
 ### Fixed
+- restore `TableData.mode` and `TableData.layout` prior to shard initialization in `loadDiskLocked`, re-encode RDB (`tables.mpk`) rows via `buildShardEntry`, and clear redundant post-recovery `Rows`/`Versions` maps so AOF+RDB restarts preserve pure `MemoryCompact` layout (`TEST-OCC-FLAT-1`)
+- add `TableSchema.ResolveRowPK` and use it in `findMatchingChildPKsUnderLock` so foreign key `ON DELETE`/`ON UPDATE` cascades resolve composite primary keys accurately (`TEST-OCC-FLAT-2`)
+- add 8-byte fixed slot encoding/decoding for `TypeTime` (`storage.TimeValue`) and restore complete `storage.DateValue` metadata for `TypeDate` in `pkg/storage/memengine/flat_record.go` (`TEST-OCC-FLAT-3`)
 - add background `SessionPool` TTL/reset sweep loop and idle `ClientSession` storage reclamation (`BUG-WT-SWEEP-3`) to eliminate 60-minute WiredTiger `sweep-server` idle session warnings
 
 ### Removed

@@ -478,6 +478,33 @@ func (s *TableSchema) ResolveRecordPK(rec Record) (Value, bool) {
 	return rec.Get(pkCol.Name)
 }
 
+// ResolveRowPK extracts a single or composite primary key Value from a schema-aligned Row.
+func (s *TableSchema) ResolveRowPK(row Row) (Value, bool) {
+	if s == nil {
+		return Value{}, false
+	}
+	if s.IsCompositePK() {
+		var parts []string
+		for i := range s.Columns {
+			if s.Columns[i].PrimaryKey {
+				if i >= len(row.Values) || row.Values[i].IsNull {
+					return Value{}, false
+				}
+				parts = append(parts, row.Values[i].String())
+			}
+		}
+		if len(parts) == 0 {
+			return Value{}, false
+		}
+		return StringValue(strings.Join(parts, "\x1f")), true
+	}
+	pkIdx := s.PrimaryKeyIndex()
+	if pkIdx < 0 || pkIdx >= len(row.Values) {
+		return Value{}, false
+	}
+	return row.Values[pkIdx], true
+}
+
 func (s *TableSchema) PrimaryKeyIndex() int {
 	for i := range s.Columns {
 		if s.Columns[i].PrimaryKey {

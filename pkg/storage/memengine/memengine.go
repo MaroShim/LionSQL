@@ -94,6 +94,7 @@ type Options struct {
 func DefaultOptions(dir string) Options {
 	return Options{
 		DataDir:       dir,
+		Mode:          MemoryCompact,
 		EnableAOF:     dir != "",
 		EnableRDB:     dir != "",
 		FsyncPolicy:   FsyncEverySec,

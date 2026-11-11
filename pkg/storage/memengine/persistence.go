@@ -415,6 +415,14 @@ func (e *Engine) loadDiskLocked() int64 {
 		e.tables[name] = td
 	}
 	for _, td := range e.tables {
+		// Unexported runtime layout metadata is not serialized by MsgPack; restore it before initShards()
+		// so RDB rows re-enter shards in the engine's configured MemoryMode without stale heap duplicates.
+		td.mode = e.opts.Mode
+		if td.mode == MemoryCompact {
+			td.layout = BuildFlatRecordLayout(&td.Schema)
+		} else {
+			td.layout = nil
+		}
 		if td.Versions == nil {
 			td.Versions = make(map[string]int64)
 			for k := range td.Rows {
@@ -438,6 +446,8 @@ func (e *Engine) loadDiskLocked() int64 {
 				}
 			}
 		}
+		td.Rows = nil
+		td.Versions = nil
 	}
 	e.rebuildFKCacheLocked()
 	return snapLSN

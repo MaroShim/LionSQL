@@ -1117,12 +1117,10 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, childTable)
 	}
 	childSchema := childTd.Schema
-	childPkCol, err := childSchema.PrimaryKeyColumn()
-	if err != nil {
+	if _, err := childSchema.PrimaryKeyColumn(); err != nil {
 		tx.engine.mu.RUnlock()
 		return nil, err
 	}
-	_, childPkIdx, _ := childSchema.FindColumn(childPkCol.Name)
 
 	pCols := fk.ParentColumns
 	if len(pCols) == 0 {
@@ -1158,8 +1156,10 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 		if _, inLocal := tx.getLocal(childTable, pkStr); inLocal {
 			return true
 		}
-		if rowMatchesFK(&childSchema, row, fk.ChildColumns, parentValues) && childPkIdx >= 0 && childPkIdx < len(row.Values) {
-			matchingPKs = append(matchingPKs, row.Values[childPkIdx])
+		if rowMatchesFK(&childSchema, row, fk.ChildColumns, parentValues) {
+			if childPK, ok := childSchema.ResolveRowPK(row); ok {
+				matchingPKs = append(matchingPKs, childPK)
+			}
 		}
 		return true
 	})
@@ -1170,8 +1170,10 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 			if tx.isLocallyDeleted(childTable, pkStr) {
 				continue
 			}
-			if rowMatchesFK(&childSchema, row, fk.ChildColumns, parentValues) && childPkIdx >= 0 && childPkIdx < len(row.Values) {
-				matchingPKs = append(matchingPKs, row.Values[childPkIdx])
+			if rowMatchesFK(&childSchema, row, fk.ChildColumns, parentValues) {
+				if childPK, ok := childSchema.ResolveRowPK(row); ok {
+					matchingPKs = append(matchingPKs, childPK)
+				}
 			}
 		}
 	}

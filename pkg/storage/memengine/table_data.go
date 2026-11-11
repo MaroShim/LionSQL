@@ -113,6 +113,17 @@ func (td *TableData) initShards() {
 	td.initOnce.Do(td.initShardsInternal)
 }
 
+func (td *TableData) buildShardEntry(row storage.Row, ver int64) shardEntry {
+	if td.mode == MemoryCompact && td.layout != nil {
+		flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, row)
+		if err == nil {
+			return shardEntry{ver: ver, flatBuf: flatBuf}
+		}
+		log.Printf("[memengine] flat record encode fallback on table %q: %v", td.Schema.Name, err)
+	}
+	return shardEntry{ver: ver, row: row}
+}
+
 func (td *TableData) initShardsInternal() {
 	for i := 0; i < numTableShards; i++ {
 		if td.shards[i].entries == nil {
@@ -126,7 +137,7 @@ func (td *TableData) initShardsInternal() {
 			if td.Versions != nil && td.Versions[k] > 0 {
 				ver = td.Versions[k]
 			}
-			td.shards[sIdx].entries[k] = shardEntry{ver: ver, row: r}
+			td.shards[sIdx].entries[k] = td.buildShardEntry(r, ver)
 		}
 	}
 	td.shardsInit = true
@@ -172,19 +183,11 @@ func (td *TableData) hasKey(pk string) bool {
 
 func (td *TableData) putRowAndVer(pk string, row storage.Row, ver int64) {
 	td.ensureShardsInit()
+	entry := td.buildShardEntry(row, ver)
 	sIdx := hashShard(pk)
 	sh := &td.shards[sIdx]
 	sh.mu.Lock()
-	if td.mode == MemoryCompact && td.layout != nil {
-		flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, row)
-		if err == nil {
-			sh.entries[pk] = shardEntry{ver: ver, flatBuf: flatBuf}
-			sh.mu.Unlock()
-			return
-		}
-		log.Printf("[memengine] flat record encode fallback on table %q pk %q: %v", td.Schema.Name, pk, err)
-	}
-	sh.entries[pk] = shardEntry{ver: ver, row: row}
+	sh.entries[pk] = entry
 	sh.mu.Unlock()
 }
 

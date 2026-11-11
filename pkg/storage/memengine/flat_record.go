@@ -96,7 +96,7 @@ func BuildFlatRecordLayout(schema *storage.TableSchema) *FlatRecordLayout {
 		offsets[i] = currentOffset
 		sz := 8 // default slot size: 8 bytes
 		switch col.Type {
-		case storage.TypeInt, storage.TypeFloat, storage.TypeDateTime, storage.TypeDate:
+		case storage.TypeInt, storage.TypeFloat, storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
 			sz = 8
 		case storage.TypeBool:
 			sz = 8 // padded to 8 for alignment
@@ -172,8 +172,31 @@ func (l *FlatRecordLayout) EncodeRowToFlat(schema *storage.TableSchema, row stor
 			binary.LittleEndian.PutUint64(slot, uint64(tVal.UnixNano()))
 
 		case storage.TypeDate:
-			tVal := val.TVal
-			binary.LittleEndian.PutUint64(slot, uint64(tVal.Unix()))
+			secs := val.IVal
+			if !val.TVal.IsZero() {
+				secs = val.TVal.Unix()
+			} else if secs == 0 && val.SVal != "" {
+				if parsed, err := storage.ParseDate(val.SVal); err == nil {
+					secs = parsed.Unix()
+				}
+			}
+			binary.LittleEndian.PutUint64(slot, uint64(secs))
+
+		case storage.TypeTime:
+			var ns int64
+			if !val.TVal.IsZero() {
+				ns = int64(val.TVal.Hour())*int64(time.Hour) +
+					int64(val.TVal.Minute())*int64(time.Minute) +
+					int64(val.TVal.Second())*int64(time.Second) +
+					int64(val.TVal.Nanosecond())
+			} else if val.IVal != 0 {
+				ns = val.IVal
+			} else if val.SVal != "" {
+				if _, parsedNs, err := storage.ParseTime(val.SVal); err == nil {
+					ns = parsedNs
+				}
+			}
+			binary.LittleEndian.PutUint64(slot, uint64(ns))
 
 		case storage.TypeVarChar, storage.TypeJSON, storage.TypeUUID:
 			s := val.SVal
@@ -252,10 +275,11 @@ func (l *FlatRecordLayout) DecodeFlatToRowWithArena(schema *storage.TableSchema,
 
 		case storage.TypeDate:
 			secs := int64(binary.LittleEndian.Uint64(slot))
-			vals[i] = storage.Value{
-				Type: storage.TypeDate,
-				TVal: time.Unix(secs, 0).UTC(),
-			}
+			vals[i] = storage.DateValue(time.Unix(secs, 0).UTC())
+
+		case storage.TypeTime:
+			ns := int64(binary.LittleEndian.Uint64(slot))
+			vals[i] = storage.TimeValue(time.Unix(0, ns).UTC())
 
 		case storage.TypeVarChar, storage.TypeJSON, storage.TypeUUID:
 			raw, err := decodeVarSlot(slot, varArea)

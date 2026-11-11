@@ -226,9 +226,9 @@
 | `DONE` | **`SSMS-OE-COMPAT-1`** | Ecosystem | P2 | SSMS Object Explorer 호환성 (sys.resource_governor_configuration, HostPlatform 배치 및 가상 카탈로그 수식 평가) |  |  |
 | `IN_PROGRESS` | **`SSMS-OE-COMPAT-2`** | Ecosystem | P2 | SSMS Object Explorer 호환성 고도화 (Phase 1~4 테이블 목록 표시 완료, Phase 5 SMO NullReferenceException 및 하위 노드 바인딩) | [`notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`](notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md) |  |
 | `DONE` | **`TDS-MOD-1`** | Architecture | P3 | TDS 대규모 파일 모듈 분할 기각 (Spec-Out) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
-| `PENDING` | **`TEST-OCC-FLAT-1`** | Storage | P2 | Flat 모드 크래시 복구 무결성 검증 (AOF/RDB 및 kill -9) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
-| `PENDING` | **`TEST-OCC-FLAT-2`** | Storage | P2 | Flat 모드 복합 DDL/DML 회귀 검증 (복합 보조 인덱스, SkipList, FK) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
-| `PENDING` | **`TEST-OCC-FLAT-3`** | Storage | P2 | Flat 모드 쿼리 엔진 풀 스위트 회귀 검증 (SLT 및 Babelfish) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
+| `DONE` | **`TEST-OCC-FLAT-1`** | Storage | P2 | Flat 모드 크래시 복구 무결성 검증 (AOF/RDB 및 kill -9) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
+| `DONE` | **`TEST-OCC-FLAT-2`** | Storage | P2 | Flat 모드 복합 DDL/DML 회귀 검증 (복합 보조 인덱스, SkipList, FK) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
+| `DONE` | **`TEST-OCC-FLAT-3`** | Storage | P2 | Flat 모드 쿼리 엔진 풀 스위트 회귀 검증 (SLT 및 Babelfish) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `PENDING` | **`TEST-OCC-FLAT-4`** | Storage | P2 | Flat 모드 24h 장기 소크 및 가변 길이 UPDATE 단편화 검증 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `DONE` | **`TUNE-DOC-SYNC-1`** | Documentation | P2 | 1.0 GA 벤치마크 및 공식 문서 실측치 일괄 동기화 |  |  |
 | `DONE` | **`TUNE-HOTSPOT-OCC-1`** | Durability | P2 | 고동시성 핫스팟 OCC 경합 완화 및 와이어 버퍼 풀링 |  | - [x] **Phase 3 (`TUNE-EPHEMERAL-VERI... |
@@ -2664,20 +2664,20 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Flat 모드 크래시 복구 무결성 검증 (AOF/RDB 및 kill -9) `TEST-OCC-FLAT-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
+### [DONE] Flat 모드 크래시 복구 무결성 검증 (AOF/RDB 및 kill -9) `TEST-OCC-FLAT-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 03:38:24
 - **Plan Doc**: [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)
 
 ---
 
-### [PENDING] Flat 모드 복합 DDL/DML 회귀 검증 (복합 보조 인덱스, SkipList, FK) `TEST-OCC-FLAT-2`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
+### [DONE] Flat 모드 복합 DDL/DML 회귀 검증 (복합 보조 인덱스, SkipList, FK) `TEST-OCC-FLAT-2`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 03:38:24
 - **Plan Doc**: [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)
 
 ---
 
-### [PENDING] Flat 모드 쿼리 엔진 풀 스위트 회귀 검증 (SLT 및 Babelfish) `TEST-OCC-FLAT-3`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
+### [DONE] Flat 모드 쿼리 엔진 풀 스위트 회귀 검증 (SLT 및 Babelfish) `TEST-OCC-FLAT-3`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 03:38:24
 - **Plan Doc**: [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)
 
 ---
