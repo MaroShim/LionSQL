@@ -152,3 +152,136 @@ func TestRegression_AUDIT_FULL_004_ConcurrentSnapshotAndDDL(t *testing.T) {
 	close(stopCh)
 	wg.Wait()
 }
+
+// TestRegression_AUDIT_FULL_001_InstantDDL_And_ConcurrentReadRace tests that:
+// 1) DecodeFlatToRowWithArena gracefully decodes a buffer encoded with an older (N-1) layout
+//    against a newer (N) column schema, populating the new column with NULL rather than panicking with index-out-of-range.
+// 2) Concurrent SELECT queries during ALTER TABLE ADD COLUMN run without panics or data races.
+func TestRegression_AUDIT_FULL_001_InstantDDL_And_ConcurrentReadRace(t *testing.T) {
+	// 1. Direct Instant DDL decoding test
+	oldSchema := storage.TableSchema{
+		Name: "t_instant",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	oldLayout := BuildFlatRecordLayout(&oldSchema)
+
+	rowOld := storage.Row{
+		Values: []storage.Value{
+			storage.IntValue(42),
+			storage.StringValue("LionSQL"),
+		},
+	}
+	bufOld, err := oldLayout.EncodeRowToFlat(&oldSchema, rowOld)
+	if err != nil {
+		t.Fatalf("EncodeRowToFlat failed: %v", err)
+	}
+
+	// Now simulate schema evolution to N=3 columns
+	newSchema := storage.TableSchema{
+		Name: "t_instant",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+			{Name: "extra_col", Type: storage.TypeInt}, // new column not in bufOld
+		},
+	}
+
+	// Decoding bufOld with oldLayout against newSchema should succeed with Instant DDL null fallback
+	decodedRow, err := oldLayout.DecodeFlatToRow(&newSchema, bufOld)
+	if err != nil {
+		t.Fatalf("DecodeFlatToRow failed on expanded schema: %v", err)
+	}
+	if len(decodedRow.Values) != 3 {
+		t.Fatalf("expected 3 values in decoded row, got %d", len(decodedRow.Values))
+	}
+	if decodedRow.Values[0].IVal != 42 {
+		t.Fatalf("expected id=42, got %v", decodedRow.Values[0])
+	}
+	if decodedRow.Values[1].SVal != "LionSQL" {
+		t.Fatalf("expected name=LionSQL, got %v", decodedRow.Values[1])
+	}
+	if !decodedRow.Values[2].IsNull {
+		t.Fatalf("expected extra_col to be NULL via Instant DDL fallback, got %v", decodedRow.Values[2])
+	}
+
+	// 2. High-concurrency read vs ALTER TABLE ADD COLUMN race test
+	tempDir := t.TempDir()
+	eng := NewWithOptions(Options{Mode: MemoryCompact})
+	if err := eng.Open(tempDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	initialSchema := &storage.TableSchema{
+		Name: "accounts_alter_race",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeInt},
+		},
+	}
+	if err := eng.CreateTable(initialSchema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+
+	// Seed 200 rows
+	txSeed, _ := sess.BeginTx(storage.TxOptions{})
+	for i := 0; i < 200; i++ {
+		_ = txSeed.Insert("accounts_alter_race", storage.Record{
+			"id":  storage.IntValue(int64(i)),
+			"val": storage.IntValue(int64(i * 10)),
+		})
+	}
+	_ = txSeed.Commit()
+
+	var wg sync.WaitGroup
+	stopReaders := make(chan struct{})
+
+	// Spawn 4 concurrent readers
+	for r := 0; r < 4; r++ {
+		wg.Add(1)
+		go func(readerID int) {
+			defer wg.Done()
+			readSess, _ := eng.NewSession()
+			defer readSess.Close()
+
+			for {
+				select {
+				case <-stopReaders:
+					return
+				default:
+					txRead, err := readSess.BeginTx(storage.TxOptions{ReadOnly: true})
+					if err != nil {
+						continue
+					}
+					for k := 0; k < 50; k++ {
+						_, _ = txRead.Get("accounts_alter_race", storage.IntValue(int64(k)))
+					}
+					_ = txRead.Rollback()
+				}
+			}
+		}(r)
+	}
+
+	// Add 3 columns sequentially while readers are active
+	time.Sleep(20 * time.Millisecond)
+	for colIdx := 1; colIdx <= 3; colIdx++ {
+		newCol := storage.Column{
+			Name:     fmt.Sprintf("added_%d", colIdx),
+			Type:     storage.TypeInt,
+			Nullable: true,
+		}
+		if err := eng.AddColumn("accounts_alter_race", &newCol); err != nil {
+			t.Fatalf("AddColumn added_%d failed: %v", colIdx, err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	close(stopReaders)
+	wg.Wait()
+}

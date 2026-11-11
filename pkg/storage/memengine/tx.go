@@ -1227,7 +1227,7 @@ func (tx *Transaction) Get(tableName string, pk storage.Value) (storage.Record, 
 		if !exists {
 			return nil, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
 		}
-		return td.Schema.RowToRecord(row), nil
+		return td.SnapshotSchema().RowToRecord(row), nil
 	}
 
 	tx.mu.Lock()
@@ -1322,7 +1322,7 @@ func (tx *Transaction) getRecordAndVerUnderLock(tableName, pkKey string, clone b
 	if err != nil {
 		return nil, 0, err
 	}
-	rec := td.Schema.RowToRecord(row)
+	rec := td.SnapshotSchema().RowToRecord(row)
 	return rec, ver, nil
 }
 

@@ -122,6 +122,13 @@ func (td *TableData) refreshSnapSchemaLocked() {
 	td.snapSchema = &cp
 }
 
+// SnapshotSchema returns an immutable snapshot of the table schema under RLock ([RULE:ConcurrencySafety]).
+func (td *TableData) SnapshotSchema() *storage.TableSchema {
+	td.mu.RLock()
+	defer td.mu.RUnlock()
+	return td.getImmutableSchemaLocked()
+}
+
 func (td *TableData) snapshotSchemaAndLayout() (*storage.TableSchema, *FlatRecordLayout) {
 	td.mu.RLock()
 	defer td.mu.RUnlock()
@@ -457,6 +464,8 @@ func (td *TableData) removePartitionKey(partID, pk string) {
 
 func (td *TableData) addColumnValues(val storage.Value) error {
 	td.ensureShardsInit()
+	td.mu.Lock()
+	defer td.mu.Unlock()
 
 	var newLayout *FlatRecordLayout
 	var oldSchema storage.TableSchema

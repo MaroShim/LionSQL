@@ -279,18 +279,32 @@ func (l *FlatRecordLayout) DecodeFlatToRowWithArena(schema *storage.TableSchema,
 		return storage.Row{}, ErrFlatRecordTruncated
 	}
 
-	numCols := l.NumColumns
+	numCols := len(schema.Columns)
+	if l.NumColumns > numCols {
+		numCols = l.NumColumns
+	}
 	vals := arena.AllocValues(numCols)
 	varArea := buf[l.TotalFixedLen:]
 
 	for i, col := range schema.Columns {
+		// [RULE:DefensiveIndexing] Instant DDL guard: If schema has more columns than layout
+		// (e.g. concurrent ADD COLUMN or schema evolution), gracefully return default NULL without index panic.
+		if i >= len(l.FixedOffsets) || i >= l.NumColumns {
+			vals[i] = storage.NullValue(col.Type)
+			continue
+		}
+
 		// 1. Check NULL bitmap
-		if (buf[i/8] & (1 << (i % 8))) != 0 {
+		if i/8 < len(buf) && (buf[i/8]&(1<<(i%8))) != 0 {
 			vals[i] = storage.NullValue(col.Type)
 			continue
 		}
 
 		offset := l.FixedOffsets[i]
+		if offset+8 > len(buf) {
+			vals[i] = storage.NullValue(col.Type)
+			continue
+		}
 		slot := buf[offset : offset+8]
 
 		switch col.Type {
