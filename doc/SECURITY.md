@@ -60,6 +60,20 @@ LionSQL incorporates an append-only, tamper-evident audit logging subsystem (`pk
 - **Non-Blocking Zero-Overhead Durability**:
   - Audit events are emitted through ring buffers and flushed asynchronously to disk (`audit.log`) via background batch writer threads, avoiding synchronization bottlenecks on low-latency OLTP execution paths.
 
+### 2.4. High-Availability Cluster Inter-Node Authentication (`ClusterToken`)
+LionSQL safeguards its 1-Writer Multi-Reader High-Availability Availability Group clustering and Raft-style failover endpoints (`pkg/replication`) with pre-shared cluster token authentication:
+- **Scope of Protected Endpoints**:
+  - Streaming: `GET /api/replication/stream` (prevents unauthorized real-time WAL data exfiltration)
+  - Topology & Control: `POST /api/replication/promote`, `POST /api/replication/demote` (prevents arbitrary node hijacking and split-brain injection)
+  - Consensus & Leader Election: `POST /api/replication/vote`, `POST /api/replication/leader` (prevents malicious leader hijacking)
+  - Telemetry: `GET /api/replication/status`, `POST /api/replication/ack` (prevents unauthorized reconnaissance)
+- **Constant-Time Cryptographic Verification**:
+  - All token comparisons utilize `crypto/subtle.ConstantTimeCompare` to guarantee complete immunity against side-channel timing analysis attacks.
+- **Fail-Closed Dual-Credential Architecture**:
+  - Inter-node requests authenticate via `X-Cluster-Token: <token>`.
+  - Administrative operators can authenticate via standard `Authorization: Bearer <cluster_token>` or signed Superuser JWT (`Authorization: Bearer <jwt>`).
+  - Requests with missing or invalid credentials receive an immediate `401 Unauthorized` fail-closed response (`[RULE:ExplicitError]`).
+
 ---
 
 ## 3. Network Security & Production Hardening

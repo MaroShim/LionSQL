@@ -23,7 +23,7 @@ For an introductory installation guide, quick start, and application tutorials, 
   * Resource governor: `-max-memory` (`<size>` e.g. `2GB`, `4096MB`, default: 65% of physical RAM), `-work-mem` (default: `64MB`), `-max-workers`, `-max-idle-sessions`
   * Security and authentication: `-auth` (default: `true`), `-admin-email`, `-admin-pass`, `-jwt-secret`
   * Logging and tracing: `-dev`, `-slow-log`, `-slow-threshold-ms` (default: `100.0ms`), `-general-log`
-  * High-availability replication: `-replica-of`, `-node-id`, `-peers`, `-self-url`, `-auto-failover`, `-heartbeat-timeout-ms`
+  * High-availability replication: `-replica-of`, `-node-id`, `-peers`, `-self-url`, `-auto-failover`, `-heartbeat-timeout-ms`, `-cluster-token`
 * **1.3. Benchmark and Load Verification Tools (`bin/bench`, `bin/tpcc-runtime`, `bin/tpcc-kernel`)**
   * TPC-C VDBE runtime harness (`bin/tpcc-runtime`): `-warehouses`, `-workers`, `-duration`, `-engine`, `-fsync` (`everysec`, `always`, `off`)
   * Storage kernel harness (`bin/tpcc-kernel`): `-warehouses`, `-workers`, `-duration`, `-engine`
@@ -510,6 +510,7 @@ Prints the official release version, build tags, target OS/architecture, and Git
 | `-auto-failover` | bool | `false` | `LION_AUTO_FAILOVER` | Enable automatic zero-downtime promotion of Replica upon Primary failure |
 | `-peers` | string | `""` | `LION_PEERS` | Comma-separated list of peer node URLs for health checking and quorum |
 | `-heartbeat-timeout-ms` | int | `3000` | `LION_HEARTBEAT_TIMEOUT_MS` | Timeout (in ms) to declare leader heartbeat failure |
+| `-cluster-token` | string | `""` | `LIONSQL_CLUSTER_TOKEN` | Pre-shared secret token for HA replication inter-node authentication |
 
 ---
 

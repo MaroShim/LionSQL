@@ -298,6 +298,12 @@ func (s *Server) SetReplicationManager(rm *replication.Manager) {
 	s.replication = rm
 	s.coordinator.SetReplicationManager(rm)
 	if rm != nil {
+		if s.auth != nil {
+			rm.SetAuthValidator(func(tokenStr string) bool {
+				u, err := s.auth.ValidateToken(tokenStr)
+				return err == nil && u != nil
+			})
+		}
 		rm.RegisterRoutes(s.mux)
 	}
 }

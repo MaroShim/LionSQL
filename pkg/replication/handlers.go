@@ -1,22 +1,84 @@
 package replication
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // RegisterRoutes mounts all replication HTTP endpoints on the given ServeMux.
 func (m *Manager) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/replication/stream", m.handleStream)
-	mux.HandleFunc("GET /api/replication/status", m.handleStatus)
-	mux.HandleFunc("POST /api/replication/ack", m.handleAck)
-	mux.HandleFunc("POST /api/replication/promote", m.handlePromote)
-	mux.HandleFunc("POST /api/replication/demote", m.handleDemote)
-	mux.HandleFunc("POST /api/replication/vote", m.handleVote)
-	mux.HandleFunc("POST /api/replication/leader", m.handleLeader)
+	mux.HandleFunc("GET /api/replication/stream", m.requireClusterAuth(m.handleStream))
+	mux.HandleFunc("GET /api/replication/status", m.requireClusterAuth(m.handleStatus))
+	mux.HandleFunc("POST /api/replication/ack", m.requireClusterAuth(m.handleAck))
+	mux.HandleFunc("POST /api/replication/promote", m.requireClusterAuth(m.handlePromote))
+	mux.HandleFunc("POST /api/replication/demote", m.requireClusterAuth(m.handleDemote))
+	mux.HandleFunc("POST /api/replication/vote", m.requireClusterAuth(m.handleVote))
+	mux.HandleFunc("POST /api/replication/leader", m.requireClusterAuth(m.handleLeader))
+}
+
+func (m *Manager) isAuthorized(r *http.Request) bool {
+	m.mu.RLock()
+	token := m.clusterToken
+	validator := m.authValidator
+	m.mu.RUnlock()
+
+	// If no cluster token is configured, allow requests in permissive mode.
+	if token == "" {
+		return true
+	}
+
+	// When cluster token is configured, check authorized credentials:
+	// 1. Check X-Cluster-Token header
+	reqToken := r.Header.Get("X-Cluster-Token")
+	if reqToken != "" && subtle.ConstantTimeCompare([]byte(reqToken), []byte(token)) == 1 {
+		return true
+	}
+
+	// 2. Check ?cluster_token= query parameter
+	if qToken := r.URL.Query().Get("cluster_token"); qToken != "" {
+		if subtle.ConstantTimeCompare([]byte(qToken), []byte(token)) == 1 {
+			return true
+		}
+	}
+
+	// 3. Check Authorization: Bearer <token>
+	authHeader := r.Header.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		bearer := strings.TrimPrefix(authHeader, "Bearer ")
+		if subtle.ConstantTimeCompare([]byte(bearer), []byte(token)) == 1 {
+			return true
+		}
+		if validator != nil && validator(bearer) {
+			return true
+		}
+	}
+
+	// 4. Check ?token= query parameter (support SSE / streaming parameter auth)
+	if qToken := r.URL.Query().Get("token"); qToken != "" {
+		if subtle.ConstantTimeCompare([]byte(qToken), []byte(token)) == 1 {
+			return true
+		}
+		if validator != nil && validator(qToken) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (m *Manager) requireClusterAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !m.isAuthorized(r) {
+			http.Error(w, "unauthorized cluster access", http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
 }
 
 func (m *Manager) handleStream(w http.ResponseWriter, r *http.Request) {

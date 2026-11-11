@@ -1691,7 +1691,7 @@
 | `AUDIT-FULL-037` | High | `pkg/api/server.go:606` | 단일 테이블 권한의 API Key로 /api/backup 호출 시 전체 데이터베이스 백업 다운로드 권한 상승 및 유출 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-038` | Medium | `pkg/api/handlers_import_export.go:190` | CSV/JSON 테이블 임포트 시 밀리초 타임스탬프 기반 PK 생성으로 인한 32비트 INT 오버플로우 및 충돌 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-039` | High | `pkg/auth/auth.go:367` | 로그아웃 세션 무효화 TokenKey 디스크 비동기화로 인한 재부팅 시 파기된 JWT 토큰 부활 결함 | 조치 완료 (TDD 검증) |
-| `AUDIT-FULL-040` | High | `pkg/replication/handlers.go:12` | HA 복제/승격/강등/투표/WAL 스트림 엔드포인트 무인증 노출로 인한 클러스터 탈취 및 데이터 유출 결함 | 미수정 |
+| `AUDIT-FULL-040` | High | `pkg/replication/handlers.go:12` | HA 복제/승격/강등/투표/WAL 스트림 엔드포인트 무인증 노출로 인한 클러스터 탈취 및 데이터 유출 결함 | 조치 완료 (TDD 검증) |
 
 ---
 

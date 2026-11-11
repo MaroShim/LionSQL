@@ -27,6 +27,8 @@ type Config struct {
 	Engine           storage.Engine
 	InitialLSN       int64
 	InitialTerm      int64
+	ClusterToken     string
+	AuthValidator    func(token string) bool
 }
 
 // Manager coordinates HA availability group replication state, roles, streaming, and auto-failover.
@@ -54,6 +56,8 @@ type Manager struct {
 	failoverCancel   context.CancelFunc
 	failoverWg       sync.WaitGroup
 	httpClient       *http.Client
+	clusterToken     string
+	authValidator    func(token string) bool
 	closed           bool
 }
 
@@ -91,6 +95,8 @@ func NewManager(cfg Config) (*Manager, error) {
 		term:             cfg.InitialTerm,
 		initialLSN:       cfg.InitialLSN,
 		eng:              cfg.Engine,
+		clusterToken:     cfg.ClusterToken,
+		authValidator:    cfg.AuthValidator,
 		broadcaster:      NewWALBroadcaster(cfg.HistoryCap),
 		httpClient: &http.Client{
 			Timeout: cfg.ElectionTimeout,
@@ -139,6 +145,7 @@ func (m *Manager) Start(ctx context.Context) error {
 			initialLSN = m.eng.CurrentLSN()
 		}
 		m.client = NewReplicationClient(m.primaryURL, m.nodeID, m.eng, initialLSN)
+		m.client.SetClusterToken(m.clusterToken)
 		m.client.SetOnTermReceived(func(t int64) {
 			m.HandlePrimaryTerm(t)
 		})
@@ -164,6 +171,30 @@ func (m *Manager) IsReadOnly() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.role == RoleReplica
+}
+
+// SetClusterToken configures the pre-shared cluster authentication token.
+func (m *Manager) SetClusterToken(token string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.clusterToken = token
+	if m.client != nil {
+		m.client.SetClusterToken(token)
+	}
+}
+
+// ClusterToken returns the configured cluster authentication token.
+func (m *Manager) ClusterToken() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.clusterToken
+}
+
+// SetAuthValidator sets a validator callback (e.g. JWT superuser check) for administrative requests.
+func (m *Manager) SetAuthValidator(fn func(token string) bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.authValidator = fn
 }
 
 // Term returns the current election term.
@@ -368,6 +399,7 @@ func (m *Manager) restartClientLocked() {
 			initialLSN = m.initialLSN
 		}
 		m.client = NewReplicationClient(m.primaryURL, m.nodeID, m.eng, initialLSN)
+		m.client.SetClusterToken(m.clusterToken)
 		m.client.SetOnTermReceived(func(t int64) {
 			m.HandlePrimaryTerm(t)
 		})

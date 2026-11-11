@@ -101,6 +101,7 @@ func runServer(args []string) error {
 	selfURLFlag := fs.String("self-url", "", "HTTP URL of this node used for peer routing and failover election")
 	heartbeatTimeout := fs.Float64("heartbeat-timeout-ms", 0, "Heartbeat failure detection timeout in milliseconds (default: 3000ms)")
 	electionTimeout := fs.Float64("election-timeout-ms", 0, "Leader election vote timeout in milliseconds (default: 1500ms)")
+	clusterTokenFlag := fs.String("cluster-token", "", "Cluster pre-shared secret token for HA replication inter-node authentication")
 	configPath := fs.String("config", "", "Path to JSON configuration file (default: auto-detect ./lionsql.json or <dir>/lionsql.json)")
 	initConfig := fs.String("init-config", "", "Generate a default lionsql.json configuration file at specified path (or ./lionsql.json) and exit")
 	doctorFlag := fs.Bool("doctor", false, "Run self-diagnostic health checks on host environment, resources, ports, and storage engines and exit")
@@ -259,6 +260,14 @@ func runServer(args []string) error {
 	}
 	if visited["election-timeout-ms"] {
 		cfg.Replication.ElectionTimeoutMS = *electionTimeout
+	}
+	if visited["cluster-token"] {
+		cfg.Replication.ClusterToken = *clusterTokenFlag
+	}
+	if cfg.Replication.ClusterToken == "" {
+		if envToken := os.Getenv("LIONSQL_CLUSTER_TOKEN"); envToken != "" {
+			cfg.Replication.ClusterToken = envToken
+		}
 	}
 	if visited["pidfile"] {
 		cfg.Server.PIDFile = *pidFile
@@ -699,6 +708,7 @@ func runServer(args []string) error {
 			ElectionTimeout:  elecTimeout,
 			Quorum:           cfg.Replication.Quorum,
 			HistoryCap:       cfg.Replication.HistoryCap,
+			ClusterToken:     cfg.Replication.ClusterToken,
 			Engine:           eng,
 		})
 		if err != nil {

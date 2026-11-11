@@ -117,6 +117,7 @@ type ReplicationConfig struct {
 	HeartbeatTimeoutMS float64  `json:"heartbeat_timeout_ms,omitempty"`  // default: 3000ms
 	ElectionTimeoutMS  float64  `json:"election_timeout_ms,omitempty"`   // default: 1500ms
 	Quorum             int      `json:"quorum,omitempty"`
+	ClusterToken       string   `json:"cluster_token,omitempty"`
 }
 
 // OutboxConfig defines settings for Transactional Outbox broker forwarding.

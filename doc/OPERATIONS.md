@@ -292,7 +292,7 @@ LionSQL enforces a **1-Writer Multi-Reader High-Availability Architecture** (GEM
 
 ### 7.1. Launching the Primary Node
 
-Start the primary node with a unique node identifier:
+Start the primary node with a unique node identifier and cluster authentication token:
 
 ```bash
 /usr/local/bin/lionsql \
@@ -301,12 +301,13 @@ Start the primary node with a unique node identifier:
     -engine=wiredtiger \
     -http=0.0.0.0:8090 \
     -pg=0.0.0.0:5433 \
-    -tds=0.0.0.0:1433
+    -tds=0.0.0.0:1433 \
+    -cluster-token="prod-cluster-secret-token"
 ```
 
 ### 7.2. Launching Read Replicas
 
-Launch one or more secondary replicas pointing to the primary's HTTP address via `-replica-of`:
+Launch one or more secondary replicas pointing to the primary's HTTP address via `-replica-of`, supplying the identical `-cluster-token`:
 
 ```bash
 /usr/local/bin/lionsql \
@@ -316,7 +317,8 @@ Launch one or more secondary replicas pointing to the primary's HTTP address via
     -engine=wiredtiger \
     -http=0.0.0.0:8090 \
     -pg=0.0.0.0:5433 \
-    -tds=0.0.0.0:1433
+    -tds=0.0.0.0:1433 \
+    -cluster-token="prod-cluster-secret-token"
 ```
 
 Upon boot, the replica:
@@ -346,7 +348,9 @@ If the primary node fails or undergoes maintenance:
 1. **Promote the Most Up-to-Date Replica**:
    Select the replica with the highest `replayed_lsn` and issue the promotion command:
    ```bash
-   curl -fsS -X POST http://replica-host.internal:8090/api/replication/promote
+   curl -fsS -X POST \
+       -H "X-Cluster-Token: prod-cluster-secret-token" \
+       http://replica-host.internal:8090/api/replication/promote
    ```
    The replica immediately lifts read-only constraints, transitions to `RolePrimary`, and begins accepting write traffic.
 
@@ -358,7 +362,26 @@ If the primary node fails or undergoes maintenance:
    ```bash
    curl -fsS -X POST \
        -H "Content-Type: application/json" \
+       -H "X-Cluster-Token: prod-cluster-secret-token" \
        -d '{"primary_url": "http://replica-host.internal:8090"}' \
        http://old-primary.internal:8090/api/replication/demote
    ```
+
+### 7.5. Cluster Authentication & Hardening (`-cluster-token`)
+
+In production environments, always configure a shared cluster token (`-cluster-token` or `LIONSQL_CLUSTER_TOKEN`):
+1. **Pre-Shared Secret Generation**:
+   Generate a cryptographically random secret string:
+   ```bash
+   openssl rand -hex 32
+   ```
+2. **Environment Variable Injection**:
+   Provide the secret to systemd units or container definitions:
+   ```bash
+   export LIONSQL_CLUSTER_TOKEN="7f8b9a1c4e2d3f6b8a0c2e4d6f8a0b2c"
+   ```
+3. **Dual Authentication Support**:
+   - Inter-node requests (`client.go`, `failover.go`) supply `X-Cluster-Token` headers automatically.
+   - Operator CLI and health monitors can authenticate via either `X-Cluster-Token: <token>` or `Authorization: Bearer <token>` (or valid JWT superuser token).
+   - Any unauthenticated request targeting `/api/replication/*` is rejected with `401 Unauthorized`.
 

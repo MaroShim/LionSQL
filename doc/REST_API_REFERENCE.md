@@ -585,6 +585,9 @@ LionSQL hosts the official client library directly for zero-dependency browser i
 
 LionSQL supports 1-Writer Multi-Reader High-Availability clustering with linear WAL streaming and zero-downtime failover promotion.
 
+> [!IMPORTANT]
+> **Authentication & Cluster Protection**: When `-cluster-token` or `LIONSQL_CLUSTER_TOKEN` is configured on the server, all endpoints under `/api/replication/*` require valid credentials via header (`X-Cluster-Token: <token>` or `Authorization: Bearer <token>`) or query parameter (`?cluster_token=<token>`). Calls from authenticated Superuser JWTs (`Authorization: Bearer <jwt>`) are also accepted for administrative operations. Requests lacking valid credentials receive `401 Unauthorized`.
+
 ### 12.1. `GET /api/replication/status`
 Returns the replication state, role, committed LSN, and follower statuses.
 

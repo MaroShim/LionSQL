@@ -89,6 +89,7 @@ Options by Category (옵션 상세):
     -self-url <url>        HTTP URL of this node used for peer routing and failover election
     -heartbeat-timeout-ms <N> Heartbeat failure detection timeout (default: 3000ms)
     -election-timeout-ms <N>  Leader election vote timeout (default: 1500ms)
+    -cluster-token <token>    Pre-shared cluster secret token for HA replication authentication (or LIONSQL_CLUSTER_TOKEN)
 
   [Backup, Restore & PITR]
     -backup <file>         Perform live snapshot backup to target archive and exit

@@ -157,9 +157,51 @@ LionSQL integrates a native, standalone 1-Writer Multi-Reader High Availability 
 - **`POST /api/replication/ack`**: Replicas send heartbeat acknowledgments reporting their latest replayed LSN.
 - **`POST /api/replication/promote`**: Instantly promotes a replica into an active primary node capable of accepting writes.
 - **`POST /api/replication/demote`**: Demotes a node to follower status upon graceful cluster reconfigurations.
+- **`POST /api/replication/vote`**: Quorum consensus vote request dispatched by candidate nodes during automated failover.
+- **`POST /api/replication/leader`**: Broadcasts newly elected primary leadership to peer cluster nodes.
 
 ### 7.3. Read-Only Invariant Enforcement
 Secondary replicas enforce strict read-only execution across all wire protocols:
 - Any mutating DDL (`CREATE/ALTER/DROP/TRUNCATE`) or DML (`INSERT/UPDATE/DELETE/MERGE`) query is immediately rejected with `ErrReadOnlyReplica` (SQLSTATE `25006`).
 - Interactive transactions requesting write access (`BEGIN TRANSACTION READ WRITE`) fail fast without mutating local state.
+
+### 7.4. Inter-Node Cluster Authentication (`ClusterToken`)
+
+To protect availability group topology and WAL record confidentiality against unauthenticated manipulation, split-brain injection, and data exfiltration, LionSQL enforces pre-shared cluster token authentication:
+
+#### Threat Model Mitigations:
+1. **Unauthorized Demotion / Denial of Service**: Malicious actors sending `POST /api/replication/demote` cannot demote an active primary without valid credentials.
+2. **Split-Brain Injection**: Unauthorized `POST /api/replication/promote` or rogue `POST /api/replication/leader` requests cannot artificially elect secondary primaries.
+3. **WAL Data Snooping**: Unauthenticated callers cannot stream sensitive transactional WAL records containing credentials or financial transactions via `GET /api/replication/stream`.
+
+#### Configuration:
+- **CLI Flag**: Specify `-cluster-token <secret>` on primary and all replica nodes:
+  ```bash
+  # Primary node
+  ./bin/lionsql -node-id=primary-1 -cluster-token="SuperSecretClusterKey_99!" ...
+
+  # Replica node
+  ./bin/lionsql -node-id=replica-1 -replica-of=http://primary:8090 -cluster-token="SuperSecretClusterKey_99!" ...
+  ```
+- **Environment Variable**: `export LIONSQL_CLUSTER_TOKEN="SuperSecretClusterKey_99!"`
+- **Configuration File (`lionsql.json`)**:
+  ```json
+  {
+    "replication": {
+      "cluster_token": "SuperSecretClusterKey_99!",
+      "auto_failover": true
+    }
+  }
+  ```
+
+#### Authentication Protocol & Dual-Credential Access:
+- **Node-to-Node Mesh Communication**: Internal replication clients (`ReplicationClient`, `FailoverManager`) automatically inject the HTTP request header:
+  ```http
+  X-Cluster-Token: <token>
+  ```
+  Token comparison is performed using constant-time evaluation (`subtle.ConstantTimeCompare`) to eliminate timing side-channel attacks.
+- **Operator Administrative Access**: Database administrators can interactively manage replication endpoints (`/status`, `/promote`, `/demote`) by providing either:
+  - Header: `Authorization: Bearer <cluster_token>` or `Authorization: Bearer <superuser_jwt>`
+  - Query parameter (for EventSource/streaming clients): `?cluster_token=<token>` or `?token=<jwt>`
+- **Fail-Closed Enforcement**: When `ClusterToken` is configured, any request omitting valid cluster credentials or a superuser JWT is immediately rejected with `401 Unauthorized` (`unauthorized cluster access`). If no cluster token is configured, the server operates in permissive zero-config mode for local test harnesses.
 

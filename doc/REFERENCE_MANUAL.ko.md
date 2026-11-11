@@ -21,7 +21,7 @@
   * 리소스 거버너: `-max-memory` (`<size>` e.g. `2GB`, `4096MB`, 기본값: 물리 RAM의 65%), `-work-mem` (기본값: `64MB`), `-max-workers`, `-max-idle-sessions`
   * 보안 및 인증: `-auth` (기본값: `true`), `-admin-email`, `-admin-pass`, `-jwt-secret`
   * 로깅 및 트레이싱: `-dev`, `-slow-log`, `-slow-threshold-ms` (기본값: `100.0ms`), `-general-log`
-  * 고가용성 복제: `-replica-of`, `-node-id`, `-peers`, `-self-url`, `-auto-failover`, `-heartbeat-timeout-ms`
+  * 고가용성 복제: `-replica-of`, `-node-id`, `-peers`, `-self-url`, `-auto-failover`, `-heartbeat-timeout-ms`, `-cluster-token`
 * **1.3. 벤치마크 및 스트레스 테스트 도구 (`bin/bench`, `bin/tpcc-runtime`, `bin/tpcc-kernel`)**
   * TPC-C VDBE 런타임 하네스 (`bin/tpcc-runtime`): `-warehouses`, `-workers`, `-duration`, `-engine`, `-fsync` (`everysec`, `always`, `off`)
   * 스토리지 커널 하네스 (`bin/tpcc-kernel`): `-warehouses`, `-workers`, `-duration`, `-engine`
@@ -507,6 +507,7 @@ LionSQL 바이너리의 정식 릴리즈 버전, 빌드 태그, 대상 OS/아키
 | `-auto-failover` | bool | `false` | `LION_AUTO_FAILOVER` | Primary 노드 장애 시 Replica 자동 무중단 승격 활성화 |
 | `-peers` | string | `""` | `LION_PEERS` | 헬스체크 및 투표를 위한 피어 노드 URL 목록 (쉼표 구분) |
 | `-heartbeat-timeout-ms` | int | `3000` | `LION_HEARTBEAT_TIMEOUT_MS` | 리더 하트비트 장애 판단 타임아웃(밀리초) |
+| `-cluster-token` | string | `""` | `LIONSQL_CLUSTER_TOKEN` | HA 복제 노드 간 상호 인증을 위한 사전 공유 시크릿 토큰 |
 
 ---
 

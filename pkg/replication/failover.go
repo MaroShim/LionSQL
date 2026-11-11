@@ -316,6 +316,9 @@ func (m *Manager) requestVote(ctx context.Context, peerURL string, req VoteReque
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if m.clusterToken != "" {
+		httpReq.Header.Set("X-Cluster-Token", m.clusterToken)
+	}
 
 	resp, err := m.httpClient.Do(httpReq)
 	if err != nil {
@@ -363,6 +366,9 @@ func (m *Manager) broadcastLeaderAnnouncement(term int64, leaderID, leaderURL st
 				return
 			}
 			req.Header.Set("Content-Type", "application/json")
+			if m.clusterToken != "" {
+				req.Header.Set("X-Cluster-Token", m.clusterToken)
+			}
 			resp, err := client.Do(req)
 			if err != nil {
 				return

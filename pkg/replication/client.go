@@ -29,6 +29,7 @@ type ReplicationClient struct {
 	stopped        atomic.Bool
 	wg             sync.WaitGroup
 	httpClient     *http.Client
+	clusterToken   string
 	onLSNProgress  func(lsn int64)
 	onTermReceived func(term int64)
 	cancelFn       context.CancelFunc
@@ -48,6 +49,11 @@ func NewReplicationClient(primaryURL, replicaID string, eng storage.Engine, init
 	c.lastLSN.Store(initialLSN)
 	c.lastHeartbeat.Store(time.Now().UnixNano())
 	return c
+}
+
+// SetClusterToken configures the pre-shared cluster authentication token for outgoing requests.
+func (c *ReplicationClient) SetClusterToken(token string) {
+	c.clusterToken = token
 }
 
 // SetOnLSNProgress registers a callback triggered whenever a WAL record is successfully applied.
@@ -146,6 +152,9 @@ func (c *ReplicationClient) streamOnce(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
 	if err != nil {
 		return err
+	}
+	if c.clusterToken != "" {
+		req.Header.Set("X-Cluster-Token", c.clusterToken)
 	}
 
 	resp, err := c.httpClient.Do(req)
