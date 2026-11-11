@@ -243,14 +243,14 @@ func (s *Server) describeWithQueryColumns(query string) ([]ColumnMeta, bool) {
 		var cols []ColumnMeta
 		if dml, err := engine.ParseDMLCommand(cte.InnerSQL); err == nil && dml != nil {
 			cols = s.describeDMLReturningColumns(dml)
-		} else if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(cte.InnerSQL)), "SELECT") {
+		} else if sqlutil.HasPrefixKeyword(cte.InnerSQL, "SELECT") {
 			if fIdx := sqlutil.FindTopLevelKeyword(cte.InnerSQL, "FROM"); fIdx != -1 {
 				sPart := strings.TrimSpace(cte.InnerSQL[:fIdx])
-				if strings.HasPrefix(strings.ToUpper(sPart), "SELECT") {
-					sPart = strings.TrimSpace(sPart[6:])
+				if rem, ok := sqlutil.TrimPrefixKeyword(sPart, "SELECT"); ok {
+					sPart = rem
 				}
-				if strings.HasPrefix(strings.ToUpper(sPart), "DISTINCT") {
-					sPart = strings.TrimSpace(sPart[8:])
+				if rem, ok := sqlutil.TrimPrefixKeyword(sPart, "DISTINCT"); ok {
+					sPart = rem
 				}
 				rawCols := sqlutil.SplitTopLevel(sPart, ',')
 				var colNames []string
@@ -285,7 +285,6 @@ func (s *Server) describeWithQueryColumns(query string) ([]ColumnMeta, bool) {
 	}
 
 	mainTrim := strings.TrimSpace(mainSQL)
-	mainUpper := strings.ToUpper(mainTrim)
 	if isWritableStmtPrefix(mainTrim) {
 		if dml, err := engine.ParseDMLCommand(mainTrim); err == nil && dml != nil {
 			cols := s.describeDMLReturningColumns(dml)
@@ -294,7 +293,7 @@ func (s *Server) describeWithQueryColumns(query string) ([]ColumnMeta, bool) {
 		return nil, false
 	}
 
-	if !strings.HasPrefix(mainUpper, "SELECT") {
+	if !sqlutil.HasPrefixKeyword(mainTrim, "SELECT") {
 		return nil, false
 	}
 
@@ -310,11 +309,11 @@ func (s *Server) describeWithQueryColumns(query string) ([]ColumnMeta, bool) {
 			}
 		}
 	}
-	if strings.HasPrefix(strings.ToUpper(sPart), "SELECT") {
-		sPart = strings.TrimSpace(sPart[6:])
+	if rem, ok := sqlutil.TrimPrefixKeyword(sPart, "SELECT"); ok {
+		sPart = rem
 	}
-	if strings.HasPrefix(strings.ToUpper(sPart), "DISTINCT") {
-		sPart = strings.TrimSpace(sPart[8:])
+	if rem, ok := sqlutil.TrimPrefixKeyword(sPart, "DISTINCT"); ok {
+		sPart = rem
 	}
 
 	aliasToCTE := make(map[string]string)
@@ -486,16 +485,16 @@ func (s *Server) inferStmtDMLParamTypes(stmtSQL string, count int, oids []int32)
 		if dml.Select != "" {
 			valTrim = strings.TrimSpace(dml.Select)
 		}
-		if strings.HasPrefix(strings.ToUpper(valTrim), "SELECT") {
+		if sqlutil.HasPrefixKeyword(valTrim, "SELECT") {
 			sPart := valTrim
 			if fIdx := sqlutil.FindTopLevelKeyword(valTrim, "FROM"); fIdx != -1 {
 				sPart = strings.TrimSpace(valTrim[:fIdx])
 			}
-			if strings.HasPrefix(strings.ToUpper(sPart), "SELECT") {
-				sPart = strings.TrimSpace(sPart[6:])
+			if rem, ok := sqlutil.TrimPrefixKeyword(sPart, "SELECT"); ok {
+				sPart = rem
 			}
-			if strings.HasPrefix(strings.ToUpper(sPart), "DISTINCT") {
-				sPart = strings.TrimSpace(sPart[8:])
+			if rem, ok := sqlutil.TrimPrefixKeyword(sPart, "DISTINCT"); ok {
+				sPart = rem
 			}
 			projs := sqlutil.SplitTopLevel(sPart, ',')
 			for i, proj := range projs {

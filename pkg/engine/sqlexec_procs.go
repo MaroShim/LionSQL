@@ -34,19 +34,8 @@ func unwrapSQLString(s string) string {
 // ParseProcArgs parses procedure name and argument tokens from EXEC / CALL query string.
 func ParseProcArgs(raw string) (string, []string) {
 	raw = strings.TrimSpace(raw)
-	upper := strings.ToUpper(raw)
-	if strings.HasPrefix(upper, "EXEC ") {
-		raw = strings.TrimSpace(raw[4:])
-	} else if strings.HasPrefix(upper, "EXECUTE ") {
-		raw = strings.TrimSpace(raw[7:])
-	} else if strings.HasPrefix(upper, "CALL ") {
-		raw = strings.TrimSpace(raw[4:])
-	} else if strings.HasPrefix(upper, "EXEC(") {
-		raw = strings.TrimSpace(raw[4:])
-		raw = "(" + raw
-	} else if strings.HasPrefix(upper, "EXECUTE(") {
-		raw = strings.TrimSpace(raw[7:])
-		raw = "(" + raw
+	if rem, ok := sqlutil.TrimAnyPrefixKeyword(raw, "EXECUTE", "EXEC", "CALL"); ok {
+		raw = rem
 	}
 
 	// Strip optional return variable: EXEC @ret = procName or EXEC @ret = sp_executesql
@@ -1049,7 +1038,7 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 		}
 	}
 
-	if len(args) > 0 && strings.HasPrefix(strings.ToUpper(args[0]), "USING ") {
+	if len(args) > 0 && sqlutil.HasPrefixKeyword(args[0], "USING") {
 		return nil, fmt.Errorf("prepared statement %q not found", procName)
 	}
 
@@ -1530,10 +1519,9 @@ func (s *Coordinator) execAnonymousBlock(query string, start time.Time, cs *Clie
 	}
 
 	command := "BLOCK"
-	upper := strings.ToUpper(trimmed)
-	if strings.HasPrefix(upper, "IF ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "IF") {
 		command = "IF"
-	} else if strings.HasPrefix(upper, "WHILE ") {
+	} else if sqlutil.HasPrefixKeyword(trimmed, "WHILE") {
 		command = "WHILE"
 	}
 

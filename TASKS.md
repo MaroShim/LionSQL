@@ -1,6 +1,6 @@
 # TASKS (Sprint SSOT Register & Mirror)
 
-> - **Last Synced**: 2026-11-11
+> - **Last Synced**: 2026-11-12
 > - **Primary Source of Truth (SSOT)**: SQLite `sprint_tasks` Table
 > - **Backup File**: Auto-synced on task update & Git commit
 
@@ -38,6 +38,7 @@
 | `DONE` | **`AUDIT-STRINGS-DISPATCH`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사 Phase 5: pkg/engine 구문 디스패치 및 query_utils strings.* 안티패턴 전수 제거 | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-STRINGS-ENGINE`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사 Phase 3: pkg/engine 핵심 실행/DDL/DML strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-STRINGS-ENGINE-REST`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사 Phase 6: pkg/engine 잔여 모듈(cte_lowering, dml_parser, explain, select) strings.* 안티패턴 전수 제거 | [`GEMINI.md`](GEMINI.md) |  |
+| `DONE` | **`AUDIT-STRINGS-FINAL`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사 Phase 8: sqlexec_procs, param_rules, copy, sqlexec 잔여 strings.* 안티패턴 전수 제거 (Invariant 12 완결) | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-STRINGS-PLANNER`** | `1.0-GA` | Planner | P1 | 코드베이스 전수 조사 Phase 4: pkg/planner 및 pkg/proc strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-STRINGS-PLANNER-SETOP`** | `1.0-GA` | Planner | P1 | 코드베이스 전수 조사 Phase 7: pkg/planner setop ORDER BY/LIMIT 수동 문자 파싱 sqlutil.FindTopLevelKeyword 전환 | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-STRINGS-WIRE`** | `1.0-GA` | Protocol | P1 | 코드베이스 전수 조사 Phase 1: pkg/wire 및 TDS 프로토콜 레이어 strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
@@ -657,6 +658,13 @@
 
 ### [DONE] 코드베이스 전수 조사 Phase 6: pkg/engine 잔여 모듈(cte_lowering, dml_parser, explain, select) strings.* 안티패턴 전수 제거 `AUDIT-STRINGS-ENGINE-REST`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-11 14:57:27
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`GEMINI.md`](GEMINI.md)
+
+---
+
+### [DONE] 코드베이스 전수 조사 Phase 8: sqlexec_procs, param_rules, copy, sqlexec 잔여 strings.* 안티패턴 전수 제거 (Invariant 12 완결) `AUDIT-STRINGS-FINAL`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-11 15:06:49
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`GEMINI.md`](GEMINI.md)
 

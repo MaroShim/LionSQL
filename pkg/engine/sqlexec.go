@@ -494,7 +494,7 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 			failed := cs.TxFailed
 			isPG := cs.IsPostgres()
 			cs.Mu.Unlock()
-			if failed && !isRollbackOrResetQuery(stmt) && (isPG || !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(stmt)), "COMMIT")) {
+			if failed && !isRollbackOrResetQuery(stmt) && (isPG || !sqlutil.HasPrefixKeyword(stmt, "COMMIT")) {
 				execErr = fmt.Errorf("current transaction is aborted, commands ignored until end of transaction block")
 				return nil, execErr
 			}

@@ -51,8 +51,8 @@ func ParseCopyStmt(query string) (*CopyStmt, error) {
 	trimmed = strings.TrimRight(trimmed, ";")
 	trimmed = strings.TrimSpace(trimmed)
 
-	upper := strings.ToUpper(trimmed)
-	if !strings.HasPrefix(upper, "COPY ") {
+	rem, ok := sqlutil.TrimPrefixKeyword(trimmed, "COPY")
+	if !ok {
 		return nil, fmt.Errorf("not a COPY statement")
 	}
 
@@ -62,7 +62,7 @@ func ParseCopyStmt(query string) (*CopyStmt, error) {
 		NullStr:   "\\N",
 	}
 
-	rest := strings.TrimSpace(trimmed[4:])
+	rest := strings.TrimSpace(rem)
 
 	// Check direction: FROM STDIN vs TO STDOUT
 	var dirPart string
