@@ -212,4 +212,55 @@ func TestTDS_AuthenticationEnforcement(t *testing.T) {
 			t.Fatalf("expected LOGINACK for admin with correct password")
 		}
 	})
+
+	// 5. AUDIT-FULL-033: Unauthenticated SQLBatch must be rejected with 18456 error and closed
+	t.Run("UnauthenticatedSQLBatchRejected_AuditFull033", func(t *testing.T) {
+		clientConn, serverConn := net.Pipe()
+		defer clientConn.Close()
+		defer serverConn.Close()
+		go srv.handleConnection(serverConn)
+
+		// Send SQLBatch directly without performing Login7
+		u16SQL := EncodeUTF16LE("SELECT 1;")
+		if err := WritePacket(clientConn, PacketSQLBatch, 1, u16SQL); err != nil {
+			t.Fatalf("failed to write SQLBatch packet: %v", err)
+		}
+
+		resp, err := ReadPacket(clientConn)
+		if err != nil {
+			t.Fatalf("failed to read response for unauthenticated batch: %v", err)
+		}
+		if !bytes.Contains(resp.Payload, []byte{TokenError}) {
+			t.Fatalf("expected TokenError for unauthenticated SQL batch, got payload: %x", resp.Payload)
+		}
+		if !bytes.Contains(resp.Payload, []byte{0x18, 0x48}) { // 18456 LE
+			t.Fatalf("expected error 18456 for unauthenticated SQL batch")
+		}
+
+		// Subsequent packet should fail because connection was closed
+		_, err = ReadPacket(clientConn)
+		if err == nil {
+			t.Fatalf("expected connection to be closed after unauthenticated batch rejection")
+		}
+	})
+
+	// 6. AUDIT-FULL-033: Zombie connection after failed Login7 must be closed immediately
+	t.Run("ZombieConnectionAfterFailedLoginClosed_AuditFull033", func(t *testing.T) {
+		clientConn, serverConn := net.Pipe()
+		defer clientConn.Close()
+		defer serverConn.Close()
+		go srv.handleConnection(serverConn)
+
+		resp := sendTestLogin7(t, clientConn, "sa", "WrongPassword!")
+		if !bytes.Contains(resp.Payload, []byte{TokenError}) {
+			t.Fatalf("expected TokenError for failed login")
+		}
+
+		// Try sending SQLBatch on the same connection: must fail because connection is closed
+		_ = WritePacket(clientConn, PacketSQLBatch, 1, EncodeUTF16LE("SELECT 1;"))
+		_, err := ReadPacket(clientConn)
+		if err == nil {
+			t.Fatalf("expected connection to be closed after failed login, but read succeeded")
+		}
+	})
 }

@@ -434,6 +434,7 @@ type ConnectionSession struct {
 	Database      string
 	PacketSize    uint32
 	TDSVersion    uint32
+	authenticated bool
 	inTx          bool
 	txDescriptor  uint64
 	prepMu        sync.Mutex
@@ -677,21 +678,35 @@ func (s *Server) handleConnection(conn net.Conn) {
 			}
 
 		case PacketLogin7:
-			s.handleLogin7(conn, p, sess)
+			if !s.handleLogin7(conn, p, sess) {
+				return
+			}
 			// Reset read deadline after successful login for normal interactive session
 			_ = conn.SetReadDeadline(time.Time{})
 
 		case PacketSQLBatch:
+			if !sess.authenticated {
+				s.rejectUnauthenticated(conn, sess)
+				return
+			}
 			pendingPkt = s.runQueryWithAttention(conn, p, sess, packetChan, errChan, func(ctx context.Context) {
 				s.handleSQLBatch(conn, p, sess, ctx)
 			})
 
 		case PacketRPC:
+			if !sess.authenticated {
+				s.rejectUnauthenticated(conn, sess)
+				return
+			}
 			pendingPkt = s.runQueryWithAttention(conn, p, sess, packetChan, errChan, func(ctx context.Context) {
 				s.handleRPC(conn, p, sess, ctx)
 			})
 
 		case PacketTransactionManager:
+			if !sess.authenticated {
+				s.rejectUnauthenticated(conn, sess)
+				return
+			}
 			s.handleTransactionManager(conn, p, sess)
 
 		case PacketAttention:
@@ -829,7 +844,18 @@ func (s *Server) handlePrelogin(conn net.Conn, pkt *Packet, sess *ConnectionSess
 	return conn, nil
 }
 
-func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSession) {
+func (s *Server) rejectUnauthenticated(conn net.Conn, sess *ConnectionSession) {
+	errMsg := "Login failed for user. Session is not authenticated."
+	errToken := BuildError(18456, 1, 14, errMsg, "LionSQL", "", 1)
+	doneToken := BuildDone(TokenDone, DoneError, 0, 0)
+
+	var errResp bytes.Buffer
+	errResp.Write(errToken)
+	errResp.Write(doneToken)
+	_ = sess.writePacket(conn, PacketTabular, errResp.Bytes())
+}
+
+func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSession) bool {
 	s.parseLogin7(pkt.Payload, sess)
 	if sess.UserName == "" {
 		sess.UserName = "sa"
@@ -856,13 +882,15 @@ func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSessio
 					errResp.Write(errToken)
 					errResp.Write(doneToken)
 					_ = sess.writePacket(conn, PacketTabular, errResp.Bytes())
-					return
+					return false
 				}
 			}
 		}
 		s.coordinator.SetSessionUser(sess.SessionID, sess.UserName)
 		sess.clientSession = s.coordinator.GetSession(sess.SessionID)
 	}
+
+	sess.authenticated = true
 
 	var resp bytes.Buffer
 
@@ -888,6 +916,7 @@ func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSessio
 	resp.Write(done)
 
 	_ = sess.writePacket(conn, PacketTabular, resp.Bytes())
+	return true
 }
 
 func (s *Server) parseLogin7(payload []byte, sess *ConnectionSession) {
