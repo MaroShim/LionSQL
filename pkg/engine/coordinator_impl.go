@@ -67,6 +67,7 @@ type Coordinator struct {
 	pkBypassMu         sync.RWMutex
 	lastIdentities     map[string]int64
 	lastIdentMu        sync.RWMutex
+	identSlots         sync.Map // lowerTableName (string) -> *TableIdentity
 	schemaVersion      atomic.Uint64
 	autoAnalyzer         *AutoAnalyzer
 	startTime            time.Time
@@ -169,25 +170,78 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 	return coord
 }
 
-// SetTableLastIdentity records the most recent identity value generated for a table.
-func (c *Coordinator) SetTableLastIdentity(tableName string, id int64) {
-	c.lastIdentMu.Lock()
-	if c.lastIdentities == nil {
-		c.lastIdentities = make(map[string]int64)
+// TableIdentity manages the lock-free atomic sequence for a table's IDENTITY / AUTO_INCREMENT.
+type TableIdentity struct {
+	seq         atomic.Int64
+	initialized atomic.Bool
+	initMu      sync.Mutex
+}
+
+func (c *Coordinator) getTableIdentity(tableName string) *TableIdentity {
+	lower := strings.ToLower(tableName)
+	if val, ok := c.identSlots.Load(lower); ok {
+		return val.(*TableIdentity)
 	}
-	c.lastIdentities[strings.ToLower(tableName)] = id
-	c.lastIdentMu.Unlock()
+	slot := &TableIdentity{}
+	actual, _ := c.identSlots.LoadOrStore(lower, slot)
+	return actual.(*TableIdentity)
+}
+
+// AllocTableIdentity atomically allocates a contiguous range of count IDs for tableName.
+// If the table sequence has not been initialized yet, initFn is invoked to fetch the initial max ID.
+func (c *Coordinator) AllocTableIdentity(tableName string, count int64, initFn func() int64) int64 {
+	if count <= 0 {
+		count = 1
+	}
+	slot := c.getTableIdentity(tableName)
+	if !slot.initialized.Load() {
+		slot.initMu.Lock()
+		if !slot.initialized.Load() {
+			initVal := int64(0)
+			if initFn != nil {
+				initVal = initFn()
+			}
+			slot.seq.Store(initVal)
+			slot.initialized.Store(true)
+		}
+		slot.initMu.Unlock()
+	}
+	end := slot.seq.Add(count)
+	return end - count + 1
+}
+
+// SetTableLastIdentity records or ratchets the identity value generated for a table.
+func (c *Coordinator) SetTableLastIdentity(tableName string, id int64) {
+	slot := c.getTableIdentity(tableName)
+	if id == 0 {
+		slot.seq.Store(0)
+		slot.initialized.Store(true)
+		return
+	}
+	for {
+		cur := slot.seq.Load()
+		if id <= cur {
+			break
+		}
+		if slot.seq.CompareAndSwap(cur, id) {
+			break
+		}
+	}
+	slot.initialized.Store(true)
 }
 
 // GetTableLastIdentity retrieves the most recent identity value generated for a table.
 func (c *Coordinator) GetTableLastIdentity(tableName string) (int64, bool) {
-	c.lastIdentMu.RLock()
-	defer c.lastIdentMu.RUnlock()
-	if c.lastIdentities == nil {
+	slot := c.getTableIdentity(tableName)
+	if !slot.initialized.Load() {
 		return 0, false
 	}
-	v, ok := c.lastIdentities[strings.ToLower(tableName)]
-	return v, ok
+	return slot.seq.Load(), true
+}
+
+// DropTableIdentity cleans up cached identity sequence slot on DROP/TRUNCATE.
+func (c *Coordinator) DropTableIdentity(tableName string) {
+	c.identSlots.Delete(strings.ToLower(tableName))
 }
 
 // InvalidatePKBypassCache clears cached fast-path PK lookup plans and increments schema version.

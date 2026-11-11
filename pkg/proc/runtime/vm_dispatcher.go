@@ -7,12 +7,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
+
+// tableVarGlobalSeq guarantees strictly monotonic and unique naming across rapid table variable declarations.
+var tableVarGlobalSeq atomic.Uint64
 
 // handleCatch checks the active catchStack on error, routing execution to the catch handler if present.
 func (f *VMFrame) handleCatch(err error, pc *int) error {
@@ -670,7 +674,24 @@ vmLoop:
 		if !strings.HasPrefix(varName, "@") {
 			varName = "@" + varName
 		}
-		physTable := fmt.Sprintf("__tv_%p_%d_%s", f, time.Now().UnixNano(), strings.TrimPrefix(varName, "@"))
+
+		// 1. Drop existing table variable first before allocating new physical table (Drop-First)
+		if f.tableVars != nil {
+			if oldPhys, exists := f.tableVars[varName]; exists {
+				if f.executor != nil {
+					if tm := f.executor.getTableManager(); tm != nil {
+						_ = tm.DropTable(oldPhys)
+					}
+				}
+				delete(f.tableVars, varName)
+			}
+		} else {
+			f.tableVars = make(map[string]string)
+		}
+
+		// 2. Monotonic atomic sequence guarantee to prevent any timestamp collision
+		seq := tableVarGlobalSeq.Add(1)
+		physTable := fmt.Sprintf("__tv_%p_%d_%d_%s", f, time.Now().UnixNano(), seq, strings.TrimPrefix(varName, "@"))
 
 		cols := data.Columns
 		if len(cols) == 0 && data.RawColDefs != "" {
@@ -706,15 +727,6 @@ vmLoop:
 			}
 		}
 
-		if f.tableVars == nil {
-			f.tableVars = make(map[string]string)
-		} else if oldPhys, exists := f.tableVars[varName]; exists {
-			if f.executor != nil {
-				if tm := f.executor.getTableManager(); tm != nil {
-					_ = tm.DropTable(oldPhys)
-				}
-			}
-		}
 		f.tableVars[varName] = physTable
 
 	case proc.OpInsert:
@@ -895,9 +907,7 @@ vmLoop:
 				tableName := tableSchema.Name
 				var nextID int64 = 1
 				if f.executor != nil {
-					if lastID, ok := f.executor.GetLastIdentity(tableName); ok {
-						nextID = lastID + 1
-					} else {
+					nextID = f.executor.AllocIdentity(tableName, 1, func() int64 {
 						var maxID int64 = 0
 						if cur, err := f.tx.Scan(data.Table); err == nil {
 							for cur.Next() {
@@ -909,9 +919,8 @@ vmLoop:
 							}
 							cur.Close()
 						}
-						nextID = maxID + 1
-					}
-					f.executor.SetLastIdentity(tableName, nextID)
+						return maxID
+					})
 				}
 				rec.Set(identityCol.Name, storage.IntValue(nextID))
 				if hasTriggers {

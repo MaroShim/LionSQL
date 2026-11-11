@@ -1,6 +1,8 @@
 package proc_test
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"lionsql/pkg/proc"
@@ -774,6 +776,96 @@ func TestParser_Regression_P0_25_BinaryExprNilRightHandSide(t *testing.T) {
 		if len(p.Errors()) == 0 {
 			t.Fatalf("[P0-25 REGRESSION] expected parser errors for malformed expression %q, but got 0 errors", sql)
 		}
+	}
+}
+
+func TestParseSQL_UpdateDelete_FromSubqueryWithWhere(t *testing.T) {
+	// 1. UPDATE with FROM subquery containing WHERE (outer is simple equality)
+	updateSQL := `UPDATE target SET col = sub.val FROM (SELECT id, val FROM source WHERE active = 1) AS sub WHERE target.id = sub.id;`
+	stmt, err := proc.ParseSQL(updateSQL)
+	if err != nil {
+		t.Fatalf("ParseSQL UPDATE failed: %v", err)
+	}
+	upd, ok := stmt.(*proc.UpdateStmt)
+	if !ok {
+		t.Fatalf("expected *UpdateStmt, got %T", stmt)
+	}
+	if upd.WhereCol != "target.id" {
+		t.Fatalf("expected WhereCol 'target.id', got %q", upd.WhereCol)
+	}
+	if colVal, ok := upd.WhereVal.(*proc.ColumnRefExpr); !ok || colVal.Name != "sub.id" {
+		t.Fatalf("expected WhereVal 'sub.id', got %v", upd.WhereVal)
+	}
+
+	// 2. UPDATE with FROM subquery containing WHERE (outer is complex condition)
+	updateComplexSQL := `UPDATE target SET col = sub.val FROM (SELECT id, val FROM source WHERE active = 1) AS sub WHERE target.id = sub.id AND target.status > 5;`
+	stmt, err = proc.ParseSQL(updateComplexSQL)
+	if err != nil {
+		t.Fatalf("ParseSQL complex UPDATE failed: %v", err)
+	}
+	updComplex, ok := stmt.(*proc.UpdateWhereStmt)
+	if !ok {
+		t.Fatalf("expected *UpdateWhereStmt, got %T", stmt)
+	}
+	whereStr := fmt.Sprintf("%v", updComplex.Where)
+	if !strings.Contains(whereStr, "target.id") || !strings.Contains(whereStr, "sub.id") || !strings.Contains(whereStr, "target.status") {
+		t.Fatalf("expected outer WHERE condition with target.id, sub.id, target.status, got: %s", whereStr)
+	}
+
+	// 3. DELETE with FROM subquery containing WHERE
+	deleteSQL := `DELETE target FROM (SELECT id FROM source WHERE active = 0) AS sub WHERE target.id = sub.id;`
+	stmt, err = proc.ParseSQL(deleteSQL)
+	if err != nil {
+		t.Fatalf("ParseSQL DELETE failed: %v", err)
+	}
+	del, ok := stmt.(*proc.DeleteStmt)
+	if !ok {
+		t.Fatalf("expected *DeleteStmt, got %T", stmt)
+	}
+	if del.WhereCol != "target.id" {
+		t.Fatalf("expected WhereCol 'target.id', got %q", del.WhereCol)
+	}
+	if colVal, ok := del.WhereVal.(*proc.ColumnRefExpr); !ok || colVal.Name != "sub.id" {
+		t.Fatalf("expected WhereVal 'sub.id', got %v", del.WhereVal)
+	}
+}
+
+func TestEvalRowExpr_Like_And_Any_SQL3VL(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+		want any
+	}{
+		{name: "null like string", sql: "SELECT CAST(NULL AS VARCHAR(10)) LIKE 'foo'", want: nil},
+		{name: "null not like string", sql: "SELECT CAST(NULL AS VARCHAR(10)) NOT LIKE 'foo'", want: nil},
+		{name: "not (null like string)", sql: "SELECT NOT (CAST(NULL AS VARCHAR(10)) LIKE 'foo')", want: nil},
+		{name: "string like null", sql: "SELECT 'foo' LIKE CAST(NULL AS VARCHAR(10))", want: nil},
+		{name: "string not like null", sql: "SELECT 'foo' NOT LIKE CAST(NULL AS VARCHAR(10))", want: nil},
+		{name: "not (string like null)", sql: "SELECT NOT ('foo' LIKE CAST(NULL AS VARCHAR(10)))", want: nil},
+		{name: "null eq any string array", sql: "SELECT CAST(NULL AS INT) = ANY('{1, 2}')", want: nil},
+		{name: "not (null eq any string array)", sql: "SELECT NOT (CAST(NULL AS INT) = ANY('{1, 2}'))", want: nil},
+		{name: "no match with null element in any array", sql: "SELECT 3 = ANY('{1, NULL}')", want: nil},
+		{name: "not (no match with null element in any array)", sql: "SELECT NOT (3 = ANY('{1, NULL}'))", want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := proc.ParseSQL(tt.sql)
+			if err != nil {
+				t.Fatalf("ParseSQL failed for %s: %v", tt.sql, err)
+			}
+			sel, ok := stmt.(*proc.GeneralSelectStmt)
+			if !ok {
+				t.Fatalf("expected *GeneralSelectStmt, got %T", stmt)
+			}
+			val, err := proc.EvalRowExpr(sel.Projections[0].Expr, nil, nil)
+			if err != nil {
+				t.Fatalf("EvalRowExpr returned error for %s: %v", tt.sql, err)
+			}
+			if val != tt.want {
+				t.Fatalf("expected %v, got %v for %s", tt.want, val, tt.sql)
+			}
+		})
 	}
 }
 

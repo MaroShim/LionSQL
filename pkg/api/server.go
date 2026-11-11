@@ -443,6 +443,29 @@ func (s *Server) GetActiveQueries() []ActiveQueryInfo {
 	return s.coordinator.GetActiveQueries()
 }
 
+// AllocTableIdentity atomically allocates a contiguous range of count IDs for tableName.
+func (s *Server) AllocTableIdentity(tableName string, count int64, initFn func() int64) int64 {
+	if s.coordinator != nil {
+		return s.coordinator.AllocTableIdentity(tableName, count, initFn)
+	}
+	return 1
+}
+
+// SetTableLastIdentity records or ratchets the identity value generated for a table.
+func (s *Server) SetTableLastIdentity(tableName string, id int64) {
+	if s.coordinator != nil {
+		s.coordinator.SetTableLastIdentity(tableName, id)
+	}
+}
+
+// GetTableLastIdentity retrieves the most recent identity value generated for a table.
+func (s *Server) GetTableLastIdentity(tableName string) (int64, bool) {
+	if s.coordinator != nil {
+		return s.coordinator.GetTableLastIdentity(tableName)
+	}
+	return 0, false
+}
+
 // SetAppHandler configures a custom HTTP handler for hosting SPA or static assets.
 func (s *Server) SetAppHandler(h http.Handler) {
 	s.appHandler = h

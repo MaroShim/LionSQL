@@ -256,6 +256,18 @@ func (l *Lexer) NextToken() Token {
 		tok.Line = tokLine
 		tok.Col = tokCol
 		return tok
+	case '.':
+		if isDigit(l.peekChar()) {
+			lit, isFloat := l.readNumber()
+			if isFloat {
+				tok = Token{Type: TokenFloat, Literal: lit, Line: tokLine, Col: tokCol}
+			} else {
+				tok = Token{Type: TokenInt, Literal: lit, Line: tokLine, Col: tokCol}
+			}
+			return tok
+		}
+		tok = Token{Type: TokenIllegal, Literal: ".", Line: tokLine, Col: tokCol}
+		return tok
 	default:
 		if (l.ch == 'N' || l.ch == 'n' || l.ch == 'X' || l.ch == 'x') && l.peekChar() == '\'' {
 			l.readChar() // skip 'N', 'n', 'X', or 'x'
@@ -553,16 +565,48 @@ func (l *Lexer) readHexLiteral() string {
 func (l *Lexer) readNumber() (string, bool) {
 	startPos := l.pos
 	isFloat := false
-	for isDigit(l.ch) {
-		l.readChar()
-	}
 	if l.ch == '.' && isDigit(l.peekChar()) {
 		isFloat = true
 		l.readChar() // eat '.'
 		for isDigit(l.ch) {
 			l.readChar()
 		}
+	} else {
+		for isDigit(l.ch) {
+			l.readChar()
+		}
+		if l.ch == '.' && isDigit(l.peekChar()) {
+			isFloat = true
+			l.readChar() // eat '.'
+			for isDigit(l.ch) {
+				l.readChar()
+			}
+		}
 	}
+
+	if l.ch == 'e' || l.ch == 'E' {
+		pCh := l.peekChar()
+		isExp := false
+		if isDigit(pCh) {
+			isExp = true
+		} else if pCh == '+' || pCh == '-' {
+			nextPos := l.readPos + 1
+			if nextPos < len(l.input) && isDigit(rune(l.input[nextPos])) {
+				isExp = true
+			}
+		}
+		if isExp {
+			isFloat = true
+			l.readChar() // eat 'e' or 'E'
+			if l.ch == '+' || l.ch == '-' {
+				l.readChar() // eat '+' or '-'
+			}
+			for isDigit(l.ch) {
+				l.readChar()
+			}
+		}
+	}
+
 	return l.input[startPos:l.pos], isFloat
 }
 

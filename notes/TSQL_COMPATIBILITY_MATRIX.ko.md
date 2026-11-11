@@ -177,11 +177,16 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
 ### 진행 중 및 잔여 확장 후보 (Active & Candidate Gaps)
 8. **논리 네임스페이스 DB 프리픽스 & 크로스 DB 조인 (`ARCH-LOGICAL-NAMESPACE-1`)** [`PENDING`]:
    - 현재 가상 No-op 상태인 `USE <dbname>`을 `__db_<dbname>_*` 물리 접두사 격리 및 3-Part Name 크로스 DB 조인으로 확장 ([`LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)).
-9. **사용자 정의 테이블 타입 (`CREATE TYPE ... AS TABLE`) 및 TVP** [`미구현`]:
-   - 클라이언트에서 DataTable을 매개변수로 넘기는 기능.
-10. **멀티-스테이트먼트 TVF, `AT TIME ZONE`, `COMPRESS`/`DECOMPRESS`, `PARSE`/`TRY_PARSE`, `@@DATEFIRST`/`@@DBTS`** [`미구현`]:
-    - 특수 시간대 변환(IANA DB 내장 필요), Gzip/Culture 파싱 함수 및 전역 타임스탬프 변수.
-11. **양방향 스크롤 커서 (`SCROLL`, `FETCH PRIOR`)** [`영구 Spec-Out`]:
+9. **사용자 정의 테이블 타입 (`CREATE TYPE ... AS TABLE`) 및 TVP (`TSQL-TVP-TYPE-1`)** [`v1.6.0 로드맵`]:
+   - 클라이언트에서 DataTable을 매개변수로 넘기는 기능 (`0xF3 TVPTYPE` 토큰 및 임시 테이블 바인딩).
+10. **멀티-스테이트먼트 TVF (`TSQL-MULTI-TVF-1`)** [`v1.6.0 로드맵`]:
+    - `CREATE FUNCTION ... RETURNS @table TABLE (...) AS BEGIN ... END` 형태의 VDBE VM 절차적 재진입 및 결과 테이블 반환.
+11. **T-SQL 확장 내장 스칼라 함수군** [`v1.1.0 로드맵`]:
+    - `AT TIME ZONE` 시간대 변환 절 및 함수 (`TSQL-FUNC-AT-TIME-ZONE`)
+    - `COMPRESS` 및 `DECOMPRESS` Gzip 바이너리 압축/해제 함수 (`TSQL-FUNC-COMPRESS`)
+    - `PARSE` 및 `TRY_PARSE` 문화권(Culture) 기반 문자열 파싱 함수 (`TSQL-FUNC-PARSE`)
+    - `@@DATEFIRST` 및 `@@DBTS` 시스템 세션 및 글로벌 타임스탬프 변수 (`TSQL-SYSVAR-DATEFIRST-DBTS`)
+12. **양방향 스크롤 커서 (`SCROLL`, `FETCH PRIOR`)** [`영구 Spec-Out`]:
     - 메모리 과점유 방지를 위해 `FORWARD_ONLY`만 지원 결정됨.
 
 ---

@@ -1026,10 +1026,13 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 					case "<=":
 						replacement = fmt.Sprintf("%s <= %s", lhs, formatSubqueryVal(maxVal))
 					case "!=", "<>":
-						if allValsEqual(vals) {
-							replacement = fmt.Sprintf("%s <> %s", lhs, formatSubqueryVal(vals[0]))
+						nonNullVals := filterNonNullSubqueryVals(vals)
+						if len(nonNullVals) == 0 {
+							replacement = "1=0"
+						} else if len(nonNullVals) == 1 || allValsEqual(nonNullVals) {
+							replacement = fmt.Sprintf("(%s IS NOT NULL AND %s <> %s)", lhs, lhs, formatSubqueryVal(nonNullVals[0]))
 						} else {
-							replacement = "1=1"
+							replacement = fmt.Sprintf("(%s IS NOT NULL)", lhs)
 						}
 					default:
 						replacement = "1=0"
@@ -1648,4 +1651,14 @@ func allValsEqual(vals []any) bool {
 		}
 	}
 	return true
+}
+
+func filterNonNullSubqueryVals(vals []any) []any {
+	var res []any
+	for _, v := range vals {
+		if v != nil {
+			res = append(res, v)
+		}
+	}
+	return res
 }

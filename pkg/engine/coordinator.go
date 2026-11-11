@@ -80,4 +80,13 @@ type SQLCoordinator interface {
 
 	// IsAuthEnabled reports whether RBAC authentication and permission checks are enforced.
 	IsAuthEnabled() bool
+
+	// AllocTableIdentity atomically allocates a contiguous range of count IDs for tableName.
+	AllocTableIdentity(tableName string, count int64, initFn func() int64) int64
+
+	// SetTableLastIdentity records or ratchets the identity value generated for a table.
+	SetTableLastIdentity(tableName string, id int64)
+
+	// GetTableLastIdentity retrieves the most recent identity value generated for a table.
+	GetTableLastIdentity(tableName string) (int64, bool)
 }

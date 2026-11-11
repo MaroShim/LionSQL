@@ -313,23 +313,23 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		isEphemeral = true
 	}
 
-	var maxID int64 = 0
-	if identityCol != nil {
-		if lastID, ok := s.GetTableLastIdentity(schema.Name); ok {
-			maxID = lastID
-		} else {
+	var nextAllocID int64 = 0
+	if identityCol != nil && !hasIdentityInTarget && len(tupleStrings) > 0 {
+		count := int64(len(tupleStrings))
+		nextAllocID = s.AllocTableIdentity(schema.Name, count, func() int64 {
+			var scanMax int64 = 0
 			if cur, err := tx.Scan(tableName); err == nil {
 				for cur.Next() {
 					if r, err := cur.Record(); err == nil {
-						if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
-							maxID = v.IVal
+						if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > scanMax {
+							scanMax = v.IVal
 						}
 					}
 				}
 				cur.Close()
 			}
-			s.SetTableLastIdentity(schema.Name, maxID)
-		}
+			return scanMax
+		})
 	}
 
 	var outputProjs []outputProj
@@ -386,15 +386,15 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 
 		if identityCol != nil {
 			if !hasIdentityInTarget {
-				maxID++
-				rec[identityCol.Name] = storage.IntValue(maxID)
+				curID := nextAllocID
+				nextAllocID++
+				rec[identityCol.Name] = storage.IntValue(curID)
 				if cs != nil {
 					cs.Mu.Lock()
-					cs.Vars["identity"] = maxID
-					cs.Vars["scope_identity"] = maxID
+					cs.Vars["identity"] = curID
+					cs.Vars["scope_identity"] = curID
 					cs.Mu.Unlock()
 				}
-				s.SetTableLastIdentity(schema.Name, maxID)
 			} else {
 				if v, ok := rec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
 					if cs != nil {
@@ -404,9 +404,6 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						cs.Mu.Unlock()
 					}
 					s.SetTableLastIdentity(schema.Name, v.IVal)
-					if v.IVal > maxID {
-						maxID = v.IVal
-					}
 				}
 			}
 		}
@@ -745,23 +742,23 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 		isEphemeral = true
 	}
 
-	var maxID int64 = 0
-	if identityCol != nil {
-		if lastID, ok := s.GetTableLastIdentity(schema.Name); ok {
-			maxID = lastID
-		} else {
+	var nextAllocID int64 = 0
+	if identityCol != nil && !hasIdentityInTarget && len(selRes.Rows) > 0 {
+		count := int64(len(selRes.Rows))
+		nextAllocID = s.AllocTableIdentity(schema.Name, count, func() int64 {
+			var scanMax int64 = 0
 			if cur, err := tx.Scan(tableName); err == nil {
 				for cur.Next() {
 					if r, err := cur.Record(); err == nil {
-						if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
-							maxID = v.IVal
+						if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > scanMax {
+							scanMax = v.IVal
 						}
 					}
 				}
 				cur.Close()
 			}
-			s.SetTableLastIdentity(schema.Name, maxID)
-		}
+			return scanMax
+		})
 	}
 
 	var outputProjs []outputProj
@@ -800,15 +797,15 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 
 		if identityCol != nil {
 			if !hasIdentityInTarget {
-				maxID++
-				rec[identityCol.Name] = storage.IntValue(maxID)
+				curID := nextAllocID
+				nextAllocID++
+				rec[identityCol.Name] = storage.IntValue(curID)
 				if cs != nil {
 					cs.Mu.Lock()
-					cs.Vars["identity"] = maxID
-					cs.Vars["scope_identity"] = maxID
+					cs.Vars["identity"] = curID
+					cs.Vars["scope_identity"] = curID
 					cs.Mu.Unlock()
 				}
-				s.SetTableLastIdentity(schema.Name, maxID)
 			} else {
 				if v, ok := rec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
 					if cs != nil {
@@ -818,9 +815,6 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 						cs.Mu.Unlock()
 					}
 					s.SetTableLastIdentity(schema.Name, v.IVal)
-					if v.IVal > maxID {
-						maxID = v.IVal
-					}
 				}
 			}
 		}
@@ -1029,7 +1023,9 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 		if cs.Vars == nil {
 			cs.Vars = make(map[string]any)
 		}
-		cs.Vars["identity"] = maxID
+		if nextAllocID > 0 {
+			cs.Vars["identity"] = nextAllocID - 1
+		}
 		cs.Mu.Unlock()
 	}
 

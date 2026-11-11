@@ -76,13 +76,5 @@ Frequently asked questions regarding LionSQL's design philosophy, internal archi
 ### Q15. What is LionSQL's ultimate goal for version 1.0 and beyond?
 > **A.** To be **"the leanest yet most uncompromising OLTP database engine."** Simple and self-contained to deploy like SQLite, while delivering the enterprise capabilities (T-SQL stored procedures, ACID durability, multi-wire protocols) and raw throughput of tier-one enterprise databases.
 
----
-
-## VI. Embedded Web Hosting & Client SDK
-
 ### Q16. Why embed a static web server and JavaScript SDK inside the database process?
-> **A.** To physically eliminate the 3-tier architecture (Nginx ➔ Node API ➔ DB) network hops (0.5~2ms loopback latency), CORS Preflight (`OPTIONS`) roundtrips, and infrastructure glue (Docker Compose, reverse proxies).
-> - **Same-Origin Zero CORS**: Web UI, BaaS REST/SQL API, and Web Studio are all served from a single port (`:8090`), reducing browser preflight (`OPTIONS`) roundtrip overhead to 0.
-> - **Zero Network Hop (0µs)**: Web queries execute directly against the VDBE engine via in-process memory pointer dispatch rather than loopback TCP sockets, achieving true 0-microsecond internal latency.
-> - **OS Kernel `sendfile(2)` Zero-Copy Isolation**: Static files (`index.html`, bundle JS/CSS) are transmitted directly from kernel page cache to socket buffers without Go heap allocation or GC pauses, sustaining 45,000~65,000 RPS without impacting database OLTP concurrency.
-> - **Zero-Bundler Native Direct**: Adding `<script src="/sdk/lionsql.js"></script>` in HTML enables immediate query execution and realtime subscriptions without npm/Vite build steps.
+> **A.** To eliminate the infrastructure complexity, network hop latency, and CORS preflight overhead inherent to traditional 3-tier stacks (Nginx ➔ API ➔ DB). Serving frontend assets and BaaS REST/SQL APIs from a single port (`:8090`) enables zero-hop in-memory dispatch, while OS zero-copy file transmission guarantees zero interference with core high-concurrency OLTP transactions.

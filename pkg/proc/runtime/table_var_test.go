@@ -53,3 +53,55 @@ END;
 		t.Fatalf("unexpected row data: %v", row)
 	}
 }
+
+func TestRuntime_TableVariables_TightLoopRedeclare(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+	executor.SetTableGetter(eng.GetTable)
+	executor.SetTableManager(eng)
+
+	sql := `
+CREATE PROCEDURE TestTableVarTightLoop
+AS
+BEGIN
+    DECLARE @i INT;
+    SET @i = 0;
+    DECLARE @total INT;
+    SET @total = 0;
+    WHILE @i < 200
+    BEGIN
+        DECLARE @tmp TABLE (val INT);
+        INSERT INTO @tmp VALUES (@i);
+        SET @total = @total + (SELECT val FROM @tmp);
+        SET @i = @i + 1;
+    END;
+    SELECT @total AS total;
+END;
+`
+	prog, err := proc.Compile(sql)
+	if err != nil {
+		t.Fatalf("Compile failed: %v", err)
+	}
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	res, err := executor.Run(prog, "TestTableVarTightLoop", nil, session)
+	if err != nil {
+		t.Fatalf("executor.Run failed: %v", err)
+	}
+
+	// 0 + 1 + ... + 199 = 199 * 200 / 2 = 19900
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(res.Rows))
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["total"]) != "19900" {
+		t.Fatalf("expected total 19900, got %v", res.Rows[0]["total"])
+	}
+}

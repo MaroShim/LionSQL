@@ -1116,6 +1116,10 @@ func hasForJSON(query string) bool {
 	return ok
 }
 
+func hasForXML(query string) bool {
+	return sqlutil.FindTopLevelKeyword(query, "FOR XML") != -1
+}
+
 type forJSONOptions struct {
 	BaseQuery           string
 	Mode                string // "PATH" or "AUTO"

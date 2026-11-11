@@ -1782,11 +1782,12 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execMerge(trimmed, start, cs)
 	}
 
+	diagErr := proc.DiagnoseParseFailure(trimmed, fmt.Errorf("unrecognized or unsupported SQL statement: %q", trimmed))
 	return &QueryResult{
 		Success:    false,
-		Error:      fmt.Sprintf("unrecognized or unsupported SQL statement: %q", trimmed),
+		Error:      diagErr.Error(),
 		DurationUS: time.Since(start).Microseconds(),
-	}, fmt.Errorf("unsupported SQL statement")
+	}, diagErr
 }
 
 // cleanIdentifier strips quotes, brackets, and prefixes from table/column names.

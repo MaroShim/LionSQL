@@ -223,7 +223,13 @@ func (p *Parser) parseUpdate() (Statement, error) {
 	// MSSQL allows UPDATE <table> SET ... [FROM <source_table_or_join>] [WHERE ...]
 	if p.curTokenIs(TokenFrom) {
 		p.nextToken()
-		for !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenReturning) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		parenDepth := 0
+		for (!p.curTokenIs(TokenWhere) || parenDepth > 0) && !p.curTokenIs(TokenReturning) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+			if p.curTokenIs(TokenLParen) {
+				parenDepth++
+			} else if p.curTokenIs(TokenRParen) && parenDepth > 0 {
+				parenDepth--
+			}
 			p.nextToken()
 		}
 	}
@@ -283,7 +289,13 @@ func (p *Parser) parseDelete() (Statement, error) {
 	// MSSQL allows DELETE <table> ... [FROM <source_table_or_join>] [WHERE ...]
 	if p.curTokenIs(TokenFrom) {
 		p.nextToken()
-		for !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenReturning) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		parenDepth := 0
+		for (!p.curTokenIs(TokenWhere) || parenDepth > 0) && !p.curTokenIs(TokenReturning) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+			if p.curTokenIs(TokenLParen) {
+				parenDepth++
+			} else if p.curTokenIs(TokenRParen) && parenDepth > 0 {
+				parenDepth--
+			}
 			p.nextToken()
 		}
 	}

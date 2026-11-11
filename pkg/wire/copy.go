@@ -433,8 +433,29 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			curPK, exists := rec[pkCol.Name]
 			if !exists || curPK.IsNull {
 				if pkCol.Type == storage.TypeInt {
-					rec[pkCol.Name] = storage.IntValue(time.Now().UnixNano()/int64(time.Millisecond) + insertedCount + 1)
+					var idVal int64
+					if s.coordinator != nil {
+						idVal = s.coordinator.AllocTableIdentity(tbl.Name, 1, func() int64 {
+							var scanMax int64 = 0
+							if cur, err := tx.Scan(tbl.Name); err == nil {
+								for cur.Next() {
+									if r, err := cur.Record(); err == nil {
+										if v, ok := r[pkCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > scanMax {
+											scanMax = v.IVal
+										}
+									}
+								}
+								cur.Close()
+							}
+							return scanMax
+						})
+					} else {
+						idVal = insertedCount + 1
+					}
+					rec[pkCol.Name] = storage.IntValue(idVal)
 				}
+			} else if curPK.Type == storage.TypeInt && !curPK.IsNull && s.coordinator != nil {
+				s.coordinator.SetTableLastIdentity(tbl.Name, curPK.IVal)
 			}
 		}
 

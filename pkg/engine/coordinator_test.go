@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"lionsql/pkg/catalog"
@@ -1887,5 +1888,114 @@ func TestCoordinator_Regression_P0_37_QueryPanicRecovery(t *testing.T) {
 		t.Fatalf("expected answer 42, got: %v", resNormal.Rows)
 	}
 }
+
+func TestCoordinator_ConcurrentInsert_Identity_NoConflict(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	createSQL := "CREATE TABLE items (id INT IDENTITY(1,1) PRIMARY KEY, name VARCHAR(50));"
+	if res, err := coord.ExecuteSQL(createSQL); err != nil || !res.Success {
+		t.Fatalf("CREATE TABLE failed: %v, res: %+v", err, res)
+	}
+
+	const numGoroutines = 10
+	const insertsPerGoroutine = 20
+	var wg sync.WaitGroup
+	errCh := make(chan error, numGoroutines*insertsPerGoroutine)
+
+	for g := 0; g < numGoroutines; g++ {
+		wg.Add(1)
+		go func(gid int) {
+			defer wg.Done()
+			sessID := fmt.Sprintf("sess-worker-%d", gid)
+			for i := 0; i < insertsPerGoroutine; i++ {
+				sql := fmt.Sprintf("INSERT INTO items (name) VALUES ('item_%d_%d');", gid, i)
+				res, err := coord.ExecuteSessionSQL(sessID, sql)
+				if err != nil {
+					errCh <- fmt.Errorf("goroutine %d iter %d: %w", gid, i, err)
+					return
+				}
+				if !res.Success {
+					errCh <- fmt.Errorf("goroutine %d iter %d res error: %s", gid, i, res.Error)
+					return
+				}
+			}
+		}(g)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		t.Fatalf("concurrent insert failed: %v", err)
+	}
+
+	// Verify total inserted rows
+	selectRes, err := coord.ExecuteSQL("SELECT COUNT(*) AS total FROM items;")
+	if err != nil || !selectRes.Success {
+		t.Fatalf("SELECT COUNT failed: %v", err)
+	}
+	expectedRows := numGoroutines * insertsPerGoroutine
+	if fmt.Sprintf("%v", selectRes.Rows[0]["total"]) != fmt.Sprintf("%d", expectedRows) {
+		t.Fatalf("expected %d rows, got %v", expectedRows, selectRes.Rows[0]["total"])
+	}
+
+	// 2. Concurrent Multi-row Batch Inserts
+	createSQL2 := "CREATE TABLE items_batch (id INT IDENTITY(1,1) PRIMARY KEY, name VARCHAR(50));"
+	if res, err := coord.ExecuteSQL(createSQL2); err != nil || !res.Success {
+		t.Fatalf("CREATE TABLE items_batch failed: %v", err)
+	}
+
+	const batchGoroutines = 10
+	const batchesPerGoroutine = 10
+	const rowsPerBatch = 5
+	var wgBatch sync.WaitGroup
+	errChBatch := make(chan error, batchGoroutines*batchesPerGoroutine)
+
+	for g := 0; g < batchGoroutines; g++ {
+		wgBatch.Add(1)
+		go func(gid int) {
+			defer wgBatch.Done()
+			sessID := fmt.Sprintf("sess-batch-worker-%d", gid)
+			for b := 0; b < batchesPerGoroutine; b++ {
+				var valParts []string
+				for r := 0; r < rowsPerBatch; r++ {
+					valParts = append(valParts, fmt.Sprintf("('val_%d_%d_%d')", gid, b, r))
+				}
+				sql := fmt.Sprintf("INSERT INTO items_batch (name) VALUES %s;", strings.Join(valParts, ", "))
+				res, err := coord.ExecuteSessionSQL(sessID, sql)
+				if err != nil {
+					errChBatch <- fmt.Errorf("goroutine %d batch %d: %w", gid, b, err)
+					return
+				}
+				if !res.Success {
+					errChBatch <- fmt.Errorf("goroutine %d batch %d res error: %s", gid, b, res.Error)
+					return
+				}
+			}
+		}(g)
+	}
+
+	wgBatch.Wait()
+	close(errChBatch)
+
+	for err := range errChBatch {
+		t.Fatalf("concurrent multi-row batch insert failed: %v", err)
+	}
+
+	selectBatchRes, err := coord.ExecuteSQL("SELECT COUNT(*) AS total FROM items_batch;")
+	if err != nil || !selectBatchRes.Success {
+		t.Fatalf("SELECT COUNT failed: %v", err)
+	}
+	expectedBatchRows := batchGoroutines * batchesPerGoroutine * rowsPerBatch
+	if fmt.Sprintf("%v", selectBatchRes.Rows[0]["total"]) != fmt.Sprintf("%d", expectedBatchRows) {
+		t.Fatalf("expected %d batch rows, got %v", expectedBatchRows, selectBatchRes.Rows[0]["total"])
+	}
+}
+
 
 

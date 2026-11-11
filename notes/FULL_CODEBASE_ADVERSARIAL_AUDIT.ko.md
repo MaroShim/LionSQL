@@ -372,7 +372,7 @@
         }
     }
     ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `완치 (TDD 회귀 검증 완료)`
 
 ---
 
@@ -531,7 +531,7 @@
         }
         tok = Token{Type: TokenIllegal, Literal: ".", Line: tokLine, Col: tokCol}
     ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `완치 (TDD 회귀 검증 완료)`
 
 ---
 
@@ -580,7 +580,7 @@
         }
     }
     ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `완치 (TDD 회귀 검증 완료)`
 
 ---
 
@@ -623,7 +623,7 @@
             return nil, nil // SQL 3VL UNKNOWN
         }
     ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `CURED` (TDD 완결: `LikeExpr` 및 `evalRowAnyComparison`에서 `isNullVal` 감지 시 SQL 3VL `nil, nil` 반환 및 단위 테스트 검증 완료)
 
 ---
 
@@ -639,7 +639,7 @@
 | `pkg/proc/parser_dml.go` | 1,354 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-015` | `DEFECT_LOGGED` |
 | `pkg/proc/parser_ddl.go` | 885 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/proc/ast.go` | 1,220 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
-| `pkg/proc/eval.go` | 1,509 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-016` | `DEFECT_LOGGED` |
+| `pkg/proc/eval.go` | 1,509 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-016` | `CURED` |
 | `pkg/proc/evaluator.go` | 502 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/proc/fold.go` | 296 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/proc/compiler.go` | 1,537 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
@@ -695,7 +695,7 @@
     seq := atomic.AddUint64(&tableVarGlobalSeq, 1)
     physTable := fmt.Sprintf("__tv_%p_%d_%d_%s", f, time.Now().UnixNano(), seq, strings.TrimPrefix(varName, "@"))
     ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `완치 (TDD 회귀 검증 완료)`
 
 ---
 
@@ -704,7 +704,7 @@
 | 파일 경로 | 라인 수 | 감사 상태 | 검출된 결함 코드 | 최종 판정 |
 | :--- | :--- | :--- | :--- | :--- |
 | `pkg/proc/runtime/vm.go` | 2,897 LOC | 100% 라인 단위 감사 완료 | 0 Defect (수명주기 회수 무결) | `PASS` |
-| `pkg/proc/runtime/vm_dispatcher.go` | 2,055 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-005` | `DEFECT_LOGGED` |
+| `pkg/proc/runtime/vm_dispatcher.go` | 2,055 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-005` | `완치 (수정 완료)` |
 | `pkg/proc/runtime/vm_lazy.go` | 54 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/proc/runtime/bridge.go` | 10 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | **Domain 4 총계** | **5,016 LOC** | **100% 전수 검증 완료** | **총 1건 식별** (High:1) | **감사 완료 (PAUSE)** |
@@ -761,7 +761,7 @@
             replacement = fmt.Sprintf("(%s IS NOT NULL)", lhs)
         }
     ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `완치 (TDD 회귀 검증 완료)`
 
 ---
 
@@ -807,7 +807,7 @@
         return cur + 1
     }
     ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `CURED` (TDD 완결: `Coordinator.AllocTableIdentity` 락-프리 `atomic.Int64` 슬롯 구현, 다중 행 배치 원자적 채번 및 10개 고루틴 동시 INSERT 무충돌 검증 완료)
 
 ---
 
@@ -900,14 +900,14 @@
 | `pkg/engine/sqlexec_prepare.go` | 580 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/engine/query_utils.go` | 587 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/engine/session.go` | 638 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-018` | `DEFECT_LOGGED` |
-| `pkg/engine/coordinator_impl.go` | 703 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-017` | `DEFECT_LOGGED` |
+| `pkg/engine/coordinator_impl.go` | 703 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-017` | `CURED` |
 | `pkg/engine/sqlexec_eval.go` | 798 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/engine/sqlexec_merge.go` | 1,004 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/engine/sqlexec_pivot.go` | 1,336 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/engine/sqlexec_dbcc.go` | 1,345 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
-| `pkg/engine/sqlexec_dml.go` | 1,358 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-017` | `DEFECT_LOGGED` |
+| `pkg/engine/sqlexec_dml.go` | 1,358 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-017` | `CURED` |
 | `pkg/engine/sqlexec_procs.go` | 1,549 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
-| `pkg/engine/sqlexec_explain.go` | 1,635 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-006` | `DEFECT_LOGGED` |
+| `pkg/engine/sqlexec_explain.go` | 1,635 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-006` | `CURED` |
 | `pkg/engine/sqlexec.go` | 1,928 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/engine/sqlexec_select.go` | 2,157 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/engine/sqlexec_ddl.go` | 2,330 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
@@ -1222,7 +1222,7 @@
   - **심각도**: `Medium` (동시 COPY 시 타임스탬프 기반 PK 중복 충돌 및 32비트 오버플로우)
   - **위치**: `pkg/wire/copy.go:436`
   - **권장 수정안**: `coordinator.NextTableIdentity(tbl.Name, count)` 또는 원자적 글로벌 시퀀스를 통해 PK를 순차 할당하도록 개선.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `CURED` (TDD 완결: `AllocTableIdentity` 기반 순차 PK 원자적 채번 및 단위 테스트 검증 완료)
 
 ---
 
@@ -1516,7 +1516,7 @@
   - **시나리오**: `INT` PK를 가진 테이블에 PK가 없는 CSV 파일을 임포트할 때 1.76조의 값이 생성되어 타입 범위 초과 에러 발생.
   - **권장 수정안**:
     - 전역 시퀀스 카운터(`atomic.AddUint64`) 또는 카탈로그 시퀀스 제너레이터를 사용하여 PK 컬럼 타입 범위(INT / BIGINT)에 부합하는 유일값을 배정.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `CURED` (TDD 완결: `AllocTableIdentity` 기반 순차 PK 원자적 채번 및 단위 테스트 검증 완료)
 
 ---
 
@@ -1538,7 +1538,7 @@
 | `pkg/api/handlers_tables.go` | 202 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/api/request_logger.go` | 251 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/api/rls.go` | 287 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
-| `pkg/api/handlers_import_export.go` | 331 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-038` | `DEFECT_LOGGED` |
+| `pkg/api/handlers_import_export.go` | 331 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-038` | `CURED` |
 | `pkg/api/mailer.go` | 340 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/api/cron.go` | 430 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/api/webhook.go` | 526 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
@@ -1664,8 +1664,8 @@
 | `AUDIT-FULL-002` | Low | `pkg/storage/memengine/memengine.go:521` | Engine.Close() 시 RDB 저장 에러 발생 시 WAL Close 에러 침묵 은폐 | 미수정 |
 | `AUDIT-FULL-003` | Critical | `pkg/storage/memengine/tx.go:2186` | Commit() 시 WAL 추가 실패 후 rollbackApplied() 누락으로 인한 메모리 유령 커밋 및 ACID 파괴 | 완치 (수정 완료) |
 | `AUDIT-FULL-004` | High | `pkg/storage/memengine/persistence.go:332` | RDB 스냅샷 직렬화 중 비동기화 tables 맵 순회로 인한 동시 DDL 패닉 | 미수정 |
-| `AUDIT-FULL-005` | High | `pkg/proc/runtime/vm_dispatcher.go:667` | OpDeclareTable 나노초 타이머 충돌로 동일 임시 테이블명 생성 및 신규 테이블 자가 삭제 | 미수정 |
-| `AUDIT-FULL-006` | Medium | `pkg/engine/sqlexec_explain.go:1016` | <> ANY 정량 서브쿼리를 distinct 값에 대해 1=1로 재작성하여 3VL NULL 행 유출 결함 | 미수정 |
+| `AUDIT-FULL-005` | High | `pkg/proc/runtime/vm_dispatcher.go:667` | OpDeclareTable 나노초 타이머 충돌로 동일 임시 테이블명 생성 및 신규 테이블 자가 삭제 | 완치 (수정 완료) |
+| `AUDIT-FULL-006` | Medium | `pkg/engine/sqlexec_explain.go:1016` | <> ANY 정량 서브쿼리를 distinct 값에 대해 1=1로 재작성하여 3VL NULL 행 유출 결함 | 완치 (수정 완료) |
 | `AUDIT-FULL-007` | Medium | `pkg/storage/wiredtiger/wt_engine.go:614` | C.go_wt_session_drop 리턴코드 무시로 고아 파일 잔존 및 후속 CREATE TABLE 실패 | 미수정 |
 | `AUDIT-FULL-008` | High | `pkg/wire/tds/server.go:1000` | ALL_HEADERS 4바이트 길이 오인식으로 인한 대용량 RPC(sp_executesql) 스트림 오절단 및 연결 단절 | 미수정 |
 | `AUDIT-FULL-009` | High | `pkg/storage/memengine/ddl.go:681` | AlterTable 시 WAL 영속화 전면 누락 및 FK CASCADE SET NULL 시 비동기화 맵 읽기 | 미수정 |
@@ -1673,16 +1673,16 @@
 | `AUDIT-FULL-011` | High | `pkg/storage/wiredtiger/wt_engine.go:680` | TruncateTables 시 PhysicalName 누락으로 인한 EBUSY 에러 및 데이터 삭제 실패 은폐 | 미수정 |
 | `AUDIT-FULL-012` | High | `pkg/storage/wiredtiger/wt_engine.go:861` | AddColumn 시 세션/커서 오픈 실패 무시로 기존 행 재작성 누락 및 카탈로그 불일치 | 미수정 |
 | `AUDIT-FULL-013` | Medium | `pkg/storage/wiredtiger/wt_engine.go:257` | Sync 시 락 해제 후 세션 오픈으로 인한 해제된 conn 경합 및 RenameTable WAL 누락 | 미수정 |
-| `AUDIT-FULL-014` | High | `pkg/proc/lexer.go:259` | 렉서에서 지수 표기법(`1e5`, `1.5E-3`) 및 단독 점 소수점(`.5`) 인식 실패 | 미수정 |
-| `AUDIT-FULL-015` | High | `pkg/proc/parser_dml.go:224` | UPDATE/DELETE ... FROM 시 서브쿼리 내부 WHERE에서 조기 탈출하여 외부 구문 오염 | 미수정 |
-| `AUDIT-FULL-016` | Medium | `pkg/proc/eval.go:346` | LikeExpr 및 evalRowAnyComparison에서 NULL 입력 시 nil 대신 false를 반환하여 3VL 파괴 | 미수정 |
-| `AUDIT-FULL-017` | High | `pkg/engine/coordinator_impl.go:150` | IDENTITY 채번 시 비원자적 시퀀스 경합으로 인한 동일 PK 생성 및 중복 키 충돌 | 미수정 |
+| `AUDIT-FULL-014` | High | `pkg/proc/lexer.go:259` | 렉서에서 지수 표기법(`1e5`, `1.5E-3`) 및 단독 점 소수점(`.5`) 인식 실패 | 완치 (수정 완료) |
+| `AUDIT-FULL-015` | High | `pkg/proc/parser_dml.go:224` | UPDATE/DELETE ... FROM 시 서브쿼리 내부 WHERE에서 조기 탈출하여 외부 구문 오염 | 완치 (수정 완료) |
+| `AUDIT-FULL-016` | Medium | `pkg/proc/eval.go:346` | LikeExpr 및 evalRowAnyComparison에서 NULL 입력 시 nil 대신 false를 반환하여 3VL 파괴 | 조치 완료 (TDD 검증) |
+| `AUDIT-FULL-017` | High | `pkg/engine/coordinator_impl.go:150` | IDENTITY 채번 시 비원자적 시퀀스 경합으로 인한 동일 PK 생성 및 중복 키 충돌 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-018` | Medium | `pkg/engine/session.go:455` | TDS Prepared 구문 실패 시 T-SQL 트랜잭션을 비조건적으로 TxFailed로 마킹하여 강제 롤백 | 미수정 |
 | `AUDIT-FULL-019` | Low | `pkg/engine/sqlexec_auth.go:212` | checkTableAccess에서 락 없이 cs.User를 읽어 발생하는 Data Race | 미수정 |
 | `AUDIT-FULL-020` | High | `pkg/execution/eval.go:316` | evalTupleBinaryExprWithSubquery에서 AND 연산자 우측 서브쿼리 실행 컨텍스트 누락 | 미수정 |
 | `AUDIT-FULL-021` | Medium | `pkg/planner/bounds.go:203` | SplitOnAnd에서 개행문자/탭 포맷팅 쿼리의 AND/BETWEEN 인식 실패로 인덱스 바운드 누락 | 미수정 |
 | `AUDIT-FULL-022` | High | `pkg/sqlutil/tokenizer.go:1427` | ReplaceCorrelatedTokens에서 주석 내 아포스트로피로 인한 문자열 상태 반전 및 서브쿼리 치환 실패 | 미수정 |
-| `AUDIT-FULL-023` | Medium | `pkg/wire/copy.go:436` | COPY FROM STDIN 시 밀리초 타임스탬프 기반 PK 생성으로 인한 동시 세션 키 충돌 및 int32 오버플로우 | 미수정 |
+| `AUDIT-FULL-023` | Medium | `pkg/wire/copy.go:436` | COPY FROM STDIN 시 밀리초 타임스탬프 기반 PK 생성으로 인한 동시 세션 키 충돌 및 int32 오버플로우 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-024` | High | `pkg/execution/builder.go:425` | isPlanSortedOnKey의 strings.Contains 부분 문자열 매칭으로 인한 MergeJoin 정렬 생략 및 조인 결과 파탄 | 미수정 |
 | `AUDIT-FULL-025` | High | `pkg/planner/decorrelate.go:676` | decorrelate.go의 isIdent 1바이트 검사로 인한 비동등 연산자(>=, !=)의 잘못된 SEMI 조인 왜곡 | 미수정 |
 | `AUDIT-FULL-026` | High | `pkg/sqlutil/tokenizer.go:1323` | ExtractTopLevelTuples에서 주석 내 괄호를 행 튜플로 오인식하여 다중 행 INSERT 실패 | 미수정 |
@@ -1697,7 +1697,7 @@
 | `AUDIT-FULL-035` | High | `pkg/api/server.go:531` | 쿼리 취소, 실행 중인 쿼리 목록, 슬로우/일반 로그 파일, 실시간 CDC 스트림 등 관리자 엔드포인트 무인증 노출 | 미수정 |
 | `AUDIT-FULL-036` | Medium | `pkg/api/records_filter.go:230` | REST API 레코드 필터 LIKE 평가 시 후보 행마다 regexp.Compile 동적 재컴파일로 인한 CPU/GC 병목 | 미수정 |
 | `AUDIT-FULL-037` | High | `pkg/api/server.go:606` | 단일 테이블 권한의 API Key로 /api/backup 호출 시 전체 데이터베이스 백업 다운로드 권한 상승 및 유출 | 미수정 |
-| `AUDIT-FULL-038` | Medium | `pkg/api/handlers_import_export.go:190` | CSV/JSON 테이블 임포트 시 밀리초 타임스탬프 기반 PK 생성으로 인한 32비트 INT 오버플로우 및 충돌 | 미수정 |
+| `AUDIT-FULL-038` | Medium | `pkg/api/handlers_import_export.go:190` | CSV/JSON 테이블 임포트 시 밀리초 타임스탬프 기반 PK 생성으로 인한 32비트 INT 오버플로우 및 충돌 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-039` | High | `pkg/auth/auth.go:367` | 로그아웃 세션 무효화 TokenKey 디스크 비동기화로 인한 재부팅 시 파기된 JWT 토큰 부활 결함 | 미수정 |
 | `AUDIT-FULL-040` | High | `pkg/replication/handlers.go:12` | HA 복제/승격/강등/투표/WAL 스트림 엔드포인트 무인증 노출로 인한 클러스터 탈취 및 데이터 유출 결함 | 미수정 |
 

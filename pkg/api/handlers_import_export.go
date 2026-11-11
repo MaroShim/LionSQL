@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"lionsql/pkg/storage"
 )
@@ -187,13 +186,37 @@ func (s *Server) handleImportTable(w http.ResponseWriter, r *http.Request) {
 					val, exists := row[col.Name]
 					if !exists || val == nil {
 						if col.PrimaryKey && col.Type == storage.TypeInt {
-							val = time.Now().UnixNano()/int64(time.Millisecond) + int64(idx)
+							var idVal int64
+							if s.coordinator != nil {
+								idVal = s.coordinator.AllocTableIdentity(tableName, 1, func() int64 {
+									var scanMax int64 = 0
+									if cur, err := tx.Scan(tableName); err == nil {
+										for cur.Next() {
+											if r, err := cur.Record(); err == nil {
+												if v, ok := r[col.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > scanMax {
+													scanMax = v.IVal
+												}
+											}
+										}
+										cur.Close()
+									}
+									return scanMax
+								})
+							} else {
+								idVal = int64(idx + 1)
+							}
+							val = idVal
 						} else if !col.Nullable {
 							writeError(w, http.StatusBadRequest, fmt.Errorf("row %d: field %q cannot be null", idx+1, col.Name))
 							return
 						}
 					}
 					rec[col.Name] = convertValue(val, col.Type)
+					if col.PrimaryKey && col.Type == storage.TypeInt && s.coordinator != nil {
+						if convertedPK, ok := rec[col.Name]; ok && !convertedPK.IsNull && convertedPK.Type == storage.TypeInt {
+							s.coordinator.SetTableLastIdentity(tableName, convertedPK.IVal)
+						}
+					}
 				}
 				if err := tx.Insert(tableName, rec); err != nil {
 					writeError(w, http.StatusBadRequest, fmt.Errorf("row %d insert error: %w", idx+1, err))
@@ -300,8 +323,29 @@ func (s *Server) handleImportTable(w http.ResponseWriter, r *http.Request) {
 			curPK, exists := rec[pkCol.Name]
 			if !exists || curPK.IsNull || (pkCol.Type == storage.TypeInt && curPK.IVal == 0) {
 				if pkCol.Type == storage.TypeInt {
-					rec[pkCol.Name] = storage.IntValue(time.Now().UnixNano()/int64(time.Millisecond) + int64(rowIdx))
+					var idVal int64
+					if s.coordinator != nil {
+						idVal = s.coordinator.AllocTableIdentity(tableName, 1, func() int64 {
+							var scanMax int64 = 0
+							if cur, err := tx.Scan(tableName); err == nil {
+								for cur.Next() {
+									if r, err := cur.Record(); err == nil {
+										if v, ok := r[pkCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > scanMax {
+											scanMax = v.IVal
+										}
+									}
+								}
+								cur.Close()
+							}
+							return scanMax
+						})
+					} else {
+						idVal = int64(rowIdx)
+					}
+					rec[pkCol.Name] = storage.IntValue(idVal)
 				}
+			} else if curPK.Type == storage.TypeInt && !curPK.IsNull && s.coordinator != nil {
+				s.coordinator.SetTableLastIdentity(tableName, curPK.IVal)
 			}
 		}
 

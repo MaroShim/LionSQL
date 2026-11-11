@@ -188,3 +188,66 @@ func TestQuantifiedOperators_EmptySetVacuousTruth(t *testing.T) {
 		t.Fatalf("> ANY on empty set expected 0 rows, got: %d (%v)", len(res.Rows), res.Rows)
 	}
 }
+
+func TestQuantifiedOperators_NotEqualAny_SQL3VL_NullExclusion(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	coord.ExecuteSQL("CREATE TABLE test_3vl (id INT PRIMARY KEY, val INT);")
+	coord.ExecuteSQL("INSERT INTO test_3vl VALUES (1, 10), (2, 20), (3, NULL);")
+
+	coord.ExecuteSQL("CREATE TABLE sub_distinct (x INT);")
+	coord.ExecuteSQL("INSERT INTO sub_distinct VALUES (10), (20);")
+
+	// In SQL 3-valued logic:
+	// val=10: (10 <> 10) OR (10 <> 20) -> FALSE OR TRUE -> TRUE (Included)
+	// val=20: (20 <> 10) OR (20 <> 20) -> TRUE OR FALSE -> TRUE (Included)
+	// val=NULL: (NULL <> 10) OR (NULL <> 20) -> UNKNOWN OR UNKNOWN -> UNKNOWN (EXCLUDED from WHERE!)
+	// Only rows 1 and 2 must be returned. Row 3 (NULL) must be excluded!
+	res, err := coord.ExecuteSQL("SELECT id FROM test_3vl WHERE val <> ANY (SELECT x FROM sub_distinct) ORDER BY id ASC;")
+	if err != nil || !res.Success {
+		t.Fatalf("<> ANY query failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("<> ANY expected 2 rows (excluding NULL row 3), got %d rows: %v", len(res.Rows), res.Rows)
+	}
+
+	// Case 2: Subquery has single unique non-null value (10)
+	coord.ExecuteSQL("CREATE TABLE sub_single (x INT);")
+	coord.ExecuteSQL("INSERT INTO sub_single VALUES (10);")
+	res, err = coord.ExecuteSQL("SELECT id FROM test_3vl WHERE val <> ANY (SELECT x FROM sub_single) ORDER BY id ASC;")
+	if err != nil || !res.Success {
+		t.Fatalf("<> ANY single failed: %v", err)
+	}
+	// val=10 -> 10<>10 is FALSE. val=20 -> 20<>10 is TRUE. val=NULL -> NULL<>10 is UNKNOWN.
+	if len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["id"]) != "2" {
+		t.Fatalf("<> ANY single expected only id 2, got: %v", res.Rows)
+	}
+
+	// Case 3: Subquery has all NULL values
+	coord.ExecuteSQL("CREATE TABLE sub_nulls (x INT);")
+	coord.ExecuteSQL("INSERT INTO sub_nulls VALUES (NULL);")
+	res, err = coord.ExecuteSQL("SELECT id FROM test_3vl WHERE val <> ANY (SELECT x FROM sub_nulls);")
+	if err != nil || !res.Success {
+		t.Fatalf("<> ANY all nulls failed: %v", err)
+	}
+	if len(res.Rows) != 0 {
+		t.Fatalf("<> ANY all nulls expected 0 rows, got: %v", res.Rows)
+	}
+
+	// Case 4: Subquery has (10, NULL)
+	coord.ExecuteSQL("INSERT INTO sub_nulls VALUES (10);") // sub_nulls now has (NULL, 10)
+	res, err = coord.ExecuteSQL("SELECT id FROM test_3vl WHERE val <> ANY (SELECT x FROM sub_nulls) ORDER BY id ASC;")
+	if err != nil || !res.Success {
+		t.Fatalf("<> ANY mixed nulls failed: %v", err)
+	}
+	// val=10: (10<>NULL) OR (10<>10) -> UNKNOWN OR FALSE -> UNKNOWN (Excluded)
+	// val=20: (20<>NULL) OR (20<>10) -> UNKNOWN OR TRUE -> TRUE (Included)
+	// val=NULL: (NULL<>NULL) OR (NULL<>10) -> UNKNOWN OR UNKNOWN -> UNKNOWN (Excluded)
+	if len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["id"]) != "2" {
+		t.Fatalf("<> ANY mixed nulls expected only id 2, got: %v", res.Rows)
+	}
+}

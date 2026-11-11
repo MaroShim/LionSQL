@@ -234,15 +234,27 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 
 					if identityCol != nil {
 						if _, hasIdent := newRec[identityCol.Name]; !hasIdent {
-							maxID++
-							newRec[identityCol.Name] = storage.IntValue(maxID)
+							curID := s.AllocTableIdentity(targetSchema.Name, 1, func() int64 {
+								var scanMax int64 = 0
+								if cur, err := tx.Scan(parsed.targetTable); err == nil {
+									for cur.Next() {
+										if r, err := cur.Record(); err == nil {
+											if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > scanMax {
+												scanMax = v.IVal
+											}
+										}
+									}
+									cur.Close()
+								}
+								return scanMax
+							})
+							newRec[identityCol.Name] = storage.IntValue(curID)
 							if cs != nil {
 								cs.Mu.Lock()
-								cs.Vars["identity"] = maxID
-								cs.Vars["scope_identity"] = maxID
+								cs.Vars["identity"] = curID
+								cs.Vars["scope_identity"] = curID
 								cs.Mu.Unlock()
 							}
-							s.SetTableLastIdentity(targetSchema.Name, maxID)
 						} else {
 							if v, ok := newRec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
 								if cs != nil {
@@ -252,9 +264,6 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 									cs.Mu.Unlock()
 								}
 								s.SetTableLastIdentity(targetSchema.Name, v.IVal)
-								if v.IVal > maxID {
-									maxID = v.IVal
-								}
 							}
 						}
 					}
@@ -425,15 +434,27 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 				// Generate IDENTITY value if column was omitted
 				if identityCol != nil {
 					if _, hasIdent := newRec[identityCol.Name]; !hasIdent {
-						maxID++
-						newRec[identityCol.Name] = storage.IntValue(maxID)
+						curID := s.AllocTableIdentity(targetSchema.Name, 1, func() int64 {
+							var scanMax int64 = 0
+							if cur, err := tx.Scan(parsed.targetTable); err == nil {
+								for cur.Next() {
+									if r, err := cur.Record(); err == nil {
+										if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > scanMax {
+											scanMax = v.IVal
+										}
+									}
+								}
+								cur.Close()
+							}
+							return scanMax
+						})
+						newRec[identityCol.Name] = storage.IntValue(curID)
 						if cs != nil {
 							cs.Mu.Lock()
-							cs.Vars["identity"] = maxID
-							cs.Vars["scope_identity"] = maxID
+							cs.Vars["identity"] = curID
+							cs.Vars["scope_identity"] = curID
 							cs.Mu.Unlock()
 						}
-						s.SetTableLastIdentity(targetSchema.Name, maxID)
 					} else {
 						if v, ok := newRec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
 							if cs != nil {
@@ -443,9 +464,6 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 								cs.Mu.Unlock()
 							}
 							s.SetTableLastIdentity(targetSchema.Name, v.IVal)
-							if v.IVal > maxID {
-								maxID = v.IVal
-							}
 						}
 					}
 				}

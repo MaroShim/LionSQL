@@ -119,3 +119,48 @@ func TestLexer_QuantifiedKeywords(t *testing.T) {
 	}
 }
 
+func TestLexer_ScientificNotationAndLeadingDot(t *testing.T) {
+	input := "1e5 1.5E-3 2e+10 3E4 .5 .123"
+	l := NewLexer(input)
+
+	expected := []struct {
+		typ TokenType
+		lit string
+	}{
+		{TokenFloat, "1e5"},
+		{TokenFloat, "1.5E-3"},
+		{TokenFloat, "2e+10"},
+		{TokenFloat, "3E4"},
+		{TokenFloat, ".5"},
+		{TokenFloat, ".123"},
+		{TokenEOF, ""},
+	}
+
+	for i, exp := range expected {
+		tok := l.NextToken()
+		if tok.Type != exp.typ {
+			t.Fatalf("[%d] expected token type %v, got %v (lit: %q)", i, exp.typ, tok.Type, tok.Literal)
+		}
+		if tok.Literal != exp.lit {
+			t.Fatalf("[%d] expected literal %q, got %q", i, exp.lit, tok.Literal)
+		}
+	}
+}
+
+func TestParser_ScientificNotationAndLeadingDot(t *testing.T) {
+	sql := `
+CREATE PROCEDURE TestScientificNum
+AS
+BEGIN
+    SELECT 1e5, 1.5E-3, 2e+10, 3E4, .5, .123;
+END;
+`
+	prog, err := Compile(sql)
+	if err != nil {
+		t.Fatalf("Compile failed: %v", err)
+	}
+	if prog == nil {
+		t.Fatalf("expected compiled program, got nil")
+	}
+}
+

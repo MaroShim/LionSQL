@@ -186,6 +186,7 @@ type TableManager interface {
 type IdentityProvider interface {
 	GetTableLastIdentity(tableName string) (int64, bool)
 	SetTableLastIdentity(tableName string, id int64)
+	AllocTableIdentity(tableName string, count int64, initFn func() int64) int64
 }
 
 // Executor manages execution of compiled stored procedures, functions, and triggers within ambient ACID transactions.
@@ -286,6 +287,30 @@ func (e *Executor) SetLastIdentity(tableName string, id int64) {
 		e.lastIdentities = make(map[string]int64)
 	}
 	e.lastIdentities[strings.ToLower(tableName)] = id
+}
+
+// AllocIdentity atomically allocates a contiguous block of count IDs for tableName.
+func (e *Executor) AllocIdentity(tableName string, count int64, initFn func() int64) int64 {
+	e.mu.RLock()
+	p := e.identProvider
+	e.mu.RUnlock()
+	if p != nil {
+		return p.AllocTableIdentity(tableName, count, initFn)
+	}
+	e.identMu.Lock()
+	defer e.identMu.Unlock()
+	if e.lastIdentities == nil {
+		e.lastIdentities = make(map[string]int64)
+	}
+	lower := strings.ToLower(tableName)
+	cur, exists := e.lastIdentities[lower]
+	if !exists {
+		if initFn != nil {
+			cur = initFn()
+		}
+	}
+	e.lastIdentities[lower] = cur + count
+	return cur + 1
 }
 
 // SetTableGetter configures the schema lookup function for relational queries.
@@ -1828,6 +1853,7 @@ func (f *VMFrame) execTruncate(tableName string) error {
 }
 
 func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, error) {
+	targetTable := f.resolveTable(data.Table)
 	lowerTable := strings.ToLower(data.Table)
 
 	if rows, isTransient := f.transientTables[lowerTable]; isTransient {
@@ -1859,8 +1885,8 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 			pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
 			pkVal = toStorageValue(pkAny)
 		}
-		if f.isPKCol(data.Table, data.WhereCol) {
-			if rec, err := f.tx.Get(data.Table, pkVal); err == nil && rec != nil {
+		if f.isPKCol(targetTable, data.WhereCol) {
+			if rec, err := f.tx.Get(targetTable, pkVal); err == nil && rec != nil {
 				if v, ok := rec[data.Column]; ok {
 					return v, nil
 				}
@@ -1874,14 +1900,14 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 		}
 	}
 
-	cursor, err := f.tx.Scan(data.Table)
+	cursor, err := f.tx.Scan(targetTable)
 	if err != nil {
 		return storage.NullValue(storage.TypeUnknown), err
 	}
 	defer cursor.Close()
 
 	// P-2 Optimization: Lazy decoding & selective filter for RawTupleCursor
-	tableSchema, _ := f.getTableSchema(data.Table)
+	tableSchema, _ := f.getTableSchema(targetTable)
 	fastChecks := f.extractFastEqConditions(tableSchema, data.WhereVal)
 	rawCur, hasRaw := cursor.(storage.RawTupleCursor)
 

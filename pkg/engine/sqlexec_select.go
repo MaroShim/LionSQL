@@ -1243,7 +1243,7 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 		prog, err = proc.CompileStatement(cleaned)
 	}
 	if err != nil {
-		return nil, err
+		return nil, proc.DiagnoseParseFailure(cleaned, err)
 	}
 
 	var tx storage.Transaction
@@ -1344,7 +1344,7 @@ func (s *Coordinator) execVDBESelect(cleaned string, start time.Time, cs *Client
 		prog, err = proc.CompileQuery(cleaned)
 	}
 	if err != nil {
-		return nil, err
+		return nil, proc.DiagnoseParseFailure(cleaned, err)
 	}
 
 	var tx storage.Transaction
@@ -1546,6 +1546,11 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	// -1. T-SQL FOR JSON clause: SELECT ... FOR JSON PATH / AUTO [,...]
 	if hasForJSON(cleaned) {
 		return s.execForJSONSelect(cleaned, start, cs)
+	}
+
+	// -1. T-SQL FOR XML clause (Legacy XML is Spec-Out)
+	if hasForXML(cleaned) {
+		return nil, proc.DiagnoseParseFailure(cleaned, fmt.Errorf("FOR XML clause is not supported"))
 	}
 
 	// -1. View expansion: if FROM clause references a known view, rewrite as a CTE.

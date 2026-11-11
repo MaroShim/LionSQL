@@ -90,10 +90,10 @@ func Compile(sql string) (*Program, error) {
 					return CompileProcedure(fbStmt)
 				}
 				if fbErr != nil {
-					return nil, fmt.Errorf("fallback error: %w", fbErr)
+					return nil, DiagnoseParseFailure(sql, fmt.Errorf("fallback error: %w", fbErr))
 				}
 			}
-			return nil, err
+			return nil, DiagnoseParseFailure(sql, err)
 		}
 		return CompileProcedure(stmt)
 	}
@@ -101,7 +101,7 @@ func Compile(sql string) (*Program, error) {
 	if strings.HasPrefix(upper, "CREATE FUNCTION") {
 		stmt, err := ParseFunction(sql)
 		if err != nil {
-			return nil, err
+			return nil, DiagnoseParseFailure(sql, err)
 		}
 		return CompileFunction(stmt)
 	}
@@ -109,7 +109,7 @@ func Compile(sql string) (*Program, error) {
 	if strings.HasPrefix(upper, "CREATE TRIGGER") {
 		stmt, err := ParseTrigger(sql)
 		if err != nil {
-			return nil, err
+			return nil, DiagnoseParseFailure(sql, err)
 		}
 		return CompileTrigger(stmt)
 	}
@@ -131,7 +131,7 @@ func Compile(sql string) (*Program, error) {
 	parser := NewParser(lexer)
 	stmt, err := parser.ParseProcedure()
 	if err != nil {
-		return nil, err
+		return nil, DiagnoseParseFailure(sql, err)
 	}
 	return CompileProcedure(stmt)
 }
@@ -147,7 +147,7 @@ func CompileAnonymousBlock(sql string) (*Program, error) {
 	p := NewParser(NewLexer(trimmed))
 	stmt, err := p.ParseStatement()
 	if err != nil {
-		return nil, err
+		return nil, DiagnoseParseFailure(sql, err)
 	}
 	if err := c.compileStatement(stmt); err != nil {
 		return nil, err
@@ -169,7 +169,7 @@ func CompileStatement(sql string) (*Program, error) {
 	p := NewParser(NewLexer(trimmed))
 	stmt, err := p.ParseSQLStatement()
 	if err != nil {
-		return nil, err
+		return nil, DiagnoseParseFailure(sql, err)
 	}
 	if err := c.compileStatement(stmt); err != nil {
 		return nil, err

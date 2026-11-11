@@ -344,12 +344,18 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 
 	case *LikeExpr:
 		val, err := EvalRowExpr(e.Expr, row, execSubquery)
-		if err != nil || val == nil {
-			return false, nil
+		if err != nil {
+			return nil, err
+		}
+		if isNullVal(val) {
+			return nil, nil
 		}
 		patVal, err := EvalRowExpr(e.Pattern, row, execSubquery)
-		if err != nil || patVal == nil {
-			return false, nil
+		if err != nil {
+			return nil, err
+		}
+		if isNullVal(patVal) {
+			return nil, nil
 		}
 		strVal := fmt.Sprintf("%v", val)
 		if sv, ok := val.(storage.Value); ok {
@@ -600,20 +606,32 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 }
 
 func evalRowAnyComparison(op TokenType, leftVal, rightVal any) (any, error) {
-	if leftVal == nil || rightVal == nil {
-		return false, nil
+	if leftVal == nil || isNullVal(leftVal) || rightVal == nil || isNullVal(rightVal) {
+		return nil, nil
 	}
 	leftStr := fmt.Sprintf("%v", leftVal)
+	if sv, ok := leftVal.(storage.Value); ok {
+		leftStr = fmt.Sprintf("%v", sv.Interface())
+	}
 	var elements []string
 	switch arr := rightVal.(type) {
 	case []string:
 		elements = arr
 	case []any:
 		for _, item := range arr {
-			elements = append(elements, fmt.Sprintf("%v", item))
+			if isNullVal(item) {
+				elements = append(elements, "NULL")
+			} else if sv, ok := item.(storage.Value); ok {
+				elements = append(elements, fmt.Sprintf("%v", sv.Interface()))
+			} else {
+				elements = append(elements, fmt.Sprintf("%v", item))
+			}
 		}
 	default:
 		raw := fmt.Sprintf("%v", rightVal)
+		if sv, ok := rightVal.(storage.Value); ok {
+			raw = fmt.Sprintf("%v", sv.Interface())
+		}
 		raw = strings.TrimSpace(raw)
 		raw = strings.TrimPrefix(raw, "ARRAY[")
 		raw = strings.TrimPrefix(raw, "array[")
@@ -629,11 +647,26 @@ func evalRowAnyComparison(op TokenType, leftVal, rightVal any) (any, error) {
 		}
 	}
 
+	hasUnknown := false
 	for _, elem := range elements {
+		if strings.EqualFold(elem, "NULL") {
+			hasUnknown = true
+			continue
+		}
 		cmp, err := evalRowBinaryOp(op, leftStr, elem)
-		if err == nil && isTruthyValue(cmp) {
+		if err != nil {
+			return nil, err
+		}
+		if isNullVal(cmp) {
+			hasUnknown = true
+			continue
+		}
+		if isTruthyValue(cmp) {
 			return true, nil
 		}
+	}
+	if hasUnknown {
+		return nil, nil
 	}
 	return false, nil
 }

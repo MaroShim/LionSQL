@@ -752,6 +752,58 @@ func TestAPI_TableExportAndImport(t *testing.T) {
 	if recordsResp.TotalItems != 4 {
 		t.Fatalf("Expected 4 products after batch JSON import, got %d", recordsResp.TotalItems)
 	}
+
+	// 7. Test JSON Batch Import with omitted ID column -> sequential PK generation
+	jsonBatchNoID := `[{"title": "Webcam", "price": 59.99}]`
+	req = httptest.NewRequest(http.MethodPost, "/api/tables/products/import", strings.NewReader(jsonBatchNoID))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Import JSON without ID failed with code %d: %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/products/records", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	var webcamResp struct {
+		TotalItems int              `json:"totalItems"`
+		Records    []map[string]any `json:"records"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&webcamResp)
+	if webcamResp.TotalItems != 5 {
+		t.Fatalf("Expected 5 products in database, got %d (records: %+v)", webcamResp.TotalItems, webcamResp.Records)
+	}
+	lastRecord := webcamResp.Records[len(webcamResp.Records)-1]
+	webcamID := fmt.Sprint(lastRecord["id"])
+	if webcamID != "105" {
+		t.Fatalf("Expected sequential ID 105 for Webcam, got %v", webcamID)
+	}
+
+	// 8. Test CSV Batch Import with omitted ID column -> sequential PK generation
+	csvDataNoID := `title,price
+Headphones,89.00
+Microphone,119.50`
+	req = httptest.NewRequest(http.MethodPost, "/api/tables/products/import", strings.NewReader(csvDataNoID))
+	req.Header.Set("Content-Type", "text/csv")
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Import CSV without ID failed with code %d: %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/products/records", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	_ = json.NewDecoder(rec.Body).Decode(&webcamResp)
+	if webcamResp.TotalItems != 7 {
+		t.Fatalf("Expected 7 products in database, got %d", webcamResp.TotalItems)
+	}
+	item6 := webcamResp.Records[5]
+	item7 := webcamResp.Records[6]
+	if fmt.Sprint(item6["id"]) != "106" || fmt.Sprint(item7["id"]) != "107" {
+		t.Fatalf("Expected sequential IDs 106 and 107 for CSV import, got %v and %v", item6["id"], item7["id"])
+	}
 }
 
 func TestAPI_ProcedureDuplicateRejection(t *testing.T) {
