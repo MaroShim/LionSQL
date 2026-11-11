@@ -692,37 +692,10 @@ func writeColumnValue(buf *bytes.Buffer, col ColumnInfo, val any) {
 		buf.Write(guidBytes)
 
 	case TypeNVarChar:
-		var strVal string
-		if s, ok := val.(string); ok {
-			strVal = s
-		} else {
-			strVal = fmt.Sprintf("%v", val)
-		}
-		if col.IsPLP || col.Size == -1 {
-			writePLPValue(buf, EncodeUTF16LE(strVal))
-		} else {
-			startLen := buf.Len()
-			buf.WriteByte(0)
-			buf.WriteByte(0)
-			nBytes := WriteUTF16LEDirect(buf, strVal)
-			binary.LittleEndian.PutUint16(buf.Bytes()[startLen:startLen+2], uint16(nBytes))
-		}
+		writeTdsTextColumn(buf, col, val, true)
 
 	case TypeVarChar:
-		var strVal string
-		if s, ok := val.(string); ok {
-			strVal = s
-		} else {
-			strVal = fmt.Sprintf("%v", val)
-		}
-		if col.IsPLP || col.Size == -1 {
-			writePLPValue(buf, []byte(strVal))
-		} else {
-			var b [2]byte
-			binary.LittleEndian.PutUint16(b[:], uint16(len(strVal)))
-			buf.Write(b[:])
-			buf.WriteString(strVal)
-		}
+		writeTdsTextColumn(buf, col, val, false)
 
 	case TypeBigVarBin:
 		var raw []byte
@@ -747,21 +720,7 @@ func writeColumnValue(buf *bytes.Buffer, col ColumnInfo, val any) {
 		}
 
 	default:
-		var strVal string
-		if s, ok := val.(string); ok {
-			strVal = s
-		} else {
-			strVal = fmt.Sprintf("%v", val)
-		}
-		if col.IsPLP || col.Size == -1 {
-			writePLPValue(buf, EncodeUTF16LE(strVal))
-		} else {
-			startLen := buf.Len()
-			buf.WriteByte(0)
-			buf.WriteByte(0)
-			nBytes := WriteUTF16LEDirect(buf, strVal)
-			binary.LittleEndian.PutUint16(buf.Bytes()[startLen:startLen+2], uint16(nBytes))
-		}
+		writeTdsTextColumn(buf, col, val, true)
 	}
 }
 

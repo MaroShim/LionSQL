@@ -154,6 +154,7 @@
 | `DONE` | **`CFG-STORAGE-OPT-1`** | CONFIG | P1 | 스토리지 옵션 계층 분리(--disk/--memory) 및 하위 호환성 매핑 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
 | `PENDING` | **`COMPAT-DECLARATIVE-1`** | Durability | P2 | 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) |  |  |
 | `DONE` | **`COMPAT-TABLE-DRIVEN-1`** | Durability | P2 | 10개 실전 서비스 호환 규칙 Table-Driven 구조 및 안티패턴 키워드 매칭 전면 정식화 | [`notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md) |  |
+| `IN_PROGRESS` | **`COMPAT-TSQL-MATRIX-1`** | Ecosystem | P2 | SQL Server 호환성 매트릭스(TSQL_COMPATIBILITY_MATRIX.ko.md) 구현 진행 중 항목 체크 및 동기화 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
 | `PENDING` | **`DOC-REVAMP-10`** | Documentation | P2 | 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 | [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md) |  |
 | `DONE` | **`DOGFOOD-SPRINT-1`** | Performance | P1 | LionSQL 자체 백엔드 기반 정형 스프린트/태스크 관리 시스템 구축 (Dogfooding) |  |  |
 | `IN_PROGRESS` | **`DURA-KILL-1`** | Durability | P2 | kill -9 크래시 복구 장기 라운드 검증 |  |  |
@@ -198,13 +199,13 @@
 | `DONE` | **`PERF-CTE-EPHEMERAL-1`** | Durability | P2 | 세션 로컬 에페머럴 CTE 버퍼 및 Zero-DDL 최적화 | [`notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md`](notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md) |  |
 | `DONE` | **`PERF-CTE-LOWERING-VDBE-1`** | Durability | P2 | Writable CTE Stored Procedure 바이트코드 Lowering 가속 | [`notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-GROVE-CONCURRENCY-1`** | Durability | P2 | Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 | [`notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 2 (`PERF-HOTSPOT-LATCH-... |
-| `PENDING` | **`PERF-HYBRID-TEMPMEM-1`** | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
+| `IN_PROGRESS` | **`PERF-HYBRID-TEMPMEM-1`** | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-OCC-ZERO-LOCK-1`** | Storage | P2 | In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 (읽기 RLock 완전 제거) | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
 | `DONE` | **`PERF-SERVER-PIPELINE-P3-P4`** | Ecosystem | P3 | 서버 파이프라인 Phase 3/4 | [`notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-SUBQUERY-MEMO-1`** | Engine | P2 | [1.0(?)] 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 | [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-VDBE-EXTREME-OPT-1`** | Durability | P2 | T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 | [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 1 (`PERF-VDBE-SLOT-1`)*... |
-| `IN_PROGRESS` | **`PERF-WIRE-ZEROALLOC-1`** | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
+| `DONE` | **`PERF-WIRE-ZEROALLOC-1`** | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
 | `DONE` | **`PLANNER-SLIM-1`** | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
@@ -1934,6 +1935,12 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [IN_PROGRESS] SQL Server 호환성 매트릭스(TSQL_COMPATIBILITY_MATRIX.ko.md) 구현 진행 중 항목 체크 및 동기화 `COMPAT-TSQL-MATRIX-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-11 01:02:28
+- **Plan Doc**: [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md)
+
+---
+
 ### [PENDING] 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 `DOC-REVAMP-10`
 - **Domain**: Documentation | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
 - **Plan Doc**: [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)
@@ -2431,8 +2438,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 `PERF-HYBRID-TEMPMEM-1`
-- **Domain**: STORAGE | **Priority**: P2 | **Updated**: 2026-11-11 00:22:11
+### [IN_PROGRESS] WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 `PERF-HYBRID-TEMPMEM-1`
+- **Domain**: STORAGE | **Priority**: P2 | **Updated**: 2026-11-11 00:56:10
 - **Plan Doc**: [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)
 
 ---
@@ -2487,8 +2494,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [IN_PROGRESS] 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 `PERF-WIRE-ZEROALLOC-1`
-- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-11 00:22:11
+### [DONE] 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 `PERF-WIRE-ZEROALLOC-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-11 01:17:36
 - **Plan Doc**: [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md)
 
 ---

@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- register `COMPAT-TSQL-MATRIX-1` sprint tracking task for `notes/TSQL_COMPATIBILITY_MATRIX.ko.md` verification and sync
+
+### Changed
+- eliminate per-row/per-column wire heap allocations and introduce bounded 16KB/512-row PGWire chunked streaming (`writePgDataRows`, `0 allocs/op` across 100k rows) and pooled incremental TDS packet streaming with direct `res.Values` slot indexing (`tdsStreamWriter`, `writeTdsTextColumn`, `writePLPUTF16LE`) (`PERF-WIRE-ZEROALLOC-1`)
+
 ### Fixed
 - add background `SessionPool` TTL/reset sweep loop and idle `ClientSession` storage reclamation (`BUG-WT-SWEEP-3`) to eliminate 60-minute WiredTiger `sweep-server` idle session warnings
 

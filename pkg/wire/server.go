@@ -1837,32 +1837,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 
 	bw := getBufioWriter(conn)
 	defer putBufioWriter(bw)
-	scratchRowBytes := make([][]byte, len(res.Columns))
-	for rIdx, row := range batchRows {
-		var rowVals []any
-		if rIdx < len(batchVals) {
-			rowVals = batchVals[rIdx]
-		}
-		for i, colName := range res.Columns {
-			isBinary := false
-			if len(portal.ResultFormats) == 1 && portal.ResultFormats[0] == 1 {
-				isBinary = true
-			} else if i < len(portal.ResultFormats) && portal.ResultFormats[i] == 1 {
-				isBinary = true
-			}
-			var val any
-			if i < len(rowVals) {
-				val = rowVals[i]
-			} else {
-				val = getRowValue(row, colName)
-			}
-			scratchRowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
-		}
-		if s.DevMode() {
-			log.Printf("[DEV][PGWire][ExecuteDataRows] cols=%v colOIDs=%v formats=%v rowBytes=%+v", res.Columns, colOIDs, portal.ResultFormats, scratchRowBytes)
-		}
-		_ = WriteDataRowBytes(bw, scratchRowBytes)
-	}
+	_ = writePgDataRows(bw, res.Columns, colOIDs, portal.ResultFormats, batchRows, batchVals, s.DevMode())
 
 	// 3. If there are still rows remaining and maxRows > 0, send PortalSuspended ('s')
 	if maxRows > 0 && portal.Pos < totalRows {
@@ -1892,29 +1867,7 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 
 		bw := getBufioWriter(conn)
 		defer putBufioWriter(bw)
-		scratchRowBytes := make([][]byte, len(res.Columns))
-		for rIdx, row := range res.Rows {
-			var rowVals []any
-			if rIdx < len(res.Values) {
-				rowVals = res.Values[rIdx]
-			}
-			for i, colName := range res.Columns {
-				isBinary := false
-				if len(resultFormats) == 1 && resultFormats[0] == 1 {
-					isBinary = true
-				} else if i < len(resultFormats) && resultFormats[i] == 1 {
-					isBinary = true
-				}
-				var val any
-				if i < len(rowVals) {
-					val = rowVals[i]
-				} else {
-					val = getRowValue(row, colName)
-				}
-				scratchRowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
-			}
-			_ = WriteDataRowBytes(bw, scratchRowBytes)
-		}
+		_ = writePgDataRows(bw, res.Columns, colOIDs, resultFormats, res.Rows, res.Values, false)
 		cmd := query
 		if strings.HasPrefix(strings.ToUpper(cmd), "FETCH") {
 			cmd = fmt.Sprintf("FETCH %d", len(res.Rows))
@@ -2070,29 +2023,7 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 			_ = WriteRowDescription(bw, cols)
 		}
 
-		scratchRowBytes := make([][]byte, len(res.Columns))
-		for rIdx, row := range res.Rows {
-			var rowVals []any
-			if rIdx < len(res.Values) {
-				rowVals = res.Values[rIdx]
-			}
-			for i, colName := range res.Columns {
-				isBinary := false
-				if len(resultFormats) == 1 && resultFormats[0] == 1 {
-					isBinary = true
-				} else if i < len(resultFormats) && resultFormats[i] == 1 {
-					isBinary = true
-				}
-				var val any
-				if i < len(rowVals) {
-					val = rowVals[i]
-				} else {
-					val = getRowValue(row, colName)
-				}
-				scratchRowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
-			}
-			_ = WriteDataRowBytes(bw, scratchRowBytes)
-		}
+		_ = writePgDataRows(bw, res.Columns, colOIDs, resultFormats, res.Rows, res.Values, false)
 		cmd := res.Command
 		if cmd == "" {
 			cmd = fmt.Sprintf("SELECT %d", len(res.Rows))

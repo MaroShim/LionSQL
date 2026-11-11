@@ -935,15 +935,7 @@ func (sess *ConnectionSession) buildRow(cols []ColumnInfo, values []any) []byte 
 // writeRowDirect formats and appends a row to destBuf, choosing NBCROW (0xD2) when negotiated
 // TDS version is 7.3 or newer, or ROW (0xD1) otherwise, with zero intermediate []any boxing (P-3).
 func (sess *ConnectionSession) writeRowDirect(destBuf *bytes.Buffer, cols []ColumnInfo, row map[string]any, scratchVals []any) {
-	if sess != nil && sess.TDSVersion >= 0x73000000 {
-		for _, col := range cols {
-			if getRowValueCaseInsensitive(row, col.Name) == nil {
-				WriteNBCRowDirect(destBuf, cols, row)
-				return
-			}
-		}
-	}
-	WriteRowDirect(destBuf, cols, row)
+	sess.writeRowValuesDirect(destBuf, cols, row, nil, scratchVals)
 }
 
 func readLoginString(payload []byte, offsetPos int) string {
@@ -1277,7 +1269,8 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 }
 
 func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionResult, sess *ConnectionSession, extraTokens func(buf *bytes.Buffer)) {
-	var buf bytes.Buffer
+	stream := sess.newStreamWriter(conn, PacketTabular)
+	buf := stream.Buffer()
 
 	for _, msg := range res.Logs {
 		buf.Write(BuildInfo(0, 1, 10, msg, "LionSQL", "", 1))
@@ -1287,28 +1280,27 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 		qr := &engine.QueryResult{
 			Columns: res.Columns,
 			Rows:    res.Rows,
+			Values:  res.Values,
 			Success: true,
 		}
 		cols := s.inferColumnInfos(qr)
 		buf.Write(BuildColMetaData(cols))
 
-		for _, row := range res.Rows {
-			sess.writeRowDirect(&buf, cols, row, nil)
-		}
+		_ = s.streamQueryRows(stream, sess, cols, res.Rows, res.Values)
 
 		doneStatus := DoneFinal
 		if sess.inTx {
 			doneStatus |= DoneInXact
 		}
-		WriteDoneDirect(&buf, TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows)))
+		WriteDoneDirect(buf, TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows)))
 		if extraTokens != nil {
-			extraTokens(&buf)
+			extraTokens(buf)
 		}
-		WriteReturnStatusDirect(&buf, 0)
-		WriteDoneDirect(&buf, TokenDoneProc, doneStatus, 0xC1, uint64(len(res.Rows)))
+		WriteReturnStatusDirect(buf, 0)
+		WriteDoneDirect(buf, TokenDoneProc, doneStatus, 0xC1, uint64(len(res.Rows)))
 	} else {
 		if extraTokens != nil {
-			extraTokens(&buf)
+			extraTokens(buf)
 		}
 		rowCount := uint64(len(res.Rows))
 		if rowCount == 0 && res.RowsAffected > 0 {
@@ -1318,10 +1310,10 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 		if sess.inTx {
 			doneStatus |= DoneInXact
 		}
-		WriteDoneDirect(&buf, TokenDoneProc, doneStatus|DoneCount, 0xC1, rowCount)
+		WriteDoneDirect(buf, TokenDoneProc, doneStatus|DoneCount, 0xC1, rowCount)
 	}
 
-	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+	_ = stream.Close()
 }
 
 func (s *Server) handleRPCUnprepare(conn net.Conn, rpc *parsedRPC, sess *ConnectionSession) {
@@ -1490,7 +1482,8 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		log.Printf("[DEV][TDS][Success] query=%s cols=%v rows=%d duration=%dµs", trimmed, res.Columns, len(res.Rows), res.DurationUS)
 	}
 
-	var buf bytes.Buffer
+	stream := sess.newStreamWriter(conn, PacketTabular)
+	buf := stream.Buffer()
 
 	upperCmd := strings.ToUpper(res.Command)
 	if upperCmd == "PRINT" {
@@ -1525,17 +1518,14 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		cols := s.inferColumnInfos(res)
 		buf.Write(BuildColMetaData(cols))
 
-		scratchVals := make([]any, len(res.Columns))
-		for _, row := range res.Rows {
-			sess.writeRowDirect(&buf, cols, row, scratchVals)
-		}
+		_ = s.streamQueryRows(stream, sess, cols, res.Rows, res.Values)
 
-		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows))))
+		WriteDoneDirect(buf, TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows)))
 		if extraTokens != nil {
-			extraTokens(&buf)
+			extraTokens(buf)
 		}
-		buf.Write(BuildReturnStatus(0))
-		buf.Write(BuildDoneProc(doneStatus, 0xC1, uint64(len(res.Rows))))
+		WriteReturnStatusDirect(buf, 0)
+		WriteDoneDirect(buf, TokenDoneProc, doneStatus, 0xC1, uint64(len(res.Rows)))
 	} else {
 		cmdCode := uint16(0)
 		switch upperCmd {
@@ -1551,13 +1541,13 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 			cmdCode = 0x00
 		}
 		if extraTokens != nil {
-			extraTokens(&buf)
+			extraTokens(buf)
 		}
-		buf.Write(BuildReturnStatus(0))
-		buf.Write(BuildDoneProc(doneStatus|DoneCount, cmdCode, uint64(res.RowsAffected)))
+		WriteReturnStatusDirect(buf, 0)
+		WriteDoneDirect(buf, TokenDoneProc, doneStatus|DoneCount, cmdCode, uint64(res.RowsAffected))
 	}
 
-	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+	_ = stream.Close()
 }
 
 func isIdentByte(ch byte) bool {
@@ -2572,7 +2562,8 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		log.Printf("[DEV][TDS][Success] query=%s cols=%v rows=%d duration=%dµs", trimmed, res.Columns, len(res.Rows), res.DurationUS)
 	}
 
-	var buf bytes.Buffer
+	stream := sess.newStreamWriter(conn, PacketTabular)
+	buf := stream.Buffer()
 
 	upperCmd := strings.ToUpper(res.Command)
 	if upperCmd == "PRINT" {
@@ -2619,12 +2610,9 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		cols := s.inferColumnInfos(res)
 		buf.Write(BuildColMetaData(cols))
 
-		scratchVals := make([]any, len(res.Columns))
-		for _, row := range res.Rows {
-			sess.writeRowDirect(&buf, cols, row, scratchVals)
-		}
+		_ = s.streamQueryRows(stream, sess, cols, res.Rows, res.Values)
 
-		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, uint64(len(res.Rows))))
+		WriteDoneDirect(buf, TokenDone, doneStatus|DoneCount, 0xC1, uint64(len(res.Rows)))
 	} else {
 		cmdCode := uint16(0)
 		switch upperCmd {
@@ -2639,10 +2627,10 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		default:
 			cmdCode = 0x00
 		}
-		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, cmdCode, uint64(res.RowsAffected)))
+		WriteDoneDirect(buf, TokenDone, doneStatus|DoneCount, cmdCode, uint64(res.RowsAffected))
 	}
 
-	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+	_ = stream.Close()
 }
 
 func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {

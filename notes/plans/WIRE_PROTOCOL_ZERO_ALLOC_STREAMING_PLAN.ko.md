@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-10
 > - **최종 갱신일**: 2026-11-11
-> - **상태**: 1.0 릴리스 활성 구현 후보 (Active Implementation Candidate)
+> - **상태**: 완료 (`DONE` - Zero-Alloc 직렬화, 16KB/512행 PGWire 청크 스트리밍, TDS `WritePLPUTF16LE`/단일 패스 슬롯 인덱스/스트리밍 프레임 플러시 검증 완료)
 > - **연계 태스크 ID**: `PERF-WIRE-ZEROALLOC-1` (Taxonomy `P-3`)
 > - **연계 이슈/문서**: [`TODO.md`](../../TODO.md), [`TASKS.md`](../../TASKS.md), [`notes/TAXONOMY.ko.md`](../TAXONOMY.ko.md) `P-3`
 
@@ -100,3 +100,23 @@ VDBE/Volcano Row ──► Direct Slot Read ──► strconv.Append* ──► 
    - 1단계: `go build`
    - 2단계: `go test -race ./...` (0 데이터 레이스)
    - 3단계: Conventional Commits 형식 커밋.
+
+---
+
+## 5. 구현 완료 및 벤치마크 검증 결과 (`2026-11-11`)
+
+- **PGWire (`pkg/wire/row_encode.go`, `pkg/wire/server.go`)**:
+  - `handleExecute`, `writeExecutionResult`, `runAndWriteQueryWithFormats` 3개 중복 직렬화 루프를 `writePgDataRows` 단일 모듈로 통합 (`16KB / 512행` 청크 스트리밍, `128KB` 풀 캡).
+  - `appendDataRowFromRow` + `appendColumnValueFast` (`strconv.Append*`, `binary.BigEndian.AppendUint*`)로 셀당 힙 할당(`fmt.Sprintf`, `[]byte(v.String())`, `make([]byte, 4/8)`) 제거.
+  - 100,000행 벤치마크 (`go test -bench=BenchmarkPGWire_ -benchmem -run=^$ ./pkg/wire`):
+    - Legacy (`BenchmarkPGWire_LegacyDataRows_100k-8`): `20,420,898 ns/op`, `8,001,269 B/op`, `600,000 allocs/op`
+    - Zero-Alloc Text Stream (`BenchmarkPGWire_ZeroAllocStream_100k-8`): `9,084,214 ns/op` (**2.25x 가속**), `307 B/op`, **`0 allocs/op`**
+    - Zero-Alloc Binary Stream (`BenchmarkPGWire_ZeroAllocStream_Binary_100k-8`): `5,902,400 ns/op` (**3.46x 가속**), `201 B/op`, **`0 allocs/op`**
+- **TDS (`pkg/wire/tds/row_stream.go`, `pkg/wire/tds/token.go`, `pkg/wire/tds/server.go`)**:
+  - `tdsPayloadBufferPool`(128KB 상한) 및 `tdsStreamWriter`로 대용량 결과셋의 멀티 메가바이트 단일 버퍼링 제거.
+  - `writeTdsTextColumn` + `writePLPUTF16LE`로 `NVARCHAR`/`VARCHAR`/PLP 열 직렬화 시 `fmt.Sprintf`/`EncodeUTF16LE` 힙 할당 제거.
+  - `resolveRowSlots` / `WriteRowDirectValues` / `WriteNBCRowDirectValues`로 `res.Values` $O(1)$ 직접 슬롯 인덱싱 및 맵 다중 스캔 제거.
+  - 100,000행 벤치마크 (`go test -bench="BenchmarkTDS_LegacyResultSet_100k|BenchmarkTDS_ZeroAllocStream_100k" -benchmem -run=^$ ./pkg/wire/tds`):
+    - Legacy (`BenchmarkTDS_LegacyResultSet_100k-8`): `23,866,891 ns/op`, `16,779,691 B/op`, `20 allocs/op`
+    - Zero-Alloc Stream (`BenchmarkTDS_ZeroAllocStream_100k-8`): `24,726,224 ns/op`, `455 B/op` (**99.997% 메모리 할당 절감**), **`1 allocs/op`**
+- **회귀 테스트**: `go test -tags wiredtiger -count=1 -race ./...` 전 패키지 100% PASS (0 data races).
