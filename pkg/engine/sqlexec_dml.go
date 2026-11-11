@@ -101,7 +101,7 @@ func parseOnConflict(s string) (*onConflictClause, error) {
 	assignmentParts := splitAssignments(setBody)
 	var assignments []onConflictAssignment
 	for _, part := range assignmentParts {
-		eqIdx := strings.Index(part, "=")
+		eqIdx := sqlutil.FindTopLevelChar(part, '=')
 		if eqIdx == -1 {
 			return nil, fmt.Errorf("invalid assignment in DO UPDATE SET: %q", part)
 		}

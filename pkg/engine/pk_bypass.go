@@ -99,9 +99,8 @@ func cleanLiteral(s string) string {
 //      "[dbo].[users]" -> "[dbo].[users]", ""
 func splitTableAndAlias(tablePart string) (string, string) {
 	tablePart = strings.TrimSpace(tablePart)
-	upper := strings.ToUpper(tablePart)
-	if idx := strings.Index(upper, " AS "); idx != -1 {
-		return strings.TrimSpace(tablePart[:idx]), strings.TrimSpace(tablePart[idx+4:])
+	if idx := sqlutil.FindTopLevelKeyword(tablePart, "AS"); idx != -1 {
+		return strings.TrimSpace(tablePart[:idx]), strings.TrimSpace(tablePart[idx+len("AS"):])
 	}
 	// If ends with bracket, quote, or backtick, it has no trailing alias
 	if strings.HasSuffix(tablePart, "]") || strings.HasSuffix(tablePart, "\"") || strings.HasSuffix(tablePart, "`") {
@@ -197,20 +196,18 @@ func parsePKLookupQuery(query string) (*pkParsedQuery, bool) {
 		return nil, false
 	}
 
-	// Must have single '=' and no comparison operators like !=, <>, <=, >=, ==
-	if strings.Contains(wherePart, "!=") ||
-		strings.Contains(wherePart, "<>") ||
-		strings.Contains(wherePart, "<=") ||
-		strings.Contains(wherePart, ">=") ||
-		strings.Contains(wherePart, "==") {
+	// Must have single '=' and no comparison operators like !=, <>, <=, >=, == outside quotes
+	if sqlutil.FindTopLevelChar(wherePart, '!') != -1 ||
+		sqlutil.FindTopLevelChar(wherePart, '<') != -1 ||
+		sqlutil.FindTopLevelChar(wherePart, '>') != -1 {
 		return nil, false
 	}
 
-	eqIdx := strings.Index(wherePart, "=")
+	eqIdx := sqlutil.FindTopLevelChar(wherePart, '=')
 	if eqIdx == -1 {
 		return nil, false
 	}
-	if strings.Index(wherePart[eqIdx+1:], "=") != -1 {
+	if sqlutil.FindTopLevelChar(wherePart[eqIdx+1:], '=') != -1 {
 		return nil, false
 	}
 
