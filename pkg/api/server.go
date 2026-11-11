@@ -551,11 +551,11 @@ func (s *Server) routes() {
 	})
 
 	// Realtime SSE Change Stream (PocketBase-style Live Event Stream)
-	s.mux.HandleFunc("GET /api/realtime", s.handleRealtimeStream)
+	s.mux.HandleFunc("GET /api/realtime", s.wrapAuth(s.handleRealtimeStream, false, ""))
 
 	// CDC (Change Data Capture) Stream (NDJSON / SSE for DuckDB, Kafka, and analytical ingestion)
-	s.mux.HandleFunc("GET /api/cdc/stream", s.handleCDCStream)
-	s.mux.HandleFunc("GET /api/cdc/outbox/status", s.handleOutboxStatus)
+	s.mux.HandleFunc("GET /api/cdc/stream", s.wrapAuth(s.handleCDCStream, false, ""))
+	s.mux.HandleFunc("GET /api/cdc/outbox/status", s.wrapSuperuser(s.handleOutboxStatus))
 
 	// Auth Endpoints (PocketBase compatible)
 	s.mux.HandleFunc("POST /api/auth/login", s.handleAuthLogin)
@@ -577,8 +577,8 @@ func (s *Server) routes() {
 
 	// SQL Query Execution API
 	s.mux.HandleFunc("POST /api/sql", s.wrapAuth(s.handleExecuteSQL, false, ""))
-	s.mux.HandleFunc("POST /api/query/cancel", s.handleQueryCancel)
-	s.mux.HandleFunc("GET /api/queries/active", s.handleListActiveQueries)
+	s.mux.HandleFunc("POST /api/query/cancel", s.wrapSuperuser(s.handleQueryCancel))
+	s.mux.HandleFunc("GET /api/queries/active", s.wrapSuperuser(s.handleListActiveQueries))
 	s.mux.HandleFunc("GET /api/overview", s.wrapAuth(s.handleOverviewStats, false, ""))
 
 	// Prometheus Metrics & OpenTelemetry Observability API
@@ -587,16 +587,16 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/v1/metrics", s.handleOpenTelemetryMetrics)
 
 	// Slow Queries Management API
-	s.mux.HandleFunc("GET /api/slow-queries", s.handleGetSlowQueries)
-	s.mux.HandleFunc("POST /api/slow-queries/threshold", s.handleSetSlowQueryThreshold)
-	s.mux.HandleFunc("POST /api/slow-queries/logfile", s.handleSetSlowQueryLogFile)
-	s.mux.HandleFunc("DELETE /api/slow-queries", s.handleClearSlowQueries)
+	s.mux.HandleFunc("GET /api/slow-queries", s.wrapSuperuser(s.handleGetSlowQueries))
+	s.mux.HandleFunc("POST /api/slow-queries/threshold", s.wrapSuperuser(s.handleSetSlowQueryThreshold))
+	s.mux.HandleFunc("POST /api/slow-queries/logfile", s.wrapSuperuser(s.handleSetSlowQueryLogFile))
+	s.mux.HandleFunc("DELETE /api/slow-queries", s.wrapSuperuser(s.handleClearSlowQueries))
 
 	// General Queries Log API
-	s.mux.HandleFunc("GET /api/general-queries", s.handleGetGeneralQueries)
-	s.mux.HandleFunc("POST /api/general-queries/toggle", s.handleToggleGeneralLog)
-	s.mux.HandleFunc("POST /api/general-queries/logfile", s.handleSetGeneralLogFile)
-	s.mux.HandleFunc("DELETE /api/general-queries", s.handleClearGeneralQueries)
+	s.mux.HandleFunc("GET /api/general-queries", s.wrapSuperuser(s.handleGetGeneralQueries))
+	s.mux.HandleFunc("POST /api/general-queries/toggle", s.wrapSuperuser(s.handleToggleGeneralLog))
+	s.mux.HandleFunc("POST /api/general-queries/logfile", s.wrapSuperuser(s.handleSetGeneralLogFile))
+	s.mux.HandleFunc("DELETE /api/general-queries", s.wrapSuperuser(s.handleClearGeneralQueries))
 
 	// Tables API (PocketBase-style Collections & Records CRUD)
 	s.mux.HandleFunc("GET /api/tables", s.wrapAuth(s.handleListTables, false, ""))
@@ -679,6 +679,11 @@ func (s *Server) wrapSuperuser(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			if qToken := r.URL.Query().Get("token"); qToken != "" {
+				authHeader = "Bearer " + qToken
+			}
+		}
 		if !strings.HasPrefix(authHeader, "Bearer ") {
 			writeError(w, http.StatusUnauthorized, fmt.Errorf("superuser authorization required"))
 			return
@@ -707,9 +712,17 @@ func (s *Server) wrapAuth(next http.HandlerFunc, isWrite bool, tableName string)
 			return
 		}
 
-		// 1. Check API Key header: X-API-Key or Authorization: ApiKey <key>
+		// 1. Check API Key header: X-API-Key or Authorization: ApiKey <key> or ?api_key=<key>
 		apiKey := r.Header.Get("X-API-Key")
+		if apiKey == "" {
+			apiKey = r.URL.Query().Get("api_key")
+		}
 		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			if qToken := r.URL.Query().Get("token"); qToken != "" {
+				authHeader = "Bearer " + qToken
+			}
+		}
 		if apiKey == "" && strings.HasPrefix(authHeader, "ApiKey ") {
 			apiKey = strings.TrimPrefix(authHeader, "ApiKey ")
 		}

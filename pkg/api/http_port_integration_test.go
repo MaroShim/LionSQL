@@ -711,6 +711,7 @@ END;`
 		defer cdcCancel()
 
 		cdcReq, _ := http.NewRequestWithContext(cdcCtx, http.MethodGet, baseURL+"/api/cdc/stream", nil)
+		cdcReq.Header.Set("Authorization", "Bearer "+superuserToken)
 		cdcResp, err := client.Do(cdcReq)
 		if err != nil {
 			t.Fatalf("GET /api/cdc/stream failed: %v", err)
@@ -775,6 +776,7 @@ END;`
 		defer rtCancel()
 
 		rtReq, _ := http.NewRequestWithContext(rtCtx, http.MethodGet, baseURL+"/api/realtime", nil)
+		rtReq.Header.Set("Authorization", "Bearer "+superuserToken)
 		rtResp, err := client.Do(rtReq)
 		if err != nil {
 			t.Fatalf("GET /api/realtime failed: %v", err)

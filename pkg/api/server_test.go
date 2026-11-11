@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"lionsql/pkg/auth"
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/storage/memengine"
 )
@@ -1018,6 +1019,92 @@ func TestAPI_SeedOnNonEmptyDatabase_ReturnsConflict(t *testing.T) {
 	}
 	if !strings.Contains(errResp["error"], "empty database") {
 		t.Errorf("expected error message to mention 'empty database', got: %s", errResp["error"])
+	}
+}
+
+func TestAPI_ProtectedAdminEndpoints_AuditFull035(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	authSvc := auth.NewAuthService(auth.Config{})
+	_, _ = authSvc.EnsureDefaultSuperuser("admin@lionsql.local", "SuperSecretPass123!")
+
+	srv := NewServerWithAuth(cat, eng, authSvc, true) // enableAuth = true
+
+	// 1. Unauthenticated requests to sensitive endpoints must return 401 Unauthorized
+	endpoints := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/api/query/cancel"},
+		{http.MethodGet, "/api/queries/active"},
+		{http.MethodGet, "/api/slow-queries"},
+		{http.MethodPost, "/api/slow-queries/threshold"},
+		{http.MethodPost, "/api/slow-queries/logfile"},
+		{http.MethodDelete, "/api/slow-queries"},
+		{http.MethodGet, "/api/general-queries"},
+		{http.MethodPost, "/api/general-queries/toggle"},
+		{http.MethodPost, "/api/general-queries/logfile"},
+		{http.MethodDelete, "/api/general-queries"},
+		{http.MethodGet, "/api/cdc/outbox/status"},
+		{http.MethodGet, "/api/realtime"},
+		{http.MethodGet, "/api/cdc/stream"},
+	}
+
+	for _, ep := range endpoints {
+		req := httptest.NewRequest(ep.method, ep.path, nil)
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Errorf("AUDIT-FULL-035: expected 401 Unauthorized for unauthenticated %s %s, got %d: %s",
+				ep.method, ep.path, rec.Code, rec.Body.String())
+		}
+	}
+
+	// 2. Obtain superuser token
+	loginPayload, _ := json.Marshal(map[string]string{
+		"identity": "admin@lionsql.local",
+		"password": "SuperSecretPass123!",
+	})
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	loginRec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(loginRec, loginReq)
+
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("failed to login superuser: %d: %s", loginRec.Code, loginRec.Body.String())
+	}
+	var authRes struct {
+		Token string `json:"token"`
+	}
+	_ = json.Unmarshal(loginRec.Body.Bytes(), &authRes)
+	if authRes.Token == "" {
+		t.Fatalf("expected valid token from login")
+	}
+
+	// 3. Authenticated request with superuser token must succeed (200 OK)
+	authEndpoints := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/api/queries/active"},
+		{http.MethodGet, "/api/slow-queries"},
+		{http.MethodGet, "/api/general-queries"},
+		{http.MethodGet, "/api/cdc/outbox/status"},
+	}
+
+	for _, ep := range authEndpoints {
+		req := httptest.NewRequest(ep.method, ep.path, nil)
+		req.Header.Set("Authorization", "Bearer "+authRes.Token)
+		rec := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+
+		if rec.Code == http.StatusUnauthorized || rec.Code == http.StatusForbidden {
+			t.Errorf("expected authorized access for superuser %s %s, got %d: %s",
+				ep.method, ep.path, rec.Code, rec.Body.String())
+		}
 	}
 }
 
