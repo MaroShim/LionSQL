@@ -220,42 +220,8 @@ func extractTrailingOrderByAndLimit(sql string) (query string, orderBy string, l
 	}
 
 	// Find top-level ORDER BY and LIMIT from the right
-	parenDepth := 0
-	inQuote := false
-	orderByIdx := -1
-	limitIdx := -1
-
-	for i := 0; i < n; i++ {
-		ch := trimmed[i]
-		if ch == '\'' {
-			inQuote = !inQuote
-			continue
-		}
-		if inQuote {
-			continue
-		}
-		if ch == '(' {
-			parenDepth++
-			continue
-		}
-		if ch == ')' {
-			if parenDepth > 0 {
-				parenDepth--
-			}
-			continue
-		}
-
-		if parenDepth == 0 {
-			prevOk := (i == 0) || unicode.IsSpace(rune(trimmed[i-1]))
-			if prevOk {
-				if i+8 <= n && strings.EqualFold(trimmed[i:i+8], "ORDER BY") && (i+8 == n || unicode.IsSpace(rune(trimmed[i+8]))) {
-					orderByIdx = i
-				} else if i+5 <= n && strings.EqualFold(trimmed[i:i+5], "LIMIT") && (i+5 == n || unicode.IsSpace(rune(trimmed[i+5]))) {
-					limitIdx = i
-				}
-			}
-		}
-	}
+	orderByIdx := sqlutil.FindTopLevelKeyword(trimmed, "ORDER BY")
+	limitIdx := sqlutil.FindTopLevelKeyword(trimmed, "LIMIT")
 
 	if orderByIdx != -1 && limitIdx != -1 && limitIdx > orderByIdx {
 		query = strings.TrimSpace(trimmed[:orderByIdx])
