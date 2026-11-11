@@ -405,24 +405,55 @@ func isPlanSortedOnKey(plan *planner.PlanNode, key string) bool {
 	if plan == nil || key == "" {
 		return false
 	}
-	cleanKey := key
-	if idx := strings.Index(cleanKey, "."); idx != -1 {
+	cleanKey := strings.TrimSpace(key)
+	tableQual := ""
+	if idx := strings.LastIndex(cleanKey, "."); idx != -1 {
+		tableQual = cleanKey[:idx]
 		cleanKey = cleanKey[idx+1:]
 	}
 	cleanKey = strings.ToLower(strings.Trim(cleanKey, "\"`[]"))
+	tableQual = strings.ToLower(strings.Trim(tableQual, "\"`[]"))
+
+	// If table qualifier exists (e.g. u.id or dbo.users.id), extract the trailing table name
+	// and verify it matches this node's Relation or Alias.
+	// This strictly prevents cross-table column collision where different tables have the same column name.
+	if tableQual != "" {
+		tName := tableQual
+		if dot := strings.LastIndex(tName, "."); dot != -1 {
+			tName = tName[dot+1:]
+		}
+		tName = strings.ToLower(strings.Trim(tName, "\"`[]"))
+
+		matchesTable := false
+		if plan.Alias != "" && (strings.EqualFold(plan.Alias, tableQual) || strings.EqualFold(plan.Alias, tName)) {
+			matchesTable = true
+		} else if plan.Relation != "" && (strings.EqualFold(plan.Relation, tableQual) || strings.EqualFold(plan.Relation, tName)) {
+			matchesTable = true
+		}
+		if !matchesTable {
+			return false
+		}
+	}
 
 	if plan.Type == planner.NodeSort {
-		sKey := plan.SortKey
-		if idx := strings.Index(sKey, "."); idx != -1 {
+		sKey := strings.TrimSpace(plan.SortKey)
+		sTableQual := ""
+		if idx := strings.LastIndex(sKey, "."); idx != -1 {
+			sTableQual = sKey[:idx]
 			sKey = sKey[idx+1:]
 		}
 		sKey = strings.ToLower(strings.Trim(sKey, "\"`[]"))
+		sTableQual = strings.ToLower(strings.Trim(sTableQual, "\"`[]"))
+
+		if tableQual != "" && sTableQual != "" && !strings.EqualFold(tableQual, sTableQual) {
+			return false
+		}
 		return sKey == cleanKey
 	}
 
 	if plan.Type == planner.NodeIndexScan || plan.Type == planner.NodeIndexOnlyScan {
-		iCond := strings.ToLower(plan.IndexCond)
-		if strings.Contains(iCond, cleanKey) {
+		leadCol := planner.ExtractIndexLeadingColumn(plan.IndexCond)
+		if leadCol != "" && strings.EqualFold(leadCol, cleanKey) {
 			return true
 		}
 	}

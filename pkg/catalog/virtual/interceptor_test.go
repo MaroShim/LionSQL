@@ -281,3 +281,41 @@ func BenchmarkIsVirtualCatalogJoinQuery_CatalogQuery(b *testing.B) {
 	}
 }
 
+func TestVirtualCatalog_LikeAndNotLikeFiltering(t *testing.T) {
+	cols := []string{"table_name"}
+	rows := []map[string]any{
+		{"table_name": "app_users"},
+		{"table_name": "app_orders"},
+		{"table_name": "app_orders_tmp"},
+		{"table_name": "col_literal"},
+		{"table_name": "sys_config"},
+	}
+
+	// 1. LIKE filtering
+	filtered1, err := virtual.FormatResultWithSQL(cols, rows, "SELECT table_name FROM t WHERE table_name LIKE 'app_%'")
+	if err != nil {
+		t.Fatalf("FormatResultWithSQL failed: %v", err)
+	}
+	if len(filtered1.Rows) != 3 {
+		t.Fatalf("expected 3 rows for app_%%, got %d", len(filtered1.Rows))
+	}
+
+	// 2. NOT LIKE filtering
+	filtered2, err := virtual.FormatResultWithSQL(cols, rows, "SELECT table_name FROM t WHERE table_name LIKE 'app_%' AND table_name NOT LIKE '%_tmp'")
+	if err != nil {
+		t.Fatalf("FormatResultWithSQL failed: %v", err)
+	}
+	if len(filtered2.Rows) != 2 {
+		t.Fatalf("expected 2 rows for NOT LIKE, got %d", len(filtered2.Rows))
+	}
+
+	// 3. Literal bracket escape: col[_]literal
+	filtered3, err := virtual.FormatResultWithSQL(cols, rows, "SELECT table_name FROM t WHERE table_name LIKE 'col[_]literal'")
+	if err != nil {
+		t.Fatalf("FormatResultWithSQL failed: %v", err)
+	}
+	if len(filtered3.Rows) != 1 || filtered3.Rows[0]["table_name"] != "col_literal" {
+		t.Fatalf("expected 1 row for col[_]literal, got %v", filtered3.Rows)
+	}
+}
+

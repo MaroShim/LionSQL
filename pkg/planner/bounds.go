@@ -200,14 +200,14 @@ func SplitOnAnd(where string) []string {
 
 		if depth == 0 {
 			// Check for BETWEEN keyword
-			if i+7 <= len(upper) && (i == 0 || upper[i-1] == ' ' || upper[i-1] == ')') && upper[i:i+7] == "BETWEEN" && (i+7 == len(upper) || upper[i+7] == ' ') {
+			if i+7 <= len(upper) && (i == 0 || sqlutil.IsWordBoundary(upper[i-1])) && upper[i:i+7] == "BETWEEN" && (i+7 == len(upper) || sqlutil.IsWordBoundary(upper[i+7])) {
 				inBetween = true
 				i += 6
 				continue
 			}
 
 			// Check for AND keyword
-			if i+3 <= len(upper) && (i == 0 || upper[i-1] == ' ' || upper[i-1] == ')') && (upper[i:i+3] == "AND" && (i+3 == len(upper) || upper[i+3] == ' ' || upper[i+3] == '(')) {
+			if i+3 <= len(upper) && (i == 0 || sqlutil.IsWordBoundary(upper[i-1])) && (upper[i:i+3] == "AND" && (i+3 == len(upper) || sqlutil.IsWordBoundary(upper[i+3]))) {
 				if inBetween {
 					// This AND belongs to BETWEEN ... AND ...
 					inBetween = false
@@ -254,6 +254,25 @@ func stripEnclosingParens(s string) string {
 		}
 		s = s[1 : len(s)-1]
 	}
+}
+
+// ExtractIndexLeadingColumn extracts the leading indexed column name from an IndexCond string.
+// e.g. "(order_id > 100)" -> "order_id", "([orders].[id] = 5)" -> "id", "(valid = 1)" -> "valid"
+func ExtractIndexLeadingColumn(cond string) string {
+	cond = strings.Trim(strings.TrimSpace(cond), "()")
+	cond = strings.TrimSpace(cond)
+	if cond == "" {
+		return ""
+	}
+	idx := strings.IndexAny(cond, " \t\r\n=><!")
+	first := cond
+	if idx != -1 {
+		first = cond[:idx]
+	}
+	if dot := strings.LastIndex(first, "."); dot != -1 {
+		first = first[dot+1:]
+	}
+	return strings.ToLower(strings.Trim(first, "\"`[]"))
 }
 
 // HasDisjunction reports whether an expression contains an OR operator outside

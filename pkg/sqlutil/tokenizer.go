@@ -160,9 +160,25 @@ func SplitTopLevelTokens(s string) []string {
 	inSingleQuote := false
 	inDoubleQuote := false
 	inBracket := false
+	inLineComment := false
+	inBlockComment := false
 
 	for i := 0; i < n; i++ {
 		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
 
 		if inSingleQuote {
 			if ch == '\'' {
@@ -192,6 +208,25 @@ func SplitTopLevelTokens(s string) []string {
 				}
 				inBracket = false
 			}
+			continue
+		}
+
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			if start != -1 && depth == 0 {
+				tokens = append(tokens, s[start:i])
+				start = -1
+			}
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			if start != -1 && depth == 0 {
+				tokens = append(tokens, s[start:i])
+				start = -1
+			}
+			inBlockComment = true
+			i++
 			continue
 		}
 
@@ -327,9 +362,25 @@ func SplitAndConditions(where string) []string {
 	inSingleQuote := false
 	inDoubleQuote := false
 	inBracket := false
+	inLineComment := false
+	inBlockComment := false
 
 	for i := 0; i < n; i++ {
 		ch := where[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && where[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
 
 		if inSingleQuote {
 			if ch == '\'' {
@@ -359,6 +410,17 @@ func SplitAndConditions(where string) []string {
 				}
 				inBracket = false
 			}
+			continue
+		}
+
+		if ch == '-' && i+1 < n && where[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && where[i+1] == '*' {
+			inBlockComment = true
+			i++
 			continue
 		}
 
@@ -439,9 +501,26 @@ func HasTopLevelOr(s string) bool {
 	inSingleQuote := false
 	inDoubleQuote := false
 	inBracket := false
+	inLineComment := false
+	inBlockComment := false
 
 	for i := 0; i < n; i++ {
 		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+
 		if inSingleQuote {
 			if ch == '\'' {
 				if i+1 < n && s[i+1] == '\'' {
@@ -466,6 +545,17 @@ func HasTopLevelOr(s string) bool {
 			if ch == ']' {
 				inBracket = false
 			}
+			continue
+		}
+
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			inBlockComment = true
+			i++
 			continue
 		}
 		if ch == '\'' {
@@ -905,9 +995,25 @@ func FindTopLevelChar(s string, target byte) int {
 	inSingleQuote := false
 	inDoubleQuote := false
 	inBracket := false
+	inLineComment := false
+	inBlockComment := false
 
 	for i := 0; i < n; i++ {
 		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
 
 		if inSingleQuote {
 			if ch == '\'' {
@@ -937,6 +1043,17 @@ func FindTopLevelChar(s string, target byte) int {
 				}
 				inBracket = false
 			}
+			continue
+		}
+
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			inBlockComment = true
+			i++
 			continue
 		}
 
@@ -1242,6 +1359,8 @@ func FindTopLevelArithmeticOp(s string) (int, byte) {
 	inSingleQuote := false
 	inDoubleQuote := false
 	inBracket := false
+	inLineComment := false
+	inBlockComment := false
 
 	addSubIdx := -1
 	var addSubOp byte
@@ -1250,6 +1369,21 @@ func FindTopLevelArithmeticOp(s string) (int, byte) {
 
 	for i := 0; i < len(s); i++ {
 		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < len(s) && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+
 		if inSingleQuote {
 			if ch == '\'' {
 				if i+1 < len(s) && s[i+1] == '\'' {
@@ -1278,6 +1412,17 @@ func FindTopLevelArithmeticOp(s string) (int, byte) {
 				}
 				inBracket = false
 			}
+			continue
+		}
+
+		if ch == '-' && i+1 < len(s) && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < len(s) && s[i+1] == '*' {
+			inBlockComment = true
+			i++
 			continue
 		}
 
@@ -1327,9 +1472,36 @@ func ExtractTopLevelTuples(s string) []string {
 	depth := 0
 	inSingleQuote := false
 	inDoubleQuote := false
+	inBracket := false
+	inLineComment := false
+	inBlockComment := false
 
 	for i := 0; i < len(s); i++ {
 		c := s[i]
+
+		if inLineComment {
+			if inTuple {
+				cur.WriteByte(c)
+			}
+			if c == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if inTuple {
+				cur.WriteByte(c)
+			}
+			if c == '*' && i+1 < len(s) && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+				if inTuple {
+					cur.WriteByte('/')
+				}
+			}
+			continue
+		}
+
 		if inSingleQuote {
 			cur.WriteByte(c)
 			if c == '\'' {
@@ -1351,6 +1523,47 @@ func ExtractTopLevelTuples(s string) []string {
 					continue
 				}
 				inDoubleQuote = false
+			}
+			continue
+		}
+		if inBracket {
+			if c == ']' {
+				if i+1 < len(s) && s[i+1] == ']' {
+					i++
+					if inTuple {
+						cur.WriteByte(s[i])
+					}
+					continue
+				}
+				inBracket = false
+			}
+			if inTuple {
+				cur.WriteByte(c)
+			}
+			continue
+		}
+
+		if c == '-' && i+1 < len(s) && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			if inTuple {
+				cur.WriteString("--")
+			}
+			continue
+		}
+		if c == '/' && i+1 < len(s) && s[i+1] == '*' {
+			inBlockComment = true
+			i++
+			if inTuple {
+				cur.WriteString("/*")
+			}
+			continue
+		}
+
+		if c == '[' {
+			inBracket = true
+			if inTuple {
+				cur.WriteByte(c)
 			}
 			continue
 		}
@@ -1434,10 +1647,32 @@ func ReplaceCorrelatedTokens(s string, replacements map[string]string) string {
 	sb.Grow(n + 16)
 
 	inSingleQuote := false
+	inLineComment := false
+	inBlockComment := false
 
 	i := 0
 	for i < n {
 		ch := s[i]
+
+		if inLineComment {
+			sb.WriteByte(ch)
+			if ch == '\n' {
+				inLineComment = false
+			}
+			i++
+			continue
+		}
+		if inBlockComment {
+			sb.WriteByte(ch)
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				sb.WriteByte(s[i+1])
+				inBlockComment = false
+				i += 2
+				continue
+			}
+			i++
+			continue
+		}
 
 		if inSingleQuote {
 			sb.WriteByte(ch)
@@ -1450,6 +1685,21 @@ func ReplaceCorrelatedTokens(s string, replacements map[string]string) string {
 				inSingleQuote = false
 			}
 			i++
+			continue
+		}
+
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			sb.WriteByte(ch)
+			sb.WriteByte(s[i+1])
+			inLineComment = true
+			i += 2
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			sb.WriteByte(ch)
+			sb.WriteByte(s[i+1])
+			inBlockComment = true
+			i += 2
 			continue
 		}
 
@@ -1551,9 +1801,29 @@ func IsCorrelatedSubquery(innerSQL string, outerNames []string) bool {
 
 	n := len(innerSQL)
 	inSingleQuote := false
+	inLineComment := false
+	inBlockComment := false
 	i := 0
 	for i < n {
 		ch := innerSQL[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			i++
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && innerSQL[i+1] == '/' {
+				inBlockComment = false
+				i += 2
+				continue
+			}
+			i++
+			continue
+		}
+
 		if inSingleQuote {
 			if ch == '\'' {
 				if i+1 < n && innerSQL[i+1] == '\'' {
@@ -1565,6 +1835,18 @@ func IsCorrelatedSubquery(innerSQL string, outerNames []string) bool {
 			i++
 			continue
 		}
+
+		if ch == '-' && i+1 < n && innerSQL[i+1] == '-' {
+			inLineComment = true
+			i += 2
+			continue
+		}
+		if ch == '/' && i+1 < n && innerSQL[i+1] == '*' {
+			inBlockComment = true
+			i += 2
+			continue
+		}
+
 		if ch == '\'' {
 			inSingleQuote = true
 			i++

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -115,6 +116,16 @@ func (cs *ClientSession) GetQueryContext() context.Context {
 		return ctx
 	}
 	return context.Background()
+}
+
+// GetUser safely returns the active database user principal under cs.Mu.
+func (cs *ClientSession) GetUser() string {
+	if cs == nil {
+		return ""
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	return cs.User
 }
 
 // HasCancelFunc reports whether an active statement cancellation function is set under cancelMu.
@@ -460,7 +471,10 @@ func (cs *ClientSession) ExecuteProgram(
 		res, err = exec.ExecuteInTxWithSessionContext(ctx, prog, paramMap, tx, sess, nil)
 		cs.lastUsedAt = time.Now()
 		if err != nil {
-			cs.TxFailed = true
+			isTimeoutOrCancel := errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
+			if cs.IsPostgres() || isTimeoutOrCancel {
+				cs.TxFailed = true
+			}
 		}
 		cs.Mu.Unlock()
 		return res, false, err

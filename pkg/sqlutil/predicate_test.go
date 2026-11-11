@@ -292,6 +292,13 @@ func TestExtractEqualityFilter(t *testing.T) {
 			expected: "accounts",
 			found:    true,
 		},
+		{
+			name:     "object_name call in XORM",
+			sql:      "SELECT * FROM sys.indexes ixs WHERE OBJECT_NAME(ixs.object_id) = 'users' AND ixs.is_primary_key = 0",
+			cols:     []string{"object_name(ixs.object_id)", "object_name"},
+			expected: "users",
+			found:    true,
+		},
 	}
 
 	for _, tt := range tests {

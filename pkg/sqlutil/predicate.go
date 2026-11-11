@@ -696,12 +696,50 @@ func ExtractEqualityFilter(sql string, targetCols ...string) (string, bool) {
 				leftEnd--
 			}
 			leftStart := leftEnd
+			// If left-hand side ends with ')', scan back over balanced parentheses to capture function call (e.g. OBJECT_NAME(...))
+			if leftStart >= 0 && sql[leftStart] == ')' {
+				pDepth := 1
+				leftStart--
+				for leftStart >= 0 && pDepth > 0 {
+					if sql[leftStart] == ')' {
+						pDepth++
+					} else if sql[leftStart] == '(' {
+						pDepth--
+					}
+					leftStart--
+				}
+				for leftStart >= 0 && (sql[leftStart] == ' ' || sql[leftStart] == '\t' || sql[leftStart] == '\n' || sql[leftStart] == '\r') {
+					leftStart--
+				}
+			}
 			for leftStart >= 0 && (IsIdentChar(sql[leftStart]) || sql[leftStart] == '.' || sql[leftStart] == '[' || sql[leftStart] == ']') {
 				leftStart--
 			}
-			leftIdent := strings.Trim(sql[leftStart+1:leftEnd+1], "[] ")
-			if idx := strings.LastIndex(leftIdent, "."); idx != -1 {
-				leftIdent = strings.Trim(leftIdent[idx+1:], "[] ")
+			rawLeft := strings.Trim(sql[leftStart+1:leftEnd+1], " \t\r\n")
+
+			matched := false
+			upperRaw := strings.ToUpper(rawLeft)
+			if targetMap[upperRaw] {
+				matched = true
+			}
+			if !matched && strings.Contains(upperRaw, "(") {
+				idxP := strings.Index(upperRaw, "(")
+				fn := strings.Trim(upperRaw[:idxP], "[] \t\r\n")
+				if dot := strings.LastIndex(fn, "."); dot != -1 {
+					fn = strings.Trim(fn[dot+1:], "[] \t\r\n")
+				}
+				if targetMap[fn] {
+					matched = true
+				}
+			}
+			if !matched {
+				leftIdent := strings.Trim(rawLeft, "[] ")
+				if idx := strings.LastIndex(leftIdent, "."); idx != -1 {
+					leftIdent = strings.Trim(leftIdent[idx+1:], "[] ")
+				}
+				if targetMap[strings.ToUpper(leftIdent)] {
+					matched = true
+				}
 			}
 
 			// Find right-hand side token
@@ -710,7 +748,7 @@ func ExtractEqualityFilter(sql string, targetCols ...string) (string, bool) {
 				rightStart++
 			}
 
-			if targetMap[strings.ToUpper(leftIdent)] && rightStart < n {
+			if matched && rightStart < n {
 				// Parse right value (literal string '...', N'...', or number)
 				val := ""
 				curr := rightStart

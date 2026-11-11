@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"testing"
+
+	"lionsql/pkg/planner"
 )
 
 // mockDuplicateKeyIterator yields total tuples all having the exact same join key.
@@ -112,4 +114,74 @@ func TestMergeJoin_Regression_P0_13_WorkMemGuard(t *testing.T) {
 		t.Fatalf("expected 500 joined rows, got %d", count)
 	}
 	t.Logf("[P0-13 PASS] Successfully evaluated 500 duplicate key merge join rows within DefaultWorkMem budget.")
+}
+
+// TestIsPlanSortedOnKey_SubstringCollision verifies that isPlanSortedOnKey does not
+// falsely treat substrings (e.g. order_id or valid matching 'id') as being sorted on the join key (AUDIT-FULL-024).
+func TestIsPlanSortedOnKey_SubstringCollision(t *testing.T) {
+	// Case 1: Index on order_id, join key is "id"
+	plan := &planner.PlanNode{
+		Type:      planner.NodeIndexScan,
+		IndexCond: "(order_id > 100)",
+	}
+	if isPlanSortedOnKey(plan, "id") {
+		t.Fatalf("CRITICAL BUG: isPlanSortedOnKey returned true for join key 'id' when index is on 'order_id'")
+	}
+
+	// Case 2: Index on valid, join key is "id"
+	planValid := &planner.PlanNode{
+		Type:      planner.NodeIndexScan,
+		IndexCond: "(valid = 1)",
+	}
+	if isPlanSortedOnKey(planValid, "id") {
+		t.Fatalf("CRITICAL BUG: isPlanSortedOnKey returned true for join key 'id' when index is on 'valid'")
+	}
+
+	// Case 3: Index on id, join key is "id" -> must return true
+	planID := &planner.PlanNode{
+		Type:      planner.NodeIndexScan,
+		IndexCond: "(id > 100)",
+	}
+	if !isPlanSortedOnKey(planID, "id") {
+		t.Fatalf("expected true for exact match 'id', got false")
+	}
+
+	// Case 4: Index on [orders].[id], join key is "orders.id" -> must return true
+	planQualified := &planner.PlanNode{
+		Type:      planner.NodeIndexOnlyScan,
+		Relation:  "orders",
+		IndexCond: "([orders].[id] > 100)",
+	}
+	if !isPlanSortedOnKey(planQualified, "orders.id") {
+		t.Fatalf("expected true for qualified match, got false")
+	}
+
+	// Case 5 (Cross-Table Collision Protection):
+	// Both 'orders' and 'users' have an 'id' column.
+	// When checking whether 'orders' is sorted on 'u.id' (users.id),
+	// isPlanSortedOnKey must strictly REJECT because 'u' does not match 'orders'!
+	planOrders := &planner.PlanNode{
+		Type:      planner.NodeIndexScan,
+		Relation:  "orders",
+		Alias:     "o",
+		IndexCond: "(id > 0)", // orders' PK index on id
+	}
+	if isPlanSortedOnKey(planOrders, "u.id") {
+		t.Fatalf("CRITICAL SECURITY / LOGICAL ERROR: isPlanSortedOnKey matched 'u.id' on 'orders' node due to cross-table column collision!")
+	}
+	if isPlanSortedOnKey(planOrders, "users.id") {
+		t.Fatalf("CRITICAL SECURITY / LOGICAL ERROR: isPlanSortedOnKey matched 'users.id' on 'orders' node!")
+	}
+	// But it must match when the qualifier belongs to this table:
+	if !isPlanSortedOnKey(planOrders, "o.id") {
+		t.Fatalf("expected true for alias 'o.id' on orders node, got false")
+	}
+	if !isPlanSortedOnKey(planOrders, "orders.id") {
+		t.Fatalf("expected true for relation 'orders.id' on orders node, got false")
+	}
+
+	// Case 6 (3-Part Name Support):
+	if !isPlanSortedOnKey(planOrders, "[dbo].[orders].[id]") {
+		t.Fatalf("expected true for 3-part qualified name '[dbo].[orders].[id]', got false")
+	}
 }

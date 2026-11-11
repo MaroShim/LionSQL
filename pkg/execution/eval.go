@@ -313,7 +313,7 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 				return false, true
 			}
 		}
-		rightVal, okR := EvalTupleExpr(t, e.Right)
+		rightVal, okR := EvalTupleExprWithSubquery(t, e.Right, execSubquery)
 		if !okR {
 			return false, false
 		}

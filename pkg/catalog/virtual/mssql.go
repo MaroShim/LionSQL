@@ -456,42 +456,68 @@ func execSysIndexColumns(src Source, sql string) (*Result, error) {
 func execXORMIndexes(src Source, sql string) (*Result, error) {
 	columns := []string{"INDEX_NAME", "COLUMN_NAME", "IS_UNIQUE"}
 	targetTable := ""
-	upper := strings.ToUpper(sql)
-	if idx := strings.Index(upper, "OBJECT_NAME"); idx != -1 {
-		rem := sql[idx:]
-		if eqIdx := strings.Index(rem, "="); eqIdx != -1 {
-			targetVal := strings.TrimSpace(rem[eqIdx+1:])
-			targetVal = strings.Trim(targetVal, "';\" \t\r\n")
-			targetTable = cleanIdentifier(targetVal)
-		}
+	if tbl, ok := sqlutil.ExtractEqualityFilter(sql, "object_name(ixs.object_id)", "object_name(i.object_id)", "object_name(object_id)", "object_name", "table_name"); ok {
+		targetTable = tbl
+	} else if tbl, ok := sqlutil.ExtractObjectIdCall(sql); ok {
+		targetTable = tbl
 	}
 
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
 
-	for _, t := range tables {
+	for tIdx, t := range tables {
 		if targetTable != "" && !strings.EqualFold(t.Name, targetTable) {
 			continue
 		}
+		objID := 1000 + tIdx
 		for _, idx := range t.Indexes {
 			for _, colName := range idx.Columns {
 				allRows = append(allRows, map[string]any{
-					"INDEX_NAME":  idx.Name,
-					"COLUMN_NAME": colName,
-					"IS_UNIQUE":   idx.Unique,
+					"INDEX_NAME":         idx.Name,
+					"COLUMN_NAME":        colName,
+					"IS_UNIQUE":          idx.Unique,
+					"name":               idx.Name,
+					"column_name":        colName,
+					"is_unique":          idx.Unique,
+					"ixs.name":           idx.Name,
+					"col.name":           colName,
+					"ixs.is_unique":      idx.Unique,
+					"is_primary_key":     false,
+					"ixs.is_primary_key": 0,
+					"tableName":          t.Name,
+					"table_name":         t.Name,
+					"object_id":          objID,
+					"ixs.object_id":      objID,
 				})
 			}
 		}
 	}
 
-	return FormatResult(columns, allRows, "*", "", "", -1)
+	projStr, whereClause, orderByClause := ExtractSQLParts(sql)
+	var remConds []string
+	if whereClause != "" {
+		conds := sqlutil.SplitAndConditions(whereClause)
+		for _, c := range conds {
+			upperC := strings.ToUpper(c)
+			if strings.Contains(upperC, "OBJECT_NAME") || strings.Contains(upperC, "OBJECT_ID") || strings.Contains(upperC, "IS_PRIMARY_KEY") {
+				continue
+			}
+			remConds = append(remConds, c)
+		}
+	}
+	remWhere := strings.Join(remConds, " AND ")
+
+	return FormatResult(columns, allRows, projStr, remWhere, orderByClause, -1)
 }
 
 func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, error) {
 	columns := []string{
-		"schemaName", "pureName", "columnName", "refSchemaName",
-		"refTableName", "refColumnName", "constraintName",
-		"updateAction", "deleteAction", "objectId",
+		"schemaName", "schema_name", "pureName", "pure_name", "name",
+		"columnName", "column_name", "refSchemaName", "ref_schema_name",
+		"refTableName", "ref_table_name", "parent_table", "ref_table",
+		"refColumnName", "ref_column_name", "constraintName", "constraint_name",
+		"updateAction", "update_action", "deleteAction", "delete_action",
+		"objectId", "object_id", "parent_object_id", "referenced_object_id",
 	}
 
 	targetIDs := parseTargetObjectIDs(sql, src)
@@ -504,6 +530,13 @@ func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, erro
 			continue
 		}
 		for _, fk := range t.ForeignKeys {
+			refObjID := 1000
+			for rIdx, rt := range tables {
+				if strings.EqualFold(rt.Name, fk.ParentTable) {
+					refObjID = 1000 + rIdx
+					break
+				}
+			}
 			upAction := fk.OnUpdate.String()
 			delAction := fk.OnDelete.String()
 			maxCols := len(fk.ChildColumns)
@@ -536,7 +569,7 @@ func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, erro
 					"objectId":             objID,
 					"object_id":            objID,
 					"parent_object_id":     objID,
-					"referenced_object_id": 1000,
+					"referenced_object_id": refObjID,
 				})
 				continue
 			}
@@ -574,7 +607,7 @@ func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, erro
 					"objectId":             objID,
 					"object_id":            objID,
 					"parent_object_id":     objID,
-					"referenced_object_id": 1000,
+					"referenced_object_id": refObjID,
 				})
 			}
 		}

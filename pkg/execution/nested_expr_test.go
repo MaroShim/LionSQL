@@ -6,6 +6,8 @@ import (
 
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/engine"
+	"lionsql/pkg/execution"
+	"lionsql/pkg/proc"
 	"lionsql/pkg/storage/memengine"
 )
 
@@ -211,5 +213,33 @@ func TestDeep_WindowWithArithmetic(t *testing.T) {
 			t.Errorf("Row %d (id %v): expected run_tot %v, got %v (row: %+v)",
 				i, res.Rows[i]["id"], exp, actual, res.Rows[i])
 		}
+	}
+}
+
+// TestDeep_SubqueryOnRightSideOfAnd verifies that subqueries placed on the right-hand side
+// of an AND operator evaluate correctly with subquery execution context (AUDIT-FULL-020).
+func TestDeep_SubqueryOnRightSideOfAnd(t *testing.T) {
+	subCalled := false
+	execSub := func(query string) ([]map[string]any, []string, error) {
+		subCalled = true
+		return []map[string]any{{"val": int64(300)}}, []string{"val"}, nil
+	}
+
+	parser := proc.NewParser(proc.NewLexer("cat = 'A' AND (SELECT val FROM t) = 300"))
+	expr := parser.ParseExpr()
+	if expr == nil {
+		t.Fatalf("failed to parse expr")
+	}
+
+	tuple := execution.NewTupleFromMap(map[string]any{"cat": "A"}, []string{"cat"})
+	val, ok := execution.EvalTupleExprWithSubquery(tuple, expr, execSub)
+	if !ok {
+		t.Fatalf("expected ok=true, got false")
+	}
+	if !subCalled {
+		t.Fatalf("expected execSubquery to be called for subquery on right-hand side of AND, but it was NOT called")
+	}
+	if b, ok := val.(bool); !ok || !b {
+		t.Fatalf("expected true, got %v", val)
 	}
 }

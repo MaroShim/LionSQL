@@ -2938,7 +2938,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		cleanRightKey = strings.ToLower(cleanIdent(cleanRightKey))
 
 		isOuterSorted := false
-		if (currentNode.Type == NodeIndexScan || currentNode.Type == NodeIndexOnlyScan) && strings.Contains(strings.ToLower(currentNode.IndexCond), cleanLeftKey) {
+		if (currentNode.Type == NodeIndexScan || currentNode.Type == NodeIndexOnlyScan) && strings.EqualFold(ExtractIndexLeadingColumn(currentNode.IndexCond), cleanLeftKey) {
 			isOuterSorted = true
 		} else if currentNode.Type == NodeSort && strings.EqualFold(cleanIdent(currentNode.SortKey), cleanLeftKey) {
 			isOuterSorted = true

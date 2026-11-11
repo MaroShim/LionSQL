@@ -72,3 +72,58 @@ func TestDbGateMSSQL_CompositeForeignKeyAndActions(t *testing.T) {
 		t.Errorf("expected CASCADE and SET NULL in row 1, got %v, %v", row1["updateAction"], row1["deleteAction"])
 	}
 }
+
+func TestMSSQL_ReferentialConstraints_ReferencedObjectID(t *testing.T) {
+	src := &mockSource{
+		tables: []*storage.TableSchema{
+			{
+				Name: "t1_users",
+				Columns: []storage.Column{
+					{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+				},
+			},
+			{
+				Name: "t2_orders",
+				Columns: []storage.Column{
+					{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+				},
+			},
+			{
+				Name: "t3_items",
+				Columns: []storage.Column{
+					{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+					{Name: "order_id", Type: storage.TypeInt},
+				},
+				ForeignKeys: []storage.ForeignKeySchema{
+					{
+						Name:          "fk_items_order",
+						ChildTable:    "t3_items",
+						ChildColumns:  []string{"order_id"},
+						ParentTable:   "t2_orders",
+						ParentColumns: []string{"id"},
+					},
+				},
+			},
+		},
+	}
+
+	q := "SELECT * FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS"
+	res, err := virtual.Execute(src, q)
+	if err != nil {
+		t.Fatalf("virtual.Execute failed: %v", err)
+	}
+
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 FK row, got %d", len(res.Rows))
+	}
+
+	row := res.Rows[0]
+	// t1_users is 1000, t2_orders is 1001, t3_items is 1002
+	if row["parent_object_id"] != 1002 {
+		t.Errorf("expected parent_object_id 1002 (t3_items), got %v", row["parent_object_id"])
+	}
+	if row["referenced_object_id"] != 1001 {
+		t.Errorf("expected referenced_object_id 1001 (t2_orders), got %v", row["referenced_object_id"])
+	}
+}
+

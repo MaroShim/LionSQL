@@ -459,17 +459,17 @@
 - [x] **`AUDIT-FULL-015` (High)**: `parser_dml.go:224` `UPDATE/DELETE ... FROM` 서브쿼리 내부 `WHERE` 조기 탈출 수정
 - [ ] **`AUDIT-FULL-016` (Medium)**: `proc/eval.go:346` `LikeExpr` 및 `evalRowAnyComparison` NULL 입력 시 3VL `nil` 반환 보장
 - [ ] **`AUDIT-FULL-017` (High)**: `coordinator_impl.go:150` `IDENTITY` 채번 비원자적 시퀀스 경합 수정
-- [ ] **`AUDIT-FULL-018` (Medium)**: `session.go:455` TDS Prepared 실패 시 비조건적 `TxFailed` 마킹 개선
-- [ ] **`AUDIT-FULL-019` (Low)**: `sqlexec_auth.go:212` `checkTableAccess` 락 없는 `cs.User` 읽기 Data Race 해소
-- [ ] **`AUDIT-FULL-020` (High)**: `execution/eval.go:316` `evalTupleBinaryExprWithSubquery` AND 우측 서브쿼리 실행 컨텍스트 전달
-- [ ] **`AUDIT-FULL-021` (Medium)**: `bounds.go:203` `SplitOnAnd` 개행/탭 포맷팅 `AND`/`BETWEEN` 인식 수정
-- [ ] **`AUDIT-FULL-022` (High)**: `tokenizer.go:1427` `ReplaceCorrelatedTokens` 주석 내 아포스트로피 상태 반전 차단
-- [ ] **`AUDIT-FULL-024` (High)**: `builder.go:425` `isPlanSortedOnKey` `strings.Contains` 부분 문자열 오매칭 수정
-- [ ] **`AUDIT-FULL-025` (High)**: `decorrelate.go:676` `isIdent` 1바이트 검사로 인한 비동등 연산자(`>=`, `!=`) SEMI 조인 왜곡 수정
-- [ ] **`AUDIT-FULL-026` (High)**: `tokenizer.go:1323` `ExtractTopLevelTuples` 주석 내 괄호 행 오인식 차단
-- [ ] **`AUDIT-FULL-027` (Medium)**: `virtual/result.go:576` `matchCondition` LIKE 평가 시 매 행 `regexp.Compile` 제거
-- [ ] **`AUDIT-FULL-028` (High)**: `virtual/mssql.go:456` `execXORMIndexes` `OBJECT_NAME` 파싱 시 후속 `AND` 조건 혼입 수정
-- [ ] **`AUDIT-FULL-029` (High)**: `virtual/mssql.go:539` `execReferentialConstraintsForeignKey` `referenced_object_id` `1000` 고정 수정
+- [x] **`AUDIT-FULL-018` (Medium)**: `session.go:455` TDS Prepared 실패 시 비조건적 `TxFailed` 마킹 개선
+- [x] **`AUDIT-FULL-019` (Low)**: `sqlexec_auth.go:212` `checkTableAccess` 락 없는 `cs.User` 읽기 Data Race 해소
+- [x] **`AUDIT-FULL-020` (High)**: `execution/eval.go:316` `evalTupleBinaryExprWithSubquery` AND 우측 서브쿼리 실행 컨텍스트 전달
+- [x] **`AUDIT-FULL-021` (Medium)**: `bounds.go:203` `SplitOnAnd` 개행/탭 포맷팅 `AND`/`BETWEEN` 인식 수정
+- [x] **`AUDIT-FULL-022` (High)**: `tokenizer.go:1427` `ReplaceCorrelatedTokens` 주석 내 아포스트로피 상태 반전 차단
+- [x] **`AUDIT-FULL-024` (High)**: `builder.go:425` `isPlanSortedOnKey` `strings.Contains` 부분 문자열 오매칭 수정
+- [x] **`AUDIT-FULL-025` (High)**: `decorrelate.go:676` `isIdent` 1바이트 검사로 인한 비동등 연산자(`>=`, `!=`) SEMI 조인 왜곡 수정
+- [x] **`AUDIT-FULL-026` (High)**: `tokenizer.go:1323` `ExtractTopLevelTuples` 주석 내 괄호 행 오인식 차단
+- [x] **`AUDIT-FULL-027` (Medium)**: `virtual/result.go:576` `matchCondition` LIKE 평가 시 매 행 `regexp.Compile` 제거
+- [x] **`AUDIT-FULL-028` (High)**: `virtual/mssql.go:456` `execXORMIndexes` `OBJECT_NAME` 파싱 시 후속 `AND` 조건 혼입 수정
+- [x] **`AUDIT-FULL-029` (High)**: `virtual/mssql.go:539` `execReferentialConstraintsForeignKey` `referenced_object_id` `1000` 고정 수정
 
 **Details & Resolution**:
 전수 감사(notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 Parser/VDBE/Planner/Execution/Sqlutil/VirtualCatalog 도메인 17대 잔여 결함 패치 wave.

@@ -839,7 +839,7 @@
         }
     }
     ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `CURED` (T-SQL 세션 구문 에러 시 `TxFailed = true` 마킹 제외, `ExecuteQuery`와 동일하게 타임아웃/취소 또는 Postgres 세션에서만 `TxFailed` 설정하도록 통일 및 TDD 검증 완료)
 
 ---
 
@@ -859,14 +859,7 @@
   - **위치**: `pkg/engine/sqlexec_auth.go:212-216`
   - **권장 수정안**:
     ```go
-    user := ""
-    if cs != nil {
-        cs.Mu.Lock()
-        user = cs.User
-        cs.Mu.Unlock()
-    }
-    ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `CURED` (ClientSession.GetUser 스레드 세이프 접근자 메서드 도입 및 checkTableAccess 적용 완료, TestAuth_CheckTableAccess_ConcurrentRace TDD -race 검증 완료)
 
 ---
 
@@ -944,7 +937,7 @@
     ```go
     rightVal, okR := EvalTupleExprWithSubquery(t, e.Right, execSubquery)
     ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `CURED` (evalTupleBinaryExprWithSubquery에서 AND 우측 피연산자에 execSubquery 주입 완료, TestDeep_SubqueryOnRightSideOfAnd TDD 검증 완료)
 
 ---
 
@@ -970,8 +963,7 @@
   - **심각도**: `Medium` (개행/탭 포함 쿼리에서 인덱스 바운드 추출 실패 및 풀스캔 퇴보)
   - **위치**: `pkg/planner/bounds.go:203, 210`
   - **권장 수정안**:
-    - `sqlutil.IsWordBoundary`를 호출하거나 `upper[i-1] == ' ' || upper[i-1] == '\t' || upper[i-1] == '\n' || upper[i-1] == '\r' || upper[i-1] == ')'`로 표준 경계 검사 적용.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `CURED` (SplitOnAnd에서 AND 및 BETWEEN 키워드 경계 검사에 sqlutil.IsWordBoundary 적용 완료, TestSplitOnAnd_MultilineAndTabs TDD 검증 완료)
 
 ---
 
@@ -989,7 +981,7 @@
   - **위치**: `pkg/execution/builder.go:423-428`
   - **권장 수정안**:
     - 단순 `strings.Contains`를 폐기하고, `plan.IndexName` 또는 인덱스 스키마의 실제 선두 컬럼과 정확히 일치(`strings.EqualFold`)하는지 정밀 검증.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `CURED` (ExtractIndexLeadingColumn 도입 및 EqualFold 완전 일치 판별 적용 완료, TestIsPlanSortedOnKey_SubstringCollision TDD 검증 완료)
 
 ---
 
@@ -1007,7 +999,7 @@
   - **위치**: `pkg/planner/decorrelate.go:65-75, 676-683`
   - **권장 수정안**:
     - `isIdent`에서 공백, 연산자(`>`, `<`, `!`, `=`)가 포함된 문자열을 엄격히 배제(`!strings.ContainsAny(s, " \t\r\n><!=+-*/()")`)하도록 보강.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `CURED` (isIdent에 연산자 및 공백 배제와 sqlutil.IsIdentChar 전수 검증 적용 완료, TestDecorrelate_NonEqualityCondition_NotDecorrelatedAsSemiJoin TDD 검증 완료)
 
 ---
 
@@ -1030,14 +1022,14 @@
 | `pkg/planner/setop.go` | 361 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/execution/setop.go` | 382 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/planner/pushdown.go` | 384 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
-| `pkg/execution/builder.go` | 430 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-024` | `DEFECT_LOGGED` |
+| `pkg/execution/builder.go` | 430 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-024` | `CURED` |
 | `pkg/execution/sort.go` | 440 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/execution/filter.go` | 478 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/execution/merge_join.go` | 489 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
-| `pkg/execution/eval.go` | 589 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-020` | `DEFECT_LOGGED` |
+| `pkg/execution/eval.go` | 589 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-020` | `CURED` |
 | `pkg/execution/window.go` | 636 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
-| `pkg/planner/decorrelate.go` | 701 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-025` | `DEFECT_LOGGED` |
-| `pkg/planner/bounds.go` | 716 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-021` | `DEFECT_LOGGED` |
+| `pkg/planner/decorrelate.go` | 701 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-025` | `CURED` |
+| `pkg/planner/bounds.go` | 716 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-021` | `CURED` |
 | `pkg/execution/iterator.go` | 809 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/execution/join.go` | 883 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/planner/stats.go` | 1,136 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
@@ -1069,7 +1061,7 @@
   - **심각도**: `High` (7대 토크나이저의 주석 미인식으로 인한 문자열 상태 반전 및 키워드 오염)
   - **위치**: `pkg/sqlutil/tokenizer.go:151, 310, 436, 902, 1240, 1427, 1526`
   - **권장 수정안**: 해당 7개 함수에 `inLineComment` 및 `inBlockComment` 상태 머신을 통일 적용하거나, 단일 공통 렉서 스캐너로 추상화 통합.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `CURED` (7대 토크나이저 함수에 표준 주석 스킵 상태 머신 일괄 적용 완료, TestTokenizer_Comments_ApostrophesAndKeywords TDD 검증 완료)
 
 ---
 
@@ -1087,7 +1079,7 @@
   - **심각도**: `High` (VALUES 절 주석 내 괄호를 행 튜플로 오인식하여 다중 행 INSERT 실패)
   - **위치**: `pkg/sqlutil/tokenizer.go:1323-1380`
   - **권장 수정안**: `ExtractTopLevelTuples`에 `inLineComment`, `inBlockComment` 및 대괄호(`inBracket`) 방어 로직 추가.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: `CURED` (ExtractTopLevelTuples에 inLineComment, inBlockComment, inBracket 방어 로직 적용 완료, TestTokenizer_Comments_ApostrophesAndKeywords TDD 검증 완료)
 
 ---
 
@@ -1101,7 +1093,7 @@
 | `pkg/sqlutil/casing.go` | 252 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/sqlutil/params.go` | 318 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/sqlutil/predicate.go` | 785 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
-| `pkg/sqlutil/tokenizer.go` | 1,609 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-022`, `AUDIT-FULL-026` | `DEFECT_LOGGED` |
+| `pkg/sqlutil/tokenizer.go` | 1,609 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-022`, `AUDIT-FULL-026` | `CURED` |
 | **Domain 7 총계** | **3,493 LOC** (테스트 포함 4,837 LOC) | **100% 전수 검증 완료** | **총 2건 식별** (High:2) | **감사 완료** |
 
 ---
@@ -1128,7 +1120,7 @@
   - **심각도**: `Medium` (카탈로그 행 루프 내 정규식 동적 재컴파일 및 GC 부하)
   - **위치**: `pkg/catalog/virtual/result.go:576-600`
   - **권장 수정안**: `regexp.Compile` 루프를 제거하고 `sqlutil.MatchLike(strVal, target)` 또는 대소문자 무시 매칭 함수로 교체.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1158,7 +1150,7 @@
   - **심각도**: `High` (XORM 연동 시 복합 WHERE 조건으로 인한 보조 인덱스 메타데이터 100% 누락)
   - **위치**: `pkg/catalog/virtual/mssql.go:456-467`
   - **권장 수정안**: `sqlutil.ExtractEqualityFilter(sql, "object_name(i.object_id)", "object_name(object_id)", "object_name")` 또는 토크나이저 기반 파서로 교체하여 인라인 문자열 분할 제거.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1181,7 +1173,7 @@
   - **심각도**: `High` (MSSQL 가상 카탈로그 내 모든 FK의 `referenced_object_id`가 첫 번째 테이블(1000)로 왜곡)
   - **위치**: `pkg/catalog/virtual/mssql.go:539, 577`
   - **권장 수정안**: `tables` 슬라이스에서 `fk.ParentTable`과 일치하는 테이블 인덱스 `rIdx`를 탐색하여 `1000 + rIdx`를 `referenced_object_id`에 할당하도록 수정.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1193,11 +1185,11 @@
 | `pkg/catalog/tables.go` | 54 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/catalog/sys_tables.go` | 69 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
 | `pkg/catalog/virtual/interceptor.go` | 477 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
-| `pkg/catalog/virtual/result.go` | 753 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-027` | `DEFECT_LOGGED` |
+| `pkg/catalog/virtual/result.go` | 753 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-027` | `CURED` |
 | `pkg/catalog/catalog.go` | 904 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
-| `pkg/catalog/virtual/mssql.go` | 1,041 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-028`, `AUDIT-FULL-029` | `DEFECT_LOGGED` |
+| `pkg/catalog/virtual/mssql.go` | 1,041 LOC | 100% 라인 단위 감사 완료 | `AUDIT-FULL-028`, `AUDIT-FULL-029` | `CURED` |
 | `pkg/catalog/virtual/pg.go` | 1,770 LOC | 100% 라인 단위 감사 완료 | 0 Defect | `PASS` |
-| **Domain 8 총계** | **5,688 LOC** (테스트 포함 7,411 LOC) | **100% 전수 검증 완료** | **총 3건 식별** (High:2, Med:1) | **감사 완료 (DEFECT_LOGGED)** |
+| **Domain 8 총계** | **5,688 LOC** (테스트 포함 7,411 LOC) | **100% 전수 검증 완료** | **총 3건 식별** (High:2, Med:1) | **100% 완치 (ALL CURED)** |
 
 ---
 
@@ -1245,7 +1237,7 @@
   - **심각도**: `High` (10개 이상 파라미터 쿼리에서 `$1`이 `$10`에 오매칭되어 파라미터 OID 왜곡)
   - **위치**: `pkg/wire/param_rules.go:637-665`
   - **권장 수정안**: `idx` 뒤의 문자가 아라비아 숫자(`'0'..'9'`)인지 확인하는 경계 검사를 추가하거나 `sqlutil.FindPgParam` 토크나이저를 사용하도록 수정.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1273,7 +1265,7 @@
   - **심각도**: `High` (COPY 스트림 중 64KB 초과 행 발생 시 침묵 조기 종료 및 후속 데이터 대량 유실)
   - **위치**: `pkg/wire/copy.go:342-354`
   - **권장 수정안**: `scanner.Buffer(make([]byte, 64*1024), MaxPGMessageSize)`로 최대 버퍼를 확장하고, 루프 종료 후 `if err := scanner.Err(); err != nil`을 명시 검사하여 클라이언트에 에러를 즉시 반환하도록 수정.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1299,7 +1291,7 @@
   - **심각도**: `High` (PostgreSQL NUMERIC 파라미터를 float64로 다운캐스팅하여 십진수 유효숫자 절단 및 지수표기법 왜곡)
   - **위치**: `pkg/wire/server.go:2619-2622`, `2641-2656`
   - **권장 수정안**: OID 1700은 `strconv.ParseFloat`를 타지 않고 `storage.ParseDecimal`을 통해 원본 십진수 문자열(`dec.String()`)을 그대로 숫자리터럴로 방출하도록 수정하고, `switch sv.Type`에 `storage.TypeDecimal` 케이스 추가.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1368,7 +1360,7 @@
         return totalLen, true
     }
     ```
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1392,7 +1384,7 @@
     1. `ConnectionSession`에 `authenticated bool` 필드를 추가.
     2. `handleLogin7`이 인증 성공 여부(`bool`)를 반환하도록 리팩터링하고, 인증 실패 시 에러 패킷 전송 후 즉시 `conn.Close()` 및 세션 종료(`return`).
     3. `PacketSQLBatch`, `PacketRPC`, `PacketTransactionManager` 수신 시 `sess.authenticated`가 거짓이면 즉시 18456 에러를 반환하고 연결을 강제 종료.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1415,7 +1407,7 @@
   - **시나리오**: `SELECT 1 AS [이름]` 실행 시 SSMS 또는 ADO.NET이 컬럼 메타데이터 길이를 6문자로 오인하여 뒤이은 데이터를 컬럼명으로 읽다가 패킷 파싱 에러로 쿼리 실행 실패.
   - **권장 수정안**:
     - `u16 := EncodeUTF16LE(str)`를 먼저 수행한 뒤, 길이 필드에는 반드시 `uint16(len(u16)/2)` 또는 `byte(len(u16)/2)`를 기록하도록 수정.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1453,7 +1445,7 @@
   - **시나리오**: 공격자가 인증 없이 포트 8090에 접근하여 `GET /api/realtime`으로 모든 데이터 변경 사항을 도청하거나, `POST /api/query/cancel`로 정상 트랜잭션을 취소하고, `POST /api/general-queries/logfile`로 서버 파일시스템을 교란함.
   - **권장 수정안**:
     - 해당 엔드포인트들을 `s.wrapSuperuser(...)`로 감싸서 관리자 JWT 인증을 강제하거나, 실시간 스트림의 경우 최소 `s.wrapAuth` 토큰 인증을 필수 적용.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1474,7 +1466,7 @@
   - **시나리오**: `GET /api/tables/users/records?filter=name LIKE '%kim%'` 호출 시 테이블 스캔 중 수만 번의 정규식 컴파일 발생.
   - **권장 수정안**:
     - `matchLike` 내부의 정규식 변환을 제거하고, `sqlutil.MatchLike(pattern, s)`를 직접 호출하도록 교체.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1496,7 +1488,7 @@
   - **시나리오**: 특정 테이블 쓰기 권한만 가진 서드파티 서비스 API 키가 `GET /api/backup`을 호출하여 데이터베이스 전체 덤프를 수신하고 관리자 계정 및 전 테이블 데이터 유출.
   - **권장 수정안**:
     - `/api/backup` 라우트를 `/api/restore`와 동일하게 `s.wrapSuperuser(s.handleBackup)`로 격상.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1572,7 +1564,7 @@
   - **시나리오**: 사용자가 관리자 콘솔에서 로그아웃하여 세션을 파기했으나, 엔진 재부팅 후 탈취된 구형 토큰이 다시 유효해져 API 요청이 인가됨.
   - **권장 수정안**:
     - `RevokeAllTokens` 내부에서 `u.TokenKey` 회전 후 반드시 `_ = s.saveLocked()`를 호출하도록 추가.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1625,7 +1617,7 @@
   - **시나리오**: 공격자가 `POST /api/replication/demote` 또는 `GET /api/replication/stream`을 호출하여 Primary를 강등시키거나 전체 WAL 데이터를 무인가 다운로드함.
   - **권장 수정안**:
     - `RegisterRoutes` 등록 시 인증 가드 미들웨어를 경유하도록 변경하거나 요청 헤더에 클러스터 인증 토큰 검증 추가.
-* **최종 판정**: `DEFECT_LOGGED`
+* **최종 판정**: 조치 완료 (TDD 검증)
 
 ---
 
@@ -1677,18 +1669,18 @@
 | `AUDIT-FULL-015` | High | `pkg/proc/parser_dml.go:224` | UPDATE/DELETE ... FROM 시 서브쿼리 내부 WHERE에서 조기 탈출하여 외부 구문 오염 | 완치 (수정 완료) |
 | `AUDIT-FULL-016` | Medium | `pkg/proc/eval.go:346` | LikeExpr 및 evalRowAnyComparison에서 NULL 입력 시 nil 대신 false를 반환하여 3VL 파괴 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-017` | High | `pkg/engine/coordinator_impl.go:150` | IDENTITY 채번 시 비원자적 시퀀스 경합으로 인한 동일 PK 생성 및 중복 키 충돌 | 조치 완료 (TDD 검증) |
-| `AUDIT-FULL-018` | Medium | `pkg/engine/session.go:455` | TDS Prepared 구문 실패 시 T-SQL 트랜잭션을 비조건적으로 TxFailed로 마킹하여 강제 롤백 | 미수정 |
-| `AUDIT-FULL-019` | Low | `pkg/engine/sqlexec_auth.go:212` | checkTableAccess에서 락 없이 cs.User를 읽어 발생하는 Data Race | 미수정 |
-| `AUDIT-FULL-020` | High | `pkg/execution/eval.go:316` | evalTupleBinaryExprWithSubquery에서 AND 연산자 우측 서브쿼리 실행 컨텍스트 누락 | 미수정 |
-| `AUDIT-FULL-021` | Medium | `pkg/planner/bounds.go:203` | SplitOnAnd에서 개행문자/탭 포맷팅 쿼리의 AND/BETWEEN 인식 실패로 인덱스 바운드 누락 | 미수정 |
-| `AUDIT-FULL-022` | High | `pkg/sqlutil/tokenizer.go:1427` | ReplaceCorrelatedTokens에서 주석 내 아포스트로피로 인한 문자열 상태 반전 및 서브쿼리 치환 실패 | 미수정 |
+| `AUDIT-FULL-018` | Medium | `pkg/engine/session.go:455` | TDS Prepared 구문 실패 시 T-SQL 트랜잭션을 비조건적으로 TxFailed로 마킹하여 강제 롤백 | 조치 완료 (TDD 검증) |
+| `AUDIT-FULL-019` | Low | `pkg/engine/sqlexec_auth.go:212` | checkTableAccess에서 락 없이 cs.User를 읽어 발생하는 Data Race | 조치 완료 (TDD 검증) |
+| `AUDIT-FULL-020` | High | `pkg/execution/eval.go:316` | evalTupleBinaryExprWithSubquery에서 AND 연산자 우측 서브쿼리 실행 컨텍스트 누락 | 조치 완료 (TDD 검증) |
+| `AUDIT-FULL-021` | Medium | `pkg/planner/bounds.go:203` | SplitOnAnd에서 개행문자/탭 포맷팅 쿼리의 AND/BETWEEN 인식 실패로 인덱스 바운드 누락 | 조치 완료 (TDD 검증) |
+| `AUDIT-FULL-022` | High | `pkg/sqlutil/tokenizer.go:1427` | ReplaceCorrelatedTokens에서 주석 내 아포스트로피로 인한 문자열 상태 반전 및 서브쿼리 치환 실패 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-023` | Medium | `pkg/wire/copy.go:436` | COPY FROM STDIN 시 밀리초 타임스탬프 기반 PK 생성으로 인한 동시 세션 키 충돌 및 int32 오버플로우 | 조치 완료 (TDD 검증) |
-| `AUDIT-FULL-024` | High | `pkg/execution/builder.go:425` | isPlanSortedOnKey의 strings.Contains 부분 문자열 매칭으로 인한 MergeJoin 정렬 생략 및 조인 결과 파탄 | 미수정 |
-| `AUDIT-FULL-025` | High | `pkg/planner/decorrelate.go:676` | decorrelate.go의 isIdent 1바이트 검사로 인한 비동등 연산자(>=, !=)의 잘못된 SEMI 조인 왜곡 | 미수정 |
-| `AUDIT-FULL-026` | High | `pkg/sqlutil/tokenizer.go:1323` | ExtractTopLevelTuples에서 주석 내 괄호를 행 튜플로 오인식하여 다중 행 INSERT 실패 | 미수정 |
-| `AUDIT-FULL-027` | Medium | `pkg/catalog/virtual/result.go:576` | matchCondition의 LIKE/ILIKE 평가 시 매 행마다 regexp.Compile 동적 재컴파일로 인한 GC 부하 | 미수정 |
-| `AUDIT-FULL-028` | High | `pkg/catalog/virtual/mssql.go:456` | execXORMIndexes의 OBJECT_NAME 파싱 시 후속 AND 조건 포함으로 인한 보조 인덱스 조회 100% 누락 | 미수정 |
-| `AUDIT-FULL-029` | High | `pkg/catalog/virtual/mssql.go:539` | execReferentialConstraintsForeignKey의 referenced_object_id 1000 고정으로 인한 외래키 부모 테이블 바인딩 오류 | 미수정 |
+| `AUDIT-FULL-024` | High | `pkg/execution/builder.go:425` | isPlanSortedOnKey의 strings.Contains 부분 문자열 매칭으로 인한 MergeJoin 정렬 생략 및 조인 결과 파탄 | 조치 완료 (TDD 검증) |
+| `AUDIT-FULL-025` | High | `pkg/planner/decorrelate.go:676` | decorrelate.go의 isIdent 1바이트 검사로 인한 비동등 연산자(>=, !=)의 잘못된 SEMI 조인 왜곡 | 조치 완료 (TDD 검증) |
+| `AUDIT-FULL-026` | High | `pkg/sqlutil/tokenizer.go:1323` | ExtractTopLevelTuples에서 주석 내 괄호를 행 튜플로 오인식하여 다중 행 INSERT 실패 | 조치 완료 (TDD 검증) |
+| `AUDIT-FULL-027` | Medium | `pkg/catalog/virtual/result.go:576` | matchCondition의 LIKE/ILIKE 평가 시 매 행마다 regexp.Compile 동적 재컴파일로 인한 GC 부하 | 조치 완료 (TDD 검증) |
+| `AUDIT-FULL-028` | High | `pkg/catalog/virtual/mssql.go:456` | execXORMIndexes의 OBJECT_NAME 파싱 시 후속 AND 조건 포함으로 인한 보조 인덱스 조회 100% 누락 | 조치 완료 (TDD 검증) |
+| `AUDIT-FULL-029` | High | `pkg/catalog/virtual/mssql.go:539` | execReferentialConstraintsForeignKey의 referenced_object_id 1000 고정으로 인한 외래키 부모 테이블 바인딩 오류 | 조치 완료 (TDD 검증) |
 | `AUDIT-FULL-030` | High | `pkg/wire/param_rules.go:637` | inferParamOID의 단순 strings.Index 매칭으로 인한 $1과 $10..$19 파라미터 접두어 오추론 결함 | 미수정 |
 | `AUDIT-FULL-031` | High | `pkg/wire/copy.go:342` | handleCopyIn의 bufio.Scanner 64KB 초과 시 에러 무시로 인한 대용량 행 조기 중단 및 데이터 침묵 유실 | 미수정 |
 | `AUDIT-FULL-032` | High | `pkg/wire/server.go:2619` | formatParamForSQL의 NUMERIC OID 1700을 float64로 변환하여 발생하는 IEEE-754 유효숫자 절단 및 지수표기법 왜곡 | 미수정 |

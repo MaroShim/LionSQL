@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"lionsql/pkg/catalog"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 )
 
@@ -252,3 +254,83 @@ func TestSession_Regression_P0_26_ConcurrentCloseAndDDL(t *testing.T) {
 
 	t.Logf("[P0-26 PASS] Concurrent CloseSession and DDL completed with zero deadlocks")
 }
+
+func TestSession_ExecuteProgram_TSQL_NonAbortingError(t *testing.T) {
+	memEng := memengine.New()
+	defer memEng.Close()
+	cat := catalog.New(memEng)
+	coord := NewCoordinator(cat, memEng, Config{})
+	defer coord.Close()
+
+	ctx := context.Background()
+
+	// 1. Create table with PK
+	_, err := coord.ExecuteSQL("CREATE TABLE items_prog (id INT PRIMARY KEY, val INT);")
+	if err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
+
+	// 2. Create T-SQL session and start transaction
+	sessID := "tsql-prepared-sess"
+	cs, err := coord.GetOrCreateSession(sessID)
+	if err != nil {
+		t.Fatalf("failed to get session: %v", err)
+	}
+	coord.SetSessionDialect(sessID, DialectTSQL)
+
+	if err := coord.BeginSessionTx(sessID, storage.TxOptions{ReadOnly: false}); err != nil {
+		t.Fatalf("failed to begin tx: %v", err)
+	}
+
+	exec := coord.Executor()
+
+	// Program 1: valid insert (id=1, val=100)
+	prog1, err := proc.Compile("INSERT INTO items_prog (id, val) VALUES (1, 100);")
+	if err != nil {
+		t.Fatalf("compile prog1: %v", err)
+	}
+	_, txAborted, err := cs.ExecuteProgram(ctx, prog1, exec, nil, memEng, "stmt1")
+	if err != nil || txAborted {
+		t.Fatalf("prog1 failed: %v, txAborted=%v", err, txAborted)
+	}
+
+	// Program 2: deliberate PK violation (id=1, val=200)
+	prog2, err := proc.Compile("INSERT INTO items_prog (id, val) VALUES (1, 200);")
+	if err != nil {
+		t.Fatalf("compile prog2: %v", err)
+	}
+	_, _, err = cs.ExecuteProgram(ctx, prog2, exec, nil, memEng, "stmt2")
+	if err == nil {
+		t.Fatalf("expected duplicate key error on prog2, got nil")
+	}
+
+	// In T-SQL, statement-level error MUST NOT abort the transaction (TxFailed should be false)!
+	if cs.IsTxFailed() {
+		t.Fatalf("expected TxFailed=false for T-SQL session after statement error, but got true")
+	}
+
+	// Program 3: valid subsequent insert in the SAME transaction (id=2, val=300)
+	prog3, err := proc.Compile("INSERT INTO items_prog (id, val) VALUES (2, 300);")
+	if err != nil {
+		t.Fatalf("compile prog3: %v", err)
+	}
+	_, txAborted, err = cs.ExecuteProgram(ctx, prog3, exec, nil, memEng, "stmt3")
+	if err != nil || txAborted {
+		t.Fatalf("prog3 failed in subsequent execution: err=%v, txAborted=%v", err, txAborted)
+	}
+
+	// Commit transaction
+	if err := coord.CommitSessionTx(sessID); err != nil {
+		t.Fatalf("failed to commit T-SQL transaction: %v", err)
+	}
+
+	// Verify both rows (1 and 2) were committed successfully
+	res, err := coord.ExecuteSQL("SELECT COUNT(*) AS cnt FROM items_prog;")
+	if err != nil || !res.Success {
+		t.Fatalf("failed to select count: %v", err)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["cnt"]) != "2" {
+		t.Fatalf("expected 2 committed rows, got %v", res.Rows[0]["cnt"])
+	}
+}
+

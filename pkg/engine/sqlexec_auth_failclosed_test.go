@@ -2,6 +2,7 @@ package engine
 
 import (
 	"strings"
+	"sync"
 	"testing"
 
 	"lionsql/pkg/auth"
@@ -103,4 +104,62 @@ func TestAuth_FailClosed_WhenAuthServiceNil(t *testing.T) {
 	if len(res.Rows) != 1 {
 		t.Fatalf("expected 1 row, got %d", len(res.Rows))
 	}
+}
+
+// TestAuth_CheckTableAccess_ConcurrentRace verifies that concurrent calls to SetSessionUser
+// and checkTableAccess (via ExecuteSessionSQL) do not trigger Go runtime data races on cs.User (AUDIT-FULL-019).
+func TestAuth_CheckTableAccess_ConcurrentRace(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := NewCoordinator(cat, eng, DefaultConfig())
+
+	if _, err := coord.ExecuteSQL("CREATE TABLE test_race (id INT PRIMARY KEY, val VARCHAR(64));"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	authSvc := auth.NewAuthService(auth.Config{})
+	_, _ = authSvc.CreateLogin("alice", "Pass1234!")
+	_, _ = authSvc.CreateUser("alice", "alice")
+	_ = authSvc.GrantTable("alice", "test_race", auth.PrivSelect)
+	coord.SetAuthService(authSvc, true)
+
+	sessID := "sess-race-user"
+	sess, err := coord.GetOrCreateSession(sessID)
+	if err != nil {
+		t.Fatalf("GetOrCreateSession failed: %v", err)
+	}
+	sess.User = "alice"
+
+	var wg sync.WaitGroup
+	stop := make(chan struct{})
+
+	// Goroutine 1: Rapidly mutate cs.User via SetSessionUser
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+				if i%2 == 0 {
+					coord.SetSessionUser(sessID, "alice")
+				} else {
+					coord.SetSessionUser(sessID, "bob")
+				}
+			}
+		}
+	}()
+
+	// Goroutine 2: Repeatedly run queries triggering checkTableAccess
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			_, _ = coord.ExecuteSessionSQL(sessID, "SELECT * FROM test_race;")
+		}
+		close(stop)
+	}()
+
+	wg.Wait()
 }

@@ -178,3 +178,24 @@ func TestHasDisjunction_LexicalBoundaries(t *testing.T) {
 		})
 	}
 }
+
+// TestSplitOnAnd_MultilineAndTabs verifies that SplitOnAnd properly recognizes word boundaries
+// formed by newlines (\n), carriage returns (\r), tabs (\t), and parens around AND and BETWEEN (AUDIT-FULL-021).
+func TestSplitOnAnd_MultilineAndTabs(t *testing.T) {
+	where := "col1 = 1\nAND col2 = 2\r\n\tAND score BETWEEN\n\t10 AND 20\nAND col3 = 3"
+	parts := SplitOnAnd(where)
+	expected := []string{
+		"col1 = 1",
+		"col2 = 2",
+		"score BETWEEN\n\t10 AND 20",
+		"col3 = 3",
+	}
+	if len(parts) != len(expected) {
+		t.Fatalf("expected %d parts, got %d: %+v", len(expected), len(parts), parts)
+	}
+	for i, exp := range expected {
+		if parts[i] != exp {
+			t.Errorf("part %d: expected %q, got %q", i, exp, parts[i])
+		}
+	}
+}

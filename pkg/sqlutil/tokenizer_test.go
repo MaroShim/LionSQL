@@ -472,3 +472,43 @@ func TestIsVolatileSubquery(t *testing.T) {
 		})
 	}
 }
+
+// TestTokenizer_Comments_ApostrophesAndKeywords verifies that tokenizer functions
+// correctly skip line comments (--) and block comments (/* */) and do not invert
+// quote states or misidentify keywords inside comments (AUDIT-FULL-022, AUDIT-FULL-026).
+func TestTokenizer_Comments_ApostrophesAndKeywords(t *testing.T) {
+	// 1. SplitAndConditions with comment containing apostrophe (don't)
+	sqlAnd := "a = 1 -- don't touch\n AND b = 2 /* OR comment */ AND c = 3"
+	conds := SplitAndConditions(sqlAnd)
+	if len(conds) != 3 {
+		t.Errorf("SplitAndConditions: expected 3 conds, got %d: %+v", len(conds), conds)
+	}
+
+	// 2. HasTopLevelOr with comment containing OR keyword
+	sqlOr := "a = 1 /* OR */ AND b = 2 -- don't OR"
+	if HasTopLevelOr(sqlOr) {
+		t.Errorf("HasTopLevelOr: expected false when OR is inside comment, got true")
+	}
+
+	// 3. ReplaceCorrelatedTokens with comment containing apostrophe
+	sqlRepl := "SELECT u.id FROM users u WHERE u.id = 10 -- don't change\n AND u.id = 20"
+	replaced := ReplaceCorrelatedTokens(sqlRepl, map[string]string{"u.id": "999"})
+	expectedRepl := "SELECT 999 FROM users u WHERE 999 = 10 -- don't change\n AND 999 = 20"
+	if replaced != expectedRepl {
+		t.Errorf("ReplaceCorrelatedTokens: expected %q, got %q", expectedRepl, replaced)
+	}
+
+	// 4. ExtractTopLevelTuples with comment containing parens (AUDIT-FULL-026)
+	sqlTuples := "(1, 'a'), -- (skip paren)\n (2, 'b'), /* (skip block) */ (3, 'c')"
+	tuples := ExtractTopLevelTuples(sqlTuples)
+	if len(tuples) != 3 {
+		t.Errorf("ExtractTopLevelTuples: expected 3 tuples, got %d: %+v", len(tuples), tuples)
+	}
+
+	// 5. FindTopLevelArithmeticOp with comment dashes
+	sqlArith := "a -- subtract\n - b"
+	idx, op := FindTopLevelArithmeticOp(sqlArith)
+	if op != '-' || idx != len("a -- subtract\n ") {
+		t.Errorf("FindTopLevelArithmeticOp: expected operator '-' after newline, got op=%c at idx=%d", op, idx)
+	}
+}

@@ -211,7 +211,7 @@ func (s *Coordinator) checkTableAccess(cs *ClientSession, table string, priv aut
 
 	user := ""
 	if cs != nil {
-		user = cs.User
+		user = cs.GetUser()
 	}
 	allowed, err := s.auth.HasTablePermission(user, cleanTbl, priv)
 	if err != nil {

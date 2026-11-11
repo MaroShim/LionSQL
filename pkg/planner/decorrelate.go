@@ -674,12 +674,31 @@ func isInsideOrBranch(where string, start, end int) bool {
 }
 
 func isIdent(s string) bool {
-	s = cleanIdent(s)
+	s = strings.TrimSpace(s)
 	if s == "" {
 		return false
 	}
-	r := rune(s[0])
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_' || r == '@'
+	if strings.ContainsAny(s, " \t\r\n><!=+-*/%^&|~(),;") {
+		return false
+	}
+	parts := strings.Split(s, ".")
+	for _, p := range parts {
+		p = strings.Trim(p, "\"`'[]")
+		if p == "" {
+			return false
+		}
+		r := p[0]
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_' || r == '@' || r == '#') {
+			return false
+		}
+		for i := 1; i < len(p); i++ {
+			c := p[i]
+			if !sqlutil.IsIdentChar(c) && c != '@' && c != '#' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func hasPrefixTable(col string, names []string) bool {
