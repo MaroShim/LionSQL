@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"lionsql/pkg/sqlutil"
 )
 
 // isDeclareCursorQuery reports whether query is a SQL server-side cursor declaration.
@@ -27,16 +29,15 @@ func (s *Coordinator) execDeclareCursor(query string, start time.Time, cs *Clien
 
 	// Squeeze "DECLARE "
 	rest := strings.TrimSpace(trimmed[len("DECLARE "):])
-	upperRest := strings.ToUpper(rest)
 
-	// Split by " FOR "
-	forIdx := strings.Index(upperRest, " FOR ")
+	// Split by "FOR"
+	forIdx := sqlutil.FindTopLevelKeyword(rest, "FOR")
 	if forIdx == -1 {
 		return nil, fmt.Errorf("syntax error: DECLARE CURSOR requires 'FOR <query>'")
 	}
 
 	header := strings.TrimSpace(rest[:forIdx])
-	cursorQuery := strings.TrimSpace(rest[forIdx+len(" FOR "):])
+	cursorQuery := strings.TrimSpace(rest[forIdx+len("FOR"):])
 
 	if cursorQuery == "" {
 		return nil, fmt.Errorf("syntax error: empty query in DECLARE CURSOR")

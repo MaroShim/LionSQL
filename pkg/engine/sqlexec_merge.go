@@ -765,16 +765,17 @@ func parseMergeQuery(query string) (*parsedMerge, error) {
 func parseTableAlias(s string) (table, alias string) {
 	s = strings.TrimSpace(s)
 	// Strip hints like WITH (HOLDLOCK) or WITH(HOLDLOCK)
-	upper := strings.ToUpper(s)
-	if idx := strings.Index(upper, "WITH"); idx != -1 && (idx == 0 || s[idx-1] == ' ' || s[idx-1] == '\t') {
+	if idx := sqlutil.FindTopLevelKeyword(s, "WITH"); idx != -1 {
 		beforeWith := strings.TrimSpace(s[:idx])
 		afterWith := strings.TrimSpace(s[idx+len("WITH"):])
-		if endParen := strings.Index(afterWith, ")"); endParen != -1 {
-			rem := strings.TrimSpace(afterWith[endParen+1:])
-			if rem != "" {
-				s = beforeWith + " " + rem
-			} else {
-				s = beforeWith
+		if openP := strings.Index(afterWith, "("); openP != -1 {
+			if endParen := sqlutil.FindMatchingParen(afterWith, openP); endParen != -1 {
+				rem := strings.TrimSpace(afterWith[endParen+1:])
+				if rem != "" {
+					s = beforeWith + " " + rem
+				} else {
+					s = beforeWith
+				}
 			}
 		}
 	}

@@ -714,10 +714,9 @@ func parseOutputClause(raw string) []outputProj {
 		}
 		alias := ""
 		expr := p
-		upper := strings.ToUpper(p)
-		if idx := strings.Index(upper, " AS "); idx != -1 {
+		if idx := sqlutil.FindTopLevelKeyword(p, "AS"); idx != -1 {
 			expr = strings.TrimSpace(p[:idx])
-			alias = cleanIdentifier(p[idx+4:])
+			alias = cleanIdentifier(p[idx+len("AS"):])
 		}
 		source := ""
 		col := expr

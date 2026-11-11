@@ -1793,7 +1793,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 // cleanIdentifier strips quotes, brackets, and prefixes from table/column names.
 func cleanIdentifier(s string) string {
 	s = strings.TrimSpace(s)
-	if idx := strings.Index(strings.ToUpper(s), " WITH "); idx != -1 {
+	if idx := sqlutil.FindTopLevelKeyword(s, "WITH"); idx != -1 {
 		s = strings.TrimSpace(s[:idx])
 	}
 	return proc.CleanSchemaPrefix(s)
@@ -1856,7 +1856,7 @@ func (s *Coordinator) execRaiserror(raw string, start time.Time) (*QueryResult, 
 	}
 
 	// Check if trailing WITH clause exists, e.g. WITH NOWAIT, WITH LOG, WITH SETERROR
-	if idx := strings.Index(strings.ToUpper(rem), " WITH "); idx != -1 {
+	if idx := sqlutil.FindTopLevelKeyword(rem, "WITH"); idx != -1 {
 		rem = strings.TrimSpace(rem[:idx])
 	}
 

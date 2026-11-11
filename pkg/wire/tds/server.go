@@ -2886,8 +2886,8 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 	// 2. Standard standalone single @@VERSION probe
 	if strings.Contains(upper, "@@VERSION") && !strings.Contains(upper, ",") && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
 		colName := "version"
-		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
-			alias := strings.TrimSpace(trimmed[asIdx+4:])
+		if asIdx := sqlutil.FindTopLevelKeyword(trimmed, "AS"); asIdx != -1 {
+			alias := strings.TrimSpace(trimmed[asIdx+len("AS"):])
 			if commaIdx := strings.Index(alias, ","); commaIdx != -1 {
 				alias = alias[:commaIdx]
 			}
@@ -2908,8 +2908,8 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 	// 2.1. Standard standalone single @@MICROSOFTVERSION probe
 	if strings.Contains(upper, "@@MICROSOFTVERSION") && !strings.Contains(upper, ",") && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
 		colName := "MicrosoftVersion"
-		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
-			alias := strings.TrimSpace(trimmed[asIdx+4:])
+		if asIdx := sqlutil.FindTopLevelKeyword(trimmed, "AS"); asIdx != -1 {
+			alias := strings.TrimSpace(trimmed[asIdx+len("AS"):])
 			if commaIdx := strings.Index(alias, ","); commaIdx != -1 {
 				alias = alias[:commaIdx]
 			}
@@ -2928,8 +2928,8 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 	// 3. Standalone single-expression SERVERPROPERTY(...) probe only
 	if strings.Contains(upper, "SERVERPROPERTY") && !strings.Contains(upper, ",") && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
 		colName := "property"
-		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
-			alias := strings.TrimSpace(trimmed[asIdx+4:])
+		if asIdx := sqlutil.FindTopLevelKeyword(trimmed, "AS"); asIdx != -1 {
+			alias := strings.TrimSpace(trimmed[asIdx+len("AS"):])
 			if commaIdx := strings.Index(alias, ","); commaIdx != -1 {
 				alias = alias[:commaIdx]
 			}
@@ -2937,11 +2937,12 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 			if alias != "" {
 				colName = alias
 			}
-		} else if spIdx := strings.Index(upper, "SERVERPROPERTY"); spIdx != -1 {
+		} else if spIdx := sqlutil.FindTopLevelKeyword(trimmed, "SERVERPROPERTY"); spIdx != -1 {
 			if openParen := strings.Index(trimmed[spIdx:], "("); openParen != -1 {
-				argStr := trimmed[spIdx+openParen+1:]
-				if closeParen := strings.Index(argStr, ")"); closeParen != -1 {
-					arg := strings.Trim(strings.TrimSpace(argStr[:closeParen]), "'\" ")
+				absOpen := spIdx + openParen
+				if closeParen := sqlutil.FindMatchingParen(trimmed, absOpen); closeParen != -1 {
+					argStr := trimmed[absOpen+1 : closeParen]
+					arg := strings.Trim(strings.TrimSpace(argStr), "'\" ")
 					if arg != "" {
 						colName = arg
 					}

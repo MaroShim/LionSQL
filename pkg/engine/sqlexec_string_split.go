@@ -209,8 +209,8 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 	if upperProj == "COUNT(*)" || upperProj == "COUNT(1)" || upperProj == "COUNT(VALUE)" ||
 		strings.HasPrefix(upperProj, "COUNT(*)") || strings.HasPrefix(upperProj, "COUNT(1)") || strings.HasPrefix(upperProj, "COUNT(VALUE)") {
 		colName := "count"
-		if asIdx := strings.Index(upperProj, " AS "); asIdx != -1 {
-			colName = cleanIdentifier(strings.TrimSpace(projStr[asIdx+4:]))
+		if asIdx := sqlutil.FindTopLevelKeyword(projStr, "AS"); asIdx != -1 {
+			colName = cleanIdentifier(strings.TrimSpace(projStr[asIdx+len("AS"):]))
 		}
 		countRow := map[string]any{colName: int64(len(rows))}
 		return &QueryResult{
@@ -244,8 +244,8 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 		projCols := planner.SplitProjections(projStr)
 		for _, pc := range projCols {
 			aliasName := pc
-			if asIdx := strings.Index(strings.ToUpper(pc), " AS "); asIdx != -1 {
-				aliasName = strings.TrimSpace(pc[asIdx+4:])
+			if asIdx := sqlutil.FindTopLevelKeyword(pc, "AS"); asIdx != -1 {
+				aliasName = strings.TrimSpace(pc[asIdx+len("AS"):])
 			} else if strings.Contains(aliasName, ".") {
 				aliasName = aliasName[strings.LastIndex(aliasName, ".")+1:]
 			}
@@ -258,7 +258,7 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 			for j, pc := range projCols {
 				colName := columns[j]
 				rawCol := pc
-				if asIdx := strings.Index(strings.ToUpper(pc), " AS "); asIdx != -1 {
+				if asIdx := sqlutil.FindTopLevelKeyword(pc, "AS"); asIdx != -1 {
 					rawCol = strings.TrimSpace(pc[:asIdx])
 				}
 				cleanedRaw := cleanIdentifier(rawCol)

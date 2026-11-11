@@ -1806,9 +1806,9 @@ func parseAggItem(proj string) aggItem {
 	proj = strings.TrimSpace(proj)
 	alias := ""
 	rawExpr := proj
-	if idx := strings.Index(strings.ToUpper(proj), " AS "); idx != -1 {
+	if idx := sqlutil.FindTopLevelKeyword(proj, "AS"); idx != -1 {
 		rawExpr = strings.TrimSpace(proj[:idx])
-		alias = cleanIdentifier(strings.TrimSpace(proj[idx+4:]))
+		alias = cleanIdentifier(strings.TrimSpace(proj[idx+len("AS"):]))
 	} else if tokens := strings.Fields(proj); len(tokens) == 2 && !strings.Contains(tokens[1], "(") {
 		rawExpr = strings.TrimSpace(tokens[0])
 		alias = cleanIdentifier(tokens[1])
