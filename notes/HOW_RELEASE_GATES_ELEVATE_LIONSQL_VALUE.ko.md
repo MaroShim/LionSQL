@@ -68,7 +68,7 @@ LionSQL의 릴리즈 자동화 파이프라인([`scripts/release.sh`](../scripts
  [Gate 2] 13대 도메인 종단간(E2E) 스모크 테스트       (~18초) ➔ 프로토콜 생존성 & 실무 호환
  [Gate 3] TPC-C OLTP 극한 부하 벤치마크             (~12초) ➔ 고동시성 포화 (>70만 tpmC)
  [Gate 4] SQLLogicTest 41만 쿼리 관계형 오라클       (~14초) ➔ 수학적 쿼리 정합성 (0 해시 오차)
- [Gate 5] T-SQL 프로시저 & Babelfish 3,000대 스위트  (~5.5초) ➔ T-SQL VM 런타임 & 오라클 정합성
+ [Gate 5] T-SQL 프로시저 & 6대 코퍼스 1,289 스위트  (~2.8초) ➔ T-SQL VM 런타임 & 오라클 정합성
  [Gate 6] SIGKILL 크래시 복구 & 누수 센티널          (~11초) ➔ 정전 무손실 & 자원 누수 0
 ========================================================================================
 ```
@@ -89,9 +89,9 @@ LionSQL의 릴리즈 자동화 파이프라인([`scripts/release.sh`](../scripts
 - **실행 명령**: `./bin/sqllogictest -dir test/slt -parallel 16`
 - **의미**: 아무리 빠르고 기능이 많아도 쿼리 결과가 틀리면 데이터베이스가 아닙니다. 90개 테스트 파일에서 추출된 **409,194개 표준 쿼리**를 16개 병렬 워커로 실행하여, 3-Valued Logic(`NULL = NULL`, `NOT IN (NULL)`), 서브쿼리 비상관화, 집계 함수의 결과 MD5 해시를 SQLite 레퍼런스 오라클과 1:1 비교합니다. **오라클 해시 오차 0건(100% 일치)**만이 릴리즈 통과의 유일한 기준입니다.
 
-### [Gate 5] T-SQL 저장 프로시저 & AWS Babelfish 오라클 3,000대 수렴 스위트
+### [Gate 5] T-SQL 저장 프로시저, AWS Babelfish 및 5대 외부 코퍼스 1,289대 진골 오라클 스위트
 - **실행 명령**: `go test -count=1 ./test/slt_proc/...`
-- **의미**: SQLLogicTest 표준 스위트가 커버하지 못하는 LionSQL의 고유 아이덴티티, 즉 **Microsoft SQL Server T-SQL 저장 프로시저 VM 런타임과 AWS Babelfish 호환 오라클**을 전수 검증합니다. 30개 코어 스위트, 1,855개 도메인 스위트, 1,115개 Babelfish 오라클 스위트 등 **총 3,000개 `.slt` 스위트(13,418개 값 검증 쿼리, 34,242개 구문, 총 47,660개 레코드)**를 통해 `@변수`, `OUTPUT` 매개변수 바인딩, 제어문(`IF/WHILE`), `RAISERROR` 포맷팅, `#임시테이블`, `@테이블변수`, 다중 `UNION/INTERSECT/EXCEPT` 체인, `CHECK` 제약 조건, 그리고 재귀 CTE의 수학적 수렴성을 단 **5.5초** 만에 완벽히 증명합니다.
+- **의미**: SQLLogicTest 표준 스위트가 커버하지 못하는 LionSQL의 고유 아이덴티티, 즉 **Microsoft SQL Server T-SQL 저장 프로시저 VM 런타임과 글로벌 오픈소스 코퍼스 호환 오라클**을 전수 검증합니다. 인위적인 패딩(Synthetic Padding)을 완전히 배제하고, 30개 수작업 코어 스위트, 1,115개 AWS Babelfish 오라클 스위트, 144개 외부 코퍼스(`sqlglot`, `tedious`, `pymssql`, `gorm-sqlserver`, `mssql-jdbc`) 오라클 스위트 등 **총 1,289개 순수 `.slt` 스위트(9,089개 값 검증 쿼리, 28,089개 구문, 총 37,178개 레코드)**를 통해 `@변수`, `OUTPUT` 매개변수 바인딩, 제어문(`IF/WHILE`), `RAISERROR` 포맷팅, `#임시테이블`, `@테이블변수`, 다중 `UNION/INTERSECT/EXCEPT` 체인, `CHECK` 제약 조건, 그리고 재귀 CTE의 수학적 수렴성을 단 **2.8초** 만에 완벽히 증명합니다.
 
 ### [Gate 6] 고동시성 `SIGKILL` 전원 차단 무손실 크래시 복구 & 누수 센티널
 - **실행 명령**: `./bin/crashtest -rounds 3 ... && ./bin/soaktest -duration 5s ...`

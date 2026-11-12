@@ -1,0 +1,30 @@
+# test/slt_proc/pymssql_oracle/3097_pymssql_test_connections.slt
+# External Corpus Oracle Suite harvested from test/corpora/pymssql/tests/test_connections.py
+
+statement ok
+SET TEXTSIZE 2147483647
+
+statement ok
+SET TEXTSIZE 2147483647;
+
+statement ok
+SET TEXTSIZE 2147483647;SET ANSI_NULLS ON;
+
+statement ok
+SET TEXTSIZE 2147483647;SET ANSI_NULLS ON
+
+statement ok
+SET TEXTSIZE 2147483647;
+
+statement ok
+SET ANSI_NULLS ON;
+
+statement ok
+SET TEXTSIZE 2147483647;
+
+statement ok
+SET ANSI_NULLS ON
+
+statement ok
+SET TEXTSIZE 2147483647
+

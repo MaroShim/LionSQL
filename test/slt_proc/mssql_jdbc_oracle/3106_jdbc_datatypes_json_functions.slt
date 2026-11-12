@@ -1,0 +1,22 @@
+# test/slt_proc/mssql_jdbc_oracle/3106_jdbc_datatypes_json_functions.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/datatypes/JSONFunctionTest.java
+
+statement ok
+CREATE TABLE jdbc_json_t (id INT PRIMARY KEY, doc NVARCHAR(4000));
+
+statement ok
+INSERT INTO jdbc_json_t VALUES (1, N'{"key1":"value1","num":42,"arr":[10,20,30]}');
+
+query TTTT
+SELECT ISJSON(doc), JSON_VALUE(doc, '$.key1'), JSON_VALUE(doc, '$.num'), JSON_QUERY(doc, '$.arr') FROM jdbc_json_t WHERE id = 1;
+----
+1 value1 42 [10,20,30]
+
+statement ok
+UPDATE jdbc_json_t SET doc = JSON_MODIFY(doc, '$.key1', 'updated') WHERE id = 1;
+
+query T
+SELECT JSON_VALUE(doc, '$.key1') FROM jdbc_json_t WHERE id = 1;
+----
+updated
+

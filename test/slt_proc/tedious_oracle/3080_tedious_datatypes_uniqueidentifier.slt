@@ -1,0 +1,13 @@
+# test/slt_proc/tedious_oracle/3080_tedious_datatypes_uniqueidentifier.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (UniqueIdentifier)
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(null as uniqueidentifier)
+----
+NULL
+

@@ -1,0 +1,327 @@
+/*
+ * Microsoft JDBC Driver for SQL Server Copyright(c) Microsoft Corporation All rights reserved. This program is made
+ * available under the terms of the MIT License. See the LICENSE file in the project root for more information.
+ */
+package com.microsoft.sqlserver.jdbc.unit.statement;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.sql.Connection;
+import java.sql.JDBCType;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Types;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.platform.runner.JUnitPlatform;
+import org.junit.runner.RunWith;
+
+import com.microsoft.sqlserver.jdbc.RandomUtil;
+import com.microsoft.sqlserver.jdbc.SQLServerPreparedStatement;
+import com.microsoft.sqlserver.jdbc.TestResource;
+import com.microsoft.sqlserver.jdbc.TestUtils;
+import com.microsoft.sqlserver.testframework.AbstractSQLGenerator;
+import com.microsoft.sqlserver.testframework.AbstractTest;
+import com.microsoft.sqlserver.testframework.Constants;
+import com.microsoft.sqlserver.testframework.vectorJsonTest;
+
+
+@RunWith(JUnitPlatform.class)
+@Tag(Constants.xAzureSQLDW)
+public class RegressionTest extends AbstractTest {
+
+    private static String tableName = RandomUtil.getIdentifier("ServerCursorPStmt");
+    private static String procName = RandomUtil.getIdentifier("ServerCursorProc");
+
+    @BeforeAll
+    public static void setupTests() throws Exception {
+        setConnection();
+    }
+
+    /**
+     * Tests select into stored proc
+     * 
+     * @throws SQLException
+     */
+    @Test
+    public void testServerCursorPStmt() throws SQLException {
+        try (Connection con = getConnection(); Statement stmt = con.createStatement()) {
+
+            // expected values
+            int numRowsInResult = 1;
+            String col3Value = "India";
+            String col3Lookup = "IN";
+
+            stmt.executeUpdate("CREATE TABLE " + AbstractSQLGenerator.escapeIdentifier(tableName)
+                    + " (col1 int primary key, col2 varchar(3), col3 varchar(128))");
+            stmt.executeUpdate(
+                    "INSERT INTO " + AbstractSQLGenerator.escapeIdentifier(tableName) + " VALUES (1, 'CAN', 'Canada')");
+            stmt.executeUpdate("INSERT INTO " + AbstractSQLGenerator.escapeIdentifier(tableName)
+                    + " VALUES (2, 'USA', 'United States of America')");
+            stmt.executeUpdate(
+                    "INSERT INTO " + AbstractSQLGenerator.escapeIdentifier(tableName) + " VALUES (3, 'JPN', 'Japan')");
+            stmt.executeUpdate("INSERT INTO " + AbstractSQLGenerator.escapeIdentifier(tableName) + " VALUES (4, '"
+                    + col3Lookup + "', '" + col3Value + "')");
+
+            // create stored proc
+            String storedProcString;
+
+            if (isSqlAzure()) {
+                // On SQL Azure, 'SELECT INTO' is not supported. So do not use it.
+                storedProcString = "CREATE PROCEDURE " + AbstractSQLGenerator.escapeIdentifier(procName)
+                        + " @param varchar(3) AS SELECT col3 FROM " + AbstractSQLGenerator.escapeIdentifier(tableName)
+                        + " WHERE col2 = @param";
+            } else {
+                // On SQL Server
+                storedProcString = "CREATE PROCEDURE " + AbstractSQLGenerator.escapeIdentifier(procName)
+                        + " @param varchar(3) AS SELECT col3 INTO #TMPTABLE FROM "
+                        + AbstractSQLGenerator.escapeIdentifier(tableName)
+                        + " WHERE col2 = @param SELECT col3 FROM #TMPTABLE";
+            }
+
+            stmt.executeUpdate(storedProcString);
+
+            // execute stored proc via pstmt
+            try (PreparedStatement pstmt = con.prepareStatement(
+                    "EXEC " + AbstractSQLGenerator.escapeIdentifier(procName) + " ?", ResultSet.TYPE_SCROLL_INSENSITIVE,
+                    ResultSet.CONCUR_READ_ONLY)) {
+                pstmt.setString(1, col3Lookup);
+
+                // should return 1 row
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    rs.last();
+                    assertEquals(rs.getRow(), numRowsInResult,
+                            TestResource.getResource("R_valueNotMatch") + rs.getRow() + ", " + numRowsInResult);
+                    rs.beforeFirst();
+                    while (rs.next()) {
+                        assertEquals(rs.getString(1), col3Value,
+                                TestResource.getResource("R_valueNotMatch") + rs.getString(1) + ", " + col3Value);
+                    }
+                }
+            } finally {
+                TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+            }
+        }
+    }
+
+    /**
+     * Tests update count returned by SELECT INTO
+     * 
+     * @throws SQLException
+     */
+    @Test
+    public void testSelectIntoUpdateCount() throws SQLException {
+        try (Connection con = getConnection()) {
+
+            // Azure does not do SELECT INTO
+            if (!isSqlAzure()) {
+                tableName = RandomUtil.getIdentifier("[#SourceTableForSelectInto]]");
+
+                try (Statement stmt = con.createStatement()) {
+                    stmt.executeUpdate("CREATE TABLE " + AbstractSQLGenerator.escapeIdentifier(tableName)
+                            + " (col1 int primary key, col2 varchar(3), col3 varchar(128))");
+                    stmt.executeUpdate("INSERT INTO " + AbstractSQLGenerator.escapeIdentifier(tableName)
+                            + " VALUES (1, 'CAN', 'Canada')");
+                    stmt.executeUpdate("INSERT INTO " + AbstractSQLGenerator.escapeIdentifier(tableName)
+                            + " VALUES (2, 'USA', 'United States of America')");
+                    stmt.executeUpdate("INSERT INTO " + AbstractSQLGenerator.escapeIdentifier(tableName)
+                            + " VALUES (3, 'JPN', 'Japan')");
+
+                    // expected values
+                    int numRowsToCopy = 2;
+
+                    try (PreparedStatement ps = con.prepareStatement("SELECT * INTO #TMPTABLE FROM "
+                            + AbstractSQLGenerator.escapeIdentifier(tableName) + " WHERE col1 <= ?")) {
+                        ps.setInt(1, numRowsToCopy);
+                        int updateCount = ps.executeUpdate();
+                        assertEquals(numRowsToCopy, updateCount, TestResource.getResource("R_incorrectUpdateCount"));
+                    } finally {
+                        TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Tests update query
+     * 
+     * @throws SQLException
+     */
+    @Test
+    public void testUpdateQuery() throws SQLException {
+        try (Connection con = getConnection(); Statement stmt = con.createStatement()) {
+            String sql;
+            JDBCType[] targets = {JDBCType.INTEGER, JDBCType.SMALLINT};
+            int rows = 3;
+            tableName = RandomUtil.getIdentifier("updateQuery");
+            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+            stmt.executeUpdate("CREATE TABLE " + AbstractSQLGenerator.escapeIdentifier(tableName) + " ("
+                    + "c1 int null," + "PK int NOT NULL PRIMARY KEY" + ")");
+
+            /*
+             * populate table
+             */
+            sql = "insert into " + AbstractSQLGenerator.escapeIdentifier(tableName) + " values(" + "?,?" + ")";
+            try (PreparedStatement pstmt = (SQLServerPreparedStatement) con.prepareStatement(sql,
+                    ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY, con.getHoldability())) {
+
+                for (int i = 1; i <= rows; i++) {
+                    pstmt.setObject(1, i, JDBCType.INTEGER);
+                    pstmt.setObject(2, i, JDBCType.INTEGER);
+                    pstmt.executeUpdate();
+                }
+            }
+            /*
+             * Update table
+             */
+            sql = "update " + AbstractSQLGenerator.escapeIdentifier(tableName) + " SET c1= ? where PK =1";
+            for (int i = 1; i <= rows; i++) {
+                try (PreparedStatement pstmt = (SQLServerPreparedStatement) con.prepareStatement(sql,
+                        ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+                    for (JDBCType target : targets) {
+                        pstmt.setObject(1, 5 + i, target);
+                        pstmt.executeUpdate();
+                    }
+                }
+            }
+
+            /*
+             * Verify
+             */
+            try (ResultSet rs = stmt
+                    .executeQuery("select * from " + AbstractSQLGenerator.escapeIdentifier(tableName))) {
+                rs.next();
+                assertEquals(rs.getInt(1), 8, "Value mismatch");
+            } finally {
+                TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+            }
+        }
+    }
+
+    /**
+     * Tests XML query
+     * 
+     * @throws SQLException
+     */
+    @Test
+    public void testXmlQuery() throws SQLException {
+        try (Connection connection = getConnection(); Statement stmt = connection.createStatement()) {
+            tableName = RandomUtil.getIdentifier("try_SQLXML_Table");
+            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+            createTable(stmt);
+
+            String sql = "UPDATE " + AbstractSQLGenerator.escapeIdentifier(tableName) + " SET [c2] = ?, [c3] = ?";
+            try (SQLServerPreparedStatement pstmt = (SQLServerPreparedStatement) connection.prepareStatement(sql)) {
+                pstmt.setObject(1, null);
+                pstmt.setObject(2, null, Types.SQLXML);
+                pstmt.executeUpdate();
+            }
+
+            try (SQLServerPreparedStatement pstmt = (SQLServerPreparedStatement) connection.prepareStatement(sql)) {
+                pstmt.setObject(1, null, Types.SQLXML);
+                pstmt.setObject(2, null);
+                pstmt.executeUpdate();
+            }
+
+            try (SQLServerPreparedStatement pstmt = (SQLServerPreparedStatement) connection.prepareStatement(sql)) {
+                pstmt.setObject(1, null);
+                pstmt.setObject(2, null, Types.SQLXML);
+                pstmt.executeUpdate();
+            } finally {
+                TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+            }
+        }
+    }
+
+    /**
+     * Tests Json query
+     * 
+     * @throws SQLException
+     */
+    @Test
+    @vectorJsonTest
+    @Tag(Constants.JSONTest)
+    public void testJsonQuery() throws SQLException {
+        try (Connection connection = getConnection(); Statement stmt = connection.createStatement()) {
+            tableName = RandomUtil.getIdentifier("try_SQLJSON_Table");
+            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+            stmt.execute("CREATE TABLE " + AbstractSQLGenerator.escapeIdentifier(tableName)
+                        + " ([c1] int NOT NULL PRIMARY KEY, [c2] json, [c3] json)");
+
+            int pkRow1 = 1;
+            int pkRow2 = 2;
+            int pkRow3 = 3;            
+            String sql = "insert into " + AbstractSQLGenerator.escapeIdentifier(tableName) + " values (?, ?,?)";
+            try (SQLServerPreparedStatement pstmt = (SQLServerPreparedStatement) connection.prepareStatement(sql)) {
+                pstmt.setInt(1, pkRow1);
+                pstmt.setObject(2, "{\"key11\":\"value11\"}");
+                pstmt.setObject(3, "{\"key12\":\"value12\"}");
+                pstmt.addBatch();
+
+                pstmt.setInt(1, pkRow2);
+                pstmt.setObject(2, "{\"key21\":\"value21\"}");
+                pstmt.setObject(3, "{\"key22\":\"value22\"}");
+                pstmt.addBatch();
+
+                pstmt.setInt(1, pkRow3);
+                pstmt.setObject(2, "{\"key31\":\"value31\"}");
+                pstmt.setObject(3, "{\"key32\":\"value32\"}");
+                pstmt.addBatch();
+
+                pstmt.executeBatch();
+            }
+
+            sql = "DELETE " + AbstractSQLGenerator.escapeIdentifier(tableName) + " where [c1] = ?";
+            try (SQLServerPreparedStatement pstmt = (SQLServerPreparedStatement) connection.prepareStatement(sql)) {
+                pstmt.setInt(1, pkRow1);
+                pstmt.executeUpdate();
+            }
+            
+            sql = "UPDATE " + AbstractSQLGenerator.escapeIdentifier(tableName) + " SET [c2] = ?, [c3] = ? where [c1] = ?";
+            try (SQLServerPreparedStatement pstmt = (SQLServerPreparedStatement) connection.prepareStatement(sql)) {
+                pstmt.setObject(1, "{\"key21.1\":\"value21.1\"}");
+                pstmt.setObject(2, "{\"key22.1\":\"value22.1\"}");
+                pstmt.setInt(3, pkRow2);
+                pstmt.executeUpdate();
+            } 
+
+            sql = "DELETE " + AbstractSQLGenerator.escapeIdentifier(tableName) + " where [c1] = ?";
+            try (SQLServerPreparedStatement pstmt = (SQLServerPreparedStatement) connection.prepareStatement(sql)) {
+                pstmt.setInt(1, pkRow3);
+                pstmt.executeUpdate();
+            }
+
+            try (ResultSet rs = stmt
+                    .executeQuery("select * from " + AbstractSQLGenerator.escapeIdentifier(tableName))) {
+                rs.next();
+                assertEquals(rs.getInt(1), 2, "Value mismatch");
+                assertEquals(rs.getObject(2), "{\"key21.1\":\"value21.1\"}", "Value mismatch");
+                assertEquals(rs.getObject(3), "{\"key22.1\":\"value22.1\"}", "Value mismatch");
+            } finally {
+                TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+            }
+        }
+    }
+
+    private void createTable(Statement stmt) throws SQLException {
+
+        String sql = "CREATE TABLE " + AbstractSQLGenerator.escapeIdentifier(tableName)
+                + " ([c1] int, [c2] xml, [c3] xml)";
+
+        stmt.execute(sql);
+    }
+
+    @AfterAll
+    public static void terminate() throws SQLException {
+        try (Statement stmt = connection.createStatement()) {
+            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+            TestUtils.dropProcedureIfExists(AbstractSQLGenerator.escapeIdentifier(procName), stmt);
+        }
+    }
+}

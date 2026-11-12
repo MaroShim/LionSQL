@@ -1,0 +1,23 @@
+# test/slt_proc/mssql_jdbc_oracle/3111_jdbc_performancelogcallback.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/PerformanceLogCallbackTest.java
+
+query T
+SELECT 1 AS test_column
+----
+1
+
+query T
+SELECT 1 AS plain_stmt
+----
+1
+
+query T
+SELECT 1 AS pool_a_marker
+----
+1
+
+query T
+SELECT 2 AS pool_b_marker
+----
+2
+

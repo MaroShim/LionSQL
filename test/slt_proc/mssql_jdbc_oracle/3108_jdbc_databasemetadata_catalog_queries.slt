@@ -1,0 +1,27 @@
+# test/slt_proc/mssql_jdbc_oracle/3108_jdbc_databasemetadata_catalog_queries.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/databasemetadata/DatabaseMetaDataTest.java
+
+statement ok
+CREATE TABLE jdbc_meta_t (id INT PRIMARY KEY, name NVARCHAR(60) NOT NULL);
+
+query TTTTT
+EXEC sp_tables @table_name = 'jdbc_meta_t';
+----
+postgres dbo jdbc_meta_t TABLE NULL
+
+query TTTTTTTTTTTTTTTTTTT
+EXEC sp_columns @table_name = 'jdbc_meta_t';
+----
+postgres dbo jdbc_meta_t id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 1 NO 56
+postgres dbo jdbc_meta_t name 12 varchar 255 255 NULL NULL 0 NULL NULL 12 NULL 255 2 NO 39
+
+query TTTTTT
+EXEC sp_pkeys @table_name = 'jdbc_meta_t';
+----
+postgres dbo jdbc_meta_t id 1 PK_jdbc_meta_t
+
+query T
+SELECT name FROM sys.tables WHERE name = 'jdbc_meta_t';
+----
+jdbc_meta_t
+

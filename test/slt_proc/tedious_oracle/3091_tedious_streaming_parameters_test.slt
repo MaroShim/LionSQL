@@ -1,0 +1,13 @@
+# test/slt_proc/tedious_oracle/3091_tedious_streaming_parameters_test.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/streaming-parameters-test.ts
+
+query T
+select @param
+----
+NULL
+
+query T
+select @param
+----
+NULL
+

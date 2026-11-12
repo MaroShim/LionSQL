@@ -1,0 +1,27 @@
+# test/slt_proc/mssql_jdbc_oracle/3114_jdbc_sqlserverconnection.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/SQLServerConnectionTest.java
+
+query T
+SELECT SESSIONPROPERTY('
+----
+SESSIONPROPERTY('
+
+statement ok
+CREATE TABLE #t (id int)
+
+statement ok
+INSERT INTO #t VALUES (1)
+
+statement ok
+INSERT INTO #t VALUES (2)
+
+statement ok
+INSERT INTO #t VALUES (3)
+
+query T
+SELECT id FROM #t ORDER BY id
+----
+1
+2
+3
+

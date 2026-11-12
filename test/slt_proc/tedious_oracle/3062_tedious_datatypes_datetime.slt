@@ -1,0 +1,63 @@
+# test/slt_proc/tedious_oracle/3062_tedious_datatypes_datetime.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (DateTime)
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(null as datetime)
+----
+NULL
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(
+----
+cast(
+

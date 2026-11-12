@@ -1,0 +1,14 @@
+# test/slt_proc/mssql_jdbc_oracle/3126_jdbc_datatypes_sqlvariantresultset.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/datatypes/SQLVariantResultSetTest.java
+
+query T
+SELECT cast('abc' as sql_variant) UNION ALL SELECT cast(42 as sql_variant)
+----
+abc
+42
+
+query T
+select cast(123 as sql_variant) as c1
+----
+123
+

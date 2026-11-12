@@ -1,0 +1,13 @@
+# test/slt_proc/tedious_oracle/3075_tedious_datatypes_char.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (Char)
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(null as char(5))
+----
+NULL
+

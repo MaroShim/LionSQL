@@ -1,0 +1,15 @@
+# test/slt_proc/mssql_jdbc_oracle/3131_jdbc_messagehandler_messagehandler.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/messageHandler/MessageHandlerTest.java
+
+statement ok
+CREATE TABLE #msghandler_tmp_table(id int, c1 varchar(255))
+
+statement ok
+INSERT INTO #msghandler_tmp_table VALUES(1, 'row 1')
+
+statement ok
+INSERT INTO #msghandler_tmp_table VALUES(1, 'row 1 - again - msg handler downgrades it')
+
+statement ok
+DECLARE @loop_cnt INT =
+

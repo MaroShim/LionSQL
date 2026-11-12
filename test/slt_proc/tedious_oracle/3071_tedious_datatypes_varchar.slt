@@ -1,0 +1,23 @@
+# test/slt_proc/tedious_oracle/3071_tedious_datatypes_varchar.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (VarChar)
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(null as varchar(10))
+----
+NULL
+
+query T
+select cast(
+----
+cast(
+

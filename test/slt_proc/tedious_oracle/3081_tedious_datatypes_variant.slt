@@ -1,0 +1,53 @@
+# test/slt_proc/tedious_oracle/3081_tedious_datatypes_variant.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (Variant)
+
+query T
+select cast(11 as sql_variant)
+----
+11
+
+query T
+select cast(11.16 as sql_variant)
+----
+11.160000
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(cast(0x1234 as varbinary(16)) as sql_variant)
+----
+4
+
+query T
+select cast(cast(
+----
+cast(cast(
+
+query T
+select N
+----
+N
+
+query T
+select cast(cast(3148.29 as decimal(20,8)) as sql_variant)
+----
+3148.29000000
+
+query T
+select cast(cast(
+----
+cast(cast(
+
+query T
+select cast(cast(
+----
+cast(cast(
+
+query T
+select cast(null as sql_variant)
+----
+NULL
+

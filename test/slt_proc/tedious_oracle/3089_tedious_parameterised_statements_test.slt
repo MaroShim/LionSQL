@@ -1,0 +1,24 @@
+# test/slt_proc/tedious_oracle/3089_tedious_parameterised_statements_test.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/parameterised-statements-test.ts
+
+query T
+select @param
+----
+NULL
+
+statement ok
+set @paramOut = @paramIn
+
+query TT
+select @param1, @param2
+----
+NULL NULL
+
+statement ok
+set @out = @in
+  set @out2 = @in3
+
+  return 0
+
+end
+

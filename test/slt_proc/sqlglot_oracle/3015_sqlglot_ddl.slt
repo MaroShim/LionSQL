@@ -1,0 +1,87 @@
+# test/slt_proc/sqlglot_oracle/3015_sqlglot_ddl.slt
+# External Corpus Oracle Suite harvested from test/corpora/sqlglot/test_tsql.py (test_ddl)
+
+statement ok
+CREATE TABLE x (id INT PRIMARY KEY, a INT, b INT, x INT);
+
+statement ok
+INSERT INTO x VALUES (1, 1, 10, 100), (2, 2, 20, 200);
+
+statement ok
+CREATE TABLE y (id INT PRIMARY KEY, a INT, b INT, x INT);
+
+statement ok
+INSERT INTO y VALUES (1, 2, 20, 200), (2, 3, 30, 300);
+
+statement ok
+CREATE TABLE z (id INT PRIMARY KEY, a INT, b INT, x INT);
+
+statement ok
+INSERT INTO z VALUES (1, 3, 30, 300), (2, 4, 40, 400);
+
+statement ok
+CREATE TABLE t (id INT PRIMARY KEY, x INT, y INT, c INT, a VARCHAR(50), cond INT, column1 VARCHAR(50), column2 VARCHAR(50), output INT, col1 INT, col2 INT, col3 CHAR(1));
+
+statement ok
+INSERT INTO t VALUES (1, 1, 2, 1, 'aba', 1, 'Hello', 'World', 42, 10, 20, 'c');
+
+statement ok
+CREATE TABLE t1 (id INT PRIMARY KEY, a INT, x INT, col1 INT, col2 INT, col3 INT);
+
+statement ok
+INSERT INTO t1 VALUES (1, 1, 10, 100, 200, 300), (2, 2, 20, 150, 250, 350);
+
+statement ok
+CREATE TABLE t2 (id INT PRIMARY KEY, a INT, x INT, col1 INT, col2 INT, col3 INT);
+
+statement ok
+INSERT INTO t2 VALUES (1, 2, 20, 50, 60, 70), (2, 3, 30, 80, 90, 100);
+
+statement ok
+CREATE VIEW start WITH SCHEMABINDING AS SELECT a FROM x
+
+statement ok
+ALTER TABLE dbo.DocExe DROP CONSTRAINT FK_Column_B
+
+statement ok
+CREATE SCHEMA testSchema
+
+statement ok
+CREATE VIEW t AS WITH cte AS (SELECT 1 AS c) SELECT c FROM cte
+
+statement ok
+ALTER TABLE tbl SET (SYSTEM_VERSIONING=OFF)
+
+statement ok
+ALTER TABLE tbl SET (FILESTREAM_ON = 'test')
+
+statement ok
+ALTER TABLE tbl SET (DATA_DELETION=ON)
+
+statement ok
+ALTER TABLE tbl SET (DATA_DELETION=OFF)
+
+statement ok
+ALTER TABLE tbl SET (SYSTEM_VERSIONING=ON(HISTORY_TABLE=db.tbl, DATA_CONSISTENCY_CHECK=OFF, HISTORY_RETENTION_PERIOD=5 DAYS))
+
+statement ok
+ALTER TABLE tbl SET (SYSTEM_VERSIONING=ON(HISTORY_TABLE=db.tbl, HISTORY_RETENTION_PERIOD=INFINITE))
+
+statement ok
+ALTER TABLE tbl SET (DATA_DELETION=ON(FILTER_COLUMN=col, RETENTION_PERIOD=5 MONTHS))
+
+statement ok
+CREATE TABLE [#temptest] (name INTEGER)
+
+statement ok
+CREATE TABLE tbl (id INTEGER IDENTITY PRIMARY KEY)
+
+statement ok
+CREATE OR ALTER VIEW a.b AS SELECT 1
+
+statement ok
+CREATE TABLE #mytemp (a INTEGER, b CHAR(2), c TIME(4), d FLOAT(24))
+
+statement ok
+ALTER TABLE tbl ADD CONSTRAINT cnstr PRIMARY KEY CLUSTERED (ID), CONSTRAINT cnstr2 UNIQUE CLUSTERED (ID)
+

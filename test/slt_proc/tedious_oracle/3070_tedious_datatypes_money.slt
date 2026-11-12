@@ -1,0 +1,28 @@
+# test/slt_proc/tedious_oracle/3070_tedious_datatypes_money.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (Money)
+
+query T
+select cast(1.22229 as money)
+----
+1.222290
+
+query T
+select cast(-1.22229 as money)
+----
+-1.222290
+
+query T
+select cast(123456789012345.11 as money)
+----
+123456789012345.109375
+
+query T
+select cast(-123456789012345.11 as money)
+----
+-123456789012345.109375
+
+query T
+select cast(null as money)
+----
+NULL
+

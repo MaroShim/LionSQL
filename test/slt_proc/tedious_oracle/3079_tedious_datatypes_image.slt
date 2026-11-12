@@ -1,0 +1,13 @@
+# test/slt_proc/tedious_oracle/3079_tedious_datatypes_image.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (Image)
+
+query T
+select cast(0x1234 as image)
+----
+0x1234
+
+query T
+select cast(null as image)
+----
+NULL
+

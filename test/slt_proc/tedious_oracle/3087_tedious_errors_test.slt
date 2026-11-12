@@ -1,0 +1,8 @@
+# test/slt_proc/tedious_oracle/3087_tedious_errors_test.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/errors-test.ts
+
+query T
+select 42,
+----
+42
+

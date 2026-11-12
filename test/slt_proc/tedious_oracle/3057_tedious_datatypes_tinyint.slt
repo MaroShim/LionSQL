@@ -1,0 +1,18 @@
+# test/slt_proc/tedious_oracle/3057_tedious_datatypes_tinyint.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (TinyInt)
+
+query T
+select cast(8 as tinyint)
+----
+8
+
+query T
+select cast(252 as tinyint)
+----
+252
+
+query T
+select cast(null as tinyint)
+----
+NULL
+

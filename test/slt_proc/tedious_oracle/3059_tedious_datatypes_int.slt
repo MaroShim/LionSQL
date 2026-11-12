@@ -1,0 +1,13 @@
+# test/slt_proc/tedious_oracle/3059_tedious_datatypes_int.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (Int)
+
+query T
+select cast(8 as int)
+----
+8
+
+query T
+select cast(null as int)
+----
+NULL
+

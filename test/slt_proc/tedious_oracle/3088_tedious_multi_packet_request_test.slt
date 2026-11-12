@@ -1,0 +1,8 @@
+# test/slt_proc/tedious_oracle/3088_tedious_multi_packet_request_test.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/multi-packet-request-test.ts
+
+query T
+select len(@value)
+----
+NULL
+

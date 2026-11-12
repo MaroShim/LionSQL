@@ -1,0 +1,35 @@
+# test/slt_proc/pymssql_oracle/3094_pymssql_sprocs_date_guid_variable_types.slt
+# External Corpus Oracle Suite harvested from test/corpora/pymssql/tests/sprocs_date_guid_variable_types.py
+
+statement ok
+CREATE PROCEDURE pymssqlTestDate @i date, @o date output AS BEGIN SET @o = @i; SELECT @o; END
+
+query T
+DECLARE @dt date; EXEC pymssqlTestDate '2026-03-31', @dt OUTPUT; SELECT @dt;
+----
+2026-03-31
+
+statement ok
+CREATE PROCEDURE pymssqlTestChar @i char(4), @o char(4) output AS BEGIN SET @o = @i; SELECT @o; END
+
+query T
+DECLARE @c char(4); EXEC pymssqlTestChar 'abcd', @c OUTPUT; SELECT @c;
+----
+abcd
+
+statement ok
+CREATE PROCEDURE pymssqlTestVarChar @i varchar(4), @o varchar(4) output AS BEGIN SET @o = @i; SELECT @o; END
+
+query T
+DECLARE @vc varchar(4); EXEC pymssqlTestVarChar 'xyz', @vc OUTPUT; SELECT @vc;
+----
+xyz
+
+statement ok
+CREATE PROCEDURE pymssqlTestText @i text, @o varchar(20) output AS BEGIN SET @o = 'text_ok'; SELECT @o; END
+
+query T
+DECLARE @tx varchar(20); EXEC pymssqlTestText 'hello', @tx OUTPUT; SELECT @tx;
+----
+text_ok
+

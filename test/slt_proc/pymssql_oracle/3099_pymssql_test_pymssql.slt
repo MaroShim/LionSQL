@@ -1,0 +1,45 @@
+# test/slt_proc/pymssql_oracle/3099_pymssql_test_pymssql.slt
+# External Corpus Oracle Suite harvested from test/corpora/pymssql/tests/test_pymssql.py
+
+statement ok
+CREATE TABLE badschema.t1 ( test1 CHAR(5) NOT NULL)
+
+statement ok
+SET TEXTSIZE 2147483647
+
+statement ok
+SET TEXTSIZE 2147483647;
+
+statement ok
+SET TEXTSIZE 2147483647;SET ANSI_NULLS ON;
+
+statement ok
+SET TEXTSIZE 2147483647;SET ANSI_NULLS ON
+
+statement ok
+SET TEXTSIZE 2147483647;
+
+statement ok
+SET ANSI_NULLS ON;
+
+statement ok
+SET TEXTSIZE 2147483647;
+
+statement ok
+SET ANSI_NULLS ON
+
+statement ok
+SET TEXTSIZE 2147483647
+
+statement ok
+CREATE DATABASE {0}
+
+statement ok
+CREATE DATABASE permission denied in database
+
+statement ok
+CREATE DATABASE autocommit_test_database
+
+statement ok
+CREATE DATABASE statement not allowed within multi-statement transaction
+

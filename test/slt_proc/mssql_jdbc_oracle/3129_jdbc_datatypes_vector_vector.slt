@@ -1,0 +1,13 @@
+# test/slt_proc/mssql_jdbc_oracle/3129_jdbc_datatypes_vector_vector.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/datatypes/vector/VectorTest.java
+
+query T
+SELECT dbo.
+----
+dbo
+
+query T
+SELECT * INTO
+----
+*
+

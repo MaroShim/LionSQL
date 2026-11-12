@@ -1,0 +1,18 @@
+# test/slt_proc/tedious_oracle/3072_tedious_datatypes_nvarchar.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (NVarChar)
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(null as nvarchar(10))
+----
+NULL
+
+query T
+select cast(
+----
+cast(
+

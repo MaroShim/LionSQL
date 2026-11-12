@@ -1,0 +1,17 @@
+# test/slt_proc/mssql_jdbc_oracle/3107_jdbc_callablestatement_inout_and_return.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/callablestatement/CallableStatementTest.java
+
+statement ok
+CREATE TABLE jdbc_guid_tbl (c1 UNIQUEIDENTIFIER);
+
+statement ok
+INSERT INTO jdbc_guid_tbl VALUES ('6F9619FF-8B86-D011-B42D-00C04FC964FF');
+
+statement ok
+CREATE PROCEDURE jdbc_inout_sp @p1 INT, @p2 INT OUTPUT AS BEGIN SET @p2 = @p1 * 10; SELECT @p2; END;
+
+query T
+DECLARE @out INT; EXEC jdbc_inout_sp 7, @out OUTPUT; SELECT @out;
+----
+70
+

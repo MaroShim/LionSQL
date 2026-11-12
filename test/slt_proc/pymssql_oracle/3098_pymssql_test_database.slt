@@ -1,0 +1,13 @@
+# test/slt_proc/pymssql_oracle/3098_pymssql_test_database.slt
+# External Corpus Oracle Suite harvested from test/corpora/pymssql/tests/test_database.py
+
+query T
+SELECT DB_NAME() AS myDB
+----
+postgres
+
+query T
+SELECT DB_NAME() AS myDB
+----
+postgres
+

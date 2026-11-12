@@ -1,0 +1,11 @@
+# test/slt_proc/mssql_jdbc_oracle/3120_jdbc_configurableretry_configurableretrylogic.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/configurableretry/ConfigurableRetryLogicTest.java
+
+statement ok
+CREATE TABLE #retry_attempts (n int)
+
+query T
+SELECT COUNT(*) FROM #retry_attempts
+----
+0
+

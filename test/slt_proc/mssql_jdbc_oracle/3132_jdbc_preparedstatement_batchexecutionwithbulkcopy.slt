@@ -1,0 +1,8 @@
+# test/slt_proc/mssql_jdbc_oracle/3132_jdbc_preparedstatement_batchexecutionwithbulkcopy.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/preparedStatement/BatchExecutionWithBulkCopyTest.java
+
+query TTTTT
+SELECT charCol, varcharCol, longvarcharCol, ncharCol1, nvarcharCol1,
+----
+charCol varcharCol longvarcharCol ncharCol1 nvarcharCol1
+

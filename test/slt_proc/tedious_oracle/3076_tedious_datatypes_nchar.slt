@@ -1,0 +1,13 @@
+# test/slt_proc/tedious_oracle/3076_tedious_datatypes_nchar.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (NChar)
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(null as nchar(5))
+----
+NULL
+

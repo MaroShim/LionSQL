@@ -1,0 +1,13 @@
+# test/slt_proc/tedious_oracle/3067_tedious_datatypes_datetimeoffset.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (DateTimeOffset)
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(null as datetimeoffset)
+----
+NULL
+

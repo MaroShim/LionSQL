@@ -1,0 +1,64 @@
+# test/slt_proc/mssql_jdbc_oracle/3144_jdbc_unit_statement_statement.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/unit/statement/StatementTest.java
+
+statement ok
+Declare @l_retstat Integer
+
+query T
+SELECT ResultSet should have at least one row
+----
+ResultSet
+
+query T
+SELECT should return 3 rows
+----
+should
+
+query T
+SELECT should return 2 rows
+----
+should
+
+query T
+SELECT should return the inserted row
+----
+should
+
+query T
+SELECT should return 1 row
+----
+should
+
+statement ok
+CREATE TABLE #ckTest(id int identity(1,1), data nvarchar(max) null)
+
+statement ok
+CREATE TABLE #ErrorTest (id INT, value VARCHAR(10))
+
+statement ok
+INSERT INTO #ErrorTest VALUES (1, '123')
+
+statement ok
+INSERT INTO #ErrorTest VALUES (2, 'INVALID')
+
+statement ok
+INSERT INTO #ErrorTest VALUES (3, '456')
+
+query TT
+SELECT id, CAST(value AS INT) AS numValue FROM #ErrorTest ORDER BY id
+----
+1 123
+2 NULL
+3 456
+
+query T
+SELECT 1 AS test
+----
+1
+
+statement ok
+DECLARE @returnValue INT;
+
+statement ok
+DECLARE @result INT;
+

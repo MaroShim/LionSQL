@@ -1,0 +1,36 @@
+# test/slt_proc/tedious_oracle/3090_tedious_prepare_execute_statements_test.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/prepare-execute-statements-test.ts
+
+query T
+select @param
+----
+NULL
+
+query T
+select @param
+----
+NULL
+
+statement ok
+SET @out = @in * 2
+
+query T
+select @param
+----
+NULL
+
+query T
+select 1 / @divisor as result
+----
+NULL
+
+query T
+select 1 / @divisor as result
+----
+NULL
+
+query T
+select 1 / @divisor as result
+----
+NULL
+

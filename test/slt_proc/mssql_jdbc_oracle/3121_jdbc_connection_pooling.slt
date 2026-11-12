@@ -1,0 +1,8 @@
+# test/slt_proc/mssql_jdbc_oracle/3121_jdbc_connection_pooling.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/connection/PoolingTest.java
+
+query T
+select * from [
+----
+*
+

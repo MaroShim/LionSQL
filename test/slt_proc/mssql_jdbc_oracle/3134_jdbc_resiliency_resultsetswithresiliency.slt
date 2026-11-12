@@ -1,0 +1,18 @@
+# test/slt_proc/mssql_jdbc_oracle/3134_jdbc_resiliency_resultsetswithresiliency.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/resiliency/ResultSetsWithResiliencyTest.java
+
+query T
+SELECT 1;SELECT 2
+----
+2
+
+query T
+SELECT 1;SELECT 1/0
+----
+NULL
+
+query T
+SELECT @p1 = '2018-03-11T02:00:00.1234567'; SELECT @p2 = '2022-03-11T02:00:00.1234567';
+----
+2022-03-11T02:00:00.1234567
+

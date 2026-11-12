@@ -1,0 +1,13 @@
+# test/slt_proc/tedious_oracle/3083_tedious_datatypes_udt.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (UDT)
+
+query T
+select geography::STGeomFromText(
+----
+geography
+
+query T
+select cast(null as geography)
+----
+NULL
+

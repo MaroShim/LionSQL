@@ -1,0 +1,18 @@
+# test/slt_proc/gorm_oracle/3104_gorm_merge_upsert_on_conflict.slt
+# External Corpus Oracle Suite harvested from test/corpora/gorm-sqlserver/create.go.txt (MergeCreate)
+
+statement ok
+CREATE TABLE gorm_products (id INT PRIMARY KEY, code VARCHAR(50), price INT);
+
+statement ok
+INSERT INTO gorm_products (id, code, price) VALUES (1, 'P01', 100);
+
+statement ok
+MERGE INTO gorm_products USING (VALUES (1, 'P01_UPD', 150), (2, 'P02_NEW', 200)) AS excluded (id, code, price) ON gorm_products.id = excluded.id WHEN MATCHED THEN UPDATE SET code = excluded.code, price = excluded.price WHEN NOT MATCHED THEN INSERT (id, code, price) VALUES (excluded.id, excluded.code, excluded.price);
+
+query TTT
+SELECT id, code, price FROM gorm_products ORDER BY id;
+----
+1 P01_UPD 150
+2 P02_NEW 200
+

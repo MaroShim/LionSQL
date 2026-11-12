@@ -1,0 +1,23 @@
+# test/slt_proc/tedious_oracle/3058_tedious_datatypes_smallint.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (SmallInt)
+
+query T
+select cast(8 as smallint)
+----
+8
+
+query T
+select cast(-8 as smallint)
+----
+-8
+
+query T
+select cast(1443 as smallint)
+----
+1443
+
+query T
+select cast(null as smallint)
+----
+NULL
+

@@ -1,0 +1,13 @@
+# test/slt_proc/tedious_oracle/3074_tedious_datatypes_binary.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (Binary)
+
+query T
+select cast(0x1234 as binary(4))
+----
+0x1234
+
+query T
+select cast(null as binary(10))
+----
+NULL
+

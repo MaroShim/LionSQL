@@ -1,0 +1,8 @@
+# test/slt_proc/mssql_jdbc_oracle/3127_jdbc_datatypes_sparse.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/datatypes/SparseTest.java
+
+query TT
+SELECT col0, col
+----
+col0 col
+

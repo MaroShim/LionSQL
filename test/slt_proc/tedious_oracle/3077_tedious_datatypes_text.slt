@@ -1,0 +1,18 @@
+# test/slt_proc/tedious_oracle/3077_tedious_datatypes_text.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (Text)
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(null as text) as text
+----
+NULL
+

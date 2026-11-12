@@ -1,0 +1,8 @@
+# test/slt_proc/mssql_jdbc_oracle/3113_jdbc_sqlserverbulkcopy.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/SQLServerBulkCopyTest.java
+
+query T
+SELECT 1 AS col1
+----
+1
+

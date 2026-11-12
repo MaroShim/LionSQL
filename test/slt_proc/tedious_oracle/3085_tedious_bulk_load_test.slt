@@ -1,0 +1,58 @@
+# test/slt_proc/tedious_oracle/3085_tedious_bulk_load_test.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/bulk-load-test.ts
+
+statement ok
+CREATE TABLE #tmpTestTable2 ([id] int not null)
+
+statement ok
+CREATE TABLE #tmpTestTable3 ([id] int, CHECK (id BETWEEN 0 and 50))
+
+statement ok
+CREATE TABLE #tmpTestTable5 ([id] int NULL DEFAULT 253565)
+
+statement ok
+SELECT [id] FROM #tmpTestTable5
+
+statement ok
+CREATE TABLE #tmpTestTable5 ([id] int NULL DEFAULT 253565)
+
+statement ok
+SELECT [id] FROM #tmpTestTable5
+
+statement ok
+CREATE TABLE #tmpTestTable5 ([id] int NULL)
+
+statement ok
+CREATE TABLE #tmpTestTable5 ([id] int NULL DEFAULT 253565)
+
+statement ok
+SELECT [id] FROM #tmpTestTable5
+
+statement ok
+CREATE TABLE #tmpTestTable5 ([id] int NULL DEFAULT 253565)
+
+statement ok
+create table #stream_test (i int not null primary key)
+
+query T
+select count(*)
+        from #stream_test a
+        inner join #stream_test b on a.i = b.i - 1
+----
+0
+
+statement ok
+create table #stream_test (i int not null primary key)
+
+statement ok
+CREATE TABLE #tmpTestTable5 ([id] int NULL DEFAULT 253565)
+
+statement ok
+CREATE TABLE #tmpTestTable5 ([id] int NULL DEFAULT 253565)
+
+statement ok
+create table #stream_test (i int not null primary key)
+
+statement ok
+create table #stream_test ([value] date)
+

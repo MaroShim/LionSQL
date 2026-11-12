@@ -1,0 +1,15 @@
+# test/slt_proc/pymssql_oracle/3101_pymssql_test_query_size.slt
+# External Corpus Oracle Suite harvested from test/corpora/pymssql/tests/test_query_size.py
+
+statement ok
+CREATE TABLE pymssql (data text)
+
+statement ok
+DELETE FROM pymssql
+
+statement ok
+DELETE FROM pymssql
+
+statement ok
+SELECT * FROM pymssql
+

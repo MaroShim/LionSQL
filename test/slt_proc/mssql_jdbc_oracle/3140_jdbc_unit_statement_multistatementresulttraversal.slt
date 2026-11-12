@@ -1,0 +1,35 @@
+# test/slt_proc/mssql_jdbc_oracle/3140_jdbc_unit_statement_multistatementresulttraversal.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/unit/statement/MultiStatementResultTraversalTest.java
+
+query T
+SELECT must surface exactly one ResultSet containing 2 rows
+----
+must
+
+query T
+SELECT c1>=2 on (1,2,3) must surface one ResultSet with 2 rows
+----
+true
+
+statement ok
+CREATE TABLE must surface as count=0 (per JDBC spec: 0 for SQL statements that return nothing);
+
+query T
+SELECT * INTO
+----
+*
+
+statement ok
+SELECT INTO must return false (no ResultSet)
+
+statement ok
+SELECT INTO must surface one count equal to rows copied (3)
+
+statement ok
+SELECT INTO must not produce a ResultSet to the caller
+
+query T
+SELECT 'noise' AS trigger_result;
+----
+noise
+

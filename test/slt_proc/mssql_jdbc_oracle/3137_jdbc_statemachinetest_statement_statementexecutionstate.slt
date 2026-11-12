@@ -1,0 +1,21 @@
+# test/slt_proc/mssql_jdbc_oracle/3137_jdbc_statemachinetest_statement_statementexecutionstate.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/statemachinetest/statement/StatementExecutionStateTest.java
+
+query TTT
+SELECT isnull(x1,0) as v1, isnull(x2,0) as v2, isnull(x3,0) as v3 INTO
+----
+x1 x2 x3
+
+statement ok
+SELECT INTO via executeQuery should throw SQLException
+
+query T
+SELECT @@TRANCOUNT
+----
+0
+
+query T
+SELECT DB_NAME()
+----
+postgres
+

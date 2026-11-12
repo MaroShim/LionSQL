@@ -1,0 +1,20 @@
+# test/slt_proc/pymssql_oracle/3095_pymssql_types_table_roundtrip_and_collation.slt
+# External Corpus Oracle Suite harvested from test/corpora/pymssql/tests/types_table_roundtrip_and_collation.py
+
+statement ok
+CREATE TABLE pymssql_t (id int identity(1, 1) not null, realno real, floatno float, moneyno money, stamp datetime, bitno bit, ch varchar(50), nch nvarchar(50), txt text, ntxt ntext, dec1 decimal(38,2), dec2 decimal(38,10), num1 numeric(38,8), uq uniqueidentifier);
+
+statement ok
+SELECT id, realno, floatno, bitno, ch, nch, dec1, uq FROM pymssql_t;
+
+statement ok
+CREATE TABLE collate_tbl (s1 VARCHAR(64) COLLATE Thai_CI_AS, s2 VARCHAR(64) COLLATE Cyrillic_General_CI_AS);
+
+statement ok
+INSERT INTO collate_tbl VALUES ('thai_val', 'cyrillic_val');
+
+query TT
+SELECT s1, s2 FROM collate_tbl;
+----
+thai_val cyrillic_val
+

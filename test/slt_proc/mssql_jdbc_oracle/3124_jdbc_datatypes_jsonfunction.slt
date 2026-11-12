@@ -1,0 +1,70 @@
+# test/slt_proc/mssql_jdbc_oracle/3124_jdbc_datatypes_jsonfunction.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/datatypes/JSONFunctionTest.java
+
+query T
+SELECT testCol,
+----
+testCol
+
+statement ok
+DECLARE @info JSON = '
+
+query T
+SELECT @info AS info;
+----
+'
+
+statement ok
+DECLARE @product JSON = '
+
+query T
+SELECT @product AS product;
+----
+'
+
+statement ok
+DECLARE @stats JSON = '
+
+query T
+SELECT @stats AS stats;
+----
+'
+
+query TT
+SELECT object_id, JSON_OBJECTAGG(name:column_id) AS columns
+----
+object_id JSON_OBJECTAGG(name:column_id)
+
+statement ok
+DECLARE @jsonInfo AS JSON = N'
+
+query TTT
+SELECT StockItemID, StockItemName, JSON_QUERY(Tags) AS Tags,
+----
+StockItemID StockItemName NULL
+
+query TTT
+SELECT FirstName, LastName, JSON_VALUE(jsonInfo,'$.info.address.town') AS Town
+----
+FirstName LastName NULL
+
+query TT
+SELECT id, data INTO
+----
+id data
+
+query TTT
+SELECT u.id, JSON_VALUE(u.data, '$.name') AS userName, JSON_VALUE(o.orderDetails, '$.product') AS product
+----
+u.id NULL NULL
+
+query T
+SELECT id,
+----
+id
+
+query TT
+SELECT id, name,
+----
+id name
+

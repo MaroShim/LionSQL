@@ -1,0 +1,24 @@
+# test/slt_proc/mssql_jdbc_oracle/3135_jdbc_resultset_resultset.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/resultset/ResultSetTest.java
+
+query T
+select null
+----
+NULL
+
+query TT
+SELECT 1, 'EDIT'
+----
+1 EDIT
+
+query TTT
+SELECT 1, 1, 'TEST1' UNION SELECT 1, 2, 'TEST2'
+----
+1 1 TEST1
+2 2 TEST2
+
+query T
+SELECT @@spid
+----
+51
+

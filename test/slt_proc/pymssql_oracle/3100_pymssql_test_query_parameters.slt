@@ -1,0 +1,13 @@
+# test/slt_proc/pymssql_oracle/3100_pymssql_test_query_parameters.slt
+# External Corpus Oracle Suite harvested from test/corpora/pymssql/tests/test_query_parameters.py
+
+query T
+select 0x240440044f04370438043d043e042000;
+----
+0x240440044f04370438043d043e042000
+
+query T
+select 0x240440044f04370438043d043e042000;
+----
+0x240440044f04370438043d043e042000
+

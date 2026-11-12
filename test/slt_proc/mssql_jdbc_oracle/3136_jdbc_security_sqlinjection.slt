@@ -1,0 +1,8 @@
+# test/slt_proc/mssql_jdbc_oracle/3136_jdbc_security_sqlinjection.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/security/SQLInjectionTest.java
+
+query T
+SELECT @@SERVERNAME
+----
+MSSQLSERVER
+

@@ -1,0 +1,14 @@
+# test/slt_proc/tedious_oracle/3084_tedious_binary_insert_test.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/binary-insert-test.ts
+
+statement ok
+CREATE TABLE #test ([data] binary(4))
+
+statement ok
+INSERT INTO #test ([data]) VALUES (@p1)
+
+query T
+SELECT [data] FROM #test
+----
+0x407031
+

@@ -1,0 +1,34 @@
+import StreamParser, { type ParserOptions } from '../../../src/token/stream-parser';
+import { FedAuthInfoToken } from '../../../src/token/token';
+import WritableTrackingBuffer from '../../../src/tracking-buffer/writable-tracking-buffer';
+import { assert } from 'chai';
+
+const options = { tdsVersion: '7_2', useUTC: false } as ParserOptions;
+
+describe('Fedauth Info Parser', function() {
+  it('should contain fed auth info', async function() {
+    const buffer = new WritableTrackingBuffer();
+    buffer.writeUInt8(0xEE);
+    buffer.writeUInt32LE(40);
+    buffer.writeUInt32LE(2);
+    buffer.writeUInt8(2);
+    buffer.writeUInt32LE(6);
+    buffer.writeUInt32LE(22);
+    buffer.writeUInt8(1);
+    buffer.writeUInt32LE(12);
+    buffer.writeUInt32LE(28);
+    buffer.writeString('spn', 'ucs2');
+    buffer.writeString('stsurl', 'ucs2');
+
+    const parser = StreamParser.parseTokens([buffer.data], options);
+    const result = await parser.next();
+    assert.isFalse(result.done);
+    const token = result.value;
+
+    assert.instanceOf(token, FedAuthInfoToken);
+    assert.strictEqual(token.stsurl, 'stsurl');
+    assert.strictEqual(token.spn, 'spn');
+
+    assert.isTrue((await parser.next()).done);
+  });
+});

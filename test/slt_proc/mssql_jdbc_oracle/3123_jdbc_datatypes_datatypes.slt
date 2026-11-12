@@ -1,0 +1,18 @@
+# test/slt_proc/mssql_jdbc_oracle/3123_jdbc_datatypes_datatypes.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/datatypes/DataTypesTest.java
+
+query T
+SELECT CAST('
+----
+CAST('
+
+query T
+SELECT CAST('0821-01-04' AS DATE)
+----
+0821-01-04
+
+query T
+SELECT '12:34:56.999500'
+----
+12:34:56.999500
+

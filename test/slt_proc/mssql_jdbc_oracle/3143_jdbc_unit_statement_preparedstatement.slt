@@ -1,0 +1,38 @@
+# test/slt_proc/mssql_jdbc_oracle/3143_jdbc_unit_statement_preparedstatement.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/unit/statement/PreparedStatementTest.java
+
+query T
+SELECT 1 WHERE 1 = @P0
+----
+1
+
+query T
+SELECT 1 WHERE 1 = @P0 AND 2 = 2
+----
+1
+
+query T
+SELECT 1 WHERE 1=@P0 and 2=2
+----
+1
+
+query T
+SELECT 1 WHERE 1 = @P0 AND 2=@P1 AND 3 =@P2 and 4=4
+----
+1
+
+query T
+SELECT 1 WHERE 1 IN (@P0,@P1,@P2)
+----
+1
+
+query T
+select 1 --
+----
+1
+
+query TTT
+SELECT @@IDENTITY AS new_id, @name AS name, @value AS value;
+----
+NULL NULL NULL
+

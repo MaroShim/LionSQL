@@ -1,0 +1,2395 @@
+package com.microsoft.sqlserver.jdbc.callablestatement;
+
+import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.io.Reader;
+import java.io.StringReader;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.sql.Blob;
+import java.sql.CallableStatement;
+import java.sql.Clob;
+import java.sql.Connection;
+import java.sql.Date;
+import java.sql.DriverManager;
+import java.sql.JDBCType;
+import java.sql.NClob;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.SQLXML;
+import java.sql.Statement;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.text.MessageFormat;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.Calendar;
+import java.util.Collections;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.util.TimeZone;
+import java.util.UUID;
+
+import org.junit.Assert;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.platform.runner.JUnitPlatform;
+import org.junit.runner.RunWith;
+
+import com.microsoft.sqlserver.jdbc.RandomUtil;
+import com.microsoft.sqlserver.jdbc.SQLServerCallableStatement;
+import com.microsoft.sqlserver.jdbc.SQLServerConnection;
+import com.microsoft.sqlserver.jdbc.SQLServerDataSource;
+import com.microsoft.sqlserver.jdbc.SQLServerException;
+import com.microsoft.sqlserver.jdbc.TestResource;
+import com.microsoft.sqlserver.jdbc.TestUtils;
+import com.microsoft.sqlserver.testframework.AbstractSQLGenerator;
+import com.microsoft.sqlserver.testframework.AbstractTest;
+import com.microsoft.sqlserver.testframework.Constants;
+import com.microsoft.sqlserver.testframework.PrepUtil;
+import com.microsoft.sqlserver.testframework.vectorJsonTest;
+
+
+/**
+ * Test CallableStatement
+ */
+@RunWith(JUnitPlatform.class)
+@Tag(Constants.xAzureSQLDW)
+public class CallableStatementTest extends AbstractTest {
+    private static String tableNameGUID = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("uniqueidentifier_Table"));
+    private static String outputProcedureNameGUID = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("uniqueidentifier_SP"));
+    private static String setNullProcedureName = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("CallableStatementTest_setNull_SP"));
+    private static String inputParamsProcedureName = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("CallableStatementTest_inputParams_SP"));
+    private static String conditionalSproc = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("CallableStatementTest_conditionalSproc"));
+    private static String simpleRetValSproc = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("CallableStatementTest_simpleSproc"));
+    private static String getObjectLocalDateTimeProcedureName = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("CallableStatementTest_getObjectLocalDateTime_SP"));
+    private static String getObjectOffsetDateTimeProcedureName = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("CallableStatementTest_getObjectOffsetDateTime_SP"));
+    private static String procName = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("procedureTestCallableStatementSpPrepare"));
+    private static String manyParamsTable = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("manyParam_Table"));
+    private static String manyParamProc = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("manyParam_Procedure"));
+    private static String currentTimeProc = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("currentTime_Procedure"));
+    private static String manyParamUserDefinedType = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("manyParam_definedType"));
+    private static String zeroParamSproc = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("zeroParamSproc"));
+    private static String tableNameJSON = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("TestJSONTable"));
+    private static String procedureNameJSON = AbstractSQLGenerator
+	    .escapeIdentifier(RandomUtil.getIdentifier("TestJSONProcedure"));
+    private static String allOutParamsProcName = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("TestAllOutParams"));
+    private static String getObjectTypesProcName = AbstractSQLGenerator
+            .escapeIdentifier(RandomUtil.getIdentifier("TestGetObjectTypesProc"));
+    private static String sqlTypeOverloadsProcName = AbstractSQLGenerator
+        .escapeIdentifier(RandomUtil.getIdentifier("SQLTypeOverloadsProc"));
+    private static String streamGetterSetterProcName = AbstractSQLGenerator
+        .escapeIdentifier(RandomUtil.getIdentifier("streamGetterSetterProc"));
+    private static String tvpProcName = AbstractSQLGenerator
+        .escapeIdentifier(RandomUtil.getIdentifier("TVPProc"));
+    private static String tvpTypeName = RandomUtil.getIdentifier("TVPType");
+    
+    /**
+     * Setup before test
+     * 
+     * @throws SQLException
+     */
+    @BeforeAll
+    public static void setupTest() throws Exception {
+        setConnection();
+
+        try (Statement stmt = connection.createStatement()) {
+            // Drop order matters. Can't drop objects still referenced by other objects.
+            TestUtils.dropProcedureIfExists(outputProcedureNameGUID, stmt);
+            TestUtils.dropProcedureIfExists(setNullProcedureName, stmt);
+            TestUtils.dropProcedureIfExists(inputParamsProcedureName, stmt);
+            TestUtils.dropProcedureIfExists(getObjectLocalDateTimeProcedureName, stmt);
+            TestUtils.dropProcedureIfExists(getObjectOffsetDateTimeProcedureName, stmt);
+            TestUtils.dropProcedureIfExists(conditionalSproc, stmt);
+            TestUtils.dropProcedureIfExists(simpleRetValSproc, stmt);
+            TestUtils.dropProcedureIfExists(zeroParamSproc, stmt);
+            TestUtils.dropProcedureIfExists(manyParamProc, stmt);
+            TestUtils.dropProcedureIfExists(procedureNameJSON, stmt);
+            TestUtils.dropTableIfExists(tableNameGUID, stmt);
+            TestUtils.dropTableIfExists(manyParamsTable, stmt);
+            TestUtils.dropTableIfExists(tableNameJSON, stmt);
+            TestUtils.dropUserDefinedTypeIfExists(manyParamUserDefinedType, stmt);
+            TestUtils.dropTableIfExists(tableNameJSON, stmt);
+			TestUtils.dropProcedureIfExists(procedureNameJSON, stmt);
+
+            createGUIDTable(stmt);
+            createGUIDStoredProcedure(stmt);
+            createSetNullProcedure(stmt);
+            createInputParamsProcedure(stmt);
+            createGetObjectLocalDateTimeProcedure(stmt);
+            createUserDefinedType();
+            createTableManyParams();
+            createProcedureManyParams();
+            createProcedureZeroParams();
+            createProcedureCurrentTime();
+            createGetObjectOffsetDateTimeProcedure(stmt);
+            createConditionalProcedure();
+            createSimpleRetValSproc();
+        }
+    }
+
+    // Test Needs more work to be configured to run on azureDB as there are slight differences
+    // between the regular SQL Server vs. azureDB
+    @Test
+    @Tag(Constants.xAzureSQLDB)
+    public void testCallableStatementManyParameters() throws SQLException {
+        String tempPass = UUID.randomUUID().toString();
+        String loginName = "JDBCLogin_" + UUID.randomUUID().toString().replace("-", "");
+        String userName = "JDBCUser_" + UUID.randomUUID().toString().replace("-", "");
+
+        // Need to create a user with limited permissions in order to run through the code block we are testing
+        // The user created will execute sp_sproc_columns internally by the driver, which should not return all
+        // the column names as the user has limited permissions
+        try (Connection conn = PrepUtil.getConnection(connectionString)) {
+            String databaseName = conn.getCatalog();
+            String dropUser = "IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '" + userName
+                    + "') DROP USER [" + userName + "]";
+            String dropLogin = "IF EXISTS (SELECT 1 FROM sys.sql_logins WHERE name = '" + loginName
+                    + "') DROP LOGIN [" + loginName + "]";
+            String createLogin = "CREATE LOGIN [" + loginName + "] WITH PASSWORD=N'" + tempPass
+                    + "', DEFAULT_DATABASE = [" + databaseName
+                    + "], DEFAULT_LANGUAGE = US_ENGLISH, CHECK_POLICY = OFF, CHECK_EXPIRATION = OFF;";
+            String createUser = "CREATE USER [" + userName + "] FOR LOGIN [" + loginName
+                    + "] WITH DEFAULT_SCHEMA = [dbo];";
+            String grantExecute = "GRANT EXECUTE ON " + manyParamProc + " TO [" + userName + "];";
+
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute(dropUser);
+                stmt.execute(dropLogin);
+                stmt.execute(createLogin);
+                stmt.execute(createUser);
+                stmt.execute(grantExecute);
+            }
+        }
+
+        try (Connection conn = PrepUtil.getConnection(
+                connectionString + ";user=" + loginName + ";password=" + tempPass + ";")) {
+            BigDecimal money = new BigDecimal("9999.99");
+
+            // Should not throw an "Index is out of range error"
+            // Should not throw R_parameterNotDefinedForProcedure
+            try (CallableStatement callableStatement = conn
+                    .prepareCall("{call " + manyParamProc + "(?,?,?,?,?,?,?,?,?,?)}")) {
+                callableStatement.setObject("@p1", money, microsoft.sql.Types.MONEY);
+                callableStatement.setObject("@p2", money, microsoft.sql.Types.MONEY);
+                callableStatement.setObject("@p3", money, microsoft.sql.Types.MONEY);
+                callableStatement.setObject("@p4", money, microsoft.sql.Types.MONEY);
+                callableStatement.setObject("@p5", money, microsoft.sql.Types.MONEY);
+                callableStatement.setObject("@p6", money, microsoft.sql.Types.MONEY);
+                callableStatement.setObject("@p7", money, microsoft.sql.Types.MONEY);
+                callableStatement.setObject("@p8", money, microsoft.sql.Types.MONEY);
+                callableStatement.setObject("@p9", money, microsoft.sql.Types.MONEY);
+                callableStatement.setObject("@p10", money, microsoft.sql.Types.MONEY);
+                callableStatement.execute();
+            }
+        }
+
+        // Clean up the temporary principal after execution
+        try (Connection conn = PrepUtil.getConnection(connectionString);
+                Statement stmt = conn.createStatement()) {
+            stmt.execute("IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '" + userName
+                    + "') DROP USER [" + userName + "]");
+            stmt.execute("IF EXISTS (SELECT 1 FROM sys.sql_logins WHERE name = '" + loginName
+                    + "') DROP LOGIN [" + loginName + "]");
+        }
+    }
+
+    @Test
+    public void testCallableStatementSpPrepare() throws SQLException {
+        try (SQLServerConnection conn = (SQLServerConnection) DriverManager.getConnection(connectionString)) {
+            conn.setPrepareMethod("prepare");
+
+            try (Statement statement = conn.createStatement();) {
+                statement.executeUpdate("create procedure " + procName + " as select 1 --");
+
+                try (CallableStatement callableStatement = conn.prepareCall("{call " + procName + "}")) {
+                    try (ResultSet rs = callableStatement.executeQuery()) { // Takes sp_executesql path
+                        rs.next();
+                        assertEquals(1, rs.getInt(1), TestResource.getResource("R_setDataNotEqual"));
+                    }
+
+                    try (ResultSet rs = callableStatement.executeQuery()) { // Takes sp_prepare path
+                        rs.next();
+                        assertEquals(1, rs.getInt(1), TestResource.getResource("R_setDataNotEqual"));
+                    }
+                } finally {
+                    TestUtils.dropProcedureIfExists(procName, statement);
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testCallableStatementExec() throws SQLException {
+        try (SQLServerConnection conn = (SQLServerConnection) DriverManager.getConnection(connectionString)) {
+            conn.setPrepareMethod("exec");
+
+            try (Statement statement = conn.createStatement();) {
+                statement.executeUpdate("create procedure " + procName + " as select 1 --");
+
+                try (CallableStatement callableStatement = conn.prepareCall("{call " + procName + "}")) {
+                    try (ResultSet rs = callableStatement.executeQuery()) {
+                        rs.next();
+                        assertEquals(1, rs.getInt(1), TestResource.getResource("R_setDataNotEqual"));
+                    }
+
+                    try (ResultSet rs = callableStatement.executeQuery()) {
+                        rs.next();
+                        assertEquals(1, rs.getInt(1), TestResource.getResource("R_setDataNotEqual"));
+                    }
+                } finally {
+                    TestUtils.dropProcedureIfExists(procName, statement);
+                }
+            }
+        }
+    }
+
+    /**
+     * Tests CallableStatement.getString() with uniqueidentifier parameter
+     * 
+     * @throws SQLException
+     */
+    @Test
+    public void getStringGUIDTest() throws SQLException {
+
+        String sql = "{call " + outputProcedureNameGUID + "(?)}";
+
+        try (SQLServerCallableStatement callableStatement = (SQLServerCallableStatement) connection.prepareCall(sql)) {
+
+            UUID originalValue = UUID.randomUUID();
+
+            callableStatement.registerOutParameter(1, microsoft.sql.Types.GUID);
+            callableStatement.setObject(1, originalValue.toString(), microsoft.sql.Types.GUID);
+            callableStatement.execute();
+
+            String retrievedValue = callableStatement.getString(1);
+
+            assertEquals(originalValue.toString().toLowerCase(), retrievedValue.toLowerCase());
+
+        }
+    }
+
+    /**
+     * test for setNull(index, varchar) to behave as setNull(index, nvarchar) when SendStringParametersAsUnicode is true
+     * 
+     * @throws SQLException
+     */
+    @Test
+    public void getSetNullWithTypeVarchar() throws SQLException {
+        String polishchar = "\u0143";
+
+        SQLServerDataSource ds = new SQLServerDataSource();
+        ds.setURL(connectionString);
+        ds.setSendStringParametersAsUnicode(true);
+        String sql = "{? = call " + setNullProcedureName + " (?,?)}";
+        try (Connection connection = ds.getConnection();
+                SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(sql);
+                SQLServerCallableStatement cs2 = (SQLServerCallableStatement) connection.prepareCall(sql)) {
+
+            cs.registerOutParameter(1, Types.INTEGER);
+            cs.setString(2, polishchar);
+            cs.setString(3, null);
+            cs.registerOutParameter(3, Types.VARCHAR);
+            cs.execute();
+
+            String expected = cs.getString(3);
+
+            cs2.registerOutParameter(1, Types.INTEGER);
+            cs2.setString(2, polishchar);
+            cs2.setNull(3, Types.VARCHAR);
+            cs2.registerOutParameter(3, Types.NVARCHAR);
+            cs2.execute();
+
+            String actual = cs2.getString(3);
+
+            assertEquals(expected, actual);
+        }
+    }
+
+    /**
+     * Tests getObject(n, java.time.LocalDateTime.class).
+     *
+     * @throws SQLException
+     */
+    @Test
+    public void testGetObjectAsLocalDateTime() throws SQLException {
+        String sql = "{CALL " + getObjectLocalDateTimeProcedureName + " (?)}";
+        try (Connection con = DriverManager.getConnection(connectionString);
+                CallableStatement cs = con.prepareCall(sql)) {
+            cs.registerOutParameter(1, Types.TIMESTAMP);
+            TimeZone prevTimeZone = TimeZone.getDefault();
+            TimeZone.setDefault(TimeZone.getTimeZone("America/Edmonton"));
+
+            // a local date/time that does not actually exist because of Daylight Saving Time
+            final String testValueDate = "2018-03-11";
+            final String testValueTime = "02:00:00.1234567";
+            final String testValueDateTime = testValueDate + "T" + testValueTime;
+
+            try {
+                cs.execute();
+
+                LocalDateTime expectedLocalDateTime = LocalDateTime.parse(testValueDateTime);
+                LocalDateTime actualLocalDateTime = cs.getObject(1, LocalDateTime.class);
+                assertEquals(expectedLocalDateTime, actualLocalDateTime);
+
+                LocalDate expectedLocalDate = LocalDate.parse(testValueDate);
+                LocalDate actualLocalDate = cs.getObject(1, LocalDate.class);
+                assertEquals(expectedLocalDate, actualLocalDate);
+
+                LocalTime expectedLocalTime = LocalTime.parse(testValueTime);
+                LocalTime actualLocalTime = cs.getObject(1, LocalTime.class);
+                assertEquals(expectedLocalTime, actualLocalTime);
+            } finally {
+                TimeZone.setDefault(prevTimeZone);
+            }
+        }
+    }
+
+    /**
+     * Tests getObject(n, java.time.OffsetDateTime.class) and getObject(n, java.time.OffsetTime.class).
+     * 
+     * @throws SQLException
+     */
+    @Test
+    @Tag(Constants.xAzureSQLDW)
+    public void testGetObjectAsOffsetDateTime() throws SQLException {
+        String sql = "{CALL " + getObjectOffsetDateTimeProcedureName + " (?, ?)}";
+        try (Connection con = DriverManager.getConnection(connectionString);
+                CallableStatement cs = con.prepareCall(sql)) {
+            cs.registerOutParameter(1, Types.TIMESTAMP_WITH_TIMEZONE);
+            cs.registerOutParameter(2, Types.TIMESTAMP_WITH_TIMEZONE);
+
+            final String testValue = "2018-01-02T11:22:33.123456700+12:34";
+
+            cs.execute();
+
+            OffsetDateTime expected = OffsetDateTime.parse(testValue);
+            OffsetDateTime actual = cs.getObject(1, OffsetDateTime.class);
+            assertEquals(expected, actual);
+            assertNull(cs.getObject(2, OffsetDateTime.class));
+
+            OffsetTime expectedTime = OffsetTime.parse(testValue.split("T")[1]);
+            OffsetTime actualTime = cs.getObject(1, OffsetTime.class);
+            assertEquals(expectedTime, actualTime);
+            assertNull(cs.getObject(2, OffsetTime.class));
+        }
+    }
+
+    /**
+     * recognize parameter names with and without leading '@'
+     * 
+     * @throws SQLException
+     */
+    @Test
+    public void inputParamsTest() throws SQLException {
+        String call = "{CALL " + inputParamsProcedureName + " (?,?)}";
+
+        // the historical way: no leading '@', parameter names respected (not positional)
+        try (CallableStatement cs = connection.prepareCall(call)) {
+            cs.setString("p2", "world");
+            cs.setString("p1", "hello");
+            try (ResultSet rs = cs.executeQuery()) {
+                rs.next();
+                assertEquals("helloworld", rs.getString(1));
+            }
+        }
+
+        // the "new" way: leading '@', parameter names still respected (not positional)
+        try (CallableStatement cs = connection.prepareCall(call)) {
+            cs.setString("@p2", "world!");
+            cs.setString("@p1", "Hello ");
+            try (ResultSet rs = cs.executeQuery()) {
+                rs.next();
+                assertEquals("Hello world!", rs.getString(1));
+            }
+        }
+
+        // sanity check: unrecognized parameter name
+        try (CallableStatement cs = connection.prepareCall(call)) {
+            cs.setString("@whatever", "test");
+            fail(TestResource.getResource("R_shouldThrowException"));
+        } catch (SQLException sse) {
+            MessageFormat form = new MessageFormat(TestResource.getResource("R_parameterNotDefined"));
+            Object[] msgArgs = {"@whatever"};
+
+            if (!sse.getMessage().startsWith(form.format(msgArgs))) {
+                fail(TestResource.getResource("R_unexpectedExceptionContent"));
+            }
+        }
+    }
+
+    @Test
+    public void testZeroParamSproc() throws SQLException {
+        String call = "{? = CALL " + zeroParamSproc + "}";
+
+        try (CallableStatement cs = connection.prepareCall(call)) {
+            cs.registerOutParameter(1, Types.INTEGER);
+            cs.execute();
+            assertEquals(1, cs.getInt(1));
+        }
+
+        // Test zero parameter sproc with return value with parentheses
+        call = "{? = CALL " + zeroParamSproc + "()}";
+
+        try (CallableStatement cs = connection.prepareCall(call)) {
+            cs.registerOutParameter(1, Types.INTEGER);
+            cs.execute();
+            // Calling zero parameter sproc with return value with parentheses
+            // should return a value that's not zero
+            assertEquals(1, cs.getInt(1));
+        }
+    }
+
+    @Test
+    public void testExecuteSystemStoredProcedureNamedParametersAndIndexedParameterNoResultset() throws SQLException {
+        String call0 = "EXEC sp_getapplock @Resource=?, @LockTimeout='0', @LockMode='Exclusive', @LockOwner='Session'";
+        String call1 = "\rEXEC\r\rsp_getapplock @Resource=?, @LockTimeout='0', @LockMode='Exclusive', @LockOwner='Session'";
+        String call2 = "  EXEC   sp_getapplock @Resource=?, @LockTimeout='0', @LockMode='Exclusive', @LockOwner='Session'";
+        String call3 = "\tEXEC\t\t\tsp_getapplock @Resource=?, @LockTimeout='0', @LockMode='Exclusive', @LockOwner='Session'";
+
+        try (CallableStatement cstmt0 = connection.prepareCall(call0);
+                CallableStatement cstmt1 = connection.prepareCall(call1);
+                CallableStatement cstmt2 = connection.prepareCall(call2);
+                CallableStatement cstmt3 = connection.prepareCall(call3);) {
+            cstmt0.setString(1, "Resource-" + UUID.randomUUID());
+            cstmt0.execute();
+
+            cstmt1.setString(1, "Resource-" + UUID.randomUUID());
+            cstmt1.execute();
+
+            cstmt2.setString(1, "Resource-" + UUID.randomUUID());
+            cstmt2.execute();
+
+            cstmt3.setString(1, "Resource-" + UUID.randomUUID());
+            cstmt3.execute();
+        }
+    }
+
+    @Test
+    public void testExecSystemStoredProcedureNamedParametersAndIndexedParameterResultSet() throws SQLException {
+        String call = "exec sp_sproc_columns_100 ?, @ODBCVer=3, @fUsePattern=0";
+
+        try (CallableStatement cstmt = connection.prepareCall(call)) {
+            cstmt.setString(1, "sp_getapplock");
+
+            try (ResultSet rs = cstmt.executeQuery()) {
+                while (rs.next()) {
+                    assertTrue(TestResource.getResource("R_resultSetEmpty"), !rs.getString(4).isEmpty());
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testExecSystemStoredProcedureNoIndexedParametersResultSet() throws SQLException {
+        String call = "execute sp_sproc_columns_100 sp_getapplock, @ODBCVer=3, @fUsePattern=0";
+
+        try (CallableStatement cstmt = connection.prepareCall(call); ResultSet rs = cstmt.executeQuery()) {
+            while (rs.next()) {
+                assertTrue(TestResource.getResource("R_resultSetEmpty"), !rs.getString(4).isEmpty());
+            }
+        }
+    }
+
+    @Test
+    public void testExecDocumentedSystemStoredProceduresIndexedParameters() throws SQLException {
+        String serverName;
+        String testTableName = "testTable";
+        Integer integer = new Integer(1);
+
+        try (Statement stmt = connection.createStatement(); ResultSet rs = stmt.executeQuery("SELECT @@SERVERNAME")) {
+            rs.next();
+            serverName = rs.getString(1);
+        }
+
+        String[] sprocs = {"EXEC sp_column_privileges ?", "exec sp_catalogs ?", "execute sp_column_privileges ?",
+                "EXEC sp_column_privileges_ex ?", "EXECUTE sp_columns ?", "execute sp_datatype_info ?",
+                "EXEC sp_sproc_columns ?", "EXECUTE sp_server_info ?", "exec sp_special_columns ?",
+                "execute sp_statistics ?", "EXEC sp_table_privileges ?", "exec sp_tables ?"};
+
+        Object[] params = {testTableName, serverName, testTableName, serverName, testTableName, integer,
+                "sp_column_privileges", integer, testTableName, testTableName, testTableName, testTableName};
+
+        int paramIndex = 0;
+
+        for (String sproc : sprocs) {
+            try (CallableStatement cstmt = connection.prepareCall(sproc)) {
+                cstmt.setObject(1, params[paramIndex]);
+                cstmt.execute();
+                paramIndex++;
+            } catch (Exception e) {
+                fail("Failed executing '" + sproc + "' with indexed parameter '" + params[paramIndex]);
+            }
+        }
+    }
+
+    @Test
+    public void testCallableStatementDefaultValues() throws SQLException {
+        String call0 = "{call " + conditionalSproc + " (?, ?, 1)}";
+        String call1 = "{call " + conditionalSproc + " (?, ?, 2)}";
+        int expectedValue = 5; // The sproc should return this value
+
+        try (CallableStatement cstmt = connection.prepareCall(call0)) {
+            cstmt.setInt(1, 1);
+            cstmt.setInt(2, 2);
+            cstmt.execute();
+            ResultSet rs = cstmt.getResultSet();
+            rs.next();
+            fail(TestResource.getResource("R_expectedFailPassed"));
+
+        } catch (Exception e) {
+            String msg = e.getMessage();
+            assertTrue(TestResource
+                    .getResource("R_nullPointerExceptionFromResultSet").equalsIgnoreCase(msg)
+                    || msg == null);
+        }
+
+        try (CallableStatement cstmt = connection.prepareCall(call1)) {
+            cstmt.setInt(1, 1);
+            cstmt.setInt(2, 2);
+            cstmt.execute();
+            ResultSet rs = cstmt.getResultSet();
+            rs.next();
+
+            assertEquals(Integer.toString(expectedValue), rs.getString(1));
+        }
+    }
+
+    @Test
+    public void testCallableStatementSetByAnnotatedArgs() throws SQLException {
+        String call = "{? = call " + simpleRetValSproc + " (@Arg1 = ?)}";
+        int expectedValue = 1; // The sproc should return this value
+
+        try (CallableStatement cstmt = connection.prepareCall(call)) {
+            cstmt.registerOutParameter(1, Types.INTEGER);
+            cstmt.setInt(1, 2);
+            cstmt.setString(2, "foo");
+            cstmt.execute();
+
+            Assert.assertEquals(expectedValue, cstmt.getInt(1));
+        }
+    }
+
+    // @Test
+    // @Tag(Constants.reqExternalSetup)
+    // @Tag(Constants.xAzureSQLDB)
+    // @Tag(Constants.xAzureSQLDW)
+    // @Tag(Constants.xAzureSQLMI)
+    // public void testFourPartSyntaxCallEscapeSyntax() throws SQLException {
+    //     String table = AbstractSQLGenerator.escapeIdentifier(RandomUtil.getIdentifier("serverList"));
+    //     try {
+
+    //         try (Statement stmt = connection.createStatement()) {
+    //             TestUtils.dropTableIfExists(table, stmt);
+    //             stmt.execute("CREATE TABLE " + table
+    //                     + " (serverName varchar(100),network varchar(100),serverStatus varchar(4000), id int, collation varchar(100), connectTimeout int, queryTimeout int)");
+    //             stmt.execute("INSERT " + table + " EXEC sp_helpserver");
+
+    //             ResultSet rs = stmt
+    //                     .executeQuery("SELECT COUNT(*) FROM " + table + " WHERE serverName = N'" + linkedServer + "'");
+    //             rs.next();
+
+    //             if (rs.getInt(1) == 1) {
+    //                 // Drop all linked logins associated with the server
+    //                 stmt.execute("EXEC sp_dropserver @server='" + linkedServer + "', @droplogins='droplogins';");
+    //             }
+
+    //             stmt.execute("EXEC sp_addlinkedserver @server='" + linkedServer + "';");
+    //             stmt.execute("EXEC sp_addlinkedsrvlogin @rmtsrvname=N'" + linkedServer + "', @useself=false"
+    //                     + ", @rmtuser=N'" + linkedServerUser + "', @rmtpassword=N'" + linkedServerPassword + "'");
+    //             stmt.execute("EXEC sp_serveroption '" + linkedServer + "', 'rpc', true;");
+    //             stmt.execute("EXEC sp_serveroption '" + linkedServer + "', 'rpc out', true;");
+    //         }
+
+    //         SQLServerDataSource ds = new SQLServerDataSource();
+    //         ds.setServerName(linkedServer);
+    //         ds.setUser(linkedServerUser);
+    //         ds.setPassword(linkedServerPassword);
+    //         ds.setEncrypt(false);
+    //         ds.setTrustServerCertificate(true);
+
+    //         try (Connection linkedServerConnection = ds.getConnection();
+    //                 Statement stmt = linkedServerConnection.createStatement()) {
+    //             stmt.execute(
+    //                     "create or alter procedure dbo.TestAdd(@Num1 int, @Num2 int, @Result int output) as begin set @Result = @Num1 + @Num2; end;");
+
+    //             stmt.execute("create or alter procedure dbo.TestReturn(@Num1 int) as select @Num1 return @Num1*3  ");
+    //         }
+
+    //         try (CallableStatement cstmt = connection
+    //                 .prepareCall("{call [" + linkedServer + "].master.dbo.TestAdd(?,?,?)}")) {
+    //             int sum = 11;
+    //             int param0 = 1;
+    //             int param1 = 10;
+    //             cstmt.setInt(1, param0);
+    //             cstmt.setInt(2, param1);
+    //             cstmt.registerOutParameter(3, Types.INTEGER);
+    //             cstmt.execute();
+    //             assertEquals(sum, cstmt.getInt(3));
+    //         }
+
+    //         try (CallableStatement cstmt = connection
+    //                 .prepareCall("exec [" + linkedServer + "].master.dbo.TestAdd ?,?,?")) {
+    //             int sum = 11;
+    //             int param0 = 1;
+    //             int param1 = 10;
+    //             cstmt.setInt(1, param0);
+    //             cstmt.setInt(2, param1);
+    //             cstmt.registerOutParameter(3, Types.INTEGER);
+    //             cstmt.execute();
+    //             assertEquals(sum, cstmt.getInt(3));
+    //         }
+
+    //         try (CallableStatement cstmt = connection
+    //                 .prepareCall("{? = call [" + linkedServer + "].master.dbo.TestReturn(?)}")) {
+    //             int expected = 15;
+    //             cstmt.registerOutParameter(1, java.sql.Types.INTEGER);
+    //             cstmt.setInt(2, 5);
+    //             cstmt.execute();
+    //             assertEquals(expected, cstmt.getInt(1));
+    //         }
+    //     } finally {
+    //         try (Statement stmt = connection.createStatement()) {
+    //             TestUtils.dropTableIfExists(table, stmt);
+    //         }
+    //     }
+    // }
+
+    @Test
+    public void testTimestampStringConversion() throws SQLException {
+        try (CallableStatement stmt = connection.prepareCall("{call " + currentTimeProc + "(?)}")) {
+            String timestamp = "2024-05-29 15:35:53.461";
+            stmt.setObject(1, timestamp, Types.TIMESTAMP);
+            stmt.registerOutParameter(1, Types.TIMESTAMP);
+            stmt.execute();
+            stmt.getObject("currentTimeStamp");
+        }
+    }
+    
+    /**
+     * Tests JSON column in a table with setObject
+     * 
+     * @throws SQLException
+     */
+    @Test
+    @vectorJsonTest
+    @Tag(Constants.JSONTest)
+	public void testJSONColumnInTableWithSetObject() throws SQLException {
+
+		try (Connection con = DriverManager.getConnection(connectionString); Statement stmt = con.createStatement()) {
+            createJSONTestTable(stmt);
+			String jsonString = "{\"key\":\"value\"}";
+			try (CallableStatement callableStatement = con
+					.prepareCall("INSERT INTO " + tableNameJSON + " (col1) VALUES (?)")) {
+				callableStatement.setObject(1, jsonString);
+				callableStatement.execute();
+			}
+
+			try (Statement queryStmt = con.createStatement();
+					ResultSet rs = queryStmt.executeQuery("SELECT col1 FROM " + tableNameJSON)) {
+				assertTrue(rs.next());
+				assertEquals(jsonString, rs.getObject(1));
+			}
+		}
+	}
+
+	@Test
+    @Tag(Constants.JSONTest)
+	public void testJSONProcedureWithSetObject() throws SQLException {
+
+		try (Connection con = DriverManager.getConnection(connectionString); Statement stmt = con.createStatement()) {
+			createJSONStoredProcedure(stmt);
+            String jsonString = "{\"key\":\"value\"}";
+			try (CallableStatement callableStatement = con.prepareCall("{call " + procedureNameJSON + " (?)}")) {
+				callableStatement.setObject(1, jsonString);
+				callableStatement.execute();
+
+				try (ResultSet rs = callableStatement.getResultSet()) {
+					assertTrue(rs.next());
+					assertEquals(jsonString, rs.getObject("col1"));
+				}
+			}
+		}
+	}
+
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testAllOutParamGettersByName() throws Exception {
+        TestUtils.dropProcedureIfExists(allOutParamsProcName, connection.createStatement());
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                "CREATE PROCEDURE " + allOutParamsProcName + " " +
+                "@char CHAR(10) OUTPUT, @nchar NCHAR(10) OUTPUT, @bit BIT OUTPUT, @tinyint TINYINT OUTPUT, " +
+                "@binary BINARY(4) OUTPUT, @date DATE OUTPUT, @float FLOAT OUTPUT, @real REAL OUTPUT, " +
+                "@bigint BIGINT OUTPUT, @int INT OUTPUT, @smallint SMALLINT OUTPUT, @decimal DECIMAL(10,2) OUTPUT, " +
+                "@money MONEY OUTPUT, @smallmoney SMALLMONEY OUTPUT, @varbinary VARBINARY(MAX) OUTPUT, " +
+                "@blob VARBINARY(MAX) OUTPUT, @clob VARCHAR(MAX) OUTPUT, @nclob NVARCHAR(MAX) OUTPUT " +
+                "AS BEGIN RETURN END"
+            );
+        }
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                "{call " + allOutParamsProcName + "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)}")) {
+
+            cs.setString("char", "charValue", false);
+            cs.setString("nchar", "hello     ");
+            cs.setBoolean("bit", true, false);
+            cs.setByte("tinyint", (byte) 42, false);
+            cs.setBytes("binary", new byte[]{1, 2, 3, 4}, false);
+            cs.setDate("date", Date.valueOf("2024-07-16"));
+            cs.setDouble("float", 123.456, false);
+            cs.setFloat("real", 78.9f, false);
+            cs.setLong("bigint", 9876543210L, false);
+            cs.setInt("int", 12345, false);
+            cs.setShort("smallint", (short) 123, false);
+            cs.setBigDecimal("decimal", new BigDecimal("123.45"), 5, 2);
+            cs.setBigDecimal("money", new BigDecimal("999.99"), 5, 2);
+            cs.setBigDecimal("money", new BigDecimal("999.99"), 5, 2, false);
+            cs.setMoney("money", new BigDecimal("999.99"));
+            cs.setMoney("money", new BigDecimal("999.99"), false);
+            cs.setBigDecimal("smallmoney", new BigDecimal("55.55"));
+            cs.setSmallMoney("smallmoney", new BigDecimal("55.55"));
+            cs.setSmallMoney("smallmoney", new BigDecimal("55.55"), false);
+            cs.setBytes("varbinary", new byte[]{0x11, 0x22, 0x33, 0x44});
+            cs.setBytes("blob", new byte[]{0x55, 0x66, 0x77, (byte) 0x88});
+            cs.setClob("clob", new javax.sql.rowset.serial.SerialClob("ascii-stream".toCharArray()));
+            cs.setNClob("nclob", new java.io.StringReader("nchar-stream"));
+
+            for (int i = 1; i <= 18; i++) {
+                cs.registerOutParameter(i, Types.VARCHAR);
+            }
+            cs.registerOutParameter(1, Types.CHAR);
+            cs.registerOutParameter(2, Types.NCHAR);
+            cs.registerOutParameter(3, Types.BIT);
+            cs.registerOutParameter(4, Types.TINYINT);
+            cs.registerOutParameter(5, Types.BINARY);
+            cs.registerOutParameter(6, Types.DATE);
+            cs.registerOutParameter(7, Types.DOUBLE);
+            cs.registerOutParameter(8, Types.REAL);
+            cs.registerOutParameter(9, Types.BIGINT);
+            cs.registerOutParameter(10, Types.INTEGER);
+            cs.registerOutParameter(11, Types.SMALLINT);
+            cs.registerOutParameter(12, Types.DECIMAL);
+            cs.registerOutParameter(13, Types.DECIMAL);
+            cs.registerOutParameter(14, microsoft.sql.Types.SMALLMONEY);
+            cs.registerOutParameter(15, Types.VARBINARY);
+            cs.registerOutParameter(16, Types.VARBINARY);
+            cs.registerOutParameter(17, Types.VARCHAR);
+            cs.registerOutParameter(18, Types.NVARCHAR);
+
+            cs.execute();
+
+            assertEquals("charValue ", cs.getString("char")); // Covers getString(String)
+            assertEquals("hello     ", cs.getNString("nchar"));
+            assertTrue(cs.getBoolean("bit"));
+            assertEquals((byte) 42, cs.getByte("tinyint"));
+            assertArrayEquals(new byte[]{1, 2, 3, 4}, cs.getBytes("binary"));
+            assertEquals(Date.valueOf("2024-07-16"), cs.getDate("date"));
+            assertEquals(123.456, cs.getDouble("float"), 0.0001);
+            assertEquals(78.9f, cs.getFloat("real"), 0.0001f);
+            assertEquals(9876543210L, cs.getLong("bigint"));
+            assertEquals(12345, cs.getInt("int"));
+            assertEquals((short) 123, cs.getShort("smallint"));
+            assertEquals(0, cs.getBigDecimal("decimal").compareTo(new BigDecimal("123.45")));
+            assertEquals(0, cs.getMoney("money").compareTo(new BigDecimal("999.99")));
+            assertEquals(0, cs.getSmallMoney("smallmoney").compareTo(new BigDecimal("55.55")));
+            try (InputStream is = cs.getBinaryStream("varbinary");
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+                
+                byte[] temp = new byte[1024];
+                int bytesRead;
+                while ((bytesRead = is.read(temp)) != -1) {
+                    buffer.write(temp, 0, bytesRead);
+                }
+
+                byte[] actualBytes = buffer.toByteArray();
+                assertArrayEquals(new byte[]{0x11, 0x22, 0x33, 0x44}, actualBytes);
+            }
+
+            Blob blob = cs.getBlob("blob");
+            assertArrayEquals(new byte[]{0x55, 0x66, 0x77, (byte) 0x88}, blob.getBytes(1, (int) blob.length()));
+
+            try (Reader reader = cs.getCharacterStream("clob")) {
+                assertEquals("ascii-stream", new BufferedReader(reader).readLine());
+            }
+
+            try (Reader reader = cs.getNCharacterStream("nclob")) {
+                assertEquals("nchar-stream", new BufferedReader(reader).readLine());
+            }
+
+            // Covers getObject(String, Map)
+            assertThrows(SQLException.class, () -> cs.getObject("char", Collections.emptyMap()));
+
+            // Covers getRef(String)
+            assertThrows(SQLException.class, () -> cs.getRef("char"));
+
+            // Covers getArray(String)
+            assertThrows(SQLException.class, () -> cs.getArray("char"));
+        }
+
+        try (Statement stmt = connection.createStatement()) {
+            TestUtils.dropProcedureIfExists(allOutParamsProcName, stmt);
+        }
+    }
+
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testAllSettersWithParameterName() throws Exception {
+        TestUtils.dropProcedureIfExists(streamGetterSetterProcName, connection.createStatement());
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                "CREATE PROCEDURE " + streamGetterSetterProcName + " " +
+                "@asciiStream VARCHAR(MAX), " +
+                "@binaryStream VARBINARY(MAX), " +
+                "@blob VARBINARY(MAX), " +
+                "@clob VARCHAR(MAX), " +
+                "@nclob NVARCHAR(MAX) OUTPUT, " +         // mark as OUTPUT
+                "@nstring XML OUTPUT " +        // mark as OUTPUT
+                "AS BEGIN " +
+                "SELECT @asciiStream AS asciiStream, @binaryStream AS binaryStream, @blob AS blob, " +
+                "@clob AS clob, @nclob AS nclob, @nstring AS nstring; " +
+                "END"
+            );
+
+        }
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement)
+                connection.prepareCall("{call " + streamGetterSetterProcName + " (?, ?, ?, ?, ?, ?)}")) {
+
+            byte[] bytes = "binary-data".getBytes(StandardCharsets.UTF_8);
+            InputStream binaryStream = new ByteArrayInputStream(bytes);
+            InputStream asciiStream = new ByteArrayInputStream("ascii".getBytes(StandardCharsets.US_ASCII));
+            Blob blob = connection.createBlob();
+            blob.setBytes(1, bytes);
+
+            Reader clobReader = new StringReader("clob data");
+            NClob nclob = connection.createNClob();
+            nclob.setString(1, "nclob string");
+
+            SQLXML sqlxml = connection.createSQLXML();
+            sqlxml.setString("<root>xml</root>");
+
+            // Set values
+            cs.setAsciiStream("asciiStream", asciiStream);
+            cs.setBinaryStream("binaryStream", binaryStream);
+            cs.setBlob("blob", blob);
+            cs.setClob("clob", clobReader);
+            cs.setNClob("nclob", nclob);
+            cs.setNString("nstring", "nstringValue");
+
+            // Additional API coverage
+            cs.setCharacterStream("clob", new StringReader("updated clob"));
+            cs.setCharacterStream("clob", new StringReader("updated clob"), 12);
+            cs.setNCharacterStream("nclob", new StringReader("updated nclob"));
+            cs.setNCharacterStream("nclob", new StringReader("updated nclob"), 13L);
+            cs.setNull("nstring", Types.NVARCHAR);
+            cs.setSQLXML("nstring", sqlxml); // overwrite nstring
+
+            cs.registerOutParameter("nclob", Types.NVARCHAR);
+            cs.registerOutParameter("nstring", Types.SQLXML);
+
+            cs.execute();
+
+
+            // Validate outputs
+            String returnedNString = cs.getNString("nclob");
+            assertNotNull(returnedNString);
+            assertTrue(returnedNString.contains("updated"));
+
+            SQLXML returnedXML = cs.getSQLXML("nstring");
+            assertNotNull(returnedXML);
+            assertEquals("<root>xml</root>", returnedXML.getString());
+        } finally {
+            try (Statement stmt = connection.createStatement()) {
+                TestUtils.dropProcedureIfExists(streamGetterSetterProcName, stmt);
+            }
+        }
+    }
+
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testAllOutParamGettersByIndex() throws Exception {
+        TestUtils.dropProcedureIfExists(allOutParamsProcName, connection.createStatement());
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                "CREATE PROCEDURE " + allOutParamsProcName + " " +
+                "@char CHAR(10) OUTPUT, @nchar NCHAR(10) OUTPUT, @bit BIT OUTPUT, @tinyint TINYINT OUTPUT, " +
+                "@binary BINARY(4) OUTPUT, @date DATE OUTPUT, @float FLOAT OUTPUT, @real REAL OUTPUT, " +
+                "@bigint BIGINT OUTPUT, @int INT OUTPUT, @smallint SMALLINT OUTPUT, @decimal DECIMAL(10,2) OUTPUT, " +
+                "@money MONEY OUTPUT, @smallmoney SMALLMONEY OUTPUT, @varbinary VARBINARY(MAX) OUTPUT, " +
+                "@blob VARBINARY(MAX) OUTPUT, @clob VARCHAR(MAX) OUTPUT, @nclob NVARCHAR(MAX) OUTPUT " +
+                "AS BEGIN RETURN END"
+            );
+        }
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                "{call " + allOutParamsProcName + "(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)}")) {
+
+            cs.setObject(1, "charValue ", Types.CHAR);
+            cs.setObject(2, "hello     ", Types.NCHAR);
+            cs.setObject(3, true, Types.BIT);
+            cs.setObject(4, (byte) 42, Types.TINYINT);
+            cs.setObject(5, new byte[]{1, 2, 3, 4}, Types.BINARY);
+            cs.setObject(6, Date.valueOf("2024-07-16"), Types.DATE);
+            cs.setObject(7, 123.456, Types.DOUBLE);
+            cs.setObject(8, 78.9f, Types.REAL);
+            cs.setObject(9, 9876543210L, Types.BIGINT);
+            cs.setObject(10, 12345, Types.INTEGER);
+            cs.setObject(11, (short) 123, Types.SMALLINT);
+            cs.setObject(12, new BigDecimal("123.45"), Types.DECIMAL);
+            cs.setObject(13, new BigDecimal("999.99"), Types.DECIMAL);
+            cs.setObject(14, new BigDecimal("55.55"), microsoft.sql.Types.SMALLMONEY);
+            cs.setObject(15, new byte[]{0x11, 0x22, 0x33, 0x44}, Types.VARBINARY);
+            cs.setObject(16, new byte[]{0x55, 0x66, 0x77, (byte) 0x88}, Types.VARBINARY);
+            cs.setClob(17, new javax.sql.rowset.serial.SerialClob("ascii-stream".toCharArray()));
+            cs.setNClob(18, new java.io.StringReader("nchar-stream"));
+
+            for (int i = 1; i <= 18; i++) {
+                cs.registerOutParameter(i, Types.VARCHAR);
+            }
+            cs.registerOutParameter(1, Types.CHAR);
+            cs.registerOutParameter(2, Types.NCHAR);
+            cs.registerOutParameter(3, Types.BIT);
+            cs.registerOutParameter(4, Types.TINYINT);
+            cs.registerOutParameter(5, Types.BINARY);
+            cs.registerOutParameter(6, Types.DATE);
+            cs.registerOutParameter(7, Types.DOUBLE);
+            cs.registerOutParameter(8, Types.REAL);
+            cs.registerOutParameter(9, Types.BIGINT);
+            cs.registerOutParameter(10, Types.INTEGER);
+            cs.registerOutParameter(11, Types.SMALLINT);
+            cs.registerOutParameter(12, Types.DECIMAL);
+            cs.registerOutParameter(13, Types.DECIMAL);
+            cs.registerOutParameter(14, microsoft.sql.Types.SMALLMONEY);
+            cs.registerOutParameter(15, Types.VARBINARY);
+            cs.registerOutParameter(16, Types.VARBINARY);
+            cs.registerOutParameter(17, Types.VARCHAR);
+            cs.registerOutParameter(18, Types.NVARCHAR);
+
+            cs.execute();
+
+            assertEquals("charValue ", cs.getString(1));
+            assertEquals("hello     ", cs.getNString(2));
+            assertTrue(cs.getBoolean(3));
+            assertEquals((byte) 42, cs.getByte(4));
+            assertArrayEquals(new byte[]{1, 2, 3, 4}, cs.getBytes(5));
+            assertEquals(Date.valueOf("2024-07-16"), cs.getDate(6));
+            assertEquals(123.456, cs.getDouble(7), 0.0001);
+            assertEquals(78.9f, cs.getFloat(8), 0.0001f);
+            assertEquals(9876543210L, cs.getLong(9));
+            assertEquals(12345, cs.getInt(10));
+            assertEquals((short) 123, cs.getShort(11));
+            assertEquals(0, cs.getBigDecimal(12).compareTo(new BigDecimal("123.45")));
+            assertEquals(0, cs.getMoney(13).compareTo(new BigDecimal("999.99")));
+            assertEquals(0, cs.getSmallMoney(14).compareTo(new BigDecimal("55.55")));
+
+            try (InputStream is = cs.getBinaryStream(15);
+                ByteArrayOutputStream buffer = new ByteArrayOutputStream()) {
+                
+                byte[] temp = new byte[1024];
+                int bytesRead;
+                while ((bytesRead = is.read(temp)) != -1) {
+                    buffer.write(temp, 0, bytesRead);
+                }
+
+                byte[] actualBytes = buffer.toByteArray();
+                assertArrayEquals(new byte[]{0x11, 0x22, 0x33, 0x44}, actualBytes);
+            }
+
+
+            Blob blob = cs.getBlob(16);
+            assertArrayEquals(new byte[]{0x55, 0x66, 0x77, (byte) 0x88}, blob.getBytes(1, (int) blob.length()));
+
+            try (Reader reader = cs.getCharacterStream(17)) {
+                assertEquals("ascii-stream", new BufferedReader(reader).readLine());
+            }
+
+            try (Reader reader = cs.getNCharacterStream(18)) {
+                assertEquals("nchar-stream", new BufferedReader(reader).readLine());
+            }
+
+            // Covers getObject(int, Map)
+            assertThrows(SQLException.class, () -> cs.getObject(1, Collections.emptyMap()));
+
+            // Covers getRef(int)
+            assertThrows(SQLException.class, () -> cs.getRef(1));
+
+            // Covers getArray(int)
+            assertThrows(SQLException.class, () -> cs.getArray(1));
+        }
+
+        try (Statement stmt = connection.createStatement()) {
+            TestUtils.dropProcedureIfExists(allOutParamsProcName, stmt);
+        }
+    }
+
+
+
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testGetObjectVariousTypes() throws SQLException {
+        TestUtils.dropProcedureIfExists(getObjectTypesProcName, connection.createStatement());
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                "CREATE PROCEDURE " + getObjectTypesProcName +
+                " @tinyint TINYINT OUTPUT, @smallint SMALLINT OUTPUT, @bigint BIGINT OUTPUT, @decimal DECIMAL(10,2) OUTPUT, @bit BIT OUTPUT, @ldt DATETIME2 OUTPUT AS " +
+                "BEGIN " +
+                // Assign output params from their current values (set by input)
+                "SELECT @tinyint = @tinyint, @smallint = @smallint, @bigint = @bigint, @decimal = @decimal, @bit = @bit, @ldt = @ldt " +
+                "END"
+            );
+        }
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                "{call " + getObjectTypesProcName + "(?,?,?,?,?,?)}")) {
+            // Register out parameters by name
+            cs.registerOutParameter("tinyint", Types.TINYINT);
+            cs.registerOutParameter("smallint", Types.SMALLINT);
+            cs.registerOutParameter("bigint", Types.BIGINT);
+            cs.registerOutParameter("decimal", Types.DECIMAL);
+            cs.registerOutParameter("bit", Types.BIT);
+            cs.registerOutParameter("ldt", Types.TIMESTAMP);
+
+            // Use all setObject overloads with parameter names
+            cs.setObject("tinyint", (byte) 7); // setObject(String, Object)
+            cs.setObject("smallint", (short) 123, Types.SMALLINT); // setObject(String, Object, int)
+            cs.setObject("bigint", 9876543210L, Types.BIGINT, 0); // setObject(String, Object, int, int)
+            cs.setObject("decimal", new BigDecimal("123.45"), Types.DECIMAL, 2, false); // setObject(String, Object, int, int, boolean)
+            cs.setObject("bit", true, Types.BIT, null, 0); // setObject(String, Object, int, Integer, int)
+            cs.setObject("ldt", null); // setObject(String, Object) with null
+
+            cs.execute();
+
+            // Byte.class
+            Byte byteVal = cs.getObject("tinyint", Byte.class);
+            assertEquals(Byte.valueOf((byte)7), byteVal);
+
+            // Short.class
+            Short shortVal = cs.getObject("smallint", Short.class);
+            assertEquals(Short.valueOf((short)123), shortVal);
+
+            // Long.class
+            Long longVal = cs.getObject("bigint", Long.class);
+            assertEquals(Long.valueOf(9876543210L), longVal);
+
+            // BigDecimal.class
+            BigDecimal bdVal = cs.getObject("decimal", BigDecimal.class);
+            assertEquals(0, bdVal.compareTo(new BigDecimal("123.45")));
+
+            // Boolean.class
+            Boolean boolVal = cs.getObject("bit", Boolean.class);
+            assertEquals(Boolean.TRUE, boolVal);
+
+            // LocalDateTime.class (null case)
+            LocalDateTime ldtVal = cs.getObject("ldt", LocalDateTime.class);
+            assertNull(ldtVal);
+        }
+        TestUtils.dropProcedureIfExists(getObjectTypesProcName, connection.createStatement());
+    }
+
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testSQLTypeOverloads() throws Exception {
+        
+        TestUtils.dropProcedureIfExists(sqlTypeOverloadsProcName, connection.createStatement());
+
+        // Simple procedure with one INOUT parameter
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                "CREATE PROCEDURE " + sqlTypeOverloadsProcName + " @val INT OUTPUT AS BEGIN SET @val = @val + 1 END"
+            );
+        }
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                "{call " + sqlTypeOverloadsProcName + "(?)}")) {
+            // Test setObject with SQLType
+            cs.setObject(1, 41, java.sql.JDBCType.INTEGER);
+            // Test registerOutParameter with SQLType
+            cs.registerOutParameter(1, java.sql.JDBCType.INTEGER);
+            cs.execute();
+            assertEquals(42, cs.getInt(1));
+
+            // Test setObject with parameter name and SQLType
+            cs.setObject("val", 100, java.sql.JDBCType.INTEGER);
+            cs.registerOutParameter("val", java.sql.JDBCType.INTEGER);
+            cs.execute();
+            assertEquals(101, cs.getInt("val"));
+
+            // Test registerOutParameter with scale and typeName
+            cs.registerOutParameter(1, java.sql.JDBCType.INTEGER, 0);
+            cs.registerOutParameter(1, java.sql.JDBCType.INTEGER, "INTEGER");
+            cs.registerOutParameter("val", java.sql.JDBCType.INTEGER, 0);
+            cs.registerOutParameter("val", java.sql.JDBCType.INTEGER, "INTEGER");
+        }
+
+        TestUtils.dropProcedureIfExists(sqlTypeOverloadsProcName, connection.createStatement());
+    }
+
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testCallableStatementParameterNameAPIs() throws Exception {
+        // Cleanup - drop procedure first, then type (order is critical!)
+        try (Statement stmt = connection.createStatement()) {
+            TestUtils.dropProcedureIfExists(tvpProcName, stmt);
+            TestUtils.dropTypeIfExists(tvpTypeName, stmt);
+        }
+        try (Statement stmt = connection.createStatement()) {
+            // Create a TVP type and procedure if not exists
+            stmt.execute("CREATE TYPE " + AbstractSQLGenerator.escapeIdentifier(tvpTypeName) + " AS TABLE (id INT)");
+            stmt.execute("CREATE PROCEDURE " + tvpProcName + " @tvp " + AbstractSQLGenerator.escapeIdentifier(tvpTypeName) + " READONLY, @val XML = NULL OUTPUT AS SELECT 1");
+        }
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall("{call " + tvpProcName + " (?, ?)}")) {
+            // setNull(String, int, String)
+            cs.setNull("val", java.sql.Types.VARCHAR, "VARCHAR");
+
+            // setURL(String, URL) - expect not supported
+            java.net.URL testUrl = java.net.URI.create("http://example.com").toURL();
+            assertThrows(SQLServerException.class, () -> cs.setURL("val", testUrl));
+
+            // setStructured(String, String, SQLServerDataTable)
+            com.microsoft.sqlserver.jdbc.SQLServerDataTable tvpTable = new com.microsoft.sqlserver.jdbc.SQLServerDataTable();
+            tvpTable.addColumnMetadata("id", java.sql.Types.INTEGER);
+            tvpTable.addRow(1);
+            cs.setStructured("tvp", tvpTypeName, tvpTable);
+
+            // setStructured(String, String, ResultSet)
+            // Use a minimal ResultSet: create a statement and select from values
+            try (Statement stmt = connection.createStatement(); ResultSet rs = stmt.executeQuery("SELECT 1 AS id")) {
+                cs.setStructured("tvp", tvpTypeName, rs);
+            }
+
+            // setStructured(String, String, ISQLServerDataRecord)
+            com.microsoft.sqlserver.jdbc.SQLServerDataTable record = new com.microsoft.sqlserver.jdbc.SQLServerDataTable();
+            record.addColumnMetadata("id", java.sql.Types.INTEGER);
+            record.addRow(1);
+            cs.setStructured("tvp", tvpTypeName, record);
+
+            // setSQLXML(String, SQLXML) (already covered, but call again)
+            SQLXML sqlxml = connection.createSQLXML();
+            sqlxml.setString("<root>test</root>");
+            cs.setSQLXML("val", sqlxml);
+
+            // getSQLXML(int)
+            cs.registerOutParameter(2, java.sql.Types.SQLXML);
+            cs.execute();
+            cs.getSQLXML(2);
+
+            // getURL(int) and getURL(String) - expect not supported
+            assertThrows(SQLServerException.class, () -> cs.getURL(2));
+            assertThrows(SQLServerException.class, () -> cs.getURL("val"));
+        }
+
+        try (Statement stmt = connection.createStatement()) {
+            // Drop procedure first, then type (order matters!)
+            TestUtils.dropProcedureIfExists(tvpProcName, stmt);
+            TestUtils.dropTypeIfExists(tvpTypeName, stmt);
+        }
+    }
+
+    // Test various time and date related getters with parameter names
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testTimeDateDatatypeGetters() throws SQLException {
+        String timeDateProcName = AbstractSQLGenerator
+                .escapeIdentifier(RandomUtil.getIdentifier("TestTimeDateGetters"));
+
+        TestUtils.dropProcedureIfExists(timeDateProcName, connection.createStatement());
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                    "CREATE PROCEDURE " + timeDateProcName +
+                            " @date_param DATE OUTPUT, @time_param TIME OUTPUT, @timestamp_param DATETIME2 OUTPUT, " +
+                            "@datetime_param DATETIME OUTPUT, @smalldatetime_param SMALLDATETIME OUTPUT AS " +
+                            "BEGIN " +
+                            "SELECT @date_param = @date_param, @time_param = @time_param, @timestamp_param = @timestamp_param, "
+                            +
+                            "@datetime_param = @datetime_param, @smalldatetime_param = @smalldatetime_param " +
+                            "END");
+        }
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                "{call " + timeDateProcName + "(?,?,?,?,?)}")) {
+
+            // Register out parameters
+            cs.registerOutParameter("date_param", Types.DATE);
+            cs.registerOutParameter("time_param", Types.TIME);
+            cs.registerOutParameter("timestamp_param", Types.TIMESTAMP);
+            cs.registerOutParameter("datetime_param", microsoft.sql.Types.DATETIME);
+            cs.registerOutParameter("smalldatetime_param", microsoft.sql.Types.SMALLDATETIME);
+
+            // Set input values
+            cs.setObject("date_param", Date.valueOf("2024-07-16"));
+            cs.setObject("time_param", Time.valueOf("14:30:45"));
+            cs.setObject("timestamp_param", Timestamp.valueOf("2024-07-16 14:30:45.123"));
+            cs.setObject("datetime_param", Timestamp.valueOf("2024-07-16 14:30:45.123"));
+            cs.setObject("smalldatetime_param", Timestamp.valueOf("2024-07-16 14:30:00"));
+
+            cs.execute();
+            Calendar cal = null;
+            
+            // getDate(String, Calendar)
+            Date dateByName = cs.getDate("date_param", cal);
+            assertNotNull(dateByName);
+            assertEquals("2024-07-16", dateByName.toString());
+
+            // getTime(String parameterName, Calendar cal)
+            Time timeByNameWithCal = cs.getTime("time_param", cal);
+            assertNotNull(timeByNameWithCal);
+            assertEquals(Time.valueOf("14:30:45").toString(), timeByNameWithCal.toString());
+
+            // getTimestamp(String name, Calendar cal)
+            Timestamp timestampByNameWithCal = cs.getTimestamp("timestamp_param", cal);
+            assertNotNull(timestampByNameWithCal);
+            assertEquals(Timestamp.valueOf("2024-07-16 14:30:45.123").getTime(),
+                    timestampByNameWithCal.getTime());
+
+            // getDateTime(String parameterName)
+            Timestamp dateTimeByName = cs.getDateTime("datetime_param");
+            assertNotNull(dateTimeByName);
+            assertEquals(Timestamp.valueOf("2024-07-16 14:30:45.123").getTime(),
+                    dateTimeByName.getTime());
+
+            // getDateTime(int index, Calendar cal) - NEW COVERAGE
+            Timestamp dateTimeByIndexWithCal = cs.getDateTime(4, cal);
+            assertNotNull(dateTimeByIndexWithCal);
+            assertEquals(Timestamp.valueOf("2024-07-16 14:30:45.123").getTime(),
+                    dateTimeByIndexWithCal.getTime());
+
+            // getDateTime(String name, Calendar cal)
+            Timestamp dateTimeByNameWithCal = cs.getDateTime("datetime_param", cal);
+            assertNotNull(dateTimeByNameWithCal);
+            assertEquals(Timestamp.valueOf("2024-07-16 14:30:45.123").getTime(),
+                    dateTimeByNameWithCal.getTime());
+
+            // getSmallDateTime(String parameterName)
+            Timestamp smallDateTimeByName = cs.getSmallDateTime("smalldatetime_param");
+            assertNotNull(smallDateTimeByName);
+            assertEquals(Timestamp.valueOf("2024-07-16 14:30:00").getTime(),
+                    smallDateTimeByName.getTime());
+
+            // getSmallDateTime(int index, Calendar cal)
+            Timestamp smallDateTimeByIndexWithCal = cs.getSmallDateTime(5, cal);
+            assertNotNull(smallDateTimeByIndexWithCal);
+            assertEquals(Timestamp.valueOf("2024-07-16 14:30:00").getTime(),
+                    smallDateTimeByIndexWithCal.getTime());
+
+            // getSmallDateTime(String name, Calendar cal)
+            Timestamp smallDateTimeByNameWithCal = cs.getSmallDateTime("smalldatetime_param", cal);
+            assertNotNull(smallDateTimeByNameWithCal);
+            assertEquals(Timestamp.valueOf("2024-07-16 14:30:00").getTime(),
+                    smallDateTimeByNameWithCal.getTime());
+        } finally {
+            TestUtils.dropProcedureIfExists(timeDateProcName, connection.createStatement());
+        }
+    }
+
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testBigDecimalGetterMethods() throws SQLException {
+        String bigDecimalProcName = AbstractSQLGenerator
+                .escapeIdentifier(RandomUtil.getIdentifier("TestBigDecimalGetters"));
+
+        TestUtils.dropProcedureIfExists(bigDecimalProcName, connection.createStatement());
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                    "CREATE PROCEDURE " + bigDecimalProcName +
+                            " @decimal_param DECIMAL(10,4) OUTPUT AS " +
+                            "BEGIN " +
+                            "SELECT @decimal_param = @decimal_param " +
+                            "END");
+        }
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                "{call " + bigDecimalProcName + "(?)}")) {
+
+            // Register out parameter
+            cs.registerOutParameter("decimal_param", Types.DECIMAL);
+
+            // Set input value using setObject
+            cs.setObject("decimal_param", new BigDecimal("123.4567"));
+
+            cs.execute();
+
+            //getBigDecimal(int, int scale) - deprecated method
+            @SuppressWarnings("deprecation")
+            BigDecimal decimalByIndex = cs.getBigDecimal(1, 2);
+            assertNotNull(decimalByIndex);
+            assertEquals(2, decimalByIndex.scale());
+            assertEquals(0, decimalByIndex.compareTo(new BigDecimal("123.45")));
+
+            //getBigDecimal(String, int scale) - deprecated method
+            @SuppressWarnings("deprecation")
+            BigDecimal decimalByName = cs.getBigDecimal("decimal_param", 3);
+            assertNotNull(decimalByName);
+            assertEquals(3, decimalByName.scale());
+            assertEquals(0, decimalByName.compareTo(new BigDecimal("123.456")));
+        } finally {
+            TestUtils.dropProcedureIfExists(bigDecimalProcName, connection.createStatement());
+        }
+    }
+
+    // Test various time and date related setters with parameter names and Calendar
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testDateTimeSettersWithCalendar() throws SQLException {
+        
+        String dateTimeSettersProcName = AbstractSQLGenerator
+                .escapeIdentifier(RandomUtil.getIdentifier("TestDateTimeSetters"));
+
+        TestUtils.dropProcedureIfExists(dateTimeSettersProcName, connection.createStatement());
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                    "CREATE PROCEDURE " + dateTimeSettersProcName +
+                            " @date_param DATE OUTPUT, @time_param TIME OUTPUT, @timestamp_param DATETIME2 OUTPUT, " +
+                            "@datetimeoffset_param DATETIMEOFFSET OUTPUT, @datetime_param DATETIME OUTPUT, " +
+                            "@smalldatetime_param SMALLDATETIME OUTPUT AS " +
+                            "BEGIN " +
+                            "SELECT @date_param = @date_param, @time_param = @time_param, @timestamp_param = @timestamp_param, "
+                            +
+                            "@datetimeoffset_param = @datetimeoffset_param, @datetime_param = @datetime_param, " +
+                            "@smalldatetime_param = @smalldatetime_param " +
+                            "END");
+        }
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                "{call " + dateTimeSettersProcName + "(?,?,?,?,?,?)}")) {
+
+            Calendar cal = Calendar.getInstance();
+            cal.setTimeZone(TimeZone.getTimeZone("UTC"));
+
+            // setTimestamp(String, Timestamp, Calendar)
+            cs.setTimestamp("timestamp_param", Timestamp.valueOf("2024-07-16 14:30:45.123"), cal);
+
+            // setTimestamp(String, Timestamp, Calendar, boolean)
+            cs.setTimestamp("timestamp_param", Timestamp.valueOf("2024-07-16 14:30:45.123"), cal, false);
+
+            // setTime(String, Time, Calendar)
+            cs.setTime("time_param", Time.valueOf("14:30:45"), cal);
+
+            // setTime(String, Time, Calendar, boolean)
+            cs.setTime("time_param", Time.valueOf("14:30:45"), cal, false);
+
+            // setDate(String, Date, Calendar)
+            cs.setDate("date_param", Date.valueOf("2024-07-16"), cal);
+
+            // setDate(String, Date, Calendar, boolean)
+            cs.setDate("date_param", Date.valueOf("2024-07-16"), cal, false);
+
+            // setTimestamp(String, Timestamp, int, boolean)
+            cs.setTimestamp("timestamp_param", Timestamp.valueOf("2024-07-16 14:30:45.123"), 3, false);
+
+            // setDateTimeOffset(String, DateTimeOffset, int, boolean)
+            microsoft.sql.DateTimeOffset dto = microsoft.sql.DateTimeOffset.valueOf(
+                    Timestamp.valueOf("2024-07-16 14:30:45.123"), 5);
+            cs.setDateTimeOffset("datetimeoffset_param", dto, 3, false);
+
+            // setTime(String, Time, int, boolean)
+            cs.setTime("time_param", Time.valueOf("14:30:45"), 3, false);
+
+            // setDateTime(String, Timestamp)
+            cs.setDateTime("datetime_param", Timestamp.valueOf("2024-07-16 14:30:45.123"));
+
+            // setDateTime(String, Timestamp, boolean)
+            cs.setDateTime("datetime_param", Timestamp.valueOf("2024-07-16 14:30:45.123"), false);
+
+            // setSmallDateTime(String, Timestamp)
+            cs.setSmallDateTime("smalldatetime_param", Timestamp.valueOf("2024-07-16 14:30:00"));
+
+            // setSmallDateTime(String, Timestamp, boolean)
+            cs.setSmallDateTime("smalldatetime_param", Timestamp.valueOf("2024-07-16 14:30:00"), false);
+
+            // Register output parameters
+            cs.registerOutParameter("date_param", Types.DATE);
+            cs.registerOutParameter("time_param", Types.TIME);
+            cs.registerOutParameter("timestamp_param", Types.TIMESTAMP);
+            cs.registerOutParameter("datetimeoffset_param", microsoft.sql.Types.DATETIMEOFFSET);
+            cs.registerOutParameter("datetime_param", microsoft.sql.Types.DATETIME);
+            cs.registerOutParameter("smalldatetime_param", microsoft.sql.Types.SMALLDATETIME);
+
+            cs.execute();
+
+            // Verify the values were set and can be retrieved
+            assertNotNull(cs.getDate("date_param"));
+            assertNotNull(cs.getTime("time_param"));
+            assertNotNull(cs.getTimestamp("timestamp_param"));
+            assertNotNull(cs.getDateTimeOffset("datetimeoffset_param"));
+            assertNotNull(cs.getDateTime("datetime_param"));
+            assertNotNull(cs.getSmallDateTime("smalldatetime_param"));
+        } finally {
+            TestUtils.dropProcedureIfExists(dateTimeSettersProcName, connection.createStatement());
+        }
+    }
+
+    // Test various stream and large object related setters with parameter names
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testStreamSettersWithParameterNames() throws SQLException {
+        
+        String streamSettersProcName = AbstractSQLGenerator
+                .escapeIdentifier(RandomUtil.getIdentifier("TestStreamSetters"));
+
+        TestUtils.dropProcedureIfExists(streamSettersProcName, connection.createStatement());
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                    "CREATE PROCEDURE " + streamSettersProcName + " " +
+                            "@nchar_stream NVARCHAR(MAX), " +
+                            "@clob_stream VARCHAR(MAX), " +
+                            "@nclob_stream NVARCHAR(MAX) OUTPUT, " +
+                            "@nstring_param NVARCHAR(MAX), " +
+                            "@ascii_stream VARCHAR(MAX), " +
+                            "@binary_stream VARBINARY(MAX), " +
+                            "@blob_stream VARBINARY(MAX) " +
+                            "AS BEGIN " +
+                            "SELECT @nchar_stream AS nchar_stream, @clob_stream AS clob_stream, @nclob_stream AS nclob_stream, "
+                            +
+                            "@nstring_param AS nstring_param, @ascii_stream AS ascii_stream, @binary_stream AS binary_stream, "
+                            +
+                            "@blob_stream AS blob_stream " +
+                            "END");
+        }
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                "{call " + streamSettersProcName + "(?,?,?,?,?,?,?)}")) {
+
+            // setNCharacterStream(String, Reader)
+            cs.setNCharacterStream("nchar_stream", new StringReader("nchar data"));
+
+            // setNCharacterStream(String, Reader, long)
+            String ncharTestData = "nchar test data with length"; // 27 characters
+            cs.setNCharacterStream("nchar_stream", new StringReader(ncharTestData), 27L); // Fixed length
+
+            // setClob(String, Reader)
+            cs.setClob("clob_stream", new StringReader("clob test data"));
+
+            // setClob(String, Reader, long)
+            String clobTestData = "clob test data with length"; // 26 characters
+            cs.setClob("clob_stream", new StringReader(clobTestData), 26L); // Fixed length
+
+            // Use actual Clob object like in testAllSettersWithParameterName
+            Clob clob = new javax.sql.rowset.serial.SerialClob("clob data".toCharArray());
+            cs.setClob("clob_stream", clob);
+
+            // setNClob(String, Reader)
+            cs.setNClob("nclob_stream", new StringReader("nclob data"));
+
+            // setNClob(String, Reader, long)
+            String nclobTestData = "nclob test data length"; // 22 characters
+            cs.setNClob("nclob_stream", new StringReader(nclobTestData), 22L); // Fixed length
+
+            // Use actual NClob object like in testAllSettersWithParameterName
+            NClob nclob = connection.createNClob();
+            nclob.setString(1, "nclob string");
+            cs.setNClob("nclob_stream", nclob);
+
+            // setNString(String, String)
+            cs.setNString("nstring_param", "nstring value");
+
+            // setNString(String, String, boolean)
+            cs.setNString("nstring_param", "nstring test value", false);
+
+            // setAsciiStream(String, InputStream)
+            byte[] asciiData = "ascii data".getBytes(StandardCharsets.US_ASCII);
+            cs.setAsciiStream("ascii_stream", new ByteArrayInputStream(asciiData));
+
+            // setAsciiStream(String, InputStream, int)
+            cs.setAsciiStream("ascii_stream", new ByteArrayInputStream(asciiData), asciiData.length);
+
+            // setAsciiStream(String, InputStream, long)
+            cs.setAsciiStream("ascii_stream", new ByteArrayInputStream(asciiData), (long) asciiData.length);
+
+            // setBinaryStream(String, InputStream)
+            byte[] binaryData = "binary data".getBytes(StandardCharsets.UTF_8);
+            cs.setBinaryStream("binary_stream", new ByteArrayInputStream(binaryData));
+
+            // setBinaryStream(String, InputStream, int)
+            cs.setBinaryStream("binary_stream", new ByteArrayInputStream(binaryData), binaryData.length);
+
+            // setBinaryStream(String, InputStream, long)
+            cs.setBinaryStream("binary_stream", new ByteArrayInputStream(binaryData), (long) binaryData.length);
+
+            // setBlob(String, InputStream)
+            cs.setBlob("blob_stream", new ByteArrayInputStream(binaryData));
+
+            // setBlob(String, InputStream, long)
+            cs.setBlob("blob_stream", new ByteArrayInputStream(binaryData), (long) binaryData.length);
+
+            // Use actual Blob object like in testAllSettersWithParameterName
+            Blob blob = connection.createBlob();
+            blob.setBytes(1, binaryData);
+            cs.setBlob("blob_stream", blob);
+
+            // Register out parameter for nclob_stream
+            cs.registerOutParameter("nclob_stream", Types.NVARCHAR);
+
+            try (ResultSet rs = cs.executeQuery()) {
+                if (rs.next()) {
+                    // Just verify that execution succeeded and we can read some values
+                    assertNotNull(rs.getString("nchar_stream"));
+                    assertNotNull(rs.getString("nstring_param"));
+                    assertNotNull(rs.getString("ascii_stream"));
+                    assertNotNull(rs.getBytes("binary_stream"));
+                    assertNotNull(rs.getBytes("blob_stream"));
+                }
+            }
+        } finally {
+            TestUtils.dropProcedureIfExists(streamSettersProcName, connection.createStatement());
+        }
+    }
+
+    // Test setObject with precision and scale
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testSetObjectWithPrecisionAndScale() throws SQLException {
+        
+        String objectPrecisionProcName = AbstractSQLGenerator
+                .escapeIdentifier(RandomUtil.getIdentifier("TestObjectPrecision"));
+
+        TestUtils.dropProcedureIfExists(objectPrecisionProcName, connection.createStatement());
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                    "CREATE PROCEDURE " + objectPrecisionProcName +
+                            " @decimal_param DECIMAL(10,3) OUTPUT AS " +
+                            "BEGIN " +
+                            "SELECT @decimal_param = @decimal_param " +
+                            "END");
+        }
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                "{call " + objectPrecisionProcName + "(?)}")) {
+
+            // setObject(String, Object, int, Integer, int)
+            BigDecimal testValue = new BigDecimal("12345.678");
+            cs.setObject("decimal_param", testValue, Types.DECIMAL, Integer.valueOf(10), 3);
+
+            cs.registerOutParameter("decimal_param", Types.DECIMAL);
+            cs.execute();
+
+            BigDecimal result = cs.getBigDecimal("decimal_param");
+            assertNotNull(result);
+            assertEquals(0, result.compareTo(new BigDecimal("12345.678")));
+        } finally {
+            TestUtils.dropProcedureIfExists(objectPrecisionProcName, connection.createStatement());
+        }
+    }
+
+    // Test setUniqueIdentifier methods
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testSetUniqueIdentifierMethods() throws SQLException {
+        
+        String identifierProcName = AbstractSQLGenerator
+                .escapeIdentifier(RandomUtil.getIdentifier("TestUniqueIdentifier"));
+
+        TestUtils.dropProcedureIfExists(identifierProcName, connection.createStatement());
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                    "CREATE PROCEDURE " + identifierProcName +
+                            " @guid_param UNIQUEIDENTIFIER AS " +
+                            "BEGIN " +
+                            "SELECT @guid_param AS guid_result " +
+                            "END");
+        }
+
+        String guidValue = UUID.randomUUID().toString();
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                "{call " + identifierProcName + "(?)}")) {
+
+            // setUniqueIdentifier(String, String)
+            cs.setUniqueIdentifier("guid_param", guidValue);
+
+            // setUniqueIdentifier(String, String, boolean)
+            cs.setUniqueIdentifier("guid_param", guidValue, false);
+
+            try (ResultSet rs = cs.executeQuery()) {
+                if (rs.next()) {
+                    assertNotNull(rs.getString("guid_result"));
+                    assertEquals(guidValue.toUpperCase(), rs.getString("guid_result").toUpperCase());
+                }
+            }
+        } finally {
+            TestUtils.dropProcedureIfExists(identifierProcName, connection.createStatement());
+        }
+    }
+
+    // Test unsupported getURL and getRowId methods
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testUnsupportedURLAndRowIdGetters() throws SQLException {
+        
+        String unsupportedGettersProcName = AbstractSQLGenerator
+                .escapeIdentifier(RandomUtil.getIdentifier("TestUnsupportedGetters"));
+
+        TestUtils.dropProcedureIfExists(unsupportedGettersProcName, connection.createStatement());
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                    "CREATE PROCEDURE " + unsupportedGettersProcName +
+                            " @varchar_param VARCHAR(50) OUTPUT AS " +
+                            "BEGIN " +
+                            "SELECT @varchar_param = @varchar_param " +
+                            "END");
+        }
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                "{call " + unsupportedGettersProcName + "(?)}")) {
+
+            cs.setString("varchar_param", "test_value");
+            cs.registerOutParameter("varchar_param", Types.VARCHAR);
+            cs.execute();
+
+            // getURL(int) - not supported
+            assertThrows(SQLServerException.class, () -> cs.getURL(1));
+
+            // getURL(String) - not supported
+            assertThrows(SQLServerException.class, () -> cs.getURL("varchar_param"));
+
+            // setRowId(String, RowId) - not supported
+            assertThrows(SQLServerException.class, () -> cs.setRowId("varchar_param", null));
+
+            // getRowId(int) - not supported
+            assertThrows(SQLServerException.class, () -> cs.getRowId(1));
+
+            // getRowId(String) - not supported
+            assertThrows(SQLServerException.class, () -> cs.getRowId("varchar_param"));
+        } finally {
+            TestUtils.dropProcedureIfExists(unsupportedGettersProcName, connection.createStatement());
+        }
+    }
+
+    // Test setObject overloads with SQLType
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testSQLTypeSetObjectOverloads() throws SQLException {
+        
+        String sqlTypeOverloadsProcName = AbstractSQLGenerator
+                .escapeIdentifier(RandomUtil.getIdentifier("TestSQLTypeOverloads"));
+
+        TestUtils.dropProcedureIfExists(sqlTypeOverloadsProcName, connection.createStatement());
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(
+                    "CREATE PROCEDURE " + sqlTypeOverloadsProcName +
+                            " @int_param INT OUTPUT, @decimal_param DECIMAL(10,2) OUTPUT AS " +
+                            "BEGIN " +
+                            "SELECT @int_param = @int_param, @decimal_param = @decimal_param " +
+                            "END");
+        }
+
+        try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                "{call " + sqlTypeOverloadsProcName + "(?,?)}")) {
+
+            // setObject(String, Object, SQLType)
+            cs.setObject("int_param", 42, java.sql.JDBCType.INTEGER);
+
+            // setObject(String, Object, SQLType, int)
+            cs.setObject("decimal_param", new BigDecimal("123.45"), java.sql.JDBCType.DECIMAL, 2);
+
+            // setObject(String, Object, SQLType, int, boolean)
+            cs.setObject("decimal_param", new BigDecimal("123.45"), java.sql.JDBCType.DECIMAL, 2, false);
+
+            cs.registerOutParameter("int_param", java.sql.JDBCType.INTEGER);
+            cs.registerOutParameter("decimal_param", java.sql.JDBCType.DECIMAL);
+
+            cs.execute();
+
+            assertEquals(42, cs.getInt("int_param"));
+            assertEquals(0, cs.getBigDecimal("decimal_param").compareTo(new BigDecimal("123.45")));
+        } finally {
+            TestUtils.dropProcedureIfExists(sqlTypeOverloadsProcName, connection.createStatement());
+        }
+    }
+
+    // Test registerOutParameter with precision and scale, including parameter index
+    @Test
+    @Tag(Constants.CodeCov)
+    public void testRegisterOutParameterWithPrecisionAndScale() throws SQLException {
+        
+        String precisionScaleProcName = AbstractSQLGenerator
+                .escapeIdentifier(RandomUtil.getIdentifier("TestPrecisionScale"));
+
+        TestUtils.dropProcedureIfExists(precisionScaleProcName, connection.createStatement());
+
+        try {
+            try (Statement stmt = connection.createStatement()) {
+                stmt.execute(
+                        "CREATE PROCEDURE " + precisionScaleProcName +
+                                " @decimal_param DECIMAL(10,3) OUTPUT, @numeric_param NUMERIC(15,4) OUTPUT AS " +
+                                "BEGIN " +
+                                "SET @decimal_param = 123.456; " +
+                                "SET @numeric_param = 987.6543; " +
+                                "END");
+            }
+
+            try (SQLServerCallableStatement cs = (SQLServerCallableStatement) connection.prepareCall(
+                    "{call " + precisionScaleProcName + "(?,?)}")) {
+
+                // registerOutParameter(int parameterIndex, SQLType sqlType,
+                // int precision, int scale)
+                cs.registerOutParameter(1, java.sql.JDBCType.DECIMAL, 10, 3);
+                cs.registerOutParameter(2, java.sql.JDBCType.NUMERIC, 15, 4);
+
+                // registerOutParameter(String parameterName, SQLType sqlType,
+                // int precision, int scale)
+                cs.registerOutParameter("decimal_param", java.sql.JDBCType.DECIMAL, 10, 3);
+                cs.registerOutParameter("numeric_param", java.sql.JDBCType.NUMERIC, 15, 4);
+
+                cs.execute();
+
+                // Verify the values can be retrieved
+                BigDecimal decimalResult = cs.getBigDecimal(1);
+                BigDecimal numericResult = cs.getBigDecimal(2);
+
+                assertNotNull(decimalResult);
+                assertNotNull(numericResult);
+                assertEquals(0, decimalResult.compareTo(new BigDecimal("123.456")));
+                assertEquals(0, numericResult.compareTo(new BigDecimal("987.6543")));
+
+                // Verify retrieval by parameter name
+                BigDecimal decimalByName = cs.getBigDecimal("decimal_param");
+                BigDecimal numericByName = cs.getBigDecimal("numeric_param");
+
+                assertEquals(0, decimalByName.compareTo(new BigDecimal("123.456")));
+                assertEquals(0, numericByName.compareTo(new BigDecimal("987.6543")));
+            }
+
+            // Test parameter index validation
+            try (SQLServerCallableStatement cs2 = (SQLServerCallableStatement) connection.prepareCall(
+                    "{call " + precisionScaleProcName + "(?,?)}")) {
+
+                // Test invalid parameter index < 1
+                try {
+                    cs2.registerOutParameter(0, java.sql.Types.DECIMAL);
+                    fail("Should have thrown SQLException for invalid parameter index");
+                } catch (SQLException e) {
+                    // Expected exception for index < 1
+                    assertTrue(e.getMessage().contains("Invalid parameter") ||
+                            e.getMessage().contains("index") ||
+                            e.getMessage().contains("Parameter"));
+                }
+
+                // Test invalid parameter index > parameter count
+                try {
+                    cs2.registerOutParameter(5, java.sql.Types.DECIMAL); // Only 2 parameters exist
+                    fail("Should have thrown SQLException for invalid parameter index");
+                } catch (SQLException e) {
+                    // Expected exception for index > inOutParam.length
+                    assertTrue(e.getMessage().contains("Invalid parameter") ||
+                            e.getMessage().contains("index") ||
+                            e.getMessage().contains("Parameter"));
+                }
+
+                // Test valid parameter registration to ensure the validation logic works
+                // correctly
+                cs2.registerOutParameter(1, java.sql.Types.DECIMAL);
+                cs2.registerOutParameter(2, java.sql.Types.NUMERIC);
+
+                cs2.execute();
+
+                // Just verify execution succeeded after valid parameter registration
+                assertNotNull(cs2.getBigDecimal(1));
+                assertNotNull(cs2.getBigDecimal(2));
+            }
+        } finally {
+            TestUtils.dropProcedureIfExists(precisionScaleProcName, connection.createStatement());
+        }
+    }
+
+    /**
+     * Tests that calling a stored procedure in a different database using named parameters works correctly.
+     * This tests the fix for GitHub issue #1882 where sp_sproc_columns fails when the stored procedure
+     * is in a different database than the current connection context.
+     * 
+     * @throws SQLException
+     */
+    @Test
+    @Tag(Constants.xAzureSQLDW)
+    @Tag(Constants.xAzureSQLDB)
+    public void testCrossDatabaseStoredProcedureWithNamedParams() throws SQLException {
+        String shortUuid = UUID.randomUUID().toString().substring(0, 8);
+        String crossDbName = "CrossDbTest" + shortUuid;
+        String crossDbProcName = "TestCrossDbProc" + shortUuid;
+        String originalDb = connection.getCatalog();
+        
+        try (Statement stmt = connection.createStatement()) {
+            // Create a separate test database
+            TestUtils.dropDatabaseIfExists(crossDbName, connectionString);
+            stmt.execute(String.format("CREATE DATABASE [%s]", crossDbName));
+            
+            // Switch to new database, create procedure, then switch back
+            stmt.execute(String.format("USE [%s]", crossDbName));
+            stmt.execute("CREATE PROCEDURE dbo." + crossDbProcName + 
+                " @param1 NVARCHAR(100), @param2 NVARCHAR(100) " +
+                "AS BEGIN SELECT @param1 + @param2 AS result END");
+            stmt.execute(String.format("USE [%s]", originalDb));
+            
+            // Call procedure from original database using named parameters
+            String callSql = String.format("{call [%s].dbo.%s(?, ?)}", crossDbName, crossDbProcName);
+            try (CallableStatement cs = connection.prepareCall(callSql)) {
+                cs.setString("param1", "Hello");
+                cs.setString("param2", "World");
+
+                try (ResultSet rs = cs.executeQuery()) {
+                    assertTrue("Expected a result row", rs.next());
+                    assertEquals("HelloWorld", rs.getString("result"));
+                }
+            }
+        } finally {
+            connection.setCatalog(originalDb);
+            // Dropping the database automatically cleans up all objects (procedures, tables, etc.) inside it
+            TestUtils.dropDatabaseIfExists(crossDbName, connectionString);
+        }
+    }
+
+    /**
+     * Tests that same-database stored procedure calls with named parameters still work correctly.
+     * This is a regression test to ensure the cross-database fix doesn't break normal usage.
+     * 
+     * This test verifies that:
+     * 1. Named parameters work correctly for same-database procedure calls
+     * 2. Both with and without '@' prefix for parameter names
+     * 3. The fix doesn't introduce any regression in normal usage patterns
+     * 
+     * @throws SQLException
+     */
+    @Test
+    public void testSameDatabaseStoredProcedureWithNamedParams() throws SQLException {
+        String procName = AbstractSQLGenerator
+                .escapeIdentifier(RandomUtil.getIdentifier("SameDbTestProc"));
+        
+        try (Statement stmt = connection.createStatement()) {
+            TestUtils.dropProcedureIfExists(procName, stmt);
+            stmt.execute("CREATE PROCEDURE " + procName + 
+                " @Name NVARCHAR(100), @Value NVARCHAR(100) " +
+                "AS BEGIN SELECT @Name AS Name, @Value AS Value END");
+            
+            // Call procedure in same database using named parameters
+            try (CallableStatement cs = connection.prepareCall("{call " + procName + "(?,?)}")) {
+                cs.setString("Name", "TestName");
+                cs.setString("Value", "TestValue");
+
+                try (ResultSet rs = cs.executeQuery()) {
+                    assertTrue("Expected a result row", rs.next());
+                    assertEquals("TestName", rs.getString("Name"));
+                    assertEquals("TestValue", rs.getString("Value"));
+                }
+            }
+            
+            // Also test with @ prefix
+            try (CallableStatement cs = connection.prepareCall("{call " + procName + "(?,?)}")) {
+                cs.setString("@Name", "Hello");
+                cs.setString("@Value", "World");
+
+                try (ResultSet rs = cs.executeQuery()) {
+                    assertTrue("Expected a result row", rs.next());
+                    assertEquals("Hello", rs.getString("Name"));
+                    assertEquals("World", rs.getString("Value"));
+                }
+            }
+        } finally {
+            try (Statement stmt = connection.createStatement()) {
+                TestUtils.dropProcedureIfExists(procName, stmt);
+            }
+        }
+    }
+
+    /**
+     * Tests the exact repro scenario from GitHub issue #1882.
+     * 
+     * Issue: When calling a stored procedure in a different database using named parameters
+     * (e.g., callableStatement.setString("Name", "def")), the driver internally calls
+     * sp_sproc_columns to resolve parameter metadata. However, sp_sproc_columns was being
+     * called without the target database prefix, causing the error:
+     * "The database name component of the object qualifier must be the name of the current database."
+     * 
+     * Fix: The driver now always qualifies sp_sproc_columns with the database name and sys schema
+     * (e.g., "DB2.sys.sp_sproc_columns") to query metadata from the correct database.
+     * The sys schema is used instead of dbo to prevent name-squatting security issues.
+     * 
+     * This test verifies that calling a stored procedure with named parameters from a different
+     * database context no longer throws an exception.
+     * 
+     * @throws SQLException
+     */
+    @Test
+    @Tag(Constants.xAzureSQLDW)
+    @Tag(Constants.xAzureSQLDB)
+    public void testGitHubIssue1882() throws SQLException {
+        String shortUuid = UUID.randomUUID().toString().substring(0, 8);
+        String db2 = "DB2_" + shortUuid;
+        String procName = "DetailsWithArgs" + shortUuid;
+        String originalDb = connection.getCatalog();
+        
+        try (Statement stmt = connection.createStatement()) {
+            TestUtils.dropDatabaseIfExists(db2, connectionString);
+            stmt.execute(String.format("CREATE DATABASE [%s]", db2));
+            
+            // Create procedure in DB2
+            stmt.execute(String.format("USE [%s]", db2));
+            stmt.execute("CREATE PROCEDURE dbo." + procName + " @Name NVARCHAR(100), @Address NVARCHAR(100) " +
+                "AS BEGIN SELECT @Name AS Name, @Address AS Address END");
+            stmt.execute(String.format("USE [%s]", originalDb));
+            
+            // Verify we are connected to original database (not DB2) when calling the procedure
+            assertEquals(originalDb, connection.getCatalog(), "Should be connected to original database");
+            
+            // Exact pattern from issue #1882 - calling procedure in DB2 from originalDb context
+            try (CallableStatement callableStatement = connection
+                    .prepareCall("{call " + db2 + ".dbo." + procName + "(?,?)}")) {
+                callableStatement.setString("Name", "def");
+                callableStatement.setString("Address", "456");
+                callableStatement.execute();
+            }
+        } finally {
+            connection.setCatalog(originalDb);
+            // Dropping the database automatically cleans up all objects (procedures, tables, etc.) inside it
+            TestUtils.dropDatabaseIfExists(db2, connectionString);
+        }
+    }
+
+    /**
+     * Tests behavior when using different casing for the current database name in procedure calls.
+     * 
+     * SQL Server database names are case-insensitive - they must be unique regardless of case.
+     * For example, "MyDB" and "MYDB" refer to the same database. Calling a procedure in "MYDB"
+     * while connected to "mydb" should be treated as a same-database call by the server.
+     * 
+     * This test verifies that calling a stored procedure in the current database using a
+     * differently-cased database name still succeeds, confirming that the driver's approach
+     * of always qualifying sp_sproc_columns with the database name works correctly with SQL
+     * Server's case-insensitive handling of database names.
+     * 
+     * @throws SQLException
+     */
+    @Test
+    public void testDatabaseNameCaseInsensitiveComparison() throws SQLException {
+        String currentDb = connection.getCatalog();
+        String shortUuid = UUID.randomUUID().toString().substring(0, 8);
+        String procName = "CaseTestProc" + shortUuid;
+        
+        try (Statement stmt = connection.createStatement()) {
+            TestUtils.dropProcedureIfExists(AbstractSQLGenerator.escapeIdentifier(procName), stmt);
+            
+            stmt.execute("CREATE PROCEDURE " + AbstractSQLGenerator.escapeIdentifier(procName) + 
+                " @Param1 NVARCHAR(100), @Param2 NVARCHAR(100) " +
+                "AS BEGIN SELECT @Param1 AS Result1, @Param2 AS Result2 END");
+            
+            // Call procedure using different case variations of the current database name
+            // These should all be recognized as same-database calls (not cross-database)
+            String upperCaseDb = currentDb.toUpperCase();
+            String lowerCaseDb = currentDb.toLowerCase();
+            
+            // Test with UPPERCASE database name in call
+            String callSqlUpper = String.format("{call [%s].dbo.%s(?, ?)}", upperCaseDb, procName);
+            try (CallableStatement cs = connection.prepareCall(callSqlUpper)) {
+                cs.setString("Param1", "UpperTest");
+                cs.setString("Param2", "Value1");
+                
+                try (ResultSet rs = cs.executeQuery()) {
+                    assertTrue("Expected a result row", rs.next());
+                    assertEquals("UpperTest", rs.getString("Result1"));
+                    assertEquals("Value1", rs.getString("Result2"));
+                }
+            }
+            
+            // Test with lowercase database name in call
+            String callSqlLower = String.format("{call [%s].dbo.%s(?, ?)}", lowerCaseDb, procName);
+
+            try (CallableStatement cs = connection.prepareCall(callSqlLower)) {
+                cs.setString("Param1", "LowerTest");
+                cs.setString("Param2", "Value2");
+                
+                try (ResultSet rs = cs.executeQuery()) {
+                    assertTrue("Expected a result row", rs.next());
+                    assertEquals("LowerTest", rs.getString("Result1"));
+                    assertEquals("Value2", rs.getString("Result2"));
+                }
+            }
+        } finally {
+            try (Statement stmt = connection.createStatement()) {
+                TestUtils.dropProcedureIfExists(AbstractSQLGenerator.escapeIdentifier(procName), stmt);
+            }
+        }
+    }
+
+    /**
+     * Tests that the driver uses sys schema for sp_sproc_columns to prevent name-squatting attacks.
+     * 
+     * Security consideration: When querying stored procedure metadata across databases, we must use
+     * the sys schema prefix (e.g., "DB2.sys.sp_sproc_columns") instead of dbo or a user-specified schema.
+     * 
+     * Why sys schema is safest:
+     * 1. Users cannot create objects in the sys schema (SQL Server protects it)
+     * 2. Using dbo would work but is vulnerable if someone creates a schema like SCH1 and a 
+     *    procedure SCH1.sp_sproc_columns - then calling DB2.SCH1.sp_sproc_columns would invoke
+     *    the malicious user procedure instead of the system procedure
+     * 3. The fix ensures we always call the real system stored procedure regardless of what
+     *    schema the user's stored procedure is in
+     * 
+     * This test verifies that:
+     * 1. Even when calling a procedure in a custom schema, the driver correctly resolves
+     *    parameter metadata using the system sp_sproc_columns
+     * 2. A user-created procedure with the same name as a system procedure in a custom schema
+     *    does not interfere with the driver's metadata queries
+     * 
+     * @throws SQLException
+     */
+    @Test
+    @Tag(Constants.xAzureSQLDW)
+    @Tag(Constants.xAzureSQLDB)
+    public void testSysSchemaProtectsAgainstNameSquatting() throws SQLException {
+        String shortUuid = UUID.randomUUID().toString().substring(0, 8);
+        String db2 = "DB2_" + shortUuid;
+        String customSchema = "CustomSchema" + shortUuid;
+        String procName = "GetDetails" + shortUuid;
+        String originalDb = connection.getCatalog();
+        
+        try (Statement stmt = connection.createStatement()) {
+            
+            TestUtils.dropDatabaseIfExists(db2, connectionString);
+            stmt.execute(String.format("CREATE DATABASE [%s]", db2));
+            
+            stmt.execute(String.format("USE [%s]", db2));
+            
+            // Create a custom schema
+            stmt.execute(String.format("CREATE SCHEMA [%s]", customSchema));
+            
+            // Create a legitimate stored procedure in the custom schema
+            stmt.execute(String.format(
+                "CREATE PROCEDURE [%s]." + procName + " @Name NVARCHAR(100), @Value NVARCHAR(100) " +
+                "AS BEGIN SELECT @Name AS Name, @Value AS Value END", customSchema));
+            
+            // Attempt to create a name-squatting procedure (sp_sproc_columns) in custom schema
+            // This simulates a malicious user trying to intercept metadata queries
+            // Note: This would fail in sys schema but succeeds in custom schemas
+            stmt.execute(String.format(
+                "CREATE PROCEDURE [%s].sp_sproc_columns @procedure_name NVARCHAR(100) = NULL, " +
+                "@procedure_owner NVARCHAR(100) = NULL, @procedure_qualifier NVARCHAR(100) = NULL " +
+                "AS " +
+                "SELECT 'INJECTED' AS COLUMN_NAME, 1 AS COLUMN_TYPE", customSchema));
+            
+            stmt.execute(String.format("USE [%s]", originalDb));
+            
+            // Call the legitimate procedure in custom schema using named parameters
+            // The driver should use sys.sp_sproc_columns (not CustomSchema.sp_sproc_columns)
+            // to get the correct parameter metadata
+            String callSql = String.format("{call [%s].[%s]." + procName + "(?, ?)}", db2, customSchema);
+            try (CallableStatement cs = connection.prepareCall(callSql)) {
+                cs.setString("Name", "TestName");
+                cs.setString("Value", "TestValue");
+                
+                try (ResultSet rs = cs.executeQuery()) {
+                    assertTrue("Expected a result row", rs.next());
+                    // If we got the correct metadata from sys.sp_sproc_columns,
+                    // the procedure should execute correctly with the right parameter names
+                    assertEquals("TestName", rs.getString("Name"));
+                    assertEquals("TestValue", rs.getString("Value"));
+                }
+            }
+        } finally {
+            connection.setCatalog(originalDb);
+            // Dropping the database automatically cleans up all objects including schemas
+            TestUtils.dropDatabaseIfExists(db2, connectionString);
+        }
+    }
+
+    /**
+     * The driver resolves stored-procedure parameter metadata by invoking sp_sproc_columns with the procedure name
+     * taken from the JDBC {call ...} syntax. Each part of that name is now emitted as an escaped N'...' string literal
+     * argument, so a crafted name that packs extra T-SQL statements is treated purely as a string during metadata
+     * resolution - i.e. it never runs, even without the application calling execute(). Both the named-parameter path
+     * (findColumn, triggered by a named setter) and the getParameterMetaData() path are exercised.
+     *
+     * This test drives both paths with a stacked-INSERT procedure name and asserts the probe table stays empty.
+     *
+     * @throws SQLException
+     */
+    @Test
+    public void testProcedureMetadataResolvesCraftedProcedureName() throws SQLException {
+        String proofTable = AbstractSQLGenerator.escapeIdentifier(RandomUtil.getIdentifier("metadata_probe"));
+
+        try (Statement stmt = connection.createStatement()) {
+            TestUtils.dropTableIfExists(proofTable, stmt);
+            stmt.execute("CREATE TABLE " + proofTable + " (note NVARCHAR(400) NOT NULL)");
+
+            // Whitespace is replaced with /**/ and the trailing metadata args are commented out with -- so the crafted
+            // name matches the driver's {call} identifier grammar (\S+, no parentheses).
+            String craftedName = "1;INSERT/**/INTO/**/" + proofTable + "/**/SELECT/**/N'probe'--";
+
+            // Path 1: getParameterMetaData() must not run the stacked INSERT.
+            try (CallableStatement cs = connection.prepareCall("{call " + craftedName + "}")) {
+                try {
+                    cs.getParameterMetaData();
+                } catch (SQLException e) {
+                    // A metadata lookup failure is acceptable; a side effect is not.
+                }
+            }
+            assertEquals(0, countRows(proofTable), "getParameterMetaData() ran the stacked statement");
+
+            // Path 2: a named setter (findColumn) must not run the stacked INSERT.
+            try (CallableStatement cs = connection.prepareCall("{call " + craftedName + "}")) {
+                try {
+                    cs.setString("p", "x");
+                } catch (SQLException e) {
+                    // An "index out of range" / "parameter not defined" failure is acceptable; a side effect is not.
+                }
+            }
+            assertEquals(0, countRows(proofTable), "A named setter ran the stacked statement");
+        } finally {
+            try (Statement stmt = connection.createStatement()) {
+                TestUtils.dropTableIfExists(proofTable, stmt);
+            }
+        }
+    }
+
+    private static int countRows(String escapedTableName) throws SQLException {
+        try (Statement stmt = connection.createStatement();
+                ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM " + escapedTableName)) {
+            rs.next();
+            return rs.getInt(1);
+        }
+    }
+
+    /**
+     * Cleanup after test
+     * 
+     * @throws SQLException
+     */
+    @AfterAll
+    public static void cleanup() throws SQLException {
+        try (Statement stmt = connection.createStatement()) {
+            // Drop order matters. Can't drop objects still referenced by other objects.
+            TestUtils.dropProcedureIfExists(outputProcedureNameGUID, stmt);
+            TestUtils.dropProcedureIfExists(setNullProcedureName, stmt);
+            TestUtils.dropProcedureIfExists(inputParamsProcedureName, stmt);
+            TestUtils.dropProcedureIfExists(getObjectLocalDateTimeProcedureName, stmt);
+            TestUtils.dropProcedureIfExists(getObjectOffsetDateTimeProcedureName, stmt);
+            TestUtils.dropProcedureIfExists(currentTimeProc, stmt);
+            TestUtils.dropProcedureIfExists(conditionalSproc, stmt);
+            TestUtils.dropProcedureIfExists(simpleRetValSproc, stmt);
+            TestUtils.dropProcedureIfExists(zeroParamSproc, stmt);
+            TestUtils.dropProcedureIfExists(procedureNameJSON, stmt);
+            TestUtils.dropProcedureIfExists(manyParamProc, stmt);
+            TestUtils.dropTableIfExists(tableNameGUID, stmt);
+            TestUtils.dropTableIfExists(manyParamsTable, stmt);
+            TestUtils.dropTableIfExists(tableNameJSON, stmt);
+            TestUtils.dropUserDefinedTypeIfExists(manyParamUserDefinedType, stmt); 
+        }
+    }
+
+    private static void createGUIDStoredProcedure(Statement stmt) throws SQLException {
+        String sql = "CREATE PROCEDURE " + outputProcedureNameGUID
+                + "(@p1 uniqueidentifier OUTPUT) AS SELECT @p1 = c1 FROM " + tableNameGUID + Constants.SEMI_COLON;
+        stmt.execute(sql);
+    }
+
+    private static void createGUIDTable(Statement stmt) throws SQLException {
+        String sql = "CREATE TABLE " + tableNameGUID + " (c1 uniqueidentifier null)";
+        stmt.execute(sql);
+    }
+
+    private static void createSetNullProcedure(Statement stmt) throws SQLException {
+        stmt.execute("create procedure " + setNullProcedureName
+                + " (@p1 nvarchar(255), @p2 nvarchar(255) output) as select @p2=@p1 return 0");
+    }
+
+    private static void createInputParamsProcedure(Statement stmt) throws SQLException {
+        String sql = "CREATE PROCEDURE " + inputParamsProcedureName + "    @p1 nvarchar(max) = N'parameter1', "
+                + "    @p2 nvarchar(max) = N'parameter2' " + "AS " + "BEGIN " + "    SET NOCOUNT ON; "
+                + "    SELECT @p1 + @p2 AS result; " + "END ";
+
+        stmt.execute(sql);
+    }
+
+    private static void createGetObjectLocalDateTimeProcedure(Statement stmt) throws SQLException {
+        String sql = "CREATE PROCEDURE " + getObjectLocalDateTimeProcedureName + "(@p1 datetime2(7) OUTPUT) AS "
+                + "SELECT @p1 = '2018-03-11T02:00:00.1234567'";
+        stmt.execute(sql);
+    }
+
+    private static void createGetObjectOffsetDateTimeProcedure(Statement stmt) throws SQLException {
+        String sql = "CREATE PROCEDURE " + getObjectOffsetDateTimeProcedureName
+                + "(@p1 DATETIMEOFFSET OUTPUT, @p2 DATETIMEOFFSET OUTPUT) AS "
+                + "SELECT @p1 = '2018-01-02T11:22:33.123456700+12:34', @p2 = NULL";
+        stmt.execute(sql);
+    }
+
+    private static void createProcedureManyParams() throws SQLException {
+        String type = manyParamUserDefinedType;
+        String sql = "CREATE PROCEDURE " + manyParamProc + " @p1 " + type + ", @p2 " + type + ", @p3 " + type + ", @p4 "
+                + type + ", @p5 " + type + ", @p6 " + type + ", @p7 " + type + ", @p8 " + type + ", @p9 " + type
+                + ", @p10 " + type + " AS INSERT INTO " + manyParamsTable
+                + " VALUES(@p1, @p2, @p3, @p4, @p5, @p6, @p7, @p8, @p9, @p10)";
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(sql);
+        }
+    }
+
+    private static void createProcedureCurrentTime() throws SQLException {
+        String sql = "CREATE PROCEDURE " + currentTimeProc + " @currentTimeStamp datetime = null OUTPUT " +
+                "AS BEGIN SET @currentTimeStamp = CURRENT_TIMESTAMP; END";
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(sql);
+        }
+    }
+
+    private static void createConditionalProcedure() throws SQLException {
+        String sql = "CREATE PROCEDURE " + conditionalSproc + " @param0 INT, @param1 INT, @maybe bigint = 2 " +
+                "AS BEGIN IF @maybe >= 2 BEGIN SELECT 5 END END";
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(sql);
+        }
+    }
+
+    private static void createSimpleRetValSproc() throws SQLException {
+        String sql = "CREATE PROCEDURE " + simpleRetValSproc + " (@Arg1 VARCHAR(128)) AS DECLARE @ReturnCode INT RETURN 1";
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(sql);
+        }
+    }
+
+    private static void createTableManyParams() throws SQLException {
+        String type = manyParamUserDefinedType;
+        String sql = "CREATE TABLE" + manyParamsTable + " (c1 " + type + " null, " + "c2 " + type + " null, " + "c3 "
+                + type + " null, " + "c4 " + type + " null, " + "c5 " + type + " null, " + "c6 " + type + " null, "
+                + "c7 " + type + " null, " + "c8 " + type + " null, " + "c9 " + type + " null, " + "c10 " + type
+                + " null);";
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(sql);
+        }
+    }
+
+    private static void createProcedureZeroParams() throws SQLException {
+        String sql = "CREATE PROCEDURE " + zeroParamSproc + " AS RETURN 1";
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute(sql);
+        }
+    }
+
+    private static void createUserDefinedType() throws SQLException {
+        String TVPCreateCmd = "CREATE TYPE " + manyParamUserDefinedType + " FROM MONEY";
+        try (Statement stmt = connection.createStatement()) {
+            stmt.executeUpdate(TVPCreateCmd);
+        }
+    }
+    
+    private static void createJSONTestTable(Statement stmt) throws SQLException {
+        enforceJsonDataTypeSupport(stmt.getConnection());
+        String sql = "CREATE TABLE " + tableNameJSON + " (" + "id INT PRIMARY KEY IDENTITY(1,1), " + "col1 JSON)";
+        stmt.execute(sql);
+    }
+
+    private static void createJSONStoredProcedure(Statement stmt) throws SQLException {
+        enforceJsonDataTypeSupport(stmt.getConnection());
+        String sql = "CREATE PROCEDURE " + procedureNameJSON + " (@jsonInput JSON) " + "AS " + "BEGIN "
+                + "    SELECT @jsonInput AS col1; " + "END";
+        stmt.execute(sql);
+    }
+
+    private static void enforceJsonDataTypeSupport(Connection connection) throws SQLException {
+        assumeTrue(isJsonDataTypeSupported(connection), "JSON data type is not supported on this server instance");
+    }
+
+    private static volatile Boolean jsonTypeSupported;
+
+    private static boolean isJsonDataTypeSupported(Connection connection) throws SQLException {
+        Boolean cached = jsonTypeSupported;
+        if (null != cached) {
+            return cached.booleanValue();
+        }
+
+        boolean supported = false;
+        try (ResultSet typeInfo = connection.getMetaData().getTypeInfo()) {
+            while (typeInfo.next()) {
+                String typeName = typeInfo.getString("TYPE_NAME");
+                if (null != typeName && "JSON".equalsIgnoreCase(typeName.trim())) {
+                    supported = true;
+                    break;
+                }
+            }
+        }
+
+        jsonTypeSupported = Boolean.valueOf(supported);
+        return supported;
+    }
+
+    /**
+     * Verifies that registering an output parameter as REF_CURSOR (by index or by name, with each
+     * overload) throws a SQLServerException, since SQL Server does not support REF_CURSOR.
+     */
+    @Test
+    @Tag(Constants.legacyFx)
+    public void testRefCursorException() throws SQLException {
+        String refCursorProc = AbstractSQLGenerator
+                .escapeIdentifier(RandomUtil.getIdentifier("refCursorProc"));
+        try (Connection conn = getConnection(); Statement stmt = conn.createStatement()) {
+            TestUtils.dropProcedureIfExists(refCursorProc, stmt);
+            stmt.executeUpdate(
+                    "CREATE PROCEDURE " + refCursorProc + " (@out1 int output) AS BEGIN SET @out1 = 1 END");
+            try (CallableStatement cstmt = conn.prepareCall("{call " + refCursorProc + " (?)}")) {
+                assertRefCursorNotSupported(() -> cstmt.registerOutParameter(1, Types.REF_CURSOR));
+                assertRefCursorNotSupported(() -> cstmt.registerOutParameter(1, Types.REF_CURSOR, 0));
+                assertRefCursorNotSupported(() -> cstmt.registerOutParameter(1, Types.REF_CURSOR, "dummy_typename"));
+                assertRefCursorNotSupported(() -> cstmt.registerOutParameter(1, JDBCType.REF_CURSOR));
+                assertRefCursorNotSupported(() -> cstmt.registerOutParameter("out1", Types.REF_CURSOR));
+                assertRefCursorNotSupported(() -> cstmt.registerOutParameter("out1", JDBCType.REF_CURSOR));
+            } finally {
+                TestUtils.dropProcedureIfExists(refCursorProc, stmt);
+            }
+        }
+    }
+
+    @FunctionalInterface
+    private interface RegisterCall {
+        void run() throws SQLException;
+    }
+
+    private void assertRefCursorNotSupported(RegisterCall call) {
+        try {
+            call.run();
+            fail("registerOutParameter with REF_CURSOR should throw");
+        } catch (SQLException e) {
+            assertTrue("Unexpected exception message: " + e.getMessage(),
+                    e.getMessage().contains("REF_CURSOR is not supported"));
+        }
+    }
+}

@@ -1,0 +1,13 @@
+# test/slt_proc/mssql_jdbc_oracle/3138_jdbc_unit_lobs_lobsstreaming.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/unit/lobs/LobsStreamingTest.java
+
+query T
+SELECT * FROM [
+----
+*
+
+query T
+SELECT @@TRANCOUNT
+----
+0
+

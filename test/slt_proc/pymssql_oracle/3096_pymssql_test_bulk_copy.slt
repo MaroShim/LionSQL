@@ -1,0 +1,9 @@
+# test/slt_proc/pymssql_oracle/3096_pymssql_test_bulk_copy.slt
+# External Corpus Oracle Suite harvested from test/corpora/pymssql/tests/test_bulk_copy.py
+
+statement ok
+CREATE TABLE {self.tablename} (a INT, b VARCHAR(50), d DOUBLE PRECISION)
+
+statement ok
+CREATE TABLE {table_name} (name NVARCHAR(50) NOT NULL)
+

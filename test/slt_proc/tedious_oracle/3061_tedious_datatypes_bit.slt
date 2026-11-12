@@ -1,0 +1,18 @@
+# test/slt_proc/tedious_oracle/3061_tedious_datatypes_bit.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (Bit)
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(null as bit)
+----
+NULL
+

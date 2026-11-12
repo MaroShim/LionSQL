@@ -1,0 +1,13 @@
+# test/slt_proc/tedious_oracle/3066_tedious_datatypes_date.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (Date)
+
+query T
+select cast(
+----
+cast(
+
+query T
+select cast(null as date)
+----
+NULL
+

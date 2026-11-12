@@ -1,0 +1,19 @@
+# test/slt_proc/mssql_jdbc_oracle/3128_jdbc_datatypes_vector_vectorfloat16.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/datatypes/vector/VectorFloat16Test.java
+
+query T
+SELECT dbo.
+----
+dbo
+
+query T
+SELECT * INTO
+----
+*
+
+statement ok
+SELECT INTO FLOAT32 mismatch
+
+statement ok
+SELECT INTO FLOAT16 mismatch
+

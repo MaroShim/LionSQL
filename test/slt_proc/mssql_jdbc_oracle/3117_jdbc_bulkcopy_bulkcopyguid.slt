@@ -1,0 +1,18 @@
+# test/slt_proc/mssql_jdbc_oracle/3117_jdbc_bulkcopy_bulkcopyguid.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/bulkCopy/BulkCopyGuidTest.java
+
+query T
+SELECT CAST('
+----
+CAST('
+
+query T
+SELECT CAST('not-a-guid' AS char(36)) AS guidCol
+----
+not-a-guid
+
+query T
+SELECT HAS_PERMS_BY_NAME(null, null, 'ALTER ANY EVENT SESSION'),
+----
+1
+

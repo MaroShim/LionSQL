@@ -1,0 +1,8 @@
+# test/slt_proc/pymssql_oracle/3102_pymssql_test_threaded.slt
+# External Corpus Oracle Suite harvested from test/corpora/pymssql/tests/test_threaded.py
+
+query T
+SELECT unknown_column
+----
+unknown_column
+

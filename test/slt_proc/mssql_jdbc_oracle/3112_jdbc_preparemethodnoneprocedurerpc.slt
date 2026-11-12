@@ -1,0 +1,250 @@
+# test/slt_proc/mssql_jdbc_oracle/3112_jdbc_preparemethodnoneprocedurerpc.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/PrepareMethodNoneProcedureRpcTest.java
+
+query T
+SELECT 1 /* unterminated EXEC p
+----
+1
+
+statement ok
+CREATE PROCEDURE #rpc_echo @v int AS SELECT @v
+
+query T
+SELECT OBJECT_ID('tempdb..
+----
+OBJECT_ID('tempdb..
+
+statement ok
+CREATE TABLE #scope_log (v int)
+
+statement ok
+CREATE PROCEDURE #scope_p @v int AS INSERT #scope_log VALUES (@v)
+
+statement ok
+DECLARE @h int, @sql nvarchar(200);
+
+statement ok
+CREATE TABLE #mig_work (id int, v int)
+
+statement ok
+SELECT id, v FROM #mig_work ORDER BY id
+
+query T
+SELECT OBJECT_ID('tempdb..#mig_work')
+----
+NULL
+
+statement ok
+CREATE TABLE #mig_ctrl (id int)
+
+statement ok
+CREATE TABLE #tx_t (v int)
+
+statement ok
+CREATE TABLE #tx_b (v int)
+
+statement ok
+CREATE TABLE #multi_t (v int)
+
+statement ok
+CREATE TABLE #parent (v int)
+
+statement ok
+CREATE PROCEDURE #p6 @v int AS SELECT @v
+
+statement ok
+EXEC sp_executesql N'CREATE TABLE #inner_sp (i int)'
+
+statement ok
+CREATE TABLE tempdb..#q_create (i int)
+
+statement ok
+CREATE TABLE tempdb.dbo.#q_create2 (i int)
+
+statement ok
+CREATE PROCEDURE dbo.mssqljdbc_perm7 AS SELECT 1
+
+statement ok
+CREATE PROCEDURE #p7 @v int AS SELECT @v
+
+statement ok
+CREATE PROCEDURE #big @s varchar(max), @b varbinary(max), @n nvarchar(max) AS SELECT
+
+statement ok
+CREATE PROCEDURE #empty @s varchar(max), @b varbinary(max) AS SELECT LEN(@s),
+
+statement ok
+CREATE TABLE #tx_s (v int)
+
+statement ok
+CREATE TABLE #batch_t (i int)
+
+statement ok
+SELECT i FROM #batch_t ORDER BY i
+
+statement ok
+CREATE TABLE ##stream_batch_t (v varbinary(max))
+
+query TT
+SELECT COUNT(*), SUM(DATALENGTH(v)) FROM ##stream_batch_t
+----
+0 NULL
+
+statement ok
+CREATE TABLE #stream_batch_rows (id int PRIMARY KEY, v varbinary(max))
+
+statement ok
+SELECT id, v FROM #stream_batch_rows ORDER BY id
+
+statement ok
+CREATE TABLE #retry_lengths (textLength int, binaryLength int)
+
+statement ok
+SELECT textLength, binaryLength FROM #retry_lengths ORDER BY binaryLength
+
+statement ok
+CREATE TABLE #queued_retry_lengths (textLength int, binaryLength int)
+
+statement ok
+SELECT textLength, binaryLength FROM #queued_retry_lengths ORDER BY binaryLength
+
+statement ok
+CREATE TABLE #retry_side_effect (v int)
+
+query T
+SELECT COUNT(*) FROM #retry_side_effect
+----
+0
+
+statement ok
+CREATE TABLE #output_data (v varbinary(max), n int);
+
+statement ok
+INSERT INTO #output_data VALUES (0x00, 0); CREATE TABLE #out (n int)
+
+query TT
+SELECT v, n FROM #output_data
+----
+0x00 0
+
+statement ok
+SELECT n FROM #out
+
+statement ok
+CREATE PROCEDURE #stream_len @v varbinary(max) AS SELECT DATALENGTH(@v)
+
+query T
+SELECT OBJECT_ID('tempdb..#created_with_exec')
+----
+NULL
+
+query T
+SELECT OBJECT_ID('tempdb..#kept_table')
+----
+NULL
+
+query T
+SELECT OBJECT_ID('tempdb..#kept_after_exec_as')
+----
+NULL
+
+statement ok
+CREATE PROCEDURE #implicit_p @v bigint AS SELECT @v
+
+statement ok
+CREATE PROCEDURE #echo_nested @v bigint AS SELECT @v
+
+statement ok
+CREATE PROCEDURE #inner_def @v bigint AS SELECT @v
+
+query T
+SELECT OBJECT_ID('tempdb..#kept_after_label')
+----
+NULL
+
+statement ok
+CREATE TABLE #in_t (i int, v varchar(10), n nvarchar(10))
+
+query T
+SELECT COUNT(*) FROM #in_t WHERE
+----
+0
+
+statement ok
+CREATE TABLE #f (col float)
+
+statement ok
+CREATE TABLE #d (col datetime2(3))
+
+statement ok
+SELECT CONVERT(varchar(40), col, 121) FROM #d
+
+statement ok
+CREATE TABLE #g (id uniqueidentifier)
+
+statement ok
+SELECT CONVERT(varchar(40), id) FROM #g
+
+statement ok
+CREATE TABLE #b (seq int IDENTITY(1,1), s varchar(20), d date, i int)
+
+statement ok
+SELECT s, CONVERT(varchar(10), d, 120), i FROM #b ORDER BY seq
+
+statement ok
+CREATE PROCEDURE #out_first @o int OUTPUT, @i int AS SET @o = @i * 2
+
+statement ok
+CREATE PROCEDURE #multi_out @i int, @o1 int OUTPUT, @o2 int OUTPUT AS
+
+statement ok
+CREATE PROCEDURE #mixed @i int, @io int OUTPUT, @o int OUTPUT AS
+
+statement ok
+CREATE PROCEDURE #two_dates @a date, @b date, @s varchar(10), @n int AS
+
+statement ok
+CREATE TABLE #target_type_test (text_value varchar(20), int_value int)
+
+statement ok
+CREATE TABLE #temporal_test (d date, dto datetimeoffset)
+
+query T
+SELECT MAX(CONVERT(varchar(10), d, 120)),
+----
+NULL
+
+statement ok
+CREATE TABLE #inferred_test (i int, d decimal(10,4))
+
+statement ok
+SELECT i, d FROM #inferred_test
+
+statement ok
+CREATE TABLE #generated_key_test (id INT IDENTITY(1,1) PRIMARY KEY, value VARCHAR(32))
+
+query TT
+SELECT payload AS binary_label, amount AS decimal_label,
+----
+payload amount
+
+statement ok
+CREATE TABLE #error_rows (id int PRIMARY KEY)
+
+query T
+SELECT COUNT(*) FROM #error_rows
+----
+0
+
+statement ok
+CREATE TABLE #batch_errors (id int)
+
+statement ok
+SELECT id FROM #batch_errors ORDER BY id
+
+statement ok
+CREATE TABLE #savepoint_rows (id int PRIMARY KEY, payload varbinary(8))
+
+statement ok
+SELECT id, payload FROM #savepoint_rows ORDER BY id
+

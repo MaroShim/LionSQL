@@ -1,0 +1,13 @@
+# test/slt_proc/tedious_oracle/3073_tedious_datatypes_varbinary.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (VarBinary)
+
+query T
+select cast(0x1234 as varbinary(4))
+----
+0x1234
+
+query T
+select cast(null as varbinary(10))
+----
+NULL
+

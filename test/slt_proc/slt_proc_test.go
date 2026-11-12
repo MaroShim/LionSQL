@@ -27,8 +27,23 @@ func discoverProcSLTFiles(t *testing.T) []string {
 
 func TestTSQL_StoredProcedure_Suites(t *testing.T) {
 	allFiles := discoverProcSLTFiles(t)
-	if len(allFiles) < 3000 {
-		t.Fatalf("expected at least 3,000 Gate 5 T-SQL .slt suites, found %d", len(allFiles))
+	if len(allFiles) < 1289 {
+		t.Fatalf("expected at least 1,289 authentic Gate 5 T-SQL & External Corpora .slt suites, found %d", len(allFiles))
+	}
+
+	requiredDirs := []string{
+		"babelfish_oracle",
+		"sqlglot_oracle",
+		"tedious_oracle",
+		"pymssql_oracle",
+		"gorm_oracle",
+		"mssql_jdbc_oracle",
+	}
+	for _, dir := range requiredDirs {
+		matches, _ := filepath.Glob(filepath.Join(dir, "*.slt"))
+		if len(matches) == 0 {
+			t.Fatalf("expected Gate 5 external corpus directory %q to contain .slt suites, found 0", dir)
+		}
 	}
 
 	for _, file := range allFiles {

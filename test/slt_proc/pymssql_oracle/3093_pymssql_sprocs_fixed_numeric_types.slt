@@ -1,0 +1,11 @@
+# test/slt_proc/pymssql_oracle/3093_pymssql_sprocs_fixed_numeric_types.slt
+# External Corpus Oracle Suite harvested from test/corpora/pymssql/tests/sprocs_fixed_numeric_types.py
+
+statement ok
+CREATE PROCEDURE pymssqlTestBigInt @i bigint, @o bigint output AS BEGIN SET @o = @i; SELECT @o; END
+
+query T
+DECLARE @o bigint; EXEC pymssqlTestBigInt 123456789, @o OUTPUT; SELECT @o;
+----
+123456789
+

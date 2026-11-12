@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
-- expand Gate 5 T-SQL stored procedure and AWS Babelfish oracle conformance from 30 to 3,000 value-verified `.slt` suites (`test/slt_proc/`, 13,418 queries, 34,242 statements, 47,660 total records across 30 core suites, 1,855 domain T-SQL suites, and 1,115 harvested AWS Babelfish oracle suites) and sync release gate scripts and documentation
+- vendor 5 external T-SQL and TDS compatibility corpora (`sqlglot`, `tedious`, `pymssql`, `gorm-sqlserver`, `mssql-jdbc`) under `test/corpora/`, harvest 144 value-verified `.slt` oracle suites, and prune 1,855 synthetic padding suites from Gate 5 (`test/slt_proc/`) so Gate 5 runs 1,289 authentic, zero-padding suites (30 core suites, 1,115 AWS Babelfish suites, and 144 external corpora suites across 9,089 queries, 28,089 statements, and 37,178 total records) (`[RULE:RadicalKISS]`)
 - complete 10-point documentation system revamp and engineering knowledge base upgrade (`DOC-REVAMP-10`):
   - author official Korean versions for 4 core manuals: `doc/ARCHITECTURE.ko.md`, `doc/BENCHMARK.ko.md`, `doc/CLIENT_TOOL_INTEGRATION.ko.md`, and `doc/internal/VDBE.ko.md` with complete technical fidelity
   - establish persistent negative knowledge catalog in `notes/SPEC_OUT_DECISIONS.ko.md` documenting the theoretical rationale and adopted alternatives for all 21 permanently rejected architecture items

@@ -68,7 +68,7 @@ Remarkably, this entire battery of deep verification finishes in **just 1 minute
  [Gate 2] 13-Domain End-to-End Smoke Test            (~18s)  -> Protocol Resilience & Tools
  [Gate 3] TPC-C OLTP Concurrency Saturation          (~12s)  -> Peak Throughput (>700k tpmC)
  [Gate 4] SQLLogicTest 410k-Query Relational Oracle  (~14s)  -> Mathematical 3VL Truth (0 Mismatch)
- [Gate 5] T-SQL Proc & Babelfish 3,000-Suite Corpus  (~5.5s) -> T-SQL VM & Babelfish Oracle Parity
+ [Gate 5] T-SQL Proc & 6-Corpora 1,289-Suite Corpus  (~2.8s)  -> T-SQL VM & Multi-Corpus Oracle Parity
  [Gate 6] SIGKILL Crash Durability & Leak Sentinels   (~11s)  -> Power-Loss Durability & Zero Leak
 ========================================================================================
 ```
@@ -89,9 +89,9 @@ Remarkably, this entire battery of deep verification finishes in **just 1 minute
 - **Command**: `./bin/sqllogictest -dir test/slt -parallel 16`
 - **Significance**: Raw speed is meaningless if a database returns wrong numbers. Executes **409,194 standard queries** across 90 files from the SQLite conformance corpus in parallel. Verifies 3-Valued Logic (`NULL = NULL`, `NOT IN (NULL)`), subquery decorrelation, and aggregate functions with a 1:1 MD5 hash comparison against the reference SQLite oracle. **Zero hash mismatches (100% PASS)** is the non-negotiable bar.
 
-### [Gate 5] T-SQL Stored Procedure & AWS Babelfish Oracle 3,000-Suite Corpus
+### [Gate 5] T-SQL Stored Procedure, AWS Babelfish & 5 External Corpora 1,289-Suite Authentic Corpus
 - **Command**: `go test -count=1 ./test/slt_proc/...`
-- **Significance**: Covers procedural language features outside standard SQLite SLT suites. Proves the correctness of LionSQL's Microsoft SQL Server T-SQL VDBE VM and AWS Babelfish oracle compatibility across **3,000 `.slt` suites (13,418 value-verified queries, 34,242 statements, 47,660 total records)**—including `@variables`, `OUTPUT` parameter bindings, control-flow branching, `RAISERROR` printf formatting, `#temp` tables, `@table` variables, chained set operations (`UNION`/`INTERSECT`/`EXCEPT`), `CHECK` constraints, and recursive CTE convergence—in just **5.5 seconds**.
+- **Significance**: Covers procedural language features outside standard SQLite SLT suites with zero synthetic padding. Proves the correctness of LionSQL's Microsoft SQL Server T-SQL VDBE VM and multi-corpus oracle compatibility across **1,289 authentic `.slt` suites (30 hand-crafted core suites, 1,115 AWS Babelfish suites, and 144 suites harvested from `sqlglot`, `tedious`, `pymssql`, `gorm-sqlserver`, and `mssql-jdbc` — 9,089 value-verified queries, 28,089 statements, 37,178 total records)** in just **2.8 seconds**.
 
 ### [Gate 6] Concurrent `SIGKILL` Crash Durability & Resource Leak Sentinels
 - **Command**: `./bin/crashtest -rounds 3 ... && ./bin/soaktest -duration 5s ...`

@@ -1,0 +1,11 @@
+# test/slt_proc/mssql_jdbc_oracle/3122_jdbc_databasemetadata_databasemetadata.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/databasemetadata/DatabaseMetaDataTest.java
+
+statement ok
+select maximum from sys.configurations where name = 'user connections'
+
+query T
+SELECT db_name() AS TABLE_CAT,
+----
+postgres
+

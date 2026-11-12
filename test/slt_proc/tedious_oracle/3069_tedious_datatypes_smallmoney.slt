@@ -1,0 +1,18 @@
+# test/slt_proc/tedious_oracle/3069_tedious_datatypes_smallmoney.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (SmallMoney)
+
+query T
+select cast(1.22229 as smallmoney)
+----
+1.222290
+
+query T
+select cast(-1.22229 as smallmoney)
+----
+-1.222290
+
+query T
+select cast(null as smallmoney)
+----
+NULL
+

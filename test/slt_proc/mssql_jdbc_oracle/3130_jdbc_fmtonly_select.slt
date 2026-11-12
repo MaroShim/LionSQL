@@ -1,0 +1,33 @@
+# test/slt_proc/mssql_jdbc_oracle/3130_jdbc_fmtonly_select.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/fmtOnly/SelectTest.java
+
+query TTT
+SELECT ProductID, SpecialOfferID, AVG(UnitPrice) AS [Average Price],
+----
+ProductID SpecialOfferID NULL
+
+query T
+SELECT AVG(OrderQty) AS [Average Quantity],
+----
+NULL
+
+query TTT
+SELECT pp.FirstName, pp.LastName, e.NationalIDNumber
+----
+pp.FirstName pp.LastName e.NationalIDNumber
+
+query TTT
+SELECT pp.LastName, pp.FirstName, e.JobTitle
+----
+pp.LastName pp.FirstName e.JobTitle
+
+query TTTTT
+SELECT BusinessEntityID, JobTitle, HireDate, VacationHours, SickLeaveHours
+----
+BusinessEntityID JobTitle HireDate VacationHours SickLeaveHours
+
+query TT
+SELECT ProductModelID, Name INTO dbo.ProductResults
+----
+ProductModelID Name
+

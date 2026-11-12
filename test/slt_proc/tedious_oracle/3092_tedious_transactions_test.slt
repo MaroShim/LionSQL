@@ -1,0 +1,65 @@
+# test/slt_proc/tedious_oracle/3092_tedious_transactions_test.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/transactions-test.ts
+
+statement ok
+create table #temp (id int)
+
+statement ok
+insert into #temp (id) values(1)
+
+query T
+select id from #temp
+----
+1
+
+statement ok
+create table #temp (value varchar(50))
+
+statement ok
+SET XACT_ABORT ON
+
+statement ok
+create table #temp (id int)
+
+statement ok
+insert into #temp (id) VALUES (1)
+
+statement ok
+insert into #temp (id) VALUES (2)
+
+query T
+select * from #temp
+----
+1
+2
+
+statement ok
+create table #temp (id int)
+
+statement ok
+insert into #temp (id) VALUES (1)
+
+statement ok
+insert into #temp (id) VALUES (2)
+
+query T
+select * from #temp
+----
+1
+2
+
+statement ok
+create table #temp (id int)
+
+statement ok
+create table #temp (id int)
+
+statement ok
+SELECT [transaction_isolation_level] FROM [sys].[dm_exec_sessions] WHERE [session_id] = @@SPID
+
+statement ok
+SELECT [transaction_isolation_level] FROM [sys].[dm_exec_sessions] WHERE [session_id] = @@SPID
+
+statement ok
+SELECT [transaction_isolation_level] FROM [sys].[dm_exec_sessions] WHERE [session_id] = @@SPID
+

@@ -1,0 +1,11 @@
+# test/slt_proc/mssql_jdbc_oracle/3139_jdbc_unit_statement_batchexecution.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/unit/statement/BatchExecutionTest.java
+
+query T
+SELECT * INTO
+----
+*
+
+statement ok
+SELECT INTO should create temp table with 2 rows
+

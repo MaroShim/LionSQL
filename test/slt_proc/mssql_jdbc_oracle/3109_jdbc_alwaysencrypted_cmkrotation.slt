@@ -1,0 +1,13 @@
+# test/slt_proc/mssql_jdbc_oracle/3109_jdbc_alwaysencrypted_cmkrotation.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/AlwaysEncrypted/CMKRotationTest.java
+
+query TTT
+SELECT name, key_store_provider_name, key_path
+----
+name key_store_provider_name key_path
+
+query TT
+SELECT cek.name as cek_name, cmk.name as cmk_name
+----
+cek.name cmk.name
+

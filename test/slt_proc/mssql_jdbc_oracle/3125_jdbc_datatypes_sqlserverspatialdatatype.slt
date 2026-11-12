@@ -1,0 +1,8 @@
+# test/slt_proc/mssql_jdbc_oracle/3125_jdbc_datatypes_sqlserverspatialdatatype.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/datatypes/SQLServerSpatialDatatypeTest.java
+
+query T
+select SERVERPROPERTY ( 'ProductVersion' )
+----
+15.0.2000.5
+

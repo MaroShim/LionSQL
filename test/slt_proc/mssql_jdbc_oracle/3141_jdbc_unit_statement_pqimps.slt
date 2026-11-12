@@ -1,0 +1,28 @@
+# test/slt_proc/mssql_jdbc_oracle/3141_jdbc_unit_statement_pqimps.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/unit/statement/PQImpsTest.java
+
+query T
+SELECT CONVERT(varchar(100), SERVERPROPERTY('ProductVersion'))
+----
+15.0.2000.5
+
+query TT
+SELECT FirstName,LastName
+----
+FirstName LastName
+
+query TT
+SELECT FirstName,COUNT(LastName)
+----
+FirstName 0
+
+query TT
+SELECT FirstName,LOWER(LastName)
+----
+FirstName lastname
+
+query T
+SELECT POWER(ID,2)
+----
+NULL
+

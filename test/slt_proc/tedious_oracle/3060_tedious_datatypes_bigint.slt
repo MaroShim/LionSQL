@@ -1,0 +1,18 @@
+# test/slt_proc/tedious_oracle/3060_tedious_datatypes_bigint.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (BigInt)
+
+query T
+select cast(8 as bigint)
+----
+8
+
+query T
+select cast(-8 as bigint)
+----
+-8
+
+query T
+select cast(null as bigint)
+----
+NULL
+

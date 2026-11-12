@@ -1,0 +1,48 @@
+# test/slt_proc/mssql_jdbc_oracle/3142_jdbc_unit_statement_preparemethodliteral.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/unit/statement/PrepareMethodLiteralTest.java
+
+statement ok
+CREATE TABLE #literal_values (value varchar(30))
+
+statement ok
+INSERT INTO #literal_values VALUES ('O''Brien')
+
+statement ok
+CREATE PROCEDURE #literal_inputs @date date, @text nvarchar(30) AS SELECT @date, @text
+
+statement ok
+CREATE TABLE #literal_marker (id int);
+
+query TTTT
+SELECT string_value, object_value, binary_value, converted_value,
+----
+string_value object_value binary_value converted_value
+
+statement ok
+CREATE TABLE #literal_rows (id int, visible bit)
+
+statement ok
+INSERT INTO #literal_rows VALUES (2, 0)
+
+statement ok
+CREATE PROCEDURE #literal_decimal_variant @v sql_variant AS SELECT
+
+statement ok
+CREATE PROCEDURE #literal_timestamp_echo @d datetime2(7) AS SELECT @d
+
+statement ok
+CREATE PROCEDURE #literal_long_echo @v bigint AS SELECT @v
+
+query TT
+SELECT (SELECT DATALENGTH(v) FROM #literal_rpc), (SELECT n FROM #literal_existing)
+----
+NULL NULL
+
+statement ok
+CREATE TABLE #literal_existing (n int); INSERT INTO #literal_existing VALUES (7)
+
+query T
+SELECT OBJECT_ID('tempdb..
+----
+OBJECT_ID('tempdb..
+

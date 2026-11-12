@@ -1,0 +1,45 @@
+# test/slt_proc/gorm_oracle/3105_gorm_migrator_catalog_introspection.slt
+# External Corpus Oracle Suite harvested from test/corpora/gorm-sqlserver/migrator.go.txt
+
+statement ok
+CREATE TABLE gorm_mig_users (id BIGINT IDENTITY(1,1) PRIMARY KEY, email VARCHAR(120) NOT NULL UNIQUE, age INT DEFAULT 20);
+
+statement ok
+CREATE INDEX idx_gorm_mig_age ON gorm_mig_users (age);
+
+query T
+SELECT DB_NAME() AS [Current Database];
+----
+postgres
+
+query T
+SELECT SCHEMA_NAME() AS [Default Schema];
+----
+dbo
+
+query T
+SELECT count(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'gorm_mig_users' AND TABLE_TYPE = 'BASE TABLE';
+----
+NULL
+
+query T
+SELECT count(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'gorm_mig_users' AND COLUMN_NAME = 'email';
+----
+NULL
+
+query T
+SELECT count(*) FROM sys.indexes WHERE name = 'idx_gorm_mig_age';
+----
+1
+
+statement ok
+CREATE OR ALTER VIEW vw_gorm_mig_users AS SELECT id, email, age FROM gorm_mig_users;
+
+statement ok
+INSERT INTO gorm_mig_users (email, age) VALUES ('a@b.com', 25);
+
+query TTT
+SELECT id, email, age FROM vw_gorm_mig_users;
+----
+1 a@b.com 25
+

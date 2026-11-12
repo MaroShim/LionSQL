@@ -1,0 +1,11 @@
+# test/slt_proc/mssql_jdbc_oracle/3110_jdbc_ntlmconnection.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/NTLMConnectionTest.java
+
+statement ok
+select auth_scheme from sys.dm_exec_connections where session_id=@@spid
+
+query T
+SELECT DB_NAME()
+----
+postgres
+

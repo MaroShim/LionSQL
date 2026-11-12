@@ -1,0 +1,81 @@
+# test/slt_proc/mssql_jdbc_oracle/3116_jdbc_sqlserverpreparedstatementtemptable.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/SQLServerPreparedStatementTempTableTest.java
+
+statement ok
+CREATE TABLE #tempTable (id INT, name NVARCHAR(50))
+
+statement ok
+CREATE TABLE [#tempTable] (id INT)
+
+query T
+SELECT 1 INTO [#tempResult]
+----
+1
+
+statement ok
+CREATE TABLE users (id INT)
+
+statement ok
+CREATE TABLE ##globalTemp (id INT)
+
+statement ok
+SELECT * INTO [##globalResult] FROM users
+
+statement ok
+SELECT * INTO regularTable FROM users
+
+statement ok
+INSERT INTO #tempTable VALUES (1, 'test')
+
+statement ok
+DELETE FROM #tempTable WHERE id = 1
+
+statement ok
+CREATE TABLE [#tempConstraintTable_jdbc_'2242d9a9-74f3-4643-9f9e-f91015343592] (C1 int check (C1 > 0))
+
+statement ok
+CrEaTe TaBlE #tempMixed (id INT)
+
+statement ok
+create table #tempData (value VARCHAR(50))
+
+statement ok
+SeLeCt * InTo #tempOutput FrOm users
+
+statement ok
+CREATE    TABLE    #tempSpaces    (id INT)
+
+statement ok
+SELECT * FROM users; CREATE TABLE #tempNotFirst (id INT)
+
+statement ok
+CrEaTe TaBlE ##GlobalMixed (id INT)
+
+statement ok
+CREATE TABLE #temp1 (id INT); CREATE TABLE #temp2 (name VARCHAR(50))
+
+statement ok
+INSERT INTO users SELECT * FROM #tempData; SELECT * INTO #tempResult FROM (SELECT * FROM #tempData) AS sub
+
+statement ok
+SELECT '##data' AS col1; CREATE TABLE #MyTempTable (id INT)
+
+statement ok
+CREATE TABLE #testTemp (id INT, value NVARCHAR(50))
+
+query TT
+SELECT 1 AS id, 'test' AS value INTO #testTemp2
+----
+1 test
+
+query T
+SELECT 1 AS result
+----
+1
+
+statement ok
+CREATE TABLE #batchTemp (id INT, value NVARCHAR(50))
+
+statement ok
+CREATE TABLE regularBatchTest (id INT, value NVARCHAR(50))
+

@@ -1,0 +1,34 @@
+# test/slt_proc/tedious_oracle/3086_tedious_collation_test.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/collation-test.ts
+
+statement ok
+CREATE DATABASE __tedious_collation_1 COLLATE Chinese_PRC_CI_AS
+
+query T
+SELECT @p1
+----
+NULL
+
+query T
+SELECT @p1
+----
+NULL
+
+query T
+SELECT @p1
+----
+NULL
+
+statement ok
+CREATE TABLE collation_test (
+          one varchar(10) NOT NULL,
+          two char(10) NOT NULL,
+          three text NOT NULL
+        )
+
+statement ok
+SELECT * FROM collation_test
+
+statement ok
+SELECT * FROM collation_test
+

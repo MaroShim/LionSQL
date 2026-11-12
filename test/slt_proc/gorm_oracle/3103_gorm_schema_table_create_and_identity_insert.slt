@@ -1,0 +1,42 @@
+# test/slt_proc/gorm_oracle/3103_gorm_schema_table_create_and_identity_insert.slt
+# External Corpus Oracle Suite harvested from test/corpora/gorm-sqlserver/create.go.txt & create_test.go.txt
+
+statement ok
+CREATE SCHEMA testschema;
+
+statement ok
+CREATE TABLE testschema.users (id BIGINT IDENTITY(1,1) PRIMARY KEY, name NVARCHAR(100));
+
+statement ok
+SET IDENTITY_INSERT testschema.users ON;
+
+query T
+INSERT INTO testschema.users (id, name) OUTPUT INSERTED.id VALUES (1, 'gorm');
+----
+1
+
+statement ok
+SET IDENTITY_INSERT testschema.users OFF;
+
+query TT
+SELECT id, name FROM testschema.users WHERE id = 1;
+----
+1 gorm
+
+query T
+INSERT INTO testschema.users (name) OUTPUT INSERTED.id VALUES ('gorm_auto');
+----
+2
+
+query TT
+SELECT id, name FROM testschema.users ORDER BY id;
+----
+1 gorm
+2 gorm_auto
+
+statement ok
+DROP TABLE IF EXISTS testschema.users;
+
+statement ok
+DROP SCHEMA IF EXISTS testschema;
+

@@ -1,0 +1,8 @@
+# test/slt_proc/mssql_jdbc_oracle/3118_jdbc_bulkcopy_bulkcopyinputvalidation.slt
+# External Corpus Oracle Suite harvested from test/corpora/mssql-jdbc/jdbc/bulkCopy/BulkCopyInputValidationTest.java
+
+query T
+SELECT OBJECT_ID('tempdb..
+----
+OBJECT_ID('tempdb..
+

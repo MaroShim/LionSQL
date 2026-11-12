@@ -1,0 +1,355 @@
+# -*- coding: utf-8 -*-
+"""
+Test bulk copy.
+"""
+
+import unittest
+import datetime
+import uuid
+
+import pytest
+
+from pymssql import _mssql
+from tests.helpers import drop_table, pymssqlconn
+
+
+tablename = "pymssql"
+simple_table = "CREATE TABLE %s (a1 INT, a2 INT, a3 INT)" % tablename
+complex_table = """
+    CREATE TABLE %s (
+        pk_id int IDENTITY (1, 1) NOT NULL,
+        uuid uniqueidentifier DEFAULT newsequentialid(),
+        col_real real UNIQUE,
+        col_float float,
+        col_datetime datetime,
+        col_bit bit,
+        col_varchar varchar(50),
+        col_varbinary varbinary(50)
+    )
+""" % tablename
+
+
+@pytest.mark.mssql_server_required
+class TestTypes(unittest.TestCase):
+    def setUp(self):
+        self.conn = pymssqlconn()
+        drop_table(self.conn._conn, tablename)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def expect_simple_table_content(self, query, content):
+        self.conn._conn.execute_query(query)
+        assert [(row[0], row[1], row[2]) for row in self.conn._conn] == content
+
+    def expect_row_count(self, expected_row_count):
+        self.conn._conn.execute_query('select count(*) from pymssql')
+        assert tuple(self.conn._conn)[0][0] == expected_row_count
+
+    def simple_table_test(self, content, **kwargs):
+        self.conn._conn.execute_non_query(simple_table)
+        self.conn.bulk_copy(tablename, content, **kwargs)
+        self.expect_simple_table_content('select * from pymssql', content)
+
+    def test_simple_table_bulk_copy(self):
+        self.simple_table_test([(1, 2, 3), (4, 5, 6)])
+
+    def test_lots_of_rows_single_batch(self):
+        self.conn._conn.execute_non_query(simple_table)
+        self.conn.bulk_copy(tablename, [(1, 2, 3), (4, 5, 6)] * 100000, batch_size=1000000)
+        self.expect_simple_table_content('select top 2 * from pymssql', [(1, 2, 3), (4, 5, 6)])
+        self.expect_row_count(200000)
+
+    def test_batches(self):
+        self.conn._conn.execute_non_query(simple_table)
+
+        self.conn.bulk_copy(tablename, [(1, 2, 3), (4, 5, 6)] * 100000, batch_size=1000)
+
+        self.expect_simple_table_content('select top 2 * from pymssql', [(1, 2, 3), (4, 5, 6)])
+        self.expect_row_count(200000)
+
+    def test_exact_batch_size(self):
+        self.conn._conn.execute_non_query(simple_table)
+
+        self.conn.bulk_copy(tablename, [(1, 2, 3), (4, 5, 6)] * 500, batch_size=1000)
+
+        self.expect_simple_table_content('select top 2 * from pymssql', [(1, 2, 3), (4, 5, 6)])
+        self.expect_row_count(1000)
+
+    def test_tablock_hint(self):
+        self.simple_table_test([(1, 2, 3), (4, 5, 6)], tablock=True)
+
+    def test_check_constraints_hint(self):
+        self.simple_table_test([(1, 2, 3), (4, 5, 6)], check_constraints=True)
+
+    def test_fire_triggers_hint(self):
+        self.simple_table_test([(1, 2, 3), (4, 5, 6)], fire_triggers=True)
+
+    def test_null_values(self):
+        self.simple_table_test([(1, None, 3), (None, None, None), (1, 2, 3)])
+
+    def test_column_ids(self):
+        self.conn._conn.execute_non_query(simple_table)
+        self.conn.bulk_copy(tablename, [(1, 2, 3), (4, 5, 6)], column_ids=[1, 3, 2])
+        self.expect_simple_table_content('select * from pymssql', [(1, 3, 2), (4, 6, 5)])
+
+    def test_too_many_columns(self):
+        self.conn._conn.execute_non_query(simple_table)
+        with self.assertRaises(_mssql.MSSQLDatabaseException):
+            self.conn.bulk_copy(tablename, [(7, 7, 7, 7)])
+
+    def test_bad_value(self):
+        self.conn._conn.execute_non_query(simple_table)
+        with self.assertRaises(_mssql.MSSQLDatabaseException):
+            self.conn.bulk_copy(tablename, [("Hello", 7, 7)])
+
+    def test_too_few_column_ids(self):
+        self.conn._conn.execute_non_query(simple_table)
+        caught_exception = False
+
+        try:
+            self.conn.bulk_copy(tablename, [(1, 2, 3)], column_ids=[1])
+        except ValueError:
+            caught_exception = True
+
+        assert caught_exception
+
+    def test_invalid_column_ids(self):
+        self.conn._conn.execute_non_query(simple_table)
+        with self.assertRaises(_mssql.MSSQLDatabaseException):
+            self.conn.bulk_copy(tablename, [(1, 2, 3)], column_ids=[1, 2, 9])
+
+    def test_complex_table(self):
+        self.conn._conn.execute_non_query(complex_table)
+        rows = [
+            (1.2000000476837158, 3.4, datetime.datetime(year=2020, month=1, day=2, hour=3, minute=4, second=5), True, "Hello World", b'\x02\x03\x05\x07'),
+            (5.599999904632568, 7.8, datetime.datetime(year=2021, month=2, day=3, hour=4, minute=5, second=6), False, "Hello World!", bytearray([2, 3, 5, 7])),
+        ]
+        self.conn.bulk_copy(tablename, rows, [3, 4, 5, 6, 7, 8])
+        self.conn._conn.execute_query('select * from pymssql')
+        assert [tuple(row[i] for i in range(2, 8)) for row in self.conn._conn] == rows
+
+    def test_uniqueness_failure(self):
+        self.conn._conn.execute_non_query(complex_table)
+
+        rows = [
+            (1.2000000476837158, 3.4, datetime.datetime(year=2020, month=1, day=2, hour=3, minute=4, second=5), True, "Hello World"),
+            (1.2000000476837158, 7.8, datetime.datetime(year=2021, month=2, day=3, hour=4, minute=5, second=6), False, "Hello World!"),
+        ]
+        with self.assertRaises(_mssql.MSSQLDatabaseException):
+            self.conn.bulk_copy(tablename, rows, [3, 4, 5, 6, 7])
+
+
+@pytest.mark.mssql_server_required
+class Test_968(unittest.TestCase):
+    """
+    Test Issue #968
+    """
+    tablename = "test_968"
+
+    def setUp(self):
+        self.conn = pymssqlconn()
+        drop_table(self.conn._conn, self.tablename)
+        self.conn._conn.execute_non_query(
+            f"CREATE TABLE {self.tablename} (a INT, b VARCHAR(50), d DOUBLE PRECISION)")
+
+    def tearDown(self):
+        drop_table(self.conn._conn, self.tablename)
+        self.conn.close()
+
+    def test(self):
+        rows = [(1, "foo", 1.2345)]
+        self.conn.bulk_copy(self.tablename, rows)
+        self.conn._conn.execute_query(f'select * from {self.tablename}')
+        res = list(self.conn._conn)
+        assert len(res) == 1
+        assert res[0]['a'] == 1
+        assert res[0]['b'] == 'foo'
+        assert res[0]['d'] == 1.2345
+
+
+@pytest.mark.mssql_server_required
+class Test_725(unittest.TestCase):
+    """
+    Test Issue #725
+    """
+    tablename = "test_725"
+
+    def setUp(self):
+        self.conn = pymssqlconn()
+        drop_table(self.conn._conn, self.tablename)
+        self.conn._conn.execute_non_query(
+            f"""CREATE TABLE {self.tablename} (
+                name nvarchar(50) not null,
+                plain_name varchar(50) not null
+            )""")
+
+    def tearDown(self):
+        drop_table(self.conn._conn, self.tablename)
+        self.conn.close()
+
+    def test(self):
+        col_data = [("Gord", "Gord"),
+                    ("Renée", "Hello 1"),
+                    ("Привет", "Hello 2"),
+                    ("สวัสดีครับ", "Hello 3"),
+                    ]
+        self.conn.bulk_copy(self.tablename, col_data)
+        self.conn._conn.execute_query(f'select * from {self.tablename}')
+        res = list(self.conn._conn)
+        assert len(res) == len(col_data)
+        for i, (name, plain_name) in enumerate(col_data):
+            assert res[i]['name'] == name
+            assert res[i]['plain_name'] == plain_name
+
+    def test_unicode_column_ids(self):
+        col_data = [("Gord", "Gord"),
+                    ("Renée", "Hello"),
+                    ("Привет", "Hello"),
+                    ("สวัสดีครับ", "Hello"),
+                    ]
+        col_data_reversed = [ _[::-1] for _ in col_data ]
+        self.conn.bulk_copy(self.tablename, col_data_reversed, column_ids=[2, 1])
+        self.conn._conn.execute_query(f'select * from {self.tablename}')
+        res = list(self.conn._conn)
+        assert len(res) == len(col_data)
+        for i, (name, plain_name) in enumerate(col_data):
+            assert res[i]['name'] == name
+            assert res[i]['plain_name'] == plain_name
+
+
+@pytest.mark.mssql_server_required
+class Test_1021(unittest.TestCase):
+    """
+    Test Issue #1021
+    """
+    rows = [("Gord",), ("Renée",), ("Ä",)]
+
+    def setUp(self):
+        self.conn = pymssqlconn()
+        # From tempdb, plain sys.columns already sees temp tables.
+        self.conn._conn.execute_non_query("USE master")
+
+    def tearDown(self):
+        self.conn.close()
+
+    def assert_temp_table_contents(self, table_name, rows, copy_name=None):
+        self.conn._conn.execute_non_query(f"CREATE TABLE {table_name} (name NVARCHAR(50) NOT NULL)")
+        self.conn.bulk_copy(copy_name if copy_name is not None else table_name, rows)
+        self.conn._conn.execute_query(f"SELECT name FROM {table_name}")
+        res = list(self.conn._conn)
+        assert [(row['name'],) for row in res] == rows
+
+    def test_local_temp_table(self):
+        self.assert_temp_table_contents("#temp_1021_local", self.rows)
+
+    def test_global_temp_table(self):
+        self.assert_temp_table_contents(f"##temp_1021_global_{uuid.uuid4().hex[:8]}", self.rows)
+
+    def test_bracketed_temp_table(self):
+        self.assert_temp_table_contents("[#temp_1021_bracketed]", self.rows)
+
+    def test_tempdb_qualified_temp_table(self):
+        self.assert_temp_table_contents("#temp_1021_qual", self.rows, "tempdb..#temp_1021_qual")
+
+    def test_bytes_temp_table(self):
+        self.assert_temp_table_contents("#temp_1021_bytes", self.rows, b"#temp_1021_bytes")
+
+
+@pytest.mark.mssql_server_required
+class Test_814(unittest.TestCase):
+    """
+    Test Issue #814
+    """
+    tablename = "test_814"
+
+    def setUp(self):
+        self.conn = pymssqlconn()
+        drop_table(self.conn._conn, self.tablename)
+        self.conn._conn.execute_non_query(
+            f"""CREATE TABLE {self.tablename} (
+                col1 INT IDENTITY NOT NULL,
+                col2 INT NOT NULL
+            )""")
+
+    def tearDown(self):
+        drop_table(self.conn._conn, self.tablename)
+        self.conn.close()
+
+    def test(self):
+        col_data = [ (1000, 1), (1001, 2) ]
+        self.conn.bulk_copy(self.tablename, col_data, [1,2])
+        self.conn._conn.execute_query(f'select * from {self.tablename}')
+        res = list(self.conn._conn)
+        print(f"{res=}")
+        assert len(res) == len(col_data)
+        for i, (col1, col2) in enumerate(col_data):
+            assert res[i]['col1'] == col1
+            assert res[i]['col2'] == col2
+
+
+@pytest.mark.mssql_server_required
+class Test_814_temp(unittest.TestCase):
+    """KEEPIDENTITY on session and global temp table identity columns."""
+
+    def setUp(self):
+        self.conn = pymssqlconn()
+        # From tempdb, plain sys.columns already sees temp tables.
+        self.conn._conn.execute_non_query("USE master")
+
+    def tearDown(self):
+        self.conn.close()
+
+    def _roundtrip(self, tablename):
+        self.conn._conn.execute_non_query(
+            f"""CREATE TABLE {tablename} (
+                col1 INT IDENTITY NOT NULL,
+                col2 INT NOT NULL
+            )""")
+        col_data = [(1000, 1), (1001, 2)]
+        self.conn.bulk_copy(tablename, col_data, [1, 2])
+        self.conn._conn.execute_query(f'select * from {tablename} order by col1')
+        res = list(self.conn._conn)
+        assert len(res) == len(col_data)
+        for i, (col1, col2) in enumerate(col_data):
+            assert res[i]['col1'] == col1
+            assert res[i]['col2'] == col2
+
+    def test_local_temp(self):
+        self._roundtrip("#test_814")
+
+    def test_global_temp(self):
+        self._roundtrip(f"##test_814_{uuid.uuid4().hex[:8]}")
+
+
+@pytest.mark.mssql_server_required
+class Test_912(unittest.TestCase):
+    """
+    Test Issue #912
+    """
+    tablename = "test_912"
+
+    def setUp(self):
+        self.conn = pymssqlconn()
+        drop_table(self.conn._conn, self.tablename)
+        self.conn._conn.execute_non_query(
+            f"""CREATE TABLE {self.tablename} (
+                id INT PRIMARY KEY IDENTITY(1, 1),
+                col0 INT NOT NULL,
+                col1 INT DEFAULT 1
+            )""")
+
+    def tearDown(self):
+        drop_table(self.conn._conn, self.tablename)
+        self.conn.close()
+
+    def test(self):
+        col_data = [(1,), (2,), (3,)]
+        self.conn.bulk_copy(self.tablename, col_data, column_ids=[2])
+        self.conn._conn.execute_query(f'select * from {self.tablename}')
+        res = list(self.conn._conn)
+        assert len(res) == len(col_data)
+        for i, (col0,) in enumerate(col_data):
+            assert res[i]['id'] == i + 1
+            assert res[i]['col0'] == col0
+            assert res[i]['col1'] == 1

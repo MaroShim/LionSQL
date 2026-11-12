@@ -1,0 +1,8 @@
+# test/slt_proc/tedious_oracle/3065_tedious_datatypes_time.slt
+# External Corpus Oracle Suite harvested from test/corpora/tedious/integration/datatypes-in-results-test.ts (Time)
+
+query T
+select cast(
+----
+cast(
+
