@@ -260,7 +260,7 @@ Build an embedded, native goroutine session pooler and worker multiplexer (`pkg/
 Accepted
 
 ### Context
-Organizations and development teams utilize heterogeneous tooling ecosystems. Database administrators and analytical tools rely on PostgreSQL tools (`psql`, DBeaver, Grafana, ORMs like GORM and Prisma), while enterprise legacy systems, reporting services, and Azure Data Studio rely on Microsoft SQL Server's Tabular Data Stream (TDS) wire protocol.
+Organizations and development teams utilize heterogeneous tooling ecosystems. Database administrators and analytical tools rely on PostgreSQL tools (`psql`, DBeaver, Grafana, ORMs like GORM and Prisma), while enterprise legacy systems, reporting services, and SSMS rely on Microsoft SQL Server's Tabular Data Stream (TDS) wire protocol.
 
 ### Decision
 Implement concurrent, first-class native wire protocol listeners in Go:
@@ -564,7 +564,7 @@ Deprecate all generic text and MessagePack record codecs. Implement a **Schema-A
 Accepted
 
 ### Context
-Modern database GUI tools (Beekeeper Studio, DBeaver, Azure Data Studio, pgAdmin, SSMS) rely on extensive catalog introspection queries to render left-side object trees, column types, default values, and foreign key relationship diagrams.
+Modern database GUI tools (Beekeeper Studio, DBeaver, pgAdmin, SSMS) rely on extensive catalog introspection queries to render left-side object trees, column types, default values, and foreign key relationship diagrams.
 - PostgreSQL tools issue multi-table joins against `pg_class`, `pg_namespace`, `pg_attribute`, and `information_schema.tables`.
 - Microsoft SQL Server tools issue complex vendor-specific joins such as `FROM INFORMATION_SCHEMA.COLUMNS ic LEFT JOIN sys.computed_columns sc ON OBJECT_ID(...) = sc.object_id`.
 
@@ -851,7 +851,7 @@ Adopt the **Single Canonical V2 Binary Tuple Codec** (`0x02`) across both storag
 4. **Tail-Only DDL & Middle DROP Fail-Closed Invariant**:
    - **Tail ADD COLUMN**: Instantly supported in $O(1)$. When table schema $N > \text{encodedCols}$, columns $0 \sim \text{encodedCols}-1$ are decoded from payload bytes, and new columns $\text{encodedCols} \sim N-1$ are instantly padded from schema default values (`col.Default`) or `NULL`.
    - **Tail DROP COLUMN**: Instantly supported in $O(1)$. When the terminal column is dropped ($N < \text{encodedCols}$), decoders process columns $0 \sim N-1$ and safely ignore trailing bytes.
-   - **Middle DROP Prohibition**: Dropping non-terminal (middle) columns on non-empty tables is strictly rejected with an explicit error (`ErrDropColumnNotTail`). Complex virtual dropped-column masking (`PERF-OCC-INSTANT-DROP-COL-1`) is permanently Spec-Out.
+   - **Middle DROP Prohibition & Fail-Closed Invariant**: Dropping non-terminal (middle) columns on non-empty tables is strictly rejected with an explicit error (`ErrDropColumnNotTail`). Dropping middle columns at runtime on a populated database is an operational anti-pattern that risks long exclusive locks, replication lag, and serialization mismatches. Furthermore, physically rewriting rows inflates runtime stalls and locks, while virtual schema tombstone masking (`PERF-OCC-INSTANT-DROP-COL-1`) degrades the 0.5ns fixed-offset decoding hot path and severely complicates verification. Complex middle-column virtual dropped masking is permanently Spec-Out, and LionSQL prescribes the standard **Copy-and-Switch** pattern (`CREATE TABLE new AS SELECT ...` followed by atomic rename) for middle-column reorganization.
 
 ### Consequences
 - **Positive**: Guarantees 100% deterministic, zero-guess decoding across all query paths. Header loads in a single 32-bit CPU register read. Extensible flags eliminate future format breakages for compression and TOAST. Codebase complexity reduced by eliminating heuristic fallback layers.

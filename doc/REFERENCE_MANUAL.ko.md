@@ -868,7 +868,7 @@ LionSQL의 스토리지 엔진(인메모리 OCC 및 WiredTiger)은 디스크 용
   ```
 
 #### 2. `ALTER TABLE` (테이블 스키마 변경 및 파티션 삭제)
-기존 테이블에 신규 컬럼을 추가하거나 기존 컬럼을 제거하며, 만료된 시계열 파티션을 $O(1)$ 속도로 일괄 파기합니다.
+기존 테이블에 신규 컬럼을 추가하거나 컬럼을 제거하며, 만료된 시계열 파티션을 $O(1)$ 속도로 일괄 파기합니다.
 
 * **구문**:
   ```sql
@@ -876,9 +876,16 @@ LionSQL의 스토리지 엔진(인메모리 OCC 및 WiredTiger)은 디스크 용
   ALTER TABLE table_name DROP COLUMN column_name;
   ALTER TABLE table_name DROP PARTITION 'partition_id';
   ```
+* **DDL 제약 및 동작 원칙**:
+  - `ADD COLUMN`: 테이블 재작성 없이 메타데이터만 갱신하는 $O(1)$ Instant DDL로 즉시 완료됩니다.
+  - `DROP COLUMN`: 테이블 맨 끝에 위치한 마지막 컬럼(Tail Column)의 삭제는 $O(1)$로 즉시 지원됩니다. 단, 데이터가 존재하는 테이블에서 중간 컬럼(Non-Terminal Column)을 삭제하려는 시도는 런타임 스톨 및 튜플 디코딩 핫패스 저하를 방지하기 위해 즉시 명시적 에러(`ErrDropColumnNotTail`, Fail-Closed)로 거부됩니다.
+  - 중간 컬럼 삭제 및 테이블 구조 개편 절차는 **[`ONLINE_SCHEMA_REORGANIZATION_GUIDE.ko.md`](ONLINE_SCHEMA_REORGANIZATION_GUIDE.ko.md)**의 무중단 Copy-and-Switch 운영 가이드를 참조하십시오.
 * **실행 예시**:
   ```sql
+  -- 신규 컬럼 O(1) 추가
   ALTER TABLE customers ADD phone_number VARCHAR(30) DEFAULT 'N/A';
+
+  -- 맨 끝(Tail) 컬럼 O(1) 삭제
   ALTER TABLE customers DROP COLUMN legacy_fax;
 
   -- 2026년 8월 파티션 O(1) 초고속 물리 삭제 (보조 인덱스 자동 정리)
@@ -1313,7 +1320,7 @@ LionSQL은 인스턴스 격리(Single Database per Process) 원칙을 유지하�
 
 ### 6.1. MS SQL Server 호환 카탈로그 (`sys.*`)
 
-SSMS, Azure Data Studio, sqlcmd가 데이터베이스 구조 및 프로시저 목록을 탐색할 때 쿼리하는 가상 뷰입니다.
+SSMS, sqlcmd가 데이터베이스 구조 및 프로시저 목록을 탐색할 때 쿼리하는 가상 뷰입니다.
 
 #### 1. `sys.databases`
 현재 가동 중인 데이터베이스 인스턴스 메타데이터를 제공합니다.
@@ -1790,7 +1797,7 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
 * [`internal/WIRE_PROTOCOLS.md`](internal/WIRE_PROTOCOLS.md)
   * **와이어 프로토콜 구현 상세**: PostgreSQL Wire Protocol v3(포트 5433) Simple/Extended 프로토콜 패킷 핸들링과 MS SQL Server TDS 7.x/8.0(포트 1433) Prelogin, Login7, RPC, `sp_prepexec` 플랜 캐시 연동 구조.
 * [`CLIENT_TOOL_INTEGRATION.md`](CLIENT_TOOL_INTEGRATION.md)
-  * **GUI/CLI 도구 연동 및 카탈로그 가로채기**: Beekeeper Studio, DBeaver, DbGate, Azure Data Studio, SSMS, `psql`, `sqlcmd` 연동 가이드. 도구별 메타데이터 쿼리 가로채기(Catalog Interception), 페이지네이션 변환 및 프로그래밍 언어 드라이버 연결 문자열 가이드.
+  * **GUI/CLI 도구 연동 및 카탈로그 가로채기**: Beekeeper Studio, DBeaver, DbGate, SSMS, `psql`, `sqlcmd` 연동 가이드. 도구별 메타데이터 쿼리 가로채기(Catalog Interception), 페이지네이션 변환 및 프로그래밍 언어 드라이버 연결 문자열 가이드.
 
 #### 10.4. BaaS 기능, 웹 SDK 및 REST API (BaaS, SDK & APIs)
 * [`REST_API_RECORDS_GUIDE.md`](REST_API_RECORDS_GUIDE.md)

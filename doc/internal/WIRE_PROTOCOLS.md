@@ -12,7 +12,7 @@ LionSQL concurrently listens on standard database ports using native Go TCP serv
                                  [ Client Applications ]
                                      │            │
              PostgreSQL Client Tools │            │ Microsoft Tools / SSMS
-             (psql, DBeaver, GORM)   │            │ (sqlcmd, Azure Data Studio)
+             (psql, DBeaver, GORM)   │            │ (sqlcmd, SSMS, Drivers)
                                      ▼            ▼
                               [ Port :5433 ]   [ Port :1433 ]
                               (Postgres v3)    (TDS 7.x/8.0)

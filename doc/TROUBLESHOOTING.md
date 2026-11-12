@@ -1,14 +1,119 @@
-# LionSQL Troubleshooting, Error Diagnostics & FAQ
+# LionSQL Troubleshooting, Error Code & SQLSTATE Dictionary (`doc/TROUBLESHOOTING.md`)
 
 > - **Created**: 2026-09-22
-> - **Last Updated**: 2026-10-20
+> - **Last Updated**: 2026-11-12
+> - **Korean Version**: [doc/TROUBLESHOOTING.ko.md](TROUBLESHOOTING.ko.md)
 
 
-This guide provides actionable solutions for common deployment, connectivity, query optimization, and storage engine issues encountered when operating LionSQL.
+This guide provides an actionable troubleshooting reference for startup issues, network connectivity, query optimization, and a systematic catalog of PostgreSQL SQLSTATE and Microsoft TDS error codes.
 
 ---
 
-## 1. Startup & Port Binding Issues
+## 1. SQLSTATE & TDS Error Code Troubleshooting Dictionary
+
+### 1.1. `SQLSTATE 40001` / TDS 1205: Serialization Failure & Write Conflicts
+
+#### Cause
+- **In-Memory OCC Engine (`-engine=memory`)**: Occurs when two concurrent transactions read the same row version and both attempt to modify or delete it. Under Optimistic Concurrency Control, the first commit succeeds while the second transaction fails OCC validation (`ErrWriteConflict`) to preserve ACID serializability.
+- **WiredTiger MVCC Engine (`-engine=wiredtiger`)**: Triggered as `WT_ROLLBACK` when transaction timestamps conflict under heavy concurrent write hotspot updates.
+
+#### Resolution
+Implement an application-level optimistic retry loop with exponential backoff:
+
+```go
+func runWithRetry(db *sql.DB, maxRetries int, fn func(tx *sql.Tx) error) error {
+    var err error
+    for attempt := 0; attempt < maxRetries; attempt++ {
+        tx, err := db.Begin()
+        if err != nil {
+            return err
+        }
+        err = fn(tx)
+        if err == nil {
+            return tx.Commit()
+        }
+        _ = tx.Rollback()
+        
+        if strings.Contains(err.Error(), "40001") || strings.Contains(err.Error(), "serialization failure") {
+            time.Sleep(time.Duration(10*(1<<attempt)) * time.Millisecond)
+            continue
+        }
+        return err
+    }
+    return err
+}
+```
+
+---
+
+### 1.2. `SQLSTATE 23505` / TDS 2627: Unique Key / Primary Key Violation
+
+#### Cause
+Attempted to insert a duplicate value into a column governed by a `PRIMARY KEY` or `UNIQUE` constraint.
+
+#### Resolution
+1. **PostgreSQL Syntax**: Use `ON CONFLICT DO UPDATE` or `ON CONFLICT DO NOTHING`:
+   ```sql
+   INSERT INTO accounts (id, balance) VALUES (1, 1000)
+   ON CONFLICT (id) DO UPDATE SET balance = accounts.balance + EXCLUDED.balance;
+   ```
+2. **T-SQL Syntax**: Use `MERGE` or verify existence prior to insertion:
+   ```sql
+   IF NOT EXISTS (SELECT 1 FROM accounts WHERE id = @id)
+   BEGIN
+       INSERT INTO accounts (id, balance) VALUES (@id, @bal);
+   END;
+   ```
+
+---
+
+### 1.3. `SQLSTATE 42P01` / TDS 208: Undefined Table or Object
+
+#### Cause
+The referenced table does not exist in the active catalog, or a foreign database name was specified without local qualification.
+
+#### Resolution
+Verify catalog tables via `SELECT name FROM sys.objects WHERE type = 'U';`. Note that LionSQL supports 3-part names like `[master].[dbo].[table]` transparently.
+
+---
+
+### 1.4. `SQLSTATE 23503` / TDS 547: Foreign Key Constraint Violation
+
+#### Cause
+The inserted foreign key does not match any primary key in the referenced parent table, or a parent row was deleted while referenced child rows remain.
+
+#### Resolution
+Validate insertion order (parent first, child second) or configure `ON DELETE CASCADE`.
+
+---
+
+### 1.5. `SQLSTATE 22012` / TDS 8134: Divide by Zero
+
+#### Cause
+An arithmetic division evaluated with a denominator of `0`.
+
+#### Resolution
+Use `NULLIF` to safely evaluate zero denominators as `NULL`:
+```sql
+SELECT amount / NULLIF(total, 0) AS ratio FROM sales;
+```
+
+---
+
+### 1.6. `SQLSTATE 53300`: Session Pool Exhausted (Too Many Connections)
+
+#### Cause
+Concurrent client requests exceeded `-max-workers` or `-max-idle-sessions`.
+
+#### Resolution
+Scale worker and session pool flags on server startup:
+```bash
+./bin/lionsql -max-workers=64 -max-idle-sessions=128
+```
+
+---
+
+## 2. Startup & Port Binding Issues
 
 ### 1.1. `bind: address already in use`
 

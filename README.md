@@ -34,7 +34,7 @@ LionSQL is a high-performance, embedded OLTP database engine that natively compi
 [Postgres Wire v3]             [MSSQL TDS 7.x/8.0]             [Web Studio & SPA Web Server]
   Port :5433                      Port :1433                      Port :8090 (/_/, /)
  (psql, DBeaver,                  (sqlcmd, SSMS,                  (Admin UI, SPA Web Hosting,
-  GORM, Prisma)                    Azure Data Studio)              REST API, Realtime SSE,
+  GORM, Prisma)                    Beekeeper Studio)               REST API, Realtime SSE,
         │                                │                         Webhooks, RLS, Cron, JS SDK)
         └────────────────────────────────┼────────────────────────────────┘
                                          │
@@ -82,13 +82,13 @@ LionSQL's core capabilities are organized across five foundational architectural
 ### 1. Dual Wire Protocols & Connection Pooling
 - **Concurrent Dual Wire Protocols**:
   - **PostgreSQL v3 Protocol (Port 5433)**: Fully compatible with `psql`, DBeaver, GORM, Prisma, and pgx, supporting SSL/TLS encryption and binary parameter binding.
-  - **Microsoft SQL Server TDS Protocol (Port 1433)**: Instantly compatible with SSMS, Azure Data Studio, `sqlcmd`, and MSSQL drivers, supporting RPC prepared execution.
+  - **Microsoft SQL Server TDS Protocol (Port 1433)**: Instantly compatible with SSMS, `sqlcmd`, and MSSQL drivers, supporting RPC prepared execution.
 - **Built-in Goroutine Connection Pooler**:
   Handles 10,000+ simultaneous connections over lightweight Go goroutines, eliminating connection bottlenecks without external poolers.
 
 > [!TIP]
 > **Recommended Application Protocol: PostgreSQL Wire (`:5433`)**
-> While LionSQL faithfully serves both protocols, **PGWire (`:5433`) is strongly recommended as the default application protocol**, even when executing T-SQL stored procedures (`EXEC sp_name @p1=$1;`). PGWire's lightweight framing and single-packet pipelining (`Parse` + `Bind` + `Execute` + `Sync`) deliver higher raw network throughput (376,000+ tpmC / 13,900+ TPS) with lower serialization latency than Microsoft TDS RPC streams, while offering universal, zero-quirk driver support across Go (`pgx`, `lib/pq`), Node.js, Python, Java, and Rust. TDS (`:1433`) is primarily intended for legacy Microsoft tooling (SSMS, Azure Data Studio, legacy .NET `SqlClient`).
+> While LionSQL faithfully serves both protocols, **PGWire (`:5433`) is strongly recommended as the default application protocol**, even when executing T-SQL stored procedures (`EXEC sp_name @p1=$1;`). PGWire's lightweight framing and single-packet pipelining (`Parse` + `Bind` + `Execute` + `Sync`) deliver higher raw network throughput (376,000+ tpmC / 13,900+ TPS) with lower serialization latency than Microsoft TDS RPC streams, while offering universal, zero-quirk driver support across Go (`pgx`, `lib/pq`), Node.js, Python, Java, and Rust. TDS (`:1433`) is primarily intended for legacy Microsoft tooling (SSMS, legacy .NET `SqlClient`).
 
 ### 2. Enterprise T-SQL Procedural Runtime
 - **Stored Procedures, Functions & Triggers**:
@@ -194,7 +194,7 @@ Upon startup, the console displays the connection endpoints:
  [HTTP API]       http://127.0.0.1:8090/api/health
  [CDC Stream]     http://127.0.0.1:8090/api/cdc/stream (NDJSON / SSE)
  [Superuser Auth] admin@lionsql.local (JWT Auth: false)
- [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / Azure Data Studio
+ [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / SSMS
  [Postgres Wire]  psql -h 127.0.0.1 -p 5433 (PostgreSQL v3 protocol, psql / pgx)
  [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 (TDS 7.x/8.0 protocol, sqlcmd / SSMS)
  [Data Directory] data

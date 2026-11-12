@@ -15,7 +15,7 @@ LionSQL acts as a zero-external-dependency database engine that concurrently ser
 | Protocol | Default Port | Default Superuser | Password | Database Name | Standard Client Ecosystem |
 |---|---|---|---|---|---|
 | **PostgreSQL v3** | `5433` (TCP) | `postgres` (or `admin`) | Any / Empty (Dev) | `postgres` | Beekeeper Studio, DBeaver, Navicat, pgAdmin, psql, lib/pq, pgx |
-| **Microsoft SQL Server (TDS 7.x/8.0)** | `1433` (TCP) | `sa` (or `admin`) | Any / Empty (Dev) | `master` | Beekeeper Studio, DBeaver, Navicat, Azure Data Studio, SSMS, go-mssqldb, pymssql |
+| **Microsoft SQL Server (TDS 7.x/8.0)** | `1433` (TCP) | `sa` (or `admin`) | Any / Empty (Dev) | `master` | Beekeeper Studio, DBeaver, Navicat, SSMS, go-mssqldb, pymssql |
 | **HTTP REST & Studio** | `8090` (TCP) | `admin@lionsql.local` | `1234567890` | `lionsql` | Embedded Web Studio (`/_/`), curl, OpenAPI, fetch |
 
 > Note: LionSQL enforces **Instance-Based Database Isolation** (GEMINI.md Section 3). Each server process hosts exactly one isolated database catalog per data directory (`--data-dir`).
@@ -29,7 +29,7 @@ LionSQL acts as a zero-external-dependency database engine that concurrently ser
 > 1. **Higher Throughput & Lower Latency**: PGWire uses a lightweight frame structure (1-byte opcode + 4-byte length) and pipelines extended query messages (`Bind` + `Execute` + `Sync`) in a single TCP transmission. Live benchmarks demonstrate **352,000 ~ 376,000+ tpmC / 13,000 ~ 13,900+ TPS** over PGWire vs **228,000 ~ 315,000+ tpmC / 8,460 ~ 11,660+ TPS** over TDS.
 > 2. **Driver Maturity & Zero-Quirk Connectivity**: PGWire drivers (`pgx/v5`, `lib/pq`, `psycopg3`, `node-postgres`, `asyncpg`, `npgsql`) are exceptionally mature, universal across all platforms, and require no proprietary Microsoft encryption trust negotiation or connection string parameters (`TrustServerCertificate=true`).
 > 3. **Full T-SQL Parity**: LionSQL executes T-SQL grammar, stored procedures, control flow (`IF`, `WHILE`), and batch scripts transparently across PGWire. Stored procedures are NOT restricted to TDS.
-> 4. **When to Use TDS (`:1433`)**: Reserve TDS primarily for legacy Microsoft toolchains (SSMS, Azure Data Studio, legacy .NET `System.Data.SqlClient`, older Dapper/EF workflows locked to MSSQL connection strings).
+> 4. **When to Use TDS (`:1433`)**: Reserve TDS primarily for legacy Microsoft toolchains (SSMS, legacy .NET `System.Data.SqlClient`, older Dapper/EF workflows locked to MSSQL connection strings).
 
 ---
 
@@ -101,7 +101,7 @@ Beekeeper Studio can connect to LionSQL in either **PostgreSQL** or **SQL Server
 
 ---
 
-### 2.3. Azure Data Studio & VS Code MSSQL Extension
+### 2.3. VS Code MSSQL Extension
 
 1. Connection Type: `Microsoft SQL Server`.
 2. Parameters:

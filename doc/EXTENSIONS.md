@@ -1,10 +1,9 @@
 # LionSQL Extension & Driver Development Guide
 
 > - **Created**: 2026-09-23
-> - **Last Updated**: 2026-10-20
+> - **Last Updated**: 2026-11-12
 
-
-LionSQL is engineered around modular, decoupled interface contracts (Open-Closed Principle). Developers can extend LionSQL with custom storage backends, secondary procedure parsers, custom scalar functions, and alternative wire protocol frontends without modifying the database core.
+LionSQL is engineered around modular, decoupled interface contracts (Open-Closed Principle). Developers can extend LionSQL with custom storage backends, secondary procedure parsers, custom scalar functions, alternative wire protocol frontends, and pluggable collation providers without modifying the database core.
 
 ---
 
@@ -148,20 +147,19 @@ Every wire listener follows a unified connection lifecycle:
 
 ---
 
-## 5. User-Defined Functions (UDF) Extension SPI: Dual-Track Architecture
+## 5. User-Defined Functions (UDF) & Collation Extension SPI
 
-LionSQL defines a complementary dual-track extension model for custom user functions, catering to both in-process application developers and standalone database deployments:
+LionSQL defines a modular extension model for custom user functions and multilingual collations, catering to both in-process application developers and standalone database deployments:
 
 ```
-                            [ User-Defined Functions (UDF) ]
-                                          │
-                  ┌───────────────────────┴───────────────────────┐
-                  ▼                                               ▼
-     [ Track 1: Go Native In-Process SPI ]           [ Track 2: WebAssembly (Wasm) Sandbox ]
-     - Target: Go Embedded Library Users             - Target: Standalone Database Deployments
-     - Binding: proc.RegisterScalarFunction(...)    - Binding: CREATE FUNCTION ... AS WASM
-     - Overhead: Zero (Direct Function Call)         - Security: Pure-Go Memory Sandboxing (wazero)
-     - Cross-Platform: Windows, Mac, Linux           - Isolation: Golden Rule 26 Panic Recovery
+                            [ Extensibility Framework ]
+                                           │
+                   ┌───────────────────────┼───────────────────────┐
+                   ▼                       ▼                       ▼
+      [ Track 1: Go Native UDF ]   [ Track 2: Wasm UDF ]  [ Pluggable Collation SPI ]
+      - proc.RegisterScalarFunction  - Standalone Wasm      - proc.RegisterCollation
+      - Zero FFI (< 5ns)            - wazero sandbox       - Fast-Path No-Collation (0.5ns)
+      - Typed storage.Value         - Memory isolation     - Pay-as-you-go multilingual
 ```
 
 ### 5.1. Track 1: Go Native Function Registration SPI (`pkg/proc`)
@@ -186,14 +184,27 @@ CREATE FUNCTION compute_risk_score AS WASM 'plugins/risk_model.wasm';
 ```
 - **Zero-CGO Pure-Go Runtime**: Powered by [wazero](https://wazero.io/), maintaining LionSQL's single static binary invariant.
 - **Multi-Language Authoring**: Users can author plugins in Go (TinyGo), Rust, C, or Zig, compiling to standard WebAssembly.
-- **Strict Fault Isolation**: Executes within an isolated virtual memory sandbox. Unhandled panics or memory violations are trapped cleanly (Golden Rule 26), ensuring zero crash impact on the core database kernel.
+- **Strict Fault Isolation**: Executes within an isolated virtual memory sandbox. Unhandled panics or memory violations are trapped cleanly, ensuring zero crash impact on the core database kernel.
+
+### 5.3. Pluggable Collation Provider SPI (`pkg/proc`, `pkg/storage`)
+To support complex multilingual sorting without bloating the core engine binary with multi-megabyte Unicode ICU tables and without incurring map lookup overhead on hot paths, LionSQL adopts a **Two-Tier Pre-Resolved (Fast-Path Native vs. Pre-Bound Go UDF)** collation architecture:
+1. **Cold-Path Pre-Binding & Normalization**: At query plan compilation and schema resolution time, collation names are pre-resolved directly into function pointers (`CollationCompareFunc`) or pre-allocated integer slots (`[RULE:BoundedLookup]`). Default collations (`SQL_Latin1_General_CP1_CI_AS`, `DATABASE_DEFAULT`, `SERVER_DEFAULT`) resolve directly to `compareFn = nil`.
+2. **Hot-Path Zero-Overhead Fast-Path (Zero Map Lookups)**: Inside high-frequency B+Tree index searches and table scans, the engine executes a single nil pointer check (`if compareFn == nil`) to dispatch inlined `strings.EqualFold` or `bytes.Compare` (0.5ns, zero allocations).
+3. **Pre-Bound Pluggable UDF Execution**: When specialized collations (e.g. `Korean_Wansung_CI_AS`, accent sensitivity, custom business sort orders) are requested, the engine invokes the pre-bound function pointer directly (`compareFn(a, b)`), paying zero map lookup or locking penalties on hot execution paths:
+```go
+// Register a custom collation provider into the engine at startup
+proc.RegisterCollation("KOREAN_WANSUNG_CI_AS", func(a, b string) int {
+    // Custom language-specific sort comparison logic
+    return myKoreanCompare(a, b)
+})
+```
 
 ---
 
 ## 6. Extension Sandboxing & Safety Guidelines
 
 In accordance with LionSQL Engineering Guidelines:
-- **Panic Recovery (Rule 26)**: All extension entrypoints and callbacks must be wrapped in `defer func() { if r := recover(); r != nil { ... } }()` panic interceptors to prevent third-party crashes from terminating the database engine.
-- **Defensive Boundary Checks (Rule 11)**: Validate all slice and buffer accesses against bounds before indexing.
-- **Resource Hygiene (Rule 24)**: Ensure every open file descriptor, network socket, and cursor is closed cleanly via `defer Close()`.
-- **Thread Safety (Rule 10)**: Custom extensions must acquire mutexes in canonical hierarchical order to prevent deadlocks and pass `go test -race` with 0 data races.
+- **Panic Recovery (`[RULE:PanicRecovery]`)**: All extension entrypoints and callbacks must be wrapped in `defer func() { if r := recover(); r != nil { ... } }()` panic interceptors to prevent third-party crashes from terminating the database engine.
+- **Defensive Boundary Checks (`[RULE:DefensiveIndexing]`)**: Validate all slice and buffer accesses against bounds before indexing.
+- **Resource Hygiene (`[RULE:HandleHygiene]`)**: Ensure every open file descriptor, network socket, and cursor is closed cleanly via `defer Close()`.
+- **Thread Safety (`[RULE:ConcurrencySafety]`)**: Custom extensions must acquire mutexes in canonical hierarchical order to prevent deadlocks and pass `go test -race` with 0 data races.

@@ -12,7 +12,7 @@ This specification details LionSQL's authentication architecture, the Service Pr
 
 LionSQL serves enterprise client workloads simultaneously across three distinct wire interfaces:
 1. **PostgreSQL Wire Protocol v3** (TCP Port `5433`): Native drivers, ORMs, and BI tools.
-2. **Microsoft SQL Server TDS 7.x/8.0** (TCP Port `1433`): Enterprise .NET, SSMS, Azure Data Studio, and legacy T-SQL clients.
+2. **Microsoft SQL Server TDS 7.x/8.0** (TCP Port `1433`): Enterprise .NET, SSMS, and legacy T-SQL clients.
 3. **HTTP/REST Management Engine** (TCP Port `8090`): Web Studio dashboard, auto-generated CRUD APIs, and Server-Sent Events.
 
 Rather than maintaining separate authentication silos, LionSQL unifies credential verification and role-based access control (RBAC) under a centralized authentication manager (`pkg/auth`):

@@ -190,6 +190,14 @@ Verifying database ACID integrity across all accounts...
 | **P99 Latency** | **8.31 ms** | **3.99 ms** |
 | **ACID Integrity Verdict** | 100% VERIFIED | 100% VERIFIED |
 
+```mermaid
+xychart-beta
+    title "Banking Transfer SP Benchmark Throughput (10k Accounts, 100 Workers)"
+    x-axis ["In-Memory OCC", "WiredTiger MVCC"]
+    y-axis "TPS (Transactions Per Second)" 0 --> 250000
+    bar [218282, 141472]
+```
+
 ### 3.4. Storage Engine Kernel TPC-C Benchmark (`cmd/tpcc_kernel` / `bin/tpcc-kernel`)
 
 > [!NOTE]
@@ -223,6 +231,14 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-kernel ./cmd/tpcc_kernel
 | **Order-Status Avg / P95 Latency** | **0.01 ms / 0.01 ms** | **0.01 ms / 0.01 ms** |
 | **Stock-Level Avg / P95 Latency** | **0.35 ms / 1.30 ms** | **0.08 ms / 0.03 ms** |
 | **Delivery Avg / P95 Latency** | **0.50 ms / 2.25 ms** | **0.09 ms / 0.08 ms** |
+
+```mermaid
+xychart-beta
+    title "Storage Kernel TPC-C Throughput Comparison (10 Wh, 100 Workers)"
+    x-axis ["In-Memory OCC", "WiredTiger MVCC"]
+    y-axis "tpmC" 0 --> 1400000
+    bar [1066827, 1184785]
+```
 
 #### Architectural Discussion & Comparative Analysis:
 
@@ -308,6 +324,15 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
 
 *(Note: Under `-fsync always`, Leader/Follower Group Commit delivers **1,744 ~ 1,863 TPS** on Apple Silicon NVMe despite physical `F_FULLFSYNC` barrier latencies).*
 
+```mermaid
+xychart-beta
+    title "VDBE T-SQL Stored Procedure Runtime TPC-C Throughput (tpmC)"
+    x-axis ["32 Workers", "100 Workers", "200 Workers"]
+    y-axis "tpmC" 500000 --> 1000000
+    bar [759102, 735590, 723719]
+    line [863101, 825899, 839052]
+```
+
 ### 3.6. Full-Stack Client-Server Network TPC-C Benchmark (`cmd/tpcc_client` / `bin/tpcc-client`)
 
 In addition to in-process kernel (`cmd/tpcc_kernel`) and bytecode runtime (`cmd/tpcc_runtime`) benchmarks, LionSQL includes an end-to-end, multi-process client-server benchmark harness (`cmd/tpcc_client/main.go`). This benchmark measures true production network performance where client worker processes communicate with a running LionSQL server instance over standard wire protocols (Microsoft SQL Server TDS 7.x/8.0 or PostgreSQL Wire Protocol v3) via TCP sockets.
@@ -378,6 +403,14 @@ The following metrics were recorded over TCP loopback connecting to a live stand
 | **16 Wh / 32 Workers (High-Perf OLTP)** | **313,999.73 tpmC** (11,536.44 TPS) | **228,680.99 tpmC** (8,465.58 TPS) | **+37.3% higher throughput**; OCC lock-free B+Tree sharding (+62.0% over v0.90.0) |
 | **10 Wh / 100 Workers (Standard Production)**| **315,744.14 tpmC** (11,668.97 TPS) | **241,572.06 tpmC** (8,936.00 TPS) | **+30.7% higher throughput**; Canonical TPC-C 1:10 ratio (+48.3% / +67.9% over v0.90.0) |
 | **20 Wh / 200 Workers (Enterprise Stress)** | **294,795.51 tpmC** (10,908.46 TPS) | **255,040.50 tpmC** (9,424.80 TPS) | **+15.6% higher throughput**; High-concurrency socket saturation (+86.4% WT leap) |
+
+```mermaid
+xychart-beta
+    title "Network Client-Server TPC-C Throughput Comparison (tpmC)"
+    x-axis ["32W TDS", "32W PGWire", "100W TDS", "100W PGWire", "200W TDS", "200W PGWire"]
+    y-axis "tpmC" 200000 --> 400000
+    bar [313999, 376538, 315744, 357159, 294795, 329176]
+```
 
 ---
 

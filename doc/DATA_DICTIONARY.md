@@ -4,7 +4,7 @@
 > - **Last Updated**: 2026-10-24
 
 
-LionSQL provides built-in virtual system catalog views adhering to both Microsoft SQL Server (`sys.*`) and ANSI/ISO standard (`information_schema.*`) specifications. These virtual views allow standard database client tools—such as DBeaver, JetBrains DataGrip, SQL Server Management Studio (SSMS), Azure Data Studio, Navicat, and `psql`—to inspect schemas, tables, columns, indexes, procedures, and query optimizer statistics seamlessly.
+LionSQL provides built-in virtual system catalog views adhering to both Microsoft SQL Server (`sys.*`) and ANSI/ISO standard (`information_schema.*`) specifications. These virtual views allow standard database client tools—such as DBeaver, JetBrains DataGrip, SQL Server Management Studio (SSMS), Navicat, and `psql`—to inspect schemas, tables, columns, indexes, procedures, and query optimizer statistics seamlessly.
 
 ---
 
@@ -213,6 +213,5 @@ WHERE table_name = 'customers';
 | **DBeaver** | PostgreSQL (`:5433`) | Queries `information_schema.tables`, `information_schema.columns` | Full native tree navigation |
 | **DataGrip** | PostgreSQL (`:5433`) | Queries `information_schema` and `pg_catalog` | Full schema inspection |
 | **SSMS** | TDS (`:1433`) | Queries `sys.databases`, `sys.tables`, `sys.columns`, `sys.procedures` | Full Object Explorer browsing |
-| **Azure Data Studio** | TDS (`:1433`) | Queries `sys.tables`, `sys.columns`, `sys.indexes` | Full query & schema editing |
 | **Navicat** | PostgreSQL (`:5433`) | Queries `information_schema.tables` and column definitions | Supported |
 | **psql CLI** | PostgreSQL (`:5433`) | `\dt`, `\d <table>`, `SELECT * FROM information_schema.*` | Supported |

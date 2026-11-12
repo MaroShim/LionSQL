@@ -18,10 +18,16 @@ Primary authoritative references covering fundamentals, SQL/T-SQL specifications
   * Exhaustive reference for CLI flags, configurations, SQL grammar, data types, built-in functions, virtual catalog views, REST APIs, and wire protocol specifications.
 * **[`FAQ.md`](FAQ.md)** ([Korean](FAQ.ko.md))
   * Authoritative engineering FAQ answering the top 16 questions across architecture, performance, concurrency, durability, and operations.
-* **[`ARCHITECTURE.md`](ARCHITECTURE.md)**
+* **[`ARCHITECTURE.md`](ARCHITECTURE.md)** ([Korean](ARCHITECTURE.ko.md))
   * End-to-end architectural blueprint (dual storage engines, 2-Tier CBO/VDBE query runtime, goroutine connection pooler).
-* **[`BENCHMARK.md`](BENCHMARK.md)**
-  * Official verified benchmarks: TPC-C (up to 1.18M tpmC), Banking SP (218k TPS), SQLLogicTest 107 full suite, and WiredTiger vs OCC comparisons.
+* **[`BENCHMARK.md`](BENCHMARK.md)** ([Korean](BENCHMARK.ko.md))
+  * Official verified benchmarks: TPC-C (up to 1.18M tpmC), Banking SP (218k TPS), SQLLogicTest 107 full suite, and WiredTiger vs OCC comparisons with Mermaid XYCharts.
+* **[`TSQL_CHEATSHEET.md`](TSQL_CHEATSHEET.md)** ([Korean](TSQL_CHEATSHEET.ko.md))
+  * Single-page 3-second cheatsheet for T-SQL functions, system variables, and procedural syntax sorted alphabetically A-Z.
+* **[`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)** ([Korean](TROUBLESHOOTING.ko.md))
+  * Troubleshooting guide and error dictionary for SQLSTATE `40001`, `23505`, `42P01` and TDS error codes.
+* **[`MSSQL_MIGRATION_CHECKLIST.md`](MSSQL_MIGRATION_CHECKLIST.md)** ([Korean](MSSQL_MIGRATION_CHECKLIST.ko.md))
+  * Practical checklist and migration guide for moving schemas, procedures, and data from Microsoft SQL Server to LionSQL.
 
 ---
 
@@ -29,8 +35,8 @@ Primary authoritative references covering fundamentals, SQL/T-SQL specifications
 
 Guides for client tools, query development, SQL ergonomics, and verification suites.
 
-* **[`CLIENT_TOOL_INTEGRATION.md`](CLIENT_TOOL_INTEGRATION.md)**
-  * Setup guide for SSMS, DBeaver, psql, Beekeeper Studio, Grafana, and other client tools.
+* **[`CLIENT_TOOL_INTEGRATION.md`](CLIENT_TOOL_INTEGRATION.md)** ([Korean](CLIENT_TOOL_INTEGRATION.ko.md))
+  * Setup guide for SSMS, DBeaver, psql, Beekeeper Studio, DbGate, and Grafana client tools.
 * **[`SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md`](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md)** ([Korean](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md))
   * Multi-dialect SQL compatibility and developer ergonomics (MySQL backticks, `DESC`, `SHOW TABLES`, high-ROI functions).
 * **[`SQLLOGICTEST_GUIDE.md`](SQLLOGICTEST_GUIDE.md)** ([Korean](SQLLOGICTEST_GUIDE.ko.md))
@@ -70,6 +76,7 @@ Operational procedures, high availability, security hardening, APIs, and backgro
   * **[`RANGE_PARTITIONING.md`](RANGE_PARTITIONING.md)**: Automated rolling time-series range partitioning.
   * **[`JSON_INDEXING_GUIDE.md`](JSON_INDEXING_GUIDE.md)**: Semi-structured JSON B-Tree indexing.
   * **[`SCHEMA_MIGRATION_GUIDE.md`](SCHEMA_MIGRATION_GUIDE.md)** / **[`DATA_IMPORT_AND_MIGRATION.md`](DATA_IMPORT_AND_MIGRATION.md)**: Schema migrations.
+  * **[`ONLINE_SCHEMA_REORGANIZATION_GUIDE.md`](ONLINE_SCHEMA_REORGANIZATION_GUIDE.md)** ([Korean](ONLINE_SCHEMA_REORGANIZATION_GUIDE.ko.md)): Operational guide for online table schema evolution (Instant ADD COLUMN, Tail DROP, Copy-and-Switch).
   * **[`DATA_DICTIONARY.md`](DATA_DICTIONARY.md)**: System catalogs and virtual views.
 
 ---
@@ -86,7 +93,7 @@ In-depth technical specifications covering LionSQL's lower-level engine mechanis
   * **[`internal/TRANSACTION_CONCURRENCY.md`](internal/TRANSACTION_CONCURRENCY.md)**: Non-blocking snapshot reads, private workspaces, and MVCC/OCC concurrency models.
 * **Execution & Performance**:
   * **[`internal/ZERO_ALLOCATION_ARCHITECTURE.md`](internal/ZERO_ALLOCATION_ARCHITECTURE.md)**: Zero-allocation memory pooling driving 20k~218k+ TPS throughput.
-  * **[`internal/VDBE.md`](internal/VDBE.md)**: SQLite-inspired T-SQL bytecode virtual machine ISA and register recycling specifications.
+  * **[`internal/VDBE.md`](internal/VDBE.md)** ([Korean](internal/VDBE.ko.md)): SQLite-inspired T-SQL bytecode virtual machine ISA and register recycling specifications.
   * **[`internal/CBO_VOLCANO.md`](internal/CBO_VOLCANO.md)**: Volcano iterator pipeline and cost-based optimizer with equi-depth histograms.
 * **Networking & Wire Protocols**:
   * **[`internal/WIRE_PROTOCOLS.md`](internal/WIRE_PROTOCOLS.md)**: PostgreSQL v3 and TDS 7.x/8.0 binary framing and goroutine connection pooler.

@@ -21,7 +21,7 @@ This document serves as an immediate, dedicated technical reference for develope
 
 ## 2. System Version & Handshake Introspection Values
 
-Real-world response values returned when GUI tools (SSMS, Azure Data Studio, DBeaver, Beekeeper Studio) perform introspection:
+Real-world response values returned when GUI tools (SSMS, DBeaver, Beekeeper Studio) perform introspection:
 
 ```sql
 -- 1. SQL Server Version Query
@@ -45,9 +45,11 @@ SELECT version();
 ## 3. Core SQL & T-SQL Compatibility Matrix
 
 ### 3.1. Modern T-SQL Functions (SQL Server 2016 - 2019 Standard)
-* **Modern String Functions**: `STRING_SPLIT()`, `STRING_AGG() [WITHIN GROUP]`, `TRIM()`, `CONCAT()`, `CONCAT_WS()`, `TRANSLATE()`, `FORMAT()`.
+* **Modern String Functions**: `STRING_SPLIT()`, `STRING_AGG() [WITHIN GROUP]`, `TRIM()`, `CONCAT()`, `CONCAT_WS()`, `TRANSLATE()`, `FORMAT()`, `QUOTENAME()`.
+* **Compression & Binary Functions**: `COMPRESS()`, `DECOMPRESS()`, `HASHBYTES()`, `CHECKSUM()`.
 * **Native JSON Functions**: `ISJSON()`, `JSON_VALUE()`, `JSON_QUERY()`, `JSON_MODIFY()`.
 * **Date & Time Functions**: `DATEADD()`, `DATEDIFF()`, `DATEPART()`, `EOMONTH()`, `GETDATE()`, `SYSDATETIME()`.
+* **System Session & Timestamp Variables**: `@@DATEFIRST`, `@@DBTS`, `@@ROWCOUNT`, `@@ERROR`, `@@TRANCOUNT`, `@@SPID`, `@@SERVERNAME`, `@@VERSION`.
 * **Conversion & Safe Evaluation**: `CONVERT()`, `TRY_CONVERT()`, `CAST()`, `TRY_CAST()`, `PARSE()`.
 * **Window & Analytic Functions**: `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `NTILE()`, `OVER (PARTITION BY ... ORDER BY ...)`.
 
@@ -62,7 +64,7 @@ SELECT version();
 ## 4. Verified Client Tools & ORM Frameworks
 
 ### 4.1. Formally Verified GUI Clients
-- **SQL Server Tools (Port :1433)**: SQL Server Management Studio (SSMS 19/20), Azure Data Studio, `sqlcmd`, DBeaver, Beekeeper Studio, DbGate.
+- **SQL Server Tools (Port :1433)**: SQL Server Management Studio (SSMS 18/19/20 - Full Object Explorer sub-node expansion for Columns/Keys/Indexes/Triggers/Statistics and 3-part qualified table normalization for Select Top 1000 / Edit Top 200), `sqlcmd`, DBeaver, Beekeeper Studio, DbGate.
 - **PostgreSQL Tools (Port :5433)**: `psql`, pgAdmin 4, DBeaver, Metabase BI.
 
 ### 4.2. Formally Verified Drivers & ORMs

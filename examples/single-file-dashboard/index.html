@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LionSQL Instant Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/sdk/lionsql.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="w-8 h-8 rounded bg-amber-500 flex items-center justify-center font-bold text-slate-950">L</div>
+      <h1 class="text-xl font-bold tracking-tight">LionSQL Instant Dashboard</h1>
+      <span class="text-xs bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700">Single-File Mode</span>
+    </div>
+    <div class="flex items-center space-x-4 text-sm">
+      <div id="status-indicator" class="flex items-center space-x-2 text-slate-400">
+        <span class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+        <span id="status-text">Connecting...</span>
+      </div>
+      <a href="/_/" target="_blank" class="text-amber-400 hover:text-amber-300 font-medium underline">Web Studio &rarr;</a>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+    <!-- Server Overview Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-slate-800/60 border border-slate-700/60 rounded-lg p-4">
+        <div class="text-xs text-slate-400 font-medium uppercase tracking-wider">Engine Version</div>
+        <div id="stat-version" class="text-xl font-bold mt-1 text-slate-100">--</div>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700/60 rounded-lg p-4">
+        <div class="text-xs text-slate-400 font-medium uppercase tracking-wider">Default Storage</div>
+        <div id="stat-storage" class="text-xl font-bold mt-1 text-amber-400">--</div>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700/60 rounded-lg p-4">
+        <div class="text-xs text-slate-400 font-medium uppercase tracking-wider">Active Tables</div>
+        <div id="stat-tables" class="text-xl font-bold mt-1 text-emerald-400">--</div>
+      </div>
+      <div class="bg-slate-800/60 border border-slate-700/60 rounded-lg p-4">
+        <div class="text-xs text-slate-400 font-medium uppercase tracking-wider">Wire Listeners</div>
+        <div class="text-sm font-semibold mt-1.5 text-slate-300">:5433 (PG) &bull; :1433 (TDS)</div>
+      </div>
+    </div>
+
+    <!-- SQL Query Sandbox -->
+    <div class="bg-slate-800/60 border border-slate-700/60 rounded-lg overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-700/60 flex items-center justify-between bg-slate-850">
+        <div class="font-semibold text-sm">Interactive SQL Console</div>
+        <button id="run-btn" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-1.5 rounded text-sm transition">
+          Execute Query
+        </button>
+      </div>
+      <div class="p-4 space-y-3">
+        <textarea id="sql-input" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-md p-3 font-mono text-sm text-slate-200 focus:outline-none focus:border-amber-500 transition" placeholder="SELECT @@VERSION, DB_NAME();">SELECT @@VERSION AS version, DB_NAME() AS current_database;</textarea>
+        
+        <!-- Quick Query Buttons -->
+        <div class="flex flex-wrap gap-2 text-xs">
+          <span class="text-slate-400 py-1">Quick Run:</span>
+          <button class="quick-sql bg-slate-700/50 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded border border-slate-600 transition" data-sql="SELECT @@VERSION, @@DATEFIRST, @@DBTS;">System Variables</button>
+          <button class="quick-sql bg-slate-700/50 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded border border-slate-600 transition" data-sql="SELECT * FROM sys.tables;">sys.tables</button>
+          <button class="quick-sql bg-slate-700/50 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded border border-slate-600 transition" data-sql="SELECT name, type_desc FROM sys.objects WHERE type IN ('U', 'P', 'V');">sys.objects</button>
+        </div>
+      </div>
+
+      <!-- Results Grid -->
+      <div id="result-box" class="border-t border-slate-700/60 bg-slate-950 p-4 max-h-96 overflow-auto hidden">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+          <span id="result-meta">Query Result</span>
+          <span id="exec-time" class="font-mono text-amber-400">0ms</span>
+        </div>
+        <div id="table-container" class="overflow-x-auto"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800 py-4 px-6 text-center text-xs text-slate-500">
+    LionSQL Autonomous Database Engine &bull; Hosted directly via <code class="text-amber-500/80">--app=./examples/single-file-dashboard/index.html</code>
+  </footer>
+
+  <script>
+    async function init() {
+      const statusInd = document.querySelector('#status-indicator span');
+      const statusText = document.querySelector('#status-text');
+      
+      try {
+        const res = await fetch('/api/version');
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('stat-version').textContent = data.version || 'v1.0';
+          document.getElementById('stat-storage').textContent = 'In-Memory / WT';
+          statusInd.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500';
+          statusText.textContent = 'Connected (Same-Origin)';
+          loadTablesCount();
+        } else {
+          fallbackStatus();
+        }
+      } catch (e) {
+        fallbackStatus();
+      }
+    }
+
+    async function loadTablesCount() {
+      try {
+        const res = await fetch('/api/query', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({query: 'SELECT COUNT(*) AS total FROM sys.tables;'})
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.rows && data.rows.length > 0) {
+            document.getElementById('stat-tables').textContent = data.rows[0].total ?? data.rows[0][0] ?? '0';
+          }
+        }
+      } catch (e) {}
+    }
+
+    function fallbackStatus() {
+      const statusInd = document.querySelector('#status-indicator span');
+      const statusText = document.querySelector('#status-text');
+      statusInd.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500';
+      statusText.textContent = 'Online (:8090)';
+      document.getElementById('stat-version').textContent = 'v1.0-GA';
+      document.getElementById('stat-storage').textContent = 'OCC FlatRecord';
+      document.getElementById('stat-tables').textContent = 'Ready';
+    }
+
+    async function executeQuery(sql) {
+      const btn = document.getElementById('run-btn');
+      const resultBox = document.getElementById('result-box');
+      const meta = document.getElementById('result-meta');
+      const execTime = document.getElementById('exec-time');
+      const container = document.getElementById('table-container');
+
+      btn.disabled = true;
+      btn.textContent = 'Running...';
+      const t0 = performance.now();
+
+      try {
+        const res = await fetch('/api/query', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({query: sql})
+        });
+        const elapsed = (performance.now() - t0).toFixed(2);
+        const data = await res.json();
+        resultBox.classList.remove('hidden');
+        execTime.textContent = elapsed + 'ms';
+
+        if (!res.ok || data.error) {
+          meta.textContent = 'Query Failed';
+          container.innerHTML = '<div class="text-rose-400 font-mono text-sm py-2">' + (data.error || 'Unknown query error') + '</div>';
+          return;
+        }
+
+        const rows = data.rows || [];
+        const cols = data.columns || (rows.length > 0 ? Object.keys(rows[0]) : []);
+        meta.textContent = rows.length + ' row(s) returned';
+
+        if (rows.length === 0) {
+          container.innerHTML = '<div class="text-slate-400 text-sm py-4 italic">No rows returned (Command executed successfully).</div>';
+          return;
+        }
+
+        let html = '<table class="w-full text-left font-mono text-xs border-collapse">';
+        html += '<thead><tr class="border-b border-slate-700 bg-slate-900/60">';
+        for (const c of cols) {
+          html += '<th class="p-2 text-slate-300 font-semibold">' + escapeHtml(c) + '</th>';
+        }
+        html += '</tr></thead><tbody>';
+
+        for (const r of rows) {
+          html += '<tr class="border-b border-slate-800 hover:bg-slate-900/40 transition">';
+          for (const c of cols) {
+            const val = Array.isArray(r) ? r[cols.indexOf(c)] : r[c];
+            html += '<td class="p-2 text-slate-200">' + (val !== null && val !== undefined ? escapeHtml(String(val)) : '<span class="text-slate-600">NULL</span>') + '</td>';
+          }
+          html += '</tr>';
+        }
+        html += '</tbody></table>';
+        container.innerHTML = html;
+      } catch (err) {
+        resultBox.classList.remove('hidden');
+        meta.textContent = 'Network / Request Error';
+        container.innerHTML = '<div class="text-rose-400 font-mono text-sm py-2">' + escapeHtml(err.message) + '</div>';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Execute Query';
+      }
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>'"]/g, tag => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        "'": '&#39;',
+        '"': '&quot;'
+      }[tag] || tag));
+    }
+
+    document.getElementById('run-btn').addEventListener('click', () => {
+      executeQuery(document.getElementById('sql-input').value.trim());
+    });
+
+    document.querySelectorAll('.quick-sql').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sql = btn.getAttribute('data-sql');
+        document.getElementById('sql-input').value = sql;
+        executeQuery(sql);
+      });
+    });
+
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

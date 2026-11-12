@@ -12,7 +12,7 @@ LionSQL is an enterprise-grade, high-concurrency embedded OLTP database engine w
 +---------------------------------------------------------------------------------------------------------+
 |                                        Client Ecosystem & Interfaces                                    |
 |   +--------------------------+   +--------------------------+   +-----------------------------------+   |
-|   | PostgreSQL Tools / ORMs  |   | MSSQL / Azure Data Studio|   | HTTP REST / Embedded Web Studio   |   |
+|   | PostgreSQL Tools / ORMs  |   | MSSQL Tools / Drivers    |   | HTTP REST / Embedded Web Studio   |   |
 |   | (psql, DBeaver, GORM)    |   | (sqlcmd, SSMS, pymssql)  |   | (Browser Dashboard, Realtime SSE) |   |
 |   | Port: 5433               |   | Port: 1433               |   | Port: 8090                        |   |
 +---+--------------------------+---+--------------------------+---+-----------------------------------+---+
@@ -305,7 +305,7 @@ sequenceDiagram
    - Fully compatible with `psql \copy` and `pg_dump`.
 3. **Microsoft SQL Server TDS 7.x/8.0 Protocol (`pkg/wire/tds/`)**:
    - Port `:1433`.
-   - Supports PRELOGIN, LOGIN7, SQLBatch, and RPC token parsing for SSMS, Azure Data Studio, and `sqlcmd`.
+   - Supports PRELOGIN, LOGIN7, SQLBatch, and RPC token parsing for SSMS and `sqlcmd`.
 
 ---
 

@@ -67,6 +67,8 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
   * **[`P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md`](plans/P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md)**: 크론 자식 프로세스 환상 탈피, 전사 세션 글로벌 패닉 완충망(`[RULE:PanicRecovery]`) 및 동시성 격리 아키텍처.
 * **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)**
   * LionSQL 전역 정규식 완전 박멸 및 결정론적 토크나이저 전환 단일 SSOT 종합 계획서 (`GA-REGEX-DDL-1` ~ `GA-REGEX-FINAL-3`, `SEC-PGWIRE-PARAM-1`).
+* **[`DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)**
+  * LionSQL 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 (`DOC-REVAMP-10`).
 * **[`DURABILITY_VERIFICATION_PLAN.ko.md`](plans/DURABILITY_VERIFICATION_PLAN.ko.md)**
   * 킬 테스트(SIGKILL 즉시 복구), 소크 테스트, 개밥 먹기(Dogfooding) 기반 실전 운영 내구성 검증 계획서.
 * **[`PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md`](plans/PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md)** / **[`PRE_1.0_FINAL_SAFETY_NET_AUDIT_REPORT.ko.md`](reports/PRE_1.0_FINAL_SAFETY_NET_AUDIT_REPORT.ko.md)**
@@ -134,6 +136,8 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 
 실전 장애 극복 과정에서 얻은 교훈, 사각지대 분석 및 아키텍처 불변성을 지키기 위해 의도적으로 기각된 평가서입니다.
 
+* **[`SPEC_OUT_DECISIONS.ko.md`](SPEC_OUT_DECISIONS.ko.md)**
+  * LionSQL 21대 기각 결정(Negative Knowledge) 전용 카탈로그 (PL/pgSQL 중복 인터프리터, XML DML, 분산 2PC, Wasm UDF, MySQL 고유 DML, 인메모리 압축, Delta WAL, 중간 컬럼 DROP 등 21개 항목의 이론적 기각 사유 및 표준 대체안 집대성).
 * **[`DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`](DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md)**
   * DuckDB 스타일 편의 문법(`SELECT * EXCLUDE`, `FROM <table>;`) 및 MySQL 추가 호환 구문의 기각 사유와 불변 경계 평가 (오타 침묵 방지 및 RDBMS 엄격성 수호).
 * **[`EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](plans/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)**

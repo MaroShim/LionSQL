@@ -19,10 +19,16 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
   * CLI 플래그, 설정 파일, SQL 문법 및 구문, 데이터 타입, 내장 함수, 가상 카탈로그 뷰, REST API 및 와이어 프로토콜 기술 사양을 총망라하는 공식 레퍼런스 매뉴얼.
 * **[`FAQ.ko.md`](FAQ.ko.md)** ([English](FAQ.md))
   * 아키텍처 불변식, 동시성/내구성, 프로토콜 호환성 및 극한의 성능 최적화를 망라하는 LionSQL 핵심 엔지니어링 FAQ 16선.
-* **[`ARCHITECTURE.md`](ARCHITECTURE.md)** (English)
+* **[`ARCHITECTURE.ko.md`](ARCHITECTURE.ko.md)** ([English](ARCHITECTURE.md))
   * LionSQL 전 계층 엔드투엔드 아키텍처 청사진 (듀얼 스토리지 백엔드, 2-Tier CBO/VDBE 쿼리 엔진, 고루틴 커넥션 풀러).
-* **[`BENCHMARK.md`](BENCHMARK.md)** (English)
-  * TPC-C (최대 118만 tpmC), 은행 송금 SP (21.8만 TPS), SQLLogicTest 107개 전수 검증, WiredTiger vs OCC 비교 등 공식 실측 벤치마크.
+* **[`BENCHMARK.ko.md`](BENCHMARK.ko.md)** ([English](BENCHMARK.md))
+  * TPC-C (최대 118만 tpmC), 은행 송금 SP (21.8만 TPS), SQLLogicTest 107개 전수 검증, WiredTiger vs OCC 비교 등 공식 실측 벤치마크 및 Mermaid 차트.
+* **[`TSQL_CHEATSHEET.ko.md`](TSQL_CHEATSHEET.ko.md)** ([English](TSQL_CHEATSHEET.md))
+  * T-SQL 함수, 시스템 변수, 제어 흐름을 알파벳 A~Z 순서로 정리한 3초 초고속 검색 치트시트.
+* **[`TROUBLESHOOTING.ko.md`](TROUBLESHOOTING.ko.md)** ([English](TROUBLESHOOTING.md))
+  * SQLSTATE `40001`, `23505`, `42P01` 및 TDS 에러 코드 원인과 해결 레시피를 집대성한 트러블슈팅 사전.
+* **[`MSSQL_MIGRATION_CHECKLIST.ko.md`](MSSQL_MIGRATION_CHECKLIST.ko.md)** ([English](MSSQL_MIGRATION_CHECKLIST.md))
+  * Microsoft SQL Server에서 LionSQL로의 스키마, 프로시저, 데이터 대량 이전 실무 체크리스트.
 
 ---
 
@@ -30,8 +36,8 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
 
 클라이언트 도구, 쿼리 개발, SQL 편의 문법 및 검증 스위트 활용 가이드입니다.
 
-* **[`CLIENT_TOOL_INTEGRATION.md`](CLIENT_TOOL_INTEGRATION.md)** (English)
-  * SSMS, DBeaver, psql, Beekeeper Studio, Grafana 등 주요 클라이언트 GUI 및 CLI 도구 연동 가이드.
+* **[`CLIENT_TOOL_INTEGRATION.ko.md`](CLIENT_TOOL_INTEGRATION.ko.md)** ([English](CLIENT_TOOL_INTEGRATION.md))
+  * SSMS, DBeaver, psql, Beekeeper Studio, DbGate, Grafana 등 주요 클라이언트 GUI 및 CLI 도구 연동 가이드.
 * **[`SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md`](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md)** ([English](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md))
   * LionSQL 다중 방언 SQL 호환성 및 개발자 편의 문법(MySQL 호환 백틱, `DESC`, `SHOW TABLES`, 고ROI 빌트인 함수 등).
 * **[`SQLLOGICTEST_GUIDE.ko.md`](SQLLOGICTEST_GUIDE.ko.md)** ([English](SQLLOGICTEST_GUIDE.md))
@@ -71,6 +77,7 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
   * **[`RANGE_PARTITIONING.md`](RANGE_PARTITIONING.md)**: 시계열 자동 롤링 레인지 파티셔닝.
   * **[`JSON_INDEXING_GUIDE.md`](JSON_INDEXING_GUIDE.md)**: 반정형 JSON B-Tree 표현식 인덱싱.
   * **[`SCHEMA_MIGRATION_GUIDE.md`](SCHEMA_MIGRATION_GUIDE.md)** / **[`DATA_IMPORT_AND_MIGRATION.md`](DATA_IMPORT_AND_MIGRATION.md)**: 스키마 마이그레이션.
+  * **[`ONLINE_SCHEMA_REORGANIZATION_GUIDE.ko.md`](ONLINE_SCHEMA_REORGANIZATION_GUIDE.ko.md)** ([English](ONLINE_SCHEMA_REORGANIZATION_GUIDE.md)): 테이블 스키마 진화(Instant ADD COLUMN, Tail DROP, Copy-and-Switch) 무중단 운영 가이드.
   * **[`DATA_DICTIONARY.md`](DATA_DICTIONARY.md)**: 시스템 카탈로그 및 가상 뷰 명세.
 
 ---
@@ -87,7 +94,7 @@ LionSQL의 심층 하부 구현, 바이트코드 가상 머신(VDBE), 제로 할
   * **[`internal/TRANSACTION_CONCURRENCY.md`](internal/TRANSACTION_CONCURRENCY.md)**: 비차단 스냅샷 읽기, 워크스페이스 격리 및 MVCC/OCC 동시성 모델.
 * **실행 엔진 및 최적화**:
   * **[`internal/ZERO_ALLOCATION_ARCHITECTURE.md`](internal/ZERO_ALLOCATION_ARCHITECTURE.md)**: 20,000+ ~ 218,000+ TPS를 견인하는 제로 할당 메모리 및 버퍼 풀링 아키텍처.
-  * **[`internal/VDBE.md`](internal/VDBE.md)**: SQLite 스타일 T-SQL 바이트코드 VM 명령어 세트(ISA) 및 레지스터 풀링 명세.
+  * **[`internal/VDBE.ko.md`](internal/VDBE.ko.md)** ([English](internal/VDBE.md)): SQLite 스타일 T-SQL 바이트코드 VM 명령어 세트(ISA) 및 레지스터 풀링 명세.
   * **[`internal/CBO_VOLCANO.md`](internal/CBO_VOLCANO.md)**: Volcano 반복자 파이프라인 및 64-버킷 균등 깊이 히스토그램 기반 비용 최적화기.
 * **네트워킹 및 와이어 프로토콜**:
   * **[`internal/WIRE_PROTOCOLS.md`](internal/WIRE_PROTOCOLS.md)**: PostgreSQL v3 및 TDS 7.x/8.0 바이너리 프레이밍 및 고루틴 커넥션 풀러.

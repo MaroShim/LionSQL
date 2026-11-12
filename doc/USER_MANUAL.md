@@ -86,7 +86,7 @@ This document is the **official User Manual** for the LionSQL database engine, p
   * Beekeeper Studio (PostgreSQL / SQL Server driver compatibility)
   * DBeaver Universal Database Tool (Metadata tree browsing guide)
   * Navicat Premium / Navicat for PostgreSQL
-  * Azure Data Studio & SQL Server Management Studio (SSMS)
+  * SQL Server Management Studio (SSMS)
 * **4.4. Built-in Web Studio Full Utilization**
   * Browser-based GUI dashboard (`http://127.0.0.1:8090/_/`)
   * Real-time SSE system monitoring stream (`/api/realtime`)
@@ -181,11 +181,11 @@ LionSQL unites the best of both paradigms within a single binary, delivering **t
    - A single executable (`lionsql`) encapsulates the DB kernel, three network listeners (PGWire, TDS, HTTP), an embedded web administration console (Web Studio), backup/restore engines, and a cron scheduler.
 2. **Simultaneous Multi-Protocol Tri-Bridge**:
    - **PostgreSQL Wire Protocol v3 (`TCP :5433`)**: 100% compatible with standard `psql`, DBeaver, GORM, Prisma, `lib/pq`, `pgx`, and the extensive PostgreSQL client tool and driver ecosystem (default catalog: `postgres`).
-   - **Microsoft SQL Server TDS 7.x/8.0 (`TCP :1433`)**: Direct integration with standard MSSQL tools such as `sqlcmd`, Azure Data Studio, SSMS, and Beekeeper Studio (default catalog: `master`).
+   - **Microsoft SQL Server TDS 7.x/8.0 (`TCP :1433`)**: Direct integration with standard MSSQL tools such as `sqlcmd`, SSMS, and Beekeeper Studio (default catalog: `master`).
    - **HTTP REST & Server-Sent Events (`TCP :8090`)**: Provides zero-config automated CRUD REST APIs, real-time SSE streams, and a browser-based GUI management studio concurrently.
    > [!TIP]
    > **Recommended Application Protocol: PGWire (`:5433`)**
-   > Even in environments that extensively utilize T-SQL stored procedures (`EXEC ...`), **using the PGWire (:5433) protocol is strongly recommended** for backend applications and microservices integration. Compared to TDS, it features lower packet overhead and supports pipelining, yielding higher measured network throughput (376,000+ tpmC / 13,900+ TPS), alongside the most mature driver support across every language ecosystem (Go, Python, Node, Java). TDS (:1433) is optimally reserved for legacy Microsoft management tools such as SSMS and Azure Data Studio.
+   > Even in environments that extensively utilize T-SQL stored procedures (`EXEC ...`), **using the PGWire (:5433) protocol is strongly recommended** for backend applications and microservices integration. Compared to TDS, it features lower packet overhead and supports pipelining, yielding higher measured network throughput (376,000+ tpmC / 13,900+ TPS), alongside the most mature driver support across every language ecosystem (Go, Python, Node, Java). TDS (:1433) is optimally reserved for legacy Microsoft management tools such as SSMS.
 3. **High-Concurrency Dual Storage Engines**:
    - Seamlessly switch between a persistence-oriented disk B+Tree MVCC storage engine (WiredTiger) and an in-memory OCC storage engine (Pure-Go SkipList) delivering microsecond responses via a single configuration flag.
 4. **Sub-Microsecond T-SQL VDBE Bytecode Virtual Machine**:
@@ -784,7 +784,7 @@ Connection guides for six major tools validated with 100% compatibility by the L
 * **Connection Type**: `PostgreSQL`
 * **Host**: `localhost`, **Port**: `5433`, **Database**: `postgres`, **User**: `admin`
 
-#### 4. Azure Data Studio & SQL Server Management Studio (SSMS)
+#### 4. SQL Server Management Studio (SSMS)
 * **Server**: `127.0.0.1,1433` (Port separated by comma)
 * **Authentication**: `SQL Server Authentication`
 * **Login**: `sa`, **Password**: `1234567890`

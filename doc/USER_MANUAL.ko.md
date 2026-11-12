@@ -86,7 +86,7 @@
   * Beekeeper Studio (PostgreSQL / SQL Server 드라이버 연결 완비)
   * DBeaver Universal Database Tool (메타데이터 트리 브라우징 가이드)
   * Navicat Premium / Navicat for PostgreSQL
-  * Azure Data Studio & SQL Server Management Studio (SSMS)
+  * SQL Server Management Studio (SSMS)
 * **4.4. 내장 웹 스튜디오(Web Studio) 완벽 활용**
   * 브라우저 기반 GUI 대시보드 (`http://127.0.0.1:8090/_/`)
   * 실시간 SSE 시스템 모니터링 스트림 (`/api/realtime`)
@@ -181,11 +181,11 @@ LionSQL은 이러한 양극단의 장점을 단일 바이너리에 결합하여,
    - 단 하나의 실행 파일(`lionsql`) 내에 DB 커널, 3대 네트워크 리스너(PGWire, TDS, HTTP), 내장 웹 관리 콘솔(Web Studio), 백업/복원 엔진, 크론 스케줄러가 모두 내장되어 있습니다.
 2. **다중 와이어 프로토콜 동시 지원 (Multi-Protocol Tri-Bridge)**:
    - **PostgreSQL Wire Protocol v3 (`TCP :5433`)**: 표준 `psql`, DBeaver, GORM, Prisma, `lib/pq`, `pgx` 등 방대한 PostgreSQL 클라이언트 도구 및 드라이버와 100% 호환됩니다 (기본 카탈로그: `postgres`).
-   - **Microsoft SQL Server TDS 7.x/8.0 (`TCP :1433`)**: `sqlcmd`, Azure Data Studio, SSMS, Beekeeper Studio 등 표준 MSSQL 생태계 도구와 직결됩니다 (기본 카탈로그: `master`).
+   - **Microsoft SQL Server TDS 7.x/8.0 (`TCP :1433`)**: `sqlcmd`, SSMS, Beekeeper Studio 등 표준 MSSQL 생태계 도구와 직결됩니다 (기본 카탈로그: `master`).
    - **HTTP REST & Server-Sent Events (`TCP :8090`)**: 무설정 자동 CRUD REST API, 실시간 SSE 스트림, 브라우저 기반 GUI 관리 스튜디오를 동시 제공합니다.
    > [!TIP]
    > **애플리케이션 권장 프로토콜: PGWire (`:5433`)**
-   > T-SQL 저장 프로시저(`EXEC ...`)를 주로 사용하는 환경이더라도 백엔드 애플리케이션 및 마이크로서비스 연동 시에는 **PGWire(:5433) 프로토콜 사용을 강력히 권장**합니다. TDS 대비 패킷 오버헤드가 적고 파이프라이닝을 지원하여 실측 네트워크 처리량(376,000+ tpmC / 13,900+ TPS)이 더 높으며, 모든 언어 생태계(Go, Python, Node, Java)에서 가장 성숙한 드라이버 지원을 받을 수 있습니다. TDS(:1433)는 주로 SSMS, Azure Data Studio 등 레거시 MS 관리 도구 전용으로 사용하는 것이 최적입니다.
+   > T-SQL 저장 프로시저(`EXEC ...`)를 주로 사용하는 환경이더라도 백엔드 애플리케이션 및 마이크로서비스 연동 시에는 **PGWire(:5433) 프로토콜 사용을 강력히 권장**합니다. TDS 대비 패킷 오버헤드가 적고 파이프라이닝을 지원하여 실측 네트워크 처리량(376,000+ tpmC / 13,900+ TPS)이 더 높으며, 모든 언어 생태계(Go, Python, Node, Java)에서 가장 성숙한 드라이버 지원을 받을 수 있습니다. TDS(:1433)는 주로 SSMS 등 레거시 MS 관리 도구 전용으로 사용하는 것이 최적입니다.
 3. **고동시성 듀얼 스토리지 엔진 (Dual Storage Engine)**:
    - 영속성 중심의 디스크 B+Tree MVCC 스토리지(WiredTiger)와 초고속 마이크로초 단위 응답을 보장하는 인메모리 OCC 스토리지(Pure-Go SkipList)를 상황에 맞게 플래그 하나로 선택할 수 있습니다.
 4. **마이크로초 T-SQL VDBE 바이트코드 가상 머신**:
@@ -784,7 +784,7 @@ LionSQL 엔지니어링 팀에서 100% 정상 작동을 실측 검증한 6대 �
 * **Connection Type**: `PostgreSQL`
 * **Host**: `localhost`, **Port**: `5433`, **Database**: `postgres`, **User**: `admin`
 
-#### 4. Azure Data Studio & SQL Server Management Studio (SSMS)
+#### 4. SQL Server Management Studio (SSMS)
 * **Server**: `127.0.0.1,1433` (포트 번호는 쉼표로 구분)
 * **Authentication**: `SQL Server Authentication`
 * **Login**: `sa`, **Password**: `1234567890`

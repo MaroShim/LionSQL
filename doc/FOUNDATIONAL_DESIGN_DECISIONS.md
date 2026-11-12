@@ -97,7 +97,7 @@ To ensure sub-microsecond parsing for high-frequency queries while guaranteeing 
 
 ### 5.1. Dual Wire Protocols: Microsoft TDS (1433) + PostgreSQL Wire (5433)
 Enterprise systems rarely live in a single-vendor vacuum. LionSQL adopts a multi-wire strategy:
-* **Native TDS 7.x/8.0 (Port :1433)**: Provides first-class support for Microsoft SQL Server enterprise tools (SSMS, Azure Data Studio, `sqlcmd`, ADO.NET, EF Core).
+* **Native TDS 7.x/8.0 (Port :1433)**: Provides first-class support for Microsoft SQL Server enterprise tools (SSMS, `sqlcmd`, ADO.NET, EF Core).
 * **PostgreSQL Wire Protocol v3 (Port :5433)**: Opens the entire modern open-source cloud ecosystem. Any driver, ORM, or data tool supporting PostgreSQL (`psql`, DBeaver, GORM, Prisma, JDBC, ODBC) connects seamlessly to LionSQL without custom client libraries.
 
 ### 5.2. Native Embedded HTTP/REST BaaS Engine (Port :8090)

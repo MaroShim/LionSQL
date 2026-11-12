@@ -879,9 +879,16 @@ Appends new columns to existing tables, drops deprecated columns, and prunes exp
   ALTER TABLE table_name DROP COLUMN column_name;
   ALTER TABLE table_name DROP PARTITION 'partition_id';
   ```
+* **DDL Constraints & Semantics**:
+  - `ADD COLUMN`: Operates as an instant $O(1)$ DDL without rewriting existing table tuples, updating metadata alone.
+  - `DROP COLUMN`: Instant $O(1)$ deletion is fully supported on the terminal (tail) column of a table. Dropping non-terminal (middle) columns on populated tables is strictly rejected with an explicit error (`ErrDropColumnNotTail`, fail-closed) to prevent runtime latency spikes and decoding hot-path regressions.
+  - For middle column removal and structural reorganizations, refer to the **[`ONLINE_SCHEMA_REORGANIZATION_GUIDE.md`](ONLINE_SCHEMA_REORGANIZATION_GUIDE.md)** for the canonical zero-downtime Copy-and-Switch procedure.
 * **Execution Examples**:
   ```sql
+  -- Instant O(1) column addition
   ALTER TABLE customers ADD phone_number VARCHAR(30) DEFAULT 'N/A';
+
+  -- Instant O(1) terminal (tail) column deletion
   ALTER TABLE customers DROP COLUMN legacy_fax;
 
   -- Instant O(1) physical drop of August 2026 partition (auto-cleans secondary indexes)
@@ -1310,13 +1317,13 @@ LionSQL's expression evaluation engine strictly honors ANSI SQL and T-SQL operat
 
 ## Chapter 6. System Catalogs Reference
 
-While strictly adhering to the instance-level isolation invariant (Single Database per Process), LionSQL projects virtual system catalogs in memory to guarantee 100% transparent interoperability with ecosystem tools such as DBeaver, Beekeeper Studio, Navicat, SSMS, Azure Data Studio, psql, and sqlcmd.
+While strictly adhering to the instance-level isolation invariant (Single Database per Process), LionSQL projects virtual system catalogs in memory to guarantee 100% transparent interoperability with ecosystem tools such as DBeaver, Beekeeper Studio, Navicat, SSMS, psql, and sqlcmd.
 
 ---
 
 ### 6.1. MS SQL Server Compatible Catalog (`sys.*`)
 
-Virtual catalog views queried by SSMS, Azure Data Studio, and sqlcmd when inspecting database structures, tables, and stored procedures.
+Virtual catalog views queried by SSMS and sqlcmd when inspecting database structures, tables, and stored procedures.
 
 #### 1. `sys.databases`
 Provides metadata for the active database catalog.
@@ -1795,7 +1802,7 @@ TDS frames maintain an **8-byte Common Header** at the start of every packet:
 * [`internal/WIRE_PROTOCOLS.md`](internal/WIRE_PROTOCOLS.md)
   - **Wire Protocol Implementation Details**: PostgreSQL Wire Protocol v3 (port 5433) simple/extended packet handling and MS SQL Server TDS 7.x/8.0 (port 1433) Prelogin, Login7, RPC, and `sp_prepexec` plan cache integration.
 * [`CLIENT_TOOL_INTEGRATION.md`](CLIENT_TOOL_INTEGRATION.md)
-  - **GUI/CLI Tool Integration & Catalog Interception**: Integration guide for Beekeeper Studio, DBeaver, DbGate, Azure Data Studio, SSMS, `psql`, and `sqlcmd`. Per-tool catalog interception, pagination translation, and language driver connection string recipes.
+  - **GUI/CLI Tool Integration & Catalog Interception**: Integration guide for Beekeeper Studio, DBeaver, DbGate, SSMS, `psql`, and `sqlcmd`. Per-tool catalog interception, pagination translation, and language driver connection string recipes.
 
 #### 10.4. BaaS Features, Web SDK & REST API
 * [`REST_API_RECORDS_GUIDE.md`](REST_API_RECORDS_GUIDE.md)

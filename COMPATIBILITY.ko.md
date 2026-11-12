@@ -21,7 +21,7 @@ LionSQL은 Microsoft SQL Server T-SQL 생태계와 PostgreSQL 클라이언트/�
 
 ## 2. 시스템 버전 및 인트로스펙션 식별값
 
-DBeaver, SSMS, Azure Data Studio, Beekeeper Studio 등 주요 GUI 도구가 접속 시 질의하는 버전 핸드셰이크 응답값입니다:
+DBeaver, SSMS, Beekeeper Studio 등 주요 GUI 도구가 접속 시 질의하는 버전 핸드셰이크 응답값입니다:
 
 ```sql
 -- 1. SQL Server 버전 확인
@@ -45,9 +45,11 @@ SELECT version();
 ## 3. 핵심 SQL 및 T-SQL 기능 호환 매트릭스
 
 ### 3.1. T-SQL 현대 내장 함수 (SQL Server 2016~2019 규격)
-* **현대 문자열 함수**: `STRING_SPLIT()`, `STRING_AGG() [WITHIN GROUP]`, `TRIM()`, `CONCAT()`, `CONCAT_WS()`, `TRANSLATE()`, `FORMAT()`.
+* **현대 문자열 함수**: `STRING_SPLIT()`, `STRING_AGG() [WITHIN GROUP]`, `TRIM()`, `CONCAT()`, `CONCAT_WS()`, `TRANSLATE()`, `FORMAT()`, `QUOTENAME()`.
+* **압축 및 바이너리 함수**: `COMPRESS()`, `DECOMPRESS()`, `HASHBYTES()`, `CHECKSUM()`.
 * **네이티브 JSON 함수**: `ISJSON()`, `JSON_VALUE()`, `JSON_QUERY()`, `JSON_MODIFY()`.
 * **날짜 및 시간 함수**: `DATEADD()`, `DATEDIFF()`, `DATEPART()`, `EOMONTH()`, `GETDATE()`, `SYSDATETIME()`.
+* **시스템 세션 및 타임스탬프 변수**: `@@DATEFIRST`, `@@DBTS`, `@@ROWCOUNT`, `@@ERROR`, `@@TRANCOUNT`, `@@SPID`, `@@SERVERNAME`, `@@VERSION`.
 * **타입 변환 및 방어 함수**: `CONVERT()`, `TRY_CONVERT()`, `CAST()`, `TRY_CAST()`, `PARSE()`.
 * **윈도우 및 분석 함수**: `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `NTILE()`, `OVER (PARTITION BY ... ORDER BY ...)`.
 
@@ -62,7 +64,7 @@ SELECT version();
 ## 4. 검증된 클라이언트 도구 & ORM 프레임워크
 
 ### 4.1. 공식 검증 완료 GUI 클라이언트
-- **SQL Server 도구 (포트 :1433)**: SQL Server Management Studio (SSMS 19/20), Azure Data Studio, `sqlcmd`, DBeaver, Beekeeper Studio, DbGate.
+- **SQL Server 도구 (포트 :1433)**: SQL Server Management Studio (SSMS 18/19/20 - 개체 탐색기 하위 폴더 Columns/Keys/Indexes/Triggers/Statistics 완전 지원 및 우클릭 Select Top 1000 / Edit Top 200 3-Part 이름 정규화 완비), `sqlcmd`, DBeaver, Beekeeper Studio, DbGate.
 - **PostgreSQL 도구 (포트 :5433)**: `psql`, pgAdmin 4, DBeaver, Metabase BI.
 
 ### 4.2. 프로덕션 검증 완료 드라이버 & ORM

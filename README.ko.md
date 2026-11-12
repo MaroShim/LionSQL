@@ -33,7 +33,7 @@ LionSQL은 Microsoft SQL Server의 T-SQL & 저장 프로시저(Stored Procedure)
 [Postgres Wire v3]             [MSSQL TDS 7.x/8.0]             [Web Studio & SPA Web Server]
   포트 :5433                      포트 :1433                      포트 :8090 (/_/, /)
  (psql, DBeaver,                  (sqlcmd, SSMS,                  (브라우저 어드민, SPA 호스팅,
-  GORM, Prisma)                    Azure Data Studio)              REST API, 실시간 SSE,
+  GORM, Prisma)                    Beekeeper Studio)               REST API, 실시간 SSE,
                                                                    웹훅, RLS, 크론, JS SDK)
         └────────────────────────────────┬────────────────────────────────┘
                                          │
@@ -80,13 +80,13 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 ### 2.1. 다중 와이어 프로토콜 & 연결 관리
 - **동시 다중 와이어 프로토콜**:
   - **PostgreSQL v3 프로토콜 (포트 5433)**: `psql`, DBeaver, GORM, Prisma, pgx 등 표준 PostgreSQL 도구 및 ORM과 완벽 호환되며, SSL/TLS 보안 연결과 파라미터 바인딩을 지원합니다.
-  - **Microsoft SQL Server TDS 프로토콜 (포트 1433)**: `sqlcmd`, SSMS, Azure Data Studio 등 기존 MSSQL 생태계 도구와 즉시 연동되며, RPC 프리페어드 파이프라인을 지원합니다.
+  - **Microsoft SQL Server TDS 프로토콜 (포트 1433)**: `sqlcmd`, SSMS 등 기존 MSSQL 생태계 도구와 즉시 연동되며, RPC 프리페어드 파이프라인을 지원합니다.
 - **내장 Goroutine 커넥션 풀러**:
   경량 Go 고루틴 기반으로 10,000개 이상의 동시 클라이언트 연결을 효율적으로 처리하여 외부 커넥션 풀러 없이도 연결 병목을 해소합니다.
 
 > [!TIP]
 > **애플리케이션 권장 프로토콜: PostgreSQL Wire (`:5433`)**
-> LionSQL은 두 프로토콜을 동시에 완벽 지원하지만, **T-SQL 저장 프로시저(`EXEC sp_name @p1=$1;`)를 실행하는 환경에서도 일반 애플리케이션 연결에는 PGWire(:5433) 사용을 강력히 권장합니다.** PGWire는 Microsoft TDS의 무거운 바이너리 RPC 스트림 대비 프레임 오버헤드가 극히 적고 확장 쿼리 파이프라이닝(`Bind`+`Execute`+`Sync`)을 단일 TCP 패킷으로 일괄 처리하여 실측 처리량이 더 높으며(376,000+ tpmC / 13,900+ TPS), Go (`pgx`, `lib/pq`), Node.js, Python, Java 등 전 언어 생태계에서 인증서 신뢰 이슈 없는 성숙한 드라이버를 제공합니다. TDS(:1433)는 주로 SSMS, Azure Data Studio, 레거시 .NET `SqlClient` 등 Microsoft 전용 도구 연동에 사용하는 것이 이상적입니다.
+> LionSQL은 두 프로토콜을 동시에 완벽 지원하지만, **T-SQL 저장 프로시저(`EXEC sp_name @p1=$1;`)를 실행하는 환경에서도 일반 애플리케이션 연결에는 PGWire(:5433) 사용을 강력히 권장합니다.** PGWire는 Microsoft TDS의 무거운 바이너리 RPC 스트림 대비 프레임 오버헤드가 극히 적고 확장 쿼리 파이프라이닝(`Bind`+`Execute`+`Sync`)을 단일 TCP 패킷으로 일괄 처리하여 실측 처리량이 더 높으며(376,000+ tpmC / 13,900+ TPS), Go (`pgx`, `lib/pq`), Node.js, Python, Java 등 전 언어 생태계에서 인증서 신뢰 이슈 없는 성숙한 드라이버를 제공합니다. TDS(:1433)는 주로 SSMS, 레거시 .NET `SqlClient` 등 Microsoft 전용 도구 연동에 사용하는 것이 이상적입니다.
 
 ### 2.2. 엔터프라이즈 T-SQL 절차적 런타임
 - **저장 프로시저, 함수 및 트리거**:
@@ -192,7 +192,7 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql.
  [HTTP API]       http://127.0.0.1:8090/api/health
  [CDC Stream]     http://127.0.0.1:8090/api/cdc/stream (NDJSON / SSE)
  [Superuser Auth] admin@lionsql.local (JWT Auth: false)
- [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / Azure Data Studio
+ [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / SSMS
  [Postgres Wire]  psql -h 127.0.0.1 -p 5433 (PostgreSQL v3 protocol, psql / pgx)
  [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 (TDS 7.x/8.0 protocol, sqlcmd / SSMS)
  [Data Directory] data
@@ -512,7 +512,7 @@ LionSQL의 모든 내부 문서, 아키텍처 결정 기록(ADR), 프로토콜 �
 - **[엔터프라이즈 인증 SPI 및 디렉터리 연동](doc/ENTERPRISE_AUTHENTICATION_SPI.md)**: `AuthProvider` SPI, LDAP/Active Directory 연동, 경계 보안 아키텍처.
 - **[불변 감사 로그 아키텍처 및 구현 계획](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md)**: PCI-DSS v4.0, SOC 2 Type II 대응 SHA-256 해시 체이닝 감사 로그.
 - **[T-SQL 및 SQL 구문 레퍼런스 가이드](doc/TSQL_REFERENCE.md)**: 프로시저, 함수, 트리거, 제어 흐름문 전체 언어 레퍼런스.
-- **[클라이언트 도구 연동 가이드](doc/CLIENT_TOOL_INTEGRATION.md)**: DBeaver, SSMS, Azure Data Studio, Beekeeper, JDBC, ODBC 연동 가이드.
+- **[클라이언트 도구 연동 가이드](doc/CLIENT_TOOL_INTEGRATION.md)**: DBeaver, SSMS, Beekeeper, JDBC, ODBC 연동 가이드.
 - **[성능 튜닝 및 벤치마크 가이드](doc/BENCHMARK.md)**: 고동시성 뱅킹 벤치마크, TPS 측정치, 메모리 튜닝 가이드.
 - **[데이터 임포트 및 마이그레이션 가이드](doc/DATA_IMPORT_AND_MIGRATION.md)**: PostgreSQL, Microsoft SQL Server, SQLite, MySQL로부터의 데이터 이전 절차.
 - **[보안 정책 및 위협 모델](doc/SECURITY.md)**: RBAC 접근 제어, SQL 인젝션 방어, 취약점 대응 정책.

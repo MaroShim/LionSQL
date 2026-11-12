@@ -251,7 +251,7 @@ server {
 | Port | Protocol | Default Exposure | Purpose |
 |---|---|---|---|
 | `5433` | TCP | Private VPC / Internal | PostgreSQL Wire Protocol (psql, application ORMs) |
-| `1433` | TCP | Private VPC / Internal | Microsoft TDS Protocol (SSMS, Azure Data Studio) |
+| `1433` | TCP | Private VPC / Internal | Microsoft TDS Protocol (SSMS, sqlcmd, drivers) |
 | `8090` | TCP | Localhost / Reverse Proxy | Embedded Web Studio, REST API, Health & Metrics |
 
 ---

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LionSQL Flat SPA App</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="/sdk/lionsql.js"></script>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo-badge">L</div>
+      <h2>LionSQL Client App</h2>
+      <span style="font-size: 0.75rem; color: #94a3b8; background: #1e293b; padding: 2px 6px; border-radius: 4px;">Flat SPA</span>
+    </div>
+    <nav>
+      <a href="#/tables" class="nav-link active" data-view="tables">Tables</a>
+      <a href="#/query" class="nav-link" data-view="query">Query Runner</a>
+      <a href="#/about" class="nav-link" data-view="about">About</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- View 1: Tables -->
+    <section id="view-tables" class="view-section active">
+      <div class="card">
+        <h3>Database Schema & Tables</h3>
+        <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.25rem;">Live introspection from LionSQL catalog</p>
+        <div id="tables-list" style="margin-top: 1rem;">
+          <div style="color: var(--text-muted); font-size: 0.875rem;">Loading tables...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- View 2: Query Runner -->
+    <section id="view-query" class="view-section">
+      <div class="card">
+        <h3>SQL Query Executor</h3>
+        <p style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.25rem;">Execute arbitrary SQL against the local LionSQL instance</p>
+        <textarea id="spa-query-input" class="editor" rows="3">SELECT @@VERSION AS version, @@DATEFIRST AS datefirst, @@DBTS AS dbts;</textarea>
+        <button id="spa-run-btn" class="btn-primary">Execute</button>
+        <div id="spa-query-result" style="margin-top: 1rem; overflow-x: auto;"></div>
+      </div>
+    </section>
+
+    <!-- View 3: About -->
+    <section id="view-about" class="view-section">
+      <div class="card">
+        <h3>About LionSQL Single-Binary Hosting</h3>
+        <p style="margin-top: 0.5rem; line-height: 1.6; font-size: 0.875rem; color: #cbd5e1;">
+          This web application is served directly by the LionSQL kernel without Nginx, Node.js, or external HTTP daemons via:
+        </p>
+        <pre style="background: #0a0f1d; padding: 0.75rem; border-radius: 4px; margin: 0.75rem 0; font-family: monospace; font-size: 0.8125rem; color: #f59e0b;">./bin/lionsql server --app=./examples/flat-spa-app</pre>
+        <ul style="margin-left: 1.25rem; margin-top: 0.5rem; font-size: 0.875rem; color: #94a3b8; line-height: 1.6;">
+          <li>Same-Origin Zero-CORS API routing to <code>/api/...</code></li>
+          <li>HTML5 History routing with automatic fallback to <code>index.html</code></li>
+          <li>Sub-microsecond BaaS queries and high concurrency</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    LionSQL Flat SPA Architecture &bull; Zero External Server Dependencies
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

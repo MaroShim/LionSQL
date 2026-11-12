@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- complete 10-point documentation system revamp and engineering knowledge base upgrade (`DOC-REVAMP-10`):
+  - author official Korean versions for 4 core manuals: `doc/ARCHITECTURE.ko.md`, `doc/BENCHMARK.ko.md`, `doc/CLIENT_TOOL_INTEGRATION.ko.md`, and `doc/internal/VDBE.ko.md` with complete technical fidelity
+  - establish persistent negative knowledge catalog in `notes/SPEC_OUT_DECISIONS.ko.md` documenting the theoretical rationale and adopted alternatives for all 21 permanently rejected architecture items
+  - create instant embedded static SPA web app starter examples in `examples/single-file-dashboard` (single-file Tailwind CDN) and `examples/flat-spa-app` (3-file flat HTML5 SPA) with English and Korean README quickstarts
+  - implement hermetic local markdown link integrity tester (`test/doc_links_test.go`) validating 294 documentation files across `doc/`, `notes/`, `guide/`, and `examples/` in 0.07s
+  - add 1-page condensed 3-second T-SQL syntax and function cheatsheet (`doc/TSQL_CHEATSHEET.ko.md` and `doc/TSQL_CHEATSHEET.md`) sorted alphabetically (A-Z)
+  - author comprehensive SQLSTATE and TDS troubleshooting error dictionary in `doc/TROUBLESHOOTING.ko.md` and `doc/TROUBLESHOOTING.md` covering serialization failures (`40001`), unique violations (`23505`), undefined tables (`42P01`), and session pool exhaustion (`53300`)
+  - add interactive Mermaid XYCharts visualizing benchmark throughput (Banking SP 218k TPS, Storage Kernel 1.18M tpmC, VDBE Runtime, and Network Wire TDS/PGWire) across `doc/BENCHMARK.md` and `doc/BENCHMARK.ko.md`
+  - establish practical Microsoft SQL Server migration checklist and data type mapping guide (`doc/MSSQL_MIGRATION_CHECKLIST.ko.md` and `doc/MSSQL_MIGRATION_CHECKLIST.md`)
 - add zero-allocation one-pass SQL clause tokenizer (`sqlutil.SplitSelectClauses`) in `pkg/sqlutil/select_clauses.go` to scan SELECT, FROM, WHERE, and ORDER BY clauses in a single linear pass (O(N)) while strictly respecting parentheses depth, quotes, and comments (`REFACTOR-VIRTUAL-CATALOG-1`)
 - harden Volcano query execution against variable-width physical tuples and dynamic projection bounds (`PERF-EXEC-TUPLE-DEFENSIVE-PAD-1`, Invariant 13 Layer 3 defense): implement `Tuple.PadToSchema()`, defensive `Tuple.GetOK()` returning `ok=true, nil` for schema-valid trailing columns, defensive padding in `ToMap()` and `ToEvalMap()`, schema-aligned copy offsets in `mergeTuplesWithArena` / `mergeTuplesWithNullsAndArena` to prevent join off-by-one column data corruption, and out-of-bounds `srcIdx` NULL padding in `ProjectionIterator`
 - implement SQL Server 2016+ `COMPRESS` and `DECOMPRESS` GZIP binary scalar functions with `VARBINARY` roundtrip and `CAST ... AS VARCHAR` interoperability (`TSQL-FUNC-COMPRESS`)
