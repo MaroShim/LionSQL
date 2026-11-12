@@ -34,14 +34,13 @@
 * **권장 옵션 조합**:
   ```bash
   lionsql serve \
-    -disk none \
-    -memory compact \
+    -disk compact \
     -ephemeral \
     -fsync off \
     -max-memory 4GB \
     -max-workers 256
   ```
-  > (기존 `-engine memory` 플래그도 하위 호환용으로 `-disk none`과 동일하게 동작합니다.)
+  > (기존 `-disk none` 및 `-engine memory` 플래그도 하위 호환용으로 `-disk compact`와 동일하게 매핑됩니다.)
 * **성능 지표**:
   - **처리량**: **20,000 ~ 25,000+ TPS** (TPC-C 기준 > 540,000 tpmC)
   - **지연 시간**: Median P50 **0.05 ms**, Tail P99 **< 1.0 ms**
@@ -124,15 +123,16 @@
 ## 3. 핵심 파라미터별 성능 영향 분석
 
 ### 3.1. `-disk` / `-memory` (스토리지 백엔드 및 인메모리 레이아웃 선택)
-* **`-disk wiredtiger`** (Unix 기본값, 레거시 `-engine wiredtiger`와 동일):
+* **`-disk compact`** (전 플랫폼 기본값, 레거시 `-disk none` 및 `-engine memory`와 동일):
+  - 순수 힙 메모리 기반 256샤드 낙관적 동시성 제어(OCC) 및 포인터리스 `FlatRecord` 구조.
+  - AOF(`wal.aof`) 및 스냅샷(`tables.mpk`)을 통한 강력한 ACID 영속성 보장.
+  - 디스크 B+Tree 오버헤드가 제거되어 단일 쿼리 서브마이크로초(~100ns) 레이턴시 및 1,040,000 tpmC 달성.
+  - CGo 의존성이 없어 macOS, Linux, Windows 전 환경에서 단일 바이너리로 100% 동일하게 구동.
+* **`-disk wiredtiger`** (선택 옵션, 레거시 `-engine wiredtiger`와 동일):
   - 디스크 기반 Lock-free B+Tree 및 MVCC 아키텍처.
   - 가용 RAM보다 훨씬 큰 대용량 데이터셋(수십~수백 GB)을 안전하게 처리.
   - 페이지 압축(Snappy)을 통해 디스크 용량을 50~70% 절감.
   - 세션 임시 테이블(`#temp`) 및 테이블 변수(`@tbl`)는 디스크 오버헤드를 우회해 순수 인메모리 OCC 엔진으로 하이브리드 가속됩니다.
-* **`-disk none`** (Windows 기본값, 레거시 `-engine memory`와 동일):
-  - 순수 힙 메모리 기반 256샤드 낙관적 동시성 제어(OCC).
-  - 포인터 간접 참조 및 디스크 I/O가 제거되어 단순 읽기/쓰기 시 서브마이크로초(~100ns) 레이턴시 달성.
-  - 쓰기 충돌이 빈번한 워크로드에서는 OCC 재시도 오버헤드가 발생할 수 있으므로 격리된 키 공간 처리에 최적.
 * **`-memory compact`** (기본값, **프로덕션 권장**):
   - 행 데이터를 포인터 없는 연속 바이트 버퍼(`FlatRecord`)로 인코딩합니다.
   - 기존 포인터 슬라이스 구조(`performance`) 대비 힙 점유율을 **약 60.8% 절감**하고 Go 런타임 GC 포인터 추적 대상 객체를 제거합니다.

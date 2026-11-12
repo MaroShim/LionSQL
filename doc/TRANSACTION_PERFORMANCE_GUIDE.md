@@ -32,14 +32,13 @@ Eliminates disk I/O bottlenecks for workloads where sub-millisecond response tim
 * **Recommended Flags**:
   ```bash
   lionsql serve \
-    -disk none \
-    -memory compact \
+    -disk compact \
     -ephemeral \
     -fsync off \
     -max-memory 4GB \
     -max-workers 256
   ```
-  > (The legacy `-engine memory` flag maps transparently to `-disk none` for backward compatibility.)
+  > (The legacy `-disk none` and `-engine memory` flags map transparently to `-disk compact` for backward compatibility.)
 * **Performance Characteristics**:
   - **Throughput**: **20,000 ~ 25,000+ TPS** (> 540,000 tpmC on TPC-C)
   - **Latency**: Median P50 **0.05 ms**, Tail P99 **< 1.0 ms**
@@ -122,15 +121,16 @@ Optimized for bulk-loading millions of rows or executing large multi-table joins
 ## 3. Core Parameter Impact Analysis
 
 ### 3.1. `-disk` / `-memory` (Storage Backend & In-Memory Layout Selection)
-* **`-disk wiredtiger`** (Unix default; legacy alias `-engine wiredtiger`):
+* **`-disk compact`** (Universal Default across macOS, Linux, and Windows; legacy alias `-disk none` / `-engine memory`):
+  - Pure heap-based 256-shard concurrent Optimistic Concurrency Control (OCC) with pointer-free `FlatRecord` structure.
+  - Strong ACID durability via sequential AOF (`wal.aof`) and compact RDB snapshots (`tables.mpk`).
+  - Eliminates disk B+Tree serialization to achieve sub-microsecond (~100ns) point read/write latency and up to 1,040,000 tpmC.
+  - Zero-CGo pure Go architecture for 100% portable single-binary execution on all operating systems.
+* **`-disk wiredtiger`** (Explicit Opt-In; legacy alias `-engine wiredtiger`):
   - Disk-backed lock-free B+Tree and MVCC architecture.
   - Safely manages datasets much larger than available RAM (tens to hundreds of GBs).
   - Reduces disk footprint by 50~70% via Snappy page compression.
   - Session temporary tables (`#temp`) and table variables (`@tbl`) automatically bypass disk B+Tree overhead via hybrid in-memory execution.
-* **`-disk none`** (Windows default; legacy alias `-engine memory`):
-  - Pure heap-based 256-shard concurrent Optimistic Concurrency Control (OCC).
-  - Eliminates disk I/O to achieve sub-microsecond (~100ns) point read/write latency.
-  - Best suited for workloads with partitioned key spaces; high write contention on hot keys may trigger OCC fast-fail retries (`40001`).
 * **`-memory compact`** (Default, **Production Recommended**):
   - Encodes in-memory rows into pointer-free contiguous `FlatRecord` byte buffers.
   - Reduces heap footprint by **~60.8%** compared to raw pointer slices and eliminates per-row Go GC pointer graphs.

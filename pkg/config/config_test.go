@@ -14,8 +14,8 @@ func TestDefaultDiskAndMemory_Platform(t *testing.T) {
 	mem := config.DefaultMemory()
 
 	if runtime.GOOS == "windows" {
-		if disk != "none" {
-			t.Fatalf("expected default disk 'none' on windows, got %q", disk)
+		if disk != "compact" {
+			t.Fatalf("expected default disk 'compact' on windows, got %q", disk)
 		}
 	} else {
 		if disk != "wiredtiger" {
@@ -41,12 +41,12 @@ func TestServerConfig_GetDiskAndMemory(t *testing.T) {
 		t.Errorf("expected compact, got %q", s1.GetMemory())
 	}
 
-	// Case 2: Legacy Engine fallback (memory -> none)
+	// Case 2: Legacy Engine fallback (memory -> compact)
 	s2 := &config.ServerConfig{
 		Engine: "memory",
 	}
-	if s2.GetDisk() != "none" {
-		t.Errorf("expected legacy engine 'memory' to map to disk 'none', got %q", s2.GetDisk())
+	if s2.GetDisk() != "compact" {
+		t.Errorf("expected legacy engine 'memory' to map to disk 'compact', got %q", s2.GetDisk())
 	}
 	if s2.GetMemory() != config.DefaultMemory() {
 		t.Errorf("expected default memory, got %q", s2.GetMemory())
@@ -62,14 +62,22 @@ func TestServerConfig_GetDiskAndMemory(t *testing.T) {
 
 	// Case 4: Disk overrides Engine
 	s4 := &config.ServerConfig{
-		Disk:   "none",
+		Disk:   "compact",
 		Engine: "wiredtiger",
 	}
-	if s4.GetDisk() != "none" {
-		t.Errorf("expected disk 'none' to override legacy engine 'wiredtiger', got %q", s4.GetDisk())
+	if s4.GetDisk() != "compact" {
+		t.Errorf("expected disk 'compact' to override legacy engine 'wiredtiger', got %q", s4.GetDisk())
 	}
 
-	// Case 5: Empty config falls back to defaults
+	// Case 5: Legacy Disk 'none' maps to 'compact'
+	sLegacy := &config.ServerConfig{
+		Disk: "none",
+	}
+	if sLegacy.GetDisk() != "compact" {
+		t.Errorf("expected legacy disk 'none' to map to 'compact', got %q", sLegacy.GetDisk())
+	}
+
+	// Case 6: Empty config falls back to defaults
 	var s5 *config.ServerConfig
 	if s5.GetDisk() != config.DefaultDisk() {
 		t.Errorf("expected default disk, got %q", s5.GetDisk())

@@ -48,9 +48,9 @@ func runSQL(args []string) error {
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "dir", "data", "Path to database data directory")
-	diskType := fs.String("disk", config.DefaultDisk(), "Disk persistence backend (wiredtiger, none)")
-	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance (deprecated, scheduled for post-1.0 removal)")
-	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (wiredtiger, memory; use -disk instead)")
+	engineType := fs.String("engine", config.DefaultEngine(), "Storage engine backend: wiredtiger or memory")
+	diskType := fs.String("disk", "", "Low-level disk persistence backend (compact, wiredtiger)")
+	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance [Deprecated]")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
 		return err
 	}
@@ -62,12 +62,16 @@ func runSQL(args []string) error {
 	query := strings.Join(queries, " ")
 
 	resolvedDisk := *diskType
-	if *engineType != "" {
+	if resolvedDisk == "" {
 		if strings.ToLower(*engineType) == "memory" {
-			resolvedDisk = "none"
-		} else {
+			resolvedDisk = "compact"
+		} else if *engineType != "" {
 			resolvedDisk = *engineType
+		} else {
+			resolvedDisk = config.DefaultDisk()
 		}
+	} else if strings.ToLower(resolvedDisk) == "memory" {
+		resolvedDisk = "compact"
 	}
 
 	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, *memoryType)
@@ -151,7 +155,7 @@ func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.E
 			}
 			return nil, nil, fmt.Errorf("failed to open wiredtiger storage at %q: %w", cleanDir, err)
 		}
-	case "none", "memory", "mem":
+	case "compact", "none", "memory", "mem":
 		memEng := memengine.New()
 		opts := memengine.DefaultOptions(cleanDir)
 		if mode, err := memengine.ParseMemoryMode(memoryType); err == nil {
@@ -166,7 +170,7 @@ func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.E
 		}
 		eng = memEng
 	default:
-		return nil, nil, fmt.Errorf("unknown disk storage %q (expected wiredtiger or none)", diskType)
+		return nil, nil, fmt.Errorf("unknown disk storage %q (expected compact or wiredtiger)", diskType)
 	}
 
 	cat := catalog.New(eng)

@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"lionsql/pkg/proc/runtime"
@@ -166,6 +167,9 @@ func TestVDBEAtomicityWiredTiger(t *testing.T) {
 
 	eng := wiredtiger.New()
 	if err := eng.Open(filepath.Clean(tmpDir)); err != nil {
+		if strings.Contains(err.Error(), "not enabled in this build") {
+			t.Skip("skipping WiredTiger test; build with '-tags wiredtiger' for native engine")
+		}
 		t.Fatalf("failed to open wiredtiger: %v", err)
 	}
 	defer eng.Close()

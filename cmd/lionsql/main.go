@@ -49,9 +49,11 @@ Options by Category (옵션 상세):
 
   [Storage & Persistence]
     -dir <path>            Database data directory (default: ./data) (aliases: -data, -data-dir)
-    -disk <type>           Disk persistence backend: wiredtiger (default) or none
+    -engine <type>         Storage engine backend: wiredtiger (default on macOS/Linux) or memory (default on Windows)
+                             - wiredtiger: Disk B+Tree MVCC engine for persistent large-scale enterprise databases
+                             - memory    : High-concurrency In-Memory OCC engine with zero-GC FlatRecord and AOF durability
+    -disk <type>           Low-level disk persistence backend: wiredtiger or compact (overrides -engine disk layer)
     -memory <type>         In-memory tuple representation: compact (default, flat zero-gc) or performance [Deprecated]
-    -engine <type>         [Deprecated] Storage engine backend (use -disk and -memory instead)
     -ephemeral             Run in purely in-memory ephemeral mode with zero disk writes
     -seed                  Automatically seed demo e-commerce sample database on startup
     -config <path>         Path to JSON configuration file (auto-detects ./lionsql.json)

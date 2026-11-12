@@ -70,9 +70,9 @@ func runServer(args []string) error {
 	fs.StringVar(dataDir, "data", defaultDataDir, "Alias for -dir")
 	fs.StringVar(dataDir, "data-dir", defaultDataDir, "Alias for -dir")
 
-	diskType := fs.String("disk", "", "Disk persistence backend: wiredtiger or none (default: wiredtiger on unix, none on windows)")
-	memoryType := fs.String("memory", "", "In-memory tuple representation: compact (default) or performance (deprecated, scheduled for post-1.0 removal)")
-	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (wiredtiger, memory; use -disk instead)")
+	engineType := fs.String("engine", "", "Storage engine backend: wiredtiger or memory (default: wiredtiger on macOS/Linux, memory on Windows)")
+	diskType := fs.String("disk", "", "Low-level disk persistence backend: wiredtiger or compact")
+	memoryType := fs.String("memory", "", "In-memory tuple representation: compact (default, flat zero-gc) or performance [Deprecated]")
 	ephemeralFlag := fs.Bool("ephemeral", false, "Run in purely in-memory ephemeral mode with zero disk persistence")
 	autoSeed := fs.Bool("seed", false, "Automatically seed demo sample database (embedded demo_seed.sql) on startup")
 	adminEmail := fs.String("admin-email", "admin@lionsql.local", "Default superuser email")
@@ -470,7 +470,7 @@ func runServer(args []string) error {
 	switch resolvedDisk {
 	case "wiredtiger":
 		if cfg.Server.Ephemeral {
-			log.Fatalf("[LionSQL] Ephemeral mode (-ephemeral) is only supported with -disk=none (or -engine=memory). WiredTiger is a disk-persistent engine.")
+			log.Fatalf("[LionSQL] Ephemeral mode (-ephemeral) is only supported with -disk=compact. WiredTiger is a disk-persistent engine.")
 		}
 		if err := os.MkdirAll(cfg.Server.DataDir, 0755); err != nil {
 			log.Fatalf("[LionSQL] Failed to create data directory: %v", err)
@@ -480,7 +480,7 @@ func runServer(args []string) error {
 			log.Fatalf("[LionSQL] Failed to open WiredTiger storage: %v", err)
 		}
 		eng = wtEng
-	case "none":
+	case "compact":
 		memEng := memengine.New()
 		opts := memengine.DefaultOptions(cfg.Server.DataDir)
 		opts.Mode = memMode
@@ -497,7 +497,7 @@ func runServer(args []string) error {
 		}
 		eng = memEng
 	default:
-		log.Fatalf("[LionSQL] Unknown storage engine: %s (supported: wiredtiger, none)", resolvedDisk)
+		log.Fatalf("[LionSQL] Unknown storage engine: %s (supported: compact, wiredtiger)", resolvedDisk)
 	}
 	defer eng.Close()
 

@@ -68,9 +68,9 @@ func runMigrateUp(args []string) error {
 	migrationsDir := fs.String("dir", "migrations", "Path to migrations directory")
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
-	diskType := fs.String("disk", config.DefaultDisk(), "Disk persistence backend (wiredtiger, none)")
-	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance (deprecated, scheduled for post-1.0 removal)")
-	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (use -disk and -memory instead)")
+	engineType := fs.String("engine", "", "Storage engine backend: wiredtiger or memory")
+	diskType := fs.String("disk", "", "Low-level disk persistence backend (compact, wiredtiger)")
+	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance [Deprecated]")
 	steps := fs.Int("steps", 0, "Number of migrations to apply (default: 0 = all pending)")
 	fs.IntVar(steps, "n", 0, "Number of migrations to apply (default: 0 = all pending)")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
@@ -81,12 +81,16 @@ func runMigrateUp(args []string) error {
 	}
 
 	resolvedDisk := *diskType
-	if *engineType != "" {
+	if resolvedDisk == "" {
 		if strings.ToLower(*engineType) == "memory" {
-			resolvedDisk = "none"
-		} else {
+			resolvedDisk = "compact"
+		} else if *engineType != "" {
 			resolvedDisk = *engineType
+		} else {
+			resolvedDisk = config.DefaultDisk()
 		}
+	} else if strings.ToLower(resolvedDisk) == "memory" {
+		resolvedDisk = "compact"
 	}
 
 	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, *memoryType)
@@ -120,9 +124,9 @@ func runMigrateDown(args []string) error {
 	migrationsDir := fs.String("dir", "migrations", "Path to migrations directory")
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
-	diskType := fs.String("disk", config.DefaultDisk(), "Disk persistence backend (wiredtiger, none)")
-	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance (deprecated, scheduled for post-1.0 removal)")
-	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (use -disk and -memory instead)")
+	engineType := fs.String("engine", "", "Storage engine backend: wiredtiger or memory")
+	diskType := fs.String("disk", "", "Low-level disk persistence backend (compact, wiredtiger)")
+	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance [Deprecated]")
 	steps := fs.Int("steps", 1, "Number of migrations to revert (default: 1)")
 	fs.IntVar(steps, "n", 1, "Number of migrations to revert (default: 1)")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
@@ -133,12 +137,16 @@ func runMigrateDown(args []string) error {
 	}
 
 	resolvedDisk := *diskType
-	if *engineType != "" {
+	if resolvedDisk == "" {
 		if strings.ToLower(*engineType) == "memory" {
-			resolvedDisk = "none"
-		} else {
+			resolvedDisk = "compact"
+		} else if *engineType != "" {
 			resolvedDisk = *engineType
+		} else {
+			resolvedDisk = config.DefaultDisk()
 		}
+	} else if strings.ToLower(resolvedDisk) == "memory" {
+		resolvedDisk = "compact"
 	}
 
 	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, *memoryType)
@@ -172,9 +180,9 @@ func runMigrateStatus(args []string) error {
 	migrationsDir := fs.String("dir", "migrations", "Path to migrations directory")
 	dataDir := fs.String("data", "data", "Path to database data directory")
 	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
-	diskType := fs.String("disk", config.DefaultDisk(), "Disk persistence backend (wiredtiger, none)")
-	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance (deprecated, scheduled for post-1.0 removal)")
-	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (use -disk and -memory instead)")
+	engineType := fs.String("engine", "", "Storage engine backend: wiredtiger or memory")
+	diskType := fs.String("disk", "", "Low-level disk persistence backend (compact, wiredtiger)")
+	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance [Deprecated]")
 	if err := fs.Parse(reorderArgs(args)); err != nil {
 		return err
 	}
@@ -183,12 +191,16 @@ func runMigrateStatus(args []string) error {
 	}
 
 	resolvedDisk := *diskType
-	if *engineType != "" {
+	if resolvedDisk == "" {
 		if strings.ToLower(*engineType) == "memory" {
-			resolvedDisk = "none"
-		} else {
+			resolvedDisk = "compact"
+		} else if *engineType != "" {
 			resolvedDisk = *engineType
+		} else {
+			resolvedDisk = config.DefaultDisk()
 		}
+	} else if strings.ToLower(resolvedDisk) == "memory" {
+		resolvedDisk = "compact"
 	}
 
 	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, *memoryType)

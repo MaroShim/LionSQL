@@ -13,9 +13,9 @@ import (
 // ServerConfig defines server storage and process parameters.
 type ServerConfig struct {
 	DataDir                  string `json:"data_dir"`
-	Disk                     string `json:"disk,omitempty"`
-	Memory                   string `json:"memory,omitempty"`
-	Engine                   string `json:"engine,omitempty"` // [Deprecated] Kept for backward compatibility; maps to Disk
+	Engine                   string `json:"engine,omitempty"` // Storage engine backend: "wiredtiger" or "memory"
+	Disk                     string `json:"disk,omitempty"`   // Low-level disk persistence backend: "wiredtiger" or "compact"
+	Memory                   string `json:"memory,omitempty"` // In-memory tuple representation: "compact" or "performance"
 	Ephemeral                bool   `json:"ephemeral"`
 	AutoSeed                 bool   `json:"auto_seed"`
 	PIDFile                  string `json:"pid_file,omitempty"`
@@ -143,12 +143,13 @@ type Config struct {
 }
 
 // DefaultDisk returns the default disk persistence backend for the current platform.
-// On Windows (runtime.GOOS == "windows"), the default is "none" (In-Memory OCC)
-// to ensure out-of-the-box execution for standalone Zero-CGo Windows binaries.
-// On non-Windows platforms (macOS, Linux), the default is "wiredtiger" (Lock-Free B+Tree MVCC).
+// On non-Windows platforms (macOS, Linux), the default is "wiredtiger" (Lock-Free B+Tree MVCC)
+// to provide a robust, disk-based enterprise OLTP DBMS out-of-the-box.
+// On Windows (runtime.GOOS == "windows"), the default is "compact" (In-Memory OCC with pointer-free flat buffer and WAL/AOF durability)
+// to ensure zero-CGo standalone execution on Windows machines.
 func DefaultDisk() string {
 	if runtime.GOOS == "windows" {
-		return "none"
+		return "compact"
 	}
 	return "wiredtiger"
 }
@@ -160,8 +161,9 @@ func DefaultMemory() string {
 	return "compact"
 }
 
-// DefaultEngine returns the default storage engine backend for the current platform.
-// Deprecated: use DefaultDisk() instead. Kept for backward compatibility.
+// DefaultEngine returns the default storage engine backend for the current platform ("wiredtiger" or "memory").
+// On non-Windows platforms (macOS, Linux), the default is "wiredtiger" (Lock-Free B+Tree MVCC).
+// On Windows (runtime.GOOS == "windows"), the default is "memory" (In-Memory OCC with FlatRecord and AOF durability).
 func DefaultEngine() string {
 	if runtime.GOOS == "windows" {
 		return "memory"
@@ -169,7 +171,7 @@ func DefaultEngine() string {
 	return "wiredtiger"
 }
 
-// GetDisk returns the normalized disk persistence backend ("wiredtiger" or "none").
+// GetDisk returns the normalized disk persistence backend ("compact" or "wiredtiger").
 // It prioritizes Disk if set, otherwise maps from legacy Engine, and finally DefaultDisk().
 func (s *ServerConfig) GetDisk() string {
 	if s == nil {
@@ -180,8 +182,8 @@ func (s *ServerConfig) GetDisk() string {
 		switch d {
 		case "wiredtiger", "wt":
 			return "wiredtiger"
-		case "none", "off", "memory", "mem":
-			return "none"
+		case "compact", "none", "off", "memory", "mem":
+			return "compact"
 		default:
 			return d
 		}
@@ -189,8 +191,8 @@ func (s *ServerConfig) GetDisk() string {
 	e := strings.ToLower(strings.TrimSpace(s.Engine))
 	if e != "" {
 		switch e {
-		case "memory", "mem", "none", "off":
-			return "none"
+		case "compact", "memory", "mem", "none", "off":
+			return "compact"
 		case "wiredtiger", "wt":
 			return "wiredtiger"
 		default:
