@@ -1,0 +1,17 @@
+# test/slt_proc/17_compression_and_system_vars.slt
+# COMPRESS/DECOMPRESS round trip and system variables
+
+query T
+SELECT CAST(DECOMPRESS(COMPRESS('hello world')) AS VARCHAR);
+----
+hello world
+
+query I
+SELECT @@DATEFIRST;
+----
+7
+
+query I
+SELECT IIF(@@DBTS IS NOT NULL, 1, 0);
+----
+1

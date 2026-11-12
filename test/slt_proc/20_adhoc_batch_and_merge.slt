@@ -1,0 +1,33 @@
+# test/slt_proc/20_adhoc_batch_and_merge.slt
+# MERGE with WHEN MATCHED / WHEN NOT MATCHED
+
+statement ok
+CREATE TABLE merge_tgt (id INT PRIMARY KEY, qty INT);
+
+statement ok
+INSERT INTO merge_tgt VALUES (1, 10), (2, 20);
+
+statement ok
+CREATE TABLE merge_src (id INT PRIMARY KEY, qty INT);
+
+statement ok
+INSERT INTO merge_src VALUES (2, 5), (3, 7);
+
+statement ok
+MERGE merge_tgt AS t
+USING merge_src AS s ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET t.qty = t.qty + s.qty
+WHEN NOT MATCHED THEN INSERT (id, qty) VALUES (s.id, s.qty);
+
+query II
+SELECT id, qty FROM merge_tgt ORDER BY id;
+----
+1 10
+2 25
+3 7
+
+statement ok
+DROP TABLE merge_tgt;
+
+statement ok
+DROP TABLE merge_src;

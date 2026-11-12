@@ -1,0 +1,27 @@
+# test/slt_proc/19_conditional_functions.slt
+# CHOOSE, IIF, ISNULL, COALESCE, NULLIF
+
+query T
+SELECT CHOOSE(2, 'Gold', 'Silver', 'Bronze');
+----
+Silver
+
+query T
+SELECT IIF(10 > 5, 'True', 'False');
+----
+True
+
+query T
+SELECT ISNULL(NULL, 'DEF');
+----
+DEF
+
+query T
+SELECT COALESCE(NULL, NULL, 'OK');
+----
+OK
+
+query I
+SELECT ISNULL(NULLIF(10, 10), -1);
+----
+-1

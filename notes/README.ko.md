@@ -22,7 +22,7 @@
 * **[`WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md`](WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md)** (한국어)
   * **WiredTiger 고동시성 락 직렬화 분석 및 4계층 봉인 포스트모텀**: `transaction_sync` 옵션으로 인한 96% 성능 급락(146k ➔ 4.8k TPS)의 C 라이브러리 내부 원인, MongoDB 실태 조사, 10회 연속 `kill -9` 100% 무손실 복구 실증 및 영구 재발 방지 4계층 잠금 체계.
 * **[`HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)** ([English](HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md))
-  * **6대 골든 릴리즈 게이트 엔지니어링 신뢰성 철학**: 릴리즈마다 기계적으로 실행되는 6대 검증 게이트(단위, 13대 도메인 스모크, TPC-C 75만 tpmC, SLT 41만 쿼리, T-SQL 14대 스위트, SIGKILL 전원 차단 무손실 복구)가 어떻게 데이터베이스의 가치를 엔터프라이즈 미션 크리티컬 인프라로 격상시키는가에 대한 기술 백서.
+  * **6대 골든 릴리즈 게이트 엔지니어링 신뢰성 철학**: 릴리즈마다 기계적으로 실행되는 6대 검증 게이트(단위, 13대 도메인 스모크, TPC-C 75만 tpmC, SLT 41만 쿼리, T-SQL 20대 스위트, SIGKILL 전원 차단 무손실 복구)가 어떻게 데이터베이스의 가치를 엔터프라이즈 미션 크리티컬 인프라로 격상시키는가에 대한 기술 백서.
 * **[`PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)**
   * **다중 프로토콜 에뮬레이션 경계**: TDS(1433), PGWire(5433), MySQL 호환 구문의 수용 범위와 중단 기준.
 * **[`TSQL_COMPATIBILITY_MATRIX.ko.md`](TSQL_COMPATIBILITY_MATRIX.ko.md)** (한국어)

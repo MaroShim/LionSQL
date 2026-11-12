@@ -1,0 +1,12 @@
+# test/slt_proc/18_datetime_functions.slt
+# T-SQL date/time functions
+
+query I
+SELECT DATEDIFF(day, '2026-01-01', '2026-01-11');
+----
+10
+
+query T
+SELECT EOMONTH('2026-02-15');
+----
+2026-02-28

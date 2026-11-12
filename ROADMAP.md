@@ -39,22 +39,22 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 [ Phase 8: Official 1.0 LTS Production Release ] ────► v1.0.0 LTS [TARGET Q4 2026]
   6 Golden Release Gates Passed + 100-Step Audit Sign-Off + Subquery Memoization (PERF-SUBQUERY-MEMO-1) + Always On Failover + Lossless CDC + LTS Packaging (WiredTiger MVCC + In-Memory OCC)
 
-[ Phase 9A: Logical Namespace & Cross-DB Engine ] ──► v1.1.0 [TARGET Q1 2027]
+[ Phase 9A: Logical Namespace & Cross-DB Engine ] ──► v1.10.0 [TARGET Q1 2027]
   Prefix-Based Logical Database Namespace (__db_<dbname>_*) + Local Cross-DB Join + Virtual Catalog Transparency
 
-[ Phase 9B: Native Pure-Go Storage Engine Preview ] ─► v1.2.0 [TARGET Q1-Q2 2027]
-  Native Pure-Go B+Tree Storage Preview (--storage=purego, CGO_ENABLED=0) + Zero-CGo Edge Deployment
+[ Phase 9B: Native Pure-Go Engine Preview & MatView Alias ] ─► v1.20.0 [TARGET Q1-Q2 2027]
+  Native Pure-Go B+Tree Storage Preview (--storage=purego) + Unified Projection + Materialized View Virtual Alias
 
-[ Phase 9C: AI Starter, S3 & Headless Ecosystem ] ──► v1.3.0 [TARGET Q2 2027]
+[ Phase 9C: AI Starter, S3 & Headless Ecosystem ] ──► v1.30.0 [TARGET Q2 2027]
   AI App Starter Context (llms.txt) + S3 Pre-signed URLs + Headless CMS (Directus, Ghost)
 
-[ Phase 9D: Query Optimizer Deep Tuning ] ────────► v1.4.0 [TARGET Q3 2027]
-  Cost-Based Optimizer Histogram Refining + Partition Pruning + Scratch Buffer Hardening
+[ Phase 9D: Query Optimizer Deep Tuning & Enterprise Apps ] ──► v1.40.0 [TARGET Q3 2027]
+  Cost-Based Optimizer Histogram Refining + Partition Pruning + Enterprise Integrations (Mattermost, NocoDB)
 
-[ Phase 10: Multi-Engine Expansion: Pure-Go LTS ] ────► v1.5.0 LTS [TARGET Q3-Q4 2027]
+[ Phase 10: Multi-Engine Expansion: Pure-Go LTS ] ────► v1.50.0 LTS [TARGET Q3-Q4 2027]
   Native Pure-Go Storage Production Graduation + Dual Persistent Engine Spectrum (WiredTiger CGo + Pure-Go CGo-Free)
 
-[ Phase 10A: Vector Search, TVP/TVF & Zero-Copy Repl ] ► v1.6.0 [TARGET Q4 2027]
+[ Phase 10A: Vector Search, TVP/TVF & Zero-Copy Repl ] ► v1.60.0 [TARGET Q4 2027]
   Pure-Go pgvector HNSW + T-SQL TVP/TVF Extensions + Length-Prefixed Binary Replication Streaming
 
 [ Phase 10B: Long-Term Horizons & Research Pool ] ────► v1.99.0 [ACTIVE POOL]
@@ -75,14 +75,14 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 | **Phase 5** | `v0.16.0` - `v0.24.0` | **Enterprise Governance, Security & Engine Decoupling**<br>Layer separation (`pkg/engine`), WAL group commit, RBAC, CBO DP join ordering, migrations CLI, prepared LRU cache. | **100% Completed** |
 | **Phase 6** | `v0.90.0`<br>(Betas 0~3) | **Production Hardening & Feature Freeze Baseline**<br>Single-binary CLI (`lionsql`), Web Studio suite, memory governor, OCC 5-point tuning, TDS positional mapping, 2-Tier query engine. | **100% Completed** |
 | **Phase 7A** | `v0.92.0` | **P0 Zero-Defect Reliability Baseline**<br>Comprehensive 100-scope code audit with P0 (Must-Fix 31 items) 100% resolved. Zero OOM/crash/corruption/security injection guaranteed. Tagged as foundational reliability baseline. | **Active / 74% Complete** |
-| **Phase 7B** | `v0.93.0` - `v0.95.0`<br>(RC1) | **P1 Hardening, Durability Verification & 6 Golden Release Gates**<br>P1 (53 items) enterprise stabilization, 10 production apps verified, `scripts/release.sh` 6 Golden Release Gates automated, `crashtest` (D1~D4), SQLLogicTest 409k, T-SQL 14-Suite, `soaktest` zero leaks. | **Scheduled** |
+| **Phase 7B** | `v0.93.0` - `v0.95.0`<br>(RC1) | **P1 Hardening, Durability Verification & 6 Golden Release Gates**<br>P1 (53 items) enterprise stabilization, 10 production apps verified, `scripts/release.sh` 6 Golden Release Gates automated, `crashtest` (D1~D4), SQLLogicTest 409k, T-SQL 20-Suite, `soaktest` zero leaks. | **Scheduled** |
 | **Phase 8** | `v1.0.0 LTS` | **Official 1.0 Production Release & Long-Term Support**<br>6 Golden Release Gates verified, 100-step audit sign-off, Always On HA, lossless CDC, certified drivers, LTS release sign-off (WiredTiger MVCC + In-Memory OCC). | **Target Q4 2026** |
-| **Phase 9A** | `v1.1.0` | **Logical Namespace & Local Cross-DB Engine**<br>Prefix-based logical database namespace (`__db_<dbname>_*`), local cross-DB join, virtual catalog transparent filtering, Sonic SIMD JSON replication. | **Target Q1 2027** |
-| **Phase 9B** | `v1.2.0` | **Native Pure-Go B+Tree Engine Preview & Unified Projection**<br>Native Pure-Go B+Tree storage engine developer preview (`--storage=purego`, `CGO_ENABLED=0`) and cross-engine unified projection pushdown decoding. | **Target Q1-Q2 2027** |
-| **Phase 9C** | `v1.3.0` | **AI Agent Starter, S3 & Headless CMS Ecosystem**<br>AI Agent Context (`llms.txt`, `AGENTS.md`), client-side S3 pre-signed URL/SigV4 (`S3-1`), Headless CMS compatibility (`Directus`, `Ghost`). | **Target Q2 2027** |
-| **Phase 9D** | `v1.4.0` | **Query Optimizer Deep Tuning & Buffer Hardening**<br>Cost-based optimizer histogram refining, partition pruning acceleration, and scratch buffer pool hardening. | **Target Q3 2027** |
-| **Phase 10** | `v1.5.0 LTS` | **Multi-Engine Portfolio Expansion: Pure-Go Production LTS**<br>Native Pure-Go storage engine promoted to first-class production tier, coexisting permanently alongside WiredTiger. Full static binary distribution without external C toolchains for lightweight edge/container deployments. | **Target Q3-Q4 2027** |
-| **Phase 10A** | `v1.6.0` | **Vector Search, Procedural TVP/TVF & Zero-Copy Replication**<br>Pure-Go `pgvector` HNSW vector search (`FEAT-VECTOR-1`), T-SQL Table-Valued Parameters (`TSQL-TVP-TYPE-1`), multi-statement TVF (`TSQL-MULTI-TVF-1`), binary frame zero-copy replication (`REPL-STREAM-BIN-1`). | **Target Q4 2027** |
+| **Phase 9A** | `v1.10.0` | **Logical Namespace & Local Cross-DB Engine**<br>Prefix-based logical database namespace (`__db_<dbname>_*`), local cross-DB join, virtual catalog transparent filtering, Sonic SIMD JSON replication. | **Target Q1 2027** |
+| **Phase 9B** | `v1.20.0` | **Native Pure-Go B+Tree Engine Preview & Unified Projection**<br>Native Pure-Go B+Tree storage engine developer preview (`--storage=purego`, `CGO_ENABLED=0`), cross-engine unified projection pushdown decoding, and Materialized View Virtual Alias (`FEAT-MATVIEW-ALIAS-1`). | **Target Q1-Q2 2027** |
+| **Phase 9C** | `v1.30.0` | **AI Agent Starter, S3 & Headless CMS Ecosystem**<br>AI Agent Context (`llms.txt`, `AGENTS.md`), client-side S3 pre-signed URL/SigV4 (`S3-1`), Headless CMS compatibility (`Directus`, `Ghost`). | **Target Q2 2027** |
+| **Phase 9D** | `v1.40.0` | **Query Optimizer Deep Tuning & Heavy Enterprise App Integrations**<br>Cost-based optimizer histogram refining, partition pruning acceleration, scratch buffer pool hardening, and enterprise app integrations (Mattermost, NocoDB). | **Target Q3 2027** |
+| **Phase 10** | `v1.50.0 LTS` | **Multi-Engine Portfolio Expansion: Pure-Go Production LTS**<br>Native Pure-Go storage engine promoted to first-class production tier, coexisting permanently alongside WiredTiger. Full static binary distribution without external C toolchains for lightweight edge/container deployments. | **Target Q3-Q4 2027** |
+| **Phase 10A** | `v1.60.0` | **Vector Search, Procedural TVP/TVF & Zero-Copy Replication**<br>Pure-Go `pgvector` HNSW vector search (`FEAT-VECTOR-1`), T-SQL Table-Valued Parameters (`TSQL-TVP-TYPE-1`), multi-statement TVF (`TSQL-MULTI-TVF-1`), binary frame zero-copy replication (`REPL-STREAM-BIN-1`). | **Target Q4 2027** |
 | **Phase 10B** | `v1.99.0` | **Long-Term Horizons & Research Pool**<br>Cryptographic immutable audit log (SHA-256), multi-core parallel analytical query (`ParallelSeqScan`), Wasm UDF sandbox (`wazero`), Timeseries LSM chunk storage (`FEAT-TIMESERIES-LSM-1`), TDS MARS streaming (`TDS-COMPAT-6`), collation & locale sorting (`LOC-1`). | **Active Research Pool** |
 | **Phase 11** | `v2.0.0+` | **Distributed Scale-Out & Next-Gen Cloud Architecture**<br>Multi-node Raft consensus replication, distributed horizontal sharding, dynamic partition rebalancing, enterprise cross-datacenter active-active federation. | **Target 2028+** |
 
@@ -116,7 +116,7 @@ Core Unit &   13-Domain     TPC-C Extreme                   SQLLogicTest  T-SQL 
 4. **Gate 4: SQLLogicTest Relational Oracle (409,194 Queries, 100% Conformance)**:
    - Executes SQLite/PostgreSQL SQLLogicTest standard test files (`bin/sqllogictest test/slt/core/`).
    - 90 files and 409,194 queries pass with 100% identical row sets and zero syntax or type coercion errors.
-5. **Gate 5: T-SQL Stored Procedure 14-Suite Convergence (100% PASS)**:
+5. **Gate 5: T-SQL Stored Procedure 20-Suite Convergence (100% PASS)**:
    - Executes `test/slt_proc/` covering Microsoft SQL Server procedural grammar:
    - Variables (`@var`), control flow (`IF/ELSE`, `WHILE`), `TRY...CATCH`, nested transactions, forward-only cursors, return codes, dynamic SQL (`sp_executesql`), table variables (`@table`), `GOTO`/labels, recursive CTEs, and parameter binds.
 6. **Gate 6: `SIGKILL` Crash Recovery Oracle & Leak-Free Soak Sentinel**:
@@ -124,7 +124,7 @@ Core Unit &   13-Domain     TPC-C Extreme                   SQLLogicTest  T-SQL 
    - `bin/soaktest`: Verifies zero descriptor leaks (`open_fds`), zero memory/goroutine growth, and sub-1ms p99 latency under continuous workload.
 
 ### 2.2. Enterprise Ecosystem & Governance Criteria (100% Validated)
-- **Multi-Protocol & Driver Conformance**: Certified zero-regression compatibility across Go (`pgx/v5`, `lib/pq`, `go-mssqldb`), Python (`psycopg3`, `pymssql`), Java JDBC (`pgjdbc`, `mssql-jdbc`), C ODBC (`psqlODBC`), and enterprise GUIs (DBeaver, SSMS, Azure Data Studio, Beekeeper Studio).
+- **Multi-Protocol & Driver Conformance**: Certified zero-regression compatibility across Go (`pgx/v5`, `lib/pq`, `go-mssqldb`), Python (`psycopg3`, `pymssql`), Java JDBC (`pgjdbc`, `mssql-jdbc`), C ODBC (`psqlODBC`), and enterprise GUIs (DBeaver, SSMS, Beekeeper Studio).
 - **Production Ecosystem Conformance (10 Real-World Apps Zero Code Change)**:
   - 10 stock, unmodified open-source applications running flawlessly against LionSQL:
     - Gitea (Git & Code Hosting), Woodpecker CI (CI/CD Pipelines)
@@ -170,7 +170,7 @@ Core Unit &   13-Domain     TPC-C Extreme                   SQLLogicTest  T-SQL 
 * **PostgreSQL `pgx/v5` Extended Batch Pipelining (`pkg/wire`)**:
   Supported pipelined queries, binary parameter decoding, and high-throughput connection multiplexing.
 * **Enterprise GUI Tool Conformance**:
-  Achieved verified interoperability with SQL Server Management Studio (SSMS), Azure Data Studio, and DBeaver.
+  Achieved verified interoperability with SQL Server Management Studio (SSMS) and DBeaver.
 * **IETF RFC 9562 Monotonic UUIDv7 (`NEWID7()`)**:
   Time-ordered UUID generation guaranteeing sequential B+Tree indexing without random insertion fragmentation.
 * **VDBE Instruction Specialization (21k TPS Peak)**:
@@ -202,7 +202,7 @@ Core Unit &   13-Domain     TPC-C Extreme                   SQLLogicTest  T-SQL 
 * **Official Release `v0.91.0` & Multi-Platform Static Binaries**:
   Packaged and published official standalone static binaries for macOS (arm64), Linux (amd64), and Windows (amd64) with zero external dynamic dependencies.
 * **The 6 Golden Release Verification Gates (`scripts/release.sh`)**:
-  Permanently integrated 6 mandatory automated verification gates into `scripts/release.sh` (Core Unit & 100k TPS, 13-Domain Smoke, TPC-C >700k tpmC, SQLLogicTest 409k queries, T-SQL 14-Suite, and SIGKILL Crash/Leak Sentinels), accompanied by technical whitepaper ([`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)).
+  Permanently integrated 6 mandatory automated verification gates into `scripts/release.sh` (Core Unit & 100k TPS, 13-Domain Smoke, TPC-C >700k tpmC, SQLLogicTest 409k queries, T-SQL 20-Suite, and SIGKILL Crash/Leak Sentinels), accompanied by technical whitepaper ([`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)).
 * **WiredTiger Crash Durability Hotfix (`crashtest`)**:
   Real-time detection and resolution of `transaction_sync=(enabled=true,method=none)` in `pkg/storage/wiredtiger/wt_engine.go` during Gate 6 crash testing, achieving 100% data integrity and zero committed row loss across 3 rounds of 7,853 transactions under non-graceful `kill -9` termination.
 * **Single-Binary Embedded SPA Web Server Hosting (`WEB-SPA-1`)**:
@@ -256,7 +256,7 @@ To protect sub-microsecond transaction performance, prevent kernel bloat, and ma
 
 ---
 
-## 5. Future Horizons: Post-1.0 Roadmap (`v1.1.0+` - `v2.0.0+`)
+## 5. Future Horizons: Post-1.0 Roadmap (`v1.10.0+` - `v2.0.0+`)
 
 The following capabilities represent strategic architectural expansions planned for post-1.0 releases:
 
@@ -265,55 +265,59 @@ The following capabilities represent strategic architectural expansions planned 
                                    │
          ┌─────────────────────────┼─────────────────────────┬─────────────────────────┬─────────────────────────┬─────────────────────────┬─────────────────────────┐
          ▼                         ▼                         ▼                         ▼                         ▼                         ▼                         ▼
-    [ v1.1.0 ]                [ v1.2.0 ]                [ v1.3.0 ]                [ v1.4.0 ]               [ v1.5.0 LTS ]             [ v1.6.0 ]                [ v1.99.0 ]
+    [ v1.10.0 ]               [ v1.20.0 ]               [ v1.30.0 ]               [ v1.40.0 ]              [ v1.50.0 LTS ]            [ v1.60.0 ]               [ v1.99.0 ]
 Logical Namespace &       Native Pure-Go B+Tree     AI Starter, S3 &          Query Optimization &     Dual Multi-Engine         Vector Search, TVP/TVF    Immutable Audit Log,
 Cross-DB Join & Sonic     Storage Engine Preview    Headless CMS Ecosystem    Memory Hardening         Production Graduation     & Zero-Copy Replication   Parallel Analytics &
 (__db_<dbname>_*)         (--storage=purego)        (llms.txt, S3, Directus)  (CBO & Pushdown)         (WiredTiger + Pure-Go)    (HNSW, TVP, Binary Repl)  Timeseries LSM & Wasm
 ```
 
-### 5.1. Logical Database Namespace, Cross-DB Join & T-SQL Extensions (`v1.1.0`)
+### 5.1. Logical Database Namespace, Cross-DB Join & T-SQL Extensions (`v1.10.0`)
 - **Objective**: Implement prefix-based logical database namespaces (`__db_<dbname>_*`) to provide 100% collision-free multi-database separation and sub-microsecond local cross-database joins without physical process reboot overhead ([`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)), alongside enterprise app compatibility extensions and SIMD JSON acceleration.
 - **Deliverables**:
   - `USE <dbname>` logical context binding with `__db_<dbname>_*` physical table routing (`ARCH-LOGICAL-NAMESPACE-1`).
   - 3-Part Name resolution (`SalesDB.dbo.Orders`) in SELECT, JOIN, DML, and subqueries.
   - Transparent virtual catalog filtering in `sys.databases` and `sys.tables` (stripping internal prefix).
   - Cross-database relational joins executed directly in-memory via Volcano Hash Join with zero IPC overhead.
-  - Materialized View Virtual Alias & Tolerant Refresh for Mattermost and enterprise apps (`FEAT-MATVIEW-ALIAS-1`, [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)).
   - T-SQL Lightweight Built-in Functions Extension: `AT TIME ZONE` (`TSQL-FUNC-AT-TIME-ZONE`), `COMPRESS`/`DECOMPRESS` (`TSQL-FUNC-COMPRESS`), `PARSE`/`TRY_PARSE` (`TSQL-FUNC-PARSE`), `@@DATEFIRST`/`@@DBTS` (`TSQL-SYSVAR-DATEFIRST-DBTS`).
   - High-Performance SIMD JSON Replication Streaming (`PERF-REPL-SONIC-1`): Replace standard `encoding/json` reflection in WAL replication streams with ByteDance Sonic SIMD acceleration for 3~5x serialization throughput gains with zero wire protocol breakage.
 
-### 5.2. Native Pure-Go B+Tree Storage Engine & Unified Projection Pushdown (Experimental `v1.2.0` -> Production LTS `v1.5.0`)
+### 5.2. Native Pure-Go B+Tree Storage Engine, Unified Projection & MatView Virtual Alias (Experimental `v1.20.0` -> Production LTS `v1.50.0`)
 - **Objective & Multi-Engine Architectural Spectrum**:
   - Implement a 100% pure-Go persistent storage backend satisfying the canonical `storage.Engine` interface, featuring a lock-free hazard-pointer B+Tree, MVCC timestamped transaction isolation, and autonomous block caching (`FEAT-PUREGO-WT-ENGINE`).
   - **Unified Projection Pushdown & LazyTuple Elimination (`PERF-PROJECTION-PUSHDOWN-1`)**:
     - Eliminate legacy `LazyTuple` complexity across WiredTiger and MemoryCompact engines.
     - Introduce planner-driven projection pushdown decoding (`DecodeTupleSelectedWithArena` / `DecodeFlatSelectedWithArena`), decoding only requested columns directly into unified `ArenaRowCursor` slabs across all three storage engines (WiredTiger, MemoryCompact, Pure-Go).
+  - **Materialized View Virtual Alias & Tolerant Refresh (`FEAT-MATVIEW-ALIAS-1`)**:
+    - Provide lightweight virtual alias rewrite and tolerant no-op refresh (`REFRESH MATERIALIZED VIEW`) to eliminate DDL syntax errors across enterprise ORMs and tools ([`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md)).
   - **Partial / Delta WAL Logging (`WAL-DELTA-1`, Permanently Spec-Out)**:
     - Permanently Spec-Out due to severe Read-Modify-Write replay penalty during crash recovery, secondary index corruption risks, and negligible physical I/O benefits under 4KB OS pages and WAL group commit. Full-Row WAL logging remains the single verified standard.
   - **Permanent Multi-Engine Coexistence (Zero Deprecation)**:
     - **WiredTiger MVCC Engine (CGo / Enterprise High-Performance Tier)**: Permanently retained as LionSQL's battle-tested, high-throughput storage flagship for hardware-saturating on-premises and enterprise production workloads.
     - **Native Pure-Go Storage Engine (CGo-Free / Cloud-Native Tier)**: Introduced as an autonomous, zero-dependency alternative enabling pure `CGO_ENABLED=0` compilation, simplified cross-platform deployment, and frictionless operation in lightweight distroless containers and Windows environments.
 - **Phased Graduation Trajectory**:
-  - **`v1.2.0` (Experimental Developer Preview)**:
+  - **`v1.20.0` (Experimental Developer Preview)**:
     Shipped as a focused, standalone opt-in storage backend (`--storage=purego` or `LIONSQL_STORAGE=purego`) under `CGO_ENABLED=0` builds, enabling field testing, crash durability benchmarking, and community verification across edge platforms.
-  - **`v1.5.0 LTS` (Production Tier Graduation)**:
+  - **`v1.50.0 LTS` (Production Tier Graduation)**:
     Upon satisfying the 6 Golden Release Verification Gates and crash-test oracles, the Native Pure-Go engine graduates to a full first-class production engine alongside WiredTiger, establishing a complete multi-tier storage portfolio.
-- **SemVer Versioning Rationale (`v1.5.0` vs. `v2.0.0`)**:
+- **SemVer Versioning Rationale (`v1.50.0` vs. `v2.0.0`)**:
   - Expanding storage engine choices while preserving 100% binary wire protocol (PGWire v3, TDS 7.x/8.0), SQL procedural syntax, and client driver compatibility introduces **zero breaking changes** to client applications.
-  - Adhering to Semantic Versioning (SemVer), this milestone is designated as **`v1.5.0 LTS`**—a milestone symbolizing architectural maturity and multi-engine flexibility without imposing enterprise upgrade friction.
+  - Adhering to Semantic Versioning (SemVer), this milestone is designated as **`v1.50.0 LTS`**—a milestone symbolizing architectural maturity and multi-engine flexibility without imposing enterprise upgrade friction.
 
-### 5.3. AI App Starter Suite, S3 Pre-signed URLs & Headless CMS Integrations (`v1.3.0`)
+### 5.3. AI App Starter Suite, S3 Pre-signed URLs & Headless CMS Integrations (`v1.30.0`)
 - **AI App Starter Positioning & Agent-Friendly Documentation (`AI-STARTER-1~3`)**: Position LionSQL as "a SQLite-light, PostgreSQL-compatible server database" for AI-generated services, leveraging the single binary, dual wire protocols, built-in BaaS (REST, webhooks, RLS, SSE), and SQLLogicTest 100% evidence ([`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)). Deliverables include `llms.txt` / `AGENTS.md` agent context (`AI-STARTER-1`), compatibility matrix (`AI-STARTER-3`), and landing page starter section with Go/Node/Python examples (`AI-STARTER-2`).
 - **Client-Side S3 Pre-signed URLs & SigV4 Signer (`S3-1`)**: Lightweight AWS SigV4 signer generating direct S3/MinIO upload/download URLs, offloading large binary blob handling without in-kernel bloat.
 - **Headless CMS & Publishing Integrations (`INTEG-DIRECTUS-1`, `INTEG-GHOST-1`)**: Fast-fail compatibility exploration and driver verification for Directus (data API engine) and Ghost (publishing platform).
 
-### 5.4. Query Optimizer Deep Tuning & Buffer Hardening (`v1.4.0`)
-- **Objective**: Cost-based optimizer histogram refining, partition pruning acceleration, and scratch buffer pool hardening in preparation for multi-engine production graduation.
+### 5.4. Query Optimizer Deep Tuning & Heavy Enterprise App Integrations (`v1.40.0`)
+- **Objective**: Cost-based optimizer histogram refining, partition pruning acceleration, scratch buffer pool hardening, and heavy enterprise application validation in preparation for multi-engine production graduation.
+- **Enterprise Application Integrations**:
+  - **Mattermost (`INTEG-MATTERMOST-1`)**: High-concurrency team collaboration, large-scale channel/message indexing, and full-text search.
+  - **NocoDB (`INTEG-NOCODB-1`)**: No-code database studio, dynamic complex metadata queries, nested filters, and spreadsheet view pagination.
 
-### 5.5. Native Pure-Go B+Tree Engine Production LTS Graduation (`v1.5.0 LTS`)
+### 5.5. Native Pure-Go B+Tree Engine Production LTS Graduation (`v1.50.0 LTS`)
 - **Objective**: Full production graduation of the 100% pure-Go B+Tree storage engine alongside WiredTiger, establishing permanent dual-engine coexistence (`CGO_ENABLED=0` cloud-native tier and CGo enterprise flagship tier) with zero breaking changes to wire protocols or SQL procedures.
 
-### 5.6. Vector Search, Procedural TVP/TVF & Zero-Copy Replication (`v1.6.0`)
+### 5.6. Vector Search, Procedural TVP/TVF & Zero-Copy Replication (`v1.60.0`)
 - **Pure-Go Vector Search Engine (`FEAT-VECTOR-1`)**: Implement native in-engine vector embedding storage and similarity search satisfying `pgvector` operators (`<->` L2 distance, `<=>` cosine distance, `<#>` inner product) with pure-Go HNSW indexing, eliminating external vector database sidecars.
 - **T-SQL Table-Valued Parameters (TVP, `TSQL-TVP-TYPE-1`) & Multi-Statement TVF (`TSQL-MULTI-TVF-1`)**: Support user-defined table types (`CREATE TYPE ... AS TABLE`), binary TVP token parameter deserialization (`0xF3 TVPTYPE`), and procedural multi-statement table-valued functions.
 - **Length-Prefixed Binary Frame Zero-Copy Replication (`REPL-STREAM-BIN-1`)**: Direct socket streaming of raw binary WAL frames to eliminate reflection/JSON overhead under 100k+ TPS multi-replica topologies.
@@ -383,19 +387,19 @@ Cross-DB Join & Sonic     Storage Engine Preview    Headless CMS Ecosystem    Me
 | **Phase 7B** | P1(53선) 엔터프라이즈 완결성 및 6대 게이트 최종 검증 (`v1.0.0-rc1`) | Quality & Hardening | `v0.95.0` | **Scheduled** | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |
 | **Phase 8** | 공식 LionSQL v1.0.0 LTS 출시 및 6대 게이트 최종 사인오프 | Release | `v1.0.0 LTS` | **Target Q4 2026** | [`CHANGELOG.md`](CHANGELOG.md) |
 | **Phase 8** | 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 (`PERF-SUBQUERY-MEMO-1`) | Query Engine | `v1.0.0 LTS` | **Completed** | [`notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md`](notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md) |
-| **Phase 9A** | 프리픽스 기반 논리적 네임스페이스 및 로컬 크로스 DB 조인 (`ARCH-LOGICAL-NAMESPACE-1`) | Query Engine | `v1.1.0` | **Planned** | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |
-| **Phase 9A** | Materialized View 가상 앨리어스 & Tolerant Refresh (`FEAT-MATVIEW-ALIAS-1`) | Query Engine | `v1.1.0` | **Planned** | [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |
-| **Phase 9A** | T-SQL 확장 내장 스칼라 함수 (`TSQL-FUNC-AT-TIME-ZONE`, `PARSE` 등) | Query Engine | `v1.1.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#51-logical-database-namespace-cross-db-join--t-sql-extensions-v110) |
-| **Phase 9A** | 고성능 SIMD JSON (ByteDance Sonic) 기반 복제 스트리밍 가속 (`PERF-REPL-SONIC-1`) | High Availability | `v1.1.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#51-logical-database-namespace-cross-db-join--t-sql-extensions-v110) |
-| **Phase 9B** | Native Pure-Go B+Tree 엔진 프리뷰 & 공통 Projection Pushdown 디코딩 (`FEAT-PUREGO-WT-ENGINE`, `PERF-PROJECTION-PUSHDOWN-1`, `--storage=purego`, `CGO_ENABLED=0`) | Storage Engine | `v1.2.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#52-native-pure-go-btree-storage-engine--unified-projection-pushdown-experimental-v120---production-lts-v150) |
-| **Phase 9C** | AI App Starter Positioning & Agent-Friendly Documentation (`AI-STARTER-1~3`) | Ecosystem | `v1.3.0` | **Planned** | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |
-| **Phase 9C** | 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기 (`S3-1`) | Cloud & Storage | `v1.3.0` | **Planned** | [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/plans/S3_PRESIGNED_STORAGE_PLAN.md) |
-| **Phase 9C** | Headless CMS & Publishing 연동 Fast-Fail 탐색 (`INTEG-DIRECTUS-1`, `INTEG-GHOST-1`) | Ecosystem | `v1.3.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#53-ai-app-starter-suite-s3-pre-signed-urls--headless-cms-integrations-v130) |
-| **Phase 9D** | Query Optimizer Deep Tuning & Buffer Hardening | Query Planner | `v1.4.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#54-query-optimizer-deep-tuning--buffer-hardening-v140) |
-| **Phase 10** | **Native Pure-Go 엔진 정식 프로덕션 승격 (WiredTiger 엔터프라이즈 티어와 영구 공존)** | Storage Engine | `v1.5.0 LTS` | **Target Q3-Q4 2027** | [`ROADMAP.md`](ROADMAP.md#52-native-pure-go-btree-storage-engine-experimental-v120---production-lts-v150) |
-| **Phase 10A** | Pure-Go Vector Search Engine (`pgvector` 호환 벡터 검색 및 HNSW 인덱스) (`FEAT-VECTOR-1`) | Query & AI | `v1.6.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#56-vector-search-procedural-tvptvf--zero-copy-replication-v160) |
-| **Phase 10A** | T-SQL TVP 매개변수 (`TSQL-TVP-TYPE-1`) 및 멀티-스테이트먼트 TVF (`TSQL-MULTI-TVF-1`) | Query Engine | `v1.6.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#56-vector-search-procedural-tvptvf--zero-copy-replication-v160) |
-| **Phase 10A** | 복제 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 (`REPL-STREAM-BIN-1`) | High Availability | `v1.6.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#56-vector-search-procedural-tvptvf--zero-copy-replication-v160) |
+| **Phase 9A** | 프리픽스 기반 논리적 네임스페이스 및 로컬 크로스 DB 조인 (`ARCH-LOGICAL-NAMESPACE-1`) | Query Engine | `v1.10.0` | **Planned** | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |
+| **Phase 9A** | T-SQL 확장 내장 스칼라 함수 (`TSQL-FUNC-AT-TIME-ZONE`, `PARSE` 등) | Query Engine | `v1.10.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#51-logical-database-namespace-cross-db-join--t-sql-extensions-v1100) |
+| **Phase 9A** | 고성능 SIMD JSON (ByteDance Sonic) 기반 복제 스트리밍 가속 (`PERF-REPL-SONIC-1`) | High Availability | `v1.10.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#51-logical-database-namespace-cross-db-join--t-sql-extensions-v1100) |
+| **Phase 9B** | Native Pure-Go B+Tree 엔진 프리뷰 & 공통 Projection Pushdown 디코딩 (`FEAT-PUREGO-WT-ENGINE`, `PERF-PROJECTION-PUSHDOWN-1`, `--storage=purego`, `CGO_ENABLED=0`) | Storage Engine | `v1.20.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#52-native-pure-go-btree-storage-engine-unified-projection--matview-virtual-alias-experimental-v1200---production-lts-v1500) |
+| **Phase 9B** | Materialized View 가상 앨리어스 & Tolerant Refresh (`FEAT-MATVIEW-ALIAS-1`) | Query Engine | `v1.20.0` | **Planned** | [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |
+| **Phase 9C** | AI App Starter Positioning & Agent-Friendly Documentation (`AI-STARTER-1~3`) | Ecosystem | `v1.30.0` | **Planned** | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |
+| **Phase 9C** | 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기 (`S3-1`) | Cloud & Storage | `v1.30.0` | **Planned** | [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/plans/S3_PRESIGNED_STORAGE_PLAN.md) |
+| **Phase 9C** | Headless CMS & Publishing 연동 Fast-Fail 탐색 (`INTEG-DIRECTUS-1`, `INTEG-GHOST-1`) | Ecosystem | `v1.30.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#53-ai-app-starter-suite-s3-pre-signed-urls--headless-cms-integrations-v1300) |
+| **Phase 9D** | Query Optimizer Deep Tuning & Buffer Hardening | Query Planner | `v1.40.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#54-query-optimizer-deep-tuning--heavy-enterprise-app-integrations-v1400) |
+| **Phase 10** | **Native Pure-Go 엔진 정식 프로덕션 승격 (WiredTiger 엔터프라이즈 티어와 영구 공존)** | Storage Engine | `v1.50.0 LTS` | **Target Q3-Q4 2027** | [`ROADMAP.md`](ROADMAP.md#55-native-pure-go-btree-engine-production-lts-graduation-v1500-lts) |
+| **Phase 10A** | Pure-Go Vector Search Engine (`pgvector` 호환 벡터 검색 및 HNSW 인덱스) (`FEAT-VECTOR-1`) | Query & AI | `v1.60.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#56-vector-search-procedural-tvptvf--zero-copy-replication-v1600) |
+| **Phase 10A** | T-SQL TVP 매개변수 (`TSQL-TVP-TYPE-1`) 및 멀티-스테이트먼트 TVF (`TSQL-MULTI-TVF-1`) | Query Engine | `v1.60.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#56-vector-search-procedural-tvptvf--zero-copy-replication-v1600) |
+| **Phase 10A** | 복제 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 (`REPL-STREAM-BIN-1`) | High Availability | `v1.60.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#56-vector-search-procedural-tvptvf--zero-copy-replication-v1600) |
 | **Phase 10B** | Enterprise Cryptographic Immutable Audit Log (`AUDIT-LOG-1`, `pkg/audit`) | Security & Audit | `v1.99.0` | **Planned** | [`notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **Phase 10B** | Multi-Core Parallel Analytical Query Execution (`ARCH-PARALLEL-SCAN-1`) | Query Execution | `v1.99.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#57-long-term-horizons-immutable-audit-log-parallel-analytics-timeseries-lsm--wasm-sandbox-v1990) |
 | **Phase 10B** | Open-Addressing Flat Integer Hash Join (`PERF-COMPLEX-QUERY-2`) | Query Engine | `v1.99.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#57-long-term-horizons-immutable-audit-log-parallel-analytics-timeseries-lsm--wasm-sandbox-v1990) |

@@ -68,7 +68,7 @@ Remarkably, this entire battery of deep verification finishes in **just 1 minute
  [Gate 2] 13-Domain End-to-End Smoke Test            (~18s)  -> Protocol Resilience & Tools
  [Gate 3] TPC-C OLTP Concurrency Saturation          (~12s)  -> Peak Throughput (>700k tpmC)
  [Gate 4] SQLLogicTest 410k-Query Relational Oracle  (~14s)  -> Mathematical 3VL Truth (0 Mismatch)
- [Gate 5] T-SQL Stored Procedure 14-Suite Corpus     (~0.5s) -> T-SQL VM & Recursive CTE Deltas
+ [Gate 5] T-SQL Stored Procedure 20-Suite Corpus     (~0.5s) -> T-SQL VM & Recursive CTE Deltas
  [Gate 6] SIGKILL Crash Durability & Leak Sentinels   (~11s)  -> Power-Loss Durability & Zero Leak
 ========================================================================================
 ```
@@ -89,7 +89,7 @@ Remarkably, this entire battery of deep verification finishes in **just 1 minute
 - **Command**: `./bin/sqllogictest -dir test/slt -parallel 16`
 - **Significance**: Raw speed is meaningless if a database returns wrong numbers. Executes **409,194 standard queries** across 90 files from the SQLite conformance corpus in parallel. Verifies 3-Valued Logic (`NULL = NULL`, `NOT IN (NULL)`), subquery decorrelation, and aggregate functions with a 1:1 MD5 hash comparison against the reference SQLite oracle. **Zero hash mismatches (100% PASS)** is the non-negotiable bar.
 
-### [Gate 5] T-SQL Proprietary Stored Procedure 14-Suite Corpus
+### [Gate 5] T-SQL Proprietary Stored Procedure 20-Suite Corpus
 - **Command**: `go test -count=1 ./test/slt_proc/...`
 - **Significance**: Covers procedural language features outside standard SQLite SLT suites. Proves the correctness of LionSQL's proprietary Microsoft SQL Server T-SQL VDBE VM—`@variables`, control-flow branching, return code bindings (`EXEC @ret = ...`), and recursive CTE delta working table convergence—in just **0.5 seconds**.
 
@@ -107,7 +107,7 @@ Establishing this 6-Stage Gate transforms LionSQL's product value and enterprise
 | Production Disaster Scenario | Shielding Release Gate |
 | :--- | :--- |
 | **"Data corrupted or lost after a power failure"** | **[Gate 6] SIGKILL Crash Recovery Oracle (D1-D4 100%)** |
-| **"Upgraded version returns distorted query results"** | **[Gate 4 & 5] SLT 410k Queries & T-SQL 14-Suite** |
+| **"Upgraded version returns distorted query results"** | **[Gate 4 & 5] SLT 410k Queries & T-SQL 20-Suite** |
 | **"Server freezes under peak traffic due to deadlocks"** | **[Gate 3] TPC-C Concurrency Saturation (>700k tpmC)** |
 
 By eliminating these three fears, LionSQL ceases to be an experimental tool and becomes a **viable enterprise alternative**.

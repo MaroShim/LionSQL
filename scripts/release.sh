@@ -294,9 +294,9 @@ else
     ./bin/sqllogictest -dir test/slt -parallel 16
     echo -e "${CLR_GREEN}Gate 4 OK: 100% PASS (Zero relational mismatches)${CLR_RESET}"
 
-    echo -e "[Gate 5/6] Running T-SQL Stored Procedure 14-Suite Hermetic Conformance..."
+    echo -e "[Gate 5/6] Running T-SQL Stored Procedure 20-Suite Hermetic Conformance..."
     go test -count=1 ./test/slt_proc/...
-    echo -e "${CLR_GREEN}Gate 5 OK: 100% PASS across 14 procedural suites${CLR_RESET}"
+    echo -e "${CLR_GREEN}Gate 5 OK: 100% PASS across 20 procedural suites${CLR_RESET}"
 
     echo -e "[Gate 6/6] Running Crash Durability & Resource Leakage Sentinels..."
     ./bin/crashtest -rounds 3 -workers 4 -engine memory

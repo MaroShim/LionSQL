@@ -1,0 +1,24 @@
+# test/slt_proc/16_json_functions.slt
+# T-SQL JSON functions
+
+query I
+SELECT ISJSON('{"id": 1}');
+----
+1
+
+query T
+SELECT JSON_VALUE('{"user":"kim"}', '$.user');
+----
+kim
+
+statement ok
+CREATE PROCEDURE sp_json_user @doc VARCHAR(200)
+AS
+BEGIN
+    SELECT JSON_VALUE(@doc, '$.user');
+END;
+
+query T
+EXEC sp_json_user '{"user":"lee"}';
+----
+lee

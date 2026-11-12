@@ -1,0 +1,39 @@
+# test/slt_proc/15_builtin_string_functions.slt
+# T-SQL built-in string functions
+
+query T
+SELECT CONCAT_WS('-', 'A', 'B', 'C');
+----
+A-B-C
+
+query I
+SELECT CHARINDEX('bar', 'foobar');
+----
+4
+
+query T
+SELECT STUFF('abcdef', 2, 3, 'XYZ');
+----
+aXYZef
+
+query T
+SELECT REPLICATE('A', 3);
+----
+AAA
+
+query T
+SELECT REVERSE('abc');
+----
+cba
+
+statement ok
+CREATE PROCEDURE sp_string_mix @s VARCHAR(20)
+AS
+BEGIN
+    SELECT CONCAT_WS('|', UPPER(@s), REVERSE(@s));
+END;
+
+query T
+EXEC sp_string_mix 'abc';
+----
+ABC|cba
