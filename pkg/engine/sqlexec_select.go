@@ -409,7 +409,7 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		}
 		return int64(0), "@@rowcount"
 	case "@@SERVERNAME", "@@SERVICENAME":
-		return "LionSQL", "@@servername"
+		return "MSSQLSERVER", "@@servername"
 	case "@@OPTIONS":
 		return int64(5432), "@@options"
 	case "@@ERROR", "ERROR_NUMBER()", "ERROR_NUMBER":
@@ -622,6 +622,39 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 			}
 		}
 		return nil, "id"
+	}
+
+	// OBJECT_DEFINITION(object_id)
+	if strings.HasPrefix(upper, "OBJECT_DEFINITION(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("OBJECT_DEFINITION(") : len(trimmed)-1])
+		val, _ := s.evalScalarExprCore(inner, cs)
+		var objID int64 = -1
+		switch v := val.(type) {
+		case int:
+			objID = int64(v)
+		case int32:
+			objID = int64(v)
+		case int64:
+			objID = v
+		case string:
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+				objID = n
+			}
+		}
+		if objID >= 3000 {
+			procs := s.getSortedProcedures()
+			idx := int(objID - 3000)
+			if idx >= 0 && idx < len(procs) {
+				return procs[idx].Body, "object_definition"
+			}
+		} else if objID >= 2000 {
+			views := s.getSortedViews()
+			idx := int(objID - 2000)
+			if idx >= 0 && idx < len(views) {
+				return views[idx].Query, "object_definition"
+			}
+		}
+		return nil, "object_definition"
 	}
 
 	// OBJECT_NAME(id)

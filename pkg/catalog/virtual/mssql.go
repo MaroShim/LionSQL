@@ -1661,39 +1661,58 @@ func execSysObjectsProgrammables(src Source, sql string) (*Result, error) {
 }
 
 func execSysCommentsSqlCode(src Source, sql string) (*Result, error) {
-	columns := []string{"pureName", "pure_name", "name", "schemaName", "schema_name", "codeText", "definition", "text", "object_id", "objectId", "id"}
+	columns := []string{
+		"pureName", "pure_name", "name", "schemaName", "schema_name", "codeText", "definition", "text", "object_id", "objectId", "id",
+		"uses_ansi_nulls", "uses_quoted_identifier", "is_schema_bound", "uses_database_collation", "is_recompiled", "null_on_null_input", "execute_as_principal_id", "uses_native_compilation",
+	}
 	var allRows []map[string]any
 
 	views := src.GetSortedViews()
 	for vIdx, v := range views {
 		allRows = append(allRows, map[string]any{
-			"pureName":    v.Name,
-			"pure_name":   v.Name,
-			"name":        v.Name,
-			"schemaName":  "dbo",
-			"schema_name": "dbo",
-			"codeText":    v.Query,
-			"definition":  v.Query,
-			"text":        v.Query,
-			"objectId":    2000 + vIdx,
-			"object_id":   2000 + vIdx,
-			"id":          2000 + vIdx,
+			"pureName":                v.Name,
+			"pure_name":               v.Name,
+			"name":                    v.Name,
+			"schemaName":              "dbo",
+			"schema_name":             "dbo",
+			"codeText":                v.Query,
+			"definition":              v.Query,
+			"text":                    v.Query,
+			"objectId":                2000 + vIdx,
+			"object_id":               2000 + vIdx,
+			"id":                      2000 + vIdx,
+			"uses_ansi_nulls":         true,
+			"uses_quoted_identifier":   true,
+			"is_schema_bound":         false,
+			"uses_database_collation": false,
+			"is_recompiled":           false,
+			"null_on_null_input":      false,
+			"execute_as_principal_id": nil,
+			"uses_native_compilation": int32(0),
 		})
 	}
 	procs := src.GetSortedProcedures()
 	for pIdx, p := range procs {
 		allRows = append(allRows, map[string]any{
-			"pureName":    p.Name,
-			"pure_name":   p.Name,
-			"name":        p.Name,
-			"schemaName":  "dbo",
-			"schema_name": "dbo",
-			"codeText":    p.Body,
-			"definition":  p.Body,
-			"text":        p.Body,
-			"objectId":    3000 + pIdx,
-			"object_id":   3000 + pIdx,
-			"id":          3000 + pIdx,
+			"pureName":                p.Name,
+			"pure_name":               p.Name,
+			"name":                    p.Name,
+			"schemaName":              "dbo",
+			"schema_name":             "dbo",
+			"codeText":                p.Body,
+			"definition":              p.Body,
+			"text":                    p.Body,
+			"objectId":                3000 + pIdx,
+			"object_id":               3000 + pIdx,
+			"id":                      3000 + pIdx,
+			"uses_ansi_nulls":         true,
+			"uses_quoted_identifier":   true,
+			"is_schema_bound":         false,
+			"uses_database_collation": false,
+			"is_recompiled":           false,
+			"null_on_null_input":      false,
+			"execute_as_principal_id": nil,
+			"uses_native_compilation": int32(0),
 		})
 	}
 

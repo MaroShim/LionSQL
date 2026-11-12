@@ -139,7 +139,7 @@ func IsVirtualCatalogJoinQuery(sql string) bool {
 	if strings.Contains(upper, "SYS.INDEXES") && matchAny(upper, "JOIN", "IS_PRIMARY_KEY", "TYPE_DESC", "HAS_FILTER", "INDEX_ID") {
 		return true
 	}
-	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.KEY_CONSTRAINTS", "SYS.FOREIGN_KEYS", "SYS.CHECK_CONSTRAINTS", "SYS.DEFAULT_CONSTRAINTS", "SYS.STATS", "SYS.TRIGGERS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS", "SYS.SQL_MODULES", "SYS.PROCEDURES", "SYS.ALL_PARAMETERS", "FN_HELPCOLLATIONS") {
+	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.KEY_CONSTRAINTS", "SYS.FOREIGN_KEYS", "SYS.CHECK_CONSTRAINTS", "SYS.DEFAULT_CONSTRAINTS", "SYS.STATS", "SYS.TRIGGERS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS", "SYS.SQL_MODULES", "SYS.ALL_SQL_MODULES", "SYS.SYSTEM_SQL_MODULES", "SYS.PROCEDURES", "SYS.ALL_PARAMETERS", "FN_HELPCOLLATIONS") {
 		return true
 	}
 	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") && matchAny(upper, "JOIN", "SCHEMANAME") {
@@ -392,7 +392,7 @@ var catalogRouteTable = []RouteRule{
 	{
 		Name: "MSSQL_CommentsSqlCode",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
-			return strings.Contains(upper, "SYS.SYSCOMMENTS") || strings.Contains(upper, "SYS.SQL_MODULES") || (strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "CODETEXT") || strings.Contains(upper, "DEFINITION")))
+			return strings.Contains(upper, "SYS.SYSCOMMENTS") || strings.Contains(upper, "SQL_MODULES") || (strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "CODETEXT") || strings.Contains(upper, "DEFINITION")))
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execSysCommentsSqlCode(src, sql)

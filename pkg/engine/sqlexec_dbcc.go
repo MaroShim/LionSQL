@@ -1222,10 +1222,74 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 			"null_on_null_input", "execute_as_principal_id", "uses_native_compilation",
 		}
 		allRows = []map[string]any{}
+		if s != nil {
+			views := s.getSortedViews()
+			for vIdx, v := range views {
+				allRows = append(allRows, map[string]any{
+					"object_id":               int32(2000 + vIdx),
+					"definition":              v.Query,
+					"uses_ansi_nulls":         true,
+					"uses_quoted_identifier":   true,
+					"is_schema_bound":         false,
+					"uses_database_collation": false,
+					"is_recompiled":           false,
+					"null_on_null_input":      false,
+					"execute_as_principal_id": nil,
+					"uses_native_compilation": int32(0),
+				})
+			}
+			procs := s.getSortedProcedures()
+			for pIdx, p := range procs {
+				allRows = append(allRows, map[string]any{
+					"object_id":               int32(3000 + pIdx),
+					"definition":              p.Body,
+					"uses_ansi_nulls":         true,
+					"uses_quoted_identifier":   true,
+					"is_schema_bound":         false,
+					"uses_database_collation": false,
+					"is_recompiled":           false,
+					"null_on_null_input":      false,
+					"execute_as_principal_id": nil,
+					"uses_native_compilation": int32(0),
+				})
+			}
+		}
 
 	case "sys.syscomments", "syscomments", "sys_syscomments":
 		columns = []string{"id", "number", "colid", "status", "ctext", "texttype", "language", "encrypted", "compressed", "text"}
 		allRows = []map[string]any{}
+		if s != nil {
+			views := s.getSortedViews()
+			for vIdx, v := range views {
+				allRows = append(allRows, map[string]any{
+					"id":         int32(2000 + vIdx),
+					"number":     int32(1),
+					"colid":      int32(1),
+					"status":     int32(0),
+					"ctext":      nil,
+					"texttype":   int32(0),
+					"language":   int32(0),
+					"encrypted":  false,
+					"compressed": false,
+					"text":       v.Query,
+				})
+			}
+			procs := s.getSortedProcedures()
+			for pIdx, p := range procs {
+				allRows = append(allRows, map[string]any{
+					"id":         int32(3000 + pIdx),
+					"number":     int32(1),
+					"colid":      int32(1),
+					"status":     int32(0),
+					"ctext":      nil,
+					"texttype":   int32(0),
+					"language":   int32(0),
+					"encrypted":  false,
+					"compressed": false,
+					"text":       p.Body,
+				})
+			}
+		}
 
 	case "sys.database_files", "sysdatabasefiles", "sys_database_files":
 		columns = []string{"file_id", "file_guid", "type", "type_desc", "data_space_id", "name", "physical_name", "state", "state_desc", "size", "max_size", "growth", "is_media_read_only", "is_read_only", "is_sparse", "is_percent_growth"}

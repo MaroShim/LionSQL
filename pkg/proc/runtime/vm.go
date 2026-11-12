@@ -1203,8 +1203,9 @@ func (f *VMFrame) getVar(name string) (storage.Value, bool) {
 		if strings.EqualFold(name, "@@ERROR") || strings.EqualFold(clean, "ERROR") || strings.EqualFold(clean, "@ERROR") {
 			return storage.IntValue(int64(f.lastError)), true
 		}
-		if strings.EqualFold(name, "@@SERVERNAME") || strings.EqualFold(clean, "SERVERNAME") || strings.EqualFold(clean, "@SERVERNAME") {
-			return storage.StringValue("LIONSQL"), true
+		if strings.EqualFold(name, "@@SERVERNAME") || strings.EqualFold(clean, "SERVERNAME") || strings.EqualFold(clean, "@SERVERNAME") ||
+			strings.EqualFold(name, "@@SERVICENAME") || strings.EqualFold(clean, "SERVICENAME") || strings.EqualFold(clean, "@SERVICENAME") {
+			return storage.StringValue("MSSQLSERVER"), true
 		}
 		if strings.EqualFold(name, "@@VERSION") || strings.EqualFold(clean, "VERSION") || strings.EqualFold(clean, "@VERSION") {
 			return storage.StringValue("Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - LionSQL Engine"), true
