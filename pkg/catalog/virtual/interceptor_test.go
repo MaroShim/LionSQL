@@ -671,5 +671,30 @@ WHERE
 	if resParams.Rows[0]["Name"] != "@UserID" || resParams.Rows[1]["Name"] != "@Total" {
 		t.Errorf("unexpected parameter names: %+v", resParams.Rows)
 	}
+
+	// Test SSMS Procedure Scripting Parameters Query with [Number]
+	qScriptParams := `SELECT
+param.name AS [Name],
+sp.object_id AS [IDText],
+db_name() AS [DatabaseName],
+param.name AS [ParamName],
+1 AS [Number]
+FROM sys.all_objects AS sp
+INNER JOIN sys.all_parameters AS param ON param.object_id=sp.object_id
+WHERE (sp.type = 'P' OR sp.type = 'RF' OR sp.type='PC')and(sp.name='sp_calculate_total' and SCHEMA_NAME(sp.schema_id)='dbo')`
+
+	resScriptParams, err := virtual.Execute(src, qScriptParams)
+	if err != nil {
+		t.Fatalf("Execute(Procedure Scripting Parameters) failed: %v", err)
+	}
+	if len(resScriptParams.Rows) != 2 {
+		t.Fatalf("expected 2 parameters for sp_calculate_total in scripting query, got %d", len(resScriptParams.Rows))
+	}
+	if resScriptParams.Rows[0]["Number"] != int16(1) {
+		t.Errorf("expected Number to be int16(1), got %T (%v)", resScriptParams.Rows[0]["Number"], resScriptParams.Rows[0]["Number"])
+	}
+	if resScriptParams.Rows[0]["ParamName"] != "@UserID" {
+		t.Errorf("expected ParamName to be @UserID, got %v", resScriptParams.Rows[0]["ParamName"])
+	}
 }
 

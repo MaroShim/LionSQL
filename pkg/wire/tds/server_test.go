@@ -1465,6 +1465,41 @@ func TestTDS_ServerProperty_ServerName(t *testing.T) {
 	}
 }
 
+func TestTDS_InferColumnInfos_SmallInt(t *testing.T) {
+	s := &Server{}
+	res := &engine.QueryResult{
+		Columns: []string{"Number", "colid", "object_id", "bigint_col"},
+		Rows: []map[string]any{
+			{
+				"Number":     int16(1),
+				"colid":      int32(2),
+				"object_id":  int32(100),
+				"bigint_col": int64(1000),
+			},
+		},
+	}
+	cols := s.inferColumnInfos(res)
+	if len(cols) != 4 {
+		t.Fatalf("expected 4 columns, got %d", len(cols))
+	}
+
+	// Number must be inferred as TypeIntN with size 2 (SmallInt) for SMO DataProvider.GetInt16
+	if cols[0].Type != TypeIntN || cols[0].Size != 2 {
+		t.Fatalf("expected Number to be TypeIntN size 2, got type=%v, size=%d", cols[0].Type, cols[0].Size)
+	}
+
+	// colid must be inferred as TypeIntN with size 2 (SmallInt)
+	if cols[1].Type != TypeIntN || cols[1].Size != 2 {
+		t.Fatalf("expected colid to be TypeIntN size 2, got type=%v, size=%d", cols[1].Type, cols[1].Size)
+	}
+
+	// object_id must be inferred as TypeIntN with size 4 (Int)
+	if cols[2].Type != TypeIntN || cols[2].Size != 4 {
+		t.Fatalf("expected object_id to be TypeIntN size 4, got type=%v, size=%d", cols[2].Type, cols[2].Size)
+	}
+}
+
+
 
 
 

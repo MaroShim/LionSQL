@@ -372,6 +372,15 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 				} else if upperSrc == "NULL" {
 					val = nil
 					found = true
+				} else if upperSrc == "1" || upperSrc == "0" {
+					if strings.EqualFold(col, "Number") {
+						val = int16(1)
+					} else if upperSrc == "1" {
+						val = int64(1)
+					} else {
+						val = int64(0)
+					}
+					found = true
 				}
 			}
 

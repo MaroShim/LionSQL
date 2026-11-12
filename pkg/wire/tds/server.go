@@ -2721,6 +2721,9 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 		} else if strings.HasSuffix(lowerCol, "guid") || strings.HasSuffix(lowerCol, "uuid") || lowerCol == "uniqueidentifier" {
 			colType = TypeGuid
 			colSize = 16
+		} else if lowerCol == "number" || lowerCol == "colid" || strings.Contains(lowerCol, "smallint") {
+			colType = TypeIntN
+			colSize = 2
 		} else if lowerCol == "object_id" || lowerCol == "objectid" || lowerCol == "column_id" || lowerCol == "columnid" || lowerCol == "schema_id" || lowerCol == "schemaid" || lowerCol == "parent_object_id" || lowerCol == "parentobjectid" || lowerCol == "principal_id" || lowerCol == "principalid" || lowerCol == "index_id" || lowerCol == "indexid" {
 			colType = TypeIntN
 			colSize = 4
@@ -2739,11 +2742,14 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 					// In SQL Server & ADO.NET (Microsoft.Data.SqlClient), standard integer is 4-byte INT (SqlDbType.Int / System.Int32).
 					// Default to 4 bytes unless the value exceeds 32-bit range or column name explicitly denotes 64-bit bigint,
 					// preventing System.InvalidCastException in SqlBuffer.get_Int32() when client callers invoke reader.GetInt32().
+					// Smallint (colSize = 2) is required for SMO stored procedure Number / colid to prevent DataProvider.GetInt16 InvalidCastException.
 					if intVal > 2147483647 || intVal < -2147483648 ||
 						strings.Contains(lowerCol, "bigint") || strings.Contains(lowerCol, "bytes") ||
 						strings.Contains(lowerCol, "lsn") || strings.Contains(lowerCol, "sequence") ||
 						lowerCol == "editionid" {
 						colSize = 8
+					} else if lowerCol == "number" || lowerCol == "colid" || strings.Contains(lowerCol, "smallint") {
+						colSize = 2
 					} else if colSize != 8 {
 						colSize = 4
 					}
