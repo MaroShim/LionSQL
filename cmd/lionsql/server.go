@@ -1003,7 +1003,11 @@ func renderStartupBanner(cfg *config.Config, ctx bannerContext) string {
 	}
 
 	b.WriteString(fmt.Sprintf(" [Data Directory] %s\n", cfg.Server.DataDir))
-	b.WriteString(fmt.Sprintf(" [Storage Engine] Disk: %s | Memory: %s\n", cfg.Server.GetDisk(), formatMemoryBannerValue(cfg.Server.GetMemory())))
+	engineName := cfg.Server.Engine
+	if engineName == "" {
+		engineName = config.DefaultEngine()
+	}
+	b.WriteString(fmt.Sprintf(" [Storage Engine] %s (Disk: %s | Memory: %s)\n", engineName, cfg.Server.GetDisk(), formatMemoryBannerValue(cfg.Server.GetMemory())))
 	if ctx.StatsWorkers > 0 || ctx.StatsIdle > 0 {
 		b.WriteString(fmt.Sprintf(" [Session Pooler] Max Workers: %d, Max Idle Sessions: %d (No PgBouncer required)\n", ctx.StatsWorkers, ctx.StatsIdle))
 	}
