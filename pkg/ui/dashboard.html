@@ -1057,7 +1057,7 @@
             <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;">
               <div>
                 <div style="font-size: 0.82rem; font-weight: 600; color: var(--text);">Seed Sample Database</div>
-                <div style="font-size: 0.72rem; color: var(--text-muted);">One-click sample tables (customers, accounts) for fresh instances.</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">One-click sample database (customers, accounts, products, sales, procedures) for fresh instances.</div>
               </div>
               <button class="btn" style="background: var(--primary); padding: 5px 12px; font-size: 0.75rem;" onclick="seedSampleData()">Seed Data</button>
             </div>
@@ -4975,8 +4975,8 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         const res = await authFetch('/api/seed', { method: 'POST' });
         const out = await res.json();
         if (res.ok) {
-          showToast(out.message || 'Sample tables (accounts, customers) seeded successfully with 7 records!', 'success');
-          await loadTables('accounts');
+          showToast(out.message || 'Sample database seeded successfully with 34 records!', 'success');
+          await loadTables('customers');
         } else {
           showToast(out.error || 'Failed to seed sample data.', 'error');
         }

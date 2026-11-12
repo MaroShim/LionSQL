@@ -96,7 +96,7 @@ func TestRealtime_HTTPStream(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Trigger a mutation that broadcasts an event
-	createReq := httptest.NewRequest(http.MethodPost, "/api/tables/accounts/records", strings.NewReader(`{"id":99,"holder":"TestSSE","balance":500}`))
+	createReq := httptest.NewRequest(http.MethodPost, "/api/tables/accounts/records", strings.NewReader(`{"id":99,"customer_id":1,"account_number":"ACC-TestSSE","balance":500.0,"account_type":"checking","status":"active","created_at":"2026-03-20 00:00:00"}`))
 	createRec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(createRec, createReq)
 	if createRec.Code != http.StatusCreated {
@@ -117,7 +117,7 @@ func TestRealtime_HTTPStream(t *testing.T) {
 	if !strings.Contains(body, "event: record_change") {
 		t.Fatalf("Expected 'event: record_change' in SSE stream, got:\n%s", body)
 	}
-	if !strings.Contains(body, `"table":"accounts"`) || !strings.Contains(body, `"TestSSE"`) {
+	if !strings.Contains(body, `"table":"accounts"`) || !strings.Contains(body, "TestSSE") {
 		t.Fatalf("Expected accounts record in SSE payload, got:\n%s", body)
 	}
 }

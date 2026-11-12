@@ -1,11 +1,11 @@
 package engine_test
 
 import (
-	"os"
 	"testing"
 
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/engine"
+	"lionsql/pkg/seed"
 	"lionsql/pkg/storage/memengine"
 )
 
@@ -16,15 +16,9 @@ func TestDemoSeedScript_Execution(t *testing.T) {
 	cat := catalog.New(eng)
 	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
 
-	sqlBytes, err := os.ReadFile("../../scripts/demo_seed.sql")
+	res, err := coord.ExecuteSQL(seed.DemoSeedSQL)
 	if err != nil {
-		t.Fatalf("failed to read scripts/demo_seed.sql: %v", err)
-	}
-
-	sqlText := string(sqlBytes)
-	res, err := coord.ExecuteSQL(sqlText)
-	if err != nil {
-		t.Fatalf("ExecuteSQL failed on demo_seed.sql: %v", err)
+		t.Fatalf("ExecuteSQL failed on DemoSeedSQL: %v", err)
 	}
 	_ = res
 

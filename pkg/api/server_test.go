@@ -75,8 +75,8 @@ func TestAPI_HealthAndSeed(t *testing.T) {
 		Records []map[string]any `json:"records"`
 	}
 	_ = json.NewDecoder(rec.Body).Decode(&recsResp)
-	if len(recsResp.Records) != 2 {
-		t.Fatalf("Expected 2 records, got %d", len(recsResp.Records))
+	if len(recsResp.Records) != 5 {
+		t.Fatalf("Expected 5 records, got %d", len(recsResp.Records))
 	}
 }
 
@@ -90,7 +90,7 @@ func TestAPI_RegisterAndExecProcedure(t *testing.T) {
 
 	// Register procedure
 	script := `
-CREATE PROCEDURE TransferFunds
+CREATE OR ALTER PROCEDURE TransferFunds
     @from INT,
     @to INT,
     @amount INT
@@ -176,11 +176,11 @@ END
 	for _, r := range recsResp.Records {
 		id := int(r["id"].(float64))
 		bal := int(r["balance"].(float64))
-		if id == 1 && bal != 750 {
-			t.Errorf("Alice balance expected 750, got %d", bal)
+		if id == 1 && bal != 4999750 {
+			t.Errorf("Alice balance expected 4999750, got %d", bal)
 		}
-		if id == 2 && bal != 750 {
-			t.Errorf("Bob balance expected 750, got %d", bal)
+		if id == 2 && bal != 3200250 {
+			t.Errorf("Bob balance expected 3200250, got %d", bal)
 		}
 	}
 }
@@ -680,7 +680,7 @@ func TestAPI_TableExportAndImport(t *testing.T) {
 		t.Fatalf("Export CSV failed with code %d: %s", rec.Code, rec.Body.String())
 	}
 	csvBody := rec.Body.String()
-	if !strings.Contains(csvBody, "id,holder,balance") || !strings.Contains(csvBody, "Alice") {
+	if !strings.Contains(csvBody, "id,customer_id,account_number,balance") || !strings.Contains(csvBody, "ACC-1001") {
 		t.Fatalf("Unexpected CSV export output:\n%s", csvBody)
 	}
 
@@ -692,12 +692,12 @@ func TestAPI_TableExportAndImport(t *testing.T) {
 		t.Fatalf("Export JSON failed with code %d: %s", rec.Code, rec.Body.String())
 	}
 	var jsonExport []map[string]any
-	if err := json.NewDecoder(rec.Body).Decode(&jsonExport); err != nil || len(jsonExport) != 2 {
+	if err := json.NewDecoder(rec.Body).Decode(&jsonExport); err != nil || len(jsonExport) != 5 {
 		t.Fatalf("Unexpected JSON export output: %+v (err=%v)", jsonExport, err)
 	}
 
 	// 4. Create new table for import
-	createPayload := `{"name":"products","columns":[{"name":"id","type":"INT","primary_key":true},{"name":"title","type":"VARCHAR","nullable":false},{"name":"price","type":"FLOAT","nullable":false}]}`
+	createPayload := `{"name":"shop_items","columns":[{"name":"id","type":"INT","primary_key":true},{"name":"title","type":"VARCHAR","nullable":false},{"name":"price","type":"FLOAT","nullable":false}]}`
 	req = httptest.NewRequest(http.MethodPost, "/api/tables", strings.NewReader(createPayload))
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -710,7 +710,7 @@ func TestAPI_TableExportAndImport(t *testing.T) {
 101,Mechanical Keyboard,129.50
 102,Wireless Mouse,49.99
 103,4K Monitor,399.00`
-	req = httptest.NewRequest(http.MethodPost, "/api/tables/products/import", strings.NewReader(csvData))
+	req = httptest.NewRequest(http.MethodPost, "/api/tables/shop_items/import", strings.NewReader(csvData))
 	req.Header.Set("Content-Type", "text/csv")
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -724,7 +724,7 @@ func TestAPI_TableExportAndImport(t *testing.T) {
 	}
 
 	// Verify imported records
-	req = httptest.NewRequest(http.MethodGet, "/api/tables/products/records", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/shop_items/records", nil)
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	var recordsResp struct {
@@ -733,12 +733,12 @@ func TestAPI_TableExportAndImport(t *testing.T) {
 	}
 	_ = json.NewDecoder(rec.Body).Decode(&recordsResp)
 	if recordsResp.TotalItems != 3 {
-		t.Fatalf("Expected 3 products in database, got %d", recordsResp.TotalItems)
+		t.Fatalf("Expected 3 shop_items in database, got %d", recordsResp.TotalItems)
 	}
 
 	// 6. Test JSON Batch Import
 	jsonBatch := `[{"id": 104, "title": "USB-C Hub", "price": 29.95}]`
-	req = httptest.NewRequest(http.MethodPost, "/api/tables/products/import", strings.NewReader(jsonBatch))
+	req = httptest.NewRequest(http.MethodPost, "/api/tables/shop_items/import", strings.NewReader(jsonBatch))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -746,17 +746,17 @@ func TestAPI_TableExportAndImport(t *testing.T) {
 		t.Fatalf("Import JSON failed with code %d: %s", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/tables/products/records", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/shop_items/records", nil)
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	_ = json.NewDecoder(rec.Body).Decode(&recordsResp)
 	if recordsResp.TotalItems != 4 {
-		t.Fatalf("Expected 4 products after batch JSON import, got %d", recordsResp.TotalItems)
+		t.Fatalf("Expected 4 shop_items after batch JSON import, got %d", recordsResp.TotalItems)
 	}
 
 	// 7. Test JSON Batch Import with omitted ID column -> sequential PK generation
 	jsonBatchNoID := `[{"title": "Webcam", "price": 59.99}]`
-	req = httptest.NewRequest(http.MethodPost, "/api/tables/products/import", strings.NewReader(jsonBatchNoID))
+	req = httptest.NewRequest(http.MethodPost, "/api/tables/shop_items/import", strings.NewReader(jsonBatchNoID))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -764,7 +764,7 @@ func TestAPI_TableExportAndImport(t *testing.T) {
 		t.Fatalf("Import JSON without ID failed with code %d: %s", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/tables/products/records", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/shop_items/records", nil)
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	var webcamResp struct {
@@ -773,7 +773,7 @@ func TestAPI_TableExportAndImport(t *testing.T) {
 	}
 	_ = json.NewDecoder(rec.Body).Decode(&webcamResp)
 	if webcamResp.TotalItems != 5 {
-		t.Fatalf("Expected 5 products in database, got %d (records: %+v)", webcamResp.TotalItems, webcamResp.Records)
+		t.Fatalf("Expected 5 shop_items in database, got %d (records: %+v)", webcamResp.TotalItems, webcamResp.Records)
 	}
 	lastRecord := webcamResp.Records[len(webcamResp.Records)-1]
 	webcamID := fmt.Sprint(lastRecord["id"])
@@ -785,7 +785,7 @@ func TestAPI_TableExportAndImport(t *testing.T) {
 	csvDataNoID := `title,price
 Headphones,89.00
 Microphone,119.50`
-	req = httptest.NewRequest(http.MethodPost, "/api/tables/products/import", strings.NewReader(csvDataNoID))
+	req = httptest.NewRequest(http.MethodPost, "/api/tables/shop_items/import", strings.NewReader(csvDataNoID))
 	req.Header.Set("Content-Type", "text/csv")
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
@@ -793,7 +793,7 @@ Microphone,119.50`
 		t.Fatalf("Import CSV without ID failed with code %d: %s", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/tables/products/records", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/shop_items/records", nil)
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	_ = json.NewDecoder(rec.Body).Decode(&webcamResp)
@@ -925,7 +925,7 @@ func TestAPI_ExecuteSQL_FormatArray(t *testing.T) {
 		t.Fatalf("seed failed: %s", recSeed.Body.String())
 	}
 
-	query := "SELECT id, holder, balance FROM accounts ORDER BY id ASC"
+	query := "SELECT id, name, email FROM customers WHERE id <= 2 ORDER BY id ASC"
 
 	// 1. Default envelope format
 	bodyDefault, _ := json.Marshal(map[string]string{"sql": query})
@@ -959,7 +959,7 @@ func TestAPI_ExecuteSQL_FormatArray(t *testing.T) {
 	if len(arrResp1) != 2 {
 		t.Fatalf("expected 2 items in raw array, got %d", len(arrResp1))
 	}
-	if arrResp1[0]["holder"] != "Alice" || arrResp1[1]["holder"] != "Bob" {
+	if arrResp1[0]["name"] != "Alice Kim" || arrResp1[1]["name"] != "Bob Park" {
 		t.Errorf("unexpected rows content: %+v", arrResp1)
 	}
 

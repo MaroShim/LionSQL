@@ -253,6 +253,7 @@
 | `PENDING` | **`S3-1`** | `v1.3.0` | Cloud | P2 | 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기 | [`notes/plans/S3_PRESIGNED_STORAGE_PLAN.md`](notes/plans/S3_PRESIGNED_STORAGE_PLAN.md) |  |
 | `DONE` | **`SEC-BOOT-DEFAULT-PASS-WARN`** |  | SEC | P2 | 초기 패스워드 미변경 시 부팅 출력 최후행 대문자 보안 경고 불변식 | [`notes/plans/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md`](notes/plans/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md) |  |
 | `DONE` | **`SEC-PGWIRE-PARAM-1`** |  | Wire | P2 | PGWire 달러 파라미터() 상태머신 토크나이저 전환 및 보안 강화 | [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md) |  |
+| `DONE` | **`SEED-EMBED-UNIFY-1`** | `Ecosystem` | --milestone | P1 | 데모 시드 스크립트(demo_seed.sql) 단일 바이너리 내장 및 Web Studio 시드 데이터 일치화 | [`--domain`](--domain) |  |
 | `DONE` | **`SQL-GOOSE-IDENTITY-1`** |  | Durability | P2 | PostgreSQL `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` 지원 및 goose 마이그레이션 호환 |  |  |
 | `DONE` | **`SQL-WRITABLE-CTE-1`** |  | Durability | P2 | PostgreSQL Writable CTE (`WITH ... INSERT/UPDATE/DELETE ... RETURNING`) 및 `::type[]` 캐스트 지원 |  |  |
 | `DONE` | **`SSMS-OE-3PART-TOP`** | `1.0-GA` | Ecosystem | P2 | SSMS 테이블 우클릭 Select Top 1000 / Edit Top 200 3-Part 이름 정규화 및 실행 검증 | [`notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`](notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md) |  |
@@ -260,6 +261,7 @@
 | `DONE` | **`SSMS-OE-COMPAT-2`** | `1.0-GA` | Ecosystem | P2 | SSMS Object Explorer 호환성 고도화 (Phase 1~4 테이블 목록 표시 완료, Phase 5 SMO NullReferenceException 및 하위 노드 바인딩) | [`notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`](notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md) |  |
 | `DONE` | **`SSMS-OE-SMO-VERIFY`** | `1.0-GA` | Ecosystem | P2 | SSMS SMO NullReferenceException v0.92.0 실측 및 BIT/NULL 강타입 TDS 프로젝션 정밀 매핑 | [`notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`](notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md) |  |
 | `DONE` | **`SSMS-OE-SUBFOLDERS`** | `1.0-GA` | Ecosystem | P2 | SSMS 테이블 하위 폴더(Columns/Keys/Indexes/Triggers)용 MSSQL_SysColumnsJoinedTypes 가상 카탈로그 구축 | [`notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`](notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md) |  |
+| `DONE` | **`SEED-EMBED-UNIFY-1`** | `1.0-GA` | Ecosystem | P2 | 데모 시드 스크립트(demo_seed.sql) 단일 바이너리 내장 및 Web Studio 시드 데이터 일치화 | [`notes/plans/EMBEDDED_DEMO_SEED_UNIFICATION_PLAN.ko.md`](notes/plans/EMBEDDED_DEMO_SEED_UNIFICATION_PLAN.ko.md) |  |
 | `PENDING` | **`TDS-COMPAT-6`** | `v1.99.0` | Wire | P2 | TDS 7.x/8.0 MARS (Multiple Active Result Sets) 스트리밍 | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`TDS-MOD-1`** |  | Architecture | P3 | TDS 대규모 파일 모듈 분할 기각 (Spec-Out) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`TEST-OCC-FLAT-1`** |  | Storage | P2 | Flat 모드 크래시 복구 무결성 검증 (AOF/RDB 및 kill -9) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
@@ -3015,6 +3017,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [DONE] 데모 시드 스크립트(demo_seed.sql) 단일 바이너리 내장 및 Web Studio 시드 데이터 일치화 `SEED-EMBED-UNIFY-1`
+- **Domain**: --milestone | **Priority**: P1 | **Updated**: 2026-11-12 01:44:47
+- **Milestone**: `Ecosystem`
+- **Plan Doc**: [`--domain`](--domain)
+
+---
+
 ### [DONE] PostgreSQL `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` 지원 및 goose 마이그레이션 호환 `SQL-GOOSE-IDENTITY-1`
 - **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-11 16:23:03
 
@@ -3096,6 +3105,24 @@ SSMS SMO SqlDataReader 강타입 판독기 호환 및 NullReferenceException/Inv
 
 **Details & Resolution**:
 SSMS Object Explorer 테이블 하위 트리(Columns, Keys, Indexes, Triggers) 확장 지원. 근거: notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md §4.3.
+
+---
+
+### [DONE] 데모 시드 스크립트(demo_seed.sql) 단일 바이너리 내장 및 Web Studio 시드 데이터 일치화 `SEED-EMBED-UNIFY-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-12 10:44:46
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/EMBEDDED_DEMO_SEED_UNIFICATION_PLAN.ko.md`](notes/plans/EMBEDDED_DEMO_SEED_UNIFICATION_PLAN.ko.md)
+- **Target Files**: `pkg/seed/seed.go, pkg/seed/demo_seed.sql, cmd/lionsql/server.go, pkg/api/handlers_records.go, pkg/ui/dashboard.html`
+
+**Phases & Checklist**:
+- [x] **Subtask 1**: `pkg/seed` 패키지 생성 및 `demo_seed.sql` `//go:embed` 정적 내장 바인딩
+- [x] **Subtask 2**: `cmd/lionsql/server.go`의 `os.ReadFile` 외부 경로 의존성 제거 및 `seed.DemoSeedSQL` 직결
+- [x] **Subtask 3**: Web Studio `handleSeed` (`POST /api/seed`)를 하드코딩된 토이 데이터 대신 `seed.DemoSeedSQL` 단일 진실 공급원으로 통일
+- [x] **Subtask 4**: Web Studio UI(`dashboard.html`) 설명 텍스트, 토스트 알림 및 회귀 테스트 일괄 동기화
+- [x] **Subtask 5**: `scripts/demo_seed.sql`과 내장 SQL의 바이트 동일성 불변식 테스트 작성
+
+**Details & Resolution**:
+단일 정적 실행 파일 내에 `demo_seed.sql`을 내장하여 저장소 외부 어디서든 `-seed` 플래그 및 Web Studio 원클릭 시딩이 동일한 5개 테이블, 34건 레코드, 2개 저장 프로시저로 완벽히 일치하여 동작하도록 보장.
 
 ---
 

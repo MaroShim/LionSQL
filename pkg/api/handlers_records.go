@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"lionsql/pkg/engine"
+	"lionsql/pkg/seed"
 	"lionsql/pkg/storage"
 )
 
@@ -754,91 +755,25 @@ func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Create accounts table
-	accountsSchema := &storage.TableSchema{
-		Name: "accounts",
-		Columns: []storage.Column{
-			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
-			{Name: "holder", Type: storage.TypeVarChar, Nullable: false},
-			{Name: "balance", Type: storage.TypeInt, Nullable: false},
-		},
+	// 1. Execute unified demo seed script via Coordinator
+	var execErr error
+	if s.coordinator != nil {
+		_, execErr = s.coordinator.ExecuteSQL(seed.DemoSeedSQL)
+	} else {
+		coord := engine.NewCoordinator(s.catalog, s.engine, engine.DefaultConfig())
+		_, execErr = coord.ExecuteSQL(seed.DemoSeedSQL)
 	}
-	if err := s.engine.CreateTable(accountsSchema); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to create 'accounts' table: %w", err))
+	if execErr != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to seed demo database: %w", execErr))
 		return
 	}
-
-	// 2. Create customers table
-	customersSchema := &storage.TableSchema{
-		Name: "customers",
-		Columns: []storage.Column{
-			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
-			{Name: "name", Type: storage.TypeVarChar, Nullable: false},
-			{Name: "balance", Type: storage.TypeFloat, Nullable: false},
-			{Name: "status", Type: storage.TypeVarChar, Nullable: false},
-		},
-	}
-	if err := s.engine.CreateTable(customersSchema); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to create 'customers' table: %w", err))
-		return
-	}
-
-	// 3. Insert sample rows within a single atomic ACID transaction
-	session, err := s.engine.NewSession()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	defer session.Close()
-
-	tx, err := session.BeginTx(storage.TxOptions{})
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	var committed bool
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
-
-	accountsRecords := []storage.Record{
-		{"id": storage.IntValue(1), "holder": storage.StringValue("Alice"), "balance": storage.IntValue(1000)},
-		{"id": storage.IntValue(2), "holder": storage.StringValue("Bob"), "balance": storage.IntValue(500)},
-	}
-	for _, rec := range accountsRecords {
-		if err := tx.Insert("accounts", rec); err != nil {
-			writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to insert record into 'accounts': %w", err))
-			return
-		}
-	}
-
-	customerRecords := []storage.Record{
-		{"id": storage.IntValue(1), "name": storage.StringValue("Alice"), "balance": storage.FloatValue(1000.5), "status": storage.StringValue("active")},
-		{"id": storage.IntValue(2), "name": storage.StringValue("Bob"), "balance": storage.FloatValue(450.0), "status": storage.StringValue("pending")},
-		{"id": storage.IntValue(3), "name": storage.StringValue("Charlie"), "balance": storage.FloatValue(800.0), "status": storage.StringValue("active")},
-		{"id": storage.IntValue(4), "name": storage.StringValue("Diana"), "balance": storage.FloatValue(200.0), "status": storage.StringValue("inactive")},
-		{"id": storage.IntValue(5), "name": storage.StringValue("Evan"), "balance": storage.FloatValue(600.0), "status": storage.StringValue("active")},
-	}
-	for _, rec := range customerRecords {
-		if err := tx.Insert("customers", rec); err != nil {
-			writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to insert record into 'customers': %w", err))
-			return
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to commit sample data transaction: %w", err))
-		return
-	}
-	committed = true
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"success": true,
-		"message": "Sample tables ('accounts', 'customers') seeded successfully with 7 records!",
-		"tables":  []string{"accounts", "customers"},
-		"records": 7,
+		"success":    true,
+		"message":    fmt.Sprintf("Sample database (%s; %s) seeded successfully with %d records!", strings.Join(seed.DemoTables, ", "), strings.Join(seed.DemoProcedures, ", "), seed.DemoRecordCount),
+		"tables":     seed.DemoTables,
+		"procedures": seed.DemoProcedures,
+		"records":    seed.DemoRecordCount,
 	})
 }
 

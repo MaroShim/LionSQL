@@ -26,6 +26,7 @@ import (
 	"lionsql/pkg/planner"
 	_ "lionsql/pkg/proc/parser/antlr"
 	"lionsql/pkg/replication"
+	"lionsql/pkg/seed"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 	"lionsql/pkg/storage/wiredtiger"
@@ -73,7 +74,7 @@ func runServer(args []string) error {
 	memoryType := fs.String("memory", "", "In-memory tuple representation: compact (default) or performance (deprecated, scheduled for post-1.0 removal)")
 	engineType := fs.String("engine", "", "[Deprecated] Storage engine backend (wiredtiger, memory; use -disk instead)")
 	ephemeralFlag := fs.Bool("ephemeral", false, "Run in purely in-memory ephemeral mode with zero disk persistence")
-	autoSeed := fs.Bool("seed", false, "Automatically seed demo sample database (scripts/demo_seed.sql) on startup")
+	autoSeed := fs.Bool("seed", false, "Automatically seed demo sample database (embedded demo_seed.sql) on startup")
 	adminEmail := fs.String("admin-email", "admin@lionsql.local", "Default superuser email")
 	adminPass := fs.String("admin-pass", "1234567890", "Default superuser password")
 	enableAuth := fs.Bool("auth", true, "Enforce JWT authentication on protected REST endpoints (default: true)")
@@ -639,17 +640,11 @@ func runServer(args []string) error {
 
 	// Auto-seed demo sample database if requested
 	if cfg.Server.AutoSeed {
-		seedPath := "scripts/demo_seed.sql"
-		sqlBytes, err := os.ReadFile(seedPath)
-		if err != nil {
-			log.Printf("[LionSQL] Error reading seed script %q: %v", seedPath, err)
+		log.Printf("[LionSQL] Seeding demo sample database (embedded demo_seed.sql)...")
+		if _, err := server.ExecuteSQL(seed.DemoSeedSQL); err != nil {
+			log.Printf("[LionSQL] Warning: demo seed script returned error: %v", err)
 		} else {
-			log.Printf("[LionSQL] Seeding demo sample database from %s...", seedPath)
-			if _, err := server.ExecuteSQL(string(sqlBytes)); err != nil {
-				log.Printf("[LionSQL] Warning: demo seed script returned error: %v", err)
-			} else {
-				log.Printf("[LionSQL] Demo sample database seeded successfully.")
-			}
+			log.Printf("[LionSQL] Demo sample database seeded successfully (5 tables, 2 procedures, %d records).", seed.DemoRecordCount)
 		}
 	}
 

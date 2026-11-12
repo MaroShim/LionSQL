@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- embed canonical demo seed SQL script (`demo_seed.sql`) directly into the single static binary via `//go:embed` and align Web Studio's `POST /api/seed` to execute the identical unified 5-table, 34-record, 2-procedure database schema (`SEED-EMBED-UNIFY-1`)
 - add SSMS Object Explorer sub-node expansion and Microsoft SMO support for table child objects including Columns, Keys, Constraints (Foreign Key, Check, Default), Indexes, Triggers, and Statistics with exact XPath URN projections (`SSMS-OE-SUBFOLDERS`, `SSMS-OE-COMPAT-2`, `SSMS-OE-SMO-VERIFY`)
 - support 3-part qualified table names (`[master].[dbo].[table]`) and pagination normalization for SSMS right-click `SELECT TOP (1000)` and `Edit Top 200` queries (`SSMS-OE-3PART-TOP`)
 - cross-compile standalone Windows 64-bit binary (`bin/lionsql.exe`) with pure Go static linking (`CGO_ENABLED=0`)
