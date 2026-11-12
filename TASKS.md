@@ -216,6 +216,7 @@
 | `PENDING` | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** |  | Wire | P1 | TDS RPC(0x03) 직접 프로시저 호출 시 OUTPUT/INOUT 파라미터 RETURNVALUE(0xAC) 토큰 반환 및 생략된 기본값(@param = default) 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-TDS-RPC-RETURN-STATUS-1`** |  | Wire | P1 | TDS RPC 프로시저 RETURN <int> 실행 시 실제 종료 코드를 RETURNSTATUS(0x79) 토큰으로 전송 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-TRIGGER-FOR-KEYWORD-1`** |  | Engine | P1 | CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** |  | Engine | P1 | CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX)) 미평가 에코 버그 및 MONEY/SMALLMONEY 4자리 소수점 스케일(1.2345) 보정 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-TSQL-INSERT-EXEC-1`** |  | Engine | P1 | INSERT INTO <table> EXEC <proc_name> 프로시저 결과셋 적재 구문 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-OFFSET-VAR-1`** | `1.0-GA` | Engine | P2 | OFFSET @var ROWS FETCH NEXT @var ROWS ONLY 프로시저 내 변수 바인딩 파싱 실패 (unexpected token @skip) | [`test/slt_proc/26_offset_fetch_paging.slt`](test/slt_proc/26_offset_fetch_paging.slt) |  |
 | `DONE` | **`FIX-TSQL-OUTPUT-PARAM-1`** | `1.0-GA` | Engine | P1 | EXEC proc @x OUTPUT 호출자 변수로 값 미전달: DECLARE @x; EXEC sp_double 21, @x OUTPUT; SELECT @x 가 42 대신 NULL | [`test/slt_proc/27_rowcount_and_dml_results.slt`](test/slt_proc/27_rowcount_and_dml_results.slt) |  |
@@ -2570,6 +2571,12 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ### [PENDING] CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 `FIX-TRIGGER-FOR-KEYWORD-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:06:31
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX)) 미평가 에코 버그 및 MONEY/SMALLMONEY 4자리 소수점 스케일(1.2345) 보정 `FIX-TSQL-CAST-MAX-AND-MONEY-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:20:43
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
