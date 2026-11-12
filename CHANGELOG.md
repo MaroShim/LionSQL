@@ -31,7 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 - handle Microsoft SMO Server Properties & Facets batch in TDS protocol (`handleSsmsServerPropertiesBatch`), answering `@HkeyLocal`, `xp_instance_regread`, and `sys.dm_hadr_cluster` queries with all 59 server facets so SSMS Object Explorer finishes child node enumeration and renders subnodes (columns, keys, indexes)
-- ensure idempotent seed execution in `demo_seed.sql` with reverse-dependency `DROP TABLE IF EXISTS` and `DROP PROCEDURE IF EXISTS` guards, preventing failure when tables or procedures exist from earlier instances
+- protect existing data by guarding CLI `-seed` against non-empty databases (skips `-seed` if existing tables are detected, matching Web Studio's empty database invariant)
 - prevent table query hijacking in virtual catalog interceptor where `MSSQL_ColumnsJoinedWithTypes` and `MSSQL_SysTableIndexesSSMS` falsely matched `sys.tables` queries containing column/index subqueries in projection, restoring SSMS Object Explorer table listing
 - immediately refresh stored procedures count (`loadProcedures`) and overview metrics (`loadOverviewMetrics`) in Web Studio upon `seedSampleData()` completion without requiring manual browser reload
 - fix parameterization in `sqlutil.ParameterizeSubquery` to prioritize qualified outer column tokens over unqualified tokens, preventing inner column name mutation in correlated subqueries (`PERF-SUBQUERY-MEMO-1`)

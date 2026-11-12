@@ -638,13 +638,22 @@ func runServer(args []string) error {
 		}
 	}
 
-	// Auto-seed demo sample database if requested
+	// Auto-seed demo sample database if requested (only on fresh / empty database to protect existing data)
 	if cfg.Server.AutoSeed {
-		log.Printf("[LionSQL] Seeding demo sample database (embedded demo_seed.sql)...")
-		if _, err := server.ExecuteSQL(seed.DemoSeedSQL); err != nil {
-			log.Printf("[LionSQL] Warning: demo seed script returned error: %v", err)
+		existingTables, err := eng.ListTables()
+		if err == nil && len(existingTables) > 0 {
+			names := make([]string, 0, len(existingTables))
+			for _, t := range existingTables {
+				names = append(names, t.Name)
+			}
+			log.Printf("[LionSQL] Existing tables detected in data directory (%d tables: %s). Skipping -seed to protect existing data.", len(existingTables), strings.Join(names, ", "))
 		} else {
-			log.Printf("[LionSQL] Demo sample database seeded successfully (5 tables, 2 procedures, %d records).", seed.DemoRecordCount)
+			log.Printf("[LionSQL] Seeding demo sample database (embedded demo_seed.sql)...")
+			if _, err := server.ExecuteSQL(seed.DemoSeedSQL); err != nil {
+				log.Printf("[LionSQL] Warning: demo seed script returned error: %v", err)
+			} else {
+				log.Printf("[LionSQL] Demo sample database seeded successfully (5 tables, 2 procedures, %d records).", seed.DemoRecordCount)
+			}
 		}
 	}
 

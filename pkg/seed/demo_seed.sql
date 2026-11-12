@@ -4,14 +4,6 @@
 -- Stored Procedures: TransferFunds, ProcessOrder
 -- ============================================================================
 
-DROP TABLE IF EXISTS sales_details;
-DROP TABLE IF EXISTS sales;
-DROP TABLE IF EXISTS products;
-DROP TABLE IF EXISTS accounts;
-DROP TABLE IF EXISTS customers;
-DROP PROCEDURE IF EXISTS TransferFunds;
-DROP PROCEDURE IF EXISTS ProcessOrder;
-
 -- 1. Customers Table (고객 인적사항)
 CREATE TABLE customers (
     id INT PRIMARY KEY,
