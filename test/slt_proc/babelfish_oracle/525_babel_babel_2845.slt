@@ -1,0 +1,53 @@
+# test/slt_proc/babelfish_oracle/525_babel_babel_2845.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2845.sql
+
+statement ok
+create table babel_2845_t1(a int, check (a > 5));
+
+statement ok
+create table babel_2845_t2(a int, b int);
+
+statement ok
+insert into babel_2845_t2 values (1, 2);
+
+statement ok
+begin tran
+
+statement ok
+insert into babel_2845_t1 values (6)
+
+statement ok
+save transaction tran1
+
+statement ok
+insert into babel_2845_t1 values (7)
+
+statement ok
+rollback transaction tran1
+
+statement ok
+commit
+
+query T
+select * from babel_2845_t1;
+----
+6
+
+statement ok
+begin tran
+
+statement ok
+insert into babel_2845_t1 values (7)
+
+statement ok
+save transaction tran1
+
+statement ok
+if (@@trancount > 0) rollback tran;
+
+statement ok
+drop table babel_2845_t1
+
+statement ok
+drop table babel_2845_t2
+

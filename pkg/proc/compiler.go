@@ -780,7 +780,23 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		return nil
 
 	case *RaiseErrorStmt:
-		c.emit(OpRaiserror, int32(s.Severity), int32(s.State), int32(s.Number), s.Message)
+		if len(s.FormatArgs) > 0 {
+			var argRegs []int32
+			for _, a := range s.FormatArgs {
+				r, err := c.compileExpr(a)
+				if err != nil {
+					return err
+				}
+				argRegs = append(argRegs, r)
+			}
+			c.emit(OpRaiserror, int32(s.Severity), int32(s.State), int32(s.Number), &RaiserrorData{
+				Message: s.Message,
+				ArgRegs: argRegs,
+			})
+			c.freeReg(int32(len(argRegs)))
+		} else {
+			c.emit(OpRaiserror, int32(s.Severity), int32(s.State), int32(s.Number), s.Message)
+		}
 		return nil
 
 	case *ThrowStmt:
@@ -965,20 +981,27 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 
 	case *ExecStmt:
 		var argRegs []int32
-		for _, a := range s.Args {
+		var outSlots []int32
+		for i, a := range s.Args {
 			r, err := c.compileExpr(a)
 			if err != nil {
 				return err
 			}
 			argRegs = append(argRegs, r)
+			outSlot := int32(-1)
+			if i < len(s.OutVars) && s.OutVars[i] != "" {
+				outSlot = c.getOrAllocSlot(s.OutVars[i])
+			}
+			outSlots = append(outSlots, outSlot)
 		}
 		destSlot := int32(-1)
 		if s.ReturnVar != "" {
 			destSlot = c.getOrAllocSlot(s.ReturnVar)
 		}
 		c.emit(OpCallProc, destSlot, 0, 0, &CallData{
-			Name:    s.ProcName,
-			ArgRegs: argRegs,
+			Name:     s.ProcName,
+			ArgRegs:  argRegs,
+			OutSlots: outSlots,
 		})
 		c.freeReg(int32(len(argRegs)))
 		return nil
@@ -1031,7 +1054,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 
 	case *GeneralSelectStmt:
 		// 1. Scalar SELECT without FROM (e.g. SELECT 1 + 1 AS res, 'hello' AS msg, GETDATE())
-		if s.From.Name == "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !s.IsExplain && !hasAggregates(s.Projections) {
+		if s.From.Name == "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.SetOps) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !s.IsExplain && !hasAggregates(s.Projections) {
 			var colNames []string
 			var projRegs []int32
 
@@ -1067,7 +1090,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		}
 
 		// 2. Single-table Point Query (WHERE col = val without joins/groups/aggregates/distinct)
-		if s.From.Name != "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !hasAggregates(s.Projections) && s.Where != nil && !s.Distinct && !s.IsExplain {
+		if s.From.Name != "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.SetOps) == 0 && len(s.GroupBy) == 0 && s.Having == nil && s.LimitExpr == nil && s.OffsetExpr == nil && s.Offset == 0 && !hasAggregates(s.Projections) && s.Where != nil && !s.Distinct && !s.IsExplain {
 			if whereCol, whereVal, ok := ExtractSimpleEq(s.Where); ok {
 				c.emit(OpPointSelect, 0, 0, 0, &PointSelectData{
 					Table:       s.From.Name,

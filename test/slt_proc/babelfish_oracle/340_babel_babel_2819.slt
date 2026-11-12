@@ -1,0 +1,121 @@
+# test/slt_proc/babelfish_oracle/340_babel_babel_2819.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2819-vu-prepare.sql, test/babelfish/raw/BABEL-2819-vu-verify.sql
+
+statement ok
+create view BABEL_2819_vu_prepare_v1 as (select datepart(dayofyear, cast('2016-11-14' as datetime)) as dayofyear, datepart(y, cast('2016-11-14' as datetime)) as y);
+
+statement ok
+create view BABEL_2819_vu_prepare_v2 as (select datename(dayofyear, cast('2016-11-14' as datetime)) as dayofyear, datename(y, cast('2016-11-14' as datetime)) as y);
+
+statement ok
+create view BABEL_2819_vu_prepare_v3 as (select datediff(y,cast('1956-06-27' as datetime),cast('1956-11-14' as datetime)));
+
+statement ok
+create view BABEL_2819_vu_prepare_v4 as (select dateadd(y, 149, cast('2016-11-14' as datetime)));
+
+statement ok
+create procedure  BABEL_2819_vu_prepare_p1 as (select datepart(dayofyear, cast('2016-11-14' as datetime)) as dayofyear, datepart(y, cast('2016-11-14' as datetime)) as y);
+
+statement ok
+create procedure  BABEL_2819_vu_prepare_p2 as (select datename(dayofyear, cast('2016-11-14' as datetime)) as dayofyear, datename(y, cast('2016-11-14' as datetime)) as y);
+
+statement ok
+create procedure  BABEL_2819_vu_prepare_p3 as (select datediff(y,cast('1956-06-27' as datetime),cast('1956-11-14' as datetime)));
+
+statement ok
+create procedure  BABEL_2819_vu_prepare_p4 as (select dateadd(y, 149, cast('2016-11-14' as datetime)));
+
+statement ok
+create function BABEL_2819_vu_prepare_f1()
+returns datetime as
+begin
+return (select datepart(y, cast('2016-06-27' as datetime)) as y);
+end
+
+statement ok
+create function BABEL_2819_vu_prepare_f2()
+returns nvarchar(15) as
+begin
+return (select datename(y, cast('2016-06-27' as datetime)) as y);
+end
+
+statement ok
+create function BABEL_2819_vu_prepare_f3()
+returns int as
+begin
+return (select datediff(y,cast('1956-06-27' as datetime),cast('1956-11-14' as datetime)));
+end
+
+statement ok
+create function BABEL_2819_vu_prepare_f4()
+returns datetime as
+begin
+return (select dateadd(y, 149, cast('2016-11-14' as datetime)));
+end
+
+statement ok
+DROP VIEW BABEL_2819_vu_prepare_v1
+
+statement ok
+DROP VIEW BABEL_2819_vu_prepare_v2
+
+statement ok
+DROP VIEW BABEL_2819_vu_prepare_v3
+
+statement ok
+DROP VIEW BABEL_2819_vu_prepare_v4
+
+query TT
+EXEC BABEL_2819_vu_prepare_p1
+----
+319 319
+
+statement ok
+DROP procedure  BABEL_2819_vu_prepare_p1
+
+query TT
+EXEC BABEL_2819_vu_prepare_p2
+----
+319 319
+
+statement ok
+DROP procedure  BABEL_2819_vu_prepare_p2
+
+query T
+EXEC BABEL_2819_vu_prepare_p3
+----
+NULL
+
+statement ok
+DROP procedure  BABEL_2819_vu_prepare_p3
+
+statement ok
+DROP procedure  BABEL_2819_vu_prepare_p4
+
+query T
+SELECT BABEL_2819_vu_prepare_f1()
+----
+179
+
+statement ok
+DROP FUNCTION BABEL_2819_vu_prepare_f1()
+
+query T
+SELECT BABEL_2819_vu_prepare_f2()
+----
+179
+
+statement ok
+DROP FUNCTION BABEL_2819_vu_prepare_f2()
+
+query T
+SELECT BABEL_2819_vu_prepare_f3()
+----
+NULL
+
+statement ok
+DROP FUNCTION BABEL_2819_vu_prepare_f3()
+
+statement ok
+DROP FUNCTION BABEL_2819_vu_prepare_f4()
+

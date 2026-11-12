@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1216_babel_babel_3299.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3299.sql
+
+statement ok
+CREATE TABLE t3299 (a int);
+
+statement ok
+DROP TABLE t3299;
+

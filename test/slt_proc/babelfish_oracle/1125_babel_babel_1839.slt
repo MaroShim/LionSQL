@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/1125_babel_babel_1839.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1839.sql
+
+statement ok
+SELECT 
+
+statement ok
+SET NOCOUNT, CONCAT_NULL_YIELDS_NULL, QUOTED_IDENTIFIER ON;
+
+statement ok
+SET NOCOUNT, CONCAT_NULL_YIELDS_NULL, QUOTED_IDENTIFIER OFF;
+
+statement ok
+SELECT 
+
+statement ok
+SET NOCOUNT, CONCAT_NULL_YIELDS_NULL, QUOTED_IDENTIFIER, NOTHING ON;
+
+statement ok
+SELECT 
+
+statement ok
+SET NOCOUNT, CONCAT_NULL_YIELDS_NULL, QUOTED_IDENTIFIER, LANGUAGE ON;
+
+statement ok
+SELECT 
+

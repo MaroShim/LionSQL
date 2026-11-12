@@ -1,0 +1,324 @@
+# test/slt_proc/babelfish_oracle/451_babel_babel_539.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_539-vu-prepare.sql, test/babelfish/raw/BABEL_539-vu-verify.sql, test/babelfish/raw/BABEL_539-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_539OldTable(col1 int , name varchar(20));
+
+statement ok
+INSERT INTO babel_539OldTable VALUES (10, 'user1') , (20, 'user2'), (30, 'user3');
+
+statement ok
+CREATE PROC babel_539_prepare_proc
+AS
+SELECT col1, name, IDENTITY(int, 1,2) AS id_num INTO babel_539NewTable_proc FROM babel_539OldTable order by col1;
+
+query TTT
+EXEC babel_539_prepare_proc
+----
+10 user1 NULL
+20 user2 NULL
+30 user3 NULL
+
+query TTT
+EXEC babel_539_prepare_proc
+----
+10 user1 NULL
+20 user2 NULL
+30 user3 NULL
+
+statement ok
+DROP TABLE IF EXISTS babel_539NewTable_proc;
+
+statement ok
+DROP TABLE IF EXISTS babel_539NewTable1;
+
+statement ok
+SELECT col1, IDENTITY(int, 1,1) AS id_num INTO babel_539NewTable1 FROM babel_539OldTable;
+
+query TT
+SELECT id_num, col1 FROM babel_539NewTable1 ORDER BY col1;
+----
+NULL 10
+NULL 20
+NULL 30
+
+query T
+SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'babel_539newtable1' ORDER BY ORDINAL_POSITION;
+----
+_row_id
+col1
+id_num
+
+statement ok
+DROP TABLE IF EXISTS babel_539NewTable1;
+
+statement ok
+SELECT col1, IDENTITY(int, 1) AS id_num INTO #babel_539NewTable1 FROM babel_539OldTable;
+
+query TT
+SELECT id_num, col1 FROM #babel_539NewTable1 ORDER BY col1;
+----
+NULL 10
+NULL 20
+NULL 30
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT col1, IDENTITY(int) AS id_num INTO #babel_539NewTable1 FROM babel_539OldTable;
+
+query TT
+SELECT col1, id_num FROM #babel_539NewTable1 ORDER BY col1;
+----
+10 NULL
+20 NULL
+30 NULL
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT col1, id_num=IDENTITY(int, 1,100) INTO #babel_539NewTable1 FROM babel_539OldTable;
+
+query TT
+SELECT id_num, col1 FROM #babel_539NewTable1 ORDER BY col1;
+----
+NULL 10
+NULL 20
+NULL 30
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT col1, [id_num]=IDENTITY(int, 1,1) INTO #babel_539NewTable1 FROM babel_539OldTable;
+
+query TT
+SELECT id_num, col1 FROM #babel_539NewTable1 ORDER BY col1; 
+----
+NULL 10
+NULL 20
+NULL 30
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT col1, identity(int, 1,-100) AS [id_num] INTO #babel_539NewTable1 FROM babel_539OldTable;
+
+query TT
+SELECT id_num, col1 FROM #babel_539NewTable1 ORDER BY col1; 
+----
+NULL 10
+NULL 20
+NULL 30
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT *, identity(int) AS [id_num] INTO #babel_539NewTable1 FROM babel_539OldTable;
+
+query TTT
+SELECT id_num, col1, name FROM #babel_539NewTable1 ORDER BY col1; 
+----
+NULL 10 user1
+NULL 20 user2
+NULL 30 user3
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT IDENTITY(int,1,1) AS id_num, ltable.col1 AS col1, ltable.name AS name INTO #babel_539NewTable1 
+FROM babel_539OldTable AS ltable JOIN babel_539OldTable AS rtable ON ltable.col1 <> rtable.col1 ORDER BY ltable.col1;
+
+statement ok
+SELECT id_num, col1, name FROM #babel_539NewTable1 ORDER BY col1; 
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT IDENTITY(bigint, 9223372036854775807, -1) id_num, col1, name INTO #babel_539NewTable1 FROM babel_539OldTable;
+
+query TTT
+SELECT id_num, col1, name FROM #babel_539NewTable1 ORDER BY col1; 
+----
+NULL 10 user1
+NULL 20 user2
+NULL 30 user3
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT IDENTITY(numeric, -9223372036854775806, +1) id_num, col1, name INTO #babel_539NewTable1 FROM babel_539OldTable;
+
+query TTT
+SELECT id_num, col1, name FROM #babel_539NewTable1 ORDER BY col1; 
+----
+NULL 10 user1
+NULL 20 user2
+NULL 30 user3
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT IDENTITY(numeric(19,0), 9223372036854775807, -1) id_num, col1, name INTO #babel_539NewTable1 FROM babel_539OldTable;
+
+query TTT
+SELECT id_num, col1, name FROM #babel_539NewTable1 ORDER BY col1; 
+----
+NULL 10 user1
+NULL 20 user2
+NULL 30 user3
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT IDENTITY(numeric(19,0), 1, 1) as id_num, * into #babel_539NewTable1 from babel_539OldTable where 1=1;
+
+query TTT
+SELECT col1, name, id_num FROM #babel_539NewTable1 ORDER BY col1; 
+----
+10 user1 NULL
+20 user2 NULL
+30 user3 NULL
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT col1, IDENTITY(int, 1, 1) AS id_num, name INTO #babel_539NewTable1 FROM babel_539OldTable ORDER BY col1 DESC;
+
+query TTT
+SELECT col1, name, id_num FROM #babel_539NewTable1 ORDER BY col1; 
+----
+10 user1 NULL
+20 user2 NULL
+30 user3 NULL
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT DISTINCT IDENTITY(int, 1, 1) AS id_num, col1, name INTO #babel_539NewTable1 FROM babel_539OldTable ORDER BY col1;
+
+query TTT
+SELECT col1, name, id_num FROM #babel_539NewTable1 ORDER BY col1; 
+----
+10 user1 NULL
+20 user2 NULL
+30 user3 NULL
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT DISTINCT name, col1, IDENTITY(int, 1, 1) AS id_num INTO #babel_539NewTable1 FROM babel_539OldTable ORDER BY name;
+
+query TTT
+SELECT col1, name, id_num FROM #babel_539NewTable1 ORDER BY name; 
+----
+10 user1 NULL
+20 user2 NULL
+30 user3 NULL
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT TOP 2 col1, name, IDENTITY(int, 1, 1) AS id_num INTO #babel_539NewTable1 FROM babel_539OldTable ORDER BY col1;
+
+query TTT
+SELECT col1, name, id_num FROM #babel_539NewTable1 ORDER BY col1; 
+----
+10 user1 NULL
+20 user2 NULL
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT TOP 2 IDENTITY(int, 1, 1) AS id_num, col1 INTO #babel_539NewTable1 FROM babel_539OldTable ORDER BY col1, name;
+
+query TTT
+SELECT col1, name, id_num FROM #babel_539NewTable1 ORDER BY col1; 
+----
+10 NULL NULL
+20 NULL NULL
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+SELECT IDENTITY(int, -10, 1+1) id_num, col1, name INTO #babel_539NewTable1 FROM babel_539OldTable;
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable1;
+
+statement ok
+CREATE TABLE babel_539OldTable2 (col1 int NOT NULL, name varchar(20), id_num INT IDENTITY(1, 2));
+
+statement ok
+DROP TABLE IF EXISTS babel_539NewTable2;
+
+statement ok
+SELECT id_num, col1, name INTO babel_539NewTable2 FROM babel_539OldTable2 ORDER BY col1;
+
+statement ok
+SELECT id_num, col1, name FROM babel_539NewTable2 ORDER BY col1; 
+
+statement ok
+DROP TABLE IF EXISTS babel_539OldTable2;
+
+statement ok
+DROP TABLE IF EXISTS babel_539NewTable2;
+
+statement ok
+CREATE TABLE #babel_539NewTable2 (col1 int, name varchar(20),  id_num int IDENTITY(-1, 2));
+
+statement ok
+SELECT id_num, col1, name FROM #babel_539NewTable2 ORDER BY col1; 
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable2;
+
+statement ok
+CREATE TABLE #babel_539NewTable2 (col1 int, name varchar(20) );
+
+statement ok
+SELECT col1, name FROM #babel_539NewTable2 ORDER BY col1; 
+
+statement ok
+ALTER TABLE #babel_539NewTable2 ADD id_num int IDENTITY(1, 1);
+
+statement ok
+INSERT INTO #babel_539NewTable2(col1, name) VALUES (10, 'user1') , (20, 'user2'), (30, 'user3');
+
+query TTT
+SELECT id_num, col1, name FROM #babel_539NewTable2 ORDER BY col1; 
+----
+NULL 10 user1
+NULL 20 user2
+NULL 30 user3
+
+statement ok
+DROP TABLE IF EXISTS #babel_539NewTable2;
+
+statement ok
+SELECT col1, IDENTITY(int, 1,1) as id_num, IDENTITY(int, 1,1) as id_num2 INTO babel_539NewTable2 FROM babel_539OldTable;
+
+statement ok
+SELECT col1, IDENTITY() AS id_num INTO babel_539NewTable1 FROM babel_539OldTable;
+
+statement ok
+DROP PROC IF EXISTS babel_539_prepare_proc;
+
+statement ok
+DROP TABLE IF EXISTS babel_539OldTable;
+

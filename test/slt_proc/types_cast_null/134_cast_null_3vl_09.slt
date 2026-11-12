@@ -1,0 +1,22 @@
+# test/slt_proc/types_cast_null/134_cast_null_3vl_09.slt
+# T-SQL CAST, TRY_CAST, ISNUMERIC, CHOOSE, IIF, COALESCE, NULLIF (9)
+
+query ITI
+SELECT CAST('344' AS INT) + 9, CAST(344 AS VARCHAR(20)), TRY_CAST('344' AS INT);
+----
+353 344 344
+
+query IIT
+SELECT ISNUMERIC('344'), ISNUMERIC('err_9z'), ISNULL(CAST(TRY_CAST('err_9z' AS INT) AS VARCHAR(20)), 'NULL_VAL');
+----
+1 0 NULL_VAL
+
+query TTTT
+SELECT CHOOSE(2, 'Alpha_9', 'Beta_9', 'Gamma_9', 'Delta_9'), IIF(344 > 10, 'YES', 'NO'), ISNULL(NULL, 'DEF_9'), COALESCE(NULL, NULL, 'COAL_9');
+----
+Beta_9 YES DEF_9 COAL_9
+
+query II
+SELECT ISNULL(NULLIF(344, 344), -1), NULLIF(344, 0);
+----
+-1 344

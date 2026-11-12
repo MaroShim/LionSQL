@@ -1,0 +1,62 @@
+# test/slt_proc/babelfish_oracle/399_babel_babel_4863_before_16_3_or_15_7_or_14_12.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4863-before-16_3-or-15_7-or-14_12-vu-prepare.sql, test/babelfish/raw/BABEL-4863-before-16_3-or-15_7-or-14_12-vu-verify.sql, test/babelfish/raw/BABEL-4863-before-16_3-or-15_7-or-14_12-vu-cleanup.sql
+
+statement ok
+create function babel_4863_func()
+	returns table as return 
+	(
+		select 'value' = '1'
+	)
+
+statement ok
+create function babel_4863_func1()
+returns table as return 
+(
+    SELECT CASE WHEN 1=1  THEN 1 ELSE 0 END
+)
+
+statement ok
+CREATE PROCEDURE babel_4863_proc @a INT
+AS BEGIN 
+DECLARE @v1 int = CASE WHEN @a=1  THEN 1 ELSE 0 END;
+DECLARE @v2 int = CASE WHEN @a=1  THEN 1 ELSE 0 END;
+DECLARE @v3 int = CASE WHEN @a=1  THEN 1 ELSE 0 END;
+SELECT @v1, @v2, @v3;
+END;
+
+statement ok
+CREATE VIEW babel_4863_view AS 
+SELECT CASE WHEN 1=1  THEN 1 ELSE 0 END;
+
+query T
+select * from babel_4863_func1();
+----
+1
+
+query TTT
+exec babel_4863_proc 1;
+----
+1 1 1
+
+query TTT
+exec babel_4863_proc 2;
+----
+0 0 0
+
+query T
+SELECT * FROM babel_4863_view;
+----
+1
+
+statement ok
+drop function if exists babel_4863_func
+
+statement ok
+drop function if exists babel_4863_func1
+
+statement ok
+drop procedure if exists babel_4863_proc
+
+statement ok
+drop view if exists babel_4863_view
+

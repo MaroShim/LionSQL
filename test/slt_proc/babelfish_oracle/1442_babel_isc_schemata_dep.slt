@@ -1,0 +1,37 @@
+# test/slt_proc/babelfish_oracle/1442_babel_isc_schemata_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/isc-schemata-dep-vu-prepare.sql, test/babelfish/raw/views/isc-schemata-dep-vu-verify.sql, test/babelfish/raw/views/isc-schemata-dep-vu-cleanup.sql
+
+statement ok
+CREATE SCHEMA isc_schemata_dep_vu_prepare_sch;
+
+statement ok
+CREATE VIEW isc_schemata_dep_vu_prepare_view AS
+SELECT * FROM information_schema.schemata WHERE schema_name = 'isc_schemata_dep_vu_prepare_sch'
+
+statement ok
+CREATE PROC isc_schemata_dep_vu_prepare_proc AS
+SELECT count(*) from information_schema.schemata WHERE schema_name = 'isc_schemata_dep_vu_prepare_sch'
+
+statement ok
+CREATE FUNCTION isc_schemata_dep_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'isc_schemata_dep_vu_prepare_sch')
+END
+
+statement ok
+SELECT * FROM isc_schemata_dep_vu_prepare_view
+
+statement ok
+DROP SCHEMA isc_schemata_dep_vu_prepare_sch;
+
+statement ok
+DROP VIEW isc_schemata_dep_vu_prepare_view
+
+statement ok
+DROP PROCEDURE isc_schemata_dep_vu_prepare_proc
+
+statement ok
+DROP FUNCTION isc_schemata_dep_vu_prepare_func
+

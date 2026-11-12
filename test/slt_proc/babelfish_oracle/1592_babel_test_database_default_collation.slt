@@ -1,0 +1,26 @@
+# test/slt_proc/babelfish_oracle/1592_babel_test_database_default_collation.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/collations/test_database_default_collation.sql
+
+statement ok
+create table babel_3300 (a varchar(5) collate database_default, b char(5) collate database_default);
+
+statement ok
+insert into babel_3300 values ('abcd', 'abcd');
+
+statement ok
+insert into babel_3300 values ('abcdef', 'abcdef');
+
+query TT
+select * from babel_3300;
+----
+abcd abcd
+abcdef abcdef
+
+statement ok
+drop table babel_3300;
+
+query T
+SELECT CAST( N'Name' AS NVARCHAR(10) ) collate catalog_default as name;
+----
+Name
+

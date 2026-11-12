@@ -1,0 +1,255 @@
+# test/slt_proc/babelfish_oracle/629_babel_datename_tzoffset.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/datename_tzoffset-vu-prepare.sql, test/babelfish/raw/datename_tzoffset-vu-verify.sql, test/babelfish/raw/datename_tzoffset-vu-cleanup.sql
+
+statement ok
+CREATE TABLE datename_tzoffset_test_cases (
+    date_value VARCHAR(50),
+    offset_value NVARCHAR(100)
+);
+
+statement ok
+CREATE VIEW datename_tzoffset_no_offset_tests_view AS 
+SELECT 
+    datename(TZOFFSET, '2025-06-03 14:30:15.1234567') AS datetime2_offset,
+    datename(TZOFFSET, '2025-06-03') AS date_offset,
+    datename(TZOFFSET, '14:30:15.1234567') AS timestamp_offset,
+    datename(TZOFFSET, '') AS empty_string_offset;
+
+statement ok
+CREATE TABLE datename_stability_test (
+    config_type VARCHAR(20),
+    config_value VARCHAR(30),
+    test_date VARCHAR(50),
+    datepart VARCHAR(20),
+    result NVARCHAR(100)
+);
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result)
+VALUES ('Initial', 'default', '2025-06-30', 'weekday', DATENAME(weekday, '2025-06-30'));
+
+statement ok
+SET LANGUAGE 'us_english';
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result)
+VALUES ('LANGUAGE', 'us_english', '2025-06-30', 'weekday', DATENAME(weekday, '2025-06-30'));
+
+statement ok
+SET LANGUAGE 'French';
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result)
+VALUES ('LANGUAGE', 'French', '2025-06-30', 'weekday', DATENAME(weekday, '2025-06-30'));
+
+statement ok
+SET LANGUAGE 'us_english';
+
+statement ok
+SET DATEFIRST 7;
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result)
+VALUES ('DATEFIRST', '7', '2025-01-05', 'week', DATENAME(week, '2025-01-05'));
+
+statement ok
+SET DATEFIRST 1;
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result)
+VALUES ('DATEFIRST', '1', '2025-01-05', 'week', DATENAME(week, '2025-01-05'));
+
+statement ok
+SET DATEFIRST 7;
+
+statement ok
+SET DATEFORMAT mdy;
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result)
+VALUES ('DATEFORMAT', 'mdy', '03-06-2025', 'month', DATENAME(month, '03-06-2025'));
+
+statement ok
+SET DATEFORMAT dmy;
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result)
+VALUES ('DATEFORMAT', 'dmy', '03-06-2025', 'month', DATENAME(month, '03-06-2025'));
+
+statement ok
+SET DATEFORMAT ymd;
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result)
+VALUES ('DATEFORMAT', 'ymd', '2025-03-06', 'month', DATENAME(month, '2025-03-06'));
+
+statement ok
+SET DATEFORMAT ydm;
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result)
+VALUES ('DATEFORMAT', 'ydm', '2025-03-06', 'month', DATENAME(month, '2025-03-06'));
+
+statement ok
+SET DATEFORMAT myd;
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result)
+VALUES ('DATEFORMAT', 'myd', '06-2025-03', 'month', DATENAME(month, '06-2025-03'));
+
+statement ok
+SET DATEFORMAT dym;
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result)
+VALUES ('DATEFORMAT', 'dym', '06-2025-03', 'month', DATENAME(month, '06-2025-03'));
+
+statement ok
+SET DATEFORMAT mdy;
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result) 
+VALUES 
+('TIMEZONE', 'UTC', '2025-06-30 12:00:00', 'hour', DATENAME(hour, '2025-06-30 12:00:00')),
+('TIMEZONE', 'UTC', '2025-01-01 05:30:45', 'hour', DATENAME(hour, '2025-01-01 05:30:45'));
+
+statement ok
+INSERT INTO datename_stability_test (config_type, config_value, test_date, datepart, result)
+VALUES 
+('TIMEZONE', 'Africa/Nairobi', '2025-06-30 12:00:00', 'hour', DATENAME(hour, '2025-06-30 12:00:00')),
+('TIMEZONE', 'Africa/Nairobi', '2025-01-01 05:30:45', 'hour', DATENAME(hour, '2025-01-01 05:30:45'));
+
+query T
+SELECT DATENAME(TZOFFSET, NULL);
+----
+NULL
+
+query T
+SELECT DATENAME(TZOFFSET, '');
+----
+NULL
+
+query T
+SELECT DATENAME(TZOFFSET, '2025-06-03 14:30:15 +01:59');
+----
+NULL
+
+query T
+SELECT DATENAME(TZOFFSET, CAST('2025-06-03 14:30:15 +01:59' AS DATETIMEOFFSET));
+----
+NULL
+
+query T
+SELECT DATENAME(TZOFFSET, CAST('2025-06-03 14:30:15 -01:59' AS DATETIMEOFFSET));
+----
+NULL
+
+statement ok
+INSERT INTO datename_tzoffset_test_cases (date_value, offset_value)
+VALUES 
+('2025-06-03 14:30:15 +01:30', DATENAME(TZOFFSET, '2025-06-03 14:30:15 +01:30')),
+('2025-06-03 14:30:15 -05:00', DATENAME(TZOFFSET, '2025-06-03 14:30:15 -05:00')),
+('2016-12-26 23:30:05.523456+08:00', DATENAME(TZOFFSET, '2016-12-26 23:30:05.523456+08:00')),
+('2016-12-26 23:30:05.523456+8', DATENAME(TZOFFSET, CAST('2016-12-26 23:30:05.523456+8' AS DATETIMEOFFSET)));
+
+query T
+SELECT DATENAME(TZOFFSET, SWITCHOFFSET(CAST('2025-06-03 14:30:15 +01:30' AS DATETIMEOFFSET), '-08:00'));
+----
+NULL
+
+query T
+SELECT DATENAME(TZOFFSET, TODATETIMEOFFSET(CAST('2025-06-03 14:30:15' AS DATETIME2), '-03:30'));
+----
+NULL
+
+query T
+DECLARE @datestring NVARCHAR(50) = N'2025-06-03 14:30:15.1234567 +05:30';
+SELECT DATENAME(TZOFFSET, @datestring);
+----
+NULL
+
+query TTTT
+SELECT * FROM datename_tzoffset_no_offset_tests_view;
+----
+NULL NULL NULL NULL
+
+query T
+SELECT DATENAME(TZOFFSET, CAST('2025-06-03 14:30:15 +14:00' AS DATETIMEOFFSET));
+----
+NULL
+
+query T
+SELECT DATENAME(TZOFFSET, CAST('2025-06-03 14:30:15 -14:00' AS DATETIMEOFFSET));
+----
+NULL
+
+query T
+SELECT DATENAME(TZOFFSET, CAST('2025-06-03 14:30:15 +14:01' AS DATETIMEOFFSET));
+----
+NULL
+
+query T
+SELECT DATENAME(TZOFFSET, '2025-06-03 14:30:15 -14:01');
+----
+NULL
+
+query T
+SELECT datename(TZOFFSET, CAST('2025-06-03 14:30:15' AS DATETIME2)) AS datetime2_type;
+----
+NULL
+
+query T
+SELECT datename(TZOFFSET, CAST('2025-06-03 14:30:15' AS DATETIMEOFFSET)) AS datetimeoffset_type;
+----
+NULL
+
+statement ok
+SELECT config_type, test_date, datepart, COUNT(DISTINCT result) as distinct_results
+FROM datename_stability_test
+GROUP BY config_type, test_date, datepart
+HAVING COUNT(DISTINCT result) > 1;
+
+query T
+SELECT datename(TZOFFSET, CAST('2025-06-03 14:30:15' AS DATETIME)) AS datetime_type;
+----
+NULL
+
+query T
+SELECT datename(TZOFFSET, CAST('2025-06-03 14:30:15' AS SMALLDATETIME)) AS smalldatetime_type;
+----
+NULL
+
+query T
+SELECT DATENAME(TZOFFSET, '2025-06-0314:30:15+01:59');
+----
+NULL
+
+query T
+SELECT datename(TZOFFSET, CAST('2025-06-03 14:30:15 -16:00' AS DATETIMEOFFSET));
+----
+NULL
+
+query T
+SELECT datename(TZOFFSET, CAST('2025-06-03 14:30:15 +10:60' AS DATETIMEOFFSET));
+----
+NULL
+
+query T
+SELECT datename(TZOFFSET, SWITCHOFFSET(CAST('2025-06-03 14:30:15 +01:30' AS DATETIMEOFFSET), 'Invalid Offset'));
+----
+NULL
+
+query T
+SELECT datename(TZOFFSET, TODATETIMEOFFSET(CAST('2025-06-03 14:30:15' AS DATETIME2), 'Invalid Offset'));
+----
+NULL
+
+statement ok
+DROP TABLE datename_tzoffset_test_cases;
+
+statement ok
+DROP TABLE datename_stability_test;
+
+statement ok
+DROP VIEW datename_tzoffset_no_offset_tests_view;
+

@@ -1,0 +1,1273 @@
+# test/slt_proc/babelfish_oracle/1607_babel_unpivot.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/unpivot-vu-prepare.sql, test/babelfish/raw/unpivot-vu-verify.sql, test/babelfish/raw/unpivot-vu-cleanup.sql
+
+statement ok
+CREATE TABLE customer_turnover (
+    customer_id INT,
+    customer_desc VARCHAR(50),
+    customer_type CHAR(1),
+    q1 INT, q2 INT, q3 INT, q4 INT
+);
+
+statement ok
+INSERT INTO customer_turnover VALUES
+    (3, 'Cust C', 'R', NULL, 0, 400, 150),
+    (1, 'Cust A', 'R', 100, 200, 100, 400),
+    (2, 'Cust B', 'P', 150, 250, 200, NULL);
+
+statement ok
+CREATE TABLE numeric_types (
+    id INT,
+    bit_val1 BIT,
+    bit_val2 BIT,
+    bit_val3 BIT,
+    decimal_val1 DECIMAL(18,2),
+    decimal_val2 DECIMAL(18,2),
+    numeric_val1 NUMERIC(18,2),
+    numeric_val2 NUMERIC(18,2),
+    float_val1 FLOAT,
+    float_val2 FLOAT,
+    real_val1 REAL,
+    real_val2 REAL,
+    bigint_val1 BIGINT,
+    bigint_val2 BIGINT,
+    int_val1 INT,
+    int_val2 INT,
+    smallint_val1 SMALLINT,
+    smallint_val2 SMALLINT,
+    tinyint_val1 TINYINT,
+    tinyint_val2 TINYINT,
+    money_val1 MONEY,
+    money_val2 MONEY,
+    smallmoney_val1 SMALLMONEY,
+    smallmoney_val2 SMALLMONEY
+);
+
+statement ok
+INSERT INTO numeric_types VALUES (
+    1,                          -- id
+    1, 0, 1,                   -- bit
+    123456.78, 98765.43,       -- decimal
+    987654.32, 456789.01,      -- numeric
+    123456.789, 98765.432,     -- float
+    987654.321, 456789.012,    -- real
+    9223372036854775807, 4611686018427387904,  -- bigint
+    2147483647, 1073741824,    -- int
+    32767, 16384,              -- smallint
+    255, 128,                  -- tinyint
+    214748.3647, 107374.1824,  -- money
+    214748.3647, 107374.1824   -- smallmoney
+);
+
+statement ok
+CREATE TABLE string_types (
+    id INT,
+    char_val1 CHAR(10),
+    char_val2 CHAR(10),
+    char_val3 CHAR(10),
+    varchar_val1 VARCHAR(50),
+    varchar_val2 VARCHAR(50),
+    varchar_val3 VARCHAR(50),
+    nchar_val1 NCHAR(10),
+    nchar_val2 NCHAR(10),
+    nchar_val3 NCHAR(10),
+    nvarchar_val1 NVARCHAR(50),
+    nvarchar_val2 NVARCHAR(50),
+    nvarchar_val3 NVARCHAR(50),
+    text_val1 TEXT,
+    text_val2 TEXT,
+    ntext_val1 NTEXT,
+    ntext_val2 NTEXT
+);
+
+statement ok
+INSERT INTO string_types VALUES (1,
+    'ABC',
+    '123',
+    '@#$',
+    'Café',
+    'Test_123',
+    '   spaces   ',
+    N'한글',
+    N'日本',
+    N'Привет',
+    N'Hello世界',
+    N'🌟Star⭐',
+    N'König',
+    'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Lorem ipsum Duis aute irure dolor in reprehenderit in voluptate velit esse cillum Lorem ipsum dolore Lorem ipsum eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur? At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus id quod maxime placeat facere possimus, Lorem ipsumomnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem Lorem ipsum quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae. Itaque earum rerum hic tenetur a sapiente delectus, Lorem ipsum ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat. Sed ut perspiciatis unde Lorem ipsum omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consecttur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et doloe magnam aliquam quaerat voluptatem. Ut enim ad minima veniam, quis nostrum exercitationem Lorem ipsum ullam corporis suscipit laboriosam, nisi ut aliquid Lorem ipsum ex ea commoi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur? At vero Lorem eos et accusamus et Lorem ipsum odio dignissimos ducimus quiblanditiis praesentium voluptatum deleniti atque corupi quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero Lorem ipsum tempore, cum soluta nobis est eligendi optio cumque nihil impeit quo minus id quod maxime placeat facere possimus, omnis voluptas assumen dolor repellendus. Temporibus Lorem ipsum autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusadae. Itaque earum rerum hic tenetur a Lorem ipsum sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat.',
+    'Special chars: /\@#$%^&*()',
+    N'علم',
+    N'שלום'
+);
+
+statement ok
+CREATE TABLE datetime_types (
+    id INT,
+    date_val1 DATE,
+    date_val2 DATE,
+    datetime_val1 DATETIME,
+    datetime_val2 DATETIME,
+    datetime2_val1 DATETIME2,
+    datetime2_val2 DATETIME2,
+    datetimeoffset_val1 DATETIMEOFFSET,
+    datetimeoffset_val2 DATETIMEOFFSET,
+    smalldatetime_val1 SMALLDATETIME,
+    smalldatetime_val2 SMALLDATETIME,
+    time_val1 TIME,
+    time_val2 TIME
+);
+
+statement ok
+INSERT INTO datetime_types VALUES (
+    1, -- id
+    '2023-01-01', '2023-02-01', -- date
+    '2023-01-01 12:30:45', '2023-02-01 14:45:30', -- datetime
+    '2023-01-01 12:30:45.1234567', '2023-02-01 14:45:30.7654321', -- datetime2
+    '2023-01-01 12:30:45.1234567 +01:00', '2023-02-01 14:45:30.7654321 -08:00', -- datetimeoffset
+    '2023-01-01 12:30:00', '2023-02-01 14:45:00', -- smalldatetime
+    '12:30:45.1234567', '14:45:30.7654321' -- time
+);
+
+statement ok
+CREATE TABLE mixed_types (
+    id INT,
+    val1 INT,
+    val2 DECIMAL(10,2),
+    val3 MONEY,
+    val4 FLOAT
+);
+
+statement ok
+CREATE TABLE sales_data (
+    product_id INT,
+    q1_sales INT,
+    q2_sales INT,
+    q1_region VARCHAR(50),
+    q2_region VARCHAR(50)
+);
+
+statement ok
+INSERT INTO sales_data VALUES
+    (1, 100, 150, 'North', 'South'),
+    (2, 200, 250, 'East', 'West'),
+    (3, NULL, 350, 'Central', 'East');
+
+statement ok
+CREATE TABLE revenue_data (
+    id INT,
+    q1_sales INT,
+    q2_sales INT
+);
+
+statement ok
+INSERT INTO revenue_data VALUES
+    (1, 100, 150),
+    (2, 200, 250),
+    (3, NULL, 350);
+
+statement ok
+CREATE TABLE product_sales (
+    product_id INT,
+    product_desc VARCHAR(25),
+    quantity_q1 INT, revenue_q1 DECIMAL(10,2),
+    quantity_q2 INT, revenue_q2 DECIMAL(10,2)
+);
+
+statement ok
+INSERT INTO product_sales VALUES
+    (2, 'PQR', 80, 1600.00, 90, 1800.00),
+    (3, 'XYZ', 0, 0, NULL, NULL),
+    (1, 'ABC', 100, 1000.00, 150, 1500.00);
+
+statement ok
+CREATE TABLE customer_info (
+    customer_id INT PRIMARY KEY,
+    customer_name VARCHAR(100),
+    customer_segment VARCHAR(50)
+);
+
+statement ok
+CREATE TABLE product_info (
+    product_id INT,
+    product_name VARCHAR(50)
+);
+
+statement ok
+INSERT INTO customer_info (customer_id, customer_name, customer_segment)
+VALUES 
+(1, 'John Doe', 'Premium'),
+(2, 'Jane Smith', 'Standard'),
+(3, 'Bob Johnson', 'Premium');
+
+statement ok
+INSERT INTO product_info VALUES 
+    (1, 'Widget'),
+    (2, 'Gadget');
+
+statement ok
+CREATE TABLE product_performance (
+    product_id INT,
+    product_name VARCHAR(50),
+    sales_q1 INT,
+    sales_q2 INT,
+    profit_q1 DECIMAL(10,2),
+    profit_q2 DECIMAL(10,2),
+    region VARCHAR(20)
+);
+
+statement ok
+INSERT INTO product_performance VALUES
+    (1, 'Laptop', 100, 150, 1000.00, 1500.00, 'North'),
+    (2, 'Desktop', 80, 120, 800.00, 1200.00, 'South'),
+    (3, 'Tablet', 200, 250, 2000.00, 2500.00, 'East'),
+    (4, 'Phone', NULL, 0, NULL, 0, 'West');
+
+statement ok
+CREATE SCHEMA sales;
+
+statement ok
+CREATE TABLE sales.quarterly_data (
+    product_id INT,
+    product_name VARCHAR(50),
+    q1_sales DECIMAL(10,2),
+    q2_sales DECIMAL(10,2),
+    q3_sales DECIMAL(10,2),
+    q4_sales DECIMAL(10,2)
+);
+
+statement ok
+INSERT INTO sales.quarterly_data VALUES
+(1, 'Product A', 0.50, 150.75, 200.25, 175.50),
+(2, 'Product B', 200.00, 300.00, 0, NULL),
+(3, 'Product C', 175.25, 225.75, NULL, 250.00);
+
+statement ok
+CREATE VIEW sales.quarterly_view AS
+SELECT customer_id, q1 AS q1_sales, q2, q3, q4 
+FROM customer_turnover;
+
+statement ok
+CREATE TABLE customer_history (
+    customer_id INT, 
+    q1 INT,  
+    q2 INT,  
+    q3 VARCHAR(10), 
+    q4 DATE,
+    turnover FLOAT,
+    time_period VARCHAR(10),
+    history_id INT PRIMARY KEY
+);
+
+statement ok
+INSERT INTO customer_history (customer_id, q1, q2, q3, q4, turnover, time_period, history_id) VALUES
+    (1, 90, 180, 'Q3-A', '2023-01-01', 150.0, 'q2', 1),
+    (1, 95, 190, 'Q3-B', '2023-04-01', 150.0, 'q2', 2),
+    (2, 140, 110, 'Q3-C', '2023-07-01', 0.0, 'q3', 3),
+    (3, 200, 300, 'Q3-D', '2023-10-01', 1000.01, 'q4', 4);
+
+statement ok
+CREATE TABLE customer_quarterly_sales (
+    customer_id INT,
+    customer_desc VARCHAR(50),
+    customer_type CHAR(1),
+    quarter VARCHAR(2),
+    sales INT
+);
+
+statement ok
+CREATE TABLE customer_turnover_2024 (
+    customer_id INT,
+    customer_desc VARCHAR(50),
+    customer_type CHAR(1),
+    q1 INT, q2 INT, q3 INT, q4 INT
+);
+
+statement ok
+INSERT INTO customer_turnover_2024 VALUES
+    (3, 'Cust C', 'R', 120, 0, 400, 150),
+    (1, 'Cust A', 'R', 100, 200, 100, 400),
+    (4, 'Cust D', 'P', 180, 220, 300, NULL);
+
+statement ok
+CREATE TABLE SalesHierarchy (
+    id INT PRIMARY KEY,
+    parent_id INT,
+    q1 INT,
+    q2 INT,
+    q3 INT,
+    q4 INT
+);
+
+statement ok
+INSERT INTO SalesHierarchy (id, parent_id, q1, q2, q3, q4) VALUES
+(1, NULL, 100, 200, 300, 400),  -- Root node
+(2, 1, 150, 250, 350, 450),     -- Child of 1
+(3, 1, 200, 300, 400, 500),     -- Child of 1
+(4, 2, 125, 225, 325, 425),     -- Child of 2
+(5, 2, 175, 275, 375, 475);     -- Child of 2
+
+statement ok
+CREATE TABLE cte_product_sales (
+    product_id INT,
+    product_name VARCHAR(50),
+    q1_quantity INT,
+    q2_quantity INT,
+    q3_quantity INT,
+    q4_quantity INT
+);
+
+statement ok
+CREATE TABLE cte_product_revenue (
+    product_id INT,
+    q1_revenue DECIMAL(10,2),
+    q2_revenue DECIMAL(10,2),
+    q3_revenue DECIMAL(10,2),
+    q4_revenue DECIMAL(10,2)
+);
+
+statement ok
+INSERT INTO cte_product_sales VALUES
+(1, 'ProductA', 100, 200, 300, 400),
+(2, 'ProductB', 150, 250, 350, 450),
+(3, 'ProductC', 200, 300, 400, 500);
+
+statement ok
+INSERT INTO cte_product_revenue VALUES
+(1, 1000.00, 2000.00, 3000.00, 4000.00),
+(2, 1500.00, 2500.00, 3500.00, 4500.00),
+(3, 2000.00, 3000.00, 4000.00, 5000.00);
+
+statement ok
+CREATE TABLE empty_table (
+    customer_id INT,
+    customer_desc VARCHAR(50),
+    customer_type CHAR(1),
+    q1 INT, q2 INT, q3 INT, q4 INT
+);
+
+statement ok
+CREATE TABLE very_long_table_name_12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567 (
+    id INT,
+    very_long_column_name_q1_12345678901234567890123456789012345678 INT,
+    very_long_column_name_q2_12345678901234567890123456789012345678 INT
+);
+
+statement ok
+INSERT INTO very_long_table_name_12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567 
+VALUES (1, 10, 20);
+
+statement ok
+CREATE TABLE [Sales$Data@2024] (
+    [Customer#ID] INT,
+    [q1$sales] DECIMAL(10,2),
+    [q2$sales] DECIMAL(10,2),
+    [q3$sales] DECIMAL(10,2)
+);
+
+statement ok
+INSERT INTO [Sales$Data@2024] VALUES (1,10,20,30);
+
+statement ok
+CREATE TABLE [Global_データ_Sales] (
+    [ID_番号] INT,
+    [Q1_販売] DECIMAL(10,2),
+    [Q2_販売] DECIMAL(10,2),
+    [q1_売上] DECIMAL(10,2),
+    [q2_売上] DECIMAL(10,2)
+);
+
+statement ok
+INSERT INTO [Global_データ_Sales] VALUES (1,2,3,4,5);
+
+query TTT
+SELECT customer_id, turnover, quarter FROM customer_turnover 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt;
+----
+3 0 q2
+3 400 q3
+3 150 q4
+1 100 q1
+1 200 q2
+1 100 q3
+1 400 q4
+2 150 q1
+2 250 q2
+2 200 q3
+
+query TTT
+SELECT customer_id, turnover, quarter FROM customer_turnover ct
+UNPIVOT (turnover FOR quarter IN (q4, q3, q2, q1)) AS unpvt;
+----
+3 150 q4
+3 400 q3
+3 0 q2
+1 400 q4
+1 100 q3
+1 200 q2
+1 100 q1
+2 200 q3
+2 250 q2
+2 150 q1
+
+query TTT
+SELECT [customer_id], turnover AS [sales value], [time period] 
+FROM [customer_turnover] 
+UNPIVOT (turnover FOR [time period] IN ([q1],[q2],[q3],[q4])) AS [unpvt alias];
+----
+3 0 q2
+3 400 q3
+3 150 q4
+1 100 q1
+1 200 q2
+1 100 q3
+1 400 q4
+2 150 q1
+2 250 q2
+2 200 q3
+
+query TTT
+SELECT customer_id AS ID, turnover AS Amount, quarter AS [Time Line] 
+FROM customer_turnover 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt;
+----
+3 0 q2
+3 400 q3
+3 150 q4
+1 100 q1
+1 200 q2
+1 100 q3
+1 400 q4
+2 150 q1
+2 250 q2
+2 200 q3
+
+query T
+SELECT unpvt.* FROM customer_turnover 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query TT
+SELECT 
+    p.*, 
+    unpvt.* 
+FROM customer_turnover 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt 
+JOIN product_sales p ON p.product_id = unpvt.customer_id;
+----
+NULL NULL
+NULL NULL
+NULL NULL
+NULL NULL
+NULL NULL
+NULL NULL
+NULL NULL
+NULL NULL
+NULL NULL
+NULL NULL
+
+query TTT
+SELECT 
+    p.*, 
+    u1.*, 
+    u2.* 
+FROM customer_turnover t1 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS u1 
+JOIN product_sales p 
+    ON p.product_id = u1.customer_id 
+    AND p.revenue_q1 > 1000.00 
+JOIN revenue_data t2 
+UNPIVOT (revenue FOR quarter2 IN (q1_sales, q2_sales)) AS u2 
+    ON u1.customer_id = u2.id
+    AND u1.quarter = SUBSTRING(u2.quarter2, 1, 2)
+    AND turnover > 100;
+----
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+
+statement ok
+SELECT c.customer_name, u.turnover, u.quarter 
+FROM customer_info c 
+JOIN customer_turnover t 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS u 
+ON c.customer_id = u.customer_id;
+
+query TTT
+SELECT 
+    customer_id,
+    turnover * 1.1 AS adjusted_turnover,
+    CAST(quarter AS VARCHAR(10)) AS quarter_name
+FROM customer_turnover 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt;
+----
+3 NULL NULL
+3 NULL NULL
+3 NULL NULL
+1 NULL NULL
+1 NULL NULL
+1 NULL NULL
+1 NULL NULL
+2 NULL NULL
+2 NULL NULL
+2 NULL NULL
+
+query TTTT
+SELECT 
+    unpvt.customer_id AS [ID],
+    [unpvt].[turnover],
+    [unpvt].[quarter],
+    CASE [unpvt].[quarter]
+        WHEN 'q1' THEN 'First'
+        WHEN 'q2' THEN 'Second'
+        WHEN 'q3' THEN 'Third'
+        WHEN 'q4' THEN 'Fourth'
+    END AS [Quarter Name]
+FROM customer_turnover
+UNPIVOT ([turnover] FOR [quarter] IN ([q1], [q2], [q3], [q4])) AS unpvt;
+----
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+statement ok
+SELECT r.product_id AS PID,
+       RIGHT(r.col_name, 2) as [Time Period],
+       r.quantity,
+       r.revenue 
+FROM product_sales p 
+UNPIVOT (quantity for col_name in (quantity_q1, quantity_q2)) AS q 
+UNPIVOT (revenue for col_name1 in (revenue_q1, revenue_q2)) AS r 
+WHERE RIGHT(r.col_name, 2) = RIGHT(r.col_name1, 2) AND r.product_desc IS NOT NULL;
+
+query TTT
+SELECT id, bit_value, bit_name
+FROM numeric_types
+UNPIVOT ( bit_value FOR bit_name IN (bit_val1, bit_val2, bit_val3)) AS bit_unpvt;
+----
+1 true bit_val1
+1 false bit_val2
+1 true bit_val3
+
+query TTTTT
+SELECT id, decimal_value, decimal_name, numeric_value, numeric_name
+FROM numeric_types
+UNPIVOT ( decimal_value FOR decimal_name IN (decimal_val1, decimal_val2)) AS decimal_unpvt
+UNPIVOT ( numeric_value FOR numeric_name IN (numeric_val1, numeric_val2)) AS numeric_unpvt;
+----
+1 123456.78 decimal_val1 NULL NULL
+1 98765.43 decimal_val2 NULL NULL
+
+statement ok
+SELECT id, bigint_value, bigint_name, int_value, int_name, smallint_value, smallint_name, tinyint_value, tinyint_name 
+FROM numeric_types
+UNPIVOT ( bigint_value FOR bigint_name IN (bigint_val1, bigint_val2)) AS bigint_unpvt 
+UNPIVOT ( int_value FOR int_name IN (int_val1, int_val2)) AS int_unpvt 
+UNPIVOT ( smallint_value FOR smallint_name IN (smallint_val1,smallint_val2)) AS smallint_unpvt 
+UNPIVOT ( tinyint_value FOR tinyint_name IN (tinyint_val1, tinyint_val2)) AS tinyint_unpvt
+WHERE RIGHT(bigint_name, 1) = RIGHT(int_name, 1)
+    AND RIGHT(int_name, 1) = RIGHT(smallint_name, 1)
+    AND RIGHT(smallint_name, 1) = RIGHT(tinyint_name, 1);
+
+query TTTTT
+SELECT id, char_value, char_name, varchar_value, varchar_name
+FROM string_types
+UNPIVOT ( char_value FOR char_name IN (char_val1, char_val2, char_val3)) AS char_unpvt 
+UNPIVOT ( varchar_value FOR varchar_name IN (varchar_val1, varchar_val2, varchar_val3)) AS varchar_unpvt;
+----
+1 ABC char_val1 NULL NULL
+1 123 char_val2 NULL NULL
+1 @#$ char_val3 NULL NULL
+
+statement ok
+SELECT 
+    id,
+    nchar_value,
+    nchar_name,
+    CASE nchar_name
+        WHEN 'nchar_val1' THEN 'Primary Value'
+        WHEN 'nchar_val2' THEN 'Secondary Value'
+        WHEN 'nchar_val3' THEN 'Tertiary Value'
+        ELSE 'Unknown Value'
+    END AS nchar_value_type,
+    nvarchar_value,
+    nvarchar_name 
+FROM string_types 
+UNPIVOT ( nchar_value FOR nchar_name IN (nchar_val1, nchar_val2, nchar_val3)) AS nchar_unpvt 
+UNPIVOT ( nvarchar_value FOR nvarchar_name IN (nvarchar_val1, nvarchar_val2, nvarchar_val3)) AS nvarchar_unpvt
+WHERE RIGHT(nchar_name, 1) = RIGHT(nvarchar_name, 1);
+
+query TTTT
+SELECT id, 'DATE' as data_type, date_name as column_name, CAST(date_value AS VARCHAR(50)) as date_value 
+FROM datetime_types 
+UNPIVOT ( date_value FOR date_name IN (date_val1, date_val2)) AS date_unpvt 
+UNION ALL 
+SELECT id, 'DATETIME' as data_type, datetime_name, CAST(datetime_value AS VARCHAR(50)) 
+FROM datetime_types 
+UNPIVOT ( datetime_value FOR datetime_name IN (datetime_val1, datetime_val2)) AS datetime_unpvt 
+UNION ALL 
+SELECT id, 'DATETIME2' as data_type, datetime2_name, CAST(datetime2_value AS VARCHAR(50)) 
+FROM datetime_types 
+UNPIVOT ( datetime2_value FOR datetime2_name IN (datetime2_val1, datetime2_val2)) AS datetime2_unpvt 
+UNION ALL 
+SELECT id, 'DATETIMEOFFSET' as data_type, datetimeoffset_name, CAST(datetimeoffset_value AS VARCHAR(50)) 
+FROM datetime_types 
+UNPIVOT ( datetimeoffset_value FOR datetimeoffset_name IN (datetimeoffset_val1, datetimeoffset_val2)) AS datetimeoffset_unpvt 
+UNION ALL 
+SELECT id, 'SMALLDATETIME' as data_type, smalldatetime_name, CAST(smalldatetime_value AS VARCHAR(50)) 
+FROM datetime_types 
+UNPIVOT ( smalldatetime_value FOR smalldatetime_name IN (smalldatetime_val1, smalldatetime_val2) ) AS smalldatetime_unpvt 
+UNION ALL 
+SELECT id, 'TIME' as data_type, time_name, CAST(time_value AS VARCHAR(50)) 
+FROM datetime_types 
+UNPIVOT ( time_value FOR time_name IN (time_val1, time_val2)) AS time_unpvt 
+ORDER BY id, data_type, column_name;
+----
+1 NULL date_val1 NULL
+1 NULL date_val2 NULL
+1 NULL datetime2_val1 NULL
+1 NULL datetime2_val2 NULL
+1 NULL datetime_val1 NULL
+1 NULL datetime_val2 NULL
+1 NULL datetimeoffset_val1 NULL
+1 NULL datetimeoffset_val2 NULL
+1 NULL smalldatetime_val1 NULL
+1 NULL smalldatetime_val2 NULL
+1 NULL time_val1 NULL
+1 NULL time_val2 NULL
+
+statement ok
+SELECT c.customer_name, u.turnover, u.quarter 
+FROM customer_info c 
+JOIN customer_turnover t 
+UNPIVOT (turnover FOR quarter IN (q4, q3, q1, q2)) AS u 
+ON c.customer_id = u.customer_id;
+
+query TTTTT
+SELECT u.customer_id, u.customer_name, u.turnover, u.quarter, c2.customer_segment 
+FROM (
+    SELECT t.*, c.customer_name, c.customer_segment
+    FROM customer_turnover t
+    LEFT JOIN customer_info c ON t.customer_id = c.customer_id 
+) AS ct 
+UNPIVOT ( turnover FOR quarter IN (q3, q1, q2, q4)) AS u 
+LEFT JOIN customer_info c2 ON u.customer_id = c2.customer_id;
+----
+NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL
+NULL NULL NULL NULL NULL
+
+statement ok
+SELECT c.customer_name, u.customer_desc, u.turnover, u.quarter
+FROM customer_info c
+CROSS JOIN (
+    SELECT customer_id, customer_desc, turnover, quarter
+    FROM customer_turnover
+    UNPIVOT (turnover FOR quarter IN (q2, q4, q3, q1)) AS unpvt
+) u
+WHERE u.customer_id = c.customer_id and u.customer_id = 2;
+
+statement ok
+SELECT c.customer_name, u.customer_desc, u.turnover, u.quarter 
+FROM customer_info c 
+CROSS APPLY (
+    SELECT customer_id, customer_desc, turnover, quarter
+    FROM customer_turnover
+    UNPIVOT (turnover FOR quarter IN (q3, q4, q2, q1)) AS unpvt
+    WHERE customer_id = c.customer_id
+) u 
+WHERE c.customer_id = 1;
+
+query TTT
+SELECT c.customer_name, u1.turnover as quarterly_turnover, u2.quarter as revenue_quarter 
+FROM customer_turnover t1 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS u1 
+JOIN customer_info c ON c.customer_id = u1.customer_id and c.customer_segment = 'Premium' 
+JOIN customer_turnover t2 
+UNPIVOT (revenue FOR quarter IN (q1, q2, q3, q4)) AS u2
+    ON u1.customer_id = u2.customer_id
+    AND RIGHT(u1.quarter, 1) = RIGHT(u2.quarter, 1)
+    AND turnover > 100;
+----
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+
+statement ok
+SELECT * FROM product_info p 
+JOIN (
+    SELECT product_id, sales, quarter
+    FROM sales_data
+    UNPIVOT (
+        sales FOR quarter IN (q1_sales, q2_sales)
+    ) AS inner_unpvt 
+) u ON p.product_id = u.product_id;
+
+query TTT
+WITH QuarterlyData AS (
+    SELECT customer_id, q1, q2, q3, q4
+    FROM customer_turnover
+    WHERE customer_type = 'R'
+) 
+SELECT * FROM QuarterlyData 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt;
+----
+3 q2 0
+3 q3 400
+3 q4 150
+1 q1 100
+1 q2 200
+1 q3 100
+1 q4 400
+
+query TTTT
+WITH RecursiveSales AS (
+    SELECT 
+        id,
+        parent_id,
+        q1, q2, q3, q4,
+        0 as level,
+        CAST(id AS VARCHAR(100)) as path
+    FROM SalesHierarchy
+    WHERE parent_id IS NULL
+    UNION ALL
+    SELECT 
+        s.id,
+        s.parent_id,
+        s.q1, s.q2, s.q3, s.q4,
+        r.level + 1,
+        CAST(r.path + '->' + CAST(s.id AS VARCHAR(10)) AS VARCHAR(100))
+    FROM SalesHierarchy s
+    INNER JOIN RecursiveSales r ON s.parent_id = r.id
+) 
+SELECT path, level, quarter, sales 
+FROM RecursiveSales 
+UNPIVOT (sales FOR quarter IN (q1, q2, q3, q4)) AS unpvt 
+ORDER BY path, quarter;
+----
+1 0 q1 100
+1 0 q2 200
+1 0 q3 300
+1 0 q4 400
+1->2 1 q1 150
+1->2 1 q2 250
+1->2 1 q3 350
+1->2 1 q4 450
+1->2->4 2 q1 125
+1->2->4 2 q2 225
+1->2->4 2 q3 325
+1->2->4 2 q4 425
+1->2->5 2 q1 175
+1->2->5 2 q2 275
+1->2->5 2 q3 375
+1->2->5 2 q4 475
+1->3 1 q1 200
+1->3 1 q2 300
+1->3 1 q3 400
+1->3 1 q4 500
+
+statement ok
+SELECT customer_id, turnover, quarter 
+FROM customer_turnover 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt 
+WHERE CAST(turnover AS DECIMAL(10,2)) > 150.00 
+    AND quarter IN ('q1', 'q2') 
+    AND unpvt.customer_id < 1000;
+
+query TTT
+SELECT customer_id, turnover, quarter 
+FROM customer_turnover 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS t 
+WHERE turnover > ( 
+    SELECT AVG(turnover) 
+    FROM customer_turnover 
+    UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS t2 
+    WHERE t2.quarter = t.quarter 
+);
+----
+3 0 q2
+3 400 q3
+3 150 q4
+1 100 q1
+1 200 q2
+1 100 q3
+1 400 q4
+2 150 q1
+2 250 q2
+2 200 q3
+
+query TTTT
+SELECT customer_type, quarter, 
+       COUNT(*) as count,
+       AVG(turnover) as avg_turnover 
+FROM customer_turnover 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt 
+GROUP BY customer_type, quarter
+ORDER BY customer_type, quarter DESC;
+----
+P q3 NULL NULL
+P q2 NULL NULL
+P q1 NULL NULL
+R q4 NULL NULL
+R q4 NULL NULL
+R q3 NULL NULL
+R q3 NULL NULL
+R q2 NULL NULL
+R q2 NULL NULL
+R q1 NULL NULL
+
+query TTTT
+SELECT 
+    customer_type,
+    quarter,
+    COUNT(*) as transaction_count,
+    SUM(turnover) as total_turnover 
+FROM customer_turnover 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt 
+GROUP BY customer_type, quarter 
+HAVING COUNT(*) > 1 AND SUM(turnover) > 500;
+----
+R q2 NULL NULL
+R q3 NULL NULL
+R q4 NULL NULL
+R q1 NULL NULL
+R q2 NULL NULL
+R q3 NULL NULL
+R q4 NULL NULL
+P q1 NULL NULL
+P q2 NULL NULL
+P q3 NULL NULL
+
+query TTT
+SELECT customer_id, turnover, quarter
+FROM customer_turnover
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt
+ORDER BY customer_id ASC, turnover, quarter DESC;
+----
+1 100 q3
+1 100 q1
+1 200 q2
+1 400 q4
+2 150 q1
+2 200 q3
+2 250 q2
+3 0 q2
+3 150 q4
+3 400 q3
+
+query TTT
+SELECT customer_id, turnover, quarter 
+FROM customer_turnover 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt 
+ORDER BY RIGHT(quarter, 1), turnover * 1.1;
+----
+3 0 q2
+3 400 q3
+3 150 q4
+1 100 q1
+1 200 q2
+1 100 q3
+1 400 q4
+2 150 q1
+2 250 q2
+2 200 q3
+
+query TTT
+SELECT TOP 5 customer_id, turnover, quarter
+FROM customer_turnover 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt 
+ORDER BY turnover DESC;
+----
+3 0 q2
+3 400 q3
+3 150 q4
+1 100 q1
+1 200 q2
+1 100 q3
+1 400 q4
+2 150 q1
+2 250 q2
+2 200 q3
+
+query TTT
+SELECT customer_id, turnover, quarter 
+FROM customer_turnover 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt 
+ORDER BY turnover DESC 
+OFFSET 5 ROWS FETCH NEXT 5 ROWS ONLY;
+----
+3 0 q2
+3 400 q3
+3 150 q4
+1 100 q1
+1 200 q2
+1 100 q3
+1 400 q4
+2 150 q1
+2 250 q2
+2 200 q3
+
+query TTTT
+DECLARE @sales_data TABLE (
+    id INT,
+    region VARCHAR(20),
+    jan_rev MONEY,
+    feb_rev MONEY
+);
+INSERT INTO @sales_data VALUES
+(1, 'North', $1000.00, 0),
+(2, 'South', $800, NULL);
+SELECT id, region, revenue, month 
+FROM @sales_data 
+UNPIVOT ( revenue FOR month IN (jan_rev, feb_rev)) AS unpvt;
+----
+1 North 0.0000 jan_rev
+1 North 0.0000 feb_rev
+2 South 0.0000 jan_rev
+
+statement ok
+CREATE VIEW sales.sales_analysis_view AS
+SELECT 
+    product_id, 
+    product_name,
+    CAST(sales_amount * 1.1 AS DECIMAL(10,2)) as adjusted_sales,
+    quarter,
+    CASE 
+        WHEN quarter = 'q1_sales' THEN 'First'
+        WHEN quarter = 'q2_sales' THEN 'Second'
+        WHEN quarter = 'q3_sales' THEN 'Third'
+        WHEN quarter = 'q4_sales' THEN 'Fourth'
+    END as quarter_name
+FROM sales.quarterly_data
+UNPIVOT ( sales_amount FOR quarter IN (q1_sales, q2_sales, q3_sales, q4_sales)) AS unpvt;
+
+query TTT
+SELECT * FROM sales.quarterly_view 
+UNPIVOT (turnover FOR quarter IN (q1_sales, q2, q3, q4)) AS unpvt;
+----
+3 q2 0
+3 q3 400
+3 q4 150
+1 q1_sales 100
+1 q2 200
+1 q3 100
+1 q4 400
+2 q1_sales 150
+2 q2 250
+2 q3 200
+
+statement ok
+SELECT * FROM customer_turnover ct 
+WHERE EXISTS (
+    SELECT 1
+    FROM customer_turnover
+    UNPIVOT (sales FOR quarter IN (q1, q2, q3, q4)) AS unpvt
+    WHERE unpvt.customer_id = ct.customer_id
+    AND sales = 0
+);
+
+statement ok
+CREATE FUNCTION dbo.GetSalesData() 
+RETURNS TABLE 
+AS 
+RETURN ( SELECT product_id, q1_sales, q2_sales  FROM sales_data );
+
+query TTT
+SELECT * FROM dbo.GetSalesData()
+UNPIVOT ( sales FOR quarter IN (q1_sales, q2_sales)) AS unpvt;
+----
+1 q1_sales 100
+1 q2_sales 150
+2 q1_sales 200
+2 q2_sales 250
+3 q2_sales 350
+
+statement ok
+INSERT INTO customer_quarterly_sales 
+SELECT customer_id, customer_desc, customer_type, quarter, sales 
+FROM customer_turnover 
+UNPIVOT (sales FOR quarter IN (q1, q2, q3, q4)) AS unpvt WHERE sales < 200;
+
+statement ok
+UPDATE customer_quarterly_sales 
+SET sales = sales * 1.1 
+FROM (
+    SELECT customer_id, quarter, turnover FROM customer_turnover
+    UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt
+    WHERE turnover BETWEEN 100 AND 200
+) AS source 
+WHERE customer_quarterly_sales.customer_id = source.customer_id 
+AND customer_quarterly_sales.quarter = source.quarter 
+AND customer_quarterly_sales.sales = source.turnover;
+
+statement ok
+UPDATE customer_quarterly_sales 
+SET sales = sales * 1.5 
+WHERE customer_id IN (
+    SELECT DISTINCT customer_id 
+    FROM customer_turnover 
+    UNPIVOT (sales FOR quarter IN (q1, q2, q3, q4)) AS unpvt
+    WHERE sales > 300
+);
+
+statement ok
+DELETE FROM customer_quarterly_sales 
+WHERE customer_id IN (
+    SELECT DISTINCT customer_id
+    FROM customer_turnover
+    UNPIVOT (
+        sales FOR quarter IN (q1, q2, q3, q4)
+    ) AS unpvt
+    WHERE sales = 0
+);
+
+query TTT
+SELECT customer_id, quarter, sales FROM customer_turnover 
+UNPIVOT (sales FOR quarter IN (q1, q2, q3, q4)) AS unpvt 
+INTERSECT 
+SELECT customer_id, quarter, sales FROM customer_turnover_2024 
+UNPIVOT (sales FOR quarter IN (q1, q2, q3, q4)) AS unpvt 
+ORDER BY customer_id, quarter;
+----
+1 q1 100
+1 q2 200
+1 q3 100
+1 q4 400
+3 q2 0
+3 q3 400
+3 q4 150
+
+query TTT
+SELECT customer_id, quarter, sales FROM customer_turnover 
+UNPIVOT (sales FOR quarter IN (q1, q2, q3, q4)) AS unpvt 
+EXCEPT 
+SELECT customer_id, quarter, sales FROM customer_turnover_2024 
+UNPIVOT (sales FOR quarter IN (q1, q2, q3, q4)) AS unpvt 
+ORDER BY customer_id, quarter;
+----
+2 q1 150
+2 q2 250
+2 q3 200
+
+statement ok
+CREATE FUNCTION dbo.fn_UnpivotSales() 
+RETURNS TABLE 
+AS 
+RETURN 
+(
+    SELECT product_id, sales, quarter FROM sales_data
+    UNPIVOT (sales FOR quarter IN (q1_sales, q2_sales)) AS unpvt 
+    WHERE product_id = 1
+);
+
+query TTT
+SELECT * FROM dbo.fn_UnpivotSales();
+----
+1 100 q1_sales
+1 150 q2_sales
+
+statement ok
+SELECT customer_id, turnover, quarter FROM empty_table 
+UNPIVOT (turnover FOR quarter IN (q1, q2, q3, q4)) AS unpvt;
+
+query TTT
+SELECT * FROM very_long_table_name_12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567 
+UNPIVOT (value FOR column_name IN (
+    very_long_column_name_q1_12345678901234567890123456789012345678, 
+    very_long_column_name_q2_12345678901234567890123456789012345678
+    )
+) AS unpvt;
+----
+1 very_long_column_name_q1_12345678901234567890123456789012345678 10
+1 very_long_column_name_q2_12345678901234567890123456789012345678 20
+
+query TTT
+SELECT [Customer#ID], [Sales $ Amount], [Quarter@Period]
+FROM [Sales$Data@2024]
+UNPIVOT (
+    [Sales $ Amount] FOR [Quarter@Period] IN (
+        [q1$sales],
+        [q2$sales],
+        [q3$sales]
+    )
+) AS [Sales@Analysis];
+----
+1 10.00 q1$sales
+1 20.00 q2$sales
+1 30.00 q3$sales
+
+query TTT
+SELECT [ID_番号], [Amount_金額], [Quarter_四半期]
+FROM [Global_データ_Sales]
+UNPIVOT (
+    [Amount_金額] FOR [Quarter_四半期] IN (
+        [q1_売上],
+        [q2_売上]
+    )
+) AS [Global_分析];
+----
+1 4.00 q1_売上
+1 5.00 q2_売上
+
+statement ok
+SELECT customer_id, turnover, quarter FROM customer_turnover c 
+UNPIVOT (turnover FOR quarter IN (c.q1, c.q2, c.q3, c.q4)) AS unpvt;
+
+statement ok
+SELECT * FROM customer_turnover UNPIVOT (
+    amount FOR quarter IN (CAST(q1 AS DECIMAL(10,2)))) AS unpvt;
+
+statement ok
+SELECT * FROM customer_turnover UNPIVOT (
+    amount FOR quarter IN (q2 AS [Q2 Sales])) AS unpvt;
+
+statement ok
+SELECT * FROM customer_turnover UNPIVOT (
+    amount FOR quarter IN (MAX(q3))) AS unpvt;
+
+statement ok
+SELECT * FROM customer_turnover UNPIVOT (
+    amount FOR quarter IN (CONVERT(numeric(10,2), q4))) AS unpvt;
+
+query TTT
+SELECT [ID_番号], [Amount_金額], [Quarter_四半期]
+FROM [Global_データ_Sales]
+UNPIVOT (
+    [Amount_金額] FOR [Quarter_四半期] IN (
+        [Q1_売上],
+        [Q2_売上]
+    )
+) AS [Global_分析];
+----
+1 4.00 Q1_売上
+1 5.00 Q2_売上
+
+statement ok
+DROP VIEW sales.sales_analysis_view;
+
+statement ok
+DROP VIEW sales.quarterly_view;
+
+statement ok
+DROP TABLE customer_quarterly_sales;
+
+statement ok
+DROP TABLE customer_turnover;
+
+statement ok
+DROP TABLE customer_turnover_2024;
+
+statement ok
+DROP TABLE customer_info;
+
+statement ok
+DROP TABLE product_info;
+
+statement ok
+DROP TABLE sales_data;
+
+statement ok
+DROP TABLE revenue_data;
+
+statement ok
+DROP TABLE product_sales;
+
+statement ok
+DROP TABLE product_performance;
+
+statement ok
+DROP TABLE customer_history;
+
+statement ok
+DROP TABLE numeric_types;
+
+statement ok
+DROP TABLE string_types;
+
+statement ok
+DROP TABLE datetime_types;
+
+statement ok
+DROP TABLE mixed_types;
+
+statement ok
+DROP TABLE sales.quarterly_data;
+
+statement ok
+DROP TABLE SalesHierarchy;
+
+statement ok
+DROP TABLE cte_product_sales;
+
+statement ok
+DROP TABLE cte_product_revenue;
+
+statement ok
+DROP TABLE empty_table;
+
+statement ok
+DROP TABLE very_long_table_name_12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567;
+
+statement ok
+DROP TABLE [Sales$Data@2024];
+
+statement ok
+DROP TABLE [Global_データ_Sales];
+
+statement ok
+IF OBJECT_ID('tempdb..#temp_sales') IS NOT NULL
+    DROP TABLE #temp_sales;
+
+statement ok
+IF OBJECT_ID('tempdb..#new_quarterly_sales') IS NOT NULL
+    DROP TABLE #new_quarterly_sales;
+
+statement ok
+DROP FUNCTION IF EXISTS dbo.fn_UnpivotSales;
+
+statement ok
+DROP FUNCTION IF EXISTS dbo.GetSalesData;
+
+statement ok
+DROP PROCEDURE IF EXISTS dbo.GetQuarterlyTotal;
+
+statement ok
+DROP SCHEMA sales;
+

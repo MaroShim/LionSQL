@@ -1,0 +1,79 @@
+# test/slt_proc/babelfish_oracle/295_babel_babel_1603.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1603.sql
+
+query T
+SELECT DATEPART(weekday, CAST( '2021-12-31' as DATE));
+----
+6
+
+query T
+SELECT @@DATEFIRST;
+----
+7
+
+statement ok
+SET DATEFIRST 1
+
+query T
+SELECT @@DATEFIRST;
+----
+7
+
+query T
+SELECT DATEPART(weekday, CAST( '2021-12-31' as DATE));
+----
+6
+
+statement ok
+DECLARE @rc INT = 3;
+SET DATEFIRST @rc;
+
+query T
+SELECT @@DATEFIRST;
+----
+7
+
+query T
+SELECT DATEPART(weekday, CAST( '2021-12-31' as DATE));
+----
+6
+
+statement ok
+SET DATEFIRST 7
+
+query T
+SELECT @@DATEFIRST;
+----
+7
+
+query T
+SELECT DATEPART(weekday, CAST( '2021-12-31' as DATE));
+----
+6
+
+statement ok
+SET DATEFIRST 0
+
+statement ok
+SET DATEFIRST 8
+
+statement ok
+SET DATEFIRST NULL;
+
+statement ok
+DECLARE @rc INT = 0;
+SET DATEFIRST @rc;
+
+statement ok
+DECLARE @rc INT = 8;
+SET DATEFIRST @rc;
+
+statement ok
+DECLARE @rc INT = NULL;
+SET DATEFIRST @rc;
+
+query T
+SELECT @@DATEFIRST;
+----
+7
+

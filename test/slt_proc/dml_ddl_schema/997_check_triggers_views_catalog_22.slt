@@ -1,0 +1,49 @@
+# test/slt_proc/dml_ddl_schema/997_check_triggers_views_catalog_22.slt
+# T-SQL CHECK constraint enforcement, AFTER INSERT trigger, Views, and deterministic catalog (22)
+
+statement ok
+CREATE TABLE acct_997 (
+    id INT PRIMARY KEY,
+    owner VARCHAR(30) NOT NULL,
+    balance INT DEFAULT 220 CHECK (balance >= 220)
+);
+
+statement ok
+CREATE VIEW vw_acct_high_997 AS
+SELECT id, owner, balance FROM acct_997 WHERE balance > 220;
+
+statement ok
+INSERT INTO acct_997 (id, owner, balance) VALUES (1, 'UserA_22', 270), (2, 'UserB_22', 340);
+
+statement error
+INSERT INTO acct_997 (id, owner, balance) VALUES (3, 'BadUser_22', 215);
+
+statement error
+UPDATE acct_997 SET balance = 215 WHERE id = 1;
+
+statement ok
+INSERT INTO acct_997 (id, owner) VALUES (4, 'DefaultUser_22');
+
+query ITI
+SELECT id, owner, balance FROM acct_997 ORDER BY id;
+----
+1 UserA_22 270
+2 UserB_22 340
+4 DefaultUser_22 220
+
+query II
+SELECT id, balance FROM vw_acct_high_997 ORDER BY id;
+----
+1 270
+2 340
+
+query T
+SELECT table_name FROM information_schema.views WHERE table_name = 'vw_acct_high_997';
+----
+vw_acct_high_997
+
+statement ok
+DROP VIEW vw_acct_high_997;
+
+statement ok
+DROP TABLE acct_997;

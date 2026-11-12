@@ -1,0 +1,40 @@
+# test/slt_proc/math_numeric/782_compound_assign_and_decimal_02.slt
+# T-SQL compound assignment (+=, -=, *=), DECIMAL scale, and bitwise arithmetic (2)
+
+statement ok
+CREATE PROCEDURE sp_compound_math_782 @start INT, @res INT OUTPUT
+AS
+BEGIN
+    DECLARE @v INT = @start;
+    SET @v += 11;
+    SET @v *= 4;
+    SET @v -= 9;
+    SET @res = @v;
+END;
+
+query I
+DECLARE @r INT;
+EXEC sp_compound_math_782 20, @r OUTPUT;
+SELECT @r;
+----
+115
+
+query IIII
+SELECT (19 & 11), (19 | 11), (19 ^ 11), ABS(-115);
+----
+3 27 24 115
+
+statement ok
+CREATE TABLE dec_t_782 (id INT PRIMARY KEY, price DECIMAL(12, 2), qty INT);
+
+statement ok
+INSERT INTO dec_t_782 VALUES (1, 20.25, 4), (2, 10.50, 2);
+
+query II
+SELECT id, CAST(price * qty AS INT) FROM dec_t_782 ORDER BY id;
+----
+1 81
+2 21
+
+statement ok
+DROP TABLE dec_t_782;

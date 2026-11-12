@@ -1,0 +1,69 @@
+# test/slt_proc/babelfish_oracle/623_babel_create_table_with_default_insert.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/create_table_with_default_insert.sql
+
+statement ok
+IF OBJECT_ID('test_unicode_defaults') IS NOT NULL DROP TABLE test_unicode_defaults;
+
+statement ok
+CREATE TABLE test_unicode_defaults
+(
+    id              INT IDENTITY PRIMARY KEY,
+    col_char        CHAR(10) DEFAULT 'a😄ğğş',
+    col_nchar       NCHAR(10) DEFAULT N'a😄ğğş',
+    col_varchar     VARCHAR(10) DEFAULT 'a😄ğğş',
+    col_nvarchar    NVARCHAR(10) DEFAULT N'a😄ğğş'
+);
+
+statement ok
+SELECT * FROM test_unicode_defaults;
+INSERT INTO test_unicode_defaults VALUES ('a😄ğğş',N'a😄ğğş','a😄ğğş',N'a😄ğğş');
+
+query TTTTT
+SELECT * FROM test_unicode_defaults;
+----
+1 a😄ğğş a😄ğğş a😄ğğş a😄ğğş
+
+statement ok
+INSERT INTO test_unicode_defaults VALUES ('000',N'000','000',N'000');
+
+query TTTTT
+SELECT * FROM test_unicode_defaults;
+----
+1 a😄ğğş a😄ğğş a😄ğğş a😄ğğş
+2 000 000 000 000
+
+statement ok
+UPDATE test_unicode_defaults
+SET col_nchar = CAST(N'a😄ğğş' AS NVARCHAR(10))
+WHERE id = 3;
+
+statement ok
+UPDATE test_unicode_defaults
+SET col_nvarchar = CAST(N'a😄ğğş' AS NVARCHAR(10))
+WHERE id = 3;
+
+statement ok
+UPDATE test_unicode_defaults
+SET col_char = CAST(N'a😄ğğş' AS VARCHAR(10))
+WHERE id = 3;
+
+statement ok
+UPDATE test_unicode_defaults
+SET col_varchar = CAST(N'a😄ğğş' AS VARCHAR(10))
+WHERE id = 3;
+
+query TTTTT
+SELECT * FROM test_unicode_defaults;
+----
+1 a😄ğğş a😄ğğş a😄ğğş a😄ğğş
+2 000 000 000 000
+
+query TTTTT
+SELECT * FROM test_unicode_defaults;
+----
+1 a😄ğğş a😄ğğş a😄ğğş a😄ğğş
+2 000 000 000 000
+
+statement ok
+IF OBJECT_ID('test_unicode_defaults') IS NOT NULL DROP TABLE test_unicode_defaults;
+

@@ -1,0 +1,29 @@
+# test/slt_proc/babelfish_oracle/1148_babel_babel_2328.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2328.sql
+
+statement ok
+CREATE PROCEDURE babel_2328_proc_varchar(
+    @nvcwl nvarchar(32),
+    @nvcwol nvarchar,
+    @vcwl varchar(32),
+    @vcwol varchar
+    ) as
+    select @nvcwl, @nvcwol, @vcwl, @vcwol;
+;
+
+statement ok
+drop procedure babel_2328_proc_varchar;
+
+statement ok
+CREATE PROCEDURE babel_2328_proc_char(
+    @ncwl nchar(32),
+    @ncwol nchar,
+    @cwl char(32),
+    @cwol char
+) as
+select @ncwl, @ncwol, @cwl, @cwol;
+    ;
+
+statement ok
+drop procedure babel_2328_proc_char;
+

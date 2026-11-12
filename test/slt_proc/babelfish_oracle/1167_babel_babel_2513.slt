@@ -1,0 +1,61 @@
+# test/slt_proc/babelfish_oracle/1167_babel_babel_2513.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2513.sql
+
+statement ok
+use master;
+
+statement ok
+CREATE TABLE t2513(
+  dto datetimeoffset,
+  dt2 datetime2,
+	dt datetime,
+	sdt smalldatetime,
+	d date,
+	t time);
+INSERT INTO t2513 values ('1900-01-01 00:00:00', '1900-01-01 00:00:00', '1900-01-01 00:00:00', '1900-01-01 00:00:00', '1900-01-01', '00:00:00'); -- all same
+INSERT INTO t2513 values ('1900-01-01 00:00:00', '1900-01-02 00:00:02', '1900-01-03 00:00:03', '1900-01-04 00:00:04', '1900-01-05', '00:00:06'); -- ascending
+INSERT INTO t2513 values ('1900-01-06 00:00:00', '1900-01-05 00:00:05', '1900-01-04 00:00:04', '1900-01-03 00:00:03', '1900-01-02', '00:00:01'); -- descending
+
+statement ok
+select * from t2513 where t = dto;
+select * from t2513 where t != dto;
+select * from t2513 where t < dto;
+select * from t2513 where t <= dto;
+select * from t2513 where t > dto;
+select * from t2513 where t >= dto;
+
+statement ok
+select * from t2513 where t = dt2;
+select * from t2513 where t != dt2;
+select * from t2513 where t < dt2;
+select * from t2513 where t <= dt2;
+select * from t2513 where t > dt2;
+select * from t2513 where t >= dt2;
+
+statement ok
+select * from t2513 where t = dt;
+select * from t2513 where t != dt;
+select * from t2513 where t < dt;
+select * from t2513 where t <= dt;
+select * from t2513 where t > dt;
+select * from t2513 where t >= dt;
+
+statement ok
+select * from t2513 where t = sdt;
+select * from t2513 where t != sdt;
+select * from t2513 where t < sdt;
+select * from t2513 where t <= sdt;
+select * from t2513 where t > sdt;
+select * from t2513 where t >= sdt;
+
+statement ok
+select * from t2513 where t = d;
+select * from t2513 where t != d;
+select * from t2513 where t < d;
+select * from t2513 where t <= d;
+select * from t2513 where t > d;
+select * from t2513 where t >= d;
+
+statement ok
+drop table t2513
+

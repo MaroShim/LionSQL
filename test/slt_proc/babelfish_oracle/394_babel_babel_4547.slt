@@ -1,0 +1,236 @@
+# test/slt_proc/babelfish_oracle/394_babel_babel_4547.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4547.sql
+
+statement ok
+CREATE TABLE babel4547t1(a varchar(max))
+
+statement ok
+insert into babel4547t1 values (REPLICATE('b', 60000))
+
+statement ok
+insert into babel4547t1 values (CAST(REPLICATE('c', 60000) as varchar(max)))
+
+statement ok
+declare @vrchrt1 varchar(max) = REPLICATE('d', 60000)
+insert into babel4547t1 values (@vrchrt1)
+
+statement ok
+DROP table babel4547t1
+
+statement ok
+CREATE TABLE babel4547t2(b nvarchar(max))
+
+statement ok
+insert into babel4547t2 values (REPLICATE('b', 30000))
+
+statement ok
+insert into babel4547t2 values (cast(REPLICATE('c', 30000) as nvarchar(max)))
+
+statement ok
+declare @nvrchrt2 nvarchar(max) = REPLICATE('d', 30000)
+insert into babel4547t2 values (@nvrchrt2)
+
+statement ok
+DROP table babel4547t2
+
+statement ok
+CREATE TABLE babel4547t3(c varbinary(max))
+
+statement ok
+insert into babel4547t3 values (convert(varbinary(max), replicate(0x01, 60001)))
+
+statement ok
+insert into babel4547t3 values (cast(REPLICATE(0x01, 60001) as varbinary(max)))
+
+statement ok
+declare @vrbnrt3 varbinary(max) = convert(varbinary(max), replicate(0x01, 60001));
+insert into babel4547t3 values (@vrbnrt3)
+
+query T
+select c from babel4547t3;
+----
+0x636f6e766572742876617262696e617279286d6178292c207265706c696361746528307830312c2036303030312929
+0x63617374285245504c494341544528307830312c203630303031292061732076617262696e617279286d61782929
+0x636f6e766572742876617262696e617279286d6178292c207265706c696361746528307830312c2036303030312929
+
+statement ok
+DROP table babel4547t3
+
+statement ok
+declare @char1 char(8001) = 'abc';
+
+statement ok
+declare @char1     char     (8001) = 'abc';
+
+query T
+declare @char2 char(8000) = 'abc';
+select @char2
+----
+abc
+
+query T
+select cast('abc' as char(8001));
+----
+abc
+
+statement ok
+declare @varchar1 varchar(8001) = 'abc';
+
+statement ok
+declare @varchar1  varchar    (8001)   = 'abc';
+
+query T
+declare @varchar2 varchar(8000) = 'abc';
+select @varchar2
+----
+abc
+
+query T
+select cast('abc' as varchar(8001));
+----
+abc
+
+statement ok
+declare @nchar1 nchar(4001) = 'abc';
+
+statement ok
+declare @nchar1    nchar   (4001) = 'abc';
+
+query T
+declare @nchar2 nchar(4000) = 'abc';
+select @nchar2
+----
+abc
+
+query T
+select cast('abc' as nchar(4001));
+----
+abc
+
+statement ok
+declare @nvarchar1 nvarchar(4001) = 'abc';
+
+statement ok
+declare @nvarchar1   nvarchar    (4001) = 'abc';
+
+query T
+declare @nvarchar2 nvarchar(4000) = 'abc';
+select @nvarchar2
+----
+abc
+
+query T
+select cast('abc' as nvarchar(4001));
+----
+abc
+
+statement ok
+declare @binary1 binary(8001) = 1;
+
+statement ok
+declare @binary1     binary   (8001) = 1;
+
+query T
+declare @binary2 binary(8000) = 1;
+select @binary2;
+----
+1
+
+query T
+select cast(1 as binary(8001));
+----
+0x31
+
+statement ok
+create table test_binary_t1 (a binary(8001))
+
+statement ok
+drop table if exists test_binary_t1
+
+statement ok
+create table test_binary_t2 (a binary(8000))
+
+statement ok
+insert into test_binary_t2 values (123)
+
+query T
+select * from test_binary_t2
+----
+0x313233
+
+statement ok
+drop table if exists test_binary_t2
+
+statement ok
+declare @varbinary1 varbinary(8001) = 1;
+
+statement ok
+declare @varbinary1    varbinary    (8001) = 1;
+
+query T
+declare @varbinary2 varbinary(8000) = 1;
+select @varbinary2;
+----
+1
+
+query T
+select cast(1 as varbinary(8001));
+----
+0x31
+
+statement ok
+create table test_varbinary_t1 (a varbinary(8001))
+
+statement ok
+drop table if exists test_varbinary_t1
+
+statement ok
+create table test_varbinary_t2 (a varbinary(8000))
+
+statement ok
+insert into test_varbinary_t2 values (123)
+
+query T
+select * from test_varbinary_t2
+----
+0x313233
+
+statement ok
+drop table if exists test_varbinary_t2
+
+query T
+declare @test_variable varchar = 'aaaaaa';
+select @test_variable
+----
+aaaaaa
+
+query T
+declare @test_variable char = 'aaaaaa';
+select @test_variable
+----
+aaaaaa
+
+query T
+declare @test_variable nvarchar = 'aaaaaa';
+select @test_variable
+----
+aaaaaa
+
+query T
+declare @test_variable nchar = 'aaaaaa';
+select @test_variable
+----
+aaaaaa
+
+query T
+declare @test_variable varbinary = 1234552;
+select @test_variable
+----
+1234552
+
+query T
+declare @test_variable binary = 1234552;
+select @test_variable
+----
+1234552
+

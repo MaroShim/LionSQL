@@ -1,0 +1,209 @@
+# test/slt_proc/babelfish_oracle/1591_babel_test_convert_to_binary_before_17_7_16_11.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/convert/test_convert_to_binary-before-17_7-16_11-vu-prepare.sql, test/babelfish/raw/functions/convert/test_convert_to_binary-before-17_7-16_11-vu-verify.sql, test/babelfish/raw/functions/convert/test_convert_to_binary-before-17_7-16_11-vu-cleanup.sql
+
+statement ok
+IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'TestConvertForBinary')
+BEGIN
+    CREATE DATABASE TestConvertForBinary;
+END
+
+statement ok
+USE TestConvertForBinary;
+
+statement ok
+CREATE TABLE Employee (
+    EmployeeID INT,
+    FirstName NVARCHAR(50),
+    LastName NVARCHAR(50),
+    Salary DECIMAL(15,2),
+    HireDate DATETIME,
+    Department VARCHAR(50),
+    EncryptedData VARBINARY(MAX)
+);
+
+statement ok
+INSERT INTO Employee (EmployeeID, FirstName, LastName, Salary, HireDate, Department)
+VALUES 
+(1, N'John', N'Doe', 75000.50, '2023-01-15 09:00:00', 'IT'),
+(2, N'Jane', N'Smith', 82000.75, '2022-11-30 10:30:00', 'HR'),
+(3, N'张', N'伟', 95000.00, '2023-03-20 14:15:00', 'Engineering'),
+(4, N'José', N'García', 68000.25, '2023-02-28 11:45:00', 'Sales');
+
+statement ok
+CREATE TABLE Documents (
+    DocID INT PRIMARY KEY,
+    DocName NVARCHAR(100),
+    DocContent VARBINARY(MAX),
+    CreatedDate DATETIME DEFAULT '2023-01-01 10:00:00',
+    ModifiedDate DATETIME,
+    DocType VARCHAR(50)
+);
+
+statement ok
+CREATE TABLE DocumentVersions (
+    VersionID INT,
+    DocID INT ,
+    VersionNumber INT,
+    BinaryContent VARBINARY(MAX),
+    CreatedDate DATETIME DEFAULT '2023-01-01 10:00:00'
+);
+
+statement ok
+CREATE VIEW vw_DocumentBinaryInfo
+AS
+SELECT 
+    d.DocID,
+    d.DocName,
+    CONVERT(BINARY(100), d.DocContent) AS ConvertedContent,
+    d.DocType
+FROM Documents d;
+
+statement ok
+CREATE VIEW vw_DocumentVersionComparison
+AS
+SELECT 
+    d.DocID,
+    d.DocName,
+    CONVERT(BINARY(50), dv1.BinaryContent) AS CurrentVersion,
+    CONVERT(BINARY(50), dv2.BinaryContent) AS PreviousVersion
+FROM Documents d
+JOIN DocumentVersions dv1 ON d.DocID = dv1.DocID
+LEFT JOIN DocumentVersions dv2 ON d.DocID = dv2.DocID 
+    AND dv1.VersionNumber = dv2.VersionNumber + 1;
+
+statement ok
+CREATE FUNCTION fn_ConvertAndCompare
+(
+    @binary1 VARBINARY(MAX),
+    @binary2 VARBINARY(MAX)
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT 
+        CONVERT(BINARY(100), @binary1) AS FirstBinary,
+        CONVERT(BINARY(100), @binary2) AS SecondBinary,
+        CASE 
+            WHEN CONVERT(BINARY(100), @binary1) = CONVERT(BINARY(100), @binary2) 
+            THEN 'Equal' 
+            ELSE 'Different'
+        END AS ComparisonResult
+);
+
+statement ok
+CREATE FUNCTION fn_GetBinaryHash
+(
+    @input VARBINARY(MAX)
+)
+RETURNS BINARY(32)
+AS
+BEGIN
+    RETURN CONVERT(BINARY(32), HASHBYTES('SHA2_256', @input));
+END;
+
+statement ok
+CREATE PROCEDURE sp_InsertDocument
+    @docID INT,
+    @docName NVARCHAR(100),
+    @content VARBINARY(MAX),
+    @docType VARCHAR(50)
+AS
+BEGIN
+    SELECT CONVERT(BINARY(50), @content) as ConvertedContent, @docType as DocType, '2023-01-01 10:00:00' as ModifiedDate;
+END;
+
+statement ok
+CREATE PROCEDURE sp_UpdateDocument
+    @docID INT,
+    @newContent VARBINARY(MAX)
+AS
+BEGIN
+    DECLARE @currentVersion INT;
+    SELECT @currentVersion = MAX(VersionNumber)
+    FROM DocumentVersions
+    WHERE DocID = @docID;
+    SELECT @docID as DocID, CONVERT(BINARY(50), @newContent) as ConvertedNewContent;
+END;
+
+statement ok
+INSERT INTO Documents (DocID, DocName, DocContent, DocType, CreatedDate)
+VALUES 
+(1, 'Test1.txt', CAST('Initial Content 1' AS VARBINARY(MAX)), 'TXT', '2023-01-01 10:00:00'),
+(2, 'Test2.doc', CAST('Initial Content 2' AS VARBINARY(MAX)), 'DOC', '2023-01-01 10:00:00');
+
+statement ok
+INSERT INTO DocumentVersions (VersionID, DocID, VersionNumber, BinaryContent, CreatedDate)
+VALUES 
+(11, 1, 1, CAST('Initial Content 1' AS VARBINARY(MAX)), '2023-01-01 10:00:00'),
+(21, 2, 1, CAST('Initial Content 2' AS VARBINARY(MAX)), '2023-01-01 10:00:00');
+
+statement ok
+CREATE TRIGGER tr_DocumentBinaryValidation
+ON Documents
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SELECT 
+        DocID,
+        DocName,
+        CONVERT(BINARY(50), DocContent) as ConvertedContent
+    FROM inserted;
+END;
+
+statement ok
+USE TestConvertForBinary;
+
+statement ok
+SELECT 'Test 3.1: Procedure InsertDocument' as TestCase,
+    DocName, DocContent
+FROM Documents 
+WHERE DocName = 'TestDoc3.pdf';
+
+query TT
+EXEC sp_UpdateDocument
+    @docID = 1,
+    @newContent = 0x576F726C64;  -- 'World' in hex
+----
+NULL NULL
+1 0x576f726c64
+
+statement ok
+USE TestConvertForBinary;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_DocumentBinaryValidation;
+
+statement ok
+DROP PROCEDURE IF EXISTS sp_UpdateDocument;
+
+statement ok
+DROP PROCEDURE IF EXISTS sp_InsertDocument;
+
+statement ok
+DROP FUNCTION IF EXISTS fn_GetBinaryHash;
+
+statement ok
+DROP FUNCTION IF EXISTS fn_ConvertAndCompare;
+
+statement ok
+DROP FUNCTION IF EXISTS dbo.GenerateRandomBinary;
+
+statement ok
+DROP VIEW IF EXISTS vw_DocumentVersionComparison;
+
+statement ok
+DROP VIEW IF EXISTS vw_DocumentBinaryInfo;
+
+statement ok
+DROP TABLE IF EXISTS DocumentVersions;
+
+statement ok
+DROP TABLE IF EXISTS Documents;
+
+statement ok
+DROP TABLE IF EXISTS Employee;
+
+statement ok
+USE master;
+

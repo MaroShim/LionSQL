@@ -1,0 +1,40 @@
+# test/slt_proc/babelfish_oracle/354_babel_babel_3118.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3118.sql
+
+statement ok
+CREATE TABLE t
+(
+c1 int IDENTITY(1,1) PRIMARY KEY,
+c2 varchar(20),
+);
+
+statement ok
+INSERT INTO t(c2) VALUES ('Joe'), ('Steve');
+
+query TT
+SELECT * FROM t
+----
+1 Joe
+2 Steve
+
+statement ok
+CREATE TRIGGER tr_txz ON t
+INSTEAD OF DELETE
+AS
+DELETE FROM t WHERE c2 IN(SELECT c2 FROM deleted)
+SELECT '@@ROWCOUNT from the DELETE trigger, the value should be 1', @@ROWCOUNT
+
+statement ok
+DELETE FROM t WHERE c2 = 'Steve'
+
+query TT
+SELECT  * FROM t
+----
+1 Joe
+
+statement ok
+drop trigger tr_txz;
+
+statement ok
+drop table t
+

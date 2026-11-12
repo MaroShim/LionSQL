@@ -1,0 +1,37 @@
+# test/slt_proc/babelfish_oracle/739_babel_sys_system_sql_modules_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-system_sql_modules-dep-vu-prepare.sql, test/babelfish/raw/views/sys-system_sql_modules-dep-vu-verify.sql, test/babelfish/raw/views/sys-system_sql_modules-dep-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sys_system_sql_modules_dep_vu_prepare_db1
+
+statement ok
+USE sys_system_sql_modules_dep_vu_prepare_db1
+
+statement ok
+CREATE PROCEDURE sys_system_sql_modules_dep_vu_prepare_p1 as 
+    SELECT uses_ansi_nulls FROM sys.system_sql_modules WHERE object_id = OBJECT_ID('sys.fn_listextendedproperty')
+
+statement ok
+CREATE FUNCTION sys_system_sql_modules_dep_vu_prepare_f1()
+RETURNS INT 
+AS 
+BEGIN
+    RETURN (SELECT COUNT(*) FROM sys.system_sql_modules WHERE object_id = OBJECT_ID('sys.fn_listextendedproperty'))
+END
+
+statement ok
+CREATE VIEW sys_system_sql_modules_dep_vu_prepare_v1 AS
+    SELECT uses_ansi_nulls FROM sys.system_sql_modules WHERE object_id = OBJECT_ID('sys.fn_listextendedproperty')
+
+statement ok
+USE sys_system_sql_modules_dep_vu_prepare_db1
+
+query T
+SELECT * FROM sys_system_sql_modules_dep_vu_prepare_v1
+----
+true
+true
+
+statement ok
+USE master
+

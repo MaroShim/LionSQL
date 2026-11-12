@@ -1,0 +1,184 @@
+# test/slt_proc/babelfish_oracle/1466_babel_sp_columns_100.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/sp_columns_100.sql
+
+statement ok
+create table var(a char(10), b nchar(9), c nvarchar(8), d varchar(7), e text, f ntext, g varbinary(10), h binary(9), i image, j xml)
+
+statement ok
+create table dates(a date, b time(5), c datetime, d datetime2(5), e smalldatetime, f sql_variant)
+
+statement ok
+create table nums(a int, b smallint, c tinyint, d bigint, e bit, f float, g real, h numeric(5,3), i money, j smallmoney)
+
+statement ok
+create table maxx(a varchar(max), b nvarchar(max), c varbinary(max))
+
+statement ok
+create table tbl_rv(id int, rv rowversion);
+
+statement ok
+create table tbl_tm(id int, tm timestamp);
+
+statement ok
+drop table tbl_rv;
+drop table tbl_tm;
+
+statement ok
+create table vart (a char_t, b nchar_t, c nvarchar_t, d varchar_t, e text_t, f ntext_t, g varbinary_t, h binary_t, i image_t)
+
+statement ok
+Create database sp_cols
+
+statement ok
+Use sp_cols
+
+statement ok
+create table test_escape_chars_sp_columns_100(a int);
+
+statement ok
+CREATE SCHEMA source_test;
+CREATE TABLE source_test.testtable (id int primary key);
+CREATE TABLE source_test.test_table (id int primary key);
+CREATE TABLE source_test.test0table (id int primary key);
+
+statement ok
+drop table nums
+
+statement ok
+drop table test_escape_chars_sp_columns_100;
+
+statement ok
+drop table source_test.testtable;
+
+statement ok
+drop table source_test.test_table;
+
+statement ok
+drop table source_test.test0table;
+
+statement ok
+drop schema source_test;
+
+statement ok
+Use master
+
+statement ok
+create table tiny_int_identity ( i_col tinyint identity(1,1), tinyint_col tinyint );
+
+statement ok
+create table small_int_identity ( i_col smallint identity(1,1), smallint_col smallint );
+
+statement ok
+create table int_identity ( i_col int identity(1,1), int_col int );
+
+statement ok
+create table big_int_identity ( i_col bigint identity(1,1), bigint_col bigint );
+
+statement ok
+create table decimal_int_identity ( i_col decimal(5,0) identity(1,1), dec5int_col decimal(5,0) );
+
+statement ok
+create table numeric_int_identity ( i_col numeric(5,0) identity(1,1), num5int_col numeric(5,0) );
+
+statement ok
+create table numeric13_int_identity ( i_col numeric(13,0) identity(1,1), num13int_col numeric(13,0) );
+
+statement ok
+Create database sp_cols collate BBF_Unicode_CP1_CI_AI
+
+statement ok
+Use sp_cols
+
+statement ok
+create table nums(a int, b smallint, c tinyint, d bigint, e bit, f float, g real, h numeric(5,3), i money, j smallmoney)
+
+statement ok
+create table test_escape_chars_sp_columns_100(a int);
+
+statement ok
+CREATE SCHEMA source_test;
+CREATE TABLE source_test.testtable (id int primary key);
+CREATE TABLE source_test.test_table (id int primary key);
+CREATE TABLE source_test.test0table (id int primary key);
+
+statement ok
+drop table nums
+
+statement ok
+drop table source_test.testtable;
+
+statement ok
+drop table source_test.test_table;
+
+statement ok
+drop table source_test.test0table;
+
+statement ok
+drop schema source_test;
+
+statement ok
+drop table test_escape_chars_sp_columns_100;
+
+statement ok
+use master
+
+statement ok
+CREATE TABLE RegularTable (RegularColumn int, Name varchar(50))
+
+statement ok
+DROP TABLE RegularTable
+
+statement ok
+CREATE TABLE [Quoted Table] (ID int, Name varchar(50))
+
+statement ok
+DROP TABLE [Quoted Table]
+
+statement ok
+CREATE TABLE [テーブル] (ID int, [名前] nvarchar(50), [年齢] int)
+
+statement ok
+DROP TABLE [テーブル]
+
+statement ok
+CREATE TABLE [テーブル 名前] ([名前] int)
+
+statement ok
+DROP TABLE [テーブル 名前] 
+
+statement ok
+CREATE TABLE dbo.tidentityintbiddgwithareallylongtablenamewhickcausesbabelfishtoaddahashcodetothenamebecauseofdefault63(a int)
+
+statement ok
+drop table tidentityintbiddgwithareallylongtablenamewhickcausesbabelfishtoaddahashcodetothenamebecauseofdefault63
+
+statement ok
+create table long_colname(xnffrfrfrfrfjvndjknvjkdfnvjnxfjnvjkxnvjnxfjknvjfnvjkxnfjkvbxjkvjkxfbnvjkbxfkjvbxfkjbvkxfjbvkjxfbvjkfxb int)
+
+statement ok
+drop table long_colname
+
+statement ok
+CREATE TABLE [tide Ntityintbiddgwithareallyl ongtablenamewhickcausesbabelfishtoaddahadddededjnfjsnjfbsd bbfjdhft63](a int)
+
+statement ok
+DROP TABLE [tide Ntityintbiddgwithareallyl ongtablenamewhickcausesbabelfishtoaddahadddededjnfjsnjfbsd bbfjdhft63]
+
+statement ok
+create table long_col_name ([tide Ntityintbiddgwithareallyl ongtablenamewhickcausesbabelfishtoaddahadddededjnfjsnjfbsd bbfjdhft63] int)
+
+statement ok
+DROP table long_col_name
+
+statement ok
+CREATE SCHEMA [abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_LongSchema]
+
+statement ok
+CREATE TABLE [abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_LongSchema].[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_LongTable] (ID int)
+
+statement ok
+DROP TABLE [abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_LongSchema].[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_LongTable]
+
+statement ok
+DROP SCHEMA [abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_LongSchema]
+

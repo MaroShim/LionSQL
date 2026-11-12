@@ -1,0 +1,52 @@
+# test/slt_proc/babelfish_oracle/492_babel_babel_int4_varbinary_div.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_int4_varbinary_div-vu-prepare.sql, test/babelfish/raw/babel_int4_varbinary_div-vu-verify.sql, test/babelfish/raw/babel_int4_varbinary_div-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE VIEW sys_int4_varbinary_vu_prepare_view AS
+SELECT  (23446576 / CAST(12345 AS varbinary(4)))
+
+statement ok
+CREATE PROC sys_int4_varbinary_vu_prepare_proc AS
+Select (21745678/CAST(424748 as varbinary(4)))
+
+statement ok
+CREATE FUNCTION sys_int4_varbinary_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+    RETURN (select 254354 / 0)
+END
+
+statement ok
+USE master
+
+query T
+SELECT * FROM sys_int4_varbinary_vu_prepare_view
+----
+NULL
+
+query T
+EXEC sys_int4_varbinary_vu_prepare_proc
+----
+NULL
+
+query T
+SELECT sys_int4_varbinary_vu_prepare_func()
+----
+NULL
+
+statement ok
+USE master
+
+statement ok
+DROP VIEW sys_int4_varbinary_vu_prepare_view
+
+statement ok
+DROP PROC sys_int4_varbinary_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_int4_varbinary_vu_prepare_func()
+

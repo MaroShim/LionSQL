@@ -1,0 +1,210 @@
+# test/slt_proc/babelfish_oracle/613_babel_cast_nvarchar_test_before_16_5.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/cast_nvarchar_test_before_16_5-vu-prepare.sql, test/babelfish/raw/cast_nvarchar_test_before_16_5-vu-verify.sql, test/babelfish/raw/cast_nvarchar_test_before_16_5-vu-cleanup.sql
+
+statement ok
+CREATE TABLE TestHash(
+nvarchar_data nvarchar(32) NOT NULL,
+varchar_data varchar(32) NOT NULL,
+cast_hashbytes_nvarchar_data  AS (cast ( hashbytes('sha1', nvarchar_data) AS varbinary(20) )) PERSISTED NOT NULL,
+convert_hashbytes_nvarchar_data AS (convert( varbinary(20),  hashbytes('sha1',nvarchar_data))) PERSISTED NOT NULL,
+cast_hashbytes_varchar_data  AS (cast ( hashbytes('sha1', varchar_data) AS varbinary(20) )) PERSISTED NOT NULL,
+convert_hashbytes_varchar_data AS (convert( varbinary(20),  hashbytes('sha1',varchar_data))) PERSISTED NOT NULL
+);
+
+statement ok
+CREATE VIEW dbo.CastDemoView
+AS
+SELECT 
+    dbo.CastNVarcharToVarbinary(N'Hello, World!') AS NVarcharToVarbinary,
+    dbo.CastVarbinaryToNVarchar(0x48656C6C6F2C20576F726C6421) AS VarbinaryToNVarchar
+
+statement ok
+CREATE FUNCTION dbo.HashMultipleTypes
+(
+    @VarcharInput VARCHAR(MAX),
+    @NVarcharInput NVARCHAR(MAX),
+    @VarbinaryInput VARBINARY(MAX)
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT 
+        HASHBYTES('SHA2_256', @VarcharInput) AS VarcharHash,
+        HASHBYTES('SHA2_256', @NVarcharInput) AS NVarcharHash,
+        HASHBYTES('SHA2_256', @VarbinaryInput) AS VarbinaryHash
+)
+
+statement ok
+CREATE VIEW dbo.HashDemoView
+AS
+SELECT 
+    HASHBYTES('SHA2_256', CAST('Hello' AS VARCHAR(MAX))) AS VarcharHash,
+    HASHBYTES('SHA2_256', CAST(N'Hello' AS NVARCHAR(MAX))) AS NVarcharHash,
+    HASHBYTES('SHA2_256', CAST(0x48656C6C6F AS VARBINARY(MAX))) AS VarbinaryHash
+
+statement ok
+SELECT DATALENGTH( nvarchar_data) as nvarchar_data_datalength
+        , LEN( nvarchar_data) AS nvarchar_data_len
+        , DATALENGTH( varchar_data) as varchar_data_btyes_datalength
+        , LEN( varchar_data) AS varchar_data_len
+        , * 
+from TestHash;
+
+query TT
+SELECT hashbytes( 'sha1', 'test string' ) as vary_string, hashbytes( 'sha1', N'test string' ) as unicode_string
+----
+0x661295C9CBF9D6B2F6428414504A8DEED3020641 0x661295C9CBF9D6B2F6428414504A8DEED3020641
+
+query TT
+SELECT hashbytes( 'MD2', 'test string' ) as vary_string, hashbytes( 'MD2', N'test string' ) as unicode_string
+----
+NULL NULL
+
+query TT
+SELECT hashbytes( 'MD4', 'test string' ) as vary_string, hashbytes( 'MD4', N'test string' ) as unicode_string
+----
+NULL NULL
+
+query TT
+SELECT hashbytes( 'MD5', 'test string' ) as vary_string, hashbytes( 'MD5', N'test string' ) as unicode_string
+----
+0x6F8DB599DE986FAB7A21625B7916589C 0x6F8DB599DE986FAB7A21625B7916589C
+
+query TT
+SELECT hashbytes( 'SHA2_256', 'test string' ) as vary_string, hashbytes( 'SHA2_256', N'test string' ) as unicode_string
+----
+0xD5579C46DFCC7F18207013E65B44E4CB4E2C2298F4AC457BA8F82743F31E930B 0xD5579C46DFCC7F18207013E65B44E4CB4E2C2298F4AC457BA8F82743F31E930B
+
+query TT
+SELECT hashbytes( 'SHA2_512', 'test string' ) as vary_string, hashbytes( 'SHA2_512', N'test string' ) as unicode_string
+----
+0x10E6D647AF44624442F388C2C14A787FF8B17E6165B83D767EC047768D8CBCB71A1A3226E7CC7816BC79C0427D94A9DA688C41A3992C7BF5E4D7CC3E0BE5DBAC 0x10E6D647AF44624442F388C2C14A787FF8B17E6165B83D767EC047768D8CBCB71A1A3226E7CC7816BC79C0427D94A9DA688C41A3992C7BF5E4D7CC3E0BE5DBAC
+
+query TT
+SELECT hashbytes( 'SHA', 'test string' ) as vary_string, hashbytes( 'SHA', N'test string' ) as unicode_string
+----
+0x661295C9CBF9D6B2F6428414504A8DEED3020641 0x661295C9CBF9D6B2F6428414504A8DEED3020641
+
+query T
+SELECT hashbytes( 'sha1', 'test string')
+----
+0x661295C9CBF9D6B2F6428414504A8DEED3020641
+
+query T
+SELECT hashbytes('sha1',cast('test string' as sys.nvarchar))
+----
+0x661295C9CBF9D6B2F6428414504A8DEED3020641
+
+query T
+SELECT cast(N'test string' as varbinary);
+----
+0x7465737420737472696e67
+
+query T
+SELECT cast(cast(cast('ab' AS nvarchar(10)) as varbinary(2)) as nvarchar(2));
+----
+�
+
+query TTT
+SELECT HASHBYTES('SHA1', '') AS empty_varchar,
+       HASHBYTES('SHA1', N'') AS empty_nvarchar,
+       HASHBYTES('SHA1', NULL) AS null_input;
+----
+0xDA39A3EE5E6B4B0D3255BFEF95601890AFD80709 0xDA39A3EE5E6B4B0D3255BFEF95601890AFD80709 NULL
+
+query TTT
+SELECT HASHBYTES('SHA1', N'こんにちは') AS japanese,
+       HASHBYTES('SHA1', N'Здравствуйте') AS russian,
+       HASHBYTES('SHA1', N'🙂😊😀') AS emojis;
+----
+0x20427A708C3F6F07CF12AB23557982D9E6D23B61 0xE2D105A2541F2DC6C8B93DF73D07DF30B33FD80A 0x3B114970B215D62CB987A4D5644FEE7001C78234
+
+query T
+SELECT HASHBYTES('SHA1', 'hello' + N'world') AS combined;
+----
+0x6ADFB183A4A2C94A2F92DAB5ADE762A47889A5A1
+
+query TT
+SELECT CAST(CAST(N'test' AS VARBINARY(8)) AS NVARCHAR(4)) AS nvarchar_roundtrip,
+       CAST(CAST('test' AS VARBINARY(8)) AS VARCHAR(4)) AS varchar_roundtrip;
+----
+test test
+
+query TTTT
+SELECT CAST(N'hello' AS VARBINARY(10)) AS nvarchar_to_varbinary,
+       CAST('hello' AS VARBINARY(10)) AS varchar_to_varbinary,
+       CONVERT(VARBINARY(10), N'hello') AS nvarchar_to_varbinary_convert,
+       CONVERT(VARBINARY(10), 'hello') AS varchar_to_varbinary_convert;
+----
+0x68656c6c6f 0x68656c6c6f 0x68656c6c6f 0x68656c6c6f
+
+query TTTT
+SELECT HASHBYTES('SHA1', 'Hello, World!') AS varchar_special,
+       HASHBYTES('SHA1', N'Hello, World!') AS nvarchar_special,
+       HASHBYTES('SHA1', 'Hello' + CHAR(13) + CHAR(10) + 'World') AS varchar_newline,
+       HASHBYTES('SHA1', N'Hello' + NCHAR(13) + NCHAR(10) + N'World') AS nvarchar_newline;
+----
+0x0A0A9F2A6772942557AB5355D76AF442F8F65E01 0x0A0A9F2A6772942557AB5355D76AF442F8F65E01 0x62E451F6ED58D1FF234A05B8467C0CEB1D4B285F 0x62E451F6ED58D1FF234A05B8467C0CEB1D4B285F
+
+query T
+SELECT CAST(
+    CAST(
+        CAST(
+            CAST(N'Hello World' AS VARBINARY(100))
+        AS VARCHAR(100))
+    AS NVARCHAR(100))
+AS VARBINARY(100)) AS four_casts;
+----
+0x48656c6c6f20576f726c64
+
+query T
+select cast(N'test string' as binary)
+----
+0x7465737420737472696e67
+
+statement ok
+create function dbo.hashbytes(@data sys.varchar)returns sys.varchar AS BEGIN    return "dummy hashbytes";END
+
+query TT
+SELECT hashbytes( 'SHA', 'test string' ) as vary_string, hashbytes( 'SHA', N'test string' ) as unicode_string
+----
+0x661295C9CBF9D6B2F6428414504A8DEED3020641 0x661295C9CBF9D6B2F6428414504A8DEED3020641
+
+query T
+select hashbytes('abc')
+----
+NULL
+
+statement ok
+drop function dbo.hashbytes
+
+query T
+DECLARE @TestBinary VARBINARY(100) = 0x54657374537472696E67; -- 'Test String' in ASCII
+DECLARE @StringResult NVARCHAR(MAX);
+SET @StringResult = dbo.CastVarbinaryToNVarchar(@TestBinary);
+select cast (@StringResult as nvarchar)
+----
+dbo.CastVarbinaryToNVarchar(0x54657374537472696E67)
+
+statement ok
+DROP TABLE IF EXISTS TestHash;
+
+statement ok
+DROP VIEW IF EXISTS dbo.CastDemoView;
+
+statement ok
+DROP FUNCTION IF EXISTS dbo.CastNVarcharToVarbinary;
+
+statement ok
+DROP FUNCTION IF EXISTS dbo.CastVarbinaryToNVarchar;
+
+statement ok
+DROP FUNCTION IF EXISTS dbo.HashMultipleTypes;
+
+statement ok
+DROP PROCEDURE IF EXISTS dbo.PrintHashResults;
+
+statement ok
+DROP VIEW IF EXISTS dbo.HashDemoView;
+

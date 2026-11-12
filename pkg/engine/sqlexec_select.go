@@ -412,6 +412,10 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		return "MSSQLSERVER", "@@servername"
 	case "@@OPTIONS":
 		return int64(5432), "@@options"
+	case "@@DATEFIRST":
+		return int64(7), "@@datefirst"
+	case "@@DBTS":
+		return proc.GetCurrentDBTS(), "@@dbts"
 	case "@@ERROR", "ERROR_NUMBER()", "ERROR_NUMBER":
 		if cs != nil {
 			cs.Mu.Lock()
@@ -1460,7 +1464,36 @@ func (s *Coordinator) execSetOpSelect(setQuery *planner.SetOpQuery, start time.T
 				seg.Op, len(outCols), len(nextRes.Columns))
 		}
 
-		rightIter := execution.NewSliceIterator(nextRes.Rows, nextRes.Columns)
+		// Map right branch columns positionally to outCols (handles duplicate column names like SELECT c2, c2)
+		var rightIter execution.Iterator
+		if len(nextRes.Values) == len(nextRes.Rows) && len(nextRes.Values) > 0 {
+			alignedRows := make([]map[string]any, len(nextRes.Values))
+			for rIdx, rowVals := range nextRes.Values {
+				m := make(map[string]any, len(outCols))
+				for cIdx, colName := range outCols {
+					if cIdx < len(rowVals) {
+						m[colName] = rowVals[cIdx]
+					}
+				}
+				alignedRows[rIdx] = m
+			}
+			rightIter = execution.NewSliceIterator(alignedRows, outCols)
+		} else {
+			alignedRows := make([]map[string]any, len(nextRes.Rows))
+			for rIdx, r := range nextRes.Rows {
+				m := make(map[string]any, len(outCols))
+				for cIdx, outCol := range outCols {
+					inCol := nextRes.Columns[cIdx]
+					if v, ok := r[inCol]; ok {
+						m[outCol] = v
+					} else if v, ok := r[strings.ToLower(inCol)]; ok {
+						m[outCol] = v
+					}
+				}
+				alignedRows[rIdx] = m
+			}
+			rightIter = execution.NewSliceIterator(alignedRows, outCols)
+		}
 		setOpType, err := execution.ParseSetOpType(seg.Op)
 		if err != nil {
 			return nil, err

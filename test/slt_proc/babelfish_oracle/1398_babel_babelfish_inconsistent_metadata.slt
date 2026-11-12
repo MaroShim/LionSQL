@@ -1,0 +1,32 @@
+# test/slt_proc/babelfish_oracle/1398_babel_babelfish_inconsistent_metadata.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ownership/babelfish_inconsistent_metadata-vu-prepare.sql, test/babelfish/raw/ownership/babelfish_inconsistent_metadata-vu-verify.sql, test/babelfish/raw/ownership/babelfish_inconsistent_metadata-vu-cleanup.sql
+
+statement ok
+CREATE VIEW babelfish_inconsistent_metadata_vu_prepare_view
+AS
+SELECT object_type, schema_name, object_name 
+FROM sys.babelfish_inconsistent_metadata()
+
+statement ok
+CREATE PROC babelfish_inconsistent_metadata_vu_prepare_proc
+AS
+SELECT object_type, schema_name, object_name 
+FROM sys.babelfish_inconsistent_metadata()
+
+statement ok
+CREATE FUNCTION babelfish_inconsistent_metadata_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT COUNT(DISTINCT detail) FROM sys.babelfish_inconsistent_metadata(false))
+END
+
+statement ok
+DROP VIEW babelfish_inconsistent_metadata_vu_prepare_view
+
+statement ok
+DROP PROC babelfish_inconsistent_metadata_vu_prepare_proc
+
+statement ok
+DROP FUNCTION babelfish_inconsistent_metadata_vu_prepare_func
+

@@ -1,0 +1,286 @@
+# test/slt_proc/babelfish_oracle/497_babel_babel_table_type.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_table_type.sql
+
+statement ok
+create procedure table_var_procedure as
+begin
+	declare @a int;
+	declare @b tableType;
+	insert into @b values('hello', 4, 100);
+	select count(*) from @b;
+end;
+
+statement ok
+DROP PROCEDURE table_var_procedure;
+
+statement ok
+create procedure table_var_procedure as
+begin
+	declare @tableVar table (a int, b int);
+	insert into @tableVar values(1, 100);
+	insert into @tableVar values(2, 200);
+	update @tableVar set b = 1000 where a = 1;
+	delete from @tableVar where a = 2;
+	select * from @tableVar;
+end;
+
+query TT
+EXEC table_var_procedure;
+----
+1 1000
+
+statement ok
+DROP PROCEDURE table_var_procedure;
+
+statement ok
+create procedure table_var_procedure as
+begin
+	declare @tableVar1 table
+	(a int, b int);
+	insert into @tableVar1 values(1, 100);
+	declare @tableVar2 table 	(c int, d varchar);
+	insert into @tableVar2 values(1, 'a');
+	select * from @tableVar1 t1 join @tableVar2 t2 on t1.a = t2.c;
+end;
+
+query TTTT
+EXEC table_var_procedure;
+----
+1 100 1 a
+
+statement ok
+DROP PROCEDURE table_var_procedure;
+
+statement ok
+create procedure dup_var_name_procedure as
+begin
+	declare @a int;
+	declare @a tableType;
+end;
+
+statement ok
+create table test_table (d int);
+
+statement ok
+EXEC dup_var_name_procedure;
+
+statement ok
+drop procedure dup_var_name_procedure;
+
+statement ok
+drop table test_table;
+
+statement ok
+create table test_table(a int, b int);
+
+statement ok
+insert into test_table values(1, 10);
+
+statement ok
+create procedure assign_proc as
+begin
+	declare @tableVar table (a int, b int);
+	set @tableVar = test_table;
+end;
+
+statement ok
+create procedure join_proc1 as
+begin
+	declare @tableVar table (a int, b int, c int);
+	insert into @tableVar values(1, 2, 3);
+	select * from test_table t inner join @tableVar tv on t.a = tv.a;
+end;
+
+query TTTTT
+EXEC join_proc1;
+----
+1 10 1 2 3
+
+statement ok
+DROP PROCEDURE join_proc1;
+
+statement ok
+create procedure join_proc2 as
+begin
+	declare @tableVar table (a int, b int, c int);
+	insert into @tableVar values(1, 2, 3);
+	select * from @tableVar tv inner join test_table t on tv.a = t.a;
+end;
+
+query TTTTT
+EXEC join_proc2;
+----
+1 2 3 1 10
+
+statement ok
+DROP PROCEDURE join_proc2;
+
+statement ok
+create procedure source_target_proc as
+begin
+	declare @tv table (a int);
+	insert into @tv values (1);
+	insert into @tv select a+1 from @tv;
+	insert into @tv select a+2 from @tv;
+	insert into @tv select a+4 from @tv;
+	select * from @tv;
+end;
+
+statement ok
+DROP PROCEDURE source_target_proc;
+
+statement ok
+create function inner_func() returns int as
+begin
+	declare @result int;
+	declare @tableVar table (a int);
+	insert into @tableVar values(1);
+	select @result = count(*) from @tableVar; -- should be 1
+	return @result;
+end;
+
+statement ok
+create function outer_func() returns int as
+begin
+	declare @result int;
+	declare @tableVar table(b int);
+	select @result = count(*) from @tableVar; -- should be 0
+	select @result = @result + inner_func(); -- should be 0 + 1 = 1
+	select @result = @result + inner_func(); -- should be 1 + 1 = 2
+	return @result;
+end;
+
+statement ok
+DROP FUNCTION outer_func;
+
+statement ok
+create procedure loop_func_proc as
+begin
+	declare @result int;
+    declare @counter int;
+	select @result = 0;
+    set @counter = 1;
+    while (@counter < 6)
+    begin
+		select @result = @result + inner_func(); -- each call to inner_func should return 1
+        set @counter = @counter + 1;
+    end
+	select @result;
+end;
+
+query T
+EXEC loop_func_proc;
+----
+0
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+DROP PROCEDURE loop_func_proc;
+
+statement ok
+DROP FUNCTION inner_func;
+
+statement ok
+create procedure loop_proc as
+begin
+	declare @result int;
+	declare @curr int;
+    declare @counter int;
+	select @result = 0;
+    set @counter = 1;
+    while (@counter < 6)
+    begin
+		declare @a tableType;
+		insert into @a values('hello', @counter, 100);
+		select @curr = count(*) from @a; -- @curr in each loop should be 1,2,3,4,5
+		select @result = @result + @curr;
+        set @counter = @counter + 1;
+    end
+	select @result;
+end;
+
+statement ok
+DROP PROCEDURE loop_proc;
+
+statement ok
+create procedure pl_set_proc as
+begin
+	set datefirst 7;
+end;
+
+statement ok
+EXEC pl_set_proc
+
+statement ok
+DROP PROCEDURE pl_set_proc;
+
+statement ok
+create procedure select_multi_tablevars as
+begin
+	declare @tablevar1 tableType;
+	insert into @tablevar1 values('hello1', 1, 100);
+	declare @tablevar2 tableType;
+	insert into @tablevar2 values('hello1', 1, 100);
+	insert into @tablevar2 values('hello2', 2, 200);
+	select * from @tablevar1, @tablevar2;
+end;
+
+statement ok
+DROP PROCEDURE select_multi_tablevars;
+
+statement ok
+create procedure select_table_tablevar as
+begin
+	declare @tablevar tableType;
+	insert into @tablevar values('hello1', 1, 100);
+	select * from test_table, @tablevar;
+end;
+
+statement ok
+DROP PROCEDURE select_table_tablevar;
+
+statement ok
+create function error_func(@tableVar tableType) returns int as
+begin
+	return 1;
+end
+
+statement ok
+create procedure tvp_proc as
+begin
+	declare @tableVar tableType;
+	insert into @tablevar values('hello1', 1, 100);
+	select tvp_func(@tableVar);
+end;
+
+statement ok
+DROP PROCEDURE tvp_proc;
+
+statement ok
+create procedure multi_tvp_proc as
+begin
+	declare @v1 tableType;
+	declare @v2 tableType1;
+	insert into @v1 values('hello1', 1, 100);
+	insert into @v2 values(1, 100);
+	insert into @v2 values(2, 200);
+	select multi_tvp_func(@v1, @v2);
+end;
+
+statement ok
+DROP PROCEDURE multi_tvp_proc;
+
+statement ok
+create schema test_schema;
+
+statement ok
+drop schema test_schema;
+
+statement ok
+DROP TABLE test_table;
+

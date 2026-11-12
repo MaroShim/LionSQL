@@ -1,0 +1,210 @@
+# test/slt_proc/babelfish_oracle/293_babel_babel_1566.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1566-vu-prepare.sql, test/babelfish/raw/BABEL-1566-vu-verify.sql, test/babelfish/raw/BABEL-1566-vu-cleanup.sql
+
+statement ok
+create table BABEL_1566_vu_prepare_1 (a int, b varchar(10));
+insert into BABEL_1566_vu_prepare_1 values (12345, 'abcd');
+insert into BABEL_1566_vu_prepare_1 values (12345, 'abcd');
+insert into BABEL_1566_vu_prepare_1 values (23456, 'bcd');
+
+statement ok
+create table BABEL_1566_vu_prepare_2 (a varchar(10), b int);
+
+statement ok
+insert into BABEL_1566_vu_prepare_2 values ('', 1);
+
+statement ok
+insert into BABEL_1566_vu_prepare_2 values (null, 2);
+
+statement ok
+insert into BABEL_1566_vu_prepare_2 values ('empty', 3);
+
+statement ok
+create table BABEL_1566_vu_prepare_3(a int)
+
+statement ok
+insert into BABEL_1566_vu_prepare_3 values(1)
+
+statement ok
+create table BABEL_1566_vu_prepare_dates(a date, b time, c datetimeoffset, d datetime2, e datetime, f smalldatetime)
+
+statement ok
+create table BABEL_1566_vu_prepare_4(a binary, b bit, c timestamp, d bytea, e sql_variant, f varbinary)
+
+statement ok
+set quoted_identifier off;
+
+query T
+select CHECKSUM(NULL);
+----
+-2128831035
+
+query T
+select CHECKSUM(1, NULL);
+----
+873244444
+
+query T
+select CHECKSUM("");
+----
+-2128831035
+
+query T
+select CHECKSUM('');
+----
+-2128831035
+
+query T
+select CHECKSUM(1, 3, '');
+----
+518729469
+
+query T
+select CHECKSUM('abcd');
+----
+-835421763
+
+query T
+select CHECKSUM('abcd', 'efg');
+----
+715044663
+
+query T
+select CHECKSUM('abcd', 'efg', 'hi');
+----
+-29686548
+
+query T
+select CHECKSUM(1, 'efg', 'hi');
+----
+990993987
+
+query T
+select CHECKSUM(123);
+----
+1916298011
+
+query T
+select CHECKSUM(10.12345);
+----
+-29958819
+
+query T
+select CHECKSUM(123, 456);
+----
+-1718241622
+
+query T
+select CHECKSUM('123', '456');
+----
+-1718241622
+
+query TT
+select CHECKSUM(a), CHECKSUM(b) from BABEL_1566_vu_prepare_1;
+----
+1136836824 -835421763
+1136836824 -835421763
+669447273 1958475554
+
+query T
+select CHECKSUM(a, b) from BABEL_1566_vu_prepare_1;
+----
+790052196
+790052196
+-1696429674
+
+query T
+select CHECKSUM(*) from BABEL_1566_vu_prepare_1;
+----
+789356349
+789356349
+789356349
+
+statement ok
+alter table BABEL_1566_vu_prepare_1 drop column a;
+
+query T
+select checksum(b) from BABEL_1566_vu_prepare_1;
+----
+-835421763
+-835421763
+1958475554
+
+query T
+select checksum(*) from BABEL_1566_vu_prepare_1;
+----
+789356349
+789356349
+789356349
+
+query T
+select checksum(*) from BABEL_1566_vu_prepare_2;
+----
+789356349
+789356349
+789356349
+
+statement ok
+select checksum(user_type_id) from sys.columns where object_id=OBJECT_ID('BABEL_1566_vu_prepare_3')
+
+statement ok
+select checksum(*) from BABEL_1566_vu_prepare_dates;
+
+statement ok
+select checksum(*) from BABEL_1566_vu_prepare_4;
+
+query T
+select cast(cast(1 as rowversion) as text);
+----
+1
+
+query T
+select cast(cast(1 as bbf_varbinary) as text);
+----
+1
+
+query T
+select cast(cast(1 as sql_variant) as text);
+----
+1
+
+query T
+select cast(cast(1 as varbinary) as text);
+----
+1
+
+query T
+select cast(cast(NULL as bit) as text);
+----
+NULL
+
+query T
+select cast(cast(0xfe as binary) as text);
+----
+þ
+
+query T
+select cast(cast(0xfe as bbf_binary) as text);
+----
+0xfe
+
+query T
+select cast(cast(0xfe as bytea) as text);
+----
+þ
+
+statement ok
+drop table BABEL_1566_vu_prepare_1;
+
+statement ok
+drop table BABEL_1566_vu_prepare_2;
+
+statement ok
+drop table BABEL_1566_vu_prepare_3;
+
+statement ok
+drop table BABEL_1566_vu_prepare_dates;
+
+statement ok
+drop table BABEL_1566_vu_prepare_4;
+

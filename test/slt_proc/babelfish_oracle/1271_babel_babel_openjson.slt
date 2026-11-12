@@ -1,0 +1,28 @@
+# test/slt_proc/babelfish_oracle/1271_babel_babel_openjson.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-OPENJSON.sql
+
+statement ok
+DECLARE @json NVARCHAR(MAX) = N'{"obj":{"a":1}}'
+DECLARE @path NVARCHAR(MAX) = N'$.obj'
+SELECT * FROM OPENJSON(@json, @path) with (a nvarchar(20))
+
+statement error
+SELECT * FROM OPENJSON(N'{"a"') with (a nvarchar(20))
+
+statement ok
+DECLARE @json NVARCHAR(MAX) = N'{"obj":{"a":1}}'
+DECLARE @path NVARCHAR(MAX) = N'$.obj'
+SELECT * FROM OPENJSON(@json, @path) with (a nvarchar(20), b nvarchar(20) 'lax $.b')
+
+statement ok
+DECLARE @json NVARCHAR(MAX) = N'{"obj":{"a":1}}'
+DECLARE @path NVARCHAR(MAX) = N'$.obj'
+SELECT * FROM OPENJSON(@json, @path) with (a nvarchar(20), b nvarchar(20) 'strict $.b')
+
+statement ok
+DECLARE @json NVARCHAR(MAX) = N'[{"b":1},{"a":2},{"a":3,"b":3},{}]'
+SELECT * FROM OPENJSON(@json) WITH (a int, b int, o nvarchar(max) '$' AS JSON)
+
+statement ok
+DROP TABLE IF EXISTS babel_5020_t
+

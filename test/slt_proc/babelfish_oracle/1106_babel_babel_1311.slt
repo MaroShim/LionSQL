@@ -1,0 +1,10 @@
+# test/slt_proc/babelfish_oracle/1106_babel_babel_1311.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1311.sql
+
+statement ok
+create table babel_1311_t(c_w_id int, c_first int);
+insert into babel_1311_t values (1, 1), (2, 2);
+
+statement ok
+drop table babel_1311_t;
+

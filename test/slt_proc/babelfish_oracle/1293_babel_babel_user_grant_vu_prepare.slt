@@ -1,0 +1,38 @@
+# test/slt_proc/babelfish_oracle/1293_babel_babel_user_grant_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ownership/BABEL-USER-GRANT-vu-prepare.sql
+
+statement ok
+CREATE DATABASE babel_5890_db
+
+statement ok
+USE babel_5890_db
+
+statement ok
+CREATE LOGIN babel_5890_role_vu_prepare_r1 WITH PASSWORD = '1234';
+CREATE USER babel_5890_role_vu_prepare_r1 FOR LOGIN babel_5890_role_vu_prepare_r1;
+DROP USER babel_5890_role_vu_prepare_r1;
+
+statement ok
+CREATE USER babel_5890_role_vu_prepare_r2 FOR LOGIN babel_5890_role_vu_prepare_r1;
+CREATE LOGIN babel_5890_role_vu_prepare_r2 WITH PASSWORD = '1234';
+
+statement ok
+CREATE PROC babel_role_vu_prepare_role_mapping AS
+BEGIN
+	SELECT
+		r.rolname AS role_name,
+		m.rolname AS member_name,
+		CASE
+			WHEN (g.rolname IN ('bbf_role_admin')) then true else false
+		END AS grantor,
+		am.admin_option, 
+		am.inherit_option, 
+		am.set_option
+	FROM pg_auth_members am
+	JOIN pg_roles r ON am.roleid = r.oid
+	JOIN pg_roles m ON am.member = m.oid
+	JOIN pg_roles g ON am.grantor = g.oid
+	WHERE r.rolname IN ('babel_5890_db_guest', 'babel_5890_db_babel_5890_role_vu_prepare_r1', 'babel_5890_db_babel_5890_role_vu_prepare_r2') AND m.rolname IN ('babel_5890_role_vu_prepare_r1', 'babel_5890_role_vu_prepare_r2')
+	ORDER BY r.rolname;
+END
+

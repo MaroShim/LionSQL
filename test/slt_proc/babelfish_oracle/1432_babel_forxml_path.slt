@@ -1,0 +1,53 @@
+# test/slt_proc/babelfish_oracle/1432_babel_forxml_path.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/forxml/forxml-path-vu-prepare.sql, test/babelfish/raw/forxml/forxml-path-vu-verify.sql, test/babelfish/raw/forxml/forxml-path-vu-cleanup.sql
+
+statement ok
+CREATE TABLE for_xml_path (SequenceNumber  INTEGER PRIMARY KEY, String VARCHAR(100) NOT NULL);
+
+statement ok
+INSERT INTO for_xml_path VALUES (1,'SELECT'),(2,'Product,'),(3,'UnitPrice,'),(4,'EffectiveDate'),(5,'FROM'), (6,'Products'),(7,'WHERE'),(8,'UnitPrice'),(9,'> 100');
+
+statement ok
+CREATE TABLE for_xml_path_all_null (col1 INT NULL);
+
+statement ok
+SET NOCOUNT ON
+
+statement ok
+DECLARE @i INT = 1; 
+WHILE @i <= 2048 
+BEGIN
+    INSERT INTO for_xml_path_all_null VALUES (NULL);
+    SET @i = @i + 1;
+END
+
+statement ok
+CREATE VIEW for_xml_path_v1 AS SELECT String as param1, hello.String as [@param2] FROM for_xml_path hello ORDER BY SequenceNumber FOR XML PATH('hello')
+
+statement ok
+CREATE VIEW for_xml_path_v2 AS SELECT hello.String as [@param2] FROM for_xml_path hello ORDER BY SequenceNumber FOR XML PATH('')
+
+statement ok
+CREATE VIEW for_xml_path_v3 AS SELECT hello.String as [@param2] , string  FROM for_xml_path hello ORDER BY SequenceNumber FOR XML PATH
+
+statement ok
+CREATE VIEW for_xml_path_v4 AS SELECT ' '+string  FROM for_xml_path hello ORDER BY SequenceNumber FOR XML PATH('')
+
+statement error
+SELECT  String as param1, hello.String as [@param2] FROM for_xml_path hello ORDER BY SequenceNumber FOR XML PATH('hello')
+
+statement error
+SELECT hello.String as [@param2] FROM for_xml_path hello ORDER BY SequenceNumber FOR XML PATH('')
+
+statement ok
+DROP VIEW for_xml_path_v1
+DROP VIEW for_xml_path_v2
+DROP VIEW for_xml_path_v3
+DROP VIEW for_xml_path_v4
+
+statement ok
+DROP TABLE for_xml_path_all_null
+
+statement ok
+DROP TABLE for_xml_path
+

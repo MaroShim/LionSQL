@@ -1,0 +1,117 @@
+# test/slt_proc/babelfish_oracle/486_babel_babel_emoji.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_emoji.sql
+
+query T
+select CAST('Â£' AS nchar(1));
+----
+Â
+
+query T
+select CAST('Â£' AS nvarchar);
+----
+Â£
+
+query T
+select CAST('Â£' AS nchar(2));
+----
+Â£
+
+query T
+select CAST('Â£' AS nvarchar(2));
+----
+Â£
+
+query T
+select CAST('Â£' AS char(1));			-- allowed
+----
+Â
+
+query T
+select CAST('Â£' AS sys.nchar(1));		-- allowed
+----
+Â
+
+query T
+select CAST('Â£' AS sys.nvarchar(1));	-- allowed
+----
+Â
+
+query T
+select CAST('Â£' AS sys.varchar(1));		-- allowed
+----
+Â
+
+query T
+select CAST('ðŸ˜€' AS char(1));			-- not allowed  TODO: fix BABEL-3543
+----
+ð
+
+query T
+select CAST('ðŸ˜€' AS sys.varchar(1));	-- not allowed  TODO: fix BABEL-3543 
+----
+ð
+
+query T
+select CAST('Â£' AS char(1));
+----
+Â
+
+query T
+select CAST('Â£' AS sys.nchar(1));
+----
+Â
+
+query T
+select CAST('Â£' AS sys.nvarchar(1));
+----
+Â
+
+query T
+select CAST('Â£' AS sys.varchar(1));
+----
+Â
+
+query T
+select CAST('ðŸ˜€' AS char(1));
+----
+ð
+
+query T
+select CAST('abðŸ˜€' AS varchar3); --not allowed  TODO: fix BABEL-3543 
+----
+abðŸ˜€
+
+query T
+select CAST('ðŸ˜€b' AS char(1));  -- not allowed TODO: fix BABEL-3543 
+----
+ð
+
+query T
+select CAST('ðŸ˜€b' AS sys.varchar(1)); -- not allowed TODO: fix BABEL-3543 
+----
+ð
+
+statement ok
+create table testing_1(col nchar);
+
+query TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT
+SELECT * FROM information_schema.columns WHERE table_name = 'testing_1'
+----
+postgres public testing_1 col 1 NULL YES varchar 255 255 NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL postgres pg_catalog varchar NULL NULL NULL NULL 1 NO NO NULL NULL NULL NULL NULL NO NEVER NULL YES
+postgres public testing_1 _row_id 2 NULL NO int4 NULL NULL 32 2 0 NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL postgres pg_catalog int4 NULL NULL NULL NULL 2 NO NO NULL NULL NULL NULL NULL NO NEVER NULL YES
+
+statement ok
+create table testing_4(col sys.varchar);
+insert into testing_4 (col) select 'ðŸ˜€'; -- not allowed TODO: fix BABEL-3543 
+
+query T
+select * from testing_4;
+----
+ðŸ˜€
+
+statement ok
+drop table testing_1;
+
+statement ok
+drop table testing_4;
+

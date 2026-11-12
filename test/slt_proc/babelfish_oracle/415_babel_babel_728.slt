@@ -1,0 +1,418 @@
+# test/slt_proc/babelfish_oracle/415_babel_babel_728.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-728.sql
+
+query T
+select sign()
+----
+NULL
+
+query T
+select sign(NULL)
+----
+NULL
+
+query T
+select sign(123.23)
+----
+1
+
+query T
+select sign(123)
+----
+1
+
+query T
+select sign(0.0)
+----
+0
+
+query T
+select sign(0)
+----
+0
+
+query T
+select sign(-123)
+----
+-1
+
+query T
+select sign(-123.23)
+----
+-1
+
+query T
+select sign('sdflkjs')
+----
+NULL
+
+query T
+select sign('123123.913');
+----
+1
+
+query T
+select sign(cast(-123.123 as int))
+----
+-1
+
+query T
+select sign(cast(0 as int))
+----
+0
+
+query T
+select sign(cast(123.123 as int))
+----
+1
+
+query T
+select sign(cast(456 as int))
+----
+1
+
+query T
+select sign(cast(0.0006 as int))
+----
+0
+
+query T
+select sign(cast(-123.123 as smallint))
+----
+-1
+
+query T
+select sign(cast(0 as smallint))
+----
+0
+
+query T
+select sign(cast(123.123 as smallint))
+----
+1
+
+query T
+select sign(cast(456 as smallint))
+----
+1
+
+query T
+select sign(cast(0.0006 as smallint))
+----
+0
+
+query T
+select sign(cast(0 as tinyint))
+----
+0
+
+query T
+select sign(cast(13.13 as tinyint))
+----
+1
+
+query T
+select sign(cast(0.0006 as tinyint))
+----
+0
+
+query T
+select sign(cast(-123.123 as bigint))
+----
+-1
+
+query T
+select sign(cast(0 as bigint))
+----
+0
+
+query T
+select sign(cast(123.123 as bigint))
+----
+1
+
+query T
+select sign(cast(456 as bigint))
+----
+1
+
+query T
+select sign(cast(0.0006 as bigint))
+----
+0
+
+query T
+select sign(cast(-123.123 as money))
+----
+NULL
+
+query T
+select sign(cast(0 as money))
+----
+NULL
+
+query T
+select sign(cast(123.123 as money))
+----
+NULL
+
+query T
+select sign(cast(456 as money))
+----
+NULL
+
+query T
+select sign(cast(0.0006 as money))
+----
+NULL
+
+query T
+select sign(cast(-123.123 as smallmoney))
+----
+NULL
+
+query T
+select sign(cast(0 as smallmoney))
+----
+NULL
+
+query T
+select sign(cast(123.123 as smallmoney))
+----
+NULL
+
+query T
+select sign(cast(456 as smallmoney))
+----
+NULL
+
+query T
+select sign(cast(0.0006 as smallmoney))
+----
+NULL
+
+query T
+select sign(cast(-123.123 as numeric))
+----
+NULL
+
+query T
+select sign(cast(0 as numeric))
+----
+NULL
+
+query T
+select sign(cast(123.123 as numeric))
+----
+NULL
+
+query T
+select sign(cast(456 as numeric))
+----
+NULL
+
+query T
+select sign(cast(0.0006 as numeric))
+----
+NULL
+
+query T
+select sign(cast(-123.123 as decimal))
+----
+NULL
+
+query T
+select sign(cast(0 as decimal))
+----
+NULL
+
+query T
+select sign(cast(123.123 as decimal))
+----
+NULL
+
+query T
+select sign(cast(456 as decimal))
+----
+NULL
+
+query T
+select sign(cast(0.0006 as decimal))
+----
+NULL
+
+query T
+select sign(cast(-123.123 as float))
+----
+-1
+
+query T
+select sign(cast(0 as float))
+----
+0
+
+query T
+select sign(cast(123.123 as float))
+----
+1
+
+query T
+select sign(cast(456 as float))
+----
+1
+
+query T
+select sign(cast(0.0006 as float))
+----
+1
+
+query T
+select sign(cast(-123.123 as real))
+----
+-1
+
+query T
+select sign(cast(0 as real))
+----
+0
+
+query T
+select sign(cast(123.123 as real))
+----
+1
+
+query T
+select sign(cast(456 as real))
+----
+1
+
+query T
+select sign(cast(0.0006 as real))
+----
+1
+
+query T
+select sign(cast(0 as binary))
+----
+NULL
+
+query T
+select sign(cast(456 as binary))
+----
+NULL
+
+query T
+select sign(cast(0 as varbinary))
+----
+NULL
+
+query T
+select sign(cast(456 as varbinary))
+----
+NULL
+
+query T
+select sign(cast('-123.123' as varchar))
+----
+-1
+
+query T
+select sign(cast('0' as varchar))
+----
+0
+
+query T
+select sign(cast('123.123' as varchar))
+----
+1
+
+query T
+select sign(cast('-123.123' as nvarchar))
+----
+-1
+
+query T
+select sign(cast('0' as nvarchar))
+----
+0
+
+query T
+select sign(cast('123.123' as nvarchar))
+----
+1
+
+query T
+select sign(cast('-123.123' as text))
+----
+-1
+
+query T
+select sign(cast('0' as text))
+----
+0
+
+query T
+select sign(cast('123.123' as text))
+----
+1
+
+query T
+select sign(cast('-123.123' as real))
+----
+-1
+
+query T
+select sign(cast('0' as real))
+----
+0
+
+query T
+select sign(cast('123.123' as real))
+----
+1
+
+query T
+select sign(cast('-123.123' as binary))
+----
+NULL
+
+query T
+select sign(cast('0' as binary))
+----
+NULL
+
+query T
+select sign(cast('123.123' as binary))
+----
+NULL
+
+query T
+select sign(cast('-123.123' as varbinary))
+----
+NULL
+
+query T
+select sign(cast('0' as varbinary))
+----
+NULL
+
+query T
+select sign(cast('123.123' as varbinary))
+----
+NULL
+
+query T
+select sign(cast('-123.123' as ntext))
+----
+-1
+
+query T
+select sign(cast('0' as ntext))
+----
+0
+
+query T
+select sign(cast('123.123' as ntext))
+----
+1
+

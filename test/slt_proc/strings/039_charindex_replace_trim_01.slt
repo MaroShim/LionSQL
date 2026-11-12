@@ -1,0 +1,30 @@
+# test/slt_proc/strings/039_charindex_replace_trim_01.slt
+# T-SQL CHARINDEX, REPLACE, and TRIM family (1)
+
+query I
+SELECT CHARINDEX('database', 'enterprise_database_system');
+----
+12
+
+query I
+SELECT CHARINDEX('nonexistent_token', 'enterprise_database_system');
+----
+0
+
+query T
+SELECT TRIM('enterprise_oltp_system');
+----
+enterprise_oltp_system
+
+statement ok
+CREATE PROCEDURE sp_replace_token_39 @src VARCHAR(100), @old VARCHAR(50), @new VARCHAR(50)
+AS
+BEGIN
+    DECLARE @pos INT = CHARINDEX(@old, @src);
+    SELECT @pos, TRIM(REPLACE(@src, @old, @new));
+END;
+
+query IT
+EXEC sp_replace_token_39 'enterprise_database_system', 'database', 'oltp';
+----
+12 enterprise_oltp_system

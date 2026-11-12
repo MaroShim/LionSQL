@@ -1,0 +1,50 @@
+# test/slt_proc/babelfish_oracle/1538_babel_sys_types_before_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-types-before-dep-vu-prepare.sql, test/babelfish/raw/views/sys-types-before-dep-vu-verify.sql, test/babelfish/raw/views/sys-types-before-dep-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sys_types_dep_vu_prepare_db1;
+
+statement ok
+USE sys_types_dep_vu_prepare_db1
+
+statement ok
+CREATE PROCEDURE sys_types_dep_vu_prepare_p1 AS
+    SELECT count(*) FROM sys.types WHERE name = 'sys_types_dep_vu_prepare_ty1'
+
+statement ok
+CREATE FUNCTION sys_types_dep_vu_prepare_f1()
+RETURNS INT
+AS
+BEGIN
+    RETURN (SELECT count(*) FROM sys.types WHERE name = 'sys_types_dep_vu_prepare_ty1')
+END
+
+statement ok
+CREATE VIEW sys_types_dep_vu_prepare_v1 AS
+    SELECT count(*) FROM sys.types WHERE name = 'sys_types_dep_vu_prepare_ty1'
+
+statement ok
+CREATE VIEW sys_types_dep_vu_prepare_v2 AS
+    SELECT is_nullable FROM sys.types WHERE name = 'sys_types_dep_vu_prepare_ty1'
+
+statement ok
+CREATE PROCEDURE sys_types_dep_vu_prepare_p2 AS
+    SELECT is_nullable FROM sys.types WHERE name = 'sys_types_dep_vu_prepare_ty1'
+
+statement ok
+CREATE FUNCTION sys_types_dep_vu_prepare_f2()
+RETURNS sys.bit
+AS
+BEGIN
+    RETURN (SELECT is_nullable FROM sys.types WHERE name = 'sys_types_dep_vu_prepare_ty1')
+END
+
+statement ok
+USE sys_types_dep_vu_prepare_db1
+
+statement ok
+SELECT * FROM sys_types_dep_vu_prepare_v1
+
+statement ok
+SELECT * FROM sys_types_dep_vu_prepare_v2
+

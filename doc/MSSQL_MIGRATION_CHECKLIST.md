@@ -59,17 +59,18 @@ LionSQL natively supports core Microsoft SQL Server data types.
 1. **Variable Declaration**: `DECLARE @name VARCHAR(50) = 'Lion'; SET @id = 1;`
 2. **Conditional Logic**: `IF ... ELSE ... BEGIN ... END`
 3. **Loops**: `WHILE ... BEGIN ... BREAK; CONTINUE; END`
-4. **Exception Frames**: `BEGIN TRY ... COMMIT TRANSACTION; END TRY BEGIN CATCH ... ROLLBACK; END CATCH`
-5. **Transactions**: `BEGIN TRAN`, `COMMIT TRAN`, `ROLLBACK TRAN`, `@@TRANCOUNT`
-6. **Scalar Functions**: `LEN`, `SUBSTRING`, `CHARINDEX`, `REPLACE`, `CONCAT`, `ISNULL`, `COALESCE`, `GETDATE()`, `DATEDIFF`, `DATEADD`, `COMPRESS`, `DECOMPRESS`
+4. **Exception Handling & Error Raising**: `BEGIN TRY ... END TRY BEGIN CATCH ... END CATCH`, `THROW 50001, 'Error message', 1;`, standalone `THROW;` (re-throw), and `RAISERROR('Error message', 16, 1);`
+5. **Transactions**: `BEGIN TRAN`, `COMMIT TRAN`, `ROLLBACK TRAN`, `SAVE TRAN`, `@@TRANCOUNT`
+6. **Session Temporary Tables & Table Variables**:
+   - `CREATE TABLE #temp (...)`, `SELECT * INTO #temp FROM ...`, and `DECLARE @tbl TABLE (...)` work out of the box without modification.
+   - Even when running in WiredTiger disk mode, `#temp` tables, `@tbl` table variables, and CTEs (`WITH cte AS (...)`) are all accelerated in-memory via the pure-Go OCC engine without disk I/O overhead—so you can freely use whichever construct best fits your query structure (CTEs for single-query readability; `#temp` or `@tbl` when reusing intermediate results across multiple procedure steps).
+7. **Scalar Functions**: `LEN`, `SUBSTRING`, `CHARINDEX`, `REPLACE`, `CONCAT`, `ISNULL`, `COALESCE`, `GETDATE()`, `DATEDIFF`, `DATEADD`, `COMPRESS`, `DECOMPRESS`
 
 ### 3.2. Recommended Transformation Patterns
 1. **Cursors ➔ Set-Based Operations**:
-   - While LionSQL supports FORWARD-ONLY cursors, set-based queries (`UPDATE ... FROM`, `INSERT ... SELECT`) are strongly recommended for maximum OLTP throughput.
-2. **`THROW` ➔ `RAISERROR`**:
-   - Prefer `RAISERROR('Error message', 16, 1);` over `THROW`.
-3. **`SELECT * INTO #TempTable` ➔ CTE or Declared Tables**:
-   - Replace temporary tables with Common Table Expressions (`WITH cte AS (...)`).
+   - While LionSQL supports `FORWARD_ONLY` / `FAST_FORWARD` cursors without syntax changes, set-based queries (`UPDATE ... FROM`, `INSERT ... SELECT`, window functions) are recommended over row-by-row cursor loops for maximum OLTP throughput.
+2. **Legacy XML (`FOR XML`, `XQuery`) ➔ Modern JSON (`FOR JSON`, `JSON_VALUE`, `OPENJSON`)**:
+   - Replace legacy XML DML with native JSON functions (`ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`, `OPENJSON`, `FOR JSON PATH/AUTO`).
 
 ---
 

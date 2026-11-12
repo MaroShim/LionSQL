@@ -1,0 +1,1236 @@
+# test/slt_proc/babelfish_oracle/1595_babel_test_output_clause.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/test_output_clause-vu-prepare.sql, test/babelfish/raw/test_output_clause-vu-verify.sql, test/babelfish/raw/test_output_clause-vu-cleanup.sql
+
+statement ok
+/*
+ * ===================================================================================================================
+ *                                              1. Basic Output clause test
+ * ===================================================================================================================
+ */
+CREATE TABLE OutputTest (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+INSERT INTO OutputTest (ID, Name, Value) VALUES 
+(1, 'Test1', 100),
+(2, 'Test2', 200),
+(3, 'Test3', 300);
+
+statement ok
+CREATE TABLE OutputLog (
+    LogID INT,
+    Operation NVARCHAR(10),
+    ID INT,
+    Name NVARCHAR(50),
+    Value INT
+);
+
+statement ok
+CREATE VIEW OutputTestView AS
+SELECT ID, Name, Value, Status FROM OutputTest WHERE Status = 'Active';
+
+statement ok
+CREATE TABLE TriggerLog (
+    LogID INT,
+    TriggerType NVARCHAR(20),
+    TableName NVARCHAR(50),
+    RecordID INT
+);
+
+statement ok
+CREATE TRIGGER tr_OutputTest_Insert
+ON OutputTest
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO TriggerLog (LogID, TriggerType, TableName, RecordID)
+    SELECT inserted.ID + 1000, 'AFTER_INSERT', 'OutputTest', inserted.ID FROM inserted;
+END;
+
+statement ok
+CREATE TRIGGER tr_OutputTest_Update
+ON OutputTest
+AFTER UPDATE
+AS
+BEGIN
+    INSERT INTO TriggerLog (LogID, TriggerType, TableName, RecordID)
+    SELECT inserted.ID + 2000, 'AFTER_UPDATE', 'OutputTest', inserted.ID FROM inserted;
+END;
+
+statement ok
+CREATE TRIGGER tr_OutputTest_Delete
+ON OutputTest
+AFTER DELETE
+AS
+BEGIN
+    INSERT INTO TriggerLog (LogID, TriggerType, TableName, RecordID)
+    SELECT deleted.ID + 3000, 'AFTER_DELETE', 'OutputTest', deleted.ID FROM deleted;
+END;
+
+statement ok
+/*
+ * ===================================================================================================================
+ *                                              2. Triggers + DML with OUTPUT clause test
+ * ===================================================================================================================
+ */
+/*
+ * ----------------------------   2.1 All below tests are AFTER TRIGGERS test with output clause. --------------------------------------
+ */
+/*
+ * ------------------------------------------------------------------------------------
+ *  2.1.1 Scenerio -
+ *  Update command with output clause
+ *  AFTER trigger on update  
+ *  Another update inside AFTER trigger updating same row
+ * ------------------------------------------------------------------------------------
+ */
+CREATE TABLE EPQTest_Update_Update (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Counter INT DEFAULT 0,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+INSERT INTO EPQTest_Update_Update (ID, Name, Value, Counter) VALUES 
+(1, 'Row1', 100, 1),
+(2, 'Row2', 200, 2),
+(3, 'Row3', 300, 3);
+
+statement ok
+CREATE TRIGGER tr_EPQTest_After_Update
+ON EPQTest_Update_Update
+AFTER UPDATE
+AS
+BEGIN
+    UPDATE EPQTest_Update_Update 
+    SET Status = 'PostTrigger'
+    WHERE ID IN (SELECT ID FROM inserted);
+END;
+
+statement ok
+/*
+ * ------------------------------------------------------------------------------------
+ *  2.1.2 Scenerio -
+ *  Update command with output clause
+ *  AFTER trigger on update  
+ *  Delete inside AFTER trigger deleting same row
+ * ------------------------------------------------------------------------------------
+ */
+CREATE TABLE EPQTest_Update_Delete (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Counter INT DEFAULT 0,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+INSERT INTO EPQTest_Update_Delete (ID, Name, Value, Counter) VALUES 
+(1, 'Row1', 100, 1),
+(2, 'Row2', 200, 2),
+(3, 'Row3', 300, 3);
+
+statement ok
+CREATE TRIGGER tr_EPQTest_Delete_OnUpdate
+ON EPQTest_Update_Delete
+AFTER UPDATE
+AS
+BEGIN
+    DELETE FROM EPQTest_Update_Delete
+    WHERE ID IN (SELECT ID FROM inserted) ;
+END;
+
+statement ok
+/*
+ * ------------------------------------------------------------------------------------
+ *  2.1.3 Scenerio -
+ *  Delete command with output clause
+ *  AFTER trigger on Delete
+ *  Delete inside AFTER trigger deleting same row
+ * ------------------------------------------------------------------------------------
+ */
+CREATE TABLE EPQTest_Delete_Delete (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Counter INT DEFAULT 0,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+INSERT INTO EPQTest_Delete_Delete (ID, Name, Value, Counter) VALUES 
+(1, 'Row1', 100, 1),
+(2, 'Row2', 200, 2),
+(3, 'Row3', 300, 3);
+
+statement ok
+CREATE TRIGGER tr_EPQTest_Delete_OnDelete
+ON EPQTest_Delete_Delete
+AFTER DELETE
+AS
+BEGIN
+    DELETE FROM EPQTest_Delete_Delete 
+    WHERE Value < (SELECT MIN(Value) FROM deleted) + 50;
+END;
+
+statement ok
+/*
+ * ------------------------------------------------------------------------------------
+ *  2.1.4 Scenerio -
+ *  Delete command with output clause
+ *  AFTER trigger on Delete
+ *  Update inside AFTER trigger trying to update deleted row
+ * ------------------------------------------------------------------------------------
+ */
+CREATE TABLE EPQTest_Delete_Update (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Counter INT DEFAULT 0,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+INSERT INTO EPQTest_Delete_Update (ID, Name, Value, Counter) VALUES
+(1, 'Row1', 100, 1),
+(2, 'Row2', 200, 2),
+(3, 'Row3', 300, 3);
+
+statement ok
+CREATE TRIGGER tr_EPQTest_Update_Update_AfterDelete
+ON EPQTest_Delete_Update
+AFTER DELETE
+AS
+BEGIN
+    UPDATE EPQTest_Delete_Update
+    SET Status = 'Updated_After_Delete'
+    WHERE ID IN (SELECT ID FROM deleted);
+END;
+
+statement ok
+/*
+ * ------------------------------------------------------------------------------------
+ *  2.1.5 Scenerio -
+ *  Insert command with output clause
+ *  AFTER trigger on Insert
+ *  Delete inside trigger deleting new inserted row
+ * ------------------------------------------------------------------------------------
+ */
+CREATE TABLE EPQTest_Insert_Delete (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Counter INT DEFAULT 0,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+CREATE TRIGGER tr_EPQTest_Delete_AfterInsert
+ON EPQTest_Insert_Delete
+AFTER INSERT
+AS
+BEGIN
+    DELETE FROM EPQTest_Insert_Delete 
+    WHERE ID IN (SELECT ID FROM inserted);
+END;
+
+statement ok
+/*
+ * ------------------------------------------------------------------------------------
+ *  2.1.6 Scenerio -
+ *  Insert command with output clause
+ *  AFTER trigger on Insert
+ *  Update inside trigger Updating new inserted row
+ * ------------------------------------------------------------------------------------
+ */
+CREATE TABLE EPQTest_Insert_Update (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Counter INT DEFAULT 0,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+CREATE TRIGGER tr_EPQTest_Update_AfterInsert
+ON EPQTest_Insert_Update
+AFTER INSERT
+AS
+BEGIN
+    UPDATE EPQTest_Insert_Update 
+    SET Status = 'PostTrigger'
+    WHERE ID IN (SELECT ID FROM inserted);
+END;
+
+statement ok
+CREATE TABLE EPQOutputLog (
+    LogID INT,
+    SourceID INT,
+    OldValue INT,
+    NewValue INT,
+    LogStatus NVARCHAR(20)
+);
+
+statement ok
+CREATE TABLE EPQOutputLog_Str (
+    LogID INT,
+    SourceID INT,
+    OldValue NVARCHAR(30),
+    NewValue NVARCHAR(30),
+    LogStatus NVARCHAR(20)
+);
+
+statement ok
+/*
+ *  ----------------------------   2.2 All below tests are INSTEAD OF TRIGGERS test with output clause. --------------------------------------------
+ */
+/*
+ * ------------------------------------------------------------------------------------
+ *  2.2.1 Scenerio -
+ *  Update command with output clause
+ *  INSTEAD OF trigger on update 
+ *  Another update inside trigger updating same row
+ * ------------------------------------------------------------------------------------
+ */
+CREATE TABLE EPQTest_InsteadOf_Update_Update (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Counter INT DEFAULT 0,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+INSERT INTO EPQTest_InsteadOf_Update_Update (ID, Name, Value, Counter) VALUES 
+(1, 'Row1', 100, 1),
+(2, 'Row2', 200, 2),
+(3, 'Row3', 300, 3);
+
+statement ok
+CREATE TRIGGER tr_EPQTest_InsteadOf_Update_Update
+ON EPQTest_InsteadOf_Update_Update
+INSTEAD OF UPDATE
+AS
+BEGIN
+    UPDATE EPQTest_InsteadOf_Update_Update 
+    SET Value = i.Value + 10,
+        Counter = e.Counter + 1,
+        Status = 'Modified'
+    FROM EPQTest_InsteadOf_Update_Update e
+    INNER JOIN inserted i ON e.ID = i.ID;
+END;
+
+statement ok
+/*
+ * ------------------------------------------------------------------------------------
+ *  2.2.2 Scenerio -
+ *  Update command with output clause on view
+ *  INSTEAD OF trigger on update 
+ *  Delete inside trigger deleting same row
+ * ------------------------------------------------------------------------------------
+ */
+CREATE TABLE EPQTest_InsteadOf_Update_Delete (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Counter INT DEFAULT 0,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+INSERT INTO EPQTest_InsteadOf_Update_Delete (ID, Name, Value, Counter) VALUES 
+(1, 'Row1', 100, 1),
+(2, 'Row2', 200, 2),
+(3, 'Row3', 300, 3);
+
+statement ok
+CREATE TRIGGER tr_EPQTest_InsteadOf_Delete_OnUpdate
+ON EPQTest_InsteadOf_Update_Delete
+INSTEAD OF UPDATE
+AS
+BEGIN
+    DELETE FROM EPQTest_InsteadOf_Update_Delete
+    WHERE ID IN (SELECT ID FROM inserted);
+END;
+
+statement ok
+/*
+ * ------------------------------------------------------------------------------------
+ *  2.2.3 Scenerio -
+ *  Delete command with output clause on view
+ *  INSTEAD OF trigger on Delete 
+ *  Delete inside trigger deleting same row
+ * ------------------------------------------------------------------------------------
+ */
+CREATE TABLE EPQTest_InsteadOf_Delete_Delete (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Counter INT DEFAULT 0,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+INSERT INTO EPQTest_InsteadOf_Delete_Delete (ID, Name, Value, Counter) VALUES 
+(1, 'Row1', 100, 1),
+(2, 'Row2', 200, 2),
+(3, 'Row3', 300, 3);
+
+statement ok
+CREATE TRIGGER tr_EPQTest_InsteadOf_Delete_OnDelete
+ON EPQTest_InsteadOf_Delete_Delete
+INSTEAD OF DELETE
+AS
+BEGIN
+    DELETE FROM EPQTest_InsteadOf_Delete_Delete 
+    WHERE Value < (SELECT MIN(Value) FROM deleted) + 50;
+    DELETE FROM EPQTest_InsteadOf_Delete_Delete
+    WHERE ID IN (SELECT ID FROM deleted);
+END;
+
+statement ok
+/*
+ * ------------------------------------------------------------------------------------
+ *  2.2.4 Scenerio -
+ *  Delete command with output clause on view
+ *  INSTEAD OF trigger on Delete 
+ *  Update inside trigger updating deleted row
+ * ------------------------------------------------------------------------------------
+ */
+CREATE TABLE EPQTest_InsteadOf_Delete_Update (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Counter INT DEFAULT 0,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+INSERT INTO EPQTest_InsteadOf_Delete_Update (ID, Name, Value, Counter) VALUES
+(1, 'Row1', 100, 1),
+(2, 'Row2', 200, 2),
+(3, 'Row3', 300, 3);
+
+statement ok
+CREATE TRIGGER tr_EPQTest_InsteadOf_Update_OnDelete
+ON EPQTest_InsteadOf_Delete_Update
+INSTEAD OF DELETE
+AS
+BEGIN
+    UPDATE EPQTest_InsteadOf_Delete_Update
+    SET Status = 'Marked_For_Delete', Counter = Counter + 1000
+    WHERE ID IN (SELECT ID FROM deleted);
+END;
+
+statement ok
+/*
+ * ------------------------------------------------------------------------------------
+ *  2.2.5 Scenerio -
+ *  Insert command with output clause on view
+ *  INSTEAD OF trigger on Insert 
+ *  Delete inside trigger deleting new inserted row
+ * ------------------------------------------------------------------------------------
+ */
+CREATE TABLE EPQTest_InsteadOf_Insert_Delete (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Counter INT DEFAULT 0,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+CREATE TRIGGER tr_EPQTest_InsteadOf_Delete_OnInsert
+ON EPQTest_InsteadOf_Insert_Delete
+INSTEAD OF INSERT
+AS
+BEGIN
+    DELETE FROM EPQTest_InsteadOf_Insert_Delete 
+    WHERE Value < (SELECT MIN(Value) FROM inserted);
+    INSERT INTO EPQTest_InsteadOf_Insert_Delete (ID, Name, Value, Counter, Status)
+    SELECT ID, Name, Value, Counter, Status FROM inserted;
+END;
+
+statement ok
+/*
+ * ------------------------------------------------------------------------------------
+ *  2.2.6 Scenerio -
+ *  Insert command with output clause on view
+ *  INSTEAD OF trigger on Insert 
+ *  Update inside trigger Updating new inserted row
+ * ------------------------------------------------------------------------------------
+ */
+CREATE TABLE EPQTest_InsteadOf_Insert_Update (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT,
+    Counter INT DEFAULT 0,
+    Status NVARCHAR(20) DEFAULT 'Active'
+);
+
+statement ok
+CREATE TRIGGER tr_EPQTest_InsteadOf_Update_OnInsert
+ON EPQTest_InsteadOf_Insert_Update
+INSTEAD OF INSERT
+AS
+BEGIN
+    UPDATE EPQTest_InsteadOf_Insert_Update 
+    SET Status = 'Updated_By_Insert', Counter = Counter + 500
+    WHERE Value < (SELECT MAX(Value) FROM inserted);
+    INSERT INTO EPQTest_InsteadOf_Insert_Update (ID, Name, Value, Counter, Status)
+    SELECT ID, Name, Value, Counter, 'Inserted_Via_Trigger' FROM inserted;
+END;
+
+statement ok
+CREATE TABLE t_upd_output_babel6885 (id INT, val INT, name VARCHAR(50));
+
+statement ok
+INSERT INTO t_upd_output_babel6885 VALUES (1, 10, 'row1'), (2, 20, 'row2'), (3, 30, 'row3');
+
+statement ok
+CREATE TABLE t_multicol_output_babel6885 (id INT, a INT, b INT, c INT, d INT);
+
+statement ok
+INSERT INTO t_multicol_output_babel6885 VALUES (1, 10, 20, 30, 40), (2, 11, 21, 31, 41);
+
+query TTT
+/*
+ * |  #  |                    Test Case                     |        Type         |                    Remark                     |
+ * |-----|--------------------------------------------------|---------------------|-----------------------------------------------|
+ * |  1  | INSERT with OUTPUT                               | Basic DML           | Tests basic INSERT OUTPUT clause             |
+ * |  2  | UPDATE with OUTPUT                               | Basic DML           | Tests basic UPDATE OUTPUT clause             |
+ * |  3  | DELETE with OUTPUT                               | Basic DML           | Tests basic DELETE OUTPUT clause             |
+ * |  4  | INSERT with OUTPUT INTO                          | OUTPUT INTO         | Tests INSERT OUTPUT INTO target table        |
+ * |  5  | UPDATE with OUTPUT INTO                          | OUTPUT INTO         | Tests UPDATE OUTPUT INTO target table        |
+ * |  6  | DELETE with OUTPUT INTO                          | OUTPUT INTO         | Tests DELETE OUTPUT INTO target table        |
+ * |  7  | Multiple row UPDATE with OUTPUT                  | Multi-row           | Tests OUTPUT with multiple affected rows     |
+ * |  8  | OUTPUT with computed columns                     | Computed Values     | Tests OUTPUT with calculated expressions     |
+ * |  9  | OUTPUT with dependent objects (view)             | View Integration    | Tests OUTPUT with view dependencies          |
+ * | 10  | UPDATE base table with OUTPUT (view test)        | View Operations     | Tests OUTPUT on base table through view      |
+ * | 11  | INSERT with OUTPUT and trigger interaction       | Trigger Basic       | Tests OUTPUT with trigger execution          |
+ * | 12  | UPDATE with OUTPUT and trigger interaction       | Trigger Basic       | Tests OUTPUT with trigger modifications      |
+ * | 13  | DELETE with OUTPUT and trigger interaction       | Trigger Basic       | Tests OUTPUT with trigger deletions          |
+ * | 14  | Multiple operations with triggers and OUTPUT INTO| Trigger Batch       | Tests batch operations with triggers         |
+ * | 15  | OUTPUT with trigger execution order validation   | Trigger Order       | Tests OUTPUT timing with trigger execution   |
+ * | 16  | Same Row UPDATE with OUTPUT (EPQ scenario)       | EPQ Complex         | Tests EPQ when trigger updates same row      |
+ * | 17  | UPDATE with AFTER UPDATE trigger (EPQ)           | AFTER Trigger EPQ   | Tests EPQ with UPDATE inside UPDATE trigger  |
+ * | 18  | UPDATE with AFTER DELETE trigger (EPQ)           | AFTER Trigger EPQ   | Tests EPQ with DELETE inside UPDATE trigger  |
+ * | 19  | DELETE with AFTER DELETE trigger (EPQ)           | AFTER Trigger EPQ   | Tests EPQ with DELETE inside DELETE trigger  |
+ * | 20  | DELETE with AFTER UPDATE trigger (EPQ)           | AFTER Trigger EPQ   | Tests EPQ with UPDATE inside DELETE trigger  |
+ * | 21  | INSERT with AFTER DELETE trigger (EPQ)           | AFTER Trigger EPQ   | Tests EPQ with DELETE inside INSERT trigger  |
+ * | 22  | INSERT with AFTER UPDATE trigger (EPQ)           | AFTER Trigger EPQ   | Tests EPQ with UPDATE inside INSERT trigger  |
+ * | 23  | INSTEAD OF UPDATE with UPDATE trigger            | INSTEAD OF EPQ      | Tests INSTEAD OF UPDATE OUTPUT with EPQ      |
+ * | 24  | INSTEAD OF UPDATE with DELETE trigger            | INSTEAD OF EPQ      | Tests INSTEAD OF UPDATE OUTPUT with DELETE   |
+ * | 25  | INSTEAD OF DELETE with DELETE trigger            | INSTEAD OF EPQ      | Tests INSTEAD OF DELETE OUTPUT cascading    |
+ * | 26  | INSTEAD OF DELETE with UPDATE trigger            | INSTEAD OF EPQ      | Tests INSTEAD OF DELETE OUTPUT with UPDATE   |
+ * | 27  | INSTEAD OF INSERT with DELETE trigger            | INSTEAD OF EPQ      | Tests INSTEAD OF INSERT OUTPUT with DELETE   |
+ * | 28  | INSTEAD OF INSERT with UPDATE trigger            | INSTEAD OF EPQ      | Tests INSTEAD OF INSERT OUTPUT with UPDATE   |
+ */
+/*
+ * ===================================================================================================================
+ *                                              1. Basic Output clause test
+ * ===================================================================================================================
+ */
+INSERT INTO OutputTest (ID, Name, Value) 
+OUTPUT inserted.ID, inserted.Name, inserted.Value
+VALUES (4, 'NewTest', 400);
+----
+4 NewTest 400
+
+query TTT
+UPDATE OutputTest 
+SET Value = OutputTest.Value + 50
+OUTPUT deleted.Name, deleted.Value as OldValue, inserted.Value as NewValue
+WHERE ID = 1;
+----
+Test1 100 150
+
+query TTT
+DELETE FROM OutputTest
+OUTPUT deleted.ID, deleted.Name, deleted.Value
+WHERE ID = 2;
+----
+2 Test2 200
+
+query TTTTT
+INSERT INTO OutputTest (ID, Name, Value)
+OUTPUT 1, 'INSERT', inserted.ID, inserted.Name, inserted.Value INTO OutputLog (LogID, Operation, ID, Name, Value)
+VALUES (5, 'LoggedTest', 500);
+----
+NULL NULL 5 LoggedTest NULL
+
+query TTTTT
+UPDATE OutputTest
+SET Status = 'Updated'
+OUTPUT 2, 'UPDATE', inserted.ID, inserted.Name, inserted.Value INTO OutputLog (LogID, Operation, ID, Name, Value)
+WHERE ID = 3;
+----
+NULL NULL 3 Test3 NULL
+
+query TTTTT
+DELETE FROM OutputTest
+OUTPUT 3, 'DELETE', deleted.ID, deleted.Name, deleted.Value INTO OutputLog (LogID, Operation, ID, Name, Value)
+WHERE Name = 'LoggedTest';
+----
+NULL NULL 5 LoggedTest NULL
+
+query TTT
+UPDATE OutputTest
+SET Value = OutputTest.Value * 2
+OUTPUT deleted.ID, deleted.Value as Before, inserted.Value as After
+WHERE OutputTest.Value > 100;
+----
+1 150 300
+3 300 600
+4 400 800
+
+query TTTT
+INSERT INTO OutputTest (ID, Name, Value)
+OUTPUT inserted.ID, inserted.Name, inserted.Value, inserted.Value * 2 as DoubleValue
+VALUES (6, 'Computed', 250);
+----
+6 Computed 250 NULL
+
+query TTT
+INSERT INTO OutputTest (ID, Name, Value, Status)
+OUTPUT inserted.ID, inserted.Name, inserted.Status
+VALUES (7, 'ViewTest', 600, 'Active');
+----
+7 ViewTest Active
+
+query TTT
+UPDATE OutputTest
+SET Value = 999
+OUTPUT deleted.Name, deleted.Value as OldValue, inserted.Value as NewValue
+WHERE Name = 'ViewTest' AND Status = 'Active';
+----
+ViewTest 600 999
+
+query TTT
+INSERT INTO OutputTest (ID, Name, Value)
+OUTPUT inserted.ID, inserted.Name, 'TRIGGER_TEST' as TestType
+VALUES (8, 'TriggerTest1', 700);
+----
+8 TriggerTest1 NULL
+
+query TTT
+UPDATE OutputTest
+SET Value = OutputTest.Value + 100, Status = 'Modified'
+OUTPUT deleted.Status as OldStatus, inserted.Status as NewStatus, inserted.ID
+WHERE Name = 'TriggerTest1';
+----
+Active Modified 8
+
+query TTT
+DELETE FROM OutputTest
+OUTPUT deleted.ID, deleted.Name, 'DELETED_BY_TRIGGER_TEST' as Note
+WHERE Name = 'TriggerTest1';
+----
+8 TriggerTest1 NULL
+
+query TTTTT
+INSERT INTO OutputTest (ID, Name, Value)
+OUTPUT 4, 'MULTI_OP', inserted.ID, inserted.Name, inserted.Value INTO OutputLog (LogID, Operation, ID, Name, Value)
+VALUES (9, 'MultiOp1', 800), (10, 'MultiOp2', 900);
+----
+NULL NULL 9 MultiOp1 NULL
+NULL NULL 10 MultiOp2 NULL
+
+query TTTTT
+UPDATE OutputTest
+SET Status = 'Batch_Updated'
+OUTPUT 5, 'BATCH_UPD', inserted.ID, inserted.Name, inserted.Value INTO OutputLog (LogID, Operation, ID, Name, Value)
+WHERE Name LIKE 'MultiOp%';
+----
+NULL NULL 10 MultiOp2 NULL
+NULL NULL 9 MultiOp1 NULL
+
+query TTT
+INSERT INTO OutputTest (ID, Name, Value)
+OUTPUT inserted.ID, inserted.Name, 'OrderTest_Time' as OutputTime
+VALUES (11, 'OrderTest', 1000);
+----
+11 OrderTest NULL
+
+statement ok
+INSERT INTO OutputTest (ID, Name, Value, Status) VALUES (12, 'SameRowTest', 1100, 'Active');
+
+query TTTT
+UPDATE OutputTest
+SET Value = 1200
+OUTPUT deleted.Value as OriginalOldValue, inserted.Value as OriginalNewValue, 
+       deleted.Status as OriginalOldStatus, inserted.Status as OriginalNewStatus
+WHERE Name = 'SameRowTest';
+----
+1100 1200 Active Active
+
+query TTTT
+SELECT ID, Name, Value, Status FROM OutputTest WHERE Name = 'SameRowTest';
+----
+12 SameRowTest 1200 Active
+
+statement ok
+SELECT * FROM OutputLog ORDER BY LogID;
+
+statement ok
+SELECT * FROM TriggerLog ORDER BY LogID;
+
+query TTTT
+SELECT * FROM OutputTestView ORDER BY ID;
+----
+1 Test1 300 Active
+4 NewTest 800 Active
+6 Computed 250 Active
+7 ViewTest 999 Active
+11 OrderTest 1000 Active
+12 SameRowTest 1200 Active
+
+query TTTT
+SELECT * FROM OutputTest ORDER BY ID;
+----
+1 Test1 300 Active
+3 Test3 600 Updated
+4 NewTest 800 Active
+6 Computed 250 Active
+7 ViewTest 999 Active
+9 MultiOp1 800 Batch_Updated
+10 MultiOp2 900 Batch_Updated
+11 OrderTest 1000 Active
+12 SameRowTest 1200 Active
+
+query TTTTTT
+/*
+ * ===================================================================================================================
+ *                                              2. Triggers with DML test.
+ * ===================================================================================================================
+ */
+/*
+ * 2.1 All below tests are AFTER TRIGGERS test with output clause
+ */
+UPDATE EPQTest_Update_Update
+SET Value = 500
+OUTPUT 
+    deleted.ID,
+    deleted.Name,
+    deleted.Value as OldValue,
+    deleted.Counter as OldCounter,
+    inserted.Value as NewValue,
+    inserted.Counter as NewCounter
+WHERE ID = 1;
+----
+1 Row1 100 1 500 1
+
+query TTTTT
+UPDATE EPQTest_Update_Update
+SET Value = 999
+OUTPUT 
+    1,
+    inserted.ID,
+    deleted.Value,
+    inserted.Value,
+    'Logged'
+INTO EPQOutputLog (LogID, SourceID, OldValue, NewValue, LogStatus)
+WHERE ID = 1;
+----
+NULL 1 999 999 NULL
+
+statement ok
+SELECT * FROM EPQTest_Update_Update ORDER BY ID;
+SELECT * FROM EPQOutputLog ORDER BY LogID;
+
+statement ok
+delete from EPQOutputLog;
+
+query TTTTT
+UPDATE EPQTest_Update_Delete 
+SET Value = 999
+OUTPUT 
+    1,
+    inserted.ID,
+    deleted.Value,
+    inserted.Value,
+    'Logged'
+INTO EPQOutputLog (LogID, SourceID, OldValue, NewValue, LogStatus)
+WHERE ID = 1;
+----
+NULL 1 999 999 NULL
+
+statement ok
+SELECT * FROM EPQTest_Update_Delete ORDER BY ID;
+SELECT * FROM EPQOutputLog ORDER BY LogID;
+
+statement ok
+delete from EPQOutputLog;
+
+query TTT
+DELETE FROM EPQTest_Delete_Delete
+OUTPUT deleted.ID, deleted.Name, deleted.Value
+WHERE ID = 2;
+----
+2 Row2 200
+
+statement ok
+SELECT * FROM EPQTest_Delete_Delete ORDER BY ID;
+SELECT * FROM EPQOutputLog ORDER BY LogID;
+
+statement ok
+delete from EPQOutputLog;
+
+query TTT
+DELETE FROM EPQTest_Delete_Update
+OUTPUT deleted.ID, deleted.Name, deleted.Value
+WHERE ID = 2;
+----
+2 Row2 200
+
+statement ok
+SELECT * FROM EPQTest_Delete_Update ORDER BY ID;
+SELECT * FROM EPQOutputLog ORDER BY LogID;
+
+statement ok
+delete from EPQOutputLog;
+
+query TTTTT
+INSERT INTO EPQTest_Insert_Delete (ID, Name, Value, Counter)
+OUTPUT 
+    1,
+    1,
+    deleted.ID,
+    inserted.ID,
+    'Logged'
+INTO EPQOutputLog (LogID, SourceID, OldValue, NewValue, LogStatus)
+VALUES (1, 'Row1', 100, 1);
+----
+NULL NULL 1 1 NULL
+
+statement ok
+SELECT * FROM EPQTest_Insert_Delete ORDER BY ID;
+SELECT * FROM EPQOutputLog ORDER BY LogID;
+
+statement ok
+delete from EPQOutputLog;
+
+query TTTTT
+INSERT INTO EPQTest_Insert_Update (ID, Name, Value, Counter)
+OUTPUT 
+    1,
+    1,
+    'NA',
+    inserted.Status,
+    'Logged'
+INTO EPQOutputLog_Str (LogID, SourceID, OldValue, NewValue, LogStatus)
+VALUES (1, 'Row1', 100, 1);
+----
+NULL NULL NULL Active NULL
+
+statement ok
+SELECT * FROM EPQTest_Insert_Update ORDER BY ID;
+SELECT * FROM EPQOutputLog_Str ORDER BY LogID;
+
+statement ok
+delete from EPQOutputLog_Str;
+
+statement ok
+/*
+* ------------------------------------------------------------------------------------
+*  INSTEAD OF Update  + update inside update trigger
+* ------------------------------------------------------------------------------------
+*/
+CREATE TABLE OutputCapture (
+    TestCase NVARCHAR(50),
+    ID INT,
+    Name NVARCHAR(50),
+    OldValue INT
+);
+
+query TTTT
+UPDATE EPQTest_InsteadOf_Update_Update
+SET Value = 1500
+OUTPUT 'InsteadOf_Update_Update', deleted.ID, deleted.Name, deleted.Value
+INTO OutputCapture (TestCase, ID, Name, OldValue)
+WHERE ID = 1;
+----
+NULL 1 Row1 NULL
+
+statement ok
+SELECT 'INSTEAD OF Update+Update OUTPUT' as TestPhase, * FROM OutputCapture;
+
+query TTTT
+delete from OutputCapture;
+/*
+* ------------------------------------------------------------------------------------
+*  INSTEAD OF Update  + delete inside update trigger
+* ------------------------------------------------------------------------------------
+*/
+UPDATE EPQTest_InsteadOf_Update_Delete
+SET Value = 2000
+OUTPUT 'InsteadOf_Update_Delete', deleted.ID, deleted.Name, deleted.Value
+INTO OutputCapture (TestCase, ID, Name, OldValue)
+WHERE ID = 1;
+----
+NULL 1 Row1 NULL
+
+statement ok
+SELECT 'INSTEAD OF Update+Delete OUTPUT' as TestPhase, * FROM OutputCapture;
+
+statement ok
+DELETE FROM OutputCapture;
+
+query TTTT
+/*
+* ------------------------------------------------------------------------------------
+*  INSTEAD OF Delete  + delete inside delete trigger
+* ------------------------------------------------------------------------------------
+*/
+DELETE FROM EPQTest_InsteadOf_Delete_Delete
+OUTPUT 'InsteadOf_Delete_Delete', deleted.ID, deleted.Name, deleted.Value
+INTO OutputCapture (TestCase, ID, Name, OldValue)
+WHERE ID = 2;
+----
+NULL 2 Row2 NULL
+
+statement ok
+SELECT 'INSTEAD OF Delete+Delete OUTPUT' as TestPhase, * FROM OutputCapture;
+
+statement ok
+DELETE FROM OutputCapture;
+
+query TTTT
+/*
+* ------------------------------------------------------------------------------------
+*  INSTEAD OF Delete  + update inside delete trigger
+* ------------------------------------------------------------------------------------
+*/
+DELETE FROM EPQTest_InsteadOf_Delete_Update
+OUTPUT 'InsteadOf_Delete_Update', deleted.ID, deleted.Name, deleted.Counter
+INTO OutputCapture (TestCase, ID, Name, OldValue)
+WHERE ID = 1;
+----
+NULL 1 Row1 NULL
+
+statement ok
+SELECT 'INSTEAD OF Delete+Update OUTPUT' as TestPhase, * FROM OutputCapture;
+
+statement ok
+SELECT 'INSTEAD OF Delete+Update' as TestPhase, * FROM EPQTest_InsteadOf_Delete_Update WHERE ID = 1;
+
+statement ok
+DELETE FROM OutputCapture;
+
+statement ok
+/*
+* ------------------------------------------------------------------------------------
+*  INSTEAD OF Insert  + delete inside insert trigger
+* ------------------------------------------------------------------------------------
+*/
+CREATE TABLE OutputCapture_insert (
+    TestCase NVARCHAR(50),
+    ID INT,
+    Name NVARCHAR(50),
+    OldValue INT,
+    NewValue INT,
+    Status NVARCHAR(50)
+);
+
+statement ok
+INSERT INTO EPQTest_InsteadOf_Insert_Delete (ID, Name, Value, Counter) VALUES (1, 'Existing1', 50, 1);
+
+query TTTTTT
+INSERT INTO EPQTest_InsteadOf_Insert_Delete (ID, Name, Value, Counter, Status)
+OUTPUT 'InsteadOf_Insert_Delete', inserted.ID, inserted.Name, 0, inserted.Value, inserted.Status
+INTO OutputCapture_insert (TestCase, ID, Name, OldValue, NewValue, Status)
+VALUES (2, 'NewRow', 100, 2, 'Active');
+----
+NULL 2 NewRow NULL 100 NULL
+
+statement ok
+SELECT 'INSTEAD OF Insert+Delete OUTPUT' as TestPhase, * FROM OutputCapture_insert;
+
+query TTTTT
+SELECT * FROM EPQTest_InsteadOf_Insert_Delete ORDER BY ID;
+----
+1 Existing1 50 1 Active
+2 NewRow 100 2 Active
+
+statement ok
+delete from OutputCapture_insert;
+
+statement ok
+/*
+* ------------------------------------------------------------------------------------
+*  INSTEAD OF Insert  + update inside insert trigger
+* ------------------------------------------------------------------------------------
+*/
+INSERT INTO EPQTest_InsteadOf_Insert_Update (ID, Name, Value, Counter) VALUES (1, 'Existing1', 50, 1);
+
+query TTTTTT
+INSERT INTO EPQTest_InsteadOf_Insert_Update (ID, Name, Value, Counter, Status)
+OUTPUT 'InsteadOf_Insert_Update', inserted.ID, inserted.Name, 0, inserted.Value, inserted.Status
+INTO OutputCapture_insert (TestCase, ID, Name, OldValue, NewValue, Status)
+VALUES (2, 'NewRow', 200, 2, 'Active');
+----
+NULL 2 NewRow NULL 200 NULL
+
+statement ok
+SELECT 'INSTEAD OF Insert+Update OUTPUT' as TestPhase, * FROM OutputCapture_insert;
+
+query TTTTT
+SELECT * FROM EPQTest_InsteadOf_Insert_Update ORDER BY ID;
+----
+1 Existing1 50 1 Active
+2 NewRow 200 2 Active
+
+statement ok
+DROP TABLE OutputCapture_insert;
+DROP TABLE OutputCapture;
+
+query TTT
+UPDATE t_upd_output_babel6885
+SET val = val * 2
+OUTPUT id, deleted.val AS old_val, val AS new_val;
+----
+1 10 20
+2 20 40
+3 30 60
+
+query TTT
+UPDATE t_upd_output_babel6885
+SET name = name + '_updated'
+OUTPUT id, name, deleted.name AS old_name
+WHERE id > 1;
+----
+2 row2_updated row2
+3 row3_updated row3
+
+query TTTTT
+UPDATE t_upd_output_babel6885
+SET val = val + 1, name = name + '_v3'
+OUTPUT id, val AS new_val, deleted.val AS old_val, name AS new_name, deleted.name AS old_name
+WHERE id = 1;
+----
+1 21 20 row1_v3 row1
+
+query TTTTTT
+DELETE FROM t_upd_output_babel6885
+OUTPUT id, val, name, deleted.id AS del_id, deleted.val AS del_val, deleted.name AS del_name
+WHERE id = 2;
+----
+2 40 row2_updated 2 40 row2_updated
+
+query TTTTTT
+INSERT INTO t_upd_output_babel6885 (id, val, name)
+OUTPUT id, val, name, inserted.id AS ins_id, inserted.val AS ins_val, inserted.name AS ins_name
+VALUES (99, 999, 'inserted_row');
+----
+99 999 inserted_row 99 999 inserted_row
+
+query TTTTTTTTTT
+UPDATE t_multicol_output_babel6885
+SET a = a + 1, b = b + 1, c = c + 1
+OUTPUT id, a AS new_a, inserted.a AS ins_a, deleted.a AS old_a,
+          b AS new_b, inserted.b AS ins_b, deleted.b AS old_b,
+          c AS new_c, inserted.c AS ins_c, deleted.c AS old_c
+WHERE id = 1;
+----
+1 11 11 10 21 21 20 31 31 30
+
+query TTTTTTTTTTTTT
+UPDATE t_multicol_output_babel6885
+SET a = a + 1, b = b + 1, c = c + 1, d = d + 1
+OUTPUT id, a AS new_a, inserted.a AS ins_a, deleted.a AS old_a,
+          b AS new_b, inserted.b AS ins_b, deleted.b AS old_b,
+          c AS new_c, inserted.c AS ins_c, deleted.c AS old_c,
+          d AS new_d, inserted.d AS ins_d, deleted.d AS old_d
+WHERE id = 1;
+----
+1 12 12 11 22 22 21 32 32 31 41 41 40
+
+statement ok
+DROP TRIGGER IF EXISTS tr_EPQTest_InsteadOf_Update_Update;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_EPQTest_InsteadOf_Delete_OnUpdate;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_EPQTest_InsteadOf_Delete_OnDelete;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_EPQTest_InsteadOf_Update_OnDelete;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_EPQTest_InsteadOf_Delete_OnInsert;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_EPQTest_InsteadOf_Update_OnInsert;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_InsteadOf_Mixed;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_OutputTest_Insert;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_OutputTest_Update;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_OutputTest_Delete;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_EPQTest_After_Update;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_EPQTest_Delete_OnUpdate;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_EPQTest_Delete_OnDelete;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_EPQTest_Update_Update_AfterDelete;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_EPQTest_Delete_AfterInsert;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_EPQTest_Update_AfterInsert;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_Update_Delete_Deadlock;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_Delete_Update_Deadlock;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_After_Mixed;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_InsteadOf_MixedDelete;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_After_MixedDelete;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_InsteadOf_MixedInsert;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_After_MixedInsert;
+
+statement ok
+DROP VIEW IF EXISTS OutputTestView;
+
+statement ok
+DROP VIEW IF EXISTS EPQView_Update_Update;
+
+statement ok
+DROP VIEW IF EXISTS EPQView_Update_Delete;
+
+statement ok
+DROP VIEW IF EXISTS EPQView_Delete_Delete;
+
+statement ok
+DROP VIEW IF EXISTS EPQView_Delete_Update;
+
+statement ok
+DROP VIEW IF EXISTS EPQView_Insert_Delete;
+
+statement ok
+DROP VIEW IF EXISTS EPQView_Insert_Update;
+
+statement ok
+DROP VIEW IF EXISTS MixedTriggerViewDelete;
+
+statement ok
+DROP VIEW IF EXISTS MixedTriggerViewInsert;
+
+statement ok
+DROP TABLE IF EXISTS OutputTest;
+
+statement ok
+DROP TABLE IF EXISTS OutputLog;
+
+statement ok
+DROP TABLE IF EXISTS TriggerLog;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_Update_Update;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_Update_Delete;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_Delete_Delete;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_Delete_Update;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_Insert_Delete;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_Insert_Update;
+
+statement ok
+DROP TABLE IF EXISTS EPQOutputLog;
+
+statement ok
+DROP TABLE IF EXISTS EPQOutputLog_Str;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_InsteadOf_Update_Update;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_InsteadOf_Update_Delete;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_InsteadOf_Delete_Delete;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_InsteadOf_Delete_Update;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_InsteadOf_Insert_Delete;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_InsteadOf_Insert_Update;
+
+statement ok
+DROP TABLE IF EXISTS EPQTest_Delete_Update_deadlock;
+
+statement ok
+DROP TABLE IF EXISTS MixedTriggerTest;
+
+statement ok
+DROP TABLE IF EXISTS TriggerOutputLogMixed;
+
+statement ok
+DROP TABLE IF EXISTS MixedTriggerTestDelete;
+
+statement ok
+DROP TABLE IF EXISTS TriggerOutputLogMixedDelete;
+
+statement ok
+DROP TABLE IF EXISTS MixedTriggerTestInsert;
+
+statement ok
+DROP TABLE IF EXISTS TriggerOutputLogMixedInsert;
+
+statement ok
+DROP TABLE IF EXISTS OutputCapture;
+
+statement ok
+DROP TABLE IF EXISTS TriggerOutputLogMixed;
+
+statement ok
+DROP TABLE IF EXISTS outputresults;
+
+statement ok
+DROP TABLE IF EXISTS t_upd_output_babel6885;
+
+statement ok
+DROP TABLE IF EXISTS t_multicol_output_babel6885;
+

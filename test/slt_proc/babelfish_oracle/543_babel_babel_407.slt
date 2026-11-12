@@ -1,0 +1,26 @@
+# test/slt_proc/babelfish_oracle/543_babel_babel_407.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-407.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE FUNCTION babel_407_func (@a INT) 
+RETURNS TABLE AS
+RETURN (SELECT @a + 1 AS col);
+
+statement ok
+CREATE VIEW babel_407_view AS
+SELECT * FROM babel_407_func(123)
+
+query T
+SELECT * FROM babel_407_view
+----
+124
+
+statement ok
+DROP VIEW babel_407_view
+
+statement ok
+DROP FUNCTION babel_407_func
+

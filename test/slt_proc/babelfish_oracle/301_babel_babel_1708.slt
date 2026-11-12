@@ -1,0 +1,84 @@
+# test/slt_proc/babelfish_oracle/301_babel_babel_1708.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1708.sql
+
+query T
+SELECT CAST(-214748.3648 AS smallmoney);
+----
+-214748.364800
+
+query T
+SELECT CAST('214748.3647' AS smallmoney);
+----
+214748.3647
+
+query T
+SELECT CAST('-214748.3648' AS smallmoney);
+----
+-214748.3648
+
+query T
+SELECT CAST(-922337203685477.5808 AS money);
+----
+-922337203685477.625000
+
+query T
+SELECT CAST('922337203685477.5807' AS money);
+----
+922337203685477.5807
+
+query T
+SELECT CAST('-922337203685477.5808' AS money);
+----
+-922337203685477.5808
+
+query T
+SELECT CAST(-214748.3649 AS smallmoney);
+----
+-214748.364900
+
+query T
+SELECT CAST('214748.3648' AS smallmoney);
+----
+214748.3648
+
+query T
+SELECT CAST('-214748.3649' AS smallmoney);
+----
+-214748.3649
+
+query T
+SELECT CAST(-922337203685477.5809 AS money);
+----
+-922337203685477.625000
+
+query T
+SELECT CAST('922337203685477.5808' AS money);
+----
+922337203685477.5808
+
+query T
+SELECT CAST('-922337203685477.5809' AS money);
+----
+-922337203685477.5809
+
+statement ok
+CREATE TABLE t1 (a smallmoney, b money)
+
+statement ok
+INSERT INTO t1 VALUES ($214748.3647, 0), (-214748.3648, 0), (0, 922337203685477.5807), (0, -922337203685477.5808)
+
+statement ok
+INSERT INTO t1 VALUES ($214748.3648, 0)
+
+statement ok
+INSERT INTO t1 VALUES (-214748.3649, 0)
+
+statement ok
+INSERT INTO t1 VALUES (0, 922337203685477.5808)
+
+statement ok
+INSERT INTO t1 VALUES (0, -922337203685477.5809)
+
+statement ok
+DROP TABLE t1;
+

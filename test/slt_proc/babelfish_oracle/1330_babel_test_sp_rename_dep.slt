@@ -1,0 +1,69 @@
+# test/slt_proc/babelfish_oracle/1330_babel_test_sp_rename_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_rename-dep-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_rename-dep-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_rename-dep-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE SCHEMA sp_rename_dep_schema1
+
+statement ok
+CREATE TABLE sp_rename_dep_schema1.sp_rename_dep_dummy_table1(sp_rename_t1_col1 int, sp_rename_t1_col2 int);
+
+statement ok
+CREATE FUNCTION sp_rename_dep_dummy_func1() 
+RETURNS INT
+AS 
+BEGIN
+    RETURN 1;
+END
+
+statement ok
+CREATE PROCEDURE sp_rename_dep_proc1
+AS
+BEGIN
+    EXEC sp_rename 'sp_rename_dep_schema1.sp_rename_dep_dummy_table1', 'sp_rename_dep_dummy_table1_new', 'OBJECT';
+    SELECT * FROM information_schema.tables WHERE TABLE_NAME LIKE '%sp_rename_dep%'
+    ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME
+END
+
+statement ok
+CREATE PROCEDURE sp_rename_dep_proc2
+AS
+BEGIN
+    EXEC sp_rename 'sp_rename_dep_dummy_func1', 'sp_rename_dep_dummy_func1_new', 'OBJECT';
+    SELECT ROUTINE_CATALOG, ROUTINE_SCHEMA, ROUTINE_NAME, ROUTINE_TYPE 
+    FROM information_schema.routines WHERE ROUTINE_NAME LIKE '%sp_rename_dep%' 
+    ORDER BY ROUTINE_CATALOG, ROUTINE_SCHEMA, ROUTINE_NAME
+END
+
+statement ok
+CREATE PROCEDURE sp_rename_dep_proc3
+AS
+BEGIN
+    EXEC babelfish_sp_rename_internal 'sp_rename_dep_dummy_table1_new', 'sp_rename_dep_dummy_table1', 'sp_rename_dep_schema1', 'U';
+    SELECT * FROM information_schema.tables WHERE TABLE_NAME LIKE '%sp_rename_dep%'
+    ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME
+END
+
+statement ok
+USE master
+
+statement ok
+USE master
+
+statement ok
+DROP PROCEDURE sp_rename_dep_proc1
+
+statement ok
+DROP PROCEDURE sp_rename_dep_proc2
+
+statement ok
+DROP PROCEDURE sp_rename_dep_proc3
+
+statement ok
+DROP TABLE sp_rename_dep_schema1.sp_rename_dep_dummy_table1
+
+statement ok
+DROP SCHEMA sp_rename_dep_schema1
+

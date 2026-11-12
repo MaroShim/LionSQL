@@ -1,0 +1,36 @@
+# test/slt_proc/babelfish_oracle/1230_babel_babel_4098.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4098-vu-prepare.sql, test/babelfish/raw/BABEL-4098-vu-verify.sql, test/babelfish/raw/BABEL-4098-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE babel_4098_db;
+
+statement ok
+use babel_4098_db;
+
+statement ok
+create schema babel_4098;
+
+statement ok
+CREATE SEQUENCE babel_4098.seq1 AS INT START WITH 10 INCREMENT BY 5 MINVALUE 0 MAXVALUE 100;
+
+statement ok
+CREATE SEQUENCE seq2 AS INT START WITH 0 INCREMENT BY 1 MINVALUE 0 MAXVALUE 100;
+
+statement ok
+use babel_4098_db;
+
+statement ok
+use babel_4098_db;
+
+statement ok
+DROP SEQUENCE babel_4098.seq1;
+
+statement ok
+DROP SEQUENCE seq2;
+
+statement ok
+DROP SCHEMA babel_4098;
+
+statement ok
+use master;
+

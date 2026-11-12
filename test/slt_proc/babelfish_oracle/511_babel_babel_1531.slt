@@ -1,0 +1,10 @@
+# test/slt_proc/babelfish_oracle/511_babel_babel_1531.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1531.sql
+
+query T
+declare @mon money;
+set @mon = $23.12;
+SELECT CONVERT(varchar(50), @mon);
+----
+$23.12
+

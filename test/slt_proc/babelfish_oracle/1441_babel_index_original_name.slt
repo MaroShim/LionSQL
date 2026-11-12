@@ -1,0 +1,23 @@
+# test/slt_proc/babelfish_oracle/1441_babel_index_original_name.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/index_original_name.sql
+
+statement ok
+CREATE TABLE index_original_name_t1(id INT, name VARCHAR);
+
+statement ok
+DECLARE @handle int;
+DECLARE @batch NVARCHAR(500);
+SET @batch = '
+CREATE INDEX index_original_name_i1 ON index_original_name_t1(id);
+SELECT name FROM sys.indexes WHERE name LIKE ''index_original_name_%'';
+DROP INDEX index_original_name_i1 ON index_original_name_t1;
+'
+EXEC SP_PREPARE @handle OUT, NULL, @batch
+EXEC SP_EXECUTE @handle
+EXEC SP_EXECUTE @handle
+EXEC SP_EXECUTE @handle
+EXEC SP_EXECUTE @handle
+
+statement ok
+DROP TABLE index_original_name_t1;
+

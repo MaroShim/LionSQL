@@ -1,0 +1,108 @@
+# test/slt_proc/babelfish_oracle/1535_babel_sys_triggers.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-triggers-vu-prepare.sql, test/babelfish/raw/views/sys-triggers-vu-verify.sql, test/babelfish/raw/views/sys-triggers-vu-cleanup.sql
+
+statement ok
+CREATE TABLE sys_triggers_vu_prepare_master_table(a int)
+
+statement ok
+CREATE TRIGGER sys_triggers_vu_prepare_master_trig ON sys_triggers_vu_prepare_master_table AFTER INSERT
+AS
+BEGIN
+SELECT 1
+END
+
+statement ok
+CREATE DATABASE sys_triggers_vu_prepare_db1
+
+statement ok
+USE sys_triggers_vu_prepare_db1
+
+statement ok
+CREATE TABLE sys_triggers_vu_prepare_t1(a int)
+
+statement ok
+CREATE TABLE sys_triggers_vu_prepare_t2(b int)
+
+statement ok
+CREATE TRIGGER sys_triggers_vu_prepare_trig1 ON sys_triggers_vu_prepare_t1 INSTEAD OF INSERT
+AS
+BEGIN
+SELECT 1
+END
+
+statement ok
+CREATE TRIGGER sys_triggers_vu_prepare_trig2 ON sys_triggers_vu_prepare_t2 AFTER INSERT
+AS
+BEGIN
+SELECT 1
+END
+
+statement ok
+USE sys_triggers_vu_prepare_db1
+
+statement ok
+SELECT 
+    name,
+    parent_class,
+    parent_class_desc,
+    type,
+    type_desc,
+    is_ms_shipped,
+    is_disabled,
+    is_not_for_replication,
+    is_instead_of_trigger
+FROM sys.triggers
+WHERE name = 'sys_triggers_vu_prepare_trig1'
+
+statement ok
+SELECT 
+    name,
+    parent_class,
+    parent_class_desc,
+    type,
+    type_desc,
+    is_ms_shipped,
+    is_disabled,
+    is_not_for_replication,
+    is_instead_of_trigger
+FROM sys.triggers
+WHERE name = 'sys_triggers_vu_prepare_trig2'
+
+statement ok
+SELECT 
+    name,
+    parent_class,
+    parent_class_desc,
+    type,
+    type_desc,
+    is_ms_shipped,
+    is_disabled,
+    is_not_for_replication,
+    is_instead_of_trigger
+FROM sys.triggers
+WHERE name = 'sys_triggers_vu_prepare_master_trig'
+
+statement ok
+USE sys_triggers_vu_prepare_db1
+
+statement ok
+DROP TRIGGER sys_triggers_vu_prepare_trig1
+
+statement ok
+DROP TRIGGER sys_triggers_vu_prepare_trig2
+
+statement ok
+DROP table sys_triggers_vu_prepare_t1
+
+statement ok
+DROP table sys_triggers_vu_prepare_t2
+
+statement ok
+USE master
+
+statement ok
+DROP TRIGGER sys_triggers_vu_prepare_master_trig
+
+statement ok
+DROP table sys_triggers_vu_prepare_master_table
+

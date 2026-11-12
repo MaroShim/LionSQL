@@ -1,0 +1,24 @@
+# test/slt_proc/babelfish_oracle/1305_babel_isc_domains.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ISC-Domains.sql
+
+statement ok
+create schema isc_domains
+
+statement ok
+Create database isc_domain_db
+
+statement ok
+use isc_domain_db
+
+statement ok
+USE master
+
+statement ok
+Create database isc_domain_db collate BBF_Unicode_CP1_CI_AI
+
+statement ok
+use isc_domain_db
+
+statement ok
+USE master
+

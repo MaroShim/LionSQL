@@ -1,0 +1,36 @@
+# test/slt_proc/babelfish_oracle/1251_babel_babel_662.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-662.sql
+
+statement ok
+CREATE TABLE babel_662_table (x INT, y FLOAT, z VARCHAR(10));
+
+statement ok
+CREATE PROC babel_662_proc_1 AS SELECT 'hi'
+
+statement ok
+CREATE PROC babel_662_proc_2 @p VARCHAR(50) AS SELECT @p
+
+statement ok
+CREATE PROC babel_662_proc_3
+(
+	@a INT,
+	@b FLOAT,
+	@c VARCHAR(10)
+)
+AS INSERT INTO babel_662_table VALUES (@a, @b, @c);
+
+statement error
+babel_662_proc_3 4, @b = 4.4, 'four';  -- invalid
+
+statement ok
+SELECT * FROM babel_662_table;
+
+statement error
+begin babel_662_proc_2 end
+
+statement ok
+DROP TABLE babel_662_table
+DROP PROC babel_662_proc_1
+DROP PROC babel_662_proc_2
+DROP PROC babel_662_proc_3
+

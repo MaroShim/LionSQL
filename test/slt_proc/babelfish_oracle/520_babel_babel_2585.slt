@@ -1,0 +1,277 @@
+# test/slt_proc/babelfish_oracle/520_babel_babel_2585.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2585.sql
+
+statement ok
+USE master;
+
+statement ok
+CREATE DATABASE [babelfish-1234];
+
+statement ok
+CREATE DATABASE [babelfish-1234] COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+CREATE DATABASE babel_recursive_cte;
+
+statement ok
+CREATE DATABASE babel_recursive_cte COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+CREATE SCHEMA [babelfish-1234];
+
+statement ok
+DROP SCHEMA [babelfish-1234];
+
+statement ok
+CREATE SCHEMA babel_recursive_cte;
+
+statement ok
+DROP SCHEMA babel_recursive_cte;
+
+statement ok
+CREATE LOGIN babel_2589_login_1 WITH PASSWORD = '123'
+
+statement ok
+DROP LOGIN babel_2589_login_1
+
+statement ok
+CREATE LOGIN babel_2589_login_2 WITH PASSWORD = '123'
+
+statement ok
+DROP LOGIN babel_2589_login_2
+
+statement ok
+CREATE LOGIN babel_2589_login_3 WITH PASSWORD = '123'
+
+statement ok
+DROP LOGIN babel_2589_login_3
+
+statement ok
+CREATE LOGIN babel_2589_login_4 WITH PASSWORD = '123'
+
+statement ok
+DROP LOGIN babel_2589_login_4
+
+statement ok
+CREATE LOGIN babel_2589_login_5 WITH PASSWORD = '123'
+
+statement ok
+DROP LOGIN babel_2589_login_5
+
+statement ok
+CREATE LOGIN babel_2589_login_6 WITH PASSWORD = '123'
+
+statement ok
+DROP LOGIN babel_2589_login_6
+
+statement ok
+CREATE LOGIN babel_2589_login_7 WITH PASSWORD = '123'
+
+statement ok
+DROP LOGIN babel_2589_login_7
+
+statement ok
+CREATE LOGIN babel_2589_login_8 WITH PASSWORD = '123'
+
+statement ok
+DROP LOGIN babel_2589_login_8
+
+statement ok
+CREATE LOGIN babel_2589_login_9 WITH PASSWORD = '123'
+
+statement ok
+DROP LOGIN babel_2589_login_9
+
+statement ok
+CREATE LOGIN babel_2589_login_10 WITH PASSWORD = '123'
+
+statement ok
+DROP LOGIN babel_2589_login_10
+
+statement ok
+CREATE DATABASE babel_2600_db_1
+
+statement ok
+USE babel_2600_db_1
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db_1 COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_2600_db_1
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db_2
+
+statement ok
+USE babel_2600_db_2
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db_2 COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_2600_db_2
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db_3
+
+statement ok
+USE babel_2600_db_3
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db_3 COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_2600_db_3
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db_4
+
+statement ok
+USE babel_2600_db_4
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db_4 COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_2600_db_4
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db_5
+
+statement ok
+USE babel_2600_db_5
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db_5 COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_2600_db_5
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db
+
+statement ok
+USE babel_2600_db
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db
+
+statement ok
+USE babel_2600_db
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db
+
+statement ok
+USE babel_2600_db
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db
+
+statement ok
+USE babel_2600_db
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db
+
+statement ok
+USE babel_2600_db
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_2600_db
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_2600_db
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_2600_db
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_2600_db
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2600_db COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_2600_db
+
+statement ok
+USE master
+
+query T
+DECLARE @default_db VARCHAR(10)
+SET @default_db = sys.babelfish_get_login_default_db('jdbc_user');
+SELECT CASE WHEN @default_db = 'master' THEN 'correct' ELSE 'error' END;
+----
+error
+

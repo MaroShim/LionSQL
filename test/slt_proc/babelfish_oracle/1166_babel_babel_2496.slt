@@ -1,0 +1,25 @@
+# test/slt_proc/babelfish_oracle/1166_babel_babel_2496.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2496.sql
+
+statement ok
+use master;
+
+statement ok
+drop schema if exists non_exist_schema;
+
+statement ok
+drop schema non_exist_schema;
+
+statement ok
+create schema s2496;
+drop schema if exists s2496;
+
+statement ok
+drop schema s2496;
+
+statement ok
+drop schema if exists s2496;
+
+statement ok
+drop schema s2496;
+

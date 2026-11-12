@@ -1,0 +1,99 @@
+# test/slt_proc/babelfish_oracle/326_babel_babel_2576.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2576.sql
+
+statement ok
+CREATE TABLE BABEL_2576(a char(1));
+
+statement ok
+INSERT INTO BABEL_2576 VALUES ('a');
+
+statement ok
+INSERT INTO BABEL_2576 VALUES (CHAR(161));
+
+statement ok
+INSERT INTO BABEL_2576 VALUES ('b');
+
+query T
+SELECT * FROM BABEL_2576;
+----
+a
+¡
+b
+
+statement ok
+DROP TABLE BABEL_2576;
+
+statement ok
+CREATE TABLE BABEL_2576(a char(5));
+
+statement ok
+INSERT INTO BABEL_2576 VALUES ('abcdef');
+
+statement ok
+INSERT INTO BABEL_2576 VALUES ('a');
+
+statement ok
+INSERT INTO BABEL_2576 VALUES (CHAR(161));
+
+statement ok
+INSERT INTO BABEL_2576 VALUES ('ab');
+
+query T
+SELECT * FROM BABEL_2576;
+----
+abcdef
+a
+¡
+ab
+
+statement ok
+DROP TABLE BABEL_2576;
+
+statement ok
+CREATE TABLE BABEL_2576 (a varchar(1));
+
+statement ok
+INSERT INTO BABEL_2576 VALUES ('a');
+
+statement ok
+INSERT INTO BABEL_2576 VALUES (CHAR(161));
+
+statement ok
+INSERT INTO BABEL_2576 VALUES ('b');
+
+query T
+SELECT * FROM BABEL_2576;
+----
+a
+¡
+b
+
+statement ok
+DROP TABLE BABEL_2576;
+
+statement ok
+CREATE TABLE BABEL_2576 (a varchar(5));
+
+statement ok
+INSERT INTO BABEL_2576 VALUES ('abcdef');
+
+statement ok
+INSERT INTO BABEL_2576 VALUES ('a');
+
+statement ok
+INSERT INTO BABEL_2576 VALUES (CHAR(161));
+
+statement ok
+INSERT INTO BABEL_2576 VALUES ('ab');
+
+query T
+SELECT * FROM BABEL_2576;
+----
+abcdef
+a
+¡
+ab
+
+statement ok
+DROP TABLE BABEL_2576;
+

@@ -1,0 +1,123 @@
+# test/slt_proc/babelfish_oracle/1455_babel_order_by_offset_fetch_rows.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/order_by_offset_fetch_rows-vu-prepare.sql, test/babelfish/raw/order_by_offset_fetch_rows-vu-verify.sql, test/babelfish/raw/order_by_offset_fetch_rows-vu-cleanup.sql
+
+statement ok
+create table t1_order_by_offset_fetch(a int, b int)
+
+statement ok
+update t1_order_by_offset_fetch set b=a
+
+statement ok
+CREATE VIEW v1_order_by_offset_fetch as select * FROM t1_order_by_offset_fetch ORDER BY b OFFSET 5 ROWS FETCH NEXT 3 rows only 
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET (@p*5) ROWS FETCH NEXT (5) ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET (@p*5) ROW FETCH NEXT 5 ROW ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET (@p*5) ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET (@p*5) ROWS FETCH NEXT 1+2 ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET (@p*5) ROWS FETCH NEXT (1+2) ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p ROWS FETCH NEXT +3 ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=0 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =0,@q int=1 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET 1+1 ROWS FETCH NEXT 2 ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET 1+1 ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=0 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p*1 ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=1 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p*1 ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =0,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p*1 ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =1,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p*1 ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =3,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p+1 ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =3,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p*2 ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =1,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p*@q ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p*@q ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int=2,@q int=0 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p*@q ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int=1,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p*@q ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int=2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p*@q ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET square(2) ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET square(1)*@p ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET square(@p)+@p ROWS FETCH NEXT @q+1 ROWS ONLY
+
+statement ok
+declare @p int=2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p*1 ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET square(1)*@p+1 ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET square(1)*(@p) ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET square(1)*@p ROWS FETCH NEXT @q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET @p*square(1) ROWS FETCH NEXT @q*square(1) ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET square(1)*@p ROWS FETCH NEXT square(1)+@q ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET square(1)* @p ROWS FETCH NEXT square(@q)*@q+1 ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET square(1)*3+1 ROWS FETCH NEXT @p+1 ROWS ONLY
+
+statement ok
+declare @p int =2,@q int=3 SELECT * FROM t1_order_by_offset_fetch ORDER BY b OFFSET (@p*@p) ROWS FETCH NEXT @p*@q ROWS ONLY
+
+statement ok
+select * from v1_order_by_offset_fetch
+
+statement ok
+DROP VIEW v1_order_by_offset_fetch 
+
+statement ok
+DROP table t1_order_by_offset_fetch
+

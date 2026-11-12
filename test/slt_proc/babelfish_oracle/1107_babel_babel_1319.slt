@@ -1,0 +1,35 @@
+# test/slt_proc/babelfish_oracle/1107_babel_babel_1319.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1319-vu-prepare.sql, test/babelfish/raw/BABEL-1319-vu-verify.sql, test/babelfish/raw/BABEL-1319-vu-cleanup.sql
+
+statement ok
+CREATE TABLE [babel_1319_vu_prepare_Item] (
+    [_id] int NOT NULL IDENTITY,
+    [Name] nvarchar(max) NULL,
+    CONSTRAINT [PK_Item] PRIMARY KEY ([_id])
+)
+
+statement ok
+CREATE TABLE [babel_1319_vu_prepare_Tag] (  [_id] int NOT NULL IDENTITY,
+    [Label] nvarchar(max) NULL,
+    [Count] int NOT NULL,
+    [Item_id] int NOT NULL,
+    CONSTRAINT [PK_Tag] PRIMARY KEY ([_id]),
+    CONSTRAINT [FK_Tag_Item_Item_id] FOREIGN KEY ([Item_id]) REFERENCES [babel_1319_vu_prepare_Item] ([_id]) ON DELETE CASCADE
+)
+
+statement ok
+CREATE INDEX [babel_1319_IX_Tag_Item_id] ON [babel_1319_vu_prepare_Tag] ([Item_id])
+
+statement ok
+INSERT INTO [babel_1319_vu_prepare_Item] ([Name])
+VALUES ('ItemOne')
+
+statement ok
+DELETE FROM [babel_1319_vu_prepare_Item] WHERE [Name] = 'ItemOne'
+
+statement ok
+DROP TABLE [babel_1319_vu_prepare_Tag]
+
+statement ok
+DROP TABLE [babel_1319_vu_prepare_Item]
+

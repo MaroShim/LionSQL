@@ -1,0 +1,17 @@
+# test/slt_proc/json_xml_compress/107_json_and_compress_02.slt
+# T-SQL ISJSON, JSON_VALUE, COMPRESS/DECOMPRESS, system vars (2)
+
+query II
+SELECT ISJSON('{"id":2,"user":"user_02","role":"viewer","score":225}'), ISJSON('invalid_2');
+----
+1 0
+
+query TTT
+SELECT JSON_VALUE('{"id":2,"user":"user_02","role":"viewer","score":225}', '$.user'), JSON_VALUE('{"id":2,"user":"user_02","role":"viewer","score":225}', '$.role'), JSON_VALUE('{"id":2,"user":"user_02","role":"viewer","score":225}', '$.score');
+----
+user_02 viewer 225
+
+query TII
+SELECT CAST(DECOMPRESS(COMPRESS('LionSQL-Payload-02-XYZXYZXYZXYZ')) AS VARCHAR(200)), @@DATEFIRST, IIF(@@DBTS IS NOT NULL, 1, 0);
+----
+LionSQL-Payload-02-XYZXYZXYZXYZ 7 1

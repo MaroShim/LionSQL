@@ -1,0 +1,461 @@
+# test/slt_proc/babelfish_oracle/551_babel_babel_4672.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/triggers/BABEL-4672-vu-prepare.sql, test/babelfish/raw/triggers/BABEL-4672-vu-verify.sql, test/babelfish/raw/triggers/BABEL-4672-vu-cleanup.sql
+
+statement ok
+CREATE TABLE emp_salary(emp_id int, salary int);
+
+statement ok
+CREATE TABLE tbl_emp_salary(emp_id int, salary int);
+
+statement ok
+CREATE VIEW vw_emp_salary as SELECT * FROM tbl_emp_salary;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_insert ON emp_salary
+INSTEAD OF INSERT
+AS
+INSERT INTO emp_salary VALUES(2, 2000);
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after_insert ON emp_salary
+AFTER INSERT
+AS
+INSERT INTO emp_salary VALUES(3, 3000);
+
+statement ok
+INSERT INTO emp_salary VALUES (1,1000);
+
+query TT
+SELECT emp_id, salary FROM emp_salary ORDER BY emp_id;
+----
+1 1000
+
+statement ok
+DROP TRIGGER tr_emp_salary_after_insert;
+
+statement ok
+DROP TRIGGER tr_emp_salary_instead_insert;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_insert ON emp_salary
+INSTEAD OF INSERT
+AS
+UPDATE emp_salary SET salary = salary + 999 where emp_id = 2;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after_update ON emp_salary
+AFTER UPDATE
+AS
+UPDATE emp_salary SET salary = salary + 9999 where emp_id = 2;
+
+statement ok
+INSERT INTO emp_salary VALUES (4,4000);
+
+query TT
+SELECT emp_id, salary FROM emp_salary ORDER BY emp_id;
+----
+1 1000
+4 4000
+
+statement ok
+DROP TRIGGER tr_emp_salary_after_update;
+
+statement ok
+DROP TRIGGER tr_emp_salary_instead_insert;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_insert ON emp_salary
+INSTEAD OF INSERT
+AS
+DELETE FROM emp_salary where emp_id = (SELECT emp_id from INSERTED);
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after_delete ON emp_salary
+AFTER DELETE
+AS
+DELETE FROM emp_salary where emp_id = (SELECT emp_id -1 from DELETED);
+
+statement ok
+INSERT INTO emp_salary VALUES (3,1000);
+
+query TT
+SELECT emp_id, salary FROM emp_salary ORDER BY emp_id;
+----
+1 1000
+3 1000
+4 4000
+
+statement ok
+DROP TRIGGER tr_emp_salary_after_delete;
+
+statement ok
+DROP TRIGGER tr_emp_salary_instead_insert;
+
+statement ok
+TRUNCATE TABLE emp_salary;
+
+statement ok
+INSERT INTO emp_salary VALUES (1, 1000);
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_update ON emp_salary
+INSTEAD OF UPDATE
+AS
+INSERT INTO emp_salary VALUES(2, 2000);
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after_insert ON emp_salary
+AFTER INSERT
+AS
+INSERT INTO emp_salary VALUES(3, 3000);
+
+statement ok
+UPDATE emp_salary SET salary = salary + 5 where emp_id = 1;
+
+query TT
+SELECT emp_id, salary FROM emp_salary ORDER BY emp_id;
+----
+1 1005
+
+statement ok
+DROP TRIGGER tr_emp_salary_after_insert;
+
+statement ok
+DROP TRIGGER tr_emp_salary_instead_update;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_update ON emp_salary
+INSTEAD OF UPDATE
+AS
+UPDATE emp_salary SET salary = salary + 999 where emp_id = 2;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after_update ON emp_salary
+AFTER UPDATE
+AS
+UPDATE emp_salary SET salary = salary + 9999 where emp_id = 2;
+
+statement ok
+UPDATE emp_salary SET salary = salary + 5 where emp_id = 2;
+
+query TT
+SELECT emp_id, salary FROM emp_salary ORDER BY emp_id;
+----
+1 1005
+
+statement ok
+DROP TRIGGER tr_emp_salary_after_update;
+
+statement ok
+DROP TRIGGER tr_emp_salary_instead_update;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_update ON emp_salary
+INSTEAD OF UPDATE
+AS
+DELETE FROM emp_salary where emp_id = (SELECT emp_id from INSERTED);
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after_delete ON emp_salary
+AFTER DELETE
+AS
+DELETE FROM emp_salary where emp_id = (SELECT emp_id +1 from DELETED);
+
+statement ok
+UPDATE emp_salary SET salary = salary + 5 where emp_id = 1;
+
+query TT
+SELECT emp_id, salary FROM emp_salary ORDER BY emp_id;
+----
+1 1010
+
+statement ok
+DROP TRIGGER tr_emp_salary_after_delete;
+
+statement ok
+DROP TRIGGER tr_emp_salary_instead_update;
+
+statement ok
+TRUNCATE TABLE emp_salary;
+
+statement ok
+INSERT INTO emp_salary VALUES(1, 1000);
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_delete ON emp_salary
+INSTEAD OF DELETE
+AS
+INSERT INTO emp_salary VALUES(2, 2000);
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after_insert ON emp_salary
+AFTER INSERT
+AS
+INSERT INTO emp_salary VALUES(3, 3000);
+
+statement ok
+DELETE FROM emp_salary where emp_id = 1;
+
+statement ok
+SELECT emp_id, salary FROM emp_salary ORDER BY emp_id;
+
+statement ok
+DROP TRIGGER tr_emp_salary_after_insert;
+
+statement ok
+DROP TRIGGER tr_emp_salary_instead_delete;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_delete ON emp_salary
+INSTEAD OF DELETE
+AS
+UPDATE emp_salary SET salary = salary + 999 where emp_id = 2;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after_update ON emp_salary
+AFTER UPDATE
+AS
+UPDATE emp_salary SET salary = salary + 9999 where emp_id = 2;
+
+statement ok
+DELETE FROM emp_salary where emp_id = 1;
+
+statement ok
+SELECT emp_id, salary FROM emp_salary ORDER BY emp_id;
+
+statement ok
+DROP TRIGGER tr_emp_salary_after_update;
+
+statement ok
+DROP TRIGGER tr_emp_salary_instead_delete;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_delete ON emp_salary
+INSTEAD OF DELETE
+AS
+DELETE FROM emp_salary where emp_id = 2;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after_delete ON emp_salary
+AFTER DELETE
+AS
+DELETE FROM emp_salary where emp_id = 3;
+
+statement ok
+DELETE FROM emp_salary where emp_id = 1;
+
+statement ok
+SELECT emp_id, salary FROM emp_salary ORDER BY emp_id;
+
+statement ok
+DROP TRIGGER tr_emp_salary_after_delete;
+
+statement ok
+DROP TRIGGER tr_emp_salary_instead_delete;
+
+statement ok
+TRUNCATE TABLE emp_salary;
+
+statement ok
+INSERT INTO tbl_emp_salary VALUES (1, 1000), (2, 2000), (3, 3000);
+
+statement ok
+CREATE TRIGGER tr_vw_emp_salary_instead
+ON vw_emp_salary
+INSTEAD OF INSERT, UPDATE
+AS
+INSERT INTO tbl_emp_salary SELECT emp_id + 1, salary + 999 FROM INSERTED
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead
+ON tbl_emp_salary
+INSTEAD OF INSERT, UPDATE
+AS
+INSERT INTO tbl_emp_salary SELECT emp_id + 1, salary + 999 FROM INSERTED
+
+query TT
+SELECT emp_id, salary FROM vw_emp_salary ORDER BY emp_id, salary;
+----
+1 1000
+2 2000
+3 3000
+
+query TT
+SELECT emp_id, salary FROM vw_emp_salary ORDER BY emp_id, salary;
+----
+1 1000
+2 2000
+3 3000
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after
+ON tbl_emp_salary
+AFTER INSERT, UPDATE
+AS
+INSERT INTO tbl_emp_salary SELECT emp_id + 1, salary + 999 FROM INSERTED
+
+query TT
+SELECT emp_id, salary FROM vw_emp_salary ORDER BY emp_id, salary;
+----
+1 1000
+2 2000
+3 3000
+
+statement ok
+DROP TRIGGER IF EXISTS tr_emp_salary_after;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_emp_salary_instead;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_vw_emp_salary_instead;
+
+statement ok
+TRUNCATE TABLE tbl_emp_salary;
+
+statement ok
+INSERT INTO tbl_emp_salary VALUES (1, 1000), (2, 2000), (3, 3000), (4, 4000);
+
+statement ok
+CREATE TRIGGER tr_vw_emp_salary_instead_delete
+ON vw_emp_salary
+INSTEAD OF DELETE
+AS
+DELETE FROM tbl_emp_salary where emp_id = (SELECT emp_id FROM DELETED) + 1;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_delete
+ON tbl_emp_salary
+INSTEAD OF DELETE
+AS
+DELETE FROM tbl_emp_salary where emp_id = (SELECT emp_id FROM DELETED) + 1;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after
+ON tbl_emp_salary
+AFTER DELETE
+AS
+DELETE FROM tbl_emp_salary where emp_id = (SELECT emp_id FROM DELETED) + 1;
+
+query TT
+SELECT emp_id, salary FROM vw_emp_salary ORDER BY emp_id, salary;
+----
+1 1000
+2 2000
+3 3000
+4 4000
+
+query TT
+SELECT emp_id, salary FROM vw_emp_salary ORDER BY emp_id, salary;
+----
+1 1000
+2 2000
+3 3000
+4 4000
+
+statement ok
+DROP TRIGGER IF EXISTS tr_emp_salary_after_delete;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_emp_salary_instead_delete;
+
+statement ok
+DROP TRIGGER IF EXISTS tr_vw_emp_salary_instead_delete;
+
+statement ok
+TRUNCATE TABLE emp_salary;
+
+statement ok
+TRUNCATE TABLE emp_salary;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_insert ON emp_salary
+INSTEAD OF INSERT
+AS
+INSERT INTO emp_salary VALUES(2, 2000);
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after_insert ON emp_salary
+AFTER INSERT
+AS
+INSERT INTO emp_salary VALUES(3, 3000);
+
+statement ok
+INSERT INTO emp_salary VALUES (1,1000);
+
+query TT
+SELECT emp_id, salary FROM emp_salary ORDER BY emp_id;
+----
+1 1000
+
+statement ok
+DROP TRIGGER tr_emp_salary_after_insert;
+
+statement ok
+DROP TRIGGER tr_emp_salary_instead_insert;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_update ON emp_salary
+INSTEAD OF UPDATE
+AS
+UPDATE emp_salary SET salary = salary + 999 where emp_id = 1;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after_update ON emp_salary
+AFTER UPDATE
+AS
+UPDATE emp_salary SET salary = salary + 9999 where emp_id = 1;
+
+statement ok
+UPDATE emp_salary SET salary = salary + 9999 where emp_id = 1;
+
+query TT
+SELECT emp_id, salary FROM emp_salary ORDER BY emp_id;
+----
+1 10999
+
+statement ok
+DROP TRIGGER tr_emp_salary_after_update;
+
+statement ok
+DROP TRIGGER tr_emp_salary_instead_update;
+
+statement ok
+INSERT INTO emp_salary VALUES(2, 2000);
+
+statement ok
+CREATE TRIGGER tr_emp_salary_instead_delete ON emp_salary
+INSTEAD OF DELETE
+AS
+DELETE FROM emp_salary where emp_id = 1;
+
+statement ok
+CREATE TRIGGER tr_emp_salary_after_delete ON emp_salary
+AFTER DELETE
+AS
+DELETE FROM emp_salary where emp_id = 2;
+
+statement ok
+DELETE FROM emp_salary where emp_id = 3;
+
+query TT
+SELECT emp_id, salary FROM emp_salary ORDER BY emp_id;
+----
+1 10999
+2 2000
+
+statement ok
+DROP TRIGGER tr_emp_salary_after_delete;
+
+statement ok
+DROP TRIGGER tr_emp_salary_instead_delete;
+
+statement ok
+DROP VIEW IF EXISTS vw_emp_salary;
+
+statement ok
+DROP TABLE IF EXISTS tbl_emp_salary;
+
+statement ok
+DROP TABLE IF EXISTS emp_salary;
+

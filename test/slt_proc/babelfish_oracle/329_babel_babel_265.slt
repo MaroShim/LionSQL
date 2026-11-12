@@ -1,0 +1,48 @@
+# test/slt_proc/babelfish_oracle/329_babel_babel_265.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-265.sql
+
+statement ok
+CREATE TABLE t_nulls1 (c1 CHAR(1), c2 INT);
+INSERT INTO t_nulls1 VALUES ('A', 1);
+INSERT INTO t_nulls1 VALUES ('B', NULL);
+
+statement ok
+SELECT c1 FROM t_nulls1 WHERE c2 = NULL;
+
+statement ok
+SELECT c1 FROM t_nulls1 WHERE c2 <> NULL;
+
+statement ok
+SELECT c1 FROM t_nulls1 WHERE c2 != NULL;
+
+query T
+SELECT c1 FROM t_nulls1 WHERE c2 IS NOT NULL;
+----
+A
+
+statement ok
+SET ANSI_NULLS OFF
+
+statement ok
+SELECT c1 FROM t_nulls1 WHERE c2 <> NULL;
+
+statement ok
+SELECT c1 FROM t_nulls1 WHERE c2 != NULL;
+
+statement ok
+SELECT c1 FROM t_nulls1 WHERE c2 = NULL;
+
+query T
+SELECT c1 FROM t_nulls1 WHERE c2 IS NOT NULL;
+----
+A
+
+statement ok
+SELECT c1 FROM t_nulls1 WHERE c2 <> NULL;
+
+statement ok
+SELECT c1 FROM t_nulls1 WHERE c2 != NULL;
+
+statement ok
+DROP TABLE t_nulls1;
+

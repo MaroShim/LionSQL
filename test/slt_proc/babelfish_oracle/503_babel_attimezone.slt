@@ -1,0 +1,58 @@
+# test/slt_proc/babelfish_oracle/503_babel_attimezone.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ATTIMEZONE.sql
+
+query T
+Select NULL AT TIME ZONE 'Eastern Standard Time'
+----
+NULL
+
+query T
+Select NULL AT TIME ZONE NULL
+----
+NULL
+
+query T
+Select NULL AT TIME ZONE 'NULL'
+----
+NULL
+
+query T
+Select 'NULL' AT TIME ZONE NULL
+----
+NULL
+
+query T
+Select 'NULL' AT TIME ZONE 'NULL'
+----
+NULL
+
+statement ok
+DECLARE @lvDate DATETIME, @lvDateUTC DATETIME
+SET @lvDate = '2021-01-01'
+SET @lvDateUTC = @lvDate AT TIME ZONE  'US Eastern Standard Time' AT TIME ZONE 'UTC'
+SELECT @lvDate, @lvDateUTC
+
+statement ok
+DROP TABLE IF EXISTS test
+Create table test( a datetime)
+insert into test(a) values(cast('1999-02-16' as datetime))
+
+query T
+DECLARE @testzone nvarchar(128) = 'Central European Standard Time';
+Select a AT TIME ZONE @testzone from test
+----
+a
+
+statement ok
+DROP TABLE IF EXISTS test
+
+query T
+Select convert(date,'2022-10-29')  AT TIME ZONE 'Eastern Standard Time'
+----
+2022-10-29
+
+query T
+Select 123  AT TIME ZONE 'Eastern Standard Time'
+----
+123
+

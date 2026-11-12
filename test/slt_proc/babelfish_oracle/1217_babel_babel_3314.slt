@@ -1,0 +1,47 @@
+# test/slt_proc/babelfish_oracle/1217_babel_babel_3314.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3314-vu-prepare.sql, test/babelfish/raw/BABEL-3314-vu-verify.sql
+
+statement ok
+CREATE VIEW BABEL_3314_vu_prepare_v1 AS (SELECT CONVERT(DATETIME, '10/1/22'));
+
+statement ok
+CREATE VIEW BABEL_3314_vu_prepare_v2 AS (SELECT CONVERT(DATE, '10/1/22'));
+
+statement ok
+CREATE PROCEDURE BABEL_3314_vu_prepare_p1 AS (SELECT CONVERT(DATETIME, '10/1/22'));
+
+statement ok
+CREATE PROCEDURE BABEL_3314_vu_prepare_p2 AS (SELECT CONVERT(DATE, '10/1/22'));
+
+statement ok
+CREATE FUNCTION BABEL_3314_vu_prepare_f1()
+RETURNS DATETIME AS
+BEGIN
+RETURN (SELECT CONVERT(DATETIME, '10/1/22'));
+END
+
+statement ok
+CREATE FUNCTION BABEL_3314_vu_prepare_f2()
+RETURNS DATE AS
+BEGIN
+RETURN (SELECT CONVERT(DATE, '10/1/22'));
+END
+
+statement ok
+DROP VIEW BABEL_3314_vu_prepare_v1
+
+statement ok
+DROP VIEW BABEL_3314_vu_prepare_v2
+
+statement ok
+DROP procedure  BABEL_3314_vu_prepare_p1
+
+statement ok
+DROP procedure  BABEL_3314_vu_prepare_p2
+
+statement ok
+DROP FUNCTION BABEL_3314_vu_prepare_f1
+
+statement ok
+DROP FUNCTION BABEL_3314_vu_prepare_f2
+

@@ -997,7 +997,7 @@ func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
 	}
 
 	// 2. MSSQL system variables in scalar SELECT
-	res, err = server.ExecuteSQL("SELECT @@VERSION AS ver, @@SPID AS spid, @@TRANCOUNT AS tc, @@ROWCOUNT AS rc, SERVERPROPERTY('ProductVersion') AS pv, SERVERPROPERTY('EngineEdition') AS ee;")
+	res, err = server.ExecuteSQL("SELECT @@VERSION AS ver, @@SPID AS spid, @@TRANCOUNT AS tc, @@ROWCOUNT AS rc, @@DATEFIRST AS df, @@DBTS AS dbts, SERVERPROPERTY('ProductVersion') AS pv, SERVERPROPERTY('EngineEdition') AS ee;")
 	if err != nil || !res.Success {
 		t.Fatalf("MSSQL scalar variables SELECT failed: %v", err)
 	}
@@ -1006,6 +1006,21 @@ func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
 	}
 	if fmt.Sprintf("%v", res.Rows[0]["spid"]) != "51" {
 		t.Fatalf("expected @@SPID=51, got %v", res.Rows[0]["spid"])
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["df"]) != "7" {
+		t.Fatalf("expected @@DATEFIRST=7, got %v", res.Rows[0]["df"])
+	}
+	if res.Rows[0]["dbts"] == nil {
+		t.Fatalf("expected non-nil @@DBTS, got %v", res.Rows[0]["dbts"])
+	}
+
+	// 2b. COMPRESS and DECOMPRESS
+	resComp, err := server.ExecuteSQL("SELECT CAST(DECOMPRESS(COMPRESS('LionSQL GZIP Storage')) AS VARCHAR(50)) AS decomp;")
+	if err != nil || !resComp.Success || len(resComp.Rows) != 1 {
+		t.Fatalf("COMPRESS/DECOMPRESS query failed: %v", err)
+	}
+	if fmt.Sprintf("%v", resComp.Rows[0]["decomp"]) != "LionSQL GZIP Storage" {
+		t.Fatalf("expected decomp='LionSQL GZIP Storage', got %v", resComp.Rows[0]["decomp"])
 	}
 	if fmt.Sprintf("%v", res.Rows[0]["pv"]) != "15.0.2000.5" {
 		t.Fatalf("expected SERVERPROPERTY('ProductVersion')=15.0.2000.5, got %v", res.Rows[0]["pv"])

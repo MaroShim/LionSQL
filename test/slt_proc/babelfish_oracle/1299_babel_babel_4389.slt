@@ -1,0 +1,18 @@
+# test/slt_proc/babelfish_oracle/1299_babel_babel_4389.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_4389.sql
+
+statement ok
+CREATE VIEW BABEL4389V_1 as SELECT 1
+
+statement ok
+DROP VIEW BABEL4389V_1
+
+statement ok
+CREATE VIEW BABEL4389V1 as SELECT 1
+
+statement ok
+DROP VIEW BABEL4389V1
+
+statement ok
+CREATE VIEW BABEL4389V1 as SELECT 1
+

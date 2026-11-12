@@ -76,7 +76,7 @@ LionSQL을 관통하는 엔지니어링 철학은 극단적으로 명확합니�
 ### 9. TDS 영구 'Windows' 에뮬레이션
 * **버린 것**: `runtime.GOOS`를 정직하게 검사해서 "macOS"나 "Linux"를 반환하려던 순진한 접근 (SSMS는 Windows SQL Server만 상정하여 작성되어 즉시 크래시 발생).
 * **선택한 것**: OS에 관계없이 `sys.dm_os_host_info`와 TDS 환경 토큰에서 **무조건 `"Windows"`로 응답**.
-* **결과**: 단 1줄의 고정 반환으로 SSMS Object Explorer, Azure Data Studio, DBeaver 등 전 세계 모든 관리 도구 100% 완벽 구동.
+* **결과**: 단 1줄의 고정 반환으로 SSMS Object Explorer, DBeaver 등 전 세계 모든 관리 도구 100% 완벽 구동.
 
 ---
 

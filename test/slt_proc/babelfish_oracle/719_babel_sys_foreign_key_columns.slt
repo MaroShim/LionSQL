@@ -1,0 +1,179 @@
+# test/slt_proc/babelfish_oracle/719_babel_sys_foreign_key_columns.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-foreign_key_columns-vu-prepare.sql, test/babelfish/raw/views/sys-foreign_key_columns-vu-verify.sql, test/babelfish/raw/views/sys-foreign_key_columns-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sys_foreign_key_columns_vu_prepare_db1;
+
+statement ok
+USE sys_foreign_key_columns_vu_prepare_db1;
+
+statement ok
+create table sys_foreign_key_columns_vu_prepare_fk_1 (a int, primary key (a));
+
+statement ok
+create table sys_foreign_key_columns_vu_prepare_fk_2 (a int, b int, primary key (a), foreign key (b) references sys_foreign_key_columns_vu_prepare_fk_1(a));
+
+statement ok
+USE master;
+
+statement ok
+create table sys_foreign_key_columns_vu_prepare_fk_3 (a int, primary key (a));
+
+statement ok
+create table sys_foreign_key_columns_vu_prepare_fk_4 (a int, b int, primary key (a), foreign key (b) references sys_foreign_key_columns_vu_prepare_fk_3(a));
+
+statement ok
+USE sys_foreign_key_columns_vu_prepare_db1;
+
+statement ok
+CREATE TABLE sys_foreign_key_columns_vu_prepare_pk_t1 (
+    PID_1 INT NOT NULL,
+    PID_2 INT NOT NULL,
+    PRIMARY KEY (PID_1, PID_2)
+);
+
+statement ok
+CREATE TABLE sys_foreign_key_columns_vu_prepare_pk_t2 (
+    PID_3 INT NOT NULL,
+    PID_4 INT NOT NULL,
+    PRIMARY KEY (PID_3, PID_4)
+);
+
+statement ok
+CREATE TABLE sys_foreign_key_columns_vu_prepare_fk_t1 (
+    PID_1 INT,
+    PID_2 INT,
+    FOREIGN KEY (PID_1, PID_2) REFERENCES sys_foreign_key_columns_vu_prepare_pk_t1(PID_1, PID_2)
+);
+
+statement ok
+CREATE TABLE sys_foreign_key_columns_vu_prepare_fk_t2 (
+    PID_3 INT,
+    PID_4 INT,
+    FOREIGN KEY (PID_3, PID_4) REFERENCES sys_foreign_key_columns_vu_prepare_pk_t2(PID_3, PID_4)
+);
+
+statement ok
+CREATE TABLE sys_foreign_key_columns_vu_prepare_pk_t3 (
+    PID_5 INT NOT NULL,
+    PID_6 INT NOT NULL,
+    PRIMARY KEY (PID_5, PID_6)
+);
+
+statement ok
+CREATE TABLE sys_foreign_key_columns_vu_prepare_fk_t3 (
+    PID_3 INT NOT NULL,
+    PID_4 INT NOT NULL,
+    PID_5 INT NOT NULL,
+    PID_6 INT NOT NULL,
+    FOREIGN KEY (PID_3, PID_4) REFERENCES sys_foreign_key_columns_vu_prepare_pk_t2(PID_3, PID_4),
+    FOREIGN KEY (PID_5, PID_6) REFERENCES sys_foreign_key_columns_vu_prepare_pk_t3(PID_5, PID_6)
+);
+
+statement ok
+USE sys_foreign_key_columns_vu_prepare_db1;
+
+statement ok
+select count(*) from sys.foreign_key_columns where parent_object_id = object_id('sys_foreign_key_columns_vu_prepare_fk_2');
+
+query T
+select count(*) from sys.foreign_keys where parent_object_id = object_id('sys_foreign_key_columns_vu_prepare_fk_2');
+----
+NULL
+
+statement ok
+USE master;
+
+statement ok
+select count(*) from sys.foreign_key_columns where parent_object_id = object_id('sys_foreign_key_columns_vu_prepare_fk_2');
+
+query T
+select count(*) from sys.foreign_keys where parent_object_id = object_id('sys_foreign_key_columns_vu_prepare_fk_2');
+----
+NULL
+
+statement ok
+select count(*) from sys.foreign_key_columns where parent_object_id = object_id('sys_foreign_key_columns_vu_prepare_fk_4');
+
+query T
+select count(*) from sys.foreign_keys where parent_object_id = object_id('sys_foreign_key_columns_vu_prepare_fk_4');
+----
+NULL
+
+statement ok
+USE sys_foreign_key_columns_vu_prepare_db1;
+
+statement ok
+select count(*) from sys.foreign_key_columns where parent_object_id = object_id('sys_foreign_key_columns_vu_prepare_fk_4');
+
+query T
+select count(*) from sys.foreign_keys where parent_object_id = object_id('sys_foreign_key_columns_vu_prepare_fk_4');
+----
+NULL
+
+statement ok
+USE sys_foreign_key_columns_vu_prepare_db1;
+
+statement ok
+SELECT COUNT(*) FROM sys.foreign_key_columns;
+
+statement ok
+SELECT COUNT(*) FROM sys.foreign_key_columns;
+
+statement ok
+SELECT COUNT(*) FROM sys.foreign_key_columns;
+
+statement ok
+SELECT COUNT(*) FROM sys.foreign_key_columns;
+
+statement ok
+SELECT COUNT(*) FROM sys.foreign_key_columns;
+
+statement ok
+SELECT COUNT(*) FROM sys.foreign_key_columns;
+
+statement ok
+SELECT constraint_column_id, parent_column_id, referenced_column_id FROM sys.foreign_key_columns ORDER BY constraint_column_id, parent_column_id, referenced_column_id;
+
+statement ok
+USE sys_foreign_key_columns_vu_prepare_db1;
+
+statement ok
+drop table sys_foreign_key_columns_vu_prepare_fk_2;
+
+statement ok
+drop table sys_foreign_key_columns_vu_prepare_fk_1;
+
+statement ok
+USE master;
+
+statement ok
+drop table sys_foreign_key_columns_vu_prepare_fk_4;
+
+statement ok
+drop table sys_foreign_key_columns_vu_prepare_fk_3;
+
+statement ok
+USE sys_foreign_key_columns_vu_prepare_db1;
+
+statement ok
+DROP TABLE sys_foreign_key_columns_vu_prepare_fk_t3;
+
+statement ok
+DROP TABLE sys_foreign_key_columns_vu_prepare_fk_t2;
+
+statement ok
+DROP TABLE sys_foreign_key_columns_vu_prepare_fk_t1;
+
+statement ok
+DROP TABLE sys_foreign_key_columns_vu_prepare_pk_t3;
+
+statement ok
+DROP TABLE sys_foreign_key_columns_vu_prepare_pk_t2;
+
+statement ok
+DROP TABLE sys_foreign_key_columns_vu_prepare_pk_t1;
+
+statement ok
+USE master;
+

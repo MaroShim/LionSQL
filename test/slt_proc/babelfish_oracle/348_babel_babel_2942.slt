@@ -1,0 +1,167 @@
+# test/slt_proc/babelfish_oracle/348_babel_babel_2942.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2942-vu-prepare.sql, test/babelfish/raw/BABEL-2942-vu-verify.sql, test/babelfish/raw/BABEL-2942-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_2942_vu_prepare_t_japan_csas(t varchar(20) collate japanese_cs_as);
+
+statement ok
+INSERT INTO babel_2942_vu_prepare_t_japan_csas (t) VALUES 
+('う'), ('ｳ'), ('C'), ('かさ'), ('ば'), ('ﾊﾟ'), ('３'), ('ﾊﾞ'), ('c'), ('ｲ'), ('がく'), ('Ｃ'), ('ウ'),('ﾊ'),  
+('1'), ('ｱ'),('パ'), ('b'), ('2'), ('ハ'),('Ｂ'), ('B'), ('バ'),('１'), ('Ａ'), ('ぱ'),('い'),('ア'), 
+('か'), ('A'), ('a'), ('ａ'),('AbC'), ('aBc'), ('は');
+
+statement ok
+CREATE TABLE babel_2942_vu_prepare_t_japan_cias(t varchar(20) collate japanese_ci_as);
+
+statement ok
+INSERT INTO babel_2942_vu_prepare_t_japan_cias (t) VALUES 
+('う'), ('ｳ'), ('C'), ('かさ'), ('ば'), ('ﾊﾟ'), ('３'), ('ﾊﾞ'), ('c'), ('ｲ'), ('がく'), ('Ｃ'), ('ウ'),('ﾊ'),  
+('1'), ('ｱ'),('パ'), ('b'), ('2'), ('ハ'),('Ｂ'), ('B'), ('バ'),('１'), ('Ａ'), ('ぱ'),('い'),('ア'), 
+('か'), ('A'), ('a'), ('ａ'),('AbC'), ('aBc'), ('は');
+
+statement ok
+CREATE TABLE babel_2942_vu_prepare_t_japan_ciai(t varchar(20) collate japanese_ci_ai);
+
+statement ok
+INSERT INTO babel_2942_vu_prepare_t_japan_ciai (t) VALUES 
+('う'), ('ｳ'), ('C'), ('かさ'), ('ば'), ('ﾊﾟ'), ('３'), ('ﾊﾞ'), ('c'), ('ｲ'), ('がく'), ('Ｃ'), ('ウ'),('ﾊ'),  
+('1'), ('ｱ'),('パ'), ('b'), ('2'), ('ハ'),('Ｂ'), ('B'), ('バ'),('１'), ('Ａ'), ('ぱ'),('い'),('ア'), 
+('か'), ('A'), ('a'), ('ａ'),('AbC'), ('aBc'), ('は');
+
+query T
+select t from babel_2942_vu_prepare_t_japan_csas order by 1 ;
+----
+1
+2
+A
+a
+AbC
+aBc
+b
+B
+C
+c
+い
+う
+か
+かさ
+がく
+は
+ば
+ぱ
+ア
+ウ
+ハ
+バ
+パ
+１
+３
+Ａ
+ａ
+Ｂ
+Ｃ
+ｱ
+ｲ
+ｳ
+ﾊ
+ﾊﾞ
+ﾊﾟ
+
+query T
+select t from babel_2942_vu_prepare_t_japan_csas where t= 'は' ;
+----
+は
+
+query T
+select t from babel_2942_vu_prepare_t_japan_cias order by 1 ;
+----
+1
+2
+A
+a
+AbC
+aBc
+b
+B
+C
+c
+い
+う
+か
+かさ
+がく
+は
+ば
+ぱ
+ア
+ウ
+ハ
+バ
+パ
+１
+３
+Ａ
+ａ
+Ｂ
+Ｃ
+ｱ
+ｲ
+ｳ
+ﾊ
+ﾊﾞ
+ﾊﾟ
+
+query T
+select t from babel_2942_vu_prepare_t_japan_cias where t= 'は' ;
+----
+は
+
+query T
+select t from babel_2942_vu_prepare_t_japan_ciai order by 1 ;
+----
+1
+2
+A
+a
+AbC
+aBc
+b
+B
+C
+c
+い
+う
+か
+かさ
+がく
+は
+ば
+ぱ
+ア
+ウ
+ハ
+バ
+パ
+１
+３
+Ａ
+ａ
+Ｂ
+Ｃ
+ｱ
+ｲ
+ｳ
+ﾊ
+ﾊﾞ
+ﾊﾟ
+
+query T
+select t from babel_2942_vu_prepare_t_japan_ciai where t= 'は' ;
+----
+は
+
+statement ok
+drop table babel_2942_vu_prepare_t_japan_csas;
+drop table babel_2942_vu_prepare_t_japan_cias;
+drop table babel_2942_vu_prepare_t_japan_ciai;
+

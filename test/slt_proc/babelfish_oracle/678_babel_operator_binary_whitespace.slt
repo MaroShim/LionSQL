@@ -1,0 +1,326 @@
+# test/slt_proc/babelfish_oracle/678_babel_operator_binary_whitespace.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/operator_binary_whitespace-vu-prepare.sql, test/babelfish/raw/operator_binary_whitespace-vu-verify.sql, test/babelfish/raw/operator_binary_whitespace-vu-cleanup.sql
+
+statement ok
+create view v1_bitop as select 99&+2 as c1, 88|-9 as c2, 77^~5 as c3
+
+statement ok
+create procedure p1_bitop  as select 99&~5|-4
+
+statement ok
+create view v1_bitop_not as select ~+2 as x
+
+statement ok
+create procedure p1_bitop_not  as select ~+2
+
+statement ok
+create view v1_modulo_op as select 10%-3 as x
+
+statement ok
+create procedure p1_modulo_op as select 10%+2
+
+statement ok
+create view v1_bitop_all as select c1=99&-5,99&+5 c2,99&~5 c3,c4=99&-5,c5=99&+5,c6=99&~5,c7=88|-~+2,88|+~+2 as c8,c9=88|~~+2,77^-~+2 c10,77^+~+2 c11,c12=77^~~+2,c13=+~+2,~-2 as c14,c15=+~-2-~-2,c16=~~~~~2,c17=+~~~~~-2,10%-3 c18,10%+3 as c19,c20=10%3,100%@@max_precision c21
+
+statement ok
+create procedure p1_bitop_all as select 99&-5,99&+5,99&~5,99&-5,99&+5,99&~5,88|-~+2,88|+~+2,88|~~+2,77^-~+2,77^+~+2,77^~~+2,+~+2,~-2,+~-2-~-2,~~~~~2,+~~~~~-2,10%-3,10%+3,10%3,100%@@max_precision
+
+query T
+select 99&-5
+----
+99
+
+query T
+select 99&+5
+----
+1
+
+query T
+select 99&~5
+----
+98
+
+statement ok
+declare @v int = 99 set @v = 123&@v select @v
+
+query T
+select 88|-~+2
+----
+91
+
+query T
+select 88|+~+2
+----
+-3
+
+query T
+select 88|~~+2
+----
+90
+
+statement ok
+declare @v int = 88 set @v = 123|@v select @v
+
+query T
+select 77^-~+2
+----
+78
+
+query T
+select 77^+~+2
+----
+-80
+
+query T
+select 77^~~+2
+----
+79
+
+statement ok
+declare @v int = 77 set @v = 123^@v select @v
+
+statement ok
+declare @v int = 10&+2 set @v = @v|-9 select @v
+
+query TTT
+select * from v1_bitop
+----
+2 -1 -73
+
+query T
+execute p1_bitop
+----
+-2
+
+query T
+select ~+2
+----
+-3
+
+query T
+select +~+2
+----
+-3
+
+query T
+select -~+2
+----
+3
+
+query T
+select ~-2
+----
+1
+
+query T
+select +~-2
+----
+1
+
+query T
+select -~-2
+----
+-1
+
+query T
+select +~2
+----
+-3
+
+query T
+select -~2
+----
+3
+
+query T
+select ~~2
+----
+2
+
+query T
+select ~~~~~2
+----
+-3
+
+query T
+select ~~~~~+2
+----
+-3
+
+query T
+select +~~~~~+2
+----
+-3
+
+query T
+select -~~~~~+2
+----
+3
+
+query T
+select ~~~~~+2
+----
+-3
+
+query T
+select +~~~~~-2
+----
+1
+
+query T
+select -~~~~~-2
+----
+-1
+
+query T
+select ~@@max_precision
+----
+~@@max_precision
+
+statement ok
+declare @v int = 2 set @v = ~@@max_precision select @v
+
+statement ok
+declare @v int = 2 set @v = ~@v select @v
+
+query T
+select * from v1_bitop_not
+----
+-3
+
+query T
+execute p1_bitop_not 
+----
+-3
+
+statement ok
+declare @v int = 10 print ~@v
+
+query T
+select 10%-3
+----
+1
+
+query T
+select 10%+3
+----
+1
+
+query T
+select 100%@@max_precision
+----
+100%@@max_precision
+
+statement ok
+declare @v int select 99%@v
+
+query T
+select * from v1_modulo_op
+----
+1
+
+query T
+exec p1_modulo_op
+----
+0
+
+statement ok
+declare @v int =10%+3 select @v
+
+statement ok
+declare @v int =10%+~3 select @v
+
+statement ok
+declare @v int =10%~+3 select @v
+
+statement ok
+declare @v int = 10 set @v = 3%@v select @v
+
+query TTTTTTTTTTTTTTTTTTTTT
+select 99&-5,99&+5,99&~5,99&-5,99&+5,99&~5,88|-~+2,88|+~+2,88|~~+2,77^-~+2,77^+~+2,77^~~+2,+~+2,~-2,+~-2-~-2,~~~~~2,+~~~~~-2,10%-3,10%+3,10%3,100%@@max_precision
+----
+99 1 98 99 1 98 91 -3 90 78 -80 79 -3 1 0 -3 1 1 1 1 100%@@max_precision
+
+query T
+select 12|~+2
+----
+-3
+
+query T
+select 10%3
+----
+1
+
+query T
+select 99&5
+----
+1
+
+query T
+select ~2
+----
+-3
+
+query T
+select ~ 2
+----
+-3
+
+query T
+select ~ + 2
+----
+-3
+
+query T
+select ~ - 2
+----
+1
+
+query T
+select ~ ~ ~ 2
+----
+-3
+
+statement ok
+declare @v int = 2 select @v = ~@v select @v
+
+statement ok
+declare @v int =~2 select @v
+
+statement ok
+declare @v int = 10 set @v %=3 select @v
+
+query T
+select 1~+2
+----
+1
+
+query T
+select 1 ~ 2
+----
+1
+
+statement ok
+drop view v1_bitop
+
+statement ok
+drop procedure p1_bitop
+
+statement ok
+drop view v1_bitop_not
+
+statement ok
+drop procedure p1_bitop_not
+
+statement ok
+drop view v1_modulo_op
+
+statement ok
+drop procedure p1_modulo_op
+
+statement ok
+drop view v1_bitop_all
+
+statement ok
+drop procedure p1_bitop_all
+

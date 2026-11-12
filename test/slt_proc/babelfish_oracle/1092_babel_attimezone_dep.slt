@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/1092_babel_attimezone_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ATTIMEZONE-dep-vu-prepare.sql, test/babelfish/raw/ATTIMEZONE-dep-vu-verify.sql, test/babelfish/raw/ATTIMEZONE-dep-vu-cleanup.sql
+
+statement ok
+CREATE VIEW ATTIMEZONE_dep_vu_prepare_v1 as (Select convert(datetime2,'2002-01-01 02:01:00.000 +00:00') AT TIME ZONE 'Central Europe Standard Time');
+
+statement ok
+CREATE VIEW ATTIMEZONE_dep_vu_prepare_v2 as (Select 'hdhdhdhdj' AT TIME ZONE 'Eastern Standard Time');
+
+statement ok
+CREATE PROCEDURE  ATTIMEZONE_dep_vu_prepare_p1 as (Select convert(datetimeoffset,'9999-12-31 15:59:59.000 +00:00') AT TIME ZONE 'Central Europe Standard Time');
+
+statement ok
+CREATE PROCEDURE  ATTIMEZONE_dep_vu_prepare_p2 as (Select '9999-12-31 15:59:59.000 +00:00' AT TIME ZONE 'Central Europe Standard Time');
+
+statement ok
+DROP VIEW ATTIMEZONE_dep_vu_prepare_v1
+
+statement ok
+DROP VIEW ATTIMEZONE_dep_vu_prepare_v2
+
+statement ok
+DROP PROCEDURE ATTIMEZONE_dep_vu_prepare_p1
+
+statement ok
+DROP PROCEDURE ATTIMEZONE_dep_vu_prepare_p2
+

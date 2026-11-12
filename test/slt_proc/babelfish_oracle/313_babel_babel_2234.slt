@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/313_babel_babel_2234.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2234.sql
+
+statement ok
+use master;
+
+query T
+SELECT NULLIF(NULL, 2);
+----
+NULL
+
+statement ok
+CREATE PROCEDURE p_2234 AS
+  SELECT NULLIF(NULL, 2);
+
+query T
+declare @a int;
+set @a = NULL;
+select nullif(@a, 2);
+----
+NULL
+
+query T
+SELECT NuLlIf(nULL, 2);
+----
+NULL
+

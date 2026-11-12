@@ -1,0 +1,171 @@
+# test/slt_proc/babelfish_oracle/403_babel_babel_5129.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-5129-vu-prepare.sql, test/babelfish/raw/BABEL-5129-vu-verify.sql, test/babelfish/raw/BABEL-5129-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_5129 (
+    int_type int,
+    numeric_type numeric(10,5),
+    money_type money,
+    varchar_type varchar(20),
+    nvarchar_type nvarchar(20)
+)
+
+statement ok
+INSERT INTO babel_5129 (
+    int_type,
+    numeric_type,
+    money_type,
+    varchar_type,
+    nvarchar_type
+)
+VALUES (
+    45000,
+    12345.12,
+    237891.22,
+    '12.3420000000',
+    '12.3420000000'
+)
+
+query TTTTT
+SELECT * FROM babel_5129
+----
+45000 12345.12000 237891.2200 12.3420000000 12.3420000000
+
+query T
+SELECT ISNUMERIC(int_type)
+FROM babel_5129
+----
+1
+
+query T
+SELECT ISNUMERIC(numeric_type)
+FROM babel_5129
+----
+1
+
+query T
+SELECT ISNUMERIC(money_type)
+FROM babel_5129
+----
+1
+
+query T
+SELECT ISNUMERIC(varchar_type)
+FROM babel_5129
+----
+1
+
+query T
+SELECT ISNUMERIC(nvarchar_type)
+FROM babel_5129
+----
+1
+
+query TTT
+DECLARE @a numeric(24,6);
+SELECT @a = 12.3420000000;
+SELECT ISNUMERIC(@a), LEN(@a), DATALENGTH(@a)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @v varchar(20);
+SELECT @v = '12.3420000000';
+SELECT ISNUMERIC(@v), LEN(@v), DATALENGTH(@v)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @nv nvarchar(10);
+SELECT @nv = '12.3420000000';
+SELECT ISNUMERIC(@nv), LEN(@nv), DATALENGTH(@nv)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @v varchar(20);
+SELECT @v = NULL;
+SELECT ISNUMERIC(@v), LEN(@v), DATALENGTH(@v)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @nv nvarchar(10);
+SELECT @nv = null;
+SELECT ISNUMERIC(@nv), LEN(@nv), DATALENGTH(@nv)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @v varchar(20);
+SELECT @v = '';
+SELECT ISNUMERIC(@v), LEN(@v), DATALENGTH(@v)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @nv nvarchar(10);
+SELECT @nv = '';
+SELECT ISNUMERIC(@nv), LEN(@nv), DATALENGTH(@nv)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @v varchar(20);
+SELECT @v = '9223372036854775807';
+SELECT ISNUMERIC(@v), LEN(@v), DATALENGTH(@v)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @v varchar(20);
+SELECT @v = '-9223372036854775808';
+SELECT ISNUMERIC(@v), LEN(@v), DATALENGTH(@v)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @nv nvarchar(20);
+SELECT @nv = '9223372036854775807';
+SELECT ISNUMERIC(@nv), LEN(@nv), DATALENGTH(@nv)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @nv nvarchar(20);
+SELECT @nv = '-9223372036854775808';
+SELECT ISNUMERIC(@nv), LEN(@nv), DATALENGTH(@nv)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @v varchar;
+SELECT @v = '12345678901234567890123456789012345';
+SELECT ISNUMERIC(@v), LEN(@v), DATALENGTH(@v)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @nv nvarchar;
+SELECT @nv = '12345678901234567890123456789012345';
+SELECT ISNUMERIC(@nv), LEN(@nv), DATALENGTH(@nv)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @v varchar(20);
+SELECT @v = '12.34.20000000';
+SELECT ISNUMERIC(@v), LEN(@v), DATALENGTH(@v)
+----
+0 NULL NULL
+
+query TTT
+DECLARE @nv nvarchar(10);
+SELECT @nv = '12.34.20000000';
+SELECT ISNUMERIC(@nv), LEN(@nv), DATALENGTH(@nv)
+----
+0 NULL NULL
+
+statement ok
+DROP TABLE babel_5129
+

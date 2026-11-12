@@ -1,0 +1,227 @@
+# test/slt_proc/babelfish_oracle/323_babel_babel_2535.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/triggers/BABEL-2535-vu-prepare.sql, test/babelfish/raw/triggers/BABEL-2535-vu-verify.sql, test/babelfish/raw/triggers/BABEL-2535-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_2535_vu_prepare_tab (a INT)
+
+statement ok
+CREATE TABLE babel_2535_vu_prepare_tmp (a INT)
+
+statement ok
+CREATE TRIGGER babel_2535_vu_prepare_trg1 ON babel_2535_vu_prepare_tab
+AFTER INSERT AS
+    BEGIN TRY
+		INSERT INTO babel_2535_vu_prepare_tmp VALUES (1);
+        SELECT 1/0;
+		INSERT INTO babel_2535_vu_prepare_tmp VALUES (2);
+    END TRY
+    BEGIN CATCH
+        SELECT XACT_STATE() AS "XACT_STATE"
+    END CATCH
+
+statement ok
+CREATE TABLE babel_2535_vu_prepare_tab_1 (a INT)
+
+statement ok
+CREATE TABLE babel_2535_vu_prepare_tmp_1 (a INT)
+
+statement ok
+CREATE TRIGGER babel_2535_vu_prepare_trg2 ON babel_2535_vu_prepare_tab_1
+AFTER INSERT AS
+    INSERT INTO babel_2535_vu_prepare_tmp_1 VALUES (555);
+
+statement ok
+INSERT INTO babel_2535_vu_prepare_tab VALUES (1);
+
+query T
+SELECT * FROM babel_2535_vu_prepare_tmp;
+----
+1
+2
+
+statement ok
+INSERT INTO babel_2535_vu_prepare_tab_1 VALUES (1);
+INSERT INTO babel_2535_vu_prepare_tab VALUES (1);
+
+query T
+SELECT * FROM babel_2535_vu_prepare_tmp_1;
+----
+555
+
+query T
+SELECT * FROM babel_2535_vu_prepare_tmp;
+----
+1
+2
+1
+2
+
+query T
+SELECT * FROM babel_2535_vu_prepare_tab_1;
+----
+1
+
+statement ok
+TRUNCATE TABLE babel_2535_vu_prepare_tmp_1;
+
+statement ok
+BEGIN TRAN;
+
+statement ok
+INSERT INTO babel_2535_vu_prepare_tab_1 VALUES (1);
+INSERT INTO babel_2535_vu_prepare_tab VALUES (1);
+
+query T
+SELECT * FROM babel_2535_vu_prepare_tmp_1;
+----
+555
+
+query T
+SELECT * FROM babel_2535_vu_prepare_tmp;
+----
+1
+2
+1
+2
+1
+2
+
+query T
+SELECT @@trancount;
+----
+1
+
+query T
+SELECT * FROM babel_2535_vu_prepare_tab_1;
+----
+1
+1
+
+statement ok
+TRUNCATE TABLE babel_2535_vu_prepare_tmp;
+
+statement ok
+DROP TRIGGER babel_2535_vu_prepare_trg1;
+
+statement ok
+CREATE TRIGGER babel_2535_vu_prepare_trg1 ON babel_2535_vu_prepare_tab
+AFTER INSERT AS
+    SELECT 1/0;
+
+statement ok
+INSERT INTO babel_2535_vu_prepare_tmp VALUES (666);
+INSERT INTO babel_2535_vu_prepare_tab VALUES (1);
+INSERT INTO babel_2535_vu_prepare_tmp VALUES (777);
+
+query T
+SELECT * FROM babel_2535_vu_prepare_tmp;
+----
+666
+777
+
+statement ok
+DROP TRIGGER babel_2535_vu_prepare_trg1;
+
+statement ok
+DROP TRIGGER babel_2535_vu_prepare_trg2;
+
+statement ok
+CREATE TABLE babel_2535_vu_prepare_t1 (a INT);
+
+statement ok
+CREATE TABLE babel_2535_vu_prepare_t2 (a INT);
+
+statement ok
+create trigger babel_2535_vu_prepare_trg2 on babel_2535_vu_prepare_t2 
+after insert as 
+begin try 
+	insert into babel_2535_vu_prepare_t1 values(1); 
+end try 
+begin catch 
+	print 'babel_2535_vu_prepare_trg2'; 
+	select @@trancount; 
+end catch;
+
+statement ok
+create trigger babel_2535_vu_prepare_trg1 on babel_2535_vu_prepare_t1 
+after insert as 
+begin try 
+	select 1/0; 
+end try 
+begin catch 
+	print 'babel_2535_vu_prepare_trg1'; 
+	select @@trancount; 
+	rollback tran; 
+end catch
+
+statement ok
+INSERT INTO babel_2535_vu_prepare_t2 VALUES (1);
+
+statement ok
+DROP TRIGGER babel_2535_vu_prepare_trg1;
+
+statement ok
+CREATE TRIGGER babel_2535_vu_prepare_trg1 ON babel_2535_vu_prepare_t1
+AFTER INSERT AS
+    BEGIN TRY
+        SELECT 1/0
+    END TRY
+    BEGIN CATCH
+        SELECT XACT_STATE() AS "XACT_STATE" --Should be -1
+        COMMIT
+    END CATCH
+
+statement ok
+INSERT INTO babel_2535_vu_prepare_t1 VALUES(1)
+
+query T
+SELECT @@TRANCOUNT AS "TRANCOUNT" --Should be 0
+----
+1
+
+statement ok
+DROP TRIGGER babel_2535_vu_prepare_trg1;
+
+statement ok
+CREATE TRIGGER babel_2535_vu_prepare_trg1 ON babel_2535_vu_prepare_t1
+AFTER INSERT AS
+    BEGIN TRY
+        SELECT 1/0
+    END TRY
+    BEGIN CATCH
+        SELECT XACT_STATE() AS "XACT_STATE" --Should be -1
+        ROLLBACK
+    END CATCH
+
+statement ok
+INSERT INTO babel_2535_vu_prepare_t1 VALUES(1)
+
+query T
+SELECT @@TRANCOUNT AS "TRANCOUNT" --Should be 0
+----
+1
+
+statement ok
+DROP TRIGGER babel_2535_vu_prepare_trg1;
+
+statement ok
+DROP TRIGGER babel_2535_vu_prepare_trg2;
+
+statement ok
+DROP TABLE babel_2535_vu_prepare_t2;
+
+statement ok
+DROP TABLE babel_2535_vu_prepare_t1;
+
+statement ok
+DROP TABLE babel_2535_vu_prepare_tab;
+
+statement ok
+DROP TABLE babel_2535_vu_prepare_tab_1;
+
+statement ok
+DROP TABLE babel_2535_vu_prepare_tmp;
+
+statement ok
+DROP TABLE babel_2535_vu_prepare_tmp_1;
+

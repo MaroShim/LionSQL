@@ -1,0 +1,13 @@
+# test/slt_proc/babelfish_oracle/1322_babel_test_sp_execute_postgresql.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_execute_postgresql-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_execute_postgresql-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_execute_postgresql-vu-cleanup.sql
+
+statement ok
+CREATE PROC test_sp_execute_postgresql_proc
+AS
+BEGIN
+    EXEC sp_execute_postgresql 'create extension fuzzystrmatch'
+END
+
+statement ok
+DROP PROC test_sp_execute_postgresql_proc
+

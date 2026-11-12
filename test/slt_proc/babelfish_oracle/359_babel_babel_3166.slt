@@ -1,0 +1,51 @@
+# test/slt_proc/babelfish_oracle/359_babel_babel_3166.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3166-vu-prepare.sql, test/babelfish/raw/BABEL-3166-vu-verify.sql
+
+statement ok
+CREATE FUNCTION babel_3166_func(@a numeric, @b varchar, @c varchar(max), @d varchar(8), @e binary(6))
+RETURNS varbinary(8) AS BEGIN RETURN @e END;
+
+statement ok
+SELECT proname, probin FROM pg_proc WHERE proname = 'babel_3166_func';
+
+query T
+SELECT babel_3166_func(1.2, 'abc', 'abcd', 'abcdefgh', 0x12bcfe);
+----
+0x12bcfe
+
+statement ok
+CREATE PROCEDURE babel_3166_proc @a numeric, @b varchar, @c varchar(max), @d varchar(8), @e binary(6)
+AS SELECT @e;
+
+query TT
+SELECT proname, probin FROM pg_proc WHERE proname = 'babel_3166_proc';
+----
+babel_3166_proc NULL
+
+query T
+EXEC babel_3166_proc 1.2, 'abc', 'abcd', 'abcdefgh', 0x12bcfe;
+----
+0x12bcfe
+
+statement ok
+SELECT proname, probin FROM pg_proc WHERE proname = 'babel_3166_func';
+
+query T
+SELECT babel_3166_func(1.2, 'abc', 'abcd', 'abcdefgh', 0x12bcfe);
+----
+0x12bcfe
+
+query TT
+DROP FUNCTION babel_3166_func;
+SELECT proname, probin FROM pg_proc WHERE proname = 'babel_3166_proc';
+----
+babel_3166_proc NULL
+
+query T
+EXEC babel_3166_proc 1.2, 'abc', 'abcd', 'abcdefgh', 0x12bcfe;
+----
+0x12bcfe
+
+statement ok
+DROP PROCEDURE babel_3166_proc;
+

@@ -1,0 +1,12 @@
+# test/slt_proc/babelfish_oracle/1173_babel_babel_2607.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2607.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2607_db
+
+statement ok
+CREATE DATABASE babel_2607_db COLLATE BBF_Unicode_CP1_CI_AI
+

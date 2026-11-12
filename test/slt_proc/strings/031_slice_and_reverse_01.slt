@@ -1,0 +1,29 @@
+# test/slt_proc/strings/031_slice_and_reverse_01.slt
+# T-SQL LEFT/RIGHT/SUBSTRING/REVERSE/LEN on 'LionSQLServer'
+
+query TTTT
+SELECT LEFT('LionSQLServer', 4), RIGHT('LionSQLServer', 6), SUBSTRING('LionSQLServer', 5, 3), REVERSE('LionSQLServer');
+----
+Lion Server SQL revreSLQSnoiL
+
+query TT
+SELECT UPPER('Lion'), LOWER('Server');
+----
+LION server
+
+query I
+SELECT LEN('LionSQLServer');
+----
+13
+
+statement ok
+CREATE PROCEDURE sp_str_slice_31 @in VARCHAR(50)
+AS
+BEGIN
+    SELECT CONCAT(LEFT(@in, 4), '-', RIGHT(@in, 6), ':', CAST(LEN(@in) AS VARCHAR(10)));
+END;
+
+query T
+EXEC sp_str_slice_31 'LionSQLServer';
+----
+Lion-Server:13

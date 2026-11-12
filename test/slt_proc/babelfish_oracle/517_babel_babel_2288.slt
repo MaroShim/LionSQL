@@ -1,0 +1,33 @@
+# test/slt_proc/babelfish_oracle/517_babel_babel_2288.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2288.sql
+
+statement ok
+use master;
+
+query T
+BEGIN TRY -- 3
+  SELECT 1/0; -- 5: error
+END TRY
+BEGIN CATCH
+  SELECT ERROR_LINE() AS ErrorLine;
+END CATCH;
+----
+NULL
+
+statement ok
+CREATE PROCEDURE sp_2288 -- 3
+AS -- 4
+  SELECT 'dummy' -- 5
+  SELECT 1/0; -- 6: error
+
+statement ok
+BEGIN TRY
+  EXEC sp_2288
+END TRY
+BEGIN CATCH
+  SELECT ERROR_LINE() AS ErrorLine;
+END CATCH;
+
+statement ok
+DROP PROCEDURE sp_2288
+

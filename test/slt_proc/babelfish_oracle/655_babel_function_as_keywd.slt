@@ -1,0 +1,26 @@
+# test/slt_proc/babelfish_oracle/655_babel_function_as_keywd.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/function_as_keywd-vu-prepare.sql, test/babelfish/raw/function_as_keywd-vu-verify.sql, test/babelfish/raw/function_as_keywd-vu-cleanup.sql
+
+statement ok
+create function f2_function_as_keywd () returns tinyint as begin return 2 end
+
+query T
+select dbo.f2_function_as_keywd()
+----
+2
+
+statement ok
+create function f4_function_as_keywd () returns tinyint
+as begin return 4 end
+
+query T
+select dbo.f4_function_as_keywd()
+----
+4
+
+statement ok
+drop function f2_function_as_keywd 
+
+statement ok
+drop function f4_function_as_keywd 
+

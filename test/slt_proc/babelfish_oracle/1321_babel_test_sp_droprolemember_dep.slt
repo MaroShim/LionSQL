@@ -1,0 +1,55 @@
+# test/slt_proc/babelfish_oracle/1321_babel_test_sp_droprolemember_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_droprolemember-dep-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_droprolemember-dep-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_droprolemember-dep-vu-cleanup.sql
+
+statement ok
+CREATE PROC test_sp_droprolemember_proc @rolename AS sys.SYSNAME, @membername AS sys.SYSNAME
+AS
+BEGIN
+	EXEC sp_droprolemember @rolename, @membername;
+END
+
+statement ok
+CREATE ROLE sp_droprolemember_role1
+
+statement ok
+CREATE ROLE sp_droprolemember_role2
+
+statement ok
+CREATE ROLE sp_droprolemember_role3
+
+statement ok
+CREATE ROLE sp_droprolemember_role4
+
+statement ok
+CREATE ROLE sp_droprolemember_dummy
+
+statement ok
+ALTER ROLE sp_droprolemember_role1 ADD MEMBER sp_droprolemember_role2
+
+statement ok
+ALTER ROLE sp_droprolemember_role1 ADD MEMBER sp_droprolemember_role3
+
+statement ok
+ALTER ROLE sp_droprolemember_role1 ADD MEMBER sp_droprolemember_role4
+
+statement ok
+ALTER ROLE sp_droprolemember_role1 ADD MEMBER sp_droprolemember_dummy
+
+statement ok
+DROP ROLE sp_droprolemember_role4
+
+statement ok
+DROP ROLE sp_droprolemember_role3
+
+statement ok
+DROP ROLE sp_droprolemember_role2
+
+statement ok
+DROP ROLE sp_droprolemember_dummy
+
+statement ok
+DROP ROLE sp_droprolemember_role1
+
+statement ok
+DROP PROC test_sp_droprolemember_proc
+

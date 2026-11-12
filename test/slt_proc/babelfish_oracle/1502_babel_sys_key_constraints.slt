@@ -1,0 +1,39 @@
+# test/slt_proc/babelfish_oracle/1502_babel_sys_key_constraints.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-key_constraints-vu-prepare.sql, test/babelfish/raw/views/sys-key_constraints-vu-verify.sql, test/babelfish/raw/views/sys-key_constraints-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sys_key_constraints_vu_prepare_db1;
+
+statement ok
+USE sys_key_constraints_vu_prepare_db1
+
+statement ok
+create table sys_key_constraints_vu_prepare_uq_1 (a int not null unique)
+
+statement ok
+USE master
+
+statement ok
+create table sys_key_constraints_vu_prepare_uq_2 (a int not null unique)
+
+statement ok
+USE sys_key_constraints_vu_prepare_db1
+
+statement ok
+USE master
+
+statement ok
+USE sys_key_constraints_vu_prepare_db1
+
+statement ok
+USE sys_key_constraints_vu_prepare_db1
+
+statement ok
+drop table sys_key_constraints_vu_prepare_uq_1;
+
+statement ok
+USE master
+
+statement ok
+drop table sys_key_constraints_vu_prepare_uq_2;
+

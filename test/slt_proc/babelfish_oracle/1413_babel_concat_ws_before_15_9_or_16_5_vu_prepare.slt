@@ -1,0 +1,123 @@
+# test/slt_proc/babelfish_oracle/1413_babel_concat_ws_before_15_9_or_16_5_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/string_functions/concat_ws-before-15_9-or-16_5-vu-prepare.sql
+
+statement ok
+CREATE TABLE babel_3409_concat_ws_t1(
+    id int,
+    col_char char(20),
+    col_varchar varchar(50),
+    col_nchar nchar(20),
+    col_nvarchar nvarchar(50),
+    col_int int,
+    col_bigint bigint,
+    col_smallint smallint,
+    col_tinyint tinyint,
+    col_numeric numeric,
+    col_float float,
+    col_real real,
+    col_bit bit,
+    col_decimal decimal,
+    col_smallmoney smallmoney,
+    col_money money,
+    col_datetime datetime,
+    col_datetime2 datetime2,
+    col_binary binary(20),
+    col_varbinary varbinary(20),
+    col_date date,
+    col_time time,
+    col_datetimeoffset datetimeoffset,
+    col_smalldatetime smalldatetime,
+    col_image image,
+    col_text text,
+    col_ntext ntext,
+    col_sql_variant sql_variant,
+    col_xml xml,
+    col_varUDT dbo.babel_3409_concat_ws_varUDT,
+    col_imageUDT dbo.babel_3409_concat_ws_imageUDT
+)
+
+statement ok
+CREATE TABLE babel_3409_concat_ws_t2(
+    id int,
+    col1_cias varchar(50) collate chinese_prc_ci_as,
+    col1_ciai varchar(50) collate chinese_prc_ci_ai,
+    col1_csas varchar(50) collate chinese_prc_cs_as,
+    col2_cias varchar(50) collate arabic_ci_as,
+    col2_ciai varchar(50) collate arabic_ci_ai,
+    col2_csas varchar(50) collate arabic_cs_as
+)
+
+statement ok
+INSERT INTO babel_3409_concat_ws_t2 VALUES
+(
+    1,
+    N'比尔·拉',
+    N'比尔·拉',
+    N'比尔·拉',
+    N'الله',
+    N'الله',
+    N'الله'
+),
+(
+    2,
+    N'莫',
+    N'莫',
+    N'莫',
+    N' مع ',
+    N' مع ',
+    N' مع '
+),
+(
+    3,
+    N'斯',
+    N'斯',
+    N'斯',
+    N'المتقين',
+    N'المتقين',
+    N'المتقين'
+)
+
+statement ok
+CREATE VIEW babel_3409_concat_ws_dep_view1 AS
+    SELECT CONCAT_WS('-', col_varchar, col_int, col_varbinary, col_text) AS concatenated_column FROM babel_3409_concat_ws_t1
+
+statement ok
+CREATE PROCEDURE babel_3409_concat_ws_dep_proc1 AS
+    SELECT CONCAT_WS('-', col_varchar, col_int, col_varbinary, col_text) FROM babel_3409_concat_ws_t1 ORDER BY id
+
+statement ok
+CREATE FUNCTION babel_3409_concat_ws_dep_func1()
+RETURNS NVARCHAR(50)
+AS
+BEGIN
+RETURN (SELECT TOP 1 CONCAT_WS('-', col_varchar, col_char, col_varbinary, col_text) FROM babel_3409_concat_ws_t1 ORDER BY id)
+END
+
+statement ok
+CREATE FUNCTION babel_3409_concat_ws_itvf_func1()
+RETURNS TABLE
+AS
+RETURN (SELECT TOP 1 CONCAT_WS('-', col_nvarchar, col_nchar, col_int, col_bigint, col_smallint, col_tinyint, col_numeric, col_float, col_real, col_bit) AS concatenated_column FROM babel_3409_concat_ws_t1 ORDER BY id)
+
+statement ok
+CREATE VIEW babel_3409_concat_ws_dep_view2 AS
+    SELECT CONCAT_WS(N'-', col_nvarchar, col_nchar, col_varchar, col_decimal, col_smallmoney, col_smalldatetime) AS concatenated_column FROM babel_3409_concat_ws_t1
+
+statement ok
+CREATE PROCEDURE babel_3409_concat_ws_dep_proc2 AS
+    SELECT CONCAT_WS(N'-', col_nvarchar, col_money, col_datetime, col_datetime2, col_binary, col_date, col_time, col_datetimeoffset) FROM babel_3409_concat_ws_t1 ORDER BY id
+
+statement ok
+CREATE FUNCTION babel_3409_concat_ws_dep_func2()
+RETURNS NVARCHAR(50)
+AS
+BEGIN
+RETURN (SELECT TOP 1 CONCAT_WS(N'-', col_nvarchar, col_varbinary, col_text, col_ntext) FROM babel_3409_concat_ws_t1 ORDER BY id)
+END
+
+statement ok
+CREATE FUNCTION babel_3409_concat_ws_itvf_func2()
+RETURNS TABLE
+AS
+RETURN (SELECT TOP 1 CONCAT_WS(N'-', col_nvarchar, col_varchar, col_char, col_nchar) AS concatenated_column FROM babel_3409_concat_ws_t1 ORDER BY id)
+

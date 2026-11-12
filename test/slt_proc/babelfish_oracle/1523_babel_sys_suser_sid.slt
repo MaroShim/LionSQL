@@ -1,0 +1,68 @@
+# test/slt_proc/babelfish_oracle/1523_babel_sys_suser_sid.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/sys-suser_sid-vu-prepare.sql, test/babelfish/raw/functions/sys-suser_sid-vu-verify.sql, test/babelfish/raw/functions/sys-suser_sid-vu-cleanup.sql
+
+statement ok
+CREATE VIEW sys_suser_sid_view_vu_prepare AS
+SELECT suser_sid(CAST('-1' AS sys.sysname))
+
+statement ok
+CREATE PROC sys_suser_sid_proc_vu_prepare AS
+SELECT suser_sid(CAST('-1' AS sys.sysname))
+
+statement ok
+CREATE FUNCTION sys_suser_sid_func_vu_prepare()
+RETURNS SYS.VARBINARY(85)
+AS
+BEGIN
+    RETURN suser_sid(CAST('-1' AS sys.sysname))
+END
+
+statement ok
+CREATE VIEW sys_suser_id_view_vu_prepare AS
+SELECT suser_id(-1)
+
+statement ok
+CREATE PROC sys_suser_id_proc_vu_prepare AS
+SELECT suser_id(-1)
+
+statement ok
+CREATE FUNCTION sys_suser_id_func_vu_prepare()
+RETURNS SYS.VARBINARY(85)
+AS
+BEGIN
+    RETURN suser_id(-1)
+END
+
+query T
+SELECT * FROM sys_suser_id_view_vu_prepare
+----
+1
+
+query T
+EXEC sys_suser_id_proc_vu_prepare
+----
+1
+
+query T
+SELECT sys_suser_id_func_vu_prepare()
+----
+1
+
+statement ok
+DROP VIEW sys_suser_sid_view_vu_prepare
+
+statement ok
+DROP PROC sys_suser_sid_proc_vu_prepare
+
+statement ok
+DROP FUNCTION sys_suser_sid_func_vu_prepare
+
+statement ok
+DROP VIEW sys_suser_id_view_vu_prepare
+
+statement ok
+DROP PROC sys_suser_id_proc_vu_prepare
+
+statement ok
+DROP FUNCTION sys_suser_id_func_vu_prepare
+

@@ -1,0 +1,387 @@
+# test/slt_proc/babelfish_oracle/631_babel_datepart.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/datepart-vu-prepare.sql, test/babelfish/raw/functions/datepart-vu-verify.sql, test/babelfish/raw/functions/datepart-vu-cleanup.sql
+
+statement ok
+CREATE VIEW date_part_vu_prepare_view AS SELECT * FROM DATEPART(wk, '07-18-2022')
+
+statement ok
+CREATE FUNCTION date_part_vu_prepare_func(@date_str varchar(128))
+RETURNS TABLE
+AS
+RETURN SELECT * FROM DATEPART(mm, @date_str);
+
+statement ok
+CREATE FUNCTION ISOweek_3101 (@date datetime)
+RETURNS tinyint
+AS
+BEGIN
+	DECLARE @ISOweek tinyint
+	SET @ISOweek= DATEPART(wk,@date)+1-DATEPART(wk,CAST(DATEPART(yy,@date) as CHAR(4))+'0104')
+	IF (@ISOweek=0)
+		SET @ISOweek=dbo.ISOweek(CAST(DATEPART(yy,@date)-1 AS CHAR(4))+'12'+ CAST(24+DATEPART(DAY,@date) AS CHAR(2)))+1
+	IF ((DATEPART(mm,@date)=12) AND ((DATEPART(dd,@date)-DATEPART(dw,@date))>= 28))
+		SET @ISOweek=1
+	RETURN(@ISOweek)
+END
+
+statement ok
+CREATE PROCEDURE date_part_vu_prepare_proc @date_str varchar(128)
+AS
+SELECT DATEPART(dd, @date_str)
+
+statement ok
+CREATE VIEW date_part_vu_prepare_sys_day_view AS SELECT * FROM DAY(CAST ('07-18-2022' AS datetime))
+
+statement ok
+CREATE FUNCTION date_part_vu_prepare_sys_day_func(@a datetime)
+RETURNS TABLE
+AS
+RETURN SELECT * FROM DAY(@a);
+
+statement ok
+CREATE PROCEDURE date_part_vu_prepare_sys_day_proc @a datetime
+AS
+SELECT DAY(@a)
+
+statement ok
+CREATE TABLE date_part_vu_prepare_DateParts (DatePartName VARCHAR(20));
+
+statement ok
+CREATE TABLE date_part_vu_prepare_TestDates (
+    TestDateTime DATETIME,
+    TestDateTimeOffset DATETIMEOFFSET,
+    TestDateTime2 DATETIME2,
+    TestSmallDateTime SMALLDATETIME
+);
+
+statement ok
+CREATE TABLE date_part_vu_prepare_TestTimezones (TimezoneName VARCHAR(50));
+
+statement ok
+CREATE TABLE date_part_vu_prepare_TestResults (
+    TestCase VARCHAR(100),
+    TimeZone VARCHAR(50),
+    DataType VARCHAR(20),
+    InputDate VARCHAR(50),
+    DatePart VARCHAR(20),
+    DatePartValue SQL_VARIANT,
+    DateName NVARCHAR(100)
+);
+
+statement ok
+INSERT INTO date_part_vu_prepare_DateParts (DatePartName) VALUES
+('year'), ('quarter'), ('month'), ('dayofyear'), ('day'), 
+('week'), ('weekday'), ('hour'), ('minute'), ('second'), 
+('millisecond'), ('microsecond'), ('nanosecond'),
+('tzoffset'), ('iso_week');
+
+statement ok
+INSERT INTO date_part_vu_prepare_TestDates VALUES 
+('2025-01-01 05:30:45', '2025-01-01 05:30:45 +00:00', '2025-01-01 05:30:45.1234567', '2025-01-01 05:31:00'),
+('2025-06-15 23:59:59', '2025-06-15 23:59:59 +00:00', '2025-06-15 23:59:59.9876543', '2025-06-15 23:59:00');
+
+statement ok
+INSERT INTO date_part_vu_prepare_TestTimezones (TimezoneName) VALUES
+('UTC'),('America/New_York'), ('Europe/London'), ('Asia/Tokyo'), ('Africa/Nairobi');
+
+query T
+SELECT DATEPART(dd, '07-18-2022')
+----
+NULL
+
+query T
+SELECT DATEPART(wk, '18 July 2022')
+----
+NULL
+
+query T
+SELECT DATEPART(yy, '07-18-2022')
+----
+NULL
+
+statement error
+SELECT ISOWeek_3101('01-01-1790')
+
+query T
+EXECUTE date_part_vu_prepare_proc '07-18-2022'
+----
+NULL
+
+query T
+EXECUTE date_part_vu_prepare_proc '18 July 2022'
+----
+NULL
+
+query T
+EXECUTE date_part_vu_prepare_proc '7/18/2022'
+----
+NULL
+
+statement ok
+DECLARE @a datetime
+SET @a = CAST('07-18-2022' AS datetime)
+EXECUTE date_part_vu_prepare_proc @a
+
+query T
+SELECT DATEPART(dd, '00:00:00.0000000')
+----
+NULL
+
+query T
+SELECT DATEPART(wk, '23:59:59.9999999')
+----
+NULL
+
+query T
+SELECT DATEPART(wk, '23:59:66')
+----
+NULL
+
+query T
+SELECT DATEPART(hh, '01:01:01.1234567 AM')
+----
+NULL
+
+query T
+SELECT DATEPART(mm, '01:01:01.1234567 PM')
+----
+NULL
+
+query T
+SELECT DATEPART(ss, '01:01:01.1234567PM')
+----
+NULL
+
+query T
+SELECT DATEPART(wk, '01:01:01.1234567')
+----
+NULL
+
+query T
+SELECT DATEPART(hh, '01:01:01.1234567 +01:01')
+----
+NULL
+
+query T
+SELECT DATEPART(mm, '0001-01-01')
+----
+1
+
+query T
+SELECT DATEPART(ss, '9999-12-31')
+----
+0
+
+query T
+SELECT DATEPART(ss, '99999-12-31')
+----
+NULL
+
+query T
+SELECT DATEPART(dd, '07-18-2022')
+----
+NULL
+
+query T
+SELECT DATEPART(wk, '07/18/2022')
+----
+29
+
+query T
+SELECT DATEPART(hh, 'Jul 18, 22')
+----
+NULL
+
+query T
+SELECT DATEPART(mm, '18 July 2022')
+----
+NULL
+
+query T
+SELECT DATEPART(yy, '220101')
+----
+NULL
+
+query T
+SELECT DATEPART(mm, '01-01-1753 00:00:00.000')
+----
+NULL
+
+query T
+SELECT DATEPART(ss, '12-31-9999 23:59:59.997')
+----
+NULL
+
+query T
+SELECT DATEPART(dd, '01-01-00000 12:44:45.034')
+----
+NULL
+
+query T
+SELECT DATEPART(ss, 'Nov 1999 01 AM')
+----
+NULL
+
+query T
+SELECT DATEPART(yy, '220101 14:30')
+----
+NULL
+
+query T
+SELECT DATEPART(mm, '01-01-1900 00:00:00')
+----
+NULL
+
+query T
+SELECT DATEPART(ss, '06-06-2079 23:59:59')
+----
+NULL
+
+query T
+SELECT DATEPART(dd, '01-01-1900 12:44:63')
+----
+NULL
+
+query T
+SELECT DATEPART(wk, '07/18/2022 12:35:00')
+----
+29
+
+query T
+SELECT DATEPART(hh, 'Jul 18, 22 01:01:00')
+----
+NULL
+
+query T
+SELECT DATEPART(yy, '18 July 2022 01:02:00')
+----
+NULL
+
+query T
+SELECT DATEPART(ss, 'Nov 1999 01:02:00')
+----
+NULL
+
+query T
+SELECT DATEPART(yy, '220101 14:30:00')
+----
+NULL
+
+query T
+SELECT DATEPART(mm, '01-01-0001 00:00:00.0000000')
+----
+NULL
+
+query T
+SELECT DATEPART(ss, '12-31-9999 23:59:59.999999')
+----
+NULL
+
+query T
+SELECT DATEPART(dd, '01-01-00091 12:44:33.1234567')
+----
+NULL
+
+query T
+SELECT DATEPART(wk, '07/18/2022 12:35:00.0000001')
+----
+29
+
+query T
+SELECT DATEPART(hh, 'Jul 18, 22 01:01:00.1234567')
+----
+NULL
+
+query T
+SELECT DATEPART(yy, '18 July 2022 01:02:00.9876543')
+----
+NULL
+
+query T
+SELECT DATEPART(ss, 'Nov 1999 01:02:00.7651112')
+----
+NULL
+
+query T
+SELECT DATEPART(yy, '220101 14:30:00.97531086')
+----
+NULL
+
+query T
+SELECT DATEPART(mm, '01-01-0001 00:00:00.0000000 -14:00')
+----
+NULL
+
+query T
+SELECT DATEPART(ss, '12-31-9999 23:59:59.9999999 +14:00')
+----
+NULL
+
+query T
+SELECT DATEPART(dd, '01-01-12345 12:44:33.1234567 -14:01')
+----
+NULL
+
+query T
+SELECT DATEPART(wk, '07/18/2022 12:35:00.0000001 +4:56')
+----
+NULL
+
+query T
+SELECT DATEPART(hh, 'Jul 18, 22 01:01:00.1234567 -7:8')
+----
+NULL
+
+query T
+SELECT DATEPART(yy, '18 July 2022 01:02:00.9876543 +9:10')
+----
+NULL
+
+query T
+SELECT DATEPART(ss, 'Nov 1999 01:02:00.7651112 -11:12')
+----
+NULL
+
+query T
+SELECT DATEPART(yy, '220101 14:30:00.97531086 +13:14')
+----
+NULL
+
+statement ok
+SELECT * FROM date_part_vu_prepare_TestResults
+ORDER BY DataType, InputDate, TimeZone, DatePart;
+
+statement ok
+SELECT 
+    DataType,
+    InputDate,
+    DatePart,
+    COUNT(DISTINCT DatePartValue) AS UniqueDatePartValues,
+    COUNT(DISTINCT DateName) AS UniqueDateNames
+FROM date_part_vu_prepare_TestResults
+GROUP BY DataType, InputDate, DatePart
+HAVING 
+    COUNT(DISTINCT DatePartValue) > 1 OR 
+    COUNT(DISTINCT DateName) > 1;
+
+statement ok
+DROP VIEW date_part_vu_prepare_view
+
+statement ok
+DROP FUNCTION date_part_vu_prepare_func
+
+statement ok
+DROP FUNCTION ISOWeek_3101
+
+statement ok
+DROP PROCEDURE date_part_vu_prepare_proc
+
+statement ok
+DROP VIEW date_part_vu_prepare_sys_day_view
+
+statement ok
+DROP FUNCTION date_part_vu_prepare_sys_day_func
+
+statement ok
+DROP PROCEDURE date_part_vu_prepare_sys_day_proc
+

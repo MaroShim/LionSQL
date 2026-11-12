@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/1226_babel_babel_3818.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3818-vu-prepare.sql, test/babelfish/raw/BABEL-3818-vu-verify.sql, test/babelfish/raw/BABEL-3818-vu-cleanup.sql
+
+statement ok
+Create Table cities (name varchar(250));
+
+statement ok
+alter table cities add region varchar(50) constraint defRegion default 'NEW ENGLAND';
+
+statement ok
+insert into cities (name) VALUES ('Boston');
+
+statement ok
+alter table cities alter column region drop default defRegion
+
+statement ok
+alter table cities alter column region varchar(50) drop default defRegion
+
+statement ok
+alter table cities alter region varchar(50) drop default defRegion
+
+statement ok
+alter table cities alter region drop default defRegion
+
+statement ok
+drop table cities;
+

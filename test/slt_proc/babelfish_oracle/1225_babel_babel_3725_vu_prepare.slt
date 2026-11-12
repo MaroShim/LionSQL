@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1225_babel_babel_3725_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/dml/BABEL-3725-vu-prepare.sql
+
+statement ok
+create table dbo.babel_3725(a int)
+
+statement ok
+insert into babel_3725 values (1), (2), (NULL)
+

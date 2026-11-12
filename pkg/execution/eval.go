@@ -219,19 +219,52 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 		}
 		found := false
 		hasNull := false
-		for _, item := range e.List {
-			itemVal, okItem := EvalTupleExprWithSubquery(t, item, execSubquery)
-			if !okItem || itemVal == nil {
-				hasNull = true
-				continue
+		if e.Query != nil {
+			if execSubquery == nil {
+				return nil, false
 			}
-			if sv, ok := itemVal.(storage.Value); ok && sv.IsNull {
-				hasNull = true
-				continue
+			subRows, cols, err := execSubquery(e.Query.String())
+			if err != nil {
+				return nil, false
 			}
-			if CompareValues(val, itemVal) == 0 {
-				found = true
-				break
+			for _, r := range subRows {
+				var itemVal any
+				if len(cols) > 0 {
+					itemVal = r[cols[0]]
+				} else {
+					for _, v := range r {
+						itemVal = v
+						break
+					}
+				}
+				if itemVal == nil {
+					hasNull = true
+					continue
+				}
+				if sv, ok := itemVal.(storage.Value); ok && sv.IsNull {
+					hasNull = true
+					continue
+				}
+				if CompareValues(val, itemVal) == 0 {
+					found = true
+					break
+				}
+			}
+		} else {
+			for _, item := range e.List {
+				itemVal, okItem := EvalTupleExprWithSubquery(t, item, execSubquery)
+				if !okItem || itemVal == nil {
+					hasNull = true
+					continue
+				}
+				if sv, ok := itemVal.(storage.Value); ok && sv.IsNull {
+					hasNull = true
+					continue
+				}
+				if CompareValues(val, itemVal) == 0 {
+					found = true
+					break
+				}
 			}
 		}
 		if found {

@@ -1,0 +1,31 @@
+# test/slt_proc/window_analytics/184_window_rank_lag_sum_04.slt
+# T-SQL ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, SUM OVER (4)
+
+statement ok
+CREATE TABLE win_t_184 (id INT PRIMARY KEY, dept VARCHAR(10), score INT, val INT);
+
+statement ok
+INSERT INTO win_t_184 VALUES (1, 'A', 104, 40), (2, 'A', 104, 80), (3, 'B', 84, 120), (4, 'B', 64, 40);
+
+query IIII
+SELECT id, ROW_NUMBER() OVER (ORDER BY id), RANK() OVER (ORDER BY score DESC), DENSE_RANK() OVER (ORDER BY score DESC)
+FROM win_t_184
+ORDER BY id;
+----
+1 1 1 1
+2 2 1 1
+3 3 3 2
+4 4 4 3
+
+query IIII
+SELECT id, LAG(val, 1, 0) OVER (ORDER BY id), LEAD(val, 1, -1) OVER (ORDER BY id), SUM(val) OVER (ORDER BY id)
+FROM win_t_184
+ORDER BY id;
+----
+1 0 80 40
+2 40 120 120
+3 80 40 240
+4 120 -1 280
+
+statement ok
+DROP TABLE win_t_184;

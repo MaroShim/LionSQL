@@ -1,0 +1,21 @@
+# test/slt_proc/babelfish_oracle/1239_babel_babel_480.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-480.sql
+
+statement ok
+create procedure p_rcv3 as begin select 123 end
+
+statement ok
+create procedure p_rcv12a
+as
+begin                -- begin + end lines are optional
+select 'hello'
+select 'world'
+select '!!!'
+end                  -- begin + end lines are optional
+
+statement ok
+drop procedure p_rcv3
+
+statement ok
+drop procedure p_rcv12a
+

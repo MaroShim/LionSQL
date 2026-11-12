@@ -1,0 +1,15 @@
+# test/slt_proc/babelfish_oracle/1402_babel_bbf_view_def_before_14_5.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/bbf_view_def-before-14_5-vu-prepare.sql, test/babelfish/raw/bbf_view_def-before-14_5-vu-verify.sql
+
+statement ok
+CREATE VIEW bbf_view_def_upgrade_vu_prepare_view AS SELECT 1;
+
+statement ok
+CREATE VIEW bbf_view_def_upgrade_vu_prepare_dep_view AS SELECT * FROM information_schema.views;
+
+statement ok
+DROP VIEW bbf_view_def_upgrade_vu_prepare_view;
+
+statement ok
+DROP VIEW bbf_view_def_upgrade_vu_prepare_dep_view;
+

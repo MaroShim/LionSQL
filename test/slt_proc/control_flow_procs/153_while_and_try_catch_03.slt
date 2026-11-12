@@ -1,0 +1,35 @@
+# test/slt_proc/control_flow_procs/153_while_and_try_catch_03.slt
+# T-SQL WHILE loop accumulation and TRY...CATCH THROW (3)
+
+statement ok
+CREATE PROCEDURE sp_loop_try_153 @n INT, @fail INT
+AS
+BEGIN
+    BEGIN TRY
+        IF @fail = 1
+        BEGIN
+            THROW 52003, 'guard_triggered_3', 1;
+        END;
+        DECLARE @i INT = 1;
+        DECLARE @s INT = 0;
+        WHILE @i <= @n
+        BEGIN
+            SET @s = @s + @i;
+            SET @i = @i + 1;
+        END;
+        SELECT @s, 'OK';
+    END TRY
+    BEGIN CATCH
+        SELECT ERROR_NUMBER(), ERROR_MESSAGE();
+    END CATCH
+END;
+
+query IT
+EXEC sp_loop_try_153 7, 0;
+----
+28 OK
+
+query IT
+EXEC sp_loop_try_153 7, 1;
+----
+52003 guard_triggered_3

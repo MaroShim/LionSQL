@@ -1,0 +1,52 @@
+# test/slt_proc/babelfish_oracle/443_babel_babel_4330.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_4330-vu-prepare.sql, test/babelfish/raw/BABEL_4330-vu-verify.sql
+
+statement ok
+CREATE TABLE babel_4330_vu_prepare_t1(a varchar(50) NULL);
+
+statement ok
+INSERT INTO babel_4330_vu_prepare_t1 VALUES('ababa');
+
+statement ok
+CREATE VIEW babel_4330_vu_prepare_v1 AS 
+SELECT replace(a, 'a', 'c') FROM babel_4330_vu_prepare_t1
+
+statement ok
+CREATE FUNCTION babel_4330_vu_prepare_f1() returns table as return
+SELECT replace(a, 'a', 'c') FROM babel_4330_vu_prepare_t1
+
+statement ok
+CREATE PROCEDURE babel_4330_vu_prepare_p1 AS SELECT replace(a, 'a', 'c') FROM babel_4330_vu_prepare_t1
+
+query T
+SELECT replace(a, 'a', 'c') FROM babel_4330_vu_prepare_t1;
+----
+cbcbc
+
+query T
+SELECT * FROM babel_4330_vu_prepare_v1;
+----
+cbcbc
+
+query T
+SELECT * FROM babel_4330_vu_prepare_f1();
+----
+cbcbc
+
+query T
+EXEC babel_4330_vu_prepare_p1;
+----
+cbcbc
+
+statement ok
+DROP PROCEDURE babel_4330_vu_prepare_p1;
+
+statement ok
+DROP FUNCTION babel_4330_vu_prepare_f1;
+
+statement ok
+DROP VIEW babel_4330_vu_prepare_v1;
+
+statement ok
+DROP TABLE babel_4330_vu_prepare_t1;
+

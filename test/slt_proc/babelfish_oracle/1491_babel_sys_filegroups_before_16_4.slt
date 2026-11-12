@@ -1,0 +1,37 @@
+# test/slt_proc/babelfish_oracle/1491_babel_sys_filegroups_before_16_4.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-filegroups-before-16-4-vu-prepare.sql, test/babelfish/raw/views/sys-filegroups-before-16-4-vu-verify.sql, test/babelfish/raw/views/sys-filegroups-before-16-4-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE VIEW sys_filegroups_vu_prepare_view AS
+SELECT * FROM sys.filegroups
+
+statement ok
+CREATE PROC sys_filegroups_vu_prepare_proc AS
+SELECT * FROM sys.filegroups
+
+statement ok
+CREATE FUNCTION dbo.sys_filegroups_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT COUNT(*) FROM sys.filegroups)
+END
+
+statement ok
+USE master
+
+statement ok
+USE master
+
+statement ok
+DROP VIEW sys_filegroups_vu_prepare_view
+
+statement ok
+DROP PROC sys_filegroups_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_filegroups_vu_prepare_func
+

@@ -1,0 +1,35 @@
+# test/slt_proc/types_cast_null/879_case_3vl_greatest_least_19.slt
+# T-SQL searched/simple CASE, GREATEST, LEAST, and 3VL NULL predicates (19)
+
+query II
+SELECT GREATEST(76, 173, 284), LEAST(76, 173, 284);
+----
+284 76
+
+statement ok
+CREATE TABLE t_null_879 (id INT PRIMARY KEY, a INT, b VARCHAR(20));
+
+statement ok
+INSERT INTO t_null_879 VALUES
+(1, 76, 'LOW'),
+(2, NULL, 'MISSING'),
+(3, 284, NULL);
+
+query ITT
+SELECT id,
+       CASE WHEN a IS NULL THEN 'IS_NULL' WHEN a >= 173 THEN 'HIGH' ELSE 'NORMAL' END,
+       COALESCE(b, 'DEFAULT_19')
+FROM t_null_879
+ORDER BY id;
+----
+1 NORMAL LOW
+2 IS_NULL MISSING
+3 HIGH DEFAULT_19
+
+query I
+SELECT COUNT(*) FROM t_null_879 WHERE a IS NOT NULL;
+----
+2
+
+statement ok
+DROP TABLE t_null_879;

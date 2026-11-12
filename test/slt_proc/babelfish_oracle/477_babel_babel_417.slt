@@ -1,0 +1,43 @@
+# test/slt_proc/babelfish_oracle/477_babel_babel_417.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_417.sql
+
+query T
+select cast(cast(cast('$123.123' as money) as sql_variant) as money);
+----
+0.00
+
+query T
+select cast(cast(cast('$123.123' as smallmoney) as sql_variant) as smallmoney);
+----
+0.00
+
+query T
+select cast(cast(cast('256' as smallint) as sql_variant) as smallint);
+----
+256
+
+query T
+select cast(cast(cast('255' as tinyint) as sql_variant) as tinyint);
+----
+255
+
+query T
+select cast(cast(cast('Â£' as nvarchar(1)) as sql_variant) as nvarchar(1));
+----
+Â
+
+query T
+select cast(cast(cast('Â£' as varchar(1)) as sql_variant) as varchar(1));
+----
+Â
+
+query T
+select cast(cast(cast('Â£' as nchar(1)) as sql_variant) as nchar(1));
+----
+Â
+
+query T
+select cast(cast(cast('Â£' as char(1)) as sql_variant) as char(1));
+----
+Â
+

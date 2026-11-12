@@ -1,0 +1,63 @@
+# test/slt_proc/babelfish_oracle/1232_babel_babel_4279_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4279-vu-prepare.sql
+
+statement ok
+CREATE TABLE test_babel_4279_t1([ABC.nfds] INT, [DEf.j] INT);
+
+statement ok
+CREATE VIEW test_babel_4279_v1 AS SELECT test_babel_4279_t1.[ABC.nfds] from test_babel_4279_t1;
+
+statement ok
+CREATE VIEW test_babel_4279_v2 AS SELECT [test_babel_4279_t1].[ABC.nfds] ,test_babel_4279_t1.[DEf.j] from test_babel_4279_t1;
+
+statement ok
+CREATE DATABASE [test_babel_4279_d.1];
+
+statement ok
+USE [test_babel_4279_d.1];
+
+statement ok
+CREATE SCHEMA test_babel_4279_s1;
+
+statement ok
+CREATE TABLE test_babel_4279_s1.test_babel_4279_st1([ABC.nfds] INT, [DEf.j] INT);
+
+statement ok
+CREATE VIEW test_babel_4279_sv1 AS SELECT [test_babel_4279_s1].[test_babel_4279_st1].[ABC.nfds] from test_babel_4279_s1.test_babel_4279_st1;
+
+statement ok
+USE MASTER
+
+statement ok
+CREATE VIEW test_babel_4279_v3 AS SELECT [test_babel_4279_d.1].[test_babel_4279_s1].[test_babel_4279_st1].[ABC.nfds] from [test_babel_4279_d.1].[test_babel_4279_s1].[test_babel_4279_st1];
+
+statement ok
+CREATE TABLE test_babel_4279_t2(您您对您对您对您对您对您对您对您对您对您您您 INT, 对您对您对您对您对您对您对您 INT);
+
+statement ok
+CREATE VIEW test_babel_4279_v4 AS SELECT test_babel_4279_t2.[您您对您对您对您对您对您对您对您对您对您您您] from test_babel_4279_t2;
+
+statement ok
+CREATE VIEW test_babel_4279_v5 AS SELECT ぁあ.[您您对您对您对您对您对您对您对您对您对您您您] from test_babel_4279_t2 AS ぁあ;
+
+statement ok
+CREATE SCHEMA "tngdf'";
+
+statement ok
+CREATE TABLE "tngdf'".[sc,sdg"fdsngjds']("AB[C" INT);
+
+statement ok
+CREATE VIEW test_babel_4279_v6 AS SELECT "tngdf'".[sc,sdg"fdsngjds']."AB[C" from "tngdf'".[sc,sdg"fdsngjds'];
+
+statement ok
+CREATE TABLE test_babel_4279_t3(ABCD INT);
+
+statement ok
+CREATE VIEW test_babel_4279_v7 AS SELECT  test_babel_4279_t3.ABCD FROM test_babel_4279_t3;
+
+statement ok
+CREATE TABLE test_babel_4279_t4([ぁあ'"] INT);
+
+statement ok
+CREATE VIEW test_babel_4279_v8 AS SELECT test_babel_4279_t4.[ぁあ'"] FROM test_babel_4279_t4;
+

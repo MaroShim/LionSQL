@@ -1,0 +1,33 @@
+# test/slt_proc/babelfish_oracle/1426_babel_drop_database.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/drop_database.sql
+
+statement ok
+use master
+
+statement ok
+CREATE DATABASE errdb
+
+statement ok
+USE errdb
+
+statement ok
+CREATE SCHEMA Purchasing;
+
+statement ok
+CREATE TABLE Purchasing.Vendor(VendorName NameType)
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE errdb COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+USE errdb
+
+statement ok
+CREATE SCHEMA Purchasing;
+
+statement ok
+USE master
+

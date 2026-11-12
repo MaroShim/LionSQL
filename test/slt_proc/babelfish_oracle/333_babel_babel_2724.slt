@@ -1,0 +1,45 @@
+# test/slt_proc/babelfish_oracle/333_babel_babel_2724.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2724.sql
+
+statement ok
+use master;
+
+statement ok
+create table t2724(a int);
+insert into t2724 values (1);
+
+query T
+select a from t2724;
+----
+1
+
+query T
+select t2724.a from t2724;
+----
+1
+
+query T
+select dbo..a from t2724;
+----
+1
+
+statement ok
+insert into t2724(a) values (2);
+insert into t2724(.a) values (3);
+insert into t2724(........a) values (4);
+insert into t2724(invalid.a) values (5);
+insert into t2724(x.y...z....w...a) values (6);
+
+query T
+select * from t2724;
+----
+1
+2
+3
+4
+5
+6
+
+statement ok
+drop table t2724;
+

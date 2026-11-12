@@ -1,0 +1,37 @@
+# test/slt_proc/babelfish_oracle/1447_babel_msdb_dbo_syspolicy_configuration.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/msdb-dbo-syspolicy_configuration-vu-prepare.sql, test/babelfish/raw/views/msdb-dbo-syspolicy_configuration-vu-verify.sql, test/babelfish/raw/views/msdb-dbo-syspolicy_configuration-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE VIEW msdb_dbo_syspolicy_configuration_vu_prepare_view AS
+SELECT * FROM msdb.dbo.syspolicy_configuration
+
+statement ok
+CREATE PROC msdb_dbo_syspolicy_configuration_vu_prepare_proc AS
+SELECT * FROM msdb.dbo.syspolicy_configuration
+
+statement ok
+CREATE FUNCTION dbo.msdb_dbo_syspolicy_configuration_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT COUNT(*) FROM msdb.dbo.syspolicy_configuration)
+END
+
+statement ok
+USE master
+
+statement ok
+USE master
+
+statement ok
+DROP VIEW msdb_dbo_syspolicy_configuration_vu_prepare_view
+
+statement ok
+DROP PROC msdb_dbo_syspolicy_configuration_vu_prepare_proc
+
+statement ok
+DROP FUNCTION dbo.msdb_dbo_syspolicy_configuration_vu_prepare_func()
+

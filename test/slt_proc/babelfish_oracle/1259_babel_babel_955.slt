@@ -1,0 +1,36 @@
+# test/slt_proc/babelfish_oracle/1259_babel_babel_955.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-955.sql
+
+statement ok
+create schema test1;
+
+statement ok
+CREATE TABLE test1.t1(c1 int, c2 varchar(10) )
+
+statement ok
+CREATE TRIGGER test1.tr1 ON test1.t1 AFTER DELETE AS
+    DECLARE @rowcnt int
+    SET @rowcnt = @@ROWCOUNT
+    SELECT @rowcnt AS "#rows"
+
+statement ok
+create schema test2;
+
+statement ok
+CREATE TRIGGER test2.tr2 ON test1.t1 AFTER DELETE AS
+    DECLARE @rowcnt int
+    SET @rowcnt = @@ROWCOUNT
+    SELECT @rowcnt AS "#rows"
+
+statement ok
+drop schema test2;
+
+statement ok
+drop trigger tr1
+
+statement ok
+drop table test1.t1
+
+statement ok
+drop schema test1
+

@@ -1,0 +1,27 @@
+# test/slt_proc/datetime/2069_eomonth_dateadd_datediff_144.slt
+# T-SQL EOMONTH, DATEADD(day), DATEDIFF(day), YEAR/MONTH/DAY (144)
+
+query TTI
+SELECT CAST(EOMONTH('2018-12-13') AS VARCHAR(10)), CAST(DATEADD(day, 22, '2018-12-13') AS VARCHAR(10)), DATEDIFF(day, '2018-12-13', '2019-01-04');
+----
+2018-12-31 2019-01-04 22
+
+query IIII
+SELECT YEAR('2019-01-04'), MONTH('2019-01-04'), DAY('2019-01-04'), DAY(EOMONTH('2018-12-13'));
+----
+2019 1 4 31
+
+statement ok
+CREATE TABLE dt_log_2069 (id INT PRIMARY KEY, ev_date VARCHAR(20));
+
+statement ok
+INSERT INTO dt_log_2069 VALUES (1, '2018-12-13'), (2, '2019-01-04');
+
+query II
+SELECT id, DATEDIFF(day, '2018-12-13', ev_date) FROM dt_log_2069 ORDER BY id;
+----
+1 0
+2 22
+
+statement ok
+DROP TABLE dt_log_2069;

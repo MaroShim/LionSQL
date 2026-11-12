@@ -1,0 +1,24 @@
+# test/slt_proc/babelfish_oracle/741_babel_sys_tables_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-tables-dep-vu-prepare.sql, test/babelfish/raw/views/sys-tables-dep-vu-verify.sql, test/babelfish/raw/views/sys-tables-dep-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sys_tables_dep_vu_prepare_db1
+
+statement ok
+USE sys_tables_dep_vu_prepare_db1
+
+statement ok
+CREATE TABLE sys_tables_dep_vu_prepare_t1(rand_col1 int DEFAULT 1, CHECK (rand_col1 > 0));
+
+statement ok
+CREATE VIEW sys_tables_dep_vu_prepare_view1 AS
+    SELECT COUNT(*) FROM sys.tables WHERE name COLLATE bbf_unicode_general_ci_as = 'sys_tables_dep_vu_prepare_t1'
+
+statement ok
+USE sys_tables_dep_vu_prepare_db1
+
+query T
+SELECT * FROM sys_tables_dep_vu_prepare_view1
+----
+1
+

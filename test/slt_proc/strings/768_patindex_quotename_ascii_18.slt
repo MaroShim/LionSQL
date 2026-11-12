@@ -1,0 +1,26 @@
+# test/slt_proc/strings/768_patindex_quotename_ascii_18.slt
+# T-SQL PATINDEX, QUOTENAME, ASCII, CHAR, SPACE, LTRIM, RTRIM (18)
+
+query ITTT
+SELECT ASCII('R'), CHAR(82), QUOTENAME('tbl_col_18'), REPLACE(CONCAT('L', SPACE(2), 'R'), ' ', '_');
+----
+82 R [tbl_col_18] L__R
+
+query II
+SELECT PATINDEX('%TARGET_R%', 'pre_18_TARGET_R_post'), LEN(LTRIM(RTRIM('   tbl_col_18   ')));
+----
+8 10
+
+statement ok
+CREATE PROCEDURE sp_str_adv_768 @s VARCHAR(100), @code INT OUTPUT
+AS
+BEGIN
+    SET @code = ASCII(LEFT(@s, 1));
+    SELECT UPPER(LEFT(@s, 3)), LOWER(RIGHT(@s, 4)), @code;
+END;
+
+query TTI
+DECLARE @out_c INT;
+EXEC sp_str_adv_768 @s = 'Rbc_XYZ18', @code = @out_c OUTPUT;
+----
+RBC yz18 82

@@ -26,7 +26,7 @@ Adopting LionSQL as the backend RDBMS for Gitea yields enterprise-grade advantag
    - LionSQL transparently handles XORM SQL generation patterns, dialect-specific DDL/DML, and system catalog queries.
 2. **Dual-Wire Protocol Freedom**:
    - **PostgreSQL Mode** (`lib/pq`, `:5433`): Standard for cloud-native and open-source environments.
-   - **SQL Server Mode** (`go-mssqldb`, `:1433`): Optimized for Microsoft enterprise environments (SSMS, .NET, Azure Data Studio).
+   - **SQL Server Mode** (`go-mssqldb`, `:1433`): Optimized for Microsoft enterprise environments (SSMS, .NET).
 3. **Extreme Hardware Efficiency**:
    - Replaces multi-gigabyte enterprise RDBMS footprints with a compact memory footprint of tens of megabytes, powered by sub-microsecond VDBE bytecode execution and In-Memory OCC / WiredTiger B+Tree engines.
 4. **Headless GitOps Automation**:

@@ -1,0 +1,43 @@
+# test/slt_proc/babelfish_oracle/1261_babel_babel_column_constraint.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-COLUMN-CONSTRAINT.sql
+
+statement ok
+CREATE SCHEMA [Babelfish_COLCONST];
+
+statement ok
+create table [Babelfish_COLCONST].[a] (
+  id int identity primary key,
+  texto varchar(50) NOT NULL
+);
+create table [Babelfish_COLCONST].[b] (
+  id int identity primary key,
+  foreign_id int not null references [Babelfish_COLCONST].[a],
+  texto varchar(50) NOT NULL
+);
+
+statement ok
+create table [Babelfish_COLCONST].[c] (
+    id int identity primary key,
+    foreign_id int not null,
+    foreign key(foreign_id) references [Babelfish_COLCONST].[a](id),
+    texto varchar(50) NOT NULL
+);
+
+statement ok
+SET IDENTITY_INSERT [Babelfish_COLCONST].[a] ON;
+
+statement ok
+insert into [Babelfish_COLCONST].[a](id,texto) values(1, 'some text');
+
+statement ok
+insert into [Babelfish_COLCONST].[b](foreign_id, texto) values(1,'insert text');
+
+statement ok
+insert into [Babelfish_COLCONST].[c](foreign_id, texto) values(1,'insert text');
+
+statement ok
+DROP TABLE [Babelfish_COLCONST].[c];
+DROP TABLE [Babelfish_COLCONST].[b];
+DROP TABLE [Babelfish_COLCONST].[a];
+DROP SCHEMA [Babelfish_COLCONST];
+

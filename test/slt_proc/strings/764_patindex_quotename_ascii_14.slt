@@ -1,0 +1,26 @@
+# test/slt_proc/strings/764_patindex_quotename_ascii_14.slt
+# T-SQL PATINDEX, QUOTENAME, ASCII, CHAR, SPACE, LTRIM, RTRIM (14)
+
+query ITTT
+SELECT ASCII('N'), CHAR(78), QUOTENAME('tbl_col_14'), REPLACE(CONCAT('L', SPACE(4), 'R'), ' ', '_');
+----
+78 N [tbl_col_14] L____R
+
+query II
+SELECT PATINDEX('%TARGET_N%', 'pre_14_TARGET_N_post'), LEN(LTRIM(RTRIM('   tbl_col_14   ')));
+----
+8 10
+
+statement ok
+CREATE PROCEDURE sp_str_adv_764 @s VARCHAR(100), @code INT OUTPUT
+AS
+BEGIN
+    SET @code = ASCII(LEFT(@s, 1));
+    SELECT UPPER(LEFT(@s, 3)), LOWER(RIGHT(@s, 4)), @code;
+END;
+
+query TTI
+DECLARE @out_c INT;
+EXEC sp_str_adv_764 @s = 'Nbc_XYZ14', @code = @out_c OUTPUT;
+----
+NBC yz14 78

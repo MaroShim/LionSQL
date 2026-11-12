@@ -1,0 +1,21 @@
+# test/slt_proc/babelfish_oracle/321_babel_babel_2445.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2445.sql
+
+statement ok
+USE master;
+
+query T
+select 'foo' where N'bar ' = 'bar';
+----
+foo
+
+query T
+select 'foo' where N'bar ' = N'bar';
+----
+foo
+
+query T
+select 'foo' as N'@var';
+----
+foo
+

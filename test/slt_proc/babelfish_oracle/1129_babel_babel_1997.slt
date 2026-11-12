@@ -1,0 +1,30 @@
+# test/slt_proc/babelfish_oracle/1129_babel_babel_1997.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1997.sql
+
+statement ok
+CREATE TABLE t1997_1(c1 int primary key, c2 int)
+
+statement ok
+CREATE TABLE t1997_2(c1 int primary key, c2 int, constraint fk foreign key (c2) references t1997_1(c1))
+
+statement ok
+INSERT INTO t1997_1 VALUES(1, 10)
+INSERT INTO t1997_2 VALUES(100, 1)
+
+statement ok
+begin tran
+        begin try
+                TRUNCATE TABLE t1997_1;
+        end try
+        begin catch
+                select xact_state();
+                DROP TABLE t1997_2
+                DROP TABLE t1997_1
+        end catch
+
+statement ok
+DROP TABLE t1997_2
+
+statement ok
+DROP TABLE t1997_1
+

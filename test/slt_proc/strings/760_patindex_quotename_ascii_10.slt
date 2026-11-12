@@ -1,0 +1,26 @@
+# test/slt_proc/strings/760_patindex_quotename_ascii_10.slt
+# T-SQL PATINDEX, QUOTENAME, ASCII, CHAR, SPACE, LTRIM, RTRIM (10)
+
+query ITTT
+SELECT ASCII('J'), CHAR(74), QUOTENAME('tbl_col_10'), REPLACE(CONCAT('L', SPACE(6), 'R'), ' ', '_');
+----
+74 J [tbl_col_10] L______R
+
+query II
+SELECT PATINDEX('%TARGET_J%', 'pre_10_TARGET_J_post'), LEN(LTRIM(RTRIM('   tbl_col_10   ')));
+----
+8 10
+
+statement ok
+CREATE PROCEDURE sp_str_adv_760 @s VARCHAR(100), @code INT OUTPUT
+AS
+BEGIN
+    SET @code = ASCII(LEFT(@s, 1));
+    SELECT UPPER(LEFT(@s, 3)), LOWER(RIGHT(@s, 4)), @code;
+END;
+
+query TTI
+DECLARE @out_c INT;
+EXEC sp_str_adv_760 @s = 'Jbc_XYZ10', @code = @out_c OUTPUT;
+----
+JBC yz10 74

@@ -1,0 +1,30 @@
+# test/slt_proc/strings/046_charindex_replace_trim_08.slt
+# T-SQL CHARINDEX, REPLACE, and TRIM family (8)
+
+query I
+SELECT CHARINDEX('pool', 'connection_pool_manager');
+----
+12
+
+query I
+SELECT CHARINDEX('nonexistent_token', 'connection_pool_manager');
+----
+0
+
+query T
+SELECT TRIM('connection_session_manager');
+----
+connection_session_manager
+
+statement ok
+CREATE PROCEDURE sp_replace_token_46 @src VARCHAR(100), @old VARCHAR(50), @new VARCHAR(50)
+AS
+BEGIN
+    DECLARE @pos INT = CHARINDEX(@old, @src);
+    SELECT @pos, TRIM(REPLACE(@src, @old, @new));
+END;
+
+query IT
+EXEC sp_replace_token_46 'connection_pool_manager', 'pool', 'session';
+----
+12 connection_session_manager

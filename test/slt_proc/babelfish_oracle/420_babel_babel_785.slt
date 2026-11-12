@@ -1,0 +1,89 @@
+# test/slt_proc/babelfish_oracle/420_babel_babel_785.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-785.sql
+
+query T
+create table testTbl(fname varchar(10));
+insert into testTbl values (null), ('Jenny');
+select * from testTbl
+----
+NULL
+Jenny
+
+statement ok
+select * from testTbl where fname=null;
+
+statement ok
+select * from testTbl where fname<>null;
+
+statement ok
+drop table testTbl;
+
+statement ok
+create table testTbl (
+    is_char_null char(10) null,
+    is_char_notnull char(10) not null,
+    is_varchar_null varchar(10) null,
+    is_varchar_notnull varchar(10) not null
+);
+
+statement ok
+insert into testTbl values
+    ('aaa','aaa','aaa','aaa'),
+    ('aaa  ','aaa  ','aaa  ','aaa  ');
+
+query TTTT
+select datalength(is_char_null) as is_char_null_len,
+    datalength(is_char_notnull) as is_char_notnull_len,
+    datalength(is_varchar_null) as is_varchar_null_len,
+    datalength(is_varchar_notnull) as is_varchar_notnull_len
+from testTbl;
+----
+3 3 3 3
+5 5 5 5
+
+statement ok
+drop table testTbl;
+
+statement ok
+create table testTbl(fname varchar(10));
+
+statement ok
+insert into testTbl values (null), ('Jenny Matthews');
+
+statement ok
+drop table testTbl;
+
+query T
+select 25/0;
+----
+NULL
+
+query T
+select 'test'+null;
+----
+NULL
+
+query T
+select concat('test', null);
+----
+test
+
+query T
+select concat(null, 'test');
+----
+test
+
+statement ok
+create table testTbl(size int)
+
+statement ok
+insert into testTbl values (707072), (1024000);
+
+query T
+select (100 / SUM((((size) * 8.00) / 1024))) from testTbl as T;
+----
+0
+
+statement ok
+drop table testTbl;
+

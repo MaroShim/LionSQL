@@ -1,0 +1,134 @@
+# test/slt_proc/babelfish_oracle/484_babel_babel_datetime.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_datetime.sql
+
+statement ok
+create table t1 (a datetime, b int)
+
+statement ok
+insert into t1 (b) values (1)
+
+query T
+select a from t1 where b = 1
+----
+NULL
+
+statement ok
+create table datetime_testing ( dt DATETIME )
+
+statement ok
+INSERT INTO datetime_testing VALUES('9999-12-31 23:59:59.998')
+
+statement ok
+INSERT INTO datetime_testing VALUES('1992-05-23 23:40:29.999')
+
+statement ok
+INSERT INTO datetime_testing VALUES('1992-05-23 23:40:30.000')
+
+statement ok
+INSERT INTO datetime_testing VALUES('1999-12-31 23:59:59.998')
+
+statement ok
+INSERT INTO datetime_testing VALUES('1999-12-31 23:59:59.999')
+
+statement ok
+INSERT INTO datetime_testing VALUES('2020-03-14')
+
+statement ok
+select * from datetime_testing where dt >= smalldatetime('2000-01-01 00:00:59')
+
+statement ok
+select * from datetime_testing where dt >= datetime('1992-05-23 23:40:00') 
+                    and dt < datetime('1992-05-23 23:41:00')
+
+statement ok
+select * from datetime_testing where dt < date('1992-05-24')
+
+query T
+select CAST(CAST('2000-01-01 23:59:59.999' AS datetime) AS date)
+----
+2000-01-01
+
+query T
+select day(cast('2002-05-23 23:41:29.998' as datetime))
+----
+23
+
+query T
+select month(cast('2002-05-23 23:41:29.998' as datetime))
+----
+5
+
+query T
+select year(cast('2002-05-23 23:41:29.998' as datetime))
+----
+2002
+
+query T
+select datepart(quarter, cast('2002-05-23 23:41:29.998' as datetime))
+----
+2
+
+query T
+select datepart(hour, cast('2002-05-23 23:41:29.998' as datetime))
+----
+23
+
+query T
+select datepart(dayofyear, cast('2002-05-23 23:41:29.998' as datetime))
+----
+143
+
+query T
+select datepart(second, cast('2002-05-23 23:41:29.998' as datetime))
+----
+29
+
+query T
+select datename(year, cast('2002-05-23 23:41:29.998' as datetime))
+----
+2002
+
+query T
+select datename(dw, cast('2002-05-23 23:41:29.998' as datetime))
+----
+Thursday
+
+query T
+select datename(month, cast('2002-05-23 23:41:29.998' as datetime))
+----
+May
+
+query T
+select pg_typeof(c1) FROM (SELECT cast('2016-12-26 23:30:05' as datetime) as C1 UNION SELECT cast('2016-12-26 23:30:05' as smalldatetime) as C1) T
+----
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT '2016-12-26 23:30:05'::datetime as C1 UNION SELECT '2016-12-26 23:30:05'::datetime2 as C1) T
+----
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT '2016-12-26 23:30:05'::datetime as C1 UNION SELECT '2016-12-26 23:30:05 +08:00:00'::datetimeoffset as C1) T
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT '2016-12-26 23:30:05'::datetime as C1 UNION SELECT '23:30:05'::time as C1) T
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT '2016-12-26 23:30:05'::datetime as C1 UNION SELECT '2016-12-26'::date as C1) T
+----
+NULL
+NULL
+
+statement ok
+drop table datetime_testing
+
+statement ok
+drop table t1
+

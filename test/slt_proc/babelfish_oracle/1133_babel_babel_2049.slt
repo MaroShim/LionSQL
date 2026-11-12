@@ -1,0 +1,10 @@
+# test/slt_proc/babelfish_oracle/1133_babel_babel_2049.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2049.sql
+
+statement ok
+create table t_babel_2049 (a int, b int);
+insert into t_babel_2049 values (10, 1);
+
+statement ok
+drop table t_babel_2049;
+

@@ -1,0 +1,33 @@
+# test/slt_proc/babelfish_oracle/1440_babel_getdatetest.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/getdatetest.sql
+
+statement ok
+Begin transaction 
+
+statement ok
+Rollback
+
+statement ok
+Begin transaction 
+
+statement ok
+Rollback
+
+statement ok
+Begin transaction 
+
+statement ok
+Rollback
+
+statement ok
+Begin transaction 
+
+statement ok
+Rollback
+
+statement ok
+Begin transaction 
+
+statement ok
+Rollback
+

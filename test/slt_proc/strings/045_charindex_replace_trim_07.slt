@@ -1,0 +1,30 @@
+# test/slt_proc/strings/045_charindex_replace_trim_07.slt
+# T-SQL CHARINDEX, REPLACE, and TRIM family (7)
+
+query I
+SELECT CHARINDEX('common', 'recursive_common_table');
+----
+11
+
+query I
+SELECT CHARINDEX('nonexistent_token', 'recursive_common_table');
+----
+0
+
+query T
+SELECT TRIM('recursive_delta_table');
+----
+recursive_delta_table
+
+statement ok
+CREATE PROCEDURE sp_replace_token_45 @src VARCHAR(100), @old VARCHAR(50), @new VARCHAR(50)
+AS
+BEGIN
+    DECLARE @pos INT = CHARINDEX(@old, @src);
+    SELECT @pos, TRIM(REPLACE(@src, @old, @new));
+END;
+
+query IT
+EXEC sp_replace_token_45 'recursive_common_table', 'common', 'delta';
+----
+11 recursive_delta_table

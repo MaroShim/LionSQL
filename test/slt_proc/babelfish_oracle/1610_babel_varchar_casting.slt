@@ -1,0 +1,61 @@
+# test/slt_proc/babelfish_oracle/1610_babel_varchar_casting.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/varchar_casting.sql
+
+statement ok
+create procedure p3078 (@a date) as begin select @a; end
+
+statement ok
+declare @a varchar(10) = '1967-10-23'
+exec p3078 @a -- implicit casting from VARCHAR to DATE
+
+statement ok
+drop procedure p3078
+
+statement ok
+declare @a varchar(20) = '11:34:45.1234'
+exec p3078 @a -- implicit casting from VARCHAR to TIME
+
+statement ok
+declare @a varchar(30) = '1968-10-23 12:45:37.123'
+exec p3078 @a -- implicit casting from VARCHAR to DATETIME
+
+statement ok
+declare @a varchar(30) = '1968-10-23 12:45:37.1234'
+exec p3078 @a -- implicit casting from VARCHAR to DATETIME2
+
+statement ok
+declare @a varchar(25) = '1912-01-16 12:32'
+exec p3078 @a -- implicit casting from VARCHAR to SMALLDATETIME
+
+statement ok
+declare @a varchar(10) = '1111.11'
+exec p3078 @a -- implicit casting from VARCHAR to MONEY 
+
+statement ok
+declare @a varchar(10) = '123.45'
+exec p3078 @a -- implicit casting from VARCHAR to NUMERIC 
+
+statement ok
+declare @a varchar(10) = 'abc'
+exec p3078 @a -- implicit casting from VARCHAR to CHAR
+
+statement ok
+declare @a varchar(10) = '10'
+exec p3078 @a -- implicit casting from VARCHAR to TINYINT
+
+statement ok
+declare @a varchar(30) = 'utils/devanagari.txt'
+exec p3078 @a -- implicit casting from VARCHAR to TEXT
+
+statement ok
+declare @a varchar(40) = 'd424fdef-1404-4bac-8289-c725b540f93d'
+exec p3078 @a -- implicit casting from VARCHAR to UNIQUEIDENTIFIER
+
+statement ok
+declare @a varchar(10) = '1'
+exec p3078 @a -- implicit casting from VARCHAR to BIT
+
+statement ok
+declare @a varchar(30) = 'utils/devanagari.txt'
+exec p3078 @a -- implicit casting from VARCHAR to XML
+

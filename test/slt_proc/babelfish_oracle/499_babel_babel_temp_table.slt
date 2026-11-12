@@ -1,0 +1,95 @@
+# test/slt_proc/babelfish_oracle/499_babel_babel_temp_table.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_temp_table.sql
+
+query T
+CREATE TABLE #local_tempt(col int);
+INSERT INTO #local_tempt VALUES (1);
+SELECT * FROM #local_tempt;
+----
+1
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE TABLE t1 (col int);
+INSERT INTO t1 values (1);
+INSERT INTO t1 values (NULL);
+SELECT * INTO #local_tempt2 FROM t1;
+
+query T
+SELECT * FROM #local_tempt2;
+----
+1
+NULL
+
+statement ok
+CREATE PROCEDURE temp_table_sp AS
+BEGIN
+	SELECT * INTO #tt_sp_local FROM t1;
+	INSERT INTO #tt_sp_local VALUES(2);
+END;
+
+statement ok
+create table #tt (a int);
+
+statement ok
+insert into #tt values(0);
+
+statement error
+select * from #tt_1st; 
+
+query T
+select * from #tt; 
+----
+0
+
+statement ok
+DROP TABLE #tt;
+
+statement ok
+create table #tt (a int);
+
+statement ok
+insert into #tt values(1);
+
+query T
+select * from #tt; -- should only print value '1'
+----
+1
+
+statement ok
+drop table #tt;
+
+statement error
+CREATE procedure temp_table_sp_exception AS
+BEGIN
+	  CREATE TABLE #tt (a int);
+	  CREATE TABLE #tt (a int); -- throws error
+END;
+
+statement ok
+SELECT * FROM pg_indexes WHERE tablename LIKE 'tt%'; -- should be no result
+
+statement ok
+create table #tt_con(a int CHECK (a > 10));
+
+statement error
+insert into #tt_con values(1); -- errorneous
+
+query T
+select * from #tt_con;
+----
+
+statement ok
+CREATE TABLE #babel322(#col int, ##col int);
+
+statement ok
+DROP TABLE #babel322;
+
+statement ok
+DROP PROCEDURE temp_table_sp;
+
+statement ok
+DROP TABLE t1;
+

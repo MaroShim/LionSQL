@@ -1,0 +1,203 @@
+# test/slt_proc/babelfish_oracle/1565_babel_temp_table.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/temp_tables/temp_table.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE TABLE #t1 (a INT IDENTITY PRIMARY KEY NOT NULL, b INT)
+
+statement ok
+INSERT INTO #t1 (b) values (1)
+
+query TT
+SELECT * FROM #t1
+----
+1 1
+
+statement ok
+ALTER TABLE #t1 DROP COLUMN b
+
+query T
+SELECT * FROM #t1
+----
+1
+
+statement ok
+ALTER TABLE #t1 ADD b varchar(20)
+
+query TT
+SELECT * FROM #t1
+----
+1 NULL
+
+statement ok
+ALTER TABLE #t1 ADD c AS a + 1
+
+query TTT
+SELECT * FROM #t1
+----
+1 NULL NULL
+
+statement error
+ALTER TABLE #t1 DROP COLUMN a
+
+query TTT
+SELECT * FROM #t1
+----
+1 NULL NULL
+
+statement ok
+INSERT INTO #t1 (b) VALUES ('hello')
+
+query TTT
+SELECT * FROM #t1
+----
+1 NULL NULL
+2 hello NULL
+
+statement error
+ALTER TABLE #t1 ALTER COLUMN b CHAR(4)
+
+statement ok
+DELETE FROM #t1 WHERE b = 'hello'
+
+statement ok
+ALTER TABLE #t1 DROP COLUMN b
+
+query TT
+SELECT * FROM #t1
+----
+1 NULL
+
+statement ok
+ALTER TABLE #t1 DROP COLUMN c
+
+query T
+SELECT * FROM #t1
+----
+1
+
+statement ok
+DROP TABLE #t1
+
+statement ok
+CREATE FUNCTION temp_table_func1(@a INT) RETURNS INT AS BEGIN RETURN 1 END
+
+statement ok
+CREATE TABLE temp_table_t1(a INT DEFAULT temp_table_func1(5))
+
+statement ok
+INSERT INTO temp_table_t1 VALUES (DEFAULT)
+
+query T
+SELECT * FROM temp_table_t1
+----
+NULL
+
+statement ok
+DROP TABLE temp_table_t1
+
+statement ok
+CREATE TABLE #t1 (a INT DEFAULT temp_table_func1(5))
+
+statement ok
+CREATE TABLE #t1 (a INT DEFAULT dbo.temp_table_func1(6))
+
+statement ok
+CREATE TABLE #t1 (a INT DEFAULT master.dbo.temp_table_func1(7))
+
+statement ok
+CREATE TABLE #t1 (a INT)
+
+statement ok
+ALTER TABLE #t1 ADD b INT DEFAULT temp_table_func1(5)
+
+statement ok
+DROP TABLE #t1
+
+statement ok
+DECLARE @tv TABLE (a INT DEFAULT temp_table_func1(5))
+INSERT INTO @tv VALUES (DEFAULT)
+SELECT * FROM @tv
+
+statement ok
+CREATE TABLE #t1 (a INT DEFAULT ISJSON('a'))
+
+statement ok
+ALTER TABLE #t1 ADD b INT DEFAULT ISJSON('b')
+
+statement ok
+INSERT INTO #t1 VALUES (DEFAULT, DEFAULT)
+
+query TT
+SELECT * FROM #t1
+----
+NULL NULL
+
+statement ok
+DROP TABLE #t1
+
+statement ok
+DECLARE @tv TABLE (a INT DEFAULT ISJSON('a'))
+INSERT INTO @tv VALUES (DEFAULT)
+SELECT * FROM @tv
+
+statement ok
+CREATE TABLE #t1 (a INT DEFAULT SYS.ISJSON('a'))
+
+statement ok
+CREATE FUNCTION ISJSON(@json TEXT) RETURNS INT AS BEGIN RETURN 10 END
+
+statement ok
+CREATE TABLE #t1 (a INT DEFAULT dbo.ISJSON('a'))
+
+statement ok
+CREATE TABLE #t1 (a INT DEFAULT ISJSON('a'))
+
+statement ok
+INSERT INTO #t1 VALUES (DEFAULT)
+
+query T
+SELECT * FROM #t1
+----
+NULL
+
+statement ok
+DROP TABLE #t1
+
+statement ok
+create table #t1(a int, b int default any_value(a))
+
+statement ok
+create table #t1(a int, b int default any_value(1))
+
+statement ok
+CREATE TABLE #t1 (a INT)
+
+statement ok
+ALTER TABLE #t1 ADD CONSTRAINT myconstraint DEFAULT temp_table_func1(5) FOR a
+
+statement ok
+ALTER TABLE #t1 ADD CONSTRAINT myconstraint DEFAULT dbo.ISJSON('a') FOR a
+
+statement ok
+ALTER TABLE #t1 ADD CONSTRAINT myconstraint DEFAULT ISJSON('a') FOR a
+
+statement ok
+INSERT INTO #t1 VALUES (DEFAULT)
+
+query T
+SELECT * FROM #t1
+----
+NULL
+
+statement ok
+DROP TABLE #t1
+
+statement ok
+DROP FUNCTION dbo.ISJSON
+
+statement ok
+DROP FUNCTION temp_table_func1
+

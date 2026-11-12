@@ -1,0 +1,140 @@
+# test/slt_proc/babelfish_oracle/609_babel_cast_eliminate.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/cast_eliminate-vu-prepare.sql, test/babelfish/raw/cast_eliminate-vu-verify.sql, test/babelfish/raw/cast_eliminate-vu-cleanup.sql
+
+statement ok
+CREATE TABLE cast_eliminate( [ROID] [int] NOT NULL PRIMARY KEY, s_int SMALLINT, b_int BIGINT );
+
+statement ok
+CREATE TABLE cast_eliminate2( [ROID] [bigint] NOT NULL PRIMARY KEY );
+
+statement ok
+set babelfish_showplan_all on
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate  WHERE (CAST(ROID AS BIGINT) = 1)
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate  WHERE (CAST(ROID AS int) = 1)
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate  WHERE (ROID = cast(1 as bigint))
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate  WHERE (CAST(ROID AS BIGINT) = cast( 1 as bigint ))
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate2  WHERE (CAST(ROID AS BIGINT) = 1)
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate2  WHERE (CAST(ROID AS int) = 1)
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate2  WHERE (ROID = cast(1 as bigint))
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate  WHERE (CAST(ROID AS BIGINT) = cast( 1 as bigint ))
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE (CAST(ROID AS BIGINT) = 1) OR (CAST(ROID AS BIGINT) = 2)
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE (CAST(ROID AS BIGINT) = 1) AND (CAST(s_int AS BIGINT) = 2)
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE 1 = (CAST(ROID AS BIGINT))
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(ROID AS BIGINT) as INT) = 1
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(s_int AS INT) = 1
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(s_int AS BIGINT) as INT) = 1
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(CAST(s_int AS BIGINT) as INT) as SMALLINT) = 1
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE b_int = 10 AND NOT ((CAST(CAST(CAST(s_int AS BIGINT) as INT) as SMALLINT) = 1 OR CAST(ROID AS BIGINT) > 10) AND ROID NOT IN (12, 34))
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(ROID AS BIGINT) as SMALLINT) = 1
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(ROID AS SMALLINT) as BIGINT) = 1
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(b_int AS BIGINT) = 1
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(b_int AS INT) = 1
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(ROID AS BIGINT) as SMALLINT) = CAST(s_int AS INT)
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(ROID AS numeric) as int) = 1
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE (CAST(ROID AS BIGINT) < 1) OR (CAST(ROID AS BIGINT) > 2)
+
+statement ok
+SELECT 1 AS [C1] FROM cast_eliminate WHERE (CAST(ROID AS BIGINT) >= 1) AND (CAST(ROID AS BIGINT) <= 2)
+
+statement ok
+set babelfish_showplan_all off
+
+statement ok
+INSERT INTO cast_eliminate VALUES (1, 1, 1), (2, 2938, 2), (3, 32767, 9223372036854775807), (-2147483648, -32768, -9223372036854775808), (2147483647, 2393, 1111111111111111);
+
+statement ok
+set BABELFISH_STATISTICS PROFILE on
+
+query TTT
+SELECT * FROM cast_eliminate WHERE (CAST(CAST(ROID AS BIGINT) AS BIGINT) = 3 OR CAST(CAST(ROID AS INT) AS BIGINT) = 2147483647) AND CAST(CAST(s_int AS INT) AS BIGINT) != 32767
+----
+2147483647 2393 1111111111111111
+
+query TTT
+SELECT * FROM cast_eliminate WHERE CAST(CAST(s_int AS INT) AS BIGINT) >= 2394 AND CAST(CAST(ROID AS BIGINT) AS SMALLINT) >= 3
+----
+3 32767 9223372036854775807
+
+query TTT
+SELECT * FROM cast_eliminate WHERE -32768 = CAST(s_int AS INT);
+----
+-2147483648 -32768 -9223372036854775808
+
+query TTT
+SELECT * FROM cast_eliminate WHERE -32768 = CAST(CAST(s_int AS INT) AS BIGINT);
+----
+-2147483648 -32768 -9223372036854775808
+
+query TTT
+SELECT * FROM cast_eliminate WHERE -32768 < CAST(CAST(s_int AS INT) AS BIGINT) OR CAST(ROID AS BIGINT) = -2147483648
+----
+-2147483648 -32768 -9223372036854775808
+1 1 1
+2 2938 2
+2147483647 2393 1111111111111111
+3 32767 9223372036854775807
+
+statement ok
+SELECT * FROM cast_eliminate WHERE -9223372036854775808 = CAST(s_int AS BIGINT)
+
+query TTT
+SELECT * FROM cast_eliminate WHERE -32768 < CAST(CAST(s_int AS INT) AS BIGINT) OR -9223372036854775808 = CAST(CAST(b_int AS BIGINT) AS INT)
+----
+-2147483648 -32768 -9223372036854775808
+1 1 1
+2 2938 2
+2147483647 2393 1111111111111111
+3 32767 9223372036854775807
+
+statement ok
+drop table cast_eliminate
+
+statement ok
+drop table cast_eliminate2
+

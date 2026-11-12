@@ -1,0 +1,646 @@
+# test/slt_proc/babelfish_oracle/362_babel_babel_3215.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3215-vu-prepare.sql, test/babelfish/raw/BABEL-3215-vu-verify.sql
+
+statement ok
+create table dbo.unionorder1 (c1 int );
+create table dbo.unionorder2 (c2 int );
+create table dbo.unionorder1b (c1 int );
+
+statement ok
+insert into unionorder1 VALUES (1), (2), (3);
+insert into unionorder2 VALUES (2), (3), (4);
+insert into unionorder1b VALUES (2), (3), (4);
+
+query T
+SELECT u.c1 FROM unionorder1 u
+UNION
+SELECT u.c1 FROM unionorder1 u
+ORDER BY u.c1;
+----
+1
+2
+3
+
+query T
+SELECT c1 FROM unionorder1
+UNION
+SELECT c2 FROM unionorder2
+ORDER BY unionorder1.c1;
+----
+1
+2
+3
+4
+
+query T
+SELECT c1 FROM unionorder1
+intersect
+SELECT c2 FROM unionorder2
+ORDER BY unionorder1.c1;
+----
+2
+3
+
+query T
+SELECT u.c1 FROM unionorder1 u
+intersect
+SELECT c2 FROM unionorder2
+ORDER BY u.c1;
+----
+2
+3
+
+query T
+SELECT c1 FROM unionorder1
+except
+SELECT c2 FROM unionorder2
+ORDER BY unionorder1.c1;
+----
+1
+
+query T
+SELECT c1 FROM unionorder1 u
+except
+SELECT c2 FROM unionorder2
+ORDER BY u.c1;
+----
+1
+
+query T
+SELECT u.c1 FROM unionorder1 u
+UNION
+SELECT c2 FROM unionorder2
+ORDER BY c1;
+----
+1
+2
+3
+4
+
+query T
+SELECT u.c1 FROM unionorder1 u
+UNION ALL
+SELECT u.c1 FROM unionorder1 u
+ORDER BY u.c1;
+----
+1
+1
+2
+2
+3
+3
+
+query T
+SELECT c1 FROM dbo.unionorder1
+UNION
+SELECT c2 FROM dbo.unionorder2
+ORDER BY dbo.unionorder1.c1;
+----
+1
+2
+3
+4
+
+query T
+SELECT c1 FROM unionorder1 u
+UNION
+SELECT c2 FROM unionorder2
+ORDER BY unionorder1.c1;
+----
+1
+2
+3
+4
+
+query T
+SELECT u.c1 FROM dbo.unionorder1 u
+UNION
+SELECT c2 FROM dbo.unionorder2
+ORDER BY dbo.unionorder1.c1;
+----
+1
+2
+3
+4
+
+query T
+SELECT c1 FROM master.dbo.unionorder1
+UNION
+SELECT c1 FROM master.dbo.unionorder1
+ORDER BY master.dbo.unionorder1.c1;
+----
+1
+2
+3
+
+query T
+SELECT c1 FROM dbo.unionorder1
+UNION
+SELECT c2 FROM dbo.unionorder2
+ORDER BY dbo.unionorder2.c2;
+----
+1
+2
+3
+4
+
+query TT
+SELECT u.* FROM unionorder1 u
+UNION
+SELECT u.*  FROM unionorder1 u
+ORDER BY u.c1
+----
+1 1
+2 2
+3 3
+
+query TT
+SELECT u.* FROM unionorder1 u
+UNION
+SELECT u.*  FROM unionorder1 u
+ORDER BY unionorder1.c1
+----
+1 1
+2 2
+3 3
+
+query TT
+SELECT u1.c1, u2.c2 FROM unionorder1 u1, unionorder2 u2 where u1.c1 = u2.c2
+UNION
+SELECT u1.c1, u2.c2 FROM unionorder1 u1, unionorder2 u2 where u1.c1 = u2.c2
+ORDER BY u2.c2
+----
+2 2
+3 3
+
+query TT
+SELECT u1.c1, u2.c2 FROM unionorder1 u1, unionorder2 u2 where u1.c1 = u2.c2
+UNION ALL
+SELECT u1.c1, u2.c2 FROM unionorder1 u1, unionorder2 u2 where u1.c1 = u2.c2
+ORDER BY u2.c2
+----
+2 2
+2 2
+3 3
+3 3
+
+query T
+select u.c2 from unionorder1 JOIN unionorder2 u on u.c2 = unionorder1.c1
+union
+select u.c1 from unionorder1 u
+ORDER BY u.c2
+----
+1
+2
+3
+
+query T
+SELECT unionorder1.c1 FROM unionorder1, unionorder1b WHERE unionorder1.c1 = unionorder1b.c1
+union
+SELECT u.c1 FROM unionorder1 u
+ORDER BY unionorder1.c1
+----
+1
+2
+3
+
+query TT
+SELECT * FROM unionorder1, unionorder1b WHERE unionorder1.c1 = unionorder1b.c1
+union
+SELECT u.c1, u.c1 FROM unionorder1 u
+ORDER BY unionorder1.c1
+----
+1 1
+2 2
+3 3
+
+query TT
+SELECT * FROM unionorder1 u1, unionorder1b u2 WHERE u1.c1 = u2.c1
+union
+SELECT u.c1, u.c1 FROM unionorder1 u
+ORDER BY u1.c1
+----
+1 1
+2 2
+3 3
+
+query T
+SELECT c1 FROM unionorder1
+ORDER BY c1
+UNION
+SELECT c2 FROM unionorder2
+ORDER BY c2
+----
+1
+2
+3
+4
+
+query T
+SELECT u1.c1 FROM unionorder1 u1
+UNION 
+SELECT c2 FROM unionorder2
+WHERE c2 IN (
+    SELECT c2 FROM unionorder2
+    UNION
+    SELECT c1 FROM unionorder1
+    WHERE c1 IN (
+        SELECT c1 FROM unionorder1
+        UNION
+        SELECT c2 FROM unionorder2
+    )
+)
+ORDER BY u1.c1;
+----
+1
+2
+3
+4
+
+query TT
+SELECT u1.c1, (SELECT TOP 1 c2 FROM unionorder2) AS col2
+FROM unionorder1 u1
+UNION 
+SELECT c2, c2 FROM unionorder2
+WHERE c2 IN (
+    SELECT TOP 5 c2 FROM unionorder2
+    UNION
+    SELECT TOP 5 c1 FROM unionorder1
+    ORDER BY unionorder2.c2
+)
+ORDER BY col2, u1.c1;
+----
+1 2
+2 2
+3 2
+3 3
+4 4
+
+query T
+SELECT c1 FROM unionorder1
+WHERE c1 IN (
+    SELECT c2 FROM unionorder2
+    UNION
+    SELECT c1 FROM unionorder1
+)
+UNION 
+SELECT c2 FROM unionorder2
+ORDER BY unionorder1.c1;
+----
+1
+2
+3
+4
+
+query T
+SELECT c1 FROM unionorder1
+WHERE c1 IN (
+    SELECT c2 FROM unionorder2
+    UNION
+    SELECT c1 FROM unionorder1
+)
+UNION 
+SELECT c2 FROM unionorder2
+ORDER BY unionorder2.c2;
+----
+1
+2
+3
+4
+
+query T
+SELECT c2 FROM (
+    SELECT c2 FROM unionorder2
+    UNION
+    SELECT c1 FROM unionorder1
+) u
+UNION 
+SELECT c1 FROM unionorder1
+ORDER BY u.c2;
+----
+1
+2
+3
+4
+
+statement ok
+create view v1 as
+    select u1b.c1
+    from unionorder1 u1
+    inner join unionorder2 u2
+    on u1.c1 = u2.c2
+    inner join unionorder1b u1b
+    on u1.c1 = u1b.c1
+union 
+    select u1b.c1
+    from unionorder1 u1
+    inner join unionorder2 u2
+    on u1.c1 = u2.c2
+    inner join unionorder1b u1b
+    on u1.c1 = u1b.c1
+
+query T
+select * from v1;
+----
+2
+3
+
+statement ok
+drop view v1;
+
+statement ok
+create table dbo.unionorder_numeric (a numeric(6,4), b numeric(6,3));
+insert into unionorder_numeric values (4, 16);
+insert into unionorder_numeric values (NULL, 101.123);
+
+statement ok
+create table dbo.unionorder_char (a CHAR(5), b CHAR(10));
+insert into unionorder_char values ('aaa', 'bbbbbbbb');
+insert into unionorder_char values (NULL, '5');
+
+query TT
+SELECT t.a, t.b FROM unionorder_numeric t
+UNION ALL
+SELECT t.a, t.b FROM unionorder_numeric t
+ORDER BY t.b;
+----
+NULL 101.123
+NULL 101.123
+4.0000 16.000
+4.0000 16.000
+
+query TT
+SELECT t.a, t.b FROM unionorder_char t
+UNION ALL
+SELECT t.a, t.b FROM unionorder_char t
+ORDER BY t.b;
+----
+NULL 5
+NULL 5
+aaa bbbbbbbb
+aaa bbbbbbbb
+
+statement ok
+create table dbo.babel4169_t1 (a int, b int, c int); 
+create table dbo.babel4169_t2 (a int, b int, c int); 
+
+statement ok
+insert into dbo.babel4169_t1 values (1, 2, 3), (10, 2, 3), (100, 2, 99);
+insert into dbo.babel4169_t2 values (4, 5, 6), (40, 5, 6), (400, 5, 99);
+
+query TT
+select sum(a), b from dbo.babel4169_t1 group by b, c
+union
+select sum(a), b from dbo.babel4169_t2 group by b, c
+order by b
+----
+11 2
+100 2
+44 5
+400 5
+
+query TT
+select sum(a) as sum, b from dbo.babel4169_t1 group by b, c
+union
+select sum(a), b from dbo.babel4169_t2 group by b, c
+order by sum
+----
+11 2
+44 5
+100 2
+400 5
+
+query TT
+select sum(a), b from dbo.babel4169_t1 group by b, c
+union
+select sum(a), b from dbo.babel4169_t2 group by b, c
+order by c
+----
+11 2
+100 2
+44 5
+400 5
+
+statement ok
+CREATE FUNCTION babel4169_error_on_func_create ()
+RETURNS TABLE
+AS
+RETURN
+    select sum(a), b from dbo.babel4169_t1 group by b, c
+    union
+    select sum(a), b from dbo.babel4169_t2 group by b, c
+    order by c
+
+statement ok
+drop table dbo.babel4169_t1;
+drop table dbo.babel4169_t2;
+
+statement ok
+create table babel4210_t1(id INT, val VARCHAR(20));
+create table babel4210_t2(t1_id INT, val VARCHAR(20));
+create table babel4210_t3(t1_id INT, val VARCHAR(20));
+
+statement ok
+insert into babel4210_t1 values (1, 'a'), (2, 'b'), (3, 'c');
+insert into babel4210_t2 values (1, 'A'), (2, 'B'), (3, 'C');
+insert into babel4210_t3 values (1, 'x'), (2, 'Y'), (3, 'z');
+
+query TTT
+select babel4210_t1.id,  babel4210_t2.val, babel4210_t3.val from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+UNION
+select babel4210_t1.id, babel4210_t2.val, babel4210_t3.val from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+ORDER BY babel4210_t3.val;
+----
+1 A x
+2 B Y
+3 C z
+
+query TTT
+select babel4210_t1.id,  babel4210_t2.val, upper(babel4210_t3.val) from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+UNION
+select babel4210_t1.id, babel4210_t3.val, upper(babel4210_t2.val) from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+ORDER BY upper(babel4210_t3.val);
+----
+1 A X
+2 B Y
+3 C Z
+1 x A
+2 Y B
+3 z C
+
+query TTT
+select babel4210_t1.id,  babel4210_t2.val, upper(babel4210_t3.val) from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+UNION
+select babel4210_t1.id, babel4210_t3.val, upper(babel4210_t2.val) from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+ORDER BY babel4210_t3.val;
+----
+1 A X
+2 B Y
+3 C Z
+1 x A
+2 Y B
+3 z C
+
+query TTT
+select babel4210_t1.id,  babel4210_t2.val, babel4210_t3.t1_id from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+UNION
+select babel4210_t1.id, babel4210_t2.val, babel4210_t3.t1_id from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+ORDER BY babel4210_t3.val;
+----
+1 A 1
+2 B 2
+3 C 3
+
+query T
+select babel4210_t3.val from babel4210_t3
+UNION
+select babel4210_t1.val from babel4210_t1
+ORDER BY (CASE WHEN babel4210_t3.val = 'b' THEN 1 ELSE 2 END)
+----
+b
+x
+Y
+z
+a
+c
+
+query TTT
+select DISTINCT babel4210_t1.id, babel4210_t2.val, babel4210_t3.val from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+UNION
+select babel4210_t1.id, babel4210_t2.val, babel4210_t3.val from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+ORDER BY babel4210_t2.val;
+----
+1 A x
+2 B Y
+3 C z
+
+query TT
+select COUNT(DISTINCT babel4210_t3.val), babel4210_t2.val from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+GROUP BY babel4210_t2.val, babel4210_t3.val
+UNION ALL
+select COUNT(DISTINCT babel4210_t3.val), babel4210_t2.val from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+GROUP BY babel4210_t2.val, babel4210_t3.val
+ORDER BY babel4210_t3.val;
+----
+1 A
+1 A
+1 B
+1 B
+1 C
+1 C
+
+query TT
+select COUNT(DISTINCT babel4210_t3.val), babel4210_t2.val from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+GROUP BY babel4210_t2.val
+UNION
+select COUNT(DISTINCT babel4210_t3.val), babel4210_t2.val from babel4210_t1
+inner join babel4210_t2 on babel4210_t1.id = babel4210_t2.t1_id
+inner join babel4210_t3 on babel4210_t1.id = babel4210_t3.t1_id
+GROUP BY babel4210_t2.val
+ORDER BY COUNT(DISTINCT babel4210_t3.val), babel4210_t2.val;
+----
+1 A
+1 B
+1 C
+
+query T
+select val from babel4210_t1
+UNION
+select t1_id from babel4210_t2
+ORDER BY babel4210_t1.id
+----
+a
+b
+c
+1
+2
+3
+
+query TTT
+WITH babel4210_cte (id, val) AS
+(
+    select babel4210_t1.id, babel4210_t3.val FROM babel4210_t1
+    INNER JOIN babel4210_t3 ON babel4210_t1.id = babel4210_t3.t1_id
+    UNION
+    select babel4210_t1.id, babel4210_t1.val from babel4210_t1
+    INNER JOIN babel4210_t3 ON babel4210_t1.id = babel4210_t3.t1_id
+)
+SELECT babel4210_cte.* FROM babel4210_cte
+UNION ALL
+SELECT babel4210_cte.* FROM babel4210_cte
+ORDER BY babel4210_cte.val, babel4210_cte.id;
+----
+4 1 a
+4 1 a
+5 2 b
+5 2 b
+6 3 c
+6 3 c
+1 1 x
+1 1 x
+2 2 Y
+2 2 Y
+3 3 z
+3 3 z
+
+query TTT
+WITH babel4210_cte (id, val) AS
+(
+    select babel4210_t1.id, babel4210_t3.val FROM babel4210_t1
+    INNER JOIN babel4210_t3 ON babel4210_t1.id = babel4210_t3.t1_id
+    UNION
+    select babel4210_t1.id, babel4210_t1.val from babel4210_t1
+    INNER JOIN babel4210_t3 ON babel4210_t1.id = babel4210_t3.t1_id
+)
+SELECT babel4210_cte.* FROM babel4210_cte
+INTERSECT
+SELECT babel4210_cte.* FROM babel4210_cte
+ORDER BY babel4210_cte.val, babel4210_cte.id;
+----
+4 1 a
+5 2 b
+6 3 c
+1 1 x
+2 2 Y
+3 3 z
+
+query T
+select top 2 babel4210_t1.id from babel4210_t1
+union
+select top 1 babel4210_t2.t1_id from babel4210_t2
+ORDER BY babel4210_t2.t1_id DESC
+----
+1
+2
+
+statement ok
+drop table babel4210_t1;
+drop table babel4210_t2;
+drop table babel4210_t3;
+

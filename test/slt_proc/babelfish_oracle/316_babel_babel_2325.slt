@@ -1,0 +1,49 @@
+# test/slt_proc/babelfish_oracle/316_babel_babel_2325.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2325.sql
+
+statement ok
+SET QUOTED_IDENTIFIER OFF
+
+query T
+SELECT 'literal'
+----
+literal
+
+query T
+SELECT [ident]
+----
+ident
+
+query T
+SELECT "string"
+----
+string
+
+query T
+SELECT "f'oo"
+----
+f'oo
+
+statement ok
+SET QUOTED_IDENTIFIER ON
+
+query T
+SELECT 'literal'
+----
+literal
+
+query T
+SELECT [ident]
+----
+ident
+
+query T
+SELECT "ident"
+----
+ident
+
+query T
+SELECT "f'oo"
+----
+f'oo
+

@@ -1,0 +1,187 @@
+# test/slt_proc/babelfish_oracle/367_babel_babel_328.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-328-vu-prepare.sql, test/babelfish/raw/BABEL-328-vu-verify.sql, test/babelfish/raw/BABEL-328-vu-cleanup.sql
+
+statement ok
+CREATE TABLE [babel_328_vu_t1]( 
+    [DepartmentID] [int] NOT NULL PRIMARY KEY, 
+    [Name] VARCHAR(250) NOT NULL, 
+) ON [PRIMARY] 
+
+statement ok
+INSERT [babel_328_vu_t1] ([DepartmentID], [Name])  
+VALUES (1, N'Engineering')
+INSERT [babel_328_vu_t1] ([DepartmentID], [Name])  
+VALUES (2, N'Administration')
+INSERT [babel_328_vu_t1] ([DepartmentID], [Name])  
+VALUES (3, N'Sales')
+INSERT [babel_328_vu_t1] ([DepartmentID], [Name])  
+VALUES (4, N'Marketing')
+INSERT [babel_328_vu_t1] ([DepartmentID], [Name])  
+VALUES (5, N'Finance')
+
+statement ok
+CREATE TABLE [babel_328_vu_t2]( 
+    [EmployeeID] [int] NOT NULL PRIMARY KEY, 
+    [FirstName] VARCHAR(250) NOT NULL, 
+    [LastName] VARCHAR(250) NOT NULL, 
+    [DepartmentID] [int] NOT NULL REFERENCES [babel_328_vu_t1](DepartmentID), 
+) ON [PRIMARY] 
+
+statement ok
+INSERT [babel_328_vu_t2] ([EmployeeID], [FirstName], [LastName], [DepartmentID]) 
+VALUES (1, N'Orlando', N'Gee', 1 ) 
+INSERT [babel_328_vu_t2] ([EmployeeID], [FirstName], [LastName], [DepartmentID]) 
+VALUES (2, N'Keith', N'Harris', 2 ) 
+INSERT [babel_328_vu_t2] ([EmployeeID], [FirstName], [LastName], [DepartmentID]) 
+VALUES (3, N'Donna', N'Carreras', 3 ) 
+INSERT [babel_328_vu_t2] ([EmployeeID], [FirstName], [LastName], [DepartmentID]) 
+VALUES (4, N'Janet', N'Gates', 3 ) 
+
+statement ok
+CREATE VIEW babel_328_vu_v1 as
+SELECT Name FROM babel_328_vu_t1 D
+CROSS APPLY
+(
+    SELECT * FROM babel_328_vu_t2 E
+    WHERE E.DepartmentID = D.DepartmentID
+) A
+
+statement ok
+CREATE VIEW babel_328_vu_v2 as
+    SELECT Name FROM babel_328_vu_t1 D 
+    INNER JOIN babel_328_vu_t2 E ON D.DepartmentID = E.DepartmentID 
+
+statement ok
+CREATE VIEW babel_328_vu_v3 as
+SELECT Name FROM babel_328_vu_t1 D
+OUTER APPLY
+(
+    SELECT * FROM babel_328_vu_t2 E
+    WHERE E.DepartmentID = D.DepartmentID
+) A
+
+statement ok
+CREATE VIEW babel_328_vu_v4 as
+    SELECT Name FROM babel_328_vu_t1 D
+    LEFT OUTER JOIN babel_328_vu_t2 E ON D.DepartmentID = E.DepartmentID
+
+statement ok
+CREATE FUNCTION babel_328_vu_f1(@DeptID AS INT)  
+RETURNS TABLE 
+AS 
+RETURN 
+( 
+    SELECT * FROM babel_328_vu_t2 E 
+    WHERE E.DepartmentID = @DeptID 
+) 
+
+statement ok
+CREATE PROC babel_328_vu_p1 AS
+    SELECT * FROM babel_328_vu_t1 D
+    CROSS APPLY babel_328_vu_f1(D.DepartmentID)
+
+statement ok
+CREATE PROC babel_328_vu_p2 AS
+    SELECT * FROM babel_328_vu_t1 D
+    CROSS APPLY babel_328_vu_f1(D.DepartmentID) E
+    WHERE E.DepartmentID = 3
+
+statement ok
+CREATE PROC babel_328_vu_p3 AS
+    SELECT * FROM babel_328_vu_t1 D 
+    OUTER APPLY babel_328_vu_f1(D.DepartmentID) 
+
+statement ok
+CREATE PROC babel_328_vu_p4 AS
+    SELECT * FROM babel_328_vu_t1 D
+    OUTER APPLY babel_328_vu_f1(D.DepartmentID) E
+    WHERE E.DepartmentID = 3
+
+statement ok
+create table babel_328_vu_t3 (a int, b int)
+create table babel_328_vu_t4 (c int, d int)
+insert into babel_328_vu_t3 values (1, 1),(2, 2)
+insert into babel_328_vu_t4 values (3, 3),(4, 4)
+
+statement ok
+CREATE VIEW babel_328_vu_v5 AS
+select * from babel_328_vu_t3 outer apply babel_328_vu_t4 outer apply (values (5,5),(6,6)) t3 (e, f)
+
+statement ok
+CREATE VIEW babel_328_vu_v6 AS
+select * from babel_328_vu_t3 cross apply babel_328_vu_t4 cross apply (values (5,5),(6,6)) t3 (e, f)
+
+query T
+SELECT * FROM babel_328_vu_v1
+----
+Engineering
+
+query T
+SELECT * FROM babel_328_vu_v2
+----
+Engineering
+
+query T
+SELECT * FROM babel_328_vu_v3 ORDER BY NAME
+----
+Engineering
+
+query T
+SELECT * FROM babel_328_vu_v4 ORDER BY NAME
+----
+Engineering
+
+query TTTTT
+SELECT * FROM babel_328_vu_t1 d
+CROSS APPLY (SELECT * FROM babel_328_vu_t2)
+----
+1 1 Orlando Gee Engineering
+
+query TTTTT
+SELECT * FROM babel_328_vu_t1 d
+OUTER APPLY (SELECT * FROM babel_328_vu_t2)
+----
+1 1 Orlando Gee Engineering
+
+statement ok
+DROP PROC babel_328_vu_p1
+
+statement ok
+DROP PROC babel_328_vu_p2
+
+statement ok
+DROP PROC babel_328_vu_p3
+
+statement ok
+DROP PROC babel_328_vu_p4
+
+statement ok
+DROP FUNCTION babel_328_vu_f1
+
+statement ok
+DROP VIEW babel_328_vu_v1
+
+statement ok
+DROP VIEW babel_328_vu_v2
+
+statement ok
+DROP VIEW babel_328_vu_v3
+
+statement ok
+DROP VIEW babel_328_vu_v4
+
+statement ok
+DROP VIEW babel_328_vu_v5
+
+statement ok
+DROP VIEW babel_328_vu_v6
+
+statement ok
+DROP TABLE babel_328_vu_t2
+
+statement ok
+DROP TABLE babel_328_vu_t1
+
+statement ok
+DROP TABLE babel_328_vu_t3
+

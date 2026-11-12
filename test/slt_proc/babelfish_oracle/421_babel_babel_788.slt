@@ -1,0 +1,131 @@
+# test/slt_proc/babelfish_oracle/421_babel_babel_788.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-788.sql
+
+statement ok
+drop table if exists babel_788_int;
+
+statement ok
+create table babel_788_int(a int null, b int not null);
+
+statement ok
+insert babel_788_int values (1, 10);
+insert babel_788_int values (3, 7);
+insert babel_788_int values (null, 8);
+
+query TT
+select * from babel_788_int order by a;
+----
+NULL 8
+1 10
+3 7
+
+query TT
+select * from babel_788_int order by a asc;
+----
+NULL 8
+1 10
+3 7
+
+query TT
+select * from babel_788_int order by a desc;
+----
+3 7
+1 10
+NULL 8
+
+query TT
+select * from babel_788_int order by b;
+----
+3 7
+NULL 8
+1 10
+
+query TT
+select * from babel_788_int order by b asc;
+----
+3 7
+NULL 8
+1 10
+
+query TT
+select * from babel_788_int order by b desc;
+----
+1 10
+NULL 8
+3 7
+
+query TT
+select * from babel_788_int order by a + b;
+----
+NULL 8
+3 7
+1 10
+
+query TT
+select * from babel_788_int order by a + b asc;
+----
+NULL 8
+3 7
+1 10
+
+query TT
+select * from babel_788_int order by a + b desc;
+----
+1 10
+3 7
+NULL 8
+
+query T
+select * from (select top(2) a from babel_788_int order by 1) s;
+----
+NULL
+1
+
+statement ok
+drop table if exists babel_788_select_into;
+
+statement ok
+select top(2) a into babel_788_select_into from babel_788_int order by 1;
+
+query T
+select * from babel_788_select_into;
+----
+NULL
+1
+
+statement ok
+drop table if exists babel_788_subquery_select_into;
+
+statement ok
+select * into babel_788_subquery_select_into from (select top(2) a from babel_788_int order by 1) s;
+
+query T
+select * from babel_788_subquery_select_into;
+----
+NULL
+1
+
+statement ok
+drop table if exists babel_788_int;
+
+statement ok
+drop table if exists babel_788_select_into;
+
+statement ok
+drop table if exists babel_788_subquery_select_into;
+
+statement ok
+drop table if exists babel_788_varchar;
+
+statement ok
+create table babel_788_varchar(a varchar(2) null, b varchar(2) not null);
+
+statement ok
+insert babel_788_varchar values ('1', '10');
+insert babel_788_varchar values ('3', '7');
+insert babel_788_varchar values ('', ' ');
+insert babel_788_varchar values (null, '8');
+
+statement ok
+drop table if exists babel_788_varchar;
+

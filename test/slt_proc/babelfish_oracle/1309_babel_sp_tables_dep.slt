@@ -1,0 +1,113 @@
+# test/slt_proc/babelfish_oracle/1309_babel_sp_tables_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/SP_TABLES-dep-vu-prepare.sql, test/babelfish/raw/SP_TABLES-dep-vu-verify.sql, test/babelfish/raw/SP_TABLES-dep-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE babel_5010_vu_prepare_db1;
+
+statement ok
+USE babel_5010_vu_prepare_db1;
+
+statement ok
+CREATE TABLE babel_5010_temp_table (
+    TABLE_QUALIFIER sys.sysname,
+    TABLE_OWNER sys.nvarchar(384),
+    TABLE_NAME sys.nvarchar(384),
+    TABLE_TYPE sys.nvarchar(100),
+    REMARKS sys.bit
+);
+
+statement ok
+CREATE TABLE babel_5010_vu_prepare_t1(a INT)
+
+statement ok
+CREATE TABLE babel_5010_vu_prepare_t2(a INT)
+
+statement ok
+CREATE VIEW babel_5010_vu_prepare_v1 AS SELECT 1;
+
+statement ok
+CREATE VIEW babel_5010_vu_prepare_v2 AS SELECT 1;
+
+statement ok
+USE master;
+
+statement ok
+USE babel_5010_vu_prepare_db1;
+
+statement ok
+SET NOCOUNT ON;
+
+statement ok
+declare @p1 sys.nvarchar=''
+declare @P2 sys.nvarchar=''
+declare @P3 sys.nvarchar='%     '
+declare @P4 sys.nvarchar=NULL
+declare @fUsePattern bit = 1
+INSERT INTO babel_5010_temp_table EXEC [sys].sp_tables @p1, @P2, @P3, @P4, @fUsePattern = @fUsePattern;
+SELECT * FROM babel_5010_temp_table WHERE TABLE_QUALIFIER IN ('master', 'tempdb', 'msdb', 'babel_5010_vu_prepare_db1') ORDER BY TABLE_QUALIFIER;
+DELETE FROM babel_5010_temp_table;
+
+statement ok
+declare @p1 sys.nvarchar=''
+declare @P2 sys.nvarchar=''
+declare @P3 sys.nvarchar='%'
+declare @P4 sys.nvarchar=NULL
+declare @fUsePattern bit = 1
+INSERT INTO babel_5010_temp_table EXEC [sys].sp_tables @p1, @P2, @P3, @P4, @fUsePattern = @fUsePattern;
+SELECT * FROM babel_5010_temp_table WHERE TABLE_QUALIFIER IN ('master', 'tempdb', 'msdb', 'babel_5010_vu_prepare_db1') ORDER BY TABLE_QUALIFIER;
+DELETE FROM babel_5010_temp_table;
+
+statement ok
+declare @p1 sys.nvarchar=''
+declare @P2 sys.nvarchar=''
+declare @P3 sys.nvarchar='     %'
+declare @P4 sys.nvarchar=NULL
+declare @fUsePattern bit = 1
+EXEC [sys].sp_tables @p1, @P2, @P3, @P4, @fUsePattern = @fUsePattern
+
+statement ok
+declare @p1 sys.nvarchar=''
+declare @P2 sys.nvarchar=''
+declare @P3 sys.nvarchar='     %     '
+declare @P4 sys.nvarchar=NULL
+declare @fUsePattern bit = 1
+EXEC [sys].sp_tables @p1, @P2, @P3, @P4, @fUsePattern = @fUsePattern
+
+statement ok
+declare @p1 sys.nvarchar='  '
+declare @P2 sys.nvarchar=''
+declare @P3 sys.nvarchar=NULL
+declare @P4 sys.nvarchar=NULL
+declare @fUsePattern bit = 1
+EXEC [sys].sp_tables @p1, @P2, @P3, @P4, @fUsePattern = @fUsePattern
+
+statement error
+EXEC [sys].sp_tables @table_name = '', @table_owner = '', @table_qualifier = '  %', @table_type = NULL, @fUsePattern = 1;
+
+statement ok
+SET NOCOUNT OFF;
+
+statement ok
+USE master;
+
+statement ok
+USE babel_5010_vu_prepare_db1;
+
+statement ok
+DROP TABLE IF EXISTS babel_5010_temp_table;
+
+statement ok
+DROP TABLE IF EXISTS babel_5010_vu_prepare_t1;
+
+statement ok
+DROP TABLE IF EXISTS babel_5010_vu_prepare_t2;
+
+statement ok
+DROP VIEW IF EXISTS babel_5010_vu_prepare_v1;
+
+statement ok
+DROP VIEW IF EXISTS babel_5010_vu_prepare_v2;
+
+statement ok
+USE master;
+

@@ -1,0 +1,40 @@
+# test/slt_proc/babelfish_oracle/1487_babel_sys_databases_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-databases-dep-vu-prepare.sql, test/babelfish/raw/views/sys-databases-dep-vu-verify.sql, test/babelfish/raw/views/sys-databases-dep-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE db_sys_databases_dep_vu_prepare
+
+statement ok
+CREATE VIEW sys_databases_view_dep_vu_prepare AS
+SELECT name, compatibility_level, collation_name FROM sys.databases WHERE name = 'db_sys_databases_dep_vu_prepare'
+
+statement ok
+CREATE PROC sys_databases_proc_dep_vu_prepare AS
+SELECT name, compatibility_level, collation_name FROM sys.databases WHERE name = 'db_sys_databases_dep_vu_prepare'
+
+statement ok
+CREATE FUNCTION sys_databases_func_dep_vu_prepare()
+RETURNS TINYINT
+AS
+BEGIN
+    RETURN (SELECT compatibility_level FROM sys.databases WHERE name = 'db_sys_databases_dep_vu_prepare')
+END
+
+statement ok
+SELECT name, compatibility_level, collation_name FROM sys_databases_view_dep_vu_prepare
+
+statement ok
+SELECT COUNT(*) FROM sys.all_columns WHERE object_id = object_id('sys.databases');
+
+statement ok
+SELECT name FROM sys.databases where name = 'db_sys_databases_dep_vu_prepare';
+
+statement ok
+DROP VIEW sys_databases_view_dep_vu_prepare
+
+statement ok
+DROP PROC sys_databases_proc_dep_vu_prepare
+
+statement ok
+DROP FUNCTION sys_databases_func_dep_vu_prepare
+

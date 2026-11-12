@@ -1,0 +1,19 @@
+# test/slt_proc/babelfish_oracle/1273_babel_babel_spcursor.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SPCURSOR.sql
+
+statement ok
+CREATE TABLE babel_cursor_t1 (i INT, d double precision, c varchar(10), u uniqueidentifier, v sql_variant);
+INSERT INTO babel_cursor_t1 VALUES (1, 1.1, 'a', '1E984725-C51C-4BF4-9960-E1C80E27ABA0', 1);
+INSERT INTO babel_cursor_t1 VALUES (2, 22.22, 'bb', '2E984725-C51C-4BF4-9960-E1C80E27ABA0', 22.22);
+INSERT INTO babel_cursor_t1 VALUES (3, 333.333, 'cccc', '3E984725-C51C-4BF4-9960-E1C80E27ABA0', 'cccc');
+INSERT INTO babel_cursor_t1 VALUES (4, 4444.4444, 'dddddd', '4E984725-C51C-4BF4-9960-E1C80E27ABA0', cast('4E984725-C51C-4BF4-9960-E1C80E27ABA0' as uniqueidentifier));
+INSERT INTO babel_cursor_t1 VALUES (NULL, NULL, NULL, NULL, NULL);
+
+statement ok
+CREATE TABLE t1812(id int primary key, a int, b int);
+
+statement ok
+DROP TABLE babel_cursor_t1
+DROP TABLE t1812
+DROP PROCEDURE p1
+

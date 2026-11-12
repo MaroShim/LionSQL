@@ -1,0 +1,86 @@
+# test/slt_proc/babelfish_oracle/1425_babel_db_ddladmin_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/fixed_roles/db_ddladmin-vu-prepare.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE LOGIN babel_5116_l1 WITH PASSWORD = '12345678'
+
+statement ok
+CREATE LOGIN babel_5116_l2 WITH PASSWORD = '12345678'
+
+statement ok
+CREATE LOGIN babel_5116_l3 WITH PASSWORD = '12345678'
+
+statement ok
+CREATE USER babel_5116_l1
+
+statement ok
+CREATE USER babel_5116_l2
+
+statement ok
+CREATE ROLE babel_5116_r1
+
+statement ok
+CREATE TABLE babel_5116_t1 (id INT)
+
+statement ok
+CREATE TABLE babel_5116_t3 (id INT)
+
+statement ok
+CREATE INDEX babel_5116_idx1 ON babel_5116_t1 (id)
+
+statement ok
+CREATE TRIGGER babel_5116_trig ON babel_5116_t1 AFTER INSERT AS SELECT 1
+
+statement ok
+CREATE VIEW babel_5116_v1 AS SELECT * FROM babel_5116_t1
+
+statement ok
+CREATE SEQUENCE babel_5116_s1 START WITH 1000 INCREMENT BY 1
+
+statement ok
+CREATE PROCEDURE babel_5116_p1 AS SELECT 1
+
+statement ok
+CREATE FUNCTION babel_5116_f1() RETURNS INT AS BEGIN RETURN 1 END
+
+statement ok
+CREATE FUNCTION babel_5116_tvf1()
+RETURNS TABLE AS RETURN
+(
+    SELECT '1' AS col
+);
+
+statement ok
+CREATE DATABASE babel_5116_db
+
+statement ok
+USE babel_5116_db
+
+statement ok
+CREATE ROLE babel_5116_r1
+
+statement ok
+CREATE TRIGGER babel_5116_trig1 ON babel_5116_t1 AFTER INSERT AS SELECT 1
+
+statement ok
+CREATE SEQUENCE babel_5116_s1 START WITH 1000 INCREMENT BY 1
+
+statement ok
+CREATE FUNCTION babel_5116_f1() RETURNS INT AS BEGIN RETURN 1 END
+
+statement ok
+CREATE FUNCTION babel_5116_tvf1()
+RETURNS TABLE AS RETURN
+(
+    SELECT '1' AS col
+);
+
+statement ok
+CREATE SCHEMA babel_5116_sch1
+
+statement ok
+CREATE SCHEMA babel_5116_sch2 AUTHORIZATION babel_5116_r1
+

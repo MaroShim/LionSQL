@@ -23,7 +23,7 @@ CREATE PROCEDURE sp_raiserror_caught
 AS
 BEGIN
     BEGIN TRY
-        RAISERROR('raised', 16, 1);
+        RAISERROR('raised %d: %s', 16, 1, 7, 'ok');
     END TRY
     BEGIN CATCH
         SELECT ERROR_MESSAGE();
@@ -33,7 +33,7 @@ END;
 query T
 EXEC sp_raiserror_caught;
 ----
-raised
+raised 7: ok
 
 statement error
 THROW 50002, 'uncaught', 1;

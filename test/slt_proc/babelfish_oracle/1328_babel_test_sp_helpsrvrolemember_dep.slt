@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1328_babel_test_sp_helpsrvrolemember_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_helpsrvrolemember-dep-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_helpsrvrolemember-dep-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_helpsrvrolemember-dep-vu-cleanup.sql
+
+statement ok
+CREATE LOGIN test_sp_helpsrvrolemember_login WITH PASSWORD='123'
+
+statement ok
+DROP LOGIN test_sp_helpsrvrolemember_login
+

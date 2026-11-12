@@ -1,0 +1,130 @@
+# test/slt_proc/babelfish_oracle/373_babel_babel_3640.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3640-vu-prepare.sql, test/babelfish/raw/BABEL-3640-vu-verify.sql, test/babelfish/raw/BABEL-3640-vu-cleanup.sql
+
+statement ok
+create database babel_3640_db;
+
+statement ok
+use babel_3640_db;
+
+statement ok
+create table mytable1 (a int, b int, c int)
+
+statement ok
+create view t_sptables5
+as
+select a from mytable1
+
+statement ok
+create table trans2(id int identity(1,1) primary key, source int, target int, amount int);
+
+statement ok
+create proc babel_3640_p1 as
+    declare @p3 varchar(32) = '''''''TABLE''''''';
+    EXEC sp_tables NULL,NULL,NULL,@p3;
+
+statement ok
+create proc babel_3640_p2 as
+    declare @p3 varchar(32) = '''TABLE''';
+    EXEC sp_tables NULL,NULL,NULL,@p3;
+
+query TTTTT
+create proc babel_3640_p3 as
+    declare @p0 sysname = 'trans2';
+    declare @p1 sysname = null;
+    declare @p2 sysname = null;
+    declare @p3 varchar(32) = 'TABLE';
+    EXEC sp_tables @p0,@p1,@p2,@p3;
+    EXEC sp_tables NULL,NULL,NULL,'TABLE';
+----
+babel_3640_db dbo mytable1 TABLE NULL
+babel_3640_db dbo trans2 TABLE NULL
+
+statement ok
+create proc babel_3640_p4 as
+    declare @p0 sysname = null;
+    declare @p1 sysname = null;
+    declare @p2 sysname = null;
+    declare @p3 varchar(32) = '''''''VIEW''''''';
+    EXEC sp_tables @p0,@p1,@p2,@p3;
+
+query TTTTT
+create proc babel_3640_p5 as
+    declare @p3 varchar(32) = '''VIEW''';
+    EXEC sp_tables NULL,NULL,NULL,@p3;
+----
+babel_3640_db dbo t_sptables5 VIEW NULL
+
+query TTTTT
+create proc babel_3640_p6 as
+    declare @p3 varchar(32) = 'VIEW';
+    EXEC sp_tables NULL,NULL,NULL,@p3;
+----
+babel_3640_db dbo t_sptables5 VIEW NULL
+
+query TTTTT
+exec sp_tables @table_type = "'TABLE'";
+exec sp_tables @table_type = "'VIEW'";
+----
+babel_3640_db dbo t_sptables5 VIEW NULL
+
+statement ok
+use babel_3640_db
+
+statement ok
+exec babel_3640_p1
+
+statement ok
+exec babel_3640_p2
+
+statement ok
+exec babel_3640_p3
+
+statement ok
+exec babel_3640_p4
+
+statement ok
+exec babel_3640_p5
+
+statement ok
+exec babel_3640_p6
+
+query TTTTT
+exec sp_tables @table_type = "'TABLE'";
+exec sp_tables @table_type = "'VIEW'";
+----
+babel_3640_db dbo t_sptables5 VIEW NULL
+
+statement ok
+use babel_3640_db
+
+statement ok
+drop procedure babel_3640_p1
+
+statement ok
+drop procedure babel_3640_p2
+
+statement ok
+drop procedure babel_3640_p3
+
+statement ok
+drop procedure babel_3640_p4
+
+statement ok
+drop procedure babel_3640_p5
+
+statement ok
+drop procedure babel_3640_p6
+
+statement ok
+drop table trans2
+
+statement ok
+drop view t_sptables5
+
+statement ok
+drop table mytable1
+
+statement ok
+use master
+

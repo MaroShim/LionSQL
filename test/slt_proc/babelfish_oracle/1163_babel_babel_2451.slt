@@ -1,0 +1,18 @@
+# test/slt_proc/babelfish_oracle/1163_babel_babel_2451.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2451.sql
+
+statement ok
+USE master;
+
+statement ok
+drop table if exists [babel_'2451];
+
+statement ok
+create table [babel_'2451] (a int, b varchar(max), c nvarchar(max));
+
+statement ok
+insert into [babel_'2451] values (1, 'DDD','dede');
+
+statement ok
+drop table if exists [babel_'2451];
+

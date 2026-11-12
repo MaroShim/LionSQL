@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/1296_babel_babel_2429.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_2429.sql
+
+statement ok
+create login newlogin with password = '12345678' , default_database=master;
+
+statement ok
+create database zzz
+
+statement ok
+create login newlogin2 with password = '12345678' , default_database=master;
+
+statement ok
+create login newlogin3 with password = '12345678' , default_database=master;
+
+statement ok
+create database zzz
+
+statement ok
+drop login newlogin
+
+statement ok
+drop login newlogin2
+
+statement ok
+drop login newlogin3
+

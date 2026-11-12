@@ -1,0 +1,48 @@
+# test/slt_proc/babelfish_oracle/557_babel_babel_941.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-941.sql
+
+statement ok
+CREATE PROCEDURE p1 as 
+BEGIN
+DECLARE @a int;
+SELECT @a = 123;
+PRINT @a;
+END
+
+statement ok
+CREATE TABLE t1 ( b int) ;
+
+statement ok
+INSERT INTO t1 VALUES (1)
+
+statement ok
+INSERT INTO t1 VALUES (2)
+
+statement ok
+INSERT INTO t1 VALUES (3)
+
+statement ok
+CREATE PROCEDURE p2 as 
+BEGIN
+DECLARE @a int;
+SELECT @a = b from t1 where (b = 1);
+PRINT @a;
+END
+
+query T
+EXEC p1;
+----
+123
+
+statement ok
+EXEC p2;
+
+statement ok
+DROP TABLE t1
+
+statement ok
+DROP PROCEDURE p1
+
+statement ok
+DROP PROCEDURE p2
+

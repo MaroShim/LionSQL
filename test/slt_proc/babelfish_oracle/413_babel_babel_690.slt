@@ -1,0 +1,59 @@
+# test/slt_proc/babelfish_oracle/413_babel_babel_690.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-690.sql
+
+statement ok
+CREATE FUNCTION func50() Returns varchar As begin RETURN ('ababababababababababababababaabbababababa'); END
+
+query T
+SELECT func50()
+----
+ababababababababababababababaabbababababa
+
+statement ok
+CREATE FUNCTION func51() Returns nvarchar As begin RETURN ('ababababababababababababababaabbababababa'); END
+
+query T
+SELECT func51()
+----
+ababababababababababababababaabbababababa
+
+statement ok
+CREATE FUNCTION func52() Returns char As begin RETURN ('ababababababababababababababaabbababababa'); END
+
+query T
+SELECT func52()
+----
+ababababababababababababababaabbababababa
+
+statement ok
+CREATE FUNCTION func53() Returns text As begin RETURN ('ababababababababababababababaabbababababa'); END
+
+statement ok
+CREATE FUNCTION func54() Returns nchar As begin RETURN ('ababababababababababababababaabbababababa'); END
+
+query T
+SELECT func54()
+----
+ababababababababababababababaabbababababa
+
+statement ok
+CREATE FUNCTION func55() Returns ntext As begin RETURN ('ababababababababababababababaabbababababa'); END
+
+statement ok
+DROP FUNCTION func50
+
+statement ok
+DROP FUNCTION func51
+
+statement ok
+DROP FUNCTION func52
+
+statement ok
+DROP FUNCTION IF EXISTS func53
+
+statement ok
+DROP FUNCTION func54
+
+statement ok
+DROP FUNCTION IF EXISTS func55
+

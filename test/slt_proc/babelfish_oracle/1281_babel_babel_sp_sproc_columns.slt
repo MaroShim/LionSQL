@@ -1,0 +1,280 @@
+# test/slt_proc/babelfish_oracle/1281_babel_babel_sp_sproc_columns.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SP_SPROC_COLUMNS-vu-prepare.sql, test/babelfish/raw/BABEL-SP_SPROC_COLUMNS-vu-verify.sql, test/babelfish/raw/BABEL-SP_SPROC_COLUMNS-vu-cleanup.sql
+
+statement ok
+DROP FUNCTION IF EXISTS babel_sp_sproc_columns_vu_prepare_net
+
+statement ok
+CREATE FUNCTION babel_sp_sproc_columns_vu_prepare_net(
+    @quantity INT,
+    @list_price DEC(10,2),
+    @discount DEC(4,2)
+)
+RETURNS DEC(10,2)
+AS 
+BEGIN
+    RETURN @quantity * @list_price * (1 - @discount);
+END
+
+statement ok
+CREATE DATABASE babel_sp_sproc_columns_vu_prepare_db1
+
+statement ok
+USE babel_sp_sproc_columns_vu_prepare_db1
+
+statement ok
+DROP TABLE IF EXISTS babel_sp_sproc_columns_vu_prepare_t1
+
+statement ok
+CREATE TABLE babel_sp_sproc_columns_vu_prepare_t1(a INT)
+
+statement ok
+DROP PROCEDURE IF EXISTS babel_sp_sproc_columns_vu_prepare_select_all
+
+statement ok
+CREATE PROCEDURE babel_sp_sproc_columns_vu_prepare_select_all
+AS
+SELECT * FROM babel_sp_sproc_columns_vu_prepare_t1
+
+statement ok
+DROP PROCEDURE IF EXISTS babel_sp_sproc_columns_vu_prepare_select_all_with_parameter
+
+statement ok
+CREATE PROCEDURE babel_sp_sproc_columns_vu_prepare_select_all_with_parameter @id int
+AS
+BEGIN
+SELECT * FROM babel_sp_sproc_columns_vu_prepare_t1 WHERE a = @id
+END
+
+statement ok
+DROP PROCEDURE IF EXISTS babel_sp_sproc_columns_vu_prepare_mp_select_all
+
+statement ok
+CREATE PROCEDURE babel_sp_sproc_columns_vu_prepare_mp_select_all @id int, @MyVarChar varchar(256)
+AS
+BEGIN
+SELECT * FROM babel_sp_sproc_columns_vu_prepare_t1 WHERE a = @id
+END
+
+statement ok
+CREATE SCHEMA babel_sp_sproc_columns_vu_prepare_s1
+
+statement ok
+DROP FUNCTION IF EXISTS babel_sp_sproc_columns_vu_prepare_s1.positive_or_negative
+
+statement ok
+CREATE FUNCTION babel_sp_sproc_columns_vu_prepare_s1.positive_or_negative (
+@long DECIMAL(9,6)
+)
+RETURNS CHAR(4) AS
+BEGIN
+DECLARE @return_value CHAR(10);
+SET @return_value = 'zero';
+    IF (@long > 0.00) SET @return_value = 'positive';
+    IF (@long < 0.00) SET @return_value = 'negative';
+    RETURN @return_value
+END;
+
+statement ok
+DROP FUNCTION IF EXISTS babel_sp_sproc_columns_vu_prepare_net
+
+statement ok
+CREATE FUNCTION babel_sp_sproc_columns_vu_prepare_net(
+    @quantity INT,
+    @list_price DEC(10,2),
+    @discount DEC(4,2)
+)
+RETURNS DEC(10,2)
+AS 
+BEGIN
+    RETURN @quantity * @list_price * (1 - @discount);
+END
+
+statement ok
+DROP FUNCTION IF EXISTS babel_sp_sproc_columns_vu_prepare_no_param_name
+
+statement ok
+CREATE FUNCTION babel_sp_sproc_columns_vu_prepare_no_param_name(
+    @ INT
+)
+RETURNS INT
+AS 
+BEGIN
+    RETURN @
+END
+
+statement ok
+DROP FUNCTION IF EXISTS babel_sp_sproc_columns_vu_prepare_table_value_func
+
+statement ok
+CREATE FUNCTION babel_sp_sproc_columns_vu_prepare_table_value_func (
+    @num INT
+)
+RETURNS TABLE
+AS 
+RETURN
+SELECT a as b FROM babel_sp_sproc_columns_vu_prepare_t1 WHERE a > @num
+
+statement ok
+CREATE PROCEDURE babel_sp_sproc_columns_vu_prepare_eyedees_proc @id babel_sp_sproc_columns_vu_prepare_eyedees
+AS
+SELECT  1
+
+statement ok
+CREATE PROCEDURE babel_sp_sproc_columns_vu_prepare_Phone_Num_proc @num babel_sp_sproc_columns_vu_prepare_Phone_Num
+AS
+SELECT  1
+
+statement ok
+CREATE FUNCTION babel_sp_sproc_columns_vu_prepare_eyedees_func (
+    @id babel_sp_sproc_columns_vu_prepare_eyedees
+)
+RETURNS babel_sp_sproc_columns_vu_prepare_eyedees AS
+BEGIN
+return @id
+END
+
+statement ok
+CREATE FUNCTION babel_sp_sproc_columns_vu_prepare_PhoneNum_func (
+    @Pn babel_sp_sproc_columns_vu_prepare_Phone_Num
+)
+RETURNS babel_sp_sproc_columns_vu_prepare_Phone_Num AS
+BEGIN
+return @Pn
+END
+
+statement ok
+CREATE PROCEDURE babel_sp_sproc_columns_vu_prepare_addTwo @num1 int, @num2 int
+AS
+SELECT (@num1 + @num2)
+
+statement ok
+CREATE PROCEDURE babel_sp_sproc_columns_vu_prepare_complexProc
+@dec decimal(23,3), 
+@num numeric(22, 8), 
+@var varchar(30), 
+@nvar nvarchar(5),
+@varmax varchar(max),
+@nvarmax nvarchar(max)
+AS
+SELECT 1
+
+statement ok
+CREATE FUNCTION babel_sp_sproc_columns_vu_prepare_scalFunc(@a int)
+RETURNS INT
+AS
+BEGIN
+RETURN @a;
+END
+
+statement ok
+CREATE FUNCTION babel_sp_sproc_columns_vu_prepare_InlineTableFunc(@t1 int, @t2 int)
+RETURNS TABLE
+AS
+RETURN
+(
+  SELECT 1 AS c1, 2 AS c2
+)
+
+statement ok
+CREATE FUNCTION babel_sp_sproc_columns_vu_prepare_InlineTableFunc2(@t1 babel_sp_sproc_columns_vu_prepare_myTableParam READONLY, 
+    @t2 babel_sp_sproc_columns_vu_prepare_myTableParam READONLY)
+RETURNS TABLE
+AS
+RETURN
+(
+  SELECT 1 AS c1, 2 AS c2
+)
+
+statement ok
+CREATE FUNCTION babel_sp_sproc_columns_vu_prepare_myDecFunc (@a babel_sp_sproc_columns_vu_prepare_myDec)
+RETURNS babel_sp_sproc_columns_vu_prepare_myDec
+AS
+BEGIN
+    RETURN @a;
+END
+
+statement ok
+CREATE PROCEDURE babel_sp_sproc_columns_vu_prepare_typeModifier
+@var4000 varchar(8000),
+@varmax varchar(max),
+@nvar4000 nvarchar(4000),
+@nvarmax nvarchar(max),
+@char char(8000),
+@nchar nchar(4000),
+@binary BINARY(8000),
+@varbinary varbinary(8000),
+@varbinaryMax varbinary(max),
+@sysname sysname
+AS
+SELECT 1
+
+statement ok
+USE babel_sp_sproc_columns_vu_prepare_db1
+
+statement ok
+USE babel_sp_sproc_columns_vu_prepare_db1
+
+statement ok
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_table_value_func
+
+statement ok
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_no_param_name
+
+statement ok
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_net
+
+statement ok
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_PhoneNum_func
+
+statement ok
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_eyedees_func
+
+statement ok
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_s1.positive_or_negative
+
+statement ok
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_select_all
+
+statement ok
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_select_all_with_parameter
+
+statement ok
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_mp_select_all
+
+statement ok
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_eyedees_proc
+
+statement ok
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_Phone_num_proc
+
+statement ok
+DROP TABLE babel_sp_sproc_columns_vu_prepare_t1
+
+statement ok
+DROP SCHEMA babel_sp_sproc_columns_vu_prepare_s1
+
+statement ok
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_addTwo
+
+statement ok
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_complexProc
+
+statement ok
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_scalFunc
+
+statement ok
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_InlineTableFunc
+
+statement ok
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_InlineTableFunc2
+
+statement ok
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_myDecFunc
+
+statement ok
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_typeModifier
+
+statement ok
+USE master
+

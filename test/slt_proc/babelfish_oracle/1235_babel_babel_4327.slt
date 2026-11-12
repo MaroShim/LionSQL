@@ -1,0 +1,44 @@
+# test/slt_proc/babelfish_oracle/1235_babel_babel_4327.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4327.sql
+
+statement ok
+CREATE TABLE [dbo].[test_babel_4327_table](
+       [id] [bigint] IDENTITY(1,1) NOT NULL,
+       [my_varchar_data] [varchar](20) NULL,
+       [my_computed_column] AS isnull([my_varchar_data],[id]));
+
+statement ok
+select name from sys.types where system_type_id = 
+(
+  select system_type_id from sys.columns where 
+    name = 'my_computed_column' and 
+	object_id = 
+	(
+	  select object_id from sys.tables where name = 'test_babel_4327_table'
+	)
+);
+
+statement ok
+select
+  ISNULL(NULL, NULL),
+  ISNULL(NULL, 'Unassigned'),
+  ISNULL([my_varchar_data], 'Unassigned'),
+  ISNULL('Unassigned', 1),
+  ISNULL ('', 5)
+from [dbo].[test_babel_4327_table];
+
+statement ok
+select * from [dbo].[test_babel_4327_table] where ISNULL([my_varchar_data], [id]) = 'HELLO';
+
+statement ok
+select * from [dbo].[test_babel_4327_table] where [my_computed_column] = 'HELLO';
+
+statement ok
+select * from [dbo].[test_babel_4327_table] where ISNULL([my_varchar_data], [id]) = 'HeLLO';
+
+statement ok
+select * from [dbo].[test_babel_4327_table] where [my_computed_column] = 'HeLLO';
+
+statement ok
+DROP TABLE [dbo].[test_babel_4327_table];
+

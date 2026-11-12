@@ -1,0 +1,10 @@
+# test/slt_proc/babelfish_oracle/1130_babel_babel_2010.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2010.sql
+
+statement ok
+CREATE PROC babel_2010_proc AS
+SELECT 'hello';
+
+statement ok
+DROP PROC babel_2010_proc
+

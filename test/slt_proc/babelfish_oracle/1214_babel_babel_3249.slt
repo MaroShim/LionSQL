@@ -1,0 +1,33 @@
+# test/slt_proc/babelfish_oracle/1214_babel_babel_3249.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/triggers/BABEL-3249-vu-prepare.sql, test/babelfish/raw/triggers/BABEL-3249-vu-verify.sql, test/babelfish/raw/triggers/BABEL-3249-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_3249_vu_prepare_TAB(C1 INT, C2 VARCHAR(100))
+
+statement ok
+INSERT INTO babel_3249_vu_prepare_TAB VALUES(1, 'abc')
+INSERT INTO babel_3249_vu_prepare_TAB VALUES(2, 'ghl')
+INSERT INTO babel_3249_vu_prepare_TAB VALUES(3, 'xyz')
+
+statement ok
+CREATE TRIGGER babel_3249_vu_prepare_TRIG_AFTER
+ON babel_3249_vu_prepare_TAB
+AFTER DELETE
+AS
+	INSERT INTO babel_3249_vu_prepare_TAB VALUES(10, 'fjf');
+
+statement ok
+DELETE FROM babel_3249_vu_prepare_TAB WHERE C1 = 1;
+
+statement ok
+SELECT PRONAME FROM PG_PROC WHERE PRONAME = 'babel_3249_vu_prepare_trig_for'
+
+statement ok
+SELECT PRONAME FROM PG_PROC WHERE PRONAME = 'babel_3249_vu_prepare_trig_after'
+
+statement ok
+DROP TRIGGER babel_3249_vu_prepare_TRIG_AFTER
+
+statement ok
+DROP TABLE babel_3249_vu_prepare_TAB
+

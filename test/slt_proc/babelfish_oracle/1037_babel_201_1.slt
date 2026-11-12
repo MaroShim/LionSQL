@@ -1,0 +1,280 @@
+# test/slt_proc/babelfish_oracle/1037_babel_201_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/201_1.sql
+
+statement ok
+CREATE PROC p313(@a int) 
+AS 
+BEGIN 
+ RETURN 42
+END
+
+statement ok
+EXEC p313
+
+statement ok
+DROP PROC p313
+
+statement ok
+begin transaction
+
+statement ok
+CREATE PROC p313(@a int) 
+AS 
+BEGIN 
+ RETURN 42
+END
+
+statement ok
+EXEC p313
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+DROP PROC p313
+
+statement ok
+create schema error_mapping;
+
+statement ok
+create table error_mapping.temp1 (a int)
+
+statement ok
+CREATE PROC p313(@a int) 
+AS 
+BEGIN 
+ RETURN 42
+END
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+insert into error_mapping.temp1 values(1)
+EXEC p313
+end
+
+statement ok
+DROP PROC p313
+
+statement ok
+create table error_mapping.temp2 (a int)
+
+statement ok
+CREATE PROC p313(@a int) 
+AS 
+BEGIN 
+ RETURN 42
+END
+
+statement ok
+DROP PROC p313
+
+statement ok
+create table error_mapping.temp3 (a int)
+
+statement ok
+CREATE PROC p313(@a int) 
+AS 
+BEGIN 
+ RETURN 42
+END
+
+statement ok
+DROP PROC p313
+
+statement ok
+drop procedure error_mapping.ErrorHandling1;
+
+statement ok
+drop table error_mapping.temp1;
+drop table error_mapping.temp2;
+drop table error_mapping.temp3;
+
+statement ok
+CREATE PROC p313(@a int) 
+AS 
+BEGIN 
+ RETURN 42
+END
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+EXEC p313
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('Compile time error' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP PROC p313
+
+statement ok
+CREATE PROC p313(@a int) 
+AS 
+BEGIN 
+ RETURN 42
+END
+
+statement ok
+begin transaction
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+EXEC p313
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP PROC p313
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE PROC p313(@a int) 
+AS 
+BEGIN 
+ RETURN 42
+END
+
+statement ok
+begin transaction
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+EXEC p313
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP PROC p313
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE PROC p313(@a int) 
+AS 
+BEGIN 
+ RETURN 42
+END
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+EXEC p313
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure error_mapping.ErrorHandling2 as
+begin
+exec error_mapping.ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+exec error_mapping.ErrorHandling2;
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+drop procedure error_mapping.ErrorHandling2;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP PROC p313
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE PROC p313(@a int) 
+AS 
+BEGIN 
+ RETURN 42
+END
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+EXEC p313
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure error_mapping.ErrorHandling2 as
+begin
+exec error_mapping.ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+exec error_mapping.ErrorHandling2;
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+drop procedure error_mapping.ErrorHandling2;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP PROC p313
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE PROC p313(@a int) 
+AS 
+BEGIN 
+ RETURN 42
+END
+
+statement ok
+DROP PROC p313
+
+statement ok
+drop schema error_mapping;
+

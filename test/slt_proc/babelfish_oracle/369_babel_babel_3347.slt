@@ -1,0 +1,132 @@
+# test/slt_proc/babelfish_oracle/369_babel_babel_3347.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3347-vu-prepare.sql, test/babelfish/raw/BABEL-3347-vu-verify.sql, test/babelfish/raw/BABEL-3347-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_3347_table_1(text_test VARCHAR(100));
+INSERT INTO babel_3347_table_1 VALUES ('hello world');
+INSERT INTO babel_3347_table_1 VALUES (NULL);
+INSERT INTO babel_3347_table_1 VALUES ('more txt');
+
+statement ok
+CREATE TABLE babel_3347_table_2(int_test INT);
+INSERT INTO babel_3347_table_2 VALUES (3);
+INSERT INTO babel_3347_table_2 VALUES (NULL);
+INSERT INTO babel_3347_table_2 VALUES (5);
+
+statement ok
+CREATE FUNCTION dbo.babel_3347_func () RETURNS NVARCHAR(100) AS BEGIN RETURN NULL END;
+
+statement ok
+CREATE VIEW babel_3347_vu1 AS
+SELECT SUBSTRING(text_test, 2,3) FROM babel_3347_table_1
+
+statement ok
+CREATE VIEW babel_3347_vu2 AS
+SELECT SUBSTRING(NULL, 2,3)
+
+statement ok
+CREATE VIEW babel_3347_vu3 AS
+SELECT SUBSTRING(dbo.babel_3347_func(), 1, 2)
+
+statement ok
+CREATE VIEW babel_3347_vu4 AS
+SELECT SUBSTRING('1234567890', int_test,8) FROM babel_3347_table_2
+
+statement ok
+CREATE VIEW babel_3347_vu5 AS
+SELECT SUBSTRING('1234567890', 2,int_test) FROM babel_3347_table_2
+
+statement ok
+CREATE VIEW babel_3347_vu6 AS
+SELECT SUBSTRING(CAST(NULL as VARCHAR), 1,2)
+
+statement ok
+CREATE VIEW babel_3347_vu7 AS
+SELECT sys.SUBSTRING(NULL, 1,2)
+
+query T
+SELECT * FROM babel_3347_vu1
+----
+ell
+NULL
+ore
+
+query T
+SELECT * FROM babel_3347_vu2
+----
+NULL
+
+query T
+SELECT * FROM babel_3347_vu3
+----
+NULL
+
+query T
+SELECT * FROM babel_3347_vu4
+----
+34567890
+NULL
+567890
+
+query T
+SELECT * FROM babel_3347_vu5
+----
+234
+NULL
+23456
+
+query T
+SELECT * FROM babel_3347_vu6
+----
+NULL
+
+query T
+SELECT * FROM babel_3347_vu7
+----
+NULL
+
+statement ok
+DECLARE @babel_3347_vu7_var NVARCHAR(MAX) = NULL
+SELECT SUBSTRING(@babel_3347_vu7_var, 2,3)
+
+statement ok
+CREATE table babel_3347_vu_tbl (a INT)
+SELECT substring(null, 2,3)
+PRINT 'this should not print'
+
+statement ok
+SELECT * FROM babel_3347_vu_tbl
+
+statement ok
+DROP VIEW IF EXISTS babel_3347_vu1
+
+statement ok
+DROP VIEW IF EXISTS babel_3347_vu2
+
+statement ok
+DROP VIEW IF EXISTS babel_3347_vu3
+
+statement ok
+DROP VIEW IF EXISTS babel_3347_vu4
+
+statement ok
+DROP VIEW IF EXISTS babel_3347_vu5
+
+statement ok
+DROP VIEW IF EXISTS babel_3347_vu6
+
+statement ok
+DROP VIEW IF EXISTS babel_3347_vu7
+
+statement ok
+DROP FUNCTION babel_3347_func
+
+statement ok
+DROP TABLE babel_3347_table_1
+
+statement ok
+DROP TABLE babel_3347_table_2
+
+statement ok
+DROP TABLE IF EXISTS babel_3347_vu_tbl
+

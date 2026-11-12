@@ -1,0 +1,54 @@
+# test/slt_proc/babelfish_oracle/1188_babel_babel_2924.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2924.sql
+
+statement ok
+use master;
+
+statement ok
+create database db_2924_1 ON PRIMARY (NAME = 'X');
+
+statement ok
+create database db_2924_2 ON PRIMARY (NAME = 'X') LOG ON (NAME = 'Y');
+
+statement ok
+create database db_2924_3 ON PRIMARY (NAME = 'X'), (NAME = 'X2') LOG ON (NAME = 'Y'), (NAME = 'Y2');
+
+statement ok
+create database db_2924_1 ON PRIMARY (NAME = 'X');
+
+statement ok
+create database db_2924_2 ON PRIMARY (NAME = 'X') LOG ON (NAME = 'Y');
+
+statement ok
+create database db_2924_3 ON PRIMARY (NAME = 'X'), (NAME = 'X2') LOG ON (NAME = 'Y'), (NAME = 'Y2');
+
+statement ok
+create database db_2924_4 ON PRIMARY (NAME = 'X'), FILEGROUP W (NAME='W1'), (NAME='W2'), (NAME = 'X2') LOG ON FILEGROUP Z (NAME = 'Z1'), (NAME = 'Z2'), (NAME = 'Y'), (NAME = 'Y2');
+
+statement ok
+create database db_2924_5 CONTAINMENT = NONE ON PRIMARY (NAME = 'X'), FILEGROUP W (NAME='W1'), (NAME='W2'), (NAME = 'X2') LOG ON FILEGROUP Z (NAME = 'Z1'), (NAME = 'Z2'), (NAME = 'Y'), (NAME = 'Y2') WITH DB_CHAINING ON, PERSISTENT_LOG_BUFFER = ON (DIRECTORY_NAME = '/tmp');
+
+statement ok
+create database db_2924_1 ON PRIMARY (NAME = 'X') COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+create database db_2924_2 ON PRIMARY (NAME = 'X') LOG ON (NAME = 'Y') COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+create database db_2924_3 ON PRIMARY (NAME = 'X'), (NAME = 'X2') LOG ON (NAME = 'Y'), (NAME = 'Y2') COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+create database db_2924_1 ON PRIMARY (NAME = 'X') COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+create database db_2924_2 ON PRIMARY (NAME = 'X') LOG ON (NAME = 'Y') COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+create database db_2924_3 ON PRIMARY (NAME = 'X'), (NAME = 'X2') LOG ON (NAME = 'Y'), (NAME = 'Y2') COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+create database db_2924_4 ON PRIMARY (NAME = 'X'), FILEGROUP W (NAME='W1'), (NAME='W2'), (NAME = 'X2') LOG ON FILEGROUP Z (NAME = 'Z1'), (NAME = 'Z2'), (NAME = 'Y'), (NAME = 'Y2') COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+create database db_2924_5 CONTAINMENT = NONE ON PRIMARY (NAME = 'X'), FILEGROUP W (NAME='W1'), (NAME='W2'), (NAME = 'X2') LOG ON FILEGROUP Z (NAME = 'Z1'), (NAME = 'Z2'), (NAME = 'Y'), (NAME = 'Y2') COLLATE BBF_Unicode_CP1_CI_AI WITH DB_CHAINING ON, PERSISTENT_LOG_BUFFER = ON (DIRECTORY_NAME = '/tmp');
+

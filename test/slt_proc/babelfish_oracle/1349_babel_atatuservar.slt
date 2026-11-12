@@ -1,0 +1,1133 @@
+# test/slt_proc/babelfish_oracle/1349_babel_atatuservar.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/atatuservar-vu-prepare.sql, test/babelfish/raw/atatuservar-vu-verify.sql, test/babelfish/raw/atatuservar-vu-cleanup.sql
+
+statement ok
+create table t1_atatuservar (c varchar(20))
+insert t1_atatuservar values ('row 1'), ('row 2'), ('row 3')
+
+statement ok
+create table t2_atatuservar (a int)
+insert t2_atatuservar values(123)
+
+statement ok
+create table t3_atatuservar (a int)
+insert t3_atatuservar values(123)
+
+statement ok
+create table t_checkident_atatuservar (a varchar(20), n int identity)
+
+statement ok
+create table t1_trigger_atatuservar (a int)
+
+statement ok
+create table t2_trigger_atatuservar (a int)
+
+statement ok
+create table t3_trigger_atatuservar (a int)
+
+statement ok
+create table t5_trigger_atatuservar (a int)
+
+statement ok
+create table t6_trigger_atatuservar (a int)
+
+statement ok
+create table t7_trigger_atatuservar (a int)
+
+statement ok
+create table t8_trigger_atatuservar (a int)
+
+statement ok
+create table t9_trigger_atatuservar (a int)
+
+statement ok
+create table t10_trigger_atatuservar(a int)
+
+statement ok
+create table t11_trigger_atatuservar(a int)
+
+statement ok
+create table t12_trigger_atatuservar(a int)
+
+statement ok
+create table t13_trigger_atatuservar(a int)
+
+statement ok
+create table t14_trigger_atatuservar(a int)
+
+statement ok
+create table t15_trigger_atatuservar(a int)
+
+statement ok
+create table t16_trigger_atatuservar(a int)
+
+statement ok
+create table t17_trigger_atatuservar(a int)
+
+statement ok
+create table t18_trigger_atatuservar(a int)
+
+statement ok
+create table t19_trigger_atatuservar(a int)
+
+statement ok
+create table t20_trigger_atatuservar(a int)
+
+statement ok
+create table t21_trigger_atatuservar(a int)
+
+statement ok
+create table t22_trigger_atatuservar(a int)
+
+statement ok
+create table t23_trigger_atatuservar(a int)
+
+statement ok
+set quoted_identifier off
+
+statement ok
+declare @@v int = 2 select @@v
+
+statement ok
+declare @#v int = 2 select @#v
+
+statement ok
+declare @@@$$@@@@v int = 2 select @@@$$@@@@v
+
+statement ok
+declare @@@$$@@@@v##### int = 2 select @@@$$@@@@v#####
+
+statement ok
+declare @@@$$@@@@#####v int = 2 select @@@$$@@@@#####v
+
+statement ok
+declare @#############v int = 2 select @#############v
+
+statement ok
+declare @@v63_7890123456789$123456789$123456789012345678901234567890123 int = 2 
+select  @@v63_7890123456789$123456789$123456789012345678901234567890123
+
+statement ok
+declare @@v64_7890123456789$123456789$1234567890123456789012345678901234 int = 2 
+select  @@v64_7890123456789$123456789$1234567890123456789012345678901234
+
+statement ok
+declare @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 int = 2 
+select  @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+
+statement ok
+declare @#v63_7890123456789$123456789$123456789012345678901234567890123 int = 2 
+select  @#v63_7890123456789$123456789$123456789012345678901234567890123
+
+statement ok
+declare @#v64_7890123456789$123456789$1234567890123456789012345678901234 int = 2 
+select  @#v64_7890123456789$123456789$1234567890123456789012345678901234
+
+statement ok
+declare @#v128_90123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 int = 2 
+select  @#v128_90123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+
+statement ok
+declare @@v128_@@@$$@@@@$$@########@@@$$@@@@$$@@@@$$@@@###__##@@@$$@@@@$$@@@@$$@@@@$$@@@______@@@$$@@@@$$@@@@$$@@@###########@@@$$@@@@@@ int = 2 
+select  @@v128_@@@$$@@@@$$@########@@@$$@@@@$$@@@@$$@@@###__##@@@$$@@@@$$@@@@$$@@@@$$@@@______@@@$$@@@@$$@@@@$$@@@###########@@@$$@@@@@@
+
+statement ok
+declare @@v int
+select 1
+set @@v = @@rowcount
+select @@v
+
+statement ok
+declare @@@$$@@@@v int, @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 int
+select 1
+set @@@$$@@@@v = @@rowcount
+set @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 = @@pgerror
+select @@@$$@@@@v, @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+
+statement ok
+declare @@v63_7890123456789$123456789$123456789012345678901234567890123 int 
+set @@v63_7890123456789$123456789$123456789012345678901234567890123 = @@rowcount
+select @@v63_7890123456789$123456789$123456789012345678901234567890123
+
+statement ok
+declare @#v64_7890123456789$123456789$1234567890123456789012345678901234 int 
+set @#v64_7890123456789$123456789$1234567890123456789012345678901234 = @@rowcount
+select @#v64_7890123456789$123456789$1234567890123456789012345678901234
+
+statement ok
+declare @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 int
+set @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 = @@rowcount
+select @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+
+statement ok
+create procedure p1_atatuservar
+as
+declare @@v int
+select 1
+set @@v = @@rowcount
+select @@v
+declare @#v int
+select 1
+set @#v = @@rowcount
+select @#v
+
+query T
+exec p1_atatuservar
+----
+NULL
+NULL
+NULL
+3
+
+statement ok
+insert t1_trigger_atatuservar values (123)
+
+statement ok
+insert t2_trigger_atatuservar values (123)
+
+statement ok
+create function f1_atatuservar() returns int
+as
+begin
+declare @@v int, @@v2 int
+select @@v2 = count(*) from t1_atatuservar
+set @@v = @@rowcount
+declare @#v int, @#v2 int
+select @#v2 = count(*) from t1_atatuservar
+set @#v = @@rowcount
+return @@v * @#v
+end
+
+query T
+select dbo.f1_atatuservar()
+----
+1
+
+statement ok
+insert t3_trigger_atatuservar values (123)
+
+statement ok
+create procedure p4_atatuservar @@p1 int
+as select @@p1
+return @@p1*-1
+
+query T
+exec p4_atatuservar 123
+----
+123
+
+query T
+exec p4_atatuservar @@p1=123
+----
+123
+
+statement ok
+declare @@v int = 987
+exec p4_atatuservar @@p1=@@v
+
+statement ok
+declare @@v int
+exec @@v = p4_atatuservar @@p1=123
+select @@v
+
+statement ok
+create procedure p19_atatuservar @#p19_atatuservar int
+as select @#p19_atatuservar
+return @#p19_atatuservar*-1
+
+query T
+exec p19_atatuservar @@max_precision
+----
+@@max_precision
+
+query T
+exec p19_atatuservar @#p19_atatuservar=@@max_precision
+----
+@@max_precision
+
+statement ok
+declare @#v int = @@max_precision
+exec p19_atatuservar @#p19_atatuservar=@#v
+
+statement ok
+declare @#v int
+exec @#v = p19_atatuservar @#p19_atatuservar=@@max_precision
+select @#v
+
+statement ok
+create procedure p5_atatuservar
+as
+declare @@v int
+exec @@v = p4_atatuservar @@p1=123
+select @@v
+declare @#v int
+exec @#v = p4_atatuservar @@p1=123
+select @#v
+
+query T
+exec p5_atatuservar
+----
+NULL
+-123
+
+statement ok
+create procedure p6_atatuservar @@p4 int output
+as
+set @@p4 *= 2
+select @@p4
+return @@p4*-1
+
+statement ok
+declare @#v1 int, @@v2 int = 123
+exec @#v1 = p6_atatuservar @@v2
+select @#v1, @@v2
+
+statement ok
+declare @#v1 int, @@v2 int = 123
+exec @#v1 = p6_atatuservar @@p4 = @@v2 out
+select @#v1, @@v2
+
+statement ok
+create procedure p7_atatuservar
+as
+declare @#v1 int, @@v2 int = 123
+exec @#v1 = p6_atatuservar @@v2 output
+select @#v1, @@v2
+
+statement ok
+declare @#v64_7890123456789$123456789$1234567890123456789012345678901234 int, @@v63_7890123456789$123456789$123456789012345678901234567890123 int = 123
+exec @#v64_7890123456789$123456789$1234567890123456789012345678901234 = p8_atatuservar @@v63_7890123456789$123456789$123456789012345678901234567890123
+select @#v64_7890123456789$123456789$1234567890123456789012345678901234, @@v63_7890123456789$123456789$123456789012345678901234567890123
+
+statement ok
+declare @#v64_7890123456789$123456789$1234567890123456789012345678901234 int, @@v63_7890123456789$123456789$123456789012345678901234567890123 int = 123
+exec @#v64_7890123456789$123456789$1234567890123456789012345678901234 = p8_atatuservar @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 = @@v63_7890123456789$123456789$123456789012345678901234567890123 out
+select @#v64_7890123456789$123456789$1234567890123456789012345678901234, @@v63_7890123456789$123456789$123456789012345678901234567890123
+
+statement ok
+insert t5_trigger_atatuservar values (123)
+
+statement ok
+insert t6_trigger_atatuservar values (123)
+
+statement ok
+declare @#v int = 3
+set @#v *= -1
+set @#v = @#v + 10*@#v
+select @#v = @#v + 1
+if @#v > 0 select 'positive' else select 'negative'
+select @#v, @#V, '@#v'
+print @#v -- PRINT output not captured by JDBC tests
+
+statement ok
+declare @@v int = 3
+set @@v *= -1
+set @@v = @@v + 10*@@v
+select @@v = @@v + 1
+if @@v > 0 select 'positive' else select 'negative'
+select @@v , @@V, '@@v'
+print @@V -- PRINT output not captured by JDBC tests
+
+statement ok
+create procedure p10_atatuservar
+as
+declare @#v int = 3
+set @#v *= -1
+set @#v = @#v + 10*@#v
+select @#v = @#v + 1
+if @#v > 0 select 'positive' else select 'negative'
+select @#v, @#V, '@#v'
+print @#v -- PRINT output not captured by JDBC tests
+declare @@v int = 3
+set @@v *= -1
+set @@v = @@v + 10*@@v
+select @@v = @@v + 1
+if @@v > 0 select 'positive' else select 'negative'
+select @@v , @@V, '@@v'
+print @@V -- PRINT output not captured by JDBC tests
+
+query TTT
+exec p10_atatuservar
+----
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+-32 NULL NULL
+NULL NULL NULL
+-33 -33 @@v
+
+statement ok
+declare @@c varchar(20)='abcd', @#v1 int=2, @v2@# int=1
+select substring(@@c, @#v1, @v2@#)
+
+statement ok
+declare @@v1 varchar(20)='row 1', @#v2 varchar(20)='row 3'
+select * from t1_atatuservar where c in (@@v1,  @#v2) order by 1
+
+statement ok
+declare @@v1 varchar(20)='1', @#v2 varchar(20)='3'
+select * from t1_atatuservar where c like '%'+@@v1 or c like '%'+@#v2 order by 1
+
+statement ok
+create function f4_atatuservar (@@p1 int, @#p2 int, @p5_atatuservar int)
+returns table
+as
+return (select @@p1*@#p2*@p5_atatuservar as x where @@p1 = 123 or @#p2 = 10 or @p5_atatuservar = 1)
+
+query T
+select * from dbo.f4_atatuservar(123, 20, 2)
+----
+4920
+
+query T
+select * from dbo.f4_atatuservar(345, 10, 2)
+----
+6900
+
+query T
+select * from dbo.f4_atatuservar(345, 20, 1)
+----
+6900
+
+statement ok
+declare @@c varchar(30), @#v int=1, @#v2 int=2
+set @@c = case when @#v > 0 then '> zero' else '<- zero' end
+select @@c
+set @@c = case @#v when 0 then 'zero' else '<> zero' end
+select @@c
+set @@c = case @#v when 0 then 'zero' when @#v2 then 'case 2' else 'something else' end
+select @@c
+set @@c = case @#v+@#v when 0 then 'zero' when @#v2 then 'case 2' else 'something else' end
+select @@c
+
+statement ok
+create procedure p22_atatuservar
+as
+declare @@c varchar(30), @#v int=1, @#v2 int=2
+set @@c = case when @#v > 0 then '> zero' else '<- zero' end
+select @@c
+set @@c = case @#v when 0 then 'zero' else '<> zero' end
+select @@c
+set @@c = case @#v when 0 then 'zero' when @#v2 then 'case 2' else 'something else' end
+select @@c
+set @@c = case @#v+@#v when 0 then 'zero' when @#v2 then 'case 2' else 'something else' end
+select @@c
+
+statement ok
+insert t7_trigger_atatuservar values (123)
+
+statement ok
+declare @@v table (a int)
+insert @@v values (123)
+select * from @@v
+
+statement ok
+declare @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 table (a int)
+insert @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 values (123)
+select * from @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+
+statement ok
+declare @#v table (a int)
+insert @#v values (123)
+insert @#v select * from @#v
+select * from @#v
+update @#v set a = a + 1
+select * from @#v
+set rowcount 1
+delete @#v
+set rowcount 0
+select * from @#v
+
+statement ok
+declare @@V table (a int)
+insert @@v values (123)
+insert @@v select * from @@v
+select * from @@v
+update @@v set a = a + 1
+select * from @@v
+set rowcount 1
+delete @@v
+set rowcount 0
+select * from @@v
+
+statement ok
+create procedure p12_atatuservar
+as
+declare @#v table (a int)
+insert @#v values (123)
+insert @#v select * from @#v
+select * from @#v
+update @#v set a = a + 1
+select * from @#v
+set rowcount 1
+delete @#v
+set rowcount 0
+select * from @#v
+declare @@V table (a int)
+insert @@v values (123)
+insert @@v select * from @@v
+select * from @@v
+update @@v set a = a + 1
+select * from @@v
+set rowcount 1
+delete @@v
+set rowcount 0
+select * from @@v
+
+statement ok
+insert t8_trigger_atatuservar values (123)
+
+statement ok
+insert t9_trigger_atatuservar values (123)
+
+statement ok
+declare @@V int = 1
+set rowcount @@v
+select * from t1_atatuservar order by 1
+set @@v = 0
+set rowcount @@v
+select * from t1_atatuservar order by 1
+
+statement ok
+declare @#V int = 1
+set rowcount @#v
+select * from t1_atatuservar order by 1
+set @#v = 0
+set rowcount @#v
+select * from t1_atatuservar order by 1
+
+statement ok
+create procedure p14_atatuservar
+as
+declare @@V int = 1
+set rowcount @@v
+select * from t1_atatuservar order by 1
+set @@v = 0
+set rowcount @@v
+select * from t1_atatuservar order by 1
+declare @#V int = 1
+set rowcount @#v
+select * from t1_atatuservar order by 1
+set @#v = 0
+set rowcount @#v
+select * from t1_atatuservar order by 1
+
+statement ok
+exec p14_atatuservar
+
+statement ok
+insert t10_trigger_atatuservar values (123)
+
+statement ok
+declare @@v int = 4
+set datefirst @@v
+select datepart(dw, '2024-10-21')
+
+statement ok
+set datefirst 7
+
+statement ok
+declare @#v int = 5
+set datefirst @#v
+select datepart(dw, '2024-10-21')
+
+statement ok
+set datefirst 7
+
+statement ok
+declare @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 int = 5
+set datefirst @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+select datepart(dw, '2024-10-21')
+
+statement ok
+set datefirst 7
+
+statement ok
+declare @@v varchar(10) = 'dmy'
+set dateformat @@v
+select cast('01/02/03' as datetime)
+
+statement ok
+set dateformat mdy
+
+statement ok
+declare @#v varchar(10) = 'dmy'
+set dateformat @#v
+select cast('01/02/03' as datetime)
+
+statement ok
+set dateformat mdy
+
+statement ok
+declare @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 varchar(10) = 'dmy'
+set dateformat @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+select cast('01/02/03' as datetime)
+
+statement ok
+set dateformat mdy
+
+statement ok
+declare @@v varchar(10) = 'dutch'
+set language @@v
+select @@language
+
+statement ok
+set language us_english
+
+statement ok
+declare @#v varchar(10) = 'french'
+set language @#v
+select @@language
+
+statement ok
+set language us_english
+
+statement ok
+declare @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 varchar(10) = 'french'
+set language @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+select @@language
+
+statement ok
+set language us_english
+
+statement ok
+create procedure p15_atatuservar
+as
+declare @@v1 int = 4
+set datefirst @@v1
+select datepart(dw, '2024-10-21')
+declare @#v1 int = 5
+set datefirst @#v1
+select datepart(dw, '2024-10-21')
+declare @@v2 varchar(10) = 'dmy'
+set dateformat @@v2
+select cast('01/02/03' as datetime)
+declare @#v3 varchar(10) = 'dutch'
+set language @#v3
+select @@language
+
+statement ok
+set datefirst 7
+set dateformat mdy
+set language us_english
+
+statement ok
+set datefirst 7
+set dateformat mdy
+set language us_english
+
+statement ok
+insert t11_trigger_atatuservar values (123)
+
+statement ok
+set datefirst 7
+set dateformat mdy
+set language us_english
+
+statement ok
+insert t12_trigger_atatuservar values (123)
+
+statement ok
+set datefirst 7
+set dateformat mdy
+set language us_english
+
+statement ok
+declare @@V varchar(50) = 'select 123' execute(@@v)
+
+statement ok
+declare @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 varchar(50) = 'select 123' execute(@@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678)
+
+statement ok
+declare @@V varchar(50) = 'declare @#v int =123 select @#v'
+execute(@@v)
+
+statement ok
+declare @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 varchar(500) = 'declare @#w128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 int =123 select @#w128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678'
+execute(@@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678)
+
+statement ok
+declare @@V varchar(50) = 'declare @#v int =123 select @#v'
+execute('select 456 ' + @@v)
+
+statement ok
+declare @#V varchar(50) = 'declare @@v int =123 select @@v'
+execute(@#v)
+
+statement ok
+declare @#V varchar(50) = 'declare @@v int =123 select @@v'
+execute('select 456 ' + @#v)
+
+statement ok
+declare @#V varchar(50) = 'select 123 '
+execute(@#v + @#v)
+
+statement ok
+declare @#V varchar(50) = 'select 123 ',  @@V varchar(50) = 'select 456 '
+execute(@#v + @@v + @@v + @#v)
+
+statement ok
+declare @@V varchar(50) = 'select "abc''def" '
+execute(@@v + 'select "xy''z" ' + @@V)
+
+statement ok
+create procedure p17_atatuservar
+as
+declare @#V1 varchar(50) = 'declare @@v int =123 select @@v'
+execute('select 456 ' + @#v1)
+declare @#V2 varchar(50) = 'select 123 '
+execute(@#v2 + @#v2)
+declare @#V3 varchar(50) = 'select 123 ',  @@V varchar(50) = 'select 456 '
+execute(@#v3 + @@v + @@v + @#v3)
+declare @@V4 varchar(50) = 'select "abc''def" '
+execute(@@v4 + 'select "xy''z" ' + @@V4)
+
+query T
+exec p17_atatuservar
+----
+abc'def
+
+statement ok
+insert t13_trigger_atatuservar values (123)
+
+statement ok
+insert t14_trigger_atatuservar values (123)
+
+statement ok
+declare @@v int=50001
+raiserror(@@v,1,1)
+
+statement ok
+declare @@v int=50001, @@v2 int=1
+raiserror(@@v,@@v2,1)
+
+statement ok
+declare @@v int=50001, @@v2 int=1, @#v3 int=1
+raiserror(@@v,@@v2,@#v3)
+
+statement ok
+declare @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 int=50001, @#w128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 int=1, @@y128_############################################______@@@$$@@@@$$@@@@__###############@@@$$@@@@$$@@@@$$@@@@$$@@@@$$@@@@$$@@@@ int=1
+raiserror(@@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678, @#w128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678, @@y128_############################################______@@@$$@@@@$$@@@@__###############@@@$$@@@@$$@@@@$$@@@@$$@@@@$$@@@@$$@@@@)
+
+statement ok
+insert t15_trigger_atatuservar values (123)
+
+statement ok
+exec sp_executesql N'declare @@v int=123 select @@v'
+
+statement ok
+declare @@sql nvarchar(50)=N'SELECT @@v1, @#v2'
+exec sp_executesql @@sql, N'@@v1 int, @#v2 varchar(20)', @#v2='Hello, World!', @@v1=123
+
+statement ok
+declare @@params nvarchar(50)=N'@@v1 int, @#v2 varchar(20)'
+exec sp_executesql N'SELECT @@v1, @#v2', @@params, @#v2='Hello, World!', @@v1=123
+
+statement ok
+declare @@sql nvarchar(50)=N'SELECT @@v1, @#v2'
+declare @@params nvarchar(50)=N'@@v1 int, @#v2 varchar(20)'
+exec sp_executesql @@sql, @@params, @#v2='Hello, World!', @@v1=123
+
+statement ok
+declare @@sql nvarchar(50)=N'SELECT @@v1, @#v2', @@params nvarchar(50)=N'@@v1 int, @#v2 varchar(20)', @@v3 int=123, @#v4 varchar(20)='Hello, World!'
+exec sp_executesql @@sql, @@params, @#v2=@#v4, @@v1=@@v3
+
+statement ok
+create procedure p1_spexec_atatuservar
+as
+declare @@sql nvarchar(50)=N'SELECT @@v1, @#v2', @@params nvarchar(50)=N'@@v1 int, @#v2 varchar(20)', @@v3 int=123, @#v4 varchar(20)='Hello, World!'
+exec sp_executesql @@sql, @@params, @#v2=@#v4, @@v1=@@v3
+declare @@SQLString1 NVARCHAR(100)
+declare @#SQLString2 NVARCHAR(max)
+declare @@ParamDef NVARCHAR(100)
+SET @@SQLString1 = N'SET @#a = @@b + @@b'
+SET @#SQLString2 = N'EXEC sp_executesql N''SET @#a = @@b + @@b'', N''@#a INT OUT, @@b INT'', @#a OUT, @@b'
+SET @@ParamDef = N'@#a INT OUTPUT, @@b INT'
+declare @@p INT
+declare @#a INT
+EXEC sp_executesql @@SQLString1, @@ParamDef, @#a = @@p OUT, @@b = 10
+EXEC sp_executesql @#SQLString2, @@ParamDef, @#a = @#a OUT, @@b = 11
+SELECT @@p, @#a
+
+statement ok
+insert t16_trigger_atatuservar values (123)
+
+statement ok
+insert t17_trigger_atatuservar values (123)
+
+statement ok
+create function f1_ins_atatuservar(@@p1 int)
+returns int
+as
+begin
+	declare @@tv table(a int)
+    insert @@tv values(@@p1)
+    return (select sum(a) from @@tv)
+end
+
+query T
+select dbo. f1_ins_atatuservar(123)
+----
+dbo
+
+statement ok
+create function f1_upd_atatuservar(@@p1 int)
+returns int
+as
+begin
+	declare @@tv table(a int)
+    insert @@tv values(@@p1)
+    update @@tv set a = a + 1
+    return (select sum(a) from @@tv)
+end
+
+query T
+select dbo. f1_upd_atatuservar(123)
+----
+dbo
+
+statement ok
+create function f1_del_atatuservar(@@p1 int)
+returns int
+as
+begin
+	declare @@tv table(a int)
+    insert @@tv values(@@p1)
+    update @@tv set a = a + 1
+    insert @@tv values(@@p1)
+    update @@tv set a = a + 1
+    delete @@tv where a = 124
+    return (select sum(a) from @@tv)
+end
+
+query T
+select dbo. f1_del_atatuservar(123)
+----
+dbo
+
+statement ok
+create function f4_ins_atatuservar(@#p1 int)
+returns int
+as
+begin
+	declare @#tv table(a int)
+    insert @#tv values(@#p1)
+    return (select sum(a) from @#tv)
+end
+
+query T
+select dbo. f4_ins_atatuservar(123)
+----
+dbo
+
+statement ok
+create function f4_upd_atatuservar(@#p1 int)
+returns int
+as
+begin
+	declare @#tv table(a int)
+    insert @#tv values(@#p1)
+    update @#tv set a = a + 1
+    return (select sum(a) from @#tv)
+end
+
+query T
+select dbo. f4_upd_atatuservar(123)
+----
+dbo
+
+statement ok
+create function f4_del_atatuservar(@#p1 int)
+returns int
+as
+begin
+	declare @#tv table(a int)
+    insert @#tv values(@#p1)
+    update @#tv set a = a + 1
+    insert @#tv values(@#p1)
+    update @#tv set a = a + 1
+    delete @#tv where a = 124
+    return (select sum(a) from @#tv)
+end
+
+query T
+select dbo. f4_del_atatuservar(123)
+----
+dbo
+
+query T
+select dbo. f14_del_atatuservar(123)
+----
+dbo
+
+statement ok
+insert t18_trigger_atatuservar values (123)
+
+statement ok
+declare @#v128_90123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 int = 50001, @#v128_90123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$123456789012345678901234567890123456782 varchar(30) = 'Test message', @#v128_90123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$123456789012345678901234567890123456783 int=1;
+THROW @#v128_90123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678, @#v128_90123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$123456789012345678901234567890123456782, @#v128_90123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$123456789012345678901234567890123456783
+
+statement ok
+insert t19_trigger_atatuservar values (123)
+
+statement ok
+declare @@TableName varchar(100)='mytab'
+DBCC CHECKIDENT (@@TableName)
+
+statement ok
+declare @@v int=2
+DBCC CHECKIDENT ('mytab', RESEED, @@v)
+
+statement ok
+declare @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 int=2
+DBCC CHECKIDENT ('mytab', RESEED, @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678)
+
+statement ok
+declare @@V varchar(50) = 'myxact'
+begin transaction @@v
+insert t3_atatuservar values(234)
+declare @#V varchar(50) = 'mysavept'
+save transaction @#v
+insert t3_atatuservar values(345)
+set @#V  = 'mysavept'
+rollback transaction @#v
+insert t3_atatuservar values(567)
+commit transaction @@v
+
+statement ok
+select * from t3_atatuservar
+
+statement ok
+delete t3_atatuservar where a > 123
+declare @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 varchar(50) = 'myxact'
+begin transaction @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+insert t3_atatuservar values(234)
+declare @#v128_90123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 varchar(50) = 'mysavept'
+save transaction @#v128_90123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+insert t3_atatuservar values(345)
+set @#v128_90123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678  = 'mysavept'
+rollback transaction @#v128_90123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+insert t3_atatuservar values(567)
+commit transaction @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+
+statement ok
+select * from t3_atatuservar
+
+statement ok
+declare @#v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 varchar(20)
+declare @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 cursor	  
+set @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 = cursor for select a from t_checkident_atatuservar order by n
+open @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+while 1=1
+begin
+	fetch from @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678 into @#v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+	if @@fetch_status <> 0 break
+	select @#v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+end
+close @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+deallocate @@v128_890123456789$123456789$1234567890123456789$123456789$1234567890123456789$123456789$12345678901234567890123456789012345678
+
+statement ok
+insert t22_trigger_atatuservar values (123)
+
+statement ok
+set quoted_identifier on
+
+statement ok
+declare @@xact_state int=123 select @@xact_state, xact_state()
+
+statement ok
+declare @@error_line int=123 select @@error_line, error_line()
+
+statement ok
+declare @@error_message int=123 select @@error_message, error_message()
+
+statement ok
+declare @@error_number int=123 select @@error_number, error_number()
+
+statement ok
+declare @@error_procedure int=123 select @@error_procedure, error_procedure()
+
+statement ok
+declare @@error_severity int=123 select @@error_severity, error_severity()
+
+statement ok
+declare @@error_state int=123 select @@error_state, error_state()
+
+statement ok
+declare @@db_id int=123 select @@db_id, db_id('master')
+
+statement ok
+declare @@db_name int=123 select @@db_name, db_name()
+
+statement ok
+declare @@exp int=123 select @@exp, exp(1)
+
+statement ok
+declare @@sign int=123 select @@sign, sign(1)
+
+statement ok
+declare @@trigger_nestlevel int=123 select @@trigger_nestlevel, trigger_nestlevel()
+
+statement ok
+declare @@atn2 int=123 select @@atn2, atn2(1,0)
+
+statement ok
+declare @@datepart int=123 select @@datepart, datepart(yy, '2024-11-12')
+
+statement ok
+declare @@datediff int=123 select @@datediff, datediff(dd, '2024-11-12', '2024-12-13')
+
+statement ok
+declare @@datediff_big int=123 select @@datediff_big, datediff(dd, '2024-11-12', '2024-12-13')
+
+statement ok
+declare @@dateadd int=123 select @@dateadd, datediff(dd, 3, '2024-11-12')
+
+statement ok
+declare @@datename int=123 select @@datename, datename(dw, '2024-11-12')
+
+statement ok
+insert t23_trigger_atatuservar values(1)
+
+statement ok
+drop procedure p1_atatuservar
+
+statement ok
+drop function f1_atatuservar
+
+statement ok
+drop procedure p4_atatuservar
+
+statement ok
+drop procedure p19_atatuservar
+
+statement ok
+drop procedure p5_atatuservar
+
+statement ok
+drop procedure p6_atatuservar
+
+statement ok
+drop procedure p7_atatuservar
+
+statement ok
+drop procedure p10_atatuservar
+
+statement ok
+drop function f4_atatuservar
+
+statement ok
+drop procedure p22_atatuservar
+
+statement ok
+drop procedure p12_atatuservar
+
+statement ok
+drop procedure p14_atatuservar
+
+statement ok
+drop procedure p15_atatuservar
+
+statement ok
+drop procedure p17_atatuservar
+
+statement ok
+drop procedure p1_spexec_atatuservar
+
+statement ok
+drop function f1_ins_atatuservar
+
+statement ok
+drop function f1_upd_atatuservar
+
+statement ok
+drop function f1_del_atatuservar
+
+statement ok
+drop function f4_ins_atatuservar
+
+statement ok
+drop function f4_upd_atatuservar
+
+statement ok
+drop function f4_del_atatuservar
+
+statement ok
+drop table t1_atatuservar
+
+statement ok
+drop table t2_atatuservar
+
+statement ok
+drop table t3_atatuservar
+
+statement ok
+drop table t_checkident_atatuservar
+
+statement ok
+drop table t1_trigger_atatuservar
+
+statement ok
+drop table t2_trigger_atatuservar
+
+statement ok
+drop table t3_trigger_atatuservar
+
+statement ok
+drop table t5_trigger_atatuservar
+
+statement ok
+drop table t6_trigger_atatuservar
+
+statement ok
+drop table t7_trigger_atatuservar
+
+statement ok
+drop table t8_trigger_atatuservar
+
+statement ok
+drop table t9_trigger_atatuservar
+
+statement ok
+drop table t10_trigger_atatuservar
+
+statement ok
+drop table t11_trigger_atatuservar
+
+statement ok
+drop table t12_trigger_atatuservar
+
+statement ok
+drop table t13_trigger_atatuservar
+
+statement ok
+drop table t14_trigger_atatuservar
+
+statement ok
+drop table t15_trigger_atatuservar
+
+statement ok
+drop table t16_trigger_atatuservar
+
+statement ok
+drop table t17_trigger_atatuservar
+
+statement ok
+drop table t18_trigger_atatuservar
+
+statement ok
+drop table t19_trigger_atatuservar
+
+statement ok
+drop table t20_trigger_atatuservar
+
+statement ok
+drop table t21_trigger_atatuservar
+
+statement ok
+drop table t22_trigger_atatuservar
+
+statement ok
+drop table t23_trigger_atatuservar
+

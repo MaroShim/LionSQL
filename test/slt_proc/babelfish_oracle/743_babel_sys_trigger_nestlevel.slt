@@ -1,0 +1,31 @@
+# test/slt_proc/babelfish_oracle/743_babel_sys_trigger_nestlevel.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/sys-trigger_nestlevel-vu-prepare.sql, test/babelfish/raw/functions/sys-trigger_nestlevel-vu-verify.sql, test/babelfish/raw/functions/sys-trigger_nestlevel-vu-cleanup.sql
+
+statement ok
+DROP TABLE IF EXISTS sys_trigger_nestlevel_vu_t1
+
+statement ok
+CREATE TABLE sys_trigger_nestlevel_vu_t1(c1 int)
+
+statement ok
+CREATE TRIGGER sys_trigger_nestlevel_vu_trigger1 ON sys_trigger_nestlevel_vu_t1
+AFTER INSERT
+AS
+BEGIN
+   IF (trigger_nestlevel()) = 1
+     BEGIN
+        INSERT INTO sys_trigger_nestlevel_vu_t1(c1) VALUES (1); -- trigger_nestlevel should be 1 on first trigger call, so this should execute once & only once
+     END
+END
+
+statement ok
+INSERT INTO sys_trigger_nestlevel_vu_t1(c1) VALUES (0);
+
+query T
+SELECT * FROM sys_trigger_nestlevel_vu_t1
+----
+0
+
+statement ok
+DROP TABLE sys_trigger_nestlevel_vu_t1
+

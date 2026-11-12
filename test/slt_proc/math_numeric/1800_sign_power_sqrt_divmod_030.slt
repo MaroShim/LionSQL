@@ -1,0 +1,28 @@
+# test/slt_proc/math_numeric/1800_sign_power_sqrt_divmod_030.slt
+# T-SQL SIGN, POWER, SQRT, integer division/modulo, and compound proc math (30)
+
+query IIIIII
+SELECT SIGN(-30), SIGN(0), SIGN(30), CAST(SQRT(4) AS INT), CAST(POWER(2, 2) AS INT), (519 % 5);
+----
+-1 0 1 2 4 4
+
+query III
+SELECT (519 / 5), ABS(-519), (30 * 12 - 5);
+----
+103 519 355
+
+statement ok
+CREATE PROCEDURE sp_math_step_1800 @x INT, @y INT, @q INT OUTPUT, @r INT OUTPUT
+AS
+BEGIN
+    SET @q = @x / @y;
+    SET @r = @x % @y;
+END;
+
+query II
+DECLARE @quo INT;
+DECLARE @rem INT;
+EXEC sp_math_step_1800 @x = 519, @y = 5, @q = @quo OUTPUT, @r = @rem OUTPUT;
+SELECT @quo, @rem;
+----
+103 4

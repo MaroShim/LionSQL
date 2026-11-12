@@ -1,0 +1,197 @@
+# test/slt_proc/babelfish_oracle/1572_babel_test_conv_int_to_varbinary_binary.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/test_conv_int_to_varbinary_binary-vu-prepare.sql, test/babelfish/raw/test_conv_int_to_varbinary_binary-vu-verify.sql, test/babelfish/raw/test_conv_int_to_varbinary_binary-vu-cleanup.sql
+
+statement ok
+CREATE VIEW int_to_varbinary_v1
+AS SELECT convert(varbinary(2), 38)
+
+statement ok
+CREATE VIEW int_to_varbinary_v2
+AS SELECT try_convert(varbinary(3), 38)
+
+statement ok
+CREATE VIEW int_to_varbinary_v3
+AS SELECT try_convert(varbinary(max), 38)
+
+statement ok
+CREATE VIEW int_to_binary_v1
+AS SELECT convert(binary(2), 38)
+
+statement ok
+CREATE VIEW int_to_binary_v2
+AS SELECT try_convert(binary(3), 38)
+
+statement ok
+CREATE FUNCTION int_to_varbinary_f1()
+RETURNS sys.varbinary(2)
+AS
+BEGIN
+    RETURN convert(varbinary(2), 38)
+END
+
+statement ok
+CREATE FUNCTION int_to_varbinary_f2()
+RETURNS sys.varbinary(3)
+AS
+BEGIN
+    RETURN try_convert(varbinary(3), 38)
+END
+
+statement ok
+CREATE FUNCTION int_to_binary_f1()
+RETURNS sys.varbinary(2)
+AS
+BEGIN
+    RETURN convert(binary(2), 38)
+END
+
+statement ok
+CREATE FUNCTION int_to_binary_f2()
+RETURNS sys.varbinary(3)
+AS
+BEGIN
+    RETURN try_convert(binary(3), 38)
+END
+
+statement ok
+CREATE PROCEDURE int_to_varbinary_p1
+AS
+BEGIN
+    SELECT convert(varbinary(2), 38)
+END
+
+statement ok
+CREATE PROCEDURE int_to_varbinary_p2
+AS
+BEGIN
+    SELECT try_convert(varbinary(3), 38)
+END
+
+statement ok
+CREATE PROCEDURE int_to_binary_p1
+AS
+BEGIN
+    SELECT convert(binary(2), 38)
+END
+
+statement ok
+CREATE PROCEDURE int_to_binary_p2
+AS
+BEGIN
+    SELECT try_convert(binary(3), 38)
+END
+
+query T
+SELECT * from int_to_varbinary_v1
+----
+0x38
+
+query T
+SELECT * from int_to_varbinary_v2
+----
+0x38
+
+query T
+SELECT * from int_to_binary_v1
+----
+0x38
+
+query T
+SELECT * from int_to_binary_v2
+----
+0x38
+
+query T
+SELECT int_to_varbinary_f1()
+----
+0x38
+
+query T
+SELECT int_to_varbinary_f2()
+----
+0x38
+
+query T
+SELECT int_to_binary_f1()
+----
+0x38
+
+query T
+SELECT int_to_binary_f2()
+----
+0x38
+
+query T
+EXEC int_to_varbinary_p1
+----
+0x38
+
+query T
+EXEC int_to_varbinary_p2
+----
+0x38
+
+query T
+EXEC int_to_binary_p1
+----
+0x38
+
+query T
+EXEC int_to_binary_p2
+----
+0x38
+
+query T
+select convert(binary(2), 38)
+----
+0x38
+
+query T
+select convert(binary(3), 38)
+----
+0x38
+
+query T
+select convert(varbinary(2), 38)
+----
+0x38
+
+query T
+select convert(varbinary(3), 38)
+----
+0x38
+
+query T
+select try_convert(binary(2), 38)
+----
+0x38
+
+query T
+select try_convert(binary(3), 38)
+----
+0x38
+
+query T
+select try_convert(varbinary(2), 38)
+----
+0x38
+
+query T
+select try_convert(varbinary(3), 38)
+----
+0x38
+
+statement ok
+DROP VIEW int_to_varbinary_v1
+DROP VIEW int_to_varbinary_v2
+DROP VIEW int_to_varbinary_v3
+DROP VIEW int_to_binary_v1
+DROP VIEW int_to_binary_v2
+
+statement ok
+DROP FUNCTION int_to_varbinary_f1()
+DROP FUNCTION int_to_varbinary_f2()
+DROP FUNCTION int_to_varbinary_f3()
+DROP FUNCTION int_to_binary_f1()
+DROP FUNCTION int_to_binary_f2()
+

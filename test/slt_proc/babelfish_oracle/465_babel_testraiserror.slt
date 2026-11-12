@@ -1,0 +1,256 @@
+# test/slt_proc/babelfish_oracle/465_babel_testraiserror.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/errorHandling/TestRaiserror.sql
+
+statement ok
+CREATE TABLE raiserrorTable (a INT);
+
+statement ok
+CREATE PROC raiserrorProc1 AS
+BEGIN
+	INSERT INTO raiserrorTable VALUES (1);
+	RAISERROR ('raiserror 16', 16, 1);
+	INSERT INTO raiserrorTable VALUES (2);
+END
+
+statement ok
+CREATE PROC raiserrorProc2 AS
+BEGIN
+	INSERT INTO raiserrorTable VALUES (111);
+	EXEC raiserrorProc1;
+	INSERT INTO raiserrorTable VALUES (222);
+END
+
+statement ok
+CREATE PROC raiserrorProc3 AS
+BEGIN
+	BEGIN TRY
+		RAISERROR ('raiserror 16', 16, 1);
+	END TRY
+	BEGIN CATCH
+		INSERT INTO raiserrorTable VALUES (11);
+		RAISERROR ('raiserror 16', 16, 1);
+		INSERT INTO raiserrorTable VALUES (12);
+	END CATCH
+END
+
+statement ok
+RAISERROR('raiserror 0', 0, 1);
+DECLARE @m1 NVARCHAR(10);
+DECLARE @m2 VARCHAR(10);
+DECLARE @m3 NCHAR(10);
+DECLARE @m4 CHAR(10);
+SET @m1 = 'raiserror 0';
+SET @m2 = 'raiserror 0';
+SET @m3 = 'raiserror 0';
+SET @m4 = 'raiserror 0';
+RAISERROR(@m1, 0, 1);
+RAISERROR(@m2, 0, 2);
+RAISERROR(@m3, 0, 3);
+RAISERROR(@m4, 0, 4);
+
+statement ok
+DECLARE @msg_id INT;
+DECLARE @severity INT;
+DECLARE @state INT;
+SET @msg_id = 51000;
+SET @severity = 0;
+SET @state = 1;
+RAISERROR(@msg_id, @severity, @state) WITH LOG, NOWAIT, SETERROR;
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+BEGIN TRANSACTION
+	EXEC raiserrorProc2;
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+BEGIN TRY
+	BEGIN TRY
+		INSERT INTO raiserrorTable VALUES (3);
+		RAISERROR('raiserror 16', 16, 1);
+		INSERT INTO raiserrorTable VALUES (4);
+	END TRY
+	BEGIN CATCH
+		INSERT INTO raiserrorTable VALUES (5);
+	END CATCH
+END TRY
+BEGIN CATCH
+	INSERT INTO raiserrorTable VALUES (6);
+END CATCH
+
+query T
+SELECT * FROM raiserrorTable
+----
+3
+5
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+query T
+BEGIN TRY
+	BEGIN TRY
+		SELECT 100/0;
+	END TRY
+	BEGIN CATCH
+		INSERT INTO raiserrorTable VALUES (3);
+		RAISERROR('raiserror 16', 16, 1);
+		INSERT INTO raiserrorTable VALUES (4);
+	END CATCH
+END TRY
+BEGIN CATCH
+	INSERT INTO raiserrorTable VALUES (5);
+END CATCH
+----
+NULL
+
+statement ok
+SELECT * FROM raiserrorTable
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+query T
+BEGIN TRY
+	SELECT 100/0;
+END TRY
+BEGIN CATCH
+	BEGIN TRY
+		INSERT INTO raiserrorTable VALUES (3);
+		RAISERROR('raiserror 16', 16, 1);
+		INSERT INTO raiserrorTable VALUES (4);
+	END TRY
+	BEGIN CATCH
+		INSERT INTO raiserrorTable VALUES (5);
+	END CATCH
+END CATCH
+----
+NULL
+
+statement ok
+SELECT * FROM raiserrorTable
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+SET XACT_ABORT ON;
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+BEGIN TRANSACTION
+	EXEC raiserrorProc2;
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+BEGIN TRY
+	BEGIN TRY
+		INSERT INTO raiserrorTable VALUES (3);
+		RAISERROR('raiserror 16', 16, 1);
+		INSERT INTO raiserrorTable VALUES (4);
+	END TRY
+	BEGIN CATCH
+		INSERT INTO raiserrorTable VALUES (5);
+	END CATCH
+END TRY
+BEGIN CATCH
+	INSERT INTO raiserrorTable VALUES (6);
+END CATCH
+
+query T
+SELECT * FROM raiserrorTable
+----
+3
+5
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+query T
+BEGIN TRY
+	BEGIN TRY
+		SELECT 100/0;
+	END TRY
+	BEGIN CATCH
+		INSERT INTO raiserrorTable VALUES (3);
+		RAISERROR('raiserror 16', 16, 1);
+		INSERT INTO raiserrorTable VALUES (4);
+	END CATCH
+END TRY
+BEGIN CATCH
+	INSERT INTO raiserrorTable VALUES (5);
+END CATCH
+----
+NULL
+
+statement ok
+SELECT * FROM raiserrorTable
+TRUNCATE TABLE raiserrorTable
+
+query T
+BEGIN TRY
+	SELECT 100/0;
+END TRY
+BEGIN CATCH
+	BEGIN TRY
+		INSERT INTO raiserrorTable VALUES (3);
+		RAISERROR('raiserror 16', 16, 1);
+		INSERT INTO raiserrorTable VALUES (4);
+	END TRY
+	BEGIN CATCH
+		INSERT INTO raiserrorTable VALUES (5);
+	END CATCH
+END CATCH
+----
+NULL
+
+statement ok
+SELECT * FROM raiserrorTable
+
+statement ok
+TRUNCATE TABLE raiserrorTable
+
+statement ok
+SET XACT_ABORT OFF;
+
+statement ok
+DROP PROC raiserrorProc1;
+
+statement ok
+DROP PROC raiserrorProc2;
+
+statement ok
+DROP PROC raiserrorProc3;
+
+statement ok
+DROP TABLE raiserrorTable;
+

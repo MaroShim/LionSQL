@@ -1,0 +1,34 @@
+# test/slt_proc/babelfish_oracle/1489_babel_sys_default_constraints_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-default_constraints-dep-vu-prepare.sql, test/babelfish/raw/views/sys-default_constraints-dep-vu-verify.sql, test/babelfish/raw/views/sys-default_constraints-dep-vu-cleanup.sql
+
+statement ok
+DROP TABLE IF EXISTS sys_default_constraints_dep_vu_prepare_t1
+
+statement ok
+CREATE TABLE sys_default_constraints_dep_vu_prepare_t1 (column_a INT, column_b INT)
+
+statement ok
+ALTER TABLE sys_default_constraints_dep_vu_prepare_t1 ADD CONSTRAINT DF_sdd_column_b DEFAULT 50 FOR column_b
+
+statement ok
+CREATE PROCEDURE sys_default_constraints_dep_vu_prepare_p1 AS 
+    SELECT definition FROM sys.default_constraints where name LIKE '%sys_default_constraints_dep_vu_prepare_t1%'
+
+statement ok
+CREATE FUNCTION sys_default_constraints_dep_vu_prepare_f1()
+RETURNS INT
+AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM sys.all_columns WHERE object_id = object_id('sys.default_constraints'));
+END
+
+statement ok
+CREATE VIEW sys_default_constraints_dep_vu_prepare_v1 AS
+    SELECT definition FROM sys.default_constraints where name LIKE '%sys_default_constraints_dep_vu_prepare_t1%'
+
+statement ok
+DROP PROCEDURE IF EXISTS sys_default_constraints_dep_vu_prepare_p1
+DROP FUNCTION IF EXISTS sys_default_constraints_dep_vu_prepare_f1
+DROP VIEW IF EXISTS sys_default_constraints_dep_vu_prepare_v1
+DROP TABLE IF EXISTS sys_default_constraints_dep_vu_prepare_t1
+

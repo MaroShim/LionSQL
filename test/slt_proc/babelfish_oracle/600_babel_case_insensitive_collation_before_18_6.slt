@@ -1,0 +1,96 @@
+# test/slt_proc/babelfish_oracle/600_babel_case_insensitive_collation_before_18_6.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/datatypes/case_insensitive_collation-before-18_6-vu-prepare.sql, test/babelfish/raw/datatypes/case_insensitive_collation-before-18_6-vu-verify.sql, test/babelfish/raw/datatypes/case_insensitive_collation-before-18_6-vu-cleanup.sql
+
+statement ok
+create table t_rcv15 ([Test] varchar);
+
+statement ok
+CREATE TABLE CaMeLtAbLe(cAmElCoLuMn VARCHAR(100) NOT NULL);
+
+statement ok
+CREATE VIEW CaMeLvIeW AS SELECT 'VIEW' + cAmElCoLuMn + 'VIEW' AS CaMeLcOlUmNiNvIeW FROM CaMeLtAbLe;
+
+statement ok
+create database TEST;
+
+statement ok
+create view vB as ( SELECT CASE WHEN 'b' = 'B' THEN 'case-insensitive' ELSE 'case-sensitive' END);
+
+statement ok
+CREATE TABLE [MyTable] ( [Col1] INT, [Col2] INT );
+
+query T
+select name from sys.columns where name = 'Test';
+----
+Test
+
+query T
+select name from sys.columns where name = 'TesT';
+----
+Test
+
+query T
+select COUNT(*) FROM sys.tables WHERE name = 'cameltable';
+----
+1
+
+query T
+select COUNT(*) FROM sys.tables WHERE name = 'CAMELTABLE';
+----
+1
+
+query T
+select COUNT(*) FROM sys.tables WHERE name = 'CaMeLtAbLe';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys.columns WHERE name = 'cAmElCoLuMn';
+----
+1
+
+statement ok
+select name from sys.databases where name = 'test';
+
+statement ok
+select name from sys.databases where name = 'TEST';
+
+query T
+SELECT t.TABLE_NAME
+FROM INFORMATION_SCHEMA.TABLES AS t
+JOIN sys.objects o ON t.TABLE_NAME = o.name where o.name = 'mytable';
+----
+MyTable
+MyTable
+
+statement ok
+select typ.typname, coll.collname from pg_type typ join pg_collation coll on typ.typcollation = coll.oid
+ where typnamespace = (select oid from pg_namespace where nspname = 'sys') order by typ.typname;
+
+statement ok
+create table t_rcv16 (a [dbo].[myTyp6]);
+
+statement ok
+create table t_rcv17(a dbo.myTyp6);
+
+statement ok
+DROP table if exists t_rcv15;
+
+statement ok
+DROP view if exists CaMeLvIeW;
+
+statement ok
+DROP table if exists CaMeLtAbLe;
+
+statement ok
+drop view if exists vB;
+
+statement ok
+drop table if exists t_rcv17;
+
+statement ok
+drop table if exists t_rcv16;
+
+statement ok
+drop table if exists [MyTable];
+

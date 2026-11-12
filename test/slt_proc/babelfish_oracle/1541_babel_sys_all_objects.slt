@@ -1,0 +1,63 @@
+# test/slt_proc/babelfish_oracle/1541_babel_sys_all_objects.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys_all_objects-vu-prepare.sql, test/babelfish/raw/views/sys_all_objects-vu-verify.sql, test/babelfish/raw/views/sys_all_objects-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE sys_all_objects_vu_prepare_1 (@arg1 VARCHAR(MAX) OUTPUT)
+AS
+BEGIN
+    print 'body removed'
+END;
+
+statement ok
+CREATE PROCEDURE sys_all_objects_vu_prepare_1_2 (@arg1 VARCHAR(MAX))
+AS
+BEGIN
+    print 'body removed'
+END;
+
+statement ok
+CREATE TABLE sys_all_objects_vu_prepare_t1(c1 int);
+
+statement ok
+CREATE TRIGGER sys_all_objects_vu_prepare_1_3 ON sys_all_objects_vu_prepare_t1
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO sys_all_objects_vu_prepare_t1(c1) VALUES (1);
+END;
+
+statement ok
+CREATE FUNCTION sys_all_objects_vu_prepare_1_6_if_1(@arg1 INT)
+RETURNS TABLE AS
+RETURN (SELECT @arg1 + 1 AS col);
+
+statement ok
+CREATE FUNCTION sys_all_objects_vu_prepare_1_7_if_2(@arg1 varchar(5), @arg2 varchar(10))
+RETURNS TABLE AS RETURN
+(SELECT @arg1 as a, @arg2 as b)
+
+statement ok
+select case when object_id([name]) = object_id then 'equal' else 'not equal' end
+from sys.all_objects where [name] = 'sys_all_objects_vu_prepare_1_3'
+
+statement ok
+SELECT type, type_desc FROM sys.all_objects WHERE name LIKE '%sys_all_objects_vu_prepare_tt_1%' ORDER BY name;
+
+statement ok
+DROP PROCEDURE sys_all_objects_vu_prepare_1
+
+statement ok
+DROP PROCEDURE sys_all_objects_vu_prepare_1_2
+
+statement ok
+DROP TRIGGER sys_all_objects_vu_prepare_1_3
+
+statement ok
+DROP TABLE sys_all_objects_vu_prepare_t1
+
+statement ok
+DROP FUNCTION sys_all_objects_vu_prepare_1_6_IF_1
+
+statement ok
+DROP FUNCTION sys_all_objects_vu_prepare_1_7_IF_2
+

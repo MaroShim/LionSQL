@@ -1,0 +1,53 @@
+# test/slt_proc/babelfish_oracle/1327_babel_test_sp_helpsrvrolemember.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_helpsrvrolemember-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_helpsrvrolemember-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_helpsrvrolemember-vu-cleanup.sql
+
+statement ok
+CREATE TABLE test_sp_helpsrvrolemember_tbl (ServerRole sys.SYSNAME,
+											MemberName sys.SYSNAME,
+											MemberSID sys.VARBINARY(85));
+CREATE LOGIN test_sp_helpsrvrolemember_login WITH PASSWORD='123'
+
+statement ok
+SET NOCOUNT ON
+
+statement ok
+SELECT ServerRole, MemberName, (CASE WHEN MemberSID IS NULL THEN 0 ELSE 1 END) FROM test_sp_helpsrvrolemember_tbl
+WHERE MemberName NOT IN ('justanotherloginwithsecad')
+
+statement ok
+TRUNCATE TABLE test_sp_helpsrvrolemember_tbl
+
+statement ok
+SELECT ServerRole, MemberName, (CASE WHEN MemberSID IS NULL THEN 0 ELSE 1 END) FROM test_sp_helpsrvrolemember_tbl
+
+statement ok
+TRUNCATE TABLE test_sp_helpsrvrolemember_tbl
+
+statement ok
+SELECT ServerRole, MemberName, (CASE WHEN MemberSID IS NULL THEN 0 ELSE 1 END) FROM test_sp_helpsrvrolemember_tbl
+
+statement ok
+TRUNCATE TABLE test_sp_helpsrvrolemember_tbl
+
+statement ok
+SELECT ServerRole, MemberName, (CASE WHEN MemberSID IS NULL THEN 0 ELSE 1 END) FROM test_sp_helpsrvrolemember_tbl
+
+statement ok
+TRUNCATE TABLE test_sp_helpsrvrolemember_tbl
+
+statement ok
+SELECT ServerRole, MemberName, (CASE WHEN MemberSID IS NULL THEN 0 ELSE 1 END) FROM test_sp_helpsrvrolemember_tbl
+
+statement ok
+TRUNCATE TABLE test_sp_helpsrvrolemember_tbl
+
+statement ok
+SELECT ServerRole, MemberName, (CASE WHEN MemberSID IS NULL THEN 0 ELSE 1 END) FROM test_sp_helpsrvrolemember_tbl
+WHERE MemberName NOT IN ('justanotherloginwithsecad')
+
+statement ok
+DROP LOGIN test_sp_helpsrvrolemember_login
+
+statement ok
+DROP TABLE test_sp_helpsrvrolemember_tbl
+

@@ -372,6 +372,9 @@ var catalogRouteTable = []RouteRule{
 			if strings.Contains(upper, "SYS.PARAMETERS") || strings.Contains(upper, "SYS.ALL_PARAMETERS") || strings.Contains(upper, "/PARAM@NAME=") {
 				return false
 			}
+			if strings.Contains(upper, "'U'") || strings.Contains(upper, "'V'") {
+				return false
+			}
 			if strings.Contains(upper, "STOREDPROCEDURE") {
 				return true
 			}

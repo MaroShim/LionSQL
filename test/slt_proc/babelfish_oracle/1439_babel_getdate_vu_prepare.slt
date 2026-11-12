@@ -1,0 +1,17 @@
+# test/slt_proc/babelfish_oracle/1439_babel_getdate_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/getdate-vu-prepare.sql
+
+statement ok
+CREATE FUNCTION dbo.checkDatetimeDiff(@value int, @expectedValue int, @expectedDiff int)
+RETURNS int
+AS
+BEGIN
+    IF @value = @expectedValue or @value = @expectedValue + @expectedDiff or @value = @expectedValue - @expectedDiff
+        RETURN 1;
+    ELSE
+        RETURN 0;
+END;
+
+statement ok
+CREATE VIEW dbo.datetimediffView AS SELECT * FROM datetimediffTable;
+

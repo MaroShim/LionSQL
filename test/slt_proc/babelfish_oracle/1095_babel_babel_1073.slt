@@ -1,0 +1,12 @@
+# test/slt_proc/babelfish_oracle/1095_babel_babel_1073.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1073.sql
+
+statement ok
+create table testing1(col nvarchar(60));
+
+statement ok
+insert into testing1 (col) select N'Muffler';
+
+statement ok
+drop table testing1;
+

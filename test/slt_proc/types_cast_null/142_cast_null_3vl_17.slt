@@ -1,0 +1,22 @@
+# test/slt_proc/types_cast_null/142_cast_null_3vl_17.slt
+# T-SQL CAST, TRY_CAST, ISNUMERIC, CHOOSE, IIF, COALESCE, NULLIF (17)
+
+query ITI
+SELECT CAST('640' AS INT) + 17, CAST(640 AS VARCHAR(20)), TRY_CAST('640' AS INT);
+----
+657 640 640
+
+query IIT
+SELECT ISNUMERIC('640'), ISNUMERIC('err_17z'), ISNULL(CAST(TRY_CAST('err_17z' AS INT) AS VARCHAR(20)), 'NULL_VAL');
+----
+1 0 NULL_VAL
+
+query TTTT
+SELECT CHOOSE(2, 'Alpha_17', 'Beta_17', 'Gamma_17', 'Delta_17'), IIF(640 > 10, 'YES', 'NO'), ISNULL(NULL, 'DEF_17'), COALESCE(NULL, NULL, 'COAL_17');
+----
+Beta_17 YES DEF_17 COAL_17
+
+query II
+SELECT ISNULL(NULLIF(640, 640), -1), NULLIF(640, 0);
+----
+-1 640

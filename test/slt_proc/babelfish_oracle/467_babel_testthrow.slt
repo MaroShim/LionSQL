@@ -1,0 +1,272 @@
+# test/slt_proc/babelfish_oracle/467_babel_testthrow.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/errorHandling/TestThrow.sql
+
+statement ok
+CREATE TABLE throwTable (a INT);
+
+statement ok
+CREATE PROC throwProc1 AS
+BEGIN
+	INSERT INTO throwTable VALUES (1);
+	THROW 51000, 'Throw error', 1;
+	INSERT INTO throwTable VALUES (2);
+END
+
+statement ok
+CREATE PROC throwProc2 AS
+BEGIN
+	INSERT INTO throwTable VALUES (111);
+	EXEC throwProc1;
+	INSERT INTO throwTable VALUES (222);
+END
+
+statement ok
+CREATE PROC reThrowProc1 AS
+BEGIN
+	BEGIN TRY
+		INSERT INTO throwTable VALUES (1);
+		THROW 51000, 'Throw error', 1;
+		INSERT INTO throwTable VALUES (2);
+	END TRY
+	BEGIN CATCH
+		THROW;
+		SELECT 'THROW SHOULD NOT CONTINUE'
+	END CATCH
+END
+
+statement ok
+CREATE PROC reThrowProc2 AS
+BEGIN
+	INSERT INTO throwTable VALUES (111);
+	EXEC reThrowProc1;
+	INSERT INTO throwTable VALUES (222);
+END
+
+statement ok
+BEGIN TRY
+	BEGIN TRY
+		PRINT 100/0;
+	END TRY
+	BEGIN CATCH
+		THROW 50000, 'Throw error', 1;
+	END CATCH
+END TRY
+BEGIN CATCH
+	THROW;
+	SELECT 'THROW SHOULD NOT CONTINUE'
+END CATCH
+
+statement ok
+BEGIN TRY
+	PRINT 100/0;
+END TRY
+BEGIN CATCH
+	BEGIN TRY
+		THROW;
+	END TRY
+	BEGIN CATCH
+		THROW;
+		SELECT 'THROW SHOULD NOT CONTINUE'
+	END CATCH
+END CATCH
+
+statement ok
+TRUNCATE TABLE throwTable
+
+statement ok
+BEGIN TRAN
+	EXEC throwProc2;
+
+statement ok
+TRUNCATE TABLE throwTable
+
+statement ok
+BEGIN TRAN
+	EXEC reThrowProc2;
+
+statement ok
+TRUNCATE TABLE throwTable
+
+statement ok
+TRUNCATE TABLE throwTable
+
+statement ok
+TRUNCATE TABLE throwTable
+
+statement ok
+BEGIN TRY
+	BEGIN TRY
+		INSERT INTO throwTable VALUES (3);
+		THROW 50000, 'Throw error', 1;
+		INSERT INTO throwTable VALUES (4);
+	END TRY
+	BEGIN CATCH
+		INSERT INTO throwTable VALUES (5);
+	END CATCH
+END TRY
+BEGIN CATCH
+	INSERT INTO throwTable VALUES (6);
+END CATCH
+
+query T
+SELECT * FROM throwTable
+----
+3
+5
+
+statement ok
+TRUNCATE TABLE throwTable
+
+query T
+BEGIN TRY
+	BEGIN TRY
+		SELECT 100/0;
+	END TRY
+	BEGIN CATCH
+		INSERT INTO throwTable VALUES (3);
+		THROW 50000, 'Throw error', 1;
+		INSERT INTO throwTable VALUES (4);
+	END CATCH
+END TRY
+BEGIN CATCH
+	INSERT INTO throwTable VALUES (6);
+END CATCH
+----
+NULL
+
+statement ok
+SELECT * FROM throwTable
+
+statement ok
+TRUNCATE TABLE throwTable
+
+query T
+BEGIN TRY
+	SELECT 100/0;
+END TRY
+BEGIN CATCH
+	BEGIN TRY
+		INSERT INTO throwTable VALUES (3);
+		THROW 50000, 'Throw error', 1;
+		INSERT INTO throwTable VALUES (4);
+	END TRY
+	BEGIN CATCH
+		INSERT INTO throwTable VALUES (5);
+	END CATCH
+END CATCH
+----
+NULL
+
+statement ok
+SELECT * FROM throwTable
+
+statement ok
+TRUNCATE TABLE throwTable
+
+statement ok
+SET XACT_ABORT ON;
+
+statement ok
+TRUNCATE TABLE throwTable
+
+statement ok
+BEGIN TRAN
+	EXEC throwProc2;
+
+statement ok
+TRUNCATE TABLE throwTable
+
+statement ok
+TRUNCATE TABLE throwTable
+
+statement ok
+TRUNCATE TABLE throwTable
+
+statement ok
+BEGIN TRY
+	BEGIN TRY
+		INSERT INTO throwTable VALUES (3);
+		THROW 50000, 'Throw error', 1;
+		INSERT INTO throwTable VALUES (4);
+	END TRY
+	BEGIN CATCH
+		INSERT INTO throwTable VALUES (5);
+	END CATCH
+END TRY
+BEGIN CATCH
+	INSERT INTO throwTable VALUES (6);
+END CATCH
+
+query T
+SELECT * FROM throwTable
+----
+3
+5
+
+statement ok
+TRUNCATE TABLE throwTable
+
+query T
+BEGIN TRY
+	BEGIN TRY
+		SELECT 100/0;
+	END TRY
+	BEGIN CATCH
+		INSERT INTO throwTable VALUES (3);
+		THROW 50000, 'Throw error', 1;
+		INSERT INTO throwTable VALUES (4);
+	END CATCH
+END TRY
+BEGIN CATCH
+	INSERT INTO throwTable VALUES (6);
+END CATCH
+----
+NULL
+
+statement ok
+SELECT * FROM throwTable
+
+statement ok
+TRUNCATE TABLE throwTable
+
+query T
+BEGIN TRY
+	SELECT 100/0;
+END TRY
+BEGIN CATCH
+	BEGIN TRY
+		INSERT INTO throwTable VALUES (3);
+		THROW 50000, 'Throw error', 1;
+		INSERT INTO throwTable VALUES (4);
+	END TRY
+	BEGIN CATCH
+		INSERT INTO throwTable VALUES (5);
+	END CATCH
+END CATCH
+----
+NULL
+
+statement ok
+SELECT * FROM throwTable
+
+statement ok
+TRUNCATE TABLE throwTable
+
+statement ok
+SET XACT_ABORT OFF;
+
+statement ok
+DROP PROC throwProc1;
+
+statement ok
+DROP PROC throwProc2;
+
+statement ok
+DROP PROC reThrowProc1;
+
+statement ok
+DROP PROC reThrowProc2;
+
+statement ok
+DROP TABLE throwTable;
+

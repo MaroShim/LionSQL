@@ -1,0 +1,18 @@
+# test/slt_proc/babelfish_oracle/1337_babel_testisolationlevels.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/transactions/TestIsolationLevels.sql
+
+statement ok
+set transaction isolation level read uncommitted;
+
+statement ok
+set transaction isolation level read committed;
+
+statement ok
+set transaction isolation level repeatable read;
+
+statement ok
+set transaction isolation level snapshot;
+
+statement ok
+set transaction isolation level serializable;
+

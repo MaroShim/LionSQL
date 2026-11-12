@@ -1,0 +1,57 @@
+# test/slt_proc/babelfish_oracle/1050_babel_2733_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/2733_1.sql
+
+statement ok
+CREATE FUNCTION f2733()
+returns text
+as 
+begin 
+return 'Hello World'
+END
+
+statement ok
+IF object_id(N'f2733', N'FN') IS NOT NULL
+    DROP FUNCTION f2733
+
+statement ok
+begin transaction
+
+statement ok
+CREATE FUNCTION f2733()
+returns text
+as 
+begin 
+return 'Hello World'
+END
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+IF object_id(N'f2733', N'FN') IS NOT NULL
+    DROP FUNCTION f2733
+
+statement ok
+set xact_abort on
+
+statement ok
+begin transaction
+
+statement ok
+CREATE FUNCTION f2733()
+returns text
+as 
+begin 
+return 'Hello World'
+END
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+IF object_id(N'f2733', N'FN') IS NOT NULL
+    DROP FUNCTION f2733
+
+statement ok
+set xact_abort off
+

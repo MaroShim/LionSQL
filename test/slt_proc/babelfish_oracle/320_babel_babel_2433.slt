@@ -1,0 +1,48 @@
+# test/slt_proc/babelfish_oracle/320_babel_babel_2433.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2433.sql
+
+statement ok
+USE master;
+
+statement ok
+create table obytt (a int);
+insert into obytt values (1);
+
+query T
+select a as B from obytt order by b;
+----
+1
+
+query T
+select a as B from obytt order by B;
+----
+1
+
+query T
+select a as B from obytt order by b+3;
+----
+1
+
+query T
+select a+3 as B from obytt order by a+3;
+----
+4
+
+query T
+select a+3 as B from obytt order by a+3;
+----
+4
+
+query T
+select a+3 as B from obytt order by a;
+----
+4
+
+query T
+select a+3 as b from obytt order by B;
+----
+4
+
+statement ok
+drop table obytt;
+

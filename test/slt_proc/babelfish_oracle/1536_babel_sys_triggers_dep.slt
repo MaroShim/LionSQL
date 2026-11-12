@@ -1,0 +1,32 @@
+# test/slt_proc/babelfish_oracle/1536_babel_sys_triggers_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-triggers-dep-vu-prepare.sql, test/babelfish/raw/views/sys-triggers-dep-vu-verify.sql, test/babelfish/raw/views/sys-triggers-dep-vu-cleanup.sql
+
+statement ok
+CREATE TABLE sys_triggers_dep_vu_prepare_table(a int)
+
+statement ok
+CREATE TRIGGER sys_triggers_dep_vu_prepare_trig ON sys_triggers_dep_vu_prepare_table AFTER INSERT
+AS
+BEGIN
+SELECT 1
+END
+
+statement ok
+CREATE PROCEDURE sys_triggers_dep_vu_prepare_p1 AS
+    SELECT name FROM sys.triggers WHERE name = 'sys_triggers_dep_vu_prepare_trig'
+
+statement ok
+CREATE FUNCTION sys_triggers_dep_vu_prepare_f1()
+RETURNS INT
+AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM sys.triggers WHERE name = 'sys_triggers_dep_vu_prepare_trig')
+END
+
+statement ok
+CREATE VIEW sys_triggers_dep_vu_prepare_v1 AS
+    SELECT name FROM sys.triggers WHERE name = 'sys_triggers_dep_vu_prepare_trig'
+
+statement ok
+SELECT * FROM sys_triggers_dep_vu_prepare_v1
+

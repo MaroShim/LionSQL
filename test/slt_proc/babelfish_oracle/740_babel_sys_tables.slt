@@ -1,0 +1,159 @@
+# test/slt_proc/babelfish_oracle/740_babel_sys_tables.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-tables-vu-prepare.sql, test/babelfish/raw/views/sys-tables-vu-verify.sql, test/babelfish/raw/views/sys-tables-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sys_tables_vu_prepare_db1;
+
+statement ok
+USE sys_tables_vu_prepare_db1
+
+statement ok
+CREATE TABLE sys_tables_vu_prepare_t1(rand_col1 int DEFAULT 1, CHECK (rand_col1 > 0));
+
+statement ok
+USE master;
+
+statement ok
+CREATE TABLE sys_tables_vu_prepare_t2(rand_col2 int DEFAULT 2, CHECK (rand_col2 > 0));
+
+statement ok
+USE sys_tables_vu_prepare_db1
+
+query T
+SELECT COUNT(*) FROM sys.tables WHERE name COLLATE bbf_unicode_general_ci_as = 'sys_tables_vu_prepare_t1';
+----
+1
+1
+
+query T
+SELECT COUNT(*) FROM sys.columns WHERE name COLLATE bbf_unicode_general_ci_as = 'rand_col1';
+----
+1
+1
+1
+1
+
+query T
+SELECT COUNT(*) FROM sys.objects WHERE type='U' and name COLLATE bbf_unicode_general_ci_as = 'sys_tables_vu_prepare_t1';
+----
+1
+1
+
+statement ok
+select count(*) from sys.objects where parent_object_id = object_id('sys_tables_vu_prepare_t1') and type = 'C';
+
+query T
+select count(*) from sys.all_objects where parent_object_id = object_id('sys_tables_vu_prepare_t1') and type = 'C';
+----
+NULL
+NULL
+
+query T
+SELECT COUNT(*) FROM sys.all_columns WHERE name COLLATE bbf_unicode_general_ci_as = 'rand_col1';
+----
+1
+1
+1
+1
+
+statement ok
+USE master;
+
+query T
+SELECT COUNT(*) FROM sys.objects WHERE type='U' and name COLLATE bbf_unicode_general_ci_as = 'sys_tables_vu_prepare_t1';
+----
+1
+1
+
+statement ok
+select count(*) from sys.objects where parent_object_id = object_id('sys_tables_vu_prepare_t1') and type = 'C';
+
+query T
+select count(*) from sys.all_objects where parent_object_id = object_id('sys_tables_vu_prepare_t1') and type = 'C';
+----
+NULL
+NULL
+
+query T
+SELECT COUNT(*) FROM sys.all_columns WHERE name COLLATE bbf_unicode_general_ci_as = 'rand_col1';
+----
+1
+1
+1
+1
+
+query T
+SELECT COUNT(*) FROM sys.tables WHERE name COLLATE bbf_unicode_general_ci_as = 'sys_tables_vu_prepare_t2';
+----
+1
+1
+
+query T
+SELECT COUNT(*) FROM sys.columns WHERE name COLLATE bbf_unicode_general_ci_as = 'rand_col2';
+----
+1
+1
+1
+1
+
+query T
+SELECT COUNT(*) FROM sys.objects WHERE type='U' and name COLLATE bbf_unicode_general_ci_as = 'sys_tables_vu_prepare_t2';
+----
+1
+1
+
+statement ok
+select count(*) from sys.objects where parent_object_id = object_id('sys_tables_vu_prepare_t2') and type = 'C';
+
+query T
+select count(*) from sys.all_objects where parent_object_id = object_id('sys_tables_vu_prepare_t2') and type = 'C';
+----
+NULL
+NULL
+
+query T
+SELECT COUNT(*) FROM sys.all_columns WHERE name COLLATE bbf_unicode_general_ci_as = 'rand_col2';
+----
+1
+1
+1
+1
+
+statement ok
+USE sys_tables_vu_prepare_db1
+
+query T
+SELECT COUNT(*) FROM sys.objects WHERE type='U' and name COLLATE bbf_unicode_general_ci_as = 'sys_tables_vu_prepare_t2';
+----
+1
+1
+
+statement ok
+select count(*) from sys.objects where parent_object_id = object_id('sys_tables_vu_prepare_t2') and type = 'C';
+
+query T
+select count(*) from sys.all_objects where parent_object_id = object_id('sys_tables_vu_prepare_t2') and type = 'C';
+----
+NULL
+NULL
+
+query T
+SELECT COUNT(*) FROM sys.all_columns WHERE name COLLATE bbf_unicode_general_ci_as = 'rand_col2';
+----
+1
+1
+1
+1
+
+statement ok
+USE sys_tables_vu_prepare_db1
+
+statement ok
+DROP TABLE sys_tables_vu_prepare_t1;
+
+statement ok
+USE master;
+
+statement ok
+DROP TABLE sys_tables_vu_prepare_t2;
+

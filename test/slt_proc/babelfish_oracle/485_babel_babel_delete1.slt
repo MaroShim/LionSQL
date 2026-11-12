@@ -1,0 +1,128 @@
+# test/slt_proc/babelfish_oracle/485_babel_babel_delete1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_delete1.sql
+
+statement ok
+CREATE TABLE delete_test_tbl (
+    age int,
+    fname char(10),
+    lname char(10),
+    city nchar(20)
+);
+
+statement ok
+DELETE delete_test_tbl WHERE city='hong kong';
+
+statement ok
+DELETE delete_test_tbl WHERE age > 50;
+
+statement ok
+DELETE delete_test_tbl WHERE fname IN ('fname1', 'fname2');
+
+statement ok
+DELETE delete_test_tbl;
+
+statement ok
+SELECT * FROM delete_test_tbl ORDER BY age DESC, city ASC;
+
+statement ok
+CREATE TABLE delete_test_tbl2 (
+    age int,
+    fname char(10),
+    lname char(10),
+    city nchar(20)
+);
+
+statement ok
+INSERT INTO delete_test_tbl2(age, fname, lname, city)
+VALUES  (50, 'fname1', 'lname1', 'london'),
+        (34, 'fname2', 'lname2', 'paris'),
+        (50, 'fname3', 'lname3', 'brussels'),
+        (90, 'fname4', 'lname4', 'new york'),
+        (26, 'fname5', 'lname5', 'los angeles'),
+        (74, 'fname6', 'lname6', 'tokyo'),
+        (44, 'fname7', 'lname7', 'oslo'),
+        (19, 'fname8', 'lname8', 'hong kong'),
+        (61, 'fname9', 'lname9', 'shanghai'),
+        (29, 'fname10', 'lname10', 'mumbai');
+
+statement ok
+CREATE TABLE delete_test_tbl3 (
+    year int,
+    lname char(10),
+);
+
+statement ok
+INSERT INTO delete_test_tbl3(year, lname)
+VALUES  (51, 'lname1'),
+        (34, 'lname3'),
+        (25, 'lname8'),
+        (95, 'lname9'),
+        (36, 'lname10');
+
+statement ok
+CREATE TABLE delete_test_tbl4 (
+    lname char(10),
+    city char(10),
+);
+
+statement ok
+INSERT INTO delete_test_tbl4(lname, city)
+VALUES  ('lname8','london'),
+        ('lname9','tokyo'),
+        ('lname10','mumbai');
+
+query TT
+SELECT * FROM delete_test_tbl3 ORDER BY lname;
+----
+51 lname1
+36 lname10
+34 lname3
+25 lname8
+95 lname9
+
+query TT
+SELECT * FROM delete_test_tbl4 ORDER BY lname;
+----
+lname10 mumbai
+lname8 london
+lname9 tokyo
+
+statement ok
+DELETE delete_test_tbl3
+FROM delete_test_tbl3 t1
+INNER JOIN delete_test_tbl3 t2
+on t1.lname = t2.lname;
+SELECT * FROM delete_test_tbl3 ORDER BY lname;
+
+statement ok
+DELETE delete_test_tbl2
+FROM delete_test_tbl2 c
+JOIN
+(SELECT lname, fname, age from delete_test_tbl2) b
+on b.lname = c.lname
+JOIN
+(SELECT lname, city, age from delete_test_tbl2) a
+on a.city = c.city;
+SELECT * FROM delete_test_tbl2 ORDER BY lname;
+
+statement ok
+DELETE delete_test_tbl4
+FROM
+(SELECT lname, city from delete_test_tbl4) b
+JOIN
+(SELECT lname from delete_test_tbl4) a
+on a.lname = b.lname;
+SELECT * FROM delete_test_tbl4 ORDER BY lname;
+
+statement ok
+DROP TABLE delete_test_tbl;
+
+statement ok
+DROP TABLE delete_test_tbl2;
+
+statement ok
+DROP TABLE delete_test_tbl3;
+
+statement ok
+DROP TABLE delete_test_tbl4;
+

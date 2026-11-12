@@ -1,0 +1,169 @@
+# test/slt_proc/babelfish_oracle/1061_babel_3729_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/3729_1.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE FUNCTION s3729.f3729 ()
+RETURNS INT
+AS
+BEGIN
+   RETURN 123 ;
+END;
+
+statement ok
+CREATE TABLE t3729(c1 int default s3729.f3729())
+
+statement ok
+DROP TABLE t3729
+
+statement ok
+DROP FUNCTION s3729.f3729
+
+statement ok
+DROP SCHEMA s3729
+
+statement ok
+CREATE SCHEMA s3729
+
+statement ok
+CREATE FUNCTION s3729.f3729 ()
+RETURNS INT
+AS
+BEGIN
+   RETURN 123 ;
+END;
+
+statement ok
+CREATE TABLE t3729(c1 int default s3729.f3729())
+
+statement ok
+begin transaction
+
+statement ok
+DROP TABLE t3729
+
+statement ok
+DROP FUNCTION s3729.f3729
+
+statement ok
+DROP SCHEMA s3729
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE SCHEMA s3729
+
+statement ok
+CREATE FUNCTION s3729.f3729 ()
+RETURNS INT
+AS
+BEGIN
+   RETURN 123 ;
+END;
+
+statement ok
+CREATE TABLE t3729(c1 int default s3729.f3729())
+
+statement ok
+begin transaction
+
+statement ok
+DROP TABLE t3729
+
+statement ok
+DROP FUNCTION s3729.f3729
+
+statement ok
+DROP SCHEMA s3729
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE FUNCTION s3729.f3729 ()
+RETURNS INT
+AS
+BEGIN
+   RETURN 123 ;
+END;
+
+statement ok
+CREATE TABLE t3729(c1 int default s3729.f3729())
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure ErrorHandling2 as
+begin
+exec ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+DROP TABLE t3729
+
+statement ok
+DROP FUNCTION s3729.f3729
+
+statement ok
+DROP SCHEMA s3729
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE FUNCTION s3729.f3729 ()
+RETURNS INT
+AS
+BEGIN
+   RETURN 123 ;
+END;
+
+statement ok
+CREATE TABLE t3729(c1 int default s3729.f3729())
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+begin transaction;
+
+statement ok
+DROP TABLE t3729
+
+statement ok
+DROP FUNCTION s3729.f3729
+
+statement ok
+DROP SCHEMA s3729
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE FUNCTION s3729.f3729 ()
+RETURNS INT
+AS
+BEGIN
+   RETURN 123 ;
+END;
+
+statement ok
+CREATE TABLE t3729(c1 int default s3729.f3729())
+
+statement ok
+DROP TABLE t3729
+
+statement ok
+DROP FUNCTION s3729.f3729
+
+statement ok
+DROP SCHEMA s3729
+

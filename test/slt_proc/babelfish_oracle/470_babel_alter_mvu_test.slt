@@ -1,0 +1,69 @@
+# test/slt_proc/babelfish_oracle/470_babel_alter_mvu_test.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/alter/alter-mvu-test-vu-prepare.sql, test/babelfish/raw/alter/alter-mvu-test-vu-verify.sql, test/babelfish/raw/alter/alter-mvu-test-vu-cleanup.sql
+
+statement ok
+create database alter_func_db;
+
+statement ok
+use alter_func_db
+
+statement ok
+CREATE TABLE alter_func_users ([Id] int, [firstname] varchar(50), [lastname] varchar(50), [email] varchar(50));
+CREATE TABLE alter_func_orders ([Id] int, [userid] int, [productid] int, [quantity] int, [orderdate] Date);
+INSERT INTO alter_func_users VALUES (1, 'j', 'o', 'testemail'), (2, 'e', 'l', 'testemail2');
+INSERT INTO alter_func_orders VALUES (1, 1, 1, 5, '2023-06-25'), (2, 1, 1, 6, '2023-06-25');
+
+statement ok
+create function alter_func_mvu_f4() returns TABLE as return (select * from alter_func_users)
+
+statement ok
+use master;
+
+statement ok
+CREATE database alter_proc_db
+
+statement ok
+use alter_proc_db
+
+statement ok
+CREATE PROCEDURE alter_proc_p1 
+AS
+    select * from alter_proc_users
+
+statement ok
+alter procedure alter_proc_p1 @dateParam date as select @dateParam
+
+statement ok
+create procedure alter_proc_p3 as select 1
+
+statement ok
+alter procedure alter_proc_p3 as select 4
+
+statement ok
+use alter_func_db
+
+statement ok
+use alter_proc_db
+
+query T
+exec alter_proc_p1 @dateParam = '2020-01-01'
+----
+2020-01-01
+
+query T
+exec alter_proc_p3;
+----
+4
+
+statement ok
+use alter_func_db
+
+statement ok
+use master;
+
+statement ok
+select * from pg_depend where refobjid = (select oid from pg_namespace where nspname = 'alter_func_db_dbo');
+
+statement ok
+select * from pg_depend where refobjid = (select oid from pg_namespace where nspname = 'alter_proc_db_dbo');
+

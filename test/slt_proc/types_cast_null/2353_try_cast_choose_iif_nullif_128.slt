@@ -1,0 +1,35 @@
+# test/slt_proc/types_cast_null/2353_try_cast_choose_iif_nullif_128.slt
+# T-SQL TRY_CAST, TRY_CONVERT, CHOOSE, IIF, ISNULL, NULLIF, COALESCE (128)
+
+query ITIT
+SELECT TRY_CAST('1671' AS INT),
+       ISNULL(TRY_CAST('not_an_int_128' AS INT), -999),
+       ISNULL(NULLIF(1671, 1671), 128),
+       CHOOSE(3, 'OPT_A_128', 'OPT_B_128', 'OPT_C_128');
+----
+1671 -999 128 OPT_C_128
+
+query TT
+SELECT IIF(1671 > 50, 'LARGE_128', 'SMALL_128'),
+       COALESCE(NULL, NULL, 'FALLBACK_128');
+----
+LARGE_128 FALLBACK_128
+
+statement ok
+CREATE TABLE tc_tbl_2353 (id INT PRIMARY KEY, raw_val VARCHAR(30), backup_val INT);
+
+statement ok
+INSERT INTO tc_tbl_2353 VALUES
+(1, '1671', 10),
+(2, 'bad_128', 640);
+
+query II
+SELECT id, COALESCE(TRY_CAST(raw_val AS INT), backup_val)
+FROM tc_tbl_2353
+ORDER BY id;
+----
+1 1671
+2 640
+
+statement ok
+DROP TABLE tc_tbl_2353;

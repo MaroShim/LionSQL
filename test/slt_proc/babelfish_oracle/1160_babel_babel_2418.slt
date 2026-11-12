@@ -1,0 +1,36 @@
+# test/slt_proc/babelfish_oracle/1160_babel_babel_2418.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2418.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2418_db
+
+statement ok
+USE babel_2418_db
+
+statement ok
+CREATE SCHEMA babel_2418_schema1
+
+statement ok
+CREATE SCHEMA babel_2418_schema2
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_2418_db COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_2418_db
+
+statement ok
+CREATE SCHEMA babel_2418_schema1
+
+statement ok
+CREATE SCHEMA babel_2418_schema2
+
+statement ok
+USE master
+

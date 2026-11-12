@@ -1,0 +1,87 @@
+# test/slt_proc/babelfish_oracle/1268_babel_babel_identity_column.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-IDENTITY-COLUMN.sql
+
+statement ok
+USE MASTER;
+
+statement ok
+CREATE TABLE dbo.t1(id INT IDENTITY NULL, col1 INT);
+
+statement ok
+CREATE TABLE dbo.t2(col1 INT);
+
+statement ok
+ALTER TABLE dbo.t2 ADD id INT IDENTITY NULL;
+
+statement ok
+CREATE TABLE dbo.test_table1(test_id INT IDENTITY(10, -1), test_col1 INT);
+
+statement ok
+SELECT * FROM test_table1;
+
+statement ok
+CREATE TABLE dbo.test_table2(test_id INT IDENTITY(100, -20), test_col1 INT);
+
+statement ok
+SELECT * FROM test_table2;
+
+statement ok
+CREATE TABLE dbo.test_table3(test_id INT IDENTITY(-10, 5), test_col1 INT);
+
+statement ok
+SELECT * FROM test_table3;
+
+statement ok
+SELECT * FROM dbo.t1;
+
+statement ok
+TRUNCATE TABLE dbo.t1;
+
+statement ok
+SELECT * FROM dbo.t1;
+
+statement ok
+TRUNCATE TABLE test_table1;
+
+statement ok
+SELECT * FROM test_table1;
+
+statement ok
+SELECT * FROM test_table1;
+
+statement ok
+CREATE TABLE dbo.t3(id1 INT IDENTITY, id2 INT IDENTITY);
+
+statement error
+CREATE TABLE dbo.t3(id1 NUMERIC IDENTITY, id2 INT IDENTITY, id3 DECIMAL IDENTITY);
+
+statement error
+ALTER TABLE dbo.t3 ADD id2 INT IDENTITY;
+
+statement ok
+ALTER TABLE dbo.t3 DROP COLUMN id1;
+
+statement ok
+ALTER TABLE dbo.t3 ADD id1 INT IDENTITY;
+
+statement error
+ALTER TABLE dbo.t3 ADD id2 INT IDENTITY;
+
+statement ok
+CREATE TABLE dbo.t4(c1 INT);
+
+statement ok
+ALTER TABLE dbo.t4 ADD id2 SMALLINT IDENTITY;
+
+statement ok
+ALTER TABLE dbo.t4 ADD id3 BIGINT IDENTITY;
+
+statement ok
+ALTER TABLE dbo.t4 DROP COLUMN id2;
+
+statement ok
+ALTER TABLE dbo.t4 ADD id2 SMALLINT IDENTITY;
+
+statement error
+ALTER TABLE dbo.t4 ADD id3 BIGINT IDENTITY;
+

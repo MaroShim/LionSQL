@@ -1,0 +1,432 @@
+# test/slt_proc/babelfish_oracle/666_babel_ltrim_before_15_8_or_16_4.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/string_functions/ltrim-before-15_8-or-16_4-vu-prepare.sql, test/babelfish/raw/functions/string_functions/ltrim-before-15_8-or-16_4-vu-verify.sql, test/babelfish/raw/functions/string_functions/ltrim-before-15_8-or-16_4-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_4489_ltrim_t1(a NCHAR(50))
+
+statement ok
+INSERT INTO babel_4489_ltrim_t1 VALUES(N'  abc🙂defghi🙂🙂    ')
+INSERT INTO babel_4489_ltrim_t1 VALUES(N'  比尔·拉莫斯    ')
+
+statement ok
+CREATE TABLE babel_4489_ltrim_t2(a NVARCHAR(50))
+
+statement ok
+INSERT INTO babel_4489_ltrim_t2 VALUES(N'  abc🙂defghi🙂🙂    ')
+
+statement ok
+CREATE TABLE babel_4489_ltrim_t3(a CHAR(50))
+
+statement ok
+INSERT INTO babel_4489_ltrim_t3 VALUES('  abcdefghi    ')
+
+statement ok
+CREATE TABLE babel_4489_ltrim_t4(a VARCHAR(50))
+
+statement ok
+INSERT INTO babel_4489_ltrim_t4 VALUES('  abcdefghi    ')
+
+statement ok
+CREATE TABLE babel_4489_ltrim_t5(a VARBINARY(50))
+
+statement ok
+INSERT INTO babel_4489_ltrim_t5 VALUES(0x2020616263642020)
+
+statement ok
+CREATE TABLE babel_4489_ltrim_chinese_prc_ci_as(a VARCHAR(50) COLLATE CHINESE_PRC_CI_AS)
+
+statement ok
+INSERT INTO babel_4489_ltrim_chinese_prc_ci_as VALUES(N'  比尔·拉莫斯    ')
+
+statement ok
+CREATE TABLE babel_4489_ltrim_chinese_prc_cs_as(a VARCHAR(50) COLLATE CHINESE_PRC_CS_AS)
+
+statement ok
+INSERT INTO babel_4489_ltrim_chinese_prc_cs_as VALUES(N'  比尔·拉莫斯    ')
+
+statement ok
+CREATE TABLE babel_4489_ltrim_chinese_prc_ci_ai(a VARCHAR(50) COLLATE CHINESE_PRC_CI_AI)
+
+statement ok
+INSERT INTO babel_4489_ltrim_chinese_prc_ci_ai VALUES(N'  比尔·拉莫斯    ')
+
+statement ok
+CREATE TABLE babel_4489_ltrim_arabic_ci_as(a VARCHAR(50) COLLATE ARABIC_CI_AS)
+
+statement ok
+INSERT INTO babel_4489_ltrim_arabic_ci_as VALUES(N'  الله مع المتقين    ')
+
+statement ok
+CREATE TABLE babel_4489_ltrim_arabic_cs_as(a VARCHAR(50) COLLATE ARABIC_CS_AS)
+
+statement ok
+INSERT INTO babel_4489_ltrim_arabic_cs_as VALUES(N'  الله مع المتقين    ')
+
+statement ok
+CREATE TABLE babel_4489_ltrim_arabic_ci_ai(a VARCHAR(50) COLLATE ARABIC_CI_AI)
+
+statement ok
+INSERT INTO babel_4489_ltrim_arabic_ci_ai VALUES(N'  الله مع المتقين    ')
+
+statement ok
+CREATE TABLE babel_4489_ltrim_image(a IMAGE)
+
+statement ok
+INSERT INTO babel_4489_ltrim_image values(CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS image))
+
+statement ok
+CREATE TABLE babel_4489_ltrim_text(a TEXT, b NTEXT)
+
+statement ok
+INSERT INTO babel_4489_ltrim_text VALUES (N'  abc🙂defghi🙂🙂    ', N'  abc🙂defghi🙂🙂    ')
+
+statement ok
+CREATE TABLE babel_4489_ltrim_UDT(a dbo.babel_4489_ltrim_imageUDT, b dbo.babel_4489_ltrim_varUDT)
+
+statement ok
+INSERT INTO babel_4489_ltrim_UDT VALUES(CAST('abcdef' as dbo.babel_4489_ltrim_imageUDT), CAST('abcdef' as dbo.babel_4489_ltrim_varUDT))
+
+statement ok
+CREATE VIEW babel_4489_ltrim_dep_view AS
+    SELECT ('|' + LTRIM(a) + '|') as result FROM babel_4489_ltrim_t2
+
+statement ok
+CREATE PROCEDURE babel_4489_ltrim_dep_proc AS
+    SELECT ('|' + LTRIM(a) + '|') as result FROM babel_4489_ltrim_t2
+
+statement ok
+CREATE FUNCTION babel_4489_ltrim_dep_func()
+RETURNS NVARCHAR(50)
+AS
+BEGIN
+RETURN (SELECT TOP 1 ('|' + LTRIM(a) + '|') FROM babel_4489_ltrim_t2)
+END
+
+statement ok
+CREATE VIEW babel_4489_ltrim_dep_view_1 AS
+    SELECT ('|' + LTRIM(a) + '|') as result FROM babel_4489_ltrim_t1
+
+statement ok
+CREATE VIEW babel_4489_ltrim_dep_view_2 AS
+    SELECT ('|' + LTRIM(a) + '|') as result FROM babel_4489_ltrim_t2
+
+statement ok
+CREATE VIEW babel_4489_ltrim_dep_view_3 AS
+    SELECT ('|' + LTRIM(a) + '|') as result FROM babel_4489_ltrim_t3
+
+statement ok
+CREATE VIEW babel_4489_ltrim_dep_view_4 AS
+    SELECT ('|' + LTRIM(a) + '|') as result FROM babel_4489_ltrim_t4
+
+statement ok
+CREATE VIEW babel_4489_ltrim_dep_view_5 AS
+    SELECT ('|' + LTRIM(a) + '|') as result FROM babel_4489_ltrim_t5
+
+statement ok
+CREATE VIEW babel_4489_ltrim_dep_view_6 AS
+    SELECT ('|' + LTRIM(a) + '|') as result FROM babel_4489_ltrim_text
+
+statement ok
+CREATE VIEW babel_4489_ltrim_dep_view_7 AS
+    SELECT ('|' + LTRIM(b) + '|') as result FROM babel_4489_ltrim_text
+
+statement ok
+CREATE FUNCTION babel_4489_ltrim_itvf_func()
+RETURNS TABLE
+AS
+RETURN (SELECT ('|' + LTRIM(a) + '|') as result FROM babel_4489_ltrim_t2)
+
+statement ok
+DECLARE @custname NVARCHAR(50) = N'比尔·拉莫斯'
+SELECT @custname, 
+    TRIM(@custname) as [TRIM]
+    , LTRIM(@custname) as [LTRIM]
+    , RTRIM(@custname) as [RTRIM]
+    , LEFT(@custname, 4) as [LEFT4]
+    , RIGHT(@custname, 4) as [RIGHT4]
+    , SUBSTRING(@custname, 2, 4) as [SUBSTRING_2_4]
+;
+
+query T
+SELECT LTRIM(NULL)
+----
+NULL
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    '
+SELECT '|' + LTRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + LTRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + LTRIM(@inputString) COLLATE CHINESE_PRC_CI_AS + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    '
+SELECT '|' + LTRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + LTRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + LTRIM(@inputString) COLLATE CHINESE_PRC_CI_AS + '|'
+
+query T
+SELECT '|' + LTRIM(a) COLLATE CHINESE_PRC_CI_AS + '|' FROM babel_4489_ltrim_chinese_prc_ci_as
+----
+|a
+
+query T
+SELECT '|' + LTRIM(a) COLLATE CHINESE_PRC_CS_AS + '|' FROM babel_4489_ltrim_chinese_prc_cs_as
+----
+|a
+
+query T
+SELECT '|' + LTRIM(a) COLLATE CHINESE_PRC_CI_AI + '|' FROM babel_4489_ltrim_chinese_prc_ci_ai
+----
+|a
+
+query T
+SELECT '|' + LTRIM(a) COLLATE ARABIC_CI_AS + '|' FROM babel_4489_ltrim_arabic_ci_as
+----
+|a
+
+query T
+SELECT '|' + LTRIM(a) COLLATE ARABIC_CS_AS + '|' FROM babel_4489_ltrim_arabic_cs_as
+----
+|a
+
+query T
+SELECT '|' + LTRIM(a) COLLATE ARABIC_CI_AI + '|' FROM babel_4489_ltrim_arabic_ci_ai
+----
+|a
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  abc🙂defghi🙂🙂    '
+SELECT '|' + LTRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  比尔·拉莫斯    '
+SELECT '|' + LTRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  abc🙂defghi🙂🙂    '
+SELECT '|' + LTRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  比尔·拉莫斯    '
+SELECT '|' + LTRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x202061626364656667682020
+SELECT '|' + LTRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x202061626364656667682020
+SELECT '|' + LTRIM(@inputString) + '|'
+
+query T
+SELECT * FROM babel_4489_ltrim_dep_view_5
+----
+|0x2020616263642020|
+
+query T
+SELECT LTRIM(a) FROM babel_4489_ltrim_UDT
+----
+abcdef
+
+query T
+SELECT LTRIM(b) FROM babel_4489_ltrim_UDT
+----
+abcdef
+
+query T
+DECLARE @inputString date = '2016-12-21';
+SELECT LTRIM(@inputString)
+----
+2016-12-21
+
+query T
+DECLARE @date date = '12-21-16';  
+DECLARE @inputString datetime = @date;
+SELECT LTRIM(@inputString)
+----
+12-21-16
+
+query T
+DECLARE @inputString time(4) = '12:10:05.1237';
+SELECT LTRIM(@inputString)
+----
+12:10:05.1237
+
+query T
+DECLARE @inputString decimal = 123456;
+SELECT LTRIM(@inputString)
+----
+123456
+
+query T
+DECLARE @inputString numeric = 12345.12;
+SELECT LTRIM(@inputString)
+----
+12345.12
+
+query T
+DECLARE @inputString float = 12345.1;
+SELECT LTRIM(@inputString)
+----
+12345.1
+
+query T
+DECLARE @inputString real = 12345.1;
+SELECT LTRIM(@inputString)
+----
+12345.1
+
+query T
+DECLARE @inputString bigint = 12345678;
+SELECT LTRIM(@inputString)
+----
+12345678
+
+query T
+DECLARE @inputString int = 12345678;
+SELECT LTRIM(@inputString)
+----
+12345678
+
+query T
+DECLARE @inputString smallint = 12356;
+SELECT LTRIM(@inputString)
+----
+12356
+
+query T
+DECLARE @inputString tinyint = 235;
+SELECT LTRIM(@inputString)
+----
+235
+
+query T
+DECLARE @inputString money = 12356;
+SELECT LTRIM(@inputString)
+----
+12356
+
+query T
+DECLARE @inputString smallmoney = 12356;
+SELECT LTRIM(@inputString)
+----
+12356
+
+query T
+DECLARE @inputString bit = 1;
+SELECT LTRIM(@inputString)
+----
+1
+
+statement ok
+DECLARE @inputString uniqueidentifier = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS uniqueidentifier)
+SELECT LTRIM(@inputString)
+
+query T
+SELECT LTRIM(a) from babel_4489_ltrim_image;
+----
+0x36463936313946462d384238362d443031312d423432442d303043303446433936344646
+
+statement ok
+DECLARE @inputString sql_variant = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant)
+SELECT LTRIM(@inputString)
+
+statement ok
+DECLARE @inputString xml = CAST ('<body><fruit/></body>' AS xml)
+SELECT LTRIM(@inputString)
+
+statement ok
+DECLARE @inputString sql_variant = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant)
+SELECT LTRIM(CAST(@inputString AS VARCHAR(50)))
+
+statement ok
+DECLARE @inputString xml = CAST ('<body><fruit/></body>' AS xml)
+SELECT LTRIM(CAST(@inputString AS VARCHAR(50)))
+
+statement ok
+DROP FUNCTION babel_4489_ltrim_itvf_func
+
+statement ok
+DROP FUNCTION babel_4489_ltrim_dep_func
+
+statement ok
+DROP PROCEDURE babel_4489_ltrim_dep_proc
+
+statement ok
+DROP VIEW babel_4489_ltrim_dep_view
+
+statement ok
+DROP VIEW babel_4489_ltrim_dep_view_1
+
+statement ok
+DROP VIEW babel_4489_ltrim_dep_view_2
+
+statement ok
+DROP VIEW babel_4489_ltrim_dep_view_3
+
+statement ok
+DROP VIEW babel_4489_ltrim_dep_view_4
+
+statement ok
+DROP VIEW babel_4489_ltrim_dep_view_5
+
+statement ok
+DROP VIEW babel_4489_ltrim_dep_view_6
+
+statement ok
+DROP VIEW babel_4489_ltrim_dep_view_7
+
+statement ok
+DROP TABLE babel_4489_ltrim_UDT
+
+statement ok
+DROP TABLE babel_4489_ltrim_text
+
+statement ok
+DROP TABLE babel_4489_ltrim_image
+
+statement ok
+DROP TABLE babel_4489_ltrim_arabic_ci_ai
+
+statement ok
+DROP TABLE babel_4489_ltrim_arabic_cs_as
+
+statement ok
+DROP TABLE babel_4489_ltrim_arabic_ci_as
+
+statement ok
+DROP TABLE babel_4489_ltrim_chinese_prc_ci_ai
+
+statement ok
+DROP TABLE babel_4489_ltrim_chinese_prc_cs_as
+
+statement ok
+DROP TABLE babel_4489_ltrim_chinese_prc_ci_as
+
+statement ok
+DROP TABLE babel_4489_ltrim_t5
+
+statement ok
+DROP TABLE babel_4489_ltrim_t4
+
+statement ok
+DROP TABLE babel_4489_ltrim_t3
+
+statement ok
+DROP TABLE babel_4489_ltrim_t2
+
+statement ok
+DROP TABLE babel_4489_ltrim_t1
+

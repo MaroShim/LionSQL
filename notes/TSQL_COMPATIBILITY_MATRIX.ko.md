@@ -1,8 +1,8 @@
 # LionSQL T-SQL 호환성 전수 매트릭스 (`TSQL_COMPATIBILITY_MATRIX.ko.md`)
 
 > - **최초 작성일**: 2026-11-10
-> - **최종 갱신일**: 2026-11-11
-> - **상태**: 활성 참조 및 지속 동기화 (`COMPAT-TSQL-MATRIX-1` `IN_PROGRESS`)
+> - **최종 갱신일**: 2026-11-12
+> - **상태**: 활성 참조 및 동기화 완료 (`COMPAT-TSQL-MATRIX-1` `DONE`)
 > - **기준 버전**: Microsoft SQL Server 2019 / 2022 호환성 기준
 > - **참조 소스**: `pkg/proc/parser/antlr/TSqlParser.g4`, `pkg/proc/lexer.go`, `pkg/proc/builtins_*.go`, `pkg/proc/compiler.go`, `pkg/engine/sqlexec_*.go`, `TASKS.md`
 
@@ -84,6 +84,7 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
 | **전역 임시 테이블** | `CREATE TABLE ##global_temp (...)` | **부분 지원** | 세션 간 공유되나 `##global` 전용 전역 수명주기 및 크로스 DB 격리(`__gtemp_`) 정합성 점검 필요 |
 | **테이블 변수** | `DECLARE @tbl TABLE (id INT, val VARCHAR(50));` | **완전 지원** | 세션 배치, 익명 블록, 저장 프로시저 완벽 지원(`__tv_*`), `INSERT`/`SELECT`/`UPDATE`/`DELETE`/`JOIN` 및 자동 정리 (`PERF-HYBRID-TEMPMEM-1` 인메모리 바이패스 `DONE`) |
 | **DB 컨텍스트 전환** | `USE <dbname>;` | **부분 지원 (가상 No-op)** | `DB_NAME()` 및 TDS `0xE3 ENVCHANGE` 토큰은 전환되나, 현재 단일 카탈로그 공유 (`__db_<dbname>_*` 논리 격리 및 3-Part 크로스 DB 조인은 `ARCH-LOGICAL-NAMESPACE-1` `PENDING`) |
+| **정렬 규칙 (Collation)** | `COLLATE <collation_name>` | **설계 완료 (로드맵)** | TypeScript 하이브리드 모델: 외부 T-SQL 구문 100% 수용 + 기본 로케일 런타임 소거(`compareFn == nil`, 0.5ns, 0-alloc) + `proc.RegisterCollation` Go SPI 및 선언적 확장 ([`notes/plans/COLLATION_AND_LOCALE_PLAN.ko.md`](plans/COLLATION_AND_LOCALE_PLAN.ko.md)) |
 | **사용자 정의 테이블 타입** | `CREATE TYPE MyTableType AS TABLE (...)` | **미구현 (후보)** | Stored Procedure에 테이블을 매개변수로 넘기는 TVP 전제 조건 |
 | **테이블 반환 함수 (TVF)** | `CREATE FUNCTION fn() RETURNS TABLE AS RETURN ...` | **부분 지원 (인라인 TVF)** | 인라인 TVF(`RETURNS TABLE AS RETURN (SELECT ...)`) 등록 및 호출 지원 완료 (`pkg/engine/sqlexec_ddl.go`); 멀티-스테이트먼트 TVF는 미구현 |
 
@@ -91,11 +92,10 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
 
 ## 6. 내장 함수 (Built-in Functions) 호환성
 
-### 6.1 문자열 함수 (String Functions)
-- **완전 지원 (36개)**: `LEN`, `DATALENGTH`, `SUBSTRING`, `CHARINDEX`, `PATINDEX`, `REPLACE`, `REVERSE`, `LEFT`, `RIGHT`, `UPPER`, `LOWER`, `LTRIM`, `RTRIM`, `TRIM`, `CONCAT`, `CONCAT_WS`, `STUFF`, `SPACE`, `REPLICATE`, `PARSENAME`, `STRING_ESCAPE`, `FORMATMESSAGE`, `ASCII`, `CHAR`, `UNICODE`, `NCHAR`, `SOUNDEX`, `DIFFERENCE`, `TRANSLATE`, `FORMAT`, `LPAD`, `RPAD`, `INITCAP`, `TO_CHAR`, `SPLIT_PART`, `STRING_SPLIT` (`enable_ordinal`, `@var` 매개변수, `CROSS APPLY` 포함)
+### 6.1 문자열 및 바이너리 함수 (String & Binary Functions)
+- **완전 지원 (42개)**: `LEN`, `DATALENGTH`, `SUBSTRING`, `CHARINDEX`, `PATINDEX`, `REPLACE`, `REVERSE`, `LEFT`, `RIGHT`, `UPPER`, `LOWER`, `TRIM`, `LTRIM`, `RTRIM`, `CONCAT`, `CONCAT_WS`, `QUOTENAME`, `STUFF`, `SPACE`, `REPLICATE`, `PARSENAME`, `STRING_ESCAPE`, `FORMATMESSAGE`, `ASCII`, `CHAR`, `UNICODE`, `NCHAR`, `SOUNDEX`, `DIFFERENCE`, `TRANSLATE`, `FORMAT`, `LPAD`, `RPAD`, `INITCAP`, `TO_CHAR`, `SPLIT_PART`, `STRING_SPLIT` (`enable_ordinal`, `@var` 매개변수, `CROSS APPLY` 포함), `COMPRESS`, `DECOMPRESS`, `HEX`, `UNHEX`, `OCTET_LENGTH`
 - **미구현 / 부분 지원 (후보)**:
   - `TRIM(characters FROM string)` (SQL Server 2022): `TRIM(cutset, target)` 2인자 컷셋 트리밍 내장 함수는 지원하나, `FROM` 키워드 구문 파싱은 보강 필요
-  - `COMPRESS(string)` / `DECOMPRESS(binary)`: Gzip 압축/해제 바이너리 함수
 
 ### 6.2 날짜 및 시간 함수 (Date & Time Functions)
 - **완전 지원 (28개)**: `GETDATE`, `GETUTCDATE`, `SYSDATETIME`, `SYSUTCDATETIME`, `SYSDATETIMEOFFSET`, `YEAR`, `MONTH`, `DAY`, `DATEPART`, `DATENAME`, `DATEDIFF`, `DATEDIFF_BIG`, `DATEADD`, `EOMONTH`, `ISDATE`, `DATEFROMPARTS`, `TIMEFROMPARTS`, `DATETIMEFROMPARTS`, `SMALLDATETIMEFROMPARTS`, `DATETRUNC`, `DATE_BUCKET`, `SWITCHOFFSET`, `TODATETIMEOFFSET`, `CURRENT_TIMESTAMP`, `NOW`, `CURDATE`, `CURTIME`
@@ -112,8 +112,8 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
 - **미구현 (후보)**:
   - `PARSE(string AS data_type [USING culture])`, `TRY_PARSE`
 
-### 6.5 시스템 메타데이터 및 에러 함수
-- **완전 지원 (38개)**: `DB_NAME`, `DB_ID`, `SCHEMA_NAME`, `SCHEMA_ID`, `OBJECT_ID`, `OBJECT_NAME`, `OBJECT_SCHEMA_NAME`, `COL_NAME`, `COL_LENGTH`, `TYPE_ID`, `TYPE_NAME`, `SERVERPROPERTY`, `CONNECTIONPROPERTY`, `COLLATIONPROPERTY`, `DATABASEPROPERTYEX`, `OBJECTPROPERTY`, `COLUMNPROPERTY`, `INDEXPROPERTY`, `FILEPROPERTY`, `FILEGROUPPROPERTY`, `FULLTEXTSERVICEPROPERTY`, `IDENT_CURRENT`, `SCOPE_IDENTITY`, `HOST_NAME`, `HOST_ID`, `CURRENT_USER`, `USER_NAME`, `SUSER_NAME`, `SUSER_SNAME`, `USER_ID`, `SUSER_ID`, `ORIGINAL_LOGIN`, `SYSTEM_USER`, `APP_NAME`, `HASHBYTES`, `CHECKSUM`, `BINARY_CHECKSUM`, `NEWID`, `NEWID7`
+### 6.5 시스템 메타데이터, 보안 및 에러 함수
+- **완전 지원 (43개)**: `DB_NAME`, `DB_ID`, `SCHEMA_NAME`, `SCHEMA_ID`, `OBJECT_ID`, `OBJECT_NAME`, `OBJECT_SCHEMA_NAME`, `COL_NAME`, `COL_LENGTH`, `TYPE_ID`, `TYPE_NAME`, `SERVERPROPERTY`, `CONNECTIONPROPERTY`, `COLLATIONPROPERTY`, `DATABASEPROPERTYEX`, `OBJECTPROPERTY`, `COLUMNPROPERTY`, `INDEXPROPERTY`, `FILEPROPERTY`, `FILEGROUPPROPERTY`, `FULLTEXTSERVICEPROPERTY`, `IDENT_CURRENT`, `SCOPE_IDENTITY`, `HOST_NAME`, `HOST_ID`, `CURRENT_USER`, `USER_NAME`, `SUSER_NAME`, `SUSER_SNAME`, `USER_ID`, `SUSER_ID`, `ORIGINAL_LOGIN`, `SYSTEM_USER`, `APP_NAME`, `HASHBYTES`, `CHECKSUM`, `BINARY_CHECKSUM`, `NEWID`, `NEWID7`, `IS_SRVROLEMEMBER`, `IS_MEMBER`, `HAS_PERMS_BY_NAME`, `PWDENCRYPT`, `PWDCOMPARE`
 - **에러 컨텍스트 함수 (완전 지원)**: `ERROR_NUMBER()`, `ERROR_MESSAGE()`, `ERROR_LINE()`, `ERROR_SEVERITY()`, `ERROR_STATE()`, `ERROR_PROCEDURE()`
 
 ---
@@ -131,8 +131,15 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
 | `@@VERSION` | **완전 지원** | Microsoft SQL Server 호환 빌드 버전 문자열 |
 | `@@IDENTITY` | **부분 지원** | 현재 `SCOPE_IDENTITY()`와 동일하게 동작 (트리거 발생 시 스코프 분리 미구현) |
 | `@@CURSOR_ROWS` | **완전 지원** | 현재 열린 커서의 적격 행 수 반환 (닫힘 시 0) |
-| `@@DATEFIRST` | **미구현 (후보)**| 주의 시작 요일 (기본 7 = 일요일) |
-| `@@DBTS` | **미구현** | 전역 증가 rowversion 타임스탬프 |
+| `@@DATEFIRST` | **완전 지원** | 주의 시작 요일 (기본값 7 = 일요일, us_english) |
+| `@@DBTS` | **완전 지원** | 데이터베이스 전역의 단조 증가하는 8바이트 rowversion/timestamp 값 |
+| `@@LOCK_TIMEOUT` | **완전 지원** | 세션 잠금 대기 제한시간 밀리초 (-1 = 무한 대기) 반환 |
+| `@@OPTIONS` | **완전 지원** | 현재 세션의 활성 SET 옵션 비트마스크 (기본 5496) 반환 |
+| `@@NESTLEVEL` | **완전 지원** | 현재 실행 중인 프로시저/트리거 중첩 깊이 (최상위 = 0) 반환 |
+| `@@MAX_CONNECTIONS` | **완전 지원** | 인스턴스 최대 동시 연결 수 (32767 표준) 반환 |
+| `@@LANGUAGE` | **완전 지원** | 세션 기본 언어 명칭 (`us_english`) 반환 |
+| `@@MICROSOFTVERSION` | **완전 지원** | 호환 SQL Server 내부 바이너리 버전 정수 반환 |
+| `@@CPU_BUSY` / `@@IO_BUSY` / `@@IDLE` | **완전 지원** | SQL Server 호환 서버 활동 메트릭 카운터 정수 반환 |
 
 ---
 
@@ -162,39 +169,48 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
    - 배치 스크립트, 재시도 대기 루프 시간 지연 지원. VDBE `OpWaitfor` 바이트코드 및 컨텍스트 협조적 중단 연동 완료.
 3. **`@@CURSOR_ROWS`** [`완전 지원`]:
    - 커서가 열릴 때 적격 행 수를 실시간 추적하고 닫힐 때 0으로 리셋하는 세션 카운터 지원 완료.
+4. **`@@DATEFIRST` 및 `@@DBTS` 시스템 변수 (`TSQL-SYSVAR-DATEFIRST-DBTS`)** [`완전 지원` / `DONE`]:
+   - `@@DATEFIRST`: 주 시작 요일 반환 (기본값 7 = 일요일, SQL Server `us_english` 기본값 완전 일치).
+   - `@@DBTS`: 데이터베이스 전역의 단조 증가 8바이트 바이너리 `rowversion`/`timestamp` 카운터 원자적 제공. VDBE VM 및 단독 SELECT 완벽 연동.
+5. **GZIP `COMPRESS` 및 `DECOMPRESS` 스칼라 함수 (`TSQL-FUNC-COMPRESS`)** [`완전 지원` / `DONE`]:
+   - `COMPRESS(exp)`: RFC 1952 표준 GZIP 바이너리 포맷 압축 (`0x1F 0x8B` 매직 헤더 검증).
+   - `DECOMPRESS(exp)`: 압축 바이트열 복원 및 `CAST(DECOMPRESS(...) AS VARCHAR)` 직접 텍스트 디코딩 100% 호환.
 
 ### 우선순위 그룹 B: 실무 체감도 '중~상' [구현 완료]
-4. **테이블 변수 (`DECLARE @tbl TABLE (...)`)** [`완전 지원`]:
+6. **테이블 변수 (`DECLARE @tbl TABLE (...)`)** [`완전 지원`]:
    - 세션 배치(`ExecuteSessionSQL`), 익명 블록, 저장 프로시저(`CREATE PROCEDURE`) 전반에 걸친 Microsoft SQL Server T-SQL 테이블 변수 지원 완료.
    - 격리된 물리 테이블(`__tv_<frame>_<time>_<name>`) 동적 생성 및 프레임 소멸 시 자동 드롭, DML(`INSERT INTO @tbl VALUES / SELECT`, `SELECT FROM @tbl`, `UPDATE @tbl`, `DELETE FROM @tbl`, `JOIN @tbl`) 완벽 연동.
-5. **`STRING_SPLIT(str, sep [, enable_ordinal])`** [`완전 지원`]:
+7. **`STRING_SPLIT(str, sep [, enable_ordinal])`** [`완전 지원`]:
    - 문자열 구분자 분할 내장 테이블 반환 연산(`enable_ordinal`, `@var`, `CROSS APPLY`) 지원 완료 (`pkg/engine/sqlexec_string_split.go`).
-6. **인라인 테이블 반환 함수 (`CREATE FUNCTION ... RETURNS TABLE`)** [`부분 지원`]:
+8. **인라인 테이블 반환 함수 (`CREATE FUNCTION ... RETURNS TABLE`)** [`부분 지원`]:
    - 단일 `SELECT` 인라인 TVF 등록/조회 지원 완료 (`멀티-스테이트먼트 TVF`는 미구현).
-7. **임시 테이블/테이블 변수 인메모리 하이브리드 바이패스 (`PERF-HYBRID-TEMPMEM-1`)** [`DONE`]:
+9. **임시 테이블/테이블 변수 인메모리 하이브리드 바이패스 (`PERF-HYBRID-TEMPMEM-1`)** [`DONE`]:
    - WiredTiger 모드에서 `__temp_*`, `__tv_*`, `__var_*`, `#*` 테이블의 `.wt` 디스크 파일 생성 및 CGo I/O를 생략하고 내장 `memengine`으로 라우팅 완료 (`pkg/storage/wiredtiger/wt_engine.go`).
 
 ### 진행 중 및 잔여 확장 후보 (Active & Candidate Gaps)
-8. **논리 네임스페이스 DB 프리픽스 & 크로스 DB 조인 (`ARCH-LOGICAL-NAMESPACE-1`)** [`PENDING`]:
-   - 현재 가상 No-op 상태인 `USE <dbname>`을 `__db_<dbname>_*` 물리 접두사 격리 및 3-Part Name 크로스 DB 조인으로 확장 ([`LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)).
-9. **사용자 정의 테이블 타입 (`CREATE TYPE ... AS TABLE`) 및 TVP (`TSQL-TVP-TYPE-1`)** [`v1.6.0 로드맵`]:
-   - 클라이언트에서 DataTable을 매개변수로 넘기는 기능 (`0xF3 TVPTYPE` 토큰 및 임시 테이블 바인딩).
-10. **멀티-스테이트먼트 TVF (`TSQL-MULTI-TVF-1`)** [`v1.6.0 로드맵`]:
+10. **논리 네임스페이스 DB 프리픽스 & 크로스 DB 조인 (`ARCH-LOGICAL-NAMESPACE-1`)** [`PENDING` / `v1.1.0 로드맵`]:
+    - 현재 가상 No-op 상태인 `USE <dbname>`을 `__db_<dbname>_*` 물리 접두사 격리 및 3-Part Name 크로스 DB 조인으로 확장 ([`LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)).
+11. **사용자 정의 테이블 타입 (`CREATE TYPE ... AS TABLE`) 및 TVP (`TSQL-TVP-TYPE-1`)** [`v1.6.0 로드맵`]:
+    - 클라이언트에서 DataTable을 매개변수로 넘기는 기능 (`0xF3 TVPTYPE` 토큰 및 임시 테이블 바인딩).
+12. **멀티-스테이트먼트 TVF (`TSQL-MULTI-TVF-1`)** [`v1.6.0 로드맵`]:
     - `CREATE FUNCTION ... RETURNS @table TABLE (...) AS BEGIN ... END` 형태의 VDBE VM 절차적 재진입 및 결과 테이블 반환.
-11. **T-SQL 확장 내장 스칼라 함수군** [`v1.1.0 로드맵`]:
+13. **T-SQL 확장 내장 스칼라 함수군** [`v1.1.0 로드맵`]:
     - `AT TIME ZONE` 시간대 변환 절 및 함수 (`TSQL-FUNC-AT-TIME-ZONE`)
-    - `COMPRESS` 및 `DECOMPRESS` Gzip 바이너리 압축/해제 함수 (`TSQL-FUNC-COMPRESS`)
     - `PARSE` 및 `TRY_PARSE` 문화권(Culture) 기반 문자열 파싱 함수 (`TSQL-FUNC-PARSE`)
-    - `@@DATEFIRST` 및 `@@DBTS` 시스템 세션 및 글로벌 타임스탬프 변수 (`TSQL-SYSVAR-DATEFIRST-DBTS`)
-12. **양방향 스크롤 커서 (`SCROLL`, `FETCH PRIOR`)** [`영구 Spec-Out`]:
+14. **Collation & 다국어 정렬/비교 아키텍처 (`LOC-1`)** [`v1.99.0 로드맵`]:
+    - TypeScript 하이브리드 모델: 외부 `COLLATE` 구문 수용, 기본 로케일 런타임 소거(`0.5ns`), Go UDF SPI 및 `config/collations.toml` 무컴파일 선언적 확장 ([`notes/plans/COLLATION_AND_LOCALE_PLAN.ko.md`](plans/COLLATION_AND_LOCALE_PLAN.ko.md)).
+15. **양방향 스크롤 커서 (`SCROLL`, `FETCH PRIOR`)** [`영구 Spec-Out`]:
     - 메모리 과점유 방지를 위해 `FORWARD_ONLY`만 지원 결정됨.
 
 ---
 
 ## 10. 결론 및 다음 단계
 
-LionSQL은 T-SQL의 **핵심 제어 흐름(TRY/CATCH, WHILE, IF, GOTO, RETURN, sp_executesql, FORWARD_ONLY CURSOR), 복합 대입·레거시/정량 연산자(`+=`, `!<`, `!>`, `ALL`/`ANY`/`SOME`), 테이블 변수(`DECLARE @tbl TABLE`), 임시 테이블(`#temp`), 인라인 TVF/`STRING_SPLIT`, 140종 이상의 내장 함수 및 트랜잭션**을 갖추고 있습니다.
+LionSQL은 T-SQL의 **핵심 제어 흐름(TRY/CATCH, WHILE, IF, GOTO, RETURN, sp_executesql, FORWARD_ONLY CURSOR), 복합 대입·레거시/정량 연산자(`+=`, `!<`, `!>`, `ALL`/`ANY`/`SOME`), 테이블 변수(`DECLARE @tbl TABLE`), 임시 테이블(`#temp`), 인라인 TVF/`STRING_SPLIT`, 150종 이상의 내장 함수 및 트랜잭션**을 갖추고 있습니다.
 
 현재 시점의 실무 연계 우선순위는 다음과 같습니다:
-- **완료 (`DONE`)**: `PERF-HYBRID-TEMPMEM-1` 구현 완료 — WiredTiger 모드에서도 `#temp`와 `@tbl`이 `.wt` 디스크 파일 생성 0개, 혼합 트랜잭션/세이브포인트 호환으로 동작합니다.
+- **완료 (`DONE`)**:
+  - `PERF-HYBRID-TEMPMEM-1`: WiredTiger 모드에서도 `#temp`와 `@tbl`이 `.wt` 디스크 파일 생성 0개, 혼합 트랜잭션/세이브포인트 호환으로 동작합니다.
+  - `TSQL-SYSVAR-DATEFIRST-DBTS` & `TSQL-FUNC-COMPRESS`: `@@DATEFIRST`, `@@DBTS`, `COMPRESS`, `DECOMPRESS` 스칼라 확장 완료.
+  - `COMPAT-TSQL-MATRIX-1`: 최신 T-SQL 구현 항목 전수 동기화 완료.
 - **차기 확장 (`PENDING`)**: 멀티 DB 워크로드 요구 시 `ARCH-LOGICAL-NAMESPACE-1`을 통해 `USE <dbname>` 가상 No-op을 `__db_<dbname>_*` 논리 네임스페이스 격리로 승격합니다.

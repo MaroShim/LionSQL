@@ -1,0 +1,39 @@
+# test/slt_proc/babelfish_oracle/1137_babel_babel_2117.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2117.sql
+
+statement ok
+use master;
+
+statement ok
+create table t2117(a int);
+create table t2117_2(b int);
+
+statement ok
+create view v2117 as select * from t2117 inner join t2117_2 do on t2117.a = do.b;
+
+statement ok
+select * from v2117;
+
+statement ok
+drop view v2117;
+
+statement ok
+create view v2117 as select do.a offset from t2117 do where do.a = 1 order by offset;
+
+statement ok
+drop view v2117
+
+statement ok
+create table do(offset int);
+
+statement ok
+create view v2117 as select do.offset from do where offset = 1;
+
+statement ok
+drop view v2117;
+
+statement ok
+drop table t2117
+drop table t2117_2
+drop table do
+

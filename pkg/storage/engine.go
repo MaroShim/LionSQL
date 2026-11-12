@@ -24,6 +24,7 @@ var (
 	ErrColumnNotFound       = errors.New("column not found")
 	ErrInvalidDataType      = errors.New("invalid data type for column")
 	ErrNotNullViolation     = errors.New("not null constraint violation")
+	ErrCheckViolation       = errors.New("check constraint violation")
 	ErrForeignKeyViolation  = errors.New("foreign key constraint violation")
 	ErrDependentObjectsExist = errors.New("cannot drop table because other objects depend on it")
 	ErrSerializationFailure = errors.New("serialization failure: concurrent update conflict")
@@ -118,6 +119,7 @@ type Column struct {
 	Precision  int      `json:"precision,omitempty" msgpack:"precision,omitempty"`
 	Scale      int      `json:"scale,omitempty" msgpack:"scale,omitempty"`
 	Default    string   `json:"default,omitempty" msgpack:"default,omitempty"`
+	CheckExpr  string   `json:"check_expr,omitempty" msgpack:"check_expr,omitempty"`
 }
 
 // IndexSchema defines metadata for a secondary index.
@@ -239,12 +241,13 @@ func isTempPrefix(name string) bool {
 
 // TableSchema defines a table structure.
 type TableSchema struct {
-	Name         string             `json:"name"`
-	PhysicalName string             `json:"physical_name,omitempty"`
-	Columns      []Column           `json:"columns"`
-	Indexes      []IndexSchema      `json:"indexes,omitempty"`
-	ForeignKeys  []ForeignKeySchema `json:"foreign_keys,omitempty"`
-	Partition    *PartitionDef      `json:"partition,omitempty"`
+	Name             string             `json:"name"`
+	PhysicalName     string             `json:"physical_name,omitempty"`
+	Columns          []Column           `json:"columns"`
+	Indexes          []IndexSchema      `json:"indexes,omitempty"`
+	ForeignKeys      []ForeignKeySchema `json:"foreign_keys,omitempty"`
+	CheckConstraints []string           `json:"check_constraints,omitempty"`
+	Partition        *PartitionDef      `json:"partition,omitempty"`
 }
 
 // Clone returns a deep copy of TableSchema so callers can mutate trial copies safely.
@@ -252,6 +255,9 @@ func (s TableSchema) Clone() TableSchema {
 	out := s
 	if s.Columns != nil {
 		out.Columns = append([]Column(nil), s.Columns...)
+	}
+	if s.CheckConstraints != nil {
+		out.CheckConstraints = append([]string(nil), s.CheckConstraints...)
 	}
 	if s.Indexes != nil {
 		out.Indexes = make([]IndexSchema, len(s.Indexes))
@@ -282,6 +288,22 @@ func (s TableSchema) Clone() TableSchema {
 		out.Partition = &pCopy
 	}
 	return out
+}
+
+// HasCheckConstraints reports whether the table or any of its columns define a CHECK constraint.
+func (s *TableSchema) HasCheckConstraints() bool {
+	if s == nil {
+		return false
+	}
+	if len(s.CheckConstraints) > 0 {
+		return true
+	}
+	for i := range s.Columns {
+		if s.Columns[i].CheckExpr != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // TableURI returns the WiredTiger table URI ("table:<physical_name>").

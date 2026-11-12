@@ -1,0 +1,20 @@
+# test/slt_proc/babelfish_oracle/1260_babel_babel_check_constraint_before_14_6.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-CHECK-CONSTRAINT-before-14_6-vu-prepare.sql, test/babelfish/raw/BABEL-CHECK-CONSTRAINT-before-14_6-vu-verify.sql, test/babelfish/raw/BABEL-CHECK-CONSTRAINT-before-14_6-vu-cleanup.sql
+
+statement ok
+CREATE TABLE [dbo].[alter_table_check_constraint](
+     [col1] [nvarchar](4) NULL
+     )
+
+statement ok
+INSERT [dbo].[alter_table_check_constraint] VALUES ('abc')
+
+statement ok
+ALTER TABLE [dbo].[alter_table_check_constraint] ADD CONSTRAINT [check_col1] CHECK ([col1] like N'%TP')
+
+statement ok
+ALTER TABLE [dbo].[alter_table_check_constraint] ADD CONSTRAINT [check_col1] CHECK ([col1] like N'%TP')
+
+statement ok
+DROP TABLE [dbo].[alter_table_check_constraint]
+

@@ -1,0 +1,22 @@
+# test/slt_proc/babelfish_oracle/423_babel_babel_820.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-820.sql
+
+query T
+SELECT 42 = CAST(42 AS numeric(38,0))
+----
+true
+
+query T
+SELECT CAST(42 AS numeric(38,0)) = 42
+----
+true
+
+statement ok
+CREATE TABLE babel_820_test_table1(test_id INT IDENTITY, test_col1 INT)
+
+statement ok
+SELECT test_col1 FROM babel_820_test_table1 WHERE test_id = @@IDENTITY
+
+statement ok
+DROP TABLE babel_820_test_table1
+

@@ -1,0 +1,58 @@
+# test/slt_proc/babelfish_oracle/349_babel_babel_2955.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2955-vu-prepare.sql, test/babelfish/raw/BABEL-2955-vu-verify.sql, test/babelfish/raw/BABEL-2955-vu-cleanup.sql
+
+statement ok
+create table babel_2955_vu_prepare_t1 (a int not null)
+
+statement ok
+create unique index ix1 on babel_2955_vu_prepare_t1(a) with pad_index
+
+statement ok
+create unique index ix2 on babel_2955_vu_prepare_t1(a) with pad_index=on
+
+statement ok
+create unique index ix3 on babel_2955_vu_prepare_t1(a) with pad_index=off
+
+statement ok
+insert into babel_2955_vu_prepare_t1 values (1)
+
+statement ok
+create table babel_2955_vu_prepare_t2 (a int not null)
+
+statement ok
+create unique index ix1 on babel_2955_vu_prepare_t2(a) with pad_index
+
+statement ok
+create unique index ix2 on babel_2955_vu_prepare_t2(a) with pad_index=on
+
+statement ok
+create unique index ix3 on babel_2955_vu_prepare_t2(a) with pad_index=off
+
+statement ok
+insert into babel_2955_vu_prepare_t2 values (1)
+
+query T
+SELECT * FROM babel_2955_vu_prepare_t1
+----
+1
+
+query T
+SELECT * FROM babel_2955_vu_prepare_t2
+----
+1
+
+statement ok
+drop index ix1 on babel_2955_vu_prepare_t1
+
+statement ok
+drop index ix2 on babel_2955_vu_prepare_t1
+
+statement ok
+drop index ix3 on babel_2955_vu_prepare_t1
+
+statement ok
+drop table babel_2955_vu_prepare_t1
+
+statement ok
+drop table babel_2955_vu_prepare_t2
+

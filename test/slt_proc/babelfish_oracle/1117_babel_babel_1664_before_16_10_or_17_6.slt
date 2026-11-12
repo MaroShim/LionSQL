@@ -1,0 +1,127 @@
+# test/slt_proc/babelfish_oracle/1117_babel_babel_1664_before_16_10_or_17_6.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1664-before-16_10-or-17_6-vu-prepare.sql, test/babelfish/raw/BABEL-1664-before-16_10-or-17_6-vu-verify.sql, test/babelfish/raw/BABEL-1664-before-16_10-or-17_6-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_1664_vu_prepare_t1 (
+    dt DATETIME,
+    sdt SMALLDATETIME
+);
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET DATEFORMAT mdy;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET DATEFORMAT dmy;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET DATEFORMAT ymd;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET DATEFORMAT ydm;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET DATEFORMAT myd;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET DATEFORMAT dym;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET LANGUAGE us_english;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET LANGUAGE Deutsch;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET LANGUAGE Français;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET LANGUAGE Español;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET LANGUAGE Deutsch;
+SET DATEFORMAT dmy;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET LANGUAGE Français;
+SET DATEFORMAT ymd;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET LANGUAGE SLOVENČINA;
+
+statement ok
+SELECT CAST(dt AS VARCHAR(50)) AS dt_varchar, 
+       CAST(sdt AS VARCHAR(50)) AS sdt_varchar 
+FROM babel_1664_vu_prepare_t1;
+
+statement ok
+SET LANGUAGE us_english;
+SET DATEFORMAT mdy;
+
+statement ok
+DROP TABLE babel_1664_vu_prepare_t1;
+

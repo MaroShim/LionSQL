@@ -1,0 +1,196 @@
+# test/slt_proc/babelfish_oracle/428_babel_babel_like2ilike.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-LIKE2ILIKE.sql
+
+statement ok
+create table like_tesing1 (c1 varchar(20), c2 char(20), c3 nvarchar(20))
+
+statement ok
+insert into like_tesing1 values ('JONES','JONES','JONES')
+
+statement ok
+insert into like_tesing1 values ('JoneS','JoneS','JoneS')
+
+statement ok
+insert into like_tesing1 values ('jOnes','jOnes','jOnes')
+
+statement ok
+insert into like_tesing1 values ('abcD','AbcD','ABCd')
+
+statement ok
+insert into like_tesing1 values ('äbĆD','äḃcD','äƀCd')
+
+query T
+select c1 from like_tesing1 where c1 LIKE 'jones'
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from like_tesing1 where c1 LIKE 'Jon%'
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from like_tesing1 where c1 LIKE 'jone_'
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from like_tesing1 where c1 LIKE '_one_'
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from like_tesing1 where c1 LIKE 'ab%'
+----
+abcD
+
+query T
+select c1 from like_tesing1 where c1 LIKE 'äb%'
+----
+äbĆD
+
+statement ok
+select c1 from like_tesing1 where c1 LIKE 'äḃĆ_'
+
+query T
+select c1 from like_tesing1 where c1 NOT LIKE 'jones'
+----
+abcD
+äbĆD
+
+query T
+select c1 from like_tesing1 where c1 NOT LIKE 'jone%'
+----
+abcD
+äbĆD
+
+statement ok
+select c1 from like_tesing1 where c1 LIKE '\%ones'
+
+statement ok
+select c1 from like_tesing1 where c1 LIKE '\_ones'
+
+query T
+select c1 from like_tesing1 where c1 LIKE lower('_ones')
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from like_tesing1 where c1 LIKE upper('_ones')
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from like_tesing1 where c1 LIKE concat('_on','_s')
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from like_tesing1 where c1 LIKE concat('a','%d')
+----
+abcD
+
+query T
+select c1 from like_tesing1 where c1 NOT LIKE lower('%s')
+----
+abcD
+äbĆD
+
+query T
+Select count(*) from like_tesing1 where c1 LIKE (select c1 from like_tesing1 where c1 LIKE 'AbcD' COLLATE sql_latin1_general_cp1_ci_as)
+----
+5
+
+query T
+Select count(*) from like_tesing1 where c2 NOT LIKE (select c2 from like_tesing1 where c2 NOT LIKE 'jo%' AND c2 NOT LIKE 'ä%')
+----
+4
+
+query T
+Select count(*) from like_tesing1 where c3 LIKE (select c3 from like_tesing1 where c3 NOT LIKE'jo%' AND c3 NOT LIKE 'ä%')
+----
+1
+
+query T
+with p1 as (select c1 from like_tesing1 where c1 LIKE '__Ć_'),
+p2 as (select c3 from like_tesing1 where c3 LIKE 'äƀ__')
+select * from p1 union all select * from p2
+order by 1
+----
+äbĆD
+äƀCd
+
+query TT
+select c1,(case when c1 LIKE 'j%' then 1 when c1 NOT LIKE 'j%' then 2 end) from like_tesing1
+----
+JONES 1
+JoneS 1
+jOnes 1
+abcD 2
+äbĆD 2
+
+statement ok
+create table like_tesing2(c1 varchar(20) COLLATE SQL_Latin1_General_CP1_CS_AS)
+
+statement ok
+insert into like_tesing2 values ('JONES')
+
+statement ok
+insert into like_tesing2 values ('JoneS')
+
+statement ok
+insert into like_tesing2 values ('abcD')
+
+statement ok
+insert into like_tesing2 values ('äbĆD')
+
+query T
+select * from like_tesing2 where c1 LIKE 'jo%'
+----
+JONES
+JoneS
+
+query T
+select * from like_tesing2 where c1 NOT LIKE 'j%'
+----
+abcD
+äbĆD
+
+query T
+select * from like_tesing2 where c1 LIKE 'AB%'
+----
+abcD
+
+query T
+SELECT CASE WHEN 'JONES' like 'jo%' THEN 1 ELSE 0 END
+----
+1
+
+query T
+SELECT CASE WHEN 'JONES' like '' THEN 1 ELSE 0 END
+----
+0
+
+statement ok
+SELECT * from like_tesing1 where c1 like ''
+
+statement ok
+drop table like_tesing1
+
+statement ok
+drop table like_tesing2
+

@@ -1,0 +1,8 @@
+# test/slt_proc/babelfish_oracle/562_babel_babel_sql_config_functions.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SQL-CONFIG-FUNCTIONS.sql
+
+query T
+SELECT count(*) FROM (SELECT @@VERSION) a where version like 'Babelfish for PostgreSQL with SQL Server Compatibility%'
+----
+0
+

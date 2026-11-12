@@ -1,0 +1,48 @@
+# test/slt_proc/babelfish_oracle/1493_babel_sys_foreign_key_columns_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-foreign_key_columns-dep-vu-prepare.sql, test/babelfish/raw/views/sys-foreign_key_columns-dep-vu-verify.sql, test/babelfish/raw/views/sys-foreign_key_columns-dep-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sys_foreign_key_columns_dep_vu_prepare_db1;
+
+statement ok
+USE sys_foreign_key_columns_dep_vu_prepare_db1;
+
+statement ok
+create table sys_foreign_key_columns_dep_vu_prepare_fk_1 (a int, primary key (a));
+
+statement ok
+create table sys_foreign_key_columns_dep_vu_prepare_fk_2 (a int, b int, primary key (a), foreign key (b) references sys_foreign_key_columns_dep_vu_prepare_fk_1(a));
+
+statement ok
+create procedure sys_foreign_key_columns_dep_vu_prepare_p1 as
+    select count(*) from sys.foreign_key_columns where parent_object_id = object_id('sys_foreign_key_columns_dep_vu_prepare_fk_2');
+
+statement ok
+create function sys_foreign_key_columns_dep_vu_prepare_f1()
+returns int
+as
+begin
+    return (select count(*) from sys.foreign_key_columns where parent_object_id = object_id('sys_foreign_key_columns_dep_vu_prepare_fk_1'))
+end
+
+statement ok
+create view sys_foreign_key_columns_dep_vu_prepare_v1 as 
+    select count(*) from sys.foreign_key_columns where parent_object_id = object_id('sys_foreign_key_columns_dep_vu_prepare_fk_2')
+
+statement ok
+USE sys_foreign_key_columns_dep_vu_prepare_db1;
+
+statement ok
+select * from sys_foreign_key_columns_dep_vu_prepare_v1
+
+statement ok
+USE sys_foreign_key_columns_dep_vu_prepare_db1
+
+statement ok
+drop procedure if exists sys_foreign_key_columns_dep_vu_prepare_p1
+drop function if exists sys_foreign_key_columns_dep_vu_prepare_f1
+drop view if exists sys_foreign_key_columns_dep_vu_prepare_v1
+drop table sys_foreign_key_columns_dep_vu_prepare_fk_2
+drop table sys_foreign_key_columns_dep_vu_prepare_fk_1
+USE master
+

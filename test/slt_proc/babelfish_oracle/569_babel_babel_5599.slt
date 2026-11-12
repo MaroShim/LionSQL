@@ -1,0 +1,675 @@
+# test/slt_proc/babelfish_oracle/569_babel_babel_5599.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_5599.sql
+
+statement ok
+create table test_tab (a int)
+
+statement ok
+create table setup_tab1(a bigint)
+
+statement ok
+insert into setup_tab1 values(99999999999999999)
+
+statement ok
+CREATE FUNCTION stmt_terminating_err()
+RETURNS int
+AS
+BEGIN
+    RETURN (SELECT CAST(a AS INT) FROM setup_tab1);  -- This will cause integer out of range error
+END
+
+statement ok
+CREATE PROCEDURE stmt_terminating_err_proc
+AS
+BEGIN
+    RETURN (SELECT CAST(a AS INT) FROM setup_tab1)
+END
+
+statement ok
+CREATE PROCEDURE stmt_terminating_err_proc_with_txn
+AS
+BEGIN
+    DECLARE @result int
+    BEGIN TRANSACTION
+        SELECT @result = CAST(a AS INT) FROM setup_tab1
+    COMMIT TRANSACTION
+    RETURN (@result)
+END
+
+statement ok
+CREATE FUNCTION call_error_function_no_txn()
+RETURNS int
+AS
+BEGIN
+    RETURN (SELECT dbo.stmt_terminating_err()) -- Direct call without transaction
+END
+
+statement ok
+CREATE FUNCTION call_error_function_with_txn()
+RETURNS int
+AS
+BEGIN
+    DECLARE @result int
+    BEGIN TRANSACTION
+        SET @result = dbo.stmt_terminating_err()  -- Call within transaction
+    COMMIT TRANSACTION
+    RETURN @result
+END
+
+statement ok
+CREATE PROCEDURE call_error_function_no_txn_proc
+AS
+BEGIN
+    RETURN (SELECT dbo.stmt_terminating_err())
+END
+
+statement ok
+CREATE PROCEDURE call_error_function_with_txn_proc
+AS
+BEGIN
+    BEGIN TRANSACTION;
+        DECLARE @result int;
+        SET @result = dbo.stmt_terminating_err();
+    COMMIT TRANSACTION;
+    RETURN @result;
+END
+
+statement ok
+insert into test_tab values (1)
+select stmt_terminating_err()
+insert into test_tab values (1)
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+truncate table test_tab
+
+statement ok
+begin tran
+
+statement ok
+insert into test_tab values (1)
+select stmt_terminating_err()
+insert into test_tab values (1)
+
+query T
+select @@trancount
+----
+1
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+rollback tran
+
+statement ok
+select * from test_tab;
+
+statement ok
+truncate table test_tab
+
+statement ok
+insert into test_tab values (1)
+select call_error_function_no_txn()
+insert into test_tab values (1)
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+truncate table test_tab
+
+statement ok
+begin tran
+
+statement ok
+insert into test_tab values (1)
+select call_error_function_no_txn()
+insert into test_tab values (1)
+
+query T
+select @@trancount
+----
+1
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+rollback tran
+
+statement ok
+select * from test_tab;
+
+statement ok
+truncate table test_tab
+
+statement ok
+insert into test_tab values (1)
+exec call_error_function_no_txn_proc
+insert into test_tab values (1)
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+truncate table test_tab
+
+statement ok
+begin tran
+
+statement ok
+insert into test_tab values (1)
+exec call_error_function_no_txn_proc
+insert into test_tab values (1)
+
+query T
+select @@trancount
+----
+1
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+rollback tran
+
+statement ok
+select * from test_tab;
+
+statement ok
+truncate table test_tab
+
+statement ok
+insert into test_tab values (1)
+exec call_error_function_with_txn_proc
+insert into test_tab values (1)
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+truncate table test_tab
+
+statement ok
+begin tran
+
+statement ok
+insert into test_tab values (1)
+exec call_error_function_with_txn_proc
+insert into test_tab values (1)
+
+query T
+select @@trancount
+----
+1
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+rollback tran
+
+statement ok
+select * from test_tab;
+
+statement ok
+truncate table test_tab
+
+statement ok
+insert into test_tab values (1)
+exec stmt_terminating_err_proc;
+insert into test_tab values (1)
+
+query T
+select * from test_tab;
+----
+1
+1
+
+statement ok
+truncate table test_tab
+
+statement ok
+begin tran
+
+statement ok
+insert into test_tab values (1)
+exec stmt_terminating_err_proc
+insert into test_tab values (1)
+
+query T
+select @@trancount
+----
+1
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+rollback tran
+
+statement ok
+select * from test_tab;
+
+statement ok
+truncate table test_tab
+
+statement ok
+insert into test_tab values (1)
+exec stmt_terminating_err_proc_with_txn;
+insert into test_tab values (1)
+
+query T
+select * from test_tab;
+----
+1
+1
+
+statement ok
+truncate table test_tab
+
+statement ok
+begin tran
+
+statement ok
+insert into test_tab values (1)
+exec stmt_terminating_err_proc_with_txn
+insert into test_tab values (1)
+
+query T
+select @@trancount
+----
+1
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+rollback tran
+
+statement ok
+select * from test_tab;
+
+statement ok
+truncate table test_tab
+
+statement ok
+DROP PROCEDURE call_error_function_with_txn_proc
+
+statement ok
+DROP PROCEDURE call_error_function_no_txn_proc
+
+statement ok
+DROP FUNCTION call_error_function_no_txn()
+
+statement ok
+DROP PROCEDURE stmt_terminating_err_proc_with_txn
+
+statement ok
+DROP PROCEDURE stmt_terminating_err_proc
+
+statement ok
+DROP FUNCTION stmt_terminating_err()
+
+statement ok
+drop table setup_tab1
+
+statement ok
+create table setup_tab2(a varchar(10))
+
+statement ok
+insert into setup_tab2 values ('abc')
+
+statement ok
+CREATE FUNCTION txn_abort_err()
+RETURNS int
+AS
+BEGIN
+    RETURN (select cast( a as int) from setup_tab2);  -- This will cause integer out of range error
+END
+
+statement ok
+CREATE PROCEDURE txn_abort_err_proc
+AS
+BEGIN
+    RETURN ( select cast( a as int) from setup_tab2)
+END
+
+statement ok
+CREATE PROCEDURE txn_abort_err_proc_with_txn
+AS
+BEGIN
+    DECLARE @result int
+    BEGIN TRANSACTION
+        select @result = cast( a as int) from setup_tab2
+    COMMIT TRANSACTION
+    RETURN (@result)
+END
+
+statement ok
+CREATE FUNCTION call_error_function_no_txn()
+RETURNS int
+AS
+BEGIN
+    RETURN (SELECT dbo.txn_abort_err()) -- Direct call without transaction
+END
+
+statement ok
+CREATE FUNCTION call_error_function_with_txn()
+RETURNS int
+AS
+BEGIN
+    DECLARE @result int
+    BEGIN TRANSACTION
+        SET @result = dbo.txn_abort_err()  -- Call within transaction
+    COMMIT TRANSACTION
+    RETURN @result
+END
+
+statement ok
+CREATE PROCEDURE call_error_function_no_txn_proc
+AS
+BEGIN
+    RETURN (SELECT dbo.txn_abort_err())
+END
+
+statement ok
+CREATE PROCEDURE call_error_function_with_txn_proc
+AS
+BEGIN
+    BEGIN TRANSACTION;
+        DECLARE @result int;
+        SET @result = dbo.txn_abort_err();
+    COMMIT TRANSACTION;
+    RETURN @result;
+END
+
+statement ok
+insert into test_tab values (1)
+select txn_abort_err()
+insert into test_tab values (1)
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+truncate table test_tab
+
+statement ok
+begin tran
+
+statement ok
+insert into test_tab values (1)
+select txn_abort_err()
+insert into test_tab values (1)
+
+query T
+select @@trancount
+----
+1
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+rollback tran
+
+statement ok
+select * from test_tab;
+
+statement ok
+truncate table test_tab
+
+statement ok
+insert into test_tab values (1)
+select call_error_function_no_txn()
+insert into test_tab values (1)
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+truncate table test_tab
+
+statement ok
+begin tran
+
+statement ok
+insert into test_tab values (1)
+select call_error_function_no_txn()
+insert into test_tab values (1)
+
+query T
+select @@trancount
+----
+1
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+rollback tran
+
+statement ok
+select * from test_tab;
+
+statement ok
+truncate table test_tab
+
+statement ok
+insert into test_tab values (1)
+exec call_error_function_no_txn_proc
+insert into test_tab values (1)
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+truncate table test_tab
+
+statement ok
+begin tran
+
+statement ok
+insert into test_tab values (1)
+exec call_error_function_no_txn_proc
+insert into test_tab values (1)
+
+query T
+select @@trancount
+----
+1
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+rollback tran
+
+statement ok
+select * from test_tab;
+
+statement ok
+truncate table test_tab
+
+statement ok
+insert into test_tab values (1)
+exec call_error_function_with_txn_proc
+insert into test_tab values (1)
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+truncate table test_tab
+
+statement ok
+begin tran
+
+statement ok
+insert into test_tab values (1)
+exec call_error_function_with_txn_proc
+insert into test_tab values (1)
+
+query T
+select @@trancount
+----
+1
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+rollback tran
+
+statement ok
+select * from test_tab;
+
+statement ok
+truncate table test_tab
+
+statement ok
+insert into test_tab values (1)
+exec txn_abort_err_proc;
+insert into test_tab values (1)
+
+query T
+select * from test_tab;
+----
+1
+1
+
+statement ok
+truncate table test_tab
+
+statement ok
+begin tran
+
+statement ok
+insert into test_tab values (1)
+exec txn_abort_err_proc
+insert into test_tab values (1)
+
+query T
+select @@trancount
+----
+1
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+rollback tran
+
+statement ok
+select * from test_tab;
+
+statement ok
+truncate table test_tab
+
+statement ok
+insert into test_tab values (1)
+exec txn_abort_err_proc_with_txn;
+insert into test_tab values (1)
+
+query T
+select * from test_tab;
+----
+1
+1
+
+statement ok
+truncate table test_tab
+
+statement ok
+begin tran
+
+statement ok
+insert into test_tab values (1)
+exec txn_abort_err_proc_with_txn
+insert into test_tab values (1)
+
+query T
+select @@trancount
+----
+1
+
+query T
+select * from test_tab;
+----
+1
+
+statement ok
+rollback tran
+
+statement ok
+select * from test_tab;
+
+statement ok
+truncate table test_tab
+
+statement ok
+DROP PROCEDURE call_error_function_with_txn_proc
+
+statement ok
+DROP PROCEDURE call_error_function_no_txn_proc
+
+statement ok
+DROP FUNCTION call_error_function_no_txn()
+
+statement ok
+DROP PROCEDURE txn_abort_err_proc_with_txn
+
+statement ok
+DROP PROCEDURE txn_abort_err_proc
+
+statement ok
+DROP FUNCTION txn_abort_err()
+
+statement ok
+drop table setup_tab2
+
+statement ok
+drop table test_tab
+

@@ -56,3 +56,31 @@ SELECT COUNT(*) FROM rc_t2;
 
 statement ok
 DROP TABLE rc_t2;
+
+statement ok
+CREATE PROCEDURE sp_double @a INT, @r INT OUTPUT
+AS
+BEGIN
+    SET @r = @a * 2;
+END;
+
+query I
+DECLARE @x INT;
+EXEC sp_double 21, @x OUTPUT;
+SELECT @x;
+----
+42
+
+statement ok
+CREATE PROCEDURE sp_call_double @in INT
+AS
+BEGIN
+    DECLARE @out INT;
+    EXEC sp_double @in, @out OUTPUT;
+    SELECT @out;
+END;
+
+query I
+EXEC sp_call_double 15;
+----
+30

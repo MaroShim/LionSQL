@@ -1,0 +1,142 @@
+# test/slt_proc/babelfish_oracle/512_babel_babel_1625.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1625-vu-prepare.sql, test/babelfish/raw/BABEL-1625-vu-verify.sql
+
+statement ok
+CREATE VIEW BABEL_1625_vu_prepare_v1 AS (SELECT DATEADD(month, 1, cast('1912-10-25 12:24:32 +10:0' as DATETIMEOFFSET)));
+
+statement ok
+CREATE VIEW BABEL_1625_vu_prepare_v2 AS (SELECT DATEADD(year, 2, cast('1912-10-25 12:24:32 -10:52' as DATETIMEOFFSET)));
+
+statement ok
+CREATE VIEW BABEL_1625_vu_prepare_v3 AS (SELECT DATEADD(day, 3, cast('1912-10-25 12:24:32 +06:45' as DATETIMEOFFSET)));
+
+statement ok
+CREATE VIEW BABEL_1625_vu_prepare_v4 AS (SELECT DATEADD(hour, 4, cast('1912-10-25 12:24:32 -11:37' as DATETIMEOFFSET)));
+
+statement ok
+CREATE VIEW BABEL_1625_vu_prepare_v5 AS (SELECT DATEADD(minute, 5, cast('1912-10-25 12:24:32 +04:44' as DATETIMEOFFSET)));
+
+statement ok
+CREATE VIEW BABEL_1625_vu_prepare_v6 AS (SELECT DATEADD(second, 6, cast('1912-10-25 12:24:32 -02:23' as DATETIMEOFFSET)));
+
+statement ok
+CREATE PROCEDURE BABEL_1625_vu_prepare_p1 AS (SELECT DATEADD(year, 1, cast('2000-02-28 12:24:32 +10:0' as DATETIMEOFFSET)));
+
+statement ok
+CREATE PROCEDURE BABEL_1625_vu_prepare_p2 AS (SELECT DATEADD(month, 1, cast('2000-02-28 12:24:32 +10:0' as DATETIMEOFFSET)));
+
+statement ok
+CREATE PROCEDURE BABEL_1625_vu_prepare_p3 AS (SELECT DATEADD(day, 1, cast('2000-02-28 12:24:32 +10:0' as DATETIMEOFFSET)));
+
+statement ok
+CREATE PROCEDURE BABEL_1625_vu_prepare_p4 AS (SELECT DATEADD(hour, 1, cast('2000-02-28 12:24:32 +10:0' as DATETIMEOFFSET)));
+
+statement ok
+CREATE PROCEDURE BABEL_1625_vu_prepare_p5 AS (SELECT DATEADD(minute, 1, cast('2000-02-28 12:24:32 +10:0' as DATETIMEOFFSET)));
+
+statement ok
+CREATE PROCEDURE BABEL_1625_vu_prepare_p6 AS (SELECT DATEADD(second, 1, cast('2000-02-28 12:24:32 +10:0' as DATETIMEOFFSET)));
+
+statement ok
+CREATE FUNCTION BABEL_1625_vu_prepare_f1()
+RETURNS DATETIMEOFFSET AS
+BEGIN
+RETURN (SELECT DATEADD(year, 7, cast('1912-10-25 17:56:28 +11:59' as DATETIMEOFFSET)));
+END
+
+statement ok
+CREATE FUNCTION BABEL_1625_vu_prepare_f2()
+RETURNS DATETIMEOFFSET AS
+BEGIN
+RETURN (SELECT DATEADD(month, 7, cast('1912-10-25 17:56:28 +11:59' as DATETIMEOFFSET)));
+END
+
+statement ok
+CREATE FUNCTION BABEL_1625_vu_prepare_f3()
+RETURNS DATETIMEOFFSET AS
+BEGIN
+RETURN (SELECT DATEADD(day, 7, cast('1912-10-25 17:56:28 +11:59' as DATETIMEOFFSET)));
+END
+
+statement ok
+CREATE FUNCTION BABEL_1625_vu_prepare_f4()
+RETURNS DATETIMEOFFSET AS
+BEGIN
+RETURN (SELECT DATEADD(hour, 7, cast('1912-10-25 17:56:28 +11:59' as DATETIMEOFFSET)));
+END
+
+statement ok
+CREATE FUNCTION BABEL_1625_vu_prepare_f5()
+RETURNS DATETIMEOFFSET AS
+BEGIN
+RETURN (SELECT DATEADD(minute, 7, cast('1912-10-25 17:56:28 +11:59' as DATETIMEOFFSET)));
+END
+
+statement ok
+CREATE FUNCTION BABEL_1625_vu_prepare_f6()
+RETURNS DATETIMEOFFSET AS
+BEGIN
+RETURN (SELECT DATEADD(second, 7, cast('1912-10-25 17:56:28 +11:59' as DATETIMEOFFSET)));
+END
+
+query T
+declare @dt datetimeoffset(6);
+set @dt = '1912-10-25 12:24:32 +10:0';
+select dateadd(month,1,@dt);
+----
+NULL
+
+statement ok
+DROP VIEW BABEL_1625_vu_prepare_v1
+
+statement ok
+DROP VIEW BABEL_1625_vu_prepare_v2
+
+statement ok
+DROP VIEW BABEL_1625_vu_prepare_v3
+
+statement ok
+DROP VIEW BABEL_1625_vu_prepare_v4
+
+statement ok
+DROP VIEW BABEL_1625_vu_prepare_v5
+
+statement ok
+DROP VIEW BABEL_1625_vu_prepare_v6
+
+statement ok
+DROP procedure  BABEL_1625_vu_prepare_p1
+
+statement ok
+DROP procedure  BABEL_1625_vu_prepare_p2
+
+statement ok
+DROP procedure  BABEL_1625_vu_prepare_p3
+
+statement ok
+DROP procedure  BABEL_1625_vu_prepare_p4
+
+statement ok
+DROP procedure  BABEL_1625_vu_prepare_p5
+
+statement ok
+DROP procedure  BABEL_1625_vu_prepare_p6
+
+statement ok
+DROP FUNCTION BABEL_1625_vu_prepare_f1()
+
+statement ok
+DROP FUNCTION BABEL_1625_vu_prepare_f2()
+
+statement ok
+DROP FUNCTION BABEL_1625_vu_prepare_f3()
+
+statement ok
+DROP FUNCTION BABEL_1625_vu_prepare_f4()
+
+statement ok
+DROP FUNCTION BABEL_1625_vu_prepare_f5()
+
+statement ok
+DROP FUNCTION BABEL_1625_vu_prepare_f6()
+

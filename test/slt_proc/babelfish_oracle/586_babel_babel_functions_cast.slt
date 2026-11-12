@@ -1,0 +1,824 @@
+# test/slt_proc/babelfish_oracle/586_babel_babel_functions_cast.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_functions_cast.sql
+
+query T
+select CAST(123 AS float);
+----
+123
+
+query T
+select CAST(CAST(11234561231231.234 AS float) AS varchar(30));
+----
+11234561231231.234375
+
+query T
+select CAST('123' AS int);
+----
+123
+
+query T
+select CAST('123' AS text);
+----
+123
+
+query T
+select CAST('123.456' AS numeric(6,3));
+----
+123.456
+
+query T
+select CAST(123.456 AS numeric(6,3));
+----
+123.456
+
+query T
+select CAST('123' As smallint);
+----
+123
+
+query T
+select CAST('1234567890' AS bigint);
+----
+1234567890
+
+query T
+select CAST(4936.56 AS MONEY);
+----
+4936.560000
+
+query T
+select CAST(-4936.56 AS MONEY);
+----
+-4936.560000
+
+query T
+select CAST(CAST(4936.56 AS MONEY) AS varchar(10));
+----
+4936.56000
+
+query T
+select CAST(CAST(-4936.56 AS MONEY) AS varchar(10));
+----
+-4936.5600
+
+query T
+select CAST(4936.56 AS smallmoney);
+----
+4936.560000
+
+query T
+select CAST(CAST(1.56 as smallmoney) AS smallint);
+----
+1
+
+query T
+select CAST(CAST(-1.56 as smallmoney) AS smallint);
+----
+-1
+
+query T
+select CAST(CAST(-214748.3648 as smallmoney) As smallint);
+----
+-214748
+
+query T
+select CAST(CAST(214748.3647 as smallmoney) As smallint);
+----
+214748
+
+query T
+select CAST(CAST(1.56 as MONEY) AS smallint);
+----
+1
+
+query T
+select CAST(CAST(-1.56 as MONEY) AS smallint);
+----
+-1
+
+query T
+select CAST(CAST(922337203685477.5807 as MONEY) AS smallint);
+----
+922337203685477
+
+query T
+select CAST(CAST(-922337203685477.5808 as MONEY) AS smallint);
+----
+-922337203685477
+
+query T
+select CAST(CAST(1.56 as smallmoney) AS int);
+----
+1
+
+query T
+select CAST(CAST(-1.56 as smallmoney) AS int);
+----
+-1
+
+query T
+select CAST(CAST(-214748.3648 as smallmoney) As int);
+----
+-214748
+
+query T
+select CAST(CAST(214748.3647 as smallmoney) As int);
+----
+214748
+
+query T
+select CAST(CAST(1.56 as MONEY) AS int);
+----
+1
+
+query T
+select CAST(CAST(-1.56 as MONEY) AS int);
+----
+-1
+
+query T
+select CAST(CAST(922337203685477.5807 as MONEY) AS int);
+----
+922337203685477
+
+query T
+select CAST(CAST(-922337203685477.5808 as MONEY) AS int);
+----
+-922337203685477
+
+query T
+select CAST(CAST(1.56 as smallmoney) AS bigint);
+----
+1
+
+query T
+select CAST(CAST(-1.56 as smallmoney) AS bigint);
+----
+-1
+
+query T
+select CAST(CAST(-214748.3648 as smallmoney) As bigint);
+----
+-214748
+
+query T
+select CAST(CAST(214748.3647 as smallmoney) As bigint);
+----
+214748
+
+query T
+select CAST(CAST(1.56 as MONEY) AS bigint);
+----
+1
+
+query T
+select CAST(CAST(-1.56 as MONEY) AS bigint);
+----
+-1
+
+query T
+select CAST(CAST(922337203685477.5807 as MONEY) AS bigint);
+----
+922337203685477
+
+query T
+select CAST(CAST(-922337203685477.5808 as MONEY) AS bigint);
+----
+-922337203685477
+
+query T
+select TRY_CAST('08/25/2017' AS date);
+----
+NULL
+
+query T
+select TRY_CAST('2017-08-25 01:01:59PM' AS datetime);
+----
+NULL
+
+query T
+select TRY_CAST('2017-08-25 01:01:59PM' AS datetime2);
+----
+NULL
+
+query T
+select TRY_CAST(123 AS float);
+----
+123
+
+query T
+select TRY_CAST(CAST(11234561231231.234 AS float) AS varchar(30));
+----
+11234561231231.234375
+
+query T
+select TRY_CAST('123' AS int);
+----
+123
+
+query T
+select TRY_CAST('123' AS text);
+----
+123
+
+query T
+select TRY_CAST('123.456' AS numeric(6,3));
+----
+123.456
+
+query T
+select TRY_CAST(123.456 AS numeric(6,3));
+----
+123.456
+
+query T
+select TRY_CAST('123' As smallint);
+----
+123
+
+query T
+select TRY_CAST('1234567890' AS bigint);
+----
+1234567890
+
+query T
+select TRY_CAST(99.9 As int);
+----
+99
+
+query T
+select TRY_CAST(-99.9 As int);
+----
+-99
+
+query T
+select TRY_CAST(CAST(12.56 as numeric(4,2)) As smallint);
+----
+12
+
+query T
+select TRY_CAST(CAST(-12.56 as numeric(4,2)) As smallint);
+----
+-12
+
+query T
+select TRY_CAST(CAST(12.56 as numeric(4,2)) As int);
+----
+12
+
+query T
+select TRY_CAST(CAST(-12.56 as numeric(4,2)) As int);
+----
+-12
+
+query T
+select TRY_CAST(CAST(12.56 as numeric(4,2)) As bigint);
+----
+12
+
+query T
+select TRY_CAST(CAST(-12.56 as numeric(4,2)) As bigint);
+----
+-12
+
+query T
+select TRY_CAST(CAST(1.56 as float(53)) As smallint);
+----
+1
+
+query T
+select TRY_CAST(CAST(-1.56 as float(53)) As smallint);
+----
+-1
+
+query T
+select TRY_CAST(CAST(-1.79e308 as float(53)) As smallint);
+----
+-9223372036854775808
+
+query T
+select TRY_CAST(CAST(1.79e308 as float(53)) As smallint);
+----
+9223372036854775807
+
+query T
+select TRY_CAST(CAST(2.23e-308 as float(53)) As smallint);
+----
+0
+
+query T
+select TRY_CAST(CAST(-2.23e-308 as float(53)) As smallint);
+----
+0
+
+query T
+select TRY_CAST(CAST(1.56 as float(53)) As int);
+----
+1
+
+query T
+select TRY_CAST(CAST(-1.56 as float(53)) As int);
+----
+-1
+
+query T
+select TRY_CAST(CAST(-1.79e308 as float(53)) As int);
+----
+-9223372036854775808
+
+query T
+select TRY_CAST(CAST(1.79e308 as float(53)) As int);
+----
+9223372036854775807
+
+query T
+select TRY_CAST(CAST(2.23e-308 as float(53)) As int);
+----
+0
+
+query T
+select TRY_CAST(CAST(-2.23e-308 as float(53)) As int);
+----
+0
+
+query T
+select TRY_CAST(CAST(1.56 as float(53)) As bigint);
+----
+1
+
+query T
+select TRY_CAST(CAST(-1.56 as float(53)) As bigint);
+----
+-1
+
+query T
+select TRY_CAST(CAST(-1.79e308 as float(53)) As bigint);
+----
+-9223372036854775808
+
+query T
+select TRY_CAST(CAST(1.79e308 as float(53)) As bigint);
+----
+9223372036854775807
+
+query T
+select TRY_CAST(CAST(2.23e-308 as float(53)) As bigint);
+----
+0
+
+query T
+select TRY_CAST(CAST(-2.23e-308 as float(53)) As bigint);
+----
+0
+
+query T
+select TRY_CAST(CAST(1.56 as real) As smallint);
+----
+1
+
+query T
+select TRY_CAST(CAST(-1.56 as real) As smallint);
+----
+-1
+
+query T
+select TRY_CAST(CAST(-3.40e38 as real) As smallint);
+----
+-9223372036854775808
+
+query T
+select TRY_CAST(CAST(-1.18e-38 as real) As smallint);
+----
+0
+
+query T
+select TRY_CAST(CAST(1.18e-38 as real) As smallint);
+----
+0
+
+query T
+select TRY_CAST(CAST(3.40e38 as real) As smallint);
+----
+9223372036854775807
+
+query T
+select TRY_CAST(CAST(1.56 as real) As int);
+----
+1
+
+query T
+select TRY_CAST(CAST(-1.56 as real) As int);
+----
+-1
+
+query T
+select TRY_CAST(CAST(-3.40e38 as real) As int);
+----
+-9223372036854775808
+
+query T
+select TRY_CAST(CAST(-1.18e-38 as real) As int);
+----
+0
+
+query T
+select TRY_CAST(CAST(1.18e-38 as real) As int);
+----
+0
+
+query T
+select TRY_CAST(CAST(3.40e38 as real) As int);
+----
+9223372036854775807
+
+query T
+select TRY_CAST(CAST(1.56 as real) As bigint);
+----
+1
+
+query T
+select TRY_CAST(CAST(-1.56 as real) As bigint);
+----
+-1
+
+query T
+select TRY_CAST(CAST(-3.40e38 as real) As bigint);
+----
+-9223372036854775808
+
+query T
+select TRY_CAST(CAST(-1.18e-38 as real) As bigint);
+----
+0
+
+query T
+select TRY_CAST(CAST(1.18e-38 as real) As bigint);
+----
+0
+
+query T
+select TRY_CAST(CAST(3.40e38 as real) As bigint);
+----
+9223372036854775807
+
+query T
+select TRY_CAST(CAST(1.56 as money) As smallint);
+----
+1
+
+query T
+select TRY_CAST(CAST(-1.56 as money) As smallint);
+----
+-1
+
+query T
+select (TRY_CAST(CAST(-922337203685477.5808 as money) As smallint));
+----
+-922337203685477
+
+query T
+select (TRY_CAST(CAST(922337203685477.5807 as money) As smallint));
+----
+922337203685477
+
+query T
+select TRY_CAST(CAST(1.56 as money) As int);
+----
+1
+
+query T
+select TRY_CAST(CAST(-1.56 as money) As int);
+----
+-1
+
+query T
+select (TRY_CAST(CAST(-922337203685477.5808 as money) As int));
+----
+-922337203685477
+
+query T
+select (TRY_CAST(CAST(922337203685477.5807 as money) As int));
+----
+922337203685477
+
+query T
+select TRY_CAST(CAST(1.56 as money) As bigint);
+----
+1
+
+query T
+select TRY_CAST(CAST(-1.56 as money) As bigint);
+----
+-1
+
+query T
+select (TRY_CAST(CAST(-922337203685477.5808 as money) As bigint));
+----
+-922337203685477
+
+query T
+select (TRY_CAST(CAST(922337203685477.5807 as money) As bigint));
+----
+922337203685477
+
+query T
+select TRY_CAST(CAST(1.56 as smallmoney) As smallint);
+----
+1
+
+query T
+select TRY_CAST(CAST(-1.56 as smallmoney) As smallint);
+----
+-1
+
+query T
+select (TRY_CAST(CAST(-214748.3648 as smallmoney) As smallint));
+----
+-214748
+
+query T
+select (TRY_CAST(CAST(214748.3647 as smallmoney) As smallint));
+----
+214748
+
+query T
+select TRY_CAST(CAST(1.56 as smallmoney) As int);
+----
+1
+
+query T
+select TRY_CAST(CAST(-1.56 as smallmoney) As int);
+----
+-1
+
+query T
+select TRY_CAST(CAST(-214748.3648 as smallmoney) As int);
+----
+-214748
+
+query T
+select TRY_CAST(CAST(214748.3647 as smallmoney) As int);
+----
+214748
+
+query T
+select TRY_CAST(CAST(1.56 as smallmoney) As bigint);
+----
+1
+
+query T
+select TRY_CAST(CAST(-1.56 as smallmoney) As bigint);
+----
+-1
+
+query T
+select TRY_CAST(CAST(-214748.3648 as smallmoney) As bigint);
+----
+-214748
+
+query T
+select TRY_CAST(CAST(214748.3647 as smallmoney) As bigint);
+----
+214748
+
+query T
+select TRY_CAST(4936.56 AS MONEY);
+----
+4936.560000
+
+query T
+select TRY_CAST(-4936.56 AS MONEY);
+----
+-4936.560000
+
+query T
+select TRY_CAST(TRY_CAST(4936.56 AS MONEY) AS varchar(10));
+----
+4936.56000
+
+query T
+select TRY_CAST(TRY_CAST(-4936.56 AS MONEY) AS varchar(10));
+----
+-4936.5600
+
+query T
+select TRY_CAST(4936.56 AS smallmoney);
+----
+4936.560000
+
+query T
+SELECT TRY_CAST(CAST(789.89 AS DECIMAL(10,2)) AS INT);
+----
+789
+
+query T
+SELECT TRY_CAST(CAST(789.89 AS DECIMAL(10,2)) AS SMALLINT);
+----
+789
+
+query T
+SELECT TRY_CAST(CAST(789.89 AS DECIMAL(10,2)) AS BIGINT);
+----
+789
+
+query T
+SELECT CAST(CAST(789.89 AS DECIMAL(10,2)) AS INT);
+----
+789
+
+query T
+SELECT CAST(CAST(789.89 AS DECIMAL(10,2)) AS SMALLINT);
+----
+789
+
+query T
+SELECT CAST(CAST(789.89 AS DECIMAL(10,2)) AS BIGINT);
+----
+789
+
+query T
+SELECT TRY_CAST(CAST('789.89' AS DECIMAL(10,2)) AS SMALLINT);
+----
+789
+
+query T
+SELECT TRY_CAST('789.89' AS INT);
+----
+789
+
+query T
+SELECT TRY_CAST('789' AS BIGINT);
+----
+789
+
+query T
+SELECT TRY_CONVERT(INT, CAST(789.89 AS DECIMAL(10,2)));
+----
+789
+
+query T
+SELECT TRY_CONVERT(SMALLINT, CAST(789.89 AS DECIMAL(10,2)));
+----
+789
+
+query T
+SELECT TRY_CONVERT(BIGINT, CAST(789.89 AS DECIMAL(10,2)));
+----
+789
+
+query T
+SELECT CONVERT(INT, CAST(789.89 AS DECIMAL(10,2)));
+----
+789
+
+query T
+SELECT CONVERT(SMALLINT, CAST(789.89 AS DECIMAL(10,2)));
+----
+789
+
+query T
+SELECT CONVERT(BIGINT, CAST(789.89 AS DECIMAL(10,2)));
+----
+789
+
+query T
+SELECT TRY_CONVERT(INT, CAST('789.89' AS DECIMAL(10,2)));
+----
+789
+
+query T
+SELECT TRY_CONVERT(SMALLINT, '789.89');
+----
+789
+
+query T
+SELECT TRY_CONVERT(BIGINT, '789');
+----
+789
+
+query T
+SELECT TRY_CAST(CAST(123.656 AS FLOAT) AS SMALLINT);
+----
+123
+
+query T
+SELECT TRY_CAST(CAST(123.656 AS FLOAT) AS INT);
+----
+123
+
+query T
+SELECT TRY_CAST(CAST(123.656 AS FLOAT) AS BIGINT);
+----
+123
+
+query T
+SELECT CAST(CAST(123.656 AS FLOAT) AS INT);
+----
+123
+
+query T
+SELECT CAST(CAST(123.656 AS FLOAT) AS SMALLINT);
+----
+123
+
+query T
+SELECT CAST(CAST(123.656 AS FLOAT) AS BIGINT);
+----
+123
+
+query T
+SELECT TRY_CONVERT(SMALLINT, CAST(123.656 AS FLOAT));
+----
+123
+
+query T
+SELECT TRY_CONVERT(INT, CAST(123.656 AS FLOAT));
+----
+123
+
+query T
+SELECT TRY_CONVERT(BIGINT, CAST(123.656 AS FLOAT));
+----
+123
+
+query T
+SELECT CONVERT(SMALLINT, CAST(123.656 AS FLOAT));
+----
+123
+
+query T
+SELECT CONVERT(INT, CAST(123.656 AS FLOAT));
+----
+123
+
+query T
+SELECT CONVERT(BIGINT, CAST(123.656 AS FLOAT));
+----
+123
+
+query T
+SELECT CONVERT(BIGINT, CAST('-123.456' AS FLOAT));
+----
+-123
+
+query T
+SELECT TRY_CONVERT(SMALLINT, CAST(-32768.1 AS FLOAT));
+----
+-32768
+
+query T
+SELECT TRY_CAST(CAST(9223372036854775806.9 AS FLOAT) AS BIGINT);
+----
+9223372036854775807
+
+query T
+SELECT CAST(CAST(9223372036854775806.9 AS FLOAT) AS BIGINT);
+----
+9223372036854775807
+
+query T
+SELECT CAST(CAST(0.000001 AS FLOAT) AS INT);
+----
+0
+
+query T
+DECLARE @f my_float_type = 456.789;
+SELECT CAST(@f AS INT);
+SELECT TRY_CAST(@f AS SMALLINT);
+SELECT CONVERT(BIGINT, @f);
+----
+456
+
+query T
+DECLARE @n my_numeric_type = 9999.9999;
+SELECT CAST(@n AS INT);
+SELECT TRY_CAST(@n AS SMALLINT);
+----
+9999
+
+query T
+DECLARE @m my_money_type = 1234.56;
+SELECT CAST(@m AS INT);
+SELECT TRY_CONVERT(SMALLINT, @m);
+----
+1234
+
+query T
+DECLARE @s my_smallmoney_type = 12.49;
+SELECT CAST(@s AS INT);
+SELECT TRY_CAST(@s AS SMALLINT);
+----
+12
+
+query T
+DECLARE @x my_money_type = NULL;
+SELECT TRY_CAST(@x AS INT);
+----
+NULL
+
+query T
+DECLARE @y my_float_type = NULL;
+SELECT CONVERT(SMALLINT, @y);
+----
+NULL
+

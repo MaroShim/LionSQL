@@ -1,0 +1,142 @@
+# test/slt_proc/babelfish_oracle/681_babel_operator_whitespace.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/operator_whitespace-vu-prepare.sql, test/babelfish/raw/operator_whitespace-vu-verify.sql, test/babelfish/raw/operator_whitespace-vu-cleanup.sql
+
+statement ok
+create table t1_operator_whitespace(a int)
+
+statement ok
+create view v1_operator_whitespace as
+select c1=1, c2=a from t1_operator_whitespace  where a = case when a!  >2 then a else 0 end 
+
+statement ok
+create procedure p1_operator_whitespace 
+as
+select a as p1 from t1_operator_whitespace where a ! = 2
+select a as p2 from t1_operator_whitespace where a ! 	 =2
+select a as q3 from t1_operator_whitespace where a !  	
+= 2
+select a as p4 from t1_operator_whitespace where a <   >2
+select a as p5 from t1_operator_whitespace where a <   	= 2
+select a as p6 from t1_operator_whitespace where a >   	=2
+select a as p7 from t1_operator_whitespace where a!<2
+select a as p8 from t1_operator_whitespace where a !< 2
+select a as p9 from t1_operator_whitespace where a ! 	  < 2
+select a as p10 from t1_operator_whitespace where a! 	  <2
+select a as p11 from t1_operator_whitespace where a !> 2
+select a as p12 from t1_operator_whitespace where a!>2
+select a as p13 from t1_operator_whitespace where a ! 	  > 2
+select a as p14 from t1_operator_whitespace where a! 	  >2
+select a as q15 from t1_operator_whitespace where a = case when a!  >2 then a else 0 end
+EXECUTE('select a as p16 from t1_operator_whitespace where a ! = 2')
+EXECUTE('select a as p17 from t1_operator_whitespace where a ! < 2')
+
+statement ok
+alter table t1_operator_whitespace add check(a!  <1)
+
+statement ok
+alter table t1_operator_whitespace add check(a<
+=3)
+
+statement ok
+insert t1_operator_whitespace values (1)
+insert t1_operator_whitespace values (2)
+insert t1_operator_whitespace values (3)
+
+query T
+select a from t1_operator_whitespace
+----
+1
+
+query T
+select a as q1 from t1_operator_whitespace where a != 2
+----
+1
+
+query T
+select a as q1 from t1_operator_whitespace where a ! = 2
+----
+1
+
+query T
+select a as q2 from t1_operator_whitespace where a ! 	 =2
+----
+1
+
+query T
+select a as q3 from t1_operator_whitespace where a !  	
+= 2
+----
+1
+
+query T
+select a as q4 from t1_operator_whitespace where a <   >2
+----
+1
+
+query T
+select a as q5 from t1_operator_whitespace where a <   	= 2
+----
+1
+
+statement ok
+select a as q6 from t1_operator_whitespace where a >   	=2
+
+statement ok
+select a as q7 from t1_operator_whitespace where a!<2
+
+statement ok
+select a as q8 from t1_operator_whitespace where a !< 2
+
+statement ok
+select a as q9 from t1_operator_whitespace where a ! 	  < 2
+
+statement ok
+select a as q10 from t1_operator_whitespace where a! 	  <2
+
+query T
+select a as q11 from t1_operator_whitespace where a !> 2
+----
+1
+
+query T
+select a as q12 from t1_operator_whitespace where a!>2
+----
+1
+
+query T
+select a as q13 from t1_operator_whitespace where a ! 	  > 2
+----
+1
+
+query T
+select a as q14 from t1_operator_whitespace where a! 	  >2
+----
+1
+
+query T
+select a as q15 from t1_operator_whitespace where a = case when a!  >2 then a else 0 end
+----
+1
+
+query T
+EXECUTE('select a as q16 from t1_operator_whitespace where a ! = 2')
+----
+1
+
+statement ok
+EXECUTE('select a as q17 from t1_operator_whitespace where a ! < 2')
+
+query T
+EXECUTE p1_operator_whitespace
+----
+1
+
+statement ok
+drop procedure p1_operator_whitespace 
+
+statement ok
+drop view v1_operator_whitespace
+
+statement ok
+drop table t1_operator_whitespace
+

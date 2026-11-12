@@ -1,0 +1,72 @@
+# test/slt_proc/babelfish_oracle/518_babel_babel_2303.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2303.sql
+
+statement ok
+DECLARE @tinyint tinyint = 5
+DECLARE @smallint smallint = 5
+DECLARE @int bigint = 5
+DECLARE @smallmoney smallmoney = 2
+DECLARE @money money = 2
+SELECT
+ @tinyint * @smallmoney AS should_be_10
+,@tinyint * @money AS should_be_10
+,@smallint * @smallmoney AS should_be_10
+,@smallint * @money AS should_be_10
+,@int * @smallmoney AS should_be_10
+,@int * @money AS should_be_10
+,@smallmoney * @tinyint AS should_be_10
+,@money * @tinyint AS should_be_10
+,@smallmoney * @smallint AS should_be_10
+,@money * @smallint AS should_be_10
+,@smallmoney * @int AS should_be_10
+,@money * @int AS should_be_10
+
+statement ok
+CREATE TABLE t1
+(
+ id int PRIMARY KEY IDENTITY
+,c_tinyint tinyint
+,c_smallint smallint
+,c_smallmoney smallmoney
+,c_money money
+,c_tinyint_m_smallmoney AS c_tinyint * c_smallmoney
+,c_tinyint_m_money AS c_tinyint * c_money
+,c_smallint_m_smallmoney AS c_smallint * c_smallmoney
+,c_smallint_m_money AS c_smallint * c_money
+,c_smallmoney_m_tinyint AS c_smallmoney * c_tinyint
+,c_money_m_tinyint AS c_money * c_tinyint
+,c_smallmoney_m_smallint AS c_smallmoney * c_smallint
+,c_money_m_smallint AS c_money * c_smallint
+)
+
+statement ok
+INSERT INTO t1(c_tinyint, c_smallint, c_smallmoney, c_money) VALUES(5,5,2,2)
+
+query TTTTTTTT
+SELECT c_tinyint_m_smallmoney, c_tinyint_m_money, c_smallint_m_smallmoney, c_smallint_m_money, c_smallmoney_m_tinyint, c_money_m_tinyint, c_smallmoney_m_smallint, c_money_m_smallint FROM t1
+----
+NULL NULL NULL NULL NULL NULL NULL NULL
+
+statement ok
+DECLARE @tinyint tinyint = 5
+DECLARE @smallint smallint = 5
+DECLARE @int bigint = 5
+DECLARE @smallmoney smallmoney = 2
+DECLARE @money money = 2
+SELECT
+ @tinyint / @smallmoney AS ts
+,@tinyint / @money AS tm
+,@smallint / @smallmoney AS ss
+,@smallint / @money AS sm
+,@int / @smallmoney AS ids
+,@int / @money AS im
+,@smallmoney / @tinyint AS st
+,@money / @tinyint AS mt
+,@smallmoney / @smallint AS ss
+,@money / @smallint AS ms
+,@smallmoney / @int AS si
+,@money / @int AS mi
+
+statement ok
+DROP TABLe t1;
+

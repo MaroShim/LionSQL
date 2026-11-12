@@ -1,0 +1,161 @@
+# test/slt_proc/babelfish_oracle/1568_babel_temp_table_visibility.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/temp_tables/temp_table_visibility-vu-prepare.sql, test/babelfish/raw/temp_tables/temp_table_visibility-vu-verify.sql, test/babelfish/raw/temp_tables/temp_table_visibility-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE object_id_inner_proc
+AS
+    if OBJECT_ID('#tmp') is not null 
+    begin
+        print 'end inner_proc'
+    end
+
+statement ok
+CREATE VIEW enr_view AS
+    SELECT
+        CASE
+            WHEN relname LIKE '#pg_toast%' AND relname LIKE '%index%' THEN '#pg_toast_#oid_masked#_index'
+            WHEN relname LIKE '#pg_toast%' THEN '#pg_toast_#oid_masked#'
+            ELSE relname
+        END AS relname
+    FROM sys.babelfish_get_enr_list()
+    ORDER BY relname COLLATE pg_c_utf8
+
+statement ok
+create proc babel_4122_proc @tabname varchar(30) as
+    if object_id(@tabname) is not null
+    begin
+        execute('select * from ' + @tabname)
+    end
+
+statement ok
+CREATE PROC p_truncate AS TRUNCATE TABLE #temptable5605
+
+statement ok
+CREATE PROC p_insert(@a INT) AS INSERT INTO #temptable5605 VALUES (@a);
+
+statement ok
+create table #t4122 (a int)
+insert #t4122 values(123)
+insert #t4122 values(456)
+
+statement ok
+if object_id('#t4122') is null
+    print 'fail'
+
+statement ok
+ALTER TABLE #sys_comprehensive ADD bonus MONEY CHECK (bonus >= 0 AND bonus <= 50000)
+
+statement ok
+ALTER TABLE #sys_comprehensive ADD CONSTRAINT chk_department CHECK (department IN ('Sales', 'Engineering', 'Marketing', 'Unknown'))
+
+statement ok
+CREATE TABLE #temp_table_with_computed_udf (
+	id INT PRIMARY KEY,
+	credit BIGINT,
+	debit BIGINT,
+	total as custom_adder(credit, debit)
+)
+
+statement ok
+CREATE TABLE #temp_table_with_default_udf (
+	num INT DEFAULT custom_adder(5,10)
+)
+
+statement ok
+CREATE TABLE #temp_table_with_default_udf (
+	num INT CHECK(custom_adder(num,10) > 100)
+)
+
+statement ok
+CREATE TABLE #temp_index1 (a INT, b VARCHAR(50));
+
+statement ok
+INSERT INTO #temp_index1 VALUES (1, 'one'), (2, 'two'), (3, 'three');
+
+statement ok
+DECLARE @sql1 NVARCHAR(MAX) = 'CREATE INDEX index1 ON #temp_index1(a)';
+EXEC SP_EXECUTESQL @sql1;
+
+query TTT
+SELECT * FROM #temp_index1 WHERE a = 2;
+----
+2 two 2
+
+statement ok
+DROP INDEX index1 ON #temp_index1;
+
+query TT
+SELECT * FROM #temp_index1 ORDER BY a;
+----
+1 one
+2 two
+3 three
+
+statement ok
+DROP TABLE #temp_index1;
+
+statement ok
+CREATE TABLE #temp_heap1 (a INT);
+
+statement ok
+INSERT INTO #temp_heap1 VALUES (1);
+
+statement ok
+DECLARE @sql2 NVARCHAR(MAX) = 'ALTER TABLE #temp_heap1 ADD col1 TEXT';
+EXEC SP_EXECUTESQL @sql2;
+
+statement ok
+UPDATE #temp_heap1 SET col1 = REPLICATE('x', 5000) WHERE a = 1;
+
+query TT
+SELECT a, LEN(col1) as col1_len FROM #temp_heap1;
+----
+1 5000
+
+statement ok
+DROP TABLE #temp_heap1;
+
+statement ok
+CREATE TABLE #temp_index2 (a INT);
+
+statement ok
+INSERT INTO #temp_index2 VALUES (1), (2), (3);
+
+statement ok
+DECLARE @sql4 NVARCHAR(MAX) = 'ALTER TABLE #temp_index2 ADD b INT DEFAULT 0';
+EXEC SP_EXECUTESQL @sql4;
+
+statement ok
+UPDATE #temp_index2 SET b = a * 10;
+
+statement ok
+DECLARE @sql5 NVARCHAR(MAX) = 'CREATE INDEX index2 ON #temp_index2(b)';
+EXEC SP_EXECUTESQL @sql5;
+
+query TTT
+SELECT * FROM #temp_index2 WHERE b > 10 ORDER BY b;
+----
+2 2 20
+3 3 30
+
+statement ok
+DROP INDEX index2 ON #temp_index2;
+
+statement ok
+DROP TABLE #temp_index2;
+
+statement ok
+drop procedure babel_4122_proc
+
+statement ok
+drop procedure object_id_inner_proc
+
+statement ok
+drop procedure p_truncate
+
+statement ok
+drop procedure p_insert
+
+statement ok
+drop view enr_view
+

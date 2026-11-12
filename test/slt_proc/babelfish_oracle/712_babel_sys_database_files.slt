@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/712_babel_sys_database_files.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-database_files.sql
+
+query TTTTTTTTTTTTTTTT
+select * from sys.database_files;
+----
+1 NULL 0 ROWS 1 lionsql_data lionsql.mdf 0 ONLINE 2048 -1 1024 false false false false
+2 NULL 1 LOG 0 lionsql_log lionsql_log.ldf 0 ONLINE 1024 -1 1024 false false false false
+

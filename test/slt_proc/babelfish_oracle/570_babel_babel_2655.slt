@@ -1,0 +1,28 @@
+# test/slt_proc/babelfish_oracle/570_babel_babel_2655.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/Babel-2655.sql
+
+statement ok
+CREATE TABLE t2218(c1 INT)
+INSERT INTO t2218 VALUES (2218)
+
+statement ok
+CREATE FUNCTION f2218() RETURNS INT AS BEGIN DECLARE @return INT SET @return = 0 SELECT @return=c1 from t2218 RETURN @return END
+
+query T
+select f2218()
+----
+0
+
+statement ok
+drop function f2218
+
+statement ok
+CREATE PROCEDURE p2655
+AS
+BEGIN
+   DECLARE @return INT SET @return = 0 SELECT @return=c1 from t2218
+END
+
+statement ok
+exec p2655
+

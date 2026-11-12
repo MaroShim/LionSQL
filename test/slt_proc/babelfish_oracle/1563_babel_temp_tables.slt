@@ -1,0 +1,58 @@
+# test/slt_proc/babelfish_oracle/1563_babel_temp_tables.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ddl/temp-tables-vu-prepare.sql, test/babelfish/raw/ddl/temp-tables-vu-verify.sql, test/babelfish/raw/ddl/temp-tables-vu-cleanup.sql
+
+statement ok
+use master
+
+statement ok
+CREATE TABLE temp_table_vu_prepare_t1 (col int);
+INSERT INTO temp_table_vu_prepare_t1 values (1);
+INSERT INTO temp_table_vu_prepare_t1 values (NULL);
+
+statement ok
+CREATE PROCEDURE temp_table_vu_prepare_sp AS
+BEGIN
+    SELECT * INTO #tt_sp_local FROM temp_table_vu_prepare_t1;
+    INSERT INTO #tt_sp_local VALUES(2);
+END;
+
+statement error
+CREATE procedure temp_table_vu_prepare_sp_exception AS
+BEGIN
+	  CREATE TABLE #tt (a int);
+	  CREATE TABLE #tt (a int); -- throws error
+END;
+
+statement ok
+use master
+
+statement ok
+CREATE TABLE #temp_table_create(a int, b nvarchar(200))
+
+statement ok
+DROP TABLE #temp_table_create
+
+statement ok
+CREATE TABLE #temp_table_alter1(col1 int)
+
+statement ok
+ALTER TABLE #temp_table_alter1 ADD col2 varchar(20)
+
+statement ok
+DROP TABLE #temp_table_alter1
+
+statement ok
+CREATE TABLE #temp_table_alter2(col1 int, col2 varchar(20))
+
+statement ok
+ALTER TABLE #temp_table_alter2 ADD col3 int IDENTITY(1, 1)
+
+statement ok
+use master
+
+statement ok
+DROP PROCEDURE temp_table_vu_prepare_sp;
+
+statement ok
+DROP TABLE temp_table_vu_prepare_t1;
+

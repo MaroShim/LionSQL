@@ -1,0 +1,125 @@
+# test/slt_proc/babelfish_oracle/1360_babel_babel_context_info.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_context_info-vu-prepare.sql, test/babelfish/raw/babel_context_info-vu-verify.sql, test/babelfish/raw/babel_context_info-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE BABEL_SET_CONTEXT_INFO
+    @context_info varbinary(128)
+AS
+BEGIN
+    EXEC sys.bbf_set_context_info @context_info
+END;
+
+statement ok
+CREATE PROCEDURE BABEL_GET_CONTEXT_INFO_WITH_PLP
+AS
+BEGIN
+    SELECT sys.bbf_get_context_info()
+END;
+
+statement ok
+CREATE PROCEDURE BABEL_GET_CONTEXT_INFO
+AS
+BEGIN
+    SELECT CONTEXT_INFO()
+END;
+
+statement ok
+CREATE VIEW BABEL_CONTEXT_INFO_VIEW AS
+    SELECT CONTEXT_INFO()
+
+statement ok
+SELECT context_info FROM sys.dm_exec_sessions WHERE session_id = @@SPID
+
+statement ok
+SELECT context_info FROM sys.dm_exec_sessions WHERE session_id = @@SPID
+
+statement ok
+DECLARE @context date = '2006-01-02'
+SET CONTEXT_INFO @context
+
+statement ok
+DECLARE @context datetime = '2006-01-02 15:04:05'
+SET CONTEXT_INFO @context
+
+statement ok
+DECLARE @context xml = '<root name="hello"></root>'
+SET CONTEXT_INFO @context
+
+statement ok
+DECLARE @context bit = 1
+SET CONTEXT_INFO @context
+
+statement ok
+DECLARE @context decimal(38, 6) = 12345678123456781234567812345678.123456
+SET CONTEXT_INFO @context
+
+statement ok
+DECLARE @context decimal(38, 6) = 12345678123456781234567812345678.123456
+SET CONTEXT_INFO @context
+
+statement ok
+DECLARE @context money = 12345678.12345678
+SET CONTEXT_INFO @context
+
+statement ok
+SET CONTEXT_INFO abc
+
+statement ok
+DECLARE @context varchar(10) = 'abc'
+SET CONTEXT_INFO @context
+
+statement ok
+DECLARE @context int = 2147483647
+SET CONTEXT_INFO @context
+
+statement ok
+DECLARE @context bigint = -9223372036854775808
+SET CONTEXT_INFO @context
+
+statement ok
+DECLARE @context smallint = -32768
+SET CONTEXT_INFO @context
+
+statement ok
+DECLARE @context tinyint = 255
+SET CONTEXT_INFO @context
+
+statement ok
+DECLARE @context float(53) = 12345678123456781234567812345678.123456
+SET CONTEXT_INFO @context
+
+statement ok
+DECLARE @context real = 12345678123456781234567812345678.123456
+SET CONTEXT_INFO @context
+
+statement ok
+SET CONTEXT_INFO 0
+
+statement ok
+SET CONTEXT_INFO NULL
+
+statement ok
+DECLARE @context int
+SET CONTEXT_INFO @context
+
+statement ok
+SET CONTEXT_INFO 0x123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567890
+
+statement ok
+SET CONTEXT_INFO 0x1234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678123456781234567812345678
+
+statement ok
+SELECT context_info FROM sys.dm_exec_sessions WHERE session_id = @@SPID
+
+statement ok
+DROP PROCEDURE BABEL_SET_CONTEXT_INFO
+
+statement ok
+DROP PROCEDURE BABEL_GET_CONTEXT_INFO_WITH_PLP
+
+statement ok
+DROP PROCEDURE BABEL_GET_CONTEXT_INFO
+
+statement ok
+DROP VIEW BABEL_CONTEXT_INFO_VIEW
+

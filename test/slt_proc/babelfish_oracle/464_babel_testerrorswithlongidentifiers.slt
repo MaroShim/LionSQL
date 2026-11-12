@@ -1,0 +1,258 @@
+# test/slt_proc/babelfish_oracle/464_babel_testerrorswithlongidentifiers.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/errorHandling/TestErrorsWithLongIdentifiers.sql
+
+statement ok
+create table babel6434_base_table (a int, b int, c varchar(100));
+
+statement ok
+create table babel6434_test_table_for_long_identifier_validation_that_exceeds_one_hundred_and_twenty_eight_characters_limit_in_babelfishxxxxxx (a int);
+
+statement ok
+create view babel6434_test_view_for_long_identifier_validation_that_exceeds_one_hundred_and_twenty_eight_characters_limit_in_babelfish_xxxxxx as select 1;
+
+statement ok
+select * into babel6434_test_selectinto_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxxxx from babel6434_base_table;
+
+statement ok
+create function babel6434_test_function_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxxxxxx() returns int as begin return 1 end;
+
+statement ok
+CREATE FUNCTION babel6434_test_tvf_function_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxx() RETURNS TABLE AS RETURN ( SELECT 1 AS Value);
+
+statement ok
+create procedure babel6434_test_procedure_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxxxxx as begin select 1; end
+
+statement ok
+CREATE TRIGGER babel6434_test_trigger_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_in_babelfishxxxxxxxx on babel6434_base_table AFTER INSERT AS BEGIN END;
+
+statement ok
+CREATE SEQUENCE babel6434_test_sequence_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfish_xxxxxxxxx
+
+statement ok
+create index babel6434_test_index_for_long_identifier_validation_that_exceeds_one_hundred_and_twenty_eight_characters_limit_babelfish_xxxxxxxx on babel6434_base_table(a);
+
+statement ok
+create table babel6434_col_test (babel6434_test_column_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfish_xxxxxxxxxxx int);
+
+statement ok
+create table babel6434_pk_test (id int, CONSTRAINT babel6434_test_pk_constraint_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxx PRIMARY KEY (id));
+
+statement ok
+alter table babel6434_base_table add CONSTRAINT babel6434_test_check_constraint_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_chars_limit_babelfishxxxxxxx CHECK (a > 0);
+
+statement ok
+alter table babel6434_base_table add CONSTRAINT babel6434_test_unique_constraint_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_chars_limit_babelfishxxxxxx UNIQUE (c);
+
+statement ok
+create table babel6434_fk_test (fk_id int, CONSTRAINT babel6434_test_fk_constraint_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxx FOREIGN KEY (fk_id) REFERENCES babel6434_pk_test(id));
+
+statement ok
+alter table babel6434_base_table add CONSTRAINT babel6434_test_default_constraint_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_chars_limit_bbfishxxxxxxxx DEFAULT 0 FOR b;
+
+statement ok
+create procedure babel6434_param_test_proc @babel6434_test_parameter_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxxxxx int as begin select 1; end
+
+statement ok
+create function babel6434_param_test_func (@babel6434_test_parameter_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxxxxx int) returns int as begin return 1 end;
+
+query T
+DECLARE @babel6434_test_variable_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxxxxx INT = 1;
+SELECT @babel6434_test_variable_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxxxxx;
+----
+1
+
+statement ok
+DECLARE babel6434_test_cursor_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxxxxxxx CURSOR FOR SELECT a FROM babel6434_base_table;
+
+statement ok
+DECLARE babel6434_test_cursor_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxxxxxxxx CURSOR FOR SELECT a FROM babel6434_base_table;
+
+statement ok
+drop table if exists babel6434_fk_test;
+
+statement ok
+drop table if exists babel6434_pk_test;
+
+statement ok
+drop table if exists babel6434_col_test;
+
+statement ok
+drop table if exists babel6434_base_table;
+
+statement ok
+CREATE DATABASE babel6434_test_database_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxxxxxx;
+
+statement ok
+CREATE SCHEMA babel6434_test_schema_for_long_identifier_validation_that_exceeds_one_hundred_and_twenty_eight_characters_limit_babelfishxxxxxxxx;
+
+statement ok
+CREATE LOGIN babel6434_test_login_for_long_identifier_validation_that_exceeds_one_hundred_and_twenty_eight_characters_limit_in_babelfishxxxxxx WITH PASSWORD = '12345678';
+
+statement ok
+CREATE ROLE babel6434_test_role_for_long_identifier_validation_that_exceeds_one_hundred_and_twenty_eight_characters_limit_in_babelfishxxxxxxx;
+
+statement ok
+CREATE TABLE #babel6434_test_temp_table_for_long_identifier_validation_that_exceeds_one_hundred_and_sixteen_charsxxxxxxxxxxxxxxxxxx (a int);
+
+statement ok
+CREATE TABLE [#babel6434_test_temp_table_for_long_identifier_validation_that_exceeds_one_hundred_and_sixteen_charsxxxxxxxxxxxxxxxxxx] (a int);
+
+statement ok
+CREATE FUNCTION [babel6434_test_function_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxxxxxx]() RETURNS INT AS BEGIN RETURN 1 END;
+
+statement ok
+CREATE TABLE babel6434_bracket_col_test ([babel6434_test_column_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfish_xxxxxxxxxxx] int);
+
+statement ok
+CREATE TABLE babel6434_bracket_idx_test (a int);
+
+statement ok
+CREATE INDEX [babel6434_test_index_for_long_identifier_validation_that_exceeds_one_hundred_and_twenty_eight_characters_limit_babelfish_xxxxxxxx] ON babel6434_bracket_idx_test(a);
+
+statement ok
+DROP TABLE IF EXISTS babel6434_bracket_idx_test;
+
+statement ok
+CREATE TABLE babel6434_bracket_src (a int);
+
+statement ok
+DROP TABLE IF EXISTS babel6434_bracket_src;
+
+statement ok
+CREATE TABLE babel6434_bracket_trg_test (a int);
+
+statement ok
+CREATE TRIGGER [babel6434_test_trigger_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_in_babelfishxxxxxxxx] ON babel6434_bracket_trg_test AFTER INSERT AS BEGIN END;
+
+statement ok
+DROP TABLE IF EXISTS babel6434_bracket_trg_test;
+
+statement ok
+CREATE SEQUENCE [babel6434_test_sequence_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfish_xxxxxxxxx];
+
+statement ok
+CREATE TABLE babel6434_bracket_pk_test (id int, CONSTRAINT [babel6434_test_pk_constraint_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxx] PRIMARY KEY (id));
+
+statement ok
+CREATE TABLE babel6434_bracket_chk_test (a int);
+
+statement ok
+ALTER TABLE babel6434_bracket_chk_test ADD CONSTRAINT [babel6434_test_check_constraint_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_chars_limit_babelfishxxxxxxx] CHECK (a > 0);
+
+statement ok
+DROP TABLE IF EXISTS babel6434_bracket_chk_test;
+
+statement ok
+CREATE TABLE babel6434_bracket_uq_test (c varchar(100));
+
+statement ok
+ALTER TABLE babel6434_bracket_uq_test ADD CONSTRAINT [babel6434_test_unique_constraint_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_chars_limit_babelfishxxxxxx] UNIQUE (c);
+
+statement ok
+DROP TABLE IF EXISTS babel6434_bracket_uq_test;
+
+statement ok
+CREATE SCHEMA [babel6434_test_schema_for_long_identifier_validation_that_exceeds_one_hundred_and_twenty_eight_characters_limit_babelfishxxxxxxxx];
+
+statement ok
+CREATE FUNCTION [babel6434_test_tvf_function_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxx]() RETURNS TABLE AS RETURN (SELECT 1 AS Value);
+
+statement ok
+CREATE TABLE babel6434_bracket_fk_ref (id int PRIMARY KEY);
+
+statement ok
+CREATE TABLE babel6434_bracket_fk_test (fk_id int, CONSTRAINT [babel6434_test_fk_constraint_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxx] FOREIGN KEY (fk_id) REFERENCES babel6434_bracket_fk_ref(id));
+
+statement ok
+DROP TABLE IF EXISTS babel6434_bracket_fk_test;
+
+statement ok
+DROP TABLE IF EXISTS babel6434_bracket_fk_ref;
+
+statement ok
+CREATE TABLE babel6434_bracket_def_test (a int);
+
+statement ok
+ALTER TABLE babel6434_bracket_def_test ADD CONSTRAINT [babel6434_test_default_constraint_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_chars_limit_bbfishxxxxxxxx] DEFAULT 0 FOR a;
+
+statement ok
+DROP TABLE IF EXISTS babel6434_bracket_def_test;
+
+statement ok
+CREATE DATABASE [babel6434_test_database_for_long_identifier_validation_that_exceeds_one_hundred_twenty_eight_characters_limit_babelfishxxxxxxxxxx];
+
+statement ok
+CREATE ROLE [babel6434_test_role_for_long_identifier_validation_that_exceeds_one_hundred_and_twenty_eight_characters_limit_in_babelfishxxxxxxx];
+
+query T
+SELECT 1 AS [babel6434_test_alias_for_long_identifier_validation_that_exceeds_one_hundred_and_twenty_eight_characters_limit_in_babelfishxxxxxx];
+----
+1
+
+statement ok
+CREATE TABLE [#babel6434_さささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささ] (a int);
+
+statement ok
+DROP TABLE IF EXISTS [#babel6434_さささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささ];
+
+statement ok
+CREATE TABLE [#babel6434_ささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささ] (a int);
+
+query T
+SELECT 1 AS babel6434_test_alias_for_long_identifier_validation_that_exceeds_one_hundred_and_twenty_eight_characters_limit_in_babelfishxxxxxx;
+----
+1
+
+statement ok
+CREATE TABLE babel6434_あああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ (a int);
+
+statement ok
+CREATE TABLE babel6434_mb_col_test (babel6434_いいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいいい int);
+
+statement ok
+CREATE FUNCTION babel6434_ううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううう() RETURNS INT AS BEGIN RETURN 1 END;
+
+statement ok
+CREATE TABLE #babel6434_さささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささ (a int);
+
+statement ok
+DROP TABLE IF EXISTS #babel6434_さささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささ;
+
+statement ok
+CREATE TABLE #babel6434_ささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささ (a int);
+
+query T
+SELECT 1 AS babel6434_おおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおおお;
+----
+1
+
+statement ok
+CREATE LOGIN babel6434_ううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううううう WITH PASSWORD = '123';
+
+statement ok
+CREATE TABLE babel6434_cursor_mb_test (a int);
+
+statement ok
+DECLARE babel6434_くくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくくく CURSOR FOR SELECT a FROM babel6434_cursor_mb_test;
+
+statement ok
+DROP TABLE IF EXISTS babel6434_cursor_mb_test;
+
+statement ok
+CREATE PROCEDURE babel6434_けけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけけ AS BEGIN SELECT 1; END
+
+statement ok
+CREATE VIEW babel6434_こここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここここ AS SELECT 1 AS val;
+
+statement ok
+CREATE TABLE babel6434_idx_mb_test (a int);
+
+statement ok
+CREATE INDEX babel6434_さささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささささ ON babel6434_idx_mb_test(a);
+
+statement ok
+DROP TABLE IF EXISTS babel6434_idx_mb_test;
+
+statement ok
+CREATE SCHEMA babel6434_ししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししししし;
+

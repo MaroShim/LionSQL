@@ -1,0 +1,146 @@
+# test/slt_proc/babelfish_oracle/661_babel_insteadof_nested_trigger_with_dml.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/triggers/insteadof_nested_trigger_with_dml-vu-prepare.sql, test/babelfish/raw/triggers/insteadof_nested_trigger_with_dml-vu-verify.sql, test/babelfish/raw/triggers/insteadof_nested_trigger_with_dml-vu-cleanup.sql
+
+statement ok
+create table insteadof_nested_trigger_with_dml_vu_prepare_t11(c1 int not null)
+
+statement ok
+create table insteadof_nested_trigger_with_dml_vu_prepare_t22(c1 int not null)
+
+statement ok
+create table insteadof_nested_trigger_with_dml_vu_prepare_t33(c1 int not null)
+
+statement ok
+insert into insteadof_nested_trigger_with_dml_vu_prepare_t11 values(1)
+
+statement ok
+insert into insteadof_nested_trigger_with_dml_vu_prepare_t22 values(1)
+
+statement ok
+insert into insteadof_nested_trigger_with_dml_vu_prepare_t33 values(1)
+
+statement ok
+create trigger insteadof_nested_trigger_with_dml_vu_prepare_trig11 on insteadof_nested_trigger_with_dml_vu_prepare_t11 INSTEAD OF insert as
+select 'nest level 1'
+insert into insteadof_nested_trigger_with_dml_vu_prepare_t22 values (2);
+
+statement ok
+create trigger insteadof_nested_trigger_with_dml_vu_prepare_trig22 on insteadof_nested_trigger_with_dml_vu_prepare_t22 INSTEAD OF insert as
+select 'nest level 2'
+insert into insteadof_nested_trigger_with_dml_vu_prepare_t33 values (2);
+
+statement ok
+create trigger insteadof_nested_trigger_with_dml_vu_prepare_trig33 on insteadof_nested_trigger_with_dml_vu_prepare_t33 INSTEAD OF insert as
+select 'nest level 3'
+
+statement ok
+create trigger insteadof_nested_trigger_with_dml_vu_prepare_trig44 on insteadof_nested_trigger_with_dml_vu_prepare_t11 INSTEAD OF update as
+select 'nest level 1'
+update insteadof_nested_trigger_with_dml_vu_prepare_t22 set c1 = 3 where c1 = 1 ;
+
+statement ok
+create trigger insteadof_nested_trigger_with_dml_vu_prepare_trig55 on insteadof_nested_trigger_with_dml_vu_prepare_t22 INSTEAD OF update as
+select 'nest level 2'
+update insteadof_nested_trigger_with_dml_vu_prepare_t33 set c1 = 3 where c1 = 1 ;
+
+statement ok
+create trigger insteadof_nested_trigger_with_dml_vu_prepare_trig66 on insteadof_nested_trigger_with_dml_vu_prepare_t33 INSTEAD OF update as
+select 'nest level 3'
+
+statement ok
+create trigger insteadof_nested_trigger_with_dml_vu_prepare_trig77 on insteadof_nested_trigger_with_dml_vu_prepare_t11 INSTEAD OF delete as
+select 'nest level 1'
+delete from insteadof_nested_trigger_with_dml_vu_prepare_t22 where c1 = 1 ;
+
+statement ok
+create trigger insteadof_nested_trigger_with_dml_vu_prepare_trig88 on insteadof_nested_trigger_with_dml_vu_prepare_t22 INSTEAD OF delete as
+select 'nest level 2'
+delete from insteadof_nested_trigger_with_dml_vu_prepare_t33 where c1 = 1 ;
+
+statement ok
+create trigger insteadof_nested_trigger_with_dml_vu_prepare_trig99 on insteadof_nested_trigger_with_dml_vu_prepare_t33 INSTEAD OF delete as
+select 'nest level 3'
+
+statement ok
+insert into insteadof_nested_trigger_with_dml_vu_prepare_t11 values(2)
+
+query T
+select * from insteadof_nested_trigger_with_dml_vu_prepare_t11
+----
+1
+2
+
+query T
+select * from insteadof_nested_trigger_with_dml_vu_prepare_t22
+----
+1
+2
+
+query T
+select * from insteadof_nested_trigger_with_dml_vu_prepare_t33
+----
+1
+2
+
+statement ok
+update insteadof_nested_trigger_with_dml_vu_prepare_t11 set c1 = 3 where c1 = 1 ;
+
+query T
+select * from insteadof_nested_trigger_with_dml_vu_prepare_t11
+----
+3
+2
+
+query T
+select * from insteadof_nested_trigger_with_dml_vu_prepare_t22
+----
+3
+2
+
+query T
+select * from insteadof_nested_trigger_with_dml_vu_prepare_t33
+----
+3
+2
+
+statement ok
+delete from insteadof_nested_trigger_with_dml_vu_prepare_t11 where c1 = 1 ;
+
+query T
+select * from insteadof_nested_trigger_with_dml_vu_prepare_t11
+----
+3
+2
+
+query T
+select * from insteadof_nested_trigger_with_dml_vu_prepare_t22
+----
+3
+2
+
+query T
+select * from insteadof_nested_trigger_with_dml_vu_prepare_t33
+----
+3
+2
+
+statement ok
+drop trigger insteadof_nested_trigger_with_dml_vu_prepare_trig11
+drop trigger insteadof_nested_trigger_with_dml_vu_prepare_trig22
+drop trigger insteadof_nested_trigger_with_dml_vu_prepare_trig33
+
+statement ok
+drop trigger insteadof_nested_trigger_with_dml_vu_prepare_trig44
+drop trigger insteadof_nested_trigger_with_dml_vu_prepare_trig55
+drop trigger insteadof_nested_trigger_with_dml_vu_prepare_trig66
+
+statement ok
+drop trigger insteadof_nested_trigger_with_dml_vu_prepare_trig77
+drop trigger insteadof_nested_trigger_with_dml_vu_prepare_trig88
+drop trigger insteadof_nested_trigger_with_dml_vu_prepare_trig99
+
+statement ok
+drop table insteadof_nested_trigger_with_dml_vu_prepare_t11
+drop table insteadof_nested_trigger_with_dml_vu_prepare_t22
+drop table insteadof_nested_trigger_with_dml_vu_prepare_t33
+

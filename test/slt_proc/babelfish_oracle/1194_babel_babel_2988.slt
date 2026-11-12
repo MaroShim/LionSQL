@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1194_babel_babel_2988.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2988.sql
+
+statement ok
+CREATE SCHEMA test authorization guest
+
+statement ok
+DROP SCHEMA test;
+

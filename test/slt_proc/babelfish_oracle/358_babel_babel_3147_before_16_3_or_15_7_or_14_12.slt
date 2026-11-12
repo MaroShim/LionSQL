@@ -1,0 +1,54 @@
+# test/slt_proc/babelfish_oracle/358_babel_babel_3147_before_16_3_or_15_7_or_14_12.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3147-before-16_3-or-15_7-or-14_12-vu-prepare.sql, test/babelfish/raw/BABEL-3147-before-16_3-or-15_7-or-14_12-vu-verify.sql, test/babelfish/raw/BABEL-3147-before-16_3-or-15_7-or-14_12-vu-cleanup.sql
+
+statement ok
+CREATE TABLE BABEL_3147_before_16_3_or_15_7_vu_prepare_t_1 (
+        c [int] NULL,
+        c_comp AS ISNULL(CONVERT(CHAR(1), 'A'), 'B')
+)
+
+statement ok
+CREATE TABLE BABEL_3147_before_16_3_or_15_7_vu_prepare_t_2 (
+        a numeric(6, 4),
+        b numeric(6, 3)
+)
+
+statement ok
+INSERT INTO BABEL_3147_before_16_3_or_15_7_vu_prepare_t_2 VALUES (10.1234, 10.123);
+INSERT INTO BABEL_3147_before_16_3_or_15_7_vu_prepare_t_2 VALUES (NULL, 101.123);
+
+statement ok
+CREATE TABLE BABEL_3147_before_16_3_or_15_7_vu_prepare_t_3 (
+        a decimal(6, 4),
+        b decimal(6, 3)
+)
+
+statement ok
+INSERT INTO BABEL_3147_before_16_3_or_15_7_vu_prepare_t_3 VALUES (10.1234, 10.123);
+INSERT INTO BABEL_3147_before_16_3_or_15_7_vu_prepare_t_3 VALUES (NULL, 101.123);
+
+statement ok
+INSERT INTO BABEL_3147_before_16_3_or_15_7_vu_prepare_t_1 VALUES(1)
+
+query T
+SELECT c_comp FROM BABEL_3147_before_16_3_or_15_7_vu_prepare_t_1
+----
+NULL
+
+query T
+SELECT ISNULL(a, b) FROM BABEL_3147_before_16_3_or_15_7_vu_prepare_t_2
+----
+10.1234
+101.123
+
+query T
+SELECT ISNULL(a, b) FROM BABEL_3147_before_16_3_or_15_7_vu_prepare_t_3
+----
+10.1234
+101.123
+
+statement ok
+DROP TABLE BABEL_3147_before_16_3_or_15_7_vu_prepare_t_1
+DROP TABLE BABEL_3147_before_16_3_or_15_7_vu_prepare_t_2
+DROP TABLE BABEL_3147_before_16_3_or_15_7_vu_prepare_t_3
+

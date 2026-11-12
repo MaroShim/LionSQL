@@ -1,0 +1,37 @@
+# test/slt_proc/babelfish_oracle/1492_babel_sys_filetables.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-filetables-vu-prepare.sql, test/babelfish/raw/views/sys-filetables-vu-verify.sql, test/babelfish/raw/views/sys-filetables-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE VIEW sys_filetables_vu_prepare_view AS
+SELECT * FROM sys.filetables
+
+statement ok
+CREATE PROC sys_filetables_vu_prepare_proc AS
+SELECT * FROM sys.filetables
+
+statement ok
+CREATE FUNCTION dbo.sys_filetables_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT COUNT(*) FROM sys.filetables)
+END
+
+statement ok
+USE master
+
+statement ok
+USE master
+
+statement ok
+DROP VIEW sys_filetables_vu_prepare_view
+
+statement ok
+DROP PROC sys_filetables_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_filetables_vu_prepare_func
+

@@ -1,0 +1,75 @@
+# test/slt_proc/babelfish_oracle/673_babel_nullabledatetime.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/nullableDatetime.sql
+
+statement ok
+CREATE TABLE nullableDatetime_Smalldatetime (c1 VARCHAR(32) NOT NULL, c2 SMALLDATETIME NULL);
+
+statement ok
+INSERT INTO nullableDatetime_Smalldatetime ( c1 ) VALUES ('First');
+
+statement ok
+INSERT INTO nullableDatetime_Smalldatetime ( c1 ) VALUES ('Second');
+
+query TT
+SELECT * FROM nullableDatetime_Smalldatetime;
+----
+First NULL
+Second NULL
+
+statement ok
+DROP TABLE nullableDatetime_Smalldatetime;
+
+statement ok
+CREATE TABLE nullableDatetime_Datetime (c1 VARCHAR(32) NOT NULL, c2 DATETIME NULL);
+
+statement ok
+INSERT INTO nullableDatetime_Datetime ( c1 ) VALUES ('First');
+
+statement ok
+INSERT INTO nullableDatetime_Datetime ( c1 ) VALUES ('Second');
+
+query TT
+SELECT * FROM nullableDatetime_Datetime;
+----
+First NULL
+Second NULL
+
+statement ok
+DROP TABLE nullableDatetime_Datetime;
+
+statement ok
+CREATE TABLE nullableDatetime_Datetime2 (c1 VARCHAR(32) NOT NULL, c2 DATETIME2(3) NULL);
+
+statement ok
+INSERT INTO nullableDatetime_Datetime2 ( c1 ) VALUES ('First');
+
+statement ok
+INSERT INTO nullableDatetime_Datetime2 ( c1 ) VALUES ('Second');
+
+query TT
+SELECT * FROM nullableDatetime_Datetime2;
+----
+First NULL
+Second NULL
+
+statement ok
+DROP TABLE nullableDatetime_Datetime2;
+
+statement ok
+CREATE TABLE nullableDatetime_Datetimeoffset (c1 VARCHAR(32) NOT NULL, c2 DATETIMEOFFSET(5) NULL);
+
+statement ok
+INSERT INTO nullableDatetime_Datetimeoffset ( c1 ) VALUES ('First');
+
+statement ok
+INSERT INTO nullableDatetime_Datetimeoffset ( c1 ) VALUES ('Second');
+
+query TT
+SELECT * FROM nullableDatetime_Datetimeoffset;
+----
+First NULL
+Second NULL
+
+statement ok
+DROP TABLE nullableDatetime_Datetimeoffset;
+

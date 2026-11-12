@@ -1,0 +1,36 @@
+# test/slt_proc/babelfish_oracle/1566_babel_temp_table_long_name_enr.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/temp_tables/temp_table_long_name_enr-vu-prepare.sql, test/babelfish/raw/temp_tables/temp_table_long_name_enr-vu-verify.sql, test/babelfish/raw/temp_tables/temp_table_long_name_enr-vu-cleanup.sql
+
+statement ok
+CREATE TABLE #temp_table_with_a_very_long_name_that_exceeds_namedatalen_limit (a INT, b VARCHAR(50))
+
+statement ok
+INSERT INTO #temp_table_with_a_very_long_name_that_exceeds_namedatalen_limit VALUES (1, 'hello')
+
+query TT
+SELECT * FROM #temp_table_with_a_very_long_name_that_exceeds_namedatalen_limit
+----
+1 hello
+
+query T
+SELECT CASE WHEN OBJECT_ID('tempdb..#temp_table_with_a_very_long_name_that_exceeds_namedatalen_limit') IS NOT NULL THEN 'FOUND' ELSE 'NOT FOUND' END AS object_id_check
+----
+FOUND
+
+statement ok
+DROP TABLE #temp_table_with_a_very_long_name_that_exceeds_namedatalen_limit
+
+statement ok
+CREATE TABLE #temp_table_name_just_over_the_namedatalen_boundary_of_64_bytess (y INT)
+
+statement ok
+INSERT INTO #temp_table_name_just_over_the_namedatalen_boundary_of_64_bytess VALUES (100)
+
+query T
+SELECT * FROM #temp_table_name_just_over_the_namedatalen_boundary_of_64_bytess
+----
+100
+
+statement ok
+DROP TABLE #temp_table_name_just_over_the_namedatalen_boundary_of_64_bytess
+

@@ -1,0 +1,51 @@
+# test/slt_proc/babelfish_oracle/1461_babel_schema_resolution_trigger.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ownership/schema_resolution_trigger-vu-prepare.sql, test/babelfish/raw/ownership/schema_resolution_trigger-vu-verify.sql
+
+statement ok
+create schema schema_resolution_trigger_s1
+
+statement ok
+create table schema_resolution_trigger_t1(dbo_t1 int)
+
+statement ok
+create table schema_resolution_trigger_s1.schema_resolution_trigger_t1(s1_t1 int, s1_t2 int)
+
+statement ok
+create table schema_resolution_trigger_mytab(dbo_mytab int)
+
+statement ok
+create table schema_resolution_trigger_s1.schema_resolution_trigger_mytab(s1_mytab int)
+
+statement ok
+BEGIN TRAN
+
+statement ok
+insert into dbo.schema_resolution_trigger_mytab values(1)
+
+statement ok
+insert into schema_resolution_trigger_s1.schema_resolution_trigger_mytab values(1)
+
+statement ok
+drop table schema_resolution_trigger_s1.schema_resolution_trigger_t1
+
+statement ok
+insert into schema_resolution_trigger_s1.schema_resolution_trigger_mytab values(1)
+
+statement ok
+drop table schema_resolution_trigger_t1
+
+statement ok
+insert into schema_resolution_trigger_s1.schema_resolution_trigger_mytab values(1)
+
+statement ok
+insert into schema_resolution_trigger_s1.schema_resolution_trigger_mytab values(1)
+
+statement ok
+drop table schema_resolution_trigger_mytab
+
+statement ok
+drop table schema_resolution_trigger_s1.schema_resolution_trigger_mytab
+
+statement ok
+drop schema schema_resolution_trigger_s1
+

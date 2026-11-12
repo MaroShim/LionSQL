@@ -1,0 +1,21 @@
+# test/slt_proc/strings/051_stuff_replicate_agg_05.slt
+# T-SQL STUFF, REPLICATE, CONCAT_WS, and STRING_AGG (5)
+
+query TTT
+SELECT STUFF('USER_ACCOUNT', 6, 7, 'PROFILE'), REPLICATE('#', 6), CONCAT_WS('/', 'dev', 'stage', 'prod');
+----
+USER_PROFILE ###### dev/stage/prod
+
+statement ok
+CREATE TABLE sagg_51 (id INT PRIMARY KEY, label VARCHAR(30));
+
+statement ok
+INSERT INTO sagg_51 VALUES (1, 'dev'), (2, 'stage'), (3, 'prod');
+
+query T
+SELECT STRING_AGG(label, '/') FROM sagg_51;
+----
+dev/stage/prod
+
+statement ok
+DROP TABLE sagg_51;

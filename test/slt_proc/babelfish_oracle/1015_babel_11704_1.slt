@@ -1,0 +1,68 @@
+# test/slt_proc/babelfish_oracle/1015_babel_11704_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/11704_1.sql
+
+statement ok
+DROP SEQUENCE s11704
+
+statement ok
+CREATE SEQUENCE s11704
+start with 5
+increment by 1
+
+statement ok
+begin transaction
+
+statement ok
+DROP SEQUENCE s11704
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE SEQUENCE s11704
+start with 5
+increment by 1
+
+statement ok
+begin transaction
+
+statement ok
+DROP SEQUENCE s11704
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure ErrorHandling2 as
+begin
+exec ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+DROP SEQUENCE s11704
+
+statement ok
+set xact_abort ON;
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+begin transaction;
+
+statement ok
+DROP SEQUENCE s11704
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+DROP SEQUENCE s11704
+

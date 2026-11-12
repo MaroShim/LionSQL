@@ -128,7 +128,7 @@ func TestStartupBanner_MemoryPerformanceDeprecationNotice(t *testing.T) {
 	defaultCfg := config.DefaultConfig()
 	defaultCfg.Auth.AdminPass = "strong-non-default-pass"
 	defaultBanner := renderStartupBanner(defaultCfg, ctx)
-	if !strings.Contains(defaultBanner, "Memory: compact\n") {
+	if !strings.Contains(defaultBanner, "Memory: compact") {
 		t.Fatalf("expected default banner to show clean Memory: compact, got:\n%s", defaultBanner)
 	}
 	if strings.Contains(defaultBanner, "DEPRECATED") {
@@ -143,7 +143,7 @@ func TestStartupBanner_MemoryPerformanceDeprecationNotice(t *testing.T) {
 		t.Fatalf("expected GetMemory() to remain %q in v1.0, got %q", "performance", got)
 	}
 	perfBanner := renderStartupBanner(perfCfg, ctx)
-	if !strings.Contains(perfBanner, "Memory: performance [DEPRECATED: use compact]\n") {
+	if !strings.Contains(perfBanner, "Memory: performance [DEPRECATED: use compact]") {
 		t.Fatalf("expected performance banner to include deprecation notice, got:\n%s", perfBanner)
 	}
 

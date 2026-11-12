@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1236_babel_babel_4406.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4406.sql
+
+statement ok
+SELECT COLUMN_NAME from master.[JDG_Refund_Requests].information_schema.columns where [TABLE_NAME] = 'vw_All_Requests'
+
+statement ok
+SELECT COLUMN_NAME from merge.[JDG_Refund_Requests].information_schema.columns where [TABLE_NAME] = 'vw_All_Requests'
+

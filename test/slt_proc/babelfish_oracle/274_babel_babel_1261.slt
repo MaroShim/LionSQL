@@ -1,0 +1,50 @@
+# test/slt_proc/babelfish_oracle/274_babel_babel_1261.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1261.sql
+
+statement ok
+CREATE PROCEDURE sp_babel_1261_1 (@a SMALLINT OUTPUT) AS
+BEGIN
+  SET @a=100;
+  select @a as a;
+END;
+
+query T
+exec sp_babel_1261_1 2;
+----
+100
+
+statement ok
+CREATE PROCEDURE sp_babel_1261_2 (@a SMALLINT OUTPUT, @b SMALLINT OUTPUT) AS
+BEGIN
+  SET @a=100;
+  SET @b=200;
+  select @a+@b as r;
+END;
+
+query T
+EXEC sp_babel_1261_2 2, 3;
+----
+300
+
+query T
+DECLARE @a INT;
+EXEC sp_babel_1261_2 @a OUT, 3;
+SELECT @a;
+----
+100
+
+query T
+DECLARE @b INT;
+EXEC sp_babel_1261_2 2, @b OUT;
+SELECT @b;
+----
+200
+
+query T
+DECLARE @a INT;
+DECLARE @b INT;
+EXEC sp_babel_1261_2 @a OUT, @b OUT;
+SELECT @a+@b;
+----
+300
+

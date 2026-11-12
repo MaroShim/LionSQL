@@ -1,0 +1,33 @@
+# test/slt_proc/babelfish_oracle/568_babel_babel_4320.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_4320.sql
+
+query T
+SELECT 
+CASE 
+	WHEN (EXISTS (SELECT * FROM INFORMATION_SCHEMA.test)) THEN 'TRUE'
+	ELSE 'FALSE'
+END
+----
+FALSE
+
+statement ok
+CREATE TABLE [dbo].[My_Table_4320](
+    [My_ID] [varchar](3) NOT NULL,
+    [My_Column] [varchar](250) NOT NULL
+)
+
+statement ok
+CREATE TABLE ncHdbdnjcnkejnjkcnreunjaknsaowlmfkrngvurtkanajhruddhbcmiuqwpalkdmfhcnbxndwue (a int)
+
+statement ok
+CREATE TABLE jakldnhjcDhdeuqpdkancjdtueqjanckdalejnxutuwmxdjajcneiqmalnfenirlenlaplqirncsrju (ncHdbdnjcnkejnjkcnreunjaknsaowlmfkrngvurtkanajhruddhbcmiuqwpalkdmfhcnbxndwue int)
+
+statement ok
+DROP TABLE jakldnhjcDhdeuqpdkancjdtueqjanckdalejnxutuwmxdjajcneiqmalnfenirlenlaplqirncsrju;
+
+statement ok
+DROP TABLE ncHdbdnjcnkejnjkcnreunjaknsaowlmfkrngvurtkanajhruddhbcmiuqwpalkdmfhcnbxndwue;
+
+statement ok
+DROP TABLE [dbo].[My_Table_4320];
+

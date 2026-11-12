@@ -1,0 +1,52 @@
+# test/slt_proc/babelfish_oracle/706_babel_switchoffset_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/switchoffset-dep-vu-prepare.sql, test/babelfish/raw/switchoffset-dep-vu-verify.sql, test/babelfish/raw/switchoffset-dep-vu-cleanup.sql
+
+statement ok
+CREATE VIEW switchoffset_dep_vu_prepare_v1 as (Select switchoffset('2000-04-22 16:2a:51.766890',340));
+
+statement ok
+CREATE VIEW switchoffset_dep_vu_prepare_v2 as (Select switchoffset('2000-04-22 ','+12:00'));
+
+statement ok
+CREATE PROCEDURE  switchoffset_dep_vu_prepare_p1 as (SELECT switchoffset(cast('2023-08-08 16:06:45' as datetime2), '-13:00'));
+
+statement ok
+CREATE PROCEDURE  switchoffset_dep_vu_prepare_p2 as (Select switchoffset('2000-04-22 16:23:51',120));
+
+statement ok
+CREATE FUNCTION switchoffset_dep_vu_prepare_f1()
+RETURNS DATETIMEOFFSET AS
+BEGIN
+RETURN (Select switchoffset('2000-0a-22 ','+12:00'));
+END
+
+statement ok
+CREATE FUNCTION switchoffset_dep_vu_prepare_f2()
+RETURNS DATETIMEOFFSET as
+begin
+RETURN (Select switchoffset('2000-04-22 16:23:50.76689',120));
+END
+
+query T
+SELECT switchoffset_dep_vu_prepare_f1()
+----
+NULL
+
+statement ok
+DROP VIEW switchoffset_dep_vu_prepare_v1
+
+statement ok
+DROP VIEW switchoffset_dep_vu_prepare_v2
+
+statement ok
+DROP PROCEDURE switchoffset_dep_vu_prepare_p1
+
+statement ok
+DROP PROCEDURE switchoffset_dep_vu_prepare_p2
+
+statement ok
+DROP FUNCTION switchoffset_dep_vu_prepare_f1()
+
+statement ok
+DROP FUNCTION switchoffset_dep_vu_prepare_f2()
+

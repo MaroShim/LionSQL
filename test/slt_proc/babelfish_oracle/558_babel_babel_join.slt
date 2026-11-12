@@ -1,0 +1,28 @@
+# test/slt_proc/babelfish_oracle/558_babel_babel_join.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-JOIN.sql
+
+statement ok
+CREATE TABLE t1(
+	id INT,
+	comment NVARCHAR(20)
+) 
+
+statement ok
+CREATE TABLE t2(
+	id INT,
+	t1_id INT,
+	PRIMARY KEY(id ASC)
+) 
+
+statement ok
+INSERT t1 VALUES (1, 'test')	
+
+query TTTT
+select * from t1 a left join t2 b on b.t1_id = a.id 
+----
+1 test NULL NULL
+
+statement ok
+DROP Table t1
+DROP Table t2
+

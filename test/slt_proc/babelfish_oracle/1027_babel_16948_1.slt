@@ -1,0 +1,205 @@
+# test/slt_proc/babelfish_oracle/1027_babel_16948_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/16948_1.sql
+
+statement ok
+CREATE TABLE t16948(c1 int)
+
+statement ok
+INSERT INTO t16948 (c1)
+VALUES
+(10),
+(3),
+(8)
+
+statement ok
+DECLARE @notCursor INT
+DECLARE @c1 INT 
+DECLARE tcursor CURSOR FOR 
+SELECT c1 
+FROM t16948
+OPEN tcursor  
+FETCH NEXT FROM @notCursor INTO @c1  
+CLOSE tcursor  
+DEALLOCATE tcursor 
+
+statement ok
+DROP TABLE t16948
+
+statement ok
+begin transaction
+
+statement ok
+CREATE TABLE t16948(c1 int)
+
+statement ok
+INSERT INTO t16948 (c1)
+VALUES
+(10),
+(3),
+(8)
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+DROP TABLE t16948
+
+statement ok
+create schema error_mapping;
+
+statement ok
+create table error_mapping.temp1 (a int)
+
+statement ok
+CREATE TABLE t16948(c1 int)
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+insert into error_mapping.temp1 values(1)
+DECLARE @notCursor INT
+DECLARE @c1 INT 
+DECLARE tcursor CURSOR FOR 
+SELECT c1 
+FROM t16948
+OPEN tcursor  
+FETCH NEXT FROM @notCursor INTO @c1  
+CLOSE tcursor  
+DEALLOCATE tcursor 
+end
+
+statement ok
+DROP TABLE t16948
+
+statement ok
+create table error_mapping.temp2 (a int)
+
+statement ok
+CREATE TABLE t16948(c1 int)
+
+statement ok
+DROP TABLE t16948
+
+statement ok
+create table error_mapping.temp3 (a int)
+
+statement ok
+CREATE TABLE t16948(c1 int)
+
+statement ok
+DROP TABLE t16948
+
+statement ok
+drop procedure error_mapping.ErrorHandling1;
+
+statement ok
+drop table error_mapping.temp1;
+drop table error_mapping.temp2;
+drop table error_mapping.temp3;
+
+statement ok
+CREATE TABLE t16948(c1 int)
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+DECLARE @notCursor INT
+DECLARE @c1 INT 
+DECLARE tcursor CURSOR FOR 
+SELECT c1 
+FROM t16948
+OPEN tcursor  
+FETCH NEXT FROM @notCursor INTO @c1  
+CLOSE tcursor  
+DEALLOCATE tcursor 
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('Compile time error' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP TABLE t16948
+
+statement ok
+CREATE TABLE t16948(c1 int)
+
+statement ok
+begin transaction
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+DECLARE @notCursor INT
+DECLARE @c1 INT 
+DECLARE tcursor CURSOR FOR 
+SELECT c1 
+FROM t16948
+OPEN tcursor  
+FETCH NEXT FROM @notCursor INTO @c1  
+CLOSE tcursor  
+DEALLOCATE tcursor 
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP TABLE t16948
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t16948(c1 int)
+
+statement ok
+begin transaction
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+DECLARE @notCursor INT
+DECLARE @c1 INT 
+DECLARE tcursor CURSOR FOR 
+SELECT c1 
+FROM t16948
+OPEN tcursor  
+FETCH NEXT FROM @notCursor INTO @c1  
+CLOSE tcursor  
+DEALLOCATE tcursor 
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP TABLE t16948
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE TABLE t16948(c1 int)
+
+statement ok
+DROP TABLE t16948
+
+statement ok
+drop schema error_mapping;
+

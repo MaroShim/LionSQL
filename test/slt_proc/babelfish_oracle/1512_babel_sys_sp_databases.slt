@@ -1,0 +1,36 @@
+# test/slt_proc/babelfish_oracle/1512_babel_sys_sp_databases.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-sp_databases-vu-prepare.sql, test/babelfish/raw/views/sys-sp_databases-vu-verify.sql, test/babelfish/raw/views/sys-sp_databases-vu-cleanup.sql
+
+statement ok
+create database sys_sp_databases_vu_prepare_db1;
+
+statement ok
+use sys_sp_databases_vu_prepare_db1;
+
+statement ok
+create table sys_sp_databases_vu_prepare_t1(a int);
+
+statement ok
+insert into sys_sp_databases_vu_prepare_t1(a) values(10);
+
+statement ok
+insert into sys_sp_databases_vu_prepare_t1(a) values(10);
+
+statement ok
+insert into sys_sp_databases_vu_prepare_t1(a) values(10);
+
+statement ok
+insert into sys_sp_databases_vu_prepare_t1(a) values(10);
+
+statement ok
+use sys_sp_databases_vu_prepare_db1;
+
+statement ok
+use sys_sp_databases_vu_prepare_db1;
+
+statement ok
+drop table sys_sp_databases_vu_prepare_t1;
+
+statement ok
+use master;
+

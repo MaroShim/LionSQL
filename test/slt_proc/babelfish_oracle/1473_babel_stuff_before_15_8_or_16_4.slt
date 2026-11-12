@@ -1,0 +1,1776 @@
+# test/slt_proc/babelfish_oracle/1473_babel_stuff_before_15_8_or_16_4.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/string_functions/stuff-before-15_8-or-16_4-vu-prepare.sql, test/babelfish/raw/functions/string_functions/stuff-before-15_8-or-16_4-vu-verify.sql, test/babelfish/raw/functions/string_functions/stuff-before-15_8-or-16_4-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_4838_stuff_t1(a NCHAR(50))
+
+statement ok
+INSERT INTO babel_4838_stuff_t1 VALUES(N'abc🙂defghi🙂🙂')
+INSERT INTO babel_4838_stuff_t1 VALUES(N'比尔·拉莫斯')
+
+statement ok
+CREATE TABLE babel_4838_stuff_t2(a NVARCHAR(50))
+
+statement ok
+INSERT INTO babel_4838_stuff_t2 VALUES(N'abc🙂defghi🙂🙂')
+
+statement ok
+CREATE TABLE babel_4838_stuff_t3(a CHAR(50))
+
+statement ok
+INSERT INTO babel_4838_stuff_t3 VALUES('abcdefghi')
+
+statement ok
+CREATE TABLE babel_4838_stuff_t4(a VARCHAR(50))
+
+statement ok
+INSERT INTO babel_4838_stuff_t4 VALUES('abcdefghi')
+
+statement ok
+CREATE TABLE babel_4838_stuff_t5(a VARBINARY(50))
+
+statement ok
+INSERT INTO babel_4838_stuff_t5 VALUES(0x2020616263642020)
+
+statement ok
+CREATE TABLE babel_4838_stuff_chinese_prc_ci_as(a VARCHAR(50) COLLATE CHINESE_PRC_CI_AS)
+
+statement ok
+INSERT INTO babel_4838_stuff_chinese_prc_ci_as VALUES(N'比尔·拉莫斯')
+
+statement ok
+CREATE TABLE babel_4838_stuff_chinese_prc_cs_as(a VARCHAR(50) COLLATE CHINESE_PRC_CS_AS)
+
+statement ok
+INSERT INTO babel_4838_stuff_chinese_prc_cs_as VALUES(N'比尔·拉莫斯')
+
+statement ok
+CREATE TABLE babel_4838_stuff_chinese_prc_ci_ai(a VARCHAR(50) COLLATE CHINESE_PRC_CI_AI)
+
+statement ok
+INSERT INTO babel_4838_stuff_chinese_prc_ci_ai VALUES(N'比尔·拉莫斯')
+
+statement ok
+CREATE TABLE babel_4838_stuff_arabic_ci_as(a VARCHAR(50) COLLATE ARABIC_CI_AS)
+
+statement ok
+INSERT INTO babel_4838_stuff_arabic_ci_as VALUES(N'الله مع المتقين')
+
+statement ok
+CREATE TABLE babel_4838_stuff_arabic_cs_as(a VARCHAR(50) COLLATE ARABIC_CS_AS)
+
+statement ok
+INSERT INTO babel_4838_stuff_arabic_cs_as VALUES(N'الله مع المتقين')
+
+statement ok
+CREATE TABLE babel_4838_stuff_arabic_ci_ai(a VARCHAR(50) COLLATE ARABIC_CI_AI)
+
+statement ok
+INSERT INTO babel_4838_stuff_arabic_ci_ai VALUES(N'الله مع المتقين')
+
+statement ok
+CREATE TABLE babel_4838_stuff_image(a IMAGE)
+
+statement ok
+INSERT INTO babel_4838_stuff_image values(CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS image))
+
+statement ok
+CREATE TABLE babel_4838_stuff_text(a TEXT, b NTEXT)
+
+statement ok
+INSERT INTO babel_4838_stuff_text VALUES (N'abc🙂defghi🙂🙂', N'abc🙂defghi🙂🙂')
+
+statement ok
+CREATE TABLE babel_4838_stuff_UDT(a dbo.babel_4838_stuff_imageUDT, b dbo.babel_4838_stuff_varUDT)
+
+statement ok
+INSERT INTO babel_4838_stuff_UDT VALUES(CAST('abcdef' as dbo.babel_4838_stuff_imageUDT), CAST('abcdef' as dbo.babel_4838_stuff_varUDT))
+
+statement ok
+CREATE VIEW babel_4838_stuff_dep_view AS
+    SELECT stuff(a, 4, 2, 'xyz🙂🙂wuytgdy🙂') as result from babel_4838_stuff_t2
+
+statement ok
+CREATE PROCEDURE babel_4838_stuff_dep_proc AS
+    SELECT stuff(a, 4, 2, 'xyz🙂🙂wuytgdy🙂') as result from babel_4838_stuff_t2
+
+statement ok
+CREATE FUNCTION babel_4838_stuff_dep_func()
+RETURNS NVARCHAR(200)
+AS
+BEGIN
+RETURN (SELECT TOP 1 stuff(a, 4, 2, 'xyz🙂🙂wuytgdy🙂') from babel_4838_stuff_t2)
+END
+
+statement ok
+CREATE VIEW babel_4838_stuff_dep_view_1 AS
+    SELECT stuff(a, 4, 2, 'xyz🙂🙂wuytgdy🙂') as result FROM babel_4838_stuff_t1
+
+statement ok
+CREATE VIEW babel_4838_stuff_dep_view_2 AS
+    SELECT stuff(a, 4, 2, 'xyz🙂🙂wuytgdy🙂') as result FROM babel_4838_stuff_t2
+
+statement ok
+CREATE VIEW babel_4838_stuff_dep_view_3 AS
+    SELECT stuff(a, 4, 2, 'xyz🙂🙂wuytgdy🙂') as result FROM babel_4838_stuff_t3
+
+statement ok
+CREATE VIEW babel_4838_stuff_dep_view_4 AS
+    SELECT stuff(a, 4, 2, 'xyz🙂🙂wuytgdy🙂') as result FROM babel_4838_stuff_t4
+
+statement ok
+CREATE VIEW babel_4838_stuff_dep_view_5 AS
+    SELECT stuff(a, 4, 2, 0x6566) as result FROM babel_4838_stuff_t5
+
+statement ok
+CREATE FUNCTION babel_4838_stuff_itvf_func()
+RETURNS TABLE
+AS
+RETURN (SELECT stuff(a, 4, 2, 'xyz🙂🙂wuytgdy🙂') as result from babel_4838_stuff_t2)
+
+query T
+SELECT stuff(NULL, 2, 1, 'ab')
+----
+NULL
+
+query T
+SELECT stuff('ab', 2, 1, NULL)
+----
+NULL
+
+query T
+SELECT stuff('ab', NULL, 1, 'bc')
+----
+NULL
+
+query T
+SELECT stuff('ab', 2, NULL, 'bc')
+----
+NULL
+
+query T
+SELECT stuff('ab', NULL, '1', 'bc')
+----
+NULL
+
+query T
+SELECT stuff('ab', '2', NULL, 'bc')
+----
+NULL
+
+query T
+SELECT stuff('ab', NULL, NULL, 'bc')
+----
+NULL
+
+query T
+SELECT stuff('abc', 1, 2)
+----
+NULL
+
+query T
+SELECT stuff('abc', 1, 1, 'xy', 1)
+----
+xybc
+
+query T
+SELECT stuff('AbdefGhi', 0, 1, 'xy')
+----
+NULL
+
+query T
+SELECT '|' + stuff('AbdefGhi', -1, 1, 'xy') + '|'
+----
+NULL
+
+query T
+SELECT stuff('AbdefGhi', 1, 1, 'xy')
+----
+xybdefGhi
+
+query T
+SELECT stuff('AbdefGhi', 8, 1, 'xy')
+----
+AbdefGhxy
+
+query T
+SELECT stuff('AbdefGhi', 9, 1, 'xy')
+----
+AbdefGhixy
+
+query T
+SELECT stuff('AbdefGhi', 2147483648, 1, 'xy')
+----
+NULL
+
+query T
+SELECT stuff('AbdefGhi', 1, 0, 'xy')
+----
+xyAbdefGhi
+
+query T
+SELECT stuff('AbdefGhi', 8, 0, 'xy')
+----
+AbdefGhxyi
+
+query T
+SELECT stuff('AbdefGhi', 1, -1, 'xy')
+----
+NULL
+
+query T
+SELECT stuff('AbdefGhi', 8, -1, 'xy')
+----
+NULL
+
+query T
+SELECT stuff('AbdefGhi', 2, 9, 'xy')
+----
+Axy
+
+query T
+SELECT stuff('AbdefGhi', 2, 2147483648, 'xy')
+----
+Axy
+
+statement ok
+DECLARE @inputString CHAR(25) = 'abc🙂defghi🙂🙂'
+DECLARE @replaceString CHAR(25) = 'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString CHAR(25) = 'abc🙂defghi🙂🙂'
+DECLARE @replaceString NCHAR(25) = N'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString CHAR(25) = 'abc🙂defghi🙂🙂'
+DECLARE @replaceString NVARCHAR(25) = N'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString CHAR(25) = 'abc🙂defghi🙂🙂'
+DECLARE @replaceString VARCHAR(25) = 'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString CHAR(25) = 'abc🙂defghi🙂🙂'
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString CHAR(25) = 'abc🙂defghi🙂🙂'
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString CHAR(25) = 'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 4, 2, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString CHAR(25) = 'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 0, 1, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString CHAR(25) = 'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 26, 1, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString CHAR(25) = 'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 2, -1, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString CHAR(25) = 'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 2, 25, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString CHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString NCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString NVARCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString VARCHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 4, 2, '拉·比')
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 0, 1, '拉·比')
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 26, 1, '拉·比')
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 2, -1, '拉·比')
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 2, 25, '拉·比')
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString CHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString NCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString NVARCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString VARCHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 4, 2, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 0, 1, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 26, 1, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 2, -1, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString CHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 2, 25, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(25) = 'abc🙂defghi🙂🙂'
+DECLARE @replaceString CHAR(25) = 'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARCHAR(25) = 'abc🙂defghi🙂🙂'
+DECLARE @replaceString NCHAR(25) = N'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARCHAR(25) = 'abc🙂defghi🙂🙂'
+DECLARE @replaceString NVARCHAR(25) = N'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARCHAR(25) = 'abc🙂defghi🙂🙂'
+DECLARE @replaceString VARCHAR(25) = 'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARCHAR(25) = 'abc🙂defghi🙂🙂'
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARCHAR(25) = 'abc🙂defghi🙂🙂'
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARCHAR(25) = 'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 4, 2, 'xyz🙂🙂wuytgdy🙂')
+
+query T
+SELECT stuff('abc🙂defghi🙂🙂', 4, 2, 'xyz🙂🙂wuytgdy🙂')
+----
+abcxyz🙂🙂wuytgdy🙂efghi🙂🙂
+
+statement ok
+DECLARE @inputString VARCHAR(25) = 'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 0, 1, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString VARCHAR(25) = 'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 26, 1, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString VARCHAR(25) = 'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 2, -1, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString VARCHAR(25) = 'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 2, 25, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString CHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString NCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString NVARCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString VARCHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 4, 2, '拉·比')
+
+query T
+SELECT stuff('比尔·拉莫斯', 4, 2, '拉·比')
+----
+比尔·拉·比斯
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 0, 1, '拉·比')
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 26, 1, '拉·比')
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 2, -1, '拉·比')
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 2, 25, '拉·比')
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString CHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString NCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString NVARCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString VARCHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 4, 2, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+query T
+SELECT stuff('比尔·拉莫斯', 4, 2, '拉·比') COLLATE CHINESE_PRC_CI_AS
+----
+比尔·拉·比斯
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 0, 1, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 26, 1, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 2, -1, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(25) = '比尔·拉莫斯'
+SELECT stuff(@inputString, 2, 25, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+query T
+SELECT stuff(a, 4, 2, a) FROM babel_4838_stuff_chinese_prc_ci_as
+----
+比尔·比尔·拉莫斯斯
+
+query T
+SELECT stuff(a, 4, 2, '拉·比') FROM babel_4838_stuff_chinese_prc_ci_as
+----
+比尔·拉·比斯
+
+query T
+SELECT stuff(a, 4, 2, a) COLLATE CHINESE_PRC_CI_AS FROM babel_4838_stuff_chinese_prc_ci_as
+----
+NULL
+
+query T
+SELECT stuff(a, 4, 2, '拉·比') COLLATE CHINESE_PRC_CI_AS FROM babel_4838_stuff_chinese_prc_ci_as
+----
+NULL
+
+query T
+SELECT stuff(a, 4, 2, a) FROM babel_4838_stuff_chinese_prc_cs_as
+----
+比尔·比尔·拉莫斯斯
+
+query T
+SELECT stuff(a, 4, 2, '拉·比') FROM babel_4838_stuff_chinese_prc_cs_as
+----
+比尔·拉·比斯
+
+query T
+SELECT stuff(a, 4, 2, a) COLLATE CHINESE_PRC_CS_AS FROM babel_4838_stuff_chinese_prc_cs_as
+----
+NULL
+
+query T
+SELECT stuff(a, 4, 2, '拉·比') COLLATE CHINESE_PRC_CS_AS FROM babel_4838_stuff_chinese_prc_cs_as
+----
+NULL
+
+query T
+SELECT stuff(a, 4, 2, a) FROM babel_4838_stuff_chinese_prc_ci_ai
+----
+比尔·比尔·拉莫斯斯
+
+query T
+SELECT stuff(a, 4, 2, '拉·比') FROM babel_4838_stuff_chinese_prc_ci_ai
+----
+比尔·拉·比斯
+
+query T
+SELECT stuff(a, 4, 2, a) COLLATE CHINESE_PRC_CI_AI FROM babel_4838_stuff_chinese_prc_ci_ai
+----
+NULL
+
+query T
+SELECT stuff(a, 4, 2, '拉·比') COLLATE CHINESE_PRC_CI_AI FROM babel_4838_stuff_chinese_prc_ci_ai
+----
+NULL
+
+query T
+SELECT stuff(a, 4, 2, a) COLLATE ARABIC_CI_AS FROM babel_4838_stuff_arabic_ci_as
+----
+NULL
+
+query T
+SELECT stuff(a, 4, 2, 'معقيال') COLLATE ARABIC_CI_AS FROM babel_4838_stuff_arabic_ci_as
+----
+NULL
+
+query T
+SELECT stuff(a, 4, 2, a) COLLATE ARABIC_CS_AS FROM babel_4838_stuff_arabic_cs_as
+----
+NULL
+
+query T
+SELECT stuff(a, 4, 2, 'معقيال') COLLATE ARABIC_CS_AS FROM babel_4838_stuff_arabic_cs_as
+----
+NULL
+
+query T
+SELECT stuff(a, 4, 2, a) COLLATE ARABIC_CI_AI FROM babel_4838_stuff_arabic_ci_ai
+----
+NULL
+
+query T
+SELECT stuff(a, 4, 2, 'معقيال') COLLATE ARABIC_CI_AI FROM babel_4838_stuff_arabic_ci_ai
+----
+NULL
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'abc🙂defghi🙂🙂'
+DECLARE @replaceString CHAR(25) = 'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'abc🙂defghi🙂🙂'
+DECLARE @replaceString NCHAR(25) = N'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'abc🙂defghi🙂🙂'
+DECLARE @replaceString NVARCHAR(25) = N'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'abc🙂defghi🙂🙂'
+DECLARE @replaceString VARCHAR(25) = 'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'abc🙂defghi🙂🙂'
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'abc🙂defghi🙂🙂'
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 4, 2, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 0, 1, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 26, 1, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 2, -1, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 2, 25, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString CHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString NCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString NVARCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString VARCHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 4, 2, '拉·比')
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 0, 1, '拉·比')
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 26, 1, '拉·比')
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 2, -1, '拉·比')
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 2, 25, '拉·比')
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString CHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString NCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString NVARCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString VARCHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 4, 2, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 0, 1, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 26, 1, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 2, -1, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 2, 25, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+query T
+SELECT stuff(a, 4, 2, a) FROM babel_4838_stuff_t1 
+----
+abcabc🙂defghi🙂🙂efghi🙂🙂
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'abc🙂defghi🙂🙂'
+DECLARE @replaceString CHAR(25) = 'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'abc🙂defghi🙂🙂'
+DECLARE @replaceString NCHAR(25) = N'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'abc🙂defghi🙂🙂'
+DECLARE @replaceString NVARCHAR(25) = N'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'abc🙂defghi🙂🙂'
+DECLARE @replaceString VARCHAR(25) = 'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'abc🙂defghi🙂🙂'
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'abc🙂defghi🙂🙂'
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 4, 2, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 0, 1, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 26, 1, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 2, -1, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'abc🙂defghi🙂🙂'
+SELECT stuff(@inputString, 2, 25, 'xyz🙂🙂wuytgdy🙂')
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString CHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString NCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString NVARCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString VARCHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 4, 2, '拉·比')
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 0, 1, '拉·比')
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 26, 1, '拉·比')
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 2, -1, '拉·比')
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 2, 25, '拉·比')
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString CHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString NCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString NVARCHAR(25) = N'拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString VARCHAR(25) = '拉·比'
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 4, 2, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 0, 1, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 26, 1, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 2, -1, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(25) = N'比尔·拉莫斯'
+SELECT stuff(@inputString, 2, 25, '拉·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+DECLARE @replaceString CHAR(25) = 'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+DECLARE @replaceString NCHAR(25) = N'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+DECLARE @replaceString NVARCHAR(25) = N'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+DECLARE @replaceString VARCHAR(25) = 'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 4, 2, 0x6566)
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 4, 2, '拉·比')
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 4, 2, '拉·比')  COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 0, 1, 0x6566)
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 13, 1, 0x6566)
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 2, -1, 0x6566)
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 2, 15, 0x6566)
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+DECLARE @replaceString CHAR(25) = 'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+DECLARE @replaceString NCHAR(25) = N'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+DECLARE @replaceString NVARCHAR(25) = N'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+DECLARE @replaceString VARCHAR(25) = 'xyz🙂🙂wuytgdy🙂'
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+DECLARE @replaceString BINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+DECLARE @replaceString VARBINARY(10) = 0x6566
+SELECT stuff(@inputString, 4, 2, @replaceString)
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 4, 2, 0x6566)
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 4, 2, '拉·比')
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 4, 2, '拉·比')  COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 0, 1, 0x6566)
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 13, 1, 0x6566)
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 2, -1, 0x6566)
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768
+SELECT stuff(@inputString, 2, 15, 0x6566)
+
+query T
+SELECT * FROM babel_4838_stuff_dep_view
+----
+abcxyz🙂🙂wuytgdy🙂efghi🙂🙂
+
+query T
+EXEC babel_4838_stuff_dep_proc
+----
+abcxyz🙂🙂wuytgdy🙂efghi🙂🙂
+
+query T
+SELECT * FROM babel_4838_stuff_itvf_func()
+----
+abcxyz🙂🙂wuytgdy🙂efghi🙂🙂
+
+query T
+SELECT * FROM babel_4838_stuff_dep_view_1
+----
+abcxyz🙂🙂wuytgdy🙂efghi🙂🙂
+
+query T
+SELECT * FROM babel_4838_stuff_dep_view_2
+----
+abcxyz🙂🙂wuytgdy🙂efghi🙂🙂
+
+query T
+SELECT * FROM babel_4838_stuff_dep_view_3
+----
+abcxyz🙂🙂wuytgdy🙂fghi
+
+query T
+SELECT * FROM babel_4838_stuff_dep_view_4
+----
+abcxyz🙂🙂wuytgdy🙂fghi
+
+query T
+SELECT * FROM babel_4838_stuff_dep_view_5
+----
+0x20x65660616263642020
+
+query T
+SELECT stuff(a, 4, 2, a) FROM babel_4838_stuff_UDT
+----
+abcabcdeff
+
+query T
+SELECT stuff(b, 4, 2, b) FROM babel_4838_stuff_UDT
+----
+abcabcdeff
+
+query T
+DECLARE @inputString date = '2016-12-21';
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+201abcd-12-21
+
+query T
+DECLARE @inputString date = '2016-12-21';
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString date = '2016-12-21';
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString date = '2016-12-21';
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc2016-12-21
+
+query T
+DECLARE @date date = '12-21-16';  
+DECLARE @inputString datetime = @date;
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+12-abcd1-16
+
+query T
+DECLARE @date date = '12-21-16';  
+DECLARE @inputString datetime = @date;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @date date = '12-21-16';  
+DECLARE @inputString datetime = @date;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @date date = '12-21-16';  
+DECLARE @inputString datetime = @date;
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc12-21-16
+
+query T
+DECLARE @inputString smalldatetime = '1955-12-13 12:43:10';
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString smalldatetime = '1955-12-13 12:43:10';
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString time(4) = '12:10:05.1237';
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+12:abcd0:05.1237
+
+query T
+DECLARE @inputString time(4) = '12:10:05.1237';
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString time(4) = '12:10:05.1237';
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString time(4) = '12:10:05.1237';
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc12:10:05.1237
+
+query T
+DECLARE @inputString datetimeoffset(4) = '1968-10-23 12:45:37.1234 +10:0';
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString datetimeoffset(4) = '1968-10-23 12:45:37.1234 +10:0';
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString datetime2(4) = '1968-10-23 12:45:37.1237';
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString datetime2(4) = '1968-10-23 12:45:37.1237';
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString decimal = 123456;
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+123abcd56
+
+query T
+DECLARE @inputString decimal = 123456;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString decimal = 123456;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcd
+
+query T
+DECLARE @inputString decimal = 123456;
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc123456
+
+query T
+DECLARE @inputString numeric = 12345.12;
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+123abcd5.12
+
+query T
+DECLARE @inputString numeric = 12345.12;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString numeric = 12345.12;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcd
+
+query T
+DECLARE @inputString numeric = 12345.12;
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc12345.12
+
+query T
+DECLARE @inputString float = 12345.1;
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+123abcd5.1
+
+query T
+DECLARE @inputString float = 12345.1;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString float = 12345.1;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcd
+
+query T
+DECLARE @inputString float = 12345.1;
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc12345.1
+
+query T
+DECLARE @inputString real = 12345.1;
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+123abcd5.1
+
+query T
+DECLARE @inputString real = 12345.1;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString real = 12345.1;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcd
+
+query T
+DECLARE @inputString real = 12345.1;
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc12345.1
+
+query T
+DECLARE @inputString bigint = 12345678;
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+123abcd5678
+
+query T
+DECLARE @inputString bigint = 12345678;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString bigint = 12345678;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcd
+
+query T
+DECLARE @inputString bigint = 12345678;
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc12345678
+
+query T
+DECLARE @inputString int = 12345678;
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+123abcd5678
+
+query T
+DECLARE @inputString int = 12345678;
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc12345678
+
+query T
+DECLARE @inputString int = 1;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+abcdysd
+
+query T
+DECLARE @inputString int = 12345678;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcd
+
+query T
+DECLARE @inputString CHAR(25) = 'xyzd';
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString CHAR(25) = 'xyzd';
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString VARCHAR(25) = 'xyzd';
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString VARCHAR(25) = 'xyzd';
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString smallint = 12356;
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+123abcd6
+
+query T
+DECLARE @inputString smallint = 12356;
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc12356
+
+query T
+DECLARE @inputString smallint = 1;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+abcdysd
+
+query T
+DECLARE @inputString smallint = 12356;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcd
+
+query T
+DECLARE @inputString NCHAR(25) = N'xyzd';
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString NCHAR(25) = N'xyzd';
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString NVARCHAR(25) = N'xyzd';
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString NVARCHAR(25) = N'xyzd';
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString tinyint = 235;
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+235abcd
+
+query T
+DECLARE @inputString tinyint = 235;
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc235
+
+query T
+DECLARE @inputString tinyint = 1;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+abcdysd
+
+query T
+DECLARE @inputString tinyint = 235;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcd
+
+query T
+DECLARE @inputString BINARY(10) = 0x6162636465666768;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString BINARY(10) = 0x6162636465666768;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString VARBINARY(10) = 0x6162636465666768;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString money = 12356;
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+123abcd6
+
+query T
+DECLARE @inputString money = 12356;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString money = 12356;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcd
+
+query T
+DECLARE @inputString money = 12356;
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc12356
+
+query T
+DECLARE @inputString smallmoney = 12356;
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+123abcd6
+
+query T
+DECLARE @inputString smallmoney = 12356;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString smallmoney = 12356;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcd
+
+query T
+DECLARE @inputString smallmoney = 12356;
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc12356
+
+query T
+DECLARE @inputString bit = 1;
+SELECT stuff(@inputString, 4, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString bit = 1;
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString bit = 1;
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString bit = 1;
+SELECT stuff('abcd', 4, 1, @inputString)
+----
+abc1
+
+statement ok
+DECLARE @inputString uniqueidentifier = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS uniqueidentifier)
+SELECT stuff(@inputString, 4, 1, 'abcd')
+
+statement ok
+DECLARE @inputString uniqueidentifier = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS uniqueidentifier)
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+
+statement ok
+DECLARE @inputString uniqueidentifier = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS uniqueidentifier)
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+
+statement ok
+DECLARE @inputString uniqueidentifier = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS uniqueidentifier)
+SELECT stuff('abcd', 4, 1, @inputString)
+
+query T
+SELECT stuff(a, 4, 2, 'abcd') from babel_4838_stuff_image;
+----
+0x3abcd63936313946462d384238362d443031312d423432442d303043303446433936344646
+
+query T
+SELECT stuff('abcd', a, 2, 'abcd') from babel_4838_stuff_image;
+----
+NULL
+
+query T
+SELECT stuff('abcd', 4, a, 'abcd') from babel_4838_stuff_image;
+----
+abcabcdd
+
+query T
+SELECT stuff('abcd', 4, 2, a) from babel_4838_stuff_image;
+----
+abc0x36463936313946462d384238362d443031312d423432442d303043303446433936344646
+
+query T
+SELECT stuff(a, 4, 2, 'abcd') FROM babel_4838_stuff_text
+----
+abcabcdefghi🙂🙂
+
+query T
+SELECT stuff('abcd', a, 2, 'abcd') FROM babel_4838_stuff_text
+----
+NULL
+
+query T
+SELECT stuff('abcd', 4, a, 'abcd') FROM babel_4838_stuff_text
+----
+abcabcdd
+
+query T
+SELECT stuff('abcd', 4, 2, a) FROM babel_4838_stuff_text
+----
+abcabc🙂defghi🙂🙂
+
+query T
+SELECT stuff(b, 4, 2, 'abcd') FROM babel_4838_stuff_text
+----
+abcabcdefghi🙂🙂
+
+query T
+SELECT stuff('abcd', b, 2, 'abcd') FROM babel_4838_stuff_text
+----
+NULL
+
+query T
+SELECT stuff('abcd', 4, b, 'abcd') FROM babel_4838_stuff_text
+----
+abcabcdd
+
+query T
+SELECT stuff('abcd', 4, 2, b) FROM babel_4838_stuff_text
+----
+abcabc🙂defghi🙂🙂
+
+statement ok
+DECLARE @inputString sql_variant = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant)
+SELECT stuff(@inputString, 4, 1, 'abcd')
+
+statement ok
+DECLARE @inputString sql_variant = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant)
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+
+statement ok
+DECLARE @inputString sql_variant = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant)
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+
+statement ok
+DECLARE @inputString sql_variant = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant)
+SELECT stuff('abcd', 4, 1, @inputString)
+
+statement ok
+DECLARE @inputString xml = CAST ('<body><fruit/></body>' AS xml)
+SELECT stuff(@inputString, 4, 1, 'abcd')
+
+statement ok
+DECLARE @inputString xml = CAST ('<body><fruit/></body>' AS xml)
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+
+statement ok
+DECLARE @inputString xml = CAST ('<body><fruit/></body>' AS xml)
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+
+statement ok
+DECLARE @inputString xml = CAST ('<body><fruit/></body>' AS xml)
+SELECT stuff('abcd', 4, 1, @inputString)
+
+query T
+DECLARE @inputString geometry = geometry::STGeomFromText('POINT (1 2)', 0);
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString geometry = geometry::STGeomFromText('POINT (1 2)', 0);
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+query T
+DECLARE @inputString geography = geography::STGeomFromText('POINT(-122.34900 47.65100)', 4326);
+SELECT stuff('xysd', @inputString, 1, 'abcd')
+----
+NULL
+
+query T
+DECLARE @inputString geography = geography::STGeomFromText('POINT(-122.34900 47.65100)', 4326);
+SELECT stuff('xysd', 1, @inputString, 'abcd')
+----
+abcdxysd
+
+statement ok
+DECLARE @inputString sql_variant = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant)
+SELECT stuff(CAST(@inputString AS VARCHAR(50)), 4, 1, 'abcd')
+
+statement ok
+DECLARE @inputString sql_variant = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant)
+SELECT stuff('abcd', 4, 1, CAST(@inputString AS VARCHAR(50)))
+
+statement ok
+DECLARE @inputString xml = CAST ('<body><fruit/></body>' AS xml)
+SELECT stuff(CAST(@inputString AS VARCHAR(50)), 4, 1, 'abcd')
+
+statement ok
+DECLARE @inputString xml = CAST ('<body><fruit/></body>' AS xml)
+SELECT stuff('abcd', 4, 1, CAST(@inputString AS VARCHAR(50)))
+
+statement ok
+DROP FUNCTION babel_4838_stuff_itvf_func
+
+statement ok
+DROP FUNCTION babel_4838_stuff_dep_func
+
+statement ok
+DROP PROCEDURE babel_4838_stuff_dep_proc
+
+statement ok
+DROP VIEW babel_4838_stuff_dep_view
+
+statement ok
+DROP TABLE babel_4838_stuff_UDT
+
+statement ok
+DROP VIEW babel_4838_stuff_dep_view_1
+
+statement ok
+DROP VIEW babel_4838_stuff_dep_view_2
+
+statement ok
+DROP VIEW babel_4838_stuff_dep_view_3
+
+statement ok
+DROP VIEW babel_4838_stuff_dep_view_4
+
+statement ok
+DROP VIEW babel_4838_stuff_dep_view_5
+
+statement ok
+DROP TABLE babel_4838_stuff_text
+
+statement ok
+DROP TABLE babel_4838_stuff_image
+
+statement ok
+DROP TABLE babel_4838_stuff_arabic_ci_ai
+
+statement ok
+DROP TABLE babel_4838_stuff_arabic_cs_as
+
+statement ok
+DROP TABLE babel_4838_stuff_arabic_ci_as
+
+statement ok
+DROP TABLE babel_4838_stuff_chinese_prc_ci_ai
+
+statement ok
+DROP TABLE babel_4838_stuff_chinese_prc_cs_as
+
+statement ok
+DROP TABLE babel_4838_stuff_chinese_prc_ci_as
+
+statement ok
+DROP TABLE babel_4838_stuff_t5
+
+statement ok
+DROP TABLE babel_4838_stuff_t4
+
+statement ok
+DROP TABLE babel_4838_stuff_t3
+
+statement ok
+DROP TABLE babel_4838_stuff_t2
+
+statement ok
+DROP TABLE babel_4838_stuff_t1
+

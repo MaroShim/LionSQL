@@ -1,0 +1,12 @@
+# test/slt_proc/babelfish_oracle/1146_babel_babel_2267.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2267.sql
+
+statement ok
+use master;
+
+statement ok
+create table t2267(a int);
+
+statement ok
+DROP TABLE t2267
+

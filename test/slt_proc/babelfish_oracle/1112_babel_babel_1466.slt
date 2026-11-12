@@ -1,0 +1,18 @@
+# test/slt_proc/babelfish_oracle/1112_babel_babel_1466.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1466.sql
+
+statement ok
+create table t1 (id int, a varchar(10), t datetime);
+
+statement ok
+alter table t1 add b as convert(smallint, 1) persisted;
+
+statement ok
+alter table t1 add c as convert(varchar(2), 1) persisted;
+
+statement ok
+alter table t1 add d as convert(smallint, convert(sql_variant, 1)) persisted;
+
+statement ok
+drop table t1;
+

@@ -1,0 +1,96 @@
+# test/slt_proc/babelfish_oracle/717_babel_sys_fn_varbintohexsubstring_before_16_10_or_17_6.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/sys-fn-varbintohexsubstring-before-16_10-or-17_6-vu-prepare.sql, test/babelfish/raw/functions/sys-fn-varbintohexsubstring-before-16_10-or-17_6-vu-verify.sql, test/babelfish/raw/functions/sys-fn-varbintohexsubstring-before-16_10-or-17_6-vu-cleanup.sql
+
+statement ok
+CREATE VIEW fn_varbintohexsubstring_vu_prepare_view AS
+SELECT sys.fn_varbintohexsubstring(1,0x1234, 1, 4)
+
+statement ok
+CREATE PROC fn_varbintohexsubstring_vu_prepare_proc AS
+SELECT sys.fn_varbintohexsubstring(1,0x1234, 1, 4)
+
+statement ok
+CREATE FUNCTION fn_varbintohexsubstring_vu_prepare_func()
+RETURNS nvarchar(128)
+AS
+BEGIN
+RETURN sys.fn_varbintohexsubstring(1,0x1234, 1, 4)
+END
+
+statement ok
+CREATE TABLE babel_5654_t1 (set_prefix sys.BIT,
+                            expression sys.varbinary(MAX),
+                            start_offset INT,
+                            substr_length INT,
+                            CHECK (sys.fn_varbintohexsubstring(set_prefix, expression, start_offset, substr_length) != NULL));
+
+statement ok
+INSERT INTO babel_5654_t1 VALUES (0,0x123486534659789876435656,1,4)
+
+statement ok
+CREATE TABLE babel_5654_t2 (set_prefix sys.BIT,
+                            expression sys.varbinary(MAX),
+                            start_offset INT,
+                            substr_length INT,
+                            [varbintohexsubstring] AS sys.fn_varbintohexsubstring(set_prefix, expression, start_offset, substr_length));
+
+statement ok
+INSERT INTO babel_5654_t2 VALUES (0,0x3486534659789876435656,1,4)
+
+statement ok
+CREATE TABLE babel_5654_t3 (set_prefix SetPrefixType,
+                            expression ExpressionType,
+                            start_offset StartOffsetType,
+                            substr_length SubstrLengthType,
+                            [varbintohexsubstring] AS sys.fn_varbintohexsubstring(set_prefix, expression, start_offset, substr_length));
+
+statement ok
+INSERT INTO babel_5654_t3 VALUES (0,0x3486534659789876435656,1,4)
+
+statement ok
+INSERT INTO babel_5654_t1 VALUES (0,0x123486534659789876435656,1,4)
+
+statement ok
+INSERT INTO babel_5654_t1 VALUES (1,0x123486534659789876435656,1,4)
+
+statement ok
+INSERT INTO babel_5654_t1 VALUES (1,0x123486534659789876435656,3,4)
+
+query TTTT
+SELECT * FROM babel_5654_t1
+----
+0 0x123486534659789876435656 1 4
+0 0x123486534659789876435656 1 4
+1 0x123486534659789876435656 1 4
+1 0x123486534659789876435656 3 4
+
+statement ok
+INSERT INTO babel_5654_t2 VALUES (1,0x23486534659789876435656,3,4)
+
+statement ok
+SELECT * FROM babel_5654_t2 WHERE [varbintohexsubstring] = sys.fn_varbintohexsubstring(1,0x23486534659789876435656,3,4)
+
+statement ok
+INSERT INTO babel_5654_t3 VALUES (1,0x23486534659789876435656,3,4)
+
+statement ok
+SELECT * FROM babel_5654_t3 WHERE [varbintohexsubstring] = sys.fn_varbintohexsubstring(1,0x23486534659789876435656,3,4)
+
+statement ok
+DROP VIEW fn_varbintohexsubstring_vu_prepare_view
+
+statement ok
+DROP PROC fn_varbintohexsubstring_vu_prepare_proc
+
+statement ok
+DROP FUNCTION fn_varbintohexsubstring_vu_prepare_func
+
+statement ok
+DROP TABLE babel_5654_t1
+
+statement ok
+DROP TABLE babel_5654_t2
+
+statement ok
+DROP TABLE babel_5654_t3
+

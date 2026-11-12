@@ -541,11 +541,11 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 		alias := ""
 		if p.curTokenIs(TokenAs) {
 			p.nextToken() // eat AS
-			if !isReservedAfterProjection(p.curToken.Type) {
+			if !isReservedAfterProjection(p.curToken.Type) && !isSetOpIdent(p.curToken) {
 				alias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}
-		} else if (p.curTokenIs(TokenIdent) || p.curTokenIs(TokenString)) && !isReservedAfterProjection(p.curToken.Type) {
+		} else if (p.curTokenIs(TokenIdent) || p.curTokenIs(TokenString)) && !isReservedAfterProjection(p.curToken.Type) && !isSetOpIdent(p.curToken) {
 			alias = cleanSchemaPrefix(p.curToken.Literal)
 			p.nextToken()
 		}
@@ -608,7 +608,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					alias = cleanSchemaPrefix(p.curToken.Literal)
 					p.nextToken()
 				}
-			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
+			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) && !isSetOpIdent(p.curToken) {
 				alias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}
@@ -656,7 +656,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					alias = cleanSchemaPrefix(p.curToken.Literal)
 					p.nextToken()
 				}
-			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
+			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) && !isSetOpIdent(p.curToken) {
 				if (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) && p.peekToken.Type == TokenJoin {
 					// Do not consume HASH/LOOP/MERGE as alias when followed by JOIN
 				} else {
@@ -825,7 +825,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					jAlias = cleanSchemaPrefix(p.curToken.Literal)
 					p.nextToken()
 				}
-			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
+			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) && !isSetOpIdent(p.curToken) {
 				if (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) && p.peekToken.Type == TokenJoin {
 					// Do not consume HASH/LOOP/MERGE as alias when followed by JOIN
 				} else {
@@ -899,7 +899,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					jAlias = cleanSchemaPrefix(p.curToken.Literal)
 					p.nextToken()
 				}
-			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
+			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) && !isSetOpIdent(p.curToken) {
 				if (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) && p.peekToken.Type == TokenJoin {
 					// Do not consume HASH/LOOP/MERGE as alias when followed by JOIN
 				} else {
@@ -1074,6 +1074,8 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
 				stmt.Limit = n
 				p.nextToken()
+			} else if p.curTokenIs(TokenVariable) || p.curTokenIs(TokenLParen) {
+				stmt.LimitExpr = p.parseExpression(precLowest)
 			}
 		} else if p.curTokenIs(TokenOffset) {
 			p.nextToken() // eat OFFSET
@@ -1081,6 +1083,8 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
 				stmt.Offset = n
 				p.nextToken()
+			} else if p.curTokenIs(TokenVariable) || p.curTokenIs(TokenLParen) {
+				stmt.OffsetExpr = p.parseExpression(precLowest)
 			}
 			// Optional ROW or ROWS (e.g. OFFSET 10 ROWS)
 			if p.curTokenIs(TokenRow) || p.curTokenIs(TokenRows) {
@@ -1096,6 +1100,8 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
 				stmt.Limit = n
 				p.nextToken()
+			} else if p.curTokenIs(TokenVariable) || p.curTokenIs(TokenLParen) {
+				stmt.LimitExpr = p.parseExpression(precLowest)
 			}
 			// Optional ROW or ROWS
 			if p.curTokenIs(TokenRow) || p.curTokenIs(TokenRows) {
@@ -1106,6 +1112,32 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				p.nextToken()
 			}
 		}
+	}
+
+	// 8.5. Set operations: UNION [ALL], INTERSECT, EXCEPT / MINUS
+	for isSetOpIdent(p.curToken) {
+		op := strings.ToUpper(p.curToken.Literal)
+		p.nextToken() // eat UNION / INTERSECT / EXCEPT / MINUS
+		if p.curTokenIs(TokenAll) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ALL")) {
+			op = op + " ALL"
+			p.nextToken() // eat ALL
+		} else if p.curTokenIs(TokenDistinct) {
+			p.nextToken() // eat DISTINCT
+		}
+		if p.curTokenIs(TokenSelect) {
+			p.nextToken() // eat SELECT
+		} else {
+			return nil, fmt.Errorf("expected SELECT after %s, got %s", op, p.curToken.Literal)
+		}
+		rightStmt, err := p.parseGeneralSelect()
+		if err != nil {
+			return nil, err
+		}
+		// Avoid deeply nested SetOps on rightStmt; flatten onto stmt.SetOps
+		subOps := rightStmt.SetOps
+		rightStmt.SetOps = nil
+		stmt.SetOps = append(stmt.SetOps, SetOpBranch{Op: op, Query: rightStmt})
+		stmt.SetOps = append(stmt.SetOps, subOps...)
 	}
 
 	// 9. Query hints: OPTION ( RECOMPILE, MAXDOP 1, HASH JOIN, LOOP JOIN, MERGE JOIN, FORCE ORDER, ... )

@@ -1,0 +1,79 @@
+# test/slt_proc/babelfish_oracle/1583_babel_test_conv_string_to_time.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/test_conv_string_to_time-vu-prepare.sql, test/babelfish/raw/functions/test_conv_string_to_time-vu-verify.sql, test/babelfish/raw/functions/test_conv_string_to_time-vu-cleanup.sql
+
+statement ok
+CREATE VIEW test_conv_string_to_time_v1 as (SELECT CONVERT(time, '13:01:59'));
+
+statement ok
+CREATE VIEW test_conv_string_to_time_v2 as (SELECT CONVERT(time, '00:00:00'));
+
+statement ok
+CREATE VIEW test_conv_string_to_time_v3 as (SELECT CONVERT(time, '1:1:1'));
+
+statement ok
+CREATE VIEW test_conv_string_to_time_v4 as (SELECT CONVERT(time, CAST('13:01:59' AS TEXT)));
+
+statement ok
+CREATE VIEW test_conv_string_to_time_v5 as (SELECT CONVERT(time, CAST('13:01:59' AS CHAR(10))));
+
+statement ok
+CREATE VIEW test_conv_string_to_time_v6 as (SELECT CONVERT(time, CAST('13:01:59' AS NCHAR(10))));
+
+statement ok
+CREATE VIEW test_conv_string_to_time_v7 as (SELECT CONVERT(time, CAST('13:01:59' AS NVARCHAR(10))));
+
+statement ok
+CREATE VIEW test_conv_string_to_time_v8 as (SELECT CONVERT(time, CAST('13' AS INTEGER)));
+
+statement ok
+CREATE VIEW test_conv_string_to_time_v9 as (SELECT CONVERT(time, CAST('13:01:59' AS VARCHAR(10))));
+
+statement ok
+CREATE VIEW test_conv_string_to_time_v10 as (SELECT CONVERT(time, '02-03-2003 11:11:11 +11:11'));
+
+statement ok
+CREATE VIEW test_conv_string_to_time_v11 as (SELECT CONVERT(time, cast('02-03-2003 11:11:11 +11:11' as sys.varchar(100))));
+
+statement ok
+CREATE VIEW test_conv_string_to_time_v12 as (SELECT CONVERT(time, CAST('20' as INTEGER)));
+
+statement ok
+DECLARE @TM_ICLO TIME = '17:24:07.1766670'
+SELECT CONVERT(TIME, @TM_ICLO)
+
+statement ok
+DROP VIEW test_conv_string_to_time_v1
+
+statement ok
+DROP VIEW test_conv_string_to_time_v2
+
+statement ok
+DROP VIEW test_conv_string_to_time_v3
+
+statement ok
+DROP VIEW test_conv_string_to_time_v4
+
+statement ok
+DROP VIEW test_conv_string_to_time_v5
+
+statement ok
+DROP VIEW test_conv_string_to_time_v6
+
+statement ok
+DROP VIEW test_conv_string_to_time_v7
+
+statement ok
+DROP VIEW test_conv_string_to_time_v8
+
+statement ok
+DROP VIEW test_conv_string_to_time_v9
+
+statement ok
+DROP VIEW test_conv_string_to_time_v10
+
+statement ok
+DROP VIEW test_conv_string_to_time_v11
+
+statement ok
+DROP VIEW test_conv_string_to_time_v12
+

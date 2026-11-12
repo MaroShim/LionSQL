@@ -1,0 +1,29 @@
+# test/slt_proc/strings/036_slice_and_reverse_06.slt
+# T-SQL LEFT/RIGHT/SUBSTRING/REVERSE/LEN on 'WiredTigerMVCC'
+
+query TTTT
+SELECT LEFT('WiredTigerMVCC', 10), RIGHT('WiredTigerMVCC', 4), SUBSTRING('WiredTigerMVCC', 6, 5), REVERSE('WiredTigerMVCC');
+----
+WiredTiger MVCC Tiger CCVMregiTderiW
+
+query TT
+SELECT UPPER('WiredTiger'), LOWER('MVCC');
+----
+WIREDTIGER mvcc
+
+query I
+SELECT LEN('WiredTigerMVCC');
+----
+14
+
+statement ok
+CREATE PROCEDURE sp_str_slice_36 @in VARCHAR(50)
+AS
+BEGIN
+    SELECT CONCAT(LEFT(@in, 10), '-', RIGHT(@in, 4), ':', CAST(LEN(@in) AS VARCHAR(10)));
+END;
+
+query T
+EXEC sp_str_slice_36 'WiredTigerMVCC';
+----
+WiredTiger-MVCC:14

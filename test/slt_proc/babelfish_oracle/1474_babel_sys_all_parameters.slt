@@ -1,0 +1,96 @@
+# test/slt_proc/babelfish_oracle/1474_babel_sys_all_parameters.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-all_parameters-vu-prepare.sql, test/babelfish/raw/views/sys-all_parameters-vu-verify.sql, test/babelfish/raw/views/sys-all_parameters-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE sys_all_parameters_vu_prepare_addTwo @num1 int, @num2 int
+AS
+SELECT (@num1 + @num2)
+
+statement ok
+CREATE PROCEDURE sys_all_parameters_vu_prepare_complexProc
+@dec decimal(23,3), 
+@num numeric(22, 8), 
+@var varchar(30), 
+@nvar nvarchar(5),
+@varmax varchar(max),
+@nvarmax nvarchar(max)
+AS
+SELECT 1
+
+statement ok
+CREATE SCHEMA sys_all_parameters_schema_vu_prepare
+
+statement ok
+CREATE FUNCTION sys_all_parameters_vu_prepare_scalFunc(@a int)
+RETURNS INT
+AS
+BEGIN
+RETURN @a;
+END
+
+statement ok
+CREATE FUNCTION sys_all_parameters_vu_prepare_InlineTableFunc(@t1 int, @t2 int)
+RETURNS TABLE
+AS
+RETURN
+(
+  SELECT 1 AS c1, 2 AS c2
+)
+
+statement ok
+CREATE FUNCTION sys_all_parameters_vu_prepare_InlineTableFunc2(@t1 sys_all_parameters_vu_prepare_myTableParam READONLY, 
+    @t2 sys_all_parameters_vu_prepare_myTableParam READONLY)
+RETURNS TABLE
+AS
+RETURN
+(
+  SELECT 1 AS c1, 2 AS c2
+)
+
+statement ok
+CREATE FUNCTION sys_all_parameters_vu_prepare_myDecFunc (@a sys_all_parameters_vu_prepare_myDec)
+RETURNS sys_all_parameters_vu_prepare_myDec
+AS
+BEGIN
+    RETURN @a;
+END
+
+statement ok
+CREATE PROCEDURE sys_all_parameters_vu_prepare_typeModifier
+@var4000 varchar(8000),
+@varmax varchar(max),
+@nvar4000 nvarchar(4000),
+@nvarmax nvarchar(max),
+@char char(8000),
+@nchar nchar(4000),
+@binary BINARY(8000),
+@varbinary varbinary(8000),
+@varbinaryMax varbinary(max),
+@sysname sysname
+AS
+SELECT 1
+
+statement ok
+DROP PROCEDURE sys_all_parameters_vu_prepare_addTwo
+
+statement ok
+DROP PROCEDURE sys_all_parameters_vu_prepare_complexProc
+
+statement ok
+DROP SCHEMA sys_all_parameters_schema_vu_prepare
+
+statement ok
+DROP FUNCTION sys_all_parameters_vu_prepare_scalFunc
+
+statement ok
+DROP FUNCTION sys_all_parameters_vu_prepare_InlineTableFunc
+
+statement ok
+DROP FUNCTION sys_all_parameters_vu_prepare_InlineTableFunc2
+
+statement ok
+DROP FUNCTION sys_all_parameters_vu_prepare_myDecFunc
+
+statement ok
+DROP PROCEDURE sys_all_parameters_vu_prepare_typeModifier
+

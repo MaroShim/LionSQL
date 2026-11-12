@@ -1,0 +1,11 @@
+# test/slt_proc/babelfish_oracle/519_babel_babel_2482.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2482.sql
+
+statement ok
+USE master
+
+query T
+select cast (1 as dbo.inttype);
+----
+1
+

@@ -1,0 +1,8 @@
+# test/slt_proc/babelfish_oracle/561_babel_babel_servicename.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SERVICENAME.sql
+
+query T
+SELECT @@SERVICENAME;
+----
+MSSQLSERVER
+

@@ -349,7 +349,14 @@ type Instruction struct {
 
 // CallData holds metadata for function and procedure invocations.
 type CallData struct {
-	Name    string
+	Name     string
+	ArgRegs  []int32
+	OutSlots []int32
+}
+
+// RaiserrorData holds metadata for RAISERROR with format arguments.
+type RaiserrorData struct {
+	Message string
 	ArgRegs []int32
 }
 

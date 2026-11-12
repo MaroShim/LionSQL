@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/1127_babel_babel_1963.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1963.sql
+
+statement ok
+CREATE PROC p1 AS
+BEGIN
+    exec p1
+END
+
+statement ok
+CREATE TABLE table2_1963 (a int)
+
+statement ok
+CREATE TRIGGER trig2_1963 
+ON table2_1963 
+AFTER INSERT   
+AS insert into table2_1963 values (1)
+
+statement ok
+insert into table2_1963 values(5)
+
+statement ok
+drop table table2_1963;
+
+statement ok
+drop procedure p1
+

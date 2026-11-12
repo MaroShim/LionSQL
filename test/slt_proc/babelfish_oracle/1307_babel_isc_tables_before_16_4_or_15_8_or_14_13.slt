@@ -1,0 +1,85 @@
+# test/slt_proc/babelfish_oracle/1307_babel_isc_tables_before_16_4_or_15_8_or_14_13.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ISC-Tables-before_16_4_or_15_8_or_14_13-vu-prepare.sql, test/babelfish/raw/ISC-Tables-before_16_4_or_15_8_or_14_13-vu-verify.sql, test/babelfish/raw/ISC-Tables-before_16_4_or_15_8_or_14_13-vu-cleanup.sql
+
+statement ok
+CREATE TABLE isc_tables_vu_prepare_t1(a INT,b INT)
+
+statement ok
+CREATE SCHEMA isc_tables_sc1
+
+statement ok
+CREATE SCHEMA [ISC_TABLES_TABLE_SCHEMA]
+
+statement ok
+CREATE SCHEMA [ISC_TABLES SCHEMA . WITH .. DOTS]
+
+statement ok
+CREATE TABLE isc_tables_sc1.t2(a INT,b INT)
+
+statement ok
+CREATE TABLE [ISC_TABLES_TABLE_SCHEMA]  .  [ISC_TABLES_TABLE] (a INT, b INT)
+
+statement ok
+CREATE TABLE [ISC_TABLES SCHEMA . WITH .. DOTS]  .  [ISC_TABLES TABLE . WITH .. DOTS] (a INT, b INT)
+
+statement ok
+CREATE PROCEDURE isc_tables_vu_prepare_p1 AS
+SELECT * FROM information_schema.tables WHERE TABLE_NAME = 'isc_tables_vu_prepare_t1'
+SELECT * FROM information_schema.tables WHERE TABLE_NAME = 'ISC_TABLES_VU_PREPARE_T1'
+
+statement ok
+CREATE FUNCTION isc_tables_vu_prepare_f1()
+RETURNS INT
+AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_NAME LIKE 'isc_tables%')
+end
+
+statement ok
+CREATE FUNCTION isc_tables_vu_prepare_f2()
+RETURNS INT
+AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM information_schema.tables WHERE TABLE_NAME LIKE 'ISC_TABLES%')
+end
+
+statement ok
+CREATE VIEW isc_tables_vu_prepare_v1 AS
+    SELECT * FROM information_schema.tables WHERE TABLE_NAME LIKE 'ISC_TABLES%' ORDER BY TABLE_NAME
+
+statement ok
+SELECT * FROM information_schema.tables WHERE TABLE_NAME = 'isc_table_type1'
+
+statement ok
+SELECT * FROM information_schema.tables WHERE TABLE_SCHEMA = 'isc_tables_sc1'
+SELECT * FROM information_schema.tables WHERE TABLE_SCHEMA = 'ISC_TABLES_SC1'
+
+statement ok
+SELECT * FROM information_schema.tables WHERE (TABLE_NAME = 'isc_table_type2' AND TABLE_SCHEMA = 'isc_tables_sc1')
+
+statement ok
+DROP VIEW isc_tables_vu_prepare_v1
+
+statement ok
+CREATE VIEW isc_tables_vu_prepare_v1 AS
+    SELECT * FROM information_schema.tables WHERE TABLE_NAME LIKE 'ISC_TABLES%' ORDER BY TABLE_NAME
+
+statement ok
+DROP TABLE isc_tables_sc1.t2
+DROP TABLE [ISC_TABLES_TABLE_SCHEMA].[ISC_TABLES_TABLE]
+DROP TABLE [ISC_TABLES SCHEMA . WITH .. DOTS].[ISC_TABLES TABLE . WITH .. DOTS2]
+
+statement ok
+DROP SCHEMA isc_tables_sc1
+DROP SCHEMA [ISC_TABLES_TABLE_SCHEMA]
+DROP SCHEMA [ISC_TABLES SCHEMA . WITH .. DOTS]
+
+statement ok
+DROP VIEW isc_tables_vu_prepare_v1
+
+statement ok
+DROP PROCEDURE isc_tables_vu_prepare_p1
+
+statement ok
+DROP TABLE isc_tables_vu_prepare_t1
+

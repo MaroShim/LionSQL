@@ -1,0 +1,29 @@
+# test/slt_proc/babelfish_oracle/514_babel_babel_1845.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1845.sql
+
+statement ok
+set ANSI_NULL_DFLT_ON ON;
+
+statement ok
+set ANSI_NULL_DFLT_OFF OFF;
+
+statement ok
+create table t1 (c1 int);
+
+statement ok
+insert into t1 values (NULL);
+
+query T
+select c1 from t1;
+----
+NULL
+
+statement ok
+set ANSI_NULL_DFLT_ON OFF;
+
+statement ok
+set ANSI_NULL_DFLT_OFF ON;
+
+statement ok
+drop table if exists t1;
+

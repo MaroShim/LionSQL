@@ -1,0 +1,363 @@
+# test/slt_proc/babelfish_oracle/1567_babel_temp_table_rollback_subxact.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/temp_tables/temp_table_rollback_subxact-vu-prepare.sql, test/babelfish/raw/temp_tables/temp_table_rollback_subxact-vu-verify.sql, test/babelfish/raw/temp_tables/temp_table_rollback_subxact-vu-cleanup.sql
+
+statement ok
+CREATE VIEW enr_view AS
+    SELECT
+        CASE
+            WHEN relname LIKE '#pg_toast%' AND relname LIKE '%index%' THEN '#pg_toast_#oid_masked#_index'
+            WHEN relname LIKE '#pg_toast%' THEN '#pg_toast_#oid_masked#'
+            ELSE relname
+        END AS relname
+    FROM sys.babelfish_get_enr_list()
+
+statement ok
+BEGIN TRANSACTION T1
+    CREATE TABLE #t1(a varchar(16))
+    INSERT INTO #t1 VALUES ('t1')
+    SAVE TRANSACTION T2
+        INSERT INTO #t1 VALUES ('t2')
+        SAVE TRANSACTION T3
+            INSERT INTO #t1 VALUES ('t3')
+            SAVE TRANSACTION T4
+                INSERT INTO #t1 VALUES ('t4')
+                SELECT * FROM #t1
+            ROLLBACK TRANSACTION T4
+            SELECT * FROM #t1
+        ROLLBACK TRANSACTION T3
+        SELECT * FROM #t1
+    ROLLBACK TRANSACTION T2
+    SELECT * FROM #t1
+ROLLBACK TRANSACTION T1
+SELECT * FROM #t1
+
+statement ok
+BEGIN TRANSACTION T1
+    CREATE TABLE #t1(a int)
+    SAVE TRANSACTION S1
+        DROP TABLE #t1
+        CREATE TABLE #t2(a int)
+        SAVE TRANSACTION S2
+            DROP TABLE #t2
+            CREATE TABLE #t3(a int)
+            SAVE TRANSACTION S3
+            DROP TABLE #t3
+    ROLLBACK TRANSACTION S1
+COMMIT
+
+statement ok
+BEGIN TRANSACTION T1
+    CREATE TABLE #t1(a int)
+    SAVE TRANSACTION S1
+        DROP TABLE #t1
+        CREATE TABLE #t2(a int)
+        SAVE TRANSACTION S2
+            DROP TABLE #t2
+            CREATE TABLE #t3(a int)
+            SAVE TRANSACTION S3
+            DROP TABLE #t3
+    ROLLBACK TRANSACTION S1
+ROLLBACK
+
+statement ok
+CREATE TABLE #t1(a int)
+
+statement ok
+BEGIN TRANSACTION T1
+    SAVE TRANSACTION s1
+        DROP TABLE #t1
+        CREATE TABLE #t1(a int identity primary key)  
+        SAVE TRANSACTION s2
+            DROP TABLE #t1
+            CREATE TABLE #t1(a varchar(1000))
+            SAVE TRANSACTION S3
+                DROP TABLE #t1
+    ROLLBACK TRANSACTION s1
+COMMIT
+
+statement ok
+SELECT * FROM #t1
+
+statement ok
+DROP TABLE #t1
+
+statement ok
+BEGIN TRANSACTION T1
+    CREATE TABLE #t1(a int primary key, b varchar(16))
+    SAVE TRANSACTION T2
+        INSERT INTO #t1 VALUES (1, 't2')
+        SAVE TRANSACTION T3
+            UPDATE #t1 SET a = 2 WHERE a = 1
+            SELECT * FROM #t1
+            SAVE TRANSACTION T4
+                DROP TABLE #t1
+            ROLLBACK TRANSACTION T4
+        ROLLBACK TRANSACTION T3
+        SELECT * FROM #t1
+    ROLLBACK TRANSACTION T2
+    select * from enr_view
+    DROP TABLE #t1
+
+statement ok
+BEGIN TRAN
+    CREATE TABLE #t1_exists(a int)
+    SAVE TRAN save1
+        CREATE TABLE #t2(a int)
+        SAVE TRAN save2
+            CREATE TABLE #t3(a int)
+    ROLLBACK TRAN save1
+    CREATE TABLE #t2_exists(a int)
+COMMIT
+
+statement ok
+BEGIN TRAN 
+    CREATE TABLE #t1(a int identity primary key)
+    SAVE TRAN save1
+        CREATE TABLE #t2(a int identity primary key, b varchar)
+        SAVE TRAN save2
+            DROP TABLE #t2
+            DROP TABLE #t1
+    ROLLBACK TRAN save1
+    CREATE TABLE #t3(a varchar, b int identity primary key)
+    SAVE TRAN save3
+        CREATE TABLE #t4(a int identity primary key, b varchar)
+        SAVE TRAN save4
+            DROP TABLE #t4
+            DROP TABLE #t3
+    ROLLBACK TRAN save3
+    CREATE TABLE #t5(a int)
+COMMIT
+
+statement ok
+BEGIN TRAN 
+    CREATE TABLE #t1(a int identity primary key)
+    SAVE TRAN save1
+        CREATE TABLE #t2(a int identity primary key, b varchar)
+        SAVE TRAN save2
+            DROP TABLE #t2
+            DROP TABLE #t1
+    ROLLBACK TRAN save1
+    CREATE TABLE #t3(a varchar, b int identity primary key)
+    SAVE TRAN save3
+        CREATE TABLE #t4(a int identity primary key, b varchar)
+        SAVE TRAN save4
+            DROP TABLE #t4
+            DROP TABLE #t3
+    ROLLBACK TRAN save3
+    CREATE TABLE #t5(a int)
+ROLLBACK
+
+statement ok
+BEGIN TRAN 
+    CREATE TABLE #t1(a int identity primary key)
+    SAVE TRAN save1
+        CREATE TABLE #t2(a int identity primary key, b varchar)
+        SAVE TRAN save2
+            DROP TABLE #t2
+            DROP TABLE #t1
+    ROLLBACK TRAN save1
+    CREATE TABLE #t3(a varchar, b int identity primary key)
+    SAVE TRAN save3
+        CREATE TABLE #t4(a int identity primary key, b varchar)
+        SAVE TRAN save4
+            DROP TABLE #t4
+            DROP TABLE #t3
+    ROLLBACK
+
+statement ok
+CREATE TABLE #temp_table_rollback_t5(a int, b varchar, c int, d int)
+
+statement ok
+BEGIN TRAN T1
+    SAVE TRANSACTION S2
+        CREATE INDEX #temp_table_rollback_t5_idx1 ON #temp_table_rollback_t5(a)
+        INSERT INTO #temp_table_rollback_t5 VALUES (1, 'a', 2, 3)
+    ROLLBACK TRANSACTION S2
+COMMIT
+
+statement ok
+SELECT * FROM #temp_table_rollback_t5
+
+statement ok
+INSERT INTO #temp_table_rollback_t5 VALUES (2, 'b', 3, 4)
+
+statement ok
+BEGIN TRAN
+    CREATE INDEX #temp_table_rollback_t5_idx1 ON #temp_table_rollback_t5(a)
+ROLLBACK
+
+query TTTT
+SELECT * FROM #temp_table_rollback_t5
+----
+2 b 3 4
+
+statement ok
+CREATE INDEX #temp_table_rollback_t5_idx1 ON #temp_table_rollback_t5(a)
+
+query TTTT
+SELECT * FROM #temp_table_rollback_t5
+----
+2 b 3 4
+
+statement ok
+DROP INDEX #temp_table_rollback_t5_idx1 ON #temp_table_rollback_t5
+
+statement ok
+CREATE INDEX #temp_table_rollback_t5_idx2 ON #temp_table_rollback_t5(b)
+
+statement ok
+BEGIN TRAN T1
+    SAVE TRANSACTION S2
+        DROP INDEX #temp_table_rollback_t5_idx2 ON #temp_table_rollback_t5
+        INSERT INTO #temp_table_rollback_t5 VALUES (3, 'c', 4, 5)
+    ROLLBACK TRANSACTION S2
+COMMIT
+
+query TTTT
+SELECT * FROM #temp_table_rollback_t5
+----
+2 b 3 4
+
+statement ok
+BEGIN TRAN
+    DROP INDEX #temp_table_rollback_t5_idx2 ON #temp_table_rollback_t5
+ROLLBACK
+
+statement ok
+DROP INDEX #temp_table_rollback_t5_idx2 ON #temp_table_rollback_t5
+
+statement ok
+CREATE INDEX #temp_table_rollback_t5_idx2 ON #temp_table_rollback_t5(b)
+
+statement ok
+DROP INDEX #temp_table_rollback_t5_idx2 ON #temp_table_rollback_t5
+
+statement ok
+BEGIN TRAN T1
+    SAVE TRANSACTION S2
+        CREATE INDEX #temp_table_rollback_t5_idx3 ON #temp_table_rollback_t5(c)
+        DROP INDEX #temp_table_rollback_t5_idx3 ON #temp_table_rollback_t5
+    ROLLBACK TRANSACTION S2
+COMMIT
+
+query TTTT
+SELECT * FROM #temp_table_rollback_t5
+----
+2 b 3 4
+
+statement ok
+BEGIN TRAN T1
+    CREATE INDEX #temp_table_rollback_t5_idx3 ON #temp_table_rollback_t5(c)
+    DROP INDEX #temp_table_rollback_t5_idx3 ON #temp_table_rollback_t5
+ROLLBACK
+
+query TTTT
+SELECT * FROM #temp_table_rollback_t5
+----
+2 b 3 4
+
+statement ok
+CREATE INDEX #temp_table_rollback_t5_idx3 ON #temp_table_rollback_t5(c)
+DROP INDEX #temp_table_rollback_t5_idx3 ON #temp_table_rollback_t5
+
+query TTTT
+SELECT * FROM #temp_table_rollback_t5
+----
+2 b 3 4
+
+statement ok
+CREATE INDEX #temp_table_rollback_t5_idx4 ON #temp_table_rollback_t5(d)
+
+statement ok
+BEGIN TRAN T1
+    SAVE TRANSACTION S2
+        DROP INDEX #temp_table_rollback_t5_idx4 ON #temp_table_rollback_t5
+        CREATE INDEX #temp_table_rollback_t5_idx4 ON #temp_table_rollback_t5(c)
+    ROLLBACK TRANSACTION S2
+COMMIT
+
+query TTTT
+SELECT * FROM #temp_table_rollback_t5
+----
+2 b 3 4
+
+statement ok
+BEGIN TRAN T1
+    DROP INDEX #temp_table_rollback_t5_idx4 ON #temp_table_rollback_t5
+    CREATE INDEX #temp_table_rollback_t5_idx4 ON #temp_table_rollback_t5(c)
+ROLLBACK
+
+query TTTT
+SELECT * FROM #temp_table_rollback_t5
+----
+2 b 3 4
+
+query TTTT
+SELECT * FROM #temp_table_rollback_t5
+----
+2 b 3 4
+
+statement ok
+DROP TABLE #temp_table_rollback_t5
+
+statement ok
+BEGIN TRAN 
+    CREATE TABLE #t1(a int identity primary key, b int)
+    SAVE TRAN save1
+        CREATE TABLE #t2(a int identity primary key, b int)
+        CREATE INDEX #idx1 ON #t1(b)
+        SAVE TRAN save2
+            CREATE INDEX #idx2 ON #t2(b)
+    ROLLBACK TRAN save1
+    SELECT * FROM #t1
+    CREATE TABLE #t3(a varchar, b int identity primary key)
+    SAVE TRAN save3
+        CREATE TABLE #t4(a int identity primary key, b varchar)
+        CREATE INDEX #idx3 ON #t3(b)
+        SAVE TRAN save4
+            CREATE INDEX #idx4 ON #t4(b)
+            DROP INDEX #idx4 ON #t4
+            DROP INDEX #idx3 ON #t3
+        ROLLBACK TRAN save4
+    ROLLBACK TRAN save3
+    COMMIT
+
+statement ok
+BEGIN TRANSACTION
+    CREATE TABLE #outer_tab1(a int)
+    SELECT * FROM enr_view
+    exec implicit_rollback_in_proc
+COMMIT
+
+statement ok
+BEGIN TRANSACTION
+    CREATE TABLE #t1(a int)
+    SELECT UPPER(abc) -- Should fail 
+COMMIT
+
+statement ok
+BEGIN TRANSACTION
+    CREATE TABLE #t2(a int)
+    SAVE TRAN s1
+        SELECT UPPER(abc)
+COMMIT
+
+statement ok
+CREATE PROCEDURE my_bad_proc AS
+BEGIN
+    SELECT UPPER(abc)
+END
+
+statement ok
+BEGIN TRANSACTION
+    CREATE TABLE #t3(a int)
+    SAVE TRAN s1
+        exec my_bad_proc
+COMMIT
+
+statement ok
+DROP PROCEDURE my_bad_proc
+
+statement ok
+DROP VIEW enr_view;
+

@@ -21,4 +21,21 @@ SELECT id FROM page_items ORDER BY id OFFSET 4 ROWS;
 6
 
 statement ok
+CREATE PROCEDURE sp_page @skip INT, @take INT
+AS
+BEGIN
+    SELECT id FROM page_items ORDER BY id OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY;
+END;
+
+query I
+EXEC sp_page 1, 3;
+----
+2
+3
+4
+
+statement ok
+DROP PROCEDURE sp_page;
+
+statement ok
 DROP TABLE page_items;

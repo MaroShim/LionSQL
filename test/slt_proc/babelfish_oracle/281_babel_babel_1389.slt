@@ -1,0 +1,41 @@
+# test/slt_proc/babelfish_oracle/281_babel_babel_1389.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1389.sql
+
+query TT
+SELECT @@OPTIONS AS OriginalOptionsValue;
+SET CONCAT_NULL_YIELDS_NULL OFF;
+SELECT 'abc' + NULL AS ResultWhen_OFF, @@OPTIONS AS OptionsValueWhen_OFF;
+----
+NULL 5432
+
+query TT
+SET CONCAT_NULL_YIELDS_NULL ON;
+SELECT 'abc' + NULL AS ResultWhen_ON, @@OPTIONS AS OptionsValueWhen_ON;
+----
+NULL 5432
+
+statement ok
+SET IMPLICIT_TRANSACTIONS ON;
+SELECT @@OPTIONS;
+SET IMPLICIT_TRANSACTIONS OFF;
+
+statement ok
+SET ANSI_NULLS OFF;
+SELECT @@OPTIONS;
+SET ANSI_NULLS ON;
+
+statement ok
+SET QUOTED_IDENTIFIER ON;
+SELECT @@OPTIONS;
+SET QUOTED_IDENTIFIER OFF;
+
+statement ok
+SET NOCOUNT ON;
+SELECT @@OPTIONS;
+SET NOCOUNT OFF;
+
+statement ok
+SET XACT_ABORT ON;
+SELECT @@OPTIONS;
+SET XACT_ABORT OFF;
+

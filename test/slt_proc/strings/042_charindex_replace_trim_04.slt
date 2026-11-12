@@ -1,0 +1,30 @@
+# test/slt_proc/strings/042_charindex_replace_trim_04.slt
+# T-SQL CHARINDEX, REPLACE, and TRIM family (4)
+
+query I
+SELECT CHARINDEX('commit', 'transaction_commit_log');
+----
+13
+
+query I
+SELECT CHARINDEX('nonexistent_token', 'transaction_commit_log');
+----
+0
+
+query T
+SELECT TRIM('transaction_wal_log');
+----
+transaction_wal_log
+
+statement ok
+CREATE PROCEDURE sp_replace_token_42 @src VARCHAR(100), @old VARCHAR(50), @new VARCHAR(50)
+AS
+BEGIN
+    DECLARE @pos INT = CHARINDEX(@old, @src);
+    SELECT @pos, TRIM(REPLACE(@src, @old, @new));
+END;
+
+query IT
+EXEC sp_replace_token_42 'transaction_commit_log', 'commit', 'wal';
+----
+13 transaction_wal_log

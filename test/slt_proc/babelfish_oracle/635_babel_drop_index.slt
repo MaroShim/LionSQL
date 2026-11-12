@@ -1,0 +1,260 @@
+# test/slt_proc/babelfish_oracle/635_babel_drop_index.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/drop_index-vu-prepare.sql, test/babelfish/raw/drop_index-vu-verify.sql, test/babelfish/raw/drop_index-vu-cleanup.sql
+
+statement ok
+use master
+
+statement ok
+use tempdb
+
+statement ok
+use master
+
+statement ok
+create table dbo.t1_drop_index(a int)
+
+statement ok
+create index ix1 on dbo.t1_drop_index(a)
+
+query TTTT
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+----
+master NULL dbo ix1
+
+query TTTT
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+----
+master NULL dbo ix1
+
+statement ok
+drop index guest.t1_drop_index.ix1
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+
+statement ok
+drop index if exists guest.t1_drop_index.ix1
+
+statement ok
+drop index if exists guest.t1_drop_index.ix2
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+
+statement ok
+drop index if exists dbo.t1_drop_index.ix1
+
+statement ok
+drop index if exists dbo.t1_drop_index.ix2
+
+statement ok
+create index ix1 on dbo.t1_drop_index(a)
+
+query TTTT
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+----
+master NULL dbo ix1
+
+query TTTT
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+----
+master NULL dbo ix1
+
+statement ok
+drop index if exists t1_drop_index.ix1
+
+query TTTT
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+----
+master NULL dbo ix1
+
+statement ok
+execute('drop index guest.t1_drop_index.ix1')
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+
+statement ok
+execute('drop index if exists guest.t1_drop_index.ix1')
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+
+statement ok
+execute('drop index if exists t1_drop_index.ix1')
+
+statement ok
+create index ix1 on dbo.t1_drop_index(a)
+
+statement ok
+drop index if exists nosuchtable.ix1
+
+statement ok
+drop index nosuchschema.nosuchtable.ix1
+
+statement ok
+drop index if exists nosuchschema.nosuchtable.ix1
+
+statement ok
+use master
+
+statement ok
+create index ix1 on guest.t1_drop_index(a)
+
+statement ok
+use tempdb
+
+query TTTT
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4	
+----
+tempdb NULL dbo ix1
+
+statement ok
+drop index guest.t1_drop_index.ix1
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4	
+
+statement ok
+use master
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4	
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4	
+
+statement ok
+use tempdb
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4	
+
+statement ok
+use master
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4	
+
+statement ok
+use tempdb
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4	
+
+statement ok
+use master
+
+statement ok
+drop index if exists tempdb.dbo.sometable.someindex
+
+statement ok
+use master
+
+statement ok
+drop table dbo.t1_drop_index
+
+statement ok
+create table dbo.t1_drop_index(a int)
+
+statement ok
+create index ix1 on dbo.t1_drop_index(a)
+
+query TTTT
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+----
+master NULL dbo ix1
+
+query TTTT
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+----
+master NULL dbo ix1
+
+statement ok
+drop index ix1 on guest.t1_drop_index
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+
+statement ok
+drop index if exists ix1 on guest.t1_drop_index
+
+statement ok
+drop index if exists ix2 on guest.t1_drop_index
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+
+statement ok
+drop index if exists ix1 on dbo.t1_drop_index
+
+statement ok
+drop index if exists ix2 on dbo.t1_drop_index
+
+statement ok
+create index ix1 on dbo.t1_drop_index(a)
+
+query TTTT
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+----
+master NULL dbo ix1
+
+statement ok
+drop index ix1 on t1_drop_index
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+
+statement ok
+drop index if exists ix1 on t1_drop_index
+
+statement ok
+create index ix1 on dbo.t1_drop_index(a)
+
+query TTTT
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+----
+master NULL dbo ix1
+
+statement ok
+execute('drop index ix1 on guest.t1_drop_index')
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+
+statement ok
+execute('drop index if exists ix1 on guest.t1_drop_index')
+
+statement ok
+select db_name(), object_name(id), object_schema_name(id), name from sysindexes where name like 'ix1%' order by 1,2,3,4
+
+statement ok
+execute('drop index if exists ix1 on t1_drop_index')
+
+statement ok
+create index ix1 on dbo.t1_drop_index(a)
+
+statement ok
+drop index if exists ix1 on nosuchtable
+
+statement ok
+drop index if exists ix1 on nosuchschema.nosuchtable
+
+statement ok
+use master
+
+statement ok
+drop index if exists someindex ON tempdb.dbo.sometable
+
+statement ok
+drop index if exists someindex ON someserver.tempdb.dbo.sometable
+
+statement ok
+use master
+
+statement ok
+drop table guest.t1_drop_index
+
+statement ok
+use tempdb
+

@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1392_babel_babel_try_parse.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_try_parse-vu-prepare.sql, test/babelfish/raw/babel_try_parse-vu-verify.sql
+
+statement ok
+create view babel_try_parse_v as select TRY_PARSE('abc' as varchar(10))
+
+statement ok
+DROP VIEW babel_try_parse_v;
+

@@ -1,0 +1,158 @@
+# test/slt_proc/babelfish_oracle/1091_babel_9809_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/9809_1.sql
+
+statement ok
+begin transaction
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+create schema error_mapping;
+
+statement ok
+create table error_mapping.temp1 (a int)
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+insert into error_mapping.temp1 values(1)
+SELECT CONVERT(DATE, '10-10-10', 140)
+end
+
+statement ok
+create table error_mapping.temp2 (a int)
+
+statement ok
+create table error_mapping.temp3 (a int)
+
+statement ok
+drop procedure error_mapping.ErrorHandling1;
+
+statement ok
+drop table error_mapping.temp1;
+drop table error_mapping.temp2;
+drop table error_mapping.temp3;
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+SELECT CONVERT(DATE, '10-10-10', 140)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('Compile time error' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+begin transaction
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+SELECT CONVERT(DATE, '10-10-10', 140)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+set xact_abort ON;
+
+statement ok
+begin transaction
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+SELECT CONVERT(DATE, '10-10-10', 140)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+SELECT CONVERT(DATE, '10-10-10', 140)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure error_mapping.ErrorHandling2 as
+begin
+exec error_mapping.ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+drop procedure error_mapping.ErrorHandling2;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+set xact_abort ON;
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+SELECT CONVERT(DATE, '10-10-10', 140)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure error_mapping.ErrorHandling2 as
+begin
+exec error_mapping.ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+drop procedure error_mapping.ErrorHandling2;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+drop schema error_mapping;
+

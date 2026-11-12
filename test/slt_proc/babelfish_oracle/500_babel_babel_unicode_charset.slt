@@ -1,0 +1,42 @@
+# test/slt_proc/babelfish_oracle/500_babel_babel_unicode_charset.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_unicode_charset.sql
+
+statement ok
+drop table if exists unicode_test;
+
+statement ok
+create table unicode_test(col nvarchar(255), 中文列名 nvarchar(255));
+
+statement ok
+insert into unicode_test values('Hello', '你好');
+
+statement ok
+insert into unicode_test values('World', '世界');
+
+query T
+select col 别名 from unicode_test;
+----
+Hello
+World
+
+query T
+select 别名=col from unicode_test;
+----
+NULL
+NULL
+
+query T
+select "你好世界" from unicode_test with(nolock);
+----
+NULL
+NULL
+
+query T
+select 中文列名 from unicode_test with(nolock);
+----
+你好
+世界
+
+statement ok
+drop table if exists unicode_test;
+

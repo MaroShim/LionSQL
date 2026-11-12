@@ -1,0 +1,28 @@
+# test/slt_proc/babelfish_oracle/1504_babel_sys_login_property.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/sys-login-property-vu-prepare.sql, test/babelfish/raw/functions/sys-login-property-vu-verify.sql, test/babelfish/raw/functions/sys-login-property-vu-cleanup.sql
+
+statement ok
+CREATE VIEW loginproperty_vu_prepare_view AS
+SELECT sys.loginproperty('test_login', 'PasswordHash')
+
+statement ok
+CREATE PROC loginproperty_vu_prepare_proc AS
+SELECT sys.loginproperty('test_login', 'PasswordHash')
+
+statement ok
+CREATE FUNCTION loginproperty_vu_prepare_func()
+RETURNS nvarchar(128)
+AS
+BEGIN
+RETURN sys.loginproperty('test_login', 'PasswordHash')
+END
+
+statement ok
+DROP VIEW loginproperty_vu_prepare_view
+
+statement ok
+DROP PROC loginproperty_vu_prepare_proc
+
+statement ok
+DROP FUNCTION loginproperty_vu_prepare_func
+

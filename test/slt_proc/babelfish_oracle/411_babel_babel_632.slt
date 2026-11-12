@@ -1,0 +1,35 @@
+# test/slt_proc/babelfish_oracle/411_babel_babel_632.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-632.sql
+
+query T
+SELECT CAST('\x31' AS bytea);
+----
+0x31
+
+query T
+SELECT CAST('0x31' AS bytea);
+----
+0x31
+
+statement ok
+CREATE TABLE t_bytea(c1 int, c2 bytea);
+
+statement ok
+INSERT INTO t_bytea (c1, c2) VALUES (1, '\x31');
+INSERT INTO t_bytea (c1, c2) VALUES (2, '0x31');
+
+query TT
+SELECT c1, CAST(c2 AS varbinary(10)) FROM t_bytea;
+----
+1 0x31
+2 0x31
+
+query TT
+SELECT c1, CAST(c2 AS varchar(10)) FROM t_bytea;
+----
+1 0x31
+2 0x31
+
+statement ok
+DROP TABLE t_bytea;
+

@@ -1,0 +1,18 @@
+# test/slt_proc/babelfish_oracle/1131_babel_babel_2011.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2011.sql
+
+statement ok
+USE master;
+
+statement ok
+CREATE TABLE t1_2011 (a int);
+CREATE TABLE myTable2 (ColumnA uniqueidentifier, a int);
+
+statement ok
+insert t1_2011 (a) values (1), (2)
+
+query T
+select count(distinct a) from myTable2
+----
+0
+

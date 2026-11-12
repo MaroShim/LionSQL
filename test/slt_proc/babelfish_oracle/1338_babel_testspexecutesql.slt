@@ -1,0 +1,23 @@
+# test/slt_proc/babelfish_oracle/1338_babel_testspexecutesql.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/TestSPExecutesql.sql
+
+statement ok
+CREATE TABLE spExecutesqlTable1 (a INT, b VARCHAR(10));
+CREATE TABLE spExecutesqlTable2 (a INT, b INT, c INT, d INT);
+
+statement ok
+TRUNCATE TABLE spExecutesqlTable1;
+
+statement ok
+TRUNCATE TABLE spExecutesqlTable2;
+
+statement ok
+TRUNCATE TABLE spExecutesqlTable1;
+
+statement ok
+TRUNCATE TABLE spExecutesqlTable1;
+
+statement ok
+DROP TABLE spExecutesqlTable1;
+DROP TABLE spExecutesqlTable2;
+

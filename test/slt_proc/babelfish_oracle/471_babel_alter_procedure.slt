@@ -1,0 +1,220 @@
+# test/slt_proc/babelfish_oracle/471_babel_alter_procedure.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/alter/alter-procedure-vu-prepare.sql, test/babelfish/raw/alter/alter-procedure-vu-verify.sql, test/babelfish/raw/alter/alter-procedure-vu-cleanup.sql
+
+statement ok
+CREATE TABLE alter_proc_users ([Id] int, [firstname] varchar(50), [lastname] varchar(50), [email] varchar(50));
+CREATE TABLE alter_proc_orders ([Id] int, [userid] int, [productid] int, [quantity] int, [orderdate] Date);
+INSERT INTO alter_proc_users VALUES (1, 'j', 'o', 'testemail'), (1, 'e', 'l', 'testemail2');
+INSERT INTO alter_proc_orders VALUES (1, 1, 1, 5, '2023-06-25'), (2, 1, 1, 6, '2023-06-25');
+
+statement ok
+CREATE PROCEDURE alter_proc_p1 
+AS
+    select * from alter_proc_users
+
+statement ok
+create procedure alter_proc_p2
+AS
+    exec alter_proc_p1
+
+statement ok
+create procedure alter_proc_p3 as select 1
+
+statement ok
+create procedure alter_proc_p4 as select 1
+
+statement ok
+create procedure alter_proc_p5 as select 10
+
+statement ok
+alter procedure alter_proc_p5 @dateParam date as select @dateParam
+
+query TTTT
+exec alter_proc_p1
+----
+1 j o testemail
+1 e l testemail2
+
+query TTTT
+exec alter_proc_p1
+----
+1 j o testemail
+1 e l testemail2
+
+statement ok
+exec alter_proc_p2
+
+query TTTT
+exec alter_proc_p1 @param = 1
+----
+1 j o testemail
+1 e l testemail2
+
+query TTTT
+exec alter_proc_p1 @param = 2
+----
+1 j o testemail
+1 e l testemail2
+
+statement ok
+exec alter_proc_p2
+
+statement ok
+ALTER PROCEDURE alter_proc_p1
+    @param date
+AS
+    IF (@param = '2020-01-01')
+    BEGIN
+        select * from alter_proc_users
+    END
+    ELSE
+    BEGIN
+        select * from alter_proc_orders
+    END
+
+query TTTT
+exec alter_proc_p1 @param = '2020-01-01'
+----
+1 j o testemail
+1 e l testemail2
+
+query TTTTT
+exec alter_proc_p1 @param = '2020-01-02'
+----
+1 1 1 5 2023-06-25
+2 1 1 6 2023-06-25
+
+statement ok
+alter procedure alter_proc_p2
+AS
+    exec alter_proc_p1 @param = '2020-01-01'
+
+statement ok
+exec alter_proc_p2
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+alter procedure alter_proc_p3 as select 2
+
+statement ok
+ROLLBACK
+
+query T
+exec alter_proc_p3
+----
+2
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+alter procedure alter_proc_p3 @z int as select 500 + @z
+
+statement ok
+INSERT INTO alter_proc_users VALUES (3, 'newuser', 'lastname', 'testemail3')
+
+statement ok
+COMMIT
+
+query T
+exec alter_proc_p3 @z = 500
+----
+1000
+
+query TTTT
+select * from alter_proc_users
+----
+1 j o testemail
+1 e l testemail2
+3 newuser lastname testemail3
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+alter procedure alter_proc_p3 as select 1000
+
+statement ok
+INSERT INTO alter_proc_users VALUES (4, 'newest_user', 'lastname3', 'testemail4')
+
+statement ok
+ROLLBACK
+
+query T
+exec alter_proc_p3
+----
+1000
+
+query TTTT
+select * from alter_proc_users
+----
+1 j o testemail
+1 e l testemail2
+3 newuser lastname testemail3
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+alter procedure alter_proc_p3 as 
+    select fake_column from alter_proc_users
+
+statement ok
+ROLLBACK
+
+query T
+exec alter_proc_p3
+----
+NULL
+NULL
+NULL
+
+query T
+exec alter_proc_p4
+----
+1
+
+statement ok
+alter 
+procedure alter_proc_p4 as select 4
+
+query T
+exec alter_proc_p4
+----
+4
+
+query T
+exec alter_proc_p5 @dateParam = '2000-01-01'
+----
+2000-01-01
+
+statement ok
+CREATE PROCEDURE [babel_6496_test'proc] AS SELECT 1;
+
+statement ok
+ALTER PROCEDURE [babel_6496_test'proc] AS SELECT 2;
+
+statement ok
+DROP PROCEDURE [babel_6496_test'proc];
+
+statement ok
+DROP PROCEDURE alter_proc_p1
+
+statement ok
+DROP PROCEDURE alter_proc_p2
+
+statement ok
+DROP PROCEDURE alter_proc_p3
+
+statement ok
+DROP PROCEDURE alter_proc_p4
+
+statement ok
+DROP PROCEDURE alter_proc_p5
+
+statement ok
+DROP TABLE alter_proc_users
+DROP TABLE alter_proc_orders
+

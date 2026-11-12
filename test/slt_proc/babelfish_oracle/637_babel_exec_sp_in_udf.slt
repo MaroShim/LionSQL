@@ -1,0 +1,162 @@
+# test/slt_proc/babelfish_oracle/637_babel_exec_sp_in_udf.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/exec_sp_in_udf-vu-prepare.sql, test/babelfish/raw/exec_sp_in_udf-vu-verify.sql, test/babelfish/raw/exec_sp_in_udf-vu-cleanup.sql
+
+statement ok
+use master
+
+statement ok
+create table t1_exec_sp_in_udf (a int)
+
+statement ok
+create procedure sp_myproc as return 0
+
+statement ok
+create function f_scalar_exec_sp_in_udf(@p int) 
+returns int as
+begin
+return @p
+end
+
+statement ok
+create function f_itvf_exec_sp_in_udf() 
+returns table 
+	return (select 123 as a)
+
+statement ok
+use tempdb
+
+statement ok
+create procedure p_tempdb_exec_sp_in_udf as return 0
+
+statement ok
+use master
+
+statement ok
+use master
+
+statement ok
+create function f1_exec_sp_in_udf() 
+returns int as
+begin
+exec sp_executesql 'select 123'
+return 0
+end
+
+query T
+select dbo.f1_exec_sp_in_udf()
+----
+0
+
+statement ok
+declare @v int = dbo.f1_exec_sp_in_udf()
+
+statement ok
+declare @v int 
+select @v = dbo.f1_exec_sp_in_udf()
+
+statement ok
+declare @v int
+set @v = dbo.f1_exec_sp_in_udf()
+
+statement ok
+select * from t1_exec_sp_in_udf where a = dbo.f1_exec_sp_in_udf()
+
+statement ok
+insert t1_exec_sp_in_udf values(dbo.f1_exec_sp_in_udf())
+
+statement ok
+delete t1_exec_sp_in_udf where a = dbo.f1_exec_sp_in_udf()
+
+statement ok
+declare @v int
+set @v = (select dbo.f1_exec_sp_in_udf())
+
+query T
+select sqrt(dbo.f1_exec_sp_in_udf())
+----
+0
+
+statement ok
+create table t2_exec_sp_in_udf(a int, b int default dbo.f1_exec_sp_in_udf())
+
+statement ok
+create function f2_exec_sp_in_udf() 
+returns int as
+begin
+exec dbo.sp_helpdb
+return 0
+end
+
+statement ok
+create function f3_exec_sp_in_udf() 
+returns int as
+begin
+exec [sp_helpdb]
+return 0
+end
+
+statement ok
+insert t1_exec_sp_in_udf values(456)
+
+query T
+select * from t1_exec_sp_in_udf
+----
+NULL
+456
+
+statement ok
+create procedure p1_exec_sp_in_udf
+as
+begin
+	exec sp_executesql 'select 123 as in_procedure'
+end
+
+query T
+exec p1_exec_sp_in_udf
+----
+123
+
+statement ok
+declare @v int
+exec @v = f_scalar_exec_sp_in_udf 123
+select @v as f_scalar_exec_sp_in_udf
+
+statement ok
+use master
+
+statement ok
+drop table t1_exec_sp_in_udf
+
+statement ok
+drop table t2_exec_sp_in_udf
+
+statement ok
+drop procedure sp_myproc
+
+statement ok
+drop procedure p1_exec_sp_in_udf
+
+statement ok
+drop function f1_exec_sp_in_udf
+
+statement ok
+drop function f2_exec_sp_in_udf
+
+statement ok
+drop function f3_exec_sp_in_udf
+
+statement ok
+drop function f_scalar_exec_sp_in_udf
+
+statement ok
+drop function f_itvf_exec_sp_in_udf
+
+statement ok
+use tempdb
+
+statement ok
+drop procedure p_tempdb_exec_sp_in_udf
+
+statement ok
+use master
+

@@ -1,0 +1,31 @@
+# test/slt_proc/babelfish_oracle/1105_babel_babel_1299.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1299.sql
+
+statement ok
+CREATE PROC babel_1299_proc (@a INT OUT, @b VARCHAR(10) OUTPUT) AS
+BEGIN
+	SET @a = @a + 1;
+	SET @b = 'hi';
+END
+
+statement ok
+DECLARE @x INT = 10;
+DECLARE @y VARCHAR(10) = 'hello';
+EXEC babel_1299_proc @x OUT, @y OUT
+SELECT @x AS x, @y AS y;
+
+statement ok
+DECLARE @x INT = 10;
+DECLARE @y VARCHAR(10) = 'hello';
+EXEC babel_1299_proc @x OUT, @y
+SELECT @x AS x, @y AS y;
+
+statement ok
+DECLARE @x INT = 10;
+DECLARE @y VARCHAR(10) = 'hello';
+EXEC babel_1299_proc @x, @y OUT
+SELECT @x AS x, @y AS y;
+
+statement ok
+DROP PROC babel_1299_proc
+

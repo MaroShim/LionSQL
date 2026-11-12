@@ -1,0 +1,125 @@
+# test/slt_proc/babelfish_oracle/436_babel_babel_spcolumns.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SPCOLUMNS.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE mydb1
+
+statement ok
+USE mydb1
+
+statement ok
+EXEC sp_columns
+
+statement ok
+CREATE table t_time (a time)
+
+query TTTTTTTTTTTTTTTTTTT
+EXEC sp_columns @table_name = 't_time'
+----
+mydb1 dbo t_time a -154 time 16 5 7 NULL 1 NULL NULL -154 NULL NULL 1 YES 41
+mydb1 dbo t_time _row_id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 2 NO 56
+
+statement ok
+CREATE table t_text(a text)
+
+query TTTTTTTTTTTTTTTTTTT
+exec sp_columns @table_name = 't_text'
+----
+mydb1 dbo t_text a 12 varchar 255 255 NULL NULL 1 NULL NULL 12 NULL 255 1 YES 39
+mydb1 dbo t_text _row_id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 2 NO 56
+
+statement ok
+CREATE table t_int (a int)
+
+query TTTTTTTTTTTTTTTTTTT
+exec sp_columns @table_name = 't_int'
+----
+mydb1 dbo t_int a 4 int 10 4 0 10 1 NULL NULL 4 NULL NULL 1 YES 56
+mydb1 dbo t_int _row_id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 2 NO 56
+
+statement ok
+CREATE table t_money(a money)
+
+query TTTTTTTTTTTTTTTTTTT
+exec sp_columns @table_name = 't_money'
+----
+mydb1 dbo t_money a 3 decimal 19 9 4 10 1 NULL NULL 3 NULL NULL 1 YES 108
+mydb1 dbo t_money _row_id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 2 NO 56
+
+query TTTTTTTTTTTTTTTTTTT
+EXEC sp_columns @table_name = 't_int', @table_owner = 'dbo', @table_qualifier = 'mydb1', @column_name = 'a'
+----
+mydb1 dbo t_int a 4 int 10 4 0 10 1 NULL NULL 4 NULL NULL 1 YES 56
+
+query TTTTTTTTTTTTTTTTTTT
+EXEC sp_columns 't_int', 'dbo', 'mydb1', 'a'
+----
+mydb1 dbo t_int a 4 int 10 4 0 10 1 NULL NULL 4 NULL NULL 1 YES 56
+
+statement ok
+drop table t_int
+drop table t_text
+drop table t_time
+drop table t_money
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE mydb1 COLLATE bbf_unicode_cp1_ci_ai;
+
+statement ok
+USE mydb1
+
+statement ok
+EXEC sp_columns
+
+query TTTTTTTTTTTTTTTTTTT
+EXEC sp_columns @table_name = 't_time'
+----
+mydb1 dbo t_time a -154 time 16 5 7 NULL 1 NULL NULL -154 NULL NULL 1 YES 41
+mydb1 dbo t_time _row_id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 2 NO 56
+
+query TTTTTTTTTTTTTTTTTTT
+exec sp_columns @table_name = 't_text'
+----
+mydb1 dbo t_text a 12 varchar 255 255 NULL NULL 1 NULL NULL 12 NULL 255 1 YES 39
+mydb1 dbo t_text _row_id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 2 NO 56
+
+statement ok
+CREATE table t_int (a int)
+
+query TTTTTTTTTTTTTTTTTTT
+exec sp_columns @table_name = 't_int'
+----
+mydb1 dbo t_int a 4 int 10 4 0 10 1 NULL NULL 4 NULL NULL 1 YES 56
+mydb1 dbo t_int _row_id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 2 NO 56
+
+query TTTTTTTTTTTTTTTTTTT
+exec sp_columns @table_name = 't_money'
+----
+mydb1 dbo t_money a 3 decimal 19 9 4 10 1 NULL NULL 3 NULL NULL 1 YES 108
+mydb1 dbo t_money _row_id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 2 NO 56
+
+query TTTTTTTTTTTTTTTTTTT
+EXEC sp_columns @table_name = 't_int', @table_owner = 'dbo', @table_qualifier = 'mydb1', @column_name = 'a'
+----
+mydb1 dbo t_int a 4 int 10 4 0 10 1 NULL NULL 4 NULL NULL 1 YES 56
+
+query TTTTTTTTTTTTTTTTTTT
+EXEC sp_columns 't_int', 'dbo', 'mydb1', 'a'
+----
+mydb1 dbo t_int a 4 int 10 4 0 10 1 NULL NULL 4 NULL NULL 1 YES 56
+
+statement ok
+drop table t_int
+drop table t_text
+drop table t_time
+drop table t_money
+
+statement ok
+USE master
+

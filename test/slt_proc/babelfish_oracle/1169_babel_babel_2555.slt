@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1169_babel_babel_2555.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2555.sql
+
+statement ok
+EXEC sp_babelfish_configure '%', 'default';
+
+statement ok
+EXEC sp_babelfish_configure '%', 'default', 'server';
+

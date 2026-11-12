@@ -1,0 +1,22 @@
+# test/slt_proc/types_cast_null/140_cast_null_3vl_15.slt
+# T-SQL CAST, TRY_CAST, ISNUMERIC, CHOOSE, IIF, COALESCE, NULLIF (15)
+
+query ITI
+SELECT CAST('566' AS INT) + 15, CAST(566 AS VARCHAR(20)), TRY_CAST('566' AS INT);
+----
+581 566 566
+
+query IIT
+SELECT ISNUMERIC('566'), ISNUMERIC('err_15z'), ISNULL(CAST(TRY_CAST('err_15z' AS INT) AS VARCHAR(20)), 'NULL_VAL');
+----
+1 0 NULL_VAL
+
+query TTTT
+SELECT CHOOSE(4, 'Alpha_15', 'Beta_15', 'Gamma_15', 'Delta_15'), IIF(566 > 10, 'YES', 'NO'), ISNULL(NULL, 'DEF_15'), COALESCE(NULL, NULL, 'COAL_15');
+----
+Delta_15 YES DEF_15 COAL_15
+
+query II
+SELECT ISNULL(NULLIF(566, 566), -1), NULLIF(566, 0);
+----
+-1 566

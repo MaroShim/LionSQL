@@ -1,0 +1,37 @@
+# test/slt_proc/babelfish_oracle/1494_babel_sys_fulltext_indexes.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-fulltext_indexes-vu-prepare.sql, test/babelfish/raw/views/sys-fulltext_indexes-vu-verify.sql, test/babelfish/raw/views/sys-fulltext_indexes-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE VIEW sys_fulltext_indexes_vu_prepare_view AS
+SELECT * FROM sys.fulltext_indexes
+
+statement ok
+CREATE PROC sys_fulltext_indexes_vu_prepare_proc AS
+SELECT * FROM sys.fulltext_indexes
+
+statement ok
+CREATE FUNCTION dbo.sys_fulltext_indexes_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT COUNT(*) FROM sys.fulltext_indexes)
+END
+
+statement ok
+USE master
+
+statement ok
+USE master
+
+statement ok
+DROP VIEW sys_fulltext_indexes_vu_prepare_view
+
+statement ok
+DROP PROC sys_fulltext_indexes_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_fulltext_indexes_vu_prepare_func
+

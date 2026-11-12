@@ -1,0 +1,306 @@
+# test/slt_proc/babelfish_oracle/684_babel_output_into_fires_trigger.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/output_into_fires_trigger.sql
+
+statement ok
+CREATE TABLE babel_4859_t (id INT)
+
+statement ok
+CREATE TRIGGER [dbo].[babel_4859_trigger_insert]
+	ON [dbo].[babel_4859_t]
+AFTER INSERT
+AS
+SET NOCOUNT ON
+SELECT 1;
+
+query T
+DECLARE @babel_4859_tabvar TABLE (id INT);
+INSERT INTO babel_4859_t OUTPUT INSERTED.id INTO @babel_4859_tabvar VALUES (4859), (9584), (2), (3)
+----
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+CREATE TRIGGER [dbo].[babel_4859_trigger_update]
+	ON [dbo].[babel_4859_t]
+AFTER UPDATE
+AS
+SET NOCOUNT ON
+SELECT 1;
+
+query TT
+DECLARE @babel_4859_tabvar TABLE (id INT, id_old INT);
+UPDATE babel_4859_t SET id = 77 OUTPUT INSERTED.id, DELETED.id INTO @babel_4859_tabvar
+----
+77 NULL
+77 NULL
+77 NULL
+77 NULL
+
+statement ok
+CREATE TRIGGER [dbo].[babel_4859_trigger_delete]
+	ON [dbo].[babel_4859_t]
+AFTER delete
+AS
+SET NOCOUNT ON
+SELECT 1;
+
+query T
+DECLARE @babel_4859_tabvar TABLE (id_old INT);
+DELETE babel_4859_t OUTPUT DELETED.id INTO @babel_4859_tabvar
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+CREATE PROCEDURE babel_4859_p
+AS
+DECLARE @babel_4859_tabvar TABLE (id INT);
+INSERT INTO babel_4859_t OUTPUT INSERTED.id INTO @babel_4859_tabvar VALUES (4859), (9584), (2), (3)
+----
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+EXEC babel_4859_p
+
+statement ok
+DROP PROC babel_4859_p
+
+query TT
+CREATE PROCEDURE babel_4859_p
+AS
+DECLARE @babel_4859_tabvar TABLE (id INT, id_old INT);
+UPDATE babel_4859_t SET id = 77 OUTPUT INSERTED.id, DELETED.id INTO @babel_4859_tabvar
+----
+77 NULL
+77 NULL
+77 NULL
+77 NULL
+
+statement ok
+EXEC babel_4859_p
+
+statement ok
+DROP PROC babel_4859_p
+
+query T
+CREATE PROCEDURE babel_4859_p
+AS
+DECLARE @babel_4859_tabvar TABLE (id_old INT);
+DELETE babel_4859_t OUTPUT DELETED.id INTO @babel_4859_tabvar
+----
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+EXEC babel_4859_p
+
+statement ok
+DROP PROC babel_4859_p
+
+statement ok
+CREATE TABLE babel_4859_t2 (id INT)
+
+query T
+CREATE TRIGGER [dbo].[babel_4859_t2_trigger_insert]
+	ON [dbo].[babel_4859_t2]
+AFTER INSERT
+AS
+SET NOCOUNT ON
+DECLARE @babel_4859_tabvar TABLE (id INT);
+INSERT INTO babel_4859_t OUTPUT INSERTED.id INTO @babel_4859_tabvar VALUES (4859), (9584), (2), (3)
+SELECT * FROM @babel_4859_tabvar
+----
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+INSERT INTO babel_4859_t2 VALUES (1)
+
+statement ok
+DROP TRIGGER [dbo].[babel_4859_t2_trigger_insert]
+
+query TT
+CREATE TRIGGER [dbo].[babel_4859_t2_trigger_insert]
+	ON [dbo].[babel_4859_t2]
+AFTER INSERT
+AS
+SET NOCOUNT ON
+DECLARE @babel_4859_tabvar TABLE (id INT, id_old INT);
+UPDATE babel_4859_t SET id = 77 OUTPUT INSERTED.id, DELETED.id INTO @babel_4859_tabvar
+SELECT * FROM @babel_4859_tabvar
+----
+77 NULL
+77 NULL
+77 NULL
+77 NULL
+
+statement ok
+INSERT INTO babel_4859_t2 VALUES (1)
+
+statement ok
+DROP TRIGGER [dbo].[babel_4859_t2_trigger_insert]
+
+query T
+CREATE TRIGGER [dbo].[babel_4859_t2_trigger_insert]
+	ON [dbo].[babel_4859_t2]
+AFTER INSERT
+AS
+SET NOCOUNT ON
+DECLARE @babel_4859_tabvar TABLE (id_old INT);
+DELETE babel_4859_t OUTPUT DELETED.id INTO @babel_4859_tabvar
+SELECT * FROM @babel_4859_tabvar
+----
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+INSERT INTO babel_4859_t2 VALUES (1)
+
+statement ok
+DROP TRIGGER [dbo].[babel_4859_t2_trigger_insert]
+
+statement ok
+CREATE FUNCTION babel_4859_f1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @babel_4859_tabvar TABLE (id INT);
+	INSERT INTO babel_4859_t OUTPUT INSERTED.id INTO @babel_4859_tabvar VALUES (4859), (9584), (2), (3)
+	RETURN 1
+END
+
+statement ok
+CREATE FUNCTION babel_4859_f1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @babel_4859_tabvar TABLE (id INT, id_old INT);
+	UPDATE babel_4859_t SET id = 77 OUTPUT INSERTED.id, DELETED.id INTO @babel_4859_tabvar
+	RETURN 1
+END
+
+statement ok
+CREATE FUNCTION babel_4859_f1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @babel_4859_tabvar TABLE (id_old INT);
+	DELETE babel_4859_t OUTPUT DELETED.id INTO @babel_4859_tabvar
+	RETURN 1
+END
+
+statement ok
+CREATE FUNCTION babel_4859_f1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @babel_4859_tabvar TABLE (id INT);
+	INSERT INTO @babel_4859_tabvar OUTPUT INSERTED.id VALUES (4859), (9584), (2), (3)
+	RETURN 1
+END
+
+statement ok
+CREATE FUNCTION babel_4859_f1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @babel_4859_tabvar TABLE (id INT);
+	UPDATE @babel_4859_tabvar SET id = 77 OUTPUT INSERTED.id, DELETED.id
+	RETURN 1
+END
+
+statement ok
+CREATE FUNCTION babel_4859_f1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @babel_4859_tabvar TABLE (id INT);
+	DELETE @babel_4859_tabvar OUTPUT DELETED.id
+	RETURN 1
+END
+
+statement ok
+CREATE FUNCTION babel_4859_f1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @babel_4859_tabvar TABLE (id INT);
+	INSERT INTO @babel_4859_tabvar OUTPUT INSERTED.id INTO babel_4859_t2 VALUES (4859), (9584), (2), (3)
+	RETURN 1
+END
+
+statement ok
+CREATE FUNCTION babel_4859_f1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @babel_4859_tabvar TABLE (id INT);
+	UPDATE @babel_4859_tabvar SET id = 77 OUTPUT INSERTED.id INTO babel_4859_t2
+	RETURN 1
+END
+
+statement ok
+CREATE FUNCTION babel_4859_f1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @babel_4859_tabvar TABLE (id INT);
+	DELETE @babel_4859_tabvar OUTPUT DELETED.id INTO babel_4859_t2
+	RETURN 1
+END
+
+statement ok
+CREATE FUNCTION babel_4859_f1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @babel_4859_tabvar TABLE (id INT);
+	DECLARE @babel_4859_tabvar_2 TABLE (id INT);
+	INSERT INTO @babel_4859_tabvar OUTPUT INSERTED.id INTO @babel_4859_tabvar_2 VALUES (4859), (9584), (2), (3)
+	RETURN 1
+END
+
+statement ok
+DROP FUNCTION babel_4859_f1
+
+statement ok
+CREATE FUNCTION babel_4859_f1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @babel_4859_tabvar TABLE (id INT);
+	DECLARE @babel_4859_tabvar_2 TABLE (id INT);
+	UPDATE @babel_4859_tabvar SET id = 77 OUTPUT INSERTED.id INTO @babel_4859_tabvar_2
+	RETURN 1
+END
+
+statement ok
+DROP FUNCTION babel_4859_f1
+
+statement ok
+CREATE FUNCTION babel_4859_f1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @babel_4859_tabvar TABLE (id INT);
+	DECLARE @babel_4859_tabvar_2 TABLE (id INT);
+	DELETE @babel_4859_tabvar OUTPUT DELETED.id INTO @babel_4859_tabvar_2
+	RETURN 1
+END
+
+statement ok
+DROP FUNCTION babel_4859_f1
+

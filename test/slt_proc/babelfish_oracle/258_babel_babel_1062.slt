@@ -1,0 +1,121 @@
+# test/slt_proc/babelfish_oracle/258_babel_babel_1062.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1062-vu-prepare.sql, test/babelfish/raw/BABEL-1062-vu-verify.sql
+
+statement ok
+create view BABEL_1062_vu_prepare_v1 as (select datepart(mi, cast('2016-11-14 12:43:10' as datetime)));
+
+statement ok
+create view BABEL_1062_vu_prepare_v2 as (select datename(mi, cast('2016-11-14 12:43:10' as datetime)));
+
+statement ok
+create view BABEL_1062_vu_prepare_v3 as (select datediff(mi,cast('1956-06-27 12:43:10' as datetime),cast('1956-11-14 12:44:10' as datetime)));
+
+statement ok
+create view BABEL_1062_vu_prepare_v4 as (select dateadd(mi, 149, cast('2016-11-14 12:43:10' as datetime)));
+
+statement ok
+create procedure  BABEL_1062_vu_prepare_p1 as (select datepart(mi, cast('2016-11-14 12:43:10' as datetime)));
+
+statement ok
+create procedure  BABEL_1062_vu_prepare_p2 as (select datename(mi, cast('2016-11-14 12:43:10' as datetime)));
+
+statement ok
+create procedure  BABEL_1062_vu_prepare_p3 as (select datediff(mi,cast('1956-06-27 12:43:10' as datetime),cast('1956-11-14 12:44:10' as datetime)));
+
+statement ok
+create procedure  BABEL_1062_vu_prepare_p4 as (select dateadd(mi, 149, cast('2016-11-14 12:43:10' as datetime)));
+
+statement ok
+create function BABEL_1062_vu_prepare_f1()
+returns datetime as
+begin
+return (select datepart(mi, cast('2016-06-27 12:43:10' as datetime)));
+end
+
+statement ok
+create function BABEL_1062_vu_prepare_f2()
+returns nvarchar(15) as
+begin
+return (select datename(mi, cast('2016-06-27 12:43:10' as datetime)));
+end
+
+statement ok
+create function BABEL_1062_vu_prepare_f3()
+returns int as
+begin
+return (select datediff(mi,cast('1956-06-27 12:43:10' as datetime),cast('1956-11-14 12:44:10' as datetime)));
+end
+
+statement ok
+create function BABEL_1062_vu_prepare_f4()
+returns datetime as
+begin
+return (select dateadd(mi, 149, cast('2016-11-14 12:43:10' as datetime)));
+end
+
+statement ok
+DROP VIEW BABEL_1062_vu_prepare_v1
+
+statement ok
+DROP VIEW BABEL_1062_vu_prepare_v2
+
+statement ok
+DROP VIEW BABEL_1062_vu_prepare_v3
+
+statement ok
+DROP VIEW BABEL_1062_vu_prepare_v4
+
+query T
+EXEC BABEL_1062_vu_prepare_p1
+----
+43
+
+statement ok
+DROP procedure  BABEL_1062_vu_prepare_p1
+
+query T
+EXEC BABEL_1062_vu_prepare_p2
+----
+43
+
+statement ok
+DROP procedure  BABEL_1062_vu_prepare_p2
+
+query T
+EXEC BABEL_1062_vu_prepare_p3
+----
+201601
+
+statement ok
+DROP procedure  BABEL_1062_vu_prepare_p3
+
+statement ok
+DROP procedure  BABEL_1062_vu_prepare_p4
+
+query T
+SELECT BABEL_1062_vu_prepare_f1()
+----
+43
+
+statement ok
+DROP FUNCTION BABEL_1062_vu_prepare_f1
+
+query T
+SELECT BABEL_1062_vu_prepare_f2()
+----
+43
+
+statement ok
+DROP FUNCTION BABEL_1062_vu_prepare_f2
+
+query T
+SELECT BABEL_1062_vu_prepare_f3()
+----
+201601
+
+statement ok
+DROP FUNCTION BABEL_1062_vu_prepare_f3
+
+statement ok
+DROP FUNCTION BABEL_1062_vu_prepare_f4
+

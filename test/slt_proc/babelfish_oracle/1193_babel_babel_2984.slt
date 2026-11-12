@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1193_babel_babel_2984.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2984.sql
+
+statement ok
+grant execute on dbo.myproc to public
+
+statement ok
+grant exec on dbo.myproc to public
+

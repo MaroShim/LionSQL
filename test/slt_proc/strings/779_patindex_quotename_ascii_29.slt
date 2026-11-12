@@ -1,0 +1,26 @@
+# test/slt_proc/strings/779_patindex_quotename_ascii_29.slt
+# T-SQL PATINDEX, QUOTENAME, ASCII, CHAR, SPACE, LTRIM, RTRIM (29)
+
+query ITTT
+SELECT ASCII('C'), CHAR(67), QUOTENAME('tbl_col_29'), REPLACE(CONCAT('L', SPACE(7), 'R'), ' ', '_');
+----
+67 C [tbl_col_29] L_______R
+
+query II
+SELECT PATINDEX('%TARGET_C%', 'pre_29_TARGET_C_post'), LEN(LTRIM(RTRIM('   tbl_col_29   ')));
+----
+8 10
+
+statement ok
+CREATE PROCEDURE sp_str_adv_779 @s VARCHAR(100), @code INT OUTPUT
+AS
+BEGIN
+    SET @code = ASCII(LEFT(@s, 1));
+    SELECT UPPER(LEFT(@s, 3)), LOWER(RIGHT(@s, 4)), @code;
+END;
+
+query TTI
+DECLARE @out_c INT;
+EXEC sp_str_adv_779 @s = 'Cbc_XYZ29', @code = @out_c OUTPUT;
+----
+CBC yz29 67

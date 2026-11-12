@@ -1,0 +1,36 @@
+# test/slt_proc/babelfish_oracle/545_babel_babel_4261.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4261.sql
+
+statement ok
+CREATE TABLE t1_babel4261 (a money);
+
+statement ok
+BEGIN TRAN BABEL4261_T1;
+
+statement ok
+ALTER TABLE t1_babel4261 SET (parallel_workers = 16);  -- note: this is PG syntax, not T-SQL
+
+statement ok
+INSERT t1_babel4261 SELECT 0.4245*10000
+INSERT t1_babel4261 SELECT 0.5234*10000
+INSERT t1_babel4261 SELECT 0.1113*10000
+INSERT t1_babel4261 SELECT 0.6732*10000
+INSERT t1_babel4261 SELECT 0.3467*10000
+INSERT t1_babel4261 SELECT 0.5213*10000
+INSERT t1_babel4261 SELECT 0.9893*10000
+INSERT t1_babel4261 SELECT 0.6034*10000
+INSERT t1_babel4261 SELECT 0.3334*10000
+INSERT t1_babel4261 SELECT 0.8888*10000
+
+query T
+SELECT sum(a) FROM t1_babel4261
+SELECT sum(a) FROM t1_babel4261   -- should not crash
+----
+4245.0000
+
+statement ok
+COMMIT TRAN BABEL4261_T1;
+
+statement ok
+DROP TABLE t1_babel4261;
+

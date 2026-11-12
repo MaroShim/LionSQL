@@ -1,0 +1,33 @@
+# test/slt_proc/babelfish_oracle/1246_babel_babel_5071.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-5071-vu-prepare.sql, test/babelfish/raw/BABEL-5071-vu-verify.sql, test/babelfish/raw/BABEL-5071-vu-cleanup.sql
+
+statement ok
+create table tab5071_1 (a int)
+
+statement ok
+CREATE TABLE tab4992_1 (c1 int, c2 int)
+
+statement ok
+CREATE TABLE tab4992_2 (c1 int, c2 int)
+
+statement ok
+INSERT INTO tab4992_1 VALUES(1, 2)
+
+statement ok
+insert tab5071_1 values (123)
+
+statement ok
+DELETE FROM tab4992_1
+
+statement ok
+SELECT * FROM tab4992_1
+
+statement ok
+drop table tab5071_1
+
+statement ok
+DROP TABLE tab4992_1
+
+statement ok
+DROP TABLE tab4992_2
+

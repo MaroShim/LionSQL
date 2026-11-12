@@ -1,0 +1,41 @@
+# test/slt_proc/babelfish_oracle/454_babel_has_dbaccess.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/HAS_DBACCESS-vu-prepare.sql, test/babelfish/raw/HAS_DBACCESS-vu-verify.sql
+
+statement ok
+CREATE DATABASE has_dbaccess_prepare_db1;
+
+query T
+SELECT HAS_DBACCESS('master');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('does_not_exist');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('has_dbaccess_prepare_db1');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('has_dbaccess_prepare_db1   ');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('   has_dbaccess_prepare_db1');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('has_dbaccess_prepare_db1');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('babelfish_db');
+----
+1
+

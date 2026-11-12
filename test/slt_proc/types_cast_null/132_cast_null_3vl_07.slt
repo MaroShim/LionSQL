@@ -1,0 +1,22 @@
+# test/slt_proc/types_cast_null/132_cast_null_3vl_07.slt
+# T-SQL CAST, TRY_CAST, ISNUMERIC, CHOOSE, IIF, COALESCE, NULLIF (7)
+
+query ITI
+SELECT CAST('270' AS INT) + 7, CAST(270 AS VARCHAR(20)), TRY_CAST('270' AS INT);
+----
+277 270 270
+
+query IIT
+SELECT ISNUMERIC('270'), ISNUMERIC('err_7z'), ISNULL(CAST(TRY_CAST('err_7z' AS INT) AS VARCHAR(20)), 'NULL_VAL');
+----
+1 0 NULL_VAL
+
+query TTTT
+SELECT CHOOSE(4, 'Alpha_7', 'Beta_7', 'Gamma_7', 'Delta_7'), IIF(270 > 10, 'YES', 'NO'), ISNULL(NULL, 'DEF_7'), COALESCE(NULL, NULL, 'COAL_7');
+----
+Delta_7 YES DEF_7 COAL_7
+
+query II
+SELECT ISNULL(NULLIF(270, 270), -1), NULLIF(270, 0);
+----
+-1 270

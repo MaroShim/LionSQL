@@ -1,0 +1,10 @@
+# test/slt_proc/babelfish_oracle/1517_babel_sys_sp_statistics_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/sys-sp_statistics-dep-vu-prepare.sql, test/babelfish/raw/sys-sp_statistics-dep-vu-verify.sql, test/babelfish/raw/sys-sp_statistics-dep-vu-cleanup.sql
+
+statement ok
+create table sys_sp_statistics_dep_vu_prepare_t1(a int)
+
+statement ok
+create procedure sys_sp_statistics_dep_vu_prepare_p1 as
+    exec sp_statistics @table_name = 'sys_sp_statistics_dep_vu_prepare_t1'
+

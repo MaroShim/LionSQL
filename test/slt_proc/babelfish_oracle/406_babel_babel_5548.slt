@@ -1,0 +1,51 @@
+# test/slt_proc/babelfish_oracle/406_babel_babel_5548.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-5548.sql
+
+statement ok
+use master;
+
+statement ok
+create table t5548(a int);
+insert into t5548 values (1);
+
+query T
+select dbo..a from t5548
+----
+1
+
+statement ok
+CREATE TABLE GEOSPATIALPOINTEMPTYdt (geom geometry, geog geography);
+
+statement ok
+select dbo.GEOSPATIALPOINTEMPTYdt.geom.STAsText() from GEOSPATIALPOINTEMPTYdt
+
+statement ok
+CREATE TABLE TestSpatialFunction_YourTableTemp ( ID INT PRIMARY KEY, PointColumn geometry ); 
+
+statement ok
+INSERT INTO TestSpatialFunction_YourTableTemp (ID, PointColumn) VALUES (1, geometry::Point(3.0, 4.0, 4326)), (2, geometry::Point(5.0, 6.0, 4326)), (3, geometry::Point(3.0, 4.0, 0));
+
+query T
+SELECT TestSpatialFunction_YourTableTemp.PointColumn.STSrid from TestSpatialFunction_YourTableTemp
+----
+NULL
+
+query T
+select PointColumn.STSrid from TestSpatialFunction_YourTableTemp
+----
+NULL
+
+query T
+select dbo.TestSpatialFunction_YourTableTemp.PointColumn.STSrid from TestSpatialFunction_YourTableTemp
+----
+NULL
+
+statement ok
+drop table TestSpatialFunction_YourTableTemp
+
+statement ok
+drop table GEOSPATIALPOINTEMPTYdt
+
+statement ok
+drop table t5548;
+

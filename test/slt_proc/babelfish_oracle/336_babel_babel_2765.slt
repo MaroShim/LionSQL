@@ -1,0 +1,111 @@
+# test/slt_proc/babelfish_oracle/336_babel_babel_2765.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2765.sql
+
+statement ok
+CREATE TABLE babel_2765_t1 (non_computed VARCHAR(200) COLLATE SQL_Latin1_General_CP1_CI_AI, computed AS substring(non_computed, 1, 5) COLLATE SQL_Latin1_General_CP1_CI_AS)
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed' or name = 'computed' ORDER BY name
+----
+computed NULL
+non_computed NULL
+
+statement ok
+DROP TABLE babel_2765_t1
+
+statement ok
+CREATE TABLE babel_2765_t1 (non_computed VARCHAR(200), computed AS substring(non_computed, 1, 5) COLLATE SQL_Latin1_General_CP1_CI_AI)
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed' or name = 'computed' ORDER BY name
+----
+computed NULL
+non_computed NULL
+
+statement ok
+DROP TABLE babel_2765_t1
+
+statement ok
+CREATE TABLE babel_2765_t1 (non_computed VARCHAR(200) COLLATE SQL_Latin1_General_CP1_CI_AI, computed AS substring(non_computed, 1, 5))
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed' or name = 'computed' ORDER BY name
+----
+computed NULL
+non_computed NULL
+
+statement ok
+DROP TABLE babel_2765_t1
+
+statement ok
+CREATE TABLE babel_2765_t1 (non_computed VARCHAR(200), computed AS substring(non_computed, 1, 5))
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed' or name = 'computed' ORDER BY name
+----
+computed NULL
+non_computed NULL
+
+statement ok
+DROP TABLE babel_2765_t1
+
+statement ok
+CREATE TABLE babel_2765_t1 (non_computed VARCHAR(200) COLLATE SQL_Latin1_General_CP1_CI_AI)
+
+statement ok
+ALTER TABLE babel_2765_t1 ADD computed AS substring(non_computed, 1, 5) COLLATE SQL_Latin1_General_CP1_CI_AS
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed' or name = 'computed' ORDER BY name
+----
+computed NULL
+non_computed NULL
+
+statement ok
+DROP TABLE babel_2765_t1
+
+statement ok
+CREATE TABLE babel_2765_t1 (non_computed VARCHAR(200))
+
+statement ok
+ALTER TABLE babel_2765_t1 ADD computed AS substring(non_computed, 1, 5) COLLATE SQL_Latin1_General_CP1_CI_AI
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed' or name = 'computed' ORDER BY name
+----
+computed NULL
+non_computed NULL
+
+statement ok
+DROP TABLE babel_2765_t1
+
+statement ok
+CREATE TABLE babel_2765_t1 (non_computed VARCHAR(200) COLLATE SQL_Latin1_General_CP1_CI_AI)
+
+statement ok
+ALTER TABLE babel_2765_t1 ADD computed AS substring(non_computed, 1, 5)
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed' or name = 'computed' ORDER BY name
+----
+computed NULL
+non_computed NULL
+
+statement ok
+DROP TABLE babel_2765_t1
+
+statement ok
+CREATE TABLE babel_2765_t1 (non_computed VARCHAR(200))
+
+statement ok
+ALTER TABLE babel_2765_t1 ADD computed AS substring(non_computed, 1, 5)
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed' or name = 'computed' ORDER BY name
+----
+computed NULL
+non_computed NULL
+
+statement ok
+DROP TABLE babel_2765_t1
+

@@ -1,0 +1,209 @@
+# test/slt_proc/babelfish_oracle/647_babel_forjson_subquery_before_14_10_or_15_5.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/forjson/forjson-subquery-before-14_10-or-15_5-vu-prepare.sql, test/babelfish/raw/forjson/forjson-subquery-before-14_10-or-15_5-vu-verify.sql, test/babelfish/raw/forjson/forjson-subquery-before-14_10-or-15_5-vu-cleanup.sql
+
+statement ok
+CREATE TABLE forjson_subquery_vu_t_countries (
+[Id] INT,
+[Age] INT,
+[Country] VARCHAR(25))
+
+statement ok
+INSERT INTO forjson_subquery_vu_t_countries values
+(1,25, 'India'),
+(2,40, 'USA'),
+(3,30, 'India'),
+(4,20, NULL),
+(5,10, 'USA')
+
+statement ok
+create table forjson_subquery_vu_t1 (x int)
+insert into forjson_subquery_vu_t1 values (1)
+
+statement ok
+CREATE VIEW forjson_subquery_vu_v_auto AS
+SELECT (
+	SELECT Id,
+		   State
+	FROM forjson_subquery_vu_t1
+	FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_subquery_vu_v_no_alias AS
+SELECT (
+	SELECT 2
+	FOR JSON PATH
+) c1
+
+statement ok
+CREATE VIEW forjson_subquery_vu_v_with AS
+WITH forjson_subquery_vu_with1(avg_age) AS (
+	SELECT avg(Age)
+	FROM forjson_subquery_vu_t_countries
+)
+SELECT (
+	SELECT Id, Age, Country
+	FROM forjson_subquery_vu_t_countries, forjson_subquery_vu_with1
+	WHERE Age >= forjson_subquery_vu_with1.avg_age
+	FOR JSON PATH
+) C1
+
+statement ok
+CREATE VIEW forjson_subquery_vu_v_with_order_by AS
+WITH forjson_subquery_vu_with2(avg_age) AS (
+	SELECT avg(Age)
+	FROM forjson_subquery_vu_t_countries
+)
+SELECT (
+	SELECT Id, Age, Country 
+	FROM forjson_subquery_vu_t_countries, forjson_subquery_vu_with2
+	WHERE Age >= forjson_subquery_vu_with2.avg_age
+	ORDER BY Country
+	FOR JSON PATH
+) c1
+
+statement ok
+CREATE TABLE forjson_subquery_vu_t_binary_strings(abinary binary, avarbinary varbinary(10))
+
+statement ok
+INSERT forjson_subquery_vu_t_binary_strings VALUES (123456,0x0a0b0c0d0e)
+
+statement ok
+CREATE TABLE forjson_subquery_vu_t_rowversion (myKey int, myValue int,RV rowversion);
+
+statement ok
+INSERT INTO forjson_subquery_vu_t_rowversion (myKey, myValue) VALUES (1, 0);
+
+statement ok
+CREATE TABLE forjson_subquery_vu_t_timestamp (myKey int, myValue int, timestamp);
+
+statement ok
+INSERT INTO forjson_subquery_vu_t_timestamp (myKey, myValue) VALUES (1, 0);
+
+statement ok
+CREATE VIEW forjson_subquery_vu_v_binary_strings AS
+SELECT
+(
+    SELECT abinary 
+    FROM forjson_subquery_vu_t_binary_strings
+    FOR JSON PATH
+) as c1;
+
+statement ok
+CREATE VIEW forjson_subquery_vu_v_varbinary_strings AS
+SELECT
+(
+    SELECT avarbinary
+    FROM forjson_subquery_vu_t_binary_strings
+    FOR JSON PATH
+) as c1;
+
+statement ok
+CREATE VIEW forjson_subquery_vu_v_rowversion AS
+SELECT
+(
+    SELECT *
+    FROM forjson_subquery_vu_t_rowversion
+    FOR JSON PATH
+) as c1;
+
+statement ok
+CREATE VIEW forjson_subquery_vu_v_timestamp AS
+SELECT
+(
+    SELECT *
+    FROM forjson_subquery_vu_t_timestamp
+    FOR JSON PATH
+) as c1;
+
+statement ok
+CREATE VIEW forjson_subquery_vu_v_internal AS
+SELECT * FROM tsql_select_for_json_result('abcd')
+
+query T
+SELECT * FROM forjson_subquery_vu_v_auto
+----
+[]
+
+query T
+SELECT * FROM forjson_subquery_vu_v_no_alias
+----
+[{"2":2}]
+
+query T
+SELECT * FROM forjson_subquery_vu_v_with
+----
+[]
+
+query T
+SELECT * FROM forjson_subquery_vu_v_with_order_by
+----
+[]
+
+query T
+SELECT * FROM forjson_subquery_vu_v_binary_strings
+----
+[{"abinary":"0x123456"}]
+
+query T
+SELECT * FROM forjson_subquery_vu_v_varbinary_strings
+----
+[{"avarbinary":"0x0a0b0c0d0e"}]
+
+query T
+SELECT * FROM forjson_subquery_vu_v_rowversion
+----
+[{"myKey":1,"myValue":0}]
+
+query T
+SELECT * FROM forjson_subquery_vu_v_timestamp
+----
+[{"myKey":1,"myValue":0}]
+
+query T
+SELECT @@rowcount
+----
+1
+
+statement ok
+DROP VIEW forjson_subquery_vu_v_auto
+
+statement ok
+DROP VIEW forjson_subquery_vu_v_no_alias
+
+statement ok
+DROP VIEW forjson_subquery_vu_v_with
+
+statement ok
+DROP VIEW forjson_subquery_vu_v_with_order_by
+
+statement ok
+DROP VIEW forjson_subquery_vu_v_binary_strings
+
+statement ok
+DROP VIEW forjson_subquery_vu_v_varbinary_strings
+
+statement ok
+DROP VIEW forjson_subquery_vu_v_rowversion
+
+statement ok
+DROP VIEW forjson_subquery_vu_v_timestamp
+
+statement ok
+DROP VIEW forjson_subquery_vu_v_internal
+
+statement ok
+DROP TABLE forjson_subquery_vu_t_countries
+
+statement ok
+DROP TABLE forjson_subquery_vu_t1
+
+statement ok
+DROP TABLE forjson_subquery_vu_t_binary_strings
+
+statement ok
+DROP TABLE forjson_subquery_vu_t_rowversion
+
+statement ok
+DROP TABLE forjson_subquery_vu_t_timestamp
+

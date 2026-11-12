@@ -1,0 +1,84 @@
+# test/slt_proc/babelfish_oracle/658_babel_ignore_inline_option.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ignore_inline_option-vu-prepare.sql, test/babelfish/raw/ignore_inline_option-vu-verify.sql, test/babelfish/raw/ignore_inline_option-vu-cleanup.sql
+
+statement ok
+CREATE FUNCTION [dbo].[TestNoInline](@input INT)
+RETURNS INT
+AS
+BEGIN
+    RETURN @input * 4
+END
+
+statement ok
+CREATE TABLE TestTable (ID INT)
+
+statement ok
+INSERT INTO TestTable VALUES (1), (2), (3)
+
+query TT
+SELECT t.ID, [dbo].[TestInlineOn](t.ID) AS Result
+FROM TestTable t ORDER BY t.ID
+----
+1 NULL
+2 NULL
+3 NULL
+
+statement ok
+DECLARE @i INT = 0
+WHILE @i < 10
+BEGIN
+    SELECT * FROM [dbo].[TestInlineOn](@i * 100)
+    SET @i = @i + 1
+END
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestInlineOn]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestInlineOff]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestNoInline]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestNullHandling]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestNested]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestDataTypes]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestTableVariable]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestErrorHandling]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestSchemabinding]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestExecuteAs]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestInlineAndSchemabinding]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestInlineAndExecuteAs]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestSchemabindingAndExecuteAs]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestAllOptions]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestReturnsNullOnNullInput]
+
+statement ok
+DROP FUNCTION IF EXISTS [dbo].[TestMultiParamAllOptions]
+
+statement ok
+DROP TABLE IF EXISTS TestTable
+

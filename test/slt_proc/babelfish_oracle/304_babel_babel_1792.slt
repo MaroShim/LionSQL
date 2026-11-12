@@ -1,0 +1,112 @@
+# test/slt_proc/babelfish_oracle/304_babel_babel_1792.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1792.sql
+
+statement ok
+USE MASTER;
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+USE db1;
+
+statement ok
+CREATE TABLE t1 (id INT, c1 INT);
+
+statement ok
+INSERT INTO t1 (id, c1) VALUES (1, 2);
+
+statement ok
+USE MASTER;
+
+statement ok
+INSERT INTO t1 (id, c1) VALUES (2, 4);
+
+statement ok
+BEGIN TRAN;
+
+statement ok
+USE db1;
+
+statement ok
+INSERT INTO t1 (id, c1) VALUES (3, 8);
+
+statement ok
+ROLLBACK;
+
+query T
+SELECT current_user;
+----
+current_user
+
+query T
+SELECT current_schema();
+----
+public
+
+statement ok
+INSERT INTO t1 (id, c1) VALUES (4, 16);
+
+query TT
+SELECT * FROM t1;
+----
+1 2
+2 4
+4 16
+
+statement ok
+USE MASTER;
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+USE db1;
+
+statement ok
+INSERT INTO t1 (id, c1) VALUES (1, 2);
+
+statement ok
+USE MASTER;
+
+statement ok
+INSERT INTO t1 (id, c1) VALUES (2, 4);
+
+statement ok
+BEGIN TRAN;
+
+statement ok
+USE db1;
+
+statement ok
+INSERT INTO t1 (id, c1) VALUES (3, 8);
+
+statement ok
+ROLLBACK;
+
+query T
+SELECT current_user;
+----
+current_user
+
+query T
+SELECT current_schema();
+----
+public
+
+statement ok
+INSERT INTO t1 (id, c1) VALUES (4, 16);
+
+query TT
+SELECT * FROM t1;
+----
+1 2
+2 4
+4 16
+1 2
+2 4
+4 16
+
+statement ok
+USE MASTER;
+

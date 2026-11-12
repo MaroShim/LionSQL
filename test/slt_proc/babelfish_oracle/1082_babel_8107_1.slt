@@ -1,0 +1,100 @@
+# test/slt_proc/babelfish_oracle/1082_babel_8107_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/8107_1.sql
+
+statement ok
+CREATE TABLE t8107_2(a int identity)
+
+statement ok
+DROP TABLE t8107_2
+
+statement ok
+CREATE TABLE t8107_1(a int identity)
+
+statement ok
+CREATE TABLE t8107_2(a int identity)
+
+statement ok
+SET IDENTITY_INSERT t8107_1 ON
+
+statement ok
+begin transaction
+
+statement ok
+SET IDENTITY_INSERT t8107_1 OFF
+
+statement ok
+DROP TABLE t8107_1
+
+statement ok
+DROP TABLE t8107_2
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t8107_1(a int identity)
+
+statement ok
+CREATE TABLE t8107_2(a int identity)
+
+statement ok
+SET IDENTITY_INSERT t8107_1 ON
+
+statement ok
+begin transaction
+
+statement ok
+SET IDENTITY_INSERT t8107_1 OFF
+
+statement ok
+DROP TABLE t8107_1
+
+statement ok
+DROP TABLE t8107_2
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE TABLE t8107_2(a int identity)
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure ErrorHandling2 as
+begin
+exec ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+DROP TABLE t8107_2
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t8107_2(a int identity)
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+begin transaction;
+
+statement ok
+DROP TABLE t8107_2
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE TABLE t8107_2(a int identity)
+
+statement ok
+DROP TABLE t8107_2
+

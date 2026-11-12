@@ -1,0 +1,85 @@
+# test/slt_proc/babelfish_oracle/1238_babel_babel_4792.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4792.sql
+
+statement ok
+create proc [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##] @in INT AS SELECT @in;
+
+statement error
+create proc [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##] @in INT AS SELECT @in;
+
+statement ok
+create function [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##] (@input int)
+returns varchar(250)
+as begin
+    return "test"
+end
+
+statement ok
+create function [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##] (@input int)
+returns varchar(250)
+as begin
+    return "test"
+end
+
+statement ok
+create function [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##] (@input int)
+returns varchar(250)
+as begin
+    return "test"
+end
+
+statement ok
+drop function [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##]
+
+statement ok
+create view [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##] 
+as
+    select 1
+
+statement error
+create view [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##] 
+as
+    select 1
+
+statement ok
+create table [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##] (
+    col1 int
+);
+
+statement ok
+drop view [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##]
+
+statement error
+create table [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##] (
+    col1 int
+);
+
+statement ok
+drop table [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##]
+
+statement ok
+create table t1 (
+    col1 int
+);
+
+statement error
+create trigger [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##]
+on t1
+for
+insert
+as
+print 'Table blocked from insert'
+rollback;
+
+statement ok
+drop table t1
+
+statement ok
+CREATE DATABASE ["龙漫远; 龍漫😃😄漫遠.¢£€¥"]
+
+statement ok
+CREATE DATABASE ["龙漫远; 龍漫😃😄漫遠.¢£€¥"]
+
+statement ok
+USE master
+

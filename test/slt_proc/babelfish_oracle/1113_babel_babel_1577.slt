@@ -1,0 +1,12 @@
+# test/slt_proc/babelfish_oracle/1113_babel_babel_1577.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1577.sql
+
+statement ok
+CREATE TABLE babel_1577_table (col# int, #col int, co##l int, col$$ int, co_#$#$l int, col_# int)
+
+statement ok
+INSERT INTO babel_1577_table VALUES (1, 2, 3, 4, 5, 6);
+
+statement ok
+DROP TABLE babel_1577_table
+

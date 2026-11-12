@@ -1,0 +1,43 @@
+# test/slt_proc/babelfish_oracle/1367_babel_babel_exec_batch.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_exec_batch.sql
+
+statement ok
+create procedure babel_462_proc @a varchar(20) as
+begin
+exec('create table ' + @a + '(b int) insert into ' + @a + ' values (111)')
+end
+
+statement ok
+SET apg_tsql_batches ON
+
+statement ok
+create procedure babel_462_proc_null as
+begin
+declare @v varchar(10)
+exec(@v)
+end
+
+statement ok
+create procedure babel_462_semicolon as
+begin
+exec('select * from babel_462_table2');
+end
+
+statement ok
+create procedure babel_462_exec_ddl as
+begin
+exec('create table babel_462_exec_ddl_table(a int)')
+end
+
+statement ok
+drop procedure babel_462_proc
+
+statement ok
+drop procedure babel_462_proc_null
+
+statement ok
+drop procedure babel_462_semicolon
+
+statement ok
+drop procedure babel_462_exec_ddl
+

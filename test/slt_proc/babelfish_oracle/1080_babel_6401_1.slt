@@ -1,0 +1,103 @@
+# test/slt_proc/babelfish_oracle/1080_babel_6401_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/6401_1.sql
+
+statement ok
+create procedure ErrorHandling1 as
+begin
+BEGIN TRAN; 
+SAVE TRAN mytran; 
+ROLLBACK TRAN myMispelledTran; 
+ROLLBACK;
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('Compile time error' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+begin transaction
+
+statement ok
+set xact_abort ON;
+
+statement ok
+begin transaction
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+create procedure ErrorHandling1 as
+begin
+BEGIN TRAN; 
+SAVE TRAN mytran; 
+ROLLBACK TRAN myMispelledTran; 
+ROLLBACK;
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure ErrorHandling2 as
+begin
+exec ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure ErrorHandling1;
+drop procedure ErrorHandling2;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+set xact_abort ON;
+
+statement ok
+create procedure ErrorHandling1 as
+begin
+BEGIN TRAN; 
+SAVE TRAN mytran; 
+ROLLBACK TRAN myMispelledTran; 
+ROLLBACK;
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure ErrorHandling2 as
+begin
+exec ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure ErrorHandling1;
+drop procedure ErrorHandling2;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+set xact_abort OFF;
+

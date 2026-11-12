@@ -1,0 +1,256 @@
+# test/slt_proc/babelfish_oracle/648_babel_forjsonauto_before_16_5.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/forjson/forjsonauto-before-16_5-vu-prepare.sql, test/babelfish/raw/forjson/forjsonauto-before-16_5-vu-verify.sql, test/babelfish/raw/forjson/forjsonauto-before-16_5-vu-cleanup.sql
+
+statement ok
+CREATE TABLE forjson_auto_vu_t_users ([Id] int, [firstname] varchar(50), [lastname] varchar(50), [email] varchar(50));
+CREATE TABLE forjson_auto_vu_t_orders ([Id] int, [userid] int, [productid] int, [quantity] int, [orderdate] Date);
+CREATE TABLE forjson_auto_vu_t_products ([Id] int, [name] varchar(50), [price] varchar (25));
+CREATE TABLE forjson_auto_vu_t_sales ([Id] int, [price] varchar(25), [totalSales] int);
+CREATE TABLE forjson_auto_vu_t_times ([Id] int, [date] Date);
+INSERT INTO forjson_auto_vu_t_users VALUES (1, 'j', 'o', 'testemail'), (1, 'e', 'l', 'testemail2');
+INSERT INTO forjson_auto_vu_t_orders VALUES (1, 1, 1, 5, '2023-06-25'), (2, 1, 1, 6, '2023-06-25');
+INSERT INTO forjson_auto_vu_t_products VALUES (1, 'A', 20), (1, 'B', 30);
+INSERT INTO forjson_auto_vu_t_sales VALUES (1, 20, 50), (2, 30, 100);
+INSERT INTO forjson_auto_vu_t_times VALUES (1, '2023-11-26'), (2, '2023-11-27');
+
+statement ok
+CREATE VIEW forjson_vu_v_1 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_2 AS
+SELECT (
+    select U.Id AS "users.userid",
+           U.firstname as "firstname"
+    FROM forjson_auto_vu_t_users U FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_3 AS
+SELECT (
+    select U.Id AS "users.userid",
+           U.firstname as "firstname",
+           O.productId AS "order.productId"
+    FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_4 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_5 AS
+SELECT (
+    select forjson_auto_vu_t_users.Id,
+           firstname,
+           productId
+    FROM forjson_auto_vu_t_users JOIN forjson_auto_vu_t_orders ON (forjson_auto_vu_t_users.id = userid) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_6 AS
+SELECT (
+    select Id,
+           firstname,
+           lastname
+    FROM forjson_auto_vu_t_users FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_7 AS
+SELECT (
+    select U.Id,
+           name,
+           price
+    FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_products P ON (U.Id = P.Id) FOR JSON AUTO
+) c1
+
+statement ok
+INSERT INTO forjson_auto_vu_t_sales VALUES (1, NULL, NULL), (2, NULL, NULL);
+
+statement ok
+CREATE VIEW forjson_vu_v_8 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_9 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales", T.date as "date" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) JOIN forjson_auto_vu_t_times T ON (S.Id = T.Id) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_10 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "өглөө", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_11 AS
+SELECT (
+    select U.Id AS "users.ελπίδα",
+           U.firstname as "爱",
+           U.lastname as "كلب"
+    FROM forjson_auto_vu_t_users U FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_12 AS 
+SELECT (
+    select totalSales FROM forjson_auto_vu_t_sales FOR JSON AUTO, INCLUDE_NULL_VALUES
+) c1
+
+statement ok
+create table t50 (x nvarchar(20))
+insert into t50 values ('some string')
+
+statement ok
+CREATE VIEW forjson_vu_v_13 AS 
+SELECT (
+    select json_modify('{"a":"b"}', '$.a', x) from (select * from t50 for json auto) a ([x])
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_14 AS 
+SELECT (
+    select json_query((select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) JOIN forjson_auto_vu_t_times T ON (S.Id = T.Id) FOR JSON AUTO)) AS [data]
+) c1
+
+query T
+SELECT * FROM forjson_vu_v_1
+----
+[{"order":{"productId":1},"product":{"oid":1,"price":"20"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"30"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"20"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"30"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"20"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"30"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"20"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"30"},"users":{"userid":1}}]
+
+query T
+SELECT * FROM forjson_vu_v_2
+----
+[{"firstname":"j","users":{"userid":1}},{"firstname":"e","users":{"userid":1}}]
+
+query T
+SELECT * FROM forjson_vu_v_3
+----
+[{"firstname":"j","order":{"productId":1},"users":{"userid":1}},{"firstname":"j","order":{"productId":1},"users":{"userid":1}},{"firstname":"e","order":{"productId":1},"users":{"userid":1}},{"firstname":"e","order":{"productId":1},"users":{"userid":1}}]
+
+query T
+SELECT * FROM forjson_vu_v_4
+----
+[{"order":{"productId":1},"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1}}]
+
+query T
+SELECT * FROM forjson_vu_v_5
+----
+[{"Id":1,"firstname":"j","productId":1},{"Id":1,"firstname":"j","productId":1},{"Id":1,"firstname":"e","productId":1},{"Id":1,"firstname":"e","productId":1}]
+
+query T
+SELECT * FROM forjson_vu_v_6
+----
+[{"Id":1,"firstname":"j","lastname":"o"},{"Id":1,"firstname":"e","lastname":"l"}]
+
+query T
+SELECT * FROM forjson_vu_v_7
+----
+[{"Id":1,"name":"A","price":"20"},{"Id":1,"name":"B","price":"30"},{"Id":1,"name":"A","price":"20"},{"Id":1,"name":"B","price":"30"}]
+
+query T
+SELECT * FROM forjson_vu_v_8
+----
+[{"order":{"productId":1},"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1}}]
+
+query T
+SELECT * FROM forjson_vu_v_9
+----
+[{"date":"2023-11-26","order":{"productId":1},"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1}},{"date":"2023-11-27","order":{"productId":1},"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1}},{"date":"2023-11-26","order":{"productId":1},"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1}},{"date":"2023-11-27","order":{"productId":1},"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1}},{"date":"2023-11-26","order":{"productId":1},"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1}},{"date":"2023-11-27","order":{"productId":1},"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1}},{"date":"2023-11-26","order":{"productId":1},"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1}},{"date":"2023-11-27","order":{"productId":1},"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1}}]
+
+query T
+SELECT * FROM forjson_vu_v_10
+----
+[{"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1},"өглөө":1},{"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1},"өглөө":1},{"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1},"өглөө":1},{"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1},"өглөө":1},{"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1},"өглөө":1},{"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1},"өглөө":1},{"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1},"өглөө":1},{"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1},"өглөө":1}]
+
+query T
+SELECT * FROM forjson_vu_v_11
+----
+[{"users":{"ελπίδα":1},"كلب":"o","爱":"j"},{"users":{"ελπίδα":1},"كلب":"l","爱":"e"}]
+
+query T
+SELECT * FROM forjson_vu_v_12
+----
+[{"totalSales":50},{"totalSales":100},{"totalSales":null},{"totalSales":null}]
+
+query T
+SELECT * FROM forjson_vu_v_13
+----
+{"a":"x"}
+
+query T
+SELECT * FROM forjson_vu_v_14
+----
+NULL
+
+statement ok
+INSERT INTO forjson_auto_vu_t_users VALUES (1, 'e', 'o', 'testemail3')
+
+statement ok
+DROP VIEW forjson_vu_v_1
+
+statement ok
+DROP VIEW forjson_vu_v_2
+
+statement ok
+DROP VIEW forjson_vu_v_3
+
+statement ok
+DROP VIEW forjson_vu_v_4
+
+statement ok
+DROP VIEW forjson_vu_v_5
+
+statement ok
+DROP VIEW forjson_vu_v_6
+
+statement ok
+DROP VIEW forjson_vu_v_7
+
+statement ok
+DROP VIEW forjson_vu_v_8
+
+statement ok
+DROP VIEW forjson_vu_v_9
+
+statement ok
+DROP VIEW forjson_vu_v_10
+
+statement ok
+DROP VIEW forjson_vu_v_11
+
+statement ok
+DROP VIEW forjson_vu_v_12
+
+statement ok
+DROP VIEW forjson_vu_v_13
+
+statement ok
+DROP VIEW forjson_vu_v_14
+
+statement ok
+DROP TABLE forjson_auto_vu_t_users
+
+statement ok
+DROP TABLE forjson_auto_vu_t_orders
+
+statement ok
+DROP TABLE forjson_auto_vu_t_products
+
+statement ok
+DROP TABLE forjson_auto_vu_t_sales
+
+statement ok
+DROP TABLE forjson_auto_vu_t_times
+
+statement ok
+DROP TABLE t50
+

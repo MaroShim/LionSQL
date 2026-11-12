@@ -1,0 +1,524 @@
+# test/slt_proc/babelfish_oracle/571_babel_select_into_test.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/SELECT_INTO_TEST-vu-prepare.sql, test/babelfish/raw/SELECT_INTO_TEST-vu-verify.sql, test/babelfish/raw/SELECT_INTO_TEST-vu-cleanup.sql
+
+statement ok
+create table select_into_pre_exist(select_into_pre_exist_COL int);
+
+statement ok
+CREATE FUNCTION dbo.select_into_double_function (@in INT) RETURNS INT
+AS
+BEGIN
+    RETURN (2 * @in);
+END;
+
+statement ok
+select select_into_pre_exist_COL into select_into_pre_exist_repro from select_into_pre_exist;
+
+statement ok
+create table select_into(select_into_COL int);
+
+statement ok
+select select_into_COL from select_into;
+
+statement ok
+select select_into_COL into select_into_REPO from select_into;
+
+statement ok
+create index IDX_REPRODUCTION on select_into_REPO(select_into_COL);
+
+query T
+select attname from pg_attribute join pg_class on pg_attribute.attrelid=pg_class.oid where pg_class.relname='select_into_repo' and attname like '%select_into%'order by attname asc;
+----
+select_into_COL
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table select_into(select_into_col1 int,select_into_Col2 int,select_into_COL int);
+
+statement ok
+select select_into_col1,select_into_Col2,select_into_COL from select_into;
+
+statement ok
+select select_into_col1,select_into_Col2,select_into_COL into select_into_REPO from select_into;
+
+statement ok
+create index IDX_REPRODUCTION on select_into_REPO(select_into_col1,select_into_Col2,select_into_COL);
+
+query T
+select attname from pg_attribute join pg_class on pg_attribute.attrelid=pg_class.oid where pg_class.relname='select_into_repo' and attname like '%select_into%'order by attname asc;
+----
+select_into_col1
+select_into_Col2
+select_into_COL
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table select_into(select_into_col int);
+
+statement ok
+select select_into_col from select_into;
+
+statement ok
+select select_into_col into select_into_REPO from select_into;
+
+statement ok
+create index IDX_REPRODUCTION on select_into_REPO(select_into_col);
+
+query T
+select attname from pg_attribute join pg_class on pg_attribute.attrelid=pg_class.oid where pg_class.relname='select_into_repo' and attname like '%select_into%'order by attname asc;
+----
+select_into_col
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table select_into(select_into_col1 int,select_into_Col2 int,select_into_COL int);
+
+statement ok
+select select_into_col1,select_into_Col2,select_into_COL from select_into;
+
+statement ok
+select * into select_into_REPO from select_into;
+
+statement ok
+create index IDX_REPRODUCTION on select_into_REPO(select_into_col1,select_into_Col2,select_into_COL);
+
+query T
+select attname from pg_attribute join pg_class on pg_attribute.attrelid=pg_class.oid where pg_class.relname='select_into_repo' and attname like '%select_into%'order by attname asc;
+----
+select_into_col1
+select_into_Col2
+select_into_COL
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table select_into(select_into_COL int);
+
+statement ok
+select select_into_COL from select_into;
+
+statement ok
+select select_into_COL as select_into_COl1 into select_into_REPO from select_into;
+
+statement ok
+create index IDX_REPRODUCTION on select_into_REPO(select_into_COl1);
+
+query T
+select attname from pg_attribute join pg_class on pg_attribute.attrelid=pg_class.oid where pg_class.relname='select_into_repo' and attname like '%select_into%'order by attname asc;
+----
+select_into_COl1
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table select_into(select_into_COL int);
+
+statement ok
+select select_into_COL from select_into;
+
+statement ok
+select select_into_double_function(select_into_COL) as select_into_COL1 into select_into_REPO from select_into;
+
+statement ok
+create index IDX_REPRODUCTION on select_into_REPO(select_into_COl1);
+
+query T
+select attname from pg_attribute join pg_class on pg_attribute.attrelid=pg_class.oid where pg_class.relname='select_into_repo' and attname like '%select_into%'order by attname asc;
+----
+select_into_COL1
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+drop function if exists select_into_double_function;
+
+statement ok
+create table select_into([select_into_COL$] int);
+
+statement ok
+select [select_into_COL$] from select_into; 
+
+statement ok
+select [select_into_COL$] as [select_into_COL1$] into select_into_REPO from select_into;
+
+statement ok
+create index IDX_REPRODUCTION on select_into_REPO([select_into_COL1$]);
+
+query T
+select attname from pg_attribute join pg_class on pg_attribute.attrelid=pg_class.oid where pg_class.relname='select_into_repo' and attname like '%select_into%'order by attname asc;
+----
+select_into_COL1$
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create index IDX_REPRODUCTION on select_into_pre_exist_repro(select_into_pre_exist_COL);
+
+statement ok
+drop table if exists select_into_pre_exist;
+
+statement ok
+drop table if exists select_into_pre_exist_repro;
+
+statement ok
+create table select_into(select_into_COL_select_into_COL_select_into_COL_select_into_COL_ int);
+
+statement ok
+select select_into_COL_select_into_COL_select_into_COL_select_into_COL_ from select_into;
+
+statement ok
+select select_into_COL_select_into_COL_select_into_COL_select_into_COL_ into select_into_REPO from select_into;
+
+statement ok
+create index IDX_REPRODUCTION on select_into_REPO(select_into_COL_select_into_COL_select_into_COL_select_into_COL_);
+
+query T
+select attname from pg_attribute join pg_class on pg_attribute.attrelid=pg_class.oid where pg_class.relname='select_into_repo' and attname like '%select_into%'order by attname asc;
+----
+select_into_COL_select_into_COL_select_into_COL_select_into_COL_
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table select_into(select_into_COL int);
+
+statement ok
+select select_into_COL from select_into;
+
+statement ok
+select identity(int,1,1) as select_into_COL,* into select_into_REPO from select_into
+
+statement ok
+select * from select_into_REPO
+
+query T
+select attname from pg_attribute join pg_class on pg_attribute.attrelid=pg_class.oid where pg_class.relname='select_into_repo' and attname like '%select_into%'order by attname asc;
+----
+select_into_COL
+select_into_COL
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table select_into(select_into_COL int);
+
+statement ok
+select select_into_COL from select_into;
+
+statement ok
+select select_into_COL into select_into_REPO from select_into;
+
+query T
+select column_name from information_schema.columns where table_name = 'select_into_REPO'
+----
+_row_id
+select_into_COL
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table select_into(select_into_COL int);
+
+statement ok
+select select_into_COL from select_into;
+
+statement ok
+select select_into_COL into select_into_REPO from select_into;
+
+statement ok
+alter table select_into_REPO add constraint CHK_SelectIntoCol check (select_into_COL > 0);
+
+query T
+select column_name from information_schema.columns where table_name = 'select_into_REPO'
+----
+_row_id
+select_into_COL
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table select_into(select_into_COL int);
+
+statement ok
+select select_into_COL from select_into;
+
+statement ok
+select select_into_COL into select_into_REPO from select_into;
+
+statement ok
+create unique index UNQ_SelectIntoCol on select_into_REPO(select_into_COL);
+
+query T
+select column_name from information_schema.columns where table_name = 'select_into_REPO'
+----
+_row_id
+select_into_COL
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table select_into(select_into_COL int, select_into_COL2 int);
+
+statement ok
+select select_into_COL, select_into_COL2 from select_into;
+
+statement ok
+select select_into_COL, select_into_COL2 into select_into_REPO from select_into;
+
+statement ok
+alter table select_into_REPO drop column select_into_COL2;
+
+query T
+select column_name from information_schema.columns where table_name = 'select_into_REPO'
+----
+_row_id
+select_into_COL
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table select_into(select_into_COL int);
+
+statement ok
+insert into select_into values (1), (2), (3);
+
+statement ok
+select attname from pg_attribute join pg_class on pg_attribute.attrelid=pg_class.oid where pg_class.relname='select_into_repo' and attname like '%select_into%'order by attname asc;
+
+statement ok
+select column_name from information_schema.columns where table_name = 'select_into_REPO'
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+drop function if exists dbo.GetSelectIntoData;
+
+statement ok
+create table select_into(中文_COL int);
+
+statement ok
+insert into select_into values (1), (2), (3);
+
+query T
+select 中文_COL from select_into;
+----
+1
+2
+3
+
+statement ok
+select 中文_COL into select_into_REPO from select_into;
+
+query T
+select * from select_into_REPO;
+----
+1
+2
+3
+
+statement ok
+create index IDX_REPRODUCTION on select_into_REPO(中文_COL);
+
+query T
+select column_name from information_schema.columns where table_name = 'select_into_REPO'
+----
+_row_id
+中文_COL
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table select_into(中文_COL_select_into_select_into_select_into_select_into_select_into_select_into_select_into_select_into int);
+
+statement ok
+insert into select_into values (1), (2), (3);
+
+query T
+select 中文_COL_select_into_select_into_select_into_select_into_select_into_select_into_select_into_select_into from select_into;
+----
+1
+2
+3
+
+statement ok
+select 中文_COL_select_into_select_into_select_into_select_into_select_into_select_into_select_into_select_into into select_into_REPO from select_into;
+
+query T
+select * from select_into_REPO;
+----
+1
+2
+3
+
+statement ok
+create index IDX_REPRODUCTION on select_into_REPO(中文_COL_select_into_select_into_select_into_select_into_select_into_select_into_select_into_select_into);
+
+query T
+select column_name from information_schema.columns where table_name = 'select_into_REPO'
+----
+_row_id
+中文_COL_select_into_select_into_select_into_select_into_select_into_select_into_select_into_select_into
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table dbo.select_into(select_into_COL int);
+
+statement ok
+insert into dbo.select_into values (1), (2), (3);
+
+query T
+select select_into_COL from dbo.select_into;
+----
+1
+2
+3
+
+statement ok
+select dbo.select_into.select_into_COL into select_into_REPO from dbo.select_into;
+
+query T
+select * from select_into_REPO;
+----
+1
+2
+3
+
+statement ok
+create index IDX_REPRODUCTION on select_into_REPO(select_into_COL);
+
+query T
+select column_name from information_schema.columns where table_name = 'select_into_REPO'
+----
+_row_id
+select_into_COL
+
+statement ok
+drop table if exists dbo.select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+create table dbo.select_into(select_into_COL_select_into_COL_Col_length_greater_then_sixty_four int);
+
+statement ok
+insert into dbo.select_into values (1), (2), (3);
+
+query T
+select select_into_COL_select_into_COL_Col_length_greater_then_sixty_four from dbo.select_into;
+----
+1
+2
+3
+
+statement ok
+select dbo.select_into.select_into_COL_select_into_COL_Col_length_greater_then_sixty_four into select_into_REPO from dbo.select_into;
+
+query T
+select * from select_into_REPO;
+----
+1
+2
+3
+
+statement ok
+create index IDX_REPRODUCTION on select_into_REPO(select_into_COL_select_into_COL_Col_length_greater_then_sixty_four);
+
+query T
+select column_name from information_schema.columns where table_name = 'select_into_REPO'
+----
+_row_id
+select_into_COL_select_into_COL_Col_length_greater_then_sixty_four
+
+statement ok
+drop table if exists dbo.select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+drop table if exists select_into;
+
+statement ok
+drop table if exists select_into_REPO;
+
+statement ok
+drop function if exists select_into_double_function;
+
+statement ok
+drop function if exists dbo.GetSelectIntoData;
+
+statement ok
+drop table if exists select_into_pre_exist;
+
+statement ok
+drop table if exists select_into_pre_exist_repro;
+

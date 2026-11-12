@@ -1,0 +1,20 @@
+# test/slt_proc/babelfish_oracle/1161_babel_babel_2437.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2437.sql
+
+statement ok
+use master;
+
+statement ok
+create schema babel_2437_schema;
+
+statement ok
+create table babel_2437_schema.t1 (a int primary key);
+
+statement ok
+create table babel_2437_schema.t2 (b int, FOREIGN KEY (b) REFERENCES babel_2437_schema.t1 (a) ON DELETE CASCADE ON UPDATE CASCADE);
+
+statement ok
+drop table if exists babel_2437_schema.t2;
+drop table if exists babel_2437_schema.t1;
+drop schema babel_2437_schema;
+

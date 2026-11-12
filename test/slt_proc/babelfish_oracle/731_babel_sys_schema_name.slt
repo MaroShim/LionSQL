@@ -1,0 +1,8 @@
+# test/slt_proc/babelfish_oracle/731_babel_sys_schema_name.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/sys-schema-name.sql
+
+query T
+SELECT sys.schema_name()
+----
+dbo
+

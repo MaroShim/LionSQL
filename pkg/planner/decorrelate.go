@@ -289,6 +289,11 @@ func parseInnerSelectWithProj(sql string) (projections, table, alias, whereClaus
 	if !strings.HasPrefix(upper, "SELECT") {
 		return "", "", "", "", false
 	}
+	for _, kw := range []string{"UNION", "INTERSECT", "EXCEPT", "MINUS", "GROUP BY", "HAVING"} {
+		if findKeywordIndex(sql, kw) != -1 {
+			return "", "", "", "", false
+		}
+	}
 	fromIdx := findKeywordIndex(sql, "FROM")
 	if fromIdx == -1 {
 		return "", "", "", "", false
@@ -304,6 +309,9 @@ func parseInnerSelectWithProj(sql string) (projections, table, alias, whereClaus
 	} else {
 		fromClause = rest
 		whereClause = ""
+	}
+	if strings.Contains(fromClause, ",") || findKeywordIndex(fromClause, "JOIN") != -1 {
+		return "", "", "", "", false
 	}
 
 	table, alias = parseTableAndAlias(fromClause)

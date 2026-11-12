@@ -1,0 +1,20 @@
+# test/slt_proc/babelfish_oracle/1480_babel_sys_column_property.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/sys-column-property-vu-prepare.sql, test/babelfish/raw/functions/sys-column-property-vu-verify.sql, test/babelfish/raw/functions/sys-column-property-vu-cleanup.sql
+
+statement ok
+DROP TABLE IF EXISTS sys_column_property_vu_t_column_property
+
+statement ok
+CREATE TABLE sys_column_property_vu_t_column_property(
+  cp1 CHAR(1) NOT NULL, 
+  cp2 CHAR(129), 
+  cp3 CHAR(4000) NOT NULL,
+  cp4 VARCHAR(1),
+  cp5 VARCHAR(129) NOT NULL,
+  cp6 VARCHAR(4000),
+  cp7 INT,
+  cp8 INT NOT NULL);
+
+statement ok
+DROP TABLE IF EXISTS sys_column_property_vu_t_column_property
+

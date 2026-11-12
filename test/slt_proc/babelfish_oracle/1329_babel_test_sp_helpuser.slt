@@ -1,0 +1,15 @@
+# test/slt_proc/babelfish_oracle/1329_babel_test_sp_helpuser.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_helpuser-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_helpuser-vu-verify.sql
+
+statement ok
+CREATE DATABASE Test_sp_helpuser_vu_prepare_db;
+
+statement ok
+USE Test_sp_helpuser_vu_prepare_db;
+
+statement ok
+USE Test_sp_helpuser_vu_prepare_db;
+
+statement ok
+USE master;
+

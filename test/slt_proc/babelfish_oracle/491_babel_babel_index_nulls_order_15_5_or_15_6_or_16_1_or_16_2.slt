@@ -1,0 +1,221 @@
+# test/slt_proc/babelfish_oracle/491_babel_babel_index_nulls_order_15_5_or_15_6_or_16_1_or_16_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_index_nulls_order-15_5-or-15_6-or-16_1-or-16_2-vu-prepare.sql, test/babelfish/raw/babel_index_nulls_order-15_5-or-15_6-or-16_1-or-16_2-vu-verify.sql, test/babelfish/raw/babel_index_nulls_order-15_5-or-15_6-or-16_1-or-16_2-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_index_nulls_order_tbl (a INT, b VARCHAR(10))
+
+statement ok
+INSERT INTO babel_index_nulls_order_tbl VALUES 
+(1, 'abc'), (2, 'def'), (3, 'ghi'), (4, 'jkl'),
+(5, 'mno'), (6, 'pqr'), (7, 'stu'), (8, 'xyz'),
+(1, 'abc'), (2, 'def'), (3, 'ghi'), (4, 'jkl'),
+(5, 'mno'), (6, 'pqr'), (7, 'stu'), (8, 'xyz'),
+(NULL, NULL)
+
+statement ok
+CREATE INDEX babel_index_nulls_order_asc_idx_a ON babel_index_nulls_order_tbl (a ASC)
+
+statement ok
+CREATE INDEX babel_index_nulls_order_desc_idx_b ON babel_index_nulls_order_tbl (b DESC)
+
+statement ok
+CREATE INDEX babel_index_nulls_order_default_idx_ab ON babel_index_nulls_order_tbl (a, b)
+
+statement ok
+CREATE VIEW babel_index_nulls_order_a_v1 AS
+SELECT TOP 1 a FROM babel_index_nulls_order_tbl WHERE a <= 5 OR a IS NULL ORDER BY a DESC
+
+statement ok
+CREATE VIEW babel_index_nulls_order_a_v2 AS
+SELECT TOP 1 a FROM babel_index_nulls_order_tbl WHERE a > 5 OR a IS NULL ORDER BY a ASC
+
+statement ok
+CREATE VIEW babel_index_nulls_order_a_v3 AS
+SELECT TOP 1 a FROM babel_index_nulls_order_tbl WHERE a > 5 OR a IS NULL ORDER BY a
+
+statement ok
+CREATE VIEW babel_index_nulls_order_b_v1 AS
+SELECT TOP 1 b FROM babel_index_nulls_order_tbl WHERE b <= 'sss' OR b IS NULL ORDER BY b DESC
+
+statement ok
+CREATE VIEW babel_index_nulls_order_b_v2 AS
+SELECT TOP 1 b FROM babel_index_nulls_order_tbl WHERE b > 'sss' OR b IS NULL ORDER BY b ASC
+
+statement ok
+CREATE VIEW babel_index_nulls_order_b_v3 AS
+SELECT TOP 1 b FROM babel_index_nulls_order_tbl WHERE b > 'sss' OR b IS NULL ORDER BY b
+
+statement ok
+CREATE VIEW babel_index_nulls_order_ab_v1 AS
+SELECT TOP 1 a, b FROM babel_index_nulls_order_tbl WHERE (a = 3 AND b <= 'sss') OR b IS NULL ORDER BY b DESC
+
+statement ok
+CREATE VIEW babel_index_nulls_order_ab_v2 AS
+SELECT TOP 1 a, b FROM babel_index_nulls_order_tbl WHERE (a = 3 AND b <= 'sss') OR b IS NULL ORDER BY b ASC
+
+statement ok
+CREATE VIEW babel_index_nulls_order_ab_v3 AS
+SELECT TOP 1 a, b FROM babel_index_nulls_order_tbl WHERE (a = 3 AND b <= 'sss') OR b IS NULL ORDER BY b
+
+statement ok
+CREATE VIEW babel_index_nulls_order_ab_v4 AS
+SELECT TOP 1 a, b FROM babel_index_nulls_order_tbl WHERE (a > 5 AND b = 'xyz') OR a IS NULL ORDER BY a DESC
+
+statement ok
+CREATE VIEW babel_index_nulls_order_ab_v5 AS
+SELECT TOP 1 a, b FROM babel_index_nulls_order_tbl WHERE (a > 5 AND b = 'xyz') OR a IS NULL ORDER BY a ASC
+
+statement ok
+CREATE VIEW babel_index_nulls_order_ab_v6 AS
+SELECT TOP 1 a, b FROM babel_index_nulls_order_tbl WHERE (a > 5 AND b = 'xyz') OR a IS NULL ORDER BY a
+
+query T
+SELECT * FROM babel_index_nulls_order_a_v1
+----
+5
+
+query T
+SELECT * FROM babel_index_nulls_order_a_v2
+----
+NULL
+
+query T
+SELECT * FROM babel_index_nulls_order_a_v3
+----
+NULL
+
+query T
+SELECT * FROM babel_index_nulls_order_b_v1
+----
+pqr
+
+query T
+SELECT * FROM babel_index_nulls_order_b_v2
+----
+NULL
+
+query T
+SELECT * FROM babel_index_nulls_order_b_v3
+----
+NULL
+
+query TT
+SELECT * FROM babel_index_nulls_order_ab_v1
+----
+3 ghi
+
+query TT
+SELECT * FROM babel_index_nulls_order_ab_v2
+----
+NULL NULL
+
+query TT
+SELECT * FROM babel_index_nulls_order_ab_v3
+----
+NULL NULL
+
+query TT
+SELECT * FROM babel_index_nulls_order_ab_v4
+----
+8 xyz
+
+query TT
+SELECT * FROM babel_index_nulls_order_ab_v5
+----
+NULL NULL
+
+query TT
+SELECT * FROM babel_index_nulls_order_ab_v6
+----
+NULL NULL
+
+statement ok
+SET babelfish_showplan_all ON
+
+query T
+SELECT TOP 1 a FROM babel_index_nulls_order_tbl WITH (INDEX (babel_index_nulls_order_asc_idx_a)) WHERE a <= 5 ORDER BY a DESC
+----
+5
+
+query T
+SELECT TOP 1 a FROM babel_index_nulls_order_tbl WITH (INDEX (babel_index_nulls_order_asc_idx_a)) WHERE a > 5 ORDER BY a ASC
+----
+6
+
+query T
+SELECT TOP 1 a FROM babel_index_nulls_order_tbl WITH (INDEX (babel_index_nulls_order_asc_idx_a)) WHERE a > 5 ORDER BY a
+----
+6
+
+query T
+SELECT TOP 1 b FROM babel_index_nulls_order_tbl WITH (INDEX (babel_index_nulls_order_desc_idx_b)) WHERE b <= 'sss' ORDER BY b DESC
+----
+pqr
+
+query T
+SELECT TOP 1 b FROM babel_index_nulls_order_tbl WITH (INDEX (babel_index_nulls_order_desc_idx_b)) WHERE b > 'sss' ORDER BY b ASC
+----
+stu
+
+query T
+SELECT TOP 1 b FROM babel_index_nulls_order_tbl WITH (INDEX (babel_index_nulls_order_desc_idx_b)) WHERE b > 'sss' ORDER BY b
+----
+stu
+
+query TT
+SELECT TOP 1 a, b FROM babel_index_nulls_order_tbl WITH (INDEX (babel_index_nulls_order_default_idx_ab)) WHERE (a = 3 AND b <= 'sss') ORDER BY b DESC
+----
+3 ghi
+
+query TT
+SELECT TOP 1 a, b FROM babel_index_nulls_order_tbl WITH (INDEX (babel_index_nulls_order_default_idx_ab)) WHERE (a = 3 AND b <= 'sss') ORDER BY b ASC
+----
+3 ghi
+
+query TT
+SELECT TOP 1 a, b FROM babel_index_nulls_order_tbl WITH (INDEX (babel_index_nulls_order_default_idx_ab))  WHERE (a = 3 AND b <= 'sss') ORDER BY b
+----
+3 ghi
+
+statement ok
+SET babelfish_showplan_all OFF
+
+statement ok
+DROP VIEW babel_index_nulls_order_a_v1
+
+statement ok
+DROP VIEW babel_index_nulls_order_a_v2
+
+statement ok
+DROP VIEW babel_index_nulls_order_a_v3
+
+statement ok
+DROP VIEW babel_index_nulls_order_b_v1
+
+statement ok
+DROP VIEW babel_index_nulls_order_b_v2
+
+statement ok
+DROP VIEW babel_index_nulls_order_b_v3
+
+statement ok
+DROP VIEW babel_index_nulls_order_ab_v1
+
+statement ok
+DROP VIEW babel_index_nulls_order_ab_v2
+
+statement ok
+DROP VIEW babel_index_nulls_order_ab_v3
+
+statement ok
+DROP VIEW babel_index_nulls_order_ab_v4
+
+statement ok
+DROP VIEW babel_index_nulls_order_ab_v5
+
+statement ok
+DROP VIEW babel_index_nulls_order_ab_v6
+
+statement ok
+DROP TABLE babel_index_nulls_order_tbl
+

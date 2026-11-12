@@ -1,0 +1,388 @@
+# test/slt_proc/babelfish_oracle/734_babel_sys_syscolumns.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-syscolumns.sql
+
+statement ok
+create database db1;
+
+statement ok
+use db1;
+
+statement ok
+CREATE FUNCTION OidToDataType(@Oid integer)
+RETURNS VARCHAR(50)
+AS
+BEGIN
+        DECLARE @datatype VARCHAR(50);
+        SET @datatype = (SELECT typname from pg_type where oid = @Oid);
+        RETURN @datatype;
+END;
+
+statement ok
+CREATE FUNCTION OidToObject(@Oid integer)
+RETURNS VARCHAR(50)
+AS
+BEGIN
+        DECLARE @object_name VARCHAR(50);
+        SET @object_name = (SELECT relname from pg_class where oid = @Oid);
+        IF (@object_name is null)
+        BEGIN
+                SET @object_name = (SELECT proname from pg_proc where oid = @Oid);
+        END
+        RETURN @object_name
+END;
+
+statement ok
+CREATE FUNCTION OidToCollation(@Oid integer)
+RETURNS VARCHAR(50)
+AS
+BEGIN
+        DECLARE @collation VARCHAR(50);
+        SET @collation = (SELECT collname from pg_collation where oid = @Oid);
+        RETURN @collation;
+END;
+
+statement ok
+create procedure syscolumns_demo_proc1 @firstparam NVARCHAR(50) as select 1
+
+statement ok
+create procedure syscolumns_demo_proc2 @firstparam NVARCHAR(50), @secondparam VARCHAR(50) OUT as select 2
+
+statement ok
+create table syscolumns_demo_table (col_a int, col_b bigint, col_c char(10), col_d numeric(5,4))
+
+query TTTTT
+select name, OidToObject(id), OidToDataType(xtype), typestat, length from dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c' or name = 'col_d' order by OidToObject(id) asc, name
+----
+col_a NULL NULL NULL NULL
+col_b NULL NULL NULL NULL
+col_c NULL NULL NULL NULL
+col_d NULL NULL NULL NULL
+
+query TTTT
+select colid, cdefault, domain, number from dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c' or name = 'col_d' order by OidToObject(id) asc, name
+----
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+query TTTTT
+select OidToCollation(collationid), status, OidToDataType(type), prec, scale from dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c' or name = 'col_d' order by OidToObject(id) asc, name
+----
+NULL NULL NULL NULL 0
+NULL NULL NULL NULL 0
+NULL NULL NULL NULL 0
+NULL NULL NULL NULL 0
+
+query TTTT
+select iscomputed, isoutparam, isnullable, collation from dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c' or name = 'col_d' order by OidToObject(id) asc, name
+----
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+query T
+SELECT COUNT(*) FROM dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c'
+----
+1
+1
+1
+
+statement ok
+use master;
+
+statement ok
+create procedure syscolumns_demo_proc3 @thirdparam NVARCHAR(50) as select 3;
+
+statement ok
+SELECT COUNT(*) FROM dbo.SySCOluMNs where name = '@thirdparam';
+
+query T
+SELECT COUNT(*) FROM db1.DbO.SySCOluMNs where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c'
+----
+1
+1
+1
+
+statement ok
+SELECT COUNT(*) FROM db1.dbo.SySCOluMNs where name = '@thirdparam';
+
+query T
+SELECT COUNT(*) FROM dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c'
+----
+1
+1
+1
+
+statement ok
+use db1;
+
+query T
+SELECT COUNT(*) FROM dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c'
+----
+1
+1
+1
+
+statement ok
+SELECT COUNT(*) FROM dbo.syscolumns where name = '@thirdparam'
+
+statement ok
+use master;
+
+statement ok
+DROP PROCEDURE syscolumns_demo_proc3
+
+statement ok
+create database db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+use db1;
+
+statement ok
+CREATE FUNCTION OidToDataType(@Oid integer)
+RETURNS VARCHAR(50)
+AS
+BEGIN
+        DECLARE @datatype VARCHAR(50);
+        SET @datatype = (SELECT typname from pg_type where oid = @Oid);
+        RETURN @datatype;
+END;
+
+statement ok
+CREATE FUNCTION OidToObject(@Oid integer)
+RETURNS VARCHAR(50)
+AS
+BEGIN
+        DECLARE @object_name VARCHAR(50);
+        SET @object_name = (SELECT relname from pg_class where oid = @Oid);
+        IF (@object_name is null)
+        BEGIN
+                SET @object_name = (SELECT proname from pg_proc where oid = @Oid);
+        END
+        RETURN @object_name
+END;
+
+statement ok
+CREATE FUNCTION OidToCollation(@Oid integer)
+RETURNS VARCHAR(50)
+AS
+BEGIN
+        DECLARE @collation VARCHAR(50);
+        SET @collation = (SELECT collname from pg_collation where oid = @Oid);
+        RETURN @collation;
+END;
+
+query TTTTT
+select name, OidToObject(id), OidToDataType(xtype), typestat, length from dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c' or name = 'col_d' order by OidToObject(id) asc, name
+----
+col_a NULL NULL NULL NULL
+col_b NULL NULL NULL NULL
+col_c NULL NULL NULL NULL
+col_d NULL NULL NULL NULL
+
+query TTTT
+select colid, cdefault, domain, number from dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c' or name = 'col_d' order by OidToObject(id) asc, name
+----
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+query TTTTT
+select OidToCollation(collationid), status, OidToDataType(type), prec, scale from dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c' or name = 'col_d' order by OidToObject(id) asc, name
+----
+NULL NULL NULL NULL 0
+NULL NULL NULL NULL 0
+NULL NULL NULL NULL 0
+NULL NULL NULL NULL 0
+
+query TTTT
+select iscomputed, isoutparam, isnullable, collation from dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c' or name = 'col_d' order by OidToObject(id) asc, name
+----
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+NULL NULL NULL NULL
+
+query T
+SELECT COUNT(*) FROM dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c'
+----
+1
+1
+1
+
+statement ok
+use master;
+
+statement ok
+create procedure syscolumns_demo_proc3 @thirdparam NVARCHAR(50) as select 3;
+
+statement ok
+SELECT COUNT(*) FROM dbo.SySCOluMNs where name = '@thirdparam';
+
+query T
+SELECT COUNT(*) FROM db1.DbO.SySCOluMNs where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c'
+----
+1
+1
+1
+
+statement ok
+SELECT COUNT(*) FROM db1.dbo.SySCOluMNs where name = '@thirdparam';
+
+query T
+SELECT COUNT(*) FROM dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c'
+----
+1
+1
+1
+
+statement ok
+use db1;
+
+query T
+SELECT COUNT(*) FROM dbo.syscolumns where name = '@firstparam' or name = '@secondparam' or name = 'col_a' or name = 'col_b' or name = 'col_c'
+----
+1
+1
+1
+
+statement ok
+SELECT COUNT(*) FROM dbo.syscolumns where name = '@thirdparam'
+
+statement ok
+use master;
+
+statement ok
+DROP PROCEDURE syscolumns_demo_proc3
+
+statement ok
+create table t1(a int, b float, c bigint, d numeric, e smallint, f tinyint, g decimal, h money, i smallmoney);
+
+statement ok
+select name, column_id, precision, scale from sys.columns where object_id=OBJECT_ID('t1') order by name;
+
+statement ok
+create table t2(a int, b int IDENTITY(1,1), c as a * b);
+
+statement ok
+select name, column_id, is_identity, is_computed from sys.columns where object_id=OBJECT_ID('t2') order by name;
+
+statement ok
+create table t3(a char(10), b nchar(10), c binary(10));
+
+statement ok
+select name, column_id, is_ansi_padded from sys.columns where object_id=OBJECT_ID('t3') order by name;
+
+statement ok
+create table t4(
+        c1 char(10) COLLATE SQL_LATIN1_GENERAL_CP1_CI_AI,
+        c2 char(10) COLLATE SQL_LATIN1_GENERAL_CP1_CI_AS,
+        c3 char(10) COLLATE SQL_LATIN1_GENERAL_CP1_CS_AI,
+        c4 char(10) COLLATE SQL_LATIN1_GENERAL_CP1_CS_AS,
+        c5 char(10) COLLATE SQL_LATIN1_GENERAL_CP1250_CI_AS
+);
+
+statement ok
+select name, column_id, collation_name from sys.columns where object_id=OBJECT_ID('t4') order by name;
+
+statement ok
+drop table t1;
+drop table t2;
+drop table t3;
+drop table t4;
+
+statement ok
+CREATE TABLE test_columns (
+    c1  bigint  NOT NULL
+    , c2    binary(123) NOT NULL
+    , c3    bit NOT NULL
+    , c4    char(123)   NOT NULL
+    , c5    date    NOT NULL
+    , c6    datetime    NOT NULL
+    , c7    datetime2   NOT NULL
+    , c8    datetimeoffset  NOT NULL
+    , c9    decimal(8,4)    NOT NULL
+    , c10   float   NOT NULL
+    , c11   image   NOT NULL
+    , c12   int NOT NULL
+    , c13   money   NOT NULL
+    , c14   nchar(123)  NOT NULL
+    , c15   ntext   NOT NULL
+    , c16   numeric(8,4)    NOT NULL
+    , c17   nvarchar(123)   NOT NULL
+    , c18   real    NOT NULL
+    , c19   smalldatetime   NOT NULL
+    , c20   smallint    NOT NULL
+    , c21   smallmoney  NOT NULL
+    , c22   sql_variant NOT NULL
+    , c23   sysname NOT NULL
+    , c24   text    NOT NULL
+    , c25   time    NOT NULL
+    , c27   tinyint NOT NULL
+    , c28   uniqueidentifier    NOT NULL
+    , c29   varbinary(123)  NOT NULL
+    , c30   varchar(123)    NOT NULL
+    , c31   xml NOT NULL
+    , c32   rowversion)
+
+statement ok
+select name,max_length,precision,scale from sys.columns where object_id = OBJECT_ID('test_columns') order by name;
+
+statement ok
+drop table test_columns;
+
+statement ok
+CREATE TABLE t1(c1 datetime2(0)
+                , c2 datetime2(7)
+                , c3 datetimeoffset(0)
+                , c4 datetimeoffset(7)
+                , c5 time(0)
+                , c6 time(7))
+select name,max_length,precision,scale from sys.columns where object_id = OBJECT_ID('t1') order by name;
+
+statement ok
+drop table t1;
+
+statement ok
+CREATE TABLE t1( c1 type1, c2 int)
+
+statement ok
+select count(*) from sys.columns where object_id = OBJECT_ID('t1') and system_type_id <> user_type_id
+
+statement ok
+select object_name(system_type_id), object_name(user_type_id) from sys.columns where object_id = OBJECT_ID('t1') order by object_name(user_type_id);
+
+statement ok
+drop table t1;
+
+statement ok
+create table babel_2947 (a varchar_max
+                        , b varchar(max)
+                        , c varchar(10)
+                        , d nvarchar_max
+                        , e nvarchar(max)
+                        , f nvarchar(10)
+                        , g varbinary_max
+                        , h varbinary(max)
+                        , i varbinary(10))
+
+statement ok
+select name, max_length from sys.columns where object_id = OBJECT_ID('babel_2947') order by name;
+
+statement ok
+drop table babel_2947
+
+statement ok
+create table babel_2947 (a varchar(max)
+                        , b varchar(10)
+                        , c nvarchar(max)
+                        , d nvarchar(10)
+                        , e varbinary(max)
+                        , f varbinary(10))
+
+statement ok
+drop table babel_2947
+

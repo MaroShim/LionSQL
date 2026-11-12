@@ -1,0 +1,458 @@
+# test/slt_proc/babelfish_oracle/580_babel_babel_726_before_16_10_or_17_6.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/datatypes/babel_726-before-16_10-or-17_6-vu-prepare.sql, test/babelfish/raw/datatypes/babel_726-before-16_10-or-17_6-vu-verify.sql, test/babelfish/raw/datatypes/babel_726-before-16_10-or-17_6-vu-cleanup.sql
+
+statement ok
+create table babel_726_t1 (
+    a1 sql_variant,
+    a2 datetimeoffset,
+    a3 datetime2,
+    a4 datetime,
+    a5 smalldatetime,
+    a6 date,
+    a7 time,
+    a8 float,
+    a9 real,
+    a10 decimal,
+    a11 money,
+    a12 smallmoney,
+    a13 bigint,
+    a14 int,
+    a15 smallint,
+    a16 tinyint,
+    a17 bit,
+    a18 ntext,
+    a19 text,
+    a20 image,
+    a21 uniqueidentifier,
+    a22 nvarchar(15),
+    a23 nchar(15),
+    a24 varchar(15),
+    a25 char(15),
+    a26 varbinary(15),
+    a27 binary,
+    a28 numeric
+)
+
+statement ok
+create table babel_726_t2 (a int, b varchar(10), c float)
+
+statement ok
+insert into babel_726_t2 values (1, 'abcde', 1.02)
+insert into babel_726_t2 values (NULL, '2.01', 1.02)
+insert into babel_726_t2 values (NULL, NULL, 1.02)
+
+statement ok
+CREATE FUNCTION babel_726_vu_prepare_f1() RETURNS NVARCHAR(4000) AS
+BEGIN
+    DECLARE @ans NVARCHAR(4000)
+    SELECT @ans = COALESCE(CAST('x'AS VARBINARY), CAST('x' AS NVARCHAR(4000)), 'x')
+    RETURN @ans
+END
+
+statement ok
+CREATE PROCEDURE babel_726_vu_prepare_p1 AS 
+SELECT COALESCE(CAST('x'AS VARBINARY), CAST('x' AS NVARCHAR(4000)), 'x')
+
+statement ok
+CREATE VIEW babel_726_vu_prepare_v1 AS
+SELECT CAST(CAST('x' as VARBINARY) AS NVARCHAR)
+
+statement ok
+CREATE VIEW babel_726_vu_prepare_v2 AS
+select coalesce(a9, a10) from babel_726_t1
+
+statement ok
+CREATE PROCEDURE babel_726_vu_prepare_p2 AS 
+select coalesce(a9, a10) from babel_726_t1
+
+statement ok
+CREATE VIEW babel_726_vu_prepare_v3 AS
+select coalesce(a12, a13) from babel_726_t1
+
+statement ok
+CREATE PROCEDURE babel_726_vu_prepare_p3 AS 
+select coalesce(a12, a13) from babel_726_t1
+
+statement ok
+CREATE VIEW babel_726_vu_prepare_v4 AS
+select coalesce(a16, a17) from babel_726_t1
+
+statement ok
+CREATE PROCEDURE babel_726_vu_prepare_p4 AS 
+select coalesce(a16, a17) from babel_726_t1
+
+statement ok
+CREATE VIEW babel_726_vu_prepare_v5 AS
+select coalesce(a18, a19) from babel_726_t1
+
+statement ok
+CREATE PROCEDURE babel_726_vu_prepare_p5 AS 
+select coalesce(a18, a19) from babel_726_t1
+
+statement ok
+CREATE VIEW babel_726_vu_prepare_v6 AS
+select coalesce(a20, a21) from babel_726_t1
+
+statement ok
+CREATE PROCEDURE babel_726_vu_prepare_p6 AS 
+select coalesce(a20, a21) from babel_726_t1
+
+statement ok
+CREATE VIEW babel_726_vu_prepare_v7 AS
+select coalesce(a22, a23) from babel_726_t1
+
+statement ok
+CREATE PROCEDURE babel_726_vu_prepare_p7 AS 
+select coalesce(a22, a23) from babel_726_t1
+
+statement ok
+select * from babel_726_vu_prepare_v2
+
+statement ok
+exec babel_726_vu_prepare_p2
+
+statement ok
+select * from babel_726_vu_prepare_v3
+
+statement ok
+exec babel_726_vu_prepare_p3
+
+statement ok
+select * from babel_726_vu_prepare_v4
+
+statement ok
+exec babel_726_vu_prepare_p4
+
+statement ok
+select * from babel_726_vu_prepare_v5
+
+statement ok
+exec babel_726_vu_prepare_p5
+
+statement ok
+select * from babel_726_vu_prepare_v6
+
+statement ok
+exec babel_726_vu_prepare_p6
+
+statement ok
+select * from babel_726_vu_prepare_v7
+
+statement ok
+exec babel_726_vu_prepare_p7
+
+query T
+select coalesce(NULL, NULL)
+----
+NULL
+
+query T
+select coalesce(NULL)
+----
+NULL
+
+query T
+select coalesce(2, '   ')
+----
+2
+
+query T
+SELECT COALESCE(NULL, 1, 2, 'I am a string')
+----
+1
+
+statement ok
+select coalesce(a1, a2) from babel_726_t1
+
+statement ok
+select coalesce(a2, a1) from babel_726_t1
+
+statement ok
+select coalesce(a2, a3) from babel_726_t1
+
+statement ok
+select coalesce(a3, a2) from babel_726_t1
+
+statement ok
+select coalesce(a3, a4) from babel_726_t1
+
+statement ok
+select coalesce(a4, a3) from babel_726_t1
+
+statement ok
+select coalesce(a4, a5) from babel_726_t1
+
+statement ok
+select coalesce(a5, a4) from babel_726_t1
+
+statement ok
+select coalesce(a5, a6) from babel_726_t1
+
+statement ok
+select coalesce(a6, a5) from babel_726_t1
+
+statement ok
+select coalesce(a6, a7) from babel_726_t1
+
+statement ok
+select coalesce(a7, a6) from babel_726_t1
+
+statement ok
+select coalesce(a7, a8) from babel_726_t1
+
+statement ok
+select coalesce(a8, a7) from babel_726_t1
+
+statement ok
+select coalesce(a8, a9) from babel_726_t1
+
+statement ok
+select coalesce(a9, a8) from babel_726_t1
+
+statement ok
+select coalesce(a9, a10) from babel_726_t1
+
+statement ok
+select coalesce(a10, a9) from babel_726_t1
+
+statement ok
+select coalesce(a10, a11) from babel_726_t1
+
+statement ok
+select coalesce(a11, a10) from babel_726_t1
+
+statement ok
+select coalesce(a11, a12) from babel_726_t1
+
+statement ok
+select coalesce(a12, a11) from babel_726_t1
+
+statement ok
+select coalesce(a12, a13) from babel_726_t1
+
+statement ok
+select coalesce(a13, a12) from babel_726_t1
+
+statement ok
+select coalesce(a13, a14) from babel_726_t1
+
+statement ok
+select coalesce(a14, a13) from babel_726_t1
+
+statement ok
+select coalesce(a14, a15) from babel_726_t1
+
+statement ok
+select coalesce(a15, a14) from babel_726_t1
+
+statement ok
+select coalesce(a15, a16) from babel_726_t1
+
+statement ok
+select coalesce(a16, a15) from babel_726_t1
+
+statement ok
+select coalesce(a16, a17) from babel_726_t1
+
+statement ok
+select coalesce(a17, a16) from babel_726_t1
+
+statement ok
+select coalesce(a17, a18) from babel_726_t1
+
+statement ok
+select coalesce(a18, a17) from babel_726_t1
+
+statement ok
+select coalesce(a18, a19) from babel_726_t1
+
+statement ok
+select coalesce(a19, a18) from babel_726_t1
+
+statement ok
+select coalesce(a19, a20) from babel_726_t1
+
+statement ok
+select coalesce(a20, a19) from babel_726_t1
+
+statement ok
+select coalesce(a20, a21) from babel_726_t1
+
+statement ok
+select coalesce(a21, a20) from babel_726_t1
+
+statement ok
+select coalesce(a21, a22) from babel_726_t1
+
+statement ok
+select coalesce(a22, a21) from babel_726_t1
+
+statement ok
+select coalesce(a22, a23) from babel_726_t1
+
+statement ok
+select coalesce(a23, a22) from babel_726_t1
+
+statement ok
+select coalesce(a23, a24) from babel_726_t1
+
+statement ok
+select coalesce(a24, a23) from babel_726_t1
+
+statement ok
+select coalesce(a24, a25) from babel_726_t1
+
+statement ok
+select coalesce(a25, a24) from babel_726_t1
+
+statement ok
+select coalesce(a25, a26) from babel_726_t1
+
+statement ok
+select coalesce(a26, a25) from babel_726_t1
+
+statement ok
+select coalesce(a26, a27) from babel_726_t1
+
+statement ok
+select coalesce(a27, a26) from babel_726_t1
+
+statement ok
+select coalesce(a28, a24) from babel_726_t1
+
+statement ok
+select coalesce(a24, a28) from babel_726_t1
+
+statement ok
+select coalesce(a28, a8) from babel_726_t1
+
+statement ok
+select coalesce(a8, a28) from babel_726_t1
+
+query T
+select coalesce(a,b,c) from babel_726_t2
+----
+1
+
+statement ok
+insert into babel_726_t2 values (NULL, 'abcde', 1.02)
+
+query T
+select coalesce(a,b,c) from babel_726_t2
+----
+1
+abcde
+
+query T
+DECLARE @ID_UNDE INT = 7;
+select COALESCE(@ID_UNDE, 'Não Informado')
+----
+7
+
+query T
+exec babel_726_vu_prepare_p1
+----
+0x78
+
+query T
+select babel_726_vu_prepare_f1()
+----
+NULL
+
+query T
+select coalesce(CAST('x'AS VARBINARY), CAST('x' AS NVARCHAR(4000)), 'x')
+----
+0x78
+
+query T
+select * from babel_726_vu_prepare_v1
+----
+x
+
+statement ok
+select * from babel_726_vu_prepare_v2
+
+statement ok
+exec babel_726_vu_prepare_p2
+
+statement ok
+select * from babel_726_vu_prepare_v3
+
+statement ok
+exec babel_726_vu_prepare_p3
+
+statement ok
+select * from babel_726_vu_prepare_v4
+
+statement ok
+exec babel_726_vu_prepare_p4
+
+statement ok
+select * from babel_726_vu_prepare_v5
+
+statement ok
+exec babel_726_vu_prepare_p5
+
+statement ok
+select * from babel_726_vu_prepare_v6
+
+statement ok
+exec babel_726_vu_prepare_p6
+
+statement ok
+select * from babel_726_vu_prepare_v7
+
+statement ok
+exec babel_726_vu_prepare_p7
+
+statement ok
+drop table babel_726_t2
+
+statement ok
+drop procedure babel_726_vu_prepare_p1
+
+statement ok
+drop function babel_726_vu_prepare_f1
+
+statement ok
+drop view babel_726_vu_prepare_v1
+
+statement ok
+drop view babel_726_vu_prepare_v2
+
+statement ok
+drop procedure babel_726_vu_prepare_p2
+
+statement ok
+drop view babel_726_vu_prepare_v3
+
+statement ok
+drop procedure babel_726_vu_prepare_p3
+
+statement ok
+drop view babel_726_vu_prepare_v4
+
+statement ok
+drop procedure babel_726_vu_prepare_p4
+
+statement ok
+drop view babel_726_vu_prepare_v5
+
+statement ok
+drop procedure babel_726_vu_prepare_p5
+
+statement ok
+drop view babel_726_vu_prepare_v6
+
+statement ok
+drop procedure babel_726_vu_prepare_p6
+
+statement ok
+drop view babel_726_vu_prepare_v7
+
+statement ok
+drop procedure babel_726_vu_prepare_p7
+
+statement ok
+drop table babel_726_t1
+

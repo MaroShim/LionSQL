@@ -1,0 +1,129 @@
+# test/slt_proc/babelfish_oracle/1345_babel_test_rename_db_single_db.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/Test_rename_db_single-db.sql
+
+statement ok
+Create database rename_db_database1;
+
+statement ok
+use rename_db_database1
+
+statement ok
+Create role rename_db_role1;
+
+statement ok
+Create schema rename_db_schema1;
+
+statement ok
+use master
+
+statement ok
+Create login rename_db_login1 with password = '1234', default_database = rename_db_database1;
+
+statement ok
+alter database rename_db_database1 modify name = rename_db_database2;
+
+statement ok
+use rename_db_database1;
+
+statement ok
+use rename_db_database2;
+
+statement ok
+use master;
+
+statement ok
+use rename_db_database1;
+
+statement ok
+use rename_db_database2;
+
+statement ok
+use master;
+
+statement ok
+use rename_db_database1;
+
+statement ok
+use rename_db_database2;
+
+statement ok
+use master;
+
+statement ok
+Use rename_db_database2
+
+statement ok
+Drop role rename_db_role1;
+
+statement ok
+Drop schema rename_db_schema1;
+
+statement ok
+use master
+
+statement ok
+Drop Login rename_db_login1;
+
+statement ok
+Create database rename_db_database1 collate BBF_Unicode_CP1_CI_AI;
+
+statement ok
+use rename_db_database1
+
+statement ok
+Create role rename_db_role1;
+
+statement ok
+Create schema rename_db_schema1;
+
+statement ok
+use master
+
+statement ok
+Create login rename_db_login1 with password = '1234', default_database = rename_db_database1;
+
+statement ok
+alter database rename_db_database1 modify name = rename_db_database2;
+
+statement ok
+use rename_db_database1;
+
+statement ok
+use rename_db_database2;
+
+statement ok
+use master;
+
+statement ok
+use rename_db_database1;
+
+statement ok
+use rename_db_database2;
+
+statement ok
+use master;
+
+statement ok
+use rename_db_database1;
+
+statement ok
+use rename_db_database2;
+
+statement ok
+use master;
+
+statement ok
+Use rename_db_database2
+
+statement ok
+Drop role rename_db_role1;
+
+statement ok
+Drop schema rename_db_schema1;
+
+statement ok
+use master
+
+statement ok
+Drop Login rename_db_login1;
+

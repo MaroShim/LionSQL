@@ -1,0 +1,29 @@
+# test/slt_proc/strings/032_slice_and_reverse_02.slt
+# T-SQL LEFT/RIGHT/SUBSTRING/REVERSE/LEN on 'TransactSQL'
+
+query TTTT
+SELECT LEFT('TransactSQL', 8), RIGHT('TransactSQL', 3), SUBSTRING('TransactSQL', 1, 8), REVERSE('TransactSQL');
+----
+Transact SQL Transact LQStcasnarT
+
+query TT
+SELECT UPPER('Transact'), LOWER('SQL');
+----
+TRANSACT sql
+
+query I
+SELECT LEN('TransactSQL');
+----
+11
+
+statement ok
+CREATE PROCEDURE sp_str_slice_32 @in VARCHAR(50)
+AS
+BEGIN
+    SELECT CONCAT(LEFT(@in, 8), '-', RIGHT(@in, 3), ':', CAST(LEN(@in) AS VARCHAR(10)));
+END;
+
+query T
+EXEC sp_str_slice_32 'TransactSQL';
+----
+Transact-SQL:11

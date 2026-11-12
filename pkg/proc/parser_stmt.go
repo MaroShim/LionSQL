@@ -720,10 +720,14 @@ func (p *Parser) parseRaiserror() (Statement, error) {
 		}
 	}
 
-	// Skip any format arguments if present
+	// Parse any format arguments if present
+	var formatArgs []Expr
 	for p.curTokenIs(TokenComma) {
 		p.nextToken()
-		p.parseExpression(precLowest)
+		arg := p.parseExpression(precLowest)
+		if arg != nil {
+			formatArgs = append(formatArgs, arg)
+		}
 	}
 
 	if !p.curTokenIs(TokenRParen) {
@@ -731,15 +735,28 @@ func (p *Parser) parseRaiserror() (Statement, error) {
 	}
 	p.nextToken()
 
+	// Optional WITH NOWAIT / WITH LOG / WITH SETERROR
+	if p.curTokenIs(TokenWith) {
+		p.nextToken()
+		for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEnd) && !p.curTokenIs(TokenEOF) {
+			if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenComma) {
+				p.nextToken()
+			} else {
+				break
+			}
+		}
+	}
+
 	if p.curTokenIs(TokenSemicolon) {
 		p.nextToken()
 	}
 
 	return &RaiseErrorStmt{
-		Number:   errNum,
-		Severity: sev,
-		State:    state,
-		Message:  msg,
+		Number:     errNum,
+		Severity:   sev,
+		State:      state,
+		Message:    msg,
+		FormatArgs: formatArgs,
 	}, nil
 }
 
@@ -833,10 +850,22 @@ func (p *Parser) parseExec() (Statement, error) {
 	p.nextToken()
 
 	var args []Expr
+	var outVars []string
 	for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEnd) && !p.curTokenIs(TokenEOF) {
 		arg := p.parseExpression(precLowest)
+		outVar := ""
+		if bin, ok := arg.(*BinaryExpr); ok && (bin.Op == TokenEq || bin.Op == TokenAssign) {
+			arg = bin.Right
+		}
+		if p.curTokenIs(TokenOutput) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "OUT")) {
+			p.nextToken() // eat OUTPUT / OUT
+			if v, ok := arg.(*VariableExpr); ok {
+				outVar = v.Name
+			}
+		}
 		if arg != nil {
 			args = append(args, arg)
+			outVars = append(outVars, outVar)
 		}
 		if p.curTokenIs(TokenComma) {
 			p.nextToken()
@@ -849,7 +878,7 @@ func (p *Parser) parseExec() (Statement, error) {
 		p.nextToken()
 	}
 
-	return &ExecStmt{ProcName: name, Args: args, ReturnVar: returnVar}, nil
+	return &ExecStmt{ProcName: name, Args: args, OutVars: outVars, ReturnVar: returnVar}, nil
 }
 
 func (p *Parser) parseWaitfor() (Statement, error) {

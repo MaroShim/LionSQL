@@ -1,0 +1,128 @@
+# test/slt_proc/babelfish_oracle/269_babel_babel_1210.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1210.sql
+
+statement ok
+CREATE FUNCTION test_implicit_2int2(@i INT2)
+RETURNS INT2
+AS
+BEGIN
+    RETURN (@i)
+END;
+
+statement ok
+CREATE FUNCTION test_implicit_2int4(@i INT4)
+RETURNS INT4
+AS
+BEGIN
+    RETURN (@i)
+END;
+
+statement ok
+CREATE FUNCTION test_implicit_2int8(@i INT8)
+RETURNS INT8
+AS
+BEGIN
+    RETURN (@i)
+END;
+
+statement ok
+CREATE FUNCTION test_implicit_2float4(@i float4)
+RETURNS float4
+AS
+BEGIN
+    RETURN (@i)
+END;
+
+statement ok
+CREATE FUNCTION test_implicit_2float8(@i float8)
+RETURNS float8
+AS
+BEGIN
+    RETURN (@i)
+END;
+
+statement ok
+CREATE TABLE t1 (a text, b varchar(20), c char(4));
+
+statement ok
+INSERT INTO t1 values ('1234.56', '-12.12', '3.14');
+
+statement ok
+INSERT INTO t1 values ('0', '-10000', '1');
+
+statement ok
+INSERT INTO t1 values ('-23.33', '12345', '0');
+
+statement ok
+INSERT INTO t1 values ('-33', '22', '-145');
+
+query TTT
+SELECT test_implicit_2float4(a), test_implicit_2float4(b), test_implicit_2float4(c) from t1;
+----
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+
+query TTT
+SELECT test_implicit_2float8(a), test_implicit_2float8(b), test_implicit_2float8(c) from t1;
+----
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+
+statement ok
+CREATE TABLE t2 (a text, b varchar(20), c char(4));
+
+statement ok
+INSERT INTO t2 values ('1234', '-12', '0');
+
+statement ok
+INSERT INTO t2 values ('0', '10000', '-123');
+
+statement ok
+INSERT INTO t2 values ('-1234', '0', '52');
+
+query TTT
+SELECT test_implicit_2int2(a), test_implicit_2int2(b), test_implicit_2int2(c) from t2;
+----
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+
+query TTT
+SELECT test_implicit_2int4(a), test_implicit_2int4(b), test_implicit_2int4(c) from t2;
+----
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+
+query TTT
+SELECT test_implicit_2int8(a), test_implicit_2int8(b), test_implicit_2int8(c) from t2;
+----
+NULL NULL NULL
+NULL NULL NULL
+NULL NULL NULL
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP TABLE t2;
+
+statement ok
+DROP FUNCTION test_implicit_2int2;
+
+statement ok
+DROP FUNCTION test_implicit_2int4;
+
+statement ok
+DROP FUNCTION test_implicit_2int8;
+
+statement ok
+DROP FUNCTION test_implicit_2float4;
+
+statement ok
+DROP FUNCTION test_implicit_2float8;
+

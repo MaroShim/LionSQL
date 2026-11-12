@@ -1,0 +1,23 @@
+# test/slt_proc/babelfish_oracle/1341_babel_testtabletype.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/datatypes/TestTableType-vu-prepare.sql, test/babelfish/raw/datatypes/TestTableType-vu-verify.sql, test/babelfish/raw/datatypes/TestTableType-vu-cleanup.sql
+
+statement ok
+create function TestTableType_vu_prepare_func1 (@number int, @tv TestTableType_vu_prepare_t4 READONLY) returns table as return (
+select *, @number from @tv 
+);
+
+statement ok
+create procedure TestTableType_vu_prepare_proc1 as
+begin
+    declare @tv TestTableType_vu_prepare_t4
+    insert into @tv values('hello1', 1, 1001)
+    insert into @tv values('hello2', 2, 1002)
+    select * from TestTableType_vu_prepare_func1(1004, @tv)
+end;
+
+statement ok
+drop procedure TestTableType_vu_prepare_proc1
+
+statement ok
+drop function TestTableType_vu_prepare_func1
+

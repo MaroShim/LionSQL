@@ -1,0 +1,893 @@
+# test/slt_proc/babelfish_oracle/1429_babel_forjsonauto.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/forjson/forjsonauto-vu-prepare.sql, test/babelfish/raw/forjson/forjsonauto-vu-verify.sql, test/babelfish/raw/forjson/forjsonauto-vu-cleanup.sql
+
+statement ok
+CREATE TABLE forjson_auto_vu_t_users ([Id] int, [firstname] varchar(50), [lastname] varchar(50), [email] varchar(50));
+CREATE TABLE forjson_auto_vu_t_orders ([Id] int, [userid] int, [productid] int, [quantity] int, [orderdate] Date);
+CREATE TABLE forjson_auto_vu_t_products ([Id] int, [name] varchar(50), [price] varchar (25));
+CREATE TABLE forjson_auto_vu_t_sales ([Id] int, [price] varchar(25), [totalSales] int);
+CREATE TABLE forjson_auto_vu_t_times ([Id] int, [date] Date);
+CREATE TABLE forjson_test_nested_1 (id int, [data] varchar(50));
+CREATE TABLE forjson_test_nested_2 (id int, [ref_id] int);
+CREATE TABLE forjson_test_unicode (id int, [column_标] varchar(50));
+CREATE TABLE forjson_test_orderby (id int, value int, name varchar(50));
+CREATE TABLE forjson_test_groupby (category varchar(20), product varchar(50), quantity int, price decimal(10,2));
+INSERT INTO forjson_auto_vu_t_users VALUES (1, 'j', 'o', 'testemail'), (1, 'e', 'l', 'testemail2');
+INSERT INTO forjson_auto_vu_t_orders VALUES (1, 1, 1, 5, '2023-06-25'), (2, 1, 1, 6, '2023-06-25');
+INSERT INTO forjson_auto_vu_t_products VALUES (1, 'A', 20), (1, 'B', 30);
+INSERT INTO forjson_auto_vu_t_sales VALUES (1, 20, 50), (2, 30, 100);
+INSERT INTO forjson_auto_vu_t_times VALUES (1, '2023-11-26'), (2, '2023-11-27');
+INSERT INTO forjson_test_nested_1 VALUES (1, NULL), (2, 'test');
+INSERT INTO forjson_test_nested_2 VALUES (1, 1), (2, NULL);
+INSERT INTO forjson_test_unicode VALUES (1, 'unicode data');
+INSERT INTO forjson_test_orderby VALUES (1, 20, 'Apple'), (2, 10, 'Banana'), (3, 30, 'Cherry'), (4, 15, 'Date'), (5, 25, 'Elderberry');
+INSERT INTO forjson_test_groupby VALUES ('Fruit', 'Apple', 10, 2.50), ('Fruit', 'Banana', 15, 1.75);
+
+statement ok
+CREATE VIEW forjson_vu_v_1 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_2 AS
+SELECT (
+    select U.Id AS "users.userid",
+           U.firstname as "firstname"
+    FROM forjson_auto_vu_t_users U FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_3 AS
+SELECT (
+    select U.Id AS "users.userid",
+           U.firstname as "firstname",
+           O.productId AS "order.productId"
+    FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_4 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_5 AS
+SELECT (
+    select forjson_auto_vu_t_users.Id,
+           firstname,
+           productId
+    FROM forjson_auto_vu_t_users JOIN forjson_auto_vu_t_orders ON (forjson_auto_vu_t_users.id = userid) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_6 AS
+SELECT (
+    select Id,
+           firstname,
+           lastname
+    FROM forjson_auto_vu_t_users FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_7 AS
+SELECT (
+    select U.Id,
+           name,
+           price
+    FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_products P ON (U.Id = P.Id) FOR JSON AUTO
+) c1
+
+statement ok
+INSERT INTO forjson_auto_vu_t_sales VALUES (1, NULL, NULL), (2, NULL, NULL);
+
+statement ok
+CREATE VIEW forjson_vu_v_8 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_9 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales", T.date as "date" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) JOIN forjson_auto_vu_t_times T ON (S.Id = T.Id) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_10 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "өглөө", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_11 AS
+SELECT (
+    select U.Id AS "users.ελπίδα",
+           U.firstname as "爱",
+           U.lastname as "كلب"
+    FROM forjson_auto_vu_t_users U FOR JSON AUTO
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_12 AS 
+SELECT (
+    select totalSales FROM forjson_auto_vu_t_sales FOR JSON AUTO, INCLUDE_NULL_VALUES
+) c1
+
+statement ok
+create table t50 (x nvarchar(20))
+insert into t50 values ('some string')
+
+statement ok
+CREATE VIEW forjson_vu_v_13 AS 
+SELECT (
+    select json_modify('{"a":"b"}', '$.a', x) from (select * from t50 for json auto) a ([x])
+) c1
+
+statement ok
+CREATE VIEW forjson_vu_v_14 AS 
+SELECT (
+    select json_query((select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) JOIN forjson_auto_vu_t_times T ON (S.Id = T.Id) FOR JSON AUTO)) AS [data]
+) c1
+
+statement ok
+/*
+* CASE 1: FOR JSON AUTO + Function
+*/
+CREATE TABLE forjson_auto_test_diff_cases ( EmployeeId INT, Salary INT);
+INSERT INTO forjson_auto_test_diff_cases (EmployeeId, Salary) VALUES(1, 75000),(2, 85000)
+
+statement ok
+CREATE FUNCTION dbo.forjson_auto_test_diff_cases_fn(@DepartmentId INT)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT  e.EmployeeId FROM forjson_auto_test_diff_cases e
+);
+
+statement ok
+CREATE TABLE forjsonauto_t_customers (CustomerID NCHAR(5) PRIMARY KEY, CompanyName NVARCHAR(100), ContactName NVARCHAR(100), ContactTitle NVARCHAR(50), Region NVARCHAR(50), Country NVARCHAR(50), Phone NVARCHAR(20), IsActive BIT DEFAULT 1);
+
+statement ok
+CREATE TABLE forjsonauto_t_orders (OrderID INT PRIMARY KEY, CustomerID NCHAR(5), OrderDate DATETIME, ShipAddress NVARCHAR(100), ShipCity NVARCHAR(50), ShipCountry NVARCHAR(50), TotalAmount MONEY, Status NVARCHAR(20));
+
+statement ok
+CREATE TABLE forjsonauto_t_order_details (OrderDetailID INT PRIMARY KEY, OrderID INT, ProductID INT, Quantity INT, UnitPrice MONEY, Discount DECIMAL(3,2) DEFAULT 0.00);
+
+statement ok
+CREATE SCHEMA forjsonauto_t_inventory_schema;
+
+statement ok
+CREATE TABLE forjsonauto_t_inventory_schema.forjsonauto_t_warehouses (WarehouseID INT PRIMARY KEY, WarehouseName NVARCHAR(100), Location NVARCHAR(100), Capacity INT, SupplierID INT, OperationalStatus NVARCHAR(20), LastInspectionDate DATETIME);
+
+statement ok
+CREATE TABLE JsonTable (ID INT IDENTITY(1,1) PRIMARY KEY, JsonData NVARCHAR(MAX));
+
+statement ok
+INSERT INTO forjsonauto_t_customers (CustomerID, CompanyName, ContactName, ContactTitle, Region, Country, Phone) VALUES ('ALFKI', 'Alfreds Inc', 'Maria Anders', 'Sales Rep', 'WA', 'USA', '030-0074321'), ('BERGS', 'Berglunds snabbköp', 'Christina Berglund', 'Administrator', NULL, 'Sweden', '0921-12 34 65'), ('CONSH', 'Consolidated Holdings', 'Elizabeth Brown', 'Sales Manager', 'LA', 'USA', '(171) 555-2282');
+
+statement ok
+INSERT INTO forjsonauto_t_orders (OrderID, CustomerID, OrderDate, ShipAddress, ShipCity, ShipCountry, TotalAmount, Status) VALUES (10248, 'ALFKI', '2023-07-04', '23 Tsawassen Blvd.', 'Seattle', 'USA', 440.00, 'Shipped'), (10249, 'BERGS', '2023-07-05', 'Luisenstr. 48', 'Mannheim', 'Germany', 1863.40, 'Pending'), (10250, 'CONSH', '2023-07-06', 'Berkeley Gardens', 'London', 'UK', 1552.60, 'Delivered');
+
+statement ok
+INSERT INTO forjsonauto_t_order_details (OrderDetailID, OrderID, ProductID, Quantity, UnitPrice, Discount) VALUES (1, 10248, 1, 12, 18.00, 0.00), (2, 10248, 2, 10, 19.00, 0.05), (3, 10249, 3, 5, 1200.00, 0.00), (4, 10250, 1, 20, 18.00, 0.10), (5, 10250, 4, 15, 10.00, 0.00);
+
+statement ok
+INSERT INTO forjsonauto_t_inventory_schema.forjsonauto_t_warehouses (WarehouseID, WarehouseName, Location, Capacity, SupplierID, OperationalStatus, LastInspectionDate) VALUES (101, 'Seattle Distribution Center', 'Seattle, WA', 50000, 1, 'Active', '2023-06-15'), (102, 'Madrid Storage Facility', 'Madrid, Spain', 35000, 2, 'Active', '2023-07-01'), (103, 'Shanghai Warehouse', 'Shanghai, China', 75000, 3, 'Maintenance', '2023-05-20'), (104, 'Stockholm Hub', 'Stockholm, Sweden', 40000, 4, 'Active', '2023-07-10'), (105, 'Backup Seattle Facility', 'Tacoma, WA', 25000, 1, 'Inactive', '2023-04-30');
+
+statement ok
+INSERT INTO JsonTable (JsonData)
+VALUES 
+    ((SELECT CustomerID, CompanyName, ContactName, Country, Phone 
+      FROM forjsonauto_t_customers 
+      WHERE CustomerID = 'ALFKI' 
+      FOR JSON AUTO));
+
+statement ok
+CREATE TABLE forjsonauto_t_trigger_test (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT
+);
+
+statement ok
+CREATE TABLE forjsonauto_t_trigger_json_result (
+    ResultJson NVARCHAR(MAX)
+);
+
+query T
+SELECT * FROM forjson_vu_v_1
+----
+[{"order":{"productId":1},"product":{"oid":1,"price":"20"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"30"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"20"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"30"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"20"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"30"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"20"},"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"30"},"users":{"userid":1}}]
+
+query T
+SELECT * FROM forjson_vu_v_2
+----
+[{"firstname":"j","users":{"userid":1}},{"firstname":"e","users":{"userid":1}}]
+
+query T
+SELECT * FROM forjson_vu_v_3
+----
+[{"firstname":"j","order":{"productId":1},"users":{"userid":1}},{"firstname":"j","order":{"productId":1},"users":{"userid":1}},{"firstname":"e","order":{"productId":1},"users":{"userid":1}},{"firstname":"e","order":{"productId":1},"users":{"userid":1}}]
+
+query T
+SELECT * FROM forjson_vu_v_4
+----
+[{"order":{"productId":1},"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1}}]
+
+query T
+SELECT * FROM forjson_vu_v_5
+----
+[{"Id":1,"firstname":"j","productId":1},{"Id":1,"firstname":"j","productId":1},{"Id":1,"firstname":"e","productId":1},{"Id":1,"firstname":"e","productId":1}]
+
+query T
+SELECT * FROM forjson_vu_v_6
+----
+[{"Id":1,"firstname":"j","lastname":"o"},{"Id":1,"firstname":"e","lastname":"l"}]
+
+query T
+SELECT * FROM forjson_vu_v_7
+----
+[{"Id":1,"name":"A","price":"20"},{"Id":1,"name":"B","price":"30"},{"Id":1,"name":"A","price":"20"},{"Id":1,"name":"B","price":"30"}]
+
+query T
+SELECT * FROM forjson_vu_v_8
+----
+[{"order":{"productId":1},"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1}},{"order":{"productId":1},"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1}}]
+
+query T
+SELECT * FROM forjson_vu_v_9
+----
+[{"date":"2023-11-26","order":{"productId":1},"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1}},{"date":"2023-11-27","order":{"productId":1},"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1}},{"date":"2023-11-26","order":{"productId":1},"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1}},{"date":"2023-11-27","order":{"productId":1},"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1}},{"date":"2023-11-26","order":{"productId":1},"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1}},{"date":"2023-11-27","order":{"productId":1},"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1}},{"date":"2023-11-26","order":{"productId":1},"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1}},{"date":"2023-11-27","order":{"productId":1},"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1}}]
+
+query T
+SELECT * FROM forjson_vu_v_10
+----
+[{"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1},"өглөө":1},{"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1},"өглөө":1},{"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1},"өглөө":1},{"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1},"өглөө":1},{"product":{"oid":1,"price":"20"},"totalsales":50,"users":{"userid":1},"өглөө":1},{"product":{"oid":1,"price":"30"},"totalsales":100,"users":{"userid":1},"өглөө":1},{"product":{"oid":2,"price":"20"},"totalsales":50,"users":{"userid":1},"өглөө":1},{"product":{"oid":2,"price":"30"},"totalsales":100,"users":{"userid":1},"өглөө":1}]
+
+query T
+SELECT * FROM forjson_vu_v_11
+----
+[{"users":{"ελπίδα":1},"كلب":"o","爱":"j"},{"users":{"ελπίδα":1},"كلب":"l","爱":"e"}]
+
+query T
+SELECT * FROM forjson_vu_v_12
+----
+[{"totalSales":50},{"totalSales":100},{"totalSales":null},{"totalSales":null}]
+
+query T
+SELECT * FROM forjson_vu_v_13
+----
+{"a":"x"}
+
+query T
+SELECT * FROM forjson_vu_v_14
+----
+NULL
+
+statement ok
+INSERT INTO forjson_auto_vu_t_users VALUES (1, 'e', 'o', 'testemail3')
+
+query T
+select 1+2 as 'a' for json auto;
+----
+[{"a":3}]
+
+query T
+select NULL as [NULL] from forjson_auto_vu_t_users for json auto;
+----
+[{},{},{}]
+
+query T
+SELECT * FROM forjson_auto_vu_t_users WHERE 1=0 FOR JSON AUTO;
+----
+[]
+
+query T
+SELECT n1.id as "outer.id", 
+       n1.data as "outer.data", 
+       n2.id as "inner.id", 
+       n2.ref_id as "inner.ref_id" 
+FROM forjson_test_nested_1 n1 
+LEFT JOIN forjson_test_nested_2 n2 ON n1.id = n2.id 
+FOR JSON AUTO, INCLUDE_NULL_VALUES;
+----
+[{"inner":{"id":1,"ref_id":1},"outer":{"data":null,"id":1}},{"inner":{"id":2,"ref_id":null},"outer":{"data":"test","id":2}}]
+
+query T
+SELECT id as "ThisIsAnExtremelyLongColumnNameThatExceedsTheNormalLimitForColumnNamesInMostDatabaseSystemsIncludingPostgreSQL.id"
+FROM forjson_auto_vu_t_users
+FOR JSON AUTO;
+----
+[{"ThisIsAnExtremelyLongColumnNameThatExceedsTheNormalLimitForColumnNamesInMostDatabaseSystemsIncludingPostgreSQL":{"id":1}},{"ThisIsAnExtremelyLongColumnNameThatExceedsTheNormalLimitForColumnNamesInMostDatabaseSystemsIncludingPostgreSQL":{"id":1}},{"ThisIsAnExtremelyLongColumnNameThatExceedsTheNormalLimitForColumnNamesInMostDatabaseSystemsIncludingPostgreSQL":{"id":1}}]
+
+query T
+SELECT id as "ThisIsAnExtremelyLongColumnNameThatExceedsTheNormalLimitForColumnNamesInMostDatabaseSystemsIncludingPostgreSQLAndShouldTriggerOurHashKeyTruncationWarningWithoutCrashing.id"
+FROM forjson_auto_vu_t_users
+FOR JSON AUTO;
+----
+[{"ThisIsAnExtremelyLongColumnNameThatExceedsTheNormalLimitForColumnNamesInMostDatabaseSystemsIncludingPostgreSQLAndShouldTriggerOurHashKeyTruncationWarningWithoutCrashing":{"id":1}},{"ThisIsAnExtremelyLongColumnNameThatExceedsTheNormalLimitForColumnNamesInMostDatabaseSystemsIncludingPostgreSQLAndShouldTriggerOurHashKeyTruncationWarningWithoutCrashing":{"id":1}},{"ThisIsAnExtremelyLongColumnNameThatExceedsTheNormalLimitForColumnNamesInMostDatabaseSystemsIncludingPostgreSQLAndShouldTriggerOurHashKeyTruncationWarningWithoutCrashing":{"id":1}}]
+
+query T
+SELECT id, name, value FROM forjson_test_orderby ORDER BY value * 2 DESC FOR JSON AUTO;
+----
+[{"id":3,"name":"Cherry","value":30},{"id":5,"name":"Elderberry","value":25},{"id":1,"name":"Apple","value":20},{"id":4,"name":"Date","value":15},{"id":2,"name":"Banana","value":10}]
+
+query T
+SELECT id, name, value FROM forjson_test_orderby ORDER BY SUBSTRING(name, 1, 1), value DESC FOR JSON AUTO;
+----
+[{"id":1,"name":"Apple","value":20},{"id":2,"name":"Banana","value":10},{"id":3,"name":"Cherry","value":30},{"id":4,"name":"Date","value":15},{"id":5,"name":"Elderberry","value":25}]
+
+query T
+SELECT category, SUM(quantity) as total_quantity, AVG(price) as avg_price FROM forjson_test_groupby GROUP BY category FOR JSON AUTO;
+----
+[{"avg_price":"2.1250","category":"Fruit","total_quantity":25}]
+
+query T
+SELECT category, COUNT(*) as product_count, SUM(quantity) as total_quantity FROM forjson_test_groupby GROUP BY category
+HAVING SUM(quantity) > 20 FOR JSON AUTO;
+----
+[{"category":"Fruit","product_count":2,"total_quantity":25}]
+
+query T
+SELECT category, 
+       COUNT(*) as product_count, 
+       SUM(quantity) as total_quantity,
+       MAX(price) as max_price,
+       MIN(price) as min_price
+FROM forjson_test_groupby
+GROUP BY category
+ORDER BY SUM(quantity * price) DESC
+FOR JSON AUTO;
+----
+[{"category":"Fruit","max_price":"2.50","min_price":"1.75","product_count":2,"total_quantity":25}]
+
+query T
+SELECT id, 
+       value,
+       ROW_NUMBER() OVER(ORDER BY value) as row_num,
+       RANK() OVER(ORDER BY value) as rank_val
+FROM forjson_test_orderby
+ORDER BY id
+FOR JSON AUTO;
+----
+[{"id":1,"rank_val":3,"row_num":3,"value":20},{"id":2,"rank_val":1,"row_num":1,"value":10},{"id":3,"rank_val":5,"row_num":5,"value":30},{"id":4,"rank_val":2,"row_num":2,"value":15},{"id":5,"rank_val":4,"row_num":4,"value":25}]
+
+query T
+/*
+ *  Condition : Only Function in the query
+ *  Expected Output: should not throw any error
+ *  Actual Output: throws incorrect error message
+ */ 
+SELECT  b.EmployeeId
+FROM dbo.forjson_auto_test_diff_cases_fn(1) as b
+FOR JSON AUTO;
+----
+[{"EmployeeId":1},{"EmployeeId":2}]
+
+query T
+/*
+ *  Condition : FUNCTION + RELATION
+ *  Actual Output: Treats Function as relation and gives incorrect output
+ *  Expected Output: should treat function and relation as separate and provides different
+ *                   nesting key and level for both
+ */ 
+SELECT  b.EmployeeId, a.salary
+FROM dbo.forjson_auto_test_diff_cases_fn(1) as b, forjson_auto_test_diff_cases a
+FOR JSON AUTO;
+----
+[{"EmployeeId":1},{"EmployeeId":2}]
+
+query T
+SELECT o1.OrderID, o1.CustomerID, o1.TotalAmount, o2.AvgAmount
+FROM (
+    SELECT OrderID, CustomerID, TotalAmount
+    FROM forjsonauto_t_orders
+    WHERE TotalAmount > 1000
+) AS o1
+JOIN (
+    SELECT CustomerID, AVG(TotalAmount) AS AvgAmount
+    FROM forjsonauto_t_orders
+    GROUP BY CustomerID
+) AS o2
+ON o1.CustomerID = o2.CustomerID
+WHERE o1.CustomerID = 'BERGS'
+FOR JSON AUTO;
+----
+[{"AvgAmount":"1863.4000","CustomerID":"BERGS","OrderID":10249,"TotalAmount":"1863.4000"}]
+
+query T
+SELECT combined.CustomerID, combined.Source
+FROM (
+    SELECT CustomerID, 'Active' as Source
+    FROM forjsonauto_t_customers
+    WHERE Country = 'USA'
+    UNION ALL
+    SELECT CustomerID, 'International' as Source
+    FROM forjsonauto_t_customers
+    WHERE Country != 'USA'
+) AS combined
+WHERE combined.CustomerID = 'ALFKI'
+FOR JSON AUTO;
+----
+[{"CustomerID":"ALFKI","Source":"Active"}]
+
+query T
+SELECT outer_sub.CustomerID, outer_sub.OrderCount
+FROM (
+    SELECT sub.CustomerID, COUNT(*) as OrderCount
+    FROM (
+        SELECT CustomerID, OrderID
+        FROM forjsonauto_t_orders
+        WHERE TotalAmount > 200
+    ) AS sub
+    GROUP BY sub.CustomerID
+) AS outer_sub
+WHERE outer_sub.CustomerID = 'ALFKI'
+FOR JSON AUTO;
+----
+[{"CustomerID":"ALFKI","OrderCount":1}]
+
+query T
+WITH 
+  cte AS (
+    SELECT CustomerID, CompanyName 
+    FROM forjsonauto_t_customers
+  ),
+  cte2 AS (
+    SELECT CustomerID, OrderID 
+    FROM forjsonauto_t_orders
+  ) 
+SELECT C.CustomerID, O.OrderID
+FROM cte C
+JOIN cte2 O
+ON (C.CustomerID = O.CustomerID)
+WHERE C.CustomerID = 'ALFKI'
+FOR JSON AUTO
+----
+[{"CustomerID":"ALFKI","OrderID":10248}]
+
+query T
+WITH high_value_orders AS (
+    SELECT o.CustomerID, 
+           COUNT(*) as high_order_count,
+           AVG(o.TotalAmount) as avg_high_amount
+    FROM forjsonauto_t_orders o
+    WHERE o.TotalAmount > 1000
+    GROUP BY o.CustomerID
+),
+all_customer_orders AS (
+    SELECT o.CustomerID,
+           o.OrderID,
+           COUNT(*) as total_order_count
+    FROM forjsonauto_t_orders o
+    GROUP BY o.CustomerID, o.OrderID
+)
+SELECT 
+    c.CustomerID,
+    hvo.customerID,
+    aco.customerID,
+    aco.total_order_count
+FROM forjsonauto_t_customers c
+LEFT JOIN high_value_orders hvo ON c.CustomerID = hvo.CustomerID
+LEFT JOIN all_customer_orders aco ON c.CustomerID = aco.CustomerID
+WHERE aco.CustomerID IS NOT NULL
+AND c.CustomerID = 'BERGS'
+FOR JSON AUTO;
+----
+[{"CustomerID":"BERGS","customerID":"BERGS","total_order_count":1}]
+
+query T
+WITH 
+    cte AS (SELECT 1 AS Id), 
+    cte2 AS (SELECT 1 AS Id)
+SELECT U.Id, O.Id
+FROM cte U
+LEFT JOIN cte2 O ON (U.Id = O.Id)
+FOR JSON AUTO
+----
+[{"Id":1}]
+
+query T
+WITH
+    cte AS(SELECT 1 AS Id), 
+    cte2 AS(SELECT 1 AS Id2)
+SELECT Id , Id2
+FROM cte 
+LEFT JOIN cte2 ON (cte.Id = cte2.Id2)
+FOR JSON AUTO
+----
+[{"Id":1,"Id2":1}]
+
+query T
+CREATE TABLE #temp_sales (
+    SalesID INT,
+    CustomerID NCHAR(5),
+    SalesAmount MONEY,
+    SalesDate DATETIME
+);
+INSERT INTO #temp_sales VALUES
+(1, 'ALFKI', 500.00, '2023-07-01'),
+(2, 'BERGS', 750.00, '2023-07-02'),
+(3, 'CONSH', 300.00, '2023-07-03'),
+(4, 'ALFKI', 400.00, '2023-07-04');
+WITH sales_summary AS (
+    SELECT 
+        CustomerID,
+        COUNT(*) as TransactionCount,
+        SUM(SalesAmount) as TotalSales,
+        AVG(SalesAmount) as AvgSales
+    FROM #temp_sales
+    GROUP BY CustomerID
+)
+SELECT ss.CustomerID, ss.TransactionCount, ss.TotalSales, ss.AvgSales
+FROM sales_summary ss
+WHERE ss.CustomerID = 'ALFKI'
+FOR JSON AUTO;
+----
+[{"AvgSales":"450.0000","CustomerID":"ALFKI","TotalSales":"900.0000","TransactionCount":2}]
+
+query T
+WITH customer_orders AS (
+    SELECT c.CustomerID, c.CompanyName, o.OrderID, o.TotalAmount
+    FROM forjsonauto_t_customers c
+    JOIN forjsonauto_t_orders o ON c.CustomerID = o.CustomerID
+)
+SELECT subquery_result.aa
+FROM (
+    SELECT co.CompanyName, co.OrderID, co.TotalAmount
+    FROM customer_orders co
+      where co.OrderID = 10248
+    FOR JSON AUTO
+) AS subquery_result(aa)
+----
+NULL
+
+query T
+SELECT 
+    ss.value AS category,
+    'Active' AS status
+FROM STRING_SPLIT('Electronics,Premium,Popular', ',') ss
+FOR JSON AUTO;
+----
+[{"category":"Electronics"},{"category":"Premium"},{"category":"Popular"}]
+
+query T
+SELECT
+    sub.id,
+    sub.name 
+FROM
+    (SELECT
+        1 as id,
+        'test' as name
+    ) AS sub 
+FOR JSON AUTO;
+----
+[{"id":1,"name":"test"}]
+
+query T
+SELECT s.value 
+FROM STRING_SPLIT('apple,banana,cherry', ',') AS s 
+FOR JSON AUTO;
+----
+[{"value":"apple"},{"value":"banana"},{"value":"cherry"}]
+
+query T
+WITH cte
+AS (SELECT
+        1 as id,
+        'test' as name
+    )
+SELECT
+    cte.id,
+    cte.name
+FROM cte
+FOR JSON AUTO;
+----
+[{"id":1,"name":"test"}]
+
+query T
+WITH 
+    unused_cte AS (SELECT 1 as id, 'test' as name)
+SELECT f.value 
+FROM STRING_SPLIT('apple,banana,cherry', ',') AS f
+FOR JSON AUTO;
+----
+[{"value":"apple"},{"value":"banana"},{"value":"cherry"}]
+
+query T
+WITH high_value_orders AS (
+    SELECT o.CustomerID, 
+           COUNT(*) as high_order_count,
+           AVG(o.TotalAmount) as avg_high_amount
+    FROM forjsonauto_t_orders o
+    WHERE o.TotalAmount > 1000
+    GROUP BY o.CustomerID
+),
+all_customer_orders AS (
+    SELECT o.CustomerID,
+           o.OrderID,
+           COUNT(*) as total_order_count
+    FROM forjsonauto_t_orders o
+    GROUP BY o.CustomerID, o.OrderID
+)
+SELECT 
+    c.CustomerID,
+    hvo.customerID,
+    aco.customerID,
+    aco.total_order_count
+FROM forjsonauto_t_customers c
+LEFT JOIN high_value_orders hvo ON c.CustomerID = hvo.CustomerID
+LEFT JOIN all_customer_orders aco ON c.CustomerID = aco.CustomerID
+WHERE aco.CustomerID IS NOT NULL
+AND c.CustomerID = 'ALFKI'
+FOR JSON AUTO;
+----
+[{"CustomerID":"ALFKI","customerID":"ALFKI","total_order_count":1}]
+
+query T
+WITH high_value_orders AS (
+    SELECT o.CustomerID,
+           COUNT(*) as high_order_count,
+           AVG(o.TotalAmount) as avg_high_amount
+    FROM forjsonauto_t_orders o
+    WHERE o.TotalAmount > 1000
+    GROUP BY o.CustomerID
+),
+all_customer_orders AS (
+    SELECT o.CustomerID,
+           o.OrderID,
+           COUNT(*) as total_order_count
+    FROM forjsonauto_t_orders o
+    GROUP BY o.CustomerID, o.OrderID
+)
+SELECT
+    hvo.CustomerID,
+    c.CustomerID,
+    hvo.customerID,
+    aco.customerID,
+    aco.total_order_count
+FROM forjsonauto_t_customers c
+LEFT JOIN high_value_orders hvo ON c.CustomerID = hvo.CustomerID
+LEFT JOIN all_customer_orders aco ON c.CustomerID = aco.CustomerID
+WHERE aco.CustomerID IS NOT NULL
+AND c.CustomerID = 'ALFKI'
+FOR JSON AUTO;
+----
+[{"CustomerID":"ALFKI","customerID":"ALFKI","total_order_count":1}]
+
+query T
+WITH high_value_orders AS (
+    SELECT o.CustomerID,
+           COUNT(*) as high_order_count,
+           AVG(o.TotalAmount) as avg_high_amount
+    FROM forjsonauto_t_orders o
+    WHERE o.TotalAmount > 1000
+    GROUP BY o.CustomerID
+),
+all_customer_orders AS (
+    SELECT o.CustomerID,
+           o.OrderID,
+           COUNT(*) as total_order_count
+    FROM forjsonauto_t_orders o
+    GROUP BY o.CustomerID, o.OrderID
+)
+SELECT
+    hvo.CustomerID,
+    c.CustomerID,
+    hvo.customerID,
+    aco.customerID,
+    aco.total_order_count
+FROM forjsonauto_t_customers c
+LEFT JOIN high_value_orders hvo ON c.CustomerID = hvo.CustomerID
+LEFT JOIN all_customer_orders aco ON c.CustomerID = aco.CustomerID
+WHERE aco.CustomerID IS NOT NULL
+AND c.CustomerID = 'ALFKI'
+FOR JSON AUTO, INCLUDE_NULL_VALUES;
+----
+[{"CustomerID":"ALFKI","customerID":"ALFKI","total_order_count":1}]
+
+statement ok
+INSERT INTO forjsonauto_t_trigger_test VALUES (1, 'Alice', 100);
+
+statement ok
+SELECT ResultJson FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+INSERT INTO forjsonauto_t_trigger_test VALUES (2, 'Bob', 200), (3, 'Charlie', 300);
+
+statement ok
+SELECT ResultJson FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_test WHERE ID = 1;
+
+statement ok
+SELECT ResultJson FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_test WHERE ID IN (2, 3);
+
+statement ok
+SELECT ResultJson FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+INSERT INTO forjsonauto_t_trigger_test VALUES (4, 'Diana', 400);
+
+statement ok
+SELECT ResultJson FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+INSERT INTO forjsonauto_t_trigger_test VALUES (5, 'Eve', 500);
+
+statement ok
+SELECT ResultJson FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+UPDATE forjsonauto_t_trigger_test SET Value = 999 WHERE ID = 4;
+
+statement ok
+SELECT ResultJson FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+UPDATE forjsonauto_t_trigger_test SET Value = 888, Name = 'Updated' WHERE ID = 5;
+
+statement ok
+SELECT ResultJson FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+INSERT INTO forjsonauto_t_trigger_test VALUES (6, NULL, NULL);
+
+statement ok
+SELECT ResultJson FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_test WHERE ID = 6;
+
+statement ok
+SELECT ResultJson FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DELETE FROM forjsonauto_t_trigger_json_result;
+
+statement ok
+DROP TRIGGER IF EXISTS forjsonauto_trg_insert;
+
+statement ok
+DROP TRIGGER IF EXISTS forjsonauto_trg_delete;
+
+statement ok
+DROP TRIGGER IF EXISTS forjsonauto_trg_insert_subset;
+
+statement ok
+DROP TRIGGER IF EXISTS forjsonauto_trg_insert_join;
+
+statement ok
+DROP TRIGGER IF EXISTS forjsonauto_trg_update_both;
+
+statement ok
+DROP TRIGGER IF EXISTS forjsonauto_trg_update_join;
+
+statement ok
+DROP TRIGGER IF EXISTS forjsonauto_trg_insert_null;
+
+statement ok
+DROP TRIGGER IF EXISTS forjsonauto_trg_delete_join;
+
+statement ok
+DROP TABLE IF EXISTS forjsonauto_t_trigger_json_result;
+
+statement ok
+DROP TABLE IF EXISTS forjsonauto_t_trigger_test;
+
+statement ok
+DROP VIEW forjson_vu_v_1
+
+statement ok
+DROP VIEW forjson_vu_v_2
+
+statement ok
+DROP VIEW forjson_vu_v_3
+
+statement ok
+DROP VIEW forjson_vu_v_4
+
+statement ok
+DROP VIEW forjson_vu_v_5
+
+statement ok
+DROP VIEW forjson_vu_v_6
+
+statement ok
+DROP VIEW forjson_vu_v_7
+
+statement ok
+DROP VIEW forjson_vu_v_8
+
+statement ok
+DROP VIEW forjson_vu_v_9
+
+statement ok
+DROP VIEW forjson_vu_v_10
+
+statement ok
+DROP VIEW forjson_vu_v_11
+
+statement ok
+DROP VIEW forjson_vu_v_12
+
+statement ok
+DROP VIEW forjson_vu_v_13
+
+statement ok
+DROP VIEW forjson_vu_v_14
+
+statement ok
+DROP FUNCTION dbo.forjson_auto_test_diff_cases_fn;
+
+statement ok
+DROP TABLE forjson_auto_vu_t_users
+
+statement ok
+DROP TABLE forjson_auto_vu_t_orders
+
+statement ok
+DROP TABLE forjson_auto_vu_t_products
+
+statement ok
+DROP TABLE forjson_auto_vu_t_sales
+
+statement ok
+DROP TABLE forjson_auto_vu_t_times
+
+statement ok
+DROP TABLE t50
+
+statement ok
+DROP TABLE forjson_auto_test_diff_cases;
+DROP TABLE forjson_test_nested_1;
+DROP TABLE forjson_test_nested_2;
+DROP TABLE forjson_test_unicode;
+DROP TABLE forjson_test_orderby;
+DROP TABLE forjson_test_groupby;
+
+statement ok
+DROP TABLE IF EXISTS forjsonauto_t_categories;
+DROP TABLE IF EXISTS forjsonauto_t_customers;
+DROP TABLE IF EXISTS forjsonauto_t_orders;
+DROP TABLE IF EXISTS forjsonauto_t_products;
+DROP TABLE IF EXISTS forjsonauto_t_order_details;
+DROP TABLE IF EXISTS forjsonauto_t_inventory_schema.forjsonauto_t_warehouses;
+DROP TABLE IF EXISTS forjsonauto_t_inventory_schema.forjsonauto_t_suppliers;
+DROP SCHEMA IF EXISTS forjsonauto_t_inventory_schema;
+DROP TABLE IF EXISTS JsonTable;
+

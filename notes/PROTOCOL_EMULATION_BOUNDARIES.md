@@ -9,7 +9,7 @@
 LionSQL is architected as an **autonomous, high-concurrency embedded OLTP database engine** featuring a single unified VDBE bytecode virtual machine executing Microsoft T-SQL stored procedures and ANSI SQL queries.
 
 To maximize ecosystem reach, LionSQL exposes multiple database network listeners concurrently from its single static executable:
-- **TDS 7.x/8.0 Protocol** (Default TCP `:1433`): Native Microsoft SQL Server tools, SSMS, Azure Data Studio, `go-mssqldb`.
+- **TDS 7.x/8.0 Protocol** (Default TCP `:1433`): Native Microsoft SQL Server tools, SSMS, `go-mssqldb`.
 - **PostgreSQL Wire Protocol v3** (Default TCP `:5433`): `psql`, `pgx/v5`, `lib/pq`, DBeaver, Beekeeper Studio, Navicat, DataGrip, GORM, Prisma.
 - **MySQL Client/Server Protocol** (Planned TCP `:3306`): `mysql` CLI, Navicat, MySQL Workbench, `go-sql-driver/mysql`, PHP/Python MySQL drivers.
 - **HTTP / REST & Web Studio** (Default TCP `:8090`): Web dashboard, health probes, automated REST API.

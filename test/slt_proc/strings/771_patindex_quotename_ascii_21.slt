@@ -1,0 +1,26 @@
+# test/slt_proc/strings/771_patindex_quotename_ascii_21.slt
+# T-SQL PATINDEX, QUOTENAME, ASCII, CHAR, SPACE, LTRIM, RTRIM (21)
+
+query ITTT
+SELECT ASCII('U'), CHAR(85), QUOTENAME('tbl_col_21'), REPLACE(CONCAT('L', SPACE(5), 'R'), ' ', '_');
+----
+85 U [tbl_col_21] L_____R
+
+query II
+SELECT PATINDEX('%TARGET_U%', 'pre_21_TARGET_U_post'), LEN(LTRIM(RTRIM('   tbl_col_21   ')));
+----
+8 10
+
+statement ok
+CREATE PROCEDURE sp_str_adv_771 @s VARCHAR(100), @code INT OUTPUT
+AS
+BEGIN
+    SET @code = ASCII(LEFT(@s, 1));
+    SELECT UPPER(LEFT(@s, 3)), LOWER(RIGHT(@s, 4)), @code;
+END;
+
+query TTI
+DECLARE @out_c INT;
+EXEC sp_str_adv_771 @s = 'Ubc_XYZ21', @code = @out_c OUTPUT;
+----
+UBC yz21 85

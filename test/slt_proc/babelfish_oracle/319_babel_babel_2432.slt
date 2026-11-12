@@ -1,0 +1,37 @@
+# test/slt_proc/babelfish_oracle/319_babel_babel_2432.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2432.sql
+
+statement ok
+create table t2432 ([COL_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij] int);
+insert into t2432 values (1);
+
+query T
+select [col_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij] from t2432;
+----
+1
+
+query T
+select col_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij from t2432;
+----
+1
+
+statement ok
+drop table t2432;
+
+statement ok
+create table t2432_2 ([col_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij] int);
+insert into t2432_2 values (1);
+
+query T
+select [COL_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij] from t2432_2;
+----
+1
+
+query T
+select COL_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij from t2432_2;
+----
+1
+
+statement ok
+drop table t2432_2;
+

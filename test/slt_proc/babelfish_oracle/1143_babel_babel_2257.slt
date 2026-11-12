@@ -1,0 +1,75 @@
+# test/slt_proc/babelfish_oracle/1143_babel_babel_2257.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2257.sql
+
+statement ok
+create schema error_mapping;
+
+statement ok
+CREATE TABLE t3616(id int);
+
+statement ok
+CREATE TABLE t3617(id int);
+
+statement ok
+CREATE TRIGGER t3616Trigger
+ON              t3616
+AFTER           INSERT  
+AS
+BEGIN
+    BEGIN TRY
+        BEGIN TRAN
+        INSERT INTO t3616 VALUES (2)
+        COMMIT TRAN
+    END TRY
+    BEGIN CATCH
+        SELECT ERROR_MESSAGE();
+    END CATCH
+END
+
+statement ok
+CREATE TRIGGER t3617Trigger
+ON              t3617
+AFTER           INSERT  
+AS
+BEGIN
+    BEGIN TRY
+        BEGIN TRAN
+        INSERT INTO t3616 VALUES (1)
+        COMMIT TRAN
+    END TRY
+    BEGIN CATCH
+        SELECT ERROR_MESSAGE();
+    END CATCH
+END
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+INSERT INTO t3617 values (1)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+select * from t3616
+
+statement ok
+select * from t3617
+
+statement ok
+drop trigger t3617Trigger;
+
+statement ok
+drop trigger t3616Trigger;
+
+statement ok
+drop table t3616;
+
+statement ok
+drop table t3617;
+
+statement ok
+drop procedure error_mapping.ErrorHandling1;
+
+statement ok
+drop schema error_mapping;
+

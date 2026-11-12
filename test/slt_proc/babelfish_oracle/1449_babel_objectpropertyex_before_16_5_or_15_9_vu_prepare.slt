@@ -1,0 +1,111 @@
+# test/slt_proc/babelfish_oracle/1449_babel_objectpropertyex_before_16_5_or_15_9_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/objectpropertyex-before-16_5-or-15_9-vu-prepare.sql
+
+statement ok
+CREATE SCHEMA objectpropertyex_ownerid_schema
+
+statement ok
+CREATE TABLE objectpropertyex_ownerid_schema.objectpropertyex_ownerid_table(a int) 
+
+statement ok
+CREATE TABLE objectpropertyex_basetype_table(a int)
+
+statement ok
+CREATE VIEW objectpropertyex_basetype_view AS
+SELECT 1
+
+statement ok
+CREATE FUNCTION objectpropertyex_basetype_function()
+RETURNS INTEGER
+AS
+BEGIN
+RETURN 1;
+END
+
+statement ok
+CREATE PROC objectpropertyex_basetype_proc
+AS
+SELECT 1
+
+statement ok
+CREATE TABLE objectpropertyex_specialinput_table(a int)
+
+statement ok
+CREATE TABLE objectpropertyex_trigger_table(a int)
+
+statement ok
+CREATE TRIGGER objectpropertyex_test_trigger ON objectpropertyex_trigger_table
+AFTER INSERT AS
+BEGIN
+    SELECT 1
+END
+
+statement ok
+CREATE TABLE objectpropertyex_constraint_table(
+    a int,
+    b int DEFAULT 42,
+    c int CHECK (c > 0),
+    CONSTRAINT objectpropertyex_pk PRIMARY KEY (a)
+)
+
+statement ok
+CREATE TABLE objectpropertyex_fk_table(
+    x int,
+    CONSTRAINT objectpropertyex_fk FOREIGN KEY (x) REFERENCES objectpropertyex_constraint_table(a)
+)
+
+statement ok
+CREATE SEQUENCE objectpropertyex_test_seq START WITH 1
+
+statement ok
+CREATE FUNCTION objectpropertyex_itvf()
+RETURNS TABLE
+AS
+RETURN (SELECT 1 AS col1)
+
+statement ok
+CREATE TABLE objectpropertyex_indexed_table(a int)
+
+statement ok
+CREATE INDEX objectpropertyex_idx ON objectpropertyex_indexed_table(a)
+
+statement ok
+CREATE TABLE objectpropertyex_noindex_table(a int)
+
+statement ok
+CREATE TABLE objectpropertyex_default_table(a int DEFAULT 10)
+
+statement ok
+CREATE TABLE objectpropertyex_notshipped_table(a int)
+
+statement ok
+CREATE VIEW objectpropertyex_schemabound_view
+WITH SCHEMABINDING
+AS
+SELECT 1 AS col1
+
+statement ok
+CREATE DATABASE objectpropertyex_otherdb
+
+statement ok
+USE objectpropertyex_otherdb
+
+statement ok
+CREATE TABLE objectpropertyex_otherdb_table(a int)
+
+statement ok
+USE master
+
+statement ok
+CREATE TABLE objectpropertyex_perm_table(a int)
+
+statement ok
+CREATE TRIGGER objectpropertyex_perm_trigger ON objectpropertyex_perm_table INSTEAD OF INSERT
+AS
+BEGIN
+    SELECT * FROM objectpropertyex_perm_table
+END
+
+statement ok
+CREATE TABLE objectpropertyex_oid_helper(name varchar(100), oid_val int)
+

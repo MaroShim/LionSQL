@@ -1,0 +1,29 @@
+# test/slt_proc/strings/1662_stuff_reverse_replicate_agg_047.slt
+# T-SQL STUFF, REVERSE, REPLICATE, CHARINDEX, SUBSTRING, STRING_AGG (47)
+
+query TTTT
+SELECT STUFF('HEAD_XXXX_TAIL', 6, 4, 'TOK047'), REVERSE('TOK047'), REPLICATE('AB2', 5), SUBSTRING('HEAD_TOK047_TAIL', 6, 6);
+----
+HEAD_TOK047_TAIL 740KOT AB2AB2AB2AB2AB2 TOK047
+
+query II
+SELECT CHARINDEX('TOK047', 'HEAD_TOK047_TAIL'), LEN('HEAD_TOK047_TAIL');
+----
+6 16
+
+statement ok
+CREATE TABLE str_items_1662 (id INT PRIMARY KEY, grp VARCHAR(10), tag VARCHAR(30));
+
+statement ok
+INSERT INTO str_items_1662 VALUES
+(1, 'G1', 'A_47'),
+(2, 'G1', 'B_47'),
+(3, 'G2', 'C_47');
+
+query T
+SELECT STRING_AGG(tag, '|') FROM str_items_1662;
+----
+A_47|B_47|C_47
+
+statement ok
+DROP TABLE str_items_1662;

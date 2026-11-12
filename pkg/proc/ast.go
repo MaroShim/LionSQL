@@ -351,12 +351,13 @@ func (e *ProcError) TdsErrorInfo() (int32, byte, byte) {
 	return e.Number, e.Severity, e.State
 }
 
-// RaiseErrorStmt represents RAISERROR('message', severity, state)
+// RaiseErrorStmt represents RAISERROR('message', severity, state, [args...])
 type RaiseErrorStmt struct {
-	Number   int32
-	Severity byte
-	State    byte
-	Message  string
+	Number     int32
+	Severity   byte
+	State      byte
+	Message    string
+	FormatArgs []Expr
 }
 
 func (s *RaiseErrorStmt) stmtNode() {}
@@ -473,10 +474,11 @@ func (s *DeleteStmt) String() string {
 	return fmt.Sprintf("DELETE FROM %s WHERE %s = %s", s.Table, s.WhereCol, s.WhereVal.String())
 }
 
-// ExecStmt represents EXEC [@return_var =] ProcName @arg1, @arg2
+// ExecStmt represents EXEC [@return_var =] ProcName @arg1 [OUTPUT], @arg2 [OUTPUT]
 type ExecStmt struct {
 	ProcName  string
 	Args      []Expr
+	OutVars   []string
 	ReturnVar string
 }
 
@@ -978,6 +980,12 @@ const (
 	GroupByGroupingSets
 )
 
+// SetOpBranch represents a chained UNION [ALL], INTERSECT, or EXCEPT/MINUS branch.
+type SetOpBranch struct {
+	Op    string // "UNION", "UNION ALL", "INTERSECT", "EXCEPT", "MINUS"
+	Query *GeneralSelectStmt
+}
+
 // GeneralSelectStmt represents a complete interactive SELECT statement.
 type GeneralSelectStmt struct {
 	CTEs         []CTEClause
@@ -990,16 +998,19 @@ type GeneralSelectStmt struct {
 	GroupByMod   GroupByModifier
 	GroupingSets [][]string
 	Having       Expr
-	OrderBy     []OrderByItem
-	Limit       int64
-	Offset      int64
-	Distinct    bool
-	TopPercent  bool
-	TopWithTies bool
-	IsExplain   bool
-	IsAnalyze   bool
-	QueryHints  []string
-	RawSQL      string
+	OrderBy      []OrderByItem
+	Limit        int64
+	LimitExpr    Expr
+	Offset       int64
+	OffsetExpr   Expr
+	SetOps       []SetOpBranch
+	Distinct     bool
+	TopPercent   bool
+	TopWithTies  bool
+	IsExplain    bool
+	IsAnalyze    bool
+	QueryHints   []string
+	RawSQL       string
 }
 
 func (s *GeneralSelectStmt) stmtNode() {}
@@ -1080,11 +1091,20 @@ func (s *GeneralSelectStmt) String() string {
 		}
 		b.WriteString(strings.Join(obStrs, ", "))
 	}
-	if s.Limit >= 0 {
+	if s.LimitExpr != nil {
+		b.WriteString(fmt.Sprintf(" LIMIT %s", s.LimitExpr.String()))
+	} else if s.Limit >= 0 {
 		b.WriteString(fmt.Sprintf(" LIMIT %d", s.Limit))
 	}
-	if s.Offset > 0 {
+	if s.OffsetExpr != nil {
+		b.WriteString(fmt.Sprintf(" OFFSET %s", s.OffsetExpr.String()))
+	} else if s.Offset > 0 {
 		b.WriteString(fmt.Sprintf(" OFFSET %d", s.Offset))
+	}
+	for _, sop := range s.SetOps {
+		if sop.Query != nil {
+			b.WriteString(fmt.Sprintf(" %s %s", sop.Op, sop.Query.String()))
+		}
 	}
 	if len(s.QueryHints) > 0 {
 		b.WriteString(fmt.Sprintf(" OPTION (%s)", strings.Join(s.QueryHints, ", ")))

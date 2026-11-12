@@ -1,0 +1,98 @@
+# test/slt_proc/babelfish_oracle/530_babel_babel_2999.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2999-vu-prepare.sql, test/babelfish/raw/BABEL-2999-vu-verify.sql, test/babelfish/raw/BABEL-2999-vu-cleanup.sql
+
+statement ok
+drop table if exists t1_BABEL2999;
+
+statement ok
+create table t1_BABEL2999(b varchar(10));
+
+statement ok
+create table t2_BABEL2999(b int);
+
+statement ok
+create table t3_BABEL2999(b varchar);
+
+statement ok
+create procedure p1_BABEL2999 as select 'abc';
+
+statement ok
+create procedure p2_BABEL2999 as select 555;
+
+statement ok
+create table t3_BABEL2999_2(a int, b datetime, c varchar(20))
+
+statement ok
+create procedure p3_BABEL2999 as select '123', 123, 123;
+
+statement ok
+create table t4_BABEL2999( a binary(30), b varbinary(30), c varchar(30), d datetime, e smalldatetime)
+
+statement ok
+create table t5_BABEL2999( a decimal, b numeric)
+
+statement ok
+create table t6_BABEL2999( a int, b tinyint, c smallint)
+
+statement ok
+select b from t1_BABEL2999 order by b;
+
+statement ok
+insert into t2_BABEL2999 SELECT '5'; 
+
+query T
+select b from t2_BABEL2999 order by b;
+----
+5
+
+statement ok
+select b from t3_BABEL2999 order by b;
+
+statement ok
+delete from t1_BABEL2999
+
+statement ok
+select * from  t1_BABEL2999;
+
+statement ok
+select * from t3_BABEL2999_2;
+
+statement ok
+select * from t4_BABEL2999
+
+statement ok
+select * from t5_BABEL2999
+
+statement ok
+select * from t6_BABEL2999
+
+statement ok
+drop table if exists t2_BABEL2999;
+
+statement ok
+drop table t1_BABEL2999;
+
+statement ok
+drop table t3_BABEL2999;
+
+statement ok
+drop table t3_BABEL2999_2;
+
+statement ok
+drop procedure p1_BABEL2999;
+
+statement ok
+drop procedure p2_BABEL2999
+
+statement ok
+drop procedure p3_BABEL2999
+
+statement ok
+drop table t4_BABEL2999;
+
+statement ok
+drop table t5_BABEL2999;
+
+statement ok
+drop table t6_BABEL2999
+

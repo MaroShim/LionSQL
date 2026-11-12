@@ -1,0 +1,28 @@
+# test/slt_proc/math_numeric/1817_sign_power_sqrt_divmod_047.slt
+# T-SQL SIGN, POWER, SQRT, integer division/modulo, and compound proc math (47)
+
+query IIIIII
+SELECT SIGN(-47), SIGN(0), SIGN(47), CAST(SQRT(16) AS INT), CAST(POWER(4, 4) AS INT), (808 % 8);
+----
+-1 0 1 4 256 0
+
+query III
+SELECT (808 / 8), ABS(-808), (47 * 12 - 8);
+----
+101 808 556
+
+statement ok
+CREATE PROCEDURE sp_math_step_1817 @x INT, @y INT, @q INT OUTPUT, @r INT OUTPUT
+AS
+BEGIN
+    SET @q = @x / @y;
+    SET @r = @x % @y;
+END;
+
+query II
+DECLARE @quo INT;
+DECLARE @rem INT;
+EXEC sp_math_step_1817 @x = 808, @y = 8, @q = @quo OUTPUT, @r = @rem OUTPUT;
+SELECT @quo, @rem;
+----
+101 0

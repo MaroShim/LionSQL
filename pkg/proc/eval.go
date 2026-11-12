@@ -1,6 +1,7 @@
 package proc
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math"
 	"strconv"
@@ -37,6 +38,74 @@ func EvalBoolExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) 
 	default:
 		return true
 	}
+}
+
+// ValidateRecordChecks validates all column-level and table-level CHECK constraints on a storage.Record.
+// Per SQL standard, a CHECK constraint is satisfied if the expression evaluates to TRUE or UNKNOWN (NULL),
+// and fails only when it explicitly evaluates to FALSE.
+func ValidateRecordChecks(schema *storage.TableSchema, rec storage.Record) error {
+	if schema == nil || !schema.HasCheckConstraints() {
+		return nil
+	}
+	rowMap := make(map[string]any, len(schema.Columns)*2)
+	for _, col := range schema.Columns {
+		if v, ok := rec[col.Name]; ok && !v.IsNull {
+			var anyVal any
+			switch v.Type {
+			case storage.TypeInt:
+				anyVal = v.IVal
+			case storage.TypeFloat:
+				anyVal = v.FVal
+			case storage.TypeDecimal:
+				anyVal = v.Decimal().String()
+			case storage.TypeBool:
+				anyVal = v.BVal
+			case storage.TypeVarChar, storage.TypeJSON, storage.TypeUUID:
+				anyVal = v.SVal
+			default:
+				anyVal = v.String()
+			}
+			rowMap[col.Name] = anyVal
+			rowMap[strings.ToLower(col.Name)] = anyVal
+		} else {
+			rowMap[col.Name] = nil
+			rowMap[strings.ToLower(col.Name)] = nil
+		}
+	}
+
+	evalCheck := func(checkStr string) error {
+		checkStr = strings.TrimSpace(checkStr)
+		if checkStr == "" {
+			return nil
+		}
+		p := NewParser(NewLexer(checkStr))
+		expr := p.ParseExpr()
+		if expr == nil || len(p.Errors()) > 0 {
+			return nil
+		}
+		val, err := EvalRowExpr(expr, rowMap, nil)
+		if err != nil || isNullVal(val) {
+			return nil // SQL standard: UNKNOWN (NULL) passes CHECK constraint
+		}
+		if !isTruthyValue(val) {
+			return fmt.Errorf("%w: new row for relation %q violates check constraint (%s)", storage.ErrCheckViolation, schema.Name, checkStr)
+		}
+		return nil
+	}
+
+	for _, col := range schema.Columns {
+		if col.CheckExpr != "" {
+			if err := evalCheck(col.CheckExpr); err != nil {
+				return err
+			}
+		}
+	}
+	for _, chk := range schema.CheckConstraints {
+		if err := evalCheck(chk); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // eval3VLAnd computes the SQL 3-valued logic AND of two nullable booleans.
@@ -273,19 +342,49 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		strVal := fmt.Sprintf("%v", val)
 		found := false
 		hasNull := false
-		for _, item := range e.List {
-			itemVal, err := EvalRowExpr(item, row, execSubquery)
+		if e.Query != nil {
+			if execSubquery == nil {
+				return nil, fmt.Errorf("subquery executor not available for IN expression")
+			}
+			subRows, cols, err := execSubquery(e.Query.String())
 			if err != nil {
-				continue
+				return nil, err
 			}
-			if isNullVal(itemVal) {
-				hasNull = true
-				continue
+			for _, r := range subRows {
+				var itemVal any
+				if len(cols) > 0 {
+					itemVal = r[cols[0]]
+				} else {
+					for _, v := range r {
+						itemVal = v
+						break
+					}
+				}
+				if isNullVal(itemVal) {
+					hasNull = true
+					continue
+				}
+				s2 := fmt.Sprintf("%v", itemVal)
+				if strings.EqualFold(strVal, s2) || strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(s2, " ")) {
+					found = true
+					break
+				}
 			}
-			s2 := fmt.Sprintf("%v", itemVal)
-			if strings.EqualFold(strVal, s2) || strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(s2, " ")) {
-				found = true
-				break
+		} else {
+			for _, item := range e.List {
+				itemVal, err := EvalRowExpr(item, row, execSubquery)
+				if err != nil {
+					continue
+				}
+				if isNullVal(itemVal) {
+					hasNull = true
+					continue
+				}
+				s2 := fmt.Sprintf("%v", itemVal)
+				if strings.EqualFold(strVal, s2) || strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(s2, " ")) {
+					found = true
+					break
+				}
 			}
 		}
 		if found {
@@ -442,6 +541,8 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			return res.BVal, nil
 		case storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
 			return res.TVal, nil
+		case storage.TypeBinary:
+			return res, nil
 		default:
 			return res.SVal, nil
 		}
@@ -744,7 +845,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		}
 		if s1, ok1 := isStringType(left); ok1 {
 			if s2, ok2 := isStringType(right); ok2 {
-				return s1 < s2, nil
+				return strings.ToLower(strings.TrimRight(s1, " ")) < strings.ToLower(strings.TrimRight(s2, " ")), nil
 			}
 		}
 		n1, isNum1 := toFloat(left)
@@ -757,7 +858,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if isNum1 && isNum2 {
 			return n1 < n2, nil
 		}
-		return fmt.Sprintf("%v", left) < fmt.Sprintf("%v", right), nil
+		return strings.ToLower(fmt.Sprintf("%v", left)) < strings.ToLower(fmt.Sprintf("%v", right)), nil
 
 	case TokenLte:
 		if isNullVal(left) || isNullVal(right) {
@@ -765,7 +866,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		}
 		if s1, ok1 := isStringType(left); ok1 {
 			if s2, ok2 := isStringType(right); ok2 {
-				return s1 <= s2, nil
+				return strings.ToLower(strings.TrimRight(s1, " ")) <= strings.ToLower(strings.TrimRight(s2, " ")), nil
 			}
 		}
 		n1, isNum1 := toFloat(left)
@@ -778,7 +879,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if isNum1 && isNum2 {
 			return n1 <= n2, nil
 		}
-		return fmt.Sprintf("%v", left) <= fmt.Sprintf("%v", right), nil
+		return strings.ToLower(fmt.Sprintf("%v", left)) <= strings.ToLower(fmt.Sprintf("%v", right)), nil
 
 	case TokenGt:
 		if isNullVal(left) || isNullVal(right) {
@@ -786,7 +887,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		}
 		if s1, ok1 := isStringType(left); ok1 {
 			if s2, ok2 := isStringType(right); ok2 {
-				return s1 > s2, nil
+				return strings.ToLower(strings.TrimRight(s1, " ")) > strings.ToLower(strings.TrimRight(s2, " ")), nil
 			}
 		}
 		n1, isNum1 := toFloat(left)
@@ -799,7 +900,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if isNum1 && isNum2 {
 			return n1 > n2, nil
 		}
-		return fmt.Sprintf("%v", left) > fmt.Sprintf("%v", right), nil
+		return strings.ToLower(fmt.Sprintf("%v", left)) > strings.ToLower(fmt.Sprintf("%v", right)), nil
 
 	case TokenGte:
 		if isNullVal(left) || isNullVal(right) {
@@ -807,7 +908,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		}
 		if s1, ok1 := isStringType(left); ok1 {
 			if s2, ok2 := isStringType(right); ok2 {
-				return s1 >= s2, nil
+				return strings.ToLower(strings.TrimRight(s1, " ")) >= strings.ToLower(strings.TrimRight(s2, " ")), nil
 			}
 		}
 		n1, isNum1 := toFloat(left)
@@ -820,7 +921,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if isNum1 && isNum2 {
 			return n1 >= n2, nil
 		}
-		return fmt.Sprintf("%v", left) >= fmt.Sprintf("%v", right), nil
+		return strings.ToLower(fmt.Sprintf("%v", left)) >= strings.ToLower(fmt.Sprintf("%v", right)), nil
 
 	case TokenPlus:
 		if left == nil || right == nil {
@@ -1139,6 +1240,8 @@ func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[str
 		return res.BVal, nil
 	case storage.TypeDateTime:
 		return res.TVal, nil
+	case storage.TypeBinary:
+		return res, nil
 	default:
 		return res.SVal, nil
 	}
@@ -1350,6 +1453,14 @@ func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style i
 		switch v.Type {
 		case storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
 			str = formatDateTimeByStyle(v.TVal, style)
+		case storage.TypeBinary:
+			if style == 1 {
+				str = "0x" + hex.EncodeToString(v.Bytes())
+			} else if style == 2 {
+				str = hex.EncodeToString(v.Bytes())
+			} else {
+				str = string(v.Bytes())
+			}
 		default:
 			if style > 0 {
 				if t, err := parseDateTimeByStyle(v.String(), 120); err == nil {

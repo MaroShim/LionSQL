@@ -1,0 +1,45 @@
+# test/slt_proc/babelfish_oracle/1110_babel_babel_1446.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1446.sql
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+CREATE LOGIN login1 WITH PASSWORD = '123';
+
+statement ok
+CREATE LOGIN login2 WITH PASSWORD = 'abc';
+
+statement ok
+DROP LOGIN login1;
+
+statement ok
+DROP LOGIN login2;
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+CREATE DATABASE db2;
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+CREATE LOGIN login1 WITH PASSWORD = '123';
+
+statement ok
+CREATE LOGIN login2 WITH PASSWORD = 'abc';
+
+statement ok
+DROP LOGIN login1;
+
+statement ok
+DROP LOGIN login2;
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+CREATE DATABASE db2 COLLATE BBF_Unicode_CP1_CI_AI;
+

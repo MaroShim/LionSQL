@@ -1,0 +1,12 @@
+# test/slt_proc/babelfish_oracle/1187_babel_babel_2890.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2890.sql
+
+statement ok
+create table #temp_babel_2890 (a text)
+
+statement ok
+insert into #temp_babel_2890 values ('this is dummy value');
+
+statement ok
+drop table #temp_babel_2890;
+

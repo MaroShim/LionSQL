@@ -1,0 +1,717 @@
+# test/slt_proc/babelfish_oracle/1361_babel_babel_datetime_before_15_12_or_16_8_or_17_4.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_datetime-before-15_12-or-16_8-or-17_4-vu-prepare.sql, test/babelfish/raw/babel_datetime-before-15_12-or-16_8-or-17_4-vu-verify.sql, test/babelfish/raw/babel_datetime-before-15_12-or-16_8-or-17_4-vu-cleanup.sql
+
+statement ok
+create table babel_datetime_vu_prepare_testing_1 (a datetime, b int)
+
+statement ok
+insert into babel_datetime_vu_prepare_testing_1 (b) values (1)
+
+statement ok
+create table babel_datetime_vu_prepare_testing ( dt DATETIME )
+
+statement ok
+INSERT INTO babel_datetime_vu_prepare_testing VALUES('9999-12-31 23:59:59.998')
+
+statement ok
+INSERT INTO babel_datetime_vu_prepare_testing VALUES('1992-05-23 23:40:29.999')
+
+statement ok
+INSERT INTO babel_datetime_vu_prepare_testing VALUES('1992-05-23 23:40:30.000')
+
+statement ok
+INSERT INTO babel_datetime_vu_prepare_testing VALUES('1999-12-31 23:59:59.998')
+
+statement ok
+INSERT INTO babel_datetime_vu_prepare_testing VALUES('1999-12-31 23:59:59.999')
+
+statement ok
+INSERT INTO babel_datetime_vu_prepare_testing VALUES('2020-03-14')
+
+statement ok
+create view babel_datetime_vu_view1
+as
+	select cast(0x0000B02200EF28C1 as datetime)
+
+statement ok
+create view babel_datetime_vu_view2
+as
+	select cast(0x00008EE700C5C100 as datetime)
+
+statement ok
+CREATE PROCEDURE babel_datetime_vu_procedure
+AS
+BEGIN
+	select cast(0x00008EE700C5C100 as datetime)
+END;
+
+statement ok
+CREATE FUNCTION babel_datetime_vu_function1 (@inputdate DATETIME)
+RETURNS varchar(50)
+AS
+BEGIN
+	RETURN @inputdate
+END
+
+statement ok
+create view babel_datetime_varbinary_vu_view1
+as
+	select cast(cast('2023-06-15 23:59:59.997' as datetime) as varbinary)
+
+statement ok
+create view babel_datetime_varbinary_vu_view2
+as
+	select cast(cast('1900-01-01 00:00:00.003' as datetime) as varbinary)
+
+statement ok
+create view babel_datetime_varbinary_vu_view3
+as
+	select cast(cast('9999-12-31 23:59:59.997' as datetime) as varbinary)
+
+statement ok
+create view babel_datetime_varbinary_vu_view4
+as
+	select cast(cast('1753-01-01 00:12:00.145' as datetime) as varbinary)
+
+statement ok
+CREATE PROCEDURE babel_datetime_varbinary_vu_procedure
+AS
+BEGIN
+	select cast(cast('2023-06-15 14:30:45.123' as datetime) as varbinary)
+	select cast(cast('2000-02-29 12:30:45.000' as datetime) as varbinary)
+	select cast(cast('1999-12-31 23:59:59.997' as datetime) as varbinary)
+END;
+
+statement ok
+CREATE FUNCTION babel_datetime_varbinary_vu_function1 (@inputdate VARBINARY)
+RETURNS VARBINARY
+AS
+BEGIN
+	RETURN @inputdate
+END
+
+statement ok
+create table babel_datetime_varbinary_vu_prepare_testing_2 (a varbinary)
+
+statement ok
+insert into babel_datetime_varbinary_vu_prepare_testing_2 values (cast('2023-06-15 14:30:45.123' as datetime))
+
+query T
+select a from babel_datetime_vu_prepare_testing_1 where b = 1
+----
+NULL
+
+statement ok
+select * from babel_datetime_vu_prepare_testing where dt >= smalldatetime('2000-01-01 00:00:59')
+
+statement ok
+select * from babel_datetime_vu_prepare_testing where dt >= datetime('1992-05-23 23:40:00') 
+                    and dt < datetime('1992-05-23 23:41:00')
+
+statement ok
+select * from babel_datetime_vu_prepare_testing where dt < date('1992-05-24')
+
+query T
+select CAST(CAST('2000-01-01 23:59:59.999' AS datetime) AS date)
+----
+2000-01-01
+
+query T
+select day(cast('2002-05-23 23:41:29.998' as datetime))
+----
+23
+
+query T
+select month(cast('2002-05-23 23:41:29.998' as datetime))
+----
+5
+
+query T
+select year(cast('2002-05-23 23:41:29.998' as datetime))
+----
+2002
+
+query T
+select datepart(quarter, cast('2002-05-23 23:41:29.998' as datetime))
+----
+2
+
+query T
+select datepart(hour, cast('2002-05-23 23:41:29.998' as datetime))
+----
+23
+
+query T
+select datepart(dayofyear, cast('2002-05-23 23:41:29.998' as datetime))
+----
+143
+
+query T
+select datepart(second, cast('2002-05-23 23:41:29.998' as datetime))
+----
+29
+
+query T
+select datename(year, cast('2002-05-23 23:41:29.998' as datetime))
+----
+2002
+
+query T
+select datename(dw, cast('2002-05-23 23:41:29.998' as datetime))
+----
+Thursday
+
+query T
+select datename(month, cast('2002-05-23 23:41:29.998' as datetime))
+----
+May
+
+query T
+select pg_typeof(c1) FROM (SELECT cast('2016-12-26 23:30:05' as datetime) as C1 UNION SELECT cast('2016-12-26 23:30:05' as smalldatetime) as C1) T
+----
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT '2016-12-26 23:30:05'::datetime as C1 UNION SELECT '2016-12-26 23:30:05'::datetime2 as C1) T
+----
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT '2016-12-26 23:30:05'::datetime as C1 UNION SELECT '2016-12-26 23:30:05 +08:00:00'::datetimeoffset as C1) T
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT '2016-12-26 23:30:05'::datetime as C1 UNION SELECT '23:30:05'::time as C1) T
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT '2016-12-26 23:30:05'::datetime as C1 UNION SELECT '2016-12-26'::date as C1) T
+----
+NULL
+NULL
+
+query T
+SELECT CAST(NULL AS DateTime);
+----
+NULL
+
+query T
+SELECT CONVERT(DateTime, NULL);
+----
+NULL
+
+query T
+SELECT babel_datetime_vu_function1(0x0000B02200EF28C1)
+----
+0x0000B02200EF28C1
+
+query T
+select cast(cast('1753-01-01 00:00:00.000' as datetime) as varbinary)
+----
+0x313735332d30312d30315430303a30303a30305a
+
+query T
+select cast(cast('9999-12-31 23:59:59.997' as datetime) as varbinary)
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('9999-12-31 23:59:59.998' as datetime) as varbinary)
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('1753-01-01 00:00:00.003' as datetime) as varbinary)
+----
+0x313735332d30312d30315430303a30303a30305a
+
+query T
+select cast(cast('1753-01-01 00:00:00.002' as datetime) as varbinary)
+----
+0x313735332d30312d30315430303a30303a30305a
+
+query T
+select cast(cast('9999-12-31 23:59:59.993' as datetime) as varbinary)
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('9999-12-31 23:59:59.995' as datetime) as varbinary)
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('1908-10-21 00:00:00.000' as datetime) as varbinary)
+----
+0x313930382d31302d32315430303a30303a30305a
+
+query T
+select cast(cast('1908-10-21 21:12:01.020' as datetime) as varbinary)
+----
+0x313930382d31302d32315432313a31323a30315a
+
+query T
+select cast(cast('2031-11-08 00:00:00.000' as datetime) as varbinary)
+----
+0x323033312d31312d30385430303a30303a30305a
+
+query T
+select cast(cast('2031-11-08 23:59:59.997' as datetime) as varbinary)
+----
+0x323033312d31312d30385432333a35393a35395a
+
+query T
+select cast(cast('2023-06-15 00:00:00.003' as datetime) as varbinary)
+----
+0x323032332d30362d31355430303a30303a30305a
+
+query T
+select cast(cast('2023-06-15 00:00:00.423' as datetime) as varbinary)
+----
+0x323032332d30362d31355430303a30303a30305a
+
+query T
+select cast(cast('2023-06-15 00:00:00.850' as datetime) as varbinary)
+----
+0x323032332d30362d31355430303a30303a30305a
+
+query T
+select cast(cast('1900-01-01 00:02:30.300' as datetime) as varbinary)
+----
+0x313930302d30312d30315430303a30323a33305a
+
+query T
+select cast(cast('1752-12-31 23:59:59.997' as datetime) as varbinary)
+----
+0x313735322d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('9999-12-31 23:59:59.999' as datetime) as varbinary)
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('2000-02-28 00:00:00.000' as datetime) as varbinary)
+----
+0x323030302d30322d32385430303a30303a30305a
+
+query T
+select cast(cast('2000-02-29 00:00:00.000' as datetime) as varbinary)
+----
+0x323030302d30322d32395430303a30303a30305a
+
+query T
+select cast(cast('2000-03-01 00:00:00.000' as datetime) as varbinary)
+----
+0x323030302d30332d30315430303a30303a30305a
+
+query T
+select cast(cast('2001-02-28 00:00:00.000' as datetime) as varbinary)
+----
+0x323030312d30322d32385430303a30303a30305a
+
+query T
+select cast(cast('2001-03-01 00:00:00.000' as datetime) as varbinary)
+----
+0x323030312d30332d30315430303a30303a30305a
+
+query T
+select cast(cast('1999-12-31 23:59:59.997' as datetime) as varbinary)
+----
+0x313939392d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('2000-01-01 00:00:00.000' as datetime) as varbinary)
+----
+0x323030302d30312d30315430303a30303a30305a
+
+query T
+select cast(cast('2023-06-15 14:30:45.123' as datetime) as varbinary)
+----
+0x323032332d30362d31355431343a33303a34355a
+
+query T
+select cast(cast('2023-06-15 14:30:45.122' as datetime) as varbinary)
+----
+0x323032332d30362d31355431343a33303a34355a
+
+query T
+select cast(cast('2023-06-15 14:30:45.156' as datetime) as varbinary)
+----
+0x323032332d30362d31355431343a33303a34355a
+
+query T
+select cast(cast('2023-06-15 14:30:45.12321' as datetime) as varbinary)
+----
+0x323032332d30362d31355431343a33303a34355a
+
+query T
+select cast(cast(NULL as datetime) as varbinary)
+----
+NULL
+
+query T
+select cast(cast('2023-06-15 14:30:45.999' as datetime) as varbinary)
+----
+0x323032332d30362d31355431343a33303a34355a
+
+query T
+select cast(cast('2023-06-15 14:30:59.999' as datetime) as varbinary)
+----
+0x323032332d30362d31355431343a33303a35395a
+
+query T
+select cast(cast('2023-06-15 14:59:59.999' as datetime) as varbinary)
+----
+0x323032332d30362d31355431343a35393a35395a
+
+query T
+select cast(cast('2023-06-15 23:59:59.999' as datetime) as varbinary)
+----
+0x323032332d30362d31355432333a35393a35395a
+
+query T
+select cast(cast('2023-08-31 23:59:59.999' as datetime) as varbinary)
+----
+0x323032332d30382d33315432333a35393a35395a
+
+query T
+select cast(cast('2023-12-31 23:59:59.999' as datetime) as varbinary)
+----
+0x323032332d31322d33315432333a35393a35395a
+
+query T
+select convert(varbinary, cast('1753-01-01 00:00:00.000' as datetime))
+----
+0x313735332d30312d30315430303a30303a30305a
+
+query T
+select convert(varbinary, cast('9999-12-31 23:59:59.997' as datetime))
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select convert(varbinary, cast('9999-12-31 23:59:59.998' as datetime))
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select convert(varbinary, cast('1753-01-01 00:00:00.003' as datetime))
+----
+0x313735332d30312d30315430303a30303a30305a
+
+query T
+select convert(varbinary, cast('1753-01-01 00:00:00.002' as datetime))
+----
+0x313735332d30312d30315430303a30303a30305a
+
+query T
+select convert(varbinary, cast('9999-12-31 23:59:59.993' as datetime))
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select convert(varbinary, cast('9999-12-31 23:59:59.995' as datetime))
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select convert(varbinary, cast('1908-10-21 00:00:00.000' as datetime))
+----
+0x313930382d31302d32315430303a30303a30305a
+
+query T
+select convert(varbinary, cast('1908-10-21 21:12:01.020' as datetime))
+----
+0x313930382d31302d32315432313a31323a30315a
+
+query T
+select convert(varbinary, cast('2031-11-08 00:00:00.000' as datetime))
+----
+0x323033312d31312d30385430303a30303a30305a
+
+query T
+select convert(varbinary, cast('2031-11-08 23:59:59.997' as datetime))
+----
+0x323033312d31312d30385432333a35393a35395a
+
+query T
+select convert(varbinary, cast('2023-06-15 00:00:00.003' as datetime))
+----
+0x323032332d30362d31355430303a30303a30305a
+
+query T
+select convert(varbinary, cast('2023-06-15 00:00:00.423' as datetime))
+----
+0x323032332d30362d31355430303a30303a30305a
+
+query T
+select convert(varbinary, cast('2023-06-15 00:00:00.850' as datetime))
+----
+0x323032332d30362d31355430303a30303a30305a
+
+query T
+select convert(varbinary, cast('1900-01-01 00:02:30.300' as datetime))
+----
+0x313930302d30312d30315430303a30323a33305a
+
+query T
+select convert(varbinary, cast('1752-12-31 23:59:59.997' as datetime))
+----
+0x313735322d31322d33315432333a35393a35395a
+
+query T
+select convert(varbinary, cast('9999-12-31 23:59:59.999' as datetime))
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select convert(varbinary, cast('2000-02-28 00:00:00.000' as datetime))
+----
+0x323030302d30322d32385430303a30303a30305a
+
+query T
+select convert(varbinary, cast('2000-02-29 00:00:00.000' as datetime))
+----
+0x323030302d30322d32395430303a30303a30305a
+
+query T
+select convert(varbinary, cast('2000-03-01 00:00:00.000' as datetime))
+----
+0x323030302d30332d30315430303a30303a30305a
+
+query T
+select convert(varbinary, cast('2001-02-28 00:00:00.000' as datetime))
+----
+0x323030312d30322d32385430303a30303a30305a
+
+query T
+select convert(varbinary, cast('2001-03-01 00:00:00.000' as datetime))
+----
+0x323030312d30332d30315430303a30303a30305a
+
+query T
+select convert(varbinary, cast('1999-12-31 23:59:59.997' as datetime))
+----
+0x313939392d31322d33315432333a35393a35395a
+
+query T
+select convert(varbinary, cast('2000-01-01 00:00:00.000' as datetime))
+----
+0x323030302d30312d30315430303a30303a30305a
+
+query T
+select convert(varbinary, cast('2023-06-15 14:30:45.123' as datetime))
+----
+0x323032332d30362d31355431343a33303a34355a
+
+query T
+select convert(varbinary, cast('2023-06-15 14:30:45.122' as datetime))
+----
+0x323032332d30362d31355431343a33303a34355a
+
+query T
+select convert(varbinary, cast('2023-06-15 14:30:45.156' as datetime))
+----
+0x323032332d30362d31355431343a33303a34355a
+
+query T
+select convert(varbinary, cast('2023-06-15 14:30:45.12321' as datetime))
+----
+0x323032332d30362d31355431343a33303a34355a
+
+query T
+select convert(varbinary, cast(NULL as datetime))
+----
+NULL
+
+query T
+select convert(varbinary, cast('2023-06-15 14:30:45.999' as datetime))
+----
+0x323032332d30362d31355431343a33303a34355a
+
+query T
+select convert(varbinary, cast('2023-06-15 14:30:59.999' as datetime))
+----
+0x323032332d30362d31355431343a33303a35395a
+
+query T
+select convert(varbinary, cast('2023-06-15 14:59:59.999' as datetime))
+----
+0x323032332d30362d31355431343a35393a35395a
+
+query T
+select convert(varbinary, cast('2023-06-15 23:59:59.999' as datetime))
+----
+0x323032332d30362d31355432333a35393a35395a
+
+query T
+select convert(varbinary, cast('2023-08-31 23:59:59.999' as datetime))
+----
+0x323032332d30382d33315432333a35393a35395a
+
+query T
+select convert(varbinary, cast('2023-12-31 23:59:59.999' as datetime))
+----
+0x323032332d31322d33315432333a35393a35395a
+
+query T
+SELECT * from babel_datetime_varbinary_vu_view1;
+----
+0x323032332d30362d31355432333a35393a35395a
+
+query T
+SELECT * from babel_datetime_varbinary_vu_view2;
+----
+0x313930302d30312d30315430303a30303a30305a
+
+query T
+SELECT * from babel_datetime_varbinary_vu_view3;
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+SELECT * from babel_datetime_varbinary_vu_view4;
+----
+0x313735332d30312d30315430303a31323a30305a
+
+query T
+EXEC babel_datetime_varbinary_vu_procedure
+----
+NULL
+NULL
+0x313939392d31322d33315432333a35393a35395a
+
+query T
+SELECT * from babel_datetime_varbinary_vu_prepare_testing_2
+----
+0x323032332d30362d31352031343a33303a34352e313233202b3030303020555443
+
+query T
+select cast(cast('1753-01-01 00:00:00.000' as datetime) as varbinary(8))
+----
+0x313735332d30312d30315430303a30303a30305a
+
+query T
+select cast(cast('9999-12-31 23:59:59.997' as datetime) as varbinary(7))
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('9999-12-31 23:59:59.998' as datetime) as varbinary(6))
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('1753-01-01 00:00:00.003' as datetime) as varbinary(5))
+----
+0x313735332d30312d30315430303a30303a30305a
+
+query T
+select cast(cast('1753-01-01 00:00:00.002' as datetime) as varbinary(4))
+----
+0x313735332d30312d30315430303a30303a30305a
+
+query T
+select cast(cast('9999-12-31 23:59:59.993' as datetime) as varbinary(3))
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('9999-12-31 23:59:59.995' as datetime) as varbinary(2))
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('1908-10-21 00:00:00.000' as datetime) as varbinary(1))
+----
+0x313930382d31302d32315430303a30303a30305a
+
+query T
+select cast(cast('2031-11-08 00:00:00.000' as datetime) as varbinary(10))
+----
+0x323033312d31312d30385430303a30303a30305a
+
+query T
+select cast(cast('2031-11-08 23:59:59.997' as datetime) as varbinary(16))
+----
+0x323033312d31312d30385432333a35393a35395a
+
+query T
+select cast(cast('2023-06-15 00:00:00.003' as datetime) as varbinary(1234))
+----
+0x323032332d30362d31355430303a30303a30305a
+
+query T
+select cast(cast('2023-06-15 00:00:00.423' as datetime) as varbinary(0))
+----
+0x323032332d30362d31355430303a30303a30305a
+
+query T
+select cast(cast('1900-01-01 00:02:30.300' as datetime) as varbinary(2))
+----
+0x313930302d30312d30315430303a30323a33305a
+
+query T
+select cast(cast('1752-12-31 23:59:59.997' as datetime) as varbinary(6))
+----
+0x313735322d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('9999-12-31 23:59:59.999' as datetime) as varbinary(3))
+----
+0x393939392d31322d33315432333a35393a35395a
+
+query T
+select cast(cast('2000-02-28 00:00:00.000' as datetime) as varbinary(5))
+----
+0x323030302d30322d32385430303a30303a30305a
+
+query T
+select cast(cast('2000-03-01 00:00:00.000' as datetime) as varbinary(8))
+----
+0x323030302d30332d30315430303a30303a30305a
+
+statement ok
+drop table babel_datetime_vu_prepare_testing
+
+statement ok
+drop table babel_datetime_vu_prepare_testing_1
+
+statement ok
+drop view babel_datetime_vu_view1
+
+statement ok
+drop view babel_datetime_vu_view2
+
+statement ok
+drop procedure babel_datetime_vu_procedure
+
+statement ok
+drop function babel_datetime_vu_function1
+
+statement ok
+drop view babel_datetime_varbinary_vu_view1
+
+statement ok
+drop view babel_datetime_varbinary_vu_view2
+
+statement ok
+drop view babel_datetime_varbinary_vu_view3
+
+statement ok
+drop view babel_datetime_varbinary_vu_view4
+
+statement ok
+drop procedure babel_datetime_varbinary_vu_procedure
+
+statement ok
+drop function babel_datetime_varbinary_vu_function1
+
+statement ok
+drop table babel_datetime_varbinary_vu_prepare_testing_2
+

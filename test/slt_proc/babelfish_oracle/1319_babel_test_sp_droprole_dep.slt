@@ -1,0 +1,25 @@
+# test/slt_proc/babelfish_oracle/1319_babel_test_sp_droprole_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_droprole-dep-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_droprole-dep-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_droprole-dep-vu-cleanup.sql
+
+statement ok
+CREATE PROC test_sp_droprole_proc @rolename AS sys.SYSNAME
+AS
+BEGIN
+	EXEC sp_droprole @rolename;
+END
+
+statement ok
+CREATE ROLE sp_droprole_role1
+
+statement ok
+CREATE ROLE sp_droprole_role2
+
+statement ok
+CREATE ROLE sp_droprole_role3
+
+statement ok
+CREATE ROLE sp_droprole_dummy
+
+statement ok
+DROP PROC test_sp_droprole_proc
+

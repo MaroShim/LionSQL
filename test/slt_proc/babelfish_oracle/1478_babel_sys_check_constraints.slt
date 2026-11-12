@@ -1,0 +1,14 @@
+# test/slt_proc/babelfish_oracle/1478_babel_sys_check_constraints.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-check_constraints.sql
+
+statement ok
+DROP TABLE IF EXISTS sys_check_constraints
+
+statement ok
+CREATE TABLE sys_check_constraints (
+	sck_date_col DATETIME CHECK (sck_date_col IS NOT NULL)
+)
+
+statement ok
+DROP TABLE IF EXISTS sys_check_constraints
+

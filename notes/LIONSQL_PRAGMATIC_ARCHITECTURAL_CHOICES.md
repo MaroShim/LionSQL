@@ -29,7 +29,7 @@ This whitepaper records **the nine most decisive architectural choices** of Lion
 ### 2. Process-Level Catalog Isolation & Tolerant Virtual `USE` No-Op
 * **What Was Rejected**: Complex in-kernel catalog multiplexing (hosting dozens of databases within a single process), which introduces cross-database locking contention, noisy-neighbor memory leaks, and cascading failure domains.
 * **What Was Chosen**: Enforcing strict physical isolation with exactly one isolated catalog per data directory (`--data-dir`) and operating system process, while accepting client commands like `USE master` or `USE [SalesDB]` as **Tolerant Virtual No-Ops** that synchronize TDS environment tokens (`0xE3 ENVCHANGE`) without syntax errors.
-* **The Outcome**: Maintains sub-microsecond catalog isolation without multi-tenant engine lock contention, while achieving 100% out-of-the-box compatibility with enterprise tools (SSMS, DBeaver, Azure Data Studio) and legacy SQL Server migration scripts.
+* **The Outcome**: Maintains sub-microsecond catalog isolation without multi-tenant engine lock contention, while achieving 100% out-of-the-box compatibility with enterprise tools (SSMS, DBeaver) and legacy SQL Server migration scripts.
 
 ### 3. Unified PGWire Gateway with T-SQL Execution (Eliminating Duplicate PL/pgSQL)
 * **What Was Rejected**: Writing and maintaining a redundant, multi-thousand-line PL/pgSQL interpreter just to service PostgreSQL wire protocol clients.
@@ -76,7 +76,7 @@ This whitepaper records **the nine most decisive architectural choices** of Lion
 ### 9. Permanent TDS 'Windows' Host Platform Emulation
 * **What Was Rejected**: Inspecting `runtime.GOOS` and naively reporting `"macOS"` or `"Linux"` to client applications during TDS handshakes (Microsoft SQL Server Management Studio was architected solely for Windows SQL Server and immediately crashes with an `InvalidOperationException` upon encountering `"macOS"`).
 * **What Was Chosen**: Unconditionally reporting `host_platform = "Windows"` across `sys.dm_os_host_info`, environment tokens, and TDS login responses, regardless of the actual host operating system.
-* **The Outcome**: A single line of pragmatic emulation guarantees that SQL Server Management Studio (SSMS Object Explorer), Azure Data Studio, DBeaver, and ADO.NET drivers function with 100% reliability on macOS, Linux, and Windows alike.
+* **The Outcome**: A single line of pragmatic emulation guarantees that SQL Server Management Studio (SSMS Object Explorer), DBeaver, and ADO.NET drivers function with 100% reliability on macOS, Linux, and Windows alike.
 
 ---
 

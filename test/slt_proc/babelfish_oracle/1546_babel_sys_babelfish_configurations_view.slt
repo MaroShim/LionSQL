@@ -1,0 +1,28 @@
+# test/slt_proc/babelfish_oracle/1546_babel_sys_babelfish_configurations_view.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys_babelfish_configurations_view-vu-prepare.sql, test/babelfish/raw/views/sys_babelfish_configurations_view-vu-verify.sql
+
+statement ok
+CREATE VIEW sys_babelfish_configurations_view_vu_prepare_view AS 
+SELECT COUNT(*) FROM sys.babelfish_configurations_view
+
+statement ok
+CREATE PROC sys_babelfish_configurations_view_vu_prepare_proc AS
+SELECT COUNT(*) FROM sys.babelfish_configurations_view
+
+statement ok
+CREATE FUNCTION sys_babelfish_configurations_view_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT COUNT(*) FROM sys.babelfish_configurations_view)
+END
+
+statement ok
+DROP VIEW sys_babelfish_configurations_view_vu_prepare_view
+
+statement ok
+DROP PROC sys_babelfish_configurations_view_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_babelfish_configurations_view_vu_prepare_func
+

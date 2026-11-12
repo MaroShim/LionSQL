@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/1233_babel_babel_4281.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4281.sql
+
+statement ok
+BEGIN TRAN BABEL4281_T1; 
+
+statement ok
+CREATE TABLE t_babel4281 (a int, b int);
+
+statement ok
+SET BABELFISH_SHOWPLAN_ALL ON
+
+statement ok
+select a, count(*) from t_babel4281 group by a order by 2; -- should not crash
+
+statement ok
+SET BABELFISH_SHOWPLAN_ALL OFF
+
+statement ok
+select a, count(*) from t_babel4281 group by a order by 2; -- should not crash
+
+statement ok
+COMMIT TRAN BABEL4281_T1;
+
+statement ok
+DROP TABLE t_babel4281;
+

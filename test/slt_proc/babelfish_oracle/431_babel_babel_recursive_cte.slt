@@ -1,0 +1,88 @@
+# test/slt_proc/babelfish_oracle/431_babel_babel_recursive_cte.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-RECURSIVE-CTE.sql
+
+statement ok
+USE master;
+
+statement ok
+CREATE SCHEMA babel_recursive_cte;
+
+statement ok
+CREATE TABLE babel_recursive_cte.numbers (c1 int);
+
+statement ok
+INSERT INTO babel_recursive_cte.numbers VALUES (3)
+
+query T
+WITH numbers(c1)
+AS (
+    SELECT 1
+    UNION ALL
+    SELECT c1 + 1 FROM numbers WHERE c1 <= 5
+)
+SELECT c1 FROM numbers ORDER BY c1
+----
+1
+2
+3
+4
+5
+6
+
+query T
+WITH numbers(c1)
+AS (
+    SELECT 1
+    UNION ALL
+    SELECT c1 + 1 FROM babel_recursive_cte.numbers WHERE c1 <= 5  -- referring physical table
+)
+SELECT c1 FROM numbers ORDER BY c1
+----
+1
+4
+
+statement error
+WITH numbers(c1)
+AS (
+    SELECT 1 FROM numbers
+    UNION ALL
+    SELECT c1 + 1 FROM numbers WHERE c1 <= 5
+)
+SELECT c1 FROM numbers ORDER BY c1
+
+statement error
+WITH numbers(c1)
+AS (
+    SELECT c1 + 1 FROM numbers WHERE c1 <= 5
+)
+SELECT c1 FROM numbers ORDER BY c1
+
+query T
+WITH numbers(c1)
+AS (
+    SELECT 1
+    UNION ALL
+    SELECT Y.c1 + 1 FROM babel_recursive_cte.numbers X INNER JOIN numbers Y on 1 = 1 WHERE Y.c1 <= 5
+)
+SELECT c1 FROM numbers ORDER BY c1
+----
+1
+
+query T
+WITH numbers(c1)
+AS (
+    SELECT 1
+    UNION ALL
+    SELECT (SELECT c1 FROM numbers) + 1 FROM babel_recursive_cte.numbers X WHERE c1 <= 5
+)
+SELECT c1 FROM numbers ORDER BY c1
+----
+NULL
+1
+
+statement ok
+DROP TABLE babel_recursive_cte.numbers;
+
+statement ok
+DROP SCHEMA babel_recursive_cte;
+

@@ -1,0 +1,89 @@
+# test/slt_proc/babelfish_oracle/407_babel_babel_5645.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-5645.sql
+
+statement ok
+CREATE TABLE parent(a int primary key);
+
+statement ok
+CREATE TABLE child(b int, foreign key (b) references parent(a) ON UPDATE CASCADE);
+
+statement ok
+CREATE TRIGGER trig1 on child AFTER UPDATE AS BEGIN SELECT 1 END
+
+statement ok
+INSERT INTO parent values(1)
+INSERT INTO child values(1)
+
+query TT
+select name,is_disabled from sys.triggers
+----
+child NULL
+parent NULL
+child NULL
+parent NULL
+
+statement ok
+UPDATE parent set a=2 where a=1
+
+statement ok
+SELECT * from parent;select * from child;
+
+query TT
+select name,is_disabled from sys.triggers
+----
+child NULL
+parent NULL
+child NULL
+parent NULL
+
+statement ok
+UPDATE parent set a=3 where a=2
+
+statement ok
+SELECT * from parent;select * from child;
+
+query TT
+select name,is_disabled from sys.triggers
+----
+child NULL
+parent NULL
+child NULL
+parent NULL
+
+statement ok
+UPDATE parent set a=4 where a=3
+
+statement ok
+SELECT * from parent;select * from child;
+
+query TT
+select name,is_disabled from sys.triggers
+----
+child NULL
+parent NULL
+child NULL
+parent NULL
+
+statement ok
+UPDATE parent set a=5 where a=4
+
+statement ok
+SELECT * from parent;select * from child;
+
+query TT
+select name,is_disabled from sys.triggers
+----
+child NULL
+parent NULL
+child NULL
+parent NULL
+
+statement ok
+UPDATE parent set a=6 where a=5
+
+statement ok
+SELECT * from parent;select * from child;
+
+statement ok
+DROP TABLE child;DROP TABLE parent;
+

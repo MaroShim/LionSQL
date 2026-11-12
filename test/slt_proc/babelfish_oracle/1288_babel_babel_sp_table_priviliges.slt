@@ -1,0 +1,81 @@
+# test/slt_proc/babelfish_oracle/1288_babel_babel_sp_table_priviliges.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SP_TABLE_PRIVILIGES-vu-prepare.sql, test/babelfish/raw/BABEL-SP_TABLE_PRIVILIGES-vu-verify.sql, test/babelfish/raw/BABEL-SP_TABLE_PRIVILIGES-vu-cleanup.sql
+
+statement ok
+create database babel_sp_table_priviliges_vu_prepare_db1
+
+statement ok
+use babel_sp_table_priviliges_vu_prepare_db1
+
+statement ok
+create table babel_sp_table_priviliges_vu_prepare_t1(a int, primary key(a))
+
+statement ok
+create table babel_sp_table_priviliges_vu_prepare_t2(a int, b int, c int)
+
+statement ok
+create table babel_sp_table_priviliges_vu_prepare_t3(a int, b int, c int)
+
+statement ok
+create table babel_sp_table_priviliges_vu_prepare_t4(a int)
+
+statement ok
+create table babel_sp_table_priviliges_vu_prepare_MyTable5 (a int, b int, c int)
+
+statement ok
+create table [babel_sp_table_priviliges_vu_prepare_MyTable6] ([a] int, [b] int, [c] int)
+
+statement ok
+create table babel_sp_table_priviliges_vu_prepare_foobar1(a int)
+
+statement ok
+create table babel_sp_table_priviliges_vu_prepare_foobar2(b int)
+
+statement ok
+create table babel_sp_table_priviliges_vu_prepare_folbar1(c int)
+
+statement ok
+use master
+
+statement ok
+use babel_sp_table_priviliges_vu_prepare_db1
+
+statement error
+exec sp_table_privileges
+
+statement ok
+use master
+
+statement ok
+use babel_sp_table_priviliges_vu_prepare_db1
+
+statement ok
+drop table babel_sp_table_priviliges_vu_prepare_t1
+
+statement ok
+drop table babel_sp_table_priviliges_vu_prepare_t2
+
+statement ok
+drop table babel_sp_table_priviliges_vu_prepare_t3
+
+statement ok
+drop table babel_sp_table_priviliges_vu_prepare_t4
+
+statement ok
+drop table babel_sp_table_priviliges_vu_prepare_MyTable5 
+
+statement ok
+drop table [babel_sp_table_priviliges_vu_prepare_MyTable6]
+
+statement ok
+drop table babel_sp_table_priviliges_vu_prepare_foobar1
+
+statement ok
+drop table babel_sp_table_priviliges_vu_prepare_foobar2
+
+statement ok
+drop table babel_sp_table_priviliges_vu_prepare_folbar1
+
+statement ok
+use master
+

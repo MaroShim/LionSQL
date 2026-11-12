@@ -1,0 +1,63 @@
+# test/slt_proc/babelfish_oracle/1611_babel_weak_view_guc.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/weak-view-guc-vu-prepare.sql, test/babelfish/raw/weak-view-guc-vu-verify.sql, test/babelfish/raw/weak-view-guc-vu-cleanup.sql
+
+statement ok
+CREATE TABLE TV1 (a int, b int);
+
+statement ok
+CREATE TABLE TV2 (id int, id1 int);
+
+statement ok
+INSERT INTO TV1 VALUES (1, 2), (3, 4);
+
+statement ok
+INSERT INTO TV2 VALUES (1, 10), (3, 20);
+
+statement ok
+CREATE VIEW V1 AS SELECT a FROM TV1;
+
+statement ok
+CREATE VIEW V2 AS SELECT * FROM V1;
+
+statement ok
+CREATE VIEW V3 AS SELECT a FROM TV1 JOIN TV2 ON TV1.a = TV2.id;
+
+statement ok
+EXEC sp_babelfish_configure;
+
+statement ok
+DROP TABLE TV1;
+
+statement ok
+DROP VIEW V1;
+
+statement ok
+ALTER VIEW V3 AS SELECT a FROM TV1 JOIN TV2 ON TV1.a = TV2.id;
+
+statement ok
+CREATE TABLE TV1 (a int, b int);
+
+statement ok
+CREATE VIEW V4 AS SELECT a, b FROM TV1;
+
+statement ok
+DROP TABLE TV1;
+
+statement ok
+DROP VIEW IF EXISTS V4;
+
+statement ok
+DROP VIEW IF EXISTS V3;
+
+statement ok
+DROP VIEW IF EXISTS V2;
+
+statement ok
+DROP VIEW IF EXISTS V1;
+
+statement ok
+DROP TABLE IF EXISTS TV2;
+
+statement ok
+DROP TABLE IF EXISTS TV1;
+

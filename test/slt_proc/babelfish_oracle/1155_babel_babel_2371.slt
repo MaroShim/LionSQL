@@ -1,0 +1,76 @@
+# test/slt_proc/babelfish_oracle/1155_babel_babel_2371.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2371.sql
+
+statement ok
+create table t_2371(AbCd int, EfGh varchar(10));
+
+statement ok
+select attname, attoptions from pg_class C, pg_attribute A where C.oid = A.attrelid and C.relname like 't_2371' and A.attnum > 0 and attisdropped = 'f' order by attname;
+
+statement ok
+select * from t_2371
+
+statement ok
+alter table t_2371 add IjKl int;
+select attname, attoptions from pg_class C, pg_attribute A where C.oid = A.attrelid and C.relname like 't_2371' and A.attnum > 0 and attisdropped = 'f' order by attname;
+
+statement ok
+select * from t_2371
+
+statement ok
+alter table t_2371 drop column EfGh;
+
+statement ok
+select * from t_2371
+
+statement ok
+select attname, attoptions from pg_class C, pg_attribute A where C.oid = A.attrelid and C.relname like 't_2371' and A.attnum > 0 and attisdropped = 'f' order by attname;
+
+statement ok
+drop table t_2371
+
+statement ok
+create table t_2371_2(A123456789B123456789C123456789D123456789E123456789F123456789G123456789H123456789I123456789J123456789K123456789 int);
+
+statement ok
+select attname, attoptions from pg_class C, pg_attribute A where C.oid = A.attrelid and C.relname like 't_2371_2' and A.attname like 'a123456789%';
+
+statement ok
+select * from t_2371_2
+
+statement ok
+drop table t_2371_2
+
+statement ok
+create table t_2371_3 (LeVeL int);
+
+statement ok
+select attname, attoptions from pg_class C, pg_attribute A where C.oid = A.attrelid and C.relname like 't_2371_3' and A.attname like 'level';
+
+statement ok
+select * from t_2371_3
+
+statement ok
+drop table t_2371_3
+
+statement ok
+SET QUOTED_IDENTIFIER ON;
+
+statement ok
+create table t_2371_4 ([Abcd] int, "Efgh" int, Ijhl int, [K)@m($[^&] int, "x'AbC""e" int, """""""" int)
+
+statement ok
+select attname, attoptions from pg_class C, pg_attribute A where C.oid = A.attrelid and C.relname like 't_2371_4' and A.attnum > 0 and attisdropped = 'f' order by attname;
+
+statement ok
+select * from t_2371_4
+
+statement ok
+drop table t_2371_4
+
+statement ok
+select attname, attoptions from pg_class C, pg_attribute A where C.oid = A.attrelid and C.relname like 'ty_2371_5' and A.attnum > 0 and attisdropped = 'f' order by attname;
+
+statement ok
+SET QUOTED_IDENTIFIER OFF; -- default
+

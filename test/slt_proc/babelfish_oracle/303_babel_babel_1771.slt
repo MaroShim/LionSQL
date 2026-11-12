@@ -1,0 +1,76 @@
+# test/slt_proc/babelfish_oracle/303_babel_babel_1771.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1771.sql
+
+statement ok
+USE master;
+
+statement ok
+CREATE SCHEMA test
+
+statement ok
+CREATE TABLE t (a int)
+
+statement ok
+CREATE PROCEDURE foo AS SELECT 1
+
+statement ok
+CREATE PROCEDURE test.bar AS SELECT 2
+
+statement ok
+SELECT * FROM t
+
+statement ok
+SELECT * FROM master..t
+
+query T
+EXEC test.bar
+----
+2
+
+query T
+EXEC .test.bar
+----
+2
+
+query T
+EXEC master..bar
+----
+2
+
+query T
+EXEC ..bar
+----
+2
+
+query T
+EXEC foo
+----
+1
+
+query T
+EXEC ..foo
+----
+1
+
+query T
+EXEC master..foo
+----
+1
+
+query T
+EXEC .schema.foo
+----
+1
+
+statement ok
+DROP TABLE t
+
+statement ok
+DROP PROCEDURE foo
+
+statement ok
+DROP PROCEDURE test.bar
+
+statement ok
+DROP SCHEMA test
+

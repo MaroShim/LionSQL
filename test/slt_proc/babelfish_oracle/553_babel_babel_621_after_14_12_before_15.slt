@@ -1,0 +1,176 @@
+# test/slt_proc/babelfish_oracle/553_babel_babel_621_after_14_12_before_15.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-621-after-14_12-before-15-vu-prepare.sql, test/babelfish/raw/BABEL-621-after-14_12-before-15-vu-verify.sql, test/babelfish/raw/BABEL-621-after-14_12-before-15-vu-cleanup.sql
+
+statement ok
+EXECUTE sp_babelfish_configure 'escape_hatch_unique_constraint', 'ignore'
+
+statement ok
+create table babel_621_vu_prepare_table_1 (a int);
+
+statement ok
+create table babel_621_vu_prepare_table_2 (a int);
+
+statement ok
+create index idx on babel_621_vu_prepare_table_1(a);
+
+statement ok
+create index idx on babel_621_vu_prepare_table_2(a);
+
+statement ok
+create table babel_621_vu_prepare_table_3 (a int);
+
+statement ok
+alter table babel_621_vu_prepare_table_3 add constraint uniq unique (a);
+
+statement ok
+create table babel_621_vu_prepare_table_4 (a int);
+
+statement ok
+create index uniq_table_4 on babel_621_vu_prepare_table_4(a);
+
+statement ok
+alter table babel_621_vu_prepare_table_4 drop constraint uniq_table_4;
+
+statement ok
+create table babel_621_vu_prepare_table_with_long_index_name (a int);
+
+statement ok
+create index very_long_index_name_on_a_table_1234567890_1234567890_1234567890_1234567890_1234567890 on babel_621_vu_prepare_table_with_long_index_name(a);
+
+statement ok
+create table babel_621_vu_prepare_second_table_with_long_index_name (a int);
+
+statement ok
+create index very_long_index_name_on_a_table_1234567890_1234567890_1234567890_1234567890_1234567890 on babel_621_vu_prepare_second_table_with_long_index_name(a);
+
+statement ok
+create table babel_621_table_with_long_name_1234567890_1234567890_1234567890_1234567890_1234567890 (a int);
+
+statement ok
+create index very_long_index_name_on_a_table_1234567890_1234567890_1234567890_1234567890_1234567890 on babel_621_table_with_long_name_1234567890_1234567890_1234567890_1234567890_1234567890(a);
+
+statement ok
+create table babel_621_second_table_with_long_name_1234567890_1234567890_1234567890_1234567890_1234567890 (a int);
+
+statement ok
+create index very_long_index_name_on_a_table_1234567890_1234567890_1234567890_1234567890_1234567890 on babel_621_second_table_with_long_name_1234567890_1234567890_1234567890_1234567890_1234567890(a);
+
+statement ok
+create table babel_621_vu_prepare_table_6 (a int);
+
+statement ok
+create index idx_ on babel_621_vu_prepare_table_6(a);
+
+statement ok
+create table table_6 (a int);
+
+statement ok
+create index idx_babel_621_vu_prepare_ on table_6(a);
+
+statement ok
+create table table_7 (a int);
+
+statement ok
+create index idx_babel_621_vu_prepare_ on table_7(a);
+
+statement ok
+create table babel_621_vu_prepare_table_7 (a int);
+
+statement ok
+create index idx_ on babel_621_vu_prepare_table_7(a);
+
+statement ok
+create table babel_621_vu_prepare_table_8 (
+    a int,
+    value int,
+    constraint constraint_8 unique nonclustered
+        (
+        value asc
+        )
+    )
+
+statement ok
+alter table babel_621_vu_prepare_table_8 drop constraint constraint_8;
+
+statement ok
+insert into babel_621_vu_prepare_table_8 values(1, 1);
+insert into babel_621_vu_prepare_table_8 values(2, 1);
+
+statement ok
+create table babel_621_vu_prepare_table_10
+(
+    a int,
+    b int,
+    c int
+)
+
+statement ok
+create unique index idx on babel_621_vu_prepare_table_10 (a, b);
+
+query TT
+select a, value from babel_621_vu_prepare_table_8 order by a;
+----
+1 1
+2 1
+
+statement ok
+drop index idx on babel_621_vu_prepare_table_10;
+
+statement ok
+insert into babel_621_vu_prepare_table_10 values(1, 2, 2);
+
+statement ok
+DROP INDEX idx on babel_621_vu_prepare_table_1;
+DROP INDEX idx on babel_621_vu_prepare_table_2;
+
+statement ok
+DROP INDEX uniq on babel_621_vu_prepare_table_3;
+
+statement ok
+DROP INDEX very_long_index_name_on_a_table_1234567890_1234567890_1234567890_1234567890_1234567890 on babel_621_vu_prepare_table_with_long_index_name;
+
+statement ok
+DROP INDEX very_long_index_name_on_a_table_1234567890_1234567890_1234567890_1234567890_1234567890 on babel_621_table_with_long_name_1234567890_1234567890_1234567890_1234567890_1234567890;
+
+statement ok
+DROP TABLE babel_621_vu_prepare_table_1;
+
+statement ok
+DROP TABLE babel_621_vu_prepare_table_2;
+
+statement ok
+DROP TABLE babel_621_vu_prepare_table_3;
+
+statement ok
+DROP TABLE babel_621_vu_prepare_table_4;
+
+statement ok
+DROP TABLE babel_621_vu_prepare_table_with_long_index_name;
+
+statement ok
+DROP TABLE babel_621_vu_prepare_second_table_with_long_index_name;
+
+statement ok
+DROP TABLE babel_621_table_with_long_name_1234567890_1234567890_1234567890_1234567890_1234567890;
+
+statement ok
+DROP TABLE babel_621_second_table_with_long_name_1234567890_1234567890_1234567890_1234567890_1234567890;
+
+statement ok
+DROP TABLE babel_621_vu_prepare_table_6;
+
+statement ok
+DROP TABLE table_6;
+
+statement ok
+DROP TABLE table_7;
+
+statement ok
+DROP TABLE babel_621_vu_prepare_table_7;
+
+statement ok
+DROP TABLE babel_621_vu_prepare_table_8;
+
+statement ok
+DROP TABLE babel_621_vu_prepare_table_10;
+

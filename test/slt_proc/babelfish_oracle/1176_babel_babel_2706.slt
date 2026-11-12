@@ -1,0 +1,18 @@
+# test/slt_proc/babelfish_oracle/1176_babel_babel_2706.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2706.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE db_2706
+
+statement ok
+USE db_2706
+
+statement ok
+CREATE SCHEMA [Babelfish]
+
+statement ok
+USE master
+

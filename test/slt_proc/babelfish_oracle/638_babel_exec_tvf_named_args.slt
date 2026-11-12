@@ -1,0 +1,89 @@
+# test/slt_proc/babelfish_oracle/638_babel_exec_tvf_named_args.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/exec_tvf_named_args-vu-prepare.sql, test/babelfish/raw/exec_tvf_named_args-vu-verify.sql, test/babelfish/raw/exec_tvf_named_args-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE exec_tvf_named_args_call_variant @customerRef NVARCHAR(50)
+AS
+BEGIN
+	EXEC exec_tvf_named_args_tvf_variant @customerRef = @customerRef
+END
+
+statement ok
+CREATE PROCEDURE exec_tvf_named_args_call_nvarchar @customerRef NVARCHAR(50)
+AS
+BEGIN
+	EXEC exec_tvf_named_args_tvf_nvarchar @customerRef = @customerRef
+END
+
+statement ok
+CREATE PROCEDURE exec_tvf_named_args_call_positional @customerRef NVARCHAR(50)
+AS
+BEGIN
+	EXEC exec_tvf_named_args_tvf_nvarchar @customerRef
+END
+
+statement ok
+CREATE PROCEDURE exec_tvf_named_args_add @a INT, @b INT
+AS
+BEGIN
+	SELECT @a + @b AS sum
+END
+
+statement ok
+CREATE PROCEDURE exec_tvf_named_args_out @x INT, @y INT OUTPUT
+AS
+BEGIN
+	SET @y = @x * 10
+END
+
+statement ok
+CREATE PROCEDURE exec_tvf_named_args_def @a INT, @b INT = 100
+AS
+BEGIN
+	SELECT @a + @b AS total
+END
+
+query T
+EXEC exec_tvf_named_args_add @a = 3, @b = 4
+----
+7
+
+statement ok
+DECLARE @res INT
+EXEC exec_tvf_named_args_out @x = 5, @y = @res OUTPUT
+SELECT @res AS out_value
+
+query T
+EXEC exec_tvf_named_args_def @a = 1
+----
+NULL
+
+query T
+EXEC exec_tvf_named_args_def @a = 1, @b = 2
+----
+3
+
+statement ok
+DROP PROCEDURE IF EXISTS exec_tvf_named_args_def
+
+statement ok
+DROP PROCEDURE IF EXISTS exec_tvf_named_args_out
+
+statement ok
+DROP PROCEDURE IF EXISTS exec_tvf_named_args_add
+
+statement ok
+DROP PROCEDURE IF EXISTS exec_tvf_named_args_call_positional
+
+statement ok
+DROP PROCEDURE IF EXISTS exec_tvf_named_args_call_nvarchar
+
+statement ok
+DROP PROCEDURE IF EXISTS exec_tvf_named_args_call_variant
+
+statement ok
+DROP FUNCTION IF EXISTS exec_tvf_named_args_tvf_nvarchar
+
+statement ok
+DROP FUNCTION IF EXISTS exec_tvf_named_args_tvf_variant
+

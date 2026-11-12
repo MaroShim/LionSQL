@@ -1,0 +1,49 @@
+# test/slt_proc/babelfish_oracle/309_babel_babel_1994_varchar.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1994-VARCHAR.sql
+
+statement ok
+drop table if exists person;
+
+statement ok
+create table person(
+    name_vcnn varchar(10) not null primary key,
+    name_vcn varchar(10) null
+);
+
+statement ok
+insert into person values ('smith', 'smith');
+
+statement ok
+insert into person values ('jones  ', 'jones  ');
+
+statement ok
+insert into person values ('jones ', 'jones  ');
+
+query T
+select count(*) from person where name_vcnn = 'smith  ';
+----
+1
+
+query T
+select count(*) from person where name_vcn = 'smith    ';
+----
+1
+
+query T
+select count(*) from person where name_vcnn = 'jones   ';
+----
+2
+
+query T
+select count(*) from person where name_vcn = 'jones   ';
+----
+2
+
+query T
+select count(*) from person where name_vcn = 'jones    ';
+----
+2
+
+statement ok
+drop table person;
+

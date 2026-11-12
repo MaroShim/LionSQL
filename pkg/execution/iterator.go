@@ -189,10 +189,11 @@ func (t Tuple) GetOK(col string) (any, bool) {
 				t.Values[idx] = formatStorageVal(val)
 				return t.Values[idx], true
 			}
+			return formatStorageVal(val), true
 		}
 	}
 	if idx >= len(t.Values) {
-		return nil, false
+		return nil, true
 	}
 	return t.Values[idx], true
 }
@@ -208,19 +209,48 @@ func (t Tuple) Set(col string, val any) {
 	}
 }
 
-// Materialize forces decoding of any underlying storage.LazyTuple into the Values slice.
-func (t *Tuple) Materialize() {
-	if t == nil || t.Lazy == nil {
+// PadToSchema defensibly ensures that t.Values has at least len(t.Index.cols) elements,
+// padding missing trailing columns with nil (NULL) without modifying existing values ([RULE:DefensiveIndexing]).
+func (t *Tuple) PadToSchema() {
+	if t == nil || t.Index == nil {
 		return
 	}
-	_, _ = t.Lazy.MaterializeRow()
-	dec := t.Lazy.DecodedValues()
-	for i := 0; i < len(t.Values) && i < len(dec); i++ {
-		if t.Values[i] == nil {
-			t.Values[i] = formatStorageVal(dec[i])
-		}
+	n := len(t.Index.cols)
+	if len(t.Values) < n {
+		padded := make([]any, n)
+		copy(padded, t.Values)
+		t.Values = padded
 	}
-	t.Lazy = nil
+}
+
+// Materialize forces decoding of any underlying storage.LazyTuple into the Values slice.
+func (t *Tuple) Materialize() {
+	if t == nil {
+		return
+	}
+	if t.Lazy != nil {
+		_, _ = t.Lazy.MaterializeRow()
+		dec := t.Lazy.DecodedValues()
+		targetLen := len(t.Values)
+		if len(dec) > targetLen {
+			targetLen = len(dec)
+		}
+		if t.Index != nil && len(t.Index.cols) > targetLen {
+			targetLen = len(t.Index.cols)
+		}
+		if targetLen > len(t.Values) {
+			padded := make([]any, targetLen)
+			copy(padded, t.Values)
+			t.Values = padded
+		}
+		for i := 0; i < len(dec) && i < len(t.Values); i++ {
+			if t.Values[i] == nil {
+				t.Values[i] = formatStorageVal(dec[i])
+			}
+		}
+		t.Lazy = nil
+	}
+	t.PadToSchema()
 }
 
 // ToMap converts the slice-backed Tuple to a map[string]any for final serialization.
@@ -232,13 +262,14 @@ func (t Tuple) ToMap() map[string]any {
 	res := make(map[string]any, len(t.Index.cols))
 
 	for i, col := range t.Index.cols {
+		var v any
 		if i < len(t.Values) {
-			v := t.Values[i]
+			v = t.Values[i]
 			if dec, ok := v.(storage.Decimal); ok {
 				v = dec.String()
 			}
-			res[col] = v
 		}
+		res[col] = v
 	}
 	return res
 }
@@ -302,10 +333,13 @@ func (t Tuple) ToEvalMap() map[string]any {
 	t.Materialize()
 	res := make(map[string]any, len(t.Index.indices))
 	for k, idx := range t.Index.indices {
-		if idx >= 0 && idx < len(t.Values) {
-			v := t.Values[idx]
-			if dec, ok := v.(storage.Decimal); ok {
-				v = dec.String()
+		if idx >= 0 {
+			var v any
+			if idx < len(t.Values) {
+				v = t.Values[idx]
+				if dec, ok := v.(storage.Decimal); ok {
+					v = dec.String()
+				}
 			}
 			res[k] = v
 		}

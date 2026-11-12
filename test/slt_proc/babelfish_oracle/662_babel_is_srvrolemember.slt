@@ -1,0 +1,108 @@
+# test/slt_proc/babelfish_oracle/662_babel_is_srvrolemember.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/is_srvrolemember.sql
+
+query T
+SELECT is_srvrolemember('PUBLIC')
+----
+0
+
+query T
+SELECT is_srvrolemember('public')
+----
+0
+
+query T
+SELECT is_srvrolemember('public     ')
+----
+0
+
+query T
+SELECT is_srvrolemember('     public')
+----
+0
+
+query T
+SELECT is_srvrolemember('public', 'non_existent')
+----
+0
+
+query T
+SELECT is_srvrolemember('public', 'jdbc_user')
+----
+0
+
+query T
+SELECT is_srvrolemember('SYSADMIN')
+----
+1
+
+query T
+SELECT is_srvrolemember('sysadmin')
+----
+1
+
+query T
+SELECT is_srvrolemember('sysadmin', 'jdbc_user')
+----
+1
+
+query T
+SELECT is_srvrolemember('sysadmin', 'jdbc_user   ')
+----
+1
+
+query T
+SELECT is_srvrolemember('sysadmin', '   jdbc_user')
+----
+1
+
+query T
+SELECT is_srvrolemember('serveradmin')
+----
+1
+
+query T
+SELECT is_srvrolemember('SERVERADMIN')
+----
+1
+
+query T
+SELECT is_srvrolemember('serveradmin', 'non_existent')
+----
+1
+
+query T
+SELECT is_srvrolemember('setupadmin')
+----
+1
+
+query T
+SELECT is_srvrolemember('securityadmin')
+----
+1
+
+query T
+SELECT is_srvrolemember('processadmin')
+----
+0
+
+query T
+SELECT is_srvrolemember('dbcreator')
+----
+0
+
+query T
+SELECT is_srvrolemember('diskadmin')
+----
+0
+
+query T
+SELECT is_srvrolemember('bulkadmin')
+----
+0
+
+query T
+SELECT is_srvrolemember('non_existent')
+----
+0
+

@@ -1,0 +1,152 @@
+# test/slt_proc/babelfish_oracle/1467_babel_sp_describe_undeclared_parameters.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/sp_describe_undeclared_parameters.sql
+
+statement ok
+CREATE TABLE testtable (firstcol int, secondcol varchar(128), thirdcol varchar(max));
+CREATE TABLE simpletable (a int);
+
+statement ok
+CREATE SCHEMA error_mapping;
+
+statement ok
+create table error_mapping.temp1 (a int);
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+insert into error_mapping.temp1 values(1);
+EXEC sp_describe_undeclared_parameters @tsql = N'INSERT INTO testtable VALUES (@P1, @P2, @P3, @P4)';
+end
+
+statement ok
+create table error_mapping.temp2 (a int);
+
+statement ok
+create table error_mapping.temp3 (a int);
+
+statement ok
+drop procedure error_mapping.ErrorHandling1;
+
+statement ok
+drop table error_mapping.temp1;
+drop table error_mapping.temp2;
+drop table error_mapping.temp3;
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+EXEC sp_describe_undeclared_parameters @tsql = N'INSERT INTO testtable VALUES (@P1, @P2, @P3, @P4)';
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('Compile time error' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+begin transaction
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+EXEC sp_describe_undeclared_parameters @tsql = N'INSERT INTO testtable VALUES (@P1, @P2, @P3, @P4)';
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure if exists error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+set xact_abort ON;
+
+statement ok
+begin transaction
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+EXEC sp_describe_undeclared_parameters @tsql = N'INSERT INTO testtable VALUES (@P1, @P2, @P3, @P4)';
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure if exists error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+EXEC sp_describe_undeclared_parameters @tsql = N'INSERT INTO testtable VALUES (@P1, @P2, @P3, @P4)';
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+create procedure error_mapping.ErrorHandling2 as
+begin
+exec error_mapping.ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+drop procedure error_mapping.ErrorHandling2;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+set xact_abort ON;
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+EXEC sp_describe_undeclared_parameters @tsql = N'INSERT INTO testtable VALUES (@P1, @P2, @P3, @P4)';
+if @@error > 0 select cast('Does not respect the xact_abort flag' as text);
+select @@trancount;
+end
+
+statement ok
+create procedure error_mapping.ErrorHandling2 as
+begin
+exec error_mapping.ErrorHandling1;
+if @@error > 0 select cast('Does not respect the xact_abort flag' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('does not respect xact_abort flag' as text) else if @err > 0 select cast('respects xact_abort flag' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+drop procedure error_mapping.ErrorHandling2;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+create table error_mapping.temp1 (a int)
+
+statement ok
+drop table error_mapping.temp1
+
+statement ok
+DROP TABLE IF EXISTS testtable;
+DROP TABLE IF EXISTS simpletable;
+DROP SCHEMA error_mapping;
+

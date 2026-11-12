@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1534_babel_sys_table_types_internal_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-table_types_internal-vu-prepare.sql
+
+statement ok
+CREATE DATABASE table_types_internal_db1;
+
+statement ok
+CREATE SCHEMA table_types_internal_schema1;
+

@@ -1,0 +1,36 @@
+# test/slt_proc/babelfish_oracle/1211_babel_babel_3204.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3204-vu-prepare.sql, test/babelfish/raw/BABEL-3204-vu-verify.sql
+
+statement ok
+CREATE FUNCTION babel_3204_text()
+RETURNS TABLE
+AS RETURN
+(
+	SELECT CAST('Hello' AS TEXT) AS message
+);
+
+statement ok
+CREATE FUNCTION babel_3204_ntext()
+RETURNS TABLE
+AS RETURN
+(
+	SELECT CAST('Hello' AS sys.NTEXT) AS message
+);
+
+statement ok
+CREATE FUNCTION babel_3204_image()
+RETURNS TABLE
+AS RETURN
+(
+	SELECT CAST(0xFE AS sys.IMAGE) AS message
+);
+
+statement ok
+DROP FUNCTION babel_3204_text;
+
+statement ok
+DROP FUNCTION babel_3204_ntext;
+
+statement ok
+DROP FUNCTION babel_3204_image;
+

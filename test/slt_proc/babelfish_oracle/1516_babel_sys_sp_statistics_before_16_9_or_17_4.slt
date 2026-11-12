@@ -1,0 +1,74 @@
+# test/slt_proc/babelfish_oracle/1516_babel_sys_sp_statistics_before_16_9_or_17_4.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/sys-sp_statistics-before-16_9-or-17_4-vu-prepare.sql, test/babelfish/raw/sys-sp_statistics-before-16_9-or-17_4-vu-verify.sql, test/babelfish/raw/sys-sp_statistics-before-16_9-or-17_4-vu-cleanup.sql
+
+statement ok
+create database sys_sp_statistics_vu_prepare_db1
+
+statement ok
+use sys_sp_statistics_vu_prepare_db1
+
+statement ok
+create table sys_sp_statistics_vu_prepare_t1(a int)
+
+statement ok
+create index sys_sp_statistics_vu_prepare_i1 on sys_sp_statistics_vu_prepare_t1(a)
+
+statement ok
+create table sys_sp_statistics_vu_prepare_t2(a int, b int)
+
+statement ok
+create index sys_sp_statistics_vu_prepare_i2 on sys_sp_statistics_vu_prepare_t2(a,b)
+
+statement ok
+create table sys_sp_statistics_vu_prepare_t3(a int, b int, c int)
+
+statement ok
+create index sys_sp_statistics_vu_prepare_i3 on sys_sp_statistics_vu_prepare_t3(c,a)
+
+statement ok
+CREATE TABLE sys_sp_statistics_vu_prepare_t4(
+        c1 INT PRIMARY KEY
+        , c2 CHAR(10) NOT NULL UNIQUE
+        , c3 VARCHAR(20) NULL
+)
+create index sys_sp_statistics_vu_prepare_i4 on sys_sp_statistics_vu_prepare_t4(c2)
+
+statement ok
+create table sys_sp_statistics_vu_prepare_t5(a int)
+
+statement ok
+use sys_sp_statistics_vu_prepare_db1
+
+statement error
+exec sp_statistics
+
+statement ok
+use sys_sp_statistics_vu_prepare_db1
+
+statement ok
+drop index sys_sp_statistics_vu_prepare_i1 on sys_sp_statistics_vu_prepare_t1
+
+statement ok
+drop index sys_sp_statistics_vu_prepare_i2 on sys_sp_statistics_vu_prepare_t2
+
+statement ok
+drop index sys_sp_statistics_vu_prepare_i3 on sys_sp_statistics_vu_prepare_t3
+
+statement ok
+drop table sys_sp_statistics_vu_prepare_t1
+
+statement ok
+drop table sys_sp_statistics_vu_prepare_t2
+
+statement ok
+drop table sys_sp_statistics_vu_prepare_t3
+
+statement ok
+drop table sys_sp_statistics_vu_prepare_t4
+
+statement ok
+drop table sys_sp_statistics_vu_prepare_t5
+
+statement ok
+use master
+

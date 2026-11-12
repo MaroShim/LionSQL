@@ -1,0 +1,58 @@
+# test/slt_proc/babelfish_oracle/453_babel_babel_nocount.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_NOCOUNT.sql
+
+statement ok
+CREATE FUNCTION dbo.babel_nocount_getval()
+	RETURNS VARCHAR(3)
+AS
+BEGIN
+	DECLARE @NOCOUNT VARCHAR(3) = 'OFF';
+	IF ( (512 & @@OPTIONS) = 512 ) SET @NOCOUNT = 'ON';
+	RETURN @NOCOUNT;
+END
+
+statement ok
+CREATE TABLE babel_nocount_t1(a int);
+INSERT INTO babel_nocount_t1 VALUES(0)
+
+query T
+SELECT dbo.babel_nocount_getval()
+----
+OFF
+
+statement ok
+SET NOCOUNT ON
+
+statement ok
+INSERT INTO babel_nocount_t1 SELECT * FROM babel_nocount_t1
+
+statement ok
+SET NOCOUNT OFF
+
+statement ok
+INSERT INTO babel_nocount_t1 SELECT * FROM babel_nocount_t1
+
+query T
+SELECT dbo.babel_nocount_getval()
+----
+OFF
+
+statement ok
+BEGIN TRAN t1
+SET NOCOUNT ON
+ROLLBACK TRAN t1
+
+statement ok
+CREATE PROCEDURE babel_nocount_setval
+AS
+	INSERT INTO babel_nocount_t1 SELECT * FROM babel_nocount_t1
+	SET NOCOUNT ON
+	INSERT INTO babel_nocount_t1 SELECT * FROM babel_nocount_t1
+
+statement ok
+SET NOCOUNT OFF
+
+statement ok
+SELECT dbo.babel_nocount_getval()
+INSERT INTO babel_nocount_t1 SELECT * FROM babel_nocount_t1
+

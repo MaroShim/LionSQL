@@ -1,0 +1,15 @@
+# test/slt_proc/babelfish_oracle/1174_babel_babel_2649.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2649.sql
+
+statement ok
+SELECT COUNT(*) FROM sys.objects WHERE name = 'my_tbl_type' AND type = 'U';
+
+statement ok
+SELECT COUNT(*) FROM sys.tables WHERE name = 'my_tbl_type';
+
+statement ok
+SELECT COUNT(*) FROM sys.types WHERE name = 'my_tbl_type' AND is_table_type = 1;
+
+statement ok
+SELECT COUNT(*) FROM sys.types WHERE name = 'type_2649' AND is_table_type = 0;
+

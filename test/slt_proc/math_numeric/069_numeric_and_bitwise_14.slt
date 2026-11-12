@@ -1,0 +1,29 @@
+# test/slt_proc/math_numeric/069_numeric_and_bitwise_14.slt
+# T-SQL ABS/SIGN/CEILING/FLOOR/POWER/SQRT/ROUND and bitwise ops (14)
+
+query IIII
+SELECT ABS(-189), SIGN(-189), CEILING(42.64), FLOOR(42.64);
+----
+189 -1 43 42
+
+query RRR
+SELECT POWER(6, 4), SQRT(196), ROUND(14.456, 2);
+----
+1296.000 14.000 14.460
+
+query III
+SELECT 87 & 47, 87 | 47, 87 ^ 47;
+----
+7 127 120
+
+statement ok
+CREATE PROCEDURE sp_divmod_69 @x INT, @y INT
+AS
+BEGIN
+    SELECT @x / @y, @x % @y, (@x / @y) * @y + (@x % @y);
+END;
+
+query III
+EXEC sp_divmod_69 73, 16;
+----
+4 9 73

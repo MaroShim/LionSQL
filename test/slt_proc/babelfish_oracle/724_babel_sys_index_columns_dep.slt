@@ -1,0 +1,38 @@
+# test/slt_proc/babelfish_oracle/724_babel_sys_index_columns_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-index_columns-dep-vu-prepare.sql, test/babelfish/raw/views/sys-index_columns-dep-vu-verify.sql, test/babelfish/raw/views/sys-index_columns-dep-vu-cleanup.sql
+
+statement ok
+DROP TABLE IF EXISTS sys_index_columns_dep_vu_prepare_t1
+
+statement ok
+CREATE TABLE sys_index_columns_dep_vu_prepare_t1 (
+	sic_name VARCHAR (50),
+	sic_surname VARCHAR (50)
+)
+
+statement ok
+CREATE INDEX sys_index_columns_dep_vu_prepare_i1
+ON sys_index_columns_dep_vu_prepare_t1 (sic_name)
+
+statement ok
+CREATE PROCEDURE sys_index_columns_dep_vu_prepare_p1 AS
+    SELECT COUNT(*) FROM sys.index_columns WHERE object_id = OBJECT_ID('sys_index_columns_dep_vu_prepare_t1')
+
+statement ok
+CREATE FUNCTION sys_index_columns_dep_vu_prepare_f1()
+RETURNS INT
+AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM sys.index_columns WHERE object_id = OBJECT_ID('sys_index_columns_dep_vu_prepare_t1'))
+END
+
+statement ok
+CREATE VIEW sys_index_columns_dep_vu_prepare_v1 AS
+    SELECT COUNT(*) FROM sys.index_columns WHERE object_id = OBJECT_ID('sys_index_columns_dep_vu_prepare_t1')
+
+query T
+SELECT * FROM sys_index_columns_dep_vu_prepare_v1
+----
+NULL
+NULL
+

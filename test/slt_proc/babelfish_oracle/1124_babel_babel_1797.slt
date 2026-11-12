@@ -1,0 +1,12 @@
+# test/slt_proc/babelfish_oracle/1124_babel_babel_1797.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1797.sql
+
+statement ok
+USE master
+
+statement ok
+create table [dbo].[t23]([id] int, [a] money, [b] datetime)
+
+statement ok
+drop table [dbo].[t23];
+

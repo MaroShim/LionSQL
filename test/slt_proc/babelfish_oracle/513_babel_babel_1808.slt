@@ -1,0 +1,36 @@
+# test/slt_proc/babelfish_oracle/513_babel_babel_1808.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1808.sql
+
+statement ok
+CREATE TABLE t1 ( a [Decimal], b [DeCimal](18,0));
+
+statement ok
+CREATE TABLE t2 ( a Decimal, b [DeCimal]);
+
+query TT
+INSERT INTO t2 values (3.14, 3.14);
+SELECT * FROM t2;
+----
+3.14 3.140000
+
+statement ok
+CREATE TABLE t3 ( a Decimal IDENTITY, b INT);
+
+statement ok
+CREATE TABLE t4 ( a [Decimal] IDENTITY, b INT);
+
+statement ok
+CREATE TABLE t5 ( a Decimal(18,2) IDENTITY, b int);
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP TABLE t2;
+
+statement ok
+DROP TABLE t3;
+
+statement ok
+DROP TABLE t4;
+

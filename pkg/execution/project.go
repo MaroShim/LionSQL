@@ -193,6 +193,15 @@ func (p *ProjectionIterator) Open(ctx context.Context) error {
 
 func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 	if p.isSelectAll && len(p.fields) == 0 {
+		tuple.Materialize()
+		if p.child != nil {
+			schemaLen := len(p.child.Schema())
+			if len(tuple.Values) < schemaLen {
+				padded := make([]any, schemaLen)
+				copy(padded, tuple.Values)
+				tuple.Values = padded
+			}
+		}
 		return tuple
 	}
 	tuple.Materialize()
@@ -208,8 +217,12 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 	}
 
 	for i, f := range p.fields {
-		if f.srcIdx >= 0 && f.srcIdx < len(tuple.Values) {
-			vals[i] = tuple.Values[f.srcIdx]
+		if f.srcIdx >= 0 {
+			if f.srcIdx < len(tuple.Values) {
+				vals[i] = tuple.Values[f.srcIdx]
+			} else {
+				vals[i] = nil
+			}
 			continue
 		}
 		// Prioritize qualified expression (e.g. "o.amount", "u.name") over unqualified alias

@@ -1,0 +1,25 @@
+# test/slt_proc/babelfish_oracle/1365_babel_babel_declare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_declare.sql
+
+statement ok
+CREATE PROCEDURE test_proc2 AS
+BEGIN
+    DECLARE @a INT
+END
+
+statement ok
+EXEC test_proc2
+
+statement ok
+CREATE PROCEDURE test_proc3 AS
+    DECLARE @a INT
+
+statement ok
+EXEC test_proc3
+
+statement ok
+DROP PROCEDURE test_proc2;
+
+statement ok
+DROP PROCEDURE test_proc3;
+

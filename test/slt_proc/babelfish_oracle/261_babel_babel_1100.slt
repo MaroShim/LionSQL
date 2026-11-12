@@ -1,0 +1,50 @@
+# test/slt_proc/babelfish_oracle/261_babel_babel_1100.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1100.sql
+
+statement ok
+CREATE TABLE t1 ( a int, b int);
+
+statement ok
+SELECT * from t1
+
+statement ok
+create table t5 ( a int, b int);
+
+statement ok
+insert into t5 values (1, 2);
+
+query TT
+select * from t5;
+----
+1 2
+
+query TT
+SELECT * from t5;
+----
+1 2
+
+query TT
+create proc p5 as
+declare @a int;
+declare @b int;
+with cte as
+(
+select 1 as c1, 2 as c2
+)
+select @a = c1 , @b = c2 from cte
+select @a
+select @b
+----
+1 NULL
+
+statement ok
+EXEC p5
+
+statement ok
+DROP TABLE t1
+DROP TABLE t5
+DROP PROCEDURE p1
+DROP PROCEDURE p3
+DROP PROCEDURE p4
+DROP PROCEDURE p5
+

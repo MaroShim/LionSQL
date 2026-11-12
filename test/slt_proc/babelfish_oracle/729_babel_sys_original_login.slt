@@ -1,0 +1,8 @@
+# test/slt_proc/babelfish_oracle/729_babel_sys_original_login.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/sys-original_login.sql
+
+query T
+SELECT ORIGINAL_LOGIN()
+----
+sa
+

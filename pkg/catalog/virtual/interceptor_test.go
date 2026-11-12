@@ -675,13 +675,47 @@ WHERE
 	// Test SSMS Procedure Scripting Parameters Query with [Number]
 	qScriptParams := `SELECT
 param.name AS [Name],
+'Server[@Name=' + quotename(CAST(
+        serverproperty(N'Servername')
+       AS sysname),'''') + ']' + '/Database[@Name=' + quotename(db_name(),'''') + ']' + '/StoredProcedure[@Name=' + quotename(sp.name,'''') + ' and @Schema=' + quotename(SCHEMA_NAME(sp.schema_id),'''') + ']' + '/Param[@Name=' + quotename(param.name,'''') + ']' AS [Urn],
+usrt.name AS [DataType],
+ISNULL(baset.name, N'') AS [SystemType],
+CAST(CASE WHEN baset.name IN (N'nchar', N'nvarchar') AND param.max_length <> -1 THEN param.max_length/2 ELSE param.max_length END AS int) AS [Length],
+CAST(param.precision AS int) AS [NumericPrecision],
+CAST(param.scale AS int) AS [NumericScale],
+param.default_value AS [DefaultValue],
+param.is_output AS [IsOutputParameter],
+param.is_cursor_ref AS [IsCursorParameter],
 sp.object_id AS [IDText],
 db_name() AS [DatabaseName],
 param.name AS [ParamName],
+CAST(
+ case
+    when sp.is_ms_shipped = 1 then 1
+    when exists (
+        select
+            1
+        from
+            sys.extended_properties
+        where
+            major_id = sp.object_id and
+            minor_id = 0 and
+            class = 1 and
+            name = N'microsoft_database_tools_support')
+        then 1
+    else 0
+end
+             AS bit) AS [ParentSysObj],
 1 AS [Number]
-FROM sys.all_objects AS sp
+FROM
+sys.all_objects AS sp
 INNER JOIN sys.all_parameters AS param ON param.object_id=sp.object_id
-WHERE (sp.type = 'P' OR sp.type = 'RF' OR sp.type='PC')and(sp.name='sp_calculate_total' and SCHEMA_NAME(sp.schema_id)='dbo')`
+LEFT OUTER JOIN sys.types AS usrt ON usrt.user_type_id = param.user_type_id
+LEFT OUTER JOIN sys.types AS baset ON (baset.user_type_id = param.system_type_id and baset.user_type_id = baset.system_type_id) or ((baset.system_type_id = param.system_type_id) and (baset.user_type_id = param.user_type_id) and (baset.is_user_defined = 0) and (baset.is_assembly_type = 1))
+WHERE
+(sp.type = 'P' OR sp.type = 'RF' OR sp.type='PC')and(sp.name='sp_calculate_total' and SCHEMA_NAME(sp.schema_id)='dbo')
+ORDER BY
+param.parameter_id ASC`
 
 	resScriptParams, err := virtual.Execute(src, qScriptParams)
 	if err != nil {
@@ -689,6 +723,12 @@ WHERE (sp.type = 'P' OR sp.type = 'RF' OR sp.type='PC')and(sp.name='sp_calculate
 	}
 	if len(resScriptParams.Rows) != 2 {
 		t.Fatalf("expected 2 parameters for sp_calculate_total in scripting query, got %d", len(resScriptParams.Rows))
+	}
+	for i, col := range resScriptParams.Columns {
+		t.Logf("Column[%d] = %q (val=%T %v)", i, col, resScriptParams.Rows[0][col], resScriptParams.Rows[0][col])
+	}
+	for k, v := range resScriptParams.Rows[0] {
+		t.Logf("Col [%s] = %T (%v)", k, v, v)
 	}
 	if resScriptParams.Rows[0]["Number"] != int16(1) {
 		t.Errorf("expected Number to be int16(1), got %T (%v)", resScriptParams.Rows[0]["Number"], resScriptParams.Rows[0]["Number"])

@@ -1,0 +1,158 @@
+# test/slt_proc/babelfish_oracle/705_babel_switchoffset.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/switchoffset.sql
+
+query T
+Select switchoffset('200a-0b-22 17:34:56.345', 1)
+----
+NULL
+
+query T
+Select switchoffset('200a-0b-22 17:34:56.345', '-011:00')
+----
+NULL
+
+query T
+Select switchoffset('0001-01-00 00:00:00.00', '-10:00')
+----
+NULL
+
+query T
+Select switchoffset('9999-12-31 24:59:59.59', 130)
+----
+NULL
+
+query T
+Select switchoffset('10000-12-31 23:59:59.59', 120)
+----
+NULL
+
+query T
+Select switchoffset('0',120)
+----
+NULL
+
+query T
+Select switchoffset('0',0x23)
+----
+NULL
+
+statement ok
+DROP TABLE IF EXISTS tem
+
+statement ok
+Create table tem(a datetimeoffset)
+insert into tem (a) values(switchoffset('2000-04-22 12:23:51.766890',120))
+Select * from tem
+Select switchoffset(a,'+14:00') from tem;
+DROP TABLE IF EXISTS tem
+
+query T
+Select switchoffset('NULL','NULL')
+----
+NULL
+
+query T
+Select switchoffset('NULL',NULL)
+----
+NULL
+
+query T
+Select switchoffset(NULL,NULL)
+----
+NULL
+
+query T
+Select switchoffset(NULL,'NULL')
+----
+NULL
+
+query T
+Select switchoffset('2345-12-31 23:59:59.59',NULL);
+----
+NULL
+
+query T
+Select switchoffset(NULL,'+12:00');
+----
+NULL
+
+query T
+Select switchoffset('NULL','+12:00');
+----
+NULL
+
+query T
+Select switchoffset('NULL',234);
+----
+NULL
+
+query T
+Select switchoffset(NULL,234);
+----
+NULL
+
+query T
+Select switchoffset(NULL,'+12:000');
+----
+NULL
+
+query T
+Select switchoffset('NULL','+12:000');
+----
+NULL
+
+query T
+Select switchoffset('NULL',1233456777888);
+----
+NULL
+
+query T
+Select switchoffset(NULL,1233456777888);
+----
+NULL
+
+query T
+Select switchoffset('1900-05-06 13:59:29.998 -8:00', '-12:00')
+----
+NULL
+
+query T
+Select switchoffset('1-1-1 00:00:00.000 +12:00' , '+12:00')
+----
+NULL
+
+query T
+Select switchoffset('0001-1-1 00:00:00.000 +12:00' , '+12:00')
+----
+NULL
+
+query T
+Select switchoffset('10000-01-01 00:00:00.000 +12:00' , '+12:00')
+----
+NULL
+
+query T
+Select switchoffset('10000-01-01 00:00:00.123 +2:00','+12:00')
+----
+NULL
+
+query T
+Select switchoffset('1-1-1 00:00:00.000 +12:00' , 743)
+----
+NULL
+
+query T
+Select switchoffset('0001-1-1 00:00:00.000 +12:00' , 743)
+----
+NULL
+
+query T
+Select switchoffset('10000-01-01 00:00:00.000 +12:00' , 743)
+----
+NULL
+
+query T
+Select switchoffset('10000-01-01 00:00:00.123 +2:00', 743)
+----
+NULL
+

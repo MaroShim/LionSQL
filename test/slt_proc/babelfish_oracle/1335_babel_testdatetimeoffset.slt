@@ -1,0 +1,139 @@
+# test/slt_proc/babelfish_oracle/1335_babel_testdatetimeoffset.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/datatypes/TestDatetimeoffset-vu-prepare.sql, test/babelfish/raw/datatypes/TestDatetimeoffset-vu-verify.sql, test/babelfish/raw/datatypes/TestDatetimeoffset-vu-cleanup.sql
+
+statement ok
+create table TestDatetimeoffset_vu_prepare_testing (df datetimeoffset);
+
+statement ok
+INSERT INTO TestDatetimeoffset_vu_prepare_testing VALUES('1800-03-15 09:00:00 +12:00');
+
+statement ok
+INSERT INTO TestDatetimeoffset_vu_prepare_testing VALUES('1992-03-15 09:00:00');
+
+statement ok
+CREATE INDEX TestDatetimeoffset_vu_prepare_idx ON TestDatetimeoffset_vu_prepare_testing (df);
+
+statement ok
+create table TestDatetimeoffset_vu_prepare_t1 (a datetimeoffset, b int);
+
+statement ok
+insert into TestDatetimeoffset_vu_prepare_t1 (b) values (1);
+
+statement ok
+CREATE PROCEDURE TestDatetimeoffset_vu_prepare_cast (@val datetimeoffset) AS
+BEGIN
+    DECLARE @DF datetimeoffset = @val
+    PRINT @DF
+    PRINT cast(@DF as datetimeoffset(5))
+END;
+
+statement ok
+CREATE PROCEDURE TestDatetimeoffset_vu_prepare_cmp (@val datetimeoffset) AS
+BEGIN
+    IF @val > CAST('2000-01-01 13:39:29.123456 +0:00' AS datetimeoffset)
+        PRINT @val - make_interval(1)
+    ELSE
+        PRINT @val + make_interval(1)
+END;
+
+statement ok
+select * from TestDatetimeoffset_vu_prepare_testing where df >= '2020-03-15 00:00:00';
+
+statement ok
+select * from TestDatetimeoffset_vu_prepare_testing where df >= '2020-03-15 09:00:00 +7';
+
+statement ok
+select * from TestDatetimeoffset_vu_prepare_testing where df >= '2020-03-15 09:00:00 +8' 
+                    and df < '2020-03-15 09:00:00';
+
+query T
+select a from TestDatetimeoffset_vu_prepare_t1 where b = 1;
+----
+NULL
+
+query T
+select CAST(CAST('2000-01-01 23:59:59.999' AS datetimeoffset) AS date);
+----
+2000-01-01
+
+query T
+select ISDATE('2030-05-06 13:59:29.998 -8:00');
+----
+0
+
+query T
+select pg_typeof(c1) FROM (SELECT CAST('2030-05-06 13:59:29.998 +0:00' AS datetimeoffset) as C1 UNION SELECT CAST('2016-12-26 23:30:05' AS datetime) as C1) T;
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT CAST('2030-05-06 13:59:29.998 +0:00' AS datetimeoffset) as C1 UNION SELECT CAST('2016-12-26 23:30:05' AS datetime2) as C1) T;
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT CAST('2030-05-06 13:59:29.998 +0:00' AS datetimeoffset) as C1 UNION SELECT CAST('2016-12-26 23:30:05' AS smalldatetime) as C1) T;
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT CAST('2030-05-06 13:59:29.998 +0:00' AS datetimeoffset) as C1 UNION SELECT CAST('23:30:05' AS time) as C1) T;
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT CAST('2030-05-06 13:59:29.998 +0:00' AS datetimeoffset) as C1 UNION SELECT CAST('2016-12-26' AS date) as C1) T;
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT CAST('2016-12-26 23:30:05' AS datetime) as C1 UNION SELECT CAST('2030-05-06 13:59:29.998 +0:00' AS datetimeoffset)as C1) T;
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT CAST('2016-12-26 23:30:05' AS datetime2) as C1 UNION SELECT CAST('2030-05-06 13:59:29.998 +0:00' AS datetimeoffset) as C1) T;
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT CAST('2016-12-26 23:30:05' AS smalldatetime) as C1 UNION SELECT CAST('2030-05-06 13:59:29.998 +0:00' AS datetimeoffset) as C1) T;
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT CAST('23:30:05' AS time) as C1 UNION SELECT CAST('2030-05-06 13:59:29.998 +0:00' AS datetimeoffset) as C1) T;
+----
+NULL
+NULL
+
+query T
+select pg_typeof(c1) FROM (SELECT CAST('2016-12-26' AS date) as C1 UNION SELECT CAST('2030-05-06 13:59:29.998 +0:00' AS datetimeoffset) as C1) T;
+----
+NULL
+NULL
+
+statement error
+DECLARE @dto datetimeoffset = CAST('19200-05-06 13:39:29.123456 +0:00' AS datetimeoffset);
+exec TestDatetimeoffset_vu_prepare_cast @dto;
+
+statement ok
+drop table TestDatetimeoffset_vu_prepare_testing;
+
+statement ok
+drop table TestDatetimeoffset_vu_prepare_t1;
+
+statement ok
+drop procedure TestDatetimeoffset_vu_prepare_cast;
+
+statement ok
+drop procedure TestDatetimeoffset_vu_prepare_cmp;
+

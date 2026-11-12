@@ -269,3 +269,86 @@ func TestVM_MultiScalarSelect(t *testing.T) {
 	}
 }
 
+func TestVM_DateFirstAndDBTS(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+	cache := runtime.NewPlanCache()
+	exec := runtime.NewExecutor(cache)
+
+	script := `
+CREATE PROCEDURE TestDateFirstAndDBTSProc AS
+BEGIN
+    DECLARE @df INT;
+    DECLARE @dbts VARBINARY(8);
+    SET @df = @@DATEFIRST;
+    SET @dbts = @@DBTS;
+    PRINT @df;
+    IF @dbts IS NOT NULL
+        PRINT 'DBTS_OK';
+END
+`
+	prog, err := cache.GetOrCompile(script)
+	if err != nil {
+		t.Fatalf("Compile script failed: %v", err)
+	}
+
+	res, err := exec.Run(prog, "TestDateFirstAndDBTSProc", nil, sess)
+	if err != nil {
+		t.Fatalf("Run script failed: %v", err)
+	}
+
+	expectedLogs := []string{"7", "DBTS_OK"}
+	if len(res.Logs) != len(expectedLogs) {
+		t.Fatalf("Expected %d logs, got %d: %v", len(expectedLogs), len(res.Logs), res.Logs)
+	}
+	for i, exp := range expectedLogs {
+		if res.Logs[i] != exp {
+			t.Errorf("Log[%d] expected %q, got %q", i, exp, res.Logs[i])
+		}
+	}
+}
+
+func TestVM_CompressAndDecompress(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+	cache := runtime.NewPlanCache()
+	exec := runtime.NewExecutor(cache)
+
+	script := `
+CREATE PROCEDURE TestCompressDecompressProc AS
+BEGIN
+    DECLARE @orig VARCHAR(100);
+    DECLARE @bin VARBINARY(MAX);
+    DECLARE @decomp VARBINARY(MAX);
+    DECLARE @res VARCHAR(100);
+
+    SET @orig = 'LionSQL High-Performance T-SQL Compression';
+    SET @bin = COMPRESS(@orig);
+    SET @decomp = DECOMPRESS(@bin);
+    SET @res = CAST(@decomp AS VARCHAR(100));
+
+    PRINT @res;
+END
+`
+	prog, err := cache.GetOrCompile(script)
+	if err != nil {
+		t.Fatalf("Compile script failed: %v", err)
+	}
+
+	res, err := exec.Run(prog, "TestCompressDecompressProc", nil, sess)
+	if err != nil {
+		t.Fatalf("Run script failed: %v", err)
+	}
+
+	expectedLog := "LionSQL High-Performance T-SQL Compression"
+	if len(res.Logs) != 1 || res.Logs[0] != expectedLog {
+		t.Fatalf("Expected log %q, got: %v", expectedLog, res.Logs)
+	}
+}
+

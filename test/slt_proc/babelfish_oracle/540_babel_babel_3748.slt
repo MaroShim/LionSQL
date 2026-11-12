@@ -1,0 +1,355 @@
+# test/slt_proc/babelfish_oracle/540_babel_babel_3748.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3748-vu-prepare.sql, test/babelfish/raw/BABEL-3748-vu-verify.sql
+
+statement ok
+CREATE VIEW BABEL_3748_vu_prepare_v1 as (SELECT TRY_CAST(1 as XML));
+
+statement ok
+CREATE PROCEDURE BABEL_3748_vu_prepare_p1 as (SELECT TRY_CAST(1 as XML));
+
+statement ok
+CREATE FUNCTION BABEL_3748_vu_prepare_f1()
+RETURNS XML AS
+BEGIN
+RETURN (SELECT TRY_CAST(1 as XML));
+END
+
+statement ok
+CREATE VIEW BABEL_3748_vu_prepare_v2 as (SELECT TRY_CAST(1.1 as XML));
+
+statement ok
+CREATE PROCEDURE BABEL_3748_vu_prepare_p2 as (SELECT TRY_CAST(1.1 as XML));
+
+statement ok
+CREATE FUNCTION BABEL_3748_vu_prepare_f2()
+RETURNS XML AS
+BEGIN
+RETURN (SELECT TRY_CAST(1.1 as XML));
+END
+
+statement ok
+CREATE VIEW BABEL_3748_vu_prepare_v3 as (SELECT TRY_CAST(1 as MONEY));
+
+statement ok
+CREATE PROCEDURE BABEL_3748_vu_prepare_p3 as (SELECT TRY_CAST(1 as MONEY));
+
+statement ok
+CREATE FUNCTION BABEL_3748_vu_prepare_f3()
+RETURNS MONEY AS
+BEGIN
+RETURN (SELECT TRY_CAST(1 as MONEY));
+END
+
+statement ok
+CREATE VIEW BABEL_3748_vu_prepare_v4 as (SELECT TRY_CAST(1.1 as MONEY));
+
+statement ok
+CREATE PROCEDURE BABEL_3748_vu_prepare_p4 as (SELECT TRY_CAST(1.1 as MONEY));
+
+statement ok
+CREATE FUNCTION BABEL_3748_vu_prepare_f4()
+RETURNS MONEY AS
+BEGIN
+RETURN (SELECT TRY_CAST(1.1 as MONEY));
+END
+
+statement ok
+CREATE VIEW BABEL_3748_vu_prepare_v5 as (SELECT TRY_CAST((1+2) as XML));
+
+statement ok
+CREATE PROCEDURE BABEL_3748_vu_prepare_p5 as (SELECT TRY_CAST((1+2) as XML));
+
+statement ok
+CREATE FUNCTION BABEL_3748_vu_prepare_f5()
+RETURNS XML AS
+BEGIN
+RETURN (SELECT TRY_CAST((1+2) as XML));
+END
+
+statement ok
+CREATE VIEW BABEL_3748_vu_prepare_v6 as (SELECT TRY_CONVERT(XML, 1));
+
+statement ok
+CREATE PROCEDURE BABEL_3748_vu_prepare_p6 as (SELECT TRY_CONVERT(XML, 1));
+
+statement ok
+CREATE FUNCTION BABEL_3748_vu_prepare_f6()
+RETURNS XML AS
+BEGIN
+RETURN (SELECT TRY_CONVERT(XML, 1));
+END
+
+statement ok
+CREATE VIEW BABEL_3748_vu_prepare_v7 as (SELECT TRY_CONVERT(XML, 1.1));
+
+statement ok
+CREATE PROCEDURE BABEL_3748_vu_prepare_p7 as (SELECT TRY_CONVERT(XML, 1.1));
+
+statement ok
+CREATE FUNCTION BABEL_3748_vu_prepare_f7()
+RETURNS XML AS
+BEGIN
+RETURN (SELECT TRY_CONVERT(XML, 1.1));
+END
+
+statement ok
+CREATE VIEW BABEL_3748_vu_prepare_v8 as (SELECT TRY_CONVERT(MONEY, 1));
+
+statement ok
+CREATE PROCEDURE BABEL_3748_vu_prepare_p8 as (SELECT TRY_CONVERT(MONEY, 1));
+
+statement ok
+CREATE FUNCTION BABEL_3748_vu_prepare_f8()
+RETURNS MONEY AS
+BEGIN
+RETURN (SELECT TRY_CONVERT(MONEY, 1));
+END
+
+statement ok
+CREATE VIEW BABEL_3748_vu_prepare_v9 as (SELECT TRY_CONVERT(MONEY, 1.1));
+
+statement ok
+CREATE PROCEDURE BABEL_3748_vu_prepare_p9 as (SELECT TRY_CONVERT(MONEY, 1.1));
+
+statement ok
+CREATE FUNCTION BABEL_3748_vu_prepare_f9()
+RETURNS MONEY AS
+BEGIN
+RETURN (SELECT TRY_CONVERT(MONEY, 1.1));
+END
+
+statement ok
+CREATE VIEW BABEL_3748_vu_prepare_v10 as (SELECT TRY_CONVERT(XML, (1+2)));
+
+statement ok
+CREATE PROCEDURE BABEL_3748_vu_prepare_p10 as (SELECT TRY_CONVERT(XML, (1+2)));
+
+statement ok
+CREATE FUNCTION BABEL_3748_vu_prepare_f10()
+RETURNS XML AS
+BEGIN
+RETURN (SELECT TRY_CONVERT(XML, (1+2)));
+END
+
+statement ok
+CREATE VIEW BABEL_3748_vu_prepare_v11 as (SELECT TRY_CONVERT(XML, (1.1+2.2)));
+
+statement ok
+CREATE PROCEDURE BABEL_3748_vu_prepare_p11 as (SELECT TRY_CONVERT(XML, (1.1+2.2)));
+
+statement ok
+CREATE FUNCTION BABEL_3748_vu_prepare_f11()
+RETURNS XML AS
+BEGIN
+RETURN (SELECT TRY_CONVERT(XML, (1.1+2.2)));
+END
+
+statement ok
+DROP VIEW BABEL_3748_vu_prepare_v1
+
+query T
+EXEC BABEL_3748_vu_prepare_p1
+----
+1
+
+statement ok
+DROP PROCEDURE BABEL_3748_vu_prepare_p1
+
+query T
+SELECT BABEL_3748_vu_prepare_f1()
+----
+1
+
+statement ok
+DROP FUNCTION BABEL_3748_vu_prepare_f1()
+
+statement ok
+DROP VIEW BABEL_3748_vu_prepare_v2
+
+query T
+EXEC BABEL_3748_vu_prepare_p2
+----
+1.100000
+
+statement ok
+DROP PROCEDURE BABEL_3748_vu_prepare_p2
+
+query T
+SELECT BABEL_3748_vu_prepare_f2()
+----
+1.100000
+
+statement ok
+DROP FUNCTION BABEL_3748_vu_prepare_f2()
+
+statement ok
+DROP VIEW BABEL_3748_vu_prepare_v3
+
+query T
+EXEC BABEL_3748_vu_prepare_p3
+----
+1
+
+statement ok
+DROP PROCEDURE BABEL_3748_vu_prepare_p3
+
+query T
+SELECT BABEL_3748_vu_prepare_f3()
+----
+1
+
+statement ok
+DROP FUNCTION BABEL_3748_vu_prepare_f3()
+
+statement ok
+DROP VIEW BABEL_3748_vu_prepare_v4
+
+query T
+EXEC BABEL_3748_vu_prepare_p4
+----
+1.100000
+
+statement ok
+DROP PROCEDURE BABEL_3748_vu_prepare_p4
+
+query T
+SELECT BABEL_3748_vu_prepare_f4()
+----
+1.100000
+
+statement ok
+DROP FUNCTION BABEL_3748_vu_prepare_f4()
+
+statement ok
+DROP VIEW BABEL_3748_vu_prepare_v5
+
+query T
+EXEC BABEL_3748_vu_prepare_p5
+----
+3
+
+statement ok
+DROP PROCEDURE BABEL_3748_vu_prepare_p5
+
+query T
+SELECT BABEL_3748_vu_prepare_f5()
+----
+3
+
+statement ok
+DROP FUNCTION BABEL_3748_vu_prepare_f5()
+
+statement ok
+DROP VIEW BABEL_3748_vu_prepare_v6
+
+query T
+EXEC BABEL_3748_vu_prepare_p6
+----
+1
+
+statement ok
+DROP PROCEDURE BABEL_3748_vu_prepare_p6
+
+query T
+SELECT BABEL_3748_vu_prepare_f6()
+----
+1
+
+statement ok
+DROP FUNCTION BABEL_3748_vu_prepare_f6()
+
+statement ok
+DROP VIEW BABEL_3748_vu_prepare_v7
+
+query T
+EXEC BABEL_3748_vu_prepare_p7
+----
+1.100000
+
+statement ok
+DROP PROCEDURE BABEL_3748_vu_prepare_p7
+
+query T
+SELECT BABEL_3748_vu_prepare_f7()
+----
+1.100000
+
+statement ok
+DROP FUNCTION BABEL_3748_vu_prepare_f7()
+
+statement ok
+DROP VIEW BABEL_3748_vu_prepare_v8
+
+query T
+EXEC BABEL_3748_vu_prepare_p8
+----
+1
+
+statement ok
+DROP PROCEDURE BABEL_3748_vu_prepare_p8
+
+query T
+SELECT BABEL_3748_vu_prepare_f8()
+----
+1
+
+statement ok
+DROP FUNCTION BABEL_3748_vu_prepare_f8()
+
+statement ok
+DROP VIEW BABEL_3748_vu_prepare_v9
+
+query T
+EXEC BABEL_3748_vu_prepare_p9
+----
+1.100000
+
+statement ok
+DROP PROCEDURE BABEL_3748_vu_prepare_p9
+
+query T
+SELECT BABEL_3748_vu_prepare_f9()
+----
+1.100000
+
+statement ok
+DROP FUNCTION BABEL_3748_vu_prepare_f9()
+
+statement ok
+DROP VIEW BABEL_3748_vu_prepare_v10
+
+query T
+EXEC BABEL_3748_vu_prepare_p10
+----
+3
+
+statement ok
+DROP PROCEDURE BABEL_3748_vu_prepare_p10
+
+query T
+SELECT BABEL_3748_vu_prepare_f10()
+----
+3
+
+statement ok
+DROP FUNCTION BABEL_3748_vu_prepare_f10()
+
+statement ok
+DROP VIEW BABEL_3748_vu_prepare_v11
+
+query T
+EXEC BABEL_3748_vu_prepare_p11
+----
+3.300000
+
+statement ok
+DROP PROCEDURE BABEL_3748_vu_prepare_p11
+
+query T
+SELECT BABEL_3748_vu_prepare_f11()
+----
+3.300000
+
+statement ok
+DROP FUNCTION BABEL_3748_vu_prepare_f11()
+

@@ -1,0 +1,20 @@
+# test/slt_proc/babelfish_oracle/532_babel_babel_3160.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3160.sql
+
+statement ok
+use master;
+
+statement ok
+CREATE TABLE load(load int);
+
+statement ok
+INSERT INTO load values (1);
+
+query T
+SELECT load FROM load;
+----
+1
+
+statement ok
+DROP TABLE load;
+

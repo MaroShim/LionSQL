@@ -1,0 +1,135 @@
+# test/slt_proc/babelfish_oracle/749_babel_table_variable_xact_with_identity.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/table_variables/table_variable_xact_with_identity.sql
+
+statement ok
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID
+
+statement ok
+CREATE VIEW enr_view AS
+    SELECT
+        CASE
+            WHEN relname LIKE '@pg_toast%' AND relname LIKE '%index%' THEN '@pg_toast_#oid_masked#_index'
+            WHEN relname LIKE '@pg_toast%' THEN '@pg_toast_#oid_masked#'
+            ELSE relname
+        END AS relname
+    FROM sys.babelfish_get_enr_list()
+
+statement ok
+CREATE TABLE numbers (number INT NOT NULL)
+
+statement ok
+DECLARE @FirstString nVarchar(255)
+DECLARE @PseudoMatrix TABLE(location int identity primary key, c2 int)
+SELECT number, SUBSTRING(@FirstString,number,1) AS ch
+    FROM numbers WHERE number <= LEN(@FirstString) union all Select 0, Char(0)
+
+statement ok
+DROP TABLE numbers
+
+statement ok
+DECLARE @tv1 tableType;
+BEGIN TRANSACTION
+    INSERT @tv1 VALUES (1), (2);
+ROLLBACK
+    SELECT * FROM @tv1
+SELECT * FROM enr_view
+
+statement ok
+CREATE PROCEDURE rcv_tv3 AS
+BEGIN
+    DECLARE @tv tableType;
+    BEGIN TRAN;
+        INSERT INTO @tv values (1);
+    ROLLBACK;
+    SELECT * FROM @tv;
+END
+
+statement ok
+DROP PROCEDURE rcv_tv3
+
+statement ok
+DECLARE @tv1 tableType;
+BEGIN TRANSACTION
+    INSERT @tv1 VALUES (1), (2);
+COMMIT TRANSACTION
+    SELECT * FROM @tv1
+SELECT * FROM enr_view
+
+statement ok
+CREATE PROCEDURE rcv_tv3 AS
+BEGIN
+    DECLARE @tv tableType;
+    BEGIN TRAN;
+        INSERT INTO @tv values (1);
+    COMMIT;
+    SELECT * FROM @tv;
+END
+
+statement ok
+DROP PROCEDURE rcv_tv3
+
+statement ok
+DECLARE @tvp2 tabvar_type_function_error
+INSERT INTO @tvp2 values (2)
+EXEC tabvar_select @tvp2
+SELECT * FROM enr_view
+
+query TT
+DECLARE @tv2 TABLE(c1 INT, c2 INT);
+INSERT INTO @tv2 VALUES(1, 2);
+BEGIN TRANSACTION
+    INSERT INTO @tv2 VALUES(2, 3);
+    SELECT * FROM @tv2                          -- should see 2 rows
+    SELECT * FROM @tv2                          -- repeat when hint bits are set
+COMMIT
+SELECT * FROM @tv2                              -- should still see 2 rows
+----
+1 2
+
+statement ok
+BEGIN TRANSACTION
+    DECLARE @tv4 TABLE(c1 INT, c2 INT, c3 INT IDENTITY)
+    INSERT INTO @tv4 VALUES(1, 2)
+ROLLBACK
+SELECT * FROM @tv4                              -- tv4 accessible and should see 1 row
+
+statement ok
+BEGIN TRANSACTION
+    DECLARE @tv4 TABLE(c1 INT, c2 INT, c3 INT IDENTITY)
+    INSERT INTO @tv4 VALUES(1, 2)
+COMMIT
+SELECT * FROM @tv4                              -- tv4 accessible and should see 1 row
+
+statement ok
+DECLARE @tv5 TABLE(c1 INT IDENTITY, c2 INT)
+INSERT INTO @tv5 VALUES(1)
+BEGIN TRANSACTION
+    UPDATE @tv5 SET c2 = 10 WHERE c1 = 1
+    UPDATE @tv5 SET c2 = 100 WHERE c1 = 1
+ROLLBACK
+SELECT * FROM @tv5                              -- should see (1, 100)
+INSERT INTO @tv5 VALUES(2)
+SELECT * FROM @tv5                              -- should see (1, 100), (2, 2)
+
+statement ok
+CREATE TABLE TestTable (ID INT, TEXTVal VARCHAR(100))
+INSERT TestTable (ID, TEXTVal) VALUES (1,'FirstVal'), (2, 'SecondVal')
+BEGIN TRANSACTION
+DECLARE @TmpTable TABLE (c1 INT IDENTITY, ID_New INT, TEXTVal_New VARCHAR(100), ID_Old INT, TEXTVal_Old VARCHAR(100))
+UPDATE TestTable SET TEXTVal = 'NewValue'
+OUTPUT Inserted.ID, Inserted.TEXTVal, Deleted.ID, Deleted.TEXTVal INTO @TmpTable
+WHERE ID IN (1,2)
+SELECT * FROM @TmpTable
+SELECT * FROM TestTable
+ROLLBACK
+SELECT * FROM @TmpTable
+SELECT * FROM TestTable
+INSERT @TmpTable VALUES (3,'ThirdVal', 3, 'ThirdVal')
+SELECT * FROM @TmpTable
+
+statement ok
+DROP TABLE TestTable
+
+statement ok
+DROP VIEW enr_view
+

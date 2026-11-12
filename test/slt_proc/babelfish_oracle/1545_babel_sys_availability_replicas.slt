@@ -1,0 +1,30 @@
+# test/slt_proc/babelfish_oracle/1545_babel_sys_availability_replicas.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys_availability_replicas-vu-prepare.sql, test/babelfish/raw/views/sys_availability_replicas-vu-verify.sql, test/babelfish/raw/views/sys_availability_replicas-vu-cleanup.sql
+
+statement ok
+CREATE VIEW sys_availability_replicas_test_view
+AS
+    SELECT * FROM sys.availability_replicas;
+
+statement ok
+CREATE PROC sys_availability_replicas_test_proc
+AS
+    SELECT * FROM sys.availability_replicas
+
+statement ok
+CREATE FUNCTION sys_availability_replicas_test_func()
+RETURNS INT
+AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM sys.availability_replicas)
+END
+
+statement ok
+DROP VIEW sys_availability_replicas_test_view
+
+statement ok
+DROP PROC sys_availability_replicas_test_proc
+
+statement ok
+DROP FUNCTION sys_availability_replicas_test_func
+

@@ -1,0 +1,188 @@
+# test/slt_proc/babelfish_oracle/730_babel_sys_procedures.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-procedures-vu-prepare.sql, test/babelfish/raw/views/sys-procedures-vu-verify.sql, test/babelfish/raw/views/sys-procedures-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sys_procedures_vu_prepare_db1;
+
+statement ok
+USE sys_procedures_vu_prepare_db1
+
+statement ok
+create proc sys_procedures_vu_prepare_proc1 as select 1;
+
+statement ok
+create table sys_procedures_vu_prepare_table1(a int, b varchar(10))
+
+statement ok
+USE master
+
+statement ok
+create proc sys_procedures_vu_prepare_proc2 as select 2;
+
+statement ok
+create view sys_procedures_vu_prepare_view as
+select count(*) from sys.procedures where name = 'sys_procedures_vu_prepare_proc2'
+
+statement ok
+create proc sys_procedures_vu_prepare_proc as
+select count(*) from sys.procedures where name = 'sys_procedures_vu_prepare_proc2'
+
+statement ok
+create function dbo.sys_procedures_vu_prepare_func()
+returns int
+as
+begin
+return (select count(*) from sys.procedures where name = 'sys_procedures_vu_prepare_proc2')
+end
+
+statement ok
+USE sys_procedures_vu_prepare_db1
+
+query T
+select count(*) from sys.procedures where name = 'sys_procedures_vu_prepare_proc1';
+----
+NULL
+
+query T
+select count(*) from sys.objects where type = 'P' and name = 'sys_procedures_vu_prepare_proc1';
+----
+1
+
+query T
+select count(*) from sys.all_objects where type = 'P' and name = 'sys_procedures_vu_prepare_proc1';
+----
+NULL
+
+query T
+select count(*) from sys.sql_modules where object_id = object_id('sys_procedures_vu_prepare_proc1');
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+select parent_object_id from sys.objects where type = 'P' and name = 'sys_procedures_vu_prepare_proc1';
+----
+0
+
+query T
+select count(*) from sys.procedures where name = 'sys_procedures_vu_prepare_trig1' and type = 'TR' and parent_object_id = object_id('sys_procedures_vu_prepare_trig1') and parent_object_id != 0;
+----
+NULL
+NULL
+NULL
+
+statement ok
+USE master
+
+query T
+select count(*) from sys.procedures where name = 'sys_procedures_vu_prepare_proc1';
+----
+NULL
+
+query T
+select count(*) from sys.objects where type = 'P' and name = 'sys_procedures_vu_prepare_proc1';
+----
+1
+
+query T
+select count(*) from sys.all_objects where type = 'P' and name = 'sys_procedures_vu_prepare_proc1';
+----
+NULL
+
+query T
+select count(*) from sys.sql_modules where object_id = object_id('sys_procedures_vu_prepare_proc1');
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+select parent_object_id from sys.objects where type = 'P' and name = 'sys_procedures_vu_prepare_proc1';
+----
+0
+
+query T
+select count(*) from sys.procedures where name = 'sys_procedures_vu_prepare_trig1' and type = 'TR' and parent_object_id = object_id('sys_procedures_vu_prepare_trig1') and parent_object_id != 0;
+----
+NULL
+NULL
+NULL
+
+query T
+select count(*) from sys.procedures where name = 'sys_procedures_vu_prepare_proc2';
+----
+NULL
+
+query T
+select count(*) from sys.objects where type = 'P' and name = 'sys_procedures_vu_prepare_proc2';
+----
+1
+
+query T
+select count(*) from sys.all_objects where type = 'P' and name = 'sys_procedures_vu_prepare_proc2';
+----
+NULL
+
+query T
+select count(*) from sys.sql_modules where object_id = object_id('sys_procedures_vu_prepare_proc2');
+----
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+USE sys_procedures_vu_prepare_db1
+
+query T
+select count(*) from sys.procedures where name = 'sys_procedures_vu_prepare_proc2';
+----
+NULL
+
+query T
+select count(*) from sys.objects where type = 'P' and name = 'sys_procedures_vu_prepare_proc2';
+----
+1
+
+query T
+select count(*) from sys.all_objects where type = 'P' and name = 'sys_procedures_vu_prepare_proc2';
+----
+NULL
+
+query T
+select count(*) from sys.sql_modules where object_id = object_id('sys_procedures_vu_prepare_proc2');
+----
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+USE master
+
+query T
+SELECT * FROM sys_procedures_vu_prepare_view
+----
+NULL
+
+statement ok
+USE sys_procedures_vu_prepare_db1
+
+statement ok
+drop table sys_procedures_vu_prepare_table1
+
+statement ok
+drop proc sys_procedures_vu_prepare_proc2
+
+statement ok
+drop view sys_procedures_vu_prepare_view 
+
+statement ok
+drop proc sys_procedures_vu_prepare_proc
+
+statement ok
+drop function dbo.sys_procedures_vu_prepare_func()
+

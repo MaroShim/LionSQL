@@ -1,0 +1,14 @@
+# test/slt_proc/babelfish_oracle/522_babel_babel_2701.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2701-vu-prepare.sql, test/babelfish/raw/BABEL-2701-vu-verify.sql, test/babelfish/raw/BABEL-2701-vu-cleanup.sql
+
+statement ok
+create table babel_2701_vu_prepare_t1(a int)
+
+query T
+select object_name(object_id) from sys.objects where name = 'babel_2701_vu_prepare_t1';
+----
+NULL
+
+statement ok
+drop table babel_2701_vu_prepare_t1
+

@@ -1,0 +1,54 @@
+# test/slt_proc/babelfish_oracle/1561_babel_table_variable_xact_nested_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/table_variables/table_variable_xact_nested_2.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_4263_db
+
+statement ok
+USE babel_4263_db
+
+statement ok
+CREATE SCHEMA babel_4263_schema
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_4263_db COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_4263_db
+
+statement ok
+CREATE SCHEMA babel_4263_schema
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_4263_db
+
+statement ok
+USE babel_4263_db
+
+statement ok
+CREATE SCHEMA babel_4263_schema
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE babel_4263_db COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE babel_4263_db
+
+statement ok
+CREATE SCHEMA babel_4263_schema
+
+statement ok
+USE master
+

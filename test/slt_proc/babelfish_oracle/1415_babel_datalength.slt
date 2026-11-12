@@ -1,0 +1,1404 @@
+# test/slt_proc/babelfish_oracle/1415_babel_datalength.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/string_functions/datalength.sql
+
+statement ok
+CREATE TABLE datalength_t5 (
+    ID INT PRIMARY KEY,
+    Email EmailAddress,
+    Phone PhoneNumber,
+    Name FullName,
+    Desc1 Description,
+    Desc2 Unicode_Description,
+    Code ShortCode,
+    Details LongText,
+    UCode UnicodeCode
+);
+
+statement ok
+INSERT INTO datalength_t5 VALUES
+(1, 'test@example.com', '1234567890', N'John Doe', 'Simple description', 
+ N'Unicode description', 'ABC12', 'Long text details', N'UNICODE123');
+
+statement ok
+CREATE TABLE datalength_t6 (
+    ID INT PRIMARY KEY,
+    Code ShortCode,
+    CodeLength AS DATALENGTH(Code) PERSISTED
+);
+
+statement ok
+INSERT INTO datalength_t6 (ID, Code) VALUES 
+(1, 'ABC12'),
+(2, 'XY');
+
+statement ok
+CREATE TABLE datalength_t7 (
+    ID INT PRIMARY KEY,
+    Email VARCHAR(255),
+    Code CHAR(10),
+    Name NVARCHAR(100),
+    Description TEXT,
+    UnicodeDesc NTEXT
+);
+
+statement ok
+INSERT INTO datalength_t7 VALUES
+(1, 'test@example.com', 'CODE123456', N'John Doe', 'Simple description', N'Unicode description'),
+(2, 'long.email@example.com', 'SHORT', N'Jane Smith', 'Another desc', N'Another unicode'),
+(3, '', '', N'', '', N'');
+
+statement ok
+CREATE VIEW datalength_vw_DataLengthInfo AS
+SELECT 
+    ID,
+    Email,
+    DATALENGTH(Email) AS Email_Size,
+    Code,
+    DATALENGTH(Code) AS Code_Size,
+    Name,
+    DATALENGTH(Name) AS Name_Size,
+    Description,
+    DATALENGTH(Description) AS Desc_Size,
+    UnicodeDesc,
+    DATALENGTH(UnicodeDesc) AS UnicodeDesc_Size,
+    DATALENGTH(Email) + DATALENGTH(Code) + DATALENGTH(Name) AS Total_Size
+FROM datalength_t7;
+
+statement ok
+CREATE VIEW datalength_vw_DataSizeCategories AS
+SELECT 
+    ID,
+    Email,
+    CASE 
+        WHEN DATALENGTH(Email) = 0 THEN 'Empty'
+        WHEN DATALENGTH(Email) <= 20 THEN 'Small'
+        ELSE 'Large'
+    END AS Email_Category,
+    Name,
+    CASE 
+        WHEN DATALENGTH(Name) = 0 THEN 'Empty'
+        WHEN DATALENGTH(Name) <= 20 THEN 'Small'
+        WHEN DATALENGTH(Name) <= 50 THEN 'Medium'
+        ELSE 'Large'
+    END AS Name_Category
+FROM datalength_t7;
+
+statement ok
+CREATE FUNCTION datalength_fn_GetTotalSize
+(
+    @Email VARCHAR(255),
+    @Code CHAR(10),
+    @Name NVARCHAR(100)
+)
+RETURNS INT
+AS
+BEGIN
+    RETURN ISNULL(DATALENGTH(@Email), 0) + 
+           ISNULL(DATALENGTH(@Code), 0) + 
+           ISNULL(DATALENGTH(@Name), 0);
+END;
+
+statement ok
+CREATE FUNCTION datalength_fn_GetSizeAnalysis()
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT 
+        ID,
+        Email,
+        DATALENGTH(Email) AS EmailSize,
+        Code,
+        DATALENGTH(Code) AS CodeSize,
+        Name,
+        DATALENGTH(Name) AS NameSize,
+        DATALENGTH(Description) AS DescSize,
+        DATALENGTH(UnicodeDesc) AS UnicodeDescSize
+    FROM datalength_t7
+    WHERE DATALENGTH(Email) > 0 OR DATALENGTH(Name) > 0
+);
+
+statement ok
+CREATE PROCEDURE datalength_sp_AnalyzeDataSizes
+    @MinSize INT = 0
+AS
+BEGIN
+    SELECT 
+        ID,
+        Email,
+        DATALENGTH(Email) AS EmailSize,
+        Name,
+        DATALENGTH(Name) AS NameSize
+    FROM datalength_t7
+    WHERE DATALENGTH(Email) > @MinSize OR DATALENGTH(Name) > @MinSize
+    ORDER BY DATALENGTH(Email) + DATALENGTH(Name) DESC;
+END;
+
+statement ok
+CREATE PROCEDURE datalength_sp_ValidateAndInsert
+    @Email VARCHAR(255),
+    @Code CHAR(10),
+    @Name NVARCHAR(100)
+AS
+BEGIN
+    IF DATALENGTH(@Email) > 255 OR DATALENGTH(@Name) > 100
+    BEGIN
+        RAISERROR ('Data exceeds maximum length', 16, 1);
+        RETURN;
+    END
+    INSERT INTO datalength_t7 (ID, Email, Code, Name, Description, UnicodeDesc)
+    VALUES (
+        (SELECT ISNULL(MAX(ID), 0) + 1 FROM datalength_t7),
+        @Email, @Code, @Name, '', N''
+    );
+END;
+
+statement ok
+CREATE TABLE datalength_ComputedColumnsTest (
+    ID INT PRIMARY KEY,
+    Email VARCHAR(255),
+    Name NVARCHAR(100),
+    EmailSize AS DATALENGTH(Email) PERSISTED,
+    NameSize AS DATALENGTH(Name) PERSISTED,
+    TotalSize AS DATALENGTH(Email) + DATALENGTH(Name) PERSISTED,
+    SizeCategory AS CASE 
+                    WHEN DATALENGTH(Email) + DATALENGTH(Name) = 0 THEN 'Empty'
+                    WHEN DATALENGTH(Email) + DATALENGTH(Name) <= 20 THEN 'Small'
+                    WHEN DATALENGTH(Email) + DATALENGTH(Name) <= 50 THEN 'Medium'
+                    ELSE 'Large'
+                   END PERSISTED
+);
+
+statement ok
+INSERT INTO datalength_ComputedColumnsTest (ID, Email, Name) VALUES
+(1, 'test@example.com', N'John Doe'),
+(2, 'short@ex.com', N'Jane'),
+(3, '', N'');
+CREATE TABLE datalength_ConstrainedTable (
+    ID INT PRIMARY KEY,
+    Email VARCHAR(255) CONSTRAINT CHK_Email_Size 
+        CHECK (DATALENGTH(Email) BETWEEN 5 AND 255),
+    Code CHAR(10) CONSTRAINT CHK_Code_Size 
+        CHECK (DATALENGTH(Code) <= 10),
+    Name NVARCHAR(100) CONSTRAINT CHK_Name_NotEmpty 
+        CHECK (DATALENGTH(Name) > 0)
+);
+
+statement ok
+CREATE VIEW datalength_vw_DataLengthSummary
+WITH SCHEMABINDING
+AS
+SELECT 
+    ID,
+    DATALENGTH(Email) AS EmailSize,
+    DATALENGTH(Code) AS CodeSize,
+    DATALENGTH(Name) AS NameSize
+FROM dbo.datalength_t7;
+
+query TTTT
+SELECT 
+    DATALENGTH('') AS EmptyString_Length,
+    DATALENGTH('A') AS SingleChar_Length,
+    DATALENGTH('Hello') AS String_Length,
+    DATALENGTH('Hello World') AS StringWithSpace_Length;
+----
+0 1 5 11
+
+query TTTTTT
+SELECT 
+    DATALENGTH('Hello') AS ASCII_Length,
+    DATALENGTH(N'Hello') AS Unicode_Length,
+    DATALENGTH('こんにちは') AS Japanese_ASCII_Length,
+    DATALENGTH(N'こんにちは') AS Japanese_Unicode_Length,
+    DATALENGTH('🌟') AS Emoji_ASCII_Length,
+    DATALENGTH(N'🌟') AS Emoji_Unicode_Length;
+----
+5 5 15 15 4 4
+
+statement ok
+CREATE TABLE datalength_t1 (
+    CharCol CHAR(10),
+    VarcharCol VARCHAR(10),
+    NCharCol NCHAR(10),
+    NVarcharCol NVARCHAR(10),
+    TextCol TEXT,
+    NTextCol NTEXT
+);
+
+statement ok
+INSERT INTO datalength_t1 VALUES
+    ('Hello', 'Hello', N'Hello', N'Hello', 'Hello', N'Hello');
+
+query TTTTTT
+SELECT 
+    DATALENGTH(CharCol) AS Char_DataLength,
+    DATALENGTH(VarcharCol) AS Varchar_DataLength,
+    DATALENGTH(NCharCol) AS NChar_DataLength,
+    DATALENGTH(NVarcharCol) AS NVarchar_DataLength,
+    DATALENGTH(TextCol) AS Text_DataLength,
+    DATALENGTH(NTextCol) AS NText_DataLength
+FROM datalength_t1;
+----
+5 5 5 5 5 5
+
+query TTTT
+SELECT 
+    DATALENGTH(CAST(123 AS TINYINT)) AS TinyInt_Length,
+    DATALENGTH(CAST(123 AS SMALLINT)) AS SmallInt_Length,
+    DATALENGTH(CAST(123 AS INT)) AS Int_Length,
+    DATALENGTH(CAST(123 AS BIGINT)) AS BigInt_Length;
+----
+8 8 8 8
+
+query TTTT
+SELECT
+    DATALENGTH(CAST(123.45 AS DECIMAL(10,2))) AS Decimal_Length,
+    DATALENGTH(CAST(123.45 AS NUMERIC(10,2))) AS Numeric_Length,
+    DATALENGTH(CAST(123.45 AS FLOAT)) AS Float_Length,
+    DATALENGTH(CAST(123.45 AS REAL)) AS Real_Length;
+----
+16 16 8 8
+
+query TTTTTTTT
+SELECT  
+    DATALENGTH(CAST('' AS BINARY(10))) as binary_10,  
+    DATALENGTH(CAST('' AS BINARY)) as binary_default, 
+    DATALENGTH(CAST(0x00 AS BINARY)) as binary_0_default, 
+    DATALENGTH(CAST('0x00' AS BINARY)) as binary_str0_default, 
+    DATALENGTH(CAST('  ' AS BINARY(10))) as binary_space_10,  
+    DATALENGTH(CAST('  ' AS BINARY)) as binary__space_default, 
+    DATALENGTH(CAST('' AS VARBINARY(10))) as varbinary_10,  
+    DATALENGTH(CAST('' AS VARBINARY)) as varbinary_default  
+----
+2 2 4 4 2 2 2 2
+
+query TTTTTTTT
+SELECT  
+    DATALENGTH(CAST(NULL AS BINARY(10))) as binary_10,  
+    DATALENGTH(CAST(NULL AS BINARY)) as binary_default, 
+    DATALENGTH(CAST('NULL' AS BINARY)) as binary_str0_default,  
+    DATALENGTH(CAST(' NULL  ' AS BINARY)) as binary_space_default,
+    DATALENGTH(CAST(NULL AS VARBINARY(10))) as varbinary_10,  
+    DATALENGTH(CAST(NULL AS VARBINARY)) as varbinary_default,
+    DATALENGTH(CAST('NULL' AS VARBINARY)) as varbinary_str_default,
+    DATALENGTH(CAST(' NULL ' AS VARBINARY)) as varbinary_space_default   
+----
+NULL NULL 10 10 NULL NULL 10 10
+
+query T
+select datalength(cast(cast('a' as rowversion) as varchar))
+----
+1
+
+query T
+select datalength(cast('' as rowversion))
+----
+0
+
+query T
+select datalength(cast(cast('' as rowversion) as varchar))
+----
+0
+
+query T
+select datalength(cast(NULL as rowversion))
+----
+NULL
+
+query T
+select datalength(cast(cast('NULL' as rowversion) as varchar))
+----
+4
+
+query TTTT
+SELECT 
+    DATALENGTH(NULL) AS Null_Length,
+    DATALENGTH(CAST(NULL AS VARCHAR(10))) AS NullVarchar_Length,
+    DATALENGTH(CAST(NULL AS INT)) AS NullInt_Length,
+    DATALENGTH(CAST(NULL AS DATETIME)) AS NullDateTime_Length;
+----
+NULL NULL NULL NULL
+
+query TTTTT
+SELECT 
+    DATALENGTH('') AS EmptyString_Length,
+    DATALENGTH(' ') AS SingleSpace_Length,
+    DATALENGTH('   ') AS MultipleSpaces_Length,
+    DATALENGTH(CHAR(9)) AS Tab_Length,
+    DATALENGTH(CHAR(13) + CHAR(10)) AS CRLF_Length;
+----
+0 1 3 1 2
+
+query TTT
+DECLARE @LargeVarchar VARCHAR(MAX) = REPLICATE('A', 8000);
+DECLARE @LargeNVarchar NVARCHAR(MAX) = REPLICATE(N'A', 4000);
+DECLARE @LargeVarbinary VARBINARY(MAX) = CAST(REPLICATE('A', 8000) AS VARBINARY(MAX));
+SELECT 
+    DATALENGTH(@LargeVarchar) AS LargeVarchar_Length,
+    DATALENGTH(@LargeNVarchar) AS LargeNVarchar_Length,
+    DATALENGTH(@LargeVarbinary) AS LargeVarbinary_Length;
+----
+20 21 44
+
+statement ok
+CREATE TABLE datalength_t4 (
+    Col1 VARCHAR(100),
+    Col2 AS DATALENGTH(Col1 + 'suffix')
+);
+
+query T
+INSERT INTO datalength_t4 (Col1) VALUES ('test');
+SELECT Col2 FROM datalength_t4;
+----
+NULL
+
+query TTT
+SELECT 
+    DATALENGTH(CHAR(1)) AS StartOfHeading_Length,
+    DATALENGTH(CHAR(32)) AS Space_Length,
+    DATALENGTH(CHAR(255)) AS ExtendedASCII_Length;
+----
+1 1 1
+
+query T
+SELECT DATALENGTH(CHAR(0)) AS NullChar_Length
+----
+1
+
+query TTTT
+SELECT 
+    DATALENGTH('Hello' + 'World') AS Concat_Length,
+    DATALENGTH(CONCAT('Hello', 'World')) AS ConcatFunc_Length,
+    DATALENGTH('Hello' + NULL) AS ConcatNull_Length,
+    DATALENGTH(CONCAT('Hello', NULL)) AS ConcatFuncNull_Length;
+----
+10 10 NULL 5
+
+query TTTTT
+SELECT 
+    DATALENGTH(CAST(123.45 AS MONEY)) AS Money_Length,
+    DATALENGTH(CAST(123.45 AS SMALLMONEY)) AS SmallMoney_Length,
+    DATALENGTH(CAST(123.45 AS DECIMAL(5,2))) AS Decimal5_2_Length,
+    DATALENGTH(CAST(123.45 AS DECIMAL(10,2))) AS Decimal10_2_Length,
+    DATALENGTH(CAST(123.45 AS DECIMAL(20,2))) AS Decimal20_2_Length;
+----
+16 16 16 16 16
+
+query TTTTT
+SELECT
+    DATALENGTH(PI()) AS PI_Length,
+    DATALENGTH(SIN(1)) AS Sin_Length,
+    DATALENGTH(COS(1)) AS Cos_Length,
+    DATALENGTH(SQUARE(2)) AS Square_Length,
+    DATALENGTH(POWER(2, 10)) AS Power_Length;
+----
+8 8 8 8 8
+
+statement ok
+CREATE TABLE datalength_t2 (
+    ID INT,
+    DecimalNum DECIMAL(18,2),
+    FloatNum FLOAT
+);
+
+statement ok
+INSERT INTO datalength_t2 VALUES 
+    (1, 123.45, 123.45),
+    (2, 456.78, 456.78),
+    (3, 789.01, 789.01);
+
+query TTTTTT
+SELECT
+    DATALENGTH(SUM(ID)) AS Sum_Int_Length,
+    DATALENGTH(SUM(DecimalNum)) AS Sum_Decimal_Length,
+    DATALENGTH(SUM(FloatNum)) AS Sum_Float_Length,
+    DATALENGTH(AVG(ID)) AS Avg_Int_Length,
+    DATALENGTH(AVG(DecimalNum)) AS Avg_Decimal_Length,
+    DATALENGTH(AVG(FloatNum)) AS Avg_Float_Length
+FROM datalength_t2;
+----
+8 7 8 8 8 8
+
+query TTTT
+SELECT
+    DATALENGTH(CASE WHEN 1=1 THEN 'TRUE' ELSE 'FALSE' END) AS Case_Length,
+    DATALENGTH(IIF(1=1, 'TRUE', 'FALSE')) AS IIF_Length,
+    DATALENGTH(CHOOSE(2, 'First', 'Second', 'Third')) AS Choose_Length,
+    DATALENGTH(COALESCE(NULL, 'Test', 'Backup')) AS Coalesce_Length;
+----
+4 4 6 4
+
+query TTTTTT
+SELECT
+    DATALENGTH(UPPER('hello')) AS Upper_Length,
+    DATALENGTH(LOWER('HELLO')) AS Lower_Length,
+    DATALENGTH(REVERSE('hello')) AS Reverse_Length,
+    DATALENGTH(RTRIM('hello  ')) AS RTrim_Length,
+    DATALENGTH(LTRIM('  hello')) AS LTrim_Length,
+    DATALENGTH(SUBSTRING('hello world', 1, 5)) AS Substring_Length;
+----
+5 5 5 5 5 5
+
+statement ok
+CREATE TABLE datalength_t3 (
+    SmallRow CHAR(80),
+    MediumRow CHAR(800),
+    LargeRow CHAR(8000)
+);
+
+query TTT
+INSERT INTO datalength_t3 VALUES
+    ('Small', REPLICATE('M', 800), REPLICATE('L', 8000));
+SELECT
+    DATALENGTH(SmallRow) AS SmallRow_Length,
+    DATALENGTH(MediumRow) AS MediumRow_Length,
+    DATALENGTH(LargeRow) AS LargeRow_Length
+FROM datalength_t3;
+----
+5 800 8000
+
+query TTTTTTTT
+SELECT 
+    DATALENGTH(Email) AS Email_DataLength,
+    DATALENGTH(Phone) AS Phone_DataLength,
+    DATALENGTH(Name) AS Name_DataLength,
+    DATALENGTH(Desc1) AS Desc1_DataLength,
+    DATALENGTH(Desc2) AS Desc2_DataLength,
+    DATALENGTH(Code) AS Code_DataLength,
+    DATALENGTH(Details) AS Details_DataLength,
+    DATALENGTH(UCode) AS UCode_DataLength
+FROM datalength_t5;
+----
+16 10 8 18 19 5 17 10
+
+query TTT
+INSERT INTO datalength_t5 (ID, Email, Name, Code) 
+VALUES (7, 'test!@#$%', N'Name!@#$%', '!@#$%');
+SELECT 
+    DATALENGTH(Email) AS SpecialChar_Email_DataLength,
+    DATALENGTH(Name) AS SpecialChar_Name_DataLength,
+    DATALENGTH(Code) AS SpecialChar_Code_DataLength
+FROM datalength_t5 WHERE ID = 7;
+----
+9 9 5
+
+query TTT
+INSERT INTO datalength_t5 (ID) VALUES (2);
+SELECT 
+    DATALENGTH(Email) AS Null_Email_DataLength,
+    DATALENGTH(Phone) AS Null_Phone_DataLength,
+    DATALENGTH(Name) AS Null_Name_DataLength
+FROM datalength_t5 WHERE ID = 2;
+----
+NULL NULL NULL
+
+query TTTT
+INSERT INTO datalength_t5 (ID, Email, Phone, Name, Code) 
+VALUES (3, '', '', '', '');
+SELECT 
+    DATALENGTH(Email) AS Empty_Email_DataLength,
+    DATALENGTH(Phone) AS Empty_Phone_DataLength,
+    DATALENGTH(Name) AS Empty_Name_DataLength,
+    DATALENGTH(Code) AS Empty_Code_DataLength
+FROM datalength_t5 WHERE ID = 3;
+----
+0 0 0 0
+
+query TTTT
+INSERT INTO datalength_t5 (ID, Email, Phone, Name, Code) 
+VALUES (4, '   ', '          ', N'   ', '     ');
+SELECT 
+    DATALENGTH(Email) AS Space_Email_DataLength,
+    DATALENGTH(Phone) AS Space_Phone_DataLength,
+    DATALENGTH(Name) AS Space_Name_DataLength,
+    DATALENGTH(Code) AS Space_Code_DataLength
+FROM datalength_t5 WHERE ID = 4;
+----
+3 10 3 5
+
+query TTT
+DECLARE @MaxEmail EmailAddress = REPLICATE('a', 255);
+DECLARE @MaxName FullName = REPLICATE(N'a', 100);
+DECLARE @MaxCode ShortCode = REPLICATE('A', 5);
+SELECT 
+    DATALENGTH(@MaxEmail) AS MaxEmail_DataLength,
+    DATALENGTH(@MaxName) AS MaxName_DataLength,
+    DATALENGTH(@MaxCode) AS MaxCode_DataLength;
+----
+19 20 17
+
+query TTT
+INSERT INTO datalength_t5 (ID, Name, Desc2, UCode) 
+VALUES (5, N'こんにちは', N'こんにちは世界', N'こんにちは');
+SELECT 
+    DATALENGTH(Name) AS Unicode_Name_DataLength,
+    DATALENGTH(Desc2) AS Unicode_Desc_DataLength,
+    DATALENGTH(UCode) AS Unicode_Code_DataLength
+FROM datalength_t5 WHERE ID = 5;
+----
+15 21 15
+
+query T
+DECLARE @Email1 EmailAddress = 'test';
+DECLARE @Email2 EmailAddress = '@example.com';
+SELECT DATALENGTH(@Email1 + @Email2) AS Concat_Email_DataLength;
+----
+16
+
+query T
+DECLARE @LongDetails LongText = REPLICATE('A', 10000);
+SELECT DATALENGTH(@LongDetails) AS LongText_DataLength;
+----
+21
+
+query TTT
+INSERT INTO datalength_t5 (ID, Email, Name, Code) 
+VALUES (6, 'test123@example.com', N'John123', 'A1B2C');
+SELECT 
+    DATALENGTH(Email) AS Mixed_Email_DataLength,
+    DATALENGTH(Name) AS Mixed_Name_DataLength,
+    DATALENGTH(Code) AS Mixed_Code_DataLength
+FROM datalength_t5 WHERE ID = 6;
+----
+19 7 5
+
+query TTT
+DECLARE @Email EmailAddress = 'test@example.com';
+SELECT 
+    DATALENGTH(UPPER(@Email)) AS Upper_Email_DataLength,
+    DATALENGTH(LOWER(@Email)) AS Lower_Email_DataLength,
+    DATALENGTH(REVERSE(@Email)) AS Reverse_Email_DataLength;
+----
+16 16 16
+
+query TTT
+SELECT * FROM datalength_t6;
+----
+1 ABC12 NULL
+2 XY NULL
+
+query TT
+SELECT ID, dbo.datalength_fn_GetTotalSize(Email, Code, Name) AS TotalSize
+FROM datalength_t7;
+----
+1 NULL
+2 NULL
+3 NULL
+
+statement ok
+CREATE FUNCTION datalength_fn_GetSizeCategory
+(
+    @Text NVARCHAR(MAX)
+)
+RETURNS VARCHAR(10)
+AS
+BEGIN
+    RETURN CASE 
+        WHEN @Text IS NULL THEN 'NULL'
+        WHEN DATALENGTH(@Text) = 0 THEN 'Empty'
+        WHEN DATALENGTH(@Text) <= 10 THEN 'Small'
+        WHEN DATALENGTH(@Text) <= 50 THEN 'Medium'
+        ELSE 'Large'
+    END;
+END;
+
+statement ok
+INSERT INTO datalength_t7 VALUES (5, 'valid@example.com', 'CODE123', N'Test User', '', N'');
+BEGIN TRY
+    INSERT INTO datalength_t7 VALUES (6, REPLICATE('a', 300), 'CODE123', N'Test User', '', N'');
+END TRY
+BEGIN CATCH
+    SELECT 
+        ERROR_NUMBER() AS ErrorNumber,
+        ERROR_MESSAGE() AS ErrorMessage;
+END CATCH;
+
+query TTTT
+SELECT * FROM datalength_vw_DataLengthSummary;
+----
+1 16 10 8
+2 22 5 10
+3 0 0 0
+5 17 7 9
+6 300 7 9
+
+query T
+SELECT DATALENGTH(CAST(123 AS TINYINT))
+----
+8
+
+query T
+SELECT DATALENGTH(CAST('123' AS TINYINT))
+----
+8
+
+query T
+SELECT DATALENGTH(CAST(123.33 AS TINYINT))
+----
+8
+
+query T
+SELECT DATALENGTH(CAST(123 AS tinyint_babel_6120))
+----
+3
+
+query T
+SELECT DATALENGTH(CAST(123 AS SMALLINT))
+----
+8
+
+query T
+SELECT DATALENGTH(CAST('123' AS SMALLINT))
+----
+8
+
+query T
+SELECT DATALENGTH(CAST(123.33 AS SMALLINT))
+----
+8
+
+query T
+SELECT DATALENGTH(CAST(123 AS smallint_babel_6120))
+----
+3
+
+query T
+SELECT DATALENGTH(CAST(123 AS INT))
+----
+8
+
+query T
+SELECT DATALENGTH(CAST('123' AS INT))
+----
+8
+
+query T
+SELECT DATALENGTH(CAST(123.33 AS INT))
+----
+8
+
+query T
+SELECT DATALENGTH(123)
+----
+8
+
+query T
+SELECT DATALENGTH(CAST(123 AS int_babel_6120))
+----
+3
+
+query T
+SELECT DATALENGTH(CAST(123 AS bigint))
+----
+8
+
+query T
+SELECT DATALENGTH(CAST('123' AS bigint))
+----
+8
+
+query T
+SELECT DATALENGTH(CAST(123.33 AS bigint))
+----
+8
+
+query T
+SELECT DATALENGTH(CAST(123 AS bigint_babel_6120))
+----
+3
+
+query T
+SELECT DATALENGTH(CAST(123.45 AS NUMERIC(10,2)))
+----
+16
+
+query T
+SELECT DATALENGTH(123.45) 
+----
+8
+
+query T
+SELECT DATALENGTH(CAST(123.451234 AS NUMERIC(10,2))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(123.451234 AS NUMERIC(5,2))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(123.451234 AS NUMERIC(1,0))) -- over flow
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(1 AS NUMERIC(1,0)))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(1.0 AS NUMERIC(1,0)))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(1.0 AS NUMERIC(5,3))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(12.346 AS NUMERIC(5,3))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(12345.6789 AS NUMERIC(9,3))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(12345.6789 AS NUMERIC(10,3)))  
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(12345.6789 AS NUMERIC(11,3))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(123456789123456789.679 AS NUMERIC(21,3))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(123456789123456789123456789123.12345678 AS NUMERIC(38,8))) 
+----
+16
+
+query T
+Select datalength(123456789123456789123456789123.12345678) 
+----
+8
+
+query T
+SELECT DATALENGTH(CAST(0.679 AS NUMERIC(21,3))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(0.1234567891 AS NUMERIC(21,3))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(0.1234567234567891 AS NUMERIC(21,3)))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(0.1234567234567891 AS NUMERIC(21,11))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(1.1234567234567891 AS NUMERIC(38,5))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(123456789123.679 AS numeric_babel_6120)) 
+----
+19
+
+query T
+SELECT DATALENGTH(CAST(0.12345678912345678912 AS NUMERIC(38,21))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(0.1234567234567891 AS NUMERIC(21,10)))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(0.12345678912345678912 AS NUMERIC(38,20))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(0.123456789123456789121 AS NUMERIC(38,20))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(123.45 AS DECIMAL(10,2)))
+----
+16
+
+query T
+SELECT DATALENGTH(123.45)
+----
+8
+
+query T
+SELECT DATALENGTH(CAST(123.451234 AS DECIMAL(10,2)))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(123.451234 AS DECIMAL(5,2))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(123.451234 AS DECIMAL(1,0))) -- over flow
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(1 AS DECIMAL(1,0)))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(1.0 AS DECIMAL(5,3))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(12.346 AS DECIMAL(5,3))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(12345678.679 AS DECIMAL(21,3))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(123456789123456789.679 AS DECIMAL(21,3))) 
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(123456789123456789123456789123.12345678 AS DECIMAL(38,8))) 
+----
+16
+
+query T
+Select datalength(123456789123456789123456789123.12345678) 
+----
+8
+
+query T
+SELECT DATALENGTH(CAST(123456789123.679 AS decimal_babel_6120)) 
+----
+19
+
+query T
+select DATALENGTH(CAST(123.45 AS MONEY))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(123 AS MONEY))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST('123' AS MONEY))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST('' AS MONEY))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(NULL AS MONEY)) -- NULL
+----
+NULL
+
+query T
+select DATALENGTH(CAST(123.45 AS money_babel_6120))
+----
+10
+
+query T
+select DATALENGTH(CAST(123.45 AS SMALLMONEY))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(123 AS SMALLMONEY))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST('123' AS SMALLMONEY))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST('' AS SMALLMONEY))
+----
+16
+
+query T
+SELECT DATALENGTH(CAST(NULL AS SMALLMONEY))
+----
+NULL
+
+query T
+select DATALENGTH(CAST(123.45 AS smallmoney_babel_6120))
+----
+10
+
+query T
+SELECT DATALENGTH(CAST('2024-01-01' AS DATE))
+----
+10
+
+query T
+SELECT DATALENGTH(CAST('2024-01-01' AS date_babel_6120))
+----
+10
+
+query T
+SELECT DATALENGTH(CAST('2024-01-01 12:34:56' AS SMALLDATETIME))
+----
+8
+
+query T
+SELECT DATALENGTH(CAST('2024-01-01 12:34:56' AS smalldatetime_babel_6120))
+----
+19
+
+query T
+SELECT DATALENGTH(CAST('12:10:30.123' AS time_babel_6120))
+----
+12
+
+query T
+select datalength(cast('01/02/03' as datetime_babel_6120))
+----
+8
+
+query T
+select datalength(cast('Apr 1 2000 14:30' as datetime2_babel_6120))
+----
+16
+
+query T
+select datalength(cast('3/12/24 14:30 +8:00' as datetimeoffset_babel_6120))
+----
+19
+
+query T
+SELECT DATALENGTH(CAST('<root>test</root>' AS XML)) AS XML_Length;
+----
+17
+
+query T
+SELECT DATALENGTH(CAST(N'<root>test</root>' AS XML)) AS XML_Length;
+----
+17
+
+query T
+SELECT DATALENGTH(CAST('<root>te界t</root>' AS XML)) AS XML_Length;
+----
+19
+
+query T
+select datalength(char(0))
+----
+1
+
+query T
+select datalength(cast('' as char))
+----
+0
+
+query T
+select datalength(cast('' as char(10)))
+----
+0
+
+query T
+select datalength(cast('asdfg' as char(10)))
+----
+5
+
+query T
+select datalength(cast('asdfg' as char))
+----
+5
+
+query T
+select datalength(cast(N'asdfg' as char))
+----
+5
+
+query T
+select datalength(cast(N'asdfg' as char(10)))
+----
+5
+
+query T
+select datalength(cast(NULL as char(10)))
+----
+NULL
+
+query T
+select datalength(cast(NULL as char))
+----
+NULL
+
+query T
+select DATALENGTH(cast('🌟' as char)) 
+----
+4
+
+query T
+select DATALENGTH(cast(N'🌟' as char)) 
+----
+4
+
+query T
+select DATALENGTH(cast(N'🌟' as char(10)))
+----
+4
+
+query T
+select datalength(cast('' as varchar))
+----
+0
+
+query T
+select datalength(cast('' as varchar(10)))
+----
+0
+
+query T
+select datalength(cast('asdfg' as varchar(10)))
+----
+5
+
+query T
+select datalength(cast('asdfg' as varchar))
+----
+5
+
+query T
+select datalength(cast(N'asdfg' as varchar))
+----
+5
+
+query T
+select datalength(cast(N'asdfg' as varchar(10)))
+----
+5
+
+query T
+select datalength(cast(NULL as varchar(10)))
+----
+NULL
+
+query T
+select datalength(cast(NULL as varchar))
+----
+NULL
+
+query T
+select DATALENGTH(cast('🌟' as varchar)) 
+----
+4
+
+query T
+select DATALENGTH(cast(N'🌟' as varchar)) 
+----
+4
+
+query T
+select DATALENGTH(cast(N'🌟' as varchar(10)))
+----
+4
+
+query T
+select datalength(cast('世界' as varchar)) 
+----
+6
+
+query T
+select datalength(cast(N'世界' as varchar)) 
+----
+6
+
+query T
+select datalength(cast(N'世界' as varchar(10))) 
+----
+6
+
+query T
+select datalength(nchar(0))
+----
+1
+
+query T
+select datalength(cast('' as nchar))
+----
+0
+
+query T
+select datalength(cast('' as nchar(10)))
+----
+0
+
+query T
+select datalength(cast('asdfg' as nchar(10)))
+----
+5
+
+query T
+select datalength(cast('asdfg' as nchar))
+----
+5
+
+query T
+select datalength(cast(N'asdfg' as nchar))
+----
+5
+
+query T
+select datalength(cast(N'asdfg' as nchar(10)))
+----
+5
+
+query T
+select datalength(cast(NULL as nchar(10)))
+----
+NULL
+
+query T
+select datalength(cast(NULL as nchar))
+----
+NULL
+
+query T
+select DATALENGTH(cast('🌟' as nchar)) 
+----
+4
+
+query T
+select DATALENGTH(cast(N'🌟' as nchar)) 
+----
+4
+
+query T
+select DATALENGTH(cast(N'🌟' as nchar(10)))
+----
+4
+
+query T
+select datalength(cast(N'世界' as nchar)) 
+----
+6
+
+query T
+select datalength(cast(N'世界' as nchar(10))) 
+----
+6
+
+query T
+select datalength(cast('' as nvarchar))
+----
+0
+
+query T
+select datalength(cast('' as nvarchar(10)))
+----
+0
+
+query T
+select datalength(cast('asdfg' as nvarchar(10)))
+----
+5
+
+query T
+select datalength(cast('asdfg' as nvarchar))
+----
+5
+
+query T
+select datalength(cast(N'asdfg' as nvarchar))
+----
+5
+
+query T
+select datalength(cast(N'asdfg' as nvarchar(10)))
+----
+5
+
+query T
+select datalength(cast(NULL as nvarchar(10)))
+----
+NULL
+
+query T
+select datalength(cast(NULL as nvarchar))
+----
+NULL
+
+query T
+select DATALENGTH(cast('🌟' as nvarchar)) 
+----
+4
+
+query T
+select DATALENGTH(cast(N'🌟' as nvarchar)) 
+----
+4
+
+query T
+select DATALENGTH(cast(N'🌟' as nvarchar(10)))
+----
+4
+
+query T
+select datalength(cast(N'世界' as nvarchar)) 
+----
+6
+
+query T
+select datalength(cast(N'世界' as nvarchar(10))) 
+----
+6
+
+query TT
+select DATALENGTH('Hello') , DATALENGTH(N'Hello')
+----
+5 5
+
+query TT
+select DATALENGTH('こんにちは'), DATALENGTH(N'こんにちは')
+----
+15 15
+
+query TT
+select DATALENGTH('Hàáâ') , DATALENGTH(N'Hàáâ')
+----
+7 7
+
+query TT
+select DATALENGTH('こàáâは'), DATALENGTH(N'こàáâは')
+----
+12 12
+
+query TT
+select DATALENGTH('🌟🌟🌟'), DATALENGTH(N'🌟🌟🌟')
+----
+12 12
+
+statement ok
+declare @a varchar(2) = 'hello'
+select DATALENGTH(@a)
+
+statement ok
+declare @a Nvarchar(2) = N'hello'
+select DATALENGTH(@a)
+
+query T
+select datalength(cast('abd' as text))
+----
+3
+
+query T
+select datalength(cast(N'abd' as text))
+----
+3
+
+query TT
+select DATALENGTH(cast('こんにちは' as text)), DATALENGTH(cast(N'こんにちは' as text))
+----
+15 15
+
+query T
+select datalength(cast('abd' as ntext))
+----
+3
+
+query T
+select datalength(cast(N'abd' as ntext))
+----
+3
+
+query TT
+select DATALENGTH(cast('こんにちは' as ntext)), DATALENGTH(cast(N'こんにちは' as ntext))
+----
+15 15
+
+query T
+select datalength(CAST('0x65' AS BINARY(10)))
+----
+4
+
+query T
+select datalength(CAST(0x65 AS BINARY(10)))
+----
+4
+
+query T
+select datalength(CAST(0x65 AS BINARY))
+----
+4
+
+query T
+select datalength(CAST('' AS BINARY(10)))
+----
+2
+
+query T
+select datalength(CAST('' AS BINARY))
+----
+2
+
+query T
+select datalength(CAST(0x65 AS varbinary))
+----
+4
+
+query T
+select datalength(CAST(0x65 AS varbinary(10)))
+----
+4
+
+query T
+select datalength(CAST('0x65' AS VARBINARY(10)))
+----
+4
+
+query T
+select datalength(CAST('' AS VARBINARY(10)))
+----
+2
+
+query T
+select datalength(CAST('' AS VARBINARY))
+----
+2
+
+statement ok
+DROP TABLE datalength_t2;
+DROP TABLE datalength_t3;
+DROP TABLE datalength_t1;
+
+statement ok
+DROP TABLE datalength_t4;
+
+statement ok
+DROP TABLE datalength_t5;
+DROP TABLE datalength_t6;
+

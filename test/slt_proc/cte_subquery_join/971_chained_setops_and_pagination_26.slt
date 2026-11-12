@@ -1,0 +1,67 @@
+# test/slt_proc/cte_subquery_join/971_chained_setops_and_pagination_26.slt
+# T-SQL Chained UNION/UNION ALL/INTERSECT/EXCEPT and parameterized OFFSET/FETCH (26)
+
+query I
+SELECT 26 AS v
+UNION ALL
+SELECT 36 AS v
+UNION ALL
+SELECT 46 AS v
+UNION ALL
+SELECT 56 AS v
+ORDER BY v;
+----
+26
+36
+46
+56
+
+statement ok
+CREATE TABLE set_a_971 (id INT PRIMARY KEY, v INT);
+
+statement ok
+CREATE TABLE set_b_971 (id INT PRIMARY KEY, v INT);
+
+statement ok
+INSERT INTO set_a_971 VALUES (1, 26), (2, 36), (3, 46);
+
+statement ok
+INSERT INTO set_b_971 VALUES (1, 36), (2, 46), (3, 56);
+
+query I
+SELECT v FROM set_a_971
+INTERSECT
+SELECT v FROM set_b_971
+ORDER BY v;
+----
+36
+46
+
+query I
+SELECT v FROM set_a_971
+EXCEPT
+SELECT v FROM set_b_971
+ORDER BY v;
+----
+26
+
+statement ok
+CREATE PROCEDURE sp_page_set_971 @skip INT, @take INT
+AS
+BEGIN
+    SELECT id, v FROM set_a_971
+    ORDER BY id
+    OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY;
+END;
+
+query II
+EXEC sp_page_set_971 1, 2;
+----
+2 36
+3 46
+
+statement ok
+DROP TABLE set_b_971;
+
+statement ok
+DROP TABLE set_a_971;

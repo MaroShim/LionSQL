@@ -1,0 +1,13 @@
+# test/slt_proc/babelfish_oracle/296_babel_babel_1621.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1621.sql
+
+query T
+SELECT is_member(CAST('fake_role' AS varchar))
+----
+0
+
+query T
+SELECT is_member(NULL)
+----
+NULL
+

@@ -1,0 +1,138 @@
+# test/slt_proc/babelfish_oracle/1081_babel_8106_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/8106_1.sql
+
+statement ok
+CREATE TABLE t8106(a int)
+
+statement ok
+SET IDENTITY_INSERT t8106 ON
+
+statement ok
+DROP TABLE t8106
+
+statement ok
+begin transaction
+
+statement ok
+CREATE TABLE t8106(a int)
+
+statement ok
+SET IDENTITY_INSERT t8106 ON
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+DROP TABLE t8106
+
+statement ok
+create schema error_mapping;
+
+statement ok
+create table error_mapping.temp1 (a int)
+
+statement ok
+CREATE TABLE t8106(a int)
+
+statement ok
+DROP TABLE t8106
+
+statement ok
+create table error_mapping.temp2 (a int)
+
+statement ok
+CREATE TABLE t8106(a int)
+
+statement ok
+DROP TABLE t8106
+
+statement ok
+create table error_mapping.temp3 (a int)
+
+statement ok
+CREATE TABLE t8106(a int)
+
+statement ok
+DROP TABLE t8106
+
+statement ok
+drop table error_mapping.temp1;
+drop table error_mapping.temp2;
+drop table error_mapping.temp3;
+
+statement ok
+CREATE TABLE t8106(a int)
+
+statement ok
+DROP TABLE t8106
+
+statement ok
+CREATE TABLE t8106(a int)
+
+statement ok
+begin transaction
+
+statement ok
+DROP TABLE t8106
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t8106(a int)
+
+statement ok
+begin transaction
+
+statement ok
+DROP TABLE t8106
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE TABLE t8106(a int)
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure error_mapping.ErrorHandling2 as
+begin
+exec error_mapping.ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+DROP TABLE t8106
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t8106(a int)
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+begin transaction;
+
+statement ok
+DROP TABLE t8106
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE TABLE t8106(a int)
+
+statement ok
+DROP TABLE t8106
+
+statement ok
+drop schema error_mapping;
+

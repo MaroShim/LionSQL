@@ -1,0 +1,843 @@
+# test/slt_proc/babelfish_oracle/577_babel_ascii_function.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/string_functions/ascii_function-vu-prepare.sql, test/babelfish/raw/functions/string_functions/ascii_function-vu-verify.sql, test/babelfish/raw/functions/string_functions/ascii_function-vu-cleanup.sql
+
+statement ok
+CREATE TABLE ascii_function_binary_test (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    BinaryCol BINARY(10),
+    BinaryASCII INT,
+    VarbinaryCol VARBINARY(50),
+    VarbinaryASCII INT,
+    CharCol CHAR(10),
+    CharASCII INT,
+    VarcharCol VARCHAR(50),
+    VarcharASCII INT,
+    Description VARCHAR(100),
+    TestResult VARCHAR(10)
+);
+INSERT INTO ascii_function_binary_test 
+(BinaryCol, VarbinaryCol, CharCol, VarcharCol, Description) VALUES
+(0x41, 0x41, 'A', 'A', 'Letter A'),
+(0x65, 0x65, 'e', 'e', 'Letter A'),
+(0x61, 0x61, 'a', 'a', 'Letter a'),
+(0x20, 0x20, ' ', ' ', 'Space'),
+(0x42, 0x42, 'B', 'B', 'Letter B'),
+(0x31, 0x31, '1', '1', 'Number 1'),
+(0x21, 0x21, '!', '!', 'Exclamation'),
+(0x414243, 0x414243, 'ABC', 'ABC', 'Multiple chars'),
+(0x20414243, 0x20414243, ' ABC', ' ABC', 'Space and chars');
+
+statement ok
+CREATE TABLE ascii_function_empty_test (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    CharCol CHAR(10),
+    CharASCII INT,
+    VarcharCol VARCHAR(50),
+    VarcharASCII INT,
+    IsNull BIT,
+    Description VARCHAR(100)
+);
+
+statement ok
+INSERT INTO ascii_function_empty_test 
+(CharCol, VarcharCol, Description) VALUES
+('', '', 'Empty string'),
+(' ', ' ', 'Single space'),
+('  ', '  ', 'Two spaces'),
+(' A', ' A', 'Space then char'),
+('A ', 'A ', 'Char then space');
+
+statement ok
+CREATE TABLE ascii_function_char_range (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    CharValue INT,
+    Description VARCHAR(100)
+);
+
+statement ok
+CREATE TABLE ascii_function_conversion_test (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    InputValue VARCHAR(50),
+    DataType VARCHAR(20),
+    Description VARCHAR(100)
+);
+
+statement ok
+INSERT INTO ascii_function_conversion_test 
+(InputValue, DataType, Description) VALUES
+('65', 'INT', 'Number to CHAR'),
+('97.0', 'FLOAT', 'Float to VARCHAR'),
+('A', 'CHAR', 'CHAR to NCHAR'),
+('123', 'VARCHAR', 'VARCHAR to CHAR'),
+('ABC', 'NVARCHAR', 'NVARCHAR to VARCHAR');
+
+statement ok
+CREATE TABLE ascii_function_negative_test (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    NegativeNum VARCHAR(20),
+    Description VARCHAR(100)
+);
+
+statement ok
+INSERT INTO ascii_function_negative_test 
+(NegativeNum, Description) VALUES
+('-1', 'Negative one'),
+('-123', 'Negative three digits'),
+('-0.123', 'Negative decimal'),
+('-1E+10', 'Negative scientific'),
+('-9999999', 'Large negative');
+
+statement ok
+CREATE TABLE ascii_function_special_types (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    MoneyValue MONEY,
+    SmallMoneyValue SMALLMONEY,
+    Description VARCHAR(100)
+);
+
+statement ok
+INSERT INTO ascii_function_special_types 
+( MoneyValue, SmallMoneyValue, Description) 
+VALUES
+( 123.45, 123.45, 'Basic values'),
+( -123.45, -123.45, 'Negative money'),
+( 214748.3647, 214748.3647, 'Max values'),
+( 0.00, 0.00, 'zero money');
+
+statement ok
+CREATE TABLE ascii_function_null_types (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    NullChar CHAR(10),
+    NullVarchar VARCHAR(50),
+    NullNchar NCHAR(10),
+    NullNvarchar NVARCHAR(50),
+    NullBinary BINARY(10),
+    NullVarbinary VARBINARY(50),
+    NullMoney MONEY,
+    Description VARCHAR(100)
+);
+
+statement ok
+INSERT INTO ascii_function_null_types 
+(Description) VALUES
+('All NULL values');
+INSERT INTO ascii_function_null_types 
+(NullChar, NullVarchar, NullNchar, NullNvarchar, NullBinary, NullVarbinary, NullMoney, Description)
+VALUES
+('', '', N'', N'', 0x00, 0x00, NULL, 'Empty/zero values');
+
+statement ok
+CREATE PROCEDURE ascii_function_validate_conversion
+    @Value VARCHAR(50),
+    @TargetType VARCHAR(20)
+AS
+BEGIN
+    DECLARE @Result INT;
+    SET @Result = CASE @TargetType
+        WHEN 'CHAR' THEN ASCII(CAST(@Value AS CHAR(10)))
+        WHEN 'VARCHAR' THEN ASCII(CAST(@Value AS VARCHAR(50)))
+        WHEN 'NCHAR' THEN ASCII(CAST(@Value AS NCHAR(10)))
+        WHEN 'NVARCHAR' THEN ASCII(CAST(@Value AS NVARCHAR(50)))
+        WHEN 'BINARY' THEN ASCII(CAST(@Value AS BINARY(10)))
+        WHEN 'VARBINARY' THEN ASCII(CAST(@Value AS VARBINARY(50)))
+    END;
+    SELECT 
+        @Value AS InputValue,
+        @TargetType AS ConvertedTo,
+        @Result AS ASCIIResult;
+END;
+
+statement ok
+CREATE VIEW ascii_function_v_empty_analysis AS
+SELECT 
+    ID,
+    CASE WHEN ASCII(CharCol) IS NULL THEN 'NULL' 
+         ELSE CAST(ASCII(CharCol) AS VARCHAR) END AS CharASCII,
+    CASE WHEN ASCII(VarcharCol) IS NULL THEN 'NULL' 
+         ELSE CAST(ASCII(VarcharCol) AS VARCHAR) END AS VarcharASCII,
+    LEN(CharCol) AS CharLength,
+    LEN(VarcharCol) AS VarcharLength,
+    Description
+FROM ascii_function_empty_test;
+
+statement ok
+CREATE TABLE ascii_function_image(a IMAGE);
+
+statement ok
+INSERT INTO ascii_function_image 
+VALUES(CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS image));
+
+statement ok
+CREATE TABLE ascii_function_text(a TEXT, b NTEXT);
+
+statement ok
+INSERT INTO ascii_function_text 
+VALUES (N'abc🙂defghi🙂🙂', N'abc🙂defghi🙂🙂');
+
+statement ok
+CREATE TABLE ascii_function_test_image (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    a VARBINARY(MAX)
+);
+
+statement ok
+INSERT INTO ascii_function_test_image (a) VALUES 
+(0x41424344), -- 'ABCD'
+(0x61626364), -- 'abcd'
+(0x31323334), -- '1234'
+(0x21402324); -- '!@#$'
+
+statement ok
+CREATE TABLE ascii_function_test_text (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    a TEXT,
+    b NTEXT
+);
+
+statement ok
+INSERT INTO ascii_function_test_text (a, b) VALUES 
+('ABCD', N'ABCD'),
+('abcd', N'abcd'),
+('1234', N'1234'),
+('!@#$', N'!@#$'),
+('    ', N'    '),
+('', N'');
+
+statement ok
+CREATE TABLE ascii_function_UDT_test (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    char_col dbo.ascii_function_charUDT,
+    varchar_col dbo.ascii_function_varcharUDT,
+    nchar_col dbo.ascii_function_ncharUDT,
+    nvarchar_col dbo.ascii_function_nvarcharUDT,
+    text_col dbo.ascii_function_textUDT,
+    ntext_col dbo.ascii_function_ntextUDT,
+    binary_col dbo.ascii_function_binaryUDT,
+    varbinary_col dbo.ascii_function_varbinaryUDT,
+    bigint_col dbo.ascii_function_bigintUDT,
+    int_col dbo.ascii_function_intUDT,
+    smallint_col dbo.ascii_function_smallintUDT,
+    tinyint_col dbo.ascii_function_tinyintUDT,
+    decimal_col dbo.ascii_function_decimalUDT,
+    numeric_col dbo.ascii_function_numericUDT,
+    float_col dbo.ascii_function_floatUDT,
+    real_col dbo.ascii_function_realUDT,
+    datetime_col dbo.ascii_function_datetimeUDT,
+    smalldatetime_col dbo.ascii_function_smalldatetimeUDT,
+    date_col dbo.ascii_function_dateUDT,
+    time_col dbo.ascii_function_timeUDT,
+    datetime2_col dbo.ascii_function_datetime2UDT,
+    datetimeoffset_col dbo.ascii_function_datetimeoffsetUDT,
+    money_col dbo.ascii_function_moneyUDT,
+    smallmoney_col dbo.ascii_function_smallmoneyUDT
+);
+
+statement ok
+INSERT INTO ascii_function_UDT_test (
+    char_col, varchar_col, nchar_col, nvarchar_col,
+    text_col, ntext_col, binary_col, varbinary_col,
+    bigint_col, int_col, smallint_col,
+    tinyint_col, decimal_col, numeric_col, float_col,
+    real_col, datetime_col, smalldatetime_col, date_col,
+    time_col, datetime2_col, datetimeoffset_col,
+    money_col, smallmoney_col
+)
+VALUES (
+    'ABC', 'ABC', N'ABC', N'ABC',
+    'ABC', N'ABC', 0x414243, 0x414243,
+    123456, 12345, 1234,
+    123, 123.45, 123.45, 123.45,
+    123.45, '2023-01-01', '2023-01-01', '2023-01-01',
+    '12:34:56', '2023-01-01 12:34:56', '2023-01-01 12:34:56 +00:00',
+    123.45, 123.45
+),
+(
+    '', '', N'', N'',
+    '', N'', 0x, 0x,
+    0, 0, 0,
+    0, 0.00, 0.00, 0.00,
+    0.00, NULL, NULL, NULL,
+    NULL, NULL, NULL,
+    0.00, 0.00
+);
+
+statement ok
+CREATE VIEW ascii_function_text_analysis AS
+SELECT 
+    'A' as TextValue,
+    ASCII(CAST('A' AS TEXT)) as ASCIIValue,
+    CASE 
+        WHEN ASCII(CAST('A' AS TEXT)) = 65 THEN 'Valid'
+        ELSE 'Invalid'
+    END AS ValidationResult;
+
+statement ok
+CREATE PROCEDURE ascii_function_text_validator
+    @InputText TEXT,
+    @ExpectedASCII INT
+AS
+BEGIN
+    IF ASCII(CAST(@InputText AS TEXT)) = @ExpectedASCII
+        SELECT 'Pass' AS Result;
+    ELSE
+        SELECT 'Fail' AS Result;
+END;
+
+statement ok
+CREATE TABLE ascii_function_source_table (
+    ID INT IDENTITY(1,1) PRIMARY KEY,
+    TextValue TEXT,
+    ExpectedASCII INT
+);
+
+statement ok
+INSERT INTO ascii_function_source_table (TextValue, ExpectedASCII) VALUES
+('A', 65),
+('a', 97),
+('1', 49),
+('!', 33),
+(' ', 32),
+('', NULL),
+(NULL, NULL);
+
+statement ok
+CREATE VIEW ascii_function_analysis AS
+SELECT 
+    ID,
+    TextValue,
+    ASCII(CAST(TextValue AS TEXT)) as ComputedASCII,
+    ExpectedASCII,
+    CASE 
+        WHEN ASCII(CAST(TextValue AS TEXT)) = ExpectedASCII THEN 'Valid'
+        WHEN ASCII(CAST(TextValue AS TEXT)) IS NULL AND ExpectedASCII IS NULL THEN 'Valid'
+        ELSE 'Invalid'
+    END AS ValidationResult
+FROM ascii_function_source_table;
+
+statement ok
+SELECT 
+    ID,
+    CharValue,
+    ASCII(CHAR(CharValue)) AS ComputedASCII,
+    Description
+FROM ascii_function_char_range
+ORDER BY CharValue;
+
+query TTTTT
+SELECT 
+    InputValue,
+    ASCII(CAST(InputValue AS CHAR(10))) AS CastToChar,
+    ASCII(CAST(InputValue AS VARCHAR(50))) AS CastToVarchar,
+    ASCII(CAST(InputValue AS NCHAR(10))) AS CastToNChar,
+    ASCII(CAST(InputValue AS NVARCHAR(50))) AS CastToNVarchar
+FROM ascii_function_conversion_test;
+----
+65 54 54 54 54
+97.0 57 57 57 57
+A 65 65 65 65
+123 49 49 49 49
+ABC 65 65 65 65
+
+query TTTTTTTTT
+SELECT ASCII(CAST(NULL AS CHAR)) AS NullChar,
+       ASCII(CAST(NULL AS VARCHAR)) AS NullVarchar,
+       ASCII(CAST(NULL AS NCHAR)) AS NullNchar,
+       ASCII(CAST(NULL AS NVARCHAR)) AS NullNvarchar,
+       ASCII(CAST(NULL AS BINARY)) AS NullBinary,
+       ASCII(CAST(NULL AS VARBINARY)) AS NullVarbinary,
+       ASCII(CAST(NULL AS DATETIME)) AS NullDateTime,
+       ASCII(CAST(NULL AS MONEY)) AS NullMoney,
+       ASCII(CAST(NULL AS SMALLMONEY)) AS NullSmallMoney;
+----
+NULL NULL NULL NULL NULL NULL NULL NULL NULL
+
+query TTTTT
+SELECT ASCII('') AS EmptyString,
+       ASCII(CAST('' AS NVARCHAR)) AS EmptyNVarchar,
+       ASCII(CAST(0x00 AS VARBINARY)) AS ZeroBinary,
+       ASCII(CAST(0 AS VARCHAR)) AS ZeroNumber,
+       ASCII(CAST(0.00 AS MONEY)) AS ZeroMoney;
+----
+NULL NULL 48 48 48
+
+statement ok
+DECLARE @date DATETIME = '2025-09-19 06:07:36.520'
+SELECT ASCII(CONVERT(VARCHAR, @date, 101)) AS USDate,
+       ASCII(CONVERT(VARCHAR, @date, 103)) AS BritishDate,
+       ASCII(CONVERT(VARCHAR, @date, 120)) AS ISODate;
+
+query TTTT
+SELECT ASCII(CAST(CAST(1234.56 AS MONEY) AS VARCHAR)) AS PositiveMoney,
+       ASCII(CAST(CAST(-1234.56 AS MONEY) AS VARCHAR)) AS NegativeMoney,
+       ASCII(CAST(CAST(0.00 AS MONEY) AS VARCHAR)) AS ZeroMoney,
+       ASCII(CAST(CAST(214748.3647 AS SMALLMONEY) AS VARCHAR)) AS MaxSmallMoney;
+----
+49 45 48 50
+
+query TT
+SELECT ASCII(CAST(CAST(123.45 AS MONEY) AS NVARCHAR)) AS MoneyToNVarchar,
+       ASCII(CAST(CAST(123.45 AS DECIMAL(10,2)) AS VARCHAR)) AS DecimalToVarchar;
+----
+49 49
+
+statement ok
+DECLARE @date DATETIME = '2025-09-19 06:07:36.520'
+SELECT ASCII(CAST(DATEPART(YEAR, @date) AS VARCHAR)) AS YearASCII,
+       ASCII(CAST(DATEPART(MONTH, @date) AS VARCHAR)) AS MonthASCII,
+       ASCII(CAST(DATEPART(DAY, @date) AS VARCHAR)) AS DayASCII;
+
+query TTT
+SELECT ASCII('$') AS DollarSign,
+       ASCII('¥') AS YenSign,
+       ASCII('£') AS PoundSign;
+----
+36 194 194
+
+query TTT
+SELECT ASCII(CAST(CAST(1234.56 AS MONEY) AS VARCHAR)) AS Standard,
+       ASCII('$' + CAST(CAST(1234.56 AS MONEY) AS VARCHAR)) AS WithDollar,
+       ASCII(CAST(CAST(-1234.56 AS MONEY) AS VARCHAR)) AS Negative;
+----
+49 36 45
+
+query TT
+SELECT ASCII(CAST(CAST(NULL AS MONEY) AS VARCHAR)) AS NullMoneyToVarchar,
+       ASCII(CAST(CAST(NULL AS DATETIME) AS NVARCHAR)) AS NullDateToNVarchar;
+----
+NULL NULL
+
+query T
+SELECT ASCII(CHAR(0)) AS ASCIIofChar0;
+----
+0
+
+query TTT
+EXEC ascii_function_validate_conversion '65', 'CHAR';
+EXEC ascii_function_validate_conversion 'A', 'NCHAR';
+EXEC ascii_function_validate_conversion '123', 'VARCHAR';
+----
+123 VARCHAR 49
+
+query TTTTTTT
+SELECT ASCII('') AS EmptyString,
+       ASCII(' ') AS SingleSpace,
+       ASCII('  ') AS TwoSpaces,
+       ASCII(CHAR(1)) AS Char1,
+       ASCII(CHAR(127)) AS Char127,
+       ASCII(CAST(NULL AS VARCHAR)) AS NullVarchar,
+       ASCII(CAST('' AS NVARCHAR)) AS EmptyNVarchar;
+----
+NULL 32 32 1 127 NULL NULL
+
+query TTTT
+SELECT ASCII(CAST(65 AS CHAR)) AS IntToChar,
+       ASCII(CAST(97.0 AS VARCHAR)) AS FloatToVarchar,
+       ASCII(CAST('A' AS NCHAR)) AS CharToNChar,
+       ASCII(CONVERT(VARCHAR, 65)) AS IntToVarchar;
+----
+54 57 65 54
+
+query T
+DECLARE @inputString sysname = N'  abc🙂defghi🙂🙂    ';
+SELECT ASCII(@inputString);
+----
+78
+
+query T
+DECLARE @inputString date = '2016-12-21';
+SELECT ASCII(@inputString);
+----
+50
+
+query T
+DECLARE @date date = '12-21-16';  
+DECLARE @inputString datetime = @date;
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString smalldatetime = '1955-12-13 12:43:10';
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString time(4) = '12:10:05.1237';
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString datetimeoffset(4) = '1968-10-23 12:45:37.1234 +10:0';
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString datetime2(4) = '1968-10-23 12:45:37.1237';
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString decimal = 123456;
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString numeric = 12345.12;
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString float = 12345.1;
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString real = 12345.1;
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString bigint = 12345678;
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString int = 12345678;
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString smallint = 12356;
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString tinyint = 235;
+SELECT ASCII(@inputString);
+----
+50
+
+query T
+DECLARE @inputString money = 12356;
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString smallmoney = 12356;
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString bit = 1;
+SELECT ASCII(@inputString);
+----
+49
+
+query T
+DECLARE @inputString uniqueidentifier = CAST('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS uniqueidentifier);
+SELECT ASCII(@inputString);
+----
+67
+
+query T
+DECLARE @inputString sql_variant = CAST('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant);
+SELECT ASCII(@inputString);
+----
+67
+
+query T
+DECLARE @inputString xml = CAST('<body><fruit/></body>' AS xml);
+SELECT ASCII(@inputString);
+----
+67
+
+query T
+DECLARE @inputString geometry = geometry::STGeomFromText('POINT (1 2)', 0);
+SELECT ASCII(@inputString);
+----
+103
+
+query T
+DECLARE @inputString geography = geography::STGeomFromText('POINT(-122.34900 47.65100)', 4326);
+SELECT ASCII(@inputString);
+----
+103
+
+query T
+DECLARE @inputString sql_variant = CAST('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant);
+SELECT ASCII(CAST(@inputString AS VARCHAR(50)));
+----
+67
+
+query T
+DECLARE @inputString xml = CAST('<body><fruit/></body>' AS xml);
+SELECT ASCII(CAST(@inputString AS VARCHAR(50)));
+----
+67
+
+query T
+DECLARE @inputString geometry = geometry::STGeomFromText('POINT (1 2)', 0);
+SELECT ASCII(CAST(@inputString AS VARCHAR(50)));
+----
+103
+
+query T
+SELECT ASCII(a) AS image_ascii FROM ascii_function_image;
+----
+48
+
+query TT
+SELECT ASCII(a) AS text_ascii, ASCII(b) AS ntext_ascii 
+FROM ascii_function_text;
+----
+97 97
+
+query TT
+SELECT ID, ASCII(a) AS varbinary_ascii 
+FROM ascii_function_test_image 
+ORDER BY ID;
+----
+1 48
+2 48
+3 48
+4 48
+
+query TTT
+SELECT 
+    ID,
+    ASCII(a) AS text_ascii,
+    ASCII(b) AS ntext_ascii
+FROM ascii_function_test_text;
+----
+1 65 65
+2 97 97
+3 49 49
+4 33 33
+5 32 32
+6 NULL NULL
+
+query TTTTT
+SELECT 
+    ASCII(CAST(NULL AS IMAGE)) AS null_image,
+    ASCII(CAST(NULL AS TEXT)) AS null_text,
+    ASCII(CAST(NULL AS NTEXT)) AS null_ntext,
+    ASCII(CAST('' AS TEXT)) AS empty_text,
+    ASCII(CAST(N'' AS NTEXT)) AS empty_ntext;
+----
+NULL NULL NULL NULL NULL
+
+query TTTTTTTTT
+SELECT 
+    ID,
+    ASCII(char_col) as char_ascii,
+    ASCII(varchar_col) as varchar_ascii,
+    ASCII(nchar_col) as nchar_ascii,
+    ASCII(nvarchar_col) as nvarchar_ascii,
+    ASCII(text_col) as text_ascii,
+    ASCII(ntext_col) as ntext_ascii,
+    ASCII(binary_col) as binary_ascii,
+    ASCII(varbinary_col) as varbinary_ascii
+FROM ascii_function_UDT_test;
+----
+1 65 65 65 65 65 65 48 48
+2 NULL NULL NULL NULL NULL NULL 48 48
+
+query TTTTTTTTT
+SELECT 
+    ID,
+    ASCII(CAST(bigint_col AS VARCHAR)) as bigint_ascii,
+    ASCII(CAST(int_col AS VARCHAR)) as int_ascii,
+    ASCII(CAST(smallint_col AS VARCHAR)) as smallint_ascii,
+    ASCII(CAST(tinyint_col AS VARCHAR)) as tinyint_ascii,
+    ASCII(CAST(decimal_col AS VARCHAR)) as decimal_ascii,
+    ASCII(CAST(numeric_col AS VARCHAR)) as numeric_ascii,
+    ASCII(CAST(float_col AS VARCHAR)) as float_ascii,
+    ASCII(CAST(real_col AS VARCHAR)) as real_ascii
+FROM ascii_function_UDT_test;
+----
+1 49 49 49 49 49 49 49 49
+2 48 48 48 48 48 48 48 48
+
+query TTTTTTT
+SELECT 
+    ID,
+    ASCII(CAST(datetime_col AS VARCHAR)) as datetime_ascii,
+    ASCII(CAST(smalldatetime_col AS VARCHAR)) as smalldatetime_ascii,
+    ASCII(CAST(date_col AS VARCHAR)) as date_ascii,
+    ASCII(CAST(time_col AS VARCHAR)) as time_ascii,
+    ASCII(CAST(datetime2_col AS VARCHAR)) as datetime2_ascii,
+    ASCII(CAST(datetimeoffset_col AS VARCHAR)) as datetimeoffset_ascii
+FROM ascii_function_UDT_test;
+----
+1 50 50 50 49 50 50
+2 NULL NULL NULL NULL NULL NULL
+
+query TTT
+SELECT 
+    ID,
+    ASCII(CAST(money_col AS VARCHAR)) as money_ascii,
+    ASCII(CAST(smallmoney_col AS VARCHAR)) as smallmoney_ascii
+FROM ascii_function_UDT_test;
+----
+1 49 49
+2 48 48
+
+query TTT
+SELECT ASCII(CAST('A' AS dbo.ascii_function_charUDT)) AS char_udt,
+       ASCII(CAST(123 AS dbo.ascii_function_intUDT)) AS int_udt,
+       ASCII(CAST(0x41 AS dbo.ascii_function_binaryUDT)) AS binary_udt;
+----
+65 49 48
+
+query TT
+SELECT 'Testing NULL with UDTs' AS TestType;
+SELECT ASCII(CAST(NULL AS dbo.ascii_function_charUDT)) AS null_char_udt,
+       ASCII(CAST(NULL AS dbo.ascii_function_binaryUDT)) AS null_binary_udt;
+----
+NULL NULL
+
+query T
+SELECT ASCII(a) as image_ascii FROM ascii_function_image;
+----
+48
+
+query TT
+SELECT ASCII(a) as text_ascii, ASCII(b) as ntext_ascii FROM ascii_function_text;
+----
+97 97
+
+query TTTT
+SELECT 
+    ASCII(CAST(NULL as dbo.ascii_function_charUDT)) as null_char,
+    ASCII(CAST(NULL as dbo.ascii_function_varcharUDT)) as null_varchar,
+    ASCII(CAST(NULL as dbo.ascii_function_ncharUDT)) as null_nchar,
+    ASCII(CAST(NULL as dbo.ascii_function_nvarcharUDT)) as null_nvarchar;
+----
+NULL NULL NULL NULL
+
+query TTTT
+SELECT 
+    ASCII(CAST('' as dbo.ascii_function_charUDT)) as empty_char,
+    ASCII(CAST('' as dbo.ascii_function_varcharUDT)) as empty_varchar,
+    ASCII(CAST(N'' as dbo.ascii_function_ncharUDT)) as empty_nchar,
+    ASCII(CAST(N'' as dbo.ascii_function_nvarcharUDT)) as empty_nvarchar;
+----
+NULL NULL NULL NULL
+
+query TT
+SELECT ASCII(CAST(0x AS VARBINARY)) AS empty_varbinary,
+       ASCII(CAST(0x AS BINARY(1))) AS empty_binary;
+----
+48 48
+
+query T
+SELECT ASCII(CAST('A' as dbo.ascii_function_charUDT)) as char_udt_direct;
+----
+65
+
+query T
+SELECT ASCII(CAST(123 as dbo.ascii_function_intUDT)) as int_udt_direct;
+----
+49
+
+query T
+SELECT ASCII(CAST(CAST('123' AS dbo.ascii_function_intUDT) AS VARCHAR)) as int_udt_to_varchar;
+----
+49
+
+query T
+SELECT ASCII(CAST(0x20 as dbo.ascii_function_binaryUDT)) as binary_udt_direct;
+----
+48
+
+query T
+SELECT ASCII(CAST('0X20' as TEXT)) as text_ascii;
+----
+48
+
+query T
+DECLARE @temp TABLE (col TEXT);
+INSERT INTO @temp VALUES ('Hello World');
+SELECT ASCII(col) AS text_variable_ascii FROM @temp;
+----
+72
+
+query T
+EXEC ascii_function_text_validator 'A', 65;
+EXEC ascii_function_text_validator 'B', 66;
+EXEC ascii_function_text_validator '', 0;
+----
+Fail
+
+query TTT
+SELECT * FROM ascii_function_text_analysis;
+----
+A 65 Valid
+
+statement ok
+DROP VIEW ascii_function_v_empty_analysis;
+
+statement ok
+DROP VIEW ascii_function_text_analysis;
+
+statement ok
+DROP VIEW ascii_function_analysis;
+
+statement ok
+DROP PROCEDURE ascii_function_validate_conversion;
+
+statement ok
+DROP PROCEDURE ascii_function_text_validator;
+
+statement ok
+DROP TABLE ascii_function_binary_test;
+
+statement ok
+DROP TABLE ascii_function_empty_test;
+
+statement ok
+DROP TABLE ascii_function_char_range;
+
+statement ok
+DROP TABLE ascii_function_conversion_test;
+
+statement ok
+DROP TABLE ascii_function_negative_test;
+
+statement ok
+DROP TABLE ascii_function_special_types;
+
+statement ok
+DROP TABLE ascii_function_null_types;
+
+statement ok
+DROP TABLE ascii_function_image;
+
+statement ok
+DROP TABLE ascii_function_text;
+
+statement ok
+DROP TABLE ascii_function_test_image;
+
+statement ok
+DROP TABLE ascii_function_test_text;
+
+statement ok
+DROP TABLE ascii_function_UDT_test;
+
+statement ok
+DROP TABLE ascii_function_source_table;
+

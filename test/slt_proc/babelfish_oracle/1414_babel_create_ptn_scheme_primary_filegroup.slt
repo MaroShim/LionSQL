@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/1414_babel_create_ptn_scheme_primary_filegroup.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/create_ptn_scheme_primary_filegroup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE create_ptn_schema_db
+
+statement ok
+USE create_ptn_schema_db
+
+statement ok
+SET QUOTED_IDENTIFIER ON
+
+statement ok
+SET QUOTED_IDENTIFIER OFF
+
+statement ok
+SET QUOTED_IDENTIFIER ON
+
+statement ok
+SET QUOTED_IDENTIFIER OFF
+
+statement ok
+USE master
+

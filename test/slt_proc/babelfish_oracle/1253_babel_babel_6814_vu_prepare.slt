@@ -1,0 +1,32 @@
+# test/slt_proc/babelfish_oracle/1253_babel_babel_6814_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-6814-vu-prepare.sql
+
+statement ok
+CREATE TABLE babel_6814_t1(a int, b varchar(50));
+
+statement ok
+CREATE TABLE babel_6814_t2(c int, d varchar(50));
+
+statement ok
+CREATE INDEX babel_6814_idx1 ON babel_6814_t1(a);
+
+statement ok
+CREATE INDEX babel_6814_idx2 ON babel_6814_t1(b);
+
+statement ok
+CREATE INDEX babel_6814_idx3 ON babel_6814_t2(c);
+
+statement ok
+CREATE PROCEDURE babel_6814_proc1 AS SELECT 1;
+
+statement ok
+CREATE VIEW babel_6814_view1 AS SELECT * FROM babel_6814_t1;
+
+statement ok
+CREATE FUNCTION babel_6814_func1()
+RETURNS int
+AS
+BEGIN
+RETURN 1;
+END
+

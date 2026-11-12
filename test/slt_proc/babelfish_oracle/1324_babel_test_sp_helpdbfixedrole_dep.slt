@@ -1,0 +1,13 @@
+# test/slt_proc/babelfish_oracle/1324_babel_test_sp_helpdbfixedrole_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_helpdbfixedrole-dep-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_helpdbfixedrole-dep-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_helpdbfixedrole-dep-vu-cleanup.sql
+
+statement ok
+CREATE PROC test_sp_helpdbfixedrole_proc @rolename AS sys.SYSNAME = NULL
+AS
+BEGIN
+	EXEC sp_helpdbfixedrole @rolename;
+END
+
+statement ok
+DROP PROC test_sp_helpdbfixedrole_proc
+

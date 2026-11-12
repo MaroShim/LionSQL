@@ -1,0 +1,465 @@
+# test/slt_proc/babelfish_oracle/619_babel_col_length.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/col_length-vu-prepare.sql, test/babelfish/raw/col_length-vu-verify.sql, test/babelfish/raw/col_length-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE babel_3489_test_db;
+
+statement ok
+USE babel_3489_test_db;
+
+statement ok
+CREATE TABLE sys_column_length_test_table(
+    ID INT PRIMARY KEY,
+    col_char CHAR(10),
+    col_varchar VARCHAR(20),
+    col_binary BINARY(5),
+    col_varbinary VARBINARY(15),
+    col_nchar NCHAR(8),
+    col_nvarchar NVARCHAR(16),
+    col_text TEXT,
+    col_image IMAGE,
+    col_ntext NTEXT,
+    col_sysname sysname,
+    col_sql_variant SQL_VARIANT,
+    col_xml XML,
+    col_varcharmax VARCHAR(MAX),
+    col_nvarcharmax NVARCHAR(MAX),
+    col_varbinarymax VARBINARY(MAX),
+    col_bit BIT,
+    col_tinyint TINYINT,
+    col_bigint BIGINT,
+    col_smallint SMALLINT,
+    col_smallmoney SMALLMONEY,
+    col_money MONEY,
+    col_smalldatetime SMALLDATETIME,
+    col_real REAL,
+    col_float FLOAT,
+    col_time TIME,
+    col_datetime DATETIME,
+    col_datetime2 DATETIME2,
+    col_datetimeoffset DATETIMEOFFSET,
+    col_uniqueidentifier UNIQUEIDENTIFIER,
+    col_date DATE,
+    col_decimal DECIMAL(10,5),
+    col_numeric NUMERIC(3,0)
+);
+
+statement ok
+CREATE SCHEMA sys_col_length_test_schema;
+
+statement ok
+CREATE TABLE sys_col_length_test_schema.test_table(
+    col_char CHAR(20),
+    col_varchar VARCHAR(30),
+    col_varbinary VARBINARY(40)
+);
+
+statement ok
+CREATE TABLE udd_test_table (
+    col_customchar custom_char_10,
+    col_customvarchar custom_varchar_20,
+    col_custombinary custom_binary_5,
+    col_customvarbinary custom_varbinary_15,
+    col_customnchar custom_nchar_8,
+    col_customnvarchar custom_nvarchar_16,
+    col_customtext custom_text,
+    col_customimage custom_image,
+    col_customntext custom_ntext,
+    col_customsysname custom_sysname,
+    col_customsqlvariant custom_sql_variant,
+    col_customxml custom_xml,
+    col_customvarcharmax custom_varcharmax,
+    col_customnvarcharmax custom_nvarcharmax,
+    col_customvarbinarymax custom_varbinarymax,
+    col_custombit custom_bit,
+    col_customtinyint custom_tinyint,
+    col_custombigint custom_bigint,
+    col_customsmallint custom_smallint,
+    col_customsmallmoney custom_smallmoney,
+    col_custommoney custom_money,
+    col_customsmalldatetime custom_smalldatetime,
+    col_customreal custom_real,
+    col_customfloat custom_float,
+    col_customtime custom_time,
+    col_customdatetime custom_datetime,
+    col_customdatetime2 custom_datetime2,
+    col_customdatetimeoffset custom_datetimeoffset,
+    col_customuniqueidentifier custom_uniqueidentifier,
+    col_customdate custom_date,
+    col_customdecimal custom_decimal_10_5,
+    col_customnumeric custom_numeric_3_0
+);
+
+statement ok
+CREATE VIEW col_length_prepare_v1 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'ID'));
+
+statement ok
+CREATE VIEW col_length_prepare_v2 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_char'));
+
+statement ok
+CREATE VIEW col_length_prepare_v3 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_varchar'));
+
+statement ok
+CREATE VIEW col_length_prepare_v4 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_binary'));
+
+statement ok
+CREATE VIEW col_length_prepare_v5 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_varbinary'));
+
+statement ok
+CREATE VIEW col_length_prepare_v6 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_nchar'));
+
+statement ok
+CREATE VIEW col_length_prepare_v7 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_float'));
+
+statement ok
+CREATE VIEW col_length_prepare_v8 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_time'));
+
+statement ok
+CREATE VIEW col_length_prepare_v9 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_datetime'));
+
+statement ok
+CREATE VIEW col_length_prepare_v10 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_datetime2'));
+
+statement ok
+CREATE PROCEDURE col_length_prepare_p1 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_nvarchar'));
+
+statement ok
+CREATE PROCEDURE col_length_prepare_p2 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_text'));
+
+statement ok
+CREATE PROCEDURE col_length_prepare_p3 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_image'));
+
+statement ok
+CREATE PROCEDURE col_length_prepare_p4 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_ntext'));
+
+statement ok
+CREATE PROCEDURE col_length_prepare_p5 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_sysname'));
+
+statement ok
+CREATE PROCEDURE col_length_prepare_p6 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_sql_variant'));
+
+statement ok
+CREATE PROCEDURE col_length_prepare_p7 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_datetimeoffset'));
+
+statement ok
+CREATE PROCEDURE col_length_prepare_p8 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'col_uniqueidentifier'));
+
+statement ok
+CREATE PROCEDURE col_length_prepare_p9 AS (SELECT COL_LENGTH('sys_column_length_test_table', 'test_col'));
+
+statement ok
+CREATE PROCEDURE col_length_prepare_p10 AS (SELECT COL_LENGTH('sys_column_length_test_table_invalid', 'col_char'));
+
+statement ok
+CREATE FUNCTION col_length_prepare_f1()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 'col_xml'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f2()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 'col_varcharmax'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f3()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 'col_nvarcharmax'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f4()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 'col_varbinarymax'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f5()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 'col_bit'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f6()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 'col_tinyint'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f7()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 'col_bigint'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f8()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 'col_smallint'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f9()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 'col_smallmoney'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f10()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 'col_money'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f11()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 'col_smalldatetime'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f12()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 'col_real'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f13()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', 1));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f14()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', -1));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f15()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH(NULL, 'col_char'));
+END
+
+statement ok
+CREATE FUNCTION col_length_prepare_f16()
+RETURNS SMALLINT AS
+BEGIN
+RETURN (SELECT COL_LENGTH('sys_column_length_test_table', NULL));
+END
+
+statement ok
+USE babel_3489_test_db;
+
+query T
+EXEC col_length_prepare_p1
+----
+50
+
+query T
+EXEC col_length_prepare_p2
+----
+50
+
+query T
+EXEC col_length_prepare_p3
+----
+50
+
+query T
+EXEC col_length_prepare_p4
+----
+50
+
+query T
+EXEC col_length_prepare_p5
+----
+50
+
+query T
+EXEC col_length_prepare_p6
+----
+50
+
+query T
+EXEC col_length_prepare_p7
+----
+50
+
+query T
+EXEC col_length_prepare_p8
+----
+50
+
+query T
+EXEC col_length_prepare_p9
+----
+50
+
+query T
+EXEC col_length_prepare_p10
+----
+50
+
+query T
+SELECT col_length_prepare_f1()
+----
+50
+
+query T
+SELECT col_length_prepare_f2()
+----
+50
+
+query T
+SELECT col_length_prepare_f3()
+----
+50
+
+query T
+SELECT col_length_prepare_f4()
+----
+50
+
+query T
+SELECT col_length_prepare_f5()
+----
+50
+
+query T
+SELECT col_length_prepare_f6()
+----
+50
+
+query T
+SELECT col_length_prepare_f7()
+----
+50
+
+query T
+SELECT col_length_prepare_f8()
+----
+50
+
+query T
+SELECT col_length_prepare_f9()
+----
+50
+
+query T
+SELECT col_length_prepare_f10()
+----
+50
+
+query T
+SELECT col_length_prepare_f11()
+----
+50
+
+query T
+SELECT col_length_prepare_f12()
+----
+50
+
+query T
+SELECT col_length_prepare_f13()
+----
+50
+
+query T
+SELECT col_length_prepare_f14()
+----
+50
+
+query T
+SELECT col_length_prepare_f15()
+----
+NULL
+
+query T
+SELECT col_length_prepare_f16()
+----
+NULL
+
+statement ok
+WITH ColumnLengths AS (
+    SELECT COLUMN_NAME,
+           sys.COL_LENGTH(TABLE_NAME, COLUMN_NAME) AS ColumnLength
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'sys_column_length_test_table'
+)
+SELECT COLUMN_NAME, ColumnLength
+FROM ColumnLengths
+WHERE ColumnLength % 2 = 0 order by COLUMN_NAME;
+
+statement ok
+USE babel_3489_test_db;
+
+statement ok
+DROP TABLE IF EXISTS sys_column_length_test_table;
+
+statement ok
+DROP TABLE IF EXISTS sys_col_length_test_schema.test_table;
+
+statement ok
+DROP SCHEMA IF EXISTS sys_col_length_test_schema;
+
+statement ok
+USE master;
+
+statement ok
+DROP VIEW IF EXISTS col_length_prepare_v1;
+DROP VIEW IF EXISTS col_length_prepare_v2;
+DROP VIEW IF EXISTS col_length_prepare_v3;
+DROP VIEW IF EXISTS col_length_prepare_v4;
+DROP VIEW IF EXISTS col_length_prepare_v5;
+DROP VIEW IF EXISTS col_length_prepare_v6;
+DROP VIEW IF EXISTS col_length_prepare_v7;
+DROP VIEW IF EXISTS col_length_prepare_v8;
+DROP VIEW IF EXISTS col_length_prepare_v9;
+DROP VIEW IF EXISTS col_length_prepare_v10;
+
+statement ok
+DROP PROCEDURE IF EXISTS col_length_prepare_p1;
+DROP PROCEDURE IF EXISTS col_length_prepare_p2;
+DROP PROCEDURE IF EXISTS col_length_prepare_p3;
+DROP PROCEDURE IF EXISTS col_length_prepare_p4;
+DROP PROCEDURE IF EXISTS col_length_prepare_p5;
+DROP PROCEDURE IF EXISTS col_length_prepare_p6;
+DROP PROCEDURE IF EXISTS col_length_prepare_p7;
+DROP PROCEDURE IF EXISTS col_length_prepare_p8;
+DROP PROCEDURE IF EXISTS col_length_prepare_p9;
+DROP PROCEDURE IF EXISTS col_length_prepare_p10;
+
+statement ok
+DROP FUNCTION IF EXISTS col_length_prepare_f1();
+DROP FUNCTION IF EXISTS col_length_prepare_f2();
+DROP FUNCTION IF EXISTS col_length_prepare_f3();
+DROP FUNCTION IF EXISTS col_length_prepare_f4();
+DROP FUNCTION IF EXISTS col_length_prepare_f5();
+DROP FUNCTION IF EXISTS col_length_prepare_f6();
+DROP FUNCTION IF EXISTS col_length_prepare_f7();
+DROP FUNCTION IF EXISTS col_length_prepare_f8();
+DROP FUNCTION IF EXISTS col_length_prepare_f9();
+DROP FUNCTION IF EXISTS col_length_prepare_f10();
+DROP FUNCTION IF EXISTS col_length_prepare_f11();
+DROP FUNCTION IF EXISTS col_length_prepare_f12();
+DROP FUNCTION IF EXISTS col_length_prepare_f13();
+DROP FUNCTION IF EXISTS col_length_prepare_f14();
+DROP FUNCTION IF EXISTS col_length_prepare_f15();
+DROP FUNCTION IF EXISTS col_length_prepare_f16();
+

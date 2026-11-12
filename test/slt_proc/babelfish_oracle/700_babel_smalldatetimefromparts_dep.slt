@@ -1,0 +1,52 @@
+# test/slt_proc/babelfish_oracle/700_babel_smalldatetimefromparts_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/smalldatetimefromparts-dep-vu-prepare.sql, test/babelfish/raw/smalldatetimefromparts-dep-vu-verify.sql, test/babelfish/raw/smalldatetimefromparts-dep-vu-cleanup.sql
+
+statement ok
+CREATE VIEW smalldatetimefromparts_vu_prepare_v1 as (SELECT SMALLDATETIMEFROMPARTS(2011, 8, 15, 14, 30));
+
+statement ok
+CREATE VIEW smalldatetimefromparts_vu_prepare_v2 as (SELECT SMALLDATETIMEFROMPARTS(2011, 8, 15, NULL, 30));
+
+statement ok
+CREATE PROCEDURE  smalldatetimefromparts_vu_prepare_p1 as (SELECT SMALLDATETIMEFROMPARTS(2011, 8, 15, 14, 30));
+
+statement ok
+CREATE PROCEDURE  smalldatetimefromparts_vu_prepare_p2 as (SELECT SMALLDATETIMEFROMPARTS(2076, 8, 15, 22, 30));
+
+statement ok
+CREATE FUNCTION smalldatetimefromparts_vu_prepare_f1()
+RETURNS SMALLDATETIME AS
+BEGIN
+RETURN (SELECT SMALLDATETIMEFROMPARTS(2079, 8, 15, 14, 30));
+END
+
+statement ok
+CREATE FUNCTION smalldatetimefromparts_vu_prepare_f2()
+RETURNS SMALLDATETIME as
+begin
+RETURN (SELECT SMALLDATETIMEFROMPARTS(1899, 8, 15, NULL, 30));
+END
+
+query T
+SELECT smalldatetimefromparts_vu_prepare_f2()
+----
+NULL
+
+statement ok
+DROP VIEW smalldatetimefromparts_vu_prepare_v1
+
+statement ok
+DROP VIEW smalldatetimefromparts_vu_prepare_v2
+
+statement ok
+DROP PROCEDURE smalldatetimefromparts_vu_prepare_p1
+
+statement ok
+DROP PROCEDURE smalldatetimefromparts_vu_prepare_p2
+
+statement ok
+DROP FUNCTION smalldatetimefromparts_vu_prepare_f1()
+
+statement ok
+DROP FUNCTION smalldatetimefromparts_vu_prepare_f2()
+

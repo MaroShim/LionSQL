@@ -1,0 +1,335 @@
+# test/slt_proc/babelfish_oracle/1588_babel_test_conv_text_to_binary_before_16_8.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/test_conv_text_to_binary-before-16_8-vu-prepare.sql, test/babelfish/raw/functions/test_conv_text_to_binary-before-16_8-vu-verify.sql, test/babelfish/raw/functions/test_conv_text_to_binary-before-16_8-vu-cleanup.sql
+
+statement ok
+CREATE VIEW cast_text_to_varbinary_1 AS
+SELECT CAST('-123.456325678543' AS VARBINARY(40))
+UNION ALL SELECT TRY_CAST('-123.456325678543' AS VARBINARY(40));
+
+statement ok
+CREATE VIEW conv_text_to_varbinary_1 AS
+SELECT CONVERT(VARBINARY(40), '-123.456325678543')
+UNION ALL SELECT TRY_CONVERT(VARBINARY(40), '-123.456325678543');
+
+statement ok
+CREATE VIEW cast_text_to_varbinary_2 AS
+SELECT CAST(N'😎Bilal DENİZLİ Türkiye' AS VARBINARY(40))
+UNION ALL SELECT TRY_CAST(N'😎Bilal DENİZLİ Türkiye' AS VARBINARY(40));
+
+statement ok
+CREATE VIEW conv_text_to_varbinary_2 AS
+SELECT CONVERT(VARBINARY(40), N'😎Bilal DENİZLİ Türkiye')
+UNION ALL SELECT TRY_CONVERT(VARBINARY(40), N'😎Bilal DENİZLİ Türkiye');
+
+statement ok
+CREATE VIEW cast_text_to_binary_1 AS
+SELECT CAST('-123.456325678543' AS BINARY(40))
+UNION ALL SELECT TRY_CAST('-123.456325678543' AS BINARY(40));
+
+statement ok
+CREATE VIEW conv_text_to_binary_1 AS
+SELECT CONVERT(BINARY(40), '-123.456325678543')
+UNION ALL SELECT TRY_CONVERT(BINARY(40), '-123.456325678543');
+
+statement ok
+CREATE VIEW cast_text_to_binary_2 AS
+SELECT CAST(N'😎Bilal DENİZLİ Türkiye' AS BINARY(40))
+UNION ALL SELECT TRY_CAST(N'😎Bilal DENİZLİ Türkiye' AS BINARY(40));
+
+statement ok
+CREATE VIEW conv_text_to_binary_2 AS
+SELECT CONVERT(BINARY(40), N'😎Bilal DENİZLİ Türkiye')
+UNION ALL SELECT TRY_CONVERT(BINARY(40), N'😎Bilal DENİZLİ Türkiye');
+
+statement ok
+CREATE PROCEDURE p_text_to_varbinary_reg
+AS
+BEGIN
+  SELECT CAST('-123.456325678543' AS VARBINARY(40)) AS val
+  UNION ALL SELECT TRY_CAST('-123.456325678543' AS VARBINARY(40));
+  SELECT CONVERT(VARBINARY(40), '-123.456325678543') AS val
+  UNION ALL SELECT TRY_CONVERT(VARBINARY(40), '-123.456325678543');
+END;
+
+statement ok
+CREATE PROCEDURE p_text_to_varbinary_uni
+AS
+BEGIN
+  SELECT CAST(N'😎Bilal DENİZLİ Türkiye' AS VARBINARY(40)) AS val
+  UNION ALL SELECT TRY_CAST(N'😎Bilal DENİZLİ Türkiye' AS VARBINARY(40));
+  SELECT CONVERT(VARBINARY(40), N'😎Bilal DENİZLİ Türkiye') AS val
+  UNION ALL SELECT TRY_CONVERT(VARBINARY(40), N'😎Bilal DENİZLİ Türkiye');
+END;
+
+statement ok
+CREATE PROCEDURE p_text_to_binary_reg
+AS
+BEGIN
+  SELECT CAST('-123.456325678543' AS BINARY(40)) AS val
+  UNION ALL SELECT TRY_CAST('-123.456325678543' AS BINARY(40));
+  SELECT CONVERT(BINARY(40), '-123.456325678543') AS val
+  UNION ALL SELECT TRY_CONVERT(BINARY(40), '-123.456325678543');
+END;
+
+statement ok
+CREATE PROCEDURE p_text_to_binary_uni
+AS
+BEGIN
+  SELECT CAST(N'😎Bilal DENİZLİ Türkiye' AS BINARY(40)) AS val
+  UNION ALL SELECT TRY_CAST(N'😎Bilal DENİZLİ Türkiye' AS BINARY(40));
+  SELECT CONVERT(BINARY(40), N'😎Bilal DENİZLİ Türkiye') AS val
+  UNION ALL SELECT TRY_CONVERT(BINARY(40), N'😎Bilal DENİZLİ Türkiye');
+END;
+
+statement ok
+CREATE VIEW cast_text_to_varbinary_hw_1 AS
+SELECT CAST('Hello World!' AS VARBINARY(40))
+UNION ALL SELECT TRY_CAST('Hello World!' AS VARBINARY(40));
+
+statement ok
+CREATE VIEW conv_text_to_varbinary_hw_1 AS
+SELECT CONVERT(VARBINARY(40), 'Hello World!')
+UNION ALL SELECT TRY_CONVERT(VARBINARY(40), 'Hello World!');
+
+statement ok
+CREATE VIEW cast_text_to_varbinary_hw_2 AS
+SELECT CAST(N'Hello World!' AS VARBINARY(40))
+UNION ALL SELECT TRY_CAST(N'Hello World!' AS VARBINARY(40));
+
+statement ok
+CREATE VIEW conv_text_to_varbinary_hw_2 AS
+SELECT CONVERT(VARBINARY(40), N'Hello World!')
+UNION ALL SELECT TRY_CONVERT(VARBINARY(40), N'Hello World!');
+
+statement ok
+CREATE VIEW cast_text_to_binary_hw_1 AS
+SELECT CAST('Hello World!' AS BINARY(40))
+UNION ALL SELECT TRY_CAST('Hello World!' AS BINARY(40));
+
+statement ok
+CREATE VIEW conv_text_to_binary_hw_1 AS
+SELECT CONVERT(BINARY(40), 'Hello World!')
+UNION ALL SELECT TRY_CONVERT(BINARY(40), 'Hello World!');
+
+statement ok
+CREATE VIEW cast_text_to_binary_hw_2 AS
+SELECT CAST(N'Hello World!' AS BINARY(40))
+UNION ALL SELECT TRY_CAST(N'Hello World!' AS BINARY(40));
+
+statement ok
+CREATE VIEW conv_text_to_binary_hw_2 AS
+SELECT CONVERT(BINARY(40), N'Hello World!')
+UNION ALL SELECT TRY_CONVERT(BINARY(40), N'Hello World!');
+
+statement ok
+CREATE PROCEDURE p_text_to_varbinary_reg_hw
+AS
+BEGIN
+  SELECT CAST('Hello World!' AS VARBINARY(40)) AS val
+  UNION ALL SELECT TRY_CAST('Hello World!' AS VARBINARY(40));
+  SELECT CONVERT(VARBINARY(40), 'Hello World!') AS val
+  UNION ALL SELECT TRY_CONVERT(VARBINARY(40), 'Hello World!');
+END;
+
+statement ok
+CREATE PROCEDURE p_text_to_varbinary_uni_hw
+AS
+BEGIN
+  SELECT CAST(N'Hello World!' AS VARBINARY(40)) AS val
+  UNION ALL SELECT TRY_CAST(N'Hello World!' AS VARBINARY(40));
+  SELECT CONVERT(VARBINARY(40), N'Hello World!') AS val
+  UNION ALL SELECT TRY_CONVERT(VARBINARY(40), N'Hello World!');
+END;
+
+statement ok
+CREATE PROCEDURE p_text_to_binary_reg_hw
+AS
+BEGIN
+  SELECT CAST('Hello World!' AS BINARY(40)) AS val
+  UNION ALL SELECT TRY_CAST('Hello World!' AS BINARY(40));
+  SELECT CONVERT(BINARY(40), 'Hello World!') AS val
+  UNION ALL SELECT TRY_CONVERT(BINARY(40), 'Hello World!');
+END;
+
+statement ok
+CREATE PROCEDURE p_text_to_binary_uni_hw
+AS
+BEGIN
+  SELECT CAST(N'Hello World!' AS BINARY(40)) AS val
+  UNION ALL SELECT TRY_CAST(N'Hello World!' AS BINARY(40));
+  SELECT CONVERT(BINARY(40), N'Hello World!') AS val
+  UNION ALL SELECT TRY_CONVERT(BINARY(40), N'Hello World!');
+END;
+
+query T
+SELECT * FROM cast_text_to_varbinary_1;
+----
+0x2d3132332e343536333235363738353433
+0x2d3132332e343536333235363738353433
+
+query T
+SELECT * FROM conv_text_to_varbinary_1;
+----
+0x2d3132332e343536333235363738353433
+0x2d3132332e343536333235363738353433
+
+query T
+SELECT * FROM cast_text_to_varbinary_2;
+----
+0xf09f988e42696c616c2044454ec4b05a4cc4b02054c3bc726b697965
+0xf09f988e42696c616c2044454ec4b05a4cc4b02054c3bc726b697965
+
+query T
+SELECT * FROM conv_text_to_varbinary_2;
+----
+0xf09f988e42696c616c2044454ec4b05a4cc4b02054c3bc726b697965
+0xf09f988e42696c616c2044454ec4b05a4cc4b02054c3bc726b697965
+
+query T
+SELECT * FROM cast_text_to_binary_1;
+----
+0x2d3132332e343536333235363738353433
+0x2d3132332e343536333235363738353433
+
+query T
+SELECT * FROM conv_text_to_binary_1;
+----
+0x2d3132332e343536333235363738353433
+0x2d3132332e343536333235363738353433
+
+query T
+SELECT * FROM cast_text_to_binary_2;
+----
+0xf09f988e42696c616c2044454ec4b05a4cc4b02054c3bc726b697965
+0xf09f988e42696c616c2044454ec4b05a4cc4b02054c3bc726b697965
+
+query T
+SELECT * FROM conv_text_to_binary_2;
+----
+0xf09f988e42696c616c2044454ec4b05a4cc4b02054c3bc726b697965
+0xf09f988e42696c616c2044454ec4b05a4cc4b02054c3bc726b697965
+
+query T
+EXEC p_text_to_varbinary_reg;
+----
+0x2d3132332e343536333235363738353433
+0x2d3132332e343536333235363738353433
+
+query T
+EXEC p_text_to_varbinary_uni;
+----
+0xf09f988e42696c616c2044454ec4b05a4cc4b02054c3bc726b697965
+0xf09f988e42696c616c2044454ec4b05a4cc4b02054c3bc726b697965
+
+query T
+EXEC p_text_to_binary_reg;
+----
+0x2d3132332e343536333235363738353433
+0x2d3132332e343536333235363738353433
+
+query T
+EXEC p_text_to_binary_uni;
+----
+0xf09f988e42696c616c2044454ec4b05a4cc4b02054c3bc726b697965
+0xf09f988e42696c616c2044454ec4b05a4cc4b02054c3bc726b697965
+
+query T
+SELECT * FROM cast_text_to_varbinary_hw_1;
+----
+0x48656c6c6f20576f726c6421
+0x48656c6c6f20576f726c6421
+
+query T
+SELECT * FROM conv_text_to_varbinary_hw_1;
+----
+0x48656c6c6f20576f726c6421
+0x48656c6c6f20576f726c6421
+
+query T
+SELECT * FROM cast_text_to_varbinary_hw_2;
+----
+0x48656c6c6f20576f726c6421
+0x48656c6c6f20576f726c6421
+
+query T
+SELECT * FROM conv_text_to_varbinary_hw_2;
+----
+0x48656c6c6f20576f726c6421
+0x48656c6c6f20576f726c6421
+
+query T
+SELECT * FROM cast_text_to_binary_hw_1;
+----
+0x48656c6c6f20576f726c6421
+0x48656c6c6f20576f726c6421
+
+query T
+SELECT * FROM conv_text_to_binary_hw_1;
+----
+0x48656c6c6f20576f726c6421
+0x48656c6c6f20576f726c6421
+
+query T
+SELECT * FROM cast_text_to_binary_hw_2;
+----
+0x48656c6c6f20576f726c6421
+0x48656c6c6f20576f726c6421
+
+query T
+SELECT * FROM conv_text_to_binary_hw_2;
+----
+0x48656c6c6f20576f726c6421
+0x48656c6c6f20576f726c6421
+
+query T
+EXEC p_text_to_varbinary_reg_hw;
+----
+0x48656c6c6f20576f726c6421
+0x48656c6c6f20576f726c6421
+
+query T
+EXEC p_text_to_varbinary_uni_hw;
+----
+0x48656c6c6f20576f726c6421
+0x48656c6c6f20576f726c6421
+
+query T
+EXEC p_text_to_binary_reg_hw;
+----
+0x48656c6c6f20576f726c6421
+0x48656c6c6f20576f726c6421
+
+query T
+EXEC p_text_to_binary_uni_hw;
+----
+0x48656c6c6f20576f726c6421
+0x48656c6c6f20576f726c6421
+
+statement ok
+DROP VIEW cast_text_to_varbinary_1;
+DROP VIEW conv_text_to_varbinary_1;
+DROP VIEW cast_text_to_varbinary_2;
+DROP VIEW conv_text_to_varbinary_2;
+DROP VIEW cast_text_to_binary_1;
+DROP VIEW conv_text_to_binary_1;
+DROP VIEW cast_text_to_binary_2;
+DROP VIEW conv_text_to_binary_2;
+DROP VIEW cast_text_to_varbinary_hw_1;
+DROP VIEW conv_text_to_varbinary_hw_1;
+DROP VIEW cast_text_to_varbinary_hw_2;
+DROP VIEW conv_text_to_varbinary_hw_2;
+DROP VIEW cast_text_to_binary_hw_1;
+DROP VIEW conv_text_to_binary_hw_1;
+DROP VIEW cast_text_to_binary_hw_2;
+DROP VIEW conv_text_to_binary_hw_2;
+
+statement ok
+DROP PROCEDURE p_text_to_varbinary_reg;
+DROP PROCEDURE p_text_to_varbinary_uni;
+DROP PROCEDURE p_text_to_binary_reg;
+DROP PROCEDURE p_text_to_binary_uni;
+DROP PROCEDURE p_text_to_varbinary_reg_hw;
+DROP PROCEDURE p_text_to_varbinary_uni_hw;
+DROP PROCEDURE p_text_to_binary_reg_hw;
+DROP PROCEDURE p_text_to_binary_uni_hw;
+

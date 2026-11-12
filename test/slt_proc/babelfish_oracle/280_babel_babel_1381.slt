@@ -1,0 +1,123 @@
+# test/slt_proc/babelfish_oracle/280_babel_babel_1381.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1381.sql
+
+statement ok
+CREATE PROCEDURE p_babel_1381_tinyint (@a tinyint OUTPUT) AS
+BEGIN
+  SET @a=42;
+  select @a as a;
+END;
+
+query T
+EXEC p_babel_1381_tinyint 1;
+----
+42
+
+statement ok
+CREATE PROCEDURE p_babel_1381_nchar (@a nchar OUTPUT) AS
+BEGIN
+  SET @a='helloworld';
+  select @a as a;
+END;
+
+query T
+EXEC p_babel_1381_nchar 'a';
+----
+helloworld
+
+statement ok
+CREATE PROCEDURE p_babel_1381_nchar_10 (@a nchar(10) OUTPUT) AS
+BEGIN
+  SET @a='helloworld';
+  select @a as a;
+END;
+
+query T
+EXEC p_babel_1381_nchar_10 'a';
+----
+helloworld
+
+statement ok
+CREATE PROCEDURE p_babel_1381_varchar (@a varchar OUTPUT) AS
+BEGIN
+  SET @a='helloworld';
+  select @a as a;
+END;
+
+query T
+EXEC p_babel_1381_varchar 'a';
+----
+helloworld
+
+statement ok
+CREATE PROCEDURE p_babel_1381_varchar_10 (@a varchar(10) OUTPUT) AS
+BEGIN
+  SET @a='helloworld';
+  select @a as a;
+END;
+
+query T
+EXEC p_babel_1381_varchar_10 'a';
+----
+helloworld
+
+statement ok
+CREATE PROCEDURE p_babel_1381_nvarchar (@a nvarchar OUTPUT) AS
+BEGIN
+  SET @a='helloworld';
+  select @a as a;
+END;
+
+query T
+EXEC p_babel_1381_varchar 'a';
+----
+helloworld
+
+statement ok
+CREATE PROCEDURE p_babel_1381_nvarchar_10 (@a nvarchar(10) OUTPUT) AS
+BEGIN
+  SET @a='helloworld';
+  select @a as a;
+END;
+
+query T
+EXEC p_babel_1381_nvarchar_10 'a';
+----
+helloworld
+
+statement ok
+CREATE PROCEDURE p_babel_1381_binary (@a binary OUTPUT) AS
+BEGIN
+  SET @a=0xabcdef;
+  select @a as a;
+END;
+
+query T
+EXEC p_babel_1381_binary 0x1;
+----
+0xabcdef
+
+statement ok
+CREATE PROCEDURE p_babel_1381_varbinary (@a varbinary OUTPUT) AS
+BEGIN
+  SET @a=0xabcdef;
+  select @a as a;
+END;
+
+query T
+EXEC p_babel_1381_varbinary 0x1;
+----
+0xabcdef
+
+statement ok
+CREATE PROCEDURE p_babel_1381_varbinary_10 (@a varbinary(10) OUTPUT) AS
+BEGIN
+  SET @a=0xabcdef;
+  select @a as a;
+END;
+
+query T
+EXEC p_babel_1381_varbinary_10 0x1;
+----
+0xabcdef
+

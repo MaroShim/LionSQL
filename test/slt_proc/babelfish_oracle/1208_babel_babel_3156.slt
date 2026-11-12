@@ -1,0 +1,25 @@
+# test/slt_proc/babelfish_oracle/1208_babel_babel_3156.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3156.sql
+
+statement ok
+CREATE TABLE dbo.performancetable (
+ id int NOT NULL,
+ col21 xml NULL,
+ CONSTRAINT PK__gen_tabl__3213E83FCC22F19F PRIMARY KEY (id)
+);
+
+statement ok
+CREATE TABLE BABEL_3156(
+a int,
+b nvarchar,
+c xml, 
+d datetime,
+e money,
+f varbinary);
+
+statement ok
+DROP TABLE BABEL_3156;
+
+statement ok
+DROP TABLE dbo.performancetable;
+

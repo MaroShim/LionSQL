@@ -1,0 +1,15 @@
+# test/slt_proc/babelfish_oracle/1303_babel_babel_grant_connect_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_GRANT_CONNECT-vu-prepare.sql
+
+statement ok
+create database grant_connect_db1;
+
+statement ok
+use grant_connect_db1;
+
+statement ok
+create table grant_connect_t1(a int);
+
+statement ok
+create login grant_connect_abc with password = 'Babel123'
+

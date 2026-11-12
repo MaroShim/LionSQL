@@ -1,0 +1,28 @@
+# test/slt_proc/math_numeric/1805_sign_power_sqrt_divmod_035.slt
+# T-SQL SIGN, POWER, SQRT, integer division/modulo, and compound proc math (35)
+
+query IIIIII
+SELECT SIGN(-35), SIGN(0), SIGN(35), CAST(SQRT(49) AS INT), CAST(POWER(2, 4) AS INT), (604 % 3);
+----
+-1 0 1 7 16 1
+
+query III
+SELECT (604 / 3), ABS(-604), (35 * 12 - 3);
+----
+201 604 417
+
+statement ok
+CREATE PROCEDURE sp_math_step_1805 @x INT, @y INT, @q INT OUTPUT, @r INT OUTPUT
+AS
+BEGIN
+    SET @q = @x / @y;
+    SET @r = @x % @y;
+END;
+
+query II
+DECLARE @quo INT;
+DECLARE @rem INT;
+EXEC sp_math_step_1805 @x = 604, @y = 3, @q = @quo OUTPUT, @r = @rem OUTPUT;
+SELECT @quo, @rem;
+----
+201 1

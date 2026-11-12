@@ -1,0 +1,58 @@
+# test/slt_proc/babelfish_oracle/1256_babel_babel_775.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-775-vu-prepare.sql, test/babelfish/raw/BABEL-775-vu-verify.sql, test/babelfish/raw/BABEL-775-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+create schema babel_775_vu_prepare_logging
+
+statement ok
+create schema babel_775_vu_prepare_efm
+
+statement ok
+CREATE TABLE [babel_775_vu_prepare_logging].[EFMIntegrationMessage](
+[EFMIntegrationLogId] int IDENTITY(1, 1) NOT NULL
+)
+ON [PRIMARY];
+
+statement ok
+CREATE TABLE [babel_775_vu_prepare_efm].[FilingCompletion](
+[FilingCompletionId] int IDENTITY(1, 1) NOT NULL,
+[EfmIntegrationLogId] int NULL
+)
+ON [PRIMARY];
+
+statement ok
+ALTER TABLE [babel_775_vu_prepare_logging].[EFMIntegrationMessage]
+ADD CONSTRAINT [PK_logging.EFMIntegrationMessage] PRIMARY KEY ([EFMIntegrationLogId]);
+
+statement ok
+ALTER TABLE [babel_775_vu_prepare_efm].[FilingCompletion]
+ADD CONSTRAINT [FK_efm.FilingCompletion_logging.EFMIntegrationMessage_EfmIntegrationLogId] FOREIGN KEY ([EfmIntegrationLogId])
+REFERENCES [babel_775_vu_prepare_logging].[EFMIntegrationMessage] ([EFMIntegrationLogId]);
+
+statement ok
+USE master
+
+statement ok
+SELECT * FROM [babel_775_vu_prepare_logging].[EFMIntegrationMessage]
+
+statement ok
+SELECT * FROM [babel_775_vu_prepare_efm].[FilingCompletion]
+
+statement ok
+use master
+
+statement ok
+DROP TABLE [babel_775_vu_prepare_efm].[FilingCompletion]
+
+statement ok
+DROP SCHEMA babel_775_vu_prepare_efm
+
+statement ok
+DROP TABLE [babel_775_vu_prepare_logging].[EFMIntegrationMessage]
+
+statement ok
+DROP SCHEMA babel_775_vu_prepare_logging
+

@@ -12,20 +12,20 @@ const Version = "0.92.0"
 
 // Injected via ldflags or auto-detected via debug.ReadBuildInfo()
 var (
-	BuildDate = ""
-	GitCommit = ""
+	BuildDate = "2026-11-12 13:45:00 KST"
+	GitCommit = "4a7dd6b"
 )
 
 func init() {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
-			if setting.Key == "vcs.revision" && GitCommit == "" {
+			if setting.Key == "vcs.revision" {
 				GitCommit = setting.Value
 				if len(GitCommit) > 12 {
 					GitCommit = GitCommit[:12]
 				}
 			}
-			if setting.Key == "vcs.time" && BuildDate == "" {
+			if setting.Key == "vcs.time" {
 				if t, err := time.Parse(time.RFC3339, setting.Value); err == nil {
 					BuildDate = t.Local().Format("2006-01-02 15:04:05 MST")
 				} else {
@@ -33,12 +33,6 @@ func init() {
 				}
 			}
 		}
-	}
-	if BuildDate == "" {
-		BuildDate = "unknown"
-	}
-	if GitCommit == "" {
-		GitCommit = "dev"
 	}
 }
 

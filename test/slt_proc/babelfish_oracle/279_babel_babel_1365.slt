@@ -1,0 +1,21 @@
+# test/slt_proc/babelfish_oracle/279_babel_babel_1365.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/BABEL-1365.sql
+
+query T
+DECLARE @SQLString NVARCHAR(100);
+DECLARE @P0 int;
+set @SQLString = N'SELECT 123;'
+EXEC @P0 = sp_executesql @SQLString;
+SELECT @P0;
+----
+NULL
+
+query T
+DECLARE @SQLString NVARCHAR(100);
+DECLARE @P0 varchar(3);
+set @SQLString = N'SELECT 321;'
+EXEC @P0 = sp_executesql @SQLString;
+SELECT @P0;
+----
+NULL
+

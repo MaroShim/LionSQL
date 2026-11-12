@@ -1,0 +1,61 @@
+# test/slt_proc/babelfish_oracle/444_babel_babel_4330.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_4330.sql
+
+statement ok
+CREATE TABLE babel_4330_t1(a varchar(50) NULL, b as replace(a, '1', '2'));
+
+statement ok
+INSERT INTO babel_4330_t1 VALUES('13131');
+
+query TT
+SELECT * FROM babel_4330_t1
+----
+13131 NULL
+
+statement ok
+UPDATE babel_4330_t1 SET a = '14141' WHERE a = '13131';
+
+query TT
+SELECT * FROM babel_4330_t1
+----
+14141 NULL
+
+statement ok
+ALTER TABLE babel_4330_t1 ADD c AS replace(a, '1','5');
+
+query TTT
+SELECT * FROM babel_4330_t1
+----
+14141 NULL NULL
+
+statement ok
+CREATE TABLE babel_4330_t2(a varchar(50) NULL, b as replace(a, NULL, '2'));
+
+statement ok
+INSERT INTO babel_4330_t2 VALUES('13131');
+
+query TT
+SELECT * FROM babel_4330_t2
+----
+13131 NULL
+
+statement ok
+CREATE TABLE babel_4330_t3(a varchar(50) NULL, b as replace(a, '1', NULL));
+
+statement ok
+INSERT INTO babel_4330_t3 VALUES('13131');
+
+query TT
+SELECT * FROM babel_4330_t3
+----
+13131 NULL
+
+statement ok
+DROP TABLE babel_4330_t1;
+
+statement ok
+DROP TABLE babel_4330_t2;
+
+statement ok
+DROP TABLE babel_4330_t3;
+

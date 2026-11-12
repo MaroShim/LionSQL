@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
-- expand Gate 5 T-SQL stored procedure conformance from 14 to 30 suites (`test/slt_proc/15` to `30`: string, JSON, compression and system variables, date/time, conditional, MERGE, math, CAST, window, paging, ROWCOUNT, THROW, IDENTITY, set operations) and sync release gate documentation
+- expand Gate 5 T-SQL stored procedure and AWS Babelfish oracle conformance from 30 to 3,000 value-verified `.slt` suites (`test/slt_proc/`, 13,418 queries, 34,242 statements, 47,660 total records across 30 core suites, 1,855 domain T-SQL suites, and 1,115 harvested AWS Babelfish oracle suites) and sync release gate scripts and documentation
 - complete 10-point documentation system revamp and engineering knowledge base upgrade (`DOC-REVAMP-10`):
   - author official Korean versions for 4 core manuals: `doc/ARCHITECTURE.ko.md`, `doc/BENCHMARK.ko.md`, `doc/CLIENT_TOOL_INTEGRATION.ko.md`, and `doc/internal/VDBE.ko.md` with complete technical fidelity
   - establish persistent negative knowledge catalog in `notes/SPEC_OUT_DECISIONS.ko.md` documenting the theoretical rationale and adopted alternatives for all 21 permanently rejected architecture items
@@ -46,6 +46,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - mark `-memory=performance`, `MemoryPerformance`, and legacy aliases (`OCCModeRaw`, `OCCModePerformance`) as deprecated in CLI help text, startup runtime log warning (`memoryPerformanceDeprecationNotice`), startup banner (`[DEPRECATED: use compact]`), and Go doc comments while preserving full v1.0 compatibility prior to post-1.0 removal (`DEPRECATE-OCC-PERF-1`)
 
 ### Fixed
+- resolve 8 T-SQL procedural, relational, and catalog compatibility defects uncovered by Gate 5 Babelfish oracle harvesting:
+  - bind caller `@var` arguments and copy back mutated parameter slots upon `EXEC ... @param = @var OUTPUT` completion (`FIX-TSQL-OUTPUT-PARAM-1`)
+  - parse and execute multi-branch chained set operations (`UNION` / `UNION ALL` / `INTERSECT` / `EXCEPT` with 3+ branches) and preserve positional right-branch columns in `execSetOpSelect` (`FIX-TSQL-UNION-CHAIN-1`)
+  - route `SELECT ... UNION [ALL] ...` inside stored procedure bodies and `NormalizeTop` only at top-level set-operation boundaries (`FIX-TSQL-PROC-UNION-ALL-1`)
+  - evaluate `@variable` and arithmetic expressions in `OFFSET <expr> ROWS FETCH NEXT <expr> ROWS ONLY` pagination clauses (`FIX-TSQL-OFFSET-VAR-1`)
+  - format `RAISERROR(msg, sev, state, args...)` with T-SQL printf-style `%s`/`%d`/`%i` substitution and support `WITH NOWAIT` / `WITH LOG` / `WITH SETERROR` options (`FIX-TSQL-RAISERROR-FMT-1`)
+  - support negative numeric default expressions (e.g. `LAG(col, 1, -1)`) in window function parsers and evaluators (`FIX-WIN-NEGATIVE-DEFAULT-1`)
+  - enforce column and table `CHECK` constraints across `INSERT`, `INSERT ... SELECT`, `UPDATE`, `ON CONFLICT DO UPDATE`, and `ALTER TABLE ADD CHECK` with case-insensitive T-SQL string relational semantics (`FIX-DDL-DEFAULT-CHECK-1`)
+  - sort `information_schema.views` and `information_schema.tables` view rows deterministically by view name (`FIX-CATALOG-ISC-VIEWS-ORDER-1`)
+  - preserve `storage.TypeBinary` payloads in `EvalRowExpr` for `CAST(DECOMPRESS(COMPRESS(...)) AS VARCHAR)` and evaluate compound `IN (SELECT ... UNION ...)` subqueries without false single-table decorrelation
 - complete Pre-1.0 final static safety-net audit across Wire/TDS, Catalog/Session, Storage/WAL, and VDBE/Execution (`AUDIT-FINAL-SAFETY-NET-1`): guard PGWire binary numeric/array and TDS RPC/PLP packet decoders against truncated/oversized payload OOM DoS and slice bounds panics, replace 12 single-value interface type assertions in `vm_dispatcher.go` with 2-value defensive guards, fix `OpIndexScan` loop-scoped `defer cursor.Close()` handle retention, return defensive deep copies in `GetStatistics`/`ListStatistics`, and eliminate 16 silent disk persistence error ignores (`_ = c.persistObjectsLocked()`) in `pkg/catalog` with in-memory rollback on disk write failure
 - resolve SSMS Object Explorer stored procedures and parameters enumeration by adding dedicated `MSSQL_SysProceduresSSMS` and `MSSQL_Parameters` interceptors with full SMO XPath URN projections, expanding `execSysAllObjectsJoined` to include procedure objects, supporting SQL Server boolean-to-bit (`= 0` / `= 1`) comparisons in virtual catalog filters, and populating standard SQL Server catalog metadata in `sys.procedures` and `sys.parameters` direct queries
 - handle Microsoft SMO Server Properties & Facets batch in TDS protocol (`handleSsmsServerPropertiesBatch`), answering `@HkeyLocal`, `xp_instance_regread`, and `sys.dm_hadr_cluster` queries with all 59 server facets so SSMS Object Explorer finishes child node enumeration and renders subnodes (columns, keys, indexes)

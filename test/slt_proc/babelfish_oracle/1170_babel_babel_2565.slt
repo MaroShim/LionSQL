@@ -1,0 +1,32 @@
+# test/slt_proc/babelfish_oracle/1170_babel_babel_2565.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/dml/BABEL-2565.sql
+
+statement ok
+create table tv_t (a int)
+insert into tv_t values(1)
+UPDATE t SET a = 100 FROM tv_t AS t
+select * from tv_t
+drop table tv_t
+
+statement ok
+declare @tv as table (a int)
+insert into @tv values(1)
+UPDATE t SET a = 100 FROM @tv AS t
+select * from @tv
+
+statement ok
+declare @tv as table (a int)
+insert into @tv values(1)
+UPDATE @tv SET a = 100
+select * from @tv
+
+statement ok
+drop table tv_t
+
+statement ok
+create table tv_t (a int)
+insert into tv_t values(10)
+delete t from tv_t as t where t.a = 10
+select * from tv_t
+drop table tv_t
+

@@ -1,0 +1,38 @@
+# test/slt_proc/babelfish_oracle/708_babel_sys_all_columns_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-all_columns-dep-vu-prepare.sql, test/babelfish/raw/views/sys-all_columns-dep-vu-verify.sql, test/babelfish/raw/views/sys-all_columns-dep-vu-cleanup.sql
+
+statement ok
+DROP TABLE IF EXISTS sys_all_columns_dep_vu_prepare_table
+
+statement ok
+CREATE TABLE sys_all_columns_dep_vu_prepare_table (
+	sac_int_col1 INT PRIMARY KEY,
+	sac_text_col_not_null1 VARCHAR(50) NOT NULL
+)
+
+statement ok
+CREATE PROCEDURE sys_all_columns_dep_vu_prepare_proc1
+AS
+    SELECT name, is_nullable, column_id 
+    FROM sys.all_columns 
+    WHERE name in ('sac_int_col1', 'sac_text_col_not_null1') ORDER BY name;
+
+statement ok
+CREATE VIEW sys_all_columns_dep_vu_prepare_view1
+AS
+    SELECT name, max_length, precision
+    FROM sys.all_columns
+    WHERE name in ('sac_int_col1', 'sac_text_col_not_null1') ORDER BY name;
+
+query TTT
+SELECT * FROM sys_all_columns_dep_vu_prepare_view1 order by max_length;
+----
+sac_int_col1 255 10
+sac_text_col_not_null1 255 10
+
+statement ok
+DROP TABLE IF EXISTS sys_all_columns_dep_vu_prepare_table
+DROP PROCEDURE IF EXISTS sys_all_columns_dep_vu_prepare_proc1;
+DROP FUNCTION IF EXISTS sys_all_columns_dep_vu_prepare_func1;
+DROP VIEW IF EXISTS sys_all_columns_dep_vu_prepare_view1;
+

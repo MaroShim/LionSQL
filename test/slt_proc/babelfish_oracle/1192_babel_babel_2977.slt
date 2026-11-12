@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1192_babel_babel_2977.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2977.sql
+
+statement ok
+create login alreadyexists with password='12345678';
+
+statement ok
+DROP login alreadyexists;
+

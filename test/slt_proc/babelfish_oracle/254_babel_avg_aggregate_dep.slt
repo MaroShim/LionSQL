@@ -1,0 +1,98 @@
+# test/slt_proc/babelfish_oracle/254_babel_avg_aggregate_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/AVG-Aggregate-Dep-vu-prepare.sql, test/babelfish/raw/AVG-Aggregate-Dep-vu-verify.sql
+
+statement ok
+CREATE TABLE avg_dep_vu_prepare_t1(
+avgbigint BIGINT, avgint INT , avgsmallint SMALLINT , avgtinyint TINYINT )
+
+statement ok
+INSERT INTO avg_dep_vu_prepare_t1 VALUES(1,1,1,1)
+
+statement ok
+CREATE FUNCTION avg_dep_vu_prepare_f1()
+RETURNS INT AS
+BEGIN
+    DECLARE @ans INT
+    SELECT @ans= AVG(avgint) FROM avg_dep_vu_prepare_t1
+    RETURN @ans
+END
+
+statement ok
+CREATE FUNCTION avg_dep_vu_prepare_f2()
+RETURNS BIGINT AS
+BEGIN
+    DECLARE @ans BIGINT
+    SELECT @ans= AVG(avgbigint) FROM avg_dep_vu_prepare_t1
+    RETURN @ans
+END
+
+statement ok
+CREATE FUNCTION avg_dep_vu_prepare_f3()
+RETURNS INT AS
+BEGIN
+    DECLARE @ans INT
+    SELECT @ans= AVG(avgsmallint) FROM avg_dep_vu_prepare_t1
+    RETURN @ans
+END
+
+statement ok
+CREATE FUNCTION avg_dep_vu_prepare_f4()
+RETURNS INT AS
+BEGIN
+    DECLARE @ans INT
+    SELECT @ans= AVG(avgtinyint) FROM avg_dep_vu_prepare_t1
+    RETURN @ans
+END
+
+statement ok
+CREATE PROCEDURE avg_dep_vu_prepare_p1
+AS
+SELECT AVG(avgbigint)as avg_bigint,AVG(avgint)as avg_int,AVG(avgsmallint) as avg_smallint ,AVG(avgtinyint) as avg_tinyint FROM avg_dep_vu_prepare_t1
+
+statement ok
+CREATE VIEW avg_dep_vu_prepare_v1 as SELECT 
+cast(pg_typeof( AVG( avgbigint ) ) as varchar(48) )  as avg_bigint , 
+cast(pg_typeof( AVG( avgint ) ) as varchar(48) )  as avg_int , 
+cast(pg_typeof( AVG( avgsmallint ) ) as varchar(48) )  as avg_smallint ,
+cast(pg_typeof( AVG( avgtinyint ) ) as varchar(48) )  as avg_tinyint 
+FROM avg_dep_vu_prepare_t1
+
+query T
+SELECT avg_dep_vu_prepare_f1()
+----
+NULL
+
+query T
+SELECT avg_dep_vu_prepare_f2()
+----
+NULL
+
+query T
+SELECT avg_dep_vu_prepare_f3()
+----
+NULL
+
+query T
+SELECT avg_dep_vu_prepare_f4()
+----
+NULL
+
+query TTTT
+EXEC avg_dep_vu_prepare_p1
+----
+1 1 1 1
+
+query TTTT
+SELECT * FROM avg_dep_vu_prepare_v1
+----
+NULL NULL NULL NULL
+
+statement ok
+DROP PROCEDURE avg_dep_vu_prepare_p1
+
+statement ok
+DROP VIEW avg_dep_vu_prepare_v1
+
+statement ok
+DROP TABLE avg_dep_vu_prepare_t1
+

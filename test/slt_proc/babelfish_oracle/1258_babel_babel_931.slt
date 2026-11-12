@@ -1,0 +1,55 @@
+# test/slt_proc/babelfish_oracle/1258_babel_babel_931.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-931.sql
+
+statement ok
+CREATE PROCEDURE babel_931_proc (@a INT OUTPUT, @b INT OUTPUT) AS
+BEGIN
+  SET @a=100; PRINT '@a (inner): ' + cast(@a as varchar(10)); 
+  SET @b=200; PRINT '@b (inner): ' + cast(@b as varchar(10)); 
+  select @a+@b as ret; END;
+
+statement ok
+CREATE PROCEDURE babel_931_caller AS
+BEGIN
+  EXEC babel_931_proc 2, 3;
+END
+
+statement ok
+EXEC babel_931_caller
+
+statement ok
+CREATE PROCEDURE babel_931_caller_2 AS
+BEGIN
+  DECLARE @b INT;
+  EXEC babel_931_proc 2, @b OUT;
+  PRINT '@b (outer): ' + cast(@b as varchar(10));
+END
+
+statement ok
+EXEC babel_931_caller_2
+
+statement ok
+CREATE PROCEDURE babel_931_caller_3 AS
+BEGIN
+  DECLARE @a INT;
+  DECLARE @b INT;
+  EXEC babel_931_proc @a OUT, @b OUT;
+  PRINT '@a (outer): ' + cast(@a as varchar(10));
+  PRINT '@b (outer): ' + cast(@b as varchar(10));
+END
+
+statement ok
+EXEC babel_931_caller_3
+
+statement ok
+DROP PROCEDURE babel_931_proc
+
+statement ok
+DROP PROCEDURE babel_931_caller
+
+statement ok
+DROP PROCEDURE babel_931_caller_2
+
+statement ok
+DROP PROCEDURE babel_931_caller_3
+

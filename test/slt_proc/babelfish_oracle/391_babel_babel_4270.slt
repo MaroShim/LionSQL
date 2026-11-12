@@ -1,0 +1,513 @@
+# test/slt_proc/babelfish_oracle/391_babel_babel_4270.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4270-vu-prepare.sql, test/babelfish/raw/BABEL-4270-vu-verify.sql, test/babelfish/raw/BABEL-4270-vu-cleanup.sql
+
+statement ok
+create database babel_4270
+
+statement ok
+use babel_4270
+
+statement ok
+create table t ( a varchar(30));
+
+statement ok
+insert into t values ('0');
+
+statement ok
+insert into t values ('4270');
+
+statement ok
+insert into t values ('0.599');
+
+statement ok
+insert into t values ('abc');
+
+statement ok
+insert into t values ('abc_d_');
+
+statement ok
+insert into t values ('bbc_d_');
+
+statement ok
+insert into t values ('xbc_f_');
+
+statement ok
+insert into t values ('abcdde');
+
+statement ok
+insert into t values ('abc\_d\_');
+
+statement ok
+insert into t values ('abc\_d_');
+
+statement ok
+insert into t values ('abc\ad\c');
+
+statement ok
+insert into t values ('abc\cd\_');
+
+statement ok
+insert into t values ('abc\xFEcd\_');
+
+statement ok
+insert into t values ('abc\xFFcd\_');
+
+statement ok
+insert into t values ('abcxFFcd\_');
+
+statement ok
+create function BABEL_4270_abc()
+returns varchar(20)
+as
+    begin
+        return 'abc\xFE%'
+    end
+
+statement ok
+create procedure BABEL_4270_test_default_escape
+as
+    begin
+        select * from t where a like 'abc\%'
+    end
+
+statement ok
+use babel_4270
+
+query T
+select * from t
+----
+0
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+abc\_d\_
+
+query T
+select * from t where a like 'abc'
+----
+abc
+
+query T
+select * from t where a like 'ab_'
+----
+abc
+
+query T
+select * from t where a like 'abc%'
+----
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abcxFFcd\_
+abc
+abc_d_
+abcdde
+abc\_d\_
+
+statement ok
+select * from t where a like 'abd'
+
+statement ok
+select * from t where a like 'abd_'
+
+query T
+select * from t where a like 'abc%'
+----
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abcxFFcd\_
+abc
+abc_d_
+abcdde
+abc\_d\_
+
+query T
+select * from t where a like '[a-z]bc%'
+----
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abcxFFcd\_
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+abc\_d\_
+
+query T
+select * from t where a like 'abc\%'
+----
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abc\_d\_
+
+query T
+select * from t where a like 'abc\_d\_'
+----
+abc\ad\c
+abc\cd\_
+abc\_d\_
+
+query T
+select * from t where a not like 'abc\%'
+----
+0
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+
+query T
+select * from t where a not like 'abc\_d\_'
+----
+0
+abc\_d_
+abc\xFEcd\_
+abc\xFFcd\_
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+
+query T
+select * from t where a like 'abc\xFEcd\_'
+----
+abc\xFEcd\_
+
+query T
+select * from t where a like 'abc\xFE%'
+----
+abc\xFEcd\_
+
+query T
+select * from t where a not like 'abc\xFEcd\_'
+----
+0
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFFcd\_
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+abc\_d\_
+
+query T
+select * from t where a not like 'abc\xFE%'
+----
+0
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFFcd\_
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+abc\_d\_
+
+query T
+select * from t where a like (select 'abc\xFE%')
+----
+abc\xFEcd\_
+
+query T
+select * from t where a like (select * from t where a like (select 'abc\xFE%'))
+----
+abc\xFEcd\_
+
+query T
+select * from t where a not like (select 'abc\xFE%')
+----
+0
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFFcd\_
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+abc\_d\_
+
+query T
+select * from t where a not like (select * from t where a like (select 'abc\xFE%'))
+----
+0
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFFcd\_
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+abc\_d\_
+
+statement ok
+declare @f varchar(20) = 'abc%'
+select * from t where a like @f
+
+statement ok
+select * from t where a like BABEL_4270_abc();
+
+query T
+select * from t where a like 0
+----
+0
+
+query T
+select * from t where a like 4270
+----
+4270
+
+statement ok
+select * from t where a like 4272
+
+query T
+select * from t where a like 0.599
+----
+0.599
+
+statement ok
+select * from t where a like 'abcc_%' escape 'c'
+
+query T
+select * from t where a not like 'abcc_%' escape 'c'
+----
+0
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+abc\_d\_
+
+query T
+select * from t where a like 'abc\_%' escape '\'
+----
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abc\_d\_
+
+statement ok
+select * from t where a like 'abc\\xFE_d\_' escape '\xFE'
+
+statement ok
+select * from t where a like 'abc_\__%' escape '_'
+
+query T
+select * from t where a not like 'abc\_%' escape '\'
+----
+0
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+
+query T
+select * from t where a not like 'abc\\xFE_d\_' escape '\xFE'
+----
+0
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+abc\_d\_
+
+query T
+select * from t where a not like 'abc_\__%' escape '_'
+----
+0
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+abc\_d\_
+
+query T
+select * from t where a like 'abc\_%' escape (select '\')
+----
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abc\_d\_
+
+query T
+select * from t where a not like 'abc\\xFE_d\_' escape ( select'\xFE')
+----
+0
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+abc\_d\_
+
+query T
+select * from t where a not like 'abc_\__%' escape (select '_')
+----
+0
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abcxFFcd\_
+4270
+0.599
+abc
+abc_d_
+bbc_d_
+xbc_f_
+abcdde
+abc\_d\_
+
+statement ok
+declare @f varchar(20) = '\xFE'
+select * from t where a like 'abc\\xFE_d\_' escape @f
+
+statement ok
+declare @f varchar(20) = '\'
+select * from t where a like 'abc\_%' escape @f
+
+statement ok
+declare @f varchar(20) = '\'
+declare @d varchar(20) = 'abc\_%'
+select * from t where a like @d escape @f
+
+statement ok
+declare @f varchar(20) = '\xFE'
+declare @d varchar(20) = 'abc\\xFE_d\_'
+select * from t where a like @d escape @f
+
+statement ok
+declare @f varchar(20) = '\'
+declare @d varchar(20) = 'abc\_%'
+select * from t where a not like @d escape @f
+
+statement ok
+declare @f varchar(20) = '\xFE'
+declare @d varchar(20) = 'abc\\xFE_d\_'
+select * from t where a not like @d escape @f
+
+statement ok
+select * from t where a like 'abc0\0_%' escape 0
+
+statement ok
+select * from t where a like 'abc0\0_%' escape 0.5
+
+query T
+exec BABEL_4270_test_default_escape
+----
+abc\_d_
+abc\ad\c
+abc\cd\_
+abc\xFEcd\_
+abc\xFFcd\_
+abc\_d\_
+
+statement ok
+use babel_4270
+
+statement ok
+drop procedure BABEL_4270_test_default_escape
+
+statement ok
+drop function BABEL_4270_abc
+
+statement ok
+drop table t
+
+statement ok
+use master
+

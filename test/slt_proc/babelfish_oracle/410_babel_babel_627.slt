@@ -1,0 +1,16 @@
+# test/slt_proc/babelfish_oracle/410_babel_babel_627.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-627.sql
+
+statement ok
+USE master;
+
+query T
+select datediff(year, CAST('2037-03-01 23:30:05.523' AS datetime), CAST('2036-02-28 23:30:05.523' AS datetime));
+----
+-1
+
+query TT
+select datepart(week, CAST('2007-04-21' AS date)), datepart(weekday, CAST('2007-04-21' AS date));
+----
+16 7
+

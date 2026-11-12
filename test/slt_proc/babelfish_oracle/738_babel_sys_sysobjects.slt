@@ -1,0 +1,97 @@
+# test/slt_proc/babelfish_oracle/738_babel_sys_sysobjects.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/sys-sysobjects-vu-prepare.sql, test/babelfish/raw/sys-sysobjects-vu-verify.sql, test/babelfish/raw/sys-sysobjects-vu-cleanup.sql
+
+statement ok
+USE master;
+
+statement ok
+CREATE TABLE sys_sysobjects_vu_prepare_table(c1 int)
+
+statement ok
+CREATE VIEW sys_sysobjects_vu_prepare_view AS
+SELECT COUNT(*) FROM sys.sysobjects s where s.name = 'sys_sysobjects_vu_prepare_table'
+
+statement ok
+CREATE PROC sys_sysobjects_vu_prepare_proc AS
+SELECT COUNT(*) FROM sys.sysobjects s where s.name = 'sys_sysobjects_vu_prepare_table'
+
+statement ok
+CREATE FUNCTION dbo.sys_sysobjects_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT COUNT(*) FROM sys.sysobjects s where s.name = 'sys_sysobjects_vu_prepare_table')
+END
+
+statement ok
+CREATE DATABASE sys_sysobjects_vu_prepare_db1;
+
+statement ok
+USE sys_sysobjects_vu_prepare_db1;
+
+statement ok
+CREATE TABLE sys_sysobjects_vu_prepare_table_t1(c1 int)
+
+statement ok
+USE master;
+
+query T
+SELECT COUNT(*) FROM dbo.SySObJEctS s where s.name = 'sys_sysobjects_vu_prepare_table';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys_sysobjects_vu_prepare_db1.dbo.SySObJEctS s where s.name = 'sys_sysobjects_vu_prepare_table_t1';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys_sysobjects_vu_prepare_db1.dbo.SySObJEctS s where s.name = 'sys_sysobjects_vu_prepare_table';
+----
+1
+
+statement ok
+CREATE DATABASE sys_sysobjects_vu_prepare_db1 collate BBF_Unicode_CP1_CI_AI;
+
+statement ok
+USE sys_sysobjects_vu_prepare_db1;
+
+statement ok
+USE master;
+
+query T
+SELECT COUNT(*) FROM dbo.SySObJEctS s where s.name = 'sys_sysobjects_vu_prepare_table';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys_sysobjects_vu_prepare_db1.dbo.SySObJEctS s where s.name = 'sys_sysobjects_vu_prepare_table_t1';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys_sysobjects_vu_prepare_db1.dbo.SySObJEctS s where s.name = 'sys_sysobjects_vu_prepare_table';
+----
+1
+
+statement ok
+DROP TABLE sys_sysobjects_vu_prepare_table
+
+statement ok
+DROP VIEW sys_sysobjects_vu_prepare_view
+
+statement ok
+DROP PROC sys_sysobjects_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_sysobjects_vu_prepare_func
+
+statement ok
+USE sys_sysobjects_vu_prepare_db1;
+
+statement ok
+DROP TABLE sys_sysobjects_vu_prepare_table_t1
+
+statement ok
+USE MASTER;
+

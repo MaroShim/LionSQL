@@ -1,0 +1,23 @@
+# test/slt_proc/babelfish_oracle/314_babel_babel_2258.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2258.sql
+
+query T
+select 'foo' where 'bar ' = 'bar';
+----
+foo
+
+query T
+select 'foo' where 0xAE = 0xAE00;
+----
+foo
+
+query T
+select 'foo' where 101.5E5 = 1015E4;
+----
+foo
+
+query T
+select 'foo' where (select 'bar ') = (select 'bar');
+----
+foo
+

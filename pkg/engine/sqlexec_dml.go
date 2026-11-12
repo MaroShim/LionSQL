@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"lionsql/pkg/auth"
+	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
@@ -569,6 +570,12 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						}
 					}
 
+					if err := proc.ValidateRecordChecks(schema, updatedRec); err != nil {
+						if isEphemeral {
+							_ = tx.Rollback()
+						}
+						return nil, fmt.Errorf("check constraint violation on %q: %w", tableName, err)
+					}
 					if err := tx.Update(tableName, existingPk, updatedRec); err != nil {
 						if isEphemeral {
 							_ = tx.Rollback()
@@ -582,6 +589,12 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			}
 		}
 
+		if err := proc.ValidateRecordChecks(schema, rec); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, fmt.Errorf("check constraint violation on %q: %w", tableName, err)
+		}
 		if err := tx.Insert(tableName, rec); err != nil {
 			if onConflict != nil && onConflict.action == conflictActionDoNothing {
 				errLower := strings.ToLower(err.Error())
@@ -979,6 +992,12 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 						}
 					}
 
+					if err := proc.ValidateRecordChecks(schema, updatedRec); err != nil {
+						if isEphemeral {
+							_ = tx.Rollback()
+						}
+						return nil, fmt.Errorf("check constraint violation on %q: %w", tableName, err)
+					}
 					if err := tx.Update(tableName, existingPk, updatedRec); err != nil {
 						if isEphemeral {
 							_ = tx.Rollback()
@@ -992,6 +1011,12 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			}
 		}
 
+		if err := proc.ValidateRecordChecks(schema, rec); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, fmt.Errorf("check constraint violation on %q: %w", tableName, err)
+		}
 		if err := tx.Insert(tableName, rec); err != nil {
 			if onConflict != nil && onConflict.action == conflictActionDoNothing {
 				errLower := strings.ToLower(err.Error())
@@ -1179,6 +1204,18 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 
 	updatedCount := int64(0)
 	for _, item := range toUpdate {
+		if schema != nil && schema.HasCheckConstraints() {
+			merged := item.orig.Clone()
+			for k, v := range item.rec {
+				merged[k] = v
+			}
+			if err := proc.ValidateRecordChecks(schema, merged); err != nil {
+				if isEphemeral {
+					_ = tx.Rollback()
+				}
+				return nil, fmt.Errorf("check constraint violation on %q: %w", tableName, err)
+			}
+		}
 		if err := tx.Update(tableName, item.pk, item.rec); err != nil {
 			if isEphemeral {
 				_ = tx.Rollback()

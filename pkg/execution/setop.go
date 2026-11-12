@@ -113,6 +113,31 @@ func (s *SetOpIterator) Open(ctx context.Context) error {
 	s.schema = make([]string, len(leftSchema))
 	copy(s.schema, leftSchema)
 	s.colIndexMap = NewColumnIndexMapFromCols(s.schema)
+	// Also register right-hand column names/qualifiers onto s.colIndexMap so trailing ORDER BY
+	// referencing right-hand qualifiers (e.g. ORDER BY unionorder2.c2) resolves to the positional slot.
+	for i, rc := range rightSchema {
+		cleanRC := strings.Trim(rc, "[]\"'`")
+		if _, exists := s.colIndexMap.indices[rc]; !exists {
+			s.colIndexMap.indices[rc] = i
+			s.colIndexMap.indices[strings.ToLower(rc)] = i
+		}
+		if _, exists := s.colIndexMap.indices[cleanRC]; !exists {
+			s.colIndexMap.indices[cleanRC] = i
+			s.colIndexMap.indices[strings.ToLower(cleanRC)] = i
+		}
+		if dotIdx := strings.Index(rc, "."); dotIdx != -1 {
+			bare := rc[dotIdx+1:]
+			cleanBare := strings.Trim(bare, "[]\"'`")
+			if _, exists := s.colIndexMap.indices[bare]; !exists {
+				s.colIndexMap.indices[bare] = i
+				s.colIndexMap.indices[strings.ToLower(bare)] = i
+			}
+			if _, exists := s.colIndexMap.indices[cleanBare]; !exists {
+				s.colIndexMap.indices[cleanBare] = i
+				s.colIndexMap.indices[strings.ToLower(cleanBare)] = i
+			}
+		}
+	}
 	s.leftDone = false
 	s.seen = make(map[string]struct{})
 	s.rightSet = make(map[string]struct{})

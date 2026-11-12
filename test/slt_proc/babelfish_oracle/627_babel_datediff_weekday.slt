@@ -1,0 +1,69 @@
+# test/slt_proc/babelfish_oracle/627_babel_datediff_weekday.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/dateFunctions/datediff-weekday-vu-prepare.sql, test/babelfish/raw/dateFunctions/datediff-weekday-vu-verify.sql, test/babelfish/raw/dateFunctions/datediff-weekday-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE datediff_weekday_p1 as (select datediff(weekday, cast('2020-01-01' as datetime), cast('2020-01-01' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_weekday_p2 as (select datediff(weekday, cast('2020-01-01' as datetime), cast('2020-01-02' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_weekday_p3 as (select datediff(weekday, cast('2020-01-11' as datetime), cast('2020-01-01' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_dw_p1 as (select datediff(dw, cast('2020-01-01' as datetime), cast('2020-12-31' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_big_weekday_p1 as (select datediff_big(weekday, cast('1990-01-01' as datetime), cast('2020-01-01' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_big_dw_p1 as (select datediff_big(dw, cast('2020-01-01' as datetime), cast('1990-01-01' as datetime)));
+
+query T
+exec datediff_weekday_p1
+----
+NULL
+
+query T
+exec datediff_weekday_p2
+----
+NULL
+
+query T
+exec datediff_weekday_p3
+----
+NULL
+
+query T
+exec datediff_dw_p1
+----
+NULL
+
+query T
+exec datediff_big_weekday_p1
+----
+NULL
+
+query T
+exec datediff_big_dw_p1
+----
+NULL
+
+statement ok
+DROP PROCEDURE datediff_weekday_p1
+
+statement ok
+DROP PROCEDURE datediff_weekday_p2
+
+statement ok
+DROP PROCEDURE datediff_weekday_p3
+
+statement ok
+DROP PROCEDURE datediff_dw_p1
+
+statement ok
+DROP PROCEDURE datediff_big_weekday_p1
+
+statement ok
+DROP PROCEDURE datediff_big_dw_p1
+

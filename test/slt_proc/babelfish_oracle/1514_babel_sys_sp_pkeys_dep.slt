@@ -1,0 +1,10 @@
+# test/slt_proc/babelfish_oracle/1514_babel_sys_sp_pkeys_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/sys-sp_pkeys-dep-vu-prepare.sql, test/babelfish/raw/sys-sp_pkeys-dep-vu-verify.sql, test/babelfish/raw/sys-sp_pkeys-dep-vu-cleanup.sql
+
+statement ok
+create table sys_sp_pkeys_dep_vu_prepare_t1(a int, primary key(a))
+
+statement ok
+create procedure sys_sp_pkeys_dep_vu_prepare_p1 as
+    exec sp_pkeys @table_name = 'sys_sp_pkeys_dep_vu_prepare_t1'
+

@@ -1,0 +1,91 @@
+# test/slt_proc/babelfish_oracle/1227_babel_babel_3820.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/openjson/BABEL-3820-vu-prepare.sql, test/babelfish/raw/openjson/BABEL-3820-vu-verify.sql, test/babelfish/raw/openjson/BABEL-3820-vu-cleanup.sql
+
+statement error
+CREATE PROCEDURE openjson_3820_p1
+AS
+BEGIN
+    SELECT * FROM OPENJSON('{}') WITH(field int 'strict$.field')
+END;
+
+statement error
+CREATE PROCEDURE openjson_3820_p5
+AS
+BEGIN
+    SELECT * FROM OPENJSON(N'[{"Item": {"Price":2024.9940}}]') WITH(field int 'strict $.field')
+END;
+
+statement ok
+CREATE PROCEDURE openjson_3820_p6
+AS
+BEGIN
+    DECLARE @json_p6 NVARCHAR(4000) = N'{"to":{"sub-object":["en-GB", "en-UK","de-AT","es-AR","sr-Cyrl"]}}';
+    SELECT [key], value FROM OPENJSON(@json_p6,'lax$.path.to."sub-object"')
+END;
+
+statement ok
+CREATE PROCEDURE openjson_3820_p7
+AS
+BEGIN
+    DECLARE @json_p7 NVARCHAR(4000) = N'{"path": {"to":{"sub-object":["en-GB", "en-UK","de-AT","es-AR","sr-Cyrl"]}}}'; 
+    SELECT [key], value FROM OPENJSON(@json_p7,'strict $.path.to."sub-object"')
+END;
+
+statement ok
+CREATE PROCEDURE openjson_3820_p8
+AS
+BEGIN
+    DECLARE @json_p8 NVARCHAR(4000) = N'{"path": {"to":{"sub-object":["en-GB", "en-UK","de-AT","es-AR","sr-Cyrl"]}}}'; 
+    SELECT [key], value FROM OPENJSON(@json_p8,'sTrIct$.path.to."sub-object"')
+END;
+
+statement ok
+CREATE PROCEDURE openjson_3820_p9
+AS
+BEGIN
+    DECLARE @json_p9 NVARCHAR(4000) = N'{"to":{"sub-object":["en-GB", "en-UK","de-AT","es-AR","sr-Cyrl"]}}'; 
+    SELECT [key], value FROM OPENJSON(@json_p9,'strict $.path.to."sub-object"')
+END;
+
+statement ok
+CREATE PROCEDURE openjson_3820_p10
+AS
+BEGIN
+    DECLARE @json_p10 NVARCHAR(4000) = N'{"to":{"sub-object":["en-GB", "en-UK","de-AT","es-AR","sr-Cyrl"]}}'; 
+    SELECT [key], value FROM OPENJSON(@json_p10,'$.path.to."sub-object"')
+END;
+
+statement error
+CREATE PROCEDURE openjson_3820_p11
+AS
+BEGIN
+    SELECT * FROM OPENJSON(N'{}') WITH(field int 'strict $.field')
+END;
+
+statement error
+exec openjson_3820_p1
+
+statement error
+exec openjson_3820_p5
+
+statement error
+exec openjson_3820_p9
+
+statement error
+exec openjson_3820_p11
+
+statement ok
+drop procedure openjson_3820_p6
+
+statement ok
+drop procedure openjson_3820_p7
+
+statement ok
+drop procedure openjson_3820_p8
+
+statement ok
+drop procedure openjson_3820_p9
+
+statement ok
+drop procedure openjson_3820_p10
+

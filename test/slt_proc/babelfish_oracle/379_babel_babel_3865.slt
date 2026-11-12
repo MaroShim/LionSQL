@@ -1,0 +1,93 @@
+# test/slt_proc/babelfish_oracle/379_babel_babel_3865.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3865.sql
+
+statement ok
+CREATE TABLE #temp_1(
+	a int,
+	b date,
+	c varchar,
+	d text,
+	e json,
+	f xml
+)
+
+statement ok
+CREATE TABLE #temp_2(
+	a sysname,
+	b datetime,
+	c datetime2,
+	d nchar,
+	e nvarchar,
+	f varbinary,
+	g numeric,
+	h smallmoney, 
+	i money
+)
+
+statement ok
+CREATE TABLE #temp_3(
+	a typa,
+	b typb
+)
+
+statement ok
+DROP TABLE #temp_3
+DROP TYPE typb
+
+statement ok
+CREATE TABLE #temp_3_5(
+	a int,
+	b as a + 1)
+
+statement ok
+INSERT INTO #temp_3_5(a) VALUES (1)
+
+query TT
+SELECT * FROM #temp_3_5
+----
+1 NULL
+
+statement ok
+DROP TABLE #temp_3_5
+
+statement ok
+CREATE TABLE tab_1 (a int, b typc)
+
+statement ok
+INSERT INTO tab_1 VALUES (1, 'a')
+
+statement ok
+SELECT * INTO #temp_4 FROM tab_1
+
+query TT
+SELECT * FROM #temp_4
+----
+1 a
+
+statement ok
+DROP TABLE tab_1
+
+statement ok
+DROP TABLE #temp_4
+
+statement ok
+CREATE ROLE role_a
+
+statement ok
+CREATE TABLE #temp_5 (a int)
+
+statement ok
+GRANT ALL ON #temp_5 TO role_a
+
+statement ok
+DROP ROLE role_a
+
+statement ok
+REVOKE ALL ON #temp_5 FROM role_a
+
+statement ok
+DROP TABLE #temp_5
+
+statement ok
+DROP ROLE role_a
+

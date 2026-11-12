@@ -1,0 +1,15 @@
+# test/slt_proc/babelfish_oracle/1151_babel_babel_235.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-235.sql
+
+statement ok
+SET ANSI_DEFAULTS ON;
+
+statement ok
+SET ANSI_DEFAULTS OFF;
+
+statement ok
+SET ANSI_DEFAULTS OFF;
+
+statement ok
+SET ANSI_DEFAULTS ON;
+

@@ -1,0 +1,15 @@
+# test/slt_proc/babelfish_oracle/521_babel_babel_2681.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2681.sql
+
+statement ok
+USE master
+
+query T
+select cast(SERVERPROPERTY('ProductVersion') as varchar) as ProductVersion;
+select cast(SERVERPROPERTY('ProductMajorVersion') as varchar) as ProductMajorVersion;
+select substring(@@version, 1, CHARINDEX(CHAR(10), @@version) - 1);
+select @@microsoftversion;
+select count(*) from (select @@version) a where version like '% (Babelfish %.%.%)';
+----
+0
+

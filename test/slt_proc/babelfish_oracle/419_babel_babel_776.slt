@@ -1,0 +1,16 @@
+# test/slt_proc/babelfish_oracle/419_babel_babel_776.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-776.sql
+
+statement ok
+USE master;
+
+query T
+SELECT FORMATMESSAGE('%s', 'Hi')
+----
+Hi
+
+query T
+SELECT FORMATMESSAGE(NULL, 0)
+----
+NULL
+

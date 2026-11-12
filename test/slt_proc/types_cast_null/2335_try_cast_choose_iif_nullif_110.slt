@@ -1,0 +1,35 @@
+# test/slt_proc/types_cast_null/2335_try_cast_choose_iif_nullif_110.slt
+# T-SQL TRY_CAST, TRY_CONVERT, CHOOSE, IIF, ISNULL, NULLIF, COALESCE (110)
+
+query ITIT
+SELECT TRY_CAST('1437' AS INT),
+       ISNULL(TRY_CAST('not_an_int_110' AS INT), -999),
+       ISNULL(NULLIF(1437, 1437), 110),
+       CHOOSE(3, 'OPT_A_110', 'OPT_B_110', 'OPT_C_110');
+----
+1437 -999 110 OPT_C_110
+
+query TT
+SELECT IIF(1437 > 50, 'LARGE_110', 'SMALL_110'),
+       COALESCE(NULL, NULL, 'FALLBACK_110');
+----
+LARGE_110 FALLBACK_110
+
+statement ok
+CREATE TABLE tc_tbl_2335 (id INT PRIMARY KEY, raw_val VARCHAR(30), backup_val INT);
+
+statement ok
+INSERT INTO tc_tbl_2335 VALUES
+(1, '1437', 10),
+(2, 'bad_110', 550);
+
+query II
+SELECT id, COALESCE(TRY_CAST(raw_val AS INT), backup_val)
+FROM tc_tbl_2335
+ORDER BY id;
+----
+1 1437
+2 550
+
+statement ok
+DROP TABLE tc_tbl_2335;

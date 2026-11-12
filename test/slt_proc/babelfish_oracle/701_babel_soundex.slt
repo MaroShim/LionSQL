@@ -1,0 +1,8 @@
+# test/slt_proc/babelfish_oracle/701_babel_soundex.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/string_functions/soundex.sql
+
+query T
+SELECT SOUNDEX('Green')
+----
+G650
+

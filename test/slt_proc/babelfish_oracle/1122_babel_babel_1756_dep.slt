@@ -1,0 +1,10 @@
+# test/slt_proc/babelfish_oracle/1122_babel_babel_1756_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1756-dep-vu-prepare.sql, test/babelfish/raw/BABEL-1756-dep-vu-verify.sql, test/babelfish/raw/BABEL-1756-dep-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_1756_dep_vu_prepare_t1(test_collation TEXT COLLATE "default")
+
+statement ok
+CREATE PROCEDURE babel_1756_dep_vu_prepare_p1 AS
+    exec sp_tablecollations_100 'babel_1756_dep_vu_prepare_t1'
+

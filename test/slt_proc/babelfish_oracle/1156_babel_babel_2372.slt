@@ -1,0 +1,38 @@
+# test/slt_proc/babelfish_oracle/1156_babel_babel_2372.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2372.sql
+
+statement ok
+SET LANGUAGE Italian
+
+statement ok
+SET LANGUAGE us_english
+
+statement ok
+declare @rc varchar(10) = 'Italian';
+SET LANGUAGE @rc
+
+statement ok
+declare @rc varchar(10) = 'us_english';
+SET LANGUAGE @rc
+
+statement ok
+SET LANGUAGE Italian
+
+statement ok
+SET LANGUAGE us_english
+
+statement ok
+declare @rc varchar(10) = 'Italian';
+SET LANGUAGE @rc
+
+statement ok
+declare @rc varchar(10) = 'us_english';
+SET LANGUAGE @rc
+
+statement ok
+declare @rc varchar(10) = NULL;
+SET LANGUAGE @rc
+
+statement ok
+SET LANGUAGE NULL
+

@@ -1,0 +1,38 @@
+# test/slt_proc/window_analytics/945_partition_window_lead_lag_25.slt
+# T-SQL PARTITION BY windowing, ROW_NUMBER, SUM OVER, LEAD/LAG negative defaults (25)
+
+statement ok
+CREATE TABLE w_part_945 (id INT PRIMARY KEY, grp VARCHAR(10), amt INT);
+
+statement ok
+INSERT INTO w_part_945 VALUES
+(1, 'G1', 250),
+(2, 'G1', 500),
+(3, 'G2', 375),
+(4, 'G2', 750);
+
+query ITIII
+SELECT id, grp,
+       ROW_NUMBER() OVER (PARTITION BY grp ORDER BY id),
+       LAG(amt, 1, -2500) OVER (PARTITION BY grp ORDER BY id),
+       LEAD(amt, 1, -2500) OVER (PARTITION BY grp ORDER BY id)
+FROM w_part_945
+ORDER BY id;
+----
+1 G1 1 -2500 500
+2 G1 2 250 -2500
+3 G2 1 -2500 750
+4 G2 2 375 -2500
+
+query III
+SELECT id, SUM(amt) OVER (PARTITION BY grp ORDER BY id), COUNT(*) OVER (PARTITION BY grp)
+FROM w_part_945
+ORDER BY id;
+----
+1 250 2
+2 750 2
+3 375 2
+4 1125 2
+
+statement ok
+DROP TABLE w_part_945;

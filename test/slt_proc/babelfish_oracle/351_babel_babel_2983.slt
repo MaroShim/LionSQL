@@ -1,0 +1,209 @@
+# test/slt_proc/babelfish_oracle/351_babel_babel_2983.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2983.sql
+
+statement ok
+use master;
+
+statement ok
+create table t2983(v varchar(10), nv nvarchar(10), c char(10), nc nchar(10), t text, nt ntext);
+
+statement ok
+insert into t2983 values ('abc', 'def', 'ghi', 'jkl', 'mno', 'pqr');
+
+query T
+select v + v from t2983;
+----
+abcabc
+
+query T
+select cast(pg_typeof(v + v) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select nv + nv from t2983;
+----
+defdef
+
+query T
+select cast(pg_typeof(nv + nv) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select c + c from t2983;
+----
+ghighi
+
+query T
+select cast(pg_typeof(c + c) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select nc + nc from t2983;
+----
+jkljkl
+
+query T
+select cast(pg_typeof(nc + nc) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select t + t from t2983;
+----
+mnomno
+
+query T
+select cast(pg_typeof(t + t) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select nt + nt from t2983;
+----
+pqrpqr
+
+query T
+select cast(pg_typeof(nt + nt) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select '123' + '456' from t2983;
+----
+579
+
+query T
+select cast(pg_typeof('123' + '456') as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select '123' + v from t2983;
+----
+123abc
+
+query T
+select cast(pg_typeof('123' + v) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select v + '123' from t2983;
+----
+abc123
+
+query T
+select cast(pg_typeof(v + '123') as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select '123' + nv from t2983;
+----
+123def
+
+query T
+select cast(pg_typeof('123' + nv) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select nv + '123' from t2983;
+----
+def123
+
+query T
+select cast(pg_typeof(nv + '123') as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select v + nv from t2983;
+----
+abcdef
+
+query T
+select cast(pg_typeof(v + nv) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select nv + v from t2983;
+----
+defabc
+
+query T
+select cast(pg_typeof(nv + v) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select c + nv from t2983;
+----
+ghidef
+
+query T
+select cast(pg_typeof(c + nv) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select nv + c from t2983;
+----
+defghi
+
+query T
+select cast(pg_typeof(nv + c) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select nc + nv from t2983;
+----
+jkldef
+
+query T
+select cast(pg_typeof(nc + nv) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select nv + nc from t2983;
+----
+defjkl
+
+query T
+select cast(pg_typeof(nv + nc) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select nc + v from t2983;
+----
+jklabc
+
+query T
+select cast(pg_typeof(nc + v) as varchar(20)) from t2983;
+----
+NULL
+
+query T
+select v + nc from t2983;
+----
+abcjkl
+
+query T
+select cast(pg_typeof(v + nc) as varchar(20)) from t2983;
+----
+NULL
+
+statement ok
+drop table t2983;
+
+statement ok
+declare @v varchar(20) = '01-Aug'
+select datediff(dd, @v + '-2021', '2022-01-01')
+

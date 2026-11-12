@@ -1,0 +1,41 @@
+# test/slt_proc/babelfish_oracle/1598_babel_timefromparts.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/timefromparts-vu-prepare.sql, test/babelfish/raw/functions/timefromparts-vu-verify.sql
+
+statement ok
+CREATE VIEW timefromparts_vu_prepare_v1 AS (SELECT TIMEFROMPARTS ( 23, 59, 59, 0, 0));
+
+statement ok
+CREATE VIEW timefromparts_vu_prepare_v2 AS (SELECT TIMEFROMPARTS ( 23, 59, 59, 456, 5));
+
+statement ok
+CREATE PROCEDURE timefromparts_vu_prepare_p1 AS (SELECT TIMEFROMPARTS ( 23, 59, 59, 5678, 3));
+
+query T
+select TIMEFROMPARTS(24, 23, 54, 35, 2 );
+----
+24:23:54.35
+
+query T
+select TIMEFROMPARTS(18, 63, 49, 75, 5 );
+----
+18:63:49.00075
+
+query T
+select TIMEFROMPARTS(08, 39, 84, 589, 3 );
+----
+08:39:84.589
+
+statement ok
+DROP VIEW timefromparts_vu_prepare_v1
+
+statement ok
+DROP VIEW timefromparts_vu_prepare_v2
+
+query T
+EXEC timefromparts_vu_prepare_p1
+----
+23:59:59.5678
+
+statement ok
+DROP PROCEDURE timefromparts_vu_prepare_p1
+

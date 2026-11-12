@@ -1,0 +1,32 @@
+# test/slt_proc/babelfish_oracle/709_babel_sys_configurations.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-configurations.sql
+
+statement ok
+SELECT count(*) FROM sys.configurations 
+WHERE 
+        SQL_VARIANT_PROPERTY(configuration_id, 'BaseType') != 'int' OR
+        SQL_VARIANT_PROPERTY(name, 'BaseType') != 'nvarchar' OR
+        SQL_VARIANT_PROPERTY(value, 'BaseType') != 'int' OR
+        SQL_VARIANT_PROPERTY(minimum, 'BaseType') != 'int' OR
+        SQL_VARIANT_PROPERTY(maximum, 'BaseType') != 'int' OR
+        SQL_VARIANT_PROPERTY(value_in_use, 'BaseType') != 'int' OR
+        SQL_VARIANT_PROPERTY(description, 'BaseType') != 'nvarchar' OR
+        SQL_VARIANT_PROPERTY(is_dynamic, 'BaseType') != 'bit' OR
+        SQL_VARIANT_PROPERTY(is_advanced, 'BaseType') != 'bit';
+
+statement ok
+CREATE DATABASE DB1;
+
+query TT
+select (select count(*) from DbO.SySConFIGuReS) as x, (select count(*) from [DbO].SySCuRConFIgS) as y;
+----
+NULL NULL
+
+statement ok
+CREATE DATABASE DB1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+query TT
+select (select count(*) from DbO.SySConFIGuReS) as x, (select count(*) from [DbO].SySCuRConFIgS) as y;
+----
+NULL NULL
+

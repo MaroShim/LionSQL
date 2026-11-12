@@ -1,0 +1,38 @@
+# test/slt_proc/babelfish_oracle/711_babel_sys_data_spaces_before_16_4.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-data_spaces-before-16-4-vu-prepare.sql, test/babelfish/raw/views/sys-data_spaces-before-16-4-vu-verify.sql, test/babelfish/raw/views/sys-data_spaces-before-16-4-vu-cleanup.sql
+
+statement ok
+CREATE VIEW sys_data_spaces_vu_prepare_view AS
+SELECT * FROM sys.data_spaces where type_desc = 'ROWS_FILEGROUP'
+
+statement ok
+CREATE PROC sys_data_spaces_vu_prepare_proc AS
+SELECT * FROM sys.data_spaces where type_desc = 'ROWS_FILEGROUP'
+
+statement ok
+CREATE FUNCTION dbo.sys_data_spaces_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT count(*) FROM sys.data_spaces where type_desc = 'ROWS_FILEGROUP')
+END
+
+query TTTTTT
+SELECT * FROM sys.data_spaces
+----
+1 PRIMARY FG ROWS_FILEGROUP true false
+
+query TTTTTT
+SELECT * FROM sys_data_spaces_vu_prepare_view
+----
+1 PRIMARY FG ROWS_FILEGROUP true false
+
+statement ok
+DROP VIEW sys_data_spaces_vu_prepare_view
+
+statement ok
+DROP PROC sys_data_spaces_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_data_spaces_vu_prepare_func
+

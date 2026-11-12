@@ -1,0 +1,57 @@
+# test/slt_proc/babelfish_oracle/1520_babel_sys_sp_tables_view.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-sp_tables_view.sql
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+USE db1
+
+statement ok
+create table tbl_1 (a int)
+
+statement ok
+USE master
+
+statement ok
+create table tbl_2 (a int)
+
+statement ok
+USE db1
+
+statement ok
+drop table tbl_1;
+
+statement ok
+USE master
+
+statement ok
+drop table tbl_2;
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+USE db1
+
+statement ok
+create table tbl_1 (a int)
+
+statement ok
+USE master
+
+statement ok
+create table tbl_2 (a int)
+
+statement ok
+USE db1
+
+statement ok
+drop table tbl_1;
+
+statement ok
+USE master
+
+statement ok
+drop table tbl_2;
+

@@ -1,0 +1,49 @@
+# test/slt_proc/babelfish_oracle/308_babel_babel_1994_varchar.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/sql_variant/BABEL-1994-VARCHAR-vu-prepare.sql, test/babelfish/raw/sql_variant/BABEL-1994-VARCHAR-vu-verify.sql, test/babelfish/raw/sql_variant/BABEL-1994-VARCHAR-vu-cleanup.sql
+
+statement ok
+drop table if exists babel_1994_varchar_vu_prepare_t1;
+
+statement ok
+create table babel_1994_varchar_vu_prepare_t1(
+    name_vcnn varchar(10) not null primary key,
+    name_vcn varchar(10) null
+);
+
+statement ok
+insert into babel_1994_varchar_vu_prepare_t1 values ('smith', 'smith');
+
+statement ok
+insert into babel_1994_varchar_vu_prepare_t1 values ('jones  ', 'jones  ');
+
+statement ok
+insert into babel_1994_varchar_vu_prepare_t1 values ('jones ', 'jones  ');
+
+query T
+select count(*) from babel_1994_varchar_vu_prepare_t1 where name_vcnn = 'smith  ';
+----
+1
+
+query T
+select count(*) from babel_1994_varchar_vu_prepare_t1 where name_vcn = 'smith    ';
+----
+1
+
+query T
+select count(*) from babel_1994_varchar_vu_prepare_t1 where name_vcnn = 'jones   ';
+----
+2
+
+query T
+select count(*) from babel_1994_varchar_vu_prepare_t1 where name_vcn = 'jones   ';
+----
+2
+
+query T
+select count(*) from babel_1994_varchar_vu_prepare_t1 where name_vcn = 'jones    ';
+----
+2
+
+statement ok
+drop table babel_1994_varchar_vu_prepare_t1;
+

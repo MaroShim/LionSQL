@@ -1,0 +1,86 @@
+# test/slt_proc/babelfish_oracle/564_babel_babel_tablehint.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-TABLEHINT.sql
+
+statement ok
+create sequence t1_sec start with 1;
+
+statement ok
+create table t1 (id int default nextval('t1_sec'), a int);
+
+statement error
+insert into t1 with(invalid_hint) (a) values (1); -- syntax error
+
+statement error
+insert into t1 with() (a) values (1);             -- syntax error
+
+statement error
+insert into t1 with((nowait)) (a) values (2);      -- syntax error
+
+statement error
+insert into t1 with('nowait') (a) values (3);      -- syntax error
+
+statement error
+insert into t1 with(123nowait) (a) values (4);     -- syntax error
+
+statement error
+insert into t1 with($nowait) (a) values (5);       -- syntax error
+
+statement error
+insert into t1 with(nowait.serializable) (a) values (6);  -- syntax error
+
+statement ok
+select * from t1 order by id;
+
+statement ok
+delete from t1 with (nowait) where a = 7;
+
+statement ok
+delete from t1 with (nowait serializable) where a = 8;
+
+statement ok
+delete from t1 with (nowait, serializable) where a = 9;
+
+statement ok
+select * from t1 order by id;
+
+statement ok
+select * from t1 order by id;
+
+statement ok
+select * from t1 order by id;
+
+statement ok
+select * from t1 with (nowait) order by id;
+
+statement ok
+select * from t1 with (nowait serializable) order by id;
+
+statement ok
+select * from t1 with (nowait, serializable) order by id;
+
+statement ok
+select * from t1 with (index=i1) order by id;
+
+statement ok
+select * from t1 with (index(i1)) order by id;
+
+statement ok
+select * from t1 with (index(i1, i2)) order by id;
+
+query T
+select count(*) from t1 s1 with (index(i1,i2)) join t1 s2 with (index=i3) on s1.a=s2.a;
+----
+0
+
+statement error
+select * from t1 (tablock, index(i1)) order by id; -- syntax error
+
+statement ok
+Select * FROM t1 n1 (Nolock) WHERE (Select Count(*) FROM t1 (Nolock) n2) <= 0;
+
+statement ok
+drop table t1;
+
+statement ok
+drop sequence t1_sec;
+

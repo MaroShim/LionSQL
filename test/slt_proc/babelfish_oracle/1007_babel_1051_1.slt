@@ -1,0 +1,35 @@
+# test/slt_proc/babelfish_oracle/1007_babel_1051_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/1051_1.sql
+
+statement ok
+CREATE TABLE t1051
+(
+ c1 int
+,c2 int NULL
+)
+
+statement ok
+DROP TABLE t1051
+
+statement ok
+SET XACT_ABORT ON;
+
+statement ok
+begin transaction
+
+statement ok
+CREATE TABLE t1051
+(
+ c1 int
+,c2 int NULL
+)
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+DROP TABLE t1051
+
+statement ok
+SET XACT_ABORT OFF;
+

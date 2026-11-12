@@ -1,0 +1,84 @@
+# test/slt_proc/babelfish_oracle/268_babel_babel_1208.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1208.sql
+
+statement ok
+create table babel_1208_t1 (a uniqueidentifier);
+
+statement ok
+insert into babel_1208_t1 values (convert(uniqueidentifier, 0x00));
+insert into babel_1208_t1 values (convert(uniqueidentifier, 0x1));
+insert into babel_1208_t1 values (convert(uniqueidentifier, 0x01));
+insert into babel_1208_t1 values (convert(uniqueidentifier, 0x123));
+insert into babel_1208_t1 values (convert(uniqueidentifier, 0x00010203040506070809));
+insert into babel_1208_t1 values (convert(uniqueidentifier, 0x000102030405060708090a0b0c0d0e0f));
+insert into babel_1208_t1 values (convert(uniqueidentifier, 0x000102030405060708090a0b0c0d0e0f1011121314));
+
+query T
+select * from babel_1208_t1 order by a;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+CREATE TABLE babel_1208_t2([SourceActivityTypeId] [uniqueidentifier] NOT NULL)
+
+statement ok
+ALTER TABLE babel_1208_t2 ADD DEFAULT (CONVERT([uniqueidentifier],0x00)) FOR [SourceActivityTypeId]
+
+statement ok
+SELECT * FROM babel_1208_t2 order by 1;
+
+statement ok
+CREATE FUNCTION babel_1208_f_binary(@v binary(16)) RETURNS binary(16) AS BEGIN RETURN @v; END
+
+statement ok
+CREATE FUNCTION babel_1208_f_varbinary(@v varbinary(16)) RETURNS varbinary(16) AS BEGIN RETURN @v; END
+
+query T
+SELECT babel_1208_f_varbinary(a) FROM babel_1208_t1;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+create table babel_1208_t3 (c1 binary(16), c2 varbinary(16));
+
+statement ok
+insert into babel_1208_t3 values (0x000102030405060708090a0b0c0d0e0f, 0x000102030405060708090a0b0c0d0e0f);
+
+statement ok
+CREATE FUNCTION babel_1208_f_uuid(@u uniqueidentifier) RETURNS uniqueidentifier AS BEGIN RETURN @u; END
+
+query TT
+SELECT babel_1208_f_uuid(c1) binary_in, babel_1208_f_uuid(c2) varbinary_in from babel_1208_t3
+----
+NULL NULL
+
+statement ok
+drop table babel_1208_t1;
+
+statement ok
+drop table babel_1208_t2;
+
+statement ok
+drop table babel_1208_t3;
+
+statement ok
+drop function babel_1208_f_binary;
+
+statement ok
+drop function babel_1208_f_varbinary;
+
+statement ok
+drop function babel_1208_f_uuid;
+

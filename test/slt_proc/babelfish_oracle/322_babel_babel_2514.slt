@@ -1,0 +1,103 @@
+# test/slt_proc/babelfish_oracle/322_babel_babel_2514.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2514.sql
+
+statement ok
+USE master;
+
+query T
+select 'value' = '1';
+----
+false
+
+statement ok
+drop view if exists babel_2514_view;
+
+statement ok
+create view babel_2514_view as (
+	select (select 'value' = '1')
+);
+
+statement ok
+drop view if exists babel_2514_view;
+
+statement ok
+drop function if exists babel_2514_func;
+
+statement ok
+create function babel_2514_func()
+	returns table as return 
+	(
+		select * from (select 'value' = '1') col1
+	)
+
+statement ok
+drop function if exists babel_2514_func;
+
+query T
+select (select 'value' = '1');
+----
+0
+
+query T
+select * from (select 'value' = '1') a;
+----
+a
+
+query T
+WITH babel_2514_cte (a) AS
+(
+	select 'value' = '1'
+)
+SELECT * from babel_2514_cte;
+----
+false
+
+query T
+declare @string1 nvarchar(5);
+SELECT 'v' = @String1;
+----
+NULL
+
+statement ok
+drop function if exists babel_2514_func_local_id_1;
+
+statement ok
+create function babel_2514_func_local_id_1(@String NVARCHAR(4000))
+returns table as return
+(
+	SELECT @string
+);
+
+statement ok
+drop function if exists babel_2514_func_local_id_1;
+
+statement ok
+drop function if exists babel_2514_func_local_id_2;
+
+statement ok
+create function babel_2514_func_local_id_2(@String NVARCHAR(4000))
+returns table as return
+(
+	SELECT 'value' = @String
+);
+
+statement ok
+drop function if exists babel_2514_func_local_id_2;
+
+statement ok
+drop function if exists babel_2514_complex_func;
+
+statement ok
+drop function if exists babel_2514_complex_func;
+
+statement ok
+drop view if exists babel_2514_complex_view;
+
+statement ok
+create view babel_2514_complex_view as (
+	select (select a = 1) col1, * from (select b = 2 union all select b = 3) t
+);
+
+statement ok
+drop view if exists babel_2514_complex_view;
+

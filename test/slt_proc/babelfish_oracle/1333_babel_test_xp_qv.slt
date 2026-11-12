@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/1333_babel_test_xp_qv.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-xp_qv.sql
+
+statement ok
+DECLARE @retVal INT
+EXECUTE @retVal = xp_qv N'87651903210', N'SERVICENAME'
+select @retVal;
+
+statement ok
+DECLARE @param1 NVARCHAR(256)
+DECLARE @param2 NVARCHAR(256)
+DECLARE @retVal INT
+set @param1 = N'87651903210'
+set @param1 = N'NameofService'
+EXECUTE @retVal = xp_qv @param1, @param2
+select @retVal;
+
+statement ok
+DECLARE @retVal INT
+EXECUTE @retVal = master.dbo.xp_qv N'87651903210', N'SERVICENAME'
+select @retVal;
+
+statement ok
+DECLARE @retVal INT
+EXECUTE @retVal = dbo.xp_qv N'87651903210', N'SERVICENAME'
+select @retVal;
+

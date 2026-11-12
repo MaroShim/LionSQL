@@ -1,0 +1,39 @@
+# test/slt_proc/babelfish_oracle/1120_babel_babel_1719.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1719.sql
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+USE db1;
+
+statement ok
+CREATE LOGIN login1 WITH PASSWORD = '123';
+
+statement ok
+SELECT is_disabled FROM sys.server_principals WHERE name = 'login1';
+
+statement ok
+USE MASTER;
+
+statement ok
+DROP LOGIN login1;
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+USE db1;
+
+statement ok
+CREATE LOGIN login1 WITH PASSWORD = '123';
+
+statement ok
+SELECT is_disabled FROM sys.server_principals WHERE name = 'login1';
+
+statement ok
+USE MASTER;
+
+statement ok
+DROP LOGIN login1;
+

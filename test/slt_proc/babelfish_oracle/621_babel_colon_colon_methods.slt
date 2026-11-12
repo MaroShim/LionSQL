@@ -1,0 +1,403 @@
+# test/slt_proc/babelfish_oracle/621_babel_colon_colon_methods.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/colon_colon_methods-vu-prepare.sql, test/babelfish/raw/colon_colon_methods-vu-verify.sql, test/babelfish/raw/colon_colon_methods-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_5987_colon_colon_t1 (XmlColumn XML, GeomColumn geometry, GeogColumn geography)
+
+statement ok
+INSERT INTO babel_5987_colon_colon_t1
+VALUES ('<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>', 
+        geometry::STGeomFromText('POINT (1 2)', 0), 
+        geography::STGeomFromText('POINT(-122.34900 47.65100)', 4326))
+
+statement ok
+CREATE PROCEDURE babel_5987_colon_colon_dep_proc2 AS
+    select geometry::NonExistentMethod() as NonExistentMethod
+
+statement ok
+CREATE PROCEDURE babel_5987_colon_colon_dep_proc3 AS
+    select geometry::NonExistentMethodField as NonExistentMethodField
+
+statement ok
+CREATE FUNCTION babel_5987_colon_colon_dep_func_4()
+RETURNS geometry
+AS
+BEGIN
+RETURN (select geometry::NonExistentMethod())
+END
+
+statement ok
+CREATE FUNCTION babel_5987_colon_colon_dep_func_5()
+RETURNS geometry
+AS
+BEGIN
+RETURN (select geometry::NonExistentMethodField)
+END
+
+statement ok
+CREATE VIEW babel_5987_colon_colon_dep_view1 AS
+    select geometry::STGeomFromText('POINT (1 2)', 0), geography::STGeomFromText('POINT (1 2)', 4326), geometry::STGeomFromText('POINT (1 2)', 0).STAsText()
+
+statement ok
+CREATE VIEW babel_5987_colon_colon_dep_view2 AS
+    select geometry::NonExistentMethod() as NonExistentMethod
+
+statement ok
+CREATE VIEW babel_5987_colon_colon_dep_view3 AS
+    select geometry::NonExistentMethodField as NonExistentMethodField
+
+query TT
+select geometry::STGeomFromText('POINT (1 2)', 0)
+----
+geometry 0
+
+query TT
+select sys.geometry::STGeomFromText('POINT (1 2)', 0)
+----
+sys.geometry 0
+
+query TT
+select [sys].[geometry]::STGeomFromText('POINT (1 2)', 0)
+----
+sys].[geometry 0
+
+query TT
+select geography::STGeomFromText('POINT (1 2)', 4326)
+----
+geography 4326
+
+query TT
+select sys.geography::STGeomFromText('POINT (1 2)', 4326)
+----
+sys.geography 4326
+
+query TT
+select [sys].[geography]::STGeomFromText('POINT (1 2)', 4326)
+----
+sys].[geography 4326
+
+query TT
+select [geography]::STGeomFromText('POINT (1 2)', 4326)
+----
+geography 4326
+
+query TT
+select [geometry]::STGeomFromText('POINT (1 2)', 0)
+----
+geometry 0
+
+query TT
+select (geography)::STGeomFromText('POINT (1 2)', 4326)
+----
+geography 4326
+
+query TT
+select (geometry)::STGeomFromText('POINT (1 2)', 0)
+----
+geometry 0
+
+query TT
+select "geography"::STGeomFromText('POINT (1 2)', 4326)
+----
+geography 4326
+
+query TT
+select "geometry"::STGeomFromText('POINT (1 2)', 0)
+----
+geometry 0
+
+query TT
+select xml::XmlColumn.value('/', 'varchar') from babel_5987_colon_colon_t1
+----
+xml varchar
+
+query T
+select geometry::GeomColumn.STAsText() from babel_5987_colon_colon_t1
+----
+NULL
+
+query T
+select geography::GeogColumn.STAsText() from babel_5987_colon_colon_t1
+----
+NULL
+
+query TT
+select XmlColumn::xml.value('/', 'varchar') from babel_5987_colon_colon_t1
+----
+XmlColumn varchar
+
+query T
+select GeomColumn::geometry.STAsText() from babel_5987_colon_colon_t1
+----
+NULL
+
+query TT
+select geometry::STGeomFromText('POINT (1 2)', 0).STAsText()
+----
+geometry 0
+
+query TT
+select geography::STGeomFromText('POINT (1 2)', 4326).STAsText()
+----
+geography 4326
+
+query T
+select hierarchyid::GETROOT()
+----
+hierarchyid
+
+query T
+select geometry::NonExistentMethod()
+----
+geometry
+
+query T
+select geography::NonExistentMethod()
+----
+geography
+
+query T
+select xml::NonExistentMethod()
+----
+xml
+
+query T
+select int::NonExistentMethod()
+----
+int
+
+query T
+select geometry::[NonExistentMethod]()
+----
+geometry
+
+query T
+select geography::[NonExistentMethod]()
+----
+geography
+
+query T
+select xml::[NonExistentMethod]()
+----
+xml
+
+query T
+select int::[NonExistentMethod]()
+----
+int
+
+query T
+select geometry::NonExistentMethodField
+----
+geometry
+
+query T
+select geography::NonExistentMethodField
+----
+geography
+
+query T
+select xml::NonExistentMethodField
+----
+xml
+
+query T
+select int::NonExistentMethodField
+----
+int
+
+query T
+select geometry::[NonExistentMethodField]
+----
+geometry
+
+query T
+select geography::[NonExistentMethodField]
+----
+geography
+
+query T
+select xml::[NonExistentMethodField]
+----
+xml
+
+query T
+select int::[NonExistentMethodField]
+----
+int
+
+query T
+select geometry::NonExistentMethod().AnotherNonExistentMethod()
+----
+geometry
+
+query T
+select geography::NonExistentMethod().AnotherNonExistentMethod()
+----
+geography
+
+query T
+select xml::NonExistentMethod().AnotherNonExistentMethod()
+----
+xml
+
+query T
+select int::NonExistentMethod().AnotherNonExistentMethod()
+----
+int
+
+query T
+select geometry::NonExistentMethodField.AnotherNonExistentField
+----
+geometry
+
+query T
+select geography::NonExistentMethodField.AnotherNonExistentField
+----
+geography
+
+query T
+select xml::NonExistentMethodField.AnotherNonExistentField
+----
+xml
+
+query T
+select int::NonExistentMethodField.AnotherNonExistentField
+----
+int
+
+query T
+select geometry::NonExistentMethod().AnotherNonExistentField
+----
+geometry
+
+query T
+select geography::NonExistentMethod().AnotherNonExistentField
+----
+geography
+
+query T
+select xml::NonExistentMethod().AnotherNonExistentField
+----
+xml
+
+query T
+select int::NonExistentMethod().AnotherNonExistentField
+----
+int
+
+query T
+select geometry::NonExistentMethodField.AnotherNonExistentMethod()
+----
+geometry
+
+query T
+select geography::NonExistentMethodField.AnotherNonExistentMethod()
+----
+geography
+
+query T
+select xml::NonExistentMethodField.AnotherNonExistentMethod()
+----
+xml
+
+query T
+select int::NonExistentMethodField.AnotherNonExistentMethod()
+----
+int
+
+query T
+select babel_5987_xmlUDT::NonExistentMethod()
+----
+babel_5987_xmlUDT
+
+query TT
+select babel_5987_geometryUDT::STGeomFromText('POINT (1 2)', 0)
+----
+babel_5987_geometryUDT 0
+
+query TT
+select babel_5987_geographyUDT::STGeomFromText('POINT (1 2)', 4326)
+----
+babel_5987_geographyUDT 4326
+
+statement ok
+SET QUOTED_IDENTIFIER OFF
+
+query TT
+select "geography"::STGeomFromText('POINT (1 2)', 4326)
+----
+geography 4326
+
+query TT
+select "geometry"::STGeomFromText('POINT (1 2)', 0)
+----
+geometry 0
+
+statement ok
+SET QUOTED_IDENTIFIER ON
+
+query TT
+select geometry   ::STGeomFromText('Point(47.65100 -22.34900 32.546000  54.56300)', 1000000000 )
+----
+geometry 1000000000
+
+query T
+EXEC babel_5987_colon_colon_dep_proc2
+----
+geometry
+
+query T
+EXEC babel_5987_colon_colon_dep_proc3
+----
+geometry
+
+query T
+SELECT babel_5987_colon_colon_dep_func_4()
+----
+geometry
+
+query T
+SELECT babel_5987_colon_colon_dep_func_5()
+----
+geometry
+
+query TT
+SELECT * FROM babel_5987_colon_colon_dep_view1
+----
+geometry 0
+
+query T
+SELECT * FROM babel_5987_colon_colon_dep_view2
+----
+geometry
+
+query T
+SELECT * FROM babel_5987_colon_colon_dep_view3
+----
+geometry
+
+statement ok
+DROP VIEW babel_5987_colon_colon_dep_view1
+
+statement ok
+DROP VIEW babel_5987_colon_colon_dep_view2
+
+statement ok
+DROP VIEW babel_5987_colon_colon_dep_view3
+
+statement ok
+DROP FUNCTION babel_5987_colon_colon_dep_func_5
+
+statement ok
+DROP FUNCTION babel_5987_colon_colon_dep_func_4
+
+statement ok
+DROP PROCEDURE babel_5987_colon_colon_dep_proc3
+
+statement ok
+DROP PROCEDURE babel_5987_colon_colon_dep_proc2
+
+statement ok
+DROP TABLE babel_5987_colon_colon_t1
+

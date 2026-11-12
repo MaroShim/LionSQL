@@ -1,0 +1,72 @@
+# test/slt_proc/babelfish_oracle/523_babel_babel_2787.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2787.sql
+
+statement ok
+CREATE TABLE employeeData( ID INT IDENTITY (1,1) PRIMARY KEY,Emp_First_name VARCHAR (50));
+
+statement ok
+CREATE TRIGGER updEmployeeData  ON employeeData  INSTEAD OF INSERT AS  
+BEGIN  
+   select count(*) from inserted;
+END
+
+statement ok
+insert into employeeData values ('a'),('b'),('c');
+
+query T
+select count(*) from employeeData;
+----
+3
+
+statement ok
+drop trigger updEmployeeData;
+
+statement ok
+insert into employeeData values ('a'),('b'),('c'),('d');
+
+statement ok
+CREATE TRIGGER updEmployeeData  ON employeeData  INSTEAD OF DELETE AS    
+BEGIN
+   select count(*) from deleted;
+END
+
+statement ok
+delete from employeeData where id = 1;
+
+statement ok
+delete from employeeData;
+
+statement ok
+select * from employeeData;
+
+statement ok
+drop trigger updEmployeeData
+
+statement ok
+delete from employeeData;
+
+statement ok
+CREATE TRIGGER updEmployeeData  ON employeeData  INSTEAD OF UPDATE AS
+BEGIN
+   select * from inserted;
+   select * from deleted;
+END
+
+statement ok
+insert into employeeData values ('a'),('b'),('c'),('d');
+
+statement ok
+update employeeData set Emp_First_name = 'ppp' where Emp_First_name = 'a'
+
+statement ok
+update employeeData set Emp_First_name = 'kkk' where Emp_First_name = 'a'
+
+statement ok
+update employeeData set Emp_First_name = 'ddd'
+
+statement ok
+drop trigger updEmployeeData
+
+statement ok
+drop table employeeData
+

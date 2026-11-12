@@ -1,0 +1,75 @@
+# test/slt_proc/babelfish_oracle/1255_babel_babel_768.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-768.sql
+
+statement ok
+CREATE TABLE t1 ( a INT PRIMARY KEY)
+
+statement ok
+CREATE TABLE t2 ( a INT REFERENCES t1(a))
+
+statement ok
+INSERT INTO t1 VALUES(1)
+
+statement ok
+INSERT INTO t2 VALUES(1)
+
+statement ok
+CREATE TABLE t3 ( a UNIQUEIDENTIFIER PRIMARY KEY)
+
+statement ok
+CREATE TABLE t4 ( a UNIQUEIDENTIFIER REFERENCES t3(a))
+
+statement ok
+INSERT INTO t3 VALUES('123e4567-e89b-12d3-a456-426614174000')
+
+statement ok
+INSERT INTO t4 VALUES('123e4567-e89b-12d3-a456-426614174000')
+
+statement ok
+CREATE TABLE t5 (a SQL_VARIANT PRIMARY KEY)
+
+statement ok
+CREATE TABLE t6 (a SQL_VARIANT REFERENCES t5(a))
+
+statement ok
+INSERT INTO t5 VALUES('123')
+
+statement ok
+INSERT INTO t6 VALUES('123')
+
+statement ok
+CREATE TABLE t7 ( a INT PRIMARY KEY)
+
+statement ok
+CREATE TABLE t8 ( a INT REFERENCES t7(a) ON DELETE RESTRICT)
+
+statement ok
+INSERT INTO t7 VALUES(1)
+
+statement ok
+INSERT INTO t8 VALUES(1)
+
+statement ok
+DROP TABLE t2
+
+statement ok
+DROP TABLE t1
+
+statement ok
+DROP TABLE t4
+
+statement ok
+DROP TABLE t3
+
+statement ok
+DROP TABLE t6
+
+statement ok
+DROP TABLE t5
+
+statement ok
+DROP TABLE t8
+
+statement ok
+DROP TABLE t7
+

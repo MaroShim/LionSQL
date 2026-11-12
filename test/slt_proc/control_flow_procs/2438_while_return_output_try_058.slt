@@ -1,0 +1,52 @@
+# test/slt_proc/control_flow_procs/2438_while_return_output_try_058.slt
+# T-SQL WHILE loop accumulation, RETURN status, OUTPUT params, TRY/CATCH (58)
+
+statement ok
+CREATE PROCEDURE sp_loop_acc_2438
+    @n INT,
+    @mult INT,
+    @total INT OUTPUT,
+    @status INT OUTPUT
+AS
+BEGIN
+    DECLARE @i INT = 1;
+    DECLARE @acc INT = 0;
+    WHILE @i <= @n
+    BEGIN
+        SET @acc = @acc + (@i * @mult);
+        SET @i = @i + 1;
+    END;
+    SET @total = @acc;
+    SET @status = 108;
+END;
+
+query II
+DECLARE @out_tot INT;
+DECLARE @rc INT;
+EXEC sp_loop_acc_2438 @n = 7, @mult = 5, @total = @out_tot OUTPUT, @status = @rc OUTPUT;
+SELECT @rc, @out_tot;
+----
+108 140
+
+statement ok
+CREATE PROCEDURE sp_safe_div_2438 @a INT, @b INT, @res INT OUTPUT
+AS
+BEGIN
+    BEGIN TRY
+        IF @b = 0
+            RAISERROR('Zero divisor on suite %d', 16, 1, 2438);
+        SET @res = @a / @b;
+    END TRY
+    BEGIN CATCH
+        SET @res = -1;
+    END CATCH;
+END;
+
+query II
+DECLARE @ok_r INT;
+DECLARE @err_r INT;
+EXEC sp_safe_div_2438 140, 5, @ok_r OUTPUT;
+EXEC sp_safe_div_2438 140, 0, @err_r OUTPUT;
+SELECT @ok_r, @err_r;
+----
+28 -1

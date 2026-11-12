@@ -1,0 +1,44 @@
+# test/slt_proc/babelfish_oracle/1094_babel_babel_1056.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1056.sql
+
+statement ok
+CREATE SCHEMA [Babelfish_1056];
+
+statement ok
+CREATE TABLE [Babelfish_1056].[employees]
+(person_id int IDENTITY PRIMARY KEY, firstname nvarchar(20), lastname nvarchar(30), salary money)
+
+statement ok
+CREATE PROCEDURE p_employee_insert @fname nvarchar(20), @lname nvarchar(30), @sal money
+AS BEGIN
+DECLARE @next_pers_id INT;
+SELECT @next_pers_id = MAX(person_id) FROM [Babelfish_1056].[employees];
+IF (@next_pers_id IS NULL)
+	SET @next_pers_id = 0
+	INSERT INTO [Babelfish_1056].[employees]
+	(person_id, firstname, lastname, salary)
+	VALUES
+	(@next_pers_id+1, @fname, @lname, @sal);
+END
+
+statement ok
+SET IDENTITY_INSERT [Babelfish_1056].[employees] ON
+
+statement ok
+SET IDENTITY_INSERT [Babelfish_1056].[employees] OFF
+
+statement ok
+SET IDENTITY_INSERT [Babelfish_1056].[employees] ON
+
+statement ok
+SET IDENTITY_INSERT [Babelfish_1056].[employees] OFF
+
+statement ok
+SET IDENTITY_INSERT [Babelfish_1056].[employees] ON
+
+statement ok
+SET IDENTITY_INSERT [Babelfish_1056].[employees] OFF
+
+statement ok
+SELECT * FROM [Babelfish_1056].[employees]
+

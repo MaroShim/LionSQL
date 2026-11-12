@@ -1,0 +1,43 @@
+# test/slt_proc/babelfish_oracle/1195_babel_babel_3000.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3000-vu-prepare.sql, test/babelfish/raw/BABEL-3000-vu-verify.sql, test/babelfish/raw/BABEL-3000-vu-cleanup.sql
+
+statement ok
+create table babel_3000_vu_prepare_var(a text, b xml)
+
+statement ok
+create table babel_3000_vu_prepare_dates(a date, b time(5))
+
+statement ok
+create table babel_3000_vu_prepare_nums(a int, b smallint, c bigint, d float, e real, f numeric(5,3))
+
+statement ok
+create table babel_3000_vu_prepare_num_identity(a int identity, b int) 
+
+statement ok
+create table babel_3000_vu_prepare_t1(a int)
+
+statement ok
+create schema babel_3000_vu_prepare_s1
+
+statement ok
+create table babel_3000_vu_prepare_s1.babel_3000_vu_prepare_nums(a int, b smallint, c bigint, d float, e real, f numeric(5,3))
+
+statement ok
+create database babel_3000_vu_prepare_db1
+
+statement ok
+use babel_3000_vu_prepare_db1
+
+statement ok
+use master
+
+statement ok
+drop table babel_3000_vu_prepare_var
+drop table babel_3000_vu_prepare_dates
+drop table babel_3000_vu_prepare_nums
+drop table babel_3000_vu_prepare_num_identity
+drop table babel_3000_vu_prepare_t1
+drop table babel_3000_vu_prepare_s1.babel_3000_vu_prepare_nums
+drop schema babel_3000_vu_prepare_s1
+drop database babel_3000_vu_prepare_db1
+

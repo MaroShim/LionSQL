@@ -1,0 +1,42 @@
+# test/slt_proc/babelfish_oracle/1209_babel_babel_3192.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3192-vu-prepare.sql, test/babelfish/raw/BABEL-3192-vu-verify.sql
+
+statement ok
+SELECT COUNT(*) AS has_dependency FROM pg_catalog.pg_depend
+WHERE objid = CAST('babel_3192_type' AS pg_catalog.regclass)  -- will get converted to pg_class oid
+AND refobjid = CAST('babel_3192_type' AS pg_catalog.regtype); -- will get converted to pg_type oid
+
+statement ok
+CREATE TABLE babel_3192_table (a int, b int);
+
+statement ok
+INSERT INTO babel_3192_table(a,b) VALUES(1,1), (2,2);
+
+statement ok
+SELECT COUNT(*) AS has_dependency FROM pg_catalog.pg_depend
+WHERE objid = CAST('@tab_babel_3192_mstvf' AS pg_catalog.regtype)   -- will get converted to pg_type oid
+AND refobjid = CAST('babel_3192_mstvf' AS pg_catalog.regproc);      -- will get converted to pg_proc oid
+
+statement ok
+SELECT COUNT(*) AS has_dependency FROM pg_catalog.pg_depend
+WHERE objid = CAST('@tab_babel_3192_mstvf' AS pg_catalog.regclass)  -- will get converted to pg_class oid
+AND refobjid = CAST('@tab_babel_3192_mstvf' AS pg_catalog.regtype); -- will get converted to pg_type oid
+
+statement ok
+SELECT COUNT(*) AS has_dependency FROM pg_catalog.pg_depend
+WHERE objid = CAST('babel_3192_type' AS pg_catalog.regclass)  -- will get converted to pg_class oid
+AND refobjid = CAST('babel_3192_type' AS pg_catalog.regtype); -- will get converted to pg_type oid
+
+statement ok
+SELECT COUNT(*) AS has_dependency FROM pg_catalog.pg_depend
+WHERE objid = CAST('@tab_babel_3192_mstvf' AS pg_catalog.regtype)   -- will get converted to pg_type oid
+AND refobjid = CAST('babel_3192_mstvf' AS pg_catalog.regproc);      -- will get converted to pg_proc oid
+
+statement ok
+SELECT COUNT(*) AS has_dependency FROM pg_catalog.pg_depend
+WHERE objid = CAST('@tab_babel_3192_mstvf' AS pg_catalog.regclass)  -- will get converted to pg_class oid
+AND refobjid = CAST('@tab_babel_3192_mstvf' AS pg_catalog.regtype); -- will get converted to pg_type oid
+
+statement ok
+DROP TABLE babel_3192_table;
+

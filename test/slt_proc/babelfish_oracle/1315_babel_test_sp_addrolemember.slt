@@ -1,0 +1,45 @@
+# test/slt_proc/babelfish_oracle/1315_babel_test_sp_addrolemember.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_addrolemember-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_addrolemember-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_addrolemember-vu-cleanup.sql
+
+statement ok
+CREATE TABLE tmp_sp_addrolemember(addRole sys.SYSNAME);
+
+statement ok
+CREATE ROLE SP_ADDROLEMEMBER_R1;
+
+statement ok
+CREATE ROLE sp_addrolemember_r2;
+
+statement ok
+CREATE ROLE sp_addrolemember_r3;
+
+statement ok
+CREATE LOGIN sp_addrolemember_login WITH PASSWORD = '123';
+
+statement ok
+CREATE USER sp_addrolemember_user FOR LOGIN sp_addrolemember_login;
+
+statement error
+EXEC sp_addrolemember;
+
+statement error
+EXEC sp_addrolemember '     ', 'sp_addrolemember_role_doesnot_exist';
+
+statement ok
+DROP USER sp_addrolemember_user;
+
+statement ok
+DROP LOGIN sp_addrolemember_login;
+
+statement ok
+DROP ROLE sp_addrolemember_r3;
+
+statement ok
+DROP ROLE sp_addrolemember_r2;
+
+statement ok
+DROP ROLE sp_addrolemember_r1;
+
+statement ok
+DROP TABLE tmp_sp_addrolemember;
+

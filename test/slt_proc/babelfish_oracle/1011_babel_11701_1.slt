@@ -1,0 +1,46 @@
+# test/slt_proc/babelfish_oracle/1011_babel_11701_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/11701_1.sql
+
+statement ok
+create schema error_mapping;
+
+statement ok
+begin transaction
+
+statement ok
+set xact_abort ON;
+
+statement ok
+begin transaction
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure error_mapping.ErrorHandling2 as
+begin
+exec error_mapping.ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+set xact_abort ON;
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+begin transaction;
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+drop schema error_mapping;
+

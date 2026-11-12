@@ -1,0 +1,31 @@
+# test/slt_proc/babelfish_oracle/1497_babel_sys_host_name_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/sys-host_name-vu-prepare.sql
+
+statement ok
+CREATE VIEW sys_host_name_vu_prepare__host_name_view AS SELECT DISTINCT hostname FROM sys.sysprocesses WHERE spid = @@SPID
+
+statement ok
+CREATE FUNCTION sys_host_name_vu_prepare__host_name_func(@pid int)
+RETURNS TABLE
+AS
+RETURN (SELECT DISTINCT CAST(hostname as nvarchar(128)) FROM sys.sysprocesses WHERE spid = @pid);
+
+statement ok
+CREATE PROCEDURE sys_host_name_vu_prepare__host_name_proc
+AS
+SELECT DISTINCT hostname FROM sys.sysprocesses WHERE spid = @@SPID
+
+statement ok
+CREATE VIEW sys_host_name_vu_prepare__dm_exec_connections_view AS select net_transport, protocol_type, protocol_version, endpoint_id, encrypt_option from sys.dm_exec_connections where session_id = @@SPID
+
+statement ok
+CREATE FUNCTION sys_host_name_vu_prepare__dm_exec_connections_func(@pid int)
+RETURNS TABLE
+AS
+RETURN (select net_transport, protocol_type, protocol_version, endpoint_id, encrypt_option from sys.dm_exec_connections where session_id = @pid);
+
+statement ok
+CREATE PROCEDURE sys_host_name_vu_prepare__dm_exec_connections_proc
+AS
+select net_transport, protocol_type, protocol_version, endpoint_id, encrypt_option from sys.dm_exec_connections where session_id = @@SPID
+

@@ -1,0 +1,39 @@
+# test/slt_proc/babelfish_oracle/1317_babel_test_sp_babelfish_volatility_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_babelfish_volatility-vu-prepare.sql
+
+statement ok
+create schema test_sp_babelfish_volatility_schema1
+
+statement ok
+create schema [test_sp_babelfish_volatility_schema1 with .dot and spaces]
+
+statement ok
+CREATE LOGIN test_sp_babelfish_volatility_login WITH PASSWORD = '12345678';
+
+statement ok
+CREATE DATABASE test_sp_babelfish_volatility_db1
+
+statement ok
+USE test_sp_babelfish_volatility_db1
+
+statement ok
+CREATE SCHEMA test_sp_babelfish_volatility_schema2
+
+statement ok
+create schema test_sp_babelfish_volatility_schema_very_long_with_length_greater_than_63_but_less_equal_than_128_random_text_aaaaaaaaaaaaaaaaaa;
+
+statement ok
+CREATE USER test_sp_babelfish_volatility_user FOR LOGIN test_sp_babelfish_volatility_login
+
+statement ok
+use master
+
+statement ok
+create table test_bbf_vol_t1(a int)
+
+statement ok
+use test_sp_babelfish_volatility_db1
+
+statement ok
+CREATE LOGIN test_sp_babelfish_volatility_login_2 WITH PASSWORD = '12345678'
+

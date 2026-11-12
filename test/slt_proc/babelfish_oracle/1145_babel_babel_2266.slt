@@ -1,0 +1,64 @@
+# test/slt_proc/babelfish_oracle/1145_babel_babel_2266.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2266.sql
+
+statement ok
+CREATE TABLE t2266(c1 varchar(50))
+
+statement ok
+CREATE PROCEDURE pr2266_text @p1 text AS
+DECLARE tcursor CURSOR FOR SELECT c1 FROM t2266
+OPEN tcursor
+FETCH NEXT FROM tcursor INTO @p1
+CLOSE tcursor
+DEALLOCATE tcursor;
+
+statement ok
+CREATE PROCEDURE pr2266_ntext @p1 ntext AS
+DECLARE tcursor CURSOR FOR SELECT c1 FROM t2266
+OPEN tcursor
+FETCH NEXT FROM tcursor INTO @p1
+CLOSE tcursor
+DEALLOCATE tcursor;
+
+statement ok
+CREATE PROCEDURE pr2266_image @p1 image AS
+DECLARE tcursor CURSOR FOR SELECT c1 FROM t2266
+OPEN tcursor
+FETCH NEXT FROM tcursor INTO @p1
+CLOSE tcursor
+DEALLOCATE tcursor;
+
+statement ok
+CREATE PROCEDURE pr2266_int @p1 int AS
+DECLARE tcursor CURSOR FOR SELECT c1 FROM t2266
+OPEN tcursor
+FETCH NEXT FROM tcursor INTO @p1
+CLOSE tcursor
+DEALLOCATE tcursor;
+
+statement ok
+CREATE PROCEDURE pr2266_varchar @p1 varchar AS
+DECLARE tcursor CURSOR FOR SELECT c1 FROM t2266
+OPEN tcursor
+FETCH NEXT FROM tcursor INTO @p1
+CLOSE tcursor
+DEALLOCATE tcursor;
+
+statement ok
+DROP PROC pr2266_text
+
+statement ok
+DROP PROC pr2266_ntext
+
+statement ok
+DROP PROC pr2266_image
+
+statement ok
+DROP PROC pr2266_int
+
+statement ok
+DROP PROC pr2266_varchar
+
+statement ok
+DROP TABLE t2266
+

@@ -1,0 +1,64 @@
+# test/slt_proc/babelfish_oracle/368_babel_babel_3317.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3317.sql
+
+statement ok
+/* batch statement. PARSEONLY must be turned off at parse
+time so that the entire batch executes */
+SET PARSEONLY ON;
+
+query T
+CREATE TABLE babel_3317t1(a int);
+INSERT INTO babel_3317t1 values (1);
+SET PARSEONLY OFF;
+SELECT * FROM babel_3317t1;
+----
+1
+
+statement ok
+SET PARSEONLY ON;
+
+statement ok
+INSERT INTO babel_3317t1 values (2);
+
+statement ok
+SET PARSEONLY OFF;
+
+query T
+SELECT * FROM babel_3317t1
+----
+1
+2
+
+statement ok
+SET PARSEONLY ON;
+SET FMTONLY, PARSEONLY OFF;
+
+query T
+SELECT * FROM babel_3317t1
+----
+1
+2
+
+statement ok
+DROP TABLE babel_3317t1
+
+statement ok
+CREATE TABLE t3317(a int);
+SET PARSEONLY ON;
+
+statement ok
+SET PARSEONLY OFF;
+SELECT * FROM t3317;
+
+statement ok
+SET PARSEONLY ON
+
+statement ok
+SET PARSEONLY OFF
+
+statement ok
+SET PARSEONLY ON
+
+statement ok
+SET PARSEONLY OFF
+

@@ -1,0 +1,21 @@
+# test/slt_proc/babelfish_oracle/1088_babel_8159_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/8159_1.sql
+
+statement ok
+CREATE VIEW v8159(c1, c2) 
+AS 
+SELECT 
+ 'a' AS c1
+
+statement ok
+SET XACT_ABORT ON;
+
+statement ok
+begin transaction
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+SET XACT_ABORT OFF;
+

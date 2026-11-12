@@ -1,0 +1,24 @@
+# test/slt_proc/babelfish_oracle/276_babel_babel_1291.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1291.sql
+
+statement ok
+CREATE TABLE sql_variant_test(a sql_variant, b sql_variant);
+
+statement ok
+INSERT INTO sql_variant_test VALUES (NULL,NULL);
+
+query TT
+SELECT * FROM sql_variant_test;
+----
+NULL NULL
+
+statement ok
+DROP TABLE sql_variant_test;
+
+query T
+select cast(cast(NULL as bit) as sql_variant);
+select cast(cast(NULL as VARCHAR(2)) as sql_variant);
+select cast(null as sql_variant);
+----
+NULL
+

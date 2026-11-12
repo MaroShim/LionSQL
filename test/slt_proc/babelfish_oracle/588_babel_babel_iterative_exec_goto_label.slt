@@ -1,0 +1,68 @@
+# test/slt_proc/babelfish_oracle/588_babel_babel_iterative_exec_goto_label.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_iterative_exec_goto_label.sql
+
+statement ok
+BEGIN TRY
+	mylabel:
+END TRY
+BEGIN CATCH
+END CATCH
+GOTO mylabel
+
+query T
+BEGIN TRY
+	SELECT 1; -- dummy
+END TRY
+BEGIN CATCH
+	mylabel:
+END CATCH
+GOTO mylabel
+----
+1
+
+statement ok
+DECLARE @i int
+SET @i = 9
+GOTO mylabel
+WHILE (@i < 10)
+	BEGIN
+		mylabel:
+	END
+
+statement ok
+DECLARE @i int
+SET @i = 9
+WHILE (@i < 10)
+	BEGIN
+		mylabel:
+	END
+GOTO mylabel
+
+statement ok
+BEGIN TRY
+	GOTO mylabel
+END TRY
+BEGIN CATCH
+	mylabel:
+END CATCH
+
+statement ok
+BEGIN TRY
+	mylabel:
+END TRY
+BEGIN CATCH
+	GOTO mylabel
+END CATCH
+
+statement ok
+BEGIN TRY
+	BEGIN TRY
+		GOTO mylabel
+	END TRY
+	BEGIN CATCH
+	END CATCH
+END TRY
+BEGIN CATCH
+	mylabel:
+END CATCH
+

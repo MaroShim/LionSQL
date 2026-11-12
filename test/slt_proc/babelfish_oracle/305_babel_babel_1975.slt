@@ -1,0 +1,43 @@
+# test/slt_proc/babelfish_oracle/305_babel_babel_1975.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1975.sql
+
+statement ok
+DROP TABLE if EXISTS t1;
+CREATE TABLE t1 (c1 int);
+INSERT INTO t1 values (1);
+INSERT INTO t1 values (2);
+INSERT INTO t1 values (NULL);
+
+query T
+SELECT * FROM t1;
+SELECT @@rowcount;
+----
+1
+
+query T
+SET ROWCOUNT 0;
+SELECT @@rowcount;
+----
+0
+
+query T
+SELECT * FROM t1;
+SELECT @@rowcount;
+----
+0
+
+query T
+SET ROWCOUNT 1;
+SELECT @@rowcount;
+----
+1
+
+query T
+set ROWCOUNT 0;
+SELECT @@rowcount;
+----
+0
+
+statement ok
+DROP TABLE t1;
+

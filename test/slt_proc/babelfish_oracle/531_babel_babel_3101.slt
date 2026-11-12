@@ -1,0 +1,59 @@
+# test/slt_proc/babelfish_oracle/531_babel_babel_3101.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3101.sql
+
+statement ok
+CREATE FUNCTION ISOweek_3101 (@date datetime)
+RETURNS tinyint
+AS
+BEGIN
+	DECLARE @ISOweek tinyint
+	SET @ISOweek= DATEPART(wk,@date)+1-DATEPART(wk,CAST(DATEPART(yy,@date) as CHAR(4))+'0104')
+	IF (@ISOweek=0)
+		SET @ISOweek=dbo.ISOweek(CAST(DATEPART(yy,@date)-1 AS CHAR(4))+'12'+ CAST(24+DATEPART(DAY,@date) AS CHAR(2)))+1
+	IF ((DATEPART(mm,@date)=12) AND ((DATEPART(dd,@date)-DATEPART(dw,@date))>= 28))
+		SET @ISOweek=1
+	RETURN(@ISOweek)
+END
+
+statement error
+SELECT ISOWeek_3101('01-01-1790')
+
+statement ok
+CREATE FUNCTION table_3101_2()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @return INT
+	SET @return = 0
+	SET @return = 1/0
+	RETURN @return
+END
+
+statement ok
+CREATE FUNCTION table_3101_1()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @return INT
+	set @return = table_3101_2()
+	RETURN @return
+END
+
+statement ok
+CREATE FUNCTION table_3101_0()
+RETURNS INT
+AS
+BEGIN
+	DECLARE @return INT
+	set @return = table_3101_1()
+	RETURN @return
+END
+
+query T
+select table_3101_0()
+----
+NULL
+
+statement ok
+DROP FUNCTION ISOWeek_3101
+

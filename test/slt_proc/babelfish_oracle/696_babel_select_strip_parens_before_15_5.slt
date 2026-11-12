@@ -1,0 +1,228 @@
+# test/slt_proc/babelfish_oracle/696_babel_select_strip_parens_before_15_5.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/select-strip-parens-before-15_5-vu-prepare.sql, test/babelfish/raw/select-strip-parens-before-15_5-vu-verify.sql, test/babelfish/raw/select-strip-parens-before-15_5-vu-cleanup.sql
+
+statement ok
+create table select_strip_parens_t1(field1 int, " field2  " int, [  field3 ] int);
+
+statement ok
+insert into select_strip_parens_t1(field1, " field2  ", [  field3 ]) values(41, 42, 43);
+
+statement ok
+create view select_strip_parens_v1 as
+select (  ( field1 )  ), (  ( " field2  " )  ), (  ( [  field3 ] )  )
+from select_strip_parens_t1;
+
+query T
+select field1 from (select field1 from select_strip_parens_t1) a;
+----
+41
+
+query T
+select field1 from (select (field1) from select_strip_parens_t1) a;
+----
+41
+
+query T
+select field1 from (select ((field1)) from select_strip_parens_t1) a;
+----
+41
+
+query T
+select field1 from (select (  ( field1 )  ) from select_strip_parens_t1) a;
+----
+41
+
+query T
+select field1 from (select (
+  ( field1 )
+) from select_strip_parens_t1) a;
+----
+41
+
+query T
+select field1 from (select (
+  ( "field1" )
+) from select_strip_parens_t1) a;
+----
+41
+
+query T
+select field1 from (select (
+  ( [field1] )
+) from select_strip_parens_t1) a;
+----
+41
+
+query T
+select field1 from (select field1 from select_strip_parens_v1) a;
+----
+41
+
+query T
+select field1 from (select (field1) from select_strip_parens_v1) a;
+----
+41
+
+query T
+select field1 from (select ((field1)) from select_strip_parens_v1) a;
+----
+41
+
+query T
+select field1 from (select (  ( field1 )  ) from select_strip_parens_v1) a;
+----
+41
+
+query T
+select field1 from (select (
+  ( field1 )
+) from select_strip_parens_v1) a;
+----
+41
+
+query T
+select field1 from (select (
+  ( "field1" )
+) from select_strip_parens_v1) a;
+----
+41
+
+query T
+select field1 from (select (
+  ( [field1] )
+) from select_strip_parens_v1) a;
+----
+41
+
+query T
+select field1 from (select " field1" from select_strip_parens_t1) a;
+----
+41
+
+query T
+select field1 from (select " field1" from select_strip_parens_v1) a;
+----
+41
+
+query T
+select field1 from (select [ field1] from select_strip_parens_t1) a;
+----
+41
+
+query T
+select field1 from (select [ field1] from select_strip_parens_v1) a;
+----
+41
+
+query T
+select field1 from (select (
+  ( " field1" )
+) from select_strip_parens_t1) a;
+----
+41
+
+query T
+select field1 from (select (
+  ( " field1" )
+) from select_strip_parens_v1) a;
+----
+41
+
+query T
+select field1 from (select (
+  ( [ field1] )
+) from select_strip_parens_t1) a;
+----
+41
+
+query T
+select field1 from (select (
+  ( [ field1] )
+) from select_strip_parens_v1) a;
+----
+41
+
+query TT
+select " field2  ", [  field3 ] from (select " field2  ", [  field3 ] from select_strip_parens_t1) a;
+----
+NULL NULL
+
+query TT
+select [ field2  ], [  field3 ] from (select " field2  ", [  field3 ] from select_strip_parens_t1) a;
+----
+NULL NULL
+
+query TT
+select " field2  ", [  field3 ] from (select (" field2  "), ([  field3 ]) from select_strip_parens_t1) a;
+----
+NULL NULL
+
+query TT
+select " field2  ", [  field3 ] from (select ((" field2  ")), (([  field3 ])) from select_strip_parens_t1) a;
+----
+NULL NULL
+
+query TT
+select " field2  ", [  field3 ] from (select ( ( " field2  " ) ), ( ( [  field3 ] ) ) from select_strip_parens_t1) a;
+----
+NULL NULL
+
+query TT
+select " field2  ", [  field3 ] from (select (
+  ( " field2  " )
+), (
+  ( [  field3 ] )
+) from select_strip_parens_t1) a;
+----
+NULL NULL
+
+query TT
+select " field2  ", [  field3 ] from (select " field2  ", [  field3 ] from select_strip_parens_v1) a;
+----
+NULL NULL
+
+query TT
+select " field2  ", "  field3 " from (select " field2  ", [  field3 ] from select_strip_parens_v1) a;
+----
+NULL NULL
+
+query TT
+select " field2  ", [  field3 ] from (select (" field2  "), ([  field3 ]) from select_strip_parens_v1) a;
+----
+NULL NULL
+
+query TT
+select " field2  ", [  field3 ] from (select ((" field2  ")), (([  field3 ])) from select_strip_parens_v1) a;
+----
+NULL NULL
+
+query TT
+select " field2  ", [  field3 ] from (select ( ( " field2  " ) ), ( ( [  field3 ] ) ) from select_strip_parens_v1) a;
+----
+NULL NULL
+
+query TT
+select " field2  ", [  field3 ] from (select (
+  ( " field2  " )
+), (
+  ( [  field3 ] )
+) from select_strip_parens_v1) a;
+----
+NULL NULL
+
+query T
+select "  field2 " from (select " field2  ", [  field3 ] from select_strip_parens_t1) a;
+----
+NULL
+
+query T
+select [ field3  ] from (select " field2  ", [  field3 ] from select_strip_parens_v1) a;
+----
+NULL
+
+statement ok
+drop view select_strip_parens_v1;
+
+statement ok
+drop table select_strip_parens_t1;
+

@@ -1,0 +1,685 @@
+# test/slt_proc/babelfish_oracle/665_babel_like_expression.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/like_expression.sql
+
+statement ok
+create table t ( a varchar(30))
+
+statement ok
+insert into t values ('abc'),('bbc'),('cbc'),('=bc'),('Abc'),('a[bc'),('a]bc');
+
+statement ok
+select * from t where a like '[%' -- suppose not having any result
+
+query T
+select * from t where a like '[c-a]bc'
+----
+abc
+bbc
+cbc
+Abc
+
+query T
+select * from t where a like '[<->]bc'
+----
+=bc
+
+query T
+select * from t where a like '[0-a]bc';
+----
+abc
+=bc
+Abc
+
+query T
+select * from t where a like '[abc]bc';
+----
+abc
+bbc
+cbc
+Abc
+
+query T
+select * from t where a like '[a-c]bc';
+----
+abc
+bbc
+cbc
+Abc
+
+query T
+select * from t where a like '[abc]_c';
+----
+abc
+bbc
+cbc
+Abc
+
+query T
+select * from t where a like '[a]%c';
+----
+abc
+Abc
+a[bc
+a]bc
+
+query T
+select * from t where a like '%[abc]c';
+----
+abc
+bbc
+cbc
+=bc
+Abc
+a[bc
+a]bc
+
+statement ok
+select * from t where a like '[%]bc';
+
+statement ok
+select * from t where a like '[_]bc';
+
+query T
+select * from t where a like 'a[bc]c';
+----
+abc
+Abc
+
+query T
+select * from t where a like '[a-z][a-z]c';
+----
+abc
+bbc
+cbc
+Abc
+
+query T
+select * from t where a like '[^ a][a-z]c';
+----
+bbc
+cbc
+=bc
+
+query T
+select * from t where a like '[^ a-b][a-z]c';
+----
+cbc
+=bc
+
+query T
+select * from t where a like '%bc';
+----
+abc
+bbc
+cbc
+=bc
+Abc
+a[bc
+a]bc
+
+query T
+select * from t where a like '[0-9a-f][0-9a-f][0-9a-f]';
+----
+abc
+bbc
+cbc
+Abc
+
+statement ok
+insert into t values (']bc')
+
+statement ok
+insert into t values ('[bc')
+
+statement ok
+select * from t where a like ('[]]bc');
+
+query T
+select * from t where a like ('[[]bc');
+----
+[bc
+
+query T
+select * from t where a like ']bc';
+----
+]bc
+
+statement ok
+insert into t values ('11.22');
+
+query T
+select * from t where a like '[0-9][0-9].[0-9][0-9]'
+----
+11.22
+
+statement ok
+create table t2 ( b varchar(30) collate BBF_Unicode_General_CS_AS)
+
+statement ok
+insert into t2 values ('[abc]bc'),('[abc]_c'),('[]]bc'),('[[]bc'),('%[abc]c'),('[^ a-b][a-z]c'),('[0-9][0-9].[0-9][0-9]'),('[<->]bc')
+
+statement ok
+select * from t2 join t on a like b;
+
+statement ok
+drop table t2;
+
+statement ok
+drop table t;
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1 
+(
+ c1 int IDENTITY(1, 1)
+,string varchar(20) null
+,patt   varchar(20) null
+,esc    varchar(2) null
+)
+
+statement ok
+select c1 from t1 where string like patt escape esc 
+and c1 > 1 order by c1
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1
+(
+ c1 int IDENTITY(1, 1)
+,string varchar(50) 
+)
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE REPLICATE('[0-9]', 6) + '-' + REPLICATE('[0-9]', 4)
+
+statement ok
+SELECT * FROM t1 WHERE SUBSTRING(string, 1, 6) LIKE REPLICATE('[0-9]', 6)
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '[CK]arlson' OR string LIKE '[CK]arlsson'
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '[^CK]arlson'
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '[A-F]%' ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '[A-BE-G]%' ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '[A-CEG]%' ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE 'M[^c]%Donalds' ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '15/% %' ESCAPE '/' ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '15!% %' ESCAPE '!' ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '15[%] %'  ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '15 /%___' ESCAPE '/' ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '15 [%] //off' ESCAPE '/' ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '%[[]%'  ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '%]%'  ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string LIKE '%[^a-zA-Z0-9öÖ]%' ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string NOT LIKE '%[^a-zA-ZåÅäÄöÖ]%' ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string  NOT LIKE '%[^a-zA-ZåÅäÄöÖ.]%' ORDER BY c1
+
+statement ok
+SELECT * FROM t1 WHERE string  NOT LIKE '%[^a-zA-ZåÅäÄöÖ.[?[]%' ESCAPE '?' ORDER BY c1
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1
+(
+ c1 int PRIMARY KEY
+,pnr char(11) CHECK (pnr LIKE '[0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9]')
+)
+
+statement ok
+INSERT INTO t1 (c1, pnr) VALUES(1, '451201-7825') --Should be OK
+
+statement error
+INSERT INTO t1 (c1, pnr) VALUES(1, '451d01-7825') --Should fail
+
+statement error
+INSERT INTO t1 (c1, pnr) VALUES(1, '451201w7825') --Should fail
+
+statement ok
+drop table t1;
+
+statement ok
+DROP TABLE IF EXISTS IP_address
+
+statement ok
+CREATE TABLE IP_address
+(
+ c1 int IDENTITY(1, 1)
+,string varchar(50) 
+,is_valid bit
+)
+
+statement ok
+SELECT * FROM IP_address
+WHERE 
+    string LIKE '_%._%._%._%'
+  AND
+    string NOT LIKE '%.%.%.%.%'
+  AND
+    string NOT LIKE '%[^0-9.]%'
+  AND
+    string NOT LIKE '%[0-9][0-9][0-9][0-9]%'
+  AND
+    string NOT LIKE '%[3-9][0-9][0-9]%'
+  AND
+    string NOT LIKE '%2[6-9][0-9]%'
+  AND
+    string NOT LIKE '%25[6-9]%'
+ORDER BY c1
+
+statement ok
+SELECT * FROM IP_address
+WHERE NOT(
+    string LIKE '_%._%._%._%'
+  AND
+    string NOT LIKE '%.%.%.%.%'
+  AND
+    string NOT LIKE '%[^0-9.]%'
+  AND
+    string NOT LIKE '%[0-9][0-9][0-9][0-9]%'
+  AND
+    string NOT LIKE '%[3-9][0-9][0-9]%'
+  AND
+    string NOT LIKE '%2[6-9][0-9]%'
+  AND
+    string NOT LIKE '%25[6-9]%')
+ORDER BY c1
+
+statement ok
+drop table IP_address
+
+query T
+select 1 where '9' like '[a-z0-9]'  -- 1
+----
+1
+
+query T
+select 1 where '9' like '[0-9'  -- no row 
+----
+1
+
+query T
+select 1 where 'b' like '[a-z0-9]'  -- 1
+----
+1
+
+query T
+select 1 where '7' like '[^a-z0-9]'  -- no row
+----
+1
+
+query T
+select 1 where 'D' like '[C-P5-7]'  -- 1
+----
+1
+
+query T
+select 1 where 'B' like '[C-P5-7]'  -- no row
+----
+1
+
+query T
+select 1 where 'B' like '[^C-P5-7]'  -- 1
+----
+1
+
+query T
+select 1 where '4' like '[C-P5-7]'  -- no row
+----
+1
+
+query T
+select 1 where '9' like '[C-P5-7]'  -- no row
+----
+1
+
+query T
+select 1 where '1357' like '[0-9][0-9][0-9][0-9]'  -- 1
+----
+1
+
+query T
+select 1 where 'a[abc]b' like 'a[abc]b'  -- no row
+----
+1
+
+query T
+select 1 where 'a[abc]b' like 'a[[]abc]b'  -- 1
+----
+1
+
+query T
+select 1 where 'a[abc]b' like 'a\[abc]b' escape '\'  -- 1
+----
+1
+
+query T
+select 1 where 'a[b' like 'a[%'  -- no row
+----
+1
+
+query T
+select 1 where 'a[b' like 'a[[]%'  -- 1
+----
+1
+
+query T
+select 1 where '$abc' like '[0-9!@#$.,;_]%'  -- 1
+----
+1
+
+query T
+select 1 where '$abc' like '[^0-9!@#$.,;_]%'  -- no row
+----
+1
+
+query T
+select 1 where '$abc' like '[^0-9!@#.,;_]%'  -- 1
+----
+1
+
+query T
+select 1 where 'abc_efgh' like 'abc[_]efg%'  -- 1
+----
+1
+
+query T
+select 1 where 'abcdefgh' like 'abc[_]efg%'  -- no row
+----
+1
+
+query T
+select 1 where 'abcdefgh' like 'abc[^_]efg%'  -- 1
+----
+1
+
+query T
+select 1 where 'd' like '[asdf]'  -- 1
+----
+1
+
+query T
+select 1 where 'e' like '[asdf]'  -- no row
+----
+1
+
+query T
+select 1 where 'e' like '[^asdf]'  -- 1
+----
+1
+
+query T
+select 1 where 'd' like '[^asdf]'  -- no row
+----
+1
+
+statement ok
+declare @v varchar = 'a[bc'
+SELECT 1 where @v LIKE '%[%' escape '~' OR @v LIKE '%]%'                -- no row
+
+statement ok
+declare @v varchar = 'a[bc'
+SELECT 1 where @v LIKE '%[[]%' OR @v LIKE '%[]]%'                       -- no row
+
+statement ok
+declare @v varchar = 'a[bc'
+SELECT 1 where @v LIKE '%~[%' escape '~' OR @v LIKE '%~]%' escape '~'   -- no row
+
+statement ok
+declare @v varchar = 'a[bc'
+set @v = 'a]bc'
+SELECT 1 where @v LIKE '%[%' escape '~' OR @v LIKE '%]%'                -- no row
+
+statement ok
+declare @v varchar = 'a[bc'
+set @v = 'a]bc'
+SELECT 1 where @v LIKE '%[[]%' OR @v LIKE '%[]]%'                       -- no row
+
+statement ok
+declare @v varchar = 'a[bc'
+set @v = 'a]bc'
+SELECT 1 where @v LIKE '%~[%' escape '~' OR @v LIKE '%~]%' escape '~'   -- no row
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = '9'set @p = '[a-z0-9]'  -- 1
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = '9'set @p = '[0-9'  -- no row
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'b'set @p = '[a-z0-9]'  -- 1
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = '7'set @p = '[^a-z0-9]'  -- no row
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'D'set @p = '[C-P5-7]'  -- 1
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'B'set @p = '[C-P5-7]'  -- no row
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'B'set @p = '[^C-P5-7]'  -- 1
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = '4'set @p = '[C-P5-7]'  -- no row
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = '9'set @p = '[C-P5-7]'  -- no row
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'a[abc]b'set @p = 'a[abc]b'  -- no row
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'a[abc]b'set @p = 'a[[]abc]b'   -- 1
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'a[abc]b'set @p = 'a\[abc]b' set @esc = '\' -- 1
+select 1 where @v like @p escape @esc 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'a[b'set @p = 'a[%'  -- no row
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'a[b'set @p = 'a[[]%'  -- 1
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = '$abc'set @p = '[0-9!@#$.,;_]%'  -- 1
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = '$abc'set @p = '[^0-9!@#$.,;_]%'  -- no row
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'abc_efgh' set @p = 'abc[_]efg%'  -- 1
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'abcdefgh' set @p = 'abc[_]efg%'  -- no row
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'abcdefgh' set @p = 'abc[^_]efg%'  -- 1
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'd' set @p = '[asdf]'  -- 1
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'e' set @p = '[asdf]'  -- no row
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'e' set @p = '[^asdf]'  -- 1
+select 1 where @v like @p 
+
+statement ok
+declare @v varchar(20), @p varchar(20), @esc char(1)
+set @v = 'd' set @p = '[^asdf]'  -- no row
+select 1 where @v like @p 
+
+query T
+select 1 where '_ab' like '\_ab'          -- no row, but returns 1  in BBF , BABEL-4270
+----
+1
+
+query T
+select 1 where '%AAABBB%' like '\%AAA%'   -- no row, but returns 1  in BBF , BABEL-4270
+----
+1
+
+query T
+select 1 where '_ab' like '\_ab'  escape '\'         -- 1 
+select 1 where '%AAABBB%' like '\%AAA%' escape '\'   -- 1
+----
+1
+
+query T
+select 1 where 'AB[C]D' LIKE 'AB~[C]D'             -- no row
+select 1 where 'AB[C]D' LIKE 'AB~[C]D' ESCAPE '~'  -- 1
+----
+1
+
+query T
+select 1 where 'AB[C]D' LIKE 'AB\[C]D'             -- no row
+select 1 where 'AB[C]D' LIKE 'AB\[C]D' ESCAPE '\'  -- 1
+----
+1
+
+query T
+select 1 where 'AB[C]D' LIKE 'AB [C]D'             -- no row
+select 1 where 'AB[C]D' LIKE 'AB [C]D' ESCAPE ' '  -- 1
+----
+1
+
+query T
+select 1 where 'AB[C]D' LIKE 'AB[C]D' ESCAPE 'B'   -- no row
+select 1 where 'AB[C]D' LIKE 'ABB[C]D' ESCAPE 'B'  -- no row
+----
+1
+
+query T
+select 1 where 'AB[C]D' LIKE 'ABZ[C]D' ESCAPE 'Z'  -- 1
+select 1 where 'AB[C]D' LIKE 'ABZ[C]D' ESCAPE 'z'  -- no row! Note: SQL Server treats the escape as case-sensitive!
+select 1 where 'ABCD' LIKE 'ABcD'                  -- 1 : SQL Server treats normal LIKE pattern case-INsensitive
+----
+1
+
+query T
+select 1 where null like null -- no row
+----
+1
+
+query T
+select 1 where null like null escape null -- no row
+----
+1
+
+query T
+select 1 where null like 'ABC' -- no row
+----
+1
+
+query T
+select 1 where 'ABC' like null -- no row
+----
+1
+
+query T
+select 1 where 'ABCD' LIKE 'AB[C]D' ESCAPE ''  -- should raise error , BABEL-4271
+----
+1
+
+query T
+select 1 where 'ABCD' LIKE 'AB[C]D' ESCAPE 'xy'  -- raise error
+----
+1
+
+statement ok
+create table tt ( a bytea);
+
+statement ok
+insert into tt values (0xdaa)
+
+statement ok
+select * from tt where a like 'da[%]';
+
+query T
+select * from tt where a not like 'da[%]';
+----
+0x0daa
+
+statement ok
+drop table tt;
+

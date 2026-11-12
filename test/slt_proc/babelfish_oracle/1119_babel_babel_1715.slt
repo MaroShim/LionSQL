@@ -1,0 +1,34 @@
+# test/slt_proc/babelfish_oracle/1119_babel_babel_1715.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1715.sql
+
+statement ok
+use master;
+
+statement ok
+CREATE TABLE t1715 (a int, b int CONSTRAINT uk_a PRIMARY KEY (a));
+
+statement ok
+INSERT INTO t1715 VALUES (1, 1);
+INSERT INTO t1715 VALUES (2, 2);
+
+statement ok
+INSERT INTO t1715 VALUES (2, 3);
+
+statement ok
+drop table t1715;
+
+statement ok
+CREATE TABLE t1715_2 (a int, b as a+1 CONSTRAINT uk_a PRIMARY KEY (a));
+
+statement ok
+drop table t1715_2;
+
+statement ok
+CREATE TABLE t1715_invalid (a int b int);
+
+statement ok
+CREATE TABLE cx_t1715 ( name sysname NOT NULL, principal_id int NOT NULL,  diagram_id int PRIMARY KEY IDENTITY, version int, definition varbinary(max) CONSTRAINT UK_principal_name UNIQUE ( principal_id, name ) );
+
+statement ok
+DROP TABLE cx_t1715;
+

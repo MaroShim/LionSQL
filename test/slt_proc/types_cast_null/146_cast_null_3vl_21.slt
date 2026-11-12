@@ -1,0 +1,22 @@
+# test/slt_proc/types_cast_null/146_cast_null_3vl_21.slt
+# T-SQL CAST, TRY_CAST, ISNUMERIC, CHOOSE, IIF, COALESCE, NULLIF (21)
+
+query ITI
+SELECT CAST('788' AS INT) + 21, CAST(788 AS VARCHAR(20)), TRY_CAST('788' AS INT);
+----
+809 788 788
+
+query IIT
+SELECT ISNUMERIC('788'), ISNUMERIC('err_21z'), ISNULL(CAST(TRY_CAST('err_21z' AS INT) AS VARCHAR(20)), 'NULL_VAL');
+----
+1 0 NULL_VAL
+
+query TTTT
+SELECT CHOOSE(2, 'Alpha_21', 'Beta_21', 'Gamma_21', 'Delta_21'), IIF(788 > 10, 'YES', 'NO'), ISNULL(NULL, 'DEF_21'), COALESCE(NULL, NULL, 'COAL_21');
+----
+Beta_21 YES DEF_21 COAL_21
+
+query II
+SELECT ISNULL(NULLIF(788, 788), -1), NULLIF(788, 0);
+----
+-1 788

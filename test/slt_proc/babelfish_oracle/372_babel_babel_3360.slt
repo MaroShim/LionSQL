@@ -1,0 +1,106 @@
+# test/slt_proc/babelfish_oracle/372_babel_babel_3360.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3360-vu-prepare.sql, test/babelfish/raw/BABEL-3360-vu-verify.sql
+
+statement ok
+create view BABEL_3360_vu_prepare_v1 as (select dateadd(millisecond, 56, cast('2016-12-26 23:29:29' as datetime2)));
+
+statement ok
+create view BABEL_3360_vu_prepare_v2 as (select dateadd(microsecond, 56, cast('2016-12-26 23:29:29' as datetime2)));
+
+statement ok
+create view BABEL_3360_vu_prepare_v3 as (select dateadd(millisecond, 56, null));
+
+statement ok
+create view BABEL_3360_vu_prepare_v4 as (select dateadd(microsecond, 56, null));
+
+statement ok
+create procedure  BABEL_3360_vu_prepare_p1 as (select dateadd(millisecond, 56, cast('2016-12-26 23:29:29' as datetime2)));
+
+statement ok
+create procedure  BABEL_3360_vu_prepare_p2 as (select dateadd(microsecond, 56, cast('2016-12-26 23:29:29' as datetime2)));
+
+statement ok
+create procedure  BABEL_3360_vu_prepare_p3 as (select dateadd(millisecond, 56, null));
+
+statement ok
+create procedure  BABEL_3360_vu_prepare_p4 as (select dateadd(microsecond, 56, null));
+
+statement ok
+create function BABEL_3360_vu_prepare_f1()
+returns datetime2 as
+begin
+return (select * from dateadd(millisecond, 56, cast('2016-12-26 23:29:29' as datetime2)));
+end
+
+statement ok
+create function BABEL_3360_vu_prepare_f2()
+returns datetime2 as
+begin
+return (select * from dateadd(microsecond, 56, cast('2016-12-26 23:29:29' as datetime2)));
+end
+
+statement ok
+create function BABEL_3360_vu_prepare_f3()
+returns datetime as
+begin
+return (select * from dateadd(millisecond, 56, null));
+end
+
+statement ok
+create function BABEL_3360_vu_prepare_f4()
+returns datetime as
+begin
+return (select * from dateadd(microsecond, 56, null));
+end
+
+statement ok
+DROP VIEW BABEL_3360_vu_prepare_v1
+
+statement ok
+DROP VIEW BABEL_3360_vu_prepare_v2
+
+statement ok
+DROP VIEW BABEL_3360_vu_prepare_v3
+
+statement ok
+DROP VIEW BABEL_3360_vu_prepare_v4
+
+statement ok
+DROP procedure  BABEL_3360_vu_prepare_p1
+
+query T
+EXEC BABEL_3360_vu_prepare_p2
+----
+NULL
+
+statement ok
+DROP procedure  BABEL_3360_vu_prepare_p2
+
+query T
+EXEC BABEL_3360_vu_prepare_p3
+----
+NULL
+
+statement ok
+DROP procedure  BABEL_3360_vu_prepare_p3
+
+query T
+EXEC BABEL_3360_vu_prepare_p4
+----
+NULL
+
+statement ok
+DROP procedure  BABEL_3360_vu_prepare_p4
+
+statement ok
+DROP FUNCTION BABEL_3360_vu_prepare_f1()
+
+statement ok
+DROP FUNCTION BABEL_3360_vu_prepare_f2()
+
+statement ok
+DROP FUNCTION BABEL_3360_vu_prepare_f3()
+
+statement ok
+DROP FUNCTION BABEL_3360_vu_prepare_f4()
+

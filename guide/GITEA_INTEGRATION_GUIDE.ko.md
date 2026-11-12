@@ -26,7 +26,7 @@ Gitea의 백엔드 RDBMS로 LionSQL을 채택할 경우 다음과 같은 엔터�
    - XORM의 기계적인 SQL 생성 패턴, 방언 고유 DDL/DML, 시스템 카탈로그 질의를 LionSQL 커널이 100% 투명하게 수용합니다.
 2. **듀얼 와이어 프로토콜 자유 선택**:
    - 오픈소스 및 클라우드 네이티브 환경에 표준적인 **PostgreSQL 모드**(`lib/pq`, `:5433`)
-   - 엔터프라이즈 및 Microsoft 생태계(SSMS, .NET, Azure Data Studio)에 최적화된 **SQL Server 모드**(`go-mssqldb`, `:1433`)
+   - 엔터프라이즈 및 Microsoft 생태계(SSMS, .NET)에 최적화된 **SQL Server 모드**(`go-mssqldb`, `:1433`)
 3. **극단적인 하드웨어 효율성 및 경량화**:
    - 수 기가바이트의 메모리를 요구하는 거대 엔터프라이즈 RDBMS 대비, 서브 마이크로초 VDBE 바이트코드 엔진과 인메모리 OCC/WiredTiger B+Tree 엔진을 통해 수십 MB 수준의 컴팩트한 풋프린트로 구동됩니다.
 4. **무인 완전 자동 배포 (Headless GitOps)**:

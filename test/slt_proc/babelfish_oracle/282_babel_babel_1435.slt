@@ -1,0 +1,163 @@
+# test/slt_proc/babelfish_oracle/282_babel_babel_1435.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1435.sql
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'sysadmin';
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'master_dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'master_db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'master_dbo';
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'tempdb_dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'tempdb_db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'tempdb_dbo';
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'msdb_dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'msdb_db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'msdb_dbo';
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+CREATE DATABASE db1;
+
+query T
+SELECT COUNT(*) FROM pg_roles where rolname = 'dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'dbo';
+----
+NULL
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'db1_dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'db1_db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'db1_dbo';
+
+statement ok
+CREATE DATABASE db2;
+
+statement ok
+USE db1;
+
+query T
+SELECT (case when db_id() = db_id('db1') then 'true' else 'false' end) result;
+----
+true
+
+statement ok
+USE master;
+
+query T
+SELECT (case when db_id() = db_id('master') then 'true' else 'false' end) result;
+----
+true
+
+statement ok
+USE db2;
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+CREATE DATABASE db2;
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'db1_dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'db1_db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'db1_dbo';
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'db2_dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'db2_db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'db2_dbo';
+
+statement ok
+USE master;
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'sysadmin';
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'master_dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'master_db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'master_dbo';
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'tempdb_dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'tempdb_db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'tempdb_dbo';
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'msdb_dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'msdb_db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'msdb_dbo';
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+query T
+SELECT COUNT(*) FROM pg_roles where rolname = 'dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'dbo';
+----
+NULL
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'db1_dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'db1_db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'db1_dbo';
+
+statement ok
+CREATE DATABASE db2 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+USE db1;
+
+query T
+SELECT (case when db_id() = db_id('db1') then 'true' else 'false' end) result;
+----
+true
+
+statement ok
+USE master;
+
+query T
+SELECT (case when db_id() = db_id('master') then 'true' else 'false' end) result;
+----
+true
+
+statement ok
+USE db2;
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+CREATE DATABASE db2 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'db1_dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'db1_db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'db1_dbo';
+
+statement ok
+SELECT COUNT(*) FROM pg_roles where rolname = 'db2_dbo';
+SELECT COUNT(*) FROM pg_roles where rolname = 'db2_db_owner';
+SELECT COUNT(*) FROM pg_namespace where nspname = 'db2_dbo';
+
+statement ok
+USE master;
+

@@ -1,0 +1,196 @@
+# test/slt_proc/babelfish_oracle/713_babel_sys_datefirst.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/sys-datefirst.sql
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+SET datefirst 3
+
+query T
+SELECT @@datefirst
+----
+7
+
+query T
+SELECT sys.datefirst()
+----
+7
+
+statement ok
+SET datefirst 2
+
+query T
+SELECT @@datefirst
+----
+7
+
+statement ok
+SET DATEFIRST 3
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+SET DATEFIRST 4
+
+query T
+SELECT @@datefirst
+----
+7
+
+statement ok
+DECLARE @i INT = 5
+SET DATEFIRST @i
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+SET DATEFIRST 6
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+declare @i int = 1
+SET datefirst @i
+
+query T
+SELECT @@datefirst
+----
+7
+
+statement ok
+SET datefirst 7
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+SET DATEFIRST 8
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+SET DATEFIRST 23
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+SET DATEFIRST 0
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+DECLARE @i INT = -4
+SET DATEFIRST @i
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+SET DATEFIRST -55
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+SET DATEFIRST 3.5
+
+statement ok
+SET datefirst 5.68
+
+statement ok
+SET DATEFIRST 1.23
+
+statement ok
+SET DATEFIRST 6.999
+
+statement ok
+SET DATEFIRST 1.00
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+SET DATEFIRST 7.00
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+SET DATEFIRST 7.01
+
+statement ok
+SET DATEFIRST 59.0974
+
+statement ok
+SET DATEFIRST 0.99
+
+statement ok
+SET DATEFIRST -2.34
+
+statement ok
+SET DATEFIRST -65.045
+
+statement ok
+SET DATEFIRST 'one'
+
+statement ok
+SET DATEFIRST '4'
+
+statement ok
+SET DATEFIRST "three"
+
+statement ok
+SET DATEFIRST "2"
+
+statement ok
+SET DATEFIRST NULL
+
+statement ok
+DECLARE @i decimal(10,2) = 2.35
+SET DATEFIRST @i
+
+query T
+SELECT @@DATEFIRST
+----
+7
+
+statement ok
+DECLARE @i varchar = '4'
+SET DATEFIRST @i
+
+query T
+SELECT @@DATEFIRST
+----
+7
+

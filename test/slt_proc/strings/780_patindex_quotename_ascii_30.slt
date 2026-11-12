@@ -1,0 +1,26 @@
+# test/slt_proc/strings/780_patindex_quotename_ascii_30.slt
+# T-SQL PATINDEX, QUOTENAME, ASCII, CHAR, SPACE, LTRIM, RTRIM (30)
+
+query ITTT
+SELECT ASCII('D'), CHAR(68), QUOTENAME('tbl_col_30'), REPLACE(CONCAT('L', SPACE(2), 'R'), ' ', '_');
+----
+68 D [tbl_col_30] L__R
+
+query II
+SELECT PATINDEX('%TARGET_D%', 'pre_30_TARGET_D_post'), LEN(LTRIM(RTRIM('   tbl_col_30   ')));
+----
+8 10
+
+statement ok
+CREATE PROCEDURE sp_str_adv_780 @s VARCHAR(100), @code INT OUTPUT
+AS
+BEGIN
+    SET @code = ASCII(LEFT(@s, 1));
+    SELECT UPPER(LEFT(@s, 3)), LOWER(RIGHT(@s, 4)), @code;
+END;
+
+query TTI
+DECLARE @out_c INT;
+EXEC sp_str_adv_780 @s = 'Dbc_XYZ30', @code = @out_c OUTPUT;
+----
+DBC yz30 68

@@ -1,0 +1,293 @@
+# test/slt_proc/babelfish_oracle/714_babel_sys_eomonth.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/sys-eomonth-vu-prepare.sql, test/babelfish/raw/functions/sys-eomonth-vu-verify.sql, test/babelfish/raw/functions/sys-eomonth-vu-cleanup.sql
+
+statement ok
+CREATE TABLE EOMONTH_DatesTable (
+    Id INT PRIMARY KEY,
+    DateValue DATE NOT NULL
+);
+
+statement ok
+INSERT INTO EOMONTH_DatesTable (Id, DateValue)
+VALUES (1, '1996-01-24'),
+       (2, '2000-06-15'),
+       (3, '2022-04-30');
+
+statement ok
+CREATE PROCEDURE GetEndOfMonthDate_EOMONTH
+    @Id INT
+AS
+BEGIN
+    SELECT EOMONTH(DateValue) AS EndOfMonth
+    FROM EOMONTH_DatesTable
+    WHERE Id = @Id;
+END;
+
+statement ok
+CREATE VIEW EOMONTH_EndOfMonthView AS
+    SELECT Id, DateValue, EOMONTH(DateValue) AS EndOfMonth
+    FROM EOMONTH_DatesTable
+
+statement ok
+CREATE VIEW EOMONTH_EndOfNextMonthView AS
+     SELECT Id, DateValue, EOMONTH(DateValue, 1) AS EndOfNextMonth
+     FROM EOMONTH_DatesTable
+
+statement ok
+CREATE PROCEDURE GetEndOfNextMonthDate_EOMONTH
+     @Id INT
+ AS
+ BEGIN
+     SELECT EOMONTH(DateValue, 1) AS EndOfNextMonth
+     FROM EOMONTH_DatesTable
+     WHERE Id = @Id;
+ END;
+
+query TTT
+SELECT * FROM EOMONTH_EndOfMonthView ORDER BY DateValue ASC;
+----
+1 1996-01-24 1996-01-31
+2 2000-06-15 2000-06-30
+3 2022-04-30 2022-04-30
+
+query T
+EXEC GetEndOfMonthDate_EOMONTH 1;
+----
+1996-01-31
+
+query TTT
+SELECT * FROM EOMONTH_EndOfNextMonthView ORDER BY DateValue ASC;
+----
+1 1996-01-24 1996-02-29
+2 2000-06-15 2000-07-31
+3 2022-04-30 2022-05-31
+
+query T
+EXEC GetEndOfNextMonthDate_EOMONTH 1;
+----
+1996-02-29
+
+query T
+SELECT EOMONTH ('2023-05-10',95719)
+----
+9999-12-31
+
+query T
+SELECT EOMONTH ('2023-05-10',95720)
+----
+10000-01-31
+
+query T
+SELECT EOMONTH ('2023-05-10',-24268)
+----
+0001-01-31
+
+query T
+SELECT EOMONTH ('2023-05-10',-24269)
+----
+0000-12-31
+
+query T
+SELECT EOMONTH ('0001-01-31')
+----
+0001-01-31
+
+query T
+SELECT EOMONTH ('9999-12-31')
+----
+9999-12-31
+
+query T
+SELECT EOMONTH (NULL)
+----
+NULL
+
+query T
+SELECT EOMONTH (NULL,1)
+----
+NULL
+
+query T
+SELECT EOMONTH (NULL,0)
+----
+NULL
+
+query T
+SELECT EOMONTH (NULL,-1)
+----
+NULL
+
+query T
+SELECT EOMONTH (NULL,NULL)
+----
+NULL
+
+query T
+SELECT EOMONTH ('1996-01-01',NULL)
+----
+NULL
+
+query T
+SELECT EOMONTH('4713-11-24 BC')
+----
+NULL
+
+query T
+SELECT EOMONTH('0001-12-31 BC')
+----
+NULL
+
+query T
+SELECT EOMONTH('0001-12-31 BC',1)
+----
+NULL
+
+query T
+SELECT EOMONTH('0001-01-01',-1)
+----
+0000-12-31
+
+query T
+SELECT EOMONTH ('9999-12-31',1)
+----
+10000-01-31
+
+query T
+SELECT EOMONTH ('10000-01-01')
+----
+NULL
+
+query T
+SELECT EOMONTH ('10000-01-01',-1)
+----
+NULL
+
+query T
+SELECT EOMONTH('1996-01-01')
+----
+1996-01-31
+
+query T
+SELECT EOMONTH('1996-02-20')
+----
+1996-02-29
+
+query T
+SELECT EOMONTH('1997-02-20')
+----
+1997-02-28
+
+query T
+SELECT EOMONTH ('1996-03-20')
+----
+1996-03-31
+
+query T
+SELECT EOMONTH('1996-04-01')
+----
+1996-04-30
+
+query T
+SELECT EOMONTH ('1996-05-20')
+----
+1996-05-31
+
+query T
+SELECT EOMONTH ('1996-06-20')
+----
+1996-06-30
+
+query T
+SELECT EOMONTH ('1996-07-20')
+----
+1996-07-31
+
+query T
+SELECT EOMONTH ('1996-08-20')
+----
+1996-08-31
+
+query T
+SELECT EOMONTH ('1996-09-20')
+----
+1996-09-30
+
+query T
+SELECT EOMONTH ('1996-10-20')
+----
+1996-10-31
+
+query T
+SELECT EOMONTH ('1996-11-20')
+----
+1996-11-30
+
+query T
+SELECT EOMONTH ('1996-12-20')
+----
+1996-12-31
+
+query T
+SELECT EOMONTH ('1996-01-01',12)
+----
+1997-01-31
+
+query T
+SELECT EOMONTH ('1996-01-01',-12)
+----
+1995-01-31
+
+query T
+SELECT EOMONTH ('1996-01-01',0)
+----
+1996-01-31
+
+query T
+SELECT EOMONTH ('1996-01-01',11)
+----
+1996-12-31
+
+query T
+SELECT EOMONTH ('1996-01-01',-1)
+----
+1995-12-31
+
+query T
+DECLARE @date DATETIME = '12/1/2011'; 
+SELECT EOMONTH ( @date ) AS Result;
+----
+NULL
+
+query T
+DECLARE @date DATETIME = '12/1/2011';  
+SELECT EOMONTH ( @date , 2) AS Result;  
+----
+NULL
+
+query T
+DECLARE @date VARCHAR(255) = '12/1/2011';  
+SELECT EOMONTH ( @date ) AS Result;  
+----
+NULL
+
+query T
+DECLARE @date VARCHAR(255) = '12/1/2011';  
+SELECT EOMONTH ( @date , -2) AS Result;  
+----
+NULL
+
+statement ok
+DROP VIEW IF EXISTS EOMONTH_EndOfMonthView;
+
+statement ok
+DROP PROCEDURE IF EXISTS GetEndOfMonthDate_EOMONTH;
+
+statement ok
+DROP VIEW IF EXISTS EOMONTH_EndOfNextMonthView;
+
+statement ok
+DROP PROCEDURE IF EXISTS GetEndOfNextMonthDate_EOMONTH;
+
+statement ok
+DROP Table eomonth_datestable
+

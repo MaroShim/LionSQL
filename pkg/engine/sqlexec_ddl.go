@@ -59,6 +59,22 @@ func parseColumnDefault(cDef string) string {
 	return ""
 }
 
+func parseColumnCheckExpr(cDef string) string {
+	idx := sqlutil.FindTopLevelKeyword(cDef, "CHECK")
+	if idx == -1 {
+		return ""
+	}
+	rest := strings.TrimSpace(cDef[idx+len("CHECK"):])
+	if len(rest) == 0 || rest[0] != '(' {
+		return ""
+	}
+	closeIdx := sqlutil.FindMatchingParen(rest, 0)
+	if closeIdx == -1 || closeIdx <= 1 {
+		return ""
+	}
+	return strings.TrimSpace(rest[1:closeIdx])
+}
+
 func parseDecimalPrecisionScale(cDef string) (int, int) {
 	upper := strings.ToUpper(cDef)
 	idx := strings.Index(upper, "DECIMAL")
@@ -248,6 +264,9 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 
 		isTableCheck := firstTokUpper == "CHECK" || strings.HasPrefix(firstTokUpper, "CHECK(") || (isConstraintClause && strings.Contains(cUpper, "CHECK"))
 		if isTableCheck {
+			if chkExpr := parseColumnCheckExpr(cDefTrimmed); chkExpr != "" {
+				schema.CheckConstraints = append(schema.CheckConstraints, chkExpr)
+			}
 			continue
 		}
 
@@ -283,6 +302,7 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		isIdentity := sqlutil.ContainsKeyword(cDefTrimmed, "IDENTITY", false) || sqlutil.ContainsKeyword(cDefTrimmed, "AUTO_INCREMENT", false) || isSerial || isGeneratedIdentity
 
 		defaultExpr := parseColumnDefault(cDefTrimmed)
+		checkExpr := parseColumnCheckExpr(cDefTrimmed)
 
 		schema.Columns = append(schema.Columns, storage.Column{
 			Name:       colName,
@@ -293,6 +313,7 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 			Precision:  precision,
 			Scale:      scale,
 			Default:    defaultExpr,
+			CheckExpr:  checkExpr,
 		})
 
 		if sqlutil.ContainsKeyword(cDefTrimmed, "REFERENCES", false) {
@@ -1637,6 +1658,12 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 
 	// 5. ALTER TABLE <table> ADD [CONSTRAINT <name>] CHECK (...)
 	if sqlutil.HasPrefixKeyword(body, "ADD") && (sqlutil.ContainsKeyword(body, "CHECK", false) || strings.Contains(bodyUpper, "CHECK(")) && !sqlutil.ContainsKeyword(body, "COLUMN", false) {
+		if checkExpr := parseColumnCheckExpr(body); checkExpr != "" {
+			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				sch.CheckConstraints = append(sch.CheckConstraints, checkExpr)
+				return nil
+			})
+		}
 		return &QueryResult{
 			Success:    true,
 			Command:    "ALTER TABLE",
@@ -2012,6 +2039,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			isIdentity := strings.Contains(segUpperRest, "IDENTITY") || strings.Contains(segUpperRest, "AUTO_INCREMENT") || isGeneratedIdentity
 
 			defaultExpr := parseColumnDefault(segTrimmed)
+			checkExpr := parseColumnCheckExpr(segTrimmed)
 
 			col := &storage.Column{
 				Name:      colName,
@@ -2021,6 +2049,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 				Precision: precision,
 				Scale:     scale,
 				Default:   defaultExpr,
+				CheckExpr: checkExpr,
 			}
 
 			if err := s.engine.AddColumn(tableName, col); err != nil {

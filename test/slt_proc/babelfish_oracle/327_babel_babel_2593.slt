@@ -1,0 +1,54 @@
+# test/slt_proc/babelfish_oracle/327_babel_babel_2593.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2593.sql
+
+statement ok
+use master
+
+statement ok
+create schema testschema
+
+statement ok
+create procedure testschema.proc1 as select 1
+
+statement ok
+create table testschema.table1 (a int primary key);
+
+statement ok
+create view testschema.view1 as select a from testschema.table1;
+
+statement ok
+create procedure dbo.proc2 as select 1
+
+statement ok
+create table dbo.table2 (a int primary key);
+
+statement ok
+create view dbo.view2 as select a from dbo.table2;
+
+statement ok
+select name from sys.objects where name ='proc1' or name = 'table1' or name = 'view1' or name = 'table1_pkey';
+
+query T
+select name from sys.objects where name ='proc2' or name = 'table2' or name = 'view2' or name = 'table2_pkey';
+----
+table2
+view2
+proc2
+
+statement ok
+select name from sys.procedures where name ='proc1'
+
+query T
+select name from sys.procedures where name ='proc2'
+----
+proc2
+
+statement ok
+drop procedure testschema.proc1;
+drop view testschema.view1;
+drop table testschema.table1;
+drop schema testschema;
+drop procedure dbo.proc2;
+drop view dbo.view2;
+drop table dbo.table2;
+

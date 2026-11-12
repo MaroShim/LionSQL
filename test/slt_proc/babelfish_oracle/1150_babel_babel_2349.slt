@@ -1,0 +1,60 @@
+# test/slt_proc/babelfish_oracle/1150_babel_babel_2349.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2349.sql
+
+statement ok
+create table t1(a int, b float, c bigint, d numeric);
+
+statement ok
+create index i1_t1 on t1 (a, b);
+
+statement ok
+select indid, name from sys.sysindexes where id=OBJECT_ID('t1');
+
+statement ok
+select indid, name from dbo.sysindexes where id=OBJECT_ID('t1');
+
+statement ok
+select count(*) from dbo.sysindexes where id=OBJECT_ID('t1');
+
+statement ok
+create database db1;
+
+statement ok
+use db1;
+
+statement ok
+select count(*) from dbo.sysindexes where id=OBJECT_ID('t1');
+
+statement ok
+use master;
+
+statement ok
+SELECT COUNT(*) FROM dbo.SySInDeXes where id=OBJECT_ID('t1');
+
+statement ok
+SELECT count(*) FROM db1.dbo.SySInDeXes where id=OBJECT_ID('t1');
+
+statement ok
+create database db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+use db1;
+
+statement ok
+select count(*) from dbo.sysindexes where id=OBJECT_ID('t1');
+
+statement ok
+use master;
+
+statement ok
+SELECT COUNT(*) FROM dbo.SySInDeXes where id=OBJECT_ID('t1');
+
+statement ok
+SELECT count(*) FROM db1.dbo.SySInDeXes where id=OBJECT_ID('t1');
+
+statement ok
+drop index i1_t1 on t1
+
+statement ok
+drop table t1
+

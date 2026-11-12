@@ -1,0 +1,47 @@
+# test/slt_proc/babelfish_oracle/366_babel_babel_3248.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3248.sql
+
+statement ok
+set showplan_all on;
+
+query T
+select 1;
+----
+1
+
+statement ok
+set showplan_all off;
+
+statement ok
+set statistics profile on;
+
+query T
+select 1;
+----
+1
+
+statement ok
+set statistics profile off;
+
+statement ok
+set showplan_all on;
+
+query T
+select 1;
+----
+1
+
+statement ok
+set showplan_all off;
+
+statement ok
+set statistics profile on;
+
+query T
+select 1;
+----
+1
+
+statement ok
+set statistics profile off;
+

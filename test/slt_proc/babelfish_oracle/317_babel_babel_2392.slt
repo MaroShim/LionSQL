@@ -1,0 +1,58 @@
+# test/slt_proc/babelfish_oracle/317_babel_babel_2392.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2392.sql
+
+statement ok
+USE master;
+
+statement ok
+create procedure sp1 (@a int = 0, @b varchar(10)) as begin select @a, @b; end;
+
+query TT
+exec sp1 @b = "abcd", @a = 3;
+----
+3 abcd
+
+query TT
+exec sp1 @a = 3, @b = "abcd";
+----
+3 abcd
+
+query TT
+exec sp1 @b = "abcd";
+----
+NULL abcd
+
+statement ok
+create procedure sp2 (@a int, @b varchar) as begin select @a, @b; end;
+
+query TT
+exec sp2 @b = "abcd", @a = 3;
+----
+3 abcd
+
+query TT
+exec sp2 @a = 3, @b = "abcd";
+----
+3 abcd
+
+statement ok
+create proc sp3 (@a int, @b varchar(10) = NULL, @c varchar(8) OUTPUT) as begin select @a, @b, @c; end
+
+query TTT
+exec sp3 @c = 'abcdefghijklmn', @a = 1;
+----
+1 NULL abcdefghijklmn
+
+query TTT
+exec sp3 @b = 'abcdefghijklmn', @c = 'abcdefghijklmn', @a = 1;
+----
+1 abcdefghijklmn abcdefghijklmn
+
+query TTT
+exec sp3 @a = 1, @b = 'abcdefghijklmn', @c = 'abcdefghijklmn';
+----
+1 abcdefghijklmn abcdefghijklmn
+
+statement ok
+drop procedure sp1, sp2, sp3;
+

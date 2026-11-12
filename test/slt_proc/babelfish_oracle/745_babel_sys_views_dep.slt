@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/745_babel_sys_views_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-views-dep-vu-prepare.sql, test/babelfish/raw/views/sys-views-dep-vu-verify.sql, test/babelfish/raw/views/sys-views-dep-vu-cleanup.sql
+
+statement ok
+CREATE VIEW sys_views_dep_vu_prepare_t1 AS select 1;
+
+statement ok
+CREATE PROCEDURE sys_views_dep_vu_prepare_p1 AS
+    SELECT COUNT(*) FROM sys.views WHERE name = 'sys_views_dep_vu_prepare_t1'
+
+statement ok
+CREATE FUNCTION sys_views_dep_vu_prepare_f1()
+RETURNS INT
+AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM sys.views WHERE name = 'sys_views_dep_vu_prepare_t1')
+END
+
+statement ok
+CREATE VIEW sys_views_dep_vu_prepare_v1 AS
+    SELECT COUNT(*) FROM sys.views WHERE name = 'sys_views_dep_vu_prepare_t1'
+
+query T
+SELECT * FROM sys_views_dep_vu_prepare_v1
+----
+1
+

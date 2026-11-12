@@ -1,0 +1,41 @@
+# test/slt_proc/babelfish_oracle/1023_babel_135_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/135_1.sql
+
+statement ok
+begin transaction
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+create schema error_mapping;
+
+statement ok
+create table error_mapping.temp1 (a int)
+
+statement ok
+create table error_mapping.temp2 (a int)
+
+statement ok
+create table error_mapping.temp3 (a int)
+
+statement ok
+drop table error_mapping.temp1;
+drop table error_mapping.temp2;
+drop table error_mapping.temp3;
+
+statement ok
+begin transaction
+
+statement ok
+set xact_abort ON;
+
+statement ok
+begin transaction
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+drop schema error_mapping;
+

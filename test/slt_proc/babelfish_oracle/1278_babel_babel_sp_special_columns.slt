@@ -1,0 +1,345 @@
+# test/slt_proc/babelfish_oracle/1278_babel_babel_sp_special_columns.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SP_SPECIAL_COLUMNS-vu-prepare.sql, test/babelfish/raw/BABEL-SP_SPECIAL_COLUMNS-vu-verify.sql, test/babelfish/raw/BABEL-SP_SPECIAL_COLUMNS-vu-cleanup.sql
+
+statement ok
+create database babel_sp_special_columns_vu_prepare_db1
+
+statement ok
+use babel_sp_special_columns_vu_prepare_db1
+
+statement ok
+create table babel_sp_special_columns_vu_prepare_t1(a int, primary key(a))
+
+statement ok
+create table babel_sp_special_columns_vu_prepare_t2(a int, b int, c int, primary key(b, c))
+
+statement ok
+create table babel_sp_special_columns_vu_prepare_t3(a int not null unique, b int, c int, primary key(c, b))
+
+statement ok
+create table babel_sp_special_columns_vu_prepare_t4(a int not null unique)
+
+statement ok
+create table babel_sp_special_columns_vu_prepare_t5(Id babel_sp_special_columns_vu_prepare_eyedees, Cellphone babel_sp_special_columns_vu_prepare_phone_num, primary key(Id, Cellphone))
+
+statement ok
+create table babel_sp_special_columns_vu_prepare_MyTable1(ColA babel_sp_special_columns_vu_prepare_eyedees, ColB babel_sp_special_columns_vu_prepare_phone_num, primary key(ColA, ColB))
+
+statement ok
+create table [babel_sp_special_columns_vu_prepare_MyTable2]([ColA] babel_sp_special_columns_vu_prepare_phone_num, [ColB] babel_sp_special_columns_vu_prepare_eyedees, primary key([ColA], [ColB]))
+
+statement ok
+create table babel_sp_special_columns_vu_prepare_unique_idx_table1(a int NOT NULL)
+
+statement ok
+create unique index babel_sp_special_columns_vu_prepare_my_index1 ON babel_sp_special_columns_vu_prepare_unique_idx_table1(a)
+
+statement ok
+create table babel_sp_special_columns_vu_prepare_unique_idx_table2(a int NOT NULL, b int primary key)
+
+statement ok
+create unique index babel_sp_special_columns_vu_prepare_my_index2 ON babel_sp_special_columns_vu_prepare_unique_idx_table2(a)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_bigint (a_bigint bigint primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_binary (a_binary binary primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_bit (a_bit bit primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_char (a_char char primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_date (a_date date primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_datetime (a_datetime datetime primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_datetime2 (a_datetime2 datetime2 primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_datetimeoffset (a_datetimeoffset datetimeoffset primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_decimal (a_decimal decimal primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_float (a_float float primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_int (a_int int primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_money (a_money money primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_nchar (a_nchar nchar primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_numeric(a_numeric numeric primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_nvarchar(a_nvarchar nvarchar primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_real(a_real real primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_smalldatetime(a_smalldatetime smalldatetime primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_smallint (a_smallint smallint primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_smallmoney (a_smallmoney smallmoney primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_sql_variant (a_sql_variant sql_variant primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_sysname (a_sysname sysname primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_time (a_time time primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_tinyint (a_tinyint tinyint primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_uniqueidentifier (a_uniqueidentifier uniqueidentifier primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_varbinary (a_varbinary varbinary primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_varchar (a_varchar varchar primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_int_identity (a_int_identity int identity primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_bigint_identity (a_bigint_identity bigint identity primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_smallint_identity (a_smallint_identity smallint identity primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_tinyint_identity (a_tinyint_identity tinyint identity primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_decimal_identity (a_decimal_identity decimal identity primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_numeric_identity (a_numeric_identity numeric identity primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_decimal_5_2 (a_decimal_5_2 decimal(5,2) primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_decimal_5_3 (a_decimal_5_2 decimal(5,3) primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_float_7 (a_float_7 float(7) primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_char_7 (a_char_7 char(7) primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_varchar_7 (a_varchar_7 varchar(7) primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_nchar_7 (a_nchar_7 nchar(7) primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_nvarchar_7 (a_nvarchar_7 nvarchar(7) primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_time_6 (a_time_6 time(6) primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_datetime2_6 (a_datetime2_6 datetime2(6) primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_datetimeoffset_6 (a_datetimeoffset_6 datetimeoffset(6) primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_binary_7 (a_binary_7 binary(7) primary key)
+
+statement ok
+CREATE TABLE babel_sp_special_columns_vu_prepare_type_varbinary_7 (a_varbinary_7 varbinary(7) primary key)
+
+statement ok
+use babel_sp_special_columns_vu_prepare_db1
+
+statement error
+exec sp_special_columns
+
+statement ok
+use babel_sp_special_columns_vu_prepare_db1
+
+statement ok
+drop table babel_sp_special_columns_vu_prepare_t1
+
+statement ok
+drop table babel_sp_special_columns_vu_prepare_t2
+
+statement ok
+drop table babel_sp_special_columns_vu_prepare_t3
+
+statement ok
+drop table babel_sp_special_columns_vu_prepare_t4
+
+statement ok
+drop table babel_sp_special_columns_vu_prepare_t5
+
+statement ok
+drop table babel_sp_special_columns_vu_prepare_MyTable1
+
+statement ok
+drop table [babel_sp_special_columns_vu_prepare_MyTable2]
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_bigint
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_binary
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_bit
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_char
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_date
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_datetime
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_datetime2
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_datetimeoffset
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_decimal
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_float
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_int
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_money
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_nchar
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_numeric
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_nvarchar
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_real
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_smalldatetime
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_smallint
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_smallmoney
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_sql_variant 
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_sysname
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_time 
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_tinyint
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_uniqueidentifier
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_varbinary
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_varchar
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_int_identity
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_bigint_identity
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_smallint_identity
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_tinyint_identity
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_decimal_identity
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_numeric_identity
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_unique_idx_table1
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_unique_idx_table2
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_decimal_5_2
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_decimal_5_3
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_float_7
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_char_7
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_varchar_7
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_nchar_7
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_nvarchar_7
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_time_6
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_datetime2_6
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_datetimeoffset_6
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_binary_7
+
+statement ok
+DROP TABLE babel_sp_special_columns_vu_prepare_type_varbinary_7
+
+statement ok
+use master
+

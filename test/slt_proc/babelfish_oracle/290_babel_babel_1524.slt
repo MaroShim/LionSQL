@@ -1,0 +1,127 @@
+# test/slt_proc/babelfish_oracle/290_babel_babel_1524.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1524.sql
+
+statement ok
+create table t1(id int, timestamp timestamp);
+
+statement ok
+drop table t1;
+
+statement ok
+create table t1(id int, timestamp);
+
+statement ok
+create table t2(id int, timestamp, timestamp);
+
+statement ok
+insert into t1(id, timestamp) values(1,2);
+
+statement ok
+insert into t1(id) values(1);
+insert into t1(id) values(2);
+
+query T
+with mycte (a, b)
+as (select t1.* from t1)
+select case when x.b = y.timestamp then 'equal' else 'not-equal' end
+				from mycte x inner join t1 y on x.a = y.id;
+----
+not-equal
+not-equal
+not-equal
+not-equal
+not-equal
+
+statement ok
+create view v1 as select id, timestamp from t1;
+
+query T
+select case when x.timestamp = y.timestamp then 'equal' else 'not-equal' end
+				from v1 x inner join t1 y on x.id = y.id;
+----
+not-equal
+not-equal
+not-equal
+not-equal
+not-equal
+
+statement ok
+drop view v1;
+
+statement ok
+create function tvf(@x int) returns table as return select id, timestamp from t1;
+
+query TT
+select case when f.timestamp = t.timestamp then 'equal' else 'not-equal' end
+                from tvf(1) f inner join t1 t on f.id = t.id;
+----
+1 NULL
+1 NULL
+2 NULL
+
+statement ok
+drop function tvf;
+
+statement ok
+create function tvf(@x int) returns timestamp as begin return cast(@x as timestamp) end;
+
+statement ok
+create function tvf(@x int, @y timestamp) returns int as begin return @x end;
+
+statement ok
+select case when x.timestamp = y.timestamp then 'equal' else 'not-equal' end
+                from t1 x inner join t2 y on x.id = y.id;
+
+statement ok
+select * into t3 from t1, t2;
+
+statement ok
+drop table t1;
+drop table t2;
+
+statement ok
+create table t1(id int, timestamp null);
+
+statement ok
+drop table t1;
+
+statement ok
+create table t1(id int, timestamp not null);
+
+statement ok
+drop table t1;
+
+statement ok
+create table t1(id int, timestamp check(timestamp > 50));
+
+statement ok
+drop table t1;
+
+statement ok
+create table t1(id int, timestamp default 50);
+
+statement ok
+create table t2(id int, timestamp, foreign key(timestamp) references t1(a));
+
+statement ok
+alter table t1 add constraint df DEFAULT 2 for timestamp;
+
+statement ok
+declare @tbl table (a int, timestamp timestamp);
+
+statement ok
+declare @tbl table (a int, timestamp);
+
+query T
+declare @last_dbts timestamp, @cur_dbts timestamp;
+set @last_dbts = @@dbts;
+insert into t1(id) values(1);
+set @cur_dbts = @@dbts;
+select case when (timestamp >= @last_dbts) and (@cur_dbts > timestamp) then 'ok'
+                else 'not-ok' end from t1 where id = 1;
+----
+not-ok
+
+statement ok
+CREATE TABLE t( c timestamp NOT NULL, PRIMARY KEY ( [ID] ASC))
+

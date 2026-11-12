@@ -1,0 +1,37 @@
+# test/slt_proc/babelfish_oracle/1503_babel_sys_key_constraints_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-key_constraints-dep-vu-prepare.sql, test/babelfish/raw/views/sys-key_constraints-dep-vu-verify.sql, test/babelfish/raw/views/sys-key_constraints-dep-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sys_key_constraints_dep_vu_prepare_db1;
+
+statement ok
+USE sys_key_constraints_dep_vu_prepare_db1
+
+statement ok
+create table sys_key_constraints_dep_vu_prepare_uq_1 (a int not null unique)
+
+statement ok
+create procedure sys_key_constraints_dep_vu_prepare_p1 as
+    select count(*) from sys.key_constraints where parent_object_id = object_id('sys_key_constraints_dep_vu_prepare_uq_1')
+
+statement ok
+create function sys_key_constraints_dep_vu_prepare_f1()
+returns int
+as
+begin
+    return (select count(*) from sys.key_constraints where parent_object_id = object_id('sys_key_constraints_dep_vu_prepare_uq_1'))
+end
+
+statement ok
+use master
+
+statement ok
+create view sys_key_constraints_dep_vu_prepare_v1 as
+    select count(*) from sys.key_constraints where parent_object_id = object_id('sys_key_constraints_dep_vu_prepare_uq_1')
+
+statement ok
+use sys_key_constraints_dep_vu_prepare_db1
+
+statement ok
+use master
+

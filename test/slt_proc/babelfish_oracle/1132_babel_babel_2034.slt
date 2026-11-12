@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1132_babel_babel_2034.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2034.sql
+
+statement ok
+CREATE TABLE EasDateTime (EasDateTime pg_catalog.timestamp, LastUpdDateTime pg_catalog.timestamp, LastCompressionMaxDate pg_catalog.timestamp, CompressionRate real);
+
+statement ok
+DROP TABLE EasDateTime;
+

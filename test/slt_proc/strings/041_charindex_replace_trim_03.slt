@@ -1,0 +1,30 @@
+# test/slt_proc/strings/041_charindex_replace_trim_03.slt
+# T-SQL CHARINDEX, REPLACE, and TRIM family (3)
+
+query I
+SELECT CHARINDEX('procedure', 'stored_procedure_runtime');
+----
+8
+
+query I
+SELECT CHARINDEX('nonexistent_token', 'stored_procedure_runtime');
+----
+0
+
+query T
+SELECT TRIM('stored_bytecode_runtime');
+----
+stored_bytecode_runtime
+
+statement ok
+CREATE PROCEDURE sp_replace_token_41 @src VARCHAR(100), @old VARCHAR(50), @new VARCHAR(50)
+AS
+BEGIN
+    DECLARE @pos INT = CHARINDEX(@old, @src);
+    SELECT @pos, TRIM(REPLACE(@src, @old, @new));
+END;
+
+query IT
+EXEC sp_replace_token_41 'stored_procedure_runtime', 'procedure', 'bytecode';
+----
+8 stored_bytecode_runtime

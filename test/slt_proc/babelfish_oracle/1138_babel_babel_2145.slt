@@ -1,0 +1,30 @@
+# test/slt_proc/babelfish_oracle/1138_babel_babel_2145.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2145.sql
+
+statement ok
+use master;
+
+statement ok
+create table t2145(c1 int);
+
+statement ok
+SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY c1) OVER (PARTITION BY c1) as pc FROM t2145;
+
+statement ok
+SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY c1) OVER (ORDER BY c1) as pc FROM t2145;
+
+statement ok
+SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY c1) OVER (ORDER BY c1 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as pc FROM t2145;
+
+statement ok
+SELECT PERCENTILE_DISC(0.5) WITHIN GROUP (ORDER BY c1) OVER (PARTITION BY c1) as pc FROM t2145;
+
+statement ok
+SELECT PERCENTILE_DISC(0.5) WITHIN GROUP (ORDER BY c1) OVER (ORDER BY c1) as pc FROM t2145;
+
+statement ok
+SELECT PERCENTILE_DISC(0.5) WITHIN GROUP (ORDER BY c1) OVER (ORDER BY c1 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as pc FROM t2145;
+
+statement ok
+drop table t2145;
+

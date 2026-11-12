@@ -1,0 +1,48 @@
+# test/slt_proc/babelfish_oracle/1334_babel_testcompiletimeerrorwithdefaultbehave.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/TestCompileTimeErrorWithDefaultBehave.sql
+
+statement ok
+USE master;
+
+statement ok
+CREATE SCHEMA error_mapping;
+
+statement ok
+begin transaction
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+begin transaction
+
+statement ok
+set xact_abort ON;
+
+statement ok
+begin transaction
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+begin transaction
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+begin transaction
+
+statement ok
+set xact_abort ON;
+
+statement ok
+begin transaction
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+DROP SCHEMA error_mapping;
+

@@ -1,0 +1,178 @@
+# test/slt_proc/babelfish_oracle/566_babel_babel_3571_15_5_or_15_6_or_16_1_or_16_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_3571-15_5-or-15_6-or-16_1-or-16_2-vu-prepare.sql, test/babelfish/raw/BABEL_3571-15_5-or-15_6-or-16_1-or-16_2-vu-verify.sql
+
+statement ok
+sp_babelfish_configure 'escape_hatch_unique_constraint', 'ignore';
+
+statement ok
+CREATE TABLE babel_3571_11 (id1 INT UNIQUE, id2 VARCHAR(30) UNIQUE, id3 VARBINARY(30))
+
+statement ok
+CREATE TABLE babel_3571_12 (id1 INT, id2 VARCHAR(30), id3 VARBINARY(30), UNIQUE(id1, id2))
+
+statement ok
+CREATE TABLE babel_3571_13 (id1 INT, id2 VARCHAR(30), id3 VARBINARY(30))
+
+statement ok
+CREATE UNIQUE INDEX babel_3571_13_unique_idx ON babel_3571_13(id1, id2)
+
+statement ok
+CREATE TABLE babel_3571_21 (id1 INT NOT NULL UNIQUE NULL, id2 VARCHAR(30) UNIQUE, id3 VARBINARY(30) PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel_3571_22 (id1 INT, id2 VARCHAR(30), id3 VARBINARY(30), UNIQUE(id1, id2), PRIMARY KEY (id3))
+
+statement ok
+CREATE TABLE babel_3571_23 (id1 INT, id2 VARCHAR(30), id3 VARBINARY(30))
+
+statement ok
+ALTER TABLE babel_3571_23 ADD CONSTRAINT babel_3571_23_pkey PRIMARY KEY (id3)
+
+statement ok
+ALTER TABLE babel_3571_23 ADD CONSTRAINT babel_3571_23_unique_idx UNIQUE (id1, id2)
+
+statement ok
+CREATE TABLE babel_3571_31 (id1 INT UNIQUE, id2 int)
+
+statement ok
+CREATE TABLE babel_3571_32 (id1 INT, UNIQUE(id1), id2 int)
+
+statement ok
+CREATE TABLE babel_3571_33 (id1 INT, id2 int)
+
+statement ok
+CREATE UNIQUE INDEX babel_3571_33_unique_idx ON babel_3571_33(id1)
+
+statement ok
+ALTER TABLE babel_3571_31 DROP COLUMN id1;
+ALTER TABLE babel_3571_32 DROP COLUMN id1;
+ALTER TABLE babel_3571_33 DROP COLUMN id1;
+
+statement ok
+ALTER TABLE babel_3571_31 ADD id1 INT;
+ALTER TABLE babel_3571_32 ADD id1 INT;
+ALTER TABLE babel_3571_33 ADD id1 INT;
+
+statement ok
+CREATE TABLE babel_3571_41 (id1 INT IDENTITY UNIQUE, id2 int)
+
+statement ok
+CREATE TABLE babel_3571_42 (id1 INT IDENTITY, UNIQUE(id1), id2 int)
+
+statement ok
+CREATE TABLE babel_3571_43 (id1 INT IDENTITY, id2 int)
+
+statement ok
+CREATE UNIQUE INDEX babel_3571_43_unique_idx ON babel_3571_43(id1)
+
+statement ok
+CREATE TABLE babel_3571_t (id INT)
+
+statement ok
+EXEC sp_babelfish_configure 'escape_hatch_unique_constraint', 'ignore';
+INSERT INTO babel_3571_t VALUES (1);
+
+statement ok
+CREATE PROC babel_3571_p
+AS
+BEGIN
+    INSERT INTO babel_3571_t VALUES (1);
+END
+
+statement ok
+EXEC babel_3571_p
+
+query T
+SELECT * FROM babel_3571_t
+----
+1
+1
+
+statement ok
+DROP PROC babel_3571_p
+
+statement ok
+DROP TABLE babel_3571_t
+
+statement ok
+INSERT INTO babel_3571_11 VALUES (-1, '-a', 0x0001), (1, '+a', 0x1001), (NULL, '', NULL), (0, NULL, NULL)
+
+statement ok
+INSERT INTO babel_3571_11 VALUES (NULL, 'random', 0x9999)
+
+statement ok
+INSERT INTO babel_3571_11 VALUES (9999, NULL, 0x9999)
+
+statement ok
+INSERT INTO babel_3571_11 VALUES (9999, 'random', NULL)
+
+statement ok
+INSERT INTO babel_3571_12 VALUES (-1, '-a', 0x0001), (1, '+a', 0x1001), (NULL, '', NULL), (0, NULL, NULL)
+
+statement ok
+INSERT INTO babel_3571_12 VALUES (NULL, NULL, NULL)
+
+statement ok
+INSERT INTO babel_3571_13 VALUES (-1, '-a', 0x0001), (1, '+a', 0x1001), (NULL, '', NULL), (0, NULL, NULL)
+
+statement ok
+INSERT INTO babel_3571_13 VALUES (NULL, NULL, NULL)
+
+statement ok
+INSERT INTO babel_3571_21 VALUES (-1, '-a', 0x0001), (1, '+a', 0x1001), (2, '', 0x0002), (0, 'something', 0x0003)
+
+statement ok
+INSERT INTO babel_3571_21 VALUES (NULL, 'random', 0x9999)
+
+statement ok
+INSERT INTO babel_3571_21 VALUES (9999, 'random', 0x1234)
+
+statement ok
+INSERT INTO babel_3571_22 VALUES (-1, '-a', 0x0001), (1, '+a', 0x1001), (NULL, '', 0x0002), (0, NULL, 0x0003)
+
+statement ok
+INSERT INTO babel_3571_22 VALUES (1234, 'somethingrandom', 0x1234)
+
+statement ok
+INSERT INTO babel_3571_23 VALUES (-1, '-a', 0x0001), (1, '+a', 0x1001), (NULL, '', 0x0002), (0, NULL, 0x0003)
+
+statement ok
+INSERT INTO babel_3571_23 VALUES (9999, NULL, 0x9999)
+
+statement ok
+INSERT INTO babel_3571_23 VALUES (0, 'somethingagain', 0x1234)
+
+statement ok
+ALTER TABLE babel_3571_23 DROP CONSTRAINT babel_3571_23_unique_idxbabel_31d1688ab21096b897da1cf1ce0e5d29b
+
+statement ok
+INSERT INTO babel_3571_23 VALUES (NULL, NULL, 0X91)
+INSERT INTO babel_3571_23 VALUES (1, '+a', 0X92)
+
+statement ok
+ALTER TABLE babel_3571_23 DROP CONSTRAINT babel_3571_23_pkeybabel_3571_23255e6842fcddf74ed00701a8a0eedc5c
+INSERT INTO babel_3571_23 VALUES (NULL, NULL, 0X0001)
+
+statement ok
+INSERT INTO babel_3571_31 VALUES (1,1), (1,1), (NULL, NULL), (NULL, NULL);
+INSERT INTO babel_3571_32 VALUES (1,1), (1,1), (NULL, NULL), (NULL, NULL);
+INSERT INTO babel_3571_33 VALUES (1,1), (1,1), (NULL, NULL), (NULL, NULL);
+
+statement ok
+SET IDENTITY_INSERT dbo.babel_3571_41 ON;
+
+statement ok
+SET IDENTITY_INSERT dbo.babel_3571_41 OFF;
+
+statement ok
+SET IDENTITY_INSERT dbo.babel_3571_42 ON;
+
+statement ok
+SET IDENTITY_INSERT dbo.babel_3571_42 OFF;
+
+statement ok
+SET IDENTITY_INSERT dbo.babel_3571_43 ON;
+
+statement ok
+SET IDENTITY_INSERT dbo.babel_3571_43 OFF;
+

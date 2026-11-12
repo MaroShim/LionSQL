@@ -1,0 +1,111 @@
+# test/slt_proc/babelfish_oracle/335_babel_babel_2765.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2765-vu-prepare.sql, test/babelfish/raw/BABEL-2765-vu-verify.sql, test/babelfish/raw/BABEL-2765-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_2765_vu_prepare_t1 (non_computed1 VARCHAR(200) COLLATE SQL_Latin1_General_CP1_CI_AI, computed1 AS substring(non_computed1, 1, 5) COLLATE SQL_Latin1_General_CP1_CI_AS)
+
+statement ok
+CREATE TABLE babel_2765_vu_prepare_t2 (non_computed2 VARCHAR(200), computed2 AS substring(non_computed2, 1, 5) COLLATE SQL_Latin1_General_CP1_CI_AI)
+
+statement ok
+CREATE TABLE babel_2765_vu_prepare_t3 (non_computed3 VARCHAR(200) COLLATE SQL_Latin1_General_CP1_CI_AI, computed3 AS substring(non_computed3, 1, 5))
+
+statement ok
+CREATE TABLE babel_2765_vu_prepare_t4 (non_computed4 VARCHAR(200), computed4 AS substring(non_computed4, 1, 5))
+
+statement ok
+CREATE TABLE babel_2765_vu_prepare_t5 (non_computed5 VARCHAR(200) COLLATE SQL_Latin1_General_CP1_CI_AI)
+
+statement ok
+ALTER TABLE babel_2765_vu_prepare_t5 ADD computed5 AS substring(non_computed5, 1, 5) COLLATE SQL_Latin1_General_CP1_CI_AS
+
+statement ok
+CREATE TABLE babel_2765_vu_prepare_t6 (non_computed6 VARCHAR(200))
+
+statement ok
+ALTER TABLE babel_2765_vu_prepare_t6 ADD computed6 AS substring(non_computed6, 1, 5) COLLATE SQL_Latin1_General_CP1_CI_AI
+
+statement ok
+CREATE TABLE babel_2765_vu_prepare_t7 (non_computed7 VARCHAR(200) COLLATE SQL_Latin1_General_CP1_CI_AI)
+
+statement ok
+ALTER TABLE babel_2765_vu_prepare_t7 ADD computed7 AS substring(non_computed7, 1, 5)
+
+statement ok
+CREATE TABLE babel_2765_vu_prepare_t8 (non_computed8 VARCHAR(200))
+
+statement ok
+ALTER TABLE babel_2765_vu_prepare_t8 ADD computed8 AS substring(non_computed8, 1, 5)
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed1' or name = 'computed1' ORDER BY name
+----
+computed1 NULL
+non_computed1 NULL
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed2' or name = 'computed2' ORDER BY name
+----
+computed2 NULL
+non_computed2 NULL
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed3' or name = 'computed3' ORDER BY name
+----
+computed3 NULL
+non_computed3 NULL
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed4' or name = 'computed4' ORDER BY name
+----
+computed4 NULL
+non_computed4 NULL
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed5' or name = 'computed5' ORDER BY name
+----
+computed5 NULL
+non_computed5 NULL
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed6' or name = 'computed6' ORDER BY name
+----
+computed6 NULL
+non_computed6 NULL
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed7' or name = 'computed7' ORDER BY name
+----
+computed7 NULL
+non_computed7 NULL
+
+query TT
+SELECT name, collation_name FROM sys.all_columns WHERE name = 'non_computed8' or name = 'computed8' ORDER BY name
+----
+computed8 NULL
+non_computed8 NULL
+
+statement ok
+DROP TABLE babel_2765_vu_prepare_t1
+
+statement ok
+DROP TABLE babel_2765_vu_prepare_t2
+
+statement ok
+DROP TABLE babel_2765_vu_prepare_t3
+
+statement ok
+DROP TABLE babel_2765_vu_prepare_t4
+
+statement ok
+DROP TABLE babel_2765_vu_prepare_t5
+
+statement ok
+DROP TABLE babel_2765_vu_prepare_t6
+
+statement ok
+DROP TABLE babel_2765_vu_prepare_t7
+
+statement ok
+DROP TABLE babel_2765_vu_prepare_t8
+

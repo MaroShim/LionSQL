@@ -1,0 +1,67 @@
+# test/slt_proc/babelfish_oracle/1537_babel_sys_types.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-types-vu-prepare.sql, test/babelfish/raw/views/sys-types-vu-verify.sql, test/babelfish/raw/views/sys-types-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE db1_sys_types;
+
+statement ok
+USE db1_sys_types
+
+statement ok
+USE master;
+
+statement ok
+select cast(name as varchar(20)) 
+		, max_length
+		, precision
+		, scale
+		, cast(collation_name as varchar(30)) 
+from sys.types where is_user_defined = 0 order by name asc;
+
+statement ok
+USE db1_sys_types
+
+statement ok
+select cast(name as varchar(20)) 
+		, max_length
+		, precision
+		, scale
+		, cast(collation_name as varchar(30)) 
+from sys.types where is_user_defined = 1 order by name asc;
+
+statement ok
+SELECT count(*) FROM sys.types WHERE name = 'my_type';
+
+statement ok
+SELECT count(*) FROM sys.types WHERE name = 'tbl_type_sys_types';
+
+statement ok
+USE master;
+
+statement ok
+SELECT count(*) FROM sys.types WHERE name = 'my_type';
+
+statement ok
+SELECT count(*) FROM sys.types WHERE name = 'my_type1';
+
+statement ok
+SELECT count(*) FROM sys.types WHERE name = 'tbl_type_sys_types';
+
+statement ok
+SELECT count(*) FROM sys.types WHERE name = 'tbl_type_sys_types1';
+
+statement ok
+USE db1_sys_types
+
+statement ok
+SELECT count(*) FROM sys.types WHERE name = 'my_type1';
+
+statement ok
+SELECT count(*) FROM sys.types WHERE name = 'tbl_type_sys_types1';
+
+statement ok
+USE db1_sys_types
+
+statement ok
+USE master;
+

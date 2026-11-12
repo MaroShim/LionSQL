@@ -1,0 +1,201 @@
+# test/slt_proc/babelfish_oracle/650_babel_forxml_namespaces_before_18_6.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/forxml/forxml-namespaces-before-18_6-vu-prepare.sql, test/babelfish/raw/forxml/forxml-namespaces-before-18_6-vu-verify.sql, test/babelfish/raw/forxml/forxml-namespaces-before-18_6-vu-cleanup.sql
+
+statement ok
+CREATE TABLE forxml_ns_employees (
+    EmpID INT,
+    EmpName VARCHAR(50),
+    Dept VARCHAR(50)
+);
+
+statement ok
+INSERT INTO forxml_ns_employees VALUES (1, 'Alice', 'Sales');
+INSERT INTO forxml_ns_employees VALUES (2, 'Bob', 'IT');
+INSERT INTO forxml_ns_employees VALUES (3, NULL, 'HR');
+INSERT INTO forxml_ns_employees VALUES (4, 'Diana', NULL);
+
+statement ok
+CREATE TABLE forxml_ns_orders (
+    OrderID INT,
+    EmpID INT,
+    Amount DECIMAL(10, 2)
+);
+
+statement ok
+INSERT INTO forxml_ns_orders VALUES (101, 1, 100.50);
+INSERT INTO forxml_ns_orders VALUES (102, 2, 200.00);
+INSERT INTO forxml_ns_orders VALUES (103, 1, NULL);
+
+statement ok
+CREATE TABLE forxml_ns_simple (
+    a INT,
+    b VARCHAR(50)
+);
+
+statement ok
+INSERT INTO forxml_ns_simple VALUES (1, 'val1');
+INSERT INTO forxml_ns_simple VALUES (2, 'val2');
+
+statement ok
+CREATE TABLE forxml_ns_nullable (
+    a INT,
+    b VARCHAR(50)
+);
+
+statement ok
+INSERT INTO forxml_ns_nullable VALUES (NULL, NULL);
+INSERT INTO forxml_ns_nullable VALUES (1, NULL);
+INSERT INTO forxml_ns_nullable VALUES (NULL, 'x');
+
+statement ok
+CREATE TABLE forxml_ns_types (
+    IntCol INT,
+    VarcharCol VARCHAR(50),
+    BitCol BIT,
+    DecimalCol DECIMAL(10,2),
+    DateCol DATE
+);
+
+statement ok
+INSERT INTO forxml_ns_types VALUES (100, 'Text1', 1, 99.99, '2024-01-01');
+INSERT INTO forxml_ns_types VALUES (NULL, NULL, NULL, NULL, NULL);
+INSERT INTO forxml_ns_types VALUES (200, NULL, 0, NULL, '2024-06-15');
+
+statement ok
+CREATE TABLE forxml_ns_special (
+    ID INT,
+    Value VARCHAR(100)
+);
+
+statement ok
+INSERT INTO forxml_ns_special VALUES (1, 'a & b');
+INSERT INTO forxml_ns_special VALUES (2, 'a < b');
+INSERT INTO forxml_ns_special VALUES (3, 'say "hello"');
+INSERT INTO forxml_ns_special VALUES (4, '<tag>x</tag>');
+
+statement ok
+CREATE TABLE forxml_ns_unicode (
+    ID INT,
+    Name NVARCHAR(50)
+);
+
+statement ok
+INSERT INTO forxml_ns_unicode VALUES (1, N'日本語');
+INSERT INTO forxml_ns_unicode VALUES (2, N'中文');
+INSERT INTO forxml_ns_unicode VALUES (3, N'한국어');
+
+statement ok
+CREATE VIEW forxml_ns_view1 AS
+SELECT EmpID, EmpName FROM forxml_ns_employees;
+
+statement ok
+CREATE VIEW forxml_ns_view2 AS
+SELECT a, b FROM forxml_ns_simple;
+
+statement ok
+SET QUOTED_IDENTIFIER OFF;
+
+statement ok
+SET QUOTED_IDENTIFIER ON;
+
+statement error
+WITH XMLNAMESPACES('http://example.com/ns1' AS ns1)
+SELECT e.EmpID AS [ns1:ID],
+       (WITH XMLNAMESPACES('http://example.com/ns2' AS ns2)
+        SELECT o.OrderID AS [ns2:OID]
+        FROM forxml_ns_orders o WHERE o.EmpID = e.EmpID
+        FOR XML RAW('ns2:Ord'), TYPE) AS [ns1:Orders]
+FROM forxml_ns_employees e WHERE e.EmpID = 1
+FOR XML RAW('ns1:Emp'), TYPE;
+
+statement ok
+CREATE TABLE xmlns_dml_t (x XML);
+
+statement ok
+SELECT x FROM xmlns_dml_t;
+
+statement ok
+DELETE FROM xmlns_dml_t;
+
+statement ok
+SELECT x FROM xmlns_dml_t;
+
+statement ok
+SELECT x FROM xmlns_dml_t;
+
+query T
+SELECT COUNT(*) AS remaining FROM xmlns_dml_t;
+----
+0
+
+statement ok
+DELETE FROM xmlns_dml_t;
+
+statement ok
+INSERT INTO xmlns_dml_t
+VALUES ('<root xmlns:ns1="http://example.com/ns1"><ns1:item>v</ns1:item></root>');
+
+query T
+SELECT COUNT(*) AS remaining FROM xmlns_dml_t;
+----
+1
+
+statement ok
+DROP TABLE xmlns_dml_t;
+
+statement ok
+CREATE TABLE xmlns_dml_exec (x XML);
+
+statement ok
+SELECT x FROM xmlns_dml_exec;
+
+statement ok
+DELETE FROM xmlns_dml_exec;
+
+statement ok
+SELECT x FROM xmlns_dml_exec;
+
+statement ok
+DROP TABLE xmlns_dml_exec;
+
+statement ok
+DECLARE @x1 NVARCHAR(MAX);
+SET @x1 = (SELECT EmpID FROM forxml_ns_employees WHERE EmpID = 1
+           FOR XML RAW('ns1:Emp'));
+
+statement ok
+DECLARE @x2 NVARCHAR(MAX);
+SET @x2 = (SELECT EmpID AS [ns1:ID] FROM forxml_ns_employees WHERE EmpID = 1
+           FOR XML PATH(''));
+
+statement ok
+DECLARE @x3 XML = (SELECT EmpID FROM forxml_ns_employees WHERE EmpID = 1
+                   FOR XML RAW('ns1:Emp'), TYPE);
+
+statement ok
+DROP VIEW forxml_ns_view1;
+
+statement ok
+DROP VIEW forxml_ns_view2;
+
+statement ok
+DROP TABLE forxml_ns_employees;
+
+statement ok
+DROP TABLE forxml_ns_orders;
+
+statement ok
+DROP TABLE forxml_ns_simple;
+
+statement ok
+DROP TABLE forxml_ns_nullable;
+
+statement ok
+DROP TABLE forxml_ns_types;
+
+statement ok
+DROP TABLE forxml_ns_special;
+
+statement ok
+DROP TABLE forxml_ns_unicode;
+

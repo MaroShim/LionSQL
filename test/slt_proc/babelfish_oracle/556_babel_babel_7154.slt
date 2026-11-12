@@ -1,0 +1,47 @@
+# test/slt_proc/babelfish_oracle/556_babel_babel_7154.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-7154.sql
+
+statement ok
+CREATE DATABASE babel_7154_db
+
+statement ok
+USE babel_7154_db
+
+statement ok
+CREATE LOGIN babel_7154_login WITH PASSWORD = '12345678'
+
+statement ok
+CREATE USER babel_7154_user FOR LOGIN babel_7154_login
+
+statement ok
+ALTER ROLE db_owner ADD MEMBER babel_7154_user
+
+statement ok
+USE master
+
+statement ok
+ALTER DATABASE babel_7154_db MODIFY NAME = babel_7154_db_renamed
+
+statement ok
+USE babel_7154_db_renamed
+
+statement ok
+CREATE TABLE babel_7154_tbl (a int)
+
+statement ok
+INSERT INTO babel_7154_tbl VALUES (1)
+
+query T
+SELECT a FROM babel_7154_tbl
+----
+1
+
+statement ok
+DROP TABLE babel_7154_tbl
+
+statement ok
+USE master
+
+statement ok
+DROP LOGIN babel_7154_login
+

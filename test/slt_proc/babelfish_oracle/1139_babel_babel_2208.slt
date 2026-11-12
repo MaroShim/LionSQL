@@ -1,0 +1,51 @@
+# test/slt_proc/babelfish_oracle/1139_babel_babel_2208.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/triggers/BABEL-2208-vu-prepare.sql, test/babelfish/raw/triggers/BABEL-2208-vu-verify.sql, test/babelfish/raw/triggers/BABEL-2208-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_2208_vu_prepare_t1(c1 int, c2 varchar(10) )
+
+statement ok
+CREATE TRIGGER babel_2208_vu_prepare_tr1 ON babel_2208_vu_prepare_t1
+AFTER DELETE AS
+    DECLARE @rowcnt int
+    SET @rowcnt = @@ROWCOUNT
+    SELECT @rowcnt AS "#rows"
+
+statement ok
+INSERT INTO babel_2208_vu_prepare_t1 VALUES
+    (1, 'string1' ),(2, 'string2' ),(3, 'string3' ),(4, 'string4' )
+
+statement ok
+CREATE TABLE babel_2208_vu_prepare_t2(c1 int, c2 varchar(10) )
+
+statement ok
+CREATE TRIGGER babel_2208_vu_prepare_tr2 ON babel_2208_vu_prepare_t2
+AFTER insert AS
+    DECLARE @rowcnt int
+    SET @rowcnt = @@ROWCOUNT
+    SELECT @rowcnt AS "#rows"
+
+statement ok
+DELETE FROM babel_2208_vu_prepare_t1 WHERE c1 = 1
+
+statement ok
+DELETE FROM babel_2208_vu_prepare_t1 WHERE c1 IN(2,3)
+
+statement ok
+INSERT INTO babel_2208_vu_prepare_t2 VALUES (1, 'string1' ),(2, 'string2' ),(3, 'string3' ),(4, 'string4' )
+
+statement ok
+INSERT INTO babel_2208_vu_prepare_t2 VALUES (1, 'string1' ),(2, 'string2' ),(3, 'string3' )
+
+statement ok
+drop trigger babel_2208_vu_prepare_tr2;
+
+statement ok
+drop trigger babel_2208_vu_prepare_tr1;
+
+statement ok
+drop table babel_2208_vu_prepare_t2;
+
+statement ok
+drop table babel_2208_vu_prepare_t1;
+

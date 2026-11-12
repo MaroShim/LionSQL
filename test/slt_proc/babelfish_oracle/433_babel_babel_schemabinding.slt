@@ -1,0 +1,32 @@
+# test/slt_proc/babelfish_oracle/433_babel_babel_schemabinding.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SCHEMABINDING.sql
+
+statement ok
+CREATE TABLE t_babel_1201 (a int);
+INSERT INTO t_babel_1201 values (1);
+
+statement ok
+CREATE VIEW v_babel_1201 WITH SCHEMABINDING AS SELECT * FROM t_babel_1201;
+
+query T
+SELECT * FROM v_babel_1201;
+----
+1
+
+statement ok
+CREATE TABLE t_babel_1201_2 (c varchar(20));
+
+statement ok
+CREATE TRIGGER tr_babel_1201 on t_babel_1201 AFTER INSERT AS INSERT INTO t_babel_1201_2 values ('triggered');
+
+statement ok
+INSERT INTO t_babel_1201 values (2);
+
+query T
+SELECT * FROM t_babel_1201_2;
+----
+triggered
+
+statement ok
+CREATE FUNCTION f_babel_1201_2 (@v int) RETURNS TABLE WITH SCHEMABINDING AS RETURN select @v+1 as a;
+

@@ -1,0 +1,403 @@
+# test/slt_proc/babelfish_oracle/1608_babel_update_with_var.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/update_with_var-vu-prepare.sql, test/babelfish/raw/update_with_var-vu-verify.sql, test/babelfish/raw/update_with_var-vu-cleanup.sql
+
+statement ok
+CREATE SCHEMA jira_babel_update_with_var_assign;
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_int (id INT, val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_int VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_str (id INT, name VARCHAR(50));
+INSERT INTO jira_babel_update_with_var_assign.test_str VALUES (1, 'A'), (2, 'B'), (3, 'C');
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_multi (id INT, val INT, name VARCHAR(20));
+INSERT INTO jira_babel_update_with_var_assign.test_multi VALUES (1, 100, 'First'), (2, 200, 'Second'), (3, 300, 'Third');
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_where (id INT, val INT, status VARCHAR(10));
+INSERT INTO jira_babel_update_with_var_assign.test_where VALUES (1, 10, 'active'), (2, 20, 'inactive'), (3, 30, 'active'), (4, 40, 'inactive');
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_null (id INT, val INT, name VARCHAR(20));
+INSERT INTO jira_babel_update_with_var_assign.test_null VALUES (1, 10, 'A'), (2, NULL, 'B'), (3, 30, NULL), (4, 40, 'D');
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_empty (id INT, val INT);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_single (id INT, val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_single VALUES (1, 50);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_numeric (
+    id INT, 
+    int_val INT, 
+    decimal_val DECIMAL(10,2), 
+    float_val FLOAT,
+    bigint_val BIGINT
+);
+INSERT INTO jira_babel_update_with_var_assign.test_numeric VALUES 
+    (1, 10, 10.5, 10.25, 1000000000),
+    (2, 20, 20.5, 20.25, 2000000000);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_math (id INT, val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_math VALUES (1, 2), (2, 3), (3, 4);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_col_assign (id INT, val INT, running_total INT);
+INSERT INTO jira_babel_update_with_var_assign.test_col_assign VALUES (1, 10, 0), (2, 20, 0), (3, 30, 0);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_main (id INT, val INT);
+CREATE TABLE jira_babel_update_with_var_assign.test_lookup (id INT, multiplier INT);
+INSERT INTO jira_babel_update_with_var_assign.test_main VALUES (1, 10), (2, 20), (3, 30);
+INSERT INTO jira_babel_update_with_var_assign.test_lookup VALUES (1, 2), (2, 3), (3, 4);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_large (id INT, val INT);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_str_complex (id INT, prefix VARCHAR(10), suffix VARCHAR(10));
+INSERT INTO jira_babel_update_with_var_assign.test_str_complex VALUES (1, 'A', 'X'), (2, 'B', 'Y'), (3, 'C', 'Z');
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_case (id INT, val INT, category VARCHAR(10));
+INSERT INTO jira_babel_update_with_var_assign.test_case VALUES (1, 10, 'A'), (2, 20, 'B'), (3, 30, 'A'), (4, 40, 'B');
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_counter (id INT, val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_counter VALUES (1, 100), (2, 200), (3, 300);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_init (id INT, val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_init VALUES (1, 5), (2, 10), (3, 15);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_self (id INT, val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_self VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_datetime (id INT, days_to_add INT);
+INSERT INTO jira_babel_update_with_var_assign.test_datetime VALUES (1, 1), (2, 2), (3, 3);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_tran (id INT, val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_tran VALUES (1, 10), (2, 20);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_top (id INT, val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_top VALUES (1, 10), (2, 20), (3, 30), (4, 40);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_convert (id INT, int_val INT, str_val VARCHAR(20));
+INSERT INTO jira_babel_update_with_var_assign.test_convert VALUES (1, 100, '50'), (2, 200, '75');
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_nested (id INT, val INT);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_other (id INT);
+
+statement ok
+INSERT INTO jira_babel_update_with_var_assign.test_nested VALUES (1, 10), (2, 20);
+
+statement ok
+INSERT INTO jira_babel_update_with_var_assign.test_other VALUES (1), (1), (2);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_dynamic (val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_dynamic VALUES (5), (15), (25);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_mixed_types (val INT, int_col INT, nvarchar_col NVARCHAR(10), float_col FLOAT);
+INSERT INTO jira_babel_update_with_var_assign.test_mixed_types VALUES (1, 10, N'A', 1.5), (2, 20, N'B', 2.5);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_coalesce (val INT, nullable_col VARCHAR(50));
+INSERT INTO jira_babel_update_with_var_assign.test_coalesce VALUES (1, NULL), (2, 'First'), (3, 'Second');
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_output (val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_output VALUES (10), (20);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_running_max (val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_running_max VALUES (5), (15), (10), (25), (20);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_cross_db (val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_cross_db VALUES (10), (20);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_target (id INT, val INT);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_source (id INT, val INT);
+
+statement ok
+INSERT INTO jira_babel_update_with_var_assign.test_target VALUES (1, 100);
+
+statement ok
+INSERT INTO jira_babel_update_with_var_assign.test_source VALUES (1, 200), (2, 300);
+
+statement ok
+CREATE FUNCTION jira_babel_update_with_var_assign.custom_function(@val INT) RETURNS INT
+AS BEGIN
+    RETURN @val * 2;
+END;
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_udf (val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_udf VALUES (5), (10);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_concurrent (val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_concurrent VALUES (1), (2), (3), (4), (5);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_overflow (val TINYINT);
+INSERT INTO jira_babel_update_with_var_assign.test_overflow VALUES (1), (2), (3);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_unicode (name VARCHAR(10), unicode_col NVARCHAR(10));
+INSERT INTO jira_babel_update_with_var_assign.test_unicode VALUES ('A', N'α'), ('B', N'β');
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_computed (base_val INT, computed_col AS (base_val * 2));
+INSERT INTO jira_babel_update_with_var_assign.test_computed (base_val) VALUES (10), (20);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_recursive (id INT, val INT, parent_id INT, processed BIT DEFAULT 0);
+INSERT INTO jira_babel_update_with_var_assign.test_recursive VALUES (1, 10, NULL, 0), (2, 20, 1, 0), (3, 30, 1, 0);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_division (val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_division VALUES (0), (2), (4);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_truncation (name VARCHAR(20));
+INSERT INTO jira_babel_update_with_var_assign.test_truncation VALUES ('VeryLongName1'), ('VeryLongName2');
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_large_string (val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_large_string VALUES (1), (2);
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.test_complex_expr (val INT);
+INSERT INTO jira_babel_update_with_var_assign.test_complex_expr VALUES (2), (3), (4);
+
+query T
+DECLARE @sum2 INT = 0;
+SELECT @sum2 = @sum2 + val FROM jira_babel_update_with_var_assign.test_int;
+SELECT @sum2 AS result; -- Expected: 60
+----
+0
+
+query T
+DECLARE @sum2 INT = 0;
+SELECT @sum2 = @sum2 + val FROM jira_babel_update_with_var_assign.test_where WHERE status = 'inactive';
+SELECT @sum2 AS result; -- Expected: 60 (20+40)
+----
+0
+
+query T
+DECLARE @sum2 INT = 100;
+SELECT @sum2 = @sum2 + val FROM jira_babel_update_with_var_assign.test_empty;
+SELECT @sum2 AS result; -- Expected: 100 (unchanged)
+----
+100
+
+query T
+DECLARE @sum2 INT = 0;
+SELECT @sum2 = @sum2 + m.val * l.multiplier
+FROM jira_babel_update_with_var_assign.test_main m
+INNER JOIN jira_babel_update_with_var_assign.test_lookup l ON m.id = l.id;
+SELECT @sum2 AS result; -- Expected: 200
+----
+0
+
+query T
+DECLARE @sum2 INT = 0;
+SELECT @sum2 = @sum2 + val FROM jira_babel_update_with_var_assign.test_large;
+SELECT @sum2 AS result; -- Expected: 500500
+----
+0
+
+statement ok
+use master
+
+query TTTT
+SELECT * FROM jira_babel_update_with_var_assign.test_recursive ORDER BY id;
+----
+1 10 NULL false
+2 20 1 false
+3 30 1 false
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.simple_test (id INT, val INT);
+INSERT INTO jira_babel_update_with_var_assign.simple_test VALUES (1, 10), (2, 20);
+
+statement ok
+CREATE TRIGGER trg_simple_test ON jira_babel_update_with_var_assign.simple_test
+AFTER UPDATE AS
+BEGIN
+    INSERT INTO jira_babel_update_with_var_assign.simple_test VALUES (99, 99);
+END;
+
+statement ok
+DROP TRIGGER IF EXISTS trg_simple_test;
+DROP TABLE jira_babel_update_with_var_assign.simple_test;
+
+statement ok
+CREATE TABLE jira_babel_update_with_var_assign.minimal_test (val INT);
+INSERT INTO jira_babel_update_with_var_assign.minimal_test VALUES (5);
+
+statement ok
+CREATE TRIGGER trg_minimal ON jira_babel_update_with_var_assign.minimal_test
+AFTER UPDATE AS BEGIN
+    SELECT 1;
+END;
+
+statement ok
+DROP TRIGGER IF EXISTS trg_minimal;
+DROP TABLE jira_babel_update_with_var_assign.minimal_test;
+
+statement ok
+DROP FUNCTION IF EXISTS jira_babel_update_with_var_assign.custom_function;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_int;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_str;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_multi;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_where;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_null;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_empty;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_single;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_numeric;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_math;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_col_assign;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_main;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_lookup;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_large;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_str_complex;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_case;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_counter;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_init;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_self;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_datetime;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_tran;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_top;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_convert;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_nested;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_other;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_dynamic;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_mixed_types;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_coalesce;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_output;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_running_max;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_cross_db;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_target;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_source;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_udf;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_concurrent;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_overflow;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_unicode;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_computed;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_recursive;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_division;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_truncation;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_identity;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_large_string;
+
+statement ok
+DROP TABLE IF EXISTS jira_babel_update_with_var_assign.test_complex_expr;
+
+statement ok
+DROP SCHEMA IF EXISTS jira_babel_update_with_var_assign;
+

@@ -1,0 +1,81 @@
+# test/slt_proc/babelfish_oracle/337_babel_babel_2787_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2787-2.sql
+
+statement ok
+CREATE TABLE employeeData( ID INT IDENTITY (1,1) PRIMARY KEY,Emp_First_name VARCHAR (50));
+
+statement ok
+insert into employeeData values ('a'),('b'),('c'),('d');
+
+statement ok
+CREATE TRIGGER updEmployeeData  ON employeeData  INSTEAD OF INSERT AS  
+BEGIN  
+   BEGIN TRAN;
+    update employeeData set Emp_First_name = 'dddd';
+   Rollback tran;
+END
+
+statement ok
+insert into employeeData values ('e')
+
+query TT
+select * from employeeData
+----
+1 a
+2 b
+3 c
+4 d
+6 e
+
+statement ok
+drop trigger updEmployeeData;
+
+statement ok
+CREATE TRIGGER updEmployeeData  ON employeeData  INSTEAD OF UPDATE AS  
+BEGIN  
+   BEGIN TRAN;
+    insert into employeeData values ('e')
+   Rollback tran;
+END
+
+statement ok
+update employeeData set Emp_First_name = 'dddd';
+
+query TT
+select * from employeeData
+----
+1 dddd
+2 dddd
+3 dddd
+4 dddd
+6 dddd
+
+statement ok
+drop trigger updEmployeeData;
+
+statement ok
+CREATE TRIGGER updEmployeeData  ON employeeData  INSTEAD OF DELETE AS  
+BEGIN  
+   BEGIN TRAN;
+    update employeeData set Emp_First_name = 'dddd';
+   Rollback tran;
+END
+
+statement ok
+delete from employeeData where Emp_First_name = 'a';
+
+query TT
+select * from employeeData
+----
+1 dddd
+2 dddd
+3 dddd
+4 dddd
+6 dddd
+
+statement ok
+drop trigger updEmployeeData;
+
+statement ok
+drop table employeeData
+

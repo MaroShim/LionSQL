@@ -1,0 +1,34 @@
+# test/slt_proc/babelfish_oracle/1604_babel_typeproperty_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/typeproperty-dep-vu-prepare.sql, test/babelfish/raw/typeproperty-dep-vu-verify.sql, test/babelfish/raw/typeproperty-dep-vu-cleanup.sql
+
+statement ok
+CREATE SCHEMA typeproperty_test1_dep_vu
+
+statement ok
+CREATE VIEW typeproperty_vu_prepare_dep_view AS
+SELECT TYPEPROPERTY('typeproperty_test1_dep_vu.null_check1_dep_vu', 'scale')
+
+statement ok
+CREATE PROC typeproperty_vu_prepare_dep_proc AS
+SELECT TYPEPROPERTY('typeproperty_test1_dep_vu.null_check1_dep_vu', 'allowsnull')
+
+statement ok
+CREATE FUNCTION typeproperty_vu_prepare_dep_func()
+RETURNS INT
+AS
+BEGIN
+RETURN TYPEPROPERTY('typeproperty_test1_dep_vu.null_check1_dep_vu', 'precision')
+END
+
+statement ok
+DROP VIEW typeproperty_vu_prepare_dep_view
+
+statement ok
+DROP PROC typeproperty_vu_prepare_dep_proc
+
+statement ok
+DROP FUNCTION typeproperty_vu_prepare_dep_func
+
+statement ok
+DROP SCHEMA typeproperty_test1_dep_vu
+

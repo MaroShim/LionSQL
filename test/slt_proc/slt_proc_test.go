@@ -27,6 +27,9 @@ func discoverProcSLTFiles(t *testing.T) []string {
 
 func TestTSQL_StoredProcedure_Suites(t *testing.T) {
 	allFiles := discoverProcSLTFiles(t)
+	if len(allFiles) < 3000 {
+		t.Fatalf("expected at least 3,000 Gate 5 T-SQL .slt suites, found %d", len(allFiles))
+	}
 
 	for _, file := range allFiles {
 		t.Run(filepath.Base(file), func(t *testing.T) {
@@ -41,10 +44,7 @@ func TestTSQL_StoredProcedure_Suites(t *testing.T) {
 			exec := slt.NewCoordinatorExecutor(coord)
 
 			for _, rec := range records {
-				
-
-if err := slt.RunRecord(exec, rec); err != nil {
-
+				if err := slt.RunRecord(exec, rec); err != nil {
 					t.Fatalf("[%s:%d] SLT verification failure: %v\nSQL:\n%s", rec.FilePath, rec.LineNumber, err, rec.SQL)
 				}
 			}

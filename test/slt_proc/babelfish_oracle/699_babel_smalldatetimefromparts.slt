@@ -1,0 +1,128 @@
+# test/slt_proc/babelfish_oracle/699_babel_smalldatetimefromparts.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/smalldatetimefromparts.sql
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 1, 01, 00, NULL ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 1, 01, NULL, 23 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 1, NULL, 00, 23  ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, NULL, 01, 00, 23 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( NULL, 1, 01, 00, 13 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( NULL,NULL, NULL, NULL, NULL ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 1900, 13, 31, 23, 59 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 13, 31, 23, 59 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 00, 31, 23, 59 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 0, 31, 23, 59 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 1, 32, 23, 59 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 1, 0, 23, 59 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 1, 00, 23, 59 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 1, 01, 24, 59 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 1, 01, -01, 59 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 1, 01, -00, 60 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 1, 01, -00, -1 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078, 1, 01, -00, -01 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ('2078','1','01','00','22' ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2078.60, 1.0, 0.1, 0.0, 2.2 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2079, 1, 2,-3,4) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2079, 1, -2,3,4) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 2079, -1,2,3,4) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 1900, 0, 1, 00, 00 ) AS Result
+----
+NULL
+
+query T
+SELECT SMALLDATETIMEFROMPARTS ( 1900, 1, 0, 00, 00 ) AS Result
+----
+NULL
+

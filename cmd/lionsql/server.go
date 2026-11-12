@@ -988,7 +988,7 @@ func renderStartupBanner(cfg *config.Config, ctx bannerContext) string {
 	}
 
 	b.WriteString(fmt.Sprintf(" [Superuser Auth] %s (JWT Auth: %v)\n", cfg.Auth.AdminEmail, cfg.Auth.Enabled))
-	b.WriteString(" [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / Azure Data Studio\n")
+	b.WriteString(" [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / SSMS\n")
 
 	if ctx.HasPG && strings.Contains(cfg.Network.PGAddr, ":") {
 		b.WriteString(fmt.Sprintf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (PostgreSQL v3 protocol, psql / pgx)\n", strings.Split(cfg.Network.PGAddr, ":")[1]))

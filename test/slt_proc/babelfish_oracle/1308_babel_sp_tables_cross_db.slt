@@ -1,0 +1,54 @@
+# test/slt_proc/babelfish_oracle/1308_babel_sp_tables_cross_db.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/SP_TABLES-cross-db-vu-prepare.sql, test/babelfish/raw/SP_TABLES-cross-db-vu-verify.sql, test/babelfish/raw/SP_TABLES-cross-db-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE babel_5263_vu_prepare_db1;
+
+statement ok
+USE babel_5263_vu_prepare_db1;
+
+statement ok
+CREATE TABLE babel_5263_vu_prepare_t1 (a INT);
+
+statement ok
+CREATE PROCEDURE babel_5263_vu_prepare_p1 AS SELECT 1;
+
+statement ok
+CREATE FUNCTION babel_5263_vu_prepare_f1() RETURNS INT AS BEGIN RETURN 1 END;
+
+statement ok
+CREATE VIEW babel_5263_vu_prepare_v1 AS SELECT 1;
+
+statement ok
+USE babel_5263_vu_prepare_db1;
+
+statement ok
+USE master;
+
+statement ok
+USE babel_5263_vu_prepare_db1;
+
+statement ok
+USE babel_5263_vu_prepare_db1;
+
+statement ok
+USE master;
+
+statement ok
+USE babel_5263_vu_prepare_db1;
+
+statement ok
+DROP FUNCTION IF EXISTS babel_5263_vu_prepare_f1;
+
+statement ok
+DROP PROCEDURE IF EXISTS babel_5263_vu_prepare_p1;
+
+statement ok
+DROP VIEW IF EXISTS babel_5263_vu_prepare_v1;
+
+statement ok
+DROP TABLE IF EXISTS babel_5263_vu_prepare_t1;
+
+statement ok
+USE master;
+

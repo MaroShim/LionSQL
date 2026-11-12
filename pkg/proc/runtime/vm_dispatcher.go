@@ -232,15 +232,31 @@ vmLoop:
 			if inst.C > 0 {
 				errNum = int(inst.C)
 			}
-			// If severity <= 10, it is informational
-			if sev <= 10 {
-				f.logs = append(f.logs, fmt.Sprintf("%v", f.aux(&inst)))
-				continue vmLoop
+		}
+
+		msg := fmt.Sprintf("%v", f.aux(&inst))
+		if rData, ok := f.aux(&inst).(*proc.RaiserrorData); ok && rData != nil {
+			msg = rData.Message
+			if len(rData.ArgRegs) > 0 && strings.Contains(msg, "%") {
+				var fmtArgs []any
+				for _, regIdx := range rData.ArgRegs {
+					if regIdx >= 0 && int(regIdx) < len(f.regs) {
+						fmtArgs = append(fmtArgs, valToString(f.regs[regIdx]))
+					}
+				}
+				goFmt := strings.ReplaceAll(msg, "%s", "%v")
+				goFmt = strings.ReplaceAll(goFmt, "%d", "%v")
+				goFmt = strings.ReplaceAll(goFmt, "%i", "%v")
+				goFmt = strings.ReplaceAll(goFmt, "%u", "%v")
+				msg = fmt.Sprintf(goFmt, fmtArgs...)
 			}
+		}
+		if inst.Op == proc.OpRaiserror && sev <= 10 {
+			f.logs = append(f.logs, msg)
+			continue vmLoop
 		}
 
 		f.lastError = errNum
-		msg := fmt.Sprintf("%v", f.aux(&inst))
 		f.lastErrorMsg = msg
 		if true {
 			f.lastErrorLine = pc
@@ -795,7 +811,7 @@ vmLoop:
 		}
 
 		// Fast-path Direct Row Insert: bypass Record map allocations when schema matches and no triggers exist
-		canDirectInsert := !isTransientTable(targetTable) && tableSchema != nil && !hasTriggers && len(cols) == len(tableSchema.Columns) && len(data.ValExprs) == len(tableSchema.Columns) && identityCol == nil
+		canDirectInsert := !isTransientTable(targetTable) && tableSchema != nil && !tableSchema.HasCheckConstraints() && !hasTriggers && len(cols) == len(tableSchema.Columns) && len(data.ValExprs) == len(tableSchema.Columns) && identityCol == nil
 		if canDirectInsert {
 			for i, col := range cols {
 				if !strings.EqualFold(col, tableSchema.Columns[i].Name) {
@@ -943,6 +959,15 @@ vmLoop:
 			}
 		}
 
+		if tableSchema != nil && tableSchema.HasCheckConstraints() {
+			if err := proc.ValidateRecordChecks(tableSchema, rec); err != nil {
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
+			}
+		}
+
 		if err := f.tx.Insert(targetTable, rec); err != nil {
 			if errors.Is(err, storage.ErrKeyExists) || errors.Is(err, storage.ErrUniqueViolation) {
 				if catchErr := f.handleCatch(fmt.Errorf("duplicate key value violates unique constraint on %q: %w", targetTable, err), &pc); catchErr != nil {
@@ -1057,7 +1082,7 @@ vmLoop:
 		hasTriggers := f.executor != nil && f.executor.HasTriggers(targetTable, "UPDATE")
 
 		// Fast-path Direct Row Update: bypass Record map allocations when no triggers exist
-		if !isTransientTable(targetTable) && tableSchema != nil && !hasTriggers {
+		if !isTransientTable(targetTable) && tableSchema != nil && !tableSchema.HasCheckConstraints() && !hasTriggers {
 			oldRow, err := f.tx.GetRow(targetTable, pkVal)
 			if err != nil {
 				if errors.Is(err, storage.ErrKeyNotFound) {
@@ -1199,6 +1224,22 @@ vmLoop:
 				}
 			}
 			rec.Set(colName, stVal)
+		}
+
+		if tableSchema != nil && tableSchema.HasCheckConstraints() {
+			merged := make(storage.Record, len(oldRec)+len(rec))
+			for k, v := range oldRec {
+				merged[k] = v
+			}
+			for k, v := range rec {
+				merged[k] = v
+			}
+			if err := proc.ValidateRecordChecks(tableSchema, merged); err != nil {
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
+			}
 		}
 
 		if err := f.tx.Update(targetTable, pkVal, rec); err != nil {
@@ -1776,7 +1817,7 @@ vmLoop:
 		if !ok || callData == nil {
 			return nil, fmt.Errorf("invalid OpCallProc metadata")
 		}
-		retVal, err := f.callProc(callData.Name, callData.ArgRegs)
+		retVal, err := f.callProc(callData.Name, callData.ArgRegs, callData.OutSlots)
 		if err != nil {
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
 				return nil, catchErr

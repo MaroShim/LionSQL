@@ -1,0 +1,74 @@
+# test/slt_proc/babelfish_oracle/1114_babel_babel_1591.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1591.sql
+
+statement ok
+CREATE FUNCTION babel1591foo1() RETURNS INT AS BEGIN RETURN 10 END
+
+query T
+SELECT babel1591foo1();
+----
+10
+
+statement ok
+DROP FUNCTION IF EXISTS babel1591foo1;
+
+statement ok
+CREATE FUNCTION foocommittest(@p int) RETURNS int AS BEGIN COMMIT RETURN 0 END
+
+statement ok
+CREATE FUNCTION foorollbacktest(@p int) RETURNS int AS BEGIN ROLLBACK RETURN 0 END
+
+statement ok
+CREATE FUNCTION fooexecutetest(@p int) RETURNS int AS BEGIN EXECUTE('select 1') RETURN 0 END
+
+statement ok
+CREATE FUNCTION fooexectest(@p int) RETURNS int AS BEGIN EXEC('select 1') RETURN 0 END
+
+statement ok
+CREATE FUNCTION fooexectestV(@p int) RETURNS int AS BEGIN EXEC(@@trancount) RETURN 0 END
+
+statement ok
+CREATE FUNCTION fsavetrantest(@p int) RETURNS int AS BEGIN SAVE TRAN sp1 RETURN 0 END
+
+statement ok
+CREATE FUNCTION fsavetransactiontest(@p int) RETURNS int AS BEGIN SAVE TRANSACTION sp2 RETURN 0 END
+
+statement ok
+CREATE FUNCTION fprinttest (@p int) RETURNS int AS BEGIN PRINT 'hello there' RETURN 0 END
+
+statement ok
+CREATE FUNCTION fraiserrortest (@p int) RETURNS int AS BEGIN RAISERROR(5005, 10, 1, N'ErrorMessage') RETURN 0 END
+
+statement ok
+DROP FUNCTION IF EXISTS foocommittest
+
+statement ok
+DROP FUNCTION IF EXISTS foorollbacktest
+
+statement ok
+DROP FUNCTION IF EXISTS fooexecutetest
+
+statement ok
+DROP FUNCTION IF EXISTS fooexectest
+
+statement ok
+DROP FUNCTION IF EXISTS fooexectestV
+
+statement ok
+DROP FUNCTION IF EXISTS fsavetrantest
+
+statement ok
+DROP FUNCTION IF EXISTS fsavetransactiontest
+
+statement ok
+DROP FUNCTION IF EXISTS fwaitfordelay
+
+statement ok
+DROP FUNCTION IF EXISTS fwaitfortime
+
+statement ok
+DROP FUNCTION IF EXISTS fprinttest
+
+statement ok
+DROP FUNCTION IF EXISTS fraiserrortest
+

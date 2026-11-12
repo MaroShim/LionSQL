@@ -1,0 +1,47 @@
+# test/slt_proc/babelfish_oracle/341_babel_babel_2829.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2829.sql
+
+statement ok
+CREATE DATABASE db_2829
+
+statement ok
+USE db_2829
+
+statement ok
+USE master
+
+statement ok
+create procedure procedure_2829 as select DISTINCT db_name(dbid), loginname from [DbO].[SySProcESSeS] WHERE spid = @@SPID;
+
+statement ok
+create table table_2829 ( a int,  b int);
+
+statement ok
+insert into table_2829 select 1,2;
+
+query TT
+select * from table_2829;
+----
+1 2
+
+statement ok
+DROP PROCEDURE procedure_2829
+
+statement ok
+DROP TABLE table_2829
+
+query T
+SELECT CASE WHEN (select count(status) from sys.sysprocesses where status='active') = (select count(status) from sys.sysprocesses where status='ACTIVE') THEN 1 ELSE 0 END AS result;
+----
+0
+
+query T
+SELECT CASE WHEN (select count(program_name) from sys.sysprocesses where program_name='sqlcmd') = (select count(program_name) from sys.sysprocesses where program_name='SQLCMD') THEN 1 ELSE 0 END AS result;
+----
+0
+
+query T
+SELECT CASE WHEN (select count(loginname) from sys.sysprocesses where loginname='jdbc_user') = (select count(loginname) from sys.sysprocesses where loginname='JDBC_user') THEN 1 ELSE 0 END AS result;
+----
+0
+

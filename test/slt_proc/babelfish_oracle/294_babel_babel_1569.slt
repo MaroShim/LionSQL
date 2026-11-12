@@ -1,0 +1,50 @@
+# test/slt_proc/babelfish_oracle/294_babel_babel_1569.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1569.sql
+
+statement ok
+CREATE TABLE check_charindex_case_insensitive(check_for VARCHAR(10), document VARCHAR(64), ci as charindex(check_for, document COLLATE SQL_Latin1_General_CP1_CI_AS));
+
+statement ok
+INSERT INTO check_charindex_case_insensitive (check_for, document) VALUES ('Test','This is a Test');
+INSERT INTO check_charindex_case_insensitive (check_for, document) VALUES ('Test','test Test test');
+INSERT INTO check_charindex_case_insensitive (check_for, document) VALUES ('TEST','This is a test');
+
+query T
+Select ci from check_charindex_case_insensitive;
+----
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE check_charindex_case_insensitive;
+
+statement ok
+CREATE TABLE check_charindex_case_sensitive(check_for VARCHAR(10), document VARCHAR(64), ci as charindex(check_for, document COLLATE SQL_Latin1_General_CP1_CS_AS));
+
+statement ok
+INSERT INTO check_charindex_case_sensitive (check_for, document) VALUES ('Test','This is a Test');
+INSERT INTO check_charindex_case_sensitive (check_for, document) VALUES ('Test','test Test test');
+INSERT INTO check_charindex_case_sensitive (check_for, document) VALUES ('TEST','This is a test');
+
+query T
+Select ci from check_charindex_case_sensitive;
+----
+NULL
+NULL
+NULL
+
+statement ok
+DROP TABLE check_charindex_case_sensitive;
+
+statement ok
+CREATE TABLE country(name VARCHAR(64), cs as CHECKSUM(name))
+
+statement ok
+INSERT INTO country VALUES ('India');
+INSERT INTO country VALUES ('US');
+INSERT INTO country VALUES ('China');
+
+statement ok
+DROP TABLE country;
+

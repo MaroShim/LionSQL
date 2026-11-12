@@ -1,0 +1,21 @@
+# test/slt_proc/strings/052_stuff_replicate_agg_06.slt
+# T-SQL STUFF, REPLICATE, CONCAT_WS, and STRING_AGG (6)
+
+query TTT
+SELECT STUFF('ORDER_ITEM_01', 7, 4, 'LINE'), REPLICATE('*', 3), CONCAT_WS(':', 'Q1', 'Q2', 'Q3');
+----
+ORDER_LINE_01 *** Q1:Q2:Q3
+
+statement ok
+CREATE TABLE sagg_52 (id INT PRIMARY KEY, label VARCHAR(30));
+
+statement ok
+INSERT INTO sagg_52 VALUES (1, 'Q1'), (2, 'Q2'), (3, 'Q3');
+
+query T
+SELECT STRING_AGG(label, ':') FROM sagg_52;
+----
+Q1:Q2:Q3
+
+statement ok
+DROP TABLE sagg_52;

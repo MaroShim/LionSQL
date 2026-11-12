@@ -1,0 +1,39 @@
+# test/slt_proc/babelfish_oracle/1248_babel_babel_565.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-565.sql
+
+statement ok
+CREATE TABLE AccountsReceivable (
+ Id int IDENTITY(1,1) NOT NULL,
+ ApplicationId int NOT NULL
+) ON [PRIMARY]
+
+statement ok
+drop table AccountsReceivable
+
+statement ok
+CREATE TABLE AccountsReceivable (
+ Id int IDENTITY(1,1) NOT NULL,
+ ApplicationId int NOT NULL
+) TEXTIMAGE_ON [PRIMARY]
+
+statement ok
+drop table AccountsReceivable
+
+statement ok
+CREATE TABLE AccountsReceivable (
+ Id int IDENTITY(1,1) NOT NULL,
+ ApplicationId int NOT NULL
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+
+statement ok
+drop table AccountsReceivable
+
+statement ok
+CREATE TABLE AccountsReceivable (
+ Id int IDENTITY(1,1) NOT NULL,
+ ApplicationId int NOT NULL
+) TEXTIMAGE_ON [PRIMARY] ON [PRIMARY]
+
+statement ok
+drop table AccountsReceivable
+

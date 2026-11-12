@@ -1,0 +1,48 @@
+# test/slt_proc/babelfish_oracle/1399_babel_babelfish_namespace_ext.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ownership/babelfish_namespace_ext-vu-prepare.sql, test/babelfish/raw/ownership/babelfish_namespace_ext-vu-verify.sql, test/babelfish/raw/ownership/babelfish_namespace_ext-vu-cleanup.sql
+
+statement ok
+CREATE SCHEMA babelfish_namespace_ext_vu_prepare_sch1
+
+statement ok
+CREATE SCHEMA babelfish_namespace_ext_vu_prepare_sch2
+
+statement ok
+CREATE VIEW babelfish_namespace_ext_vu_prepare_view
+AS
+SELECT nspname, orig_name 
+FROM sys.babelfish_namespace_ext 
+WHERE nspname LIKE '%babelfish_namespace_ext_vu_prepare_sch%'
+ORDER BY nspname
+
+statement ok
+CREATE PROC babelfish_namespace_ext_vu_prepare_proc
+AS
+SELECT nspname, orig_name 
+FROM sys.babelfish_namespace_ext 
+WHERE nspname LIKE '%babelfish_namespace_ext_vu_prepare_sch%'
+ORDER BY nspname
+
+statement ok
+CREATE FUNCTION babelfish_namespace_ext_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT COUNT(*) FROM sys.babelfish_namespace_ext WHERE nspname LIKE '%babelfish_namespace_ext_vu_prepare_sch%')
+END
+
+statement ok
+DROP VIEW babelfish_namespace_ext_vu_prepare_view
+
+statement ok
+DROP PROC babelfish_namespace_ext_vu_prepare_proc
+
+statement ok
+DROP FUNCTION babelfish_namespace_ext_vu_prepare_func
+
+statement ok
+DROP SCHEMA babelfish_namespace_ext_vu_prepare_sch1
+
+statement ok
+DROP SCHEMA babelfish_namespace_ext_vu_prepare_sch2
+

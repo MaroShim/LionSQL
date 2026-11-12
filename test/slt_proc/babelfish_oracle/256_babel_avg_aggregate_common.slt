@@ -1,0 +1,243 @@
+# test/slt_proc/babelfish_oracle/256_babel_avg_aggregate_common.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/AVG-Aggregate-common-vu-prepare.sql, test/babelfish/raw/AVG-Aggregate-common-vu-verify.sql
+
+statement ok
+CREATE TABLE avg_agg_vu_prepare_t1(
+avgbigint BIGINT, avgint INT , avgsmallint SMALLINT , avgtinyint TINYINT )
+
+statement ok
+INSERT INTO avg_agg_vu_prepare_t1 VALUES (9223372036854775807,2147483647,32767,255)
+INSERT INTO avg_agg_vu_prepare_t1 VALUES (9223372036854775807,2147483647,32767,255)
+
+statement ok
+CREATE TABLE avg_agg_vu_prepare_t2(
+avgbigint BIGINT, avgint INT , avgsmallint SMALLINT , avgtinyint TINYINT )
+
+statement ok
+CREATE TABLE avg_agg_vu_prepare_t3(
+avgbigint BIGINT, avgint INT , avgsmallint SMALLINT , avgtinyint TINYINT )
+
+statement ok
+INSERT INTO avg_agg_vu_prepare_t3 VALUES(16,8,4,2)
+INSERT INTO avg_agg_vu_prepare_t3 VALUES(2,4,8,16)
+
+statement ok
+CREATE TABLE avg_agg_vu_prepare_t4(
+avgbigint BIGINT, avgint INT , avgsmallint SMALLINT , avgtinyint TINYINT )
+
+statement ok
+INSERT INTO avg_agg_vu_prepare_t4 VALUES (-9223372036854775808,-2147483648,-32768,0)
+INSERT INTO avg_agg_vu_prepare_t4 VALUES (-9223372036854775808,-2147483648,-32768,0)
+
+statement ok
+CREATE TABLE avg_agg_vu_prepare_t5(
+col1int INT, col2int INT, col3bigint BIGINT)
+
+statement ok
+INSERT INTO avg_agg_vu_prepare_t5 VALUES (1,100,1000)
+INSERT INTO avg_agg_vu_prepare_t5 VALUES (1,200,2000)
+INSERT INTO avg_agg_vu_prepare_t5 VALUES (1,300,3000)
+INSERT INTO avg_agg_vu_prepare_t5 VALUES (2,100,1000)
+INSERT INTO avg_agg_vu_prepare_t5 VALUES (2,100,1000)
+INSERT INTO avg_agg_vu_prepare_t5 VALUES (2,200,2000)
+
+statement ok
+CREATE TABLE avg_agg_vu_prepare_t6 (dept char(1),dt DATE,priceint INT,pricebigint BIGINT)
+
+statement ok
+INSERT INTO avg_agg_vu_prepare_t6 VALUES ('A','2022-01-01',31,1000)
+INSERT INTO avg_agg_vu_prepare_t6 VALUES ('A','2022-01-02',35,2000)
+INSERT INTO avg_agg_vu_prepare_t6 VALUES ('B','2022-01-03',34,2000)
+INSERT INTO avg_agg_vu_prepare_t6 VALUES ('B','2022-01-04',33,3000)
+INSERT INTO avg_agg_vu_prepare_t6 VALUES ('B','2022-01-05',32,4000)
+
+statement ok
+CREATE TABLE avg_agg_vu_prepare_t7(
+avgbigint BIGINT, avgint INT , avgsmallint SMALLINT , avgtinyint TINYINT )
+
+statement ok
+INSERT INTO avg_agg_vu_prepare_t7 VALUES(NULL,8,NULL,2)
+INSERT INTO avg_agg_vu_prepare_t7 VALUES(10,NULL,8,NULL)
+
+statement ok
+CREATE TABLE avg_agg_vu_prepare_t8(
+avgbigint BIGINT, avgint INT , avgsmallint SMALLINT , avgtinyint TINYINT )
+
+statement ok
+INSERT INTO avg_agg_vu_prepare_t8 VALUES(-10,10,-4,2)
+INSERT INTO avg_agg_vu_prepare_t8 VALUES(14,-8,8,0)
+INSERT INTO avg_agg_vu_prepare_t8 VALUES(NULL,NULL,NULL,NULL)
+
+query T
+SELECT AVG( avgbigint ) AS avg_bigint FROM avg_agg_vu_prepare_t1
+----
+9223372036854775807
+
+query T
+SELECT AVG( avgint ) AS avg_int FROM avg_agg_vu_prepare_t1
+----
+2147483647
+
+query T
+SELECT AVG( avgbigint ) AS avg_bigint FROM avg_agg_vu_prepare_t2
+----
+NULL
+
+query T
+SELECT AVG( avgint ) AS avg_int FROM avg_agg_vu_prepare_t2
+----
+NULL
+
+query T
+SELECT AVG( avgsmallint ) AS avg_smallintint FROM avg_agg_vu_prepare_t2
+----
+NULL
+
+query T
+SELECT AVG( avgtinyint ) AS avg_tinyint FROM avg_agg_vu_prepare_t2
+----
+NULL
+
+query T
+SELECT AVG( avgbigint ) AS avg_bigint FROM avg_agg_vu_prepare_t3
+----
+16
+
+query T
+SELECT AVG( avgint ) AS avg_int FROM avg_agg_vu_prepare_t3
+----
+8
+
+query T
+SELECT AVG( avgsmallint ) AS avg_smallintint FROM avg_agg_vu_prepare_t3
+----
+4
+
+query T
+SELECT AVG( avgtinyint ) AS avg_tinyint FROM avg_agg_vu_prepare_t3
+----
+2
+
+query TTTT
+SELECT 
+	cast(pg_typeof( AVG( avgbigint ) ) as varchar(48) )  as avg_bigint 
+	, cast(pg_typeof( AVG( avgint ) ) as varchar(48) )  as avg_int 
+	, cast(pg_typeof( AVG( avgsmallint ) ) as varchar(48) )  as avg_smallint 
+	, cast(pg_typeof( AVG( avgtinyint ) ) as varchar(48) )  as avg_tinyint 
+FROM avg_agg_vu_prepare_t3
+----
+NULL NULL NULL NULL
+
+query T
+SELECT AVG( avgbigint ) AS avg_bigint FROM avg_agg_vu_prepare_t4
+----
+-9223372036854775808
+
+query T
+SELECT AVG( avgint ) AS avg_int FROM avg_agg_vu_prepare_t4
+----
+-2147483648
+
+query TT
+SELECT col1int,AVG(col2int) FROM avg_agg_vu_prepare_t5 GROUP BY col1int
+----
+1 100
+
+query TT
+SELECT col1int,AVG(col3bigint) FROM avg_agg_vu_prepare_t5 GROUP BY col1int
+----
+1 1000
+
+query TT
+SELECT AVG(DISTINCT col1int),AVG(DISTINCT col3bigint) FROM avg_agg_vu_prepare_t5
+----
+1 1000
+
+query TTT
+SELECT dt, priceint ,AVG(priceint) OVER (
+ORDER BY dt
+ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING
+) FiveDayMovAvg
+FROM avg_agg_vu_prepare_t6
+----
+2022-01-01 31 31
+
+query TTT
+SELECT dt, pricebigint ,AVG(pricebigint) OVER (
+ORDER BY dt
+ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING
+) FiveDayMovAvg
+FROM avg_agg_vu_prepare_t6
+----
+2022-01-01 1000 1000
+
+query TT
+SELECT priceint,AVG(priceint) OVER(ORDER BY priceint) FROM avg_agg_vu_prepare_t6
+----
+31 31
+
+query TT
+SELECT pricebigint,AVG(pricebigint) OVER(ORDER BY pricebigint) FROM avg_agg_vu_prepare_t6
+----
+1000 1000
+
+query TT
+SELECT dept,AVG(priceint) OVER(PARTITION BY dept) FROM avg_agg_vu_prepare_t6
+----
+A 31
+
+query TT
+SELECT dept,AVG(pricebigint) OVER(PARTITION BY dept) FROM avg_agg_vu_prepare_t6
+----
+A 1000
+
+query T
+SELECT AVG( avgbigint ) AS avg_bigint FROM avg_agg_vu_prepare_t7
+----
+NULL
+
+query T
+SELECT AVG( avgint ) AS avg_int FROM avg_agg_vu_prepare_t7
+----
+8
+
+query T
+SELECT AVG( avgsmallint ) AS avg_smallintint FROM avg_agg_vu_prepare_t7
+----
+NULL
+
+query T
+SELECT AVG( avgtinyint ) AS avg_tinyint FROM avg_agg_vu_prepare_t7
+----
+2
+
+query T
+SELECT AVG( avgbigint ) AS avg_bigint FROM avg_agg_vu_prepare_t8
+----
+-10
+
+query T
+SELECT AVG( avgint ) AS avg_int FROM avg_agg_vu_prepare_t8
+----
+10
+
+query T
+SELECT AVG( avgsmallint ) AS avg_smallintint FROM avg_agg_vu_prepare_t8
+----
+-4
+
+query T
+SELECT AVG( avgtinyint ) AS avg_tinyint FROM avg_agg_vu_prepare_t8
+----
+2
+
+statement ok
+DROP TABLE avg_agg_vu_prepare_t1
+DROP TABLE avg_agg_vu_prepare_t2
+DROP TABLE avg_agg_vu_prepare_t3
+DROP TABLE avg_agg_vu_prepare_t4
+DROP TABLE avg_agg_vu_prepare_t5
+DROP TABLE avg_agg_vu_prepare_t6
+DROP TABLE avg_agg_vu_prepare_t7
+DROP TABLE avg_agg_vu_prepare_t8
+

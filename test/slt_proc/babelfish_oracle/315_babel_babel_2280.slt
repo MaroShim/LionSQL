@@ -1,0 +1,36 @@
+# test/slt_proc/babelfish_oracle/315_babel_babel_2280.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2280.sql
+
+query T
+exec sp_executesql N'SELECT 1'
+----
+1
+
+query T
+exec sp_executesql N'SELECT @var1', N'@var1 varchar(20)', @var1=2
+----
+2
+
+statement ok
+exec sp_executesql N''
+
+statement ok
+exec sp_executesql N'', N''
+
+statement ok
+exec sp_executesql N'', N'', N''
+
+statement ok
+exec sp_executesql N'', N'', @var1=1
+
+query T
+exec sp_executesql N'SELECT 1', N''
+----
+1
+
+statement ok
+exec sp_executesql N'', N'@var1'
+
+statement ok
+exec sp_executesql N'', N'@var1 varchar(20)'
+

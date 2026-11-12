@@ -1,0 +1,27 @@
+# test/slt_proc/datetime/1964_eomonth_dateadd_datediff_039.slt
+# T-SQL EOMONTH, DATEADD(day), DATEDIFF(day), YEAR/MONTH/DAY (39)
+
+query TTI
+SELECT CAST(EOMONTH('2021-03-23') AS VARCHAR(10)), CAST(DATEADD(day, 17, '2021-03-23') AS VARCHAR(10)), DATEDIFF(day, '2021-03-23', '2021-04-09');
+----
+2021-03-31 2021-04-09 17
+
+query IIII
+SELECT YEAR('2021-04-09'), MONTH('2021-04-09'), DAY('2021-04-09'), DAY(EOMONTH('2021-03-23'));
+----
+2021 4 9 31
+
+statement ok
+CREATE TABLE dt_log_1964 (id INT PRIMARY KEY, ev_date VARCHAR(20));
+
+statement ok
+INSERT INTO dt_log_1964 VALUES (1, '2021-03-23'), (2, '2021-04-09');
+
+query II
+SELECT id, DATEDIFF(day, '2021-03-23', ev_date) FROM dt_log_1964 ORDER BY id;
+----
+1 0
+2 17
+
+statement ok
+DROP TABLE dt_log_1964;

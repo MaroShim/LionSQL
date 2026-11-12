@@ -1,0 +1,33 @@
+# test/slt_proc/babelfish_oracle/1498_babel_sys_identity_columns.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-identity_columns.sql
+
+statement ok
+DROP TABLE IF EXISTS sys_identity_columns
+
+statement ok
+CREATE TABLE sys_identity_columns (c1 int, c2 int IDENTITY(1,1))
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+USE master
+
+statement ok
+DROP TABLE IF EXISTS sys_identity_columns
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE db1
+
+statement ok
+USE master
+
+statement ok
+DROP TABLE IF EXISTS sys_identity_columns
+

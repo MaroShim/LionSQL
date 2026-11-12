@@ -1,0 +1,898 @@
+# test/slt_proc/babelfish_oracle/1615_babel_xml_value.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/xml/xml_value-vu-prepare.sql, test/babelfish/raw/xml/xml_value-vu-verify.sql, test/babelfish/raw/xml/xml_value-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_5223_xml_value_t1 (XmlColumn XML)
+
+statement ok
+INSERT INTO babel_5223_xml_value_t1
+VALUES ('<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>')
+
+statement ok
+CREATE TABLE babel_5223_xml_value_t2 (Id INT PRIMARY KEY, XmlColumn XML);
+
+statement ok
+INSERT INTO babel_5223_xml_value_t2 (Id, XmlColumn)
+VALUES (1, '<Root><Child1>Value1</Child1></Root>'),
+       (2, '<Root><Child2>Value2</Child2></Root>'),
+       (3, '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>');
+
+statement ok
+CREATE TABLE babel_5223_xml_value_text (XmlColumn TEXT)
+
+statement ok
+INSERT INTO babel_5223_xml_value_text
+VALUES ('<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>')
+
+statement ok
+CREATE SCHEMA babel_5223_sch1
+
+statement ok
+CREATE SCHEMA babel_5223_sch2
+
+statement ok
+CREATE TABLE babel_5223_xml_value_udt (VarUDTColumn dbo.babel_5223_xml_value_varcharUDT, ImageUDTColumn dbo.babel_5223_xml_value_imageUDT, XmlUDTColumn dbo.babel_5223_xml_value_xmlUDT)
+
+statement ok
+INSERT INTO babel_5223_xml_value_udt
+VALUES ('<Root><Child1>Value1</Child1></Root>', CAST('<Root><Child1>Value1</Child1></Root>' AS IMAGE), '<Root><Child1>Value1</Child1></Root>')
+
+statement ok
+CREATE VIEW babel_5223_xml_value_dep_view AS
+    SELECT XmlColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') as namevalues FROM babel_5223_xml_value_t1
+
+statement ok
+CREATE PROCEDURE babel_5223_xml_value_dep_proc AS
+    SELECT XmlColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') FROM babel_5223_xml_value_t1
+
+statement ok
+CREATE FUNCTION babel_5223_xml_value_dep_func()
+RETURNS VARCHAR(100)
+AS
+BEGIN
+RETURN (SELECT TOP 1 XmlColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') FROM babel_5223_xml_value_t1)
+END
+
+statement ok
+CREATE FUNCTION babel_5223_xml_value_itvf_func()
+RETURNS TABLE
+AS
+RETURN (SELECT XmlColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') as namevalues FROM babel_5223_xml_value_t1)
+
+statement ok
+CREATE FUNCTION dbo.babel_5223_xml_value_func1()
+RETURNS XML
+AS
+BEGIN
+RETURN CAST('<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>' as XML)
+END
+
+statement ok
+CREATE TABLE babel_5223_xml_value_compcol(id INT, col_xml XML, comp_col as col_xml.value('(/artist/@name)[1]', 'varchar(100)'))
+
+statement ok
+CREATE TABLE babel_5223_xml_value_constraint(col_xml XML, constraint chkNamevalue check(col_xml.value('(/artist/@name)[1]', 'varchar(100)') IS NULL))
+
+statement ok
+CREATE TABLE babel_5223_xml_value_compcol1(id INT, col_xml XML, comp_col as dbo.wrapper_xmlvalue1(col_xml))
+
+statement ok
+CREATE TABLE babel_5223_xml_value_constraint1(col_xml XML, constraint chkNamevalue1 check(wrapper_xmlvalue1(col_xml) IS NULL))
+
+statement ok
+SET QUOTED_IDENTIFIER OFF
+
+statement ok
+CREATE VIEW babel_5223_xml_value_dep_view2 AS
+    SELECT XmlColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') as namevalues FROM babel_5223_xml_value_t1
+
+statement ok
+CREATE TABLE babel_5223_xml_value_compcol2(id INT, col_xml XML, comp_col as dbo.wrapper_xmlvalue2(col_xml))
+
+statement ok
+CREATE TABLE babel_5223_xml_value_constraint2(col_xml XML, constraint chkNamevalue2 check(wrapper_xmlvalue2(col_xml) = 'Rohit Bhagat'))
+
+statement ok
+SET QUOTED_IDENTIFIER ON
+
+statement ok
+CREATE TABLE babel_5223_xml_value_school_details (
+    id INT,
+    student XML
+);
+
+statement ok
+INSERT INTO babel_5223_xml_value_school_details (id, student)
+VALUES
+    (1, '<student classid="1" rollid="1" studentname="StudentA" />'),
+    (2, '<student classid="1" rollid="2" studentname="StudentB" />'),
+    (3, '<student classid="1" rollid="3" studentname="StudentC" />'),
+    (4, '<student classid="2" rollid="1" studentname="StudentD" />'),
+    (5, '<student classid="2" rollid="2" studentname="StudentE" />')
+
+statement ok
+CREATE TRIGGER  babel_5223_xml_value_tr_parital_student_entry
+ON babel_5223_xml_value_school_details
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SELECT id, student AS invalid_entries FROM babel_5223_xml_value_school_details
+    WHERE student.value('(/student/@studentname)[1]', 'varchar(100)') not like 'Student%'
+    ORDER BY id;
+END;
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+SELECT @xml.value('(/Root/Child1)[1]', 'varchar(100)')
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+SELECT @xml.value('(/Root/Child2[text()="Value2"])[1]', 'varchar(100)')
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+query T
+DECLARE @xml XML = '<Root><ParentNode><Child1>Value1</Child1></ParentNode><ParentNode><Child1>Value2</Child1></ParentNode></Root>';
+SELECT @xml.value('(/Root/ParentNode/Child1[text()="Value2"])[1]', 'varchar(100)')
+----
+<Root><ParentNode><Child1>Value1</Child1></ParentNode><ParentNode><Child1>Value2</Child1></ParentNode></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2><Child3>Value3</Child3></Root>';
+SELECT @xml.value('(/Root/Child1)[1]', 'varchar(100)') as child1, @xml.value('(/Root/Child2)[1]', 'varchar(100)') as child2, @xml.value('(/Root/Child3)[1]', 'varchar(100)') as child3
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2><Child3>Value3</Child3></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child>Value1</Child></Root>';
+SELECT @xml.value('/Root/Child', 'varchar(100)') as child
+----
+<Root><Child>Value1</Child></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child>Value1</Child><Child>Value2</Child><Child>Value3</Child></Root>';
+SELECT @xml.value('/Root/Child', 'varchar(100)') as child
+----
+<Root><Child>Value1</Child><Child>Value2</Child><Child>Value3</Child></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+DECLARE @element VARCHAR(20) = 'Child1';
+SELECT @xml.value(CONCAT('(/Root/', @element, ')[1]'), 'varchar(100)')
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+query T
+DECLARE @xml XML = '<Root><Parent1><Child1>Value1</Child1></Parent1><Parent2><Child2>Value2</Child2></Parent2></Root>';
+SELECT @xml.value('(/Root/Parent1/Child1)[1]', 'varchar(100)')
+----
+<Root><Parent1><Child1>Value1</Child1></Parent1><Parent2><Child2>Value2</Child2></Parent2></Root>
+
+query T
+DECLARE @xml XML = '<root><child>Hello</child></root>';
+SELECT @xml.value('(//child)[1]', 'varchar(100)');
+----
+<root><child>Hello</child></root>
+
+query T
+DECLARE @xml XML = '<root><parent><child1>Test1</child1><child2>Test2</child2></parent></root>';
+SELECT @xml.value('(//child1)[1]', 'varchar(100)'), @xml.value('(//child2)[1]', 'varchar(100)');
+----
+<root><parent><child1>Test1</child1><child2>Test2</child2></parent></root>
+
+query T
+DECLARE @xml XML = '<root></root>';
+SELECT @xml.value('(//child)[1]', 'varchar(100)');
+----
+<root></root>
+
+statement ok
+DECLARE @x XML = ''
+SELECT @x.value('(/Root/row)[1]', 'NVARCHAR(100)') 
+
+statement ok
+DECLARE @x XML = '    '
+SELECT @x.value('(/Root/row)[1]', 'NVARCHAR(100)') 
+
+statement ok
+DECLARE @x XML = NULL
+SELECT @x.value('(/Root/row)[1]', 'NVARCHAR(100)') 
+
+statement ok
+DECLARE @xml XML = ''
+SELECT @xml.value('', 'varchar(20)')
+
+statement ok
+DECLARE @xml XML = '<Root><row><name>James</name></row></Root>'
+SELECT @xml.value('', 'varchar(20)')
+
+query T
+DECLARE @xml XML = '<root><child>123</child></root>';
+SELECT @xml.value('(//child)[1]', 'varchar(100)'), @xml.value('(//child)[1]', 'int'), @xml.value('(//child)[1]', 'varbinary');
+----
+<root><child>123</child></root>
+
+query T
+DECLARE @xml XML = '<child1>Test1</child1><child2>Test2</child2>';
+SELECT @xml.value('(//child1)[1]', 'varchar(100)'), @xml.value('(//child2)[1]', 'varchar(100)');
+----
+<child1>Test1</child1><child2>Test2</child2>
+
+query T
+DECLARE @xml XML = '<root>Hello&#0;World</root>';
+SELECT @xml.value('(/root)[1]', 'varchar(100)');
+----
+<root>Hello&#0;World</root>
+
+query T
+DECLARE @x XML = '<root></root>';
+SELECT @x.value('true()', 'varchar(100)');
+----
+<root></root>
+
+query T
+DECLARE @x XML = '<root></root>';
+SELECT @x.value('false()', 'varchar(100)');
+----
+<root></root>
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml  .  value  ('(/artists/artist/@name)[1]'  , 'varchar(100)');
+
+query T
+SELECT XmlColumn   . value    ('(/artists/artist/@name)[1]'  , 'varchar(100)') FROM babel_5223_xml_value_t1
+----
+XmlColumn
+
+query T
+SELECT babel_5223_xml_value_t1 .   XmlColumn   . value    ('(/artists/artist/@name)[1]'  , 'varchar(100)') FROM babel_5223_xml_value_t1
+----
+babel_5223_xml_value_t1
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.VALUE('(/artists/artist/@name)[1]', 'varchar(100)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.Value('(/artists/artist/@name)[1]', 'varchar(100)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.VaLuE('(/artists/artist/@name)[1]', 'varchar(100)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value(cast('(/artists/artist/@name)[1]' as VARCHAR(100)), 'varchar(100)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value(cast('(/artists/artist/@name)[1]' as text), 'varchar(100)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value(@xml, 'varchar(100)');
+
+statement ok
+DECLARE @xml VARCHAR(100) = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)');
+
+statement ok
+DECLARE @xml NVARCHAR(100) = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)');
+
+statement ok
+DECLARE @xml INT = 1
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)');
+
+statement ok
+DECLARE @xml BIGINT = 1
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)')
+
+statement ok
+DECLARE @xml FLOAT = 1
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)')
+
+statement ok
+DECLARE @xml DECIMAL = 1
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)')
+
+statement ok
+DECLARE @xml NUMERIC = 1
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)')
+
+statement ok
+DECLARE @xml BIT = 1
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)')
+
+query T
+SELECT XmlColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') FROM babel_5223_xml_value_text
+----
+NULL
+
+query T
+SELECT VarUDTColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') FROM babel_5223_xml_value_udt
+----
+NULL
+
+query T
+SELECT ImageUDTColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') FROM babel_5223_xml_value_udt
+----
+NULL
+
+query T
+SELECT XmlUDTColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') FROM babel_5223_xml_value_udt
+----
+NULL
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'varchar(10)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'nvarchar(10)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'char(10)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'nchar(10)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT DATALENGTH(@xml.value('(/artists/artist/@id)[1]', 'varchar(10)'));
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT DATALENGTH(@xml.value('(/artists/artist/@id)[1]', 'nvarchar(10)'));
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT DATALENGTH(@xml.value('(/artists/artist/@id)[1]', 'char(10)'));
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT DATALENGTH(@xml.value('(/artists/artist/@id)[1]', 'nchar(10)'));
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'text');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'ntext');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'sql_variant');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'datetimeoffset');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'datetime2');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'datetime');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'smalldatetime');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'date');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'time');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'float');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'real');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'numeric');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'money');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'smallmoney');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'bigint');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'int');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'smallint');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'tinyint');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'varbinary(10)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'binary(10)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'bit');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'uniqueidentifier');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'image');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'xml');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'decimal');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'sysname');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'vector');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'sparsevec');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'halfvec');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'timestamp');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'babel_5223_xml_value_varcharUDT');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'dbo.babel_5223_xml_value_varcharUDT');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'babel_5223_xml_value_sch_varcharUDT');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'babel_5223_sch1.babel_5223_xml_value_sch_varcharUDT');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'babel_5223_sch2.babel_5223_xml_value_sch_varcharUDT');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'nonexistent');
+
+statement ok
+DECLARE @xml XML = NULL
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value(NULL, 'varchar(100)');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value('(/artists/artist/@name)[1]', NULL);
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value(NULL, NULL);
+
+query T
+SELECT XmlColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') FROM babel_5223_xml_value_t1
+----
+NULL
+
+query T
+SELECT babel_5223_xml_value_t1.XmlColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') FROM babel_5223_xml_value_t1
+----
+NULL
+
+query T
+SELECT dbo.babel_5223_xml_value_t1.XmlColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') FROM babel_5223_xml_value_t1
+----
+NULL
+
+query TT
+SELECT Id, XmlColumn.value('(/Root/Child1)[1]', 'varchar(100)') AS Result
+FROM babel_5223_xml_value_t2;
+----
+1 NULL
+2 NULL
+3 NULL
+
+query TT
+SELECT Id, XmlColumn.value('(/Root/Child2)[1]', 'varchar(100)') AS Result
+FROM babel_5223_xml_value_t2 ORDER BY Id;
+----
+1 NULL
+2 NULL
+3 NULL
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT (SELECT @xml).value('(/artists/artist/@name)[1]', 'varchar(100)')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)').STArea()
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)').STX
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)').value('(/artists/artist/@name)[1]', 'varchar(100)').value('(/artists/artist/@name)[1]', 'varchar(100)').value('(/artists/artist/@name)[1]', 'varchar(100)')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value()
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value('(/artists/artist/@name)[1]', 1)
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+SELECT @xml.value('(/Root/Child1)[1]', 'varchar(100)')
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+SELECT @xml.value('(/Root/Child1)[1]', "varchar(100)")
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+SELECT @xml.value('(/Root/Child1)[1]', `varchar(100)`)
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+SELECT @xml.value('(/Root/Child1)[1]', '''varchar(100)''')
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+SELECT @xml.value('(/Root/Child1)[1]', [varchar(100)])
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+statement ok
+SET QUOTED_IDENTIFIER OFF
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+SELECT @xml.value('(/Root/Child1)[1]', 'varchar(100)')
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+SELECT @xml.value('(/Root/Child1)[1]', "varchar(100)")
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+SELECT @xml.value('(/Root/Child1)[1]', `varchar(100)`)
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+SELECT @xml.value('(/Root/Child1)[1]', '''varchar(100)''')
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+query T
+DECLARE @xml XML = '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>';
+SELECT @xml.value('(/Root/Child1)[1]', [varchar(100)])
+----
+<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>
+
+statement ok
+SET QUOTED_IDENTIFIER ON
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.query('/artists/artist').value('/artist/@name', 'varchar(100)')
+
+query T
+SELECT * FROM babel_5223_xml_value_dep_view
+----
+NULL
+
+query T
+EXEC babel_5223_xml_value_dep_proc
+----
+NULL
+
+query T
+SELECT babel_5223_xml_value_dep_func()
+----
+NULL
+
+query T
+SELECT * FROM babel_5223_xml_value_itvf_func()
+----
+NULL
+
+statement ok
+INSERT INTO babel_5223_xml_value_compcol VALUES (1, '<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_compcol VALUES (2, '<artist />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_constraint VALUES ('<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_constraint VALUES ('<artist />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_compcol1 VALUES (1, '<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_compcol1 VALUES (2, '<artist />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_constraint1 VALUES ('<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_constraint1 VALUES ('<artist />')
+
+query T
+SELECT * FROM babel_5223_xml_value_dep_view2
+----
+NULL
+
+statement ok
+INSERT INTO babel_5223_xml_value_compcol2 VALUES (1, '<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_compcol2 VALUES (2, '<artist />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_constraint2 VALUES ('<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_constraint2 VALUES ('<artist />')
+
+statement ok
+SET QUOTED_IDENTIFIER OFF
+
+statement ok
+INSERT INTO babel_5223_xml_value_compcol1 VALUES (1, '<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_compcol1 VALUES (2, '<artist />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_constraint1 VALUES ('<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_constraint1 VALUES ('<artist />')
+
+query T
+SELECT * FROM babel_5223_xml_value_dep_view2
+----
+NULL
+
+statement ok
+INSERT INTO babel_5223_xml_value_compcol2 VALUES (1, '<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_compcol2 VALUES (2, '<artist />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_constraint2 VALUES ('<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_constraint2 VALUES ('<artist />')
+
+statement ok
+SET QUOTED_IDENTIFIER ON
+
+statement ok
+INSERT INTO babel_5223_xml_value_school_details VALUES (6, '<student classid="2" rollid="3" studentname="StudentF" />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_school_details VALUES (7, '<student classid="2"  rollid="4" studentname="Rohit" />')
+
+statement ok
+INSERT INTO babel_5223_xml_value_school_details VALUES (8, '<student classid="1"  rollid="4" studentname="NotAStudent" />')
+
+statement ok
+UPDATE babel_5223_xml_value_school_details
+SET student=CAST('<student classid="1" rollid="4" studentname="StudentG" />' as XML)
+WHERE id=7
+
+statement ok
+DELETE FROM babel_5223_xml_value_school_details WHERE id=8
+
+statement ok
+SET QUOTED_IDENTIFIER OFF
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value('(/artists/artist/@name)[1]', 'varchar(100)')
+
+query T
+SELECT XmlColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') FROM babel_5223_xml_value_t1
+----
+NULL
+
+query T
+SELECT babel_5223_xml_value_t1.XmlColumn.value('(/artists/artist/@name)[1]', 'varchar(100)') FROM babel_5223_xml_value_t1
+----
+NULL
+
+statement ok
+DECLARE @xml XML = '<artists> <artist id="1"/> </artists>'
+SELECT @xml.value('(/artists/artist/@id)[1]', 'sql_variant');
+
+statement ok
+DECLARE @xml INT = 1
+SELECT @xml.value('(/artists/artist/@name)[1]', 'sql_variant');
+
+statement ok
+SET QUOTED_IDENTIFIER ON
+
+statement ok
+DECLARE @xml INT = 1
+SELECT @xml.value('(/artists/artist/@name)[1]', 'sql_variant');
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.VALUE('(/artists/artist/@name)[1]', 'sql_variant');
+
+query T
+DECLARE @xml XML = '<root><child>Hello</child></root>';
+SELECT @xml.value('(//*:child)[1]');
+----
+<root><child>Hello</child></root>
+
+statement ok
+DECLARE @xml XML = '<root><item name="a.[b">MATCH</item></root>'
+SELECT @xml.value('(/root/item[@name="a.[b"])[1]', 'varchar(20)')
+
+statement ok
+DECLARE @xml XML = '<root><item a.b="x.y">MATCH</item></root>'
+SELECT @xml.value('(/root/item[@a.b="x.y"])[1]', 'varchar(20)')
+
+statement ok
+DECLARE @xml XML = '<root><item a.b_.="x.y">MATCH</item>><item a.b_.="y.z">MATCH2</item></root>'
+SELECT @xml.value('(/root/item[@a.b_.="x.y"])[1]', 'varchar(20)')
+
+statement ok
+DECLARE @xml XML = '<root><item a.b_.="x.y">MATCH</item>><item a.b_.="y.z">MATCH2</item></root>'
+SELECT @xml.value('(/root/item[@a.b_.="y.z"])[1]', 'varchar(20)')
+
+statement ok
+DECLARE @xml XML = '<root><item a.[b="x.y">MATCH</item></root>'
+SELECT @xml.value('(/root/item[@a.[b="x.y"])[1]', 'varchar(20)')
+
+statement ok
+DECLARE @xml XML = '<root><item name="a.[b">MATCH</item></root>'
+SELECT @xml.value('(/root/item[@name="a.[b])[1]', 'varchar(20)')
+
+statement ok
+DROP TABLE babel_5223_xml_value_udt
+
+statement ok
+DROP SCHEMA babel_5223_sch1
+
+statement ok
+DROP SCHEMA babel_5223_sch2
+
+statement ok
+DROP VIEW babel_5223_xml_value_dep_view
+
+statement ok
+DROP VIEW babel_5223_xml_value_dep_view2
+
+statement ok
+DROP PROCEDURE babel_5223_xml_value_dep_proc
+
+statement ok
+DROP FUNCTION dbo.babel_5223_xml_value_func1
+
+statement ok
+DROP FUNCTION babel_5223_xml_value_dep_func
+
+statement ok
+DROP FUNCTION babel_5223_xml_value_itvf_func
+
+statement ok
+DROP TABLE babel_5223_xml_value_compcol
+
+statement ok
+DROP TABLE babel_5223_xml_value_constraint
+
+statement ok
+DROP TABLE babel_5223_xml_value_compcol1
+
+statement ok
+DROP TABLE babel_5223_xml_value_constraint1
+
+statement ok
+DROP TABLE babel_5223_xml_value_compcol2
+
+statement ok
+DROP TABLE babel_5223_xml_value_constraint2
+
+statement ok
+DROP TRIGGER  babel_5223_xml_value_tr_parital_student_entry
+
+statement ok
+DROP TABLE babel_5223_xml_value_school_details
+
+statement ok
+DROP TABLE babel_5223_xml_value_t1
+
+statement ok
+DROP TABLE babel_5223_xml_value_t2
+
+statement ok
+DROP TABLE babel_5223_xml_value_text
+

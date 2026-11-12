@@ -1,0 +1,70 @@
+# test/slt_proc/babelfish_oracle/747_babel_sys_server_principals_dep_for_13_x.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ownership/sys_server_principals_dep_for_13_x-vu-prepare.sql, test/babelfish/raw/ownership/sys_server_principals_dep_for_13_x-vu-verify.sql, test/babelfish/raw/ownership/sys_server_principals_dep_for_13_x-vu-cleanup.sql
+
+statement ok
+CREATE LOGIN sys_server_principals_dep_for_13_x_vu_prepare_login1 WITH PASSWORD = '123'
+
+statement ok
+CREATE LOGIN sys_server_principals_dep_for_13_x_vu_prepare_login2 WITH PASSWORD = '123'
+
+statement ok
+CREATE VIEW sys_server_principals_dep_for_13_x_vu_prepare_view
+AS
+SELECT name, type, type_desc, is_disabled, default_database_name, default_language_name, is_fixed_role
+FROM sys.server_principals 
+WHERE name LIKE '%sys_server_principals_dep_for_13_x_vu_prepare%'
+ORDER BY name
+
+statement ok
+CREATE PROC sys_server_principals_dep_for_13_x_vu_prepare_proc
+AS
+SELECT name, type, type_desc, is_disabled, default_database_name, default_language_name, is_fixed_role
+FROM sys.server_principals 
+WHERE name LIKE '%sys_server_principals_dep_for_13_x_vu_prepare%'
+ORDER BY name
+
+statement ok
+CREATE FUNCTION sys_server_principals_dep_for_13_x_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT COUNT(*) FROM sys.server_principals WHERE name LIKE '%sys_server_principals_dep_for_13_x_vu_prepare%')
+END
+
+query TT
+SELECT name, is_fixed_role FROM sys.server_principals
+WHERE name IN ('sysadmin', 'jdbc_user')
+ORDER BY name
+----
+sysadmin true
+
+statement ok
+SELECT * FROM sys_server_principals_dep_for_13_x_vu_prepare_view
+
+statement ok
+SELECT name FROM sys.server_principals
+WHERE name LIKE 'sys_server_principals_dep_for_13_x_vu_prepare_login%'
+ORDER BY name
+
+query TT
+SELECT name, is_fixed_role FROM sys.server_principals
+WHERE name IN ('sysadmin', 'jdbc_user')
+ORDER BY name
+----
+sysadmin true
+
+statement ok
+DROP VIEW sys_server_principals_dep_for_13_x_vu_prepare_view
+
+statement ok
+DROP PROC sys_server_principals_dep_for_13_x_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_server_principals_dep_for_13_x_vu_prepare_func
+
+statement ok
+DROP LOGIN sys_server_principals_dep_for_13_x_vu_prepare_login1
+
+statement ok
+DROP LOGIN sys_server_principals_dep_for_13_x_vu_prepare_login2
+

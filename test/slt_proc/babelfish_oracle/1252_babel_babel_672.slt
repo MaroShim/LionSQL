@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1252_babel_babel_672.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-672.sql
+
+statement ok
+CREATE TABLE babel_672_table ( a int, constraint ab primary key nonclustered (a) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY]) ON [PRIMARY]
+
+statement ok
+DROP TABLE babel_672_table
+

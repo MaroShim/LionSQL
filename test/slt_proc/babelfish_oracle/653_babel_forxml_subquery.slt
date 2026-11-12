@@ -1,0 +1,97 @@
+# test/slt_proc/babelfish_oracle/653_babel_forxml_subquery.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/forxml/forxml-subquery-vu-prepare.sql, test/babelfish/raw/forxml/forxml-subquery-vu-verify.sql, test/babelfish/raw/forxml/forxml-subquery-vu-cleanup.sql
+
+statement ok
+CREATE TABLE forxml_subquery_vu_t_binary (Col1 int PRIMARY KEY, Col2 binary);
+INSERT INTO forxml_subquery_vu_t_binary VALUES (1, 0x7);
+
+statement ok
+create view forxml_subquery_vu_v_path as
+SELECT Col1, CAST(Col2 as image) as Col2 FROM forxml_subquery_vu_t_binary FOR XML PATH;
+
+statement ok
+create view forxml_subquery_vu_v_base64 as
+SELECT Col1, CAST(Col2 as image) as Col2 FROM forxml_subquery_vu_t_binary FOR XML PATH, BINARY BASE64;
+
+statement ok
+create table forxml_subquery_vu_t_t1 (id int, a varchar(10));
+create table forxml_subquery_vu_t_t2 (id int, a varchar(10));
+insert into forxml_subquery_vu_t_t1 values (1, 't1_a1');
+insert into forxml_subquery_vu_t_t1 values (2, 't1_a2');
+insert into forxml_subquery_vu_t_t1 values (3, NULL);
+insert into forxml_subquery_vu_t_t2 values (1, 't2_a1');
+insert into forxml_subquery_vu_t_t2 values (2, 't2_a2');
+insert into forxml_subquery_vu_t_t2 values (3, NULL);
+
+statement ok
+create view forxml_subquery_vu_v_cte2 as
+with cte as (select a from forxml_subquery_vu_t_t1)
+select * from forxml_subquery_vu_t_t2, (select * from cte for xml raw) as t3(colxml);
+
+statement ok
+create view forxml_subquery_vu_v_cte3 as
+with cte as (select a from forxml_subquery_vu_t_t1)
+select (select * from cte for xml raw) as colxml, * from forxml_subquery_vu_t_t2;
+
+statement ok
+create view forxml_subquery_vu_v_cte4 as
+with
+cte1 as (select * from forxml_subquery_vu_t_t1),
+cte2 as (select a from cte1 for xml raw)
+select * from cte2;
+
+statement ok
+create view forxml_subquery_vu_v_correlated_subquery as
+select a, (select * from forxml_subquery_vu_t_t2 where id = t.id for xml raw) as mycol from forxml_subquery_vu_t_t1 t
+
+statement ok
+CREATE VIEW forxml_subquery_vu_v_internal AS
+SELECT * FROM tsql_select_for_xml_result('<abcd/>')
+
+statement ok
+CREATE VIEW forxml_subquery_vu_v_internal_text AS
+SELECT * FROM tsql_select_for_xml_text_result('<abcd/>')
+
+query T
+SELECT @@rowcount
+----
+1
+
+query T
+SELECT @@rowcount
+----
+1
+
+statement ok
+drop view forxml_subquery_vu_v_path;
+
+statement ok
+drop view forxml_subquery_vu_v_base64;
+
+statement ok
+drop TABLE forxml_subquery_vu_t_binary;
+
+statement ok
+drop view forxml_subquery_vu_v_cte2;
+
+statement ok
+drop view forxml_subquery_vu_v_cte3;
+
+statement ok
+drop view forxml_subquery_vu_v_cte4;
+
+statement ok
+drop view forxml_subquery_vu_v_correlated_subquery;
+
+statement ok
+DROP VIEW forxml_subquery_vu_v_internal
+
+statement ok
+DROP VIEW forxml_subquery_vu_v_internal_text
+
+statement ok
+drop table forxml_subquery_vu_t_t1;
+
+statement ok
+drop table forxml_subquery_vu_t_t2;
+

@@ -1,0 +1,315 @@
+# test/slt_proc/babelfish_oracle/624_babel_currency_symbol.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/currency_symbol.sql
+
+query T
+select CAST('$100.123' AS money);
+----
+0.00
+
+query T
+select CAST('¢100.123' AS money);
+----
+0.00
+
+query T
+select CAST('¤100.123' AS money);
+----
+0.00
+
+query T
+select CAST('£100.123' AS money);
+----
+0.00
+
+query T
+select CAST('¥100.123' AS money);
+----
+0.00
+
+query T
+select CAST('৲100.123' AS money);
+----
+0.00
+
+query T
+select CAST('৳100.123' AS money);
+----
+0.00
+
+query T
+select CAST('฿100.123' AS money);
+----
+0.00
+
+query T
+select CAST('៛100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₠100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₡100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₢100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₣100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₤100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₥100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₦100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₧100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₨100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₩100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₪100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₫100.123' AS money);
+----
+0.00
+
+query T
+select CAST('€100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₭100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₮100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₯100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₰100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₱100.123' AS money);
+----
+0.00
+
+query T
+select CAST('﷼100.123' AS money);
+----
+0.00
+
+query T
+select CAST('﹩100.123' AS money);
+----
+0.00
+
+query T
+select CAST('￠100.123' AS money);
+----
+0.00
+
+query T
+select CAST('＄100.123' AS money);
+----
+0.00
+
+query T
+select CAST('￡100.123' AS money);
+----
+0.00
+
+query T
+select CAST('￥100.123' AS money);
+----
+0.00
+
+query T
+select CAST('￦100.123' AS money);
+----
+0.00
+
+query T
+select CAST('$-214.3648' AS money);
+----
+0.00
+
+query T
+select CAST('¢-214.3648' AS money);
+----
+0.00
+
+query T
+select CAST('¤-214.3648' AS money);
+----
+0.00
+
+query T
+select CAST('฿-214.3648' AS money);
+----
+0.00
+
+query T
+select CAST('₠-214.3648' AS money);
+----
+0.00
+
+query T
+select CAST('₨-214.3648' AS money);
+----
+0.00
+
+query T
+select CAST('$0' AS money);
+----
+0.00
+
+query T
+select CAST('¢0' AS money);
+----
+0.00
+
+query T
+select CAST('¤0' AS money);
+----
+0.00
+
+query T
+select CAST('฿0' AS money);
+----
+0.00
+
+query T
+select CAST('₠0' AS money);
+----
+0.00
+
+query T
+select CAST('₨0' AS money);
+----
+0.00
+
+query T
+select CAST('₹100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₿100.123' AS money);
+----
+0.00
+
+query T
+select CAST('૱100.123' AS money);
+----
+0.00
+
+query T
+select CAST('௹100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₼100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₷100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₳100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₲100.123' AS money);
+----
+0.00
+
+query T
+select CAST('₾100.123' AS money);
+----
+0.00
+
+statement ok
+CREATE TABLE currency_symbol_t1(a money);
+
+statement ok
+INSERT INTO currency_symbol_t1 VALUES($111.123);
+
+statement ok
+INSERT INTO currency_symbol_t1 VALUES(¢112.123);
+
+statement ok
+INSERT INTO currency_symbol_t1 VALUES(¤113.123);
+
+statement ok
+INSERT INTO currency_symbol_t1 VALUES(฿114.123);
+
+statement ok
+INSERT INTO currency_symbol_t1 VALUES(₠115.123);
+
+statement ok
+INSERT INTO currency_symbol_t1 VALUES(₨116.123);
+
+query T
+SELECT * FROM currency_symbol_t1;
+----
+0.0000
+0.0000
+0.0000
+0.0000
+0.0000
+0.0000
+
+statement ok
+INSERT INTO currency_symbol_t1 VALUES(₿118.123);
+
+statement ok
+DROP TABLE currency_symbol_t1;
+

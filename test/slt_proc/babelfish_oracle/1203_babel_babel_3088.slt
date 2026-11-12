@@ -1,0 +1,28 @@
+# test/slt_proc/babelfish_oracle/1203_babel_babel_3088.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3088.sql
+
+statement ok
+use master
+
+statement ok
+create database db3088
+
+statement ok
+use db3088
+
+statement ok
+create table t3088(a nvarchar(50));
+insert into t3088 values ('aaa');
+
+statement ok
+use master
+
+statement ok
+create database db3088 COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+use db3088
+
+statement ok
+use master
+

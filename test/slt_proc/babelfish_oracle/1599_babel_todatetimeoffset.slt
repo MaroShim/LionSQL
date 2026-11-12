@@ -1,0 +1,175 @@
+# test/slt_proc/babelfish_oracle/1599_babel_todatetimeoffset.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/todatetimeoffset.sql
+
+query T
+Select todatetimeoffset('-1-04-22 16:23:51.766890','+12:00')
+----
+NULL
+
+query T
+Select todatetimeoffset('2000-0a-22 16:23:51.766890','+12:00')
+----
+NULL
+
+query T
+Select todatetimeoffset('20sb-04-22 16:23:51.766890','+12:00')
+----
+NULL
+
+query T
+Select todatetimeoffset('2000-04-2c 16:23:51.766890','+12:00')
+----
+NULL
+
+query T
+Select todatetimeoffset('2000-04-22 1d:23:51.766890','+12:00')
+----
+NULL
+
+query T
+Select todatetimeoffset('2000-0a-22 16:2a:51.766890','+12:00')
+----
+NULL
+
+query T
+Select todatetimeoffset('2000-04-22 16:23:5d.766890','+12:00')
+----
+NULL
+
+query T
+Select todatetimeoffset('2000-04-22 16:23:51.7668c0','+12:00') -- Wrong output , Need to fix BABEL-4328
+----
+NULL
+
+query T
+Select todatetimeoffset('1-04-22 16:23:51.766890','+12:00')
+----
+NULL
+
+query T
+Select todatetimeoffset('2000-04-22 1d:23:51.766890',120)
+----
+NULL
+
+query T
+Select todatetimeoffset('2000-04-22 16:2a:51.766890',340)
+----
+NULL
+
+query T
+Select todatetimeoffset('2000-04-22 16:23:5d.766890',841)
+----
+NULL
+
+query T
+Select todatetimeoffset('2000-04-22 16:23:51.7668c0',-342) -- Wrong output , Need to fix BABEL-4328
+----
+NULL
+
+query T
+Select todatetimeoffset('1-04-22 16:23:51.766890',-4556)
+----
+NULL
+
+query T
+Select todatetimeoffset('0001-01-00 00:00:00.00', '-10:00')
+----
+NULL
+
+query T
+Select todatetimeoffset('10000-12-31 23:59:59.59', '+12:00')
+----
+NULL
+
+query T
+Select todatetimeoffset('0',120)
+----
+NULL
+
+query T
+Select todatetimeoffset('0',0x23)
+----
+NULL
+
+statement ok
+DROP TABLE IF EXISTS tem
+
+statement ok
+Create table tem(a datetimeoffset)
+insert into tem (a) values(todatetimeoffset('2000-04-22 12:23:51.766890',120))
+Select * from tem
+Select todatetimeoffset(a,234) from tem
+
+query T
+Select todatetimeoffset('2345-12-31 23:59:59.59',NULL);
+----
+NULL
+
+query T
+Select todatetimeoffset(NULL,'+12:00');
+----
+NULL
+
+query T
+Select todatetimeoffset('NULL','+12:00');
+----
+NULL
+
+query T
+Select todatetimeoffset('NULL',234);
+----
+NULL
+
+query T
+Select todatetimeoffset(NULL,234);
+----
+NULL
+
+query T
+Select todatetimeoffset(NULL,'+12:000');
+----
+NULL
+
+query T
+Select todatetimeoffset('NULL','+12:000');
+----
+NULL
+
+query T
+Select todatetimeoffset('NULL',1233456777888);
+----
+NULL
+
+query T
+Select todatetimeoffset(NULL,1233456777888);
+----
+NULL
+
+query T
+Select todatetimeoffset('NULL','NULL')
+----
+NULL
+
+query T
+Select todatetimeoffset('NULL',NULL)
+----
+NULL
+
+query T
+Select todatetimeoffset(NULL,NULL)
+----
+NULL
+
+query T
+Select todatetimeoffset(NULL,'NULL')
+----
+NULL
+
+query T
+Select todatetimeoffset('10000-12-31 23:12:00.123 +00:00',743)
+----
+NULL
+
+statement ok
+drop table tem
+

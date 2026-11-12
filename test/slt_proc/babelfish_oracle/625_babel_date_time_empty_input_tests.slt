@@ -1,0 +1,101 @@
+# test/slt_proc/babelfish_oracle/625_babel_date_time_empty_input_tests.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/date_time_empty_input_tests-vu-prepare.sql, test/babelfish/raw/date_time_empty_input_tests-vu-verify.sql, test/babelfish/raw/date_time_empty_input_tests-vu-cleanup.sql
+
+statement ok
+CREATE TABLE test_empty_strings (
+    id int,
+    dt date,
+    tm time
+);
+
+statement ok
+CREATE VIEW empty_string_date_time_view AS
+SELECT 
+    CAST('' AS date) AS empty_date,
+    CAST('   ' AS date) AS space_date,
+    CAST('' AS time) AS empty_time,
+    CAST('   ' AS time) AS space_time;
+
+statement ok
+CREATE VIEW string_vars_to_date_view AS
+SELECT
+    CAST(CAST('' AS VARCHAR) AS DATE) AS empty_varchar_date,
+    CAST(CAST('   ' AS VARCHAR(10)) AS DATE) AS spaces_varchar_date, 
+    CAST(CAST(N'' AS NVARCHAR) AS DATE) AS empty_nvarchar_date,
+    CAST(CAST(N'   ' AS NVARCHAR(10)) AS DATE) AS spaces_nvarchar_date;
+
+statement ok
+CREATE VIEW string_vars_to_time_view AS
+SELECT
+    CAST(CAST('' AS VARCHAR) AS TIME) AS empty_varchar_time,
+    CAST(CAST('   ' AS VARCHAR(10)) AS TIME) AS spaces_varchar_time, 
+    CAST(CAST(N'' AS NVARCHAR) AS TIME) AS empty_nvarchar_time,
+    CAST(CAST(N'   ' AS NVARCHAR(10)) AS TIME) AS spaces_nvarchar_time;
+
+statement ok
+CREATE VIEW tab_space_dates_view AS
+SELECT
+    CAST(CHAR(9) AS date) AS tab_date,
+    CAST(CHAR(9) AS time) AS tab_time;
+
+statement ok
+INSERT INTO test_empty_strings VALUES 
+(1, '', ''),                            -- Empty strings
+(2, '   ', '   ');                      -- Spaces
+
+query TTT
+SELECT * FROM test_empty_strings;
+----
+1 NULL NULL
+2 NULL NULL
+
+statement ok
+CREATE TABLE #test_computed (
+    str_col varchar(10),
+    date_col AS CAST(str_col AS date),
+    time_col AS CAST(str_col AS time)
+);
+
+statement ok
+INSERT INTO #test_computed (str_col) VALUES 
+(''),                   -- Empty string
+('   ');                -- Spaces
+
+query T
+DECLARE @d3 date;
+SET @d3 = CHAR(9);                     -- Tab
+SELECT @d3 AS tab;
+----
+CHAR(9)
+
+statement ok
+INSERT INTO test_empty_strings VALUES
+(3, CHAR(9), CHAR(9));
+
+query TTT
+SELECT * FROM test_empty_strings WHERE id = 3;
+----
+3 NULL NULL
+
+statement ok
+INSERT INTO #test_computed (str_col) VALUES 
+(CHAR(9));              -- Tab
+
+statement ok
+DROP TABLE #test_computed;
+
+statement ok
+DROP TABLE test_empty_strings;
+
+statement ok
+DROP VIEW empty_string_date_time_view;
+
+statement ok
+DROP VIEW string_vars_to_date_view;
+
+statement ok
+DROP VIEW string_vars_to_time_view;
+
+statement ok
+DROP VIEW tab_space_dates_view;
+

@@ -1,0 +1,35 @@
+# test/slt_proc/control_flow_procs/156_while_and_try_catch_06.slt
+# T-SQL WHILE loop accumulation and TRY...CATCH THROW (6)
+
+statement ok
+CREATE PROCEDURE sp_loop_try_156 @n INT, @fail INT
+AS
+BEGIN
+    BEGIN TRY
+        IF @fail = 1
+        BEGIN
+            THROW 52006, 'guard_triggered_6', 1;
+        END;
+        DECLARE @i INT = 1;
+        DECLARE @s INT = 0;
+        WHILE @i <= @n
+        BEGIN
+            SET @s = @s + @i;
+            SET @i = @i + 1;
+        END;
+        SELECT @s, 'OK';
+    END TRY
+    BEGIN CATCH
+        SELECT ERROR_NUMBER(), ERROR_MESSAGE();
+    END CATCH
+END;
+
+query IT
+EXEC sp_loop_try_156 10, 0;
+----
+55 OK
+
+query IT
+EXEC sp_loop_try_156 10, 1;
+----
+52006 guard_triggered_6

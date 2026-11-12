@@ -1,0 +1,121 @@
+# test/slt_proc/babelfish_oracle/371_babel_babel_3358.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3358-vu-prepare.sql, test/babelfish/raw/BABEL-3358-vu-verify.sql
+
+statement ok
+create view BABEL_3358_vu_prepare_v1 as (select datepart(dw, cast('2016-11-14' as datetime)) as dw, datepart(w, cast('2016-11-14' as datetime)) as w);
+
+statement ok
+create view BABEL_3358_vu_prepare_v2 as (select datename(dw, cast('2016-11-14' as datetime)) as dw, datename(w, cast('2016-11-14' as datetime)) as w);
+
+statement ok
+create view BABEL_3358_vu_prepare_v3 as (select datediff(w, cast('2016-11-14' as datetime), cast('2016-11-14' as datetime) + 17));
+
+statement ok
+create view BABEL_3358_vu_prepare_v4 as (select dateadd(w, 1,cast('2016-11-14' as datetime)));
+
+statement ok
+create procedure  BABEL_3358_vu_prepare_p1 as (select datepart(dw, cast('2016-11-14' as datetime))as dw, datepart(w, cast('2016-11-14' as datetime)) as w);
+
+statement ok
+create procedure  BABEL_3358_vu_prepare_p2 as (select datename(dw, cast('2016-11-14' as datetime)) as dw, datename(w, cast('2016-11-14' as datetime)) as w);
+
+statement ok
+create procedure  BABEL_3358_vu_prepare_p3 as (select datediff(w, cast('2016-11-14' as datetime), cast('2016-11-14' as datetime) + 17));
+
+statement ok
+create procedure  BABEL_3358_vu_prepare_p4 as (select dateadd(w, 1,cast('2016-11-14' as datetime)));
+
+statement ok
+create function BABEL_3358_vu_prepare_f1()
+returns datetime as
+begin
+return (select datepart(w, cast('2016-06-27' as datetime)) as w);
+end
+
+statement ok
+create function BABEL_3358_vu_prepare_f2()
+returns nvarchar(15) as
+begin
+return (select datename(w, cast('2016-06-27' as datetime)) as w);
+end
+
+statement ok
+create function BABEL_3358_vu_prepare_f3()
+returns datetime as
+begin
+return (select datediff(w, cast('2016-06-27' as datetime), cast('2016-06-27' as datetime) + 17));
+end
+
+statement ok
+create function BABEL_3358_vu_prepare_f4()
+returns datetime as
+begin
+return (select dateadd(w, 1,cast('2016-06-27' as datetime)));
+end
+
+statement ok
+DROP VIEW BABEL_3358_vu_prepare_v1
+
+statement ok
+DROP VIEW BABEL_3358_vu_prepare_v2
+
+statement ok
+DROP VIEW BABEL_3358_vu_prepare_v3
+
+statement ok
+DROP VIEW BABEL_3358_vu_prepare_v4
+
+query TT
+EXEC BABEL_3358_vu_prepare_p1
+----
+2 2
+
+statement ok
+DROP procedure  BABEL_3358_vu_prepare_p1
+
+query TT
+EXEC BABEL_3358_vu_prepare_p2
+----
+Monday Monday
+
+statement ok
+DROP procedure  BABEL_3358_vu_prepare_p2
+
+query T
+EXEC BABEL_3358_vu_prepare_p3
+----
+NULL
+
+statement ok
+DROP procedure  BABEL_3358_vu_prepare_p3
+
+statement ok
+DROP procedure  BABEL_3358_vu_prepare_p4
+
+query T
+SELECT BABEL_3358_vu_prepare_f1()
+----
+2
+
+statement ok
+DROP FUNCTION BABEL_3358_vu_prepare_f1()
+
+query T
+SELECT BABEL_3358_vu_prepare_f2()
+----
+Monday
+
+statement ok
+DROP FUNCTION BABEL_3358_vu_prepare_f2()
+
+query T
+SELECT BABEL_3358_vu_prepare_f3()
+----
+NULL
+
+statement ok
+DROP FUNCTION BABEL_3358_vu_prepare_f3()
+
+statement ok
+DROP FUNCTION BABEL_3358_vu_prepare_f4()
+

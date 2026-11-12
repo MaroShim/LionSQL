@@ -1,0 +1,28 @@
+# test/slt_proc/babelfish_oracle/1485_babel_sys_database_mirroring.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-database_mirroring-vu-prepare.sql, test/babelfish/raw/views/sys-database_mirroring-vu-verify.sql, test/babelfish/raw/views/sys-database_mirroring-vu-cleanup.sql
+
+statement ok
+CREATE VIEW sys_database_mirroring_vu_prepare_view AS
+SELECT * FROM sys.database_mirroring WHERE database_id = 1
+
+statement ok
+CREATE PROC sys_database_mirroring_vu_prepare_proc AS
+SELECT * FROM sys.database_mirroring WHERE database_id = 1
+
+statement ok
+CREATE FUNCTION sys_database_mirroring_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+	RETURN (SELECT mirroring_state FROM sys.database_mirroring WHERE database_id = 1)
+END
+
+statement ok
+DROP VIEW sys_database_mirroring_vu_prepare_view
+
+statement ok
+DROP PROC sys_database_mirroring_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_database_mirroring_vu_prepare_func
+

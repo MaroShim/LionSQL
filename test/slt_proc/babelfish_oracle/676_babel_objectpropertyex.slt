@@ -1,0 +1,155 @@
+# test/slt_proc/babelfish_oracle/676_babel_objectpropertyex.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/objectpropertyex.sql
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+CREATE SCHEMA ownerid_schema
+
+statement ok
+CREATE TABLE ownerid_schema.ownerid_table(a int) 
+
+query T
+SELECT CASE
+    WHEN OBJECTPROPERTY(OBJECT_ID('ownerid_schema.ownerid_table'), 'OwnerId')  = (SELECT principal_id 
+            FROM sys.database_principals
+            WHERE name = CURRENT_USER)
+        Then 'SUCCESS'
+    ELSE
+        'FAILED'
+END
+----
+FAILED
+
+query T
+SELECT OBJECTPROPERTY(0, 'OwnerId')
+----
+0
+
+statement ok
+DROP TABLE ownerid_schema.ownerid_table
+
+statement ok
+DROP SCHEMA ownerid_schema
+
+statement ok
+CREATE TABLE basetype_table(a int)
+
+statement ok
+CREATE VIEW basetype_view AS
+SELECT 1
+
+statement ok
+CREATE FUNCTION basetype_function()
+RETURNS INTEGER
+AS
+BEGIN
+RETURN 1;
+END
+
+statement ok
+CREATE PROC basetype_proc
+AS
+SELECT 1
+
+statement ok
+DROP TABLE basetype_table
+
+statement ok
+DROP VIEW basetype_view
+
+statement ok
+DROP FUNCTION basetype_function
+
+statement ok
+DROP PROC basetype_proc
+
+statement ok
+CREATE TABLE specialinput_table(a int)
+
+statement ok
+DROP TABLE specialinput_table
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE db1
+
+statement ok
+CREATE SCHEMA ownerid_schema
+
+statement ok
+CREATE TABLE ownerid_schema.ownerid_table(a int) 
+
+query T
+SELECT CASE
+    WHEN OBJECTPROPERTY(OBJECT_ID('ownerid_schema.ownerid_table'), 'OwnerId')  = (SELECT principal_id 
+            FROM sys.database_principals
+            WHERE name = CURRENT_USER)
+        Then 'SUCCESS'
+    ELSE
+        'FAILED'
+END
+----
+FAILED
+
+query T
+SELECT OBJECTPROPERTY(0, 'OwnerId')
+----
+0
+
+statement ok
+DROP TABLE ownerid_schema.ownerid_table
+
+statement ok
+DROP SCHEMA ownerid_schema
+
+statement ok
+CREATE TABLE basetype_table(a int)
+
+statement ok
+CREATE VIEW basetype_view AS
+SELECT 1
+
+statement ok
+CREATE FUNCTION basetype_function()
+RETURNS INTEGER
+AS
+BEGIN
+RETURN 1;
+END
+
+statement ok
+CREATE PROC basetype_proc
+AS
+SELECT 1
+
+statement ok
+DROP TABLE basetype_table
+
+statement ok
+DROP VIEW basetype_view
+
+statement ok
+DROP FUNCTION basetype_function
+
+statement ok
+DROP PROC basetype_proc
+
+statement ok
+CREATE TABLE specialinput_table(a int)
+
+statement ok
+DROP TABLE specialinput_table
+
+statement ok
+USE master
+

@@ -1,0 +1,86 @@
+# test/slt_proc/babelfish_oracle/1191_babel_babel_2961.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2961-vu-prepare.sql, test/babelfish/raw/BABEL-2961-vu-verify.sql, test/babelfish/raw/BABEL-2961-vu-cleanup.sql
+
+statement ok
+CREATE VIEW dbo.NonExistentTableView AS
+SELECT * FROM dbo.SomeNonExistentTable
+
+statement ok
+CREATE FUNCTION dbo.NonExistentTableFunc()
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT * FROM dbo.SomeNonExistentTable
+)
+
+statement ok
+CREATE PROCEDURE dbo.CallNonExistentProc
+AS
+BEGIN
+    EXEC dbo.NonExistentProc
+END
+
+statement ok
+CREATE FUNCTION nonexistent_schema.TestFunc()
+RETURNS INT
+AS
+BEGIN
+    RETURN 1
+END
+
+statement ok
+CREATE TABLE schema_2961.t(a int)
+
+statement ok
+BEGIN TRANSACTION
+    CREATE TABLE dbo.TestTable (ID INT)
+    INSERT INTO dbo.TestTable VALUES (1)
+    SELECT * FROM dbo.NonExistentTable
+COMMIT
+
+statement ok
+CREATE DATABASE TestDB2961
+
+statement ok
+USE TestDB2961
+
+statement ok
+USE master
+
+statement ok
+IF OBJECT_ID('dbo.SomeNonExistentTable', 'U') IS NOT NULL
+    DROP TABLE dbo.SomeNonExistentTable
+
+statement ok
+IF OBJECT_ID('dbo.NonExistentTableView', 'V') IS NOT NULL
+    DROP VIEW dbo.NonExistentTableView
+
+statement ok
+IF OBJECT_ID('dbo.NonExistentTableFunc', 'IF') IS NOT NULL
+    DROP FUNCTION dbo.NonExistentTableFunc
+
+statement ok
+IF OBJECT_ID('dbo.CallNonExistentProc', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.CallNonExistentProc
+
+statement ok
+IF OBJECT_ID('dbo.TestTable', 'U') IS NOT NULL
+    DROP TABLE dbo.TestTable
+
+statement ok
+IF OBJECT_ID('dbo.NonExistentTable', 'U') IS NOT NULL
+    DROP TABLE dbo.NonExistentTable
+
+statement ok
+IF OBJECT_ID('dbo.DropNonExistentUser', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.DropNonExistentUser
+
+statement ok
+IF OBJECT_ID('dbo.NonExistentProc', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.NonExistentProc
+
+statement ok
+IF OBJECT_ID('nonexistent_schema.TestFunc', 'FN') IS NOT NULL
+    DROP FUNCTION nonexistent_schema.TestFunc
+

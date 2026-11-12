@@ -1,0 +1,21 @@
+# test/slt_proc/babelfish_oracle/1291_babel_babel_targetlist.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-TARGETLIST.sql
+
+statement ok
+CREATE SCHEMA ts;
+CREATE TABLE ts.t1 (ABC text, b varchar(20), c char(4), Xyz int, [Delimited] int, [Square Brackets] bigint);
+
+statement ok
+SELECT * from ts.t1;
+SELECT xyz, XYZ, xYz, xyz ColName, xYz AS ColName, [Square Brackets], [Delimited], [DeLIMITed] from ts.t1;
+
+statement ok
+SELECT xyz AS [WOW! This is a very very long identifier that will get truncated with a uniquifying suffix by Babelfish] from ts.t1;
+
+statement ok
+SELECT xyz AS [WOW! This is a very very long identifier that will get truncated with a uniquifying suffix by Babelfish - with extra stuff] from ts.t1;
+
+statement ok
+DROP TABLE ts.t1;
+DROP SCHEMA ts;
+

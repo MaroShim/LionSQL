@@ -1,0 +1,166 @@
+# test/slt_proc/babelfish_oracle/1416_babel_dateadd.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/dateFunctions/dateadd-vu-prepare.sql, test/babelfish/raw/dateFunctions/dateadd-vu-verify.sql, test/babelfish/raw/dateFunctions/dateadd-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE dateadd_p1 as (select dateadd(day, 2, cast('1900-01-01' as date)));
+
+statement ok
+CREATE PROCEDURE dateadd_p3 as (select dateadd(hour, 5, cast('01:01:21 +10:00' as datetimeoffset)));
+
+statement ok
+CREATE PROCEDURE dateadd_p4 as (select dateadd(second, 1, cast('1999-12-31 23:59:59' as datetime)));
+
+statement ok
+CREATE PROCEDURE dateadd_p5 as (select dateadd(millisecond, 1, cast('1999-12-31 23:59:59' as datetime)));
+
+statement ok
+CREATE PROCEDURE dateadd_p6 as (select dateadd(millisecond, 1, cast('1999-12-31 23:59:59' as datetime2)));
+
+statement ok
+CREATE PROCEDURE dateadd_p8 as (select dateadd(hour, 2, cast('1900-01-01' as date)));
+
+statement ok
+CREATE PROCEDURE dateadd_p9 as (select dateadd(minute, -70, cast('2016-12-26 00:30:05.523456+8' as datetimeoffset)));
+
+statement ok
+CREATE PROCEDURE dateadd_p10 as (select sys.dateadd_internal_datetime('day', 1, cast('2016-12-26 00:30:05' as datetime), 3));
+
+statement ok
+CREATE VIEW dateadd_v1 as (select dateadd(day, 1, '2024-12-31'))
+
+statement ok
+CREATE VIEW dateadd_v2 as (select dateadd(hour, 1, cast('2024-12-31' as datetime)))
+
+statement ok
+CREATE VIEW dateadd_v3 as (select dateadd(week, 1, cast('2024-12-31' as datetime2)))
+
+statement ok
+CREATE VIEW dateadd_v4 as (select dateadd(millisecond, 500, cast('2024-12-31 00:23:00.002343' as time)))
+
+statement ok
+CREATE VIEW dateadd_v5 as (select dateadd(year, 1, cast('2024-12-31' as smalldatetime)))
+
+statement ok
+CREATE VIEW dateadd_v6 as (select dateadd(minute, 1, cast('2024-12-31' as datetimeoffset)))
+
+statement ok
+CREATE TABLE UdtTable
+(
+    ID INT PRIMARY KEY,
+    UdtTime UDT_TIME,
+    UdtDate UDT_DATE,
+    UdtDatetime UDT_DATETIME,
+    UdtDatetime2 UDT_DATETIME2,
+    UdtTimestamp UDT_TIMESTAMP,
+    UdtSmalldatetime UDT_SMALLDATETIME,
+    UdtDatetimeOffset UDT_DATETIMEOFFSET
+)
+
+statement ok
+INSERT INTO UdtTable (ID, UdtTime, UdtDate, UdtDatetime, UdtDatetime2, UdtTimestamp, UdtSmalldatetime, UdtDatetimeOffset) 
+VALUES (1, '14:30:25', '2024-12-09', '2024-12-09 14:30:25.123', '2024-12-09 14:30:25.1234567', '2024-12-09 14:30:25', '2024-12-09 14:30:00', CAST('2025-12-15 20:43:34.7733333 +00:00' AS DATETIMEOFFSET));
+
+statement ok
+DECLARE @time TIME, @date DATE, @datetime DATETIME, @datetime2 DATETIME2, @timestamp TIMESTAMP, @smalldatetime SMALLDATETIME, @datetimeoffset DATETIMEOFFSET
+SET @time = CAST('14:30:25.4444' AS TIME)
+SET @date = CAST('2024-12-09 14:30:25.123' AS DATE)
+SET @datetime = CAST('2024-12-09 14:30:25.123' AS DATETIME)
+SET @datetime2 = CAST('2024-12-09 14:30:25' AS DATETIME2)
+SET @timestamp = CAST('2038-01-19 03:14:07.9999999' AS TIMESTAMP)
+SET @smalldatetime = CAST('2069-06-06 23:58:59.99999' AS SMALLDATETIME)
+SET @datetimeoffset = CAST('2025-12-15 20:48:42.7933333 +00:00' AS DATETIMEOFFSET)
+INSERT INTO UdtTable (ID, UdtTime, UdtDate, UdtDatetime, UdtDatetime2, UdtTimestamp, UdtSmalldatetime, UdtDatetimeOffset) 
+VALUES (2, @time, @date, @datetime, @datetime2, @timestamp, @smalldatetime, @datetimeoffset);
+
+statement ok
+INSERT INTO UdtTable (ID, UdtTime, UdtDate, UdtDatetime, UdtDatetime2, UdtTimestamp, UdtSmalldatetime, UdtDatetimeOffset) 
+VALUES (3, '23:59:59', '1900-01-01', '1753-01-01 00:00:00', '1800-01-01 00:00:00', '1900-01-01 00:00:00', '1900-01-01 00:00:00', CAST('2025-12-15 20:48:42.7933333 +00:00' AS DATETIMEOFFSET));
+
+statement ok
+INSERT INTO UdtTable (ID, UdtTime, UdtDate, UdtDatetime, UdtDatetime2, UdtTimestamp, UdtSmalldatetime, UdtDatetimeOffset) 
+VALUES (4, '00:00:00', '1994-12-31', '1999-01-31 23:59:59.997', '9995-12-31 23:59:59.9999999', '2038-01-19 03:14:07', '2069-06-06 23:59:00', CAST('2080-12-31 00:00:00.00 +00:00' AS DATETIMEOFFSET));
+
+statement ok
+INSERT INTO UdtTable (ID, UdtTime, UdtDate, UdtDatetime, UdtDatetime2, UdtTimestamp, UdtSmalldatetime, UdtDatetimeOffset) 
+VALUES (5, '12:00:00', CAST('20241212' AS DATE), CAST('20241212' AS DATETIME), CAST('20241212' AS DATETIME2), CAST('20241212' AS TIMESTAMP), CAST('20241212' AS SMALLDATETIME), CAST('20241212' AS DATETIMEOFFSET));
+
+statement ok
+begin transaction
+
+query T
+SELECT dateadd(fakeoption, 2, cast('1900-01-01' as date));
+----
+NULL
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+begin transaction
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+begin transaction
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+begin transaction
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+begin transaction
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+DROP PROCEDURE dateadd_p1
+
+statement ok
+DROP PROCEDURE dateadd_p3
+
+statement ok
+DROP PROCEDURE dateadd_p4
+
+statement ok
+DROP PROCEDURE dateadd_p5
+
+statement ok
+DROP PROCEDURE dateadd_p6
+
+statement ok
+DROP PROCEDURE dateadd_p8
+
+statement ok
+DROP PROCEDURE dateadd_p9
+
+statement ok
+DROP PROCEDURE dateadd_p10
+
+statement ok
+DROP VIEW IF EXISTS dateadd_v1
+
+statement ok
+DROP VIEW IF EXISTS dateadd_v2
+
+statement ok
+DROP VIEW IF EXISTS dateadd_v3
+
+statement ok
+DROP VIEW IF EXISTS dateadd_v4
+
+statement ok
+DROP VIEW IF EXISTS dateadd_v5
+
+statement ok
+DROP VIEW IF EXISTS dateadd_v6
+
+statement ok
+DROP TABLE IF EXISTS UdtTable
+

@@ -1,0 +1,530 @@
+# test/slt_proc/babelfish_oracle/593_babel_babel_top_in_dml.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/dml/babel_top_in_dml.sql
+
+statement ok
+create table t (a int, b int)
+
+statement ok
+insert t values(1,1)
+insert t values(2,2)
+insert t values(3,3)
+insert t values(4,4)
+insert t values(5,5)
+
+query TT
+select * from t
+----
+1 1
+
+statement ok
+update t set b = b*-1 where b > 0
+
+query TT
+select * from t
+----
+1 -1
+
+query T
+select count(*) from t where b > 0
+----
+0
+
+query T
+select count(*) from t
+----
+1
+
+statement ok
+declare @a int
+set @a = 1
+delete top (@a) from t
+
+query T
+select count(*) from t
+----
+1
+
+statement ok
+create table t1 (a int, b int)
+
+statement ok
+insert t1 values(1,1)
+insert t1 values(2,2)
+insert t1 values(3,3)
+insert t1 values(4,4)
+insert t1 values(5,5)
+
+statement ok
+create table t2 (a int, b int)
+
+statement ok
+insert t2 values(1,-1)
+insert t2 values(2,2)
+insert t2 values(3,3)
+insert t2 values(400,4)
+insert t2 values(500,5)
+
+query T
+select count(*) from t1 where a < 0
+----
+0
+
+statement ok
+create table t3 (a int, b int)
+
+statement ok
+insert t3 values(1,1)
+insert t3 values(2,2)
+insert t3 values(-3,-3)
+
+statement ok
+create table t4 (a int, b int)
+
+statement ok
+insert t4 values(1,-1)
+insert t4 values(2,2)
+insert t4 values(3,3)
+insert t4 values(400,4)
+insert t4 values(500,5)
+
+query T
+select count(*) from t3
+----
+1
+
+query T
+select count(*) from t3 where b = 100
+----
+0
+
+query T
+select count(*) from t3
+----
+1
+
+statement ok
+drop table t
+
+statement ok
+drop table t1
+
+statement ok
+drop table t2
+
+statement ok
+drop table t3
+
+statement ok
+drop table t4
+
+statement ok
+CREATE TABLE update_test_tbl (
+    age int,
+    fname char(10),
+    lname char(10),
+    city nchar(20)
+);
+
+statement ok
+INSERT INTO update_test_tbl(age, fname, lname, city) 
+VALUES  (50, 'fname1', 'lname1', 'london'),
+        (34, 'fname2', 'lname2', 'paris'),
+        (35, 'fname3', 'lname3', 'brussels'),
+        (90, 'fname4', 'lname4', 'new york'),
+        (26, 'fname5', 'lname5', 'los angeles'),
+        (74, 'fname6', 'lname6', 'tokyo'),
+        (44, 'fname7', 'lname7', 'oslo'),
+        (19, 'fname8', 'lname8', 'hong kong'),
+        (61, 'fname9', 'lname9', 'shanghai'),
+        (29, 'fname10', 'lname10', 'mumbai');
+CREATE TABLE update_test_tbl2 (
+    year int,
+    lname char(10),
+);
+
+statement ok
+INSERT INTO update_test_tbl2(year, lname) 
+VALUES  (51, 'lname1'),
+        (34, 'lname3'),
+        (25, 'lname8'),
+        (95, 'lname9'),
+        (36, 'lname10');
+
+statement ok
+CREATE TABLE update_test_tbl3 (
+    lname char(10),
+    city char(10),
+);
+
+statement ok
+INSERT INTO update_test_tbl3(lname, city)
+VALUES  ('lname8','london'),
+        ('lname9','tokyo'),
+        ('lname10','mumbai');
+
+statement ok
+DROP TABLE update_test_tbl;
+
+statement ok
+DROP TABLE update_test_tbl2;
+
+statement ok
+DROP TABLE update_test_tbl3;
+
+statement ok
+drop procedure if exists babel_2020_update_ct;
+
+statement ok
+drop procedure if exists babel_2020_update_ct;
+drop table if exists babel_2020_update_t1;
+drop table if exists babel_2020_update_t2;
+
+statement ok
+CREATE TABLE babel_update_tbl1(a INT, b VARCHAR(10));
+CREATE TABLE babel_update_tbl2(a INT, b VARCHAR(10));
+CREATE TABLE babel_update_tbl3 (a INT, c INT);
+INSERT INTO babel_update_tbl1 VALUES (1, 'left'), (2, 'inner');
+INSERT INTO babel_update_tbl2 VALUES (10, 'inner'), (30, 'right');
+INSERT INTO babel_update_tbl3 VALUES (1, 10), (3, 10);
+
+statement ok
+CREATE VIEW babel_update_top_view AS SELECT * FROM babel_update_tbl1 WHERE babel_update_tbl1.a > 1;
+
+statement ok
+CREATE SCHEMA babel_update_schema
+
+statement ok
+CREATE TABLE babel_update_schema.babel_update_tbl1(a INT);
+INSERT INTO babel_update_schema.babel_update_tbl1 VALUES (1), (2);
+
+statement ok
+BEGIN TRAN
+UPDATE top(1) t1 SET a = a + 1
+FROM babel_update_tbl1 AS t1
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+UPDATE top(1) t1 SET t1.a = a + 1
+FROM babel_update_tbl1 t1
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+UPDATE top(1) t1 SET a = t1.a + 1
+OUTPUT deleted.*
+FROM non_existant_tbl t1
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+UPDATE top(1) t1 SET a = t1.a + 1
+FROM babel_update_tbl1 t1
+INNER JOIN (SELECT * FROM babel_update_tbl1) t2
+ON t1.b = t2.b
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+UPDATE top(1) t1 SET a = 10
+FROM babel_update_tbl2 t2
+JOIN babel_update_tbl1 t1
+ON t2.b = t1.b
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+UPDATE top(1) t1 SET t1.a = t1.a + 1
+FROM babel_update_tbl1 t1 
+INNER JOIN babel_update_tbl1 t2
+ON t1.b = t2.b
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+UPDATE top(1) t1 SET t1.a = t1.a + 1
+OUTPUT inserted.*
+FROM babel_update_tbl1 t1 
+INNER JOIN babel_update_tbl1 t2
+ON t1.b = t2.b
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+UPDATE top(1) t1 SET t1.a = t2.a
+FROM babel_update_tbl1 AS t1 
+INNER JOIN babel_update_tbl2 AS t2
+ON t1.b = t2.b
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+UPDATE top(1) t1 SET a = 10
+FROM babel_update_tbl1 t2, babel_update_tbl3 t1
+WHERE c > 1
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+UPDATE top(1) t1 SET a = 100
+FROM babel_update_tbl1 AS t1 
+LEFT OUTER JOIN babel_update_tbl1 t2
+ON t2.b = t1.b
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+UPDATE top(1) t1 SET a = 100
+FROM babel_update_tbl1 AS t1
+WHERE t1.a IN
+(
+	SELECT a FROM babel_update_tbl1
+	WHERE babel_update_tbl1.a = t1.a
+)
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+INSERT INTO babel_update_tbl1 VALUES (3, 'extra')
+UPDATE top(1) v1 SET a = 100
+FROM babel_update_top_view v1
+WHERE a = 2
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+UPDATE top(1) t1 SET t1.a = a + 1
+FROM babel_update_schema.babel_update_tbl1 t1
+ROLLBACK
+
+statement ok
+DROP VIEW babel_update_top_view
+
+statement ok
+DROP TABLE babel_update_tbl1
+DROP TABLE babel_update_tbl2
+DROP TABLE babel_update_tbl3
+DROP TABLE babel_update_schema.babel_update_tbl1
+
+statement ok
+DROP SCHEMA babel_update_schema
+
+statement ok
+drop procedure if exists babel_2020_delete_ct;
+
+statement ok
+drop procedure if exists babel_2020_delete_ct;
+drop table if exists babel_2020_delete_t1;
+drop table if exists babel_2020_delete_t2;
+
+statement ok
+CREATE TABLE babel_delete_tbl1(a INT, b VARCHAR(10));
+CREATE TABLE babel_delete_tbl2(a INT, b VARCHAR(10));
+CREATE TABLE babel_delete_tbl3 (a INT, c INT);
+INSERT INTO babel_delete_tbl1 VALUES (1, 'left'), (2, 'inner');
+INSERT INTO babel_delete_tbl2 VALUES (10, 'inner'), (30, 'right');
+INSERT INTO babel_delete_tbl3 VALUES (1, 10), (3, 10);
+
+statement ok
+CREATE VIEW babel_delete_top_view AS SELECT * FROM babel_delete_tbl1 WHERE babel_delete_tbl1.a > 1;
+
+statement ok
+CREATE SCHEMA babel_delete_schema
+
+statement ok
+CREATE TABLE babel_delete_schema.babel_delete_tbl1(a INT);
+INSERT INTO babel_delete_schema.babel_delete_tbl1 VALUES (1), (2);
+
+statement ok
+BEGIN TRAN
+DELETE top(1) t1
+FROM babel_delete_tbl1 AS t1
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+DELETE top(1) t1
+FROM babel_delete_tbl1 t1
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+DELETE top(1) t1
+FROM babel_delete_tbl1 t1
+INNER JOIN (SELECT * FROM babel_delete_tbl1) t2
+ON t1.b = t2.b
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+DELETE top(1) t1
+FROM babel_delete_tbl2 t2
+JOIN babel_delete_tbl1 t1
+ON t2.b = t1.b
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+DELETE top(1) t1
+FROM babel_delete_tbl1 t1 
+INNER JOIN babel_delete_tbl1 t2
+ON t1.b = t2.b
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+DELETE top(1) t1
+FROM babel_delete_tbl1 AS t1 
+INNER JOIN babel_delete_tbl2 AS t2
+ON t1.b = t2.b
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+DELETE top(1) t1
+FROM babel_delete_tbl1 t2, babel_delete_tbl3 t1
+WHERE c > 1
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+DELETE top(1) t1
+FROM babel_delete_tbl1 AS t1 
+LEFT OUTER JOIN babel_delete_tbl1 t2
+ON t2.b = t1.b
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+DELETE top(1) t1
+FROM babel_delete_tbl1 AS t1
+WHERE t1.a IN
+(
+	SELECT a FROM babel_delete_tbl1
+	WHERE babel_delete_tbl1.a = t1.a
+)
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+INSERT INTO babel_delete_tbl1 VALUES (3, 'extra')
+DELETE top(1) v1
+FROM babel_delete_top_view v1
+WHERE a = 2
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+DELETE top(1) t1
+FROM babel_delete_schema.babel_delete_tbl1 t1
+ROLLBACK
+
+statement ok
+BEGIN TRAN
+DELETE top(1) babel_delete_schema.babel_delete_tbl1
+ROLLBACK
+
+statement error
+DELETE top(1) babel_delete_schema.babel_delete_tbl1
+FROM babel_delete_tbl1
+
+statement error
+DELETE top(1) babel_delete_schema.babel_delete_tbl1
+FROM babel_delete_tbl2 AS babel_delete_tbl1
+
+statement ok
+DROP VIEW babel_delete_top_view
+
+statement ok
+DROP TABLE babel_delete_tbl1
+DROP TABLE babel_delete_tbl2
+DROP TABLE babel_delete_tbl3
+DROP TABLE babel_delete_schema.babel_delete_tbl1
+
+statement ok
+DROP SCHEMA babel_delete_schema
+
+statement ok
+create table babel_update_error(a int primary key)
+
+statement ok
+insert into babel_update_error values (1), (2), (3)
+
+query T
+select * from babel_update_error order by a
+----
+1
+2
+3
+
+query T
+select * from babel_update_error order by a
+----
+1
+2
+3
+
+statement ok
+drop table babel_update_error
+
+statement ok
+CREATE TABLE babel_1139_t1(a INT);
+CREATE TABLE babel_1139_t2(a INT);
+
+statement ok
+TRUNCATE TABLE babel_1139_t1;
+TRUNCATE TABLE babel_1139_t2;
+
+statement ok
+TRUNCATE TABLE babel_1139_t1;
+TRUNCATE TABLE babel_1139_t2;
+
+query T
+SELECT COUNT(*) FROM babel_1139_t1;
+SELECT COUNT(*) FROM babel_1139_t2;
+----
+0
+
+statement ok
+TRUNCATE TABLE babel_1139_t1;
+TRUNCATE TABLE babel_1139_t2;
+
+query T
+SELECT COUNT(*) FROM babel_1139_t1;
+SELECT COUNT(*) FROM babel_1139_t2;
+----
+0
+
+statement ok
+DROP TABLE babel_1139_t1;
+DROP TABLE babel_1139_t2;
+
+statement ok
+create table top_with_output_tbl(no_o_id int, no_w_id VARCHAR(20))
+
+statement ok
+insert into top_with_output_tbl VALUES (-1, 'foo'), (2, 'foo');
+
+statement ok
+set babelfish_showplan_all on
+
+statement ok
+set babelfish_showplan_all off
+
+statement ok
+drop table top_with_output_tbl;
+
+statement ok
+CREATE TABLE babel2007_t1(c1PK INT PRIMARY KEY, c2INT INT, c4COMMENT VARCHAR(100))
+CREATE TABLE babel2007_t2(c1PK INT PRIMARY KEY, c2INT INT, c4COMMENT VARCHAR(100))
+
+statement ok
+INSERT INTO babel2007_t1 VALUES( 1, 10, 'insert' )
+        , ( 2, 20, 'insert' )
+        , ( 3, 30, 'insert' )
+        , ( 4, 40, 'insert' )
+
+statement ok
+DROP TABLE babel2007_t1
+DROP TABLE babel2007_t2
+

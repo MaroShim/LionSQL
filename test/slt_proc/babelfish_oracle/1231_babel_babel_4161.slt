@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/1231_babel_babel_4161.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4161-vu-prepare.sql, test/babelfish/raw/BABEL-4161-vu-verify.sql, test/babelfish/raw/BABEL-4161-vu-cleanup.sql
+
+statement ok
+create table #t4161(c1 int, c2 int)
+
+statement ok
+create index i4161 on #t4161(c1)
+
+statement ok
+drop table #t4161
+
+statement ok
+create table #t4161(c1 int, c2 int)
+
+statement ok
+create index i4161 on #t4161(c1)
+
+statement ok
+create table #t4161a (a typ4161)
+
+statement ok
+create index ind4161a on #t4161a(a)
+
+statement ok
+drop table #t4161a
+

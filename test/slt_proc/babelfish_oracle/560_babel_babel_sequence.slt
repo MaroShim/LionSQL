@@ -1,0 +1,332 @@
+# test/slt_proc/babelfish_oracle/560_babel_babel_sequence.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SEQUENCE.sql
+
+statement ok
+USE master;
+
+statement ok
+CREATE TABLE babel_sequence_tinyint (id [tinyint] IDENTITY, col1 [tinyint]);
+
+statement ok
+SELECT * FROM babel_sequence_tinyint;
+
+statement ok
+CREATE TABLE babel_sequence_tinyint_dec (id [tinyint] IDENTITY(1,-1), col1 [tinyint]);
+
+statement ok
+SELECT * FROM babel_sequence_tinyint_dec;
+
+statement ok
+CREATE TABLE babel_sequence_smallint (id [smallint] IDENTITY, col1 [int]);
+
+statement ok
+SELECT * FROM babel_sequence_smallint;
+
+statement ok
+CREATE TABLE babel_sequence_int (id [int] IDENTITY, col1 [int]);
+
+statement ok
+SELECT * FROM babel_sequence_int;
+
+statement ok
+CREATE TABLE babel_sequence_bigint (id [bigint] IDENTITY, col1 [int]);
+
+statement ok
+SELECT * FROM babel_sequence_bigint;
+
+statement ok
+CREATE TABLE babel_sequence_numeric (id numeric(18,0) IDENTITY, col1 int);
+
+statement ok
+SELECT * FROM babel_sequence_numeric;
+
+statement ok
+CREATE TABLE babel_sequence_decimal (id decimal(18,0) IDENTITY, col1 int);
+
+statement ok
+SELECT * FROM babel_sequence_decimal;
+
+statement ok
+CREATE TABLE babel_sequence_numeric_faulty_scale (id numeric(18,6) IDENTITY, col1 int);
+
+statement ok
+CREATE TABLE babel_sequence_numeric_faulty_precision (id numeric(20,0) IDENTITY, col1 int);
+
+statement ok
+CREATE TABLE babel_sequence_alter (col1 [int]);
+
+statement ok
+INSERT INTO babel_sequence_alter VALUES (-5), (10), (42);
+
+statement ok
+ALTER TABLE babel_sequence_alter ADD id_tinyint [tinyint] IDENTITY(1,1);
+
+query TT
+SELECT * FROM babel_sequence_alter;
+----
+-5 NULL
+10 NULL
+42 NULL
+
+statement ok
+ALTER TABLE babel_sequence_alter DROP COLUMN id_tinyint;
+
+statement ok
+ALTER TABLE babel_sequence_alter ADD id_smallint [smallint] IDENTITY(1,1);
+
+query TT
+SELECT * FROM babel_sequence_alter;
+----
+-5 NULL
+10 NULL
+42 NULL
+
+statement ok
+ALTER TABLE babel_sequence_alter DROP COLUMN id_smallint;
+
+statement ok
+ALTER TABLE babel_sequence_alter ADD id_int [int] IDENTITY;
+
+query TT
+SELECT * FROM babel_sequence_alter;
+----
+-5 NULL
+10 NULL
+42 NULL
+
+statement ok
+ALTER TABLE babel_sequence_alter DROP COLUMN id_int;
+
+statement ok
+ALTER TABLE babel_sequence_alter ADD id_bigint [bigint] IDENTITY(32,8);
+
+statement ok
+INSERT INTO babel_sequence_alter VALUES (-5), (10), (42);
+
+query TT
+SELECT * FROM babel_sequence_alter;
+----
+-5 NULL
+10 NULL
+42 NULL
+-5 NULL
+10 NULL
+42 NULL
+
+statement ok
+ALTER TABLE babel_sequence_alter DROP COLUMN id_bigint;
+
+statement ok
+ALTER TABLE babel_sequence_alter ADD id_numeric numeric(18,0) IDENTITY(32,8);
+
+statement ok
+INSERT INTO babel_sequence_alter VALUES (-5), (10), (42);
+
+query TT
+SELECT * FROM babel_sequence_alter;
+----
+-5 NULL
+10 NULL
+42 NULL
+-5 NULL
+10 NULL
+42 NULL
+-5 NULL
+10 NULL
+42 NULL
+
+statement ok
+ALTER TABLE babel_sequence_alter DROP COLUMN id_numeric;
+
+statement ok
+ALTER TABLE babel_sequence_alter ADD id_decimal decimal(18,0) IDENTITY(32,8);
+
+statement ok
+INSERT INTO babel_sequence_alter VALUES (-5), (10), (42);
+
+query TT
+SELECT * FROM babel_sequence_alter;
+----
+-5 NULL
+-5 NULL
+10 NULL
+42 NULL
+10 NULL
+42 NULL
+-5 NULL
+10 NULL
+42 NULL
+-5 NULL
+10 NULL
+42 NULL
+
+statement ok
+ALTER TABLE babel_sequence_alter DROP COLUMN id_decimal;
+
+statement ok
+CREATE SEQUENCE seq_tinyint
+AS [tinyint]
+START WITH 1
+INCREMENT BY 1
+CACHE  50
+
+query T
+SELECT nextval('seq_tinyint');
+----
+1
+
+query T
+SELECT setval('seq_tinyint', 255);
+----
+255
+
+query T
+SELECT nextval('seq_tinyint');
+----
+1
+
+statement ok
+CREATE SEQUENCE seq_smallint
+AS [smallint]
+START WITH 1
+INCREMENT BY 1
+CACHE  50
+
+query T
+SELECT nextval('seq_smallint');
+----
+1
+
+query T
+SELECT setval('seq_smallint', 32767);
+----
+32767
+
+query T
+SELECT nextval('seq_smallint');
+----
+1
+
+statement ok
+CREATE SEQUENCE seq_int
+AS [int]
+START WITH 1
+INCREMENT BY 1
+CACHE  50
+
+query T
+SELECT nextval('seq_int');
+----
+1
+
+query T
+SELECT setval('seq_int', 2147483647);
+----
+2147483647
+
+query T
+SELECT nextval('seq_int');
+----
+1
+
+statement ok
+CREATE SEQUENCE seq_bigint
+AS [bigint]
+START WITH 1
+INCREMENT BY 1
+CACHE  50
+
+query T
+SELECT nextval('seq_bigint');
+----
+1
+
+query T
+SELECT setval('seq_bigint', 9223372036854775807);
+----
+9223372036854775807
+
+query T
+SELECT nextval('seq_bigint');
+----
+1
+
+statement ok
+CREATE SEQUENCE seq_numeric
+AS numeric(18,0)
+START WITH 1
+INCREMENT BY 1
+CACHE  50
+
+query T
+SELECT nextval('seq_numeric');
+----
+1
+
+query T
+SELECT setval('seq_numeric', 9223372036854775807);
+----
+9223372036854775807
+
+query T
+SELECT nextval('seq_numeric');
+----
+1
+
+statement ok
+CREATE SEQUENCE seq_decimal
+AS decimal(18,0)
+START WITH 1
+INCREMENT BY 1
+CACHE  50
+
+query T
+SELECT nextval('seq_decimal');
+----
+1
+
+query T
+SELECT setval('seq_decimal', 9223372036854775807);
+----
+9223372036854775807
+
+query T
+SELECT nextval('seq_decimal');
+----
+1
+
+statement ok
+CREATE SEQUENCE seq_tinyint_faulty_min
+AS [tinyint]
+START WITH 1
+INCREMENT BY 1
+MINVALUE -1
+MAXVALUE 255
+CACHE  50
+
+statement ok
+CREATE SEQUENCE seq_tinyint_faulty_max
+AS [tinyint]
+START WITH 1
+INCREMENT BY 1
+MINVALUE 0
+MAXVALUE 256
+CACHE  50
+
+statement ok
+CREATE SEQUENCE seq_numeric_faulty_scale
+AS numeric(10,1)
+START WITH 1
+INCREMENT BY 1
+CACHE  50
+
+statement ok
+CREATE SEQUENCE seq_numeric_faulty_precision
+AS numeric(21,0)
+START WITH 1
+INCREMENT BY 1
+CACHE  50
+
+statement ok
+DROP SEQUENCE seq_tinyint, seq_smallint, seq_int, seq_bigint, seq_numeric, seq_decimal;
+

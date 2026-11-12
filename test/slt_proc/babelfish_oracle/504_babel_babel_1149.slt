@@ -1,0 +1,30 @@
+# test/slt_proc/babelfish_oracle/504_babel_babel_1149.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1149.sql
+
+statement ok
+create function itvf_1149 (@number int) returns table as return (select 1 as a, 2 as b);
+
+query TT
+select * from itvf_1149(5);
+----
+1 2
+
+statement ok
+declare @a table (a int, b int);
+insert into @a values(1, 100);
+
+statement ok
+create procedure proc_1149 as
+declare @a table (a int, b int);
+insert into @a values(1, 100);
+update @a set b = 200;
+
+statement ok
+exec proc_1149
+
+statement ok
+drop function itvf_1149;
+
+statement ok
+drop procedure proc_1149;
+

@@ -1,0 +1,12 @@
+# test/slt_proc/babelfish_oracle/1593_babel_test_drop_login_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/test_drop_login-vu-prepare.sql
+
+statement ok
+CREATE LOGIN babel_5127_test_sysadmin WITH PASSWORD = '12345678';
+
+statement ok
+CREATE LOGIN babel_5127_test_securityadmin WITH PASSWORD = '12345678';
+
+statement ok
+CREATE LOGIN babel_5127_test_regularuser WITH PASSWORD = '12345678';
+

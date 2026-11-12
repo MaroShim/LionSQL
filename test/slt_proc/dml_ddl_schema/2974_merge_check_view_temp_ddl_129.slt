@@ -1,0 +1,58 @@
+# test/slt_proc/dml_ddl_schema/2974_merge_check_view_temp_ddl_129.slt
+# T-SQL MERGE, CHECK/DEFAULT constraints, Views, #Temp tables, and Tail ALTER TABLE (129)
+
+statement ok
+CREATE TABLE inv_main_2974 (
+    item_id INT PRIMARY KEY,
+    sku VARCHAR(30) NOT NULL,
+    qty INT DEFAULT 645 CHECK (qty >= 645)
+);
+
+statement ok
+INSERT INTO inv_main_2974 (item_id, sku, qty) VALUES (1, 'SKU_A_129', 655), (2, 'SKU_B_129', 670);
+
+statement error
+INSERT INTO inv_main_2974 (item_id, sku, qty) VALUES (9, 'SKU_BAD_129', 644);
+
+statement ok
+INSERT INTO inv_main_2974 (item_id, sku) VALUES (3, 'SKU_DEF_129');
+
+statement ok
+CREATE TABLE #inv_delta_2974 (item_id INT PRIMARY KEY, sku VARCHAR(30), delta INT);
+
+statement ok
+INSERT INTO #inv_delta_2974 VALUES (2, 'SKU_B_129', 5), (4, 'SKU_D_129', 685);
+
+statement ok
+MERGE inv_main_2974 AS t
+USING #inv_delta_2974 AS s ON t.item_id = s.item_id
+WHEN MATCHED THEN UPDATE SET t.qty = t.qty + s.delta
+WHEN NOT MATCHED THEN INSERT (item_id, sku, qty) VALUES (s.item_id, s.sku, s.delta);
+
+statement ok
+CREATE VIEW vw_inv_2974 AS
+SELECT item_id, sku, qty FROM inv_main_2974 WHERE qty > 645;
+
+query ITI
+SELECT item_id, sku, qty FROM vw_inv_2974 ORDER BY item_id;
+----
+1 SKU_A_129 655
+2 SKU_B_129 675
+4 SKU_D_129 685
+
+statement ok
+ALTER TABLE inv_main_2974 ADD COLUMN wh_code VARCHAR(20) DEFAULT 'WH_129';
+
+query IT
+SELECT item_id, wh_code FROM inv_main_2974 WHERE item_id = 3;
+----
+3 WH_129
+
+statement ok
+DROP VIEW vw_inv_2974;
+
+statement ok
+DROP TABLE #inv_delta_2974;
+
+statement ok
+DROP TABLE inv_main_2974;

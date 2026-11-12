@@ -1,0 +1,139 @@
+# test/slt_proc/babelfish_oracle/447_babel_babel_4367_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_4367_2.sql
+
+statement ok
+CREATE TABLE BABEL_4367_1 (
+    id INT
+)
+
+statement ok
+CREATE TABLE BABEL_4367_2 (
+    id INT
+)
+
+statement ok
+CREATE VIEW BABEL_4367_V_1 AS SELECT 1
+
+statement ok
+CREATE VIEW BABEL_4367_V_2 AS SELECT 1
+
+statement ok
+CREATE FUNCTION BABEL_4367_F1()
+RETURNS BIGINT
+AS BEGIN RETURN 10 END
+
+statement ok
+CREATE FUNCTION BABEL_4367_F2()
+RETURNS BIGINT
+AS BEGIN RETURN 10 END
+
+statement ok
+CREATE PROCEDURE BABEL_4367_P_1
+AS
+SELECT 'dummyProc' 
+
+statement ok
+CREATE PROCEDURE BABEL_4367_P_2
+AS
+SELECT 'dummyProc'
+
+statement ok
+CREATE SEQUENCE BABEL_4367_S_1
+
+statement ok
+CREATE SEQUENCE BABEL_4367_S_2
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DROP PROCEDURE BABEL_4367_P_1
+
+statement ok
+DROP PROCEDURE IF EXISTS BABEL_4367_P_2
+
+statement ok
+DROP SEQUENCE BABEL_4367_S_1
+
+statement ok
+DROP SEQUENCE IF EXISTS BABEL_4367_S_2
+
+statement ok
+DROP VIEW BABEL_4367_V_1
+
+statement ok
+DROP VIEW IF EXISTS BABEL_4367_V_2
+
+statement ok
+DROP TABLE BABEL_4367_1
+
+statement ok
+DROP TABLE IF EXISTS BABEL_4367_2
+
+statement ok
+DROP FUNCTION BABEL_4367_F1
+
+statement ok
+DROP FUNCTION IF EXISTS BABEL_4367_F2
+
+query T
+SELECT @@trancount
+----
+1
+
+statement ok
+SELECT name FROM sys.objects WHERE name LIKE 'babel_4367_%' ORDER BY name ASC
+
+statement ok
+SELECT name FROM sys.types WHERE name LIKE 'babel_4367_%' ORDER BY name ASC
+
+statement ok
+ROLLBACK
+
+statement ok
+SELECT name FROM sys.objects WHERE name LIKE 'babel_4367_%' ORDER BY name ASC
+
+statement ok
+SELECT name FROM sys.types WHERE name LIKE 'babel_4367_%' ORDER BY name ASC
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DROP PROCEDURE IF EXISTS BABEL_4367_P_2
+
+statement ok
+DROP SEQUENCE BABEL_4367_S_1
+
+statement ok
+DROP SEQUENCE IF EXISTS BABEL_4367_S_2
+
+statement ok
+DROP VIEW IF EXISTS BABEL_4367_V_2
+
+statement ok
+DROP TABLE IF EXISTS BABEL_4367_2
+
+statement ok
+DROP FUNCTION IF EXISTS BABEL_4367_F2
+
+query T
+SELECT @@trancount
+----
+1
+
+statement ok
+SELECT name FROM sys.objects WHERE name LIKE 'babel_4367_%' ORDER BY name ASC
+
+statement ok
+SELECT name FROM sys.types WHERE name LIKE 'babel_4367_%' ORDER BY name ASC
+
+statement ok
+COMMIT
+
+statement ok
+SELECT name FROM sys.objects WHERE name LIKE 'babel_4367_%' ORDER BY name ASC
+
+statement ok
+SELECT name FROM sys.types WHERE name LIKE 'babel_4367_%' ORDER BY name ASC
+

@@ -1,0 +1,28 @@
+# test/slt_proc/babelfish_oracle/1115_babel_babel_1645.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1645.sql
+
+statement ok
+CREATE TABLE test(c1 int)
+
+statement ok
+CREATE VIEW vt
+AS
+SELECT * FROM test
+
+statement ok
+CREATE TABLE #t(c1 int)
+
+statement ok
+CREATE VIEW v
+AS
+SELECT * FROM #t
+
+statement ok
+DROP VIEW vt
+
+statement ok
+DROP TABLE test
+
+statement ok
+DROP TABLE #t
+

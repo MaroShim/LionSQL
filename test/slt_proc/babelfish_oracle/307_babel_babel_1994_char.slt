@@ -1,0 +1,39 @@
+# test/slt_proc/babelfish_oracle/307_babel_babel_1994_char.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1994-CHAR.sql
+
+statement ok
+drop table if exists pad;
+
+statement ok
+create table pad(
+    c5nn char(5) not null,
+    c5n character(5) null
+);
+
+statement ok
+insert into pad values('ab ', 'ab ');
+create index pad_c5nn_idx on pad(c5nn);
+
+statement ok
+drop table pad;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+CREATE TABLE t1 (c1 CHAR);
+INSERT INTO t1 VALUES ('A');
+
+query T
+SELECT c1 from t1;
+----
+A
+
+statement ok
+drop table t1;
+
+query T
+select datalength(cast('123 ' as char));
+----
+4
+

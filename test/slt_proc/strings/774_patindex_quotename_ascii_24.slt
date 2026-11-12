@@ -1,0 +1,26 @@
+# test/slt_proc/strings/774_patindex_quotename_ascii_24.slt
+# T-SQL PATINDEX, QUOTENAME, ASCII, CHAR, SPACE, LTRIM, RTRIM (24)
+
+query ITTT
+SELECT ASCII('X'), CHAR(88), QUOTENAME('tbl_col_24'), REPLACE(CONCAT('L', SPACE(2), 'R'), ' ', '_');
+----
+88 X [tbl_col_24] L__R
+
+query II
+SELECT PATINDEX('%TARGET_X%', 'pre_24_TARGET_X_post'), LEN(LTRIM(RTRIM('   tbl_col_24   ')));
+----
+8 10
+
+statement ok
+CREATE PROCEDURE sp_str_adv_774 @s VARCHAR(100), @code INT OUTPUT
+AS
+BEGIN
+    SET @code = ASCII(LEFT(@s, 1));
+    SELECT UPPER(LEFT(@s, 3)), LOWER(RIGHT(@s, 4)), @code;
+END;
+
+query TTI
+DECLARE @out_c INT;
+EXEC sp_str_adv_774 @s = 'Xbc_XYZ24', @code = @out_c OUTPUT;
+----
+XBC yz24 88

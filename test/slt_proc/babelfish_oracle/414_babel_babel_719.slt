@@ -1,0 +1,87 @@
+# test/slt_proc/babelfish_oracle/414_babel_babel_719.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-719.sql
+
+statement ok
+use master;
+
+query T
+select $12.4524
+----
+$12.4524
+
+query T
+select +$12.4524
+----
+NULL
+
+query T
+select -$12.4524
+----
+NULL
+
+query T
+select $+12.4524
+----
+$+12.4524
+
+query T
+select $-12.4524
+----
+$-12.4524
+
+query T
+select abs($12.4524)
+----
+abs($12.4524)
+
+query T
+select abs(+$12.4524)
+----
+abs(+$12.4524)
+
+query T
+select abs(-$12.4524)
+----
+abs(-$12.4524)
+
+query T
+select abs($+12.4524)
+----
+abs($+12.4524)
+
+query T
+select abs($-12.4524)
+----
+abs($-12.4524)
+
+statement ok
+create function f719(@a float) returns int as begin return floor(@a) end
+
+query T
+select f719($12.4524)
+----
+f719($12.4524)
+
+query T
+select f719(+$12.4524)
+----
+f719(+$12.4524)
+
+query T
+select f719(-$12.4524)
+----
+f719(-$12.4524)
+
+query T
+select f719($+12.4524)
+----
+f719($+12.4524)
+
+query T
+select f719($-12.4524)
+----
+f719($-12.4524)
+
+statement ok
+drop function f719
+

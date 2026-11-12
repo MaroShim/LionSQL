@@ -1,0 +1,70 @@
+# test/slt_proc/babelfish_oracle/1068_babel_4920_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/4920_1.sql
+
+statement ok
+CREATE TRIGGER tr_4920 ON t4920
+AFTER INSERT
+AS
+SELECT 1
+
+statement ok
+CREATE TABLE t4920(c1 int)
+
+statement ok
+begin transaction
+
+statement ok
+DROP TABLE t4920
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t4920(c1 int)
+
+statement ok
+CREATE TRIGGER tr_4920 ON t4920
+AFTER INSERT
+AS
+SELECT 1
+
+statement ok
+begin transaction
+
+statement ok
+DROP TABLE t4920
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE TRIGGER tr_4920 ON t4920
+AFTER INSERT
+AS
+SELECT 1
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure ErrorHandling2 as
+begin
+exec ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+set xact_abort ON;
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+begin transaction;
+
+statement ok
+set xact_abort OFF;
+

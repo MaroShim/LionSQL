@@ -1,0 +1,59 @@
+# test/slt_proc/babelfish_oracle/1164_babel_babel_2455.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2455.sql
+
+statement ok
+use master;
+
+statement ok
+create schema s2455;
+
+statement ok
+create table t2455_base(a int);
+
+statement ok
+create table .t2455(a int);
+insert into .t2455 values (1);
+
+statement ok
+drop table .t2455;
+
+statement ok
+create table ..t2455(a int);
+insert into ..t2455 values (1);
+
+statement ok
+drop table ..t2455;
+
+statement ok
+create table master..t2455(a int);
+insert into master..t2455 values (1);
+
+statement ok
+drop table master..t2455;
+
+statement ok
+create table .s2455.t2455(a int);
+insert into .s2455.t2455 values (1);
+
+statement ok
+drop table .s2455.t2455;
+
+statement ok
+CREATE VIEW .v2455 AS SELECT * FROM t2455_base;
+
+statement ok
+DROP VIEW .s2455.v2455
+
+statement ok
+CREATE TABLE ..t2455(a int);
+INSERT INTO ..t2455 VALUES (1);
+
+statement ok
+DROP TABLE ..t2455;
+
+statement ok
+drop table t2455_base;
+
+statement ok
+drop schema s2455;
+

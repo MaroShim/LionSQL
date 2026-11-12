@@ -1,0 +1,21 @@
+# test/slt_proc/strings/055_stuff_replicate_agg_09.slt
+# T-SQL STUFF, REPLICATE, CONCAT_WS, and STRING_AGG (9)
+
+query TTT
+SELECT STUFF('CACHE_HIT_CNT', 7, 3, 'MISS'), REPLICATE('-', 2), CONCAT_WS('_', 'create', 'read', 'update');
+----
+CACHE_MISS_CNT -- create_read_update
+
+statement ok
+CREATE TABLE sagg_55 (id INT PRIMARY KEY, label VARCHAR(30));
+
+statement ok
+INSERT INTO sagg_55 VALUES (1, 'create'), (2, 'read'), (3, 'update');
+
+query T
+SELECT STRING_AGG(label, '_') FROM sagg_55;
+----
+create_read_update
+
+statement ok
+DROP TABLE sagg_55;

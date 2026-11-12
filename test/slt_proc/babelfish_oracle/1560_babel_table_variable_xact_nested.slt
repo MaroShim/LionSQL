@@ -1,0 +1,56 @@
+# test/slt_proc/babelfish_oracle/1560_babel_table_variable_xact_nested.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/table_variables/table_variable_xact_nested.sql
+
+statement ok
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID
+
+statement ok
+CREATE VIEW enr_view AS
+    SELECT
+        CASE
+            WHEN relname LIKE '@pg_toast%' AND relname LIKE '%index%' THEN '@pg_toast_#oid_masked#_index'
+            WHEN relname LIKE '@pg_toast%' THEN '@pg_toast_#oid_masked#'
+            ELSE relname
+        END AS relname
+    FROM sys.babelfish_get_enr_list()
+
+statement ok
+CREATE TABLE MainTable (
+ firstname VARCHAR(255),
+ lastname VARCHAR(255),
+);
+
+statement ok
+CREATE TABLE TableUpdatedByTrigger (
+ FULLNAME VARCHAR(255),
+ XACT_STATUS varchar(255),
+ SQLIDENTITYCOL [int] IDENTITY(1,1) NOT NULL
+)
+
+statement ok
+CREATE TABLE TableVariableTracker(
+ nestlevel INT,
+ table_variable_name TEXT
+)
+
+statement ok
+SELECT * FROM MainTable
+
+statement ok
+SELECT * FROM TableUpdatedByTrigger; -- should show two rows
+
+statement ok
+SELECT * FROM TableVariableTracker
+
+statement ok
+DROP TABLE TableVariableTracker
+
+statement ok
+DROP TABLE TableUpdatedByTrigger
+
+statement ok
+DROP TABLE MainTable
+
+statement ok
+DROP VIEW enr_view
+

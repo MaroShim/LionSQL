@@ -1,0 +1,675 @@
+# test/slt_proc/babelfish_oracle/539_babel_babel_3646_before_14_6.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3646-before-14_6-vu-prepare.sql, test/babelfish/raw/BABEL-3646-before-14_6-vu-verify.sql
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v1 as (SELECT TRY_CAST(CAST('1990-01-01' as xml) as date));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p1 as (SELECT TRY_CAST(CAST('1990-01-01' as xml) as date));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f1()
+RETURNS DATE AS
+BEGIN
+RETURN (SELECT TRY_CAST(CAST('1990-01-01' as xml) as date));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v2 as (SELECT TRY_CAST(TRY_CAST (TRY_CAST('1990-01-01' as xml) as text) as date));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p2 as (SELECT TRY_CAST(TRY_CAST (TRY_CAST('1990-01-01' as xml) as text) as date));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f2()
+RETURNS DATE AS
+BEGIN
+RETURN (SELECT TRY_CAST(TRY_CAST (TRY_CAST('1990-01-01' as xml) as text) as date));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v3 as (select TRY_CAST(CAST (CAST('1990-01-01' as xml) as text) as date));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p3 as (select TRY_CAST(CAST (CAST('1990-01-01' as xml) as text) as date));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f3()
+RETURNS DATE AS
+BEGIN
+RETURN (select TRY_CAST(CAST (CAST('1990-01-01' as xml) as text) as date));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v4 as (select TRY_CAST(TRY_CAST(1 as binary) as float));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p4 as (select TRY_CAST(TRY_CAST(1 as binary) as float));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f4()
+RETURNS float AS
+BEGIN
+RETURN (select TRY_CAST(TRY_CAST(1 as binary) as float));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v5 as (select TRY_CAST(CAST(1 as binary) as real));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p5 as (select TRY_CAST(CAST(1 as binary) as real));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f5()
+RETURNS real AS
+BEGIN
+RETURN (select TRY_CAST(CAST(1 as binary) as real));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v6 as (select TRY_CAST(CAST(1 as numeric) as uniqueidentifier));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p6 as (select TRY_CAST(CAST(1 as numeric) as uniqueidentifier));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f6()
+RETURNS uniqueidentifier AS
+BEGIN
+RETURN (select TRY_CAST(CAST(1 as numeric) as uniqueidentifier));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v7 as (select TRY_CAST(CAST('100' as xml) as image));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p7 as (select TRY_CAST(CAST('100' as xml) as image));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f7()
+RETURNS image AS
+BEGIN
+RETURN (select TRY_CAST(CAST('100' as xml) as image));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v8 as (select TRY_CAST(CAST('100' as xml) as bit));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p8 as (select TRY_CAST(CAST('100' as xml) as bit));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f8()
+RETURNS bit AS
+BEGIN
+RETURN (select TRY_CAST(CAST('100' as xml) as bit));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v9 as (select TRY_CAST(CAST('100' as xml) as money));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p9 as (select TRY_CAST(CAST('100' as xml) as money));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f9()
+RETURNS money AS
+BEGIN
+RETURN (select TRY_CAST(CAST('100' as xml) as money));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v10 as (select TRY_CAST(CAST('100' as int) as money));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p10 as (select TRY_CAST(CAST('100' as int) as money));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f10()
+RETURNS money AS
+BEGIN
+RETURN (select TRY_CAST(CAST('100' as int) as money));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v11 as (select TRY_CAST(CAST('100' as varchar(1)) as text));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p11 as (select TRY_CAST(CAST('100' as varchar(1)) as text));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f11()
+RETURNS text AS
+BEGIN
+RETURN (select TRY_CAST(CAST('100' as varchar(1)) as text));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v12 as (select TRY_CAST(CAST('1990-01-01 10:10:10.12345' as datetime(2)) as datetime));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p12 as (select TRY_CAST(CAST('1990-01-01 10:10:10.12345' as datetime(2)) as datetime));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f12()
+RETURNS DATETIME AS
+BEGIN
+RETURN (select TRY_CAST(CAST('1990-01-01 10:10:10.12345' as datetime(2)) as datetime));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v13 as (select TRY_CAST(CAST('1990-01-01 10:10:10.123' as datetime) as datetime2(1)));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p13 as (select TRY_CAST(CAST('1990-01-01 10:10:10.123' as datetime) as datetime2(1)));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f13()
+RETURNS datetime AS
+BEGIN
+RETURN (select TRY_CAST(CAST('1990-01-01 10:10:10.123' as datetime) as datetime2(1)));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v14 as (select TRY_CAST(CAST('1990-12-31 23:59:59.999' as datetime2) as datetime));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p14 as (select TRY_CAST(CAST('1990-12-31 23:59:59.999' as datetime2) as datetime));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f14()
+RETURNS datetime AS
+BEGIN
+RETURN (select TRY_CAST(CAST('1990-12-31 23:59:59.999' as datetime2) as datetime));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v15 as (select TRY_CAST(CAST('1990-12-31 23:59:59.999' as datetime2) as datetime));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p15 as (select TRY_CAST(CAST('1990-12-31 23:59:59.999' as datetime2) as datetime));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f15()
+RETURNS datetime AS
+BEGIN
+RETURN (select TRY_CAST(CAST('1990-12-31 23:59:59.999' as datetime2(1)) as datetime));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v16 as (select TRY_CAST(CAST('5' as datetime2(1)) as datetime));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p16 as (select TRY_CAST(CAST('5' as datetime2(1)) as datetime));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f16()
+RETURNS datetime AS
+BEGIN
+RETURN (select TRY_CAST(CAST('5' as datetime2(1)) as datetime));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v17 as (select TRY_CAST(CAST('5' as numeric) as xml));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p17 as (select TRY_CAST(CAST('5' as numeric) as xml));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f17()
+RETURNS xml AS
+BEGIN
+RETURN (select TRY_CAST(CAST('5' as numeric) as xml));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v18 as (select TRY_CAST(TRY_CAST('5' as numeric) as xml));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p18 as (select TRY_CAST(TRY_CAST('5' as numeric) as xml));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f18()
+RETURNS xml AS
+BEGIN
+RETURN (select TRY_CAST(TRY_CAST('5' as numeric) as xml));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v19 as (select TRY_CAST(CAST(NULL as datetime2(1)) as datetime));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p19 as (select TRY_CAST(CAST(NULL as datetime2(1)) as datetime));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f19()
+RETURNS datetime AS
+BEGIN
+RETURN (select TRY_CAST(CAST(NULL as datetime2(1)) as datetime));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v20 as (select TRY_CAST(CAST(5 as smallint) as varchar));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p20 as (select TRY_CAST(CAST(5 as smallint) as varchar));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f20()
+RETURNS varchar AS
+BEGIN
+RETURN (select TRY_CAST(CAST(5 as smallint) as varchar));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v22 as (SELECT TRY_CAST(CAST('1990-01-01' AS DATE) AS TIME));
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v24 as (SELECT TRY_CAST(CAST('1990-01-01' AS DATE) AS MONEY));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p24 as (SELECT TRY_CAST(CAST('1990-01-01' AS DATE) AS MONEY));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f24()
+RETURNS MONEY AS
+BEGIN
+RETURN (SELECT TRY_CAST(CAST('1990-01-01' AS DATE) AS MONEY));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v25 as (SELECT TRY_CAST(CAST('1990-01-01' AS DATETIME) AS XML));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p25 as (SELECT TRY_CAST(CAST('1990-01-01' AS DATETIME) AS XML));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f25()
+RETURNS XML AS
+BEGIN
+RETURN (SELECT TRY_CAST(CAST('1990-01-01' AS DATETIME) AS XML));
+END
+
+statement ok
+CREATE VIEW BABEL_3646_before_14_6_vu_prepare_v26 as (SELECT sys.int4binary(1, 1, TRUE));
+
+statement ok
+CREATE PROCEDURE BABEL_3646_before_14_6_vu_prepare_p26 as (SELECT sys.int4binary(1, 1, TRUE));
+
+statement ok
+CREATE FUNCTION BABEL_3646_before_14_6_vu_prepare_f26()
+RETURNS BINARY AS
+BEGIN
+RETURN (SELECT sys.int4binary(1, 1, TRUE));
+END
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v1
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p1
+----
+1990-01-01
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p1
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f1()
+----
+1990-01-01
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f1()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v2
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p2
+----
+1990-01-01
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p2
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f2()
+----
+1990-01-01
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f2()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v3
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p3
+----
+1990-01-01
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p3
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f3()
+----
+1990-01-01
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f3()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v4
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p4
+----
+NULL
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p4
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f4()
+----
+NULL
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f4()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v5
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p5
+----
+NULL
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p5
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f5()
+----
+NULL
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f5()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v6
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p6
+----
+NULL
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p6
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f6()
+----
+NULL
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f6()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v7
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p7
+----
+0x313030
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p7
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f7()
+----
+0x313030
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f7()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v8
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p8
+----
+NULL
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p8
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f8()
+----
+NULL
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f8()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v9
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p9
+----
+100
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p9
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f9()
+----
+100
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f9()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v10
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p10
+----
+100
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p10
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f10()
+----
+100
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f10()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v11
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p11
+----
+1
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p11
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f11()
+----
+1
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f11()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v12
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p12
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f12()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v13
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p13
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f13()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v14
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p14
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f14()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v15
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p15
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f15()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v16
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p16
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f16()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v17
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p17
+----
+5
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p17
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f17()
+----
+5
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f17()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v18
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p18
+----
+5
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p18
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f18()
+----
+5
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f18()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v19
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p19
+----
+NULL
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p19
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f19()
+----
+NULL
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f19()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v20
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p20
+----
+5
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p20
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f20()
+----
+5
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f20()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v22
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v24
+
+query T
+EXEC BABEL_3646_before_14_6_vu_prepare_p24
+----
+0.00
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p24
+
+query T
+SELECT BABEL_3646_before_14_6_vu_prepare_f24()
+----
+0.00
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f24()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v25
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p25
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f25()
+
+statement ok
+DROP VIEW BABEL_3646_before_14_6_vu_prepare_v26
+
+statement ok
+DROP PROCEDURE BABEL_3646_before_14_6_vu_prepare_p26
+
+statement ok
+DROP FUNCTION BABEL_3646_before_14_6_vu_prepare_f26()
+

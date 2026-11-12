@@ -1,0 +1,196 @@
+# test/slt_proc/babelfish_oracle/659_babel_indexproperty.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/indexproperty-vu-prepare.sql, test/babelfish/raw/functions/indexproperty-vu-verify.sql, test/babelfish/raw/functions/indexproperty-vu-cleanup.sql
+
+statement ok
+use master 
+
+statement ok
+create table indexproperty_vu_prepare_table1(c1 int PRIMARY KEY (c1))
+
+statement ok
+create table indexproperty_vu_prepare_table2(c2 int not null)
+
+statement ok
+create unique index indexproperty_vu_prepare_idx on indexproperty_vu_prepare_table2(c2)
+
+statement ok
+create procedure sys_indexproperty_vu_prepare_proc 
+as 
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', 'InDexDepTh')
+
+statement ok
+create function sys_indexproperty_vu_prepare_func() 
+returns int
+as 
+begin
+return (select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'ISunique'))
+end
+
+statement ok
+use master
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), NULL, 'IsClustered')
+----
+NULL
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', 'PropertyDoesNotExist')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), '     indexproperty_vu_prepare_table1_pkey  ', '     InDexDepTh     ')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', 'IndexFillFactor')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', 'IsAutoStatistics')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', 'ISCLUSTERED')
+----
+1
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), '   indexproperty_vu_prepare_table1_pkey', 'isdisabled')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', 'IsFulltextKey')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', 'IsHypothetical')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey   ', 'IsPadIndex')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', 'IsPageLockDisallowed')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', 'IsRowLockDisallowed   ')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', '   IsStatistics')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', 'ISunique')
+----
+1
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', 'IsColumnstore')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table1'), 'indexproperty_vu_prepare_table1_pkey', 'IsOptimizedForSequentialKey')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'IndexFillFactor')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'IsAutoStatistics')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'ISCLUSTERED')
+----
+1
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'isdisabled')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'IsFulltextKey')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'IsHypothetical')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'IsPadIndex')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'IsPageLockDisallowed')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'IsRowLockDisallowed   ')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), '   IsStatistics')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'ISunique')
+----
+1
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'IsColumnstore')
+----
+0
+
+query T
+select INDEXPROPERTY(OBJECT_ID('indexproperty_vu_prepare_table2'), (select name from sys.indexes where name like 'indexproperty_vu_prepare_idx%'), 'IsOptimizedForSequentialKey')
+----
+0
+
+query T
+exec sys_indexproperty_vu_prepare_proc
+----
+0
+
+statement ok
+use master
+
+statement ok
+drop procedure sys_indexproperty_vu_prepare_proc
+
+statement ok
+drop function sys_indexproperty_vu_prepare_func
+
+statement ok
+drop table indexproperty_vu_prepare_table2
+
+statement ok
+drop table indexproperty_vu_prepare_table1
+

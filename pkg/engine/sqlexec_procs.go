@@ -990,8 +990,48 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 	return nil, fmt.Errorf("unrecognized system stored procedure: %s", procLower)
 }
 
+// extractExecReturnVarAndOutputArgs extracts optional @return_var and per-arg @out_var OUTPUT bindings from raw EXEC query.
+func extractExecReturnVarAndOutputArgs(raw string) (string, []string) {
+	raw = strings.TrimSpace(raw)
+	if rem, ok := sqlutil.TrimAnyPrefixKeyword(raw, "EXECUTE", "EXEC", "CALL"); ok {
+		raw = rem
+	}
+	returnVar := ""
+	if strings.HasPrefix(raw, "@") {
+		if eqIdx := strings.Index(raw, "="); eqIdx != -1 {
+			candidate := strings.TrimSpace(raw[:eqIdx])
+			if !strings.ContainsAny(candidate, " \t,()") {
+				returnVar = candidate
+				raw = strings.TrimSpace(raw[eqIdx+1:])
+			}
+		}
+	}
+	_, rawArgs := ParseProcArgs("EXEC " + raw)
+	return returnVar, rawArgs
+}
+
+func stripTrailingOutputKeyword(s string) (string, bool) {
+	trimmed := strings.TrimSpace(s)
+	fields := strings.Fields(trimmed)
+	if len(fields) >= 2 {
+		last := fields[len(fields)-1]
+		if strings.EqualFold(last, "OUTPUT") || strings.EqualFold(last, "OUT") {
+			idx := strings.LastIndex(trimmed, last)
+			if idx > 0 {
+				return strings.TrimSpace(trimmed[:idx]), true
+			}
+		}
+	}
+	return trimmed, false
+}
+
 func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	return s.execProcedureCallWithRaw(query, query, start, cs)
+}
+
+func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	procName, args := ParseProcArgs(query)
+	returnVar, rawArgs := extractExecReturnVarAndOutputArgs(rawQuery)
 
 	ctx := cs.GetQueryContext()
 
@@ -1057,6 +1097,7 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 	}
 
 	argMap := make(map[string]any)
+	outputBindings := make(map[string]string) // targetParam -> caller @varName
 	for i, arg := range args {
 		arg = strings.TrimSpace(arg)
 		targetParam := ""
@@ -1079,8 +1120,24 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 			paramType = procMeta.Params[i].Type
 		}
 
+		valStr, isOut := stripTrailingOutputKeyword(valStr)
+		if i < len(rawArgs) {
+			rawArg := strings.TrimSpace(rawArgs[i])
+			if eqIdx := strings.IndexByte(rawArg, '='); eqIdx != -1 {
+				rawArg = strings.TrimSpace(rawArg[eqIdx+1:])
+			}
+			rawValExpr, rawIsOut := stripTrailingOutputKeyword(rawArg)
+			if (isOut || rawIsOut) && strings.HasPrefix(rawValExpr, "@") && targetParam != "" {
+				outputBindings[targetParam] = rawValExpr
+			}
+		}
+
 		if targetParam != "" {
 			isQuoted := strings.HasPrefix(valStr, "'") || strings.HasPrefix(valStr, "N'") || strings.HasPrefix(valStr, "n'") || strings.HasPrefix(valStr, "\"")
+			if !isQuoted && strings.EqualFold(valStr, "NULL") {
+				argMap[targetParam] = nil
+				continue
+			}
 			raw := unwrapSQLString(valStr)
 			if isQuoted || paramType == storage.TypeVarChar {
 				argMap[targetParam] = raw
@@ -1121,13 +1178,28 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 		return nil, fmt.Errorf("procedure execution error: %w", err)
 	}
 
-	if res != nil && res.LastIdentity > 0 && cs != nil {
+	if res != nil && cs != nil {
 		cs.Mu.Lock()
 		if cs.Vars == nil {
 			cs.Vars = make(map[string]any)
 		}
-		cs.Vars["identity"] = res.LastIdentity
-		cs.Vars["@@identity"] = res.LastIdentity
+		if res.LastIdentity > 0 {
+			cs.Vars["identity"] = res.LastIdentity
+			cs.Vars["@@identity"] = res.LastIdentity
+		}
+		if returnVar != "" {
+			cs.Vars[returnVar] = res.ReturnValue
+		}
+		if len(outputBindings) > 0 && res.Vars != nil {
+			for targetParam, callerVar := range outputBindings {
+				cleanParam := strings.ToLower(strings.TrimPrefix(targetParam, "@"))
+				if outVal, ok := res.Vars[cleanParam]; ok {
+					cs.Vars[callerVar] = outVal
+				} else if outVal, ok := res.Vars[targetParam]; ok {
+					cs.Vars[callerVar] = outVal
+				}
+			}
+		}
 		cs.Mu.Unlock()
 	}
 

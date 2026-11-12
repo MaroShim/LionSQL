@@ -1,0 +1,25 @@
+# test/slt_proc/babelfish_oracle/529_babel_babel_2968.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2968.sql
+
+statement ok
+use master;
+
+statement ok
+create table t2968 (name int);
+insert into t2968 values (1);
+
+statement ok
+CREATE VIEW  v2968 AS
+SELECT name objectName FROM t2968
+
+query T
+select * from v2968;
+----
+1
+
+statement ok
+drop view v2968;
+
+statement ok
+drop table t2968;
+

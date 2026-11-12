@@ -1,0 +1,47 @@
+# test/slt_proc/babelfish_oracle/297_babel_babel_1631.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1631.sql
+
+statement ok
+DROP FUNCTION IF EXISTS custom_f3;
+
+statement ok
+CREATE FUNCTION custom_f3(@one CHAR(10)) RETURNS CHAR(6) AS BEGIN RETURN @one; END;
+
+query T
+SELECT custom_f3('abcdef');
+----
+abcdef
+
+statement ok
+DROP FUNCTION IF EXISTS custom_f4;
+
+statement ok
+CREATE FUNCTION custom_f4(@one NCHAR(10)) RETURNS NCHAR(6) AS BEGIN RETURN @one; END;
+
+query T
+SELECT custom_f4('abc');
+----
+abc
+
+statement ok
+DROP FUNCTION IF EXISTS custom_f5;
+
+statement ok
+CREATE FUNCTION custom_f5(@one CHAR(20)) RETURNS CHAR(8) AS BEGIN RETURN @one; END;
+
+query T
+SELECT custom_f5('abcdefghij');
+----
+abcdefghij
+
+statement ok
+DROP FUNCTION IF EXISTS custom_f6;
+
+statement ok
+CREATE FUNCTION custom_f6(@one CHAR(10)) RETURNS CHAR AS BEGIN RETURN @one; END;
+
+query T
+SELECT custom_f6('abcdef');
+----
+abcdef
+

@@ -1,0 +1,258 @@
+# test/slt_proc/babelfish_oracle/440_babel_babel_sp_tables.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SP_TABLES-vu-prepare.sql, test/babelfish/raw/BABEL-SP_TABLES-vu-verify.sql, test/babelfish/raw/BABEL-SP_TABLES-vu-cleanup.sql
+
+statement ok
+create table babel_sp_tables_vu_prepare_t_sptables(a int)
+
+statement ok
+create database babel_sp_tables_vu_prepare_db1
+
+statement ok
+use babel_sp_tables_vu_prepare_db1
+
+statement ok
+create table babel_sp_tables_vu_prepare_t_sptables2(b int)
+
+statement ok
+create table babel_sp_tables_vu_prepare_t_sotables2(c int)
+
+statement ok
+create table babel_sp_tables_vu_prepare_t_s_tables2(c int)
+
+statement ok
+create table babel_sp_tables_vu_prepare_t__tables2(c int)
+
+statement ok
+create table babel_sp_tables_vu_prepare_test_escape_chars_sp_tables(c int)
+
+statement ok
+create table babel_sp_tables_vu_prepare_MyTable1 (a int, b int, c int)
+
+statement ok
+create table [babel_sp_tables_vu_prepare_MyTable2] ([a] int, [b] int, [c] int)
+
+statement ok
+create view babel_sp_tables_vu_prepare_t_sptables5
+as
+select a from babel_sp_tables_vu_prepare_MyTable1
+
+statement ok
+use babel_sp_tables_vu_prepare_db1
+
+query TTTTT
+exec sp_tables @TABLE_NAME = 'babel_sp_tables_vu_prepare_mytable1'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_MyTable1 TABLE NULL
+
+query TTTTT
+exec sp_tables @TABLE_NAME = 'babel_sp_tables_vu_prepare_MYTABLE1'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_MyTable1 TABLE NULL
+
+query TTTTT
+exec sp_tables @TABLE_NAME = 'babel_sp_tables_vu_prepare_mytable2'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_MyTable2 TABLE NULL
+
+query TTTTT
+exec sp_tables @TABLE_NAME = 'babel_sp_tables_vu_prepare_MYTABLE2'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_MyTable2 TABLE NULL
+
+query TTTTT
+exec sp_tables @TABLE_NAME = [babel_sp_tables_vu_prepare_mytable1]
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_MyTable1 TABLE NULL
+
+query TTTTT
+exec sp_tables @TABLE_NAME = [babel_sp_tables_vu_prepare_MYTABLE1]
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_MyTable1 TABLE NULL
+
+query TTTTT
+exec sp_tables @TABLE_NAME = [babel_sp_tables_vu_prepare_mytable2]
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_MyTable2 TABLE NULL
+
+query TTTTT
+exec sp_tables @TABLE_NAME = [babel_sp_tables_vu_prepare_MYTABLE2]
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_MyTable2 TABLE NULL
+
+query TTTTT
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_sptables'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+
+query TTTTT
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_sptables', @table_owner = 'dbo'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+
+query TTTTT
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_sptables', @table_qualifier = 'babel_sp_tables_vu_prepare_db1'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+
+query TTTTT
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_sptables', @table_type = "'TABLE'"
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+
+query TTTTT
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_sptables', @table_type = "'TABLE','VIEW'"
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+
+query TTTTT
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_sptable%', @table_type = "'TABLE','VIEW'"
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables2 TABLE NULL
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables5 VIEW NULL
+
+query TTTTT
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_sptable%', @table_type = "'TABLE','VIEW','TABLE','VIEW'"
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables2 TABLE NULL
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables5 VIEW NULL
+
+query TTTTT
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_spt%'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables2 TABLE NULL
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables5 VIEW NULL
+
+query TTTTT
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_spt%', @fUsePattern = '0'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables2 TABLE NULL
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables5 VIEW NULL
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_sptables_nonexist'
+
+query TTTTT
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_sptabl%'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables2 TABLE NULL
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables5 VIEW NULL
+
+query TTTTT
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_s_tables2'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_s_tables2 TABLE NULL
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_s[op]tables2'
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_s[^o]tables2'
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_s[o-p]tables2'
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t[_]sptables', @table_type = "'TABLE'"
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t[_]sptables2', @table_type = "'TABLE'"
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t[_]sotables2', @table_type = "'TABLE'"
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t[_]sptables5', @table_type = "'VIEW'"
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_s[_]tables2', @table_type = "'TABLE'"
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t[_]s[_]tables2', @table_type = "'TABLE'"
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t[_][_]tables2', @table_type = "'TABLE'"
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t[__]tables2', @table_type = "'TABLE'"
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t[[_]]sptables', @table_type = "'TABLE'"
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_test\_escape_chars\_sp_tables', @table_type = "'TABLE'"
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_test\_escape\_chars\_sp\_tables', @table_type = "'TABLE'"
+
+query TTTTT
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_test_escape_chars_sp_tables', @table_type = "'TABLE'"
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_test_escape_chars_sp_tables TABLE NULL
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_s[_]tables2', @table_type = "'Table'"
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_s[_]tables2', @table_type = "'tAbLe'"
+
+statement ok
+exec sp_tables @table_name = 'babel_sp_tables_vu_prepare_t_s[_]tables2', @table_type = "'table'"
+
+query TTTTT
+exec sp_tables 'babel_sp_tables_vu_prepare_t_sptables', 'dbo', 'babel_sp_tables_vu_prepare_db1'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+
+query TTTTT
+exec sp_tables 'babel_sp_tables_vu_prepare_T_SPTABLES', 'DBO', 'babel_sp_tables_vu_prepare_db1'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+
+query TTTTT
+EXEC SP_TABLES @TABLE_NAME = 'babel_sp_tables_vu_prepare_t_sptables', @TABLE_OWNER = 'dbo', @TABLE_QUALIFIER = 'babel_sp_tables_vu_prepare_db1'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+
+query TTTTT
+exec [sp_tables] 'babel_sp_tables_vu_prepare_t_sptables', 'dbo', 'babel_sp_tables_vu_prepare_db1'
+----
+babel_sp_tables_vu_prepare_db1 dbo babel_sp_tables_vu_prepare_t_sptables TABLE NULL
+
+statement ok
+use babel_sp_tables_vu_prepare_db1
+
+statement ok
+drop view babel_sp_tables_vu_prepare_t_sptables5
+
+statement ok
+drop table babel_sp_tables_vu_prepare_t_sptables
+
+statement ok
+drop table babel_sp_tables_vu_prepare_t_s_tables2
+
+statement ok
+drop table babel_sp_tables_vu_prepare_t__tables2
+
+statement ok
+drop table babel_sp_tables_vu_prepare_test_escape_chars_sp_tables
+
+statement ok
+drop table babel_sp_tables_vu_prepare_MyTable1
+
+statement ok
+drop table [babel_sp_tables_vu_prepare_MyTable2]
+
+statement ok
+drop table babel_sp_tables_vu_prepare_t_sptables2
+
+statement ok
+drop table babel_sp_tables_vu_prepare_t_sotables2
+
+statement ok
+use master
+

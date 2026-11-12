@@ -1,0 +1,117 @@
+# test/slt_proc/babelfish_oracle/378_babel_babel_3801.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3801-vu-prepare.sql, test/babelfish/raw/BABEL-3801-vu-verify.sql
+
+statement ok
+CREATE TABLE bbf_3801_tab (col_a bbf_3801_type DEFAULT 'Whoops!' COLLATE japanese_ci_as);
+
+statement ok
+CREATE VIEW bbf_3801_view AS SELECT col_a FROM bbf_3801_tab;
+
+statement ok
+create table bbf_3801_tab1 (a varchar(100), check (a > 'abc'));
+
+statement ok
+create table bbf_3801_tab2 (a bbf_3801_type, check (a > 'abc'));
+
+statement ok
+create table bbf_3801_tab3 (a varchar(100), b as cast('abc' as bbf_3801_type))
+
+statement ok
+create table bbf_3801_tab4 (col_a1 char(100) COLLATE japanese_ci_as, col_b1 as substr(col_a1, 1, 1));
+
+statement ok
+create table bbf_3801_tab5 (col_a2 bbf_3801_type COLLATE japanese_ci_as, col_b2 as substr(col_a2, 1, 1));
+
+statement ok
+create table bbf_3801_tab6 (col_a3 char(100), col_b3 as substr(col_a3, 1, 1));
+
+statement ok
+select collname from PG_COLLATION where oid = (
+    select attcollation from pg_attribute where attname = 'col_a' and
+    attrelid = (
+        select oid from pg_class where relname = 'bbf_3801_tab'
+    )
+);
+
+statement ok
+select collname from PG_COLLATION where oid = (
+    select attcollation from pg_attribute where attname = 'col_a' and
+    attrelid = (
+        select oid from pg_class where relname = 'bbf_3801_view'
+    )
+);
+
+statement ok
+insert into bbf_3801_tab1 values ('b'), ('B');
+
+statement error
+insert into bbf_3801_tab1 values ('aBc');
+
+query T
+select * from bbf_3801_tab1;
+----
+b
+B
+
+statement ok
+insert into bbf_3801_tab2 values ('b'), ('B');
+
+statement error
+insert into bbf_3801_tab2 values ('aBc');
+
+query T
+select * from bbf_3801_tab2;
+----
+b
+B
+
+statement ok
+insert into bbf_3801_tab3 values ('a');
+
+query TT
+select * from bbf_3801_tab3;
+----
+a NULL
+
+statement ok
+select coll.collname from 
+pg_collation coll join pg_attribute attr on attr.attcollation = coll.oid
+where attr.attrelid = (select oid from pg_class where relname = 'bbf_3801_tab4')
+and (attr.attname = 'col_a1' or attr.attname = 'col_b1');
+
+statement ok
+select coll.collname from 
+pg_collation coll join pg_attribute attr on attr.attcollation = coll.oid
+where attr.attrelid = (select oid from pg_class where relname = 'bbf_3801_tab5')
+and (attr.attname = 'col_a2' or attr.attname = 'col_b2');
+
+statement ok
+select coll.collname from 
+pg_collation coll join pg_attribute attr on attr.attcollation = coll.oid
+where attr.attrelid = (select oid from pg_class where relname = 'bbf_3801_tab6')
+and (attr.attname = 'col_a3' or attr.attname = 'col_b3');
+
+statement ok
+DROP VIEW bbf_3801_view;
+
+statement ok
+DROP TABLE bbf_3801_tab;
+
+statement ok
+DROP TABLE bbf_3801_tab1;
+
+statement ok
+DROP TABLE bbf_3801_tab2;
+
+statement ok
+DROP TABLE bbf_3801_tab3;
+
+statement ok
+DROP TABLE bbf_3801_tab4;
+
+statement ok
+DROP TABLE bbf_3801_tab5;
+
+statement ok
+DROP TABLE bbf_3801_tab6;
+

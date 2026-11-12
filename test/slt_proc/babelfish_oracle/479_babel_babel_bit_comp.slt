@@ -1,0 +1,180 @@
+# test/slt_proc/babelfish_oracle/479_babel_babel_bit_comp.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_bit_comp.sql
+
+statement ok
+CREATE TABLE t1 (a bit, b int);
+
+statement ok
+INSERT INTO t1 VALUES (1, 1);
+
+statement ok
+INSERT INTO t1 VALUES (0, 0);
+
+query T
+SELECT a FROM t1 WHERE a = 0;
+----
+false
+
+query T
+SELECT a FROM t1 WHERE a = 1;
+----
+true
+
+statement ok
+SELECT a FROM t1 WHERE a = -1;
+
+query T
+SELECT a FROM t1 WHERE a <> 0;
+----
+true
+
+query T
+SELECT a FROM t1 WHERE a <> 1;
+----
+false
+
+query T
+SELECT a FROM t1 WHERE a <> -1;
+----
+true
+false
+
+query T
+SELECT a FROM t1 WHERE a > 0;
+----
+true
+
+statement ok
+SELECT a FROM t1 WHERE a > 1;
+
+query T
+SELECT a FROM t1 WHERE a > -1;
+----
+true
+false
+
+query T
+SELECT a FROM t1 WHERE a >= 0 ORDER BY b;
+----
+false
+true
+
+query T
+SELECT a FROM t1 WHERE a >= 1;
+----
+true
+
+query T
+SELECT a FROM t1 WHERE a >= -1;
+----
+true
+false
+
+statement ok
+SELECT a FROM t1 WHERE a < 0;
+
+query T
+SELECT a FROM t1 WHERE a < 1;
+----
+false
+
+statement ok
+SELECT a FROM t1 WHERE a < -1;
+
+query T
+SELECT a FROM t1 WHERE a <= 0;
+----
+false
+
+query T
+SELECT a FROM t1 WHERE a <= 1 ORDER BY b;
+----
+false
+true
+
+statement ok
+SELECT a FROM t1 WHERE a <= -1 ORDER BY b;
+
+statement ok
+CREATE TABLE t2 ( a INT);
+
+statement ok
+INSERT INTO t2 VALUES (1);
+
+statement ok
+INSERT INTO t2 VALUES (0);
+
+statement ok
+INSERT INTO t2 VALUES (-1);
+
+query T
+SELECT a FROM t2 WHERE a = CAST(0 AS bit);
+----
+0
+
+query T
+SELECT a FROM t2 WHERE a = CAST(1 AS bit) ORDER BY a;
+----
+1
+
+query T
+SELECT a FROM t2 WHERE a <> CAST(0 AS bit) ORDER BY a;
+----
+-1
+1
+
+query T
+SELECT a FROM t2 WHERE a <> CAST(1 AS bit);
+----
+0
+-1
+
+query T
+SELECT a FROM t2 WHERE a > CAST(0 AS bit) ORDER BY a;
+----
+1
+
+statement ok
+SELECT a FROM t2 WHERE a > CAST(1 AS bit);
+
+query T
+SELECT a FROM t2 WHERE a >= CAST(0 AS bit) ORDER BY a;
+----
+0
+1
+
+query T
+SELECT a FROM t2 WHERE a >= CAST(1 AS bit) ORDER BY a;
+----
+1
+
+query T
+SELECT a FROM t2 WHERE a < CAST(0 AS bit);
+----
+-1
+
+query T
+SELECT a FROM t2 WHERE a < CAST(1 AS bit);
+----
+0
+-1
+
+query T
+SELECT a FROM t2 WHERE a <= CAST(0 AS bit);
+----
+0
+-1
+
+query T
+SELECT a FROM t2 WHERE a <= CAST(1 AS bit) ORDER BY a;
+----
+-1
+0
+1
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP TABLE t2;
+

@@ -1,0 +1,120 @@
+# test/slt_proc/babelfish_oracle/299_babel_babel_1683.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1683.sql
+
+statement ok
+CREATE TABLE babel_1683_table_nvarchar (a INT, b NVARCHAR(128))
+
+statement ok
+INSERT INTO babel_1683_table_nvarchar VALUES (1, NULL)
+
+statement ok
+INSERT INTO babel_1683_table_nvarchar(a) VALUES (2)
+
+query TT
+SELECT * FROM babel_1683_table_nvarchar
+----
+1 NULL
+2 NULL
+
+statement ok
+DROP TABLE babel_1683_table_nvarchar
+
+statement ok
+CREATE TABLE babel_1683_table_sysname (a INT, b SYSNAME)
+
+statement ok
+INSERT INTO babel_1683_table_sysname VALUES (1, NULL)
+
+statement ok
+INSERT INTO babel_1683_table_sysname(a) VALUES (2)
+
+query TT
+SELECT * FROM babel_1683_table_sysname
+----
+1 NULL
+2 NULL
+
+statement ok
+DROP TABLE babel_1683_table_sysname
+
+statement ok
+CREATE TABLE babel_1683_table_sysname (a INT, b SYSNAME NULL)
+
+statement ok
+INSERT INTO babel_1683_table_sysname VALUES (1, NULL)
+
+statement ok
+INSERT INTO babel_1683_table_sysname(a) VALUES (2)
+
+query TT
+SELECT * FROM babel_1683_table_sysname
+----
+1 NULL
+2 NULL
+
+statement ok
+DROP TABLE babel_1683_table_sysname
+
+statement ok
+CREATE TABLE babel_1683_table_nvarchar (a INT)
+
+statement ok
+ALTER TABLE babel_1683_table_nvarchar ADD b NVARCHAR(128)
+
+statement ok
+INSERT INTO babel_1683_table_nvarchar VALUES (1, NULL)
+
+statement ok
+INSERT INTO babel_1683_table_nvarchar(a) VALUES (2)
+
+query TT
+SELECT * FROM babel_1683_table_nvarchar
+----
+1 NULL
+2 NULL
+
+statement ok
+DROP TABLE babel_1683_table_nvarchar
+
+statement ok
+CREATE TABLE babel_1683_table_sysname (a INT)
+
+statement ok
+ALTER TABLE babel_1683_table_sysname ADD b SYSNAME
+
+statement ok
+INSERT INTO babel_1683_table_sysname VALUES (1, NULL)
+
+statement ok
+INSERT INTO babel_1683_table_sysname(a) VALUES (2)
+
+query TT
+SELECT * FROM babel_1683_table_sysname
+----
+1 NULL
+2 NULL
+
+statement ok
+DROP TABLE babel_1683_table_sysname
+
+statement ok
+CREATE TABLE babel_1683_table_sysname (a INT)
+
+statement ok
+ALTER TABLE babel_1683_table_sysname ADD b SYSNAME NULL
+
+statement ok
+INSERT INTO babel_1683_table_sysname VALUES (1, NULL)
+
+statement ok
+INSERT INTO babel_1683_table_sysname(a) VALUES (2)
+
+query TT
+SELECT * FROM babel_1683_table_sysname
+----
+1 NULL
+2 NULL
+
+statement ok
+DROP TABLE babel_1683_table_sysname
+

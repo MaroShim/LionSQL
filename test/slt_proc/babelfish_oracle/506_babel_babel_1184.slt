@@ -1,0 +1,79 @@
+# test/slt_proc/babelfish_oracle/506_babel_babel_1184.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1184.sql
+
+statement ok
+CREATE TABLE TMP_1 (a INT)
+
+statement ok
+INSERT INTO TMP_1 VALUES (1)
+
+statement ok
+CREATE TABLE TMP_2 (a INT, b INT)
+
+statement ok
+CREATE PROCEDURE TEST_INSERT_SELECT
+AS
+INSERT INTO TMP_2 (a)
+SELECT a FROM TMP_1
+UNION
+SELECT a FROM TMP_1
+UNION
+SELECT a FROM TMP_1
+INSERT INTO TMP_2 (a)
+SELECT a FROM TMP_1
+UNION ALL
+SELECT a FROM TMP_1
+UNION ALL
+SELECT a FROM TMP_1
+
+statement ok
+SELECT * FROM TMP_2
+
+statement ok
+SELECT * FROM TMP_2
+
+statement ok
+CREATE PROCEDURE TEST_SELECT_1
+AS
+SELECT a FROM TMP_1
+UNION
+SELECT a FROM TMP_1
+UNION
+SELECT a FROM TMP_1
+
+query T
+EXECUTE TEST_SELECT_1
+----
+1
+
+statement ok
+CREATE PROCEDURE TEST_SELECT_2
+AS
+SELECT a FROM TMP_1
+UNION ALL
+SELECT a FROM TMP_1
+UNION ALL
+SELECT a FROM TMP_1
+
+query T
+EXECUTE TEST_SELECT_2
+----
+1
+1
+1
+
+statement ok
+DROP TABLE TMP_1
+
+statement ok
+DROP TABLE TMP_2
+
+statement ok
+DROP PROCEDURE TEST_INSERT_SELECT
+
+statement ok
+DROP PROCEDURE TEST_SELECT_1
+
+statement ok
+DROP PROCEDURE TEST_SELECT_2
+

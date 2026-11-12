@@ -24,7 +24,7 @@ This report presents a comprehensive compatibility diagnostic of LionSQL's Micro
 ## 2. Compatibility Verification Matrix by Domain
 
 ### 2.1 Session Context & Server Global Settings (22/22 PASS - 100%)
-Verified full interoperability with global variables and initialization routines executed by SSMS, Azure Data Studio, DBeaver, and Beekeeper Studio.
+Verified full interoperability with global variables and initialization routines executed by SSMS, DBeaver, and Beekeeper Studio.
 
 | ID | Test Scenario | Query Statement (SQL) | Result | Notes |
 | :--- | :--- | :--- | :--- | :--- |

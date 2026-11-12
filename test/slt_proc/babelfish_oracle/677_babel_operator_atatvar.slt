@@ -1,0 +1,288 @@
+# test/slt_proc/babelfish_oracle/677_babel_operator_atatvar.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/operator_atatvar-vu-prepare.sql, test/babelfish/raw/operator_atatvar-vu-verify.sql, test/babelfish/raw/operator_atatvar-vu-cleanup.sql
+
+statement ok
+create view v1_operator_atatvar as
+select c=@@max_precision where 0! =@@max_precision
+
+statement ok
+create view v2_operator_atatvar as
+select c=@@max_precision where 0=@@max_precision
+
+statement ok
+create procedure p1_operator_atatvar
+as
+if 1=@@max_precision select 'yes' else select 'no'
+if 1< >@@max_precision select 'yes' else select 'no'
+if 1! =@@max_precision select 'yes' else select 'no'
+if 1>@@max_precision select 'yes' else select 'no'
+if 1<@@max_precision select 'yes' else select 'no'
+if 1! >@@max_precision select 'yes' else select 'no'
+if 1! <@@max_precision select 'yes' else select 'no'
+if case when 1! <@@max_precision then 1 else 0 end > 0 select 'yes' else select 'no'
+if case when 1>@@max_precision then 1 else 0 end > 0 select 'yes' else select 'no'
+if case when 1=@@max_precision then 1 else 0 end > 0 select 'yes' else select 'no'
+execute('if case when 1=@@max_precision then 1 else 0 end > 0 select ''yes'' else select ''no''')
+select 1 where 1<@@max_precision 
+select 1 where 1!>@@max_precision 
+select * from v1_operator_atatvar where case when 1!=@@max_precision then 1 else @@max_precision end=@@max_precision
+
+statement ok
+create procedure p3_operator_atatvar @p int
+as
+select @p
+
+statement ok
+create function f1_operator_atatvar(@p int) returns int
+as
+begin
+	if @p=@@spid return 1
+	else return 0
+end
+
+statement ok
+create function f2_operator_atatvar(@p int) returns table
+as
+	return select 1 as c where @p=@@max_precision
+
+query T
+if 1=@@max_precision select 'yes' else select 'no'
+----
+no
+
+query T
+if 1<>@@max_precision select 'yes' else select 'no'
+----
+yes
+
+query T
+if 1< >@@max_precision select 'yes' else select 'no'
+----
+yes
+
+query T
+if 1!=@@max_precision select 'yes' else select 'no'
+----
+yes
+
+query T
+if 1! =@@max_precision select 'yes' else select 'no'
+----
+yes
+
+query T
+if 1>@@max_precision select 'yes' else select 'no'
+----
+no
+
+query T
+if 1<@@max_precision select 'yes' else select 'no'
+----
+yes
+
+query T
+if 1>=@@max_precision select 'yes' else select 'no'
+----
+no
+
+query T
+if 1> =@@max_precision select 'yes' else select 'no'
+----
+no
+
+query T
+if 1<=@@max_precision select 'yes' else select 'no'
+----
+yes
+
+query T
+if 1< =@@max_precision select 'yes' else select 'no'
+----
+yes
+
+query T
+if 1!>@@max_precision select 'yes' else select 'no'
+----
+yes
+
+query T
+if 1! >@@max_precision select 'yes' else select 'no'
+----
+yes
+
+query T
+if 1! <@@max_precision select 'yes' else select 'no'
+----
+no
+
+query T
+if 1!<@@max_precision select 'yes' else select 'no'
+----
+no
+
+query T
+if case when 1! <@@max_precision then 1 else 0 end=@@max_precision select 'yes' else select 'no'
+----
+no
+
+query T
+if case when 1>@@max_precision then 1 else 0 end>@@max_precision select 'yes' else select 'no'
+----
+no
+
+query T
+if case when 1=@@max_precision then 1 else 0 end!=@@max_precision select 'yes' else select 'no'
+----
+yes
+
+query T
+execute('if case when 1=@@max_precision then 1 else 0 end > 0 select ''yes'' else select ''no''')
+----
+no
+
+query T
+select 1 where 1<@@max_precision 
+----
+1
+
+query T
+select 1 where 1!=@@max_precision 
+----
+1
+
+query T
+select 1 where 1<>@@max_precision 
+----
+1
+
+query T
+select 1 where 1< >@@max_precision 
+----
+1
+
+query T
+select 1 where 1!>@@max_precision 
+----
+1
+
+query T
+select 1 where 1! >@@max_precision 
+----
+1
+
+query T
+if 1 = @@max_precision select 'yes' else select 'no'
+----
+no
+
+statement ok
+declare @v int = 1 if 1=@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1<@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1>@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1<>@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1!=@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1 !=@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1 ! =@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1!>@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1!<@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1=@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1<@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1>@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1< >@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1! =@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1! >@v select 'yes' else select 'no'
+
+statement ok
+declare @v int = 1 if 1! <@v select 'yes' else select 'no'
+
+query T
+select c=@@max_precision where 0< >@@max_precision
+----
+NULL
+
+statement ok
+select * from v1_operator_atatvar where 0! <@@max_precision
+
+statement ok
+select * from v1_operator_atatvar where case when 1!=@@max_precision then 1 else @@max_precision end=@@max_precision
+
+statement ok
+select * from v2_operator_atatvar where 0!<@@max_precision
+
+statement ok
+select * from v2_operator_atatvar where case when 1!=@@max_precision then 1 else @@max_precision end=@@max_precision
+
+statement ok
+declare @v int
+set @v=1
+set @v+=@v
+select @v=@v+1
+select @v+=@v
+select @v
+
+query T
+execute p3_operator_atatvar @p=@@max_precision
+----
+@@max_precision
+
+query T
+execute('execute p3_operator_atatvar @p=@@max_precision')
+----
+@@max_precision
+
+query T
+select * from dbo.f2_operator_atatvar(@@max_precision)
+----
+1
+
+query T
+select * from dbo.f2_operator_atatvar(@@max_precision-1)
+----
+1
+
+statement ok
+drop view v1_operator_atatvar
+
+statement ok
+drop view v2_operator_atatvar
+
+statement ok
+drop procedure p1_operator_atatvar
+
+statement ok
+drop procedure p3_operator_atatvar
+
+statement ok
+drop function f1_operator_atatvar
+
+statement ok
+drop function f2_operator_atatvar
+

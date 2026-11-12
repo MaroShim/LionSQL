@@ -1,0 +1,59 @@
+# test/slt_proc/babelfish_oracle/334_babel_babel_2725.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2725.sql
+
+statement ok
+use master;
+
+statement ok
+create table t2725 (a int, b int, offset int not null);
+
+statement ok
+insert into t2725 (a, offset) values (1, 2);
+
+query TTT
+select a, b, t2725.offset from t2725;
+----
+1 NULL 2
+
+statement ok
+alter table t2725 add binary binary; -- column "binary" whose type is binary
+
+statement ok
+insert into t2725(offset,binary) values (3, 0x04);
+
+statement ok
+insert into t2725(offset,binary) values (4, 0x05);
+insert into t2725(offset,binary) values (4, 0x05);
+
+query T
+update t2725 set offset = 5 output deleted.offset where offset = 2;
+----
+2
+
+query T
+delete from t2725 output offset where offset = 4;
+----
+4
+4
+
+query T
+select [offset] from t2725 order by offset;
+----
+5
+3
+
+query T
+select t2725.[offset] from t2725 order by offset;
+----
+5
+3
+
+statement ok
+drop table t2725;
+
+statement ok
+create table offset(offset int);
+
+statement ok
+drop table offset;
+

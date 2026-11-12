@@ -1,0 +1,35 @@
+# test/slt_proc/babelfish_oracle/1506_babel_sys_partitions.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/sys-partitions-vu-prepare.sql, test/babelfish/raw/sys-partitions-vu-verify.sql, test/babelfish/raw/sys-partitions-vu-cleanup.sql
+
+statement ok
+CREATE TABLE sys_partitions_table_1(i int)
+
+statement ok
+CREATE TABLE sys_partitions_table_2(i int)
+
+statement ok
+CREATE INDEX sys_partitions_index ON sys_partitions_table_2(i);
+
+statement ok
+SELECT (CASE WHEN (partition_id IS NULL) THEN 0 ELSE 1 END),
+        (CASE WHEN (object_id IS NULL) THEN 0 ELSE 1 END),
+        (CASE WHEN (index_id IS NULL) THEN 0 ELSE 1 END),
+        partition_number,hobt_id,
+        (CASE WHEN ("rows" IS NULL) THEN 0 ELSE 1 END),
+        filestream_filegroup_id,
+        data_compression,data_compression_desc FROM sys.partitions where object_id = OBJECT_ID('sys_partitions_table_1');
+
+statement ok
+SELECT (CASE WHEN (partition_id IS NULL) THEN 0 ELSE 1 END),
+        (CASE WHEN (object_id IS NULL) THEN 0 ELSE 1 END),
+        (CASE WHEN (index_id IS NULL) THEN 0 ELSE 1 END),
+        partition_number,hobt_id,
+        (CASE WHEN ("rows" IS NULL) THEN 0 ELSE 1 END),
+        filestream_filegroup_id,
+        data_compression,data_compression_desc FROM sys.partitions where object_id = OBJECT_ID('sys_partitions_table_2');
+
+statement ok
+DROP INDEX sys_partitions_index ON sys_partitions_table_2;
+DROP TABLE sys_partitions_table_2;
+DROP TABLE sys_partitions_table_1;
+

@@ -1,0 +1,12 @@
+# test/slt_proc/babelfish_oracle/1123_babel_babel_1757.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1757.sql
+
+statement ok
+CREATE TABLE t1(a int)
+
+statement ok
+SET FMTONLY ON SELECT * FROM t1 SET FMTONLY OFF
+
+statement ok
+DROP TABLE t1
+

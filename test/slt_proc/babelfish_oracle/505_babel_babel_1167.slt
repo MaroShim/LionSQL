@@ -1,0 +1,31 @@
+# test/slt_proc/babelfish_oracle/505_babel_babel_1167.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1167.sql
+
+statement ok
+CREATE TABLE babel_1167_table (a INT);
+
+statement ok
+INSERT INTO babel_1167_table VALUES (111), (222)
+
+statement ok
+CREATE PROCEDURE babel_1167_proc AS
+IF 1=1
+	UPDATE babel_1167_table SET a = 0
+ELSE
+	UPDATE babel_1167_table SET a = 1
+
+statement ok
+EXEC babel_1167_proc
+
+query T
+SELECT * FROM babel_1167_table
+----
+0
+0
+
+statement ok
+DROP PROC babel_1167_proc
+
+statement ok
+DROP TABLE babel_1167_table
+

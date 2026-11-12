@@ -1,0 +1,107 @@
+# test/slt_proc/babelfish_oracle/380_babel_babel_388.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-388.sql
+
+statement ok
+create view babel_388_v1 as select null a;
+
+query T
+select cast(pg_typeof(a) as varchar(10)) as typname from babel_388_v1;
+----
+NULL
+
+statement ok
+create view babel_388_v2 as select null a union select null;
+
+query T
+select cast(pg_typeof(a) as varchar(10)) as typname from babel_388_v2;
+----
+NULL
+
+statement ok
+create view babel_388_v3 as select null a union select null union select 1;
+
+query T
+select cast(pg_typeof(a) as varchar(10)) as typname from babel_388_v3;
+----
+NULL
+NULL
+
+statement ok
+create view babel_388_v4 as select 1 a;
+
+query T
+select cast(pg_typeof(a) as varchar(10)) as typname from babel_388_v4;
+----
+NULL
+
+statement ok
+create view babel_388_v5 as select 'string' a;
+
+query T
+select cast(pg_typeof(a) as varchar(10)) as typname from babel_388_v5;
+----
+NULL
+
+statement ok
+create view babel_388_v6 as select 1 a UNION select NULL;
+
+query T
+select cast(pg_typeof(a) as varchar(10)) as typname from babel_388_v6;
+----
+NULL
+NULL
+
+statement ok
+create view babel_388_v7 as select NULL a UNION select 1;
+
+query T
+select cast(pg_typeof(a) as varchar(10)) as typname from babel_388_v7;
+----
+NULL
+NULL
+
+statement ok
+create view babel_388_v8 as select 'string' a UNION select NULL;
+
+query T
+select cast(pg_typeof(a) as varchar(10)) as typname from babel_388_v8;
+----
+NULL
+NULL
+
+statement ok
+create view babel_388_v9 as select NULL a UNION select 'string';
+
+query T
+select cast(pg_typeof(a) as varchar(10)) as typname from babel_388_v9;
+----
+NULL
+NULL
+
+statement ok
+DROP view babel_388_v1;
+
+statement ok
+DROP view babel_388_v2;
+
+statement ok
+DROP view babel_388_v3;
+
+statement ok
+DROP view babel_388_v4;
+
+statement ok
+DROP view babel_388_v5;
+
+statement ok
+DROP view babel_388_v6;
+
+statement ok
+DROP view babel_388_v7;
+
+statement ok
+DROP view babel_388_v8;
+
+statement ok
+DROP view babel_388_v9;
+

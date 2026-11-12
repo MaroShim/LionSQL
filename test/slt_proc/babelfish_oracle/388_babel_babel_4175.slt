@@ -1,0 +1,67 @@
+# test/slt_proc/babelfish_oracle/388_babel_babel_4175.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4175-vu-prepare.sql, test/babelfish/raw/BABEL-4175-vu-verify.sql, test/babelfish/raw/BABEL-4175-vu-cleanup.sql
+
+statement ok
+CREATE TABLE Purchasing (
+  OrderID int,
+  EmployeeID int,
+  VendorID int
+);
+
+statement ok
+CREATE TABLE insertTest(VendorID INT)
+
+statement ok
+INSERT INTO Purchasing(OrderID, EmployeeID, VendorID) VALUES (1, 52, 158);
+INSERT INTO Purchasing(OrderID, EmployeeID, VendorID) VALUES (2, 44, 146);
+INSERT INTO Purchasing(OrderID, EmployeeID, VendorID) VALUES (3, 25, 142);
+INSERT INTO Purchasing(OrderID, EmployeeID, VendorID) VALUES (4, 66, 460);
+INSERT INTO Purchasing(OrderID, EmployeeID, VendorID) VALUES (5, 37, 154);
+INSERT INTO Purchasing(OrderID, EmployeeID, VendorID) VALUES (6, 53, 564);
+INSERT INTO Purchasing(OrderID, EmployeeID, VendorID) VALUES (7, 36, 156);
+
+query TTT
+SELECT * FROM Purchasing;
+----
+1 52 158
+2 44 146
+3 25 142
+4 66 460
+5 37 154
+6 53 564
+7 36 156
+
+query TTT
+SELECT * FROM Purchasing;
+----
+1 52 158
+2 44 146
+3 25 142
+4 66 460
+5 37 154
+6 53 564
+7 36 156
+
+query TTT
+SELECT * FROM Purchasing;
+----
+1 52 158
+2 44 146
+3 25 142
+4 66 460
+5 37 154
+6 53 564
+7 36 156
+
+statement ok
+SELECT * FROM insertTest
+
+statement ok
+SELECT * FROM insertTest
+
+statement ok
+DROP TABLE insertTest;
+
+statement ok
+DROP TABLE Purchasing;
+

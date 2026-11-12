@@ -1,0 +1,51 @@
+# test/slt_proc/babelfish_oracle/1453_babel_openxml_with_clause_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/xml/openxml_with_clause-vu-prepare.sql
+
+statement ok
+CREATE TABLE test_openxml_table(oid char(5), date datetime, amount float);
+
+statement ok
+CREATE TABLE test_openxml_table_2(oid char(5), Date datetime, amount float);
+
+statement ok
+CREATE TABLE very_long_table_name_that_exceeds_sixty_four_characters_limit_test (
+    id INT,
+    name VARCHAR(50),
+    value INT
+);
+
+statement ok
+CREATE TABLE test_long_columns (
+    very_long_column_name_that_definitely_exceeds_sixty_four_characters_limit_test INT,
+    another_extremely_long_column_name_exceeding_standard_limits_for_testing VARCHAR(50),
+    short_col INT
+);
+
+statement ok
+CREATE TABLE mixed_length_names (
+    id INT,
+    extremely_long_column_name_that_exceeds_the_standard_sixty_four_character_limit_for_identifiers VARCHAR(200),
+    short VARCHAR(50)
+);
+
+statement ok
+CREATE TABLE person_table (
+    id INT,
+    name VARCHAR(50),
+    age INT
+);
+
+statement ok
+CREATE TABLE regions (region_id INT, region_name VARCHAR(50));
+
+statement ok
+CREATE VIEW openxml_column_patterns AS 
+SELECT 'id' as column_name, 0 as flag, sys.tsql_openxml_get_colpattern('id', 0) AS xpath_pattern
+
+statement ok
+CREATE VIEW openxml_documents AS 
+SELECT 1 as document_id, sys.tsql_openxml_get_xmldoc(1) AS xml_document;
+
+statement ok
+CREATE TABLE openxml_ns_sink(src varchar(20), val varchar(50))
+

@@ -1,0 +1,54 @@
+# test/slt_proc/babelfish_oracle/1201_babel_babel_3013.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3013.sql
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+CREATE LOGIN johndoe with password='Babel123'
+
+statement ok
+CREATE USER johndoe
+
+statement ok
+CREATE TABLE t(a int, b int)
+
+statement ok
+GRANT SELECT(a) on t to johndoe
+
+statement ok
+DROP TABLE t
+
+statement ok
+USE master
+
+statement ok
+DROP LOGIN johndoe
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI
+
+statement ok
+USE db1
+
+statement ok
+CREATE LOGIN johndoe with password='Babel123'
+
+statement ok
+CREATE TABLE t(a int, b int)
+
+statement ok
+GRANT SELECT(a) on t to johndoe
+
+statement ok
+DROP TABLE t
+
+statement ok
+USE master
+
+statement ok
+DROP LOGIN johndoe
+

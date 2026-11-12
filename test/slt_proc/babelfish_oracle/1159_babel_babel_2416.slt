@@ -1,0 +1,15 @@
+# test/slt_proc/babelfish_oracle/1159_babel_babel_2416.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2416.sql
+
+statement ok
+USE master
+
+statement ok
+USE tempdb
+
+statement ok
+USE msdb
+
+statement ok
+USE master
+

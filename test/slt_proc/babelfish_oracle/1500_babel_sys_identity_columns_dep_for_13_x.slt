@@ -1,0 +1,47 @@
+# test/slt_proc/babelfish_oracle/1500_babel_sys_identity_columns_dep_for_13_x.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-identity_columns-dep-for-13-x-vu-prepare.sql, test/babelfish/raw/views/sys-identity_columns-dep-for-13-x-vu-verify.sql, test/babelfish/raw/views/sys-identity_columns-dep-for-13-x-vu-cleanup.sql
+
+statement ok
+DROP TABLE IF EXISTS sys_identity_columns_dep_vu_prepare
+
+statement ok
+CREATE TABLE sys_identity_columns_dep_vu_prepare (c1 int, c3 int IDENTITY(1,1))
+
+statement ok
+CREATE DATABASE sys_identity_columns_dep_vu_prepare_db1
+
+statement ok
+CREATE PROCEDURE sys_identity_columns_dep_vu_prepare_p1 AS
+    SELECT seed_value, increment_value, last_value FROM sys.identity_columns WHERE object_id = object_id('sys_identity_columns_dep_vu_prepare')
+
+statement ok
+CREATE FUNCTION sys_identity_columns_dep_vu_prepare_f1()
+RETURNS INT 
+AS
+BEGIN 
+    RETURN (SELECT COUNT(*) FROM sys.identity_columns WHERE object_id = object_id('sys_identity_columns_dep_vu_prepare'))
+END
+
+statement ok
+USE sys_identity_columns_dep_vu_prepare_db1
+
+statement ok
+CREATE VIEW sys_identity_columns_dep_vu_prepare_v1 AS
+    SELECT COUNT(*) FROM sys.identity_columns WHERE object_id = object_id('sys_identity_columns_dep_vu_prepare')
+
+statement ok
+USE master
+
+statement ok
+USE sys_identity_columns_dep_vu_prepare_db1
+
+statement ok
+DROP VIEW sys_identity_columns_dep_vu_prepare_v1
+
+statement ok
+CREATE VIEW sys_identity_columns_dep_vu_prepare_v1 AS
+    SELECT COUNT(*) FROM sys.identity_columns WHERE object_id = object_id('sys_identity_columns_dep_vu_prepare')
+
+statement ok
+USE master
+

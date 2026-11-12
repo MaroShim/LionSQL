@@ -1,0 +1,54 @@
+# test/slt_proc/control_flow_procs/902_proc_output_temp_raiserror_17.slt
+# T-SQL Stored Procedure OUTPUT params, #temp table, @table_var, RAISERROR format (17)
+
+statement ok
+CREATE TABLE #calc_stage_902 (step INT PRIMARY KEY, val INT);
+
+statement ok
+INSERT INTO #calc_stage_902 VALUES (1, 425), (2, 85), (3, -34);
+
+statement ok
+CREATE PROCEDURE sp_calc_net_902
+    @gross INT,
+    @bonus INT,
+    @tax INT,
+    @net INT OUTPUT,
+    @label VARCHAR(50) OUTPUT
+AS
+BEGIN
+    SET @net = @gross + @bonus - @tax;
+    SET @label = CONCAT('NET_', CAST(@net AS VARCHAR(20)));
+END;
+
+query IT
+DECLARE @n INT;
+DECLARE @lbl VARCHAR(50);
+EXEC sp_calc_net_902 @gross = 425, @bonus = 85, @tax = 34, @net = @n OUTPUT, @label = @lbl OUTPUT;
+SELECT @n, @lbl;
+----
+476 NET_476
+
+query II
+SELECT COUNT(*), SUM(val) FROM #calc_stage_902;
+----
+3 476
+
+statement ok
+DROP TABLE #calc_stage_902;
+
+statement ok
+CREATE PROCEDURE sp_guard_fmt_902 @code INT, @item VARCHAR(30)
+AS
+BEGIN
+    BEGIN TRY
+        RAISERROR('Item %s failed with code %d', 16, 1, @item, @code) WITH NOWAIT;
+    END TRY
+    BEGIN CATCH
+        SELECT ERROR_NUMBER(), ERROR_SEVERITY(), ERROR_STATE(), ERROR_MESSAGE();
+    END CATCH
+END;
+
+query IIIT
+EXEC sp_guard_fmt_902 117, 'SKU_17';
+----
+50000 16 1 Item SKU_17 failed with code 117

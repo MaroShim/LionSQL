@@ -1,0 +1,69 @@
+# test/slt_proc/babelfish_oracle/1302_babel_babel_4940.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_4940.sql
+
+statement ok
+SET NOCOUNT ON
+
+statement ok
+CREATE TABLE babel_4940_t1(id INT PRIMARY KEY, c1 VARCHAR(5) DEFAULT 'a')
+
+statement ok
+CREATE TABLE babel_4940_t2(id INT, PRIMARY KEY(id), c1 VARCHAR(5) DEFAULT 'a')
+
+statement ok
+CREATE TABLE babel_4940_t3(id INT, id1 INT, PRIMARY KEY(id, id1), c1 VARCHAR(5) DEFAULT 'a')
+
+statement ok
+CREATE TABLE babel_4940_t4(id INT PRIMARY KEY, c1 VARCHAR(5) DEFAULT 'a')
+
+statement ok
+CREATE TABLE babel_4940_t5(id INT, c1 VARCHAR(5) DEFAULT 'a')
+
+statement ok
+ALTER TABLE babel_4940_t5 ADD CONSTRAINT c PRIMARY KEY (id)
+
+statement ok
+CREATE TABLE babel_4940_t6(id INT, id1 INT, c1 VARCHAR(5) DEFAULT 'a')
+
+statement ok
+ALTER TABLE babel_4940_t6 ADD CONSTRAINT c1 PRIMARY KEY(id, id1 DESC)
+
+statement ok
+SET BABELFISH_STATISTICS PROFILE ON;
+
+statement ok
+SELECT TOP 10 * FROM babel_4940_t1 ORDER BY id
+
+statement ok
+SELECT TOP 10 * FROM babel_4940_t1 ORDER BY id DESC
+
+statement ok
+SELECT TOP 10 * FROM babel_4940_t2 ORDER BY id 
+
+statement ok
+SELECT TOP 10 * FROM babel_4940_t2 ORDER BY id DESC
+
+statement ok
+SELECT TOP 10 * FROM babel_4940_t3 ORDER BY id, id1
+
+statement ok
+SELECT TOP 10 * FROM babel_4940_t3 ORDER BY id DESC, id1 DESC
+
+statement ok
+SELECT TOP 10 * FROM babel_4940_t4 ORDER BY id
+
+statement ok
+SELECT TOP 10 * FROM babel_4940_t4 ORDER BY id DESC
+
+statement ok
+SELECT TOP 10 * FROM babel_4940_t5 ORDER BY id 
+
+statement ok
+SELECT TOP 10 * FROM babel_4940_t5 ORDER BY id DESC
+
+statement ok
+SELECT TOP 10 * FROM babel_4940_t6 ORDER BY id, id1 DESC
+
+statement ok
+SELECT TOP 10 * FROM babel_4940_t6 ORDER BY id DESC, id1 ASC
+

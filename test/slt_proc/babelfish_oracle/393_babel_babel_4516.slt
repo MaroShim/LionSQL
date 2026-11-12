@@ -1,0 +1,106 @@
+# test/slt_proc/babelfish_oracle/393_babel_babel_4516.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4516-vu-prepare.sql, test/babelfish/raw/BABEL-4516-vu-verify.sql, test/babelfish/raw/BABEL-4516-vu-cleanup.sql
+
+statement ok
+USE master;
+
+statement ok
+CREATE DATABASE [DATABASE_1];
+
+statement ok
+USE [DATABASE_1];
+
+statement ok
+CREATE SCHEMA [DB1_Schema_1];
+
+statement ok
+CREATE SCHEMA [db1_SCHEMA_2];
+
+statement ok
+CREATE SCHEMA [DB1_My_Schema];
+
+statement ok
+CREATE LOGIN [DB1_Login_1] WITH PASSWORD = '12345678';
+
+statement ok
+CREATE USER [DB1_User_1] FOR LOGIN [DB1_Login_1];
+
+statement ok
+CREATE LOGIN [DB1_Login_2] WITH PASSWORD = 'abc';
+
+statement ok
+CREATE LOGIN [DB1_User_3] WITH PASSWORD = 'abc';
+
+statement ok
+CREATE USER [DB1_User_3] WITH DEFAULT_SCHEMA = [DB1_Schema_1];
+
+statement ok
+USE [DATABASE_1];
+
+statement ok
+CREATE TABLE [Table_1] ([Col_1] INT NOT NULL, [COL 2] INT NOT NULL, PRIMARY KEY ([Col_1], [COL 2]));
+
+statement ok
+CREATE TABLE [DB1_My_Schema].[Table_2] ([Col_1] INT NOT NULL, [COL 2] INT NOT NULL, FOREIGN KEY ([Col_1], [COL 2]) REFERENCES [Table_1]([Col_1], [COL 2]));
+
+statement ok
+CREATE view [db1_SCHEMA_2].[DB1 My View] AS SELECT * FROM [Table_1];
+
+statement ok
+CREATE PROC [db1_SCHEMA_2].[babel_user_ext] AS
+BEGIN 
+	SELECT rolname, login_name, type, orig_username, database_name
+	FROM sys.babelfish_authid_user_ext
+	WHERE orig_username LIKE 'DB1_User_%'
+	ORDER BY rolname, orig_username
+END
+
+statement ok
+USE [DATABASE_1];
+
+query T
+SELECT COUNT(*) FROM [Table_1];
+----
+0
+
+query T
+SELECT COUNT(*) FROM [DB1_My_Schema].[Table_2];
+----
+0
+
+statement ok
+USE [DATABASE_1];
+
+statement ok
+DROP VIEW [db1_SCHEMA_2].[DB1 My View];
+
+statement ok
+DROP PROCEDURE [db1_SCHEMA_2].[babel_user_ext];
+
+statement ok
+DROP TABLE [DB1_My_Schema].[Table_2];
+
+statement ok
+DROP TABLE [Table_1];
+
+statement ok
+DROP SCHEMA [DB1_Schema_1];
+
+statement ok
+DROP SCHEMA [db1_SCHEMA_2];
+
+statement ok
+DROP SCHEMA [DB1_My_Schema];
+
+statement ok
+USE master;
+
+statement ok
+DROP LOGIN [DB1_Login_1];
+
+statement ok
+DROP LOGIN [DB1_Login_2];
+
+statement ok
+DROP LOGIN [DB1_User_3];
+

@@ -1,0 +1,450 @@
+# test/slt_proc/babelfish_oracle/1385_babel_babel_test_int8_numeric_oper_before_16_3_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_test_int8_numeric_oper_before_16_3-vu-prepare.sql
+
+statement ok
+create table test_int8_numeric_vu(a bigint);
+
+statement ok
+INSERT INTO test_int8_numeric_vu VALUES (NULL), (-9223372036854775808), (9223372036854775807);
+
+statement ok
+CREATE INDEX test_int8_numeric_vu_idx on test_int8_numeric_vu(a);
+
+statement ok
+create procedure test_int8_numeric_p0 as
+select count(*) from test_int8_numeric_vu where a = 1.0;
+
+statement ok
+create procedure test_int8_numeric_p00 as
+select count(*) from test_int8_numeric_vu where 1.0 = a;
+
+statement ok
+create procedure test_int8_numeric_p1 as
+select count(*) from test_int8_numeric_vu where a IS NULL;
+
+statement ok
+create procedure test_int8_numeric_p2 as
+select count(*) from test_int8_numeric_vu where a <> 5.0;
+
+statement ok
+create procedure test_int8_numeric_p3 as
+select count(*) from test_int8_numeric_vu where 5.0 <> a;
+
+statement ok
+create procedure test_int8_numeric_p4 as
+select count(*) from test_int8_numeric_vu where a < 5.0;
+
+statement ok
+create procedure test_int8_numeric_p5 as
+select count(*) from test_int8_numeric_vu where 5.0 > a;
+
+statement ok
+create procedure test_int8_numeric_p6 as
+select count(*) from test_int8_numeric_vu where a < -9223372036854775808.0;
+
+statement ok
+create procedure test_int8_numeric_p7 as
+select count(*) from test_int8_numeric_vu where -9223372036854775808.0 > a;
+
+statement ok
+create procedure test_int8_numeric_p8 as
+select count(*) from test_int8_numeric_vu where a <= 5.0;
+
+statement ok
+create procedure test_int8_numeric_p9 as
+select count(*) from test_int8_numeric_vu where 5.0 >= a;
+
+statement ok
+create procedure test_int8_numeric_p10 as
+select count(*) from test_int8_numeric_vu where a > 999995.0;
+
+statement ok
+create procedure test_int8_numeric_p11 as
+select count(*) from test_int8_numeric_vu where 999995.0 < a;
+
+statement ok
+create procedure test_int8_numeric_p12 as
+select count(*) from test_int8_numeric_vu where a >= 999995.0;
+
+statement ok
+create procedure test_int8_numeric_p13 as
+select count(*) from test_int8_numeric_vu where 999995.0 <= a;
+
+statement ok
+create procedure test_int8_numeric_p14 as
+select count(*) from test_int8_numeric_vu where a > 9223372036854775807.0;
+
+statement ok
+create procedure test_int8_numeric_p15 as
+select count(*) from test_int8_numeric_vu where 9223372036854775807.0 < a;
+
+statement ok
+create procedure test_int8_numeric_p16 as
+select count(*) from test_int8_numeric_vu where a > 5.0;
+
+statement ok
+create procedure test_int8_numeric_p17 as
+select count(*) from test_int8_numeric_vu where 5.0 < a;
+
+statement ok
+create procedure test_int8_numeric_p18 as
+select count(*) from test_int8_numeric_vu where a between 5.0 and 10.0;
+
+statement ok
+create procedure test_int8_numeric_p19 as
+select count(*) from test_int8_numeric_vu where a between 5.0 and 999999.0;
+
+statement ok
+create procedure test_int8_numeric_p20 as
+select count(*) from test_int8_numeric_vu where (a between 5.0 and 999999.0) and a = 10;
+
+statement ok
+create procedure test_int8_numeric_p21 as
+select count(*) from test_int8_numeric_vu where a > 5.0 and a < 7;
+
+statement ok
+create procedure test_int8_numeric_p22 as
+select count(*) from test_int8_numeric_vu where 5.0 < a and 7 > a;
+
+statement ok
+create procedure test_int8_numeric_p23 as
+select count(*) from test_int8_numeric_vu where a <> 5;
+
+statement ok
+create procedure test_int8_numeric_p24 as
+select count(*) from test_int8_numeric_vu where a < 5;
+
+statement ok
+create procedure test_int8_numeric_p25 as
+select count(*) from test_int8_numeric_vu where a < -9223372036854775808;
+
+statement ok
+create procedure test_int8_numeric_p26 as
+select count(*) from test_int8_numeric_vu where a <= 5;
+
+statement ok
+create procedure test_int8_numeric_p27 as
+select count(*) from test_int8_numeric_vu where a > 999995;
+
+statement ok
+create procedure test_int8_numeric_p28 as
+select count(*) from test_int8_numeric_vu where a >= 999995;
+
+statement ok
+create procedure test_int8_numeric_p29 as
+select count(*) from test_int8_numeric_vu where a > 9223372036854775807;
+
+statement ok
+create procedure test_int8_numeric_p30 as
+select count(*) from test_int8_numeric_vu where a > 5;
+
+statement ok
+create procedure test_int8_numeric_p31 as
+select count(*) from test_int8_numeric_vu where a between 5 and 10;
+
+statement ok
+create procedure test_int8_numeric_p32 as
+select count(*) from test_int8_numeric_vu where a between 5 and 999999;
+
+statement ok
+create view test_int8_numeric_v0 as
+select count(*) from test_int8_numeric_vu where a = 1.0;
+
+statement ok
+create view test_int8_numeric_v00 as
+select count(*) from test_int8_numeric_vu where 1.0 = a;
+
+statement ok
+create view test_int8_numeric_v1 as
+select count(*) from test_int8_numeric_vu where a IS NULL;
+
+statement ok
+create view test_int8_numeric_v2 as
+select count(*) from test_int8_numeric_vu where a <> 5.0;
+
+statement ok
+create view test_int8_numeric_v3 as
+select count(*) from test_int8_numeric_vu where 5.0 <> a;
+
+statement ok
+create view test_int8_numeric_v4 as
+select count(*) from test_int8_numeric_vu where a < 5.0;
+
+statement ok
+create view test_int8_numeric_v5 as
+select count(*) from test_int8_numeric_vu where 5.0 > a;
+
+statement ok
+create view test_int8_numeric_v6 as
+select count(*) from test_int8_numeric_vu where a < -9223372036854775808.0;
+
+statement ok
+create view test_int8_numeric_v7 as
+select count(*) from test_int8_numeric_vu where -9223372036854775808.0 > a;
+
+statement ok
+create view test_int8_numeric_v8 as
+select count(*) from test_int8_numeric_vu where a <= 5.0;
+
+statement ok
+create view test_int8_numeric_v9 as
+select count(*) from test_int8_numeric_vu where 5.0 >= a;
+
+statement ok
+create view test_int8_numeric_v10 as
+select count(*) from test_int8_numeric_vu where a > 999995.0;
+
+statement ok
+create view test_int8_numeric_v11 as
+select count(*) from test_int8_numeric_vu where 999995.0 < a;
+
+statement ok
+create view test_int8_numeric_v12 as
+select count(*) from test_int8_numeric_vu where a >= 999995.0;
+
+statement ok
+create view test_int8_numeric_v13 as
+select count(*) from test_int8_numeric_vu where 999995.0 <= a;
+
+statement ok
+create view test_int8_numeric_v14 as
+select count(*) from test_int8_numeric_vu where a > 9223372036854775807.0;
+
+statement ok
+create view test_int8_numeric_v15 as
+select count(*) from test_int8_numeric_vu where 9223372036854775807.0 < a;
+
+statement ok
+create view test_int8_numeric_v16 as
+select count(*) from test_int8_numeric_vu where a > 5.0;
+
+statement ok
+create view test_int8_numeric_v17 as
+select count(*) from test_int8_numeric_vu where 5.0 < a;
+
+statement ok
+create view test_int8_numeric_v18 as
+select count(*) from test_int8_numeric_vu where a between 5.0 and 10.0;
+
+statement ok
+create view test_int8_numeric_v19 as
+select count(*) from test_int8_numeric_vu where a between 5.0 and 999999.0;
+
+statement ok
+create view test_int8_numeric_v20 as
+select count(*) from test_int8_numeric_vu where (a between 5.0 and 999999.0) and a = 10;
+
+statement ok
+create view test_int8_numeric_v21 as
+select count(*) from test_int8_numeric_vu where a > 5.0 and a < 7;
+
+statement ok
+create view test_int8_numeric_v22 as
+select count(*) from test_int8_numeric_vu where 5.0 < a and 7 > a;
+
+statement ok
+create view test_int8_numeric_v23 as
+select count(*) from test_int8_numeric_vu where a <> 5;
+
+statement ok
+create view test_int8_numeric_v24 as
+select count(*) from test_int8_numeric_vu where a < 5;
+
+statement ok
+create view test_int8_numeric_v25 as
+select count(*) from test_int8_numeric_vu where a < -9223372036854775808;
+
+statement ok
+create view test_int8_numeric_v26 as
+select count(*) from test_int8_numeric_vu where a <= 5;
+
+statement ok
+create view test_int8_numeric_v27 as
+select count(*) from test_int8_numeric_vu where a > 999995;
+
+statement ok
+create view test_int8_numeric_v28 as
+select count(*) from test_int8_numeric_vu where a >= 999995;
+
+statement ok
+create view test_int8_numeric_v29 as
+select count(*) from test_int8_numeric_vu where a > 9223372036854775807;
+
+statement ok
+create view test_int8_numeric_v30 as
+select count(*) from test_int8_numeric_vu where a > 5;
+
+statement ok
+create view test_int8_numeric_v31 as
+select count(*) from test_int8_numeric_vu where a between 5 and 10;
+
+statement ok
+create view test_int8_numeric_v32 as
+select count(*) from test_int8_numeric_vu where a between 5 and 999999;
+
+statement ok
+create function test_int8_numeric_f0() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a = 1.0) end;
+
+statement ok
+create function test_int8_numeric_f00() returns int as
+begin return (select count(*) from test_int8_numeric_vu where 1.0 = a) end;
+
+statement ok
+create function test_int8_numeric_f1() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a IS NULL) end;
+
+statement ok
+create function test_int8_numeric_f2() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a <> 5.0) end;
+
+statement ok
+create function test_int8_numeric_f3() returns int as
+begin return (select count(*) from test_int8_numeric_vu where 5.0 <> a) end;
+
+statement ok
+create function test_int8_numeric_f4() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a < 5.0) end;
+
+statement ok
+create function test_int8_numeric_f5() returns int as
+begin return (select count(*) from test_int8_numeric_vu where 5.0 > a) end;
+
+statement ok
+create function test_int8_numeric_f6() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a < -9223372036854775808.0) end;
+
+statement ok
+create function test_int8_numeric_f7() returns int as
+begin return (select count(*) from test_int8_numeric_vu where -9223372036854775808.0 > a) end;
+
+statement ok
+create function test_int8_numeric_f8() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a <= 5.0) end;
+
+statement ok
+create function test_int8_numeric_f9() returns int as
+begin return (select count(*) from test_int8_numeric_vu where 5.0 >= a) end;
+
+statement ok
+create function test_int8_numeric_f10() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a > 999995.0) end;
+
+statement ok
+create function test_int8_numeric_f11() returns int as
+begin return (select count(*) from test_int8_numeric_vu where 999995.0 < a) end;
+
+statement ok
+create function test_int8_numeric_f12() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a >= 999995.0) end;
+
+statement ok
+create function test_int8_numeric_f13() returns int as
+begin return (select count(*) from test_int8_numeric_vu where 999995.0 <= a) end;
+
+statement ok
+create function test_int8_numeric_f14() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a > 9223372036854775807.0) end;
+
+statement ok
+create function test_int8_numeric_f15() returns int as
+begin return (select count(*) from test_int8_numeric_vu where 9223372036854775807.0 < a) end;
+
+statement ok
+create function test_int8_numeric_f16() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a > 5.0) end;
+
+statement ok
+create function test_int8_numeric_f17() returns int as
+begin return (select count(*) from test_int8_numeric_vu where 5.0 < a) end;
+
+statement ok
+create function test_int8_numeric_f18() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a between 5.0 and 10.0) end;
+
+statement ok
+create function test_int8_numeric_f19() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a between 5.0 and 999999.0) end;
+
+statement ok
+create function test_int8_numeric_f20() returns int as
+begin return (select count(*) from test_int8_numeric_vu where (a between 5.0 and 999999.0) and a = 10) end;
+
+statement ok
+create function test_int8_numeric_f21() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a > 5.0 and a < 7) end;
+
+statement ok
+create function test_int8_numeric_f22() returns int as
+begin return (select count(*) from test_int8_numeric_vu where 5.0 < a and 7 > a) end;
+
+statement ok
+create function test_int8_numeric_f23() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a <> 5) end;
+
+statement ok
+create function test_int8_numeric_f24() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a < 5) end;
+
+statement ok
+create function test_int8_numeric_f25() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a < -9223372036854775808) end;
+
+statement ok
+create function test_int8_numeric_f26() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a <= 5) end;
+
+statement ok
+create function test_int8_numeric_f27() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a > 999995) end;
+
+statement ok
+create function test_int8_numeric_f28() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a >= 999995) end;
+
+statement ok
+create function test_int8_numeric_f29() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a > 9223372036854775807) end;
+
+statement ok
+create function test_int8_numeric_f30() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a > 5) end;
+
+statement ok
+create function test_int8_numeric_f31() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a between 5 and 10) end;
+
+statement ok
+create function test_int8_numeric_f32() returns int as
+begin return (select count(*) from test_int8_numeric_vu where a between 5 and 999999) end;
+
+statement ok
+create table test_int8_numeric_t1(
+    a bigint,
+    b bigint,
+    c bigint,
+    d bigint,
+    e bigint,
+    f numeric,
+    check (a = f),
+    check (b < f),
+    check (c <= f),
+    check (d > f),
+    check (e >= f)
+)
+
+statement ok
+create table test_int8_numeric_t2(
+    a numeric,
+    b numeric,
+    c numeric,
+    d numeric,
+    e numeric,
+    f bigint,
+    check (a = f),
+    check (b < f),
+    check (c <= f),
+    check (d > f),
+    check (e >= f)
+)
+

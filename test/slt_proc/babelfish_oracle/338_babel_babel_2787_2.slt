@@ -1,0 +1,81 @@
+# test/slt_proc/babelfish_oracle/338_babel_babel_2787_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/triggers/BABEL-2787-2-vu-prepare.sql, test/babelfish/raw/triggers/BABEL-2787-2-vu-verify.sql, test/babelfish/raw/triggers/BABEL-2787-2-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_2787_2_vu_prepare_employeeData( ID INT IDENTITY (1,1) PRIMARY KEY,Emp_First_name VARCHAR (50));
+
+statement ok
+insert into babel_2787_2_vu_prepare_employeeData values ('a'),('b'),('c'),('d');
+
+statement ok
+CREATE TRIGGER babel_2787_2_vu_prepare_updEmployeeData  ON babel_2787_2_vu_prepare_employeeData  INSTEAD OF INSERT AS  
+BEGIN  
+   BEGIN TRAN;
+    update babel_2787_2_vu_prepare_employeeData set Emp_First_name = 'dddd';
+   Rollback tran;
+END
+
+statement ok
+insert into babel_2787_2_vu_prepare_employeeData values ('e')
+
+query TT
+select * from babel_2787_2_vu_prepare_employeeData
+----
+1 a
+2 b
+3 c
+4 d
+6 e
+
+statement ok
+drop trigger babel_2787_2_vu_prepare_updEmployeeData;
+
+statement ok
+CREATE TRIGGER babel_2787_2_vu_prepare_updEmployeeData  ON babel_2787_2_vu_prepare_employeeData  INSTEAD OF UPDATE AS  
+BEGIN  
+   BEGIN TRAN;
+    insert into babel_2787_2_vu_prepare_employeeData values ('e')
+   Rollback tran;
+END
+
+statement ok
+update babel_2787_2_vu_prepare_employeeData set Emp_First_name = 'dddd';
+
+query TT
+select * from babel_2787_2_vu_prepare_employeeData
+----
+1 dddd
+2 dddd
+3 dddd
+4 dddd
+6 dddd
+
+statement ok
+drop trigger babel_2787_2_vu_prepare_updEmployeeData;
+
+statement ok
+CREATE TRIGGER babel_2787_2_vu_prepare_updEmployeeData  ON babel_2787_2_vu_prepare_employeeData  INSTEAD OF DELETE AS  
+BEGIN  
+   BEGIN TRAN;
+    update babel_2787_2_vu_prepare_employeeData set Emp_First_name = 'dddd';
+   Rollback tran;
+END
+
+statement ok
+delete from babel_2787_2_vu_prepare_employeeData where Emp_First_name = 'a';
+
+query TT
+select * from babel_2787_2_vu_prepare_employeeData
+----
+1 dddd
+2 dddd
+3 dddd
+4 dddd
+6 dddd
+
+statement ok
+drop trigger babel_2787_2_vu_prepare_updEmployeeData;
+
+statement ok
+drop table babel_2787_2_vu_prepare_employeeData
+

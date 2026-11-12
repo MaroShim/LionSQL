@@ -1,0 +1,76 @@
+# test/slt_proc/babelfish_oracle/332_babel_babel_2716.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2716.sql
+
+statement ok
+use master;
+
+query T
+select (case when 'a ' like 'a' then 1 else 0 end);
+----
+0
+
+query T
+select (case when 'a ' like 'a ' then 1 else 0 end);
+----
+1
+
+query T
+select (case when 'a  ' like 'a ' then 1 else 0 end);
+----
+0
+
+query T
+select (case when 'a' like 'a ' then 1 else 0 end);
+----
+0
+
+query T
+select (case when 'a ' like 'a  ' then 1 else 0 end);
+----
+0
+
+query T
+select (case when 'a ' not like 'a' then 1 else 0 end);
+----
+1
+
+query T
+select (case when 'a ' not like 'a ' then 1 else 0 end);
+----
+0
+
+query T
+select (case when 'a  ' not like 'a ' then 1 else 0 end);
+----
+1
+
+query T
+select (case when 'a' not like 'a ' then 1 else 0 end);
+----
+1
+
+query T
+select (case when 'a ' not like 'a  ' then 1 else 0 end);
+----
+1
+
+query T
+select (case when 'a' like 'a_' then 1 else 0 end);
+----
+0
+
+query T
+select (case when 'a ' like 'a_' then 1 else 0 end);
+----
+1
+
+query T
+select (case when 'a' like 'a%' then 1 else 0 end);
+----
+1
+
+query T
+select (case when 'a ' like 'a%' then 1 else 0 end);
+----
+1
+

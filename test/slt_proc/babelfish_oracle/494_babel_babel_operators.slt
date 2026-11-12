@@ -1,0 +1,77 @@
+# test/slt_proc/babelfish_oracle/494_babel_babel_operators.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_operators.sql
+
+query T
+SELECT (123 + 0x42);
+SELECT (0x42 + 123);
+----
+0x42123
+
+query T
+SELECT (123 - 0x42);
+SELECT (0x42 - 123);
+----
+-123
+
+query T
+SELECT (123 * CAST(123 AS varbinary(4)));
+SELECT (CAST(123 AS varbinary(4)) * 123);
+----
+0
+
+query T
+SELECT (12345 / CAST(12 AS varbinary(4)));
+SELECT (CAST(12345 AS varbinary(4)) / 12);
+----
+0
+
+query T
+SELECT (CAST(123 AS varbinary(1)) & 21);
+SELECT (CAST(123 AS varbinary(2)) & 321);
+SELECT (CAST(12345 AS varbinary(4)) & 54321);
+----
+NULL
+
+query T
+SELECT (CAST(9876543210 AS BIGINT) & CAST(1234567890 AS varbinary(8)));
+SELECT (543210 & CAST(12345 AS varbinary(4)));
+SELECT (CAST(321 AS smallint) & CAST(123 AS varbinary(2)));
+SELECT (CAST(12 AS tinyint) & CAST(21 AS varbinary(1)));
+----
+NULL
+
+query T
+SELECT (CAST(123 AS varbinary(1)) | 21);
+SELECT (CAST(123 AS varbinary(2)) | 321);
+SELECT (CAST(12345 AS varbinary(4)) | 54321);
+----
+NULL
+
+query T
+SELECT (CAST(9876543210 AS BIGINT) | CAST(1234567890 AS varbinary(8)));
+SELECT (543210 | CAST(12345 AS varbinary(4)));
+SELECT (CAST(321 AS smallint) | CAST(123 AS varbinary(2)));
+SELECT (CAST(12 AS tinyint) | CAST(21 AS varbinary(1)));
+----
+NULL
+
+query T
+SELECT (17 ^ 5);
+----
+20
+
+query T
+SELECT (CAST(123 AS varbinary(1)) ^ 21);
+SELECT (CAST(123 AS varbinary(2)) ^ 321);
+SELECT (CAST(12345 AS varbinary(4)) ^ 54321);
+----
+NULL
+
+query T
+SELECT (CAST(9876543210 AS BIGINT) ^ CAST(1234567890 AS varbinary(8)));
+SELECT (543210 ^ CAST(12345 AS varbinary(4)));
+SELECT (CAST(321 AS smallint) ^ CAST(123 AS varbinary(2)));
+SELECT (CAST(12 AS tinyint) ^ CAST(21 AS varbinary(1)));
+----
+NULL
+

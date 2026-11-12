@@ -1,0 +1,78 @@
+# test/slt_proc/babelfish_oracle/587_babel_babel_iterative_exec.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_iterative_exec.sql
+
+statement ok
+CREATE PROCEDURE my_test1 @a int AS
+BEGIN
+	SELECT @a;
+END
+
+statement ok
+CREATE PROCEDURE my_test2 @a int AS
+BEGIN
+	SELECT 'first stmt';
+	IF @a < 10
+		BEGIN
+			SELECT 'true branch stmt 1';
+		END
+END
+
+statement ok
+CREATE PROCEDURE my_test3 @a int AS
+BEGIN
+	SELECT 'first stmt';
+	SELECT 'second stmt';
+	IF @a < 10
+		BEGIN
+			SELECT 'true branch stmt 1';
+			SELECT 'true branch stmt 2';
+		END
+	ELSE
+		BEGIN
+			SELECT 'false branch stmt 1';
+			SELECT 'false branch stmt 2';
+		END
+	SELECT 'last stmt';
+END
+
+statement ok
+CREATE PROCEDURE my_test4 @a int AS
+BEGIN
+	SELECT 'first stmt';
+	SELECT 'second stmt';
+	IF @a < 10
+		if @a < 5
+			BEGIN
+				SELECT 'print1';
+				SELECT 'print2';
+			END
+		else
+			BEGIN
+				SELECT 'print3';
+				SELECT 'print4';
+			END
+	ELSE
+		BEGIN
+			SELECT 'print5';
+			SELECT 'print6';
+		END
+	SELECT 'last stmt';
+END
+
+query T
+EXEC my_test1 11
+----
+11
+
+statement ok
+DROP PROCEDURE my_test1;
+
+statement ok
+DROP PROCEDURE my_test2;
+
+statement ok
+DROP PROCEDURE my_test3;
+
+statement ok
+DROP PROCEDURE my_test4;
+

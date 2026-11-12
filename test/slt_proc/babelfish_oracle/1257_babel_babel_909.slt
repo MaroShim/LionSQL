@@ -1,0 +1,14 @@
+# test/slt_proc/babelfish_oracle/1257_babel_babel_909.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-909.sql
+
+statement ok
+CREATE FUNCTION foo(@i uniqueidentifier)
+RETURNS uniqueidentifier
+AS
+BEGIN
+    RETURN @i
+END;
+
+statement ok
+DROP FUNCTION foo;
+

@@ -1,0 +1,25 @@
+# test/slt_proc/babelfish_oracle/1222_babel_babel_3655.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3655-vu-prepare.sql, test/babelfish/raw/BABEL-3655-vu-verify.sql
+
+statement ok
+USE MASTER
+
+statement ok
+CREATE DATABASE babel_3655_test_db
+
+statement ok
+USE babel_3655_test_db
+
+statement ok
+CREATE SCHEMA babel_3655_test_s1
+
+statement ok
+CREATE FUNCTION babel_3655_test_f1()
+RETURNS INT AS 
+BEGIN 
+RETURN 1; 
+END
+
+statement ok
+USE MASTER
+

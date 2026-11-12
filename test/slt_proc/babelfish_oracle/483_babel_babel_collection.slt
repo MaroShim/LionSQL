@@ -1,0 +1,370 @@
+# test/slt_proc/babelfish_oracle/483_babel_babel_collection.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_collection.sql
+
+statement ok
+create table testing1(col nvarchar(60)); -- expect this to fail in the Postgres dialect
+
+query T
+select cast(
+    case
+        when cast(sys.SERVERPROPERTY('BabelfishVersion') as varchar(20)) LIKE '_._._'
+             THEN 'valid'
+    else 'invalid'
+    end as sys.varchar(20));
+----
+invalid
+
+statement ok
+create table testing2 (col varchar(20) collate SQL_Latin1_General_CP1_CI_AS);
+
+statement ok
+insert into testing2 values ('JONES');
+insert into testing2 values ('jones');
+insert into testing2 values ('Jones');
+insert into testing2 values ('JoNes');
+insert into testing2 values ('JoNés');
+
+query T
+select * from testing2 where col collate BBF_Unicode_General_CS_AS = 'JoNes';
+----
+JONES
+jones
+Jones
+JoNes
+JoNés
+
+query T
+select * from testing2 where col collate BBF_Unicode_General_CI_AS = 'JoNes';
+----
+JONES
+jones
+Jones
+JoNes
+JoNés
+
+query T
+select * from testing2 where col collate BBF_Unicode_General_CI_AI = 'JoNes';
+----
+JONES
+jones
+Jones
+JoNes
+JoNés
+
+query T
+select * from testing2 where col collate BBF_Unicode_General_CS_AI = 'JoNes';
+----
+JONES
+jones
+Jones
+JoNes
+JoNés
+
+statement ok
+create table testing3 (c1 varchar(20), c2 char(20), c3 nvarchar(20));
+
+statement ok
+insert into testing3 values ('JONES','JONES','JONES');
+insert into testing3 values ('JoneS','JoneS','JoneS');
+insert into testing3 values ('jOnes','jOnes','jOnes');
+
+query T
+select c1 from testing3 where c1='jones';
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c2 from testing3 where c2='jones';
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c3 from testing3 where c3='jones';
+----
+JONES
+JoneS
+jOnes
+
+statement ok
+create table testing4 (c1 varchar(20), c2 char(20), c3 nvarchar(20));
+create index c1_idx on testing4 (c1);
+
+statement ok
+insert into testing4 values ('JONES','JONES','JONES');
+insert into testing4 values ('JoneS','JoneS','JoneS');
+insert into testing4 values ('jOnes','jOnes','jOnes');
+insert into testing4 values ('abcD','AbcD','ABCd');
+insert into testing4 values ('äbĆD','äḃcD','äƀCd');
+
+statement ok
+SET babelfish_showplan_all ON;
+
+query T
+select c1 from testing4 where c1 LIKE 'jones'; -- this gets converted to '='
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from testing4 where c1 LIKE 'Jon%';
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from testing4 where c1 LIKE 'jone_';
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from testing4 where c1 LIKE '_one_';
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from testing4 where c1 LIKE '%on%s';
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from testing4 where c1 LIKE 'ab%';
+----
+abcD
+
+query T
+select c1 from testing4 where c1 LIKE 'äb%';
+----
+äbĆD
+
+statement ok
+select c1 from testing4 where c1 LIKE 'äḃĆ_';
+
+query T
+select c1 from testing4 where c1 NOT LIKE 'jones';
+----
+abcD
+äbĆD
+
+query T
+select c1 from testing4 where c1 NOT LIKE 'jone%';
+----
+abcD
+äbĆD
+
+query T
+select c1 from testing4 where c1 NOT LIKE 'ä%';
+----
+JONES
+JoneS
+jOnes
+abcD
+
+statement ok
+select c1 from testing4 where c1 LIKE '\%ones';
+
+statement ok
+select c1 from testing4 where c1 LIKE '\_ones';
+
+statement ok
+SET babelfish_showplan_all OFF;
+
+query T
+select c1 from testing4 where c1 LIKE lower('_ones');
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from testing4 where c1 LIKE upper('_ones');
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from testing4 where c1 LIKE concat('_on','_s');
+----
+JONES
+JoneS
+jOnes
+
+query T
+select c1 from testing4 where c1 LIKE concat('a','%d');
+----
+abcD
+
+query T
+select c1 from testing4 where c1 NOT LIKE lower('%s') COLLATE sql_latin1_general_cp1_ci_as;
+----
+abcD
+äbĆD
+
+query TTT
+Select * from testing4 where c1 LIKE (select c1 from testing4 where c1 LIKE 'AbcD');
+----
+abcD AbcD ABCd
+
+query TTT
+Select * from testing4 where c2 NOT LIKE (select c2 from testing4 where c2 NOT LIKE 'jo%' AND c2 NOT LIKE 'ä%');
+----
+JONES JONES JONES
+JoneS JoneS JoneS
+jOnes jOnes jOnes
+äbĆD äḃcD äƀCd
+
+query TTT
+Select * from testing4 where c3 LIKE (select c3 from testing4 where c3 NOT LIKE'jo%' AND c3 NOT LIKE 'ä%');
+----
+abcD AbcD ABCd
+
+query T
+with p1 as (select c1 from testing4 where c1 LIKE '__Ć_'),
+p2 as (select c3 from testing4 where c3 LIKE 'äƀ__')
+select * from p1 union all select * from p2;
+----
+äbĆD
+äƀCd
+
+query TT
+select c2,(case when c2 LIKE '_bc%' then 1 when c2 LIKE 'jon%' then 2 when c3 LIKE 'ä%' then 3 end) from testing4;
+----
+JONES 2
+JoneS 2
+jOnes 2
+AbcD 1
+äḃcD 3
+
+statement ok
+create table testing5(c1 varchar(20) COLLATE SQL_Latin1_General_CP1_CS_AS);
+
+statement ok
+insert into testing5 values ('JONES');
+insert into testing5 values ('JoneS');
+insert into testing5 values ('abcD');
+insert into testing5 values ('äbĆD');
+
+query T
+select * from testing5 where c1 LIKE 'jo%'; -- does not use the transformation
+----
+JONES
+JoneS
+
+statement ok
+SET babelfish_showplan_all ON;
+
+query T
+select * from testing5 where c1 LIKE 'jo%';
+----
+JONES
+JoneS
+
+statement ok
+SET babelfish_showplan_all OFF;
+
+query T
+select * from testing5 where c1 NOT LIKE 'j%';
+----
+abcD
+äbĆD
+
+query T
+select * from testing5 where c1 LIKE 'AB%';
+----
+abcD
+
+statement ok
+SELECT * from testing5 where c1 like '';
+
+statement ok
+SET babelfish_showplan_all ON;
+
+statement ok
+SELECT * from testing5 where c1 like '';
+
+statement ok
+SET babelfish_showplan_all OFF;
+
+statement ok
+SELECT * from testing5 where c1 like NULL;
+
+statement ok
+SET babelfish_showplan_all ON;
+
+statement ok
+SELECT * from testing5 where c1 like NULL;
+
+statement ok
+SET babelfish_showplan_all OFF;
+
+query T
+SELECT * FROM testing5 where c1 COLLATE French_CI_AS like 'jo%' ;
+----
+JONES
+JoneS
+abcD
+äbĆD
+
+statement ok
+SET babelfish_showplan_all ON;
+
+query T
+SELECT * FROM testing5 where c1 COLLATE French_CI_AS like 'jo%' ;
+----
+JONES
+JoneS
+abcD
+äbĆD
+
+statement ok
+SET babelfish_showplan_all OFF;
+
+query T
+SELECT * FROM testing5 where c1 COLLATE Chinese_PRC_CI_AS like 'jo%' ;
+----
+JONES
+JoneS
+abcD
+äbĆD
+
+statement ok
+SET babelfish_showplan_all ON;
+
+query T
+SELECT * FROM testing5 where c1 COLLATE Chinese_PRC_CI_AS like 'jo%' ;
+----
+JONES
+JoneS
+abcD
+äbĆD
+
+statement ok
+SET babelfish_showplan_all OFF;
+
+statement ok
+drop table testing1;
+
+statement ok
+drop table testing2;
+
+statement ok
+drop table testing3;
+
+statement ok
+drop table testing4;
+
+statement ok
+drop table testing5;
+

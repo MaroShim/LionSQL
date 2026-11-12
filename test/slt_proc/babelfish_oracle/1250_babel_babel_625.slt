@@ -1,0 +1,12 @@
+# test/slt_proc/babelfish_oracle/1250_babel_babel_625.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-625.sql
+
+statement ok
+create procedure hf_proc AS
+
+statement ok
+exec hf_proc
+
+statement ok
+DROP PROCEDURE hf_proc
+

@@ -1,0 +1,54 @@
+# test/slt_proc/dml_ddl_schema/246_merge_constraints_views_ddl_16.slt
+# T-SQL MERGE, TOP, OFFSET/FETCH, Constraints, Views, Tail DDL (16)
+
+statement ok
+CREATE TABLE m_tgt_246 (
+    sku INT PRIMARY KEY,
+    code VARCHAR(20) UNIQUE,
+    qty INT DEFAULT 1600 CHECK (qty >= 0)
+);
+
+statement ok
+CREATE TABLE m_src_246 (sku INT PRIMARY KEY, code VARCHAR(20), qty INT);
+
+statement ok
+INSERT INTO m_tgt_246 (sku, code, qty) VALUES (1, 'A_16', 80), (2, 'B_16', 160);
+
+statement ok
+INSERT INTO m_src_246 VALUES (2, 'B_16', 32), (3, 'C_16', 240);
+
+statement error
+INSERT INTO m_tgt_246 (sku, code, qty) VALUES (9, 'NEG_16', -5);
+
+statement ok
+MERGE m_tgt_246 AS t
+USING m_src_246 AS s ON t.sku = s.sku
+WHEN MATCHED THEN UPDATE SET t.qty = t.qty + s.qty
+WHEN NOT MATCHED THEN INSERT (sku, code, qty) VALUES (s.sku, s.code, s.qty);
+
+query ITI
+SELECT sku, code, qty FROM m_tgt_246 ORDER BY sku;
+----
+1 A_16 80
+2 B_16 192
+3 C_16 240
+
+query II
+SELECT TOP 2 sku, qty FROM m_tgt_246 ORDER BY sku DESC;
+----
+3 240
+2 192
+
+statement ok
+ALTER TABLE m_tgt_246 ADD COLUMN tag VARCHAR(20) DEFAULT 'OK';
+
+query IT
+SELECT sku, tag FROM m_tgt_246 WHERE sku = 1;
+----
+1 OK
+
+statement ok
+DROP TABLE m_src_246;
+
+statement ok
+DROP TABLE m_tgt_246;

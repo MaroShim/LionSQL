@@ -1,0 +1,28 @@
+# test/slt_proc/window_analytics/2575_rank_denserank_lag_lead_035.slt
+# T-SQL RANK, DENSE_RANK, ROW_NUMBER, LAG/LEAD with negative default, running SUM (35)
+
+statement ok
+CREATE TABLE win_scores_2575 (id INT PRIMARY KEY, dept VARCHAR(10), score INT);
+
+statement ok
+INSERT INTO win_scores_2575 VALUES
+(1, 'D1', 350),
+(2, 'D1', 350),
+(3, 'D1', 875);
+
+query IIIIII
+SELECT id,
+       ROW_NUMBER() OVER (PARTITION BY dept ORDER BY score, id),
+       RANK() OVER (PARTITION BY dept ORDER BY score),
+       DENSE_RANK() OVER (PARTITION BY dept ORDER BY score),
+       LAG(score, 1, -350) OVER (PARTITION BY dept ORDER BY id),
+       SUM(score) OVER (PARTITION BY dept ORDER BY id)
+FROM win_scores_2575
+ORDER BY id;
+----
+1 1 1 1 -350 350
+2 2 1 1 350 700
+3 3 3 2 350 1575
+
+statement ok
+DROP TABLE win_scores_2575;

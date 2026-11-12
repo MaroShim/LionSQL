@@ -1,0 +1,15 @@
+# test/slt_proc/babelfish_oracle/1118_babel_babel_1682.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1682.sql
+
+statement ok
+use master
+
+statement ok
+create schema [Babelfish];
+
+statement ok
+declare @emps [Babelfish].[EmployeesType];
+
+statement ok
+drop schema [Babelfish];
+

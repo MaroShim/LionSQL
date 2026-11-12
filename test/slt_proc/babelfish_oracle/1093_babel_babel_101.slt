@@ -1,0 +1,16 @@
+# test/slt_proc/babelfish_oracle/1093_babel_babel_101.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-101.sql
+
+statement ok
+CREATE PROCEDURE p5
+AS
+BEGIN TRY
+PRINT 'Hello 1'
+END TRY
+BEGIN CATCH
+PRINT 'Hello 2'
+END CATCH;
+
+statement ok
+DROP PROCEDURE p5
+

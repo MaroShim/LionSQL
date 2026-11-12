@@ -1,0 +1,30 @@
+# test/slt_proc/babelfish_oracle/1346_babel_test_sp_rename_database_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/Test_sp_rename_database-vu-prepare.sql
+
+statement ok
+Create database sp_rename_database1;
+
+statement ok
+use sp_rename_database1
+
+statement ok
+Create role sp_rename_role1;
+
+statement ok
+Create schema sp_rename_schema1;
+
+statement ok
+Create login sp_rename_login1 with password = '1234', default_database = sp_rename_database1;
+
+statement ok
+Create database [sp_rename_ThisOldDatabaseNameIsCaseSensitiveAndIsLongerThan64DigitsToTestRenameDb];
+
+statement ok
+Create login sp_rename_login2 with password = '1234';
+
+statement ok
+Use sp_rename_database1
+
+statement ok
+Create User sp_rename_login2;
+

@@ -1,8 +1,8 @@
 # LionSQL 마이크로 아키텍처 제로 할당 6대 핫패스 튜닝 계획서 (`MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`)
 
 > - **작성일**: 2026-11-12
-> - **상태**: Candidate & Active Sprint Specification (1~3순위 즉시 착수 대상, 4~6순위 온디맨드 후보 과제)
-> - **관련 태스크 ID**:
+> - **상태**: **Post-1.0 Candidate Specification (`v1.10.0` 온디맨드 후보 과제로 전수 이관 — 1.0-GA 코드 동결 및 안정성 최우선 원칙 준수)**
+> - **관련 태스크 ID (`v1.10.0` `PENDING`)**:
 >   - **1순위**: `PERF-VDBE-FRAME-SLIM-1` (VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결)
 >   - **2순위**: `PERF-WAL-ZERO-ALLOC-1` (In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 `writeFrame` Zero-Alloc)
 >   - **3순위**: `PERF-WT-ROW-DIRECT-1` (WiredTiger `InsertRow`/`Update` 중간 `Record` 맵 2중 할당 우회 및 `EncodeRowToBuffer` 직결)

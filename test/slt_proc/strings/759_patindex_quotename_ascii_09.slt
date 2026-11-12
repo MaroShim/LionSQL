@@ -1,0 +1,26 @@
+# test/slt_proc/strings/759_patindex_quotename_ascii_09.slt
+# T-SQL PATINDEX, QUOTENAME, ASCII, CHAR, SPACE, LTRIM, RTRIM (9)
+
+query ITTT
+SELECT ASCII('I'), CHAR(73), QUOTENAME('tbl_col_09'), REPLACE(CONCAT('L', SPACE(5), 'R'), ' ', '_');
+----
+73 I [tbl_col_09] L_____R
+
+query II
+SELECT PATINDEX('%TARGET_I%', 'pre_09_TARGET_I_post'), LEN(LTRIM(RTRIM('   tbl_col_09   ')));
+----
+8 10
+
+statement ok
+CREATE PROCEDURE sp_str_adv_759 @s VARCHAR(100), @code INT OUTPUT
+AS
+BEGIN
+    SET @code = ASCII(LEFT(@s, 1));
+    SELECT UPPER(LEFT(@s, 3)), LOWER(RIGHT(@s, 4)), @code;
+END;
+
+query TTI
+DECLARE @out_c INT;
+EXEC sp_str_adv_759 @s = 'Ibc_XYZ9', @code = @out_c OUTPUT;
+----
+IBC xyz9 73

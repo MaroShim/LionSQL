@@ -1,0 +1,13 @@
+# test/slt_proc/babelfish_oracle/1277_babel_babel_sp_fkeys_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SP_FKEYS-dep-vu-prepare.sql, test/babelfish/raw/BABEL-SP_FKEYS-dep-vu-verify.sql, test/babelfish/raw/BABEL-SP_FKEYS-dep-vu-cleanup.sql
+
+statement ok
+create table babel_sp_fkeys_dep_vu_prepare_t1(a int, primary key(a))
+
+statement ok
+create table babel_sp_fkeys_dep_vu_prepare_t2(a int, b int, c int, foreign key(b) references babel_sp_fkeys_dep_vu_prepare_t1(a))
+
+statement ok
+create procedure babel_sp_fkeys_dep_vu_prepare_p1 as
+    exec sp_fkeys @pktable_name = 'babel_sp_fkeys_dep_vu_prepare_t1'
+

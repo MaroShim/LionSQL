@@ -1,0 +1,112 @@
+# test/slt_proc/babelfish_oracle/1031_babel_1768_1750_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/1768_1750_1.sql
+
+statement ok
+CREATE VIEW v1768
+AS
+SELECT c1, c2
+FROM t1768_1
+
+statement ok
+DROP VIEW v1768
+
+statement ok
+CREATE TABLE t1768_1(
+ c1 int NOT NULL
+,c2 int NOT NULL
+,PRIMARY KEY (c1))
+
+statement ok
+CREATE VIEW v1768
+AS
+SELECT c1, c2
+FROM t1768_1
+
+statement ok
+begin transaction
+
+statement ok
+DROP VIEW v1768
+
+statement ok
+DROP TABLE t1768_1
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t1768_1(
+ c1 int NOT NULL
+,c2 int NOT NULL
+,PRIMARY KEY (c1))
+
+statement ok
+CREATE VIEW v1768
+AS
+SELECT c1, c2
+FROM t1768_1
+
+statement ok
+begin transaction
+
+statement ok
+DROP VIEW v1768
+
+statement ok
+DROP TABLE t1768_1
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE VIEW v1768
+AS
+SELECT c1, c2
+FROM t1768_1
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure ErrorHandling2 as
+begin
+exec ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+DROP VIEW v1768
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE VIEW v1768
+AS
+SELECT c1, c2
+FROM t1768_1
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+begin transaction;
+
+statement ok
+DROP VIEW v1768
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE VIEW v1768
+AS
+SELECT c1, c2
+FROM t1768_1
+
+statement ok
+DROP VIEW v1768
+

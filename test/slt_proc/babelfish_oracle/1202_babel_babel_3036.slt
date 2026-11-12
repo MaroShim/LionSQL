@@ -1,0 +1,15 @@
+# test/slt_proc/babelfish_oracle/1202_babel_babel_3036.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3036.sql
+
+statement ok
+CREATE LOGIN tester WITH PASSWORD = '12121212';
+
+statement ok
+CREATE USER test_user FOR LOGIN tester;
+
+statement ok
+DROP USER test_user;
+
+statement ok
+DROP LOGIN tester;
+

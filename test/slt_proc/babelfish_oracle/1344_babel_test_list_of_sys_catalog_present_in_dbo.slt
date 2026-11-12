@@ -1,0 +1,31 @@
+# test/slt_proc/babelfish_oracle/1344_babel_test_list_of_sys_catalog_present_in_dbo.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/Test_list_of_sys_catalog_present_in_dbo.sql
+
+statement ok
+CREATE TABLE list_of_view_should_be_present_in_dbo_table(view_name varchar(100));
+
+statement ok
+INSERT INTO list_of_view_should_be_present_in_dbo_table values
+    ('syscacheobjects'),
+    ('syscomments'),
+    ('sysconstraints'),
+    ('sysdepends'),
+    ('sysdevices'),
+    ('sysfilegroups'),
+    ('sysfiles'),
+    ('sysfulltextcatalogs'),
+    ('sysindexkeys'),
+    ('syslockinfo'),
+    ('sysmembers'),
+    ('sysmessages'),
+    ('sysoledbusers'),
+    ('sysperfinfo'),
+    ('syspermissions'),
+    ('sysprotects'),
+    ('sysreferences'),
+    ('sysremotelogins'),
+    ('sysservers');
+
+statement ok
+DROP TABLE list_of_view_should_be_present_in_dbo_table;
+

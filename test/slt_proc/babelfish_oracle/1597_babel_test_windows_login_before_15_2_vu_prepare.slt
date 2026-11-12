@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1597_babel_test_windows_login_before_15_2_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/test_windows_login_before_15_2-vu-prepare.sql
+
+statement ok
+CREATE DATABASE ad_db;
+
+statement ok
+CREATE LOGIN PassWordUser with PASSWORD='123';
+

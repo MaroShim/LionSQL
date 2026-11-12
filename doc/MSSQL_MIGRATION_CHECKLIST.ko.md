@@ -60,17 +60,18 @@ LionSQL은 Microsoft SQL Server의 핵심 데이터 타입을 네이티브하게
 1. **변수 선언 및 할당**: `DECLARE @name VARCHAR(50) = 'Lion'; SET @id = 1;`
 2. **조건 분기**: `IF ... ELSE ... BEGIN ... END`
 3. **반복문**: `WHILE ... BEGIN ... BREAK; CONTINUE; END`
-4. **예외 처리**: `BEGIN TRY ... COMMIT TRANSACTION; END TRY BEGIN CATCH ... ROLLBACK; END CATCH`
-5. **트랜잭션 제어**: `BEGIN TRAN`, `COMMIT TRAN`, `ROLLBACK TRAN`, `@@TRANCOUNT`
-6. **내장 함수**: `LEN`, `SUBSTRING`, `CHARINDEX`, `REPLACE`, `CONCAT`, `ISNULL`, `COALESCE`, `GETDATE()`, `DATEDIFF`, `DATEADD`
+4. **예외 처리 및 에러 발생**: `BEGIN TRY ... END TRY BEGIN CATCH ... END CATCH`, `THROW 50001, 'Error message', 1;`, 단독 `THROW;` (재발생), `RAISERROR('Error message', 16, 1);`
+5. **트랜잭션 제어**: `BEGIN TRAN`, `COMMIT TRAN`, `ROLLBACK TRAN`, `SAVE TRAN`, `@@TRANCOUNT`
+6. **세션 임시 테이블 및 테이블 변수**:
+   - `CREATE TABLE #temp (...)`, `SELECT * INTO #temp FROM ...`, `DECLARE @tbl TABLE (...)` 구문을 수정 없이 그대로 지원합니다.
+   - WiredTiger 디스크 모드에서도 `#temp`, `@tbl`, 공통 테이블 식(`WITH cte AS (...)`)은 모두 디스크 I/O 없이 순수 인메모리 OCC 엔진에서 처리되므로 어느 쪽을 사용하든 동일한 성능을 발휘합니다. (단일 쿼리 가독성은 CTE가, 프로시저 내 다중 스텝 재사용은 `#temp` 또는 `@tbl`이 유리합니다.)
+7. **내장 함수**: `LEN`, `SUBSTRING`, `CHARINDEX`, `REPLACE`, `CONCAT`, `ISNULL`, `COALESCE`, `GETDATE()`, `DATEDIFF`, `DATEADD`, `COMPRESS`, `DECOMPRESS`
 
 ### 3.2. 변환 권장 패턴
-1. **커서 (CURSOR) ➔ 집합 기반 쿼리 또는 선형 순회**:
-   - LionSQL은 기본 전방 전용(FORWARD-ONLY) 커서를 지원하지만, 고성능 OLTP를 위해 커서 루프를 집합 기반 `UPDATE ... FROM` 또는 `INSERT ... SELECT`로 재작성하는 것을 권장합니다.
-2. **`THROW` ➔ `RAISERROR`**:
-   - `THROW 50001, 'Error message', 1;` 대신 `RAISERROR('Error message', 16, 1);` 사용 권장.
-3. **`SELECT * INTO #TempTable` ➔ 일반 테이블 또는 CTE**:
-   - 임시 테이블 대신 공통 테이블 식(`WITH cte AS (...)`) 또는 명시적 테이블 선언을 권장합니다.
+1. **커서 (CURSOR) ➔ 집합 기반 쿼리 (Set-Based Queries)**:
+   - LionSQL은 전방 전용(`FORWARD_ONLY` / `FAST_FORWARD`) 커서를 그대로 실행할 수 있지만, 최대 OLTP 처리량을 위해 행 단위(RBAR) 커서 루프는 집합 기반 `UPDATE ... FROM`, `INSERT ... SELECT`, 또는 윈도우 함수로 전환하는 것을 권장합니다.
+2. **레거시 XML (`FOR XML`, `XQuery`) ➔ JSON (`FOR JSON`, `JSON_VALUE`, `OPENJSON`)**:
+   - 레거시 XML DML 대신 표준 JSON 함수(`ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`, `OPENJSON`, `FOR JSON PATH/AUTO`)로 전환하는 것을 권장합니다.
 
 ---
 

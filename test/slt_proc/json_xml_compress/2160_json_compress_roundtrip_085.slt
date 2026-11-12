@@ -1,0 +1,29 @@
+# test/slt_proc/json_xml_compress/2160_json_compress_roundtrip_085.slt
+# T-SQL ISJSON, JSON_VALUE, JSON_MODIFY, COMPRESS & DECOMPRESS roundtrip (85)
+
+query IIT
+SELECT ISJSON('{"node":"node_085","code":853,"active":true}'), ISJSON('invalid_json_85'), JSON_VALUE('{"node":"node_085","code":853,"active":true}', '$.node');
+----
+1 0 node_085
+
+query IT
+SELECT CAST(JSON_VALUE(JSON_MODIFY('{"node":"node_085","code":853,"active":true}', '$.code', 8509), '$.code') AS INT),
+       CAST(DECOMPRESS(COMPRESS('LionSQL-Compressed-Block-2160-Key-853')) AS VARCHAR(200));
+----
+8509 LionSQL-Compressed-Block-2160-Key-853
+
+statement ok
+CREATE TABLE jc_store_2160 (id INT PRIMARY KEY, j VARCHAR(400), rev_j VARCHAR(400));
+
+statement ok
+INSERT INTO jc_store_2160 VALUES (1, '{"node":"node_085","code":853,"active":true}', JSON_MODIFY('{"node":"node_085","code":853,"active":true}', '$.code', 8509));
+
+query ITI
+SELECT id, JSON_VALUE(j, '$.node'), CAST(JSON_VALUE(rev_j, '$.code') AS INT)
+FROM jc_store_2160
+WHERE ISJSON(j) = 1;
+----
+1 node_085 8509
+
+statement ok
+DROP TABLE jc_store_2160;

@@ -1,0 +1,51 @@
+# test/slt_proc/control_flow_procs/180_cursor_and_return_code_15.slt
+# T-SQL Cursor iteration and nested EXEC @rc = proc (15)
+
+statement ok
+CREATE TABLE cur_t_180 (id INT PRIMARY KEY, v INT);
+
+statement ok
+INSERT INTO cur_t_180 VALUES (1, 150), (2, 300), (3, 450);
+
+statement ok
+CREATE PROCEDURE sp_cur_180
+AS
+BEGIN
+    DECLARE @id INT;
+    DECLARE @v INT;
+    DECLARE @acc INT = 0;
+    DECLARE c CURSOR FOR SELECT id, v FROM cur_t_180 ORDER BY id;
+    OPEN c;
+    FETCH NEXT FROM c INTO @id, @v;
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SET @acc = @acc + @v;
+        FETCH NEXT FROM c INTO @id, @v;
+    END;
+    CLOSE c;
+    DEALLOCATE c;
+    SELECT @acc;
+    RETURN 215;
+END;
+
+query I
+EXEC sp_cur_180;
+----
+900
+
+statement ok
+CREATE PROCEDURE sp_call_cur_180
+AS
+BEGIN
+    DECLARE @rc INT;
+    EXEC @rc = sp_cur_180;
+    SELECT @rc;
+END;
+
+query I
+EXEC sp_call_cur_180;
+----
+215
+
+statement ok
+DROP TABLE cur_t_180;

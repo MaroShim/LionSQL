@@ -1,0 +1,163 @@
+# test/slt_proc/babelfish_oracle/339_babel_babel_2795.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2795-vu-prepare.sql, test/babelfish/raw/BABEL-2795-vu-verify.sql
+
+statement ok
+CREATE VIEW BABEL_2795_vu_prepare_v1 AS (select datediff(dd,DATETIMEFROMPARTS(2021,12,10,1,50,59,0),DATEADD(minute,123456*1440,DATETIMEFROMPARTS(1900,1,1,0,0,0,0))));
+
+statement ok
+CREATE VIEW BABEL_2795_vu_prepare_v2 AS (SELECT DATEDIFF(day, '2011-12-29 23:00:00', '2011-12-31 01:00:00'));
+
+statement ok
+CREATE VIEW BABEL_2795_vu_prepare_v3 AS (SELECT DATEDIFF(dd, '2011-12-30 08:55:59.123', '2011-12-31 08:55:59.123'));
+
+statement ok
+CREATE VIEW BABEL_2795_vu_prepare_v4 AS (SELECT DATEDIFF(dd, '2011-12-30 08:55:59.123', '2011-12-31 00:00:00.000'));
+
+statement ok
+CREATE VIEW BABEL_2795_vu_prepare_v5 AS (SELECT DATEDIFF(dd, '2011-12-31 00:00:00.000', '2011-12-30 08:55:59.123'));
+
+statement ok
+CREATE PROCEDURE BABEL_2795_vu_prepare_p1 AS (SELECT DATEDIFF(day, NULL, '2011-12-29 23:00:00'));
+
+statement ok
+CREATE PROCEDURE BABEL_2795_vu_prepare_p2 AS (SELECT DATEDIFF(day, NULL, NULL));
+
+statement ok
+CREATE PROCEDURE BABEL_2795_vu_prepare_p3 AS (SELECT DATEDIFF(day, '2011-12-31 23:00:00', '2012-01-01 01:00:00'));
+
+statement ok
+CREATE PROCEDURE BABEL_2795_vu_prepare_p4 AS (SELECT DATEDIFF(day, '2011-02-28 03:00:00', '2011-03-01 09:46:00'));
+
+statement ok
+CREATE PROCEDURE BABEL_2795_vu_prepare_p5 AS (SELECT DATEDIFF(day, '2012-02-28 03:00:00', '2012-03-01 09:46:00'));
+
+statement ok
+CREATE FUNCTION BABEL_2795_vu_prepare_f1()
+RETURNS INTEGER AS
+BEGIN
+RETURN (SELECT DATEDIFF(hour, '1986-03-03 00:05', '1986-03-01 08:55'));
+END
+
+statement ok
+CREATE FUNCTION BABEL_2795_vu_prepare_f2()
+RETURNS INTEGER AS
+BEGIN
+RETURN (SELECT DATEDIFF(hour, '1992-10-30 02:01', '1992-10-30 01:23'));
+END
+
+statement ok
+CREATE FUNCTION BABEL_2795_vu_prepare_f3()
+RETURNS INTEGER AS
+BEGIN
+RETURN (SELECT DATEDIFF(hour, '1992-10-30 01:23', '1992-10-30 02:01'));
+END
+
+statement ok
+CREATE FUNCTION BABEL_2795_vu_prepare_f4()
+RETURNS INTEGER AS
+BEGIN
+RETURN (SELECT DATEDIFF(hour, '2016-02-28 09:05', '2016-03-01 08:55'));
+END
+
+statement ok
+CREATE FUNCTION BABEL_2795_vu_prepare_f5()
+RETURNS INTEGER AS
+BEGIN
+RETURN (SELECT DATEDIFF(hour, '2015-02-28 09:55', '2015-03-01 08:55'));
+END
+
+statement ok
+DROP VIEW BABEL_2795_vu_prepare_v1
+
+statement ok
+DROP VIEW BABEL_2795_vu_prepare_v2
+
+statement ok
+DROP VIEW BABEL_2795_vu_prepare_v3
+
+statement ok
+DROP VIEW BABEL_2795_vu_prepare_v4
+
+statement ok
+DROP VIEW BABEL_2795_vu_prepare_v5
+
+query T
+EXEC BABEL_2795_vu_prepare_p1
+----
+NULL
+
+statement ok
+DROP procedure  BABEL_2795_vu_prepare_p1
+
+query T
+EXEC BABEL_2795_vu_prepare_p2
+----
+NULL
+
+statement ok
+DROP procedure  BABEL_2795_vu_prepare_p2
+
+query T
+EXEC BABEL_2795_vu_prepare_p3
+----
+0
+
+statement ok
+DROP procedure  BABEL_2795_vu_prepare_p3
+
+query T
+EXEC BABEL_2795_vu_prepare_p4
+----
+1
+
+statement ok
+DROP procedure  BABEL_2795_vu_prepare_p4
+
+query T
+EXEC BABEL_2795_vu_prepare_p5
+----
+2
+
+statement ok
+DROP procedure  BABEL_2795_vu_prepare_p5
+
+query T
+SELECT BABEL_2795_vu_prepare_f1()
+----
+NULL
+
+statement ok
+DROP FUNCTION BABEL_2795_vu_prepare_f1()
+
+query T
+SELECT BABEL_2795_vu_prepare_f2()
+----
+NULL
+
+statement ok
+DROP FUNCTION BABEL_2795_vu_prepare_f2()
+
+query T
+SELECT BABEL_2795_vu_prepare_f3()
+----
+NULL
+
+statement ok
+DROP FUNCTION BABEL_2795_vu_prepare_f3()
+
+query T
+SELECT BABEL_2795_vu_prepare_f4()
+----
+NULL
+
+statement ok
+DROP FUNCTION BABEL_2795_vu_prepare_f4()
+
+query T
+SELECT BABEL_2795_vu_prepare_f5()
+----
+NULL
+
+statement ok
+DROP FUNCTION BABEL_2795_vu_prepare_f5()
+

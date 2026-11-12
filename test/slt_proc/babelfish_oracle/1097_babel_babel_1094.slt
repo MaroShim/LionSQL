@@ -1,0 +1,31 @@
+# test/slt_proc/babelfish_oracle/1097_babel_babel_1094.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1094.sql
+
+statement ok
+CREATE PROCEDURE babel_1094_proc(@p0 VARCHAR(32))
+AS
+BEGIN
+  UPDATE T set id = @id + 1
+  BEGIN TRANSACTION
+    UPDATE T SET col1 = s.col2 FROM @tab_var s WHERE T.col3 = s.col4
+  COMMIT
+  SELECT * FROM T WHERE col1 = @id
+END
+
+statement ok
+CREATE PROCEDURE babel_1094_proc_2(@p0 VARCHAR(32))
+AS
+BEGIN
+  UPDATE T set id = @id + 1
+  BEGIN TRANSACTION
+    UPDATE T SET col1 = s.col2 FROM @tab_var s WHERE T.col3 = s.col4
+  ROLLBACK
+  SELECT * FROM T WHERE col1 = @id
+END
+
+statement ok
+DROP PROCEDURE babel_1094_proc
+
+statement ok
+DROP PROCEDURE babel_1094_proc_2
+

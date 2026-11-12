@@ -1,0 +1,89 @@
+# test/slt_proc/babelfish_oracle/516_babel_babel_2203.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/triggers/BABEL-2203-vu-prepare.sql, test/babelfish/raw/triggers/BABEL-2203-vu-verify.sql, test/babelfish/raw/triggers/BABEL-2203-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE babel_2203_vu_prepare_p_inner AS
+  SELECT 1
+
+statement ok
+CREATE FUNCTION babel_2203_vu_prepare_f() RETURNS INT AS
+BEGIN
+  DECLARE @return INT
+  SET @return = 42
+  EXEC babel_2203_vu_prepare_p_inner -- should throw runtime error
+  RETURN @return
+END
+
+statement ok
+CREATE FUNCTION babel_2203_vu_prepare_f_inner() RETURNS INT AS
+BEGIN
+  RETURN 42;
+END
+
+statement ok
+CREATE FUNCTION babel_2203_vu_prepare_f_2() RETURNS INT AS
+BEGIN
+  DECLARE @return INT
+  EXEC @return = babel_2203_vu_prepare_f_inner
+  RETURN @return
+END
+
+statement ok
+CREATE TABLE babel_2203_vu_prepare_t(a int);
+INSERT INTO babel_2203_vu_prepare_t VALUES (1);
+
+statement ok
+CREATE FUNCTION babel_2203_vu_prepare_f_i() RETURNS INT AS
+BEGIN
+  INSERT INTO babel_2203_vu_prepare_t VALUES (2);
+  RETURN 0;
+END
+
+statement ok
+CREATE FUNCTION babel_2203_vu_prepare_f_u() RETURNS INT AS
+BEGIN
+  UPDATE babel_2203_vu_prepare_t SET a = 2;
+  RETURN 0;
+END
+
+statement ok
+CREATE FUNCTION babel_2203_vu_prepare_f_d() RETURNS INT AS
+BEGIN
+  DELETE FROM babel_2203_vu_prepare_t;
+  RETURN 0;
+END
+
+statement ok
+CREATE TABLE babel_2203_vu_prepare_t_inserted_by_proc(a int);
+
+statement ok
+CREATE PROCEDURE babel_2203_vu_prepare_p_2_inner AS
+  INSERT INTO babel_2203_vu_prepare_t_inserted_by_proc VALUES (42);
+
+statement ok
+CREATE TABLE babel_2203_vu_prepare_t_2(a int);
+INSERT INTO babel_2203_vu_prepare_t_2 VALUES (1);
+
+statement ok
+DECLARE @ret INT
+EXEC @ret = babel_2203_vu_prepare_f_2
+SELECT @ret
+
+statement ok
+INSERT INTO babel_2203_vu_prepare_t_2 VALUES (2);
+
+query T
+SELECT * FROM babel_2203_vu_prepare_t_2;
+----
+1
+2
+
+statement ok
+SELECT * FROM babel_2203_vu_prepare_t_inserted_by_proc;
+
+statement ok
+DROP PROCEDURE babel_2203_vu_prepare_p_inner, babel_2203_vu_prepare_p_2_inner;
+
+statement ok
+DROP FUNCTION babel_2203_vu_prepare_f, babel_2203_vu_prepare_f_inner, babel_2203_vu_prepare_f_2;
+

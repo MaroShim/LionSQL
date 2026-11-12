@@ -1,0 +1,82 @@
+# test/slt_proc/babelfish_oracle/284_babel_babel_1481.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1481.sql
+
+statement ok
+CREATE TABLE babel_1481_t(a VARCHAR(8000))
+
+statement ok
+INSERT INTO babel_1481_t VALUES ('Test Value 1'), ('Test Value 2');
+
+statement ok
+DROP TABLE babel_1481_t;
+
+statement ok
+CREATE TABLE babel_1481_t(a CHAR(8000));
+
+statement ok
+INSERT INTO babel_1481_t VALUES ('Test Value 1'), ('Test Value 2');
+
+statement ok
+DROP TABLE babel_1481_t;
+
+statement ok
+CREATE TABLE babel_1481_t(a VARCHAR(8001))
+
+statement ok
+INSERT INTO babel_1481_t VALUES ('Test Value 1'), ('Test Value 2');
+
+statement ok
+DROP TABLE babel_1481_t;
+
+statement ok
+CREATE TABLE babel_1481_t(a NCHAR(4000))
+
+statement ok
+INSERT INTO babel_1481_t VALUES ('Test Value 1'), ('Test Value 2');
+
+statement ok
+DROP TABLE babel_1481_t;
+
+statement ok
+CREATE TABLE babel_1481_t(a NVARCHAR(4001))
+
+query T
+SELECT cast(12 as VARCHAR(8000))
+----
+12
+
+query T
+SELECT cast(12 as CHAR(8000))
+----
+12
+
+query T
+SELECT cast(12 as NVARCHAR(4000))
+----
+12
+
+query T
+SELECT cast(12 as NCHAR(4000))
+----
+12
+
+query T
+SELECT cast(12 as VARCHAR(8001))
+----
+12
+
+query T
+SELECT cast(12 as CHAR(8001))
+----
+12
+
+query T
+SELECT cast(12 as NVARCHAR(4001))
+----
+12
+
+query T
+SELECT cast(12 as NCHAR(4001))
+----
+12
+

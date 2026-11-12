@@ -1,0 +1,28 @@
+# test/slt_proc/babelfish_oracle/1458_babel_print_null.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/print_null-vu-prepare.sql, test/babelfish/raw/print_null-vu-verify.sql, test/babelfish/raw/print_null-vu-cleanup.sql
+
+statement ok
+create procedure p1_print_null as
+declare @v varchar = null
+print null
+print @v
+print ''
+set @v = ''
+print @v
+print ' '
+print '  '
+
+statement ok
+declare @v varchar = null
+print @v
+
+statement ok
+declare @v varchar = ''
+print @v
+
+statement ok
+exec p1_print_null
+
+statement ok
+drop procedure p1_print_null
+

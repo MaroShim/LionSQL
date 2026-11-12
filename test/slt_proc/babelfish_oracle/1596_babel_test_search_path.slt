@@ -1,0 +1,135 @@
+# test/slt_proc/babelfish_oracle/1596_babel_test_search_path.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/test_search_path.sql
+
+statement ok
+CREATE DATABASE ["BABEL_5111.db"]
+
+statement ok
+CREATE DATABASE ["龙漫远; 龍漫遠.¢£€¥"]
+
+statement ok
+CREATE TABLE t1(a int)
+
+query T
+SELECT current_setting('search_path')
+----
+public
+
+statement ok
+CREATE SCHEMA ["BABEL_5111.scm"]
+
+statement ok
+CREATE VIEW ["BABEL_5111.scm"].v1 AS SELECT 1
+
+statement ok
+CREATE PROCEDURE ["BABEL_5111.scm"].p1 AS SELECT 1
+
+statement ok
+CREATE TRIGGER ["BABEL_5111.scm"].BABEL_5111_trgger1 on ["BABEL_5111.scm"].t1 AFTER INSERT AS BEGIN END
+
+query T
+SELECT current_setting('search_path')
+----
+public
+
+statement ok
+CREATE SCHEMA ["BABEL_5111.😃😄😉😊"]
+
+statement ok
+USE master
+
+query T
+EXEC ["BABEL_5111.db"].["BABEL_5111.scm"].p1
+----
+1
+
+statement ok
+SELECT * from ["BABEL_5111.db"].["BABEL_5111.scm"].t1
+
+statement ok
+DROP PROCEDURE ["BABEL_5111.scm"].p1
+
+statement ok
+DROP TRIGGER ["BABEL_5111.scm"].BABEL_5111_trgger1
+
+statement ok
+DROP VIEW ["BABEL_5111.scm"].v1
+
+statement ok
+DROP TABLE ["BABEL_5111.scm"].t1
+
+statement ok
+DROP SCHEMA ["BABEL_5111.scm"]
+
+statement ok
+DROP SCHEMA ["BABEL_5111.😃😄😉😊"]
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE ["BABEL_5111.db"] collate BBF_Unicode_CP1_CI_AI
+
+statement ok
+CREATE DATABASE ["龙漫远; 龍漫遠.¢£€¥"] collate BBF_Unicode_CP1_CI_AI
+
+statement ok
+CREATE TABLE t1(a int)
+
+query T
+SELECT current_setting('search_path')
+----
+public
+
+statement ok
+CREATE SCHEMA ["BABEL_5111.scm"]
+
+statement ok
+CREATE VIEW ["BABEL_5111.scm"].v1 AS SELECT 1
+
+statement ok
+CREATE PROCEDURE ["BABEL_5111.scm"].p1 AS SELECT 1
+
+statement ok
+CREATE TRIGGER ["BABEL_5111.scm"].BABEL_5111_trgger1 on ["BABEL_5111.scm"].t1 AFTER INSERT AS BEGIN END
+
+query T
+SELECT current_setting('search_path')
+----
+public
+
+statement ok
+CREATE SCHEMA ["BABEL_5111.😃😄😉😊"]
+
+statement ok
+USE master
+
+query T
+EXEC ["BABEL_5111.db"].["BABEL_5111.scm"].p1
+----
+1
+
+statement ok
+SELECT * from ["BABEL_5111.db"].["BABEL_5111.scm"].t1
+
+statement ok
+DROP PROCEDURE ["BABEL_5111.scm"].p1
+
+statement ok
+DROP TRIGGER ["BABEL_5111.scm"].BABEL_5111_trgger1
+
+statement ok
+DROP VIEW ["BABEL_5111.scm"].v1
+
+statement ok
+DROP TABLE ["BABEL_5111.scm"].t1
+
+statement ok
+DROP SCHEMA ["BABEL_5111.scm"]
+
+statement ok
+DROP SCHEMA ["BABEL_5111.😃😄😉😊"]
+
+statement ok
+USE master
+

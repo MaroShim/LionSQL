@@ -1,0 +1,21 @@
+# test/slt_proc/babelfish_oracle/589_babel_babel_iterative_exec_try_catch.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_iterative_exec_try_catch.sql
+
+query T
+BEGIN TRY
+	BEGIN TRY
+		SELECT 'generate error'
+		SELECT 100/0
+	END TRY
+	BEGIN CATCH
+		SELECT 'generate error in catch' 
+		SELECT 99/0
+	END CATCH
+END TRY
+BEGIN CATCH
+	SELECT 'handle error'
+END CATCH
+----
+NULL
+NULL
+

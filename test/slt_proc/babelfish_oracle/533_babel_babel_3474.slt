@@ -1,0 +1,303 @@
+# test/slt_proc/babelfish_oracle/533_babel_babel_3474.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3474-vu-prepare.sql, test/babelfish/raw/BABEL-3474-vu-verify.sql
+
+statement ok
+create view BABEL_3474_vu_prepare_v1 as (SELECT DATEADD(microsecond, 56, cast('2016-12-26 12:15:01' as DATETIMEOFFSET)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v2 as (SELECT DATEADD(microsecond, 1700, cast('2016-12-26 12:15:01' as DATETIME2)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v3 as (SELECT DATEADD(microsecond,15,cast('12:15:59.999999' as TIME)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v4 as (SELECT DATEADD(microsecond, 56, cast('2016-12-26 12:15:01' as DATETIME)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v5 as (SELECT DATEADD(microsecond,150,cast('1955-12-13 12:43:10' as SMALLDATETIME)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v6 as (SELECT DATEADD(nanosecond, 56, cast('2016-12-26 12:15:01' as DATETIMEOFFSET)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v7 as (SELECT DATEADD(nanosecond, 1700, cast('2016-12-26 12:15:01' as DATETIME2)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v8 as (SELECT DATEADD(nanosecond,1000,cast('12:15:59.999999' as TIME)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v9 as (SELECT DATEADD(nanosecond, 56, cast('2016-12-26 12:15:01' as DATETIME)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v10 as (SELECT DATEADD(nanosecond,150,cast('1955-12-13 12:43:10' as SMALLDATETIME)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v11 as (SELECT DATEADD(day,150,cast('12:15:59.999999' as TIME)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v12 as (SELECT DATEADD(second,150,cast('1955-12-13' as DATE)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v13 as (SELECT DATEADD(minute, 70, cast('2016-12-26 23:30:05.523456+8' as DATETIMEOFFSET)));
+
+statement ok
+create view BABEL_3474_vu_prepare_v14 as (SELECT DATEADD(month, 2, cast('2016-12-26 23:30:05.523456+8' as DATETIMEOFFSET)));
+
+statement ok
+create procedure  BABEL_3474_vu_prepare_p1 as (SELECT DATEADD(microsecond, 56, cast('2016-12-26 12:15:01' as DATETIMEOFFSET)));
+
+statement ok
+create procedure  BABEL_3474_vu_prepare_p2 as (SELECT DATEADD(microsecond, 1700, cast('2016-12-26 12:15:01' as DATETIME2)));
+
+statement ok
+create procedure  BABEL_3474_vu_prepare_p4 as (SELECT DATEADD(microsecond, 56, cast('2016-12-26 12:15:01' as DATETIME)));
+
+statement ok
+create procedure  BABEL_3474_vu_prepare_p5 as (SELECT DATEADD(microsecond,150,cast('1955-12-13 12:43:10' as SMALLDATETIME)));
+
+statement ok
+create procedure  BABEL_3474_vu_prepare_p6 as (SELECT DATEADD(nanosecond, 56, cast('2016-12-26 12:15:01' as DATETIMEOFFSET)));
+
+statement ok
+create procedure  BABEL_3474_vu_prepare_p7 as (SELECT DATEADD(nanosecond, 1700, cast('2016-12-26 12:15:01' as DATETIME2)));
+
+statement ok
+create procedure  BABEL_3474_vu_prepare_p9 as (SELECT DATEADD(nanosecond, 56, cast('2016-12-26 12:15:01' as DATETIME)));
+
+statement ok
+create procedure  BABEL_3474_vu_prepare_p10 as (SELECT DATEADD(nanosecond,150,cast('1955-12-13 12:43:10' as SMALLDATETIME)));
+
+statement ok
+create procedure  BABEL_3474_vu_prepare_p12 as (SELECT DATEADD(second,150,cast('1955-12-13' as DATE)));
+
+statement ok
+create procedure  BABEL_3474_vu_prepare_p13 as (SELECT DATEADD(minute, 70, cast('2016-12-26 23:30:05.523456+8' as DATETIMEOFFSET)));
+
+statement ok
+create procedure  BABEL_3474_vu_prepare_p14 as (SELECT DATEADD(month, 2, cast('2016-12-26 23:30:05.523456+8' as DATETIMEOFFSET)));
+
+statement ok
+create function BABEL_3474_vu_prepare_f1()
+returns DATETIME as
+begin
+return (SELECT * from DATEADD(microsecond, 56, cast('2016-12-26 12:15:01' as DATETIMEOFFSET)));
+end
+
+statement ok
+create function BABEL_3474_vu_prepare_f2()
+returns DATETIME2 as
+begin
+return (SELECT * from DATEADD(microsecond, 1700, cast('2016-12-26 12:15:01' as DATETIME2)));
+end
+
+statement ok
+create function BABEL_3474_vu_prepare_f4()
+returns DATETIME as
+begin
+return (SELECT * from DATEADD(microsecond, 56, cast('2016-12-26 12:15:01' as DATETIME)));
+end
+
+statement ok
+create function BABEL_3474_vu_prepare_f5()
+returns SMALLDATETIME as
+begin
+return (SELECT * from DATEADD(microsecond,150,cast('1955-12-13 12:43:10' as SMALLDATETIME)));
+end
+
+statement ok
+create function BABEL_3474_vu_prepare_f6()
+returns DATETIMEOFFSET as
+begin
+return (SELECT * from DATEADD(nanosecond, 56, cast('2016-12-26 12:15:01' as DATETIMEOFFSET)));
+end
+
+statement ok
+create function BABEL_3474_vu_prepare_f7()
+returns DATETIME2 as
+begin
+return (SELECT * from DATEADD(nanosecond, 1700, cast('2016-12-26 12:15:01' as DATETIME2)));
+end
+
+statement ok
+create function BABEL_3474_vu_prepare_f9()
+returns DATETIME as
+begin
+return (SELECT * from DATEADD(nanosecond, 56, cast('2016-12-26 12:15:01' as DATETIME)));
+end
+
+statement ok
+create function BABEL_3474_vu_prepare_f10()
+returns SMALLDATETIME as
+begin
+return (SELECT * from DATEADD(nanosecond,150,cast('1955-12-13 12:43:10' as SMALLDATETIME)));
+end
+
+statement ok
+create function BABEL_3474_vu_prepare_f12()
+returns DATE as
+begin
+return (SELECT * from DATEADD(second,150,cast('1955-12-13' as DATE)));
+end
+
+statement ok
+create function BABEL_3474_vu_prepare_f13()
+returns DATE as
+begin
+return (SELECT DATEADD(minute, 70, cast('2016-12-26 23:30:05.523456+8' as DATETIMEOFFSET)));
+end
+
+statement ok
+create function BABEL_3474_vu_prepare_f14()
+returns DATE as
+begin
+return (SELECT DATEADD(month, 2, cast('2016-12-26 23:30:05.523456+8' as DATETIMEOFFSET)));
+end
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v1
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v2
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v3
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v4
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v5
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v6
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v7
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v8
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v9
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v10
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v11
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v12
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v13
+
+statement ok
+DROP VIEW BABEL_3474_vu_prepare_v14
+
+query T
+EXEC BABEL_3474_vu_prepare_p1
+----
+NULL
+
+statement ok
+DROP procedure BABEL_3474_vu_prepare_p1
+
+query T
+EXEC BABEL_3474_vu_prepare_p2
+----
+NULL
+
+statement ok
+DROP procedure BABEL_3474_vu_prepare_p2
+
+query T
+EXEC BABEL_3474_vu_prepare_p4
+----
+NULL
+
+statement ok
+DROP procedure BABEL_3474_vu_prepare_p4
+
+query T
+EXEC BABEL_3474_vu_prepare_p5
+----
+NULL
+
+statement ok
+DROP procedure BABEL_3474_vu_prepare_p5
+
+query T
+EXEC BABEL_3474_vu_prepare_p6
+----
+NULL
+
+statement ok
+DROP procedure BABEL_3474_vu_prepare_p6
+
+query T
+EXEC BABEL_3474_vu_prepare_p7
+----
+NULL
+
+statement ok
+DROP procedure BABEL_3474_vu_prepare_p7
+
+query T
+EXEC BABEL_3474_vu_prepare_p9
+----
+NULL
+
+statement ok
+DROP procedure BABEL_3474_vu_prepare_p9
+
+query T
+EXEC BABEL_3474_vu_prepare_p10
+----
+NULL
+
+statement ok
+DROP procedure BABEL_3474_vu_prepare_p10
+
+statement ok
+DROP procedure BABEL_3474_vu_prepare_p12
+
+statement ok
+DROP procedure BABEL_3474_vu_prepare_p13
+
+statement ok
+DROP procedure BABEL_3474_vu_prepare_p14
+
+statement ok
+DROP FUNCTION BABEL_3474_vu_prepare_f1
+
+statement ok
+DROP FUNCTION BABEL_3474_vu_prepare_f2
+
+statement ok
+DROP FUNCTION BABEL_3474_vu_prepare_f4
+
+statement ok
+DROP FUNCTION BABEL_3474_vu_prepare_f5
+
+statement ok
+DROP FUNCTION BABEL_3474_vu_prepare_f6
+
+statement ok
+DROP FUNCTION BABEL_3474_vu_prepare_f7
+
+statement ok
+DROP FUNCTION BABEL_3474_vu_prepare_f9
+
+statement ok
+DROP FUNCTION BABEL_3474_vu_prepare_f10
+
+statement ok
+DROP FUNCTION BABEL_3474_vu_prepare_f12
+
+statement ok
+DROP FUNCTION BABEL_3474_vu_prepare_f13
+
+statement ok
+DROP FUNCTION BABEL_3474_vu_prepare_f14
+

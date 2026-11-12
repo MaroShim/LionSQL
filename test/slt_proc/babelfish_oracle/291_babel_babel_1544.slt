@@ -1,0 +1,53 @@
+# test/slt_proc/babelfish_oracle/291_babel_babel_1544.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1544.sql
+
+statement ok
+declare @vb varbinary(10) = NULL
+select len(@vb)
+
+query T
+declare @vb varbinary(5)
+set @vb = 0x90a;
+select len(@vb)
+----
+5
+
+query T
+declare @vb varbinary(1)
+set @vb = 0x90a;
+select len(@vb)
+----
+5
+
+query T
+declare @vb varbinary(10)
+set @vb = 0x90a;
+select len(@vb)
+----
+5
+
+query T
+declare @vb varbinary(7)
+set @vb = 0x010a1a1a1a;
+select len(@vb)
+----
+12
+
+query T
+declare @vb varbinary(10)
+set @vb = 0x0102030405060708090a021321321a321a3a213a21a;
+select len(@vb)
+----
+45
+
+query T
+declare @vb varbinary(10)
+set @vb = 0x0102030405060708090a021a31321a321a321a321a321a3a213a21a;
+select len(@vb)
+----
+57
+
+statement ok
+declare @vb varbinary(10) = 0x0102030405060708090a021a31321a321a321a321a321a3a213a21a321a321a321a36513a216a03
+select len(@vb)
+

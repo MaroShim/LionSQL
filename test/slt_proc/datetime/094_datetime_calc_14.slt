@@ -1,0 +1,17 @@
+# test/slt_proc/datetime/094_datetime_calc_14.slt
+# T-SQL YEAR/MONTH/DAY/DATENAME/EOMONTH/DATEADD/DATEDIFF (14)
+
+query IIIT
+SELECT YEAR('2023-02-15'), MONTH('2023-02-15'), DAY('2023-02-15'), DATENAME(month, '2023-02-15');
+----
+2023 2 15 February
+
+query TT
+SELECT EOMONTH('2023-02-15'), CONVERT(VARCHAR(10), DATEADD(day, 56, '2026-01-01'), 120);
+----
+2023-02-28 2026-02-26
+
+query III
+SELECT DATEDIFF(day, '2026-01-01', '2026-02-26'), ISDATE('2023-02-15'), ISDATE('bad-date-14');
+----
+56 1 0

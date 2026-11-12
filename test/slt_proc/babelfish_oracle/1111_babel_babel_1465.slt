@@ -1,0 +1,15 @@
+# test/slt_proc/babelfish_oracle/1111_babel_babel_1465.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1465-vu-prepare.sql, test/babelfish/raw/BABEL-1465-vu-verify.sql, test/babelfish/raw/BABEL-1465-vu-cleanup.sql
+
+statement ok
+create table babel_1465_vu_prepare_t1 (id int, a varchar(10));
+
+statement ok
+alter table babel_1465_vu_prepare_t1 add b as cast(cast('01-01-2012' as char(10)) as varchar(10)) persisted;
+
+statement ok
+alter table babel_1465_vu_prepare_t1 add c as cast(cast('01-01-2012' as sql_variant) as varchar(10)) persisted;
+
+statement ok
+DROP TABLE babel_1465_vu_prepare_t1
+

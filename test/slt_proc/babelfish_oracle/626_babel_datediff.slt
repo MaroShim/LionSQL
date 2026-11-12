@@ -1,0 +1,696 @@
+# test/slt_proc/babelfish_oracle/626_babel_datediff.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/dateFunctions/datediff-vu-prepare.sql, test/babelfish/raw/dateFunctions/datediff-vu-verify.sql, test/babelfish/raw/dateFunctions/datediff-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE datediff_p1 as (select datediff(year, cast('1900-01-01' as datetime), cast('2023-01-02' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_p2 as (select datediff(year, cast('2020-01-01' as datetime), cast('1990-01-02' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_p3 as (select datediff(quarter, cast('2020-01-01' as datetime), cast('1990-01-02' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_p4 as (select datediff(month, cast('2020-01-01' as datetime), cast('2022-01-02' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_p5 as (select datediff(week, cast('2020-01-01' as datetime2), cast('2022-01-02' as datetime2)));
+
+statement ok
+CREATE PROCEDURE datediff_p6 as (select datediff(day, cast('2020-01-01' as smalldatetime), cast('1990-01-01' as smalldatetime)));
+
+statement ok
+CREATE PROCEDURE datediff_p7 as (select datediff(hour, cast('2020-01-01 01:01:20.99' as smalldatetime), cast('1990-01-01 06:01:20.99' as smalldatetime)));
+
+statement ok
+CREATE PROCEDURE datediff_p8 as (select datediff(minute, cast('2020-01-01 01:01:20.99' as datetime), cast('1990-01-01 06:01:20.99' as smalldatetime)));
+
+statement ok
+CREATE PROCEDURE datediff_p9 as (select datediff(second, cast('2000-01-01 01:01:20.99' as datetime), cast('2005-01-01 10:01:20.99' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_p10 as (select datediff(millisecond, cast('2005-01-01 01:01:20.99' as datetime), cast('2005-01-01 10:01:20.99' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_p11 as (select datediff(microsecond, cast('2005-01-01 01:01:20.99' as datetime), cast('2005-01-01 1:21:20.99' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_p12 as (select datediff(nanosecond, cast('2005-01-01 01:01:20.99' as datetime), cast('2005-01-01 1:21:20.99' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_p13 as (select datediff_big(nanosecond, cast('2005-01-01 01:01:20.99' as datetime), cast('2005-01-01 1:21:20.99' as datetime)));
+
+statement ok
+CREATE PROCEDURE datediff_p14 as (select datediff(hour, cast('2020-01-01 01:01:20.99 +10:00' as datetimeoffset), cast('2020-01-01 06:01:20.99' as datetimeoffset)));
+
+statement ok
+CREATE PROCEDURE datediff_p15 as (select datediff(dayofyear, cast('2020-01-01 01:01:20.99 +10:00' as datetimeoffset), cast('2023-01-01 06:01:20.99' as datetimeoffset)));
+
+statement ok
+CREATE PROCEDURE datediff_p16 as (select sys.datediff_internal_big('week', cast('2005-01-01 01:01:20.99' as datetime), cast('2005-01-01 01:01:20.99' as datetime)));
+
+query T
+exec datediff_p1
+----
+123
+
+query T
+exec datediff_p2
+----
+-30
+
+query T
+exec datediff_p3
+----
+-120
+
+query T
+exec datediff_p4
+----
+24
+
+query T
+exec datediff_p5
+----
+104
+
+query T
+exec datediff_p6
+----
+-10957
+
+query T
+exec datediff_p7
+----
+-262963
+
+query T
+exec datediff_p8
+----
+-15777780
+
+query T
+exec datediff_p9
+----
+157885200
+
+query T
+exec datediff_p10
+----
+32400000
+
+query T
+exec datediff_p11
+----
+NULL
+
+query T
+exec datediff_p12
+----
+NULL
+
+query T
+exec datediff_p13
+----
+NULL
+
+query T
+exec datediff_p14
+----
+15
+
+query T
+exec datediff_p15
+----
+NULL
+
+statement ok
+begin transaction
+
+query T
+SELECT DATEDIFF(fakeoption, cast('2023-01-01 01:01:20.98' as datetime), cast('2023-01-01 01:01:20.98' as datetime))
+----
+NULL
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+begin transaction
+
+query T
+SELECT DATEDIFF(nanosecond, cast('1900-01-01 01:01:20.98' as datetime), cast('2023-01-01 01:01:20.98' as datetime))
+----
+NULL
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+query T
+Declare @runForDate datetime = '01/22/2012';
+Declare @evaluationDate datetime = DATEADD(DAY,-1,@runForDate);
+Select DATEDIFF(wk,7,@evaluationDate)
+----
+NULL
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-01' AS DATE), CAST('2023-01-01' AS DATE)) AS SameDate;
+----
+0
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-01' AS DATETIME), CAST('2023-01-02' AS DATETIME)) AS ConsecutiveDaysSameWeek;
+----
+0
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-01' AS DATE), CAST('2022-12-25' AS DATE)) AS DifferentWeeks;
+----
+-1
+
+query T
+SELECT DATEDIFF(week, CAST('2010-01-01' AS DATE), CAST('2009-12-19' AS DATE)) AS DifferentWeeks;
+----
+-1
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-01-01' AS DATE), CAST('2023-01-31' AS DATE)) AS SameQuarter;
+----
+0
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-01-01' AS DATETIME), CAST('2023-02-01' AS DATETIME)) AS ConsecutiveMonths;
+----
+0
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-02-01' AS DATETIME), CAST('2023-01-01' AS DATETIME)) AS ConsecutiveMonths;
+----
+0
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-01-01' AS DATE), CAST('2023-07-25' AS DATE)) AS DifferentQuarters;
+----
+2
+
+query T
+SELECT DATEDIFF(quarter, CAST('2010-01-01' AS DATE), CAST('2011-12-19' AS DATE)) AS DifferentQuarters;
+----
+7
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-01' AS DATE), CAST('2023-01-07' AS DATE)) AS NoBoundaryCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-07' AS DATE), CAST('2023-01-01' AS DATE)) AS NoBoundaryCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-01-01' AS DATE), CAST('2023-03-31' AS DATE)) AS NoBoundaryCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-07' AS DATETIME), CAST('2023-01-08' AS DATETIME)) AS OneBoundaryCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF(wk, CAST('2023-01-07' AS DATETIME), CAST('2023-01-08' AS DATETIME)) AS OneBoundaryCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-08' AS DATETIME), CAST('2023-01-07' AS DATETIME)) AS OneBoundaryCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-01-01' AS DATETIME), CAST('2023-04-01' AS DATETIME)) AS OneBoundaryCrossed;
+----
+1
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-04-01' AS DATETIME), CAST('2023-01-01' AS DATETIME)) AS OneBoundaryCrossed;
+----
+-1
+
+query T
+SELECT DATEDIFF(qq, CAST('2023-01-01' AS DATETIME), CAST('2022-12-31' AS DATETIME)) AS OneBoundaryCrossed;
+----
+-1
+
+query T
+SELECT DATEDIFF(quarter, CAST('2022-12-31' AS DATETIME), CAST('2023-01-01' AS DATETIME)) AS OneBoundaryCrossed;
+----
+1
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-07' AS DATE), CAST('2023-01-22' AS DATE)) AS MultipleBoundariesCrossed;
+----
+2
+
+query T
+SELECT DATEDIFF(ww, CAST('2023-01-07' AS DATE), CAST('2023-01-22' AS DATE)) AS MultipleBoundariesCrossed;
+----
+2
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-22' AS DATE), CAST('2023-01-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+-2
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-01-07' AS DATE), CAST('2023-01-22' AS DATE)) AS MultipleBoundariesCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF(q, CAST('2023-01-07' AS DATE), CAST('2023-01-22' AS DATE)) AS MultipleBoundariesCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF(q, CAST('2023-01-22' AS DATE), CAST('2023-01-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF(q, CAST('2023-05-22' AS DATE), CAST('2023-06-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-06-22' AS DATE), CAST('2023-05-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-06-22' AS DATE), CAST('2023-07-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+1
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-07-22' AS DATE), CAST('2023-06-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+-1
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-01-22' AS DATE), CAST('2024-01-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+4
+
+query T
+SELECT DATEDIFF(quarter, CAST('2024-01-22' AS DATE), CAST('2023-01-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+-4
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-01-22' AS DATE), CAST('2024-04-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+5
+
+query T
+SELECT DATEDIFF(quarter, CAST('2024-01-22' AS DATE), CAST('2023-04-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+-3
+
+query T
+SELECT DATEDIFF(week, CAST('2022-12-31' AS DATE), CAST('2023-01-08' AS DATE)) AS YearBoundaryCrossed;
+----
+1
+
+query T
+SELECT DATEDIFF(quarter, CAST('2022-12-31' AS DATE), CAST('2023-01-08' AS DATE)) AS YearBoundaryCrossed;
+----
+1
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-01' AS DATE), CAST('2023-01-08' AS DATE)) AS WeekStartsOnSunday;
+----
+1
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-01' AS DATETIME), CAST('2023-01-14' AS DATETIME)) AS WeekEndsOnSaturday;
+----
+1
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-01' AS DATE), CAST('2023-01-28' AS DATE)) AS MultipleWeeksNoOverlap;
+----
+3
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-01 00:00:00' AS DATETIME), CAST('2023-01-08 00:00:00' AS DATETIME)) AS ExactBoundary;
+----
+1
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-01-01 00:00:00' AS DATETIME), CAST('2023-04-01 00:00:00' AS DATETIME)) AS ExactBoundary;
+----
+1
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-01 23:59:59.999999' AS DATETIME2), CAST('2023-01-08 00:00:00.000000' AS DATETIME2)) AS FractionalSecondsPrecision;
+----
+0
+
+query T
+SELECT DATEDIFF(week, CAST('2020-02-28' AS DATETIME), CAST('2020-03-01' AS DATETIME)) AS AcrossLeapDay;
+----
+0
+
+query T
+SELECT DATEDIFF(week, CAST('2020-02-29' AS DATE), CAST('2020-03-07' AS DATE)) AS WeekWithLeapDay;
+----
+1
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-08' AS DATE), CAST('2023-01-01' AS DATE)) AS NegativeInterval;
+----
+-1
+
+query T
+SELECT DATEDIFF(week, CAST('9999-01-01' AS DATE), CAST('0001-01-01' AS DATE)) AS Date_ReverseRange;
+----
+-15250
+
+query T
+SELECT DATEDIFF(week, CAST('9999-01-01' AS DATETIME2), CAST('0001-01-01' AS DATETIME2)) AS Datetime2_ReverseRange;
+----
+-15250
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-01' AS DATETIME), CAST('2023-01-07' AS DATETIME)) AS SameWeekBoundary;
+----
+0
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-07' AS DATE), CAST('2023-01-08' AS DATE)) AS WeekResetBoundary;
+----
+0
+
+query T
+SELECT DATEDIFF(week, CAST('2022-12-31' AS DATETIME), CAST('2023-01-01' AS DATETIME)) AS SameWeekAcrossYears;
+----
+0
+
+query T
+SELECT DATEDIFF(week, CAST('2022-12-31' AS DATE), CAST('2023-01-08' AS DATE)) AS DifferentWeeksAcrossYears;
+----
+1
+
+query T
+SELECT DATEDIFF(week, NULL, CAST('2023-01-01' AS DATE)) AS NullStartDate;
+----
+NULL
+
+query T
+SELECT DATEDIFF(week, CAST('2023-01-01' AS DATETIME), NULL) AS NullEndDate;
+----
+NULL
+
+query T
+SELECT DATEDIFF(week, NULL, NULL) AS BothNull;
+----
+NULL
+
+query T
+SELECT DATEDIFF(quarter, NULL, CAST('2023-01-01' AS DATE)) AS NullStartDate;
+----
+NULL
+
+query T
+SELECT DATEDIFF(quarter, CAST('2023-01-01' AS DATETIME), NULL) AS NullEndDate;
+----
+NULL
+
+query T
+SELECT DATEDIFF(quarter, NULL, NULL) AS BothNull;
+----
+NULL
+
+statement error
+SELECT DATEDIFF(week, CAST('InvalidDate' AS DATE), CAST('2023-01-01' AS DATE)) AS InvalidStartDate;
+
+query T
+SELECT DATEDIFF(week, CAST('1923-01-01' AS DATE), CAST('2023-01-01' AS DATE)) AS CenturyDifference;
+----
+5217
+
+query T
+SELECT DATEDIFF(week, CAST('0001-01-01' AS DATETIME), CAST('2023-01-01' AS DATETIME)) AS MillenniaDifference;
+----
+15250
+
+query T
+SELECT DATEDIFF(quarter, CAST('1923-01-01' AS DATE), CAST('2023-01-01' AS DATE)) AS CenturyDifference;
+----
+400
+
+query T
+SELECT DATEDIFF(quarter, CAST('0001-01-01' AS DATETIME), CAST('2023-01-01' AS DATETIME)) AS MillenniaDifference;
+----
+8088
+
+query T
+SELECT DATEDIFF(week, CAST('0001-01-01' AS DATE), CAST('9999-12-31' AS DATE)) AS Date_FullRange;
+----
+15250
+
+query T
+SELECT DATEDIFF(week, CAST('1753-01-01' AS DATETIME), CAST('9999-12-31' AS DATETIME)) AS Datetime_FullRange;
+----
+15250
+
+query T
+SELECT DATEDIFF(week, CAST('0001-01-01' AS DATETIME), CAST('9999-12-31' AS DATETIME)) AS Datetime_FullRange_Error;
+----
+15250
+
+query T
+SELECT DATEDIFF(week, CAST('0001-01-01 00:00:00.000000' AS DATETIME2), CAST('9999-12-31 23:59:59.999999' AS DATETIME2)) AS Datetime2_FullRange;
+----
+15250
+
+query T
+SELECT DATEDIFF(week, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:59:59' AS SMALLDATETIME)) AS Smalldatetime_FullRange;
+----
+9362
+
+query T
+SELECT DATEDIFF(week, CAST('1753-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:59:59' AS SMALLDATETIME)) AS Smalldatetime_FullRange_Error;
+----
+15250
+
+query T
+SELECT DATEDIFF(week, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('9999-12-31 23:59:59' AS SMALLDATETIME)) AS Smalldatetime_FullRange_Error;
+----
+15250
+
+query T
+SELECT DATEDIFF(week, CAST('0001-01-01 00:00:00.000000 +00:00' AS DATETIMEOFFSET), CAST('9999-12-31 23:59:59.999999 +00:00' AS DATETIMEOFFSET)) AS DatetimeOffset_FullRange;
+----
+15250
+
+query T
+SELECT DATEDIFF(quarter, CAST('0001-01-01' AS DATE), CAST('9999-12-31' AS DATE)) AS Date_FullRange;
+----
+39995
+
+query T
+SELECT DATEDIFF(quarter, CAST('1753-01-01' AS DATETIME), CAST('9999-12-31' AS DATETIME)) AS Datetime_FullRange;
+----
+32987
+
+query T
+SELECT DATEDIFF(quarter, CAST('0001-01-01' AS DATETIME), CAST('9999-12-31' AS DATETIME)) AS Datetime_FullRange_Error;
+----
+39995
+
+query T
+SELECT DATEDIFF(quarter, CAST('0001-01-01 00:00:00.000000' AS DATETIME2), CAST('9999-12-31 23:59:59.999999' AS DATETIME2)) AS Datetime2_FullRange;
+----
+39995
+
+query T
+SELECT DATEDIFF(quarter, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:59:59' AS SMALLDATETIME)) AS Smalldatetime_FullRange;
+----
+717
+
+query T
+SELECT DATEDIFF(quarter, CAST('1753-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:59:59' AS SMALLDATETIME)) AS Smalldatetime_FullRange_Error;
+----
+1305
+
+query T
+SELECT DATEDIFF(quarter, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('9999-12-31 23:59:59' AS SMALLDATETIME)) AS Smalldatetime_FullRange_Error;
+----
+32399
+
+query T
+SELECT DATEDIFF(quarter, CAST('0001-01-01 00:00:00.000000 +00:00' AS DATETIMEOFFSET), CAST('9999-12-31 23:59:59.999999 +00:00' AS DATETIMEOFFSET)) AS DatetimeOffset_FullRange;
+----
+39995
+
+query T
+SELECT DATEDIFF(week, CAST('0001-01-01' AS DATE), CAST('9999-01-01 23:59:59' AS DATETIME)) AS DateToDatetime;
+----
+15250
+
+query T
+SELECT DATEDIFF(quarter, CAST('0001-01-01' AS DATE), CAST('9999-01-01 23:59:59' AS DATETIME)) AS DateToDatetime;
+----
+39992
+
+query T
+SELECT DATEDIFF(week, CAST('1753-01-01 00:00:00' AS DATETIME), CAST('9999-01-01 23:59:59.999' AS DATETIME2)) AS DatetimeToDatetime2;
+----
+15250
+
+query T
+SELECT DATEDIFF(week, CAST('0001-01-01 00:00:00+00:00' AS DATETIMEOFFSET), CAST('2079-06-06' AS SMALLDATETIME)) AS DatetimeOffsetToSmalldatetime;
+----
+15250
+
+query T
+SELECT DATEDIFF(week, CAST('1753-01-01 00:00:00' AS DATETIME2), CAST('1900-01-01' AS DATE)) AS Datetime2ToDate;
+----
+7669
+
+query T
+SELECT DATEDIFF(week, CAST('0001-01-01 00:00:00+00:00' AS DATETIMEOFFSET), CAST('1753-01-01 00:00:00' AS DATETIME2)) AS DatetimeOffsetTodatetime2;
+----
+15250
+
+query T
+SELECT DATEDIFF(quarter, CAST('1753-01-01 00:00:00' AS DATETIME), CAST('9999-01-01 23:59:59.999' AS DATETIME2)) AS DatetimeToDatetime2;
+----
+32984
+
+query T
+SELECT DATEDIFF(quarter, CAST('0001-01-01 00:00:00+00:00' AS DATETIMEOFFSET), CAST('2079-06-06' AS SMALLDATETIME)) AS DatetimeOffsetToSmalldatetime;
+----
+8313
+
+query T
+SELECT DATEDIFF(quarter, CAST('1753-01-01 00:00:00' AS DATETIME2), CAST('1900-01-01' AS DATE)) AS Datetime2ToDate;
+----
+588
+
+query T
+SELECT DATEDIFF(quarter, CAST('0001-01-01 00:00:00+00:00' AS DATETIMEOFFSET), CAST('1753-01-01 00:00:00' AS DATETIME2)) AS DatetimeOffsetTodatetime2;
+----
+7008
+
+query T
+SELECT DATEDIFF(week, '2023-01-01 00:00:00+00:00', '2023-01-08 00:00:00+05:30') AS SameTimeDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF(week, '2023-01-01 00:00:00+00:00', '2023-01-08 05:30:00+05:30') AS SameTimeDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF(week, '2023-01-01 00:00:00-05:00', '2023-01-01 00:00:00+01:00') AS StartEarlierDifferentZone;
+----
+NULL
+
+query T
+SELECT DATEDIFF(week, '2024-01-05 23:59:59+00:00', '2024-01-06 00:00:01+05:30') AS CrossWeekBoundary;
+----
+NULL
+
+query T
+SELECT DATEDIFF(week, '2000-01-01 00:00:00+00:00', '2023-01-01 00:00:00+10:00') AS LargeIntervalDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF(week, '2023-01-01 00:00:00+05:30', '2000-01-01 00:00:00+00:00') AS ReverseIntervalDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF(quarter, '2023-01-01 00:00:00+00:00', '2023-04-01 00:00:00+05:30') AS SameTimeDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF(quarter, '2023-01-01 00:00:00+00:00', '2023-04-01 05:30:00+05:30') AS SameTimeDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF(quarter, '2023-01-01 00:00:00-05:00', '2023-01-01 00:00:00+01:00') AS StartEarlierDifferentZone;
+----
+NULL
+
+query T
+SELECT DATEDIFF(quarter, '2023-12-31 23:59:59+00:00', '2024-01-01 00:00:01+05:30') AS CrossQuarterBoundary;
+----
+NULL
+
+query T
+SELECT DATEDIFF(quarter, '2000-01-01 00:00:00+00:00', '2023-01-01 00:00:00+10:00') AS LargeIntervalDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF(quarter, '2023-01-01 00:00:00+05:30', '2000-01-01 00:00:00+00:00') AS ReverseIntervalDifferentOffsets;
+----
+NULL
+
+statement ok
+DROP PROCEDURE datediff_p1
+
+statement ok
+DROP PROCEDURE datediff_p2
+
+statement ok
+DROP PROCEDURE datediff_p3
+
+statement ok
+DROP PROCEDURE datediff_p4
+
+statement ok
+DROP PROCEDURE datediff_p5
+
+statement ok
+DROP PROCEDURE datediff_p6
+
+statement ok
+DROP PROCEDURE datediff_p7
+
+statement ok
+DROP PROCEDURE datediff_p8
+
+statement ok
+DROP PROCEDURE datediff_p9
+
+statement ok
+DROP PROCEDURE datediff_p10
+
+statement ok
+DROP PROCEDURE datediff_p11
+
+statement ok
+DROP PROCEDURE datediff_p12
+
+statement ok
+DROP PROCEDURE datediff_p13
+
+statement ok
+DROP PROCEDURE datediff_p14
+
+statement ok
+DROP PROCEDURE datediff_p15
+
+statement ok
+DROP PROCEDURE datediff_p16
+

@@ -1,0 +1,31 @@
+# test/slt_proc/babelfish_oracle/1521_babel_sys_sp_tables_view_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-sp_tables_view-dep-vu-prepare.sql, test/babelfish/raw/views/sys-sp_tables_view-dep-vu-verify.sql, test/babelfish/raw/views/sys-sp_tables_view-dep-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sys_sp_tables_view_dep_vu_prepare_db1;
+
+statement ok
+USE sys_sp_tables_view_dep_vu_prepare_db1
+
+statement ok
+create table sys_sp_tables_view_dep_vu_prepare_t1 (a int)
+
+statement ok
+create procedure sys_sp_tables_view_dep_vu_prepare_p1 as
+    select count(*) from sys.sp_tables_view where TABLE_NAME = 'sys_sp_tables_view_dep_vu_prepare_t1'
+
+statement ok
+create function sys_sp_tables_view_dep_vu_prepare_f1()
+returns int
+as
+begin 
+    return (select count(*) from sys.sp_tables_view where TABLE_NAME = 'sys_sp_tables_view_dep_vu_prepare_t1')
+end
+
+statement ok
+create view sys_sp_tables_view_dep_vu_prepare_v1 as
+    select count(*) from sys.sp_tables_view where TABLE_NAME = 'sys_sp_tables_view_dep_vu_prepare_t1'
+
+statement ok
+USE sys_sp_tables_view_dep_vu_prepare_db1
+

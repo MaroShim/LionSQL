@@ -2,6 +2,7 @@ package virtual
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"lionsql/pkg/storage"
@@ -61,7 +62,11 @@ func generateInfoSchemaTables(src Source, whereClause string) ([]string, []map[s
 		})
 	}
 	// Also include views
-	for _, v := range src.ListViews() {
+	views := src.ListViews()
+	sort.Slice(views, func(i, j int) bool {
+		return views[i].Name < views[j].Name
+	})
+	for _, v := range views {
 		allRows = append(allRows, map[string]any{
 			"table_catalog":                "postgres",
 			"table_schema":                 "public",
@@ -529,7 +534,11 @@ func generateInfoSchemaViews(src Source, whereClause string) ([]string, []map[st
 	}
 	var allRows []map[string]any
 	if src != nil {
-		for _, v := range src.ListViews() {
+		views := src.ListViews()
+		sort.Slice(views, func(i, j int) bool {
+			return views[i].Name < views[j].Name
+		})
+		for _, v := range views {
 			allRows = append(allRows, map[string]any{
 				"table_catalog":              "postgres",
 				"table_schema":               "public",

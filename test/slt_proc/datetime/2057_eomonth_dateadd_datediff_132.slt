@@ -1,0 +1,27 @@
+# test/slt_proc/datetime/2057_eomonth_dateadd_datediff_132.slt
+# T-SQL EOMONTH, DATEADD(day), DATEDIFF(day), YEAR/MONTH/DAY (132)
+
+query TTI
+SELECT CAST(EOMONTH('2024-12-09') AS VARCHAR(10)), CAST(DATEADD(day, 10, '2024-12-09') AS VARCHAR(10)), DATEDIFF(day, '2024-12-09', '2024-12-19');
+----
+2024-12-31 2024-12-19 10
+
+query IIII
+SELECT YEAR('2024-12-19'), MONTH('2024-12-19'), DAY('2024-12-19'), DAY(EOMONTH('2024-12-09'));
+----
+2024 12 19 31
+
+statement ok
+CREATE TABLE dt_log_2057 (id INT PRIMARY KEY, ev_date VARCHAR(20));
+
+statement ok
+INSERT INTO dt_log_2057 VALUES (1, '2024-12-09'), (2, '2024-12-19');
+
+query II
+SELECT id, DATEDIFF(day, '2024-12-09', ev_date) FROM dt_log_2057 ORDER BY id;
+----
+1 0
+2 10
+
+statement ok
+DROP TABLE dt_log_2057;

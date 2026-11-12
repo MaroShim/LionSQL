@@ -1,0 +1,39 @@
+# test/slt_proc/babelfish_oracle/1318_babel_test_sp_droprole.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_droprole-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_droprole-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_droprole-vu-cleanup.sql
+
+statement ok
+CREATE TABLE tmp_sp_droprole(addRole sys.SYSNAME);
+
+statement ok
+CREATE ROLE sp_droprole_r1;
+
+statement ok
+CREATE ROLE sp_droprole_r2;
+
+statement ok
+CREATE LOGIN sp_droprole_login WITH PASSWORD = '123';
+
+statement ok
+CREATE USER sp_droprole_user FOR LOGIN sp_droprole_login;
+
+statement ok
+ALTER ROLE SP_DROPROLE_R1 ADD MEMBER SP_DROPROLE_R2;
+
+statement error
+EXEC sp_droprole;
+
+statement error
+EXEC sp_droprole '     ';
+
+statement ok
+ALTER ROLE SP_DROPROLE_R1 DROP MEMBER SP_DROPROLE_R2;
+
+statement ok
+DROP USER sp_droprole_user;
+
+statement ok
+DROP LOGIN sp_droprole_login;
+
+statement ok
+DROP TABLE tmp_sp_droprole;
+

@@ -1,0 +1,1481 @@
+# test/slt_proc/babelfish_oracle/1459_babel_replace_before_15_8_or_16_4.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/string_functions/replace-before-15_8-or-16_4-vu-prepare.sql, test/babelfish/raw/functions/string_functions/replace-before-15_8-or-16_4-vu-verify.sql, test/babelfish/raw/functions/string_functions/replace-before-15_8-or-16_4-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_4836_replace_t1(a NCHAR(50), b NCHAR(20), c NCHAR(20))
+
+statement ok
+INSERT INTO babel_4836_replace_t1 VALUES(N'  abc🙂defghi🙂🙂    ', N'🙂de', N'x🙂y')
+INSERT INTO babel_4836_replace_t1 VALUES(N'  比尔·拉莫斯    ', N'拉莫', N'尔·比')
+
+statement ok
+CREATE TABLE babel_4836_replace_t2(a NVARCHAR(50), b NVARCHAR(20), c NVARCHAR(20))
+
+statement ok
+INSERT INTO babel_4836_replace_t2 VALUES(N'  abc🙂defghi🙂🙂    ', N'🙂de', N'x🙂y')
+
+statement ok
+CREATE TABLE babel_4836_replace_t3(a VARCHAR(50), b VARCHAR(20), c VARCHAR(20))
+
+statement ok
+INSERT INTO babel_4836_replace_t3 VALUES('  abc🙂defghi🙂🙂    ', '🙂de', 'x🙂y')
+
+statement ok
+CREATE TABLE babel_4836_replace_t4(a BINARY(50), b BINARY(20), c BINARY(20))
+
+statement ok
+INSERT INTO babel_4836_replace_t4 VALUES(0x6162636465, 0x6263, 0x747576)
+
+statement ok
+CREATE TABLE babel_4836_replace_t5(a VARBINARY(50), b VARBINARY(20), c VARBINARY(20))
+
+statement ok
+INSERT INTO babel_4836_replace_t5 VALUES(0x6162636465, 0x6263, 0x747576)
+
+statement ok
+CREATE TABLE babel_4836_replace_chinese_prc_ci_as(a VARCHAR(50) COLLATE CHINESE_PRC_CI_AS, b VARCHAR(20) COLLATE CHINESE_PRC_CI_AS, c VARCHAR(20) COLLATE CHINESE_PRC_CI_AS)
+
+statement ok
+INSERT INTO babel_4836_replace_chinese_prc_ci_as VALUES(N'  比尔·拉莫斯    ', N'拉莫', N'尔·比')
+
+statement ok
+CREATE TABLE babel_4836_replace_chinese_prc_cs_as(a VARCHAR(50) COLLATE CHINESE_PRC_CS_AS, b VARCHAR(20) COLLATE CHINESE_PRC_CS_AS, c VARCHAR(20) COLLATE CHINESE_PRC_CS_AS)
+
+statement ok
+INSERT INTO babel_4836_replace_chinese_prc_cs_as VALUES(N'  比尔·拉莫斯    ', N'拉莫', N'尔·比')
+
+statement ok
+CREATE TABLE babel_4836_replace_arabic_ci_as(a VARCHAR(50) COLLATE ARABIC_CI_AS, b VARCHAR(20) COLLATE ARABIC_CI_AS, c VARCHAR(20) COLLATE ARABIC_CI_AS)
+
+statement ok
+INSERT INTO babel_4836_replace_arabic_ci_as VALUES(N'  الله مع المتقين    ', N'ين', N'مع')
+
+statement ok
+CREATE TABLE babel_4836_replace_arabic_cs_as(a VARCHAR(50) COLLATE ARABIC_CS_AS, b VARCHAR(20) COLLATE ARABIC_CS_AS, c VARCHAR(20) COLLATE ARABIC_CS_AS)
+
+statement ok
+INSERT INTO babel_4836_replace_arabic_cs_as VALUES(N'  الله مع المتقين    ', N'ين', N'مع')
+
+statement ok
+CREATE TABLE babel_4836_replace_image(a IMAGE)
+
+statement ok
+INSERT INTO babel_4836_replace_image values(CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS image))
+
+statement ok
+CREATE TABLE babel_4836_replace_text(a TEXT, b TEXT, c TEXT)
+
+statement ok
+INSERT INTO babel_4836_replace_text VALUES (N'  abc🙂defghi🙂🙂    ', N'🙂def', N'jhi🙂')
+
+statement ok
+CREATE TABLE babel_4836_replace_ntext(a NTEXT, b NTEXT, c NTEXT)
+
+statement ok
+INSERT INTO babel_4836_replace_ntext VALUES (N'  abc🙂defghi🙂🙂    ', N'🙂def', N'jhi🙂')
+
+statement ok
+CREATE TABLE babel_4836_replace_image_UDT_t(a dbo.babel_4836_replace_imageUDT, b dbo.babel_4836_replace_imageUDT, c dbo.babel_4836_replace_imageUDT)
+
+statement ok
+INSERT INTO babel_4836_replace_image_UDT_t VALUES(CAST('abcdef' as dbo.babel_4836_replace_imageUDT), CAST('bc' as dbo.babel_4836_replace_imageUDT), CAST('gh' as dbo.babel_4836_replace_imageUDT))
+
+statement ok
+CREATE TABLE babel_4836_replace_var_UDT_t(a dbo.babel_4836_replace_imageUDT, b dbo.babel_4836_replace_varUDT, c dbo.babel_4836_replace_varUDT)
+
+statement ok
+INSERT INTO babel_4836_replace_var_UDT_t VALUES(CAST('abcdef' as dbo.babel_4836_replace_imageUDT), CAST('bc' as dbo.babel_4836_replace_varUDT), CAST('gh' as dbo.babel_4836_replace_varUDT))
+
+statement ok
+CREATE VIEW babel_4836_replace_dep_view AS
+    SELECT replace(a, b, c) as result FROM babel_4836_replace_t2
+
+statement ok
+CREATE VIEW babel_4836_replace_dep_view1 AS
+    SELECT replace(a, b, c) as result FROM babel_4836_replace_t3
+
+statement ok
+CREATE PROCEDURE babel_4836_replace_dep_proc AS
+    SELECT replace(a, b, c) as result FROM babel_4836_replace_t2
+
+statement ok
+CREATE FUNCTION babel_4836_replace_dep_func()
+RETURNS NVARCHAR(50)
+AS
+BEGIN
+RETURN (SELECT TOP 1 replace(a, b, c) FROM babel_4836_replace_t2)
+END
+
+statement ok
+CREATE FUNCTION babel_4836_replace_itvf_func()
+RETURNS TABLE
+AS
+RETURN (SELECT replace(a, b, c) as result FROM babel_4836_replace_t2)
+
+statement ok
+declare @string1 nvarchar(30) = N'比尔·拉',@string2 nvarchar(30) = N'斯', @pat nvarchar(10) = N'尔'
+select REPLACE(@string1, @pat, @string2)
+
+query T
+SELECT replace(NULL, 'acs', 'scd')
+----
+NULL
+
+query T
+SELECT replace('scd', NULL, 'scd')
+----
+NULL
+
+query T
+SELECT replace('scd', 'scd', NULL)
+----
+NULL
+
+query T
+SELECT replace(NULL, NULL, NULL)
+----
+NULL
+
+query T
+SELECT replace(NULL, 'aces', 'scdwe')
+----
+NULL
+
+query T
+SELECT replace('aceds', 'aces', 'scdwe', 'acsdes')
+----
+aceds
+
+query T
+SELECT replace('aces', 'scdwe')
+----
+NULL
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂'
+SELECT replace(@inputString, '🙂de', 'x🙂y')
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂'
+SELECT replace(@inputString, '?de', 'x🙂y')
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂'
+SELECT replace(@inputString, '😎de', 'x🙂y')
+
+statement ok
+DECLARE @inputString CHAR(50) = '比尔·拉莫斯'
+SELECT replace(@inputString, '拉莫', '尔·比')
+
+statement ok
+DECLARE @inputString CHAR(50) = '比尔·拉莫斯'
+SELECT replace(@inputString, '拉莫', '尔·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString CHAR(50) = '比尔·拉莫斯', @pattern CHAR(10) = '拉莫', @replacement CHAR(10) = '尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = '比尔·拉莫斯', @pattern CHAR(10) = '拉莫', @replacement CHAR(10) = '尔·比'
+SELECT replace(@inputString, @pattern, @replacement) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂'
+SELECT replace(@inputString, '🙂de', 'x🙂y')
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂'
+SELECT replace(@inputString, '?de', 'x🙂y')
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂'
+SELECT replace(@inputString, '😎de', 'x🙂y')
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '比尔·拉莫斯'
+SELECT replace(@inputString, '拉莫', '尔·比')
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '比尔·拉莫斯'
+SELECT replace(@inputString, '拉莫', '尔·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '比尔·拉莫斯', @pattern VARCHAR(10) = '拉莫', @replacement VARCHAR(10) = '尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '比尔·拉莫斯', @pattern VARCHAR(10) = '拉莫', @replacement VARCHAR(10) = '尔·比'
+SELECT replace(@inputString, @pattern, @replacement) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '比尔·拉莫斯', @pattern VARCHAR(MAX) = '拉莫', @replacement VARCHAR(MAX) = '尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '比尔·拉莫斯', @pattern VARCHAR(MAX) = '拉莫', @replacement VARCHAR(MAX) = '尔·比'
+SELECT replace(@inputString, @pattern, @replacement) COLLATE CHINESE_PRC_CI_AS
+
+query T
+SELECT replace(a, b, c) COLLATE CHINESE_PRC_CI_AS FROM babel_4836_replace_chinese_prc_ci_as
+----
+a
+
+query T
+SELECT replace(a, b, c) COLLATE CHINESE_PRC_CS_AS FROM babel_4836_replace_chinese_prc_cs_as
+----
+a
+
+query T
+SELECT replace(a, b, c) COLLATE ARABIC_CI_AS FROM babel_4836_replace_arabic_ci_as
+----
+a
+
+query T
+SELECT replace(a, b, c) COLLATE ARABIC_CS_AS FROM babel_4836_replace_arabic_cs_as
+----
+a
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'abc🙂defghi🙂🙂'
+SELECT replace(@inputString, '🙂de', 'x🙂y')
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'abc🙂defghi🙂🙂'
+SELECT replace(@inputString, '?de', 'x🙂y')
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'abc🙂defghi🙂🙂'
+SELECT replace(@inputString, '😎de', 'x🙂y')
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'比尔·拉莫斯'
+SELECT replace(@inputString, '拉莫', '尔·比')
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'比尔·拉莫斯'
+SELECT replace(@inputString, '拉莫', '尔·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'比尔·拉莫斯', @pattern NCHAR(10) = N'拉莫', @replacement NCHAR(10) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'比尔·拉莫斯', @pattern NCHAR(10) = N'拉莫', @replacement NCHAR(10) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'abc🙂defghi🙂🙂'
+SELECT replace(@inputString, '🙂de', 'x🙂y')
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'abc🙂defghi🙂🙂'
+SELECT replace(@inputString, '?de', 'x🙂y')
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'abc🙂defghi🙂🙂'
+SELECT replace(@inputString, '😎de', 'x🙂y')
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'比尔·拉莫斯'
+SELECT replace(@inputString, '拉莫', '尔·比')
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'比尔·拉莫斯'
+SELECT replace(@inputString, '拉莫', '尔·比') COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'比尔·拉莫斯', @pattern NVARCHAR(10) = N'拉莫', @replacement NVARCHAR(10) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'比尔·拉莫斯', @pattern NVARCHAR(10) = N'拉莫', @replacement NVARCHAR(10) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'比尔·拉莫斯', @pattern NVARCHAR(MAX) = N'拉莫', @replacement NVARCHAR(MAX) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'比尔·拉莫斯', @pattern NVARCHAR(MAX) = N'拉莫', @replacement NVARCHAR(MAX) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement) COLLATE CHINESE_PRC_CI_AS
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x61626364656667
+SELECT replace(@inputString, 0x6364, 0x737475)
+
+statement ok
+DECLARE @inputString BINARY(10) = 0x61626364656667, @pattern BINARY(10) = 0x6364, @replacement BINARY(10) = 0x737475
+SELECT replace(@inputString, @pattern, @replacement)
+
+query T
+SELECT replace(a, b, c) FROM babel_4836_replace_t4
+----
+0x6162636465
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x61626364656667
+SELECT replace(@inputString, 0x6364, 0x737475)
+
+statement ok
+DECLARE @inputString VARBINARY(10) = 0x61626364656667, @pattern VARBINARY(10) = 0x6364, @replacement VARBINARY(10) = 0x737475
+SELECT replace(@inputString, @pattern, @replacement)
+
+query T
+SELECT replace(a, b, c) FROM babel_4836_replace_t5
+----
+0x6162636465
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '?de', @replacement VARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '🙂de', @replacement VARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '😎de', @replacement VARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = '比尔·拉莫斯', @pattern VARCHAR(20) = '拉莫', @replacement VARCHAR(20) = '尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'🙂de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'😎de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = '比尔·拉莫斯', @pattern NCHAR(20) = N'拉莫', @replacement NCHAR(20) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'🙂de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'😎de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = '比尔·拉莫斯', @pattern NVARCHAR(20) = N'拉莫', @replacement NVARCHAR(20) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '?de', @replacement CHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '?de', @replacement NCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '?de', @replacement NVARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '?de', @replacement VARCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '?de', @replacement VARCHAR(40) = 'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '?de', @replacement CHAR(40) = 'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement CHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement VARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NCHAR(40) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NVARCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement VARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement CHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NVARCHAR(40) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NVARCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement CHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = N'?de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = N'?de', @replacement VARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = N'?de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = N'?de', @replacement CHAR(40) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = N'?de', @replacement CHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = N'?de', @replacement NCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @replacement VARCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @replacement NVARCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @replacement CHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @replacement NCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString CHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement CHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '🙂de', @replacement CHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '😎de', @replacement CHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '比尔·拉莫斯', @pattern CHAR(20) = '拉莫', @replacement CHAR(20) = '尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'🙂de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'😎de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '比尔·拉莫斯', @pattern NCHAR(20) = N'拉莫', @replacement NCHAR(20) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)+ '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'🙂de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'😎de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '比尔·拉莫斯', @pattern NVARCHAR(20) = N'拉莫', @replacement NVARCHAR(20) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement VARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement NCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement NVARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement CHAR(40) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement CHAR(40) = 'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement VARCHAR(40) = 'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement CHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement VARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NCHAR(40) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NVARCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement VARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement CHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NVARCHAR(40) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NVARCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement CHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement CHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement VARCHAR(40) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement VARCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement NCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @replacement VARCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @replacement NVARCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @replacement CHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @replacement NCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString VARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement CHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'abc🙂defghi🙂🙂', @pattern CHAR(20) = '🙂de', @replacement CHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'abc🙂defghi🙂🙂', @pattern CHAR(20) = '😎de', @replacement CHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'比尔·拉莫斯', @pattern CHAR(20) = '拉莫', @replacement CHAR(20) = '尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '?de', @replacement VARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '🙂de', @replacement VARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '😎de', @replacement VARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'比尔·拉莫斯', @pattern VARCHAR(20) = '拉莫', @replacement VARCHAR(20) = '尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'🙂de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'😎de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'比尔·拉莫斯', @pattern NVARCHAR(20) = N'拉莫', @replacement NVARCHAR(20) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement VARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement NCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement NVARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement CHAR(40) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement CHAR(40) = 'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement NVARCHAR(40) = 'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement CHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement VARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NCHAR(40) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement CHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement VARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement CHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NVARCHAR(40) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NVARCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement VARCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement CHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement VARCHAR(40) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement VARCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement NCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @replacement VARCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @replacement NVARCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @replacement CHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @replacement NCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString NCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement CHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'abc🙂defghi🙂🙂', @pattern CHAR(20) = '🙂de', @replacement CHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'abc🙂defghi🙂🙂', @pattern CHAR(20) = '😎de', @replacement CHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'比尔·拉莫斯', @pattern CHAR(20) = '拉莫', @replacement CHAR(20) = '尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '?de', @replacement VARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '🙂de', @replacement VARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = '😎de', @replacement VARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'比尔·拉莫斯', @pattern VARCHAR(20) = '拉莫', @replacement VARCHAR(20) = '尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'🙂de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'😎de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'比尔·拉莫斯', @pattern NCHAR(20) = N'拉莫', @replacement NCHAR(20) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement VARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement NCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement NVARCHAR(20) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement CHAR(40) = 'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement CHAR(40) = 'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(20) = '?de', @replacement VARCHAR(40) = 'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement CHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement VARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NCHAR(40) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(20) = N'?de', @replacement NVARCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement VARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement CHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NVARCHAR(40) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement NVARCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(20) = N'?de', @replacement CHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement NCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement CHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement NVARCHAR(20) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement VARCHAR(40) = N'x🙂y'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement VARCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(20) = N'?de', @replacement NVARCHAR(40) = N'x🙂yw'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @replacement VARCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @replacement NVARCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @replacement CHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @replacement NCHAR(40) = 'x🙂y'
+SELECT replace(@inputString, '?de', @replacement)
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern VARCHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NVARCHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern CHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = 'abc🙂defghi🙂🙂', @pattern NCHAR(40) = '?de'
+SELECT replace(@inputString, @pattern, 'x🙂y')
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'ABCDEF', @pattern BINARY(4) = 0x414243, @replacement NCHAR(20) = N'尔·比'
+SELECT replace(@inputString, @pattern, @replacement)
+
+statement ok
+DECLARE @inputString VARBINARY(50) = 0x41424344, @pattern NCHAR(20) = N'尔·比', @replacement VARBINARY(2) = 0x4144
+SELECT replace(@inputString, @pattern, @replacement)
+
+query T
+SELECT replace(a, b, c) FROM babel_4836_replace_image_UDT_t
+----
+aghdef
+
+query T
+SELECT replace(b, b, c) FROM babel_4836_replace_var_UDT_t
+----
+gh
+
+statement ok
+DECLARE @inputString date = '2016-12-21'
+SELECT replace(@inputString, '12', '06');
+
+query T
+DECLARE @inputString date = '2016-12-21', @pattern VARCHAR(10) = '12', @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+2016-06-21
+
+query T
+DECLARE @inputString VARCHAR(20) = '2016-12-21', @pattern date = '2016-12-21', @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+06
+
+query T
+DECLARE @inputString VARCHAR(20) = '2016-12-21', @pattern VARCHAR(20) = '2016-12-21', @replacement date = '2016-12-21';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+2016-12-21
+
+statement ok
+DECLARE @inputString date = '2016-12-21'
+SELECT replace(@inputString, @inputString, @inputString)
+
+query T
+DECLARE @date date = '12-21-16';
+DECLARE @inputString datetime = @date, @pattern VARCHAR(10) = '12', @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+06-21-16
+
+query T
+DECLARE @date date = '12-21-16';
+DECLARE @inputString datetime = @date;
+SELECT replace(@inputString, @inputString, @inputString)
+----
+12-21-16
+
+query T
+DECLARE @inputString VARCHAR(20) = '2016-12-21', @date date = '2016-12-21', @replacement VARCHAR(10) = '06';
+DECLARE @pattern datetime = @date;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+06
+
+query T
+DECLARE @inputString VARCHAR(20) = '2016-12-21', @pattern VARCHAR(20) = '2016-12-21', @date date = '2016-12-21';
+DECLARE @replacement datetime = @date;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+2016-12-21
+
+query T
+DECLARE @inputString VARCHAR(30) = '2016-12-21 12:43:10', @pattern smalldatetime = '2016-12-21 12:43:10', @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+06
+
+query T
+DECLARE @inputString time(4) = '12:10:05.1237', @pattern VARCHAR(10) = '12', @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+06:10:05.0637
+
+query T
+DECLARE @inputString VARCHAR(30) = '12:10:05.1237', @pattern time(4) = '12:10:05.1237', @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+06
+
+query T
+DECLARE @inputString VARCHAR(30) = '12:10:05.1237', @pattern VARCHAR(30) = '12:10:05.1237', @replacement time(4) = '12:10:05.1237';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+12:10:05.1237
+
+query T
+DECLARE @inputString time(4) = '12:10:05.1237';
+SELECT replace(@inputString, @inputString, @inputString)
+----
+12:10:05.1237
+
+query T
+DECLARE @inputString VARCHAR(50) = '1968-10-23 12:45:37.1234 +10:0', @pattern datetimeoffset(4) = '1968-10-23 12:45:37.1234 +10:0', @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+06
+
+query T
+DECLARE @inputString VARCHAR(50) = '1968-10-23 12:45:37.1237', @pattern datetime2(4) = '1968-10-23 12:45:37.1237', @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+06
+
+query T
+DECLARE @inputString decimal = 123456, @pattern decimal = 12, @replacement decimal = 06;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+63456
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern decimal = 12, @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+0634
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '1234', @replacement decimal = 12;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+12
+
+query T
+DECLARE @inputString numeric = 12345.12, @pattern numeric = 12, @replacement numeric = 06;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+6345.6
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern numeric = 12.12, @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '1234', @replacement numeric = 12.12;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+12.12
+
+query T
+DECLARE @inputString float = 12345.1, @pattern float = 12, @replacement float = 06;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+6345.1
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern float = 12.1, @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '1234', @replacement float = 12.1;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+12.1
+
+query T
+DECLARE @inputString real = 12345.1, @pattern real = 12, @replacement real = 06;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+6345.1
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern real = 12.1, @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '1234', @replacement real = 12.1;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+12.1
+
+query T
+DECLARE @inputString bigint = 12345678, @pattern bigint = 12, @replacement bigint = 06;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+6345678
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern bigint = 12, @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+0634
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '1234', @replacement bigint = 12;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+12
+
+query T
+DECLARE @inputString int = 12345678, @pattern int = 12, @replacement int = 06;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+6345678
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern int = 12, @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+0634
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '1234', @replacement int = 12;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+12
+
+query T
+DECLARE @inputString smallint = 12356, @pattern smallint = 12, @replacement smallint = 06;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+6356
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern smallint = 12, @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+0634
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '1234', @replacement smallint = 12;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+12
+
+query T
+DECLARE @inputString tinyint = 235, @pattern tinyint = 12, @replacement tinyint = 06;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+235
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern tinyint = 12, @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+0634
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '1234', @replacement tinyint = 12;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+12
+
+query T
+DECLARE @inputString money = 12356, @pattern money = 12, @replacement money = 06;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+6356
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern money = 12, @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+0634
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '1234', @replacement money = 12;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+12
+
+query T
+DECLARE @inputString smallmoney = 12356, @pattern smallmoney = 12, @replacement smallmoney = 06;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+6356
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern smallmoney = 12, @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+0634
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '1234', @replacement smallmoney = 12;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+12
+
+query T
+DECLARE @inputString bit = 1, @pattern bit = 1, @replacement bit = 0;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+0
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern bit = 1, @replacement VARCHAR(10) = '06';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+06234
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '1234', @replacement bit = 0;
+SELECT replace(@inputString, @pattern, @replacement)
+----
+0
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern UNIQUEIDENTIFIER = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS UNIQUEIDENTIFIER), @replacement VARCHAR(10) = '6F9619FF-8B86-D011-B42D-00C04FC964FF';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '6F9619FF-8B86-D011-B42D-00C04FC964FF', @replacement UNIQUEIDENTIFIER = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS UNIQUEIDENTIFIER);
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+statement ok
+DECLARE @inputString UNIQUEIDENTIFIER = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS UNIQUEIDENTIFIER)
+SELECT replace(@inputString, @inputString, @inputString)
+
+query T
+SELECT replace(a, a, a) FROM babel_4836_replace_image;
+----
+0x36463936313946462d384238362d443031312d423432442d303043303446433936344646
+
+query T
+SELECT replace('a', a, 'a') FROM babel_4836_replace_image;
+----
+a
+
+query T
+SELECT replace('a', 'a', a) FROM babel_4836_replace_image;
+----
+0x36463936313946462d384238362d443031312d423432442d303043303446433936344646
+
+query T
+DECLARE @pattern VARCHAR(10) = '6F', @replacement VARCHAR(10) = '5A';
+SELECT replace(a, @pattern, @replacement) from babel_4836_replace_image;
+----
+0x36463936313946462d384238362d443031312d423432442d303043303446433936344646
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern sql_variant = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant), @replacement VARCHAR(10) = '6F9619FF-8B86-D011-B42D-00C04FC964FF';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '6F9619FF-8B86-D011-B42D-00C04FC964FF', @replacement sql_variant = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant);
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+statement ok
+DECLARE @inputString sql_variant = CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS sql_variant)
+SELECT replace(@inputString, @inputString, @inputString)
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern xml = CAST ('<body><fruit/></body>' AS xml), @replacement VARCHAR(10) = '6F9619FF-8B86-D011-B42D-00C04FC964FF';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '6F9619FF-8B86-D011-B42D-00C04FC964FF', @replacement xml = CAST ('<body><fruit/></body>' AS xml);
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern geometry = geometry::STGeomFromText('POINT (1 2)', 0), @replacement VARCHAR(10) = '6F9619FF-8B86-D011-B42D-00C04FC964FF';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '6F9619FF-8B86-D011-B42D-00C04FC964FF', @replacement geometry = geometry::STGeomFromText('POINT (1 2)', 0);
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern geography = geography::STGeomFromText('POINT (1 2)', 4326), @replacement VARCHAR(10) = '6F9619FF-8B86-D011-B42D-00C04FC964FF';
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+query T
+DECLARE @inputString VARCHAR(50) = '1234', @pattern VARCHAR(50) = '6F9619FF-8B86-D011-B42D-00C04FC964FF', @replacement geography = geography::STGeomFromText('POINT (1 2)', 4326);
+SELECT replace(@inputString, @pattern, @replacement)
+----
+1234
+
+statement ok
+DROP FUNCTION babel_4836_replace_itvf_func
+
+statement ok
+DROP FUNCTION babel_4836_replace_dep_func
+
+statement ok
+DROP PROCEDURE babel_4836_replace_dep_proc
+
+statement ok
+DROP VIEW babel_4836_replace_dep_view
+
+statement ok
+DROP VIEW babel_4836_replace_dep_view1
+
+statement ok
+DROP TABLE babel_4836_replace_image_UDT_t
+
+statement ok
+DROP TABLE babel_4836_replace_var_UDT_t
+
+statement ok
+DROP TABLE babel_4836_replace_text
+
+statement ok
+DROP TABLE babel_4836_replace_ntext
+
+statement ok
+DROP TABLE babel_4836_replace_image
+
+statement ok
+DROP TABLE babel_4836_replace_arabic_cs_as
+
+statement ok
+DROP TABLE babel_4836_replace_arabic_ci_as
+
+statement ok
+DROP TABLE babel_4836_replace_chinese_prc_cs_as
+
+statement ok
+DROP TABLE babel_4836_replace_chinese_prc_ci_as
+
+statement ok
+DROP TABLE babel_4836_replace_t5
+
+statement ok
+DROP TABLE babel_4836_replace_t4
+
+statement ok
+DROP TABLE babel_4836_replace_t3
+
+statement ok
+DROP TABLE babel_4836_replace_t2
+
+statement ok
+DROP TABLE babel_4836_replace_t1
+

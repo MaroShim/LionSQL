@@ -1,0 +1,109 @@
+# test/slt_proc/babelfish_oracle/1140_babel_babel_2218.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2218.sql
+
+statement ok
+use master;
+
+statement ok
+CREATE TABLE t2218(c1 INT)
+INSERT INTO t2218 VALUES (2218);
+INSERT INTO t2218 VALUES (2219);
+
+statement ok
+CREATE FUNCTION f2218()
+RETURNS INT AS
+BEGIN
+  DECLARE @return INT
+  SET @return = 0
+  SELECT * from t2218
+  RETURN @return
+END
+
+statement ok
+CREATE FUNCTION f2218()
+RETURNS INT AS
+BEGIN
+  DECLARE @return INT
+  SET @return = 0
+  SELECT @return=c1 from t2218
+  RETURN @return
+END
+
+statement ok
+DECLARE @ret INT;
+SET @ret = f2218();
+SELECT @ret;
+DROP FUNCTION f2218;
+
+statement error
+CREATE FUNCTION f_getval()RETURNS INTEGER
+AS
+BEGIN
+  DECLARE temp_cursor CURSOR FOR SELECT c1 FROM t2218
+  OPEN temp_cursor
+  FETCH NEXT FROM temp_cursor
+  CLOSE temp_cursor
+  RETURN 1
+END
+
+statement ok
+CREATE FUNCTION f_getval() RETURNS INTEGER
+AS
+BEGIN
+  DECLARE @my_var int
+  DECLARE temp_cursor CURSOR FOR SELECT c1 FROM t2218
+  OPEN temp_cursor
+  FETCH NEXT FROM temp_cursor INTO @my_var
+  CLOSE temp_cursor
+  RETURN @my_var
+END
+
+statement ok
+DROP FUNCTION f_getval;
+
+statement ok
+CREATE FUNCTION f_getval() RETURNS INTEGER
+AS
+BEGIN
+  DECLARE @my_var int
+  DECLARE temp_cursor CURSOR FOR SELECT c1 FROM t2218
+  OPEN temp_cursor
+  FETCH NEXT FROM temp_cursor INTO @my_var
+  FETCH NEXT FROM temp_cursor INTO @my_var
+  CLOSE temp_cursor
+  RETURN @my_var
+END
+
+statement ok
+DROP FUNCTION f_getval;
+
+statement ok
+CREATE PROCEDURE proc_with_cursor_fetch
+AS
+BEGIN
+  DECLARE temp_cursor CURSOR FOR SELECT c1 FROM t2218
+  DECLARE @my_var int
+  OPEN temp_cursor
+  FETCH NEXT FROM temp_cursor INTO @my_var
+  CLOSE temp_cursor
+END
+
+statement ok
+DROP PROCEDURE proc_with_cursor_fetch;
+
+statement ok
+CREATE TRIGGER trg1 ON t2218 AFTER INSERT AS
+  DECLARE temp_cursor CURSOR FOR SELECT c1 FROM t2218
+  DECLARE @my_var int
+  OPEN temp_cursor
+  FETCH NEXT FROM temp_cursor INTO @my_var
+  CLOSE temp_cursor
+
+statement ok
+INSERT INTO t2218 VALUES (2218);
+
+statement ok
+DROP TRIGGER trg1
+DROP TRIGGER trg2
+DROP TABLE t2218
+

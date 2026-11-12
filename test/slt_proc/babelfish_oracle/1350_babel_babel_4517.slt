@@ -1,0 +1,85 @@
+# test/slt_proc/babelfish_oracle/1350_babel_babel_4517.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel-4517-vu-prepare.sql, test/babelfish/raw/babel-4517-vu-verify.sql, test/babelfish/raw/babel-4517-vu-cleanup.sql
+
+statement ok
+create table babel_4517 (
+    date_col date NULL,
+    datetime_col datetime NULL,
+    datetime2_col datetime2 NULL
+)
+
+statement ok
+create view view_4517_date as select * from babel_4517 where date_col <= cast('2023-08-31' as date) and date_col >= cast('2023-08-31' as date);
+
+statement ok
+create view view_4517_datetime as select * from babel_4517 where datetime_col <= cast('2023-08-31' as date) and datetime_col >= cast('2023-08-31' as date);
+
+statement ok
+create view view_4517_datetime2 as select * from babel_4517 where datetime2_col <= cast('2023-08-31' as date) and datetime2_col >= cast('2023-08-31' as date);
+
+statement ok
+BEGIN TRANSACTION babel_4517
+
+statement ok
+SET BABELFISH_SHOWPLAN_ALL on
+
+statement ok
+select * from view_4517_date;
+
+statement ok
+select * from view_4517_datetime
+
+statement ok
+select * from view_4517_datetime2
+
+statement ok
+select * from babel_4517 where date_col <= cast('2023-08-31' as date) and date_col >= cast('2023-08-31' as date);
+
+statement ok
+select * from babel_4517 where datetime_col <= cast('2023-08-31' as date) and datetime_col >= cast('2023-08-31' as date);
+
+statement ok
+select * from babel_4517 where datetime2_col <= cast('2023-08-31' as date) and datetime2_col >= cast('2023-08-31' as date);
+
+statement ok
+SET BABELFISH_SHOWPLAN_ALL off
+
+statement ok
+SET BABELFISH_SHOWPLAN_ALL on
+
+statement ok
+select * from view_4517_date;
+
+statement ok
+select * from view_4517_datetime
+
+statement ok
+select * from view_4517_datetime2
+
+statement ok
+select * from babel_4517 where date_col <= cast('2023-08-31' as date) and date_col >= cast('2023-08-31' as date);
+
+statement ok
+select * from babel_4517 where datetime_col <= cast('2023-08-31' as date) and datetime_col >= cast('2023-08-31' as date);
+
+statement ok
+select * from babel_4517 where datetime2_col <= cast('2023-08-31' as date) and datetime2_col >= cast('2023-08-31' as date);
+
+statement ok
+SET BABELFISH_SHOWPLAN_ALL off
+
+statement ok
+COMMIT TRANSACTION babel_4517
+
+statement ok
+drop view view_4517_date
+
+statement ok
+drop view view_4517_datetime
+
+statement ok
+drop view view_4517_datetime2
+
+statement ok
+drop table babel_4517
+

@@ -1,0 +1,54 @@
+# test/slt_proc/dml_ddl_schema/232_merge_constraints_views_ddl_02.slt
+# T-SQL MERGE, TOP, OFFSET/FETCH, Constraints, Views, Tail DDL (2)
+
+statement ok
+CREATE TABLE m_tgt_232 (
+    sku INT PRIMARY KEY,
+    code VARCHAR(20) UNIQUE,
+    qty INT DEFAULT 200 CHECK (qty >= 0)
+);
+
+statement ok
+CREATE TABLE m_src_232 (sku INT PRIMARY KEY, code VARCHAR(20), qty INT);
+
+statement ok
+INSERT INTO m_tgt_232 (sku, code, qty) VALUES (1, 'A_2', 10), (2, 'B_2', 20);
+
+statement ok
+INSERT INTO m_src_232 VALUES (2, 'B_2', 4), (3, 'C_2', 30);
+
+statement error
+INSERT INTO m_tgt_232 (sku, code, qty) VALUES (9, 'NEG_2', -5);
+
+statement ok
+MERGE m_tgt_232 AS t
+USING m_src_232 AS s ON t.sku = s.sku
+WHEN MATCHED THEN UPDATE SET t.qty = t.qty + s.qty
+WHEN NOT MATCHED THEN INSERT (sku, code, qty) VALUES (s.sku, s.code, s.qty);
+
+query ITI
+SELECT sku, code, qty FROM m_tgt_232 ORDER BY sku;
+----
+1 A_2 10
+2 B_2 24
+3 C_2 30
+
+query II
+SELECT TOP 2 sku, qty FROM m_tgt_232 ORDER BY sku DESC;
+----
+3 30
+2 24
+
+statement ok
+ALTER TABLE m_tgt_232 ADD COLUMN tag VARCHAR(20) DEFAULT 'OK';
+
+query IT
+SELECT sku, tag FROM m_tgt_232 WHERE sku = 1;
+----
+1 OK
+
+statement ok
+DROP TABLE m_src_232;
+
+statement ok
+DROP TABLE m_tgt_232;

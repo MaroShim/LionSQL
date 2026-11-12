@@ -1,0 +1,250 @@
+# test/slt_proc/babelfish_oracle/461_babel_test_identity_before_14_7_or_15_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/Test-Identity-before-14_7-or-15_2-vu-prepare.sql, test/babelfish/raw/Test-Identity-before-14_7-or-15_2-vu-verify.sql, test/babelfish/raw/Test-Identity-before-14_7-or-15_2-vu-cleanup.sql
+
+statement ok
+CREATE TABLE test_identity_vu_prepare_t1
+(id   INT IDENTITY(1, 1), 
+ Name NVARCHAR(20) NULL
+)
+
+query T
+SELECT MAX(id) AS MaximumUsedIdentity FROM test_identity_vu_prepare_t1
+SELECT SCOPE_IDENTITY()
+SELECT @@IDENTITY
+SELECT IDENT_CURRENT('test_identity_vu_prepare_t1')
+----
+NULL
+
+statement error
+SELECT sys.babelfish_get_scope_identity()
+
+statement ok
+CREATE PROCEDURE test_identity_vu_prepare_p1
+AS
+INSERT INTO test_identity_vu_prepare_t1 VALUES ('Nirmit_Shah')
+SELECT MAX(id) AS MaximumUsedIdentity FROM test_identity_vu_prepare_t1
+SELECT SCOPE_IDENTITY()
+SELECT @@IDENTITY
+SELECT IDENT_CURRENT('test_identity_vu_prepare_t1')
+
+statement ok
+CREATE FUNCTION test_identity_vu_prepare_func1()
+RETURNS TINYINT
+AS
+BEGIN
+RETURN IDENT_CURRENT('test_identity_vu_prepare_t1')
+END
+
+statement ok
+CREATE TABLE test_identity_vu_prepare_t2
+(id   TINYINT IDENTITY(1, 1)  , 
+ Name NVARCHAR(20) NULL
+)
+
+statement ok
+CREATE PROCEDURE test_identity_vu_prepare_p2
+AS
+INSERT INTO test_identity_vu_prepare_t2 VALUES ('Babelfish4')
+SELECT MAX(id) AS MaximumUsedIdentity FROM test_identity_vu_prepare_t2
+SELECT SCOPE_IDENTITY()
+SELECT @@IDENTITY
+SELECT IDENT_CURRENT('test_identity_vu_prepare_t2')
+
+statement ok
+CREATE TABLE test_identity_vu_prepare_t3
+(DepartmentID   INT IDENTITY(100, 5) , 
+ Departmentname VARCHAR(20) NULL
+);
+
+statement ok
+CREATE PROCEDURE test_identity_vu_prepare_p3
+AS
+INSERT INTO test_identity_vu_prepare_t3 VALUES ('Babelfish5')
+SELECT MAX(DepartmentID) AS MaximumUsedIdentity FROM test_identity_vu_prepare_t3
+SELECT SCOPE_IDENTITY()
+SELECT @@IDENTITY
+SELECT IDENT_CURRENT('test_identity_vu_prepare_t3')
+
+query T
+SELECT MAX(id) AS MaximumUsedIdentity FROM test_identity_vu_prepare_t2
+SELECT MAX(DepartmentID) AS MaximumUsedIdentity FROM test_identity_vu_prepare_t3
+SELECT @@IDENTITY
+SELECT SCOPE_IDENTITY()
+SELECT IDENT_CURRENT('test_identity_vu_prepare_t2')
+----
+NULL
+
+statement ok
+CREATE FUNCTION test_identity_vu_prepare_func2()
+RETURNS TINYINT
+AS
+BEGIN
+RETURN IDENT_CURRENT('test_identity_vu_prepare_t2')
+END
+
+statement ok
+CREATE FUNCTION test_identity_vu_prepare_func3()
+RETURNS TINYINT
+AS
+BEGIN
+RETURN IDENT_CURRENT('test_identity_vu_prepare_t3')
+END
+
+statement ok
+CREATE TABLE test_identity_vu_prepare_t4
+(
+   Name VARCHAR(20),
+   Age  INT NOT NULL
+)
+
+statement ok
+INSERT test_identity_vu_prepare_t4 VALUES ('Babelfish13',21),('Babelfish14',20),('Babelfish15',23)
+
+statement ok
+CREATE TABLE test_identity_vu_prepare_t5
+(
+   Name VARCHAR(20),
+   Age  INT NOT NULL
+)
+
+statement ok
+INSERT test_identity_vu_prepare_t5 VALUES ('Babelfish16',21),('Babelfish17',20),('Babelfish18',23)
+
+statement ok
+CREATE FUNCTION test_identity_vu_prepare_func4()
+RETURNS TINYINT
+AS
+BEGIN
+RETURN IDENT_CURRENT('test_identity_vu_prepare_t5')
+END
+
+statement ok
+CREATE TABLE test_identity_vu_prepare_t6
+(
+   ID INT IDENTITY(1,1),
+   Name VARCHAR(20)
+)
+
+statement ok
+CREATE PROCEDURE test_identity_vu_prepare_p5
+AS
+INSERT INTO test_identity_vu_prepare_t6 
+OUTPUT INSERTED.ID
+VALUES ('Babelfish19')
+
+statement ok
+CREATE VIEW scope_identity_view AS
+SELECT sys.babelfish_get_scope_identity()
+
+statement ok
+SELECT * FROM test_identity_vu_prepare_t1 ORDER BY id
+
+statement ok
+SELECT * FROM test_identity_vu_prepare_t2 ORDER BY id
+
+statement ok
+SELECT * FROM test_identity_vu_prepare_t3 ORDER BY DepartmentID
+
+query T
+SELECT test_identity_vu_prepare_func1()
+----
+1
+
+query T
+SELECT test_identity_vu_prepare_func2()
+----
+1
+
+query T
+SELECT test_identity_vu_prepare_func3()
+----
+1
+
+query TT
+SELECT * FROM test_identity_vu_prepare_t4 ORDER BY Name
+----
+Babelfish13 21
+Babelfish14 20
+Babelfish15 23
+
+query T
+SELECT SCOPE_IDENTITY()
+SELECT @@IDENTITY
+SELECT IDENT_CURRENT('test_identity_vu_prepare_t4')
+----
+NULL
+
+query TT
+SELECT * FROM test_identity_vu_prepare_t4 ORDER BY Name
+----
+Babelfish13 21
+Babelfish14 20
+Babelfish15 23
+
+query T
+SELECT MAX(id) as MaximumUsedIdentity FROM test_identity_vu_prepare_t4
+SELECT SCOPE_IDENTITY()
+SELECT @@IDENTITY
+SELECT IDENT_CURRENT('test_identity_vu_prepare_t4')
+----
+NULL
+
+query TT
+SELECT * FROM test_identity_vu_prepare_t5 ORDER BY Name
+----
+Babelfish16 21
+Babelfish17 20
+Babelfish18 23
+
+query T
+SELECT test_identity_vu_prepare_func4()
+----
+1
+
+query T
+SELECT test_identity_vu_prepare_func4()
+----
+1
+
+statement ok
+DROP PROCEDURE test_identity_vu_prepare_p1
+
+statement ok
+DROP FUNCTION test_identity_vu_prepare_func1
+
+statement ok
+DROP FUNCTION test_identity_vu_prepare_func2
+
+statement ok
+DROP FUNCTION test_identity_vu_prepare_func3
+
+statement ok
+DROP FUNCTION test_identity_vu_prepare_func4
+
+statement ok
+DROP PROCEDURE test_identity_vu_prepare_p2
+
+statement ok
+DROP PROCEDURE test_identity_vu_prepare_p3
+
+statement ok
+DROP PROCEDURE test_identity_vu_prepare_p5
+
+statement ok
+DROP TABLE test_identity_vu_prepare_t1
+
+statement ok
+DROP TABLE test_identity_vu_prepare_t2
+
+statement ok
+DROP TABLE test_identity_vu_prepare_t3
+
+statement ok
+DROP TABLE test_identity_vu_prepare_t4
+
+statement ok
+DROP TABLE test_identity_vu_prepare_t5
+
+statement ok
+DROP TABLE test_identity_vu_prepare_t6
+

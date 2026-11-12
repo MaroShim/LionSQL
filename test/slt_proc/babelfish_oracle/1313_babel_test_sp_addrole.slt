@@ -1,0 +1,39 @@
+# test/slt_proc/babelfish_oracle/1313_babel_test_sp_addrole.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_addrole-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_addrole-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_addrole-vu-cleanup.sql
+
+statement ok
+CREATE TABLE tmp_sp_addrole(addRole sys.SYSNAME);
+
+statement ok
+CREATE ROLE sp_addrole_r1;
+
+statement ok
+CREATE LOGIN sp_addrole_login WITH PASSWORD = '123';
+
+statement ok
+CREATE USER sp_addrole_user FOR LOGIN sp_addrole_login;
+
+statement error
+EXEC sp_addrole '     ';
+
+statement error
+EXEC sp_addrole;
+
+statement ok
+select name from sys.database_principals where name = 'SP_ADDROLE_R3';
+
+statement ok
+DROP ROLE sp_addrole_r3;
+
+statement ok
+DROP USER sp_addrole_user;
+
+statement ok
+DROP LOGIN sp_addrole_login;
+
+statement ok
+DROP ROLE sp_addrole_r1;
+
+statement ok
+DROP TABLE tmp_sp_addrole;
+

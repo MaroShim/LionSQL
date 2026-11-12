@@ -1,0 +1,379 @@
+# test/slt_proc/babelfish_oracle/1575_babel_test_conv_money_to_varchar.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/test_conv_money_to_varchar-vu-prepare.sql, test/babelfish/raw/functions/test_conv_money_to_varchar-vu-verify.sql, test/babelfish/raw/functions/test_conv_money_to_varchar-vu-cleanup.sql
+
+statement ok
+CREATE TABLE test_conv_money_to_varchar_t1(val money)
+
+statement ok
+INSERT INTO test_conv_money_to_varchar_t1 VALUES (1234), (0), (123.12), (0.12456)
+
+statement ok
+CREATE VIEW test_conv_string_to_date_v1 as (
+    SELECT val,
+        val_convert = '$' + CONVERT(VARCHAR, val) ,
+        val_convert_style_0 = '$' + CONVERT(VARCHAR, val, 0),
+        val_convert_style_1 = '$' + CONVERT(VARCHAR, val, 1),
+        val_convert_style_2 = '$' + CONVERT(VARCHAR, val, 2)
+    FROM test_conv_money_to_varchar_t1 ORDER BY val
+);
+
+statement ok
+CREATE PROCEDURE test_conv_string_to_date_p1 as (
+    SELECT val,
+        val_cast_varchar = '$' + CAST(val AS VARCHAR),
+        val_cast_varchar25 = '$' + CAST(val AS VARCHAR(25)),
+        val_cast_nvarchar = '$' + CAST(val AS NVARCHAR),
+        val_cast_nvarchar25 = '$' + CAST(val AS NVARCHAR(25)),
+        val_cast_char = '$' + CAST(val AS CHAR),
+        val_cast_char25 = '$' + CAST(val AS CHAR(25)),
+        val_cast_nchar = '$' + CAST(val AS NCHAR),
+        val_cast_nchar25 = '$' + CAST(val AS NCHAR(25)),
+        val_convert = '$' + CONVERT(VARCHAR, val) ,
+        val_convert_style_0 = '$' + CONVERT(VARCHAR, val, 0),
+        val_convert_style_1 = '$' + CONVERT(VARCHAR, val, 1),
+        val_convert_style_2 = '$' + CONVERT(VARCHAR, val, 2)
+    FROM test_conv_money_to_varchar_t1 ORDER BY val
+);
+
+statement ok
+CREATE FUNCTION test_conv_string_to_date_f1()
+RETURNS TABLE AS
+RETURN (
+    SELECT val,
+        val_cast_varchar = '$' + CAST(val AS VARCHAR),
+        val_cast_varchar25 = '$' + CAST(val AS VARCHAR(25)),
+        val_cast_nvarchar = '$' + CAST(val AS NVARCHAR),
+        val_cast_nvarchar25 = '$' + CAST(val AS NVARCHAR(25)),
+        val_cast_char = '$' + CAST(val AS CHAR),
+        val_cast_char25 = '$' + CAST(val AS CHAR(25)),
+        val_cast_nchar = '$' + CAST(val AS NCHAR),
+        val_cast_nchar25 = '$' + CAST(val AS NCHAR(25)),
+        val_convert = '$' + CONVERT(VARCHAR, val) ,
+        val_convert_style_0 = '$' + CONVERT(VARCHAR, val, 0),
+        val_convert_style_1 = '$' + CONVERT(VARCHAR, val, 1),
+        val_convert_style_2 = '$' + CONVERT(VARCHAR, val, 2)
+    FROM test_conv_money_to_varchar_t1 ORDER BY val
+);
+
+statement ok
+DECLARE @val MONEY = 1234
+SELECT @val,
+    val_cast = '$' + CAST(@val AS VARCHAR),
+    val_convert = '$' + CONVERT(VARCHAR, @val),
+    val_convert_style_0 = '$' + CONVERT(VARCHAR, @val, 0),
+    val_convert_style_1 = '$' + CONVERT(VARCHAR, @val, 1),
+    val_convert_style_2 = '$' + CONVERT(VARCHAR, @val, 2),
+    val_convert_style_126 = '$' + CONVERT(VARCHAR, @val, 126);
+
+statement ok
+DECLARE @val MONEY = 0
+SELECT @val,
+    val_cast = '$' + CAST(@val AS VARCHAR),
+    val_convert = '$' + CONVERT(VARCHAR, @val),
+    val_convert_style_0 = '$' + CONVERT(VARCHAR, @val, 0),
+    val_convert_style_1 = '$' + CONVERT(VARCHAR, @val, 1),
+    val_convert_style_2 = '$' + CONVERT(VARCHAR, @val, 2),
+    val_convert_style_126 = '$' + CONVERT(VARCHAR, @val, 126);
+
+statement ok
+DECLARE @val MONEY = 123.12
+SELECT @val,
+    val_cast = '$' + CAST(@val AS VARCHAR),
+    val_convert = '$' + CONVERT(VARCHAR, @val),
+    val_convert_style_0 = '$' + CONVERT(VARCHAR, @val, 0),
+    val_convert_style_1 = '$' + CONVERT(VARCHAR, @val, 1),
+    val_convert_style_2 = '$' + CONVERT(VARCHAR, @val, 2),
+    val_convert_style_126 = '$' + CONVERT(VARCHAR, @val, 126);
+
+statement ok
+DECLARE @val MONEY = 0.12456
+SELECT @val,
+    val_cast = '$' + CAST(@val AS VARCHAR),
+    val_convert = '$' + CONVERT(VARCHAR, @val),
+    val_convert_style_0 = '$' + CONVERT(VARCHAR, @val, 0),
+    val_convert_style_1 = '$' + CONVERT(VARCHAR, @val, 1),
+    val_convert_style_2 = '$' + CONVERT(VARCHAR, @val, 2),
+    val_convert_style_126 = '$' + CONVERT(VARCHAR, @val, 126);
+
+statement ok
+DECLARE @val MONEY = 123456789123456.12456
+SELECT @val,
+    val_cast = '$' + CAST(@val AS VARCHAR),
+    val_convert = '$' + CONVERT(VARCHAR, @val),
+    val_convert_style_0 = '$' + CONVERT(VARCHAR, @val, 0),
+    val_convert_style_1 = '$' + CONVERT(VARCHAR, @val, 1),
+    val_convert_style_2 = '$' + CONVERT(VARCHAR, @val, 2),
+    val_convert_style_126 = '$' + CONVERT(VARCHAR, @val, 126);
+
+query TTTTTTT
+SELECT val,
+    val_cast = '$' + CAST(val AS VARCHAR),
+    val_convert = '$' + CONVERT(VARCHAR, val),
+    val_convert_style_0 = '$' + CONVERT(VARCHAR, val, 0),
+    val_convert_style_1 = '$' + CONVERT(VARCHAR, val, 1),
+    val_convert_style_2 = '$' + CONVERT(VARCHAR, val, 2),
+    val_convert_style_126 = '$' + CONVERT(VARCHAR, val, 126)
+FROM test_conv_money_to_varchar_t1 ORDER BY val
+----
+0.0000 NULL NULL NULL NULL NULL NULL
+0.1246 NULL NULL NULL NULL NULL NULL
+123.1200 NULL NULL NULL NULL NULL NULL
+1234.0000 NULL NULL NULL NULL NULL NULL
+
+query TTTTTTT
+SELECT val,
+    val_cast = '$' + CAST(val AS VARCHAR(10)),
+    val_convert = '$' + CONVERT(VARCHAR(10), val),
+    val_convert_style_0 = '$' + CONVERT(VARCHAR(10), val, 0),
+    val_convert_style_1 = '$' + CONVERT(VARCHAR(10), val, 1),
+    val_convert_style_2 = '$' + CONVERT(VARCHAR(10), val, 2),
+    val_convert_style_126 = '$' + CONVERT(VARCHAR(10), val, 126)
+FROM test_conv_money_to_varchar_t1 ORDER BY val
+----
+0.0000 NULL NULL NULL NULL NULL NULL
+0.1246 NULL NULL NULL NULL NULL NULL
+123.1200 NULL NULL NULL NULL NULL NULL
+1234.0000 NULL NULL NULL NULL NULL NULL
+
+statement ok
+DECLARE @val MONEY = 1234
+SELECT @val,
+    val_cast = '$' + CAST(@val AS CHAR(25)),
+    val_convert = '$' + CONVERT(CHAR(25), @val),
+    val_convert_style_0 = '$' + CONVERT(CHAR(25), @val, 0),
+    val_convert_style_1 = '$' + CONVERT(CHAR(25), @val, 1),
+    val_convert_style_2 = '$' + CONVERT(CHAR(25), @val, 2),
+    val_convert_style_126 = '$' + CONVERT(CHAR(25), @val, 126);
+
+statement ok
+DECLARE @val MONEY = 0
+SELECT @val,
+    val_cast = '$' + CAST(@val AS CHAR(25)),
+    val_convert = '$' + CONVERT(CHAR(25), @val),
+    val_convert_style_0 = '$' + CONVERT(CHAR(25), @val, 0),
+    val_convert_style_1 = '$' + CONVERT(CHAR(25), @val, 1),
+    val_convert_style_2 = '$' + CONVERT(CHAR(25), @val, 2),
+    val_convert_style_126 = '$' + CONVERT(CHAR(25), @val, 126);
+
+statement ok
+DECLARE @val MONEY = 123.12
+SELECT @val,
+    val_cast = '$' + CAST(@val AS CHAR(25)),
+    val_convert = '$' + CONVERT(CHAR(25), @val),
+    val_convert_style_0 = '$' + CONVERT(CHAR(25), @val, 0),
+    val_convert_style_1 = '$' + CONVERT(CHAR(25), @val, 1),
+    val_convert_style_2 = '$' + CONVERT(CHAR(25), @val, 2),
+    val_convert_style_126 = '$' + CONVERT(CHAR(25), @val, 126);
+
+statement ok
+DECLARE @val MONEY = 0.12456
+SELECT @val,
+    val_cast = '$' + CAST(@val AS CHAR(25)),
+    val_convert = '$' + CONVERT(CHAR(25), @val),
+    val_convert_style_0 = '$' + CONVERT(CHAR(25), @val, 0),
+    val_convert_style_1 = '$' + CONVERT(CHAR(25), @val, 1),
+    val_convert_style_2 = '$' + CONVERT(CHAR(25), @val, 2),
+    val_convert_style_126 = '$' + CONVERT(CHAR(25), @val, 126);
+
+statement ok
+DECLARE @val MONEY = 123456789123456.12456
+SELECT @val,
+    val_cast = '$' + CAST(@val AS CHAR(25)),
+    val_convert = '$' + CONVERT(CHAR(25), @val),
+    val_convert_style_0 = '$' + CONVERT(CHAR(25), @val, 0),
+    val_convert_style_1 = '$' + CONVERT(CHAR(25), @val, 1),
+    val_convert_style_2 = '$' + CONVERT(CHAR(25), @val, 2),
+    val_convert_style_126 = '$' + CONVERT(CHAR(25), @val, 126);
+
+query TTTTTTT
+SELECT val,
+    val_cast = '$' + CAST(val AS CHAR(25)),
+    val_convert = '$' + CONVERT(CHAR(25), val),
+    val_convert_style_0 = '$' + CONVERT(CHAR(25), val, 0),
+    val_convert_style_1 = '$' + CONVERT(CHAR(25), val, 1),
+    val_convert_style_2 = '$' + CONVERT(CHAR(25), val, 2),
+    val_convert_style_126 = '$' + CONVERT(CHAR(25), val, 126)
+FROM test_conv_money_to_varchar_t1 ORDER BY val
+----
+0.0000 NULL NULL NULL NULL NULL NULL
+0.1246 NULL NULL NULL NULL NULL NULL
+123.1200 NULL NULL NULL NULL NULL NULL
+1234.0000 NULL NULL NULL NULL NULL NULL
+
+statement ok
+DECLARE @val MONEY = 1234
+SELECT @val,
+    val_cast = '$' + CAST(@val AS NVARCHAR),
+    val_convert = '$' + CONVERT(NVARCHAR, @val),
+    val_convert_style_0 = '$' + CONVERT(NVARCHAR, @val, 0),
+    val_convert_style_1 = '$' + CONVERT(NVARCHAR, @val, 1),
+    val_convert_style_2 = '$' + CONVERT(NVARCHAR, @val, 2),
+    val_convert_style_126 = '$' + CONVERT(NVARCHAR, @val, 126);
+
+statement ok
+DECLARE @val MONEY = 0
+SELECT @val,
+    val_cast = '$' + CAST(@val AS NVARCHAR),
+    val_convert = '$' + CONVERT(NVARCHAR, @val),
+    val_convert_style_0 = '$' + CONVERT(NVARCHAR, @val, 0),
+    val_convert_style_1 = '$' + CONVERT(NVARCHAR, @val, 1),
+    val_convert_style_2 = '$' + CONVERT(NVARCHAR, @val, 2),
+    val_convert_style_126 = '$' + CONVERT(NVARCHAR, @val, 126);
+
+statement ok
+DECLARE @val MONEY = 123.12
+SELECT @val,
+    val_cast = '$' + CAST(@val AS NVARCHAR),
+    val_convert = '$' + CONVERT(NVARCHAR, @val),
+    val_convert_style_0 = '$' + CONVERT(NVARCHAR, @val, 0),
+    val_convert_style_1 = '$' + CONVERT(NVARCHAR, @val, 1),
+    val_convert_style_2 = '$' + CONVERT(NVARCHAR, @val, 2),
+    val_convert_style_126 = '$' + CONVERT(NVARCHAR, @val, 126);
+
+statement ok
+DECLARE @val MONEY = 0.12456
+SELECT @val,
+    val_cast = '$' + CAST(@val AS NVARCHAR),
+    val_convert = '$' + CONVERT(NVARCHAR, @val),
+    val_convert_style_0 = '$' + CONVERT(NVARCHAR, @val, 0),
+    val_convert_style_1 = '$' + CONVERT(NVARCHAR, @val, 1),
+    val_convert_style_2 = '$' + CONVERT(NVARCHAR, @val, 2),
+    val_convert_style_126 = '$' + CONVERT(NVARCHAR, @val, 126);
+
+statement ok
+DECLARE @val MONEY = 123456789123456.12456
+SELECT @val,
+    val_cast = '$' + CAST(@val AS NVARCHAR),
+    val_convert = '$' + CONVERT(NVARCHAR, @val),
+    val_convert_style_0 = '$' + CONVERT(NVARCHAR, @val, 0),
+    val_convert_style_1 = '$' + CONVERT(NVARCHAR, @val, 1),
+    val_convert_style_2 = '$' + CONVERT(NVARCHAR, @val, 2),
+    val_convert_style_126 = '$' + CONVERT(NVARCHAR, @val, 126);
+
+query TTTTTTT
+SELECT val,
+    val_cast = '$' + CAST(val AS NVARCHAR),
+    val_convert = '$' + CONVERT(NVARCHAR, val),
+    val_convert_style_0 = '$' + CONVERT(NVARCHAR, val, 0),
+    val_convert_style_1 = '$' + CONVERT(NVARCHAR, val, 1),
+    val_convert_style_2 = '$' + CONVERT(NVARCHAR, val, 2),
+    val_convert_style_126 = '$' + CONVERT(NVARCHAR, val, 126)
+FROM test_conv_money_to_varchar_t1 ORDER BY val
+----
+0.0000 NULL NULL NULL NULL NULL NULL
+0.1246 NULL NULL NULL NULL NULL NULL
+123.1200 NULL NULL NULL NULL NULL NULL
+1234.0000 NULL NULL NULL NULL NULL NULL
+
+query TTTTTTT
+SELECT val,
+    val_cast = '$' + CAST(val AS NVARCHAR),
+    val_convert = '$' + CONVERT(NVARCHAR(10), val),
+    val_convert_style_0 = '$' + CONVERT(NVARCHAR(10), val, 0),
+    val_convert_style_1 = '$' + CONVERT(NVARCHAR(10), val, 1),
+    val_convert_style_2 = '$' + CONVERT(NVARCHAR(10), val, 2),
+    val_convert_style_126 = '$' + CONVERT(NVARCHAR(10), val, 126)
+FROM test_conv_money_to_varchar_t1 ORDER BY val
+----
+0.0000 NULL NULL NULL NULL NULL NULL
+0.1246 NULL NULL NULL NULL NULL NULL
+123.1200 NULL NULL NULL NULL NULL NULL
+1234.0000 NULL NULL NULL NULL NULL NULL
+
+statement ok
+DECLARE @val MONEY = 1234
+SELECT @val,
+    val_cast = '$' + CAST(@val AS NCHAR(25)),
+    val_convert = '$' + CONVERT(NCHAR(25), @val),
+    val_convert_style_0 = '$' + CONVERT(NCHAR(25), @val, 0),
+    val_convert_style_1 = '$' + CONVERT(NCHAR(25), @val, 1),
+    val_convert_style_2 = '$' + CONVERT(NCHAR(25), @val, 2),
+    val_convert_style_126 = '$' + CONVERT(NCHAR(25), @val, 126);
+
+statement ok
+DECLARE @val MONEY = 0
+SELECT @val,
+    val_cast = '$' + CAST(@val AS NCHAR(25)),
+    val_convert = '$' + CONVERT(NCHAR(25), @val),
+    val_convert_style_0 = '$' + CONVERT(NCHAR(25), @val, 0),
+    val_convert_style_1 = '$' + CONVERT(NCHAR(25), @val, 1),
+    val_convert_style_2 = '$' + CONVERT(NCHAR(25), @val, 2),
+    val_convert_style_126 = '$' + CONVERT(NCHAR(25), @val, 126);
+
+statement ok
+DECLARE @val MONEY = 123.12
+SELECT @val,
+    val_cast = '$' + CAST(@val AS NCHAR(25)),
+    val_convert = '$' + CONVERT(NCHAR(25), @val),
+    val_convert_style_0 = '$' + CONVERT(NCHAR(25), @val, 0),
+    val_convert_style_1 = '$' + CONVERT(NCHAR(25), @val, 1),
+    val_convert_style_2 = '$' + CONVERT(NCHAR(25), @val, 2),
+    val_convert_style_126 = '$' + CONVERT(NCHAR(25), @val, 126);
+
+statement ok
+DECLARE @val MONEY = 0.12456
+SELECT @val,
+    val_cast = '$' + CAST(@val AS NCHAR(25)),
+    val_convert = '$' + CONVERT(NCHAR(25), @val),
+    val_convert_style_0 = '$' + CONVERT(NCHAR(25), @val, 0),
+    val_convert_style_1 = '$' + CONVERT(NCHAR(25), @val, 1),
+    val_convert_style_2 = '$' + CONVERT(NCHAR(25), @val, 2),
+    val_convert_style_126 = '$' + CONVERT(NCHAR(25), @val, 126);
+
+statement ok
+DECLARE @val MONEY = 123456789123456.12456
+SELECT @val,
+    val_cast = '$' + CAST(@val AS NCHAR(25)),
+    val_convert = '$' + CONVERT(NCHAR(25), @val),
+    val_convert_style_0 = '$' + CONVERT(NCHAR(25), @val, 0),
+    val_convert_style_1 = '$' + CONVERT(NCHAR(25), @val, 1),
+    val_convert_style_2 = '$' + CONVERT(NCHAR(25), @val, 2),
+    val_convert_style_126 = '$' + CONVERT(NCHAR(25), @val, 126);
+
+query TTTTTTT
+SELECT val,
+    val_cast = '$' + CAST(val AS NCHAR(25)),
+    val_convert = '$' + CONVERT(NCHAR(25), val),
+    val_convert_style_0 = '$' + CONVERT(NCHAR(25), val, 0),
+    val_convert_style_1 = '$' + CONVERT(NCHAR(25), val, 1),
+    val_convert_style_2 = '$' + CONVERT(NCHAR(25), val, 2),
+    val_convert_style_126 = '$' + CONVERT(NCHAR(25), val, 126)
+FROM test_conv_money_to_varchar_t1 ORDER BY val
+----
+0.0000 NULL NULL NULL NULL NULL NULL
+0.1246 NULL NULL NULL NULL NULL NULL
+123.1200 NULL NULL NULL NULL NULL NULL
+1234.0000 NULL NULL NULL NULL NULL NULL
+
+statement ok
+DECLARE @val MONEY = 1234.5678
+SELECT @val, val_cast = '$' + CAST(@val AS CHAR(5));
+
+query TTTTTTTTTTTTT
+EXEC test_conv_string_to_date_p1
+----
+0.0000 NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+0.1246 NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+123.1200 NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+1234.0000 NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+
+query TTTTTTTTTTTTT
+SELECT * FROM test_conv_string_to_date_f1()
+----
+0.0000 NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+0.1246 NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+123.1200 NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+1234.0000 NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+
+statement ok
+DROP VIEW test_conv_string_to_date_v1
+
+statement ok
+DROP PROCEDURE test_conv_string_to_date_p1
+
+statement ok
+DROP FUNCTION test_conv_string_to_date_f1
+
+statement ok
+DROP TABLE test_conv_money_to_varchar_t1
+

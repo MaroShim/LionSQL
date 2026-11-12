@@ -1,0 +1,320 @@
+# test/slt_proc/babelfish_oracle/689_babel_pgr_select_implicit.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/pg_regress/pgr_select_implicit.sql
+
+statement ok
+CREATE TABLE test_missing_target (a int, b int, c char(8), d char);
+
+statement ok
+INSERT INTO test_missing_target VALUES (0, 1, 'XXXX', 'A');
+
+statement ok
+INSERT INTO test_missing_target VALUES (1, 2, 'ABAB', 'b');
+
+statement ok
+INSERT INTO test_missing_target VALUES (2, 2, 'ABAB', 'c');
+
+statement ok
+INSERT INTO test_missing_target VALUES (3, 3, 'BBBB', 'D');
+
+statement ok
+INSERT INTO test_missing_target VALUES (4, 3, 'BBBB', 'e');
+
+statement ok
+INSERT INTO test_missing_target VALUES (5, 3, 'bbbb', 'F');
+
+statement ok
+INSERT INTO test_missing_target VALUES (6, 4, 'cccc', 'g');
+
+statement ok
+INSERT INTO test_missing_target VALUES (7, 4, 'cccc', 'h');
+
+statement ok
+INSERT INTO test_missing_target VALUES (8, 4, 'CCCC', 'I');
+
+statement ok
+INSERT INTO test_missing_target VALUES (9, 4, 'CCCC', 'j');
+
+query TT
+SELECT c, count(*) FROM test_missing_target GROUP BY test_missing_target.c ORDER BY c;
+----
+ABAB 2
+BBBB 2
+bbbb 1
+CCCC 2
+cccc 2
+XXXX 1
+
+query T
+SELECT count(*) FROM test_missing_target GROUP BY test_missing_target.c ORDER BY c;
+----
+1
+2
+2
+2
+1
+2
+
+query T
+SELECT count(*) FROM test_missing_target GROUP BY a ORDER BY b;
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+
+query T
+SELECT count(*) FROM test_missing_target GROUP BY b ORDER BY b;
+----
+1
+4
+2
+3
+
+query TT
+SELECT test_missing_target.b, count(*)
+  FROM test_missing_target GROUP BY b ORDER BY b;
+----
+1 1
+2 2
+3 3
+4 4
+
+query T
+SELECT c FROM test_missing_target ORDER BY a;
+----
+XXXX
+ABAB
+ABAB
+BBBB
+BBBB
+bbbb
+cccc
+cccc
+CCCC
+CCCC
+
+query T
+SELECT count(*) FROM test_missing_target GROUP BY b ORDER BY b desc;
+----
+1
+4
+2
+3
+
+query T
+SELECT count(*) FROM test_missing_target ORDER BY 1 desc;
+----
+10
+
+query TT
+SELECT c, count(*) FROM test_missing_target GROUP BY 1 ORDER BY 1;
+----
+XXXX 10
+
+query TT
+SELECT c, count(*) FROM test_missing_target GROUP BY 3;
+----
+XXXX 10
+
+query T
+SELECT count(*) FROM test_missing_target x, test_missing_target y
+	WHERE x.a = y.a
+	GROUP BY b ORDER BY b;
+----
+1
+4
+2
+3
+
+query TT
+SELECT a, a FROM test_missing_target
+	ORDER BY a;
+----
+0 0
+1 1
+2 2
+3 3
+4 4
+5 5
+6 6
+7 7
+8 8
+9 9
+
+query TT
+SELECT a/2, a/2 FROM test_missing_target
+	ORDER BY a/2;
+----
+0 0
+0 0
+1 1
+1 1
+2 2
+2 2
+3 3
+3 3
+4 4
+4 4
+
+query TT
+SELECT a/2, a/2 FROM test_missing_target
+	GROUP BY a/2 ORDER BY a/2;
+----
+0 0
+4 4
+1 1
+2 2
+3 3
+
+query TT
+SELECT x.b, count(*) FROM test_missing_target x, test_missing_target y
+	WHERE x.a = y.a
+	GROUP BY x.b ORDER BY x.b;
+----
+1 1
+2 2
+3 3
+4 4
+
+query T
+SELECT count(*) FROM test_missing_target x, test_missing_target y
+	WHERE x.a = y.a
+	GROUP BY x.b ORDER BY x.b;
+----
+1
+4
+2
+3
+
+statement ok
+SELECT count(*) INTO test_missing_target2
+FROM test_missing_target x, test_missing_target y
+	WHERE x.a = y.a
+	GROUP BY x.b ORDER BY x.b;
+
+query T
+SELECT * FROM test_missing_target2;
+----
+1
+4
+2
+3
+
+query TT
+SELECT a%2, count(b) FROM test_missing_target
+GROUP BY test_missing_target.a%2
+ORDER BY test_missing_target.a%2;
+----
+0 5
+1 5
+
+query T
+SELECT count(c) FROM test_missing_target
+GROUP BY lower(test_missing_target.c)
+ORDER BY lower(test_missing_target.c);
+----
+1
+2
+3
+4
+
+query T
+SELECT count(a) FROM test_missing_target GROUP BY a ORDER BY b;
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+
+query T
+SELECT count(b) FROM test_missing_target GROUP BY b/2 ORDER BY b/2;
+----
+1
+4
+5
+
+query TT
+SELECT lower(test_missing_target.c), count(c)
+  FROM test_missing_target GROUP BY lower(c) ORDER BY lower(c);
+----
+xxxx 1
+abab 2
+bbbb 3
+cccc 4
+
+query T
+SELECT a FROM test_missing_target ORDER BY upper(d);
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+query T
+SELECT count(b) FROM test_missing_target
+	GROUP BY (b + 1) / 2 ORDER BY (b + 1) / 2 desc;
+----
+7
+3
+
+query T
+SELECT count(x.a) FROM test_missing_target x, test_missing_target y
+	WHERE x.a = y.a
+	GROUP BY b/2 ORDER BY b/2;
+----
+1
+4
+5
+
+query TT
+SELECT x.b/2, count(x.b) FROM test_missing_target x, test_missing_target y
+	WHERE x.a = y.a
+	GROUP BY x.b/2 ORDER BY x.b/2;
+----
+0 1
+2 4
+1 5
+
+query T
+SELECT count(b) FROM test_missing_target x, test_missing_target y
+	WHERE x.a = y.a
+	GROUP BY x.b/2;
+----
+1
+4
+5
+
+statement ok
+SELECT count(x.b) INTO test_missing_target3
+FROM test_missing_target x, test_missing_target y
+	WHERE x.a = y.a
+	GROUP BY x.b/2 ORDER BY x.b/2
+SELECT * FROM test_missing_target3;
+
+statement ok
+DROP TABLE test_missing_target;
+
+statement ok
+DROP TABLE test_missing_target2;
+
+statement ok
+DROP TABLE test_missing_target3;
+

@@ -1,0 +1,18 @@
+# test/slt_proc/babelfish_oracle/555_babel_babel_701.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-701.sql
+
+statement ok
+CREATE PROCEDURE babel_701_sp (@a varbinary OUTPUT) AS
+BEGIN
+  SET @a=0x121;
+  Select @a as a;
+END;
+
+query T
+EXEC babel_701_sp 0x122
+----
+0x121
+
+statement ok
+DROP PROCEDURE babel_701_sp
+

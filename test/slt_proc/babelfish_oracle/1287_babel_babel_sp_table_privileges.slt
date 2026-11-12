@@ -1,0 +1,147 @@
+# test/slt_proc/babelfish_oracle/1287_babel_babel_sp_table_privileges.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SP_TABLE_PRIVILEGES.sql
+
+statement ok
+create database db1
+
+statement ok
+use db1
+
+statement ok
+create table t1(a int, primary key(a))
+
+statement ok
+create table t2(a int, b int, c int)
+
+statement ok
+create table t3(a int, b int, c int)
+
+statement ok
+create table t4(a int)
+
+statement ok
+create table MyTable5 (a int, b int, c int)
+
+statement ok
+create table [MyTable6] ([a] int, [b] int, [c] int)
+
+statement ok
+create table foobar1(a int)
+
+statement ok
+create table foobar2(b int)
+
+statement ok
+create table folbar1(c int)
+
+statement error
+exec sp_table_privileges
+
+statement ok
+use master
+
+statement ok
+use db1
+
+statement ok
+drop table t1
+
+statement ok
+drop table t2
+
+statement ok
+drop table t3
+
+statement ok
+drop table t4
+
+statement ok
+drop table MyTable5 
+
+statement ok
+drop table [MyTable6]
+
+statement ok
+drop table foobar1
+
+statement ok
+drop table foobar2
+
+statement ok
+drop table folbar1
+
+statement ok
+use master
+
+statement ok
+create database db1 COLLATE bbf_unicode_cp1_ci_ai;
+
+statement ok
+use db1
+
+statement ok
+create table t1(a int, primary key(a))
+
+statement ok
+create table t2(a int, b int, c int)
+
+statement ok
+create table t3(a int, b int, c int)
+
+statement ok
+create table t4(a int)
+
+statement ok
+create table MyTable5 (a int, b int, c int)
+
+statement ok
+create table [MyTable6] ([a] int, [b] int, [c] int)
+
+statement ok
+create table foobar1(a int)
+
+statement ok
+create table foobar2(b int)
+
+statement ok
+create table folbar1(c int)
+
+statement error
+exec sp_table_privileges
+
+statement ok
+use master
+
+statement ok
+use db1
+
+statement ok
+drop table t1
+
+statement ok
+drop table t2
+
+statement ok
+drop table t3
+
+statement ok
+drop table t4
+
+statement ok
+drop table MyTable5 
+
+statement ok
+drop table [MyTable6]
+
+statement ok
+drop table foobar1
+
+statement ok
+drop table foobar2
+
+statement ok
+drop table folbar1
+
+statement ok
+use master
+

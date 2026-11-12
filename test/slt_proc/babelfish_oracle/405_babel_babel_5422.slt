@@ -1,0 +1,149 @@
+# test/slt_proc/babelfish_oracle/405_babel_babel_5422.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-5422.sql
+
+statement ok
+CREATE TABLE babel_5422_table (
+    [primary] INT PRIMARY KEY,
+    Name VARCHAR(50)
+);
+
+statement ok
+CREATE TABLE babel_5422_table2 (
+    [PRIMARY] INT,
+    Age INT
+);
+
+statement ok
+CREATE TABLE #babel_5422_table3 (
+    [primary_column] INT,
+    Age INT
+);
+
+statement ok
+INSERT INTO babel_5422_table ([primary], Name)
+VALUES (1, 'John'), (2, 'Jane'), (3, 'Bob');
+
+statement ok
+INSERT INTO babel_5422_table2 ([primary], Age)
+VALUES (1, 25), (3, 30);
+
+statement ok
+INSERT INTO #babel_5422_table3 ([primary_column], Age)
+VALUES (1, 30), (3, 40);
+
+query TT
+SELECT [primary] AS PrimaryKey, Name
+FROM babel_5422_table;
+----
+1 John
+2 Jane
+3 Bob
+
+query TT
+SELECT [primary_column] AS [Primary], Age
+FROM #babel_5422_table3;
+----
+1 30
+3 40
+
+query TTT
+SELECT t1.[primary], t1.Name, t2.Age
+FROM babel_5422_table t1
+JOIN babel_5422_table2 t2 ON t1.[primary] = t2.[primary];
+----
+1 John 25
+3 Bob 30
+
+query T
+SELECT COUNT([primary]) AS TotalRows
+FROM babel_5422_table;
+----
+3
+
+query TT
+SELECT *
+FROM babel_5422_table
+ORDER BY [primary] DESC;
+----
+3 Bob
+2 Jane
+1 John
+
+query TT
+SELECT [primary],
+    CASE
+        WHEN [primary] = 1 THEN 'One'
+        WHEN [primary] = 2 THEN 'Two'
+        ELSE 'Other'
+    END AS PrimaryDescription
+FROM babel_5422_table;
+----
+1 One
+2 Two
+3 Other
+
+query T
+SELECT Name
+FROM babel_5422_table
+WHERE [primary] IN (SELECT [primary] FROM babel_5422_table2);
+----
+John
+Bob
+
+statement ok
+CREATE VIEW babel_5422_view
+AS
+SELECT [primary], Name
+FROM babel_5422_table;
+
+query TT
+SELECT * FROM babel_5422_view;
+----
+1 John
+2 Jane
+3 Bob
+
+statement ok
+CREATE PROCEDURE babel_5422_proc
+    @PrimaryKey INT
+AS
+BEGIN
+    SELECT [primary], Name
+    FROM babel_5422_table
+    WHERE [primary] = @PrimaryKey;
+END
+
+query TT
+EXEC babel_5422_proc 2;
+----
+2 Jane
+
+statement ok
+CREATE FUNCTION babel_5422_func
+    (@PrimaryKey INT)
+RETURNS TABLE
+AS
+RETURN(
+    SELECT [primary], Name
+    FROM babel_5422_table
+    WHERE [primary] = @PrimaryKey
+)
+
+statement ok
+DROP FUNCTION babel_5422_func;
+
+statement ok
+DROP PROCEDURE babel_5422_proc;
+
+statement ok
+DROP VIEW babel_5422_view;
+
+statement ok
+DROP TABLE #babel_5422_table3
+
+statement ok
+DROP TABLE babel_5422_table2;
+
+statement ok
+DROP TABLE babel_5422_table;
+

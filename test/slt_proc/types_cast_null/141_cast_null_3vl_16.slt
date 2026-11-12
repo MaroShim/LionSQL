@@ -1,0 +1,22 @@
+# test/slt_proc/types_cast_null/141_cast_null_3vl_16.slt
+# T-SQL CAST, TRY_CAST, ISNUMERIC, CHOOSE, IIF, COALESCE, NULLIF (16)
+
+query ITI
+SELECT CAST('603' AS INT) + 16, CAST(603 AS VARCHAR(20)), TRY_CAST('603' AS INT);
+----
+619 603 603
+
+query IIT
+SELECT ISNUMERIC('603'), ISNUMERIC('err_16z'), ISNULL(CAST(TRY_CAST('err_16z' AS INT) AS VARCHAR(20)), 'NULL_VAL');
+----
+1 0 NULL_VAL
+
+query TTTT
+SELECT CHOOSE(1, 'Alpha_16', 'Beta_16', 'Gamma_16', 'Delta_16'), IIF(603 > 10, 'YES', 'NO'), ISNULL(NULL, 'DEF_16'), COALESCE(NULL, NULL, 'COAL_16');
+----
+Alpha_16 YES DEF_16 COAL_16
+
+query II
+SELECT ISNULL(NULLIF(603, 603), -1), NULLIF(603, 0);
+----
+-1 603

@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/1175_babel_babel_2688.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2688-vu-prepare.sql, test/babelfish/raw/BABEL-2688-vu-verify.sql, test/babelfish/raw/BABEL-2688-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_2688_tab1(a int)
+
+statement ok
+CREATE FUNCTION babel_2688_fn2() RETURNS int
+AS
+BEGIN
+	UPDATE t
+	SET a = 1
+	FROM babel_2688_tab1 AS t;
+	RETURN 0;
+END
+
+statement ok
+CREATE FUNCTION babel_2688_fn5() RETURNS int
+AS
+BEGIN
+	DELETE FROM babel_2688_tab1;
+	RETURN 0;
+END
+
+statement ok
+DROP TABLE babel_2688_tab1
+

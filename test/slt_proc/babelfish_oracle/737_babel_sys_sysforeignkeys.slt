@@ -1,0 +1,90 @@
+# test/slt_proc/babelfish_oracle/737_babel_sys_sysforeignkeys.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-sysforeignkeys.sql
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+USE db1
+
+statement ok
+create table fk_1 (a int, primary key (a))
+
+statement ok
+create table fk_2 (a int, b int, primary key (a), foreign key (b) references fk_1(a))
+
+statement ok
+SELECT COUNT(*) FROM dbo.SySFoReIGNkeYs where fkeyid = object_id('fk_2');
+
+statement ok
+SELECT COUNT(*) FROM db1.dbo.SySFoReIGNkeYs where fkeyid = object_id('fk_2');
+
+query T
+select count(*) from sys.foreign_keys where parent_object_id = object_id('fk_2');
+----
+NULL
+
+query T
+select count(*) from sys.foreign_keys where parent_object_id = object_id('fk_2') and type='f';
+----
+NULL
+
+query T
+select count(*) from sys.foreign_keys where parent_object_id = object_id('fk_2') and type='F';
+----
+NULL
+
+statement ok
+USE master
+
+statement ok
+select count(*) from dbo.sysforeignkeys where fkeyid = object_id('fk_2');
+
+query T
+select count(*) from sys.foreign_keys where parent_object_id = object_id('fk_2');
+----
+NULL
+
+statement ok
+create table fk_3 (a int, primary key (a))
+
+statement ok
+create table fk_4 (a int, b int, primary key (a), foreign key (b) references fk_3(a))
+
+statement ok
+SELECT COUNT(*) FROM dbo.SySFoReIGNkeYs where fkeyid = object_id('fk_4');
+
+statement ok
+SELECT COUNT(*) FROM db1.dbo.SySFoReIGNkeYs where fkeyid = object_id('fk_4');
+
+query T
+select count(*) from sys.foreign_keys where parent_object_id = object_id('fk_4');
+----
+NULL
+
+statement ok
+USE db1
+
+statement ok
+select count(*) from dbo.sysforeignkeys where fkeyid = object_id('fk_4');
+
+query T
+select count(*) from sys.foreign_keys where parent_object_id = object_id('fk_4');
+----
+NULL
+
+statement ok
+drop table fk_2;
+
+statement ok
+drop table fk_1;
+
+statement ok
+USE master
+
+statement ok
+drop table fk_4;
+
+statement ok
+drop table fk_3;
+

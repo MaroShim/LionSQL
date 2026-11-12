@@ -1,0 +1,64 @@
+# test/slt_proc/babelfish_oracle/1457_babel_output_with_where_tests.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/output_with_where_tests.sql
+
+statement ok
+CREATE TABLE insert_table (ID INT IDENTITY(1,1), Name VARCHAR(50), Value INT);
+
+statement ok
+DROP TABLE insert_table;
+
+statement ok
+CREATE TABLE delete_table (id INT IDENTITY(1,1), name VARCHAR(50), Price DECIMAL(10,2));
+
+statement ok
+CREATE TABLE #temp_delete_table (ID INT IDENTITY(1,1), DeletedID INT, DeletedName VARCHAR(50), DeletedPrice DECIMAL(10,2));
+
+statement ok
+DELETE FROM delete_table
+OUTPUT Deleted.id, Deleted.name, Deleted.Price INTO #temp_delete_table
+WHERE Price > 100;
+
+statement ok
+DROP TABLE delete_table;
+DROP TABLE #temp_delete_table;
+
+statement ok
+CREATE TABLE TestTable (ID INT, TEXTVal VARCHAR(100))
+
+statement ok
+INSERT INTO TestTable
+VALUES (1, 'John'),
+       (2, 'Jane'),
+       (3, 'Bob'),
+       (4, 'Alice');
+
+statement ok
+CREATE TABLE #TmpTable (
+    c1 INT IDENTITY,
+    ID_New INT,
+    TEXTVal_New VARCHAR(100),
+    ID_Old INT,
+    TEXTVal_Old VARCHAR(100)
+);
+
+query TTTT
+UPDATE TestTable SET TEXTVal = 'NewValue'
+OUTPUT Inserted.ID, Inserted.TEXTVal, Deleted.ID, Deleted.TEXTVal INTO #TmpTable WHERE ID IN (1,2)
+----
+1 NewValue 1 NULL
+2 NewValue 2 NULL
+
+statement ok
+SET IDENTITY_INSERT #TmpTable ON
+
+query TTTT
+UPDATE TestTable SET TEXTVal = 'NewValue'
+OUTPUT Inserted.ID, Inserted.TEXTVal, Deleted.ID, Deleted.TEXTVal INTO #TmpTable WHERE ID IN (1,2)
+----
+1 NewValue 1 NULL
+2 NewValue 2 NULL
+
+statement ok
+DROP TABLE TestTable;
+DROP TABLE #TmpTable;
+

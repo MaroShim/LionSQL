@@ -1,0 +1,81 @@
+# test/slt_proc/babelfish_oracle/273_babel_babel_1252.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1252.sql
+
+statement ok
+use master;
+
+statement ok
+create table dttest (d datetime)
+
+statement ok
+insert dttest values(cast('10/10/2000 12:34:56.789' as datetime) - 100)
+insert dttest values(cast('10/10/2000 12:34:56.789' as datetime) - (-100))
+insert dttest values(100 - cast('10/10/2000 12:34:56.789' as datetime))
+insert dttest values((-100) - cast('10/10/2000 12:34:56.789' as datetime))
+insert dttest values(cast('10/10/2000 12:34:56.789' as datetime) + 100)
+insert dttest values(cast('10/10/2000 12:34:56.789' as datetime) + (-100))
+insert dttest values(100 + cast('10/10/2000 12:34:56.789' as datetime))
+insert dttest values((-100) + cast('10/10/2000 12:34:56.789' as datetime))
+
+statement ok
+insert dttest values(cast('10/10/2000 12:34:56.789' as datetime) - 1.5)
+insert dttest values(cast('10/10/2000 12:34:56.789' as datetime) - (-1.5))
+insert dttest values(2.3 - cast('10/10/2000 12:34:56.789' as datetime))
+insert dttest values((-2.3) - cast('10/10/2000 12:34:56.789' as datetime))
+insert dttest values(cast('10/10/2000 12:34:56.789' as datetime) + .11)
+insert dttest values(cast('10/10/2000 12:34:56.789' as datetime) + (-.11))
+insert dttest values(8.55 + cast('10/10/2000 12:34:56.789' as datetime))
+insert dttest values((-9.76) + cast('10/10/2000 12:34:56.789' as datetime))
+
+statement ok
+insert dttest values(10000000 + cast('10/10/2000 12:34:56.789' as datetime))
+
+statement ok
+insert dttest values(cast('10/10/2000 12:34:56.789' as datetime) - 10000000)
+
+query T
+select * from dttest
+----
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+create table dttest2 (d smalldatetime)
+
+statement ok
+insert dttest2 values(1000 - cast('1/10/1900 12:34:56.789' as smalldatetime))
+insert dttest2 values(cast('10/10/2000 12:34:56.789' as smalldatetime) + 100)
+insert dttest2 values(cast('10/10/2000 12:34:56.789' as smalldatetime) - 10)
+insert dttest2 values(100 + cast('10/10/2000 12:34:56.789' as smalldatetime))
+
+statement ok
+insert dttest2 values(cast('10/10/2000 12:34:56.789' as smalldatetime) + 1.5)
+insert dttest2 values(cast('10/10/2000 12:34:56.789' as smalldatetime) - (1.5))
+insert dttest2 values(20.3 - cast('1/2/1900 12:34:56.789' as smalldatetime))
+insert dttest2 values(cast('10/10/2000 12:34:56.789' as smalldatetime) + .11)
+insert dttest2 values(8.55 + cast('10/10/2000 12:34:56.789' as smalldatetime))
+
+statement ok
+insert dttest2 values(100000 + cast('10/10/2000 12:34:56.789' as smalldatetime))
+
+statement ok
+insert dttest2 values((-100000)+ cast('10/10/2000 12:34:56.789' as smalldatetime))
+
+statement ok
+insert dttest2 values(cast('10/10/2000 12:34:56.789' as smalldatetime) - 10000000)
+
+query T
+select * from dttest2
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+drop table dttest
+drop table dttest2
+

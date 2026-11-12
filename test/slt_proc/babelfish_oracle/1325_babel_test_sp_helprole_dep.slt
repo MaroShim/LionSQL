@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1325_babel_test_sp_helprole_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_helprole-dep-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_helprole-dep-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_helprole-dep-vu-cleanup.sql
+
+statement ok
+CREATE ROLE sp_helprole_role1;
+
+statement ok
+DROP ROLE sp_helprole_role1;
+

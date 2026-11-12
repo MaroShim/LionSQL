@@ -1,0 +1,17 @@
+# test/slt_proc/babelfish_oracle/1102_babel_babel_1231.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1231.sql
+
+statement ok
+CREATE FUNCTION custom_diff(
+	@one int,
+	@two int
+)
+RETURNS int
+AS 
+BEGIN
+	RETURN (@one - @two);
+END;
+
+statement ok
+DROP FUNCTION custom_diff
+

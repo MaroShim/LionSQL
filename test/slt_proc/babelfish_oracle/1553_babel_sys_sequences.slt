@@ -1,0 +1,30 @@
+# test/slt_proc/babelfish_oracle/1553_babel_sys_sequences.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys_sequences-vu-prepare.sql, test/babelfish/raw/views/sys_sequences-vu-verify.sql, test/babelfish/raw/views/sys_sequences-vu-cleanup.sql
+
+statement ok
+CREATE VIEW sys_sequences_test_view
+AS
+    SELECT * FROM sys.sequences;
+
+statement ok
+CREATE PROC sys_sequences_test_proc
+AS
+    SELECT * FROM sys.sequences
+
+statement ok
+CREATE FUNCTION sys_sequences_test_func()
+RETURNS INT
+AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM sys.sequences)
+END
+
+statement ok
+DROP VIEW sys_sequences_test_view
+
+statement ok
+DROP PROC sys_sequences_test_proc
+
+statement ok
+DROP FUNCTION sys_sequences_test_func
+

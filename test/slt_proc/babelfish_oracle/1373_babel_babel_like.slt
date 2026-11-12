@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/1373_babel_babel_like.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_like.sql
+
+statement ok
+select relname from pg_class where relname like NULL;
+
+statement ok
+select relname from pg_class where relname like '';
+
+statement ok
+select relname from pg_class where relname like 'pg\[1:9\]class';
+
+statement ok
+select relname from pg_class where relname like 'pg*[1:9*]class' escape '*';
+
+statement ok
+select relname from pg_class where relname like NULL;
+
+statement ok
+select relname from pg_class where relname like '';
+
+statement ok
+select relname from pg_class where relname like 'pg\[1:9\]class';
+
+statement ok
+select relname from pg_class where relname like 'pg*[1:9*]class' escape '*';
+

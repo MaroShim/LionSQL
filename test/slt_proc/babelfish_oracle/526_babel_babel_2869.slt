@@ -1,0 +1,44 @@
+# test/slt_proc/babelfish_oracle/526_babel_babel_2869.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2869.sql
+
+statement ok
+CREATE TABLE join_repro (
+    c1  bigint  NOT NULL
+    , c2    binary(123) NOT NULL
+    , c3    INT NOT NULL
+    , c4    REAL    NOT NULL
+    , c5    FLOAT   NOT NULL
+    , c6    CHAR(1) NOT NULL
+)
+
+statement ok
+SELECT T.name
+FROM sys.objects O, sys.columns C, sys.types T
+WHERE O.object_id = C.object_id
+AND C.user_type_id = T.user_type_id
+AND O.name = 'join_repro'
+AND O.schema_id = SCHEMA_ID( 'dbo' )
+ORDER BY T.name
+
+statement ok
+Create database BABEL2869
+
+statement ok
+Use BABEL2869
+
+query T
+Select name from sys.types order by name
+----
+bit
+datetime
+float
+int
+varchar
+
+statement ok
+use master
+
+statement ok
+drop table join_repro
+drop database BABEL2869
+

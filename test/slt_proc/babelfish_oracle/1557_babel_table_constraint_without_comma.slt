@@ -1,0 +1,125 @@
+# test/slt_proc/babelfish_oracle/1557_babel_table_constraint_without_comma.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/table_constraint_without_comma-vu-prepare.sql, test/babelfish/raw/table_constraint_without_comma-vu-verify.sql, test/babelfish/raw/table_constraint_without_comma-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE p5_tv_nocomma
+AS 
+BEGIN                       
+	DECLARE @tv TABLE (a INT NOT NULL, b INT NOT NULL PRIMARY KEY)
+	INSERT @tv VALUES(1,2) 
+	INSERT @tv VALUES(2,2) 
+END
+
+statement ok
+CREATE PROCEDURE p6_tv_nocomma
+AS 
+BEGIN
+	DECLARE @tv TABLE (a INT NOT NULL PRIMARY KEY, b INT NOT NULL)
+	INSERT @tv VALUES(1,2) 
+	INSERT @tv VALUES(1,3) 
+END
+
+statement ok
+DECLARE @tv_nocomma TABLE(a INT NOT NULL, b INT PRIMARY KEY(a))
+insert @tv_nocomma values (1,2)
+insert @tv_nocomma values (1,3)
+
+statement ok
+DECLARE @tv_nocomma TABLE(a INT NOT NULL, b INT NOT NULL PRIMARY KEY(a,b))
+insert @tv_nocomma values (1,2)
+insert @tv_nocomma values (1,2)
+
+statement ok
+DECLARE @tv_nocomma TABLE(a INT NOT NULL, b INT UNIQUE(a))
+insert @tv_nocomma values (1,2)
+insert @tv_nocomma values (1,3)
+
+statement ok
+DECLARE @tv_nocomma TABLE(a INT NOT NULL, b INT NOT NULL UNIQUE(a,b))
+insert @tv_nocomma values (1,2)
+insert @tv_nocomma values (1,2)
+
+statement ok
+DECLARE @tv_nocomma TABLE(a INT NOT NULL, b INT NOT NULL PRIMARY KEY)
+insert @tv_nocomma values (1,2)
+insert @tv_nocomma values (2,2)
+
+statement ok
+DECLARE @tv_nocomma TABLE(a INT NOT NULL PRIMARY KEY, b INT NOT NULL)
+insert @tv_nocomma values (1,2)
+insert @tv_nocomma values (1,3)
+
+statement ok
+DECLARE @tv_nocomma TABLE(a INT NOT NULL, b INT NOT NULL UNIQUE)
+insert @tv_nocomma values (1,2)
+insert @tv_nocomma values (2,2)
+
+statement ok
+DECLARE @tv_nocomma TABLE(a INT NOT NULL UNIQUE, b INT NOT NULL)
+insert @tv_nocomma values (1,2)
+insert @tv_nocomma values (1,3)
+
+statement ok
+DECLARE @tv_nocomma TABLE(a INT NOT NULL, b INT NOT NULL CHECK(a>0))
+insert @tv_nocomma values (1,2)
+insert @tv_nocomma values (0,3)
+
+statement ok
+create table t1_tvf_nocomma (a INT NOT NULL, b INT NOT NULL PRIMARY KEY(a))
+insert t1_tvf_nocomma values (1,2)
+insert t1_tvf_nocomma values (1,3)
+
+statement ok
+create table t2_tvf_nocomma (a INT NOT NULL, b INT NOT NULL PRIMARY KEY)
+insert t2_tvf_nocomma values (1,2)
+insert t2_tvf_nocomma values (1,3)
+
+statement ok
+create table t3_tvf_nocomma (a INT NOT NULL PRIMARY KEY, b INT NOT NULL)
+insert t3_tvf_nocomma values (1,2)
+insert t3_tvf_nocomma values (1,3)
+
+statement ok
+create table t4_tvf_nocomma (a INT NOT NULL, b INT NOT NULL UNIQUE(a))
+insert t4_tvf_nocomma values (1,2)
+insert t4_tvf_nocomma values (1,3)
+
+statement ok
+create table t5_tvf_nocomma (a INT NOT NULL, b INT NOT NULL UNIQUE)
+insert t5_tvf_nocomma values (1,2)
+insert t5_tvf_nocomma values (1,3)
+
+statement ok
+create table t6_tvf_nocomma (a INT NOT NULL UNIQUE, b INT NOT NULL)
+insert t6_tvf_nocomma values (1,2)
+insert t6_tvf_nocomma values (1,3)
+
+statement ok
+create table #t7_tvf_nocomma (a INT NOT NULL, b INT NOT NULL UNIQUE(a))
+insert #t7_tvf_nocomma values (1,2)
+insert #t7_tvf_nocomma values (1,3)
+
+statement ok
+DROP PROCEDURE p5_tv_nocomma
+
+statement ok
+DROP PROCEDURE p6_tv_nocomma
+
+statement ok
+DROP TABLE t1_tvf_nocomma
+
+statement ok
+DROP TABLE t2_tvf_nocomma
+
+statement ok
+DROP TABLE t3_tvf_nocomma
+
+statement ok
+DROP TABLE t4_tvf_nocomma
+
+statement ok
+DROP TABLE t5_tvf_nocomma
+
+statement ok
+DROP TABLE t6_tvf_nocomma
+

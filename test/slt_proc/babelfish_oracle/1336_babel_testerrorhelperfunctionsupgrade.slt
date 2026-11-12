@@ -1,0 +1,32 @@
+# test/slt_proc/babelfish_oracle/1336_babel_testerrorhelperfunctionsupgrade.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/TestErrorHelperFunctionsUpgrade-vu-prepare.sql, test/babelfish/raw/ErrorMapping/TestErrorHelperFunctionsUpgrade-vu-verify.sql, test/babelfish/raw/ErrorMapping/TestErrorHelperFunctionsUpgrade-vu-cleanup.sql
+
+statement ok
+CREATE VIEW TestErrorHelperFunctionsUpgrade_VU_PREPARE_VIEW AS
+SELECT sql_error_code from sys.fn_mapped_system_error_list();
+
+statement ok
+create function TestErrorHelperFunctionsUpgrade_VU_PREPARE_FUNC() returns table
+as
+return (select sql_error_code from sys.fn_mapped_system_error_list());
+
+statement ok
+create procedure TestErrorHelperFunctionsUpgrade_VU_PREPARE_PROC as
+select count(*) from sys.fn_mapped_system_error_list()
+
+statement ok
+DROP VIEW TestErrorHelperFunctionsUpgrade_VU_PREPARE_VIEW
+
+statement ok
+CREATE VIEW TestErrorHelperFunctionsUpgrade_VU_PREPARE_VIEW AS
+SELECT sql_error_code from sys.fn_mapped_system_error_list();
+
+statement ok
+DROP VIEW TestErrorHelperFunctionsUpgrade_VU_PREPARE_VIEW;
+
+statement ok
+DROP FUNCTION TestErrorHelperFunctionsUpgrade_VU_PREPARE_FUNC;
+
+statement ok
+DROP PROCEDURE TestErrorHelperFunctionsUpgrade_VU_PREPARE_PROC;
+

@@ -1,0 +1,31 @@
+# test/slt_proc/babelfish_oracle/1265_babel_babel_extendedproperty_before_15_4.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-EXTENDEDPROPERTY-before-15_4-vu-prepare.sql, test/babelfish/raw/BABEL-EXTENDEDPROPERTY-before-15_4-vu-verify.sql
+
+statement ok
+create table BABEL_EXTENDEDPROPERTY_vu_t1 (a int)
+
+statement ok
+create view BABEL_EXTENDEDPROPERTY_vu_v1 as select * FROM fn_listextendedproperty(NULL, 'schema', N'dbo', 'table', N't1', NULL, NULL);
+
+statement ok
+CREATE FUNCTION BABEL_EXTENDEDPROPERTY_vu_f1 (@t VARCHAR(30))
+RETURNS TABLE AS
+RETURN SELECT * FROM fn_listextendedproperty(NULL, 'schema', N'dbo', 'table', @t, NULL, NULL);
+
+statement ok
+create proc BABEL_EXTENDEDPROPERTY_vu_p1
+AS
+SELECT * FROM fn_listextendedproperty(NULL, 'schema', N'dbo', 'table', N'BABEL_EXTENDEDPROPERTY_vu_t1', NULL, NULL);
+
+statement ok
+drop view BABEL_EXTENDEDPROPERTY_vu_v1
+
+statement ok
+drop function BABEL_EXTENDEDPROPERTY_vu_f1
+
+statement ok
+drop proc BABEL_EXTENDEDPROPERTY_vu_p1
+
+statement ok
+drop table BABEL_EXTENDEDPROPERTY_vu_t1
+

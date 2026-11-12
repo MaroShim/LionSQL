@@ -1,0 +1,426 @@
+# test/slt_proc/babelfish_oracle/404_babel_babel_5242_union_tsql_basetype.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-5242-union-tsql-basetype.sql
+
+statement ok
+CREATE TABLE t1 (
+  a INT,
+  TransactionAmount money NULL
+);
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 't1'
+    AND a.[name] = 'TransactionAmount';
+
+statement ok
+CREATE VIEW TestView AS
+    select
+        traamo = a
+    from t1
+union all
+    select
+        traamo = TransactionAmount
+    from t1;
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+statement ok
+DROP VIEW TestView;
+
+statement ok
+CREATE VIEW TestView AS
+  SELECT CASE 2
+    WHEN 1 THEN a
+    WHEN 2 THEN TransactionAmount
+    END AS traamo
+  FROM t1;
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+statement ok
+DROP VIEW TestView;
+
+statement ok
+CREATE VIEW TestView AS
+    select
+        traamo = null
+    from t1
+union all
+    select
+        traamo = TransactionAmount
+    from t1;
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+statement ok
+DROP VIEW TestView;
+
+statement ok
+CREATE VIEW TestView AS
+    select
+        traamo = CAST(null AS money)
+    from t1
+union all
+    select
+        traamo = TransactionAmount
+    from t1;
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+statement ok
+DROP VIEW TestView;
+
+statement ok
+CREATE VIEW TestView AS
+    select
+        traamo = CAST(11 AS NUMERIC)
+    from t1
+union all
+    select
+        traamo = TransactionAmount
+    from t1;
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+statement ok
+DROP VIEW TestView;
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+CREATE TABLE t1 (
+  a smallmoney,
+  b money,
+  c text,
+  d numeric,
+  e int
+);
+
+statement ok
+INSERT INTO t1 VALUES (214748.3647, 922337203685477.5807, 'test', 1.2, 4), (-214748.3648, -922337203685477.5808, 'test', 2.3, 4);
+
+statement ok
+CREATE view TestView as
+    select
+        traamo = a
+    from t1
+union all
+    select
+        traamo = b
+    from t1
+union all
+    select traamo = CAST(214748.3657 AS MONEY);
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+query T
+SELECT * FROM TestView ORDER BY traamo;
+----
+NULL
+NULL
+NULL
+NULL
+false
+
+statement ok
+DROP VIEW TestView;
+
+statement ok
+CREATE view TestView as
+    select
+        traamo = b
+    from t1
+union all
+    select
+        traamo = a
+    from t1;
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+statement ok
+DROP VIEW TestView;
+
+query T
+SELECT a FROM t1
+UNION
+SELECT b FROM t1
+UNION
+SELECT c FROM t1;
+----
+214748.364700
+-214748.364800
+922337203685477.6250
+-922337203685477.6250
+test
+
+statement ok
+CREATE view TestView as
+    select
+        traamo = a
+    from t1
+union all
+    select
+        traamo = b
+    from t1
+union all
+    select
+        traamo = d
+    from t1
+union all
+    select
+        traamo = e
+    from t1;
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+statement ok
+DROP VIEW TestView;
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+CREATE TABLE ti (
+  a tinyint,
+  b smallint
+);
+
+statement ok
+CREATE VIEW TestView AS
+    select
+        traamo = a
+    from ti
+union all
+    select
+        traamo = null
+    from ti;
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+statement ok
+DROP VIEW TestView;
+
+statement ok
+CREATE VIEW TestView AS
+    select
+        traamo = a
+    from ti
+union all
+    select
+        traamo = b
+    from ti;
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+statement ok
+DROP VIEW TestView;
+
+statement ok
+CREATE VIEW TestView AS
+    select
+        traamo = b
+    from ti
+union all
+    select
+        traamo = a
+    from ti;
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+statement ok
+INSERT INTO ti VALUES (255, 256), (0, -1);
+
+query T
+SELECT * FROM TestView ORDER BY traamo;
+----
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+DROP VIEW TestView;
+DROP TABLE ti;
+
+statement ok
+CREATE TABLE tn (a VARCHAR(11) NOT NULL, b SSN);
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'tn'
+    AND a.[name] = 'b';
+
+statement ok
+CREATE VIEW TestView AS
+    select
+        traamo = 'hope'
+    from tn
+union all
+    select
+        traamo = b
+    from tn;
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+statement ok
+DROP VIEW TestView;
+
+statement ok
+CREATE VIEW TestView AS
+    select
+        traamo = a
+    from tn
+union all
+    select
+        traamo = b
+    from tn;
+
+statement ok
+SELECT c.[name] AS [sys_types_user_type_id],
+       TYPE_NAME(a.user_type_id) AS type_name_function_user_type_id
+FROM sys.columns a
+    INNER JOIN sys.objects b
+        ON a.[object_id] = b.[object_id]
+    LEFT JOIN sys.types c
+        ON a.user_type_id = c.user_type_id
+WHERE b.[name] = 'TestView'
+    AND a.[name] = 'traamo';
+
+statement ok
+DROP VIEW TestView;
+
+statement ok
+DROP TABLE tn;
+
+query T
+SELECT 'unknown'
+UNION
+SELECT $1.0
+UNION
+SELECT N'xyz';
+----
+unknown
+$1.0
+xyz
+

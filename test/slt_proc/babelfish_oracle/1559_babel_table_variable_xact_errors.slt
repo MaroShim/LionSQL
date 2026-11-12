@@ -1,0 +1,186 @@
+# test/slt_proc/babelfish_oracle/1559_babel_table_variable_xact_errors.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/table_variables/table_variable_xact_errors.sql
+
+statement ok
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID
+
+statement error
+BEGIN TRY
+    DECLARE @tv TABLE(c1 INT PRIMARY KEY, c2 INT)
+    INSERT INTO @tv VALUES(1, 10), (2, 20), (3, 30)
+    SELECT 1 / 0    -- error
+END TRY
+BEGIN CATCH
+    BEGIN TRANSACTION
+        SELECT * FROM @tv                  -- 3 records
+        DELETE FROM @tv
+    ROLLBACK
+END CATCH;
+INSERT INTO @tv VALUES(1, 10), (2, 20), (3, 30)
+UPDATE @tv SET c1 = 1 WHERE c1 = 3 -- duplicate key
+SELECT * FROM @tv                  -- 3 records
+
+statement ok
+CREATE PROC table_variable_throw_proc1 AS
+BEGIN
+    DECLARE @tv TABLE (a INT PRIMARY KEY, b CHAR(8))
+    INSERT INTO @tv VALUES (1, 'First');
+    SELECT * FROM @tv;
+    THROW 51000, 'Throw error', 1;
+    INSERT INTO @tv VALUES (2, 'Second');
+END
+
+statement ok
+DROP PROCEDURE table_variable_throw_proc1
+
+statement ok
+CREATE PROCEDURE tv_function_1
+AS
+BEGIN TRY
+    DECLARE @tv TABLE(c1 INT PRIMARY KEY, c2 INT)
+    INSERT INTO @tv VALUES(1, 10), (2, 20), (3, 30)
+    INSERT INTO @tv VALUES(3, 30) -- duplicate key, fail while table and index are open
+END TRY
+BEGIN CATCH
+    INSERT INTO @tv VALUES(3, 30) -- duplicate key, fail while table and index are open
+    SELECT * FROM @tv
+END CATCH;
+
+statement ok
+DROP PROCEDURE tv_function_1
+
+statement ok
+CREATE PROCEDURE table_variable_throw_proc1
+AS
+BEGIN TRY
+    DECLARE @tv TABLE (a INT PRIMARY KEY, b CHAR(8))
+    INSERT INTO @tv VALUES (1, 'First');
+    RAISERROR ('raiserror 16', 16, 1);
+END TRY
+BEGIN CATCH
+    SELECT 'CATCH in Procedure 1';
+    INSERT INTO @tv VALUES (2, 'Second');
+    SELECT * FROM @tv; -- return 2 rows
+    THROW;
+END CATCH
+
+statement ok
+DROP PROCEDURE table_variable_throw_proc1
+
+statement ok
+CREATE SCHEMA [Control]
+
+statement ok
+DROP SCHEMA [Control]
+
+statement ok
+CREATE procedure temp_table_sp_exec AS
+BEGIN
+    DECLARE @SQLString NVARCHAR(500);
+    SET @SQLString = N'declare @table_t1 table(a int); INSERT INTO @table_t1 values(1);SELECT * FROM @table_t1';
+    EXECUTE sp_executesql @SQLString;
+    SET @SQLString = N'declare @table_t1 table(a int NOT NULL); INSERT INTO @table_t1 values(NULL);SELECT * FROM @table_t1';
+    EXECUTE sp_executesql @SQLString;
+END;
+
+statement ok
+DROP PROCEDURE temp_table_sp_exec
+
+statement ok
+DECLARE @tv_3 TABLE(a typa, b typb)
+DROP TYPE typb
+INSERT INTO @tv_3 VALUES(1, 'Hello')
+SELECT * FROM @tv_3
+
+query T
+select 123
+----
+123
+
+statement ok
+CREATE FUNCTION [dbo].[WOSQL_BuildRevenueDetailOLUQuery]  ()
+RETURNS NVARCHAR(MAX) AS
+BEGIN
+    DECLARE @TSQL NVARCHAR(MAX)
+    DECLARE @STATION_INTS_TABLE TABLE (STATION_INT INT)
+    DECLARE @STATION_INT INT     SET @TSQL = ''
+    DECLARE CUR_NETWORK CURSOR LOCAL FOR
+        SELECT STATION_INT FROM @STATION_INTS_TABLE    OPEN CUR_NETWORK
+    FETCH NEXT FROM CUR_NETWORK INTO @STATION_INT
+    RETURN @TSQL
+END
+
+statement ok
+DROP FUNCTION [dbo].[WOSQL_BuildRevenueDetailOLUQuery]
+
+statement ok
+CREATE FUNCTION [dbo].[WOSQL_BuildRevenueDetailOLUQuery]  ()
+RETURNS NVARCHAR(MAX) AS
+BEGIN
+    DECLARE @TSQL NVARCHAR(MAX)
+    DECLARE @STATION_INTS_TABLE TABLE (STATION_INT INT)
+    DECLARE @STATION_INT INT     SET @TSQL = ''
+    DECLARE CUR_NETWORK CURSOR LOCAL FOR
+        SELECT STATION_INT FROM @STATION_INTS_TABLE    OPEN CUR_NETWORK
+    FETCH NEXT FROM CUR_NETWORK INTO @STATION_INT
+    THROW 51000, 'Throw error', 1;
+    RETURN @TSQL
+END
+
+statement ok
+DROP FUNCTION [dbo].[WOSQL_BuildRevenueDetailOLUQuery]
+
+statement ok
+CREATE FUNCTION [dbo].[WOSQL_BuildRevenueDetailOLUQuery]  ()
+RETURNS NVARCHAR(MAX) AS
+BEGIN
+    DECLARE @TSQL NVARCHAR(MAX)
+    DECLARE @STATION_INTS_TABLE TABLE (STATION_INT INT PRIMARY KEY, C2 INT)
+    DECLARE @STATION_INT INT     SET @TSQL = ''
+    INSERT INTO @STATION_INTS_TABLE VALUES(1, 1)
+    DECLARE CUR_NETWORK CURSOR LOCAL FOR
+        SELECT STATION_INT FROM @STATION_INTS_TABLE
+    OPEN CUR_NETWORK
+    FETCH NEXT FROM CUR_NETWORK INTO @STATION_INT
+    INSERT INTO @STATION_INTS_TABLE VALUES(1, 1) -- duplicate key
+    RETURN @TSQL
+END
+
+statement ok
+DROP FUNCTION [dbo].[WOSQL_BuildRevenueDetailOLUQuery]
+
+statement error
+CREATE PROCEDURE test
+AS
+BEGIN TRY
+    DECLARE @tv1 TABLE(c1 INT PRIMARY KEY, b INT IDENTITY, c CHAR(15) DEFAULT 'Whoops!')
+    SELECT 1/0
+END TRY
+BEGIN CATCH
+    BEGIN TRANSACTION
+    INSERT INTO @tv1 VALUES(1, 3, 'Three')          -- invalid syntax, should do a clean shutdown
+    COMMIT
+END CATCH;
+
+statement ok
+DROP TABLE IF EXISTS mytab
+
+statement ok
+CREATE TABLE mytab(a VARCHAR(30) NULL) 
+
+statement ok
+CREATE PROC myproc2
+AS
+BEGIN
+	BEGIN TRANSACTION
+	SAVE TRANSACTION savept0
+		EXEC myproc
+	COMMIT
+END
+
+statement ok
+DROP TABLE mytab
+
+statement ok
+DROP PROCEDURE myproc2
+

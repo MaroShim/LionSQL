@@ -1,0 +1,48 @@
+# test/slt_proc/babelfish_oracle/1242_babel_babel_4888.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4888-vu-prepare.sql, test/babelfish/raw/BABEL-4888-vu-verify.sql, test/babelfish/raw/BABEL-4888-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_4888_t1 (id1 INT UNIQUE(id1 DESC), id2 VARCHAR(30) UNIQUE(id2 ASC), id3 VARBINARY(30))
+
+statement ok
+CREATE TABLE babel_4888_t2 (id1 INT, id2 VARCHAR(30), id3 VARBINARY(30), UNIQUE(id1 ASC, id2 DESC))
+
+statement ok
+CREATE TABLE babel_4888_t3 (id1 INT PRIMARY KEY(id1 DESC), id2 VARCHAR(30) UNIQUE(id2), id3 VARBINARY(30))
+
+statement ok
+CREATE TABLE babel_4888_t4 (id1 INT, id2 VARCHAR(30), id3 VARBINARY(30), PRIMARY KEY(id1 ASC, id2 DESC))
+
+statement ok
+INSERT INTO babel_4888_t1 VALUES (-1, '-a', 0x0001), (1, '+a', 0x1001), (NULL, '', NULL), (0, NULL, NULL)
+
+statement ok
+INSERT INTO babel_4888_t1 VALUES (NULL, 'random', 0x9999)
+
+statement ok
+INSERT INTO babel_4888_t1 VALUES (9999, NULL, 0x9999)
+
+statement ok
+INSERT INTO babel_4888_t1 VALUES (9999, 'random', NULL)
+
+statement ok
+INSERT INTO babel_4888_t2 VALUES (NULL, '', 0x9999)
+
+statement ok
+INSERT INTO babel_4888_t3 VALUES (0, NULL, 0x9999)
+
+statement ok
+INSERT INTO babel_4888_t4 VALUES (-1, '-a', 0x0001), (1, '+a', 0x1001), (NULL, '', NULL), (0, NULL, NULL)
+
+statement ok
+INSERT INTO babel_4888_t4 VALUES (NULL, '', 0x9999)
+
+statement ok
+INSERT INTO babel_4888_t4 VALUES (0, NULL, 0x9999)
+
+statement ok
+INSERT INTO babel_4888_t4 VALUES (NULL, NULL, NULL)
+
+statement ok
+INSERT INTO babel_4888_t4 VALUES (NULL, NULL, 0x9999)
+

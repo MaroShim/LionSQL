@@ -1,0 +1,60 @@
+# test/slt_proc/babelfish_oracle/1555_babel_sys_syslogins_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/sys_syslogins_dep-vu-prepare.sql, test/babelfish/raw/sys_syslogins_dep-vu-verify.sql, test/babelfish/raw/sys_syslogins_dep-vu-cleanup.sql
+
+statement ok
+CREATE LOGIN sys_syslogins_dep_vu_prepare_login1 WITH PASSWORD = '12345'
+
+statement ok
+CREATE LOGIN sys_syslogins_dep_vu_prepare_login2 WITH PASSWORD = '12345'
+
+statement ok
+CREATE VIEW sys_syslogins_dep_vu_prepare_view
+AS
+SELECT name,dbname,default_language_name,status,totcpu,totio,spacelimit,timelimit,
+resultlimit,loginname,password,denylogin,hasaccess,isntname,isntgroup,isntuser,sysadmin,securityadmin,serveradmin,setupadmin,
+processadmin,diskadmin,dbcreator,bulkadmin 
+FROM sys.syslogins 
+WHERE name LIKE '%sys_syslogins_dep_vu_prepare%'
+ORDER BY name
+
+statement ok
+CREATE PROC sys_syslogins_dep_vu_prepare_proc
+AS
+SELECT name,dbname,default_language_name,status,totcpu,totio,spacelimit,timelimit,
+resultlimit,loginname,password,denylogin,hasaccess,isntname,isntgroup,isntuser,sysadmin,securityadmin,serveradmin,setupadmin,
+processadmin,diskadmin,dbcreator,bulkadmin 
+FROM sys.syslogins 
+WHERE name LIKE '%sys_syslogins_dep_vu_prepare%'
+ORDER BY name
+
+statement ok
+CREATE FUNCTION sys_syslogins_dep_vu_prepare_func()
+RETURNS INT AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM sys.syslogins WHERE name LIKE '%sys_syslogins_dep_vu_prepare%')
+END
+
+statement ok
+CREATE DATABASE sys_syslogins_dep_vu_prepare_db
+
+statement ok
+CREATE LOGIN sys_syslogins_dep_vu_prepare_login3 WITH PASSWORD = '12345'
+
+statement ok
+DROP LOGIN sys_syslogins_dep_vu_prepare_login3
+
+statement ok
+DROP VIEW sys_syslogins_dep_vu_prepare_view
+
+statement ok
+DROP PROC sys_syslogins_dep_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_syslogins_dep_vu_prepare_func
+
+statement ok
+DROP LOGIN sys_syslogins_dep_vu_prepare_login1
+
+statement ok
+DROP LOGIN sys_syslogins_dep_vu_prepare_login2
+

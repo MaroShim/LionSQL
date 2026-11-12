@@ -1,0 +1,52 @@
+# test/slt_proc/babelfish_oracle/1070_babel_4924_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/4924_2.sql
+
+statement ok
+CREATE TABLE t4924(c1 int, c2 int)
+
+statement ok
+begin transaction
+
+statement ok
+DROP TABLE t4924
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t4924(c1 int, c2 int)
+
+statement ok
+begin transaction
+
+statement ok
+DROP TABLE t4924
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure ErrorHandling2 as
+begin
+exec ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+set xact_abort ON;
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+begin transaction;
+
+statement ok
+set xact_abort OFF;
+

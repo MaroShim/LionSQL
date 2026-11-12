@@ -1,0 +1,191 @@
+# test/slt_proc/babelfish_oracle/744_babel_sys_views.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-views.sql
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+USE db1
+
+statement ok
+CREATE VIEW rand_name1 AS select 1;
+
+query T
+SELECT COUNT(*) FROM sys.views WHERE name = 'rand_name1';
+----
+1
+
+query T
+SELECT count(*) FROM sys.views WHERE name='RAND_nAME1';
+----
+1
+
+statement ok
+SELECT count(*) FROM sys.views WHERE name='RAND_nAME1' and type='V';
+
+statement ok
+SELECT count(*) FROM sys.views WHERE name='RAND_nAME1' and type='v';
+
+statement ok
+SELECT count(*) FROM sys.views WHERE name='RAND_nAME1' and type_desc='VIEW';
+
+statement ok
+SELECT count(*) FROM sys.views WHERE name='RAND_nAME1' and type_desc='view';
+
+query T
+SELECT COUNT(*) FROM sys.objects WHERE type='V' and name = 'rand_name1';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys.all_objects WHERE type='V' and name = 'rand_name1';
+----
+NULL
+
+statement ok
+USE master;
+
+query T
+SELECT COUNT(*) FROM sys.objects WHERE type='V' and name = 'rand_name1';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys.all_objects WHERE type='V' and name = 'rand_name1';
+----
+NULL
+
+statement ok
+CREATE VIEW rand_name2 AS select 1;
+
+query T
+SELECT COUNT(*) FROM sys.views WHERE name = 'rand_name2';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys.objects WHERE type='V' and name = 'rand_name2';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys.all_objects WHERE type='V' and name = 'rand_name2';
+----
+NULL
+
+statement ok
+USE db1
+
+query T
+SELECT COUNT(*) FROM sys.objects WHERE type='V' and name = 'rand_name2';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys.all_objects WHERE type='V' and name = 'rand_name2';
+----
+NULL
+
+statement ok
+DROP VIEW rand_name1;
+
+statement ok
+USE master;
+
+statement ok
+DROP VIEW rand_name2;
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+USE db1
+
+statement ok
+CREATE VIEW rand_name1 AS select 1;
+
+query T
+SELECT COUNT(*) FROM sys.views WHERE name = 'rand_name1';
+----
+1
+
+query T
+SELECT count(*) FROM sys.views WHERE name='RAND_nAME1';
+----
+1
+
+statement ok
+SELECT count(*) FROM sys.views WHERE name='RAND_nAME1' and type='V';
+
+statement ok
+SELECT count(*) FROM sys.views WHERE name='RAND_nAME1' and type='v';
+
+statement ok
+SELECT count(*) FROM sys.views WHERE name='RAND_nAME1' and type_desc='VIEW';
+
+statement ok
+SELECT count(*) FROM sys.views WHERE name='RAND_nAME1' and type_desc='view';
+
+query T
+SELECT COUNT(*) FROM sys.objects WHERE type='V' and name = 'rand_name1';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys.all_objects WHERE type='V' and name = 'rand_name1';
+----
+NULL
+
+statement ok
+USE master;
+
+query T
+SELECT COUNT(*) FROM sys.objects WHERE type='V' and name = 'rand_name1';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys.all_objects WHERE type='V' and name = 'rand_name1';
+----
+NULL
+
+statement ok
+CREATE VIEW rand_name2 AS select 1;
+
+query T
+SELECT COUNT(*) FROM sys.views WHERE name = 'rand_name2';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys.objects WHERE type='V' and name = 'rand_name2';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys.all_objects WHERE type='V' and name = 'rand_name2';
+----
+NULL
+
+statement ok
+USE db1
+
+query T
+SELECT COUNT(*) FROM sys.objects WHERE type='V' and name = 'rand_name2';
+----
+1
+
+query T
+SELECT COUNT(*) FROM sys.all_objects WHERE type='V' and name = 'rand_name2';
+----
+NULL
+
+statement ok
+DROP VIEW rand_name1;
+
+statement ok
+USE master;
+
+statement ok
+DROP VIEW rand_name2;
+

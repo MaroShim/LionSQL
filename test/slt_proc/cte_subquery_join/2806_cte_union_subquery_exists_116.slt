@@ -1,0 +1,53 @@
+# test/slt_proc/cte_subquery_join/2806_cte_union_subquery_exists_116.slt
+# T-SQL CTEs, IN (SELECT ... UNION ...), EXISTS decorrelation, and chained UNION ALL (116)
+
+statement ok
+CREATE TABLE cj_emp_2806 (id INT PRIMARY KEY, dept_id INT, salary INT);
+
+statement ok
+CREATE TABLE cj_dept_2806 (dept_id INT PRIMARY KEY, dname VARCHAR(20));
+
+statement ok
+INSERT INTO cj_dept_2806 VALUES (10, 'ENG_116'), (20, 'SALES_116'), (30, 'HR_116');
+
+statement ok
+INSERT INTO cj_emp_2806 VALUES
+(1, 10, 348),
+(2, 10, 696),
+(3, 20, 1044),
+(4, 30, 1392);
+
+query ITI
+WITH dept_totals AS (
+    SELECT dept_id, SUM(salary) AS tot_sal
+    FROM cj_emp_2806
+    GROUP BY dept_id
+)
+SELECT d.dept_id, d.dname, dt.tot_sal
+FROM cj_dept_2806 d
+JOIN dept_totals dt ON d.dept_id = dt.dept_id
+ORDER BY d.dept_id;
+----
+10 ENG_116 1044
+20 SALES_116 1044
+30 HR_116 1392
+
+query II
+SELECT id, salary
+FROM cj_emp_2806
+WHERE dept_id IN (
+    SELECT dept_id FROM cj_dept_2806 WHERE dept_id = 10
+    UNION
+    SELECT dept_id FROM cj_dept_2806 WHERE dept_id = 30
+)
+ORDER BY id;
+----
+1 348
+2 696
+4 1392
+
+statement ok
+DROP TABLE cj_emp_2806;
+
+statement ok
+DROP TABLE cj_dept_2806;

@@ -1,0 +1,71 @@
+# test/slt_proc/babelfish_oracle/1109_babel_babel_1442.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1442.sql
+
+statement ok
+CREATE LOGIN r1 WITH PASSWORD = 'abc' MUST_CHANGE, CHECK_EXPIRATION = ON;
+
+statement ok
+CREATE LOGIN r2 WITH PASSWORD = '123', CREDENTIAL = cred1;
+
+statement ok
+CREATE LOGIN r5 WITH PASSWORD = 'xyz', SID = 0x123ABC;
+
+statement ok
+CREATE LOGIN r6
+WITH PASSWORD = '1000101',
+DEFAULT_DATABASE = master,
+CHECK_POLICY = OFF,
+CHECK_EXPIRATION = OFF;
+
+statement ok
+ALTER LOGIN r1 WITH PASSWORD = '123' OLD_PASSWORD = 'abc';
+
+statement ok
+ALTER LOGIN r1 WITH PASSWORD = '123' MUST_CHANGE;
+
+statement ok
+ALTER LOGIN r1 WITH PASSWORD = '123' UNLOCK;
+
+statement ok
+ALTER LOGIN r2 WITH PASSWORD = 'abc',
+CREDENTIAL = cred1;
+
+statement ok
+SELECT default_database_name FROM sys.server_principals WHERE name = 'r1';
+
+statement ok
+SELECT default_database_name FROM sys.server_principals WHERE name = 'r6';
+
+statement ok
+ALTER LOGIN r1 WITH PASSWORD = '123';
+
+statement ok
+ALTER LOGIN r1 WITH PASSWORD = '123' OLD_PASSWORD = 'abc';
+
+statement ok
+SELECT default_database_name FROM sys.server_principals WHERE name = 'r1';
+
+statement ok
+ALTER LOGIN r2 WITH PASSWORD = 'abc' UNLOCK,
+DEFAULT_LANGUAGE = english,
+NAME = r10,
+CHECK_POLICY = ON,
+CHECK_EXPIRATION = ON,
+CREDENTIAL = cred1;
+
+statement ok
+CREATE LOGIN r12 WITH PASSWORD = '123',
+DEFAULT_DATABASE = zzz;
+
+statement ok
+DROP LOGIN r1;
+
+statement ok
+DROP LOGIN r2;
+
+statement ok
+DROP LOGIN r5;
+
+statement ok
+DROP LOGIN r6;
+

@@ -1,0 +1,24 @@
+# test/slt_proc/babelfish_oracle/270_babel_babel_1212.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1212.sql
+
+statement ok
+create table #tt(a int);
+
+query T
+select (case when OBJECT_ID('#tt') IS NOT NULL then 'true' else 'false' end) result;
+----
+true
+
+query T
+select (case when OBJECT_ID('tempdb..#tt') IS NOT NULL then 'true' else 'false' end) result;
+----
+true
+
+query T
+select (case when OBJECT_ID('tempdb..#tt2') IS NULL then 'true' else 'false' end) result;
+----
+false
+
+statement ok
+drop table #tt;
+

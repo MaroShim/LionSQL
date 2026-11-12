@@ -1,0 +1,78 @@
+# test/slt_proc/babelfish_oracle/1013_babel_11703_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/11703_1.sql
+
+statement ok
+CREATE SEQUENCE s11703
+    START WITH 11
+    MINVALUE 5
+    MAXVALUE 10
+
+statement ok
+begin transaction
+
+statement ok
+CREATE SEQUENCE s11703
+    START WITH 11
+    MINVALUE 5
+    MAXVALUE 10
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+create schema error_mapping;
+
+statement ok
+create table error_mapping.temp1 (a int)
+
+statement ok
+create table error_mapping.temp2 (a int)
+
+statement ok
+create table error_mapping.temp3 (a int)
+
+statement ok
+drop table error_mapping.temp1;
+drop table error_mapping.temp2;
+drop table error_mapping.temp3;
+
+statement ok
+begin transaction
+
+statement ok
+set xact_abort ON;
+
+statement ok
+begin transaction
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure error_mapping.ErrorHandling2 as
+begin
+exec error_mapping.ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+set xact_abort ON;
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+begin transaction;
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+drop schema error_mapping;
+

@@ -1,0 +1,13 @@
+# test/slt_proc/babelfish_oracle/498_babel_babel_tds_fault_injection.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_tds_fault_injection.sql
+
+query T
+select 1
+----
+1
+
+query T
+select 1
+----
+1
+

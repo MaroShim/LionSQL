@@ -1,0 +1,28 @@
+# test/slt_proc/babelfish_oracle/1417_babel_dateadd_internal_df.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/dateadd_internal_df-vu-prepare.sql, test/babelfish/raw/functions/dateadd_internal_df-vu-verify.sql
+
+statement ok
+CREATE VIEW dateadd_internal_df_view_vu_prepare AS
+SELECT dateadd_internal_df('minute',-70,cast('2016-12-26 00:30:05.523456+8' as DATETIMEOFFSET))
+
+statement ok
+CREATE PROC dateadd_internal_df_proc_vu_prepare AS
+SELECT dateadd_internal_df('minute',-70,cast('2016-12-26 00:30:05.523456+8' as DATETIMEOFFSET))
+
+statement ok
+CREATE FUNCTION dateadd_internal_df_func_vu_prepare()
+RETURNS sys.DATETIMEOFFSET
+AS
+BEGIN
+    RETURN dateadd_internal_df('minute',-70,cast('2016-12-26 00:30:05.523456+8' as DATETIMEOFFSET))
+END
+
+statement ok
+DROP VIEW dateadd_internal_df_view_vu_prepare
+
+statement ok
+DROP PROC dateadd_internal_df_proc_vu_prepare
+
+statement ok
+DROP FUNCTION dateadd_internal_df_func_vu_prepare
+

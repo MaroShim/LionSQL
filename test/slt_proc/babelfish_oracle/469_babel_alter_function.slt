@@ -1,0 +1,105 @@
+# test/slt_proc/babelfish_oracle/469_babel_alter_function.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/alter/alter-function-vu-prepare.sql, test/babelfish/raw/alter/alter-function-vu-verify.sql, test/babelfish/raw/alter/alter-function-vu-cleanup.sql
+
+statement ok
+CREATE TABLE alter_func_users ([Id] int, [firstname] varchar(50), [lastname] varchar(50), [email] varchar(50));
+CREATE TABLE alter_func_orders ([Id] int, [userid] int, [productid] int, [quantity] int, [orderdate] Date);
+INSERT INTO alter_func_users VALUES (1, 'j', 'o', 'testemail'), (2, 'e', 'l', 'testemail2');
+INSERT INTO alter_func_orders VALUES (1, 1, 1, 5, '2023-06-25'), (2, 1, 1, 6, '2023-06-25');
+
+statement ok
+create function alter_func_f4() returns TABLE as return (select * from alter_func_users)
+
+statement ok
+create function alter_func_f6(@p1 int, @p2 int=123, @p3 int) returns int as begin return @p1 + @p2 + @p3 end
+
+statement ok
+create schema alter_func_prep_schema1
+
+statement ok
+select ROUTINE_NAME, ROUTINE_BODY, ROUTINE_DEFINITION from information_schema.routines where SPECIFIC_NAME LIKE 'alter_func_f1';
+
+statement ok
+select ROUTINE_NAME, ROUTINE_BODY, ROUTINE_DEFINITION from information_schema.routines where SPECIFIC_NAME LIKE 'alter_func_f2';
+
+statement error
+select alter_func_f2()
+
+statement ok
+select ROUTINE_NAME, ROUTINE_BODY, ROUTINE_DEFINITION from information_schema.routines where SPECIFIC_NAME LIKE 'alter_func_f2';
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ROLLBACK
+
+statement error
+select alter_func_f2('test')
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO alter_func_users VALUES (3, 'newuser', 'lastname', 'testemail3')
+
+statement ok
+COMMIT
+
+query TTTT
+select * from alter_func_users
+----
+1 j o testemail
+2 e l testemail2
+3 newuser lastname testemail3
+
+statement ok
+select ROUTINE_NAME, ROUTINE_BODY, ROUTINE_DEFINITION from information_schema.routines where SPECIFIC_NAME LIKE 'alter_func_f2';
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO alter_func_users VALUES (4, 'newest_user', 'lastname3', 'testemail4')
+
+statement ok
+ROLLBACK
+
+statement error
+select alter_func_f2()
+
+query TTTT
+select * from alter_func_users
+----
+1 j o testemail
+2 e l testemail2
+3 newuser lastname testemail3
+
+statement error
+select Id, Name from alter_func_f5()
+
+query T
+select alter_func_f6(1, default, 100)
+----
+1default100
+
+query T
+select alter_func_f6(default, default, 100)
+----
+defaultdefault100
+
+statement ok
+drop function alter_func_f4
+
+statement ok
+drop function alter_func_f6;
+
+statement ok
+drop table alter_func_users
+
+statement ok
+drop table alter_func_orders
+
+statement ok
+drop schema alter_func_prep_schema1
+

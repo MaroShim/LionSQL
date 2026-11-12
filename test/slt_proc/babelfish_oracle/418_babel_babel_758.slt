@@ -1,0 +1,117 @@
+# test/slt_proc/babelfish_oracle/418_babel_babel_758.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-758.sql
+
+statement ok
+CREATE PROCEDURE babel_758_set_stmt
+@how_many INT OUT
+AS
+BEGIN
+  SET @how_many = POWER(2, 23) - POWER(2, 3);
+END
+
+query T
+DECLARE @ret bigint;
+EXECUTE babel_758_set_stmt @ret OUTPUT;
+SELECT @ret;
+----
+8388600
+
+query T
+DECLARE @ret double precision;
+EXECUTE babel_758_set_stmt @ret OUTPUT;
+SELECT @ret;
+----
+8388600
+
+query T
+DECLARE @ret real;
+EXECUTE babel_758_set_stmt @ret OUTPUT;
+SELECT @ret;
+----
+8388600
+
+query T
+DECLARE @ret decimal;
+EXECUTE babel_758_set_stmt @ret OUTPUT;
+SELECT @ret;
+----
+8388600
+
+query T
+DECLARE @ret smallint;
+EXECUTE babel_758_set_stmt @ret OUTPUT;
+SELECT @ret;
+----
+8388600
+
+query T
+DECLARE @ret tinyint;
+EXECUTE babel_758_set_stmt @ret OUTPUT;
+SELECT @ret;
+----
+8388600
+
+statement ok
+CREATE TABLE [babel_758_employees] (a int);
+INSERT INTO [babel_758_employees] values (1), (2), (3), (4), (5), (6), (7), (8), (9);
+INSERT INTO [babel_758_employees] SELECT * FROM [babel_758_employees];
+INSERT INTO [babel_758_employees] SELECT * FROM [babel_758_employees];
+INSERT INTO [babel_758_employees] SELECT * FROM [babel_758_employees];
+INSERT INTO [babel_758_employees] SELECT * FROM [babel_758_employees];
+INSERT INTO [babel_758_employees] SELECT * FROM [babel_758_employees];
+
+statement ok
+CREATE PROCEDURE babel_758_p_employee_count
+@how_many INT OUT
+AS
+BEGIN
+  SELECT @how_many = COUNT(*) from [babel_758_employees];
+END
+
+query T
+DECLARE @ret bigint;
+EXECUTE babel_758_p_employee_count @ret OUTPUT;
+SELECT @ret;
+----
+NULL
+
+query T
+DECLARE @ret double precision;
+EXECUTE babel_758_p_employee_count @ret OUTPUT;
+SELECT @ret;
+----
+NULL
+
+query T
+DECLARE @ret real;
+EXECUTE babel_758_p_employee_count @ret OUTPUT;
+SELECT @ret;
+----
+NULL
+
+query T
+DECLARE @ret decimal;
+EXECUTE babel_758_p_employee_count @ret OUTPUT;
+SELECT @ret;
+----
+NULL
+
+query T
+DECLARE @ret smallint;
+EXECUTE babel_758_p_employee_count @ret OUTPUT;
+SELECT @ret;
+----
+NULL
+
+query T
+DECLARE @ret tinyint;
+EXECUTE babel_758_p_employee_count @ret OUTPUT;
+SELECT @ret;
+----
+NULL
+
+statement ok
+DROP PROCEDURE babel_758_set_stmt;
+DROP PROCEDURE babel_758_p_employee_count;
+DROP TABLE babel_758_employees;
+

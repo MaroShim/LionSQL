@@ -1,0 +1,18 @@
+# test/slt_proc/babelfish_oracle/1326_babel_test_sp_helprolemember_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_helprolemember-dep-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_helprolemember-dep-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_helprolemember-dep-vu-cleanup.sql
+
+statement ok
+CREATE ROLE sp_helprolemember_role1;
+
+statement ok
+CREATE ROLE sp_helprolemember_role2;
+
+statement ok
+ALTER ROLE sp_helprolemember_role1 ADD MEMBER sp_helprolemember_role2;
+
+statement ok
+DROP ROLE sp_helprolemember_role2;
+
+statement ok
+DROP ROLE sp_helprolemember_role1;
+

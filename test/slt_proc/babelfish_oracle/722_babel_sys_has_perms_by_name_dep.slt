@@ -1,0 +1,44 @@
+# test/slt_proc/babelfish_oracle/722_babel_sys_has_perms_by_name_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/sys-has_perms_by_name-dep-vu-prepare.sql, test/babelfish/raw/functions/sys-has_perms_by_name-dep-vu-verify.sql, test/babelfish/raw/functions/sys-has_perms_by_name-dep-vu-cleanup.sql
+
+statement ok
+CREATE TABLE has_perms_by_name_dep_vu_prepare_t1(a int, b int)
+
+statement ok
+CREATE VIEW has_perms_by_name_dep_vu_prepare_view AS
+SELECT HAS_PERMS_BY_NAME('has_perms_by_name_dep_vu_prepare_t1','OBJECT', 'SELECT')
+
+statement ok
+CREATE PROC has_perms_by_name_dep_vu_prepare_proc AS
+SELECT HAS_PERMS_BY_NAME('has_perms_by_name_dep_vu_prepare_t1','OBJECT', 'SELECT')
+
+statement ok
+CREATE FUNCTION has_perms_by_name_dep_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN HAS_PERMS_BY_NAME('has_perms_by_name_dep_vu_prepare_t1','OBJECT', 'SELECT')
+END
+
+query T
+SELECT * FROM has_perms_by_name_dep_vu_prepare_view
+----
+1
+
+query T
+EXEC has_perms_by_name_dep_vu_prepare_proc
+----
+1
+
+statement ok
+DROP VIEW has_perms_by_name_dep_vu_prepare_view
+
+statement ok
+DROP PROC has_perms_by_name_dep_vu_prepare_proc
+
+statement ok
+DROP FUNCTION has_perms_by_name_dep_vu_prepare_func
+
+statement ok
+DROP TABLE has_perms_by_name_dep_vu_prepare_t1
+

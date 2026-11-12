@@ -1,0 +1,1065 @@
+# test/slt_proc/babelfish_oracle/592_babel_babel_string_to_money_reg.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_string_to_money_reg-vu-prepare.sql, test/babelfish/raw/babel_string_to_money_reg-vu-verify.sql, test/babelfish/raw/babel_string_to_money_reg-vu-cleanup.sql
+
+statement ok
+CREATE FUNCTION dbo.fn_tests_moneydecl()
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT 
+        CAST(CHAR(9) AS money) AS tab_val,
+        CAST(CHAR(160) AS money) AS nbsp_val  
+);
+
+statement ok
+CREATE VIEW dbo.vw_test_money_whitespace AS
+SELECT 
+    CAST(' ' AS money) AS space_val,
+    CAST(CHAR(9) AS money) AS tab_val,
+    CAST(CHAR(10) AS money) AS lf_val,
+    CAST(CHAR(13) AS money) AS cr_val,
+    CAST(CHAR(160) AS money) AS nbsp_val;
+
+statement ok
+CREATE PROCEDURE dbo.sp_test_money_special
+AS
+BEGIN
+    DECLARE @c money = CHAR(44), @b money = CHAR(92);
+    DECLARE @results TABLE (
+        id INT,
+        name VARCHAR(20),
+        val money
+    );
+    INSERT INTO @results (id, name, val) VALUES (1, 'comma', @c);
+    INSERT INTO @results (id, name, val) VALUES (2, 'backslash', @b);
+    SELECT name, val FROM @results ORDER BY id;
+END;
+
+statement ok
+CREATE VIEW dbo.vw_test_money_currency AS
+SELECT 
+    CAST('$' AS money) AS dollar,
+    CAST(CHAR(162) AS money) AS cent,
+    CAST(CHAR(163) AS money) AS pound,
+    CAST(CHAR(165) AS money) AS yen;
+
+statement ok
+CREATE FUNCTION dbo.fn_money_chars()
+RETURNS TABLE
+AS
+RETURN (
+    SELECT 
+        CAST(CHAR(36) AS money) AS dollar,
+        CAST(CHAR(44) AS money) AS comma,
+        CAST(CHAR(49) AS money) AS one
+);
+
+statement ok
+CREATE PROCEDURE dbo.sp_test_money_digits
+AS
+BEGIN
+    SELECT name, val FROM (
+        SELECT 1 AS seq, 'char_48 (0)' AS name, CAST(CHAR(48) AS money) AS val UNION ALL
+        SELECT 2, 'char_49 (1)', CAST(CHAR(49) AS money) UNION ALL
+        SELECT 3, 'char_50 (2)', CAST(CHAR(50) AS money) UNION ALL
+        SELECT 4, 'char_51 (3)', CAST(CHAR(51) AS money) UNION ALL
+        SELECT 5, 'char_52 (4)', CAST(CHAR(52) AS money) UNION ALL
+        SELECT 6, 'char_53 (5)', CAST(CHAR(53) AS money) UNION ALL
+        SELECT 7, 'char_54 (6)', CAST(CHAR(54) AS money) UNION ALL
+        SELECT 8, 'char_55 (7)', CAST(CHAR(55) AS money) UNION ALL
+        SELECT 9, 'char_56 (8)', CAST(CHAR(56) AS money) UNION ALL
+        SELECT 10, 'char_57 (9)', CAST(CHAR(57) AS money)
+    ) AS results
+    ORDER BY seq;
+END;
+
+query T
+SELECT CAST('\0' AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST('$,,100' AS MONEY);
+----
+0.00
+
+query T
+SELECT ISNUMERIC(CHAR(9));
+----
+0
+
+query T
+SELECT ISNUMERIC(CHAR(13));
+----
+0
+
+query T
+SELECT isnumeric(CHAR(92));
+----
+0
+
+query T
+SELECT isnumeric(char(44));
+----
+0
+
+query T
+SELECT CAST(NCHAR(8364) AS money);           -- Euro sign
+----
+0.00
+
+query T
+SELECT CAST(CHAR(11) AS MONEY);              --Vertical tab
+----
+0.00
+
+query T
+SELECT CAST(CHAR(12) AS MONEY);              -- Form feed
+----
+0.00
+
+query T
+SELECT CAST(CHAR(32) AS MONEY);              -- Space
+----
+0.00
+
+query T
+SELECT CAST(CHAR(43) AS MONEY);              -- Plus
+----
+0.00
+
+query T
+SELECT CAST(CHAR(44) AS MONEY);              -- Comma 
+----
+0.00
+
+query T
+SELECT CAST(CHAR(45) AS MONEY);              -- Hyphen-minus
+----
+0.00
+
+query T
+SELECT CAST(CHAR(46) AS MONEY);              -- Dot
+----
+0.00
+
+query T
+SELECT CAST(CHAR(48) AS MONEY);              -- Zero
+----
+0
+
+query T
+SELECT CAST(CHAR(162) AS MONEY);             -- Cent sign
+----
+0.00
+
+query T
+SELECT CAST(CHAR(163) AS MONEY);             -- Pound sign
+----
+0.00
+
+query T
+SELECT CAST(CHAR(164) AS MONEY);             -- Currency sign
+----
+0.00
+
+query T
+SELECT CAST(CHAR(165) AS MONEY);             -- Yen sign
+----
+0.00
+
+query T
+SELECT CAST('\' AS money);
+----
+0.00
+
+query T
+SELECT CAST('\ .6431,,7431,85,12,97                         ' AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(NCHAR(160) + ' ' AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(NCHAR(160) + '123.45' AS MONEY);
+----
+123.45
+
+query T
+SELECT CAST(NCHAR(160) + NCHAR(160) + '99.99' AS MONEY);
+----
+99.99
+
+query T
+SELECT CAST(NCHAR(160) + '123.45' + NCHAR(160) AS MONEY);
+----
+123.45
+
+query T
+SELECT CAST(NCHAR(160) + 'hello' AS MONEY)
+----
+0.00
+
+query T
+SELECT CAST('\\1234' AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(',/,1234' AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST('1234\0' AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST('1234\ ' AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST('1234/5,6 ' AS MONEY); 
+----
+0.00
+
+query T
+SELECT CAST('1234abc' AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST('1234\\' AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(72) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(73) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(74) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(75) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(76) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(77) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(78) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(79) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(80) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(81) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(82) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(83) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(84) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(85) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(86) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(87) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(88) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(89) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(90) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(91) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(93) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(94) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(95) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(96) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(97) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(98) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(99) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(100) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(101) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(102) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(103) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(104) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(105) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(106) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(107) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(108) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(109) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(110) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(111) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(112) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(113) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(114) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(115) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(116) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(117) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(118) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(119) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(120) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(121) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(122) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(123) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(124) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(125) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(126) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(127) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(129) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(130) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(131) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(132) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(133) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(134) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(135) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(136) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(137) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(138) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(139) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(140) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(142) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(145) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(146) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(147) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(148) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(149) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(150) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(151) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(152) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(153) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(154) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(155) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(156) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(158) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(159) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(161) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(166) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(167) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(168) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(169) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(170) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(171) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(172) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(173) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(174) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(175) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(176) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(177) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(178) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(179) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(180) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(181) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(182) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(183) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(184) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(185) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(186) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(187) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(188) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(189) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(190) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(191) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(192) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(193) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(194) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(195) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(196) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(197) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(198) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(199) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(200) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(201) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(202) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(203) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(204) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(205) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(206) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(207) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(208) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(209) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(210) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(211) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(212) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(213) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(214) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(215) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(216) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(217) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(218) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(219) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(220) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(221) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(222) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(223) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(224) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(225) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(226) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(227) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(228) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(229) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(230) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(231) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(232) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(241) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(242) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(243) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(244) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(245) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(246) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(247) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(248) AS MONEY);
+----
+0.00
+
+query T
+SELECT CAST(CHAR(249) AS MONEY);
+----
+0.00
+
+query TT
+SELECT * FROM dbo.fn_tests_moneydecl();
+----
+0.00 0.00
+
+query TT
+EXEC dbo.sp_test_money_special;
+----
+comma 0.00
+backslash 0.00
+
+statement ok
+DROP FUNCTION IF EXISTS dbo.fn_tests_moneydecl;
+
+statement ok
+DROP VIEW IF EXISTS dbo.vw_test_money_whitespace;
+
+statement ok
+DROP PROCEDURE IF EXISTS dbo.sp_test_money_special;
+
+statement ok
+DROP VIEW IF EXISTS dbo.vw_test_money_currency;
+
+statement ok
+DROP FUNCTION IF EXISTS dbo.fn_money_chars;
+
+statement ok
+DROP PROCEDURE IF EXISTS dbo.sp_test_money_digits;
+

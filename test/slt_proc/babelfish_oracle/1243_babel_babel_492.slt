@@ -1,0 +1,79 @@
+# test/slt_proc/babelfish_oracle/1243_babel_babel_492.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-492.sql
+
+query T
+SELECT exp(cast(12 AS BINARY));
+----
+NULL
+
+statement ok
+CREATE PROC p492 @a INT, @b FLOAT AS
+SELECT @a, @b;
+
+query TT
+EXEC p492 4;
+----
+4 NULL
+
+query TT
+EXEC p492 1, 2; -- 2 arguments supplied
+----
+1 2
+
+query TT
+EXEC p492 2, 3; -- Supply arguments to procedure with no parameters
+----
+2 3
+
+statement ok
+DROP PROC p492;
+
+statement ok
+CREATE PROC p492 @a INT, @b FLOAT, @c DECIMAL AS
+SELECT @a, @b, @c;
+
+query TTT
+EXEC p492 1, 2; -- Only positional arguments
+----
+1 2 NULL
+
+query TTT
+EXEC p492 @b=2, @a=1; -- Only named arguments
+----
+1 2 NULL
+
+query TTT
+EXEC p492 1, @c=3; -- Mixed positional and named arguments
+----
+1 NULL 3
+
+query TTT
+EXEC p492 1, @x=2, @y=3; -- Unknown non-default argument names
+----
+1 NULL NULL
+
+query TTT
+EXEC p492 1, 2, 3, 4; -- Supply arguments more than the procedure expects
+----
+1 2 3
+
+statement ok
+DROP PROC p492;
+
+statement ok
+CREATE PROC p492 @a INT, @b FLOAT, @c INT = 3 AS
+SELECT @a, @b, @c;
+
+query TTT
+EXEC p492 1, 2, 3; -- Valid call
+----
+1 2 3
+
+query TTT
+EXEC p492 1, 2, @x=5; -- Unknown default argument name
+----
+1 2 NULL
+
+statement ok
+DROP PROC p492;
+

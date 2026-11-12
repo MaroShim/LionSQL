@@ -1,0 +1,393 @@
+# test/slt_proc/babelfish_oracle/1036_babel_1946_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/1946_1.sql
+
+statement ok
+CREATE TABLE t1946
+(c1 int IDENTITY
+,c2 varchar(500)
+,c3 varchar(500)
+,c4 varchar(500)
+,c5 varchar(500)
+,c6 varchar(500)
+,c7 varchar(500)
+)
+
+statement ok
+CREATE INDEX ix1946 ON t1946(c1, c2, c3, c4, c5, c6, c7)
+
+statement ok
+DROP TABLE t1946
+
+statement ok
+begin transaction
+
+statement ok
+CREATE TABLE t1946
+(c1 int IDENTITY
+,c2 varchar(500)
+,c3 varchar(500)
+,c4 varchar(500)
+,c5 varchar(500)
+,c6 varchar(500)
+,c7 varchar(500)
+)
+
+statement ok
+CREATE INDEX ix1946 ON t1946(c1, c2, c3, c4, c5, c6, c7)
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+DROP TABLE t1946
+
+statement ok
+create schema error_mapping;
+
+statement ok
+create table error_mapping.temp1 (a int)
+
+statement ok
+CREATE TABLE t1946
+(c1 int IDENTITY
+,c2 varchar(500)
+,c3 varchar(500)
+,c4 varchar(500)
+,c5 varchar(500)
+,c6 varchar(500)
+,c7 varchar(500)
+)
+
+statement ok
+CREATE INDEX ix1946 ON t1946(c1, c2, c3, c4, c5, c6, c7)
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+insert into error_mapping.temp1 values(1)
+INSERT INTO t1946(c2, c3, c4, c5, c6, c7)
+VALUES(
+ REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+)
+end
+
+statement ok
+DROP TABLE t1946
+
+statement ok
+create table error_mapping.temp2 (a int)
+
+statement ok
+CREATE TABLE t1946
+(c1 int IDENTITY
+,c2 varchar(500)
+,c3 varchar(500)
+,c4 varchar(500)
+,c5 varchar(500)
+,c6 varchar(500)
+,c7 varchar(500)
+)
+
+statement ok
+CREATE INDEX ix1946 ON t1946(c1, c2, c3, c4, c5, c6, c7)
+
+statement ok
+DROP TABLE t1946
+
+statement ok
+create table error_mapping.temp3 (a int)
+
+statement ok
+CREATE TABLE t1946
+(c1 int IDENTITY
+,c2 varchar(500)
+,c3 varchar(500)
+,c4 varchar(500)
+,c5 varchar(500)
+,c6 varchar(500)
+,c7 varchar(500)
+)
+
+statement ok
+CREATE INDEX ix1946 ON t1946(c1, c2, c3, c4, c5, c6, c7)
+
+statement ok
+DROP TABLE t1946
+
+statement ok
+drop procedure error_mapping.ErrorHandling1;
+
+statement ok
+drop table error_mapping.temp1;
+drop table error_mapping.temp2;
+drop table error_mapping.temp3;
+
+statement ok
+CREATE TABLE t1946
+(c1 int IDENTITY
+,c2 varchar(500)
+,c3 varchar(500)
+,c4 varchar(500)
+,c5 varchar(500)
+,c6 varchar(500)
+,c7 varchar(500)
+)
+
+statement ok
+CREATE INDEX ix1946 ON t1946(c1, c2, c3, c4, c5, c6, c7)
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+INSERT INTO t1946(c2, c3, c4, c5, c6, c7)
+VALUES(
+ REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('Compile time error' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP TABLE t1946
+
+statement ok
+CREATE TABLE t1946
+(c1 int IDENTITY
+,c2 varchar(500)
+,c3 varchar(500)
+,c4 varchar(500)
+,c5 varchar(500)
+,c6 varchar(500)
+,c7 varchar(500)
+)
+
+statement ok
+CREATE INDEX ix1946 ON t1946(c1, c2, c3, c4, c5, c6, c7)
+
+statement ok
+begin transaction
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+INSERT INTO t1946(c2, c3, c4, c5, c6, c7)
+VALUES(
+ REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP TABLE t1946
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t1946
+(c1 int IDENTITY
+,c2 varchar(500)
+,c3 varchar(500)
+,c4 varchar(500)
+,c5 varchar(500)
+,c6 varchar(500)
+,c7 varchar(500)
+)
+
+statement ok
+CREATE INDEX ix1946 ON t1946(c1, c2, c3, c4, c5, c6, c7)
+
+statement ok
+begin transaction
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+INSERT INTO t1946(c2, c3, c4, c5, c6, c7)
+VALUES(
+ REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP TABLE t1946
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE TABLE t1946
+(c1 int IDENTITY
+,c2 varchar(500)
+,c3 varchar(500)
+,c4 varchar(500)
+,c5 varchar(500)
+,c6 varchar(500)
+,c7 varchar(500)
+)
+
+statement ok
+CREATE INDEX ix1946 ON t1946(c1, c2, c3, c4, c5, c6, c7)
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+INSERT INTO t1946(c2, c3, c4, c5, c6, c7)
+VALUES(
+ REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure error_mapping.ErrorHandling2 as
+begin
+exec error_mapping.ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+drop procedure error_mapping.ErrorHandling2;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP TABLE t1946
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t1946
+(c1 int IDENTITY
+,c2 varchar(500)
+,c3 varchar(500)
+,c4 varchar(500)
+,c5 varchar(500)
+,c6 varchar(500)
+,c7 varchar(500)
+)
+
+statement ok
+CREATE INDEX ix1946 ON t1946(c1, c2, c3, c4, c5, c6, c7)
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+INSERT INTO t1946(c2, c3, c4, c5, c6, c7)
+VALUES(
+ REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+,REPLICATE('a', 500)
+)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure error_mapping.ErrorHandling2 as
+begin
+exec error_mapping.ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+drop procedure error_mapping.ErrorHandling2;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+DROP TABLE t1946
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE TABLE t1946
+(c1 int IDENTITY
+,c2 varchar(500)
+,c3 varchar(500)
+,c4 varchar(500)
+,c5 varchar(500)
+,c6 varchar(500)
+,c7 varchar(500)
+)
+
+statement ok
+CREATE INDEX ix1946 ON t1946(c1, c2, c3, c4, c5, c6, c7)
+
+statement ok
+DROP TABLE t1946
+
+statement ok
+drop schema error_mapping;
+

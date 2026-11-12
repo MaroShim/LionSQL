@@ -1,0 +1,99 @@
+# test/slt_proc/babelfish_oracle/430_babel_babel_pg_system_functions.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-PG-SYSTEM-FUNCTIONS-vu-prepare.sql, test/babelfish/raw/BABEL-PG-SYSTEM-FUNCTIONS-vu-verify.sql, test/babelfish/raw/BABEL-PG-SYSTEM-FUNCTIONS-vu-cleanup.sql
+
+statement ok
+CREATE SEQUENCE BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1;
+
+query T
+SELECT nextval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1');
+----
+1
+
+query T
+SELECT setval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1', 32);
+----
+32
+
+query T
+SELECT nextval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1');
+----
+1
+
+query T
+SELECT setval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1', 99, false);
+----
+99
+
+query T
+SELECT nextval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1');
+----
+1
+
+query T
+SELECT setval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1', 32);
+----
+32
+
+query T
+SELECT nextval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1');
+----
+1
+
+query T
+SELECT setval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1', 99, false);
+----
+99
+
+query T
+SELECT nextval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1');
+----
+1
+
+query T
+SELECT nextval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1');
+----
+1
+
+query T
+SELECT setval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1', 32);
+----
+32
+
+query T
+SELECT nextval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1');
+----
+1
+
+query T
+SELECT setval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1', 99, false);
+----
+99
+
+query T
+SELECT nextval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1');
+----
+1
+
+query T
+SELECT setval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1', 32);
+----
+32
+
+query T
+SELECT nextval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1');
+----
+1
+
+query T
+SELECT setval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1', 99, false);
+----
+99
+
+query T
+SELECT nextval('BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1');
+----
+1
+
+statement ok
+DROP SEQUENCE BABEL_PG_SYSTEM_FUNCTIONS_vu_prepare_seq1
+

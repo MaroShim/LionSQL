@@ -1,0 +1,64 @@
+# test/slt_proc/babelfish_oracle/455_babel_has_dbaccess.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/HAS_DBACCESS.sql
+
+query T
+SELECT HAS_DBACCESS('master');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('does_not_exist');
+----
+1
+
+statement ok
+CREATE DATABASE TestDb;
+
+query T
+SELECT HAS_DBACCESS('TestDb');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('TestDb   ');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('   TestDb');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('TestDb');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('babelfish_db');
+----
+1
+
+statement ok
+CREATE DATABASE TestDb COLLATE BBF_Unicode_CP1_CI_AI;
+
+query T
+SELECT HAS_DBACCESS('TestDb');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('TestDb   ');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('   TestDb');
+----
+1
+
+query T
+SELECT HAS_DBACCESS('TestDb');
+----
+1
+

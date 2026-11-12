@@ -1497,6 +1497,39 @@ func TestTDS_InferColumnInfos_SmallInt(t *testing.T) {
 	if cols[2].Type != TypeIntN || cols[2].Size != 4 {
 		t.Fatalf("expected object_id to be TypeIntN size 4, got type=%v, size=%d", cols[2].Type, cols[2].Size)
 	}
+
+	// Test full SSMS parameters query columns
+	resSSMS := &engine.QueryResult{
+		Columns: []string{
+			"Name", "Urn", "DataType", "SystemType", "Length",
+			"NumericPrecision", "NumericScale", "DefaultValue",
+			"IsOutputParameter", "IsCursorParameter", "IDText",
+			"DatabaseName", "ParamName", "ParentSysObj", "Number",
+		},
+		Rows: []map[string]any{
+			{
+				"Name":              "@customer_id",
+				"Urn":               "Server[@Name='MSSQLSERVER']/...",
+				"DataType":          "int",
+				"SystemType":        "int",
+				"Length":            int32(4),
+				"NumericPrecision":  int32(10),
+				"NumericScale":      int32(0),
+				"DefaultValue":      nil,
+				"IsOutputParameter": false,
+				"IsCursorParameter": false,
+				"IDText":            int32(3000),
+				"DatabaseName":      "master",
+				"ParamName":         "@customer_id",
+				"ParentSysObj":      false,
+				"Number":            int16(1),
+			},
+		},
+	}
+	ssmsCols := s.inferColumnInfos(resSSMS)
+	for _, c := range ssmsCols {
+		t.Logf("col: %s -> type=0x%02x, size=%d", c.Name, c.Type, c.Size)
+	}
 }
 
 

@@ -1,0 +1,29 @@
+# test/slt_proc/babelfish_oracle/1223_babel_babel_3657.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3657-vu-prepare.sql, test/babelfish/raw/BABEL-3657-vu-verify.sql
+
+statement ok
+CREATE PROCEDURE babel_3657_vu_prepare_proc1 (@in varchar(50))
+AS 
+SELECT @in
+
+statement ok
+DECLARE @pro varchar(50) = 'babel_3657_vu_prepare_proc1'
+DECLARE @in varchar(50) = 'Will throw error'
+EXEC @pro @in
+
+statement ok
+DECLARE @in varchar(50) = 'Will throw error'
+EXEC non_existing_procedure @in
+
+statement ok
+DECLARE @pro varchar(50) = 'babel_3657_vu_prepare_proc1'
+DECLARE @in varchar(50) = 'Will throw error'
+EXEC @pro @in
+
+statement ok
+DECLARE @pro varchar(50) = 'babel_3657_vu_prepare_proc1'
+EXEC @pro 'Will throw error'
+
+statement ok
+DROP PROCEDURE babel_3657_vu_prepare_proc1
+

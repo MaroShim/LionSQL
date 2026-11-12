@@ -1,0 +1,30 @@
+# test/slt_proc/babelfish_oracle/1427_babel_drop_index_before_15_6_or_16_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/drop_index-before-15_6-or-16_2-vu-prepare.sql, test/babelfish/raw/drop_index-before-15_6-or-16_2-vu-verify.sql, test/babelfish/raw/drop_index-before-15_6-or-16_2-vu-cleanup.sql
+
+statement ok
+use master
+
+statement ok
+create table dbo.t1_drop_index(a int)
+
+statement ok
+create index ix1 on dbo.t1_drop_index(a)
+
+statement ok
+create table dbo.t2_drop_index(a int)
+
+statement ok
+create index ix1 on dbo.t2_drop_index(a)
+
+statement ok
+use master
+
+statement ok
+use master
+
+statement ok
+drop table dbo.t1_drop_index
+
+statement ok
+drop table dbo.t2_drop_index
+

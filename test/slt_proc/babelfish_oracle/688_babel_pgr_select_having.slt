@@ -1,0 +1,99 @@
+# test/slt_proc/babelfish_oracle/688_babel_pgr_select_having.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/pg_regress/pgr_select_having.sql
+
+statement ok
+CREATE TABLE test_having (a int, b int, c char(8), d char);
+
+statement ok
+INSERT INTO test_having VALUES (0, 1, 'XXXX', 'A');
+
+statement ok
+INSERT INTO test_having VALUES (1, 2, 'AAAA', 'b');
+
+statement ok
+INSERT INTO test_having VALUES (2, 2, 'AAAA', 'c');
+
+statement ok
+INSERT INTO test_having VALUES (3, 3, 'BBBB', 'D');
+
+statement ok
+INSERT INTO test_having VALUES (4, 3, 'BBBB', 'e');
+
+statement ok
+INSERT INTO test_having VALUES (5, 3, 'bbbb', 'F');
+
+statement ok
+INSERT INTO test_having VALUES (6, 4, 'cccc', 'g');
+
+statement ok
+INSERT INTO test_having VALUES (7, 4, 'cccc', 'h');
+
+statement ok
+INSERT INTO test_having VALUES (8, 4, 'CCCC', 'I');
+
+statement ok
+INSERT INTO test_having VALUES (9, 4, 'CCCC', 'j');
+
+query TT
+SELECT b, c FROM test_having
+	GROUP BY b, c HAVING count(*) = 1 ORDER BY b, c;
+----
+1 XXXX
+3 bbbb
+
+query TT
+SELECT b, c FROM test_having
+	GROUP BY b, c HAVING b = 3 ORDER BY b, c;
+----
+3 BBBB
+3 bbbb
+
+query TT
+SELECT lower(c), count(c) FROM test_having
+	GROUP BY lower(c) HAVING count(*) > 2 OR min(a) = max(a)
+	ORDER BY lower(c);
+----
+bbbb 3
+cccc 4
+xxxx 1
+
+query TT
+SELECT c, max(a) FROM test_having
+	GROUP BY c HAVING count(*) > 2 OR min(a) = max(a)
+	ORDER BY c;
+----
+bbbb 5
+XXXX 0
+
+statement ok
+SELECT min(a), max(a) FROM test_having HAVING min(a) = max(a);
+
+query TT
+SELECT min(a), max(a) FROM test_having HAVING min(a) < max(a);
+----
+0 9
+
+query T
+SELECT a FROM test_having HAVING min(a) < max(a);
+----
+0
+
+statement ok
+SELECT 1 AS one FROM test_having HAVING a > 1;
+
+statement ok
+SELECT 1 AS one FROM test_having HAVING 1 > 2;
+
+query T
+SELECT 1 AS one FROM test_having HAVING 1 < 2;
+----
+1
+
+query T
+SELECT 1 AS one FROM test_having WHERE 1/a = 1 HAVING 1 < 2;
+----
+1
+
+statement ok
+DROP TABLE test_having;
+

@@ -1,10 +1,13 @@
 package proc
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -220,7 +223,8 @@ func isStringBuiltin(name string) bool {
 		"PARSENAME", "STRING_ESCAPE", "FORMATMESSAGE",
 		"PATINDEX", "UNICODE", "NCHAR", "SOUNDEX", "DIFFERENCE", "TRANSLATE", "FORMAT",
 		"STRPOS", "INSTR", "MD5", "SHA256", "HEX", "UNHEX", "LPAD", "RPAD", "OCTET_LENGTH", "BIT_LENGTH", "INITCAP", "TO_CHAR",
-		"GREP", "REGEXP_LIKE", "AWK", "SPLIT_PART":
+		"GREP", "REGEXP_LIKE", "AWK", "SPLIT_PART",
+		"COMPRESS", "DECOMPRESS":
 		return true
 	default:
 		return false
@@ -886,6 +890,61 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 			}
 		}
 		return storage.StringValue(b.String())
+
+	case "COMPRESS":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeBinary)
+		}
+		var raw []byte
+		if args[0].Type == storage.TypeBinary {
+			raw = args[0].Bytes()
+		} else {
+			raw = []byte(valToString(args[0]))
+		}
+		var buf bytes.Buffer
+		zw := gzip.NewWriter(&buf)
+		if _, err := zw.Write(raw); err != nil {
+			return storage.NullValue(storage.TypeBinary)
+		}
+		if err := zw.Close(); err != nil {
+			return storage.NullValue(storage.TypeBinary)
+		}
+		return storage.BinaryValue(buf.Bytes())
+
+	case "DECOMPRESS":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeBinary)
+		}
+		var raw []byte
+		if args[0].Type == storage.TypeBinary {
+			raw = args[0].Bytes()
+		} else if len(args[0].BinVal) > 0 {
+			raw = []byte(args[0].BinVal)
+		} else {
+			s := args[0].SVal
+			if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+				if b, err := storage.ParseBinaryBytes(s); err == nil {
+					raw = b
+				} else {
+					raw = []byte(s)
+				}
+			} else {
+				raw = []byte(s)
+			}
+		}
+		if len(raw) == 0 {
+			return storage.NullValue(storage.TypeBinary)
+		}
+		zr, err := gzip.NewReader(bytes.NewReader(raw))
+		if err != nil {
+			return storage.NullValue(storage.TypeBinary)
+		}
+		defer zr.Close()
+		decompressed, err := io.ReadAll(zr)
+		if err != nil {
+			return storage.NullValue(storage.TypeBinary)
+		}
+		return storage.BinaryValue(decompressed)
 
 	case "FORMATMESSAGE":
 		if len(args) == 0 || args[0].IsNull {

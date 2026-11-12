@@ -1,0 +1,24 @@
+# test/slt_proc/babelfish_oracle/1463_babel_set_tran_isolvl.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/set_tran_isolvl-vu-prepare.sql, test/babelfish/raw/set_tran_isolvl-vu-verify.sql, test/babelfish/raw/set_tran_isolvl-vu-cleanup.sql
+
+statement ok
+set transaction isolation level serializable
+
+statement ok
+set tran isolation level serializable
+
+statement ok
+set transaction isolation level read committed
+
+statement ok
+set tran isolation level read committed
+
+statement ok
+EXECUTE('set transaction isolation level repeatable read')
+
+statement ok
+EXECUTE('set tran isolation level repeatable read')
+
+statement ok
+set transaction isolation level read committed
+

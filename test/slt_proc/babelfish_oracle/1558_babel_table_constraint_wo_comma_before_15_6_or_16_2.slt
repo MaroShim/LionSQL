@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/1558_babel_table_constraint_wo_comma_before_15_6_or_16_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/table_constraint_wo_comma-before-15_6-or-16_2-vu-prepare.sql, test/babelfish/raw/table_constraint_wo_comma-before-15_6-or-16_2-vu-verify.sql, test/babelfish/raw/table_constraint_wo_comma-before-15_6-or-16_2-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE p5_tv_nocomma
+AS 
+BEGIN                       
+	DECLARE @tv TABLE (a INT NOT NULL, b INT NOT NULL PRIMARY KEY)
+	INSERT @tv VALUES(1,2) 
+	INSERT @tv VALUES(2,2) 
+END
+
+statement ok
+CREATE PROCEDURE p6_tv_nocomma
+AS 
+BEGIN
+	DECLARE @tv TABLE (a INT NOT NULL PRIMARY KEY, b INT NOT NULL)
+	INSERT @tv VALUES(1,2) 
+	INSERT @tv VALUES(1,3) 
+END
+
+statement ok
+DROP PROCEDURE p5_tv_nocomma
+
+statement ok
+DROP PROCEDURE p6_tv_nocomma
+

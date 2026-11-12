@@ -1,0 +1,558 @@
+# test/slt_proc/babelfish_oracle/1613_babel_xml_exist.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/xml/xml_exist-vu-prepare.sql, test/babelfish/raw/xml/xml_exist-vu-verify.sql, test/babelfish/raw/xml/xml_exist-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_5222_xml_exist_t1 (XmlColumn XML)
+
+statement ok
+INSERT INTO babel_5222_xml_exist_t1
+VALUES ('<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>')
+
+statement ok
+CREATE TABLE babel_5222_xml_exist_t2 (Id INT PRIMARY KEY, XmlColumn XML);
+
+statement ok
+INSERT INTO babel_5222_xml_exist_t2 (Id, XmlColumn)
+VALUES (1, '<Root><Child1>Value1</Child1></Root>'),
+       (2, '<Root><Child2>Value2</Child2></Root>'),
+       (3, '<Root><Child1>Value1</Child1><Child2>Value2</Child2></Root>');
+
+statement ok
+CREATE TABLE babel_5222_xml_exist_text (XmlColumn TEXT)
+
+statement ok
+INSERT INTO babel_5222_xml_exist_text
+VALUES ('<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>')
+
+statement ok
+CREATE TABLE babel_5222_xml_exist_udt (VarUDTColumn dbo.babel_5222_xml_exist_varcharUDT, ImageUDTColumn dbo.babel_5222_xml_exist_imageUDT, XmlUDTColumn dbo.babel_5222_xml_exist_xmlUDT)
+
+statement ok
+INSERT INTO babel_5222_xml_exist_udt
+VALUES ('<Root><Child1>Value1</Child1></Root>', CAST('<Root><Child1>Value1</Child1></Root>' AS IMAGE), '<Root><Child1>Value1</Child1></Root>')
+
+statement ok
+CREATE VIEW babel_5222_xml_exist_dep_view AS
+    SELECT XmlColumn.exist('/artists/artist/@name') as nameExists FROM babel_5222_xml_exist_t1
+
+statement ok
+CREATE PROCEDURE babel_5222_xml_exist_dep_proc AS
+    SELECT XmlColumn.exist('/artists/artist/@name') FROM babel_5222_xml_exist_t1
+
+statement ok
+CREATE FUNCTION babel_5222_xml_exist_dep_func()
+RETURNS BIT
+AS
+BEGIN
+RETURN (SELECT TOP 1 XmlColumn.exist('/artists/artist/@name') FROM babel_5222_xml_exist_t1)
+END
+
+statement ok
+CREATE FUNCTION babel_5222_xml_exist_itvf_func()
+RETURNS TABLE
+AS
+RETURN (SELECT XmlColumn.exist('/artists/artist/@name') as nameExists FROM babel_5222_xml_exist_t1)
+
+statement ok
+CREATE FUNCTION dbo.babel_5222_xml_exist_func1()
+RETURNS XML
+AS
+BEGIN
+RETURN CAST('<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>' as XML)
+END
+
+statement ok
+CREATE TABLE babel_5222_xml_exist_compcol(id INT, col_xml XML, comp_col as col_xml.exist('/artist/@name'))
+
+statement ok
+CREATE TABLE babel_5222_xml_exist_constraint(col_xml XML, constraint chkNameExist check(col_xml.exist('/artist/@name') = 1))
+
+statement ok
+CREATE TABLE babel_5222_xml_exist_compcol1(id INT, col_xml XML, comp_col as dbo.wrapper_xmlexist1(col_xml))
+
+statement ok
+CREATE TABLE babel_5222_xml_exist_constraint1(col_xml XML, constraint chkNameExist1 check(wrapper_xmlexist1(col_xml) = 1))
+
+statement ok
+SET QUOTED_IDENTIFIER OFF
+
+statement ok
+CREATE VIEW babel_5222_xml_exist_dep_view2 AS
+    SELECT XmlColumn.exist('/artists/artist/@name') as nameExists FROM babel_5222_xml_exist_t1
+
+statement ok
+CREATE TABLE babel_5222_xml_exist_compcol2(id INT, col_xml XML, comp_col as dbo.wrapper_xmlexist2(col_xml))
+
+statement ok
+CREATE TABLE babel_5222_xml_exist_constraint2(col_xml XML, constraint chkNameExist2 check(wrapper_xmlexist2(col_xml) = 1))
+
+statement ok
+SET QUOTED_IDENTIFIER ON
+
+statement ok
+CREATE TABLE babel_5222_xml_exist_school_details (
+    id INT,
+    student XML
+);
+
+statement ok
+INSERT INTO babel_5222_xml_exist_school_details (id, student)
+VALUES
+    (1, '<student classid="1" rollid="1" studentname="StudentA" />'),
+    (2, '<student classid="1" rollid="2" studentname="StudentB" />'),
+    (3, '<student classid="1" rollid="3" studentname="StudentC" />'),
+    (4, '<student classid="2" rollid="1" studentname="StudentD" />'),
+    (5, '<student classid="2" rollid="2" studentname="StudentE" />')
+
+statement ok
+CREATE TRIGGER  babel_5222_xml_exist_tr_parital_student_entry
+ON babel_5222_xml_exist_school_details
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SELECT id, student AS invalid_entries FROM babel_5222_xml_exist_school_details
+    WHERE student.exist('/student/@classid') = 0
+            OR student.exist('/student/@rollid') = 0
+            OR student.exist('/student/@studentname') = 0
+    ORDER BY id;
+END;
+
+query T
+DECLARE @xml XML = '<root><child>Hello</child></root>';
+SELECT @xml.exist('(//child)[1]');
+----
+<root><child>Hello</child></root>
+
+query T
+DECLARE @xml XML = '<root><parent><child1>Test1</child1><child2>Test2</child2></parent></root>';
+SELECT @xml.exist('(//child1)[1]'), @xml.exist('(//child2)[1]');
+----
+<root><parent><child1>Test1</child1><child2>Test2</child2></parent></root>
+
+query T
+DECLARE @xml XML = '<root></root>';
+SELECT @xml.exist('(//child)[1]');
+----
+<root></root>
+
+statement ok
+DECLARE @xml XML = ''
+select @xml.exist('/Root/row')
+
+statement ok
+DECLARE @xml XML = '   '
+select @xml.exist('/Root/row')
+
+statement ok
+DECLARE @xml XML = NULL
+select @xml.exist('/Root/row')
+
+statement ok
+DECLARE @xml XML = ''
+SELECT @xml.exist('')
+
+statement ok
+DECLARE @xml XML = '<Root><row><name>James</name></row></Root>'
+SELECT @xml.exist('')
+
+query T
+DECLARE @xml XML = '<root><child>123</child></root>';
+SELECT @xml.exist('(//child)[1]'), @xml.exist('(//child)[1]'), @xml.exist('(//child)[1]');
+----
+<root><child>123</child></root>
+
+query T
+DECLARE @xml XML = '<child1>Test1</child1><child2>Test2</child2>';
+SELECT @xml.exist('(//child1)[1]'), @xml.exist('(//child2)[1]');
+----
+<child1>Test1</child1><child2>Test2</child2>
+
+query T
+DECLARE @xml XML = '<root>Hello&#0;World</root>';
+SELECT @xml.exist('(/root)[1]');
+----
+<root>Hello&#0;World</root>
+
+query T
+DECLARE @x XML = '<root></root>';
+SELECT @x.exist('true()')
+----
+<root></root>
+
+query T
+DECLARE @x XML = '<root></root>';
+SELECT @x.exist('false()')
+----
+<root></root>
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml  .  exist  ('/artists/artist/@name'  )
+
+query T
+SELECT XmlColumn   . exist    ('/artists/artist/@name'  ) FROM babel_5222_xml_exist_t1
+----
+XmlColumn
+
+query T
+SELECT babel_5222_xml_exist_t1 .   XmlColumn   . exist    ('/artists/artist/@name'  ) FROM babel_5222_xml_exist_t1
+----
+babel_5222_xml_exist_t1
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.EXIST('/artists/artist/@name')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.Exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.ExIsT('/artists/artist/@name')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.eXiSt('/artists/artist/@name')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist(cast('/artists/artist/@name' as VARCHAR(100)))
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist(cast('/artists/artist/@name' as text))
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist(@xml)
+
+statement ok
+DECLARE @xml VARCHAR(100) = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml NVARCHAR(100) = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml INT = 1
+SELECT @xml.exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml BIGINT = 1
+SELECT @xml.exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml FLOAT = 1
+SELECT @xml.exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml DECIMAL = 1
+SELECT @xml.exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml NUMERIC = 1
+SELECT @xml.exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml BIT = 1
+SELECT @xml.exist('/artists/artist/@name')
+
+query T
+SELECT XmlColumn.exist('/artists/artist/@name') FROM babel_5222_xml_exist_text
+----
+NULL
+
+query T
+SELECT VarUDTColumn.exist('/artists/artist/@name') FROM babel_5222_xml_exist_udt
+----
+NULL
+
+query T
+SELECT ImageUDTColumn.exist('/artists/artist/@name') FROM babel_5222_xml_exist_udt
+----
+NULL
+
+query T
+SELECT XmlUDTColumn.exist('/artists/artist/@name') FROM babel_5222_xml_exist_udt
+----
+NULL
+
+statement ok
+DECLARE @xml XML = NULL
+SELECT @xml.exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist(NULL)
+
+statement ok
+DECLARE @xml XML = NULL
+SELECT @xml.exist(NULL)
+
+query T
+SELECT XmlColumn.exist('/artists/artist/@name') FROM babel_5222_xml_exist_t1
+----
+NULL
+
+query T
+SELECT babel_5222_xml_exist_t1.XmlColumn.exist('/artists/artist/@name') FROM babel_5222_xml_exist_t1
+----
+NULL
+
+query T
+SELECT dbo.babel_5222_xml_exist_t1.XmlColumn.exist('/artists/artist/@name') FROM babel_5222_xml_exist_t1
+----
+NULL
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT (SELECT @xml).exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist('/artists/artist/@name').STArea()
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist('/artists/artist/@name').STX
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist('/artists/artist/@name').exist('/artists/artist/@name').exist('/artists/artist/@name').exist('/artists/artist/@name')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist()
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist('/artists/artist/@name', 1)
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.query('/artists').exist('/artists/artist/@name')
+
+query T
+SELECT * FROM babel_5222_xml_exist_dep_view
+----
+NULL
+
+query T
+EXEC babel_5222_xml_exist_dep_proc
+----
+NULL
+
+query T
+SELECT babel_5222_xml_exist_dep_func()
+----
+NULL
+
+query T
+SELECT * FROM babel_5222_xml_exist_itvf_func()
+----
+NULL
+
+statement ok
+INSERT INTO babel_5222_xml_exist_compcol VALUES (1, '<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_compcol VALUES (2, '<artist />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_constraint VALUES ('<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_constraint VALUES ('<artist />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_compcol1 VALUES (1, '<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_compcol1 VALUES (2, '<artist />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_constraint1 VALUES ('<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_constraint1 VALUES ('<artist />')
+
+query T
+SELECT * FROM babel_5222_xml_exist_dep_view2
+----
+NULL
+
+statement ok
+INSERT INTO babel_5222_xml_exist_compcol2 VALUES (1, '<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_compcol2 VALUES (2, '<artist />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_constraint2 VALUES ('<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_constraint2 VALUES ('<artist />')
+
+statement ok
+SET QUOTED_IDENTIFIER OFF
+
+statement ok
+INSERT INTO babel_5222_xml_exist_compcol1 VALUES (1, '<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_compcol1 VALUES (2, '<artist />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_constraint1 VALUES ('<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_constraint1 VALUES ('<artist />')
+
+query T
+SELECT * FROM babel_5222_xml_exist_dep_view2
+----
+NULL
+
+statement ok
+INSERT INTO babel_5222_xml_exist_compcol2 VALUES (1, '<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_compcol2 VALUES (2, '<artist />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_constraint2 VALUES ('<artist name="Rohit Bhagat" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_constraint2 VALUES ('<artist />')
+
+statement ok
+SET QUOTED_IDENTIFIER ON
+
+statement ok
+INSERT INTO babel_5222_xml_exist_school_details VALUES (6, '<student classid="2" rollid="3" studentname="StudentF" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_school_details VALUES (7, '<student rollid="4" studentname="StudentG" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_school_details VALUES (8, '<student classid="2" studentname="StudentH" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_school_details VALUES (9, '<student classid="2" rollid="4" />')
+
+statement ok
+INSERT INTO babel_5222_xml_exist_school_details VALUES (10, '<student classid="2" />')
+
+statement ok
+UPDATE babel_5222_xml_exist_school_details
+SET student=CAST('<student classid="1" rollid="4" studentname="StudentG" />' as XML)
+WHERE id=7
+
+statement ok
+DELETE FROM babel_5222_xml_exist_school_details WHERE id=10
+
+statement ok
+SET QUOTED_IDENTIFIER OFF
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.exist('/artists/artist/@name')
+
+query T
+SELECT XmlColumn.exist('/artists/artist/@name') FROM babel_5222_xml_exist_t1
+----
+NULL
+
+query T
+SELECT babel_5222_xml_exist_t1.XmlColumn.exist('/artists/artist/@name') FROM babel_5222_xml_exist_t1
+----
+NULL
+
+statement ok
+SET QUOTED_IDENTIFIER ON
+
+statement ok
+DECLARE @x XML;  
+DECLARE @f BIT;  
+SET @x = '<Somedate>2002-01-01Z</Somedate>';  
+SET @f = @x.exist('/Somedate[(text()[1] cast as xs:date ?) = xs:date("2002-01-01Z") ]')  
+SELECT @f;
+
+query T
+DECLARE @xml XML = '<root><child>Hello</child></root>';
+SELECT @xml.exist('(//*:child)[1]');
+----
+<root><child>Hello</child></root>
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.value('(/artists/artist/@name)[1]','varchar(20)')
+
+statement ok
+DECLARE @xml XML = '<artists> <artist name="John Doe"/> <artist name="Edward Poe"/> <artist name="Mark The Great"/> </artists>'
+SELECT @xml.query('/artists/artist')
+
+statement ok
+DROP TABLE babel_5222_xml_exist_udt
+
+statement ok
+DROP VIEW babel_5222_xml_exist_dep_view
+
+statement ok
+DROP VIEW babel_5222_xml_exist_dep_view2
+
+statement ok
+DROP PROCEDURE babel_5222_xml_exist_dep_proc
+
+statement ok
+DROP FUNCTION dbo.babel_5222_xml_exist_func1
+
+statement ok
+DROP FUNCTION babel_5222_xml_exist_dep_func
+
+statement ok
+DROP FUNCTION babel_5222_xml_exist_itvf_func
+
+statement ok
+DROP TABLE babel_5222_xml_exist_compcol
+
+statement ok
+DROP TABLE babel_5222_xml_exist_constraint
+
+statement ok
+DROP TABLE babel_5222_xml_exist_compcol1
+
+statement ok
+DROP TABLE babel_5222_xml_exist_constraint1
+
+statement ok
+DROP TABLE babel_5222_xml_exist_compcol2
+
+statement ok
+DROP TABLE babel_5222_xml_exist_constraint2
+
+statement ok
+DROP TRIGGER  babel_5222_xml_exist_tr_parital_student_entry
+
+statement ok
+DROP TABLE babel_5222_xml_exist_school_details
+
+statement ok
+DROP TABLE babel_5222_xml_exist_t1
+
+statement ok
+DROP TABLE babel_5222_xml_exist_t2
+
+statement ok
+DROP TABLE babel_5222_xml_exist_text
+

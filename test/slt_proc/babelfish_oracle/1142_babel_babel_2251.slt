@@ -1,0 +1,30 @@
+# test/slt_proc/babelfish_oracle/1142_babel_babel_2251.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2251.sql
+
+statement ok
+RAISERROR(N'test %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s', 1, 1, N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1',N'1');
+
+statement ok
+RAISERROR(N'test %d %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s', 1, 1, 100,N'1',N'1')
+
+statement ok
+RAISERROR(N'test %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s', 1, 1, N'a', N'a', N'a', N'a',N'a', N'a', N'a', N'a', N'a', N'a', N'a', N'a', N'a', N'a', N'a', N'a', N'a', N'a', N'a', N'a')
+
+statement ok
+RAISERROR(N'test %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s', 1, 1)
+
+statement ok
+RAISERROR(N'escaped %% with other additional parameters %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s', 1, 1)
+
+statement ok
+RAISERROR(N'message string does not contain any parameter', 1, 1)
+
+statement ok
+RAISERROR(N'contains an invalid message%', 1, 1, N'123')
+
+statement ok
+RAISERROR(N'', 1, 1)
+
+statement ok
+RAISERROR(N'a', 1, 1)
+

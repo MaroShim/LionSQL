@@ -1,0 +1,21 @@
+# test/slt_proc/babelfish_oracle/1456_babel_order_by_offset_fetch_rows_before_15_6_or_16_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/order_by_offset_fetch_rows-before-15_6-or-16_2-vu-prepare.sql, test/babelfish/raw/order_by_offset_fetch_rows-before-15_6-or-16_2-vu-verify.sql, test/babelfish/raw/order_by_offset_fetch_rows-before-15_6-or-16_2-vu-cleanup.sql
+
+statement ok
+create table t1_upgr_order_by_offset_fetch(a int, b int)
+
+statement ok
+CREATE VIEW v1_upgr_order_by_offset_fetch as select * FROM t1_upgr_order_by_offset_fetch ORDER BY b OFFSET 5 ROWS FETCH NEXT 3 rows only 
+
+statement ok
+update t1_upgr_order_by_offset_fetch set b=a
+
+statement ok
+select * from v1_upgr_order_by_offset_fetch
+
+statement ok
+DROP VIEW v1_upgr_order_by_offset_fetch 
+
+statement ok
+DROP table t1_upgr_order_by_offset_fetch
+

@@ -1,0 +1,186 @@
+# test/slt_proc/babelfish_oracle/376_babel_babel_3697.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/json_modify/BABEL-3697-vu-prepare.sql, test/babelfish/raw/json_modify/BABEL-3697-vu-verify.sql, test/babelfish/raw/json_modify/BABEL-3697-vu-cleanup.sql
+
+statement ok
+create view babel_3697_1 as
+SELECT JSON_MODIFY('{"click_count": 173}', '$.click_count', CAST(JSON_VALUE('{"click_count": 173}','$.click_count') AS INT)+1)
+
+statement ok
+create view babel_3697_2 as
+SELECT JSON_MODIFY('{"click_count": 173.12345342}', '$.click_count', CAST(JSON_VALUE('{"click_count": 173.12345342}','$.click_count') AS NUMERIC(7, 3)))
+
+statement ok
+create view babel_3697_3 as
+SELECT JSON_MODIFY('{"click_count": 173}', '$.click_count', 25)
+
+statement ok
+create view babel_3697_4 as
+SELECT JSON_MODIFY('{"click_count": 1900-01-01}', '$.click_count', CAST('1900-02-02' as DATE))
+
+statement ok
+create view babel_3697_5 as
+SELECT JSON_MODIFY('{"click_count": 04:05:06}', '$.click_count', CAST('04:05:06' as TIME))
+
+statement ok
+create procedure babel_3697_6
+as begin
+DECLARE @data NVARCHAR(100)='{"click_count": 12345}'
+SELECT JSON_MODIFY(@data, '$.click_count', CAST(JSON_VALUE(@data,'$.click_count') AS CHAR(2)))
+end;
+
+statement ok
+create procedure babel_3697_7
+as begin
+DECLARE @data NVARCHAR(100)='{"click_count": 12345}'
+SELECT JSON_MODIFY(@data, '$.click_count', 0)
+end;
+
+statement ok
+create procedure babel_3697_8
+as begin
+DECLARE @data NVARCHAR(100)='{"click_count": 12345}'
+SELECT JSON_MODIFY(@data, '$.click_count', 6 + 235)
+end;
+
+statement ok
+create view babel_3697_multi_function as
+SELECT JSON_MODIFY(JSON_MODIFY(JSON_MODIFY('{"name":"John","skills":["C#","SQL"]}','$.name','Mike'),'$.surname','Smith'),'append $.skills','Azure') AS mf_1, 
+       JSON_MODIFY(JSON_MODIFY('{"price":49.99}','$.Price',CAST(JSON_VALUE('{"price":49.99}','$.price') AS NUMERIC(4,2))),'$.price',NULL) AS mf_2;
+
+statement ok
+CREATE  FUNCTION [dbo].[o7getcodevaluedesc] ()
+returns nvarchar(256)
+as BEGIN
+   return "ddd"
+end;
+
+statement ok
+create table babel_4793(a int , b int)
+
+statement ok
+create schema babel_4793_schema
+
+statement ok
+CREATE  FUNCTION babel_4793_schema.babel_4793_func ()
+returns int 
+as BEGIN
+    return 1;
+end;
+
+statement ok
+create procedure babel_4793_pro1
+as begin
+   select kk , dd, dbo.o7getcodevaluedesc() from (
+      select a as kk, count(b) as dd from babel_4793  group by a 
+   ) as drived
+end;
+
+statement ok
+create procedure babel_4793_pro2
+as begin
+   select dbo.o7getcodevaluedesc() , kk , dd from (
+      select a as kk, count(b) as dd from babel_4793  group by a 
+   ) as drived
+end;
+
+statement ok
+create procedure babel_4793_pro3
+as begin
+   select babel_4793_schema.babel_4793_func() , kk , dd from (
+      select a as kk, count(b) as dd from babel_4793  group by a 
+   ) as drived
+end;
+
+query T
+SELECT * FROM babel_3697_1
+----
+{"click_count":174}
+
+query T
+SELECT * FROM babel_3697_2
+----
+{"click_count":"173.123"}
+
+query T
+SELECT * FROM babel_3697_3
+----
+{"click_count":25}
+
+query T
+EXEC babel_3697_6
+----
+{"click_count":"12"}
+
+query T
+EXEC babel_3697_7
+----
+{"click_count":0}
+
+query T
+EXEC babel_3697_8
+----
+{"click_count":241}
+
+statement ok
+select kk , dd, dbo.o7getcodevaluedesc() from (
+   select a as kk, count(b) as dd from babel_4793  group by a 
+) as drived
+
+statement ok
+select dbo.o7getcodevaluedesc() , kk , dd from (
+   select a as kk, count(b) as dd from babel_4793  group by a 
+) as drived
+
+statement ok
+select babel_4793_schema.babel_4793_func() , kk , dd from (
+   select a as kk, count(b) as dd from babel_4793  group by a 
+) as drived
+
+statement ok
+DROP VIEW babel_3697_1
+
+statement ok
+DROP VIEW babel_3697_2
+
+statement ok
+DROP VIEW babel_3697_3
+
+statement ok
+DROP VIEW babel_3697_4
+
+statement ok
+DROP VIEW babel_3697_5
+
+statement ok
+DROP PROCEDURE babel_3697_6
+
+statement ok
+DROP PROCEDURE babel_3697_7
+
+statement ok
+DROP PROCEDURE babel_3697_8
+
+statement ok
+DROP VIEW babel_3697_multi_function
+
+statement ok
+DROP FUNCTION [dbo].[o7getcodevaluedesc] 
+
+statement ok
+drop function babel_4793_schema.babel_4793_func
+
+statement ok
+drop table babel_4793;
+
+statement ok
+drop procedure babel_4793_pro1
+
+statement ok
+drop procedure babel_4793_pro2
+
+statement ok
+drop procedure babel_4793_pro3
+
+statement ok
+drop schema babel_4793_schema
+

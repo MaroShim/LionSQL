@@ -1,0 +1,61 @@
+# test/slt_proc/babelfish_oracle/1532_babel_sys_systypes_before_16_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/sys-systypes-before-16-2-vu-prepare.sql, test/babelfish/raw/sys-systypes-before-16-2-vu-verify.sql
+
+statement ok
+CREATE DATABASE sys_systypes_db;
+
+statement ok
+USE sys_systypes_db
+
+statement ok
+CREATE view sys_systypes_view1 AS
+select name, status, length, variable, allownulls, printfmt, collation from sys.systypes order by name asc;
+
+statement ok
+CREATE view sys_systypes_view2 AS
+select name, status, length, variable, allownulls, printfmt, collation from sys.systypes where name = 'sys_systypes_type';
+
+statement ok
+CREATE view sys_systypes_view3 AS
+select length, name from sys.systypes where variable = 1 order by name asc;
+
+statement ok
+CREATE view sys_systypes_view4 AS
+select name, status, length, variable, allownulls, printfmt, collation from sys.systypes where name = 'sys_systypes_type2';
+
+statement ok
+USE sys_systypes_db
+
+statement ok
+USE master;
+
+statement ok
+SELECT count(*) FROM dbo.systypes WHERE name = 'sys_systypes_type';
+
+statement ok
+SELECT count(*) FROM sys_systypes_db.dbo.systypes WHERE name = 'sys_systypes_type';
+
+statement ok
+SELECT name, status, length, variable, allownulls, printfmt, collation FROM dbo.systypes WHERE name = 'sys_systypes_type';
+
+statement ok
+SELECT name, status, length, variable, allownulls, printfmt, collation FROM sys_systypes_db.dbo.systypes WHERE name = 'sys_systypes_type';
+
+statement ok
+USE sys_systypes_db
+
+statement ok
+DROP VIEW sys_systypes_view4
+
+statement ok
+DROP VIEW sys_systypes_view3
+
+statement ok
+DROP VIEW sys_systypes_view2
+
+statement ok
+DROP VIEW sys_systypes_view1
+
+statement ok
+USE master
+

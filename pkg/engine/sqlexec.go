@@ -1421,6 +1421,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.3 Substitute session variables in SQL query if present
+	rawBeforeVarSub := trimmed
 	cs.Mu.Lock()
 	if len(cs.Vars) > 0 {
 		keys := make([]string, 0, len(cs.Vars))
@@ -1556,7 +1557,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 2. Procedure Invocation: EXEC / CALL / sp_*
 	if sqlutil.HasPrefixKeyword(trimmed, "EXEC") || sqlutil.HasPrefixKeyword(trimmed, "EXECUTE") || sqlutil.HasPrefixKeyword(trimmed, "CALL") || strings.HasPrefix(strings.ToUpper(trimmed), "SP_") {
-		return s.execProcedureCall(trimmed, start, cs)
+		return s.execProcedureCallWithRaw(trimmed, rawBeforeVarSub, start, cs)
 	}
 
 	// 2.1 User Exception: RAISERROR

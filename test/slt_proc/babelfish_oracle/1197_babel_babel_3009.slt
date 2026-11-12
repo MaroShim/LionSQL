@@ -1,0 +1,13 @@
+# test/slt_proc/babelfish_oracle/1197_babel_babel_3009.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3009.sql
+
+statement ok
+SELECT ac.name,tp.name as type_name FROM sys.all_columns ac
+LEFT JOIN sys.types tp ON tp.system_type_id = ac.system_type_id
+WHERE ac.object_id = object_id('sys.server_principals') ORDER BY ac.name;
+
+statement ok
+SELECT ac.name,tp.name as type_name FROM sys.all_columns ac
+LEFT JOIN sys.types tp ON tp.system_type_id = ac.system_type_id
+WHERE ac.object_id = object_id('sys.database_principals') ORDER BY ac.name;
+

@@ -1,0 +1,17 @@
+# test/slt_proc/json_xml_compress/113_json_and_compress_08.slt
+# T-SQL ISJSON, JSON_VALUE, COMPRESS/DECOMPRESS, system vars (8)
+
+query II
+SELECT ISJSON('{"id":8,"user":"user_08","role":"auditor","score":825}'), ISJSON('invalid_8');
+----
+1 0
+
+query TTT
+SELECT JSON_VALUE('{"id":8,"user":"user_08","role":"auditor","score":825}', '$.user'), JSON_VALUE('{"id":8,"user":"user_08","role":"auditor","score":825}', '$.role'), JSON_VALUE('{"id":8,"user":"user_08","role":"auditor","score":825}', '$.score');
+----
+user_08 auditor 825
+
+query TII
+SELECT CAST(DECOMPRESS(COMPRESS('LionSQL-Payload-08-XYZXYZ')) AS VARCHAR(200)), @@DATEFIRST, IIF(@@DBTS IS NOT NULL, 1, 0);
+----
+LionSQL-Payload-08-XYZXYZ 7 1

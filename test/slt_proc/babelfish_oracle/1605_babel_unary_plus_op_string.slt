@@ -1,0 +1,574 @@
+# test/slt_proc/babelfish_oracle/1605_babel_unary_plus_op_string.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/unary_plus_op_string-vu-prepare.sql, test/babelfish/raw/unary_plus_op_string-vu-verify.sql, test/babelfish/raw/unary_plus_op_string-vu-cleanup.sql
+
+statement ok
+set quoted_identifier off
+
+statement ok
+create table t1_unary_plus_op_string(i int, vc varchar(30))
+
+statement ok
+create view v1_unary_plus_op_string as
+select 'view '+++(+N'value1') + 
++ /*comment*/
+(
++ /*comment*/
++ -- comment +
+(
++
+'value2'))++(+(select 'value3')) as col1,
+1 + -2 as col2,
+1 ++ -2 as col3,
+1 + ~2 as col4,
+1 +++++ ~2 as col5,
+1 ++++ (++++ -2) as col6,
+1 ++++ (++++ ~2) as col7
+
+statement ok
+create procedure p1_unary_plus_op_string 
+as
+declare @v varchar(20) = ' test'
+declare @i int = 1
+declare @d datetime='2024-Jan-01 01:02:03' 
+declare @dc decimal(10,4)=1
+select 'proc '+'line1'
+select 'proc '++'line2'
+select 'proc '++N'line3'
+select 'proc '+++++'line4'
+select 'proc '+++++"line5"
+select 'proc '+
++ /*comment*/
+(
++ /*comment*/
++ -- comment +
+(
++
+"line6"))+++@v
+select 'proc ' ++(++(++(select N'line7')))++(+@v)
+select 'proc ' ++ case when len('a'+++ 'b')=2 then 'true' else 'false' end
+select 'proc line8' where 'x' in (+'x')
+select 'proc line9' where 'x' like +'x'
+set @v = 'x'
+select 'proc line10' where 'x' like (+@v)
+select 'proc line11' where 'x' like +(+(+@v))
+select 'proc line 12 ' ++ vc from t1_unary_plus_op_string order by 1  
+select 'proc line 13 ' ++(+vc) from t1_unary_plus_op_string order by 1
+select 'proc line 14 ' ++ [vc] from t1_unary_plus_op_string order by 1 
+select 1 + @i, 2 + (+@i), 3 ++++(++(+++@i)) 
+select +@d, + (+@d), ++++(++(+++@d))
+select 1 +@dc, 2 + (+@dc), 3 ++++(++(+++@dc))
+select 1 + -2 as expr1
+select 1 ++ -2 as expr2
+select 1 + ~2 as expr3
+select 1 +++++ ~2 as expr4
+select 1 ++++ (++++ -2) as expr5
+select 1 ++++ (++++ ~2) as expr6
+EXECUTE('select ''execimm ''++''line1''')
+EXECUTE('select ''execimm ''++N''line2''')
+EXECUTE('select ''execimm ''++(+(select N''line3''))')
+
+statement ok
+create function f1_unary_plus_op_string (@v varchar(10)) returns varchar(30)
+as
+begin
+declare @s varchar(30)
+set @s = 'func '+++(+N'value1') +
++
+(
++ /*comment*/
++ -- comment +
+(++(select "value2")))++(+@v)
+return @s
+end
+
+statement ok
+insert t1_unary_plus_op_string values (1, 'abc')
+
+statement ok
+set quoted_identifier off
+
+query T
+select 'x'+'y'
+----
+xy
+
+query T
+select 'x' + 'y'
+----
+xy
+
+query T
+select 'x' + 
+'y'
+/*comment*/    + 
+   'z'
+----
+xyz
+
+query T
+select 'x'++'y'
+----
+xy
+
+query T
+select 'x'++++++++'y'
+----
+xy
+
+query T
+select 'x'++N'y'
+----
+xy
+
+query T
+select 'x'++++++++N'y'
+----
+xy
+
+query T
+select 'x' ++++++++ 'y'
+----
+xy
+
+query T
+select 'x' ++   ++ 
+/* comment*/  +  +
+'y'  ++ -- comment +
+/*comment*/    ++  +
+ ++  'z'
+----
+xyz
+
+statement ok
+declare @v varchar(10)='y' select 'x'+ @v, 'x' +@v, 'x' ++++++@v
+
+statement ok
+declare @v varchar(10)='y' select 'x'+ (@v), 'x' + (+@v), 'x' ++++(++(+++@v))
+
+statement ok
+declare @v tinyint=1 select 1 +@v, 2 + (+@v), 3 ++++(++(+++@v))
+
+statement ok
+declare @v int=1 select 1 +@v, 2 + (+@v), 3 ++++(++(+++@v))
+
+statement ok
+declare @v bigint=1 select 1 +@v, 2 + (+@v), 3 ++++(++(+++@v))
+
+statement ok
+declare @v decimal(10,4)=1 select 1 +@v, 2 + (+@v), 3 ++++(++(+++@v))
+
+statement ok
+declare @v money=1 select 1 +@v, 2 + (+@v), 3 ++++(++(+++@v))
+
+statement ok
+declare @v datetime='2024-Jan-01 01:02:03' select  +@v, + (+@v), ++++(++(+++@v))
+
+statement ok
+declare @v datetime2='2024-Jan-01 01:02:03' select  +@v, + (+@v), ++++(++(+++@v))
+
+query T
+select +'y'
+----
+y
+
+query T
+select +N'y'
+----
+y
+
+query T
+select ((+'y')) 
+----
+y
+
+query T
+select ((+N'y')) 
+----
+y
+
+query T
+select ++++(++++++(+++++'y')) 
+----
+y
+
+query T
+select 'x'+(+'y') 
+----
+xy
+
+query T
+select 'x'+++((+++(+++'y')))
+----
+xy
+
+query T
+select 'x'+++(
+(+++
+(+++
+'y')))
+----
+xy
+
+query T
+if 'x' <> + char(13) select 'true' else select 'false'
+----
+true
+
+query T
+if 'x' <> +++ char(13) select 'true' else select 'false'
+----
+true
+
+query T
+select len(+'x')
+----
+1
+
+query T
+select len(+N'x')
+----
+1
+
+query T
+select 'x' ++ substring('xyz', 2, 1)
+----
+xy
+
+query T
+select 'x' +++++ substring(+'xyz', 2, 1)  
+----
+xy
+
+query T
+select 'x' ++ case when len('a'+++ 'b')=2 then 'true' else 'false' end
+----
+xtrue
+
+query T
+select 'x' ++ case when len(+'a'+++ 'b')=2 then +'true' else +++++'false' end
+----
+xtrue
+
+statement ok
+declare @v varchar(10) = 'true'
+select 'x' ++ case when len(+'a'+++ 'b')=2 then +@v else 'false' end
+
+query T
+select 1 where 'x' in (+'x')
+----
+1
+
+query T
+select 1 where 'x' like +'x'
+----
+1
+
+statement ok
+declare @v varchar(10) = 'x'
+select 1 where 'x' like (+@v)
+
+statement ok
+declare @v varchar(10) = 'x'
+select 1 where 'x' like +(+(+@v))
+
+statement ok
+declare @v varchar(10) = 'x'
+if 'y' <> + @v select 'true' else select 'false'
+
+statement ok
+declare @v varchar(10) = 'x'
+if 'y' <> +++ @v select 'true' else select 'false'
+set @v = 'x' ++ case when len('a'+++ 'b')=2 then 'true2' else 'false2' end
+select @v
+
+query T
+select 'x' ++vc from t1_unary_plus_op_string order by 1
+----
+xabc
+
+query T
+select 'x' ++(+vc) from t1_unary_plus_op_string order by 1
+----
+xabc
+
+query T
+select +(select 'abc')
+----
+abc
+
+query T
+select ++++(select 'abc')
+----
+abc
+
+query T
+select +(+((select 'abc')))
+----
+abc
+
+query T
+select "x"+"y"
+----
+xy
+
+query T
+select "x" + "y"
+----
+xy
+
+query T
+select "x" + 
+"y" 
+/*comment*/    + 
+   "z"
+----
+xyz
+
+query T
+select "x"++"y"
+----
+xy
+
+query T
+select "x"++++++++"y"
+----
+xy
+
+query T
+select "x" ++++++++ "y"
+----
+xy
+
+query T
+select "x" ++   ++ 
+/* comment*/  +  +
+"y"  ++ 
+/*comment*/    ++  +
+ ++  "z"
+----
+xyz
+
+statement ok
+declare @v varchar(10)="y" select "x"+ @v, "x" +@v, "x" ++++++@v
+
+query T
+select +"y"
+----
+y
+
+query T
+select ((+"y")) 
+----
+y
+
+query T
+select ++++(++++++(+++++"y")) 
+----
+y
+
+query T
+select 'x'+(+"y") 
+----
+xy
+
+query T
+select "x"+++((+++(+++"y")))
+----
+xy
+
+query T
+select "x"+++(
+(+++
+(+++
+"y")))
+----
+xy
+
+query T
+if "x" <> + char(13) select "true" else select "false"
+----
+true
+
+query T
+if "x" <> +++ char(13) select "true" else select "false"
+----
+true
+
+query T
+select len(+"x")
+----
+1
+
+query T
+select "x" ++ substring("xyz", 2, 1)
+----
+xy
+
+query T
+select "x" +++++ substring(+"xyz", 2, 1)  
+----
+xy
+
+query T
+select "x" ++ case when len("a"+++ "b")=2 then "true" else "false" end
+----
+xtrue
+
+statement ok
+declare @v varchar(10) = "true"
+select "x" ++ case when len(+"a"+++ 'b')=2 then +@v else +"false" end
+
+query T
+select 1 where "x" in (+"x")
+----
+1
+
+query T
+select 1 where "x" like +"x"
+----
+1
+
+statement ok
+declare @v varchar(10) = "x"
+if "y" <> +++ @v select "true" else select "false"
+set @v = "x" ++ case when len(++"a"+++N'b')=2 then "true2" else "false2" end
+select @v
+
+query T
+select +(+((select "abc")))
+----
+abc
+
+statement ok
+set quoted_identifier on
+
+query T
+select 'x' ++ "vc" from t1_unary_plus_op_string order by 1
+----
+xabc
+
+query T
+select 'x' ++((+(++"vc"))) from t1_unary_plus_op_string order by 1
+----
+xabc
+
+statement ok
+set quoted_identifier off
+
+query T
+select 'x' ++ [vc] from t1_unary_plus_op_string order by 1
+----
+xabc
+
+query T
+select 'x' ++ ((+(++[vc]))) from t1_unary_plus_op_string order by 1
+----
+xabc
+
+query T
+select 1 +-2
+----
+-1
+
+query T
+select 1 + -2
+----
+-1
+
+query T
+select 1 ++-2
+----
+-1
+
+query T
+select 1 + + -2
+----
+-1
+
+query T
+select 1 + ~2
+----
+-2
+
+query T
+select 1 ++~2
+----
+-2
+
+query T
+select 1 ++ ~2
+----
+-2
+
+query T
+select 1 ++++ (++++ 2) 
+----
+3
+
+query T
+select 1 ++++ (++++ ~2) 
+----
+-2
+
+query T
+select 1 ++++ (++++ -2) 
+----
+-1
+
+query T
+execute('select ((+''y'')) ')
+----
+y
+
+query T
+execute('select ''x''+++((+++(+++''y'')))')
+----
+xy
+
+query T
+execute('select ''x'' ++vc from t1_unary_plus_op_string order by 1')
+----
+xabc
+
+query T
+select  ~'y' 
+----
+NULL
+
+query T
+select 'x' + ~'y' 
+----
+NULL
+
+query T
+select 'x' ++ ~'y' 
+----
+NULL
+
+query T
+select  -'y' 
+----
+y
+
+query T
+select 'x' + -'y' 
+----
+xy
+
+query T
+select 'x' ++ -'y' 
+----
+xy
+
+statement ok
+drop procedure p1_unary_plus_op_string 
+
+statement ok
+drop function f1_unary_plus_op_string 
+
+statement ok
+drop view v1_unary_plus_op_string
+
+statement ok
+drop table t1_unary_plus_op_string
+

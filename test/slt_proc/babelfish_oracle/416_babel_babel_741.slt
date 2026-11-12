@@ -1,0 +1,132 @@
+# test/slt_proc/babelfish_oracle/416_babel_babel_741.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-741-vu-prepare.sql, test/babelfish/raw/BABEL-741-vu-verify.sql, test/babelfish/raw/BABEL-741-vu-cleanup.sql
+
+statement ok
+CREATE VIEW babel_3836_v1 as SELECT * FROM schema_name(schema_id('dbo'));
+
+statement ok
+CREATE FUNCTION babel_3836_f1() 
+RETURNS TABLE AS 
+RETURN (
+    SELECT * FROM schema_name(schema_id('dbo'))
+)
+
+statement ok
+CREATE PROCEDURE babel_3836_p1 AS SELECT * FROM schema_name(schema_id('dbo'));
+
+statement ok
+CREATE VIEW babel_3836_v2 as SELECT * FROM schema_name(schema_id());
+
+statement ok
+CREATE FUNCTION babel_3836_f2() 
+RETURNS TABLE AS 
+RETURN (
+    SELECT * FROM schema_name(schema_id())
+)
+
+statement ok
+CREATE PROCEDURE babel_3836_p2 AS SELECT * FROM schema_name(schema_id());
+
+query T
+SELECT schema_id('public')
+----
+1
+
+query T
+SELECT schema_id('pg_toast')
+----
+1
+
+query T
+SELECT schema_id(NULL)
+----
+1
+
+query T
+SELECT schema_id(1)
+----
+1
+
+query T
+SELECT schema_id('fake_schemaname')
+----
+1
+
+query T
+SELECT schema_id('')
+----
+1
+
+query T
+SELECT schema_name(schema_id())
+----
+dbo
+
+query T
+SELECT schema_name(schema_id('dbo'))
+----
+dbo
+
+query T
+SELECT schema_name(99)
+----
+dbo
+
+query T
+SELECT schema_name(2200)
+----
+dbo
+
+query T
+SELECT schema_name(-1)
+----
+dbo
+
+query T
+SELECT schema_name(0)
+----
+dbo
+
+query T
+SELECT schema_name(1)
+----
+dbo
+
+query T
+SELECT schema_name(123412341234)
+----
+dbo
+
+query T
+SELECT schema_name(NULL)
+----
+dbo
+
+query T
+SELECT schema_name('asdf')
+----
+dbo
+
+query T
+SELECT schema_name()
+----
+dbo
+
+statement ok
+DROP FUNCTION babel_3836_f1;
+
+statement ok
+DROP PROCEDURE babel_3836_p1;
+
+statement ok
+DROP VIEW babel_3836_v1;
+
+statement ok
+DROP FUNCTION babel_3836_f2;
+
+statement ok
+DROP PROCEDURE babel_3836_p2;
+
+statement ok
+DROP VIEW babel_3836_v2;
+

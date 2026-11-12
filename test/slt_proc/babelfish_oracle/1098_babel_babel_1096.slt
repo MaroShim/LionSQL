@@ -1,0 +1,43 @@
+# test/slt_proc/babelfish_oracle/1098_babel_babel_1096.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1096.sql
+
+statement ok
+CREATE TABLE babel_1096_t1 (a int)
+
+statement ok
+INSERT INTO babel_1096_t1 values (1);
+
+statement ok
+CREATE TABLE babel_1096_t2 (a int);
+
+statement ok
+CREATE PROCEDURE babel_1096_proc
+AS
+  INSERT INTO babel_1096_t2
+  SELECT * FROM babel_1096_t1
+  SELECT COUNT(*) FROM babel_1096_t2
+
+statement ok
+CREATE TABLE babel_956_t (a int, n int identity)
+
+statement ok
+CREATE PROCEDURE babel_956_proc
+AS
+  INSERT babel_956_t(a) SELECT 123
+  SELECT @@identity
+
+statement ok
+DROP PROCEDURE babel_1096_proc
+
+statement ok
+DROP TABLE babel_1096_t1
+
+statement ok
+DROP TABLE babel_1096_t2
+
+statement ok
+DROP PROCEDURE babel_956_proc
+
+statement ok
+DROP TABLE babel_956_t
+

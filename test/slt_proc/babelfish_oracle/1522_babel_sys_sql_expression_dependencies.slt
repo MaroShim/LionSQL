@@ -1,0 +1,37 @@
+# test/slt_proc/babelfish_oracle/1522_babel_sys_sql_expression_dependencies.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-sql_expression_dependencies-vu-prepare.sql, test/babelfish/raw/views/sys-sql_expression_dependencies-vu-verify.sql, test/babelfish/raw/views/sys-sql_expression_dependencies-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE VIEW sys_sql_expression_dependencies_vu_prepare_view AS
+SELECT * FROM sys.sql_expression_dependencies
+
+statement ok
+CREATE PROC sys_sql_expression_dependencies_vu_prepare_proc AS
+SELECT * FROM sys.sql_expression_dependencies
+
+statement ok
+CREATE FUNCTION sys_sql_expression_dependencies_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM sys.sql_expression_dependencies WHERE referencing_id= 1)
+END
+
+statement ok
+USE master
+
+statement ok
+USE master
+
+statement ok
+DROP VIEW sys_sql_expression_dependencies_vu_prepare_view
+
+statement ok
+DROP PROC sys_sql_expression_dependencies_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_sql_expression_dependencies_vu_prepare_func
+

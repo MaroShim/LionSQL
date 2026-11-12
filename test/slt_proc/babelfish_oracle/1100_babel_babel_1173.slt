@@ -1,0 +1,16 @@
+# test/slt_proc/babelfish_oracle/1100_babel_babel_1173.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1173.sql
+
+statement ok
+CREATE PROCEDURE proc_babel_1173
+(
+	@p INT NULL
+)
+AS PRINT 'helloworld'
+
+statement ok
+EXEC proc_babel_1173 1
+
+statement ok
+DROP PROCEDURE proc_babel_1173
+

@@ -1,0 +1,126 @@
+# test/slt_proc/babelfish_oracle/1224_babel_babel_3702.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/openjson/BABEL-3702-vu-prepare.sql, test/babelfish/raw/openjson/BABEL-3702-vu-verify.sql
+
+statement ok
+CREATE PROCEDURE BABEL_3702_vu_prepare_p7 as (select * from openjson(N'{"a":"long string"}') with (a nvarchar(5)));
+
+statement ok
+CREATE PROCEDURE BABEL_3702_vu_prepare_p9 as (SELECT * FROM OPENJSON(N'{"a":1}') WITH (obj nvarchar(20) '$' AS JSON));
+
+statement ok
+create table fdefs (id int, fname nvarchar(20))
+insert into fdefs values (1, 'alpha'),(2, 'bravo')
+create table ftypes (id int, ftype nvarchar(20))
+insert into ftypes values (1, 'type1'),(3, 'type3')
+
+statement ok
+CREATE PROCEDURE BABEL_3702_vu_prepare_p13
+AS
+BEGIN
+    DECLARE @json NVARCHAR(4000) = N'{ 
+        "pets" : {
+                "cats" : [
+                { "id" : 1, "name" : "Fluffy", "sex" : "Female" },
+                { "id" : 2, "name" : "Long Tail", "sex" : "Female" },
+                { "id" : 3, "name" : "Scratch", "sex" : "Male" }
+            ],
+                "dogs" : [
+                { "name" : "Fetch", "sex" : "Male" },
+                { "name" : "Fluffy", "sex" : "Male" },
+                { "name" : "Wag", "sex" : "Female" }
+            ]
+        }
+    }';
+    SELECT * FROM OPENJSON(@json, '$.pets.cats[1]')
+END;
+
+statement ok
+CREATE PROCEDURE BABEL_3702_vu_prepare_p17
+AS
+BEGIN
+    DECLARE @JSON NVARCHAR(MAX) = N'[
+        {
+            "OrderNumber":"SO43659",
+            "OrderDate":"2011-05-31T00:00:00",
+            "AccountNumber":"AW29825",
+            "ItemPrice":2024.9940,
+            "ItemQuantity":1
+        },
+        {
+            "OrderNumber":"SO43661",
+            "OrderDate":"2011-06-01T00:00:00",
+            "AccountNumber":"AW73565",
+            "ItemPrice":2024.9940,
+            "ItemQuantity":3
+        }
+        ]'
+    SELECT root.[key] AS [Order],TheValues.[key], TheValues.[value]
+    FROM OPENJSON ( @JSON ) AS root
+    CROSS APPLY OPENJSON ( root.value) AS TheValues
+END;
+
+statement ok
+CREATE TABLE p18_data (
+   CustomerID int,
+   City nvarchar(50),
+   Product nvarchar(max)
+)
+INSERT INTO p18_data
+   (CustomerID, City, Product)
+VALUES
+   (1, N'Delhi', N'[{"Products": [{"Id": "1", "Name": "TV"}, {"Id": "2", "Name": "Laptop"}]}]'),
+   (2, N'Bamgalore', N'[{"Products": [{"Id": "1", "Name": "TV"}, {"Id": "2", "Name": "Laptop"}, {"Id": "3", "Name": "Mobile"}]}]')
+
+statement ok
+CREATE PROCEDURE BABEL_3702_vu_prepare_p21
+AS
+BEGIN
+    DECLARE @json_text NVARCHAR(MAX)
+    SET @json_text = N'
+        {
+            "name": "Spider-Man",
+            "vitals": {
+                "species": "Human",
+                "height": {
+                    "measure": 178,
+                    "unit": "cm"
+                }
+            },
+            "current_team": null,
+            "aliases": ["Bag-Man","Black Marvel","Peter Palmer"],
+            "is_good": true,
+            "created": 1962
+        }
+    '
+    SELECT * FROM OPENJSON(@json_text)
+    ORDER BY [type]
+END;
+
+statement ok
+DROP PROCEDURE BABEL_3702_vu_prepare_p7
+
+statement ok
+DROP PROCEDURE BABEL_3702_vu_prepare_p9
+
+statement ok
+declare @json nvarchar(max) = '{"udfs":[{"name":"alpha","value":"value1"},{"name":"bravo","value":"value2"}]}'
+exec BABEL_3702_vu_prepare_p12 @json
+
+statement ok
+drop table fdefs
+drop table ftypes
+drop procedure BABEL_3702_vu_prepare_p12
+
+statement ok
+DROP PROCEDURE BABEL_3702_vu_prepare_p13
+
+statement ok
+DROP PROCEDURE BABEL_3702_vu_prepare_p17
+
+statement ok
+drop table p18_data
+DROP PROCEDURE BABEL_3702_vu_prepare_p18
+
+statement ok
+DROP PROCEDURE BABEL_3702_vu_prepare_p21
+

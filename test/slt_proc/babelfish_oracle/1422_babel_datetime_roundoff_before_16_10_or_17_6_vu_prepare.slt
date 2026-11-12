@@ -1,0 +1,134 @@
+# test/slt_proc/babelfish_oracle/1422_babel_datetime_roundoff_before_16_10_or_17_6_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/datatypes/datetime_roundoff-before-16_10-or-17_6-vu-prepare.sql
+
+statement ok
+CREATE TABLE datetime_storage_test (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    test_name VARCHAR(100),
+    dt_value DATETIME,
+    description VARCHAR(200)
+);
+
+statement ok
+INSERT INTO datetime_storage_test (test_name, dt_value, description) VALUES
+('basic_000', '2024-01-15 10:30:45.000', 'Already at .000 boundary'),
+('basic_001', '2024-01-15 10:30:45.001', 'Should round to .000'),
+('basic_002', '2024-01-15 10:30:45.002', 'Should round to .003'),
+('basic_003', '2024-01-15 10:30:45.003', 'Already at .003 boundary'),
+('basic_004', '2024-01-15 10:30:45.004', 'Should round to .003'),
+('basic_005', '2024-01-15 10:30:45.005', 'Should round to .007'),
+('basic_006', '2024-01-15 10:30:45.006', 'Should round to .007'),
+('basic_007', '2024-01-15 10:30:45.007', 'Already at .007 boundary'),
+('basic_008', '2024-01-15 10:30:45.008', 'Should round to .007'),
+('basic_009', '2024-01-15 10:30:45.009', 'Should round to .010');
+
+statement ok
+INSERT INTO datetime_storage_test (test_name, dt_value, description) VALUES
+('edge_second_rollover', '2024-01-15 10:30:59.999', 'Should rollover to next second'),
+('edge_minute_rollover', '2024-01-15 10:59:59.999', 'Should rollover to next minute'),
+('edge_hour_rollover', '2024-01-15 23:59:59.999', 'Should rollover to next hour'),
+('edge_day_rollover', '2024-01-31 23:59:59.999', 'Should rollover to next day');
+
+statement ok
+INSERT INTO datetime_storage_test (test_name, dt_value, description) VALUES
+('business_timestamp', '2024-03-12 09:15:30.123', 'Typical business timestamp'),
+('log_entry', '2024-03-12 14:22:18.456', 'Log entry timestamp'),
+('transaction_time', '2024-03-12 16:45:22.789', 'Transaction timestamp'),
+('audit_time', '2024-03-12 11:33:44.234', 'Audit trail timestamp');
+
+statement ok
+CREATE TABLE datetime_comparison_test (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    event_time DATETIME,
+    event_type VARCHAR(50)
+);
+
+statement ok
+INSERT INTO datetime_comparison_test (event_time, event_type) VALUES
+('2024-01-15 10:30:45.149', 'login_attempt'),
+('2024-01-15 10:30:45.150', 'login_success'),
+('2024-01-15 10:30:45.151', 'session_start'),
+('2024-01-15 10:30:45.152', 'page_load');
+
+statement ok
+CREATE TABLE datetime_aggregation_test (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    process_time DATETIME,
+    amount DECIMAL(10,2),
+    status VARCHAR(20)
+);
+
+statement ok
+INSERT INTO datetime_aggregation_test (process_time, amount, status) VALUES
+('2024-01-15 10:30:45.001', 100.00, 'completed'),
+('2024-01-15 10:30:45.002', 150.00, 'completed'),
+('2024-01-15 10:30:45.003', 200.00, 'completed'),
+('2024-01-15 10:30:45.004', 75.00, 'pending');
+
+statement ok
+CREATE TABLE datetime_index_test (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    created_at DATETIME,
+    data VARCHAR(100)
+);
+
+statement ok
+CREATE INDEX IX_datetime_index_test_created_at ON datetime_index_test(created_at);
+
+statement ok
+INSERT INTO datetime_index_test (created_at, data) VALUES
+('2024-01-15 10:30:45.001', 'record1'),
+('2024-01-15 10:30:45.002', 'record2'),
+('2024-01-15 10:30:45.003', 'record3'),
+('2024-01-15 10:30:45.004', 'record4'),
+('2024-01-15 10:30:45.005', 'record5');
+
+statement ok
+CREATE PROCEDURE test_datetime_parameter
+    @input_datetime DATETIME
+AS
+BEGIN
+    SELECT 
+        @input_datetime as input_value,
+        CAST(@input_datetime AS VARCHAR(30)) as string_representation;
+END;
+
+statement ok
+CREATE FUNCTION get_rounded_datetime(@dt DATETIME)
+RETURNS DATETIME
+AS
+BEGIN
+    RETURN @dt;
+END;
+
+statement ok
+CREATE VIEW datetime_view AS
+SELECT 
+    id,
+    dt_value,
+    CAST(dt_value AS VARCHAR(30)) as dt_string
+FROM datetime_storage_test
+WHERE dt_value > '2024-01-15 10:30:45.000';
+
+statement ok
+CREATE TABLE datetime_test ( id INT IDENTITY(1,1) PRIMARY KEY, date_time1 datetime NOT NULL, date_time2 datetime NOT NULL);
+INSERT INTO datetime_test (date_time1, date_time2)  VALUES ('2014-03-12 12:00:34.466', '2010-03-04 12:55:41.149');
+INSERT INTO datetime_test (date_time1, date_time2)  VALUES ('2014-03-12 12:00:34.467', '2010-03-04 12:55:41.150');
+
+statement ok
+select date_time1, date_time2 from datetime_test where date_time1 = '2014-03-12 12:00:34.467'
+
+statement ok
+select date_time1, date_time2 from datetime_test where date_time1 = '2014-03-12 12:00:34.466'
+
+query T
+select cast('2014-03-12 12:00:34.462' as datetime) - cast('2014-03-12 12:00:34.464' as datetime)
+----
+0
+
+statement ok
+CREATE TABLE datetime_unique_index(datetime_unique_index_col datetime PRIMARY KEY);
+
+statement ok
+INSERT INTO datetime_unique_index VALUES('2014-03-12 12:00:34.466');
+

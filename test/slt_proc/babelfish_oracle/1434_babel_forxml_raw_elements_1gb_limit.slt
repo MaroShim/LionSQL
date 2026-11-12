@@ -1,0 +1,18 @@
+# test/slt_proc/babelfish_oracle/1434_babel_forxml_raw_elements_1gb_limit.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/forxml/forxml-raw-elements-1gb-limit-vu-prepare.sql, test/babelfish/raw/forxml/forxml-raw-elements-1gb-limit-vu-verify.sql, test/babelfish/raw/forxml/forxml-raw-elements-1gb-limit-vu-cleanup.sql
+
+statement ok
+CREATE TABLE xml_limit_test (c1 VARCHAR(MAX));
+
+statement ok
+INSERT INTO xml_limit_test SELECT REPLICATE(CAST('X' AS VARCHAR(MAX)), 400000000);
+
+statement ok
+INSERT INTO xml_limit_test SELECT REPLICATE(CAST('X' AS VARCHAR(MAX)), 400000000);
+
+statement ok
+INSERT INTO xml_limit_test SELECT REPLICATE(CAST('X' AS VARCHAR(MAX)), 400000000);
+
+statement ok
+DROP TABLE xml_limit_test;
+

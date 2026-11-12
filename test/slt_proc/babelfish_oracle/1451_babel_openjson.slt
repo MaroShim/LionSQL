@@ -1,0 +1,59 @@
+# test/slt_proc/babelfish_oracle/1451_babel_openjson.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/openjson/openjson-vu-prepare.sql, test/babelfish/raw/openjson/openjson-vu-verify.sql
+
+statement ok
+CREATE VIEW BABEL_3702_vu_prepare_v1 as (select * from OPENJSON(N'{"a":null,"b":"a","c":1,"d":true,"e":[1,2],"f":{"name":"John"}}'));
+
+statement ok
+CREATE PROCEDURE BABEL_3702_vu_prepare_p1 as (select * from OPENJSON(N'{"a":null,"b":"a","c":1,"d":true,"e":[1,2],"f":{"name":"John"}}'));
+
+statement ok
+CREATE PROCEDURE BABEL_3702_vu_prepare_p2
+AS
+BEGIN
+DECLARE @jsonvar NVARCHAR(2048) = N'{
+        "String_value": "John",
+        "DoublePrecisionFloatingPoint_value": 45,
+        "DoublePrecisionFloatingPoint_value": 2.3456,
+        "BooleanTrue_value": true,
+        "BooleanFalse_value": false,
+        "Null_value": null,
+        "Array_value": ["a","r","r","a","y"],
+        "Object_value": {"obj":"ect"}
+    }';
+    SELECT * FROM OpenJson(@jsonvar)
+END;
+
+statement ok
+CREATE VIEW BABEL_3702_vu_prepare_v3 as (SELECT [key], value FROM OPENJSON(N'{"path":{"to":{"sub-object":["en-GB", "en-UK","de-AT","es-AR","sr-Cyrl"]}}}','$.path.to."sub-object"'));
+
+statement ok
+CREATE PROCEDURE BABEL_3702_vu_prepare_p3 as (SELECT [key], value FROM OPENJSON(N'{"path":{"to":{"sub-object":["en-GB", "en-UK","de-AT","es-AR","sr-Cyrl"]}}}','$.path.to."sub-object"'));
+
+statement ok
+CREATE PROCEDURE BABEL_3702_vu_prepare_p4 as (select * from openjson(N'{"obj":{"a":1}}', 'lax $.a'));
+
+statement ok
+CREATE PROCEDURE BABEL_3702_vu_prepare_p5 as (select * from openjson(N'{"obj":{"a":1}}', 'strict $.a'));
+
+statement ok
+DROP VIEW BABEL_3702_vu_prepare_v1
+
+statement ok
+DROP PROCEDURE BABEL_3702_vu_prepare_p1
+
+statement ok
+DROP PROCEDURE BABEL_3702_vu_prepare_p2
+
+statement ok
+DROP VIEW BABEL_3702_vu_prepare_v3
+
+statement ok
+DROP PROCEDURE BABEL_3702_vu_prepare_p3
+
+statement ok
+DROP PROCEDURE BABEL_3702_vu_prepare_p4
+
+statement ok
+DROP PROCEDURE BABEL_3702_vu_prepare_p5
+

@@ -1,0 +1,23 @@
+# test/slt_proc/babelfish_oracle/1104_babel_babel_1243.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/triggers/BABEL-1243-vu-prepare.sql, test/babelfish/raw/triggers/BABEL-1243-vu-verify.sql, test/babelfish/raw/triggers/BABEL-1243-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_1243_vu_prepare_employeeData(
+     ID INT IDENTITY (1,1) PRIMARY KEY,Emp_First_name VARCHAR (50),Emp_Last_name VARCHAR (50),Emp_Salary INT)
+
+statement ok
+CREATE TRIGGER babel_1243_vu_prepare_updEmployeeDatas ON babel_1243_vu_prepare_employeeData  AFTER UPDATE,INSERT AS   
+    select * from inserted;
+
+statement ok
+insert into babel_1243_vu_prepare_employeeData values ('a','b',234);
+
+statement ok
+update babel_1243_vu_prepare_employeeData set Emp_Last_name = 'ccc' where id = 1;
+
+statement ok
+drop trigger babel_1243_vu_prepare_updEmployeeDatas
+
+statement ok
+drop table babel_1243_vu_prepare_employeeData
+

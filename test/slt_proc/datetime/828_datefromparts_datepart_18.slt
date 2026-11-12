@@ -1,0 +1,26 @@
+# test/slt_proc/datetime/828_datefromparts_datepart_18.slt
+# T-SQL DATEFROMPARTS, DATEPART(quarter/dayofyear), DATEDIFF month/year (18)
+
+query TII
+SELECT CAST(DATEFROMPARTS(2022, 6, 5) AS VARCHAR(10)), DATEPART(quarter, '2022-06-05'), DATEPART(dayofyear, '2022-06-05');
+----
+2022-06-05 2 156
+
+query III
+SELECT DATEDIFF(year, '2015-01-01', '2022-06-05'), DATEDIFF(month, '2022-01-01', '2022-06-05'), IIF('2022-06-05' >= '2020-01-01', 1, 0);
+----
+7 5 1
+
+statement ok
+CREATE PROCEDURE sp_dt_check_828 @dt VARCHAR(20), @q INT OUTPUT
+AS
+BEGIN
+    SET @q = DATEPART(quarter, @dt);
+    SELECT YEAR(@dt), MONTH(@dt), DAY(@dt), @q;
+END;
+
+query IIII
+DECLARE @q_out INT;
+EXEC sp_dt_check_828 '2022-06-05', @q_out OUTPUT;
+----
+2022 6 5 2

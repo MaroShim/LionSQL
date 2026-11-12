@@ -1,0 +1,54 @@
+# test/slt_proc/babelfish_oracle/528_babel_babel_2934.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2934-vu-prepare.sql, test/babelfish/raw/BABEL-2934-vu-verify.sql
+
+statement ok
+CREATE TABLE BABEL_2934_vu_1 (c TIME(7) NULL, d TIME(7) NULL)
+
+statement ok
+INSERT BABEL_2934_vu_1 VALUES ('00:59:59.9999123' , NULL)
+
+statement ok
+INSERT BABEL_2934_vu_1 VALUES ('00:00:01.0000120' , NULL)
+
+statement ok
+update BABEL_2934_vu_1 set d = dateadd(ns, 300, c)
+
+statement ok
+CREATE TABLE BABEL_2934_vu_2 (c DATETIME2(7) NULL, d DATETIME2(7) NULL)
+
+statement ok
+update BABEL_2934_vu_2 set d = dateadd(ns, 300, c)
+
+statement ok
+CREATE TABLE BABEL_2934_vu_3 (c DATETIMEOFFSET(7) NULL, d DATETIMEOFFSET(7) NULL)
+
+statement ok
+update BABEL_2934_vu_3 set d = dateadd(ns, 300, c)
+
+statement ok
+CREATE VIEW BABEL_2934_vu_v1 as select cast('12:15:04.1234567' as TIME(7))
+
+query TTTT
+select c, d, convert(varchar(30), c, 109) as c2, convert(varchar(30), d, 109) as d2 from BABEL_2934_vu_1
+----
+00:59:59 NULL 00:59:59 NULL
+00:00:01 NULL 00:00:01 NULL
+
+statement ok
+drop table BABEL_2934_vu_1
+
+statement ok
+select c, d, convert(varchar(30), c, 109) as c2, convert(varchar(30), d, 109) as d2 from BABEL_2934_vu_2
+
+statement ok
+drop table BABEL_2934_vu_2
+
+statement ok
+select c, d, convert(varchar(30), c, 109) as c2, convert(varchar(30), d, 109) as d2 from BABEL_2934_vu_3
+
+statement ok
+drop table BABEL_2934_vu_3
+
+statement ok
+drop view BABEL_2934_vu_v1
+

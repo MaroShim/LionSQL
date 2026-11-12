@@ -1,0 +1,31 @@
+# test/slt_proc/babelfish_oracle/1482_babel_sys_columns_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-columns-dep-vu-prepare.sql, test/babelfish/raw/views/sys-columns-dep-vu-verify.sql, test/babelfish/raw/views/sys-columns-dep-vu-cleanup.sql
+
+statement ok
+create table sys_columns_dep_vu_prepare_t1(a int, b float, c bigint, d numeric, e smallint, f tinyint, g decimal, h money, i smallmoney);
+
+statement ok
+create procedure sys_columns_dep_vu_prepare_p1 as
+    select name, column_id, precision, scale from sys.columns where object_id=OBJECT_ID('sys_columns_dep_vu_prepare_t1') order by column_id;
+
+statement ok
+create view sys_columns_dep_vu_prepare_v1 as
+    select name, column_id, precision, scale from sys.columns where object_id=OBJECT_ID('sys_columns_dep_vu_prepare_t1') order by column_id;
+
+statement ok
+create function sys_columns_dep_vu_prepare_f1()
+returns int 
+as
+begin
+    return (select count(*) from sys.columns where object_id=OBJECT_ID('sys_columns_dep_vu_prepare_t1'));
+end
+
+statement ok
+select * from sys_columns_dep_vu_prepare_v1
+
+statement ok
+drop function if exists sys_columns_dep_vu_prepare_f1
+drop procedure if exists sys_columns_dep_vu_prepare_p1
+drop view if exists sys_columns_dep_vu_prepare_v1
+drop table if exists sys_columns_dep_vu_prepare_t1
+

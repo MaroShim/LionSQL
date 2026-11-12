@@ -1,0 +1,39 @@
+# test/slt_proc/babelfish_oracle/306_babel_babel_1994_char.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/sql_variant/BABEL-1994-CHAR-vu-prepare.sql, test/babelfish/raw/sql_variant/BABEL-1994-CHAR-vu-verify.sql, test/babelfish/raw/sql_variant/BABEL-1994-CHAR-vu-cleanup.sql
+
+statement ok
+drop table if exists babel_1994_vu_prepare_t1;
+
+statement ok
+create table babel_1994_vu_prepare_t1(
+    c5nn char(5) not null,
+    c5n character(5) null
+);
+
+statement ok
+insert into babel_1994_vu_prepare_t1 values('ab ', 'ab ');
+create index babel_1994_vu_prepare_idx on babel_1994_vu_prepare_t1(c5nn);
+
+statement ok
+drop table if exists babel_1994_vu_prepare_t2;
+
+statement ok
+CREATE TABLE babel_1994_vu_prepare_t2 (c1 CHAR);
+INSERT INTO babel_1994_vu_prepare_t2 VALUES ('A');
+
+query T
+SELECT c1 from babel_1994_vu_prepare_t2;
+----
+A
+
+query T
+select datalength(cast('123 ' as char));
+----
+4
+
+statement ok
+drop table babel_1994_vu_prepare_t1;
+
+statement ok
+drop table babel_1994_vu_prepare_t2;
+

@@ -1,0 +1,151 @@
+# test/slt_proc/babelfish_oracle/390_babel_babel_4264.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4264.sql
+
+statement ok
+create table babel4264(name1 varchar(42), flag1 bit)
+
+statement ok
+insert into babel4264 values ('true', 1)
+insert into babel4264 values ('false', 0)
+
+query TT
+select * from babel4264 where flag1 = CAST('true' as VARCHAR(20))
+----
+true true
+
+query TT
+select * from babel4264 where CAST('true' as VARCHAR(20)) = flag1
+----
+true true
+
+statement ok
+select * from babel4264 where -flag1 = CAST('true' as VARCHAR(20))
+
+statement ok
+select * from babel4264 where CAST('true' as VARCHAR(20)) = ~flag1
+
+statement ok
+set babelfish_showplan_all on
+
+query TT
+select * from babel4264 where flag1 = CAST('true' as VARCHAR(20))
+----
+true true
+
+statement ok
+set babelfish_showplan_all off
+
+statement ok
+drop table babel4264
+
+statement ok
+create table babel4264(date1 date)
+
+statement ok
+set babelfish_showplan_all on
+
+statement ok
+SELECT * from babel4264 where date1 = '1955-12-13 12:43:10'
+
+statement ok
+SELECT * from babel4264 where date1 = cast('1955-12-13 12:43:10' as datetime2)
+
+statement ok
+SELECT * from babel4264 where date1 = cast('1955-12-13 12:43:10' as smalldatetime)
+
+statement ok
+set babelfish_showplan_all off
+
+statement ok
+drop table babel4264
+
+statement ok
+create table babel4264(dollars money)
+
+statement ok
+set babelfish_showplan_all on
+
+statement ok
+SELECT * from babel4264 where dollars = 10
+
+statement ok
+SELECT * from babel4264 where dollars = 10.0
+
+statement ok
+SELECT * from babel4264 where dollars = 2147483650
+
+statement ok
+SELECT * from babel4264 where dollars = '10.12'
+
+statement ok
+SELECT * from babel4264 where dollars = '10.123512341234'
+
+statement ok
+SELECT * from babel4264 where dollars = cast('10' as varchar(30))
+
+statement ok
+set babelfish_showplan_all off
+
+statement ok
+drop table babel4264
+
+query T
+SELECT (123 + (-0x42));
+----
+1230x42
+
+query T
+SELECT ((-0x42) + 123);
+----
+0x42123
+
+query T
+SELECT (123 - 0x42);
+----
+123
+
+query T
+SELECT (0x42 - 123);
+----
+-123
+
+query T
+SELECT (2147483640 + 0x10)
+----
+21474836400x10
+
+query T
+SELECT (0x10 + 2147483640)
+----
+0x102147483640
+
+query T
+SELECT (cast(2147483640 as bigint) + 0x10)
+----
+21474836400x10
+
+query T
+SELECT (0x10 + cast(2147483640 as bigint))
+----
+0x102147483640
+
+query T
+SELECT (-2147483640 - 0x10)
+----
+-2147483640
+
+query T
+SELECT (-0x10 - 2147483640)
+----
+-2147483640
+
+query T
+SELECT (cast(-2147483640 as bigint) - 0x10)
+----
+-2147483640
+
+query T
+SELECT (-0x10 - cast(2147483640 as bigint))
+----
+-2147483640
+

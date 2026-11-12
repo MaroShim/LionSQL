@@ -1,0 +1,92 @@
+# test/slt_proc/babelfish_oracle/1556_babel_sys_sysusers_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ownership/sys_sysusers_dep-vu-prepare.sql, test/babelfish/raw/ownership/sys_sysusers_dep-vu-verify.sql, test/babelfish/raw/ownership/sys_sysusers_dep-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sysusersdb
+
+statement ok
+USE sysusersdb
+
+statement ok
+CREATE LOGIN sysusers_dep_vu_prepare_login1 WITH PASSWORD = '123'
+
+statement ok
+CREATE USER sysusers_dep_vu_prepare_user1 FOR LOGIN sysusers_dep_vu_prepare_login1
+
+statement ok
+CREATE LOGIN sysusers_dep_vu_prepare_login2 WITH PASSWORD = '123'
+
+statement ok
+CREATE USER sysusers_dep_vu_prepare_user2 FOR LOGIN sysusers_dep_vu_prepare_login2;
+
+statement ok
+CREATE VIEW sysusers_dep_vu_prepare_view
+AS
+SELECT name, hasdbaccess, islogin, isntname, issqluser, issqlrole
+FROM sys.sysusers
+WHERE name LIKE '%sysusers_dep_vu_prepare_%' OR name = 'dbo' or name = 'guest'
+ORDER BY name offset 0 rows
+
+statement ok
+CREATE PROC sysusers_dep_vu_prepare_proc
+AS
+SELECT name, hasdbaccess, islogin, isntname, issqluser, issqlrole
+FROM sys.sysusers
+WHERE name LIKE '%sysusers_dep_vu_prepare_%' OR name = 'dbo' or name = 'guest'
+ORDER BY name
+
+statement ok
+CREATE FUNCTION sysusers_dep_vu_prepare_func()
+RETURNS TABLE
+AS
+RETURN
+    SELECT name, hasdbaccess, islogin, isntname, issqluser, issqlrole
+    FROM sys.sysusers
+    WHERE name LIKE '%sysusers_dep_vu_prepare_%' OR name = 'dbo' or name = 'guest'
+    ORDER BY name offset 0 rows
+
+statement ok
+USE sysusersdb
+
+statement ok
+GRANT CONNECT TO guest
+
+statement ok
+REVOKE CONNECT FROM guest
+
+statement ok
+REVOKE CONNECT FROM sysusers_dep_vu_prepare_user1
+
+statement ok
+GRANT CONNECT TO sysusers_dep_vu_prepare_user1
+
+statement ok
+USE master
+
+statement ok
+USE sysusersdb
+
+statement ok
+DROP VIEW sysusers_dep_vu_prepare_view
+
+statement ok
+DROP PROC sysusers_dep_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sysusers_dep_vu_prepare_func
+
+statement ok
+DROP USER sysusers_dep_vu_prepare_user1
+
+statement ok
+DROP USER sysusers_dep_vu_prepare_user2
+
+statement ok
+DROP LOGIN sysusers_dep_vu_prepare_login1
+
+statement ok
+DROP LOGIN sysusers_dep_vu_prepare_login2
+
+statement ok
+USE master
+

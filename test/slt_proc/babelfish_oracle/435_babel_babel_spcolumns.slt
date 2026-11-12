@@ -1,0 +1,77 @@
+# test/slt_proc/babelfish_oracle/435_babel_babel_spcolumns.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SPCOLUMNS-vu-prepare.sql, test/babelfish/raw/BABEL-SPCOLUMNS-vu-verify.sql, test/babelfish/raw/BABEL-SPCOLUMNS-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE babel_sp_columns_vu_prepare_mydb1
+
+statement ok
+USE babel_sp_columns_vu_prepare_mydb1
+
+statement ok
+CREATE table babel_sp_columns_vu_prepare_t_time (a time)
+
+statement ok
+CREATE table babel_sp_columns_vu_prepare_t_text(a text)
+
+statement ok
+CREATE table babel_sp_columns_vu_prepare_t_int (a int)
+
+statement ok
+CREATE table babel_sp_columns_vu_prepare_t_money(a money)
+
+statement ok
+CREATE table babel_sp_columns_vu_prepare_bytea(a bytea, b image)
+
+statement ok
+USE babel_sp_columns_vu_prepare_mydb1
+
+statement ok
+EXEC sp_columns
+
+query TTTTTTTTTTTTTTTTTTT
+EXEC sp_columns @table_name = 'babel_sp_columns_vu_prepare_t_time'
+----
+babel_sp_columns_vu_prepare_mydb1 dbo babel_sp_columns_vu_prepare_t_time a -154 time 16 5 7 NULL 1 NULL NULL -154 NULL NULL 1 YES 41
+babel_sp_columns_vu_prepare_mydb1 dbo babel_sp_columns_vu_prepare_t_time _row_id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 2 NO 56
+
+query TTTTTTTTTTTTTTTTTTT
+exec sp_columns @table_name = 'babel_sp_columns_vu_prepare_t_text'
+----
+babel_sp_columns_vu_prepare_mydb1 dbo babel_sp_columns_vu_prepare_t_text a 12 varchar 255 255 NULL NULL 1 NULL NULL 12 NULL 255 1 YES 39
+babel_sp_columns_vu_prepare_mydb1 dbo babel_sp_columns_vu_prepare_t_text _row_id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 2 NO 56
+
+query TTTTTTTTTTTTTTTTTTT
+exec sp_columns @table_name = 'babel_sp_columns_vu_prepare_t_int'
+----
+babel_sp_columns_vu_prepare_mydb1 dbo babel_sp_columns_vu_prepare_t_int a 4 int 10 4 0 10 1 NULL NULL 4 NULL NULL 1 YES 56
+babel_sp_columns_vu_prepare_mydb1 dbo babel_sp_columns_vu_prepare_t_int _row_id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 2 NO 56
+
+query TTTTTTTTTTTTTTTTTTT
+exec sp_columns @table_name = 'babel_sp_columns_vu_prepare_t_money'
+----
+babel_sp_columns_vu_prepare_mydb1 dbo babel_sp_columns_vu_prepare_t_money a 3 decimal 19 9 4 10 1 NULL NULL 3 NULL NULL 1 YES 108
+babel_sp_columns_vu_prepare_mydb1 dbo babel_sp_columns_vu_prepare_t_money _row_id 4 int 10 4 0 10 0 NULL NULL 4 NULL NULL 2 NO 56
+
+query TTTTTTTTTTTTTTTTTTT
+EXEC sp_columns @table_name = 'babel_sp_columns_vu_prepare_t_int', @table_owner = 'dbo', @table_qualifier = 'babel_sp_columns_vu_prepare_mydb1', @column_name = 'a'
+----
+babel_sp_columns_vu_prepare_mydb1 dbo babel_sp_columns_vu_prepare_t_int a 4 int 10 4 0 10 1 NULL NULL 4 NULL NULL 1 YES 56
+
+query TTTTTTTTTTTTTTTTTTT
+EXEC sp_columns 'babel_sp_columns_vu_prepare_t_int', 'dbo', 'babel_sp_columns_vu_prepare_mydb1', 'a'
+----
+babel_sp_columns_vu_prepare_mydb1 dbo babel_sp_columns_vu_prepare_t_int a 4 int 10 4 0 10 1 NULL NULL 4 NULL NULL 1 YES 56
+
+statement ok
+USE babel_sp_columns_vu_prepare_mydb1
+
+statement ok
+drop table babel_sp_columns_vu_prepare_t_int
+drop table babel_sp_columns_vu_prepare_t_text
+drop table babel_sp_columns_vu_prepare_t_time
+drop table babel_sp_columns_vu_prepare_t_money
+drop table babel_sp_columns_vu_prepare_bytea
+
+statement ok
+USE master
+

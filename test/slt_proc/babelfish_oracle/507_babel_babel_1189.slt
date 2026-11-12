@@ -1,0 +1,21 @@
+# test/slt_proc/babelfish_oracle/507_babel_babel_1189.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/triggers/BABEL-1189-vu-prepare.sql, test/babelfish/raw/triggers/BABEL-1189-vu-verify.sql, test/babelfish/raw/triggers/BABEL-1189-vu-cleanup.sql
+
+statement ok
+create table babel_1189_vu_prepare_t1(a int);
+
+statement ok
+create table babel_1189_vu_prepare_t2(a int);
+
+statement ok
+insert babel_1189_vu_prepare_t1 values(1);
+
+statement ok
+insert babel_1189_vu_prepare_t2 values(1);
+
+query T
+select * from babel_1189_vu_prepare_t1;
+select * from babel_1189_vu_prepare_t2;
+----
+1
+

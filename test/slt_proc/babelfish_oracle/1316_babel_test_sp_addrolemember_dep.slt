@@ -1,0 +1,43 @@
+# test/slt_proc/babelfish_oracle/1316_babel_test_sp_addrolemember_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_addrolemember-dep-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_addrolemember-dep-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_addrolemember-dep-vu-cleanup.sql
+
+statement ok
+CREATE PROC test_sp_addrolemember_proc @rolename AS sys.SYSNAME, @membername AS sys.SYSNAME
+AS
+BEGIN
+	EXEC sp_addrolemember @rolename, @membername;
+END
+
+statement ok
+CREATE ROLE sp_addrolemember_role1
+
+statement ok
+CREATE ROLE sp_addrolemember_role2
+
+statement ok
+CREATE ROLE sp_addrolemember_role3
+
+statement ok
+CREATE ROLE sp_addrolemember_role4
+
+statement ok
+CREATE ROLE sp_addrolemember_dummy
+
+statement ok
+DROP ROLE sp_addrolemember_role4
+
+statement ok
+DROP ROLE sp_addrolemember_role3
+
+statement ok
+DROP ROLE sp_addrolemember_role2
+
+statement ok
+DROP ROLE sp_addrolemember_dummy
+
+statement ok
+DROP ROLE sp_addrolemember_role1
+
+statement ok
+DROP PROC test_sp_addrolemember_proc
+

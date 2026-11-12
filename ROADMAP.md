@@ -98,7 +98,7 @@ To tag the official **LionSQL 1.0 / v1.0.0 LTS** release, every candidate build 
     ┌─────────────┬─────────────┬───────────────┴───────────────┬─────────────┬─────────────┐
     ▼             ▼             ▼                               ▼             ▼             ▼
 [ Gate 1 ]    [ Gate 2 ]    [ Gate 3 ]                      [ Gate 4 ]    [ Gate 5 ]    [ Gate 6 ]
-Core Unit &   13-Domain     TPC-C Extreme                   SQLLogicTest  T-SQL 14-     SIGKILL Crash
+Core Unit &   13-Domain     TPC-C Extreme                   SQLLogicTest  T-SQL 3,000   SIGKILL Crash
 100k TPS      E2E Smoke     Load Benchmark                  409k Oracle   Proc Suites   & Soak Leak
 (23 pkgs OK)  (Dual Engine) (>700k tpmC)                    (90 files OK) (100% PASS)   (D1~D4 / 0 FDs)
 ```
@@ -116,9 +116,9 @@ Core Unit &   13-Domain     TPC-C Extreme                   SQLLogicTest  T-SQL 
 4. **Gate 4: SQLLogicTest Relational Oracle (409,194 Queries, 100% Conformance)**:
    - Executes SQLite/PostgreSQL SQLLogicTest standard test files (`bin/sqllogictest test/slt/core/`).
    - 90 files and 409,194 queries pass with 100% identical row sets and zero syntax or type coercion errors.
-5. **Gate 5: T-SQL Stored Procedure 30-Suite Convergence (100% PASS)**:
-   - Executes `test/slt_proc/` covering Microsoft SQL Server procedural grammar:
-   - Variables (`@var`), control flow (`IF/ELSE`, `WHILE`), `TRY...CATCH`, nested transactions, forward-only cursors, return codes, dynamic SQL (`sp_executesql`), table variables (`@table`), `GOTO`/labels, recursive CTEs, and parameter binds.
+5. **Gate 5: T-SQL Stored Procedure & Babelfish Oracle 3,000-Suite Convergence (100% PASS)**:
+   - Executes `test/slt_proc/` (3,000 value-verified `.slt` suites, 13,418 queries, 34,242 statements, 47,660 total records) covering Microsoft SQL Server procedural grammar and AWS Babelfish oracle parity:
+   - Variables (`@var`), `OUTPUT` parameters, control flow (`IF/ELSE`, `WHILE`), `TRY...CATCH`, `RAISERROR` printf-style formatting, nested transactions, forward-only cursors, return codes, dynamic SQL (`sp_executesql`), `#temp` tables, table variables (`@table`), `GOTO`/labels, recursive CTEs, chained `UNION`/`INTERSECT`/`EXCEPT`, window functions (`LEAD`/`LAG` negative defaults), and `DEFAULT`/`CHECK` constraints.
 6. **Gate 6: `SIGKILL` Crash Recovery Oracle & Leak-Free Soak Sentinel**:
    - `bin/crashtest`: 4-point consistency oracles (D1 Commit Durability, D2 Atomicity, D3 Checksum Consistency, D4 Recoverability) under unexpected process termination (`kill -9`) with verified WiredTiger `transaction_sync` durability.
    - `bin/soaktest`: Verifies zero descriptor leaks (`open_fds`), zero memory/goroutine growth, and sub-1ms p99 latency under continuous workload.

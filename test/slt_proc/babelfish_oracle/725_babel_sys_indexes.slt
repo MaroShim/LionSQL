@@ -1,0 +1,144 @@
+# test/slt_proc/babelfish_oracle/725_babel_sys_indexes.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-indexes-vu-prepare.sql, test/babelfish/raw/views/sys-indexes-vu-verify.sql, test/babelfish/raw/views/sys-indexes-vu-cleanup.sql
+
+statement ok
+DROP TABLE IF EXISTS sys_indexes_vu_prepare_t1
+
+statement ok
+DROP TABLE IF EXISTS sys_indexes_vu_prepare_t2
+
+statement ok
+CREATE TABLE sys_indexes_vu_prepare_t1 (
+	c1 INT, 
+	c2 VARCHAR(128)
+);
+
+statement ok
+CREATE TABLE sys_indexes_vu_prepare_t2 (
+	c1 INT, 
+	c2 VARCHAR(128)
+);
+
+statement ok
+INSERT INTO sys_indexes_vu_prepare_t1 (c1, c2) VALUES
+(100, 'abc'),
+(200, 'bcd'),
+(300, 'cde'),
+(1400, 'def')
+
+statement ok
+CREATE INDEX sys_indexes_vu_prepare_i1 ON sys_indexes_vu_prepare_t1 (c1);
+CREATE INDEX sys_indexes_vu_prepare_i1a ON sys_indexes_vu_prepare_t1 (c2);
+
+statement ok
+CREATE DATABASE sys_indexes_vu_prepare_db1
+
+statement ok
+USE sys_indexes_vu_prepare_db1
+
+statement ok
+USE master
+
+statement ok
+CREATE TABLE sys_indexes_vu_prepare_t_pkey(c1 int PRIMARY KEY)
+
+statement ok
+CREATE TABLE sys_indexes_vu_prepare_t_fkey(c2 int)
+
+statement ok
+ALTER TABLE sys_indexes_vu_prepare_t_fkey ADD FOREIGN KEY(c2) REFERENCES sys_indexes_vu_prepare_t_pkey (c1);
+
+statement ok
+CREATE TABLE sys_indexes_vu_prepare_t_unique(c1 int UNIQUE NOT NULL)
+
+statement ok
+SELECT COUNT(*) FROM sys.all_columns WHERE object_id = object_id('sys.indexes');
+
+statement ok
+SELECT COUNT(*) FROM sys.indexes WHERE object_id = OBJECT_ID('sys_indexes_vu_prepare_t1')
+
+query T
+SELECT COUNT(*) FROM sys.indexes WHERE name LIKE 'sys_indexes_vu_prepare_i1%';
+----
+1
+1
+
+statement ok
+SELECT type, type_desc FROM sys.indexes WHERE name LIKE 'sys_indexes_vu_prepare_i1%';
+
+query TT
+SELECT type, type_desc FROM sys.indexes WHERE object_id = OBJECT_ID('sys_indexes_vu_prepare_t1');
+----
+TABLE NULL
+TABLE NULL
+
+statement ok
+SELECT COUNT(*) FROM sys.indexes WHERE object_id = OBJECT_ID('sys_indexes_vu_prepare_t2')
+
+query TT
+SELECT type, type_desc FROM sys.indexes WHERE object_id = OBJECT_ID('sys_indexes_vu_prepare_t2');
+----
+TABLE NULL
+TABLE NULL
+
+statement ok
+USE sys_indexes_vu_prepare_db1
+
+statement ok
+SELECT COUNT(*) FROM sys.indexes WHERE object_id = OBJECT_ID('sys_indexes_vu_prepare_t1')
+
+query T
+SELECT COUNT(*) FROM sys.indexes WHERE name LIKE 'sys_indexes_vu_prepare_i1%';
+----
+1
+1
+
+statement ok
+USE master
+
+query T
+SELECT COUNT(*) FROM sys.indexes WHERE name LIKE 'sys_indexes_vu_prepare_i%';
+----
+1
+1
+
+query TT
+SELECT type_desc, is_unique_constraint FROM sys.indexes WHERE object_id = OBJECT_ID('sys_indexes_vu_prepare_t_pkey')
+----
+NULL NULL
+NULL NULL
+
+query TT
+SELECT type_desc, is_unique_constraint FROM sys.indexes WHERE object_id = OBJECT_ID('sys_indexes_vu_prepare_t_unique')
+----
+NULL NULL
+NULL NULL
+
+statement ok
+USE sys_indexes_vu_prepare_db1
+
+statement ok
+USE master
+
+statement ok
+DROP INDEX sys_indexes_vu_prepare_i1 ON sys_indexes_vu_prepare_t1;
+DROP INDEX sys_indexes_vu_prepare_i1a ON sys_indexes_vu_prepare_t1;
+
+statement ok
+DROP TABLE IF EXISTS sys_indexes_vu_prepare_t_unique
+
+statement ok
+DROP TABLE IF EXISTS sys_indexes_vu_prepare_t1
+
+statement ok
+DROP TABLE IF EXISTS sys_indexes_vu_prepare_t2
+
+statement ok
+DROP TABLE IF EXISTS sys_indexes_vu_prepare_t_fkey
+
+statement ok
+DROP TABLE IF EXISTS sys_indexes_vu_prepare_t_pkey
+
+statement ok
+DROP TABLE IF EXISTS sys_indexes_vu_prepare_t_unique
+

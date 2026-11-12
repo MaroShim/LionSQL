@@ -1,0 +1,28 @@
+# test/slt_proc/babelfish_oracle/1314_babel_test_sp_addrole_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_addrole-dep-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_addrole-dep-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_addrole-dep-vu-cleanup.sql
+
+statement ok
+CREATE PROC test_sp_addrole_proc @rolename AS sys.SYSNAME, @ownername AS sys.SYSNAME = NULL
+AS
+BEGIN
+    IF @ownername IS NULL
+	EXEC sp_addrole @rolename;
+    ELSE
+	EXEC sp_addrole @rolename, @ownername;
+END
+
+statement ok
+DROP ROLE sp_addrole_role1
+
+statement ok
+DROP ROLE sp_addrole_role2
+
+statement ok
+DROP ROLE sp_addrole_role3
+
+statement ok
+DROP ROLE sp_addrole_dummy
+
+statement ok
+DROP PROC test_sp_addrole_proc
+

@@ -1,0 +1,19 @@
+# test/slt_proc/babelfish_oracle/1509_babel_sys_proc_param_helper_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-proc_param_helper-dep-vu-prepare.sql, test/babelfish/raw/views/sys-proc_param_helper-dep-vu-verify.sql, test/babelfish/raw/views/sys-proc_param_helper-dep-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE sys_proc_param_helper_proc @rolename AS sys.SYSNAME
+AS
+BEGIN
+    SELECT count(*) FROM proc_param_helper() WHERE NAME = @rolename
+END
+
+statement ok
+create procedure sys_proc_param_helper_proc1 @sys_proc_param_helper_proc1_firstparam NVARCHAR(50) as select 1
+
+statement ok
+DROP PROCEDURE sys_proc_param_helper_proc1
+
+statement ok
+DROP PROCEDURE sys_proc_param_helper_proc;
+

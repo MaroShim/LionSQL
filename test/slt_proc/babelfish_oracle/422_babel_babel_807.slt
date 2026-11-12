@@ -1,0 +1,18 @@
+# test/slt_proc/babelfish_oracle/422_babel_babel_807.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-807.sql
+
+query TTTT
+SELECT COLLATIONPROPERTY('Traditional_Spanish_CS_AS', 'CodePage'), COLLATIONPROPERTY('Traditional_Spanish_CS_AS', 'ComparisonStyle'), COLLATIONPROPERTY('Traditional_Spanish_CS_AS', 'Version'), COLLATIONPROPERTY('Traditional_Spanish_CS_AS', 'LCID');
+----
+1252 196609 0 1033
+
+query T
+SELECT COLLATIONPROPERTY('Traditional_Spanish_CS_AS', 'INVALID');
+----
+0
+
+query T
+SELECT COLLATIONPROPERTY('INVALID', 'LCID');
+----
+1033
+

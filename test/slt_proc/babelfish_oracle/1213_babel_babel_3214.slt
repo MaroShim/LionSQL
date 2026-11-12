@@ -1,0 +1,70 @@
+# test/slt_proc/babelfish_oracle/1213_babel_babel_3214.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3214.sql
+
+statement ok
+/*
+ * T-SQL transaction isolation level mapping is as follows for dm_exec_sessions:
+ *
+ * 1 = READ UNCOMMITTED
+ * 2 = READ COMMITTED
+ * 3 = REPEATABLE READ
+ * 4 = SERIALIZABLE
+ * 5 = SNAPSHOT
+ */
+SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+SELECT CAST(current_setting('transaction_isolation') AS VARCHAR);
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID;
+
+statement ok
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SELECT CAST(current_setting('transaction_isolation') AS VARCHAR);
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID;
+
+statement ok
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+
+statement ok
+SELECT CAST(current_setting('transaction_isolation') AS VARCHAR);
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID;
+
+statement ok
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+
+statement ok
+SELECT CAST(current_setting('transaction_isolation') AS VARCHAR);
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID;
+
+statement ok
+SET TRANSACTION ISOLATION LEVEL SNAPSHOT;
+SELECT CAST(current_setting('transaction_isolation') AS VARCHAR);
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID;
+
+statement ok
+SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+SELECT CAST(current_setting('transaction_isolation') AS VARCHAR);
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID;
+
+statement ok
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SELECT CAST(current_setting('transaction_isolation') AS VARCHAR);
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID;
+
+statement ok
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+
+statement ok
+SELECT CAST(current_setting('transaction_isolation') AS VARCHAR);
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID;
+
+statement ok
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+
+statement ok
+SELECT CAST(current_setting('transaction_isolation') AS VARCHAR);
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID;
+
+statement ok
+SET TRANSACTION ISOLATION LEVEL SNAPSHOT;
+SELECT CAST(current_setting('transaction_isolation') AS VARCHAR);
+SELECT transaction_isolation_level from sys.dm_exec_sessions WHERE session_id = @@SPID;
+

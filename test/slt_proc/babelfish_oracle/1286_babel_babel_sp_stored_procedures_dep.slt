@@ -1,0 +1,11 @@
+# test/slt_proc/babelfish_oracle/1286_babel_babel_sp_stored_procedures_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SP_STORED_PROCEDURES-dep-vu-prepare.sql, test/babelfish/raw/BABEL-SP_STORED_PROCEDURES-dep-vu-verify.sql, test/babelfish/raw/BABEL-SP_STORED_PROCEDURES-dep-vu-cleanup.sql
+
+statement ok
+create procedure babel_sp_stored_procedures_dep_vu_prepare_p1 as
+    select 1
+
+statement ok
+create procedure babel_sp_stored_procedures_dep_vu_prepare_p2 as
+    EXEC sp_stored_procedures @sp_name = 'babel_sp_stored_procedures_dep_vu_prepare_p1'
+

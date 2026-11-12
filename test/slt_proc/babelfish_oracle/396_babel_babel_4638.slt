@@ -1,0 +1,341 @@
+# test/slt_proc/babelfish_oracle/396_babel_babel_4638.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4638-vu-prepare.sql, test/babelfish/raw/BABEL-4638-vu-verify.sql, test/babelfish/raw/BABEL-4638-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_4638_t1(a VARCHAR(10) COLLATE arabic_ci_as);
+CREATE TABLE babel_4638_t2(a VARCHAR(10) COLLATE chinese_prc_ci_as);
+CREATE TABLE babel_4638_t3(a VARCHAR(10) COLLATE japanese_ci_as);
+CREATE TABLE babel_4638_t4(a VARCHAR(10) COLLATE hebrew_ci_as);
+CREATE TABLE babel_4638_t5(a VARCHAR(10));
+
+statement ok
+CREATE TABLE babel_4638_char_t1(a CHAR(10) COLLATE arabic_ci_as);
+CREATE TABLE babel_4638_char_t2(a CHAR(10) COLLATE chinese_prc_ci_as);
+CREATE TABLE babel_4638_char_t3(a CHAR(10) COLLATE japanese_ci_as);
+CREATE TABLE babel_4638_char_t4(a CHAR(10) COLLATE hebrew_ci_as);
+CREATE TABLE babel_4638_char_t5(a CHAR(10));
+
+statement ok
+CREATE TABLE babel_4638_nchar_t1(a NCHAR(10) COLLATE arabic_ci_as);
+CREATE TABLE babel_4638_nchar_t2(a NCHAR(10) COLLATE chinese_prc_ci_as);
+CREATE TABLE babel_4638_nchar_t3(a NCHAR(10) COLLATE japanese_ci_as);
+CREATE TABLE babel_4638_nchar_t4(a NCHAR(10) COLLATE hebrew_ci_as);
+CREATE TABLE babel_4638_nchar_t5(a NCHAR(10));
+
+statement ok
+INSERT INTO babel_4638_t1 VALUES('ح'), ('غ'), ('سسس'), ('للل');
+INSERT INTO babel_4638_t2 VALUES('五'), ('九'), ('乙乙乙'), ('魚魚魚');
+INSERT INTO babel_4638_t3 VALUES('あ'), ('九'), ('ちちち'), ('さささ');
+INSERT INTO babel_4638_t4 VALUES('ב'), ('א'), ('קקק'), ('מממ');
+INSERT INTO babel_4638_t5 VALUES('a'), ('🙂'), ('🙂🙂🙂'), ('さささ');
+
+query T
+SELECT * FROM babel_4638_t1
+----
+ح
+غ
+سسس
+للل
+
+query T
+SELECT CAST(a AS CHAR(1)) + '|' FROM babel_4638_t1
+----
+ح|
+غ|
+سسس|
+للل|
+
+query T
+SELECT CAST(a AS CHAR(5)) + '|' FROM babel_4638_t1
+----
+ح|
+غ|
+سسس|
+للل|
+
+query T
+SELECT CAST(a AS NCHAR(1)) + '|' FROM babel_4638_t1
+----
+ح|
+غ|
+سسس|
+للل|
+
+query T
+SELECT CAST(a AS NCHAR(5)) + '|' FROM babel_4638_t1
+----
+ح|
+غ|
+سسس|
+للل|
+
+statement ok
+INSERT INTO babel_4638_char_t1 VALUES('ح'), ('غ'), ('سسس'), ('للل')
+INSERT INTO babel_4638_nchar_t1 VALUES('ح'), ('غ'), ('سسس'), ('للل')
+
+query T
+SELECT a + '|' FROM babel_4638_char_t1
+----
+ح|
+غ|
+سسس|
+للل|
+
+statement ok
+SELECT a + '|' FROM babel_4638_nchar_t1
+
+query T
+SELECT * FROM babel_4638_t2
+----
+五
+九
+乙乙乙
+魚魚魚
+
+query T
+SELECT CAST(a AS CHAR(1)) + '|' FROM babel_4638_t2
+----
+五|
+九|
+乙乙乙|
+魚魚魚|
+
+query T
+SELECT CAST(a AS CHAR(5)) + '|' FROM babel_4638_t2
+----
+五|
+九|
+乙乙乙|
+魚魚魚|
+
+query T
+SELECT CAST(a AS NCHAR(1)) + '|' FROM babel_4638_t2
+----
+五|
+九|
+乙乙乙|
+魚魚魚|
+
+query T
+SELECT CAST(a AS NCHAR(5)) + '|' FROM babel_4638_t2
+----
+五|
+九|
+乙乙乙|
+魚魚魚|
+
+statement ok
+INSERT INTO babel_4638_char_t2 VALUES('五'), ('九'), ('乙乙乙'), ('魚魚魚')
+INSERT INTO babel_4638_nchar_t2 VALUES('五'), ('九'), ('乙乙乙'), ('魚魚魚')
+
+query T
+SELECT a + '|' FROM babel_4638_char_t2
+----
+五|
+九|
+乙乙乙|
+魚魚魚|
+
+statement ok
+SELECT a + '|' FROM babel_4638_nchar_t2
+
+query T
+SELECT * FROM babel_4638_t3
+----
+あ
+九
+ちちち
+さささ
+
+query T
+SELECT CAST(a AS CHAR(1)) + '|' FROM babel_4638_t3
+----
+あ|
+九|
+ちちち|
+さささ|
+
+query T
+SELECT CAST(a AS CHAR(5)) + '|' FROM babel_4638_t3
+----
+あ|
+九|
+ちちち|
+さささ|
+
+query T
+SELECT CAST(a AS NCHAR(1)) + '|' FROM babel_4638_t3
+----
+あ|
+九|
+ちちち|
+さささ|
+
+query T
+SELECT CAST(a AS NCHAR(5)) + '|' FROM babel_4638_t3
+----
+あ|
+九|
+ちちち|
+さささ|
+
+statement ok
+INSERT INTO babel_4638_char_t3 VALUES('あ'), ('九'), ('ちちち'), ('さささ')
+INSERT INTO babel_4638_nchar_t3 VALUES('あ'), ('九'), ('ちちち'), ('さささ')
+
+query T
+SELECT a + '|' FROM babel_4638_char_t3
+----
+あ|
+九|
+ちちち|
+さささ|
+
+statement ok
+SELECT a + '|' FROM babel_4638_nchar_t3
+
+query T
+SELECT * FROM babel_4638_t4
+----
+ב
+א
+קקק
+מממ
+
+query T
+SELECT CAST(a AS CHAR(1)) + '|' FROM babel_4638_t4
+----
+ב|
+א|
+קקק|
+מממ|
+
+query T
+SELECT CAST(a AS CHAR(5)) + '|' FROM babel_4638_t4
+----
+ב|
+א|
+קקק|
+מממ|
+
+query T
+SELECT CAST(a AS NCHAR(1)) + '|' FROM babel_4638_t4
+----
+ב|
+א|
+קקק|
+מממ|
+
+query T
+SELECT CAST(a AS NCHAR(5)) + '|' FROM babel_4638_t4
+----
+ב|
+א|
+קקק|
+מממ|
+
+statement ok
+INSERT INTO babel_4638_char_t4 VALUES('ב'), ('א'), ('קקק'), ('מממ');
+INSERT INTO babel_4638_nchar_t4 VALUES('ב'), ('א'), ('קקק'), ('מממ');
+
+query T
+SELECT a + '|' FROM babel_4638_char_t4
+----
+ב|
+א|
+קקק|
+מממ|
+
+query T
+SELECT a + '|' FROM babel_4638_nchar_t4
+----
+ב|
+א|
+קקק|
+מממ|
+
+query T
+SELECT * FROM babel_4638_t5
+----
+a
+🙂
+🙂🙂🙂
+さささ
+
+query T
+SELECT CAST(a as NVARCHAR(10)) FROM babel_4638_t5
+----
+a
+🙂
+🙂🙂🙂
+さささ
+
+query T
+SELECT CAST(a AS CHAR(1)) + '|' FROM babel_4638_t5
+----
+a|
+🙂|
+🙂🙂🙂|
+さささ|
+
+query T
+SELECT CAST(a AS CHAR(5)) + '|' FROM babel_4638_t5
+----
+a|
+🙂|
+🙂🙂🙂|
+さささ|
+
+query T
+SELECT CAST(a AS NCHAR(1)) + '|' FROM babel_4638_t5
+----
+a|
+🙂|
+🙂🙂🙂|
+さささ|
+
+query T
+SELECT CAST(a AS NCHAR(5)) + '|' FROM babel_4638_t5
+----
+a|
+🙂|
+🙂🙂🙂|
+さささ|
+
+statement ok
+INSERT INTO babel_4638_char_t5 VALUES('a'), ('🙂'), ('🙂🙂🙂'), ('さささ');
+INSERT INTO babel_4638_nchar_t5 VALUES('a'), ('🙂'), ('🙂🙂🙂'), ('さささ');
+
+query T
+SELECT a + '|' FROM babel_4638_char_t5
+----
+a|
+🙂|
+🙂🙂🙂|
+さささ|
+
+query T
+SELECT a + '|' FROM babel_4638_nchar_t5
+----
+a|
+🙂|
+🙂🙂🙂|
+さささ|
+
+statement ok
+DROP TABLE babel_4638_t1
+DROP TABLE babel_4638_t2
+DROP TABLE babel_4638_t3
+DROP TABLE babel_4638_t4
+DROP TABLE babel_4638_t5
+DROP TABLE babel_4638_char_t1
+DROP TABLE babel_4638_char_t2
+DROP TABLE babel_4638_char_t3
+DROP TABLE babel_4638_char_t4
+DROP TABLE babel_4638_char_t5
+DROP TABLE babel_4638_nchar_t1
+DROP TABLE babel_4638_nchar_t2
+DROP TABLE babel_4638_nchar_t3
+DROP TABLE babel_4638_nchar_t4
+DROP TABLE babel_4638_nchar_t5
+

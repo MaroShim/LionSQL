@@ -1,0 +1,37 @@
+# test/slt_proc/babelfish_oracle/1495_babel_sys_hash_indexes.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-hash_indexes-vu-prepare.sql, test/babelfish/raw/views/sys-hash_indexes-vu-verify.sql, test/babelfish/raw/views/sys-hash_indexes-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE VIEW sys_hash_indexes_vu_prepare_view AS
+SELECT * FROM sys.hash_indexes
+
+statement ok
+CREATE PROC sys_hash_indexes_vu_prepare_proc AS
+SELECT * FROM sys.hash_indexes
+
+statement ok
+CREATE FUNCTION dbo.sys_hash_indexes_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT COUNT(*) FROM sys.hash_indexes)
+END
+
+statement ok
+USE master
+
+statement ok
+USE master
+
+statement ok
+DROP VIEW sys_hash_indexes_vu_prepare_view
+
+statement ok
+DROP PROC sys_hash_indexes_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_hash_indexes_vu_prepare_func
+

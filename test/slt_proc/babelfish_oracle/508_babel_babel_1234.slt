@@ -1,0 +1,8 @@
+# test/slt_proc/babelfish_oracle/508_babel_babel_1234.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1234.sql
+
+query T
+SELECT CAST(0 AS BIT) AS N'AdminConnection';
+----
+false
+

@@ -1,0 +1,69 @@
+# test/slt_proc/babelfish_oracle/596_babel_bitwise_not_operator.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/bitwise_not-operator-vu-prepare.sql, test/babelfish/raw/bitwise_not-operator-vu-verify.sql, test/babelfish/raw/bitwise_not-operator-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE TABLE bitwise_not_vu_prepare_table(c1 bit)
+
+statement ok
+INSERT INTO bitwise_not_vu_prepare_table VALUES 
+(~CAST( 0 AS bit )), 
+(~CAST( 1 AS bit )) 
+
+statement ok
+CREATE PROCEDURE bitwise_not_vu_prepare_procedure 
+AS
+SELECT ~CAST( 0 AS bit )
+
+statement ok
+CREATE FUNCTION dbo.bitwise_not_vu_prepare_function ()
+RETURNS BIT AS
+BEGIN
+    DECLARE @res bit
+	SELECT @res = (SELECT ~CAST( 0 AS bit ))
+    RETURN  @res
+END;
+
+statement ok
+USE master
+
+query T
+SELECT ~CAST(1 AS BIT)
+----
+NULL
+
+query T
+SELECT ~CAST(0 AS BIT)
+----
+NULL
+
+query T
+SELECT * FROM bitwise_not_vu_prepare_table
+----
+NULL
+NULL
+
+query T
+EXEC bitwise_not_vu_prepare_procedure
+----
+NULL
+
+query T
+SELECT dbo.bitwise_not_vu_prepare_function()
+----
+NULL
+
+statement ok
+USE master
+
+statement ok
+DROP TABLE bitwise_not_vu_prepare_table
+
+statement ok
+DROP PROCEDURE bitwise_not_vu_prepare_procedure
+
+statement ok
+DROP FUNCTION dbo.bitwise_not_vu_prepare_function
+

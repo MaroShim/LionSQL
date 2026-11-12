@@ -1,0 +1,45 @@
+# test/slt_proc/babelfish_oracle/1183_babel_babel_2747.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2747.sql
+
+statement ok
+CREATE PROCEDURE babel_2747 (@arg1 VARCHAR(MAX) OUTPUT)
+AS
+BEGIN
+    print 'body removed'
+END;
+
+statement ok
+CREATE PROCEDURE babel_2747_2 (@arg1 VARCHAR(MAX))
+AS
+BEGIN
+    print 'body removed'
+END;
+
+statement ok
+CREATE FUNCTION babel_2747_3 (@arg1 varchar(5), @arg2 varchar(10))
+RETURNS TABLE AS RETURN
+(SELECT @arg1 as a, @arg2 as b)
+
+statement ok
+CREATE TABLE t1(c1 int);
+
+statement ok
+CREATE TRIGGER babel_2747_4 ON t1
+AFTER INSERT
+AS
+BEGIN
+    INSERT INTO t1(c1) VALUES (1);
+END;
+
+statement ok
+DROP PROCEDURE babel_2747
+
+statement ok
+DROP PROCEDURE babel_2747_2
+
+statement ok
+DROP FUNCTION babel_2747_3
+
+statement ok
+DROP TABLE t1
+

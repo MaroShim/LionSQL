@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1295_babel_babel_use_statement.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-Use_Statement.sql
+
+statement ok
+CREATE TABLE tb(i INT);
+
+statement ok
+DROP TABLE tb;
+

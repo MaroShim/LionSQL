@@ -1,0 +1,58 @@
+# test/slt_proc/babelfish_oracle/434_babel_babel_serverproperty.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SERVERPROPERTY.sql
+
+query T
+select serverproperty('invalid property');
+----
+NULL
+
+query T
+select serverproperty('collation');
+----
+SQL_Latin1_General_CP1_CI_AS
+
+query T
+select 'true' where serverproperty('collationId') >= 0;
+----
+true
+
+query T
+select serverproperty('IsSingleUser');
+----
+NULL
+
+query T
+select serverproperty('ServerName');
+----
+MSSQLSERVER
+
+query T
+SELECT SERVERPROPERTY('babelfish');
+----
+NULL
+
+statement ok
+CREATE PROCEDURE BABEL_3587_proc (@BabelfishVersion VARCHAR(50), @productlevel VARCHAR(50))
+AS BEGIN
+    DECLARE @minor_version VARCHAR(50);
+    DECLARE @productlevel_number VARCHAR(50);
+    SELECT @minor_version = value FROM (SELECT value, ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) idx  
+        FROM STRING_SPLIT(@BabelfishVersion, '.')) t 
+        WHERE idx  = 2
+    IF(@minor_version = '0')
+    BEGIN
+        IF(@productlevel = 'RTM') SELECT 'pass'
+        ELSE SELECT 'fail'
+    END
+    ELSE
+    BEGIN
+        SELECT @productlevel_number = substring(@productlevel, 3, (len(@productlevel) - 1));
+        if (@productlevel like 'SP%' AND @BabelfishVersion like '%.' + @productlevel_number)
+            SELECT 'pass'
+        ELSE SELECT 'fail'
+    END
+END;
+
+statement ok
+DROP PROCEDURE BABEL_3587_proc
+

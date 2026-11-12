@@ -1,0 +1,59 @@
+# test/slt_proc/babelfish_oracle/735_babel_sys_sysdatabases.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-sysdatabases-vu-prepare.sql, test/babelfish/raw/views/sys-sysdatabases-vu-verify.sql, test/babelfish/raw/views/sys-sysdatabases-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sys_sysdatabases_vu_prepare_db
+
+statement ok
+CREATE VIEW sys_sysdatabases_vu_prepare_view
+AS
+SELECT name, cmptlevel 
+FROM sys.sysdatabases 
+WHERE name LIKE 'sys_sysdatabases_vu_prepare_db%'
+ORDER BY name
+
+statement ok
+CREATE PROC sys_sysdatabases_vu_prepare_proc
+AS
+SELECT name, cmptlevel 
+FROM sys.sysdatabases 
+WHERE name LIKE 'sys_sysdatabases_vu_prepare_db%'
+ORDER BY name
+
+statement ok
+CREATE FUNCTION sys_sysdatabases_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT COUNT(*) FROM sys.sysdatabases WHERE name LIKE 'sys_sysdatabases_vu_prepare_db%')
+END
+
+query T
+SELECT compatibility_level FROM sys.databases WHERE name = 'master'
+----
+150
+
+query T
+SELECT cmptlevel FROM master.dbo.sysdatabases WHERE name = 'master'
+----
+NULL
+
+query T
+SELECT cmptlevel FROM msdb.dbo.sysdatabases WHERE name = 'master'
+----
+NULL
+
+query T
+SELECT cmptlevel FROM tempdb.dbo.sysdatabases WHERE name = 'master'
+----
+NULL
+
+statement ok
+DROP VIEW sys_sysdatabases_vu_prepare_view
+
+statement ok
+DROP PROC sys_sysdatabases_vu_prepare_proc
+
+statement ok
+DROP FUNCTION sys_sysdatabases_vu_prepare_func
+

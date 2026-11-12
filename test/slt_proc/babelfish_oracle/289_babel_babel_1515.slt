@@ -1,0 +1,35 @@
+# test/slt_proc/babelfish_oracle/289_babel_babel_1515.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1515.sql
+
+query TT
+DECLARE @a char(10)
+SELECT @a = '12345678901234567890123456789012345';
+SELECT LEN(@a), DATALENGTH(@a)
+SELECT @a
+----
+35 35
+
+query TT
+DECLARE @a nchar(10)
+SELECT @a = '12345678901234567890123456789012345';
+SELECT LEN(@a), DATALENGTH(@a)
+SELECT @a
+----
+35 35
+
+query TT
+DECLARE @a varchar(10)
+SELECT @a = '12345678901234567890123456789012345';
+SELECT LEN(@a), DATALENGTH(@a)
+SELECT @a
+----
+35 35
+
+query TT
+DECLARE @a nvarchar(10)
+SELECT @a = '12345678901234567890123456789012345';
+SELECT LEN(@a), DATALENGTH(@a)
+SELECT @a
+----
+35 35
+

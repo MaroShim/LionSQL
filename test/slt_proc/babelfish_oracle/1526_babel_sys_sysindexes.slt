@@ -1,0 +1,70 @@
+# test/slt_proc/babelfish_oracle/1526_babel_sys_sysindexes.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-sysindexes-vu-prepare.sql, test/babelfish/raw/views/sys-sysindexes-vu-verify.sql, test/babelfish/raw/views/sys-sysindexes-vu-cleanup.sql
+
+statement ok
+CREATE DATABASE sys_sysindexes_vu_prepare_db1
+
+statement ok
+USE sys_sysindexes_vu_prepare_db1
+
+statement ok
+CREATE TABLE sys_sysindexes_vu_prepare_t1(a INT, b INT)
+
+statement ok
+CREATE INDEX sys_sysindexes_vu_prepare_t1_i1 on sys_sysindexes_vu_prepare_t1(a)
+
+statement ok
+CREATE PROCEDURE sys_sysindexes_vu_prepare_p1 AS
+SELECT COUNT(*) FROM sys.sysindexes WHERE name LIKE '%sys_sysindexes_vu_prepare_t1_i1%'
+SELECT COUNT(*) FROM sys.sysindexes WHERE name LIKE '%SYS_SYSINDEXES_VU_PREPARE_T1_I1%'
+
+statement ok
+CREATE FUNCTION sys_sysindexes_vu_prepare_f1()
+RETURNS INT
+AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM sys.sysindexes WHERE name LIKE '%sys_sysindexes_vu_prepare_t1_i1%')
+end
+
+statement ok
+CREATE FUNCTION sys_sysindexes_vu_prepare_f2()
+RETURNS INT
+AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM sys.sysindexes WHERE name LIKE '%SYS_SYSINDEXES_VU_PREPARE_T1_I1%')
+end
+
+statement ok
+CREATE VIEW sys_sysindexes_vu_prepare_v1 AS
+    SELECT COUNT(*) FROM sys.sysindexes WHERE name LIKE '%sys_sysindexes_vu_prepare_t1_i1%'
+
+statement ok
+USE master
+
+statement ok
+USE sys_sysindexes_vu_prepare_db1
+
+statement ok
+select count(*) from sys.indexes v1 inner join sys.sysindexes v2 on v1.object_id = v2.id and indid=index_id where v1.name LIKE '%SYS_SYSINDEXES_VU_PREPARE_T1_I1%';
+
+statement ok
+USE master
+
+statement ok
+USE sys_sysindexes_vu_prepare_db1
+
+statement ok
+DROP VIEW sys_sysindexes_vu_prepare_v1
+
+statement ok
+DROP PROCEDURE sys_sysindexes_vu_prepare_p1
+
+statement ok
+DROP INDEX sys_sysindexes_vu_prepare_t1_i1 ON sys_sysindexes_vu_prepare_t1
+
+statement ok
+DROP TABLE sys_sysindexes_vu_prepare_t1
+
+statement ok
+USE master
+

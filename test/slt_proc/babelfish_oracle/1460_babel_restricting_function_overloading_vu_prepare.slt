@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1460_babel_restricting_function_overloading_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/restricting_function_overloading-vu-prepare.sql
+
+statement ok
+CREATE SCHEMA restrict_func_overloading_s1;
+
+statement ok
+CREATE SCHEMA restrict_func_overloading_s2;
+

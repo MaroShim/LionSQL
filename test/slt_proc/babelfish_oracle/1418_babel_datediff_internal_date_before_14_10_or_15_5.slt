@@ -1,0 +1,10 @@
+# test/slt_proc/babelfish_oracle/1418_babel_datediff_internal_date_before_14_10_or_15_5.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/datediff_internal_date-before-14_10-or-15_5-vu-prepare.sql, test/babelfish/raw/functions/datediff_internal_date-before-14_10-or-15_5-vu-verify.sql, test/babelfish/raw/functions/datediff_internal_date-before-14_10-or-15_5-vu-cleanup.sql
+
+statement ok
+CREATE VIEW datediff_internal_date_vu_prepare_v1 AS
+SELECT datediff_internal_date('day', CAST('20201010' AS DATE), CAST('20201001' AS DATE))
+
+statement ok
+DROP VIEW datediff_internal_date_vu_prepare_v1
+

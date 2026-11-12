@@ -233,6 +233,16 @@ func cleanSchemaPrefix(name string) string {
 	return CleanSchemaPrefix(name)
 }
 
+func isSetOpIdent(tok Token) bool {
+	if tok.Type != TokenIdent {
+		return false
+	}
+	return strings.EqualFold(tok.Literal, "UNION") ||
+		strings.EqualFold(tok.Literal, "INTERSECT") ||
+		strings.EqualFold(tok.Literal, "EXCEPT") ||
+		strings.EqualFold(tok.Literal, "MINUS")
+}
+
 func isReservedAfterFromOrJoin(tok TokenType) bool {
 	switch tok {
 	case TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,

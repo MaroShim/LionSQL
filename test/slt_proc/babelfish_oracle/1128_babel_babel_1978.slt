@@ -1,0 +1,21 @@
+# test/slt_proc/babelfish_oracle/1128_babel_babel_1978.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1978.sql
+
+statement ok
+SET blah ON;
+
+statement ok
+SET blahblah oh_yes;
+
+statement ok
+SET auto_commit_batch on; -- existing bbf GUC
+
+statement ok
+SET blah ON;
+
+statement ok
+SET blahblah oh_yes;
+
+statement ok
+SET auto_commit_batch on; -- existing bbf GUC
+

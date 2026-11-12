@@ -1,0 +1,31 @@
+# test/slt_proc/babelfish_oracle/1438_babel_get_tds_id.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/get_tds_id-vu-prepare.sql, test/babelfish/raw/get_tds_id-vu-verify.sql, test/babelfish/raw/get_tds_id-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE get_tds_id_proc
+AS 
+    SELECT get_tds_id('timestamp') as rv;
+
+statement ok
+CREATE FUNCTION get_tds_id_func(@a sys.varchar(50))
+RETURNS INT
+AS
+BEGIN
+    DECLARE @b int;
+    SET @b = (SELECT get_tds_id(@a) as rv);
+    RETURN @b;
+END
+
+statement ok
+CREATE VIEW get_tds_id_view AS
+    SELECT * FROM get_tds_id('timestamp') AS rv
+
+statement ok
+DROP PROCEDURE get_tds_id_proc;
+
+statement ok
+DROP FUNCTION get_tds_id_func;
+
+statement ok
+DROP VIEW get_tds_id_view;
+

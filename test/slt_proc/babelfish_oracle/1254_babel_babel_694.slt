@@ -1,0 +1,23 @@
+# test/slt_proc/babelfish_oracle/1254_babel_babel_694.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-694.sql
+
+statement ok
+CREATE PROCEDURE my_test @a int, @b int
+AS
+PRINT @a + @b
+
+statement ok
+EXEC my_test(1,2)
+
+statement ok
+EXEC my_test 1, (1,2)
+
+statement ok
+EXECUTE my_test(1,2)
+
+statement ok
+EXECUTE my_test 1, (1,2)
+
+statement ok
+drop procedure my_test
+

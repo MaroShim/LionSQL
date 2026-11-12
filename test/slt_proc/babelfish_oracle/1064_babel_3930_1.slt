@@ -1,0 +1,100 @@
+# test/slt_proc/babelfish_oracle/1064_babel_3930_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/3930_1.sql
+
+statement ok
+CREATE TABLE t3930 (a int)
+
+statement ok
+DROP TABLE t3930
+
+statement ok
+CREATE TABLE t3930_1(c1 int primary key, c2 int)
+
+statement ok
+CREATE TABLE t3930_2(c1 int primary key, c2 int, constraint fk foreign key (c2) references t3930_1(c1))
+
+statement ok
+CREATE TABLE t3930 (a int)
+
+statement ok
+begin transaction
+
+statement ok
+DROP TABLE t3930_2
+
+statement ok
+DROP TABLE t3930_1
+
+statement ok
+DROP TABLE t3930
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t3930_1(c1 int primary key, c2 int)
+
+statement ok
+CREATE TABLE t3930_2(c1 int primary key, c2 int, constraint fk foreign key (c2) references t3930_1(c1))
+
+statement ok
+CREATE TABLE t3930 (a int)
+
+statement ok
+begin transaction
+
+statement ok
+DROP TABLE t3930_2
+
+statement ok
+DROP TABLE t3930_1
+
+statement ok
+DROP TABLE t3930
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE TABLE t3930 (a int)
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure ErrorHandling2 as
+begin
+exec ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+DROP TABLE t3930
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t3930 (a int)
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+begin transaction;
+
+statement ok
+DROP TABLE t3930
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE TABLE t3930 (a int)
+
+statement ok
+DROP TABLE t3930
+

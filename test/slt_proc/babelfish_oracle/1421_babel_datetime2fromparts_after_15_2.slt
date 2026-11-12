@@ -1,0 +1,81 @@
+# test/slt_proc/babelfish_oracle/1421_babel_datetime2fromparts_after_15_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/datetime2fromparts-after-15-2-vu-prepare.sql, test/babelfish/raw/functions/datetime2fromparts-after-15-2-vu-verify.sql
+
+statement ok
+CREATE VIEW datetime2fromparts_vu_prepare_v1 AS (select DATETIME2FROMPARTS(1962, 16, 1, 14, 64, 48, 59, 5 ));
+
+statement ok
+CREATE VIEW datetime2fromparts_vu_prepare_v2 AS (select DATETIME2FROMPARTS(20008, 8, 32, 34, 23, 78, 45, 8 ));
+
+statement ok
+CREATE VIEW datetime2fromparts_vu_prepare_v3 AS (select DATETIME2FROMPARTS(1980, 11, 25, 22, 09, 58, 671, 4 ));
+
+statement ok
+CREATE PROCEDURE datetime2fromparts_vu_prepare_p1 AS (select DATETIME2FROMPARTS(2011, 8, 15, 14, 23, 44, 5, 1 ));
+
+statement ok
+CREATE PROCEDURE datetime2fromparts_vu_prepare_p2 AS (select DATETIME2FROMPARTS(2011, 8, 15, 14, 23, 44, 5, 2 ));
+
+statement ok
+CREATE PROCEDURE datetime2fromparts_vu_prepare_p3 AS (select DATETIME2FROMPARTS(2011, 8, 15, 14, 23, 44, 5, 3 ));
+
+statement ok
+CREATE PROCEDURE datetime2fromparts_vu_prepare_p4 AS (select DATETIME2FROMPARTS(2011, 8, 15, 14, 23, 44, 5, 4 ));
+
+statement ok
+CREATE FUNCTION datetime2fromparts_vu_prepare_f1()
+RETURNS DATETIME2 AS
+BEGIN
+RETURN (select DATETIME2FROMPARTS(2011, 8, 15, 14, 23, 44, 5, 5 ));
+END
+
+statement ok
+CREATE FUNCTION datetime2fromparts_vu_prepare_f2()
+RETURNS DATETIME2 AS
+BEGIN
+RETURN (select DATETIME2FROMPARTS(2011, 8, 15, 14, 23, 44, 5, 6 ));
+END
+
+statement ok
+CREATE TABLE #TestDatetime (ID INT, TestDate DATETIME2);
+
+statement ok
+INSERT INTO #TestDatetime VALUES (1, '2023-06-15 14:30:45.500500');
+INSERT INTO #TestDatetime VALUES (2, DATETIME2FROMPARTS(2023, 6, 16, 10, 15, 30, 250250,6));
+
+statement ok
+SELECT ID FROM #TestDatetime WHERE TestDate = DATETIME2FROMPARTS(2023, 6, 15, 14, 30, 45, 500500, 6);
+
+statement ok
+SELECT ID FROM #TestDatetime WHERE TestDate = '2023-06-16 10:15:30.250250';
+
+statement ok
+DROP TABLE #TestDatetime;
+
+statement ok
+DROP VIEW datetime2fromparts_vu_prepare_v1
+
+statement ok
+DROP VIEW datetime2fromparts_vu_prepare_v2
+
+statement ok
+DROP VIEW datetime2fromparts_vu_prepare_v3
+
+statement ok
+DROP PROCEDURE datetime2fromparts_vu_prepare_p1
+
+statement ok
+DROP PROCEDURE datetime2fromparts_vu_prepare_p2
+
+statement ok
+DROP PROCEDURE datetime2fromparts_vu_prepare_p3
+
+statement ok
+DROP PROCEDURE datetime2fromparts_vu_prepare_p4
+
+statement ok
+DROP FUNCTION datetime2fromparts_vu_prepare_f1()
+
+statement ok
+DROP FUNCTION datetime2fromparts_vu_prepare_f2()
+

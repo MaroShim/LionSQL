@@ -1,0 +1,129 @@
+# test/slt_proc/babelfish_oracle/395_babel_babel_4606.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4606-vu-prepare.sql, test/babelfish/raw/BABEL-4606-vu-verify.sql, test/babelfish/raw/BABEL-4606-vu-cleanup.sql
+
+statement ok
+create table babel_4606 (a int primary key, b int)
+
+statement ok
+insert into babel_4606 (a, b) values (1,7),(2,8),(3,9),(4,10),(5,11),(6,12)
+
+statement ok
+create table babel_4606_2 (a int primary key, b int)
+
+statement ok
+insert into babel_4606_2 (a, b) values (1,7),(2,8),(3,9),(4,10),(5,11),(6,12)
+
+statement ok
+create trigger babel_4606_2_trigger
+on babel_4606_2
+after update
+AS
+begin
+	update babel_4606_2
+	set babel_4606_2.b = babel_4606_2.b + 2
+	from inserted as i
+		where babel_4606_2.a = i.a
+end
+
+statement ok
+create table babel_4606_3 (a int primary key, b int)
+
+statement ok
+insert into babel_4606_3 (a, b) values (1,7),(2,8),(3,9),(4,10),(5,11),(6,12)
+
+statement ok
+create trigger babel_4606_3_trigger
+on babel_4606_3
+after update
+AS
+begin
+	update babel_4606_3
+	set babel_4606_3.b = babel_4606_3.b + 200
+	from deleted as i
+		where babel_4606_3.a = i.a
+end
+
+query TT
+select * from babel_4606
+----
+1 7
+2 8
+3 9
+4 10
+5 11
+6 12
+
+statement ok
+update babel_4606 set b = 100 where a = 1;
+
+query TT
+select * from babel_4606
+----
+1 100
+2 8
+3 9
+4 10
+5 11
+6 12
+
+query TT
+select * from babel_4606_2
+----
+1 7
+2 8
+3 9
+4 10
+5 11
+6 12
+
+statement ok
+update babel_4606_2 set b = 100 where a = 1;
+
+query TT
+select * from babel_4606_2
+----
+1 100
+2 8
+3 9
+4 10
+5 11
+6 12
+
+query TT
+select * from babel_4606_3
+----
+1 7
+2 8
+3 9
+4 10
+5 11
+6 12
+
+statement ok
+update babel_4606_3 set b = 100 where a = 1;
+
+query TT
+select * from babel_4606_3
+----
+1 100
+2 8
+3 9
+4 10
+5 11
+6 12
+
+statement ok
+drop table babel_4606
+
+statement ok
+drop trigger babel_4606_2_trigger
+
+statement ok
+drop table babel_4606_2
+
+statement ok
+drop trigger babel_4606_3_trigger
+
+statement ok
+drop table babel_4606_3
+

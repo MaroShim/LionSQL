@@ -1,0 +1,115 @@
+# test/slt_proc/babelfish_oracle/723_babel_sys_index_columns.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-index_columns.sql
+
+statement ok
+DROP TABLE IF EXISTS sys_index_columns
+
+statement ok
+CREATE TABLE sys_index_columns (
+	sic_name VARCHAR (50),
+	sic_surname VARCHAR (50)
+)
+
+statement ok
+CREATE INDEX sic_test_index
+ON sys_index_columns (sic_name)
+
+query T
+SELECT COUNT(*) FROM sys.index_columns WHERE object_id = OBJECT_ID('sys_index_columns')
+----
+NULL
+NULL
+
+statement ok
+DROP TABLE IF EXISTS sys_index_columns
+
+statement ok
+CREATE DATABASE db1;
+
+statement ok
+USE db1
+
+statement ok
+CREATE TABLE rand_name1(rand_col1 int DEFAULT 1);
+
+statement ok
+CREATE INDEX idx_rand_name1 ON rand_name1(rand_col1);
+
+statement ok
+SELECT count(*) FROM  sys.index_columns idx JOIN sys.tables tab ON idx.object_id = tab.object_id WHERE tab.name = 'rand_name1';
+
+statement ok
+USE master;
+
+statement ok
+SELECT count(*) FROM  sys.index_columns idx JOIN sys.tables tab ON idx.object_id = tab.object_id WHERE tab.name = 'rand_name1';
+
+statement ok
+CREATE TABLE rand_name2(rand_col2 int DEFAULT 1);
+
+statement ok
+CREATE INDEX idx_rand_name2 ON rand_name2(rand_col2);
+
+statement ok
+SELECT count(*) FROM  sys.index_columns idx JOIN sys.tables tab ON idx.object_id = tab.object_id WHERE tab.name = 'rand_name2';
+
+statement ok
+USE db1
+
+statement ok
+SELECT count(*) FROM  sys.index_columns idx JOIN sys.tables tab ON idx.object_id = tab.object_id WHERE tab.name = 'rand_name2';
+
+statement ok
+DROP TABLE rand_name1;
+
+statement ok
+USE master
+
+statement ok
+DROP TABLE rand_name2;
+
+statement ok
+CREATE DATABASE db1 COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+USE db1
+
+statement ok
+CREATE TABLE rand_name1(rand_col1 int DEFAULT 1);
+
+statement ok
+CREATE INDEX idx_rand_name1 ON rand_name1(rand_col1);
+
+statement ok
+SELECT count(*) FROM  sys.index_columns idx JOIN sys.tables tab ON idx.object_id = tab.object_id WHERE tab.name = 'rand_name1';
+
+statement ok
+USE master;
+
+statement ok
+SELECT count(*) FROM  sys.index_columns idx JOIN sys.tables tab ON idx.object_id = tab.object_id WHERE tab.name = 'rand_name1';
+
+statement ok
+CREATE TABLE rand_name2(rand_col2 int DEFAULT 1);
+
+statement ok
+CREATE INDEX idx_rand_name2 ON rand_name2(rand_col2);
+
+statement ok
+SELECT count(*) FROM  sys.index_columns idx JOIN sys.tables tab ON idx.object_id = tab.object_id WHERE tab.name = 'rand_name2';
+
+statement ok
+USE db1
+
+statement ok
+SELECT count(*) FROM  sys.index_columns idx JOIN sys.tables tab ON idx.object_id = tab.object_id WHERE tab.name = 'rand_name2';
+
+statement ok
+DROP TABLE rand_name1;
+
+statement ok
+USE master
+
+statement ok
+DROP TABLE rand_name2;
+

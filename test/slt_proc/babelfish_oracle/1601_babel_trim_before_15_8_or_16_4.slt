@@ -1,0 +1,591 @@
+# test/slt_proc/babelfish_oracle/1601_babel_trim_before_15_8_or_16_4.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/string_functions/trim-before-15_8-or-16_4-vu-prepare.sql, test/babelfish/raw/functions/string_functions/trim-before-15_8-or-16_4-vu-verify.sql, test/babelfish/raw/functions/string_functions/trim-before-15_8-or-16_4-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_4489_trim_t1(a NCHAR(50), b NCHAR(20))
+
+statement ok
+INSERT INTO babel_4489_trim_t1 VALUES(N'  abc🙂defghi🙂🙂    ', N'ab🙂 ')
+INSERT INTO babel_4489_trim_t1 VALUES(N'  比尔·拉莫斯    ', N'比拉斯 ')
+
+statement ok
+CREATE TABLE babel_4489_trim_t2(a NVARCHAR(50), b NVARCHAR(20))
+
+statement ok
+INSERT INTO babel_4489_trim_t2 VALUES(N'  abc🙂defghi🙂🙂    ', N'ab🙂 ')
+
+statement ok
+CREATE TABLE babel_4489_trim_t3(a CHAR(50), b CHAR(20))
+
+statement ok
+INSERT INTO babel_4489_trim_t3 VALUES('  abcdefghi    ', 'abi ')
+
+statement ok
+CREATE TABLE babel_4489_trim_t4(a VARCHAR(50), b VARCHAR(20))
+
+statement ok
+INSERT INTO babel_4489_trim_t4 VALUES('  abcdefghi    ', 'abi ')
+
+statement ok
+CREATE TABLE babel_4489_trim_t5(a VARBINARY(50), b VARBINARY(50))
+
+statement ok
+INSERT INTO babel_4489_trim_t5 VALUES(0x61626364, 0x6164)
+
+statement ok
+CREATE TABLE babel_4489_trim_chinese_prc_ci_as(a VARCHAR(50) COLLATE CHINESE_PRC_CI_AS, b VARCHAR(20) COLLATE CHINESE_PRC_CI_AS)
+
+statement ok
+INSERT INTO babel_4489_trim_chinese_prc_ci_as VALUES(N'  比尔·拉莫斯    ', N'比拉斯 ')
+
+statement ok
+CREATE TABLE babel_4489_trim_chinese_prc_cs_as(a VARCHAR(50) COLLATE CHINESE_PRC_CS_AS, b VARCHAR(20) COLLATE CHINESE_PRC_CS_AS)
+
+statement ok
+INSERT INTO babel_4489_trim_chinese_prc_cs_as VALUES(N'  比尔·拉莫斯    ', N'比拉斯 ')
+
+statement ok
+CREATE TABLE babel_4489_trim_chinese_prc_ci_ai(a VARCHAR(50) COLLATE CHINESE_PRC_CI_AI, b VARCHAR(20) COLLATE CHINESE_PRC_CI_AI)
+
+statement ok
+INSERT INTO babel_4489_trim_chinese_prc_ci_ai VALUES(N'  比尔·拉莫斯    ', N'比拉斯 ')
+
+statement ok
+CREATE TABLE babel_4489_trim_arabic_ci_as(a VARCHAR(50) COLLATE ARABIC_CI_AS, b VARCHAR(20) COLLATE ARABIC_CI_AS)
+
+statement ok
+INSERT INTO babel_4489_trim_arabic_ci_as VALUES(N'  الله مع المتقين    ', N'ين ')
+
+statement ok
+CREATE TABLE babel_4489_trim_arabic_cs_as(a VARCHAR(50) COLLATE ARABIC_CS_AS, b VARCHAR(20) COLLATE ARABIC_CS_AS)
+
+statement ok
+INSERT INTO babel_4489_trim_arabic_cs_as VALUES(N'  الله مع المتقين    ', N'ين ')
+
+statement ok
+CREATE TABLE babel_4489_trim_arabic_ci_ai(a VARCHAR(50) COLLATE ARABIC_CI_AI, b VARCHAR(20) COLLATE ARABIC_CI_AI)
+
+statement ok
+INSERT INTO babel_4489_trim_arabic_ci_ai VALUES(N'  الله مع المتقين    ', N'ين ')
+
+statement ok
+CREATE TABLE babel_4489_trim_image(a IMAGE)
+
+statement ok
+INSERT INTO babel_4489_trim_image values(CAST ('6F9619FF-8B86-D011-B42D-00C04FC964FF' AS image))
+
+statement ok
+CREATE TABLE babel_4489_trim_text(a TEXT, b NTEXT)
+
+statement ok
+INSERT INTO babel_4489_trim_text VALUES (N'  abc🙂defghi🙂🙂    ', N'  abc🙂defghi🙂🙂    ')
+
+statement ok
+CREATE TABLE babel_4489_trim_UDT(a dbo.babel_4489_trim_imageUDT, b dbo.babel_4489_trim_varUDT)
+
+statement ok
+INSERT INTO babel_4489_trim_UDT VALUES(CAST('abcdef' as dbo.babel_4489_trim_imageUDT), CAST('abcdef' as dbo.babel_4489_trim_varUDT))
+
+statement ok
+CREATE VIEW babel_4489_trim_dep_view AS
+    SELECT ('|' + TRIM(b FROM a) + '|') as result FROM babel_4489_trim_t2
+
+statement ok
+CREATE VIEW babel_4489_trim_dep_view_1 AS
+    SELECT ('|' + TRIM(a) + '|') as result FROM babel_4489_trim_t1
+
+statement ok
+CREATE VIEW babel_4489_trim_dep_view_2 AS
+    SELECT ('|' + TRIM(a) + '|') as result FROM babel_4489_trim_t2
+
+statement ok
+CREATE VIEW babel_4489_trim_dep_view_3 AS
+    SELECT ('|' + TRIM(a) + '|') as result FROM babel_4489_trim_t3
+
+statement ok
+CREATE VIEW babel_4489_trim_dep_view_4 AS
+    SELECT ('|' + TRIM(a) + '|') as result FROM babel_4489_trim_t4
+
+statement ok
+CREATE VIEW babel_4489_trim_dep_view_5 AS
+    SELECT ('|' + TRIM(a) + '|') as result FROM babel_4489_trim_t5
+
+statement ok
+CREATE VIEW babel_4489_trim_dep_view_6 AS
+    SELECT ('|' + TRIM(b FROM a) + '|') as result FROM babel_4489_trim_t4
+
+statement ok
+CREATE FUNCTION babel_4489_trim_itvf_func()
+RETURNS TABLE
+AS
+RETURN (SELECT ('|' + TRIM(b FROM a) + '|') as result FROM babel_4489_trim_t2)
+
+statement ok
+DECLARE @custname NVARCHAR(50) = N'比尔·拉莫斯'
+SELECT @custname, 
+    TRIM(@custname) as [TRIM]
+    , LTRIM(@custname) as [LTRIM]
+    , RTRIM(@custname) as [RTRIM]
+    , LEFT(@custname, 4) as [LEFT4]
+    , RIGHT(@custname, 4) as [RIGHT4]
+    , SUBSTRING(@custname, 2, 4) as [SUBSTRING_2_4]
+;
+
+query T
+SELECT TRIM(NULL)
+----
+NULL
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    '
+SELECT '|' + TRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + TRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + TRIM(@inputString) COLLATE CHINESE_PRC_CI_AS + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    '
+SELECT '|' + TRIM('ab? ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    '
+SELECT '|' + TRIM('ab🙂 ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    '
+SELECT '|' + TRIM('ab😎 ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + TRIM('比拉斯 ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + TRIM('比拉斯 ' FROM @inputString) COLLATE CHINESE_PRC_CI_AS + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  比尔·拉莫斯    ', @charSet CHAR(10) = '比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  比尔·拉莫斯    ', @charSet CHAR(10) = '比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) COLLATE CHINESE_PRC_CI_AS + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    '
+SELECT '|' + TRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + TRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + TRIM(@inputString) COLLATE CHINESE_PRC_CI_AS + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    '
+SELECT '|' + TRIM('ab? ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    '
+SELECT '|' + TRIM('ab🙂 ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    '
+SELECT '|' + TRIM('ab😎 ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + TRIM('比拉斯 ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + TRIM('比拉斯 ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    '
+SELECT '|' + TRIM('比拉斯 ' FROM @inputString) COLLATE CHINESE_PRC_CI_AS + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    ', @charSet VARCHAR(10) = '比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    ', @charSet VARCHAR(10) = '比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) COLLATE CHINESE_PRC_CI_AS + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    ', @charSet VARCHAR(MAX) = '比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    ', @charSet VARCHAR(MAX) = '比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) COLLATE CHINESE_PRC_CI_AS + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  abc🙂defghi🙂🙂    '
+SELECT '|' + TRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  比尔·拉莫斯    '
+SELECT '|' + TRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  ab😎c🙂defghi🙂🙂    '
+SELECT '|' + TRIM('ab🙂😎 ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  比尔·拉莫斯    '
+SELECT '|' + TRIM('比拉斯 ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  比尔·拉莫斯    ', @charSet NCHAR(20) = N'比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  abc🙂defghi🙂🙂    '
+SELECT '|' + TRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  比尔·拉莫斯    '
+SELECT '|' + TRIM(@inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  ab😎c🙂defghi🙂🙂    '
+SELECT '|' + TRIM('ab🙂😎 ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  比尔·拉莫斯    '
+SELECT '|' + TRIM('比拉斯 ' FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  比尔·拉莫斯    ', @charSet NVARCHAR(20) = N'比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  比尔·拉莫斯    ', @charSet NVARCHAR(MAX) = N'比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+query T
+SELECT * FROM babel_4489_trim_dep_view_1
+----
+|abc🙂defghi🙂🙂|
+
+query T
+SELECT * FROM babel_4489_trim_dep_view_2
+----
+|abc🙂defghi🙂🙂|
+
+query T
+SELECT * FROM babel_4489_trim_dep_view_3
+----
+|abcdefghi|
+
+query T
+SELECT * FROM babel_4489_trim_dep_view_4
+----
+|abcdefghi|
+
+query T
+SELECT * FROM babel_4489_trim_dep_view_5
+----
+|0x61626364|
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet VARCHAR(20) = 'ab? '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet VARCHAR(20) = 'ab🙂 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet VARCHAR(20) = 'ab😎 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  比尔·拉莫斯    ', @charSet VARCHAR(20) = '比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet NCHAR(20) = N'ab? '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet NCHAR(20) = N'ab🙂 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet NCHAR(20) = N'ab😎 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  比尔·拉莫斯    ', @charSet NCHAR(20) = N'比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet NVARCHAR(20) = N'ab? '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet NVARCHAR(20) = N'ab🙂 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet NVARCHAR(20) = N'ab😎 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString CHAR(50) = '  比尔·拉莫斯    ', @charSet NVARCHAR(20) = N'比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet CHAR(20) = 'ab? '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet CHAR(20) = 'ab🙂 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet CHAR(20) = 'ab😎 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    ', @charSet CHAR(20) = '比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet NCHAR(20) = N'ab? '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet NCHAR(20) = N'ab🙂 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet NCHAR(20) = N'ab😎 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    ', @charSet NCHAR(20) = N'比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet NVARCHAR(20) = N'ab? '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet NVARCHAR(20) = N'ab🙂 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  abc🙂defghi🙂🙂    ', @charSet NVARCHAR(20) = N'ab😎 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARCHAR(50) = '  比尔·拉莫斯    ', @charSet NVARCHAR(20) = N'比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet CHAR(20) = 'ab? '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet CHAR(20) = 'ab🙂 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet CHAR(20) = 'ab😎 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  比尔·拉莫斯    ', @charSet CHAR(20) = '比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet VARCHAR(20) = 'ab? '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet VARCHAR(20) = 'ab🙂 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet VARCHAR(20) = 'ab😎 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  比尔·拉莫斯    ', @charSet VARCHAR(20) = '比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet NVARCHAR(20) = N'ab🙂 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet NVARCHAR(20) = N'ab😎 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NCHAR(50) = N'  比尔·拉莫斯    ', @charSet NVARCHAR(20) = N'比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet CHAR(20) = 'ab? '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet CHAR(20) = 'ab🙂 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet CHAR(20) = 'ab😎 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  比尔·拉莫斯    ', @charSet CHAR(20) = '比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet VARCHAR(20) = 'ab? '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet VARCHAR(20) = 'ab🙂 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet VARCHAR(20) = 'ab😎 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  比尔·拉莫斯    ', @charSet VARCHAR(20) = '比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet NCHAR(20) = N'ab🙂 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  abc🙂defghi🙂🙂    ', @charSet NCHAR(20) = N'ab😎 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  比尔·拉莫斯    ', @charSet NCHAR(20) = N'比拉斯 '
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString NVARCHAR(50) = N'  ABCDEF    ', @charSet BINARY(4) = 0x414243
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+statement ok
+DECLARE @inputString VARBINARY(50) = 0x41424344, @charSet VARBINARY(2) = 0x4144
+SELECT '|' + TRIM(@charSet FROM @inputString) + '|'
+
+query T
+SELECT TRIM(a) FROM babel_4489_trim_UDT
+----
+abcdef
+
+query T
+SELECT TRIM(b) FROM babel_4489_trim_UDT
+----
+abcdef
+
+statement ok
+DECLARE @charSet VARCHAR(10) = 'ab'
+SELECT TRIM(@charSet FROM a) FROM babel_4489_trim_UDT
+
+statement ok
+DECLARE @charSet VARCHAR(10) = 'ab'
+SELECT TRIM(@charSet FROM b) FROM babel_4489_trim_UDT
+
+statement ok
+DECLARE @inputString date = '2016-12-21'
+SELECT TRIM('12' FROM @inputString)
+
+statement ok
+DECLARE @inputString date = '2016-12-21'
+SELECT TRIM(@inputString FROM @inputString)
+
+statement ok
+DECLARE @charSet VARCHAR(20) = 'ab? '
+SELECT TRIM(@charSet FROM a) FROM babel_4489_trim_text
+
+statement ok
+DECLARE @charSet VARCHAR(20) = 'ab? '
+SELECT TRIM(@charSet FROM b) FROM babel_4489_trim_text
+
+statement ok
+DROP FUNCTION babel_4489_trim_itvf_func
+
+statement ok
+DROP VIEW babel_4489_trim_dep_view
+
+statement ok
+DROP VIEW babel_4489_trim_dep_view_1
+
+statement ok
+DROP VIEW babel_4489_trim_dep_view_2
+
+statement ok
+DROP VIEW babel_4489_trim_dep_view_3
+
+statement ok
+DROP VIEW babel_4489_trim_dep_view_4
+
+statement ok
+DROP VIEW babel_4489_trim_dep_view_5
+
+statement ok
+DROP VIEW babel_4489_trim_dep_view_6
+
+statement ok
+DROP TABLE babel_4489_trim_UDT
+
+statement ok
+DROP TABLE babel_4489_trim_text
+
+statement ok
+DROP TABLE babel_4489_trim_image
+
+statement ok
+DROP TABLE babel_4489_trim_arabic_ci_ai
+
+statement ok
+DROP TABLE babel_4489_trim_arabic_cs_as
+
+statement ok
+DROP TABLE babel_4489_trim_arabic_ci_as
+
+statement ok
+DROP TABLE babel_4489_trim_chinese_prc_ci_ai
+
+statement ok
+DROP TABLE babel_4489_trim_chinese_prc_cs_as
+
+statement ok
+DROP TABLE babel_4489_trim_chinese_prc_ci_as
+
+statement ok
+DROP TABLE babel_4489_trim_t5
+
+statement ok
+DROP TABLE babel_4489_trim_t4
+
+statement ok
+DROP TABLE babel_4489_trim_t3
+
+statement ok
+DROP TABLE babel_4489_trim_t2
+
+statement ok
+DROP TABLE babel_4489_trim_t1
+

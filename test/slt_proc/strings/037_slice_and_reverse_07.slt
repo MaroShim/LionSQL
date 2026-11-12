@@ -1,0 +1,29 @@
+# test/slt_proc/strings/037_slice_and_reverse_07.slt
+# T-SQL LEFT/RIGHT/SUBSTRING/REVERSE/LEN on 'BytecodeVirtualMachine'
+
+query TTTT
+SELECT LEFT('BytecodeVirtualMachine', 8), RIGHT('BytecodeVirtualMachine', 7), SUBSTRING('BytecodeVirtualMachine', 9, 7), REVERSE('BytecodeVirtualMachine');
+----
+Bytecode Machine Virtual enihcaMlautriVedocetyB
+
+query TT
+SELECT UPPER('Bytecode'), LOWER('Machine');
+----
+BYTECODE machine
+
+query I
+SELECT LEN('BytecodeVirtualMachine');
+----
+22
+
+statement ok
+CREATE PROCEDURE sp_str_slice_37 @in VARCHAR(50)
+AS
+BEGIN
+    SELECT CONCAT(LEFT(@in, 8), '-', RIGHT(@in, 7), ':', CAST(LEN(@in) AS VARCHAR(10)));
+END;
+
+query T
+EXEC sp_str_slice_37 'BytecodeVirtualMachine';
+----
+Bytecode-Machine:22

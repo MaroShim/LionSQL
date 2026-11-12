@@ -1,0 +1,120 @@
+# test/slt_proc/babelfish_oracle/426_babel_babel_column_alias.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-COLUMN-ALIAS.sql
+
+query T
+SELECT 1 a
+----
+1
+
+query T
+SELECT 1 'a'
+----
+1
+
+query T
+SELECT 1 "a"
+----
+1
+
+query T
+SELECT a=1
+----
+false
+
+query T
+SELECT 'a'=1
+----
+false
+
+query T
+SELECT "a"=1
+----
+false
+
+query T
+SELECT 1 year
+----
+1
+
+query T
+SELECT 1 'year'
+----
+1
+
+query T
+SELECT 1 "year"
+----
+1
+
+query T
+SELECT year=1
+----
+false
+
+query T
+SELECT 'year'=1
+----
+false
+
+query T
+SELECT "year"=1
+----
+false
+
+statement ok
+CREATE TABLE t_567 (a int);
+INSERT INTO t_567 VALUES (42);
+
+query T
+SELECT a year from t_567;
+----
+42
+
+query T
+SELECT a 'year' from t_567;
+----
+42
+
+query T
+SELECT a "year" from t_567;
+----
+42
+
+query T
+SELECT year=a from t_567;
+----
+NULL
+
+query T
+SELECT 'year'=a from t_567;
+----
+false
+
+query T
+SELECT "year"=a from t_567;
+----
+NULL
+
+statement ok
+DROP TABLE t_567;
+
+query T
+SELECT 1 """col"""
+----
+1
+
+query T
+SELECT """col"""=1
+----
+false
+
+query T
+SELECT 1 ["col"]
+----
+1
+
+query T
+SELECT ["col"]=1
+----
+false
+

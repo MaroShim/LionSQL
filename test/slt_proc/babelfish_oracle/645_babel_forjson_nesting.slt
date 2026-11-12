@@ -1,0 +1,262 @@
+# test/slt_proc/babelfish_oracle/645_babel_forjson_nesting.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/forjson/forjson-nesting-vu-prepare.sql, test/babelfish/raw/forjson/forjson-nesting-vu-verify.sql, test/babelfish/raw/forjson/forjson-nesting-vu-cleanup.sql
+
+statement ok
+CREATE TABLE forjson_nesting_vu_t_users (
+    [Id] int,
+    [firstname] varchar(50),
+    [lastname] varchar(50),
+    [email] varchar(50),
+);
+
+statement ok
+CREATE TABLE forjson_nesting_vu_t_products (
+    [Id] int,
+    [name] varchar(50),
+    [price] varchar (25)
+);
+
+statement ok
+CREATE TABLE forjson_nesting_vu_t_orders (
+    [Id] int,
+    [userid] int,
+    [productid] int,
+    [quantity] int,
+    [orderdate] Date
+);
+
+statement ok
+CREATE TABLE forjson_nesting_vu_t_null_users (
+    [Id] int,
+    [firstname] varchar(50),
+    [lastname] varchar(50),
+    [email] varchar(50),
+    [phone] varchar(25)
+);
+
+statement ok
+INSERT INTO forjson_nesting_vu_t_users
+VALUES 
+    (1, 'John', 'Doe', 'johndoe@gmail.com'),
+    (2, 'Jane', 'Smith', 'janesmith@yahoo.com'),
+    (3, 'Mike', 'Johnson', 'mikejohnson');
+
+statement ok
+INSERT INTO forjson_nesting_vu_t_products
+VALUES
+    (1, 'Product A', '10.99'),
+    (2, 'Product B', '19.99'),
+    (3, 'Product C', '5.99');
+
+statement ok
+INSERT INTO forjson_nesting_vu_t_orders
+VALUES
+    (1, 1, 1, 2, '2023-06-25'),
+    (2, 1, 2, 1, '2023-06-25'),
+    (3, 2, 3, 3, '2023-06-26');
+
+statement ok
+INSERT INTO forjson_nesting_vu_t_null_users
+VALUES
+    (1, 'John', 'Doe', 'johndoe@gmail.com', '123-456-7890'),
+    (2, 'Jane', 'Smith', 'janesmith@yahoo.com', NULL),
+    (3, NULL, NULL, 'mikejohnson@myspace.com', '098-765-4321'),
+    (4, 'Sergio', 'Giavanni', NULL, NULL);
+
+statement ok
+CREATE VIEW forjson_nesting_vu_v_users AS
+SELECT (
+    SELECT Id, 
+            firstname AS "Name.first",
+            lastname AS "Name.last",
+            email
+    FROM forjson_nesting_vu_t_users
+    FOR JSON PATH
+) c1
+
+statement ok
+CREATE VIEW forjson_nesting_vu_v_products AS
+SELECT (
+    SELECT Id,
+            name AS "Info.name",
+            price AS "Info.price"
+    FROM forjson_nesting_vu_t_products
+    FOR JSON PATH
+) c1
+
+statement ok
+CREATE VIEW forjson_nesting_vu_v_orders AS
+SELECT (
+    SELECT Id AS "Id.orderid",
+            userid AS "Id.userid",
+            productid AS "Id.productid",
+            quantity AS "orderinfo.quantity",
+            orderdate AS "orderinfo.orderdate"
+    FROM forjson_nesting_vu_t_orders
+    FOR JSON PATH
+) c1
+
+statement ok
+CREATE VIEW forjson_nesting_vu_v_deep AS
+SELECT (
+    SELECT Id,
+            firstname AS "User.info.name.first",
+            lastname AS "User.info.name.last"
+    FROM forjson_nesting_vu_t_users
+    FOR JSON PATH
+) c1
+
+statement ok
+CREATE VIEW forjson_nesting_vu_v_join_deep AS
+SELECT (
+    SELECT U.Id "User.id",
+            O.quantity AS "User.order.info.quantity",
+            O.orderdate AS "User.order.info.orderdate"
+    FROM forjson_nesting_vu_t_users U
+        JOIN forjson_nesting_vu_t_orders O
+            ON (U.id = O.userid)
+    FOR JSON PATH 
+) c1
+
+statement ok
+CREATE VIEW forjson_nesting_vu_v_layered_insert AS
+SELECT (
+    SELECT U.id,
+        O.id AS "Order.Orderid",
+        P.id AS "Order.Product.Productid",
+        O.orderdate AS "Order.date"
+    FROM forjson_nesting_vu_t_users U
+        JOIN forjson_nesting_vu_t_orders O
+            ON (U.id = O.userid)
+        JOIN forjson_nesting_vu_t_products P
+            ON (P.id = O.productid)
+    FOR JSON PATH
+) c1
+
+statement ok
+CREATE VIEW forjson_nesting_vu_v_error AS
+SELECT (
+    SELECT id,
+            firstname AS "user.name",
+            lastname AS "user.name.last"
+    FROM forjson_nesting_vu_t_users
+    FOR JSON PATH
+)
+
+statement ok
+CREATE VIEW forjson_nesting_vu_v_no_null AS
+SELECT (
+    SELECT id,
+            firstname AS "user.name.first",
+            lastname AS "user.name.last",
+            email AS "contact.email",
+            phone AS "contact.phone"
+    FROM forjson_nesting_vu_t_null_users
+    FOR JSON PATH
+)
+
+statement ok
+CREATE VIEW forjson_nesting_vu_v_with_null AS
+SELECT (
+    SELECT id,
+            firstname AS "user.name.first",
+            lastname AS "user.name.last",
+            email AS "contact.email",
+            phone AS "contact.phone"
+    FROM forjson_nesting_vu_t_null_users
+    FOR JSON PATH, INCLUDE_NULL_VALUES
+)
+
+query TTTT
+SELECT * FROM forjson_nesting_vu_t_users
+----
+1 John Doe johndoe@gmail.com
+2 Jane Smith janesmith@yahoo.com
+3 Mike Johnson mikejohnson
+
+query TTTTT
+SELECT * FROM forjson_nesting_vu_t_orders
+----
+1 1 1 2 2023-06-25
+2 1 2 1 2023-06-25
+3 2 3 3 2023-06-26
+
+query T
+SELECT * FROM forjson_nesting_vu_v_users
+----
+[{"Id":1,"Name":{"first":"John","last":"Doe"},"email":"johndoe@gmail.com"},{"Id":2,"Name":{"first":"Jane","last":"Smith"},"email":"janesmith@yahoo.com"},{"Id":3,"Name":{"first":"Mike","last":"Johnson"},"email":"mikejohnson"}]
+
+query T
+SELECT * FROM forjson_nesting_vu_v_orders
+----
+[{"Id":{"orderid":1,"productid":1,"userid":1},"orderinfo":{"orderdate":"2023-06-25","quantity":2}},{"Id":{"orderid":2,"productid":2,"userid":1},"orderinfo":{"orderdate":"2023-06-25","quantity":1}},{"Id":{"orderid":3,"productid":3,"userid":2},"orderinfo":{"orderdate":"2023-06-26","quantity":3}}]
+
+query T
+SELECT * FROM forjson_nesting_vu_v_deep
+----
+[{"Id":1,"first":"John","last":"Doe"},{"Id":2,"first":"Jane","last":"Smith"},{"Id":3,"first":"Mike","last":"Johnson"}]
+
+query T
+SELECT * FROM forjson_nesting_vu_v_join_deep
+----
+[{"User":{"id":1},"orderdate":"2023-06-25","quantity":2},{"User":{"id":1},"orderdate":"2023-06-25","quantity":1},{"User":{"id":2},"orderdate":"2023-06-26","quantity":3}]
+
+query T
+SELECT * FROM forjson_nesting_vu_v_layered_insert
+----
+[{"Order":{"Orderid":1,"date":"2023-06-25"},"Productid":1,"id":1},{"Order":{"Orderid":2,"date":"2023-06-25"},"Productid":2,"id":1},{"Order":{"Orderid":3,"date":"2023-06-26"},"Productid":3,"id":2}]
+
+query T
+SELECT * FROM forjson_nesting_vu_v_error
+----
+[{"id":1,"last":"Doe","user":{"name":"John"}},{"id":2,"last":"Smith","user":{"name":"Jane"}},{"id":3,"last":"Johnson","user":{"name":"Mike"}}]
+
+query T
+SELECT * FROM forjson_nesting_vu_v_no_null
+----
+[{"contact":{"email":"johndoe@gmail.com","phone":"123-456-7890"},"first":"John","id":1,"last":"Doe"},{"contact":{"email":"janesmith@yahoo.com"},"first":"Jane","id":2,"last":"Smith"},{"contact":{"email":"mikejohnson@myspace.com","phone":"098-765-4321"},"id":3},{"first":"Sergio","id":4,"last":"Giavanni"}]
+
+query T
+SELECT * FROM forjson_nesting_vu_v_with_null
+----
+[{"contact":{"email":"johndoe@gmail.com","phone":"123-456-7890"},"first":"John","id":1,"last":"Doe"},{"contact":{"email":"janesmith@yahoo.com","phone":null},"first":"Jane","id":2,"last":"Smith"},{"contact":{"email":"mikejohnson@myspace.com","phone":"098-765-4321"},"first":null,"id":3,"last":null},{"contact":{"email":null,"phone":null},"first":"Sergio","id":4,"last":"Giavanni"}]
+
+statement ok
+DROP VIEW forjson_nesting_vu_v_users
+
+statement ok
+DROP VIEW forjson_nesting_vu_v_products
+
+statement ok
+DROP VIEW forjson_nesting_vu_v_orders
+
+statement ok
+DROP VIEW forjson_nesting_vu_v_deep
+
+statement ok
+DROP VIEW forjson_nesting_vu_v_join_deep
+
+statement ok
+DROP VIEW forjson_nesting_vu_v_layered_insert
+
+statement ok
+DROP VIEW forjson_nesting_vu_v_error
+
+statement ok
+DROP VIEW forjson_nesting_vu_v_no_null
+
+statement ok
+DROP VIEW forjson_nesting_vu_v_with_null
+
+statement ok
+DROP TABLE forjson_nesting_vu_t_users
+
+statement ok
+DROP TABLE forjson_nesting_vu_t_products
+
+statement ok
+DROP TABLE forjson_nesting_vu_t_orders
+
+statement ok
+DROP TABLE forjson_nesting_vu_t_null_users
+

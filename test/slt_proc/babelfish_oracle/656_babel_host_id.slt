@@ -1,0 +1,27 @@
+# test/slt_proc/babelfish_oracle/656_babel_host_id.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/host_id-vu-prepare.sql, test/babelfish/raw/functions/host_id-vu-verify.sql, test/babelfish/raw/functions/host_id-vu-cleanup.sql
+
+statement ok
+CREATE VIEW host_id_4272_v1 AS (SELECT CASE WHEN CAST(HOST_ID() AS INT) >= 0 THEN 'HOST_ID() returns number' ELSE 'HOST_ID() unexpected value' END) 
+
+statement ok
+CREATE PROCEDURE host_id_4272_p1 AS (SELECT CASE WHEN CAST(HOST_ID() AS INT) >= 0 THEN 'HOST_ID() returns number' ELSE 'HOST_ID() unexpected value' END);
+
+query T
+SELECT ISNUMERIC(HOST_ID())
+----
+1
+
+query T
+SELECT 1
+WHERE (SELECT DISTINCT ISNULL(hostprocess,0) FROM sys.sysprocesses WHERE spid = @@SPID) = CAST(HOST_ID() AS INT)
+AND (SELECT DISTINCT ISNULL(host_process_id,0) FROM sys.dm_exec_sessions WHERE session_id = @@SPID) = CAST(HOST_ID() AS INT)
+----
+1
+
+statement ok
+DROP VIEW host_id_4272_v1
+
+statement ok
+DROP PROCEDURE host_id_4272_p1
+

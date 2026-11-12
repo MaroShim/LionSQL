@@ -1,0 +1,48 @@
+# test/slt_proc/babelfish_oracle/495_babel_babel_select_distinct_top.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_select_distinct_top.sql
+
+statement ok
+create table babel_select_distinct_top (a int);
+
+statement ok
+insert into babel_select_distinct_top values (3), (1), (2), (2), (1);
+
+query T
+select * from babel_select_distinct_top ORDER BY a ASC;
+----
+1
+1
+2
+2
+3
+
+query T
+select distinct a from babel_select_distinct_top order by a;
+----
+1
+2
+3
+
+query T
+select distinct top(2) a from babel_select_distinct_top order by a;
+----
+1
+
+query T
+select * from (select distinct top(2) a from babel_select_distinct_top order by a) b;
+----
+1
+
+query T
+select (select distinct top(1) a from babel_select_distinct_top order by a);
+----
+1
+
+query T
+select 'foo' where (select distinct top(1) a from babel_select_distinct_top order by a) = 1;
+----
+foo
+
+statement ok
+drop table babel_select_distinct_top;
+

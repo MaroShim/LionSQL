@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"lionsql/pkg/proc"
@@ -388,6 +389,9 @@ func isPureInteger(s string) bool {
 	start := 0
 	if s[0] == '-' || s[0] == '+' {
 		start = 1
+		for start < len(s) && s[start] == ' ' {
+			start++
+		}
 	}
 	if start >= len(s) {
 		return false
@@ -416,17 +420,24 @@ func parseLiteralValue(s string) any {
 	}
 	// Number parsing without coercion of formatted strings
 	if isPureInteger(s) {
-		var n int64
-		if _, err := fmt.Sscanf(s, "%d", &n); err == nil {
+		normalized := s
+		if (s[0] == '-' || s[0] == '+') && strings.Contains(s, " ") {
+			normalized = string(s[0]) + strings.TrimSpace(s[1:])
+		}
+		if n, err := strconv.ParseInt(normalized, 10, 64); err == nil {
 			return n
 		}
 	}
 	if strings.Count(s, ".") == 1 {
-		if d, err := storage.ParseDecimal(s); err == nil {
+		normalized := s
+		if len(s) > 1 && (s[0] == '-' || s[0] == '+') && strings.Contains(s, " ") {
+			normalized = string(s[0]) + strings.TrimSpace(s[1:])
+		}
+		if d, err := storage.ParseDecimal(normalized); err == nil {
 			return d
 		}
 		var f float64
-		if _, err := fmt.Sscanf(s, "%f", &f); err == nil {
+		if _, err := fmt.Sscanf(normalized, "%f", &f); err == nil {
 			return f
 		}
 	}

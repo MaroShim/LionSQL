@@ -1,0 +1,31 @@
+# test/slt_proc/babelfish_oracle/1323_babel_test_sp_helpdbfixedrole.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_helpdbfixedrole-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_helpdbfixedrole-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_helpdbfixedrole-vu-cleanup.sql
+
+statement ok
+CREATE TABLE test_sp_helpdbfixedrole_tbl (DbFixedRole sys.SYSNAME, 
+											Description sys.NVARCHAR(70));
+
+statement ok
+SELECT DbFixedRole, Description FROM test_sp_helpdbfixedrole_tbl
+
+statement ok
+TRUNCATE TABLE test_sp_helpdbfixedrole_tbl
+
+statement ok
+SELECT DbFixedRole, Description FROM test_sp_helpdbfixedrole_tbl
+
+statement ok
+TRUNCATE TABLE test_sp_helpdbfixedrole_tbl
+
+statement ok
+SELECT DbFixedRole, Description FROM test_sp_helpdbfixedrole_tbl
+
+statement ok
+TRUNCATE TABLE test_sp_helpdbfixedrole_tbl
+
+statement ok
+SELECT DbFixedRole, Description FROM test_sp_helpdbfixedrole_tbl
+
+statement ok
+DROP TABLE test_sp_helpdbfixedrole_tbl
+

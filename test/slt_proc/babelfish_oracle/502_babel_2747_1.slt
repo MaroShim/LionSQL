@@ -1,0 +1,133 @@
+# test/slt_proc/babelfish_oracle/502_babel_2747_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/2747_1.sql
+
+statement ok
+RAISERROR('%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d'
+,1,
+1,
+3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3)
+
+statement ok
+begin transaction
+
+statement ok
+RAISERROR('%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d'
+,1,
+1,
+3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3)
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+create schema error_mapping;
+
+statement ok
+create table error_mapping.temp1 (a int)
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+insert into error_mapping.temp1 values(1)
+RAISERROR('%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d'
+,1,
+1,
+3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3)
+end
+
+statement ok
+create table error_mapping.temp2 (a int)
+
+statement ok
+create table error_mapping.temp3 (a int)
+
+statement ok
+drop procedure error_mapping.ErrorHandling1;
+
+statement ok
+drop table error_mapping.temp1;
+drop table error_mapping.temp2;
+drop table error_mapping.temp3;
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+RAISERROR('%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d'
+,1,
+1,
+3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('Compile time error' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+begin transaction
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+RAISERROR('%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d'
+,1,
+1,
+3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+set xact_abort ON;
+
+statement ok
+begin transaction
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+RAISERROR('%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d'
+,1,
+1,
+3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3)
+if @@error > 0 select cast('STATEMENT TERMINATING ERROR' as text);
+end
+
+statement ok
+declare @err int = @@error; if (@err > 0 and @@trancount > 0) select cast('BATCH ONLY TERMINATING' as text) else if @err > 0 select cast('BATCH TERMINATING\ txn rolledback' as text);
+if @@trancount > 0 rollback transaction;
+drop procedure error_mapping.ErrorHandling1;
+set xact_abort OFF;
+set implicit_transactions OFF;
+
+statement ok
+set xact_abort OFF;
+
+query T
+begin try
+select 1
+RAISERROR('%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d'
+,1,
+1,
+3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3)
+end try
+begin catch
+	select xact_state();
+end catch
+if @@trancount > 0 rollback transaction;
+----
+1
+
+statement ok
+drop schema error_mapping;
+

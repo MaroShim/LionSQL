@@ -1,0 +1,36 @@
+# test/slt_proc/babelfish_oracle/680_babel_operator_binary_whitespace_before_15_6_or_16_2.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/operator_binary_whitespace-before-15_6-or-16_2-vu-prepare.sql, test/babelfish/raw/operator_binary_whitespace-before-15_6-or-16_2-vu-verify.sql, test/babelfish/raw/operator_binary_whitespace-before-15_6-or-16_2-vu-cleanup.sql
+
+statement ok
+create procedure p1_bitop  as select 99&~5|-4
+
+statement ok
+create procedure p1_bitop_not  as select ~+2
+
+statement ok
+create procedure p1_modulo_op as select 10%+2
+
+query T
+execute p1_bitop
+----
+-2
+
+query T
+execute p1_bitop_not 
+----
+-3
+
+query T
+exec p1_modulo_op
+----
+0
+
+statement ok
+drop procedure p1_bitop
+
+statement ok
+drop procedure p1_bitop_not
+
+statement ok
+drop procedure p1_modulo_op
+

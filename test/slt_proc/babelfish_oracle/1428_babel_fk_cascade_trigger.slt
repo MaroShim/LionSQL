@@ -1,0 +1,1502 @@
+# test/slt_proc/babelfish_oracle/1428_babel_fk_cascade_trigger.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/triggers/fk-cascade-trigger-vu-prepare.sql, test/babelfish/raw/triggers/fk-cascade-trigger-vu-verify.sql, test/babelfish/raw/triggers/fk-cascade-trigger-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel7022_parent (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_history (id int, parent_id int)
+
+statement ok
+CREATE TABLE babel7022_fire_count (rows_seen int)
+
+statement ok
+CREATE TRIGGER babel7022_child_del_trg
+  ON babel7022_child
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_fire_count (rows_seen) SELECT COUNT(*) FROM deleted;
+  INSERT INTO babel7022_history (id, parent_id)
+    SELECT id, parent_id FROM deleted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent2 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child2 (
+  id int IDENTITY(1,1) PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent2(id) ON DELETE CASCADE,
+  val varchar(20)
+)
+
+statement ok
+CREATE TABLE babel7022_history2 (child_id int, parent_id int, val varchar(20))
+
+statement ok
+CREATE TRIGGER babel7022_child2_del_trg
+  ON babel7022_child2
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_history2 (child_id, parent_id, val)
+    SELECT id, parent_id, val FROM deleted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent3 (id int PRIMARY KEY, name varchar(50))
+
+statement ok
+CREATE TABLE babel7022_child3 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent3(id) ON UPDATE CASCADE,
+  data varchar(50)
+)
+
+statement ok
+CREATE TABLE babel7022_update_log (child_id int, old_parent_id int, new_parent_id int)
+
+statement ok
+CREATE TRIGGER babel7022_child3_upd_trg
+  ON babel7022_child3
+  AFTER UPDATE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_update_log (child_id, old_parent_id, new_parent_id)
+    SELECT d.id, d.parent_id, i.parent_id
+    FROM deleted d JOIN inserted i ON d.id = i.id;
+END
+
+statement ok
+CREATE TABLE babel7022_parent4 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child4 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent4(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_audit4a (cnt int)
+
+statement ok
+CREATE TABLE babel7022_audit4b (cnt int)
+
+statement ok
+CREATE TRIGGER babel7022_child4_del_trg_a
+  ON babel7022_child4
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_audit4a (cnt) SELECT COUNT(*) FROM deleted;
+END
+
+statement ok
+CREATE TRIGGER babel7022_child4_del_trg_b
+  ON babel7022_child4
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_audit4b (cnt) SELECT COUNT(*) FROM deleted;
+END
+
+statement ok
+CREATE TABLE babel7022_gp (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_p (
+  id int PRIMARY KEY,
+  gp_id int NOT NULL REFERENCES babel7022_gp(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_c (
+  id int PRIMARY KEY,
+  p_id int NOT NULL REFERENCES babel7022_p(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_gp_log (tbl varchar(10), del_count int)
+
+statement ok
+CREATE TRIGGER babel7022_p_del_trg
+  ON babel7022_p
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_gp_log (tbl, del_count) SELECT 'parent', COUNT(*) FROM deleted;
+END
+
+statement ok
+CREATE TRIGGER babel7022_c_del_trg
+  ON babel7022_c
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_gp_log (tbl, del_count) SELECT 'child', COUNT(*) FROM deleted;
+END
+
+statement ok
+CREATE TABLE babel7022_standalone (id int PRIMARY KEY, val varchar(50))
+
+statement ok
+CREATE TABLE babel7022_standalone_log (id int, val varchar(50))
+
+statement ok
+CREATE TRIGGER babel7022_standalone_del_trg
+  ON babel7022_standalone
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_standalone_log (id, val)
+    SELECT id, val FROM deleted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent7 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child7 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent7(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_ins_log (id int, parent_id int)
+
+statement ok
+CREATE TRIGGER babel7022_child7_ins_trg
+  ON babel7022_child7
+  AFTER INSERT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_ins_log (id, parent_id)
+    SELECT id, parent_id FROM inserted;
+END
+
+statement ok
+CREATE TABLE babel7022_t8 (id int PRIMARY KEY, val int)
+
+statement ok
+CREATE TABLE babel7022_t8_log (id int, old_val int, new_val int)
+
+statement ok
+CREATE TRIGGER babel7022_t8_upd_trg
+  ON babel7022_t8
+  AFTER UPDATE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_t8_log (id, old_val, new_val)
+    SELECT d.id, d.val, i.val FROM deleted d JOIN inserted i ON d.id = i.id;
+END
+
+statement ok
+CREATE TABLE babel7022_parent9 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child9 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent9(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_log9 (cnt int)
+
+statement ok
+CREATE TRIGGER babel7022_child9_del_trg
+  ON babel7022_child9
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_log9 (cnt) SELECT COUNT(*) FROM deleted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent10 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child10 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent10(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_log10 (id int, parent_id int)
+
+statement ok
+CREATE TRIGGER babel7022_child10_del_trg
+  ON babel7022_child10
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_log10 (id, parent_id)
+    SELECT id, parent_id FROM deleted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent11 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child11 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent11(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_log11 (firing_num int IDENTITY(1,1), del_count int)
+
+statement ok
+CREATE TRIGGER babel7022_child11_del_trg
+  ON babel7022_child11
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_log11 (del_count) SELECT COUNT(*) FROM deleted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent12 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child12 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent12(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_log12 (id int, parent_id int)
+
+statement ok
+CREATE TRIGGER babel7022_child12_del_trg
+  ON babel7022_child12
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_log12 (id, parent_id)
+    SELECT id, parent_id FROM deleted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent13a (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child13a (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent13a(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_history13a (id int, parent_id int)
+
+statement ok
+CREATE TRIGGER babel7022_child13a_del_trg
+  ON babel7022_child13a
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SAVE TRANSACTION trg_sp;
+  INSERT INTO babel7022_history13a (id, parent_id) SELECT id, parent_id FROM deleted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent13b (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child13b (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent13b(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_history13b (id int, parent_id int)
+
+statement ok
+CREATE TRIGGER babel7022_child13b_del_trg
+  ON babel7022_child13b
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_history13b (id, parent_id) SELECT id, -1 FROM deleted;
+  SAVE TRANSACTION trg_sp;
+  INSERT INTO babel7022_history13b (id, parent_id) SELECT id, parent_id FROM deleted;
+  ROLLBACK TRANSACTION trg_sp;
+END
+
+statement ok
+CREATE TABLE babel7022_parent13c (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child13c (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent13c(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_history13c (id int, parent_id int)
+
+statement ok
+CREATE TRIGGER babel7022_child13c_del_trg
+  ON babel7022_child13c
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  BEGIN TRANSACTION;
+  INSERT INTO babel7022_history13c (id, parent_id) SELECT id, parent_id FROM deleted;
+  COMMIT TRANSACTION;
+END
+
+statement ok
+CREATE TABLE babel7022_parent13d (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child13d (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent13d(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_history13d (id int, parent_id int)
+
+statement ok
+CREATE TRIGGER babel7022_child13d_del_trg
+  ON babel7022_child13d
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_history13d (id, parent_id) SELECT id, parent_id FROM deleted;
+  ROLLBACK TRANSACTION;
+END
+
+statement ok
+CREATE TABLE babel7022_t14 (id int PRIMARY KEY, val int)
+
+statement ok
+CREATE TABLE babel7022_fire14 (rows_seen int)
+
+statement ok
+CREATE TRIGGER babel7022_t14_ins_trg
+  ON babel7022_t14
+  AFTER INSERT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_fire14 (rows_seen) SELECT COUNT(*) FROM inserted;
+END
+
+statement ok
+CREATE TABLE babel7022_t15 (id int PRIMARY KEY, val int)
+
+statement ok
+CREATE TABLE babel7022_fire15 (rows_seen int)
+
+statement ok
+CREATE TRIGGER babel7022_t15_upd_trg
+  ON babel7022_t15
+  AFTER UPDATE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_fire15 (rows_seen) SELECT COUNT(*) FROM inserted;
+END
+
+statement ok
+CREATE TABLE babel7022_t16 (id int PRIMARY KEY, val int)
+
+statement ok
+CREATE TABLE babel7022_fire16 (rows_seen int)
+
+statement ok
+CREATE TRIGGER babel7022_t16_del_trg
+  ON babel7022_t16
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_fire16 (rows_seen) SELECT COUNT(*) FROM deleted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent17 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child17 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent17(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_audit17 (id int, parent_id int)
+
+statement ok
+CREATE TABLE babel7022_audit17_fire (rows_seen int)
+
+statement ok
+CREATE TRIGGER babel7022_child17_del_trg
+  ON babel7022_child17
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_audit17 (id, parent_id) SELECT id, parent_id FROM deleted;
+END
+
+statement ok
+CREATE TRIGGER babel7022_audit17_ins_trg
+  ON babel7022_audit17
+  AFTER INSERT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_audit17_fire (rows_seen) SELECT COUNT(*) FROM inserted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent18 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child18 (
+  id int PRIMARY KEY,
+  parent_id int NULL REFERENCES babel7022_parent18(id) ON DELETE SET NULL
+)
+
+statement ok
+CREATE TABLE babel7022_fire18 (rows_seen int)
+
+statement ok
+CREATE TRIGGER babel7022_child18_upd_trg
+  ON babel7022_child18
+  AFTER UPDATE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_fire18 (rows_seen) SELECT COUNT(*) FROM inserted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent19 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child19 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL DEFAULT 99 REFERENCES babel7022_parent19(id) ON DELETE SET DEFAULT
+)
+
+statement ok
+CREATE TABLE babel7022_fire19 (rows_seen int)
+
+statement ok
+CREATE TRIGGER babel7022_child19_upd_trg
+  ON babel7022_child19
+  AFTER UPDATE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_fire19 (rows_seen) SELECT COUNT(*) FROM inserted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent20 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child20 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent20(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TRIGGER babel7022_child20_del_trg
+  ON babel7022_child20
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  THROW 51000, 'batch terminating error from trigger', 1;
+END
+
+statement ok
+CREATE TABLE babel7022_parent21 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child21 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent21(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TRIGGER babel7022_child21_del_trg
+  ON babel7022_child21
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  THROW 51001, 'error caught by outer try/catch', 1;
+END
+
+statement ok
+CREATE TABLE babel7022_parent22p (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child22p (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent22p(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TRIGGER babel7022_child22p_del_trg
+  ON babel7022_child22p
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  THROW 51002, 'poison trigger', 1;
+END
+
+statement ok
+CREATE TABLE babel7022_parent22g (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child22g (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent22g(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_fire22g (rows_seen int)
+
+statement ok
+CREATE TRIGGER babel7022_child22g_del_trg
+  ON babel7022_child22g
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_fire22g (rows_seen) SELECT COUNT(*) FROM deleted;
+END
+
+statement ok
+CREATE TABLE babel7022_parent23 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child23 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent23(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TABLE babel7022_audit23 (k int CONSTRAINT babel7022_audit23_pk PRIMARY KEY)
+
+statement ok
+CREATE TRIGGER babel7022_child23_del_trg
+  ON babel7022_child23
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  INSERT INTO babel7022_audit23 (k) VALUES (99);
+END
+
+statement ok
+CREATE TABLE babel7022_parent24 (id int PRIMARY KEY)
+
+statement ok
+CREATE TABLE babel7022_child24 (
+  id int PRIMARY KEY,
+  parent_id int NOT NULL REFERENCES babel7022_parent24(id) ON DELETE CASCADE
+)
+
+statement ok
+CREATE TRIGGER babel7022_child24_del_trg
+  ON babel7022_child24
+  AFTER DELETE
+AS
+BEGIN
+  SET NOCOUNT ON;
+  BEGIN TRY
+    DECLARE @x int = 1 / 0;
+  END TRY
+  BEGIN CATCH
+    DECLARE @e int = ERROR_NUMBER();
+  END CATCH
+END
+
+statement ok
+INSERT INTO babel7022_parent SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5
+
+statement ok
+INSERT INTO babel7022_child (id, parent_id) SELECT 1,1 UNION SELECT 2,2 UNION SELECT 3,3 UNION SELECT 4,4 UNION SELECT 5,5
+
+statement ok
+DELETE FROM babel7022_parent
+
+query TT
+SELECT COUNT(*) AS fire_count, MAX(rows_seen) AS rows_seen_per_fire FROM babel7022_fire_count
+----
+0 NULL
+
+query T
+SELECT COUNT(*) AS history_count FROM babel7022_history
+----
+0
+
+statement ok
+SELECT id, parent_id FROM babel7022_history ORDER BY id
+
+statement ok
+INSERT INTO babel7022_parent2 VALUES (1)
+
+statement ok
+INSERT INTO babel7022_child2 (parent_id, val)
+  SELECT 1, 'child_' + CAST(n AS varchar)
+  FROM (SELECT 1 AS n UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5
+        UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10) t
+
+statement ok
+DELETE FROM babel7022_parent2 WHERE id = 1
+
+query T
+SELECT COUNT(*) AS history_count FROM babel7022_history2
+----
+0
+
+statement ok
+INSERT INTO babel7022_parent3 VALUES (1, 'old'), (2, 'new')
+
+statement ok
+INSERT INTO babel7022_child3 VALUES (1, 1, 'a'), (2, 1, 'b'), (3, 1, 'c'), (4, 1, 'd'), (5, 1, 'e')
+
+statement ok
+UPDATE babel7022_parent3 SET id = 10 WHERE id = 1
+
+query T
+SELECT COUNT(*) AS log_count FROM babel7022_update_log
+----
+0
+
+statement ok
+SELECT child_id, old_parent_id, new_parent_id FROM babel7022_update_log ORDER BY child_id
+
+statement ok
+INSERT INTO babel7022_parent4 SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5
+
+statement ok
+INSERT INTO babel7022_child4 SELECT 1,1 UNION SELECT 2,2 UNION SELECT 3,3 UNION SELECT 4,4 UNION SELECT 5,5
+
+statement ok
+DELETE FROM babel7022_parent4
+
+query TTT
+SELECT 'trigger_a' AS trigger_name, COUNT(*) AS fire_count, SUM(cnt) AS total_rows FROM babel7022_audit4a
+----
+trigger_a 0 NULL
+
+query TTT
+SELECT 'trigger_b' AS trigger_name, COUNT(*) AS fire_count, SUM(cnt) AS total_rows FROM babel7022_audit4b
+----
+trigger_b 0 NULL
+
+statement ok
+INSERT INTO babel7022_gp VALUES (1), (2)
+
+statement ok
+INSERT INTO babel7022_p VALUES (1, 1), (2, 1), (3, 2), (4, 2)
+
+statement ok
+INSERT INTO babel7022_c VALUES (1, 1), (2, 1), (3, 3), (4, 3)
+
+statement ok
+DELETE FROM babel7022_gp
+
+statement ok
+SELECT tbl, del_count FROM babel7022_gp_log ORDER BY tbl
+
+statement ok
+INSERT INTO babel7022_standalone VALUES (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')
+
+statement ok
+DELETE FROM babel7022_standalone
+
+query T
+SELECT COUNT(*) AS log_count FROM babel7022_standalone_log
+----
+0
+
+statement ok
+INSERT INTO babel7022_parent7 VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO babel7022_child7 VALUES (1, 1), (2, 2), (3, 3)
+
+query T
+SELECT COUNT(*) AS ins_log_count FROM babel7022_ins_log
+----
+0
+
+statement ok
+DELETE FROM babel7022_parent7
+
+query T
+SELECT COUNT(*) AS ins_log_count FROM babel7022_ins_log
+----
+0
+
+statement ok
+INSERT INTO babel7022_t8 VALUES (1, 10), (2, 20), (3, 30)
+
+statement ok
+UPDATE babel7022_t8 SET val = val + 100
+
+query T
+SELECT COUNT(*) AS log_count FROM babel7022_t8_log
+----
+0
+
+statement ok
+SELECT id, old_val, new_val FROM babel7022_t8_log ORDER BY id
+
+statement ok
+INSERT INTO babel7022_parent9 VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO babel7022_child9 VALUES (10, 2), (20, 3)
+
+statement ok
+DELETE FROM babel7022_parent9 WHERE id = 1
+
+statement ok
+SELECT * FROM babel7022_log9 ORDER BY cnt
+
+statement ok
+DELETE FROM babel7022_parent9 WHERE id = 2
+
+statement ok
+SELECT * FROM babel7022_log9 ORDER BY cnt
+
+statement ok
+INSERT INTO babel7022_parent10 VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO babel7022_child10 VALUES (1, 1), (2, 2), (3, 3)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DELETE FROM babel7022_parent10
+
+query T
+SELECT COUNT(*) AS log_count FROM babel7022_log10
+----
+0
+
+statement ok
+COMMIT
+
+query T
+SELECT COUNT(*) AS log_count FROM babel7022_log10
+----
+0
+
+statement ok
+INSERT INTO babel7022_parent11 VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO babel7022_child11 VALUES (1, 1), (2, 1), (3, 2), (4, 2), (5, 3), (6, 3)
+
+statement ok
+DELETE FROM babel7022_parent11 WHERE id = 1
+
+statement ok
+DELETE FROM babel7022_parent11 WHERE id = 2
+
+statement ok
+DELETE FROM babel7022_parent11 WHERE id = 3
+
+statement ok
+SELECT firing_num, del_count FROM babel7022_log11 ORDER BY firing_num
+
+statement ok
+INSERT INTO babel7022_parent12 VALUES (1), (2), (3), (4), (5)
+
+statement ok
+INSERT INTO babel7022_child12 VALUES (1,1), (2,2), (3,3), (4,4), (5,5)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DELETE FROM babel7022_parent12
+
+statement ok
+ROLLBACK TRANSACTION
+
+query T
+SELECT COUNT(*) AS log_count_after_rollback FROM babel7022_log12
+----
+0
+
+query T
+SELECT COUNT(*) AS parent_count_after_rollback FROM babel7022_parent12
+----
+5
+
+statement ok
+DELETE FROM babel7022_log12
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+SAVE TRANSACTION sp1
+
+statement ok
+DELETE FROM babel7022_parent12
+
+statement ok
+COMMIT TRANSACTION
+
+query T
+SELECT COUNT(*) AS log_count_after_savepoint_commit FROM babel7022_log12
+----
+0
+
+statement ok
+DELETE FROM babel7022_child12
+
+statement ok
+DELETE FROM babel7022_parent12
+
+statement ok
+DELETE FROM babel7022_log12
+
+statement ok
+INSERT INTO babel7022_parent12 VALUES (1), (2), (3), (4), (5)
+
+statement ok
+INSERT INTO babel7022_child12 VALUES (1,1), (2,2), (3,3), (4,4), (5,5)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+DELETE FROM babel7022_parent12 WHERE id IN (1, 2)
+
+statement ok
+SAVE TRANSACTION sp1
+
+statement ok
+DELETE FROM babel7022_parent12 WHERE id IN (3, 4, 5)
+
+statement ok
+ROLLBACK TRANSACTION sp1
+
+statement ok
+COMMIT TRANSACTION
+
+statement ok
+SELECT id, parent_id FROM babel7022_log12 ORDER BY id
+
+query T
+SELECT id FROM babel7022_parent12 ORDER BY id
+----
+3
+4
+5
+
+statement ok
+INSERT INTO babel7022_parent13a VALUES (1), (2), (3), (4), (5)
+
+statement ok
+INSERT INTO babel7022_child13a VALUES (1,1), (2,2), (3,3), (4,4), (5,5)
+
+statement ok
+DELETE FROM babel7022_parent13a
+
+query T
+SELECT COUNT(*) AS savepoint_in_trigger_count FROM babel7022_history13a
+----
+0
+
+statement ok
+INSERT INTO babel7022_parent13b VALUES (1), (2), (3), (4), (5)
+
+statement ok
+INSERT INTO babel7022_child13b VALUES (1,1), (2,2), (3,3), (4,4), (5,5)
+
+statement ok
+DELETE FROM babel7022_parent13b
+
+statement ok
+SELECT parent_id, COUNT(*) AS cnt FROM babel7022_history13b GROUP BY parent_id ORDER BY parent_id
+
+statement ok
+INSERT INTO babel7022_parent13c VALUES (1), (2), (3), (4), (5)
+
+statement ok
+INSERT INTO babel7022_child13c VALUES (1,1), (2,2), (3,3), (4,4), (5,5)
+
+statement ok
+DELETE FROM babel7022_parent13c
+
+query T
+SELECT COUNT(*) AS begin_commit_in_trigger_count FROM babel7022_history13c
+----
+0
+
+statement ok
+INSERT INTO babel7022_parent13d VALUES (1), (2), (3), (4), (5)
+
+statement ok
+INSERT INTO babel7022_child13d VALUES (1,1), (2,2), (3,3), (4,4), (5,5)
+
+statement ok
+DELETE FROM babel7022_parent13d
+
+query T
+SELECT COUNT(*) AS history_after_rollback FROM babel7022_history13d
+----
+0
+
+query T
+SELECT COUNT(*) AS parent_after_rollback FROM babel7022_parent13d
+----
+0
+
+statement ok
+INSERT INTO babel7022_t14 VALUES (1,10), (2,20), (3,30), (4,40), (5,50)
+
+query TT
+SELECT COUNT(*) AS fire_count, MAX(rows_seen) AS rows_seen_per_fire FROM babel7022_fire14
+----
+0 NULL
+
+statement ok
+INSERT INTO babel7022_t15 VALUES (1,10), (2,20), (3,30), (4,40), (5,50)
+
+statement ok
+UPDATE babel7022_t15 SET val = val + 1
+
+query TT
+SELECT COUNT(*) AS fire_count, MAX(rows_seen) AS rows_seen_per_fire FROM babel7022_fire15
+----
+0 NULL
+
+statement ok
+INSERT INTO babel7022_t16 VALUES (1,10), (2,20), (3,30), (4,40), (5,50)
+
+statement ok
+DELETE FROM babel7022_t16
+
+query TT
+SELECT COUNT(*) AS fire_count, MAX(rows_seen) AS rows_seen_per_fire FROM babel7022_fire16
+----
+0 NULL
+
+statement ok
+INSERT INTO babel7022_parent17 VALUES (1), (2), (3), (4), (5)
+
+statement ok
+INSERT INTO babel7022_child17 VALUES (1,1), (2,2), (3,3), (4,4), (5,5)
+
+statement ok
+DELETE FROM babel7022_parent17
+
+query T
+SELECT COUNT(*) AS audit_count FROM babel7022_audit17
+----
+0
+
+query TT
+SELECT COUNT(*) AS audit_fire_count, MAX(rows_seen) AS rows_seen_per_fire FROM babel7022_audit17_fire
+----
+0 NULL
+
+statement ok
+INSERT INTO babel7022_parent18 VALUES (1), (2), (3), (4), (5)
+
+statement ok
+INSERT INTO babel7022_child18 VALUES (1,1), (2,2), (3,3), (4,4), (5,5)
+
+statement ok
+DELETE FROM babel7022_parent18
+
+query TT
+SELECT COUNT(*) AS fire_count, MAX(rows_seen) AS rows_seen_per_fire FROM babel7022_fire18
+----
+0 NULL
+
+query T
+SELECT COUNT(*) AS null_children FROM babel7022_child18 WHERE parent_id IS NULL
+----
+5
+
+statement ok
+INSERT INTO babel7022_parent19 VALUES (1), (2), (3), (4), (5), (99)
+
+statement ok
+INSERT INTO babel7022_child19 VALUES (1,1), (2,2), (3,3), (4,4), (5,5)
+
+statement ok
+DELETE FROM babel7022_parent19 WHERE id IN (1, 2, 3, 4, 5)
+
+query TT
+SELECT COUNT(*) AS fire_count, MAX(rows_seen) AS rows_seen_per_fire FROM babel7022_fire19
+----
+0 NULL
+
+query T
+SELECT COUNT(*) AS default_children FROM babel7022_child19 WHERE parent_id = 99
+----
+0
+
+statement ok
+INSERT INTO babel7022_parent20 VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO babel7022_child20 VALUES (10,1), (20,2), (30,3)
+
+statement ok
+DELETE FROM babel7022_parent20 WHERE id = 1
+
+query T
+SELECT COUNT(*) AS parent_remaining FROM babel7022_parent20
+----
+2
+
+statement ok
+INSERT INTO babel7022_parent21 VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO babel7022_child21 VALUES (10,1), (20,2), (30,3)
+
+statement ok
+BEGIN TRY
+  DELETE FROM babel7022_parent21 WHERE id = 1
+END TRY
+BEGIN CATCH
+  SELECT ERROR_NUMBER() AS err_number, ERROR_MESSAGE() AS err_message
+END CATCH
+
+query T
+SELECT COUNT(*) AS parent_remaining FROM babel7022_parent21
+----
+2
+
+statement ok
+INSERT INTO babel7022_parent22p VALUES (1), (2)
+
+statement ok
+INSERT INTO babel7022_child22p VALUES (10,1), (20,2)
+
+statement ok
+INSERT INTO babel7022_parent22g VALUES (1), (2), (3), (4), (5)
+
+statement ok
+INSERT INTO babel7022_child22g VALUES (10,1), (20,2), (30,3), (40,4), (50,5)
+
+statement ok
+BEGIN TRY
+  DELETE FROM babel7022_parent22p
+END TRY
+BEGIN CATCH
+  SELECT ERROR_NUMBER() AS caught_err
+END CATCH
+
+statement ok
+DELETE FROM babel7022_parent22g
+
+query T
+SELECT COUNT(*) AS poison_remaining FROM babel7022_parent22p
+----
+0
+
+query TT
+SELECT COUNT(*) AS good_fire_count, MAX(rows_seen) AS rows_seen_per_fire FROM babel7022_fire22g
+----
+0 NULL
+
+statement ok
+INSERT INTO babel7022_parent23 VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO babel7022_child23 VALUES (10,1), (20,2), (30,3)
+
+statement ok
+INSERT INTO babel7022_audit23 VALUES (99)
+
+statement ok
+DELETE FROM babel7022_parent23 WHERE id = 1
+
+query T
+SELECT COUNT(*) AS parent_remaining FROM babel7022_parent23
+----
+2
+
+statement ok
+INSERT INTO babel7022_parent24 VALUES (1), (2), (3)
+
+statement ok
+INSERT INTO babel7022_child24 VALUES (10,1), (20,2), (30,3)
+
+statement ok
+DELETE FROM babel7022_parent24 WHERE id = 1
+
+query T
+SELECT COUNT(*) AS parent_remaining FROM babel7022_parent24
+----
+2
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child24_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child24
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent24
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child23_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_audit23
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child23
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent23
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child22g_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_fire22g
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child22g
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent22g
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child22p_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child22p
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent22p
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child21_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child21
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent21
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child20_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child20
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent20
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child19_upd_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_fire19
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child19
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent19
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child18_upd_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_fire18
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child18
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent18
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_audit17_ins_trg
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child17_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_audit17_fire
+
+statement ok
+DROP TABLE IF EXISTS babel7022_audit17
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child17
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent17
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_t16_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_fire16
+
+statement ok
+DROP TABLE IF EXISTS babel7022_t16
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_t15_upd_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_fire15
+
+statement ok
+DROP TABLE IF EXISTS babel7022_t15
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_t14_ins_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_fire14
+
+statement ok
+DROP TABLE IF EXISTS babel7022_t14
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child13a_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_history13a
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child13a
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent13a
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child13b_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_history13b
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child13b
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent13b
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child13c_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_history13c
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child13c
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent13c
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child13d_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_history13d
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child13d
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent13d
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child12_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_log12
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child12
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent12
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child11_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_log11
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child11
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent11
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child10_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_log10
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child10
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent10
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child9_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_log9
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child9
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent9
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_t8_upd_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_t8_log
+
+statement ok
+DROP TABLE IF EXISTS babel7022_t8
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child7_ins_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_ins_log
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child7
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent7
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_standalone_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_standalone_log
+
+statement ok
+DROP TABLE IF EXISTS babel7022_standalone
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_c_del_trg
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_p_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_gp_log
+
+statement ok
+DROP TABLE IF EXISTS babel7022_c
+
+statement ok
+DROP TABLE IF EXISTS babel7022_p
+
+statement ok
+DROP TABLE IF EXISTS babel7022_gp
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child4_del_trg_a
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child4_del_trg_b
+
+statement ok
+DROP TABLE IF EXISTS babel7022_audit4a
+
+statement ok
+DROP TABLE IF EXISTS babel7022_audit4b
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child4
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent4
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child3_upd_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_update_log
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child3
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent3
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child2_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_history2
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child2
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent2
+
+statement ok
+DROP TRIGGER IF EXISTS babel7022_child_del_trg
+
+statement ok
+DROP TABLE IF EXISTS babel7022_fire_count
+
+statement ok
+DROP TABLE IF EXISTS babel7022_history
+
+statement ok
+DROP TABLE IF EXISTS babel7022_child
+
+statement ok
+DROP TABLE IF EXISTS babel7022_parent
+

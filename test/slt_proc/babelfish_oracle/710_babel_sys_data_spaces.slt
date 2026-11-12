@@ -1,0 +1,18 @@
+# test/slt_proc/babelfish_oracle/710_babel_sys_data_spaces.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-data_spaces.sql
+
+query TTTTTT
+SELECT * FROM sys.data_spaces;
+----
+1 PRIMARY FG ROWS_FILEGROUP true false
+
+query T
+SELECT type FROM sys.data_spaces where type='FG';
+----
+FG
+
+query T
+SELECT type FROM sys.data_spaces where type='fg';
+----
+FG
+

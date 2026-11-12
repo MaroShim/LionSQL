@@ -1,0 +1,68 @@
+# test/slt_proc/babelfish_oracle/1443_babel_login_token_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/login_token-dep-vu-prepare.sql, test/babelfish/raw/login_token-dep-vu-verify.sql, test/babelfish/raw/login_token-dep-vu-cleanup.sql
+
+statement ok
+create database login_token_db;
+
+statement ok
+use login_token_db;
+
+statement ok
+create procedure login_token_proc as
+	select count(*) from sys.login_token
+
+statement ok
+create procedure user_token_proc as
+	select count(*) from sys.user_token
+
+statement ok
+create function login_token_func()
+returns int
+as
+begin
+	return(select count(*) from sys.login_token)
+end
+
+statement ok
+create function user_token_func()
+returns int
+as
+begin
+        return(select count(*) from sys.user_token)
+end
+
+statement ok
+create view login_token_view as
+select count(*) from sys.login_token
+
+statement ok
+create view user_token_view as
+select count(*) from sys.user_token
+
+statement ok
+use login_token_db;
+
+statement ok
+use login_token_db;
+
+statement ok
+drop procedure login_token_proc;
+
+statement ok
+drop procedure user_token_proc;
+
+statement ok
+drop function login_token_func;
+
+statement ok
+drop function user_token_func;
+
+statement ok
+drop view user_token_view;
+
+statement ok
+drop view login_token_view;
+
+statement ok
+use master;
+

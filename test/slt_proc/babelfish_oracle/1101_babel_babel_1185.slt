@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1101_babel_babel_1185.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1185.sql
+
+statement ok
+CREATE TABLE t_1185(a int);
+
+statement ok
+DROP TABLE t_1185;
+

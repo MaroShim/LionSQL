@@ -137,7 +137,7 @@ func normalizeTop(sql string) string {
 	}
 	// Bypass TOP if UNION, EXCEPT, INTERSECT, PERCENT, or WITH TIES is present at top-level
 	if ContainsKeyword(sql, "PERCENT", false) || ContainsKeyword(sql, "WITH TIES", false) ||
-		ContainsKeyword(sql, "UNION", false) || ContainsKeyword(sql, "EXCEPT", false) || ContainsKeyword(sql, "INTERSECT", false) {
+		FindTopLevelKeyword(sql, "UNION") != -1 || FindTopLevelKeyword(sql, "EXCEPT") != -1 || FindTopLevelKeyword(sql, "INTERSECT") != -1 {
 		return sql
 	}
 

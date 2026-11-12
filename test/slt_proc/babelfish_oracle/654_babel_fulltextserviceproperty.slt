@@ -1,0 +1,38 @@
+# test/slt_proc/babelfish_oracle/654_babel_fulltextserviceproperty.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/fulltextserviceproperty.sql
+
+query T
+SELECT fulltextserviceproperty('ResourceUsage')
+----
+1
+
+query T
+SELECT fulltextserviceproperty('ConnectTimeout')
+----
+1
+
+query T
+SELECT fulltextserviceproperty('IsFulltextInstalled')
+----
+1
+
+query T
+SELECT fulltextserviceproperty('DataTimeout')
+----
+1
+
+query T
+SELECT fulltextserviceproperty('LoadOSResources')
+----
+1
+
+query T
+SELECT fulltextserviceproperty('VerifySignature')
+----
+1
+
+query T
+SELECT fulltextserviceproperty('Non_Existent')
+----
+1
+

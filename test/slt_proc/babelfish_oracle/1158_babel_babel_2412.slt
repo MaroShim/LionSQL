@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1158_babel_babel_2412.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2412.sql
+
+statement ok
+create procedure empty_proc as ;
+
+statement ok
+drop procedure empty_proc;
+

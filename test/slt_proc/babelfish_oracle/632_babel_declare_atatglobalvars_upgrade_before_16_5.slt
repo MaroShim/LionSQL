@@ -1,0 +1,59 @@
+# test/slt_proc/babelfish_oracle/632_babel_declare_atatglobalvars_upgrade_before_16_5.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/declare_atatglobalvars_upgrade-before-16_5-vu-prepare.sql, test/babelfish/raw/declare_atatglobalvars_upgrade-before-16_5-vu-verify.sql, test/babelfish/raw/declare_atatglobalvars_upgrade-before-16_5-vu-cleanup.sql
+
+statement ok
+create table t1_declare_atatglobalvars_upgrade(a int)
+
+statement ok
+insert t1_declare_atatglobalvars_upgrade values (1), (2)
+
+statement ok
+create procedure p1_declare_atatglobalvars_upgrade
+as
+declare @@max_precision int=123
+select @@max_precision
+
+query T
+exec p1_declare_atatglobalvars_upgrade
+----
+123
+
+statement ok
+create function f1_declare_atatglobalvars_upgrade() 
+returns int 
+as 
+begin
+declare @@max_precision int=123
+return @@max_precision
+end
+
+query T
+select dbo.f1_declare_atatglobalvars_upgrade() 
+----
+123
+
+statement ok
+insert into t1_declare_atatglobalvars_upgrade values(3)
+
+statement ok
+insert into t1_declare_atatglobalvars_upgrade values(4)
+
+query T
+exec p1_declare_atatglobalvars_upgrade
+----
+123
+
+query T
+select dbo.f1_declare_atatglobalvars_upgrade() 
+----
+123
+
+statement ok
+drop table t1_declare_atatglobalvars_upgrade
+
+statement ok
+drop procedure p1_declare_atatglobalvars_upgrade
+
+statement ok
+drop function f1_declare_atatglobalvars_upgrade
+

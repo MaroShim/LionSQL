@@ -1,0 +1,24 @@
+# test/slt_proc/babelfish_oracle/1204_babel_babel_3108.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3108.sql
+
+statement ok
+CREATE TABLE t3108(c1 nvarchar(50));
+
+statement ok
+CREATE FUNCTION f3108_o ( @val nvarchar(50) )
+RETURNS nvarchar(max) AS
+BEGIN
+	DECLARE @tcs nvarchar(max);
+	SELECT @tcs = f3108_i(@val)
+	RETURN Case WHEN @tcs='|' then '' else isnull(@tcs,   '') end
+END
+
+statement ok
+declare @val nvarchar(50) = ' ' SELECT f3108_o(@val) as tc
+
+statement ok
+DROP FUNCTION f3108_o
+
+statement ok
+DROP TABLE t3108
+

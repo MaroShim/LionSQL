@@ -1,0 +1,70 @@
+# test/slt_proc/babelfish_oracle/1332_babel_test_xp_instance_regread.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-xp_instance_regread.sql
+
+statement ok
+DECLARE @retVal INT
+EXECUTE xp_instance_regread N'RootKey', N'Key', N'ServiceName', @retVal OUT
+SELECT @retVal;
+
+statement ok
+DECLARE @retVal nvarchar(512)
+EXECUTE sys.xp_instance_regread N'RootKey', N'Key', N'ServiceName', @retVal OUT
+SELECT @retVal;
+
+statement ok
+DECLARE @param1 NVARCHAR(512)
+DECLARE @param2 NVARCHAR(512)
+DECLARE @param3 NVARCHAR(512)
+SET @param1 = N'RootKey'
+SET @param2 = N'Key'
+SET @param3 = N'ServiceName'
+DECLARE @retVal INT
+EXECUTE sys.xp_instance_regread @param1, @param2, @param3, @retVal OUT
+SELECT @retVal;
+
+statement ok
+DECLARE @param1 NVARCHAR(512)
+DECLARE @param2 NVARCHAR(512)
+DECLARE @param3 NVARCHAR(512)
+SET @param1 = N'RootKey'
+SET @param2 = N'Key'
+SET @param3 = N'ServiceName'
+DECLARE @retVal nvarchar(512)
+EXECUTE xp_instance_regread @param1, @param2, @param3, @retVal OUT
+SELECT @retVal;
+
+statement ok
+USE master
+
+statement ok
+DECLARE @retVal INT
+EXECUTE dbo.xp_instance_regread N'RootKey', N'Key', N'ServiceName', @retVal OUT
+SELECT @retVal;
+
+statement ok
+DECLARE @retVal nvarchar(512)
+EXECUTE master.dbo.xp_instance_regread N'RootKey', N'Key', N'ServiceName', @retVal OUT
+SELECT @retVal;
+
+statement ok
+DECLARE @param1 NVARCHAR(512)
+DECLARE @param2 NVARCHAR(512)
+DECLARE @param3 NVARCHAR(512)
+SET @param1 = N'RootKey'
+SET @param2 = N'Key'
+SET @param3 = N'ServiceName'
+DECLARE @retVal INT
+EXECUTE master.dbo.xp_instance_regread @param1, @param2, @param3, @retVal OUT
+SELECT @retVal;
+
+statement ok
+DECLARE @param1 NVARCHAR(512)
+DECLARE @param2 NVARCHAR(512)
+DECLARE @param3 NVARCHAR(512)
+SET @param1 = N'RootKey'
+SET @param2 = N'Key'
+SET @param3 = N'ServiceName'
+DECLARE @retVal nvarchar(512)
+EXECUTE dbo.xp_instance_regread @param1, @param2, @param3, @retVal OUT
+SELECT @retVal;
+

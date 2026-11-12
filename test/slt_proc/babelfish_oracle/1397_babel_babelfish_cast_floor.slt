@@ -1,0 +1,57 @@
+# test/slt_proc/babelfish_oracle/1397_babel_babelfish_cast_floor.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babelfish_cast_floor-vu-prepare.sql, test/babelfish/raw/babelfish_cast_floor-vu-verify.sql
+
+statement ok
+create view babelfish_cast_floor_bigint_v as select babelfish_cast_floor_bigint(cast ('123' as varchar(10)))
+
+statement ok
+create view babelfish_cast_floor_int_v as select babelfish_cast_floor_int(cast ('123' as varchar(10)));
+
+statement ok
+create view babelfish_cast_floor_smallint_v as select babelfish_cast_floor_smallint(cast ('123' as varchar(10)));
+
+statement ok
+create function babelfish_cast_floor_bigint_f() 
+returns bigint
+as
+begin
+	declare @a bigint = babelfish_cast_floor_bigint(cast ('123' as varchar(10)));
+	return @a
+end
+
+statement ok
+create function babelfish_cast_floor_int_f() 
+returns int
+as
+begin
+	declare @a int = babelfish_cast_floor_int(cast ('123' as varchar(10)));
+	return @a
+end
+
+statement ok
+create function babelfish_cast_floor_smallint_f() 
+returns smallint
+as
+begin
+	declare @a smallint = babelfish_cast_floor_smallint(cast ('123' as varchar(10)));
+	return @a
+end
+
+statement ok
+DROP VIEW babelfish_cast_floor_bigint_v;
+
+statement ok
+DROP VIEW babelfish_cast_floor_int_v;
+
+statement ok
+DROP VIEW babelfish_cast_floor_smallint_v;
+
+statement ok
+DROP FUNCTION babelfish_cast_floor_bigint_f()
+
+statement ok
+DROP FUNCTION babelfish_cast_floor_int_f()
+
+statement ok
+DROP FUNCTION babelfish_cast_floor_smallint_f()
+

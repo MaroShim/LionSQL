@@ -1,0 +1,37 @@
+# test/slt_proc/babelfish_oracle/1505_babel_sys_numbered_procedures.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-numbered_procedures-vu-prepare.sql, test/babelfish/raw/views/sys-numbered_procedures-vu-verify.sql, test/babelfish/raw/views/sys-numbered_procedures-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE VIEW sys_numbered_procedures_vu_prepare_view AS
+SELECT * FROM sys.numbered_procedures
+
+statement ok
+CREATE PROC sys_numbered_procedures_vu_prepare_proc AS
+SELECT * FROM sys.numbered_procedures 
+
+statement ok
+CREATE FUNCTION dbo.sys_numbered_procedures_vu_prepare_func()
+RETURNS INT
+AS
+BEGIN
+RETURN (SELECT count(*) FROM sys.numbered_procedures)
+END
+
+statement ok
+USE master
+
+statement ok
+USE master
+
+statement ok
+DROP VIEW sys_numbered_procedures_vu_prepare_view
+
+statement ok
+DROP PROC sys_numbered_procedures_vu_prepare_proc
+
+statement ok
+DROP FUNCTION dbo.sys_numbered_procedures_vu_prepare_func()
+

@@ -1,0 +1,13 @@
+# test/slt_proc/babelfish_oracle/325_babel_babel_2557.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2557.sql
+
+query T
+select cast(hashbytes('sha2_512', 'abcdefg') as varbinary(64))
+----
+0xd716a4188569b68ab1b6dfac178e570114cdf0ea3a1cc0e31486c3e41241bc6a76424e8c37ab26f096fc85ef9886c8cb634187f4fddff645fb099f1ff54c6b8c
+
+query T
+select cast(hashbytes('sha2_512', 'abcdefg') as varbinary(62))
+----
+0xd716a4188569b68ab1b6dfac178e570114cdf0ea3a1cc0e31486c3e41241bc6a76424e8c37ab26f096fc85ef9886c8cb634187f4fddff645fb099f1ff54c6b8c
+

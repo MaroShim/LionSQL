@@ -1,0 +1,941 @@
+# test/slt_proc/babelfish_oracle/1445_babel_mathematical_func_before_17_6_or_16_10.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/mathematical_func-before_17_6-or-16_10-vu-prepare.sql, test/babelfish/raw/mathematical_func-before_17_6-or-16_10-vu-verify.sql, test/babelfish/raw/mathematical_func-before_17_6-or-16_10-vu-cleanup.sql
+
+statement ok
+CREATE VIEW BABEL_3914_vu_prepare_t_1 AS (SELECT degrees(CAST(922337203685477599.81 AS NUMERIC)));
+
+statement ok
+CREATE VIEW BABEL_3914_vu_prepare_t_2 AS (SELECT degrees(CAST(-922337203685477598.81 AS NUMERIC)));
+
+statement ok
+CREATE VIEW BABEL_3914_vu_prepare_t_3 AS (SELECT degrees(CAST(223372036854.77598 AS NUMERIC)));
+
+statement ok
+CREATE VIEW BABEL_3914_vu_prepare_t_4 AS (SELECT degrees(CAST(0 AS NUMERIC)));
+
+statement ok
+CREATE VIEW BABEL_3914_vu_prepare_t_5 AS (SELECT degrees(CAST(NULL AS NUMERIC)));
+
+statement ok
+CREATE PROCEDURE BABEL_3914_vu_prepare_t_p1 AS (SELECT degrees(CAST(922337203685477599.81 AS NUMERIC)));
+
+statement ok
+CREATE PROCEDURE BABEL_3914_vu_prepare_t_p2 AS (SELECT degrees(CAST(-922337203685477598.81 AS NUMERIC)));
+
+statement ok
+CREATE PROCEDURE BABEL_3914_vu_prepare_t_p3 AS (SELECT degrees(CAST(223372036854.77598 AS NUMERIC)));
+
+statement ok
+CREATE PROCEDURE BABEL_3914_vu_prepare_t_p4 AS (SELECT degrees(CAST(0 AS NUMERIC)));
+
+statement ok
+CREATE PROCEDURE BABEL_3914_vu_prepare_t_p5 AS (SELECT degrees(CAST(NULL AS NUMERIC)));
+
+statement ok
+CREATE PROCEDURE BABEL_3914_vu_prepare_t_p11 AS (SELECT degrees(CAST(9223372036854775999.91 AS NUMERIC)));
+
+statement ok
+CREATE VIEW BABEL_3914_vu_prepare_t_6 AS (SELECT radians(CAST(922337203685477599.81 AS NUMERIC)));
+
+statement ok
+CREATE VIEW BABEL_3914_vu_prepare_t_7 AS (SELECT radians(CAST(-922337203685477598.81 AS NUMERIC)));
+
+statement ok
+CREATE VIEW BABEL_3914_vu_prepare_t_8 AS (SELECT radians(CAST(223372036854.77598 AS NUMERIC)));
+
+statement ok
+CREATE VIEW BABEL_3914_vu_prepare_t_9 AS (SELECT radians(CAST(0 AS NUMERIC)));
+
+statement ok
+CREATE VIEW BABEL_3914_vu_prepare_t_10 AS (SELECT radians(CAST(NULL AS NUMERIC)));
+
+statement ok
+CREATE PROCEDURE BABEL_3914_vu_prepare_t_p6 AS (SELECT radians(CAST(922337203685477599.81 AS NUMERIC)));
+
+statement ok
+CREATE PROCEDURE BABEL_3914_vu_prepare_t_p7 AS (SELECT radians(CAST(-922337203685477598.81 AS NUMERIC)));
+
+statement ok
+CREATE PROCEDURE BABEL_3914_vu_prepare_t_p8 AS (SELECT radians(CAST(223372036854.77598 AS NUMERIC)));
+
+statement ok
+CREATE PROCEDURE BABEL_3914_vu_prepare_t_p9 AS (SELECT radians(CAST(0 AS NUMERIC)));
+
+statement ok
+CREATE PROCEDURE BABEL_3914_vu_prepare_t_p10 AS (SELECT radians(CAST(NULL AS NUMERIC)));
+
+statement ok
+CREATE PROCEDURE BABEL_3914_vu_prepare_t_p12 AS (SELECT radians(CAST(9223372036854775999.91 AS NUMERIC)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_1 AS (SELECT degrees(CAST(922337203.81 AS MONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_2 AS (SELECT degrees(CAST(-922337203.81 AS MONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_3 AS (SELECT degrees(CAST(2233.77598 AS MONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_4 AS (SELECT degrees(CAST(0 AS MONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_5 AS (SELECT degrees(CAST(NULL AS MONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p1 AS (SELECT degrees(CAST(922337203.5807 AS MONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p2 AS (SELECT degrees(CAST(-922337203.81 AS MONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p3 AS (SELECT degrees(CAST(2233.77598 AS MONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p4 AS (SELECT degrees(CAST(0 AS MONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p5 AS (SELECT degrees(CAST(NULL AS MONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p6 AS (SELECT degrees(CAST(922337203.91 AS MONEY)));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table1 (id INT, result MONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table1 VALUES (1, degrees(CAST(922337203.81 AS MONEY)));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table2 (id INT, result MONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table2 VALUES (1, degrees(CAST(-922337203.81 AS MONEY)));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table3 (id INT, result MONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table3 VALUES (1, degrees(CAST(0 AS MONEY)));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table4 (id INT, result MONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table4 VALUES (1, degrees(CAST(NULL AS MONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_6 AS (SELECT degrees(CAST(214748.3647 AS SMALLMONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_7 AS (SELECT degrees(CAST(-214748.3648 AS SMALLMONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_8 AS (SELECT degrees(CAST(18756 AS SMALLMONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_9 AS (SELECT degrees(CAST(0 AS SMALLMONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_10 AS (SELECT degrees(CAST(NULL AS SMALLMONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p7 AS (SELECT degrees(CAST(214748.3647 AS SMALLMONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p8 AS (SELECT degrees(CAST(-214748.3648 AS SMALLMONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p9 AS (SELECT degrees(CAST(18756 AS SMALLMONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p10 AS (SELECT degrees(CAST(0 AS SMALLMONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p11 AS (SELECT degrees(CAST(NULL AS SMALLMONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p12 AS (SELECT degrees(CAST(214749.3647 AS SMALLMONEY)));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table5 (id INT, result SMALLMONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table5 VALUES (1, cast(degrees(CAST(214748.3647 AS SMALLMONEY)) AS SMALLMONEY));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table6 (id INT, result SMALLMONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table6 VALUES (1, cast(degrees(CAST(-214748.3648 AS SMALLMONEY)) AS SMALLMONEY));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table7 (id INT, result SMALLMONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table7 VALUES (1, degrees(CAST(0 AS SMALLMONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_11 AS (SELECT radians(CAST(922337203.81 AS MONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_12 AS (SELECT radians(CAST(-922337203.81 AS MONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_13 AS (SELECT radians(CAST(22337203.77598 AS MONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_14 AS (SELECT radians(CAST(0 AS MONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_15 AS (SELECT radians(CAST(NULL AS MONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p13 AS (SELECT radians(CAST(92233720368.81 AS MONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p14 AS (SELECT radians(CAST(-92233720368.81 AS MONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p15 AS (SELECT radians(CAST(2233720368.77598 AS MONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p16 AS (SELECT radians(CAST(0 AS MONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p17 AS (SELECT radians(CAST(NULL AS MONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p18 AS (SELECT radians(CAST(92233720368.91 AS MONEY)));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table8 (id INT, result MONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table8 VALUES (1, radians(CAST(922337203.81 AS MONEY)));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table9 (id INT, result MONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table9 VALUES (1, radians(CAST(-922337203.81 AS MONEY)));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table10 (id INT, result MONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table10 VALUES (1, radians(CAST(0 AS MONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_16 AS (SELECT radians(CAST(214748.3647 AS SMALLMONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_17 AS (SELECT radians(CAST(-214748.3648 AS SMALLMONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_18 AS (SELECT radians(CAST(18756 AS SMALLMONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_19 AS (SELECT radians(CAST(0 AS SMALLMONEY)));
+
+statement ok
+CREATE VIEW BABEL_5748_vu_prepare_t_20 AS (SELECT radians(CAST(NULL AS SMALLMONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p19 AS (SELECT radians(CAST(214748.3647 AS SMALLMONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p20 AS (SELECT radians(CAST(-214748.3648 AS SMALLMONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p21 AS (SELECT radians(CAST(18756 AS SMALLMONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p22 AS (SELECT radians(CAST(0 AS SMALLMONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p23 AS (SELECT radians(CAST(NULL AS SMALLMONEY)));
+
+statement ok
+CREATE PROCEDURE BABEL_5748_vu_prepare_t_p24 AS (SELECT radians(CAST(214749.3647 AS SMALLMONEY)));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table11 (id INT, result SMALLMONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table11 VALUES (1, radians(CAST(214748.3647 AS SMALLMONEY)));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table12 (id INT, result SMALLMONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table12 VALUES (1, radians(CAST(-214748.3648 AS SMALLMONEY)));
+
+statement ok
+CREATE TABLE BABEL_5748_vu_prepare_t_table13 (id INT, result SMALLMONEY);
+
+statement ok
+INSERT INTO BABEL_5748_vu_prepare_t_table13 VALUES (1, radians(CAST(0 AS SMALLMONEY)));
+
+query T
+EXECUTE BABEL_3914_vu_prepare_t_p1
+----
+NULL
+
+query T
+EXECUTE BABEL_3914_vu_prepare_t_p2
+----
+NULL
+
+query T
+EXECUTE BABEL_3914_vu_prepare_t_p3
+----
+NULL
+
+query T
+EXECUTE BABEL_3914_vu_prepare_t_p4
+----
+NULL
+
+query T
+EXECUTE BABEL_3914_vu_prepare_t_p5
+----
+NULL
+
+query T
+EXECUTE BABEL_3914_vu_prepare_t_p11
+----
+NULL
+
+query T
+EXECUTE BABEL_3914_vu_prepare_t_p6
+----
+NULL
+
+query T
+EXECUTE BABEL_3914_vu_prepare_t_p7
+----
+NULL
+
+query T
+EXECUTE BABEL_3914_vu_prepare_t_p8
+----
+NULL
+
+query T
+EXECUTE BABEL_3914_vu_prepare_t_p9
+----
+NULL
+
+query T
+EXECUTE BABEL_3914_vu_prepare_t_p10
+----
+NULL
+
+query T
+EXECUTE BABEL_3914_vu_prepare_t_p12
+----
+NULL
+
+query TT
+SELECT DEGREES(CAST(PI()/2 AS MONEY)) AS result1, DEGREES(CAST(PI()/2 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT DEGREES(CAST(PI() AS MONEY)) AS result1, DEGREES(CAST(PI() AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT DEGREES(CAST(1.0 AS MONEY)) AS result1, DEGREES(CAST(1.0 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT DEGREES(CAST(0.0 AS MONEY)) AS result1, DEGREES(CAST(0.0 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT DEGREES(CAST(PI()/2.0 AS MONEY)) AS result1, DEGREES(CAST(PI()/2.0 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT DEGREES(CAST(-PI()/2 AS MONEY)) AS result1, DEGREES(CAST(-PI()/2 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT DEGREES(CAST(-PI() AS MONEY)) AS result1, DEGREES(CAST(-PI() AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT DEGREES(CAST(0 AS MONEY)) AS result1, DEGREES(CAST(0 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query T
+SELECT DEGREES(CAST(16097821017949.1657 AS MONEY)) AS 'Max_Money';
+----
+NULL
+
+query T
+SELECT DEGREES(CAST(16097821017949.1658 AS MONEY)) AS 'overflow';
+----
+NULL
+
+query T
+SELECT DEGREES(CAST(-16097821017949.1657 AS MONEY)) AS 'Min_Money';
+----
+NULL
+
+query T
+SELECT DEGREES(CAST(-16097821017949.1658 AS MONEY)) AS 'overflow';
+----
+NULL
+
+query T
+SELECT DEGREES(CAST(-214748.3648 AS SMALLMONEY)) AS 'Min_SmallMoney';
+----
+NULL
+
+query T
+SELECT DEGREES(CAST(-214748.3649 AS SMALLMONEY)) AS 'overflow';
+----
+NULL
+
+query TT
+SELECT DEGREES(CAST(NULL AS MONEY)) AS result1, DEGREES(CAST(NULL AS SMALLMONEY));
+----
+NULL NULL
+
+query T
+SELECT DEGREES(CAST(3748.0660 AS SMALLMONEY)) AS result;
+----
+NULL
+
+query T
+SELECT DEGREES(CAST(214748.3647 AS SMALLMONEY)) AS 'Max_SmallMoney';
+----
+NULL
+
+query T
+SELECT DEGREES(CAST(214748.3648 AS SMALLMONEY)) AS 'overflow';
+----
+NULL
+
+query TT
+SELECT RADIANS(CAST(90.0 AS MONEY)) AS result1, RADIANS(CAST(90.0 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT RADIANS(CAST(180.0 AS MONEY)) AS result1, RADIANS(CAST(180.0 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT RADIANS(CAST(45.0 AS MONEY)) AS result1, RADIANS(CAST(45.0 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT RADIANS(CAST(0.0 AS MONEY)) AS result1, RADIANS(CAST(0.0 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT RADIANS(CAST(360.0 AS MONEY)) AS result1, RADIANS(CAST(360.0 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT RADIANS(CAST(-90.0 AS MONEY)) AS result1, RADIANS(CAST(-90.0 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT RADIANS(CAST(-180.0 AS MONEY)) AS result1, RADIANS(CAST(-180.0 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT RADIANS(CAST(0 AS MONEY)) AS result1, RADIANS(CAST(0 AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query TT
+SELECT RADIANS(CAST(NULL AS MONEY)) AS result1, RADIANS(CAST(NULL AS SMALLMONEY)) AS result2;
+----
+NULL NULL
+
+query T
+SELECT RADIANS(CAST(922337203685477.5807 AS MONEY)) AS 'Max_Money_Radians';
+----
+NULL
+
+query T
+SELECT RADIANS(CAST(922337203685477.5807 AS MONEY)) AS 'overflow';
+----
+NULL
+
+query T
+SELECT RADIANS(CAST(-922337203685477.5808 AS MONEY)) AS 'Min_Money_Radians';
+----
+NULL
+
+query T
+SELECT RADIANS(CAST(-922337203685477.5809 AS MONEY)) AS 'overflow';
+----
+NULL
+
+query T
+SELECT RADIANS(CAST(-214748.3649 AS SMALLMONEY)) AS 'overflow';
+----
+NULL
+
+query T
+SELECT RADIANS(CAST(214748.3647 AS SMALLMONEY)) AS 'Max_smallMoney_Radians';
+----
+NULL
+
+query T
+SELECT RADIANS(CAST(214748.3648 AS SMALLMONEY)) AS 'overflow';
+----
+NULL
+
+query T
+SELECT RADIANS(CAST(-214748.3648 AS SMALLMONEY)) AS 'Min_SmallMoney';
+----
+NULL
+
+query T
+SELECT RADIANS(CAST(-214748.3649 AS SMALLMONEY)) AS 'overflow';
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p1
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p2
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p3
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p4
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p5
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p6
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p7
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p8
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p9
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p10
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p11
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p12
+----
+NULL
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table1;
+----
+1 52846029066.2106
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table2;
+----
+1 -52846029066.2106
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table3;
+----
+1 0.0000
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table4;
+----
+1 NULL
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table5;
+----
+1 12304174.954646
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table6;
+----
+1 -12304174.960376
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table7;
+----
+1 0
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p13
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p14
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p15
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p16
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p17
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p18
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p19
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p20
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p21
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p22
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p23
+----
+NULL
+
+query T
+EXECUTE BABEL_5748_vu_prepare_t_p24
+----
+NULL
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table8;
+----
+1 16097821.0201
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table9;
+----
+1 -16097821.0201
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table10;
+----
+1 0.0000
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table11;
+----
+1 3748.066027
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table12;
+----
+1 -3748.066029
+
+query TT
+SELECT * FROM BABEL_5748_vu_prepare_t_table13;
+----
+1 0
+
+statement ok
+DROP VIEW BABEL_3914_vu_prepare_t_1
+
+statement ok
+DROP VIEW BABEL_3914_vu_prepare_t_2
+
+statement ok
+DROP VIEW BABEL_3914_vu_prepare_t_3
+
+statement ok
+DROP VIEW BABEL_3914_vu_prepare_t_4
+
+statement ok
+DROP VIEW BABEL_3914_vu_prepare_t_5
+
+statement ok
+DROP PROCEDURE BABEL_3914_vu_prepare_t_p1
+
+statement ok
+DROP PROCEDURE BABEL_3914_vu_prepare_t_p2
+
+statement ok
+DROP PROCEDURE BABEL_3914_vu_prepare_t_p3
+
+statement ok
+DROP PROCEDURE BABEL_3914_vu_prepare_t_p4
+
+statement ok
+DROP PROCEDURE BABEL_3914_vu_prepare_t_p5
+
+statement ok
+DROP PROCEDURE BABEL_3914_vu_prepare_t_p11
+
+statement ok
+DROP VIEW BABEL_3914_vu_prepare_t_6
+
+statement ok
+DROP VIEW BABEL_3914_vu_prepare_t_7
+
+statement ok
+DROP VIEW BABEL_3914_vu_prepare_t_8
+
+statement ok
+DROP VIEW BABEL_3914_vu_prepare_t_9
+
+statement ok
+DROP VIEW BABEL_3914_vu_prepare_t_10
+
+statement ok
+DROP PROCEDURE BABEL_3914_vu_prepare_t_p6
+
+statement ok
+DROP PROCEDURE BABEL_3914_vu_prepare_t_p7
+
+statement ok
+DROP PROCEDURE BABEL_3914_vu_prepare_t_p8
+
+statement ok
+DROP PROCEDURE BABEL_3914_vu_prepare_t_p9
+
+statement ok
+DROP PROCEDURE BABEL_3914_vu_prepare_t_p10
+
+statement ok
+DROP PROCEDURE BABEL_3914_vu_prepare_t_p12
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_1
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_2
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_3
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_4
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_5
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p1
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p2
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p3
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p4
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p5
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p6
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_6
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_7
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_8
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_9
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_10
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p7
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p8
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p9
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p10
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p11
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p12
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_11
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_12
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_13
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_14
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_15
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p13
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p14
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p15
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p16
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p17
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p18
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_16
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_17
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_18
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_19
+
+statement ok
+DROP VIEW BABEL_5748_vu_prepare_t_20
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p19
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p20
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p21
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p22
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p23
+
+statement ok
+DROP PROCEDURE BABEL_5748_vu_prepare_t_p24
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table1;
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table2;
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table3;
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table4;
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table5;
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table6;
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table7;
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table8;
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table9;
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table10;
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table11;
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table12;
+
+statement ok
+DROP TABLE BABEL_5748_vu_prepare_t_table13;
+

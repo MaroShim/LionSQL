@@ -1,0 +1,106 @@
+# test/slt_proc/babelfish_oracle/1008_babel_10610_1.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/10610_1.sql
+
+statement ok
+CREATE VIEW v10610 AS
+SELECT c1, c2
+FROM t10610
+
+statement ok
+DROP VIEW v10610
+
+statement ok
+CREATE TABLE t10610(
+  c1 int,
+  c2 int
+)
+
+statement ok
+CREATE VIEW v10610 AS
+SELECT c1, c2
+FROM t10610
+
+statement ok
+begin transaction
+
+statement ok
+DROP VIEW v10610
+
+statement ok
+DROP TABLE t10610
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE TABLE t10610(
+  c1 int,
+  c2 int
+)
+
+statement ok
+CREATE VIEW v10610 AS
+SELECT c1, c2
+FROM t10610
+
+statement ok
+begin transaction
+
+statement ok
+DROP VIEW v10610
+
+statement ok
+DROP TABLE t10610
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE VIEW v10610 AS
+SELECT c1, c2
+FROM t10610
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+create procedure ErrorHandling2 as
+begin
+exec ErrorHandling1;
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+end
+
+statement ok
+begin transaction;
+
+statement ok
+DROP VIEW v10610
+
+statement ok
+set xact_abort ON;
+
+statement ok
+CREATE VIEW v10610 AS
+SELECT c1, c2
+FROM t10610
+
+statement ok
+if @@error > 0 select cast('CURRENT BATCH TERMINATING ERROR' as text);
+
+statement ok
+begin transaction;
+
+statement ok
+DROP VIEW v10610
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+CREATE VIEW v10610 AS
+SELECT c1, c2
+FROM t10610
+
+statement ok
+DROP VIEW v10610
+

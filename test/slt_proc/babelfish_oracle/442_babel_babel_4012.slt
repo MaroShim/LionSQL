@@ -1,0 +1,267 @@
+# test/slt_proc/babelfish_oracle/442_babel_babel_4012.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_4012.sql
+
+statement ok
+CREATE SCHEMA BABEL_4012_sch
+
+statement ok
+CREATE TABLE BABEL_4012_sch.table1(a int, b int);
+
+statement ok
+INSERT INTO BABEL_4012_sch.table1 VALUES(1,4), (1,5);
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+query TT
+SELECT * FROM BABEL_4012_sch.table1;
+----
+1 4
+1 5
+
+statement ok
+CREATE TABLE BABEL_4012_table2(a int, b int);
+
+statement ok
+INSERT INTO BABEL_4012_table2 VALUES(1,6), (1,7);
+
+statement ok
+UPDATE dbo.BABEL_4012_table2 SET dbo.BABEL_4012_table2.a = 2 FROM BABEL_4012_table2 AS t1
+
+query TT
+SELECT * FROM BABEL_4012_table2;
+----
+2 6
+2 7
+
+statement ok
+UPDATE BABEL_4012_table2 SET dbo.BABEL_4012_table2.a = 3 FROM BABEL_4012_table2 AS t1
+
+query TT
+SELECT * FROM BABEL_4012_table2;
+----
+3 6
+3 7
+
+query TT
+SELECT * FROM BABEL_4012_table2;
+----
+3 6
+3 7
+
+query TT
+SELECT * FROM BABEL_4012_table2;
+----
+3 6
+3 7
+
+query TT
+SELECT * FROM BABEL_4012_table2;
+----
+3 6
+3 7
+
+query TT
+SELECT * FROM BABEL_4012_table2;
+----
+3 6
+3 7
+
+query TT
+SELECT * FROM BABEL_4012_table2;
+----
+3 6
+3 7
+
+query TT
+SELECT * FROM BABEL_4012_table2;
+----
+3 6
+3 7
+
+query TT
+SELECT * FROM BABEL_4012_table2;
+----
+3 6
+3 7
+
+query TT
+SELECT * FROM BABEL_4012_table2;
+----
+3 6
+3 7
+
+statement ok
+UPDATE dbo.BABEL_4012_table2 SET dbo.BABEL_4012_table2.a = 3 FROM dbo.BABEL_4012_table2
+
+query TT
+SELECT * FROM dbo.BABEL_4012_table2;
+----
+3 6
+3 7
+
+statement ok
+UPDATE BABEL_4012_table2 SET dbo.BABEL_4012_table2.a = 1 FROM dbo.BABEL_4012_table2
+
+query TT
+SELECT * FROM dbo.BABEL_4012_table2;
+----
+1 6
+1 7
+
+query TT
+SELECT * FROM dbo.BABEL_4012_table2;
+----
+1 6
+1 7
+
+query TT
+SELECT * FROM dbo.BABEL_4012_table2;
+----
+1 6
+1 7
+
+statement ok
+DROP TABLE BABEL_4012_table2;
+
+statement ok
+DROP TABLE BABEL_4012_sch.table1;
+
+statement ok
+DROP SCHEMA BABEL_4012_sch;
+

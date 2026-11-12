@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1207_babel_babel_3145.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3145.sql
+
+statement ok
+CREATE DATABASE CamelCaseDB
+
+statement ok
+CREATE DATABASE CamelCaseDB COLLATE BBF_Unicode_CP1_CI_AI
+

@@ -1,0 +1,160 @@
+# test/slt_proc/babelfish_oracle/409_babel_babel_6158.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-6158.sql
+
+statement ok
+CREATE FUNCTION dbo.fnSimple()
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT 5 AS Value
+)
+
+query T
+SELECT * FROM dbo.fnSimple()
+----
+5
+
+statement ok
+DROP FUNCTION IF EXISTS dbo.fnSimple
+
+statement ok
+CREATE DATABASE [foo-bar]
+
+statement ok
+USE [foo-bar]
+
+statement ok
+create schema [sch-ema]
+
+statement ok
+CREATE FUNCTION [sch-ema].[fn_simple#1]()
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT 'ABC@adf#$%#' AS Value
+)
+
+statement ok
+DROP FUNCTION IF EXISTS fn_Simple
+
+statement ok
+DROP FUNCTION IF EXISTS [sch-ema].fnSimple
+
+query T
+SELECT * FROM [sch-ema].[fn_simple#1]()
+----
+ABC@adf#$%#
+
+statement ok
+DROP FUNCTION IF EXISTS [sch-ema].[fn_simple#1]
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE [data-base_name]
+
+statement ok
+USE [data-base_name]
+
+statement ok
+CREATE SCHEMA [sch-ema_test]
+
+statement ok
+DROP FUNCTION IF EXISTS [sch-ema_test].[fn_Sample-Test]
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE [My Database 2]
+
+statement ok
+USE [My Database 2]
+
+statement ok
+DROP FUNCTION IF EXISTS [fn Sample]
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE [db#@$]
+
+statement ok
+USE [db#@$]
+
+statement ok
+CREATE SCHEMA [sch#-@$]
+
+statement ok
+DROP FUNCTION IF EXISTS [fn#-a@$]
+
+statement ok
+DROP FUNCTION IF EXISTS [sch#-@$].[fn#-a@$]
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE [db@-#_$]
+
+statement ok
+USE [db@-#_$]
+
+statement ok
+CREATE SCHEMA [sch@-#_$]
+
+statement ok
+DROP FUNCTION IF EXISTS [sch@-#_$].[fn@-#_$]
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE [db---###$]
+
+statement ok
+USE [db---###$]
+
+statement ok
+CREATE SCHEMA [sch---###$$$]
+
+statement ok
+DROP FUNCTION IF EXISTS [sch---###$$$].[fn---###$$$]
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE [db-#$-#$-#$]
+
+statement ok
+USE [db-#$-#$-#$]
+
+statement ok
+CREATE SCHEMA [sch-#$-#$-#$]
+
+statement ok
+DROP FUNCTION IF EXISTS [sch-#$-#$-#$].[fn-#$-#$-#$]
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE [123-@#$-456]
+
+statement ok
+USE [123-@#$-456]
+
+statement ok
+CREATE SCHEMA [789-@#$-012]
+
+statement ok
+DROP FUNCTION IF EXISTS [789-@#$-012].[fn345-@#$-678]
+
+statement ok
+USE master
+

@@ -1,0 +1,70 @@
+# test/slt_proc/babelfish_oracle/342_babel_babel_2833.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2833.sql
+
+statement ok
+use master;
+
+statement ok
+create schema S2833;
+
+query T
+select count(*) from (select schema_id('S2833') i) t where i is not null;
+----
+1
+
+query T
+select count(*) from (select schema_id('s2833') i) t where i is not null;
+----
+1
+
+statement ok
+drop schema S2833;
+
+statement ok
+create schema s2833;
+
+query T
+select count(*) from (select schema_id('S2833') i) t where i is not null;
+----
+1
+
+query T
+select count(*) from (select schema_id('s2833') i) t where i is not null;
+----
+1
+
+statement ok
+drop schema s2833;
+
+statement ok
+create schema S2833_THISISLONG_THISISLONG_THISISLONG_THISISLONG_THISISLONG_THISISLONG_THISISLONG;
+
+query T
+select count(*) from (select schema_id('S2833_THISISLONG_THISISLONG_THISISLONG_THISISLONG_THISISLONG_THISISLONG_THISISLONG') i) t where i is not null;
+----
+1
+
+query T
+select count(*) from (select schema_id('s2833_thisislong_thisislong_thisislong_thisislong_thisislong_thisislong_thisislong') i) t where i is not null;
+----
+1
+
+statement ok
+drop schema S2833_THISISLONG_THISISLONG_THISISLONG_THISISLONG_THISISLONG_THISISLONG_THISISLONG;
+
+statement ok
+create schema s2833_thisislong_thisislong_thisislong_thisislong_thisislong_thisislong_thisislong;
+
+query T
+select count(*) from (select schema_id('S2833_THISISLONG_THISISLONG_THISISLONG_THISISLONG_THISISLONG_THISISLONG_THISISLONG') i) t where i is not null;
+----
+1
+
+query T
+select count(*) from (select schema_id('s2833_thisislong_thisislong_thisislong_thisislong_thisislong_thisislong_thisislong') i) t where i is not null;
+----
+1
+
+statement ok
+drop schema s2833_thisislong_thisislong_thisislong_thisislong_thisislong_thisislong_thisislong;
+

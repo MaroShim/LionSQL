@@ -1,0 +1,398 @@
+# test/slt_proc/babelfish_oracle/559_babel_babel_role.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-ROLE.sql
+
+query T
+SELECT DB_NAME()
+----
+postgres
+
+statement ok
+CREATE ROLE test1
+
+statement ok
+SELECT name, type_desc
+FROM sys.database_principals
+WHERE name = 'test1'
+
+statement ok
+CREATE ROLE test1
+
+statement ok
+CREATE LOGIN test1 WITH PASSWORD = 'abc';
+
+statement ok
+CREATE USER test1
+
+statement ok
+CREATE LOGIN test2 WITH PASSWORD = 'abc';
+
+statement ok
+CREATE USER test2
+
+statement ok
+CREATE ROLE test2
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+query T
+SELECT DB_NAME()
+----
+db1
+
+statement ok
+CREATE ROLE test1
+
+statement ok
+CREATE ROLE test2
+
+statement ok
+CREATE PROC babel_user_ext AS
+BEGIN
+	SELECT rolname, type, orig_username, database_name
+	FROM sys.babelfish_authid_user_ext
+	WHERE orig_username LIKE 'test%'
+	ORDER BY rolname, orig_username
+END
+
+statement ok
+CREATE PROC babel_db_principal AS
+BEGIN
+	SELECT name, type_desc
+	FROM sys.database_principals
+	WHERE name LIKE 'test%'
+	ORDER BY name
+END
+
+statement ok
+CREATE PROC babel_role_members AS
+BEGIN
+	SELECT dp1.name AS RoleName, dp1.type AS RoleType,
+		   dp2.name AS MemberName, dp2.type AS MemberType
+	FROM sys.database_role_members AS drm
+	INNER JOIN sys.database_principals AS dp1
+	ON drm.role_principal_id = dp1.principal_id
+	INNER JOIN sys.database_principals AS dp2
+	ON drm.member_principal_id = dp2.principal_id
+	ORDER BY dp1.name, dp2.name
+END
+
+statement ok
+ALTER ROLE test1 ADD MEMBER test2
+
+statement ok
+CREATE LOGIN test3 WITH PASSWORD = 'abc'
+
+statement ok
+CREATE USER test3
+
+statement ok
+ALTER ROLE test1 ADD MEMBER test3
+
+statement ok
+CREATE LOGIN test4 WITH PASSWORD = 'abc'
+
+statement ok
+ALTER ROLE test1 ADD MEMBER test4
+
+statement ok
+ALTER ROLE test1 ADD MEMBER test1
+
+statement ok
+ALTER ROLE test2 ADD MEMBER test1
+
+statement ok
+ALTER ROLE test1 ADD MEMBER dbo
+
+statement ok
+ALTER ROLE test1 ADD MEMBER db_owner
+
+statement ok
+ALTER ROLE db_owner ADD MEMBER test1
+
+statement ok
+ALTER ROLE db_owner DROP MEMBER test1
+
+statement ok
+CREATE USER test4
+
+statement ok
+ALTER ROLE test2 ADD MEMBER test4
+
+statement ok
+ALTER ROLE test1 WITH NAME = test1_new
+
+statement ok
+ALTER ROLE test1_new DROP MEMBER test2
+
+statement ok
+ALTER ROLE test1_new DROP MEMBER test3
+
+statement ok
+DROP USER test3
+
+statement ok
+DROP USER test4
+
+statement ok
+DROP ROLE test2
+
+statement ok
+DROP ROLE test1_new
+
+statement ok
+DROP PROC babel_user_ext
+
+statement ok
+DROP PROC babel_db_principal
+
+statement ok
+DROP PROC babel_role_members
+
+statement ok
+USE master
+
+statement ok
+DROP USER test2
+
+statement ok
+DROP ROLE test1
+
+statement ok
+DROP LOGIN test1
+
+statement ok
+DROP LOGIN test2
+
+statement ok
+DROP LOGIN test3
+
+statement ok
+DROP LOGIN test4
+
+query T
+SELECT DB_NAME()
+----
+master
+
+statement ok
+CREATE ROLE test1
+
+statement ok
+SELECT name, type_desc
+FROM sys.database_principals
+WHERE name = 'test1'
+
+statement ok
+CREATE ROLE test1
+
+statement ok
+CREATE LOGIN test1 WITH PASSWORD = 'abc';
+
+statement error
+CREATE USER test1
+
+statement ok
+CREATE LOGIN test2 WITH PASSWORD = 'abc';
+
+statement ok
+CREATE USER test2
+
+statement ok
+CREATE ROLE test2
+
+statement ok
+CREATE DATABASE db1 COLLATE bbf_unicode_cp1_ci_ai;
+
+statement ok
+USE db1
+
+query T
+SELECT DB_NAME()
+----
+db1
+
+statement ok
+CREATE ROLE test1
+
+statement ok
+CREATE ROLE test2
+
+statement ok
+CREATE PROC babel_user_ext AS
+BEGIN
+	SELECT rolname, type, orig_username, database_name
+	FROM sys.babelfish_authid_user_ext
+	WHERE orig_username LIKE 'test%'
+	ORDER BY rolname, orig_username
+END
+
+statement ok
+CREATE PROC babel_db_principal AS
+BEGIN
+	SELECT name, type_desc
+	FROM sys.database_principals
+	WHERE name LIKE 'test%'
+	ORDER BY name
+END
+
+statement ok
+CREATE PROC babel_role_members AS
+BEGIN
+	SELECT dp1.name AS RoleName, dp1.type AS RoleType,
+		   dp2.name AS MemberName, dp2.type AS MemberType
+	FROM sys.database_role_members AS drm
+	INNER JOIN sys.database_principals AS dp1
+	ON drm.role_principal_id = dp1.principal_id
+	INNER JOIN sys.database_principals AS dp2
+	ON drm.member_principal_id = dp2.principal_id
+	ORDER BY dp1.name, dp2.name
+END
+
+statement ok
+ALTER ROLE test1 ADD MEMBER test2
+
+statement ok
+CREATE LOGIN test3 WITH PASSWORD = 'abc'
+
+statement ok
+CREATE USER test3
+
+statement ok
+ALTER ROLE test1 ADD MEMBER test3
+
+statement ok
+CREATE LOGIN test4 WITH PASSWORD = 'abc'
+
+statement ok
+ALTER ROLE test1 ADD MEMBER test4
+
+statement ok
+ALTER ROLE test1 ADD MEMBER test1
+
+statement ok
+ALTER ROLE test2 ADD MEMBER test1
+
+statement ok
+ALTER ROLE test1 ADD MEMBER dbo
+
+statement ok
+ALTER ROLE test1 ADD MEMBER db_owner
+
+statement ok
+ALTER ROLE db_owner ADD MEMBER test1
+
+statement ok
+ALTER ROLE db_owner DROP MEMBER test1
+
+statement ok
+CREATE USER test4
+
+statement ok
+ALTER ROLE test2 ADD MEMBER test4
+
+statement ok
+ALTER ROLE test1 WITH NAME = test1_new
+
+statement ok
+ALTER ROLE test1_new DROP MEMBER test2
+
+statement ok
+ALTER ROLE test1_new DROP MEMBER test3
+
+statement ok
+DROP USER test3
+
+statement ok
+DROP USER test4
+
+statement ok
+DROP ROLE test2
+
+statement ok
+DROP ROLE test1_new
+
+statement ok
+DROP PROC babel_user_ext
+
+statement ok
+DROP PROC babel_db_principal
+
+statement ok
+DROP PROC babel_role_members
+
+statement ok
+USE master
+
+statement ok
+DROP USER test2
+
+statement ok
+DROP ROLE test1
+
+statement ok
+DROP LOGIN test1
+
+statement ok
+DROP LOGIN test2
+
+statement ok
+DROP LOGIN test3
+
+statement ok
+DROP LOGIN test4
+
+statement ok
+create database mydb
+
+statement ok
+use mydb
+
+statement ok
+create login babel_role_login with password = '123'
+
+statement ok
+create user babel_role_user for login babel_role_login
+
+statement ok
+create table t_role(a int)
+
+statement ok
+grant select on t_role to babel_role_user
+
+statement ok
+drop user babel_role_user
+
+statement ok
+drop login babel_role_login
+
+statement ok
+drop table t_role
+
+statement ok
+use master
+
+statement ok
+create schema role_sch1
+
+statement ok
+create login babel_role_login with password = '123'
+
+statement ok
+create user babel_role_user for login babel_role_login
+
+statement ok
+grant select on schema::sch1 to babel_role_user
+
+statement ok
+drop user babel_role_user
+
+statement ok
+drop login babel_role_login
+
+statement ok
+drop schema role_sch1
+

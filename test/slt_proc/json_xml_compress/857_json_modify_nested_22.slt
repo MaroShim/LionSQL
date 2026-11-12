@@ -1,0 +1,27 @@
+# test/slt_proc/json_xml_compress/857_json_modify_nested_22.slt
+# T-SQL JSON_MODIFY, nested JSON_VALUE, and JSON table filtering (22)
+
+query TTT
+SELECT JSON_VALUE('{"service":"svc_22","env":"dev","Version":220,"meta":{"region":"kr-2"}}', '$.service'), JSON_VALUE('{"service":"svc_22","env":"dev","Version":220,"meta":{"region":"kr-2"}}', '$.meta.region'), JSON_VALUE(JSON_MODIFY('{"service":"svc_22","env":"dev","Version":220,"meta":{"region":"kr-2"}}', '$.Version', 2207), '$.Version');
+----
+svc_22 kr-2 2207
+
+statement ok
+CREATE TABLE j_cfg_857 (id INT PRIMARY KEY, doc VARCHAR(500));
+
+statement ok
+INSERT INTO j_cfg_857 VALUES
+(1, '{"service":"svc_22","env":"dev","Version":220,"meta":{"region":"kr-2"}}'),
+(2, JSON_MODIFY('{"service":"svc_22","env":"dev","Version":220,"meta":{"region":"kr-2"}}', '$.Version', 2207));
+
+query ITI
+SELECT id, JSON_VALUE(doc, '$.service'), CAST(JSON_VALUE(doc, '$.Version') AS INT)
+FROM j_cfg_857
+WHERE ISJSON(doc) = 1
+ORDER BY id;
+----
+1 svc_22 220
+2 svc_22 2207
+
+statement ok
+DROP TABLE j_cfg_857;

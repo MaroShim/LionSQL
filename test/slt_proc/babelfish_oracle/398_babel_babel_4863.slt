@@ -1,0 +1,217 @@
+# test/slt_proc/babelfish_oracle/398_babel_babel_4863.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4863-vu-prepare.sql, test/babelfish/raw/BABEL-4863-vu-verify.sql, test/babelfish/raw/BABEL-4863-vu-cleanup.sql
+
+statement ok
+create table babel_4863_t1 (a int)
+
+statement ok
+INSERT INTO babel_4863_t1 VALUES(1)
+
+statement ok
+create function babel_4863_func()
+	returns table as return 
+	(
+		select 'value' = '1'
+	)
+
+statement ok
+create function babel_4863_func1()
+returns table as return 
+(
+    SELECT CASE WHEN 1=1  THEN 1 ELSE 0 END[this is a $.^ test], 
+    CASE WHEN 1=1  THEN 1 ELSE 0 END'this is a $.^ test1', 
+    CASE WHEN 1=1  THEN 1 ELSE 0 END"this is a $.^ test2"
+)
+
+statement ok
+CREATE PROCEDURE babel_4863_proc @a INT
+AS BEGIN 
+DECLARE @v1 int = CASE WHEN @a=1  THEN 1 ELSE 0 END;
+DECLARE @v2 int = CASE WHEN @a=1  THEN 1 ELSE 0 END;
+DECLARE @v3 int = CASE WHEN @a=1  THEN 1 ELSE 0 END;
+SELECT @v1[this is a $.^ test], @v2'this is a $.^ test1', @v3"this is a $.^ test2";
+END;
+
+statement ok
+CREATE VIEW babel_4863_view AS 
+SELECT CASE WHEN 1=1  THEN 1 ELSE 0 END[this is a $.^ test], 
+    CASE WHEN 1=1  THEN 1 ELSE 0 END'this is a $.^ test1', 
+    CASE WHEN 1=1  THEN 1 ELSE 0 END"this is a $.^ test2";
+
+query T
+SELECT 123abc;
+----
+123
+
+query T
+SELECT 0x0o;
+----
+0x0
+
+query T
+SELECT 1_2_3;
+----
+1
+
+query T
+SELECT 0.a;
+----
+0
+
+query T
+SELECT 0.0a;
+----
+0
+
+query T
+SELECT .0a;
+----
+0
+
+query T
+SELECT 0.0e1a;
+----
+0
+
+query T
+SELECT $1a;
+----
+$1a
+
+query T
+SELECT CASE WHEN 1=1  THEN 1 ELSE 0 END[c]
+----
+1
+
+query T
+SELECT CASE WHEN 1=1  THEN 1 ELSE 0 END'c'
+----
+1
+
+query T
+SELECT CASE WHEN 1=1  THEN 1 ELSE 0 END"c"
+----
+1
+
+query T
+select a[c] from babel_4863_t1
+----
+1
+
+query T
+select a"c" from babel_4863_t1
+----
+1
+
+query T
+select a'c' from babel_4863_t1
+----
+1
+
+statement ok
+declare @v int=1
+select @v[c]
+
+statement ok
+declare @v int=1
+select @v'c'
+
+statement ok
+declare @v int=1
+select @v"c"
+
+query T
+select 1[c];
+----
+1
+
+query T
+select 1'c';
+----
+1
+
+query T
+select 1"c";
+----
+1
+
+query T
+select 'abc'[def];
+----
+abc
+
+query T
+select 'abc''def';
+----
+abc'def
+
+query T
+select 'abc'"def";
+----
+abc
+
+query T
+select 123[this is a $.^ test]
+----
+123
+
+query T
+select 123'this is a $.^ test'
+----
+123
+
+query T
+select 123"this is a $.^ test"
+----
+123
+
+query T
+SELECT CASE WHEN 1=1  THEN 1 ELSE 0 END[this is a $.^ test]
+----
+1
+
+query T
+SELECT CASE WHEN 1=1  THEN 1 ELSE 0 END'this is a $.^ test'
+----
+1
+
+query T
+SELECT CASE WHEN 1=1  THEN 1 ELSE 0 END"this is a $.^ test"
+----
+1
+
+query TTT
+select * from babel_4863_func1();
+----
+1 1 1
+
+query TTT
+exec babel_4863_proc 1;
+----
+1 1 1
+
+query TTT
+exec babel_4863_proc 2;
+----
+0 0 0
+
+query TTT
+SELECT * FROM babel_4863_view;
+----
+1 1 1
+
+statement ok
+drop table if exists babel_4863_t1
+
+statement ok
+drop function if exists babel_4863_func
+
+statement ok
+drop function if exists babel_4863_func1
+
+statement ok
+drop procedure if exists babel_4863_proc
+
+statement ok
+drop view if exists babel_4863_view
+

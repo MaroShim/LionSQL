@@ -1,0 +1,17 @@
+# test/slt_proc/babelfish_oracle/510_babel_babel_1400.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1400.sql
+
+statement ok
+CREATE PROCEDURE sp_test1 (@a nchar OUTPUT, @b nvarchar OUTPUT, @c varbinary OUTPUT, @d char OUTPUT, @e varchar OUTPUT, @f binary OUTPUT) AS BEGIN Select @a, @b, @c, @d, @e, @f; END;
+
+query TTTTTT
+Declare @a nchar; Set @a = 'hello';
+Declare @b nvarchar; Set @b = 'world';
+Declare @c varbinary; Set @c = 0xABCD;
+Declare @d char; Set @d = 'HELLO';
+Declare @e varchar; Set @e = 'WORLD';
+Declare @f binary; Set @f = 0x1234;
+exec sp_test1 @a, @b, @c, @d, @e, @f;
+----
+hello world 0xABCD HELLO WORLD 0x1234
+

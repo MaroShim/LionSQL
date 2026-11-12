@@ -1,0 +1,186 @@
+# test/slt_proc/babelfish_oracle/387_babel_babel_4078_before_16_5_or_15_9.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-4078-before-16_5-or-15_9-vu-prepare.sql, test/babelfish/raw/BABEL-4078-before-16_5-or-15_9-vu-verify.sql, test/babelfish/raw/BABEL-4078-before-16_5-or-15_9-vu-cleanup.sql
+
+statement ok
+CREATE VIEW babel_4078_vu_prepare_view1 AS
+SELECT CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as DATE)) result
+
+statement ok
+CREATE VIEW babel_4078_vu_prepare_view11 AS
+SELECT CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as DATE), 105) result
+
+statement ok
+CREATE VIEW babel_4078_vu_prepare_view2 AS
+SELECT CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as TIME))  result
+
+statement ok
+CREATE VIEW babel_4078_vu_prepare_view22 AS
+SELECT CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as TIME), 20) result
+
+statement ok
+CREATE PROCEDURE babel_4078_vu_prepare_proc1 AS
+SELECT CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as DATE))  result
+
+statement ok
+CREATE PROCEDURE babel_4078_vu_prepare_proc11 AS
+SELECT CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as DATE), 105)  result
+
+statement ok
+CREATE FUNCTION babel_4078_vu_prepare_func1()
+RETURNS TABLE
+AS
+RETURN (SELECT CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as DATE))  result)
+
+statement ok
+CREATE FUNCTION babel_4078_vu_prepare_func11()
+RETURNS TABLE
+AS
+RETURN (SELECT CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as DATE), 105)  result)
+
+statement ok
+CREATE FUNCTION babel_4078_vu_prepare_func2()
+RETURNS TABLE
+AS
+RETURN (SELECT CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as TIME))  result)
+
+statement ok
+CREATE FUNCTION babel_4078_vu_prepare_func22()
+RETURNS TABLE
+AS
+RETURN (SELECT CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as TIME), 20)  result)
+
+statement ok
+CREATE VIEW babel_4078_vu_prepare_view3 AS
+SELECT CASE 
+       WHEN CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as DATE)) =  CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as DATE), 20)
+       THEN 'true'
+       else 'false'
+       END  result
+
+statement ok
+CREATE VIEW babel_4078_vu_prepare_view4 AS
+SELECT CASE 
+       WHEN CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as TIME)) =  CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as TIME), 25)
+       THEN 'true'
+       else 'false'
+       END  result
+
+statement ok
+CREATE VIEW babel_4078_vu_prepare_view5 AS
+SELECT CASE 
+       WHEN CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as sys.DATETIME)) =  CONVERT(NVARCHAR(10), CAST('2023-02-03 19:08:35.527' as sys.DATETIME), 0)
+       THEN 'true'
+       else 'false'
+       END  result
+
+statement ok
+CREATE VIEW babel_4078_vu_prepare_view6 AS
+SELECT CASE 
+       WHEN CONVERT(NVARCHAR(10), CAST('1.0001' as float)) =  CONVERT(NVARCHAR(10), CAST('1.0001' as float), 0)
+       THEN 'true'
+       else 'false'
+       END  result
+
+statement ok
+CREATE VIEW babel_4078_vu_prepare_view7 AS
+SELECT CASE 
+       WHEN CONVERT(NVARCHAR(10), CAST('1.0001' as sys.money)) =  CONVERT(NVARCHAR(10), CAST('1.0001' as sys.money), 0)
+       THEN 'true'
+       else 'false'
+       END  result
+
+query T
+SELECT * FROM babel_4078_vu_prepare_view1
+----
+2023-02-03
+
+query T
+SELECT * FROM babel_4078_vu_prepare_view11
+----
+2023-02-03
+
+query T
+EXEC babel_4078_vu_prepare_proc1
+----
+2023-02-03
+
+query T
+EXEC babel_4078_vu_prepare_proc11
+----
+2023-02-03
+
+query T
+SELECT * FROM babel_4078_vu_prepare_func1()
+----
+2023-02-03
+
+query T
+SELECT * FROM babel_4078_vu_prepare_func11()
+----
+2023-02-03
+
+query T
+SELECT * FROM babel_4078_vu_prepare_view3
+----
+true
+
+query T
+SELECT * FROM babel_4078_vu_prepare_view5
+----
+true
+
+query T
+SELECT * FROM babel_4078_vu_prepare_view6
+----
+true
+
+query T
+SELECT * FROM babel_4078_vu_prepare_view7
+----
+true
+
+statement ok
+DROP VIEW babel_4078_vu_prepare_view1
+
+statement ok
+DROP VIEW babel_4078_vu_prepare_view11
+
+statement ok
+DROP VIEW babel_4078_vu_prepare_view2
+
+statement ok
+DROP VIEW babel_4078_vu_prepare_view22
+
+statement ok
+DROP PROCEDURE babel_4078_vu_prepare_proc1
+
+statement ok
+DROP PROCEDURE babel_4078_vu_prepare_proc11
+
+statement ok
+DROP FUNCTION babel_4078_vu_prepare_func1
+
+statement ok
+DROP FUNCTION babel_4078_vu_prepare_func11
+
+statement ok
+DROP FUNCTION babel_4078_vu_prepare_func2
+
+statement ok
+DROP FUNCTION babel_4078_vu_prepare_func22
+
+statement ok
+DROP VIEW babel_4078_vu_prepare_view3
+
+statement ok
+DROP VIEW babel_4078_vu_prepare_view4
+
+statement ok
+DROP VIEW babel_4078_vu_prepare_view5
+
+statement ok
+DROP VIEW babel_4078_vu_prepare_view6
+
+statement ok
+DROP VIEW babel_4078_vu_prepare_view7
+

@@ -1,0 +1,24 @@
+# test/slt_proc/babelfish_oracle/1263_babel_babel_execute_as_caller.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-EXECUTE_AS_CALLER-vu-prepare.sql, test/babelfish/raw/BABEL-EXECUTE_AS_CALLER-vu-verify.sql, test/babelfish/raw/BABEL-EXECUTE_AS_CALLER-vu-cleanup.sql
+
+statement ok
+CREATE TABLE babel_execute_as_caller_table(c1 int);
+INSERT INTO babel_execute_as_caller_table values (1);
+
+statement ok
+CREATE FUNCTION babel_execute_as_caller_function_return_table_select() RETURNS TABLE WITH EXECUTE AS CALLER AS
+RETURN (SELECT * FROM babel_execute_as_caller_table)
+
+statement ok
+CREATE FUNCTION babel_execute_as_caller_function_return_table_1() RETURNS TABLE WITH EXECUTE AS OWNER AS
+RETURN (SELECT * FROM babel_execute_as_caller_table)
+
+statement ok
+CREATE TABLE babel_execute_as_caller_table_1 (c varchar(20));
+
+statement ok
+INSERT INTO babel_execute_as_caller_table values (2);
+
+statement ok
+SELECT * FROM babel_execute_as_caller_table_1;
+

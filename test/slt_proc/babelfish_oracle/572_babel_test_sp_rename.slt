@@ -1,0 +1,312 @@
+# test/slt_proc/babelfish_oracle/572_babel_test_sp_rename.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/storedProcedures/Test-sp_rename-vu-prepare.sql, test/babelfish/raw/storedProcedures/Test-sp_rename-vu-verify.sql, test/babelfish/raw/storedProcedures/Test-sp_rename-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE TABLE sp_rename_vu_table1(sp_rename_vu_t1_col1 int, sp_rename_vu_t1_col2 int);
+
+statement ok
+CREATE TABLE sp_rename_vu_table2(sp_rename_vu_t2_col1 int, sp_rename_vu_t2_col2 int);
+
+statement ok
+SET quoted_identifier ON
+
+statement ok
+CREATE TABLE sp_rename_vu_table_delim("sp_rename_vu_td1_col1" int, [sp_rename_vu_td1_col2] int);
+
+statement ok
+CREATE SCHEMA sp_rename_vu_schema1;
+
+statement ok
+CREATE TABLE sp_rename_vu_schema1.sp_rename_vu_table1(sp_rename_vu_s1_t1_col1 int, sp_rename_vu_s1_t1_col2 int);
+
+statement ok
+CREATE TABLE sp_rename_vu_schema1.sp_rename_vu_table2(sp_rename_vu_s1_t2_col1 int, sp_rename_vu_s1_t2_col2 int);
+
+statement ok
+CREATE VIEW sp_rename_vu_view1 as SELECT sp_rename_vu_t1_col1 FROM sp_rename_vu_table1;
+
+statement ok
+CREATE PROCEDURE sp_rename_vu_proc1
+AS
+SELECT 1;
+
+statement ok
+CREATE PROCEDURE sp_rename_vu_schema1.sp_rename_vu_proc2
+AS
+SELECT 1;
+
+statement ok
+CREATE FUNCTION sp_rename_vu_func1() 
+RETURNS INT
+AS 
+BEGIN
+    RETURN 1;
+END
+
+statement ok
+CREATE FUNCTION sp_rename_vu_func2(@id INT) 
+RETURNS INT
+AS 
+BEGIN
+    RETURN 1;
+END
+
+statement ok
+CREATE FUNCTION sp_rename_vu_schema1.sp_rename_vu_func3(@id INT) 
+RETURNS INT
+AS 
+BEGIN
+    RETURN 1;
+END
+
+statement ok
+CREATE SEQUENCE sp_rename_vu_seq1 
+START WITH 1  
+INCREMENT BY 1;  
+
+statement ok
+CREATE SEQUENCE sp_rename_vu_schema1.sp_rename_vu_seq1 
+START WITH 1  
+INCREMENT BY 1;  
+
+statement ok
+CREATE SEQUENCE sp_rename_vu_seq2
+START WITH 1  
+INCREMENT BY 1;  
+
+statement ok
+CREATE TRIGGER sp_rename_vu_trig1 ON sp_rename_vu_table2 
+AFTER INSERT, UPDATE AS 
+RAISERROR ('Testing sp_rename trigger', 16, 10);
+
+statement ok
+USE master
+
+statement ok
+EXEC sp_rename 'sp_rename_vu_table1', 'sp_rename_vu_table1_new', 'OBJECT';
+
+query TTTT
+SELECT ROUTINE_CATALOG, ROUTINE_SCHEMA, ROUTINE_NAME, ROUTINE_TYPE 
+FROM information_schema.routines WHERE ROUTINE_NAME LIKE '%sp_rename_vu%' 
+ORDER BY ROUTINE_CATALOG, ROUTINE_SCHEMA, ROUTINE_NAME
+----
+postgres public sp_rename_vu_proc1 PROCEDURE
+postgres public sp_rename_vu_schema1.sp_rename_vu_proc2 PROCEDURE
+
+query TTTT
+SELECT ROUTINE_CATALOG, ROUTINE_SCHEMA, ROUTINE_NAME, ROUTINE_TYPE 
+FROM information_schema.routines WHERE ROUTINE_NAME LIKE '%sp_rename_vu%'
+ORDER BY ROUTINE_CATALOG, ROUTINE_SCHEMA, ROUTINE_NAME
+----
+postgres public sp_rename_vu_proc1 PROCEDURE
+postgres public sp_rename_vu_schema1.sp_rename_vu_proc2 PROCEDURE
+
+statement ok
+EXEC sp_rename 'SP_RENAME_vu_table1_new', 'sp_rename_vu_table1_case_insensitive1', 'OBJECT';
+
+statement ok
+EXEC sp_rename 'sp_rename_vu_table1_case_insensitive1', 'SP_RENAME_vu_TABLE1_case_insensitive2', 'OBJECT';
+
+statement ok
+SELECT SEQUENCE_CATALOG, SEQUENCE_SCHEMA, SEQUENCE_NAME 
+FROM information_schema.sequences WHERE SEQUENCE_NAME LIKE '%sp_rename_vu%' 
+ORDER BY SEQUENCE_CATALOG, SEQUENCE_SCHEMA, SEQUENCE_NAME
+
+statement ok
+SELECT SEQUENCE_CATALOG, SEQUENCE_SCHEMA, SEQUENCE_NAME 
+FROM information_schema.sequences WHERE SEQUENCE_NAME LIKE '%sp_rename_vu%' 
+ORDER BY SEQUENCE_CATALOG, SEQUENCE_SCHEMA, SEQUENCE_NAME
+
+query TT
+SELECT name, parent_class
+FROM sys.triggers WHERE name LIKE '%sp_rename_vu%' 
+ORDER BY parent_class, name
+----
+SP_RENAME_vu_TABLE1_case_insensitive2 NULL
+sp_rename_vu_schema1.sp_rename_vu_table1 NULL
+sp_rename_vu_schema1.sp_rename_vu_table2 NULL
+sp_rename_vu_table2 NULL
+sp_rename_vu_table_delim NULL
+sp_rename_vu_view1 NULL
+SP_RENAME_vu_TABLE1_case_insensitive2 NULL
+sp_rename_vu_schema1.sp_rename_vu_table1 NULL
+sp_rename_vu_schema1.sp_rename_vu_table2 NULL
+sp_rename_vu_table2 NULL
+sp_rename_vu_table_delim NULL
+sp_rename_vu_view1 NULL
+
+statement ok
+INSERT INTO sp_rename_vu_table2(sp_rename_vu_t2_col1, sp_rename_vu_t2_col2) VALUES (1, 2);
+
+query TT
+SELECT name, parent_class
+FROM sys.triggers WHERE name LIKE '%sp_rename_vu%' 
+ORDER BY parent_class, name
+----
+SP_RENAME_vu_TABLE1_case_insensitive2 NULL
+sp_rename_vu_schema1.sp_rename_vu_table1 NULL
+sp_rename_vu_schema1.sp_rename_vu_table2 NULL
+sp_rename_vu_table2 NULL
+sp_rename_vu_table_delim NULL
+sp_rename_vu_view1 NULL
+SP_RENAME_vu_TABLE1_case_insensitive2 NULL
+sp_rename_vu_schema1.sp_rename_vu_table1 NULL
+sp_rename_vu_schema1.sp_rename_vu_table2 NULL
+sp_rename_vu_table2 NULL
+sp_rename_vu_table_delim NULL
+sp_rename_vu_view1 NULL
+
+statement ok
+INSERT INTO sp_rename_vu_table2(sp_rename_vu_t2_col1, sp_rename_vu_t2_col2) VALUES (1, 2);
+
+statement ok
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME 
+FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'sp_rename_vu_table1' 
+ORDER BY COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME;
+
+statement ok
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME 
+FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'sp_rename_vu_table1' 
+ORDER BY COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME;
+
+statement ok
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME 
+FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'sp_rename_vu_table2_new'
+ORDER BY COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME;
+
+statement ok
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME 
+FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'sp_rename_vu_table2_new'
+ORDER BY COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME;
+
+query TTT
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME 
+FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'sp_rename_vu_table_delim'
+ORDER BY COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME;
+----
+_row_id public sp_rename_vu_table_delim
+sp_rename_vu_td1_col1 public sp_rename_vu_table_delim
+sp_rename_vu_td1_col2 public sp_rename_vu_table_delim
+
+statement ok
+EXEC sp_rename 'sp_rename_vu_table_delim."sp_rename_vu_td1_col1"', 'sp_rename_vu_td1_col1_new', 'COLUMN';
+
+query TTT
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME 
+FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'sp_rename_vu_table_delim'
+ORDER BY COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME;
+----
+_row_id public sp_rename_vu_table_delim
+sp_rename_vu_td1_col1_new public sp_rename_vu_table_delim
+sp_rename_vu_td1_col2 public sp_rename_vu_table_delim
+
+statement ok
+EXEC sp_rename 'sp_rename_vu_table_delim.[sp_rename_vu_td1_col1_new]', '[sp_rename_vu_td1_col1_new]', 'COLUMN';
+
+query TTT
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME 
+FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'sp_rename_vu_table_delim'
+ORDER BY COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME;
+----
+_row_id public sp_rename_vu_table_delim
+sp_rename_vu_td1_col1_new public sp_rename_vu_table_delim
+sp_rename_vu_td1_col2 public sp_rename_vu_table_delim
+
+statement ok
+EXEC sp_rename 'sp_rename_vu_table_delim."[sp_rename_vu_td1_col1_new]"', '[SP_rename_vu_td1_col1_MIXED]', 'COLUMN';
+
+query TTT
+SELECT COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME 
+FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'sp_rename_vu_table_delim'
+ORDER BY COLUMN_NAME, TABLE_SCHEMA, TABLE_NAME;
+----
+SP_rename_vu_td1_col1_MIXED public sp_rename_vu_table_delim
+_row_id public sp_rename_vu_table_delim
+sp_rename_vu_td1_col2 public sp_rename_vu_table_delim
+
+statement ok
+EXEC sp_rename 'sp_rename_vu_table_delim."[SP_rename_vu_td1_col1_MIXED]"', '[  SP_rename_vu_td1_col1_MIXED_spaces   ]', 'COLUMN';
+
+statement ok
+SET quoted_identifier OFF
+
+statement ok
+SELECT t1.name, s1.name
+FROM sys.types t1 INNER JOIN sys.schemas s1 ON t1.schema_id = s1.schema_id 
+WHERE t1.is_user_defined = 1 AND t1.name LIKE '%sp_rename_vu%'
+ORDER BY t1.name, s1.name;
+
+statement ok
+CREATE TABLE sp_rename_vu_alias1_table1(col1 sp_rename_vu_alias1);
+
+statement ok
+SELECT t1.name, s1.name
+FROM sys.types t1 INNER JOIN sys.schemas s1 ON t1.schema_id = s1.schema_id 
+WHERE t1.is_user_defined = 1 AND t1.name LIKE '%sp_rename_vu%'
+ORDER BY t1.name, s1.name;
+
+statement ok
+CREATE TABLE sp_rename_vu_alias1_table2(col1 sp_rename_vu_alias1);
+
+statement ok
+INSERT INTO sp_rename_vu_alias1_table1(col1) VALUES ('abc');
+
+statement ok
+INSERT INTO sp_rename_vu_alias1_table2(col1) VALUES ('abcd');
+
+query T
+SELECT * FROM sp_rename_vu_alias1_table1;
+----
+abc
+
+query T
+SELECT * FROM sp_rename_vu_alias1_table2;
+----
+abcd
+
+statement ok
+SELECT name FROM sys.indexes WHERE name like 'sp_rename_indexnamegreaterthan64%';
+
+statement ok
+IF OBJECT_ID('babelfish_split_identifier_view') IS NULL
+BEGIN
+    EXEC sp_executesql N'
+        CREATE VIEW babelfish_split_identifier_view AS SELECT * FROM sys.babelfish_split_identifier(''ABC.DEF.GHI'')';
+END
+
+statement ok
+USE master
+
+statement ok
+DROP TABLE sp_rename_vu_table2;
+
+statement ok
+DROP VIEW sp_rename_vu_view1;
+
+statement ok
+DROP TABLE sp_rename_vu_table_delim;
+
+statement ok
+DROP TABLE sp_rename_vu_schema1.sp_rename_vu_table1;
+
+statement ok
+DROP SEQUENCE sp_rename_vu_seq1_new;
+
+statement ok
+DROP SEQUENCE sp_rename_vu_seq2;
+
+statement ok
+DROP SEQUENCE sp_rename_vu_schema1.sp_rename_vu_seq1_new2;
+
+statement ok
+DROP TABLE sp_rename_vu_alias1_table1;
+
+statement ok
+DROP TABLE sp_rename_vu_alias1_table2;
+
+statement ok
+DROP SCHEMA sp_rename_vu_schema1;
+

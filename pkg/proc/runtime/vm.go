@@ -881,7 +881,8 @@ func (e *Executor) releaseFrame(frame *VMFrame) {
 // (VMFrame.Execute is implemented in vm_dispatcher.go as a single flattened direct dispatch loop)
 
 func (f *VMFrame) bindWhereVariables(where string) string {
-	if where == "" || len(f.vars) == 0 {
+	allVars := f.getStorageVarsMap()
+	if where == "" || len(allVars) == 0 {
 		return where
 	}
 	res := where
@@ -892,7 +893,7 @@ func (f *VMFrame) bindWhereVariables(where string) string {
 	seen := make(map[string]bool)
 	var bindings []varBinding
 
-	for k, v := range f.vars {
+	for k, v := range allVars {
 		valStr := v.String()
 		if v.Type == storage.TypeVarChar {
 			valStr = "'" + strings.ReplaceAll(v.SVal, "'", "''") + "'"
@@ -1050,6 +1051,30 @@ func replaceVariableBoundaries(s, target, replacement string) string {
 }
 
 func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[string]any, []string, [][]any, error) {
+	if strings.Contains(sql, "@") {
+		sql = f.bindWhereVariables(sql)
+		queryData = nil
+	}
+	if setQuery, ok := planner.FindTopLevelSetOps(sql); ok && setQuery != nil && len(setQuery.Segments) >= 2 {
+		if f.executor != nil {
+			if qe := f.executor.getQueryExecutor(); qe != nil {
+				rows, cols, err := qe(f.ctx, sql, f.tx, f.getStorageVarsMap())
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				var vals [][]any
+				for _, r := range rows {
+					rowVals := make([]any, len(cols))
+					for ci, col := range cols {
+						rowVals[ci] = r[col]
+					}
+					vals = append(vals, rowVals)
+				}
+				return rows, cols, vals, nil
+			}
+		}
+	}
+
 	p := planner.NewPlanner()
 	var qInfo *planner.QueryInfo
 	if queryData != nil {
@@ -1215,6 +1240,12 @@ func (f *VMFrame) getVar(name string) (storage.Value, bool) {
 				return storage.IntValue(f.lastIdentity), true
 			}
 			return storage.NullValue(storage.TypeInt), true
+		}
+		if strings.EqualFold(name, "@@DATEFIRST") || strings.EqualFold(clean, "DATEFIRST") || strings.EqualFold(clean, "@DATEFIRST") {
+			return storage.IntValue(7), true
+		}
+		if strings.EqualFold(name, "@@DBTS") || strings.EqualFold(clean, "DBTS") || strings.EqualFold(clean, "@DBTS") {
+			return storage.BinaryValue(proc.GetCurrentDBTS()), true
 		}
 	} else if strings.EqualFold(name, "SCOPE_IDENTITY") || strings.EqualFold(name, "SCOPE_IDENTITY()") {
 		if f.lastIdentity > 0 {
@@ -1396,6 +1427,12 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 			}
 		}
 
+		if tableSchema.HasCheckConstraints() {
+			if err := proc.ValidateRecordChecks(tableSchema, rec); err != nil {
+				return insertedCount, err
+			}
+		}
+
 		if err := f.tx.Insert(targetTable, rec); err != nil {
 			return insertedCount, fmt.Errorf("insert error into %s: %w", data.Table, err)
 		}
@@ -1478,6 +1515,18 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 				}
 				recUpdates.Set(colName, stVal)
 				newRowMap[colName] = valToAny(stVal)
+			}
+			if tableSchema != nil && tableSchema.HasCheckConstraints() {
+				merged := make(storage.Record, len(oldRec)+len(recUpdates))
+				for k, v := range oldRec {
+					merged[k] = v
+				}
+				for k, v := range recUpdates {
+					merged[k] = v
+				}
+				if err := proc.ValidateRecordChecks(tableSchema, merged); err != nil {
+					return 0, err
+				}
 			}
 			if err := f.tx.Update(targetTable, pkVal, recUpdates); err != nil {
 				return 0, fmt.Errorf("update error on %s: %w", targetTable, err)
@@ -1646,6 +1695,18 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		}
 
 		if hasPk {
+			if tableSchema != nil && tableSchema.HasCheckConstraints() {
+				merged := make(storage.Record, len(rec)+len(recUpdates))
+				for k, v := range rec {
+					merged[k] = v
+				}
+				for k, v := range recUpdates {
+					merged[k] = v
+				}
+				if err := proc.ValidateRecordChecks(tableSchema, merged); err != nil {
+					return 0, err
+				}
+			}
 			item := updateItem{
 				pk:      pkVal,
 				updates: recUpdates,
@@ -2412,7 +2473,7 @@ func (f *VMFrame) callUDF(fnName string, argRegs []int32) (storage.Value, error)
 	return toStorageValue(retVal), nil
 }
 
-func (f *VMFrame) callProc(procName string, argRegs []int32) (storage.Value, error) {
+func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (storage.Value, error) {
 	if f.callDepth >= 64 {
 		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("maximum stored procedure call depth (64) exceeded (possible infinite recursion)")
 	}
@@ -2446,6 +2507,28 @@ func (f *VMFrame) callProc(procName string, argRegs []int32) (storage.Value, err
 	}
 	subFrame.bindParams(params)
 	retVal, err := subFrame.Execute(0)
+	if err == nil && len(outSlots) > 0 {
+		for i, p := range prog.Params {
+			if i < len(outSlots) && outSlots[i] >= 0 && int(outSlots[i]) < len(f.slots) {
+				cleanP := cleanSymbol(p.Name)
+				subSlot := int32(-1)
+				if prog.VarSlots != nil {
+					if s, ok := prog.VarSlots[cleanP]; ok {
+						subSlot = s
+					} else if s, ok := prog.VarSlots[strings.ToLower(cleanP)]; ok {
+						subSlot = s
+					}
+				}
+				if subSlot >= 0 && int(subSlot) < len(subFrame.slots) {
+					f.slots[outSlots[i]] = subFrame.slots[subSlot]
+					f.evalCtxDirty = true
+				} else if subVal, ok := subFrame.vars[cleanP]; ok {
+					f.slots[outSlots[i]] = subVal
+					f.evalCtxDirty = true
+				}
+			}
+		}
+	}
 	logs := subFrame.logs
 	f.executor.releaseFrame(subFrame)
 

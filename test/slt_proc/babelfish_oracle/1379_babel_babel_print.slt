@@ -1,0 +1,41 @@
+# test/slt_proc/babelfish_oracle/1379_babel_babel_print.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_print.sql
+
+statement ok
+CREATE PROCEDURE tsql_print_text AS
+    PRINT 'Pre-defined text for tsql_print_text'
+
+statement ok
+EXEC tsql_print_text
+
+statement ok
+CREATE PROCEDURE tsql_print_message(@message varchar(50)) AS
+BEGIN 
+    PRINT @message 
+END;
+
+statement ok
+EXEC tsql_print_message 'Testing message for tsql_print_message'
+
+statement ok
+CREATE PROCEDURE tsql_print_message_and_text(@message varchar(50)) AS 
+BEGIN 
+    PRINT 'Pre-defined text for tsql_print_message_and_text. User input: '+ @message
+END
+
+statement ok
+EXEC tsql_print_message_and_text 'Testing message for tsql_print_message_and_text'
+
+statement ok
+CREATE PROCEDURE tsql_print_function AS
+    EXECUTE tsql_print_text
+
+statement ok
+EXEC tsql_print_function
+
+statement ok
+DROP PROCEDURE tsql_print_text;
+DROP PROCEDURE tsql_print_message;
+DROP PROCEDURE tsql_print_message_and_text;
+DROP PROCEDURE tsql_print_function;
+

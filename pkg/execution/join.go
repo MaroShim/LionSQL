@@ -743,14 +743,22 @@ func mergeTuples(left, right Tuple, combinedIndex *ColumnIndexMap) Tuple {
 func mergeTuplesWithArena(left, right Tuple, combinedIndex *ColumnIndexMap, arena *storage.Arena) Tuple {
 	left.Materialize()
 	right.Materialize()
+	leftLen := len(left.Values)
+	if left.Index != nil && len(left.Index.cols) > leftLen {
+		leftLen = len(left.Index.cols)
+	}
+	rightLen := len(right.Values)
+	if right.Index != nil && len(right.Index.cols) > rightLen {
+		rightLen = len(right.Index.cols)
+	}
 	var vals []any
 	if arena != nil {
-		vals = arena.AllocAnySlice(len(left.Values) + len(right.Values))
+		vals = arena.AllocAnySlice(leftLen + rightLen)
 	} else {
-		vals = make([]any, len(left.Values)+len(right.Values))
+		vals = make([]any, leftLen+rightLen)
 	}
 	copy(vals, left.Values)
-	copy(vals[len(left.Values):], right.Values)
+	copy(vals[leftLen:], right.Values)
 	return Tuple{
 		Values: vals,
 		Index:  combinedIndex,
@@ -763,11 +771,15 @@ func mergeTuplesWithNulls(left Tuple, rightColsCount int, combinedIndex *ColumnI
 
 func mergeTuplesWithNullsAndArena(left Tuple, rightColsCount int, combinedIndex *ColumnIndexMap, arena *storage.Arena) Tuple {
 	left.Materialize()
+	leftLen := len(left.Values)
+	if left.Index != nil && len(left.Index.cols) > leftLen {
+		leftLen = len(left.Index.cols)
+	}
 	var vals []any
 	if arena != nil {
-		vals = arena.AllocAnySlice(len(left.Values) + rightColsCount)
+		vals = arena.AllocAnySlice(leftLen + rightColsCount)
 	} else {
-		vals = make([]any, len(left.Values)+rightColsCount)
+		vals = make([]any, leftLen+rightColsCount)
 	}
 	copy(vals, left.Values)
 	return Tuple{
@@ -782,11 +794,15 @@ func mergeNullsWithTuple(leftColsCount int, right Tuple, combinedIndex *ColumnIn
 
 func mergeNullsWithTupleAndArena(leftColsCount int, right Tuple, combinedIndex *ColumnIndexMap, arena *storage.Arena) Tuple {
 	right.Materialize()
+	rightLen := len(right.Values)
+	if right.Index != nil && len(right.Index.cols) > rightLen {
+		rightLen = len(right.Index.cols)
+	}
 	var vals []any
 	if arena != nil {
-		vals = arena.AllocAnySlice(leftColsCount + len(right.Values))
+		vals = arena.AllocAnySlice(leftColsCount + rightLen)
 	} else {
-		vals = make([]any, leftColsCount+len(right.Values))
+		vals = make([]any, leftColsCount+rightLen)
 	}
 	copy(vals[leftColsCount:], right.Values)
 	return Tuple{

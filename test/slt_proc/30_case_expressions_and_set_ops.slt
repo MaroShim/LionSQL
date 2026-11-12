@@ -39,6 +39,38 @@ SELECT 2 INTERSECT SELECT 2;
 ----
 2
 
+statement ok
+CREATE PROCEDURE sp_setops
+AS
+BEGIN
+    SELECT 1 AS v UNION SELECT 2 AS v UNION SELECT 2 AS v ORDER BY 1;
+END;
+
+query I
+EXEC sp_setops;
+----
+1
+2
+
+statement ok
+CREATE PROCEDURE sp_union_all @a INT, @b INT
+AS
+BEGIN
+    SELECT @a AS v UNION ALL SELECT @b AS v ORDER BY 1;
+END;
+
+query I
+EXEC sp_union_all 5, 5;
+----
+5
+5
+
+statement ok
+DROP PROCEDURE sp_setops;
+
+statement ok
+DROP PROCEDURE sp_union_all;
+
 query T
 SELECT CASE 2 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'many' END;
 ----

@@ -148,6 +148,39 @@ func TestBuiltin_Strings(t *testing.T) {
 	if ch := EvalBuiltin("CHAR", []storage.Value{storage.IntValue(65)}); ch.SVal != "A" {
 		t.Errorf("Expected 'A', got %q", ch.SVal)
 	}
+
+	// COMPRESS and DECOMPRESS
+	originalStr := "Hello, World! LionSQL T-SQL GZIP Compression Engine"
+	comp := EvalBuiltin("COMPRESS", []storage.Value{storage.StringValue(originalStr)})
+	if comp.IsNull || comp.Type != storage.TypeBinary {
+		t.Fatalf("COMPRESS expected non-null TypeBinary, got %v", comp)
+	}
+	compBytes := comp.Bytes()
+	if len(compBytes) < 10 || compBytes[0] != 0x1f || compBytes[1] != 0x8b {
+		t.Fatalf("COMPRESS output missing valid GZIP magic header (0x1f 0x8b): %v", compBytes)
+	}
+
+	decomp := EvalBuiltin("DECOMPRESS", []storage.Value{comp})
+	if decomp.IsNull || decomp.Type != storage.TypeBinary {
+		t.Fatalf("DECOMPRESS expected non-null TypeBinary, got %v", decomp)
+	}
+	if string(decomp.Bytes()) != originalStr {
+		t.Errorf("DECOMPRESS roundtrip failed: expected %q, got %q", originalStr, string(decomp.Bytes()))
+	}
+
+	// CAST(DECOMPRESS(COMPRESS(...)) AS VARCHAR)
+	castStr, err := EvalCast(decomp, storage.TypeVarChar, 0, 0, 0, false)
+	if err != nil || castStr.SVal != originalStr {
+		t.Errorf("CAST DECOMPRESS to VARCHAR failed: %v (val=%q)", err, castStr.SVal)
+	}
+
+	// NULL handling
+	if nullComp := EvalBuiltin("COMPRESS", []storage.Value{storage.NullValue(storage.TypeVarChar)}); !nullComp.IsNull {
+		t.Errorf("COMPRESS(NULL) expected NULL, got %v", nullComp)
+	}
+	if nullDecomp := EvalBuiltin("DECOMPRESS", []storage.Value{storage.NullValue(storage.TypeBinary)}); !nullDecomp.IsNull {
+		t.Errorf("DECOMPRESS(NULL) expected NULL, got %v", nullDecomp)
+	}
 }
 
 func TestBuiltin_Math(t *testing.T) {
@@ -1001,6 +1034,12 @@ func TestBuiltin_TSQLExpansions(t *testing.T) {
 	if spid := EvalBuiltin("@@SPID", nil); spid.IVal != 51 {
 		t.Errorf("@@SPID expected 51, got %d", spid.IVal)
 	}
+	if df := EvalBuiltin("@@DATEFIRST", nil); df.IVal != 7 {
+		t.Errorf("@@DATEFIRST expected 7, got %d", df.IVal)
+	}
+	if dbts := EvalBuiltin("@@DBTS", nil); len(dbts.Bytes()) != 8 {
+		t.Errorf("@@DBTS expected 8 bytes, got %d bytes (%v)", len(dbts.Bytes()), dbts.Bytes())
+	}
 	if col := EvalBuiltin("COL_NAME", []storage.Value{storage.IntValue(1), storage.IntValue(1)}); col.SVal != "id" {
 		t.Errorf("COL_NAME expected 'id', got %q", col.SVal)
 	}
@@ -1012,7 +1051,7 @@ func TestBuiltin_TSQLExpansions(t *testing.T) {
 		"STRING_ESCAPE", "SQUARE", "ISJSON", "JSON_MODIFY",
 		"HOST_NAME", "HOST_ID", "CURRENT_USER", "USER_NAME", "SUSER_NAME", "SUSER_SNAME",
 		"USER_ID", "SUSER_ID", "@@VERSION", "VERSION", "@@SERVERNAME", "@@SPID", "SPID",
-		"@@MAX_CONNECTIONS", "@@LANGUAGE", "COL_NAME",
+		"@@MAX_CONNECTIONS", "@@LANGUAGE", "@@DATEFIRST", "@@DBTS", "COL_NAME",
 	}
 	for _, fn := range newFuncs {
 		if !IsBuiltinFunction(fn) {

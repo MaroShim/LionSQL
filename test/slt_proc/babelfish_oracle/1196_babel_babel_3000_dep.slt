@@ -1,0 +1,10 @@
+# test/slt_proc/babelfish_oracle/1196_babel_babel_3000_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-3000-dep-vu-prepare.sql, test/babelfish/raw/BABEL-3000-dep-vu-verify.sql, test/babelfish/raw/BABEL-3000-dep-vu-cleanup.sql
+
+statement ok
+create table babel_3000_dep_vu_prepare_t1(a text, b xml)
+
+statement ok
+create procedure babel_3000_dep_vu_prepare_p1 as
+    exec sp_describe_first_result_set N'select * from babel_3000_dep_vu_prepare_t1'
+

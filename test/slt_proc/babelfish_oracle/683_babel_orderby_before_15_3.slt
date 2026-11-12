@@ -1,0 +1,61 @@
+# test/slt_proc/babelfish_oracle/683_babel_orderby_before_15_3.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/orderby-before-15_3-vu-prepare.sql, test/babelfish/raw/orderby-before-15_3-vu-verify.sql, test/babelfish/raw/orderby-before-15_3-vu-cleanup.sql
+
+statement ok
+drop table if exists t1;
+
+statement ok
+create table t1(a int);
+
+statement ok
+insert t1 values (1);
+insert t1 values (3);
+insert t1 values (null);
+
+statement ok
+create view orderby_vu_view_1 as with t1cte AS (
+select top(3) a from t1 order by 1
+)
+select * from t1cte; 
+
+statement ok
+create view orderby_vu_view_2 as 
+select top(3) a from t1 order by 1; 
+
+statement ok
+create view orderby_vu_view_3 as
+select * from (select top(3) a from t1 order by 1) as b;
+
+query T
+select * from orderby_vu_view_1;
+----
+NULL
+1
+3
+
+query T
+select * from orderby_vu_view_2;
+----
+NULL
+1
+3
+
+query T
+select * from orderby_vu_view_3;
+----
+NULL
+1
+3
+
+statement ok
+drop view orderby_vu_view_1;
+
+statement ok
+drop view orderby_vu_view_2;
+
+statement ok
+drop view orderby_vu_view_3;
+
+statement ok
+drop table t1;
+

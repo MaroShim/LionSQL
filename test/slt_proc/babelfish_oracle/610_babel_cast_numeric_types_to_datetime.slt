@@ -1,0 +1,65 @@
+# test/slt_proc/babelfish_oracle/610_babel_cast_numeric_types_to_datetime.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/cast_numeric_types_to_datetime-vu-prepare.sql, test/babelfish/raw/cast_numeric_types_to_datetime-vu-verify.sql, test/babelfish/raw/cast_numeric_types_to_datetime-vu-cleanup.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE TABLE datetime_vu_prepare_table(c1 datetime)
+
+statement ok
+INSERT INTO datetime_vu_prepare_table VALUES 
+(CAST(10 as DATETIME)), 
+(CAST(CAST (1 as BIT) as DATETIME)), 
+(CAST(CAST (216.5937465072345996348935531215926 as NUMERIC(19,7)) as DATETIME)), 
+(CAST(CAST (-46.781289 as DECIMAL(6,2)) as DATETIME)), 
+(CAST(CAST (54.63493295443232 as FLOAT(12)) as DATETIME)), 
+(CAST(CAST (3.1215926 as REAL) as DATETIME)), 
+(CAST(CAST (98 as INT) as DATETIME)), 
+(CAST(CAST (131.23 as BIGINT) as DATETIME)), 
+(CAST(CAST (5 as SMALLINT) as DATETIME)), 
+(CAST(CAST (9 as TINYINT) as DATETIME))
+
+statement ok
+CREATE PROCEDURE datetime_vu_prepare_procedure 
+AS
+SELECT CAST(CAST (46.99999999 as MONEY) as DATETIME)
+
+statement ok
+CREATE FUNCTION dbo.datetime_vu_prepare_function (@par SMALLMONEY)
+RETURNS DATETIME AS
+BEGIN
+    Declare @res datetime
+	SELECT @res = (SELECT CAST(@par AS DATETIME))
+    RETURN  @res
+END;
+
+statement ok
+USE master
+
+query T
+SELECT * FROM datetime_vu_prepare_table
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+statement ok
+USE master
+
+statement ok
+DROP TABLE datetime_vu_prepare_table
+
+statement ok
+DROP PROCEDURE datetime_vu_prepare_procedure
+
+statement ok
+DROP FUNCTION dbo.datetime_vu_prepare_function
+

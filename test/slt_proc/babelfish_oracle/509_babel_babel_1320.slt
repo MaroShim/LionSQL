@@ -1,0 +1,21 @@
+# test/slt_proc/babelfish_oracle/509_babel_babel_1320.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1320.sql
+
+statement ok
+USE master
+
+statement ok
+CREATE SCHEMA tds72;
+
+statement ok
+CREATE FUNCTION tds72.test_tds_72_date_datatypes(@a date) RETURNS date AS BEGIN RETURN @a; END;
+
+query T
+DECLARE @a date = '2020-05-14'; 
+SELECT tds72.test_tds_72_date_datatypes(@a);
+----
+2020-05-14
+
+statement ok
+DROP FUNCTION tds72.test_tds_72_date_datatypes;
+

@@ -1,0 +1,155 @@
+# test/slt_proc/babelfish_oracle/1285_babel_babel_sp_stored_procedures.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-SP_STORED_PROCEDURES.sql
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1(a INT, PRIMARY KEY(a))
+
+statement ok
+DROP PROCEDURE IF EXISTS select_all
+
+statement ok
+CREATE PROCEDURE select_all
+AS
+SELECT * FROM t1
+
+statement ok
+DROP PROCEDURE IF EXISTS seluct_all
+
+statement ok
+CREATE PROCEDURE seluct_all
+AS
+SELECT * FROM t1
+
+statement ok
+DROP PROCEDURE IF EXISTS SelEct_AlL_Mixed
+
+statement ok
+CREATE PROCEDURE SelEct_AlL_Mixed
+AS
+SELECT * FROM t1
+
+statement ok
+CREATE SCHEMA s1
+
+statement ok
+DROP FUNCTION IF EXISTS s1.positive_or_negative
+
+statement ok
+CREATE FUNCTION s1.positive_or_negative (
+	@long DECIMAL(9,6)
+)
+RETURNS CHAR(4) AS
+BEGIN
+	DECLARE @return_value CHAR(10);
+	SET @return_value = 'zero';
+    IF (@long > 0.00) SET @return_value = 'positive';
+    IF (@long < 0.00) SET @return_value = 'negative';
+    RETURN @return_value
+END;
+
+statement ok
+DROP FUNCTION s1.positive_or_negative
+
+statement ok
+DROP PROCEDURE select_all
+
+statement ok
+DROP PROCEDURE seluct_all
+
+statement ok
+DROP PROCEDURE SelEct_AlL_Mixed
+
+statement ok
+DROP TABLE t1
+
+statement ok
+DROP SCHEMA s1
+
+statement ok
+USE master
+
+statement ok
+CREATE DATABASE db1 COLLATE bbf_unicode_cp1_ci_ai;
+
+statement ok
+USE db1
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1(a INT, PRIMARY KEY(a))
+
+statement ok
+DROP PROCEDURE IF EXISTS select_all
+
+statement ok
+CREATE PROCEDURE select_all
+AS
+SELECT * FROM t1
+
+statement ok
+DROP PROCEDURE IF EXISTS seluct_all
+
+statement ok
+CREATE PROCEDURE seluct_all
+AS
+SELECT * FROM t1
+
+statement ok
+DROP PROCEDURE IF EXISTS SelEct_AlL_Mixed
+
+statement ok
+CREATE PROCEDURE SelEct_AlL_Mixed
+AS
+SELECT * FROM t1
+
+statement ok
+CREATE SCHEMA s1
+
+statement ok
+DROP FUNCTION IF EXISTS s1.positive_or_negative
+
+statement ok
+CREATE FUNCTION s1.positive_or_negative (
+	@long DECIMAL(9,6)
+)
+RETURNS CHAR(4) AS
+BEGIN
+	DECLARE @return_value CHAR(10);
+	SET @return_value = 'zero';
+    IF (@long > 0.00) SET @return_value = 'positive';
+    IF (@long < 0.00) SET @return_value = 'negative';
+    RETURN @return_value
+END;
+
+statement ok
+DROP FUNCTION s1.positive_or_negative
+
+statement ok
+DROP PROCEDURE select_all
+
+statement ok
+DROP PROCEDURE seluct_all
+
+statement ok
+DROP PROCEDURE SelEct_AlL_Mixed
+
+statement ok
+DROP TABLE t1
+
+statement ok
+DROP SCHEMA s1
+
+statement ok
+USE master
+

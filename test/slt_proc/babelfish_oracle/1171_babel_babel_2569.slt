@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1171_babel_babel_2569.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2569.sql
+
+statement ok
+CREATE LOGIN test2569 with PASSWORD = '123';
+
+statement ok
+DROP LOGIN test2569;
+

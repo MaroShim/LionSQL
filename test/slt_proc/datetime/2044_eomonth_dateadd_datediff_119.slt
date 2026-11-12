@@ -1,0 +1,27 @@
+# test/slt_proc/datetime/2044_eomonth_dateadd_datediff_119.slt
+# T-SQL EOMONTH, DATEADD(day), DATEDIFF(day), YEAR/MONTH/DAY (119)
+
+query TTI
+SELECT CAST(EOMONTH('2020-11-23') AS VARCHAR(10)), CAST(DATEADD(day, 22, '2020-11-23') AS VARCHAR(10)), DATEDIFF(day, '2020-11-23', '2020-12-15');
+----
+2020-11-30 2020-12-15 22
+
+query IIII
+SELECT YEAR('2020-12-15'), MONTH('2020-12-15'), DAY('2020-12-15'), DAY(EOMONTH('2020-11-23'));
+----
+2020 12 15 30
+
+statement ok
+CREATE TABLE dt_log_2044 (id INT PRIMARY KEY, ev_date VARCHAR(20));
+
+statement ok
+INSERT INTO dt_log_2044 VALUES (1, '2020-11-23'), (2, '2020-12-15');
+
+query II
+SELECT id, DATEDIFF(day, '2020-11-23', ev_date) FROM dt_log_2044 ORDER BY id;
+----
+1 0
+2 22
+
+statement ok
+DROP TABLE dt_log_2044;

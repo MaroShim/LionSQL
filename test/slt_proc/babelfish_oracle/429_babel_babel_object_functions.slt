@@ -1,0 +1,55 @@
+# test/slt_proc/babelfish_oracle/429_babel_babel_object_functions.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-OBJECT-FUNCTIONS.sql
+
+statement ok
+CREATE SCHEMA obj_funcs;
+
+statement ok
+CREATE TABLE obj_funcs.t1(id INT, c1 NVARCHAR);
+
+query T
+SELECT (CASE WHEN OBJECT_NAME(OBJECT_ID(N'obj_funcs.t1 ', N'U')) = 't1' THEN 'true' ELSE 'false' END) result;
+----
+false
+
+query T
+SELECT (CASE WHEN OBJECT_NAME(OBJECT_ID(N'  t1', N'U')) = 't1' THEN 'true' ELSE 'false' END) result;
+----
+false
+
+query T
+SELECT (CASE WHEN OBJECT_NAME(OBJECT_ID(N'  t1  ')) = 't1' THEN 'true' ELSE 'false' END) result;
+----
+false
+
+query T
+SELECT (CASE WHEN OBJECT_NAME(OBJECT_ID(N'[obj_funcs].[t1] ', N'U')) = 't1' THEN 'true' ELSE 'false' END) result;
+----
+false
+
+query T
+SELECT (CASE WHEN OBJECT_NAME(OBJECT_ID(N'   [obj_funcs].[t1]  ', N'U')) = 't1' THEN 'true' ELSE 'false' END) result;
+----
+false
+
+query T
+SELECT (CASE WHEN OBJECT_NAME(OBJECT_ID(N'"obj_funcs"."t1" ', N'U')) = 't1' THEN 'true' ELSE 'false' END) result;
+----
+false
+
+query T
+SELECT (CASE WHEN OBJECT_NAME(OBJECT_ID(N'   "obj_funcs"."t1"  ', N'U')) = 't1' THEN 'true' ELSE 'false' END) result;
+----
+false
+
+query T
+SELECT (CASE WHEN OBJECT_ID(N'non_existent_schema.t1') IS NULL THEN 'true' ELSE 'false' END) result;
+----
+false
+
+statement ok
+DROP TABLE obj_funcs.t1;
+
+statement ok
+DROP SCHEMA obj_funcs;
+

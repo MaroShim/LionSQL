@@ -1,0 +1,60 @@
+# test/slt_proc/babelfish_oracle/1126_babel_babel_1953_vu_prepare.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1953-vu-prepare.sql
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t1 (a)
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t2 (a, b int)
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t3 (a int, b)
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t4 (int a)
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t5 (int)
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t6 (a int, varchar(5))
+
+statement ok
+CREATE TABLE 1953_vu_prepare_t7 (a int)
+
+statement ok
+CREATE TABLE @ (a int)
+
+statement ok
+CREATE TABLE $ (a int)
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t8 (123a int)
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t9 (@ int)
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t11 ($ int)
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t14 (a int, a int)
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t15 (a int, int a)
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t16 (a int, a varchar(5))
+
+statement ok
+CREATE TABLE BABEL_1953_vu_prepare_t17(a int)
+
+statement ok
+CREATE VIEW 123view AS SELECT * FROM BABEL_1953_vu_prepare_t17
+
+statement ok
+CREATE VIEW @ AS SELECT * FROM BABEL_1953_vu_prepare_t17
+
+statement ok
+CREATE VIEW $ AS SELECT * FROM BABEL_1953_vu_prepare_t17
+

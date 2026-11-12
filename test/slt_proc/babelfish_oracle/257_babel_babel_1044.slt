@@ -1,0 +1,167 @@
+# test/slt_proc/babelfish_oracle/257_babel_babel_1044.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1044.sql
+
+statement ok
+create schema schema_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij;
+create table schema_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij.table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij(
+  col_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij integer
+);
+
+statement ok
+insert into schema_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij.table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij values (42);
+
+query T
+select * from schema_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij.table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij;
+----
+42
+
+statement ok
+select count(*) from pg_catalog.pg_class where relname = 'table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij';
+
+statement ok
+select count(*) from pg_catalog.pg_class where relname = 'table_longer_than_63_0abcdefgijc2ed7b983a352405e4e26c711bd071bf';
+
+query T
+select (case when object_id('schema_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij.table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij') is not null then 'exists' else 'error' end) result;
+----
+exists
+
+query T
+select (case when object_id('schema_longer_than_63_0abcdefgi2f5cbde477221faa47c8d08e1d6bbb27.table_longer_than_63_0abcdefgijc2ed7b983a352405e4e26c711bd071bf') is not null then 'exists' else 'error' end) result;
+----
+exists
+
+query T
+select (case when object_id('schema_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij.table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij') = object_id('schema_longer_than_63_0abcdefgi2f5cbde477221faa47c8d08e1d6bbb27.table_longer_than_63_0abcdefgijc2ed7b983a352405e4e26c711bd071bf') then 'correct' else 'error' end) result;
+----
+error
+
+statement ok
+drop table schema_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij.table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij;
+drop schema schema_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij;
+
+statement ok
+create table table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij(
+  col_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij integer
+);
+
+statement ok
+insert into table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij values (42);
+
+query T
+select (case when object_id('table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij') is not null then 'exists' else 'error' end) result;
+----
+exists
+
+query T
+select (case when object_id('table_longer_than_63_0abcdefgijc2ed7b983a352405e4e26c711bd071bf') is not null then 'exists' else 'error' end) result;
+----
+exists
+
+query T
+select (case when object_id('table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij') = object_id('table_longer_than_63_0abcdefgijc2ed7b983a352405e4e26c711bd071bf') then 'correct' else 'error' end) result;
+----
+error
+
+statement ok
+create table table_name_t(c1 char(128) COLLATE C, c2 varchar(128) COLLATE C, c3 text COLLATE C);
+
+statement ok
+insert into table_name_t values (
+  'table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij',
+  'table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij',
+  'table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij'
+);
+
+query T
+select count(*) from pg_catalog.pg_class where relname in (SELECT cast (c1 as pg_catalog.name) from table_name_t);
+----
+NULL
+NULL
+
+query T
+select count(*) from pg_catalog.pg_class where relname in (SELECT cast (c2 as pg_catalog.name) from table_name_t);
+----
+NULL
+NULL
+
+query T
+select count(*) from pg_catalog.pg_class where relname in (SELECT cast (c3 as pg_catalog.name) from table_name_t);
+----
+NULL
+NULL
+
+statement ok
+drop table table_name_t;
+
+statement ok
+create function func_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij(
+  @argname_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij int)
+RETURNS integer
+AS
+BEGIN
+  return (select @argname_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij + 1);
+END;
+
+statement ok
+create view view_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij as
+select func_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij(
+  col_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij)
+from table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij;
+
+query T
+select * from view_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij;
+----
+NULL
+
+statement ok
+create table table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghik(
+  col_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij integer
+);
+
+statement ok
+drop view view_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij;
+
+statement ok
+drop function func_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij;
+
+statement ok
+drop table table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghij;
+
+statement ok
+drop table table_longer_than_63_0abcdefgij1abcdefgij2abcdefgij3abcdefgij4abcdefgij5abcdefgij6abcdefgij7abcdefgij8abcdefghij9abcdefghik;
+
+statement ok
+create table babel_1200_t(id int, [BALA_#] varchar(40));
+
+statement ok
+insert into babel_1200_t values (42, 'aaa'), (666, 'bbb');
+
+statement ok
+create procedure babel_1200_proc
+@balano as varchar(40)
+as
+begin
+  select r.ID from babel_1200_t r where r.BALA_#=@balano
+end
+
+statement ok
+create procedure babel_1200_proc_quoted
+@balano as varchar(40)
+as
+begin
+  select r.ID from babel_1200_t r where r.[BALA_#]=@balano
+end
+
+statement ok
+exec babel_1200_proc_quoted 'aaa'
+
+statement ok
+drop procedure babel_1200_proc_quoted;
+
+statement ok
+drop procedure babel_1200_proc;
+
+statement ok
+drop table babel_1200_t;
+

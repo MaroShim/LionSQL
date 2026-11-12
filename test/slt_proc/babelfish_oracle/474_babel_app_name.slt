@@ -1,0 +1,25 @@
+# test/slt_proc/babelfish_oracle/474_babel_app_name.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/app_name-vu-prepare.sql, test/babelfish/raw/functions/app_name-vu-verify.sql, test/babelfish/raw/functions/app_name-vu-cleanup.sql
+
+statement ok
+CREATE VIEW app_name_vu_prepare_v1 AS (SELECT APP_NAME());
+
+statement ok
+CREATE PROCEDURE app_name_vu_prepare_p1 AS (SELECT app_name());
+
+query T
+EXEC app_name_vu_prepare_p1
+----
+LionSQL
+
+query T
+EXEC app_name_vu_prepare_p1
+----
+LionSQL
+
+statement ok
+DROP VIEW app_name_vu_prepare_v1
+
+statement ok
+DROP PROCEDURE app_name_vu_prepare_p1
+

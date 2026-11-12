@@ -1,0 +1,21 @@
+# test/slt_proc/strings/050_stuff_replicate_agg_04.slt
+# T-SQL STUFF, REPLICATE, CONCAT_WS, and STRING_AGG (4)
+
+query TTT
+SELECT STUFF('SQL-SERVER', 5, 6, 'LION'), REPLICATE('!', 2), CONCAT_WS(';', 'TCP', 'UDP', 'TDS');
+----
+SQL-LION !! TCP;UDP;TDS
+
+statement ok
+CREATE TABLE sagg_50 (id INT PRIMARY KEY, label VARCHAR(30));
+
+statement ok
+INSERT INTO sagg_50 VALUES (1, 'TCP'), (2, 'UDP'), (3, 'TDS');
+
+query T
+SELECT STRING_AGG(label, ';') FROM sagg_50;
+----
+TCP;UDP;TDS
+
+statement ok
+DROP TABLE sagg_50;

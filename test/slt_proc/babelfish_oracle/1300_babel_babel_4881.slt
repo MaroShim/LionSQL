@@ -1,0 +1,42 @@
+# test/slt_proc/babelfish_oracle/1300_babel_babel_4881.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_4881.sql
+
+statement ok
+CREATE PROCEDURE babel_4881_proc_3
+AS
+BEGIN
+    SET NOCOUNT ON
+    SET QUOTED_IDENTIFIER OFF;
+    SET DATEFIRST 7
+END
+
+statement ok
+CREATE PROCEDURE babel_4881_proc_2
+AS
+BEGIN
+    SET NOCOUNT OFF
+    SET QUOTED_IDENTIFIER ON;
+    SET ROWCOUNT 1000;
+    EXEC babel_4881_proc_3
+END
+
+statement ok
+CREATE PROCEDURE babel_4881_proc_1
+AS
+BEGIN
+    SET NOCOUNT ON
+    SET QUOTED_IDENTIFIER OFF
+    SET DATEFIRST 4
+    EXEC babel_4881_proc_2
+END
+
+statement ok
+SET ROWCOUNT 999;
+SET DATEFIRST 2;
+
+statement ok
+EXEC babel_4881_proc_1
+
+statement ok
+DROP PROCEDURE babel_4881_proc_1, babel_4881_proc_2, babel_4881_proc_3
+

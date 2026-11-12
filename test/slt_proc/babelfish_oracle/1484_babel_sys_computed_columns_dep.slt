@@ -1,0 +1,38 @@
+# test/slt_proc/babelfish_oracle/1484_babel_sys_computed_columns_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/views/sys-computed_columns-dep-vu-prepare.sql, test/babelfish/raw/views/sys-computed_columns-dep-vu-verify.sql, test/babelfish/raw/views/sys-computed_columns-dep-vu-cleanup.sql
+
+statement ok
+DROP TABLE IF EXISTS sys_computed_columns_dep_vu_prepare_t1
+
+statement ok
+CREATE TABLE sys_computed_columns_dep_vu_prepare_t1 ( 
+  scc_first_number1 smallint,
+  scc_second_number1 money,
+  scc_multiplied1 AS scc_first_number1 * scc_second_number1
+)
+
+statement ok
+CREATE PROCEDURE sys_computed_columns_dep_vu_prepare_p1 AS
+    SELECT name FROM sys.computed_columns where name in ('scc_multiplied1')
+
+statement ok
+CREATE FUNCTION sys_computed_columns_dep_vu_prepare_f1()
+RETURNS INT 
+AS
+BEGIN
+    RETURN (SELECT COUNT(*) FROM sys.all_columns WHERE object_id = object_id('sys.computed_columns'))
+END
+
+statement ok
+CREATE VIEW sys_computed_columns_dep_vu_prepare_v1 AS
+    SELECT name FROM sys.computed_columns where name in ('scc_multiplied1')
+
+statement ok
+SELECT * FROM sys_computed_columns_dep_vu_prepare_v1
+
+statement ok
+DROP PROCEDURE IF EXISTS sys_computed_columns_dep_vu_prepare_p1
+DROP FUNCTION IF EXISTS sys_computed_columns_dep_vu_prepare_f1
+DROP VIEW IF EXISTS sys_computed_columns_dep_vu_prepare_v1
+DROP TABLE IF EXISTS sys_computed_columns_dep_vu_prepare_t1
+

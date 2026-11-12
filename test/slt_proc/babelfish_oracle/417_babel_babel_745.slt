@@ -1,0 +1,180 @@
+# test/slt_proc/babelfish_oracle/417_babel_babel_745.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-745-vu-prepare.sql, test/babelfish/raw/BABEL-745-vu-verify.sql, test/babelfish/raw/BABEL-745-vu-cleanup.sql
+
+statement ok
+CREATE TABLE SalesData (
+  Product varchar(50),
+  SalesAmount float8
+);
+INSERT INTO SalesData (Product, SalesAmount)
+VALUES ('Product A', 100.00), ('Product A', 150.00), ('Product A', 200.00),
+       ('Product B', 50.00), ('Product B', 75.00), ('Product B', 100.00),
+       ('Product C', 25.00), ('Product C', 50.00), ('Product C', 75.00);
+
+statement ok
+CREATE VIEW v_SalesData AS
+SELECT Product, STDEV(SalesAmount) AS SalesAmount
+FROM SalesData
+GROUP BY Product
+ORDER BY Product, SalesAmount;
+
+statement ok
+CREATE VIEW v1_SalesData AS
+SELECT Product, STDEVP(SalesAmount) AS SalesAmount
+FROM SalesData
+GROUP BY Product
+ORDER BY Product, SalesAmount;
+
+statement ok
+CREATE VIEW v2_SalesData AS
+SELECT Product, VAR(SalesAmount) AS SalesAmount
+FROM SalesData
+GROUP BY Product
+ORDER BY Product, SalesAmount;
+
+statement ok
+CREATE VIEW v3_SalesData AS
+SELECT Product, VARP(SalesAmount) AS SalesAmount
+FROM SalesData
+GROUP BY Product
+ORDER BY Product, SalesAmount;
+
+statement ok
+CREATE PROCEDURE sp_CalculateStdev
+  @Product varchar(50)
+AS
+BEGIN
+  SELECT STDEV(SalesAmount) AS SalesAmountStdev
+  FROM SalesData
+  WHERE Product = @Product
+  GROUP BY Product;
+END;
+
+statement ok
+CREATE PROCEDURE sp1_CalculateStdev
+  @Product varchar(50)
+AS
+BEGIN
+  SELECT STDEVP(SalesAmount) AS SalesAmountStdev
+  FROM SalesData
+  WHERE Product = @Product
+  GROUP BY Product;
+END;
+
+statement ok
+CREATE PROCEDURE sp2_CalculateStdev
+  @Product varchar(50)
+AS
+BEGIN
+  SELECT VAR(SalesAmount) AS SalesAmountStdev
+  FROM SalesData
+  WHERE Product = @Product
+  GROUP BY Product;
+END;
+
+statement ok
+CREATE PROCEDURE sp3_CalculateStdev
+  @Product varchar(50)
+AS
+BEGIN
+  SELECT VARP(SalesAmount) AS SalesAmountStdev
+  FROM SalesData
+  WHERE Product = @Product
+  GROUP BY Product;
+END;
+
+query T
+SELECT STDEV(SalesAmount) AS SalesAmount
+FROM SalesData;
+----
+100
+150
+200
+50
+75
+100
+25
+50
+75
+
+query T
+SELECT STDEV(Product) AS ProductStdev
+FROM SalesData;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT VAR(SalesAmount) AS SalesAmountStdev
+FROM SalesData
+GROUP BY Product
+ORDER BY Product ASC;
+----
+NULL
+NULL
+NULL
+
+query T
+SELECT VARP(SalesAmount) AS SalesAmountStdev
+FROM SalesData
+GROUP BY Product
+ORDER BY Product ASC;
+----
+NULL
+NULL
+NULL
+
+query T
+EXEC sp_CalculateStdev 'Product A';
+----
+NULL
+
+query T
+EXEC sp1_CalculateStdev 'Product A';
+----
+NULL
+
+query T
+EXEC sp2_CalculateStdev 'Product A';
+----
+NULL
+
+query T
+EXEC sp3_CalculateStdev 'Product A';
+----
+NULL
+
+statement ok
+DROP VIEW IF EXISTS v_SalesData;
+
+statement ok
+DROP VIEW IF EXISTS v1_SalesData;
+
+statement ok
+DROP VIEW IF EXISTS v2_SalesData;
+
+statement ok
+DROP VIEW IF EXISTS v3_SalesData;
+
+statement ok
+DROP TABLE IF EXISTS SalesData;
+
+statement ok
+DROP PROCEDURE IF EXISTS sp_CalculateStdev;
+
+statement ok
+DROP PROCEDURE IF EXISTS sp1_CalculateStdev;
+
+statement ok
+DROP PROCEDURE IF EXISTS sp2_CalculateStdev;
+
+statement ok
+DROP PROCEDURE IF EXISTS sp3_CalculateStdev;
+

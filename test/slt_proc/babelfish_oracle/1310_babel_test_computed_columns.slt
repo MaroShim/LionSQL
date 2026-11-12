@@ -1,0 +1,169 @@
+# test/slt_proc/babelfish_oracle/1310_babel_test_computed_columns.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/Test-Computed-Columns-vu-prepare.sql, test/babelfish/raw/Test-Computed-Columns-vu-verify.sql, test/babelfish/raw/Test-Computed-Columns-vu-cleanup.sql
+
+statement ok
+CREATE TABLE computed_column_vu_prepare_t1 (a NVARCHAR(10), b  AS substring(a,1,3) UNIQUE NOT NULL);
+
+statement ok
+CREATE TABLE computed_column_vu_prepare_t2 (a INT, b  AS (a + c) / 4 PERSISTED, c INT);
+
+statement ok
+CREATE TABLE computed_column_vu_prepare_error (a INT, b  AS a/4 NOT NULL PERSISTED);
+
+statement error
+CREATE TABLE computed_column_vu_prepare_error (a INT, b NUMERIC GENERATED ALWAYS AS (a/4) stored);
+
+statement error
+CREATE TABLE computed_column_vu_prepare_error (a NVARCHAR(10), b  AS non_existant_function(a,1,3) UNIQUE NOT NULL);
+
+statement error
+CREATE TABLE computed_column_vu_prepare_error (a INT, b AS c, c AS a);
+CREATE TABLE computed_column_vu_prepare_error (a INT, b AS b + 1);
+
+statement ok
+CREATE TABLE computed_column_vu_prepare_t3
+(
+ DOB     DATE NOT NULL, 
+ AddDate AS DATEADD(year,60,DOB), 
+);
+
+statement ok
+CREATE TABLE computed_column_vu_prepare_t4
+  (
+  EmpNumb INT NOT NULL,
+  Designation VARCHAR(50) NOT NULL,
+  DOBirth DATETIME NOT NULL,
+  DORetirement AS 
+    CASE WHEN Designation = 'Manager' 
+      THEN (DATEADD(YEAR,(65),[DOBirth]))
+      ELSE (DATEADD(YEAR,(60),[DOBirth]))
+    END
+    PERSISTED
+)
+
+statement ok
+INSERT INTO computed_column_vu_prepare_t4 (EmpNumb,Designation,DOBirth) values (84, 'DBA', '1985-12-13')
+INSERT INTO computed_column_vu_prepare_t4 (EmpNumb,Designation,DOBirth) values (85, 'DBA', '1980-11-18')
+INSERT INTO computed_column_vu_prepare_t4 (EmpNumb,Designation,DOBirth) values (86, 'Manager', '1978-01-19')
+INSERT INTO computed_column_vu_prepare_t4 (EmpNumb,Designation,DOBirth) values (88, 'Manager', '1985-12-13')
+INSERT INTO computed_column_vu_prepare_t4 (EmpNumb,Designation,DOBirth) values (90, 'Developer', '1975-07-23')
+
+statement ok
+CREATE TABLE computed_column_vu_prepare_t5
+  (
+  Numerator INT NOT NULL,
+  Denominator INT NOT NULL,
+  Result AS (Numerator/NULLIF(Denominator,0)) 
+  )
+
+statement ok
+INSERT INTO computed_column_vu_prepare_t5 (Numerator, Denominator) VALUES (840, 12)
+INSERT INTO computed_column_vu_prepare_t5 (Numerator, Denominator) VALUES (805, 6)
+INSERT INTO computed_column_vu_prepare_t5 (Numerator, Denominator) VALUES (846, 3)
+INSERT INTO computed_column_vu_prepare_t5 (Numerator, Denominator) VALUES (88, 0)
+INSERT INTO computed_column_vu_prepare_t5 (Numerator, Denominator) VALUES (90, 15)
+
+statement ok
+CREATE TABLE computed_column_vu_prepare_t6
+  (
+  EmpNumb INT NOT NULL,
+  LeavesAvailed TINYINT NOT NULL,
+  EmpDep AS EmpNumb%10
+  )
+
+statement ok
+CREATE TABLE computed_column_vu_prepare_t7
+  (
+  EmpNumb INT NOT NULL,
+  Designation VARCHAR(50) NOT NULL,
+  LeaveBalance AS (computed_column_vu_prepare_func1(EmpNumb))
+  )
+
+statement ok
+CREATE TABLE computed_column_vu_prepare_t8
+(
+  FirstName VARCHAR(20),
+  LastName VARCHAR(20),
+  FullName AS CONCAT(FirstName,' ',LastName)
+)
+
+statement ok
+CREATE TABLE computed_column_vu_prepare_t9
+(
+    A INT IDENTITY(1,1),
+    B AS CAST(A AS FLOAT),
+    C VARCHAR(20)
+)
+
+statement error
+CREATE PROCEDURE computed_column_vu_prepare_p1
+AS
+ALTER TABLE computed_column_vu_prepare_t9 add D as B/4 PERSISTED
+
+statement error
+INSERT INTO computed_column_vu_prepare_t1 VALUES('abcd'); -- throws error
+
+query TTT
+INSERT INTO computed_column_vu_prepare_t2 (a,c) VALUES (12, 12);
+SELECT * FROM computed_column_vu_prepare_t2;
+----
+12 NULL 12
+
+statement error
+CREATE TABLE computed_column_vu_prepare_error (a INT, b  AS a/4 NOT NULL PERSISTED);
+
+statement error
+CREATE TABLE computed_column_vu_prepare_error (a INT, b NUMERIC GENERATED ALWAYS AS (a/4) stored);
+
+statement error
+CREATE TABLE computed_column_vu_prepare_error (a NVARCHAR(10), b  AS non_existant_function(a,1,3) UNIQUE NOT NULL);
+
+statement error
+CREATE TABLE computed_column_vu_prepare_error (a INT, b AS c, c AS a);
+CREATE TABLE computed_column_vu_prepare_error (a INT, b AS b + 1);
+
+statement error
+ALTER TABLE computed_column_vu_prepare_t1 DROP column a;
+ALTER TABLE computed_column_vu_prepare_t1 ALTER column a VARCHAR;
+
+statement error
+INSERT INTO computed_column_vu_prepare_t3 (DOB,AddDate) values ('01-01-2000','01-01-2000')
+
+statement ok
+ALTER TABLE computed_column_vu_prepare_t3 DROP COLUMN AddDate 
+
+query TTT
+SELECT * FROM computed_column_vu_prepare_t5
+----
+840 12 NULL
+
+statement ok
+SELECT * FROM computed_column_vu_prepare_t6
+
+statement ok
+SELECT * FROM computed_column_vu_prepare_t9
+
+statement ok
+SELECT * FROM computed_column_vu_prepare_t9
+
+statement ok
+DROP TABLE computed_column_vu_prepare_t1;
+
+statement ok
+DROP TABLE computed_column_vu_prepare_t2;
+
+statement ok
+DROP TABLE computed_column_vu_prepare_t3
+
+statement ok
+DROP TABLE computed_column_vu_prepare_t4
+
+statement ok
+DROP TABLE computed_column_vu_prepare_t5
+
+statement ok
+DROP TABLE computed_column_vu_prepare_t6
+
+statement ok
+DROP TABLE computed_column_vu_prepare_t9
+

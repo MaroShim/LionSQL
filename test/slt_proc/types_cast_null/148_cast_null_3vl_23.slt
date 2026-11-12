@@ -1,0 +1,22 @@
+# test/slt_proc/types_cast_null/148_cast_null_3vl_23.slt
+# T-SQL CAST, TRY_CAST, ISNUMERIC, CHOOSE, IIF, COALESCE, NULLIF (23)
+
+query ITI
+SELECT CAST('862' AS INT) + 23, CAST(862 AS VARCHAR(20)), TRY_CAST('862' AS INT);
+----
+885 862 862
+
+query IIT
+SELECT ISNUMERIC('862'), ISNUMERIC('err_23z'), ISNULL(CAST(TRY_CAST('err_23z' AS INT) AS VARCHAR(20)), 'NULL_VAL');
+----
+1 0 NULL_VAL
+
+query TTTT
+SELECT CHOOSE(4, 'Alpha_23', 'Beta_23', 'Gamma_23', 'Delta_23'), IIF(862 > 10, 'YES', 'NO'), ISNULL(NULL, 'DEF_23'), COALESCE(NULL, NULL, 'COAL_23');
+----
+Delta_23 YES DEF_23 COAL_23
+
+query II
+SELECT ISNULL(NULLIF(862, 862), -1), NULLIF(862, 0);
+----
+-1 862

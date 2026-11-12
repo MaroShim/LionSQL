@@ -1,0 +1,11 @@
+# test/slt_proc/babelfish_oracle/1154_babel_babel_2355.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2355.sql
+
+statement ok
+CREATE PROC babel_2355_proc1 AS
+DECLARE @a DECIMAL(38, 39)
+
+statement ok
+CREATE PROC babel_2355_proc2 AS
+DECLARE @a INTA
+

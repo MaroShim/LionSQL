@@ -1,0 +1,54 @@
+# test/slt_proc/babelfish_oracle/263_babel_babel_1164.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1164.sql
+
+statement ok
+CREATE TABLE t1(c1 int, c2 numeric, c3 varchar(32));
+
+statement ok
+INSERT INTO t1 VALUES (1, 2.0, 'hello');
+
+statement ok
+INSERT INTO t1 VALUES (1, 2.0);
+
+query TTT
+SELECT * FROM t1;
+----
+1 2.00 hello
+1 2.00 NULL
+
+statement ok
+CREATE TABLE t2(id int IDENTITY, c1 int, c2 numeric, c3 AS c1 * c2);
+
+statement error
+INSERT INTO t2 VALUES (5);
+
+statement ok
+SELECT * FROM t2;
+
+statement ok
+INSERT INTO t1 SELECT c1, c2, c3 FROM t2;
+
+query TTT
+SELECT * FROM t1;
+----
+1 2.00 hello
+1 2.00 NULL
+
+statement error
+INSERT INTO t1 SELECT id, c2 FROM t2;
+
+query TTT
+SELECT * FROM t1;
+----
+1 2.00 hello
+1 2.00 NULL
+
+statement ok
+CREATE TABLE t3(c1 int, c2 numeric);
+
+statement ok
+INSERT INTO t3 VALUES (2, 4);
+
+statement error
+INSERT INTO t1 SELECT * FROM t3;
+

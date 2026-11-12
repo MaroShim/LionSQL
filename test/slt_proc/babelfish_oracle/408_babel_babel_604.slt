@@ -1,0 +1,29 @@
+# test/slt_proc/babelfish_oracle/408_babel_babel_604.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-604.sql
+
+statement ok
+create table employees(@pers_id int, @fname nvarchar(20), @lname nvarchar(30), sal money)
+
+statement ok
+create procedure p_employee_select as begin select * from employees end
+
+statement ok
+call p_employee_select
+
+statement ok
+call p_employee_select
+
+query T
+create procedure p as select 2; select 1;
+----
+1
+
+query T
+execute p;
+----
+2
+
+statement ok
+drop procedure p_employee_select, p;
+drop table employees;
+

@@ -1,0 +1,146 @@
+# test/slt_proc/babelfish_oracle/459_babel_partition_collations.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/PARTITION-collations.sql
+
+query T
+SELECT 
+    input_value COLLATE Latin1_General_CS_AS, -- used collate with order by verify the ouptut of partition number
+    $PARTITION.PF_CaseSensitiveAccentSensitive(input_value) as partition_number
+FROM (
+    VALUES 
+        ('A'),    -- Tests case sensitivity
+        ('a'),    -- Tests case sensitivity
+        (N'á'),   -- Tests accent sensitivity
+        ('b'),    -- Tests value between partition boundaries
+        ('c'),    -- Tests exact boundary match
+        ('C'),    -- Tests case sensitivity at boundary
+        ('d'),    -- Tests last boundary
+        ('e')     -- Tests beyond last boundary
+) AS test_cases(input_value)
+order by input_value;
+----
+input_value
+
+statement ok
+CREATE DATABASE PartitionCollateTestDB
+COLLATE Latin1_General_CI_AS;
+
+statement ok
+USE PartitionCollateTestDB;
+
+statement ok
+USE master;
+
+query T
+SELECT 
+    input_value COLLATE Latin1_General_CS_AS, -- used collate with order by verify the ouptut of partition number
+    PartitionCollateTestDB.$PARTITION.PF_ExplicitCollate(input_value) as partition_number
+FROM (
+    VALUES 
+        ('A'),    -- Tests case sensitivity
+        ('a'),    -- Should map different from 'A'
+        (N'á'),   -- Tests accent sensitivity
+        ('b'),    -- Tests value between boundaries
+        ('c'),    -- Tests boundary value
+        ('C'),    -- Should map different from 'c'
+        ('d'),    -- Tests last boundary
+        ('e')     -- Tests beyond last boundary
+) AS test_cases(input_value)
+ORDER BY 
+    input_value;
+----
+input_value
+
+query T
+SELECT 
+    input_value COLLATE Latin1_General_CI_AS, -- used collate with order by verify the ouptut of partition number
+    PartitionCollateTestDB.$PARTITION.PF_ImplicitCollate(input_value) as partition_number
+FROM (
+    VALUES 
+        ('A'),    -- Tests case insensitivity
+        ('a'),    -- Should map same as 'A'
+        (N'á'),   -- Tests accent sensitivity
+        ('b'),    -- Tests value between boundaries
+        ('c'),    -- Tests boundary value
+        ('C'),    -- Should map same as 'c'
+        ('d'),    -- Tests last boundary
+        ('e')     -- Tests beyond last boundary
+) AS test_cases(input_value)
+ORDER BY 
+    input_value;
+----
+input_value
+
+statement ok
+USE master;
+
+statement ok
+CREATE DATABASE CaseInsensitiveAccentSensitive
+COLLATE Latin1_General_CI_AS;
+
+statement ok
+USE CaseInsensitiveAccentSensitive;
+
+statement ok
+CREATE TABLE PartitionedTable1 (
+    ID INT IDENTITY(1,1),
+    PartitionKey NVARCHAR(10) COLLATE Latin1_General_CI_AI, -- collation doesn't match partition function
+    Value NVARCHAR(100)
+) ON PS_AccentSensitive(PartitionKey);
+
+statement ok
+CREATE TABLE PartitionedTable2 (
+    ID INT IDENTITY(1,1),
+    PartitionKey NVARCHAR(10), -- using database default collation
+    Value NVARCHAR(100)
+) ON PS_AccentSensitive(PartitionKey);
+
+statement ok
+CREATE TABLE PartitionedTable3 (
+    ID INT IDENTITY(1,1),
+    PartitionKey NVARCHAR(10) COLLATE Latin1_General_CS_AS, -- collation doesn't match default partition function collation
+    Value NVARCHAR(100)
+) ON PS_CaseInsensitive(PartitionKey);
+
+statement ok
+CREATE TABLE PartitionedTable4 (
+    ID INT IDENTITY(1,1),
+    PartitionKey NVARCHAR(10), -- using database default collation
+    Value NVARCHAR(100)
+) ON PS_DefaultCollation(PartitionKey);
+
+statement ok
+SELECT name, collation_name FROM sys.all_columns where object_id = object_id('PartitionedTable4') order by name;
+
+statement ok
+DROP TABLE PartitionedTable4;
+
+statement ok
+CREATE TABLE PartitionedTable5 (
+    ID INT IDENTITY(1,1),
+    PartitionKey NVARCHAR(10) COLLATE Latin1_General_CI_AI,
+    Value NVARCHAR(100)
+) ON PS_AccentInsensitive(PartitionKey);
+
+statement ok
+SELECT name, collation_name FROM sys.all_columns where object_id = object_id('PartitionedTable5') order by name;
+
+statement ok
+DROP TABLE PartitionedTable5;
+
+statement ok
+CREATE TABLE PartitionedTable6 (
+    ID INT IDENTITY(1,1),
+    PartitionKey INT COLLATE invalid_collation, -- using invalid collation
+    Value NVARCHAR(100)
+) ON PS_DefaultCollation(PartitionKey);
+
+statement ok
+CREATE TABLE PartitionedTable7 (
+    ID INT IDENTITY(1,1),
+    PartitionKey INT COLLATE Latin1_GENERAL_CI_AS, -- using valid collation with non-collatable datatype
+    Value NVARCHAR(100)
+) ON PS_DefaultCollation(PartitionKey);
+
+statement ok
+USE master
+

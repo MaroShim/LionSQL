@@ -1,0 +1,28 @@
+# test/slt_proc/babelfish_oracle/259_babel_babel_1066.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1066.sql
+
+query T
+select datename(month, cast('2002-05-23 23:41:29.998' as smalldatetime));
+----
+May
+
+query T
+select datename(dw, null);
+----
+NULL
+
+query T
+select dateadd(yy, 1, null);
+----
+NULL
+
+query T
+select datepart(weekday, cast( '2021-12-31' as date));
+----
+6
+
+query T
+select datepart(dw, null);
+----
+NULL
+

@@ -1,0 +1,33 @@
+# test/slt_proc/babelfish_oracle/1342_babel_testtvpquoting.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/datatypes/TestTvpQuoting.sql
+
+statement ok
+create schema babel_6481_s
+
+statement ok
+declare @v1 babel_6481_s.placing
+insert into @v1 values (10)
+exec sp_executesql N'select a from @x order by a',
+                   N'@x babel_6481_s.placing readonly', @x = @v1
+
+statement ok
+declare @v2 babel_6481_s.babel_6481_t
+insert into @v2 values (20)
+exec sp_executesql N'select a from @x order by a',
+                   N'@x babel_6481_s.babel_6481_t readonly', @x = @v2
+
+statement ok
+declare @v3 babel_6481_s.placing
+insert into @v3 values (100), (200), (300)
+exec sp_executesql N'select a from @x order by a',
+                   N'@x babel_6481_s.placing readonly', @x = @v3
+
+statement ok
+declare @v4 babel_6481_s.placing
+insert into @v4 values (40)
+exec sp_executesql N'select a from @x order by a',
+                   N'@x babel_6481_s.placing readonly', @x = @v4
+
+statement ok
+drop schema babel_6481_s
+

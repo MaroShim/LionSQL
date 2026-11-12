@@ -1,0 +1,17 @@
+# test/slt_proc/datetime/104_datetime_calc_24.slt
+# T-SQL YEAR/MONTH/DAY/DATENAME/EOMONTH/DATEADD/DATEDIFF (24)
+
+query IIIT
+SELECT YEAR('2021-12-05'), MONTH('2021-12-05'), DAY('2021-12-05'), DATENAME(month, '2021-12-05');
+----
+2021 12 5 December
+
+query TT
+SELECT EOMONTH('2021-12-05'), CONVERT(VARCHAR(10), DATEADD(day, 96, '2026-01-01'), 120);
+----
+2021-12-31 2026-04-07
+
+query III
+SELECT DATEDIFF(day, '2026-01-01', '2026-04-07'), ISDATE('2021-12-05'), ISDATE('bad-date-24');
+----
+96 1 0

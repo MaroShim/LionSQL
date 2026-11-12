@@ -1,0 +1,49 @@
+# test/slt_proc/cte_subquery_join/228_recursive_cte_and_joins_23.slt
+# T-SQL Recursive CTE, INNER JOIN, EXISTS, NOT EXISTS (23)
+
+query I
+WITH seq(n) AS (
+    SELECT 5
+    UNION ALL
+    SELECT n + 5 FROM seq WHERE n < 20
+)
+SELECT n FROM seq ORDER BY n;
+----
+5
+10
+15
+20
+
+statement ok
+CREATE TABLE c_cust_228 (cid INT PRIMARY KEY, cname VARCHAR(20));
+
+statement ok
+CREATE TABLE c_ord_228 (oid INT PRIMARY KEY, cid INT, amt INT);
+
+statement ok
+INSERT INTO c_cust_228 VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie');
+
+statement ok
+INSERT INTO c_ord_228 VALUES (101, 1, 230), (102, 1, 460), (103, 2, 690);
+
+query ITI
+SELECT c.cid, c.cname, SUM(o.amt)
+FROM c_cust_228 c
+INNER JOIN c_ord_228 o ON c.cid = o.cid
+GROUP BY c.cid, c.cname
+ORDER BY c.cid;
+----
+1 Alice 690
+2 Bob 690
+
+query IT
+SELECT cid, cname FROM c_cust_228 c
+WHERE NOT EXISTS (SELECT 1 FROM c_ord_228 o WHERE o.cid = c.cid);
+----
+3 Charlie
+
+statement ok
+DROP TABLE c_ord_228;
+
+statement ok
+DROP TABLE c_cust_228;

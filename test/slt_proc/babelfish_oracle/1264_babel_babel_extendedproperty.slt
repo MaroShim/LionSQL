@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1264_babel_babel_extendedproperty.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-EXTENDEDPROPERTY.sql
+
+statement ok
+create table t1 (a int)
+
+statement ok
+drop table t1
+

@@ -1,0 +1,187 @@
+# test/slt_proc/babelfish_oracle/633_babel_default_params.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/default_params-vu-prepare.sql, test/babelfish/raw/default_params-vu-verify.sql, test/babelfish/raw/default_params-vu-cleanup.sql
+
+statement ok
+create function default_params_func1 (@p1 int=1,@p2 int = 2 ) returns int as begin return @p1 + @p2 end;
+
+statement ok
+create function default_params_func2 (@p1 int,@p2 int =2, @p3 int) returns int as begin return @p1 + @p2 + @p3 end;
+
+statement ok
+create function default_params_func3 (@p1 varchar(20) = 'abc') returns varchar as begin return @p1 end;
+
+statement ok
+create function default_params_func4 (@p1 int) returns int as begin return @p1 end;
+
+statement ok
+create function default_params_func5 (@p1 varchar(20)) returns varchar as begin return @p1 end;
+
+statement ok
+create proc default_params_proc1 @p1 int=1, @p2 int=2, @p3 int=3 as select @p1, @p2, @p3
+
+statement ok
+create proc default_params_proc2 (@p1 varchar(20) = 'abc', @p2 int) as select @p1, @p2
+
+statement ok
+create proc default_params_proc3 (@p1 varchar = 'abc', @p2 int) as select @p1, @p2
+
+statement ok
+create proc default_params_proc4 @p1 int=1, @p2 int=2, @p3 varchar(20)='dbb' as select @p1, @p2, @p3
+
+query T
+select default_params_func1(default, default);
+----
+defaultdefault
+
+query T
+select default_params_func1(10, default);
+----
+10default
+
+query T
+select default_params_func1(10);
+----
+NULL
+
+query T
+select default_params_func1();
+----
+NULL
+
+query T
+select default_params_func1(default);
+----
+NULL
+
+query T
+select default_params_func2(10,default,20);
+----
+10default20
+
+query T
+select default_params_func2(10,20,30);
+----
+60
+
+query T
+select default_params_func3(default);
+----
+default
+
+query T
+select default_params_func3();
+----
+NULL
+
+query T
+select default_params_func3('dddd');
+----
+dddd
+
+query T
+select default_params_func4(default);
+----
+default
+
+query T
+select default_params_func5(default);
+----
+default
+
+query TTT
+exec default_params_proc1 111, default, 333
+----
+111 default 333
+
+query TTT
+exec default_params_proc1 default, default, default
+----
+default default default
+
+query TTT
+exec default_params_proc1 default
+----
+default NULL NULL
+
+query TTT
+exec default_params_proc1 @p1=default, @p2=default,@p3=300
+----
+default default 300
+
+query TTT
+exec default_params_proc1 @p1=300, @p2=default,@p3=default
+----
+300 default default
+
+query TTT
+exec default_params_proc1 @p1=default, @p2=300,@p3=default
+----
+default 300 default
+
+query TT
+exec default_params_proc2 default, 2
+----
+default 2
+
+query TT
+exec default_params_proc2 'dddd', 2
+----
+dddd 2
+
+query TT
+exec default_params_proc3 default, 2
+----
+default 2
+
+query TT
+exec default_params_proc3 'dddd', 3
+----
+dddd 3
+
+query TT
+exec default_params_proc3 default, default
+----
+default default
+
+query TT
+exec default_params_proc3 'ddd', default
+----
+ddd default
+
+query TTT
+exec default_params_proc4 1,2,default
+----
+1 2 default
+
+query TTT
+exec default_params_proc4 1,2, @p3=default
+----
+1 2 default
+
+statement ok
+drop function default_params_func1;
+
+statement ok
+drop function default_params_func2;
+
+statement ok
+drop function default_params_func3;
+
+statement ok
+drop function default_params_func4;
+
+statement ok
+drop procedure default_params_proc1;
+
+statement ok
+drop procedure default_params_proc2;
+
+statement ok
+drop procedure default_params_proc3
+
+statement ok
+drop procedure default_params_proc4
+
+statement ok
+drop function default_params_func5;
+

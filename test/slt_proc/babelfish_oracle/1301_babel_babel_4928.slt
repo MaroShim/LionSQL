@@ -1,0 +1,81 @@
+# test/slt_proc/babelfish_oracle/1301_babel_babel_4928.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_4928.sql
+
+statement ok
+DECLARE @babel_4928 TABLE(id int UNIQUE);
+INSERT INTO @babel_4928 VALUES (NULL);
+INSERT INTO @babel_4928 VALUES (NULL);
+
+statement ok
+DECLARE @babel_4928 TABLE(id int UNIQUE, id1 int UNIQUE, id2 INT PRIMARY KEY);
+INSERT INTO @babel_4928 VALUES (NULL, 1, 2);
+INSERT INTO @babel_4928 VALUES (NULL, 2, 20);
+
+statement ok
+DECLARE @babel_4928 TABLE(id int UNIQUE, id1 int UNIQUE, id2 INT PRIMARY KEY);
+INSERT INTO @babel_4928 VALUES (1, NULL, 2);
+INSERT INTO @babel_4928 VALUES (2, NULL, 20);
+
+statement ok
+DECLARE @babel_4928 TABLE(id int , UNIQUE(id));
+INSERT INTO @babel_4928 VALUES (NULL);
+INSERT INTO @babel_4928 VALUES (NULL);
+
+statement ok
+CREATE TABLE #babel_4928_temp_table (id INT UNIQUE);
+
+statement ok
+INSERT INTO #babel_4928_temp_table VALUES (NULL);
+INSERT INTO #babel_4928_temp_table VALUES (NULL);
+
+statement ok
+DROP TABLE #babel_4928_temp_table
+
+statement ok
+CREATE TABLE #babel_4928_temp_table (id INT, UNIQUE(id));
+
+statement ok
+INSERT INTO #babel_4928_temp_table VALUES (NULL);
+INSERT INTO #babel_4928_temp_table VALUES (NULL);
+
+statement ok
+DROP TABLE #babel_4928_temp_table
+
+statement ok
+DECLARE @babel_4928 babel_4928_table_type;
+INSERT INTO @babel_4928 VALUES (NULL);
+INSERT INTO @babel_4928 VALUES (NULL);
+
+statement ok
+DECLARE @babel_4928 babel_4928_table_type_2;
+INSERT INTO @babel_4928 VALUES (NULL);
+INSERT INTO @babel_4928 VALUES (NULL);
+
+statement ok
+DECLARE @babel_4928 TABLE(id TIMESTAMP UNIQUE);
+INSERT INTO @babel_4928 VALUES (NULL);
+INSERT INTO @babel_4928 VALUES (NULL);
+
+statement ok
+DECLARE @babel_4928 TABLE(id TIMESTAMP , UNIQUE(id));
+INSERT INTO @babel_4928 VALUES (NULL);
+INSERT INTO @babel_4928 VALUES (NULL);
+
+statement ok
+CREATE TABLE #babel_4928_temp_table (id TIMESTAMP UNIQUE);
+
+statement ok
+CREATE TABLE #babel_4928_temp_table (id TIMESTAMP, UNIQUE(id));
+
+statement ok
+CREATE TABLE #babel_4928_temp_table (id INT PRIMARY KEY);
+
+statement ok
+DROP TABLE #babel_4928_temp_table
+
+statement ok
+CREATE TABLE #babel_4928_temp_table (id INT, PRIMARY KEY(id));
+
+statement ok
+DROP TABLE #babel_4928_temp_table
+

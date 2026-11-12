@@ -1,0 +1,44 @@
+# test/slt_proc/babelfish_oracle/675_babel_objectproperty_dep.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/objectproperty-dep-vu-prepare.sql, test/babelfish/raw/functions/objectproperty-dep-vu-verify.sql, test/babelfish/raw/functions/objectproperty-dep-vu-cleanup.sql
+
+statement ok
+CREATE TABLE objectproperty_vu_prepare_t1(a int)
+
+statement ok
+CREATE VIEW objectproperty_vu_prepare_dep_view AS
+SELECT OBJECTPROPERTY(OBJECT_ID('objectproperty_vu_prepare_t1'), 'IsTable')
+
+statement ok
+CREATE PROC objectproperty_vu_prepare_dep_proc AS
+SELECT OBJECTPROPERTY(OBJECT_ID('objectproperty_vu_prepare_t1'), 'IsTable')
+
+statement ok
+CREATE FUNCTION objectproperty_vu_prepare_dep_func()
+RETURNS INT
+AS
+BEGIN
+RETURN OBJECTPROPERTY(OBJECT_ID('objectproperty_vu_prepare_t1'), 'IsTable')
+END
+
+query T
+SELECT * FROM objectproperty_vu_prepare_dep_view
+----
+1
+
+query T
+EXEC objectproperty_vu_prepare_dep_proc
+----
+1
+
+statement ok
+DROP VIEW objectproperty_vu_prepare_dep_view
+
+statement ok
+DROP PROC objectproperty_vu_prepare_dep_proc
+
+statement ok
+DROP FUNCTION objectproperty_vu_prepare_dep_func
+
+statement ok
+DROP TABLE objectproperty_vu_prepare_t1
+

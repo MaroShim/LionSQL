@@ -1,0 +1,72 @@
+# test/slt_proc/babelfish_oracle/698_babel_select_into_rowcount.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/select_into_rowcount-vu-prepare.sql, test/babelfish/raw/select_into_rowcount-vu-verify.sql, test/babelfish/raw/select_into_rowcount-vu-cleanup.sql
+
+statement ok
+CREATE TABLE select_into_rowcount_vu_prepare_src (c1 INT, c2 VARCHAR(20));
+
+statement ok
+INSERT INTO select_into_rowcount_vu_prepare_src VALUES (1, 'a'), (2, 'b'), (3, 'c');
+
+statement ok
+SELECT * INTO select_into_rowcount_vu_verify_t1 FROM select_into_rowcount_vu_prepare_src;
+
+statement ok
+SELECT * INTO select_into_rowcount_vu_verify_t2 FROM select_into_rowcount_vu_prepare_src WHERE c1 = 1;
+
+statement ok
+SELECT * INTO select_into_rowcount_vu_verify_t3 FROM select_into_rowcount_vu_prepare_src WHERE 1 = 0;
+
+statement ok
+SELECT * INTO #select_into_rowcount_vu_verify_t4 FROM select_into_rowcount_vu_prepare_src;
+
+statement ok
+SELECT * INTO #select_into_rowcount_vu_verify_t5 FROM select_into_rowcount_vu_prepare_src WHERE c1 = 2;
+
+statement ok
+SELECT * INTO #select_into_rowcount_vu_verify_t6 FROM select_into_rowcount_vu_prepare_src WHERE 1 = 0;
+
+statement ok
+SELECT c1 INTO select_into_rowcount_vu_verify_t7 FROM select_into_rowcount_vu_prepare_src;
+
+statement ok
+SELECT c2 INTO #select_into_rowcount_vu_verify_t8 FROM select_into_rowcount_vu_prepare_src WHERE c1 > 1;
+
+statement ok
+SELECT * INTO select_into_rowcount_vu_verify_t9 FROM (SELECT 1 AS c1 UNION ALL SELECT 2 UNION ALL SELECT 3) t;
+
+statement ok
+SELECT * INTO #select_into_rowcount_vu_verify_t10 FROM (SELECT 'a' AS val UNION ALL SELECT 'b') t;
+
+statement ok
+SELECT * INTO #select_into_rowcount_vu_verify_t11 FROM (SELECT 42 AS num) t;
+
+query T
+SELECT * INTO #select_into_rowcount_vu_verify_t12 FROM select_into_rowcount_vu_prepare_src;
+SELECT @@ROWCOUNT;
+----
+3
+
+statement ok
+SET NOCOUNT ON;
+SELECT * INTO #select_into_rowcount_vu_verify_t13 FROM select_into_rowcount_vu_prepare_src;
+SELECT @@ROWCOUNT;
+SET NOCOUNT OFF;
+
+statement ok
+DROP TABLE select_into_rowcount_vu_verify_t1;
+
+statement ok
+DROP TABLE select_into_rowcount_vu_verify_t2;
+
+statement ok
+DROP TABLE select_into_rowcount_vu_verify_t3;
+
+statement ok
+DROP TABLE select_into_rowcount_vu_verify_t7;
+
+statement ok
+DROP TABLE select_into_rowcount_vu_verify_t9;
+
+statement ok
+DROP TABLE select_into_rowcount_vu_prepare_src;
+

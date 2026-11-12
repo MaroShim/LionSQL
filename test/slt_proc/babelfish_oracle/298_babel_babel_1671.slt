@@ -1,0 +1,31 @@
+# test/slt_proc/babelfish_oracle/298_babel_babel_1671.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1671.sql
+
+statement ok
+DROP PROCEDURE IF EXISTS sp_test12;
+
+statement ok
+CREATE PROCEDURE sp_test12 (@a binary OUTPUT) AS BEGIN SET @a=0x121; Select @a as a; END;
+
+query T
+Declare @a binary;Set @a=0x121; exec sp_test12 @a;select @a as a;
+----
+0x121
+
+statement ok
+DROP PROCEDURE sp_test12;
+
+statement ok
+DROP PROCEDURE IF EXISTS sp_test13;
+
+statement ok
+CREATE PROCEDURE sp_test13 (@b binary OUTPUT) AS BEGIN SET @b=0x121111; Select @b as b; END;
+
+query T
+Declare @b binary;Set @b=0x121111; exec sp_test13 @b;select @b as b;
+----
+0x121111
+
+statement ok
+DROP PROCEDURE sp_test13;
+

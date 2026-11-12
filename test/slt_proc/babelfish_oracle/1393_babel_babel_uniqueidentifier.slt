@@ -1,0 +1,165 @@
+# test/slt_proc/babelfish_oracle/1393_babel_babel_uniqueidentifier.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_uniqueidentifier.sql
+
+statement ok
+create table t1 (a uniqueidentifier, b uniqueidentifier, c uniqueidentifier, primary key(a));
+
+statement ok
+insert into t1(a) values ('6F9619FF-8B86-D011-B42D-00C04FC964FF');
+
+query TTT
+select * from t1;
+----
+6f9619ff-8b86-d011-b42d-00c04fc964ff NULL NULL
+
+statement ok
+select * from t1 where a = '6F9619FF-8B86-D011-B42D-00C04FC964FF'; -- test PK
+
+query T
+select count(*) from t1 where a = '6F9619FF-8B86-D011-B42D-00C04FC964FF';
+----
+1
+
+query T
+select count(*) from t1 where a > '6F9619FF-8B86-D011-B42D-00C04FC964FF';
+----
+0
+
+query T
+select count(*) from t1 where a >= '6F9619FF-8B86-D011-B42D-00C04FC964FF';
+----
+1
+
+query T
+select count(*) from t1 where a < 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+----
+1
+
+query T
+select count(*) from t1 where a <= 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+----
+1
+
+query T
+select count(*) from t1 where a <> 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+----
+1
+
+query T
+create table t2 (a uniqueidentifier, b uniqueidentifier, c uniqueidentifier, primary key(a));
+insert into t2 select * from t1 order by a;
+select count(distinct a) from t2;
+----
+1
+
+statement ok
+create table t3 ( a uniqueidentifier, b uniqueidentifier);
+
+statement ok
+create index t3_a on t3 (a);
+
+statement ok
+create index t3_b on t3 (b);
+
+statement ok
+create table t4 ( a uniqueidentifier);
+
+statement ok
+insert into t4 values ('6F9619FF-8B86-D011-B42D-00C04FC964FF');
+
+statement ok
+insert into t4 values ('6F9619FF-8B86-D011-B42D-00C04FC964FFwrong'); -- characters exceeding are truncated
+
+statement ok
+insert into t4 values ('{6F9619FF-8B86-D011-B42D-00C04FC964FF}'); -- with braces
+
+statement ok
+insert into t4 values ('{6F9619FF-8B86-D011-B42D-00C04FC964FFwrong'); -- error due to no matching brace
+
+statement ok
+insert into t4 values ('6F9619FF-8B86-D011-B42D-00C04FC964FF}'); -- single brace at the end are truncated
+
+query T
+select * from t4;
+----
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+6f9619ff-8b86-d011-b42d-00c04fc964ffwrong
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+{6f9619ff-8b86-d011-b42d-00c04fc964ffwrong
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+
+statement ok
+select name, setting from pg_settings where name in ('enable_seqscan', 'enable_bitmapscan');
+
+statement ok
+select * from t3 where a = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'; -- test btree index
+
+statement ok
+select * from t3 where b = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'; -- test hash index
+
+statement ok
+create table t5 ( a uniqueidentifier);
+insert into t5 values (cast('6F9619FF-8B86-D011-B42D-00C04FC964FF' as varchar(50)));
+
+statement ok
+insert into t5 values (cast('6F9619FF-8B86-D011-B42D-00C04FC964FFwrong' as varchar(50))); -- characters exceeding are truncated
+
+statement ok
+insert into t5 values (cast('{6F9619FF-8B86-D011-B42D-00C04FC964FF}' as varchar(50))); -- with braces
+
+statement ok
+insert into t5 values (cast('{6F9619FF-8B86-D011-B42D-00C04FC964FFwrong' as varchar(50))); -- error due to no matching brace
+
+statement ok
+insert into t5 values (cast('6F9619FF-8B86-D011-B42D-00C04FC964FF}' as varchar(50))); -- single brace at the end are truncated
+
+statement ok
+insert into t5 values (cast('6F9619FF-8B86-D011-B42D-00C04FC964FF' as nvarchar(50)));
+
+statement ok
+insert into t5 values (cast('6F9619FF-8B86-D011-B42D-00C04FC964FFwrong' as nvarchar(50))); -- characters exceeding are truncated
+
+statement ok
+insert into t5 values (cast('{6F9619FF-8B86-D011-B42D-00C04FC964FF}' as nvarchar(50))); -- with braces
+
+statement ok
+insert into t5 values (cast('{6F9619FF-8B86-D011-B42D-00C04FC964FFwrong' as nvarchar(50))); -- error due to no matching brace
+
+statement ok
+insert into t5 values (cast('6F9619FF-8B86-D011-B42D-00C04FC964FF}' as nvarchar(50))); -- single brace at the end are truncated
+
+query T
+select * from t5 where a = cast('6F9619FF-8B86-D011-B42D-00C04FC964FF' as varchar(50));
+----
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+
+query T
+select * from t5 where a = cast('6F9619FF-8B86-D011-B42D-00C04FC964FF' as nvarchar(50));
+----
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+6f9619ff-8b86-d011-b42d-00c04fc964ff
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
+drop table t3;
+
+statement ok
+drop table t4;
+
+statement ok
+drop table t5;
+

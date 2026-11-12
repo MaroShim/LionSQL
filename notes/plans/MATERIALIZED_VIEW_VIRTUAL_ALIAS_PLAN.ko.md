@@ -1,7 +1,7 @@
 # LionSQL Materialized View Virtual Alias & Tolerant Refresh Architecture Plan (`MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-05
-> - **상태**: 승인 완료 (Post-1.0 및 엔터프라이즈 앱 호환성 로드맵 반영: `v1.1.0`)
+> - **상태**: 승인 완료 (Post-1.0 및 엔터프라이즈 앱 호환성 로드맵 반영: `v1.2.0`)
 > - **관련 과제**: `FEAT-MATVIEW-ALIAS-1` (Materialized View Virtual Alias & Tolerant Refresh)
 > - **연계 태스크**: `INTEG-MATTERMOST-1` (Mattermost), `INTEG-NOCODB-1` (NocoDB)
 > - **핵심 불변식**: `[RULE:RadicalKISS]` (극단적 단순성 및 실용주의), `[RULE:SafeDefaults]` (안전한 기본값), `[RULE:ModularInterface]` (인터페이스 분리)

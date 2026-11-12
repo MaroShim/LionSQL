@@ -1,0 +1,84 @@
+# test/slt_proc/babelfish_oracle/1390_babel_babel_timezoneinfo_before_17_7.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/babel_timezoneinfo_before_17_7-vu-prepare.sql, test/babelfish/raw/babel_timezoneinfo_before_17_7-vu-verify.sql, test/babelfish/raw/babel_timezoneinfo_before_17_7-vu-cleanup.sql
+
+statement ok
+CREATE VIEW dbo.vw_UTC
+AS
+    SELECT 
+        name AS timezone_name,
+        current_utc_offset AS utc_offset
+    FROM sys.time_zone_info
+    WHERE name = 'UTC'
+
+statement ok
+CREATE VIEW v_test AS
+SELECT name FROM sys.time_zone_info 
+WHERE name = 'India Standard Time';
+
+statement ok
+CREATE FUNCTION dbo.fn_GetUTCZonesWithOffset()
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT 
+        name,
+        current_utc_offset,
+        CASE 
+            WHEN name = 'UTC' THEN 0  
+            WHEN name LIKE 'UTC-%%' THEN 
+                CAST(SUBSTRING(name, 5, 2) AS INT) + 100 
+            WHEN name LIKE 'UTC+%%' THEN 
+                CAST(SUBSTRING(name, 5, 2) AS INT)  
+        END as sort_order
+    FROM sys.time_zone_info
+    WHERE name LIKE '%UTC%'
+);
+
+statement ok
+CREATE VIEW dbo.vw_TimeZoneCount
+AS
+    SELECT COUNT(*) as total_time_zones
+    FROM sys.time_zone_info;
+
+statement ok
+CREATE PROCEDURE sp_ValidateTimeZoneData
+    @timezone NVARCHAR(128)   
+AS
+BEGIN
+    DECLARE @count INT;
+    SELECT @count = COUNT(*)
+    FROM sys.time_zone_info
+    WHERE name = @timezone;
+    IF @count = 0
+        SELECT 'Invalid' as validation_result, @timezone as zone_name;
+    ELSE
+        SELECT 'Valid' as validation_result, @timezone as zone_name;
+END;
+
+statement ok
+DROP VIEW IF EXISTS dbo.vw_UTC;
+
+statement ok
+DROP VIEW v_test;
+
+statement ok
+IF OBJECT_ID('dbo.fn_GetUTCZonesWithOffset') IS NOT NULL
+    DROP FUNCTION dbo.fn_GetUTCZonesWithOffset;
+
+statement ok
+IF OBJECT_ID('dbo.vw_TimeZoneCount') IS NOT NULL
+    DROP VIEW dbo.vw_TimeZoneCount;
+
+statement ok
+IF OBJECT_ID('test_timezone_offset', 'FN') IS NOT NULL
+DROP FUNCTION test_timezone_offset;
+
+statement ok
+IF OBJECT_ID('sp_ValidateTimeZoneData', 'P') IS NOT NULL
+    DROP PROCEDURE sp_ValidateTimeZoneData;
+
+statement ok
+IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'validate_utc_offset' AND type = 'FN')
+    DROP FUNCTION validate_utc_offset;
+

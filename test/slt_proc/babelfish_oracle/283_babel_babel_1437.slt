@@ -1,0 +1,96 @@
+# test/slt_proc/babelfish_oracle/283_babel_babel_1437.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1437.sql
+
+query T
+SELECT db_id('hello');
+SELECT db_name(1234);
+----
+LionSQL
+
+query T
+SELECT db_id('master');
+SELECT db_name(1);
+----
+LionSQL
+
+statement ok
+USE master;
+
+query T
+SELECT db_id();
+SELECT db_name();
+----
+master
+
+query T
+SELECT db_id('tempdb')
+SELECT db_name(2);
+----
+1
+
+statement ok
+USE tempdb;
+
+query T
+SELECT db_id();
+SELECT db_name();
+----
+tempdb
+
+query T
+SELECT db_id('msdb')
+SELECT db_name(4);
+----
+1
+
+statement ok
+USE msdb;
+
+query T
+SELECT db_id();
+SELECT db_name();
+----
+msdb
+
+statement ok
+CREATE DATABASE babel_1437_db;
+
+statement ok
+USE babel_1437_db;
+
+query T
+SELECT (case when db_name() = 'babel_1437_db' then 'true' else 'false' end) result;
+SELECT (case when db_name(db_id()) = 'babel_1437_db' then 'true' else 'false' end) result;
+SELECT (case when db_id('babel_1437_db') = db_id() then 'true' else 'false' end) result;
+----
+true
+
+statement ok
+USE MASTER;
+
+query T
+SELECT db_id('babel_1437_db');
+----
+1
+
+statement ok
+CREATE DATABASE babel_1437_db COLLATE BBF_Unicode_CP1_CI_AI;
+
+statement ok
+USE babel_1437_db;
+
+query T
+SELECT (case when db_name() = 'babel_1437_db' then 'true' else 'false' end) result;
+SELECT (case when db_name(db_id()) = 'babel_1437_db' then 'true' else 'false' end) result;
+SELECT (case when db_id('babel_1437_db') = db_id() then 'true' else 'false' end) result;
+----
+true
+
+statement ok
+USE MASTER;
+
+query T
+SELECT db_id('babel_1437_db');
+----
+1
+

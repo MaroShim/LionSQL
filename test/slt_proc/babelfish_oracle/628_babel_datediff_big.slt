@@ -1,0 +1,956 @@
+# test/slt_proc/babelfish_oracle/628_babel_datediff_big.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/datediff_big-vu-prepare.sql, test/babelfish/raw/functions/datediff_big-vu-verify.sql, test/babelfish/raw/functions/datediff_big-vu-cleanup.sql
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v1 AS (
+    SELECT 
+        DATEDIFF_BIG(year, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Years,
+        DATEDIFF_BIG(quarter, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Quarters,
+        DATEDIFF_BIG(month, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Months,
+        DATEDIFF_BIG(dayofyear, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS DayofYears,
+        DATEDIFF_BIG(day, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Days,
+        DATEDIFF_BIG(week, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Weeks,
+        DATEDIFF_BIG(hour, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Hours,
+        DATEDIFF_BIG(minute, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Minutes,
+        DATEDIFF_BIG(second, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Seconds,
+        DATEDIFF_BIG(millisecond, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Millisecond,
+        DATEDIFF_BIG(microsecond, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Microsecond,
+        DATEDIFF_BIG(nanosecond, '2000-01-01 00:00:00.0000000', '2200-01-01 00:00:00.0000000') AS Nanosecond
+    );
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v2 AS (
+    SELECT 
+        DATEDIFF_BIG(nanosecond, '2000-01-01 00:00:00.0000000', '2500-01-01 00:00:00.0000000') AS Nanosecond
+    );
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v3 AS (
+    SELECT 
+        DATEDIFF_BIG(year, CAST('2000-01-01' AS DATE), CAST('2200-12-31' AS DATE)) AS Years,
+        DATEDIFF_BIG(quarter, CAST('2000-01-01' AS DATE), CAST('2200-12-31' AS DATE)) AS Quarters,
+        DATEDIFF_BIG(month, CAST('2000-01-01' AS DATE), CAST('2200-12-31' AS DATE)) AS Months,
+        DATEDIFF_BIG(dayofyear, CAST('2000-01-01' AS DATE), CAST('2200-12-31' AS DATE)) AS DayofYears,
+        DATEDIFF_BIG(day, CAST('2000-01-01' AS DATE), CAST('2200-12-31' AS DATE)) AS Days,
+        DATEDIFF_BIG(week, CAST('2000-01-01' AS DATE), CAST('2200-12-31' AS DATE)) AS Weeks,
+        DATEDIFF_BIG(hour, CAST('2000-01-01' AS DATE), CAST('2200-12-31' AS DATE)) AS Hours,
+        DATEDIFF_BIG(minute, CAST('2000-01-01' AS DATE), CAST('2200-12-31' AS DATE)) AS Minutes,
+        DATEDIFF_BIG(second, CAST('2000-01-01' AS DATE), CAST('2200-12-31' AS DATE)) AS Seconds,
+        DATEDIFF_BIG(millisecond, CAST('2000-01-01' AS DATE), CAST('2200-12-31' AS DATE)) AS Millisecond,
+        DATEDIFF_BIG(microsecond, CAST('2000-01-01' AS DATE), CAST('2200-12-31' AS DATE)) AS Microsecond,
+        DATEDIFF_BIG(nanosecond, CAST('2000-01-01' AS DATE), CAST('2200-12-31' AS DATE)) AS Nanosecond
+    );
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v4 AS (
+    SELECT 
+        DATEDIFF_BIG(year, CAST('2000-01-01 23:30:05.523' AS DATETIME), CAST('2200-12-31 23:30:05.523' AS DATETIME)) AS Years,
+        DATEDIFF_BIG(quarter, CAST('2000-01-01 23:30:05.523' AS DATETIME), CAST('2200-12-31 23:30:05.523' AS DATETIME)) AS Quarters,
+        DATEDIFF_BIG(month, CAST('2000-01-01 23:30:05.523' AS DATETIME), CAST('2200-12-31 23:30:05.523' AS DATETIME)) AS Months,
+        DATEDIFF_BIG(dayofyear, CAST('2000-01-01 23:30:05.523' AS DATETIME), CAST('2200-12-31 23:30:05.523' AS DATETIME)) AS DayofYears,
+        DATEDIFF_BIG(day, CAST('2000-01-01 23:30:05.523' AS DATETIME), CAST('2200-12-31 23:30:05.523' AS DATETIME)) AS Days,
+        DATEDIFF_BIG(week, CAST('2000-01-01 23:30:05.523' AS DATETIME), CAST('2200-12-31 23:30:05.523' AS DATETIME)) AS Weeks,
+        DATEDIFF_BIG(hour, CAST('2000-01-01 23:30:05.523' AS DATETIME), CAST('2200-12-31 23:30:05.523' AS DATETIME)) AS Hours,
+        DATEDIFF_BIG(minute, CAST('2000-01-01 23:30:05.523' AS DATETIME), CAST('2200-12-31 23:30:05.523' AS DATETIME)) AS Minutes,
+        DATEDIFF_BIG(second, CAST('2000-01-01 23:30:05.523' AS DATETIME), CAST('2200-12-31 23:30:05.523' AS DATETIME)) AS Seconds,
+        DATEDIFF_BIG(millisecond, CAST('2000-01-01 23:30:05.523' AS DATETIME), CAST('2200-12-31 23:30:05.523' AS DATETIME)) AS Millisecond,
+        DATEDIFF_BIG(microsecond, CAST('2000-01-01 23:30:05.523' AS DATETIME), CAST('2200-12-31 23:30:05.523' AS DATETIME)) AS Microsecond,
+        DATEDIFF_BIG(nanosecond, CAST('2000-01-01 23:30:05.523' AS DATETIME), CAST('2200-12-31 23:30:05.523' AS DATETIME)) AS Nanosecond
+    );
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v5 AS (
+    SELECT 
+        DATEDIFF_BIG(year, CAST('1900-12-31 12:24:32 +10:0' AS DATETIMEOFFSET), CAST('2000-01-01 12:25:32 +10:0' AS DATETIMEOFFSET)) AS Years,
+        DATEDIFF_BIG(quarter, CAST('1900-12-31 12:24:32 +10:0' AS DATETIMEOFFSET), CAST('2000-01-01 12:25:32 +10:0' AS DATETIMEOFFSET)) AS Quarters,
+        DATEDIFF_BIG(month, CAST('1900-12-31 12:24:32 +10:0' AS DATETIMEOFFSET), CAST('2000-01-01 12:25:32 +10:0' AS DATETIMEOFFSET)) AS Months,
+        DATEDIFF_BIG(dayofyear, CAST('1900-12-31 12:24:32 +10:0' AS DATETIMEOFFSET), CAST('2000-01-01 12:25:32 +10:0' AS DATETIMEOFFSET)) AS DayofYears,
+        DATEDIFF_BIG(day, CAST('1900-12-31 12:24:32 +10:0' AS DATETIMEOFFSET), CAST('2000-01-01 12:25:32 +10:0' AS DATETIMEOFFSET)) AS Days,
+        DATEDIFF_BIG(week, CAST('1900-12-31 12:24:32 +10:0' AS DATETIMEOFFSET), CAST('2000-01-01 12:25:32 +10:0' AS DATETIMEOFFSET)) AS Weeks,
+        DATEDIFF_BIG(hour, CAST('1900-12-31 12:24:32 +10:0' AS DATETIMEOFFSET), CAST('2000-01-01 12:25:32 +10:0' AS DATETIMEOFFSET)) AS Hours,
+        DATEDIFF_BIG(minute, CAST('1900-12-31 12:24:32 +10:0' AS DATETIMEOFFSET), CAST('2000-01-01 12:25:32 +10:0' AS DATETIMEOFFSET)) AS Minutes,
+        DATEDIFF_BIG(second, CAST('1900-12-31 12:24:32 +10:0' AS DATETIMEOFFSET), CAST('2000-01-01 12:25:32 +10:0' AS DATETIMEOFFSET)) AS Seconds,
+        DATEDIFF_BIG(millisecond, CAST('1900-12-31 12:24:32 +10:0' AS DATETIMEOFFSET), CAST('2000-01-01 12:25:32 +10:0' AS DATETIMEOFFSET)) AS Millisecond,
+        DATEDIFF_BIG(microsecond, CAST('1900-12-31 12:24:32 +10:0' AS DATETIMEOFFSET), CAST('2000-01-01 12:25:32 +10:0' AS DATETIMEOFFSET)) AS Microsecond,
+        DATEDIFF_BIG(nanosecond, CAST('1900-12-31 12:24:32 +10:0' AS DATETIMEOFFSET), CAST('2000-01-01 12:25:32 +10:0' AS DATETIMEOFFSET)) AS Nanosecond
+    );
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v6 AS (
+    SELECT 
+        DATEDIFF_BIG(year, CAST('2016-12-26 23:30:05.523456' AS DATETIME2), CAST('2216-12-26 23:30:05.523456' AS DATETIME2)) AS Years,
+        DATEDIFF_BIG(quarter, CAST('2016-12-26 23:30:05.523456' AS DATETIME2), CAST('2216-12-26 23:30:05.523456' AS DATETIME2)) AS Quarters,
+        DATEDIFF_BIG(month, CAST('2016-12-26 23:30:05.523456' AS DATETIME2), CAST('2216-12-26 23:30:05.523456' AS DATETIME2)) AS Months,
+        DATEDIFF_BIG(dayofyear, CAST('2016-12-26 23:30:05.523456' AS DATETIME2), CAST('2216-12-26 23:30:05.523456' AS DATETIME2)) AS DayofYears,
+        DATEDIFF_BIG(day, CAST('2016-12-26 23:30:05.523456' AS DATETIME2), CAST('2216-12-26 23:30:05.523456' AS DATETIME2)) AS Days,
+        DATEDIFF_BIG(week, CAST('2016-12-26 23:30:05.523456' AS DATETIME2), CAST('2216-12-26 23:30:05.523456' AS DATETIME2)) AS Weeks,
+        DATEDIFF_BIG(hour, CAST('2016-12-26 23:30:05.523456' AS DATETIME2), CAST('2216-12-26 23:30:05.523456' AS DATETIME2)) AS Hours,
+        DATEDIFF_BIG(minute, CAST('2016-12-26 23:30:05.523456' AS DATETIME2), CAST('2216-12-26 23:30:05.523456' AS DATETIME2)) AS Minutes,
+        DATEDIFF_BIG(second, CAST('2016-12-26 23:30:05.523456' AS DATETIME2), CAST('2216-12-26 23:30:05.523456' AS DATETIME2)) AS Seconds,
+        DATEDIFF_BIG(millisecond, CAST('2016-12-26 23:30:05.523456' AS DATETIME2), CAST('2216-12-26 23:30:05.523456' AS DATETIME2)) AS Millisecond,
+        DATEDIFF_BIG(microsecond, CAST('2016-12-26 23:30:05.523456' AS DATETIME2), CAST('2216-12-26 23:30:05.523456' AS DATETIME2)) AS Microsecond,
+        DATEDIFF_BIG(nanosecond, CAST('2016-12-26 23:30:05.523456' AS DATETIME2), CAST('2216-12-26 23:30:05.523456' AS DATETIME2)) AS Nanosecond
+    );
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v7 AS (
+    SELECT 
+        DATEDIFF_BIG(year, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Years,
+        DATEDIFF_BIG(quarter, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Quarters,
+        DATEDIFF_BIG(month, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Months,
+        DATEDIFF_BIG(dayofyear, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS DayofYears,
+        DATEDIFF_BIG(day, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Days,
+        DATEDIFF_BIG(week, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Weeks,
+        DATEDIFF_BIG(hour, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Hours,
+        DATEDIFF_BIG(minute, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Minutes,
+        DATEDIFF_BIG(second, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Seconds,
+        DATEDIFF_BIG(millisecond, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Millisecond,
+        DATEDIFF_BIG(microsecond, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Microsecond,
+        DATEDIFF_BIG(nanosecond, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Nanosecond
+    );
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v8 AS (
+    SELECT 
+        DATEDIFF_BIG(year, CAST('12:10:30.123' AS TIME), CAST('13:01:59.456' AS TIME)) AS Years
+    );
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v9 AS (
+    SELECT 
+        DATEDIFF_BIG(minute, CAST('12:10:30.123' AS TIME), CAST('13:01:59.456' AS TIME)) AS Minutes
+    );
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v10 AS (
+    SELECT 
+        DATEDIFF_BIG(year, CAST('12:10:30.123' AS TIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Years,
+        DATEDIFF_BIG(quarter, CAST('12:10:30.123' AS TIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Quarters,
+        DATEDIFF_BIG(month, CAST('12:10:30.123' AS TIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Months,
+        DATEDIFF_BIG(dayofyear, CAST('12:10:30.123' AS TIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS DayofYears,
+        DATEDIFF_BIG(day, CAST('12:10:30.123' AS TIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Days,
+        DATEDIFF_BIG(week, CAST('12:10:30.123' AS TIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Weeks,
+        DATEDIFF_BIG(hour, CAST('12:10:30.123' AS TIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Hours,
+        DATEDIFF_BIG(minute, CAST('12:10:30.123' AS TIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Minutes,
+        DATEDIFF_BIG(second, CAST('12:10:30.123' AS TIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Seconds,
+        DATEDIFF_BIG(millisecond, CAST('12:10:30.123' AS TIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Millisecond,
+        DATEDIFF_BIG(microsecond, CAST('12:10:30.123' AS TIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Microsecond,
+        DATEDIFF_BIG(nanosecond, CAST('12:10:30.123' AS TIME), CAST('2079-06-06 23:58:59' AS SMALLDATETIME)) AS Nanosecond
+    );
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v11 AS (
+    SELECT 
+        DATEDIFF_BIG(year, NULL, NULL) AS res1,
+        DATEDIFF_BIG(year, '2000-01-01 00:00:00.0000000', NULL) AS res2,
+        DATEDIFF_BIG(year, NULL, '2000-01-01 00:00:00.0000000') AS res3
+    );
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v12 AS (
+    SELECT 
+        DATEDIFF_BIG(NULL, NULL, NULL) AS res1
+);
+
+statement ok
+CREATE VIEW datediff_big_vu_prepare_v13 AS (
+    SELECT
+        num_days_in_date(CAST(0 AS BIGINT), CAST(0 AS BIGINT), CAST(0 AS BIGINT)) AS res1,
+        num_days_in_date(CAST(1 AS BIGINT), CAST(1 AS BIGINT), CAST(1 AS BIGINT)) AS res2,
+        num_days_in_date(CAST(8 AS BIGINT), CAST(5 AS BIGINT), CAST(2023 AS BIGINT)) AS res3,
+        num_days_in_date(CAST(31 AS BIGINT), CAST(12 AS BIGINT), CAST(9999 AS BIGINT)) AS res4
+);
+
+statement ok
+CREATE PROCEDURE datediff_big_vu_prepare_p1 AS 
+BEGIN
+    SELECT 
+        DATEDIFF_BIG(year, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Years,
+        DATEDIFF_BIG(quarter, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Quarters,
+        DATEDIFF_BIG(month, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Months,
+        DATEDIFF_BIG(dayofyear, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS DayofYears,
+        DATEDIFF_BIG(day, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Days,
+        DATEDIFF_BIG(week, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Weeks,
+        DATEDIFF_BIG(hour, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Hours,
+        DATEDIFF_BIG(minute, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Minutes,
+        DATEDIFF_BIG(second, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Seconds,
+        DATEDIFF_BIG(millisecond, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Millisecond,
+        DATEDIFF_BIG(microsecond, '2000-01-01 00:00:00.0000000', '3000-01-01 00:00:00.0000000') AS Microsecond,
+        DATEDIFF_BIG(nanosecond, '2000-01-01 00:00:00.0000000', '2200-01-01 00:00:00.0000000') AS Nanosecond;
+END
+
+statement ok
+CREATE PROCEDURE datediff_big_vu_prepare_p2 AS 
+BEGIN
+    SELECT 
+        DATEDIFF_BIG(nanosecond, '2000-01-01 00:00:00.0000000', '2500-01-01 00:00:00.0000000') AS Nanosecond;
+END
+
+statement ok
+CREATE PROCEDURE datediff_big_vu_prepare_p3
+    @x DATE = '2000-01-01', @y DATE = '2200-12-31'
+AS
+BEGIN
+    SELECT 
+        DATEDIFF_BIG(year, @x, @y) AS Years,
+        DATEDIFF_BIG(quarter, @x, @y) AS Quarters,
+        DATEDIFF_BIG(month, @x, @y) AS Months,
+        DATEDIFF_BIG(dayofyear, @x, @y) AS DayofYears,
+        DATEDIFF_BIG(day, @x, @y) AS Days,
+        DATEDIFF_BIG(week, @x, @y) AS Weeks,
+        DATEDIFF_BIG(hour, @x, @y) AS Hours,
+        DATEDIFF_BIG(minute, @x, @y) AS Minutes,
+        DATEDIFF_BIG(second, @x, @y) AS Seconds,
+        DATEDIFF_BIG(millisecond, @x, @y) AS Millisecond,
+        DATEDIFF_BIG(microsecond, @x, @y) AS Microsecond,
+        DATEDIFF_BIG(nanosecond, @x, @y) AS Nanosecond;
+END
+
+statement ok
+CREATE PROCEDURE datediff_big_vu_prepare_p4
+    @x DATETIME = '2000-01-01 23:30:05.523', @y DATETIME = '2200-12-31 23:30:05.523'
+AS
+BEGIN
+    SELECT 
+        DATEDIFF_BIG(year, @x, @y) AS Years,
+        DATEDIFF_BIG(quarter, @x, @y) AS Quarters,
+        DATEDIFF_BIG(month, @x, @y) AS Months,
+        DATEDIFF_BIG(dayofyear, @x, @y) AS DayofYears,
+        DATEDIFF_BIG(day, @x, @y) AS Days,
+        DATEDIFF_BIG(week, @x, @y) AS Weeks,
+        DATEDIFF_BIG(hour, @x, @y) AS Hours,
+        DATEDIFF_BIG(minute, @x, @y) AS Minutes,
+        DATEDIFF_BIG(second, @x, @y) AS Seconds,
+        DATEDIFF_BIG(millisecond, @x, @y) AS Millisecond,
+        DATEDIFF_BIG(microsecond, @x, @y) AS Microsecond,
+        DATEDIFF_BIG(nanosecond, @x, @y) AS Nanosecond;
+END
+
+statement ok
+CREATE PROCEDURE datediff_big_vu_prepare_p5
+    @x DATETIMEOFFSET = '1900-12-31 12:24:32 +10:0', @y DATETIMEOFFSET = '2000-01-01 12:25:32 +10:0'
+AS
+BEGIN
+    SELECT 
+        DATEDIFF_BIG(year, @x, @y) AS Years,
+        DATEDIFF_BIG(quarter, @x, @y) AS Quarters,
+        DATEDIFF_BIG(month, @x, @y) AS Months,
+        DATEDIFF_BIG(dayofyear, @x, @y) AS DayofYears,
+        DATEDIFF_BIG(day, @x, @y) AS Days,
+        DATEDIFF_BIG(week, @x, @y) AS Weeks,
+        DATEDIFF_BIG(hour, @x, @y) AS Hours,
+        DATEDIFF_BIG(minute, @x, @y) AS Minutes,
+        DATEDIFF_BIG(second, @x, @y) AS Seconds,
+        DATEDIFF_BIG(millisecond, @x, @y) AS Millisecond,
+        DATEDIFF_BIG(microsecond, @x, @y) AS Microsecond,
+        DATEDIFF_BIG(nanosecond, @x, @y) AS Nanosecond;
+END
+
+statement ok
+CREATE PROCEDURE datediff_big_vu_prepare_p6
+    @x DATETIME2 = '2016-12-26 23:30:05.523456', @y DATETIME2 = '2216-12-26 23:30:05.523456'
+AS
+BEGIN
+    SELECT 
+        DATEDIFF_BIG(year, @x, @y) AS Years,
+        DATEDIFF_BIG(quarter, @x, @y) AS Quarters,
+        DATEDIFF_BIG(month, @x, @y) AS Months,
+        DATEDIFF_BIG(dayofyear, @x, @y) AS DayofYears,
+        DATEDIFF_BIG(day, @x, @y) AS Days,
+        DATEDIFF_BIG(week, @x, @y) AS Weeks,
+        DATEDIFF_BIG(hour, @x, @y) AS Hours,
+        DATEDIFF_BIG(minute, @x, @y) AS Minutes,
+        DATEDIFF_BIG(second, @x, @y) AS Seconds,
+        DATEDIFF_BIG(millisecond, @x, @y) AS Millisecond,
+        DATEDIFF_BIG(microsecond, @x, @y) AS Microsecond,
+        DATEDIFF_BIG(nanosecond, @x, @y) AS Nanosecond;
+END
+
+statement ok
+CREATE PROCEDURE datediff_big_vu_prepare_p7
+    @x SMALLDATETIME = '1900-01-01 00:00:00', @y SMALLDATETIME = '2079-06-06 23:58:59'
+AS
+BEGIN
+    SELECT 
+        DATEDIFF_BIG(year, @x, @y) AS Years,
+        DATEDIFF_BIG(quarter, @x, @y) AS Quarters,
+        DATEDIFF_BIG(month, @x, @y) AS Months,
+        DATEDIFF_BIG(dayofyear, @x, @y) AS DayofYears,
+        DATEDIFF_BIG(day, @x, @y) AS Days,
+        DATEDIFF_BIG(week, @x, @y) AS Weeks,
+        DATEDIFF_BIG(hour, @x, @y) AS Hours,
+        DATEDIFF_BIG(minute, @x, @y) AS Minutes,
+        DATEDIFF_BIG(second, @x, @y) AS Seconds,
+        DATEDIFF_BIG(millisecond, @x, @y) AS Millisecond,
+        DATEDIFF_BIG(microsecond, @x, @y) AS Microsecond,
+        DATEDIFF_BIG(nanosecond, @x, @y) AS Nanosecond;
+END
+
+statement ok
+CREATE PROCEDURE datediff_big_vu_prepare_p11
+AS
+BEGIN
+    SELECT 
+        DATEDIFF_BIG(year, NULL, NULL) AS res1,
+        DATEDIFF_BIG(year, '2000-01-01 00:00:00.0000000', NULL) AS res2,
+        DATEDIFF_BIG(year, NULL, '2000-01-01 00:00:00.0000000') AS res3
+END
+
+statement ok
+CREATE PROCEDURE datediff_big_vu_prepare_p12
+AS
+BEGIN
+    SELECT 
+        DATEDIFF_BIG(NULL, NULL, NULL) AS res1
+END
+
+statement ok
+CREATE PROCEDURE datediff_big_vu_prepare_p13
+AS
+BEGIN
+    SELECT
+        num_days_in_date(CAST(0 AS BIGINT), CAST(0 AS BIGINT), CAST(0 AS BIGINT)) AS res1,
+        num_days_in_date(CAST(1 AS BIGINT), CAST(1 AS BIGINT), CAST(1 AS BIGINT)) AS res2,
+        num_days_in_date(CAST(8 AS BIGINT), CAST(5 AS BIGINT), CAST(2023 AS BIGINT)) AS res3,
+        num_days_in_date(CAST(31 AS BIGINT), CAST(12 AS BIGINT), CAST(9999 AS BIGINT)) AS res4
+END
+
+query TTTTTTTTTTTT
+EXEC datediff_big_vu_prepare_p1
+----
+1000 4000 12000 NULL 106751 15250 2562047 153722867 9223372036 9223372036854 NULL NULL
+
+query T
+EXEC datediff_big_vu_prepare_p2
+----
+NULL
+
+query TTTTTTTTTTTT
+EXEC datediff_big_vu_prepare_p3
+----
+NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+
+query TTTTTTTTTTTT
+EXEC datediff_big_vu_prepare_p4
+----
+NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+
+query TTTTTTTTTTTT
+EXEC datediff_big_vu_prepare_p5
+----
+NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+
+query TTTTTTTTTTTT
+EXEC datediff_big_vu_prepare_p6
+----
+NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+
+query TTTTTTTTTTTT
+EXEC datediff_big_vu_prepare_p7
+----
+NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL NULL
+
+query TTT
+EXEC datediff_big_vu_prepare_p11
+----
+NULL NULL NULL
+
+query T
+EXEC datediff_big_vu_prepare_p12
+----
+NULL
+
+statement ok
+begin transaction
+
+query T
+SELECT DATEDIFF_BIG(fakeoption, cast('2023-01-01 01:01:20.98' as datetime), cast('2023-01-01 01:01:20.98' as datetime))
+----
+NULL
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+begin transaction
+
+query T
+SELECT DATEDIFF_BIG(nanosecond, cast('1900-01-01 01:01:20.98' as datetime), cast('3000-01-01 01:01:20.98' as datetime))
+----
+NULL
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+begin transaction
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+query T
+Declare @runForDate datetime = '01/22/2012';
+Declare @evaluationDate datetime = DATEADD(DAY,-1,@runForDate);
+Select DATEDIFF_BIG(wk,7,@evaluationDate)
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-01' AS DATE), CAST('2023-01-01' AS DATE)) AS SameDate;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-01' AS DATETIME), CAST('2023-01-02' AS DATETIME)) AS ConsecutiveDaysSameWeek;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-01' AS DATE), CAST('2022-12-25' AS DATE)) AS DifferentWeeks;
+----
+-1
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2010-01-01' AS DATE), CAST('2009-12-19' AS DATE)) AS DifferentWeeks;
+----
+-1
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-01-01' AS DATE), CAST('2023-01-31' AS DATE)) AS SameQuarter;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-01-01' AS DATETIME), CAST('2023-02-01' AS DATETIME)) AS ConsecutiveMonths;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-02-01' AS DATETIME), CAST('2023-01-01' AS DATETIME)) AS ConsecutiveMonths;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-01-01' AS DATE), CAST('2023-07-25' AS DATE)) AS DifferentQuarters;
+----
+2
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2010-01-01' AS DATE), CAST('2011-12-19' AS DATE)) AS DifferentQuarters;
+----
+7
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-01' AS DATE), CAST('2023-01-07' AS DATE)) AS NoBoundaryCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-07' AS DATE), CAST('2023-01-01' AS DATE)) AS NoBoundaryCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-01-01' AS DATE), CAST('2023-03-31' AS DATE)) AS NoBoundaryCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-07' AS DATETIME), CAST('2023-01-08' AS DATETIME)) AS OneBoundaryCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(wk, CAST('2023-01-07' AS DATETIME), CAST('2023-01-08' AS DATETIME)) AS OneBoundaryCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-08' AS DATETIME), CAST('2023-01-07' AS DATETIME)) AS OneBoundaryCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-01-01' AS DATETIME), CAST('2023-04-01' AS DATETIME)) AS OneBoundaryCrossed;
+----
+1
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-04-01' AS DATETIME), CAST('2023-01-01' AS DATETIME)) AS OneBoundaryCrossed;
+----
+-1
+
+query T
+SELECT DATEDIFF_BIG(qq, CAST('2023-01-01' AS DATETIME), CAST('2022-12-31' AS DATETIME)) AS OneBoundaryCrossed;
+----
+-1
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2022-12-31' AS DATETIME), CAST('2023-01-01' AS DATETIME)) AS OneBoundaryCrossed;
+----
+1
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-07' AS DATE), CAST('2023-01-22' AS DATE)) AS MultipleBoundariesCrossed;
+----
+2
+
+query T
+SELECT DATEDIFF_BIG(ww, CAST('2023-01-07' AS DATE), CAST('2023-01-22' AS DATE)) AS MultipleBoundariesCrossed;
+----
+2
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-22' AS DATE), CAST('2023-01-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+-2
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-01-07' AS DATE), CAST('2023-01-22' AS DATE)) AS MultipleBoundariesCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(q, CAST('2023-01-07' AS DATE), CAST('2023-01-22' AS DATE)) AS MultipleBoundariesCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-01-22' AS DATE), CAST('2023-01-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-05-22' AS DATE), CAST('2023-06-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-06-22' AS DATE), CAST('2023-05-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-06-22' AS DATE), CAST('2023-07-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+1
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-07-22' AS DATE), CAST('2023-06-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+-1
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-01-22' AS DATE), CAST('2024-01-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+4
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2024-01-22' AS DATE), CAST('2023-01-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+-4
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-01-22' AS DATE), CAST('2024-04-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+5
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2024-01-22' AS DATE), CAST('2023-04-07' AS DATE)) AS MultipleBoundariesCrossed;
+----
+-3
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2022-12-31' AS DATE), CAST('2023-01-08' AS DATE)) AS YearBoundaryCrossed;
+----
+1
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2022-12-31' AS DATE), CAST('2023-01-08' AS DATE)) AS YearBoundaryCrossed;
+----
+1
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-01' AS DATE), CAST('2023-01-08' AS DATE)) AS WeekStartsOnSunday;
+----
+1
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-01' AS DATETIME), CAST('2023-01-14' AS DATETIME)) AS WeekEndsOnSaturday;
+----
+1
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-01' AS DATE), CAST('2023-01-28' AS DATE)) AS MultipleWeeksNoOverlap;
+----
+3
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-01 00:00:00' AS DATETIME), CAST('2023-01-08 00:00:00' AS DATETIME)) AS ExactBoundary;
+----
+1
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-01-01 00:00:00' AS DATETIME), CAST('2023-04-01 00:00:00' AS DATETIME)) AS ExactBoundary;
+----
+1
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-01 23:59:59.999999' AS DATETIME2), CAST('2023-01-08 00:00:00.000000' AS DATETIME2)) AS FractionalSecondsPrecision;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2020-02-28' AS DATETIME), CAST('2020-03-01' AS DATETIME)) AS AcrossLeapDay;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2020-02-29' AS DATE), CAST('2020-03-07' AS DATE)) AS WeekWithLeapDay;
+----
+1
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-08' AS DATE), CAST('2023-01-01' AS DATE)) AS NegativeInterval;
+----
+-1
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('9999-01-01' AS DATE), CAST('0001-01-01' AS DATE)) AS Date_ReverseRange;
+----
+-15250
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('9999-01-01' AS DATETIME2), CAST('0001-01-01' AS DATETIME2)) AS Datetime2_ReverseRange;
+----
+-15250
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-01' AS DATETIME), CAST('2023-01-07' AS DATETIME)) AS SameWeekBoundary;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-07' AS DATE), CAST('2023-01-08' AS DATE)) AS WeekResetBoundary;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2022-12-31' AS DATETIME), CAST('2023-01-01' AS DATETIME)) AS SameWeekAcrossYears;
+----
+0
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2022-12-31' AS DATE), CAST('2023-01-08' AS DATE)) AS DifferentWeeksAcrossYears;
+----
+1
+
+query T
+SELECT DATEDIFF_BIG(week, NULL, CAST('2023-01-01' AS DATE)) AS NullStartDate;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('2023-01-01' AS DATETIME), NULL) AS NullEndDate;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(week, NULL, NULL) AS BothNull;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(quarter, NULL, CAST('2023-01-01' AS DATE)) AS NullStartDate;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('2023-01-01' AS DATETIME), NULL) AS NullEndDate;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(quarter, NULL, NULL) AS BothNull;
+----
+NULL
+
+statement error
+SELECT DATEDIFF_BIG(week, CAST('InvalidDate' AS DATE), CAST('2023-01-01' AS DATE)) AS InvalidStartDate;
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('1923-01-01' AS DATE), CAST('2023-01-01' AS DATE)) AS CenturyDifference;
+----
+5217
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('0001-01-01' AS DATETIME), CAST('2023-01-01' AS DATETIME)) AS MillenniaDifference;
+----
+15250
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('1923-01-01' AS DATE), CAST('2023-01-01' AS DATE)) AS CenturyDifference;
+----
+400
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('0001-01-01' AS DATETIME), CAST('2023-01-01' AS DATETIME)) AS MillenniaDifference;
+----
+8088
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('0001-01-01' AS DATE), CAST('9999-12-31' AS DATE)) AS Date_FullRange;
+----
+15250
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('1753-01-01' AS DATETIME), CAST('9999-12-31' AS DATETIME)) AS Datetime_FullRange;
+----
+15250
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('0001-01-01' AS DATETIME), CAST('9999-12-31' AS DATETIME)) AS Datetime_FullRange_Error;
+----
+15250
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('0001-01-01 00:00:00.000000' AS DATETIME2), CAST('9999-12-31 23:59:59.999999' AS DATETIME2)) AS Datetime2_FullRange;
+----
+15250
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:59:59' AS SMALLDATETIME)) AS Smalldatetime_FullRange;
+----
+9362
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('1753-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:59:59' AS SMALLDATETIME)) AS Smalldatetime_FullRange_Error;
+----
+15250
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('9999-12-31 23:59:59' AS SMALLDATETIME)) AS Smalldatetime_FullRange_Error;
+----
+15250
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('0001-01-01 00:00:00.000000 +00:00' AS DATETIMEOFFSET), CAST('9999-12-31 23:59:59.999999 +00:00' AS DATETIMEOFFSET)) AS DatetimeOffset_FullRange;
+----
+15250
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('0001-01-01' AS DATE), CAST('9999-12-31' AS DATE)) AS Date_FullRange;
+----
+39995
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('1753-01-01' AS DATETIME), CAST('9999-12-31' AS DATETIME)) AS Datetime_FullRange;
+----
+32987
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('0001-01-01' AS DATETIME), CAST('9999-12-31' AS DATETIME)) AS Datetime_FullRange_Error;
+----
+39995
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('0001-01-01 00:00:00.000000' AS DATETIME2), CAST('9999-12-31 23:59:59.999999' AS DATETIME2)) AS Datetime2_FullRange;
+----
+39995
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:59:59' AS SMALLDATETIME)) AS Smalldatetime_FullRange;
+----
+717
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('1753-01-01 00:00:00' AS SMALLDATETIME), CAST('2079-06-06 23:59:59' AS SMALLDATETIME)) AS Smalldatetime_FullRange_Error;
+----
+1305
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('1900-01-01 00:00:00' AS SMALLDATETIME), CAST('9999-12-31 23:59:59' AS SMALLDATETIME)) AS Smalldatetime_FullRange_Error;
+----
+32399
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('0001-01-01 00:00:00.000000 +00:00' AS DATETIMEOFFSET), CAST('9999-12-31 23:59:59.999999 +00:00' AS DATETIMEOFFSET)) AS DatetimeOffset_FullRange;
+----
+39995
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('0001-01-01' AS DATE), CAST('9999-01-01 23:59:59' AS DATETIME)) AS DateToDatetime;
+----
+15250
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('0001-01-01' AS DATE), CAST('9999-01-01 23:59:59' AS DATETIME)) AS DateToDatetime;
+----
+39992
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('1753-01-01 00:00:00' AS DATETIME), CAST('9999-01-01 23:59:59.999' AS DATETIME2)) AS DatetimeToDatetime2;
+----
+15250
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('0001-01-01 00:00:00+00:00' AS DATETIMEOFFSET), CAST('2079-06-06' AS SMALLDATETIME)) AS DatetimeOffsetToSmalldatetime;
+----
+15250
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('1753-01-01 00:00:00' AS DATETIME2), CAST('1900-01-01' AS DATE)) AS Datetime2ToDate;
+----
+7669
+
+query T
+SELECT DATEDIFF_BIG(week, CAST('0001-01-01 00:00:00+00:00' AS DATETIMEOFFSET), CAST('1753-01-01 00:00:00' AS DATETIME2)) AS DatetimeOffsetTodatetime2;
+----
+15250
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('1753-01-01 00:00:00' AS DATETIME), CAST('9999-01-01 23:59:59.999' AS DATETIME2)) AS DatetimeToDatetime2;
+----
+32984
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('0001-01-01 00:00:00+00:00' AS DATETIMEOFFSET), CAST('2079-06-06' AS SMALLDATETIME)) AS DatetimeOffsetToSmalldatetime;
+----
+8313
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('1753-01-01 00:00:00' AS DATETIME2), CAST('1900-01-01' AS DATE)) AS Datetime2ToDate;
+----
+588
+
+query T
+SELECT DATEDIFF_BIG(quarter, CAST('0001-01-01 00:00:00+00:00' AS DATETIMEOFFSET), CAST('1753-01-01 00:00:00' AS DATETIME2)) AS DatetimeOffsetTodatetime2;
+----
+7008
+
+query T
+SELECT DATEDIFF_BIG(week, '2023-01-01 00:00:00+00:00', '2023-01-08 00:00:00+05:30') AS SameTimeDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(week, '2023-01-01 00:00:00+00:00', '2023-01-08 05:30:00+05:30') AS SameTimeDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(week, '2023-01-01 00:00:00-05:00', '2023-01-01 00:00:00+01:00') AS StartEarlierDifferentZone;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(week, '2024-01-05 23:59:59+00:00', '2024-01-06 00:00:01+05:30') AS CrossWeekBoundary;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(week, '2000-01-01 00:00:00+00:00', '2023-01-01 00:00:00+10:00') AS LargeIntervalDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(week, '2023-01-01 00:00:00+05:30', '2000-01-01 00:00:00+00:00') AS ReverseIntervalDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(quarter, '2023-01-01 00:00:00+00:00', '2023-04-01 00:00:00+05:30') AS SameTimeDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(quarter, '2023-01-01 00:00:00+00:00', '2023-04-01 05:30:00+05:30') AS SameTimeDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(quarter, '2023-01-01 00:00:00-05:00', '2023-01-01 00:00:00+01:00') AS StartEarlierDifferentZone;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(quarter, '2023-12-31 23:59:59+00:00', '2024-01-01 00:00:01+05:30') AS CrossQuarterBoundary;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(quarter, '2000-01-01 00:00:00+00:00', '2023-01-01 00:00:00+10:00') AS LargeIntervalDifferentOffsets;
+----
+NULL
+
+query T
+SELECT DATEDIFF_BIG(quarter, '2023-01-01 00:00:00+05:30', '2000-01-01 00:00:00+00:00') AS ReverseIntervalDifferentOffsets;
+----
+NULL
+
+statement ok
+DROP VIEW datediff_big_vu_prepare_v1;
+
+statement ok
+DROP VIEW datediff_big_vu_prepare_v2;
+
+statement ok
+DROP VIEW datediff_big_vu_prepare_v3;
+
+statement ok
+DROP VIEW datediff_big_vu_prepare_v4;
+
+statement ok
+DROP VIEW datediff_big_vu_prepare_v5;
+
+statement ok
+DROP VIEW datediff_big_vu_prepare_v6;
+
+statement ok
+DROP VIEW datediff_big_vu_prepare_v7;
+
+statement ok
+DROP VIEW datediff_big_vu_prepare_v8;
+
+statement ok
+DROP VIEW datediff_big_vu_prepare_v9;
+
+statement ok
+DROP VIEW datediff_big_vu_prepare_v10;
+
+statement ok
+DROP VIEW datediff_big_vu_prepare_v11;
+
+statement ok
+DROP VIEW datediff_big_vu_prepare_v13;
+
+statement ok
+DROP PROCEDURE datediff_big_vu_prepare_p1;
+
+statement ok
+DROP PROCEDURE datediff_big_vu_prepare_p2;
+
+statement ok
+DROP PROCEDURE datediff_big_vu_prepare_p3;
+
+statement ok
+DROP PROCEDURE datediff_big_vu_prepare_p4;
+
+statement ok
+DROP PROCEDURE datediff_big_vu_prepare_p5;
+
+statement ok
+DROP PROCEDURE datediff_big_vu_prepare_p6;
+
+statement ok
+DROP PROCEDURE datediff_big_vu_prepare_p7;
+
+statement ok
+DROP PROCEDURE datediff_big_vu_prepare_p11;
+
+statement ok
+DROP PROCEDURE datediff_big_vu_prepare_p12;
+
+statement ok
+DROP PROCEDURE datediff_big_vu_prepare_p13;
+

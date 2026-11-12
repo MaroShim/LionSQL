@@ -1,0 +1,86 @@
+# test/slt_proc/babelfish_oracle/412_babel_babel_646.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-646.sql
+
+statement ok
+create table t1 ( a int )
+
+statement ok
+create procedure my_proc as
+PRINT 'OK'
+
+statement ok
+create procedure test_proc1 as
+execute my_proc
+execute [my_proc]
+
+statement ok
+create procedure test_proc2 as
+execute my_proc
+execute [my_proc]
+
+statement ok
+create procedure test_proc3 as
+execute my_proc
+execute [my_proc]
+select 123
+
+statement ok
+create procedure test_proc4 as
+execute my_proc
+execute [my_proc]
+insert into t1 values (1)
+
+statement ok
+create procedure test_proc5 as
+execute my_proc
+execute [my_proc]
+update t1 set a = 2
+
+statement ok
+EXEC test_proc1;
+
+statement ok
+EXEC test_proc2;
+
+query T
+EXEC test_proc3;
+----
+123
+
+statement ok
+EXEC test_proc4;
+
+query T
+select * from t1;
+----
+1
+
+statement ok
+EXEC test_proc5;
+
+query T
+select * from t1;
+----
+2
+
+statement ok
+drop procedure test_proc1
+
+statement ok
+drop procedure test_proc2
+
+statement ok
+drop procedure test_proc3
+
+statement ok
+drop procedure test_proc4
+
+statement ok
+drop procedure test_proc5
+
+statement ok
+drop procedure my_proc
+
+statement ok
+drop table t1
+

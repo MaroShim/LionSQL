@@ -1,0 +1,153 @@
+# test/slt_proc/babelfish_oracle/466_babel_testruntimeerrorwithdefaultbehave.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/ErrorMapping/TestRunTimeErrorWithDefaultBehave.sql
+
+statement ok
+CREATE SCHEMA error_mapping;
+
+statement ok
+CREATE TABLE t257(c1 binary(10));
+
+statement ok
+DROP TABLE t257;
+
+statement ok
+begin transaction
+
+statement ok
+CREATE TABLE t257(c1 binary(10));
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+DROP TABLE t257;
+
+statement ok
+SET XACT_ABORT ON;
+
+statement ok
+begin transaction
+
+statement ok
+CREATE TABLE t257(c1 binary(10));
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+DROP TABLE t257;
+
+statement ok
+SET XACT_ABORT OFF;
+
+statement ok
+CREATE TABLE t257(c1 binary(10));
+
+statement ok
+if @@error > 0 select cast('Compile time error' as text);
+
+statement ok
+begin transaction;
+
+statement ok
+if @@trancount > 0 rollback transaction;
+
+statement ok
+set xact_abort ON;
+
+statement ok
+if @@trancount > 0 rollback transaction;
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+DROP TABLE t257;
+
+query T
+SELECT DATEPART(xyz, CAST('2012-12-12' AS date));
+----
+NULL
+
+statement ok
+begin transaction
+
+query T
+SELECT DATEPART(xyz, CAST('2012-12-12' AS date));
+----
+NULL
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+SET XACT_ABORT ON;
+
+statement ok
+begin transaction
+
+query T
+SELECT DATEPART(xyz, CAST('2012-12-12' AS date));
+----
+NULL
+
+statement ok
+if (@@trancount > 0) rollback tran
+
+statement ok
+SET XACT_ABORT OFF;
+
+statement ok
+create procedure error_mapping.ErrorHandling1 as
+begin
+	begin try
+		select 1
+		SELECT DATEPART(xyz, CAST('2012-12-12' AS date));
+	end try
+	begin catch
+		select xact_state();
+	end catch
+	select @@trancount;
+end
+
+statement ok
+if @@error > 0 select cast('Compile time error' as text)
+
+statement ok
+begin transaction;
+
+query T
+exec error_mapping.ErrorHandling1;
+----
+NULL
+NULL
+1
+
+statement ok
+if @@trancount > 0 rollback tran;
+
+statement ok
+set xact_abort ON;
+
+statement ok
+begin transaction;
+
+query T
+exec error_mapping.ErrorHandling1;
+----
+NULL
+NULL
+1
+
+statement ok
+if @@trancount > 0 rollback tran;
+
+statement ok
+set xact_abort OFF;
+
+statement ok
+drop procedure error_mapping.ErrorHandling1;
+
+statement ok
+DROP SCHEMA error_mapping;
+

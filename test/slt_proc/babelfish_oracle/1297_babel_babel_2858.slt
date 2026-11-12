@@ -1,0 +1,29 @@
+# test/slt_proc/babelfish_oracle/1297_babel_babel_2858.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL_2858-vu-prepare.sql, test/babelfish/raw/BABEL_2858-vu-verify.sql, test/babelfish/raw/BABEL_2858-vu-cleanup.sql
+
+statement ok
+create table babel_2858_t1(num integer, word varchar(10));
+
+statement ok
+create table babel_2858_t1_deleted(num integer, nextnum integer);
+
+statement ok
+SELECT * FROM babel_2858_t1
+
+statement ok
+delete babel_2858_t1
+output babel_2858_t1.word
+from babel_2858_t1
+inner join babel_2858_t1_deleted
+ on babel_2858_t1.num=babel_2858_t1_deleted.num
+where babel_2858_t1.num=14;
+
+statement ok
+DECLARE @x xml (dbo.f);
+
+statement ok
+DROP TABLE IF EXISTS babel_2858_t1
+
+statement ok
+DROP TABLE IF EXISTS babel_2858_t1_deleted
+

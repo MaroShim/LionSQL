@@ -1,0 +1,8 @@
+# test/slt_proc/babelfish_oracle/634_babel_difference.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/functions/string_functions/difference.sql
+
+query T
+SELECT DIFFERENCE('Green', 'Greene');
+----
+4
+

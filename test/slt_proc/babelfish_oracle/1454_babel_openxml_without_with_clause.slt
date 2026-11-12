@@ -1,0 +1,220 @@
+# test/slt_proc/babelfish_oracle/1454_babel_openxml_without_with_clause.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/xml/openxml_without_with_clause-vu-prepare.sql, test/babelfish/raw/xml/openxml_without_with_clause-vu-verify.sql, test/babelfish/raw/xml/openxml_without_with_clause-vu-cleanup.sql
+
+statement ok
+CREATE PROCEDURE openxml_without_with_dep_proc1(@xml nvarchar(max)) 
+AS 
+BEGIN
+    DECLARE @handle INT;
+    EXEC sp_xml_preparedocument @handle OUTPUT, @xml;
+    SELECT 
+        id, parentid, nodetype, localname, prefix, namespaceuri, datatype, prev, text
+    FROM OPENXML(@handle, '/') ORDER BY id;
+    EXEC sp_xml_removedocument @handle;
+END 
+
+statement ok
+CREATE PROCEDURE openxml_without_with_dep_proc2(@xml nvarchar(max)) 
+AS 
+BEGIN
+    DECLARE @handle INT;
+    EXEC sp_xml_preparedocument @handle OUTPUT, @xml;
+    SELECT 
+        id, parentid, nodetype, localname, prefix, namespaceuri, datatype, prev, text
+    FROM OPENXML(@handle, '/', 1) ORDER BY id;
+    EXEC sp_xml_removedocument @handle;
+END 
+
+statement ok
+CREATE TABLE babel_6046_school_details_raw_xml (
+    id INT,
+    student NVARCHAR(MAX)
+);
+
+statement ok
+CREATE TABLE babel_6046_school_details (
+    id sys.BIGINT,
+    parentid sys.BIGINT,
+    nodetype sys.INT,
+    localname sys.NVARCHAR(MAX),
+    prefix sys.NVARCHAR(MAX),
+    namespaceuri sys.NVARCHAR(MAX),
+    datatype sys.NVARCHAR(MAX),
+    prev sys.BIGINT,
+    text sys.NTEXT
+);
+
+statement ok
+CREATE TRIGGER  babel_6046_school_details_raw_xml_to_table
+ON babel_6046_school_details_raw_xml
+AFTER INSERT
+AS
+BEGIN
+    DECLARE @xml nvarchar(1000);
+    SELECT @xml = student FROM inserted;
+    DECLARE @handle INT;
+    EXEC sp_xml_preparedocument @handle OUTPUT, @xml;
+    INSERT INTO babel_6046_school_details SELECT * FROM OPENXML(@handle, '/');
+    EXEC sp_xml_removedocument @handle
+END;
+
+statement ok
+DECLARE @xml nvarchar(1000) = '<root><parent><child>content</child></parent></root>'
+DECLARE @handle INT
+EXEC sp_xml_preparedocument @handle OUTPUT, @xml
+SELECT 
+    parent.localname as ParentName,
+    child.localname as ChildName,
+    child.parentid,
+    parent.id,
+    'Relationship Test' as TestType
+FROM OPENXML(@handle, '/') parent
+INNER JOIN OPENXML(@handle, '/') child ON parent.id = child.parentid
+WHERE parent.nodetype = 1 AND child.nodetype = 1
+EXEC sp_xml_removedocument @handle
+
+statement ok
+DECLARE @xml nvarchar(1000) = '<?xml version="1.0"?>
+<!-- Root comment -->
+<root xmlns="http://default.ns" xmlns:prefix="http://prefix.ns" attr="rootattr">
+    Text content
+    <element prefix:attr="prefixedattr">Element text</element>
+    <!-- Element comment -->
+    <![CDATA[CDATA section content]]>
+    <?processing-instruction data?>
+    <selfclosing/>
+</root>'
+DECLARE @handle INT
+EXEC sp_xml_preparedocument @handle OUTPUT, @xml
+SELECT 
+    id,
+    parentid,
+    nodetype,
+    CASE nodetype
+        WHEN 1 THEN 'Element'
+        WHEN 2 THEN 'Attribute' 
+        WHEN 3 THEN 'Text'
+        WHEN 4 THEN 'CDATA'
+        WHEN 7 THEN 'Processing Instruction'
+        WHEN 8 THEN 'Comment'
+        ELSE 'Other'
+    END as NodeTypeName,
+    localname,
+    prefix,
+    namespaceuri,
+    prev,
+    SUBSTRING(CAST(text as NVARCHAR(MAX)), 1, 50) as TextContent
+FROM OPENXML(@handle, '/')
+ORDER BY id
+EXEC sp_xml_removedocument @handle
+
+statement error
+DECLARE @xml NVARCHAR(MAX) = '<root><unclosed>content</root>'
+DECLARE @handle INT
+EXEC sp_xml_preparedocument @handle OUTPUT, @xml
+SELECT * FROM OPENXML(@handle, '/') ORDER BY id;
+EXEC sp_xml_removedocument @handle
+
+statement error
+DECLARE @handle INT = 999999;
+SELECT * FROM OPENXML(@handle, '/') ORDER BY id;
+
+statement error
+DECLARE @xml nvarchar(1000) = '<root>content</root>'
+DECLARE @handle INT
+EXEC sp_xml_preparedocument @handle OUTPUT, @xml
+SELECT * FROM OPENXML(@handle, 'invalid[xpath') ORDER BY id;
+EXEC sp_xml_removedocument @handle
+
+statement ok
+DECLARE @xml nvarchar(1000) = '
+<catalog xmlns:book="http://books.com" xmlns:author="http://authors.com">
+    <book:book id="1" book:isbn="123456789">
+        <book:title>SQL Server Guide</book:title>
+        <author:author author:id="100">
+            <author:name>John Doe</author:name>
+            <author:email>john@example.com</author:email>
+        </author:author>
+        <book:chapters>
+            <book:chapter number="1">Introduction</book:chapter>
+            <book:chapter number="2">Advanced Topics</book:chapter>
+        </book:chapters>
+        <!-- Publication info -->
+        <book:published>2024</book:published>
+    </book:book>
+</catalog>'
+DECLARE @handle INT
+EXEC sp_xml_preparedocument @handle OUTPUT, @xml
+SELECT 
+    id,
+    parentid,
+    nodetype,
+    localname,
+    prefix,
+    namespaceuri,
+    CASE 
+        WHEN LEN(CAST(text as NVARCHAR(MAX))) > 50 
+        THEN SUBSTRING(CAST(text as NVARCHAR(MAX)), 1, 50) + '...'
+        ELSE CAST(text as NVARCHAR(MAX))
+    END as TextContent
+FROM OPENXML(@handle, '/')
+ORDER BY id
+EXEC sp_xml_removedocument @handle
+
+statement ok
+DECLARE @xml nvarchar(1000) = '<root 
+    veryLongAttributeName="VeryLongAttributeValueThatExceedsNormalLengthExpectations"
+    emptyAttr=""
+    numericAttr="12345.67"
+    booleanAttr="true"
+    dateAttr="2024-01-01T10:30:00Z">
+    <emptyElement></emptyElement>
+    <whitespaceElement>   </whitespaceElement>
+    <numberElement>42</numberElement>
+    <decimalElement>3.14159</decimalElement>
+    <specialChars>&lt;&gt;&amp;&quot;&apos;</specialChars>
+</root>'
+DECLARE @handle INT
+EXEC sp_xml_preparedocument @handle OUTPUT, @xml
+SELECT 
+    localname,
+    nodetype,
+    LEN(CAST(text as NVARCHAR(MAX))) as TextLength,
+    CAST(text as NVARCHAR(MAX)) as TextContent
+FROM OPENXML(@handle, '/')
+WHERE nodetype IN (1, 2, 3)
+ORDER BY id
+EXEC sp_xml_removedocument @handle
+
+statement ok
+SELECT * FROM babel_6046_school_details_raw_xml
+
+statement ok
+SELECT * FROM babel_6046_school_details
+
+statement ok
+INSERT INTO babel_6046_school_details_raw_xml (id, student)
+VALUES (1, '<student classid="1" rollid="1" studentname="StudentA" />')
+
+statement ok
+SELECT * FROM babel_6046_school_details
+
+statement ok
+INSERT INTO babel_6046_school_details_raw_xml (id, student)
+VALUES (2, '<student classid="1" rollid="2" studentname="StudentB" />')
+
+statement ok
+SELECT * FROM babel_6046_school_details
+
+statement ok
+DROP PROCEDURE openxml_without_with_dep_proc1
+
+statement ok
+DROP PROCEDURE openxml_without_with_dep_proc2
+
+statement ok
+DROP TABLE babel_6046_school_details_raw_xml
+
+statement ok
+DROP TABLE babel_6046_school_details
+

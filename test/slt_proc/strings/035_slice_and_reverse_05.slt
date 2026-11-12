@@ -1,0 +1,29 @@
+# test/slt_proc/strings/035_slice_and_reverse_05.slt
+# T-SQL LEFT/RIGHT/SUBSTRING/REVERSE/LEN on 'OptimisticConcurrency'
+
+query TTTT
+SELECT LEFT('OptimisticConcurrency', 10), RIGHT('OptimisticConcurrency', 11), SUBSTRING('OptimisticConcurrency', 11, 4), REVERSE('OptimisticConcurrency');
+----
+Optimistic Concurrency Conc ycnerrucnoCcitsimitpO
+
+query TT
+SELECT UPPER('Optimistic'), LOWER('Concurrency');
+----
+OPTIMISTIC concurrency
+
+query I
+SELECT LEN('OptimisticConcurrency');
+----
+21
+
+statement ok
+CREATE PROCEDURE sp_str_slice_35 @in VARCHAR(50)
+AS
+BEGIN
+    SELECT CONCAT(LEFT(@in, 10), '-', RIGHT(@in, 11), ':', CAST(LEN(@in) AS VARCHAR(10)));
+END;
+
+query T
+EXEC sp_str_slice_35 'OptimisticConcurrency';
+----
+Optimistic-Concurrency:21

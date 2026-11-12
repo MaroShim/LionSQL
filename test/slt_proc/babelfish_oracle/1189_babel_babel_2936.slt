@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1189_babel_babel_2936.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-2936.sql
+
+statement ok
+CREATE TABLE dbo.t2936 (c XML NULL);
+
+statement ok
+DROP TABLE dbo.t2936;
+

@@ -1,0 +1,9 @@
+# test/slt_proc/babelfish_oracle/1121_babel_babel_1756.slt
+# Babelfish Oracle Suite harvested from test/babelfish/raw/BABEL-1756.sql
+
+statement ok
+CREATE TABLE foo(test_collation TEXT COLLATE "default")
+
+statement ok
+DROP TABLE foo;
+
