@@ -1,0 +1,39 @@
+# test/slt_proc/28_throw_and_raiserror.slt
+# THROW / RAISERROR caught by TRY...CATCH
+
+statement ok
+CREATE PROCEDURE sp_throw_caught
+AS
+BEGIN
+    BEGIN TRY
+        THROW 50001, 'custom failure', 1;
+    END TRY
+    BEGIN CATCH
+        SELECT ERROR_NUMBER(), ERROR_MESSAGE();
+    END CATCH
+END;
+
+query IT
+EXEC sp_throw_caught;
+----
+50001 custom failure
+
+statement ok
+CREATE PROCEDURE sp_raiserror_caught
+AS
+BEGIN
+    BEGIN TRY
+        RAISERROR('raised', 16, 1);
+    END TRY
+    BEGIN CATCH
+        SELECT ERROR_MESSAGE();
+    END CATCH
+END;
+
+query T
+EXEC sp_raiserror_caught;
+----
+raised
+
+statement error
+THROW 50002, 'uncaught', 1;

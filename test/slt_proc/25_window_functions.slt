@@ -1,0 +1,35 @@
+# test/slt_proc/25_window_functions.slt
+# ROW_NUMBER, RANK, DENSE_RANK
+
+statement ok
+CREATE TABLE win_scores (id INT PRIMARY KEY, score INT);
+
+statement ok
+INSERT INTO win_scores VALUES (1, 90), (2, 80), (3, 90), (4, 70);
+
+query II
+SELECT id, ROW_NUMBER() OVER (ORDER BY id) FROM win_scores ORDER BY id;
+----
+1 1
+2 2
+3 3
+4 4
+
+query II
+SELECT id, RANK() OVER (ORDER BY score DESC) FROM win_scores ORDER BY id;
+----
+1 1
+2 3
+3 1
+4 4
+
+query II
+SELECT id, DENSE_RANK() OVER (ORDER BY score DESC) FROM win_scores ORDER BY id;
+----
+1 1
+2 2
+3 1
+4 3
+
+statement ok
+DROP TABLE win_scores;

@@ -1,0 +1,42 @@
+# test/slt_proc/24_cast_convert_and_validation.slt
+# CAST, CONVERT, TRY_CAST, ISNUMERIC, ISDATE
+
+query I
+SELECT CAST('123' AS INT);
+----
+123
+
+query T
+SELECT CAST(123 AS VARCHAR(10));
+----
+123
+
+query I
+SELECT CONVERT(INT, '77');
+----
+77
+
+query I
+SELECT ISNUMERIC('123.45');
+----
+1
+
+query I
+SELECT ISNUMERIC('abc');
+----
+0
+
+query I
+SELECT ISDATE('2026-11-12');
+----
+1
+
+query I
+SELECT ISDATE('not a date');
+----
+0
+
+query T
+SELECT ISNULL(CAST(TRY_CAST('abc' AS INT) AS VARCHAR(10)), 'NULL');
+----
+NULL

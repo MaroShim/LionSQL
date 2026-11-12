@@ -1,0 +1,25 @@
+# test/slt_proc/29_identity_and_scope.slt
+# IDENTITY columns and @@IDENTITY
+
+statement ok
+CREATE TABLE id_t (id INT IDENTITY(1,1) PRIMARY KEY, name VARCHAR(10));
+
+statement ok
+INSERT INTO id_t (name) VALUES ('a');
+
+statement ok
+INSERT INTO id_t (name) VALUES ('b');
+
+query IT
+SELECT id, name FROM id_t ORDER BY id;
+----
+1 a
+2 b
+
+query I
+SELECT @@IDENTITY;
+----
+2
+
+statement ok
+DROP TABLE id_t;

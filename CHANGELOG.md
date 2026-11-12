@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
-- expand Gate 5 T-SQL stored procedure conformance from 14 to 20 suites (`test/slt_proc/15` to `20`: string functions, JSON, COMPRESS/DECOMPRESS and system variables, date/time, conditional functions, MERGE) and sync release gate documentation
+- expand Gate 5 T-SQL stored procedure conformance from 14 to 30 suites (`test/slt_proc/15` to `30`: string, JSON, compression and system variables, date/time, conditional, MERGE, math, CAST, window, paging, ROWCOUNT, THROW, IDENTITY, set operations) and sync release gate documentation
 - complete 10-point documentation system revamp and engineering knowledge base upgrade (`DOC-REVAMP-10`):
   - author official Korean versions for 4 core manuals: `doc/ARCHITECTURE.ko.md`, `doc/BENCHMARK.ko.md`, `doc/CLIENT_TOOL_INTEGRATION.ko.md`, and `doc/internal/VDBE.ko.md` with complete technical fidelity
   - establish persistent negative knowledge catalog in `notes/SPEC_OUT_DECISIONS.ko.md` documenting the theoretical rationale and adopted alternatives for all 21 permanently rejected architecture items

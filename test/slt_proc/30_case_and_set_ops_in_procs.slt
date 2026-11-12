@@ -1,0 +1,40 @@
+# test/slt_proc/30_case_and_set_ops_in_procs.slt
+# CASE expressions, UNION/INTERSECT/EXCEPT inside procedures
+
+statement ok
+CREATE PROCEDURE sp_grade @score INT
+AS
+BEGIN
+    SELECT CASE WHEN @score >= 90 THEN 'A' WHEN @score >= 80 THEN 'B' ELSE 'C' END;
+END;
+
+query T
+EXEC sp_grade 95;
+----
+A
+
+query T
+EXEC sp_grade 85;
+----
+B
+
+query T
+EXEC sp_grade 10;
+----
+C
+
+query I
+SELECT 1 UNION ALL SELECT 1 ORDER BY 1;
+----
+1
+1
+
+query I
+SELECT 1 EXCEPT SELECT 2;
+----
+1
+
+query I
+SELECT 2 INTERSECT SELECT 2;
+----
+2

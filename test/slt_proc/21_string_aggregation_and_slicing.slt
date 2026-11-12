@@ -1,0 +1,66 @@
+# test/slt_proc/21_string_aggregation_and_slicing.slt
+# LEFT, RIGHT, SUBSTRING, TRIM family, STRING_AGG, LEN, CHAR/ASCII
+
+query T
+SELECT LEFT('LionSQL', 4);
+----
+Lion
+
+query T
+SELECT RIGHT('LionSQL', 3);
+----
+SQL
+
+query T
+SELECT SUBSTRING('LionSQL', 5, 3);
+----
+SQL
+
+query T
+SELECT TRIM('   abc   ');
+----
+abc
+
+query T
+SELECT LTRIM('   abc');
+----
+abc
+
+query T
+SELECT RTRIM('abc   ');
+----
+abc
+
+query I
+SELECT LEN('LionSQL');
+----
+7
+
+query I
+SELECT ASCII('A');
+----
+65
+
+query T
+SELECT CHAR(65);
+----
+A
+
+query T
+SELECT REPLACE('abc', 'b', 'x');
+----
+axc
+
+statement ok
+CREATE TABLE agg_names (id INT PRIMARY KEY, name VARCHAR(20));
+
+statement ok
+INSERT INTO agg_names VALUES (1, 'a'), (2, 'b'), (3, 'c');
+
+query T
+SELECT STRING_AGG(name, ',') FROM agg_names;
+----
+a,b,c
+
+statement ok
+DROP TABLE agg_names;

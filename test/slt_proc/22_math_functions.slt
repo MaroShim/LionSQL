@@ -1,0 +1,42 @@
+# test/slt_proc/22_math_functions.slt
+# Numeric built-in functions
+
+query I
+SELECT ABS(-42);
+----
+42
+
+query I
+SELECT CEILING(4.2);
+----
+5
+
+query I
+SELECT FLOOR(4.9);
+----
+4
+
+query I
+SELECT SIGN(-15);
+----
+-1
+
+query R
+SELECT POWER(2, 8);
+----
+256.000
+
+query R
+SELECT SQRT(16);
+----
+4.000
+
+query R
+SELECT ROUND(123.456, 2);
+----
+123.460
+
+query I
+SELECT 17 % 5;
+----
+2

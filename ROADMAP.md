@@ -75,7 +75,7 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 | **Phase 5** | `v0.16.0` - `v0.24.0` | **Enterprise Governance, Security & Engine Decoupling**<br>Layer separation (`pkg/engine`), WAL group commit, RBAC, CBO DP join ordering, migrations CLI, prepared LRU cache. | **100% Completed** |
 | **Phase 6** | `v0.90.0`<br>(Betas 0~3) | **Production Hardening & Feature Freeze Baseline**<br>Single-binary CLI (`lionsql`), Web Studio suite, memory governor, OCC 5-point tuning, TDS positional mapping, 2-Tier query engine. | **100% Completed** |
 | **Phase 7A** | `v0.92.0` | **P0 Zero-Defect Reliability Baseline**<br>Comprehensive 100-scope code audit with P0 (Must-Fix 31 items) 100% resolved. Zero OOM/crash/corruption/security injection guaranteed. Tagged as foundational reliability baseline. | **Active / 74% Complete** |
-| **Phase 7B** | `v0.93.0` - `v0.95.0`<br>(RC1) | **P1 Hardening, Durability Verification & 6 Golden Release Gates**<br>P1 (53 items) enterprise stabilization, 10 production apps verified, `scripts/release.sh` 6 Golden Release Gates automated, `crashtest` (D1~D4), SQLLogicTest 409k, T-SQL 20-Suite, `soaktest` zero leaks. | **Scheduled** |
+| **Phase 7B** | `v0.93.0` - `v0.95.0`<br>(RC1) | **P1 Hardening, Durability Verification & 6 Golden Release Gates**<br>P1 (53 items) enterprise stabilization, 10 production apps verified, `scripts/release.sh` 6 Golden Release Gates automated, `crashtest` (D1~D4), SQLLogicTest 409k, T-SQL 30-Suite, `soaktest` zero leaks. | **Scheduled** |
 | **Phase 8** | `v1.0.0 LTS` | **Official 1.0 Production Release & Long-Term Support**<br>6 Golden Release Gates verified, 100-step audit sign-off, Always On HA, lossless CDC, certified drivers, LTS release sign-off (WiredTiger MVCC + In-Memory OCC). | **Target Q4 2026** |
 | **Phase 9A** | `v1.10.0` | **Logical Namespace & Local Cross-DB Engine**<br>Prefix-based logical database namespace (`__db_<dbname>_*`), local cross-DB join, virtual catalog transparent filtering, Sonic SIMD JSON replication. | **Target Q1 2027** |
 | **Phase 9B** | `v1.20.0` | **Native Pure-Go B+Tree Engine Preview & Unified Projection**<br>Native Pure-Go B+Tree storage engine developer preview (`--storage=purego`, `CGO_ENABLED=0`), cross-engine unified projection pushdown decoding, and Materialized View Virtual Alias (`FEAT-MATVIEW-ALIAS-1`). | **Target Q1-Q2 2027** |
@@ -116,7 +116,7 @@ Core Unit &   13-Domain     TPC-C Extreme                   SQLLogicTest  T-SQL 
 4. **Gate 4: SQLLogicTest Relational Oracle (409,194 Queries, 100% Conformance)**:
    - Executes SQLite/PostgreSQL SQLLogicTest standard test files (`bin/sqllogictest test/slt/core/`).
    - 90 files and 409,194 queries pass with 100% identical row sets and zero syntax or type coercion errors.
-5. **Gate 5: T-SQL Stored Procedure 20-Suite Convergence (100% PASS)**:
+5. **Gate 5: T-SQL Stored Procedure 30-Suite Convergence (100% PASS)**:
    - Executes `test/slt_proc/` covering Microsoft SQL Server procedural grammar:
    - Variables (`@var`), control flow (`IF/ELSE`, `WHILE`), `TRY...CATCH`, nested transactions, forward-only cursors, return codes, dynamic SQL (`sp_executesql`), table variables (`@table`), `GOTO`/labels, recursive CTEs, and parameter binds.
 6. **Gate 6: `SIGKILL` Crash Recovery Oracle & Leak-Free Soak Sentinel**:
@@ -202,7 +202,7 @@ Core Unit &   13-Domain     TPC-C Extreme                   SQLLogicTest  T-SQL 
 * **Official Release `v0.91.0` & Multi-Platform Static Binaries**:
   Packaged and published official standalone static binaries for macOS (arm64), Linux (amd64), and Windows (amd64) with zero external dynamic dependencies.
 * **The 6 Golden Release Verification Gates (`scripts/release.sh`)**:
-  Permanently integrated 6 mandatory automated verification gates into `scripts/release.sh` (Core Unit & 100k TPS, 13-Domain Smoke, TPC-C >700k tpmC, SQLLogicTest 409k queries, T-SQL 20-Suite, and SIGKILL Crash/Leak Sentinels), accompanied by technical whitepaper ([`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)).
+  Permanently integrated 6 mandatory automated verification gates into `scripts/release.sh` (Core Unit & 100k TPS, 13-Domain Smoke, TPC-C >700k tpmC, SQLLogicTest 409k queries, T-SQL 30-Suite, and SIGKILL Crash/Leak Sentinels), accompanied by technical whitepaper ([`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)).
 * **WiredTiger Crash Durability Hotfix (`crashtest`)**:
   Real-time detection and resolution of `transaction_sync=(enabled=true,method=none)` in `pkg/storage/wiredtiger/wt_engine.go` during Gate 6 crash testing, achieving 100% data integrity and zero committed row loss across 3 rounds of 7,853 transactions under non-graceful `kill -9` termination.
 * **Single-Binary Embedded SPA Web Server Hosting (`WEB-SPA-1`)**:

@@ -562,7 +562,7 @@ LionSQL strictly adheres to a **3-Stage Verification Pipeline** for every change
      # 2. 8-core concurrent verification (107 files, 551,217 queries in 47.2s)
      ./bin/sqllogictest -dir test/slt -parallel 8
 
-     # 3. Procedural (T-SQL/Babelfish) verification (20 suites, 100% PASS)
+     # 3. Procedural (T-SQL/Babelfish) verification (30 suites, 100% PASS)
      go test -tags wiredtiger -v -race ./test/slt_proc/...
      ```
 3. **Commit Integrity**:

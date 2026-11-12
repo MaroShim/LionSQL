@@ -1,0 +1,37 @@
+# test/slt_proc/23_datetime_parts_and_arithmetic.slt
+# DATEADD, DATEPART, DATENAME, YEAR/MONTH/DAY
+
+query I
+SELECT YEAR('2026-11-12');
+----
+2026
+
+query I
+SELECT MONTH('2026-11-12');
+----
+11
+
+query I
+SELECT DAY('2026-11-12');
+----
+12
+
+query I
+SELECT DATEPART(year, '2026-11-12');
+----
+2026
+
+query T
+SELECT DATENAME(month, '2026-11-12');
+----
+November
+
+query T
+SELECT CONVERT(VARCHAR(10), DATEADD(day, 7, '2026-11-12'), 120);
+----
+2026-11-19
+
+query I
+SELECT DATEDIFF(month, '2026-01-15', '2026-04-15');
+----
+3

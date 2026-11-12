@@ -561,7 +561,7 @@ LionSQL은 모든 코드 변경, 리팩토링, 기능 추가 시 엄격한 **3�
      # 2. 8코어 병렬 초고속 검증 (107개 파일, 551,217 쿼리 47.2초 완주)
      ./bin/sqllogictest -dir test/slt -parallel 8
 
-     # 3. 절차형(T-SQL/Babelfish) 스위트 검증 (20개 스위트 100% PASS)
+     # 3. 절차형(T-SQL/Babelfish) 스위트 검증 (30개 스위트 100% PASS)
      go test -tags wiredtiger -v -race ./test/slt_proc/...
      ```
 3. **커밋 무결성 규약 (Commit)**:
