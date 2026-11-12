@@ -1148,7 +1148,8 @@ func hasAggregates(projections []Projection) bool {
 		pUpper := strings.ToUpper(p.Expr.String())
 		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
 			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
-			strings.Contains(pUpper, "MAX(") || strings.Contains(pUpper, "PERCENTILE_CONT(") ||
+			strings.Contains(pUpper, "MAX(") || strings.Contains(pUpper, "STRING_AGG(") ||
+			strings.Contains(pUpper, "GROUP_CONCAT(") || strings.Contains(pUpper, "PERCENTILE_CONT(") ||
 			strings.Contains(pUpper, "PERCENTILE_DISC(") || strings.Contains(pUpper, "APPROX_PERCENTILE(") ||
 			strings.Contains(pUpper, "MEDIAN(") {
 			return true

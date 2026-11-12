@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - mark `-memory=performance`, `MemoryPerformance`, and legacy aliases (`OCCModeRaw`, `OCCModePerformance`) as deprecated in CLI help text, startup runtime log warning (`memoryPerformanceDeprecationNotice`), startup banner (`[DEPRECATED: use compact]`), and Go doc comments while preserving full v1.0 compatibility prior to post-1.0 removal (`DEPRECATE-OCC-PERF-1`)
 
 ### Fixed
+- resolve `STRING_AGG` / `GROUP_CONCAT` returning `NULL` in `GROUP BY` queries with `ORDER BY` or `WITHIN GROUP (ORDER BY ...)` (`FIX-GROUPBY-STRING-AGG-1`): preserve full multi-argument expression keys in `AggregateIterator`, support `STRING_AGG(...) WITHIN GROUP (ORDER BY col [ASC|DESC])` intra-group ordering, and prevent `ProjectionIterator` from overwriting pre-computed aggregate columns with scalar re-evaluation
 - resolve 8 T-SQL procedural, relational, and catalog compatibility defects uncovered by Gate 5 Babelfish oracle harvesting:
   - bind caller `@var` arguments and copy back mutated parameter slots upon `EXEC ... @param = @var OUTPUT` completion (`FIX-TSQL-OUTPUT-PARAM-1`)
   - parse and execute multi-branch chained set operations (`UNION` / `UNION ALL` / `INTERSECT` / `EXCEPT` with 3+ branches) and preserve positional right-branch columns in `execSetOpSelect` (`FIX-TSQL-UNION-CHAIN-1`)

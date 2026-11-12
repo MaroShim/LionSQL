@@ -40,16 +40,24 @@ const (
 )
 
 type aggField struct {
-	fnType     aggFuncType
-	argCol     string
-	separator  string
-	alias      string
-	rawExpr    string
-	isStar     bool
-	isLiteral  bool
-	isDistinct bool
-	percentile float64
-	parsed     proc.Expr
+	fnType      aggFuncType
+	argCol      string
+	separator   string
+	alias       string
+	rawExpr     string
+	origExpr    string
+	isStar      bool
+	isLiteral   bool
+	isDistinct  bool
+	percentile  float64
+	parsed      proc.Expr
+	orderByExpr proc.Expr
+	orderByDesc bool
+}
+
+type strOrderItem struct {
+	str string
+	key any
 }
 
 type groupAccumulator struct {
@@ -63,6 +71,7 @@ type groupAccumulator struct {
 	maxs       map[int]any
 	values     map[int][]float64
 	strLists   map[int][]string
+	strOrders  map[int][]strOrderItem
 	tDigests   map[int]*TDigest
 	distincts  map[int]map[string]struct{}
 }
@@ -261,6 +270,46 @@ func (a *AggregateIterator) parseFields() {
 			extractAggFromAST(e.Pattern)
 		case *proc.WithinGroupExpr:
 			if e.Function != nil {
+				fnName := strings.ToUpper(e.Function.Name)
+				if fnName == "STRING_AGG" || fnName == "GROUP_CONCAT" {
+					rawCall := e.String()
+					already := false
+					for _, ef := range a.fields {
+						if !ef.isLiteral && (strings.EqualFold(ef.rawExpr, rawCall) || strings.EqualFold(ef.origExpr, rawCall)) {
+							already = true
+							break
+						}
+					}
+					if !already {
+						for _, ef := range auxAggFields {
+							if !ef.isLiteral && (strings.EqualFold(ef.rawExpr, rawCall) || strings.EqualFold(ef.origExpr, rawCall)) {
+								already = true
+								break
+							}
+						}
+					}
+					if !already && len(e.Function.Args) > 0 {
+						parsedArg := e.Function.Args[0]
+						argCol := strings.Trim(strings.TrimSpace(parsedArg.String()), "\"`[]")
+						sep := ","
+						if len(e.Function.Args) > 1 {
+							sep = strings.Trim(e.Function.Args[1].String(), "'\"")
+						}
+						auxAggFields = append(auxAggFields, aggField{
+							fnType:      aggGroupConcat,
+							argCol:      argCol,
+							separator:   sep,
+							alias:       rawCall,
+							isDistinct:  e.Function.Distinct,
+							rawExpr:     rawCall,
+							origExpr:    rawCall,
+							parsed:      parsedArg,
+							orderByExpr: e.OrderBy,
+							orderByDesc: e.Desc,
+						})
+					}
+					return
+				}
 				extractAggFromAST(e.Function)
 			}
 		}
@@ -368,6 +417,7 @@ func (a *AggregateIterator) parseFields() {
 						alias:      alias,
 						isDistinct: isDistinct,
 						rawExpr:    rawCall,
+						origExpr:   exprPart,
 						parsed:     parsedArg,
 					})
 					a.schema = append(a.schema, alias)
@@ -428,6 +478,32 @@ func (a *AggregateIterator) parseFields() {
 
 			if wg, ok := ast.(*proc.WithinGroupExpr); ok && wg.Function != nil {
 				fnName := strings.ToUpper(wg.Function.Name)
+				if (fnName == "STRING_AGG" || fnName == "GROUP_CONCAT") && len(wg.Function.Args) >= 1 {
+					parsedArg := wg.Function.Args[0]
+					arg := strings.Trim(strings.TrimSpace(parsedArg.String()), "\"`[]")
+					sep := ","
+					if len(wg.Function.Args) > 1 {
+						sep = strings.Trim(wg.Function.Args[1].String(), "'\"")
+					}
+					alias := extractedAlias
+					if alias == "" {
+						alias = strings.ToLower(fnName)
+					}
+					a.fields = append(a.fields, aggField{
+						fnType:      aggGroupConcat,
+						argCol:      arg,
+						separator:   sep,
+						alias:       alias,
+						isDistinct:  wg.Function.Distinct,
+						rawExpr:     exprPart,
+						origExpr:    wg.String(),
+						parsed:      parsedArg,
+						orderByExpr: wg.OrderBy,
+						orderByDesc: wg.Desc,
+					})
+					a.schema = append(a.schema, alias)
+					continue
+				}
 				if (fnName == "PERCENTILE_CONT" || fnName == "PERCENTILE_DISC") && len(wg.Function.Args) == 1 {
 					pVal, _ := strconv.ParseFloat(wg.Function.Args[0].String(), 64)
 					arg := ""
@@ -442,7 +518,7 @@ func (a *AggregateIterator) parseFields() {
 					if alias == "" {
 						alias = strings.ToLower(fnName)
 					}
-					a.fields = append(a.fields, aggField{fnType: tType, argCol: arg, alias: alias, percentile: pVal, rawExpr: exprPart})
+					a.fields = append(a.fields, aggField{fnType: tType, argCol: arg, alias: alias, percentile: pVal, rawExpr: exprPart, origExpr: wg.String()})
 					a.schema = append(a.schema, alias)
 					continue
 				}
@@ -496,6 +572,11 @@ func (a *AggregateIterator) parseFields() {
 			colMap.indices[f.rawExpr] = fIdx
 			colMap.indices[strings.ToLower(f.rawExpr)] = fIdx
 			colMap.indices[strings.ToUpper(f.rawExpr)] = fIdx
+		}
+		if f.origExpr != "" {
+			colMap.indices[f.origExpr] = fIdx
+			colMap.indices[strings.ToLower(f.origExpr)] = fIdx
+			colMap.indices[strings.ToUpper(f.origExpr)] = fIdx
 		}
 		if f.argCol != "" {
 			if _, exists := colMap.indices[f.argCol]; !exists {
@@ -803,6 +884,21 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 				}
 			case aggGroupConcat:
 				list := acc.strLists[fIdx]
+				if f.orderByExpr != nil && len(acc.strOrders[fIdx]) > 0 {
+					items := acc.strOrders[fIdx]
+					desc := f.orderByDesc
+					sort.SliceStable(items, func(i, j int) bool {
+						cmp := CompareValues(items[i].key, items[j].key)
+						if desc {
+							return cmp > 0
+						}
+						return cmp < 0
+					})
+					list = make([]string, len(items))
+					for i, it := range items {
+						list[i] = it.str
+					}
+				}
 				if len(list) == 0 {
 					val = nil
 				} else {
@@ -915,6 +1011,11 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 								evalMap[af.rawExpr] = vals[afIdx]
 								evalMap[strings.ToUpper(af.rawExpr)] = vals[afIdx]
 								evalMap[strings.ToLower(af.rawExpr)] = vals[afIdx]
+							}
+							if af.origExpr != "" {
+								evalMap[af.origExpr] = vals[afIdx]
+								evalMap[strings.ToUpper(af.origExpr)] = vals[afIdx]
+								evalMap[strings.ToLower(af.origExpr)] = vals[afIdx]
 							}
 							if af.alias != "" {
 								evalMap[af.alias] = vals[afIdx]
@@ -1078,7 +1179,18 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 			}
 		case aggGroupConcat:
 			if val != nil {
-				acc.strLists[fIdx] = append(acc.strLists[fIdx], fmt.Sprintf("%v", val))
+				strVal := fmt.Sprintf("%v", val)
+				acc.strLists[fIdx] = append(acc.strLists[fIdx], strVal)
+				if f.orderByExpr != nil {
+					if acc.strOrders == nil {
+						acc.strOrders = make(map[int][]strOrderItem)
+					}
+					ordVal, ok := EvalTupleExpr(tuple, f.orderByExpr)
+					if !ok {
+						ordVal, _ = lookupVal(tuple, f.orderByExpr.String())
+					}
+					acc.strOrders[fIdx] = append(acc.strOrders[fIdx], strOrderItem{str: strVal, key: ordVal})
+				}
 				acc.counts[fIdx]++
 			}
 		case aggPercentileCont, aggPercentileDisc, aggMedian:

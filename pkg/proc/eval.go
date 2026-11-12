@@ -551,6 +551,17 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		return evalRowFunction(e, e.Name, e.Args, row, execSubquery)
 
 	case *WithinGroupExpr:
+		if row != nil {
+			cand := e.String()
+			if v, ok := row[cand]; ok {
+				return v, nil
+			}
+			for k, v := range row {
+				if strings.EqualFold(k, cand) {
+					return v, nil
+				}
+			}
+		}
 		return nil, nil
 
 	case *ExistsExpr:
@@ -1108,7 +1119,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 
 func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[string]any, execSubquery SubqueryExecutor) (any, error) {
 	uName := strings.ToUpper(strings.TrimSpace(name))
-	isAggFn := uName == "COUNT" || uName == "SUM" || uName == "AVG" || uName == "MIN" || uName == "MAX"
+	isAggFn := uName == "COUNT" || uName == "SUM" || uName == "AVG" || uName == "MIN" || uName == "MAX" || uName == "STRING_AGG" || uName == "GROUP_CONCAT"
 	if row != nil {
 		var argStrs []string
 		for _, a := range args {

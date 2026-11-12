@@ -3107,6 +3107,8 @@ func hasTopLevelAggregateExpr(expr proc.Expr) bool {
 	switch e := expr.(type) {
 	case *proc.ScalarSubqueryExpr:
 		return false
+	case *proc.WithinGroupExpr:
+		return true
 	case *proc.FunctionCallExpr:
 		fn := strings.ToUpper(e.Name)
 		switch fn {
