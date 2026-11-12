@@ -105,3 +105,50 @@ END;
 		t.Fatalf("expected total 19900, got %v", res.Rows[0]["total"])
 	}
 }
+
+func TestRuntime_ProcTempTableDDL(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+	executor.SetTableGetter(eng.GetTable)
+	executor.SetTableManager(eng)
+
+	sql := `
+CREATE PROCEDURE TestTempTableDDLProc
+AS
+BEGIN
+    CREATE TABLE #temp_orders (id INT PRIMARY KEY, item VARCHAR(50), qty INT);
+    CREATE INDEX idx_temp_item ON #temp_orders (item);
+    INSERT INTO #temp_orders VALUES (1, 'Keyboard', 2), (2, 'Mouse', 5);
+    UPDATE #temp_orders SET qty = 10 WHERE id = 1;
+    SELECT id, item, qty FROM #temp_orders WHERE id = 1;
+    DROP INDEX idx_temp_item ON #temp_orders;
+    DROP TABLE #temp_orders;
+END;
+`
+	prog, err := proc.Compile(sql)
+	if err != nil {
+		t.Fatalf("Compile failed: %v", err)
+	}
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	res, err := executor.Run(prog, "TestTempTableDDLProc", nil, session)
+	if err != nil {
+		t.Fatalf("executor.Run failed: %v", err)
+	}
+
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(res.Rows))
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["item"]) != "Keyboard" || fmt.Sprintf("%v", res.Rows[0]["qty"]) != "10" {
+		t.Fatalf("unexpected row: %v", res.Rows[0])
+	}
+}
+

@@ -637,6 +637,22 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		})
 		return nil
 
+	case *CreateTableStmt:
+		c.emit(OpCreateTable, 0, 0, 0, s)
+		return nil
+
+	case *DropTableStmt:
+		c.emit(OpDropTable, 0, 0, 0, s)
+		return nil
+
+	case *CreateIndexStmt:
+		c.emit(OpCreateIndex, 0, 0, 0, s)
+		return nil
+
+	case *DropIndexStmt:
+		c.emit(OpDropIndex, 0, 0, 0, s)
+		return nil
+
 	case *DeclareStmt:
 		varName := cleanVarName(s.Name)
 		slot := c.getOrAllocSlot(varName)

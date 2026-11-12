@@ -882,7 +882,7 @@ func (e *Executor) releaseFrame(frame *VMFrame) {
 
 func (f *VMFrame) bindWhereVariables(where string) string {
 	allVars := f.getStorageVarsMap()
-	if where == "" || len(allVars) == 0 {
+	if where == "" || (len(allVars) == 0 && len(f.tableVars) == 0) {
 		return where
 	}
 	res := where
@@ -922,6 +922,14 @@ func (f *VMFrame) bindWhereVariables(where string) string {
 				seen[lowerK] = true
 				bindings = append(bindings, varBinding{name: k, val: valStr})
 			}
+		}
+	}
+
+	for tblKey, physName := range f.tableVars {
+		lowerK := strings.ToLower(tblKey)
+		if !seen[lowerK] {
+			seen[lowerK] = true
+			bindings = append(bindings, varBinding{name: tblKey, val: physName})
 		}
 	}
 
@@ -1051,7 +1059,7 @@ func replaceVariableBoundaries(s, target, replacement string) string {
 }
 
 func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[string]any, []string, [][]any, error) {
-	if strings.Contains(sql, "@") {
+	if strings.Contains(sql, "@") || strings.Contains(sql, "#") {
 		sql = f.bindWhereVariables(sql)
 		queryData = nil
 	}

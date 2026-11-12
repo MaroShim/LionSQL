@@ -99,6 +99,10 @@ const (
 	OpSelectInto
 	OpTruncate
 	OpDeclareTable
+	OpCreateTable
+	OpDropTable
+	OpCreateIndex
+	OpDropIndex
 
 	// Cursor Operations
 	OpCursorOpen
@@ -295,6 +299,14 @@ func (op OpCode) String() string {
 		return "TRUNCATE"
 	case OpDeclareTable:
 		return "DECLARE_TABLE"
+	case OpCreateTable:
+		return "CREATE_TABLE"
+	case OpDropTable:
+		return "DROP_TABLE"
+	case OpCreateIndex:
+		return "CREATE_INDEX"
+	case OpDropIndex:
+		return "DROP_INDEX"
 	case OpCursorOpen:
 		return "CURSOR_OPEN"
 	case OpCursorFetch:

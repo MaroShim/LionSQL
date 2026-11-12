@@ -75,6 +75,25 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return p.parseGoto()
 	case TokenWaitfor:
 		return p.parseWaitfor()
+	case TokenCreate:
+		if p.peekTokenIs(TokenTable) {
+			return p.parseCreateTable()
+		}
+		if p.peekTokenIs(TokenIndex) || p.peekTokenIs(TokenUnique) {
+			return p.ParseCreateIndex()
+		}
+		return nil, fmt.Errorf("unsupported CREATE statement in procedure body: %s at %d:%d",
+			p.peekToken.Literal, p.peekToken.Line, p.peekToken.Col)
+	case TokenDrop:
+		p.nextToken() // eat DROP
+		if p.curTokenIs(TokenTable) {
+			return p.parseDropTable()
+		}
+		if p.curTokenIs(TokenIndex) {
+			return p.parseDropIndex()
+		}
+		return nil, fmt.Errorf("unsupported DROP statement in procedure body: %s at %d:%d",
+			p.curToken.Literal, p.curToken.Line, p.curToken.Col)
 	case TokenIdent:
 		if p.peekTokenIs(TokenColon) {
 			label := p.curToken.Literal

@@ -751,6 +751,150 @@ vmLoop:
 
 		f.tableVars[varName] = physTable
 
+	case proc.OpCreateTable:
+		stmt, ok := f.aux(&inst).(*proc.CreateTableStmt)
+		if !ok || stmt == nil {
+			return nil, fmt.Errorf("invalid OpCreateTable metadata")
+		}
+		rawName := strings.TrimSpace(stmt.Name)
+		lowerName := strings.ToLower(rawName)
+		isLocalTemp := strings.HasPrefix(lowerName, "#") && !strings.HasPrefix(lowerName, "##")
+		physTable := rawName
+		if isLocalTemp {
+			if f.tableVars != nil {
+				if oldPhys, exists := f.tableVars[lowerName]; exists {
+					if stmt.IfNotExists {
+						continue vmLoop
+					}
+					if f.executor != nil {
+						if tm := f.executor.getTableManager(); tm != nil {
+							_ = tm.DropTable(oldPhys)
+						}
+					}
+					delete(f.tableVars, lowerName)
+				}
+			} else {
+				f.tableVars = make(map[string]string)
+			}
+			seq := tableVarGlobalSeq.Add(1)
+			physTable = fmt.Sprintf("__temp_%p_%d_%d_%s", f, time.Now().UnixNano(), seq, strings.TrimPrefix(lowerName, "#"))
+		}
+
+		schema := &storage.TableSchema{
+			Name:    physTable,
+			Columns: make([]storage.Column, len(stmt.Columns)),
+		}
+		for i, c := range stmt.Columns {
+			schema.Columns[i] = storage.Column{
+				Name:       c.Name,
+				Type:       c.Type,
+				PrimaryKey: c.PrimaryKey,
+				Nullable:   c.Nullable,
+				Precision:  c.Precision,
+				Scale:      c.Scale,
+			}
+		}
+		if !schema.HasPrimaryKey() {
+			schema.EnsurePrimaryKey("_row_id")
+		}
+
+		if f.executor != nil {
+			if tm := f.executor.getTableManager(); tm != nil {
+				if err := tm.CreateTable(schema); err != nil {
+					if stmt.IfNotExists && errors.Is(err, storage.ErrTableExists) {
+						continue vmLoop
+					}
+					if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+						return nil, catchErr
+					}
+					continue vmLoop
+				}
+			}
+		}
+		if isLocalTemp {
+			f.tableVars[lowerName] = physTable
+		}
+
+	case proc.OpDropTable:
+		stmt, ok := f.aux(&inst).(*proc.DropTableStmt)
+		if !ok || stmt == nil {
+			return nil, fmt.Errorf("invalid OpDropTable metadata")
+		}
+		rawName := strings.TrimSpace(stmt.Name)
+		lowerName := strings.ToLower(rawName)
+		physTable := f.resolveTable(rawName)
+		if f.tableVars != nil {
+			if mapped, exists := f.tableVars[lowerName]; exists {
+				physTable = mapped
+				delete(f.tableVars, lowerName)
+			}
+		}
+		if f.executor != nil {
+			if tm := f.executor.getTableManager(); tm != nil {
+				if err := tm.DropTable(physTable); err != nil {
+					if stmt.IfExists && errors.Is(err, storage.ErrTableNotFound) {
+						continue vmLoop
+					}
+					if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+						return nil, catchErr
+					}
+					continue vmLoop
+				}
+			}
+		}
+
+	case proc.OpCreateIndex:
+		stmt, ok := f.aux(&inst).(*proc.CreateIndexStmt)
+		if !ok || stmt == nil {
+			return nil, fmt.Errorf("invalid OpCreateIndex metadata")
+		}
+		physTable := f.resolveTable(stmt.Table)
+		if f.executor != nil {
+			if tm := f.executor.getTableManager(); tm != nil {
+				if ic, ok := tm.(interface {
+					CreateIndex(index *storage.IndexSchema) error
+				}); ok {
+					idxDef := &storage.IndexSchema{
+						Name:        stmt.Name,
+						TableName:   physTable,
+						Columns:     stmt.Columns,
+						IncludeCols: stmt.IncludeCols,
+						Unique:      stmt.Unique,
+						Expression:  stmt.Expression,
+						ExprColumn:  stmt.ExprColumn,
+						ExprPath:    stmt.ExprPath,
+					}
+					if err := ic.CreateIndex(idxDef); err != nil && !stmt.IfNotExists {
+						if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+							return nil, catchErr
+						}
+						continue vmLoop
+					}
+				}
+			}
+		}
+
+	case proc.OpDropIndex:
+		stmt, ok := f.aux(&inst).(*proc.DropIndexStmt)
+		if !ok || stmt == nil {
+			return nil, fmt.Errorf("invalid OpDropIndex metadata")
+		}
+		physTable := f.resolveTable(stmt.Table)
+		if f.executor != nil && physTable != "" {
+			if tm := f.executor.getTableManager(); tm != nil {
+				if id, ok := tm.(interface {
+					DropIndex(tableName, indexName string) error
+				}); ok {
+					if err := id.DropIndex(physTable, stmt.Name); err != nil && !stmt.IfExists {
+						if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+							return nil, catchErr
+						}
+						continue vmLoop
+					}
+				}
+			}
+		}
+
 	case proc.OpInsert:
 		data, ok := f.aux(&inst).(*proc.DMLData)
 		if !ok || data == nil {
