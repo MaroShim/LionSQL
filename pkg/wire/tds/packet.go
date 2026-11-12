@@ -385,6 +385,9 @@ func ReadBVarChar(r *bytes.Reader) (string, error) {
 		return "", err
 	}
 	byteCount := int(charCount) * 2
+	if byteCount > r.Len() {
+		return "", io.ErrUnexpectedEOF
+	}
 	buf := make([]byte, byteCount)
 	if _, err := io.ReadFull(r, buf); err != nil {
 		return "", err
@@ -399,6 +402,9 @@ func ReadUsVarChar(r *bytes.Reader) (string, error) {
 		return "", err
 	}
 	byteCount := int(charCount) * 2
+	if byteCount > r.Len() {
+		return "", io.ErrUnexpectedEOF
+	}
 	buf := make([]byte, byteCount)
 	if _, err := io.ReadFull(r, buf); err != nil {
 		return "", err

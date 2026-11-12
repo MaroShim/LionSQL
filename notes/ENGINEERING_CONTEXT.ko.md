@@ -1,7 +1,7 @@
 # LionSQL Engineering Context & Architectural Invariants (`notes/ENGINEERING_CONTEXT.ko.md`)
 
 > - **최초 작성일**: 2026-10-03
-> - **최종 갱신일**: 2026-11-07
+> - **최종 갱신일**: 2026-11-12
 
 
 이 문서는 LionSQL의 설계 원칙, 확립된 핵심 불변식(Invariants), 의도적으로 배제(Spec-Out)한 대안들의 이유, 그리고 사용자가 요구하는 엄격한 엔지니어링 및 협업 규약을 설명합니다.
@@ -44,10 +44,14 @@
   * **Secondary Fallback (ANTLR4 TSqlParser)**: `pkg/proc/parser/antlr/`, MSSQL 전용 특화 문법(`[dbo].[Name]`, `WITH RECOMPILE` 등) 자동 폴백.
 * **설계 원칙**: 두 파서 간 순환 참조(Circular Dependency)를 방지하기 위해 `proc.RegisterProcedureFallback` SPI로 분리되어 있으며, 두 파서 모두 영구적으로 유지/검증되어야 합니다.
 
-### ⑥ 듀얼 트랙 UDF 전략 (ADR-018)
+### ⑥ 듀얼 트랙 UDF 전략 및 Go UDF 기반 Pluggable Collation SPI (ADR-018)
 * **결정 사항**:
   * **Track 1 (Go Native In-Process SPI)**: `proc.RegisterScalarFunction`. Go로 LionSQL을 임베딩하는 개발자를 위한 제로 FFI 오버헤드 직결 호출 (<5ns).
   * **Track 2 (WebAssembly 샌드박스)**: 독립 서버 환경에서 안전하게 외부 함수를 실행하기 위한 `wazero` 메모리 샌드박스.
+  * **Pluggable Collation SPI (2-Tier 사전 바인딩 문자열 정렬/비교 모델)**:
+    - **외곽 사전 바인딩(Cold-Path Pre-Binding)**: 기본 콜레이션(`SQL_Latin1_General_CP1_CI_AS`, `DATABASE_DEFAULT` 등)은 `compareFn = nil`로 바인딩하고, 커스텀 콜레이션은 파서/플래너/스키마 로더 단계에서 UDF 함수 포인터(`CollationCompareFunc`) 또는 정수 슬롯 인덱스로 완전히 사전 해석(`[RULE:BoundedLookup]`).
+    - **초고속 핫패스(Hot-Path Zero Map Lookup)**: 인덱스 탐색 및 정렬 시 맵 룩업을 전면 배제하고, `if compareFn == nil` 단 1회의 nil 포인터 검사로 인라인 `strings.EqualFold` / `bytes.Compare` 직결 (0.5ns 초고속 핫패스 보존).
+    - **Go UDF 플러그인 콜레이션(Pluggable UDF Path)**: 다국어(한국어 완성형, 악센트 구분 등) 및 커스텀 비즈니스 정렬은 무거운 외부 ICU 라이브러리를 엔진 코어에 하드코딩하지 않고, 외곽에서 미리 바인딩된 UDF 함수 포인터(`compareFn(a, b)`)를 직접 호출하는 Pay-as-you-go 모델 확립.
 
 ### ⑦ 인메모리 OCC 스토리지: 백그라운드 Vacuum 스레드 배제 (Spec-Out)
 * **결정 사항**: 인메모리 OCC 엔진(`memengine`)은 세션 프라이빗 워크스페이스에서 변경분을 버퍼링한 뒤, 커밋 시점에 버전을 원자적으로 교체하거나 롤백 시 워크스페이스를 버림.
@@ -343,8 +347,12 @@
      - **ADD COLUMN의 안전성**: 신규 컬럼은 항상 레코드의 맨 끝(Tail)에 추가되므로 물리 오프셋을 왜곡하지 않음. 디코더에서 스키마 컬럼 수가 더 많을 경우 누락된 필드를 컬럼 기본값(Default) 또는 `NULL`로 즉각 온더플라이 패딩함.
      - **DROP COLUMN의 안전성 및 Fail-Closed 방어선**:
        * **Tail 컬럼 삭제**: 맨 끝(Tail) 컬럼 삭제는 물리 레코드의 꼬리 바이트를 무시하므로 $O(1)$로 완벽히 안전함.
-       * **중간 컬럼 삭제 금지**: 데이터가 존재하는 테이블에서 중간 컬럼(Non-Terminal Column)을 삭제하려는 시도는 침묵 속 데이터 왜곡을 방지하기 위해 즉시 명시적 에러(`ErrDropColumnNotTail`, Fail-Closed)로 거절함.
-       * **가상 결번 마스킹 Spec-Out**: 0.5ns 읽기 핫패스를 훼손하는 복잡한 중간 컬럼 섀도우 마스킹(`PERF-OCC-INSTANT-DROP-COL-1`)은 영구 Spec-Out으로 배제함 (Spec-Out 21).
+       * **중간 컬럼 삭제 금지 (Fail-Closed & Operational Anti-Pattern)**: 데이터가 존재하는 테이블에서 중간 컬럼(Non-Terminal / Middle Column)을 삭제하려는 시도는 침묵 속 데이터 왜곡 및 서비스 장애를 방지하기 위해 즉시 명시적 에러(`ErrDropColumnNotTail`, Fail-Closed)로 거절함.
+       * **중간 컬럼 삭제의 영구 Spec-Out 3대 근거 (`PERF-OCC-INSTANT-DROP-COL-1`)**:
+         1. **운영상 안티패턴(Operational Anti-Pattern)**: 가동 중인 프로덕션 데이터베이스에서 런타임에 중간 컬럼을 삭제하는 행위 자체가 긴 트랜잭션 락, 복제 지연, ORM 및 직렬화 불일치 장애를 유발하는 대표적인 운영 안티패턴임.
+         2. **물리적 전수 재작성의 한계**: 런타임에 테이블 전체 레코드를 물리적으로 재인코딩하는 방식은 대용량 테이블에서 장시간의 읽기/쓰기 스톨(Stalls)과 독점적 테이블 락을 발생시켜 온라인 OLTP 서비스 SLA를 심각하게 위협함.
+         3. **스키마 논리 마스킹/툼스톤의 한계**: 스키마 메타데이터에 삭제 플래그(Tombstone)를 심고 물리-논리 컬럼 인디렉션 맵을 유지하는 방식은 구현 복잡도가 기하급수적으로 증가하고 검증이 극도로 어려우며, LionSQL의 핵심 경쟁력인 0.5ns 고정 오프셋 튜플 디코딩 핫패스 성능을 저하시킴.
+       * **공식 표준 대안 (Copy-and-Switch)**: 중간 컬럼 제거 및 테이블 구조 개편이 필요한 경우, 엔터프라이즈 정석 표준인 **Copy-and-Switch** 패턴(`CREATE TABLE new_table AS SELECT col1, col3 FROM old_table;` 후 트랜잭션 내 원자적 `RENAME`)을 사용하는 것을 공식 해법으로 규정함.
   5. **3중 방어 안전망 (Defensive Multi-Layer)**:
      - **Layer 1 (스토리지 엔진)**: `ADD COLUMN`은 메타데이터 갱신 $O(1)$ 완료. 데이터가 있는 테이블의 중간 컬럼 삭제는 Fail-Closed 에러 거부.
      - **Layer 2 (튜플 디코더 `DecodeTupleToRowWithArena`)**: 4바이트 헤더에서 `encodedCols`를 읽어 새 컬럼은 Default/Null로 패딩하고, 컬럼 물리 손상 시 명시적 에러 반환.
@@ -367,6 +375,17 @@
 * **도입 배경 및 배제 근거**:
   - 편리함이나 임시 멱등성을 이유로 기존 사용자 데이터를 묻지도 않고 지우거나 덮어쓰는(Overwrite) 안일한 휴리스틱은 데이터베이스의 절대적 제1원칙인 **데이터 영속성 및 안전성(`[RULE:AtomicSaves]`, Crash Prevention & Security)**을 정면으로 위배함.
   - "코드가 자꾸 기존 데이터를 덮어쓰지 않고, 원본 의도를 철저히 수호한다"는 사용자 원칙에 따라, 스크립트 내 강제 DROP을 영구 배제하고 빈 카탈로그 불변식을 시스템 전역에 확립함.
+
+---
+
+### ㉜ VDBE 바이트코드 16바이트 고정 정렬 명령어 레이아웃 확정 및 8바이트 비트패킹 영구 배제 (Spec-Out)
+* **결정 사항**:
+  * LionSQL T-SQL VDBE 가상머신(`pkg/proc/bytecode.go`)의 명령어 구조체 `Instruction`은 패딩이 없는 **16바이트 고정 정렬 레이아웃(`Op(1B) + Flags(1B) + Aux(2B) + A(4B) + B(4B) + C(4B)`)**을 영구 유지하며, 이를 8바이트(`int16` 레지스터 축소 또는 `uint64` 비트패킹)로 압축하는 안을 영구 배제(Spec-Out)함.
+* **배제 근거 및 아키텍처 실측 분석**:
+  1. **L1 캐시 상주성 (이미 1KB 미만의 프로시저 크기)**: 일반 OLTP 쿼리 및 스토어드 프로시저(TPC-C 포함)는 컴파일 시 5~80개 명령어(16B 기준 80B~1.25KB)로 CPU L1 데이터 캐시(32~64KB)의 3% 미만을 차지함. 64B 캐시라인당 4개(16B)에서 8개(8B)로 늘려도 L1 캐시 미스 감소 효과는 0%에 수렴함.
+  2. **DB VM의 실제 병목 위치**: 순수 산술 루프를 도는 언어 VM과 달리, DB VM(SQLite `VdbeOp` 역시 24바이트 고정 폭 사용)은 실행 시간의 95% 이상이 스토리지 B+Tree/샤드 탐색, MVCC/OCC 검증, 튜플 코덱 및 `storage.Value` 레지스터 처리에 소비되므로 명령어 폭 축소에 따른 전체 OLTP 처리량 변화가 전무함.
+  3. **`Aux` 필드 상실 및 비트 시프트(ALU) 패널티**: DB 명령어는 3개의 레지스터(`A, B, C`) 외에 보조 메타데이터 슬롯(`Aux`)까지 총 4개의 피연산자가 필수적임. 8바이트 내에 이를 비트패킹하면 매 스텝마다 비트 시프트/마스킹 연산이 추가되어 하드웨어 정렬 필드를 직접 읽는 16바이트 구조보다 디코딩이 느려지거나, `Aux`를 외부 포인터로 빼내면서 캐시 로컬리티가 오히려 악화됨.
+  4. **대형 스크립트 경계 안전성 (`int32` vs `int16`)**: `int32`(21억) 피연산자는 대량 배치 스크립트나 거대 상수 풀에서도 `int16`(32,767 한계) 오버플로우 위험 없이 단순하고 안전한 실행을 보장함 (`[RULE:RadicalKISS]`, 상세 분석: [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)).
 
 ---
 

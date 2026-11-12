@@ -76,6 +76,9 @@ type Instruction struct {
 } // Exactly 16 Bytes (Zero Padding)
 ```
 
+> **Architectural Invariant (16-Byte Fixed Layout vs. 8-Byte Packing)**:
+> Shrinking `Instruction` to 8 bytes (via `int16` operands or `uint64` bit-packing) is permanently rejected (`Spec-Out`). While 8 bytes fits 8 instructions per 64-byte L1 cache line instead of 4, typical OLTP procedures (`15~100` instructions, `240B~1.6KB`) already reside 100% within the 32KB~64KB L1 data cache. Conversely, `int16` caps jump offsets, constant pool indexes, and immediate integers (`OpLoadConstInt`) at `32,767`—breaking large batch scripts and forcing memory indirections—while `uint64` bit-packing adds shift/mask + sign-extension ALU overhead on every instruction dispatch. See [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](../../notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) (§5) and the master directory [`notes/VDBE_BYTECODE_DIRECTORY.ko.md`](../../notes/VDBE_BYTECODE_DIRECTORY.ko.md) for the complete analysis.
+
 ### 3.1. Initialization & Flow Control Opcodes
 
 | Opcode | Operands | Description |

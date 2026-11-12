@@ -562,8 +562,8 @@ vmLoop:
 
 	case proc.OpIn:
 		val := f.regs[inst.B]
-		callData := f.aux(&inst).(*proc.CallData)
-		if len(callData.ArgRegs) == 0 {
+		callData, ok := f.aux(&inst).(*proc.CallData)
+		if !ok || callData == nil || len(callData.ArgRegs) == 0 {
 			f.regs[inst.A] = storage.BoolValue(false)
 			break
 		}
@@ -574,7 +574,7 @@ vmLoop:
 		found := false
 		hasNull := false
 		for _, regIdx := range callData.ArgRegs {
-			if int(regIdx) < len(f.regs) {
+			if regIdx >= 0 && int(regIdx) < len(f.regs) {
 				regVal := f.regs[regIdx]
 				if regVal.IsNull {
 					hasNull = true
@@ -602,7 +602,10 @@ vmLoop:
 
 	case proc.OpCast:
 		srcVal := f.regs[inst.B]
-		castData := f.aux(&inst).(*proc.CastData)
+		castData, ok := f.aux(&inst).(*proc.CastData)
+		if !ok || castData == nil {
+			return nil, fmt.Errorf("invalid OpCast metadata")
+		}
 		resVal, err := proc.EvalCast(srcVal, castData.TargetType, castData.Precision, castData.Scale, castData.Style, castData.Try)
 		if err != nil {
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
@@ -669,7 +672,10 @@ vmLoop:
 
 // --- Storage DML ---
 	case proc.OpDeclareTable:
-		data := f.aux(&inst).(*proc.TableVarData)
+		data, ok := f.aux(&inst).(*proc.TableVarData)
+		if !ok || data == nil {
+			return nil, fmt.Errorf("invalid OpDeclareTable metadata")
+		}
 		varName := strings.ToLower(data.Name)
 		if !strings.HasPrefix(varName, "@") {
 			varName = "@" + varName
@@ -730,7 +736,10 @@ vmLoop:
 		f.tableVars[varName] = physTable
 
 	case proc.OpInsert:
-		data := f.aux(&inst).(*proc.DMLData)
+		data, ok := f.aux(&inst).(*proc.DMLData)
+		if !ok || data == nil {
+			return nil, fmt.Errorf("invalid OpInsert metadata")
+		}
 		targetTable := f.resolveTable(data.Table)
 		if data.Select != nil {
 			cnt, err := f.execInsertSelect(data)
@@ -996,7 +1005,10 @@ vmLoop:
 		}
 
 	case proc.OpUpdate:
-		data := f.aux(&inst).(*proc.DMLData)
+		data, ok := f.aux(&inst).(*proc.DMLData)
+		if !ok || data == nil {
+			return nil, fmt.Errorf("invalid OpUpdate metadata")
+		}
 		targetTable := f.resolveTable(data.Table)
 		if data.WhereCol != "" && !f.isPKCol(targetTable, data.WhereCol) {
 			data.WhereExpr = &proc.BinaryExpr{
@@ -1261,7 +1273,10 @@ vmLoop:
 		}
 
 	case proc.OpUpdateWhere:
-		data := f.aux(&inst).(*proc.DMLData)
+		data, ok := f.aux(&inst).(*proc.DMLData)
+		if !ok || data == nil {
+			return nil, fmt.Errorf("invalid OpUpdateWhere metadata")
+		}
 		cnt, err := f.execUpdateWhere(data)
 		if err != nil {
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
@@ -1272,7 +1287,10 @@ vmLoop:
 		f.rowCount = cnt
 
 	case proc.OpDelete:
-		data := f.aux(&inst).(*proc.DMLData)
+		data, ok := f.aux(&inst).(*proc.DMLData)
+		if !ok || data == nil {
+			return nil, fmt.Errorf("invalid OpDelete metadata")
+		}
 		targetTable := f.resolveTable(data.Table)
 		if data.WhereCol != "" && !f.isPKCol(targetTable, data.WhereCol) {
 			data.WhereExpr = &proc.BinaryExpr{
@@ -1356,7 +1374,10 @@ vmLoop:
 		}
 
 	case proc.OpDeleteWhere:
-		data := f.aux(&inst).(*proc.DMLData)
+		data, ok := f.aux(&inst).(*proc.DMLData)
+		if !ok || data == nil {
+			return nil, fmt.Errorf("invalid OpDeleteWhere metadata")
+		}
 		cnt, err := f.execDeleteWhere(data)
 		if err != nil {
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
@@ -1367,6 +1388,9 @@ vmLoop:
 		f.rowCount = cnt
 
 	case proc.OpTruncate:
+		if inst.A < 0 || int(inst.A) >= len(f.prog.Constants) {
+			return nil, fmt.Errorf("invalid OpTruncate constant index: %d", inst.A)
+		}
 		tableName := f.prog.Constants[inst.A].String()
 		if err := f.execTruncate(tableName); err != nil {
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
@@ -1376,7 +1400,10 @@ vmLoop:
 		}
 
 	case proc.OpSelectInto:
-		data := f.aux(&inst).(*proc.SelectIntoData)
+		data, ok := f.aux(&inst).(*proc.SelectIntoData)
+		if !ok || data == nil {
+			return nil, fmt.Errorf("invalid OpSelectInto metadata")
+		}
 		val, err := f.execSelectInto(data)
 		if err != nil {
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
@@ -1398,7 +1425,10 @@ vmLoop:
 		}
 
 	case proc.OpPointSelect:
-		data := f.aux(&inst).(*proc.PointSelectData)
+		data, ok := f.aux(&inst).(*proc.PointSelectData)
+		if !ok || data == nil {
+			return nil, fmt.Errorf("invalid OpPointSelect metadata")
+		}
 		var pkVal storage.Value
 		if v, ok := f.evalRowExprFast(data.WhereVal); ok {
 			pkVal = v
@@ -1728,7 +1758,10 @@ vmLoop:
 		}
 
 	case proc.OpCallUDF:
-		callData := f.aux(&inst).(*proc.CallData)
+		callData, ok := f.aux(&inst).(*proc.CallData)
+		if !ok || callData == nil {
+			return nil, fmt.Errorf("invalid OpCallUDF metadata")
+		}
 		res, err := f.callUDF(callData.Name, callData.ArgRegs)
 		if err != nil {
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
@@ -1739,7 +1772,10 @@ vmLoop:
 		f.regs[inst.A] = res
 
 	case proc.OpCallProc:
-		callData := f.aux(&inst).(*proc.CallData)
+		callData, ok := f.aux(&inst).(*proc.CallData)
+		if !ok || callData == nil {
+			return nil, fmt.Errorf("invalid OpCallProc metadata")
+		}
 		retVal, err := f.callProc(callData.Name, callData.ArgRegs)
 		if err != nil {
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
@@ -1857,7 +1893,10 @@ vmLoop:
 		}
 
 	case proc.OpIndexScan:
-		data := f.aux(&inst).(*proc.IndexScanData)
+		data, ok := f.aux(&inst).(*proc.IndexScanData)
+		if !ok || data == nil {
+			return nil, fmt.Errorf("invalid OpIndexScan metadata")
+		}
 		evalCtx := f.buildRowEvalMap(nil)
 
 		var lowVal *storage.Value
@@ -1887,7 +1926,6 @@ vmLoop:
 			}
 			continue vmLoop
 		}
-		defer cursor.Close()
 
 		var rows []map[string]any
 		var cols []string
@@ -1895,13 +1933,12 @@ vmLoop:
 			cols = data.Projections
 		}
 
+		var scanRecErr error
 		for cursor.Next() {
 			rec, err := cursor.Record()
 			if err != nil {
-				if catchErr := f.handleCatch(fmt.Errorf("OpIndexScan record error on %s: %w", data.Table, err), &pc); catchErr != nil {
-					return nil, catchErr
-				}
-				continue vmLoop
+				scanRecErr = fmt.Errorf("OpIndexScan record error on %s: %w", data.Table, err)
+				break
 			}
 			rowMap := recordToMap(rec)
 
@@ -1928,6 +1965,13 @@ vmLoop:
 				}
 			}
 			rows = append(rows, outRow)
+		}
+		_ = cursor.Close()
+		if scanRecErr != nil {
+			if catchErr := f.handleCatch(scanRecErr, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 
 		f.rows = rows
@@ -1961,7 +2005,10 @@ vmLoop:
 		}
 
 	case proc.OpResultRow:
-		data := f.aux(&inst).(*proc.ResultRowData)
+		data, ok := f.aux(&inst).(*proc.ResultRowData)
+		if !ok || data == nil || data.Count < 0 {
+			return nil, fmt.Errorf("invalid OpResultRow metadata")
+		}
 		row := make(map[string]any, data.Count)
 		vals := make([]any, data.Count)
 		cols := make([]string, len(data.Columns))
@@ -1975,7 +2022,7 @@ vmLoop:
 				regIdx = data.StartReg + i
 			}
 			var val any
-			if int(regIdx) < len(f.regs) {
+			if regIdx >= 0 && int(regIdx) < len(f.regs) {
 				val = valToAny(f.regs[regIdx])
 			}
 			vals[i] = val

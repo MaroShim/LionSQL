@@ -272,7 +272,11 @@ func (s *Server) describeWithQueryColumns(query string) ([]ColumnMeta, bool) {
 				}
 				oids := s.resolveColumnOIDs(cte.InnerSQL, colNames, nil)
 				for idx, cn := range colNames {
-					cols = append(cols, ColumnMeta{Name: cn, DataType: oids[idx]})
+					var oid int32 = 25
+					if idx < len(oids) {
+						oid = oids[idx]
+					}
+					cols = append(cols, ColumnMeta{Name: cn, DataType: oid})
 				}
 			}
 		}

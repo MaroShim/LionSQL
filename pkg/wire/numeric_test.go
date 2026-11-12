@@ -59,4 +59,30 @@ func TestPgBinaryNumericMalformed(t *testing.T) {
 	if _, err := decodePgBinaryNumeric(b); err == nil {
 		t.Errorf("expected error on truncated digits payload, got nil")
 	}
+
+	// Negative ndigits (-1 = 0xFFFF)
+	negDigits := []byte{0xFF, 0xFF, 0, 0, 0, 0, 0, 0}
+	if _, err := decodePgBinaryNumeric(negDigits); err == nil {
+		t.Errorf("expected error on negative ndigits, got nil")
+	}
+
+	// Out-of-bounds dscale (30000 = 0x7530)
+	badScale := []byte{0, 0, 0, 0, 0, 0, 0x75, 0x30}
+	if _, err := decodePgBinaryNumeric(badScale); err == nil {
+		t.Errorf("expected error on excessive dscale, got nil")
+	}
+
+	// Out-of-range base-10000 digit (10000 = 0x2710)
+	badDigit := []byte{0, 1, 0, 0, 0, 0, 0, 0, 0x27, 0x10}
+	if _, err := decodePgBinaryNumeric(badDigit); err == nil {
+		t.Errorf("expected error on digit >= 10000, got nil")
+	}
+
+	// Malformed binary array with negative elemLen (-5) or oversized dim
+	if got := decodeBinaryArray([]byte{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 25, 0x7F, 0xFF, 0xFF, 0xFF, 0, 0, 0, 1}, 0); got != "{}" {
+		t.Errorf("expected empty array literal on oversized dim, got %q", got)
+	}
+	if got := decodeBinaryArray([]byte{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 25, 0, 0, 0, 1, 0, 0, 0, 1, 0xFF, 0xFF, 0xFF, 0xFB}, 0); got != "{}" {
+		t.Errorf("expected safe handling on negative elemLen (-5), got %q", got)
+	}
 }

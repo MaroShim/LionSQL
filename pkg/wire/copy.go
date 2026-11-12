@@ -309,6 +309,11 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 		}
 
 		if msgType == MsgCopyData {
+			if dataBuf.Len()+len(payload) > MaxPGMessageSize {
+				_ = WriteError(conn, fmt.Sprintf("COPY stream exceeds maximum size limit (%d bytes)", MaxPGMessageSize))
+				_ = s.writeReady(conn, sessID)
+				return
+			}
 			dataBuf.Write(payload)
 		} else if msgType == MsgCopyDone {
 			break
@@ -385,6 +390,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 		}
 	}
 
+	var committed bool
 	if !inTx {
 		var err error
 		localSess, err = s.engine.NewSession()
@@ -401,6 +407,11 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			_ = s.writeReady(conn, sessID)
 			return
 		}
+		defer func() {
+			if !committed {
+				_ = tx.Rollback()
+			}
+		}()
 	}
 
 	pkCol, _ := tbl.PrimaryKeyColumn()
@@ -486,6 +497,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			_ = s.writeReady(conn, sessID)
 			return
 		}
+		committed = true
 	}
 
 	// 7. Complete command

@@ -35,6 +35,9 @@ func decodePgBinaryNumeric(b []byte) (storage.Decimal, error) {
 	if sign == numericNan {
 		return storage.ZeroDecimal(0), nil
 	}
+	if ndigits < 0 || ndigits > 1000 || dscale < 0 || dscale > 2000 || weight < -2000 || weight > 2000 {
+		return storage.ZeroDecimal(0), fmt.Errorf("numeric header out of bounds: ndigits=%d weight=%d dscale=%d", ndigits, weight, dscale)
+	}
 	if ndigits == 0 {
 		return storage.ZeroDecimal(int32(dscale)), nil
 	}
@@ -48,6 +51,9 @@ func decodePgBinaryNumeric(b []byte) (storage.Decimal, error) {
 	for i := int16(0); i < ndigits; i++ {
 		offset := 8 + int(i)*2
 		digit := int16(binary.BigEndian.Uint16(b[offset : offset+2]))
+		if digit < 0 || digit >= 10000 {
+			return storage.ZeroDecimal(0), fmt.Errorf("invalid base-10000 numeric digit at index %d: %d", i, digit)
+		}
 		val.Mul(val, big10000)
 		val.Add(val, big.NewInt(int64(digit)))
 	}

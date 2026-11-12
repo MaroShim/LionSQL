@@ -40,6 +40,12 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 | **9** | **`OCC-HYPER-2`** | In-Memory OCC Pointer-Free Flat Record (4~5x 메모리 압축)| **매우 높음 (★★★★)**| **광범위 (Critical)**| **극상 (Extreme)** | 엔진 전반 레이아웃 대수술로 인한 회귀 버그, 가변 길이 문자열 갱신 단편화 | **Phase 4 (Deep Kernel)** |
 | **10**| **`LOC-1~4`** | MSSQL Collation 및 유니코드 다국어 로케일 정렬/비교 | **높음 (★★★)** | **광범위 (High)** | **중간** | 로케일 키 인코딩 오버헤드로 인한 순수 ASCII 문자열 비교 성능 저하 | **Phase 4 (Specialized)**|
 | **11**| **`TDS-COMPAT-6`** | TDS 7.x/8.0 MARS (Multiple Active Result Sets) 스트리밍 | **매우 높음 (★★★★)**| **광범위 (Critical)**| **낮음~중간** | 복잡한 패킷 헤더 상태 머신으로 인한 교착 상태(Deadlock) 및 가치 대비 과도한 비용 | **Phase 5 (Deprioritized)**|
+| **13**| **`PERF-VDBE-FRAME-SLIM-1`** | VDBE 프레임 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | **낮음 (★☆☆)** | **국소 (Low)** | **높음** | 최소 레지스터 하한선 조정 시 동적 레지스터 범위 방어 필수 | **Active (1순위 착수)** |
+| **14**| **`PERF-WAL-ZERO-ALLOC-1`** | In-Memory OCC WAL 단일 풀 버퍼 직렬화 (`writeFrame` Zero-Alloc) | **낮음 (★☆☆)** | **국소 (Low)** | **높음** | 풀 반환 전 파일 Write 완료 보장 및 256KB 상한 가드레일 준수 | **Active (2순위 착수)** |
+| **15**| **`PERF-WT-ROW-DIRECT-1`** | WiredTiger `InsertRow` 중간 `Record` 맵 2중 할당 우회 및 직접 인코딩 | **중간 (★★☆)** | **국소 (Low)** | **높음** | FK/Unique 제약 검사 시 `storage.Row` 직접 참조 정합성 유지 | **Active (3순위 착수)** |
+| **16**| **`PERF-RESULT-ROW-STREAM-1`** | 결과셋 `Rows []map[string]any` 이중 구체화 제거 및 `[]storage.Row` 직결 | **중간 (★★☆)** | **중간 (Med)** | **매우 높음** | REST JSON API 및 레거시 호출부의 `res.Rows` 참조 하위 호환성 보장 | **Candidate (4순위)** |
+| **17**| **`PERF-TDS-ZEROCOPY-FRAME-1`** | TDS `tdsStreamWriter` 8바이트 헤더 예약 인플레이스 패킷 프레이밍 | **중간 (★★☆)** | **국소 (Low)** | **중간~높음** | 다중 패킷 분할 시 EOM 상태 플래그 및 패킷 경계 오프셋 무결성 | **Candidate (5순위)** |
+| **18**| **`PERF-CACHE-SHARD-1`** | `PlanCache` 및 세션 레지스트리 32-Shard 분할 (캐시라인 바운싱 제거) | **낮음~중간 (★☆☆~★★☆)** | **국소 (Low)** | **중간** | 샤드별 LRU 용량 배분 및 전체 캐시 플러시(`Clear`) 시 순차 락 획득 | **Candidate (6순위)** |
 | **-** | **`FRIENDLY-SQL`** | DuckDB 스타일 편의 SQL (`* EXCLUDE`, `FROM tbl;` 등) | **낮음 (★☆☆)** | **국소 (Low)** | **기각 (Spec-Out)** | 오타 침묵 위험 및 RDBMS 엄격성 훼손 (LionSQL is NOT DuckDB 철학) | **영구 보류 (Spec-Out)** |
 
 ---

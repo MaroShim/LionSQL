@@ -1246,11 +1246,13 @@ func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *Prepa
 		}
 		var paramTypes []int32
 		var stmt *PreparedStatement
+		var portalQuery string
 		if portal.Statement != nil {
 			paramTypes = portal.Statement.ParamTypes
 			stmt = portal.Statement
+			portalQuery = portal.Statement.Query
 		}
-		s.writeSchemaDescription(conn, portal.Statement.Query, paramTypes, stmt, portal.ResultFormats)
+		s.writeSchemaDescription(conn, portalQuery, paramTypes, stmt, portal.ResultFormats)
 	} else {
 		_ = WriteNoData(conn)
 	}
@@ -1509,7 +1511,11 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 			colOIDs := s.resolveColumnOIDs(previewSQL, res.Columns, sampleRow)
 			cols := make([]ColumnMeta, len(res.Columns))
 			for i, c := range res.Columns {
-				cols[i] = ColumnMeta{Name: c, DataType: colOIDs[i]}
+				var oid int32 = 25
+				if i < len(colOIDs) {
+					oid = colOIDs[i]
+				}
+				cols[i] = ColumnMeta{Name: c, DataType: oid}
 			}
 			recordCols(cols)
 			applyFormats(cols)
@@ -1597,7 +1603,10 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 					colOIDs := s.resolveColumnOIDs(querySQL, cols, nil)
 					colMetas := make([]ColumnMeta, len(cols))
 					for i, c := range cols {
-						oid := colOIDs[i]
+						var oid int32
+						if i < len(colOIDs) {
+							oid = colOIDs[i]
+						}
 						if oid == 0 {
 							oid = 25
 						}
@@ -1718,10 +1727,11 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 
 	if !portal.Executed {
 		// Standard session SQL execution fallback
-		var pTypes []int32
-		if portal.Statement != nil {
-			pTypes = portal.Statement.ParamTypes
+		if portal.Statement == nil {
+			_ = WriteError(conn, fmt.Sprintf("portal %q has no bound statement", portalName))
+			return
 		}
+		pTypes := portal.Statement.ParamTypes
 		substitutedSQL := substituteParams(portal.Statement.Query, portal.Params, pTypes, portal.ParamValues)
 
 		// Fast-Path for simple transaction control commands
@@ -1782,7 +1792,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 			portal.Statement.NoData = true
 		}
 		cmd := res.Command
-		if cmd == "" {
+		if cmd == "" && portal.Statement != nil {
 			cmd = portal.Statement.Query
 		}
 		_ = WriteCommandComplete(conn, formatPgCommandComplete(cmd, res.RowsAffected, len(res.Rows)))
@@ -1813,7 +1823,10 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 	if len(res.Rows) > 0 {
 		sampleRow = res.Rows[0]
 	}
-	queryForOIDs := portal.Statement.Query
+	var queryForOIDs string
+	if portal.Statement != nil {
+		queryForOIDs = portal.Statement.Query
+	}
 	if sqlutil.HasPrefixKeyword(queryForOIDs, "EXEC") || sqlutil.HasPrefixKeyword(queryForOIDs, "CALL") {
 		procName, _ := engine.ParseProcArgs(queryForOIDs)
 		if procName != "" && s.catalog != nil {
@@ -2017,7 +2030,11 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 				} else if i < len(resultFormats) && resultFormats[i] == 1 {
 					fmtCode = 1
 				}
-				cols[i] = ColumnMeta{Name: c, DataType: colOIDs[i], Format: fmtCode}
+				var oid int32 = 25
+				if i < len(colOIDs) {
+					oid = colOIDs[i]
+				}
+				cols[i] = ColumnMeta{Name: c, DataType: oid, Format: fmtCode}
 			}
 			_ = WriteRowDescription(bw, cols)
 		}
@@ -2158,12 +2175,19 @@ func decodeBinaryArray(b []byte, elemOID int32) string {
 	_ = binary.Read(r, binary.BigEndian, &ndims)
 	_ = binary.Read(r, binary.BigEndian, &hasNull)
 	_ = binary.Read(r, binary.BigEndian, &elemType)
-	if ndims == 0 {
+	if ndims <= 0 || ndims > 6 {
 		return "{}"
 	}
 	var dim, lbound int32
-	_ = binary.Read(r, binary.BigEndian, &dim)
-	_ = binary.Read(r, binary.BigEndian, &lbound)
+	if err := binary.Read(r, binary.BigEndian, &dim); err != nil {
+		return "{}"
+	}
+	if err := binary.Read(r, binary.BigEndian, &lbound); err != nil {
+		return "{}"
+	}
+	if dim <= 0 || dim > 100000 {
+		return "{}"
+	}
 
 	var elements []string
 	for i := 0; i < int(dim); i++ {
@@ -2174,6 +2198,9 @@ func decodeBinaryArray(b []byte, elemOID int32) string {
 		if elemLen == -1 {
 			elements = append(elements, "NULL")
 			continue
+		}
+		if elemLen < 0 || int(elemLen) > r.Len() {
+			break
 		}
 		elemBytes := make([]byte, elemLen)
 		if _, err := io.ReadFull(r, elemBytes); err != nil {

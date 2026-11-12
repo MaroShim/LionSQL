@@ -185,3 +185,60 @@ func TestTDS_ReadPacket_OOMGuard_P0_27(t *testing.T) {
 		}
 	})
 }
+
+// Regression test for AUDIT-FINAL-SAFETY-NET-1: TDS RPC/PLP & VarChar Bounds/OOM Guards
+func TestTDS_MalformedRPCAndPLP_BoundsGuard(t *testing.T) {
+	t.Run("ReadBVarChar_TruncatedPayload", func(t *testing.T) {
+		// Claims 50 UTF-16LE chars (100 bytes), but only 4 bytes follow
+		r := bytes.NewReader([]byte{50, 0x41, 0x00, 0x42, 0x00})
+		if _, err := ReadBVarChar(r); err == nil {
+			t.Fatalf("expected error on truncated ReadBVarChar")
+		}
+	})
+
+	t.Run("ReadUsVarChar_TruncatedPayload", func(t *testing.T) {
+		// Claims 60000 UTF-16LE chars (120000 bytes), but only 2 bytes follow
+		r := bytes.NewReader([]byte{0x60, 0xEA, 0x41, 0x00})
+		if _, err := ReadUsVarChar(r); err == nil {
+			t.Fatalf("expected error on truncated ReadUsVarChar")
+		}
+	})
+
+	t.Run("ParseRPCRequest_TruncatedProcName", func(t *testing.T) {
+		// nameLen = 10000 (0x2710), but no name bytes follow
+		payload := []byte{0x10, 0x27}
+		if _, err := parseRPCRequest(payload); err == nil {
+			t.Fatalf("expected error on truncated RPC proc name")
+		}
+	})
+
+	t.Run("ReadRPCValue_PLPOversizedChunkLen", func(t *testing.T) {
+		// TypeVarChar (0xA7), maxLen=0xFFFF (PLP), totalLen=0 (unknown), chunkLen=0x7FFFFFFF (2GB) with only 2 bytes in buffer
+		buf := []byte{
+			0xFF, 0xFF, // maxLen = PLP
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // collation (5 bytes) + 1
+		}
+		// Build exact TypeVarChar PLP stream: maxLen(2) + collation(5) + totalLen(8) + chunkLen(4)
+		stream := []byte{
+			0xFF, 0xFF, // maxLen = 0xFFFF (PLP)
+			0x09, 0x04, 0xD0, 0x00, 0x34, // collation (5 bytes)
+			0xFE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, // totalLen = PLP_UNKNOWN
+			0xFF, 0xFF, 0xFF, 0x7F, // chunkLen = 2GB (malicious!)
+			0x41, 0x42, // only 2 bytes present
+		}
+		_ = buf
+		r := bytes.NewReader(stream)
+		if _, err := readRPCValue(r, TypeVarChar); err == nil {
+			t.Fatalf("expected error on oversized PLP chunkLen, got nil")
+		}
+	})
+
+	t.Run("ReadRPCValue_DecimalNInvalidScaleAndLength", func(t *testing.T) {
+		// TypeDecimalN: maxLen=17, prec=38, scale=200 (invalid > 38), actualLen=5
+		stream := []byte{17, 38, 200, 5, 1, 1, 0, 0, 0}
+		r := bytes.NewReader(stream)
+		if _, err := readRPCValue(r, TypeDecimalN); err == nil {
+			t.Fatalf("expected error on invalid DecimalN scale > 38")
+		}
+	})
+}

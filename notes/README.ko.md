@@ -69,6 +69,8 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
   * LionSQL 전역 정규식 완전 박멸 및 결정론적 토크나이저 전환 단일 SSOT 종합 계획서 (`GA-REGEX-DDL-1` ~ `GA-REGEX-FINAL-3`, `SEC-PGWIRE-PARAM-1`).
 * **[`DURABILITY_VERIFICATION_PLAN.ko.md`](plans/DURABILITY_VERIFICATION_PLAN.ko.md)**
   * 킬 테스트(SIGKILL 즉시 복구), 소크 테스트, 개밥 먹기(Dogfooding) 기반 실전 운영 내구성 검증 계획서.
+* **[`PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md`](plans/PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md)** / **[`PRE_1.0_FINAL_SAFETY_NET_AUDIT_REPORT.ko.md`](reports/PRE_1.0_FINAL_SAFETY_NET_AUDIT_REPORT.ko.md)**
+  * LionSQL 1.0-GA 정식 릴리스 직전 4대 도메인(와이어/코디네이터/스토리지/VDBE) × 4대 결함 분류 체계 정밀 정적 전수 감사 계획서 및 17대 콜드 패스 방어벽 보강 완료 보고서 (`AUDIT-FINAL-SAFETY-NET-1`).
 
 ---
 
@@ -83,12 +85,14 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 * **[`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](plans/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)**: 키 래치 완전 제거를 통한 160k TPS 회귀 복구 및 CI 성능 게이트 구축 계획서.
 
 ### 3.2. 쿼리 엔진, 옵티마이저 & 파서 (Engine, Planner & Parser)
+* **[`VDBE_BYTECODE_DIRECTORY.ko.md`](VDBE_BYTECODE_DIRECTORY.ko.md)**: **VDBE & 16-Byte 바이트코드 마스터 디렉토리** — 1세대(Goja 폐기)부터 4세대(218k TPS Lock-Free 달성)까지의 진화 타임라인, 카테고리별 문서 맵(ISA, 2-Tier 라우팅, 극한 튜닝 백서, Babelfish 검증), 소스 코드 패키지 가이드.
 * **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 단순 질의(VDBE)와 복합 관계대수(CBO)를 분리하는 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 명세서.
 * **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md)**: AST 및 Dialect 타입 기반 2-Tier 쿼리 라우팅 정규화 계획서 (`ARCH-VDBE-ROUTING-1`).
 * **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](plans/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 카탈로그 라우팅 리팩토링 검증 보고서 (527ns 실측).
 * **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)**: 10개 이상 테이블 조인 최적화 및 공집합 조기 탈락 설계 계획서 (`OPT-LARGE-JOIN-1`).
 * **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)**: 플래너 슬림화 및 순수 AST 전환 설계 계획서 (`PLANNER-SLIM-1`, `PLANNER-AST-1`).
-* **[`VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)**: 바이트코드 루프 언롤링, 레지스터 풀링, 분기 예측 최적화 극단 가속 계획서.
+* **[`VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)**: VDBE 바이트코드 VM 아키텍처 진화(1~4세대) 및 극한 성능 튜닝 백서 (4-Way Unrolling, `vmFrame` 풀링, 16-Byte ISA 트레이드오프, 218k TPS 실측).
+* **[`MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md)**: 6대 마이크로 아키텍처 제로 할당 핫패스 튜닝 계획서 (`PERF-VDBE-FRAME-SLIM-1`, `PERF-WAL-ZERO-ALLOC-1`, `PERF-WT-ROW-DIRECT-1` 등).
 * **[`WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)**: 쓰기 가능한 CTE(Writable CTE)를 VDBE 바이트코드로 직접 컴파일하는 Lowering 설계.
 * **[`SQL_PARSER_HARDENING_PLAN.ko.md`](plans/SQL_PARSER_HARDENING_PLAN.ko.md)**: 리터럴 오염 방지 및 세미콜론 절단 방지를 위한 SQL 파서 하드닝 계획서.
 

@@ -1964,7 +1964,11 @@ func parseRPCRequest(payload []byte) (*parsedRPC, error) {
 			return nil, err
 		}
 	} else if nameLen > 0 {
-		nameBytes := make([]byte, int(nameLen)*2)
+		byteCount := int(nameLen) * 2
+		if byteCount > r.Len() {
+			return nil, io.ErrUnexpectedEOF
+		}
+		nameBytes := make([]byte, byteCount)
 		if _, err := io.ReadFull(r, nameBytes); err != nil {
 			return nil, err
 		}
@@ -2142,6 +2146,9 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 				if chunkLen == 0 {
 					break
 				}
+				if int64(chunkLen) > int64(r.Len()) || int64(plpBuf.Len())+int64(chunkLen) > MaxTDSMessageSize {
+					return nil, io.ErrUnexpectedEOF
+				}
 				chunk := make([]byte, chunkLen)
 				if _, err := io.ReadFull(r, chunk); err != nil {
 					return nil, err
@@ -2156,6 +2163,9 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 		}
 		if valLen == 0xFFFF {
 			return nil, nil
+		}
+		if int(valLen) > r.Len() {
+			return nil, io.ErrUnexpectedEOF
 		}
 		buf := make([]byte, valLen)
 		if _, err := io.ReadFull(r, buf); err != nil {
@@ -2185,6 +2195,9 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 				if chunkLen == 0 {
 					break
 				}
+				if int64(chunkLen) > int64(r.Len()) || int64(plpBuf.Len())+int64(chunkLen) > MaxTDSMessageSize {
+					return nil, io.ErrUnexpectedEOF
+				}
 				chunk := make([]byte, chunkLen)
 				if _, err := io.ReadFull(r, chunk); err != nil {
 					return nil, err
@@ -2199,6 +2212,9 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 		}
 		if valLen == 0xFFFF {
 			return nil, nil
+		}
+		if int(valLen) > r.Len() {
+			return nil, io.ErrUnexpectedEOF
 		}
 		buf := make([]byte, valLen)
 		if _, err := io.ReadFull(r, buf); err != nil {
@@ -2226,6 +2242,9 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 				if chunkLen == 0 {
 					break
 				}
+				if int64(chunkLen) > int64(r.Len()) || int64(plpBuf.Len())+int64(chunkLen) > MaxTDSMessageSize {
+					return nil, io.ErrUnexpectedEOF
+				}
 				chunk := make([]byte, chunkLen)
 				if _, err := io.ReadFull(r, chunk); err != nil {
 					return nil, err
@@ -2240,6 +2259,9 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 		}
 		if valLen == 0xFFFF {
 			return nil, nil
+		}
+		if int(valLen) > r.Len() {
+			return nil, io.ErrUnexpectedEOF
 		}
 		buf := make([]byte, valLen)
 		if _, err := io.ReadFull(r, buf); err != nil {
@@ -2295,6 +2317,9 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 		if actualLen == 0 {
 			return nil, nil
 		}
+		if int(actualLen) > r.Len() {
+			return nil, io.ErrUnexpectedEOF
+		}
 		buf := make([]byte, actualLen)
 		if _, err := io.ReadFull(r, buf); err != nil {
 			return nil, err
@@ -2309,6 +2334,9 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 		}
 		if actualLen == 0 {
 			return nil, nil
+		}
+		if int(actualLen) > r.Len() {
+			return nil, io.ErrUnexpectedEOF
 		}
 		buf := make([]byte, actualLen)
 		if _, err := io.ReadFull(r, buf); err != nil {
@@ -2330,6 +2358,9 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 		}
 		if actualLen == 0 {
 			return nil, nil
+		}
+		if int(actualLen) > r.Len() {
+			return nil, io.ErrUnexpectedEOF
 		}
 		buf := make([]byte, actualLen)
 		if _, err := io.ReadFull(r, buf); err != nil {
@@ -2386,9 +2417,17 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 		if actualLen == 0 {
 			return nil, nil
 		}
-		sign, _ := r.ReadByte()
+		if int(actualLen) > r.Len() || actualLen > 17 || scale > 38 {
+			return nil, io.ErrUnexpectedEOF
+		}
+		sign, err := r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
 		intBytes := make([]byte, actualLen-1)
-		_, _ = io.ReadFull(r, intBytes)
+		if _, err := io.ReadFull(r, intBytes); err != nil {
+			return nil, err
+		}
 		var intVal uint64
 		for i := len(intBytes) - 1; i >= 0; i-- {
 			intVal = (intVal << 8) | uint64(intBytes[i])

@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- harden Volcano query execution against variable-width physical tuples and dynamic projection bounds (`PERF-EXEC-TUPLE-DEFENSIVE-PAD-1`, Invariant 13 Layer 3 defense): implement `Tuple.PadToSchema()`, defensive `Tuple.GetOK()` returning `ok=true, nil` for schema-valid trailing columns, defensive padding in `ToMap()` and `ToEvalMap()`, schema-aligned copy offsets in `mergeTuplesWithArena` / `mergeTuplesWithNullsAndArena` to prevent join off-by-one column data corruption, and out-of-bounds `srcIdx` NULL padding in `ProjectionIterator`
+- implement SQL Server 2016+ `COMPRESS` and `DECOMPRESS` GZIP binary scalar functions with `VARBINARY` roundtrip and `CAST ... AS VARCHAR` interoperability (`TSQL-FUNC-COMPRESS`)
+- add T-SQL system session and database variables `@@DATEFIRST` (default 7 = Sunday) and `@@DBTS` (monotonic 8-byte rowversion/timestamp) with runtime VM and scalar query execution parity (`TSQL-SYSVAR-DATEFIRST-DBTS`)
+- document online schema reorganization and zero-downtime Copy-and-Switch operational procedure in `doc/ONLINE_SCHEMA_REORGANIZATION_GUIDE.ko.md` and `doc/ONLINE_SCHEMA_REORGANIZATION_GUIDE.md` (`GUIDE-SCHEMA-REORG-1`)
 - embed canonical demo seed SQL script (`demo_seed.sql`) directly into the single static binary via `//go:embed` and align Web Studio's `POST /api/seed` to execute the identical unified 5-table, 34-record, 2-procedure database schema (`SEED-EMBED-UNIFY-1`)
 - add SSMS Object Explorer sub-node expansion and Microsoft SMO support for table child objects including Columns, Keys, Constraints (Foreign Key, Check, Default), Indexes, Triggers, and Statistics with exact XPath URN projections (`SSMS-OE-SUBFOLDERS`, `SSMS-OE-COMPAT-2`, `SSMS-OE-SMO-VERIFY`)
 - support 3-part qualified table names (`[master].[dbo].[table]`) and pagination normalization for SSMS right-click `SELECT TOP (1000)` and `Edit Top 200` queries (`SSMS-OE-3PART-TOP`)
@@ -30,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - mark `-memory=performance`, `MemoryPerformance`, and legacy aliases (`OCCModeRaw`, `OCCModePerformance`) as deprecated in CLI help text, startup runtime log warning (`memoryPerformanceDeprecationNotice`), startup banner (`[DEPRECATED: use compact]`), and Go doc comments while preserving full v1.0 compatibility prior to post-1.0 removal (`DEPRECATE-OCC-PERF-1`)
 
 ### Fixed
+- complete Pre-1.0 final static safety-net audit across Wire/TDS, Catalog/Session, Storage/WAL, and VDBE/Execution (`AUDIT-FINAL-SAFETY-NET-1`): guard PGWire binary numeric/array and TDS RPC/PLP packet decoders against truncated/oversized payload OOM DoS and slice bounds panics, replace 12 single-value interface type assertions in `vm_dispatcher.go` with 2-value defensive guards, fix `OpIndexScan` loop-scoped `defer cursor.Close()` handle retention, return defensive deep copies in `GetStatistics`/`ListStatistics`, and eliminate 16 silent disk persistence error ignores (`_ = c.persistObjectsLocked()`) in `pkg/catalog` with in-memory rollback on disk write failure
 - resolve SSMS Object Explorer stored procedures and parameters enumeration by adding dedicated `MSSQL_SysProceduresSSMS` and `MSSQL_Parameters` interceptors with full SMO XPath URN projections, expanding `execSysAllObjectsJoined` to include procedure objects, supporting SQL Server boolean-to-bit (`= 0` / `= 1`) comparisons in virtual catalog filters, and populating standard SQL Server catalog metadata in `sys.procedures` and `sys.parameters` direct queries
 - handle Microsoft SMO Server Properties & Facets batch in TDS protocol (`handleSsmsServerPropertiesBatch`), answering `@HkeyLocal`, `xp_instance_regread`, and `sys.dm_hadr_cluster` queries with all 59 server facets so SSMS Object Explorer finishes child node enumeration and renders subnodes (columns, keys, indexes)
 - prevent table query hijacking in virtual catalog interceptor where `MSSQL_ColumnsJoinedWithTypes` and `MSSQL_SysTableIndexesSSMS` falsely matched `sys.tables` queries containing column/index subqueries in projection, restoring SSMS Object Explorer table listing
@@ -1735,7 +1740,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 - **Technical Documentation & Architecture Decision Records (`doc/`, `notes/`)**:
-  - Authored `doc/CLIENT_TOOL_INTEGRATION.md`: Comprehensive connection and integration guide for Beekeeper Studio, DBeaver, Azure Data Studio, SSMS, `psql`, `sqlcmd`, and programming language drivers (Go, Python, Node.js, C#, Rust, Java).
+  - Authored `doc/CLIENT_TOOL_INTEGRATION.md`: Comprehensive connection and integration guide for Beekeeper Studio, DBeaver, SSMS, `psql`, `sqlcmd`, and programming language drivers (Go, Python, Node.js, C#, Rust, Java).
   - Authored `doc/internal/TRANSACTION_CONCURRENCY.md`: Complete specification for non-blocking snapshot reads, In-Memory OCC vs WiredTiger MVCC concurrency models, private workspace isolation, and VDBE transaction coupling (`exec.RunInTx`).
   - Authored `doc/internal/RECORD_BINARY_FORMAT.md`: Schema-aware compact binary tuple storage format specification.
   - Added ADR-019 (Schema-Aware Compact Binary Tuple Storage Codec), ADR-020 (Multi-Protocol Virtual Catalog Interceptor Strategy), and ADR-021 (Open Source Licensing Strategy: GPL-3.0-or-later) to `doc/ADR.md`.
@@ -2648,7 +2653,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Added
 - **Microsoft SQL Server TDS 7.x/8.0 Wire Protocol**:
   - Native TDS listener on port `1433` handling PRELOGIN, LOGIN7, SQLBatch UTF-16LE, and RPC token stream decoding.
-  - Native compatibility with SQL Server Management Studio (SSMS), Azure Data Studio, `sqlcmd`, and Microsoft ODBC/JDBC drivers.
+  - Native compatibility with SQL Server Management Studio (SSMS), `sqlcmd`, and Microsoft ODBC/JDBC drivers.
 - **PostgreSQL High-Speed Bulk Copy Protocol (`COPY`)**:
   - Wire-level framing for `COPY <table> FROM STDIN` and `COPY <table> TO STDOUT` (`MsgCopyInResponse`, `MsgCopyOutResponse`, `MsgCopyData`, `MsgCopyDone`, `MsgCopyFail`).
   - Full compatibility with `psql \copy` and `pg_dump` for high-throughput batch ingestion.

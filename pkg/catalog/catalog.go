@@ -137,7 +137,9 @@ func (c *Catalog) RegisterProcedure(proc *Procedure) error {
 	}
 	c.procedures[key] = proc
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -158,7 +160,10 @@ func (c *Catalog) CreateProcedure(proc *Procedure) error {
 	proc.UpdatedAt = now
 	c.procedures[key] = proc
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			delete(c.procedures, key)
+			return err
+		}
 	}
 	return nil
 }
@@ -179,7 +184,10 @@ func (c *Catalog) AlterProcedure(proc *Procedure) error {
 	proc.UpdatedAt = time.Now()
 	c.procedures[key] = proc
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			c.procedures[key] = existing
+			return err
+		}
 	}
 	return nil
 }
@@ -217,12 +225,16 @@ func (c *Catalog) DropProcedure(name string) error {
 	defer c.mu.Unlock()
 
 	key := strings.ToLower(cleanCatalogIdent(name))
-	if _, exists := c.procedures[key]; !exists {
+	existing, exists := c.procedures[key]
+	if !exists {
 		return fmt.Errorf("%w: %s", ErrProcNotFound, name)
 	}
 	delete(c.procedures, key)
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			c.procedures[key] = existing
+			return err
+		}
 	}
 	return nil
 }
@@ -243,7 +255,9 @@ func (c *Catalog) RegisterFunction(fn *Function) error {
 	}
 	c.functions[key] = fn
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -263,7 +277,10 @@ func (c *Catalog) CreateFunction(fn *Function) error {
 	fn.UpdatedAt = now
 	c.functions[key] = fn
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			delete(c.functions, key)
+			return err
+		}
 	}
 	return nil
 }
@@ -283,7 +300,10 @@ func (c *Catalog) AlterFunction(fn *Function) error {
 	fn.UpdatedAt = time.Now()
 	c.functions[key] = fn
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			c.functions[key] = existing
+			return err
+		}
 	}
 	return nil
 }
@@ -321,12 +341,16 @@ func (c *Catalog) DropFunction(name string) error {
 	defer c.mu.Unlock()
 
 	key := strings.ToLower(cleanCatalogIdent(name))
-	if _, exists := c.functions[key]; !exists {
+	existing, exists := c.functions[key]
+	if !exists {
 		return fmt.Errorf("%w: %s", ErrFuncNotFound, name)
 	}
 	delete(c.functions, key)
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			c.functions[key] = existing
+			return err
+		}
 	}
 	return nil
 }
@@ -347,7 +371,9 @@ func (c *Catalog) RegisterTrigger(trg *Trigger) error {
 	}
 	c.triggers[key] = trg
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -367,7 +393,10 @@ func (c *Catalog) CreateTrigger(trg *Trigger) error {
 	trg.UpdatedAt = now
 	c.triggers[key] = trg
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			delete(c.triggers, key)
+			return err
+		}
 	}
 	return nil
 }
@@ -387,7 +416,10 @@ func (c *Catalog) AlterTrigger(trg *Trigger) error {
 	trg.UpdatedAt = time.Now()
 	c.triggers[key] = trg
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			c.triggers[key] = existing
+			return err
+		}
 	}
 	return nil
 }
@@ -441,12 +473,16 @@ func (c *Catalog) DropTrigger(name string) error {
 	defer c.mu.Unlock()
 
 	key := strings.ToLower(cleanCatalogIdent(name))
-	if _, exists := c.triggers[key]; !exists {
+	existing, exists := c.triggers[key]
+	if !exists {
 		return fmt.Errorf("%w: %s", ErrTriggerNotFound, name)
 	}
 	delete(c.triggers, key)
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			c.triggers[key] = existing
+			return err
+		}
 	}
 	return nil
 }
@@ -742,7 +778,10 @@ func (c *Catalog) CreateView(v *View) error {
 	v.UpdatedAt = now
 	c.views[key] = v
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			delete(c.views, key)
+			return err
+		}
 	}
 	return nil
 }
@@ -753,7 +792,8 @@ func (c *Catalog) CreateOrReplaceView(v *View) {
 	defer c.mu.Unlock()
 	key := strings.ToLower(cleanCatalogIdent(v.Name))
 	now := time.Now()
-	if existing, exists := c.views[key]; exists {
+	existing, exists := c.views[key]
+	if exists {
 		v.CreatedAt = existing.CreatedAt
 	} else {
 		v.CreatedAt = now
@@ -761,7 +801,13 @@ func (c *Catalog) CreateOrReplaceView(v *View) {
 	v.UpdatedAt = now
 	c.views[key] = v
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			if exists {
+				c.views[key] = existing
+			} else {
+				delete(c.views, key)
+			}
+		}
 	}
 }
 
@@ -778,7 +824,10 @@ func (c *Catalog) AlterView(v *View) error {
 	v.UpdatedAt = time.Now()
 	c.views[key] = v
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			c.views[key] = existing
+			return err
+		}
 	}
 	return nil
 }
@@ -802,12 +851,16 @@ func (c *Catalog) DropView(name string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := strings.ToLower(cleanCatalogIdent(name))
-	if _, exists := c.views[key]; !exists {
+	existing, exists := c.views[key]
+	if !exists {
 		return fmt.Errorf("%w: %s", ErrViewNotFound, name)
 	}
 	delete(c.views, key)
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			c.views[key] = existing
+			return err
+		}
 	}
 	return nil
 }
@@ -830,9 +883,17 @@ func (c *Catalog) CreateStatistics(stat *StatisticDef) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := strings.ToLower(cleanCatalogIdent(stat.TableName) + "." + cleanCatalogIdent(stat.Name))
+	existing, exists := c.statistics[key]
 	c.statistics[key] = stat
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			if exists {
+				c.statistics[key] = existing
+			} else {
+				delete(c.statistics, key)
+			}
+			return err
+		}
 	}
 	return nil
 }
@@ -844,6 +905,8 @@ func (c *Catalog) DropStatistics(tableName, statName string) error {
 	cleanTbl := cleanCatalogIdent(tableName)
 	cleanStat := cleanCatalogIdent(statName)
 
+	var deletedKey string
+	var deletedStat *StatisticDef
 	if cleanTbl == "" {
 		foundKey := ""
 		for k, s := range c.statistics {
@@ -854,18 +917,28 @@ func (c *Catalog) DropStatistics(tableName, statName string) error {
 			}
 		}
 		if foundKey != "" {
+			deletedKey = foundKey
+			deletedStat = c.statistics[foundKey]
 			delete(c.statistics, foundKey)
 		}
 	} else {
 		key := strings.ToLower(cleanTbl + "." + cleanStat)
+		deletedKey = key
+		deletedStat = c.statistics[key]
 		delete(c.statistics, key)
 	}
 
 	if c.persistenceDir != "" {
-		_ = c.persistObjectsLocked()
+		if err := c.persistObjectsLocked(); err != nil {
+			if deletedKey != "" && deletedStat != nil {
+				c.statistics[deletedKey] = deletedStat
+			}
+			return err
+		}
 	}
 
 	if ts, ok := c.tableStats[cleanTbl]; ok && ts != nil {
+		prevMulti := ts.MultiColumns
 		var remaining []*planner.MultiColumnStats
 		for _, ms := range ts.MultiColumns {
 			if !strings.EqualFold(ms.Name, cleanStat) {
@@ -874,7 +947,10 @@ func (c *Catalog) DropStatistics(tableName, statName string) error {
 		}
 		ts.MultiColumns = remaining
 		if c.persistenceDir != "" {
-			_ = c.persistTableStatsLocked()
+			if err := c.persistTableStatsLocked(); err != nil {
+				ts.MultiColumns = prevMulti
+				return err
+			}
 		}
 	}
 	return nil
@@ -886,7 +962,15 @@ func (c *Catalog) GetStatistics(tableName, statName string) (*StatisticDef, bool
 	defer c.mu.RUnlock()
 	key := strings.ToLower(cleanCatalogIdent(tableName) + "." + cleanCatalogIdent(statName))
 	stat, ok := c.statistics[key]
-	return stat, ok
+	if !ok || stat == nil {
+		return nil, false
+	}
+	cp := *stat
+	if len(stat.Columns) > 0 {
+		cp.Columns = make([]string, len(stat.Columns))
+		copy(cp.Columns, stat.Columns)
+	}
+	return &cp, true
 }
 
 // ListStatistics lists all extended statistics definitions for a given table (C-5).
@@ -897,7 +981,12 @@ func (c *Catalog) ListStatistics(tableName string) []*StatisticDef {
 	var res []*StatisticDef
 	for _, s := range c.statistics {
 		if strings.ToLower(cleanCatalogIdent(s.TableName)) == cleanTbl {
-			res = append(res, s)
+			cp := *s
+			if len(s.Columns) > 0 {
+				cp.Columns = make([]string, len(s.Columns))
+				copy(cp.Columns, s.Columns)
+			}
+			res = append(res, &cp)
 		}
 	}
 	return res
