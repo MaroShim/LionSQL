@@ -249,7 +249,19 @@ var catalogRouteTable = []RouteRule{
 		Name: "MSSQL_ColumnsJoinedWithTypes",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
 			hasCols := strings.Contains(upper, "SYS.COLUMNS") || strings.Contains(upper, "SYS.ALL_COLUMNS")
-			return hasCols && (strings.Contains(upper, "SYS.TYPES") || strings.Contains(upper, "SYS.TABLES") || strings.Contains(upper, "ISIDENTITY") || strings.Contains(upper, "IS_IDENTITY") || strings.Contains(upper, "DATATYPE") || strings.Contains(upper, "MAX_LENGTH") || strings.Contains(upper, "CLMNS.NAME"))
+			if !hasCols {
+				return false
+			}
+			// Guard: If this is a table query (primary projection is Table, URN is /Table@Name without /Column@Name),
+			// do NOT hijack to column handler.
+			if strings.Contains(upper, "TBL.NAME AS NAME") || (strings.Contains(upper, "/TABLE@NAME=") && !strings.Contains(upper, "/COLUMN@NAME=")) {
+				return false
+			}
+			return strings.Contains(upper, "/COLUMN@NAME=") || strings.Contains(upper, "CLMNS.NAME") ||
+				strings.Contains(upper, "CLMNS.COLUMN_ID") || strings.Contains(upper, "CLMNS.OBJECT_ID") ||
+				strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS") ||
+				strings.Contains(upper, "JOIN SYS.COLUMNS") || strings.Contains(upper, "JOIN SYS.ALL_COLUMNS") ||
+				strings.Contains(upper, "SYS.TYPES") || strings.Contains(upper, "IS_IDENTITY") || strings.Contains(upper, "MAX_LENGTH")
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execSysColumnsJoinedWithTypes(src, sql)
@@ -384,8 +396,17 @@ var catalogRouteTable = []RouteRule{
 	{
 		Name: "MSSQL_SysTableIndexesSSMS",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
-			return strings.Contains(upper, "SYS.TABLES") && strings.Contains(upper, "SYS.INDEXES") &&
-				(strings.Contains(upper, "I.OBJECT_ID") || strings.Contains(upper, "INDEX_ID > 0") || strings.Contains(upper, "HAS_FILTER") || strings.Contains(upper, "IS_HYPOTHETICAL") || strings.Contains(upper, "TYPE_DESC") || strings.Contains(upper, "INDEXTYPE") || strings.Contains(upper, "I.NAME") || strings.Contains(upper, "I.INDEX_ID"))
+			if !strings.Contains(upper, "SYS.TABLES") || !strings.Contains(upper, "SYS.INDEXES") {
+				return false
+			}
+			// Guard: If this is a table query (primary projection is Table), do NOT hijack to index handler.
+			// Note: '[' and ']' are stripped in upper!
+			if strings.Contains(upper, "TBL.NAME AS NAME") || (strings.Contains(upper, "/TABLE@NAME=") && !strings.Contains(upper, "/INDEX@NAME=")) {
+				return false
+			}
+			return strings.Contains(upper, "/INDEX@NAME=") || strings.Contains(upper, "I.OBJECT_ID") ||
+				strings.Contains(upper, "I.INDEX_ID") || strings.Contains(upper, "I.NAME") ||
+				strings.Contains(upper, "INDEXTYPE") || (strings.Contains(upper, "TYPE_DESC") && !strings.Contains(upper, "TBL.CREATE_DATE"))
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execSysIndexesForSSMS(src, sql)

@@ -30,6 +30,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - mark `-memory=performance`, `MemoryPerformance`, and legacy aliases (`OCCModeRaw`, `OCCModePerformance`) as deprecated in CLI help text, startup runtime log warning (`memoryPerformanceDeprecationNotice`), startup banner (`[DEPRECATED: use compact]`), and Go doc comments while preserving full v1.0 compatibility prior to post-1.0 removal (`DEPRECATE-OCC-PERF-1`)
 
 ### Fixed
+- prevent table query hijacking in virtual catalog interceptor where `MSSQL_ColumnsJoinedWithTypes` and `MSSQL_SysTableIndexesSSMS` falsely matched `sys.tables` queries containing column/index subqueries in projection, restoring SSMS Object Explorer table listing
+- immediately refresh stored procedures count (`loadProcedures`) and overview metrics (`loadOverviewMetrics`) in Web Studio upon `seedSampleData()` completion without requiring manual browser reload
 - fix parameterization in `sqlutil.ParameterizeSubquery` to prioritize qualified outer column tokens over unqualified tokens, preventing inner column name mutation in correlated subqueries (`PERF-SUBQUERY-MEMO-1`)
 - prevent compile-time constant-folding of non-deterministic volatile scalar subqueries in `sqlexec_explain.go` (`PERF-SUBQUERY-MEMO-1`)
 - harden `MemoryCompact` storage engine against 6 audit defects (`FIX-OCC-COMPACT-AUDIT-1`):

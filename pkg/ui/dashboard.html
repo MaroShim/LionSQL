@@ -4977,6 +4977,10 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         if (res.ok) {
           showToast(out.message || 'Sample database seeded successfully with 34 records!', 'success');
           await loadTables('customers');
+          await loadProcedures();
+          if (typeof loadOverviewMetrics === 'function') {
+            await loadOverviewMetrics();
+          }
         } else {
           showToast(out.error || 'Failed to seed sample data.', 'error');
         }
