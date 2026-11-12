@@ -211,12 +211,17 @@
 | `PENDING` | **`FIX-SQL-DERIVED-VALUES-1`** |  | Engine | P1 | FROM (VALUES (...), (...)) AS alias(col1, col2) 인라인 테이블 값 생성자 및 컬럼 별칭 지원 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-SQL-PAREN-SELECT-1`** |  | Engine | P1 | 괄호로 감싸진 (SELECT ...) 최상위 쿼리 및 뷰/CTE 본문 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQLUTIL-PARSER-1`** |  | Engine | P2 | pkg/sqlutil SQL 파서/정규화기 결함 보강 및 렉서 공통화 | [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-TDS-ERROR-NUMBER-MAP-1`** |  | Wire | P1 | PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(2627, 2601, 547) 매핑 반환 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-TDS-PRINT-INFO-TOKEN-1`** |  | Wire | P1 | PRINT 문 실행 결과를 TDS INFO(0xAB) 토큰으로 클라이언트에 실시간 전송 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** |  | Wire | P1 | TDS RPC(0x03) 직접 프로시저 호출 시 OUTPUT/INOUT 파라미터 RETURNVALUE(0xAC) 토큰 반환 및 생략된 기본값(@param = default) 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-TDS-RPC-RETURN-STATUS-1`** |  | Wire | P1 | TDS RPC 프로시저 RETURN <int> 실행 시 실제 종료 코드를 RETURNSTATUS(0x79) 토큰으로 전송 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-TRIGGER-FOR-KEYWORD-1`** |  | Engine | P1 | CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-TSQL-INSERT-EXEC-1`** |  | Engine | P1 | INSERT INTO <table> EXEC <proc_name> 프로시저 결과셋 적재 구문 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-OFFSET-VAR-1`** | `1.0-GA` | Engine | P2 | OFFSET @var ROWS FETCH NEXT @var ROWS ONLY 프로시저 내 변수 바인딩 파싱 실패 (unexpected token @skip) | [`test/slt_proc/26_offset_fetch_paging.slt`](test/slt_proc/26_offset_fetch_paging.slt) |  |
 | `DONE` | **`FIX-TSQL-OUTPUT-PARAM-1`** | `1.0-GA` | Engine | P1 | EXEC proc @x OUTPUT 호출자 변수로 값 미전달: DECLARE @x; EXEC sp_double 21, @x OUTPUT; SELECT @x 가 42 대신 NULL | [`test/slt_proc/27_rowcount_and_dml_results.slt`](test/slt_proc/27_rowcount_and_dml_results.slt) |  |
 | `DONE` | **`FIX-TSQL-PROC-UNION-ALL-1`** | `1.0-GA` | Engine | P2 | 프로시저 본문 내 UNION ALL 파싱 실패 (unexpected token ALL), 프로시저 밖은 정상 | [`test/slt_proc/30_case_expressions_and_set_ops.slt`](test/slt_proc/30_case_expressions_and_set_ops.slt) |  |
 | `DONE` | **`FIX-TSQL-RAISERROR-FMT-1`** | `1.0-GA` | Engine | P2 | RAISERROR 포맷 인자 치환(%d, %s) 미구현: 'raised %d',16,1,7 가 'raised %d'로 반환 | [`test/slt_proc/28_throw_and_raiserror.slt`](test/slt_proc/28_throw_and_raiserror.slt) |  |
+| `PENDING` | **`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`** |  | Engine | P1 | 최상위 배치 및 sp_executesql에서 SELECT @var = expr 구문을 비교식이 아닌 T-SQL 변수 대입으로 처리 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-UNION-CHAIN-1`** | `1.0-GA` | Engine | P1 | 3개 이상 UNION 체인 중복 제거 오류: SELECT 1 UNION SELECT 2 UNION SELECT 2 ORDER BY 1 이 1,1,2 반환(프로시저 내부는 NULL,NULL,2) | [`test/slt_proc/30_case_and_set_ops_in_procs.slt`](test/slt_proc/30_case_and_set_ops_in_procs.slt) |  |
 | `PENDING` | **`FIX-TSQL-XACT-STATE-1`** |  | Engine | P1 | TRY...CATCH 트랜잭션 상태 내장 함수 XACT_STATE() 지원 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-VM-HIDDEN-ROWID-1`** |  | Engine | P1 | PK 없는 테이블에 대한 VDBE VM OpInsert 실행 시 숨은 _row_id 자동 발번 누락 수정 | [`1.0-GA`](1.0-GA) |  |
@@ -301,6 +306,7 @@
 | `DONE` | **`TEST-OCC-FLAT-2`** |  | Storage | P2 | Flat 모드 복합 DDL/DML 회귀 검증 (복합 보조 인덱스, SkipList, FK) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `DONE` | **`TEST-OCC-FLAT-3`** |  | Storage | P2 | Flat 모드 쿼리 엔진 풀 스위트 회귀 검증 (SLT 및 Babelfish) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `PENDING` | **`TEST-OCC-FLAT-4`** | `1.0-GA` | Storage | P2 | Flat 모드 24h 장기 소크 및 가변 길이 UPDATE 단편화 검증 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
+| `PENDING` | **`TEST-TDS-GOMSSQLDB-ORACLE-1`** |  | Wire | P1 | 공식 microsoft/go-mssqldb 드라이버 테스트 스위트(550+ 케이스) 라이브 TDS 통합 오라클 이식 및 검증 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`TSQL-FUNC-AT-TIME-ZONE`** | `v1.10.0` | Engine | P2 | AT TIME ZONE 시간대 변환 구문 및 함수 (IANA/Windows Timezone) | [`notes/plans/TIMEZONE_LOCALE_PARSING_PLAN.ko.md`](notes/plans/TIMEZONE_LOCALE_PARSING_PLAN.ko.md) |  |
 | `DONE` | **`TSQL-FUNC-COMPRESS`** | `1.0-GA` | Engine | P2 | COMPRESS 및 DECOMPRESS GZIP 바이너리 압축/해제 내장 함수 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
 | `PENDING` | **`TSQL-FUNC-PARSE`** | `v1.10.0` | Engine | P2 | PARSE 및 TRY_PARSE 문화권(Culture) 기반 문자열 파싱 함수 | [`notes/plans/TIMEZONE_LOCALE_PARSING_PLAN.ko.md`](notes/plans/TIMEZONE_LOCALE_PARSING_PLAN.ko.md) |  |
@@ -2538,6 +2544,30 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [PENDING] PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(2627, 2601, 547) 매핑 반환 `FIX-TDS-ERROR-NUMBER-MAP-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-12 15:16:34
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] PRINT 문 실행 결과를 TDS INFO(0xAB) 토큰으로 클라이언트에 실시간 전송 `FIX-TDS-PRINT-INFO-TOKEN-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-12 15:16:34
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] TDS RPC(0x03) 직접 프로시저 호출 시 OUTPUT/INOUT 파라미터 RETURNVALUE(0xAC) 토큰 반환 및 생략된 기본값(@param = default) 바인딩 지원 `FIX-TDS-RPC-OUTPUT-TOKEN-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-12 15:16:34
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] TDS RPC 프로시저 RETURN <int> 실행 시 실제 종료 코드를 RETURNSTATUS(0x79) 토큰으로 전송 `FIX-TDS-RPC-RETURN-STATUS-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-12 15:16:34
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
 ### [PENDING] CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 `FIX-TRIGGER-FOR-KEYWORD-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:06:31
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
@@ -2575,6 +2605,12 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 13:19:50
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`test/slt_proc/28_throw_and_raiserror.slt`](test/slt_proc/28_throw_and_raiserror.slt)
+
+---
+
+### [PENDING] 최상위 배치 및 sp_executesql에서 SELECT @var = expr 구문을 비교식이 아닌 T-SQL 변수 대입으로 처리 `FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:16:34
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
 
@@ -3360,6 +3396,12 @@ SSMS Object Explorer 테이블 하위 트리(Columns, Keys, Indexes, Triggers) �
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 16:23:03
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)
+
+---
+
+### [PENDING] 공식 microsoft/go-mssqldb 드라이버 테스트 스위트(550+ 케이스) 라이브 TDS 통합 오라클 이식 및 검증 `TEST-TDS-GOMSSQLDB-ORACLE-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-12 15:16:34
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
 
