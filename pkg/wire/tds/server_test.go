@@ -1361,6 +1361,96 @@ func TestTDS_ALL_HEADERS_Validation_AuditFull008(t *testing.T) {
 	}
 }
 
+func TestTDS_SSMS_ServerPropertiesBatch(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	query := `declare @HkeyLocal nvarchar(18)
+        declare @ServicesRegPath nvarchar(34)
+        declare @SmoAuditLevel int
+        exec master.dbo.xp_instance_regread @HkeyLocal, @InstanceRegPath, N'AuditLevel', @SmoAuditLevel OUTPUT
+
+SELECT
+@SmoAuditLevel AS [AuditLevel],
+ISNULL(@NumErrorLogs, -1) AS [NumberOfLogFiles],
+(case when @SmoLoginMode < 3 then @SmoLoginMode else 9 end) AS [LoginMode],
+ISNULL(@SmoMailProfile,N'') AS [MailProfile],
+@BackupDirectory AS [BackupDirectory],
+@SmoPerfMonMode AS [PerfMonMode],
+ISNULL(@InstallSqlDataDir,N'') AS [InstallDataDirectory],
+CAST(@@SERVICENAME AS sysname) AS [ServiceName],
+@ErrorLogPath AS [ErrorLogPath],
+@SmoRoot AS [RootDirectory],
+CAST(case when 'a' <> 'A' then 1 else 0 end AS bit) AS [IsCaseSensitive],
+CAST(ISNULL(SERVERPROPERTY(N'IsLocalDB'), 0) AS bit) AS [IsLocalDB],
+@@MAX_PRECISION AS [MaxPrecision],
+CAST(FULLTEXTSERVICEPROPERTY('IsFullTextInstalled') AS bit) AS [IsFullTextInstalled],
+SERVERPROPERTY(N'ProductVersion') AS [VersionString],
+CAST(SERVERPROPERTY(N'Edition') AS sysname) AS [Edition],
+CAST(SERVERPROPERTY(N'ProductLevel') AS sysname) AS [ProductLevel],
+CAST(ISNULL(SERVERPROPERTY(N'ProductUpdateLevel'), N'') AS sysname) AS [ProductUpdateLevel],
+CAST(SERVERPROPERTY('IsSingleUser') AS bit) AS [IsSingleUser],
+CAST(SERVERPROPERTY('EngineEdition') AS int) AS [EngineEdition],
+CAST(ISNULL(SERVERPROPERTY('IsClustered'), 0) AS bit) AS [IsClustered],
+CAST(ISNULL(SERVERPROPERTY(N'MachineName'), N'') AS sysname) AS [NetName],
+ISNULL(SERVERPROPERTY(N'ComputerNamePhysicalNetBIOS'),N'') AS [ComputerNamePhysicalNetBIOS],
+ISNULL(@ServiceStartMode,2) AS [ServiceStartMode],
+@LogPath AS [MasterDBLogPath],
+@MasterPath AS [MasterDBPath],
+SERVERPROPERTY('instancedefaultdatapath') AS [DefaultFile],
+SERVERPROPERTY('instancedefaultlogpath') AS [DefaultLog],
+SERVERPROPERTY(N'ResourceVersion') AS [ResourceVersionString],
+SERVERPROPERTY(N'ResourceLastUpdateDateTime') AS [ResourceLastUpdateDateTime],
+SERVERPROPERTY(N'CollationID') AS [CollationID],
+SERVERPROPERTY(N'ComparisonStyle') AS [ComparisonStyle],
+SERVERPROPERTY(N'SqlCharSet') AS [SqlCharSet],
+SERVERPROPERTY(N'SqlCharSetName') AS [SqlCharSetName],
+SERVERPROPERTY(N'SqlSortOrder') AS [SqlSortOrder],
+SERVERPROPERTY(N'SqlSortOrderName') AS [SqlSortOrderName],
+SERVERPROPERTY(N'BuildClrVersion') AS [BuildClrVersionString],
+ISNULL(@ServiceAccount,N'') AS [ServiceAccount],
+CAST(@NamedPipesEnabled AS bit) AS [NamedPipesEnabled],
+CAST(@TcpEnabled AS bit) AS [TcpEnabled],
+ISNULL(@InstallSharedDirectory,N'') AS [InstallSharedDirectory],
+ISNULL(suser_sname(sid_binary(ISNULL(@SqlGroup,N''))),N'') AS [SqlDomainGroup],
+@FilestreamLevel AS [FilestreamLevel],
+ISNULL(@FilestreamShareName,N'') AS [FilestreamShareName],
+-1 AS [TapeLoadWaitTime],
+CAST(SERVERPROPERTY(N'IsHadrEnabled') AS bit) AS [IsHadrEnabled],
+SERVERPROPERTY(N'HADRManagerStatus') AS [HadrManagerStatus],
+ISNULL(@cluster_name, '') AS [ClusterName],
+ISNULL(@quorum_type, 4) AS [ClusterQuorumType],
+ISNULL(@quorum_state, 3) AS [ClusterQuorumState],
+SUSER_SID(@ServiceAccount, 0) AS [ServiceAccountSid],
+CAST(SERVERPROPERTY('IsPolyBaseInstalled') AS bit) AS [IsPolyBaseInstalled],
+CAST(
+        serverproperty(N'Servername')
+       AS sysname) AS [Name],
+CAST(
+        ISNULL(serverproperty(N'instancename'),N'')
+       AS sysname) AS [InstanceName],
+CAST(0x0001 AS int) AS [Status],
+SERVERPROPERTY('PathSeparator') AS [PathSeparator],
+0 AS [IsContainedAuthentication],
+CAST(null AS int) AS [ServerType]`
+
+	payload := sendSQLBatch(t, conn, query)
+
+	if !bytes.Contains(payload, EncodeUTF16LE("AuditLevel")) {
+		t.Fatalf("expected 'AuditLevel' column in response")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("ServiceName")) {
+		t.Fatalf("expected 'ServiceName' column in response")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("Edition")) {
+		t.Fatalf("expected 'Edition' column in response")
+	}
+	if !bytes.Contains(payload, EncodeUTF16LE("ServerType")) {
+		t.Fatalf("expected 'ServerType' column in response")
+	}
+}
+
 
 
 

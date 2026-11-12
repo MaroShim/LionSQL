@@ -1472,6 +1472,11 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		return
 	}
 
+	// SSMS SMO Server Properties & Facets Batch (@HkeyLocal + xp_instance_regread + ServerType)
+	if s.handleSsmsServerPropertiesBatch(conn, trimmed, sess, extraTokens, true) {
+		return
+	}
+
 	// System function / version short-circuit
 	if cols, vals, ok := matchVersionQuery(trimmed); ok {
 		if s.DevMode() {
@@ -2552,6 +2557,11 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		return
 	}
 
+	// SSMS SMO Server Properties & Facets Batch (@HkeyLocal + xp_instance_regread + ServerType)
+	if s.handleSsmsServerPropertiesBatch(conn, trimmed, sess, nil, false) {
+		return
+	}
+
 	// System function / version short-circuit
 	if cols, vals, ok := matchVersionQuery(trimmed); ok {
 		if s.DevMode() {
@@ -3237,6 +3247,169 @@ func (s *Server) handleSsmsServerInitBatch(conn net.Conn, trimmed string, sess *
 	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 	if s.DevMode() {
 		log.Printf("[DEV][TDS][Success] query=SSMS SMO Server Discovery Batch cols=[Server_Name, Server_Urn, ... HostPlatform] rows=1 duration=0µs")
+	}
+	return true
+}
+
+// handleSsmsServerPropertiesBatch handles the Microsoft SMO Server Properties & Facets batch.
+// SSMS Object Explorer executes this multi-statement batch (declaring @HkeyLocal, xp_instance_regread, sys.dm_hadr_cluster)
+// whenever an object or node is expanded to populate server properties and facets.
+func (s *Server) handleSsmsServerPropertiesBatch(conn net.Conn, trimmed string, sess *ConnectionSession, extraTokens func(*bytes.Buffer), isRPC bool) bool {
+	upper := strings.ToUpper(trimmed)
+	if !strings.Contains(upper, "@HKEYLOCAL") || (!strings.Contains(upper, "SMOAUDITLEVEL") && !strings.Contains(upper, "AUDITLEVEL") && !strings.Contains(upper, "XP_INSTANCE_REGREAD")) {
+		return false
+	}
+	if !strings.Contains(upper, "SERVERTYPE") && !strings.Contains(upper, "ISCONTAINEDAUTHENTICATION") {
+		return false
+	}
+
+	cols := []ColumnInfo{
+		{Name: "AuditLevel", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "NumberOfLogFiles", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "LoginMode", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "MailProfile", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "BackupDirectory", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "PerfMonMode", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "InstallDataDirectory", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "ServiceName", Type: TypeNVarChar, Size: 256, Nullable: true},
+		{Name: "ErrorLogPath", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "RootDirectory", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "IsCaseSensitive", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "IsLocalDB", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "MaxPrecision", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "IsFullTextInstalled", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "VersionString", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "Edition", Type: TypeNVarChar, Size: 256, Nullable: true},
+		{Name: "ProductLevel", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "ProductUpdateLevel", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "IsSingleUser", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "EngineEdition", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "IsClustered", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "NetName", Type: TypeNVarChar, Size: 256, Nullable: true},
+		{Name: "ComputerNamePhysicalNetBIOS", Type: TypeNVarChar, Size: 256, Nullable: true},
+		{Name: "ServiceStartMode", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "MasterDBLogPath", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "MasterDBPath", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "DefaultFile", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "DefaultLog", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "ResourceVersionString", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "ResourceLastUpdateDateTime", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "CollationID", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "ComparisonStyle", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "SqlCharSet", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "SqlCharSetName", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "SqlSortOrder", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "SqlSortOrderName", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "BuildClrVersionString", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "ServiceAccount", Type: TypeNVarChar, Size: 256, Nullable: true},
+		{Name: "NamedPipesEnabled", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "TcpEnabled", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "InstallSharedDirectory", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "SqlDomainGroup", Type: TypeNVarChar, Size: 256, Nullable: true},
+		{Name: "PolicyHealthState", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "FilestreamLevel", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "FilestreamShareName", Type: TypeNVarChar, Size: 256, Nullable: true},
+		{Name: "TapeLoadWaitTime", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "IsHadrEnabled", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "HadrManagerStatus", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "ClusterName", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "ClusterQuorumType", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "ClusterQuorumState", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "ServiceAccountSid", Type: TypeBigVarBin, Size: 128, Nullable: true},
+		{Name: "IsPolyBaseInstalled", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "Name", Type: TypeNVarChar, Size: 256, Nullable: true},
+		{Name: "InstanceName", Type: TypeNVarChar, Size: 256, Nullable: true},
+		{Name: "Status", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "PathSeparator", Type: TypeNVarChar, Size: 8, Nullable: true},
+		{Name: "IsContainedAuthentication", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "ServerType", Type: TypeIntN, Size: 4, Nullable: true},
+	}
+
+	vals := []any{
+		int32(0),                             // AuditLevel
+		int32(-1),                            // NumberOfLogFiles
+		int32(2),                             // LoginMode (Mixed)
+		"",                                   // MailProfile
+		"C:\\data",                           // BackupDirectory
+		int32(1000),                         // PerfMonMode
+		"C:\\data",                           // InstallDataDirectory
+		"MSSQLSERVER",                        // ServiceName
+		"C:\\data",                           // ErrorLogPath
+		"C:\\LionSQL",                        // RootDirectory
+		false,                                // IsCaseSensitive
+		false,                                // IsLocalDB
+		int32(38),                            // MaxPrecision
+		false,                                // IsFullTextInstalled
+		"15.0.2000.5",                        // VersionString
+		"Developer Edition (64-bit)",         // Edition
+		"RTM",                                // ProductLevel
+		"",                                   // ProductUpdateLevel
+		false,                                // IsSingleUser
+		int32(3),                             // EngineEdition
+		false,                                // IsClustered
+		"MSSQLSERVER",                        // NetName
+		"MSSQLSERVER",                        // ComputerNamePhysicalNetBIOS
+		int32(2),                             // ServiceStartMode
+		"C:\\data",                           // MasterDBLogPath
+		"C:\\data",                           // MasterDBPath
+		"C:\\data",                           // DefaultFile
+		"C:\\data",                           // DefaultLog
+		"15.0.2000.5",                        // ResourceVersionString
+		"2026-01-01 00:00:00",                // ResourceLastUpdateDateTime
+		int32(872479760),                     // CollationID
+		int32(196609),                        // ComparisonStyle
+		int32(0),                             // SqlCharSet
+		"iso_1",                              // SqlCharSetName
+		int32(0),                             // SqlSortOrder
+		"nocase",                             // SqlSortOrderName
+		"v4.0.30319",                         // BuildClrVersionString
+		"NT AUTHORITY\\SYSTEM",               // ServiceAccount
+		false,                                // NamedPipesEnabled
+		true,                                 // TcpEnabled
+		"C:\\LionSQL",                        // InstallSharedDirectory
+		"",                                   // SqlDomainGroup
+		int32(0),                             // PolicyHealthState
+		int32(0),                             // FilestreamLevel
+		"",                                   // FilestreamShareName
+		int32(-1),                            // TapeLoadWaitTime
+		false,                                // IsHadrEnabled
+		int32(0),                             // HadrManagerStatus
+		"",                                   // ClusterName
+		int32(4),                             // ClusterQuorumType
+		int32(3),                             // ClusterQuorumState
+		[]byte{0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x12, 0x00, 0x00, 0x00}, // ServiceAccountSid
+		false,                                // IsPolyBaseInstalled
+		"MSSQLSERVER",                        // Name
+		"",                                   // InstanceName
+		int32(1),                             // Status (0x0001)
+		"\\",                                 // PathSeparator
+		int32(0),                             // IsContainedAuthentication
+		nil,                                  // ServerType
+	}
+
+	var buf bytes.Buffer
+	buf.Write(BuildColMetaData(cols))
+	buf.Write(sess.buildRow(cols, vals))
+
+	doneStatus := DoneFinal
+	if sess.inTx {
+		doneStatus |= DoneInXact
+	}
+
+	if isRPC {
+		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
+		if extraTokens != nil {
+			extraTokens(&buf)
+		}
+		buf.Write(BuildReturnStatus(0))
+		buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
+	} else {
+		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, 1))
+	}
+
+	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+	if s.DevMode() {
+		log.Printf("[DEV][TDS][Success] query=SSMS SMO Server Properties Batch cols=[AuditLevel, ... ServerType] rows=1 duration=0µs")
 	}
 	return true
 }
