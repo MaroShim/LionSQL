@@ -12,12 +12,12 @@ import (
 
 // ExtractMssqlTableNameEq extracts table name equality filter from MSSQL catalog query.
 func ExtractMssqlTableNameEq(sql string) (string, bool) {
-	return sqlutil.ExtractEqualityFilter(sql, "table_name", "c.name", "t.name", "ic.table_name", "name")
+	return sqlutil.ExtractEqualityFilter(sql, "table_name", "tbl.name", "c.name", "t.name", "ic.table_name", "tbl.table_name", "name")
 }
 
 // ExtractMssqlSchemaNameEq extracts schema name equality filter from MSSQL catalog query.
 func ExtractMssqlSchemaNameEq(sql string) (string, bool) {
-	return sqlutil.ExtractEqualityFilter(sql, "table_schema", "s.name", "ic.table_schema", "name")
+	return sqlutil.ExtractEqualityFilter(sql, "table_schema", "tbl.schema_id", "s.name", "ic.table_schema", "name")
 }
 
 func cleanTargetTableName(raw string) string {
@@ -42,7 +42,7 @@ func parseTargetObjectIDs(sql string, src Source) map[int]bool {
 			return res
 		}
 	}
-	if val, ok := sqlutil.ExtractEqualityFilter(sql, "object_id"); ok {
+	if val, ok := sqlutil.ExtractEqualityFilter(sql, "object_id", "tbl.object_id", "clmns.object_id", "i.object_id", "t.object_id", "k.parent_object_id", "fk.parent_object_id", "chk.parent_object_id", "def.parent_object_id", "tr.parent_id", "s.object_id", "parent_object_id"); ok {
 		if id, err := strconv.Atoi(val); err == nil {
 			return map[int]bool{id: true}
 		}
@@ -157,6 +157,10 @@ func execInformationSchemaColumnsWithComputed(src Source, sql string) (*Result, 
 
 func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 	columns := []string{
+		"Name", "ID", "Nullable", "Identity", "RowGuidCol", "IsFileStream",
+		"IsSparse", "IsColumnSet", "Computed", "IsDeterministic", "IsPersisted",
+		"Length", "Precision", "Scale", "Collation", "DataType", "SystemType",
+		"Default", "DefaultConstraint", "Urn",
 		"columnName", "dataType", "objectId", "isIdentity",
 		"maxLength", "precision", "scale", "isNullable",
 		"charMaxLength", "defaultValue", "defaultConstraint",
@@ -167,6 +171,14 @@ func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
+
+	currDb := "master"
+	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
+		if cur := dbs.GetCurrentDatabase(); cur != "" {
+			currDb = cur
+		}
+	}
+	serverName := "MSSQLSERVER"
 
 	for tIdx, t := range tables {
 		objID := 1000 + tIdx
@@ -253,66 +265,106 @@ func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 				collName = "SQL_Latin1_General_CP1_CI_AS"
 			}
 
+			colUrn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/Column[@Name='%s']", serverName, currDb, t.Name, c.Name)
+
 			allRows = append(allRows, map[string]any{
-				"columnName":         c.Name,
-				"name":               c.Name,
-				"column_name":        c.Name,
-				"a.name":             c.Name,
-				"b.name":             dataType,
-				"c.name":             c.Name,
-				"collation_name":     collName,
-				"a.collation_name":   collName,
-				"dataType":           dataType,
-				"data_type":          dataType,
-				"type_name":          dataType,
-				"ctype":              dataType,
-				"objectId":           objID,
-				"object_id":          objID,
-				"a.object_id":        objID,
-				"c.object_id":        objID,
-				"isIdentity":         false,
-				"is_identity":        false,
-				"maxLength":          int64(maxLen),
-				"max_length":         int64(maxLen),
-				"a.max_length":       int64(maxLen),
-				"precision":          int64(prec),
-				"a.precision":        int64(prec),
-				"scale":              int64(scale),
-				"a.scale":            int64(scale),
-				"isNullable":         c.Nullable,
-				"is_nullable":        c.Nullable,
-				"a.is_nullable":      c.Nullable,
-				"nullable":           c.Nullable,
-				"charMaxLength":      charMaxLen,
-				"defaultValue":       nil,
-				"defaultConstraint":  nil,
-				"vdefault":           "",
-				"computedExpression": nil,
-				"isPersisted":        nil,
-				"columnId":           int64(cIdx + 1),
-				"column_id":          int64(cIdx + 1),
-				"a.column_id":        int64(cIdx + 1),
-				"ic.column_id":       icColID,
-				"numericPrecision":   numPrec,
-				"numericScale":       numScale,
-				"isSparse":           false,
-				"columnComment":      nil,
-				"system_type_id":     int(c.Type),
-				"user_type_id":       int(c.Type),
-				"type":               "U",
-				"type_desc":          "USER_TABLE",
-				"tableName":          t.Name,
-				"table_name":         t.Name,
-				"schemaName":         "dbo",
-				"schema_name":        "dbo",
-				"o.type":             "U",
-				"o.object_id":        objID,
-				"o.name":             t.Name,
-				"u.name":             "dbo",
-				"is_primary_key":     c.PrimaryKey,
-				"is_pk":              isPKVal,
-				"default_is_null":    true,
-				"defaultIsNull":      true,
+				"Name":                 c.Name,
+				"ID":                   int32(cIdx + 1),
+				"Nullable":             c.Nullable,
+				"Identity":             c.Identity,
+				"RowGuidCol":           false,
+				"IsFileStream":         false,
+				"IsSparse":             false,
+				"IsColumnSet":          false,
+				"Computed":             false,
+				"IsDeterministic":      false,
+				"IsPersisted":          false,
+				"Length":               int32(maxLen),
+				"Precision":            int32(prec),
+				"Scale":                int32(scale),
+				"Collation":            collName,
+				"DataType":             dataType,
+				"SystemType":           dataType,
+				"Default":              c.Default,
+				"DefaultConstraint":    "",
+				"Urn":                  colUrn,
+				"clmns.name":           c.Name,
+				"clmns.column_id":      int32(cIdx + 1),
+				"clmns.is_nullable":    c.Nullable,
+				"clmns.is_identity":    c.Identity,
+				"clmns.is_rowguidcol":  false,
+				"clmns.is_filestream":  false,
+				"clmns.is_sparse":      false,
+				"clmns.is_column_set":  false,
+				"clmns.is_computed":    false,
+				"clmns.max_length":     int64(maxLen),
+				"clmns.precision":      int64(prec),
+				"clmns.scale":          int64(scale),
+				"clmns.collation_name": collName,
+				"usrt.name":            dataType,
+				"s1clmns.name":         dataType,
+				"columnName":           c.Name,
+				"name":                 c.Name,
+				"column_name":          c.Name,
+				"a.name":               c.Name,
+				"b.name":               dataType,
+				"c.name":               c.Name,
+				"collation_name":       collName,
+				"a.collation_name":     collName,
+				"dataType":             dataType,
+				"data_type":            dataType,
+				"type_name":            dataType,
+				"ctype":                dataType,
+				"objectId":             objID,
+				"object_id":            objID,
+				"a.object_id":          objID,
+				"c.object_id":          objID,
+				"isIdentity":           false,
+				"is_identity":          false,
+				"maxLength":            int64(maxLen),
+				"max_length":           int64(maxLen),
+				"a.max_length":         int64(maxLen),
+				"precision":            int64(prec),
+				"a.precision":          int64(prec),
+				"scale":                int64(scale),
+				"a.scale":              int64(scale),
+				"isNullable":           c.Nullable,
+				"is_nullable":          c.Nullable,
+				"a.is_nullable":        c.Nullable,
+				"nullable":             c.Nullable,
+				"charMaxLength":        charMaxLen,
+				"defaultValue":         nil,
+				"defaultConstraint":    nil,
+				"vdefault":             "",
+				"computedExpression":   nil,
+				"columnId":             int64(cIdx + 1),
+				"column_id":            int64(cIdx + 1),
+				"a.column_id":          int64(cIdx + 1),
+				"ic.column_id":         icColID,
+				"numericPrecision":     numPrec,
+				"numericScale":         numScale,
+				"isSparse":             false,
+				"columnComment":        nil,
+				"system_type_id":       int(c.Type),
+				"user_type_id":         int(c.Type),
+				"type":                 "U",
+				"type_desc":            "USER_TABLE",
+				"tableName":            t.Name,
+				"table_name":           t.Name,
+				"tbl.name":             t.Name,
+				"tbl.schema_id":        int32(1),
+				"tbl.object_id":        objID,
+				"schema_id":            int32(1),
+				"schemaName":           "dbo",
+				"schema_name":          "dbo",
+				"o.type":               "U",
+				"o.object_id":          objID,
+				"o.name":               t.Name,
+				"u.name":               "dbo",
+				"is_primary_key":       c.PrimaryKey,
+				"is_pk":                isPKVal,
+				"default_is_null":      true,
+				"defaultIsNull":        true,
 				"isnull(p.is_primary_key, 0)": isPKVal,
 			})
 		}
@@ -414,7 +466,9 @@ func execSysIndexesSecondary(src Source, sql string) (*Result, error) {
 
 func execSysIndexColumns(src Source, sql string) (*Result, error) {
 	columns := []string{
-		"object_id", "index_id", "column_id", "columnName", "isDescending", "isIncludedColumn",
+		"IndexID", "ColumnID", "KeyOrdinal", "Name", "Descending",
+		"object_id", "index_id", "column_id", "columnName", "column_name", "name",
+		"key_ordinal", "is_descending_key", "isDescending", "isIncludedColumn", "is_included_column",
 	}
 
 	targetIDs := parseTargetObjectIDs(sql, src)
@@ -426,8 +480,50 @@ func execSysIndexColumns(src Source, sql string) (*Result, error) {
 		if targetIDs != nil && !targetIDs[objID] {
 			continue
 		}
+
+		// 1. Primary Key columns (index_id = 1)
+		pkColOrdinal := 1
+		for cIdx, c := range t.Columns {
+			if c.PrimaryKey {
+				allRows = append(allRows, map[string]any{
+					"IndexID":              int32(1),
+					"index_id":             int32(1),
+					"ic.index_id":          int32(1),
+					"ColumnID":             int32(cIdx + 1),
+					"column_id":            int32(cIdx + 1),
+					"ic.column_id":         int32(cIdx + 1),
+					"clmns.column_id":      int32(cIdx + 1),
+					"KeyOrdinal":           int32(pkColOrdinal),
+					"key_ordinal":          int32(pkColOrdinal),
+					"ic.key_ordinal":       int32(pkColOrdinal),
+					"Name":                 c.Name,
+					"name":                 c.Name,
+					"columnName":           c.Name,
+					"column_name":          c.Name,
+					"clmns.name":           c.Name,
+					"Descending":           false,
+					"isDescending":         false,
+					"is_descending_key":    false,
+					"ic.is_descending_key": false,
+					"isIncludedColumn":     false,
+					"is_included_column":   false,
+					"object_id":            objID,
+					"objectId":             objID,
+					"ic.object_id":         objID,
+					"tbl.object_id":        objID,
+					"tbl.name":             t.Name,
+					"tbl.schema_id":        int32(1),
+					"schema_id":            int32(1),
+					"tableName":            t.Name,
+					"table_name":           t.Name,
+				})
+				pkColOrdinal++
+			}
+		}
+
+		// 2. Secondary index columns (index_id = idxNum + 2)
 		for idxNum, idx := range t.Indexes {
-			for _, colName := range idx.Columns {
+			for kOrd, colName := range idx.Columns {
 				colID := 1
 				for cIdx, c := range t.Columns {
 					if strings.EqualFold(c.Name, colName) {
@@ -436,15 +532,36 @@ func execSysIndexColumns(src Source, sql string) (*Result, error) {
 					}
 				}
 				allRows = append(allRows, map[string]any{
-					"object_id":        objID,
-					"objectId":         objID,
-					"index_id":         idxNum + 2,
-					"column_id":        colID,
-					"columnName":       colName,
-					"column_name":      colName,
-					"name":             colName,
-					"isDescending":     false,
-					"isIncludedColumn": false,
+					"IndexID":              int32(idxNum + 2),
+					"index_id":             int32(idxNum + 2),
+					"ic.index_id":          int32(idxNum + 2),
+					"ColumnID":             int32(colID),
+					"column_id":            int32(colID),
+					"ic.column_id":         int32(colID),
+					"clmns.column_id":      int32(colID),
+					"KeyOrdinal":           int32(kOrd + 1),
+					"key_ordinal":          int32(kOrd + 1),
+					"ic.key_ordinal":       int32(kOrd + 1),
+					"Name":                 colName,
+					"name":                 colName,
+					"columnName":           colName,
+					"column_name":          colName,
+					"clmns.name":           colName,
+					"Descending":           false,
+					"isDescending":         false,
+					"is_descending_key":    false,
+					"ic.is_descending_key": false,
+					"isIncludedColumn":     false,
+					"is_included_column":   false,
+					"object_id":            objID,
+					"objectId":             objID,
+					"ic.object_id":         objID,
+					"tbl.object_id":        objID,
+					"tbl.name":             t.Name,
+					"tbl.schema_id":        int32(1),
+					"schema_id":            int32(1),
+					"tableName":            t.Name,
+					"table_name":           t.Name,
 				})
 			}
 		}
@@ -755,13 +872,13 @@ func execSysParameters(sql string) (*Result, error) {
 
 func execSysObjectsTriggers(sql string) (*Result, error) {
 	columns := []string{
+		"Name", "ID", "IsEnabled", "Urn",
 		"modifyDate", "objectId", "triggerName", "schemaName",
 		"tableName", "triggerTiming", "eventType", "definition",
+		"name", "object_id", "parent_id", "is_disabled",
 	}
-	return &Result{
-		Columns: columns,
-		Rows:    []map[string]any{},
-	}, nil
+	var allRows []map[string]any
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execSysObjectsMetadata(src Source, sql string) (*Result, error) {
@@ -998,6 +1115,411 @@ func execSysTablesJoinedIndexes(src Source, sql string) (*Result, error) {
 			"dsidx.type":                      "FG",
 		}
 		allRows = append(allRows, row)
+	}
+
+	return FormatResultWithSQL(columns, allRows, sql)
+}
+
+func execSysIndexesForSSMS(src Source, sql string) (*Result, error) {
+	columns := []string{
+		"Name", "ID", "IndexType", "TypeDesc", "IsPrimaryKey", "IsUnique",
+		"IsUniqueConstraint", "HasFilter", "FilterDefinition", "Urn",
+		"name", "index_id", "type", "type_desc", "is_primary_key", "is_unique",
+		"is_unique_constraint", "has_filter", "filter_definition", "object_id",
+	}
+
+	targetIDs := parseTargetObjectIDs(sql, src)
+	tables := src.GetSortedTables()
+	var allRows []map[string]any
+
+	currDb := "master"
+	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
+		if cur := dbs.GetCurrentDatabase(); cur != "" {
+			currDb = cur
+		}
+	}
+	serverName := "MSSQLSERVER"
+
+	for tIdx, t := range tables {
+		objID := 1000 + tIdx
+		if targetIDs != nil && !targetIDs[objID] {
+			continue
+		}
+
+		// 1. Primary Key Clustered Index (if table has primary key)
+		hasPK := false
+		for _, c := range t.Columns {
+			if c.PrimaryKey {
+				hasPK = true
+				break
+			}
+		}
+		if hasPK {
+			pkName := "PK_" + t.Name
+			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/Index[@Name='%s']", serverName, currDb, t.Name, pkName)
+			allRows = append(allRows, map[string]any{
+				"Name":                 pkName,
+				"name":                 pkName,
+				"i.name":               pkName,
+				"ID":                   int32(1),
+				"index_id":             int32(1),
+				"i.index_id":           int32(1),
+				"IndexType":            int32(1), // Clustered
+				"type":                 int32(1),
+				"i.type":               int32(1),
+				"TypeDesc":             "CLUSTERED",
+				"type_desc":            "CLUSTERED",
+				"i.type_desc":          "CLUSTERED",
+				"IsPrimaryKey":         true,
+				"is_primary_key":       true,
+				"i.is_primary_key":     true,
+				"IsUnique":             true,
+				"is_unique":            true,
+				"i.is_unique":          true,
+				"IsUniqueConstraint":   false,
+				"is_unique_constraint": false,
+				"HasFilter":            false,
+				"has_filter":           false,
+				"FilterDefinition":     "",
+				"filter_definition":    "",
+				"object_id":            objID,
+				"i.object_id":          objID,
+				"tbl.object_id":        objID,
+				"tbl.name":             t.Name,
+				"tbl.schema_id":        int32(1),
+				"schema_id":            int32(1),
+				"tableName":            t.Name,
+				"table_name":           t.Name,
+				"Urn":                  urn,
+			})
+		}
+
+		// 2. Secondary Indexes
+		for idxNum, idx := range t.Indexes {
+			idxID := int32(idxNum + 2)
+			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/Index[@Name='%s']", serverName, currDb, t.Name, idx.Name)
+			allRows = append(allRows, map[string]any{
+				"Name":                 idx.Name,
+				"name":                 idx.Name,
+				"i.name":               idx.Name,
+				"ID":                   idxID,
+				"index_id":             idxID,
+				"i.index_id":           idxID,
+				"IndexType":            int32(2), // Non-Clustered
+				"type":                 int32(2),
+				"i.type":               int32(2),
+				"TypeDesc":             "NONCLUSTERED",
+				"type_desc":            "NONCLUSTERED",
+				"i.type_desc":          "NONCLUSTERED",
+				"IsPrimaryKey":         false,
+				"is_primary_key":       false,
+				"i.is_primary_key":     false,
+				"IsUnique":             idx.Unique,
+				"is_unique":            idx.Unique,
+				"i.is_unique":          idx.Unique,
+				"IsUniqueConstraint":   idx.Unique,
+				"is_unique_constraint": idx.Unique,
+				"HasFilter":            false,
+				"has_filter":           false,
+				"FilterDefinition":     "",
+				"filter_definition":    "",
+				"object_id":            objID,
+				"i.object_id":          objID,
+				"tbl.object_id":        objID,
+				"tbl.name":             t.Name,
+				"tbl.schema_id":        int32(1),
+				"schema_id":            int32(1),
+				"tableName":            t.Name,
+				"table_name":           t.Name,
+				"Urn":                  urn,
+			})
+		}
+	}
+
+	return FormatResultWithSQL(columns, allRows, sql)
+}
+
+func execSysKeyConstraintsMSSQL(src Source, sql string) (*Result, error) {
+	columns := []string{
+		"Name", "ID", "KeyType", "TypeDesc", "IsSystemNamed", "Urn",
+		"name", "type", "type_desc", "is_system_named", "object_id", "parent_object_id", "schema_id",
+	}
+
+	targetIDs := parseTargetObjectIDs(sql, src)
+	tables := src.GetSortedTables()
+	var allRows []map[string]any
+
+	currDb := "master"
+	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
+		if cur := dbs.GetCurrentDatabase(); cur != "" {
+			currDb = cur
+		}
+	}
+	serverName := "MSSQLSERVER"
+
+	for tIdx, t := range tables {
+		objID := 1000 + tIdx
+		if targetIDs != nil && !targetIDs[objID] {
+			continue
+		}
+
+		hasPK := false
+		for _, c := range t.Columns {
+			if c.PrimaryKey {
+				hasPK = true
+				break
+			}
+		}
+		if hasPK {
+			pkName := "PK_" + t.Name
+			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/Key[@Name='%s']", serverName, currDb, t.Name, pkName)
+			allRows = append(allRows, map[string]any{
+				"Name":               pkName,
+				"name":               pkName,
+				"k.name":             pkName,
+				"ID":                 int32(objID + 50000),
+				"object_id":          int32(objID + 50000),
+				"k.object_id":        int32(objID + 50000),
+				"parent_object_id":   objID,
+				"k.parent_object_id": objID,
+				"tbl.object_id":      objID,
+				"tbl.name":           t.Name,
+				"tbl.schema_id":      int32(1),
+				"tableName":          t.Name,
+				"table_name":         t.Name,
+				"KeyType":            "PK",
+				"type":               "PK",
+				"k.type":             "PK",
+				"TypeDesc":           "PRIMARY_KEY_CONSTRAINT",
+				"type_desc":          "PRIMARY_KEY_CONSTRAINT",
+				"k.type_desc":        "PRIMARY_KEY_CONSTRAINT",
+				"IsSystemNamed":      false,
+				"is_system_named":    false,
+				"schema_id":          int32(1),
+				"Urn":                urn,
+			})
+		}
+	}
+
+	return FormatResultWithSQL(columns, allRows, sql)
+}
+
+func execSysForeignKeysMSSQL(src Source, sql string) (*Result, error) {
+	columns := []string{
+		"Name", "ID", "Urn", "name", "object_id", "parent_object_id", "referenced_object_id",
+		"is_disabled", "is_not_trusted", "delete_referential_action", "update_referential_action",
+	}
+
+	targetIDs := parseTargetObjectIDs(sql, src)
+	tables := src.GetSortedTables()
+	var allRows []map[string]any
+
+	currDb := "master"
+	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
+		if cur := dbs.GetCurrentDatabase(); cur != "" {
+			currDb = cur
+		}
+	}
+	serverName := "MSSQLSERVER"
+
+	for tIdx, t := range tables {
+		objID := 1000 + tIdx
+		if targetIDs != nil && !targetIDs[objID] {
+			continue
+		}
+
+		for fkIdx, fk := range t.ForeignKeys {
+			fkName := fk.Name
+			if fkName == "" {
+				fkName = fmt.Sprintf("FK_%s_%d", t.Name, fkIdx+1)
+			}
+			refObjID := 1000
+			for otherIdx, otherT := range tables {
+				if strings.EqualFold(otherT.Name, fk.ParentTable) {
+					refObjID = 1000 + otherIdx
+					break
+				}
+			}
+			fkID := int32(objID + 60000 + fkIdx)
+			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/ForeignKey[@Name='%s']", serverName, currDb, t.Name, fkName)
+			allRows = append(allRows, map[string]any{
+				"Name":                      fkName,
+				"name":                      fkName,
+				"fk.name":                   fkName,
+				"ID":                        fkID,
+				"object_id":                 fkID,
+				"fk.object_id":              fkID,
+				"parent_object_id":          objID,
+				"fk.parent_object_id":       objID,
+				"referenced_object_id":      refObjID,
+				"fk.referenced_object_id":   refObjID,
+				"tbl.object_id":             objID,
+				"tbl.name":                  t.Name,
+				"tbl.schema_id":             int32(1),
+				"schema_id":                 int32(1),
+				"tableName":                 t.Name,
+				"table_name":                t.Name,
+				"is_disabled":               false,
+				"is_not_trusted":            false,
+				"delete_referential_action": int32(0),
+				"update_referential_action": int32(0),
+				"Urn":                       urn,
+			})
+		}
+	}
+
+	return FormatResultWithSQL(columns, allRows, sql)
+}
+
+func execSysCheckConstraintsMSSQL(src Source, sql string) (*Result, error) {
+	columns := []string{
+		"Name", "ID", "Definition", "is_disabled", "parent_object_id", "object_id", "Urn",
+	}
+	var allRows []map[string]any
+	return FormatResultWithSQL(columns, allRows, sql)
+}
+
+func execSysDefaultConstraintsMSSQL(src Source, sql string) (*Result, error) {
+	columns := []string{
+		"Name", "ID", "Definition", "is_disabled", "parent_object_id", "parent_column_id", "object_id", "Urn",
+	}
+
+	targetIDs := parseTargetObjectIDs(sql, src)
+	tables := src.GetSortedTables()
+	var allRows []map[string]any
+
+	currDb := "master"
+	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
+		if cur := dbs.GetCurrentDatabase(); cur != "" {
+			currDb = cur
+		}
+	}
+	serverName := "MSSQLSERVER"
+
+	for tIdx, t := range tables {
+		objID := 1000 + tIdx
+		if targetIDs != nil && !targetIDs[objID] {
+			continue
+		}
+
+		for cIdx, c := range t.Columns {
+			if c.Default != "" {
+				defName := fmt.Sprintf("DF_%s_%s", t.Name, c.Name)
+				defID := int32(objID*100 + cIdx + 1)
+				urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/DefaultConstraint[@Name='%s']", serverName, currDb, t.Name, defName)
+				allRows = append(allRows, map[string]any{
+					"Name":                 defName,
+					"name":                 defName,
+					"def.name":             defName,
+					"ID":                   defID,
+					"object_id":            defID,
+					"def.object_id":        defID,
+					"Definition":           c.Default,
+					"definition":           c.Default,
+					"def.definition":       c.Default,
+					"is_disabled":          false,
+					"parent_object_id":     objID,
+					"def.parent_object_id": objID,
+					"parent_column_id":     int32(cIdx + 1),
+					"def.parent_column_id": int32(cIdx + 1),
+					"tbl.object_id":        objID,
+					"tbl.name":             t.Name,
+					"tbl.schema_id":        int32(1),
+					"schema_id":            int32(1),
+					"tableName":            t.Name,
+					"table_name":           t.Name,
+					"Urn":                  urn,
+				})
+			}
+		}
+	}
+
+	return FormatResultWithSQL(columns, allRows, sql)
+}
+
+func execSysStatsMSSQL(src Source, sql string) (*Result, error) {
+	columns := []string{
+		"Name", "ID", "stats_id", "object_id", "auto_created", "user_created", "no_recompute", "has_filter", "filter_definition", "Urn",
+	}
+
+	targetIDs := parseTargetObjectIDs(sql, src)
+	tables := src.GetSortedTables()
+	var allRows []map[string]any
+
+	currDb := "master"
+	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
+		if cur := dbs.GetCurrentDatabase(); cur != "" {
+			currDb = cur
+		}
+	}
+	serverName := "MSSQLSERVER"
+
+	for tIdx, t := range tables {
+		objID := 1000 + tIdx
+		if targetIDs != nil && !targetIDs[objID] {
+			continue
+		}
+
+		hasPK := false
+		for _, c := range t.Columns {
+			if c.PrimaryKey {
+				hasPK = true
+				break
+			}
+		}
+		if hasPK {
+			pkName := "PK_" + t.Name
+			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/Statistic[@Name='%s']", serverName, currDb, t.Name, pkName)
+			allRows = append(allRows, map[string]any{
+				"Name":              pkName,
+				"name":              pkName,
+				"s.name":            pkName,
+				"ID":                int32(1),
+				"stats_id":          int32(1),
+				"s.stats_id":        int32(1),
+				"object_id":         objID,
+				"s.object_id":       objID,
+				"tbl.object_id":     objID,
+				"tbl.name":          t.Name,
+				"tbl.schema_id":     int32(1),
+				"schema_id":         int32(1),
+				"tableName":         t.Name,
+				"table_name":        t.Name,
+				"auto_created":      false,
+				"user_created":      false,
+				"no_recompute":      false,
+				"has_filter":        false,
+				"filter_definition": "",
+				"Urn":               urn,
+			})
+		}
+
+		for idxNum, idx := range t.Indexes {
+			sID := int32(idxNum + 2)
+			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/Statistic[@Name='%s']", serverName, currDb, t.Name, idx.Name)
+			allRows = append(allRows, map[string]any{
+				"Name":              idx.Name,
+				"name":              idx.Name,
+				"s.name":            idx.Name,
+				"ID":                sID,
+				"stats_id":          sID,
+				"s.stats_id":        sID,
+				"object_id":         objID,
+				"s.object_id":       objID,
+				"tbl.object_id":     objID,
+				"tbl.name":          t.Name,
+				"tbl.schema_id":     int32(1),
+				"schema_id":         int32(1),
+				"tableName":         t.Name,
+				"table_name":        t.Name,
+				"auto_created":      false,
+				"user_created":      false,
+				"no_recompute":      false,
+				"has_filter":        false,
+				"filter_definition": "",
+				"Urn":               urn,
+			})
+		}
 	}
 
 	return FormatResultWithSQL(columns, allRows, sql)

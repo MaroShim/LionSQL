@@ -192,6 +192,117 @@ func TestToolAudit_TDS_SSMS_DiscoverySuite(t *testing.T) {
 	if rowCount != 2 {
 		t.Fatalf("expected 2 customers rows, got %d", rowCount)
 	}
+
+	// 1.7. SSMS SMO Columns Sub-Node Expansion via sp_executesql
+	smoColsSQL := `exec sp_executesql N'SELECT
+		clmns.name AS [Name],
+		clmns.column_id AS [ID],
+		clmns.is_nullable AS [Nullable],
+		clmns.is_identity AS [Identity],
+		clmns.max_length AS [Length],
+		usrt.name AS [DataType],
+		clmns.name AS [Urn]
+		FROM sys.tables AS tbl
+		INNER JOIN sys.all_columns AS clmns ON clmns.object_id = tbl.object_id
+		LEFT OUTER JOIN sys.types AS usrt ON usrt.user_type_id = clmns.user_type_id
+		WHERE (tbl.name=@_msparam_0 and SCHEMA_NAME(tbl.schema_id)=@_msparam_1)
+		ORDER BY [ID] ASC', N'@_msparam_0 nvarchar(4000),@_msparam_1 nvarchar(4000)', @_msparam_0=N'customers', @_msparam_1=N'dbo'`
+
+	rowsSmoCols, err := db.QueryContext(ctx, smoColsSQL)
+	if err != nil {
+		t.Fatalf("SSMS SMO columns query failed: %v", err)
+	}
+	smoColCount := 0
+	for rowsSmoCols.Next() {
+		var name, dt, urn string
+		var id, length int
+		var nullable, identity bool
+		if err := rowsSmoCols.Scan(&name, &id, &nullable, &identity, &length, &dt, &urn); err != nil {
+			t.Fatalf("scan SMO column failed: %v", err)
+		}
+		smoColCount++
+	}
+	rowsSmoCols.Close()
+	if smoColCount != 6 {
+		t.Fatalf("expected 6 SMO columns for customers, got %d", smoColCount)
+	}
+
+	// 1.8. SSMS SMO Indexes Sub-Node Expansion via sp_executesql
+	smoIdxSQL := `exec sp_executesql N'SELECT
+		i.name AS [Name],
+		i.index_id AS [ID],
+		i.type_desc AS [TypeDesc],
+		i.is_primary_key AS [IsPrimaryKey],
+		i.is_unique AS [IsUnique]
+		FROM sys.tables AS tbl
+		INNER JOIN sys.indexes AS i ON (i.index_id > 0 and i.is_hypothetical = 0) AND (i.object_id=tbl.object_id)
+		WHERE (tbl.name=@_msparam_0 and SCHEMA_NAME(tbl.schema_id)=@_msparam_1)
+		ORDER BY [ID] ASC', N'@_msparam_0 nvarchar(4000),@_msparam_1 nvarchar(4000)', @_msparam_0=N'customers', @_msparam_1=N'dbo'`
+
+	rowsSmoIdx, err := db.QueryContext(ctx, smoIdxSQL)
+	if err != nil {
+		t.Fatalf("SSMS SMO indexes query failed: %v", err)
+	}
+	smoIdxCount := 0
+	for rowsSmoIdx.Next() {
+		var name, typeDesc string
+		var id int
+		var isPK, isUnique bool
+		if err := rowsSmoIdx.Scan(&name, &id, &typeDesc, &isPK, &isUnique); err != nil {
+			t.Fatalf("scan SMO index failed: %v", err)
+		}
+		smoIdxCount++
+	}
+	rowsSmoIdx.Close()
+	if smoIdxCount != 1 {
+		t.Fatalf("expected 1 SMO index (PK) for customers, got %d", smoIdxCount)
+	}
+
+	// 1.9. SSMS SMO Keys Sub-Node Expansion via sp_executesql
+	smoKeysSQL := `exec sp_executesql N'SELECT
+		k.name AS [Name],
+		k.type AS [KeyType],
+		k.type_desc AS [TypeDesc]
+		FROM sys.tables AS tbl
+		INNER JOIN sys.key_constraints AS k ON k.parent_object_id = tbl.object_id
+		WHERE (tbl.name=@_msparam_0 and SCHEMA_NAME(tbl.schema_id)=@_msparam_1)', N'@_msparam_0 nvarchar(4000),@_msparam_1 nvarchar(4000)', @_msparam_0=N'customers', @_msparam_1=N'dbo'`
+
+	rowsSmoKeys, err := db.QueryContext(ctx, smoKeysSQL)
+	if err != nil {
+		t.Fatalf("SSMS SMO keys query failed: %v", err)
+	}
+	smoKeyCount := 0
+	for rowsSmoKeys.Next() {
+		var name, keyType, typeDesc string
+		if err := rowsSmoKeys.Scan(&name, &keyType, &typeDesc); err != nil {
+			t.Fatalf("scan SMO key constraint failed: %v", err)
+		}
+		smoKeyCount++
+	}
+	rowsSmoKeys.Close()
+	if smoKeyCount != 1 {
+		t.Fatalf("expected 1 SMO key constraint for customers, got %d", smoKeyCount)
+	}
+
+	// 1.10. SSMS Right-Click "Select Top 1000 Rows" with 3-Part Qualified Name
+	qTop1000 := "SELECT TOP (1000) [customer_id], [name] FROM [master].[dbo].[customers]"
+	rowsTop1000, err := db.QueryContext(ctx, qTop1000)
+	if err != nil {
+		t.Fatalf("SSMS 3-part TOP 1000 query failed: %v", err)
+	}
+	top1000Count := 0
+	for rowsTop1000.Next() {
+		var id string
+		var name string
+		if err := rowsTop1000.Scan(&id, &name); err != nil {
+			t.Fatalf("scan TOP 1000 row failed: %v", err)
+		}
+		top1000Count++
+	}
+	rowsTop1000.Close()
+	if top1000Count != 2 {
+		t.Fatalf("expected 2 rows from TOP 1000 3-part query, got %d", top1000Count)
+	}
 }
 
 // 2. DbGate 9-Step Choreography End-to-End Audit

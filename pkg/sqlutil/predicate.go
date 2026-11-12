@@ -607,6 +607,8 @@ func ExtractEqualityFilter(sql string, targetCols ...string) (string, bool) {
 	inLineComment := false
 	inBlockComment := false
 	depth := 0
+	subqueryDepth := 0
+	var subqueryStack []bool
 
 	for i := 0; i < n; i++ {
 		ch := sql[i]
@@ -679,17 +681,62 @@ func ExtractEqualityFilter(sql string, targetCols ...string) (string, bool) {
 
 		if ch == '(' {
 			depth++
+			// Determine if this parenthesis starts a subquery (SELECT ...)
+			isSubquery := false
+			j := i + 1
+			for j < n {
+				if sql[j] == ' ' || sql[j] == '\t' || sql[j] == '\n' || sql[j] == '\r' {
+					j++
+					continue
+				}
+				if j+1 < n && sql[j] == '-' && sql[j+1] == '-' {
+					j += 2
+					for j < n && sql[j] != '\n' {
+						j++
+					}
+					continue
+				}
+				if j+1 < n && sql[j] == '/' && sql[j+1] == '*' {
+					j += 2
+					for j+1 < n && !(sql[j] == '*' && sql[j+1] == '/') {
+						j++
+					}
+					if j+1 < n {
+						j += 2
+					}
+					continue
+				}
+				break
+			}
+			if j+6 <= n && strings.EqualFold(sql[j:j+6], "SELECT") {
+				if j+6 == n || isWordBoundary(sql[j+6]) {
+					isSubquery = true
+				}
+			}
+			if isSubquery {
+				subqueryDepth++
+				subqueryStack = append(subqueryStack, true)
+			} else {
+				subqueryStack = append(subqueryStack, false)
+			}
 			continue
 		}
 		if ch == ')' {
 			if depth > 0 {
 				depth--
 			}
+			if len(subqueryStack) > 0 {
+				wasSub := subqueryStack[len(subqueryStack)-1]
+				subqueryStack = subqueryStack[:len(subqueryStack)-1]
+				if wasSub && subqueryDepth > 0 {
+					subqueryDepth--
+				}
+			}
 			continue
 		}
 
-		// Check for '=' operator at depth 0 only (prevent accidental matches inside subqueries)
-		if depth == 0 && ch == '=' && i+1 < n && sql[i+1] != '=' && (i == 0 || (sql[i-1] != '!' && sql[i-1] != '<' && sql[i-1] != '>' && sql[i-1] != ':')) {
+		// Check for '=' operator outside subqueries (prevent accidental matches inside subqueries)
+		if subqueryDepth == 0 && ch == '=' && i+1 < n && sql[i+1] != '=' && (i == 0 || (sql[i-1] != '!' && sql[i-1] != '<' && sql[i-1] != '>' && sql[i-1] != ':')) {
 			// Find left-hand side token
 			leftEnd := i - 1
 			for leftEnd >= 0 && (sql[leftEnd] == ' ' || sql[leftEnd] == '\t' || sql[leftEnd] == '\n' || sql[leftEnd] == '\r') {
@@ -777,7 +824,7 @@ func ExtractEqualityFilter(sql string, targetCols ...string) (string, bool) {
 					if curr < n && (sql[curr] == '-' || sql[curr] == '+') {
 						curr++
 					}
-					for curr < n && (IsIdentChar(sql[curr]) || sql[curr] == '.') {
+					for curr < n && (IsIdentChar(sql[curr]) || sql[curr] == '.' || sql[curr] == '@' || sql[curr] == '$') {
 						curr++
 					}
 					val = sql[valStart:curr]

@@ -42,6 +42,13 @@ static int go_wt_session_truncate(WT_SESSION *session, const char *name) {
     return session->truncate(session, name, NULL, NULL, NULL);
 }
 
+static int go_wt_session_checkpoint(WT_SESSION *session) {
+    if (session == NULL) {
+        return 0;
+    }
+    return session->checkpoint(session, NULL);
+}
+
 static int go_wt_session_begin(WT_SESSION *session, const char *config) {
     return session->begin_transaction(session, config);
 }
@@ -257,31 +264,29 @@ func (e *Engine) SyncCount() int64 {
 	return e.syncCount.Load()
 }
 
-// Sync forces flushing of all committed transactions to the WiredTiger write-ahead log ([RULE:ExplicitError], Scope-129).
+// Sync forces flushing of all committed transactions to the WiredTiger write-ahead log ([RULE:ExplicitError], Scope-129, AUDIT-FULL-013).
 func (e *Engine) Sync() error {
-	e.mu.Lock()
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+
+	e.mu.RLock()
 	if e.closed || e.conn == nil {
-		e.mu.Unlock()
+		e.mu.RUnlock()
 		return nil
 	}
 	conn := e.conn
-	e.mu.Unlock()
+	e.mu.RUnlock()
 
 	var sess *C.WT_SESSION
 	if ret := C.go_wt_open_session(conn, &sess); ret != 0 {
 		return fmt.Errorf("wiredtiger open session for sync failed with code %d", ret)
 	}
 	defer C.go_wt_session_close(sess)
-	return e.syncUpTo(sess, e.writeSeq.Load())
+	return e.syncUpToLocked(sess, e.writeSeq.Load())
 }
 
-// syncUpTo performs leader/follower group commit via WT_SESSION::log_flush(sync=on).
-// The first waiter on syncMu flushes all committed transactions up to writeSeq in a
-// single disk sync; followers covered by that flush return immediately without a syscall.
-func (e *Engine) syncUpTo(sess *C.WT_SESSION, seq int64) error {
-	e.syncMu.Lock()
-	defer e.syncMu.Unlock()
-
+// syncUpToLocked flushes transactions up to seq while e.syncMu is held.
+func (e *Engine) syncUpToLocked(sess *C.WT_SESSION, seq int64) error {
 	if e.syncedSeq.Load() >= seq {
 		return nil
 	}
@@ -292,6 +297,15 @@ func (e *Engine) syncUpTo(sess *C.WT_SESSION, seq int64) error {
 	}
 	e.syncedSeq.Store(target)
 	return nil
+}
+
+// syncUpTo performs leader/follower group commit via WT_SESSION::log_flush(sync=on).
+// The first waiter on syncMu flushes all committed transactions up to writeSeq in a
+// single disk sync; followers covered by that flush return immediately without a syscall.
+func (e *Engine) syncUpTo(sess *C.WT_SESSION, seq int64) error {
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+	return e.syncUpToLocked(sess, seq)
 }
 
 func (e *Engine) startPeriodicSync(stopCh <-chan struct{}) {
@@ -624,7 +638,24 @@ func (e *Engine) DropTable(tableName string) error {
 	uri := C.CString(tbl.TableURI())
 	defer C.free(unsafe.Pointer(uri))
 
-	C.go_wt_session_drop(sess, uri)
+	// [AUDIT-FULL-007 / RULE:ExplicitError] Fail closed on drop failure to prevent orphan physical files.
+	// Retry on transient EBUSY (code 16) with checkpoint to flush dirty cache/dhandles as recommended by WiredTiger docs.
+	var dropRet C.int
+	for attempt := 0; attempt < 10; attempt++ {
+		dropRet = C.go_wt_session_drop(sess, uri)
+		if dropRet == 0 {
+			break
+		}
+		if dropRet == 16 { // EBUSY
+			_ = C.go_wt_session_checkpoint(sess)
+			time.Sleep(15 * time.Millisecond)
+			continue
+		}
+		break
+	}
+	if dropRet != 0 {
+		return fmt.Errorf("wiredtiger drop table %q (%s) failed with code %d", tableName, tbl.TableURI(), dropRet)
+	}
 
 	sqlutil.MapDeleteFold(e.tables, tableName)
 	if err := e.saveCatalog(); err != nil {
@@ -720,12 +751,22 @@ func (e *Engine) truncatePermTables(tableNames []string, cascade bool) error {
 	var walOps []memengine.WALOp
 	for _, tbl := range targetSet {
 		e.evictAllCursors(tbl.Name)
+		if tbl.PhysicalName != "" && tbl.PhysicalName != tbl.Name {
+			e.evictAllCursors(tbl.PhysicalName)
+		}
 		uri := C.CString(tbl.TableURI())
 		if ret := C.go_wt_session_truncate(sess, uri); ret != 0 {
-			C.go_wt_session_drop(sess, uri)
+			if dropRet := C.go_wt_session_drop(sess, uri); dropRet != 0 {
+				C.free(unsafe.Pointer(uri))
+				return fmt.Errorf("wiredtiger truncate drop failed for table %q (uri: %s): code %d", tbl.Name, tbl.TableURI(), dropRet)
+			}
 			config := C.CString("key_format=S,value_format=u")
-			C.go_wt_session_create(sess, uri, config)
+			createRet := C.go_wt_session_create(sess, uri, config)
 			C.free(unsafe.Pointer(config))
+			if createRet != 0 {
+				C.free(unsafe.Pointer(uri))
+				return fmt.Errorf("wiredtiger truncate recreate failed for table %q (uri: %s): code %d", tbl.Name, tbl.TableURI(), createRet)
+			}
 		}
 		C.free(unsafe.Pointer(uri))
 
@@ -862,6 +903,26 @@ func (e *Engine) GetPartitions(tableName string) ([]storage.PartitionInfo, error
 	return res, nil
 }
 
+// tableHasRowsLocked returns true if the specified table contains at least one physical row.
+func (e *Engine) tableHasRowsLocked(tbl *storage.TableSchema) bool {
+	var chkSess *C.WT_SESSION
+	if ret := C.go_wt_open_session(e.conn, &chkSess); ret != 0 {
+		return false
+	}
+	defer C.go_wt_session_close(chkSess)
+
+	uri := C.CString(tbl.TableURI())
+	defer C.free(unsafe.Pointer(uri))
+
+	var chkCur *C.WT_CURSOR
+	if ret := C.go_wt_open_cursor(chkSess, uri, &chkCur); ret != 0 {
+		return false
+	}
+	defer C.go_wt_cursor_close(chkCur)
+
+	return C.go_wt_cursor_next(chkCur) == 0
+}
+
 func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 	if storage.IsTemporaryTable(tableName) {
 		return e.tempEng.AddColumn(tableName, col)
@@ -881,72 +942,24 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 		}
 	}
 
-	fillVal := storage.NullValue(col.Type)
-	if strings.TrimSpace(col.Default) != "" {
-		fillVal = storage.ParseLiteralDefault(col.Default, col.Type)
-	}
-
 	// Check if table has existing rows when column is NOT NULL without default
 	if !col.Nullable && strings.TrimSpace(col.Default) == "" {
-		hasRows := false
-		var chkSess *C.WT_SESSION
-		if ret := C.go_wt_open_session(e.conn, &chkSess); ret == 0 {
-			uri := C.CString(tbl.TableURI())
-			var chkCur *C.WT_CURSOR
-			if C.go_wt_open_cursor(chkSess, uri, &chkCur) == 0 {
-				if C.go_wt_cursor_next(chkCur) == 0 {
-					hasRows = true
-				}
-				C.go_wt_cursor_close(chkCur)
-			}
-			C.free(unsafe.Pointer(uri))
-			C.go_wt_session_close(chkSess)
-		}
-		if hasRows {
+		if e.tableHasRowsLocked(tbl) {
 			return fmt.Errorf("cannot add NOT NULL column %q with no default value to non-empty table %q", col.Name, tableName)
 		}
 	}
 
-	oldSchema := *tbl
-	tbl.Columns = append(tbl.Columns, *col)
-
-	// Rewrite any existing records with the new column layout
-	var sess *C.WT_SESSION
-	if ret := C.go_wt_open_session(e.conn, &sess); ret == 0 {
-		defer C.go_wt_session_close(sess)
-		uri := C.CString(tbl.TableURI())
-		defer C.free(unsafe.Pointer(uri))
-
-		var cur *C.WT_CURSOR
-		if C.go_wt_open_cursor(sess, uri, &cur) == 0 {
-			defer C.go_wt_cursor_close(cur)
-			type rowUpdate struct {
-				key  string
-				data []byte
-			}
-			var updates []rowUpdate
-			for C.go_wt_cursor_next(cur) == 0 {
-				var pKey *C.char
-				var pData unsafe.Pointer
-				var sz C.size_t
-				if C.go_wt_cursor_get_key(cur, &pKey) == 0 && C.go_wt_cursor_get_val_raw(cur, &pData, &sz) == 0 && pData != nil {
-					rec, err := decodeRecord(&oldSchema, C.GoBytes(pData, C.int(sz)))
-					if err == nil {
-						rec[col.Name] = fillVal
-						newBytes, err := storage.EncodeTuple(tbl, rec)
-						if err == nil {
-							updates = append(updates, rowUpdate{key: C.GoString(pKey), data: newBytes})
-						}
-					}
-				}
-			}
-			for _, u := range updates {
-				cKey := C.CString(u.key)
-				C.go_wt_cursor_update_raw(cur, cKey, unsafe.Pointer(&u.data[0]), C.size_t(len(u.data)))
-				C.free(unsafe.Pointer(cKey))
-			}
-		}
+	// [PERF-WT-INSTANT-ADD-COL-1 / AUDIT-FULL-012 / Invariant 13]
+	// Instant O(1) ADD COLUMN:
+	// Do not rewrite existing records on disk. Existing binary tuples retain their original
+	// column byte layouts, and the decoder automatically pads missing trailing columns with
+	// schema defaults or NULLs on-the-fly. Evict cached cursors to prevent stale schema reads.
+	e.evictAllCursors(tbl.Name)
+	if tbl.PhysicalName != "" && tbl.PhysicalName != tbl.Name {
+		e.evictAllCursors(tbl.PhysicalName)
 	}
+
+	tbl.Columns = append(tbl.Columns, *col)
 
 	if err := e.saveCatalog(); err != nil {
 		return err
@@ -997,6 +1010,12 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 		tbl.PhysicalName = tbl.Name
 	}
 
+	// Evict any active cached cursors under the old and physical name
+	e.evictAllCursors(oldClean)
+	if tbl.PhysicalName != "" && tbl.PhysicalName != oldClean {
+		e.evictAllCursors(tbl.PhysicalName)
+	}
+
 	for k := range e.tables {
 		if strings.EqualFold(k, oldClean) {
 			delete(e.tables, k)
@@ -1018,6 +1037,15 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 	if err := e.saveCatalog(); err != nil {
 		return err
 	}
+
+	// [AUDIT-FULL-013] Record OpRenameTable WAL operation
+	if !oldTemp {
+		e.recordWALLocked([]memengine.WALOp{{
+			Type:  memengine.OpRenameTable,
+			Table: newClean,
+			Key:   oldClean,
+		}})
+	}
 	return nil
 }
 
@@ -1034,11 +1062,59 @@ func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.Table
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
-	if err := mutator(t); err != nil {
+	trialSchema := t.Clone()
+	if err := mutator(&trialSchema); err != nil {
 		return err
 	}
+
+	// [Invariant 13: Schema Evolution & Instant DDL 3-Layer Defense]
+	// Verify DROP COLUMN safety on WiredTiger:
+	// Dropping non-terminal (middle) columns from a non-empty table shifts column offsets
+	// relative to existing physical binary tuples on disk, corrupting type/value interpretation.
+	// Reject non-terminal DROP COLUMN with an explicit error ([RULE:ExplicitError]) until
+	// virtual dropped-column masking is implemented.
+	if len(trialSchema.Columns) < len(t.Columns) {
+		oldCols := t.Columns
+		newCols := trialSchema.Columns
+
+		// Check if any dropped column is not at the tail of oldCols
+		for oldIdx, oldCol := range oldCols {
+			found := false
+			for _, newCol := range newCols {
+				if strings.EqualFold(oldCol.Name, newCol.Name) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				// Column was dropped
+				isTerminal := (oldIdx >= len(newCols))
+				if !isTerminal {
+					if e.tableHasRowsLocked(t) {
+						return fmt.Errorf("dropping non-terminal column %q from non-empty table %q is not supported in WiredTiger engine (invariant 13)", oldCol.Name, tableName)
+					}
+				}
+			}
+		}
+	}
+
+	e.evictAllCursors(t.Name)
+	if t.PhysicalName != "" && t.PhysicalName != t.Name {
+		e.evictAllCursors(t.PhysicalName)
+	}
+
+	*t = trialSchema
 	if err := e.saveCatalog(); err != nil {
 		return err
+	}
+
+	if !storage.IsTemporaryTable(tableName) {
+		walSchema := trialSchema.Clone()
+		e.recordWALLocked([]memengine.WALOp{{
+			Type:   memengine.OpAlterTable,
+			Table:  tableName,
+			Schema: &walSchema,
+		}})
 	}
 	return nil
 }
@@ -1234,6 +1310,7 @@ type WTSession struct {
 	tempSess   storage.Session
 	mu         sync.Mutex
 	closed     bool
+	activeTx   bool
 	cursorPool map[string][]*C.WT_CURSOR
 	allCursors map[*C.WT_CURSOR]struct{}
 	toClose    []*C.WT_CURSOR
@@ -1286,6 +1363,9 @@ func (s *WTSession) evictCursors(tableName string) {
 		}
 	}
 	s.flushPendingClosesLocked()
+	if !s.activeTx {
+		_ = C.go_wt_session_reset(s.sess)
+	}
 }
 
 func (s *WTSession) Close() error {
@@ -1441,6 +1521,7 @@ func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error)
 	if ret != 0 {
 		return nil, fmt.Errorf("begin_transaction failed with code %d", ret)
 	}
+	s.activeTx = true
 
 	snapLSN := opts.SnapshotLSN
 	if snapLSN == 0 {
@@ -2634,6 +2715,9 @@ func (tx *WTTx) Commit() error {
 
 	ret := C.go_wt_session_commit(tx.sess.sess, nil)
 	_ = C.go_wt_session_reset(tx.sess.sess)
+	tx.sess.mu.Lock()
+	tx.sess.activeTx = false
+	tx.sess.mu.Unlock()
 	if ret != 0 {
 		if tempTx != nil {
 			_ = tempTx.Rollback()
@@ -2700,6 +2784,9 @@ func (tx *WTTx) Rollback() error {
 		return fmt.Errorf("rollback_transaction failed with code %d", ret)
 	}
 	_ = C.go_wt_session_reset(tx.sess.sess)
+	tx.sess.mu.Lock()
+	tx.sess.activeTx = false
+	tx.sess.mu.Unlock()
 	return nil
 }
 
@@ -2982,14 +3069,14 @@ func (c *WTCursor) RawTuple() ([]byte, bool) {
 }
 
 func decodeRecord(schema *storage.TableSchema, data []byte) (storage.Record, error) {
-	if len(data) > 0 && data[0] == storage.TupleCodecVersion && schema != nil {
+	if len(data) > 0 && storage.IsTupleCodec(data[0]) && schema != nil {
 		return storage.DecodeTuple(schema, data)
 	}
 	return nil, fmt.Errorf("invalid binary tuple record bytes")
 }
 
 func decodeRow(schema *storage.TableSchema, data []byte) (storage.Row, error) {
-	if len(data) > 0 && data[0] == storage.TupleCodecVersion && schema != nil {
+	if len(data) > 0 && storage.IsTupleCodec(data[0]) && schema != nil {
 		return storage.DecodeTupleToRow(schema, data)
 	}
 	return storage.Row{}, fmt.Errorf("invalid binary tuple record bytes")

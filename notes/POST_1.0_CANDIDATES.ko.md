@@ -34,6 +34,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 | **6** | **`S3-1~4`** | 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기 | **중간 (★★☆)** | **독립적 (Low)** | **중간** | 서버-클라이언트 간 시계 오차(Clock Skew)로 인한 서명 만료 오류 | **Phase 2 (Utility)** |
 | **12**| **`REPL-STREAM-BIN-1`** | Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 | **낮음~중간 (★☆☆~★★☆)** | **국소 (Low)** | **높음** | 네트워크 스트리밍 프로토콜 바이너리화 및 프레이밍 동기화 | **Phase 2 (Replication)** |
 | **-** | **`WAL-DELTA-1`** | Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) | **중간~높음 (★★☆~★★★)** | **엔진 내부 (Med)** | **기각 (Spec-Out)** | 리플레이 시 Read-Modify-Write 오버헤드로 RTO 급증 및 보조 인덱스 정합성 파괴 | **영구 기각 (Spec-Out)** |
+| **-** | **`RESEARCH-INPROCESS-REBOOT-USE`** | In-Process Graceful Reboot 기반 물리 서브폴더 USE DB 전환 | **매우 높음 (★★★★)** | **전체 파괴 (Critical)** | **기각 (Spec-Out)** | 프로세스 재부팅으로 동시 세션/트랜잭션 단절, 크로스 DB 조인 불가능 | **영구 기각 (Spec-Out)** |
 | **7** | **`BENCH-TPCH-1`** | CBO 서브쿼리 Decorrelation (`IN`/`EXISTS` ➔ Semi-Join) | **높음 (★★★)** | **높음 (High)** | **대체 기각 (Spec-Out)** | `NULL` 3치 논리(3VL) 및 Count Bug 위험 ➔ **`PERF-SUBQUERY-MEMO-1`** 로 영구 대체 | **영구 기각 (Replaced)** |
 | **8** | **`PERF-COMPLEX-QUERY-2`**| Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) | **높음 (★★★)** | **중간 (Engine)** | **높음** | 고부하 해시 클러스터링/리사이징 시 순간 지연 및 메모리 스파이크 | **Phase 3 (Analytical)** |
 | **9** | **`OCC-HYPER-2`** | In-Memory OCC Pointer-Free Flat Record (4~5x 메모리 압축)| **매우 높음 (★★★★)**| **광범위 (Critical)**| **극상 (Extreme)** | 엔진 전반 레이아웃 대수술로 인한 회귀 버그, 가변 길이 문자열 갱신 단편화 | **Phase 4 (Deep Kernel)** |

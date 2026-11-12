@@ -319,3 +319,164 @@ func TestVirtualCatalog_LikeAndNotLikeFiltering(t *testing.T) {
 	}
 }
 
+func TestSSMS_ObjectExplorer_SubnodeQueries(t *testing.T) {
+	src := newTestMockSource()
+
+	// 1. Columns for table 'users' with SSMS SMO aliases and Urn
+	qCols := `SELECT
+		clmns.name AS [Name],
+		clmns.column_id AS [ID],
+		clmns.is_nullable AS [Nullable],
+		clmns.is_identity AS [Identity],
+		clmns.max_length AS [Length],
+		clmns.precision AS [Precision],
+		clmns.scale AS [Scale],
+		usrt.name AS [DataType],
+		'Server[@Name=MSSQLSERVER]/Database[@Name=master]/Table[@Name=users and @Schema=dbo]/Column[@Name=' + clmns.name + ']' AS [Urn]
+		FROM sys.tables AS tbl
+		INNER JOIN sys.all_columns AS clmns ON clmns.object_id = tbl.object_id
+		LEFT OUTER JOIN sys.types AS usrt ON usrt.user_type_id = clmns.user_type_id
+		WHERE (tbl.name = 'users' and SCHEMA_NAME(tbl.schema_id) = 'dbo')
+		ORDER BY [ID] ASC`
+
+	if !virtual.IsVirtualCatalogJoinQuery(qCols) {
+		t.Fatalf("expected IsVirtualCatalogJoinQuery to match SSMS Columns query")
+	}
+	resCols, err := virtual.Execute(src, qCols)
+	if err != nil {
+		t.Fatalf("Execute(SSMS Columns) failed: %v", err)
+	}
+	if len(resCols.Rows) != 2 {
+		t.Fatalf("expected 2 columns for users, got %d", len(resCols.Rows))
+	}
+	if resCols.Rows[0]["Name"] != "id" || resCols.Rows[1]["Name"] != "username" {
+		t.Errorf("unexpected column names: %+v", resCols.Rows)
+	}
+	if urn, ok := resCols.Rows[0]["Urn"].(string); !ok || urn == "" {
+		t.Errorf("expected non-empty Urn for column id, got %v", resCols.Rows[0]["Urn"])
+	}
+
+	// 2. Indexes for table 'users'
+	qIdx := `SELECT
+		i.name AS [Name],
+		i.index_id AS [ID],
+		i.type AS [IndexType],
+		i.type_desc AS [TypeDesc],
+		i.is_primary_key AS [IsPrimaryKey],
+		i.is_unique AS [IsUnique],
+		'Urn' AS [Urn]
+		FROM sys.tables AS tbl
+		INNER JOIN sys.indexes AS i ON (i.index_id > 0 and i.is_hypothetical = 0) AND (i.object_id=tbl.object_id)
+		WHERE (tbl.name = 'users' and SCHEMA_NAME(tbl.schema_id) = 'dbo')
+		ORDER BY [ID] ASC`
+
+	if !virtual.IsVirtualCatalogJoinQuery(qIdx) {
+		t.Fatalf("expected IsVirtualCatalogJoinQuery to match SSMS Indexes query")
+	}
+	resIdx, err := virtual.Execute(src, qIdx)
+	if err != nil {
+		t.Fatalf("Execute(SSMS Indexes) failed: %v", err)
+	}
+	if len(resIdx.Rows) != 1 {
+		t.Fatalf("expected 1 index (PK) for users, got %d", len(resIdx.Rows))
+	}
+	if resIdx.Rows[0]["Name"] != "PK_users" {
+		t.Errorf("expected PK_users, got %v", resIdx.Rows[0]["Name"])
+	}
+
+	// 3. Index Columns for table 'users'
+	qIndexCols := `SELECT
+		ic.index_id AS [IndexID],
+		ic.column_id AS [ColumnID],
+		ic.key_ordinal AS [KeyOrdinal],
+		clmns.name AS [Name],
+		ic.is_descending_key AS [Descending]
+		FROM sys.tables AS tbl
+		INNER JOIN sys.indexes AS i ON i.object_id = tbl.object_id
+		INNER JOIN sys.index_columns AS ic ON ic.object_id = tbl.object_id AND ic.index_id = i.index_id
+		INNER JOIN sys.all_columns AS clmns ON clmns.object_id = tbl.object_id AND clmns.column_id = ic.column_id
+		WHERE (tbl.name = 'users' and SCHEMA_NAME(tbl.schema_id) = 'dbo')`
+
+	if !virtual.IsVirtualCatalogJoinQuery(qIndexCols) {
+		t.Fatalf("expected IsVirtualCatalogJoinQuery to match SSMS Index Columns query")
+	}
+	resIndexCols, err := virtual.Execute(src, qIndexCols)
+	if err != nil {
+		t.Fatalf("Execute(SSMS Index Columns) failed: %v", err)
+	}
+	if len(resIndexCols.Rows) != 1 {
+		t.Fatalf("expected 1 index column for PK_users, got %d", len(resIndexCols.Rows))
+	}
+	if resIndexCols.Rows[0]["Name"] != "id" {
+		t.Errorf("expected index column name 'id', got %v", resIndexCols.Rows[0]["Name"])
+	}
+
+	// 4. Keys (sys.key_constraints) for table 'users'
+	qKeys := `SELECT
+		k.name AS [Name],
+		k.type AS [KeyType],
+		k.type_desc AS [TypeDesc],
+		k.is_system_named AS [IsSystemNamed]
+		FROM sys.tables AS tbl
+		INNER JOIN sys.key_constraints AS k ON k.parent_object_id = tbl.object_id
+		WHERE (tbl.name = 'users' and SCHEMA_NAME(tbl.schema_id) = 'dbo')`
+
+	if !virtual.IsVirtualCatalogJoinQuery(qKeys) {
+		t.Fatalf("expected IsVirtualCatalogJoinQuery to match SSMS Keys query")
+	}
+	resKeys, err := virtual.Execute(src, qKeys)
+	if err != nil {
+		t.Fatalf("Execute(SSMS Keys) failed: %v", err)
+	}
+	if len(resKeys.Rows) != 1 {
+		t.Fatalf("expected 1 key constraint for users, got %d", len(resKeys.Rows))
+	}
+	if resKeys.Rows[0]["Name"] != "PK_users" || resKeys.Rows[0]["KeyType"] != "PK" {
+		t.Errorf("unexpected key constraint: %+v", resKeys.Rows[0])
+	}
+
+	// 5. Foreign Keys for table 'orders'
+	qFKs := `SELECT
+		fk.name AS [Name],
+		fk.object_id AS [ID]
+		FROM sys.tables AS tbl
+		INNER JOIN sys.foreign_keys AS fk ON fk.parent_object_id = tbl.object_id
+		WHERE (tbl.name = 'orders' and SCHEMA_NAME(tbl.schema_id) = 'dbo')`
+
+	if !virtual.IsVirtualCatalogJoinQuery(qFKs) {
+		t.Fatalf("expected IsVirtualCatalogJoinQuery to match SSMS Foreign Keys query")
+	}
+	resFKs, err := virtual.Execute(src, qFKs)
+	if err != nil {
+		t.Fatalf("Execute(SSMS FKs) failed: %v", err)
+	}
+	if len(resFKs.Rows) != 1 {
+		t.Fatalf("expected 1 foreign key for orders, got %d", len(resFKs.Rows))
+	}
+	if resFKs.Rows[0]["Name"] != "fk_orders_user" {
+		t.Errorf("expected fk_orders_user, got %v", resFKs.Rows[0]["Name"])
+	}
+
+	// 6. Statistics for table 'users'
+	qStats := `SELECT
+		s.name AS [Name],
+		s.stats_id AS [ID]
+		FROM sys.tables AS tbl
+		INNER JOIN sys.stats AS s ON s.object_id = tbl.object_id
+		WHERE (tbl.name = 'users' and SCHEMA_NAME(tbl.schema_id) = 'dbo')`
+
+	if !virtual.IsVirtualCatalogJoinQuery(qStats) {
+		t.Fatalf("expected IsVirtualCatalogJoinQuery to match SSMS Statistics query")
+	}
+	resStats, err := virtual.Execute(src, qStats)
+	if err != nil {
+		t.Fatalf("Execute(SSMS Statistics) failed: %v", err)
+	}
+	if len(resStats.Rows) != 1 {
+		t.Fatalf("expected 1 statistic for users, got %d", len(resStats.Rows))
+	}
+	if resStats.Rows[0]["Name"] != "PK_users" {
+		t.Errorf("expected PK_users stats, got %v", resStats.Rows[0]["Name"])
+	}
+}
+

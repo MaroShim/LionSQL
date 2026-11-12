@@ -126,6 +126,20 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
    - **Strictly Prohibited**:
      - Raw `strings.Index`, `strings.Contains`, `strings.Split`, `strings.HasPrefix` on unparsed SQL queries, DDL/DML clauses, WHERE predicates, or function argument lists.
 
+### Invariant 13: Single Canonical V2 Binary Tuple Codec (4-Byte Aligned Header, Flags, Instant Tail DDL)
+1. **4-Byte 32-Bit Aligned Fixed Header**:
+   - `Byte 0`: `Version` (`0x02`, `TupleCodecVersion` / `TupleCodecV2`)
+   - `Byte 1`: `Flags` (`0x00` default, reserved bits: `FLAG_NO_NULLS 0x01`, `FLAG_COMPRESSED 0x02`, `FLAG_TOAST 0x04`, `FLAG_EXTENDED 0x08`)
+   - `Bytes 2..3`: `encodedCols` (`uint16` Little-Endian, $0 \sim 65,535$)
+   - `Bytes 4 .. 4 + ceil(encodedCols/8)`: `NullBitmap` (1-to-1 ordinal mapping to columns)
+   - `Bytes 4 + ceil(encodedCols/8) .. end`: Dense sequential payloads for non-null columns
+2. **Fail-Fast Firewall & Zero Legacy V1 Fallbacks**:
+   - Any buffer whose initial byte is not `0x02` is rejected immediately with `ErrInvalidTupleHeader`.
+   - Legacy V1 parsing branches, bitmap length guesses, and error-swallowing fallbacks (`if col.Default != ""`) are completely eradicated (`[RULE:ExplicitError]`, `[RULE:RadicalKISS]`).
+3. **Tail-Only DDL & Middle DROP Fail-Closed Invariant**:
+   - `ADD COLUMN`: Instant $O(1)$ schema expansion. Tuples written under older schemas have $N > \text{encodedCols}$; newly added columns are padded from default or `NULL` without buffer overflows.
+   - `DROP COLUMN`: Instant $O(1)$ on tail columns ($N < \text{encodedCols}$). Dropping non-terminal (middle) columns on non-empty tables is strictly rejected with explicit `ErrDropColumnNotTail`.
+
 ---
 
 ## 3. Explicit Spec-Out Decisions (Engine Simplicity & KISS)
@@ -150,6 +164,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 17. **Complex Aggregate Subquery AST Decorrelation & Mini TPC-H Suite (`BENCH-TPCH-1`)**: Permanently Replaced / Spec-Out. While Tier-1 `[NOT] EXISTS` / `IN` Semi-Join decorrelation is already complete (`pkg/planner/decorrelate.go`), Kim's Group-By Pushdown AST rewriting for aggregate correlated subqueries introduces severe Count Bug (`COUNT(*) = 0` vs `NULL`) and SQL 3VL distortion risks. Replaced permanently by a bounded per-query memoization cache (`PERF-SUBQUERY-MEMO-1`), guaranteeing 100% SQL semantic safety with up to 1,000x practical speedup.
 18. **In-Memory OCC Generation/Epoch Zero-Lock Snapshot (`PERF-OCC-ZERO-LOCK-1`)**: Permanently Spec-Out. While lock-free read snapshots via Epoch/Generation tracking eliminate `shard.mu.RLock()`, deferred version reclamation forces long-running read transactions to retain old row versions, triggering severe memory bloat and CPU cacheline bouncing on global atomic epoch counters. LionSQL standardizes exclusively on 256 cacheline-padded shards and pointer-free FlatRecord (`MemoryCompact`), which already delivers 1,040,000 tpmC with sub-microsecond latency, zero GC scan overhead, and zero memory bloat risk.
 19. **Partial / Delta WAL Logging (`WAL-DELTA-1`)**: Permanently Spec-Out. While logging only modified columns on UPDATE promises theoretical write-volume savings, it introduces severe architectural drawbacks: (1) crash recovery and replication replay suffer catastrophic Read-Modify-Write penalties as every record requires reading the base row before patching, drastically inflating Recovery Time Objective (RTO); (2) composite secondary indexes containing unmodified columns cannot identify previous key values without full-row lookups, risking index corruption; (3) variable-length column (VARCHAR) realignment eliminates in-memory CPU benefits; and (4) OS 4KB page caching combined with LionSQL's group commit (`wal.GroupCommit`) masks sub-block differences, rendering physical I/O gains negligible. LionSQL strictly standardizes on instant $O(1)$ Full-Row WAL logging as its verified single standard.
+20. **In-Process Graceful Reboot Multi-Database Switching (`RESEARCH-INPROCESS-REBOOT-USE`)**: Permanently Spec-Out. The proposal to implement `USE <dbname>` by gracefully tearing down and rebooting the entire database kernel/engine within the process to switch storage subfolders has been definitively rejected: (1) it destroys connection multiplexing and transaction isolation across concurrent client sessions; (2) tear-down/spin-up introduces multi-second latency spikes in high-frequency queries; and (3) cross-database joins and 3-part naming (`SalesDB.dbo.Orders`) are fundamentally impossible across distinct physical process states. LionSQL standardizes permanently on **Prefix-Based Logical Database Namespaces (`__db_<dbname>_*`)** in `v1.1.0` (`ARCH-LOGICAL-NAMESPACE-1`), delivering sub-microsecond local cross-database joins and zero process restart overhead.
+21. **Complex Middle Column Virtual Dropped Masking (`PERF-OCC-INSTANT-DROP-COL-1`)**: Permanently Spec-Out. Maintaining complex virtual column indirection maps, bitmap shifting heuristics, and tombstone masks for non-terminal dropped columns creates severe silent data corruption risks and bloats the 0.5ns sub-microsecond decoding hot path. LionSQL standardizes permanently on Instant Tail-Only DDL with fail-closed rejection for middle column drops.
 
 ---
 

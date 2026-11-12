@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -504,6 +505,131 @@ func TestP1_Batch2_TupleUvarintOverflowGuard(t *testing.T) {
 		if _, err := SkipTupleColumn(dt, corruptData, 0); err != ErrTupleBufferTooShort {
 			t.Errorf("SkipTupleColumn(%v) expected ErrTupleBufferTooShort on uvarint overflow, got %v", dt, err)
 		}
+	}
+}
+
+// TestTupleCodec_InstantAddColumnPadding verifies that tuples encoded under an older schema (fewer columns)
+// can be safely decoded under a newer schema with added columns, automatically padding defaults and NULLs
+// across DecodeTupleToRow, DecodeTupleSelected, NewLazyTuple, ExtractColumnFromTuple, and DecodeTupleIntoValues.
+func TestTupleCodec_InstantAddColumnPadding(t *testing.T) {
+	schOld := &TableSchema{
+		Name: "items",
+		Columns: []Column{
+			{Name: "id", Type: TypeInt, PrimaryKey: true},
+			{Name: "name", Type: TypeVarChar},
+		},
+	}
+
+	recOld := Record{
+		"id":   IntValue(101),
+		"name": StringValue("Widget"),
+	}
+
+	data, err := EncodeTuple(schOld, recOld)
+	if err != nil {
+		t.Fatalf("EncodeTuple failed: %v", err)
+	}
+
+	// Schema after ALTER TABLE ADD COLUMN price FLOAT DEFAULT '9.99', ADD COLUMN note VARCHAR
+	schNew := &TableSchema{
+		Name: "items",
+		Columns: []Column{
+			{Name: "id", Type: TypeInt, PrimaryKey: true},
+			{Name: "name", Type: TypeVarChar},
+			{Name: "price", Type: TypeFloat, Default: "9.99"},
+			{Name: "note", Type: TypeVarChar, Nullable: true},
+		},
+	}
+
+	// 1. DecodeTupleToRow
+	row, err := DecodeTupleToRow(schNew, data)
+	if err != nil {
+		t.Fatalf("DecodeTupleToRow with new schema failed: %v", err)
+	}
+	if len(row.Values) != 4 {
+		t.Fatalf("expected 4 values, got %d", len(row.Values))
+	}
+	if row.Values[0].IVal != 101 || row.Values[1].SVal != "Widget" {
+		t.Errorf("base values mismatch: %+v", row.Values[:2])
+	}
+	if row.Values[2].FVal != 9.99 {
+		t.Errorf("expected padded default 9.99 for price, got %v", row.Values[2].FVal)
+	}
+	if !row.Values[3].IsNull {
+		t.Errorf("expected NULL for note, got %v", row.Values[3])
+	}
+
+	// 2. DecodeTupleSelected
+	selRow, err := DecodeTupleSelected(schNew, data, []int{0, 2, 3})
+	if err != nil {
+		t.Fatalf("DecodeTupleSelected failed: %v", err)
+	}
+	if selRow.Values[0].IVal != 101 || selRow.Values[2].FVal != 9.99 || !selRow.Values[3].IsNull {
+		t.Errorf("DecodeTupleSelected mismatch: %+v", selRow.Values)
+	}
+
+	// 3. NewLazyTuple
+	lt, err := NewLazyTuple(schNew, data)
+	if err != nil {
+		t.Fatalf("NewLazyTuple failed: %v", err)
+	}
+	valPrice, err := lt.Get(2)
+	if err != nil || valPrice.FVal != 9.99 {
+		t.Errorf("LazyTuple.Get(2) price mismatch: val=%v, err=%v", valPrice, err)
+	}
+	valNote, err := lt.Get(3)
+	if err != nil || !valNote.IsNull {
+		t.Errorf("LazyTuple.Get(3) note mismatch: val=%v, err=%v", valNote, err)
+	}
+	matRow, err := lt.MaterializeRow()
+	if err != nil || matRow.Values[2].FVal != 9.99 {
+		t.Errorf("LazyTuple.MaterializeRow mismatch: %+v, err=%v", matRow, err)
+	}
+
+	// 4. ExtractColumnFromTuple
+	extPrice, err := ExtractColumnFromTuple(schNew, data, 2)
+	if err != nil || extPrice.FVal != 9.99 {
+		t.Errorf("ExtractColumnFromTuple price mismatch: val=%v, err=%v", extPrice, err)
+	}
+	extNote, err := ExtractColumnFromTuple(schNew, data, 3)
+	if err != nil || !extNote.IsNull {
+		t.Errorf("ExtractColumnFromTuple note mismatch: val=%v, err=%v", extNote, err)
+	}
+
+	// 5. DecodeTupleIntoValues
+	dest := make([]Value, len(schNew.Columns))
+	if err := DecodeTupleIntoValues(schNew, data, dest); err != nil {
+		t.Fatalf("DecodeTupleIntoValues failed: %v", err)
+	}
+	if dest[2].FVal != 9.99 || !dest[3].IsNull {
+		t.Errorf("DecodeTupleIntoValues mismatch: %+v", dest)
+	}
+
+	// 6. Terminal column DROP: schema with only 1 column
+	schDropped := &TableSchema{
+		Name: "items",
+		Columns: []Column{
+			{Name: "id", Type: TypeInt, PrimaryKey: true},
+		},
+	}
+	dropRow, err := DecodeTupleToRow(schDropped, data)
+	if err != nil {
+		t.Fatalf("DecodeTupleToRow with dropped schema failed: %v", err)
+	}
+	if len(dropRow.Values) != 1 || dropRow.Values[0].IVal != 101 {
+		t.Fatalf("expected 1 value with id=101, got %+v", dropRow.Values)
+	}
+
+	// 7. Fail-Fast rejection of legacy V1 (0x01) and invalid version bytes
+	legacyV1Buf := []byte{0x01, 0x00, 0x01, 0x00}
+	if _, err := DecodeTupleToRow(schNew, legacyV1Buf); !errors.Is(err, ErrInvalidTupleHeader) {
+		t.Fatalf("expected ErrInvalidTupleHeader on legacy V1 0x01 buffer, got %v", err)
+	}
+	if _, err := ExtractColumnFromTuple(schNew, legacyV1Buf, 0); !errors.Is(err, ErrInvalidTupleHeader) {
+		t.Fatalf("expected ErrInvalidTupleHeader on legacy V1 0x01 buffer, got %v", err)
+	}
+	if _, err := NewLazyTuple(schNew, legacyV1Buf); !errors.Is(err, ErrInvalidTupleHeader) {
+		t.Fatalf("expected ErrInvalidTupleHeader on legacy V1 0x01 buffer, got %v", err)
 	}
 }
 

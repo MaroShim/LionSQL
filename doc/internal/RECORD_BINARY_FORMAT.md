@@ -19,32 +19,49 @@ LionSQL eliminates these overheads via a **Schema-Aware Compact Binary Tuple Cod
 
 ## 2. Binary Layout Specification
 
-A LionSQL binary tuple is a contiguous byte slice structured as follows:
+A LionSQL binary tuple (V2) is a contiguous byte slice structured with a 4-byte 32-bit aligned fixed header followed by a null bitmap and value payloads:
 
 ```
-┌─────────────────┬──────────────────────────┬────────────────────────────────────────────────────────┐
-│ Version Header  │ Null Bitmap              │ Sequential Column Payloads                             │
-│ (1 Byte)        │ (ceil(N / 8) Bytes)      │ (Only non-NULL columns, strictly ordered by schema)   │
-└─────────────────┴──────────────────────────┴────────────────────────────────────────────────────────┘
+┌─────────────────┬─────────────────┬──────────────────────────┬──────────────────────────┬────────────────────────────────────────────────────────┐
+│ Version Header  │ Flags           │ Physical Column Count    │ Null Bitmap              │ Sequential Column Payloads                             │
+│ (1 Byte: 0x02)  │ (1 Byte: 0x00)  │ (2 Bytes: uint16 LE)     │ (ceil(N / 8) Bytes)      │ (Only non-NULL columns, strictly ordered by schema)   │
+└─────────────────┴─────────────────┴──────────────────────────┴──────────────────────────┴────────────────────────────────────────────────────────┘
 ```
 
 ### 2.1. Version Header (1 Byte)
-* **Value**: `0x01` (`TupleCodecVersion`)
-* **Purpose**: Identifies the binary layout specification. Allows future codec enhancements (e.g., dictionary encoding, column-family grouping, inline checksums) to coexist with legacy blocks.
-* **Integrity Guard**: Decoders immediately reject buffers whose initial byte does not match `0x01` with `ErrInvalidTupleHeader`.
+* **Value**: `0x02` (`TupleCodecVersion` / `TupleCodecV2`)
+* **Purpose**: Identifies the binary layout specification.
+* **Integrity Guard**: Decoders immediately reject buffers whose initial byte does not match `0x02` with `ErrInvalidTupleHeader` (Fail-Fast firewall). Legacy V1 formats (`0x01`) are rejected cleanly with zero silent memory corruption.
 
-### 2.2. Null Bitmap ($\lceil N / 8 \rceil$ Bytes)
-* **Length Calculation**: For a table with $N$ columns, the bitmap consumes `(N + 7) / 8` bytes.
+### 2.2. Flags Header (1 Byte)
+* **Value**: `0x00` (`TupleFlagNone` by default)
+* **Bit Allocation**:
+  * `0x01` (`TupleFlagNoNulls`): Reserved for tuples with zero NULL values (null bitmap can be omitted in future optimizations).
+  * `0x02` (`TupleFlagCompressed`): Reserved for row-level payload compression (e.g., ZSTD/Snappy for large JSON/Text rows).
+  * `0x04` (`TupleFlagToast`): Reserved for out-of-line TOAST/LOB overflow pointers for very large binary objects (> 16KB).
+  * `0x08` (`TupleFlagExtended`): Reserved for extended header metadata.
+* **Extensibility**: Allows future engine features (compression, TOAST, encryption) to be activated without altering the binary format version or invalidating existing data pages.
+
+### 2.3. Physical Column Count (`encodedCols uint16`, 2 Bytes)
+* **Value**: Little-Endian unsigned 16-bit integer (range $0 \sim 65,535$).
+* **Self-Describing Layout**: Embeds the exact number of columns physically encoded when the tuple was written.
+* **Instant Schema Evolution ($O(1)$)**:
+  * **Tail ADD COLUMN**: When a table schema has $N > \text{encodedCols}$ columns, columns $0 \sim \text{encodedCols}-1$ are decoded from the tuple bytes, and newly added columns $\text{encodedCols} \sim N-1$ are instantly padded from the schema default (`col.Default`) or `NULL` without rewriting the table or reading past buffer boundaries.
+  * **Tail DROP COLUMN**: When the terminal column is dropped ($N < \text{encodedCols}$), decoders process columns $0 \sim N-1$ and cleanly ignore trailing bytes.
+  * **Middle DROP Safety**: Dropping non-terminal (middle) columns on non-empty tables is strictly rejected with an explicit error (`ErrDropColumnNotTail`) to prevent silent column-offset misalignment.
+
+### 2.4. Null Bitmap ($\lceil N / 8 \rceil$ Bytes)
+* **Length Calculation**: For a tuple with `encodedCols` columns, the bitmap consumes `(encodedCols + 7) / 8` bytes.
   - $1 \sim 8$ columns: 1 byte
   - $9 \sim 16$ columns: 2 bytes
   - $17 \sim 24$ columns: 3 bytes
 * **Bit Representation**:
-  - Column index $i$ corresponds to byte `i / 8` and bit `1 << (i % 8)`.
+  - Column index $i$ corresponds to byte `4 + (i / 8)` and bit `1 << (i % 8)`.
   - **Bit = 1**: The column value is `NULL`.
   - **Bit = 0**: The column value is non-NULL and present in the payload section.
 * **Zero Payload Overhead**: When a column is marked NULL in the bitmap, **zero bytes** are emitted into the payload area. Sparse tables with numerous NULL columns achieve optimal storage density.
 
-### 2.3. Sequential Column Payloads
+### 2.5. Sequential Column Payloads
 Non-NULL columns are serialized in the exact ordinal sequence defined by `TableSchema.Columns`. Each column payload adheres to the encoding rules described below:
 
 | Storage Type | Go Native Type | Encoding Scheme | Byte Length |

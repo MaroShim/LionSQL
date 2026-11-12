@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- add SSMS Object Explorer sub-node expansion and Microsoft SMO support for table child objects including Columns, Keys, Constraints (Foreign Key, Check, Default), Indexes, Triggers, and Statistics with exact XPath URN projections (`SSMS-OE-SUBFOLDERS`, `SSMS-OE-COMPAT-2`, `SSMS-OE-SMO-VERIFY`)
+- support 3-part qualified table names (`[master].[dbo].[table]`) and pagination normalization for SSMS right-click `SELECT TOP (1000)` and `Edit Top 200` queries (`SSMS-OE-3PART-TOP`)
+- cross-compile standalone Windows 64-bit binary (`bin/lionsql.exe`) with pure Go static linking (`CGO_ENABLED=0`)
 - implement per-query bounded subquery memoization with 4,096-entry cap, volatile expression bypass (NEWID, RAND, GETDATE, NOW, etc.), and thread safety in Volcano query execution (`PERF-SUBQUERY-MEMO-1`, `ADR-030`)
 - add `MemoryCompact` durability, composite DDL/DML, SkipList, FK, `ArenaRowCursor`, and extended-type reliability suite in `pkg/storage/memengine/flat_reliability_test.go` (`TEST-OCC-FLAT-1`, `TEST-OCC-FLAT-2`), verified alongside `test/slt` (`InProc`), `test/slt_proc` 14-suite T-SQL compatibility, and 4-round `SIGKILL` `crashtest` (`TEST-OCC-FLAT-3`)
 - document `compact` default rationale and pre-v1.0 `performance` mode deprecation (`DEPRECATE-OCC-PERF-1`) across `doc/ADR.md` (`ADR-028`), `notes/ENGINEERING_CONTEXT.ko.md` (`㉕`), `notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`, `doc/TRANSACTION_PERFORMANCE_GUIDE*.md`, and `doc/USER_MANUAL*.md`

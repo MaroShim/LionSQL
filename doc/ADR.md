@@ -821,32 +821,43 @@ Adopt **Option A** exclusively and permanently reject **Option B** and **Option 
 
 ---
 
-## ADR-030: Correlated Subquery Bounded Memoization over Kim's AST Decorrelation
+## ADR-031: Single Canonical V2 Binary Tuple Codec (4-Byte Aligned Header, Flags, Instant Tail DDL)
 
 ### Status
 Accepted
 
 ### Context
-Correlated scalar and aggregate subqueries (e.g. `WHERE salary > (SELECT AVG(salary) FROM emp WHERE dept_id = e.dept_id)`) incur $O(N \times M)$ execution overhead when evaluated naively row-by-row.
-While simple `[NOT] EXISTS` and `IN` subqueries are decorrelated into Semi/Anti joins in `pkg/planner/decorrelate.go`, decorrelating complex aggregate subqueries via Kim's Group-By pushdown rewrites introduces severe semantic hazards:
-1. **The Classic SQL "Count Bug"**: When outer rows have zero matching inner rows, a LEFT OUTER JOIN produces `NULL`, whereas an aggregated subquery `SELECT COUNT(*) ...` produces `0`. Rewriting this to an outer join requires delicate `COALESCE`/`CASE` fix-up expressions that are prone to subtle bugs.
-2. **SQL 3-Valued Logic (3VL) Distortion**: Nullable outer join keys can produce unexpected empty sets or unintended matches under standard join semantics.
-3. **Severe AST Rewriting Complexity**: Injecting derived tables and projection rewrites for subqueries located inside deep boolean expressions or projection lists creates combinatorial edge cases.
-
-Enterprise database engines like PostgreSQL 14 (`Memoize` node) and Microsoft SQL Server (`Lazy Spool` / `Table Spool`) solve this by memoizing subquery results keyed by outer correlated parameters during execution.
+LionSQL's initial binary tuple codec (`TupleCodecV1`) omitted physical column counts from the tuple header, relying on catalog schema lengths to calculate null bitmap boundaries. When schemas evolved via `ALTER TABLE ADD COLUMN` or `DROP COLUMN`, decoders could not deterministically ascertain the physical column count of tuples serialized under prior schemas, necessitating fragile length heuristics and error-swallowing default fallbacks.
+Furthermore, an exhaustive architectural review against PostgreSQL `HeapTupleHeaderData` (`t_infomask`, `t_infomask2`, `t_bits`) and MySQL InnoDB (`info_bits`, `n_fields`, null flags) revealed that industry-standard binary record layouts require:
+1. **Self-Describing Column Counts**: Physical column count embedded in the record header (`t_natts` / `n_fields`) to enable instant $O(1)$ schema evolution without table rewrites.
+2. **Extensible Flag Bits**: An extensible header flag byte (`infomask` / `info_bits`) reserved for future capabilities (row compression, out-of-line TOAST/LOB storage, encryption) without breaking binary compatibility.
+3. **Word Alignment**: Clean 32-bit CPU memory alignment across headers to maximize register load efficiency.
+4. **Deterministic DDL Boundaries**: Safe instant tail DDL combined with fail-closed rejection of middle-column drops on populated tables.
 
 ### Decision
-Adopt **Bounded Per-Query Memoization** (`PERF-SUBQUERY-MEMO-1`) in `opts.SubqueryExecutor` (`pkg/engine/sqlexec_select.go`) and reject Kim's aggregate subquery AST rewriting:
-1. **Strict Resource Bounding**: Cap cache capacity at 4,096 entries per query (`[RULE:BoundedBuffers]`). If an outer query exceeds 4,096 distinct parameter tuples, further caching safely halts and execution falls back to unmemoized evaluation without memory exhaustion.
-2. **Volatile Expression Bypass**: Detect non-deterministic functions (`NEWID`, `NEWID7`, `RAND`, `GETDATE`, `NOW`, `CURRENT_TIMESTAMP`, `UUID`, etc.) via `sqlutil.IsVolatileSubquery` and unconditionally bypass memoization and compile-time constant folding.
-3. **Per-Query Lifecycle Isolation**: Allocate cache maps within the query-local scope of `ExecuteVolcanoSelect`, guaranteeing zero cross-query state leakage and automatic garbage collection on completion.
-4. **Parameterization Precedence**: In `sqlutil.ParameterizeSubquery`, prioritize qualified references (`alias.col`) over unqualified references (`col`) to prevent mutating inner table column names in projections or filters.
-5. **Thread-Safe Access**: Guard cache reads and writes with a local `sync.RWMutex` (`[RULE:ConcurrencySafety]`).
+Adopt the **Single Canonical V2 Binary Tuple Codec** (`0x02`) across both storage engines (WiredTiger and In-Memory OCC WAL/AOF) and enact a clean break from legacy V1:
+1. **4-Byte 32-Bit Aligned Header**:
+   - `Byte 0`: `Version` (`0x02`, `TupleCodecVersion` / `TupleCodecV2`)
+   - `Byte 1`: `Flags` (`TupleFlagNone = 0x00` default)
+   - `Bytes 2..3`: `encodedCols` (`uint16` Little-Endian, range $0 \sim 65,535$)
+   - `Bytes 4 .. 4 + ceil(encodedCols/8)`: `NullBitmap` (1-to-1 ordinal mapping to columns)
+   - `Bytes 4 + ceil(encodedCols/8) .. end`: Dense sequential payloads for non-null columns
+2. **Clean Break (Zero V1 Fallbacks)**: Completely eliminate V1 parsing branches, bitmap length guesses, and error-swallowing fallbacks (`if col.Default != ""`) from all decoding hot paths (`[RULE:ExplicitError]`, `[RULE:RadicalKISS]`). Any buffer whose initial byte is not `0x02` is rejected immediately with `ErrInvalidTupleHeader` (Fail-Fast firewall).
+3. **Pre-Allocated Future Extensibility Flags**:
+   - `0x01` (`TupleFlagNoNulls`): Reserved for tuples with zero NULL values (null bitmap omission).
+   - `0x02` (`TupleFlagCompressed`): Reserved for row-level payload compression (e.g. ZSTD/LZ4 for large JSON/Text rows).
+   - `0x04` (`TupleFlagToast`): Reserved for out-of-line TOAST/LOB overflow pointers (> 16KB).
+   - `0x08` (`TupleFlagExtended`): Reserved for extended header metadata.
+4. **Tail-Only DDL & Middle DROP Fail-Closed Invariant**:
+   - **Tail ADD COLUMN**: Instantly supported in $O(1)$. When table schema $N > \text{encodedCols}$, columns $0 \sim \text{encodedCols}-1$ are decoded from payload bytes, and new columns $\text{encodedCols} \sim N-1$ are instantly padded from schema default values (`col.Default`) or `NULL`.
+   - **Tail DROP COLUMN**: Instantly supported in $O(1)$. When the terminal column is dropped ($N < \text{encodedCols}$), decoders process columns $0 \sim N-1$ and safely ignore trailing bytes.
+   - **Middle DROP Prohibition**: Dropping non-terminal (middle) columns on non-empty tables is strictly rejected with an explicit error (`ErrDropColumnNotTail`). Complex virtual dropped-column masking (`PERF-OCC-INSTANT-DROP-COL-1`) is permanently Spec-Out.
 
 ### Consequences
-- **Positive**: Achieves 30x~1,000x latency reduction on correlated queries with low-to-medium cardinality outer keys (e.g. 500 rows across 5 departments drops from 350ms to 10.8ms). Guarantees 100% SQL standard semantic safety with zero Count Bug or 3VL join distortion risks.
-- **Negative**: Workloads with >4,096 distinct outer keys incur unmemoized execution penalties for entries beyond the cap (deferring LRU eviction and WorkMem spilling to Post-1.0 Phase 2).
-- **Compliance**: Adheres to `[RULE:BoundedBuffers]`, `[RULE:ConcurrencySafety]`, `[RULE:RadicalKISS]`, and `notes/ENGINEERING_CONTEXT.ko.md` Invariant 17.
+- **Positive**: Guarantees 100% deterministic, zero-guess decoding across all query paths. Header loads in a single 32-bit CPU register read. Extensible flags eliminate future format breakages for compression and TOAST. Codebase complexity reduced by eliminating heuristic fallback layers.
+- **Negative**: Pre-1.0 development database folders created under legacy V1 must be re-initialized.
+- **Compliance**: Adheres to `[RULE:ExplicitError]`, `[RULE:RadicalKISS]`, `[RULE:ZeroAllocation]`, `[RULE:SafeDefaults]`, and `notes/ENGINEERING_CONTEXT.ko.md` Invariant 13.
+
 
 
 

@@ -133,13 +133,13 @@ func IsVirtualCatalogJoinQuery(sql string) bool {
 	upper := strings.ToUpper(sql)
 	upper = strings.ReplaceAll(strings.ReplaceAll(upper, "[", ""), "]", "")
 
-	if strings.Contains(upper, "SYS.COLUMNS") && matchAny(upper, "JOIN", "SYS.TYPES") {
+	if (strings.Contains(upper, "SYS.COLUMNS") || strings.Contains(upper, "SYS.ALL_COLUMNS")) && matchAny(upper, "JOIN", "SYS.TYPES", "SYS.TABLES") {
 		return true
 	}
-	if strings.Contains(upper, "SYS.INDEXES") && matchAny(upper, "JOIN", "IS_PRIMARY_KEY") {
+	if strings.Contains(upper, "SYS.INDEXES") && matchAny(upper, "JOIN", "IS_PRIMARY_KEY", "TYPE_DESC", "HAS_FILTER", "INDEX_ID") {
 		return true
 	}
-	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS", "SYS.SQL_MODULES", "FN_HELPCOLLATIONS") {
+	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.KEY_CONSTRAINTS", "SYS.FOREIGN_KEYS", "SYS.CHECK_CONSTRAINTS", "SYS.DEFAULT_CONSTRAINTS", "SYS.STATS", "SYS.TRIGGERS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS", "SYS.SQL_MODULES", "FN_HELPCOLLATIONS") {
 		return true
 	}
 	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") && matchAny(upper, "JOIN", "SCHEMANAME") {
@@ -248,16 +248,62 @@ var catalogRouteTable = []RouteRule{
 	{
 		Name: "MSSQL_ColumnsJoinedWithTypes",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
-			return strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "SYS.TYPES") || strings.Contains(upper, "ISIDENTITY") || strings.Contains(upper, "IS_IDENTITY") || strings.Contains(upper, "DATATYPE") || strings.Contains(upper, "MAX_LENGTH"))
+			hasCols := strings.Contains(upper, "SYS.COLUMNS") || strings.Contains(upper, "SYS.ALL_COLUMNS")
+			return hasCols && (strings.Contains(upper, "SYS.TYPES") || strings.Contains(upper, "SYS.TABLES") || strings.Contains(upper, "ISIDENTITY") || strings.Contains(upper, "IS_IDENTITY") || strings.Contains(upper, "DATATYPE") || strings.Contains(upper, "MAX_LENGTH") || strings.Contains(upper, "CLMNS.NAME"))
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execSysColumnsJoinedWithTypes(src, sql)
 		},
 	},
 	{
+		Name: "MSSQL_KeyConstraints",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.KEY_CONSTRAINTS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysKeyConstraintsMSSQL(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_ForeignKeys",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.FOREIGN_KEYS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysForeignKeysMSSQL(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_CheckConstraints",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.CHECK_CONSTRAINTS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysCheckConstraintsMSSQL(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_DefaultConstraints",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.DEFAULT_CONSTRAINTS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysDefaultConstraintsMSSQL(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_Stats",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.STATS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysStatsMSSQL(src, sql)
+		},
+	},
+	{
 		Name: "MSSQL_ColumnComments",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
-			return strings.Contains(upper, "COLUMNCOMMENT") && strings.Contains(upper, "SYS.COLUMNS")
+			return strings.Contains(upper, "COLUMNCOMMENT") && (strings.Contains(upper, "SYS.COLUMNS") || strings.Contains(upper, "SYS.ALL_COLUMNS"))
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execSysColumnsExtendedPropertyComment(sql)
@@ -333,6 +379,16 @@ var catalogRouteTable = []RouteRule{
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execSysObjectsViews(src, sql)
+		},
+	},
+	{
+		Name: "MSSQL_SysTableIndexesSSMS",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.TABLES") && strings.Contains(upper, "SYS.INDEXES") &&
+				(strings.Contains(upper, "I.OBJECT_ID") || strings.Contains(upper, "INDEX_ID > 0") || strings.Contains(upper, "HAS_FILTER") || strings.Contains(upper, "IS_HYPOTHETICAL") || strings.Contains(upper, "TYPE_DESC") || strings.Contains(upper, "INDEXTYPE") || strings.Contains(upper, "I.NAME") || strings.Contains(upper, "I.INDEX_ID"))
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysIndexesForSSMS(src, sql)
 		},
 	},
 	{

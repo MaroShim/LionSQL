@@ -328,6 +328,33 @@
 
 ---
 
+### ㉚ 스키마 진화(Schema Evolution), 단일 V2 바이너리 튜플 코덱 및 Instant Tail DDL 불변식 (Invariant 13)
+* **결정 사항**:
+  1. **전수 재작성(Table Rewrite)의 영구 폐기 및 단일 V2 바이너리 튜플 코덱 확정**:
+     - 컬럼 추가(`ALTER TABLE ADD COLUMN`) 시 기존 디스크의 모든 행을 전수 재인코딩/덮어쓰기하던 레거시 루프를 전면 폐기하고, 메타데이터만 갱신하는 **$O(1)$ Instant ADD COLUMN**을 정규 표준으로 채택함 (`PERF-WT-INSTANT-ADD-COL-1`).
+     - PostgreSQL `HeapTupleHeaderData`(`t_infomask`, `t_infomask2`, `t_bits`) 및 MySQL InnoDB(`info_bits`, `n_fields`)와 동일하게 자기완비적(Self-Describing) 4바이트 정렬 고정 헤더를 갖춘 **단일 정석 V2 바이너리 튜플 포맷(`0x02`)**을 확립함 (`ADR-031`):
+       `[Version: 1B (0x02)] [Flags: 1B (0x00)] [encodedCols: 2B (uint16 LE)] [NullBitmap: ceil(N/8)B] [Payloads...]`
+  2. **V1 레거시 분기 및 에러 은폐 휴리스틱 전면 폐기 (Clean Break)**:
+     - 튜플 헤더에 컬럼 수가 없어 스키마 변경 시 길이 추정이나 디코딩 에러 발생 시 `if col.Default != ""`로 에러를 은폐하던 레거시 V1의 모든 위험한 휴리스틱을 완전히 삭제함 (`[RULE:ExplicitError]`, `[RULE:RadicalKISS]`).
+     - `0x02`가 아닌 바이너리 버퍼는 즉시 `ErrInvalidTupleHeader`로 Fail-Fast 차단하여 잠재적 메모리 오손을 원천 차단함.
+  3. **미래 확장성 플래그(Flags) 선할당**:
+     - 튜플 헤더 1바이트 `Flags`에 `TupleFlagNoNulls(0x01)`, `TupleFlagCompressed(0x02)`, `TupleFlagToast(0x04)`, `TupleFlagExtended(0x08)`를 선할당하여, 향후 행 압축이나 거대 LOB TOAST 포인터가 도입되더라도 바이너리 버전을 다시 깨뜨리지 않고 무중단 호환성을 유지함.
+  4. **추가/삭제 반복 시 물리 레코드 불일치 방어 원칙 (Tail-Only DDL)**:
+     - **ADD COLUMN의 안전성**: 신규 컬럼은 항상 레코드의 맨 끝(Tail)에 추가되므로 물리 오프셋을 왜곡하지 않음. 디코더에서 스키마 컬럼 수가 더 많을 경우 누락된 필드를 컬럼 기본값(Default) 또는 `NULL`로 즉각 온더플라이 패딩함.
+     - **DROP COLUMN의 안전성 및 Fail-Closed 방어선**:
+       * **Tail 컬럼 삭제**: 맨 끝(Tail) 컬럼 삭제는 물리 레코드의 꼬리 바이트를 무시하므로 $O(1)$로 완벽히 안전함.
+       * **중간 컬럼 삭제 금지**: 데이터가 존재하는 테이블에서 중간 컬럼(Non-Terminal Column)을 삭제하려는 시도는 침묵 속 데이터 왜곡을 방지하기 위해 즉시 명시적 에러(`ErrDropColumnNotTail`, Fail-Closed)로 거절함.
+       * **가상 결번 마스킹 Spec-Out**: 0.5ns 읽기 핫패스를 훼손하는 복잡한 중간 컬럼 섀도우 마스킹(`PERF-OCC-INSTANT-DROP-COL-1`)은 영구 Spec-Out으로 배제함 (Spec-Out 21).
+  5. **3중 방어 안전망 (Defensive Multi-Layer)**:
+     - **Layer 1 (스토리지 엔진)**: `ADD COLUMN`은 메타데이터 갱신 $O(1)$ 완료. 데이터가 있는 테이블의 중간 컬럼 삭제는 Fail-Closed 에러 거부.
+     - **Layer 2 (튜플 디코더 `DecodeTupleToRowWithArena`)**: 4바이트 헤더에서 `encodedCols`를 읽어 새 컬럼은 Default/Null로 패딩하고, 컬럼 물리 손상 시 명시적 에러 반환.
+     - **Layer 3 (Volcano 쿼리 실행기 `PERF-EXEC-TUPLE-DEFENSIVE-PAD-1`)**: 상위 플래너와 하위 스토리지 간 스키마 버전 불일치로 프로젝션 인덱스가 행 크기를 초과하더라도 패닉 없이 `NULL`을 방어 반환.
+* **도입 배경 및 배제 근거**:
+  - 기존 WiredTiger `AddColumn`의 전수 재작성 방식은 수천만 건 테이블에서 수 초~수 분의 쓰기 락 지연을 유발할 뿐만 아니라, 재작성 루프 중 세션/커서 오픈 실패 시 스키마와 디스크 데이터가 영구 불일치하는 심각한 에러 은폐 결함(`AUDIT-FULL-012`)을 유발함.
+  - 현대 메이저 RDBMS(PostgreSQL v11+, MySQL 8.0 InnoDB, SQL Server)의 표준 아키텍처인 Instant DDL과 다층 디코더 패딩을 도입하여 성능과 데이터 안정성을 동시에 달성함.
+
+---
+
 ## 2. 사용자의 엔지니어링 철학 및 협업 규약
 
 LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집니다:

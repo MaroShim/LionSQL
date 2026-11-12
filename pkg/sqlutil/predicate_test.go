@@ -394,4 +394,15 @@ func TestPredicate_HardeningProbes(t *testing.T) {
 	if v, ok := ExtractEqualityFilter("SELECT * FROM t WHERE id IN (SELECT x FROM u WHERE name = 'zz')", "name"); ok {
 		t.Fatalf("expected ExtractEqualityFilter to ignore nested subquery equality, but got %q", v)
 	}
+
+	// 6. ExtractEqualityFilter inside parenthesized grouping clauses (SSMS query pattern)
+	if v, ok := ExtractEqualityFilter("SELECT * FROM sys.tables AS tbl WHERE (tbl.name = 'customers' AND SCHEMA_NAME(tbl.schema_id) = 'dbo')", "tbl.name"); !ok || v != "customers" {
+		t.Fatalf("ExtractEqualityFilter parenthesized SSMS pattern failed: got %q, ok=%v", v, ok)
+	}
+	if v, ok := ExtractEqualityFilter("SELECT * FROM sys.tables AS tbl WHERE (tbl.name = @_msparam_0 AND SCHEMA_NAME(tbl.schema_id) = @_msparam_1)", "tbl.name"); !ok || v != "@_msparam_0" {
+		t.Fatalf("ExtractEqualityFilter parameter pattern failed: got %q, ok=%v", v, ok)
+	}
+	if v, ok := ExtractEqualityFilter("SELECT * FROM sys.tables AS tbl WHERE ((tbl.name = 'orders'))", "tbl.name"); !ok || v != "orders" {
+		t.Fatalf("ExtractEqualityFilter double-nested grouping failed: got %q, ok=%v", v, ok)
+	}
 }

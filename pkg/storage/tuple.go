@@ -10,8 +10,21 @@ import (
 )
 
 const (
-	TupleCodecVersion byte = 0x01
+	TupleCodecV2      byte = 0x02
+	TupleCodecVersion byte = TupleCodecV2
+
+	// Tuple Header Flag Bits (Byte 1)
+	TupleFlagNone       byte = 0x00
+	TupleFlagNoNulls    byte = 0x01 // Reserved: No NULL values exist (null bitmap omitted)
+	TupleFlagCompressed byte = 0x02 // Reserved: Row payload is compressed
+	TupleFlagToast      byte = 0x04 // Reserved: Out-of-line TOAST pointer present
+	TupleFlagExtended   byte = 0x08 // Reserved: Extended header metadata present
 )
+
+// IsTupleCodec reports whether the byte matches the LionSQL binary tuple codec header version.
+func IsTupleCodec(b byte) bool {
+	return b == TupleCodecVersion
+}
 
 var (
 	ErrInvalidTupleHeader  = errors.New("invalid tuple header or version")
@@ -134,7 +147,7 @@ func EncodeRow(schema *TableSchema, row Row) ([]byte, error) {
 	numCols := len(schema.Columns)
 	nullBitmapLen := (numCols + 7) / 8
 
-	buf := make([]byte, 1+nullBitmapLen, 64)
+	buf := make([]byte, 4+nullBitmapLen, 64)
 	return EncodeRowToBuffer(schema, row, buf)
 }
 
@@ -147,7 +160,7 @@ func EncodeRowToBuffer(schema *TableSchema, row Row, buf []byte) ([]byte, error)
 	numCols := len(schema.Columns)
 	nullBitmapLen := (numCols + 7) / 8
 
-	neededLen := 1 + nullBitmapLen
+	neededLen := 4 + nullBitmapLen
 	if cap(buf) < neededLen {
 		buf = make([]byte, neededLen, neededLen+numCols*8)
 	} else {
@@ -157,6 +170,8 @@ func EncodeRowToBuffer(schema *TableSchema, row Row, buf []byte) ([]byte, error)
 		}
 	}
 	buf[0] = TupleCodecVersion
+	buf[1] = TupleFlagNone
+	binary.LittleEndian.PutUint16(buf[2:4], uint16(numCols))
 
 	var scratch [10]byte
 
@@ -168,7 +183,7 @@ func EncodeRowToBuffer(schema *TableSchema, row Row, buf []byte) ([]byte, error)
 			val = NullValue(col.Type)
 		}
 		if val.IsNull {
-			buf[1+(i/8)] |= 1 << (i % 8)
+			buf[4+(i/8)] |= 1 << (i % 8)
 			continue
 		}
 
@@ -269,6 +284,24 @@ func EncodeTupleToBuffer(schema *TableSchema, rec Record, buf []byte) ([]byte, e
 }
 
 
+func readTupleHeader(data []byte) (flags byte, encodedCols int, bitmap []byte, offset int, err error) {
+	if len(data) < 4 {
+		return 0, 0, nil, 0, ErrTupleBufferTooShort
+	}
+	if data[0] != TupleCodecVersion {
+		return 0, 0, nil, 0, fmt.Errorf("%w: got 0x%02x, expected 0x%02x", ErrInvalidTupleHeader, data[0], TupleCodecVersion)
+	}
+	flags = data[1]
+	encodedCols = int(binary.LittleEndian.Uint16(data[2:4]))
+	nullBitmapLen := (encodedCols + 7) / 8
+	if len(data) < 4+nullBitmapLen {
+		return 0, 0, nil, 0, ErrTupleBufferTooShort
+	}
+	bitmap = data[4 : 4+nullBitmapLen]
+	offset = 4 + nullBitmapLen
+	return flags, encodedCols, bitmap, offset, nil
+}
+
 // DecodeTupleToRow decodes a compact binary tuple directly into a Row without map allocations.
 func DecodeTupleToRow(schema *TableSchema, data []byte) (Row, error) {
 	return DecodeTupleToRowWithArena(schema, data, nil)
@@ -279,22 +312,13 @@ func DecodeTupleToRowWithArena(schema *TableSchema, data []byte, arena *Arena) (
 	if schema == nil {
 		return Row{}, errors.New("nil table schema")
 	}
-	if len(data) < 1 {
-		return Row{}, ErrTupleBufferTooShort
-	}
-	if data[0] != TupleCodecVersion {
-		return Row{}, fmt.Errorf("%w: got 0x%02x, expected 0x%02x", ErrInvalidTupleHeader, data[0], TupleCodecVersion)
+
+	_, encodedCols, bitmap, offset, err := readTupleHeader(data)
+	if err != nil {
+		return Row{}, err
 	}
 
 	numCols := len(schema.Columns)
-	nullBitmapLen := (numCols + 7) / 8
-	if len(data) < 1+nullBitmapLen {
-		return Row{}, ErrTupleBufferTooShort
-	}
-
-	bitmap := data[1 : 1+nullBitmapLen]
-	offset := 1 + nullBitmapLen
-
 	var vals []Value
 	if arena != nil {
 		vals = arena.AllocValues(numCols)
@@ -303,6 +327,15 @@ func DecodeTupleToRowWithArena(schema *TableSchema, data []byte, arena *Arena) (
 	}
 
 	for i, col := range schema.Columns {
+		if i >= encodedCols {
+			if col.Default != "" {
+				vals[i] = ParseLiteralDefault(col.Default, col.Type)
+			} else {
+				vals[i] = NullValue(col.Type)
+			}
+			continue
+		}
+
 		isNull := (bitmap[i/8] & (1 << (i % 8))) != 0
 		if isNull {
 			vals[i] = NullValue(col.Type)
@@ -475,22 +508,13 @@ func DecodeTupleSelectedWithArena(schema *TableSchema, data []byte, selectedCols
 	if schema == nil {
 		return Row{}, errors.New("nil table schema")
 	}
-	if len(data) < 1 {
-		return Row{}, ErrTupleBufferTooShort
-	}
-	if data[0] != TupleCodecVersion {
-		return Row{}, fmt.Errorf("%w: got 0x%02x, expected 0x%02x", ErrInvalidTupleHeader, data[0], TupleCodecVersion)
+
+	_, encodedCols, bitmap, offset, err := readTupleHeader(data)
+	if err != nil {
+		return Row{}, err
 	}
 
 	numCols := len(schema.Columns)
-	nullBitmapLen := (numCols + 7) / 8
-	if len(data) < 1+nullBitmapLen {
-		return Row{}, ErrTupleBufferTooShort
-	}
-
-	bitmap := data[1 : 1+nullBitmapLen]
-	offset := 1 + nullBitmapLen
-
 	needed := make([]bool, numCols)
 	for _, idx := range selectedCols {
 		if idx >= 0 && idx < numCols {
@@ -506,6 +530,15 @@ func DecodeTupleSelectedWithArena(schema *TableSchema, data []byte, selectedCols
 	}
 
 	for i, col := range schema.Columns {
+		if i >= encodedCols {
+			if needed[i] && col.Default != "" {
+				vals[i] = ParseLiteralDefault(col.Default, col.Type)
+			} else {
+				vals[i] = NullValue(col.Type)
+			}
+			continue
+		}
+
 		isNull := (bitmap[i/8] & (1 << (i % 8))) != 0
 		if isNull {
 			vals[i] = NullValue(col.Type)
@@ -541,7 +574,8 @@ type LazyTuple struct {
 	isDecoded     []bool
 	colOffsets    []int
 	hasOffset     []bool
-	nullBitmapLen int
+	encodedCols   int
+	bitmap        []byte
 	nextColToScan int
 	currOffset    int
 }
@@ -551,19 +585,12 @@ func NewLazyTuple(schema *TableSchema, data []byte) (*LazyTuple, error) {
 	if schema == nil {
 		return nil, errors.New("nil table schema")
 	}
-	if len(data) < 1 {
-		return nil, ErrTupleBufferTooShort
-	}
-	if data[0] != TupleCodecVersion {
-		return nil, fmt.Errorf("%w: got 0x%02x, expected 0x%02x", ErrInvalidTupleHeader, data[0], TupleCodecVersion)
+	_, encodedCols, bitmap, offset, err := readTupleHeader(data)
+	if err != nil {
+		return nil, err
 	}
 
 	numCols := len(schema.Columns)
-	nullBitmapLen := (numCols + 7) / 8
-	if len(data) < 1+nullBitmapLen {
-		return nil, ErrTupleBufferTooShort
-	}
-
 	return &LazyTuple{
 		schema:        schema,
 		data:          data,
@@ -571,9 +598,10 @@ func NewLazyTuple(schema *TableSchema, data []byte) (*LazyTuple, error) {
 		isDecoded:     make([]bool, numCols),
 		colOffsets:    make([]int, numCols),
 		hasOffset:     make([]bool, numCols),
-		nullBitmapLen: nullBitmapLen,
+		encodedCols:   encodedCols,
+		bitmap:        bitmap,
 		nextColToScan: 0,
-		currOffset:    1 + nullBitmapLen,
+		currOffset:    offset,
 	}, nil
 }
 
@@ -593,19 +621,30 @@ func (lt *LazyTuple) Get(colIdx int) (Value, error) {
 		return lt.decoded[colIdx], nil
 	}
 
+	col := lt.schema.Columns[colIdx]
+	if colIdx >= lt.encodedCols {
+		if col.Default != "" {
+			lt.decoded[colIdx] = ParseLiteralDefault(col.Default, col.Type)
+		} else {
+			lt.decoded[colIdx] = NullValue(col.Type)
+		}
+		lt.isDecoded[colIdx] = true
+		return lt.decoded[colIdx], nil
+	}
+
 	// Check null bitmap
-	isNull := (lt.data[1+(colIdx/8)] & (1 << (colIdx % 8))) != 0
+	isNull := (lt.bitmap[colIdx/8] & (1 << (colIdx % 8))) != 0
 	if isNull {
-		lt.decoded[colIdx] = NullValue(lt.schema.Columns[colIdx].Type)
+		lt.decoded[colIdx] = NullValue(col.Type)
 		lt.isDecoded[colIdx] = true
 		return lt.decoded[colIdx], nil
 	}
 
 	// If we already know the exact byte offset for this column:
 	if lt.hasOffset[colIdx] {
-		val, _, err := DecodeTupleValue(lt.schema.Columns[colIdx].Type, lt.data, lt.colOffsets[colIdx])
+		val, _, err := DecodeTupleValue(col.Type, lt.data, lt.colOffsets[colIdx])
 		if err != nil {
-			return Value{}, fmt.Errorf("%w at col %d (%s)", err, colIdx, lt.schema.Columns[colIdx].Name)
+			return Value{}, fmt.Errorf("%w at col %d (%s)", err, colIdx, col.Name)
 		}
 		lt.decoded[colIdx] = val
 		lt.isDecoded[colIdx] = true
@@ -614,7 +653,18 @@ func (lt *LazyTuple) Get(colIdx int) (Value, error) {
 
 	// Scan forward from nextColToScan up to colIdx
 	for c := lt.nextColToScan; c <= colIdx; c++ {
-		colIsNull := (lt.data[1+(c/8)] & (1 << (c % 8))) != 0
+		if c >= lt.encodedCols {
+			colC := lt.schema.Columns[c]
+			if colC.Default != "" {
+				lt.decoded[c] = ParseLiteralDefault(colC.Default, colC.Type)
+			} else {
+				lt.decoded[c] = NullValue(colC.Type)
+			}
+			lt.isDecoded[c] = true
+			continue
+		}
+
+		colIsNull := (lt.bitmap[c/8] & (1 << (c % 8))) != 0
 		if colIsNull {
 			lt.decoded[c] = NullValue(lt.schema.Columns[c].Type)
 			lt.isDecoded[c] = true
@@ -706,42 +756,45 @@ func ExtractColumnFromTuple(schema *TableSchema, data []byte, targetColIdx int) 
 	if targetColIdx < 0 || targetColIdx >= len(schema.Columns) {
 		return Value{}, errors.New("column index out of range")
 	}
-	if len(data) < 1 {
-		return Value{}, ErrTupleBufferTooShort
-	}
-	if data[0] != TupleCodecVersion {
-		return Value{}, fmt.Errorf("%w: got 0x%02x, expected 0x%02x", ErrInvalidTupleHeader, data[0], TupleCodecVersion)
+
+	_, encodedCols, bitmap, offset, err := readTupleHeader(data)
+	if err != nil {
+		return Value{}, err
 	}
 
-	numCols := len(schema.Columns)
-	nullBitmapLen := (numCols + 7) / 8
-	if len(data) < 1+nullBitmapLen {
-		return Value{}, ErrTupleBufferTooShort
+	col := schema.Columns[targetColIdx]
+	if targetColIdx >= encodedCols {
+		if col.Default != "" {
+			return ParseLiteralDefault(col.Default, col.Type), nil
+		}
+		return NullValue(col.Type), nil
 	}
 
 	// 1. Fast check null bitmap
-	isNull := (data[1+targetColIdx/8] & (1 << (targetColIdx % 8))) != 0
+	isNull := (bitmap[targetColIdx/8] & (1 << (targetColIdx % 8))) != 0
 	if isNull {
-		return NullValue(schema.Columns[targetColIdx].Type), nil
+		return NullValue(col.Type), nil
 	}
 
 	// 2. Skip preceding non-null columns
-	offset := 1 + nullBitmapLen
 	for i := 0; i < targetColIdx; i++ {
-		priorNull := (data[1+i/8] & (1 << (i % 8))) != 0
+		priorNull := (bitmap[i/8] & (1 << (i % 8))) != 0
 		if priorNull {
 			continue
 		}
 		nextOffset, err := SkipTupleColumn(schema.Columns[i].Type, data, offset)
 		if err != nil {
-			return Value{}, err
+			return Value{}, fmt.Errorf("%w at col %d (%s)", err, i, schema.Columns[i].Name)
 		}
 		offset = nextOffset
 	}
 
 	// 3. Decode only target column
-	val, _, err := DecodeTupleValue(schema.Columns[targetColIdx].Type, data, offset)
-	return val, err
+	val, _, err := DecodeTupleValue(col.Type, data, offset)
+	if err != nil {
+		return Value{}, fmt.Errorf("%w at col %d (%s)", err, targetColIdx, col.Name)
+	}
+	return val, nil
 }
 
 // DecodeTupleIntoValues decodes a compact binary tuple directly into the destination slice dest,
@@ -750,26 +803,26 @@ func DecodeTupleIntoValues(schema *TableSchema, data []byte, dest []Value) error
 	if schema == nil {
 		return errors.New("nil table schema")
 	}
-	if len(data) < 1 {
-		return ErrTupleBufferTooShort
-	}
-	if data[0] != TupleCodecVersion {
-		return fmt.Errorf("%w: got 0x%02x, expected 0x%02x", ErrInvalidTupleHeader, data[0], TupleCodecVersion)
+	_, encodedCols, bitmap, offset, err := readTupleHeader(data)
+	if err != nil {
+		return err
 	}
 
 	numCols := len(schema.Columns)
 	if len(dest) < numCols {
 		return errors.New("dest slice capacity too short for schema columns")
 	}
-	nullBitmapLen := (numCols + 7) / 8
-	if len(data) < 1+nullBitmapLen {
-		return ErrTupleBufferTooShort
-	}
-
-	bitmap := data[1 : 1+nullBitmapLen]
-	offset := 1 + nullBitmapLen
 
 	for i, col := range schema.Columns {
+		if i >= encodedCols {
+			if col.Default != "" {
+				dest[i] = ParseLiteralDefault(col.Default, col.Type)
+			} else {
+				dest[i] = NullValue(col.Type)
+			}
+			continue
+		}
+
 		isNull := (bitmap[i/8] & (1 << (i % 8))) != 0
 		if isNull {
 			dest[i] = NullValue(col.Type)
