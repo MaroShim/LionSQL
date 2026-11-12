@@ -6,7 +6,7 @@
 > 모든 태스크 추가, 상태 변경, 마일스톤 수정은 반드시 `./bin/sprint` CLI를 통해서만 수행해야 합니다.
 > 수정 후 `./bin/sprint backup TASKS.md` 명령으로 이 문서를 동기화하십시오.
 
-> - **Last Synced**: 2026-11-12
+> - **Last Synced**: 2026-11-13
 > - **Primary Source of Truth (SSOT)**: SQLite `sprint_tasks` Table
 > - **Backup File**: Auto-synced on task update & Git commit
 
@@ -202,17 +202,24 @@
 | `PENDING` | **`FEAT-VECTOR-1`** | `v1.60.0` | FEAT | P2 | Pure-Go Vector Search Engine (pgvector compat) | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WASM-UDF-1`** | `v1.99.0` | Engine | P2 | WebAssembly 런타임 샌드박스 UDF (wazero) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-CURSOR-LIFECYCLE-1`** |  | Engine | P1 | 커서 DEALLOCATE 및 배치 종료 시 세션 커서 레지스트리 정리 및 재선언 충돌 해결 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DDL-DEFAULT-CHECK-1`** | `1.0-GA` | Engine | P2 | CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-GROUPBY-STRING-AGG-1`** |  | Engine | P1 | GROUP BY 쿼리에서 STRING_AGG(col, sep) 그룹별 집계 누락(NULL 반환) 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-OCC-COMPACT-AUDIT-1`** | `1.0-GA` | Storage | P1 | MemoryCompact 2단계 Audit 결함 수정 (Arena UAF, AlterTable 레이아웃/WAL, memCursor 레이스, varSlot 오버플로우) | [`notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md`](notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md) |  |
 | `PENDING` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-PROC-TEMP-TABLE-DDL-1`** |  | Engine | P1 | 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-SQL-DERIVED-VALUES-1`** |  | Engine | P1 | FROM (VALUES (...), (...)) AS alias(col1, col2) 인라인 테이블 값 생성자 및 컬럼 별칭 지원 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-SQL-PAREN-SELECT-1`** |  | Engine | P1 | 괄호로 감싸진 (SELECT ...) 최상위 쿼리 및 뷰/CTE 본문 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQLUTIL-PARSER-1`** |  | Engine | P2 | pkg/sqlutil SQL 파서/정규화기 결함 보강 및 렉서 공통화 | [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-TRIGGER-FOR-KEYWORD-1`** |  | Engine | P1 | CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-TSQL-INSERT-EXEC-1`** |  | Engine | P1 | INSERT INTO <table> EXEC <proc_name> 프로시저 결과셋 적재 구문 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-OFFSET-VAR-1`** | `1.0-GA` | Engine | P2 | OFFSET @var ROWS FETCH NEXT @var ROWS ONLY 프로시저 내 변수 바인딩 파싱 실패 (unexpected token @skip) | [`test/slt_proc/26_offset_fetch_paging.slt`](test/slt_proc/26_offset_fetch_paging.slt) |  |
 | `DONE` | **`FIX-TSQL-OUTPUT-PARAM-1`** | `1.0-GA` | Engine | P1 | EXEC proc @x OUTPUT 호출자 변수로 값 미전달: DECLARE @x; EXEC sp_double 21, @x OUTPUT; SELECT @x 가 42 대신 NULL | [`test/slt_proc/27_rowcount_and_dml_results.slt`](test/slt_proc/27_rowcount_and_dml_results.slt) |  |
 | `DONE` | **`FIX-TSQL-PROC-UNION-ALL-1`** | `1.0-GA` | Engine | P2 | 프로시저 본문 내 UNION ALL 파싱 실패 (unexpected token ALL), 프로시저 밖은 정상 | [`test/slt_proc/30_case_expressions_and_set_ops.slt`](test/slt_proc/30_case_expressions_and_set_ops.slt) |  |
 | `DONE` | **`FIX-TSQL-RAISERROR-FMT-1`** | `1.0-GA` | Engine | P2 | RAISERROR 포맷 인자 치환(%d, %s) 미구현: 'raised %d',16,1,7 가 'raised %d'로 반환 | [`test/slt_proc/28_throw_and_raiserror.slt`](test/slt_proc/28_throw_and_raiserror.slt) |  |
 | `DONE` | **`FIX-TSQL-UNION-CHAIN-1`** | `1.0-GA` | Engine | P1 | 3개 이상 UNION 체인 중복 제거 오류: SELECT 1 UNION SELECT 2 UNION SELECT 2 ORDER BY 1 이 1,1,2 반환(프로시저 내부는 NULL,NULL,2) | [`test/slt_proc/30_case_and_set_ops_in_procs.slt`](test/slt_proc/30_case_and_set_ops_in_procs.slt) |  |
+| `PENDING` | **`FIX-TSQL-XACT-STATE-1`** |  | Engine | P1 | TRY...CATCH 트랜잭션 상태 내장 함수 XACT_STATE() 지원 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-VM-HIDDEN-ROWID-1`** |  | Engine | P1 | PK 없는 테이블에 대한 VDBE VM OpInsert 실행 시 숨은 _row_id 자동 발번 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-WIN-NEGATIVE-DEFAULT-1`** | `1.0-GA` | Engine | P2 | LAG/LEAD 윈도우 함수 음수 기본값 인자(LEAD(val, 1, -1)) 파싱 시 0 반환 오류 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FRIENDLY-SQL`** |  | Ecosystem | P3 | DuckDB-Style Friendly SQL 문법 지원 | [`notes/plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md) |  |
 | `DONE` | **`GA-REGEX-FINAL-2`** |  | Engine | P2 | CBO Planner 및 VDBE 잔여 정규식 100% 완전 제거 | [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md) |  |
@@ -2463,6 +2470,12 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] 커서 DEALLOCATE 및 배치 종료 시 세션 커서 레지스트리 정리 및 재선언 충돌 해결 `FIX-CURSOR-LIFECYCLE-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:06:30
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
 ### [DONE] CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 `FIX-DDL-DEFAULT-CHECK-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 13:48:05
 - **Milestone**: `1.0-GA`
@@ -2507,9 +2520,33 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [PENDING] FROM (VALUES (...), (...)) AS alias(col1, col2) 인라인 테이블 값 생성자 및 컬럼 별칭 지원 `FIX-SQL-DERIVED-VALUES-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:06:31
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] 괄호로 감싸진 (SELECT ...) 최상위 쿼리 및 뷰/CTE 본문 실행 지원 `FIX-SQL-PAREN-SELECT-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:06:30
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
 ### [DONE] pkg/sqlutil SQL 파서/정규화기 결함 보강 및 렉서 공통화 `FIX-SQLUTIL-PARSER-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 16:23:03
 - **Plan Doc**: [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md)
+
+---
+
+### [PENDING] CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 `FIX-TRIGGER-FOR-KEYWORD-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:06:31
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] INSERT INTO <table> EXEC <proc_name> 프로시저 결과셋 적재 구문 파싱 및 실행 지원 `FIX-TSQL-INSERT-EXEC-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:06:31
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
 
@@ -2545,6 +2582,18 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 13:17:12
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`test/slt_proc/30_case_and_set_ops_in_procs.slt`](test/slt_proc/30_case_and_set_ops_in_procs.slt)
+
+---
+
+### [PENDING] TRY...CATCH 트랜잭션 상태 내장 함수 XACT_STATE() 지원 `FIX-TSQL-XACT-STATE-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:06:31
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] PK 없는 테이블에 대한 VDBE VM OpInsert 실행 시 숨은 _row_id 자동 발번 누락 수정 `FIX-VM-HIDDEN-ROWID-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:06:30
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
 
