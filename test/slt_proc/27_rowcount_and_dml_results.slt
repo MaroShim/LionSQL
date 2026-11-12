@@ -1,0 +1,58 @@
+# test/slt_proc/27_rowcount_and_dml_results.slt
+# @@ROWCOUNT after UPDATE and DELETE inside procedures
+
+statement ok
+CREATE TABLE rc_t (id INT PRIMARY KEY, v INT);
+
+statement ok
+INSERT INTO rc_t VALUES (1, 10), (2, 20), (3, 30);
+
+statement ok
+CREATE PROCEDURE sp_bump @min INT
+AS
+BEGIN
+    UPDATE rc_t SET v = v + 1 WHERE v >= @min;
+    SELECT @@ROWCOUNT;
+END;
+
+query I
+EXEC sp_bump 20;
+----
+2
+
+query II
+SELECT id, v FROM rc_t ORDER BY id;
+----
+1 10
+2 21
+3 31
+
+statement ok
+DROP TABLE rc_t;
+
+statement ok
+CREATE TABLE rc_t2 (id INT PRIMARY KEY, v INT);
+
+statement ok
+INSERT INTO rc_t2 VALUES (1, 1), (2, 2), (3, 3), (4, 4);
+
+statement ok
+CREATE PROCEDURE sp_prune @max INT
+AS
+BEGIN
+    DELETE FROM rc_t2 WHERE v > @max;
+    SELECT @@ROWCOUNT;
+END;
+
+query I
+EXEC sp_prune 2;
+----
+2
+
+query I
+SELECT COUNT(*) FROM rc_t2;
+----
+2
+
+statement ok
+DROP TABLE rc_t2;

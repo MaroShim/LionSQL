@@ -1,5 +1,5 @@
-# test/slt_proc/30_case_and_set_ops_in_procs.slt
-# CASE expressions, UNION/INTERSECT/EXCEPT inside procedures
+# test/slt_proc/30_case_expressions_and_set_ops.slt
+# CASE expressions and UNION ALL/EXCEPT/INTERSECT at top level
 
 statement ok
 CREATE PROCEDURE sp_grade @score INT
@@ -38,3 +38,13 @@ query I
 SELECT 2 INTERSECT SELECT 2;
 ----
 2
+
+query T
+SELECT CASE 2 WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'many' END;
+----
+two
+
+query I
+SELECT CASE WHEN 1 = 2 THEN 10 END IS NULL;
+----
+1

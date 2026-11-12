@@ -204,6 +204,8 @@
 | `DONE` | **`FIX-OCC-COMPACT-AUDIT-1`** | `1.0-GA` | Storage | P1 | MemoryCompact 2단계 Audit 결함 수정 (Arena UAF, AlterTable 레이아웃/WAL, memCursor 레이스, varSlot 오버플로우) | [`notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md`](notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-SQLUTIL-PARSER-1`** |  | Engine | P2 | pkg/sqlutil SQL 파서/정규화기 결함 보강 및 렉서 공통화 | [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md) |  |
 | `PENDING` | **`FIX-TSQL-OFFSET-VAR-1`** | `1.0-GA` | Engine | P2 | OFFSET @var ROWS FETCH NEXT @var ROWS ONLY 프로시저 내 변수 바인딩 파싱 실패 (unexpected token @skip) | [`test/slt_proc/26_offset_fetch_paging.slt`](test/slt_proc/26_offset_fetch_paging.slt) |  |
+| `PENDING` | **`FIX-TSQL-OUTPUT-PARAM-1`** | `1.0-GA` | Engine | P1 | EXEC proc @x OUTPUT 호출자 변수로 값 미전달: DECLARE @x; EXEC sp_double 21, @x OUTPUT; SELECT @x 가 42 대신 NULL | [`test/slt_proc/27_rowcount_and_dml_results.slt`](test/slt_proc/27_rowcount_and_dml_results.slt) |  |
+| `PENDING` | **`FIX-TSQL-PROC-UNION-ALL-1`** | `1.0-GA` | Engine | P2 | 프로시저 본문 내 UNION ALL 파싱 실패 (unexpected token ALL), 프로시저 밖은 정상 | [`test/slt_proc/30_case_expressions_and_set_ops.slt`](test/slt_proc/30_case_expressions_and_set_ops.slt) |  |
 | `PENDING` | **`FIX-TSQL-RAISERROR-FMT-1`** | `1.0-GA` | Engine | P2 | RAISERROR 포맷 인자 치환(%d, %s) 미구현: 'raised %d',16,1,7 가 'raised %d'로 반환 | [`test/slt_proc/28_throw_and_raiserror.slt`](test/slt_proc/28_throw_and_raiserror.slt) |  |
 | `PENDING` | **`FIX-TSQL-UNION-CHAIN-1`** | `1.0-GA` | Engine | P1 | 3개 이상 UNION 체인 중복 제거 오류: SELECT 1 UNION SELECT 2 UNION SELECT 2 ORDER BY 1 이 1,1,2 반환(프로시저 내부는 NULL,NULL,2) | [`test/slt_proc/30_case_and_set_ops_in_procs.slt`](test/slt_proc/30_case_and_set_ops_in_procs.slt) |  |
 | `DONE` | **`FRIENDLY-SQL`** |  | Ecosystem | P3 | DuckDB-Style Friendly SQL 문법 지원 | [`notes/plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md) |  |
@@ -2475,6 +2477,20 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 12:34:31
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`test/slt_proc/26_offset_fetch_paging.slt`](test/slt_proc/26_offset_fetch_paging.slt)
+
+---
+
+### [PENDING] EXEC proc @x OUTPUT 호출자 변수로 값 미전달: DECLARE @x; EXEC sp_double 21, @x OUTPUT; SELECT @x 가 42 대신 NULL `FIX-TSQL-OUTPUT-PARAM-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 12:37:50
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`test/slt_proc/27_rowcount_and_dml_results.slt`](test/slt_proc/27_rowcount_and_dml_results.slt)
+
+---
+
+### [PENDING] 프로시저 본문 내 UNION ALL 파싱 실패 (unexpected token ALL), 프로시저 밖은 정상 `FIX-TSQL-PROC-UNION-ALL-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 12:37:50
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`test/slt_proc/30_case_expressions_and_set_ops.slt`](test/slt_proc/30_case_expressions_and_set_ops.slt)
 
 ---
 

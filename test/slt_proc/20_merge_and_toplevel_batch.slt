@@ -1,5 +1,5 @@
-# test/slt_proc/20_adhoc_batch_and_merge.slt
-# MERGE with WHEN MATCHED / WHEN NOT MATCHED
+# test/slt_proc/20_merge_and_toplevel_batch.slt
+# MERGE (WHEN MATCHED / NOT MATCHED) and top-level DECLARE/WHILE/IF batches
 
 statement ok
 CREATE TABLE merge_tgt (id INT PRIMARY KEY, qty INT);
@@ -31,3 +31,26 @@ DROP TABLE merge_tgt;
 
 statement ok
 DROP TABLE merge_src;
+
+query I
+DECLARE @i INT = 0;
+DECLARE @s INT = 0;
+WHILE @i < 5
+BEGIN
+    SET @i = @i + 1;
+    SET @s = @s + @i;
+END;
+SELECT @s;
+----
+15
+
+query T
+DECLARE @n INT = 7;
+DECLARE @r VARCHAR(10);
+IF @n % 2 = 0
+    SET @r = 'even';
+ELSE
+    SET @r = 'odd';
+SELECT @r;
+----
+odd
