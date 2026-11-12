@@ -309,6 +309,20 @@ func runServer(args []string) error {
 		cfg.Server.DataDir = defaultDataDir
 	}
 
+	explicitEngineSet := visited["engine"] || visited["disk"] || loadedConfigPath != ""
+	explicitMemorySet := visited["memory"] || (loadedConfigPath != "" && cfg.Server.Memory != "")
+	if !cfg.Server.Ephemeral && cfg.Server.DataDir != "" {
+		if existingManifest, err := config.ResolveExistingEngineManifest(cfg.Server.DataDir, cfg.Server.GetDisk(), explicitEngineSet); err != nil {
+			log.Fatalf("[LionSQL] %v", err)
+		} else if existingManifest != nil {
+			cfg.Server.Disk = existingManifest.Disk
+			cfg.Server.Engine = existingManifest.Engine
+			if !explicitMemorySet && existingManifest.Memory != "" {
+				cfg.Server.Memory = existingManifest.Memory
+			}
+		}
+	}
+
 	resolvedPidFile := cfg.Server.PIDFile
 	if resolvedPidFile == "" {
 		resolvedPidFile = filepath.Join(cfg.Server.DataDir, "lionsql.pid")
@@ -464,6 +478,21 @@ func runServer(args []string) error {
 	if !cfg.Server.Ephemeral {
 		if err := pathutil.ValidateDir(cfg.Server.DataDir, true); err != nil {
 			log.Fatalf("[LionSQL] Data directory validation failed: %v", err)
+		}
+		manifest, err := config.ResolveOrWriteEngineManifest(cfg.Server.DataDir, resolvedDisk, resolvedMemory, explicitEngineSet, explicitMemorySet)
+		if err != nil {
+			log.Fatalf("[LionSQL] %v", err)
+		}
+		if manifest != nil {
+			resolvedDisk = manifest.Disk
+			resolvedMemory = manifest.Memory
+			cfg.Server.Disk = manifest.Disk
+			cfg.Server.Engine = manifest.Engine
+			cfg.Server.Memory = manifest.Memory
+			memMode, err = memengine.ParseMemoryMode(resolvedMemory)
+			if err != nil {
+				log.Fatalf("[LionSQL] Invalid memory layout configuration: %v", err)
+			}
 		}
 	}
 
