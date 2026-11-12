@@ -218,6 +218,7 @@
 | `PENDING` | **`FIX-TRIGGER-FOR-KEYWORD-1`** |  | Engine | P1 | CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** |  | Engine | P1 | CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX)) 미평가 에코 버그 및 MONEY/SMALLMONEY 4자리 소수점 스케일(1.2345) 보정 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-TSQL-INSERT-EXEC-1`** |  | Engine | P1 | INSERT INTO <table> EXEC <proc_name> 프로시저 결과셋 적재 구문 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-TSQL-JSON-FUNCTIONS-EXT-1`** | `1.0-GA` | Engine | P1 | mssql-jdbc JSONFunctionTest.java 호환성: SQL Server JSON 컬럼 타입 별칭 및 JSON_OBJECT, JSON_ARRAY, JSON_PATH_EXISTS 내장 함수 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-OFFSET-VAR-1`** | `1.0-GA` | Engine | P2 | OFFSET @var ROWS FETCH NEXT @var ROWS ONLY 프로시저 내 변수 바인딩 파싱 실패 (unexpected token @skip) | [`test/slt_proc/26_offset_fetch_paging.slt`](test/slt_proc/26_offset_fetch_paging.slt) |  |
 | `DONE` | **`FIX-TSQL-OUTPUT-PARAM-1`** | `1.0-GA` | Engine | P1 | EXEC proc @x OUTPUT 호출자 변수로 값 미전달: DECLARE @x; EXEC sp_double 21, @x OUTPUT; SELECT @x 가 42 대신 NULL | [`test/slt_proc/27_rowcount_and_dml_results.slt`](test/slt_proc/27_rowcount_and_dml_results.slt) |  |
 | `DONE` | **`FIX-TSQL-PROC-UNION-ALL-1`** | `1.0-GA` | Engine | P2 | 프로시저 본문 내 UNION ALL 파싱 실패 (unexpected token ALL), 프로시저 밖은 정상 | [`test/slt_proc/30_case_expressions_and_set_ops.slt`](test/slt_proc/30_case_expressions_and_set_ops.slt) |  |
@@ -308,6 +309,8 @@
 | `DONE` | **`TEST-OCC-FLAT-3`** |  | Storage | P2 | Flat 모드 쿼리 엔진 풀 스위트 회귀 검증 (SLT 및 Babelfish) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `PENDING` | **`TEST-OCC-FLAT-4`** | `1.0-GA` | Storage | P2 | Flat 모드 24h 장기 소크 및 가변 길이 UPDATE 단편화 검증 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `PENDING` | **`TEST-TDS-GOMSSQLDB-ORACLE-1`** |  | Wire | P1 | 공식 microsoft/go-mssqldb 드라이버 테스트 스위트(550+ 케이스) 라이브 TDS 통합 오라클 이식 및 검증 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`TEST-TDS-MSSQL-JDBC-ORACLE-1`** | `1.0-GA` | Protocol | P1 | microsoft/mssql-jdbc 공식 테스트 스위트(200개 파일, 2,641개 @Test, datatypes/callablestatement/preparedStatement/databasemetadata) 핵심 T-SQL 및 카탈로그 오라클 수확 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`TEST-TDS-PYMSSQL-ORACLE-1`** | `1.0-GA` | Protocol | P1 | pymssql 공식 테스트 스위트(test_sprocs.py 17개 고정/가변 타입 OUTPUT 프로시저, test_types.py, test_queries.py 등 ~200케이스) TDS/Gate 5 오라클 포팅 및 검증 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`TSQL-FUNC-AT-TIME-ZONE`** | `v1.10.0` | Engine | P2 | AT TIME ZONE 시간대 변환 구문 및 함수 (IANA/Windows Timezone) | [`notes/plans/TIMEZONE_LOCALE_PARSING_PLAN.ko.md`](notes/plans/TIMEZONE_LOCALE_PARSING_PLAN.ko.md) |  |
 | `DONE` | **`TSQL-FUNC-COMPRESS`** | `1.0-GA` | Engine | P2 | COMPRESS 및 DECOMPRESS GZIP 바이너리 압축/해제 내장 함수 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
 | `PENDING` | **`TSQL-FUNC-PARSE`** | `v1.10.0` | Engine | P2 | PARSE 및 TRY_PARSE 문화권(Culture) 기반 문자열 파싱 함수 | [`notes/plans/TIMEZONE_LOCALE_PARSING_PLAN.ko.md`](notes/plans/TIMEZONE_LOCALE_PARSING_PLAN.ko.md) |  |
@@ -2587,6 +2590,13 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [PENDING] mssql-jdbc JSONFunctionTest.java 호환성: SQL Server JSON 컬럼 타입 별칭 및 JSON_OBJECT, JSON_ARRAY, JSON_PATH_EXISTS 내장 함수 지원 `FIX-TSQL-JSON-FUNCTIONS-EXT-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:29:18
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
 ### [DONE] OFFSET @var ROWS FETCH NEXT @var ROWS ONLY 프로시저 내 변수 바인딩 파싱 실패 (unexpected token @skip) `FIX-TSQL-OFFSET-VAR-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 13:17:12
 - **Milestone**: `1.0-GA`
@@ -3408,6 +3418,20 @@ SSMS Object Explorer 테이블 하위 트리(Columns, Keys, Indexes, Triggers) �
 
 ### [PENDING] 공식 microsoft/go-mssqldb 드라이버 테스트 스위트(550+ 케이스) 라이브 TDS 통합 오라클 이식 및 검증 `TEST-TDS-GOMSSQLDB-ORACLE-1`
 - **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-12 15:16:34
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] microsoft/mssql-jdbc 공식 테스트 스위트(200개 파일, 2,641개 @Test, datatypes/callablestatement/preparedStatement/databasemetadata) 핵심 T-SQL 및 카탈로그 오라클 수확 `TEST-TDS-MSSQL-JDBC-ORACLE-1`
+- **Domain**: Protocol | **Priority**: P1 | **Updated**: 2026-11-12 15:29:18
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] pymssql 공식 테스트 스위트(test_sprocs.py 17개 고정/가변 타입 OUTPUT 프로시저, test_types.py, test_queries.py 등 ~200케이스) TDS/Gate 5 오라클 포팅 및 검증 `TEST-TDS-PYMSSQL-ORACLE-1`
+- **Domain**: Protocol | **Priority**: P1 | **Updated**: 2026-11-12 15:29:18
+- **Milestone**: `1.0-GA`
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
