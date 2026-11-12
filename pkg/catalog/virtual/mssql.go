@@ -858,16 +858,96 @@ func execSysColumnsExtendedPropertyComment(sql string) (*Result, error) {
 	}, nil
 }
 
-func execSysParameters(sql string) (*Result, error) {
+func execSysParameters(src Source, sql string) (*Result, error) {
 	columns := []string{
-		"parentObjectId", "objectId", "parameterObjectId", "pureName",
-		"parameterName", "dataType", "charMaxLength", "parameterMode",
-		"numericPrecision", "numericScale", "parameterIndex", "schemaName",
+		"Name", "name", "parameter_name", "parameterName", "pureName", "pure_name",
+		"ID", "id", "parameter_id", "parameterId", "parameterIndex",
+		"Urn", "urn",
+		"DataType", "dataType", "data_type",
+		"Length", "max_length", "charMaxLength",
+		"NumericPrecision", "numeric_precision", "precision",
+		"NumericScale", "numeric_scale", "scale",
+		"IsOutputParameter", "is_output", "isOutput", "parameterMode",
+		"HasDefaultValue", "has_default_value",
+		"DefaultValue", "default_value",
+		"object_id", "objectId", "parent_object_id", "parentObjectId", "parameterObjectId",
+		"user_type_id", "system_type_id",
+		"Schema", "schema", "schemaName", "schema_name",
+		"type", "sp.type", "type_desc", "sp.name", "procedure_name",
 	}
-	return &Result{
-		Columns: columns,
-		Rows:    []map[string]any{},
-	}, nil
+	var allRows []map[string]any
+	if src == nil {
+		return FormatResultWithSQL(columns, allRows, sql)
+	}
+
+	currDb := "master"
+	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
+		if cur := dbs.GetCurrentDatabase(); cur != "" {
+			currDb = cur
+		}
+	}
+	serverName := "MSSQLSERVER"
+
+	procs := src.GetSortedProcedures()
+	for pIdx, p := range procs {
+		objID := int32(3000 + pIdx)
+		for paramIdx, param := range p.Params {
+			paramID := int32(paramIdx + 1)
+			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/StoredProcedure[@Name='%s' and @Schema='dbo']/Param[@Name='%s']", serverName, currDb, p.Name, param.Name)
+			allRows = append(allRows, map[string]any{
+				"Name":              param.Name,
+				"name":              param.Name,
+				"parameter_name":    param.Name,
+				"parameterName":     param.Name,
+				"pureName":          param.Name,
+				"pure_name":         param.Name,
+				"ID":                paramID,
+				"id":                paramID,
+				"parameter_id":      paramID,
+				"parameterId":       paramID,
+				"parameterIndex":    paramID,
+				"Urn":               urn,
+				"urn":               urn,
+				"DataType":          param.Type.String(),
+				"dataType":          param.Type.String(),
+				"data_type":         param.Type.String(),
+				"Length":            int16(8),
+				"max_length":        int16(8),
+				"charMaxLength":     int16(8),
+				"NumericPrecision":  int32(10),
+				"numeric_precision": int32(10),
+				"precision":         int32(10),
+				"NumericScale":      int32(0),
+				"numeric_scale":     int32(0),
+				"scale":             int32(0),
+				"IsOutputParameter": false,
+				"is_output":         false,
+				"isOutput":          false,
+				"parameterMode":     "IN",
+				"HasDefaultValue":   false,
+				"has_default_value": false,
+				"DefaultValue":      nil,
+				"default_value":     nil,
+				"object_id":         objID,
+				"objectId":          objID,
+				"parent_object_id":  objID,
+				"parentObjectId":    objID,
+				"parameterObjectId": objID,
+				"user_type_id":      int32(56),
+				"system_type_id":    int32(56),
+				"Schema":            "dbo",
+				"schema":            "dbo",
+				"schemaName":        "dbo",
+				"schema_name":       "dbo",
+				"type":               "P ",
+				"sp.type":            "P ",
+				"type_desc":          "SQL_STORED_PROCEDURE",
+				"sp.name":            p.Name,
+				"procedure_name":     p.Name,
+			})
+		}
+	}
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execSysObjectsTriggers(sql string) (*Result, error) {
@@ -1620,6 +1700,123 @@ func execSysCommentsSqlCode(src Source, sql string) (*Result, error) {
 	return FormatResultWithSQL(columns, allRows, sql)
 }
 
+func execSysProceduresForSSMS(src Source, sql string) (*Result, error) {
+	columns := []string{
+		"Name", "name", "sp.name", "ssp.name", "pureName", "pure_name", "routine_name",
+		"Schema", "schema", "SCHEMA_NAME(sp.schema_id)", "schema_id", "schemaName", "schema_name", "routine_schema",
+		"ID", "id", "object_id", "sp.object_id", "ssp.object_id", "objectId",
+		"Urn", "urn",
+		"CreateDate", "create_date", "sp.create_date", "created_date",
+		"DateLastModified", "modify_date", "sp.modify_date", "ModifyDate",
+		"IsExecutionReplicated", "is_execution_replicated",
+		"ImplementationType", "implementation_type",
+		"Owner", "owner",
+		"IsEncrypted", "is_encrypted",
+		"IsNativelyCompiled", "is_natively_compiled",
+		"AnsiNullsStatus", "ansi_nulls_status",
+		"QuotedIdentifierStatus", "quoted_identifier_status",
+		"IsSchemaBound", "is_schema_bound",
+		"IsSystemObject", "is_ms_shipped", "sp.is_ms_shipped",
+		"type", "sp.type", "type_desc", "routine_type",
+		"is_published", "is_schema_published", "is_auto_executed",
+		"definition", "codeText", "text",
+	}
+	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	var allRows []map[string]any
+
+	if src == nil {
+		return FormatResultWithSQL(columns, allRows, sql)
+	}
+
+	currDb := "master"
+	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
+		if cur := dbs.GetCurrentDatabase(); cur != "" {
+			currDb = cur
+		}
+	}
+	serverName := "MSSQLSERVER"
+
+	procs := src.GetSortedProcedures()
+	for pIdx, p := range procs {
+		objID := int32(3000 + pIdx)
+		createdDate := p.CreatedAt
+		if createdDate.IsZero() {
+			createdDate = defaultDate
+		}
+		updatedDate := p.UpdatedAt
+		if updatedDate.IsZero() {
+			updatedDate = createdDate
+		}
+		urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/StoredProcedure[@Name='%s' and @Schema='dbo']", serverName, currDb, p.Name)
+
+		row := map[string]any{
+			"Name":                      p.Name,
+			"name":                      p.Name,
+			"sp.name":                   p.Name,
+			"ssp.name":                  p.Name,
+			"pureName":                  p.Name,
+			"pure_name":                 p.Name,
+			"routine_name":              p.Name,
+			"Schema":                    "dbo",
+			"schema":                    "dbo",
+			"SCHEMA_NAME(sp.schema_id)":  "dbo",
+			"schema_id":                 int32(1),
+			"sp.schema_id":              int32(1),
+			"schemaName":                "dbo",
+			"schema_name":               "dbo",
+			"routine_schema":            "dbo",
+			"ID":                        objID,
+			"id":                        objID,
+			"object_id":                 objID,
+			"sp.object_id":              objID,
+			"ssp.object_id":             objID,
+			"objectId":                  objID,
+			"Urn":                       urn,
+			"urn":                       urn,
+			"CreateDate":                createdDate,
+			"create_date":               createdDate,
+			"sp.create_date":            createdDate,
+			"created_date":              createdDate,
+			"DateLastModified":          updatedDate,
+			"modify_date":               updatedDate,
+			"sp.modify_date":            updatedDate,
+			"ModifyDate":                updatedDate,
+			"IsExecutionReplicated":     int32(0),
+			"is_execution_replicated":   int32(0),
+			"ImplementationType":        int32(0),
+			"implementation_type":       int32(0),
+			"Owner":                     "dbo",
+			"owner":                     "dbo",
+			"IsEncrypted":               false,
+			"is_encrypted":              false,
+			"IsNativelyCompiled":        int32(0),
+			"is_natively_compiled":      int32(0),
+			"AnsiNullsStatus":           true,
+			"ansi_nulls_status":         true,
+			"QuotedIdentifierStatus":    true,
+			"quoted_identifier_status":  true,
+			"IsSchemaBound":             false,
+			"is_schema_bound":           false,
+			"IsSystemObject":            false,
+			"is_ms_shipped":             false,
+			"sp.is_ms_shipped":          false,
+			"type":                      "P ",
+			"sp.type":                   "P ",
+			"type_desc":                 "SQL_STORED_PROCEDURE",
+			"routine_type":              "PROCEDURE",
+			"is_published":              false,
+			"is_schema_published":       false,
+			"is_auto_executed":          false,
+			"definition":                p.Body,
+			"codeText":                  p.Body,
+			"text":                      p.Body,
+		}
+		allRows = append(allRows, row)
+	}
+
+	return FormatResultWithSQL(columns, allRows, sql)
+}
+
 func execSysAllObjectsJoined(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"name", "object_id", "principal_id", "schema_id", "parent_object_id",
@@ -1670,5 +1867,33 @@ func execSysAllObjectsJoined(src Source, sql string) (*Result, error) {
 		})
 	}
 
-	return FormatResult(columns, allRows, "*", "", "name", -1)
+	procs := src.GetSortedProcedures()
+	for pIdx, p := range procs {
+		createdDate := p.CreatedAt
+		if createdDate.IsZero() {
+			createdDate = defaultDate
+		}
+		updatedDate := p.UpdatedAt
+		if updatedDate.IsZero() {
+			updatedDate = createdDate
+		}
+		allRows = append(allRows, map[string]any{
+			"name":                p.Name,
+			"object_id":           3000 + pIdx,
+			"principal_id":        nil,
+			"schema_id":           1,
+			"parent_object_id":    0,
+			"type":                "P ",
+			"type_desc":           "SQL_STORED_PROCEDURE",
+			"create_date":         createdDate,
+			"modify_date":         updatedDate,
+			"is_ms_shipped":       false,
+			"is_published":        false,
+			"is_schema_published": false,
+			"description":         nil,
+			"is_external":         false,
+		})
+	}
+
+	return FormatResultWithSQL(columns, allRows, sql)
 }

@@ -442,8 +442,12 @@ func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 
 func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 	whereStr = strings.TrimRight(strings.TrimSpace(whereStr), ";")
-	if inner, ok := sqlutil.StripParentheses(whereStr); ok {
-		whereStr = inner
+	for {
+		if inner, ok := sqlutil.StripParentheses(whereStr); ok {
+			whereStr = inner
+		} else {
+			break
+		}
 	}
 
 	lookupRec := func(col string) (any, bool) {
@@ -451,6 +455,42 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		if !ok {
 			if idx := strings.Index(col, "."); idx != -1 {
 				val, ok = rec[col[idx+1:]]
+			}
+		}
+		if !ok {
+			for k, v := range rec {
+				if strings.EqualFold(k, col) {
+					return v, true
+				}
+				if idx := strings.Index(k, "."); idx != -1 && strings.EqualFold(k[idx+1:], col) {
+					return v, true
+				}
+				if idx := strings.Index(col, "."); idx != -1 && strings.EqualFold(k, col[idx+1:]) {
+					return v, true
+				}
+			}
+		}
+		if !ok {
+			upperCol := strings.ToUpper(col)
+			if strings.Contains(upperCol, "IS_MS_SHIPPED") {
+				if v, ok2 := rec["is_ms_shipped"]; ok2 {
+					return v, true
+				}
+			}
+			if strings.Contains(upperCol, "USES_NATIVE_COMPILATION") {
+				if v, ok2 := rec["is_natively_compiled"]; ok2 {
+					return v, true
+				}
+				return int32(0), true
+			}
+			if strings.Contains(upperCol, "IS_EXECUTION_REPLICATED") {
+				if v, ok2 := rec["is_execution_replicated"]; ok2 {
+					return v, true
+				}
+				return int32(0), true
+			}
+			if strings.Contains(upperCol, "MICROSOFT_DATABASE_TOOLS_SUPPORT") {
+				return int32(0), true
 			}
 		}
 		return val, ok
@@ -475,7 +515,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		found := false
 		for _, item := range pred.Items {
 			item = strings.TrimSpace(strings.Trim(item, "'\""))
-			if strings.EqualFold(strVal, item) {
+			if strings.EqualFold(strVal, item) || strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(item, " ")) {
 				found = true
 				break
 			}
@@ -496,7 +536,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		found := false
 		for _, item := range pred.Items {
 			item = strings.TrimSpace(strings.Trim(item, "'\""))
-			if strings.EqualFold(strVal, item) {
+			if strings.EqualFold(strVal, item) || strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(item, " ")) {
 				found = true
 				break
 			}
@@ -534,9 +574,21 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		strVal := fmt.Sprintf("%v", val)
 		switch op {
 		case "=":
-			return strings.EqualFold(strVal, target)
+			if b, ok := val.(bool); ok {
+				if b {
+					return target == "1" || strings.EqualFold(target, "true")
+				}
+				return target == "0" || strings.EqualFold(target, "false")
+			}
+			return strings.EqualFold(strVal, target) || strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(target, " "))
 		case "!=", "<>":
-			return !strings.EqualFold(strVal, target)
+			if b, ok := val.(bool); ok {
+				if b {
+					return !(target == "1" || strings.EqualFold(target, "true"))
+				}
+				return !(target == "0" || strings.EqualFold(target, "false"))
+			}
+			return !strings.EqualFold(strVal, target) && !strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(target, " "))
 		case "~", "~*":
 			rePat := target
 			if op == "~*" {
@@ -584,6 +636,11 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 }
 
 func splitLogicalConditions(whereStr, op string) []string {
+	cleanOp := strings.TrimSpace(op)
+	opLen := len(cleanOp)
+	if opLen == 0 {
+		return []string{whereStr}
+	}
 	var parts []string
 	parenDepth := 0
 	inQuote := false
@@ -603,23 +660,27 @@ func splitLogicalConditions(whereStr, op string) []string {
 			quoteChar = ch
 			continue
 		}
-		if ch == '(' {
+		if ch == '(' || ch == '[' {
 			parenDepth++
 			continue
 		}
-		if ch == ')' {
+		if ch == ')' || ch == ']' {
 			if parenDepth > 0 {
 				parenDepth--
 			}
 			continue
 		}
-		if parenDepth == 0 && i+len(op) <= len(whereStr) && strings.EqualFold(whereStr[i:i+len(op)], op) {
-			part := strings.TrimSpace(whereStr[lastIdx:i])
-			if part != "" {
-				parts = append(parts, part)
+		if parenDepth == 0 && i+opLen <= len(whereStr) {
+			beforeOk := (i == 0) || isWhitespaceOrPunctByte(whereStr[i-1])
+			afterOk := (i+opLen == len(whereStr)) || isWhitespaceOrPunctByte(whereStr[i+opLen])
+			if beforeOk && afterOk && strings.EqualFold(whereStr[i:i+opLen], cleanOp) {
+				part := strings.TrimSpace(whereStr[lastIdx:i])
+				if part != "" {
+					parts = append(parts, part)
+				}
+				lastIdx = i + opLen
+				i += opLen - 1
 			}
-			lastIdx = i + len(op)
-			i += len(op) - 1
 		}
 	}
 	if lastIdx < len(whereStr) {

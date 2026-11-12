@@ -111,7 +111,11 @@ func newTestMockSource() *mockSource {
 		procedures: []*catalog.Procedure{
 			{
 				Name: "sp_calculate_total",
-				Body: "CREATE PROCEDURE sp_calculate_total AS BEGIN SELECT 1; END",
+				Params: []catalog.ParamDef{
+					{Name: "@UserID", Type: storage.TypeInt},
+					{Name: "@Total", Type: storage.TypeDecimal},
+				},
+				Body: "CREATE PROCEDURE sp_calculate_total @UserID INT, @Total DECIMAL(10,2) AS BEGIN SELECT 1; END",
 			},
 		},
 		views: []*catalog.View{
@@ -542,6 +546,130 @@ end
 	t.Logf("Returned rows: %d, rows: %+v", len(res.Rows), res.Rows)
 	if len(res.Rows) != 2 {
 		t.Fatalf("expected 2 tables (orders, users), got %d", len(res.Rows))
+	}
+}
+
+func TestSSMS_StoredProcedures_ObjectExplorerQuery(t *testing.T) {
+	src := newTestMockSource()
+
+	// 1. Variant A: Standard SSMS Stored Procedures Query with sys.all_objects LEFT OUTER JOIN sys.procedures
+	qA := `SELECT
+sp.name AS [Name],
+SCHEMA_NAME(sp.schema_id) AS [Schema],
+sp.object_id AS [ID],
+'Server[@Name=' + quotename(CAST(serverproperty(N'Servername') AS sysname),'''') + ']' + '/Database[@Name=' + quotename(db_name(),'''') + ']' + '/StoredProcedure[@Name=' + quotename(sp.name,'''') + ' and @Schema=' + quotename(SCHEMA_NAME(sp.schema_id),'''') + ']' AS [Urn],
+sp.create_date AS [CreateDate],
+sp.modify_date AS [DateLastModified],
+ISNULL(ssp.is_execution_replicated, 0) AS [IsExecutionReplicated],
+CAST(CASE WHEN sp.type = 'P' THEN 0 ELSE 1 END AS bit) AS [ImplementationType]
+FROM
+sys.all_objects AS sp
+LEFT OUTER JOIN sys.procedures AS ssp ON ssp.object_id = sp.object_id
+WHERE
+(sp.type in ('P', 'PC')) and (sp.is_ms_shipped=0)
+ORDER BY
+[Schema] ASC,[Name] ASC`
+
+	if !virtual.IsVirtualCatalogJoinQuery(qA) {
+		t.Fatalf("expected IsVirtualCatalogJoinQuery to match SSMS Stored Procedures Variant A")
+	}
+	resA, err := virtual.Execute(src, qA)
+	if err != nil {
+		t.Fatalf("Execute(Variant A) failed: %v", err)
+	}
+	if len(resA.Rows) != 1 {
+		t.Fatalf("expected 1 stored procedure, got %d", len(resA.Rows))
+	}
+	if resA.Rows[0]["Name"] != "sp_calculate_total" {
+		t.Errorf("expected sp_calculate_total, got %v", resA.Rows[0]["Name"])
+	}
+	if resA.Rows[0]["Schema"] != "dbo" {
+		t.Errorf("expected dbo schema, got %v", resA.Rows[0]["Schema"])
+	}
+	if resA.Rows[0]["ID"] != int32(3000) {
+		t.Errorf("expected ID 3000, got %v", resA.Rows[0]["ID"])
+	}
+	if urn, ok := resA.Rows[0]["Urn"].(string); !ok || urn == "" {
+		t.Errorf("expected non-empty Urn, got %v", resA.Rows[0]["Urn"])
+	}
+
+	// 2. Variant B: SSMS Object Explorer with Extended Properties & Native Compilation
+	qB := `SELECT
+sp.name AS [Name],
+SCHEMA_NAME(sp.schema_id) AS [Schema],
+'Server[@Name=' + quotename(CAST(serverproperty(N'Servername') AS sysname),'''') + ']' + '/Database[@Name=' + quotename(db_name(),'''') + ']' + '/StoredProcedure[@Name=' + quotename(sp.name,'''') + ' and @Schema=' + quotename(SCHEMA_NAME(sp.schema_id),'''') + ']' AS [Urn],
+sp.create_date AS [CreateDate],
+ISNULL(ssp.name, N'') AS [Owner],
+CAST(CASE WHEN ISNULL(smsp.definition, ssmsp.definition) IS NULL THEN 1 ELSE 0 END AS bit) AS [IsEncrypted],
+CASE WHEN sp.type = N'P' THEN 1 WHEN sp.type = N'PC' THEN 2 ELSE 1 END AS [ImplementationType],
+ISNULL(sm.uses_native_compilation,0) AS [IsNativelyCompiled]
+FROM
+sys.all_objects AS sp
+LEFT OUTER JOIN sys.database_principals AS ssp ON ssp.principal_id = ISNULL(sp.principal_id, (OBJECTPROPERTY(sp.object_id, 'OwnerId')))
+LEFT OUTER JOIN sys.sql_modules AS smsp ON smsp.object_id = sp.object_id
+LEFT OUTER JOIN sys.system_sql_modules AS ssmsp ON ssmsp.object_id = sp.object_id
+LEFT OUTER JOIN sys.all_sql_modules AS sm ON sm.object_id = sp.object_id
+WHERE
+(sp.type = 'P' OR sp.type = 'RF' OR sp.type='PC')and(CAST(
+ case
+    when sp.is_ms_shipped = 1 then 1
+    when exists (
+        select
+            1
+        from
+            sys.extended_properties
+        where
+            major_id = sp.object_id and
+            minor_id = 0 and
+            class = 1 and
+            name = N'microsoft_database_tools_support')
+        then 1
+    else 0
+end
+             AS bit)='0' and ISNULL(sm.uses_native_compilation,0)='0')`
+
+	if !virtual.IsVirtualCatalogJoinQuery(qB) {
+		t.Fatalf("expected IsVirtualCatalogJoinQuery to match SSMS Stored Procedures Variant B")
+	}
+	resB, err := virtual.Execute(src, qB)
+	if err != nil {
+		t.Fatalf("Execute(Variant B) failed: %v", err)
+	}
+	if len(resB.Rows) != 1 {
+		t.Fatalf("expected 1 stored procedure for Variant B, got %d", len(resB.Rows))
+	}
+	if resB.Rows[0]["Name"] != "sp_calculate_total" {
+		t.Errorf("expected sp_calculate_total, got %v", resB.Rows[0]["Name"])
+	}
+
+	// 3. Stored Procedure Parameters Query
+	qParams := `SELECT
+param.name AS [Name],
+param.parameter_id AS [ID],
+'Server[@Name=' + quotename(CAST(serverproperty(N'Servername') AS sysname),'''') + ']' + '/Database[@Name=' + quotename(db_name(),'''') + ']' + '/StoredProcedure[@Name=' + quotename(sp.name,'''') + ' and @Schema=' + quotename(SCHEMA_NAME(sp.schema_id),'''') + ']' + '/Param[@Name=' + quotename(param.name,'''') + ']' AS [Urn],
+param.is_output AS [IsOutputParameter],
+TYPE_NAME(param.user_type_id) AS [DataType],
+param.max_length AS [Length],
+param.precision AS [NumericPrecision],
+param.scale AS [NumericScale]
+FROM
+sys.all_objects AS sp
+INNER JOIN sys.all_parameters AS param ON param.object_id = sp.object_id
+WHERE
+(sp.type = 'P' OR sp.type = 'RF' OR sp.type='PC')`
+
+	if !virtual.IsVirtualCatalogJoinQuery(qParams) {
+		t.Fatalf("expected IsVirtualCatalogJoinQuery to match SSMS Procedure Parameters")
+	}
+	resParams, err := virtual.Execute(src, qParams)
+	if err != nil {
+		t.Fatalf("Execute(Procedure Parameters) failed: %v", err)
+	}
+	if len(resParams.Rows) != 2 {
+		t.Fatalf("expected 2 parameters for sp_calculate_total, got %d", len(resParams.Rows))
+	}
+	if resParams.Rows[0]["Name"] != "@UserID" || resParams.Rows[1]["Name"] != "@Total" {
+		t.Errorf("unexpected parameter names: %+v", resParams.Rows)
 	}
 }
 

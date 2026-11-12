@@ -757,15 +757,73 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 		}
 
 	case "sys.procedures", "sysprocedures", "sys_procedures":
-		columns = []string{"routine_name", "routine_type", "routine_schema", "created_date"}
+		columns = []string{
+			"name", "object_id", "principal_id", "schema_id", "parent_object_id",
+			"type", "type_desc", "create_date", "modify_date",
+			"is_ms_shipped", "is_published", "is_schema_published",
+			"is_auto_executed", "is_execution_replicated",
+			"routine_name", "routine_type", "routine_schema", "created_date",
+		}
 		if s.catalog != nil {
-			for _, p := range s.catalog.ListProcedures() {
+			for pIdx, p := range s.catalog.ListProcedures() {
+				createdDate := p.CreatedAt
+				if createdDate.IsZero() {
+					createdDate = defaultDate
+				}
+				updatedDate := p.UpdatedAt
+				if updatedDate.IsZero() {
+					updatedDate = createdDate
+				}
 				allRows = append(allRows, map[string]any{
-					"routine_name":   p.Name,
-					"routine_type":   "PROCEDURE",
-					"routine_schema": "dbo",
-					"created_date":   p.CreatedAt,
+					"name":                    p.Name,
+					"object_id":               int32(3000 + pIdx),
+					"principal_id":            nil,
+					"schema_id":               int32(1),
+					"parent_object_id":        int32(0),
+					"type":                    "P ",
+					"type_desc":               "SQL_STORED_PROCEDURE",
+					"create_date":             createdDate,
+					"modify_date":             updatedDate,
+					"is_ms_shipped":           false,
+					"is_published":            false,
+					"is_schema_published":     false,
+					"is_auto_executed":        false,
+					"is_execution_replicated": false,
+					"routine_name":            p.Name,
+					"routine_type":            "PROCEDURE",
+					"routine_schema":          "dbo",
+					"created_date":            createdDate,
 				})
+			}
+		}
+
+	case "sys.parameters", "sysparameters", "sys_parameters", "sys.all_parameters", "sysallparameters", "sys_all_parameters":
+		columns = []string{
+			"object_id", "name", "parameter_id", "system_type_id", "user_type_id",
+			"max_length", "precision", "scale", "is_output", "is_cursor_ref",
+			"has_default_value", "is_xml_document", "default_value",
+		}
+		if s.catalog != nil {
+			for pIdx, p := range s.catalog.ListProcedures() {
+				objID := int32(3000 + pIdx)
+				for paramIdx, param := range p.Params {
+					paramID := int32(paramIdx + 1)
+					allRows = append(allRows, map[string]any{
+						"object_id":         objID,
+						"name":              param.Name,
+						"parameter_id":      paramID,
+						"system_type_id":    int32(56),
+						"user_type_id":      int32(56),
+						"max_length":        int16(8),
+						"precision":         uint8(10),
+						"scale":             uint8(0),
+						"is_output":         false,
+						"is_cursor_ref":     false,
+						"has_default_value": false,
+						"is_xml_document":   false,
+						"default_value":     nil,
+					})
+				}
 			}
 		}
 

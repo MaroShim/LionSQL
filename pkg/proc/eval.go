@@ -282,7 +282,8 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 				hasNull = true
 				continue
 			}
-			if strings.EqualFold(strVal, fmt.Sprintf("%v", itemVal)) {
+			s2 := fmt.Sprintf("%v", itemVal)
+			if strings.EqualFold(strVal, s2) || strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(s2, " ")) {
 				found = true
 				break
 			}

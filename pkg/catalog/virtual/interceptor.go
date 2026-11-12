@@ -139,7 +139,7 @@ func IsVirtualCatalogJoinQuery(sql string) bool {
 	if strings.Contains(upper, "SYS.INDEXES") && matchAny(upper, "JOIN", "IS_PRIMARY_KEY", "TYPE_DESC", "HAS_FILTER", "INDEX_ID") {
 		return true
 	}
-	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.KEY_CONSTRAINTS", "SYS.FOREIGN_KEYS", "SYS.CHECK_CONSTRAINTS", "SYS.DEFAULT_CONSTRAINTS", "SYS.STATS", "SYS.TRIGGERS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS", "SYS.SQL_MODULES", "FN_HELPCOLLATIONS") {
+	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.KEY_CONSTRAINTS", "SYS.FOREIGN_KEYS", "SYS.CHECK_CONSTRAINTS", "SYS.DEFAULT_CONSTRAINTS", "SYS.STATS", "SYS.TRIGGERS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS", "SYS.SQL_MODULES", "SYS.PROCEDURES", "SYS.ALL_PARAMETERS", "FN_HELPCOLLATIONS") {
 		return true
 	}
 	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") && matchAny(upper, "JOIN", "SCHEMANAME") {
@@ -351,10 +351,10 @@ var catalogRouteTable = []RouteRule{
 	{
 		Name: "MSSQL_Parameters",
 		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
-			return strings.Contains(upper, "SYS.PARAMETERS")
+			return strings.Contains(upper, "SYS.PARAMETERS") || strings.Contains(upper, "SYS.ALL_PARAMETERS")
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
-			return execSysParameters(sql)
+			return execSysParameters(src, sql)
 		},
 	},
 	{
@@ -364,6 +364,29 @@ var catalogRouteTable = []RouteRule{
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execSysObjectsTriggers(sql)
+		},
+	},
+	{
+		Name: "MSSQL_SysProceduresSSMS",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			if strings.Contains(upper, "SYS.PARAMETERS") || strings.Contains(upper, "SYS.ALL_PARAMETERS") || strings.Contains(upper, "/PARAM@NAME=") {
+				return false
+			}
+			if strings.Contains(upper, "STOREDPROCEDURE") {
+				return true
+			}
+			if strings.Contains(upper, "SYS.PROCEDURES") || strings.Contains(upper, "SYSPROCEDURES") {
+				return true
+			}
+			if (strings.Contains(upper, "SYS.ALL_OBJECTS") || strings.Contains(upper, "SYS.OBJECTS")) &&
+				(strings.Contains(upper, "'P'") || strings.Contains(upper, "N'P'")) &&
+				!strings.Contains(upper, "/TABLE@NAME=") && !strings.Contains(upper, "/VIEW@NAME=") && !strings.Contains(upper, "/INDEX@NAME=") {
+				return true
+			}
+			return false
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysProceduresForSSMS(src, sql)
 		},
 	},
 	{

@@ -1518,6 +1518,8 @@ ORDER BY
 	}
 
 	// 19. SSMS Stored Procedures Query
+	_, _ = coord.ExecuteSQL("CREATE PROCEDURE sp_TestAudit @id INT AS BEGIN SELECT @id; END")
+
 	qSSMSProcs := `SELECT
 sp.name AS [Name],
 SCHEMA_NAME(sp.schema_id) AS [Schema],
@@ -1551,8 +1553,73 @@ WHERE
     else 0
 end
              AS bit)='0' and ISNULL(sm.uses_native_compilation,0)='0')`
-	if _, err := coord.ExecuteSQL(qSSMSProcs); err != nil {
+	resB, err := coord.ExecuteSQL(qSSMSProcs)
+	if err != nil {
 		t.Fatalf("SSMS procs query failed: %v", err)
+	}
+	if len(resB.Rows) == 0 {
+		t.Fatalf("expected at least 1 procedure row in SSMS procs query (Variant B), got %v", resB)
+	}
+	if resB.Rows[0]["Name"] != "sp_TestAudit" {
+		t.Errorf("expected procedure name sp_TestAudit, got %v", resB.Rows[0]["Name"])
+	}
+	if resB.Rows[0]["Schema"] != "dbo" {
+		t.Errorf("expected Schema dbo, got %v", resB.Rows[0]["Schema"])
+	}
+	if urn, ok := resB.Rows[0]["Urn"].(string); !ok || !strings.Contains(urn, "StoredProcedure[@Name='sp_TestAudit'") {
+		t.Errorf("expected valid StoredProcedure URN, got %v", resB.Rows[0]["Urn"])
+	}
+
+	// 19b. SSMS Stored Procedures Query Variant A
+	qSSMSProcsA := `SELECT
+sp.name AS [Name],
+SCHEMA_NAME(sp.schema_id) AS [Schema],
+sp.object_id AS [ID],
+'Server[@Name=' + quotename(CAST(serverproperty(N'Servername') AS sysname),'''') + ']' + '/Database[@Name=' + quotename(db_name(),'''') + ']' + '/StoredProcedure[@Name=' + quotename(sp.name,'''') + ' and @Schema=' + quotename(SCHEMA_NAME(sp.schema_id),'''') + ']' AS [Urn],
+sp.create_date AS [CreateDate],
+sp.modify_date AS [DateLastModified],
+ISNULL(ssp.is_execution_replicated, 0) AS [IsExecutionReplicated],
+CAST(CASE WHEN sp.type = 'P' THEN 0 ELSE 1 END AS bit) AS [ImplementationType]
+FROM
+sys.all_objects AS sp
+LEFT OUTER JOIN sys.procedures AS ssp ON ssp.object_id = sp.object_id
+WHERE
+(sp.type in ('P', 'PC')) and (sp.is_ms_shipped=0)
+ORDER BY
+[Schema] ASC,[Name] ASC`
+	resA, err := coord.ExecuteSQL(qSSMSProcsA)
+	if err != nil {
+		t.Fatalf("SSMS procs query (Variant A) failed: %v", err)
+	}
+	if len(resA.Rows) == 0 {
+		t.Fatalf("expected at least 1 procedure row in SSMS procs query (Variant A), got %v", resA)
+	}
+	if resA.Rows[0]["Name"] != "sp_TestAudit" {
+		t.Errorf("expected procedure name sp_TestAudit, got %v", resA.Rows[0]["Name"])
+	}
+
+	// 19c. Direct sys.procedures Query
+	resProcsDirect, err := coord.ExecuteSQL("SELECT name, object_id, schema_id, type_desc FROM sys.procedures")
+	if err != nil {
+		t.Fatalf("sys.procedures query failed: %v", err)
+	}
+	if len(resProcsDirect.Rows) == 0 {
+		t.Fatalf("expected at least 1 procedure row in direct sys.procedures query, got %v", resProcsDirect)
+	}
+	if resProcsDirect.Rows[0]["name"] != "sp_TestAudit" {
+		t.Errorf("expected procedure name sp_TestAudit, got %v", resProcsDirect.Rows[0]["name"])
+	}
+
+	// 19d. Direct sys.parameters Query
+	resParamsDirect, err := coord.ExecuteSQL("SELECT name, object_id, parameter_id FROM sys.parameters")
+	if err != nil {
+		t.Fatalf("sys.parameters query failed: %v", err)
+	}
+	if len(resParamsDirect.Rows) == 0 {
+		t.Fatalf("expected at least 1 parameter row in direct sys.parameters query, got %v", resParamsDirect)
+	}
+	if resParamsDirect.Rows[0]["name"] != "@id" {
+		t.Errorf("expected parameter name @id, got %v", resParamsDirect.Rows[0]["name"])
 	}
 }
 
