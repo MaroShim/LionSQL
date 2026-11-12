@@ -353,6 +353,21 @@
   - 기존 WiredTiger `AddColumn`의 전수 재작성 방식은 수천만 건 테이블에서 수 초~수 분의 쓰기 락 지연을 유발할 뿐만 아니라, 재작성 루프 중 세션/커서 오픈 실패 시 스키마와 디스크 데이터가 영구 불일치하는 심각한 에러 은폐 결함(`AUDIT-FULL-012`)을 유발함.
   - 현대 메이저 RDBMS(PostgreSQL v11+, MySQL 8.0 InnoDB, SQL Server)의 표준 아키텍처인 Instant DDL과 다층 디코더 패딩을 도입하여 성능과 데이터 안정성을 동시에 달성함.
 
+### ㉛ 비파괴적 데이터베이스 시딩 및 기존 데이터 보호 불변식 (Non-Destructive Seeding & Zero-Overwrite Invariant, Invariant 14)
+* **결정 사항**:
+  1. **신규 인스턴스 전용 시딩 원칙 (Fresh-Instance Primacy)**:
+     - LionSQL의 데모 샘플 데이터베이스 시딩(`-seed` CLI 옵션 및 Web Studio의 `POST /api/seed`)은 오직 데이터가 없는 **신규/빈 데이터베이스(Fresh Instance, `len(tables) == 0`)**를 초기에 신속하게 체험/검증하기 위한 목적으로만 동작해야 함.
+     - Web Studio(`pkg/api/handlers_records.go`)에 확립된 원칙(`sample data can only be seeded on an empty database`)과 동일하게, CLI 및 엔진 전체에서도 기존 데이터 보호 원칙을 일관되게 고수함.
+  2. **파괴적 DDL(`DROP TABLE IF EXISTS`) 원천 금지**:
+     - 샘플 스크립트(`scripts/demo_seed.sql`, `pkg/seed/demo_seed.sql`) 내부에는 임의의 파괴적 DDL(`DROP TABLE IF EXISTS`, `DROP PROCEDURE IF EXISTS`, `TRUNCATE`)을 **절대 포함하지 않음**.
+     - 멱등성을 핑계로 `DROP TABLE`을 스크립트에 임의 삽입할 경우, 사용자가 서비스 스크립트나 배치 파일에 `-seed`를 실수로 남겨둔 상태에서 서버가 재시작될 때마다 기존 데이터가 초기화(Wipe)되는 치명적인 데이터 유실 사고가 발생함 (`[RULE:AtomicSaves]`).
+  3. **기존 데이터 감지 시 안전한 실패(Fail-Safe / Zero-Overwrite)**:
+     - 테이블이 이미 존재하는 디렉터리에서 `lionsql -seed`가 실행되면, `table "customers" already exists` 에러와 함께 즉시 중단(Abort)되어 기존 사용자 테이블과 레코드를 1바이트도 덮어쓰거나 훼손하지 않고 완벽히 보존함.
+     - 사용자가 의도하여 샘플 데이터를 다시 설치하고자 할 때에는, 사용자가 직접 `data` 폴더를 삭제/백업하거나 명시적으로 테이블을 정리한 후 새 인스턴스로 기동하는 것이 올바른 운영 절차임.
+* **도입 배경 및 배제 근거**:
+  - 편리함이나 임시 멱등성을 이유로 기존 사용자 데이터를 묻지도 않고 지우거나 덮어쓰는(Overwrite) 안일한 휴리스틱은 데이터베이스의 절대적 제1원칙인 **데이터 영속성 및 안전성(`[RULE:AtomicSaves]`, Crash Prevention & Security)**을 정면으로 위배함.
+  - "코드가 자꾸 기존 데이터를 덮어쓰지 않고, 원본 의도를 철저히 수호한다"는 사용자 원칙에 따라, 스크립트 내 강제 DROP을 영구 배제하고 빈 카탈로그 불변식을 시스템 전역에 확립함.
+
 ---
 
 ## 2. 사용자의 엔지니어링 철학 및 협업 규약

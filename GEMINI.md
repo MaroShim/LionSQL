@@ -140,6 +140,15 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
    - `ADD COLUMN`: Instant $O(1)$ schema expansion. Tuples written under older schemas have $N > \text{encodedCols}$; newly added columns are padded from default or `NULL` without buffer overflows.
    - `DROP COLUMN`: Instant $O(1)$ on tail columns ($N < \text{encodedCols}$). Dropping non-terminal (middle) columns on non-empty tables is strictly rejected with explicit `ErrDropColumnNotTail`.
 
+### Invariant 14: Non-Destructive Seeding & Zero-Overwrite Invariant (Fresh-Instance Safety)
+1. **Fresh-Instance Invariance for Sample Data**:
+   - LionSQL's sample database seeding (`-seed` CLI startup flag and Web Studio `POST /api/seed`) is strictly architected for initial bootstrap on empty, fresh catalog instances (`len(tables) == 0`).
+   - Sample seed scripts (`scripts/demo_seed.sql`, `pkg/seed/demo_seed.sql`) must **NEVER** contain destructive DDL statements (`DROP TABLE IF EXISTS`, `TRUNCATE`, `DROP PROCEDURE IF EXISTS`).
+2. **Zero-Overwrite & Fail-Safe Protection of User Data**:
+   - If `-seed` is executed against an existing data directory where tables already exist, LionSQL strictly preserves all existing user schemas and records. Under no circumstances may demo seed scripts drop, overwrite, or mutate user-created tables or records.
+   - If collision occurs, the seed operation safely aborts with an explicit diagnostic warning (`table already exists`), leaving all pre-existing schemas and tuples intact (`[RULE:AtomicSaves]`, `[RULE:ExplicitError]`).
+   - Re-seeding an existing instance requires manual operator intervention (clearing the data directory or executing an explicit backup/migration), preventing catastrophic automated data wipes during service restarts.
+
 ---
 
 ## 3. Explicit Spec-Out Decisions (Engine Simplicity & KISS)
