@@ -203,7 +203,10 @@
 | `PENDING` | **`FEAT-WASM-UDF-1`** | `v1.99.0` | Engine | P2 | WebAssembly 런타임 샌드박스 UDF (wazero) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DDL-DEFAULT-CHECK-1`** | `1.0-GA` | Engine | P2 | CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-GROUPBY-STRING-AGG-1`** |  | Engine | P1 | GROUP BY 쿼리에서 STRING_AGG(col, sep) 그룹별 집계 누락(NULL 반환) 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-OCC-COMPACT-AUDIT-1`** | `1.0-GA` | Storage | P1 | MemoryCompact 2단계 Audit 결함 수정 (Arena UAF, AlterTable 레이아웃/WAL, memCursor 레이스, varSlot 오버플로우) | [`notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md`](notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md) |  |
+| `PENDING` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-PROC-TEMP-TABLE-DDL-1`** |  | Engine | P1 | 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQLUTIL-PARSER-1`** |  | Engine | P2 | pkg/sqlutil SQL 파서/정규화기 결함 보강 및 렉서 공통화 | [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TSQL-OFFSET-VAR-1`** | `1.0-GA` | Engine | P2 | OFFSET @var ROWS FETCH NEXT @var ROWS ONLY 프로시저 내 변수 바인딩 파싱 실패 (unexpected token @skip) | [`test/slt_proc/26_offset_fetch_paging.slt`](test/slt_proc/26_offset_fetch_paging.slt) |  |
 | `DONE` | **`FIX-TSQL-OUTPUT-PARAM-1`** | `1.0-GA` | Engine | P1 | EXEC proc @x OUTPUT 호출자 변수로 값 미전달: DECLARE @x; EXEC sp_double 21, @x OUTPUT; SELECT @x 가 42 대신 NULL | [`test/slt_proc/27_rowcount_and_dml_results.slt`](test/slt_proc/27_rowcount_and_dml_results.slt) |  |
@@ -2467,6 +2470,12 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] GROUP BY 쿼리에서 STRING_AGG(col, sep) 그룹별 집계 누락(NULL 반환) 수정 `FIX-GROUPBY-STRING-AGG-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 14:55:03
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
 ### [DONE] MemoryCompact 2단계 Audit 결함 수정 (Arena UAF, AlterTable 레이아웃/WAL, memCursor 레이스, varSlot 오버플로우) `FIX-OCC-COMPACT-AUDIT-1`
 - **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-11 16:23:03
 - **Milestone**: `1.0-GA`
@@ -2483,6 +2492,18 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 **Details & Resolution**:
 MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (커밋 전 필수). [합의 ADR] F1: Option B(Go 힙 문자열 + TypeDecimal 무복사 파싱) 완료 / F2: trialSchema 원자성 + ALTER COLUMN TYPE Fail-Closed + DROP COLUMN 시 PK/FK 차단 및 보조 인덱스 Cascade 동반 정리 + OpAlterTable{Schema} WAL 통합 완료 / F3: A(AddColumn applySchemaMigrationLocked 통합 + addColumnValues Fail-Closed) + B(memCursor 동일 세대 Schema/Layout 스냅샷 바인딩) 완료 / F4: Option A(16MiB-1/4GiB-1 Fail-Closed ErrFlatRecordTooLarge + ENGINEERING_CONTEXT ㉗ 명문화) 완료 / F5: syncShardsToMapsAlreadyLocked Fail-Closed + saveDiskSnapshotLocked 단일 락 경계 통합 완료 / F6: EncodeRowToFlat ConvertValueToColumn 방어 가드 + TypeBinary 포맷 일치 확정. 상세: notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md §5
+
+---
+
+### [PENDING] EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 `FIX-PROC-EXEC-RETURN-VAR-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 14:55:03
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 `FIX-PROC-TEMP-TABLE-DDL-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 14:55:03
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
 
