@@ -3032,6 +3032,20 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 			val = "Developer Edition (64-bit)"
 		case "PRODUCTLEVEL":
 			val = "RTM"
+		case "SERVERNAME", "MACHINENAME", "INSTANCENAME", "COMPUTERNAMEPHYSICALNETBIOS":
+			val = "MSSQLSERVER"
+		case "PRODUCTVERSION":
+			val = "15.0.2000.5"
+		case "BUILDCLRVERSION":
+			val = "v4.0.30319"
+		case "ISCLUSTERED", "ISHADRENABLED", "ISINTEGRATEDSECURITYONLY":
+			val = int32(0)
+			colType = TypeIntN
+			colSize = 4
+		case "ISSINGLEUSER", "ISXTPSUPPORTED":
+			val = false
+			colType = TypeBitN
+			colSize = 1
 		}
 		cols := []ColumnInfo{
 			{Name: colName, Type: colType, Size: colSize, Nullable: true},

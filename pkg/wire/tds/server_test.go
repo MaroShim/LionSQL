@@ -1451,6 +1451,21 @@ CAST(null AS int) AS [ServerType]`
 	}
 }
 
+func TestTDS_ServerProperty_ServerName(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	payload := sendSQLBatch(t, conn, "select SERVERPROPERTY(N'servername')")
+	if !bytes.Contains(payload, EncodeUTF16LE("MSSQLSERVER")) {
+		t.Fatalf("expected SERVERPROPERTY(N'servername') to return 'MSSQLSERVER'")
+	}
+	if bytes.Contains(payload, EncodeUTF16LE("15.0.2000.5")) {
+		t.Fatalf("SERVERPROPERTY(N'servername') erroneously returned version '15.0.2000.5'")
+	}
+}
+
+
 
 
 
