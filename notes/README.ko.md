@@ -88,6 +88,7 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 * **[`VDBE_BYTECODE_DIRECTORY.ko.md`](VDBE_BYTECODE_DIRECTORY.ko.md)**: **VDBE & 16-Byte 바이트코드 마스터 디렉토리** — 1세대(Goja 폐기)부터 4세대(218k TPS Lock-Free 달성)까지의 진화 타임라인, 카테고리별 문서 맵(ISA, 2-Tier 라우팅, 극한 튜닝 백서, Babelfish 검증), 소스 코드 패키지 가이드.
 * **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 단순 질의(VDBE)와 복합 관계대수(CBO)를 분리하는 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 명세서.
 * **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md)**: AST 및 Dialect 타입 기반 2-Tier 쿼리 라우팅 정규화 계획서 (`ARCH-VDBE-ROUTING-1`).
+* **[`VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md`](plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md)**: 가상 카탈로그(`pkg/catalog/virtual` & `sqlexec_dbcc`) 구조 통합, 830줄 단일 테이블 이관, Zero-Alloc One-Pass 절 스캐너(`SplitSelectClauses`) 및 보일러플레이트 리팩토링 아키텍처 (`REFACTOR-VIRTUAL-CATALOG-1`).
 * **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](plans/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 카탈로그 라우팅 리팩토링 검증 보고서 (527ns 실측).
 * **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)**: 10개 이상 테이블 조인 최적화 및 공집합 조기 탈락 설계 계획서 (`OPT-LARGE-JOIN-1`).
 * **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)**: 플래너 슬림화 및 순수 AST 전환 설계 계획서 (`PLANNER-SLIM-1`, `PLANNER-AST-1`).

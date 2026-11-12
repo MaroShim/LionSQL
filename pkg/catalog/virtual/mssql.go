@@ -10,6 +10,37 @@ import (
 	"lionsql/pkg/storage"
 )
 
+const mssqlServerName = "MSSQLSERVER"
+
+func resolveCurrentDB(src Source) string {
+	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
+		if cur := dbs.GetCurrentDatabase(); cur != "" {
+			return cur
+		}
+	}
+	return "master"
+}
+
+func tableObjectID(tIdx int) int {
+	return 1000 + tIdx
+}
+
+func viewObjectID(vIdx int) int {
+	return 2000 + vIdx
+}
+
+func procObjectID(pIdx int) int {
+	return 3000 + pIdx
+}
+
+func buildDatabaseObjectURN(currDb, objType, objName string) string {
+	return fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/%s[@Name='%s' and @Schema='dbo']", mssqlServerName, currDb, objType, objName)
+}
+
+func buildObjectChildURN(currDb, parentType, parentName, childType, childName string) string {
+	return fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/%s[@Name='%s' and @Schema='dbo']/%s[@Name='%s']", mssqlServerName, currDb, parentType, parentName, childType, childName)
+}
+
 // ExtractMssqlTableNameEq extracts table name equality filter from MSSQL catalog query.
 func ExtractMssqlTableNameEq(sql string) (string, bool) {
 	return sqlutil.ExtractEqualityFilter(sql, "table_name", "tbl.name", "c.name", "t.name", "ic.table_name", "tbl.table_name", "name")
@@ -171,17 +202,10 @@ func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
-
-	currDb := "master"
-	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
-		if cur := dbs.GetCurrentDatabase(); cur != "" {
-			currDb = cur
-		}
-	}
-	serverName := "MSSQLSERVER"
+	currDb := resolveCurrentDB(src)
 
 	for tIdx, t := range tables {
-		objID := 1000 + tIdx
+		objID := tableObjectID(tIdx)
 		if targetIDs != nil && !targetIDs[objID] {
 			continue
 		}
@@ -265,7 +289,7 @@ func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 				collName = "SQL_Latin1_General_CP1_CI_AS"
 			}
 
-			colUrn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/Column[@Name='%s']", serverName, currDb, t.Name, c.Name)
+			colUrn := buildObjectChildURN(currDb, "Table", t.Name, "Column", c.Name)
 
 			allRows = append(allRows, map[string]any{
 				"Name":                 c.Name,
@@ -880,20 +904,14 @@ func execSysParameters(src Source, sql string) (*Result, error) {
 		return FormatResultWithSQL(columns, allRows, sql)
 	}
 
-	currDb := "master"
-	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
-		if cur := dbs.GetCurrentDatabase(); cur != "" {
-			currDb = cur
-		}
-	}
-	serverName := "MSSQLSERVER"
+	currDb := resolveCurrentDB(src)
 
 	procs := src.GetSortedProcedures()
 	for pIdx, p := range procs {
-		objID := int32(3000 + pIdx)
+		objID := int32(procObjectID(pIdx))
 		for paramIdx, param := range p.Params {
 			paramID := int32(paramIdx + 1)
-			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/StoredProcedure[@Name='%s' and @Schema='dbo']/Param[@Name='%s']", serverName, currDb, p.Name, param.Name)
+			urn := buildObjectChildURN(currDb, "StoredProcedure", p.Name, "Param", param.Name)
 			allRows = append(allRows, map[string]any{
 				"Name":              param.Name,
 				"name":              param.Name,
@@ -1123,13 +1141,7 @@ func execSysTablesJoinedIndexes(src Source, sql string) (*Result, error) {
 		return FormatResultWithSQL(columns, allRows, sql)
 	}
 
-	currDb := "master"
-	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
-		if cur := dbs.GetCurrentDatabase(); cur != "" {
-			currDb = cur
-		}
-	}
-	serverName := "MSSQLSERVER"
+	currDb := resolveCurrentDB(src)
 
 	tables := src.GetSortedTables()
 	for tIdx, t := range tables {
@@ -1141,7 +1153,7 @@ func execSysTablesJoinedIndexes(src Source, sql string) (*Result, error) {
 			}
 		}
 
-		urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']", serverName, currDb, t.Name)
+		urn := buildDatabaseObjectURN(currDb, "Table", t.Name)
 
 		row := map[string]any{
 			"Name":                            t.Name,
@@ -1226,17 +1238,10 @@ func execSysIndexesForSSMS(src Source, sql string) (*Result, error) {
 	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
-
-	currDb := "master"
-	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
-		if cur := dbs.GetCurrentDatabase(); cur != "" {
-			currDb = cur
-		}
-	}
-	serverName := "MSSQLSERVER"
+	currDb := resolveCurrentDB(src)
 
 	for tIdx, t := range tables {
-		objID := 1000 + tIdx
+		objID := tableObjectID(tIdx)
 		if targetIDs != nil && !targetIDs[objID] {
 			continue
 		}
@@ -1251,7 +1256,7 @@ func execSysIndexesForSSMS(src Source, sql string) (*Result, error) {
 		}
 		if hasPK {
 			pkName := "PK_" + t.Name
-			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/Index[@Name='%s']", serverName, currDb, t.Name, pkName)
+			urn := buildObjectChildURN(currDb, "Table", t.Name, "Index", pkName)
 			allRows = append(allRows, map[string]any{
 				"Name":                 pkName,
 				"name":                 pkName,
@@ -1292,7 +1297,7 @@ func execSysIndexesForSSMS(src Source, sql string) (*Result, error) {
 		// 2. Secondary Indexes
 		for idxNum, idx := range t.Indexes {
 			idxID := int32(idxNum + 2)
-			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/Index[@Name='%s']", serverName, currDb, t.Name, idx.Name)
+			urn := buildObjectChildURN(currDb, "Table", t.Name, "Index", idx.Name)
 			allRows = append(allRows, map[string]any{
 				"Name":                 idx.Name,
 				"name":                 idx.Name,
@@ -1343,17 +1348,10 @@ func execSysKeyConstraintsMSSQL(src Source, sql string) (*Result, error) {
 	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
-
-	currDb := "master"
-	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
-		if cur := dbs.GetCurrentDatabase(); cur != "" {
-			currDb = cur
-		}
-	}
-	serverName := "MSSQLSERVER"
+	currDb := resolveCurrentDB(src)
 
 	for tIdx, t := range tables {
-		objID := 1000 + tIdx
+		objID := tableObjectID(tIdx)
 		if targetIDs != nil && !targetIDs[objID] {
 			continue
 		}
@@ -1367,7 +1365,7 @@ func execSysKeyConstraintsMSSQL(src Source, sql string) (*Result, error) {
 		}
 		if hasPK {
 			pkName := "PK_" + t.Name
-			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/Key[@Name='%s']", serverName, currDb, t.Name, pkName)
+			urn := buildObjectChildURN(currDb, "Table", t.Name, "Key", pkName)
 			allRows = append(allRows, map[string]any{
 				"Name":               pkName,
 				"name":               pkName,
@@ -1408,17 +1406,10 @@ func execSysForeignKeysMSSQL(src Source, sql string) (*Result, error) {
 	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
-
-	currDb := "master"
-	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
-		if cur := dbs.GetCurrentDatabase(); cur != "" {
-			currDb = cur
-		}
-	}
-	serverName := "MSSQLSERVER"
+	currDb := resolveCurrentDB(src)
 
 	for tIdx, t := range tables {
-		objID := 1000 + tIdx
+		objID := tableObjectID(tIdx)
 		if targetIDs != nil && !targetIDs[objID] {
 			continue
 		}
@@ -1431,12 +1422,12 @@ func execSysForeignKeysMSSQL(src Source, sql string) (*Result, error) {
 			refObjID := 1000
 			for otherIdx, otherT := range tables {
 				if strings.EqualFold(otherT.Name, fk.ParentTable) {
-					refObjID = 1000 + otherIdx
+					refObjID = tableObjectID(otherIdx)
 					break
 				}
 			}
 			fkID := int32(objID + 60000 + fkIdx)
-			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/ForeignKey[@Name='%s']", serverName, currDb, t.Name, fkName)
+			urn := buildObjectChildURN(currDb, "Table", t.Name, "ForeignKey", fkName)
 			allRows = append(allRows, map[string]any{
 				"Name":                      fkName,
 				"name":                      fkName,
@@ -1482,17 +1473,10 @@ func execSysDefaultConstraintsMSSQL(src Source, sql string) (*Result, error) {
 	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
-
-	currDb := "master"
-	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
-		if cur := dbs.GetCurrentDatabase(); cur != "" {
-			currDb = cur
-		}
-	}
-	serverName := "MSSQLSERVER"
+	currDb := resolveCurrentDB(src)
 
 	for tIdx, t := range tables {
-		objID := 1000 + tIdx
+		objID := tableObjectID(tIdx)
 		if targetIDs != nil && !targetIDs[objID] {
 			continue
 		}
@@ -1501,7 +1485,7 @@ func execSysDefaultConstraintsMSSQL(src Source, sql string) (*Result, error) {
 			if c.Default != "" {
 				defName := fmt.Sprintf("DF_%s_%s", t.Name, c.Name)
 				defID := int32(objID*100 + cIdx + 1)
-				urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/DefaultConstraint[@Name='%s']", serverName, currDb, t.Name, defName)
+				urn := buildObjectChildURN(currDb, "Table", t.Name, "DefaultConstraint", defName)
 				allRows = append(allRows, map[string]any{
 					"Name":                 defName,
 					"name":                 defName,
@@ -1540,17 +1524,10 @@ func execSysStatsMSSQL(src Source, sql string) (*Result, error) {
 	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
-
-	currDb := "master"
-	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
-		if cur := dbs.GetCurrentDatabase(); cur != "" {
-			currDb = cur
-		}
-	}
-	serverName := "MSSQLSERVER"
+	currDb := resolveCurrentDB(src)
 
 	for tIdx, t := range tables {
-		objID := 1000 + tIdx
+		objID := tableObjectID(tIdx)
 		if targetIDs != nil && !targetIDs[objID] {
 			continue
 		}
@@ -1564,7 +1541,7 @@ func execSysStatsMSSQL(src Source, sql string) (*Result, error) {
 		}
 		if hasPK {
 			pkName := "PK_" + t.Name
-			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/Statistic[@Name='%s']", serverName, currDb, t.Name, pkName)
+			urn := buildObjectChildURN(currDb, "Table", t.Name, "Statistic", pkName)
 			allRows = append(allRows, map[string]any{
 				"Name":              pkName,
 				"name":              pkName,
@@ -1591,7 +1568,7 @@ func execSysStatsMSSQL(src Source, sql string) (*Result, error) {
 
 		for idxNum, idx := range t.Indexes {
 			sID := int32(idxNum + 2)
-			urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/Table[@Name='%s' and @Schema='dbo']/Statistic[@Name='%s']", serverName, currDb, t.Name, idx.Name)
+			urn := buildObjectChildURN(currDb, "Table", t.Name, "Statistic", idx.Name)
 			allRows = append(allRows, map[string]any{
 				"Name":              idx.Name,
 				"name":              idx.Name,
@@ -1762,17 +1739,11 @@ func execSysProceduresForSSMS(src Source, sql string) (*Result, error) {
 		return FormatResultWithSQL(columns, allRows, sql)
 	}
 
-	currDb := "master"
-	if dbs, ok := src.(interface{ GetCurrentDatabase() string }); ok {
-		if cur := dbs.GetCurrentDatabase(); cur != "" {
-			currDb = cur
-		}
-	}
-	serverName := "MSSQLSERVER"
+	currDb := resolveCurrentDB(src)
 
 	procs := src.GetSortedProcedures()
 	for pIdx, p := range procs {
-		objID := int32(3000 + pIdx)
+		objID := int32(procObjectID(pIdx))
 		createdDate := p.CreatedAt
 		if createdDate.IsZero() {
 			createdDate = defaultDate
@@ -1781,7 +1752,7 @@ func execSysProceduresForSSMS(src Source, sql string) (*Result, error) {
 		if updatedDate.IsZero() {
 			updatedDate = createdDate
 		}
-		urn := fmt.Sprintf("Server[@Name='%s']/Database[@Name='%s']/StoredProcedure[@Name='%s' and @Schema='dbo']", serverName, currDb, p.Name)
+		urn := buildDatabaseObjectURN(currDb, "StoredProcedure", p.Name)
 
 		row := map[string]any{
 			"Name":                      p.Name,

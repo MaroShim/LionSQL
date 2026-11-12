@@ -6,6 +6,7 @@ import (
 
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/catalog/virtual"
+	"lionsql/pkg/planner"
 	"lionsql/pkg/storage"
 )
 
@@ -133,6 +134,22 @@ func (s *Coordinator) GetTableRowCount(name string) int64 {
 		}
 	}
 	return 0
+}
+
+// GetPartitions returns partitions for table if supported.
+func (s *Coordinator) GetPartitions(tableName string) ([]storage.PartitionInfo, error) {
+	if s.engine == nil {
+		return nil, nil
+	}
+	return s.engine.GetPartitions(tableName)
+}
+
+// ListTableStats returns planner statistics if supported.
+func (s *Coordinator) ListTableStats() map[string]*planner.TableStats {
+	if s.catalog == nil {
+		return nil
+	}
+	return s.catalog.ListTableStats()
 }
 
 type sessionSource struct {

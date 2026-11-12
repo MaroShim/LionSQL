@@ -35,20 +35,8 @@ func IsVirtualTable(tableName string) bool {
 }
 
 // parseVirtualSelectClauses extracts the projection expressions and WHERE clause
-// from a virtual catalog SELECT query, respecting quote boundaries and comments.
+// from a virtual catalog SELECT query, respecting quote boundaries and comments via sqlutil.SplitSelectClauses.
 func parseVirtualSelectClauses(sql string) (projStr string, whereClause string) {
-	projStr = "*"
-	if fromIdx := sqlutil.FindTopLevelKeyword(sql, "FROM"); fromIdx != -1 {
-		selectPart := sql[:fromIdx]
-		if selectIdx := sqlutil.FindTopLevelKeyword(selectPart, "SELECT"); selectIdx != -1 {
-			projStr = strings.TrimSpace(selectPart[selectIdx+6:])
-		}
-	}
-	if whereIdx := sqlutil.FindTopLevelKeyword(sql, "WHERE"); whereIdx != -1 {
-		whereClause = strings.TrimSpace(sql[whereIdx+5:])
-		if orderIdx := sqlutil.FindTopLevelKeyword(whereClause, "ORDER BY"); orderIdx != -1 {
-			whereClause = strings.TrimSpace(whereClause[:orderIdx])
-		}
-	}
-	return projStr, whereClause
+	c := sqlutil.SplitSelectClauses(sql)
+	return c.Projection, c.Where
 }

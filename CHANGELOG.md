@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- add zero-allocation one-pass SQL clause tokenizer (`sqlutil.SplitSelectClauses`) in `pkg/sqlutil/select_clauses.go` to scan SELECT, FROM, WHERE, and ORDER BY clauses in a single linear pass (O(N)) while strictly respecting parentheses depth, quotes, and comments (`REFACTOR-VIRTUAL-CATALOG-1`)
 - harden Volcano query execution against variable-width physical tuples and dynamic projection bounds (`PERF-EXEC-TUPLE-DEFENSIVE-PAD-1`, Invariant 13 Layer 3 defense): implement `Tuple.PadToSchema()`, defensive `Tuple.GetOK()` returning `ok=true, nil` for schema-valid trailing columns, defensive padding in `ToMap()` and `ToEvalMap()`, schema-aligned copy offsets in `mergeTuplesWithArena` / `mergeTuplesWithNullsAndArena` to prevent join off-by-one column data corruption, and out-of-bounds `srcIdx` NULL padding in `ProjectionIterator`
 - implement SQL Server 2016+ `COMPRESS` and `DECOMPRESS` GZIP binary scalar functions with `VARBINARY` roundtrip and `CAST ... AS VARCHAR` interoperability (`TSQL-FUNC-COMPRESS`)
 - add T-SQL system session and database variables `@@DATEFIRST` (default 7 = Sunday) and `@@DBTS` (monotonic 8-byte rowversion/timestamp) with runtime VM and scalar query execution parity (`TSQL-SYSVAR-DATEFIRST-DBTS`)
@@ -26,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - register `COMPAT-TSQL-MATRIX-1` sprint tracking task for `notes/TSQL_COMPATIBILITY_MATRIX.ko.md` verification and sync
 
 ### Changed
+- refactor virtual system catalog execution architecture (`REFACTOR-VIRTUAL-CATALOG-1`): migrate 830-line `sys.*` single-table catalog generation switch from `pkg/engine/sqlexec_dbcc.go` into `pkg/catalog/virtual/mssql_single.go` (`GenerateSysCatalogRows`), eliminate duplicated `findTopLevelKeyword` by delegating `ExtractSQLParts` to `sqlutil.SplitSelectClauses`, extract common URN/ObjectID helpers and current DB resolver across `pkg/catalog/virtual/mssql.go`, and add `GetPartitions` / `ListTableStats` provider assertions in `sqlexec_virtual.go` with 100% behavioral parity
 - set `memengine.DefaultOptions` `Mode` to `MemoryCompact` so all in-process Go callers align with CLI (`config.DefaultMemory()`) (`TEST-OCC-FLAT-1`, `TEST-OCC-FLAT-3`)
 - optimize `MemoryCompact` scan decoding via Option A (`PERF-OCC-FLAT-DECODE-1`): remove redundant SSO byte-slice allocation in `decodeVarSlot`, add `Arena.AllocStringBytes` and `DecodeFlatToRowWithArena`, defer FlatRecord decoding until row read (`snapshotEntriesAndKeys`), and wire `ArenaRowCursor.RowWithArena` into `fillScanChunk` (`SeqScanIterator` / `IndexScanIterator`), dropping `ModeFlat_Scan1000` from 4,007 to 7 allocs/op with `Arena`
 - eliminate per-row/per-column wire heap allocations and introduce bounded 16KB/512-row PGWire chunked streaming (`writePgDataRows`, `0 allocs/op` across 100k rows) and pooled incremental TDS packet streaming with direct `res.Values` slot indexing (`tdsStreamWriter`, `writeTdsTextColumn`, `writePLPUTF16LE`) (`PERF-WIRE-ZEROALLOC-1`)
