@@ -496,5 +496,38 @@ func TestTSQLCompatMatrix_InsertExecStoredProcedure(t *testing.T) {
 	}
 }
 
+func TestTSQLCompatMatrix_TriggerForKeyword(t *testing.T) {
+	coord, cleanup := newCompatMatrixTestCoord(t)
+	defer cleanup()
+
+	setupSQL := []string{
+		"CREATE TABLE orders_trg (id INT PRIMARY KEY, val VARCHAR(50));",
+		"CREATE TABLE audit_trg (id INT PRIMARY KEY, msg VARCHAR(50));",
+		`CREATE TRIGGER trg_orders_audit ON orders_trg FOR INSERT, UPDATE AS
+		BEGIN
+			DECLARE @oid INT;
+			SET @oid = (SELECT id FROM inserted);
+			INSERT INTO audit_trg VALUES (@oid, 'TRIGGER_FIRED');
+		END;`,
+	}
+	for _, q := range setupSQL {
+		if _, err := coord.ExecuteSQL(q); err != nil {
+			t.Fatalf("setup query failed: %v\nSQL: %s", err, q)
+		}
+	}
+
+	// Verify trigger metadata registered in catalog
+	trg, err := coord.Catalog().GetTrigger("trg_orders_audit")
+	if err != nil {
+		t.Fatalf("GetTrigger failed: %v", err)
+	}
+	if trg.Timing != "AFTER" {
+		t.Fatalf("expected trigger timing AFTER, got %s", trg.Timing)
+	}
+	if len(trg.Events) != 2 || trg.Events[0] != "INSERT" || trg.Events[1] != "UPDATE" {
+		t.Fatalf("unexpected trigger events: %+v", trg.Events)
+	}
+}
+
 
 

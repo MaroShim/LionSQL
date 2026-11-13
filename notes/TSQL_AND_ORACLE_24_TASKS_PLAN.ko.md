@@ -17,7 +17,7 @@
 | **#6** | **`FIX-VM-HIDDEN-ROWID-1`** | `PENDING` | Proc / VM | P1 | 명시적 PK가 없는 테이블에 대해 VDBE VM `OpInsert` 실행 시 숨은 `_row_id` 자동 발번 누락 수정 |
 | **#7** | **`FIX-TSQL-INSERT-EXEC-1`** | `DONE` | Parser / VM / Engine | P1 | `INSERT INTO <table> [(cols)] EXEC <proc_name> [args]` 프로시저 결과셋 테이블 적재 지원 |
 | **#8** | **`FIX-SQL-DERIVED-VALUES-1`** | `DONE` | Engine / Planner | P1 | `FROM (VALUES (...), (...)) AS alias(col1, col2)` 인라인 테이블 값 생성자 및 컬럼 별칭 파싱·실행 지원 |
-| **#9** | **`FIX-TRIGGER-FOR-KEYWORD-1`** | `PENDING` | Parser / Engine | P1 | `CREATE TRIGGER ... FOR INSERT, UPDATE, DELETE` (`AFTER` 동의어) 구문 파싱 지원 |
+| **#9** | **`FIX-TRIGGER-FOR-KEYWORD-1`** | `DONE` | Parser / Engine | P1 | `CREATE TRIGGER ... FOR INSERT, UPDATE, DELETE` (`AFTER` 동의어) 구문 파싱 지원 |
 | **#10** | **`FIX-TSQL-XACT-STATE-1`** | `PENDING` | Proc / Engine | P1 | `TRY...CATCH` 블록 내 트랜잭션 상태 반환 스칼라 함수 `XACT_STATE()` (`1`, `0`, `-1`) 지원 |
 | **#11** | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** | `PENDING` | Parser / Eval | P1 | `CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX))` 미평가 원문 에코 버그 및 `MONEY`/`SMALLMONEY` 4자리 소수점 스케일 보정 |
 | **#12** | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** | `PENDING` | Wire (TDS) | P1 | TDS `RPCRequest`(`0x03`) 직접 프로시저 호출 시 `OUTPUT` 파라미터 `RETURNVALUE`(`0xAC`) 토큰 반환 및 기본값(`DEFAULT`) 바인딩 지원 |
@@ -166,13 +166,14 @@
 
 ---
 
-### `#9` `FIX-TRIGGER-FOR-KEYWORD-1` (`PENDING`)
+### `#9` `FIX-TRIGGER-FOR-KEYWORD-1` (`DONE`)
 - **현상**:
   T-SQL 레거시 및 표준 구문인 `CREATE TRIGGER trg_audit ON orders FOR INSERT, UPDATE AS BEGIN ... END` 실행 시 `FOR` 키워드 위치에서 구문 에러가 발생함. (`AFTER INSERT`만 허용됨).
 - **근본 원인 (Root Cause)**:
   - T-SQL에서 `FOR INSERT`는 `AFTER INSERT`와 완전히 동일한 동의어(Synonym)이나, `pkg/proc/parser_ddl.go` (`parseCreateTrigger`) 및 `pkg/engine/sqlexec_ddl.go`의 트리거 헤더 파서가 타이밍 키워드로 `BEFORE`, `AFTER`, `INSTEAD OF`만 검사하고 `FOR` 토큰을 `AFTER`로 매핑하지 않음.
-- **해결 설계안 (Proposed Solution)**:
-  - `pkg/proc/parser_ddl.go`와 `pkg/engine/sqlexec_ddl.go`의 트리거 정의 파서에서 `ON <table_name>` 다음 토큰이 `FOR`(`TokenFor`)인 경우 이를 `AFTER` 타이밍(`TriggerAfter`)으로 정규화하여 파싱하도록 수정.
+- **해결 및 적용 완료 내역**:
+  - `pkg/proc/parser_ddl.go` (`parseCreateTrigger`): `ON <table_name>` 및 SQLite 구문 분기에서 `TokenFor`(`FOR`)를 `AFTER` 타이밍으로 정규화하여 파싱하도록 추가하고, 트리거 이벤트 목록이 비어있는 경우에 대한 방어 검증(`len(events) == 0`) 추가 (`[RULE:DefensiveIndexing]`).
+  - `pkg/proc/runtime/trigger_test.go` 및 `pkg/engine/tsql_compat_matrix_regression_test.go`를 통해 `CREATE TRIGGER ... FOR INSERT, UPDATE`의 AST 파싱, 바이트코드 컴파일, 카탈로그 등록 및 `AFTER` 타이밍 매핑 전수 검증 통과.
 
 ---
 

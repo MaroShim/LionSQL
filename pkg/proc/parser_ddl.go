@@ -372,7 +372,7 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 		tableName = cleanSchemaPrefix(p.curToken.Literal)
 		p.nextToken()
 
-		if p.curTokenIs(TokenAfter) {
+		if p.curTokenIs(TokenAfter) || p.curTokenIs(TokenFor) {
 			timing = "AFTER"
 			p.nextToken()
 		} else if p.curTokenIs(TokenInstead) {
@@ -403,12 +403,16 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 				break
 			}
 		}
+
+		if len(events) == 0 {
+			return nil, fmt.Errorf("expected at least one trigger event (INSERT, UPDATE, DELETE), got %s", p.curToken.Literal)
+		}
 	} else {
-		// SQLite Syntax: CREATE TRIGGER trg [BEFORE | AFTER | INSTEAD OF] [INSERT | UPDATE [OF col,...] | DELETE] ON table ...
+		// SQLite Syntax: CREATE TRIGGER trg [BEFORE | AFTER | INSTEAD OF | FOR] [INSERT | UPDATE [OF col,...] | DELETE] ON table ...
 		if p.curTokenIs(TokenBefore) {
 			timing = "BEFORE"
 			p.nextToken()
-		} else if p.curTokenIs(TokenAfter) {
+		} else if p.curTokenIs(TokenAfter) || p.curTokenIs(TokenFor) {
 			timing = "AFTER"
 			p.nextToken()
 		} else if p.curTokenIs(TokenInstead) {

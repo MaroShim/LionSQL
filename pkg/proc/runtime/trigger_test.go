@@ -418,3 +418,37 @@ END;
 	}
 }
 
+func TestTrigger_ForKeywordSynonym(t *testing.T) {
+	sql := `
+CREATE TRIGGER trg_audit_for
+ON orders
+FOR INSERT, UPDATE
+AS
+BEGIN
+    DECLARE @OId INT;
+    SET @OId = (SELECT id FROM inserted);
+    INSERT INTO order_audit (id, event, order_id, amount) VALUES (@OId, 'FOR_TRIGGER', @OId, 100.0);
+END
+`
+	stmt, err := proc.ParseTrigger(sql)
+	if err != nil {
+		t.Fatalf("ParseTrigger with FOR keyword failed: %v", err)
+	}
+
+	if stmt.Timing != "AFTER" {
+		t.Fatalf("expected timing 'AFTER' for FOR trigger, got %q", stmt.Timing)
+	}
+
+	if len(stmt.Events) != 2 || stmt.Events[0] != "INSERT" || stmt.Events[1] != "UPDATE" {
+		t.Fatalf("expected events [INSERT, UPDATE], got %+v", stmt.Events)
+	}
+
+	prog, err := proc.CompileTrigger(stmt)
+	if err != nil {
+		t.Fatalf("CompileTrigger failed: %v", err)
+	}
+	if prog == nil {
+		t.Fatalf("expected non-nil program")
+	}
+}
+
