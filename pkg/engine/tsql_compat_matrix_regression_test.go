@@ -319,3 +319,88 @@ func TestTSQLCompatMatrix_ParenthesizedSelectQueries(t *testing.T) {
 	}
 }
 
+// TestTSQLCompatMatrix_ProcedureInsertIntoTableWithoutExplicitPK verifies that executing
+// INSERT INTO a table without an explicit PK from within a stored procedure correctly generates
+// and assigns synthetic _row_id primary keys (FIX-VM-HIDDEN-ROWID-1).
+func TestTSQLCompatMatrix_ProcedureInsertIntoTableWithoutExplicitPK(t *testing.T) {
+	coord, cleanup := newCompatMatrixTestCoord(t)
+	defer cleanup()
+
+	// 1. Create table without explicit PK
+	if _, err := coord.ExecuteSQL("CREATE TABLE test_sp_no_pk (msg VARCHAR(100), val INT);"); err != nil {
+		t.Fatalf("CREATE TABLE test_sp_no_pk failed: %v", err)
+	}
+
+	// 2. Create procedure that inserts multiple rows
+	procSQL := `
+		CREATE PROCEDURE sp_insert_no_pk
+		AS
+		BEGIN
+			INSERT INTO test_sp_no_pk (msg, val) VALUES ('first', 10);
+			INSERT INTO test_sp_no_pk (msg, val) VALUES ('second', 20);
+			INSERT INTO test_sp_no_pk (msg, val) VALUES ('third', 30);
+		END;
+	`
+	if _, err := coord.ExecuteSQL(procSQL); err != nil {
+		t.Fatalf("CREATE PROCEDURE sp_insert_no_pk failed: %v", err)
+	}
+
+	// 3. Execute procedure
+	if _, err := coord.ExecuteSQL("EXEC sp_insert_no_pk;"); err != nil {
+		t.Fatalf("EXEC sp_insert_no_pk failed: %v", err)
+	}
+
+	// 4. Verify all rows were inserted and can be queried
+	res, err := coord.ExecuteSQL("SELECT msg, val FROM test_sp_no_pk ORDER BY val ASC;")
+	if err != nil {
+		t.Fatalf("SELECT from test_sp_no_pk failed: %v", err)
+	}
+	if len(res.Rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d (%+v)", len(res.Rows), res.Rows)
+	}
+	if res.Rows[0]["msg"] != "first" || res.Rows[1]["msg"] != "second" || res.Rows[2]["msg"] != "third" {
+		t.Fatalf("unexpected row contents: %+v", res.Rows)
+	}
+
+	// 5. Verify explicit query on synthetic _row_id
+	resRowID, err := coord.ExecuteSQL("SELECT _row_id, msg FROM test_sp_no_pk ORDER BY _row_id ASC;")
+	if err != nil {
+		t.Fatalf("SELECT _row_id failed: %v", err)
+	}
+	if len(resRowID.Rows) != 3 {
+		t.Fatalf("expected 3 rows for _row_id, got %d (%+v)", len(resRowID.Rows), resRowID.Rows)
+	}
+
+	// 6. Test INSERT INTO ... SELECT inside stored procedure for PK-less table
+	if _, err := coord.ExecuteSQL("CREATE TABLE test_sp_no_pk_src (msg VARCHAR(100), val INT);"); err != nil {
+		t.Fatalf("CREATE TABLE test_sp_no_pk_src failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL("INSERT INTO test_sp_no_pk_src VALUES ('src1', 100), ('src2', 200);"); err != nil {
+		t.Fatalf("INSERT INTO test_sp_no_pk_src failed: %v", err)
+	}
+
+	procInsertSelectSQL := `
+		CREATE PROCEDURE sp_insert_select_no_pk
+		AS
+		BEGIN
+			INSERT INTO test_sp_no_pk (msg, val)
+			SELECT msg, val FROM test_sp_no_pk_src;
+		END;
+	`
+	if _, err := coord.ExecuteSQL(procInsertSelectSQL); err != nil {
+		t.Fatalf("CREATE PROCEDURE sp_insert_select_no_pk failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL("EXEC sp_insert_select_no_pk;"); err != nil {
+		t.Fatalf("EXEC sp_insert_select_no_pk failed: %v", err)
+	}
+
+	resTotal, err := coord.ExecuteSQL("SELECT _row_id, msg FROM test_sp_no_pk ORDER BY _row_id ASC;")
+	if err != nil {
+		t.Fatalf("SELECT _row_id after insert-select failed: %v", err)
+	}
+	if len(resTotal.Rows) != 5 {
+		t.Fatalf("expected 5 rows total, got %d (%+v)", len(resTotal.Rows), resTotal.Rows)
+	}
+}
+
+

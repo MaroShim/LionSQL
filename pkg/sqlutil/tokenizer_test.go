@@ -469,6 +469,18 @@ func TestHasAnyPrefixKeyword(t *testing.T) {
 			want:     true,
 		},
 		{
+			name:     "matches multi-word keyword with inline comment",
+			sql:      "CREATE/* comment */FUNCTION fn_test() RETURNS INT",
+			keywords: []string{"CREATE FUNCTION", "CREATE PROCEDURE"},
+			want:     true,
+		},
+		{
+			name:     "matches multi-word keyword with line comment between words",
+			sql:      "CREATE -- line comment\n FUNCTION fn_test() RETURNS INT",
+			keywords: []string{"CREATE FUNCTION"},
+			want:     true,
+		},
+		{
 			name:     "matches setop branch keyword",
 			sql:      "UNION ALL SELECT 2",
 			keywords: []string{"UNION", "INTERSECT", "EXCEPT", "MINUS"},

@@ -713,8 +713,47 @@ func isWhitespaceByte(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\r' || b == '\n'
 }
 
+// skipWhitespaceAndComments advances the index past any spaces, tabs, newlines,
+// and SQL comments (-- ... and /* ... */).
+func skipWhitespaceAndComments(s string, start int) int {
+	n := len(s)
+	curr := start
+	for curr < n {
+		ch := s[curr]
+		if isWhitespaceByte(ch) {
+			curr++
+			continue
+		}
+		if ch == '-' && curr+1 < n && s[curr+1] == '-' {
+			curr += 2
+			for curr < n && s[curr] != '\n' {
+				curr++
+			}
+			if curr < n && s[curr] == '\n' {
+				curr++
+			}
+			continue
+		}
+		if ch == '/' && curr+1 < n && s[curr+1] == '*' {
+			curr += 2
+			for curr+1 < n && !(s[curr] == '*' && s[curr+1] == '/') {
+				curr++
+			}
+			if curr+1 < n {
+				curr += 2 // Skip */
+			} else {
+				curr = n
+			}
+			continue
+		}
+		break
+	}
+	return curr
+}
+
 // matchWordsAt checks if words match in sequence starting at index start in s.
-// Between consecutive words, arbitrary whitespace (spaces, tabs, newlines) is accepted.
+// Between consecutive words, arbitrary whitespace (spaces, tabs, newlines) and
+// comments (-- ... and /* ... */) are transparently accepted.
 // Returns the index after the matched sequence and true on success.
 func matchWordsAt(s string, start int, words []string) (int, bool) {
 	n := len(s)
@@ -727,13 +766,12 @@ func matchWordsAt(s string, start int, words []string) (int, bool) {
 
 	for wIdx, word := range words {
 		if wIdx > 0 {
-			// Between words, there MUST be at least one whitespace character
-			if curr >= n || !isWhitespaceByte(s[curr]) {
+			// Between words, there MUST be at least one whitespace or comment character
+			next := skipWhitespaceAndComments(s, curr)
+			if next == curr {
 				return 0, false
 			}
-			for curr < n && isWhitespaceByte(s[curr]) {
-				curr++
-			}
+			curr = next
 		}
 
 		wLen := len(word)
@@ -755,114 +793,39 @@ func matchWordsAt(s string, start int, words []string) (int, bool) {
 
 // HasPrefixKeyword checks whether the statement starts with keyword at top level,
 // ignoring leading whitespace and SQL comments (-- ... and /* ... */).
-// Multi-word keywords (e.g. "CREATE TABLE") accept arbitrary whitespace between words.
+// Multi-word keywords (e.g. "CREATE TABLE") accept arbitrary whitespace and comments between words.
 func HasPrefixKeyword(s string, keyword string) bool {
-	n := len(s)
-	if n == 0 {
-		return false
-	}
 	words := strings.Fields(keyword)
 	if len(words) == 0 {
 		return false
 	}
-
-	inLineComment := false
-	inBlockComment := false
-
-	for i := 0; i < n; i++ {
-		ch := s[i]
-
-		if inLineComment {
-			if ch == '\n' {
-				inLineComment = false
-			}
-			continue
-		}
-		if inBlockComment {
-			if ch == '*' && i+1 < n && s[i+1] == '/' {
-				inBlockComment = false
-				i++
-			}
-			continue
-		}
-
-		if ch == '-' && i+1 < n && s[i+1] == '-' {
-			inLineComment = true
-			i++
-			continue
-		}
-		if ch == '/' && i+1 < n && s[i+1] == '*' {
-			inBlockComment = true
-			i++
-			continue
-		}
-
-		if isWhitespaceByte(ch) {
-			continue
-		}
-
-		// First non-whitespace, non-comment byte reached.
-		_, ok := matchWordsAt(s, i, words)
-		return ok
+	start := skipWhitespaceAndComments(s, 0)
+	if start >= len(s) {
+		return false
 	}
-	return false
+	_, ok := matchWordsAt(s, start, words)
+	return ok
 }
 
 // HasAnyPrefixKeyword checks whether the statement starts with ANY of the specified keywords at top level,
 // safely skipping leading whitespace and SQL comments (-- ... and /* ... */) only ONCE.
 func HasAnyPrefixKeyword(s string, keywords ...string) bool {
-	n := len(s)
-	if n == 0 || len(keywords) == 0 {
+	if len(keywords) == 0 {
+		return false
+	}
+	start := skipWhitespaceAndComments(s, 0)
+	if start >= len(s) {
 		return false
 	}
 
-	inLineComment := false
-	inBlockComment := false
-
-	for i := 0; i < n; i++ {
-		ch := s[i]
-
-		if inLineComment {
-			if ch == '\n' {
-				inLineComment = false
-			}
+	for _, kw := range keywords {
+		words := strings.Fields(kw)
+		if len(words) == 0 {
 			continue
 		}
-		if inBlockComment {
-			if ch == '*' && i+1 < n && s[i+1] == '/' {
-				inBlockComment = false
-				i++
-			}
-			continue
+		if _, ok := matchWordsAt(s, start, words); ok {
+			return true
 		}
-
-		if ch == '-' && i+1 < n && s[i+1] == '-' {
-			inLineComment = true
-			i++
-			continue
-		}
-		if ch == '/' && i+1 < n && s[i+1] == '*' {
-			inBlockComment = true
-			i++
-			continue
-		}
-
-		if isWhitespaceByte(ch) {
-			continue
-		}
-
-		// First non-whitespace, non-comment byte reached at index i.
-		// Test each keyword candidate from this position without rescanning leading comments/whitespace.
-		for _, kw := range keywords {
-			words := strings.Fields(kw)
-			if len(words) == 0 {
-				continue
-			}
-			if _, ok := matchWordsAt(s, i, words); ok {
-				return true
-			}
-		}
-		return false
 	}
 	return false
 }
@@ -875,42 +838,13 @@ func TrimPrefixKeyword(s string, keyword string) (string, bool) {
 	if len(words) == 0 {
 		return s, false
 	}
-	n := len(s)
-	inLineComment := false
-	inBlockComment := false
-	for i := 0; i < n; i++ {
-		ch := s[i]
-		if inLineComment {
-			if ch == '\n' {
-				inLineComment = false
-			}
-			continue
-		}
-		if inBlockComment {
-			if ch == '*' && i+1 < n && s[i+1] == '/' {
-				inBlockComment = false
-				i++
-			}
-			continue
-		}
-		if ch == '-' && i+1 < n && s[i+1] == '-' {
-			inLineComment = true
-			i++
-			continue
-		}
-		if ch == '/' && i+1 < n && s[i+1] == '*' {
-			inBlockComment = true
-			i++
-			continue
-		}
-		if isWhitespaceByte(ch) {
-			continue
-		}
-		endIdx, ok := matchWordsAt(s, i, words)
-		if ok {
-			return strings.TrimSpace(s[endIdx:]), true
-		}
+	start := skipWhitespaceAndComments(s, 0)
+	if start >= len(s) {
 		return s, false
+	}
+	endIdx, ok := matchWordsAt(s, start, words)
+	if ok {
+		return strings.TrimSpace(s[endIdx:]), true
 	}
 	return s, false
 }

@@ -117,14 +117,19 @@
 
 ---
 
-### `#6` `FIX-VM-HIDDEN-ROWID-1` (`PENDING`)
+### `#6` `FIX-VM-HIDDEN-ROWID-1` (`DONE`)
 - **현상**:
-  명시적인 `PRIMARY KEY` 없이 생성된 테이블(예: `CREATE TABLE t (a INT, b VARCHAR(20))`)에 대해, 최상위 SQL에서는 `INSERT`가 잘 되지만 **저장 프로시저 내부(VDBE VM `OpInsert`)**에서 `INSERT INTO t VALUES (1, 'x')`를 실행하면 PK 누락 오류 또는 `_row_id` NULL/중복 충돌이 발생함.
+  명시적인 `PRIMARY KEY` 없이 생성된 테이블(예: `CREATE TABLE t (a INT, b VARCHAR(20))`)에 대해, 최상위 SQL에서는 `INSERT`가 잘 되지만 **저장 프로시저 내부(VDBE VM `OpInsert`)**에서 `INSERT INTO t VALUES (1, 'x')` 또는 `INSERT INTO t SELECT ...`를 실행하면 PK 누락 오류 또는 `_row_id` NULL/중복 충돌이 발생함.
 - **근본 원인 (Root Cause)**:
-  - LionSQL에서 명시적 PK가 없는 테이블은 `schema.EnsurePrimaryKey("_row_id")`를 통해 숨은 기본키 컬럼 `_row_id` (`Hidden: true, PrimaryKey: true`)를 자동으로 갖는다.
-  - 최상위 DML 실행기(`pkg/engine/sqlexec_dml.go`)는 `INSERT` 시 `_row_id` 컬럼에 원자적 단조 증가 번호(`nextRowID` / `NextIdentityValue`)를 자동 주입하지만, VDBE VM의 `OpInsert` 핸들러(`pkg/proc/runtime/vm_dispatcher.go:915-1030`)는 `col.Identity`인 컬럼만 자동 발번하고 `col.Name == "_row_id"`(또는 `col.Hidden && col.PrimaryKey`)인 컬럼에 대한 자동 발번 분기가 누락되어 있음.
+  - LionSQL에서 명시적 PK가 없는 테이블은 `schema.EnsurePrimaryKey("_row_id")`를 통해 숨은 기본키 컬럼 `_row_id` (`Hidden: true, PrimaryKey: true, Identity: true`)를 자동으로 갖는다.
+  - VDBE VM `OpInsert`의 `execInsertSelect`(`pkg/proc/runtime/vm.go`) 경로에서 `targetCols` 생성이 `len(data.Columns) == 0`일 때만 `Identity` 컬럼을 제외하고, `data.Columns`가 명시되었거나 생략되었을 때 `_row_id` 및 `IDENTITY` 컬럼에 대한 `AllocIdentity` 채번 로직이 빠져 있어 `missing primary key "_row_id"` 에러가 발생했음.
 - **해결 설계안 (Proposed Solution)**:
-  - `pkg/proc/runtime/vm_dispatcher.go`의 `case proc.OpInsert:`(단건/다건 `VALUES` 삽입 및 `execInsertSelect`)에서 테이블 스키마의 PK 컬럼이 `_row_id`(`col.Hidden` 또는 `strings.EqualFold(col.Name, "_row_id")`)이고 레코드에 값이 지정되지 않은 경우, `f.executor.NextIdentityValue(targetTable, 1, 1)` (또는 원자적 시퀀스 카운터)를 호출하여 고유한 `TypeInt` `_row_id`를 자동 할당하도록 수정.
+  - `pkg/proc/runtime/vm.go`의 `execInsertSelect`에서 대상 테이블 스키마의 `identityCol` 유무와 `targetCols` 포함 여부를 확인하고, 미포함 시 `f.executor.AllocIdentity(tableSchema.Name, count, ...)`로 단조 증가 번호를 할당하여 각 삽입 행의 `_row_id` / `IDENTITY` 슬롯에 주입.
+  - `pkg/sqlutil/tokenizer.go`: `matchWordsAt`에서 복합 키워드 단어 사이의 인라인 주석(`/* ... */`) 및 라인 주석(`-- ... \n`)을 투명하게 건너뛰도록 `skipWhitespaceAndComments` 적용.
+- **완료 커밋 및 검증**:
+  - `pkg/sqlutil/tokenizer_test.go`: `TestHasAnyPrefixKeyword`에 복합 키워드 단어 간 주석 스킵 회귀 검증 추가.
+  - `pkg/proc/runtime/hidden_rowid_test.go`: `TestVM_Insert_SyntheticHiddenRowID` 통과.
+  - `pkg/engine/tsql_compat_matrix_regression_test.go`: `TestTSQLCompatMatrix_ProcedureInsertIntoTableWithoutExplicitPK` 통과.
 
 ---
 

@@ -1388,17 +1388,54 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 		return 0, fmt.Errorf("table %q not found: %w", data.Table, err)
 	}
 
+	var identityCol *storage.Column
+	for idx := range tableSchema.Columns {
+		if tableSchema.Columns[idx].Identity {
+			identityCol = &tableSchema.Columns[idx]
+			break
+		}
+	}
+
 	targetCols := data.Columns
+	hasIdentityInTarget := false
 	if len(targetCols) == 0 {
 		for _, c := range tableSchema.Columns {
 			if !c.Identity {
 				targetCols = append(targetCols, c.Name)
 			}
 		}
+	} else if identityCol != nil {
+		for _, c := range targetCols {
+			if strings.EqualFold(c, identityCol.Name) {
+				hasIdentityInTarget = true
+				break
+			}
+		}
 	}
 
 	if len(cols) != len(targetCols) {
 		return 0, fmt.Errorf("column count mismatch: target table %q expects %d columns, but SELECT produced %d columns", data.Table, len(targetCols), len(cols))
+	}
+
+	var nextAllocID int64 = 0
+	if identityCol != nil && !hasIdentityInTarget && len(rows) > 0 {
+		count := int64(len(rows))
+		if f.executor != nil {
+			nextAllocID = f.executor.AllocIdentity(tableSchema.Name, count, func() int64 {
+				var maxID int64 = 0
+				if cur, err := f.tx.Scan(data.Table); err == nil {
+					for cur.Next() {
+						if r, err := cur.Record(); err == nil {
+							if v, ok := r.Get(identityCol.Name); ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
+								maxID = v.IVal
+							}
+						}
+					}
+					cur.Close()
+				}
+				return maxID
+			})
+		}
 	}
 
 	hasTriggers := f.executor != nil && f.executor.HasTriggers(targetTable, "INSERT")
@@ -1432,6 +1469,20 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 		for _, col := range tableSchema.Columns {
 			if _, exists := rec[col.Name]; !exists && col.Default != "" {
 				rec[col.Name] = proc.ParseLiteralDefault(col.Default, col.Type)
+			}
+		}
+
+		if identityCol != nil && !hasIdentityInTarget && nextAllocID > 0 {
+			curID := nextAllocID
+			nextAllocID++
+			rec.Set(identityCol.Name, storage.IntValue(curID))
+			if hasTriggers {
+				rowMap[identityCol.Name] = curID
+			}
+			f.lastIdentity = curID
+			if f.vars != nil {
+				f.vars["identity"] = storage.IntValue(curID)
+				f.vars["scope_identity"] = storage.IntValue(curID)
 			}
 		}
 
