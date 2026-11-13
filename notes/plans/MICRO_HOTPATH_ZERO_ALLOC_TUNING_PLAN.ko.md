@@ -1,11 +1,11 @@
 # LionSQL 마이크로 아키텍처 제로 할당 6대 핫패스 튜닝 계획서 (`MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`)
 
 > - **작성일**: 2026-11-12
-> - **상태**: **Post-1.0 Candidate Specification (`v1.10.0` 온디맨드 후보 과제로 전수 이관 — 1.0-GA 코드 동결 및 안정성 최우선 원칙 준수)**
-> - **관련 태스크 ID (`v1.10.0` `PENDING`)**:
->   - **1순위**: `PERF-VDBE-FRAME-SLIM-1` (VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결) — **[유지 (범위 단순화: 중복 초기화 루프 제거만 채택)]**
->   - **2순위**: `PERF-WAL-ZERO-ALLOC-1` (In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 `writeFrame` Zero-Alloc) — **[유지 (`v1.10.0` Active)]**
->   - **3순위**: `PERF-WT-ROW-DIRECT-1` (WiredTiger `InsertRow`/`Update` 중간 `Record` 맵 2중 할당 우회 및 `EncodeRowToBuffer` 직결) — **[유지 (`v1.10.0` Active)]**
+> - **상태**: **1.0-GA 이전 구현 및 안정화 과제로 편입 (유지 3건 v1.0.0 적용, 오버 엔지니어링 3건 영구 기각 완료)**
+> - **관련 태스크 ID (`v1.0.0` Active / `DONE`)**:
+>   - **1순위**: `PERF-VDBE-FRAME-SLIM-1` (VDBE 프레임/레지스터 슬림 초기화: 중복 초기화 루프 제거만 채택) — **[유지 (`v1.0.0` Active / 1.0 이전 구현)]**
+>   - **2순위**: `PERF-WAL-ZERO-ALLOC-1` (In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 `writeFrame` Zero-Alloc) — **[유지 (`v1.0.0` Active / 1.0 이전 구현)]**
+>   - **3순위**: `PERF-WT-ROW-DIRECT-1` (WiredTiger `InsertRow`/`Update` 중간 `Record` 맵 2중 할당 우회 및 `EncodeRowToBuffer` 직결) — **[유지 (`v1.0.0` Active / 1.0 이전 구현)]**
 >   - **4순위**: `PERF-RESULT-ROW-STREAM-1` (쿼리 결과셋 `Rows []map[string]any` 이중 구체화 제거 및 `[]storage.Row` Zero-Boxing 스트리밍) — **[영구 기각 (Spec-Out `DONE`)]**
 >   - **5순위**: `PERF-TDS-ZEROCOPY-FRAME-1` (TDS `tdsStreamWriter` 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 `copy` 제거) — **[영구 기각 (Spec-Out `DONE`)]**
 >   - **6순위**: `PERF-CACHE-SHARD-1` (`PlanCache` 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 `RLock` 캐시라인 바운싱 제거) — **[영구 기각 (Spec-Out `DONE`)]**
@@ -46,8 +46,8 @@ LionSQL은 v0.92.0까지 튜플 바이너리 코덱(V2), Pointer-Free FlatRecord
 2. **해결 설계**:
    - **Exact-Size Register Slicing**: `newFrame(prog, tx)`에서 `numRegs := int(prog.NumRegisters) + 4` (최소 8)로 실제 프로그램이 요구하는 레지스터 개수만큼만 슬라이싱하고, 필요한 범위(`f.regs[:numRegs]`, `f.slots[:numSlots]`)만 초기화.
    - **Prepared Statement Pre-Resolved Slot Mapping**: `Statement` 컴파일 시점에 각 포지셔널 파라미터(`$1`, `$2`, `@p1`)가 매핑되는 `prog.VarSlots` 인덱스를 `stmt.ParamSlotIndices []int32`로 사전 계산(Pre-resolve)하거나, `bindParams`에서 불필요한 중복 키(`p1`, `@p1`, `$1` 3중 삽입) 대신 단일 정규화 키 또는 포지셔널 바인딩으로 단축.
-3. **[2026-11-13 적정성 감사 판정 — 부분 채택 및 범위 단순화 (`[RULE:RadicalKISS]`)]**:
-   - **채택 유지 (`Deletion-First`)**: `resetForPool()`에서 이미 `clear()`를 수행하고 있음에도 `newFrame()`에서 매번 64개 강제 하한선 루프를 또 도는 중복 초기화 제거 및 Exact-Size Register Slicing은 코드 단순화와 불필요한 낭비 제거에 부합하므로 유지한다.
+3. **[2026-11-13 적정성 감사 판정 — 부분 채택 및 범위 단순화 (`[RULE:RadicalKISS]`, 1.0 이전 구현 대상 편입)]**:
+   - **채택 유지 (`Deletion-First`)**: `resetForPool()`에서 이미 `clear()`를 수행하고 있음에도 `newFrame()`에서 매번 64개 강제 하한선 루프를 또 도는 중복 초기화 제거 및 Exact-Size Register Slicing은 코드 단순화와 불필요한 낭비 제거에 부합하므로 1.0 이전 구현 대상으로 유지한다.
    - **기각 (Spec-Out)**: `Statement.ParamSlotIndices` 별도 슬라이스를 사전 계산하여 관리하는 안은 구조체 복잡도 대비 실익이 낮으므로 배제한다.
 
 ---
@@ -67,8 +67,8 @@ LionSQL은 v0.92.0까지 튜플 바이너리 코덱(V2), Pointer-Free FlatRecord
    - `pkg/storage/memengine/msgpack.go`에 기존 버퍼 뒤에 직접 직렬화하는 `AppendMsgPackFrame(dst []byte, rec WALRecord) ([]byte, error)` 및 `walFrameBufPool` (`sync.Pool`, 기본 4KB, 최대 반환 상한 256KB `[RULE:BoundedBuffers]`)을 도입.
    - 풀에서 꺼낸 슬라이스의 첫 4바이트(`[0:4]`)를 길이 헤더 자리로 비워두고 `[4:]` 위치에 곧바로 MessagePack 인코더가 쓰도록 한 뒤, 완료 시 `binary.BigEndian.PutUint32(buf[:4], uint32(len(buf)-4))`를 채워 `w.file.Write(buf)`에 직결.
    - `Write` 직후 버퍼를 즉시 풀에 반환하여 **트랜잭션 커밋당 WAL 직렬화 힙 할당을 0 B/op, 0 allocs/op으로 제거**.
-3. **[2026-11-13 적정성 감사 판정 — 원안 유지 (`v1.10.0` Active)]**:
-   - 20줄 이내의 단순한 구조 개선으로 매 커밋당 불필요한 2중 바이트 슬라이스 할당과 `copy`를 제거하므로 원안대로 유지한다.
+3. **[2026-11-13 적정성 감사 판정 — 원안 유지 (`v1.0.0` Active / 1.0 이전 구현 대상 편입)]**:
+   - 20줄 이내의 단순한 구조 개선으로 매 커밋당 불필요한 2중 바이트 슬라이스 할당과 `copy`를 제거하므로 1.0 이전 구현 대상으로 즉시 채택하여 원안대로 유지한다.
 
 ---
 
@@ -80,8 +80,8 @@ LionSQL은 v0.92.0까지 튜플 바이너리 코덱(V2), Pointer-Free FlatRecord
 2. **해결 설계**:
    - `storage.EncodeRowToBuffer(schema *TableSchema, row Row, buf []byte)`를 사용해 포지셔널 `storage.Row`에서 V2 바이너리 튜플을 직접 직렬화.
    - `WTTx.insertRowLocked(tableName string, tbl *storage.TableSchema, row storage.Row)` 전용 패스트패스를 구현하여 PK 추출(`row[tbl.PKIndex()]`), FK/Unique 인덱스 검사, V2 바이너리 튜플 직렬화 전 과정에서 **중간 `storage.Record` 맵 생성 2회를 완전히 제거**.
-3. **[2026-11-13 적정성 감사 판정 — 원안 유지 (`v1.10.0` Active)]**:
-   - 포지셔널 슬라이스를 맵으로 2번 바꿨다가 다시 슬라이스 순서로 읽는 명백한 중복 작업을 제거하는 것이므로 원안대로 유지한다.
+3. **[2026-11-13 적정성 감사 판정 — 원안 유지 (`v1.0.0` Active / 1.0 이전 구현 대상 편입)]**:
+   - 포지셔널 슬라이스를 맵으로 2번 바꿨다가 다시 슬라이스 순서로 읽는 명백한 중복 작업을 제거하는 것이므로 1.0 이전 구현 대상으로 즉시 채택하여 원안대로 유지한다.
 
 ---
 

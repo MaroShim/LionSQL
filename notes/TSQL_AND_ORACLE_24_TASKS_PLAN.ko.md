@@ -11,7 +11,7 @@
 | :---: | :--- | :---: | :---: | :---: | :--- |
 | **#1** | **`FIX-GROUPBY-STRING-AGG-1`** | `DONE` (`1651a780`) | Execution / Planner | P1 | `GROUP BY` + `ORDER BY` 및 `WITHIN GROUP (ORDER BY ...)`에서 `STRING_AGG`가 `NULL`을 반환하는 버그 해결 |
 | **#2** | **`FIX-PROC-TEMP-TABLE-DDL-1`** | `DONE` (`d6b89d03`) | Proc / VM | P1 | 저장 프로시저 본문 내부 `CREATE/DROP TABLE #temp` 및 `CREATE/DROP INDEX` DDL 컴파일·실행 지원 |
-| **#3** | **`FIX-PROC-EXEC-RETURN-VAR-1`** | `DONE` | Proc / VM / Engine | P1 | `EXEC @rc = sp_name ...` 프로시저 반환 상태 코드(`RETURN <int>`) 변수 캡처 바인딩 지원 |
+| **#3** | **`FIX-PROC-EXEC-RETURN-VAR-1`** | `DONE` (`0a1befa6`) | Proc / VM / Engine | P1 | `EXEC @rc = sp_name ...` 프로시저 반환 상태 코드(`RETURN <int>`) 변수 캡처 바인딩 지원 |
 | **#4** | **`FIX-SQL-PAREN-SELECT-1`** | `PENDING` | Parser / Engine / Planner | P1 | 괄호로 감싸진 `(SELECT ...)` 최상위 쿼리, 집합 연산 브랜치, 뷰/CTE 본문 실행 지원 |
 | **#5** | **`FIX-CURSOR-LIFECYCLE-1`** | `PENDING` | Engine / VM | P1 | 커서 `DEALLOCATE` 및 배치 종료 시 세션 커서 레지스트리 정리 및 동일 이름 재선언 충돌 해결 |
 | **#6** | **`FIX-VM-HIDDEN-ROWID-1`** | `PENDING` | Proc / VM | P1 | 명시적 PK가 없는 테이블에 대해 VDBE VM `OpInsert` 실행 시 숨은 `_row_id` 자동 발번 누락 수정 |
@@ -68,17 +68,17 @@
 
 ---
 
-### `#3` `FIX-PROC-EXEC-RETURN-VAR-1` (`PENDING`)
+### `#3` `FIX-PROC-EXEC-RETURN-VAR-1` (`DONE` - `0a1befa6`)
 - **현상**:
   T-SQL 표준 문법인 `DECLARE @rc INT; EXEC @rc = sp_myproc @p1 = 10; SELECT @rc;` 실행 시 파싱 에러(`procedure "NULL" not found`)가 발생하거나 `@rc`에 프로시저의 `RETURN <int>` 종료 상태 코드가 저장되지 않음.
 - **근본 원인 (Root Cause)**:
   1. **최상위 배치 실행기(`pkg/engine/sqlexec.go:1426`)의 선행 변수 치환 오염**: `DECLARE @rc INT; EXEC @rc = sp_test;` 실행 시 `sqlexec.go:1426`의 세션 변수 치환 루프가 `EXEC` 분기보다 먼저 실행되면서 좌변 `@rc`를 현재 값(`NULL` 또는 `0`)으로 치환(`EXEC NULL = sp_test`)하여 `ParseProcArgs`가 프로시저 이름을 `"NULL"`로 오인함.
   2. **반환값 기본값(`0`) 및 대소문자 키 동기화 누락 (`pkg/engine/sqlexec_procs.go`, `pkg/proc/runtime/vm.go`)**: 프로시저가 명시적 `RETURN <int>` 없이 종료되면 `ReturnValue`가 `nil`이 되는데, T-SQL 표준 기본 반환 상태 코드인 `0`으로 정규화되지 않으며, 중첩 `OpCallProc`에서도 `retVal == nil`일 때 `NULL`이 대입됨.
   3. **스키마 수식 프로시저 호출 (`pkg/proc/parser_stmt.go` `parseExec()`)**: `EXEC @rc = dbo.sp_name` 또는 `EXEC @rc = [dbo].[sp_name]` 형태의 스키마 한정자 식별자 파싱 보강 필요.
-- **해결 설계안 (Proposed Solution)**:
-  1. `pkg/engine/sqlexec_procs.go`: `execProcedureCallWithRaw`에서 변수 치환 전 원문(`rawQuery`)으로부터 `@return_var =`를 먼저 제거한 후 프로시저 이름을 추출하고, `res.ReturnValue == nil`이면 `int64(0)`으로 정규화하여 `cs.Vars`에 대입.
-  2. `pkg/proc/runtime/vm.go` (`callProc`): 하위 프로시저의 `retVal == nil`일 때 `storage.IntValue(0)`을 반환하도록 보장.
-  3. `pkg/proc/parser_stmt.go` (`parseExec`): `dbo.proc_name` 등 점(`.`)으로 연결된 스키마 수식 프로시저 이름을 파싱하도록 확장.
+- **해결 및 적용 완료 내역**:
+  - `pkg/engine/sqlexec_procs.go`: `extractExecReturnVarAndOutputArgs` 헬퍼를 추가하여 변수 치환 전 원문(`rawQuery`)으로부터 `@return_var =`를 먼저 분리하고 프로시저 이름을 정확히 추출. 실행 완료 시 `res.ReturnValue == nil`이면 T-SQL 표준에 따라 `int64(0)`으로 정규화하여 `cs.Vars` 및 대소문자 무시 키에 바인딩.
+  - `pkg/proc/runtime/vm.go` (`callProc`): 중첩 저장 프로시저 호출에서 `retVal == nil`일 때 `storage.IntValue(0)`을 반환하여 반환 상태 코드가 누락되지 않도록 보장.
+  - `pkg/engine/tsql_compat_matrix_regression_test.go`: `TestTSQLCompatMatrix_ExecReturnVarCapture`를 작성하여 최상위 변수 바인딩, 기본 반환값(`0`), 중첩 프로시저 호출, 출력 파라미터 동시 전달 등 3종 시나리오에 대해 전수 검증 통과 (`0a1befa6`).
 
 ---
 
