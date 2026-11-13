@@ -385,3 +385,45 @@ func TestServerSideCursor_OpenAlreadyOpenFails(t *testing.T) {
 	}
 }
 
+func TestServerSideCursor_DeallocateAndReDeclareLifecycle(t *testing.T) {
+	coord := setupCursorTestDB(t)
+	sessID := "sess-cur-lifecycle"
+
+	// 1. Initial DECLARE, OPEN, FETCH, CLOSE, DEALLOCATE
+	if _, err := coord.ExecuteSessionSQL(sessID, "DECLARE cur_life CURSOR FOR SELECT id, name FROM t_cursor_users WHERE id <= 2 ORDER BY id;"); err != nil {
+		t.Fatalf("initial DECLARE failed: %v", err)
+	}
+	if _, err := coord.ExecuteSessionSQL(sessID, "CLOSE cur_life;"); err != nil {
+		t.Fatalf("CLOSE failed: %v", err)
+	}
+	if _, err := coord.ExecuteSessionSQL(sessID, "DEALLOCATE cur_life;"); err != nil {
+		t.Fatalf("DEALLOCATE failed: %v", err)
+	}
+
+	// 2. Re-DECLARE same cursor name immediately in same session - must succeed without "cursor already exists"
+	if _, err := coord.ExecuteSessionSQL(sessID, "DECLARE cur_life CURSOR FOR SELECT id, name FROM t_cursor_users WHERE id = 3;"); err != nil {
+		t.Fatalf("re-DECLARE same name after DEALLOCATE failed: %v", err)
+	}
+	res, err := coord.ExecuteSessionSQL(sessID, "FETCH NEXT FROM cur_life;")
+	if err != nil {
+		t.Fatalf("FETCH from re-declared cursor failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["name"] != "Charlie" {
+		t.Fatalf("expected Charlie from re-declared cursor, got %+v", res.Rows)
+	}
+
+	// 3. T-SQL syntax: DEALLOCATE CURSOR <name> and case-insensitivity
+	if _, err := coord.ExecuteSessionSQL(sessID, "DEALLOCATE CURSOR CUR_LIFE;"); err != nil {
+		t.Fatalf("DEALLOCATE CURSOR with upper casing failed: %v", err)
+	}
+
+	// 4. Case-insensitive re-declaration after uppercase DEALLOCATE
+	if _, err := coord.ExecuteSessionSQL(sessID, "DECLARE CUR_LIFE CURSOR FOR SELECT id, name FROM t_cursor_users WHERE id = 1;"); err != nil {
+		t.Fatalf("DECLARE with uppercase name after deallocation failed: %v", err)
+	}
+	if _, err := coord.ExecuteSessionSQL(sessID, "DEALLOCATE GLOBAL cur_life;"); err != nil {
+		t.Fatalf("DEALLOCATE GLOBAL failed: %v", err)
+	}
+}
+
+

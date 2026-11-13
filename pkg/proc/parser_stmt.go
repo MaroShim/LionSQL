@@ -190,6 +190,9 @@ func (p *Parser) parseClose() (Statement, error) {
 
 func (p *Parser) parseDeallocate() (Statement, error) {
 	p.nextToken() // eat DEALLOCATE
+	for p.curTokenIs(TokenCursor) || strings.EqualFold(p.curToken.Literal, "GLOBAL") || strings.EqualFold(p.curToken.Literal, "LOCAL") {
+		p.nextToken()
+	}
 	curName := p.curToken.Literal
 	p.nextToken()
 	if p.curTokenIs(TokenSemicolon) {

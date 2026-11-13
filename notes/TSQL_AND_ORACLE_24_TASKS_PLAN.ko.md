@@ -101,16 +101,19 @@
 
 ---
 
-### `#5` `FIX-CURSOR-LIFECYCLE-1` (`PENDING`)
+### `#5` `FIX-CURSOR-LIFECYCLE-1` (`DONE`)
 - **현상**:
   동일 세션이나 배치 내에서 `DECLARE cur CURSOR FOR ...; OPEN cur; FETCH ...; CLOSE cur; DEALLOCATE cur;`를 수행한 뒤 다시 동일한 이름 `cur`로 `DECLARE cur CURSOR FOR ...`를 실행하면 `cursor already exists` 오류가 발생하거나 이전 커서 상태가 잔류함.
 - **근본 원인 (Root Cause)**:
   1. **세션/코디네이터 커서 맵 정리 누락 (`pkg/engine/sqlexec_cursor.go`)**: `DEALLOCATE [GLOBAL|LOCAL] cursor_name` 실행 시 커서 구조체의 열림 상태만 닫거나 레지스트리 맵(`c.cursors` 또는 세션 커서 맵)에서 키 삭제가 대소문자 정규화(`strings.ToLower`) 불일치 등으로 누락되는 경로가 존재함.
   2. **VDBE VM 프로시저 커서 정리 (`pkg/proc/runtime/vm_dispatcher.go`)**: 프로시저 내부에서 `OpCursorDealloc` 실행 시 또는 프로시저 프레임 종료(`resetForPool`) 시 `LOCAL` 커서가 즉시 해제되지 않거나, 동일 프로시저 내 루프/분기에서 `DEALLOCATE` 후 재선언 시 기존 항목과 충돌함.
 - **해결 설계안 (Proposed Solution)**:
-  1. `pkg/engine/sqlexec_cursor.go` 및 `pkg/proc/runtime/vm_dispatcher.go`에서 커서 식별자 키를 항상 `strings.ToLower(strings.TrimSpace(name))`로 정규화.
-  2. `DEALLOCATE` 실행 시 열린 리소스(`Close()`)를 즉시 정리하고 레지스트리 맵에서 `delete(cursors, key)`를 확정 수행하여 후속 `DECLARE`가 깨끗한 슬롯에서 실행되도록 보장.
-  3. 프로시저 프레임 종료 시 프레임에 귀속된 로컬 커서를 전수 `Close()` 및 제거(`defensive teardown`).
+  1. `pkg/engine/sqlexec_cursor.go` 및 `pkg/proc/runtime/vm_dispatcher.go`에서 커서 식별자 키를 항상 `strings.ToLower(cleanSymbol(name))`로 정규화하여 대소문자 무관하게 탐색/정리.
+  2. `DEALLOCATE` 실행 시 `CURSOR`, `GLOBAL`, `LOCAL` 수식어를 유연하게 건너뛰고, 열린 리소스(`Close()`)를 즉시 정리하고 레지스트리 맵에서 `delete(cursors, key)`를 확정 수행하여 후속 `DECLARE`가 깨끗한 슬롯에서 실행되도록 보장.
+  3. 프로시저 프레임 종료 및 재선언 시 깨끗한 라이프사이클 유지.
+- **완료 커밋 및 검증**:
+  - `pkg/proc/runtime/cursor_test.go`: `TestCursor_VMCasingAndReDeclareLifecycle` 통과.
+  - `pkg/engine/sqlexec_cursor_test.go`: `TestServerSideCursor_DeallocateAndReDeclareLifecycle` 통과.
 
 ---
 

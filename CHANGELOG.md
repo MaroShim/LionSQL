@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - mark `-memory=performance`, `MemoryPerformance`, and legacy aliases (`OCCModeRaw`, `OCCModePerformance`) as deprecated in CLI help text, startup runtime log warning (`memoryPerformanceDeprecationNotice`), startup banner (`[DEPRECATED: use compact]`), and Go doc comments while preserving full v1.0 compatibility prior to post-1.0 removal (`DEPRECATE-OCC-PERF-1`)
 
 ### Fixed
+- resolve cursor lifecycle deallocation and case-insensitive re-declaration in VDBE runtime and server session cursor registry (`FIX-CURSOR-LIFECYCLE-1`): normalize cursor identifiers to lowercase, support `DEALLOCATE CURSOR/GLOBAL/LOCAL` syntax variations, and ensure deterministic cleanup on deallocation to allow seamless re-declaration within the same session or procedure batch
 - support parenthesized `(SELECT ...)` queries across top-level batches, nested set operations (`UNION`/`INTERSECT`/`EXCEPT`), `CREATE VIEW`, CTE bodies, and stored procedures (`FIX-SQL-PAREN-SELECT-1`)
 - support `EXEC @rc = sp_name ...` return status variable capture across top-level batches and nested stored procedure calls with default status `0` normalization (`FIX-PROC-EXEC-RETURN-VAR-1`)
 - support `CREATE TABLE`, `DROP TABLE`, `CREATE INDEX`, and `DROP INDEX` DDL statements inside stored procedure bodies with isolated frame-local `#temp` table mapping (`FIX-PROC-TEMP-TABLE-DDL-1`)

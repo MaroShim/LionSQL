@@ -306,3 +306,45 @@ END;
 	}
 }
 
+func TestCursor_VMCasingAndReDeclareLifecycle(t *testing.T) {
+	eng := setupCursorTestDB(t)
+	defer eng.Close()
+
+	tsql := `
+CREATE PROCEDURE ProcCursorCasingAndLifecycle
+AS
+BEGIN
+    DECLARE @total INT = 0;
+    DECLARE @id INT;
+
+    -- 1. Declare with CamelCase, Open with lowercase, Deallocate with uppercase
+    DECLARE MyCursor CURSOR FOR SELECT id FROM accounts WHERE status = 'ACTIVE' ORDER BY id;
+    OPEN mycursor;
+    FETCH NEXT FROM MYCURSOR INTO @id;
+    SET @total = @total + @id;
+    CLOSE myCursor;
+    DEALLOCATE MYCURSOR;
+
+    -- 2. Re-declare the same cursor name in the same procedure execution
+    DECLARE mycursor CURSOR FOR SELECT id FROM accounts WHERE id = 4;
+    OPEN MYCURSOR;
+    FETCH NEXT FROM myCursor INTO @id;
+    SET @total = @total + @id;
+    CLOSE mycursor;
+    DEALLOCATE mycursor;
+
+    RETURN @total;
+END;
+`
+	res, err := runCursorProc(t, eng, tsql, "ProcCursorCasingAndLifecycle", nil)
+	if err != nil {
+		t.Fatalf("ProcCursorCasingAndLifecycle failed: %v", err)
+	}
+
+	// First account id=1, second query account id=4 -> total = 5
+	if fmt.Sprintf("%v", res.ReturnValue) != "5" {
+		t.Fatalf("expected return value 5, got %v", res.ReturnValue)
+	}
+}
+
+

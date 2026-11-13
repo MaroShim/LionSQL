@@ -52,6 +52,7 @@ func (s *Coordinator) execDeclareCursor(query string, start time.Time, cs *Clien
 	if cursorName == "" {
 		return nil, fmt.Errorf("syntax error: invalid cursor name")
 	}
+	lookupKey := strings.ToLower(cursorName)
 
 	var withHold bool
 	var scroll bool
@@ -71,7 +72,7 @@ func (s *Coordinator) execDeclareCursor(query string, start time.Time, cs *Clien
 	if cs.Cursors == nil {
 		cs.Cursors = make(map[string]*SessionCursor)
 	}
-	if _, exists := cs.Cursors[cursorName]; exists {
+	if _, exists := cs.Cursors[lookupKey]; exists {
 		cs.Mu.Unlock()
 		return nil, fmt.Errorf("cursor %q already exists", cursorName)
 	}
@@ -84,7 +85,7 @@ func (s *Coordinator) execDeclareCursor(query string, start time.Time, cs *Clien
 	}
 
 	cs.Mu.Lock()
-	cs.Cursors[cursorName] = &SessionCursor{
+	cs.Cursors[lookupKey] = &SessionCursor{
 		Name:       cursorName,
 		Query:      cursorQuery,
 		Columns:    res.Columns,
@@ -340,7 +341,7 @@ func (s *Coordinator) execFetchCursor(query string, start time.Time, cs *ClientS
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()
 
-	cur, exists := cs.Cursors[cursorName]
+	cur, exists := cs.Cursors[strings.ToLower(cursorName)]
 	if !exists {
 		return nil, fmt.Errorf("cursor %q does not exist", cursorName)
 	}
@@ -381,7 +382,7 @@ func (s *Coordinator) execMoveCursor(query string, start time.Time, cs *ClientSe
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()
 
-	cur, exists := cs.Cursors[cursorName]
+	cur, exists := cs.Cursors[strings.ToLower(cursorName)]
 	if !exists {
 		return nil, fmt.Errorf("cursor %q does not exist", cursorName)
 	}
@@ -415,12 +416,13 @@ func (s *Coordinator) execOpenCursor(query string, start time.Time, cs *ClientSe
 	}
 
 	target := cleanIdentifier(rest)
+	lookupKey := strings.ToLower(target)
 	if target == "" {
 		return nil, fmt.Errorf("syntax error: cursor name required for OPEN")
 	}
 
 	cs.Mu.Lock()
-	cur, exists := cs.Cursors[target]
+	cur, exists := cs.Cursors[lookupKey]
 	if !exists {
 		cs.Mu.Unlock()
 		return nil, fmt.Errorf("cursor %q does not exist", target)
@@ -438,7 +440,7 @@ func (s *Coordinator) execOpenCursor(query string, start time.Time, cs *ClientSe
 	}
 
 	cs.Mu.Lock()
-	if cur, exists := cs.Cursors[target]; exists {
+	if cur, exists := cs.Cursors[lookupKey]; exists {
 		cur.Columns = res.Columns
 		cur.Rows = res.Rows
 		cur.Pos = 0
@@ -492,7 +494,7 @@ func (s *Coordinator) execCloseCursor(query string, start time.Time, cs *ClientS
 		return nil, fmt.Errorf("syntax error: cursor name required for CLOSE")
 	}
 
-	cur, exists := cs.Cursors[target]
+	cur, exists := cs.Cursors[strings.ToLower(target)]
 	if !exists {
 		return nil, fmt.Errorf("cursor %q does not exist", target)
 	}

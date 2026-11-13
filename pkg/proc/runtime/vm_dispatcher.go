@@ -1767,8 +1767,9 @@ vmLoop:
 	case proc.OpCursorOpen:
 		switch data := f.aux(&inst).(type) {
 		case *proc.CursorData:
-			f.cursors[cleanSymbol(data.Name)] = &cursorState{
-				name:      cleanSymbol(data.Name),
+			curName := strings.ToLower(cleanSymbol(data.Name))
+			f.cursors[curName] = &cursorState{
+				name:      curName,
 				table:     f.resolveTable(data.Table),
 				columns:   data.Columns,
 				whereExpr: data.WhereExpr,
@@ -1777,7 +1778,7 @@ vmLoop:
 				isOpen:    false,
 			}
 		case string:
-			curName := cleanSymbol(data)
+			curName := strings.ToLower(cleanSymbol(data))
 			cur, exists := f.cursors[curName]
 			if !exists {
 				err := fmt.Errorf("cursor %s does not exist", curName)
@@ -1814,39 +1815,40 @@ vmLoop:
 		}
 
 	case proc.OpCursorFetch:
-		data, ok := f.aux(&inst).(*proc.CursorData)
-		if !ok || data == nil {
-			return nil, fmt.Errorf("invalid cursor fetch metadata")
-		}
-		curName := cleanSymbol(data.Name)
-		cur, exists := f.cursors[curName]
-		if !exists || !cur.isOpen || cur.idx >= len(cur.rows) {
-			f.fetchStatus = -1
-		} else {
-			row := cur.rows[cur.idx]
-			cur.idx++
-			f.fetchStatus = 0
-			for i, varName := range data.IntoVars {
-				if i < len(cur.columns) {
-					col := cur.columns[i]
-					if v, ok := row[col]; ok {
-						f.setVar(varName, v)
-					} else {
-						// Case-insensitive fallback
-						found := false
-						for rk, rv := range row {
-							if strings.EqualFold(rk, col) {
-								f.setVar(varName, rv)
-								found = true
-								break
+		switch data := f.aux(&inst).(type) {
+		case *proc.CursorData:
+			curName := strings.ToLower(cleanSymbol(data.Name))
+			cur, exists := f.cursors[curName]
+			if !exists || !cur.isOpen || cur.idx >= len(cur.rows) {
+				f.fetchStatus = -1
+			} else {
+				row := cur.rows[cur.idx]
+				cur.idx++
+				f.fetchStatus = 0
+				for i, varName := range data.IntoVars {
+					if i < len(cur.columns) {
+						col := cur.columns[i]
+						if v, ok := row[col]; ok {
+							f.setVar(varName, v)
+						} else {
+							// Case-insensitive fallback
+							found := false
+							for rk, rv := range row {
+								if strings.EqualFold(rk, col) {
+									f.setVar(varName, rv)
+									found = true
+									break
+								}
 							}
-						}
-						if !found {
-							f.setVar(varName, storage.NullValue(storage.TypeUnknown))
+							if !found {
+								f.setVar(varName, storage.NullValue(storage.TypeUnknown))
+							}
 						}
 					}
 				}
 			}
+		default:
+			return nil, fmt.Errorf("invalid cursor fetch metadata")
 		}
 
 	case proc.OpCursorClose:
@@ -1854,7 +1856,7 @@ vmLoop:
 		if !ok {
 			return nil, fmt.Errorf("invalid cursor close target")
 		}
-		curName := cleanSymbol(rawName)
+		curName := strings.ToLower(cleanSymbol(rawName))
 		if cur, exists := f.cursors[curName]; exists {
 			if !cur.isOpen {
 				err := fmt.Errorf("cursor %s is not open", curName)
@@ -1883,7 +1885,7 @@ vmLoop:
 		if !ok {
 			return nil, fmt.Errorf("invalid cursor deallocate target")
 		}
-		curName := cleanSymbol(rawName)
+		curName := strings.ToLower(cleanSymbol(rawName))
 		if cur, exists := f.cursors[curName]; exists {
 			cur.rows = nil
 			delete(f.cursors, curName)

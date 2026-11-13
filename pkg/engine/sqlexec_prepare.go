@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -137,6 +138,21 @@ func (s *Coordinator) execDeallocate(query string, start time.Time, cs *ClientSe
 
 	target = strings.TrimRight(target, ";")
 	target = strings.TrimSpace(target)
+
+	// Strip optional T-SQL cursor qualifiers: CURSOR, GLOBAL, LOCAL
+	if rem, ok := sqlutil.TrimPrefixKeyword(target, "CURSOR"); ok {
+		target = strings.TrimSpace(rem)
+	} else if rem, ok := sqlutil.TrimPrefixKeyword(target, "GLOBAL"); ok {
+		target = strings.TrimSpace(rem)
+		if rem2, ok2 := sqlutil.TrimPrefixKeyword(target, "CURSOR"); ok2 {
+			target = strings.TrimSpace(rem2)
+		}
+	} else if rem, ok := sqlutil.TrimPrefixKeyword(target, "LOCAL"); ok {
+		target = strings.TrimSpace(rem)
+		if rem2, ok2 := sqlutil.TrimPrefixKeyword(target, "CURSOR"); ok2 {
+			target = strings.TrimSpace(rem2)
+		}
+	}
 
 	if strings.EqualFold(target, "ALL") {
 		if cs != nil {
