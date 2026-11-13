@@ -38,14 +38,10 @@ func isBeginTransaction(rest string) bool {
 	if len(rest) == 0 || rest[0] == ';' {
 		return true
 	}
-	return sqlutil.HasPrefixKeyword(rest, "TRANSACTION") ||
-		sqlutil.HasPrefixKeyword(rest, "TRAN") ||
-		sqlutil.HasPrefixKeyword(rest, "WORK") ||
-		sqlutil.HasPrefixKeyword(rest, "DISTRIBUTED") ||
-		sqlutil.HasPrefixKeyword(rest, "READ") ||
-		sqlutil.HasPrefixKeyword(rest, "ISOLATION") ||
-		sqlutil.HasPrefixKeyword(rest, "DEFERRABLE") ||
-		sqlutil.HasPrefixKeyword(rest, "NOT")
+	return sqlutil.HasAnyPrefixKeyword(rest,
+		"TRANSACTION", "TRAN", "WORK", "DISTRIBUTED",
+		"READ", "ISOLATION", "DEFERRABLE", "NOT",
+	)
 }
 
 func isProcOrFuncHeader(s string) bool {
@@ -57,18 +53,11 @@ func isProcOrFuncHeader(s string) bool {
 	if ch != 'C' && ch != 'c' && ch != 'A' && ch != 'a' {
 		return false
 	}
-	return sqlutil.HasPrefixKeyword(s, "CREATE PROCEDURE") ||
-		sqlutil.HasPrefixKeyword(s, "CREATE PROC") ||
-		sqlutil.HasPrefixKeyword(s, "CREATE OR ALTER PROCEDURE") ||
-		sqlutil.HasPrefixKeyword(s, "CREATE OR ALTER PROC") ||
-		sqlutil.HasPrefixKeyword(s, "ALTER PROCEDURE") ||
-		sqlutil.HasPrefixKeyword(s, "ALTER PROC") ||
-		sqlutil.HasPrefixKeyword(s, "CREATE FUNCTION") ||
-		sqlutil.HasPrefixKeyword(s, "CREATE OR ALTER FUNCTION") ||
-		sqlutil.HasPrefixKeyword(s, "ALTER FUNCTION") ||
-		sqlutil.HasPrefixKeyword(s, "CREATE TRIGGER") ||
-		sqlutil.HasPrefixKeyword(s, "CREATE OR ALTER TRIGGER") ||
-		sqlutil.HasPrefixKeyword(s, "ALTER TRIGGER")
+	return sqlutil.HasAnyPrefixKeyword(s,
+		"CREATE PROCEDURE", "CREATE PROC", "CREATE OR ALTER PROCEDURE", "CREATE OR ALTER PROC",
+		"ALTER PROCEDURE", "ALTER PROC", "CREATE FUNCTION", "CREATE OR ALTER FUNCTION",
+		"ALTER FUNCTION", "CREATE TRIGGER", "CREATE OR ALTER TRIGGER", "ALTER TRIGGER",
+	)
 }
 
 func isIfHeader(s string) bool {
@@ -303,11 +292,7 @@ func TrimAnyPrefix(upper, original string, prefixes ...string) (string, bool) {
 // IsRollbackOrResetQuery reports whether query is a transaction rollback or session reset command.
 func IsRollbackOrResetQuery(q string) bool {
 	q = StripLeadingComments(q)
-	return sqlutil.HasPrefixKeyword(q, "ROLLBACK") ||
-		sqlutil.HasPrefixKeyword(q, "DISCARD") ||
-		sqlutil.HasPrefixKeyword(q, "RESET") ||
-		sqlutil.HasPrefixKeyword(q, "DEALLOCATE") ||
-		sqlutil.HasPrefixKeyword(q, "UNLISTEN")
+	return sqlutil.HasAnyPrefixKeyword(q, "ROLLBACK", "DISCARD", "RESET", "DEALLOCATE", "UNLISTEN")
 }
 
 // ParseSessionVarValue converts a T-SQL literal string to a native Go value (bool, int64, float64, string).

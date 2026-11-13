@@ -936,10 +936,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.045 Connection Pool Reset: DISCARD ALL / RESET ALL / DEALLOCATE ALL / UNLISTEN *
-	if sqlutil.HasPrefixKeyword(trimmed, "DISCARD") ||
-		sqlutil.HasPrefixKeyword(trimmed, "RESET ALL") ||
-		sqlutil.HasPrefixKeyword(trimmed, "DEALLOCATE ALL") ||
-		sqlutil.HasPrefixKeyword(trimmed, "UNLISTEN") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "DISCARD", "RESET ALL", "DEALLOCATE ALL", "UNLISTEN") {
 		if cs != nil {
 			cs.Mu.Lock()
 			if s.engine != nil {
@@ -954,7 +951,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			cs.TempTables = nil
 			cs.TempTableMap = nil
 			cs.EphemeralTables = nil
-			if sqlutil.HasPrefixKeyword(trimmed, "DISCARD ALL") || sqlutil.HasPrefixKeyword(trimmed, "RESET ALL") || sqlutil.HasPrefixKeyword(trimmed, "DEALLOCATE ALL") {
+			if sqlutil.HasAnyPrefixKeyword(trimmed, "DISCARD ALL", "RESET ALL", "DEALLOCATE ALL") {
 				cs.PreparedStmts = nil
 			}
 			cs.Mu.Unlock()
@@ -1473,21 +1470,23 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 1. Procedural DDL: CREATE PROCEDURE / ALTER PROCEDURE / DROP PROCEDURE / CREATE FUNCTION / CREATE TRIGGER
-	if sqlutil.HasPrefixKeyword(trimmed, "CREATE PROCEDURE") || sqlutil.HasPrefixKeyword(trimmed, "CREATE PROC") ||
-		sqlutil.HasPrefixKeyword(trimmed, "CREATE OR ALTER PROCEDURE") || sqlutil.HasPrefixKeyword(trimmed, "CREATE OR ALTER PROC") ||
-		sqlutil.HasPrefixKeyword(trimmed, "ALTER PROCEDURE") || sqlutil.HasPrefixKeyword(trimmed, "ALTER PROC") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed,
+		"CREATE PROCEDURE", "CREATE PROC",
+		"CREATE OR ALTER PROCEDURE", "CREATE OR ALTER PROC",
+		"ALTER PROCEDURE", "ALTER PROC",
+	) {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
 		return s.execCreateProcedure(trimmed, start)
 	}
-	if sqlutil.HasPrefixKeyword(trimmed, "DROP PROCEDURE") || sqlutil.HasPrefixKeyword(trimmed, "DROP PROC") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "DROP PROCEDURE", "DROP PROC") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
 		return s.execDropProcedure(trimmed, start)
 	}
-	if sqlutil.HasPrefixKeyword(trimmed, "CREATE FUNCTION") || sqlutil.HasPrefixKeyword(trimmed, "CREATE OR ALTER FUNCTION") || sqlutil.HasPrefixKeyword(trimmed, "ALTER FUNCTION") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE FUNCTION", "CREATE OR ALTER FUNCTION", "ALTER FUNCTION") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1499,8 +1498,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 		return s.execDropFunction(trimmed, start)
 	}
-	if sqlutil.HasPrefixKeyword(trimmed, "CREATE TRIGGER") || sqlutil.HasPrefixKeyword(trimmed, "CREATE OR ALTER TRIGGER") || sqlutil.HasPrefixKeyword(trimmed, "ALTER TRIGGER") ||
-		sqlutil.HasPrefixKeyword(trimmed, "CREATE TEMP TRIGGER") || sqlutil.HasPrefixKeyword(trimmed, "CREATE TEMPORARY TRIGGER") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed,
+		"CREATE TRIGGER", "CREATE OR ALTER TRIGGER", "ALTER TRIGGER",
+		"CREATE TEMP TRIGGER", "CREATE TEMPORARY TRIGGER",
+	) {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1514,7 +1515,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 1.5 DDL: CREATE VIEW / CREATE OR REPLACE VIEW / CREATE OR ALTER VIEW / ALTER VIEW / CREATE TEMP VIEW / DROP VIEW
-	if sqlutil.HasPrefixKeyword(trimmed, "CREATE VIEW") || sqlutil.HasPrefixKeyword(trimmed, "CREATE OR REPLACE VIEW") || sqlutil.HasPrefixKeyword(trimmed, "CREATE OR ALTER VIEW") || sqlutil.HasPrefixKeyword(trimmed, "ALTER VIEW") || sqlutil.HasPrefixKeyword(trimmed, "CREATE TEMP VIEW") || sqlutil.HasPrefixKeyword(trimmed, "CREATE TEMPORARY VIEW") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE VIEW", "CREATE OR REPLACE VIEW", "CREATE OR ALTER VIEW", "ALTER VIEW", "CREATE TEMP VIEW", "CREATE TEMPORARY VIEW") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1552,12 +1553,12 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	if sqlutil.HasPrefixKeyword(trimmed, "DENY") {
 		return s.execDeny(trimmed, start)
 	}
-	if sqlutil.HasPrefixKeyword(trimmed, "SETUSER") || sqlutil.HasPrefixKeyword(trimmed, "EXECUTE AS USER") || sqlutil.HasPrefixKeyword(trimmed, "EXEC AS USER") || sqlutil.HasPrefixKeyword(trimmed, "REVERT") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "SETUSER", "EXECUTE AS USER", "EXEC AS USER", "REVERT") {
 		return s.execSetUser(trimmed, start, cs)
 	}
 
 	// 2. Procedure Invocation: EXEC / CALL / sp_*
-	if sqlutil.HasPrefixKeyword(trimmed, "EXEC") || sqlutil.HasPrefixKeyword(trimmed, "EXECUTE") || sqlutil.HasPrefixKeyword(trimmed, "CALL") || strings.HasPrefix(strings.ToUpper(trimmed), "SP_") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "EXEC", "EXECUTE", "CALL") || strings.HasPrefix(strings.ToUpper(trimmed), "SP_") {
 		return s.execProcedureCallWithRaw(trimmed, rawBeforeVarSub, start, cs)
 	}
 
@@ -1580,7 +1581,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 3.1 DDL: CREATE INDEX
-	if sqlutil.HasPrefixKeyword(trimmed, "CREATE INDEX") || sqlutil.HasPrefixKeyword(trimmed, "CREATE UNIQUE INDEX") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE INDEX", "CREATE UNIQUE INDEX") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1628,7 +1629,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.2 DDL/DML: TRUNCATE TABLE
-	if sqlutil.HasPrefixKeyword(trimmed, "TRUNCATE TABLE") || sqlutil.HasPrefixKeyword(trimmed, "TRUNCATE") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "TRUNCATE TABLE", "TRUNCATE") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1674,7 +1675,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.37 Tolerant PG Compatibility: CREATE / DROP SCHEMA / EXTENSION
-	if sqlutil.HasPrefixKeyword(trimmed, "CREATE SCHEMA") || sqlutil.HasPrefixKeyword(trimmed, "DROP SCHEMA") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE SCHEMA", "DROP SCHEMA") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "SCHEMA",
@@ -1983,21 +1984,17 @@ func isSelectOrParenthesizedQuery(sql string) bool {
 		return true
 	}
 	if len(trimmed) > 0 && trimmed[0] == '(' {
+		// 1) 닫는 쌍이 문장의 끝인 경우: 외곽 괄호를 모두 벗긴 결과가 SELECT/WITH인지 확인
 		unwrapped := sqlutil.UnwrapOuterParens(trimmed)
 		if sqlutil.HasAnyPrefixKeyword(unwrapped, "SELECT", "WITH") || planner.HasTopLevelSetOp(unwrapped) {
 			return true
 		}
-		// Sibling parenthesized set operation check: ((SELECT ...)) UNION (SELECT ...)
-		if len(unwrapped) > 0 && unwrapped[0] == '(' {
-			firstClose := sqlutil.FindMatchingParen(unwrapped, 0)
-			if firstClose != -1 {
-				insideFirst := sqlutil.UnwrapOuterParens(unwrapped[1:firstClose])
-				if sqlutil.HasAnyPrefixKeyword(insideFirst, "SELECT", "WITH") {
-					afterParen := strings.TrimSpace(unwrapped[firstClose+1:])
-					if sqlutil.HasAnyPrefixKeyword(afterParen, "UNION", "INTERSECT", "EXCEPT", "MINUS") {
-						return true
-					}
-				}
+		// 2) 닫는 쌍 뒤에 내용이 남는 경우: 첫 괄호 블록 뒤에 집합 연산자(UNION 등)가 이어지는지 확인
+		firstClose := sqlutil.FindMatchingParen(trimmed, 0)
+		if firstClose != -1 {
+			afterParen := strings.TrimSpace(trimmed[firstClose+1:])
+			if sqlutil.HasAnyPrefixKeyword(afterParen, "UNION", "INTERSECT", "EXCEPT", "MINUS") {
+				return true
 			}
 		}
 	}
