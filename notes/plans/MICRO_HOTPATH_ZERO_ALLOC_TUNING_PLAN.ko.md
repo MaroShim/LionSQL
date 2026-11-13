@@ -3,12 +3,12 @@
 > - **작성일**: 2026-11-12
 > - **상태**: **Post-1.0 Candidate Specification (`v1.10.0` 온디맨드 후보 과제로 전수 이관 — 1.0-GA 코드 동결 및 안정성 최우선 원칙 준수)**
 > - **관련 태스크 ID (`v1.10.0` `PENDING`)**:
->   - **1순위**: `PERF-VDBE-FRAME-SLIM-1` (VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결)
->   - **2순위**: `PERF-WAL-ZERO-ALLOC-1` (In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 `writeFrame` Zero-Alloc)
->   - **3순위**: `PERF-WT-ROW-DIRECT-1` (WiredTiger `InsertRow`/`Update` 중간 `Record` 맵 2중 할당 우회 및 `EncodeRowToBuffer` 직결)
->   - **4순위**: `PERF-RESULT-ROW-STREAM-1` (쿼리 결과셋 `Rows []map[string]any` 이중 구체화 제거 및 `[]storage.Row` Zero-Boxing 스트리밍)
->   - **5순위**: `PERF-TDS-ZEROCOPY-FRAME-1` (TDS `tdsStreamWriter` 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 `copy` 제거)
->   - **6순위**: `PERF-CACHE-SHARD-1` (`PlanCache` 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 `RLock` 캐시라인 바운싱 제거)
+>   - **1순위**: `PERF-VDBE-FRAME-SLIM-1` (VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결) — **[유지 (범위 단순화: 중복 초기화 루프 제거만 채택)]**
+>   - **2순위**: `PERF-WAL-ZERO-ALLOC-1` (In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 `writeFrame` Zero-Alloc) — **[유지 (`v1.10.0` Active)]**
+>   - **3순위**: `PERF-WT-ROW-DIRECT-1` (WiredTiger `InsertRow`/`Update` 중간 `Record` 맵 2중 할당 우회 및 `EncodeRowToBuffer` 직결) — **[유지 (`v1.10.0` Active)]**
+>   - **4순위**: `PERF-RESULT-ROW-STREAM-1` (쿼리 결과셋 `Rows []map[string]any` 이중 구체화 제거 및 `[]storage.Row` Zero-Boxing 스트리밍) — **[영구 기각 (Spec-Out `DONE`)]**
+>   - **5순위**: `PERF-TDS-ZEROCOPY-FRAME-1` (TDS `tdsStreamWriter` 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 `copy` 제거) — **[영구 기각 (Spec-Out `DONE`)]**
+>   - **6순위**: `PERF-CACHE-SHARD-1` (`PlanCache` 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 `RLock` 캐시라인 바운싱 제거) — **[영구 기각 (Spec-Out `DONE`)]**
 
 ---
 
@@ -26,12 +26,12 @@ LionSQL은 v0.92.0까지 튜플 바이너리 코덱(V2), Pointer-Free FlatRecord
 
 | 순위 | 태스크 ID | 대상 서브시스템 | 핵심 병목 진단 | 기대 효과 (ROI) | 난이도 | 추진 구분 |
 |:---:|---|---|---|---|:---:|:---:|
-| **1순위** | **`PERF-VDBE-FRAME-SLIM-1`** | `pkg/proc/runtime`, `pkg/wire` | `newFrame()`에서 매번 최소 64개 레지스터(3KB) 루프 초기화 + PGWire/TDS Prepared 실행 시 `paramMap` 3~5중 해시 삽입 | 프로시저/Prepared 호출당 맵 해싱 0회, 프레임 초기화 비용 75% 절감 | ★☆☆ | **즉시 착수 (Active)** |
+| **1순위** | **`PERF-VDBE-FRAME-SLIM-1`** | `pkg/proc/runtime`, `pkg/wire` | `newFrame()`에서 매번 최소 64개 레지스터(3KB) 루프 초기화 + PGWire/TDS Prepared 실행 시 `paramMap` 3~5중 해시 삽입 | 프로시저/Prepared 호출당 맵 해싱 0회, 프레임 초기화 비용 75% 절감 | ★☆☆ | **유지 (범위 단순화)** |
 | **2순위** | **`PERF-WAL-ZERO-ALLOC-1`** | `pkg/storage/memengine` | `WALWriter.writeFrame`에서 `MarshalMsgPack` 슬라이스 할당 후 `make([]byte, 4+len)` 2차 할당 및 전체 `copy` | 쓰기 트랜잭션 커밋당 힙 할당 2회 ➔ 0회 (Zero-Alloc WAL) | ★☆☆ | **즉시 착수 (Active)** |
 | **3순위** | **`PERF-WT-ROW-DIRECT-1`** | `pkg/storage/wiredtiger`, `pkg/storage` | `WTTx.InsertRow`가 포지셔널 `Row`를 받아 `RowToRecord` 맵 생성 후 `insertLocked`에서 또 `normalized` 맵을 생성 | WiredTiger `INSERT` 시 행당 `map[string]Value` 할당 2회 완전 제거 | ★★☆ | **즉시 착수 (Active)** |
-| **4순위** | **`PERF-RESULT-ROW-STREAM-1`** | `pkg/proc/runtime`, `pkg/wire`, `pkg/wire/tds` | `ExecutionResult`가 와이어에서 쓰이지도 않는 `Rows []map[string]any`와 `Values [][]any`를 동시 생성 및 `any` 박싱 | `SELECT` 다건 조회 처리량 30~50% 향상 및 GC 압력 대폭 감소 | ★★☆ | **후보 과제 (Candidate)** |
-| **5순위** | **`PERF-TDS-ZEROCOPY-FRAME-1`** | `pkg/wire/tds` | `tdsStreamWriter`가 `bytes.Buffer`에 쓴 뒤 `frame` 버퍼로 재복사하고 `FlushIfReady`에서 잔여 바이트를 슬라이딩 복사 | TDS 대량 결과셋 패킷 프레이밍 시 메모리 `copy` 0회 달성 | ★★☆ | **후보 과제 (Candidate)** |
-| **6순위** | **`PERF-CACHE-SHARD-1`** | `pkg/proc/runtime`, `pkg/api` | 고동시성(64코어+) 환경에서 단일 `PlanCache.mu.RLock()`의 `readerCount` 원자적 카운터 캐시라인 바운싱 | 다중 코어 동시 쿼리 디스패치 시 L1 캐시 무효화 제거 | ★★☆ | **후보 과제 (Candidate)** |
+| **4순위** | **`PERF-RESULT-ROW-STREAM-1`** | `pkg/proc/runtime`, `pkg/wire`, `pkg/wire/tds` | `ExecutionResult`가 와이어에서 쓰이지도 않는 `Rows []map[string]any`와 `Values [][]any`를 동시 생성 및 `any` 박싱 | `SELECT` 다건 조회 처리량 30~50% 향상 및 GC 압력 대폭 감소 | ★★☆ | **영구 기각 (Spec-Out)** |
+| **5순위** | **`PERF-TDS-ZEROCOPY-FRAME-1`** | `pkg/wire/tds` | `tdsStreamWriter`가 `bytes.Buffer`에 쓴 뒤 `frame` 버퍼로 재복사하고 `FlushIfReady`에서 잔여 바이트를 슬라이딩 복사 | TDS 대량 결과셋 패킷 프레이밍 시 메모리 `copy` 0회 달성 | ★★☆ | **영구 기각 (Spec-Out)** |
+| **6순위** | **`PERF-CACHE-SHARD-1`** | `pkg/proc/runtime`, `pkg/api` | 고동시성(64코어+) 환경에서 단일 `PlanCache.mu.RLock()`의 `readerCount` 원자적 카운터 캐시라인 바운싱 | 다중 코어 동시 쿼리 디스패치 시 L1 캐시 무효화 제거 | ★★☆ | **영구 기각 (Spec-Out)** |
 
 ---
 
@@ -46,6 +46,9 @@ LionSQL은 v0.92.0까지 튜플 바이너리 코덱(V2), Pointer-Free FlatRecord
 2. **해결 설계**:
    - **Exact-Size Register Slicing**: `newFrame(prog, tx)`에서 `numRegs := int(prog.NumRegisters) + 4` (최소 8)로 실제 프로그램이 요구하는 레지스터 개수만큼만 슬라이싱하고, 필요한 범위(`f.regs[:numRegs]`, `f.slots[:numSlots]`)만 초기화.
    - **Prepared Statement Pre-Resolved Slot Mapping**: `Statement` 컴파일 시점에 각 포지셔널 파라미터(`$1`, `$2`, `@p1`)가 매핑되는 `prog.VarSlots` 인덱스를 `stmt.ParamSlotIndices []int32`로 사전 계산(Pre-resolve)하거나, `bindParams`에서 불필요한 중복 키(`p1`, `@p1`, `$1` 3중 삽입) 대신 단일 정규화 키 또는 포지셔널 바인딩으로 단축.
+3. **[2026-11-13 적정성 감사 판정 — 부분 채택 및 범위 단순화 (`[RULE:RadicalKISS]`)]**:
+   - **채택 유지 (`Deletion-First`)**: `resetForPool()`에서 이미 `clear()`를 수행하고 있음에도 `newFrame()`에서 매번 64개 강제 하한선 루프를 또 도는 중복 초기화 제거 및 Exact-Size Register Slicing은 코드 단순화와 불필요한 낭비 제거에 부합하므로 유지한다.
+   - **기각 (Spec-Out)**: `Statement.ParamSlotIndices` 별도 슬라이스를 사전 계산하여 관리하는 안은 구조체 복잡도 대비 실익이 낮으므로 배제한다.
 
 ---
 
@@ -64,6 +67,8 @@ LionSQL은 v0.92.0까지 튜플 바이너리 코덱(V2), Pointer-Free FlatRecord
    - `pkg/storage/memengine/msgpack.go`에 기존 버퍼 뒤에 직접 직렬화하는 `AppendMsgPackFrame(dst []byte, rec WALRecord) ([]byte, error)` 및 `walFrameBufPool` (`sync.Pool`, 기본 4KB, 최대 반환 상한 256KB `[RULE:BoundedBuffers]`)을 도입.
    - 풀에서 꺼낸 슬라이스의 첫 4바이트(`[0:4]`)를 길이 헤더 자리로 비워두고 `[4:]` 위치에 곧바로 MessagePack 인코더가 쓰도록 한 뒤, 완료 시 `binary.BigEndian.PutUint32(buf[:4], uint32(len(buf)-4))`를 채워 `w.file.Write(buf)`에 직결.
    - `Write` 직후 버퍼를 즉시 풀에 반환하여 **트랜잭션 커밋당 WAL 직렬화 힙 할당을 0 B/op, 0 allocs/op으로 제거**.
+3. **[2026-11-13 적정성 감사 판정 — 원안 유지 (`v1.10.0` Active)]**:
+   - 20줄 이내의 단순한 구조 개선으로 매 커밋당 불필요한 2중 바이트 슬라이스 할당과 `copy`를 제거하므로 원안대로 유지한다.
 
 ---
 
@@ -75,6 +80,8 @@ LionSQL은 v0.92.0까지 튜플 바이너리 코덱(V2), Pointer-Free FlatRecord
 2. **해결 설계**:
    - `storage.EncodeRowToBuffer(schema *TableSchema, row Row, buf []byte)`를 사용해 포지셔널 `storage.Row`에서 V2 바이너리 튜플을 직접 직렬화.
    - `WTTx.insertRowLocked(tableName string, tbl *storage.TableSchema, row storage.Row)` 전용 패스트패스를 구현하여 PK 추출(`row[tbl.PKIndex()]`), FK/Unique 인덱스 검사, V2 바이너리 튜플 직렬화 전 과정에서 **중간 `storage.Record` 맵 생성 2회를 완전히 제거**.
+3. **[2026-11-13 적정성 감사 판정 — 원안 유지 (`v1.10.0` Active)]**:
+   - 포지셔널 슬라이스를 맵으로 2번 바꿨다가 다시 슬라이스 순서로 읽는 명백한 중복 작업을 제거하는 것이므로 원안대로 유지한다.
 
 ---
 
@@ -83,9 +90,15 @@ LionSQL은 v0.92.0까지 튜플 바이너리 코덱(V2), Pointer-Free FlatRecord
 ### 4.1. [4순위] `PERF-RESULT-ROW-STREAM-1`: 결과셋 `[]storage.Row` Zero-Boxing 직결 스트리밍
 - **목표**: `SELECT` 실행 시 `Rows []map[string]any`와 `Values [][]any`를 중복 생성하는 대신, 와이어 프로토콜(PGWire/TDS)이 `RawRows []storage.Row` (`[][]storage.Value`)를 직접 소비하도록 파이프라인을 일원화하여 셀당 `any` 인터페이스 박싱과 행당 `map` 할당을 제거.
 - **주의사항**: REST JSON API 및 내부 테스트 헬퍼 중 `res.Rows` 맵을 직접 참조하는 호출부와의 하위 호환성을 위해 지연 변환(`LazyRows()`) 또는 호출자 힌트 플래그(`WantTypedRows`)를 함께 설계해야 함.
+- **[2026-11-13 적정성 감사 판정 — 영구 기각 (Spec-Out `DONE`)]**:
+  - 현재 REST JSON API, Web Studio, 저장 프로시저 내부 결과 소비, 수천 개의 통합 테스트가 `QueryResult.Rows` (`[]map[string]any`)와 `Values` 단일 표준 계약을 사용하고 있음. `LazyRows()`나 `WantTypedRows` 플래그로 호출 경로를 이원화하면 엔진 전역의 API 계약이 파편화되고 `nil` 참조 회귀 위험이 급증함 (`[RULE:RadicalKISS]`). 와이어 계층은 이미 `PERF-WIRE-ZEROALLOC-1`을 통해 포지셔널 `res.Values` 슬롯을 직접 인덱싱하고 있으므로 추가 이원화는 영구 배제함 ([`notes/SPEC_OUT_DECISIONS.ko.md`](file:///Users/maro/Projects/SQLion/notes/SPEC_OUT_DECISIONS.ko.md) #24 등재).
 
 ### 4.2. [5순위] `PERF-TDS-ZEROCOPY-FRAME-1`: TDS `tdsStreamWriter` 인플레이스 패킷 프레이밍
 - **목표**: `tdsStreamWriter`가 내부 `bytes.Buffer` 대신 `tdsFramePool32K` 슬라이스를 직접 보유하며 오프셋 `HeaderSize(8)`부터 토큰을 기록하고, 패킷 경계(`maxPayload`) 도달 시 앞단 8바이트 헤더만 채워 즉시 `w.Write()`를 호출함으로써 중간 복사(`copy`)를 완전 제거.
+- **[2026-11-13 적정성 감사 판정 — 영구 기각 (Spec-Out `DONE`)]**:
+  - `PERF-WIRE-ZEROALLOC-1`을 통해 이미 32KB 풀 버퍼 기반 0 allocs/op 스트리밍이 달성되었으며, 네트워크 I/O 경로의 지배적 시간은 커널 TCP `write` 시스템 콜($\sim 5\mu\text{s}$)임. CPU L1 캐시 내에서의 32KB `copy`($< 1\mu\text{s}$)를 아끼기 위해 수동 8바이트 오프셋 슬라이싱을 도입하는 것은 패킷 경계/플러시 오프바이원 버그 위험만 키우는 오버 엔지니어링이므로 영구 배제함 ([`notes/SPEC_OUT_DECISIONS.ko.md`](file:///Users/maro/Projects/SQLion/notes/SPEC_OUT_DECISIONS.ko.md) #23 등재).
 
 ### 4.3. [6순위] `PERF-CACHE-SHARD-1`: `PlanCache` 및 세션 레지스트리 32-Shard 분할
 - **목표**: `PlanCache`의 단일 `sync.RWMutex`를 프로시저/쿼리 해시 기반 32개 샤드(`cacheShard [32]struct{ mu sync.RWMutex; ... padding [40]byte }`)로 분리하여 64코어 이상 하이엔드 서버에서의 L1 캐시라인 바운싱을 원천 차단.
+- **[2026-11-13 적정성 감사 판정 — 영구 기각 (Spec-Out `DONE`)]**:
+  - 쓰기 경합이 잦은 테이블 스토리지(`memengine` 256-Shard)와 달리, 서버 공용 `PlanCache`는 초기 프로시저 컴파일 이후 99.9999% 읽기 전용(`GetByName`)으로 동작함. 프로시저 1건 실행($2 \sim 50\mu\text{s}$) 대비 `PlanCache` 맵 조회($\sim 15\text{ns}$) 비중은 극미하므로, 32-Shard 분할과 40바이트 패딩은 해시 오버헤드와 LRU 용량 관리 파편화만 초래하는 전형적인 YAGNI 위반이므로 영구 배제함 ([`notes/SPEC_OUT_DECISIONS.ko.md`](file:///Users/maro/Projects/SQLion/notes/SPEC_OUT_DECISIONS.ko.md) #22 등재).

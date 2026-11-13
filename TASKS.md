@@ -207,7 +207,7 @@
 | `DONE` | **`FIX-DDL-DEFAULT-CHECK-1`** | `1.0-GA` | Engine | P2 | CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-GROUPBY-STRING-AGG-1`** |  | Engine | P1 | GROUP BY 쿼리에서 STRING_AGG(col, sep) 그룹별 집계 누락(NULL 반환) 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-OCC-COMPACT-AUDIT-1`** | `1.0-GA` | Storage | P1 | MemoryCompact 2단계 Audit 결함 수정 (Arena UAF, AlterTable 레이아웃/WAL, memCursor 레이스, varSlot 오버플로우) | [`notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md`](notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md) |  |
-| `PENDING` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-TEMP-TABLE-DDL-1`** |  | Engine | P1 | 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-SQL-DERIVED-VALUES-1`** |  | Engine | P1 | FROM (VALUES (...), (...)) AS alias(col1, col2) 인라인 테이블 값 생성자 및 컬럼 별칭 지원 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-SQL-PAREN-SELECT-1`** |  | Engine | P1 | 괄호로 감싸진 (SELECT ...) 최상위 쿼리 및 뷰/CTE 본문 실행 지원 | [`1.0-GA`](1.0-GA) |  |
@@ -258,7 +258,7 @@
 | `DONE` | **`P2-STABILIZE-AB-1`** |  | engine | P2 | P2 그룹 A/B 경계값 클램핑 및 내장함수 정합성 가드 10건 보강 | [`notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md`](notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`P3-INVARIANTS`** |  | Architecture | P3 | By-Design & Spec-Out Architecture Invariants (25 Cases) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`PERF-BENCH-WT-RESTORE-1`** |  | Performance | P1 | WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 |  |  |
-| `PENDING` | **`PERF-CACHE-SHARD-1`** | `v1.10.0` | Engine | P2 | PlanCache 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 RLock 캐시라인 바운싱 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
+| `DONE` | **`PERF-CACHE-SHARD-1`** | `v1.10.0` | Engine | P2 | PlanCache 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 RLock 캐시라인 바운싱 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-CBO-STATS-BOUNDED-1`** | `1.0-GA` | Planner / Storage | P2 | Support atomic live TableRowCount in WiredTiger and enforce 30,000-row bounded Vitter reservoir sampling in AnalyzeTable ([RULE:BoundedBuffers]) | [`pkg/engine/sqlexec_explain.go`](pkg/engine/sqlexec_explain.go) |  |
 | `PENDING` | **`PERF-COMPLEX-QUERY-2`** | `v1.99.0` | Engine | P2 | Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`PERF-COMPLEX-QUERY-COLUMNAR`** |  | Architecture | P3 | 순수 Columnar Vectorization 전면 재작성 영구 기각 (Spec-Out) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
@@ -273,10 +273,10 @@
 | `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | `v1.20.0` | Engine | P3 | WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** |  | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
 | `PENDING` | **`PERF-REPL-SONIC-1`** | `v1.10.0` | Replication | P2 | 고성능 SIMD JSON (ByteDance Sonic) 기반 복제 스트리밍 가속 |  |  |
-| `PENDING` | **`PERF-RESULT-ROW-STREAM-1`** | `v1.10.0` | Engine | P2 | 쿼리 결과셋 Rows 맵 이중 구체화 제거 및 []storage.Row Zero-Boxing 스트리밍 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
+| `DONE` | **`PERF-RESULT-ROW-STREAM-1`** | `v1.10.0` | Engine | P2 | 쿼리 결과셋 Rows 맵 이중 구체화 제거 및 []storage.Row Zero-Boxing 스트리밍 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SERVER-PIPELINE-P3-P4`** |  | Ecosystem | P3 | 서버 파이프라인 Phase 3/4 | [`notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SUBQUERY-MEMO-1`** | `1.0-GA` | Engine | P2 | [1.0(?)] 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 | [`notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md`](notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-TDS-ZEROCOPY-FRAME-1`** | `v1.10.0` | Wire | P2 | TDS tdsStreamWriter 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 copy 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
+| `DONE` | **`PERF-TDS-ZEROCOPY-FRAME-1`** | `v1.10.0` | Wire | P2 | TDS tdsStreamWriter 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 copy 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-VDBE-EXTREME-OPT-1`** |  | Durability | P2 | T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 | [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 1 (`PERF-VDBE-SLOT-1`)*... |
 | `PENDING` | **`PERF-VDBE-FRAME-SLIM-1`** | `v1.10.0` | Engine | P2 | VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-WAL-ZERO-ALLOC-1`** | `v1.10.0` | Storage | P2 | In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 writeFrame Zero-Alloc | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
@@ -2530,8 +2530,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 `FIX-PROC-EXEC-RETURN-VAR-1`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 14:55:03
+### [DONE] EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 `FIX-PROC-EXEC-RETURN-VAR-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-13 00:38:19
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
@@ -2974,8 +2974,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] PlanCache 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 RLock 캐시라인 바운싱 제거 `PERF-CACHE-SHARD-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 10:46:26
+### [DONE] PlanCache 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 RLock 캐시라인 바운싱 제거 `PERF-CACHE-SHARD-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-13 00:18:05
 - **Milestone**: `v1.10.0`
 - **Plan Doc**: [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md)
 
@@ -3111,8 +3111,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] 쿼리 결과셋 Rows 맵 이중 구체화 제거 및 []storage.Row Zero-Boxing 스트리밍 `PERF-RESULT-ROW-STREAM-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 10:46:26
+### [DONE] 쿼리 결과셋 Rows 맵 이중 구체화 제거 및 []storage.Row Zero-Boxing 스트리밍 `PERF-RESULT-ROW-STREAM-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-13 00:18:05
 - **Milestone**: `v1.10.0`
 - **Plan Doc**: [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md)
 
@@ -3134,8 +3134,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] TDS tdsStreamWriter 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 copy 제거 `PERF-TDS-ZEROCOPY-FRAME-1`
-- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-12 08:22:00
+### [DONE] TDS tdsStreamWriter 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 copy 제거 `PERF-TDS-ZEROCOPY-FRAME-1`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-13 00:18:05
 - **Milestone**: `v1.10.0`
 - **Plan Doc**: [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md)
 

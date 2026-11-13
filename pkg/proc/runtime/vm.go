@@ -2543,6 +2543,9 @@ func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (
 	if len(logs) > 0 {
 		f.logs = append(f.logs, logs...)
 	}
+	if retVal == nil {
+		return storage.IntValue(0), err
+	}
 	return toStorageValue(retVal), err
 }
 

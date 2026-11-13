@@ -990,15 +990,15 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 	return nil, fmt.Errorf("unrecognized system stored procedure: %s", procLower)
 }
 
-// extractExecReturnVarAndOutputArgs extracts optional @return_var and per-arg @out_var OUTPUT bindings from raw EXEC query.
-func extractExecReturnVarAndOutputArgs(raw string) (string, []string) {
+// extractExecReturnVarAndOutputArgs extracts optional @return_var, procName, and per-arg @out_var OUTPUT bindings from raw EXEC query.
+func extractExecReturnVarAndOutputArgs(raw string) (string, string, []string) {
 	raw = strings.TrimSpace(raw)
 	if rem, ok := sqlutil.TrimAnyPrefixKeyword(raw, "EXECUTE", "EXEC", "CALL"); ok {
 		raw = rem
 	}
 	returnVar := ""
 	if strings.HasPrefix(raw, "@") {
-		if eqIdx := strings.Index(raw, "="); eqIdx != -1 {
+		if eqIdx := sqlutil.FindTopLevelChar(raw, '='); eqIdx != -1 {
 			candidate := strings.TrimSpace(raw[:eqIdx])
 			if !strings.ContainsAny(candidate, " \t,()") {
 				returnVar = candidate
@@ -1006,8 +1006,8 @@ func extractExecReturnVarAndOutputArgs(raw string) (string, []string) {
 			}
 		}
 	}
-	_, rawArgs := ParseProcArgs("EXEC " + raw)
-	return returnVar, rawArgs
+	rawProcName, rawArgs := ParseProcArgs("EXEC " + raw)
+	return returnVar, rawProcName, rawArgs
 }
 
 func stripTrailingOutputKeyword(s string) (string, bool) {
@@ -1030,8 +1030,22 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 }
 
 func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	returnVar, rawProcName, rawArgs := extractExecReturnVarAndOutputArgs(rawQuery)
 	procName, args := ParseProcArgs(query)
-	returnVar, rawArgs := extractExecReturnVarAndOutputArgs(rawQuery)
+	if returnVar != "" {
+		// When rawQuery had `EXEC @rc = procName ...`, variable substitution on `query`
+		// may have replaced `@rc` with `NULL` or a literal (e.g. `EXEC NULL = procName ...`).
+		// Strip the leading `... =` from `query` before parsing procName and args.
+		trimmedQ := strings.TrimSpace(query)
+		if rem, ok := sqlutil.TrimAnyPrefixKeyword(trimmedQ, "EXECUTE", "EXEC", "CALL"); ok {
+			if eqIdx := sqlutil.FindTopLevelChar(rem, '='); eqIdx != -1 {
+				procName, args = ParseProcArgs("EXEC " + strings.TrimSpace(rem[eqIdx+1:]))
+			}
+		}
+		if procName == "" && rawProcName != "" {
+			procName = rawProcName
+		}
+	}
 
 	ctx := cs.GetQueryContext()
 
@@ -1188,7 +1202,12 @@ func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, st
 			cs.Vars["@@identity"] = res.LastIdentity
 		}
 		if returnVar != "" {
-			cs.Vars[returnVar] = res.ReturnValue
+			retVal := res.ReturnValue
+			if retVal == nil {
+				retVal = int64(0)
+			}
+			cs.Vars[returnVar] = retVal
+			cs.Vars[strings.ToLower(returnVar)] = retVal
 		}
 		if len(outputBindings) > 0 && res.Vars != nil {
 			for targetParam, callerVar := range outputBindings {

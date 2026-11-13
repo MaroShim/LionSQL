@@ -1,38 +1,38 @@
-# T-SQL / TDS 호환성 및 오라클 검증 대기 목록 상세 원인 분석 및 해결 설계서 (`#2` ~ `#25`)
+# T-SQL / TDS 호환성 및 오라클 검증 대기 목록 상세 원인 분석 및 해결 설계서 (`#1` ~ `#24`)
 
 > **작성일**: 2026-11-13
-> **목적**: 전체 대기 목록 24건(기존 `#1 FEAT-DATADIR-ENGINE-MANIFEST-1` 완료 후 잔여 `#2` ~ `#24` 및 추가 등록된 CBO 통계 Bounded 태스크 `#25`)에 대해, 각 문제의 **정확한 발생 원인(Root Cause)**, **관련 소스코드 위치(Target Files)**, **구체적인 해결법 및 아키텍처 설계안(Proposed Solution)**을 단일 문서로 영속화하여 추적 및 Red-Green TDD 실행의 기준점(SSOT)으로 삼는다 (`[RULE:PlanPersistence]`).
+> **목적**: 전체 대기 목록 24건(T-SQL/TDS 호환성 패치 `#1` ~ `#17`, 외부 드라이버·코퍼스 오라클 검증 `#18` ~ `#23`, CBO 통계 Bounded 태스크 `#24`)에 대해, 각 문제의 **정확한 발생 원인(Root Cause)**, **관련 소스코드 위치(Target Files)**, **구체적인 해결법 및 아키텍처 설계안(Proposed Solution)**을 단일 문서로 영속화하여 추적 및 Red-Green TDD 실행의 기준점(SSOT)으로 삼는다 (`[RULE:PlanPersistence]`).
 
 ---
 
-## 1. 전체 목록 요약 매트릭스 (`#2` ~ `#25`)
+## 1. 전체 목록 요약 매트릭스 (`#1` ~ `#24`)
 
 | 순번 | 태스크 ID | 상태 | 도메인 | 우선순위 | 핵심 요약 |
 | :---: | :--- | :---: | :---: | :---: | :--- |
-| **#2** | **`FIX-GROUPBY-STRING-AGG-1`** | `DONE` (`1651a780`) | Execution / Planner | P1 | `GROUP BY` + `ORDER BY` 및 `WITHIN GROUP (ORDER BY ...)`에서 `STRING_AGG`가 `NULL`을 반환하는 버그 해결 |
-| **#3** | **`FIX-PROC-TEMP-TABLE-DDL-1`** | `DONE` | Proc / VM | P1 | 저장 프로시저 본문 내부 `CREATE/DROP TABLE #temp` 및 `CREATE/DROP INDEX` DDL 컴파일·실행 지원 |
-| **#4** | **`FIX-PROC-EXEC-RETURN-VAR-1`** | `PENDING` | Proc / VM / Engine | P1 | `EXEC @rc = sp_name ...` 프로시저 반환 상태 코드(`RETURN <int>`) 변수 캡처 바인딩 지원 |
-| **#5** | **`FIX-SQL-PAREN-SELECT-1`** | `PENDING` | Parser / Engine / Planner | P1 | 괄호로 감싸진 `(SELECT ...)` 최상위 쿼리, 집합 연산 브랜치, 뷰/CTE 본문 실행 지원 |
-| **#6** | **`FIX-CURSOR-LIFECYCLE-1`** | `PENDING` | Engine / VM | P1 | 커서 `DEALLOCATE` 및 배치 종료 시 세션 커서 레지스트리 정리 및 동일 이름 재선언 충돌 해결 |
-| **#7** | **`FIX-VM-HIDDEN-ROWID-1`** | `PENDING` | Proc / VM | P1 | 명시적 PK가 없는 테이블에 대해 VDBE VM `OpInsert` 실행 시 숨은 `_row_id` 자동 발번 누락 수정 |
-| **#8** | **`FIX-TSQL-INSERT-EXEC-1`** | `PENDING` | Parser / VM / Engine | P1 | `INSERT INTO <table> [(cols)] EXEC <proc_name> [args]` 프로시저 결과셋 테이블 적재 지원 |
-| **#9** | **`FIX-SQL-DERIVED-VALUES-1`** | `PENDING` | Engine / Planner | P1 | `FROM (VALUES (...), (...)) AS alias(col1, col2)` 인라인 테이블 값 생성자 및 컬럼 별칭 파싱·실행 지원 |
-| **#10** | **`FIX-TRIGGER-FOR-KEYWORD-1`** | `PENDING` | Parser / Engine | P1 | `CREATE TRIGGER ... FOR INSERT, UPDATE, DELETE` (`AFTER` 동의어) 구문 파싱 지원 |
-| **#11** | **`FIX-TSQL-XACT-STATE-1`** | `PENDING` | Proc / Engine | P1 | `TRY...CATCH` 블록 내 트랜잭션 상태 반환 스칼라 함수 `XACT_STATE()` (`1`, `0`, `-1`) 지원 |
-| **#12** | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** | `PENDING` | Parser / Eval | P1 | `CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX))` 미평가 원문 에코 버그 및 `MONEY`/`SMALLMONEY` 4자리 소수점 스케일 보정 |
-| **#13** | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** | `PENDING` | Wire (TDS) | P1 | TDS `RPCRequest`(`0x03`) 직접 프로시저 호출 시 `OUTPUT` 파라미터 `RETURNVALUE`(`0xAC`) 토큰 반환 및 기본값(`DEFAULT`) 바인딩 지원 |
-| **#14** | **`FIX-TDS-RPC-RETURN-STATUS-1`** | `PENDING` | Wire (TDS) / Engine | P1 | TDS RPC 프로시저 `RETURN <int>` 실행 시 하드코딩된 `0` 대신 실제 종료 코드를 `RETURNSTATUS`(`0x79`) 토큰으로 전송 |
-| **#15** | **`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`** | `PENDING` | Engine | P1 | 최상위 배치 및 `sp_executesql`에서 `SELECT @var = expr [FROM ...]` 구문을 비교식이 아닌 T-SQL 변수 대입으로 실행 |
-| **#16** | **`FIX-TDS-PRINT-INFO-TOKEN-1`** | `PENDING` | Wire (TDS) | P1 | `PRINT` 문 실행 결과(`res.Messages`)를 TDS `INFO`(`0xAB`) 토큰으로 클라이언트에 실시간 전송 |
-| **#17** | **`FIX-TDS-ERROR-NUMBER-MAP-1`** | `PENDING` | Wire (TDS) | P1 | PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(`2627`, `2601`, `547`) 매핑 반환 |
-| **#18** | **`FIX-TSQL-JSON-FUNCTIONS-EXT-1`** | `PENDING` | Proc / Engine | P1 | `mssql-jdbc` 호환성: SQL Server `JSON` 컬럼 타입 별칭 및 `JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS` 내장 함수 지원 |
-| **#19** | **`TEST-TDS-GOMSSQLDB-ORACLE-1`** | `PENDING` | Wire / Test | P1 | 공식 `microsoft/go-mssqldb` 드라이버 테스트 스위트 라이브 TDS 통합 오라클 이식 및 검증 |
-| **#20** | **`TEST-TDS-PYMSSQL-ORACLE-1`** | `PENDING` | Protocol / Test | P1 | `pymssql` 공식 테스트 스위트(`test_sprocs.py`, `test_types.py`, `test_queries.py`) TDS/Gate 5 오라클 포팅 및 검증 |
-| **#21** | **`TEST-TDS-MSSQL-JDBC-ORACLE-1`** | `PENDING` | Protocol / Test | P1 | `microsoft/mssql-jdbc` 공식 테스트 스위트 핵심 T-SQL 및 카탈로그 오라클 수확 및 검증 |
-| **#22** | **`TEST-SQLGLOT-TSQL-ORACLE-1`** | `PENDING` | Engine / Test | P1 | `tobymao/sqlglot` `test_tsql.py` (526개 validate 케이스) T-SQL 표현식·내장함수·날짜약어·집합연산 오라클 검증 |
-| **#23** | **`TEST-TDS-TEDIOUS-ORACLE-1`** | `PENDING` | Protocol / Test | P1 | `tediousjs/tedious` 통합 테스트(`rpc-test`, `datatypes-in-results`, `parameterised-statements`) 오라클 포팅 및 검증 |
-| **#24** | **`TEST-GORM-SQLSERVER-ORACLE-1`** | `PENDING` | Engine / Test | P1 | `go-gorm/sqlserver` 드라이버 핵심 쿼리(`MERGE USING VALUES`, `OUTPUT INSERTED`, `sp_rename`, `sys.*` 조인) 오라클 검증 |
-| **#25** | **`PERF-CBO-STATS-BOUNDED-1`** | `PENDING` | Planner / Storage | P2 | WiredTiger 원자적 실시간 `TableRowCount` 카운터 도입 및 `AnalyzeTable` 30,000행 Vitter 저수지 샘플링 상한 강제 |
+| **#1** | **`FIX-GROUPBY-STRING-AGG-1`** | `DONE` (`1651a780`) | Execution / Planner | P1 | `GROUP BY` + `ORDER BY` 및 `WITHIN GROUP (ORDER BY ...)`에서 `STRING_AGG`가 `NULL`을 반환하는 버그 해결 |
+| **#2** | **`FIX-PROC-TEMP-TABLE-DDL-1`** | `DONE` (`d6b89d03`) | Proc / VM | P1 | 저장 프로시저 본문 내부 `CREATE/DROP TABLE #temp` 및 `CREATE/DROP INDEX` DDL 컴파일·실행 지원 |
+| **#3** | **`FIX-PROC-EXEC-RETURN-VAR-1`** | `DONE` | Proc / VM / Engine | P1 | `EXEC @rc = sp_name ...` 프로시저 반환 상태 코드(`RETURN <int>`) 변수 캡처 바인딩 지원 |
+| **#4** | **`FIX-SQL-PAREN-SELECT-1`** | `PENDING` | Parser / Engine / Planner | P1 | 괄호로 감싸진 `(SELECT ...)` 최상위 쿼리, 집합 연산 브랜치, 뷰/CTE 본문 실행 지원 |
+| **#5** | **`FIX-CURSOR-LIFECYCLE-1`** | `PENDING` | Engine / VM | P1 | 커서 `DEALLOCATE` 및 배치 종료 시 세션 커서 레지스트리 정리 및 동일 이름 재선언 충돌 해결 |
+| **#6** | **`FIX-VM-HIDDEN-ROWID-1`** | `PENDING` | Proc / VM | P1 | 명시적 PK가 없는 테이블에 대해 VDBE VM `OpInsert` 실행 시 숨은 `_row_id` 자동 발번 누락 수정 |
+| **#7** | **`FIX-TSQL-INSERT-EXEC-1`** | `PENDING` | Parser / VM / Engine | P1 | `INSERT INTO <table> [(cols)] EXEC <proc_name> [args]` 프로시저 결과셋 테이블 적재 지원 |
+| **#8** | **`FIX-SQL-DERIVED-VALUES-1`** | `PENDING` | Engine / Planner | P1 | `FROM (VALUES (...), (...)) AS alias(col1, col2)` 인라인 테이블 값 생성자 및 컬럼 별칭 파싱·실행 지원 |
+| **#9** | **`FIX-TRIGGER-FOR-KEYWORD-1`** | `PENDING` | Parser / Engine | P1 | `CREATE TRIGGER ... FOR INSERT, UPDATE, DELETE` (`AFTER` 동의어) 구문 파싱 지원 |
+| **#10** | **`FIX-TSQL-XACT-STATE-1`** | `PENDING` | Proc / Engine | P1 | `TRY...CATCH` 블록 내 트랜잭션 상태 반환 스칼라 함수 `XACT_STATE()` (`1`, `0`, `-1`) 지원 |
+| **#11** | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** | `PENDING` | Parser / Eval | P1 | `CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX))` 미평가 원문 에코 버그 및 `MONEY`/`SMALLMONEY` 4자리 소수점 스케일 보정 |
+| **#12** | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** | `PENDING` | Wire (TDS) | P1 | TDS `RPCRequest`(`0x03`) 직접 프로시저 호출 시 `OUTPUT` 파라미터 `RETURNVALUE`(`0xAC`) 토큰 반환 및 기본값(`DEFAULT`) 바인딩 지원 |
+| **#13** | **`FIX-TDS-RPC-RETURN-STATUS-1`** | `PENDING` | Wire (TDS) / Engine | P1 | TDS RPC 프로시저 `RETURN <int>` 실행 시 하드코딩된 `0` 대신 실제 종료 코드를 `RETURNSTATUS`(`0x79`) 토큰으로 전송 |
+| **#14** | **`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`** | `PENDING` | Engine | P1 | 최상위 배치 및 `sp_executesql`에서 `SELECT @var = expr [FROM ...]` 구문을 비교식이 아닌 T-SQL 변수 대입으로 실행 |
+| **#15** | **`FIX-TDS-PRINT-INFO-TOKEN-1`** | `PENDING` | Wire (TDS) | P1 | `PRINT` 문 실행 결과(`res.Messages`)를 TDS `INFO`(`0xAB`) 토큰으로 클라이언트에 실시간 전송 |
+| **#16** | **`FIX-TDS-ERROR-NUMBER-MAP-1`** | `PENDING` | Wire (TDS) | P1 | PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(`2627`, `2601`, `547`) 매핑 반환 |
+| **#17** | **`FIX-TSQL-JSON-FUNCTIONS-EXT-1`** | `PENDING` | Proc / Engine | P1 | `mssql-jdbc` 호환성: SQL Server `JSON` 컬럼 타입 별칭 및 `JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS` 내장 함수 지원 |
+| **#18** | **`TEST-TDS-GOMSSQLDB-ORACLE-1`** | `PENDING` | Wire / Test | P1 | 공식 `microsoft/go-mssqldb` 드라이버 테스트 스위트 라이브 TDS 통합 오라클 이식 및 검증 |
+| **#19** | **`TEST-TDS-PYMSSQL-ORACLE-1`** | `PENDING` | Protocol / Test | P1 | `pymssql` 공식 테스트 스위트(`test_sprocs.py`, `test_types.py`, `test_queries.py`) TDS/Gate 5 오라클 포팅 및 검증 |
+| **#20** | **`TEST-TDS-MSSQL-JDBC-ORACLE-1`** | `PENDING` | Protocol / Test | P1 | `microsoft/mssql-jdbc` 공식 테스트 스위트 핵심 T-SQL 및 카탈로그 오라클 수확 및 검증 |
+| **#21** | **`TEST-SQLGLOT-TSQL-ORACLE-1`** | `PENDING` | Engine / Test | P1 | `tobymao/sqlglot` `test_tsql.py` (526개 validate 케이스) T-SQL 표현식·내장함수·날짜약어·집합연산 오라클 검증 |
+| **#22** | **`TEST-TDS-TEDIOUS-ORACLE-1`** | `PENDING` | Protocol / Test | P1 | `tediousjs/tedious` 통합 테스트(`rpc-test`, `datatypes-in-results`, `parameterised-statements`) 오라클 포팅 및 검증 |
+| **#23** | **`TEST-GORM-SQLSERVER-ORACLE-1`** | `PENDING` | Engine / Test | P1 | `go-gorm/sqlserver` 드라이버 핵심 쿼리(`MERGE USING VALUES`, `OUTPUT INSERTED`, `sp_rename`, `sys.*` 조인) 오라클 검증 |
+| **#24** | **`PERF-CBO-STATS-BOUNDED-1`** | `PENDING` | Planner / Storage | P2 | WiredTiger 원자적 실시간 `TableRowCount` 카운터 도입 및 `AnalyzeTable` 30,000행 Vitter 저수지 샘플링 상한 강제 |
 
 ---
 
@@ -40,7 +40,7 @@
 
 ---
 
-### `#2` `FIX-GROUPBY-STRING-AGG-1` (`DONE` - `1651a780`)
+### `#1` `FIX-GROUPBY-STRING-AGG-1` (`DONE` - `1651a780`)
 - **현상**:
   1. `SELECT grp, STRING_AGG(val, ',') FROM t GROUP BY grp ORDER BY grp`와 같이 `GROUP BY`와 `ORDER BY`가 함께 쓰이거나 별칭이 붙은 경우 `STRING_AGG` 결과가 `NULL`로 반환됨.
   2. `SELECT grp, STRING_AGG(val, ',') WITHIN GROUP (ORDER BY val DESC) FROM t GROUP BY grp` 구문에서 `NULL`이 반환되거나 그룹 내부 정렬이 수행되지 않음.
@@ -55,7 +55,7 @@
 
 ---
 
-### `#3` `FIX-PROC-TEMP-TABLE-DDL-1` (`DONE`)
+### `#2` `FIX-PROC-TEMP-TABLE-DDL-1` (`DONE` - `d6b89d03`)
 - **현상**:
   저장 프로시저(`CREATE PROCEDURE ... AS BEGIN ... END`) 본문 안에서 `CREATE TABLE #temp (...)`, `CREATE INDEX idx ON #temp (...)`, `DROP INDEX ...`, `DROP TABLE #temp` 실행 시 `[42000] Valid T-SQL syntax recognized ('CREATE statement'), but this feature is not yet supported` 에러가 발생함.
 - **근본 원인 (Root Cause)**:
@@ -68,21 +68,21 @@
 
 ---
 
-### `#4` `FIX-PROC-EXEC-RETURN-VAR-1` (`PENDING`)
+### `#3` `FIX-PROC-EXEC-RETURN-VAR-1` (`PENDING`)
 - **현상**:
-  T-SQL 표준 문법인 `DECLARE @rc INT; EXEC @rc = sp_myproc @p1 = 10; SELECT @rc;` 실행 시 파싱 에러가 발생하거나 `@rc`에 프로시저의 `RETURN <int>` 종료 상태 코드가 저장되지 않음.
+  T-SQL 표준 문법인 `DECLARE @rc INT; EXEC @rc = sp_myproc @p1 = 10; SELECT @rc;` 실행 시 파싱 에러(`procedure "NULL" not found`)가 발생하거나 `@rc`에 프로시저의 `RETURN <int>` 종료 상태 코드가 저장되지 않음.
 - **근본 원인 (Root Cause)**:
-  1. **파서 (`pkg/proc/parser_stmt.go` `parseExec()`)**: `EXEC` 또는 `EXECUTE` 토큰 직후 프로시저 이름(식별자)만 기대하며, `@return_var = proc_name` 형태의 선행 `@변수 =` 토큰 시퀀스를 파싱하지 못함.
-  2. **AST 및 바이트코드 (`pkg/proc/ast.go` `ExecStmt`, `pkg/proc/compiler.go`)**: `ExecStmt` 구조체에 반환값을 받을 변수명 필드(`ReturnVar string`)가 없으며, `OpExec` 실행기(`pkg/proc/runtime/vm_dispatcher.go`) 및 최상위 배치 실행기(`pkg/engine/sqlexec_procs.go`)가 하위 프로시저의 `Result.ReturnValue`를 호출자 변수 슬롯에 대입하지 않음.
+  1. **최상위 배치 실행기(`pkg/engine/sqlexec.go:1426`)의 선행 변수 치환 오염**: `DECLARE @rc INT; EXEC @rc = sp_test;` 실행 시 `sqlexec.go:1426`의 세션 변수 치환 루프가 `EXEC` 분기보다 먼저 실행되면서 좌변 `@rc`를 현재 값(`NULL` 또는 `0`)으로 치환(`EXEC NULL = sp_test`)하여 `ParseProcArgs`가 프로시저 이름을 `"NULL"`로 오인함.
+  2. **반환값 기본값(`0`) 및 대소문자 키 동기화 누락 (`pkg/engine/sqlexec_procs.go`, `pkg/proc/runtime/vm.go`)**: 프로시저가 명시적 `RETURN <int>` 없이 종료되면 `ReturnValue`가 `nil`이 되는데, T-SQL 표준 기본 반환 상태 코드인 `0`으로 정규화되지 않으며, 중첩 `OpCallProc`에서도 `retVal == nil`일 때 `NULL`이 대입됨.
+  3. **스키마 수식 프로시저 호출 (`pkg/proc/parser_stmt.go` `parseExec()`)**: `EXEC @rc = dbo.sp_name` 또는 `EXEC @rc = [dbo].[sp_name]` 형태의 스키마 한정자 식별자 파싱 보강 필요.
 - **해결 설계안 (Proposed Solution)**:
-  1. `pkg/proc/ast.go`: `ExecStmt`에 `ReturnVar string` 필드 추가.
-  2. `pkg/proc/parser_stmt.go`: `parseExec()`에서 `EXEC` 다음 토큰이 `@`로 시작하는 변수(`TokenIdent`)이고 그다음 토큰이 `=`(`TokenEq`)인 경우, 이를 `stmt.ReturnVar`로 캡처하고 뒤이은 프로시저 이름과 인자 목록을 파싱하도록 확장.
-  3. `pkg/proc/runtime/vm_dispatcher.go` (`case proc.OpExec:`): 하위 프로시저 실행 완료 후 `stmt.ReturnVar != ""`이면 반환된 정수 상태 코드(기본값 `0`, `RETURN n` 실행 시 `n`)를 호출자 프레임의 `f.vars` / 레지스터 슬롯(`ReturnVar`)에 기록.
-  4. `pkg/engine/sqlexec_procs.go`: 최상위 배치 또는 `sp_executesql`에서 `EXEC @rc = ...` 호출 시에도 세션 변수 맵(`sessionVars`)의 `@rc`에 `ReturnCode`를 기록하도록 동기화.
+  1. `pkg/engine/sqlexec_procs.go`: `execProcedureCallWithRaw`에서 변수 치환 전 원문(`rawQuery`)으로부터 `@return_var =`를 먼저 제거한 후 프로시저 이름을 추출하고, `res.ReturnValue == nil`이면 `int64(0)`으로 정규화하여 `cs.Vars`에 대입.
+  2. `pkg/proc/runtime/vm.go` (`callProc`): 하위 프로시저의 `retVal == nil`일 때 `storage.IntValue(0)`을 반환하도록 보장.
+  3. `pkg/proc/parser_stmt.go` (`parseExec`): `dbo.proc_name` 등 점(`.`)으로 연결된 스키마 수식 프로시저 이름을 파싱하도록 확장.
 
 ---
 
-### `#5` `FIX-SQL-PAREN-SELECT-1` (`PENDING`)
+### `#4` `FIX-SQL-PAREN-SELECT-1` (`PENDING`)
 - **현상**:
   1. `(SELECT 1 AS a)` 또는 `((SELECT a FROM t))`처럼 최상위 쿼리가 괄호로 감싸진 경우 실행 실패.
   2. `(SELECT 1 AS a) UNION ALL (SELECT 2 AS a) ORDER BY a`처럼 집합 연산(`UNION`/`INTERSECT`/`EXCEPT`)의 개별 브랜치가 괄호로 감싸진 경우 파싱/실행 실패.
@@ -97,12 +97,12 @@
 
 ---
 
-### `#6` `FIX-CURSOR-LIFECYCLE-1` (`PENDING`)
+### `#5` `FIX-CURSOR-LIFECYCLE-1` (`PENDING`)
 - **현상**:
   동일 세션이나 배치 내에서 `DECLARE cur CURSOR FOR ...; OPEN cur; FETCH ...; CLOSE cur; DEALLOCATE cur;`를 수행한 뒤 다시 동일한 이름 `cur`로 `DECLARE cur CURSOR FOR ...`를 실행하면 `cursor already exists` 오류가 발생하거나 이전 커서 상태가 잔류함.
 - **근본 원인 (Root Cause)**:
   1. **세션/코디네이터 커서 맵 정리 누락 (`pkg/engine/sqlexec_cursor.go`)**: `DEALLOCATE [GLOBAL|LOCAL] cursor_name` 실행 시 커서 구조체의 열림 상태만 닫거나 레지스트리 맵(`c.cursors` 또는 세션 커서 맵)에서 키 삭제가 대소문자 정규화(`strings.ToLower`) 불일치 등으로 누락되는 경로가 존재함.
-  2. **VDBE VM 프로시저 커서 정리 (`pkg/proc/runtime/vm_dispatcher.go`)**: 프로시저 내부에서 `OpCursorDeallocate` 실행 시 또는 프로시저 프레임 종료(`resetForPool`) 시 `LOCAL` 커서가 즉시 해제되지 않거나, 동일 프로시저 내 루프/분기에서 `DEALLOCATE` 후 재선언 시 기존 항목과 충돌함.
+  2. **VDBE VM 프로시저 커서 정리 (`pkg/proc/runtime/vm_dispatcher.go`)**: 프로시저 내부에서 `OpCursorDealloc` 실행 시 또는 프로시저 프레임 종료(`resetForPool`) 시 `LOCAL` 커서가 즉시 해제되지 않거나, 동일 프로시저 내 루프/분기에서 `DEALLOCATE` 후 재선언 시 기존 항목과 충돌함.
 - **해결 설계안 (Proposed Solution)**:
   1. `pkg/engine/sqlexec_cursor.go` 및 `pkg/proc/runtime/vm_dispatcher.go`에서 커서 식별자 키를 항상 `strings.ToLower(strings.TrimSpace(name))`로 정규화.
   2. `DEALLOCATE` 실행 시 열린 리소스(`Close()`)를 즉시 정리하고 레지스트리 맵에서 `delete(cursors, key)`를 확정 수행하여 후속 `DECLARE`가 깨끗한 슬롯에서 실행되도록 보장.
@@ -110,7 +110,7 @@
 
 ---
 
-### `#7` `FIX-VM-HIDDEN-ROWID-1` (`PENDING`)
+### `#6` `FIX-VM-HIDDEN-ROWID-1` (`PENDING`)
 - **현상**:
   명시적인 `PRIMARY KEY` 없이 생성된 테이블(예: `CREATE TABLE t (a INT, b VARCHAR(20))`)에 대해, 최상위 SQL에서는 `INSERT`가 잘 되지만 **저장 프로시저 내부(VDBE VM `OpInsert`)**에서 `INSERT INTO t VALUES (1, 'x')`를 실행하면 PK 누락 오류 또는 `_row_id` NULL/중복 충돌이 발생함.
 - **근본 원인 (Root Cause)**:
@@ -121,7 +121,7 @@
 
 ---
 
-### `#8` `FIX-TSQL-INSERT-EXEC-1` (`PENDING`)
+### `#7` `FIX-TSQL-INSERT-EXEC-1` (`PENDING`)
 - **현상**:
   T-SQL에서 매우 빈번히 쓰이는 `INSERT INTO target_table (col1, col2) EXEC sp_get_rows @p1 = 1;` 구문이 파싱 에러로 거부됨.
 - **근본 원인 (Root Cause)**:
@@ -134,7 +134,7 @@
 
 ---
 
-### `#9` `FIX-SQL-DERIVED-VALUES-1` (`PENDING`)
+### `#8` `FIX-SQL-DERIVED-VALUES-1` (`PENDING`)
 - **현상**:
   `SELECT v.id, v.name FROM (VALUES (1, 'Alice'), (2, 'Bob')) AS v(id, name) WHERE v.id = 2`와 같은 인라인 테이블 값 생성자(Table Value Constructor) 파생 테이블 쿼리가 실행되지 않음.
 - **근본 원인 (Root Cause)**:
@@ -147,7 +147,7 @@
 
 ---
 
-### `#10` `FIX-TRIGGER-FOR-KEYWORD-1` (`PENDING`)
+### `#9` `FIX-TRIGGER-FOR-KEYWORD-1` (`PENDING`)
 - **현상**:
   T-SQL 레거시 및 표준 구문인 `CREATE TRIGGER trg_audit ON orders FOR INSERT, UPDATE AS BEGIN ... END` 실행 시 `FOR` 키워드 위치에서 구문 에러가 발생함. (`AFTER INSERT`만 허용됨).
 - **근본 원인 (Root Cause)**:
@@ -157,7 +157,7 @@
 
 ---
 
-### `#11` `FIX-TSQL-XACT-STATE-1` (`PENDING`)
+### `#10` `FIX-TSQL-XACT-STATE-1` (`PENDING`)
 - **현상**:
   저장 프로시저나 배치의 `BEGIN TRY ... END TRY BEGIN CATCH ... IF XACT_STATE() <> 0 ROLLBACK TRANSACTION; END CATCH` 구문에서 `XACT_STATE()` 호출 시 알 수 없는 함수 오류가 발생하거나 올바른 트랜잭션 상태값을 반환하지 않음.
 - **근본 원인 (Root Cause)**:
@@ -172,7 +172,7 @@
 
 ---
 
-### `#12` `FIX-TSQL-CAST-MAX-AND-MONEY-1` (`PENDING`)
+### `#11` `FIX-TSQL-CAST-MAX-AND-MONEY-1` (`PENDING`)
 - **현상**:
   1. `SELECT CAST('hello' AS NVARCHAR(MAX))` 또는 `CONVERT(VARCHAR(MAX), 123)` 실행 시 변환된 값 `'hello'`가 나오는 대신, 미평가된 원문 SQL 문자열 `"CAST('hello' AS NVARCHAR(MAX))"`가 그대로 반환되거나 파싱 오류 발생.
   2. `CAST('1.23456' AS MONEY)` 또는 `SMALLMONEY` 변환 시 SQL Server 표준 고정 소수점 4자리(`1.2346` / 스케일 4) 대신 일반 부동소수점 또는 2자리 Decimal로 처리됨.
@@ -185,7 +185,7 @@
 
 ---
 
-### `#13` `FIX-TDS-RPC-OUTPUT-TOKEN-1` (`PENDING`)
+### `#12` `FIX-TDS-RPC-OUTPUT-TOKEN-1` (`PENDING`)
 - **현상**:
   `go-mssqldb`, `pymssql`, `tedious`, `mssql-jdbc` 등 표준 TDS 드라이버가 `SQLBatch`(`0x01`) 텍스트가 아닌 **바이너리 `RPCRequest`(`0x03`) 패킷**으로 저장 프로시저를 직접 호출할 때:
   1. `OUTPUT` / `INOUT` 파라미터의 변경된 값이 드라이버의 출력 변수에 채워지지 않음.
@@ -199,7 +199,7 @@
 
 ---
 
-### `#14` `FIX-TDS-RPC-RETURN-STATUS-1` (`PENDING`)
+### `#13` `FIX-TDS-RPC-RETURN-STATUS-1` (`PENDING`)
 - **현상**:
   저장 프로시저가 `RETURN 42;`와 같이 비-0 상태 코드를 반환했음에도, TDS RPC 호출 클라이언트가 받는 `ReturnStatus` 값이 항상 `0`으로 고정됨.
 - **근본 원인 (Root Cause)**:
@@ -211,7 +211,7 @@
 
 ---
 
-### `#15` `FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1` (`PENDING`)
+### `#14` `FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1` (`PENDING`)
 - **현상**:
   저장 프로시저 내부가 아닌 **최상위 SQL 배치** 또는 `sp_executesql` 내에서 `DECLARE @x INT; SELECT @x = 100; SELECT @x;` 또는 `SELECT @x = price FROM items WHERE id = 1;`을 실행하면, `@x`에 값이 대입되지 않고 `@x = 100`이 boolean 동등 비교식(`NULL = 100`)으로 평가되어 불필요한 결과셋 행이 반환됨.
 - **근본 원인 (Root Cause)**:
@@ -224,7 +224,7 @@
 
 ---
 
-### `#16` `FIX-TDS-PRINT-INFO-TOKEN-1` (`PENDING`)
+### `#15` `FIX-TDS-PRINT-INFO-TOKEN-1` (`PENDING`)
 - **현상**:
   T-SQL `PRINT 'Hello World'` 또는 `RAISERROR('info msg', 10, 1)` (심각도 <= 10 정보성 메시지) 실행 시, 엔진 내부 `QueryResult.Messages` 슬라이스에는 메시지가 담기지만 TDS 와이어 프로토콜(`pkg/wire/tds.go`)이 이를 클라이언트로 내려보내지 않아 SSMS 메시지 탭이나 드라이버 `InfoMessage` 콜백에서 출력이 누락됨.
 - **근본 원인 (Root Cause)**:
@@ -234,7 +234,7 @@
 
 ---
 
-### `#17` `FIX-TDS-ERROR-NUMBER-MAP-1` (`PENDING`)
+### `#16` `FIX-TDS-ERROR-NUMBER-MAP-1` (`PENDING`)
 - **현상**:
   PK 중복, Unique 인덱스 위반, Foreign Key 위반, Check 제약 위반 발생 시 TDS 에러 토큰(`0xAA`)의 에러 번호(`Number`)가 모두 일반 번호(`50000`)로 내려가서, 클라이언트 ORM(`GORM`, `Entity Framework`, `JDBC`, `go-mssqldb`)이 제약 조건 위반 종류를 구분하지 못함.
 - **근본 원인 (Root Cause)**:
@@ -251,7 +251,7 @@
 
 ---
 
-### `#18` `FIX-TSQL-JSON-FUNCTIONS-EXT-1` (`PENDING`)
+### `#17` `FIX-TSQL-JSON-FUNCTIONS-EXT-1` (`PENDING`)
 - **현상**:
   SQL Server 2022 / Azure SQL 및 `mssql-jdbc` `JSONFunctionTest.java`에서 사용하는 최신 표준 JSON 함수인 `JSON_OBJECT('key': val, ...)`, `JSON_ARRAY(v1, v2, ...)`, `JSON_PATH_EXISTS(json_doc, '$.path')` 및 `JSON` 네이티브 컬럼 타입 선언이 지원되지 않거나 일부 구문(`'k': v` 콜론 키-값 문법, `NULL ON NULL` / `ABSENT ON NULL`)에서 실패함.
 - **근본 원인 (Root Cause)**:
@@ -266,31 +266,31 @@
 
 ---
 
-### `#19` ~ `#24` 외부 공식 드라이버 및 파서 코퍼스 오라클 검증 (`TEST-*-ORACLE-1` 6건)
-위의 `#2` ~ `#18` 엔진·파서·TDS 프로토콜 결함 패치가 완료되면, 이미 `test/corpora/`에 벤더링된 5대 외부 코퍼스 및 공식 Go TDS 드라이버를 대상으로 실제 오라클 스위트 검증을 수행한다:
+### `#18` ~ `#23` 외부 공식 드라이버 및 파서 코퍼스 오라클 검증 (`TEST-*-ORACLE-1` 6건)
+위의 `#1` ~ `#17` 엔진·파서·TDS 프로토콜 결함 패치가 완료되면, 이미 `test/corpora/`에 벤더링된 5대 외부 코퍼스 및 공식 Go TDS 드라이버를 대상으로 실제 오라클 스위트 검증을 수행한다:
 
-1. **`#19` `TEST-TDS-GOMSSQLDB-ORACLE-1`**:
+1. **`#18` `TEST-TDS-GOMSSQLDB-ORACLE-1`**:
    - **원인/배경**: Go 생태계 표준 SQL Server 드라이버인 `microsoft/go-mssqldb`를 통해 라이브 TDS 포트(`:1433`)에 연결했을 때 파라미터 바인딩(`@p1`), `sql.Out{Dest: &outVar}`, 프로시저 반환 코드, 트랜잭션 롤백, 에러 번호(`mssql.Error.Number`)가 100% 호환되는지 검증 필요.
    - **해결법**: `pkg/wire/tds_gomssqldb_oracle_test.go` 통합 테스트를 구성하여 RPC 호출, `OUTPUT` 파라미터, `RETURN` 상태값, `PRINT` 메시지, 제약 조건 에러 번호(`2627`, `2601`, `547`), 대용량 `NVARCHAR(MAX)` 스트리밍을 전수 검증.
-2. **`#20` `TEST-TDS-PYMSSQL-ORACLE-1`**:
+2. **`#19` `TEST-TDS-PYMSSQL-ORACLE-1`**:
    - **원인/배경**: `test/corpora/pymssql/tests/`(`test_sprocs.py`의 17개 고정/가변 타입 `OUTPUT` 프로시저, `test_types.py`, `test_queries.py`)에서 추출한 T-SQL 프로시저 및 타입 변환 케이스 검증.
-   - **해결법**: `#4`, `#12`, `#13`, `#14` 패치 후 `test/slt_proc/corpora/pymssql_*.slt` 및 TDS RPC 테스트를 확장하여 100% 통과 확인.
-3. **`#21` `TEST-TDS-MSSQL-JDBC-ORACLE-1`**:
+   - **해결법**: `#3`, `#11`, `#12`, `#13` 패치 후 `test/slt_proc/corpora/pymssql_*.slt` 및 TDS RPC 테스트를 확장하여 100% 통과 확인.
+3. **`#20` `TEST-TDS-MSSQL-JDBC-ORACLE-1`**:
    - **원인/배경**: `test/corpora/mssql-jdbc/`의 `JSONFunctionTest`, `CallableStatementTest`, `PreparedStatementTest`, `DatabaseMetaDataTest` 핵심 쿼리 호환성 검증.
-   - **해결법**: `#18`(`JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS`) 및 카탈로그/RPC 패치 후 `mssql_jdbc_*.slt` 오라클 스위트 확장 및 100% 통과 확인.
-4. **`#22` `TEST-SQLGLOT-TSQL-ORACLE-1`**:
+   - **해결법**: `#17`(`JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS`) 및 카탈로그/RPC 패치 후 `mssql_jdbc_*.slt` 오라클 스위트 확장 및 100% 통과 확인.
+4. **`#21` `TEST-SQLGLOT-TSQL-ORACLE-1`**:
    - **원인/배경**: `test/corpora/sqlglot/test_tsql.py` (3,274줄, 526개 T-SQL 변환/검증 케이스) 중 순수 OLTP T-SQL 내장 함수, 날짜 약어(`dd`, `mm`, `yyyy`), `CAST`/`CONVERT`, `STRING_AGG`, 파생 `VALUES` 테이블 케이스 검증.
-   - **해결법**: `#2`, `#5`, `#9`, `#12` 패치 후 `sqlglot_tsql_*.slt` 오라클 스위트를 확장하여 실행 결과값 대조 검증.
-5. **`#23` `TEST-TDS-TEDIOUS-ORACLE-1`**:
+   - **해결법**: `#1`, `#4`, `#8`, `#11` 패치 후 `sqlglot_tsql_*.slt` 오라클 스위트를 확장하여 실행 결과값 대조 검증.
+5. **`#22` `TEST-TDS-TEDIOUS-ORACLE-1`**:
    - **원인/배경**: Node.js 표준 TDS 드라이버 `test/corpora/tedious/`의 `datatypes-in-results`, `parameterised-statements`, `rpc-test`, `transactions`(`XACT_STATE`, `TRY...CATCH`) 검증.
-   - **해결법**: `#11`, `#13`, `#14`, `#15`, `#16` 패치 후 `tedious_*.slt` 및 TDS 와이어 테스트로 100% 통과 검증.
-6. **`#24` `TEST-GORM-SQLSERVER-ORACLE-1`**:
+   - **해결법**: `#10`, `#12`, `#13`, `#14`, `#15` 패치 후 `tedious_*.slt` 및 TDS 와이어 테스트로 100% 통과 검증.
+6. **`#23` `TEST-GORM-SQLSERVER-ORACLE-1`**:
    - **원인/배경**: Go ORM `test/corpora/gorm-sqlserver/`가 생성하는 `MERGE INTO ... USING (VALUES ...) AS excluded(...)`, `OUTPUT INSERTED.*`, `sp_rename`, `sys.indexes`/`sys.foreign_keys`/`sys.check_constraints` 스키마 인트로스펙션 조인 쿼리 검증.
-   - **해결법**: `#9`(파생 `VALUES` 컬럼 별칭) 패치와 연동하여 `gorm_sqlserver_*.slt` 및 통합 테스트로 GORM 마이그레이션·CRUD 패턴 100% 통과 검증.
+   - **해결법**: `#8`(파생 `VALUES` 컬럼 별칭) 패치와 연동하여 `gorm_sqlserver_*.slt` 및 통합 테스트로 GORM 마이그레이션·CRUD 패턴 100% 통과 검증.
 
 ---
 
-### `#25` `PERF-CBO-STATS-BOUNDED-1` (`PENDING`)
+### `#24` `PERF-CBO-STATS-BOUNDED-1` (`PENDING`)
 - **현상 및 배경 (MySQL 통계 지연/메모리 스파이크 대비)**:
   MySQL(InnoDB)은 대량 데이터 적재 직후 `ANALYZE TABLE`이 제때 돌지 않으면 과거 통계(예: 0건~수건)에 고착되어 잘못된 조인 순서나 풀스캔을 선택하는 성능 저하가 빈번함.
   반면 LionSQL은:

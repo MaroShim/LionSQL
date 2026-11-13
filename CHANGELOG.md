@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - mark `-memory=performance`, `MemoryPerformance`, and legacy aliases (`OCCModeRaw`, `OCCModePerformance`) as deprecated in CLI help text, startup runtime log warning (`memoryPerformanceDeprecationNotice`), startup banner (`[DEPRECATED: use compact]`), and Go doc comments while preserving full v1.0 compatibility prior to post-1.0 removal (`DEPRECATE-OCC-PERF-1`)
 
 ### Fixed
+- support `EXEC @rc = sp_name ...` return status variable capture across top-level batches and nested stored procedure calls with default status `0` normalization (`FIX-PROC-EXEC-RETURN-VAR-1`)
 - support `CREATE TABLE`, `DROP TABLE`, `CREATE INDEX`, and `DROP INDEX` DDL statements inside stored procedure bodies with isolated frame-local `#temp` table mapping (`FIX-PROC-TEMP-TABLE-DDL-1`)
 - resolve `STRING_AGG` / `GROUP_CONCAT` returning `NULL` in `GROUP BY` queries with `ORDER BY` or `WITHIN GROUP (ORDER BY ...)` (`FIX-GROUPBY-STRING-AGG-1`): preserve full multi-argument expression keys in `AggregateIterator`, support `STRING_AGG(...) WITHIN GROUP (ORDER BY col [ASC|DESC])` intra-group ordering, and prevent `ProjectionIterator` from overwriting pre-computed aggregate columns with scalar re-evaluation
 - resolve 8 T-SQL procedural, relational, and catalog compatibility defects uncovered by Gate 5 Babelfish oracle harvesting:

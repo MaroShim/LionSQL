@@ -172,3 +172,30 @@ LionSQL은 `[RULE:RadicalKISS]` 원칙에 입각하여 다음 21개 항목을 �
   2. 런타임에 물리 행을 재작성하면 전역 테이블 락과 지연시간 폭증이 발생합니다.
   3. 가상 톰스톤 마스킹이나 인디렉션 맵은 엔진 복잡도를 극도로 증가시키고 0.5ns 고정 오프셋 디코딩 핫패스를 영구적으로 퇴행시킵니다.
 - **표준 대체안 (What We Do)**: Instant Tail-Only DDL을 표준으로 채택하고, 비말단 중간 컬럼 DROP은 Fail-Closed 원칙에 따라 명시적 에러(`ErrDropColumnNotTail`)로 거부하며, 표준적인 **Copy-and-Switch** 절차(`CREATE TABLE new AS SELECT ...` 후 원자적 이름 변경)를 안내합니다.
+
+---
+
+### 22. PlanCache 32-Shard 분할 기각 (`PERF-CACHE-SHARD-1`)
+- **제안 내용**: 서버 공용 `PlanCache`의 단일 `sync.RWMutex`를 프로시저/쿼리 해시 기반 32개 캐시라인 패딩 샤드로 분할하여 `RLock` 캐시라인 바운싱 제거.
+- **기각 사유 (Why Not)**:
+  1. 쓰기 경합이 빈번한 스토리지 엔진(`memengine` 256-Shard)과 달리, `PlanCache`는 초기 프로시저 컴파일 이후 99.9999% 읽기 전용(`GetByName`)으로 동작합니다.
+  2. 쿼리 1건 실행 비용($2 \sim 50\mu\text{s}$)에서 `PlanCache` 맵 조회는 $\sim 15\text{ns}$에 불과하므로, 32-Shard 분할 및 해시 계산 오버헤드를 추가해도 전체 처리량(TPS) 체감 이득은 0%에 수렴하는 반면 LRU 용량 관리(`capacity / 32`) 파편화와 코드 복잡도만 증가합니다 (`[RULE:RadicalKISS]`, YAGNI).
+- **표준 대체안 (What We Do)**: 단일 `PlanCache`와 `RLock` 패스트패스를 그대로 유지합니다.
+
+---
+
+### 23. TDS 스트림 라이터 8바이트 헤더 인플레이스 슬라이싱 기각 (`PERF-TDS-ZEROCOPY-FRAME-1`)
+- **제안 내용**: `tdsStreamWriter`에서 `bytes.Buffer`를 제거하고 32KB 프레임 슬라이스의 오프셋 `8`부터 직접 기록하여 메모리 `copy`를 제거.
+- **기각 사유 (Why Not)**:
+  1. `PERF-WIRE-ZEROALLOC-1`을 통해 이미 PGWire/TDS 스트리밍의 힙 할당은 0 allocs/op으로 해결되었으며, 네트워크 I/O 경로의 지배적 비용은 커널 TCP `write` 시스템 콜($\sim 5\mu\text{s}$)입니다.
+  2. L1 캐시 내에서의 32KB 메모리 복사는 서브 마이크로초 미만이므로, 수동 오프셋 계산으로 패킷 경계/플러시 오프바이원(Off-by-One) 버그 위험을 감수할 이유가 없습니다 (`[RULE:RadicalKISS]`).
+- **표준 대체안 (What We Do)**: 검증된 `tdsStreamWriter` + `tdsFramePool` 풀링 구조를 표준으로 유지합니다.
+
+---
+
+### 24. 쿼리 결과셋 `Rows` 맵 제거 및 `LazyRows` 이원화 기각 (`PERF-RESULT-ROW-STREAM-1`)
+- **제안 내용**: `ExecutionResult` 및 `QueryResult`에서 `Rows []map[string]any` 생성을 중단하고 `LazyRows()` 또는 `WantTypedRows` 플래그로 호출 경로를 이원화.
+- **기각 사유 (Why Not)**:
+  1. REST JSON API, Web Studio, 저장 프로시저 내부 결과 소비, 수천 개의 통합 테스트가 `res.Rows`와 `res.Values` 단일 계약을 기반으로 동작하고 있습니다.
+  2. 호출자별 힌트 플래그(`WantTypedRows`)나 지연 변환 계층을 도입하면 엔진 전역의 API 계약이 파편화되고 `nil` 참조 회귀 버그 위험이 급증합니다 (`[RULE:RadicalKISS]`).
+- **표준 대체안 (What We Do)**: 현행 `QueryResult` (`Rows` + `Values`) 단일 표준 계약을 유지하고, 와이어 계층은 이미 구현된 포지셔널 `res.Values` 직접 인덱싱(`PERF-WIRE-ZEROALLOC-1`)을 사용합니다.

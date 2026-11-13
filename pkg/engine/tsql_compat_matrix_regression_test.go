@@ -129,3 +129,79 @@ func TestTSQLCompatMatrix_SessionOptionsAndSystemVars(t *testing.T) {
 		t.Fatalf("expected @@TRANCOUNT=0, @@ERROR=0, got %+v", res.Rows[0])
 	}
 }
+
+func TestTSQLCompatMatrix_ExecReturnVarCapture(t *testing.T) {
+	coord, cleanup := newCompatMatrixTestCoord(t)
+	defer cleanup()
+
+	setupProcs := []string{
+		`CREATE PROCEDURE sp_calc_status @a INT, @b INT OUTPUT AS
+		 BEGIN
+		     SET @b = @a * 10;
+		     RETURN @a + 5;
+		 END;`,
+		`CREATE PROCEDURE sp_default_return AS
+		 BEGIN
+		     DECLARE @x INT = 1;
+		 END;`,
+		`CREATE PROCEDURE sp_caller_proc @in INT AS
+		 BEGIN
+		     DECLARE @rc1 INT;
+		     DECLARE @rc2 INT;
+		     DECLARE @outVal INT;
+		     EXEC @rc1 = sp_calc_status @in, @outVal OUTPUT;
+		     EXEC @rc2 = dbo.sp_default_return;
+		     SELECT @rc1 AS rc1, @rc2 AS rc2, @outVal AS out_val;
+		 END;`,
+	}
+	for _, q := range setupProcs {
+		if _, err := coord.ExecuteSQL(q); err != nil {
+			t.Fatalf("create proc failed: %v\nSQL: %s", err, q)
+		}
+	}
+
+	// 1. Top-level batch: DECLARE @rc INT; EXEC @rc = sp_calc_status ...
+	sess := "sess-exec-ret"
+	batch1 := `
+		DECLARE @rc INT;
+		DECLARE @out INT;
+		EXEC @rc = sp_calc_status 7, @out OUTPUT;
+		SELECT @rc AS ret_code, @out AS out_param;
+	`
+	res1, err := coord.ExecuteSessionSQL(sess, batch1)
+	if err != nil {
+		t.Fatalf("top-level EXEC @rc = sp_calc_status failed: %v", err)
+	}
+	if len(res1.Rows) != 1 {
+		t.Fatalf("expected 1 row from top-level batch, got %d (%+v)", len(res1.Rows), res1.Rows)
+	}
+	if res1.Rows[0]["ret_code"] != int64(12) || res1.Rows[0]["out_param"] != int64(70) {
+		t.Fatalf("expected ret_code=12, out_param=70, got %+v", res1.Rows[0])
+	}
+
+	// 2. Top-level batch: default return status 0 when procedure has no explicit RETURN <int>
+	batch2 := `
+		DECLARE @rc_def INT = 99;
+		EXEC @rc_def = sp_default_return;
+		SELECT @rc_def AS def_code;
+	`
+	res2, err := coord.ExecuteSessionSQL(sess, batch2)
+	if err != nil {
+		t.Fatalf("top-level EXEC @rc_def = sp_default_return failed: %v", err)
+	}
+	if len(res2.Rows) != 1 || res2.Rows[0]["def_code"] != int64(0) {
+		t.Fatalf("expected def_code=0, got %+v", res2.Rows)
+	}
+
+	// 3. Nested stored procedure call: EXEC @rc1 = sp_calc_status & EXEC @rc2 = dbo.sp_default_return inside sp_caller_proc
+	res3, err := coord.ExecuteSessionSQL(sess, "EXEC sp_caller_proc 4;")
+	if err != nil {
+		t.Fatalf("nested EXEC @rc inside sp_caller_proc failed: %v", err)
+	}
+	if len(res3.Rows) != 1 {
+		t.Fatalf("expected 1 row from sp_caller_proc, got %d (%+v)", len(res3.Rows), res3.Rows)
+	}
+	if res3.Rows[0]["rc1"] != int64(9) || res3.Rows[0]["rc2"] != int64(0) || res3.Rows[0]["out_val"] != int64(40) {
+		t.Fatalf("expected rc1=9, rc2=0, out_val=40, got %+v", res3.Rows[0])
+	}
+}
