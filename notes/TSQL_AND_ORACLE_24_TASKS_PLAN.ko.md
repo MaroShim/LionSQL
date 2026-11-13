@@ -21,7 +21,7 @@
 | **#10** | **`FIX-TSQL-XACT-STATE-1`** | `DONE` | Proc / Engine | P1 | `TRY...CATCH` 블록 내 트랜잭션 상태 반환 스칼라 함수 `XACT_STATE()` (`1`, `0`, `-1`) 지원 |
 | **#11** | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** | `DONE` | Parser / Eval | P1 | `CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX))` 미평가 원문 에코 버그 및 `MONEY`/`SMALLMONEY` 4자리 소수점 스케일 보정 |
 | **#12** | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** | `DONE` | Wire (TDS) | P1 | TDS `RPCRequest`(`0x03`) 직접 프로시저 호출 시 `OUTPUT` 파라미터 `RETURNVALUE`(`0xAC`) 토큰 반환 및 기본값(`DEFAULT`) 바인딩 지원 |
-| **#13** | **`FIX-TDS-RPC-RETURN-STATUS-1`** | `PENDING` | Wire (TDS) / Engine | P1 | TDS RPC 프로시저 `RETURN <int>` 실행 시 하드코딩된 `0` 대신 실제 종료 코드를 `RETURNSTATUS`(`0x79`) 토큰으로 전송 |
+| **#13** | **`FIX-TDS-RPC-RETURN-STATUS-1`** | `DONE` | Wire (TDS) / Engine | P1 | TDS RPC 프로시저 `RETURN <int>` 실행 시 하드코딩된 `0` 대신 실제 종료 코드를 `RETURNSTATUS`(`0x79`) 토큰으로 전송 |
 | **#14** | **`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`** | `PENDING` | Engine | P1 | 최상위 배치 및 `sp_executesql`에서 `SELECT @var = expr [FROM ...]` 구문을 비교식이 아닌 T-SQL 변수 대입으로 실행 |
 | **#15** | **`FIX-TDS-PRINT-INFO-TOKEN-1`** | `PENDING` | Wire (TDS) | P1 | `PRINT` 문 실행 결과(`res.Messages`)를 TDS `INFO`(`0xAB`) 토큰으로 클라이언트에 실시간 전송 |
 | **#16** | **`FIX-TDS-ERROR-NUMBER-MAP-1`** | `PENDING` | Wire (TDS) | P1 | PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(`2627`, `2601`, `547`) 매핑 반환 |
@@ -221,7 +221,7 @@
 
 ---
 
-### `#13` `FIX-TDS-RPC-RETURN-STATUS-1` (`PENDING`)
+### `#13` `FIX-TDS-RPC-RETURN-STATUS-1` (`DONE`)
 - **현상**:
   저장 프로시저가 `RETURN 42;`와 같이 비-0 상태 코드를 반환했음에도, TDS RPC 호출 클라이언트가 받는 `ReturnStatus` 값이 항상 `0`으로 고정됨.
 - **근본 원인 (Root Cause)**:

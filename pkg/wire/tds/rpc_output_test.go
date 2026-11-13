@@ -175,3 +175,166 @@ func TestTDS_RPCDirectProc_NoOutputParamEmitsNoReturnValue(t *testing.T) {
 		t.Fatalf("unexpected RETURNVALUE for call without OUTPUT parameters: %x", resp)
 	}
 }
+
+// findReturnStatus locates the TokenReturnStatus (0x79) token in the response stream and returns its int32 value and offset.
+func findReturnStatus(t *testing.T, resp []byte) (int32, int) {
+	t.Helper()
+	for i := 0; i <= len(resp)-5; i++ {
+		if resp[i] == TokenReturnStatus {
+			val := int32(binary.LittleEndian.Uint32(resp[i+1 : i+5]))
+			return val, i
+		}
+	}
+	t.Fatalf("no RETURNSTATUS (0x79) token found in response: %x", resp)
+	return 0, -1
+}
+
+// findTokenOffset returns the byte index of the first occurrence of token.
+func findTokenOffset(resp []byte, token byte) int {
+	for i, b := range resp {
+		if b == token {
+			return i
+		}
+	}
+	return -1
+}
+
+func TestTDS_RPCDirectProc_ReturnStatus(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+	_ = sendSQLBatch(t, conn, `
+CREATE PROCEDURE GetAnswer AS
+BEGIN
+    RETURN 42;
+END;
+`)
+
+	resp := sendNamedRPC(t, conn, "GetAnswer", nil)
+	val, offset := findReturnStatus(t, resp)
+	if val != 42 {
+		t.Fatalf("expected RETURNSTATUS=42, got %d", val)
+	}
+	doneOffset := findTokenOffset(resp, TokenDoneProc)
+	if doneOffset < 0 || offset >= doneOffset {
+		t.Fatalf("expected RETURNSTATUS (offset %d) to precede DONEPROC (offset %d)", offset, doneOffset)
+	}
+}
+
+func TestTDS_RPCDirectProc_ReturnStatusBeforeReturnValue(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+	_ = sendSQLBatch(t, conn, `
+CREATE PROCEDURE AddAndReturn
+    @a INT,
+    @b INT,
+    @sum INT OUTPUT
+AS
+BEGIN
+    SET @sum = @a + @b;
+    RETURN 99;
+END;
+`)
+
+	var params bytes.Buffer
+	params.Write(buildIntParam("@a", false, 5))
+	params.Write(buildIntParam("@b", false, 7))
+	params.Write(buildIntParam("@sum", true, 0))
+	resp := sendNamedRPC(t, conn, "AddAndReturn", params.Bytes())
+
+	val, statusOffset := findReturnStatus(t, resp)
+	if val != 99 {
+		t.Fatalf("expected RETURNSTATUS=99, got %d", val)
+	}
+
+	rv := findIntReturnValue(t, resp)
+	if rv.value != 12 {
+		t.Fatalf("expected @sum=12, got %d", rv.value)
+	}
+
+	rvOffset := findTokenOffset(resp, TokenReturnValue)
+	doneOffset := findTokenOffset(resp, TokenDoneProc)
+
+	if statusOffset >= rvOffset {
+		t.Fatalf("ordering violation: RETURNSTATUS (offset %d) must precede RETURNVALUE (offset %d)", statusOffset, rvOffset)
+	}
+	if rvOffset >= doneOffset {
+		t.Fatalf("ordering violation: RETURNVALUE (offset %d) must precede DONEPROC (offset %d)", rvOffset, doneOffset)
+	}
+}
+
+func TestTDS_RPCDirectProc_ReturnStatusWithResultSet(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+	_ = sendSQLBatch(t, conn, `
+CREATE PROCEDURE SelectAndReturn AS
+BEGIN
+    SELECT 100 AS val;
+    RETURN 77;
+END;
+`)
+
+	resp := sendNamedRPC(t, conn, "SelectAndReturn", nil)
+	val, statusOffset := findReturnStatus(t, resp)
+	if val != 77 {
+		t.Fatalf("expected RETURNSTATUS=77, got %d", val)
+	}
+
+	colOffset := findTokenOffset(resp, TokenColMetaData)
+	doneInProcOffset := findTokenOffset(resp, TokenDoneInProc)
+	doneOffset := findTokenOffset(resp, TokenDoneProc)
+
+	if colOffset < 0 || doneInProcOffset < 0 || doneOffset < 0 {
+		t.Fatalf("missing tokens: col=%d doneInProc=%d done=%d", colOffset, doneInProcOffset, doneOffset)
+	}
+	if !(colOffset < doneInProcOffset && doneInProcOffset < statusOffset && statusOffset < doneOffset) {
+		t.Fatalf("ordering violation: COL(%d) < DONEINPROC(%d) < RETURNSTATUS(%d) < DONEPROC(%d)",
+			colOffset, doneInProcOffset, statusOffset, doneOffset)
+	}
+}
+
+func TestTDS_RPCDirectProc_DefaultReturnStatusZero(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+	_ = sendSQLBatch(t, conn, `
+CREATE PROCEDURE NoExplicitReturn AS
+BEGIN
+    DECLARE @x INT = 1;
+END;
+`)
+
+	resp := sendNamedRPC(t, conn, "NoExplicitReturn", nil)
+	val, _ := findReturnStatus(t, resp)
+	if val != 0 {
+		t.Fatalf("expected default RETURNSTATUS=0, got %d", val)
+	}
+}
+
+func TestTDS_RPCTextFallback_ReturnStatus(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+	_ = sendSQLBatch(t, conn, `
+CREATE PROCEDURE FallbackProc AS
+BEGIN
+    RETURN 1234;
+END;
+`)
+
+	// Invoke via sp_executesql (which routes through executeRPCAndRespond)
+	var params bytes.Buffer
+	params.Write(buildNVarCharParam("@stmt", false, "EXEC FallbackProc;"))
+	resp := sendRPC(t, conn, 10, 0, params.Bytes())
+
+	val, statusOffset := findReturnStatus(t, resp)
+	if val != 1234 {
+		t.Fatalf("expected RETURNSTATUS=1234 from sp_executesql fallback, got %d", val)
+	}
+	doneOffset := findTokenOffset(resp, TokenDoneProc)
+	if doneOffset < 0 || statusOffset >= doneOffset {
+		t.Fatalf("expected RETURNSTATUS (offset %d) to precede DONEPROC (offset %d)", statusOffset, doneOffset)
+	}
+}

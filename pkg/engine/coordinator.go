@@ -19,6 +19,37 @@ type QueryResult struct {
 	DurationUS   int64            `json:"duration_us"`
 	Messages     []string         `json:"messages,omitempty"`
 	Error        string           `json:"error,omitempty"`
+
+	// ReturnStatus carries the integer a stored procedure passed to RETURN.
+	// It is meaningful only when HasReturnStatus is true (the statement was a procedure call).
+	ReturnStatus    int32 `json:"return_status,omitempty"`
+	HasReturnStatus bool  `json:"has_return_status,omitempty"`
+}
+
+// ReturnStatusFromValue converts a procedure RETURN value into the int32 sent as the TDS RETURNSTATUS token.
+// A missing value (procedure ended without RETURN) and non-integer values map to 0, as in SQL Server.
+func ReturnStatusFromValue(v any) int32 {
+	switch n := v.(type) {
+	case int:
+		return int32(n)
+	case int8:
+		return int32(n)
+	case int16:
+		return int32(n)
+	case int32:
+		return n
+	case int64:
+		return int32(n)
+	case uint8:
+		return int32(n)
+	case uint16:
+		return int32(n)
+	case uint32:
+		return int32(n)
+	case float64:
+		return int32(n)
+	}
+	return 0
 }
 
 // ActiveQueryInfo represents snapshot metadata of an in-flight query.

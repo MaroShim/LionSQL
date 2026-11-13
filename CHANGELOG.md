@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- propagate stored procedure `RETURN <int>` status code correctly via TDS RPC response stream (`FIX-TDS-RPC-RETURN-STATUS-1`):
+  - add `ReturnStatus int32` and `HasReturnStatus bool` to `engine.QueryResult` and convert procedure `ReturnValue` via `ReturnStatusFromValue` (`pkg/engine/coordinator.go`, `sqlexec_procs.go`)
+  - emit `TokenReturnStatus` (`0x79`) with 4-byte little-endian status value across both fast-path (`respondExecutionResult`) and text-fallback (`executeRPCAndRespond`) paths in `pkg/wire/tds/server.go`
+  - enforce MS-TDS token stream ordering so `RETURNSTATUS` precedes `RETURNVALUE` output tokens before `DONEPROC`
+  - add comprehensive RPC tests in `pkg/wire/tds/rpc_output_test.go` covering procedure return status, token ordering, result sets with return code, and `sp_executesql` fallback
 - evaluate `CAST`/`CONVERT` to `NVARCHAR(MAX)`, `VARCHAR(MAX)` and `VARBINARY(MAX)` and enforce `MONEY`/`SMALLMONEY` fixed scale 4 (`FIX-TSQL-CAST-MAX-AND-MONEY-1`):
   - accept the `MAX` keyword token inside type length parentheses in `parseTypeSpec` (`pkg/proc/parser_expr.go`), encoded as precision `-1` so no truncation occurs; previously the parse failure caused the raw expression text to be echoed
   - default scale `4` for `MONEY`/`SMALLMONEY` with half-up rounding via `EvalCast`; bracketed type names (`[money]`) are normalized in `parseDataType`

@@ -219,7 +219,7 @@
 | `PENDING` | **`FIX-TDS-ERROR-NUMBER-MAP-1`** |  | Wire | P1 | PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(2627, 2601, 547) 매핑 반환 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-TDS-PRINT-INFO-TOKEN-1`** |  | Wire | P1 | PRINT 문 실행 결과를 TDS INFO(0xAB) 토큰으로 클라이언트에 실시간 전송 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** |  | Wire | P1 | TDS RPC(0x03) 직접 프로시저 호출 시 OUTPUT/INOUT 파라미터 RETURNVALUE(0xAC) 토큰 반환 및 생략된 기본값(@param = default) 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`FIX-TDS-RPC-RETURN-STATUS-1`** |  | Wire | P1 | TDS RPC 프로시저 RETURN <int> 실행 시 실제 종료 코드를 RETURNSTATUS(0x79) 토큰으로 전송 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-TDS-RPC-RETURN-STATUS-1`** |  | Wire | P1 | TDS RPC 프로시저 RETURN <int> 실행 시 실제 종료 코드를 RETURNSTATUS(0x79) 토큰으로 전송 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TRIGGER-FOR-KEYWORD-1`** |  | Engine | P1 | CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** |  | Engine | P1 | CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX)) 미평가 에코 버그 및 MONEY/SMALLMONEY 4자리 소수점 스케일(1.2345) 보정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-INSERT-EXEC-1`** |  | Engine | P1 | INSERT INTO <table> EXEC <proc_name> 프로시저 결과셋 적재 구문 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
@@ -2607,8 +2607,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] TDS RPC 프로시저 RETURN <int> 실행 시 실제 종료 코드를 RETURNSTATUS(0x79) 토큰으로 전송 `FIX-TDS-RPC-RETURN-STATUS-1`
-- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-12 15:16:34
+### [DONE] TDS RPC 프로시저 RETURN <int> 실행 시 실제 종료 코드를 RETURNSTATUS(0x79) 토큰으로 전송 `FIX-TDS-RPC-RETURN-STATUS-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-13 23:25:27
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---

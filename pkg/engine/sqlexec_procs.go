@@ -1234,13 +1234,15 @@ func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, st
 	}
 
 	return &QueryResult{
-		Success:      true,
-		Command:      "EXEC",
-		Columns:      res.Columns,
-		Rows:         res.Rows,
-		RowsAffected: rowsAffected,
-		DurationUS:   time.Since(start).Microseconds(),
-		Messages:     messages,
+		Success:         true,
+		Command:         "EXEC",
+		Columns:         res.Columns,
+		Rows:            res.Rows,
+		RowsAffected:    rowsAffected,
+		DurationUS:      time.Since(start).Microseconds(),
+		Messages:        messages,
+		ReturnStatus:    ReturnStatusFromValue(res.ReturnValue),
+		HasReturnStatus: true,
 	}, nil
 }
 

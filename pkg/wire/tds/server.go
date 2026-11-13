@@ -1205,8 +1205,8 @@ func (s *Server) handleRPCPrepare(conn net.Conn, rpc *parsedRPC, sess *Connectio
 	sess.prepMu.Unlock()
 
 	var buf bytes.Buffer
-	WriteReturnValueIntDirect(&buf, 1, "@handle", handle)
 	WriteReturnStatusDirect(&buf, 0)
+	WriteReturnValueIntDirect(&buf, 1, "@handle", handle)
 	WriteDoneDirect(&buf, TokenDoneProc, DoneFinal, 0, 0)
 	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 }
@@ -1331,6 +1331,8 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 		buf.Write(BuildInfo(0, 1, 10, msg, "LionSQL", "", 1))
 	}
 
+	returnStatus := engine.ReturnStatusFromValue(res.ReturnValue)
+
 	if len(res.Columns) > 0 {
 		qr := &engine.QueryResult{
 			Columns: res.Columns,
@@ -1348,12 +1350,13 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 			doneStatus |= DoneInXact
 		}
 		WriteDoneDirect(buf, TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows)))
+		WriteReturnStatusDirect(buf, returnStatus)
 		if extraTokens != nil {
 			extraTokens(buf)
 		}
-		WriteReturnStatusDirect(buf, 0)
 		WriteDoneDirect(buf, TokenDoneProc, doneStatus, 0xC1, uint64(len(res.Rows)))
 	} else {
+		WriteReturnStatusDirect(buf, returnStatus)
 		if extraTokens != nil {
 			extraTokens(buf)
 		}
@@ -1448,10 +1451,10 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
 		var buf bytes.Buffer
+		buf.Write(BuildReturnStatus(0))
 		if extraTokens != nil {
 			extraTokens(&buf)
 		}
-		buf.Write(BuildReturnStatus(0))
 		buf.Write(BuildDoneProc(DoneFinal, 0, 0))
 		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 		return
@@ -1498,10 +1501,10 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 			doneStatus |= DoneInXact
 		}
 		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
+		buf.Write(BuildReturnStatus(0))
 		if extraTokens != nil {
 			extraTokens(&buf)
 		}
-		buf.Write(BuildReturnStatus(0))
 		buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
 		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 		if s.DevMode() {
@@ -1574,6 +1577,11 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		doneStatus |= DoneInXact
 	}
 
+	returnStatus := int32(0)
+	if res.HasReturnStatus {
+		returnStatus = res.ReturnStatus
+	}
+
 	if len(res.Columns) > 0 {
 		cols := s.inferColumnInfos(res)
 		buf.Write(BuildColMetaData(cols))
@@ -1581,10 +1589,10 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		_ = s.streamQueryRows(stream, sess, cols, res.Rows, res.Values)
 
 		WriteDoneDirect(buf, TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows)))
+		WriteReturnStatusDirect(buf, returnStatus)
 		if extraTokens != nil {
 			extraTokens(buf)
 		}
-		WriteReturnStatusDirect(buf, 0)
 		WriteDoneDirect(buf, TokenDoneProc, doneStatus, 0xC1, uint64(len(res.Rows)))
 	} else {
 		cmdCode := uint16(0)
@@ -1600,10 +1608,10 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		default:
 			cmdCode = 0x00
 		}
+		WriteReturnStatusDirect(buf, returnStatus)
 		if extraTokens != nil {
 			extraTokens(buf)
 		}
-		WriteReturnStatusDirect(buf, 0)
 		WriteDoneDirect(buf, TokenDoneProc, doneStatus|DoneCount, cmdCode, uint64(res.RowsAffected))
 	}
 
@@ -3192,10 +3200,10 @@ func (s *Server) handleSsmsEnvironmentBatch(conn net.Conn, trimmed string, sess 
 
 	if isRPC {
 		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
+		buf.Write(BuildReturnStatus(0))
 		if extraTokens != nil {
 			extraTokens(&buf)
 		}
-		buf.Write(BuildReturnStatus(0))
 		buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
 	} else {
 		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, 1))
@@ -3302,10 +3310,10 @@ func (s *Server) handleSsmsServerInitBatch(conn net.Conn, trimmed string, sess *
 
 	if isRPC {
 		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
+		buf.Write(BuildReturnStatus(0))
 		if extraTokens != nil {
 			extraTokens(&buf)
 		}
-		buf.Write(BuildReturnStatus(0))
 		buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
 	} else {
 		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, 1))
@@ -3465,10 +3473,10 @@ func (s *Server) handleSsmsServerPropertiesBatch(conn net.Conn, trimmed string, 
 
 	if isRPC {
 		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
+		buf.Write(BuildReturnStatus(0))
 		if extraTokens != nil {
 			extraTokens(&buf)
 		}
-		buf.Write(BuildReturnStatus(0))
 		buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
 	} else {
 		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, 1))
