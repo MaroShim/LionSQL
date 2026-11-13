@@ -210,7 +210,7 @@
 | `DONE` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-TEMP-TABLE-DDL-1`** |  | Engine | P1 | 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-SQL-DERIVED-VALUES-1`** |  | Engine | P1 | FROM (VALUES (...), (...)) AS alias(col1, col2) 인라인 테이블 값 생성자 및 컬럼 별칭 지원 | [`1.0-GA`](1.0-GA) |  |
-| `IN_PROGRESS` | **`FIX-SQL-PAREN-SELECT-1`** |  | Engine | P1 | 괄호로 감싸진 (SELECT ...) 최상위 쿼리 및 뷰/CTE 본문 실행 지원 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-SQL-PAREN-SELECT-1`** |  | Engine | P1 | 괄호로 감싸진 (SELECT ...) 최상위 쿼리 및 뷰/CTE 본문 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQLUTIL-PARSER-1`** |  | Engine | P2 | pkg/sqlutil SQL 파서/정규화기 결함 보강 및 렉서 공통화 | [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md) |  |
 | `PENDING` | **`FIX-TDS-ERROR-NUMBER-MAP-1`** |  | Wire | P1 | PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(2627, 2601, 547) 매핑 반환 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-TDS-PRINT-INFO-TOKEN-1`** |  | Wire | P1 | PRINT 문 실행 결과를 TDS INFO(0xAB) 토큰으로 클라이언트에 실시간 전송 | [`1.0-GA`](1.0-GA) |  |
@@ -2548,7 +2548,7 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [IN_PROGRESS] 괄호로 감싸진 (SELECT ...) 최상위 쿼리 및 뷰/CTE 본문 실행 지원 `FIX-SQL-PAREN-SELECT-1`
+### [DONE] 괄호로 감싸진 (SELECT ...) 최상위 쿼리 및 뷰/CTE 본문 실행 지원 `FIX-SQL-PAREN-SELECT-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:06:30
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
 

@@ -32,6 +32,15 @@ func HasTopLevelSetOp(query string) bool {
 // ignoring operators enclosed within parentheses (subqueries, CTEs) or string literals.
 func FindTopLevelSetOps(query string) (*SetOpQuery, bool) {
 	trimmed := strings.TrimRight(strings.TrimSpace(query), ";")
+	outerQuery, trailingOrderBy, trailingLimit := extractTrailingOrderByAndLimit(trimmed)
+	outerQuery = sqlutil.UnwrapOuterParens(outerQuery)
+	trimmed = outerQuery
+	if trailingOrderBy != "" {
+		trimmed += " ORDER BY " + trailingOrderBy
+	}
+	if trailingLimit >= 0 {
+		trimmed += " LIMIT " + strconv.FormatInt(trailingLimit, 10)
+	}
 	n := len(trimmed)
 	if n < 7 { // Shortest: "SELECT"
 		return nil, false
@@ -171,53 +180,12 @@ func FindTopLevelSetOps(query string) (*SetOpQuery, bool) {
 }
 
 func cleanSubqueryParens(sql string) string {
-	trimmed := strings.TrimSpace(sql)
-	if strings.HasPrefix(trimmed, "(") && strings.HasSuffix(trimmed, ")") {
-		// Verify if the outer parens span the entire string
-		depth := 0
-		allWrapped := true
-		for i := 0; i < len(trimmed)-1; i++ {
-			if trimmed[i] == '(' {
-				depth++
-			} else if trimmed[i] == ')' {
-				depth--
-				if depth == 0 {
-					allWrapped = false
-					break
-				}
-			}
-		}
-		if allWrapped && depth == 1 {
-			return strings.TrimSpace(trimmed[1 : len(trimmed)-1])
-		}
-	}
-	return trimmed
+	return sqlutil.UnwrapOuterParens(sql)
 }
 
 func extractTrailingOrderByAndLimit(sql string) (query string, orderBy string, limit int64) {
 	trimmed := strings.TrimSpace(sql)
-	n := len(trimmed)
 	limit = -1
-
-	// If enclosed entirely in parentheses, don't peel inner ORDER BY / LIMIT
-	if strings.HasPrefix(trimmed, "(") && strings.HasSuffix(trimmed, ")") {
-		depth := 0
-		allWrapped := true
-		for i := 0; i < n-1; i++ {
-			if trimmed[i] == '(' {
-				depth++
-			} else if trimmed[i] == ')' {
-				depth--
-				if depth == 0 {
-					allWrapped = false
-					break
-				}
-			}
-		}
-		if allWrapped && depth == 1 {
-			return trimmed, "", -1
-		}
-	}
 
 	// Find top-level ORDER BY and LIMIT from the right
 	orderByIdx := sqlutil.FindTopLevelKeyword(trimmed, "ORDER BY")
@@ -232,6 +200,24 @@ func extractTrailingOrderByAndLimit(sql string) (query string, orderBy string, l
 		}
 		return
 	}
+
+	if orderByIdx != -1 {
+		query = strings.TrimSpace(trimmed[:orderByIdx])
+		orderBy = strings.TrimSpace(trimmed[orderByIdx+8:])
+		return
+	}
+
+	if limitIdx != -1 {
+		query = strings.TrimSpace(trimmed[:limitIdx])
+		limitStr := strings.TrimSpace(trimmed[limitIdx+5:])
+		if lim, err := strconv.ParseInt(limitStr, 10, 64); err == nil {
+			limit = lim
+		}
+		return
+	}
+
+	query = trimmed
+	return
 
 	if orderByIdx != -1 && limitIdx == -1 {
 		query = strings.TrimSpace(trimmed[:orderByIdx])

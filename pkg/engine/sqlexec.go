@@ -14,6 +14,7 @@ import (
 
 	"lionsql/pkg/catalog/virtual"
 	"lionsql/pkg/execution"
+	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/replication"
 	"lionsql/pkg/sqlutil"
@@ -1739,14 +1740,15 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execInsert(trimmed, start, cs)
 	}
 
-	// 6. DQL: WITH (Common Table Expressions) / SELECT
-	if sqlutil.HasPrefixKeyword(trimmed, "WITH") {
-		if virtual.IsVirtualCatalogJoinQuery(trimmed) {
-			return s.execVirtualCatalogJoinSelect(trimmed, start, cs)
+	// 6. DQL: WITH (Common Table Expressions) / SELECT (including parenthesized SELECT)
+	if isSelectOrParenthesizedQuery(trimmed) {
+		unwrapped := sqlutil.UnwrapOuterParens(trimmed)
+		if sqlutil.HasPrefixKeyword(unwrapped, "WITH") {
+			if virtual.IsVirtualCatalogJoinQuery(unwrapped) {
+				return s.execVirtualCatalogJoinSelect(unwrapped, start, cs)
+			}
+			return s.execCTE(unwrapped, start, cs)
 		}
-		return s.execCTE(trimmed, start, cs)
-	}
-	if sqlutil.HasPrefixKeyword(trimmed, "SELECT") {
 		return s.execSelect(trimmed, start, cs)
 	}
 
@@ -1970,4 +1972,43 @@ func (s *Coordinator) execThrow(raw string, start time.Time) (*QueryResult, erro
 		State:    byte(state),
 		Message:  msg,
 	}
+}
+
+// isSelectOrParenthesizedQuery reports whether the query string represents a SELECT or WITH statement,
+// including cases where the entire statement or its leading branch is enclosed in parentheses (e.g. (SELECT 1),
+// ((SELECT 1) UNION (SELECT 2))).
+func isSelectOrParenthesizedQuery(sql string) bool {
+	trimmed := strings.TrimRight(strings.TrimSpace(sql), ";")
+	if sqlutil.HasPrefixKeyword(trimmed, "SELECT") || sqlutil.HasPrefixKeyword(trimmed, "WITH") {
+		return true
+	}
+	if planner.HasTopLevelSetOp(trimmed) {
+		return true
+	}
+	if len(trimmed) > 0 && trimmed[0] == '(' {
+		unwrapped := sqlutil.UnwrapOuterParens(trimmed)
+		if sqlutil.HasPrefixKeyword(unwrapped, "SELECT") || sqlutil.HasPrefixKeyword(unwrapped, "WITH") {
+			return true
+		}
+		if planner.HasTopLevelSetOp(unwrapped) {
+			return true
+		}
+		// Sibling parenthesized set operation check: (SELECT ...) UNION (SELECT ...)
+		if len(unwrapped) > 0 && unwrapped[0] == '(' {
+			firstClose := sqlutil.FindMatchingParen(unwrapped, 0)
+			if firstClose != -1 {
+				insideFirst := strings.TrimSpace(unwrapped[1:firstClose])
+				if sqlutil.HasPrefixKeyword(insideFirst, "SELECT") {
+					afterParen := strings.TrimSpace(unwrapped[firstClose+1:])
+					if sqlutil.HasPrefixKeyword(afterParen, "UNION") ||
+						sqlutil.HasPrefixKeyword(afterParen, "INTERSECT") ||
+						sqlutil.HasPrefixKeyword(afterParen, "EXCEPT") ||
+						sqlutil.HasPrefixKeyword(afterParen, "MINUS") {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
 }

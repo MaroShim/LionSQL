@@ -12,7 +12,7 @@
 | **#1** | **`FIX-GROUPBY-STRING-AGG-1`** | `DONE` (`1651a780`) | Execution / Planner | P1 | `GROUP BY` + `ORDER BY` 및 `WITHIN GROUP (ORDER BY ...)`에서 `STRING_AGG`가 `NULL`을 반환하는 버그 해결 |
 | **#2** | **`FIX-PROC-TEMP-TABLE-DDL-1`** | `DONE` (`d6b89d03`) | Proc / VM | P1 | 저장 프로시저 본문 내부 `CREATE/DROP TABLE #temp` 및 `CREATE/DROP INDEX` DDL 컴파일·실행 지원 |
 | **#3** | **`FIX-PROC-EXEC-RETURN-VAR-1`** | `DONE` (`0a1befa6`) | Proc / VM / Engine | P1 | `EXEC @rc = sp_name ...` 프로시저 반환 상태 코드(`RETURN <int>`) 변수 캡처 바인딩 지원 |
-| **#4** | **`FIX-SQL-PAREN-SELECT-1`** | `PENDING` | Parser / Engine / Planner | P1 | 괄호로 감싸진 `(SELECT ...)` 최상위 쿼리, 집합 연산 브랜치, 뷰/CTE 본문 실행 지원 |
+| **#4** | **`FIX-SQL-PAREN-SELECT-1`** | `DONE` | Parser / Engine / Planner | P1 | 괄호로 감싸진 `(SELECT ...)` 최상위 쿼리, 집합 연산 브랜치, 뷰/CTE 본문 실행 지원 |
 | **#5** | **`FIX-CURSOR-LIFECYCLE-1`** | `PENDING` | Engine / VM | P1 | 커서 `DEALLOCATE` 및 배치 종료 시 세션 커서 레지스트리 정리 및 동일 이름 재선언 충돌 해결 |
 | **#6** | **`FIX-VM-HIDDEN-ROWID-1`** | `PENDING` | Proc / VM | P1 | 명시적 PK가 없는 테이블에 대해 VDBE VM `OpInsert` 실행 시 숨은 `_row_id` 자동 발번 누락 수정 |
 | **#7** | **`FIX-TSQL-INSERT-EXEC-1`** | `PENDING` | Parser / VM / Engine | P1 | `INSERT INTO <table> [(cols)] EXEC <proc_name> [args]` 프로시저 결과셋 테이블 적재 지원 |
@@ -82,7 +82,7 @@
 
 ---
 
-### `#4` `FIX-SQL-PAREN-SELECT-1` (`PENDING`)
+### `#4` `FIX-SQL-PAREN-SELECT-1` (`DONE`)
 - **현상**:
   1. `(SELECT 1 AS a)` 또는 `((SELECT a FROM t))`처럼 최상위 쿼리가 괄호로 감싸진 경우 실행 실패.
   2. `(SELECT 1 AS a) UNION ALL (SELECT 2 AS a) ORDER BY a`처럼 집합 연산(`UNION`/`INTERSECT`/`EXCEPT`)의 개별 브랜치가 괄호로 감싸진 경우 파싱/실행 실패.
@@ -90,10 +90,14 @@
 - **근본 원인 (Root Cause)**:
   1. **쿼리 라우터 및 SELECT 진입점 (`pkg/engine/sqlexec.go`, `pkg/engine/sqlexec_select.go`)**: 최상위 문장 분류기가 첫 토큰이 `SELECT`나 `WITH`인지만 확인하고, 여는 괄호 `(`로 시작하는 SELECT 쿼리를 인식하지 못함.
   2. **집합 연산 분리기 (`pkg/engine/sqlexec_select.go`, `pkg/planner/setop.go`)**: `splitSetOperations` 및 각 브랜치 실행기가 브랜치 양끝의 매칭되는 외곽 괄호 `( ... )`를 벗겨내지(unwrap) 않아 하위 SELECT 파서가 `(`에서 구문 오류를 일으킴.
-  3. **Pratt 파서 (`pkg/proc/parser_dml.go`)**: `parseSelect()`가 선행 여는 괄호 `(`로 감싸진 SELECT 문을 허용하지 않음.
-- **해결 설계안 (Proposed Solution)**:
-  1. `pkg/sqlutil`에 컨텍스트 인식 외곽 괄호 제거 함수 `sqlutil.UnwrapOuterParens(sql string) string`을 구현 (단, `(SELECT 1) UNION (SELECT 2)`처럼 첫 `(`가 중간에서 닫히고 뒤에 최상위 연산자가 이어지는 경우는 전체를 감싼 괄호가 아니므로 `sqlutil.FindMatchingParen`으로 정확히 끝 위치와 일치할 때만 벗김 — Invariant 7 & 12 준수).
-  2. 최상위 쿼리 디스패처(`sqlexec.go`), `execSelectQuery`(`sqlexec_select.go`), 집합 연산 각 브랜치(`execSetOpSelect`), 그리고 뷰/CTE 본문 정규화 경로에서 `sqlutil.UnwrapOuterParens`를 적용하여 중첩 외곽 괄호를 안전하게 정규화.
+  3. **Pratt 파서 (`pkg/proc/parser_stmt.go`)**: 저장 프로시저 파서가 `(`로 시작하는 괄호 표현식 문장을 파싱하지 못함.
+- **해결 및 적용 완료 내역**:
+  - `pkg/sqlutil/tokenizer.go`: 컨텍스트 인식 `UnwrapOuterParens(sql)`를 구현하여 문자열 리터럴, 주석, 중첩 괄호 내부는 건드리지 않고 쿼리 전체를 감싼 최외곽 괄호만 안전하게 언래핑. Sibling 집합 연산(`(SELECT 1) UNION (SELECT 2)`)은 원형 보존.
+  - `pkg/engine/sqlexec.go`: `isSelectOrParenthesizedQuery` 디스패처 헬퍼를 추가하여 괄호로 시작하는 SELECT/WITH/집합 연산을 감지하고 `execSelect`로 라우팅.
+  - `pkg/engine/sqlexec_select.go` & `pkg/planner/setop.go`: `execSelect`, `FindTopLevelSetOps`, `extractTrailingOrderByAndLimit`에서 `UnwrapOuterParens`를 호출하여 단일/중첩 괄호 및 후행 `ORDER BY / LIMIT`을 온전히 분리.
+  - `pkg/engine/sqlexec_ddl.go` & `pkg/planner/planner.go`: `CREATE VIEW` 및 `WITH cte AS (...)` 내부 쿼리에 `UnwrapOuterParens` 적용.
+  - `pkg/proc/parser_stmt.go`: `TokenLParen` 분기를 추가하여 프로시저 내부 `(SELECT ...)` 문장 파싱 지원.
+  - `pkg/engine/tsql_compat_matrix_regression_test.go`: `TestTSQLCompatMatrix_ParenthesizedSelectQueries`로 최상위 단일/다중 괄호, 집합 연산, 뷰, CTE, 저장 프로시저 전 시나리오 회귀 검증 통과.
 
 ---
 

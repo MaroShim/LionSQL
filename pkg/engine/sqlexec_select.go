@@ -1602,6 +1602,7 @@ func normalizeMSSQLPagination(sql string) string {
 func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	cleaned = StripLeadingComments(cleaned)
+	cleaned = sqlutil.UnwrapOuterParens(cleaned)
 
 	// P-5 Fast-Path: Zero-overhead storage bypass for simple single-PK lookups
 	if res, err, ok := s.tryPKLookupBypass(cleaned, start, cs); ok {

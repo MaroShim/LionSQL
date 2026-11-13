@@ -1367,6 +1367,7 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 
 	beforeAS := strings.TrimSpace(cleaned[:asIdx])
 	selectQuery := strings.TrimSpace(cleaned[asIdx+2:])
+	selectQuery = sqlutil.UnwrapOuterParens(selectQuery)
 
 	isAlter := sqlutil.HasPrefixKeyword(beforeAS, "ALTER VIEW")
 	orReplace := sqlutil.ContainsKeyword(beforeAS, "OR REPLACE", false) || sqlutil.ContainsKeyword(beforeAS, "OR ALTER", false)

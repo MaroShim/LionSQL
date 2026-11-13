@@ -548,3 +548,62 @@ func TestTrimPrefixKeyword(t *testing.T) {
 	}
 }
 
+func TestUnwrapOuterParens(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "single level parens",
+			input:    "(SELECT 1 AS a)",
+			expected: "SELECT 1 AS a",
+		},
+		{
+			name:     "multiple outer parens",
+			input:    "(((SELECT 1 AS a)))",
+			expected: "SELECT 1 AS a",
+		},
+		{
+			name:     "with outer whitespace and trailing semicolon",
+			input:    "  ( ( SELECT 1 AS a ) ) ;  ",
+			expected: "SELECT 1 AS a",
+		},
+		{
+			name:     "sibling union parens - should NOT unwrap whole string",
+			input:    "(SELECT 1 AS a) UNION ALL (SELECT 2 AS a)",
+			expected: "(SELECT 1 AS a) UNION ALL (SELECT 2 AS a)",
+		},
+		{
+			name:     "nested wrapped union",
+			input:    "((SELECT 1 AS a) UNION ALL (SELECT 2 AS a))",
+			expected: "(SELECT 1 AS a) UNION ALL (SELECT 2 AS a)",
+		},
+		{
+			name:     "paren in string literal",
+			input:    "(SELECT '(hello)', ')')",
+			expected: "SELECT '(hello)', ')'",
+		},
+		{
+			name:     "unbalanced paren",
+			input:    "(SELECT 1",
+			expected: "(SELECT 1",
+		},
+		{
+			name:     "no parens",
+			input:    "SELECT 1",
+			expected: "SELECT 1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := UnwrapOuterParens(tt.input)
+			if got != tt.expected {
+				t.Errorf("UnwrapOuterParens(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+

@@ -1290,6 +1290,28 @@ func FindMatchingParen(s string, openIdx int) int {
 	return -1
 }
 
+// UnwrapOuterParens unwraps all outermost balanced parentheses enclosing the entire SQL string.
+// It safely ignores parentheses inside string literals, comments, or brackets.
+// If the first parenthesis closes before the end of the statement (e.g. "(SELECT 1) UNION (SELECT 2)"),
+// it is recognized as sibling subqueries and the outer structure is preserved intact.
+func UnwrapOuterParens(sql string) string {
+	trimmed := strings.TrimRight(strings.TrimSpace(sql), ";")
+	for len(trimmed) > 0 && trimmed[0] == '(' {
+		closeIdx := FindMatchingParen(trimmed, 0)
+		if closeIdx == -1 {
+			break
+		}
+		// Check whether the matching close paren covers the entire remaining SQL (ignoring whitespace and semicolons)
+		remainder := strings.TrimRight(strings.TrimSpace(trimmed[closeIdx+1:]), ";")
+		if remainder == "" {
+			trimmed = strings.TrimRight(strings.TrimSpace(trimmed[1:closeIdx]), ";")
+		} else {
+			break
+		}
+	}
+	return trimmed
+}
+
 // SplitTopLevelKeyword splits string s by a standalone keyword (e.g. "AND", "OR") at depth 0,
 // safely skipping string literals ('...', "..."), brackets ([...]), comments, and parentheses ((...)).
 func SplitTopLevelKeyword(s string, kw string) []string {

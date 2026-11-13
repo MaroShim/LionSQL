@@ -61,6 +61,21 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return p.parseTx()
 	case TokenSelect:
 		return p.parseSelect()
+	case TokenLParen:
+		// Parenthesized statement, e.g. (SELECT ...)
+		p.nextToken() // eat '('
+		stmt, err := p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+		if !p.curTokenIs(TokenRParen) {
+			return nil, fmt.Errorf("expected ')', got %s at %d:%d", p.curToken.Literal, p.curToken.Line, p.curToken.Col)
+		}
+		p.nextToken() // eat ')'
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+		return stmt, nil
 	case TokenInsert:
 		return p.parseInsert()
 	case TokenUpdate:

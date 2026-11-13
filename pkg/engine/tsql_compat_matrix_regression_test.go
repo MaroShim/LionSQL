@@ -205,3 +205,115 @@ func TestTSQLCompatMatrix_ExecReturnVarCapture(t *testing.T) {
 		t.Fatalf("expected rc1=9, rc2=0, out_val=40, got %+v", res3.Rows[0])
 	}
 }
+
+func TestTSQLCompatMatrix_ParenthesizedSelectQueries(t *testing.T) {
+	coord, cleanup := newCompatMatrixTestCoord(t)
+	defer cleanup()
+
+	// 1. Setup sample table
+	setup := []string{
+		"CREATE TABLE paren_items (id INT PRIMARY KEY, name VARCHAR(50), score INT);",
+		"INSERT INTO paren_items VALUES (1, 'Alpha', 95), (2, 'Beta', 80), (3, 'Gamma', 90);",
+	}
+	for _, q := range setup {
+		if _, err := coord.ExecuteSQL(q); err != nil {
+			t.Fatalf("setup failed for %q: %v", q, err)
+		}
+	}
+
+	// 2. Top-level parenthesized scalar & table SELECTs (single & multiple layers)
+	scalarTests := []struct {
+		sql      string
+		expected any
+	}{
+		{"(SELECT 1 AS a);", int64(1)},
+		{"(((SELECT 42 AS a)));", int64(42)},
+		{"  (( SELECT 100 AS val ))  ", int64(100)},
+		{"(SELECT score FROM paren_items WHERE id = 1);", int64(95)},
+		{"(( (SELECT name FROM paren_items WHERE id = 2) ));", "Beta"},
+	}
+	for _, tt := range scalarTests {
+		res, err := coord.ExecuteSQL(tt.sql)
+		if err != nil {
+			t.Fatalf("query %q failed: %v", tt.sql, err)
+		}
+		if len(res.Rows) != 1 {
+			t.Fatalf("expected 1 row for %q, got %d", tt.sql, len(res.Rows))
+		}
+		t.Logf("query %q: Rows=%+v, Values=%+v", tt.sql, res.Rows, res.Values)
+		var val any
+		if len(res.Values) > 0 && len(res.Values[0]) > 0 {
+			val = res.Values[0][0]
+		} else {
+			for _, v := range res.Rows[0] {
+				val = v
+				break
+			}
+		}
+		if val != tt.expected {
+			t.Fatalf("for %q, expected %v, got %v (%+v)", tt.sql, tt.expected, val, res.Rows)
+		}
+	}
+
+	// 3. Parenthesized set operations (sibling branches & outer wrapped)
+	setopQueries := []string{
+		"(SELECT 1 AS a) UNION ALL (SELECT 2 AS a);",
+		"((SELECT 1 AS a) UNION ALL (SELECT 2 AS a));",
+		"(SELECT id, score FROM paren_items WHERE id = 1) UNION ALL (SELECT id, score FROM paren_items WHERE id = 2) ORDER BY id ASC;",
+		"((SELECT id FROM paren_items WHERE id <= 2) UNION (SELECT id FROM paren_items WHERE id >= 2)) ORDER BY id ASC;",
+	}
+	for _, q := range setopQueries {
+		res, err := coord.ExecuteSQL(q)
+		if err != nil {
+			t.Fatalf("setop query %q failed: %v", q, err)
+		}
+		if len(res.Rows) < 2 {
+			t.Fatalf("expected >= 2 rows for %q, got %d", q, len(res.Rows))
+		}
+	}
+
+	// 4. CREATE VIEW with parenthesized SELECT body
+	if _, err := coord.ExecuteSQL("CREATE VIEW v_paren_test AS (SELECT id, name FROM paren_items WHERE score >= 90);"); err != nil {
+		t.Fatalf("CREATE VIEW with paren query failed: %v", err)
+	}
+	resView, err := coord.ExecuteSQL("SELECT * FROM v_paren_test ORDER BY id ASC;")
+	if err != nil {
+		t.Fatalf("SELECT from v_paren_test failed: %v", err)
+	}
+	if len(resView.Rows) != 2 {
+		t.Fatalf("expected 2 rows from v_paren_test, got %d (%+v)", len(resView.Rows), resView.Rows)
+	}
+
+	// 5. CTE with parenthesized body
+	cteSQL := "WITH cte_items AS ((SELECT id, name FROM paren_items WHERE id = 3)) SELECT name FROM cte_items;"
+	resCTE, err := coord.ExecuteSQL(cteSQL)
+	if err != nil {
+		t.Fatalf("CTE with paren query failed: %v", err)
+	}
+	if len(resCTE.Rows) != 1 || resCTE.Rows[0]["name"] != "Gamma" {
+		t.Fatalf("expected 1 row with Gamma, got %+v", resCTE.Rows)
+	}
+
+	// 6. Stored procedure with parenthesized SELECT statement
+	procSQL := `
+		CREATE PROCEDURE sp_test_paren_stmt AS
+		BEGIN
+			(SELECT 777 AS lucky);
+		END;
+	`
+	if _, err := coord.ExecuteSQL(procSQL); err != nil {
+		t.Fatalf("CREATE PROCEDURE with parenthesized statement failed: %v", err)
+	}
+	resProc, err := coord.ExecuteSQL("EXEC sp_test_paren_stmt;")
+	if err != nil {
+		t.Fatalf("EXEC sp_test_paren_stmt failed: %v", err)
+	}
+	if len(resProc.Rows) != 1 {
+		t.Fatalf("expected 1 row from sp_test_paren_stmt, got %d (%+v)", len(resProc.Rows), resProc.Rows)
+	}
+	luckyVal := resProc.Rows[0]["lucky"]
+	if luckyVal != int64(777) {
+		t.Fatalf("expected lucky=777 from sp_test_paren_stmt, got %v (%+v)", luckyVal, resProc.Rows)
+	}
+}
+

@@ -654,6 +654,7 @@ func ParseCTEs(query string) ([]CTEInfo, string) {
 		}
 
 		innerSQL := strings.TrimSpace(afterAs[1:closeIdx])
+		innerSQL = sqlutil.UnwrapOuterParens(innerSQL)
 		ctes = append(ctes, CTEInfo{
 			Name:     cteName,
 			Columns:  cteCols,
