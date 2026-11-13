@@ -101,7 +101,7 @@ func BackupToFile(backend Backend, filename string) error {
 		os.Remove(tmpName)
 		return err
 	}
-	if err := tmpFile.Chmod(0644); err != nil {
+	if err := tmpFile.Chmod(0444); err != nil {
 		tmpFile.Close()
 		os.Remove(tmpName)
 		return err
@@ -114,6 +114,7 @@ func BackupToFile(backend Backend, filename string) error {
 		os.Remove(tmpName)
 		return err
 	}
+	_ = os.Chmod(filename, 0444)
 	return nil
 }
 
