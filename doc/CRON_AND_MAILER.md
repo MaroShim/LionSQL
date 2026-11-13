@@ -162,3 +162,129 @@ Content-Type: application/json
   "to": "developer@mycompany.com"
 }
 ```
+
+---
+
+## 3. SQL Server DatabaseMail & External Worker Architecture
+
+LionSQL implements full Microsoft SQL Server **DatabaseMail** compatibility (`FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`). To protect database OLTP performance and isolate external SMTP latency, stored procedure invocations do not block on external sockets; instead, messages are atomically queued into `msdb.dbo.sysmail_mailitems` and dispatched asynchronously by the dedicated `lionsql dbmail-worker`.
+
+### 3.1. Architecture Diagram
+
+```
+       [ Client / T-SQL Batch ]
+                  │
+                  ▼ EXEC msdb.dbo.sp_send_dbmail
+       ┌──────────────────────────┐
+       │     LionSQL DB Kernel    │
+       │ (Atomic Sub-µs INSERT)   │
+       └──────────┬───────────────┘
+                  │
+                  ▼
+       [ msdb.dbo.sysmail_mailitems ] (sent_status = 'unsent')
+                  │
+                  ▼ Async Polling / Processing
+       ┌──────────────────────────┐
+       │   lionsql dbmail-worker  │ ◄── External Process (CLI)
+       └──────────┬───────────────┘
+                  │
+                  ├────────────────────────┐
+                  ▼                        ▼
+     [ msdb.dbo.sysmail_log ]     [ External SMTP Server ]
+     (Status: sent / failed)      (TLS / STARTTLS Dispatch)
+```
+
+### 3.2. T-SQL Stored Procedure: `msdb.dbo.sp_send_dbmail`
+
+#### Syntax & Parameters:
+```sql
+EXEC msdb.dbo.sp_send_dbmail
+    [@profile_name =] 'profile_name',
+    [@recipients =] 'recipients [; ...n]',
+    [@copy_recipients =] 'copy_recipients [; ...n]',
+    [@blind_copy_recipients =] 'blind_copy_recipients [; ...n]',
+    [@from_address =] 'from_address',
+    [@reply_to =] 'reply_to',
+    [@subject =] 'subject',
+    [@body =] 'body',
+    [@body_format =] 'body_format', -- 'TEXT' (default) or 'HTML'
+    [@importance =] 'importance',   -- 'LOW', 'NORMAL' (default), 'HIGH'
+    [@sensitivity =] 'sensitivity', -- 'NORMAL' (default), 'PERSONAL', 'PRIVATE', 'CONFIDENTIAL'
+    [@file_attachments =] 'attachments [; ...n]',
+    [@query =] 'query',
+    [@mailitem_id =] @mailitem_id OUTPUT;
+```
+
+#### Example Usage in T-SQL:
+```sql
+DECLARE @mailId INT;
+EXEC msdb.dbo.sp_send_dbmail
+    @profile_name = 'Notifications',
+    @recipients = 'ops@mycompany.com; dev@mycompany.com',
+    @copy_recipients = 'manager@mycompany.com',
+    @subject = 'Daily Settlement Complete',
+    @body = '<h1>Settlement Succeeded</h1><p>Processed 10,240 records.</p>',
+    @body_format = 'HTML',
+    @mailitem_id = @mailId OUTPUT;
+
+SELECT @mailId AS QueuedMailID;
+```
+
+### 3.3. DatabaseMail Queue Tables
+
+1. **`msdb.dbo.sysmail_mailitems`**:
+   - `mailitem_id INT PRIMARY KEY`: Unique mail identifier.
+   - `profile_name VARCHAR(128)`: Associated configuration profile.
+   - `recipients VARCHAR`: Primary destination addresses.
+   - `copy_recipients VARCHAR`: Carbon copy (CC) addresses.
+   - `blind_copy_recipients VARCHAR`: Blind carbon copy (BCC) addresses.
+   - `from_address VARCHAR`: Custom sender address (falls back to worker default).
+   - `subject VARCHAR`: Message subject.
+   - `body VARCHAR`: Plain text or HTML payload.
+   - `body_format VARCHAR(20)`: `TEXT` or `HTML`.
+   - `send_request_date DATETIME`: Enqueue timestamp.
+   - `sent_date DATETIME`: Completion timestamp (NULL while pending).
+   - `sent_status VARCHAR(20)`: `unsent`, `sent`, `failed`.
+   - `last_mod_date DATETIME`: Last state modification timestamp.
+
+2. **`msdb.dbo.sysmail_log`**:
+   - `log_id INT PRIMARY KEY`: Sequential log identifier.
+   - `mailitem_id INT`: Reference to target item.
+   - `event_type VARCHAR(20)`: `information`, `warning`, `error`.
+   - `log_date DATETIME`: Event timestamp.
+   - `description VARCHAR`: Detailed transmission report or SMTP server diagnostic.
+
+### 3.4. Running the DatabaseMail Worker CLI
+
+To process the queue and dispatch outgoing emails, execute the standalone worker:
+```bash
+# Basic invocation with STARTTLS
+lionsql dbmail-worker \
+    -db-url "postgres://127.0.0.1:5433/master?sslmode=disable" \
+    -smtp-host "smtp.gmail.com" \
+    -smtp-port 587 \
+    -smtp-user "alerts@mycompany.com" \
+    -smtp-pass "super-secret-app-password" \
+    -from-email "alerts@mycompany.com" \
+    -from-name "LionSQL Alerts"
+
+# Advanced configuration options
+lionsql dbmail-worker \
+    -db-url "postgres://127.0.0.1:5433/master?sslmode=disable" \
+    -smtp-host "smtp.mailgun.org" \
+    -smtp-port 587 \
+    -smtp-user "postmaster@mycompany.com" \
+    -smtp-pass "key-xxxx" \
+    -from-email "no-reply@mycompany.com" \
+    -poll-interval-ms 500 \
+    -batch-size 50 \
+    -tls=true
+```
+
+### 3.5. REST API for DatabaseMail Queue Inspection
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/dbmail/items?limit=50` | Inspect queued mail items and their delivery status |
+| `GET` | `/api/dbmail/logs?limit=50` | Inspect transmission event logs and diagnostics |
+

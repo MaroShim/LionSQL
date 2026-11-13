@@ -154,4 +154,19 @@ func TestMailerAPI_Endpoints(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("POST /api/auth/request-password-reset expected 200, got %d", w.Code)
 	}
+
+	// 6. DatabaseMail items and logs API
+	req = httptest.NewRequest("GET", "/api/dbmail/items", nil)
+	w = httptest.NewRecorder()
+	server.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/dbmail/items expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest("GET", "/api/dbmail/logs", nil)
+	w = httptest.NewRecorder()
+	server.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /api/dbmail/logs expected 200, got %d: %s", w.Code, w.Body.String())
+	}
 }

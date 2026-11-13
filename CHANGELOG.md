@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - known follow-ups: hex literals (`0x01`) are lexed as strings, breaking `replicate(0x01, n)` (`394_babel_babel_4547.slt` now fails honestly instead of passing on echoed text); `CAST('$100.123' AS MONEY)` returns `0.0000`; `LEN(money)` length differs from SQL Server
 
 ### Added
+- support SQL Server DatabaseMail external worker and `sp_send_dbmail` stored procedure (`FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`):
+  - isolate outbound SMTP network operations from database kernel into dedicated `lionsql dbmail-worker` background process (`pkg/dbmail/worker.go`, `cmd/lionsql/cli_dbmail.go`)
+  - support T-SQL stored procedure `msdb.dbo.sp_send_dbmail` with atomic sub-microsecond queue insertion into `msdb.dbo.sysmail_mailitems` participating in caller ACID transactions (`pkg/engine/databasemail.go`)
+  - bind generated `mailitem_id` to `@mailitem_id OUTPUT` parameters and record delivery diagnostics in `msdb.dbo.sysmail_log`
+  - expose DatabaseMail queue and audit REST endpoints `GET /api/dbmail/items` and `GET /api/dbmail/logs` (`pkg/api/mailer_handlers.go`)
+  - comprehensive test suites across engine, worker mock SMTP, and CLI flags (`pkg/engine/databasemail_test.go`, `pkg/dbmail/worker_test.go`, `cmd/lionsql/cli_dbmail_test.go`)
 - return OUTPUT parameters and apply declared defaults for direct TDS stored procedure RPC calls (`FIX-TDS-RPC-OUTPUT-TOKEN-1`):
   - record `Output` and `Default` on `ParamDef` for `CREATE PROCEDURE` parameters (`pkg/proc/parser_ddl.go`, `pkg/proc/ast.go`); previously the default expression and the `OUTPUT` keyword were skipped by the parser
   - bind declared defaults for omitted parameters in `VMFrame.bindParams` (`pkg/proc/runtime/vm.go`), shared by TDS RPC, batch `EXEC`, and nested procedure calls

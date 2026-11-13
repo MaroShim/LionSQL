@@ -665,6 +665,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/settings/mail/test", s.wrapSuperuser(s.handleTestMail))
 	s.mux.HandleFunc("GET /api/mail/logs", s.wrapSuperuser(s.handleGetMailLogs))
 	s.mux.HandleFunc("DELETE /api/mail/logs", s.wrapSuperuser(s.handleDeleteMailLogs))
+	s.mux.HandleFunc("GET /api/dbmail/items", s.wrapSuperuser(s.handleGetDatabaseMailItems))
+	s.mux.HandleFunc("GET /api/dbmail/logs", s.wrapSuperuser(s.handleGetDatabaseMailLogs))
 	s.mux.HandleFunc("POST /api/auth/request-password-reset", s.handleRequestPasswordReset)
 
 	// HTTP API Request Activity Logs

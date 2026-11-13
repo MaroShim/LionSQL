@@ -73,6 +73,10 @@ type Coordinator struct {
 	startTime            time.Time
 	tolerantDDL          atomic.Bool
 	clientSessionIdleTTL time.Duration
+	dbMailMu             sync.Mutex
+	dbMailInitialized    bool
+	dbMailItemCounter    atomic.Int64
+	dbMailLogCounter     atomic.Int64
 	stopCh               chan struct{}
 	bgWg                 sync.WaitGroup
 	closeOnce            sync.Once

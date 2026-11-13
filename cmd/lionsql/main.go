@@ -32,6 +32,7 @@ Commands (기본 명령체계):
   set <key> <val>        Update runtime configuration parameter (sudo-like password prompt)
   backup <file>          Create a point-in-time database snapshot backup archive
   restore <file>         Restore database state from a backup archive
+  dbmail-worker          Run DatabaseMail background queue dispatcher worker
   version                Display version and storage engine information
   help                   Show this help message
 
@@ -238,6 +239,14 @@ func main() {
 		sourceArchive := subargs[0]
 		passArgs := append([]string{"-restore=" + sourceArchive}, subargs[1:]...)
 		if err := runServer(passArgs); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "dbmail-worker":
+		if err := runDbMailWorker(subargs); err != nil {
+			if err == flag.ErrHelp {
+				return
+			}
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}

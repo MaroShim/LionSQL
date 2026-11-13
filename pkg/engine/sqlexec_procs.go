@@ -1062,6 +1062,8 @@ func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, st
 	switch procLower {
 	case "sp_executesql":
 		return s.execSpExecuteSQL(args, start, cs, ctx)
+	case "sp_send_dbmail":
+		return s.execSpSendDbMail(args, rawArgs, start, cs)
 	case "sp_babelfish_configure":
 		// Tolerant virtual No-Op for Babelfish environment configuration
 		return &QueryResult{
