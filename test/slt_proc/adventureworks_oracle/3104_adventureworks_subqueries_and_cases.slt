@@ -1,0 +1,66 @@
+# test/slt_proc/adventureworks_oracle/3104_adventureworks_subqueries_and_cases.slt
+# Microsoft AdventureWorksLT Subqueries & CASE Expressions Suite
+
+statement ok
+CREATE TABLE [SalesLT].[Customer] (
+    [CustomerID] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [FirstName] VARCHAR(50) NOT NULL,
+    [LastName] VARCHAR(50) NOT NULL,
+    [EmailAddress] VARCHAR(50) NULL
+);
+
+statement ok
+CREATE TABLE [SalesLT].[SalesOrderHeader] (
+    [SalesOrderID] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [Status] TINYINT NOT NULL,
+    [SalesOrderNumber] VARCHAR(25) NOT NULL,
+    [CustomerID] INT NOT NULL,
+    [TotalDue] DECIMAL(18,4) NOT NULL
+);
+
+statement ok
+INSERT INTO [SalesLT].[Customer] ([FirstName], [LastName], [EmailAddress])
+VALUES
+('Orlando', 'Gee', 'orlando@test.com'),
+('Keith', 'Harris', 'keith@test.com'),
+('Donna', 'Carreras', 'donna@test.com'),
+('Ghost', 'User', 'ghost@test.com');
+
+statement ok
+INSERT INTO [SalesLT].[SalesOrderHeader] ([Status], [SalesOrderNumber], [CustomerID], [TotalDue])
+VALUES
+(1, 'SO71780', 1, 100.0000),
+(5, 'SO71781', 2, 250.0000),
+(6, 'SO71782', 3, 50.0000);
+
+query IT
+SELECT 
+    c.CustomerID,
+    c.LastName
+FROM [SalesLT].[Customer] c
+WHERE EXISTS (
+    SELECT 1 
+    FROM [SalesLT].[SalesOrderHeader] h 
+    WHERE h.CustomerID = c.CustomerID
+)
+ORDER BY c.CustomerID ASC;
+----
+1 Gee
+2 Harris
+3 Carreras
+
+query TT
+SELECT 
+    SalesOrderNumber,
+    CASE [Status]
+        WHEN 1 THEN 'InProcess'
+        WHEN 5 THEN 'Shipped'
+        WHEN 6 THEN 'Cancelled'
+        ELSE 'Unknown'
+    END AS StatusText
+FROM [SalesLT].[SalesOrderHeader]
+ORDER BY SalesOrderID ASC;
+----
+SO71780 InProcess
+SO71781 Shipped
+SO71782 Cancelled

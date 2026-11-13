@@ -1,0 +1,131 @@
+# test/slt_proc/adventureworks_oracle/3102_adventureworks_orders_and_customers.slt
+# Microsoft AdventureWorksLT Orders & Customers Business Suite
+
+statement ok
+CREATE TABLE [SalesLT].[Address] (
+    [AddressID] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [AddressLine1] VARCHAR(60) NOT NULL,
+    [City] VARCHAR(30) NOT NULL,
+    [StateProvince] VARCHAR(50) NOT NULL,
+    [CountryRegion] VARCHAR(50) NOT NULL,
+    [PostalCode] VARCHAR(15) NOT NULL
+);
+
+statement ok
+CREATE TABLE [SalesLT].[Customer] (
+    [CustomerID] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [FirstName] VARCHAR(50) NOT NULL,
+    [LastName] VARCHAR(50) NOT NULL,
+    [CompanyName] VARCHAR(128) NULL,
+    [EmailAddress] VARCHAR(50) NULL,
+    [Phone] VARCHAR(25) NULL
+);
+
+statement ok
+CREATE TABLE [SalesLT].[CustomerAddress] (
+    [CustomerID] INT NOT NULL,
+    [AddressID] INT NOT NULL,
+    [AddressType] VARCHAR(50) NOT NULL,
+    PRIMARY KEY ([CustomerID], [AddressID])
+);
+
+statement ok
+CREATE TABLE [SalesLT].[Product] (
+    [ProductID] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [Name] VARCHAR(50) NOT NULL,
+    [ProductNumber] VARCHAR(25) NOT NULL,
+    [StandardCost] DECIMAL(18,4) NOT NULL,
+    [ListPrice] DECIMAL(18,4) NOT NULL
+);
+
+statement ok
+CREATE TABLE [SalesLT].[SalesOrderHeader] (
+    [SalesOrderID] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [OrderDate] DATETIME NOT NULL,
+    [SalesOrderNumber] VARCHAR(25) NOT NULL,
+    [CustomerID] INT NOT NULL,
+    [ShipToAddressID] INT NULL,
+    [BillToAddressID] INT NULL,
+    [TotalDue] DECIMAL(18,4) NOT NULL
+);
+
+statement ok
+CREATE TABLE [SalesLT].[SalesOrderDetail] (
+    [SalesOrderID] INT NOT NULL,
+    [SalesOrderDetailID] INT IDENTITY(1,1) NOT NULL,
+    [OrderQty] SMALLINT NOT NULL,
+    [ProductID] INT NOT NULL,
+    [UnitPrice] DECIMAL(18,4) NOT NULL,
+    [LineTotal] DECIMAL(38,6) NOT NULL,
+    PRIMARY KEY ([SalesOrderID], [SalesOrderDetailID])
+);
+
+statement ok
+INSERT INTO [SalesLT].[Address] ([AddressLine1], [City], [StateProvince], [CountryRegion], [PostalCode])
+VALUES 
+('1010 Clear Lake Blvd', 'Renton', 'Washington', 'United States', '98055'),
+('2020 4th Ave', 'Seattle', 'Washington', 'United States', '98101'),
+('3030 Olympic Dr', 'Bellevue', 'Washington', 'United States', '98004');
+
+statement ok
+INSERT INTO [SalesLT].[Customer] ([FirstName], [LastName], [CompanyName], [EmailAddress], [Phone])
+VALUES
+('Orlando', 'Gee', 'A Bike Store', 'orlando0@adventure-works.com', '245-555-0173'),
+('Keith', 'Harris', 'Progressive Sports', 'keith0@adventure-works.com', '170-555-0127'),
+('Donna', 'Carreras', 'Advanced Bikes', 'donna0@adventure-works.com', '279-555-0130');
+
+statement ok
+INSERT INTO [SalesLT].[CustomerAddress] ([CustomerID], [AddressID], [AddressType])
+VALUES
+(1, 1, 'Main Office'),
+(2, 2, 'Main Office'),
+(3, 3, 'Shipping');
+
+statement ok
+INSERT INTO [SalesLT].[Product] ([Name], [ProductNumber], [StandardCost], [ListPrice])
+VALUES
+('Mountain-100 Silver, 38', 'BK-M18S-38', 700.0000, 1200.0000),
+('Road-150 Red, 48', 'BK-R15R-48', 900.0000, 1500.0000),
+('Men Sports Jersey, L', 'SJ-01-L', 25.0000, 49.9900);
+
+statement ok
+INSERT INTO [SalesLT].[SalesOrderHeader] ([OrderDate], [SalesOrderNumber], [CustomerID], [ShipToAddressID], [BillToAddressID], [TotalDue])
+VALUES
+('2026-01-10', 'SO71780', 1, 1, 1, 2707.2500),
+('2026-01-15', 'SO71781', 2, 2, 2, 1712.7400),
+('2026-02-01', 'SO71782', 3, 3, 3, 1491.7500);
+
+statement ok
+INSERT INTO [SalesLT].[SalesOrderDetail] ([SalesOrderID], [OrderQty], [ProductID], [UnitPrice], [LineTotal])
+VALUES
+(1, 2, 1, 1200.0000, 2400.0000),
+(1, 1, 3, 49.9900, 49.9900),
+(2, 1, 2, 1500.0000, 1500.0000);
+
+query ITI
+SELECT 
+    c.CustomerID,
+    c.LastName,
+    COUNT(h.SalesOrderID) AS TotalOrders
+FROM [SalesLT].[Customer] c
+INNER JOIN [SalesLT].[SalesOrderHeader] h ON c.CustomerID = h.CustomerID
+GROUP BY c.CustomerID, c.LastName
+ORDER BY c.CustomerID ASC;
+----
+1 Gee 1
+2 Harris 1
+3 Carreras 1
+
+query TIIR
+SELECT 
+    h.SalesOrderNumber,
+    d.SalesOrderDetailID,
+    d.OrderQty,
+    d.UnitPrice
+FROM [SalesLT].[SalesOrderHeader] h
+INNER JOIN [SalesLT].[SalesOrderDetail] d ON h.SalesOrderID = d.SalesOrderID
+ORDER BY d.SalesOrderDetailID ASC;
+----
+SO71780 1 2 1200.000
+SO71780 2 1 49.990
+SO71781 3 1 1500.000

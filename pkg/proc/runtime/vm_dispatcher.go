@@ -32,6 +32,9 @@ func (f *VMFrame) handleCatch(err error, pc *int) error {
 		catchPC := f.catchStack[len(f.catchStack)-1]
 		f.catchStack = f.catchStack[:len(f.catchStack)-1]
 		*pc = catchPC
+		if f.tranCount > 0 || f.tx != nil {
+			f.txFailed = true
+		}
 		return nil
 	}
 	return err
@@ -265,6 +268,9 @@ vmLoop:
 			catchPC := f.catchStack[len(f.catchStack)-1]
 			f.catchStack = f.catchStack[:len(f.catchStack)-1]
 			pc = catchPC
+			if f.tranCount > 0 || f.tx != nil {
+				f.txFailed = true
+			}
 			continue vmLoop
 		}
 		return nil, &proc.ProcError{
@@ -637,6 +643,9 @@ vmLoop:
 		f.tranCount++
 
 	case proc.OpTxCommit:
+		if f.txFailed {
+			return nil, errors.New("[42000] Uncommittable transaction is detected at the end of the batch. The transaction is rolled back.")
+		}
 		if f.tranCount > 1 {
 			// Nested transaction COMMIT: decrement tranCount only, do not commit physically!
 			f.tranCount--
@@ -660,6 +669,7 @@ vmLoop:
 	case proc.OpTxRollback:
 		// T-SQL Standard: ROLLBACK without savepoint unconditionally resets tranCount to 0 and rolls back physically
 		f.tranCount = 0
+		f.txFailed = false
 		if f.tx != nil {
 			if err := f.tx.Rollback(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
 				return nil, err
@@ -1938,6 +1948,16 @@ vmLoop:
 				f.regs[inst.A] = storage.StringValue(f.prog.Name)
 			} else {
 				f.regs[inst.A] = storage.NullValue(storage.TypeVarChar)
+			}
+		} else if strings.EqualFold(callData.Name, "XACT_STATE") {
+			if f.tranCount > 0 {
+				if f.txFailed {
+					f.regs[inst.A] = storage.IntValue(-1)
+				} else {
+					f.regs[inst.A] = storage.IntValue(1)
+				}
+			} else {
+				f.regs[inst.A] = storage.IntValue(0)
 			}
 		} else if strings.EqualFold(callData.Name, "DB_NAME") || strings.EqualFold(callData.Name, "CURRENT_DATABASE") {
 			if len(args) == 0 {

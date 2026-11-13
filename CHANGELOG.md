@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- support T-SQL scalar function `XACT_STATE()` returning active transaction state (`FIX-TSQL-XACT-STATE-1`):
+  - return `1` for committable active transactions, `0` outside transactions or after `ROLLBACK`, and `-1` for uncommittable transactions aborted by errors in `TRY...CATCH`
+  - add `txFailed` flag to `VMFrame` and fail closed on `COMMIT TRANSACTION` when `txFailed == true` with SQL Server error `[42000]`
+  - align `evalScalarExprCore` in `sqlexec_select.go` and add `XACT_STATE` bypass in `execSelect` to eliminate false-positive ambient transactions
+  - preserve schema-qualified table names in `resolveTable` (`pkg/proc/runtime/vm.go`) via `getTableGetter` introspection
+- vendor Microsoft AdventureWorksLT lightweight OLTP database corpus under `test/corpora/adventureworks/`:
+  - 11 relational tables DDL (`adventureworks_lt_schema.sql`), sample business seed data (`adventureworks_lt_data.sql`), and 8 real-world business queries (`adventureworks_lt_queries.sql`)
+  - integrate 4 value-verified Gate 5 `.slt` oracle suites (`3101`~`3104`) under `test/slt_proc/adventureworks_oracle/` and register directory in `test/slt_proc/slt_proc_test.go`
+  - verify full schema DDL, identity generation, foreign key integrity, and business analytics in `pkg/engine/adventureworks_compat_test.go`
+- expand `sqlglot` external T-SQL compatibility oracle suite:
+  - implement 3-argument truncation mode in `ROUND(numeric_expression, length, function)` (`pkg/proc/builtins_math.go`)
+  - harvest and add `3057_sqlglot_numeric_trunc.slt` under `test/slt_proc/sqlglot_oracle/` for Gate 5 cross-dialect verification
 - support `INSERT INTO <table> [(cols)] EXEC <sp_name> [args]` stored procedure resultset table ingestion (`FIX-TSQL-INSERT-EXEC-1`):
   - parse `EXEC` and `EXECUTE` in `GeneralInsertStmt` AST (`pkg/proc/ast.go`, `pkg/proc/parser_dml.go`, `pkg/engine/dml_parser.go`)
   - execute target procedure in sub-frame within transaction context in `execInsertExec` (`pkg/proc/runtime/vm.go`, `vm_dispatcher.go`), mapping result columns with schema casting, `AllocIdentity` autoincrement, and check constraints

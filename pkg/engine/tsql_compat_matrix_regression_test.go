@@ -1,10 +1,12 @@
 package engine_test
 
 import (
+	"context"
 	"testing"
 
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/engine"
+	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 )
 
@@ -526,6 +528,51 @@ func TestTSQLCompatMatrix_TriggerForKeyword(t *testing.T) {
 	}
 	if len(trg.Events) != 2 || trg.Events[0] != "INSERT" || trg.Events[1] != "UPDATE" {
 		t.Fatalf("unexpected trigger events: %+v", trg.Events)
+	}
+}
+
+func TestTSQLCompatMatrix_XactState(t *testing.T) {
+	coord, cleanup := newCompatMatrixTestCoord(t)
+	defer cleanup()
+
+	sessionID := "xact-state-session"
+	if _, err := coord.GetOrCreateSession(sessionID); err != nil {
+		t.Fatalf("GetOrCreateSession failed: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Outside transaction -> 0
+	res, err := coord.ExecuteSessionSQLContext(ctx, sessionID, "SELECT XACT_STATE();")
+	if err != nil {
+		t.Fatalf("SELECT XACT_STATE() failed: %v", err)
+	}
+	if len(res.Rows) == 0 || res.Rows[0]["xact_state"] != int64(0) {
+		t.Fatalf("expected XACT_STATE()=0 outside tx, got %+v", res.Rows)
+	}
+
+	// 2. Active transaction -> 1
+	if err := coord.BeginSessionTx(sessionID, storage.TxOptions{}); err != nil {
+		t.Fatalf("BeginSessionTx failed: %v", err)
+	}
+	res, err = coord.ExecuteSessionSQLContext(ctx, sessionID, "SELECT XACT_STATE();")
+	if err != nil {
+		t.Fatalf("SELECT XACT_STATE() inside tx failed: %v", err)
+	}
+	if len(res.Rows) == 0 || res.Rows[0]["xact_state"] != int64(1) {
+		t.Fatalf("expected XACT_STATE()=1 inside active tx, got %+v", res.Rows)
+	}
+
+	// 3. Rollback -> 0
+	if err := coord.RollbackSessionTx(sessionID); err != nil {
+		t.Fatalf("RollbackSessionTx failed: %v", err)
+	}
+	res, err = coord.ExecuteSessionSQLContext(ctx, sessionID, "SELECT XACT_STATE();")
+	if err != nil {
+		t.Fatalf("SELECT XACT_STATE() after rollback failed: %v", err)
+	}
+	if len(res.Rows) == 0 || res.Rows[0]["xact_state"] != int64(0) {
+		t.Fatalf("expected XACT_STATE()=0 after rollback, got %+v", res.Rows)
 	}
 }
 

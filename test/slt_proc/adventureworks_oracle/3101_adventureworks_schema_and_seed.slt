@@ -1,0 +1,216 @@
+# test/slt_proc/adventureworks_oracle/3101_adventureworks_schema_and_seed.slt
+# Microsoft AdventureWorksLT Lightweight OLTP Schema & Seed Verification Suite
+
+statement ok
+CREATE TABLE [dbo].[ErrorLog] (
+    [ErrorLogID] INT IDENTITY(1,1) NOT NULL,
+    [ErrorTime] DATETIME NOT NULL DEFAULT (GETDATE()),
+    [UserName] VARCHAR(128) NOT NULL,
+    [ErrorNumber] INT NOT NULL,
+    [ErrorSeverity] INT NULL,
+    [ErrorState] INT NULL,
+    [ErrorProcedure] VARCHAR(126) NULL,
+    [ErrorLine] INT NULL,
+    [ErrorMessage] VARCHAR(4000) NOT NULL,
+    CONSTRAINT [PK_ErrorLog_ErrorLogID] PRIMARY KEY ([ErrorLogID])
+);
+
+statement ok
+CREATE TABLE [SalesLT].[Address] (
+    [AddressID] INT IDENTITY(1,1) NOT NULL,
+    [AddressLine1] VARCHAR(60) NOT NULL,
+    [AddressLine2] VARCHAR(60) NULL,
+    [City] VARCHAR(30) NOT NULL,
+    [StateProvince] VARCHAR(50) NOT NULL,
+    [CountryRegion] VARCHAR(50) NOT NULL,
+    [PostalCode] VARCHAR(15) NOT NULL,
+    [rowguid] UNIQUEIDENTIFIER NOT NULL DEFAULT (NEWID()),
+    [ModifiedDate] DATETIME NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_Address_AddressID] PRIMARY KEY ([AddressID])
+);
+
+statement ok
+CREATE TABLE [SalesLT].[Customer] (
+    [CustomerID] INT IDENTITY(1,1) NOT NULL,
+    [NameStyle] BIT NOT NULL DEFAULT (0),
+    [Title] VARCHAR(8) NULL,
+    [FirstName] VARCHAR(50) NOT NULL,
+    [MiddleName] VARCHAR(50) NULL,
+    [LastName] VARCHAR(50) NOT NULL,
+    [Suffix] VARCHAR(10) NULL,
+    [CompanyName] VARCHAR(128) NULL,
+    [SalesPerson] VARCHAR(256) NULL,
+    [EmailAddress] VARCHAR(50) NULL,
+    [Phone] VARCHAR(25) NULL,
+    [PasswordHash] VARCHAR(128) NOT NULL DEFAULT ('$2a$12$dummyHash000000000000000000000000000000000000000000000000000'),
+    [PasswordSalt] VARCHAR(10) NOT NULL DEFAULT ('dummysalt1'),
+    [rowguid] UNIQUEIDENTIFIER NOT NULL DEFAULT (NEWID()),
+    [ModifiedDate] DATETIME NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_Customer_CustomerID] PRIMARY KEY ([CustomerID])
+);
+
+statement ok
+CREATE TABLE [SalesLT].[CustomerAddress] (
+    [CustomerID] INT NOT NULL,
+    [AddressID] INT NOT NULL,
+    [AddressType] VARCHAR(50) NOT NULL,
+    [rowguid] UNIQUEIDENTIFIER NOT NULL DEFAULT (NEWID()),
+    [ModifiedDate] DATETIME NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_CustomerAddress_CustomerID_AddressID] PRIMARY KEY ([CustomerID], [AddressID]),
+    CONSTRAINT [FK_CustomerAddress_Customer_CustomerID] FOREIGN KEY ([CustomerID]) REFERENCES [SalesLT].[Customer] ([CustomerID]),
+    CONSTRAINT [FK_CustomerAddress_Address_AddressID] FOREIGN KEY ([AddressID]) REFERENCES [SalesLT].[Address] ([AddressID])
+);
+
+statement ok
+CREATE TABLE [SalesLT].[ProductCategory] (
+    [ProductCategoryID] INT IDENTITY(1,1) NOT NULL,
+    [ParentProductCategoryID] INT NULL,
+    [Name] VARCHAR(50) NOT NULL,
+    [rowguid] UNIQUEIDENTIFIER NOT NULL DEFAULT (NEWID()),
+    [ModifiedDate] DATETIME NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_ProductCategory_ProductCategoryID] PRIMARY KEY ([ProductCategoryID]),
+    CONSTRAINT [FK_ProductCategory_ProductCategory_ParentProductCategoryID] FOREIGN KEY ([ParentProductCategoryID]) REFERENCES [SalesLT].[ProductCategory] ([ProductCategoryID])
+);
+
+statement ok
+CREATE TABLE [SalesLT].[ProductModel] (
+    [ProductModelID] INT IDENTITY(1,1) NOT NULL,
+    [Name] VARCHAR(50) NOT NULL,
+    [CatalogDescription] VARCHAR(MAX) NULL,
+    [rowguid] UNIQUEIDENTIFIER NOT NULL DEFAULT (NEWID()),
+    [ModifiedDate] DATETIME NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_ProductModel_ProductModelID] PRIMARY KEY ([ProductModelID])
+);
+
+statement ok
+CREATE TABLE [SalesLT].[ProductDescription] (
+    [ProductDescriptionID] INT IDENTITY(1,1) NOT NULL,
+    [Description] VARCHAR(400) NOT NULL,
+    [rowguid] UNIQUEIDENTIFIER NOT NULL DEFAULT (NEWID()),
+    [ModifiedDate] DATETIME NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_ProductDescription_ProductDescriptionID] PRIMARY KEY ([ProductDescriptionID])
+);
+
+statement ok
+CREATE TABLE [SalesLT].[Product] (
+    [ProductID] INT IDENTITY(1,1) NOT NULL,
+    [Name] VARCHAR(50) NOT NULL,
+    [ProductNumber] VARCHAR(25) NOT NULL,
+    [Color] VARCHAR(15) NULL,
+    [StandardCost] DECIMAL(18,4) NOT NULL,
+    [ListPrice] DECIMAL(18,4) NOT NULL,
+    [Size] VARCHAR(5) NULL,
+    [Weight] DECIMAL(8,2) NULL,
+    [ProductCategoryID] INT NULL,
+    [ProductModelID] INT NULL,
+    [SellStartDate] DATETIME NOT NULL,
+    [SellEndDate] DATETIME NULL,
+    [DiscontinuedDate] DATETIME NULL,
+    [ThumbNailPhoto] VARCHAR(MAX) NULL,
+    [ThumbnailPhotoFileName] VARCHAR(50) NULL,
+    [rowguid] UNIQUEIDENTIFIER NOT NULL DEFAULT (NEWID()),
+    [ModifiedDate] DATETIME NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_Product_ProductID] PRIMARY KEY ([ProductID]),
+    CONSTRAINT [FK_Product_ProductCategory_ProductCategoryID] FOREIGN KEY ([ProductCategoryID]) REFERENCES [SalesLT].[ProductCategory] ([ProductCategoryID]),
+    CONSTRAINT [FK_Product_ProductModel_ProductModelID] FOREIGN KEY ([ProductModelID]) REFERENCES [SalesLT].[ProductModel] ([ProductModelID]),
+    CONSTRAINT [CK_Product_StandardCost] CHECK ([StandardCost] >= 0.00),
+    CONSTRAINT [CK_Product_ListPrice] CHECK ([ListPrice] >= 0.00)
+);
+
+statement ok
+CREATE TABLE [SalesLT].[ProductModelProductDescription] (
+    [ProductModelID] INT NOT NULL,
+    [ProductDescriptionID] INT NOT NULL,
+    [Culture] VARCHAR(6) NOT NULL,
+    [rowguid] UNIQUEIDENTIFIER NOT NULL DEFAULT (NEWID()),
+    [ModifiedDate] DATETIME NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_ProductModelProductDescription_ProductModelID_ProductDescriptionID_Culture] PRIMARY KEY ([ProductModelID], [ProductDescriptionID], [Culture]),
+    CONSTRAINT [FK_ProductModelProductDescription_ProductModel_ProductModelID] FOREIGN KEY ([ProductModelID]) REFERENCES [SalesLT].[ProductModel] ([ProductModelID]),
+    CONSTRAINT [FK_ProductModelProductDescription_ProductDescription_ProductDescriptionID] FOREIGN KEY ([ProductDescriptionID]) REFERENCES [SalesLT].[ProductDescription] ([ProductDescriptionID])
+);
+
+statement ok
+CREATE TABLE [SalesLT].[SalesOrderHeader] (
+    [SalesOrderID] INT IDENTITY(1,1) NOT NULL,
+    [RevisionNumber] TINYINT NOT NULL DEFAULT (0),
+    [OrderDate] DATETIME NOT NULL DEFAULT (GETDATE()),
+    [DueDate] DATETIME NOT NULL,
+    [ShipDate] DATETIME NULL,
+    [Status] TINYINT NOT NULL DEFAULT (1),
+    [OnlineOrderFlag] BIT NOT NULL DEFAULT (1),
+    [SalesOrderNumber] VARCHAR(25) NOT NULL,
+    [PurchaseOrderNumber] VARCHAR(25) NULL,
+    [AccountNumber] VARCHAR(15) NULL,
+    [CustomerID] INT NOT NULL,
+    [ShipToAddressID] INT NULL,
+    [BillToAddressID] INT NULL,
+    [ShipMethod] VARCHAR(50) NOT NULL,
+    [CreditCardApprovalCode] VARCHAR(15) NULL,
+    [SubTotal] DECIMAL(18,4) NOT NULL DEFAULT (0.00),
+    [TaxAmt] DECIMAL(18,4) NOT NULL DEFAULT (0.00),
+    [Freight] DECIMAL(18,4) NOT NULL DEFAULT (0.00),
+    [TotalDue] DECIMAL(18,4) NOT NULL DEFAULT (0.00),
+    [Comment] VARCHAR(MAX) NULL,
+    [rowguid] UNIQUEIDENTIFIER NOT NULL DEFAULT (NEWID()),
+    [ModifiedDate] DATETIME NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_SalesOrderHeader_SalesOrderID] PRIMARY KEY ([SalesOrderID]),
+    CONSTRAINT [FK_SalesOrderHeader_Customer_CustomerID] FOREIGN KEY ([CustomerID]) REFERENCES [SalesLT].[Customer] ([CustomerID]),
+    CONSTRAINT [FK_SalesOrderHeader_Address_BillTo_AddressID] FOREIGN KEY ([BillToAddressID]) REFERENCES [SalesLT].[Address] ([AddressID]),
+    CONSTRAINT [FK_SalesOrderHeader_Address_ShipTo_AddressID] FOREIGN KEY ([ShipToAddressID]) REFERENCES [SalesLT].[Address] ([AddressID])
+);
+
+statement ok
+CREATE TABLE [SalesLT].[SalesOrderDetail] (
+    [SalesOrderID] INT NOT NULL,
+    [SalesOrderDetailID] INT IDENTITY(1,1) NOT NULL,
+    [OrderQty] SMALLINT NOT NULL,
+    [ProductID] INT NOT NULL,
+    [UnitPrice] DECIMAL(18,4) NOT NULL,
+    [UnitPriceDiscount] DECIMAL(18,4) NOT NULL DEFAULT (0.00),
+    [LineTotal] DECIMAL(38,6) NOT NULL,
+    [rowguid] UNIQUEIDENTIFIER NOT NULL DEFAULT (NEWID()),
+    [ModifiedDate] DATETIME NOT NULL DEFAULT (GETDATE()),
+    CONSTRAINT [PK_SalesOrderDetail_SalesOrderID_SalesOrderDetailID] PRIMARY KEY ([SalesOrderID], [SalesOrderDetailID]),
+    CONSTRAINT [FK_SalesOrderDetail_SalesOrderHeader_SalesOrderID] FOREIGN KEY ([SalesOrderID]) REFERENCES [SalesLT].[SalesOrderHeader] ([SalesOrderID]),
+    CONSTRAINT [FK_SalesOrderDetail_Product_ProductID] FOREIGN KEY ([ProductID]) REFERENCES [SalesLT].[Product] ([ProductID]),
+    CONSTRAINT [CK_SalesOrderDetail_OrderQty] CHECK ([OrderQty] > 0),
+    CONSTRAINT [CK_SalesOrderDetail_UnitPrice] CHECK ([UnitPrice] >= 0.00),
+    CONSTRAINT [CK_SalesOrderDetail_UnitPriceDiscount] CHECK ([UnitPriceDiscount] >= 0.00)
+);
+
+statement ok
+INSERT INTO [dbo].[ErrorLog] ([ErrorTime], [UserName], [ErrorNumber], [ErrorSeverity], [ErrorState], [ErrorProcedure], [ErrorLine], [ErrorMessage])
+VALUES ('2026-01-01 10:00:00', 'sa', 50000, 16, 1, 'usp_SampleProc', 42, 'Initial audit log bootstrap check.');
+
+statement ok
+INSERT INTO [SalesLT].[Address] ([AddressLine1], [AddressLine2], [City], [StateProvince], [CountryRegion], [PostalCode])
+VALUES 
+('1010 Clear Lake Blvd', NULL, 'Renton', 'Washington', 'United States', '98055'),
+('2020 4th Ave', 'Suite 500', 'Seattle', 'Washington', 'United States', '98101'),
+('3030 Olympic Dr', NULL, 'Bellevue', 'Washington', 'United States', '98004'),
+('4040 Broadway Ave', '#12B', 'Portland', 'Oregon', 'United States', '97201'),
+('5050 Oxford St', NULL, 'London', 'Greater London', 'United Kingdom', 'W1D 1BS');
+
+statement ok
+INSERT INTO [SalesLT].[Customer] ([FirstName], [LastName], [CompanyName], [EmailAddress], [Phone])
+VALUES
+('Orlando', 'Gee', 'A Bike Store', 'orlando0@adventure-works.com', '245-555-0173'),
+('Keith', 'Harris', 'Progressive Sports', 'keith0@adventure-works.com', '170-555-0127'),
+('Donna', 'Carreras', 'Advanced Bikes', 'donna0@adventure-works.com', '279-555-0130'),
+('Janet', 'Gates', 'Modular Cycle Systems', 'janet1@adventure-works.com', '710-555-0173'),
+('Lucy', 'Harrington', 'Metropolitan Sports', 'lucy0@adventure-works.com', '828-555-0186');
+
+query I
+SELECT COUNT(*) FROM [SalesLT].[Customer];
+----
+5
+
+query I
+SELECT COUNT(*) FROM [SalesLT].[Address];
+----
+5
+
+query I
+SELECT COUNT(*) FROM [dbo].[ErrorLog];
+----
+1

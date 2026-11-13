@@ -398,6 +398,21 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 			return tc, "@@trancount"
 		}
 		return int64(0), "@@trancount"
+	case "XACT_STATE()", "XACT_STATE":
+		if cs != nil {
+			cs.Mu.Lock()
+			hasTx := cs.TranCount > 0
+			failed := cs.TxFailed
+			cs.Mu.Unlock()
+			if !hasTx {
+				return int64(0), "xact_state"
+			}
+			if failed {
+				return int64(-1), "xact_state"
+			}
+			return int64(1), "xact_state"
+		}
+		return int64(0), "xact_state"
 	case "@@ROWCOUNT":
 		if cs != nil {
 			cs.Mu.Lock()
@@ -1667,7 +1682,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION
 	if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
 		upperClean := strings.ToUpper(cleaned)
-		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean, "CURRENT_SETTING") && !strings.Contains(upperClean, "PG_CANCEL_BACKEND") && !strings.Contains(upperClean, "PG_TERMINATE_BACKEND") && !strings.Contains(upperClean[6:], "SELECT") && !strings.Contains(cleaned, "->") {
+		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "XACT_STATE") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean, "CURRENT_SETTING") && !strings.Contains(upperClean, "PG_CANCEL_BACKEND") && !strings.Contains(upperClean, "PG_TERMINATE_BACKEND") && !strings.Contains(upperClean[6:], "SELECT") && !strings.Contains(cleaned, "->") {
 			if res, err := s.execVDBESelect(cleaned, start, cs); err == nil && res != nil {
 				return res, nil
 			}

@@ -1,0 +1,72 @@
+# test/slt_proc/adventureworks_oracle/3103_adventureworks_products_and_categories.slt
+# Microsoft AdventureWorksLT Products & Categories Hierarchy Suite
+
+statement ok
+CREATE TABLE [SalesLT].[ProductCategory] (
+    [ProductCategoryID] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [ParentProductCategoryID] INT NULL,
+    [Name] VARCHAR(50) NOT NULL
+);
+
+statement ok
+CREATE TABLE [SalesLT].[Product] (
+    [ProductID] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+    [Name] VARCHAR(50) NOT NULL,
+    [ProductNumber] VARCHAR(25) NOT NULL,
+    [Color] VARCHAR(15) NULL,
+    [StandardCost] DECIMAL(18,4) NOT NULL,
+    [ListPrice] DECIMAL(18,4) NOT NULL,
+    [ProductCategoryID] INT NULL
+);
+
+statement ok
+INSERT INTO [SalesLT].[ProductCategory] ([ParentProductCategoryID], [Name])
+VALUES
+(NULL, 'Bikes'),
+(NULL, 'Components');
+
+statement ok
+INSERT INTO [SalesLT].[ProductCategory] ([ParentProductCategoryID], [Name])
+VALUES
+(1, 'MountainBikes'),
+(1, 'RoadBikes'),
+(1, 'TouringBikes');
+
+statement ok
+INSERT INTO [SalesLT].[Product] ([Name], [ProductNumber], [Color], [StandardCost], [ListPrice], [ProductCategoryID])
+VALUES
+('Mountain-100', 'BK-M18S-38', 'Silver', 700.0000, 1200.0000, 3),
+('Road-150', 'BK-R15R-48', 'Red', 900.0000, 1500.0000, 4),
+('Touring-1000', 'BK-T10B-54', 'Blue', 800.0000, 1350.0000, 5),
+('Jersey-S', 'SJ-01-S', 'Yellow', 25.0000, 50.0000, 2);
+
+query TT
+SELECT 
+    p.Name AS ParentCategory,
+    c.Name AS SubCategory
+FROM [SalesLT].[ProductCategory] c
+INNER JOIN [SalesLT].[ProductCategory] p ON c.ParentProductCategoryID = p.ProductCategoryID
+ORDER BY c.Name ASC;
+----
+Bikes MountainBikes
+Bikes RoadBikes
+Bikes TouringBikes
+
+query IT
+WITH HighValueProducts AS (
+    SELECT 
+        ProductID,
+        Name,
+        ListPrice
+    FROM [SalesLT].[Product]
+    WHERE ListPrice > 1000.00
+)
+SELECT 
+    ProductID,
+    Name
+FROM HighValueProducts
+ORDER BY ProductID ASC;
+----
+1 Mountain-100
+2 Road-150
+3 Touring-1000

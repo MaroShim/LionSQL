@@ -95,12 +95,21 @@ func evalMathBuiltin(upper string, args []storage.Value) storage.Value {
 			if len(args) >= 2 && !args[1].IsNull {
 				decimals = int(args[1].IVal)
 			}
-			factor := math.Pow(10, float64(decimals))
-			rounded := math.Round(n*factor) / factor
-			if decimals == 0 {
-				return storage.IntValue(int64(rounded))
+			truncate := false
+			if len(args) >= 3 && !args[2].IsNull && args[2].IVal != 0 {
+				truncate = true
 			}
-			return storage.FloatValue(rounded)
+			factor := math.Pow(10, float64(decimals))
+			var resNum float64
+			if truncate {
+				resNum = math.Trunc(n*factor) / factor
+			} else {
+				resNum = math.Round(n*factor) / factor
+			}
+			if decimals == 0 {
+				return storage.IntValue(int64(resNum))
+			}
+			return storage.FloatValue(resNum)
 		}
 		return storage.NullValue(storage.TypeFloat)
 

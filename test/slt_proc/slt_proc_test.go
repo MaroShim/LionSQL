@@ -38,6 +38,7 @@ func TestTSQL_StoredProcedure_Suites(t *testing.T) {
 		"pymssql_oracle",
 		"gorm_oracle",
 		"mssql_jdbc_oracle",
+		"adventureworks_oracle",
 	}
 	for _, dir := range requiredDirs {
 		matches, _ := filepath.Glob(filepath.Join(dir, "*.slt"))

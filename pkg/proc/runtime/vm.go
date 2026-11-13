@@ -506,6 +506,7 @@ type VMFrame struct {
 	lastOpenedCursor string
 	fetchStatus     int
 	tranCount       int
+	txFailed        bool
 	lastIdentity    int64
 	lastError       int
 	lastErrorMsg    string
@@ -576,6 +577,14 @@ func (f *VMFrame) resolveTable(name string) string {
 		if !strings.HasPrefix(lower, "@") {
 			if phys, ok := f.tableVars["@"+lower]; ok {
 				return phys
+			}
+		}
+	}
+	cleaned := proc.CleanSchemaPrefix(raw)
+	if f.executor != nil {
+		if tg := f.executor.getTableGetter(); tg != nil {
+			if schema, err := tg(cleaned); err == nil && schema != nil {
+				return cleaned
 			}
 		}
 	}
@@ -818,6 +827,7 @@ func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame
 	f.values = nil
 	f.rowCount = 0
 	f.tranCount = 0
+	f.txFailed = false
 	f.lastIdentity = 0
 	f.lastError = 0
 	f.lastErrorMsg = ""
@@ -890,6 +900,7 @@ func (f *VMFrame) resetForPool() {
 	f.logs = f.logs[:0]
 	f.rowCount = 0
 	f.tranCount = 0
+	f.txFailed = false
 	f.lastIdentity = 0
 	f.lastError = 0
 	f.lastErrorMsg = ""

@@ -18,7 +18,7 @@
 | **#7** | **`FIX-TSQL-INSERT-EXEC-1`** | `DONE` | Parser / VM / Engine | P1 | `INSERT INTO <table> [(cols)] EXEC <proc_name> [args]` 프로시저 결과셋 테이블 적재 지원 |
 | **#8** | **`FIX-SQL-DERIVED-VALUES-1`** | `DONE` | Engine / Planner | P1 | `FROM (VALUES (...), (...)) AS alias(col1, col2)` 인라인 테이블 값 생성자 및 컬럼 별칭 파싱·실행 지원 |
 | **#9** | **`FIX-TRIGGER-FOR-KEYWORD-1`** | `DONE` | Parser / Engine | P1 | `CREATE TRIGGER ... FOR INSERT, UPDATE, DELETE` (`AFTER` 동의어) 구문 파싱 지원 |
-| **#10** | **`FIX-TSQL-XACT-STATE-1`** | `PENDING` | Proc / Engine | P1 | `TRY...CATCH` 블록 내 트랜잭션 상태 반환 스칼라 함수 `XACT_STATE()` (`1`, `0`, `-1`) 지원 |
+| **#10** | **`FIX-TSQL-XACT-STATE-1`** | `DONE` | Proc / Engine | P1 | `TRY...CATCH` 블록 내 트랜잭션 상태 반환 스칼라 함수 `XACT_STATE()` (`1`, `0`, `-1`) 지원 |
 | **#11** | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** | `PENDING` | Parser / Eval | P1 | `CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX))` 미평가 원문 에코 버그 및 `MONEY`/`SMALLMONEY` 4자리 소수점 스케일 보정 |
 | **#12** | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** | `PENDING` | Wire (TDS) | P1 | TDS `RPCRequest`(`0x03`) 직접 프로시저 호출 시 `OUTPUT` 파라미터 `RETURNVALUE`(`0xAC`) 토큰 반환 및 기본값(`DEFAULT`) 바인딩 지원 |
 | **#13** | **`FIX-TDS-RPC-RETURN-STATUS-1`** | `PENDING` | Wire (TDS) / Engine | P1 | TDS RPC 프로시저 `RETURN <int>` 실행 시 하드코딩된 `0` 대신 실제 종료 코드를 `RETURNSTATUS`(`0x79`) 토큰으로 전송 |
@@ -177,7 +177,7 @@
 
 ---
 
-### `#10` `FIX-TSQL-XACT-STATE-1` (`PENDING`)
+### `#10` `FIX-TSQL-XACT-STATE-1` (`DONE`)
 - **현상**:
   저장 프로시저나 배치의 `BEGIN TRY ... END TRY BEGIN CATCH ... IF XACT_STATE() <> 0 ROLLBACK TRANSACTION; END CATCH` 구문에서 `XACT_STATE()` 호출 시 알 수 없는 함수 오류가 발생하거나 올바른 트랜잭션 상태값을 반환하지 않음.
 - **근본 원인 (Root Cause)**:
@@ -185,10 +185,12 @@
     - `1`: 활성 사용자 트랜잭션이 존재하며 커밋 가능한 상태
     - `0`: 활성 사용자 트랜잭션이 없음 (Autocommit 상태)
     - `-1`: 활성 트랜잭션이 존재하지만 심각한 에러가 발생하여 커밋할 수 없고 `ROLLBACK`만 가능한 상태 (Uncommittable Transaction)
-  - 현재 `pkg/proc/builtins.go` 및 VM/코디네이터 세션 컨텍스트에 `XACT_STATE()` 내장 함수가 연결되어 있지 않음.
-- **해결 설계안 (Proposed Solution)**:
-  1. VDBE VM 프레임(`pkg/proc/runtime/vm.go`) 및 엔진 세션(`pkg/engine/coordinator.go`)에서 현재 활성 트랜잭션 여부(`inTransaction` / `activeTx != nil`)와 언커밋 불가 플래그(`txUncommittable`)를 추적.
-  2. `pkg/proc/builtins.go` 및 VM 표현식 평가기(`pkg/proc/runtime/vm.go`)에 `XACT_STATE()`를 등록하여 활성 트랜잭션이 있으면 `1`(언커밋 불가 시 `-1`), 없으면 `0`을 `storage.TypeInt`로 반환.
+  - `pkg/proc/builtins.go` 및 VM/코디네이터 세션 컨텍스트에 `XACT_STATE()` 내장 함수가 연결되어 있지 않았음.
+- **해결 및 적용 완료 내역**:
+  - `pkg/proc/builtins_sys.go`: `isSysBuiltin` 및 `evalSysBuiltin`에 `XACT_STATE` 등록.
+  - `pkg/proc/runtime/vm.go` & `vm_dispatcher.go`: `VMFrame.txFailed` 필드를 추가하고 `handleCatch` 및 `OpThrow` 시 활성 트랜잭션이 있으면 `txFailed = true`로 마킹. `OpTxCommit` 시 `txFailed`이면 SQL Server 표준 `[42000]` 에러로 실패. `OpTxRollback` 시 `txFailed = false`, `tranCount = 0` 리셋. `OpCallBuiltin`에서 `tranCount > 0`일 때 `1` (실패 시 `-1`), 트랜잭션 미존재 시 `0` 반환.
+  - `pkg/engine/sqlexec_select.go`: `evalScalarExprCore`에서 `cs.TranCount > 0` 기반으로 `1` (실패 시 `-1`), `0` 반환 및 `execSelect` 테이블-리스 스칼라 경로에서 `XACT_STATE`를 안전하게 인터셉트.
+  - `pkg/proc/runtime/xact_state_test.go` 및 `pkg/engine/tsql_compat_matrix_regression_test.go`를 통해 저장 프로시저 및 세션 레벨 생명주기 검증 전수 통과.
 
 ---
 
