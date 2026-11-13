@@ -75,7 +75,7 @@ EXEC p492_5 1, 2, 3; -- Valid call
 query TTT
 EXEC p492_5 1, 2, @x=5; -- Unknown default argument name
 ----
-1 2 NULL
+1 2 3
 
 statement ok
 DROP PROC p492_5;

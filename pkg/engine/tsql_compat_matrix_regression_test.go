@@ -643,3 +643,34 @@ func TestTSQLCompatMatrix_CastMaxAndMoney(t *testing.T) {
 
 
 
+
+func TestTSQLCompatMatrix_ProcedureParamDefaults(t *testing.T) {
+	coord, cleanup := newCompatMatrixTestCoord(t)
+	defer cleanup()
+
+	if _, err := coord.ExecuteSQL("CREATE PROCEDURE p_def @a INT, @b INT = 10, @c VARCHAR(10) = 'x' AS BEGIN SELECT @a + @b AS total, @c AS tag; END;"); err != nil {
+		t.Fatalf("CREATE PROCEDURE with defaults failed: %v", err)
+	}
+
+	cases := []struct {
+		sql   string
+		total int64
+		tag   string
+	}{
+		{"EXEC p_def 5;", 15, "x"},
+		{"EXEC p_def 5, 1;", 6, "x"},
+		{"EXEC p_def @a = 2, @c = 'z';", 12, "z"},
+	}
+	for _, tc := range cases {
+		res, err := coord.ExecuteSQL(tc.sql)
+		if err != nil {
+			t.Fatalf("%s failed: %v", tc.sql, err)
+		}
+		if len(res.Rows) != 1 {
+			t.Fatalf("%s: expected 1 row, got %+v", tc.sql, res.Rows)
+		}
+		if fmt.Sprint(res.Rows[0]["total"]) != fmt.Sprint(tc.total) || fmt.Sprint(res.Rows[0]["tag"]) != tc.tag {
+			t.Fatalf("%s: expected total=%d tag=%s, got %+v", tc.sql, tc.total, tc.tag, res.Rows[0])
+		}
+	}
+}

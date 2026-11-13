@@ -516,32 +516,67 @@ type VMFrame struct {
 }
 
 func (f *VMFrame) bindParams(params map[string]any) {
-	if len(params) == 0 {
+	for k, v := range params {
+		f.setParamVar(cleanSymbol(k), toStorageValue(v))
+	}
+	f.bindDeclaredDefaults(params)
+	if len(params) > 0 {
+		f.evalCtxDirty = true
+	}
+}
+
+// setParamVar stores a bound parameter into its compiled slot, falling back to the named variable map.
+func (f *VMFrame) setParamVar(clean string, stVal storage.Value) {
+	slot := int32(-1)
+	if f.prog != nil && f.prog.VarSlots != nil {
+		if s, ok := f.prog.VarSlots[clean]; ok {
+			slot = s
+		} else if s, ok := f.prog.VarSlots[strings.ToLower(clean)]; ok {
+			slot = s
+		}
+	}
+	if slot >= 0 && int(slot) < len(f.slots) {
+		f.slots[slot] = stVal
 		return
 	}
-	for k, v := range params {
-		clean := cleanSymbol(k)
-		stVal := toStorageValue(v)
-		slot := int32(-1)
-		if f.prog != nil && f.prog.VarSlots != nil {
-			if s, ok := f.prog.VarSlots[clean]; ok {
-				slot = s
-			} else if s, ok := f.prog.VarSlots[strings.ToLower(clean)]; ok {
-				slot = s
-			}
+	if f.vars == nil {
+		f.vars = make(map[string]storage.Value, 8)
+	}
+	f.vars[clean] = stVal
+	f.vars[strings.ToLower(clean)] = stVal
+}
+
+// bindDeclaredDefaults applies `@p type = default` expressions for procedure parameters the caller omitted.
+func (f *VMFrame) bindDeclaredDefaults(provided map[string]any) {
+	if f.prog == nil {
+		return
+	}
+	for _, pd := range f.prog.Params {
+		if pd.Default == nil {
+			continue
 		}
-		if slot >= 0 && int(slot) < len(f.slots) {
-			f.slots[slot] = stVal
-		} else {
-			if f.vars == nil {
-				f.vars = make(map[string]storage.Value, 8)
-			}
-			f.vars[clean] = stVal
-			f.vars[strings.ToLower(clean)] = stVal
+		clean := cleanSymbol(pd.Name)
+		if paramProvided(provided, clean) {
+			continue
+		}
+		val, err := proc.EvalRowExpr(pd.Default, nil, nil)
+		if err != nil {
+			continue
+		}
+		f.setParamVar(clean, toStorageValue(val))
+		f.evalCtxDirty = true
+	}
+}
+
+func paramProvided(provided map[string]any, clean string) bool {
+	for k := range provided {
+		if strings.EqualFold(cleanSymbol(k), clean) {
+			return true
 		}
 	}
-	f.evalCtxDirty = true
+	return false
 }
+
 
 func (f *VMFrame) getStorageVarsMap() map[string]storage.Value {
 	varEst := len(f.vars)

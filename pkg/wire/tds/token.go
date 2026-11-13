@@ -450,6 +450,29 @@ func BuildReturnValueInt(paramOrdinal uint16, paramName string, val int32) []byt
 	return buf.Bytes()
 }
 
+// WriteReturnValue writes a RETURNVALUE token (0xAC) for an OUTPUT parameter of any column type.
+// Layout: ordinal, B_VARCHAR name, status (0x01 = output), usertype, flags, TYPE_INFO, value.
+func WriteReturnValue(buf *bytes.Buffer, paramOrdinal uint16, paramName string, col ColumnInfo, val any) {
+	buf.WriteByte(TokenReturnValue)
+	var hdr [2]byte
+	binary.LittleEndian.PutUint16(hdr[:], paramOrdinal)
+	buf.Write(hdr[:])
+	writeBVarchar(buf, paramName)
+	buf.WriteByte(0x01) // StatusFlags: Output parameter
+	_ = binary.Write(buf, binary.LittleEndian, uint32(0))
+	var flags uint16
+	if col.Nullable {
+		flags |= 0x0001
+	}
+	_ = binary.Write(buf, binary.LittleEndian, flags)
+	writeTypeInfo(buf, col)
+	if isNilTdsValue(val) {
+		writeNullColumnValue(buf, col)
+		return
+	}
+	writeColumnValue(buf, col, val)
+}
+
 // BuildError builds an ERROR token (0xAA).
 func BuildError(number int32, state byte, class byte, msg, serverName, procName string, lineNum int32) []byte {
 	var payload bytes.Buffer
@@ -503,6 +526,92 @@ func BuildInfo(number int32, state byte, class byte, msg, serverName, procName s
 	return buf.Bytes()
 }
 
+// writeTypeInfo writes the TYPE_INFO block (type id plus type-specific length/scale/collation) for col.
+func writeTypeInfo(buf *bytes.Buffer, col ColumnInfo) {
+	buf.WriteByte(col.Type)
+
+	switch col.Type {
+	case TypeIntN:
+		// MaxLength: 1B (e.g. 8 bytes for int64/int4)
+		buf.WriteByte(byte(col.Size))
+	case TypeFltN:
+		// MaxLength: 1B (e.g. 8 bytes)
+		buf.WriteByte(8)
+	case TypeBitN:
+		// MaxLength: 1B (1)
+		buf.WriteByte(1)
+	case TypeDateTimeN:
+		// MaxLength: 1B (8)
+		buf.WriteByte(8)
+	case TypeDateN:
+		// [MS-TDS] 2.2.5.6: DATENTYPE MUST NOT have a TYPE_VARLEN
+	case TypeTimeN:
+		// [MS-TDS] 2.2.5.6: TIMENTYPE scale (1 byte, 0..7). Default 7 (100ns precision).
+		scale := byte(7)
+		if col.Scale > 0 && col.Scale <= 7 {
+			scale = byte(col.Scale)
+		}
+		buf.WriteByte(scale)
+	case TypeDateTime2N:
+		// [MS-TDS] 2.2.5.6: DATETIME2NTYPE scale (1 byte, 0..7). Default 7 (100ns precision).
+		scale := byte(7)
+		if col.Scale > 0 && col.Scale <= 7 {
+			scale = byte(col.Scale)
+		}
+		buf.WriteByte(scale)
+	case TypeDateTimeOffsetN:
+		// [MS-TDS] 2.2.5.6: DATETIMEOFFSETNTYPE scale (1 byte, 0..7). Default 7 (100ns precision).
+		scale := byte(7)
+		if col.Scale > 0 && col.Scale <= 7 {
+			scale = byte(col.Scale)
+		}
+		buf.WriteByte(scale)
+	case TypeGuid:
+		// [MS-TDS] 2.2.5.5.1.1: GUIDTYPE is BYTELEN_TYPE with MaxLength 16 (0x10)
+		buf.WriteByte(16)
+	case TypeNVarChar:
+		if col.IsPLP || col.Size == -1 {
+			_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFF))
+		} else {
+			maxLen := uint16(col.Size * 2)
+			if col.Size <= 0 || col.Size > 4000 {
+				maxLen = 8000
+			}
+			_ = binary.Write(buf, binary.LittleEndian, maxLen)
+		}
+		buf.Write(DefaultCollation)
+	case TypeVarChar:
+		if col.IsPLP || col.Size == -1 {
+			_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFF))
+		} else {
+			maxLen := uint16(col.Size)
+			if col.Size <= 0 || col.Size > 8000 {
+				maxLen = 8000
+			}
+			_ = binary.Write(buf, binary.LittleEndian, maxLen)
+		}
+		buf.Write(DefaultCollation)
+	case TypeBigVarBin:
+		if col.IsPLP || col.Size == -1 {
+			_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFF))
+		} else {
+			maxLen := uint16(col.Size)
+			if col.Size <= 0 || col.Size > 8000 {
+				maxLen = 8000
+			}
+			_ = binary.Write(buf, binary.LittleEndian, maxLen)
+		}
+	default:
+		// Fallback to NVarChar
+		if col.IsPLP || col.Size == -1 {
+			_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFF))
+		} else {
+			_ = binary.Write(buf, binary.LittleEndian, uint16(8000))
+		}
+		buf.Write(DefaultCollation)
+	}
+}
+
 // BuildColMetaData builds a COLMETADATA token (0x81).
 func BuildColMetaData(cols []ColumnInfo) []byte {
 	var buf bytes.Buffer
@@ -520,89 +629,7 @@ func BuildColMetaData(cols []ColumnInfo) []byte {
 		}
 		_ = binary.Write(&buf, binary.LittleEndian, flags)
 
-		// TypeInfo
-		buf.WriteByte(col.Type)
-
-		switch col.Type {
-		case TypeIntN:
-			// MaxLength: 1B (e.g. 8 bytes for int64/int4)
-			buf.WriteByte(byte(col.Size))
-		case TypeFltN:
-			// MaxLength: 1B (e.g. 8 bytes)
-			buf.WriteByte(8)
-		case TypeBitN:
-			// MaxLength: 1B (1)
-			buf.WriteByte(1)
-		case TypeDateTimeN:
-			// MaxLength: 1B (8)
-			buf.WriteByte(8)
-		case TypeDateN:
-			// [MS-TDS] 2.2.5.6: DATENTYPE MUST NOT have a TYPE_VARLEN
-		case TypeTimeN:
-			// [MS-TDS] 2.2.5.6: TIMENTYPE scale (1 byte, 0..7). Default 7 (100ns precision).
-			scale := byte(7)
-			if col.Scale > 0 && col.Scale <= 7 {
-				scale = byte(col.Scale)
-			}
-			buf.WriteByte(scale)
-		case TypeDateTime2N:
-			// [MS-TDS] 2.2.5.6: DATETIME2NTYPE scale (1 byte, 0..7). Default 7 (100ns precision).
-			scale := byte(7)
-			if col.Scale > 0 && col.Scale <= 7 {
-				scale = byte(col.Scale)
-			}
-			buf.WriteByte(scale)
-		case TypeDateTimeOffsetN:
-			// [MS-TDS] 2.2.5.6: DATETIMEOFFSETNTYPE scale (1 byte, 0..7). Default 7 (100ns precision).
-			scale := byte(7)
-			if col.Scale > 0 && col.Scale <= 7 {
-				scale = byte(col.Scale)
-			}
-			buf.WriteByte(scale)
-		case TypeGuid:
-			// [MS-TDS] 2.2.5.5.1.1: GUIDTYPE is BYTELEN_TYPE with MaxLength 16 (0x10)
-			buf.WriteByte(16)
-		case TypeNVarChar:
-			if col.IsPLP || col.Size == -1 {
-				_ = binary.Write(&buf, binary.LittleEndian, uint16(0xFFFF))
-			} else {
-				maxLen := uint16(col.Size * 2)
-				if col.Size <= 0 || col.Size > 4000 {
-					maxLen = 8000
-				}
-				_ = binary.Write(&buf, binary.LittleEndian, maxLen)
-			}
-			buf.Write(DefaultCollation)
-		case TypeVarChar:
-			if col.IsPLP || col.Size == -1 {
-				_ = binary.Write(&buf, binary.LittleEndian, uint16(0xFFFF))
-			} else {
-				maxLen := uint16(col.Size)
-				if col.Size <= 0 || col.Size > 8000 {
-					maxLen = 8000
-				}
-				_ = binary.Write(&buf, binary.LittleEndian, maxLen)
-			}
-			buf.Write(DefaultCollation)
-		case TypeBigVarBin:
-			if col.IsPLP || col.Size == -1 {
-				_ = binary.Write(&buf, binary.LittleEndian, uint16(0xFFFF))
-			} else {
-				maxLen := uint16(col.Size)
-				if col.Size <= 0 || col.Size > 8000 {
-					maxLen = 8000
-				}
-				_ = binary.Write(&buf, binary.LittleEndian, maxLen)
-			}
-		default:
-			// Fallback to NVarChar
-			if col.IsPLP || col.Size == -1 {
-				_ = binary.Write(&buf, binary.LittleEndian, uint16(0xFFFF))
-			} else {
-				_ = binary.Write(&buf, binary.LittleEndian, uint16(8000))
-			}
-			buf.Write(DefaultCollation)
-		}
+		writeTypeInfo(&buf, col)
 
 		// ColName: B_VARCHAR (1B char count + UTF-16LE)
 		writeBVarchar(&buf, col.Name)

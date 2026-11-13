@@ -336,19 +336,24 @@ func WriteRowDirectValues(destBuf *bytes.Buffer, cols []ColumnInfo, values []any
 			val = values[i]
 		}
 		if isNilTdsValue(val) {
-			switch col.Type {
-			case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN, TypeDateN, TypeTimeN, TypeDateTime2N, TypeDateTimeOffsetN, TypeGuid:
-				destBuf.WriteByte(0)
-			default:
-				if col.IsPLP || col.Size == -1 {
-					destBuf.Write(tdsNullPLP)
-				} else {
-					destBuf.Write(tdsNullVarLen)
-				}
-			}
+			writeNullColumnValue(destBuf, col)
 			continue
 		}
 		writeColumnValue(destBuf, col, val)
+	}
+}
+
+// writeNullColumnValue writes the type-specific NULL marker for a column value.
+func writeNullColumnValue(destBuf *bytes.Buffer, col ColumnInfo) {
+	switch col.Type {
+	case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN, TypeDateN, TypeTimeN, TypeDateTime2N, TypeDateTimeOffsetN, TypeGuid:
+		destBuf.WriteByte(0)
+	default:
+		if col.IsPLP || col.Size == -1 {
+			destBuf.Write(tdsNullPLP)
+		} else {
+			destBuf.Write(tdsNullVarLen)
+		}
 	}
 }
 

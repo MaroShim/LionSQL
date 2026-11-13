@@ -193,8 +193,10 @@ func (s *CreateTriggerStmt) String() string {
 
 // ParamDef defines a procedure parameter.
 type ParamDef struct {
-	Name string
-	Type storage.DataType
+	Name    string
+	Type    storage.DataType
+	Output  bool // declared OUTPUT / OUT (by-reference)
+	Default Expr // declared default expression, nil when the parameter is required
 }
 
 func (s *CreateProcStmt) stmtNode() {}

@@ -48,7 +48,7 @@ RETURN SELECT @a AS a, @b AS b, @c AS c, @d AS d;
 query T
 EXEC my_proc1 @a = 10, @d = 40;
 ----
-NULL
+100
 
 query T
 EXEC my_proc1 @a = 10;

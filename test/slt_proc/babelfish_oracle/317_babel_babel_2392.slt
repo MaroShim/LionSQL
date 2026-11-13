@@ -20,7 +20,7 @@ exec sp1 @a = 3, @b = "abcd";
 query TT
 exec sp1 @b = "abcd";
 ----
-NULL abcd
+0 abcd
 
 statement ok
 create procedure sp2 (@a int, @b varchar) as begin select @a, @b; end;

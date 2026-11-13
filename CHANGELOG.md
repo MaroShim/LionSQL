@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - known follow-ups: hex literals (`0x01`) are lexed as strings, breaking `replicate(0x01, n)` (`394_babel_babel_4547.slt` now fails honestly instead of passing on echoed text); `CAST('$100.123' AS MONEY)` returns `0.0000`; `LEN(money)` length differs from SQL Server
 
 ### Added
+- return OUTPUT parameters and apply declared defaults for direct TDS stored procedure RPC calls (`FIX-TDS-RPC-OUTPUT-TOKEN-1`):
+  - record `Output` and `Default` on `ParamDef` for `CREATE PROCEDURE` parameters (`pkg/proc/parser_ddl.go`, `pkg/proc/ast.go`); previously the default expression and the `OUTPUT` keyword were skipped by the parser
+  - bind declared defaults for omitted parameters in `VMFrame.bindParams` (`pkg/proc/runtime/vm.go`), shared by TDS RPC, batch `EXEC`, and nested procedure calls
+  - emit a `RETURNVALUE` (`0xAC`) token for every OUTPUT-flagged RPC parameter after a direct procedure call (`pkg/wire/tds/rpc_output.go`), using the integer width declared by the client; unnamed positional parameters bind by declaration order
+  - extract `writeTypeInfo` from `BuildColMetaData` and `writeNullColumnValue` from the row writer so COLMETADATA, ROW and RETURNVALUE share one encoding
+  - realign 8 `babelfish_oracle` expectations that had captured the previous behavior of omitted defaults binding to `NULL`
+  - known follow-ups: `DEFAULT` keyword as an EXEC argument is treated as a string literal; unknown named EXEC arguments are ignored instead of raising an error; `DATEDIFF_BIG(dayofyear, ...)` returns `NULL`
 - support T-SQL scalar function `XACT_STATE()` returning active transaction state (`FIX-TSQL-XACT-STATE-1`):
   - return `1` for committable active transactions, `0` outside transactions or after `ROLLBACK`, and `-1` for uncommittable transactions aborted by errors in `TRY...CATCH`
   - add `txFailed` flag to `VMFrame` and fail closed on `COMMIT TRANSACTION` when `txFailed == true` with SQL Server error `[42000]`

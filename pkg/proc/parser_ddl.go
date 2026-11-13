@@ -75,10 +75,12 @@ func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 			}
 		}
 
-		// Skip optional default value e.g. = NULL, = 0
+		// Optional default value e.g. = NULL, = 0, = 'x'
 		if p.curTokenIs(TokenAssign) || p.curTokenIs(TokenEq) {
 			p.nextToken()
-			if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenInt) || p.curTokenIs(TokenFloat) || p.curTokenIs(TokenString) || p.curTokenIs(TokenNull) {
+			if def := p.parseExpression(precLowest); def != nil {
+				params[len(params)-1].Default = def
+			} else if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenInt) || p.curTokenIs(TokenFloat) || p.curTokenIs(TokenString) || p.curTokenIs(TokenNull) {
 				p.nextToken()
 			}
 		}
@@ -88,8 +90,9 @@ func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 			p.nextToken()
 		}
 
-		// Skip optional OUTPUT / OUT keyword
+		// Optional OUTPUT / OUT keyword marks a by-reference parameter
 		if p.curTokenIs(TokenOutput) || (p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "OUTPUT") || strings.EqualFold(p.curToken.Literal, "OUT"))) {
+			params[len(params)-1].Output = true
 			p.nextToken()
 		}
 

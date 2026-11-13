@@ -541,7 +541,7 @@ func (s *Server) executeVDBEPreparedFastPath(
 	}
 
 	if runErr == nil && res != nil {
-		s.respondExecutionResult(conn, res, sess, extraTokens)
+		s.respondExecutionResult(conn, res, sess, withOutputParams(extraTokens, boundParams, procParamNames, res.Vars))
 		return true
 	}
 	if ctx.Err() != nil {
@@ -1100,7 +1100,15 @@ func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession, 
 				if pMeta, err := s.catalog.GetProcedure(procName); err == nil && pMeta != nil && pMeta.Body != "" {
 					if cache := s.BytecodePlanCache(); cache != nil {
 						if prog, err := cache.GetOrCompile(pMeta.Body); err == nil && prog != nil {
-							if s.executeVDBEPreparedFastPath(ctx, conn, prog, rpc.Params, sess, nil, nil) {
+							// Positional (unnamed) RPC parameters bind by declaration order; named ones bind by name.
+							var declared []string
+							if !rpcHasNamedParam(rpc.Params) {
+								declared = make([]string, len(prog.Params))
+								for i, pd := range prog.Params {
+									declared[i] = pd.Name
+								}
+							}
+							if s.executeVDBEPreparedFastPath(ctx, conn, prog, rpc.Params, sess, nil, declared) {
 								return
 							}
 						}

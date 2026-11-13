@@ -56,7 +56,7 @@ SELECT @res AS out_value
 query T
 EXEC exec_tvf_named_args_def @a = 1
 ----
-NULL
+101
 
 query T
 EXEC exec_tvf_named_args_def @a = 1, @b = 2
