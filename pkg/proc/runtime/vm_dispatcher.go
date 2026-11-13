@@ -901,6 +901,17 @@ vmLoop:
 			return nil, fmt.Errorf("invalid OpInsert metadata")
 		}
 		targetTable := f.resolveTable(data.Table)
+		if data.Exec != nil {
+			cnt, err := f.execInsertExec(data)
+			if err != nil {
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
+			}
+			f.rowCount = cnt
+			continue vmLoop
+		}
 		if data.Select != nil {
 			cnt, err := f.execInsertSelect(data)
 			if err != nil {

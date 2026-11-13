@@ -202,6 +202,8 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			return res, nil
 		} else if strings.Contains(err.Error(), "IDENTITY_INSERT") {
 			return nil, err
+		} else if dml != nil && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(dml.Values)), "EXEC") {
+			return nil, err
 		}
 	}
 

@@ -1222,8 +1222,22 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 		}, nil
 	}
 
+	if p.curTokenIs(TokenExec) {
+		execStmt, err := p.parseExec()
+		if err != nil {
+			return nil, err
+		}
+		return &GeneralInsertStmt{
+			Table:      tblName,
+			Columns:    cols,
+			OutputCols: outputCols,
+			IntoVars:   intoVars,
+			Exec:       execStmt.(*ExecStmt),
+		}, nil
+	}
+
 	if !p.curTokenIs(TokenValues) {
-		return nil, fmt.Errorf("expected VALUES or SELECT in INSERT, got %s", p.curToken.Literal)
+		return nil, fmt.Errorf("expected VALUES, SELECT, or EXEC in INSERT, got %s", p.curToken.Literal)
 	}
 	p.nextToken()
 

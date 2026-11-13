@@ -15,7 +15,7 @@
 | **#4** | **`FIX-SQL-PAREN-SELECT-1`** | `DONE` | Parser / Engine / Planner | P1 | 괄호로 감싸진 `(SELECT ...)` 최상위 쿼리, 집합 연산 브랜치, 뷰/CTE 본문 실행 지원 |
 | **#5** | **`FIX-CURSOR-LIFECYCLE-1`** | `PENDING` | Engine / VM | P1 | 커서 `DEALLOCATE` 및 배치 종료 시 세션 커서 레지스트리 정리 및 동일 이름 재선언 충돌 해결 |
 | **#6** | **`FIX-VM-HIDDEN-ROWID-1`** | `PENDING` | Proc / VM | P1 | 명시적 PK가 없는 테이블에 대해 VDBE VM `OpInsert` 실행 시 숨은 `_row_id` 자동 발번 누락 수정 |
-| **#7** | **`FIX-TSQL-INSERT-EXEC-1`** | `PENDING` | Parser / VM / Engine | P1 | `INSERT INTO <table> [(cols)] EXEC <proc_name> [args]` 프로시저 결과셋 테이블 적재 지원 |
+| **#7** | **`FIX-TSQL-INSERT-EXEC-1`** | `DONE` | Parser / VM / Engine | P1 | `INSERT INTO <table> [(cols)] EXEC <proc_name> [args]` 프로시저 결과셋 테이블 적재 지원 |
 | **#8** | **`FIX-SQL-DERIVED-VALUES-1`** | `PENDING` | Engine / Planner | P1 | `FROM (VALUES (...), (...)) AS alias(col1, col2)` 인라인 테이블 값 생성자 및 컬럼 별칭 파싱·실행 지원 |
 | **#9** | **`FIX-TRIGGER-FOR-KEYWORD-1`** | `PENDING` | Parser / Engine | P1 | `CREATE TRIGGER ... FOR INSERT, UPDATE, DELETE` (`AFTER` 동의어) 구문 파싱 지원 |
 | **#10** | **`FIX-TSQL-XACT-STATE-1`** | `PENDING` | Proc / Engine | P1 | `TRY...CATCH` 블록 내 트랜잭션 상태 반환 스칼라 함수 `XACT_STATE()` (`1`, `0`, `-1`) 지원 |
@@ -133,16 +133,20 @@
 
 ---
 
-### `#7` `FIX-TSQL-INSERT-EXEC-1` (`PENDING`)
+### `#7` `FIX-TSQL-INSERT-EXEC-1` (`DONE`)
 - **현상**:
   T-SQL에서 매우 빈번히 쓰이는 `INSERT INTO target_table (col1, col2) EXEC sp_get_rows @p1 = 1;` 구문이 파싱 에러로 거부됨.
 - **근본 원인 (Root Cause)**:
-  1. **파서 (`pkg/proc/parser_dml.go` `parseInsert()`)**: `INSERT INTO <table> [(cols)]` 다음에 `VALUES`, `SELECT`, `DEFAULT VALUES`만 허용하고 `EXEC` / `EXECUTE` 토큰 분기를 처리하지 않음.
+  1. **파서 (`pkg/proc/parser_dml.go` `parseGeneralInsert()`)**: `INSERT INTO <table> [(cols)]` 다음에 `VALUES`, `SELECT`, `DEFAULT VALUES`만 허용하고 `EXEC` / `EXECUTE` 토큰 분기를 처리하지 않음.
   2. **실행기 (`pkg/engine/sqlexec_dml.go` & `pkg/proc/runtime/vm_dispatcher.go`)**: 프로시저(또는 `sp_executesql`)를 실행하여 반환된 결과셋(`Rows`)을 대상 테이블의 컬럼 순서에 맞춰 트랜잭션 내부에서 `Insert`하는 실행 경로가 없음.
-- **해결 설계안 (Proposed Solution)**:
-  1. `pkg/proc/ast.go` (`InsertStmt`) 및 `pkg/proc/bytecode.go` (`DMLData`)에 `Exec *ExecStmt` 필드를 추가.
-  2. `pkg/proc/parser_dml.go` (`parseInsert`): `VALUES` / `SELECT` 외에 `TokenExec` (`EXEC` / `EXECUTE`)가 오면 `parseExec()`를 호출하여 `InsertStmt.Exec`에 연결.
-  3. `pkg/engine/sqlexec_dml.go` 및 `pkg/proc/runtime/vm_dispatcher.go` (`OpInsert`): `data.Exec != nil`일 때 대상 프로시저를 현재 트랜잭션 컨텍스트에서 실행하고, 반환된 결과셋 행들을 순서대로 대상 테이블에 삽입(스키마 타입 강제변환, `_row_id`/`IDENTITY` 자동 채번, 제약 조건 검사 포함)한 뒤 삽입된 행 수를 `@@ROWCOUNT`에 반영. (단, SQL Server 표준과 동일하게 중첩 `INSERT ... EXEC` 내부의 `INSERT ... EXEC`는 최대 깊이 가드 적용 `[RULE:BoundedRecursion]`).
+  3. **세션 임시테이블 식별자 (`pkg/engine/session.go`)**: 세션 ID에 하이픈(`-`)이 포함된 경우(`pg-1`, `sess-temp-...`) `#temp` 테이블 재작성 시 SQL 파서가 마이너스 연산자로 오인식하여 문법 오류 발생.
+- **해결 및 적용 완료 내역**:
+  1. `pkg/proc/ast.go` (`GeneralInsertStmt`) 및 `pkg/proc/bytecode.go` (`DMLData`)에 `Exec *ExecStmt` 필드를 추가.
+  2. `pkg/proc/parser_dml.go` (`parseGeneralInsert`): `TokenExec` (`EXEC` / `EXECUTE`)가 오면 `p.parseExec()`를 호출하여 `GeneralInsertStmt.Exec`에 연결하고, `pkg/engine/dml_parser.go`에도 `EXEC` 절 통과 허용.
+  3. `pkg/proc/runtime/vm.go` & `vm_dispatcher.go`: `execInsertExec`를 구현하여 대상 프로시저를 현재 프레임의 트랜잭션 컨텍스트(`f.tx`) 및 동일 실행기에서 서브프레임으로 실행하고, 반환된 결과셋 행들을 대상 테이블 스키마에 매핑하여 삽입(타입 변환, `AllocIdentity`, 체크 제약조건 검사, 재귀 깊이 64 제한 `[RULE:BoundedRecursion]`).
+  4. `pkg/engine/coordinator_impl.go`: `executor.SetProcedureGetter` SPI를 연결하여 카탈로그의 저장 프로시저를 동적으로 컴파일/캐시 바인딩.
+  5. `pkg/engine/session.go`: `MangleSessionIDForIdent` 무충돌 단일 규칙(영숫자 유지, 비영숫자는 `_XX` 16진수 인코딩)을 적용하여 다중 세션 간 충돌 0% 및 파서 호환성 보장.
+  6. `pkg/engine/tsql_compat_matrix_regression_test.go` 및 `session_mangle_test.go`를 통해 단독 실행, 중첩 프로시저 실행, 세션 임시테이블(`#temp`) 적재 전 과정 검증 완료.
 
 ---
 

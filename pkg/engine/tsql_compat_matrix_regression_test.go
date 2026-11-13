@@ -403,4 +403,98 @@ func TestTSQLCompatMatrix_ProcedureInsertIntoTableWithoutExplicitPK(t *testing.T
 	}
 }
 
+// TestTSQLCompatMatrix_InsertExecStoredProcedure verifies Task #7 (FIX-TSQL-INSERT-EXEC-1):
+// Piping stored procedure execution result sets directly into target tables via INSERT INTO ... EXEC.
+func TestTSQLCompatMatrix_InsertExecStoredProcedure(t *testing.T) {
+	coord, cleanup := newCompatMatrixTestCoord(t)
+	defer cleanup()
+
+	// 1. Create source table and populate with data
+	if _, err := coord.ExecuteSQL("CREATE TABLE src_products (id INT PRIMARY KEY, name VARCHAR(100), price INT);"); err != nil {
+		t.Fatalf("CREATE TABLE src_products failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL("INSERT INTO src_products VALUES (1, 'Keyboard', 50), (2, 'Mouse', 30), (3, 'Monitor', 200);"); err != nil {
+		t.Fatalf("INSERT INTO src_products failed: %v", err)
+	}
+
+	// 2. Create procedure that queries source table with a parameter
+	procSQL := `
+		CREATE PROCEDURE sp_get_discounted_products
+			@max_price INT
+		AS
+		BEGIN
+			SELECT id, name, price FROM src_products WHERE price <= @max_price ORDER BY id ASC;
+		END;
+	`
+	if _, err := coord.ExecuteSQL(procSQL); err != nil {
+		t.Fatalf("CREATE PROCEDURE sp_get_discounted_products failed: %v", err)
+	}
+
+	// 3. Create destination table
+	if _, err := coord.ExecuteSQL("CREATE TABLE dest_discounted (prod_id INT, prod_name VARCHAR(100), prod_price INT);"); err != nil {
+		t.Fatalf("CREATE TABLE dest_discounted failed: %v", err)
+	}
+
+	// 4. Test standalone INSERT INTO dest_discounted EXEC sp_get_discounted_products @max_price = 60;
+	insertExecSQL := "INSERT INTO dest_discounted (prod_id, prod_name, prod_price) EXEC sp_get_discounted_products @max_price = 60;"
+	if _, err := coord.ExecuteSQL(insertExecSQL); err != nil {
+		t.Fatalf("standalone INSERT ... EXEC failed: %v", err)
+	}
+
+	res, err := coord.ExecuteSQL("SELECT prod_id, prod_name, prod_price FROM dest_discounted ORDER BY prod_id ASC;")
+	if err != nil {
+		t.Fatalf("SELECT dest_discounted failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows in dest_discounted, got %d (%+v)", len(res.Rows), res.Rows)
+	}
+	if res.Rows[0]["prod_name"] != "Keyboard" || res.Rows[1]["prod_name"] != "Mouse" {
+		t.Fatalf("unexpected destination contents: %+v", res.Rows)
+	}
+
+	// 5. Test nested INSERT INTO ... EXEC inside another stored procedure
+	procWrapperSQL := `
+		CREATE PROCEDURE sp_load_items_into_dest
+		AS
+		BEGIN
+			INSERT INTO dest_discounted (prod_id, prod_name, prod_price)
+			EXEC sp_get_discounted_products @max_price = 200;
+		END;
+	`
+	if _, err := coord.ExecuteSQL(procWrapperSQL); err != nil {
+		t.Fatalf("CREATE PROCEDURE sp_load_items_into_dest failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL("EXEC sp_load_items_into_dest;"); err != nil {
+		t.Fatalf("EXEC sp_load_items_into_dest failed: %v", err)
+	}
+
+	resTotal, err := coord.ExecuteSQL("SELECT COUNT(*) AS cnt FROM dest_discounted;")
+	if err != nil {
+		t.Fatalf("SELECT COUNT(*) failed: %v", err)
+	}
+	if resTotal.Rows[0]["cnt"] != int64(5) {
+		t.Fatalf("expected 5 total rows, got %v", resTotal.Rows[0]["cnt"])
+	}
+
+	// 6. Test INSERT INTO #temp EXEC sp_get_discounted_products @max_price = 100;
+	tempTableBatch := `
+		CREATE TABLE #temp_discounted (prod_id INT, prod_name VARCHAR(100), prod_price INT);
+		INSERT INTO #temp_discounted (prod_id, prod_name, prod_price)
+		EXEC sp_get_discounted_products @max_price = 100;
+		SELECT prod_name FROM #temp_discounted ORDER BY prod_id ASC;
+	`
+	sessID := "sess-temp-insert-exec"
+	resTemp, err := coord.ExecuteSessionSQL(sessID, tempTableBatch)
+	if err != nil {
+		t.Fatalf("INSERT INTO #temp EXEC failed: %v", err)
+	}
+	if len(resTemp.Rows) != 2 {
+		t.Fatalf("expected 2 rows in #temp_discounted, got %d (%+v)", len(resTemp.Rows), resTemp.Rows)
+	}
+	if resTemp.Rows[0]["prod_name"] != "Keyboard" || resTemp.Rows[1]["prod_name"] != "Mouse" {
+		t.Fatalf("unexpected temp table contents: %+v", resTemp.Rows)
+	}
+}
+
+
 

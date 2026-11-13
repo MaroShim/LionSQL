@@ -868,6 +868,16 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		for _, v := range s.IntoVars {
 			c.getOrAllocSlot(cleanVarName(v))
 		}
+		if s.Exec != nil {
+			c.emit(OpInsert, 0, 0, 0, &DMLData{
+				Table:      s.Table,
+				Columns:    s.Columns,
+				Exec:       s.Exec,
+				OutputCols: s.OutputCols,
+				IntoVars:   s.IntoVars,
+			})
+			return nil
+		}
 		if s.Select != nil {
 			c.emit(OpInsert, 0, 0, 0, &DMLData{
 				Table:      s.Table,

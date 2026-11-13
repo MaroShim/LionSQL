@@ -1212,7 +1212,7 @@ func (e *ExistsExpr) String() string {
 	return fmt.Sprintf("EXISTS (%s)", e.Query.String())
 }
 
-// GeneralInsertStmt represents INSERT INTO table (cols) [OUTPUT ...] VALUES (tuples...) or INSERT INTO table (cols) [OUTPUT ...] SELECT ...
+// GeneralInsertStmt represents INSERT INTO table (cols) [OUTPUT ...] VALUES (tuples...) or INSERT INTO table (cols) [OUTPUT ...] SELECT ... or INSERT INTO table (cols) [OUTPUT ...] EXEC ...
 type GeneralInsertStmt struct {
 	Table      string
 	Columns    []string
@@ -1220,6 +1220,7 @@ type GeneralInsertStmt struct {
 	IntoVars   []string
 	Tuples     [][]Expr
 	Select     *GeneralSelectStmt
+	Exec       *ExecStmt
 }
 
 func (s *GeneralInsertStmt) stmtNode() {}
@@ -1227,6 +1228,12 @@ func (s *GeneralInsertStmt) String() string {
 	outStr := ""
 	if len(s.OutputCols) > 0 {
 		outStr = " OUTPUT " + strings.Join(s.OutputCols, ", ")
+	}
+	if s.Exec != nil {
+		if len(s.Columns) > 0 {
+			return fmt.Sprintf("INSERT INTO %s (%s)%s %s", s.Table, strings.Join(s.Columns, ", "), outStr, s.Exec.String())
+		}
+		return fmt.Sprintf("INSERT INTO %s%s %s", s.Table, outStr, s.Exec.String())
 	}
 	if s.Select != nil {
 		if len(s.Columns) > 0 {

@@ -160,6 +160,17 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 		}
 		return res.Rows, res.Columns, nil
 	})
+	executor.SetProcedureGetter(func(name string) (*proc.Program, error) {
+		procMeta, err := coord.catalog.GetProcedure(name)
+		if err != nil {
+			return nil, err
+		}
+		prog, err := executor.Cache().GetOrCompile(procMeta.Body)
+		if err != nil {
+			return nil, err
+		}
+		return prog, nil
+	})
 	type walHookAdder interface {
 		AddWALHook(fn func(rec memengine.WALRecord))
 	}

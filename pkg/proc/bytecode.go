@@ -382,6 +382,7 @@ type DMLData struct {
 	WhereVal    Expr
 	WhereExpr   Expr
 	Select      *GeneralSelectStmt
+	Exec        *ExecStmt
 	OutputCols  []string
 	IntoVars    []string
 }

@@ -294,7 +294,7 @@ func parseInsertBody(st *DMLStatement, sc *dmlScanner) error {
 	if len(rest) >= 6 && strings.EqualFold(rest[:6], "OUTPUT") && (len(rest) == 6 || isDMLSpace(rest[6])) {
 		body := rest[6:]
 		cut := len(body)
-		for _, kw := range []string{"VALUES", "SELECT"} {
+		for _, kw := range []string{"VALUES", "SELECT", "EXEC"} {
 			if i := sqlutil.FindTopLevelKeyword(body, kw); i != -1 && i < cut {
 				cut = i
 			}
@@ -334,6 +334,10 @@ func parseInsertBody(st *DMLStatement, sc *dmlScanner) error {
 		} else {
 			st.Select = rest
 		}
+		return nil
+	}
+	if sqlutil.HasPrefixKeyword(probe, "EXEC") {
+		st.Values = rest
 		return nil
 	}
 	return fmt.Errorf("invalid INSERT INTO syntax")

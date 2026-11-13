@@ -883,7 +883,7 @@ func (p *Parser) parseExec() (Statement, error) {
 	if !p.curTokenIs(TokenIdent) {
 		return nil, fmt.Errorf("expected procedure name in EXEC, got %s", p.curToken.Literal)
 	}
-	name := p.curToken.Literal
+	name := cleanSchemaPrefix(p.curToken.Literal)
 	p.nextToken()
 
 	var args []Expr

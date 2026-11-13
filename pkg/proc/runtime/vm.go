@@ -154,6 +154,17 @@ func (c *PlanCache) GetByName(name string) (*proc.Program, bool) {
 	return prog, ok
 }
 
+// Names returns all procedure or function names currently cached.
+func (c *PlanCache) Names() []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	res := make([]string, 0, len(c.byName))
+	for k := range c.byName {
+		res = append(res, k)
+	}
+	return res
+}
+
 // Len returns the current number of cached script programs.
 func (c *PlanCache) Len() int {
 	c.mu.RLock()
@@ -199,6 +210,7 @@ type Executor struct {
 	tableGetter    execution.TableGetter
 	tableManager   TableManager
 	queryExecutor  QueryExecutor
+	procGetter     ProcedureGetter
 	identProvider  IdentityProvider
 	identMu        sync.RWMutex
 	lastIdentities map[string]int64
@@ -311,6 +323,22 @@ func (e *Executor) AllocIdentity(tableName string, count int64, initFn func() in
 	}
 	e.lastIdentities[lower] = cur + count
 	return cur + 1
+}
+
+// ProcedureGetter defines a callback to retrieve a compiled procedure program by name (e.g. from catalog).
+type ProcedureGetter func(name string) (*proc.Program, error)
+
+// SetProcedureGetter registers an external procedure lookup callback (e.g. catalog compiler).
+func (e *Executor) SetProcedureGetter(pg ProcedureGetter) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.procGetter = pg
+}
+
+func (e *Executor) getProcedureGetter() ProcedureGetter {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.procGetter
 }
 
 // SetTableGetter configures the schema lookup function for relational queries.
@@ -1510,6 +1538,244 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 	return insertedCount, nil
 }
 
+func (f *VMFrame) execInsertExec(data *proc.DMLData) (int64, error) {
+	if data.Exec == nil {
+		return 0, nil
+	}
+	if f.callDepth >= 64 {
+		return 0, fmt.Errorf("maximum stored procedure call depth (64) exceeded (possible infinite recursion)")
+	}
+	if f.executor == nil {
+		return 0, fmt.Errorf("executor not initialized")
+	}
+
+	execStmt := data.Exec
+	procName := execStmt.ProcName
+
+	var rows []map[string]any
+	var cols []string
+
+	if strings.EqualFold(procName, "sp_executesql") {
+		// Evaluate arguments in current frame
+		var argVals []storage.Value
+		for _, a := range execStmt.Args {
+			val, _ := proc.EvalRowExpr(a, f.buildRowEvalMap(nil), nil)
+			argVals = append(argVals, toStorageValue(val))
+		}
+		if len(argVals) == 0 {
+			return 0, fmt.Errorf("sp_executesql requires at least 1 parameter (@stmt)")
+		}
+		sqlStr := argVals[0].String()
+		if argVals[0].Type == storage.TypeVarChar {
+			sqlStr = argVals[0].SVal
+		}
+		sqlStr = strings.TrimSpace(sqlStr)
+		if sqlStr != "" {
+			prog, err := f.executor.Cache().GetOrCompile(sqlStr)
+			if err != nil {
+				prog, err = proc.Compile(sqlStr)
+				if err != nil {
+					return 0, fmt.Errorf("sp_executesql compile error: %w", err)
+				}
+			}
+			paramMap := make(map[string]any)
+			if len(argVals) > 2 {
+				for i, val := range argVals[2:] {
+					pVal := valToAny(val)
+					pIdx := i + 1
+					paramMap[fmt.Sprintf("p%d", pIdx)] = pVal
+					paramMap[fmt.Sprintf("@p%d", pIdx)] = pVal
+				}
+			}
+			res, err := f.executor.ExecuteInTx(prog, paramMap, f.tx, f.transientTables)
+			if err != nil {
+				return 0, err
+			}
+			if res != nil {
+				if len(res.Logs) > 0 {
+					f.logs = append(f.logs, res.Logs...)
+				}
+				rows = res.Rows
+				cols = res.Columns
+			}
+		}
+	} else {
+		prog, found := f.executor.Cache().GetByName(procName)
+		if !found {
+			if pg := f.executor.getProcedureGetter(); pg != nil {
+				if p, err := pg(procName); err == nil && p != nil {
+					prog = p
+					found = true
+					f.executor.Cache().PutByName(procName, prog)
+				}
+			}
+		}
+		if !found {
+			return 0, fmt.Errorf("procedure %s not found", procName)
+		}
+
+		params := make(map[string]any)
+		for i, p := range prog.Params {
+			if i < len(execStmt.Args) {
+				vAny, _ := proc.EvalRowExpr(execStmt.Args[i], f.buildRowEvalMap(nil), nil)
+				params[p.Name] = vAny
+			}
+		}
+
+		subFrame := f.executor.newFrame(prog, f.tx)
+		subFrame.callDepth = f.callDepth + 1
+		if f.transientTables != nil {
+			for k, v := range f.transientTables {
+				subFrame.transientTables[k] = v
+			}
+		}
+		subFrame.bindParams(params)
+		_, err := subFrame.Execute(0)
+		if err != nil {
+			f.executor.releaseFrame(subFrame)
+			return 0, err
+		}
+		rows = subFrame.rows
+		cols = subFrame.columns
+		logs := subFrame.logs
+		f.executor.releaseFrame(subFrame)
+		if len(logs) > 0 {
+			f.logs = append(f.logs, logs...)
+		}
+	}
+
+	if len(rows) == 0 {
+		return 0, nil
+	}
+
+	targetTable := f.resolveTable(data.Table)
+	tableSchema, err := f.getTableSchema(targetTable)
+	if err != nil {
+		return 0, fmt.Errorf("table %q not found: %w", data.Table, err)
+	}
+
+	var identityCol *storage.Column
+	for idx := range tableSchema.Columns {
+		if tableSchema.Columns[idx].Identity {
+			identityCol = &tableSchema.Columns[idx]
+			break
+		}
+	}
+
+	targetCols := data.Columns
+	hasIdentityInTarget := false
+	if len(targetCols) == 0 {
+		for _, c := range tableSchema.Columns {
+			if !c.Identity {
+				targetCols = append(targetCols, c.Name)
+			}
+		}
+	} else if identityCol != nil {
+		for _, c := range targetCols {
+			if strings.EqualFold(c, identityCol.Name) {
+				hasIdentityInTarget = true
+				break
+			}
+		}
+	}
+
+	if len(cols) != len(targetCols) {
+		return 0, fmt.Errorf("column count mismatch: target table %q expects %d columns, but EXEC produced %d columns", data.Table, len(targetCols), len(cols))
+	}
+
+	var nextAllocID int64 = 0
+	if identityCol != nil && !hasIdentityInTarget && len(rows) > 0 {
+		count := int64(len(rows))
+		if f.executor != nil {
+			nextAllocID = f.executor.AllocIdentity(tableSchema.Name, count, func() int64 {
+				var maxID int64 = 0
+				if cur, err := f.tx.Scan(data.Table); err == nil {
+					for cur.Next() {
+						if r, err := cur.Record(); err == nil {
+							if v, ok := r.Get(identityCol.Name); ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
+								maxID = v.IVal
+							}
+						}
+					}
+					cur.Close()
+				}
+				return maxID
+			})
+		}
+	}
+
+	hasTriggers := f.executor != nil && f.executor.HasTriggers(targetTable, "INSERT")
+	var newRows []map[string]any
+	if hasTriggers {
+		newRows = make([]map[string]any, 0, len(rows))
+	}
+
+	insertedCount := int64(0)
+	for _, row := range rows {
+		rec := make(storage.Record, len(targetCols))
+		rowMap := make(map[string]any, len(targetCols))
+
+		for i, targetCol := range targetCols {
+			srcCol := cols[i]
+			val := row[srcCol]
+			stVal := toStorageValue(val)
+			if colSchema, _, ok := tableSchema.FindColumn(targetCol); ok {
+				targetCol = colSchema.Name
+				if colSchema.Type != stVal.Type {
+					stVal = proc.ParseLiteralDefault(stVal.String(), colSchema.Type)
+				}
+			}
+			rec.Set(targetCol, stVal)
+			if hasTriggers {
+				rowMap[targetCol] = valToAny(stVal)
+			}
+		}
+
+		// Apply default values for missing columns
+		for _, col := range tableSchema.Columns {
+			if _, exists := rec[col.Name]; !exists && col.Default != "" {
+				rec[col.Name] = proc.ParseLiteralDefault(col.Default, col.Type)
+			}
+		}
+
+		if identityCol != nil && !hasIdentityInTarget && nextAllocID > 0 {
+			curID := nextAllocID
+			nextAllocID++
+			rec.Set(identityCol.Name, storage.IntValue(curID))
+			if hasTriggers {
+				rowMap[identityCol.Name] = curID
+			}
+			f.lastIdentity = curID
+			if f.vars != nil {
+				f.vars["identity"] = storage.IntValue(curID)
+				f.vars["scope_identity"] = storage.IntValue(curID)
+			}
+		}
+
+		if tableSchema.HasCheckConstraints() {
+			if err := proc.ValidateRecordChecks(tableSchema, rec); err != nil {
+				return insertedCount, err
+			}
+		}
+
+		if err := f.tx.Insert(targetTable, rec); err != nil {
+			return insertedCount, fmt.Errorf("insert error into %s: %w", data.Table, err)
+		}
+		insertedCount++
+		if hasTriggers {
+			newRows = append(newRows, rowMap)
+		}
+	}
+
+	if hasTriggers && len(newRows) > 0 {
+		if err := f.fireTriggers(data.Table, "INSERT", newRows, nil); err != nil {
+			return insertedCount, fmt.Errorf("trigger error on %s: %w", data.Table, err)
+		}
+	}
+
+	return insertedCount, nil
+}
+
 func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	targetTable := f.resolveTable(data.Table)
 	if schema, err := f.getTableSchema(targetTable); err == nil && schema != nil {
@@ -2543,6 +2809,15 @@ func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (
 	}
 
 	prog, found := f.executor.Cache().GetByName(procName)
+	if !found {
+		if pg := f.executor.getProcedureGetter(); pg != nil {
+			if p, err := pg(procName); err == nil && p != nil {
+				prog = p
+				found = true
+				f.executor.Cache().PutByName(procName, prog)
+			}
+		}
+	}
 	if !found {
 		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("procedure %s not found", procName)
 	}
