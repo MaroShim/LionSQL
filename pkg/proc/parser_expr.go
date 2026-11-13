@@ -476,10 +476,17 @@ func (p *Parser) parseTypeSpec() (storage.DataType, int, int) {
 	}
 	prec := 0
 	scale := 0
+	cleanFirst := strings.Trim(firstLit, "[]")
+	if strings.EqualFold(cleanFirst, "MONEY") || strings.EqualFold(cleanFirst, "SMALLMONEY") {
+		scale = 4
+	}
 	if p.curTokenIs(TokenLParen) {
 		p.nextToken()
 		if p.curTokenIs(TokenInt) {
 			prec, _ = strconv.Atoi(p.curToken.Literal)
+			p.nextToken()
+		} else if p.curTokenIs(TokenMax) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "MAX")) {
+			prec = -1 // -1 denotes MAX length in T-SQL
 			p.nextToken()
 		}
 		if p.curTokenIs(TokenComma) {

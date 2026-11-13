@@ -110,7 +110,7 @@ DROP VIEW BABEL_3748_before_14_7_vu_prepare_v3
 query T
 EXEC BABEL_3748_before_14_7_vu_prepare_p3
 ----
-1
+1.0000
 
 statement ok
 DROP PROCEDURE BABEL_3748_before_14_7_vu_prepare_p3
@@ -118,7 +118,7 @@ DROP PROCEDURE BABEL_3748_before_14_7_vu_prepare_p3
 query T
 SELECT BABEL_3748_before_14_7_vu_prepare_f3()
 ----
-1
+1.0000
 
 statement ok
 DROP FUNCTION BABEL_3748_before_14_7_vu_prepare_f3()
@@ -129,7 +129,7 @@ DROP VIEW BABEL_3748_before_14_7_vu_prepare_v4
 query T
 EXEC BABEL_3748_before_14_7_vu_prepare_p4
 ----
-1.100000
+1.1000
 
 statement ok
 DROP PROCEDURE BABEL_3748_before_14_7_vu_prepare_p4
@@ -137,7 +137,7 @@ DROP PROCEDURE BABEL_3748_before_14_7_vu_prepare_p4
 query T
 SELECT BABEL_3748_before_14_7_vu_prepare_f4()
 ----
-1.100000
+1.1000
 
 statement ok
 DROP FUNCTION BABEL_3748_before_14_7_vu_prepare_f4()

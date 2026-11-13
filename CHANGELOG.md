@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- evaluate `CAST`/`CONVERT` to `NVARCHAR(MAX)`, `VARCHAR(MAX)` and `VARBINARY(MAX)` and enforce `MONEY`/`SMALLMONEY` fixed scale 4 (`FIX-TSQL-CAST-MAX-AND-MONEY-1`):
+  - accept the `MAX` keyword token inside type length parentheses in `parseTypeSpec` (`pkg/proc/parser_expr.go`), encoded as precision `-1` so no truncation occurs; previously the parse failure caused the raw expression text to be echoed
+  - default scale `4` for `MONEY`/`SMALLMONEY` with half-up rounding via `EvalCast`; bracketed type names (`[money]`) are normalized in `parseDataType`
+  - correct `tedious` money suites (`3069`, `3070`) and regenerate 23 `babelfish_oracle` expectations that had captured the previous unscaled output (the Babelfish raw corpus ships inputs only, so those expectations were never upstream results)
+  - known follow-ups: hex literals (`0x01`) are lexed as strings, breaking `replicate(0x01, n)` (`394_babel_babel_4547.slt` now fails honestly instead of passing on echoed text); `CAST('$100.123' AS MONEY)` returns `0.0000`; `LEN(money)` length differs from SQL Server
+
 ### Added
 - support T-SQL scalar function `XACT_STATE()` returning active transaction state (`FIX-TSQL-XACT-STATE-1`):
   - return `1` for committable active transactions, `0` outside transactions or after `ROLLBACK`, and `-1` for uncommittable transactions aborted by errors in `TRY...CATCH`

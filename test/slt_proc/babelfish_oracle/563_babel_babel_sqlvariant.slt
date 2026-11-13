@@ -292,8 +292,8 @@ Insert into sourceTable values (cast (NULL as MONEY), cast (-000002 as MONEY));
 query TT
 Select * from sourceTable;
 ----
-0 0.00
-NULL -2
+0.0000 0.0000
+NULL -2.0000
 
 statement ok
 Select * from destinationTable;
@@ -319,8 +319,8 @@ Insert into sourceTable values (cast (NULL as SMALLMONEY), cast (-000002 as SMAL
 query TT
 Select * from sourceTable;
 ----
-0 0.00
-NULL -2
+0.0000 0.0000
+NULL -2.0000
 
 statement ok
 Select * from destinationTable;

@@ -600,12 +600,12 @@ SELECT * FROM BABEL_5748_vu_prepare_t_table4;
 query TT
 SELECT * FROM BABEL_5748_vu_prepare_t_table5;
 ----
-1 12304174.954646
+1 12304174.9546
 
 query TT
 SELECT * FROM BABEL_5748_vu_prepare_t_table6;
 ----
-1 -12304174.960376
+1 -12304174.9604
 
 query TT
 SELECT * FROM BABEL_5748_vu_prepare_t_table7;

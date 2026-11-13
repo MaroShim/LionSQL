@@ -4,15 +4,14 @@
 query T
 select cast(1.22229 as smallmoney)
 ----
-1.222290
+1.2223
 
 query T
 select cast(-1.22229 as smallmoney)
 ----
--1.222290
+-1.2223
 
 query T
 select cast(null as smallmoney)
 ----
 NULL
-

@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"lionsql/pkg/catalog"
@@ -573,6 +574,70 @@ func TestTSQLCompatMatrix_XactState(t *testing.T) {
 	}
 	if len(res.Rows) == 0 || res.Rows[0]["xact_state"] != int64(0) {
 		t.Fatalf("expected XACT_STATE()=0 after rollback, got %+v", res.Rows)
+	}
+}
+
+func TestTSQLCompatMatrix_CastMaxAndMoney(t *testing.T) {
+	coord, cleanup := newCompatMatrixTestCoord(t)
+	defer cleanup()
+
+	// 1. SELECT CAST(... AS NVARCHAR(MAX)) should evaluate, not raw echo
+	res, err := coord.ExecuteSQL("SELECT CAST('hello world' AS NVARCHAR(MAX)) AS msg;")
+	if err != nil {
+		t.Fatalf("SELECT CAST NVARCHAR(MAX) failed: %v", err)
+	}
+	if len(res.Rows) == 0 || res.Rows[0]["msg"] != "hello world" {
+		t.Fatalf("expected 'hello world', got %+v", res.Rows)
+	}
+
+	// 2. CONVERT(VARCHAR(MAX), 12345)
+	res, err = coord.ExecuteSQL("SELECT CONVERT(VARCHAR(MAX), 12345) AS num_str;")
+	if err != nil {
+		t.Fatalf("CONVERT VARCHAR(MAX) failed: %v", err)
+	}
+	if len(res.Rows) == 0 || res.Rows[0]["num_str"] != "12345" {
+		t.Fatalf("expected '12345', got %+v", res.Rows)
+	}
+
+	// 3. CAST('1.23456' AS MONEY) -> 4 decimal scale 1.2346
+	res, err = coord.ExecuteSQL("SELECT CAST('1.23456' AS MONEY) AS price;")
+	if err != nil {
+		t.Fatalf("CAST AS MONEY failed: %v", err)
+	}
+	if len(res.Rows) == 0 {
+		t.Fatalf("expected 1 row, got 0")
+	}
+	priceStr := fmt.Sprintf("%v", res.Rows[0]["price"])
+	if priceStr != "1.2346" {
+		t.Fatalf("expected '1.2346', got %v", priceStr)
+	}
+
+	// 4. CAST('50.5' AS SMALLMONEY) -> 50.5000
+	res, err = coord.ExecuteSQL("SELECT CAST('50.5' AS SMALLMONEY) AS sm;")
+	if err != nil {
+		t.Fatalf("CAST AS SMALLMONEY failed: %v", err)
+	}
+	if len(res.Rows) == 0 {
+		t.Fatalf("expected 1 row, got 0")
+	}
+	smStr := fmt.Sprintf("%v", res.Rows[0]["sm"])
+	if smStr != "50.5000" {
+		t.Fatalf("expected '50.5000', got %v", smStr)
+	}
+
+	// 5. Table DDL and DML with MONEY and NVARCHAR(MAX)
+	if _, err := coord.ExecuteSQL("CREATE TABLE items_money (id INT PRIMARY KEY, amt MONEY, note NVARCHAR(MAX));"); err != nil {
+		t.Fatalf("CREATE TABLE items_money failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL("INSERT INTO items_money VALUES (1, 99.5, 'Max Description Note');"); err != nil {
+		t.Fatalf("INSERT INTO items_money failed: %v", err)
+	}
+	res, err = coord.ExecuteSQL("SELECT id, amt, note FROM items_money WHERE id = 1;")
+	if err != nil {
+		t.Fatalf("SELECT items_money failed: %v", err)
+	}
+	if len(res.Rows) == 0 || res.Rows[0]["note"] != "Max Description Note" {
+		t.Fatalf("expected row with note='Max Description Note', got %+v", res.Rows)
 	}
 }
 

@@ -461,7 +461,7 @@ DROP VIEW BABEL_3646_vu_prepare_v9
 query T
 EXEC BABEL_3646_vu_prepare_p9
 ----
-100
+100.0000
 
 statement ok
 DROP PROCEDURE BABEL_3646_vu_prepare_p9
@@ -469,7 +469,7 @@ DROP PROCEDURE BABEL_3646_vu_prepare_p9
 query T
 SELECT BABEL_3646_vu_prepare_f9()
 ----
-100
+100.0000
 
 statement ok
 DROP FUNCTION BABEL_3646_vu_prepare_f9()
@@ -480,7 +480,7 @@ DROP VIEW BABEL_3646_vu_prepare_v10
 query T
 EXEC BABEL_3646_vu_prepare_p10
 ----
-100
+100.0000
 
 statement ok
 DROP PROCEDURE BABEL_3646_vu_prepare_p10
@@ -488,7 +488,7 @@ DROP PROCEDURE BABEL_3646_vu_prepare_p10
 query T
 SELECT BABEL_3646_vu_prepare_f10()
 ----
-100
+100.0000
 
 statement ok
 DROP FUNCTION BABEL_3646_vu_prepare_f10()
@@ -642,7 +642,7 @@ DROP VIEW BABEL_3646_vu_prepare_v24
 query T
 EXEC BABEL_3646_vu_prepare_p24
 ----
-0.00
+0.0000
 
 statement ok
 DROP PROCEDURE BABEL_3646_vu_prepare_p24
@@ -650,7 +650,7 @@ DROP PROCEDURE BABEL_3646_vu_prepare_p24
 query T
 SELECT BABEL_3646_vu_prepare_f24()
 ----
-0.00
+0.0000
 
 statement ok
 DROP FUNCTION BABEL_3646_vu_prepare_f24()

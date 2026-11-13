@@ -477,107 +477,107 @@ FROM char_conversion_test;
 query T
 SELECT * FROM money_style_test_v1;
 ----
-1234.135700
+1234.1357
 
 query T
 SELECT * FROM money_style_test_v2;
 ----
-1234.135700
+1234.1357
 
 query T
 SELECT * FROM money_style_test_v3;
 ----
-1234.135700
+1234.1357
 
 query T
 SELECT * FROM money_style_test_v4;
 ----
-1234.135700
+1234.1357
 
 query T
 SELECT * FROM money_style_test_v5;
 ----
-1234.135700
+1234.1357
 
 query T
 SELECT * FROM smallmoney_style_test_v1;
 ----
-1234.135700
+1234.1357
 
 query T
 SELECT * FROM smallmoney_style_test_v2;
 ----
-1234.135700
+1234.1357
 
 query T
 SELECT * FROM smallmoney_style_test_v3;
 ----
-1234.135700
+1234.1357
 
 query T
 SELECT * FROM smallmoney_style_test_v4;
 ----
-1234.135700
+1234.1357
 
 query T
 SELECT * FROM smallmoney_style_test_v5;
 ----
-1234.135700
+1234.1357
 
 query T
 EXECUTE money_style_test_p1;
 ----
-1234.135700
+1234.1357
 
 query T
 EXECUTE money_style_test_p2;
 ----
-1234.135700
+1234.1357
 
 query T
 EXECUTE money_style_test_p3;
 ----
-1234.135700
+1234.1357
 
 query T
 EXECUTE money_style_test_p4;
 ----
-1234.135700
+1234.1357
 
 query T
 EXECUTE smallmoney_style_test_p1;
 ----
-1234.135700
+1234.1357
 
 query T
 EXECUTE smallmoney_style_test_p2;
 ----
--1234.135700
+-1234.1357
 
 query T
 EXECUTE smallmoney_style_test_p3;
 ----
-214748.364700
+214748.3647
 
 query T
 EXECUTE smallmoney_style_test_p4;
 ----
--214748.364800
+-214748.3648
 
 query T
 EXECUTE smallmoney_style_test_p5;
 ----
-0.000000
+0.0000
 
 query T
 SELECT CONVERT(VARCHAR, CAST(123376736.12345678923456789 AS MONEY), 1.8);
 ----
-123376736.123457
+123376736.1235
 
 query T
 select convert(varchar, cast(123 as money), NULL)
 ----
-123
+123.0000
 
 query TTTT
 EXEC date_style_test_p1 '2023-09-25', 0;
@@ -593,12 +593,12 @@ SELECT * FROM date_style_test_v2;
 query T
 SELECT CONVERT(VARCHAR(10),CAST(1234.1234 AS MONEY),1.8);
 ----
-1234.12340
+1234.1234
 
 query T
 SELECT TRY_CONVERT(VARCHAR(10),CAST(1234.1234 AS MONEY),1.8);
 ----
-1234.12340
+1234.1234
 
 query T
 BEGIN TRY
@@ -608,7 +608,7 @@ BEGIN CATCH
     SELECT 'Invalid MONEY conversion caught' as test_case, ERROR_MESSAGE() as error;
 END CATCH
 ----
-0.00
+0.0000
 
 query T
 BEGIN TRY
@@ -618,7 +618,7 @@ BEGIN CATCH
     SELECT 'Invalid SMALLMONEY conversion caught' as test_case, ERROR_MESSAGE() as error;
 END CATCH
 ----
-0.00
+0.0000
 
 statement ok
 SELECT 
@@ -647,17 +647,17 @@ ORDER BY id;
 query T
 SELECT CONVERT(VARCHAR, CAST(1234.56 AS MONEY), NULL) AS null_style_test;
 ----
-1234.560000
+1234.5600
 
 query T
 SELECT CONVERT(VARCHAR, CAST(1234.56 AS MONEY), 999999999) AS overflow_style_test;
 ----
-1234.560000
+1234.5600
 
 query T
 SELECT CONVERT(VARCHAR, CAST(1234.56 AS MONEY), -999999999) AS underflow_style_test;
 ----
-1234.560000
+1234.5600
 
 query TTTTTTTTTTTTT
 SELECT * FROM money_smallmoney_conversions ORDER BY id;

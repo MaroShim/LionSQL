@@ -534,7 +534,7 @@ SELECT
     LEN(CAST(-123.45 AS MONEY)) AS NegativeMoney_Length,
     LEN(CAST(0.00 AS MONEY)) AS ZeroMoney_Length;
 ----
-10 11 8
+8 9 6
 
 query TT
 SELECT

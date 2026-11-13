@@ -13,7 +13,7 @@ SELECT CAST(
     (SELECT * FROM t293) 
     AS SMALLMONEY)
 ----
-0.00
+0.0000
 
 statement ok
 DROP TABLE t293
@@ -33,7 +33,7 @@ SELECT CAST(
     (SELECT * FROM t293) 
     AS SMALLMONEY)
 ----
-0.00
+0.0000
 
 statement ok
 if (@@trancount > 0) rollback tran

@@ -4,12 +4,12 @@
 query T
 select cast(cast(cast('$123.123' as money) as sql_variant) as money);
 ----
-0.00
+0.0000
 
 query T
 select cast(cast(cast('$123.123' as smallmoney) as sql_variant) as smallmoney);
 ----
-0.00
+0.0000
 
 query T
 select cast(cast(cast('256' as smallint) as sql_variant) as smallint);

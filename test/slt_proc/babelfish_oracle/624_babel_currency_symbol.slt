@@ -4,277 +4,277 @@
 query T
 select CAST('$100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('¢100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('¤100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('£100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('¥100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('৲100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('৳100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('฿100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('៛100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₠100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₡100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₢100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₣100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₤100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₥100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₦100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₧100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₨100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₩100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₪100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₫100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('€100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₭100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₮100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₯100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₰100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₱100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('﷼100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('﹩100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('￠100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('＄100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('￡100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('￥100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('￦100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('$-214.3648' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('¢-214.3648' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('¤-214.3648' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('฿-214.3648' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₠-214.3648' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₨-214.3648' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('$0' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('¢0' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('¤0' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('฿0' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₠0' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₨0' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₹100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₿100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('૱100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('௹100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₼100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₷100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₳100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₲100.123' AS money);
 ----
-0.00
+0.0000
 
 query T
 select CAST('₾100.123' AS money);
 ----
-0.00
+0.0000
 
 statement ok
 CREATE TABLE currency_symbol_t1(a money);

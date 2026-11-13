@@ -385,14 +385,14 @@ SELECT * FROM testsqlvariant_money_dt;
 query TT
 Select * from testsqlvariant_sourceTable8;
 ----
-0 0.00
-NULL -2
+0.0000 0.0000
+NULL -2.0000
 
 query TT
 Select * from testsqlvariant_sourceTable9;
 ----
-0 0.00
-NULL -2
+0.0000 0.0000
+NULL -2.0000
 
 query TT
 Select * from testsqlvariant_sourceTable19;

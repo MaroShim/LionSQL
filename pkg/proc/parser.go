@@ -268,7 +268,7 @@ func isReservedAfterProjection(tok TokenType) bool {
 }
 
 func parseDataType(s string) storage.DataType {
-	switch strings.ToUpper(s) {
+	switch strings.ToUpper(strings.Trim(s, "[]")) {
 	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL", "INT2", "INT4", "INT8", "SIGNED", "UNSIGNED":
 		return storage.TypeInt
 	case "VARCHAR", "TEXT", "NVARCHAR", "CHAR", "BPCHAR", "SYSNAME":

@@ -1,0 +1,146 @@
+package runtime_test
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+
+	"lionsql/pkg/proc"
+	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
+)
+
+func parseExprHelper(s string) proc.Expr {
+	l := proc.NewLexer(s)
+	p := proc.NewParser(l)
+	return p.ParseExpr()
+}
+
+func valToString(v any) string {
+	if d, ok := v.(storage.Decimal); ok {
+		return d.String()
+	}
+	return strings.TrimSpace(fmt.Sprintf("%v", v))
+}
+
+func TestTSQL_Cast_Max_And_Money(t *testing.T) {
+	// 1. Direct EvalRowExpr verification
+
+	// Test 1: NVARCHAR(MAX)
+	expr1 := parseExprHelper("CAST('hello world' AS NVARCHAR(MAX))")
+	if expr1 == nil {
+		t.Fatalf("ParseExpr for NVARCHAR(MAX) returned nil")
+	}
+	cast1, ok := expr1.(*proc.CastExpr)
+	if !ok {
+		t.Fatalf("expected *proc.CastExpr, got %T", expr1)
+	}
+	if cast1.Precision != -1 {
+		t.Errorf("expected Precision -1 for MAX, got %d", cast1.Precision)
+	}
+	val1, err := proc.EvalRowExpr(cast1, nil, nil)
+	if err != nil {
+		t.Fatalf("EvalRowExpr failed for NVARCHAR(MAX): %v", err)
+	}
+	if val1 != "hello world" {
+		t.Errorf("expected 'hello world', got %v", val1)
+	}
+
+	// Test 2: VARCHAR(MAX) with CONVERT
+	expr2 := parseExprHelper("CONVERT(VARCHAR(MAX), 12345)")
+	if expr2 == nil {
+		t.Fatalf("ParseExpr for CONVERT VARCHAR(MAX) returned nil")
+	}
+	val2, err := proc.EvalRowExpr(expr2, nil, nil)
+	if err != nil {
+		t.Fatalf("EvalRowExpr failed for CONVERT VARCHAR(MAX): %v", err)
+	}
+	if val2 != "12345" {
+		t.Errorf("expected '12345', got %v", val2)
+	}
+
+	// Test 3: MONEY 4-decimal scale rounding (1.23456 -> 1.2346)
+	expr3 := parseExprHelper("CAST('1.23456' AS MONEY)")
+	if expr3 == nil {
+		t.Fatalf("ParseExpr for CAST AS MONEY returned nil")
+	}
+	cast3, ok := expr3.(*proc.CastExpr)
+	if !ok {
+		t.Fatalf("expected *proc.CastExpr, got %T", expr3)
+	}
+	if cast3.Scale != 4 {
+		t.Errorf("expected Scale 4 for MONEY, got %d", cast3.Scale)
+	}
+	val3, err := proc.EvalRowExpr(cast3, nil, nil)
+	if err != nil {
+		t.Fatalf("EvalRowExpr failed for CAST AS MONEY: %v", err)
+	}
+	val3Str := valToString(val3)
+	if val3Str != "1.2346" {
+		t.Errorf("expected '1.2346', got %v", val3Str)
+	}
+
+	// Test 4: SMALLMONEY 4-decimal scale (50.5 -> 50.5000)
+	expr4 := parseExprHelper("CAST('50.5' AS SMALLMONEY)")
+	if expr4 == nil {
+		t.Fatalf("ParseExpr for CAST AS SMALLMONEY returned nil")
+	}
+	val4, err := proc.EvalRowExpr(expr4, nil, nil)
+	if err != nil {
+		t.Fatalf("EvalRowExpr failed for SMALLMONEY: %v", err)
+	}
+	val4Str := valToString(val4)
+	if val4Str != "50.5000" {
+		t.Errorf("expected '50.5000', got %v", val4Str)
+	}
+
+	// 2. VDBE VM Procedure execution
+	eng := memengine.New()
+	defer eng.Close()
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	script := `
+CREATE PROCEDURE TestCastMaxAndMoney
+AS
+BEGIN
+    DECLARE @msg NVARCHAR(MAX);
+    SET @msg = CAST('antigravity' AS NVARCHAR(MAX));
+
+    DECLARE @m MONEY;
+    SET @m = CAST('99.99994' AS MONEY);
+
+    SELECT @msg AS msg, @m AS price;
+END;
+`
+	prog, err := proc.Compile(script)
+	if err != nil {
+		t.Fatalf("Compile failed: %v", err)
+	}
+
+	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+
+	res, err := executor.Run(prog, "TestCastMaxAndMoney", nil, session)
+	if err != nil {
+		t.Fatalf("Executor.Run failed: %v", err)
+	}
+
+	if len(res.Rows) == 0 {
+		t.Fatalf("expected 1 row result, got 0")
+	}
+
+	row := res.Rows[0]
+	if row["msg"] != "antigravity" {
+		t.Errorf("expected msg='antigravity', got %v", row["msg"])
+	}
+	priceStr := valToString(row["price"])
+	if priceStr != "99.9999" {
+		t.Errorf("expected price='99.9999', got %v", priceStr)
+	}
+}

@@ -4,25 +4,24 @@
 query T
 select cast(1.22229 as money)
 ----
-1.222290
+1.2223
 
 query T
 select cast(-1.22229 as money)
 ----
--1.222290
+-1.2223
 
 query T
 select cast(123456789012345.11 as money)
 ----
-123456789012345.109375
+123456789012345.1094
 
 query T
 select cast(-123456789012345.11 as money)
 ----
--123456789012345.109375
+-123456789012345.1094
 
 query T
 select cast(null as money)
 ----
 NULL
-

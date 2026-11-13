@@ -434,12 +434,12 @@ SELECT * FROM babel_3556_vu_prepare_f3(@in);
 query T
 SELECT * FROM babel_3556_vu_prepare_v17;
 ----
-1234
+1234.0000
 
 query T
 SELECT * FROM babel_3556_vu_prepare_v18;
 ----
-1234
+1234.0000
 
 statement ok
 DROP PROCEDURE babel_3556_vu_prepare_p1;

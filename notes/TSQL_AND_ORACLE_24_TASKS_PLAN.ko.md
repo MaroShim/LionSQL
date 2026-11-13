@@ -19,7 +19,7 @@
 | **#8** | **`FIX-SQL-DERIVED-VALUES-1`** | `DONE` | Engine / Planner | P1 | `FROM (VALUES (...), (...)) AS alias(col1, col2)` 인라인 테이블 값 생성자 및 컬럼 별칭 파싱·실행 지원 |
 | **#9** | **`FIX-TRIGGER-FOR-KEYWORD-1`** | `DONE` | Parser / Engine | P1 | `CREATE TRIGGER ... FOR INSERT, UPDATE, DELETE` (`AFTER` 동의어) 구문 파싱 지원 |
 | **#10** | **`FIX-TSQL-XACT-STATE-1`** | `DONE` | Proc / Engine | P1 | `TRY...CATCH` 블록 내 트랜잭션 상태 반환 스칼라 함수 `XACT_STATE()` (`1`, `0`, `-1`) 지원 |
-| **#11** | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** | `PENDING` | Parser / Eval | P1 | `CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX))` 미평가 원문 에코 버그 및 `MONEY`/`SMALLMONEY` 4자리 소수점 스케일 보정 |
+| **#11** | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** | `DONE` | Parser / Eval | P1 | `CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX))` 미평가 원문 에코 버그 및 `MONEY`/`SMALLMONEY` 4자리 소수점 스케일 보정 |
 | **#12** | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** | `PENDING` | Wire (TDS) | P1 | TDS `RPCRequest`(`0x03`) 직접 프로시저 호출 시 `OUTPUT` 파라미터 `RETURNVALUE`(`0xAC`) 토큰 반환 및 기본값(`DEFAULT`) 바인딩 지원 |
 | **#13** | **`FIX-TDS-RPC-RETURN-STATUS-1`** | `PENDING` | Wire (TDS) / Engine | P1 | TDS RPC 프로시저 `RETURN <int>` 실행 시 하드코딩된 `0` 대신 실제 종료 코드를 `RETURNSTATUS`(`0x79`) 토큰으로 전송 |
 | **#14** | **`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`** | `PENDING` | Engine | P1 | 최상위 배치 및 `sp_executesql`에서 `SELECT @var = expr [FROM ...]` 구문을 비교식이 아닌 T-SQL 변수 대입으로 실행 |
@@ -194,7 +194,7 @@
 
 ---
 
-### `#11` `FIX-TSQL-CAST-MAX-AND-MONEY-1` (`PENDING`)
+### `#11` `FIX-TSQL-CAST-MAX-AND-MONEY-1` (`DONE`)
 - **현상**:
   1. `SELECT CAST('hello' AS NVARCHAR(MAX))` 또는 `CONVERT(VARCHAR(MAX), 123)` 실행 시 변환된 값 `'hello'`가 나오는 대신, 미평가된 원문 SQL 문자열 `"CAST('hello' AS NVARCHAR(MAX))"`가 그대로 반환되거나 파싱 오류 발생.
   2. `CAST('1.23456' AS MONEY)` 또는 `SMALLMONEY` 변환 시 SQL Server 표준 고정 소수점 4자리(`1.2346` / 스케일 4) 대신 일반 부동소수점 또는 2자리 Decimal로 처리됨.
