@@ -12,25 +12,7 @@ import (
 
 // StripLeadingComments removes leading SQL line comments (--) and block comments (/* */) as well as whitespace.
 func StripLeadingComments(s string) string {
-	for {
-		s = strings.TrimSpace(s)
-		if strings.HasPrefix(s, "--") {
-			idx := strings.IndexByte(s, '\n')
-			if idx == -1 {
-				return ""
-			}
-			s = s[idx+1:]
-		} else if strings.HasPrefix(s, "/*") {
-			idx := strings.Index(s, "*/")
-			if idx == -1 {
-				return ""
-			}
-			s = s[idx+2:]
-		} else {
-			break
-		}
-	}
-	return s
+	return sqlutil.StripLeadingComments(s)
 }
 
 func isBeginTransaction(rest string) bool {

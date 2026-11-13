@@ -713,6 +713,22 @@ func isWhitespaceByte(b byte) bool {
 	return b == ' ' || b == '\t' || b == '\r' || b == '\n'
 }
 
+// SkipWhitespaceAndComments advances the index past any spaces, tabs, newlines,
+// and SQL comments (-- ... and /* ... */).
+func SkipWhitespaceAndComments(s string, start int) int {
+	return skipWhitespaceAndComments(s, start)
+}
+
+// StripLeadingComments removes leading SQL line comments (--), block comments (/* */),
+// and whitespace from s.
+func StripLeadingComments(s string) string {
+	idx := skipWhitespaceAndComments(s, 0)
+	if idx >= len(s) {
+		return ""
+	}
+	return s[idx:]
+}
+
 // skipWhitespaceAndComments advances the index past any spaces, tabs, newlines,
 // and SQL comments (-- ... and /* ... */).
 func skipWhitespaceAndComments(s string, start int) int {
@@ -1283,13 +1299,18 @@ func FindMatchingParen(s string, openIdx int) int {
 	return -1
 }
 
-// UnwrapOuterParens unwraps all outermost balanced parentheses enclosing the entire SQL string.
+// UnwrapOuterParens unwraps all outermost balanced parentheses enclosing the entire SQL string,
+// ignoring leading/trailing comments and whitespace.
 // It safely ignores parentheses inside string literals, comments, or brackets.
 // If the first parenthesis closes before the end of the statement (e.g. "(SELECT 1) UNION (SELECT 2)"),
 // it is recognized as sibling subqueries and the outer structure is preserved intact.
 func UnwrapOuterParens(sql string) string {
 	trimmed := strings.TrimRight(strings.TrimSpace(sql), ";")
-	for len(trimmed) > 0 && trimmed[0] == '(' {
+	for {
+		trimmed = StripLeadingComments(trimmed)
+		if len(trimmed) == 0 || trimmed[0] != '(' {
+			break
+		}
 		closeIdx := FindMatchingParen(trimmed, 0)
 		if closeIdx == -1 {
 			break

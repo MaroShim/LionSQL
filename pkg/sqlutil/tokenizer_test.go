@@ -663,6 +663,16 @@ func TestUnwrapOuterParens(t *testing.T) {
 			expected: "(SELECT 1",
 		},
 		{
+			name:     "with outer comment before parens",
+			input:    "/* leading comment */ ((SELECT 1 AS a));",
+			expected: "SELECT 1 AS a",
+		},
+		{
+			name:     "with line comment before inner parens",
+			input:    "(-- line comment\n (SELECT 1 AS a))",
+			expected: "SELECT 1 AS a",
+		},
+		{
 			name:     "no parens",
 			input:    "SELECT 1",
 			expected: "SELECT 1",

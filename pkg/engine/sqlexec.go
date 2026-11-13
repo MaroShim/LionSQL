@@ -1980,6 +1980,7 @@ func (s *Coordinator) execThrow(raw string, start time.Time) (*QueryResult, erro
 // ((SELECT 1)) UNION (SELECT 2), ((SELECT 1) UNION (SELECT 2))).
 func isSelectOrParenthesizedQuery(sql string) bool {
 	trimmed := strings.TrimRight(strings.TrimSpace(sql), ";")
+	trimmed = sqlutil.StripLeadingComments(trimmed)
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "SELECT", "WITH") || planner.HasTopLevelSetOp(trimmed) {
 		return true
 	}
