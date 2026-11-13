@@ -259,6 +259,8 @@ func TestTSQLCompatMatrix_ParenthesizedSelectQueries(t *testing.T) {
 	setopQueries := []string{
 		"(SELECT 1 AS a) UNION ALL (SELECT 2 AS a);",
 		"((SELECT 1 AS a) UNION ALL (SELECT 2 AS a));",
+		"((SELECT 1 AS a)) UNION ((SELECT 2 AS a));",
+		"(((SELECT 1 AS a))) UNION ALL (SELECT 2 AS a);",
 		"(SELECT id, score FROM paren_items WHERE id = 1) UNION ALL (SELECT id, score FROM paren_items WHERE id = 2) ORDER BY id ASC;",
 		"((SELECT id FROM paren_items WHERE id <= 2) UNION (SELECT id FROM paren_items WHERE id >= 2)) ORDER BY id ASC;",
 	}

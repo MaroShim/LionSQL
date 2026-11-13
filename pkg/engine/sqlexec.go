@@ -1683,7 +1683,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
-	if sqlutil.HasPrefixKeyword(trimmed, "CREATE EXTENSION") || sqlutil.HasPrefixKeyword(trimmed, "DROP EXTENSION") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE EXTENSION", "DROP EXTENSION") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "CREATE EXTENSION",
@@ -1693,7 +1693,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.38 Tolerant PG Compatibility: CREATE / DROP / ALTER ROLE
-	if sqlutil.HasPrefixKeyword(trimmed, "CREATE ROLE") || sqlutil.HasPrefixKeyword(trimmed, "DROP ROLE") || sqlutil.HasPrefixKeyword(trimmed, "ALTER ROLE") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE ROLE", "DROP ROLE", "ALTER ROLE") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "ROLE",
@@ -1713,7 +1713,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.41 Tolerant PG Compatibility: SEQUENCE
-	if sqlutil.HasPrefixKeyword(trimmed, "CREATE SEQUENCE") || sqlutil.HasPrefixKeyword(trimmed, "ALTER SEQUENCE") || sqlutil.HasPrefixKeyword(trimmed, "DROP SEQUENCE") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE SEQUENCE", "ALTER SEQUENCE", "DROP SEQUENCE") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "SEQUENCE",
@@ -1723,7 +1723,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.42 Tolerant PG Compatibility: LOCK TABLE
-	if sqlutil.HasPrefixKeyword(trimmed, "LOCK TABLE") || sqlutil.HasPrefixKeyword(trimmed, "LOCK") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "LOCK TABLE", "LOCK") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "LOCK TABLE",
@@ -1976,34 +1976,25 @@ func (s *Coordinator) execThrow(raw string, start time.Time) (*QueryResult, erro
 
 // isSelectOrParenthesizedQuery reports whether the query string represents a SELECT or WITH statement,
 // including cases where the entire statement or its leading branch is enclosed in parentheses (e.g. (SELECT 1),
-// ((SELECT 1) UNION (SELECT 2))).
+// ((SELECT 1)) UNION (SELECT 2), ((SELECT 1) UNION (SELECT 2))).
 func isSelectOrParenthesizedQuery(sql string) bool {
 	trimmed := strings.TrimRight(strings.TrimSpace(sql), ";")
-	if sqlutil.HasPrefixKeyword(trimmed, "SELECT") || sqlutil.HasPrefixKeyword(trimmed, "WITH") {
-		return true
-	}
-	if planner.HasTopLevelSetOp(trimmed) {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "SELECT", "WITH") || planner.HasTopLevelSetOp(trimmed) {
 		return true
 	}
 	if len(trimmed) > 0 && trimmed[0] == '(' {
 		unwrapped := sqlutil.UnwrapOuterParens(trimmed)
-		if sqlutil.HasPrefixKeyword(unwrapped, "SELECT") || sqlutil.HasPrefixKeyword(unwrapped, "WITH") {
+		if sqlutil.HasAnyPrefixKeyword(unwrapped, "SELECT", "WITH") || planner.HasTopLevelSetOp(unwrapped) {
 			return true
 		}
-		if planner.HasTopLevelSetOp(unwrapped) {
-			return true
-		}
-		// Sibling parenthesized set operation check: (SELECT ...) UNION (SELECT ...)
+		// Sibling parenthesized set operation check: ((SELECT ...)) UNION (SELECT ...)
 		if len(unwrapped) > 0 && unwrapped[0] == '(' {
 			firstClose := sqlutil.FindMatchingParen(unwrapped, 0)
 			if firstClose != -1 {
-				insideFirst := strings.TrimSpace(unwrapped[1:firstClose])
-				if sqlutil.HasPrefixKeyword(insideFirst, "SELECT") {
+				insideFirst := sqlutil.UnwrapOuterParens(unwrapped[1:firstClose])
+				if sqlutil.HasAnyPrefixKeyword(insideFirst, "SELECT", "WITH") {
 					afterParen := strings.TrimSpace(unwrapped[firstClose+1:])
-					if sqlutil.HasPrefixKeyword(afterParen, "UNION") ||
-						sqlutil.HasPrefixKeyword(afterParen, "INTERSECT") ||
-						sqlutil.HasPrefixKeyword(afterParen, "EXCEPT") ||
-						sqlutil.HasPrefixKeyword(afterParen, "MINUS") {
+					if sqlutil.HasAnyPrefixKeyword(afterParen, "UNION", "INTERSECT", "EXCEPT", "MINUS") {
 						return true
 					}
 				}

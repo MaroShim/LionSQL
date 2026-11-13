@@ -808,6 +808,65 @@ func HasPrefixKeyword(s string, keyword string) bool {
 	return false
 }
 
+// HasAnyPrefixKeyword checks whether the statement starts with ANY of the specified keywords at top level,
+// safely skipping leading whitespace and SQL comments (-- ... and /* ... */) only ONCE.
+func HasAnyPrefixKeyword(s string, keywords ...string) bool {
+	n := len(s)
+	if n == 0 || len(keywords) == 0 {
+		return false
+	}
+
+	inLineComment := false
+	inBlockComment := false
+
+	for i := 0; i < n; i++ {
+		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
+
+		if isWhitespaceByte(ch) {
+			continue
+		}
+
+		// First non-whitespace, non-comment byte reached at index i.
+		// Test each keyword candidate from this position without rescanning leading comments/whitespace.
+		for _, kw := range keywords {
+			words := strings.Fields(kw)
+			if len(words) == 0 {
+				continue
+			}
+			if _, ok := matchWordsAt(s, i, words); ok {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
 // TrimPrefixKeyword tests if s begins with the given keyword (case-insensitively, respecting comments/spaces and word boundaries).
 // If it matches, it returns the remainder of the string after the keyword (with leading/trailing whitespace trimmed) and true.
 // Otherwise it returns original s and false.

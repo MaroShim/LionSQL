@@ -443,6 +443,67 @@ func TestHasPrefixKeyword(t *testing.T) {
 	}
 }
 
+func TestHasAnyPrefixKeyword(t *testing.T) {
+	tests := []struct {
+		name     string
+		sql      string
+		keywords []string
+		want     bool
+	}{
+		{
+			name:     "matches first keyword",
+			sql:      "SELECT 1",
+			keywords: []string{"SELECT", "WITH"},
+			want:     true,
+		},
+		{
+			name:     "matches second keyword with comments",
+			sql:      "/* leading comment */ WITH cte AS (SELECT 1) SELECT * FROM cte",
+			keywords: []string{"SELECT", "WITH"},
+			want:     true,
+		},
+		{
+			name:     "matches multi-word keyword",
+			sql:      "  -- comment\n CREATE OR ALTER PROCEDURE sp_test AS BEGIN (SELECT 1); END",
+			keywords: []string{"CREATE PROCEDURE", "CREATE OR ALTER PROCEDURE", "ALTER PROCEDURE"},
+			want:     true,
+		},
+		{
+			name:     "matches setop branch keyword",
+			sql:      "UNION ALL SELECT 2",
+			keywords: []string{"UNION", "INTERSECT", "EXCEPT", "MINUS"},
+			want:     true,
+		},
+		{
+			name:     "no match",
+			sql:      "INSERT INTO t VALUES (1)",
+			keywords: []string{"SELECT", "WITH", "UPDATE"},
+			want:     false,
+		},
+		{
+			name:     "empty keywords list",
+			sql:      "SELECT 1",
+			keywords: nil,
+			want:     false,
+		},
+		{
+			name:     "empty sql",
+			sql:      "",
+			keywords: []string{"SELECT"},
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HasAnyPrefixKeyword(tt.sql, tt.keywords...)
+			if got != tt.want {
+				t.Errorf("HasAnyPrefixKeyword(%q, %v) = %v, want %v", tt.sql, tt.keywords, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsVolatileSubquery(t *testing.T) {
 	tests := []struct {
 		name string
