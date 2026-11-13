@@ -194,6 +194,7 @@
 | `DONE` | **`DURA-SLT-1`** |  | Durability | P2 | SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 | [`notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`DURA-SLT-2`** |  | Durability | P2 | SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 | [`notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`DURA-SOAK-1`** | `1.0-GA` | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
+| `PENDING` | **`FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`** | `1.0-GA` | Mail | P2 | SQL Server DatabaseMail 외부 워커 프로세스 분리 및 sp_send_dbmail 지원 | [`notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md`](notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-DATADIR-ENGINE-MANIFEST-1`** | `1.0-GA` | Storage | P1 | 데이터 폴더 초기화 시 엔진 매니페스트(lionsql.engine.json: wiredtiger/compact, 코덱 버전) 원자적 기록, 재기동 시 자동 감지 및 이종 엔진 명시 시 Fail-Closed 차단 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FEAT-MATVIEW-ALIAS-1`** | `v1.20.0` | FEAT | P2 | Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) | [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PUREGO-WT-ENGINE`** | `v1.20.0` | Storage | P3 | WiredTiger 호환 자체 Pure-Go MVCC 스토리지 엔진 구현 및 CGo 분리 (Post-1.0) |  |  |
@@ -2430,6 +2431,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - `Scan()` 찢긴 읽기(torn read) 결함 발굴 및 `snapshotRowsAndKeys` 카노니컬 샤드 RLock 스냅샷으로 완치.
 - 다중 워커 계좌 이체 간 `KeyLatch` 상호 교차 대기 데드락 및 `CancelSessionQuery`의 `cs.Mu` 블로킹 결함 발굴, 25ms 타임아웃 `ErrSerializationFailure` (`SQLSTATE 40001`) 반환 및 `cancelMu` 분리로 원천 완치 (`pkg/storage/key_latch.go`, `pkg/engine/coordinator_impl.go`, `session.go`).
 - 5분 연속 소크 완주: `60,000` ops (`32,986` commits 일치), 잔액 불변(`SUM(balance)=1,000,000`, 위반 0건), RSS 비율 1.00, FD 비율 1.00 (`24` 고정), 고루틴 비율 1.00 (`22` 고정), p99 비율 0.92 (`2.18ms ➔ 2.02ms`, 성능 열화 0) 전 지표 PASS.
+
+---
+
+### [PENDING] SQL Server DatabaseMail 외부 워커 프로세스 분리 및 sp_send_dbmail 지원 `FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`
+- **Domain**: Mail | **Priority**: P2 | **Updated**: 2026-11-13 23:27:24
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md`](notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md)
 
 ---
 
