@@ -552,33 +552,11 @@ func (s *Coordinator) loadMergeSourceRows(parsed *parsedMerge, tx storage.Transa
 	// Case 1: (VALUES (...), (...))
 	if inner, ok := sqlutil.StripParentheses(raw); ok {
 		if strings.HasPrefix(strings.ToUpper(inner), "VALUES") {
-			afterValues := strings.TrimSpace(inner[6:])
-			tuples := sqlutil.ExtractTopLevelTuples(afterValues)
-			cols := parsed.sourceCols
-			var rows []map[string]any
-			for _, tuple := range tuples {
-				vals := splitValues(tuple)
-				r := make(map[string]any)
-				for i, v := range vals {
-					vStr := strings.TrimSpace(v)
-					if len(vStr) >= 2 && vStr[0] == '\'' && vStr[len(vStr)-1] == '\'' {
-						vStr = strings.ReplaceAll(vStr[1:len(vStr)-1], "''", "'")
-					} else if len(vStr) >= 2 && vStr[0] == '"' && vStr[len(vStr)-1] == '"' {
-						vStr = strings.ReplaceAll(vStr[1:len(vStr)-1], `""`, `"`)
-					} else {
-						vStr = strings.Trim(vStr, "'\"")
-					}
-					var colName string
-					if i < len(cols) {
-						colName = cols[i]
-					} else {
-						colName = fmt.Sprintf("col%d", i+1)
-					}
-					r[colName] = vStr
-				}
-				rows = append(rows, r)
+			res, err := evaluateValuesToQueryResult(inner, parsed.sourceCols, start)
+			if err != nil {
+				return nil, err
 			}
-			return rows, nil
+			return res.Rows, nil
 		}
 	}
 

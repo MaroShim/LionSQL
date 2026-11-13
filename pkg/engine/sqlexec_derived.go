@@ -2,11 +2,13 @@ package engine
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
@@ -17,7 +19,7 @@ var (
 
 func hasDerivedTables(sql string) bool {
 	upper := strings.ToUpper(sql)
-	if !strings.Contains(upper, "SELECT") {
+	if !strings.Contains(upper, "FROM") && !strings.Contains(upper, "JOIN") {
 		return false
 	}
 	openParen, _ := findNextDerivedTable(sql)
@@ -42,10 +44,13 @@ func findNextDerivedTable(sql string) (openParenIdx int, closeParenIdx int) {
 				}
 				if pos < n && upper[pos] == '(' && pos < sqlLen {
 					innerPos := pos + 1
-					for innerPos < n && (upper[innerPos] == ' ' || upper[innerPos] == '\t' || upper[innerPos] == '\r' || upper[innerPos] == '\n') {
+					for innerPos < n && (upper[innerPos] == ' ' || upper[innerPos] == '\t' || innerPos < n && (upper[innerPos] == '\r' || upper[innerPos] == '\n')) {
 						innerPos++
 					}
-					if strings.HasPrefix(upper[innerPos:], "SELECT") && (innerPos+6 == n || (innerPos+6 < n && isSep(upper[innerPos+6]))) {
+					isSelect := strings.HasPrefix(upper[innerPos:], "SELECT") && (innerPos+6 == n || (innerPos+6 < n && isSep(upper[innerPos+6])))
+					isValues := strings.HasPrefix(upper[innerPos:], "VALUES") && (innerPos+6 == n || (innerPos+6 < n && isSep(upper[innerPos+6])))
+					isWith := strings.HasPrefix(upper[innerPos:], "WITH") && (innerPos+4 == n || (innerPos+4 < n && isSep(upper[innerPos+4])))
+					if isSelect || isValues || isWith {
 						cIdx := sqlutil.FindMatchingParen(sql, pos)
 						if cIdx != -1 {
 							return pos, cIdx
@@ -80,32 +85,58 @@ func isSep(ch byte) bool {
 	return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' || ch == '(' || ch == ')' || ch == ',' || ch == ';'
 }
 
-func parseDerivedTableAlias(afterClose string) (string, int) {
+func parseDerivedTableAlias(afterClose string) (string, []string, int) {
 	trimmed := strings.TrimLeft(afterClose, " \t\r\n")
 	leadingWs := len(afterClose) - len(trimmed)
 	if trimmed == "" {
-		return "", 0
+		return "", nil, 0
 	}
+	var ident string
+	var idLen int
+	var asOffset int
 	// Check optional "AS "
 	if len(trimmed) >= 3 && strings.EqualFold(trimmed[:2], "AS") && (trimmed[2] == ' ' || trimmed[2] == '\t' || trimmed[2] == '\r' || trimmed[2] == '\n') {
 		afterAs := strings.TrimLeft(trimmed[2:], " \t\r\n")
 		asWs := len(trimmed) - 2 - len(afterAs)
-		ident, idLen := parseIdentifierToken(afterAs)
-		if ident != "" {
-			return ident, leadingWs + 2 + asWs + idLen
-		}
+		ident, idLen = parseIdentifierToken(afterAs)
+		asOffset = 2 + asWs
 	} else {
-		ident, idLen := parseIdentifierToken(trimmed)
-		if ident != "" {
-			upperIdent := strings.ToUpper(ident)
-			switch upperIdent {
-			case "WHERE", "GROUP", "ORDER", "LIMIT", "OFFSET", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "ON", "UNION", "HAVING":
-				return "", 0
+		ident, idLen = parseIdentifierToken(trimmed)
+	}
+
+	if ident == "" {
+		return "", nil, 0
+	}
+
+	upperIdent := strings.ToUpper(ident)
+	switch upperIdent {
+	case "WHERE", "GROUP", "ORDER", "LIMIT", "OFFSET", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "ON", "UNION", "HAVING":
+		return "", nil, 0
+	}
+
+	consumed := leadingWs + asOffset + idLen
+
+	// Check optional derived column list: (col1, col2, ...)
+	var colNames []string
+	rest := afterClose[consumed:]
+	trimmedRest := strings.TrimLeft(rest, " \t\r\n")
+	wsLen := len(rest) - len(trimmedRest)
+	if len(trimmedRest) > 0 && trimmedRest[0] == '(' {
+		cParen := sqlutil.FindMatchingParen(trimmedRest, 0)
+		if cParen != -1 {
+			colsContent := trimmedRest[1:cParen]
+			rawCols := sqlutil.SplitTopLevel(colsContent, ',')
+			for _, rc := range rawCols {
+				c := cleanIdentifier(strings.TrimSpace(rc))
+				if c != "" {
+					colNames = append(colNames, c)
+				}
 			}
-			return ident, leadingWs + idLen
+			consumed += wsLen + cParen + 1
 		}
 	}
-	return "", 0
+
+	return ident, colNames, consumed
 }
 
 func parseIdentifierToken(s string) (string, int) {
@@ -142,6 +173,97 @@ func parseIdentifierToken(s string) (string, int) {
 	return "", 0
 }
 
+func parseValueExpression(exprStr string) any {
+	trimmed := strings.TrimSpace(exprStr)
+	if strings.EqualFold(trimmed, "NULL") {
+		return nil
+	}
+	if strings.EqualFold(trimmed, "TRUE") {
+		return true
+	}
+	if strings.EqualFold(trimmed, "FALSE") {
+		return false
+	}
+	// String literal '...'
+	if len(trimmed) >= 2 && trimmed[0] == '\'' && trimmed[len(trimmed)-1] == '\'' {
+		return strings.ReplaceAll(trimmed[1:len(trimmed)-1], "''", "'")
+	}
+	// Integer
+	if i, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+		return i
+	}
+	// Float
+	if f, err := strconv.ParseFloat(trimmed, 64); err == nil && strings.ContainsAny(trimmed, ".eE") {
+		return f
+	}
+	// Arbitrary AST expression (e.g. CAST, arithmetic, function calls)
+	p := proc.NewParser(proc.NewLexer(trimmed))
+	astExpr := p.ParseExpr()
+	if astExpr != nil && len(p.Errors()) == 0 {
+		if val, err := proc.EvalRowExpr(astExpr, nil, nil); err == nil {
+			return val
+		}
+	}
+	return trimmed
+}
+
+// evaluateValuesToQueryResult parses and evaluates a VALUES clause:
+// e.g. "VALUES (1, 'Alice'), (2, 'Bob')"
+// explicitCols: optional column names, e.g. ["id", "name"]
+func evaluateValuesToQueryResult(valuesClause string, explicitCols []string, start time.Time) (*QueryResult, error) {
+	trimmed := strings.TrimSpace(valuesClause)
+	if !sqlutil.HasPrefixKeyword(trimmed, "VALUES") {
+		return nil, fmt.Errorf("expected VALUES keyword, got: %s", trimmed)
+	}
+	afterValues := strings.TrimSpace(trimmed[6:])
+	tuples := sqlutil.ExtractTopLevelTuples(afterValues)
+	if len(tuples) == 0 {
+		return nil, fmt.Errorf("no tuples found in VALUES clause")
+	}
+
+	var firstVals []string
+	var numCols int
+	for _, tuple := range tuples {
+		vals := splitValues(tuple)
+		if len(firstVals) == 0 {
+			firstVals = vals
+			numCols = len(vals)
+		}
+	}
+
+	cols := make([]string, numCols)
+	for i := 0; i < numCols; i++ {
+		if i < len(explicitCols) {
+			cols[i] = explicitCols[i]
+		} else {
+			cols[i] = fmt.Sprintf("column%d", i+1)
+		}
+	}
+
+	rows := make([]map[string]any, 0, len(tuples))
+	for _, tuple := range tuples {
+		vals := splitValues(tuple)
+		r := make(map[string]any, numCols)
+		for i := 0; i < numCols; i++ {
+			var valStr string
+			if i < len(vals) {
+				valStr = vals[i]
+			}
+			r[cols[i]] = parseValueExpression(valStr)
+		}
+		rows = append(rows, r)
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      cols,
+		Rows:         rows,
+		RowsAffected: int64(len(rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
 func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *ClientSession) (string, []string, error) {
 	currentSQL := query
 	var createdTables []string
@@ -154,7 +276,7 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 
 		innerSQL := strings.TrimSpace(currentSQL[openParenIdx+1 : closeParenIdx])
 		afterClose := currentSQL[closeParenIdx+1:]
-		alias, consumed := parseDerivedTableAlias(afterClose)
+		alias, colNames, consumed := parseDerivedTableAlias(afterClose)
 		matchEnd := closeParenIdx + 1 + consumed
 
 		counterVal := atomic.AddInt64(&derivedTableCounter, 1)
@@ -163,21 +285,40 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 		}
 		tempName := fmt.Sprintf("#__dt_%d_%s", counterVal, alias)
 
-		// If the enclosing query defines CTEs (WITH ...), pass the CTE definitions to the inner query
-		// so inner subqueries can reference CTE tables (e.g. Vikunja permission queries).
-		queryToExec := innerSQL
-		trimmedCurrent := strings.TrimSpace(currentSQL)
-		if strings.HasPrefix(strings.ToUpper(trimmedCurrent), "WITH") && len(trimmedCurrent) > 4 && (trimmedCurrent[4] == ' ' || trimmedCurrent[4] == '\t' || trimmedCurrent[4] == '\n' || trimmedCurrent[4] == '\r') {
-			if ctes, mainQ := planner.ParseCTEs(trimmedCurrent); len(ctes) > 0 {
-				ctePrefix := strings.TrimSpace(trimmedCurrent[:len(trimmedCurrent)-len(mainQ)])
-				if ctePrefix != "" && openParenIdx >= len(ctePrefix) {
-					queryToExec = ctePrefix + " " + innerSQL
+		var innerRes *QueryResult
+		var err error
+		trimmedInner := strings.TrimSpace(innerSQL)
+		if strings.HasPrefix(strings.ToUpper(trimmedInner), "VALUES") && (len(trimmedInner) == 6 || isSep(trimmedInner[6])) {
+			innerRes, err = evaluateValuesToQueryResult(trimmedInner, colNames, start)
+		} else {
+			// If the enclosing query defines CTEs (WITH ...), pass the CTE definitions to the inner query
+			// so inner subqueries can reference CTE tables (e.g. Vikunja permission queries).
+			queryToExec := innerSQL
+			trimmedCurrent := strings.TrimSpace(currentSQL)
+			if strings.HasPrefix(strings.ToUpper(trimmedCurrent), "WITH") && len(trimmedCurrent) > 4 && (trimmedCurrent[4] == ' ' || trimmedCurrent[4] == '\t' || trimmedCurrent[4] == '\n' || trimmedCurrent[4] == '\r') {
+				if ctes, mainQ := planner.ParseCTEs(trimmedCurrent); len(ctes) > 0 {
+					ctePrefix := strings.TrimSpace(trimmedCurrent[:len(trimmedCurrent)-len(mainQ)])
+					if ctePrefix != "" && openParenIdx >= len(ctePrefix) {
+						queryToExec = ctePrefix + " " + innerSQL
+					}
+				}
+			}
+
+			// Execute inner SELECT query
+			innerRes, err = s.execSelect(queryToExec, start, cs)
+			if err == nil && len(colNames) > 0 && len(innerRes.Columns) == len(colNames) {
+				oldCols := innerRes.Columns
+				innerRes.Columns = colNames
+				for _, row := range innerRes.Rows {
+					for idx, oldCol := range oldCols {
+						if val, exists := row[oldCol]; exists {
+							delete(row, oldCol)
+							row[colNames[idx]] = val
+						}
+					}
 				}
 			}
 		}
-
-		// Execute inner SELECT query
-		innerRes, err := s.execSelect(queryToExec, start, cs)
 		if err != nil {
 			return "", createdTables, fmt.Errorf("derived table subquery error: %w", err)
 		}

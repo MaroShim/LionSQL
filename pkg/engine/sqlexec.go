@@ -1753,6 +1753,11 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execSelect(trimmed, start, cs)
 	}
 
+	// 6.5 DQL: Standalone Table Value Constructor: VALUES (...), (...)
+	if sqlutil.HasPrefixKeyword(trimmed, "VALUES") {
+		return evaluateValuesToQueryResult(trimmed, nil, start)
+	}
+
 	// 7. DML: UPDATE
 	if kind, _, ok := dmlHead(trimmed); ok && kind == dmlUpdate {
 		if err := s.checkWriteAllowed(); err != nil {

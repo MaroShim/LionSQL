@@ -16,7 +16,7 @@
 | **#5** | **`FIX-CURSOR-LIFECYCLE-1`** | `PENDING` | Engine / VM | P1 | 커서 `DEALLOCATE` 및 배치 종료 시 세션 커서 레지스트리 정리 및 동일 이름 재선언 충돌 해결 |
 | **#6** | **`FIX-VM-HIDDEN-ROWID-1`** | `PENDING` | Proc / VM | P1 | 명시적 PK가 없는 테이블에 대해 VDBE VM `OpInsert` 실행 시 숨은 `_row_id` 자동 발번 누락 수정 |
 | **#7** | **`FIX-TSQL-INSERT-EXEC-1`** | `DONE` | Parser / VM / Engine | P1 | `INSERT INTO <table> [(cols)] EXEC <proc_name> [args]` 프로시저 결과셋 테이블 적재 지원 |
-| **#8** | **`FIX-SQL-DERIVED-VALUES-1`** | `PENDING` | Engine / Planner | P1 | `FROM (VALUES (...), (...)) AS alias(col1, col2)` 인라인 테이블 값 생성자 및 컬럼 별칭 파싱·실행 지원 |
+| **#8** | **`FIX-SQL-DERIVED-VALUES-1`** | `DONE` | Engine / Planner | P1 | `FROM (VALUES (...), (...)) AS alias(col1, col2)` 인라인 테이블 값 생성자 및 컬럼 별칭 파싱·실행 지원 |
 | **#9** | **`FIX-TRIGGER-FOR-KEYWORD-1`** | `PENDING` | Parser / Engine | P1 | `CREATE TRIGGER ... FOR INSERT, UPDATE, DELETE` (`AFTER` 동의어) 구문 파싱 지원 |
 | **#10** | **`FIX-TSQL-XACT-STATE-1`** | `PENDING` | Proc / Engine | P1 | `TRY...CATCH` 블록 내 트랜잭션 상태 반환 스칼라 함수 `XACT_STATE()` (`1`, `0`, `-1`) 지원 |
 | **#11** | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** | `PENDING` | Parser / Eval | P1 | `CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX))` 미평가 원문 에코 버그 및 `MONEY`/`SMALLMONEY` 4자리 소수점 스케일 보정 |
@@ -150,16 +150,19 @@
 
 ---
 
-### `#8` `FIX-SQL-DERIVED-VALUES-1` (`PENDING`)
+### `#8` `FIX-SQL-DERIVED-VALUES-1` (`DONE`)
 - **현상**:
   `SELECT v.id, v.name FROM (VALUES (1, 'Alice'), (2, 'Bob')) AS v(id, name) WHERE v.id = 2`와 같은 인라인 테이블 값 생성자(Table Value Constructor) 파생 테이블 쿼리가 실행되지 않음.
 - **근본 원인 (Root Cause)**:
   - `pkg/engine/sqlexec_derived.go` (파생 테이블 구체화기) 및 `pkg/planner/planner.go`가 `FROM ( ... ) AS alias` 내부가 항상 `SELECT`나 `WITH`로 시작한다고 가정함.
   - 또한 파생 테이블 별칭 뒤의 괄호 컬럼 목록 `AS v(id, name)`에서 `(id, name)`을 파싱하여 생성된 파생 테이블의 컬럼 이름(`column1`, `column2` -> `id`, `name`)에 매핑하는 로직이 일부 경로에서 빠져 있음.
-- **해결 설계안 (Proposed Solution)**:
-  1. 파생 테이블 별칭 파서(`pkg/engine/sqlexec_derived.go`, `pkg/sqlutil`)에서 `AS alias (col1, col2, ...)` 형태의 컬럼 별칭 리스트를 추출하는 모듈화 헬퍼 추가 (`[RULE:ModularAbstraction]`).
-  2. 파생 테이블 내부 쿼리가 `VALUES (...)`로 시작하는 경우, 각 튜플 식을 평가하여 행들을 생성하고 지정된 컬럼 별칭 `(col1, col2, ...)`(미지정 시 `column1, column2, ...`)으로 인메모리 파생 테이블 스키마 및 튜플을 구성.
-  3. 일반 `FROM (SELECT 1, 2) AS t(a, b)`에 대해서도 컬럼 별칭 재매핑 `(a, b)`가 일관되게 동작하도록 통합.
+- **해결 및 적용 완료 내역**:
+  1. `pkg/engine/sqlexec_derived.go`: `hasDerivedTables` 및 `findNextDerivedTable`에서 괄호 내부가 `SELECT`뿐 아니라 `VALUES` 또는 `WITH`인 경우도 파생 테이블로 식별하도록 확장.
+  2. `parseDerivedTableAlias`: `AS alias (col1, col2, ...)` 형태의 컬럼 별칭 리스트와 괄호 범위를 정확히 파싱하여 추출하고 소비 범위에 포함하도록 개선.
+  3. `evaluateValuesToQueryResult`: `VALUES (...), (...)` 튜플들을 파싱하고 각 식을 AST/리터럴 파서(`proc.ParseExpr` + `proc.EvalRowExpr`)로 평가하여, 지정된 컬럼 별칭 `(col1, col2, ...)`(미지정 시 `column1, column2, ...`)을 갖는 `*QueryResult`로 변환하는 표준 헬퍼 구현.
+  4. `resolveDerivedTables`: `VALUES` 파생 테이블 및 일반 `(SELECT ...) AS t(col_a, col_b)`에 대해 컬럼명 재매핑 및 인메모리 임시테이블 스키마 생성을 완벽히 연동.
+  5. `pkg/engine/sqlexec.go` 및 `sqlexec_merge.go`: 최상위 단독 `VALUES (1, 'a'), (2, 'b');` 구문 실행 및 `MERGE USING (VALUES ...)` 구문 분석에 `evaluateValuesToQueryResult`를 재사용(`[RULE:ModularAbstraction]`, `[RULE:RadicalKISS]`).
+  6. `pkg/engine/sqlexec_derived_values_test.go`를 통해 기본 WHERE 필터, SELECT *, 복수 파생 테이블 간 JOIN, 컬럼 재매핑, 단독 실행, 수식/CAST 등 6가지 시나리오 전수 검증 완료.
 
 ---
 
