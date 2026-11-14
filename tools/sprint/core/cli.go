@@ -42,21 +42,33 @@ func RunCLI(backend Backend, appTitle string, args []string) {
 
 	case "list":
 		whereClauses := make([]string, 0, 2)
+		showAll := false
+		explicitStatus := false
 		for i := 1; i < len(args); i++ {
 			arg := strings.TrimSpace(args[i])
 			lower := strings.ToLower(strings.TrimLeft(arg, "-"))
 			switch lower {
+			case "all":
+				showAll = true
 			case "active":
+				explicitStatus = true
 				whereClauses = append(whereClauses, "UPPER(status) != 'DONE'")
 			case "pending":
+				explicitStatus = true
 				whereClauses = append(whereClauses, "UPPER(status) = 'PENDING'")
 			case "in_progress":
+				explicitStatus = true
 				whereClauses = append(whereClauses, "UPPER(status) = 'IN_PROGRESS'")
 			case "done":
+				explicitStatus = true
 				whereClauses = append(whereClauses, "UPPER(status) = 'DONE'")
 			default:
 				whereClauses = append(whereClauses, fmt.Sprintf("LOWER(COALESCE(milestone, '')) = '%s'", EscapeSQL(strings.ToLower(arg))))
 			}
+		}
+		if !showAll && !explicitStatus {
+			// Default to active tasks (excluding DONE)
+			whereClauses = append(whereClauses, "UPPER(status) != 'DONE'")
 		}
 		whereSQL := ""
 		if len(whereClauses) > 0 {
@@ -259,7 +271,7 @@ func PrintUsage(appTitle string) {
 	fmt.Printf("%s\n", appTitle)
 	fmt.Println("Usage:")
 	fmt.Println("  sprint init                                    : Create/migrate sprint_tasks table")
-	fmt.Println("  sprint list [active|pending|done] [milestone]  : View tasks (use 'active' to exclude DONE)")
+	fmt.Println("  sprint list [all|active|pending|done] [ms]     : View tasks (default: active tasks excluding DONE; use 'all' for full history)")
 	fmt.Println("  sprint show <id>                               : Inspect task details, phases, and metrics")
 	fmt.Println("  sprint add <id> <title> [dom] [prio] [doc] [ms]: Register a new task")
 	fmt.Println("  sprint set <id> <status>                       : Update task status (PENDING, IN_PROGRESS, DONE)")
