@@ -32,6 +32,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - known follow-ups: hex literals (`0x01`) are lexed as strings, breaking `replicate(0x01, n)` (`394_babel_babel_4547.slt` now fails honestly instead of passing on echoed text); `CAST('$100.123' AS MONEY)` returns `0.0000`; `LEN(money)` length differs from SQL Server
 
 ### Added
+- atomic transactional DDL rollback and session-transaction boundary isolation (`FEAT-TRANSACTIONAL-DDL-1`):
+  - introduce `DDLUndoOp` LIFO undo stack on `ClientSession` (`pkg/engine/session.go`) tracking DDL actions within explicit multi-statement transactions
+  - implement non-destructive tombstone rename for `DROP TABLE` inside transactions (`__tombstone_<session>_<timestamp>_<name>`), restoring original table on `ROLLBACK` and permanently purging tombstones on `COMMIT`
+  - support atomic rollback for `CREATE TABLE` (permanent and local `#temp`), `ALTER TABLE ADD/DROP COLUMN`, `ALTER TABLE RENAME TO`, `sp_rename` table/column, and `CREATE/DROP INDEX`
+  - finalize and purge DDL undo operations safely in `CommitSessionTx` and execute reverse LIFO undo in `RollbackSessionTx` without holding session mutexes across storage engine calls (`pkg/engine/sqlexec.go`, `sqlexec_ddl.go`, `sqlexec_procs.go`)
+  - add comprehensive unit test suite in `pkg/engine/transactional_ddl_test.go` covering 12 scenarios including nested transactions, temporary tables, and index/column rollbacks
 - support SQL Server DatabaseMail external worker and `sp_send_dbmail` stored procedure (`FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`):
   - isolate outbound SMTP network operations from database kernel into dedicated `lionsql dbmail-worker` background process (`pkg/dbmail/worker.go`, `cmd/lionsql/cli_dbmail.go`)
   - support T-SQL stored procedure `msdb.dbo.sp_send_dbmail` with atomic sub-microsecond queue insertion into `msdb.dbo.sysmail_mailitems` participating in caller ACID transactions (`pkg/engine/databasemail.go`)

@@ -390,6 +390,24 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		}
 	}
 
+	if cs != nil {
+		cs.Mu.Lock()
+		if cs.Tx != nil {
+			if strings.HasPrefix(tableName, "#") || strings.HasPrefix(strings.ToLower(tableName), "__temp_") {
+				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+					Kind:      DDLUndoDropTempTable,
+					TableName: tableName,
+				})
+			} else {
+				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+					Kind:      DDLUndoDropCreatedTable,
+					TableName: schema.Name,
+				})
+			}
+		}
+		cs.Mu.Unlock()
+	}
+
 	s.InvalidatePKBypassCache()
 
 	return &QueryResult{
@@ -434,6 +452,89 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 			}
 		}
 	}
+
+	inTx := false
+	if cs != nil {
+		cs.Mu.Lock()
+		inTx = (cs.Tx != nil)
+		cs.Mu.Unlock()
+	}
+
+	if inTx {
+		if strings.HasPrefix(tableName, "#") && !strings.HasPrefix(tableName, "##") {
+			phys, exists := cs.GetTempTablePhysical(tableName)
+			if !exists {
+				if sqlutil.ContainsKeyword(query, "IF EXISTS", false) || s.TolerantDDL() {
+					return &QueryResult{
+						Success:    true,
+						Command:    "DROP TABLE",
+						DurationUS: time.Since(start).Microseconds(),
+						Messages:   []string{fmt.Sprintf("Table %q does not exist (skipped)", tableName)},
+					}, nil
+				}
+				return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+			}
+			tombstone := fmt.Sprintf("__temp_tombstone_%s_%d_%s", cs.ID, time.Now().UnixNano(), strings.TrimPrefix(tableName, "#"))
+			if err := s.engine.RenameTable(phys, tombstone); err != nil {
+				return nil, err
+			}
+			cs.UnregisterTempTable(tableName)
+			cs.Mu.Lock()
+			cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+				Kind:          DDLUndoRestoreDroppedTempTable,
+				TableName:     tableName,
+				TombstoneName: tombstone,
+			})
+			cs.Mu.Unlock()
+			s.InvalidatePKBypassCache()
+			return &QueryResult{
+				Success:    true,
+				Command:    "DROP TABLE",
+				DurationUS: time.Since(start).Microseconds(),
+				Messages:   []string{fmt.Sprintf("Table %q dropped successfully", tableName)},
+			}, nil
+		}
+
+		// Permanent table drop inside active transaction: Tombstone rename for safe rollback
+		sch, err := s.engine.GetTable(tableName)
+		if err != nil {
+			if (sqlutil.ContainsKeyword(query, "IF EXISTS", false) || s.TolerantDDL()) && errors.Is(err, storage.ErrTableNotFound) {
+				return &QueryResult{
+					Success:    true,
+					Command:    "DROP TABLE",
+					DurationUS: time.Since(start).Microseconds(),
+					Messages:   []string{fmt.Sprintf("Table %q does not exist (skipped)", tableName)},
+				}, nil
+			}
+			return nil, err
+		}
+
+		tombstone := fmt.Sprintf("__tombstone_%s_%d_%s", cs.ID, time.Now().UnixNano(), sch.Name)
+		if err := s.engine.RenameTable(tableName, tombstone); err != nil {
+			return nil, err
+		}
+
+		schClone := sch.Clone()
+		cs.Mu.Lock()
+		cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+			Kind:          DDLUndoRestoreDroppedTable,
+			TableName:     sch.Name,
+			TombstoneName: tombstone,
+			SchemaBackup:  &schClone,
+		})
+		cs.Mu.Unlock()
+
+		s.InvalidatePKBypassCache()
+		s.SetTableLastIdentity(tableName, 0)
+
+		return &QueryResult{
+			Success:    true,
+			Command:    "DROP TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Table %q dropped successfully", tableName)},
+		}, nil
+	}
+
 	if err := s.engine.DropTable(tableName); err != nil {
 		if (sqlutil.ContainsKeyword(query, "IF EXISTS", false) || s.TolerantDDL()) && errors.Is(err, storage.ErrTableNotFound) {
 			return &QueryResult{
@@ -701,7 +802,7 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *Clien
 	}, nil
 }
 
-func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execCreateIndex(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// 1. Try Pratt parser first (full support for functional expression indexes & double parens)
@@ -728,6 +829,17 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 			}
 			return nil, err
 		}
+		if cs != nil {
+			cs.Mu.Lock()
+			if cs.Tx != nil {
+				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+					Kind:      DDLUndoDropCreatedIndex,
+					TableName: stmt.Table,
+					IndexName: stmt.Name,
+				})
+			}
+			cs.Mu.Unlock()
+		}
 		msg := fmt.Sprintf("Index %q created successfully on table %q.", stmt.Name, stmt.Table)
 		if stmt.Unique {
 			msg = fmt.Sprintf("Unique index %q created successfully on table %q.", stmt.Name, stmt.Table)
@@ -743,7 +855,7 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 	return nil, fmt.Errorf("invalid CREATE INDEX syntax: expected CREATE [UNIQUE] INDEX [IF NOT EXISTS] <name> ON <table> (<cols>) [INCLUDE (<cols>)] [WHERE ...]")
 }
 
-func (s *Coordinator) execDropIndex(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDropIndex(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	if !sqlutil.HasPrefixKeyword(cleaned, "DROP INDEX") {
 		return nil, fmt.Errorf("invalid DROP INDEX syntax: expected DROP INDEX [IF EXISTS] <name> [ON <table>] [CASCADE]")
@@ -792,6 +904,22 @@ func (s *Coordinator) execDropIndex(query string, start time.Time) (*QueryResult
 		}
 	}
 
+	var idxBackup *storage.IndexSchema
+	if tbl, err := s.engine.GetTable(tableName); err == nil && tbl != nil {
+		if idx, _, found := tbl.FindIndex(indexName); found && idx != nil {
+			idxBackup = &storage.IndexSchema{
+				Name:        idx.Name,
+				TableName:   tbl.Name,
+				Columns:     append([]string(nil), idx.Columns...),
+				IncludeCols: append([]string(nil), idx.IncludeCols...),
+				Unique:      idx.Unique,
+				Expression:  idx.Expression,
+				ExprColumn:  idx.ExprColumn,
+				ExprPath:    idx.ExprPath,
+			}
+		}
+	}
+
 	if err := s.engine.DropIndex(tableName, indexName); err != nil {
 		if ifExists || s.TolerantDDL() {
 			return &QueryResult{
@@ -802,6 +930,18 @@ func (s *Coordinator) execDropIndex(query string, start time.Time) (*QueryResult
 			}, nil
 		}
 		return nil, err
+	}
+
+	if cs != nil && idxBackup != nil {
+		cs.Mu.Lock()
+		if cs.Tx != nil {
+			cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+				Kind:        DDLUndoRestoreDroppedIndex,
+				TableName:   tableName,
+				IndexSchema: idxBackup,
+			})
+		}
+		cs.Mu.Unlock()
 	}
 
 	return &QueryResult{
@@ -1867,6 +2007,17 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		if err := s.engine.RenameTable(tableName, newName); err != nil {
 			return nil, err
 		}
+		if cs != nil {
+			cs.Mu.Lock()
+			if cs.Tx != nil {
+				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+					Kind:    DDLUndoRenameTable,
+					OldName: tableName,
+					NewName: newName,
+				})
+			}
+			cs.Mu.Unlock()
+		}
 		s.InvalidatePKBypassCache()
 		return &QueryResult{
 			Success:    true,
@@ -1896,6 +2047,18 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 				return nil
 			}); err != nil {
 				return nil, err
+			}
+			if cs != nil {
+				cs.Mu.Lock()
+				if cs.Tx != nil {
+					cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+						Kind:       DDLUndoRenameColumn,
+						TableName:  tableName,
+						OldName:    oldName,
+						NewName:    newName,
+					})
+				}
+				cs.Mu.Unlock()
 			}
 			return &QueryResult{
 				Success:    true,
@@ -1958,6 +2121,15 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			}
 		}
 		if len(droppedCols) > 0 {
+			var droppedColBackups []*storage.Column
+			if curSch, err := s.engine.GetTable(tableName); err == nil && curSch != nil {
+				for _, dc := range droppedCols {
+					if c, _, found := curSch.FindColumn(dc); found && c != nil {
+						cCopy := *c
+						droppedColBackups = append(droppedColBackups, &cCopy)
+					}
+				}
+			}
 			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 				newCols := make([]storage.Column, 0, len(sch.Columns))
 				for _, col := range sch.Columns {
@@ -1976,6 +2148,19 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 				return nil
 			}); err != nil {
 				return nil, err
+			}
+			if cs != nil {
+				cs.Mu.Lock()
+				if cs.Tx != nil {
+					for _, b := range droppedColBackups {
+						cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+							Kind:         DDLUndoRestoreDroppedColumn,
+							TableName:    tableName,
+							ColumnBackup: b,
+						})
+					}
+				}
+				cs.Mu.Unlock()
 			}
 			return &QueryResult{
 				Success:    true,
@@ -2060,6 +2245,17 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 				return nil, err
 			}
 			addedCols = append(addedCols, colName)
+			if cs != nil {
+				cs.Mu.Lock()
+				if cs.Tx != nil {
+					cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+						Kind:       DDLUndoDropAddedColumn,
+						TableName:  tableName,
+						ColumnName: colName,
+					})
+				}
+				cs.Mu.Unlock()
+			}
 		}
 
 		s.InvalidatePKBypassCache()

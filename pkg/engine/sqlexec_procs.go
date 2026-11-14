@@ -543,78 +543,30 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 				return nil, fmt.Errorf("column %q not found in table %q", oldColName, tableName)
 			}
 
-			// Read all records
-			sess, err := s.engine.NewSession()
-			if err != nil {
-				return nil, err
-			}
-			tx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
-			if err != nil {
-				sess.Close()
-				return nil, err
-			}
-
-			cur, err := tx.Scan(tableName)
-			if err != nil {
-				_ = tx.Rollback()
-				sess.Close()
-				return nil, err
-			}
-			var records []storage.Record
-			for cur.Next() {
-				r, recErr := cur.Record()
-				if recErr != nil {
-					continue
-				}
-				newRec := make(storage.Record, len(r))
-				for k, v := range r {
-					if strings.EqualFold(k, oldColName) {
-						newRec[newColName] = v
-					} else {
-						newRec[k] = v
+			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				for i := range sch.Columns {
+					if strings.EqualFold(sch.Columns[i].Name, oldColName) {
+						sch.Columns[i].Name = newColName
+						break
 					}
 				}
-				records = append(records, newRec)
-			}
-			cur.Close()
-			_ = tx.Rollback()
-			sess.Close()
-
-			// Update schema
-			newCols := make([]storage.Column, len(tbl.Columns))
-			copy(newCols, tbl.Columns)
-			newCols[colIdx].Name = newColName
-
-			newSchema := &storage.TableSchema{
-				Name:    tbl.Name,
-				Columns: newCols,
-				Indexes: tbl.Indexes,
-			}
-
-			if err := s.engine.DropTable(tableName); err != nil {
+				return nil
+			}); err != nil {
 				return nil, err
 			}
-			if err := s.engine.CreateTable(newSchema); err != nil {
-				return nil, err
-			}
-			insSess, err := s.engine.NewSession()
-			if err != nil {
-				return nil, err
-			}
-			defer insSess.Close()
-			insTx, err := insSess.BeginTx(storage.TxOptions{})
-			if err != nil {
-				return nil, err
-			}
-			for _, rec := range records {
-				if err := insTx.Insert(tableName, rec); err != nil {
-					_ = insTx.Rollback()
-					return nil, err
+			if cs != nil {
+				cs.Mu.Lock()
+				if cs.Tx != nil {
+					cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+						Kind:       DDLUndoRenameColumn,
+						TableName:  tableName,
+						OldName:    oldColName,
+						NewName:    newColName,
+					})
 				}
+				cs.Mu.Unlock()
 			}
-			if err := insTx.Commit(); err != nil {
-				return nil, err
-			}
+			s.InvalidatePKBypassCache()
 
 			return &QueryResult{
 				Success:    true,
@@ -628,70 +580,28 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 		oldTblName := cleanIdentifier(oldName)
 		newTblName := cleanIdentifier(newName)
 
-		tbl, err := s.engine.GetTable(oldTblName)
-		if err != nil {
-			return nil, fmt.Errorf("table %q not found: %w", oldTblName, err)
-		}
-		if _, err := s.engine.GetTable(newTblName); err == nil {
-			return nil, fmt.Errorf("table %q already exists", newTblName)
-		}
-
-		sess, err := s.engine.NewSession()
-		if err != nil {
+		if err := s.engine.RenameTable(oldTblName, newTblName); err != nil {
 			return nil, err
 		}
-		tx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
-		if err != nil {
-			sess.Close()
-			return nil, err
-		}
-
-		cur, err := tx.Scan(oldTblName)
-		if err != nil {
-			_ = tx.Rollback()
-			sess.Close()
-			return nil, err
-		}
-		var records []storage.Record
-		for cur.Next() {
-			if r, recErr := cur.Record(); recErr == nil {
-				records = append(records, r)
+		if cs != nil {
+			cs.Mu.Lock()
+			if cs.Tx != nil {
+				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+					Kind:    DDLUndoRenameTable,
+					OldName: oldTblName,
+					NewName: newTblName,
+				})
 			}
+			cs.Mu.Unlock()
 		}
-		cur.Close()
-		_ = tx.Rollback()
-		sess.Close()
+		s.InvalidatePKBypassCache()
 
-		newSchema := &storage.TableSchema{
-			Name:    newTblName,
-			Columns: tbl.Columns,
-			Indexes: tbl.Indexes,
-		}
-
-		if err := s.engine.DropTable(oldTblName); err != nil {
-			return nil, err
-		}
-		if err := s.engine.CreateTable(newSchema); err != nil {
-			return nil, err
-		}
-		insSess, err := s.engine.NewSession()
-		if err != nil {
-			return nil, err
-		}
-		defer insSess.Close()
-		insTx, err := insSess.BeginTx(storage.TxOptions{})
-		if err != nil {
-			return nil, err
-		}
-		for _, rec := range records {
-			if err := insTx.Insert(newTblName, rec); err != nil {
-				_ = insTx.Rollback()
-				return nil, err
-			}
-		}
-		if err := insTx.Commit(); err != nil {
-			return nil, err
-		}
+		return &QueryResult{
+			Success:    true,
+			Command:    "EXEC",
+			Messages:   []string{"Caution: Changing any part of an object name could break scripts and stored procedures."},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
 
 		return &QueryResult{
 			Success:    true,

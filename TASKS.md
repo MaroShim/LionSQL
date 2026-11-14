@@ -202,11 +202,13 @@
 | `DONE` | **`FEAT-TABLE-VAR-1`** |  | Engine | P2 | T-SQL 테이블 변수(DECLARE @tbl TABLE) 지원 및 DML/배치 라이프사이클 통합 | [`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TIMESERIES-LSM-1`** | `v1.99.0` | FEAT | P2 | LSM Time-Series Chunk Storage & time_bucket | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TOLERANT-DDL-1`** |  | FEAT | P2 | Dynamic Runtime Tolerant DDL CLI Switch & PostgreSQL 42704 SQLSTATE | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-TRANSACTIONAL-DDL-1`** | `1.0-GA` | Engine | P1 | Transactional DDL (CREATE/DROP/ALTER/RENAME/INDEX 롤백 지원) 및 세션-트랜잭션 경계 격리 안전성 강화 | [`notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`](notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`** | `1.0-GA` | Engine | P2 | Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-VECTOR-1`** | `v1.60.0` | FEAT | P2 | Pure-Go Vector Search Engine (pgvector compat) | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WAL-ARCHIVER-INPROCESS-1`** | `1.0-GA` | Storage | P3 | WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WASM-UDF-1`** | `v1.99.0` | Engine | P2 | WebAssembly 런타임 샌드박스 UDF (wazero) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `PENDING` | **`FEAT-WEB-STUDIO-HYBRID-1`** | `1.0-GA` | API | P2 | Web Studio 하이브리드 지원 (--no-studio 플래그 및 lionsql studio 서브커맨드 프록시) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `IN_PROGRESS` | **`FEAT-WT-SECONDARY-INDEX-BTREE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 | [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md) |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-CURSOR-LIFECYCLE-1`** |  | Engine | P1 | 커서 DEALLOCATE 및 배치 종료 시 세션 커서 레지스트리 정리 및 재선언 충돌 해결 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-DATEDIFF-BIG-DAYOFYEAR-1`** |  | Proc | P2 | DATEDIFF_BIG(dayofyear, ...) returns NULL | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
@@ -2495,6 +2497,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] Transactional DDL (CREATE/DROP/ALTER/RENAME/INDEX 롤백 지원) 및 세션-트랜잭션 경계 격리 안전성 강화 `FEAT-TRANSACTIONAL-DDL-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-14 01:52:21
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`](notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md)
+
+---
+
 ### [PENDING] Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 `FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 00:10:34
 - **Milestone**: `1.0-GA`
@@ -2527,6 +2536,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: API | **Priority**: P2 | **Updated**: 2026-11-14 00:08:33
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
+
+---
+
+### [IN_PROGRESS] WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 `FEAT-WT-SECONDARY-INDEX-BTREE-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-14 01:35:26
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md)
 
 ---
 
