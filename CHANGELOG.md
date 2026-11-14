@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Architecture
+- register architecture plan `REFACTOR-TSQL-SESSION-VARS-VDBE-1` (`notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md`):
+  - schedule complete elimination of pre-parsing session variable textual substitution (`substituteParamOutsideQuotes`)
+  - design unified VDBE AST / register direct binding architecture for T-SQL session variables (`ClientSession.Vars`) to eliminate L-Value corruption and restore plan caching
+
+
 ### Security
 - enforce Zero-Tampering Oracle Test Invariant (`[RULE:ZeroOracleTampering]`, Invariant 16):
   - deploy `scripts/verify_no_slt_mutation.sh` and Git pre-commit hook preventing any modification to `*.slt` or `test/corpora/` oracle files
