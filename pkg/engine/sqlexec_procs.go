@@ -167,6 +167,15 @@ func mapStorageColumnToSpColumn(col storage.Column, tblName string, dbName strin
 		row["SQL_DATA_TYPE"] = 12
 		row["CHAR_OCTET_LENGTH"] = prec
 		row["SS_DATA_TYPE"] = 39
+	case storage.TypeReal:
+		row["DATA_TYPE"] = 7 // SQL_REAL
+		row["TYPE_NAME"] = "real"
+		row["PRECISION"] = 24
+		row["LENGTH"] = 4
+		row["SCALE"] = nil
+		row["RADIX"] = 2
+		row["SQL_DATA_TYPE"] = 7
+		row["SS_DATA_TYPE"] = 59
 	case storage.TypeFloat:
 		row["DATA_TYPE"] = 6 // SQL_FLOAT
 		row["TYPE_NAME"] = "float"

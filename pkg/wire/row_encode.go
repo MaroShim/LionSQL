@@ -143,6 +143,8 @@ func appendStorageValueText(dst []byte, v storage.Value) ([]byte, bool, bool) {
 	switch v.Type {
 	case storage.TypeInt:
 		return strconv.AppendInt(dst, v.IVal, 10), true, false
+	case storage.TypeReal:
+		return strconv.AppendFloat(dst, v.FVal, 'f', 6, 32), true, false
 	case storage.TypeFloat:
 		return strconv.AppendFloat(dst, v.FVal, 'f', 6, 64), true, false
 	case storage.TypeVarChar, storage.TypeJSON:
@@ -158,7 +160,7 @@ func appendStorageValueBinary(dst []byte, v storage.Value, oid int32) ([]byte, b
 	switch v.Type {
 	case storage.TypeInt:
 		return appendBinaryInt(dst, v.IVal, oid)
-	case storage.TypeFloat:
+	case storage.TypeReal, storage.TypeFloat:
 		return appendBinaryFloat(dst, v.FVal, oid)
 	case storage.TypeBool:
 		if oid == 16 {

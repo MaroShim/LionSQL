@@ -192,6 +192,11 @@ func EncodeRowToBuffer(schema *TableSchema, row Row, buf []byte) ([]byte, error)
 			n := binary.PutVarint(scratch[:], val.IVal)
 			buf = append(buf, scratch[:n]...)
 
+		case TypeReal:
+			bits := math.Float32bits(float32(val.FVal))
+			binary.LittleEndian.PutUint32(scratch[:4], bits)
+			buf = append(buf, scratch[:4]...)
+
 		case TypeFloat:
 			bits := math.Float64bits(val.FVal)
 			binary.LittleEndian.PutUint64(scratch[:8], bits)
@@ -367,6 +372,13 @@ func DecodeTupleValue(colType DataType, data []byte, offset int) (Value, int, er
 		}
 		return IntValue(iVal), offset + n, nil
 
+	case TypeReal:
+		if offset+4 > len(data) {
+			return Value{}, offset, ErrTupleBufferTooShort
+		}
+		bits := binary.LittleEndian.Uint32(data[offset : offset+4])
+		return RealValue(math.Float32frombits(bits)), offset + 4, nil
+
 	case TypeFloat:
 		if offset+8 > len(data) {
 			return Value{}, offset, ErrTupleBufferTooShort
@@ -473,6 +485,12 @@ func SkipTupleColumn(colType DataType, data []byte, offset int) (int, error) {
 			return offset, ErrTupleBufferTooShort
 		}
 		return offset + n, nil
+
+	case TypeReal:
+		if offset+4 > len(data) {
+			return offset, ErrTupleBufferTooShort
+		}
+		return offset + 4, nil
 
 	case TypeFloat, TypeDateTime, TypeDate:
 		if offset+8 > len(data) {

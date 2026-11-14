@@ -773,6 +773,12 @@ func parseFieldVal(raw string, col storage.Column) (storage.Value, error) {
 			return storage.IntValue(int64(f)), nil
 		}
 		return storage.NullValue(storage.TypeInt), fmt.Errorf("invalid input syntax for type integer: %q", raw)
+	case storage.TypeReal:
+		f, err := strconv.ParseFloat(raw, 32)
+		if err != nil {
+			return storage.NullValue(storage.TypeReal), fmt.Errorf("invalid input syntax for type real: %q", raw)
+		}
+		return storage.RealValue(float32(f)), nil
 	case storage.TypeFloat:
 		f, err := strconv.ParseFloat(raw, 64)
 		if err != nil {

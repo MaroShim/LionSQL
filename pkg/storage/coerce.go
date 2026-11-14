@@ -34,12 +34,24 @@ func CoerceBinaryValues(a, b Value) (Value, Value, bool) {
 		return DecimalValueFromDecimal(da), DecimalValueFromDecimal(db), true
 	}
 
-	// 2. Numeric promotion: Float > Int
+	// 2. Numeric promotion: Float > Real > Int
+	if (a.Type == TypeFloat && b.Type == TypeReal) || (a.Type == TypeReal && b.Type == TypeFloat) {
+		if a.Type == TypeReal {
+			return FloatValue(a.FVal), b, true
+		}
+		return a, FloatValue(b.FVal), true
+	}
 	if (a.Type == TypeInt && b.Type == TypeFloat) || (a.Type == TypeFloat && b.Type == TypeInt) {
 		if a.Type == TypeInt {
 			return FloatValue(float64(a.IVal)), b, true
 		}
 		return a, FloatValue(float64(b.IVal)), true
+	}
+	if (a.Type == TypeInt && b.Type == TypeReal) || (a.Type == TypeReal && b.Type == TypeInt) {
+		if a.Type == TypeInt {
+			return RealValue(float32(a.IVal)), b, true
+		}
+		return a, RealValue(float32(b.IVal)), true
 	}
 
 	// 3. Boolean and Integer coercion (0 / 1)
@@ -117,7 +129,7 @@ func ConvertValueToColumn(val Value, col Column) (Value, error) {
 	switch col.Type {
 	case TypeInt:
 		switch val.Type {
-		case TypeFloat:
+		case TypeFloat, TypeReal:
 			if math.IsNaN(val.FVal) || math.IsInf(val.FVal, 0) || val.FVal < math.MinInt64 || val.FVal > math.MaxInt64 {
 				return Value{}, fmt.Errorf("%w: float %v out of INT range for column %q", ErrInvalidDataType, val.FVal, col.Name)
 			}
@@ -138,8 +150,31 @@ func ConvertValueToColumn(val Value, col Column) (Value, error) {
 			}
 			return IntValue(n), nil
 		}
+	case TypeReal:
+		switch val.Type {
+		case TypeFloat:
+			return RealValue(float32(val.FVal)), nil
+		case TypeInt:
+			return RealValue(float32(val.IVal)), nil
+		case TypeBool:
+			return RealValue(float32(boolToInt(val.BVal))), nil
+		case TypeDecimal:
+			f, err := strconv.ParseFloat(val.DVal.String(), 32)
+			if err != nil {
+				return Value{}, fmt.Errorf("%w: cannot convert decimal %s to REAL for column %q: %v", ErrInvalidDataType, val.String(), col.Name, err)
+			}
+			return RealValue(float32(f)), nil
+		case TypeVarChar:
+			f, err := strconv.ParseFloat(strings.TrimSpace(val.SVal), 32)
+			if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+				return Value{}, fmt.Errorf("%w: cannot convert %q to REAL for column %q", ErrInvalidDataType, val.SVal, col.Name)
+			}
+			return RealValue(float32(f)), nil
+		}
 	case TypeFloat:
 		switch val.Type {
+		case TypeReal:
+			return FloatValue(val.FVal), nil
 		case TypeInt:
 			return FloatValue(float64(val.IVal)), nil
 		case TypeBool:

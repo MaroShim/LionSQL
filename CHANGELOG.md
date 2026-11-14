@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **Types, Storage & Protocols (`FIX-TYPE-REAL-FLOAT-DISTINCTION-1`, Defect 101)**:
+  - Completely decouple `REAL` (4-byte IEEE 754 float32, `storage.TypeReal`) from `FLOAT` (8-byte IEEE 754 float64, `storage.TypeFloat`) across storage codecs, DDL parsers, and wire protocols.
+  - Enforce on-disk binary tuple layout isolation: `REAL` consumes exactly 4 bytes in V2 binary tuple encoding (`TupleCodecV2`) while `FLOAT` consumes 8 bytes, guaranteeing permanent on-disk binary format invariance prior to 1.0-GA.
+  - Differentiate secondary index B-Tree monotonic key encoding: 8 hex characters for `TypeReal` and 16 hex characters for `TypeFloat`.
+  - Align DDL type parsers: `REAL`, `FLOAT4`, and `FLOAT(1..24)` map to `TypeReal` (precision: 24, max_length: 4); `FLOAT`, `DOUBLE`, `FLOAT8`, and `FLOAT(25..53)` map to `TypeFloat` (precision: 53, max_length: 8).
+  - Map wire protocols and virtual catalog: TDS `TypeFltN` sends 4 bytes for `TypeReal` and 8 bytes for `TypeFloat`; PGWire maps `TypeReal` to OID 700 (`FLOAT4`) and `TypeFloat` to OID 701 (`FLOAT8`); `sys.types` exposes `real` (59, 4, 24) and `float` (62, 8, 53).
+
 ### Added
 - **Wire & Protocol (`FEAT-TDS-MULTIPLE-RESULT-SETS-1`, Defect 107)**:
   - Implement sequential Multiple Result Sets streaming (`QueryResult.Next`) across SQL batches and stored procedures for Microsoft SQL Server TDS 7.x/8.0 wire protocol listener (`:1433`).

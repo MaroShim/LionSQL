@@ -25,6 +25,8 @@ func (v Value) EncodeMsgpack(enc *msgpack.Encoder) error {
 	switch v.Type {
 	case TypeInt:
 		return enc.EncodeInt(v.IVal)
+	case TypeReal:
+		return enc.EncodeFloat32(float32(v.FVal))
 	case TypeFloat:
 		return enc.EncodeFloat64(v.FVal)
 	case TypeBool:
@@ -120,6 +122,12 @@ func (v *Value) DecodeMsgpack(dec *msgpack.Decoder) error {
 			return err
 		}
 		*v = IntValue(i)
+	case TypeReal:
+		f, err := dec.DecodeFloat32()
+		if err != nil {
+			return err
+		}
+		*v = RealValue(f)
 	case TypeFloat:
 		f, err := dec.DecodeFloat64()
 		if err != nil {

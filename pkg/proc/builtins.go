@@ -96,6 +96,8 @@ func valToString(v storage.Value) string {
 		return v.SVal
 	case storage.TypeInt:
 		return strconv.FormatInt(v.IVal, 10)
+	case storage.TypeReal:
+		return strconv.FormatFloat(v.FVal, 'f', -1, 32)
 	case storage.TypeFloat:
 		return strconv.FormatFloat(v.FVal, 'f', -1, 64)
 	case storage.TypeBool:
@@ -117,7 +119,7 @@ func toFloatNum(v storage.Value) (float64, bool) {
 	switch v.Type {
 	case storage.TypeInt:
 		return float64(v.IVal), true
-	case storage.TypeFloat:
+	case storage.TypeFloat, storage.TypeReal:
 		return v.FVal, true
 	case storage.TypeVarChar:
 		f, err := strconv.ParseFloat(strings.TrimSpace(v.SVal), 64)
@@ -141,7 +143,7 @@ func isTruthyStorageValue(v storage.Value) bool {
 		return v.BVal
 	case storage.TypeInt:
 		return v.IVal != 0
-	case storage.TypeFloat:
+	case storage.TypeFloat, storage.TypeReal:
 		return v.FVal != 0
 	case storage.TypeVarChar:
 		s := strings.TrimSpace(v.SVal)

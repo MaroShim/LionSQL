@@ -77,6 +77,7 @@ const (
 	TypeBinary
 	TypeDate
 	TypeTime
+	TypeReal
 )
 
 func (t DataType) String() string {
@@ -103,6 +104,8 @@ func (t DataType) String() string {
 		return "DATE"
 	case TypeTime:
 		return "TIME"
+	case TypeReal:
+		return "REAL"
 	default:
 		return "UNKNOWN"
 	}
@@ -342,6 +345,11 @@ func ParsePKValue(s string, dt DataType) Value {
 			return Value{Type: TypeFloat, FVal: f, IVal: int64(f)}
 		}
 		return Value{Type: TypeFloat}
+	case TypeReal:
+		if f, err := strconv.ParseFloat(s, 32); err == nil {
+			return RealValue(float32(f))
+		}
+		return Value{Type: TypeReal}
 	case TypeDecimal:
 		return DecimalValue(s)
 	case TypeBool:
@@ -748,6 +756,8 @@ func (v Value) Interface() any {
 		return v.IVal
 	case TypeFloat:
 		return v.FVal
+	case TypeReal:
+		return float32(v.FVal)
 	case TypeBool:
 		return v.BVal
 	case TypeDateTime, TypeDate:
@@ -773,6 +783,10 @@ func FloatValue(v float64) Value {
 	return Value{Type: TypeFloat, FVal: v, IVal: int64(v)}
 }
 
+func RealValue(v float32) Value {
+	return Value{Type: TypeReal, FVal: float64(v), IVal: int64(v)}
+}
+
 func BoolValue(v bool) Value {
 	return Value{Type: TypeBool, BVal: v}
 }
@@ -787,7 +801,7 @@ func BoolValueFromAny(v Value) Value {
 		return v
 	case TypeInt:
 		return BoolValue(v.IVal != 0)
-	case TypeFloat:
+	case TypeFloat, TypeReal:
 		return BoolValue(v.FVal != 0)
 	case TypeDecimal:
 		return BoolValue(!v.Decimal().IsZero())
@@ -869,6 +883,24 @@ func EncodeIndexKeyPart(v Value) string {
 		b[14] = hexDigits[u>>4&0xf]
 		b[15] = hexDigits[u&0xf]
 		return string(b[:])
+	case TypeReal:
+		bits := math.Float32bits(float32(v.FVal))
+		if (bits & 0x80000000) != 0 {
+			bits = ^bits
+		} else {
+			bits ^= 0x80000000
+		}
+		var b [8]byte
+		const hexDigits = "0123456789abcdef"
+		b[0] = hexDigits[bits>>28&0xf]
+		b[1] = hexDigits[bits>>24&0xf]
+		b[2] = hexDigits[bits>>20&0xf]
+		b[3] = hexDigits[bits>>16&0xf]
+		b[4] = hexDigits[bits>>12&0xf]
+		b[5] = hexDigits[bits>>8&0xf]
+		b[6] = hexDigits[bits>>4&0xf]
+		b[7] = hexDigits[bits&0xf]
+		return string(b[:])
 	case TypeFloat:
 		bits := math.Float64bits(v.FVal)
 		if (bits & 0x8000000000000000) != 0 {
@@ -920,7 +952,7 @@ func (v Value) Decimal() Decimal {
 	if v.Type == TypeInt {
 		return NewDecimalFromInt(v.IVal, 0)
 	}
-	if v.Type == TypeFloat {
+	if v.Type == TypeFloat || v.Type == TypeReal {
 		return NewDecimalFromFloat(v.FVal, 4)
 	}
 	if v.SVal != "" {
@@ -953,6 +985,8 @@ func (v Value) String() string {
 		return v.SVal
 	case TypeFloat:
 		return fmt.Sprintf("%f", v.FVal)
+	case TypeReal:
+		return strconv.FormatFloat(v.FVal, 'g', -1, 32)
 	case TypeDecimal:
 		if v.DVal.value != nil {
 			return v.DVal.String()
@@ -1011,7 +1045,7 @@ func (v Value) Equal(other Value) bool {
 		return v.IVal == other.IVal
 	case TypeVarChar, TypeJSON:
 		return v.SVal == other.SVal
-	case TypeFloat:
+	case TypeFloat, TypeReal:
 		return v.FVal == other.FVal || math.Abs(v.FVal-other.FVal) < 1e-9
 	case TypeDecimal:
 		return v.Decimal().Equal(other.Decimal())
@@ -1076,7 +1110,7 @@ func (v Value) Compare(other Value) int {
 			return 1
 		}
 		return 0
-	case TypeFloat:
+	case TypeFloat, TypeReal:
 		return CompareFloatEpsilon(v.FVal, other.FVal)
 	case TypeDecimal:
 		return v.Decimal().Cmp(other.Decimal())

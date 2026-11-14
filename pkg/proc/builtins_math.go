@@ -73,7 +73,7 @@ func evalMathBuiltin(upper string, args []storage.Value) storage.Value {
 			decimals := 0
 			if len(args) >= 2 && !args[1].IsNull {
 				decimals = int(args[1].IVal)
-				if args[1].Type == storage.TypeFloat {
+				if args[1].Type == storage.TypeFloat || args[1].Type == storage.TypeReal {
 					decimals = int(args[1].FVal)
 				}
 			}
@@ -329,7 +329,7 @@ func evalMathBuiltin(upper string, args []storage.Value) storage.Value {
 	case "RAND", "RANDOM":
 		if len(args) > 0 && !args[0].IsNull {
 			seedVal := args[0].IVal
-			if args[0].Type == storage.TypeFloat {
+			if args[0].Type == storage.TypeFloat || args[0].Type == storage.TypeReal {
 				seedVal = int64(args[0].FVal)
 			}
 			r := mathrand.New(mathrand.NewPCG(uint64(seedVal), uint64(seedVal*6364136223846793005+1)))
@@ -342,7 +342,7 @@ func evalMathBuiltin(upper string, args []storage.Value) storage.Value {
 			return storage.NullValue(storage.TypeInt)
 		}
 		val := uint64(args[0].IVal)
-		if args[0].Type == storage.TypeFloat {
+		if args[0].Type == storage.TypeFloat || args[0].Type == storage.TypeReal {
 			val = uint64(int64(args[0].FVal))
 		}
 		return storage.IntValue(int64(bits.OnesCount64(val)))

@@ -307,6 +307,12 @@ func parsePKValue(lit string, dt storage.DataType) (storage.Value, error) {
 			return storage.Value{}, err
 		}
 		return storage.FloatValue(f), nil
+	case storage.TypeReal:
+		f, err := strconv.ParseFloat(lit, 32)
+		if err != nil {
+			return storage.Value{}, err
+		}
+		return storage.RealValue(float32(f)), nil
 	default:
 		return storage.Value{}, fmt.Errorf("unsupported PK data type: %v", dt)
 	}

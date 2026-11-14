@@ -77,22 +77,50 @@ func GenerateSysCatalogRows(src Source, norm string, currDb string) (columns []s
 				if !c.Nullable {
 					nullableStr = "NO"
 				}
+				systemTypeID := 56
+				userTypeID := 56
+				maxLength := 4
+				prec := 10
+				scale := 0
+				switch c.Type {
+				case storage.TypeInt:
+					systemTypeID, userTypeID, maxLength, prec = 56, 56, 4, 10
+				case storage.TypeReal:
+					systemTypeID, userTypeID, maxLength, prec = 59, 59, 4, 24
+				case storage.TypeFloat:
+					systemTypeID, userTypeID, maxLength, prec = 62, 62, 8, 53
+				case storage.TypeVarChar:
+					systemTypeID, userTypeID, maxLength, prec = 167, 167, 8000, 0
+				case storage.TypeBool:
+					systemTypeID, userTypeID, maxLength, prec = 104, 104, 1, 1
+				case storage.TypeDateTime:
+					systemTypeID, userTypeID, maxLength, prec, scale = 61, 61, 8, 23, 3
+				case storage.TypeDecimal:
+					p, s := c.Precision, c.Scale
+					if p <= 0 {
+						p = 18
+					}
+					if s < 0 {
+						s = 2
+					}
+					systemTypeID, userTypeID, maxLength, prec, scale = 108, 108, 17, p, s
+				}
 				allRows = append(allRows, map[string]any{
 					"table_name":       t.Name,
 					"column_name":      c.Name,
 					"name":             c.Name,
 					"object_id":        tableObjectID(tIdx),
 					"column_id":        i + 1,
-					"system_type_id":   56,
-					"user_type_id":     56,
+					"system_type_id":   systemTypeID,
+					"user_type_id":     userTypeID,
 					"data_type":        c.Type.String(),
 					"is_nullable":      nullableStr,
 					"is_identity":      false,
 					"is_primary_key":   c.PrimaryKey,
 					"ordinal_position": i + 1,
-					"max_length":       255,
-					"precision":        10,
-					"scale":            0,
+					"max_length":       maxLength,
+					"precision":        prec,
+					"scale":            scale,
 				})
 			}
 		}
@@ -475,6 +503,7 @@ func GenerateSysCatalogRows(src Source, norm string, currDb string) (columns []s
 		columns = []string{"name", "system_type_id", "user_type_id", "schema_id", "max_length", "precision", "scale", "is_nullable"}
 		allRows = append(allRows,
 			map[string]any{"name": "int", "system_type_id": 56, "user_type_id": 56, "schema_id": 4, "max_length": 4, "precision": 10, "scale": 0, "is_nullable": true},
+			map[string]any{"name": "real", "system_type_id": 59, "user_type_id": 59, "schema_id": 4, "max_length": 4, "precision": 24, "scale": 0, "is_nullable": true},
 			map[string]any{"name": "varchar", "system_type_id": 167, "user_type_id": 167, "schema_id": 4, "max_length": 8000, "precision": 0, "scale": 0, "is_nullable": true},
 			map[string]any{"name": "float", "system_type_id": 62, "user_type_id": 62, "schema_id": 4, "max_length": 8, "precision": 53, "scale": 0, "is_nullable": true},
 			map[string]any{"name": "bit", "system_type_id": 104, "user_type_id": 104, "schema_id": 4, "max_length": 1, "precision": 1, "scale": 0, "is_nullable": true},

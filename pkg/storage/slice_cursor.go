@@ -91,6 +91,22 @@ func ValueFromAny(v any, targetType DataType) Value {
 			}
 		}
 		return IntValue(0)
+	case TypeReal:
+		switch val := v.(type) {
+		case float32:
+			return RealValue(val)
+		case float64:
+			return RealValue(float32(val))
+		case int:
+			return RealValue(float32(val))
+		case int64:
+			return RealValue(float32(val))
+		case string:
+			if f, err := strconv.ParseFloat(val, 32); err == nil {
+				return RealValue(float32(f))
+			}
+		}
+		return RealValue(0)
 	case TypeFloat:
 		switch val := v.(type) {
 		case float64:

@@ -57,6 +57,22 @@ func EvalBinaryOp(op byte, leftVal, rightVal storage.Value, targetType storage.D
 		}
 		return storage.IntValue(res), nil
 
+	case storage.TypeReal:
+		var res float64
+		switch op {
+		case '+':
+			res = leftF + rightF
+		case '-':
+			res = leftF - rightF
+		case '*':
+			res = leftF * rightF
+		case '/':
+			res = leftF / rightF
+		default:
+			return storage.NullValue(targetType), fmt.Errorf("unsupported operator %c for TypeReal", op)
+		}
+		return storage.RealValue(float32(res)), nil
+
 	case storage.TypeFloat:
 		var res float64
 		switch op {
@@ -113,7 +129,7 @@ func ToNumeric(val storage.Value) (float64, int64, bool) {
 	switch val.Type {
 	case storage.TypeInt:
 		return float64(val.IVal), val.IVal, true
-	case storage.TypeFloat:
+	case storage.TypeFloat, storage.TypeReal:
 		return val.FVal, int64(val.FVal), true
 	case storage.TypeDecimal:
 		f, err := strconv.ParseFloat(val.String(), 64)

@@ -152,7 +152,9 @@ func parseDataTypeString(s string) storage.DataType {
 		return storage.TypeInt
 	case "VARCHAR", "TEXT", "NVARCHAR", "CHAR", "BPCHAR", "SYSNAME":
 		return storage.TypeVarChar
-	case "FLOAT", "DOUBLE", "REAL", "FLOAT4", "FLOAT8":
+	case "REAL", "FLOAT4":
+		return storage.TypeReal
+	case "FLOAT", "DOUBLE", "FLOAT8":
 		return storage.TypeFloat
 	case "DECIMAL", "NUMERIC", "MONEY", "SMALLMONEY":
 		return storage.TypeDecimal

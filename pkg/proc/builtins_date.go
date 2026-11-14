@@ -594,7 +594,7 @@ func evalDateBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		part := normalizeDatePart(valToString(args[0]))
 		n := args[1].IVal
-		if args[1].Type == storage.TypeFloat {
+		if args[1].Type == storage.TypeFloat || args[1].Type == storage.TypeReal {
 			n = int64(args[1].FVal)
 		} else if args[1].Type == storage.TypeVarChar {
 			if parsedN, err := strconv.ParseInt(strings.TrimSpace(args[1].SVal), 10, 64); err == nil {
@@ -631,7 +631,7 @@ func evalDateBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		part := normalizeDatePart(valToString(args[0]))
 		width := args[1].IVal
-		if args[1].Type == storage.TypeFloat {
+		if args[1].Type == storage.TypeFloat || args[1].Type == storage.TypeReal {
 			width = int64(args[1].FVal)
 		} else if args[1].Type == storage.TypeVarChar {
 			if w, err := strconv.ParseInt(strings.TrimSpace(args[1].SVal), 10, 64); err == nil {
@@ -668,7 +668,7 @@ func evalDateBuiltin(upper string, args []storage.Value) storage.Value {
 		if len(args) >= 2 {
 			if args[1].Type == storage.TypeInt {
 				monthsToAdd = int(args[1].IVal)
-			} else if args[1].Type == storage.TypeFloat {
+			} else if args[1].Type == storage.TypeFloat || args[1].Type == storage.TypeReal {
 				monthsToAdd = int(args[1].FVal)
 			} else if args[1].Type == storage.TypeVarChar {
 				if m, err := strconv.Atoi(strings.TrimSpace(args[1].SVal)); err == nil {

@@ -121,7 +121,7 @@ func BuildFlatRecordLayout(schema *storage.TableSchema) *FlatRecordLayout {
 		offsets[i] = currentOffset
 		sz := 8 // default slot size: 8 bytes
 		switch col.Type {
-		case storage.TypeInt, storage.TypeFloat, storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
+		case storage.TypeInt, storage.TypeFloat, storage.TypeReal, storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
 			sz = 8
 		case storage.TypeBool:
 			sz = 8 // padded to 8 for alignment
@@ -187,6 +187,9 @@ func (l *FlatRecordLayout) EncodeRowToFlat(schema *storage.TableSchema, row stor
 		switch col.Type {
 		case storage.TypeInt:
 			binary.LittleEndian.PutUint64(slot, uint64(val.IVal))
+
+		case storage.TypeReal:
+			binary.LittleEndian.PutUint32(slot[:4], math.Float32bits(float32(val.FVal)))
 
 		case storage.TypeFloat:
 			binary.LittleEndian.PutUint64(slot, math.Float64bits(val.FVal))
@@ -311,6 +314,10 @@ func (l *FlatRecordLayout) DecodeFlatToRowWithArena(schema *storage.TableSchema,
 		case storage.TypeInt:
 			v := int64(binary.LittleEndian.Uint64(slot))
 			vals[i] = storage.IntValue(v)
+
+		case storage.TypeReal:
+			bits := binary.LittleEndian.Uint32(slot[:4])
+			vals[i] = storage.RealValue(math.Float32frombits(bits))
 
 		case storage.TypeFloat:
 			bits := binary.LittleEndian.Uint64(slot)

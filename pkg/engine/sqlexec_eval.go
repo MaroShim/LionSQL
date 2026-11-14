@@ -83,6 +83,8 @@ func formatStorageValue(v storage.Value) any {
 		return v.SVal
 	case storage.TypeFloat:
 		return v.FVal
+	case storage.TypeReal:
+		return float32(v.FVal)
 	case storage.TypeDecimal:
 		return v.Decimal().String()
 	case storage.TypeBool:

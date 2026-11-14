@@ -2,6 +2,7 @@ package memengine
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -474,13 +475,24 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 			continue
 		}
 		if val.Type != col.Type {
-			if col.Type == storage.TypeFloat && val.Type == storage.TypeInt {
-				val = storage.FloatValue(float64(val.IVal))
+			if col.Type == storage.TypeFloat && (val.Type == storage.TypeInt || val.Type == storage.TypeReal) {
+				if val.Type == storage.TypeInt {
+					val = storage.FloatValue(float64(val.IVal))
+				} else {
+					val = storage.FloatValue(val.FVal)
+				}
 				record[col.Name] = val
-			} else if col.Type == storage.TypeInt && val.Type == storage.TypeFloat && val.FVal == float64(int64(val.FVal)) {
+			} else if col.Type == storage.TypeReal && (val.Type == storage.TypeInt || val.Type == storage.TypeFloat) {
+				if val.Type == storage.TypeInt {
+					val = storage.RealValue(float32(val.IVal))
+				} else {
+					val = storage.RealValue(float32(val.FVal))
+				}
+				record[col.Name] = val
+			} else if col.Type == storage.TypeInt && (val.Type == storage.TypeFloat || val.Type == storage.TypeReal) && val.FVal == float64(int64(val.FVal)) {
 				val = storage.IntValue(int64(val.FVal))
 				record[col.Name] = val
-			} else if col.Type == storage.TypeDecimal && (val.Type == storage.TypeInt || val.Type == storage.TypeFloat || val.Type == storage.TypeVarChar) {
+			} else if col.Type == storage.TypeDecimal && (val.Type == storage.TypeInt || val.Type == storage.TypeFloat || val.Type == storage.TypeReal || val.Type == storage.TypeVarChar) {
 				val = storage.DecimalValue(val.String())
 				if col.Scale > 0 {
 					val = storage.DecimalValueFromDecimal(val.DVal.Rescale(int32(col.Scale)))
@@ -610,9 +622,19 @@ func (tx *Transaction) UpdateRow(tableName string, pk storage.Value, row storage
 		rowClone := cloneRow(row)
 		for i, col := range schema.Columns {
 			if i < len(rowClone.Values) && rowClone.Values[i].Type != col.Type && !rowClone.Values[i].IsNull {
-				if col.Type == storage.TypeFloat && rowClone.Values[i].Type == storage.TypeInt {
-					rowClone.Values[i] = storage.FloatValue(float64(rowClone.Values[i].IVal))
-				} else if col.Type == storage.TypeInt && rowClone.Values[i].Type == storage.TypeFloat && rowClone.Values[i].FVal == float64(int64(rowClone.Values[i].FVal)) {
+				if col.Type == storage.TypeFloat && (rowClone.Values[i].Type == storage.TypeInt || rowClone.Values[i].Type == storage.TypeReal) {
+					if rowClone.Values[i].Type == storage.TypeInt {
+						rowClone.Values[i] = storage.FloatValue(float64(rowClone.Values[i].IVal))
+					} else {
+						rowClone.Values[i] = storage.FloatValue(rowClone.Values[i].FVal)
+					}
+				} else if col.Type == storage.TypeReal && (rowClone.Values[i].Type == storage.TypeInt || rowClone.Values[i].Type == storage.TypeFloat) {
+					if rowClone.Values[i].Type == storage.TypeInt {
+						rowClone.Values[i] = storage.RealValue(float32(rowClone.Values[i].IVal))
+					} else {
+						rowClone.Values[i] = storage.RealValue(float32(rowClone.Values[i].FVal))
+					}
+				} else if col.Type == storage.TypeInt && (rowClone.Values[i].Type == storage.TypeFloat || rowClone.Values[i].Type == storage.TypeReal) && rowClone.Values[i].FVal == float64(int64(rowClone.Values[i].FVal)) {
 					rowClone.Values[i] = storage.IntValue(int64(rowClone.Values[i].FVal))
 				}
 			}
@@ -675,13 +697,24 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 			continue
 		}
 		if val.Type != col.Type {
-			if col.Type == storage.TypeFloat && val.Type == storage.TypeInt {
-				val = storage.FloatValue(float64(val.IVal))
+			if col.Type == storage.TypeFloat && (val.Type == storage.TypeInt || val.Type == storage.TypeReal) {
+				if val.Type == storage.TypeInt {
+					val = storage.FloatValue(float64(val.IVal))
+				} else {
+					val = storage.FloatValue(val.FVal)
+				}
 				updated[col.Name] = val
-			} else if col.Type == storage.TypeInt && val.Type == storage.TypeFloat && val.FVal == float64(int64(val.FVal)) {
+			} else if col.Type == storage.TypeReal && (val.Type == storage.TypeInt || val.Type == storage.TypeFloat) {
+				if val.Type == storage.TypeInt {
+					val = storage.RealValue(float32(val.IVal))
+				} else {
+					val = storage.RealValue(float32(val.FVal))
+				}
+				updated[col.Name] = val
+			} else if col.Type == storage.TypeInt && (val.Type == storage.TypeFloat || val.Type == storage.TypeReal) && val.FVal == float64(int64(val.FVal)) {
 				val = storage.IntValue(int64(val.FVal))
 				updated[col.Name] = val
-			} else if col.Type == storage.TypeDecimal && (val.Type == storage.TypeInt || val.Type == storage.TypeFloat || val.Type == storage.TypeVarChar) {
+			} else if col.Type == storage.TypeDecimal && (val.Type == storage.TypeInt || val.Type == storage.TypeFloat || val.Type == storage.TypeReal || val.Type == storage.TypeVarChar) {
 				val = storage.DecimalValue(val.String())
 				if col.Scale > 0 {
 					val = storage.DecimalValueFromDecimal(val.DVal.Rescale(int32(col.Scale)))
@@ -1167,11 +1200,14 @@ func valuesEqual(a, b storage.Value) bool {
 	if a.Equal(b) {
 		return true
 	}
-	if a.Type == storage.TypeFloat && b.Type == storage.TypeInt {
+	if (a.Type == storage.TypeFloat || a.Type == storage.TypeReal) && b.Type == storage.TypeInt {
 		return a.FVal == float64(b.IVal)
 	}
-	if a.Type == storage.TypeInt && b.Type == storage.TypeFloat {
+	if a.Type == storage.TypeInt && (b.Type == storage.TypeFloat || b.Type == storage.TypeReal) {
 		return float64(a.IVal) == b.FVal
+	}
+	if (a.Type == storage.TypeFloat && b.Type == storage.TypeReal) || (a.Type == storage.TypeReal && b.Type == storage.TypeFloat) {
+		return a.FVal == b.FVal || math.Abs(a.FVal-b.FVal) < 1e-9
 	}
 	return false
 }

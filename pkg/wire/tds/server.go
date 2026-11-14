@@ -2837,7 +2837,10 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 					} else if colSize != 8 {
 						colSize = 4
 					}
-				case float64, float32:
+				case float32:
+					colType = TypeFltN
+					colSize = 4
+				case float64:
 					colType = TypeFltN
 					colSize = 8
 				case bool:

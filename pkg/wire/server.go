@@ -1165,6 +1165,8 @@ func formatParamString(val storage.Value) string {
 	switch val.Type {
 	case storage.TypeInt:
 		return strconv.FormatInt(val.IVal, 10)
+	case storage.TypeReal:
+		return strconv.FormatFloat(val.FVal, 'f', -1, 32)
 	case storage.TypeFloat:
 		return strconv.FormatFloat(val.FVal, 'f', -1, 64)
 	case storage.TypeBool:
@@ -2607,6 +2609,8 @@ func formatParamForSQL(val string, pType int32, sv storage.Value) string {
 	switch sv.Type {
 	case storage.TypeInt:
 		return fmt.Sprintf("%d", sv.IVal)
+	case storage.TypeReal:
+		return fmt.Sprintf("%g", float32(sv.FVal))
 	case storage.TypeFloat:
 		return fmt.Sprintf("%g", sv.FVal)
 	case storage.TypeDecimal:
@@ -2676,6 +2680,8 @@ func typeToPgOID(t storage.DataType) int32 {
 	switch t {
 	case storage.TypeInt:
 		return 23 // INT4
+	case storage.TypeReal:
+		return 700 // FLOAT4
 	case storage.TypeFloat:
 		return 701 // FLOAT8
 	case storage.TypeDecimal:
@@ -2757,6 +2763,8 @@ func inferPgOID(v any) int32 {
 				return 23
 			}
 			return 20
+		case storage.TypeReal:
+			return 700
 		case storage.TypeFloat:
 			return 701
 		case storage.TypeBool:

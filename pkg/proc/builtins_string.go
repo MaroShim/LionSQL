@@ -309,7 +309,7 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 			return storage.NullValue(storage.TypeVarChar)
 		}
 		code := int(args[0].IVal)
-		if args[0].Type == storage.TypeFloat {
+		if args[0].Type == storage.TypeFloat || args[0].Type == storage.TypeReal {
 			code = int(args[0].FVal)
 		}
 		if code < 0 || code > 255 {
@@ -482,11 +482,11 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		runes := []rune(valToString(args[0]))
 		start := int(args[1].IVal)
-		if args[1].Type == storage.TypeFloat {
+		if args[1].Type == storage.TypeFloat || args[1].Type == storage.TypeReal {
 			start = int(args[1].FVal)
 		}
 		length := int(args[2].IVal)
-		if args[2].Type == storage.TypeFloat {
+		if args[2].Type == storage.TypeFloat || args[2].Type == storage.TypeReal {
 			length = int(args[2].FVal)
 		}
 		replacement := valToString(args[3])
@@ -611,7 +611,7 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 			return storage.NullValue(storage.TypeVarChar)
 		}
 		code := args[0].IVal
-		if args[0].Type == storage.TypeFloat {
+		if args[0].Type == storage.TypeFloat || args[0].Type == storage.TypeReal {
 			code = int64(args[0].FVal)
 		}
 		if code < 0 || code > unicode.MaxRune {
@@ -735,7 +735,7 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		str := valToString(args[0])
 		targetLen := int(args[1].IVal)
-		if args[1].Type == storage.TypeFloat {
+		if args[1].Type == storage.TypeFloat || args[1].Type == storage.TypeReal {
 			targetLen = int(args[1].FVal)
 		}
 		if targetLen <= 0 {
@@ -767,7 +767,7 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		str := valToString(args[0])
 		targetLen := int(args[1].IVal)
-		if args[1].Type == storage.TypeFloat {
+		if args[1].Type == storage.TypeFloat || args[1].Type == storage.TypeReal {
 			targetLen = int(args[1].FVal)
 		}
 		if targetLen <= 0 {

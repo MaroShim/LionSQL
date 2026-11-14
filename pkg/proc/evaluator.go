@@ -315,6 +315,8 @@ func evalExpr(expr Expr, ctx *ExecutionContext) (storage.Value, error) {
 				return storage.IntValue(-val.IVal), nil
 			} else if val.Type == storage.TypeFloat {
 				return storage.FloatValue(-val.FVal), nil
+			} else if val.Type == storage.TypeReal {
+				return storage.RealValue(-float32(val.FVal)), nil
 			}
 			return storage.Value{}, fmt.Errorf("cannot negate non-numeric type %s", val.Type)
 		case TokenNot:
@@ -360,21 +362,21 @@ func evalBinary(op TokenType, left, right storage.Value) (storage.Value, error) 
 		if left.Type == storage.TypeVarChar || right.Type == storage.TypeVarChar {
 			return storage.StringValue(left.String() + right.String()), nil
 		}
-		if left.Type == storage.TypeFloat || right.Type == storage.TypeFloat {
+		if left.Type == storage.TypeFloat || right.Type == storage.TypeFloat || left.Type == storage.TypeReal || right.Type == storage.TypeReal {
 			return storage.FloatValue(asFloat(left) + asFloat(right)), nil
 		}
 	case TokenMinus:
 		if left.Type == storage.TypeInt && right.Type == storage.TypeInt {
 			return storage.IntValue(left.IVal - right.IVal), nil
 		}
-		if left.Type == storage.TypeFloat || right.Type == storage.TypeFloat {
+		if left.Type == storage.TypeFloat || right.Type == storage.TypeFloat || left.Type == storage.TypeReal || right.Type == storage.TypeReal {
 			return storage.FloatValue(asFloat(left) - asFloat(right)), nil
 		}
 	case TokenAsterisk:
 		if left.Type == storage.TypeInt && right.Type == storage.TypeInt {
 			return storage.IntValue(left.IVal * right.IVal), nil
 		}
-		if left.Type == storage.TypeFloat || right.Type == storage.TypeFloat {
+		if left.Type == storage.TypeFloat || right.Type == storage.TypeFloat || left.Type == storage.TypeReal || right.Type == storage.TypeReal {
 			return storage.FloatValue(asFloat(left) * asFloat(right)), nil
 		}
 	case TokenSlash, TokenDiv:
@@ -448,7 +450,7 @@ func compareValues(a, b storage.Value) int {
 		}
 		return 0
 	}
-	if a.Type == storage.TypeFloat || b.Type == storage.TypeFloat {
+	if a.Type == storage.TypeFloat || b.Type == storage.TypeFloat || a.Type == storage.TypeReal || b.Type == storage.TypeReal {
 		fa, fb := asFloat(a), asFloat(b)
 		if fa < fb {
 			return -1
@@ -477,7 +479,7 @@ func isTruthy(v storage.Value) bool {
 		return v.BVal
 	case storage.TypeInt:
 		return v.IVal != 0
-	case storage.TypeFloat:
+	case storage.TypeFloat, storage.TypeReal:
 		return v.FVal != 0.0
 	case storage.TypeVarChar:
 		return len(v.SVal) > 0 && v.SVal != "0" && v.SVal != "false"

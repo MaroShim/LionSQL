@@ -334,6 +334,23 @@ func ConvertValue(v any, targetType storage.DataType) storage.Value {
 		}
 	case storage.TypeVarChar:
 		return storage.StringValue(fmt.Sprintf("%v", v))
+	case storage.TypeReal:
+		switch num := v.(type) {
+		case float32:
+			return storage.RealValue(num)
+		case float64:
+			return storage.RealValue(float32(num))
+		case int:
+			return storage.RealValue(float32(num))
+		case int64:
+			return storage.RealValue(float32(num))
+		case string:
+			if num == "" {
+				return storage.NullValue(targetType)
+			}
+			f, _ := strconv.ParseFloat(num, 32)
+			return storage.RealValue(float32(f))
+		}
 	case storage.TypeFloat:
 		switch num := v.(type) {
 		case float64:

@@ -276,14 +276,29 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 
 		colName := cleanIdentifier(tokens[0])
 		rawType := strings.ToUpper(tokens[1])
+		var floatPrec int = -1
 		if idx := strings.Index(rawType, "("); idx != -1 {
+			if strings.HasPrefix(rawType, "FLOAT") {
+				if endIdx := strings.Index(rawType, ")"); endIdx > idx {
+					if n, err := strconv.Atoi(strings.TrimSpace(rawType[idx+1 : endIdx])); err == nil {
+						floatPrec = n
+					}
+				}
+			}
 			rawType = rawType[:idx]
 		}
 
 		dataType := parseSQLDataType(rawType)
+		if dataType == storage.TypeFloat && floatPrec > 0 && floatPrec <= 24 {
+			dataType = storage.TypeReal
+		}
 		precision := 0
 		scale := 0
-		if dataType == storage.TypeDecimal {
+		if dataType == storage.TypeReal {
+			precision = 24
+		} else if dataType == storage.TypeFloat {
+			precision = 53
+		} else if dataType == storage.TypeDecimal {
 			precision = 18
 			scale = 2
 			if rawType == "MONEY" {
@@ -1336,7 +1351,9 @@ func parseSQLDataType(s string) storage.DataType {
 	switch strings.ToUpper(s) {
 	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "IDENTITY", "SERIAL", "BIGSERIAL", "SMALLSERIAL", "INT2", "INT4", "INT8":
 		return storage.TypeInt
-	case "FLOAT", "DOUBLE", "REAL", "FLOAT4", "FLOAT8", "DOUBLE PRECISION":
+	case "REAL", "FLOAT4":
+		return storage.TypeReal
+	case "FLOAT", "DOUBLE", "FLOAT8", "DOUBLE PRECISION":
 		return storage.TypeFloat
 	case "NUMERIC", "DECIMAL", "MONEY":
 		return storage.TypeDecimal

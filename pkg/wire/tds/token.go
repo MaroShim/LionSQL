@@ -540,8 +540,12 @@ func writeTypeInfo(buf *bytes.Buffer, col ColumnInfo) {
 		// MaxLength: 1B (e.g. 8 bytes for int64/int4)
 		buf.WriteByte(byte(col.Size))
 	case TypeFltN:
-		// MaxLength: 1B (e.g. 8 bytes)
-		buf.WriteByte(8)
+		// MaxLength: 1B (e.g. 4 bytes for real, 8 bytes for float)
+		if col.Size == 4 {
+			buf.WriteByte(4)
+		} else {
+			buf.WriteByte(8)
+		}
 	case TypeBitN:
 		// MaxLength: 1B (1)
 		buf.WriteByte(1)
@@ -676,10 +680,17 @@ func writeColumnValue(buf *bytes.Buffer, col ColumnInfo, val any) {
 
 	case TypeFltN:
 		fltVal := toFloat64(val)
-		buf.WriteByte(8)
-		var b [8]byte
-		binary.LittleEndian.PutUint64(b[:], math.Float64bits(fltVal))
-		buf.Write(b[:])
+		if col.Size == 4 {
+			buf.WriteByte(4)
+			var b [4]byte
+			binary.LittleEndian.PutUint32(b[:], math.Float32bits(float32(fltVal)))
+			buf.Write(b[:])
+		} else {
+			buf.WriteByte(8)
+			var b [8]byte
+			binary.LittleEndian.PutUint64(b[:], math.Float64bits(fltVal))
+			buf.Write(b[:])
+		}
 
 	case TypeBitN:
 		bitVal := toBool(val)
