@@ -150,6 +150,23 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
    - If collision occurs, the seed operation safely aborts with an explicit diagnostic warning (`table already exists`), leaving all pre-existing schemas and tuples intact (`[RULE:AtomicSaves]`, `[RULE:ExplicitError]`).
    - Re-seeding an existing instance requires manual operator intervention (clearing the data directory or executing an explicit backup/migration), preventing catastrophic automated data wipes during service restarts.
 
+### Invariant 15: Canonical Secondary Index Key/Value Codec (Order-Preserving Binary Encoding & Single-Transaction B-Tree Parity)
+1. **Physical Namespace & Binary Format Invariance (`key_format=u, value_format=u`)**:
+   - Each secondary index is materialized as an independent WiredTiger physical B-Tree table (`table:_idx_<PhysicalTableName>_<IndexName>`).
+   - Binary format (`WT_ITEM`) is unconditionally enforced to eliminate C NUL-termination (`\0`) truncation defects across composite column separators (`\x00`), NULL representations (`\x00NULL`), and primary key suffixes.
+2. **Order-Preserving Monotonic Scalar Encodings (`storage.EncodeIndexKeyPart`)**:
+   - Signed integers (`TypeInt`): XOR with sign-bit `0x8000000000000000` mapped monotonically to 16-character hex strings (`00...00` to `ff...ff`).
+   - Floats (`TypeFloat`): IEEE 754 sign-flipped hex string encoding.
+   - Timestamps (`TypeDateTime`): ISO 8601 UTC chronological formatting.
+   - Nulls (`\x00NULL`): Prepended with `0x00` ensuring NULL values consistently sort before all non-null values.
+3. **Unique vs. Non-Unique Key/Value Layout**:
+   - **Unique Index (`Unique == true`)**: `Key = indexKey`, `Value = pk` (string). Fast-fail duplicate key detection ($O(\log N)$) via `cursor->search`. Multiple NULL values are safely accommodated via non-unique layout without constraint collisions.
+   - **Non-Unique Index (`Unique == false`)**: `Key = indexKey + "\x00" + pk`, `Value = ""` (empty). Primary key concatenation guarantees global uniqueness within the B-Tree while clustering identical index keys in primary-key order.
+4. **Single-Transaction Parity & Zero Full-Scan Invariant**:
+   - Primary table mutations and all associated secondary index B-Tree modifications execute strictly within the same `WT_SESSION` transaction boundary, guaranteeing atomic rollback on `tx.Rollback()`.
+   - `IndexScan`, `IndexScanDesc`, and `checkUniqueIndexesLocked` must exclusively utilize direct B-Tree cursor operations (`search_near`, `search`, `prev`), permanently banning full-table sequential scans (`scanLocked`) and in-memory slice reversals.
+   - Full specification codified in [`notes/SECONDARY_INDEX_FORMAT.ko.md`](notes/SECONDARY_INDEX_FORMAT.ko.md).
+
 ---
 
 ## 3. Explicit Spec-Out Decisions (Engine Simplicity & KISS)

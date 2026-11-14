@@ -378,7 +378,22 @@
 
 ---
 
-### ㉜ VDBE 바이트코드 16바이트 고정 정렬 명령어 레이아웃 확정 및 8바이트 비트패킹 영구 배제 (Spec-Out)
+### ㉜ 보조 인덱스(Secondary Index) 정렬 보존 바이너리 코덱 및 물리 B-Tree 실체화 불변식 (Invariant 15)
+* **결정 사항**:
+  1. **물리 B-Tree 테이블 격리 및 바이너리 포맷 (`key_format=u, value_format=u`)**:
+     - 각 보조 인덱스는 `table:_idx_<PhysicalTableName>_<IndexName>` 네임스페이스 하에 독립적인 물리 WiredTiger B-Tree 파일로 생성 및 영속화됨.
+     - C NUL 종단자(`\0`) 절단 결함을 원천 배제하기 위해 `key_format=u` (WT_ITEM)를 의무화하여, 복합 컬럼 구분자(`\x00`), NULL 정렬 마커(`\x00NULL`), 가변 길이 PK 접미사를 바이트 단위로 정확히 보존함.
+  2. **순서 보존 단조 인코딩 (`storage.EncodeIndexKeyPart`)**:
+     - 부호 있는 정수(`TypeInt`)는 최상위 부호 비트를 반전(`^ 0x8000000000000000`)하여 16자리 hex 문자열로 매핑하고, 부동소수점(`TypeFloat`)은 IEEE 754 부호 반전을 적용하여 B-Tree 내 `memcmp` 비교가 데이터 타입의 수치적 크기 순서와 정확히 일치하도록 보장함.
+  3. **고유/비고유 키 레이아웃 및 SQL 다중 NULL 허용**:
+     - 고유 인덱스(`Unique`): `Key = indexKey`, `Value = pk`. 단, `NULL` 값은 SQL 표준에 따라 비고유 포맷(`\x00NULL\x00 + pk`, Value `""`)으로 분기 저장하여 다중 NULL 저장을 안전하게 수용함.
+     - 비고유 인덱스: `Key = indexKey + "\x00" + pk`, `Value = ""` 구조로 B-Tree 고유성을 보장하면서 동일 키를 가진 행들을 기본 키 순으로 밀집 정렬함.
+  4. **단일 트랜잭션 원자적 동기화 및 풀스캔 영구 배제**:
+     - 기본 테이블과 모든 보조 인덱스 갱신은 단일 `WT_SESSION` 트랜잭션 경계 내에서 원자적으로 실행되며, `IndexScan`/`IndexScanDesc`/`checkUniqueIndexesLocked`는 커서 B-Tree 직접 탐색(`search_near`, `search`)만을 사용하고 기존의 전체 테이블 풀스캔(`scanLocked`)을 100% 영구 배제함. 상세 규격: [`notes/SECONDARY_INDEX_FORMAT.ko.md`](notes/SECONDARY_INDEX_FORMAT.ko.md).
+
+---
+
+### ㉝ VDBE 바이트코드 16바이트 고정 정렬 명령어 레이아웃 확정 및 8바이트 비트패킹 영구 배제 (Spec-Out)
 * **결정 사항**:
   * LionSQL T-SQL VDBE 가상머신(`pkg/proc/bytecode.go`)의 명령어 구조체 `Instruction`은 패딩이 없는 **16바이트 고정 정렬 레이아웃(`Op(1B) + Flags(1B) + Aux(2B) + A(4B) + B(4B) + C(4B)`)**을 영구 유지하며, 이를 8바이트(`int16` 레지스터 축소 또는 `uint64` 비트패킹)로 압축하는 안을 영구 배제(Spec-Out)함.
 * **배제 근거 및 아키텍처 실측 분석**:
