@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- map TDS constraint and engine errors to official Microsoft SQL Server error numbers (`FIX-TDS-ERROR-NUMBER-MAP-1`):
+  - map Primary Key violation (`storage.ErrKeyExists`) to Msg 2627 (Severity 14, State 1)
+  - map Unique index violation (`storage.ErrUniqueViolation`) to Msg 2601 (Severity 14, State 1)
+  - map Foreign Key & Check constraint violations (`storage.ErrForeignKeyViolation`, `storage.ErrCheckViolation`) to Msg 547 (Severity 16, State 0)
+  - map NOT NULL violation (`storage.ErrNotNullViolation`) to Msg 515 (Severity 16, State 2)
+  - map Table/Object not found (`storage.ErrTableNotFound`) to Msg 208 (Severity 16, State 1) and Column not found (`storage.ErrColumnNotFound`) to Msg 207 (Severity 16, State 1)
+  - map Table already exists (`storage.ErrTableExists`) to Msg 2714 (Severity 16, State 6) and Index already exists to Msg 1913
+  - map Dependency conflicts (`storage.ErrDependentObjectsExist`) to Msg 3726 (Severity 16, State 1)
+  - map Deadlocks and concurrency write conflicts (`storage.ErrSerializationFailure`, `storage.IsWriteConflict`) to Msg 1205 (Severity 13, State 51)
+  - replace hardcoded 50000 error numbers in `handleTransactionManagerRequest` with `extractTdsErrorInfo(err)`
+  - add hermetic unit tests in `pkg/wire/tds/error_number_map_test.go` and official `go-mssqldb` driver integration tests in `pkg/wire/tds/driver_integration_test.go`
 - stream `PRINT` and informational statements via TDS `INFO` token (`0xAB`) (`FIX-TDS-PRINT-INFO-TOKEN-1`):
   - support top-level `PRINT expr` in `pkg/engine/sqlexec.go`, evaluating expressions via Pratt parser against session variables and emitting message payloads
   - accumulate messages across multi-statement SQL batches in `ExecuteSessionSQLContext` so leading `PRINT` outputs are not discarded by trailing queries

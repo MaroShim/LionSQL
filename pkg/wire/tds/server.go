@@ -2527,7 +2527,8 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 		err := s.coordinator.BeginSessionTx(sess.SessionID, storage.TxOptions{})
 		if err != nil {
 			var buf bytes.Buffer
-			buf.Write(BuildError(50000, 1, 16, err.Error(), "LionSQL", "", 1))
+			num, state, sev, msg := extractTdsErrorInfo(err)
+			buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
 			buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
 			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 			return
@@ -2547,7 +2548,8 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 		err := s.coordinator.CommitSessionTx(sess.SessionID)
 		if err != nil {
 			var buf bytes.Buffer
-			buf.Write(BuildError(50000, 1, 16, err.Error(), "LionSQL", "", 1))
+			num, state, sev, msg := extractTdsErrorInfo(err)
+			buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
 			buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
 			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 			return
@@ -2565,7 +2567,8 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 		err := s.coordinator.RollbackSessionTx(sess.SessionID)
 		if err != nil {
 			var buf bytes.Buffer
-			buf.Write(BuildError(50000, 1, 16, err.Error(), "LionSQL", "", 1))
+			num, state, sev, msg := extractTdsErrorInfo(err)
+			buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
 			buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
 			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 			return
@@ -3497,6 +3500,7 @@ type tdsErrorDescriber interface {
 }
 
 // extractTdsErrorInfo extracts TDS error fields: number, state, severity (class), and message.
+// It maps LionSQL and Go storage/engine errors to official Microsoft SQL Server error numbers.
 func extractTdsErrorInfo(err error) (int32, byte, byte, string) {
 	if err == nil {
 		return 0, 0, 0, ""
@@ -3506,6 +3510,110 @@ func extractTdsErrorInfo(err error) (int32, byte, byte, string) {
 		num, sev, state := desc.TdsErrorInfo()
 		return num, state, sev, err.Error()
 	}
+
+	// 1. Primary Key constraint violation -> Msg 2627, Level 14, State 1
+	if errors.Is(err, storage.ErrKeyExists) {
+		return 2627, 1, 14, err.Error()
+	}
+
+	// 2. Unique index constraint violation -> Msg 2601, Level 14, State 1
+	if errors.Is(err, storage.ErrUniqueViolation) {
+		return 2601, 1, 14, err.Error()
+	}
+
+	// 3. Foreign Key / Check constraint violation -> Msg 547, Level 16, State 0
+	if errors.Is(err, storage.ErrForeignKeyViolation) || errors.Is(err, storage.ErrCheckViolation) {
+		return 547, 0, 16, err.Error()
+	}
+
+	// 4. NOT NULL constraint violation -> Msg 515, Level 16, State 2
+	if errors.Is(err, storage.ErrNotNullViolation) {
+		return 515, 2, 16, err.Error()
+	}
+
+	// 5. Table / Object not found -> Msg 208, Level 16, State 1
+	if errors.Is(err, storage.ErrTableNotFound) {
+		return 208, 1, 16, err.Error()
+	}
+
+	// 6. Column not found -> Msg 207, Level 16, State 1
+	if errors.Is(err, storage.ErrColumnNotFound) {
+		return 207, 1, 16, err.Error()
+	}
+
+	// 7. Table already exists -> Msg 2714, Level 16, State 6
+	if errors.Is(err, storage.ErrTableExists) {
+		return 2714, 6, 16, err.Error()
+	}
+
+	// 8. Index already exists -> Msg 1913, Level 16, State 1
+	if errors.Is(err, storage.ErrIndexExists) {
+		return 1913, 1, 16, err.Error()
+	}
+
+	// 9. Cannot drop object due to dependencies -> Msg 3726, Level 16, State 1
+	if errors.Is(err, storage.ErrDependentObjectsExist) {
+		return 3726, 1, 16, err.Error()
+	}
+
+	// 10. Deadlock / Serialization failure / Concurrent update conflict -> Msg 1205, Level 13, State 51
+	if storage.IsWriteConflict(err) || errors.Is(err, storage.ErrSerializationFailure) {
+		return 1205, 51, 13, err.Error()
+	}
+
+	// 11. Read-only transaction / replica -> Msg 3906, Level 16, State 1
+	if errors.Is(err, storage.ErrReadOnlyTransaction) || errors.Is(err, storage.ErrReadOnlyReplica) {
+		return 3906, 1, 16, err.Error()
+	}
+
+	// Fallback heuristic based on error message substrings for unwrapped errors or engine messages:
+	errLower := strings.ToLower(err.Error())
+	if strings.Contains(errLower, "primary key constraint") || strings.Contains(errLower, "violates primary key") {
+		return 2627, 1, 14, err.Error()
+	}
+	if strings.Contains(errLower, "unique constraint") || strings.Contains(errLower, "unique index") {
+		return 2601, 1, 14, err.Error()
+	}
+	if strings.Contains(errLower, "foreign key constraint") || strings.Contains(errLower, "violates foreign key") {
+		return 547, 0, 16, err.Error()
+	}
+	if strings.Contains(errLower, "check constraint") || strings.Contains(errLower, "violates check constraint") {
+		return 547, 0, 16, err.Error()
+	}
+	if strings.Contains(errLower, "not null constraint") || strings.Contains(errLower, "cannot insert null") || strings.Contains(errLower, "contains null values") {
+		return 515, 2, 16, err.Error()
+	}
+	if strings.Contains(errLower, "invalid object name") || strings.Contains(errLower, "table not found") {
+		return 208, 1, 16, err.Error()
+	}
+	if strings.Contains(errLower, "invalid column name") || strings.Contains(errLower, "column not found") {
+		return 207, 1, 16, err.Error()
+	}
+	if strings.Contains(errLower, "already exists") && (strings.Contains(errLower, "table") || strings.Contains(errLower, "object")) {
+		return 2714, 6, 16, err.Error()
+	}
+	if strings.Contains(errLower, "write conflict") || strings.Contains(errLower, "deadlock") || strings.Contains(errLower, "serialization failure") {
+		return 1205, 51, 13, err.Error()
+	}
+	if strings.Contains(errLower, "read-only") {
+		return 3906, 1, 16, err.Error()
+	}
+	if strings.Contains(errLower, "divide by zero") || strings.Contains(errLower, "division by zero") {
+		return 8134, 1, 16, err.Error()
+	}
+	if strings.Contains(errLower, "arithmetic overflow") {
+		return 8115, 1, 16, err.Error()
+	}
+	if strings.Contains(errLower, "string or binary data would be truncated") || strings.Contains(errLower, "data would be truncated") {
+		return 8152, 14, 16, err.Error()
+	}
+	if strings.Contains(errLower, "could not find stored procedure") {
+		return 2812, 62, 16, err.Error()
+	}
+	if strings.Contains(errLower, "syntax error") || strings.Contains(errLower, "incorrect syntax") {
+		return 102, 1, 15, err.Error()
+	}
+
 	return 50000, 1, 16, err.Error()
 }
 

@@ -1357,6 +1357,94 @@ func TestDriverIntegration_GoMSSQLDB_RaiserrorAndThrow(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_GoMSSQLDB_StandardErrorNumbers(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("sqlserver://sa:admin@127.0.0.1:%d?database=master&encrypt=disable", port)
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("Failed to open connection: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Setup table with PK, NOT NULL, and unique index
+	_, err = db.ExecContext(ctx, "CREATE TABLE t_err_map (id INT PRIMARY KEY, name VARCHAR(50) NOT NULL, email VARCHAR(100));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	_, err = db.ExecContext(ctx, "CREATE UNIQUE INDEX idx_err_email ON t_err_map (email);")
+	if err != nil {
+		t.Fatalf("CREATE UNIQUE INDEX failed: %v", err)
+	}
+
+	// 1. Initial valid insert
+	_, err = db.ExecContext(ctx, "INSERT INTO t_err_map (id, name, email) VALUES (1, 'Alice', 'alice@test.com');")
+	if err != nil {
+		t.Fatalf("initial INSERT failed: %v", err)
+	}
+
+	// 2. Primary Key duplicate insert -> Msg 2627
+	_, err = db.ExecContext(ctx, "INSERT INTO t_err_map (id, name, email) VALUES (1, 'Bob', 'bob@test.com');")
+	if err == nil {
+		t.Fatalf("expected PK duplicate error, got nil")
+	}
+	var mssqlErr mssql.Error
+	if !errors.As(err, &mssqlErr) {
+		t.Fatalf("expected mssql.Error, got %T: %v", err, err)
+	}
+	if mssqlErr.Number != 2627 {
+		t.Errorf("PK duplicate: expected Number=2627, got %d (Class=%d, State=%d)", mssqlErr.Number, mssqlErr.Class, mssqlErr.State)
+	}
+
+	// 3. Unique index duplicate insert -> Msg 2601
+	_, err = db.ExecContext(ctx, "INSERT INTO t_err_map (id, name, email) VALUES (2, 'Charlie', 'alice@test.com');")
+	if err == nil {
+		t.Fatalf("expected unique index error, got nil")
+	}
+	if !errors.As(err, &mssqlErr) {
+		t.Fatalf("expected mssql.Error, got %T: %v", err, err)
+	}
+	if mssqlErr.Number != 2601 {
+		t.Errorf("Unique index duplicate: expected Number=2601, got %d (Class=%d, State=%d)", mssqlErr.Number, mssqlErr.Class, mssqlErr.State)
+	}
+
+	// 4. NOT NULL constraint violation -> Msg 515
+	_, err = db.ExecContext(ctx, "INSERT INTO t_err_map (id, name, email) VALUES (3, NULL, 'charlie@test.com');")
+	if err == nil {
+		t.Fatalf("expected NOT NULL error, got nil")
+	}
+	if !errors.As(err, &mssqlErr) {
+		t.Fatalf("expected mssql.Error, got %T: %v", err, err)
+	}
+	if mssqlErr.Number != 515 {
+		t.Errorf("NOT NULL violation: expected Number=515, got %d (Class=%d, State=%d)", mssqlErr.Number, mssqlErr.Class, mssqlErr.State)
+	}
+
+	// 5. Invalid object name (table not found) -> Msg 208
+	_, err = db.ExecContext(ctx, "SELECT * FROM nonexistent_table_xyz;")
+	if err == nil {
+		t.Fatalf("expected table not found error, got nil")
+	}
+	if !errors.As(err, &mssqlErr) {
+		t.Fatalf("expected mssql.Error, got %T: %v", err, err)
+	}
+	if mssqlErr.Number != 208 {
+		t.Errorf("Table not found: expected Number=208, got %d (Class=%d, State=%d)", mssqlErr.Number, mssqlErr.Class, mssqlErr.State)
+	}
+}
+
 func TestDriverIntegration_GoMSSQLDB_NPrefixUnicodeLiterals(t *testing.T) {
 	eng := memengine.New()
 	defer eng.Close()
