@@ -62,6 +62,10 @@ func (c *SliceCursor) Close() error {
 	return nil
 }
 
+func (c *SliceCursor) Err() error {
+	return nil
+}
+
 // ValueFromAny converts an arbitrary Go value into a typed storage.Value according to targetType.
 func ValueFromAny(v any, targetType DataType) Value {
 	if v == nil {

@@ -2597,3 +2597,7 @@ func (c *memCursor) Close() error {
 	return nil
 }
 
+func (c *memCursor) Err() error {
+	return nil
+}
+

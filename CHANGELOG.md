@@ -31,11 +31,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`: enforce connection pool session isolation via TDS StatusResetConnection (0x08), PGWire DISCARD ALL, and HTTP token-scoped session sandboxing (Defect 103)
     - `FEAT-TYPE-ROWVERSION-MONOTONIC-COUNTER-1`: support ROWVERSION data type parsing and automatic monotonic @@DBTS binary stamping on row mutations (Defect 104)
     - `FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`: auto-invalidate VDBE bytecode procedure and query execution plan caches on table/index DDL changes (Defect 105)
+    - `FEAT-CDC-DUCKDB-INITIAL-SNAPSHOT-CHECKPOINT-1`: establish resilient CDC-to-DuckDB streaming pipeline with initial snapshot bootstrap, transactional LSN disk checkpointing, and exponential backoff auto-reconnect loop (Defect 106)
+    - `FEAT-TDS-MULTIPLE-RESULT-SETS-1`: stream multiple sequential result sets across TDS batches and stored procedures via QueryResult chaining, intermediate DONE(DoneMore), and final DONE(DoneFinal) tokens for ADO.NET NextResult() and SSMS multi-grid compatibility (Defect 107)
+    - `FIX-WT-CURSOR-ERROR-PROPAGATION-1`: eliminate silent data omission on storage read/scan failures by adding Cursor.Err() error propagation across WTCursor, wtIndexBTreeCursor, and memCursor (Defect 108)
 - enhance benchmark CLI directory safety and logging transparency across `cmd/tpcc_runtime`, `cmd/tpcc_kernel`, `cmd/bench`, `cmd/ssb`:
   - explicitly print `[Base Directory] ... (Preserved)` and `[Isolated Subdir] ... (Auto-cleaned upon exit)`
   - guarantee temporary benchmark subdirectory cleanup on error before `os.Exit(1)` and log parent directory preservation
 - standardize bilingual cross-language documentation link convention across `doc/` and `guide/` (Endonym Primacy: English docs link to Korean via `[한국어 문서]`, Korean docs link to English via `[English]`):
   - update `FAQ`, `MSSQL_MIGRATION_CHECKLIST`, `TSQL_CHEATSHEET`, `TROUBLESHOOTING`, `WEB_STUDIO_GUIDE`, `BENCHMARK`, `ARCHITECTURE`, `USER_MANUAL`, `REFERENCE_MANUAL`, `RELEASE_AUTOMATION_GUIDE`, `TRANSACTION_PERFORMANCE_GUIDE`, `COMPLEX_QUERY_BENCHMARK_GUIDE`, and integration guides
+- standardize metadata header specification (document version, initial creation date, last updated date, target release, wire protocols) across all 26 integration guides in `guide/`:
+  - enforce 100% compliance across `SSMS`, `Metabase`, `DuckDB`, `Gitea`, `Grafana`, `Casdoor`, `Answer`, `Vaultwarden`, `Umami`, `Vikunja`, `Woodpecker`, `IOTA-SDK`, and `README`
 - register architecture plan `FIX-SESSION-DRAIN-CLOSE-UAF-1` (`notes/plans/FIX_SESSION_DRAIN_CLOSE_UAF_PLAN.ko.md`):
   - schedule in-flight query drain synchronization during `CloseSession` to prevent CGo Use-After-Free (UAF) and WiredTiger multi-thread concurrency panics
 - register architecture plan `REFACTOR-SESSION-TRANSACTION-INVARIANT-1` (`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`):

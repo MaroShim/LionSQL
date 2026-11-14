@@ -87,6 +87,9 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 	for dest.Len() < DefaultChunkSize {
 		if !cursor.Next() {
 			*eof = true
+			if err := cursor.Err(); err != nil {
+				return err
+			}
 			if dest.Len() > 0 {
 				return nil
 			}

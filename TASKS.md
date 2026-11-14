@@ -194,6 +194,7 @@
 | `DONE` | **`DURA-SLT-1`** |  | Durability | P2 | SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 | [`notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`DURA-SLT-2`** |  | Durability | P2 | SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 | [`notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`DURA-SOAK-1`** | `1.0-GA` | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
+| `PENDING` | **`FEAT-CDC-DUCKDB-INITIAL-SNAPSHOT-CHECKPOINT-1`** | `1.0-GA` | Ecosystem | P2 | CDC 및 DuckDB 연동 최초 스냅샷 적재, LSN 체크포인트 영속화 및 자동 재연결 파이프라인 | [`guide/DUCKDB_INTEGRATION_GUIDE.ko.md`](guide/DUCKDB_INTEGRATION_GUIDE.ko.md) |  |
 | `PENDING` | **`FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`** | `1.0-GA` | CLI | P2 | lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 | [`doc/USER_MANUAL.ko.md`](doc/USER_MANUAL.ko.md) |  |
 | `DONE` | **`FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`** | `1.0-GA` | Mail | P2 | SQL Server DatabaseMail 외부 워커 프로세스 분리 및 sp_send_dbmail 지원 | [`notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md`](notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-DATADIR-ENGINE-MANIFEST-1`** | `1.0-GA` | Storage | P1 | 데이터 폴더 초기화 시 엔진 매니페스트(lionsql.engine.json: wiredtiger/compact, 코덱 버전) 원자적 기록, 재기동 시 자동 감지 및 이종 엔진 명시 시 Fail-Closed 차단 | [`1.0-GA`](1.0-GA) |  |
@@ -203,6 +204,7 @@
 | `PENDING` | **`FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`** | `1.0-GA` | Security | P2 | 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리) | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `PENDING` | **`FEAT-SQL-SERVER-AGENT-INPROCESS-1`** | `1.0-GA` | Engine | P2 | SQL Server Agent 인-프로세스 스케줄러 (msdb.dbo.sysjobs, sysjobhistory, sp_add_job) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TABLE-VAR-1`** |  | Engine | P2 | T-SQL 테이블 변수(DECLARE @tbl TABLE) 지원 및 DML/배치 라이프사이클 통합 | [`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-TDS-MULTIPLE-RESULT-SETS-1`** | `1.0-GA` | Wire | P2 | TDS 다중 결과 집합(Multiple Result Sets / Sequential NextResult) 스트리밍 반환 지원 | [`notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md`](notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TIMESERIES-LSM-1`** | `v1.99.0` | FEAT | P2 | LSM Time-Series Chunk Storage & time_bucket | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TOLERANT-DDL-1`** |  | FEAT | P2 | Dynamic Runtime Tolerant DDL CLI Switch & PostgreSQL 42704 SQLSTATE | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TRANSACTIONAL-DDL-1`** | `1.0-GA` | Engine | P1 | Transactional DDL (CREATE/DROP/ALTER/RENAME/INDEX 롤백 지원) 및 세션-트랜잭션 경계 격리 안전성 강화 | [`notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`](notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md) |  |
@@ -261,6 +263,7 @@
 | `PENDING` | **`FIX-UPDATE-SNAPSHOT-COLUMN-SWAP-1`** | `1.0-GA` | Engine | P2 | UPDATE 다중 컬럼 대입 시 원본 튜플 스냅샷 기반 평가(SET a = b, b = a 원자적 스왑 보장) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-VM-HIDDEN-ROWID-1`** |  | Engine | P1 | PK 없는 테이블에 대한 VDBE VM OpInsert 실행 시 숨은 _row_id 자동 발번 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-WIN-NEGATIVE-DEFAULT-1`** | `1.0-GA` | Engine | P2 | LAG/LEAD 윈도우 함수 음수 기본값 인자(LEAD(val, 1, -1)) 파싱 시 0 반환 오류 수정 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-WT-CURSOR-ERROR-PROPAGATION-1`** | `1.0-GA` | Storage | P1 | WTCursor.Next() 에러 전파 부재로 인한 사일런트 데이터 누락 방지 (Cursor.Err() 인터페이스 확립) | [`notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md`](notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md) |  |
 | `PENDING` | **`FIX-WT-SAVEPOINT-INDEX-CORRUPTION-1`** | `1.0-GA` | Storage | P2 | WiredTiger 세이브포인트 롤백 시 보조 인덱스 키 누수 및 고아 인덱스 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`FIX-WT-UNIQUE-INDEX-OVERWRITE-FALSE-1`** | `1.0-GA` | Storage | P2 | WiredTiger 유니크 인덱스 B-Tree 조작 시 overwrite=false 강제하여 중복 키 사일런트 덮어쓰기 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FRIENDLY-SQL`** |  | Ecosystem | P3 | DuckDB-Style Friendly SQL 문법 지원 | [`notes/plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md) |  |
@@ -323,7 +326,7 @@
 | `DONE` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** |  | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-OCC-FLAT-1`** |  | Storage | P2 | Flat 코덱 신뢰성 및 동시성 결함 보강 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `PENDING` | **`REFACTOR-SESSION-TRANSACTION-INVARIANT-1`** | `v1.10.0` | Engine | P2 | 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 | [`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`](notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md) |  |
-| `PENDING` | **`REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`** | `v1.10.0` | Engine | P2 | 트랜잭셔널 DDL 섀도 카탈로그 격리 및 크래시 데이터 유실 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `PENDING` | **`REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`** | `v1.10.0` | Engine | P2 | 트랜잭셔널 DDL 섀도 카탈로그 격리 및 크래시 데이터 유실 방지 | [`notes/plans/TRANSACTIONAL_DDL_MODULARIZATION_PLAN.ko.md`](notes/plans/TRANSACTIONAL_DDL_MODULARIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`REFACTOR-TSQL-SESSION-VARS-VDBE-1`** | `v1.10.0` | Engine | P2 | sqlexec 텍스트 치환 전면 폐지 및 T-SQL 세션 변수 VDBE AST/레지스터 바인딩 일원화 | [`notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md`](notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-VIRTUAL-CATALOG-1`** | `1.0-GA` | Catalog | P2 | 가상 카탈로그(pkg/catalog/virtual & sqlexec_dbcc) 구조 통합 및 보일러플레이트 리팩토링 | [`notes/plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md`](notes/plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`REPL-STREAM-BIN-1`** | `v1.60.0` | Replication | P2 | Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 |  |  |
@@ -2465,6 +2468,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] CDC 및 DuckDB 연동 최초 스냅샷 적재, LSN 체크포인트 영속화 및 자동 재연결 파이프라인 `FEAT-CDC-DUCKDB-INITIAL-SNAPSHOT-CHECKPOINT-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-14 12:57:43
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`guide/DUCKDB_INTEGRATION_GUIDE.ko.md`](guide/DUCKDB_INTEGRATION_GUIDE.ko.md)
+
+---
+
 ### [PENDING] lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 `FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`
 - **Domain**: CLI | **Priority**: P2 | **Updated**: 2026-11-14 12:32:11
 - **Milestone**: `1.0-GA`
@@ -2527,6 +2537,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [DONE] T-SQL 테이블 변수(DECLARE @tbl TABLE) 지원 및 DML/배치 라이프사이클 통합 `FEAT-TABLE-VAR-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-11 16:23:02
 - **Plan Doc**: [`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md)
+
+---
+
+### [PENDING] TDS 다중 결과 집합(Multiple Result Sets / Sequential NextResult) 스트리밍 반환 지원 `FEAT-TDS-MULTIPLE-RESULT-SETS-1`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-14 13:15:44
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md`](notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md)
 
 ---
 
@@ -2922,6 +2939,13 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 13:25:35
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [DONE] WTCursor.Next() 에러 전파 부재로 인한 사일런트 데이터 누락 방지 (Cursor.Err() 인터페이스 확립) `FIX-WT-CURSOR-ERROR-PROPAGATION-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-14 13:30:58
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md`](notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md)
 
 ---
 
@@ -3524,9 +3548,9 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] 트랜잭셔널 DDL 섀도 카탈로그 격리 및 크래시 데이터 유실 방지 `REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 10:58:52
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 13:20:55
 - **Milestone**: `v1.10.0`
-- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/TRANSACTIONAL_DDL_MODULARIZATION_PLAN.ko.md`](notes/plans/TRANSACTIONAL_DDL_MODULARIZATION_PLAN.ko.md)
 
 ---
 

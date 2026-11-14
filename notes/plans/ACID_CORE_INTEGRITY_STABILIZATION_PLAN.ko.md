@@ -3,7 +3,7 @@
 
 > **문서 상태**: Approved (100대 결함 3그룹 체계화 및 1.0-GA 쉴드 확립)  
 > **마일스톤 분류**:
-> - **제1그룹 (1.0-GA 쇼스토퍼)**: 17개 (사용자 체감 & 코어 무결성/타입 시스템/CLI/세션 보안/캐시 무결성 즉시 해결 과제)
+> - **제1그룹 (1.0-GA 쇼스토퍼)**: 20개 (사용자 체감 & 코어 무결성/타입 시스템/CLI/세션 보안/캐시 무결성/CDC/다중 데이터셋/커서 에러 전파 즉시 해결 과제)
 > - **제2그룹 (Post-1.0 실무 운영 안정화)**: 61개 (v1.10.0 ~ v1.30.0 정기 릴리즈 개선 과제)
 > - **제3그룹 (장기 백로그 & 특수 엣지 케이스)**: 27개 (v1.40.0+ / 실용적 비시급 분산·플래너 과제)  
 > **관련 규칙**: `[RULE:AtomicSaves]`, `[RULE:ExplicitError]`, `[RULE:LockHierarchy]`, `[RULE:PlanPersistence]`, `[RULE:ContinuousBacklog]`, `[RULE:ZeroOracleTampering]`
@@ -17,19 +17,19 @@
 
 ```mermaid
 flowchart TD
-    subgraph ACID_TriGroup ["ACID 105대 결함 3그룹 계층 구조"]
-        G1["제1그룹: 1.0-GA 쇼스토퍼 (17개)<br>• 사용자 즉시 체감 버그 (NEWID, SET a=b, b=a, NOT IN NULL)<br>• 데이터 타입 바이너리 정합성 (REAL 4B vs FLOAT 8B 분리, ROWVERSION 카운터 지원)<br>• DDL 스키마 캐시 무결성 (테이블 DDL 시 VDBE 바이트코드/플랜 캐시 Auto-Invalidate)<br>• 커넥션 풀 세션 보안 격리 (TDS StatusResetConnection, HTTP 세션 격리)<br>• 대화형 CLI 엔트리포인트 (lionsql -i 및 lionsql cli 동시 지원)<br>• 드라이버 행 방지 (TDS ENVCHANGE, DONE_ERROR)<br>• 사일런트 데이터 오염 차단 (유니크 덮어쓰기, 세이브포인트 인덱스 누수)"]
+    subgraph ACID_TriGroup ["ACID 108대 결함 3그룹 계층 구조"]
+        G1["제1그룹: 1.0-GA 쇼스토퍼 (20개)<br>• 사용자 즉시 체감 버그 (NEWID, SET a=b, b=a, NOT IN NULL)<br>• 데이터 타입 바이너리 정합성 (REAL 4B vs FLOAT 8B 분리, ROWVERSION 카운터 지원)<br>• DDL 스키마 캐시 무결성 (테이블 DDL 시 VDBE 바이트코드/플랜 캐시 Auto-Invalidate)<br>• 커넥션 풀 세션 보안 격리 (TDS StatusResetConnection, HTTP 세션 격리)<br>• 실시간 CDC 무결성 (DuckDB 최초 스냅샷 적재, LSN 체크포인트 영속화 & 자동 재연결)<br>• TDS 다중 결과 집합 스트리밍 (Multiple Result Sets / Sequential NextResult)<br>• WTCursor.Next() 에러 전파 (Cursor.Err() 인터페이스로 사일런트 데이터 누락 차단)<br>• 대화형 CLI 엔트리포인트 (lionsql -i 및 lionsql cli 동시 지원)<br>• 드라이버 행 방지 (TDS ENVCHANGE, DONE_ERROR)<br>• 사일런트 데이터 오염 차단 (유니크 덮어쓰기, 세이브포인트 인덱스 누수)"]
         G2["제2그룹: Post-1.0 실무 운영 안정화 (61개 / v1.10 ~ v1.30)<br>• 섀도 DDL 격리, WAL Phantom Commit, 복제 프레임 무결성<br>• 동시성 FK 공유 락, 세션 로컬 변수 스코프, 타이밍 공격 방어<br>• 수치 정밀도(Decimal), 대용량 튜플 오프셋, 카탈로그 원자성"]
         G3["제3그룹: 장기 아키텍처 및 비시급 과제 (27개 / v1.40+)<br>• 다단계 재귀 FK DAG 토폴로지, SSI 술어 갭 락<br>• WorkMem 디스크 스필 해시 집계, 인덱스 스킵 스캔<br>• 분산 에포크 펜싱, HLC 하이브리드 논리 시계"]
     end
     G1 -->|1.0 출시 전 100% 종결| GA["LionSQL 1.0 GA 릴리즈"]
-    GA --> G2
+    G2
     G2 --> G3
 ```
 
 ---
 
-## 2. 제1그룹: 1.0-GA 쇼스토퍼 (사용자 체감 & 코어 무결성 최우선 17대 과제)
+## 2. 제1그룹: 1.0-GA 쇼스토퍼 (사용자 체감 & 코어 무결성 최우선 20대 과제)
 
 사용자가 데이터베이스를 처음 설치하고 쿼리를 실행했을 때 **즉시 마주칠 수 있는 상식 파괴 버그**와 **사일런트 데이터 오염**, 그리고 온디스크 바이너리 호환성을 깨뜨리는 **데이터 타입 미분리**, 개발자 UX를 결정짓는 **대화형 CLI 엔트리포인트**를 1.0 출시 전에 원천 차단 및 확립합니다.
 
@@ -132,6 +132,46 @@ flowchart TD
   1. DDL 실행 완료 훅인 `s.InvalidatePKBypassCache()` 내부에서 `s.executor.Cache().Clear()` 및 `s.planCache.Clear()`(또는 테이블 단위 종속성 기반 `InvalidateTable(tableName)`)를 원자적 호출.
   2. 스키마 변경 직후 모든 오래된 바이트코드 플랜을 즉각 무효화하여, 다음 프로시저 호출(`EXEC`) 시 최신 카탈로그 스키마를 기준으로 자동 재컴파일(Auto-Recompile)되도록 보장.
 
+### [결함 106 / 태스크: `FEAT-CDC-DUCKDB-INITIAL-SNAPSHOT-CHECKPOINT-1`] CDC 및 DuckDB 연동 최초 스냅샷 적재, LSN 디스크 체크포인트 영속화 및 자동 재연결(Backoff) 파이프라인
+* **분류**: `Ecosystem / CDC / Streaming / Resilience` | **위치**: `guide/DUCKDB_INTEGRATION_GUIDE.ko.md`, `scripts/duckdb_cdc_worker.py`, `pkg/cdc/streamer.go`
+* **현상**:
+  1. **최초 적재(Initial Snapshot) 부재**: 워커가 기동 시점 이후의 신규 변동분만 청취하여, 기동 전 테이블에 이미 존재하던 대량의 기존 데이터(Baseline Snapshot)가 DuckDB에 적재되지 않음.
+  2. **체크포인트 LSN 영속화 부재**: 수신한 LSN을 디스크나 DuckDB 메타데이터 테이블에 기록하지 않아 프로세스 재기동 시 어디까지 읽었는지 알 수 없음.
+  3. **자동 재연결(Auto-Reconnect) 루프 부재**: 네트워크 일시 단절이나 서버 재기동 시 예외로 인해 프로세스가 즉시 사망하며, 지수 백오프 기반 재연결 및 `from_lsn={last_lsn}` 이어받기 장치가 없음.
+* **해결책**:
+  1. **초기 스냅샷 부트스트랩 (Initial Snapshot Load)**: DuckDB 체크포인트 테이블(`_lionsql_cdc_checkpoint`) 조회 결과 `last_lsn == 0`(최초 기동)인 경우, REST/PGWire 스냅샷 API(`POST /api/sql` 또는 `/api/cdc/snapshot`)를 호출하여 기존 전체 레코드와 당시의 $LSN_{snapshot}$을 원자적으로 DuckDB에 일괄 적재.
+  2. **트랜잭셔널 LSN 체크포인팅**: CDC 이벤트 배치 반영 시마다 DuckDB 내부의 `_lionsql_cdc_checkpoint (table_name, last_lsn, updated_at)`에 최신 LSN을 단일 트랜잭션 내에서 동시 커밋하여 Exactly-Once 무결성 확립.
+  3. **지수 백오프 자동 재연결 루프 (Infinite Reconnection Loop)**: `while True:` 블록 하에서 네트워크 단절 또는 HTTP 5xx 에러 발생 시 $1s \to 2s \to 4s \dots \max 30s$ 지수 백오프로 재연결을 시도하고, 디스크에 기록된 마지막 `last_lsn`을 `from_lsn` 파라미터로 전송하여 누락·중복 없는 무중단 스트리밍 보장.
+
+### [결함 107 / 태스크: `FEAT-TDS-MULTIPLE-RESULT-SETS-1`] TDS 다중 결과 집합(Multiple Result Sets / Sequential NextResult) 스트리밍 반환 지원
+* **분류**: `Wire / TDS Protocol / Batch Execution / Stored Procedure` | **위치**: `pkg/wire/tds/server.go`, `pkg/engine/coordinator.go`, `pkg/engine/sqlexec.go`, `pkg/proc/runtime/vm.go`
+* **현상**:
+  1. 단일 SQL 배치(`SELECT 1 AS a; SELECT 2 AS b;`) 또는 저장 프로시저 내부에서 복수의 `SELECT` 문을 실행할 때, `sqlexec.go`의 `ExecuteSessionSQLContext`가 이전 결과 집합들을 덮어쓰고 마지막 `QueryResult`만 단독 반환함.
+  2. TDS 와이어 리스너(`pkg/wire/tds/server.go`)가 단일 `res`만 직렬화하여 전송하므로, C# ADO.NET (`SqlDataReader.NextResult()`), Java JDBC (`Statement.getMoreResults()`), Python (`cursor.nextset()`), Go (`rows.NextResultSet()`), SSMS 멀티 그리드 등 다중 데이터셋을 기대하는 클라이언트에서 첫 번째 결과 집합이 유실되거나 후속 결과 집합을 탐색할 수 없는 심각한 드라이버 비호환 발생.
+* **해결책**:
+  1. **엔진 다중 결과 집합 체이닝 (`QueryResult.Next *QueryResult`)**: `pkg/engine/coordinator.go`의 `QueryResult` 구조체에 `Next *QueryResult` 필드를 추가하여, 다중 쿼리 배치 실행 시 생성된 각 결과 집합(또는 DML `RowsAffected`)을 단일 연결 리스트(Linked List)로 체이닝.
+  2. **TDS 다중 토큰 스트리밍 파이프라인**: `pkg/wire/tds/server.go`에서 `cur := res` 순회를 통해:
+     - 후속 결과 집합이 있는 경우(`cur.Next != nil`):
+       - `COLMETADATA` (0x81) -> `ROW` (0xD1) 행 스트리밍 -> `DONE` (0xFD) 또는 `DONEINPROC` (0xFF) 토큰에 `Status = DoneMore | DoneCount` (`0x0001 | 0x0010`) 플래그 부여.
+     - 최종 결과 집합인 경우(`cur.Next == nil`):
+       - `COLMETADATA` -> `ROW` -> `DONE` 토큰에 `Status = DoneFinal | DoneCount` 플래그 부여하여 배치 종료 신호 전달.
+  3. **VDBE VM 저장 프로시저 다중 결과셋 지원**: 프로시저 내부에서 다중 `SELECT` 실행 시 결과셋 프레임을 분리하여 `Next` 체인으로 전파.
+  4. **클라이언트 드라이버 호환성 오라클 검증**: ADO.NET / JDBC / `go-mssqldb`의 `NextResultSet()` 및 `SELECT 1 AS a; SELECT 2 AS b;` 다중 셋 반환 회귀 테스트 작성.
+  5. **아키텍처 계획서 영속화 (`[RULE:PlanPersistence]`)**: [`notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md`](TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md) 등록 완료.
+
+### [결함 108 / 태스크: `FIX-WT-CURSOR-ERROR-PROPAGATION-1`] [완료] WTCursor.Next() 에러 전파 부재로 인한 사일런트 데이터 누락 방지 (Cursor.Err() 인터페이스 확립)
+* **분류**: `Storage / WiredTiger / Cursor / Data Integrity` | **위치**: `pkg/storage/engine.go`, `pkg/storage/wiredtiger/wt_engine.go`, `pkg/execution/scan.go`
+* **현상**:
+  1. `WTCursor.Next()` 및 `wtIndexBTreeCursor.Next()`가 `C.go_wt_cursor_next(c.cur) != 0` 하나로 모든 0이 아닌 반환값을 `c.eof = true`로 처리하여 루프를 탈출함.
+  2. 정상적인 테이블 끝(`C.WT_NOTFOUND`)과 실제 심각한 시스템/엔진 오류(`C.WT_ROLLBACK`, `C.WT_PANIC`, 온디스크 블록 손상, I/O 읽기 타임아웃, 메모리 고갈)를 전혀 구분하지 않고 조용히 삼킴.
+  3. 이로 인해 대용량 테이블 스캔이나 집계 쿼리(`SELECT COUNT(*)`, `SUM()`) 도중 I/O 장애가 발생해도 에러를 던지지 않고 부분 행만 집계하여 정상 반환하는 사일런트 데이터 누락/왜곡(Silent Data Omission) 발생.
+* **해결책**:
+  1. **`storage.Cursor` 인터페이스 확장**: Go 표준 라이브러리(`database/sql.Rows.Err()`) 규격에 맞춰 `Err() error` 메서드 추가.
+  2. **`WTCursor` 에러 보존 및 전파**: `ret != 0 && ret != C.WT_NOTFOUND`인 경우 `c.err = fmt.Errorf(...)`를 래치하고 `false` 반환.
+  3. **전체 커서 구현체 정합성 보장**: `wtIndexBTreeCursor`, `memCursor`, `SliceCursor`, 테스트 모의 커서에 `Err() error` 전면 구현.
+  4. **스캔 루프 Fail-Closed 에러 점검**: `pkg/execution/scan.go` 등 쿼리 스캔 루프에서 `!cursor.Next()` 발생 시 `cursor.Err()`를 점검하여 즉시 Fail-Closed 쿼리 실패 처리.
+  5. **아키텍처 계획서 영속화 (`[RULE:PlanPersistence]`)**: [`notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md`](WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md) 등록 완료.
+
 ---
 
 ## 3. 제2그룹: Post-1.0 실무 운영 안정화 (v1.10.0 ~ v1.30.0 정기 릴리즈 개선 61대 과제)
@@ -148,7 +188,7 @@ flowchart TD
 ### [결함 3] 트랜잭셔널 DDL(Transactional DDL)의 허위 원자성 및 Dirty DDL Read
 * **분류**: `Isolation / Durability` | **위치**: `pkg/engine/sqlexec_ddl.go:478-524`, `pkg/engine/session.go:99`
 * **현상**: 트랜잭션 내 DDL 시 스토리지에서 즉시 삭제/변경하고 Go 힙 `ddlUndoLog`에만 기록하여 타 세션 노출 및 크래시 시 유실.
-* **해결책**: 트랜잭션 격리 섀도 카탈로그(Catalog Overlay)에서 관리하다가 `Commit()` 시점에 원자적 교체.
+* **해결책**: 트랜잭션 격리 섀도 카탈로그(Catalog Overlay)와 지연 물리 액션 큐(Deferred Action Queue)를 전담하는 `pkg/catalog/txddl` 모듈을 도입하여 `Commit()` 시점에 원자적 교체 및 일괄 적용. 상세 계획: [`notes/plans/TRANSACTIONAL_DDL_MODULARIZATION_PLAN.ko.md`](TRANSACTIONAL_DDL_MODULARIZATION_PLAN.ko.md)
 
 ### [결함 4] 동시성 환경에서 외래 키(FK) 검증 시 부모 행 삭제 방지 락 부재 (Ghost Orphan)
 * **분류**: `Consistency` | **위치**: `pkg/storage/wiredtiger/wt_engine.go:2389-2418`

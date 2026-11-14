@@ -2781,10 +2781,11 @@ type wtIndexBTreeCursor struct {
 	closed  bool
 	currPK  string
 	currKey string
+	err     error
 }
 
 func (c *wtIndexBTreeCursor) Next() bool {
-	if c.closed || c.cur == nil || c.eof {
+	if c.closed || c.cur == nil || c.eof || c.err != nil {
 		return false
 	}
 
@@ -2807,17 +2808,26 @@ func (c *wtIndexBTreeCursor) Next() bool {
 					ret := C.go_wt_cursor_search_near(c.cur, &exact)
 					if ret != 0 {
 						c.eof = true
+						if ret != C.WT_NOTFOUND {
+							c.err = fmt.Errorf("wiredtiger index cursor search_near error: %d (%s)", ret, C.GoString(C.wiredtiger_strerror(ret)))
+						}
 						return false
 					}
 					if exact < 0 {
-						if C.go_wt_cursor_next(c.cur) != 0 {
+						if nret := C.go_wt_cursor_next(c.cur); nret != 0 {
 							c.eof = true
+							if nret != C.WT_NOTFOUND {
+								c.err = fmt.Errorf("wiredtiger index cursor next error: %d (%s)", nret, C.GoString(C.wiredtiger_strerror(nret)))
+							}
 							return false
 						}
 					}
 				} else {
-					if C.go_wt_cursor_next(c.cur) != 0 {
+					if nret := C.go_wt_cursor_next(c.cur); nret != 0 {
 						c.eof = true
+						if nret != C.WT_NOTFOUND {
+							c.err = fmt.Errorf("wiredtiger index cursor next error: %d (%s)", nret, C.GoString(C.wiredtiger_strerror(nret)))
+						}
 						return false
 					}
 				}
@@ -2837,30 +2847,45 @@ func (c *wtIndexBTreeCursor) Next() bool {
 					ret := C.go_wt_cursor_search_near(c.cur, &exact)
 					if ret != 0 {
 						c.eof = true
+						if ret != C.WT_NOTFOUND {
+							c.err = fmt.Errorf("wiredtiger index cursor search_near error: %d (%s)", ret, C.GoString(C.wiredtiger_strerror(ret)))
+						}
 						return false
 					}
 					if exact > 0 {
-						if C.go_wt_cursor_prev(c.cur) != 0 {
+						if pret := C.go_wt_cursor_prev(c.cur); pret != 0 {
 							c.eof = true
+							if pret != C.WT_NOTFOUND {
+								c.err = fmt.Errorf("wiredtiger index cursor prev error: %d (%s)", pret, C.GoString(C.wiredtiger_strerror(pret)))
+							}
 							return false
 						}
 					}
 				} else {
-					if C.go_wt_cursor_prev(c.cur) != 0 {
+					if pret := C.go_wt_cursor_prev(c.cur); pret != 0 {
 						c.eof = true
+						if pret != C.WT_NOTFOUND {
+							c.err = fmt.Errorf("wiredtiger index cursor prev error: %d (%s)", pret, C.GoString(C.wiredtiger_strerror(pret)))
+						}
 						return false
 					}
 				}
 			}
 		} else {
 			if !c.desc {
-				if C.go_wt_cursor_next(c.cur) != 0 {
+				if nret := C.go_wt_cursor_next(c.cur); nret != 0 {
 					c.eof = true
+					if nret != C.WT_NOTFOUND {
+						c.err = fmt.Errorf("wiredtiger index cursor next error: %d (%s)", nret, C.GoString(C.wiredtiger_strerror(nret)))
+					}
 					return false
 				}
 			} else {
-				if C.go_wt_cursor_prev(c.cur) != 0 {
+				if pret := C.go_wt_cursor_prev(c.cur); pret != 0 {
 					c.eof = true
+					if pret != C.WT_NOTFOUND {
+						c.err = fmt.Errorf("wiredtiger index cursor prev error: %d (%s)", pret, C.GoString(C.wiredtiger_strerror(pret)))
+					}
 					return false
 				}
 			}
@@ -2871,6 +2896,9 @@ func (c *wtIndexBTreeCursor) Next() bool {
 		var keySz C.size_t
 		if ret := C.go_wt_cursor_get_key_raw(c.cur, &pKeyData, &keySz); ret != 0 || pKeyData == nil {
 			c.eof = true
+			if ret != 0 && ret != C.WT_NOTFOUND {
+				c.err = fmt.Errorf("wiredtiger index cursor get_key error: %d (%s)", ret, C.GoString(C.wiredtiger_strerror(ret)))
+			}
 			return false
 		}
 		keyStr := string(C.GoBytes(pKeyData, C.int(keySz)))
@@ -2987,6 +3015,10 @@ func (c *wtIndexBTreeCursor) Close() error {
 		C.go_wt_cursor_close(cur)
 	}
 	return nil
+}
+
+func (c *wtIndexBTreeCursor) Err() error {
+	return c.err
 }
 
 func (tx *WTTx) Commit() error {
@@ -3338,17 +3370,22 @@ type WTCursor struct {
 	schema *storage.TableSchema
 	closed bool
 	eof    bool
+	err    error
 }
 
 func (c *WTCursor) Next() bool {
-	if c.closed || c.cur == nil || c.eof {
+	if c.closed || c.cur == nil || c.eof || c.err != nil {
 		return false
 	}
-	if C.go_wt_cursor_next(c.cur) != 0 {
-		c.eof = true
-		return false
+	ret := C.go_wt_cursor_next(c.cur)
+	if ret == 0 {
+		return true
 	}
-	return true
+	c.eof = true
+	if ret != C.WT_NOTFOUND {
+		c.err = fmt.Errorf("wiredtiger cursor next error: %d (%s)", ret, C.GoString(C.wiredtiger_strerror(ret)))
+	}
+	return false
 }
 
 func (c *WTCursor) Record() (storage.Record, error) {
@@ -3420,6 +3457,10 @@ func (c *WTCursor) Close() error {
 		C.go_wt_cursor_close(cur)
 	}
 	return nil
+}
+
+func (c *WTCursor) Err() error {
+	return c.err
 }
 
 // wtOpError converts a WiredTiger return code into a Go error. WT_ROLLBACK

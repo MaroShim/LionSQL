@@ -43,6 +43,10 @@ func (fc *faultyCursor) Close() error {
 	return fc.realCur.Close()
 }
 
+func (fc *faultyCursor) Err() error {
+	return fc.realCur.Err()
+}
+
 // faultyTx wraps a real storage.Transaction and intercepts Scan() to inject faultyCursor.
 type faultyTx struct {
 	storage.Transaction

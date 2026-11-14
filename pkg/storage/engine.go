@@ -1108,6 +1108,7 @@ type Cursor interface {
 	Record() (Record, error)
 	Row() (Row, error)
 	Close() error
+	Err() error
 }
 
 // RawTupleCursor is an optional interface implemented by cursors that support zero-copy binary tuple access.
