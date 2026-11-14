@@ -3,7 +3,6 @@ package memengine
 import (
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1578,37 +1577,7 @@ func (tx *Transaction) IndexScanDesc(tableName string, indexName string, low, hi
 
 // ParsePKValue parses a string-encoded primary key back into a storage.Value.
 func ParsePKValue(s string, dt storage.DataType) storage.Value {
-	switch dt {
-	case storage.TypeInt:
-		if n, err := strconv.ParseInt(s, 10, 64); err == nil {
-			return storage.Value{Type: storage.TypeInt, IVal: n, FVal: float64(n)}
-		}
-		return storage.Value{Type: storage.TypeInt}
-	case storage.TypeFloat:
-		if f, err := strconv.ParseFloat(s, 64); err == nil {
-			return storage.Value{Type: storage.TypeFloat, FVal: f, IVal: int64(f)}
-		}
-		return storage.Value{Type: storage.TypeFloat}
-	case storage.TypeDecimal:
-		return storage.DecimalValue(s)
-	case storage.TypeBool:
-		return storage.BoolValue(strings.EqualFold(s, "true") || s == "1")
-	case storage.TypeDateTime:
-		if t, err := time.Parse(time.RFC3339, s); err == nil {
-			return storage.DateTimeValue(t)
-		}
-		return storage.StringValue(s)
-	case storage.TypeDate:
-		return storage.DateValueFromString(s)
-	case storage.TypeTime:
-		return storage.TimeValueFromString(s)
-	case storage.TypeUUID:
-		return storage.UUIDValue(s)
-	case storage.TypeBinary:
-		return storage.BinaryValueFromString(s)
-	default:
-		return storage.StringValue(s)
-	}
+	return storage.ParsePKValue(s, dt)
 }
 
 func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {

@@ -317,6 +317,53 @@ func (s *TableSchema) TableURI() string {
 	return "table:" + s.Name
 }
 
+// IndexURI returns the WiredTiger secondary index URI ("table:_idx_<physical_name>_<index_name>").
+func (s *TableSchema) IndexURI(indexName string) string {
+	if s == nil {
+		return ""
+	}
+	base := s.Name
+	if s.PhysicalName != "" {
+		base = s.PhysicalName
+	}
+	return fmt.Sprintf("table:_idx_%s_%s", base, indexName)
+}
+
+// ParsePKValue parses a string representation into a Value of the specified DataType.
+func ParsePKValue(s string, dt DataType) Value {
+	switch dt {
+	case TypeInt:
+		if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+			return Value{Type: TypeInt, IVal: n, FVal: float64(n)}
+		}
+		return Value{Type: TypeInt}
+	case TypeFloat:
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return Value{Type: TypeFloat, FVal: f, IVal: int64(f)}
+		}
+		return Value{Type: TypeFloat}
+	case TypeDecimal:
+		return DecimalValue(s)
+	case TypeBool:
+		return BoolValue(strings.EqualFold(s, "true") || s == "1")
+	case TypeDateTime:
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			return DateTimeValue(t)
+		}
+		return StringValue(s)
+	case TypeDate:
+		return DateValueFromString(s)
+	case TypeTime:
+		return TimeValueFromString(s)
+	case TypeUUID:
+		return UUIDValue(s)
+	case TypeBinary:
+		return BinaryValueFromString(s)
+	default:
+		return StringValue(s)
+	}
+}
+
 func (s *TableSchema) IsTemporary() bool {
 	return s != nil && IsTemporaryTable(s.Name)
 }

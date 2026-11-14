@@ -88,6 +88,14 @@ static int go_wt_cursor_next(WT_CURSOR *cursor) {
     return cursor->next(cursor);
 }
 
+static int go_wt_cursor_prev(WT_CURSOR *cursor) {
+    return cursor->prev(cursor);
+}
+
+static int go_wt_cursor_search_near(WT_CURSOR *cursor, int *exactp) {
+    return cursor->search_near(cursor, exactp);
+}
+
 static int go_wt_cursor_insert(WT_CURSOR *cursor) {
     return cursor->insert(cursor);
 }
@@ -106,6 +114,50 @@ static int go_wt_cursor_search(WT_CURSOR *cursor) {
 
 static void go_wt_cursor_set_key(WT_CURSOR *cursor, const char *key) {
     cursor->set_key(cursor, key);
+}
+
+static void go_wt_cursor_set_key_raw(WT_CURSOR *cursor, const void *data, size_t size) {
+    if (cursor != NULL && cursor->key_format != NULL && strcmp(cursor->key_format, "u") == 0) {
+        WT_ITEM item;
+        memset(&item, 0, sizeof(item));
+        item.data = data;
+        item.size = size;
+        cursor->set_key(cursor, &item);
+    } else {
+        cursor->set_key(cursor, (const char *)data);
+    }
+}
+
+static int go_wt_cursor_get_key_raw(WT_CURSOR *cursor, const void **datap, size_t *sizep) {
+    if (cursor != NULL && cursor->key_format != NULL && strcmp(cursor->key_format, "u") == 0) {
+        WT_ITEM item;
+        memset(&item, 0, sizeof(item));
+        int ret = cursor->get_key(cursor, &item);
+        if (ret == 0) {
+            *datap = item.data;
+            *sizep = item.size;
+        } else {
+            *datap = NULL;
+            *sizep = 0;
+        }
+        return ret;
+    } else {
+        const char *str = NULL;
+        int ret = cursor->get_key(cursor, &str);
+        if (ret == 0 && str != NULL) {
+            *datap = (const void *)str;
+            *sizep = strlen(str);
+        } else {
+            *datap = NULL;
+            *sizep = 0;
+        }
+        return ret;
+    }
+}
+
+static int go_wt_cursor_remove_key_raw(WT_CURSOR *cursor, const void *data, size_t size) {
+    go_wt_cursor_set_key_raw(cursor, data, size);
+    return cursor->remove(cursor);
 }
 
 static void go_wt_cursor_set_val(WT_CURSOR *cursor, const char *val) {
@@ -196,7 +248,6 @@ static int go_wt_cursor_remove_key(WT_CURSOR *cursor, const char *key) {
 import "C"
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -472,6 +523,21 @@ func (e *Engine) loadCatalog() {
 		if hasTemp {
 			_ = e.saveCatalog()
 		}
+		if e.conn != nil {
+			var sess *C.WT_SESSION
+			if C.go_wt_open_session(e.conn, &sess) == 0 {
+				config := C.CString("key_format=u,value_format=u")
+				for _, t := range e.tables {
+					for _, idx := range t.Indexes {
+						idxURI := C.CString(t.IndexURI(idx.Name))
+						_ = C.go_wt_session_create(sess, idxURI, config)
+						C.free(unsafe.Pointer(idxURI))
+					}
+				}
+				C.free(unsafe.Pointer(config))
+				C.go_wt_session_close(sess)
+			}
+		}
 	}
 }
 
@@ -586,6 +652,17 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		return fmt.Errorf("session->create failed with code %d", ret)
 	}
 
+	for _, idx := range schema.Indexes {
+		idxURI := C.CString(schema.IndexURI(idx.Name))
+		idxConfig := C.CString("key_format=u,value_format=u")
+		idxRet := C.go_wt_session_create(sess, idxURI, idxConfig)
+		C.free(unsafe.Pointer(idxURI))
+		C.free(unsafe.Pointer(idxConfig))
+		if idxRet != 0 {
+			return fmt.Errorf("session->create index %q failed with code %d", idx.Name, idxRet)
+		}
+	}
+
 	e.tables[schema.Name] = schema
 	if err := e.saveCatalog(); err != nil {
 		return err
@@ -655,6 +732,14 @@ func (e *Engine) DropTable(tableName string) error {
 	}
 	if dropRet != 0 {
 		return fmt.Errorf("wiredtiger drop table %q (%s) failed with code %d", tableName, tbl.TableURI(), dropRet)
+	}
+
+	for _, idx := range tbl.Indexes {
+		idxURI := tbl.IndexURI(idx.Name)
+		e.evictAllCursors(idxURI)
+		cIdxURI := C.CString(idxURI)
+		_ = C.go_wt_session_drop(sess, cIdxURI)
+		C.free(unsafe.Pointer(cIdxURI))
 	}
 
 	sqlutil.MapDeleteFold(e.tables, tableName)
@@ -769,6 +854,14 @@ func (e *Engine) truncatePermTables(tableNames []string, cascade bool) error {
 			}
 		}
 		C.free(unsafe.Pointer(uri))
+
+		for _, idx := range tbl.Indexes {
+			idxURI := tbl.IndexURI(idx.Name)
+			e.evictAllCursors(idxURI)
+			cIdxURI := C.CString(idxURI)
+			_ = C.go_wt_session_truncate(sess, cIdxURI)
+			C.free(unsafe.Pointer(cIdxURI))
+		}
 
 		if !storage.IsTemporaryTable(tbl.Name) {
 			walOps = append(walOps, memengine.WALOp{
@@ -1173,6 +1266,61 @@ func (e *Engine) ListTables() ([]*storage.TableSchema, error) {
 	return res, nil
 }
 
+func encodeSecondaryIndexKey(idx *storage.IndexSchema, v storage.Value) string {
+	if len(idx.Columns) > 1 {
+		return v.String()
+	}
+	return storage.EncodeIndexKeyPart(v)
+}
+
+func formatIndexKeyValue(rec storage.Record, idx *storage.IndexSchema, pkStr string) (key string, val string, isNull bool) {
+	keyVal := storage.ExtractIndexKeyFromRecord(rec, idx)
+	if keyVal.IsNull {
+		isNull = true
+	}
+	var keyStr string
+	if len(idx.Columns) > 1 {
+		keyStr = keyVal.String()
+	} else {
+		keyStr = storage.EncodeIndexKeyPart(keyVal)
+	}
+
+	if idx.Unique && !isNull {
+		return keyStr, pkStr, false
+	}
+	return keyStr + "\x00" + pkStr, "", isNull
+}
+
+func insertIndexEntry(cur *C.WT_CURSOR, key, val string) error {
+	var kData, vData unsafe.Pointer
+	if len(key) > 0 {
+		kData = unsafe.Pointer(unsafe.StringData(key))
+	}
+	if len(val) > 0 {
+		vData = unsafe.Pointer(unsafe.StringData(val))
+	}
+	C.go_wt_cursor_set_key_raw(cur, kData, C.size_t(len(key)))
+	C.go_wt_cursor_set_val_raw(cur, vData, C.size_t(len(val)))
+	if ret := C.go_wt_cursor_insert(cur); ret != 0 {
+		return wtOpError("cursor_insert_index", int(ret))
+	}
+	return nil
+}
+
+func removeIndexEntry(cur *C.WT_CURSOR, key string) error {
+	var kData unsafe.Pointer
+	if len(key) > 0 {
+		kData = unsafe.Pointer(unsafe.StringData(key))
+	}
+	if ret := C.go_wt_cursor_remove_key_raw(cur, kData, C.size_t(len(key))); ret != 0 {
+		if ret == C.WT_NOTFOUND {
+			return nil
+		}
+		return wtOpError("cursor_remove_index", int(ret))
+	}
+	return nil
+}
+
 func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	if index != nil && storage.IsTemporaryTable(index.TableName) {
 		return e.tempEng.CreateIndex(index)
@@ -1208,6 +1356,70 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 		return fmt.Errorf("%w: %s", storage.ErrIndexExists, index.Name)
 	}
 
+	idxURI := t.IndexURI(index.Name)
+	cIdxURI := C.CString(idxURI)
+	defer C.free(unsafe.Pointer(cIdxURI))
+	cIdxConfig := C.CString("key_format=u,value_format=u")
+	defer C.free(unsafe.Pointer(cIdxConfig))
+
+	var sess *C.WT_SESSION
+	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
+		return fmt.Errorf("open_session failed: %d", ret)
+	}
+	defer C.go_wt_session_close(sess)
+
+	if ret := C.go_wt_session_create(sess, cIdxURI, cIdxConfig); ret != 0 {
+		return fmt.Errorf("session->create index %q failed with code %d", index.Name, ret)
+	}
+
+	// Backfill existing rows if table contains data
+	primURI := C.CString(t.TableURI())
+	defer C.free(unsafe.Pointer(primURI))
+
+	var tblCur, idxCur *C.WT_CURSOR
+	if ret := C.go_wt_open_cursor(sess, primURI, &tblCur); ret == 0 {
+		defer C.go_wt_cursor_close(tblCur)
+		if ret := C.go_wt_open_cursor(sess, cIdxURI, &idxCur); ret == 0 {
+			defer C.go_wt_cursor_close(idxCur)
+			for C.go_wt_cursor_next(tblCur) == 0 {
+				var pKey *C.char
+				if kret := C.go_wt_cursor_get_key(tblCur, &pKey); kret != 0 || pKey == nil {
+					continue
+				}
+				pkStr := C.GoString(pKey)
+
+				var pData unsafe.Pointer
+				var sz C.size_t
+				if vret := C.go_wt_cursor_get_val_raw(tblCur, &pData, &sz); vret != 0 || pData == nil {
+					continue
+				}
+				rec, err := decodeRecord(t, C.GoBytes(pData, C.int(sz)))
+				if err != nil {
+					continue
+				}
+
+				k, v, isNull := formatIndexKeyValue(rec, index, pkStr)
+				if index.Unique && !isNull {
+					var kData unsafe.Pointer
+					if len(k) > 0 {
+						kData = unsafe.Pointer(unsafe.StringData(k))
+					}
+					C.go_wt_cursor_set_key_raw(idxCur, kData, C.size_t(len(k)))
+					if C.go_wt_cursor_search(idxCur) == 0 {
+						C.go_wt_cursor_reset(idxCur)
+						_ = C.go_wt_session_drop(sess, cIdxURI)
+						return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, k, index.Name)
+					}
+					C.go_wt_cursor_reset(idxCur)
+				}
+				if err := insertIndexEntry(idxCur, k, v); err != nil {
+					_ = C.go_wt_session_drop(sess, cIdxURI)
+					return err
+				}
+			}
+		}
+	}
+
 	t.Indexes = append(t.Indexes, *index)
 	if err := e.saveCatalog(); err != nil {
 		return err
@@ -1233,9 +1445,20 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
-	_, idxPos, exists := t.FindIndex(indexName)
+	idxSchema, idxPos, exists := t.FindIndex(indexName)
 	if !exists {
 		return fmt.Errorf("%w: %s", storage.ErrIndexNotFound, indexName)
+	}
+
+	idxURI := t.IndexURI(idxSchema.Name)
+	e.evictAllCursors(idxURI)
+
+	var sess *C.WT_SESSION
+	if ret := C.go_wt_open_session(e.conn, &sess); ret == 0 {
+		cIdxURI := C.CString(idxURI)
+		_ = C.go_wt_session_drop(sess, cIdxURI)
+		C.free(unsafe.Pointer(cIdxURI))
+		C.go_wt_session_close(sess)
 	}
 
 	t.Indexes = append(t.Indexes[:idxPos], t.Indexes[idxPos+1:]...)
@@ -1356,8 +1579,9 @@ func (s *WTSession) evictCursors(tableName string) {
 	}
 	prefixTable := "table:" + tableName
 	prefixIndex := "index:" + tableName + ":"
+	prefixIdxTable := "table:_idx_" + tableName + "_"
 	for curURI, pool := range s.cursorPool {
-		if curURI == prefixTable || strings.HasPrefix(curURI, prefixIndex) {
+		if curURI == prefixTable || strings.HasPrefix(curURI, prefixIndex) || strings.HasPrefix(curURI, prefixIdxTable) || curURI == tableName {
 			s.toClose = append(s.toClose, pool...)
 			delete(s.cursorPool, curURI)
 		}
@@ -1803,6 +2027,20 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 		return wtOpError("cursor_insert", int(ret))
 	}
 
+	for _, idx := range tbl.Indexes {
+		idxURI := tbl.IndexURI(idx.Name)
+		idxCur, err := tx.sess.acquireCursor(idxURI)
+		if err != nil {
+			return err
+		}
+		k, v, _ := formatIndexKeyValue(record, &idx, pkStr)
+		if err := insertIndexEntry(idxCur, k, v); err != nil {
+			tx.sess.releaseCursor(idxURI, idxCur)
+			return err
+		}
+		tx.sess.releaseCursor(idxURI, idxCur)
+	}
+
 	tx.hasWrites = true
 	if len(tx.savepoints) > 0 {
 		tx.undoLog = append(tx.undoLog, wtUndoOp{
@@ -1933,6 +2171,27 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 		return wtOpError("cursor_update", int(ret))
 	}
 
+	if len(tbl.Indexes) > 0 {
+		oldRec, err := decodeRecord(tbl, oldData)
+		if err == nil {
+			for _, idx := range tbl.Indexes {
+				oldKey, _, _ := formatIndexKeyValue(oldRec, &idx, pkStr)
+				newKey, newVal, _ := formatIndexKeyValue(existing, &idx, pkStr)
+				if oldKey == newKey {
+					continue
+				}
+				idxURI := tbl.IndexURI(idx.Name)
+				idxCur, err := tx.sess.acquireCursor(idxURI)
+				if err != nil {
+					continue
+				}
+				_ = removeIndexEntry(idxCur, oldKey)
+				_ = insertIndexEntry(idxCur, newKey, newVal)
+				tx.sess.releaseCursor(idxURI, idxCur)
+			}
+		}
+	}
+
 	tx.hasWrites = true
 	if len(tx.savepoints) > 0 {
 		tx.undoLog = append(tx.undoLog, wtUndoOp{
@@ -1982,14 +2241,18 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 		return err
 	}
 
-	var oldData []byte
-	if len(tx.savepoints) > 0 {
-		oldData, _ = tx.getRawBytesLocked(tableName, pk)
-	}
-
 	tbl, err := tx.getTableLocked(tableName)
 	if err != nil {
 		return err
+	}
+
+	var oldData []byte
+	var existingRec storage.Record
+	if len(tx.savepoints) > 0 || len(tbl.Indexes) > 0 {
+		oldData, _ = tx.getRawBytesLocked(tableName, pk)
+		if len(oldData) > 0 {
+			existingRec, _ = decodeRecord(tbl, oldData)
+		}
 	}
 
 	uri := tbl.TableURI()
@@ -2013,6 +2276,19 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 		return wtOpError("cursor_remove", int(ret))
 	}
 
+	if existingRec != nil && len(tbl.Indexes) > 0 {
+		for _, idx := range tbl.Indexes {
+			idxURI := tbl.IndexURI(idx.Name)
+			idxCur, err := tx.sess.acquireCursor(idxURI)
+			if err != nil {
+				continue
+			}
+			k, _, _ := formatIndexKeyValue(existingRec, &idx, pkStr)
+			_ = removeIndexEntry(idxCur, k)
+			tx.sess.releaseCursor(idxURI, idxCur)
+		}
+	}
+
 	tx.hasWrites = true
 	if len(oldData) > 0 {
 		tx.undoLog = append(tx.undoLog, wtUndoOp{
@@ -2034,6 +2310,7 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 }
 
 func (tx *WTTx) checkUniqueIndexesLocked(tableName string, tbl *storage.TableSchema, currentPK storage.Value, rec storage.Record) error {
+	pkStr := currentPK.String()
 	for _, idx := range tbl.Indexes {
 		if !idx.Unique {
 			continue
@@ -2042,25 +2319,39 @@ func (tx *WTTx) checkUniqueIndexesLocked(tableName string, tbl *storage.TableSch
 		if keyVal.IsNull {
 			continue
 		}
-		cur, err := tx.indexScanLocked(tableName, idx.Name, &keyVal, &keyVal)
+		var keyStr string
+		if len(idx.Columns) > 1 {
+			keyStr = keyVal.String()
+		} else {
+			keyStr = storage.EncodeIndexKeyPart(keyVal)
+		}
+
+		idxURI := tbl.IndexURI(idx.Name)
+		cur, err := tx.sess.acquireCursor(idxURI)
 		if err != nil {
 			return err
 		}
-		for cur.Next() {
-			rowRec, rErr := cur.Record()
-			if rErr != nil {
-				continue
-			}
-			if rPK, ok := tbl.ResolveRecordPK(rowRec); ok && rPK.Equal(currentPK) {
-				continue
-			}
-			existingKey := storage.ExtractIndexKeyFromRecord(rowRec, &idx)
-			if !existingKey.IsNull && existingKey.Equal(keyVal) {
-				cur.Close()
-				return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idx.Name)
+
+		var kData unsafe.Pointer
+		if len(keyStr) > 0 {
+			kData = unsafe.Pointer(unsafe.StringData(keyStr))
+		}
+		C.go_wt_cursor_set_key_raw(cur, kData, C.size_t(len(keyStr)))
+		ret := C.go_wt_cursor_search(cur)
+		if ret == 0 {
+			var pValData unsafe.Pointer
+			var valSz C.size_t
+			if vret := C.go_wt_cursor_get_val_raw(cur, &pValData, &valSz); vret == 0 && pValData != nil && valSz > 0 {
+				existingPK := string(C.GoBytes(pValData, C.int(valSz)))
+				if existingPK != pkStr {
+					C.go_wt_cursor_reset(cur)
+					tx.sess.releaseCursor(idxURI, cur)
+					return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idx.Name)
+				}
 			}
 		}
-		cur.Close()
+		C.go_wt_cursor_reset(cur)
+		tx.sess.releaseCursor(idxURI, cur)
 	}
 	return nil
 }
@@ -2386,32 +2677,23 @@ func (tx *WTTx) IndexScan(tableName string, indexName string, low, high *storage
 		}
 		return ttx.IndexScan(tableName, indexName, low, high)
 	}
-	return tx.indexScanLocked(tableName, indexName, low, high)
+	return tx.indexScanBTreeLocked(tableName, indexName, low, high, false)
 }
 
-func (tx *WTTx) indexScanLocked(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
-	cur, err := tx.scanLocked(tableName)
-	if err != nil {
-		return nil, err
+func (tx *WTTx) IndexScanDesc(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	if tx.closed {
+		return nil, storage.ErrTxClosed
 	}
-	if low == nil && high == nil {
-		return cur, nil
+	if storage.IsTemporaryTable(tableName) {
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return nil, err
+		}
+		return ttx.IndexScanDesc(tableName, indexName, low, high)
 	}
-	tbl, _ := tx.getTableLocked(tableName)
-	if tbl == nil {
-		return cur, nil
-	}
-	idx, _, found := tbl.FindIndex(indexName)
-	if !found || idx == nil {
-		return cur, nil
-	}
-	return &wtFilteredIndexCursor{
-		base:   cur,
-		schema: tbl,
-		idx:    idx,
-		low:    low,
-		high:   high,
-	}, nil
+	return tx.indexScanBTreeLocked(tableName, indexName, low, high, true)
 }
 
 func (tx *WTTx) IndexOnlyScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
@@ -2430,265 +2712,281 @@ func (tx *WTTx) IndexOnlyScan(tableName string, indexName string, low, high *sto
 	return tx.IndexScan(tableName, indexName, low, high)
 }
 
-type wtSliceCursor struct {
-	schema *storage.TableSchema
-	rows   []storage.Row
-	recs   []storage.Record
-	idx    int
-}
-
-func (c *wtSliceCursor) Next() bool {
-	c.idx++
-	if len(c.rows) > 0 {
-		return c.idx < len(c.rows)
-	}
-	return c.idx < len(c.recs)
-}
-
-func (c *wtSliceCursor) Row() (storage.Row, error) {
-	if c.idx >= 0 && c.idx < len(c.rows) {
-		return c.rows[c.idx], nil
-	}
-	if c.idx >= 0 && c.idx < len(c.recs) && c.recs[c.idx] != nil && c.schema != nil {
-		return c.schema.RecordToRow(c.recs[c.idx]), nil
-	}
-	return storage.Row{}, errors.New("cursor out of range")
-}
-
-func (c *wtSliceCursor) Record() (storage.Record, error) {
-	if c.idx >= 0 && c.idx < len(c.recs) && c.recs[c.idx] != nil {
-		return c.recs[c.idx], nil
-	}
-	if c.idx >= 0 && c.idx < len(c.rows) && c.schema != nil {
-		return c.schema.RowToRecord(c.rows[c.idx]), nil
-	}
-	return nil, errors.New("cursor out of range")
-}
-
-func (c *wtSliceCursor) Close() error {
-	c.rows = nil
-	c.recs = nil
-	return nil
-}
-
-func (tx *WTTx) IndexScanDesc(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
-	if storage.IsTemporaryTable(tableName) {
-		tx.mu.Lock()
-		defer tx.mu.Unlock()
-		if tx.closed {
-			return nil, storage.ErrTxClosed
-		}
-		ttx, err := tx.ensureTempTxLocked()
-		if err != nil {
-			return nil, err
-		}
-		return ttx.IndexScanDesc(tableName, indexName, low, high)
-	}
-	cur, err := tx.IndexScan(tableName, indexName, low, high)
+func (tx *WTTx) indexScanBTreeLocked(tableName string, indexName string, low, high *storage.Value, desc bool) (storage.Cursor, error) {
+	tbl, err := tx.getTableLocked(tableName)
 	if err != nil {
 		return nil, err
 	}
-	defer cur.Close()
-
-	tbl, _ := tx.getTableLocked(tableName)
-	var rows []storage.Row
-	var recs []storage.Record
-
-	for cur.Next() {
-		row, rerr := cur.Row()
-		if rerr == nil && len(row.Values) > 0 {
-			rows = append(rows, row)
-		} else {
-			rec, _ := cur.Record()
-			recs = append(recs, rec)
-		}
+	idx, _, found := tbl.FindIndex(indexName)
+	if !found || idx == nil {
+		return nil, fmt.Errorf("%w: %s on table %s", storage.ErrIndexNotFound, indexName, tableName)
 	}
 
-	if len(rows) > 0 {
-		n := len(rows)
-		for i := 0; i < n/2; i++ {
-			rows[i], rows[n-1-i] = rows[n-1-i], rows[i]
-		}
-	} else if len(recs) > 0 {
-		nr := len(recs)
-		for i := 0; i < nr/2; i++ {
-			recs[i], recs[nr-1-i] = recs[nr-1-i], recs[i]
-		}
+	idxURI := tbl.IndexURI(idx.Name)
+	cur, err := tx.sess.acquireCursor(idxURI)
+	if err != nil {
+		return nil, err
 	}
 
-	return &wtSliceCursor{
-		schema: tbl,
-		rows:   rows,
-		recs:   recs,
-		idx:    -1,
-	}, nil
+	btreeCur := &wtIndexBTreeCursor{
+		tx:   tx,
+		sess: tx.sess,
+		tbl:  tbl,
+		idx:  idx,
+		uri:  idxURI,
+		cur:  cur,
+		desc: desc,
+	}
+
+	if low != nil {
+		btreeCur.hasLow = true
+		btreeCur.lowKey = encodeSecondaryIndexKey(idx, *low)
+	}
+	if high != nil {
+		btreeCur.hasHigh = true
+		btreeCur.highKey = encodeSecondaryIndexKey(idx, *high)
+	}
+
+	return btreeCur, nil
 }
 
-type wtFilteredIndexCursor struct {
-	base    storage.Cursor
-	schema  *storage.TableSchema
+func compareCompositePrefix(curKey, boundKey string) int {
+	curParts := strings.Split(curKey, "\x00")
+	boundParts := strings.Split(boundKey, "\x00")
+	for i := 0; i < len(boundParts) && i < len(curParts); i++ {
+		if curParts[i] < boundParts[i] {
+			return -1
+		}
+		if curParts[i] > boundParts[i] {
+			return 1
+		}
+	}
+	return 0
+}
+
+type wtIndexBTreeCursor struct {
+	tx      *WTTx
+	sess    *WTSession
+	tbl     *storage.TableSchema
 	idx     *storage.IndexSchema
-	low     *storage.Value
-	high    *storage.Value
-	currRow storage.Row
-	currRec storage.Record
-	currRaw []byte
-	hasRaw  bool
+	uri     string
+	cur     *C.WT_CURSOR
+	lowKey  string
+	highKey string
+	hasLow  bool
+	hasHigh bool
+	desc    bool
+	started bool
+	eof     bool
+	closed  bool
+	currPK  string
+	currKey string
 }
 
-func (c *wtFilteredIndexCursor) Next() bool {
-	for c.base.Next() {
-		rawCur, ok := c.base.(storage.RawTupleCursor)
-		if ok {
-			c.currRaw, c.hasRaw = rawCur.RawTuple()
+func (c *wtIndexBTreeCursor) Next() bool {
+	if c.closed || c.cur == nil || c.eof {
+		return false
+	}
+
+	for {
+		if !c.started {
+			c.started = true
+			if !c.desc {
+				// Ascending initial seek
+				if c.hasLow {
+					searchKey := c.lowKey
+					if !c.idx.Unique {
+						searchKey = c.lowKey + "\x00"
+					}
+					var kData unsafe.Pointer
+					if len(searchKey) > 0 {
+						kData = unsafe.Pointer(unsafe.StringData(searchKey))
+					}
+					C.go_wt_cursor_set_key_raw(c.cur, kData, C.size_t(len(searchKey)))
+					var exact C.int
+					ret := C.go_wt_cursor_search_near(c.cur, &exact)
+					if ret != 0 {
+						c.eof = true
+						return false
+					}
+					if exact < 0 {
+						if C.go_wt_cursor_next(c.cur) != 0 {
+							c.eof = true
+							return false
+						}
+					}
+				} else {
+					if C.go_wt_cursor_next(c.cur) != 0 {
+						c.eof = true
+						return false
+					}
+				}
+			} else {
+				// Descending initial seek
+				if c.hasHigh {
+					searchKey := c.highKey
+					if !c.idx.Unique {
+						searchKey = c.highKey + "\x00\xff\xff\xff\xff"
+					}
+					var kData unsafe.Pointer
+					if len(searchKey) > 0 {
+						kData = unsafe.Pointer(unsafe.StringData(searchKey))
+					}
+					C.go_wt_cursor_set_key_raw(c.cur, kData, C.size_t(len(searchKey)))
+					var exact C.int
+					ret := C.go_wt_cursor_search_near(c.cur, &exact)
+					if ret != 0 {
+						c.eof = true
+						return false
+					}
+					if exact > 0 {
+						if C.go_wt_cursor_prev(c.cur) != 0 {
+							c.eof = true
+							return false
+						}
+					}
+				} else {
+					if C.go_wt_cursor_prev(c.cur) != 0 {
+						c.eof = true
+						return false
+					}
+				}
+			}
+		} else {
+			if !c.desc {
+				if C.go_wt_cursor_next(c.cur) != 0 {
+					c.eof = true
+					return false
+				}
+			} else {
+				if C.go_wt_cursor_prev(c.cur) != 0 {
+					c.eof = true
+					return false
+				}
+			}
 		}
-		row, err := c.base.Row()
-		if err != nil {
-			rec, rerr := c.base.Record()
-			if rerr != nil {
+
+		// Read current key & value from positioned cursor
+		var pKeyData unsafe.Pointer
+		var keySz C.size_t
+		if ret := C.go_wt_cursor_get_key_raw(c.cur, &pKeyData, &keySz); ret != 0 || pKeyData == nil {
+			c.eof = true
+			return false
+		}
+		keyStr := string(C.GoBytes(pKeyData, C.int(keySz)))
+
+		var curIndexKey, curPK string
+		if c.idx.Unique {
+			var pValData unsafe.Pointer
+			var valSz C.size_t
+			if vret := C.go_wt_cursor_get_val_raw(c.cur, &pValData, &valSz); vret == 0 && pValData != nil && valSz > 0 {
+				curIndexKey = keyStr
+				curPK = string(C.GoBytes(pValData, C.int(valSz)))
+			} else {
+				sep := strings.LastIndexByte(keyStr, 0)
+				if sep >= 0 {
+					curIndexKey = keyStr[:sep]
+					curPK = keyStr[sep+1:]
+				} else {
+					curIndexKey = keyStr
+					curPK = ""
+				}
+			}
+		} else {
+			sep := strings.LastIndexByte(keyStr, 0)
+			if sep >= 0 {
+				curIndexKey = keyStr[:sep]
+				curPK = keyStr[sep+1:]
+			} else {
+				curIndexKey = keyStr
+				curPK = ""
+			}
+		}
+
+		// Boundary checks
+		if !c.desc {
+			if c.hasHigh && compareCompositePrefix(curIndexKey, c.highKey) > 0 {
+				c.eof = true
+				return false
+			}
+			if c.hasLow && compareCompositePrefix(curIndexKey, c.lowKey) < 0 {
 				continue
 			}
-			c.currRec = rec
-			c.currRow = storage.Row{}
-			if c.matchesRecord(rec) {
-				return true
-			}
-			continue
-		}
-		c.currRow = row
-		c.currRec = nil
-		if c.matchesRow(row) {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *wtFilteredIndexCursor) matchesRecord(rec storage.Record) bool {
-	if c.idx == nil {
-		return false
-	}
-	key := storage.ExtractIndexKeyFromRecord(rec, c.idx)
-	if key.IsNull {
-		if (c.low != nil && !c.low.IsNull) || (c.high != nil && !c.high.IsNull) {
-			return false
-		}
-	}
-	if len(c.idx.Columns) > 1 && ((c.low != nil && c.low.Type != storage.TypeVarChar) || (c.high != nil && c.high.Type != storage.TypeVarChar)) {
-		if firstVal, ok := rec.Get(c.idx.Columns[0]); ok {
-			if c.low != nil && firstVal.Compare(*c.low) < 0 {
+		} else {
+			if c.hasLow && compareCompositePrefix(curIndexKey, c.lowKey) < 0 {
+				c.eof = true
 				return false
 			}
-			if c.high != nil && firstVal.Compare(*c.high) > 0 {
-				return false
+			if c.hasHigh && compareCompositePrefix(curIndexKey, c.highKey) > 0 {
+				continue
 			}
-			return true
 		}
+
+		c.currPK = curPK
+		c.currKey = curIndexKey
+		return true
 	}
-	if c.low != nil && key.Compare(*c.low) < 0 {
-		return false
-	}
-	if c.high != nil && key.Compare(*c.high) > 0 {
-		return false
-	}
-	return true
 }
 
-func (c *wtFilteredIndexCursor) matchesRow(row storage.Row) bool {
-	if c.idx == nil || c.schema == nil {
-		return false
+func (c *wtIndexBTreeCursor) Row() (storage.Row, error) {
+	if c.closed || c.cur == nil || c.eof || c.currPK == "" {
+		return storage.Row{}, fmt.Errorf("cursor closed or out of range")
 	}
-	var key storage.Value
-	if c.idx.IsExpression() {
-		colName := c.idx.ExprColumn
-		if colName == "" && len(c.idx.Columns) > 0 {
-			colName = c.idx.Columns[0]
-		}
-		if _, colIdx, found := c.schema.FindColumn(colName); found && colIdx >= 0 && colIdx < len(row.Values) {
-			docVal := row.Values[colIdx]
-			if !docVal.IsNull {
-				key = storage.ExtractJSONIndexKey(docVal.String(), c.idx.ExprPath)
-			} else {
-				key = storage.NullValue(storage.TypeVarChar)
-			}
-		} else {
-			return false
-		}
-	} else if len(c.idx.Columns) == 1 {
-		if _, colIdx, found := c.schema.FindColumn(c.idx.Columns[0]); found && colIdx >= 0 && colIdx < len(row.Values) {
-			key = row.Values[colIdx]
-		} else {
-			return false
-		}
-	} else if len(c.idx.Columns) > 1 {
-		var sb strings.Builder
-		for i, cName := range c.idx.Columns {
-			if i > 0 {
-				sb.WriteByte(0)
-			}
-			if _, colIdx, found := c.schema.FindColumn(cName); found && colIdx >= 0 && colIdx < len(row.Values) {
-				sb.WriteString(storage.EncodeIndexKeyPart(row.Values[colIdx]))
-			} else {
-				sb.WriteString("NULL")
-			}
-		}
-		key = storage.StringValue(sb.String())
+	pkCol, err := c.tbl.PrimaryKeyColumn()
+	if err != nil {
+		return storage.Row{}, err
+	}
+	pkVal := storage.ParsePKValue(c.currPK, pkCol.Type)
+	return c.tx.GetRow(c.tbl.Name, pkVal)
+}
+
+func (c *wtIndexBTreeCursor) Record() (storage.Record, error) {
+	if c.closed || c.cur == nil || c.eof || c.currPK == "" {
+		return nil, fmt.Errorf("cursor closed or out of range")
+	}
+	pkCol, err := c.tbl.PrimaryKeyColumn()
+	if err != nil {
+		return nil, err
+	}
+	pkVal := storage.ParsePKValue(c.currPK, pkCol.Type)
+	row, err := c.tx.GetRow(c.tbl.Name, pkVal)
+	if err != nil {
+		return nil, err
+	}
+	return c.tbl.RowToRecord(row), nil
+}
+
+func (c *wtIndexBTreeCursor) RawTuple() ([]byte, bool) {
+	if c.closed || c.cur == nil || c.eof || c.currPK == "" {
+		return nil, false
+	}
+	c.tx.mu.Lock()
+	defer c.tx.mu.Unlock()
+	pkCol, err := c.tbl.PrimaryKeyColumn()
+	if err != nil {
+		return nil, false
+	}
+	pkVal := storage.ParsePKValue(c.currPK, pkCol.Type)
+	data, err := c.tx.getRawBytesLocked(c.tbl.Name, pkVal)
+	if err != nil || len(data) == 0 {
+		return nil, false
+	}
+	return data, true
+}
+
+func (c *wtIndexBTreeCursor) Close() error {
+	if c.closed || c.cur == nil {
+		return nil
+	}
+	c.closed = true
+	cur := c.cur
+	c.cur = nil
+	if c.sess != nil && c.uri != "" {
+		c.sess.releaseCursor(c.uri, cur)
 	} else {
-		return false
+		C.go_wt_cursor_close(cur)
 	}
-
-	if key.IsNull {
-		if (c.low != nil && !c.low.IsNull) || (c.high != nil && !c.high.IsNull) {
-			return false
-		}
-	}
-	if len(c.idx.Columns) > 1 && ((c.low != nil && c.low.Type != storage.TypeVarChar) || (c.high != nil && c.high.Type != storage.TypeVarChar)) {
-		if _, colIdx, found := c.schema.FindColumn(c.idx.Columns[0]); found && colIdx >= 0 && colIdx < len(row.Values) {
-			firstVal := row.Values[colIdx]
-			if c.low != nil && firstVal.Compare(*c.low) < 0 {
-				return false
-			}
-			if c.high != nil && firstVal.Compare(*c.high) > 0 {
-				return false
-			}
-			return true
-		}
-	}
-	if c.low != nil && key.Compare(*c.low) < 0 {
-		return false
-	}
-	if c.high != nil && key.Compare(*c.high) > 0 {
-		return false
-	}
-	return true
-}
-
-func (c *wtFilteredIndexCursor) Record() (storage.Record, error) {
-	if c.currRec != nil {
-		return c.currRec, nil
-	}
-	if len(c.currRow.Values) > 0 && c.schema != nil {
-		return c.schema.RowToRecord(c.currRow), nil
-	}
-	return c.base.Record()
-}
-
-func (c *wtFilteredIndexCursor) Row() (storage.Row, error) {
-	if len(c.currRow.Values) > 0 {
-		return c.currRow, nil
-	}
-	return c.base.Row()
-}
-
-func (c *wtFilteredIndexCursor) RawTuple() ([]byte, bool) {
-	if c.hasRaw {
-		return c.currRaw, true
-	}
-	return nil, false
-}
-
-func (c *wtFilteredIndexCursor) Close() error {
-	return c.base.Close()
+	return nil
 }
 
 func (tx *WTTx) Commit() error {
@@ -2966,6 +3264,18 @@ func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes [
 			return wtOpError("cursor put", int(ret))
 		}
 	}
+	if len(tbl.Indexes) > 0 {
+		if rec, err := decodeRecord(tbl, recBytes); err == nil {
+			for _, idx := range tbl.Indexes {
+				idxURI := tbl.IndexURI(idx.Name)
+				if idxCur, err := tx.sess.acquireCursor(idxURI); err == nil {
+					k, v, _ := formatIndexKeyValue(rec, &idx, pkStr)
+					_ = insertIndexEntry(idxCur, k, v)
+					tx.sess.releaseCursor(idxURI, idxCur)
+				}
+			}
+		}
+	}
 	return nil
 }
 
@@ -2999,6 +3309,21 @@ func (tx *WTTx) removeRawLocked(tableName string, pk storage.Value) error {
 	cKey, cleanup := fastCString(pkStr, keyBuf[:])
 	if cleanup != nil {
 		defer cleanup()
+	}
+
+	if len(tbl.Indexes) > 0 {
+		if oldData, err := tx.getRawBytesLocked(tableName, pk); err == nil && len(oldData) > 0 {
+			if oldRec, err := decodeRecord(tbl, oldData); err == nil {
+				for _, idx := range tbl.Indexes {
+					idxURI := tbl.IndexURI(idx.Name)
+					if idxCur, err := tx.sess.acquireCursor(idxURI); err == nil {
+						k, _, _ := formatIndexKeyValue(oldRec, &idx, pkStr)
+						_ = removeIndexEntry(idxCur, k)
+						tx.sess.releaseCursor(idxURI, idxCur)
+					}
+				}
+			}
+		}
 	}
 
 	_ = C.go_wt_cursor_remove_key(cur, cKey)

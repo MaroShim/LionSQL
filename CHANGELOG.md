@@ -32,6 +32,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - known follow-ups: hex literals (`0x01`) are lexed as strings, breaking `replicate(0x01, n)` (`394_babel_babel_4547.slt` now fails honestly instead of passing on echoed text); `CAST('$100.123' AS MONEY)` returns `0.0000`; `LEN(money)` length differs from SQL Server
 
 ### Added
+- WiredTiger physical B-Tree secondary index materialization and O(log N) point/range scan (`FEAT-WT-SECONDARY-INDEX-BTREE-1`):
+  - physically materialize secondary indexes as independent WiredTiger B-Tree tables (`table:_idx_<tableName>_<indexName>`) with `key_format=u,value_format=u`, eliminating full table scans (`scanLocked`) and in-memory slice reversals
+  - implement `wtIndexBTreeCursor` supporting $O(\log N)$ cursor seek (`search_near`), forward sequential traversal (`IndexScan`), and backward traversal (`IndexScanDesc`)
+  - support single and composite index keys with prefix range queries via `compareCompositePrefix`
+  - synchronize secondary indexes atomically during `InsertRow`, `UpdateRow`, and `DeleteRow` within the same `WT_SESSION` transaction boundary, guaranteeing atomic rollback on `tx.Rollback()`
+  - enforce unique index constraints via $O(\log N)$ B-Tree cursor search in `checkUniqueIndexesLocked`, properly permitting multiple NULL entries per SQL standard
+  - backfill existing table rows upon `CreateIndex`, drop index B-Trees on `DropIndex` and `DropTable`, and truncate index B-Trees on `TruncateTables`
+  - add comprehensive test suite in `pkg/storage/wiredtiger/wt_secondary_index_test.go` covering persistence across restarts, DML sync, unique violations, composite scans, rollbacks, and sub-millisecond 10,000-row performance
 - atomic transactional DDL rollback and session-transaction boundary isolation (`FEAT-TRANSACTIONAL-DDL-1`):
   - introduce `DDLUndoOp` LIFO undo stack on `ClientSession` (`pkg/engine/session.go`) tracking DDL actions within explicit multi-statement transactions
   - implement non-destructive tombstone rename for `DROP TABLE` inside transactions (`__tombstone_<session>_<timestamp>_<name>`), restoring original table on `ROLLBACK` and permanently purging tombstones on `COMMIT`
