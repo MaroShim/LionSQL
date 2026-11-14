@@ -26,6 +26,7 @@
 # Flags:
 #   --dry-run      Preview actions and changelog output without modifying files
 #   --skip-tests   Bypass 'go test' verification step (fast path)
+#   --skip-audit   Bypass Gate 0 Dual-AI pre-release audit check (emergency hotfixes only)
 #   --no-push      Commit and tag locally without pushing to remote origin
 #   --push-only    Push an existing local release commit/tag and create GitHub release
 # ==============================================================================
@@ -54,6 +55,7 @@ TODO_FILE="${ROOT_DIR}/TODO.md"
 # Defaults
 DRY_RUN=false
 SKIP_TESTS=false
+SKIP_AUDIT=false
 NO_PUSH=false
 PUSH_ONLY=false
 SKIP_GH_RELEASE=false
@@ -67,6 +69,9 @@ for arg in "$@"; do
             ;;
         --skip-tests)
             SKIP_TESTS=true
+            ;;
+        --skip-audit)
+            SKIP_AUDIT=true
             ;;
         --no-push)
             NO_PUSH=true
@@ -252,6 +257,47 @@ echo -e "Audit Protocol : ${CLR_GREEN}Verified via Dual-AI Adversarial Audit Pro
 # ------------------------------------------------------------------------------
 echo ""
 echo -e "${CLR_BLUE}[2/5] Running Verification Pipeline...${CLR_RESET}"
+
+# Gate 0: Dual-AI Pre-Release Audit Gate
+echo -e "[Gate 0/6] Verifying Dual-AI Pre-Release Adversarial Audit Protocol..."
+if [ "${SKIP_AUDIT}" = true ]; then
+    echo -e "${CLR_YELLOW}Warning: Skipping Dual-AI audit gate (--skip-audit specified).${CLR_RESET}"
+else
+    DIFF_PROD_COUNT=$(git diff --name-only "${PREV_TAG:-HEAD~1}" HEAD -- 'pkg/**/*.go' 'cmd/**/*.go' | grep -v '_test\.go$' | grep -c . || true)
+    if [ "${DIFF_PROD_COUNT}" -gt 0 ]; then
+        AUDIT_REPORT=""
+        for candidate in \
+            "${ROOT_DIR}/notes/reports/AUDIT_${TAG}_CONSOLIDATED.ko.md" \
+            "${ROOT_DIR}/notes/reports/AUDIT_${VER}_CONSOLIDATED.ko.md" \
+            "${ROOT_DIR}/notes/reports/AUDIT_v${VER}_CONSOLIDATED.ko.md"; do
+            if [ -f "${candidate}" ]; then
+                AUDIT_REPORT="${candidate}"
+                break
+            fi
+        done
+
+        if [ -z "${AUDIT_REPORT}" ]; then
+            echo -e "${CLR_RED}Gate 0 FAILED: Pre-release Dual-AI audit report not found for ${TAG}.${CLR_RESET}"
+            echo -e "Modified production Go files: ${DIFF_PROD_COUNT}"
+            echo -e "Please run './scripts/audit_diff.sh ${PREV_TAG:-} HEAD ${TAG}' to perform Dual-AI audit."
+            echo -e "Expected consolidated report: notes/reports/AUDIT_${TAG}_CONSOLIDATED.ko.md"
+            echo -e "Pass --skip-audit only for emergency hotfixes."
+            exit 1
+        fi
+
+        UNRESOLVED_P0=$(grep -E '^- \[ \] \*\*P0\*\*|^\- \[ \] P0' "${AUDIT_REPORT}" || true)
+        if [ -n "${UNRESOLVED_P0}" ]; then
+            echo -e "${CLR_RED}Gate 0 FAILED: Unresolved P0 audit defects found in ${AUDIT_REPORT}:${CLR_RESET}"
+            echo "${UNRESOLVED_P0}"
+            echo -e "All P0 critical defects must be resolved and verified before release."
+            exit 1
+        fi
+
+        echo -e "${CLR_GREEN}Gate 0 OK: Dual-AI Audit verified ($(basename "${AUDIT_REPORT}"), 0 unresolved P0 items)${CLR_RESET}"
+    else
+        echo -e "${CLR_GREEN}Gate 0 OK: Zero production Go source changes since ${PREV_TAG:-HEAD~1}${CLR_RESET}"
+    fi
+fi
 
 echo "Compiling 3 official release binaries..."
 # 1. macOS Apple Silicon (arm64)

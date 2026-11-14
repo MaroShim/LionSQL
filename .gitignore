@@ -27,3 +27,5 @@ data/WiredTiger*
 
 # Scratch & Temporary
 scratch/
+notes/reports/prompts/
+

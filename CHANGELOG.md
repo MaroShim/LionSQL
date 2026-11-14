@@ -32,6 +32,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - known follow-ups: hex literals (`0x01`) are lexed as strings, breaking `replicate(0x01, n)` (`394_babel_babel_4547.slt` now fails honestly instead of passing on echoed text); `CAST('$100.123' AS MONEY)` returns `0.0000`; `LEN(money)` length differs from SQL Server
 
 ### Added
+- automate Dual-AI (Antigravity & Claude) pre-release audit pipeline (`FEAT-DUAL-AI-AUDIT-PIPELINE-1`):
+  - enhance `scripts/audit_diff.sh` to extract production Go diffs between release tags and generate structured 4-axis adversarial audit prompts and consolidated report templates (`notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`)
+  - integrate Gate 0 into `scripts/release.sh`, enforcing that a pre-release audit report exists with zero unresolved P0 defects before compiling release binaries and tagging
+  - support `--skip-audit` flag in `scripts/release.sh` strictly for emergency hotfixes
 - codify canonical physical storage specifications and architecture references:
   - add `notes/PHYSICAL_TABLE_FORMAT.ko.md` defining single canonical V2 binary tuple codec (`0x02`), 4-byte aligned fixed header, flags, $O(1)$ Instant Tail DDL, and secondary index B-Tree key/value codecs (`GEMINI.md` [Invariant 13, 15])
   - add creation and revision dates, cross-links, and specifications in `notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md` and `notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`
