@@ -5,7 +5,7 @@
 > - **최종 갱신일**: 2026-11-14
 > - **과제 식별 코드**: `FEAT-TRANSACTIONAL-DDL-1`
 > - **구현 상태**: 구현 완료 (`DONE`, 커밋 `6aa648ac`)
-> - **공식 물리 규격서**: [`PHYSICAL_TABLE_FORMAT.ko.md`](PHYSICAL_TABLE_FORMAT.ko.md) (물리 테이블 포맷 규격서), [`SECONDARY_INDEX_FORMAT.ko.md`](SECONDARY_INDEX_FORMAT.ko.md) (보조 인덱스 물리 규격서)
+> - **공식 물리 규격서**: [`PHYSICAL_TABLE_FORMAT.ko.md`](PHYSICAL_TABLE_FORMAT.ko.md) (통합 물리 스토리지 포맷 공식 규격서)
 > - **연계 불변식**: `GEMINI.md` [Invariant 13: Single Canonical V2 Binary Tuple Codec], [Invariant 15: Canonical Secondary Index Key/Value Codec], `notes/ENGINEERING_CONTEXT.ko.md` [불변식 ㉚], [불변식 ㉜]
 
 ---

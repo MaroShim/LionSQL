@@ -390,7 +390,7 @@
      - 고유 인덱스(`Unique`): `Key = indexKey`, `Value = pk`. 단, `NULL` 값은 SQL 표준에 따라 비고유 포맷(`\x00NULL\x00 + pk`, Value `""`)으로 분기 저장하여 다중 NULL 저장을 안전하게 수용함.
      - 비고유 인덱스: `Key = indexKey + "\x00" + pk`, `Value = ""` 구조로 B-Tree 고유성을 보장하면서 동일 키를 가진 행들을 기본 키 순으로 밀집 정렬함.
   4. **단일 트랜잭션 원자적 동기화 및 풀스캔 영구 배제**:
-     - 기본 테이블과 모든 보조 인덱스 갱신은 단일 `WT_SESSION` 트랜잭션 경계 내에서 원자적으로 실행되며, `IndexScan`/`IndexScanDesc`/`checkUniqueIndexesLocked`는 커서 B-Tree 직접 탐색(`search_near`, `search`)만을 사용하고 기존의 전체 테이블 풀스캔(`scanLocked`)을 100% 영구 배제함. 상세 규격: [`notes/SECONDARY_INDEX_FORMAT.ko.md`](notes/SECONDARY_INDEX_FORMAT.ko.md).
+     - 기본 테이블과 모든 보조 인덱스 갱신은 단일 `WT_SESSION` 트랜잭션 경계 내에서 원자적으로 실행되며, `IndexScan`/`IndexScanDesc`/`checkUniqueIndexesLocked`는 커서 B-Tree 직접 탐색(`search_near`, `search`)만을 사용하고 기존의 전체 테이블 풀스캔(`scanLocked`)을 100% 영구 배제함. 상세 규격: [`notes/PHYSICAL_TABLE_FORMAT.ko.md`](notes/PHYSICAL_TABLE_FORMAT.ko.md).
 
 ---
 

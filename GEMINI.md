@@ -166,7 +166,7 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
 4. **Single-Transaction Parity & Zero Full-Scan Invariant**:
    - Primary table mutations and all associated secondary index B-Tree modifications execute strictly within the same `WT_SESSION` transaction boundary, guaranteeing atomic rollback on `tx.Rollback()`.
    - `IndexScan`, `IndexScanDesc`, and `checkUniqueIndexesLocked` must exclusively utilize direct B-Tree cursor operations (`search_near`, `search`, `prev`), permanently banning full-table sequential scans (`scanLocked`) and in-memory slice reversals.
-   - Full specification codified in [`notes/SECONDARY_INDEX_FORMAT.ko.md`](notes/SECONDARY_INDEX_FORMAT.ko.md).
+   - Full specification codified in [`notes/PHYSICAL_TABLE_FORMAT.ko.md`](notes/PHYSICAL_TABLE_FORMAT.ko.md).
 
 ---
 
