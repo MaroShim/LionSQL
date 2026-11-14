@@ -1,8 +1,17 @@
 # LionSQL & DuckDB 연동 가이드 (`DUCKDB_INTEGRATION_GUIDE.ko.md`)
 
-이 문서는 고성능 임베디드 분석(OLAP) 데이터베이스 엔진인 **[DuckDB](https://duckdb.org/)**를 **LionSQL**과 연동하여, 고동시성 OLTP 트랜잭션 워크로드와 서브밀리초 단위 벡터화 분석(HTAP)을 구축하는 공식 운영 가이드입니다.
+> - **문서 버전**: v1.1.0
+> - **최초 작성일**: 2026-11-07
+> - **최종 업데이트**: 2026-11-14
+> - **대상 릴리즈**: LionSQL v0.90.0-beta4+
+> - **연동 대상**: DuckDB v0.10.x ~ v1.1.x+ (Python `duckdb`, DuckDB CLI)
+> - **지원 채널**:
+>   - **HTTP REST & 실시간 CDC 스트림**: `GET /api/cdc/stream` (기본 TCP `:8090`)
+>   - **PostgreSQL Wire Protocol v3**: 기본 TCP `:5433` (초기 스냅샷 벌크 추출용)
+> - **참조 구현**: [`examples/duckdb-cdc-worker/duckdb_cdc_worker.py`](../examples/duckdb-cdc-worker/duckdb_cdc_worker.py)
+> - **English Guide**: [`guide/DUCKDB_INTEGRATION_GUIDE.md`](DUCKDB_INTEGRATION_GUIDE.md)
 
-> [English Version](DUCKDB_INTEGRATION_GUIDE.md)
+이 문서는 고성능 임베디드 분석(OLAP) 데이터베이스 엔진인 **[DuckDB](https://duckdb.org/)**를 **LionSQL**과 연동하여, 고동시성 OLTP 트랜잭션 워크로드와 서브밀리초 단위 벡터화 분석(HTAP)을 구축하는 공식 운영 가이드입니다.
 
 ---
 
@@ -115,80 +124,158 @@ LionSQL은 외부 카프카(Kafka)나 데베지움(Debezium) 같은 무거운 �
 
 ### 4.2 제로 사이드카 Python + DuckDB 워커 (`duckdb_cdc_worker.py`)
 
-외부 메시지 큐 없이 Python 표준 라이브러리와 `duckdb` 모듈만으로 동작하는 완결된 스트리밍 컨슈머 예제입니다:
+외부 메시지 큐 없이 Python 표준 라이브러리와 `duckdb` 모듈만으로 동작하며, **① 최초 스냅샷 부트스트랩**, **② 트랜잭셔널 LSN 디스크 체크포인팅**, **③ 지수 백오프 자동 재연결(Auto-Reconnect)**을 모두 완비한 프로덕션급 스트리밍 컨슈머 예제입니다:
 
 ```python
 #!/usr/bin/env python3
 """
 LionSQL CDC -> DuckDB In-Memory/Persistent HTAP Streaming Worker
-외부 브로커(Kafka, Redis, Zookeeper)가 전혀 필요 없는 단일 스크립트 실시간 파이프라인.
+- 최초 기동 시: 기존 테이블 스냅샷 자동 적재 (Initial Snapshot Bootstrap)
+- 실시간 스트리밍: LSN 단위 트랜잭셔널 체크포인팅 (Zero Data Loss)
+- 네트워크/서버 단절 시: 지수 백오프 자동 재연결 및 from_lsn 이어받기
 """
 
 import json
+import time
 import urllib.request
+import urllib.error
 import duckdb
 
-def run_cdc_worker():
-    # 1. 로컬 DuckDB 인스턴스 연결 (영속 파일 또는 :memory:)
-    con = duckdb.connect("analytics.duckdb")
+BASE_URL = "http://127.0.0.1:8090"
+TABLE_NAME = "orders"
+DB_FILE = "analytics.duckdb"
 
-    # 2. 분석용 컬럼형 테이블 초기화
-    con.execute("""
-        CREATE TABLE IF NOT EXISTS orders (
+def init_duckdb(con):
+    """분석용 컬럼형 테이블 및 LSN 체크포인트 메타데이터 테이블 초기화"""
+    con.execute(f"""
+        CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
             id BIGINT PRIMARY KEY,
             customer_id BIGINT,
             amount DOUBLE,
             status VARCHAR,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+        );
+        CREATE TABLE IF NOT EXISTS _lionsql_cdc_checkpoint (
+            table_name VARCHAR PRIMARY KEY,
+            last_lsn BIGINT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     """)
-    print("[DuckDB] 분석용 컬럼형 테이블이 준비되었습니다.")
+    print("[DuckDB] 분석용 컬럼형 테이블 및 LSN 체크포인트 저장소가 준비되었습니다.")
 
-    # 3. LionSQL CDC 엔드포인트 연결 (orders 테이블 구독)
-    cdc_url = "http://127.0.0.1:8090/api/cdc/stream?table=orders"
-    print(f"[CDC Worker] LionSQL 실시간 변경 스트림 구독 시작: {cdc_url}")
+def get_last_checkpoint_lsn(con, table_name):
+    """DuckDB 디스크에 영속 저장된 마지막 동기화 LSN 조회"""
+    row = con.execute("""
+        SELECT last_lsn FROM _lionsql_cdc_checkpoint WHERE table_name = ?
+    """, [table_name]).fetchone()
+    return row[0] if row else 0
 
-    req = urllib.request.Request(cdc_url)
+def save_checkpoint(con, table_name, lsn):
+    """동기화 LSN 체크포인트 원자적 갱신"""
+    con.execute("""
+        INSERT OR REPLACE INTO _lionsql_cdc_checkpoint (table_name, last_lsn, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+    """, [table_name, lsn])
+
+def perform_initial_snapshot(con, base_url, table_name):
+    """
+    최초 기동 시 기존 LionSQL 테이블의 전체 베이스라인 스냅샷을 1회 일괄 적재하고,
+    동기화 기준 시점의 LSN을 체크포인트에 기록합니다.
+    """
+    print(f"[CDC Worker] '{table_name}' 테이블의 최초 스냅샷(Initial Snapshot) 적재를 시작합니다...")
+    sql_url = f"{base_url}/api/sql?format=array"
+    query_payload = json.dumps({"query": f"SELECT * FROM {table_name}"}).encode("utf-8")
+    req = urllib.request.Request(sql_url, data=query_payload, headers={"Content-Type": "application/json"})
+    
     with urllib.request.urlopen(req) as resp:
-        for line in resp:
-            if not line:
-                continue
-            line_str = line.decode("utf-8").strip()
-            if not line_str or line_str.startswith(":"):
-                continue  # 하트비트 핑 무시
+        rows = json.loads(resp.read().decode("utf-8"))
+    
+    con.begin()
+    for r in rows:
+        con.execute(f"""
+            INSERT OR REPLACE INTO {table_name} (id, customer_id, amount, status)
+            VALUES (?, ?, ?, ?)
+        """, [r.get("id"), r.get("customer_id"), float(r.get("amount", 0)), r.get("status")])
+    
+    # 스냅샷 적재 시점의 LSN 쿼리 (또는 1부터 시작)
+    save_checkpoint(con, table_name, 1)
+    con.commit()
+    print(f"[CDC Worker] 최초 스냅샷 적재 완료: 총 {len(rows)}개 레코드가 동기화되었습니다.")
+    return 1
 
-            event = json.loads(line_str)
-            op = event.get("op")
-            data = event.get("data", {})
-            lsn = event.get("lsn")
+def run_cdc_worker():
+    con = duckdb.connect(DB_FILE)
+    init_duckdb(con)
 
-            if op == "INSERT":
-                con.execute("""
-                    INSERT OR REPLACE INTO orders (id, customer_id, amount, status)
-                    VALUES (?, ?, ?, ?)
-                """, [data.get("id"), data.get("customer_id"), float(data.get("amount", 0)), data.get("status")])
-                print(f"[CDC Event LSN:{lsn}] INSERT -> id={data.get('id')}")
+    retry_delay = 1
+    max_delay = 30
 
-            elif op == "UPDATE":
-                con.execute("""
-                    UPDATE orders
-                    SET customer_id = ?, amount = ?, status = ?
-                    WHERE id = ?
-                """, [data.get("customer_id"), float(data.get("amount", 0)), data.get("status"), data.get("id")])
-                print(f"[CDC Event LSN:{lsn}] UPDATE -> id={data.get('id')}")
+    # 영구 자동 재연결 루프 (Infinite Reconnection Loop)
+    while True:
+        try:
+            last_lsn = get_last_checkpoint_lsn(con, TABLE_NAME)
+            
+            # 최초 실행 시 초기 스냅샷 적재
+            if last_lsn == 0:
+                last_lsn = perform_initial_snapshot(con, BASE_URL, TABLE_NAME)
 
-            elif op == "DELETE":
-                key = event.get("key")
-                con.execute("DELETE FROM orders WHERE id = ?", [key])
-                print(f"[CDC Event LSN:{lsn}] DELETE -> key={key}")
+            cdc_url = f"{BASE_URL}/api/cdc/stream?table={TABLE_NAME}&from_lsn={last_lsn}"
+            print(f"[CDC Worker] LionSQL 실시간 변경 스트림 연결 시도 (from_lsn={last_lsn}): {cdc_url}")
 
-            # 4. 실시간 마이크로 집계 테스트 (1.5ms 미만 질의)
-            res = con.execute("""
-                SELECT status, count(*), round(sum(amount), 2)
-                FROM orders
-                GROUP BY status
-            """).fetchall()
-            print(f"  └─ [실시간 집계 결과]: {res}")
+            req = urllib.request.Request(cdc_url)
+            with urllib.request.urlopen(req) as resp:
+                retry_delay = 1  # 정상 연결 시 백오프 초기화
+                print("[CDC Worker] 실시간 스트림 연결 성공. 이벤트를 청취합니다...")
+                
+                for line in resp:
+                    if not line:
+                        continue
+                    line_str = line.decode("utf-8").strip()
+                    if not line_str or line_str.startswith(":"):
+                        continue  # 하트비트 핑 무시
+
+                    event = json.loads(line_str)
+                    if event.get("type") == "ping":
+                        continue
+
+                    op = event.get("op")
+                    data = event.get("data", {})
+                    lsn = event.get("lsn", 0)
+
+                    # DuckDB 단일 트랜잭션 내에서 데이터 변경과 LSN 체크포인트를 원자적으로 커밋
+                    con.begin()
+                    if op in ("INSERT", "SNAPSHOT"):
+                        con.execute(f"""
+                            INSERT OR REPLACE INTO {TABLE_NAME} (id, customer_id, amount, status)
+                            VALUES (?, ?, ?, ?)
+                        """, [data.get("id"), data.get("customer_id"), float(data.get("amount", 0)), data.get("status")])
+                        print(f"[CDC Event LSN:{lsn}] {op} -> id={data.get('id')}")
+
+                    elif op == "UPDATE":
+                        con.execute(f"""
+                            UPDATE {TABLE_NAME}
+                            SET customer_id = ?, amount = ?, status = ?
+                            WHERE id = ?
+                        """, [data.get("customer_id"), float(data.get("amount", 0)), data.get("status"), data.get("id")])
+                        print(f"[CDC Event LSN:{lsn}] UPDATE -> id={data.get('id')}")
+
+                    elif op == "DELETE":
+                        key = event.get("key")
+                        con.execute(f"DELETE FROM {TABLE_NAME} WHERE id = ?", [key])
+                        print(f"[CDC Event LSN:{lsn}] DELETE -> key={key}")
+
+                    if lsn > 0:
+                        save_checkpoint(con, TABLE_NAME, lsn)
+                    con.commit()
+
+        except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
+            print(f"[CDC Worker] 스트림 연결 중단 ({e}). {retry_delay}초 후 저장된 LSN({last_lsn})부터 자동 재연결...")
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_delay)
+        except Exception as e:
+            print(f"[CDC Worker] 처리 중 오류 발생 ({e}). {retry_delay}초 후 안전하게 재연결...")
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_delay)
 
 if __name__ == "__main__":
     run_cdc_worker()

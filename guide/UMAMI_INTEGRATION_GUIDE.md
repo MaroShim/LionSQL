@@ -1,8 +1,11 @@
-# LionSQL Umami Integration Guide
+# LionSQL Umami Integration Guide (`UMAMI_INTEGRATION_GUIDE.md`)
 
-> - **Created**: 2026-11-01
+> - **Document Version**: v1.1.0
+> - **Initial Created**: 2026-11-01
+> - **Last Updated**: 2026-11-14
 > - **Target Application**: Umami v2 (Web Analytics Platform)
-> - **Protocol**: PostgreSQL Wire Protocol v3 (`TCP :5433`)
+> - **Protocol**: **PostgreSQL Wire Protocol v3** (`TCP :5433`)
+> - **한국어 문서**: [`guide/UMAMI_INTEGRATION_GUIDE.ko.md`](UMAMI_INTEGRATION_GUIDE.ko.md)
 
 ---
 

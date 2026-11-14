@@ -1,4 +1,12 @@
-# Vikunja Integration Guide (LionSQL PGWire)
+# Vikunja Integration Guide (`VIKUNJA_INTEGRATION_GUIDE.md`)
+
+> - **Document Version**: v1.0.0
+> - **Initial Created**: 2026-11-01
+> - **Last Updated**: 2026-11-14
+> - **Target Release**: LionSQL v0.90.0-beta4+
+> - **Integration Target**: Vikunja (`vikunja/vikunja:latest`, Go XORM based)
+> - **Supported Wire Protocol**: **PostgreSQL Wire Protocol v3** (default TCP `:5433`)
+> - **한국어 문서**: [`guide/VIKUNJA_INTEGRATION_GUIDE.ko.md`](VIKUNJA_INTEGRATION_GUIDE.ko.md)
 
 This document provides instructions for integrating **Vikunja**, an open-source task management and Kanban platform (alternative to Trello, Asana, and Todoist), with LionSQL using the PostgreSQL Wire Protocol (PGWire v3, default port `:5433`, WiredTiger storage engine).
 

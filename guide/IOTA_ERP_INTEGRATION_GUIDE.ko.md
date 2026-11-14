@@ -1,7 +1,8 @@
 # LionSQL 기반 IOTA-SDK Go ERP 구축 및 운영 공식 연동 가이드 (`guide/IOTA_ERP_INTEGRATION_GUIDE.ko.md`)
 
-> - **문서 버전**: v1.0.0
+> - **문서 버전**: v1.1.0
 > - **최초 작성일**: 2026-10-31
+> - **최종 업데이트**: 2026-11-14
 > - **대상 릴리즈**: LionSQL v0.90.0-beta4+
 > - **연동 대상**: IOTA SDK Go ERP (github.com/iota-uz/iota-sdk, 공식 소스 무수정 연동)
 > - **데이터베이스 드라이버**: `jackc/pgx/v5` (`pgxpool`)
@@ -9,6 +10,7 @@
 > - **참조 문서**:
 >   - 실전 연동 검증 보고서: [`notes/IOTA_ERP_INTEGRATION_REPORT.ko.md`](../notes/reports/IOTA_ERP_INTEGRATION_REPORT.ko.md)
 >   - Gitea 연동 가이드: [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md)
+> - **English Guide**: [`guide/IOTA_ERP_INTEGRATION_GUIDE.md`](IOTA_ERP_INTEGRATION_GUIDE.md)
 
 ---
 

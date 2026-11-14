@@ -1,5 +1,15 @@
 # Metabase BI 연동 가이드 (`METABASE_INTEGRATION_GUIDE.ko.md`)
 
+> - **문서 버전**: v1.0.0
+> - **최초 작성일**: 2026-11-01
+> - **최종 업데이트**: 2026-11-14
+> - **대상 릴리즈**: LionSQL v0.90.0-beta4+
+> - **연동 대상**: Metabase (Docker 공식 이미지 `metabase/metabase:latest`)
+> - **지원 유선 프로토콜**:
+>   - **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
+>   - **Microsoft SQL Server TDS 7.x/8.0** (기본 TCP `:1433`)
+> - **English Guide**: [`guide/METABASE_INTEGRATION_GUIDE.md`](METABASE_INTEGRATION_GUIDE.md)
+
 이 문서는 엔터프라이즈 오픈소스 BI 대시보드 도구인 **[Metabase](https://www.metabase.com/)**를 LionSQL에 연결하여 비주얼 쿼리 빌더 및 SQL 분석 환경을 구성하는 공식 운영 가이드입니다.
 
 LionSQL은 **PostgreSQL Wire 프로토콜(TCP :5433)**과 **Microsoft SQL Server TDS 프로토콜(TCP :1433)**을 동시에 지원하므로, 사용 환경과 기호에 따라 원하는 드라이버를 선택하여 연결할 수 있습니다.

@@ -1,7 +1,8 @@
 # LionSQL 기반 Grafana 구축 및 듀얼 데이터 소스 공식 연동 가이드 (`guide/GRAFANA_INTEGRATION_GUIDE.ko.md`)
 
-> - **문서 버전**: v1.0.0
+> - **문서 버전**: v1.1.0
 > - **최초 작성일**: 2026-10-31
+> - **최종 업데이트**: 2026-11-14
 > - **대상 릴리즈**: LionSQL v0.90.0-beta4+
 > - **연동 대상**: Grafana v10.x ~ v13.x+ (github.com/grafana/grafana, 공식 소스 무수정 연동)
 > - **데이터베이스 드라이버**:

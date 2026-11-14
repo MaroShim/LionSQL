@@ -1,4 +1,12 @@
-# Vikunja 연동 가이드 (LionSQL PGWire)
+# Vikunja 연동 가이드 (`VIKUNJA_INTEGRATION_GUIDE.ko.md`)
+
+> - **문서 버전**: v1.0.0
+> - **최초 작성일**: 2026-11-01
+> - **최종 업데이트**: 2026-11-14
+> - **대상 릴리즈**: LionSQL v0.90.0-beta4+
+> - **연동 대상**: Vikunja (`vikunja/vikunja:latest`, Go XORM 기반)
+> - **지원 유선 프로토콜**: **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
+> - **English Guide**: [`guide/VIKUNJA_INTEGRATION_GUIDE.md`](VIKUNJA_INTEGRATION_GUIDE.md)
 
 본 문서는 Trello, Asana, Todoist 등을 대체하는 직관적인 오픈소스 태스크 관리 및 프로젝트 칸반 플랫폼인 **Vikunja**를 LionSQL의 PostgreSQL Wire Protocol (PGWire v3, 기본 포트 `:5433`, WiredTiger 스토리지 엔진) 백엔드로 연동하는 방법을 설명합니다.
 

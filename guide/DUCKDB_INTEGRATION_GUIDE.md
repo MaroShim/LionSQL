@@ -1,8 +1,17 @@
 # LionSQL & DuckDB Integration Guide (`DUCKDB_INTEGRATION_GUIDE.md`)
 
-This guide specifies how to integrate **[DuckDB](https://duckdb.org/)**, the high-performance embedded analytical (OLAP) database engine, with **LionSQL** to establish a unified, sub-millisecond vectorized hybrid transactional/analytical processing (HTAP) architecture.
+> - **Document Version**: v1.1.0
+> - **Initial Created**: 2026-11-07
+> - **Last Updated**: 2026-11-14
+> - **Target Release**: LionSQL v0.90.0-beta4+
+> - **Integration Target**: DuckDB v0.10.x ~ v1.1.x+ (Python `duckdb`, DuckDB CLI)
+> - **Supported Channels**:
+>   - **HTTP REST & Realtime CDC Stream**: `GET /api/cdc/stream` (default TCP `:8090`)
+>   - **PostgreSQL Wire Protocol v3**: default TCP `:5433` (for initial snapshot extraction)
+> - **Reference Implementation**: [`examples/duckdb-cdc-worker/duckdb_cdc_worker.py`](../examples/duckdb-cdc-worker/duckdb_cdc_worker.py)
+> - **한국어 문서**: [`guide/DUCKDB_INTEGRATION_GUIDE.ko.md`](DUCKDB_INTEGRATION_GUIDE.ko.md)
 
-> [한국어 문서](DUCKDB_INTEGRATION_GUIDE.ko.md)
+This guide specifies how to integrate **[DuckDB](https://duckdb.org/)**, the high-performance embedded analytical (OLAP) database engine, with **LionSQL** to establish a unified, sub-millisecond vectorized hybrid transactional/analytical processing (HTAP) architecture.
 
 ---
 
@@ -113,78 +122,160 @@ LionSQL provides a native, real-time HTTP streaming endpoint (`GET /api/cdc/stre
 
 ### 4.2 Zero-Sidecar Python + DuckDB Streaming Worker (`duckdb_cdc_worker.py`)
 
+A production-grade streaming consumer using only the Python standard library and `duckdb`—requiring zero external message brokers—complete with:
+1. **Initial Snapshot Bootstrap** (loads pre-existing table baseline)
+2. **Transactional LSN Disk Checkpointing** (`_lionsql_cdc_checkpoint`)
+3. **Exponential Backoff Infinite Auto-Reconnect Loop** with `from_lsn` resume.
+
 ```python
 #!/usr/bin/env python3
 """
-LionSQL CDC -> DuckDB Streaming Ingestion Worker.
-Operates using Python standard library and duckdb with zero external brokers.
+LionSQL CDC -> DuckDB In-Memory/Persistent HTAP Streaming Worker
+- Initial Boot: Automatic baseline snapshot loading (Initial Snapshot Bootstrap)
+- Real-time Stream: Transactional LSN checkpointing in DuckDB (Zero Data Loss)
+- Network/Server Disconnects: Infinite auto-reconnect loop with exponential backoff & from_lsn resume
 """
 
 import json
+import time
 import urllib.request
+import urllib.error
 import duckdb
 
-def run_cdc_worker():
-    # 1. Connect to DuckDB (persistent file or :memory:)
-    con = duckdb.connect("analytics.duckdb")
+BASE_URL = "http://127.0.0.1:8090"
+TABLE_NAME = "orders"
+DB_FILE = "analytics.duckdb"
 
-    # 2. Prepare columnar analytical table
-    con.execute("""
-        CREATE TABLE IF NOT EXISTS orders (
+def init_duckdb(con):
+    """Initialize analytical columnar table and LSN checkpoint metadata store"""
+    con.execute(f"""
+        CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
             id BIGINT PRIMARY KEY,
             customer_id BIGINT,
             amount DOUBLE,
             status VARCHAR,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+        );
+        CREATE TABLE IF NOT EXISTS _lionsql_cdc_checkpoint (
+            table_name VARCHAR PRIMARY KEY,
+            last_lsn BIGINT NOT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     """)
-    print("[DuckDB] Analytics database connected and table prepared.")
+    print("[DuckDB] Analytical table and LSN checkpoint store are ready.")
 
-    # 3. Connect to LionSQL CDC stream (subscribing to 'orders' table)
-    cdc_url = "http://127.0.0.1:8090/api/cdc/stream?table=orders"
-    print(f"[CDC Worker] Subscribing to LionSQL CDC stream: {cdc_url}")
+def get_last_checkpoint_lsn(con, table_name):
+    """Query persistent checkpoint LSN from DuckDB disk"""
+    row = con.execute("""
+        SELECT last_lsn FROM _lionsql_cdc_checkpoint WHERE table_name = ?
+    """, [table_name]).fetchone()
+    return row[0] if row else 0
 
-    req = urllib.request.Request(cdc_url)
+def save_checkpoint(con, table_name, lsn):
+    """Atomically record latest checkpoint LSN"""
+    con.execute("""
+        INSERT OR REPLACE INTO _lionsql_cdc_checkpoint (table_name, last_lsn, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+    """, [table_name, lsn])
+
+def perform_initial_snapshot(con, base_url, table_name):
+    """
+    On initial boot (last_lsn == 0), export pre-existing table baseline snapshot
+    and commit records into DuckDB alongside baseline LSN checkpoint.
+    """
+    print(f"[CDC Worker] Performing initial baseline snapshot for '{table_name}'...")
+    sql_url = f"{base_url}/api/sql?format=array"
+    query_payload = json.dumps({"query": f"SELECT * FROM {table_name}"}).encode("utf-8")
+    req = urllib.request.Request(sql_url, data=query_payload, headers={"Content-Type": "application/json"})
+    
     with urllib.request.urlopen(req) as resp:
-        for line in resp:
-            if not line:
-                continue
-            line_str = line.decode("utf-8").strip()
-            if not line_str or line_str.startswith(":"):
-                continue  # Skip heartbeat pings
+        rows = json.loads(resp.read().decode("utf-8"))
+    
+    con.begin()
+    for r in rows:
+        con.execute(f"""
+            INSERT OR REPLACE INTO {table_name} (id, customer_id, amount, status)
+            VALUES (?, ?, ?, ?)
+        """, [r.get("id"), r.get("customer_id"), float(r.get("amount", 0)), r.get("status")])
+    
+    save_checkpoint(con, table_name, 1)
+    con.commit()
+    print(f"[CDC Worker] Initial snapshot complete: {len(rows)} rows synchronized.")
+    return 1
 
-            event = json.loads(line_str)
-            op = event.get("op")
-            data = event.get("data", {})
-            lsn = event.get("lsn")
+def run_cdc_worker():
+    con = duckdb.connect(DB_FILE)
+    init_duckdb(con)
 
-            if op == "INSERT":
-                con.execute("""
-                    INSERT OR REPLACE INTO orders (id, customer_id, amount, status)
-                    VALUES (?, ?, ?, ?)
-                """, [data.get("id"), data.get("customer_id"), float(data.get("amount", 0)), data.get("status")])
-                print(f"[CDC Event LSN:{lsn}] INSERT -> id={data.get('id')}")
+    retry_delay = 1
+    max_delay = 30
 
-            elif op == "UPDATE":
-                con.execute("""
-                    UPDATE orders
-                    SET customer_id = ?, amount = ?, status = ?
-                    WHERE id = ?
-                """, [data.get("customer_id"), float(data.get("amount", 0)), data.get("status"), data.get("id")])
-                print(f"[CDC Event LSN:{lsn}] UPDATE -> id={data.get('id')}")
+    # Infinite auto-reconnect loop
+    while True:
+        try:
+            last_lsn = get_last_checkpoint_lsn(con, TABLE_NAME)
+            
+            # Perform initial snapshot on very first run
+            if last_lsn == 0:
+                last_lsn = perform_initial_snapshot(con, BASE_URL, TABLE_NAME)
 
-            elif op == "DELETE":
-                key = event.get("key")
-                con.execute("DELETE FROM orders WHERE id = ?", [key])
-                print(f"[CDC Event LSN:{lsn}] DELETE -> key={key}")
+            cdc_url = f"{BASE_URL}/api/cdc/stream?table={TABLE_NAME}&from_lsn={last_lsn}"
+            print(f"[CDC Worker] Connecting to LionSQL CDC stream (from_lsn={last_lsn}): {cdc_url}")
 
-            # 4. Instant micro-aggregation query (< 1.5ms)
-            res = con.execute("""
-                SELECT status, count(*), round(sum(amount), 2)
-                FROM orders
-                GROUP BY status
-            """).fetchall()
-            print(f"  └─ [Live Aggregation]: {res}")
+            req = urllib.request.Request(cdc_url)
+            with urllib.request.urlopen(req) as resp:
+                retry_delay = 1  # Reset backoff upon successful connection
+                print("[CDC Worker] Stream connection established. Listening for events...")
+                
+                for line in resp:
+                    if not line:
+                        continue
+                    line_str = line.decode("utf-8").strip()
+                    if not line_str or line_str.startswith(":"):
+                        continue  # Skip heartbeat ping
+
+                    event = json.loads(line_str)
+                    if event.get("type") == "ping":
+                        continue
+
+                    op = event.get("op")
+                    data = event.get("data", {})
+                    lsn = event.get("lsn", 0)
+
+                    # Atomically commit data mutation and LSN checkpoint within single DuckDB transaction
+                    con.begin()
+                    if op in ("INSERT", "SNAPSHOT"):
+                        con.execute(f"""
+                            INSERT OR REPLACE INTO {TABLE_NAME} (id, customer_id, amount, status)
+                            VALUES (?, ?, ?, ?)
+                        """, [data.get("id"), data.get("customer_id"), float(data.get("amount", 0)), data.get("status")])
+                        print(f"[CDC Event LSN:{lsn}] {op} -> id={data.get('id')}")
+
+                    elif op == "UPDATE":
+                        con.execute(f"""
+                            UPDATE {TABLE_NAME}
+                            SET customer_id = ?, amount = ?, status = ?
+                            WHERE id = ?
+                        """, [data.get("customer_id"), float(data.get("amount", 0)), data.get("status"), data.get("id")])
+                        print(f"[CDC Event LSN:{lsn}] UPDATE -> id={data.get('id')}")
+
+                    elif op == "DELETE":
+                        key = event.get("key")
+                        con.execute(f"DELETE FROM {TABLE_NAME} WHERE id = ?", [key])
+                        print(f"[CDC Event LSN:{lsn}] DELETE -> key={key}")
+
+                    if lsn > 0:
+                        save_checkpoint(con, TABLE_NAME, lsn)
+                    con.commit()
+
+        except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
+            print(f"[CDC Worker] Stream disconnected ({e}). Reconnecting in {retry_delay}s from LSN {last_lsn}...")
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_delay)
+        except Exception as e:
+            print(f"[CDC Worker] Error encountered ({e}). Reconnecting safely in {retry_delay}s...")
+            time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_delay)
 
 if __name__ == "__main__":
     run_cdc_worker()

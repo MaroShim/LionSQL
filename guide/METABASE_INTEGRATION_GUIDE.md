@@ -1,5 +1,15 @@
 # Metabase BI Integration Guide (`METABASE_INTEGRATION_GUIDE.md`)
 
+> - **Document Version**: v1.0.0
+> - **Initial Created**: 2026-11-01
+> - **Last Updated**: 2026-11-14
+> - **Target Release**: LionSQL v0.90.0-beta4+
+> - **Integration Target**: Metabase (Official Docker image `metabase/metabase:latest`)
+> - **Supported Wire Protocols**:
+>   - **PostgreSQL Wire Protocol v3** (default TCP `:5433`)
+>   - **Microsoft SQL Server TDS 7.x/8.0** (default TCP `:1433`)
+> - **한국어 문서**: [`guide/METABASE_INTEGRATION_GUIDE.ko.md`](METABASE_INTEGRATION_GUIDE.ko.md)
+
 This document is the official administration guide for connecting **[Metabase](https://www.metabase.com/)** (open-source business intelligence and analytics dashboard) to LionSQL.
 
 LionSQL natively supports dual client protocols:

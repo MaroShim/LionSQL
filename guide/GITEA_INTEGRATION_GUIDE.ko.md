@@ -1,7 +1,8 @@
 # LionSQL 기반 Gitea 구축 및 운영 공식 연동 가이드 (`guide/GITEA_INTEGRATION_GUIDE.ko.md`)
 
-> - **문서 버전**: v1.0.0
+> - **문서 버전**: v1.1.0
 > - **최초 작성일**: 2026-10-30
+> - **최종 업데이트**: 2026-11-14
 > - **대상 릴리즈**: LionSQL v0.90.0-beta4+
 > - **연동 대상**: Gitea v1.23 ~ v1.27+ (공식 소스/바이너리 무수정 연동)
 > - **지원 유선 프로토콜**:
@@ -10,6 +11,7 @@
 > - **참조 문서**:
 >   - 아키텍처 포스트모템: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](../notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)
 >   - 실전 연동 검증 보고서: [`notes/GITEA_INTEGRATION_REPORT.ko.md`](../notes/reports/GITEA_INTEGRATION_REPORT.ko.md)
+> - **English Guide**: [`guide/GITEA_INTEGRATION_GUIDE.md`](GITEA_INTEGRATION_GUIDE.md)
 
 ---
 

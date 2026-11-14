@@ -1,7 +1,8 @@
 # LionSQL 기반 Vaultwarden 구축 및 운영 공식 연동 가이드 (`guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md`)
 
-> - **문서 버전**: v1.0.0
+> - **문서 버전**: v1.1.0
 > - **최초 작성일**: 2026-11-01
+> - **최종 업데이트**: 2026-11-14
 > - **대상 릴리즈**: LionSQL v0.90.0-beta4+
 > - **연동 대상**: Vaultwarden (공식 Docker 이미지 `vaultwarden/server:latest` 무수정 연동)
 > - **지원 유선 프로토콜**:
@@ -9,6 +10,7 @@
 > - **참조 문서**:
 >   - 실전 연동 검증 보고서: [`notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md`](../notes/reports/VAULTWARDEN_INTEGRATION_REPORT.ko.md)
 >   - 모듈러 아키텍처 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md)
+> - **English Guide**: [`guide/VAULTWARDEN_INTEGRATION_GUIDE.md`](VAULTWARDEN_INTEGRATION_GUIDE.md)
 
 ---
 

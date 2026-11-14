@@ -1,7 +1,8 @@
 # Official Vaultwarden Integration & Deployment Guide with LionSQL (`guide/VAULTWARDEN_INTEGRATION_GUIDE.md`)
 
-> - **Document Version**: v1.0.0
-> - **Initial Date**: 2026-11-01
+> - **Document Version**: v1.1.0
+> - **Initial Created**: 2026-11-01
+> - **Last Updated**: 2026-11-14
 > - **Target Release**: LionSQL v0.90.0-beta4+
 > - **Integration Target**: Vaultwarden (Stock official Docker image `vaultwarden/server:latest` without modifications)
 > - **Supported Wire Protocol**:
@@ -9,6 +10,7 @@
 > - **Reference Documents**:
 >   - Integration Report: [`notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md`](../notes/reports/VAULTWARDEN_INTEGRATION_REPORT.ko.md)
 >   - Modular Architecture Plan: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md)
+> - **한국어 문서**: [`guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](VAULTWARDEN_INTEGRATION_GUIDE.ko.md)
 
 ---
 

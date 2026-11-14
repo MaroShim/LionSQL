@@ -1,8 +1,14 @@
 # LionSQL & SSMS (SQL Server Management Studio) 연동 가이드 (`SSMS_INTEGRATION_GUIDE.ko.md`)
 
-이 문서는 Microsoft의 공식 데이터베이스 관리 도구인 **[SQL Server Management Studio (SSMS)](https://learn.microsoft.com/ko-kr/sql/ssms/download-sql-server-management-studio-ssms)**를 **LionSQL**의 네이티브 Microsoft SQL Server TDS(Tabular Data Stream) 리스너(`TCP :1433`)와 연동하여 데이터베이스를 관리하고 T-SQL 쿼리를 실행하는 공식 사용자 가이드입니다.
+> - **문서 버전**: v1.0.0
+> - **최초 작성일**: 2026-11-08
+> - **최종 업데이트**: 2026-11-14
+> - **대상 릴리즈**: LionSQL v0.90.0-beta4+
+> - **연동 대상**: Microsoft SQL Server Management Studio (SSMS 18.x, 19.x, 20.x+)
+> - **지원 유선 프로토콜**: **Microsoft SQL Server TDS 7.x/8.0** (기본 TCP `:1433`)
+> - **English Guide**: [`guide/SSMS_INTEGRATION_GUIDE.md`](SSMS_INTEGRATION_GUIDE.md)
 
-> [English Version](SSMS_INTEGRATION_GUIDE.md)
+이 문서는 Microsoft의 공식 데이터베이스 관리 도구인 **[SQL Server Management Studio (SSMS)](https://learn.microsoft.com/ko-kr/sql/ssms/download-sql-server-management-studio-ssms)**를 **LionSQL**의 네이티브 Microsoft SQL Server TDS(Tabular Data Stream) 리스너(`TCP :1433`)와 연동하여 데이터베이스를 관리하고 T-SQL 쿼리를 실행하는 공식 사용자 가이드입니다.
 
 ---
 

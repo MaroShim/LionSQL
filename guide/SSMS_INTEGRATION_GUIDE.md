@@ -1,8 +1,14 @@
 # LionSQL & SSMS (SQL Server Management Studio) Integration Guide (`SSMS_INTEGRATION_GUIDE.md`)
 
-This document is the official operational guide for connecting Microsoft's flagship database tool, **[SQL Server Management Studio (SSMS)](https://learn.microsoft.com/en-us/sql/ssms/download-sql-server-management-studio-ssms)**, to **LionSQL**'s native Microsoft SQL Server TDS (Tabular Data Stream) listener (`TCP :1433`).
+> - **Document Version**: v1.0.0
+> - **Initial Created**: 2026-11-08
+> - **Last Updated**: 2026-11-14
+> - **Target Release**: LionSQL v0.90.0-beta4+
+> - **Integration Target**: Microsoft SQL Server Management Studio (SSMS 18.x, 19.x, 20.x+)
+> - **Supported Wire Protocol**: **Microsoft SQL Server TDS 7.x/8.0** (default TCP `:1433`)
+> - **한국어 문서**: [`guide/SSMS_INTEGRATION_GUIDE.ko.md`](SSMS_INTEGRATION_GUIDE.ko.md)
 
-> [한국어 문서](SSMS_INTEGRATION_GUIDE.ko.md)
+This document is the official operational guide for connecting Microsoft's flagship database tool, **[SQL Server Management Studio (SSMS)](https://learn.microsoft.com/en-us/sql/ssms/download-sql-server-management-studio-ssms)**, to **LionSQL**'s native Microsoft SQL Server TDS (Tabular Data Stream) listener (`TCP :1433`).
 
 ---
 

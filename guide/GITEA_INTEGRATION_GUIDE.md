@@ -1,7 +1,8 @@
 # Official LionSQL Integration & Operation Guide for Gitea (`guide/GITEA_INTEGRATION_GUIDE.md`)
 
-> - **Document Version**: v1.0.0
-> - **Initial Date**: 2026-10-30
+> - **Document Version**: v1.1.0
+> - **Initial Created**: 2026-10-30
+> - **Last Updated**: 2026-11-14
 > - **Target Release**: LionSQL v0.90.0-beta4+
 > - **Integration Target**: Gitea v1.23 ~ v1.27+ (unmodified official binary/source)
 > - **Supported Wire Protocols**:
@@ -10,6 +11,7 @@
 > - **Related Documents**:
 >   - Architecture Postmortem: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](../notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)
 >   - Verification Report: [`notes/GITEA_INTEGRATION_REPORT.ko.md`](../notes/reports/GITEA_INTEGRATION_REPORT.ko.md)
+> - **한국어 문서**: [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md)
 
 ---
 

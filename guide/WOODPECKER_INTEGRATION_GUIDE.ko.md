@@ -1,4 +1,12 @@
-# Woodpecker CI 연동 가이드 (LionSQL PGWire)
+# Woodpecker CI 연동 가이드 (`WOODPECKER_INTEGRATION_GUIDE.ko.md`)
+
+> - **문서 버전**: v1.0.0
+> - **최초 작성일**: 2026-11-01
+> - **최종 업데이트**: 2026-11-14
+> - **대상 릴리즈**: LionSQL v0.90.0-beta4+
+> - **연동 대상**: Woodpecker CI (`woodpeckerci/woodpecker-server:latest`, Go XORM 기반)
+> - **지원 유선 프로토콜**: **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
+> - **English Guide**: [`guide/WOODPECKER_INTEGRATION_GUIDE.md`](WOODPECKER_INTEGRATION_GUIDE.md)
 
 본 문서는 GitHub Actions 및 Drone CI를 대체하는 경량 컨테이너 기반 CI/CD 플랫폼인 **Woodpecker CI**를 LionSQL의 PostgreSQL Wire Protocol (PGWire v3, 기본 포트 `:5433`, WiredTiger 스토리지 엔진) 백엔드로 연동하는 방법을 설명합니다.
 

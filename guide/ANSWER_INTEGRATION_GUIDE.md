@@ -1,7 +1,8 @@
 # Official Deployment and Operation Guide for Apache Answer on LionSQL (`guide/ANSWER_INTEGRATION_GUIDE.md`)
 
-> - **Document Version**: v1.0.0
-> - **Initial Date**: 2026-11-01
+> - **Document Version**: v1.1.0
+> - **Initial Created**: 2026-11-01
+> - **Last Updated**: 2026-11-14
 > - **Target Release**: LionSQL v0.90.0-beta4+
 > - **Target Application**: Apache Answer v1.4+ (Unmodified official source/binary)
 > - **Supported Protocol**:
@@ -9,6 +10,7 @@
 > - **Reference Documents**:
 >   - Live Integration Report: [`notes/ANSWER_INTEGRATION_REPORT.ko.md`](../notes/reports/ANSWER_INTEGRATION_REPORT.ko.md)
 >   - Modular Architecture Plan: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md)
+> - **한국어 문서**: [`guide/ANSWER_INTEGRATION_GUIDE.ko.md`](ANSWER_INTEGRATION_GUIDE.ko.md)
 
 ---
 
