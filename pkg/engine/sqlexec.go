@@ -1392,6 +1392,11 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
+	// 0.21 Variable Assignment: SELECT @var = expr [, ...] [FROM ...]
+	if isAssign, res, err := s.tryExecSelectVarAssignment(trimmed, start, cs); isAssign {
+		return res, err
+	}
+
 	// 0.25 Prepared Statements: PREPARE / DEALLOCATE / DROP PREPARE
 	if sqlutil.HasPrefixKeyword(trimmed, "PREPARE") {
 		return s.execPrepare(trimmed, start, cs)

@@ -944,8 +944,8 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		return true, "pg_advisory_lock"
 	}
 
-	// Session variable @var
-	if strings.HasPrefix(trimmed, "@") {
+	// Session variable @var (single identifier only)
+	if strings.HasPrefix(trimmed, "@") && !strings.ContainsAny(trimmed, " \t\n\r+-*/%()[]<>=!&|^,") {
 		if cs != nil {
 			cs.Mu.Lock()
 			v, exists := cs.Vars[trimmed]
@@ -1619,6 +1619,11 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	cleaned = StripLeadingComments(cleaned)
 	cleaned = sqlutil.UnwrapOuterParens(cleaned)
 
+	// -1. T-SQL Variable Assignment: SELECT @var = expr [, ...] [FROM ...]
+	if isAssign, res, err := s.tryExecSelectVarAssignment(cleaned, start, cs); isAssign {
+		return res, err
+	}
+
 	// P-5 Fast-Path: Zero-overhead storage bypass for simple single-PK lookups
 	if res, err, ok := s.tryPKLookupBypass(cleaned, start, cs); ok {
 		return res, err
@@ -2275,6 +2280,263 @@ func isSingleQuotedLiteral(s string) bool {
 
 func desugarBareTableIn(sql string) string {
 	return sqlutil.DesugarBareTableIn(sql)
+}
+
+type selectVarAssignment struct {
+	varName string
+	exprStr string
+}
+
+func parseSelectVarAssignments(query string) (assignments []selectVarAssignment, fromClause string, isAssign bool, err error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+	cleaned = StripLeadingComments(cleaned)
+	cleaned = sqlutil.UnwrapOuterParens(cleaned)
+
+	if !sqlutil.HasPrefixKeyword(cleaned, "SELECT") {
+		return nil, "", false, nil
+	}
+
+	fromIdx := sqlutil.FindTopLevelKeyword(cleaned, "FROM")
+	var projectionsStr string
+	if fromIdx != -1 {
+		projectionsStr = cleaned[6:fromIdx]
+		fromClause = strings.TrimSpace(cleaned[fromIdx:])
+	} else {
+		projectionsStr = cleaned[6:]
+		fromClause = ""
+	}
+
+	projectionsStr = strings.TrimSpace(projectionsStr)
+	for {
+		if rem, ok := sqlutil.TrimPrefixKeyword(projectionsStr, "ALL"); ok {
+			projectionsStr = strings.TrimSpace(rem)
+		} else if rem, ok := sqlutil.TrimPrefixKeyword(projectionsStr, "DISTINCT"); ok {
+			projectionsStr = strings.TrimSpace(rem)
+		} else {
+			break
+		}
+	}
+
+	projItems := sqlutil.SplitTopLevel(projectionsStr, ',')
+	if len(projItems) == 0 {
+		return nil, "", false, nil
+	}
+
+	hasAssign := false
+	hasNonAssign := false
+	for _, item := range projItems {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		eqIdx := sqlutil.FindTopLevelChar(item, '=')
+		if eqIdx == -1 {
+			hasNonAssign = true
+			continue
+		}
+		if eqIdx > 0 && (item[eqIdx-1] == '!' || item[eqIdx-1] == '<' || item[eqIdx-1] == '>') {
+			hasNonAssign = true
+			continue
+		}
+		if eqIdx+1 < len(item) && item[eqIdx+1] == '=' {
+			hasNonAssign = true
+			continue
+		}
+
+		lhs := strings.TrimSpace(item[:eqIdx])
+		rhs := strings.TrimSpace(item[eqIdx+1:])
+
+		if eqIdx > 0 && (item[eqIdx-1] == '+' || item[eqIdx-1] == '-' || item[eqIdx-1] == '*' || item[eqIdx-1] == '/') {
+			op := item[eqIdx-1]
+			lhs = strings.TrimSpace(item[:eqIdx-1])
+			rhs = fmt.Sprintf("%s %c (%s)", lhs, op, rhs)
+		}
+
+		if strings.HasPrefix(lhs, "@") && !strings.HasPrefix(lhs, "@@") && !strings.HasPrefix(lhs, "[") {
+			hasAssign = true
+			assignments = append(assignments, selectVarAssignment{
+				varName: lhs,
+				exprStr: rhs,
+			})
+		} else {
+			hasNonAssign = true
+		}
+	}
+
+	if hasAssign && hasNonAssign {
+		return nil, "", true, fmt.Errorf("Msg 141, Level 15, State 1: A SELECT statement that assigns a value to a variable must not be combined with data-retrieval operations.")
+	}
+
+	if hasAssign {
+		return assignments, fromClause, true, nil
+	}
+	return nil, "", false, nil
+}
+
+func (s *Coordinator) setSessionVar(cs *ClientSession, varName string, val any) {
+	if cs == nil {
+		return
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.Vars == nil {
+		cs.Vars = make(map[string]any, 8)
+	}
+	clean := strings.TrimPrefix(varName, "@")
+	cs.Vars["@"+clean] = val
+	cs.Vars[clean] = val
+	lower := strings.ToLower(clean)
+	cs.Vars["@"+lower] = val
+	cs.Vars[lower] = val
+}
+
+func (s *Coordinator) tryExecSelectVarAssignment(query string, start time.Time, cs *ClientSession) (bool, *QueryResult, error) {
+	assignments, fromClause, isAssign, err := parseSelectVarAssignments(query)
+	if err != nil {
+		return true, nil, err
+	}
+	if !isAssign {
+		return false, nil, nil
+	}
+
+	// Case 1: Table-less assignment: SELECT @x = 100, @y = 200
+	if fromClause == "" {
+		for _, a := range assignments {
+			exprStr := a.exprStr
+			if sqlutil.ContainsKeyword(exprStr, "SELECT", true) {
+				if resolved, err := s.resolveSubqueriesWithSession(exprStr, cs); err == nil && resolved != exprStr {
+					exprStr = resolved
+				}
+			}
+			val, _ := s.evalScalarExpr(exprStr, cs)
+			if val == exprStr {
+				p := proc.NewParser(proc.NewLexer(exprStr))
+				if ast := p.ParseExpr(); ast != nil {
+					var varRow map[string]any
+					if cs != nil {
+						cs.Mu.Lock()
+						if len(cs.Vars) > 0 {
+							varRow = make(map[string]any, len(cs.Vars))
+							for k, v := range cs.Vars {
+								varRow[k] = v
+							}
+						}
+						cs.Mu.Unlock()
+					}
+					if res, err := proc.EvalRowExpr(ast, varRow, nil); err == nil && res != nil {
+						val = res
+					}
+				}
+			}
+			s.setSessionVar(cs, a.varName, val)
+		}
+
+		return true, &QueryResult{
+			Success:      true,
+			Command:      "SELECT",
+			Columns:      nil,
+			Rows:         nil,
+			Values:       nil,
+			RowsAffected: 1,
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// Case 2: Relational assignment with FROM clause: SELECT @price = price FROM items WHERE id = 1
+	substitutedFrom := fromClause
+	if cs != nil {
+		cs.Mu.Lock()
+		if len(cs.Vars) > 0 {
+			for k, v := range cs.Vars {
+				if strings.HasPrefix(k, "@") && !strings.HasPrefix(k, "@@") {
+					substitutedFrom = substituteParamOutsideQuotes(substitutedFrom, k, fmt.Sprintf("%v", v))
+				}
+			}
+		}
+		cs.Mu.Unlock()
+	}
+
+	hasAtVar := false
+	var projParts []string
+	for i, a := range assignments {
+		if strings.Contains(a.exprStr, "@") {
+			hasAtVar = true
+		}
+		projParts = append(projParts, fmt.Sprintf("%s AS __assign_%d", a.exprStr, i))
+	}
+	var rewrittenSQL string
+	if hasAtVar {
+		rewrittenSQL = fmt.Sprintf("SELECT *, %s %s", strings.Join(projParts, ", "), substitutedFrom)
+	} else {
+		rewrittenSQL = fmt.Sprintf("SELECT %s %s", strings.Join(projParts, ", "), substitutedFrom)
+	}
+
+	selRes, err := s.execSelect(rewrittenSQL, start, cs)
+	if err != nil {
+		return true, nil, err
+	}
+	if !selRes.Success {
+		return true, selRes, nil
+	}
+
+	for _, row := range selRes.Rows {
+		evalMap := make(map[string]any, len(row)+16)
+		for k, v := range row {
+			evalMap[k] = v
+			evalMap[strings.ToLower(k)] = v
+		}
+		if cs != nil {
+			cs.Mu.Lock()
+			for k, v := range cs.Vars {
+				evalMap[k] = v
+			}
+			cs.Mu.Unlock()
+		}
+
+		for i, a := range assignments {
+			aliasKey := fmt.Sprintf("__assign_%d", i)
+			var finalVal any
+
+			if strings.Contains(a.exprStr, "@") {
+				p := proc.NewParser(proc.NewLexer(a.exprStr))
+				if ast := p.ParseExpr(); ast != nil {
+					if res, err := proc.EvalRowExpr(ast, evalMap, nil); err == nil && res != nil {
+						finalVal = res
+					}
+				}
+			}
+
+			if finalVal == nil {
+				if v, ok := row[aliasKey]; ok {
+					finalVal = v
+				} else {
+					p := proc.NewParser(proc.NewLexer(a.exprStr))
+					if ast := p.ParseExpr(); ast != nil {
+						if res, err := proc.EvalRowExpr(ast, evalMap, nil); err == nil {
+							finalVal = res
+						}
+					}
+				}
+			}
+
+			s.setSessionVar(cs, a.varName, finalVal)
+			clean := strings.TrimPrefix(a.varName, "@")
+			evalMap["@"+clean] = finalVal
+			evalMap[clean] = finalVal
+			evalMap["@"+strings.ToLower(clean)] = finalVal
+			evalMap[strings.ToLower(clean)] = finalVal
+		}
+	}
+
+	return true, &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      nil,
+		Rows:         nil,
+		Values:       nil,
+		RowsAffected: int64(len(selRes.Rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
 }
 
 

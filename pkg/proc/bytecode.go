@@ -97,6 +97,7 @@ const (
 	OpUpdateWhere
 	OpDeleteWhere
 	OpSelectInto
+	OpSelectAssign
 	OpTruncate
 	OpDeclareTable
 	OpCreateTable
@@ -295,6 +296,8 @@ func (op OpCode) String() string {
 		return "DELETE_WHERE"
 	case OpSelectInto:
 		return "SELECT_INTO"
+	case OpSelectAssign:
+		return "SELECT_ASSIGN"
 	case OpTruncate:
 		return "TRUNCATE"
 	case OpDeclareTable:
@@ -401,6 +404,19 @@ type SelectIntoData struct {
 	Table    string
 	WhereCol string
 	WhereVal Expr
+}
+
+// SelectAssignItem defines a single variable assignment target in SELECT @var = expr.
+type SelectAssignItem struct {
+	VarName string
+	ExprStr string
+	Slot    int32
+}
+
+// SelectAssignData holds metadata for T-SQL variable assignment queries: SELECT @var = expr FROM ...
+type SelectAssignData struct {
+	SQL         string
+	Assignments []SelectAssignItem
 }
 
 // CursorData holds metadata for CURSOR declarations and fetches.

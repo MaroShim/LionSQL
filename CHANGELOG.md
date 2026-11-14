@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- execute top-level and procedure `SELECT @var = expr [FROM ...]` as T-SQL variable assignment (`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`):
+  - intercept top-level `SELECT @var = expr` prior to session variable textual substitution in `pkg/engine/sqlexec.go`, evaluating expressions without FROM or extracting final row results from FROM queries and updating session variables without emitting result set rows
+  - implement `OpSelectAssign` VDBE bytecode instruction and compilation in `pkg/proc/compiler.go` and `pkg/proc/runtime/vm.go`
+  - enforce T-SQL Msg 141 (no-mixing rule) forbidding combining variable assignments with data-retrieval projections in a single SELECT
+  - extend point-lookup shortcut `tryPointLookup` in `pkg/proc/runtime/vm.go` to handle aliased column projections (`col AS alias`), enabling fast-path variable assignment execution in stored procedures
+  - add unit test coverage in `pkg/engine/select_assign_test.go` and `pkg/proc/runtime/select_assign_vdbe_test.go`
 - propagate stored procedure `RETURN <int>` status code correctly via TDS RPC response stream (`FIX-TDS-RPC-RETURN-STATUS-1`):
   - add `ReturnStatus int32` and `HasReturnStatus bool` to `engine.QueryResult` and convert procedure `ReturnValue` via `ReturnStatusFromValue` (`pkg/engine/coordinator.go`, `sqlexec_procs.go`)
   - emit `TokenReturnStatus` (`0x79`) with 4-byte little-endian status value across both fast-path (`respondExecutionResult`) and text-fallback (`executeRPCAndRespond`) paths in `pkg/wire/tds/server.go`

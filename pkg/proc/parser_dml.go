@@ -559,6 +559,20 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 		}
 	}
 
+	// Check No-Mixing Invariant (Msg 141): Variable assignment cannot be mixed with regular data-retrieval
+	hasAssign := false
+	hasNonAssign := false
+	for _, proj := range stmt.Projections {
+		if strings.HasPrefix(proj.Alias, "@") {
+			hasAssign = true
+		} else {
+			hasNonAssign = true
+		}
+	}
+	if hasAssign && hasNonAssign {
+		return nil, fmt.Errorf("Msg 141, Level 15, State 1: A SELECT statement that assigns a value to a variable must not be combined with data-retrieval operations.")
+	}
+
 	if p.curTokenIs(TokenInto) {
 		p.nextToken() // eat INTO
 		if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenVariable) {

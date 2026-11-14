@@ -22,7 +22,7 @@
 | **#11** | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** | `DONE` | Parser / Eval | P1 | `CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX))` 미평가 원문 에코 버그 및 `MONEY`/`SMALLMONEY` 4자리 소수점 스케일 보정 |
 | **#12** | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** | `DONE` | Wire (TDS) | P1 | TDS `RPCRequest`(`0x03`) 직접 프로시저 호출 시 `OUTPUT` 파라미터 `RETURNVALUE`(`0xAC`) 토큰 반환 및 기본값(`DEFAULT`) 바인딩 지원 |
 | **#13** | **`FIX-TDS-RPC-RETURN-STATUS-1`** | `DONE` | Wire (TDS) / Engine | P1 | TDS RPC 프로시저 `RETURN <int>` 실행 시 하드코딩된 `0` 대신 실제 종료 코드를 `RETURNSTATUS`(`0x79`) 토큰으로 전송 |
-| **#14** | **`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`** | `PENDING` | Engine | P1 | 최상위 배치 및 `sp_executesql`에서 `SELECT @var = expr [FROM ...]` 구문을 비교식이 아닌 T-SQL 변수 대입으로 실행 |
+| **#14** | **`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`** | `DONE` | Engine | P1 | 최상위 배치 및 `sp_executesql`에서 `SELECT @var = expr [FROM ...]` 구문을 비교식이 아닌 T-SQL 변수 대입으로 실행 |
 | **#15** | **`FIX-TDS-PRINT-INFO-TOKEN-1`** | `PENDING` | Wire (TDS) | P1 | `PRINT` 문 실행 결과(`res.Messages`)를 TDS `INFO`(`0xAB`) 토큰으로 클라이언트에 실시간 전송 |
 | **#16** | **`FIX-TDS-ERROR-NUMBER-MAP-1`** | `PENDING` | Wire (TDS) | P1 | PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(`2627`, `2601`, `547`) 매핑 반환 |
 | **#17** | **`FIX-TSQL-JSON-FUNCTIONS-EXT-1`** | `PENDING` | Proc / Engine | P1 | `mssql-jdbc` 호환성: SQL Server `JSON` 컬럼 타입 별칭 및 `JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS` 내장 함수 지원 |
@@ -233,7 +233,7 @@
 
 ---
 
-### `#14` `FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1` (`PENDING`)
+### `#14` `FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1` (`DONE`)
 - **현상**:
   저장 프로시저 내부가 아닌 **최상위 SQL 배치** 또는 `sp_executesql` 내에서 `DECLARE @x INT; SELECT @x = 100; SELECT @x;` 또는 `SELECT @x = price FROM items WHERE id = 1;`을 실행하면, `@x`에 값이 대입되지 않고 `@x = 100`이 boolean 동등 비교식(`NULL = 100`)으로 평가되어 불필요한 결과셋 행이 반환됨.
 - **근본 원인 (Root Cause)**:

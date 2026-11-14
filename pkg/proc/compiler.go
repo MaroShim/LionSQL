@@ -1079,6 +1079,53 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		return nil
 
 	case *GeneralSelectStmt:
+		// 0. Variable assignment SELECT (e.g. SELECT @x = 100, @y = 200 or SELECT @price = price FROM items WHERE id = 1)
+		isAssign := false
+		for _, p := range s.Projections {
+			if strings.HasPrefix(p.Alias, "@") {
+				isAssign = true
+				break
+			}
+		}
+
+		if isAssign {
+			// Case 1: Scalar variable assignment without FROM
+			if s.From.Name == "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.SetOps) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !s.IsExplain {
+				for _, p := range s.Projections {
+					reg, err := c.compileExpr(p.Expr)
+					if err != nil {
+						return err
+					}
+					varName := cleanVarName(p.Alias)
+					slot := c.getOrAllocSlot(varName)
+					c.emit(OpStoreVar, reg, slot, 0, varName)
+					c.freeReg(1)
+				}
+				return nil
+			}
+
+			// Case 2: Variable assignment with FROM clause
+			var items []SelectAssignItem
+			for _, p := range s.Projections {
+				varName := cleanVarName(p.Alias)
+				slot := c.getOrAllocSlot(varName)
+				items = append(items, SelectAssignItem{
+					VarName: varName,
+					ExprStr: p.Expr.String(),
+					Slot:    slot,
+				})
+			}
+			sql := s.RawSQL
+			if sql == "" {
+				sql = s.String()
+			}
+			c.emit(OpSelectAssign, 0, 0, 0, &SelectAssignData{
+				SQL:         sql,
+				Assignments: items,
+			})
+			return nil
+		}
+
 		// 1. Scalar SELECT without FROM (e.g. SELECT 1 + 1 AS res, 'hello' AS msg, GETDATE())
 		if s.From.Name == "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.SetOps) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !s.IsExplain && !hasAggregates(s.Projections) {
 			var colNames []string

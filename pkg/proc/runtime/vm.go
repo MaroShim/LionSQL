@@ -2374,6 +2374,90 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 	return storage.NullValue(storage.TypeUnknown), nil
 }
 
+func (f *VMFrame) execSelectAssign(data *proc.SelectAssignData) error {
+	if data == nil || len(data.Assignments) == 0 {
+		return nil
+	}
+
+	cleaned := strings.TrimRight(strings.TrimSpace(data.SQL), ";")
+	fromIdx := sqlutil.FindTopLevelKeyword(cleaned, "FROM")
+	if fromIdx == -1 {
+		return fmt.Errorf("OpSelectAssign requires a FROM clause")
+	}
+
+	fromClause := strings.TrimSpace(cleaned[fromIdx:])
+
+	hasAtVar := false
+	var projParts []string
+	for i, a := range data.Assignments {
+		if strings.Contains(a.ExprStr, "@") {
+			hasAtVar = true
+		}
+		projParts = append(projParts, fmt.Sprintf("%s AS __assign_%d", a.ExprStr, i))
+	}
+	var rewrittenSQL string
+	if hasAtVar {
+		rewrittenSQL = fmt.Sprintf("SELECT *, %s %s", strings.Join(projParts, ", "), fromClause)
+	} else {
+		rewrittenSQL = fmt.Sprintf("SELECT %s %s", strings.Join(projParts, ", "), fromClause)
+	}
+
+	rows, _, _, err := f.execRelQuery(rewrittenSQL, nil)
+	if err != nil {
+		return err
+	}
+
+	for _, row := range rows {
+		rowCtx := f.buildRowEvalMap(row)
+
+		for i, a := range data.Assignments {
+			aliasKey := fmt.Sprintf("__assign_%d", i)
+			var finalVal any
+
+			if strings.Contains(a.ExprStr, "@") {
+				p := proc.NewParser(proc.NewLexer(a.ExprStr))
+				if ast := p.ParseExpr(); ast != nil {
+					if res, err := proc.EvalRowExpr(ast, rowCtx, nil); err == nil && res != nil {
+						finalVal = res
+					}
+				}
+			}
+
+			if finalVal == nil {
+				if v, ok := row[aliasKey]; ok {
+					finalVal = v
+				} else {
+					p := proc.NewParser(proc.NewLexer(a.ExprStr))
+					if ast := p.ParseExpr(); ast != nil {
+						if res, err := proc.EvalRowExpr(ast, rowCtx, nil); err == nil {
+							finalVal = res
+						}
+					}
+				}
+			}
+
+			stVal := toStorageValue(finalVal)
+			clean := cleanSymbol(a.VarName)
+			if a.Slot >= 0 && int(a.Slot) < len(f.slots) {
+				f.slots[a.Slot] = stVal
+				f.evalCtxDirty = true
+			}
+			f.setVar(clean, stVal)
+
+			rowCtx["@"+clean] = finalVal
+			rowCtx[clean] = finalVal
+			rowCtx["@"+strings.ToLower(clean)] = finalVal
+			rowCtx[strings.ToLower(clean)] = finalVal
+		}
+	}
+
+	f.rowCount = int64(len(rows))
+	f.rows = nil
+	f.columns = nil
+	f.values = nil
+	return nil
+}
+
 func extractSimpleEq(expr proc.Expr) (string, proc.Expr, bool) {
 	if expr == nil {
 		return "", nil, false
@@ -3375,19 +3459,39 @@ func tryPointLookup(tx storage.Transaction, qInfo *planner.QueryInfo, schema *st
 	rowMap := make(map[string]any, len(qInfo.Projections))
 	cols := make([]string, 0, len(qInfo.Projections))
 	for _, proj := range qInfo.Projections {
-		projClean := cleanSymbol(proj)
-		if projClean == "*" {
+		projTrim := strings.TrimSpace(proj)
+		if projTrim == "*" {
 			for i, col := range schema.Columns {
 				if i < len(row.Values) {
 					rowMap[col.Name] = valToAny(row.Values[i])
 					cols = append(cols, col.Name)
 				}
 			}
-			break
+			continue
 		}
-		if col, idx, ok := schema.FindColumn(projClean); ok && idx >= 0 && idx < len(row.Values) {
-			rowMap[col.Name] = valToAny(row.Values[idx])
-			cols = append(cols, col.Name)
+
+		expr, alias, hasAs := sqlutil.SplitAsAlias(projTrim)
+		var colTarget string
+		var aliasTarget string
+		if hasAs {
+			colTarget = cleanSymbol(expr)
+			aliasTarget = cleanSymbol(alias)
+		} else {
+			colTarget = cleanSymbol(projTrim)
+			aliasTarget = colTarget
+		}
+
+		if col, idx, ok := schema.FindColumn(colTarget); ok && idx >= 0 && idx < len(row.Values) {
+			val := valToAny(row.Values[idx])
+			rowMap[col.Name] = val
+			if aliasTarget != "" && aliasTarget != col.Name {
+				rowMap[aliasTarget] = val
+			}
+			cols = append(cols, aliasTarget)
+		} else {
+			// Cannot resolve projection via simple point lookup (e.g. expressions or functions);
+			// fall back to Volcano CBO execution engine
+			return nil, nil, false
 		}
 	}
 

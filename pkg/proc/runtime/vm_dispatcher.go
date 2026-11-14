@@ -1630,6 +1630,18 @@ vmLoop:
 			f.regs[inst.A] = val
 		}
 
+	case proc.OpSelectAssign:
+		data, ok := f.aux(&inst).(*proc.SelectAssignData)
+		if !ok || data == nil {
+			return nil, fmt.Errorf("invalid OpSelectAssign metadata")
+		}
+		if err := f.execSelectAssign(data); err != nil {
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
+		}
+
 	case proc.OpPointSelect:
 		data, ok := f.aux(&inst).(*proc.PointSelectData)
 		if !ok || data == nil {
