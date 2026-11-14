@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Architecture
+- register architecture plan `FIX-SESSION-DRAIN-CLOSE-UAF-1` (`notes/plans/FIX_SESSION_DRAIN_CLOSE_UAF_PLAN.ko.md`):
+  - schedule in-flight query drain synchronization during `CloseSession` to prevent CGo Use-After-Free (UAF) and WiredTiger multi-thread concurrency panics
 - register architecture plan `REFACTOR-SESSION-TRANSACTION-INVARIANT-1` (`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`):
   - enforce Single Active Transaction Invariant per client session
   - schedule session-level execution serialization (`cs.execMu`) to eliminate autocommit session pool bypass and multi-transaction concurrency anomalies
