@@ -103,3 +103,7 @@ func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.Table
 	return fmt.Errorf("wiredtiger storage engine not enabled")
 }
 
+func (e *Engine) TableRowCount(tableName string) (int64, error) {
+	return 0, fmt.Errorf("wiredtiger storage engine not enabled")
+}
+

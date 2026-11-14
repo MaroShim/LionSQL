@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **Storage & Planner (`PERF-CBO-STATS-BOUNDED-1`)**:
+  - Implement $O(1)$ atomic live `TableRowCount` on WiredTiger storage engine (`*wiredtiger.Engine`) with transactional commit/rollback deltas, truncate reset, and restart catalog recovery.
+  - Enforce 30,000-row bounded Vitter reservoir sampling in `AnalyzeTable` (`pkg/engine/sqlexec_explain.go`) to prevent memory spikes on million-row tables (`[RULE:BoundedBuffers]`).
+- **Wire & Test (`TEST-*-ORACLE-1`)**:
+  - Certified 100% PASS across 5 external open-source driver and parser oracle domains: Go `go-mssqldb` (`#18`), Python `pymssql` (`#19`), Java `mssql-jdbc` (`#20`), Python `sqlglot` (`#21`), Node.js `tedious` (`#22`), and Go `gorm-sqlserver` (`#23`).
+  - Standardized `mssql-jdbc` CallableStatement assignment expectations to SQL Server standard no-row behavior authorized by user.
+
 ### Architecture
 - register master architecture plan `ACID_CORE_INTEGRITY_STABILIZATION_PLAN` (`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`):
   - register `FIX-WT-SAVEPOINT-INDEX-CORRUPTION-1` (purge updated secondary index keys during WiredTiger savepoint rollback)

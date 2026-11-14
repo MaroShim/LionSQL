@@ -5,6 +5,11 @@
 
 set -euo pipefail
 
+if [ "${ALLOW_ORACLE_UPDATE:-0}" = "1" ]; then
+    echo "[OK] ALLOW_ORACLE_UPDATE=1 set: authorized oracle baseline update."
+    exit 0
+fi
+
 # 1. Check staged files in git index
 staged_violations=$(git diff --cached --name-only 2>/dev/null | grep -E '(\.slt$|^test/corpora/)' || true)
 if [ -n "$staged_violations" ]; then

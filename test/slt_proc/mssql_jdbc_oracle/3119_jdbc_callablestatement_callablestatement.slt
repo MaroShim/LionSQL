@@ -11,25 +11,19 @@ SELECT @asciiStream AS asciiStream, @binaryStream AS binaryStream, @blob AS blob
 ----
 NULL NULL NULL
 
-query TTTTTT
+statement ok
 SELECT @tinyint = @tinyint, @smallint = @smallint, @bigint = @bigint, @decimal = @decimal, @bit = @bit, @ldt = @ldt
-----
-NULL NULL NULL NULL NULL NULL
 
 query T
 SELECT 1 AS id
 ----
 1
 
-query TTT
+statement ok
 SELECT @date_param = @date_param, @time_param = @time_param, @timestamp_param = @timestamp_param,
-----
-NULL NULL NULL
 
-query T
+statement ok
 SELECT @decimal_param = @decimal_param
-----
-NULL
 
 query TTT
 SELECT @nchar_stream AS nchar_stream, @clob_stream AS clob_stream, @nclob_stream AS nclob_stream,
@@ -41,28 +35,21 @@ SELECT @guid_param AS guid_result
 ----
 NULL
 
-query T
+statement ok
 SELECT @varchar_param = @varchar_param
-----
-NULL
 
-query TT
+statement ok
 SELECT @int_param = @int_param, @decimal_param = @decimal_param
-----
-NULL NULL
 
 query TT
 SELECT 'INJECTED' AS COLUMN_NAME, 1 AS COLUMN_TYPE
 ----
 INJECTED 1
 
-query T
+statement ok
 SELECT @p1 = '2018-03-11T02:00:00.1234567'
-----
-2018-03-11T02:00:00.1234567
 
 query T
 SELECT @jsonInput AS col1;
 ----
 NULL
-

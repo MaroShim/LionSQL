@@ -230,7 +230,126 @@ func TestOfficialGoMSSQLDB_SelectTypesAndCollations(t *testing.T) {
 	}
 }
 
-// Keep unused imports referenced for TDD tests to be enabled as each FIX-TDS-* task is implemented.
+// TestOfficialGoMSSQLDB_TransactionRollback verifies that transactions opened and rolled back
+// via go-mssqldb are cleanly discarded with zero data leakage.
+func TestOfficialGoMSSQLDB_TransactionRollback(t *testing.T) {
+	db, cleanup := openOfficialGoMSSQLDB(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := db.ExecContext(ctx, "CREATE TABLE t_tx_test (id INT PRIMARY KEY, val NVARCHAR(50));"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, "INSERT INTO t_tx_test (id, val) VALUES (1, 'in-tx');"); err != nil {
+		t.Fatalf("INSERT in tx failed: %v", err)
+	}
+
+	if err := tx.Rollback(); err != nil {
+		t.Fatalf("Rollback failed: %v", err)
+	}
+
+	var count int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM t_tx_test;").Scan(&count); err != nil {
+		t.Fatalf("SELECT count failed: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 rows after rollback, got %d", count)
+	}
+}
+
+// TestOfficialGoMSSQLDB_ParameterizedQuery verifies parameterized queries via sp_executesql.
+func TestOfficialGoMSSQLDB_ParameterizedQuery(t *testing.T) {
+	db, cleanup := openOfficialGoMSSQLDB(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := db.ExecContext(ctx, "CREATE TABLE t_param (id INT PRIMARY KEY, name NVARCHAR(50), age INT);"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	if _, err := db.ExecContext(ctx, "INSERT INTO t_param (id, name, age) VALUES (@p1, @p2, @p3);", 101, "Alice", 30); err != nil {
+		t.Fatalf("INSERT with params failed: %v", err)
+	}
+
+	var name string
+	var age int
+	if err := db.QueryRowContext(ctx, "SELECT name, age FROM t_param WHERE id = @p1;", 101).Scan(&name, &age); err != nil {
+		t.Fatalf("SELECT with params failed: %v", err)
+	}
+	if name != "Alice" || age != 30 {
+		t.Fatalf("got name=%q, age=%d, want Alice, 30", name, age)
+	}
+}
+
+// TestOfficialGoMSSQLDB_StoredProcedure_OutputAndReturnStatus verifies that go-mssqldb
+// executing a stored procedure receives OUTPUT parameter values (via sql.Out)
+// and the procedure return code (via mssql.ReturnStatus).
+func TestOfficialGoMSSQLDB_StoredProcedure_OutputAndReturnStatus(t *testing.T) {
+	db, cleanup := openOfficialGoMSSQLDB(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, `
+CREATE PROCEDURE sp_add_test 
+    @a INT, 
+    @b INT, 
+    @sum INT OUTPUT
+AS
+BEGIN
+    SET @sum = @a + @b;
+    RETURN 42;
+END;
+`)
+	if err != nil {
+		t.Fatalf("CREATE PROCEDURE failed: %v", err)
+	}
+
+	var sum int64
+	var rc mssql.ReturnStatus
+	_, err = db.ExecContext(ctx, "sp_add_test",
+		sql.Named("a", 15),
+		sql.Named("b", 27),
+		sql.Named("sum", sql.Out{Dest: &sum}),
+		&rc,
+	)
+	if err != nil {
+		t.Fatalf("EXEC sp_add_test failed: %v", err)
+	}
+
+	if sum != 42 {
+		t.Errorf("got sum=%d, want 42", sum)
+	}
+	if rc != 42 {
+		t.Errorf("got return status=%d, want 42", rc)
+	}
+}
+
+// TestOfficialGoMSSQLDB_PrintMessages verifies that PRINT statements execute cleanly via go-mssqldb.
+func TestOfficialGoMSSQLDB_PrintMessages(t *testing.T) {
+	db, cleanup := openOfficialGoMSSQLDB(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := db.ExecContext(ctx, "PRINT 'Hello from LionSQL TDS Oracle';"); err != nil {
+		t.Fatalf("PRINT execution failed: %v", err)
+	}
+}
+
+// Keep unused imports referenced.
 var (
 	_ = errors.As
 	_ = sqlexp.ReturnMessage{}

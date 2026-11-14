@@ -287,14 +287,16 @@ type Engine struct {
 	connClosed  atomic.Bool
 	sessMu      sync.Mutex
 	sessions    map[*WTSession]struct{}
+	rowCounts   map[string]*atomic.Int64
 }
 
 // New creates a new WiredTiger storage engine instance.
 func New() *Engine {
 	e := &Engine{
-		tables:   make(map[string]*storage.TableSchema),
-		tempEng:  memengine.New(),
-		sessions: make(map[*WTSession]struct{}),
+		tables:    make(map[string]*storage.TableSchema),
+		tempEng:   memengine.New(),
+		sessions:  make(map[*WTSession]struct{}),
+		rowCounts: make(map[string]*atomic.Int64),
 	}
 	e.fsyncPolicy.Store(int32(memengine.FsyncEverySec))
 	return e
@@ -528,6 +530,8 @@ func (e *Engine) loadCatalog() {
 			if C.go_wt_open_session(e.conn, &sess) == 0 {
 				config := C.CString("key_format=u,value_format=u")
 				for _, t := range e.tables {
+					cnt := e.countTableRows(sess, t)
+					e.getRowCountAtomicLocked(t.Name).Store(cnt)
 					for _, idx := range t.Indexes {
 						idxURI := C.CString(t.IndexURI(idx.Name))
 						_ = C.go_wt_session_create(sess, idxURI, config)
@@ -539,6 +543,66 @@ func (e *Engine) loadCatalog() {
 			}
 		}
 	}
+}
+
+// countTableRows counts physical rows in WiredTiger table (used during catalog load).
+func (e *Engine) countTableRows(sess *C.WT_SESSION, t *storage.TableSchema) int64 {
+	uri := C.CString(t.TableURI())
+	defer C.free(unsafe.Pointer(uri))
+	var cur *C.WT_CURSOR
+	if C.go_wt_open_cursor(sess, uri, &cur) != 0 {
+		return 0
+	}
+	defer C.go_wt_cursor_close(cur)
+	var cnt int64
+	for C.go_wt_cursor_next(cur) == 0 {
+		cnt++
+	}
+	return cnt
+}
+
+func (e *Engine) getRowCountAtomicLocked(tableName string) *atomic.Int64 {
+	cnt, ok := sqlutil.MapGetFold(e.rowCounts, tableName)
+	if ok && cnt != nil {
+		return cnt
+	}
+	cnt = new(atomic.Int64)
+	if e.rowCounts == nil {
+		e.rowCounts = make(map[string]*atomic.Int64)
+	}
+	e.rowCounts[tableName] = cnt
+	return cnt
+}
+
+func (e *Engine) getRowCountAtomic(tableName string) *atomic.Int64 {
+	e.mu.RLock()
+	cnt, ok := sqlutil.MapGetFold(e.rowCounts, tableName)
+	e.mu.RUnlock()
+	if ok && cnt != nil {
+		return cnt
+	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.getRowCountAtomicLocked(tableName)
+}
+
+// TableRowCount returns the live row count of a table in O(1) time across concurrent transactions.
+func (e *Engine) TableRowCount(tableName string) (int64, error) {
+	if storage.IsTemporaryTable(tableName) {
+		return e.tempEng.TableRowCount(tableName)
+	}
+
+	tbl, err := e.GetTable(tableName)
+	if err != nil {
+		return 0, err
+	}
+
+	cnt := e.getRowCountAtomic(tbl.Name).Load()
+	if cnt < 0 {
+		cnt = 0
+	}
+	return cnt, nil
 }
 
 func (e *Engine) saveCatalog() error {
@@ -743,6 +807,7 @@ func (e *Engine) DropTable(tableName string) error {
 	}
 
 	sqlutil.MapDeleteFold(e.tables, tableName)
+	sqlutil.MapDeleteFold(e.rowCounts, tableName)
 	if err := e.saveCatalog(); err != nil {
 		return err
 	}
@@ -864,6 +929,9 @@ func (e *Engine) truncatePermTables(tableNames []string, cascade bool) error {
 		}
 
 		if !storage.IsTemporaryTable(tbl.Name) {
+			if cnt := e.getRowCountAtomicLocked(tbl.Name); cnt != nil {
+				cnt.Store(0)
+			}
 			walOps = append(walOps, memengine.WALOp{
 				Type:  memengine.OpTruncateTable,
 				Table: tbl.Name,
@@ -1117,6 +1185,13 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 
 	tbl.Name = newClean
 	e.tables[newClean] = tbl
+
+	cnt := e.getRowCountAtomicLocked(oldClean)
+	sqlutil.MapDeleteFold(e.rowCounts, oldClean)
+	if e.rowCounts == nil {
+		e.rowCounts = make(map[string]*atomic.Int64)
+	}
+	e.rowCounts[newClean] = cnt
 
 	// Update any foreign key definitions on other tables referencing oldClean
 	for _, otherTd := range e.tables {
@@ -1804,6 +1879,7 @@ type WTTx struct {
 	spWALIndices      map[string]int
 	tableCache        map[string]*storage.TableSchema
 	snapTables        []*storage.TableSchema
+	rowDeltas         map[string]int64
 }
 
 func (tx *WTTx) ensureTempTxLocked() (storage.Transaction, error) {
@@ -2060,6 +2136,11 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 		})
 	}
 
+	if tx.rowDeltas == nil {
+		tx.rowDeltas = make(map[string]int64)
+	}
+	tx.rowDeltas[tbl.Name]++
+
 	return nil
 }
 
@@ -2305,6 +2386,11 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 			Key:   pk.String(),
 		})
 	}
+
+	if tx.rowDeltas == nil {
+		tx.rowDeltas = make(map[string]int64)
+	}
+	tx.rowDeltas[tbl.Name]--
 
 	return nil
 }
@@ -3030,6 +3116,8 @@ func (tx *WTTx) Commit() error {
 	}
 	tx.closed = true
 	hasWrites := tx.hasWrites
+	rowDeltas := tx.rowDeltas
+	tx.rowDeltas = nil
 	tx.tableCache = nil
 	walOps := tx.walOps
 	tx.walOps = nil
@@ -3068,6 +3156,13 @@ func (tx *WTTx) Commit() error {
 	}
 
 	eng := tx.sess.engine
+	if len(rowDeltas) > 0 {
+		for tblName, delta := range rowDeltas {
+			if delta != 0 {
+				eng.getRowCountAtomic(tblName).Add(delta)
+			}
+		}
+	}
 	seq := eng.writeSeq.Add(1)
 	if len(walOps) > 0 && eng.hasHook.Load() {
 		rec := eng.recordWALLocked(walOps)
@@ -3094,6 +3189,7 @@ func (tx *WTTx) Rollback() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
+	tx.rowDeltas = nil
 	tx.tableCache = nil
 	tx.walOps = nil
 	tx.spWALIndices = nil
@@ -3196,9 +3292,15 @@ func (tx *WTTx) RollbackTo(name string) error {
 		switch op.kind {
 		case wtUndoDelete:
 			_ = tx.removeRawLocked(op.table, op.pk)
+			if tx.rowDeltas != nil {
+				tx.rowDeltas[op.table]--
+			}
 		case wtUndoPut:
 			if len(op.oldData) > 0 {
 				_ = tx.putRawBytesLocked(op.table, op.pk, op.oldData)
+				if tx.rowDeltas != nil {
+					tx.rowDeltas[op.table]++
+				}
 			}
 		}
 	}

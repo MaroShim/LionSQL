@@ -24,15 +24,15 @@
 | **#13** | **`FIX-TDS-RPC-RETURN-STATUS-1`** | `DONE` | Wire (TDS) / Engine | P1 | TDS RPC 프로시저 `RETURN <int>` 실행 시 하드코딩된 `0` 대신 실제 종료 코드를 `RETURNSTATUS`(`0x79`) 토큰으로 전송 |
 | **#14** | **`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`** | `DONE` | Engine | P1 | 최상위 배치 및 `sp_executesql`에서 `SELECT @var = expr [FROM ...]` 구문을 비교식이 아닌 T-SQL 변수 대입으로 실행 |
 | **#15** | **`FIX-TDS-PRINT-INFO-TOKEN-1`** | `DONE` | Wire (TDS) | P1 | `PRINT` 문 실행 결과(`res.Messages`)를 TDS `INFO`(`0xAB`) 토큰으로 클라이언트에 실시간 전송 |
-| **#16** | **`FIX-TDS-ERROR-NUMBER-MAP-1`** | `PENDING` | Wire (TDS) | P1 | PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(`2627`, `2601`, `547`) 매핑 반환 |
-| **#17** | **`FIX-TSQL-JSON-FUNCTIONS-EXT-1`** | `PENDING` | Proc / Engine | P1 | `mssql-jdbc` 호환성: SQL Server `JSON` 컬럼 타입 별칭 및 `JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS` 내장 함수 지원 |
-| **#18** | **`TEST-TDS-GOMSSQLDB-ORACLE-1`** | `PENDING` | Wire / Test | P1 | 공식 `microsoft/go-mssqldb` 드라이버 테스트 스위트 라이브 TDS 통합 오라클 이식 및 검증 |
-| **#19** | **`TEST-TDS-PYMSSQL-ORACLE-1`** | `PENDING` | Protocol / Test | P1 | `pymssql` 공식 테스트 스위트(`test_sprocs.py`, `test_types.py`, `test_queries.py`) TDS/Gate 5 오라클 포팅 및 검증 |
-| **#20** | **`TEST-TDS-MSSQL-JDBC-ORACLE-1`** | `PENDING` | Protocol / Test | P1 | `microsoft/mssql-jdbc` 공식 테스트 스위트 핵심 T-SQL 및 카탈로그 오라클 수확 및 검증 |
-| **#21** | **`TEST-SQLGLOT-TSQL-ORACLE-1`** | `PENDING` | Engine / Test | P1 | `tobymao/sqlglot` `test_tsql.py` (526개 validate 케이스) T-SQL 표현식·내장함수·날짜약어·집합연산 오라클 검증 |
-| **#22** | **`TEST-TDS-TEDIOUS-ORACLE-1`** | `PENDING` | Protocol / Test | P1 | `tediousjs/tedious` 통합 테스트(`rpc-test`, `datatypes-in-results`, `parameterised-statements`) 오라클 포팅 및 검증 |
-| **#23** | **`TEST-GORM-SQLSERVER-ORACLE-1`** | `PENDING` | Engine / Test | P1 | `go-gorm/sqlserver` 드라이버 핵심 쿼리(`MERGE USING VALUES`, `OUTPUT INSERTED`, `sp_rename`, `sys.*` 조인) 오라클 검증 |
-| **#24** | **`PERF-CBO-STATS-BOUNDED-1`** | `PENDING` | Planner / Storage | P2 | WiredTiger 원자적 실시간 `TableRowCount` 카운터 도입 및 `AnalyzeTable` 30,000행 Vitter 저수지 샘플링 상한 강제 |
+| **#16** | **`FIX-TDS-ERROR-NUMBER-MAP-1`** | `DONE` (`598636a7`) | Wire (TDS) | P1 | PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(`2627`, `2601`, `547`) 매핑 반환 |
+| **#17** | **`FIX-TSQL-JSON-FUNCTIONS-EXT-1`** | `DONE` (`5b8fcba2`) | Proc / Engine | P1 | `mssql-jdbc` 호환성: SQL Server `JSON` 컬럼 타입 별칭 및 `JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS` 내장 함수 지원 |
+| **#18** | **`TEST-TDS-GOMSSQLDB-ORACLE-1`** | `DONE` | Wire / Test | P1 | 공식 `microsoft/go-mssqldb` 드라이버 테스트 스위트 라이브 TDS 통합 오라클 이식 및 검증 |
+| **#19** | **`TEST-TDS-PYMSSQL-ORACLE-1`** | `DONE` | Protocol / Test | P1 | `pymssql` 공식 테스트 스위트(`test_sprocs.py`, `test_types.py`, `test_queries.py`) TDS/Gate 5 오라클 포팅 및 검증 |
+| **#20** | **`TEST-TDS-MSSQL-JDBC-ORACLE-1`** | `DONE` | Protocol / Test | P1 | `microsoft/mssql-jdbc` 공식 테스트 스위트 핵심 T-SQL 및 카탈로그 오라클 수확 및 검증 |
+| **#21** | **`TEST-SQLGLOT-TSQL-ORACLE-1`** | `DONE` | Engine / Test | P1 | `tobymao/sqlglot` `test_tsql.py` (526개 validate 케이스) T-SQL 표현식·내장함수·날짜약어·집합연산 오라클 검증 |
+| **#22** | **`TEST-TDS-TEDIOUS-ORACLE-1`** | `DONE` | Protocol / Test | P1 | `tediousjs/tedious` 통합 테스트(`rpc-test`, `datatypes-in-results`, `parameterised-statements`) 오라클 포팅 및 검증 |
+| **#23** | **`TEST-GORM-SQLSERVER-ORACLE-1`** | `DONE` | Engine / Test | P1 | `go-gorm/sqlserver` 드라이버 핵심 쿼리(`MERGE USING VALUES`, `OUTPUT INSERTED`, `sp_rename`, `sys.*` 조인) 오라클 검증 |
+| **#24** | **`PERF-CBO-STATS-BOUNDED-1`** | `DONE` | Planner / Storage | P2 | WiredTiger 원자적 실시간 `TableRowCount` 카운터 도입 및 `AnalyzeTable` 30,000행 Vitter 저수지 샘플링 상한 강제 |
 
 ---
 

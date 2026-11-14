@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -697,8 +698,12 @@ func (s *Coordinator) AnalyzeTable(tbl string) (*planner.TableStats, error) {
 	}
 	defer cursor.Close()
 
+	// Enforce 30,000-row bounded Vitter reservoir sampling ([RULE:BoundedBuffers]).
+	const maxAnalyzeSampleRows int64 = 30000
+
 	colVals := make(map[string][]storage.Value)
 	nullCounts := make(map[string]int64)
+	colNonNullCount := make(map[string]int64)
 	for _, c := range schema.Columns {
 		colVals[c.Name] = make([]storage.Value, 0)
 	}
@@ -736,24 +741,36 @@ func (s *Coordinator) AnalyzeTable(tbl string) (*planner.TableStats, error) {
 			if !ok || v.IsNull {
 				nullCounts[c.Name]++
 			} else {
-				colVals[c.Name] = append(colVals[c.Name], v)
+				nonNull := colNonNullCount[c.Name]
+				colNonNullCount[c.Name]++
+				if nonNull < maxAnalyzeSampleRows {
+					colVals[c.Name] = append(colVals[c.Name], v)
+				} else {
+					// Vitter's Algorithm R: replace with probability maxAnalyzeSampleRows / (nonNull + 1)
+					j := rand.Int64N(nonNull + 1)
+					if j < maxAnalyzeSampleRows {
+						colVals[c.Name][j] = v
+					}
+				}
 			}
 		}
 
 		for i, grp := range candGroups {
-			var key strings.Builder
-			for j, colName := range grp.cols {
-				if j > 0 {
-					key.WriteByte(0)
+			if int64(len(multiSets[i])) < maxAnalyzeSampleRows {
+				var key strings.Builder
+				for j, colName := range grp.cols {
+					if j > 0 {
+						key.WriteByte(0)
+					}
+					v := rec[colName]
+					if v.IsNull {
+						key.WriteString("\x01NULL")
+					} else {
+						key.WriteString(v.String())
+					}
 				}
-				v := rec[colName]
-				if v.IsNull {
-					key.WriteString("\x01NULL")
-				} else {
-					key.WriteString(v.String())
-				}
+				multiSets[i][key.String()] = struct{}{}
 			}
-			multiSets[i][key.String()] = struct{}{}
 		}
 	}
 
