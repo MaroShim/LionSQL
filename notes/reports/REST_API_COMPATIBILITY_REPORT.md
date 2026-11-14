@@ -119,7 +119,7 @@ With this verification complete, LionSQL has achieved end-to-end live testing ac
 | Port | Protocol / Service | Verified Driver / Client | Test Scenarios | Pass Rate | Official Report |
 | :---: | :--- | :--- | :---: | :---: | :--- |
 | **5433** | **PostgreSQL Wire v3** | `github.com/lib/pq`, `github.com/jackc/pgx/v5` | 57 | **100.0%** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](PGWIRE_COMPATIBILITY_REPORT.md) |
-| **1433** | **Microsoft TDS 7.x/8.0** | `github.com/microsoft/go-mssqldb` | 123 | **99.2%** (122/123 passing) | [`doc/TDS_COMPATIBILITY_REPORT.md`](TDS_COMPATIBILITY_REPORT.md) |
+| **1433** | **Microsoft TDS 7.x/8.0** | `github.com/microsoft/go-mssqldb` | 123 | **100.0%** (123/123 passing) | [`doc/TDS_COMPATIBILITY_REPORT.md`](TDS_COMPATIBILITY_REPORT.md) |
 | **8090** | **HTTP REST / Web Studio** | Native HTTP Client, SSE, JavaScript SDK | 37 | **100.0%** | [`doc/REST_API_COMPATIBILITY_REPORT.md`](REST_API_COMPATIBILITY_REPORT.md) |
 
 All network entry points are verified for high-concurrency production deployments with zero data races.

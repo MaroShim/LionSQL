@@ -1,7 +1,7 @@
 # LionSQL TDS (Port 1433) Microsoft SQL Server Compatibility Verification Report
 
 > - **Created**: 2026-10-18
-> - **Last Updated**: 2026-11-04
+> - **Last Updated**: 2026-11-14
 
 
 This report presents a comprehensive compatibility diagnostic of LionSQL's Microsoft SQL Server TDS (Tabular Data Stream 7.x/8.0) protocol listener (`127.0.0.1:1433`). Utilizing the official Microsoft Go driver (`github.com/microsoft/go-mssqldb v1.11.2`), we performed live end-to-end tests across **123 detailed scenarios** spanning session negotiation, DDL, CRUD, transactions, T-SQL scalar and window functions, RPC parameterization, VDBE stored procedures, system catalog views, and **production ORM patterns (EF Core, Dapper) with advanced T-SQL extensions**.
@@ -17,7 +17,7 @@ This report presents a comprehensive compatibility diagnostic of LionSQL's Micro
 | **Storage Backend** | WiredTiger Lock-Free MVCC B+Tree Engine |
 | **Connection String** | `server=127.0.0.1;port=1433;database=master;user id=sa;password=secret;encrypt=disable` |
 | **Total Test Scenarios** | **123 Scenarios** (77 Baseline/Core + 46 Production/Edge Cases) |
-| **Verification Summary** | **PASS: 121 (98.4%)**, **TYPE_DIFF: 1 (0.8%)**, **UNSUPPORTED: 0 (0.0%)**, **FAIL: 1 (0.8%)**<br>(Practical Compatibility Rate: **99.2%** / 122 of 123 passing) |
+| **Verification Summary** | **PASS: 122 (99.2%)**, **TYPE_DIFF: 1 (0.8%)**, **UNSUPPORTED: 0 (0.0%)**, **FAIL: 0 (0.0%)**<br>(Practical Compatibility Rate: **100.0%** / 123 of 123 passing) |
 
 ---
 
@@ -224,7 +224,7 @@ Validated SQL Server-specific binary serialization, literal parsing, and token e
 
 | ID | Test Scenario | Query Statement (SQL) | Result | Analysis & Detailed Behavior |
 | :--- | :--- | :--- | :--- | :--- |
-| 113 | Multiple Result Sets | `SELECT 1 AS first_val; SELECT 'two' AS second_val;` | **FAIL** | **[Deferred to Post-1.0]** In-flight multi-statement batches overwrite intermediate results, delivering only the terminal resultset to the client. Dapper `QueryMultiple` is deferred to Post-1.0 |
+| 113 | Multiple Result Sets | `SELECT 1 AS first_val; SELECT 'two' AS second_val;` | **PASS** | **[Resolved via FEAT-TDS-MULTIPLE-RESULT-SETS-1]** In-flight multi-statement batches and stored procedures stream sequential resultsets via `TokenDone` (`DoneMore 0x0001`) and final `TokenDone` (`DoneFinal 0x0000`). Fully interoperable with C# Dapper `QueryMultiple`, ADO.NET `SqlDataReader.NextResult()`, and Go `rows.NextResultSet()` |
 | 114 | UPSERT Statement (MERGE) | `MERGE target AS T USING source AS S ON (T.id=S.id) WHEN MATCHED THEN UPDATE WHEN NOT MATCHED THEN INSERT;` | **PASS** | T-SQL standard `MERGE` execution |
 | 115-116 | Correlated Row Generators | `CROSS APPLY (SELECT TOP (1) ... )`, `OUTER APPLY (...)` | **PASS** | Correlated subquery table expressions |
 | 117 | Semicolon-Free Multiple Statements | `SELECT 1 AS a SELECT 2 AS b` | **PASS** | Parses consecutive statements without semicolons |
@@ -236,10 +236,14 @@ Validated SQL Server-specific binary serialization, literal parsing, and token e
 
 ## 3. Diagnostic Gap Analysis & Comprehensive Defect Resolutions
 
-### 1. [Deferred to Post-1.0] Multiple Result Sets Streaming (`TDS-COMPAT-6`)
-- **Observed Behavior**: Executing `SELECT 1; SELECT 'two';` within a single batch dropped the primary resultset and returned only the terminal resultset (`'two'`).
-- **Root Cause**: `pkg/engine/sqlexec.go` overwrote results in `lastRes = res`, and TDS wire streaming supported only a single terminal resultset token.
-- **Resolution Plan**: Expanding `ExecuteSessionSQLContext` to return `[]*QueryResult` and emitting sequential `COLMETADATA ➔ ROW ➔ DONE (MoreResults)` token streams is scheduled for Post-1.0 to avoid regressions in single-statement OLTP hot paths.
+### 1. [Resolved] Multiple Result Sets Streaming (`FEAT-TDS-MULTIPLE-RESULT-SETS-1`, `TDS-COMPAT-6`)
+- **Observed Behavior**: Executing `SELECT 1; SELECT 'two';` within a single batch previously dropped intermediate resultsets and returned only the terminal resultset (`'two'`).
+- **Resolution**:
+  - `pkg/engine/coordinator.go`: Added `Next *QueryResult` linked list chaining to capture multiple sequential result sets across batches and stored procedures.
+  - `pkg/engine/sqlexec.go`: Updated `ExecuteSessionSQLContext` to collect and chain all meaningful result sets in `headRes.Next` sequence, preserving the first result set as the primary head.
+  - `pkg/wire/tds/server.go`: Enhanced `executeQueryAndRespond` and `executeRPCAndRespond` to iterate through `cur := res; cur != nil; cur = cur.Next`, emitting `TokenDone (0xFD)` / `TokenDoneInProc (0xFF)` with `DoneMore | DoneCount` (`0x0001 | 0x0010`) for intermediate sets and `DoneFinal` (`0x0000`) on terminal completion.
+  - `pkg/proc/runtime/vm.go` & `vm_dispatcher.go`: Added `VMResultSet` sequence collection to VDBE virtual machine and updated `execProcedureCallWithRaw` to emit multiple result set chains for stored procedures with multiple `SELECT` statements.
+  - Verified via `pkg/wire/tds/multiple_result_sets_test.go` (`TestTDS_MultipleResultSets_SequentialNextResult`, `TestTDS_MultipleResultSets_MultiRowTables`, `TestTDS_MultipleResultSets_StoredProcedure`, `TestTDS_MultipleResultSets_MixedDMLAndProc`) using official `go-mssqldb` driver with zero data races.
 
 ---
 
@@ -342,11 +346,9 @@ Validated SQL Server-specific binary serialization, literal parsing, and token e
 
 ## 4. Final Conclusion
 
-Across 123 production T-SQL scenarios, LionSQL achieved an **authoritative 99.2% overall compatibility rate (122 of 123 passing: 121 PASS + 1 TYPE_DIFF)**.
+Across 123 production T-SQL scenarios, LionSQL achieved an **authoritative 100.0% overall compatibility rate (123 of 123 passing: 122 PASS + 1 TYPE_DIFF, 0 FAIL)**.
 
 - **Certified Enterprise Capabilities**:
-  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` partial rollbacks, temporary tables (`#temp`), table variables (`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, inline variable initializers (`DECLARE @x INT = 0`), BIT column 1/0 boolean coercion, NULL propagation (`CONCAT_NULL_YIELDS_NULL`), legacy metadata procedures (`sp_tables`, `sp_columns`), user exception handling (`RAISERROR`, `THROW`), Unicode N-prefix (`N'...'`) literals, native DATETIME binary serialization (`GETDATE()`), ad-hoc anonymous control-flow (`IF...ELSE`, `WHILE`), WiredTiger `TRUNCATE TABLE` transactional rollback isolation, and session-level Prepared Statement Bounded LRU caching (`PREP-1`).
-- **Post-1.0 Roadmap Track**:
-  - Multiple result sets streaming (`TDS-COMPAT-6`) for bulk C# Dapper `QueryMultiple` pipelines.
+  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` partial rollbacks, temporary tables (`#temp`), table variables (`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, inline variable initializers (`DECLARE @x INT = 0`), BIT column 1/0 boolean coercion, NULL propagation (`CONCAT_NULL_YIELDS_NULL`), legacy metadata procedures (`sp_tables`, `sp_columns`), user exception handling (`RAISERROR`, `THROW`), Unicode N-prefix (`N'...'`) literals, native DATETIME binary serialization (`GETDATE()`), ad-hoc anonymous control-flow (`IF...ELSE`, `WHILE`), WiredTiger `TRUNCATE TABLE` transactional rollback isolation, session-level Prepared Statement Bounded LRU caching (`PREP-1`), and sequential Multiple Result Sets streaming (`FEAT-TDS-MULTIPLE-RESULT-SETS-1`).
 
-With all 10 major defects resolved, LionSQL delivers drop-in compatibility for existing enterprise .NET, Java, Node.js, and Python database applications without requiring code modifications.
+With all 10 major defects resolved and full multiple result sets streaming verified, LionSQL delivers drop-in compatibility for existing enterprise .NET, Java, Node.js, and Python database applications without requiring code modifications.
