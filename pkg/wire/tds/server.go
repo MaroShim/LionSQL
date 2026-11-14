@@ -1583,36 +1583,53 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		returnStatus = res.ReturnStatus
 	}
 
-	if len(res.Columns) > 0 {
-		cols := s.inferColumnInfos(res)
-		buf.Write(BuildColMetaData(cols))
+	for cur := res; cur != nil; cur = cur.Next {
+		if len(cur.Columns) > 0 {
+			cols := s.inferColumnInfos(cur)
+			buf.Write(BuildColMetaData(cols))
 
-		_ = s.streamQueryRows(stream, sess, cols, res.Rows, res.Values)
+			_ = s.streamQueryRows(stream, sess, cols, cur.Rows, cur.Values)
 
-		WriteDoneDirect(buf, TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows)))
-		WriteReturnStatusDirect(buf, returnStatus)
-		if extraTokens != nil {
-			extraTokens(buf)
+			WriteDoneDirect(buf, TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(cur.Rows)))
+		} else if cur.Next != nil {
+			curCmdCode := uint16(0)
+			switch strings.ToUpper(cur.Command) {
+			case "SELECT":
+				curCmdCode = 0xC1
+			case "INSERT":
+				curCmdCode = 0xC3
+			case "DELETE":
+				curCmdCode = 0xC4
+			case "UPDATE":
+				curCmdCode = 0xC5
+			default:
+				curCmdCode = 0x00
+			}
+			WriteDoneDirect(buf, TokenDoneInProc, DoneMore|DoneCount, curCmdCode, uint64(cur.RowsAffected))
 		}
+	}
+
+	cmdCode := uint16(0)
+	switch upperCmd {
+	case "SELECT":
+		cmdCode = 0xC1
+	case "INSERT":
+		cmdCode = 0xC3
+	case "DELETE":
+		cmdCode = 0xC4
+	case "UPDATE":
+		cmdCode = 0xC5
+	default:
+		cmdCode = 0x00
+	}
+	WriteReturnStatusDirect(buf, returnStatus)
+	if extraTokens != nil {
+		extraTokens(buf)
+	}
+
+	if len(res.Columns) > 0 {
 		WriteDoneDirect(buf, TokenDoneProc, doneStatus, 0xC1, uint64(len(res.Rows)))
 	} else {
-		cmdCode := uint16(0)
-		switch upperCmd {
-		case "SELECT":
-			cmdCode = 0xC1
-		case "INSERT":
-			cmdCode = 0xC3
-		case "DELETE":
-			cmdCode = 0xC4
-		case "UPDATE":
-			cmdCode = 0xC5
-		default:
-			cmdCode = 0x00
-		}
-		WriteReturnStatusDirect(buf, returnStatus)
-		if extraTokens != nil {
-			extraTokens(buf)
-		}
 		WriteDoneDirect(buf, TokenDoneProc, doneStatus|DoneCount, cmdCode, uint64(res.RowsAffected))
 	}
 
@@ -2712,33 +2729,40 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		}
 	}
 
-	doneStatus := DoneFinal
-	if sess.inTx {
-		doneStatus |= DoneInXact
-	}
+	for cur := res; cur != nil; cur = cur.Next {
+		isFinal := (cur.Next == nil)
 
-	if len(res.Columns) > 0 {
-		cols := s.inferColumnInfos(res)
-		buf.Write(BuildColMetaData(cols))
-
-		_ = s.streamQueryRows(stream, sess, cols, res.Rows, res.Values)
-
-		WriteDoneDirect(buf, TokenDone, doneStatus|DoneCount, 0xC1, uint64(len(res.Rows)))
-	} else {
-		cmdCode := uint16(0)
-		switch upperCmd {
-		case "SELECT":
-			cmdCode = 0xC1
-		case "INSERT":
-			cmdCode = 0xC3
-		case "DELETE":
-			cmdCode = 0xC4
-		case "UPDATE":
-			cmdCode = 0xC5
-		default:
-			cmdCode = 0x00
+		doneStatus := DoneFinal
+		if !isFinal {
+			doneStatus = DoneMore
 		}
-		WriteDoneDirect(buf, TokenDone, doneStatus|DoneCount, cmdCode, uint64(res.RowsAffected))
+		if sess.inTx {
+			doneStatus |= DoneInXact
+		}
+
+		if len(cur.Columns) > 0 {
+			cols := s.inferColumnInfos(cur)
+			buf.Write(BuildColMetaData(cols))
+
+			_ = s.streamQueryRows(stream, sess, cols, cur.Rows, cur.Values)
+
+			WriteDoneDirect(buf, TokenDone, doneStatus|DoneCount, 0xC1, uint64(len(cur.Rows)))
+		} else {
+			cmdCode := uint16(0)
+			switch strings.ToUpper(cur.Command) {
+			case "SELECT":
+				cmdCode = 0xC1
+			case "INSERT":
+				cmdCode = 0xC3
+			case "DELETE":
+				cmdCode = 0xC4
+			case "UPDATE":
+				cmdCode = 0xC5
+			default:
+				cmdCode = 0x00
+			}
+			WriteDoneDirect(buf, TokenDone, doneStatus|DoneCount, cmdCode, uint64(cur.RowsAffected))
+		}
 	}
 
 	_ = stream.Close()

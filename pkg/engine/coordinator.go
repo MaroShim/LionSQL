@@ -24,6 +24,10 @@ type QueryResult struct {
 	// It is meaningful only when HasReturnStatus is true (the statement was a procedure call).
 	ReturnStatus    int32 `json:"return_status,omitempty"`
 	HasReturnStatus bool  `json:"has_return_status,omitempty"`
+
+	// Next links subsequent result sets produced by multi-statement batches
+	// or stored procedures emitting multiple SELECT queries.
+	Next *QueryResult `json:"next,omitempty"`
 }
 
 // ReturnStatusFromValue converts a procedure RETURN value into the int32 sent as the TDS RETURNSTATUS token.

@@ -22,6 +22,13 @@ import (
 	"lionsql/pkg/storage"
 )
 
+// VMResultSet captures the output tuples and column metadata of an individual SELECT statement.
+type VMResultSet struct {
+	Columns []string
+	Rows    []map[string]any
+	Values  [][]any
+}
+
 // ExecutionResult captures the output and metrics of a procedure, function, or query execution.
 type ExecutionResult struct {
 	ReturnValue  any
@@ -33,6 +40,7 @@ type ExecutionResult struct {
 	RowsAffected int64
 	LastIdentity int64
 	Vars         map[string]any // Final variable states after execution
+	ResultSets   []VMResultSet  // Sequential result sets for multiple SELECT queries
 }
 
 // TriggerEntry holds metadata and precompiled bytecode for a trigger.
@@ -501,6 +509,7 @@ type VMFrame struct {
 	rows            []map[string]any
 	columns         []string
 	values          [][]any
+	resultSets      []VMResultSet
 	rowCount        int64
 	cursorRows       int64
 	lastOpenedCursor string
@@ -705,17 +714,7 @@ func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName 
 		}
 	}
 
-	return &ExecutionResult{
-		ReturnValue:  retVal,
-		Logs:         frame.logs,
-		Duration:     time.Since(start),
-		Rows:         frame.rows,
-		Columns:      frame.columns,
-		Values:       frame.values,
-		RowsAffected: frame.rowCount,
-		LastIdentity: frame.lastIdentity,
-		Vars:         collectFrameVars(frame),
-	}, nil
+	return frame.buildExecutionResult(start, retVal), nil
 }
 
 // RunInTx executes a program within an existing transaction context.
@@ -769,17 +768,51 @@ func (e *Executor) ExecuteInTxWithSessionContext(ctx context.Context, prog *proc
 		return nil, err
 	}
 
+	return frame.buildExecutionResult(start, retVal), nil
+}
+
+func (frame *VMFrame) buildExecutionResult(start time.Time, retVal any) *ExecutionResult {
+	var resultSets []VMResultSet
+	if len(frame.resultSets) > 0 {
+		resultSets = append(resultSets, frame.resultSets...)
+		if len(frame.columns) > 0 {
+			resultSets = append(resultSets, VMResultSet{
+				Columns: frame.columns,
+				Rows:    frame.rows,
+				Values:  frame.values,
+			})
+		}
+	} else if len(frame.columns) > 0 {
+		resultSets = []VMResultSet{{
+			Columns: frame.columns,
+			Rows:    frame.rows,
+			Values:  frame.values,
+		}}
+	}
+
+	rows := frame.rows
+	columns := frame.columns
+	values := frame.values
+	rowCount := frame.rowCount
+	if len(resultSets) > 0 {
+		rows = resultSets[0].Rows
+		columns = resultSets[0].Columns
+		values = resultSets[0].Values
+		rowCount = int64(len(rows))
+	}
+
 	return &ExecutionResult{
 		ReturnValue:  retVal,
 		Logs:         frame.logs,
 		Duration:     time.Since(start),
-		Rows:         frame.rows,
-		Columns:      frame.columns,
-		Values:       frame.values,
-		RowsAffected: frame.rowCount,
+		Rows:         rows,
+		Columns:      columns,
+		Values:       values,
+		RowsAffected: rowCount,
 		LastIdentity: frame.lastIdentity,
 		Vars:         collectFrameVars(frame),
-	}, nil
+		ResultSets:   resultSets,
+	}
 }
 
 func collectFrameVars(frame *VMFrame) map[string]any {
@@ -926,6 +959,7 @@ func (f *VMFrame) resetForPool() {
 	f.rows = nil
 	f.columns = nil
 	f.values = nil
+	f.resultSets = nil
 	f.ctx = nil
 	f.tx = nil
 	f.session = nil

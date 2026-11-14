@@ -1158,6 +1158,33 @@ func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, st
 	}
 	messages = append(messages, fmt.Sprintf("Return code: %v", res.ReturnValue))
 
+	if len(res.ResultSets) > 1 {
+		var headRes *QueryResult
+		var tailRes *QueryResult
+		for i, rs := range res.ResultSets {
+			qr := &QueryResult{
+				Success:         true,
+				Command:         "EXEC",
+				Columns:         rs.Columns,
+				Rows:            rs.Rows,
+				Values:          rs.Values,
+				RowsAffected:    int64(len(rs.Rows)),
+				DurationUS:      time.Since(start).Microseconds(),
+				Messages:        messages,
+				ReturnStatus:    ReturnStatusFromValue(res.ReturnValue),
+				HasReturnStatus: true,
+			}
+			if i == 0 {
+				headRes = qr
+				tailRes = qr
+			} else {
+				tailRes.Next = qr
+				tailRes = qr
+			}
+		}
+		return headRes, nil
+	}
+
 	rowsAffected := res.RowsAffected
 	if rowsAffected == 0 && len(res.Rows) > 0 {
 		rowsAffected = int64(len(res.Rows))
@@ -1168,6 +1195,7 @@ func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, st
 		Command:         "EXEC",
 		Columns:         res.Columns,
 		Rows:            res.Rows,
+		Values:          res.Values,
 		RowsAffected:    rowsAffected,
 		DurationUS:      time.Since(start).Microseconds(),
 		Messages:        messages,

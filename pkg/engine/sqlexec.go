@@ -471,6 +471,8 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 	}
 
 	var accumulatedMessages []string
+	var headRes *QueryResult
+	var tailRes *QueryResult
 	for _, stmt := range stmts {
 		select {
 		case <-queryCtx.Done():
@@ -535,6 +537,9 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 			}
 			execErr = err
 			lastRes = res
+			if headRes != nil {
+				return headRes, err
+			}
 			return res, err
 		}
 		if cs != nil {
@@ -546,15 +551,31 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 			if len(res.Messages) > 0 {
 				accumulatedMessages = append(accumulatedMessages, res.Messages...)
 			}
+			if len(res.Columns) > 0 || res.Next != nil {
+				if headRes == nil {
+					headRes = res
+					tailRes = res
+				} else {
+					tailRes.Next = res
+					tailRes = res
+				}
+				for tailRes.Next != nil {
+					tailRes = tailRes.Next
+				}
+			}
 			if lastRes == nil || len(res.Columns) > 0 || res.Command != "PRINT" {
 				lastRes = res
 			}
 		}
 	}
-	if lastRes != nil && len(accumulatedMessages) > 0 {
-		lastRes.Messages = accumulatedMessages
+	ret := headRes
+	if ret == nil {
+		ret = lastRes
 	}
-	return lastRes, nil
+	if ret != nil && len(accumulatedMessages) > 0 {
+		ret.Messages = accumulatedMessages
+	}
+	return ret, nil
 }
 
 // ExecuteSessionSQL runs SQL statements within a specific client session context.

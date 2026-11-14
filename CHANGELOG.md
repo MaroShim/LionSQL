@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Wire & Protocol (`FEAT-TDS-MULTIPLE-RESULT-SETS-1`, Defect 107)**:
+  - Implement sequential Multiple Result Sets streaming (`QueryResult.Next`) across SQL batches and stored procedures for Microsoft SQL Server TDS 7.x/8.0 wire protocol listener (`:1433`).
+  - Emit intermediate `TokenDone` / `TokenDoneInProc` with `DoneMore (0x0001)` status and final `TokenDone` / `TokenDoneProc` with `DoneFinal (0x0000)`, enabling standard multi-result navigation in client drivers (Go `rows.NextResultSet()`, ADO.NET `NextResult()`, JDBC `getMoreResults()`, SSMS multi-grid view).
+  - Support multi-statement stored procedures emitting multiple SELECT queries in VDBE virtual machine with `VMResultSet` sequence collection.
 - **Storage & Planner (`PERF-CBO-STATS-BOUNDED-1`)**:
   - Implement $O(1)$ atomic live `TableRowCount` on WiredTiger storage engine (`*wiredtiger.Engine`) with transactional commit/rollback deltas, truncate reset, and restart catalog recovery.
   - Enforce 30,000-row bounded Vitter reservoir sampling in `AnalyzeTable` (`pkg/engine/sqlexec_explain.go`) to prevent memory spikes on million-row tables (`[RULE:BoundedBuffers]`).

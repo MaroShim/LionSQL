@@ -2109,6 +2109,13 @@ vmLoop:
 			continue vmLoop
 		}
 
+		if len(f.columns) > 0 {
+			f.resultSets = append(f.resultSets, VMResultSet{
+				Columns: f.columns,
+				Rows:    f.rows,
+				Values:  f.values,
+			})
+		}
 		f.rows = rows
 		f.columns = cols
 		f.values = vals
@@ -2135,6 +2142,10 @@ vmLoop:
 				}
 			}
 			f.setVar(queryData.IntoVar, toStorageValue(val))
+			f.rows = nil
+			f.columns = nil
+			f.values = nil
+			f.rowCount = 0
 		}
 		if inst.A >= 0 && int(inst.A) < len(f.regs) {
 			f.regs[inst.A] = storage.IntValue(int64(len(rows)))
@@ -2281,6 +2292,16 @@ vmLoop:
 			row[colName] = val
 		}
 
+		if len(f.columns) > 0 {
+			f.resultSets = append(f.resultSets, VMResultSet{
+				Columns: f.columns,
+				Rows:    f.rows,
+				Values:  f.values,
+			})
+			f.rows = nil
+			f.values = nil
+		}
+
 		f.rows = append(f.rows, row)
 		f.values = append(f.values, vals)
 		f.columns = cols
@@ -2356,4 +2377,17 @@ func parseTsqlDelay(val storage.Value, isDelay bool) (time.Duration, error) {
 	}
 	return target.Sub(now), nil
 }
+
+func slicesEqualStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 
