@@ -117,8 +117,9 @@ type Column struct {
 	Type       DataType `json:"type" msgpack:"type"`
 	PrimaryKey bool     `json:"primary_key" msgpack:"primary_key"`
 	Nullable   bool     `json:"nullable" msgpack:"nullable"`
-	Identity   bool     `json:"identity,omitempty" msgpack:"identity,omitempty"`
-	Hidden     bool     `json:"hidden,omitempty" msgpack:"hidden,omitempty"`
+	Identity     bool     `json:"identity,omitempty" msgpack:"identity,omitempty"`
+	IsRowVersion bool     `json:"is_rowversion,omitempty" msgpack:"is_rowversion,omitempty"`
+	Hidden       bool     `json:"hidden,omitempty" msgpack:"hidden,omitempty"`
 	Precision  int      `json:"precision,omitempty" msgpack:"precision,omitempty"`
 	Scale      int      `json:"scale,omitempty" msgpack:"scale,omitempty"`
 	Default    string   `json:"default,omitempty" msgpack:"default,omitempty"`
@@ -635,6 +636,19 @@ func (s *TableSchema) PrimaryKeyColumn() (*Column, error) {
 		}
 	}
 	return nil, fmt.Errorf("no primary key defined on table %q", s.Name)
+}
+
+// RowVersionColumn returns the ROWVERSION column if defined on the table.
+func (s *TableSchema) RowVersionColumn() (*Column, int, bool) {
+	if s == nil {
+		return nil, -1, false
+	}
+	for i := range s.Columns {
+		if s.Columns[i].IsRowVersion {
+			return &s.Columns[i], i, true
+		}
+	}
+	return nil, -1, false
 }
 
 func (s *TableSchema) FindColumn(name string) (*Column, int, bool) {

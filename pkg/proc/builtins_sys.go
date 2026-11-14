@@ -6,7 +6,6 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"hash/crc32"
@@ -15,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"lionsql/pkg/storage"
@@ -25,26 +23,21 @@ var (
 	uuidv7Mu sync.Mutex
 	lastV7Ms int64
 	v7Seq    uint16
-
-	globalDBTS atomic.Uint64
 )
-
-func init() {
-	// Standard starting baseline for SQL Server rowversion/timestamp (0x00000000000007D0 = 2000)
-	globalDBTS.Store(2000)
-}
 
 // GetCurrentDBTS returns the current database 8-byte rowversion/timestamp counter as a big-endian byte slice.
 func GetCurrentDBTS() []byte {
-	v := globalDBTS.Load()
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, v)
-	return buf
+	return storage.GetCurrentDBTS()
 }
 
 // AdvanceDBTS monotonically increments and returns the new global rowversion/timestamp counter.
 func AdvanceDBTS() uint64 {
-	return globalDBTS.Add(1)
+	return storage.AdvanceDBTS()
+}
+
+// NextRowVersion atomically increments the global rowversion counter and returns the new 8-byte big-endian binary.
+func NextRowVersion() []byte {
+	return storage.NextRowVersion()
 }
 
 // GenerateUUIDv7 generates an RFC 9562 Version 7 UUID string with 48-bit millisecond timestamp

@@ -352,6 +352,12 @@ func (tx *Transaction) InsertRow(tableName string, row storage.Row) error {
 	}
 	schema := td.Schema
 
+	if _, rvIdx, hasRV := schema.RowVersionColumn(); hasRV {
+		if rvIdx >= 0 && rvIdx < len(row.Values) {
+			row.Values[rvIdx] = storage.BinaryValue(storage.NextRowVersion())
+		}
+	}
+
 	// Fast-path for tables without secondary indexes, foreign keys, composite PKs, or partitioning
 	if len(schema.Indexes) == 0 && len(schema.ForeignKeys) == 0 && !schema.IsPartitioned() && !schema.IsCompositePK() {
 		pkIdx := schema.PrimaryKeyIndex()
@@ -403,6 +409,10 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 		}
 	}
 	record = normalized
+
+	if rvCol, _, hasRV := schema.RowVersionColumn(); hasRV {
+		record[rvCol.Name] = storage.BinaryValue(storage.NextRowVersion())
+	}
 
 	if _, err := schema.PrimaryKeyColumn(); err != nil {
 		return err
@@ -620,6 +630,11 @@ func (tx *Transaction) UpdateRow(tableName string, pk storage.Value, row storage
 		originalBaseVer := tx.getBaseVer(schema.Name, pkKey)
 
 		rowClone := cloneRow(row)
+		if _, rvIdx, hasRV := schema.RowVersionColumn(); hasRV {
+			if rvIdx >= 0 && rvIdx < len(rowClone.Values) {
+				rowClone.Values[rvIdx] = storage.BinaryValue(storage.NextRowVersion())
+			}
+		}
 		for i, col := range schema.Columns {
 			if i < len(rowClone.Values) && rowClone.Values[i].Type != col.Type && !rowClone.Values[i].IsNull {
 				if col.Type == storage.TypeFloat && (rowClone.Values[i].Type == storage.TypeInt || rowClone.Values[i].Type == storage.TypeReal) {
@@ -685,6 +700,10 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 		} else {
 			updated.Set(col, val)
 		}
+	}
+
+	if rvCol, _, hasRV := schema.RowVersionColumn(); hasRV {
+		updated[rvCol.Name] = storage.BinaryValue(storage.NextRowVersion())
 	}
 
 	// Validate columns and types for updated row

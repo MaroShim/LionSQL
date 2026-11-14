@@ -82,28 +82,34 @@ func GenerateSysCatalogRows(src Source, norm string, currDb string) (columns []s
 				maxLength := 4
 				prec := 10
 				scale := 0
-				switch c.Type {
-				case storage.TypeInt:
-					systemTypeID, userTypeID, maxLength, prec = 56, 56, 4, 10
-				case storage.TypeReal:
-					systemTypeID, userTypeID, maxLength, prec = 59, 59, 4, 24
-				case storage.TypeFloat:
-					systemTypeID, userTypeID, maxLength, prec = 62, 62, 8, 53
-				case storage.TypeVarChar:
-					systemTypeID, userTypeID, maxLength, prec = 167, 167, 8000, 0
-				case storage.TypeBool:
-					systemTypeID, userTypeID, maxLength, prec = 104, 104, 1, 1
-				case storage.TypeDateTime:
-					systemTypeID, userTypeID, maxLength, prec, scale = 61, 61, 8, 23, 3
-				case storage.TypeDecimal:
-					p, s := c.Precision, c.Scale
-					if p <= 0 {
-						p = 18
+				dataTypeStr := c.Type.String()
+				if c.IsRowVersion {
+					systemTypeID, userTypeID, maxLength, prec, scale = 189, 189, 8, 0, 0
+					dataTypeStr = "rowversion"
+				} else {
+					switch c.Type {
+					case storage.TypeInt:
+						systemTypeID, userTypeID, maxLength, prec = 56, 56, 4, 10
+					case storage.TypeReal:
+						systemTypeID, userTypeID, maxLength, prec = 59, 59, 4, 24
+					case storage.TypeFloat:
+						systemTypeID, userTypeID, maxLength, prec = 62, 62, 8, 53
+					case storage.TypeVarChar:
+						systemTypeID, userTypeID, maxLength, prec = 167, 167, 8000, 0
+					case storage.TypeBool:
+						systemTypeID, userTypeID, maxLength, prec = 104, 104, 1, 1
+					case storage.TypeDateTime:
+						systemTypeID, userTypeID, maxLength, prec, scale = 61, 61, 8, 23, 3
+					case storage.TypeDecimal:
+						p, s := c.Precision, c.Scale
+						if p <= 0 {
+							p = 18
+						}
+						if s < 0 {
+							s = 2
+						}
+						systemTypeID, userTypeID, maxLength, prec, scale = 108, 108, 17, p, s
 					}
-					if s < 0 {
-						s = 2
-					}
-					systemTypeID, userTypeID, maxLength, prec, scale = 108, 108, 17, p, s
 				}
 				allRows = append(allRows, map[string]any{
 					"table_name":       t.Name,
@@ -113,7 +119,7 @@ func GenerateSysCatalogRows(src Source, norm string, currDb string) (columns []s
 					"column_id":        i + 1,
 					"system_type_id":   systemTypeID,
 					"user_type_id":     userTypeID,
-					"data_type":        c.Type.String(),
+					"data_type":        dataTypeStr,
 					"is_nullable":      nullableStr,
 					"is_identity":      false,
 					"is_primary_key":   c.PrimaryKey,
@@ -504,6 +510,8 @@ func GenerateSysCatalogRows(src Source, norm string, currDb string) (columns []s
 		allRows = append(allRows,
 			map[string]any{"name": "int", "system_type_id": 56, "user_type_id": 56, "schema_id": 4, "max_length": 4, "precision": 10, "scale": 0, "is_nullable": true},
 			map[string]any{"name": "real", "system_type_id": 59, "user_type_id": 59, "schema_id": 4, "max_length": 4, "precision": 24, "scale": 0, "is_nullable": true},
+			map[string]any{"name": "timestamp", "system_type_id": 189, "user_type_id": 189, "schema_id": 4, "max_length": 8, "precision": 0, "scale": 0, "is_nullable": false},
+			map[string]any{"name": "rowversion", "system_type_id": 189, "user_type_id": 189, "schema_id": 4, "max_length": 8, "precision": 0, "scale": 0, "is_nullable": false},
 			map[string]any{"name": "varchar", "system_type_id": 167, "user_type_id": 167, "schema_id": 4, "max_length": 8000, "precision": 0, "scale": 0, "is_nullable": true},
 			map[string]any{"name": "float", "system_type_id": 62, "user_type_id": 62, "schema_id": 4, "max_length": 8, "precision": 53, "scale": 0, "is_nullable": true},
 			map[string]any{"name": "bit", "system_type_id": 104, "user_type_id": 104, "schema_id": 4, "max_length": 1, "precision": 1, "scale": 0, "is_nullable": true},

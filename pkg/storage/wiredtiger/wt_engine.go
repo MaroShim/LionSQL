@@ -2042,6 +2042,10 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 	}
 	record = normalized
 
+	if rvCol, _, hasRV := tbl.RowVersionColumn(); hasRV {
+		record[rvCol.Name] = storage.BinaryValue(storage.NextRowVersion())
+	}
+
 	if _, err := tbl.PrimaryKeyColumn(); err != nil {
 		return err
 	}
@@ -2212,6 +2216,10 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 		} else {
 			existing.Set(col, val)
 		}
+	}
+
+	if rvCol, _, hasRV := tbl.RowVersionColumn(); hasRV {
+		existing[rvCol.Name] = storage.BinaryValue(storage.NextRowVersion())
 	}
 
 	if err := tx.checkForeignKeyLocked(tbl, existing); err != nil {

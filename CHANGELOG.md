@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Map wire protocols and virtual catalog: TDS `TypeFltN` sends 4 bytes for `TypeReal` and 8 bytes for `TypeFloat`; PGWire maps `TypeReal` to OID 700 (`FLOAT4`) and `TypeFloat` to OID 701 (`FLOAT8`); `sys.types` exposes `real` (59, 4, 24) and `float` (62, 8, 53).
 
 ### Added
+- **Types, Storage & Engine (`FEAT-TYPE-ROWVERSION-MONOTONIC-COUNTER-1`, Defect 104)**:
+  - Implement full T-SQL `ROWVERSION` (`TIMESTAMP`) data type and monotonic global database sequence (`@@DBTS`).
+  - Enforce single-rowversion column constraint per table on `CREATE TABLE` and `ALTER TABLE ADD COLUMN`.
+  - Automatically stamp next monotonic 8-byte binary rowversion on all `INSERT` and `UPDATE` mutations across storage engines (`memengine` and `wiredtiger`).
+  - Forward `@@DBTS` system function and expose `rowversion` / `timestamp` in virtual catalogs (`sys.types` id 189, `sys.columns`).
 - **Wire & Protocol (`FEAT-TDS-MULTIPLE-RESULT-SETS-1`, Defect 107)**:
   - Implement sequential Multiple Result Sets streaming (`QueryResult.Next`) across SQL batches and stored procedures for Microsoft SQL Server TDS 7.x/8.0 wire protocol listener (`:1433`).
   - Emit intermediate `TokenDone` / `TokenDoneInProc` with `DoneMore (0x0001)` status and final `TokenDone` / `TokenDoneProc` with `DoneFinal (0x0000)`, enabling standard multi-result navigation in client drivers (Go `rows.NextResultSet()`, ADO.NET `NextResult()`, JDBC `getMoreResults()`, SSMS multi-grid view).

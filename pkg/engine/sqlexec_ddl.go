@@ -312,23 +312,32 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		isGeneratedIdentity := sqlutil.ContainsKeyword(cDefTrimmed, "AS IDENTITY", false) ||
 			(sqlutil.ContainsKeyword(cDefTrimmed, "GENERATED", false) && sqlutil.ContainsKeyword(cDefTrimmed, "IDENTITY", false))
 		isSerial := rawType == "SERIAL" || rawType == "BIGSERIAL" || rawType == "SMALLSERIAL"
+		isRowVersion := rawType == "ROWVERSION"
+		if isRowVersion {
+			if _, _, hasRV := schema.RowVersionColumn(); hasRV {
+				return nil, fmt.Errorf("a table can only have one rowversion column")
+			}
+			dataType = storage.TypeBinary
+			precision = 8
+		}
 		isPK := sqlutil.ContainsKeyword(cDefTrimmed, "PRIMARY KEY", false)
-		isNotNull := sqlutil.ContainsKeyword(cDefTrimmed, "NOT NULL", false) || isPK || isSerial || isGeneratedIdentity
+		isNotNull := sqlutil.ContainsKeyword(cDefTrimmed, "NOT NULL", false) || isPK || isSerial || isGeneratedIdentity || isRowVersion
 		isIdentity := sqlutil.ContainsKeyword(cDefTrimmed, "IDENTITY", false) || sqlutil.ContainsKeyword(cDefTrimmed, "AUTO_INCREMENT", false) || isSerial || isGeneratedIdentity
 
 		defaultExpr := parseColumnDefault(cDefTrimmed)
 		checkExpr := parseColumnCheckExpr(cDefTrimmed)
 
 		schema.Columns = append(schema.Columns, storage.Column{
-			Name:       colName,
-			Type:       dataType,
-			PrimaryKey: isPK,
-			Nullable:   !isNotNull,
-			Identity:   isIdentity,
-			Precision:  precision,
-			Scale:      scale,
-			Default:    defaultExpr,
-			CheckExpr:  checkExpr,
+			Name:         colName,
+			Type:         dataType,
+			PrimaryKey:   isPK,
+			Nullable:     !isNotNull,
+			Identity:     isIdentity,
+			IsRowVersion: isRowVersion,
+			Precision:    precision,
+			Scale:        scale,
+			Default:      defaultExpr,
+			CheckExpr:    checkExpr,
 		})
 
 		if sqlutil.ContainsKeyword(cDefTrimmed, "REFERENCES", false) {
@@ -1367,7 +1376,7 @@ func parseSQLDataType(s string) storage.DataType {
 		return storage.TypeTime
 	case "UUID", "UNIQUEIDENTIFIER", "GUID":
 		return storage.TypeUUID
-	case "VARBINARY", "BINARY", "BYTEA", "BLOB", "IMAGE":
+	case "VARBINARY", "BINARY", "BYTEA", "BLOB", "IMAGE", "ROWVERSION":
 		return storage.TypeBinary
 	case "JSON", "JSONB":
 		return storage.TypeJSON
@@ -2236,8 +2245,13 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 
 			isGeneratedIdentity := sqlutil.ContainsKeyword(segTrimmed, "AS IDENTITY", false) ||
 				(sqlutil.ContainsKeyword(segTrimmed, "GENERATED", false) && sqlutil.ContainsKeyword(segTrimmed, "IDENTITY", false))
+			isRowVersion := baseType == "ROWVERSION"
+			if isRowVersion {
+				dataType = storage.TypeBinary
+				precision = 8
+			}
 			segUpperRest := strings.ToUpper(segTrimmed)
-			isNotNull := strings.Contains(segUpperRest, "NOT NULL") || isGeneratedIdentity
+			isNotNull := strings.Contains(segUpperRest, "NOT NULL") || isGeneratedIdentity || isRowVersion
 			nullable := !isNotNull
 			isIdentity := strings.Contains(segUpperRest, "IDENTITY") || strings.Contains(segUpperRest, "AUTO_INCREMENT") || isGeneratedIdentity
 
@@ -2245,14 +2259,24 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			checkExpr := parseColumnCheckExpr(segTrimmed)
 
 			col := &storage.Column{
-				Name:      colName,
-				Type:      dataType,
-				Nullable:  nullable,
-				Identity:  isIdentity,
-				Precision: precision,
-				Scale:     scale,
-				Default:   defaultExpr,
-				CheckExpr: checkExpr,
+				Name:         colName,
+				Type:         dataType,
+				Nullable:     nullable,
+				Identity:     isIdentity,
+				IsRowVersion: isRowVersion,
+				Precision:    precision,
+				Scale:        scale,
+				Default:      defaultExpr,
+				CheckExpr:    checkExpr,
+			}
+
+			if isRowVersion {
+				tblSch, err := s.engine.GetTable(tableName)
+				if err == nil {
+					if _, _, hasRV := tblSch.RowVersionColumn(); hasRV {
+						return nil, fmt.Errorf("a table can only have one rowversion column")
+					}
+				}
 			}
 
 			if err := s.engine.AddColumn(tableName, col); err != nil {
