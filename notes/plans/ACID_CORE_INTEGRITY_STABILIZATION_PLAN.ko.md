@@ -3,7 +3,7 @@
 
 > **문서 상태**: Approved (100대 결함 3그룹 체계화 및 1.0-GA 쉴드 확립)  
 > **마일스톤 분류**:
-> - **제1그룹 (1.0-GA 쇼스토퍼)**: 14개 (사용자 체감 & 코어 무결성/타입 시스템/대화형 CLI 엔트리포인트 즉시 해결 과제)
+> - **제1그룹 (1.0-GA 쇼스토퍼)**: 17개 (사용자 체감 & 코어 무결성/타입 시스템/CLI/세션 보안/캐시 무결성 즉시 해결 과제)
 > - **제2그룹 (Post-1.0 실무 운영 안정화)**: 61개 (v1.10.0 ~ v1.30.0 정기 릴리즈 개선 과제)
 > - **제3그룹 (장기 백로그 & 특수 엣지 케이스)**: 27개 (v1.40.0+ / 실용적 비시급 분산·플래너 과제)  
 > **관련 규칙**: `[RULE:AtomicSaves]`, `[RULE:ExplicitError]`, `[RULE:LockHierarchy]`, `[RULE:PlanPersistence]`, `[RULE:ContinuousBacklog]`, `[RULE:ZeroOracleTampering]`
@@ -17,8 +17,8 @@
 
 ```mermaid
 flowchart TD
-    subgraph ACID_TriGroup ["ACID 102대 결함 3그룹 계층 구조"]
-        G1["제1그룹: 1.0-GA 쇼스토퍼 (14개)<br>• 사용자 즉시 체감 버그 (NEWID, SET a=b, b=a, NOT IN NULL)<br>• 데이터 타입 바이너리 정합성 (REAL 4B vs FLOAT 8B 분리)<br>• 대화형 CLI 엔트리포인트 (lionsql -i 및 lionsql cli 동시 지원)<br>• 드라이버 행 방지 (TDS ENVCHANGE, DONE_ERROR)<br>• 사일런트 데이터 오염 차단 (유니크 덮어쓰기, 세이브포인트 인덱스 누수)"]
+    subgraph ACID_TriGroup ["ACID 105대 결함 3그룹 계층 구조"]
+        G1["제1그룹: 1.0-GA 쇼스토퍼 (17개)<br>• 사용자 즉시 체감 버그 (NEWID, SET a=b, b=a, NOT IN NULL)<br>• 데이터 타입 바이너리 정합성 (REAL 4B vs FLOAT 8B 분리, ROWVERSION 카운터 지원)<br>• DDL 스키마 캐시 무결성 (테이블 DDL 시 VDBE 바이트코드/플랜 캐시 Auto-Invalidate)<br>• 커넥션 풀 세션 보안 격리 (TDS StatusResetConnection, HTTP 세션 격리)<br>• 대화형 CLI 엔트리포인트 (lionsql -i 및 lionsql cli 동시 지원)<br>• 드라이버 행 방지 (TDS ENVCHANGE, DONE_ERROR)<br>• 사일런트 데이터 오염 차단 (유니크 덮어쓰기, 세이브포인트 인덱스 누수)"]
         G2["제2그룹: Post-1.0 실무 운영 안정화 (61개 / v1.10 ~ v1.30)<br>• 섀도 DDL 격리, WAL Phantom Commit, 복제 프레임 무결성<br>• 동시성 FK 공유 락, 세션 로컬 변수 스코프, 타이밍 공격 방어<br>• 수치 정밀도(Decimal), 대용량 튜플 오프셋, 카탈로그 원자성"]
         G3["제3그룹: 장기 아키텍처 및 비시급 과제 (27개 / v1.40+)<br>• 다단계 재귀 FK DAG 토폴로지, SSI 술어 갭 락<br>• WorkMem 디스크 스필 해시 집계, 인덱스 스킵 스캔<br>• 분산 에포크 펜싱, HLC 하이브리드 논리 시계"]
     end
@@ -29,7 +29,7 @@ flowchart TD
 
 ---
 
-## 2. 제1그룹: 1.0-GA 쇼스토퍼 (사용자 체감 & 코어 무결성 최우선 14대 과제)
+## 2. 제1그룹: 1.0-GA 쇼스토퍼 (사용자 체감 & 코어 무결성 최우선 17대 과제)
 
 사용자가 데이터베이스를 처음 설치하고 쿼리를 실행했을 때 **즉시 마주칠 수 있는 상식 파괴 버그**와 **사일런트 데이터 오염**, 그리고 온디스크 바이너리 호환성을 깨뜨리는 **데이터 타입 미분리**, 개발자 UX를 결정짓는 **대화형 CLI 엔트리포인트**를 1.0 출시 전에 원천 차단 및 확립합니다.
 
@@ -108,6 +108,29 @@ flowchart TD
   2. **대화형 프롬프트 진입 동시 지원**: 단축 플래그 `lionsql -i` (또는 `--interactive`, `--shell`)와 서브커맨드 `lionsql cli` (또는 `lionsql sql`)를 모두 지원하여 즉시 T-SQL 대화형 셸(`LionSQL> `)로 진입.
   3. **헤드리스 쿼리 실행 지원 (`[RULE:HeadlessParity]`)**: `-e "SELECT ..."` 인라인 쿼리 실행 및 `-f query.sql` 파일 배치 실행 지원.
   4. **비밀번호/포트 관례 보호**: `-p` 플래그는 기존 DB 표준(Password/Port)과 충돌하므로 프롬프트 용도로 사용하지 않고 전 세계 표준인 `-i`(Interactive) 채택.
+
+### [결함 103 / 태스크: `FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`] 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리)
+* **분류**: `Security / Session State / Connection Pool` | **위치**: `pkg/wire/tds/server.go`, `pkg/api/handlers_admin.go`, `pkg/engine/session.go`
+* **현상**: 커넥션 풀(HikariCP, ADO.NET, Npgsql 등) 사용 환경에서 사용자 A가 실행한 `EXECUTE AS USER = 'admin'`, `SET @var`, `#temp_tables`가 세션 반납 후 리셋되지 않아, 동일 커넥션을 대여한 사용자 B가 A의 관리자 권한 및 개인정보 세션 변수를 그대로 승계받는 세션 상태 누수(Session State Leakage) 보안 취약점 발생. HTTP `/api/sql`에서도 `session_id` 미지정 시 싱글톤 `"default"` 세션을 공유하여 동일 오염 발생.
+* **해결책**:
+  1. **TDS `StatusResetConnection(0x08)` 원자적 리셋**: TDS 패킷 헤더에서 0x08 플래그 감지 시, `cs.User = cs.OriginalUser` 강제 복구, `clear(cs.Vars)`, 세션 임시 테이블 물리 샤드 강제 드롭, 활성 트랜잭션 롤백을 수행하는 `cs.ResetSessionState()` 호출 파이프라인 구축.
+  2. **PGWire `DISCARD ALL` 지원**: 풀러 재사용 시 전송되는 `DISCARD ALL` 및 `RESET ALL` 파싱 및 세션 상태 원자적 초기화.
+  3. **HTTP API 인증 토큰 기반 세션 격리**: `/api/sql` 호출 시 `session_id`가 생략되더라도 싱글톤 `"default"` 세션을 공유하지 않고, 인증 주체(JWT Claim / API Key)별 격리 세션 또는 일회성 Ephemeral 세션을 자동 발급하여 교차 오염 원천 차단.
+
+### [결함 104 / 태스크: `FEAT-TYPE-ROWVERSION-MONOTONIC-COUNTER-1`] `ROWVERSION` 데이터 타입 DDL 파싱 및 INSERT/UPDATE 시 `@@DBTS` 단조 증가 바이너리 자동 스탬핑
+* **분류**: `Type System / T-SQL Standard / Storage` | **위치**: `pkg/engine/sqlexec_ddl.go`, `pkg/proc/runtime/vm_dispatcher.go`, `pkg/storage/engine.go`
+* **현상**: `TIMESTAMP`는 날짜/시간(DATETIME)으로 올바르게 매핑되어 있으나, Microsoft SQL Server의 낙관적 동시성 제어(OCC) 핵심 타입인 `ROWVERSION`이 DDL 파서(`parseSQLDataType`)에 등록되어 있지 않아 `VARCHAR`로 잘못 폴백됨. 또한 레코드 INSERT/UPDATE 시 `@@DBTS` 글로벌 단조 증가 시퀀스(`AdvanceDBTS()`)를 8바이트 빅엔디안 바이너리로 자동 갱신해 주는 스탬핑 파이프라인 부재.
+* **해결책**:
+  1. `parseSQLDataType`에 `ROWVERSION`을 등록하여 `storage.TypeBinary`(8바이트 고정)로 매핑.
+  2. 테이블 스키마에 `RowVersion` 플래그를 추가하고, 행 생성(INSERT) 및 변경(UPDATE) 시 엔진 차원에서 `proc.AdvanceDBTS()`를 호출하여 `0x00000000000007D1...` 형식의 최신 8바이트 버전 바이너리를 자동 할당.
+  3. T-SQL 레거시 DDL에서 날짜 함수 없이 `col TIMESTAMP NOT NULL`로 단독 선언된 경우 `ROWVERSION`과의 변환 및 호환성 가이드 제공.
+
+### [결함 105 / 태스크: `FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`] 테이블 DDL 변경 시 VDBE 바이트코드 프로시저 및 실행 계획 캐시 자동 Invalidate
+* **분류**: `Engine / VDBE / Schema Invariance` | **위치**: `pkg/engine/coordinator_impl.go:262`, `pkg/engine/sqlexec_ddl.go`, `pkg/proc/runtime/vm.go`
+* **현상**: 테이블에 DDL(`ALTER TABLE ADD/DROP COLUMN`, `CREATE/DROP INDEX`, `RENAME TABLE` 등)이 발생했을 때, PK 바이패스 캐시(`schemaVersion`)만 갱신되고 VDBE 바이트코드 프로시저 캐시(`s.executor.Cache()`) 및 AST 플랜 캐시(`s.planCache`)는 Invalidate되지 않음. 이로 인해 기 컴파일된 프로시저가 이전 스키마의 컬럼 오프셋이나 인덱스 번호를 그대로 참조하여 엉뚱한 데이터를 읽거나 사일런트 데이터 오염을 유발할 위험 존재.
+* **해결책**:
+  1. DDL 실행 완료 훅인 `s.InvalidatePKBypassCache()` 내부에서 `s.executor.Cache().Clear()` 및 `s.planCache.Clear()`(또는 테이블 단위 종속성 기반 `InvalidateTable(tableName)`)를 원자적 호출.
+  2. 스키마 변경 직후 모든 오래된 바이트코드 플랜을 즉각 무효화하여, 다음 프로시저 호출(`EXEC`) 시 최신 카탈로그 스키마를 기준으로 자동 재컴파일(Auto-Recompile)되도록 보장.
 
 ---
 

@@ -28,6 +28,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `FIX-WT-UNIQUE-INDEX-OVERWRITE-FALSE-1`: enforce overwrite=false on WiredTiger unique index inserts to eliminate silent overwrites
     - `FIX-TYPE-REAL-FLOAT-DISTINCTION-1`: decouple REAL (4-byte IEEE 754 float32) from FLOAT (8-byte float64) across storage tuple codec, TDS/PGWire protocols, and catalog views (Defect 101)
     - `FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`: support dual entrypoints for interactive T-SQL REPL via short flag `lionsql -i` and subcommand `lionsql cli` with headless `-e`/`-f` parity and `-p` password/port convention protection (Defect 102)
+    - `FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`: enforce connection pool session isolation via TDS StatusResetConnection (0x08), PGWire DISCARD ALL, and HTTP token-scoped session sandboxing (Defect 103)
+    - `FEAT-TYPE-ROWVERSION-MONOTONIC-COUNTER-1`: support ROWVERSION data type parsing and automatic monotonic @@DBTS binary stamping on row mutations (Defect 104)
+    - `FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`: auto-invalidate VDBE bytecode procedure and query execution plan caches on table/index DDL changes (Defect 105)
 - enhance benchmark CLI directory safety and logging transparency across `cmd/tpcc_runtime`, `cmd/tpcc_kernel`, `cmd/bench`, `cmd/ssb`:
   - explicitly print `[Base Directory] ... (Preserved)` and `[Isolated Subdir] ... (Auto-cleaned upon exit)`
   - guarantee temporary benchmark subdirectory cleanup on error before `os.Exit(1)` and log parent directory preservation
