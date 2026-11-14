@@ -50,7 +50,7 @@ func main() {
 	numWorkers := flag.Int("workers", 20, "Number of concurrent client workers")
 	durationFlag := flag.Duration("duration", 15*time.Second, "Benchmark duration (e.g. 10s, 30s, 1m)")
 	engineType := flag.String("engine", "memory", "Storage engine backend (memory, wiredtiger)")
-	dataDir := flag.String("dir", "data/tpcc_kernel_wt", "Data directory for WiredTiger backend")
+	dataDir := flag.String("dir", "data/tpcc_kernel_wt", "Parent base directory for isolated benchmark runs (unique subdirectories are created and auto-cleaned)")
 	keepDir := flag.Bool("keep-dir", false, "Preserve benchmark data directory after completion")
 	numItems := flag.Int("items", 1000, "Number of unique items (default 1000 for fast setup, full spec: 100000)")
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default 300 for fast setup, full spec: 3000)")
@@ -61,11 +61,9 @@ func main() {
 	fmt.Println("================================================================================")
 	fmt.Println("  LionSQL TPC-C Benchmark Suite (Storage Engine Kernel - tpcc-kernel)")
 	fmt.Println("================================================================================")
-	fmt.Printf(" [Storage Engine] %s (Dir: %s)\n", *engineType, *dataDir)
 	fmt.Printf(" [Scale Factor]   %d Warehouses (%d Items, %d Customers/District)\n", *numWarehouses, *numItems, *numCustPerDist)
 	fmt.Printf(" [Concurrency]    %d Client Workers\n", *numWorkers)
 	fmt.Printf(" [Duration]       %v\n", *durationFlag)
-	fmt.Println("--------------------------------------------------------------------------------")
 
 	// 1. Initialize Storage Engine
 	var eng storage.Engine
@@ -77,18 +75,24 @@ func main() {
 			os.Exit(1)
 		}
 		defer cleanup()
+		fmt.Printf(" [Storage Engine] wiredtiger\n")
+		fmt.Printf(" [Base Directory] %s (Preserved)\n", *dataDir)
+		fmt.Printf(" [Isolated Subdir] %s (Auto-cleaned upon exit)\n", subDir)
 		eng = wiredtiger.New()
 		if err := eng.Open(subDir); err != nil {
+			cleanup()
 			fmt.Printf("Failed to open WiredTiger storage engine: %v\n", err)
 			os.Exit(1)
 		}
 	case "memory":
+		fmt.Printf(" [Storage Engine] memory (Pure RAM in-memory)\n")
 		eng = memengine.New()
 		_ = eng.Open("")
 	default:
 		fmt.Printf("Unknown storage engine: %s. Options: memory, wiredtiger\n", *engineType)
 		os.Exit(1)
 	}
+	fmt.Println("--------------------------------------------------------------------------------")
 	defer func() {
 		eng.Close()
 	}()

@@ -3,7 +3,7 @@
 - **문서 버전**: 1.0 (Consolidated Master Edition)
 - **작성 일자**: 10월 17일
 - **검증 대상**: LionSQL Embedded High-Concurrency OLTP Database Engine
-- **테스트 환경**: macOS Darwin arm64 (Apple Silicon), Go 1.24+ (`-tags wiredtiger`)
+- **테스트 환경**: macOS Darwin arm64 (Apple Silicon), Go 1.26+ (`-tags wiredtiger`)
 - **검증 주체**: Antigravity AI Pair Programming Agent & Core Engineering Team
 - **종합 결과**: **13개 주요 테스트 도메인 전 항목 통과 (100% PASS, 0 Failures, 0 Data Races, 0 Leaks)**
 
@@ -67,7 +67,7 @@
 
 ### 2.1 하드웨어 및 런타임 인프라
 - **호스트 머신**: Apple M-Series (macOS Darwin 24.x arm64)
-- **Go 툴체인**: Go 1.24+ with runtime race detector (`-race`)
+- **Go 툴체인**: Go 1.26+ with runtime race detector (`-race`)
 - **CGO 컴파일 의존성**: WiredTiger C Library Static Binding (`-tags wiredtiger`)
 - **프로세스 격리 모델**: 데이터 디렉터리(`--data-dir`) 및 바인딩 포트(`--port`) 단위의 완전 물리 프로세스 격리
 

@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-09-22
 > - **최종 갱신일**: 2026-11-12
-> - **영문 버전**: [doc/TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+> - **English**: [doc/TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
 ---
 

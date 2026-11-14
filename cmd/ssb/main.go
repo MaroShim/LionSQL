@@ -17,7 +17,7 @@ import (
 func main() {
 	sf := flag.Float64("sf", 0.001, "SSB Scale Factor (0.001 = ~6K rows, 0.01 = ~60K rows, 0.1 = ~600K rows)")
 	engineType := flag.String("engine", "memory", "Storage engine backend: memory or wiredtiger")
-	dataDir := flag.String("dir", "data/ssb_wt", "Directory for WiredTiger storage")
+	dataDir := flag.String("dir", "data/ssb_wt", "Parent base directory for isolated benchmark runs (unique subdirectories are created and auto-cleaned)")
 	keepDir := flag.Bool("keep-dir", false, "Preserve storage directory after run")
 	warmup := flag.Int("warmup", 1, "Warmup iterations")
 	iterations := flag.Int("iterations", 3, "Measurement iterations")
@@ -26,10 +26,8 @@ func main() {
 	fmt.Println("================================================================================")
 	fmt.Println("  LionSQL Star Schema Benchmark (SSB) - Complex Query & Volcano CBO Engine")
 	fmt.Println("================================================================================")
-	fmt.Printf(" [Storage Engine] %s\n", *engineType)
 	fmt.Printf(" [Scale Factor]   %.4f (~%d LineOrder fact rows)\n", *sf, int(6000000**sf))
 	fmt.Printf(" [Iterations]     %d warmup, %d measured runs\n", *warmup, *iterations)
-	fmt.Println("--------------------------------------------------------------------------------")
 
 	var eng storage.Engine
 	switch *engineType {
@@ -40,18 +38,24 @@ func main() {
 			os.Exit(1)
 		}
 		defer cleanup()
+		fmt.Printf(" [Storage Engine] %s\n", *engineType)
+		fmt.Printf(" [Base Directory] %s (Preserved)\n", *dataDir)
+		fmt.Printf(" [Isolated Subdir] %s (Auto-cleaned upon exit)\n", subDir)
 		eng = wiredtiger.New()
 		if err := eng.Open(subDir); err != nil {
+			cleanup()
 			fmt.Printf("Failed to open WiredTiger engine: %v\n", err)
 			os.Exit(1)
 		}
 	case "memory":
+		fmt.Printf(" [Storage Engine] memory (Pure RAM in-memory)\n")
 		eng = memengine.New()
 		_ = eng.Open("")
 	default:
 		fmt.Printf("Unknown engine: %s. Use 'memory' or 'wiredtiger'\n", *engineType)
 		os.Exit(1)
 	}
+	fmt.Println("--------------------------------------------------------------------------------")
 	defer eng.Close()
 
 	cat := catalog.New(eng)

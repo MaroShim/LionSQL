@@ -2,7 +2,7 @@
 
 > - **Created**: 2026-10-29
 > - **Last Updated**: 2026-10-29
-> [한국어 문서 (Korean Version)](COMPLEX_QUERY_BENCHMARK_GUIDE.ko.md)
+> [한국어 문서](COMPLEX_QUERY_BENCHMARK_GUIDE.ko.md)
 
 > [!NOTE]
 > This document serves as the official technical guide for LionSQL's Tier 2 Volcano CBO complex query execution engine, detailing the Star Schema Benchmark (SSB) 4-flight query specifications, standalone benchmark CLI tool (`bin/ssb`) usage, and empirical performance comparisons against leading database management systems (DuckDB, PostgreSQL, SQLite).

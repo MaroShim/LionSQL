@@ -2956,6 +2956,12 @@ func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (
 	for i, p := range prog.Params {
 		if i < len(argRegs) {
 			regIdx := argRegs[i]
+			if regIdx == -1 {
+				if p.Default == nil {
+					return storage.NullValue(storage.TypeUnknown), fmt.Errorf("procedure %s parameter %s has no DEFAULT value declared", procName, p.Name)
+				}
+				continue
+			}
 			if regIdx >= 0 && int(regIdx) < len(f.regs) {
 				params[p.Name] = valToAny(f.regs[regIdx])
 			}
@@ -2994,6 +3000,14 @@ func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (
 		}
 	}
 	logs := subFrame.logs
+	if len(subFrame.rows) > 0 {
+		f.rows = append(f.rows, subFrame.rows...)
+		f.columns = subFrame.columns
+		f.rowCount += subFrame.rowCount
+	}
+	if len(subFrame.values) > 0 {
+		f.values = append(f.values, subFrame.values...)
+	}
 	f.executor.releaseFrame(subFrame)
 
 	if len(logs) > 0 {

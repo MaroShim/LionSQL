@@ -2,6 +2,7 @@
 
 > - **최초 작성일**: 2026-10-08
 > - **최종 갱신일**: 2026-10-29
+> - **English**: [doc/USER_MANUAL.md](USER_MANUAL.md)
 
 
 이 문서는 LionSQL 데이터베이스 엔진을 처음 설치하고 실행하는 방법부터, 클라이언트 연결, 애플리케이션 개발, 그리고 운영 및 유지보수까지 전 과정을 단계별로 안내하는 **공식 사용자 매뉴얼(User Manual)**입니다.
@@ -21,7 +22,7 @@
   * Volcano 관계형 쿼리 실행 엔진 및 비용 기반 옵티마이저 (CBO)
 * **1.3. 시스템 요구사항 및 플랫폼 지원**
   * 지원 운영체제: macOS (Apple Silicon / Intel), Linux (x86_64 / arm64), Windows
-  * 빌드 및 런타임 전제조건 (Go 1.22+, 선택적 WiredTiger Cgo 라이브러리)
+  * 빌드 및 런타임 전제조건 (Go 1.26+, 선택적 WiredTiger Cgo 라이브러리)
 
 ---
 
@@ -265,7 +266,7 @@ LionSQL은 경량 임베디드 설계로 인해 매우 낮은 하드웨어 사�
 | **RAM** | 512 MB (기본 work_mem 64MB) | 4 GB 이상 (물리 메모리의 65%를 글로벌 거버너 예산으로 자동 할당) |
 | **디스크** | 100 MB 여유 공간 (바이너리 약 50MB) | NVMe SSD (초당 수만 건의 WAL Group Commit I/O 보장) |
 | **운영체제** | macOS 12+ (Darwin ARM64 / x86_64)<br>Linux (Ubuntu 20.04+, RHEL 8+, Alpine/Debian)<br>Windows 10 / Server 2019+ | Linux LTS (Ubuntu 22.04 LTS / 24.04 LTS x86_64 or ARM64) |
-| **Go 컴파일러** | Go 1.22 이상 (소스 빌드 시) | Go 1.24 이상 |
+| **Go 컴파일러** | Go 1.26 이상 (소스 빌드 시) | Go 1.26+ |
 
 ---
 
@@ -304,7 +305,7 @@ LionSQL은 외부 공유 라이브러리나 런타임 설치가 필요 없는 �
 $ lionsql version
 LionSQL v0.92.0 (darwin/arm64) [tags: wiredtiger]
 Git Commit: 477a4cb6
-Go Version: go1.24.0
+Go Version: go1.26.0
 Build Date: 2026-11-09T08:30:00Z
 Storage Backends: WiredTiger MVCC, In-Memory OCC
 ```
@@ -339,7 +340,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-kernel ./cmd/tpcc_kernel
 설정 파일 없이 기본 플래그만으로 서버를 즉시 기동할 수 있습니다:
 
 ```bash
-# 기본 데이터 디렉토리(./data)로 포그라운드 대화형 기동
+# 기본 데이터 디렉토리(./data)로 포그라운드 서버 기동 (기본 동작 - 인자 없음)
 ./bin/lionsql
 ```
 
@@ -366,6 +367,34 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-kernel ./cmd/tpcc_kernel
 ```bash
 $ curl -s http://127.0.0.1:8090/api/health
 {"status":"ok","version":"0.92.0","engine":"wiredtiger","uptime_seconds":5}
+```
+
+---
+
+### 2.3.1. 대화형 터미널 셸(Interactive SQL CLI) 진입
+
+LionSQL은 데이터베이스 서버를 백그라운드나 컨테이너로 띄운 후, 별도의 외부 클라이언트 설치 없이 즉시 단일 바이너리로 대화형 SQL 프롬프트(REPL)에 진입할 수 있는 2가지 진입 경로를 동시 제공합니다:
+
+```bash
+# 방법 1: 단축 플래그 (-i, --interactive, --shell)
+./bin/lionsql -i
+
+# 방법 2: 서브커맨드 (cli, sql, shell)
+./bin/lionsql cli
+```
+
+> [!NOTE]
+> **`-p` 플래그 관례 보호 정책**:  
+> 데이터베이스 생태계(MySQL, PostgreSQL, MSSQL)에서 `-p`는 수십 년간 **비밀번호(Password)** 또는 **포트(Port)**로 예약되어 있습니다. LionSQL은 사용자의 근육 기억(Muscle Memory) 충돌을 방지하기 위해 `-p`를 프롬프트 플래그로 전용하지 않고, 유닉스/Python/Node.js 전 세계 표준인 **`-i` (Interactive)** 단축 플래그와 **`cli`** 서브커맨드를 표준으로 채택합니다.
+
+#### 헤드리스 쿼리 실행 및 배치 스크립트 ([RULE:HeadlessParity])
+CI/CD 파이프라인이나 셸 스크립트에서 터미널 열람 없이 즉시 단일 쿼리나 스크립트를 실행할 수 있습니다:
+```bash
+# 인라인 T-SQL 쿼리 즉시 실행 (-e)
+./bin/lionsql -i -e "SELECT @@VERSION;"
+
+# SQL 배치 스크립트 파일 실행 (-f)
+./bin/lionsql cli -f setup.sql
 ```
 
 ---

@@ -3,7 +3,7 @@
 Single-binary, high-concurrency OLTP database server supporting T-SQL and stored procedures
 
 [![Version](https://img.shields.io/badge/version-v0.92.0-blue.svg)](CHANGELOG.md)
-[![Go Version](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg?logo=go&logoColor=white)](go.mod)
+[![Go Version](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg?logo=go&logoColor=white)](go.mod)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](README.md)
 [![Architecture](https://img.shields.io/badge/Architecture-PGWire%20%7C%20T--SQL%20%7C%20VDBE-blueviolet)](doc/ARCHITECTURE.md)
@@ -146,7 +146,7 @@ LionSQL's core capabilities are organized across five foundational architectural
 
 #### Prerequisites
 - **Supported Operating Systems**: **macOS**, **Linux** (officially supported), **Windows** (standalone binary available)
-- Go 1.22 or higher
+- Go 1.26 or higher (Go 1.26+)
 - (Optional, for WiredTiger backend) `wiredtiger` development headers and libraries:
   - macOS: `brew install wiredtiger`
   - Linux (Ubuntu/Debian): `sudo apt-get install libwiredtiger-dev`
@@ -187,7 +187,7 @@ Upon startup, the console displays the connection endpoints:
 ```text
 --------------------------------------------------------------------------------
  LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v0.92.0)
- (built: 2026-11-09 14:00:00 KST, commit: 2eb8712, go1.24 darwin/arm64) [tags: wiredtiger]
+ (built: 2026-11-09 14:00:00 KST, commit: 2eb8712, go1.26 darwin/arm64) [tags: wiredtiger]
 --------------------------------------------------------------------------------
  [Configuration]  Zero-Config (Built-in Defaults)
  [Web Dashboard]  http://127.0.0.1:8090/_/
@@ -387,17 +387,23 @@ run();
 | `-work-mem` | `64MB` | Default memory limit per query operator before spill-to-disk |
 | `-max-workers` | `NumCPU * 4` | Maximum concurrent query execution workers |
 | `-max-idle-sessions` | `64` | Maximum idle storage sessions to retain in pool |
-| `-auth` | `false` | Enforce JWT authentication on protected REST endpoints |
-| `-seed` | `true` | Seed sample accounts and `TransferFunds` procedure on startup |
+| `-auth` | `true` | Enforce JWT authentication on protected REST endpoints |
+| `-seed` | `false` | Seed sample accounts and `TransferFunds` procedure on startup |
 
 ### Unified CLI & Daemon Controls
 
 LionSQL provides a modern, unified CLI with first-class lifecycle commands:
 
 ```bash
-# Foreground execution (default)
+# Foreground execution (default - no arguments)
 ./bin/lionsql                   # Start immediately using ./data
 ./bin/lionsql serve -dir=./data # Explicit serve subcommand
+
+# Interactive SQL Terminal Shell & CLI (Dual Entrypoints)
+./bin/lionsql -i                # Interactive T-SQL prompt (short flag)
+./bin/lionsql cli               # Interactive T-SQL prompt (subcommand)
+./bin/lionsql -i -e "SELECT 1;" # Headless one-off query execution
+./bin/lionsql cli -f script.sql # Headless batch script execution
 
 # Background daemon management
 ./bin/lionsql start -dev        # Start daemon in background (creates lionsql.pid & lionsql.log)

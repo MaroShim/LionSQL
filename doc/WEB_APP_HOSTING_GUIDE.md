@@ -2,7 +2,7 @@
 
 > - **Created**: 2026-11-06
 > - **Last Updated**: 2026-11-06
-> [한국어 문서 (Korean Version)](WEB_APP_HOSTING_GUIDE.ko.md)
+> [한국어 문서](WEB_APP_HOSTING_GUIDE.ko.md)
 
 LionSQL provides a built-in static web server capable of **hosting high-concurrency OLTP databases and frontend web applications (SPAs) simultaneously within a single static executable**, eliminating the need for sidecar web servers like Nginx, Apache, Caddy, or Node.js.
 

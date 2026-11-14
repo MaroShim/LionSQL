@@ -6,7 +6,7 @@ Thank you for your interest in contributing to LionSQL! This guide explains our 
 
 ## 1. Development Prerequisites
 
-- **Go**: Version 1.22 or higher.
+- **Go**: Version 1.26 or higher (Go 1.26+).
 - **WiredTiger (Optional for Cgo production backend)**:
   - macOS: `brew install wiredtiger`
   - Ubuntu/Debian: `sudo apt-get install libwiredtiger-dev`

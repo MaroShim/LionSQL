@@ -3,7 +3,7 @@
 단일 바이너리 고동시성 OLTP 데이터베이스 서버 (T-SQL 및 저장 프로시저 지원) / Single-binary, high-concurrency OLTP database server supporting T-SQL and stored procedures
 
 [![Version](https://img.shields.io/badge/version-v0.92.0-blue.svg)](CHANGELOG.md)
-[![Go Version](https://img.shields.io/badge/Go-1.24%2B-00ADD8.svg?logo=go&logoColor=white)](go.mod)
+[![Go Version](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg?logo=go&logoColor=white)](go.mod)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](README.ko.md)
 [![Architecture](https://img.shields.io/badge/Architecture-PGWire%20%7C%20T--SQL%20%7C%20VDBE-blueviolet)](doc/ARCHITECTURE.md)
@@ -144,7 +144,7 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 
 #### 사전 요구 사항
 - **지원 운영체제 (OS)**: **macOS**, **Linux** (공식 지원), **Windows** (단독 바이너리 빌드 지원)
-- Go 1.22 이상
+- Go 1.26 이상 (Go 1.26+)
 - (WiredTiger 백엔드 사용 시 선택 사항) `wiredtiger` 개발 헤더 및 라이브러리:
   - macOS: `brew install wiredtiger`
   - Linux (Ubuntu/Debian): `sudo apt-get install libwiredtiger-dev`
@@ -185,7 +185,7 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql.
 ```text
 --------------------------------------------------------------------------------
  LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v0.92.0)
- (built: 2026-11-09 14:00:00 KST, commit: 2eb8712, go1.24 darwin/arm64) [tags: wiredtiger]
+ (built: 2026-11-09 14:00:00 KST, commit: 2eb8712, go1.26 darwin/arm64) [tags: wiredtiger]
 --------------------------------------------------------------------------------
  [Configuration]  Zero-Config (Built-in Defaults)
  [Web Dashboard]  http://127.0.0.1:8090/_/
@@ -385,17 +385,23 @@ run();
 | `-work-mem` | `64MB` | 연산자 단위 디스크 스필 기준 메모리 상한선 |
 | `-max-workers` | `NumCPU * 4` | 최대 동시 쿼리 실행 워커 스레드 수 |
 | `-max-idle-sessions` | `64` | 풀에 유지할 최대 유휴 스토리지 세션 수 |
-| `-auth` | `false` | 보호된 REST 엔드포인트에 대한 JWT 인증 강제 여부 |
-| `-seed` | `true` | 기동 시 데모 계좌 데이터 및 `TransferFunds` 프로시저 시드 생성 |
+| `-auth` | `true` | 보호된 REST 엔드포인트에 대한 JWT 인증 강제 여부 |
+| `-seed` | `false` | 기동 시 데모 계좌 데이터 및 `TransferFunds` 프로시저 시드 생성 |
 
 ### 통합 CLI 및 백그라운드 데몬 제어
 
 LionSQL은 일급 라이프사이클 서브커맨드를 지원하는 현대적 통합 CLI를 제공합니다:
 
 ```bash
-# 기본 포그라운드 실행
-./bin/lionsql                   # ./data 디렉터리를 사용하여 즉시 실행
+# 기본 포그라운드 서버 실행 (기본 동작 - 인자 없음)
+./bin/lionsql                   # ./data 디렉터리를 사용하여 즉시 서버 실행
 ./bin/lionsql serve -dir=./data # 명시적 서버 실행 서브커맨드
+
+# 대화형 SQL 터미널 셸 및 CLI (2대 진입 경로 동시 지원)
+./bin/lionsql -i                # 대화형 T-SQL 프롬프트 진입 (단축 플래그)
+./bin/lionsql cli               # 대화형 T-SQL 프롬프트 진입 (서브커맨드)
+./bin/lionsql -i -e "SELECT 1;" # 헤드리스 원라이너 인라인 쿼리 실행
+./bin/lionsql cli -f script.sql # 헤드리스 배치 스크립트 실행
 
 # 백그라운드 데몬 관리
 ./bin/lionsql start -dev        # 백그라운드 데몬 기동 (lionsql.pid 및 lionsql.log 자동 생성)

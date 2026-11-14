@@ -50,7 +50,7 @@ AUTO_INSTALL=true \
 DB_TYPE=postgres \
 DB_HOST=127.0.0.1:5433 \
 DB_USERNAME=admin \
-DB_PASSWORD=1234567890 \
+DB_PASSWORD=<your-admin-password> \
 DB_NAME=answer \
 LANGUAGE=en_US \
 SITE_NAME="LionSQL Q&A" \
@@ -73,7 +73,7 @@ server:
 data:
   database:
     driver: postgres
-    connection: host=127.0.0.1 port=5433 user=admin password=1234567890 dbname=answer sslmode=disable
+    connection: host=127.0.0.1 port=5433 user=admin password=<your-admin-password> dbname=answer sslmode=disable
   cache:
     file_path: /path/to/answer_data/cache/cache.db
 i18n:

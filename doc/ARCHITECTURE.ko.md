@@ -2,6 +2,7 @@
 
 > - **최초 작성일**: 2026-09-22
 > - **최종 갱신일**: 2026-11-12
+> - **English**: [doc/ARCHITECTURE.md](ARCHITECTURE.md)
 
 ---
 

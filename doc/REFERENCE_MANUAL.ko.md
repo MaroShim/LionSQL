@@ -2,6 +2,7 @@
 
 > - **최초 작성일**: 2026-10-08
 > - **최종 갱신일**: 2026-11-03
+> - **English**: [doc/REFERENCE_MANUAL.md](REFERENCE_MANUAL.md)
 
 
 이 문서는 LionSQL 데이터베이스 엔진의 모든 명령어, 설정값, SQL 구문 및 문법 규격, 데이터 타입, 시스템 내장 함수, 가상 카탈로그 뷰, REST API 엔드포인트 및 와이어 프로토콜 사양을 총망라하는 **공식 레퍼런스 매뉴얼(Reference Manual)**입니다.
@@ -461,7 +462,7 @@ LionSQL 바이너리의 정식 릴리즈 버전, 빌드 태그, 대상 OS/아키
   ```bash
   LionSQL v0.90.0 (darwin/arm64) [tags: wiredtiger]
   Git Commit: 477a4cb6
-  Go Version: go1.24.0
+  Go Version: go1.26.0
   Build Date: 2024-10-19T08:30:00Z
   Storage Backends: WiredTiger MVCC, In-Memory OCC
   ```
@@ -1464,7 +1465,7 @@ LionSQL은 기본 HTTP 포트 `:8090`을 통해 시스템 메트릭 관제, 관�
   {
     "name": "LionSQL",
     "version": "0.90.0",
-    "go_version": "go1.24.0",
+    "go_version": "go1.26.0",
     "git_commit": "477a4cb6",
     "build_tags": ["wiredtiger"],
     "os_arch": "darwin/arm64"

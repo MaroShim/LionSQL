@@ -1,6 +1,6 @@
 # LionSQL Core Engine Internals (`doc/internal/`)
 
-> [한국어 문서 (Korean Version)](README.ko.md)
+> [한국어 문서](README.ko.md)
 
 This directory contains low-level architectural blueprints, binary format specifications, virtual machine instruction set architectures (ISA), and engine concurrency invariants for **LionSQL** core database developers and engine maintainers.
 

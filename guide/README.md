@@ -1,6 +1,6 @@
 # LionSQL Official Application Integration Guides (`guide/`)
 
-> [한국어 문서 (Korean Version)](README.ko.md)
+> [한국어 문서](README.ko.md)
 
 This directory contains official step-by-step deployment, migration, and operational guides for running popular open-source applications and enterprise services directly on **LionSQL** with zero source code modifications.
 

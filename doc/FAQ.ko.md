@@ -1,7 +1,7 @@
 # LionSQL 자주 묻는 질문 (FAQ) (`doc/FAQ.ko.md`)
 
 > **문서 버전**: v0.91.0 기준  
-> **영문 버전**: [`doc/FAQ.md`](FAQ.md)  
+> **English**: [`doc/FAQ.md`](FAQ.md)  
 > **핵심 설계 및 아키텍처 문서**: [`notes/ENGINEERING_CONTEXT.ko.md`](../notes/ENGINEERING_CONTEXT.ko.md), [`doc/ARCHITECTURE.md`](ARCHITECTURE.md)
 
 LionSQL의 설계 철학, 내부 아키텍처, 성능 최적화 및 프로토콜 호환성에 대해 자주 묻는 16가지 질문과 답변입니다.

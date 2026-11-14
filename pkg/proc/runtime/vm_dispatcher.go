@@ -1042,18 +1042,36 @@ vmLoop:
 
 		for i, col := range cols {
 			if i < len(data.ValExprs) {
-				stVal, ok := f.evalRowExprFast(data.ValExprs[i])
-				if !ok {
-					if evalCtx == nil {
-						evalCtx = f.buildRowEvalMap(nil)
+				valExpr := data.ValExprs[i]
+				var stVal storage.Value
+				isDefaultKw := proc.IsDefaultKeyword(valExpr)
+				if isDefaultKw {
+					if tableSchema != nil {
+						if colSchema, _, ok := tableSchema.FindColumn(col); ok && colSchema.Default != "" {
+							stVal = proc.ParseLiteralDefault(colSchema.Default, colSchema.Type)
+						} else if ok {
+							stVal = storage.NullValue(colSchema.Type)
+						} else {
+							stVal = storage.Value{IsNull: true}
+						}
+					} else {
+						stVal = storage.Value{IsNull: true}
 					}
-					vAny, _ := proc.EvalRowExpr(data.ValExprs[i], evalCtx, nil)
-					stVal = toStorageValue(vAny)
+				} else {
+					var ok bool
+					stVal, ok = f.evalRowExprFast(valExpr)
+					if !ok {
+						if evalCtx == nil {
+							evalCtx = f.buildRowEvalMap(nil)
+						}
+						vAny, _ := proc.EvalRowExpr(valExpr, evalCtx, nil)
+						stVal = toStorageValue(vAny)
+					}
 				}
 				if tableSchema != nil {
 					if colSchema, _, ok := tableSchema.FindColumn(col); ok {
 						col = colSchema.Name
-						if colSchema.Type != stVal.Type {
+						if !isDefaultKw && colSchema.Type != stVal.Type {
 							if colSchema.Type == storage.TypeDecimal && stVal.Type == storage.TypeFloat && colSchema.Scale >= 0 {
 								stVal = proc.ParseLiteralDefault(strconv.FormatFloat(stVal.FVal, 'f', colSchema.Scale, 64), colSchema.Type)
 							} else {

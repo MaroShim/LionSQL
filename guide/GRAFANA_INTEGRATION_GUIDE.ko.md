@@ -11,7 +11,7 @@
 > - **참조 문서**:
 >   - 실전 연동 검증 보고서: [`notes/GRAFANA_INTEGRATION_REPORT.ko.md`](../notes/reports/GRAFANA_INTEGRATION_REPORT.ko.md)
 >   - 아키텍처 계획서: [`notes/GRAFANA_INTEGRATION_PLAN.ko.md`](../notes/reports/GRAFANA_INTEGRATION_REPORT.ko.md)
->   - 영문 가이드: [`guide/GRAFANA_INTEGRATION_GUIDE.md`](GRAFANA_INTEGRATION_GUIDE.md)
+>   - English Guide: [`guide/GRAFANA_INTEGRATION_GUIDE.md`](GRAFANA_INTEGRATION_GUIDE.md)
 
 ---
 
@@ -65,7 +65,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
 ### 2.2. LionSQL 데몬 시작
 Grafana 전용 데이터 디렉토리(예: `data_grafana/`)를 지정하여 구동합니다:
 ```bash
-./bin/lionsql -data-dir=data_grafana -admin-pass=1234567890
+./bin/lionsql -data-dir=data_grafana -admin-pass="<your-admin-password>"
 ```
 
 기동 즉시 다음 엔드포인트가 활성화됩니다:
@@ -104,12 +104,12 @@ type = postgres
 host = 127.0.0.1:5433
 name = grafana
 user = admin
-password = 1234567890
+password = <your-admin-password>
 ssl_mode = disable
 
 [security]
 admin_user = admin
-admin_password = 1234567890
+admin_password = <your-grafana-admin-password>
 
 [paths]
 data = /Users/maro/Projects/grafana/data
@@ -137,7 +137,7 @@ Grafana가 기동된 상태에서 REST API 또는 웹 UI를 통해 LionSQL의 �
 
 ### 4.1. 데이터 소스 1: LionSQL PostgreSQL (`:5433`) 등록
 ```bash
-curl -s -u admin:1234567890 -X POST http://localhost:3100/api/datasources \
+curl -s -u admin:<your-grafana-admin-password> -X POST http://localhost:3100/api/datasources \
   -H "Content-Type: application/json" \
   -d '{
     "name": "LionSQL-PG",
@@ -152,14 +152,14 @@ curl -s -u admin:1234567890 -X POST http://localhost:3100/api/datasources \
       "postgresVersion": 1500
     },
     "secureJsonData": {
-      "password": "1234567890"
+      "password": "<your-admin-password>"
     }
   }'
 ```
 
 ### 4.2. 데이터 소스 2: LionSQL Microsoft SQL Server (`:1433`) 등록
 ```bash
-curl -s -u admin:1234567890 -X POST http://localhost:3100/api/datasources \
+curl -s -u admin:<your-grafana-admin-password> -X POST http://localhost:3100/api/datasources \
   -H "Content-Type: application/json" \
   -d '{
     "name": "LionSQL-MSSQL",
@@ -173,7 +173,7 @@ curl -s -u admin:1234567890 -X POST http://localhost:3100/api/datasources \
       "encrypt": "disable"
     },
     "secureJsonData": {
-      "password": "1234567890"
+      "password": "<your-admin-password>"
     }
   }'
 ```
@@ -181,11 +181,11 @@ curl -s -u admin:1234567890 -X POST http://localhost:3100/api/datasources \
 ### 4.3. 데이터 소스 헬스 체크 (`/api/datasources/uid/<uid>/health`)
 ```bash
 # PostgreSQL Data Source Health Check
-curl -s -u admin:1234567890 http://localhost:3100/api/datasources/uid/<pg-datasource-uid>/health
+curl -s -u admin:<your-grafana-admin-password> http://localhost:3100/api/datasources/uid/<pg-datasource-uid>/health
 # 응답: {"message":"Database Connection OK","status":"OK"}
 
 # MSSQL Data Source Health Check
-curl -s -u admin:1234567890 http://localhost:3100/api/datasources/uid/<mssql-datasource-uid>/health
+curl -s -u admin:<your-grafana-admin-password> http://localhost:3100/api/datasources/uid/<mssql-datasource-uid>/health
 # 응답: {"message":"Database Connection OK","status":"OK"}
 ```
 
@@ -193,7 +193,7 @@ curl -s -u admin:1234567890 http://localhost:3100/api/datasources/uid/<mssql-dat
 하나의 대시보드 패널 요청에서 PGWire(`:5433`)와 MSSQL TDS(`:1433`) 데이터 소스를 동시에 쿼리하여 동일한 카탈로그 데이터를 조회합니다:
 
 ```bash
-curl -s -u admin:1234567890 -X POST http://localhost:3100/api/ds/query \
+curl -s -u admin:<your-grafana-admin-password> -X POST http://localhost:3100/api/ds/query \
   -H "Content-Type: application/json" \
   -d '{
     "queries": [

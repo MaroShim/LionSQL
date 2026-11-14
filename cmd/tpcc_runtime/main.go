@@ -54,7 +54,7 @@ func main() {
 	durationFlag := flag.Duration("duration", 15*time.Second, "Benchmark duration (e.g. 10s, 30s, 1m)")
 	engineType := flag.String("engine", "memory", "Storage engine backend (memory, wiredtiger)")
 	fsyncFlag := flag.String("fsync", "everysec", "WAL fsync policy: off (ephemeral), none, everysec (default), always")
-	dataDir := flag.String("dir", "data/tpcc_runtime_wt", "Data directory for WAL/WiredTiger backend")
+	dataDir := flag.String("dir", "data/tpcc_runtime_wt", "Parent base directory for isolated benchmark runs (unique subdirectories are created and auto-cleaned)")
 	keepDir := flag.Bool("keep-dir", false, "Preserve benchmark data directory after completion")
 	numItems := flag.Int("items", 1000, "Number of unique items (default 1000 for fast setup, full spec: 100000)")
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default 300 for fast setup, full spec: 3000)")
@@ -90,11 +90,6 @@ func main() {
 	fmt.Println("  LionSQL TPC-C Benchmark Suite (T-SQL VDBE Runtime Engine - tpcc-runtime)")
 	fmt.Println("================================================================================")
 	fmt.Printf(" [Execution]      Precompiled T-SQL VDBE Bytecode (*proc.Program -> PlanCache)\n")
-	fmt.Printf(" [Storage Engine] %s (WAL fsync: %s, Dir: %s)\n", *engineType, fsyncMode, *dataDir)
-	fmt.Printf(" [Scale Factor]   %d Warehouses (%d Items, %d Customers/District)\n", *numWarehouses, *numItems, *numCustPerDist)
-	fmt.Printf(" [Concurrency]    %d Client Workers\n", *numWorkers)
-	fmt.Printf(" [Duration]       %v\n", *durationFlag)
-	fmt.Println("--------------------------------------------------------------------------------")
 
 	// 1. Initialize Storage Engine
 	var eng storage.Engine
@@ -108,8 +103,12 @@ func main() {
 			os.Exit(1)
 		}
 		defer cleanup()
+		fmt.Printf(" [Storage Engine] %s (WAL fsync: %s)\n", *engineType, fsyncMode)
+		fmt.Printf(" [Base Directory] %s (Preserved)\n", *dataDir)
+		fmt.Printf(" [Isolated Subdir] %s (Auto-cleaned upon exit)\n", subDir)
 		wtEng = wiredtiger.New()
 		if err := wtEng.Open(subDir); err != nil {
+			cleanup()
 			fmt.Printf("Failed to open WiredTiger storage engine: %v\n", err)
 			os.Exit(1)
 		}
@@ -123,6 +122,9 @@ func main() {
 				os.Exit(1)
 			}
 			defer cleanup()
+			fmt.Printf(" [Storage Engine] memory (WAL fsync: %s)\n", fsyncMode)
+			fmt.Printf(" [Base Directory] %s (Preserved)\n", *dataDir)
+			fmt.Printf(" [Isolated Subdir] %s (Auto-cleaned upon exit)\n", subDir)
 			// Seed initial tables with FsyncNone for fast setup, then switch to targetFsyncPolicy
 			opts := memengine.DefaultOptions(subDir)
 			opts.EnableAOF = true
@@ -130,17 +132,24 @@ func main() {
 			opts.AOFThreshold = 0
 			opts.FsyncPolicy = memengine.FsyncNone
 			if err := memEng.OpenWithOptions(opts); err != nil {
+				cleanup()
 				fmt.Printf("Failed to open memory storage engine with WAL: %v\n", err)
 				os.Exit(1)
 			}
 		} else {
+			fmt.Printf(" [Storage Engine] memory (Pure RAM in-memory)\n")
 			_ = memEng.Open("")
 		}
 		eng = memEng
 	default:
-		fmt.Printf("Unknown storage engine: %s. Options: memory, wiredtiger\n", *engineType)
+		fmt.Printf("Unknown storage engine: %s. Use 'memory' or 'wiredtiger'\n", *engineType)
 		os.Exit(1)
 	}
+
+	fmt.Printf(" [Scale Factor]   %d Warehouses (%d Items, %d Customers/District)\n", *numWarehouses, *numItems, *numCustPerDist)
+	fmt.Printf(" [Concurrency]    %d Client Workers\n", *numWorkers)
+	fmt.Printf(" [Duration]       %v\n", *durationFlag)
+	fmt.Println("--------------------------------------------------------------------------------")
 	defer func() {
 		eng.Close()
 	}()

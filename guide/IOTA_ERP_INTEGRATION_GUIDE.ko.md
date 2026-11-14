@@ -49,10 +49,10 @@ go build -buildvcs=false -o bin/lionsql ./cmd/lionsql
 
 ```bash
 # 디스크 영속 모드 (기본 데이터 디렉토리: data/)
-./bin/lionsql -data-dir=data -admin-pass=1234567890
+./bin/lionsql -data-dir=data -admin-pass="<your-admin-password>"
 
 # 또는 개발 및 테스트용 초고속 인메모리 모드 (-ephemeral)
-./bin/lionsql -ephemeral -engine=memory -admin-pass=1234567890
+./bin/lionsql -ephemeral -engine=memory -admin-pass="<your-admin-password>"
 ```
 
 서버가 정상 기동되면 콘솔에 다음과 같은 리스너 바인딩 상태가 출력됩니다:
@@ -82,7 +82,7 @@ ENV=production
 DB_HOST=127.0.0.1
 DB_PORT=5433
 DB_USER=admin
-DB_PASSWORD=1234567890
+DB_PASSWORD=<your-admin-password>
 DB_NAME=iota
 DB_SSL_MODE=disable
 

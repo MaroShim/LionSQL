@@ -1008,12 +1008,19 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 	case *ExecStmt:
 		var argRegs []int32
 		var outSlots []int32
+		allocCount := int32(0)
 		for i, a := range s.Args {
+			if IsDefaultKeyword(a) {
+				argRegs = append(argRegs, -1)
+				outSlots = append(outSlots, -1)
+				continue
+			}
 			r, err := c.compileExpr(a)
 			if err != nil {
 				return err
 			}
 			argRegs = append(argRegs, r)
+			allocCount++
 			outSlot := int32(-1)
 			if i < len(s.OutVars) && s.OutVars[i] != "" {
 				outSlot = c.getOrAllocSlot(s.OutVars[i])
@@ -1029,7 +1036,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			ArgRegs:  argRegs,
 			OutSlots: outSlots,
 		})
-		c.freeReg(int32(len(argRegs)))
+		c.freeReg(allocCount)
 		return nil
 
 	case *DynamicExecStmt:
@@ -1630,4 +1637,12 @@ func cleanVarName(name string) string {
 		name = name[4:]
 	}
 	return strings.Trim(name, "[]\"'`")
+}
+
+// IsDefaultKeyword reports whether an expression is the literal DEFAULT keyword.
+func IsDefaultKeyword(e Expr) bool {
+	if col, ok := e.(*ColumnRefExpr); ok {
+		return strings.EqualFold(col.Name, "DEFAULT")
+	}
+	return false
 }

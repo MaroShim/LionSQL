@@ -16,7 +16,7 @@ LionSQL supports Casdoor's **XORM + Casbin** persistence layer out of the box wi
 ## 2. Starting LionSQL
 
 ```bash
-./bin/lionsql -data-dir=data_casdoor -admin-pass=1234567890
+./bin/lionsql -data-dir=data_casdoor -admin-pass="<your-admin-password>"
 ```
 
 - **PostgreSQL Wire Listener**: `127.0.0.1:5433`
@@ -37,7 +37,7 @@ httpport = 8000
 runmode = dev
 copyrequestbody = true
 driverName = postgres
-dataSourceName = "user=admin password=1234567890 host=127.0.0.1 port=5433 sslmode=disable dbname=casdoor"
+dataSourceName = "user=admin password=<your-admin-password> host=127.0.0.1 port=5433 sslmode=disable dbname=casdoor"
 dbName =
 tableNamePrefix =
 showSql = false
@@ -54,7 +54,7 @@ httpport = 8000
 runmode = dev
 copyrequestbody = true
 driverName = mssql
-dataSourceName = "sqlserver://admin:1234567890@127.0.0.1:1433?database=casdoor&encrypt=disable"
+dataSourceName = "sqlserver://admin:<your-admin-password>@127.0.0.1:1433?database=casdoor&encrypt=disable"
 dbName = casdoor
 tableNamePrefix =
 showSql = false

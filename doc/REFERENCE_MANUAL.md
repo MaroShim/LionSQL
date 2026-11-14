@@ -2,6 +2,7 @@
 
 > - **Created**: 2026-10-08
 > - **Last Updated**: 2026-11-03
+> - **한국어 문서**: [doc/REFERENCE_MANUAL.ko.md](REFERENCE_MANUAL.ko.md)
 
 
 This document is the **Official Reference Manual** encompassing all CLI commands, configuration parameters, SQL syntax and grammar specifications, data types, system built-in functions, virtual catalog views, REST API endpoints, and wire protocol specifications for the LionSQL database engine.
@@ -464,7 +465,7 @@ Prints the official release version, build tags, target OS/architecture, and Git
   ```bash
   LionSQL v0.90.0 (darwin/arm64) [tags: wiredtiger]
   Git Commit: 477a4cb6
-  Go Version: go1.24.0
+  Go Version: go1.26.0
   Build Date: 2024-10-19T08:30:00Z
   Storage Backends: WiredTiger MVCC, In-Memory OCC
   ```
@@ -1467,7 +1468,7 @@ Returns engine status, running version, and active storage backend. Used for loa
   {
     "name": "LionSQL",
     "version": "0.90.0",
-    "go_version": "go1.24.0",
+    "go_version": "go1.26.0",
     "git_commit": "477a4cb6",
     "build_tags": ["wiredtiger"],
     "os_arch": "darwin/arm64"

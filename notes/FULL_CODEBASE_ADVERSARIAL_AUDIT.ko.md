@@ -85,7 +85,7 @@
     return walErr
     ```
   - 만약 RDB 스냅샷 저장 중 디스크 풀(ENOSPC) 등으로 `saveErr`가 발생하고, 이어서 WAL 닫기(`walErr`)에서도 I/O 에러가 발생했을 때, `saveErr`만 반환되고 `walErr`는 완전히 침묵 무시됨 (`[RULE:ExplicitError]`).
-  - Go 1.20+ 표준 `errors.Join(saveErr, walErr)`를 사용하거나 복합 에러로 결합하여 두 I/O 에러의 가시성을 모두 보장해야 함.
+  - Go 1.26+ 표준 `errors.Join(saveErr, walErr)`를 사용하거나 복합 에러로 결합하여 두 I/O 에러의 가시성을 모두 보장해야 함.
 * **합의된 결함 (Defect)**:
   - **식별 코드**: `AUDIT-FULL-002`
   - **심각도**: `Low`
@@ -102,7 +102,7 @@
     return walErr
     ```
 * **최종 판정**: `DEFECT_FIXED (완치)`
-  - Go 1.20 표준 `errors.Join(saveErr, walErr)`를 적용하여 RDB 스냅샷 저장 에러와 WAL 파일 닫기 에러가 동시에 발생하더라도 두 에러를 모두 온전히 결합하여 호출자에게 투명하게 보고 (`[RULE:ExplicitError]`).
+  - Go 1.26+ 표준 `errors.Join(saveErr, walErr)`를 적용하여 RDB 스냅샷 저장 에러와 WAL 파일 닫기 에러가 동시에 발생하더라도 두 에러를 모두 온전히 결합하여 호출자에게 투명하게 보고 (`[RULE:ExplicitError]`).
   - `TestRegression_AUDIT_FULL_002_CloseMultiErrorJoining` TDD 회귀 검증 완료.
 
 ---

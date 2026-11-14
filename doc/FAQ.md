@@ -1,7 +1,7 @@
 # LionSQL Frequently Asked Questions (FAQ) (`doc/FAQ.md`)
 
 > **Document Version**: v0.91.0  
-> **Korean Version**: [`doc/FAQ.ko.md`](FAQ.ko.md)  
+> **한국어 문서**: [`doc/FAQ.ko.md`](FAQ.ko.md)  
 > **Core Architecture & Knowledge Base**: [`notes/ENGINEERING_CONTEXT.ko.md`](../notes/ENGINEERING_CONTEXT.ko.md), [`doc/ARCHITECTURE.md`](ARCHITECTURE.md)
 
 Frequently asked questions regarding LionSQL's design philosophy, internal architecture, performance optimizations, and protocol compatibility.

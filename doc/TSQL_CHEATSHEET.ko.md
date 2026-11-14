@@ -3,7 +3,7 @@
 > - **최초 작성일**: 2026-11-12
 > - **최종 갱신일**: 2026-11-12
 > - **버전 기준**: LionSQL v1.0-GA
-> - **영문 버전**: [doc/TSQL_CHEATSHEET.md](TSQL_CHEATSHEET.md)
+> - **English**: [doc/TSQL_CHEATSHEET.md](TSQL_CHEATSHEET.md)
 
 ---
 

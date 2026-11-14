@@ -194,6 +194,7 @@
 | `DONE` | **`DURA-SLT-1`** |  | Durability | P2 | SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 | [`notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`DURA-SLT-2`** |  | Durability | P2 | SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 | [`notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`DURA-SOAK-1`** | `1.0-GA` | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
+| `PENDING` | **`FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`** | `1.0-GA` | CLI | P2 | lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 | [`doc/USER_MANUAL.ko.md`](doc/USER_MANUAL.ko.md) |  |
 | `DONE` | **`FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`** | `1.0-GA` | Mail | P2 | SQL Server DatabaseMail 외부 워커 프로세스 분리 및 sp_send_dbmail 지원 | [`notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md`](notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-DATADIR-ENGINE-MANIFEST-1`** | `1.0-GA` | Storage | P1 | 데이터 폴더 초기화 시 엔진 매니페스트(lionsql.engine.json: wiredtiger/compact, 코덱 버전) 원자적 기록, 재기동 시 자동 감지 및 이종 엔진 명시 시 Fail-Closed 차단 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FEAT-DUAL-AI-AUDIT-PIPELINE-1`** | `1.0-GA` | Durability | P1 | Dual-AI (Antigravity & Claude) Pre-Release Audit Pipeline Automation: scripts/audit_diff.sh and scripts/release.sh Gate 0 integration | [`notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`](notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md) |  |
@@ -211,13 +212,20 @@
 | `PENDING` | **`FEAT-WEB-STUDIO-HYBRID-1`** | `1.0-GA` | API | P2 | Web Studio 하이브리드 지원 (--no-studio 플래그 및 lionsql studio 서브커맨드 프록시) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WT-SECONDARY-INDEX-BTREE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 | [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md) |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-CONCURRENT-UPDATE-LOST-UPDATE-1`** | `1.0-GA` | Storage | P2 | 조건절 UPDATE 동시성 실행 시 최신 커밋 버전 Current Read 검증 및 갱신 손실(Lost Update) 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-CURSOR-LIFECYCLE-1`** |  | Engine | P1 | 커서 DEALLOCATE 및 배치 종료 시 세션 커서 레지스트리 정리 및 재선언 충돌 해결 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-DATEDIFF-BIG-DAYOFYEAR-1`** |  | Proc | P2 | DATEDIFF_BIG(dayofyear, ...) returns NULL | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-DDL-DEFAULT-CHECK-1`** | `1.0-GA` | Engine | P2 | CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 | [`1.0-GA`](1.0-GA) |  |
-| `IN_PROGRESS` | **`FIX-EXEC-DEFAULT-KEYWORD-1`** |  | Parser | P2 | EXEC arg DEFAULT keyword must bind the declared default instead of the string literal | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `DONE` | **`FIX-DEFAULT-EXPR-DYNAMIC-EVAL-1`** | `1.0-GA` | Engine | P2 | DEFAULT 표현식(NEWID, GETDATE 등) 파싱 시점 캐싱 폐지 및 INSERT 실행 시 동적 평가 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-EVAL-NOT-IN-NULL-3VL-1`** | `1.0-GA` | Engine | P2 | NOT IN 서브쿼리 및 리스트에 NULL 포함 시 3치 논리(3VL UNKNOWN) 엄격 적용 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-EXEC-DEFAULT-KEYWORD-1`** |  | Parser | P2 | EXEC arg DEFAULT keyword must bind the declared default instead of the string literal | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `PENDING` | **`FIX-EXEC-UNKNOWN-NAMED-ARG-1`** |  | Engine | P2 | EXEC with an unknown named argument must raise error 8145 instead of being ignored | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-FK-CONCURRENT-PARENT-LOCK-1`** | `1.0-GA` | Storage | P2 | 동시성 FK 검증 시 부모 행 삭제 방지 참조 락 체계 확립 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-GROUPBY-STRING-AGG-1`** |  | Engine | P1 | GROUP BY 쿼리에서 STRING_AGG(col, sep) 그룹별 집계 누락(NULL 반환) 수정 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-HTTP-REAP-ABANDONED-TX-1`** | `1.0-GA` | API | P2 | Web Studio/HTTP 유휴 세션 회수 시 미종료 트랜잭션 자동 롤백 및 스토리지 잠금 해제 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-HYBRID-TX-SPLIT-BRAIN-1`** | `1.0-GA` | Storage | P2 | 하이브리드 트랜잭션 2PC 부재로 인한 분할 커밋(Split-Brain) 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`FIX-LEXER-HEX-BINARY-LITERAL-1`** |  | Parser | P2 | Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-MEMENGINE-WAL-FSYNC-ROLLBACK-1`** | `1.0-GA` | Storage | P2 | MemEngine WAL fsync 실패 시 메모리 데이터 잔류(Phantom Commit) 롤백 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-OCC-COMPACT-AUDIT-1`** | `1.0-GA` | Storage | P1 | MemoryCompact 2단계 Audit 결함 수정 (Arena UAF, AlterTable 레이아웃/WAL, memCursor 레이스, varSlot 오버플로우) | [`notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md`](notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-TEMP-TABLE-DDL-1`** |  | Engine | P1 | 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
@@ -225,11 +233,16 @@
 | `DONE` | **`FIX-SQL-DERIVED-VALUES-1`** |  | Engine | P1 | FROM (VALUES (...), (...)) AS alias(col1, col2) 인라인 테이블 값 생성자 및 컬럼 별칭 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQL-PAREN-SELECT-1`** |  | Engine | P1 | 괄호로 감싸진 (SELECT ...) 최상위 쿼리 및 뷰/CTE 본문 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQLUTIL-PARSER-1`** |  | Engine | P2 | pkg/sqlutil SQL 파서/정규화기 결함 보강 및 렉서 공통화 | [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-TABLE-VAR-TX-ROLLBACK-EXEMPT-1`** | `1.0-GA` | Engine | P2 | T-SQL 테이블 변수(@table_var) 트랜잭션 롤백 면제 및 TRY...CATCH 에러 로깅 보존 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-TDS-BATCH-ERROR-DONE-TOKEN-1`** | `1.0-GA` | Wire | P2 | TDS 배치 문장 에러 발생 시 DONE_ERROR 종단 토큰 발송 보장(클라이언트 드라이버 행 방지) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TDS-ERROR-NUMBER-MAP-1`** |  | Wire | P1 | PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(2627, 2601, 547) 매핑 반환 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TDS-PRINT-INFO-TOKEN-1`** |  | Wire | P1 | PRINT 문 실행 결과를 TDS INFO(0xAB) 토큰으로 클라이언트에 실시간 전송 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** |  | Wire | P1 | TDS RPC(0x03) 직접 프로시저 호출 시 OUTPUT/INOUT 파라미터 RETURNVALUE(0xAC) 토큰 반환 및 생략된 기본값(@param = default) 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TDS-RPC-RETURN-STATUS-1`** |  | Wire | P1 | TDS RPC 프로시저 RETURN <int> 실행 시 실제 종료 코드를 RETURNSTATUS(0x79) 토큰으로 전송 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-TDS-USE-ENVCHANGE-TOKEN-1`** | `1.0-GA` | Wire | P2 | TDS USE 구문 실행 시 클라이언트 UI 동기화를 위한 ENVCHANGE(0xE3) 토큰 정상 방출 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-TRIGGER-DML-INVOCATION-PIPELINE-1`** | `1.0-GA` | Engine | P2 | INSERT/UPDATE/DELETE DML 실행 파이프라인 직후 카탈로그 AFTER 트리거 자동 발화 연동 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TRIGGER-FOR-KEYWORD-1`** |  | Engine | P1 | CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-TRUNCATE-TX-ROLLBACK-DEFERRED-1`** | `1.0-GA` | Storage | P2 | 트랜잭션 내 TRUNCATE 실행 시 물리 삭제 커밋 시점 지연(Deferred Drop) 및 롤백 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** |  | Engine | P1 | CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX)) 미평가 에코 버그 및 MONEY/SMALLMONEY 4자리 소수점 스케일(1.2345) 보정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-INSERT-EXEC-1`** |  | Engine | P1 | INSERT INTO <table> EXEC <proc_name> 프로시저 결과셋 적재 구문 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-JSON-FUNCTIONS-EXT-1`** | `1.0-GA` | Engine | P1 | mssql-jdbc JSONFunctionTest.java 호환성: SQL Server JSON 컬럼 타입 별칭 및 JSON_OBJECT, JSON_ARRAY, JSON_PATH_EXISTS 내장 함수 지원 | [`1.0-GA`](1.0-GA) |  |
@@ -241,8 +254,12 @@
 | `DONE` | **`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`** |  | Engine | P1 | 최상위 배치 및 sp_executesql에서 SELECT @var = expr 구문을 비교식이 아닌 T-SQL 변수 대입으로 처리 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-UNION-CHAIN-1`** | `1.0-GA` | Engine | P1 | 3개 이상 UNION 체인 중복 제거 오류: SELECT 1 UNION SELECT 2 UNION SELECT 2 ORDER BY 1 이 1,1,2 반환(프로시저 내부는 NULL,NULL,2) | [`test/slt_proc/30_case_and_set_ops_in_procs.slt`](test/slt_proc/30_case_and_set_ops_in_procs.slt) |  |
 | `DONE` | **`FIX-TSQL-XACT-STATE-1`** |  | Engine | P1 | TRY...CATCH 트랜잭션 상태 내장 함수 XACT_STATE() 지원 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-TYPE-REAL-FLOAT-DISTINCTION-1`** | `1.0-GA` | Storage | P2 | REAL(4-byte float32) vs FLOAT(8-byte float64) 데이터 타입 분리 및 스토리지/프로토콜 정합성 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-UPDATE-SNAPSHOT-COLUMN-SWAP-1`** | `1.0-GA` | Engine | P2 | UPDATE 다중 컬럼 대입 시 원본 튜플 스냅샷 기반 평가(SET a = b, b = a 원자적 스왑 보장) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-VM-HIDDEN-ROWID-1`** |  | Engine | P1 | PK 없는 테이블에 대한 VDBE VM OpInsert 실행 시 숨은 _row_id 자동 발번 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-WIN-NEGATIVE-DEFAULT-1`** | `1.0-GA` | Engine | P2 | LAG/LEAD 윈도우 함수 음수 기본값 인자(LEAD(val, 1, -1)) 파싱 시 0 반환 오류 수정 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-WT-SAVEPOINT-INDEX-CORRUPTION-1`** | `1.0-GA` | Storage | P2 | WiredTiger 세이브포인트 롤백 시 보조 인덱스 키 누수 및 고아 인덱스 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-WT-UNIQUE-INDEX-OVERWRITE-FALSE-1`** | `1.0-GA` | Storage | P2 | WiredTiger 유니크 인덱스 B-Tree 조작 시 overwrite=false 강제하여 중복 키 사일런트 덮어쓰기 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FRIENDLY-SQL`** |  | Ecosystem | P3 | DuckDB-Style Friendly SQL 문법 지원 | [`notes/plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md) |  |
 | `DONE` | **`GA-REGEX-FINAL-2`** |  | Engine | P2 | CBO Planner 및 VDBE 잔여 정규식 100% 완전 제거 | [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md) |  |
 | `DONE` | **`GA-REGEX-FINAL-3`** |  | Engine | P2 | 쿼리 실행 런타임 LIKE 정규식 100% 완전 제거 | [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md) |  |
@@ -303,6 +320,7 @@
 | `DONE` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** |  | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-OCC-FLAT-1`** |  | Storage | P2 | Flat 코덱 신뢰성 및 동시성 결함 보강 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `PENDING` | **`REFACTOR-SESSION-TRANSACTION-INVARIANT-1`** | `v1.10.0` | Engine | P2 | 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 | [`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`](notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md) |  |
+| `PENDING` | **`REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`** | `v1.10.0` | Engine | P2 | 트랜잭셔널 DDL 섀도 카탈로그 격리 및 크래시 데이터 유실 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`REFACTOR-TSQL-SESSION-VARS-VDBE-1`** | `v1.10.0` | Engine | P2 | sqlexec 텍스트 치환 전면 폐지 및 T-SQL 세션 변수 VDBE AST/레지스터 바인딩 일원화 | [`notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md`](notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-VIRTUAL-CATALOG-1`** | `1.0-GA` | Catalog | P2 | 가상 카탈로그(pkg/catalog/virtual & sqlexec_dbcc) 구조 통합 및 보일러플레이트 리팩토링 | [`notes/plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md`](notes/plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`REPL-STREAM-BIN-1`** | `v1.60.0` | Replication | P2 | Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 |  |  |
@@ -2444,6 +2462,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 `FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`
+- **Domain**: CLI | **Priority**: P2 | **Updated**: 2026-11-14 12:32:11
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`doc/USER_MANUAL.ko.md`](doc/USER_MANUAL.ko.md)
+
+---
+
 ### [DONE] SQL Server DatabaseMail 외부 워커 프로세스 분리 및 sp_send_dbmail 지원 `FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`
 - **Domain**: Mail | **Priority**: P2 | **Updated**: 2026-11-13 23:40:22
 - **Milestone**: `1.0-GA`
@@ -2564,6 +2589,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] 조건절 UPDATE 동시성 실행 시 최신 커밋 버전 Current Read 검증 및 갱신 손실(Lost Update) 방지 `FIX-CONCURRENT-UPDATE-LOST-UPDATE-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-14 11:23:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
 ### [DONE] 커서 DEALLOCATE 및 배치 종료 시 세션 커서 레지스트리 정리 및 재선언 충돌 해결 `FIX-CURSOR-LIFECYCLE-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-13 02:05:50
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
@@ -2583,8 +2615,22 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [IN_PROGRESS] EXEC arg DEFAULT keyword must bind the declared default instead of the string literal `FIX-EXEC-DEFAULT-KEYWORD-1`
-- **Domain**: Parser | **Priority**: P2 | **Updated**: 2026-11-14 10:24:29
+### [DONE] DEFAULT 표현식(NEWID, GETDATE 등) 파싱 시점 캐싱 폐지 및 INSERT 실행 시 동적 평가 보장 `FIX-DEFAULT-EXPR-DYNAMIC-EVAL-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 12:38:00
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
+### [PENDING] NOT IN 서브쿼리 및 리스트에 NULL 포함 시 3치 논리(3VL UNKNOWN) 엄격 적용 `FIX-EVAL-NOT-IN-NULL-3VL-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 11:23:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
+### [DONE] EXEC arg DEFAULT keyword must bind the declared default instead of the string literal `FIX-EXEC-DEFAULT-KEYWORD-1`
+- **Domain**: Parser | **Priority**: P2 | **Updated**: 2026-11-14 12:39:43
 - **Plan Doc**: [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
 
 ---
@@ -2595,15 +2641,43 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] 동시성 FK 검증 시 부모 행 삭제 방지 참조 락 체계 확립 `FIX-FK-CONCURRENT-PARENT-LOCK-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-14 10:58:56
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
 ### [DONE] GROUP BY 쿼리에서 STRING_AGG(col, sep) 그룹별 집계 누락(NULL 반환) 수정 `FIX-GROUPBY-STRING-AGG-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 23:41:53
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
 
+### [PENDING] Web Studio/HTTP 유휴 세션 회수 시 미종료 트랜잭션 자동 롤백 및 스토리지 잠금 해제 `FIX-HTTP-REAP-ABANDONED-TX-1`
+- **Domain**: API | **Priority**: P2 | **Updated**: 2026-11-14 11:23:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
+### [PENDING] 하이브리드 트랜잭션 2PC 부재로 인한 분할 커밋(Split-Brain) 방지 `FIX-HYBRID-TX-SPLIT-BRAIN-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-14 10:58:48
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
 ### [PENDING] Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) `FIX-LEXER-HEX-BINARY-LITERAL-1`
 - **Domain**: Parser | **Priority**: P2 | **Updated**: 2026-11-13 08:55:59
 - **Plan Doc**: [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
+
+---
+
+### [PENDING] MemEngine WAL fsync 실패 시 메모리 데이터 잔류(Phantom Commit) 롤백 `FIX-MEMENGINE-WAL-FSYNC-ROLLBACK-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-14 10:59:00
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
 
 ---
 
@@ -2663,6 +2737,20 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [PENDING] T-SQL 테이블 변수(@table_var) 트랜잭션 롤백 면제 및 TRY...CATCH 에러 로깅 보존 `FIX-TABLE-VAR-TX-ROLLBACK-EXEMPT-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 11:23:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
+### [PENDING] TDS 배치 문장 에러 발생 시 DONE_ERROR 종단 토큰 발송 보장(클라이언트 드라이버 행 방지) `FIX-TDS-BATCH-ERROR-DONE-TOKEN-1`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-14 11:23:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
 ### [DONE] PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(2627, 2601, 547) 매핑 반환 `FIX-TDS-ERROR-NUMBER-MAP-1`
 - **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-14 10:02:35
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
@@ -2687,9 +2775,30 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [PENDING] TDS USE 구문 실행 시 클라이언트 UI 동기화를 위한 ENVCHANGE(0xE3) 토큰 정상 방출 `FIX-TDS-USE-ENVCHANGE-TOKEN-1`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-14 11:23:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
+### [PENDING] INSERT/UPDATE/DELETE DML 실행 파이프라인 직후 카탈로그 AFTER 트리거 자동 발화 연동 `FIX-TRIGGER-DML-INVOCATION-PIPELINE-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 11:23:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
 ### [DONE] CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 `FIX-TRIGGER-FOR-KEYWORD-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-13 04:00:05
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] 트랜잭션 내 TRUNCATE 실행 시 물리 삭제 커밋 시점 지연(Deferred Drop) 및 롤백 보장 `FIX-TRUNCATE-TX-ROLLBACK-DEFERRED-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-14 11:23:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
 
 ---
 
@@ -2765,6 +2874,20 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [PENDING] REAL(4-byte float32) vs FLOAT(8-byte float64) 데이터 타입 분리 및 스토리지/프로토콜 정합성 보장 `FIX-TYPE-REAL-FLOAT-DISTINCTION-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-14 11:55:48
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
+### [PENDING] UPDATE 다중 컬럼 대입 시 원본 튜플 스냅샷 기반 평가(SET a = b, b = a 원자적 스왑 보장) `FIX-UPDATE-SNAPSHOT-COLUMN-SWAP-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 11:23:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
 ### [DONE] PK 없는 테이블에 대한 VDBE VM OpInsert 실행 시 숨은 _row_id 자동 발번 누락 수정 `FIX-VM-HIDDEN-ROWID-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-13 02:24:45
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
@@ -2775,6 +2898,20 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 13:25:35
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] WiredTiger 세이브포인트 롤백 시 보조 인덱스 키 누수 및 고아 인덱스 방지 `FIX-WT-SAVEPOINT-INDEX-CORRUPTION-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-14 10:58:43
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
+### [PENDING] WiredTiger 유니크 인덱스 B-Tree 조작 시 overwrite=false 강제하여 중복 키 사일런트 덮어쓰기 방지 `FIX-WT-UNIQUE-INDEX-OVERWRITE-FALSE-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-14 11:23:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
 
 ---
 
@@ -3359,6 +3496,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 10:48:52
 - **Milestone**: `v1.10.0`
 - **Plan Doc**: [`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`](notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md)
+
+---
+
+### [PENDING] 트랜잭셔널 DDL 섀도 카탈로그 격리 및 크래시 데이터 유실 방지 `REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 10:58:52
+- **Milestone**: `v1.10.0`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
 
 ---
 

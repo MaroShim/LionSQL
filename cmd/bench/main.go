@@ -24,7 +24,7 @@ func main() {
 	numWorkers := flag.Int("workers", 100, "Concurrent client workers")
 	totalOps := flag.Int("ops", 50000, "Total number of transfer transactions to execute")
 	engineType := flag.String("engine", config.DefaultEngine(), "Storage engine backend (wiredtiger, memory)")
-	dataDir := flag.String("dir", "data/bench_wt", "Data directory for benchmark storage")
+	dataDir := flag.String("dir", "data/bench_wt", "Parent base directory for isolated benchmark runs (unique subdirectories are created and auto-cleaned)")
 	keepDir := flag.Bool("keep-dir", false, "Preserve benchmark data directory after completion")
 	flag.Parse()
 	execution.InitRuntimeTuning(0, 0)
@@ -33,14 +33,11 @@ func main() {
 	fmt.Println("  LionSQL High-Concurrency OLTP Benchmark (TransferFunds Stored Procedure)")
 	fmt.Println("================================================================================")
 	fmt.Printf(" [Target]         Stored Procedure (T-SQL -> Native VDBE Bytecode -> ACID Tx)\n")
-	fmt.Printf(" [Storage Engine] %s (Dir: %s)\n", *engineType, *dataDir)
 	fmt.Printf(" [Accounts]       %d accounts (Initial balance: 1,000,000 each)\n", *numAccounts)
 	fmt.Printf(" [Concurrency]    %d concurrent workers\n", *numWorkers)
 	fmt.Printf(" [Total Ops]      %d transactions\n", *totalOps)
-	fmt.Println("--------------------------------------------------------------------------------")
 
 	// 1. Initialize Engine & Seed Accounts
-	fmt.Printf("Initializing %s storage engine and seeding %d accounts... ", *engineType, *numAccounts)
 	var eng storage.Engine
 	switch *engineType {
 	case "wiredtiger":
@@ -50,18 +47,25 @@ func main() {
 			os.Exit(1)
 		}
 		defer cleanup()
+		fmt.Printf(" [Storage Engine] %s\n", *engineType)
+		fmt.Printf(" [Base Directory] %s (Preserved)\n", *dataDir)
+		fmt.Printf(" [Isolated Subdir] %s (Auto-cleaned upon exit)\n", subDir)
 		eng = wiredtiger.New()
 		if err := eng.Open(subDir); err != nil {
+			cleanup()
 			fmt.Printf("Failed to open WiredTiger storage engine: %v. Specify -engine=memory to benchmark in-memory.\n", err)
 			os.Exit(1)
 		}
 	case "memory":
+		fmt.Printf(" [Storage Engine] memory (Pure RAM in-memory)\n")
 		eng = memengine.New()
 		_ = eng.Open("")
 	default:
 		fmt.Printf("Unknown storage engine: %s. Options: wiredtiger, memory\n", *engineType)
 		os.Exit(1)
 	}
+	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Printf("Seeding %d accounts... ", *numAccounts)
 	defer func() {
 		eng.Close()
 	}()

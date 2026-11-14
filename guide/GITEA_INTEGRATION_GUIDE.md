@@ -63,7 +63,7 @@ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql.
 ### 3.2. Starting LionSQL Daemon
 ```bash
 # Production background daemon mode
-./bin/lionsql -data-dir=data -admin-pass=1234567890
+./bin/lionsql -data-dir=data -admin-pass="<your-admin-password>"
 
 # Development mode with real-time query logging (-dev)
 ./bin/lionsql -data-dir=data -dev
@@ -92,7 +92,7 @@ DB_TYPE  = postgres
 HOST     = 127.0.0.1:5433
 NAME     = gitea
 USER     = admin
-PASSWD   = 1234567890
+PASSWD   = <your-admin-password>
 SCHEMA   = public
 SSL_MODE = disable
 LOG_SQL  = false
@@ -128,7 +128,7 @@ DB_TYPE  = mssql
 HOST     = 127.0.0.1:1433
 NAME     = gitea
 USER     = sa
-PASSWD   = 1234567890
+PASSWD   = <your-admin-password>
 SSL_MODE = disable
 LOG_SQL  = false
 

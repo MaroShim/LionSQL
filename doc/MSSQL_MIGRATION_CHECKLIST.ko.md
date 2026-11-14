@@ -3,7 +3,7 @@
 > - **최초 작성일**: 2026-11-12
 > - **최종 갱신일**: 2026-11-12
 > - **대상 릴리즈**: LionSQL v1.0-GA
-> - **영문 버전**: [doc/MSSQL_MIGRATION_CHECKLIST.md](MSSQL_MIGRATION_CHECKLIST.md)
+> - **English**: [doc/MSSQL_MIGRATION_CHECKLIST.md](MSSQL_MIGRATION_CHECKLIST.md)
 
 ---
 

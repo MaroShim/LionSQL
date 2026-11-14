@@ -2,7 +2,7 @@
 
 This document is the official operational guide for connecting Microsoft's flagship database tool, **[SQL Server Management Studio (SSMS)](https://learn.microsoft.com/en-us/sql/ssms/download-sql-server-management-studio-ssms)**, to **LionSQL**'s native Microsoft SQL Server TDS (Tabular Data Stream) listener (`TCP :1433`).
 
-> [Korean Version (한국어)](SSMS_INTEGRATION_GUIDE.ko.md)
+> [한국어 문서](SSMS_INTEGRATION_GUIDE.ko.md)
 
 ---
 
@@ -60,7 +60,7 @@ Launch SSMS and configure the **Connect to Server** dialog as follows:
 | **Server name** | `127.0.0.1,1433` or `localhost,1433` | **Important**: Use a **comma (`,`)**, not a colon (`:`), for the port delimiter. |
 | **Authentication** | `SQL Server Authentication` | Native TDS login |
 | **Login** | `sa` (or configured database user) | Default administrative account |
-| **Password** | `1234567890` (or configured password) | Default initial administrator password |
+| **Password** | `<configured-admin-password>` | Administrator password configured at launch |
 
 ### 3.2. Connection Properties Tab (Only 1 Required Change)
 

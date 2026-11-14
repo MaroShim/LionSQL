@@ -314,8 +314,13 @@ func stageMigratedShardsLocked(
 	}
 
 	newDefaults := make([]storage.Value, len(nextSchema.Columns))
+	isDynamicDefault := make([]bool, len(nextSchema.Columns))
 	for j, col := range nextSchema.Columns {
 		if diff.srcIdx[j] != -1 {
+			continue
+		}
+		if storage.IsDynamicDefault(col.Default) {
+			isDynamicDefault[j] = true
 			continue
 		}
 		defVal := storage.NullValue(col.Type)
@@ -347,7 +352,11 @@ func stageMigratedShardsLocked(
 				oi := diff.srcIdx[j]
 				var rawVal storage.Value
 				if oi == -1 {
-					rawVal = newDefaults[j]
+					if isDynamicDefault[j] {
+						rawVal = storage.ParseLiteralDefault(nextCol.Default, nextCol.Type)
+					} else {
+						rawVal = newDefaults[j]
+					}
 				} else if oi >= 0 && oi < len(row.Values) {
 					rawVal = row.Values[oi]
 				} else {

@@ -3,7 +3,7 @@
 > - **Created**: 2026-11-12
 > - **Last Updated**: 2026-11-12
 > - **Target Release**: LionSQL v1.0-GA
-> - **Korean Version**: [doc/TSQL_CHEATSHEET.ko.md](TSQL_CHEATSHEET.ko.md)
+> - **한국어 문서**: [doc/TSQL_CHEATSHEET.ko.md](TSQL_CHEATSHEET.ko.md)
 
 ---
 

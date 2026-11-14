@@ -2,7 +2,7 @@
 
 > - **Created**: 2026-11-02
 > - **Last Updated**: 2026-11-02
-> [한국어 문서 (Korean Version)](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md)
+> [한국어 문서](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md)
 >
 > - **Document Status**: Production Ready / 100% Verified
 > - **Related Task IDs**: `S-MYSQL-1-P1`, `FUNC-DIALECT-7`, `PROC-CURSOR-1`

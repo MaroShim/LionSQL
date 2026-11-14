@@ -3,6 +3,7 @@
 > - **최초 작성일**: 2026-09-22
 > - **최종 갱신일**: 2026-11-12
 > - **엔진 릴리즈**: v0.92.0 (1.0-GA 준비)
+> - **English**: [doc/BENCHMARK.md](BENCHMARK.md)
 > - **과거 기준선 아카이브**: [doc/history/BENCHMARK_20261031.md](history/BENCHMARK_20261031.md) (v0.90.0 기준선)
 
 ---
@@ -66,7 +67,7 @@ $$\sum \text{Initial Balances} \equiv \sum \text{Final Balances}$$
 | **통합 메모리 (RAM)** | 16 GB 통합 메모리 (LPDDR4X, 68.25 GB/s 대역폭) |
 | **내장 스토리지 (SSD)** | 500 GB Apple NVMe SSD (Apple APFS 파일시스템, 하드웨어 쓰기 캐싱) |
 | **운영체제 (OS)** | macOS (Darwin ARM64) |
-| **컴파일러 및 런타임** | Go 1.24+ (`GOOS=darwin`, `GOARCH=arm64`, WiredTiger Cgo 활성화) |
+| **컴파일러 및 런타임** | Go 1.26+ (`GOOS=darwin`, `GOARCH=arm64`, WiredTiger Cgo 활성화) |
 
 ---
 

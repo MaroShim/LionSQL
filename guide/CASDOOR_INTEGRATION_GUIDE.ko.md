@@ -16,7 +16,7 @@ LionSQL은 단일 바이너리 데이터베이스 엔진으로서 Casdoor의 **X
 ## 2. LionSQL 서버 기동
 
 ```bash
-./bin/lionsql -data-dir=data_casdoor -admin-pass=1234567890
+./bin/lionsql -data-dir=data_casdoor -admin-pass="<your-admin-password>"
 ```
 
 - **PostgreSQL Wire 리스너**: `127.0.0.1:5433`
@@ -37,7 +37,7 @@ httpport = 8000
 runmode = dev
 copyrequestbody = true
 driverName = postgres
-dataSourceName = "user=admin password=1234567890 host=127.0.0.1 port=5433 sslmode=disable dbname=casdoor"
+dataSourceName = "user=admin password=<your-admin-password> host=127.0.0.1 port=5433 sslmode=disable dbname=casdoor"
 dbName =
 tableNamePrefix =
 showSql = false
@@ -54,7 +54,7 @@ httpport = 8000
 runmode = dev
 copyrequestbody = true
 driverName = mssql
-dataSourceName = "sqlserver://admin:1234567890@127.0.0.1:1433?database=casdoor&encrypt=disable"
+dataSourceName = "sqlserver://admin:<your-admin-password>@127.0.0.1:1433?database=casdoor&encrypt=disable"
 dbName = casdoor
 tableNamePrefix =
 showSql = false

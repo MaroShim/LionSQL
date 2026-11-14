@@ -3,6 +3,7 @@
 > - **Created**: 2026-09-22
 > - **Last Updated**: 2026-11-09
 > - **Engine Release**: v0.92.0
+> - **한국어 문서**: [doc/BENCHMARK.ko.md](BENCHMARK.ko.md)
 > - **Historical Baseline Archive**: [doc/history/BENCHMARK_20261031.md](history/BENCHMARK_20261031.md) (v0.90.0 Baseline)
 
 
@@ -65,7 +66,7 @@ All verified performance metrics, TPC-C tpmC rates, TPS throughput, and latency 
 | **Unified Memory (RAM)** | 16 GB Unified Memory (LPDDR4X, unified architecture, 68.25 GB/s bandwidth) |
 | **Internal Storage (SSD)** | 500 GB Apple NVMe Solid State Drive (Apple APFS file system, hardware write caching) |
 | **Operating System** | macOS (Darwin ARM64) |
-| **Compiler & Runtime** | Go 1.24+ (`GOOS=darwin`, `GOARCH=arm64`, Cgo enabled for WiredTiger bindings) |
+| **Compiler & Runtime** | Go 1.26+ (`GOOS=darwin`, `GOARCH=arm64`, Cgo enabled for WiredTiger bindings) |
 
 ---
 

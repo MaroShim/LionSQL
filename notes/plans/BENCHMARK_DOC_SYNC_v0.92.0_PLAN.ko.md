@@ -53,7 +53,7 @@ LionSQL은 37건의 P0 심층 결함 패치(`P0-01` ~ `P0-37`)와 Gate 4 비트 
 ## 3. 동기화 대상 문서 및 세부 섹션 (SSOT Target Files)
 
 ### 1) [`doc/BENCHMARK.md`](../../doc/BENCHMARK.md)
-* **제2절 (하드웨어 환경)**: Apple M1 (8-core, 16GB, macOS ARM64), Go 1.24+ 런타임 정보 최신화.
+* **제2절 (하드웨어 환경)**: Apple M1 (8-core, 16GB, macOS ARM64), Go 1.26+ 런타임 정보 최신화.
 * **제3.3절 (`cmd/bench` 송금 프로시저)**:
   - In-Memory OCC 실행 로그 덤프 및 통계 테이블 갱신
   - WiredTiger MVCC 실행 로그 덤프 및 통계 테이블 갱신

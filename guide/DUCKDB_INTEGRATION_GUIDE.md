@@ -2,7 +2,7 @@
 
 This guide specifies how to integrate **[DuckDB](https://duckdb.org/)**, the high-performance embedded analytical (OLAP) database engine, with **LionSQL** to establish a unified, sub-millisecond vectorized hybrid transactional/analytical processing (HTAP) architecture.
 
-> [한국어 버전 (Korean Version)](DUCKDB_INTEGRATION_GUIDE.ko.md)
+> [한국어 문서](DUCKDB_INTEGRATION_GUIDE.ko.md)
 
 ---
 

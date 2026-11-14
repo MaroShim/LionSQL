@@ -49,10 +49,10 @@ Launch LionSQL specifying the data directory:
 
 ```bash
 # Disk persistence mode (default data directory: data/)
-./bin/lionsql -data-dir=data -admin-pass=1234567890
+./bin/lionsql -data-dir=data -admin-pass="<your-admin-password>"
 
 # Or ultra-fast in-memory testing mode (-ephemeral)
-./bin/lionsql -ephemeral -engine=memory -admin-pass=1234567890
+./bin/lionsql -ephemeral -engine=memory -admin-pass="<your-admin-password>"
 ```
 
 Upon startup, the console displays active listeners:
@@ -82,7 +82,7 @@ ENV=production
 DB_HOST=127.0.0.1
 DB_PORT=5433
 DB_USER=admin
-DB_PASSWORD=1234567890
+DB_PASSWORD=<your-admin-password>
 DB_NAME=iota
 DB_SSL_MODE=disable
 

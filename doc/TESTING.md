@@ -24,7 +24,7 @@ This guide explains how to build, test, and regression-check LionSQL on a local 
 
 | Requirement | Detail |
 | :--- | :--- |
-| Go toolchain | Go 1.24 or newer (the race detector is required). The reference host used Go 1.27.x on `darwin/arm64`. |
+| Go toolchain | Go 1.26 or newer (Go 1.26+, the race detector is required). |
 | C toolchain | Required for the WiredTiger backend (`cgo`). On macOS install the Xcode command line tools. |
 | WiredTiger | Linked through `cgo` when building with `-tags wiredtiger`. |
 | `uv` (optional) | Only needed by the external Python driver tests. They are skipped automatically when `uv` is not on `PATH`. |

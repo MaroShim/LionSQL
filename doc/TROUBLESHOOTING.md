@@ -2,7 +2,7 @@
 
 > - **Created**: 2026-09-22
 > - **Last Updated**: 2026-11-12
-> - **Korean Version**: [doc/TROUBLESHOOTING.ko.md](TROUBLESHOOTING.ko.md)
+> - **한국어 문서**: [doc/TROUBLESHOOTING.ko.md](TROUBLESHOOTING.ko.md)
 
 
 This guide provides an actionable troubleshooting reference for startup issues, network connectivity, query optimization, and a systematic catalog of PostgreSQL SQLSTATE and Microsoft TDS error codes.

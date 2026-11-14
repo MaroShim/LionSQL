@@ -1064,6 +1064,24 @@ func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, st
 				argMap[targetParam] = nil
 				continue
 			}
+			if !isQuoted && strings.EqualFold(valStr, "DEFAULT") {
+				var hasDefault bool
+				if prog != nil {
+					cleanTarget := strings.ToLower(strings.TrimPrefix(targetParam, "@"))
+					for _, pd := range prog.Params {
+						if strings.ToLower(strings.TrimPrefix(pd.Name, "@")) == cleanTarget {
+							if pd.Default != nil {
+								hasDefault = true
+							}
+							break
+						}
+					}
+				}
+				if !hasDefault {
+					return nil, fmt.Errorf("The DEFAULT keyword cannot be used as an argument to procedure %q because the parameter %q has no default value.", procName, targetParam)
+				}
+				continue
+			}
 			raw := unwrapSQLString(valStr)
 			if isQuoted || paramType == storage.TypeVarChar {
 				argMap[targetParam] = raw

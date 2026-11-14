@@ -220,7 +220,7 @@ ORDER BY d_year, c_nation;
 
 ## 8. 실측 성능 베이스라인 측정 결과 기록 (Baseline Metrics)
 
-> - **측정 환경**: Apple Silicon M1 (arm64, 8 Cores), Darwin 25.0.0, Go 1.24, `-tags wiredtiger`
+> - **측정 환경**: Apple Silicon M1 (arm64, 8 Cores), Darwin 25.0.0, Go 1.26+, `-tags wiredtiger`
 > - **측정 일시**: 2026-10-29
 
 ### 8.1. Go 표준 마이크로 벤치마크 결과 (`go test -bench=BenchmarkSSB -benchmem`)

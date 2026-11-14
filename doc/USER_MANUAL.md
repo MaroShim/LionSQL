@@ -2,6 +2,7 @@
 
 > - **Created**: 2026-10-08
 > - **Last Updated**: 2026-11-03
+> - **한국어 문서**: [doc/USER_MANUAL.ko.md](USER_MANUAL.ko.md)
 
 
 This document is the **official User Manual** for the LionSQL database engine, providing step-by-step guidance from initial installation and startup, through client connections and application development, to production operations and administration.
@@ -21,7 +22,7 @@ This document is the **official User Manual** for the LionSQL database engine, p
   * Volcano relational query execution engine and Cost-Based Optimizer (CBO)
 * **1.3. System Requirements and Platform Support**
   * Supported operating systems: macOS (Apple Silicon / Intel), Linux (x86_64 / arm64), Windows
-  * Build and runtime prerequisites (Go 1.22+, optional WiredTiger Cgo library)
+  * Build and runtime prerequisites (Go 1.26+, optional WiredTiger Cgo library)
 
 ---
 
@@ -265,7 +266,7 @@ Due to its lightweight embedded design, LionSQL operates smoothly even on minima
 | **RAM** | 512 MB (default work_mem 64MB) | 4 GB or higher (65% of physical memory automatically budgeted for global governor) |
 | **Disk** | 100 MB free space (binary approx. 50MB) | NVMe SSD (ensures tens of thousands of WAL Group Commit I/O operations per second) |
 | **OS** | macOS 12+ (Darwin ARM64 / x86_64)<br>Linux (Ubuntu 20.04+, RHEL 8+, Alpine/Debian)<br>Windows 10 / Server 2019+ | Linux LTS (Ubuntu 22.04 LTS / 24.04 LTS x86_64 or ARM64) |
-| **Go Compiler** | Go 1.22 or higher (when building from source) | Go 1.24 or higher |
+| **Go Compiler** | Go 1.26 or higher (when building from source) | Go 1.26+ |
 
 ---
 
@@ -304,7 +305,7 @@ After installation, verify proper operation by checking the version in your term
 $ lionsql version
 LionSQL v0.92.0 (darwin/arm64) [tags: wiredtiger]
 Git Commit: 477a4cb6
-Go Version: go1.24.0
+Go Version: go1.26.0
 Build Date: 2026-11-09T08:30:00Z
 Storage Backends: WiredTiger MVCC, In-Memory OCC
 ```
@@ -339,7 +340,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-kernel ./cmd/tpcc_kernel
 Start the server immediately using default flags without requiring a configuration file:
 
 ```bash
-# Interactive foreground launch with default data directory (./data)
+# Foreground server launch with default data directory (./data) (Default behavior - no arguments)
 ./bin/lionsql
 ```
 
@@ -366,6 +367,34 @@ In a separate terminal window, immediately verify startup health via the health 
 ```bash
 $ curl -s http://127.0.0.1:8090/api/health
 {"status":"ok","version":"0.92.0","engine":"wiredtiger","uptime_seconds":5}
+```
+
+---
+
+### 2.3.1. Interactive SQL Terminal Shell (CLI Entrypoint)
+
+LionSQL provides two simultaneous entrypoints to enter the interactive SQL prompt (REPL) using the single binary without requiring external client installation:
+
+```bash
+# Option 1: Short Flag (-i, --interactive, --shell)
+./bin/lionsql -i
+
+# Option 2: Subcommand (cli, sql, shell)
+./bin/lionsql cli
+```
+
+> [!NOTE]
+> **`-p` Flag Convention Protection Policy**:  
+> In the database ecosystem (MySQL, PostgreSQL, MSSQL), `-p` has been universally reserved for **password** or **port** for decades. To avoid cognitive friction and muscle memory clashes, LionSQL reserves `-p` for standard credentials/ports and adopts the global Unix/Python/Node.js standard **`-i` (Interactive)** short flag and **`cli`** subcommand.
+
+#### Headless Query Execution and Batch Scripting ([RULE:HeadlessParity])
+Execute single queries or batch files directly in CI/CD pipelines and shell scripts without interactive terminal prompts:
+```bash
+# Inline T-SQL execution (-e)
+./bin/lionsql -i -e "SELECT @@VERSION;"
+
+# Batch SQL script execution (-f)
+./bin/lionsql cli -f setup.sql
 ```
 
 ---

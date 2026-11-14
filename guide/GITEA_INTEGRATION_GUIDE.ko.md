@@ -69,7 +69,7 @@ Gitea 전용 격리 데이터 디렉토리(예: `data/` 또는 `data_pg/`)를 �
 
 ```bash
 # 백그라운드 프로덕션 모드 구동
-./bin/lionsql -data-dir=data -admin-pass=1234567890
+./bin/lionsql -data-dir=data -admin-pass="<your-admin-password>"
 
 # 개발 및 실시간 쿼리 디버깅 모드 (-dev 플래그 활성화)
 ./bin/lionsql -data-dir=data -dev
@@ -98,7 +98,7 @@ DB_TYPE  = postgres
 HOST     = 127.0.0.1:5433
 NAME     = gitea
 USER     = admin
-PASSWD   = 1234567890
+PASSWD   = <your-admin-password>
 SCHEMA   = public
 SSL_MODE = disable
 LOG_SQL  = false
@@ -134,7 +134,7 @@ DB_TYPE  = mssql
 HOST     = 127.0.0.1:1433
 NAME     = gitea
 USER     = sa
-PASSWD   = 1234567890
+PASSWD   = <your-admin-password>
 SSL_MODE = disable
 LOG_SQL  = false
 

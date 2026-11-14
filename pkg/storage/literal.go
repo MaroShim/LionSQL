@@ -57,16 +57,7 @@ func generateUUIDv7() string {
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]))
 }
 
-// ParseLiteralDefault parses a literal SQL expression or default value string into a Value.
-// It handles outer parentheses (e.g. `((0))`), function calls (e.g. `GETDATE()`, `NEWID()`),
-// string literals, and type-specific data parsing.
-func ParseLiteralDefault(s string, targetType DataType) Value {
-	s = strings.TrimSpace(s)
-	if s == "" || strings.EqualFold(s, "NULL") || strings.EqualFold(s, "DEFAULT") {
-		return NullValue(targetType)
-	}
-
-	// Strip matched outer parentheses: e.g. `((0))` -> `0`
+func stripOuterParens(s string) string {
 	for strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
 		depth := 0
 		allWrapped := true
@@ -87,6 +78,41 @@ func ParseLiteralDefault(s string, targetType DataType) Value {
 			break
 		}
 	}
+	return s
+}
+
+// IsDynamicDefault returns true if the default value expression represents a volatile,
+// non-deterministic runtime function (such as NEWID or GETDATE) that must be re-evaluated
+// per row rather than evaluated once at parse time.
+func IsDynamicDefault(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	s = stripOuterParens(s)
+	upper := strings.ToUpper(s)
+	switch upper {
+	case "NEWID7()", "UUIDV7()", "UUID_GENERATE_V7()", "NEWID()", "GEN_RANDOM_UUID()",
+		"GETDATE()", "NOW()", "CURRENT_TIMESTAMP", "GETUTCDATE()", "SYSDATETIME()":
+		return true
+	}
+	if (strings.HasPrefix(upper, "NOW()") || strings.HasPrefix(upper, "CURRENT_TIMESTAMP") || strings.HasPrefix(upper, "GETDATE()")) && strings.Contains(upper, "AT TIME ZONE") {
+		return true
+	}
+	return false
+}
+
+// ParseLiteralDefault parses a literal SQL expression or default value string into a Value.
+// It handles outer parentheses (e.g. `((0))`), function calls (e.g. `GETDATE()`, `NEWID()`),
+// string literals, and type-specific data parsing.
+func ParseLiteralDefault(s string, targetType DataType) Value {
+	s = strings.TrimSpace(s)
+	if s == "" || strings.EqualFold(s, "NULL") || strings.EqualFold(s, "DEFAULT") {
+		return NullValue(targetType)
+	}
+
+	// Strip matched outer parentheses: e.g. `((0))` -> `0`
+	s = stripOuterParens(s)
 
 	upper := strings.ToUpper(s)
 	switch upper {

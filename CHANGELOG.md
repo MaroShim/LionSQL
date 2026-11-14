@@ -8,6 +8,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Architecture
+- register master architecture plan `ACID_CORE_INTEGRITY_STABILIZATION_PLAN` (`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`):
+  - register `FIX-WT-SAVEPOINT-INDEX-CORRUPTION-1` (purge updated secondary index keys during WiredTiger savepoint rollback)
+  - register `FIX-HYBRID-TX-SPLIT-BRAIN-1` (prevent dual-engine split-brain commit by inverting tempTx validation)
+  - register `REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1` (isolate transactional DDL in shadow catalog to prevent dirty DDL reads and crash data loss)
+  - register `FIX-FK-CONCURRENT-PARENT-LOCK-1` (enforce key-level share lock during foreign key validation to prevent ghost orphan child rows)
+  - register `FIX-MEMENGINE-WAL-FSYNC-ROLLBACK-1` (hold shard locks through WAL fsync and rollback applied memory entries on I/O failure)
+  - register Top 12 Pre-1.0 UX & Integrity Shield tasks:
+    - `FIX-DEFAULT-EXPR-DYNAMIC-EVAL-1`: eliminate parse-time caching of DEFAULT expressions (NEWID, GETDATE) and enforce dynamic evaluation on INSERT
+    - `FIX-TRIGGER-DML-INVOCATION-PIPELINE-1`: wire catalog AFTER triggers into post-DML execution pipeline
+    - `FIX-UPDATE-SNAPSHOT-COLUMN-SWAP-1`: enforce original tuple snapshot evaluation for multi-column UPDATE assignments (SET a = b, b = a)
+    - `FIX-EVAL-NOT-IN-NULL-3VL-1`: enforce 3-valued logic (3VL UNKNOWN) on NOT IN expressions containing NULL
+    - `FIX-TRUNCATE-TX-ROLLBACK-DEFERRED-1`: defer physical file truncation until tx commit to guarantee TRUNCATE rollback
+    - `FIX-TABLE-VAR-TX-ROLLBACK-EXEMPT-1`: exempt T-SQL table variables (@table_var) from transaction rollback to preserve error logs
+    - `FIX-TDS-USE-ENVCHANGE-TOKEN-1`: emit ENVCHANGE (0xE3) token on USE statement execution for client UI synchronization
+    - `FIX-TDS-BATCH-ERROR-DONE-TOKEN-1`: ensure DONE_ERROR stream termination token on batch statement errors
+    - `FIX-HTTP-REAP-ABANDONED-TX-1`: auto-rollback abandoned transactions during HTTP/Web Studio session reaping
+    - `FIX-CONCURRENT-UPDATE-LOST-UPDATE-1`: enforce current-read version check on predicate UPDATE to eliminate lost updates
+    - `FIX-WT-UNIQUE-INDEX-OVERWRITE-FALSE-1`: enforce overwrite=false on WiredTiger unique index inserts to eliminate silent overwrites
+    - `FIX-TYPE-REAL-FLOAT-DISTINCTION-1`: decouple REAL (4-byte IEEE 754 float32) from FLOAT (8-byte float64) across storage tuple codec, TDS/PGWire protocols, and catalog views (Defect 101)
+    - `FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`: support dual entrypoints for interactive T-SQL REPL via short flag `lionsql -i` and subcommand `lionsql cli` with headless `-e`/`-f` parity and `-p` password/port convention protection (Defect 102)
+- enhance benchmark CLI directory safety and logging transparency across `cmd/tpcc_runtime`, `cmd/tpcc_kernel`, `cmd/bench`, `cmd/ssb`:
+  - explicitly print `[Base Directory] ... (Preserved)` and `[Isolated Subdir] ... (Auto-cleaned upon exit)`
+  - guarantee temporary benchmark subdirectory cleanup on error before `os.Exit(1)` and log parent directory preservation
+- standardize bilingual cross-language documentation link convention across `doc/` and `guide/` (Endonym Primacy: English docs link to Korean via `[한국어 문서]`, Korean docs link to English via `[English]`):
+  - update `FAQ`, `MSSQL_MIGRATION_CHECKLIST`, `TSQL_CHEATSHEET`, `TROUBLESHOOTING`, `WEB_STUDIO_GUIDE`, `BENCHMARK`, `ARCHITECTURE`, `USER_MANUAL`, `REFERENCE_MANUAL`, `RELEASE_AUTOMATION_GUIDE`, `TRANSACTION_PERFORMANCE_GUIDE`, `COMPLEX_QUERY_BENCHMARK_GUIDE`, and integration guides
 - register architecture plan `FIX-SESSION-DRAIN-CLOSE-UAF-1` (`notes/plans/FIX_SESSION_DRAIN_CLOSE_UAF_PLAN.ko.md`):
   - schedule in-flight query drain synchronization during `CloseSession` to prevent CGo Use-After-Free (UAF) and WiredTiger multi-thread concurrency panics
 - register architecture plan `REFACTOR-SESSION-TRANSACTION-INVARIANT-1` (`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`):
@@ -1226,7 +1251,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Accelerated `EncodeUTF16LE` and `DecodeUTF16LE` with 7-bit ASCII fast-paths and direct `strings.Builder` streaming in `pkg/wire/tds/packet.go`, slashing allocation overhead from 3 allocs/op to 1 alloc/op (121.9 ns/op encode, 266.3 ns/op decode).
   - Documented post-mortem and 3 recurrence prevention invariants in `notes/PITFALLS_AND_TRICKS.md` (Section 13).
 - **Simplify In-Memory SkipList PRNG with Go Standard Library (`KISS-4`) (`pkg/storage/memengine`)**:
-  - Replaced legacy `math/rand` instance and its dedicated `rndMu sync.Mutex` in `SkipList` with Go 1.22+ lock-free `math/rand/v2`.
+  - Replaced legacy `math/rand` instance and its dedicated `rndMu sync.Mutex` in `SkipList` with Go 1.26+ lock-free `math/rand/v2`.
   - Completely eliminated redundant double locking (`sl.mu` + `sl.rndMu`) during index insertion, removed 16 bytes of struct memory overhead, and eliminated timestamp-based seed initialization.
 - **Unify Virtual PG Catalog & Information Schema Generators (`KISS-2`) (`pkg/catalog/virtual`, `pkg/engine`)**:
   - Migrated all 35 `pg_catalog.*` and 17 `information_schema.*` virtual table generators from `pkg/engine/` into `pkg/catalog/virtual/` (`pg.go` and `info_schema.go`).
@@ -1291,7 +1316,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Replaced ad-hoc `NewChunk` allocations in `aggregate.go`, `join.go`, `sort.go`, and `sqlexec_select.go` with pooled chunk acquisition and deterministic `defer ReleaseChunk` recycling.
 - **In-Memory OCC Transaction Object & Workspace Map Pooling (`P-11`) (`pkg/storage/memengine`)**:
   - Implemented `sync.Pool`-backed `txPool` in `pkg/storage/memengine/tx.go` to eliminate heap allocations for `Transaction` and its 6 workspace maps (`tableCache`, `baseVers`, `local`, `deleted`, `changes`, `savepoints`) on every transaction begin.
-  - Leveraged Go 1.21+ built-in `clear(m)` in `releaseToPoolLocked()` to wipe map contents in $O(1)$ time while preserving underlying hash table bucket arrays.
+  - Leveraged Go 1.26+ built-in `clear(m)` in `releaseToPoolLocked()` to wipe map contents in $O(1)$ time while preserving underlying hash table bucket arrays.
   - Added bounded resource guard against oversized transaction collections (> 1,024 changes) to prevent memory retention spikes.
   - Achieved zero-allocation transaction creation for high-frequency OLTP workloads (16,000~20,000+ TPS).
 - **Semi-Structured JSON Same-Tuple DOM Cache & Zero-Allocation Key Scanner (`P-7`) (`pkg/storage`, `pkg/engine`)**:

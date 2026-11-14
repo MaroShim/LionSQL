@@ -83,7 +83,7 @@ sudo systemctl status lionsql
 Create a `Dockerfile`:
 
 ```dockerfile
-FROM golang:1.22-bookworm AS builder
+FROM golang:1.26-bookworm AS builder
 WORKDIR /app
 COPY . .
 RUN apt-get update && apt-get install -y libwiredtiger-dev

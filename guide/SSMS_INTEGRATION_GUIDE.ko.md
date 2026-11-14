@@ -60,7 +60,7 @@ SSMS를 실행하고 **서버에 연결 (Connect to Server)** 대화 상자에�
 | **서버 이름 (Server name)** | `127.0.0.1,1433` 또는 `localhost,1433` | **주의**: 포트 번호 앞은 콜론(`:`)이 아닌 **쉼표(`,`)**를 사용해야 합니다. |
 | **인증 (Authentication)** | `SQL Server 인증` (`SQL Server Authentication`) | 표준 TDS 계정 인증 사용 |
 | **로그인 (Login)** | `sa` (또는 생성한 사용자 계정) | 기본 시스템 관리자 계정 |
-| **암호 (Password)** | `1234567890` (또는 지정한 패스워드) | LionSQL 초기 기본 관리자 암호 |
+| **암호 (Password)** | `<설정한 관리자 암호>` | 서버 기동 시 지정한 관리자 암호 |
 
 ### 3.2. 연결 속성 탭 (Connection Properties - 필수 수정 항목 1개)
 

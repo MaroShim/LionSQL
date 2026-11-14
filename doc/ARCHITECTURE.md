@@ -2,6 +2,7 @@
 
 > - **Created**: 2026-09-22
 > - **Last Updated**: 2026-10-24
+> - **한국어 문서**: [doc/ARCHITECTURE.ko.md](ARCHITECTURE.ko.md)
 
 
 ## 1. Executive Summary & Architectural Vision

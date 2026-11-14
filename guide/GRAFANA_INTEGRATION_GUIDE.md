@@ -10,7 +10,7 @@
 >   - Query Data Source 2: `mssql` (`github.com/microsoft/go-mssqldb`, TDS 7.x/8.0, TCP `:1433`)
 > - **Related Documents**:
 >   - Verification Report: [`notes/GRAFANA_INTEGRATION_REPORT.ko.md`](../notes/reports/GRAFANA_INTEGRATION_REPORT.ko.md)
->   - Korean Guide: [`guide/GRAFANA_INTEGRATION_GUIDE.ko.md`](GRAFANA_INTEGRATION_GUIDE.ko.md)
+>   - 한국어 가이드: [`guide/GRAFANA_INTEGRATION_GUIDE.ko.md`](GRAFANA_INTEGRATION_GUIDE.ko.md)
 
 ---
 
@@ -64,7 +64,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
 ### 2.2. Starting the LionSQL Server
 Start LionSQL with an isolated data directory (e.g., `data_grafana/`):
 ```bash
-./bin/lionsql -data-dir=data_grafana -admin-pass=1234567890
+./bin/lionsql -data-dir=data_grafana -admin-pass="<your-admin-password>"
 ```
 
 Active listeners upon startup:
@@ -103,12 +103,12 @@ type = postgres
 host = 127.0.0.1:5433
 name = grafana
 user = admin
-password = 1234567890
+password = <your-admin-password>
 ssl_mode = disable
 
 [security]
 admin_user = admin
-admin_password = 1234567890
+admin_password = <your-grafana-admin-password>
 
 [paths]
 data = /Users/maro/Projects/grafana/data
@@ -136,7 +136,7 @@ With Grafana running on `http://localhost:3100`, register both LionSQL wire prot
 
 ### 4.1. Registering Data Source 1: LionSQL PostgreSQL (`:5433`)
 ```bash
-curl -s -u admin:1234567890 -X POST http://localhost:3100/api/datasources \
+curl -s -u admin:<your-grafana-admin-password> -X POST http://localhost:3100/api/datasources \
   -H "Content-Type: application/json" \
   -d '{
     "name": "LionSQL-PG",
@@ -151,14 +151,14 @@ curl -s -u admin:1234567890 -X POST http://localhost:3100/api/datasources \
       "postgresVersion": 1500
     },
     "secureJsonData": {
-      "password": "1234567890"
+      "password": "<your-admin-password>"
     }
   }'
 ```
 
 ### 4.2. Registering Data Source 2: LionSQL Microsoft SQL Server (`:1433`)
 ```bash
-curl -s -u admin:1234567890 -X POST http://localhost:3100/api/datasources \
+curl -s -u admin:<your-grafana-admin-password> -X POST http://localhost:3100/api/datasources \
   -H "Content-Type: application/json" \
   -d '{
     "name": "LionSQL-MSSQL",
@@ -172,7 +172,7 @@ curl -s -u admin:1234567890 -X POST http://localhost:3100/api/datasources \
       "encrypt": "disable"
     },
     "secureJsonData": {
-      "password": "1234567890"
+      "password": "<your-admin-password>"
     }
   }'
 ```
@@ -180,11 +180,11 @@ curl -s -u admin:1234567890 -X POST http://localhost:3100/api/datasources \
 ### 4.3. Data Source Health Checks (`/api/datasources/uid/<uid>/health`)
 ```bash
 # PostgreSQL Data Source Health Check
-curl -s -u admin:1234567890 http://localhost:3100/api/datasources/uid/<pg-datasource-uid>/health
+curl -s -u admin:<your-grafana-admin-password> http://localhost:3100/api/datasources/uid/<pg-datasource-uid>/health
 # Response: {"message":"Database Connection OK","status":"OK"}
 
 # MSSQL Data Source Health Check
-curl -s -u admin:1234567890 http://localhost:3100/api/datasources/uid/<mssql-datasource-uid>/health
+curl -s -u admin:<your-grafana-admin-password> http://localhost:3100/api/datasources/uid/<mssql-datasource-uid>/health
 # Response: {"message":"Database Connection OK","status":"OK"}
 ```
 
@@ -192,7 +192,7 @@ curl -s -u admin:1234567890 http://localhost:3100/api/datasources/uid/<mssql-dat
 Query both the PostgreSQL (`:5433`) and MSSQL (`:1433`) data sources simultaneously in a single request:
 
 ```bash
-curl -s -u admin:1234567890 -X POST http://localhost:3100/api/ds/query \
+curl -s -u admin:<your-grafana-admin-password> -X POST http://localhost:3100/api/ds/query \
   -H "Content-Type: application/json" \
   -d '{
     "queries": [

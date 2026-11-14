@@ -3,7 +3,7 @@
 > - **Created**: 2026-11-12
 > - **Last Updated**: 2026-11-12
 > - **Target Release**: LionSQL v1.0-GA
-> - **Korean Version**: [doc/MSSQL_MIGRATION_CHECKLIST.ko.md](MSSQL_MIGRATION_CHECKLIST.ko.md)
+> - **한국어 문서**: [doc/MSSQL_MIGRATION_CHECKLIST.ko.md](MSSQL_MIGRATION_CHECKLIST.ko.md)
 
 ---
 

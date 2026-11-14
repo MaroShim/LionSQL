@@ -2,7 +2,7 @@
 
 > - **Created**: 2026-09-29
 > - **Last Updated**: 2026-11-04
-> [Korean Version](README.ko.md)
+> [한국어 문서](README.ko.md)
 
 Welcome to the official technical documentation directory for **LionSQL**, an autonomous, high-concurrency embedded OLTP database engine and modern Backend-as-a-Service (BaaS) packaged into a single standalone static binary.
 

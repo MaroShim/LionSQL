@@ -40,6 +40,8 @@ func PrepareBenchmarkDir(parentDir, prefix string, keepDir bool) (dir string, cl
 		}
 		if rmErr := os.RemoveAll(subDir); rmErr != nil {
 			fmt.Fprintf(os.Stderr, "[LionSQL Benchmark] Warning: failed to clean up benchmark directory %q: %v\n", subDir, rmErr)
+		} else {
+			fmt.Printf("[LionSQL Benchmark] Cleaned up temporary benchmark subdirectory: %s (Parent directory %q preserved)\n", subDir, cleanParent)
 		}
 	}
 
