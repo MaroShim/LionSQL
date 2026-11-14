@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Architecture
+- register architecture plan `REFACTOR-SESSION-TRANSACTION-INVARIANT-1` (`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`):
+  - enforce Single Active Transaction Invariant per client session
+  - schedule session-level execution serialization (`cs.execMu`) to eliminate autocommit session pool bypass and multi-transaction concurrency anomalies
 - register architecture plan `REFACTOR-TSQL-SESSION-VARS-VDBE-1` (`notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md`):
   - schedule complete elimination of pre-parsing session variable textual substitution (`substituteParamOutsideQuotes`)
   - design unified VDBE AST / register direct binding architecture for T-SQL session variables (`ClientSession.Vars`) to eliminate L-Value corruption and restore plan caching

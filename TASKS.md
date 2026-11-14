@@ -301,6 +301,7 @@
 | `DONE` | **`R-6`** |  | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** |  | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-OCC-FLAT-1`** |  | Storage | P2 | Flat 코덱 신뢰성 및 동시성 결함 보강 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
+| `PENDING` | **`REFACTOR-SESSION-TRANSACTION-INVARIANT-1`** | `v1.10.0` | Engine | P2 | 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 | [`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`](notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md) |  |
 | `PENDING` | **`REFACTOR-TSQL-SESSION-VARS-VDBE-1`** | `v1.10.0` | Engine | P2 | sqlexec 텍스트 치환 전면 폐지 및 T-SQL 세션 변수 VDBE AST/레지스터 바인딩 일원화 | [`notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md`](notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-VIRTUAL-CATALOG-1`** | `1.0-GA` | Catalog | P2 | 가상 카탈로그(pkg/catalog/virtual & sqlexec_dbcc) 구조 통합 및 보일러플레이트 리팩토링 | [`notes/plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md`](notes/plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`REPL-STREAM-BIN-1`** | `v1.60.0` | Replication | P2 | Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 |  |  |
@@ -3343,6 +3344,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ### [DONE] Flat 코덱 신뢰성 및 동시성 결함 보강 `REFACTOR-OCC-FLAT-1`
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-11 16:23:03
 - **Plan Doc**: [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)
+
+---
+
+### [PENDING] 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 `REFACTOR-SESSION-TRANSACTION-INVARIANT-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 10:48:52
+- **Milestone**: `v1.10.0`
+- **Plan Doc**: [`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`](notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md)
 
 ---
 
