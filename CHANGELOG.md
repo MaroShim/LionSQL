@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- stream `PRINT` and informational statements via TDS `INFO` token (`0xAB`) (`FIX-TDS-PRINT-INFO-TOKEN-1`):
+  - support top-level `PRINT expr` in `pkg/engine/sqlexec.go`, evaluating expressions via Pratt parser against session variables and emitting message payloads
+  - accumulate messages across multi-statement SQL batches in `ExecuteSessionSQLContext` so leading `PRINT` outputs are not discarded by trailing queries
+  - serialize messages in `executeBatchSQLAndRespond` and `executeRPCAndRespond` as TDS `TokenInfo` (`0xAB`) packets with UTF-16LE encoding, skipping internal context strings
+  - add `WriteInfoDirect` in `pkg/wire/tds/token.go` for zero-allocation packet stream serialization
+  - add integration tests in `pkg/wire/tds/print_info_test.go` verifying single statements, multi-statement batches, stored procedures, and informational `RAISERROR`
 - execute top-level and procedure `SELECT @var = expr [FROM ...]` as T-SQL variable assignment (`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`):
   - intercept top-level `SELECT @var = expr` prior to session variable textual substitution in `pkg/engine/sqlexec.go`, evaluating expressions without FROM or extracting final row results from FROM queries and updating session variables without emitting result set rows
   - implement `OpSelectAssign` VDBE bytecode instruction and compilation in `pkg/proc/compiler.go` and `pkg/proc/runtime/vm.go`

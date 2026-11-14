@@ -23,7 +23,7 @@
 | **#12** | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** | `DONE` | Wire (TDS) | P1 | TDS `RPCRequest`(`0x03`) 직접 프로시저 호출 시 `OUTPUT` 파라미터 `RETURNVALUE`(`0xAC`) 토큰 반환 및 기본값(`DEFAULT`) 바인딩 지원 |
 | **#13** | **`FIX-TDS-RPC-RETURN-STATUS-1`** | `DONE` | Wire (TDS) / Engine | P1 | TDS RPC 프로시저 `RETURN <int>` 실행 시 하드코딩된 `0` 대신 실제 종료 코드를 `RETURNSTATUS`(`0x79`) 토큰으로 전송 |
 | **#14** | **`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`** | `DONE` | Engine | P1 | 최상위 배치 및 `sp_executesql`에서 `SELECT @var = expr [FROM ...]` 구문을 비교식이 아닌 T-SQL 변수 대입으로 실행 |
-| **#15** | **`FIX-TDS-PRINT-INFO-TOKEN-1`** | `PENDING` | Wire (TDS) | P1 | `PRINT` 문 실행 결과(`res.Messages`)를 TDS `INFO`(`0xAB`) 토큰으로 클라이언트에 실시간 전송 |
+| **#15** | **`FIX-TDS-PRINT-INFO-TOKEN-1`** | `DONE` | Wire (TDS) | P1 | `PRINT` 문 실행 결과(`res.Messages`)를 TDS `INFO`(`0xAB`) 토큰으로 클라이언트에 실시간 전송 |
 | **#16** | **`FIX-TDS-ERROR-NUMBER-MAP-1`** | `PENDING` | Wire (TDS) | P1 | PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(`2627`, `2601`, `547`) 매핑 반환 |
 | **#17** | **`FIX-TSQL-JSON-FUNCTIONS-EXT-1`** | `PENDING` | Proc / Engine | P1 | `mssql-jdbc` 호환성: SQL Server `JSON` 컬럼 타입 별칭 및 `JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS` 내장 함수 지원 |
 | **#18** | **`TEST-TDS-GOMSSQLDB-ORACLE-1`** | `PENDING` | Wire / Test | P1 | 공식 `microsoft/go-mssqldb` 드라이버 테스트 스위트 라이브 TDS 통합 오라클 이식 및 검증 |
@@ -246,7 +246,7 @@
 
 ---
 
-### `#15` `FIX-TDS-PRINT-INFO-TOKEN-1` (`PENDING`)
+### `#15` `FIX-TDS-PRINT-INFO-TOKEN-1` (`DONE`)
 - **현상**:
   T-SQL `PRINT 'Hello World'` 또는 `RAISERROR('info msg', 10, 1)` (심각도 <= 10 정보성 메시지) 실행 시, 엔진 내부 `QueryResult.Messages` 슬라이스에는 메시지가 담기지만 TDS 와이어 프로토콜(`pkg/wire/tds.go`)이 이를 클라이언트로 내려보내지 않아 SSMS 메시지 탭이나 드라이버 `InfoMessage` 콜백에서 출력이 누락됨.
 - **근본 원인 (Root Cause)**:

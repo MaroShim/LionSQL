@@ -470,6 +470,7 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 		return lastRes, nil
 	}
 
+	var accumulatedMessages []string
 	for _, stmt := range stmts {
 		select {
 		case <-queryCtx.Done():
@@ -541,7 +542,17 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 			cs.Vars["error"] = int64(0)
 			cs.Mu.Unlock()
 		}
-		lastRes = res
+		if res != nil {
+			if len(res.Messages) > 0 {
+				accumulatedMessages = append(accumulatedMessages, res.Messages...)
+			}
+			if lastRes == nil || len(res.Columns) > 0 || res.Command != "PRINT" {
+				lastRes = res
+			}
+		}
+	}
+	if lastRes != nil && len(accumulatedMessages) > 0 {
+		lastRes.Messages = accumulatedMessages
 	}
 	return lastRes, nil
 }
@@ -1577,6 +1588,11 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execThrow(trimmed, start)
 	}
 
+	// 2.3 Informational Message: PRINT
+	if sqlutil.HasPrefixKeyword(trimmed, "PRINT") {
+		return s.execPrint(trimmed, start, cs)
+	}
+
 	// 3. DDL: CREATE TABLE
 	if sqlutil.HasPrefixKeyword(trimmed, "CREATE TABLE") {
 		if err := s.checkWriteAllowed(); err != nil {
@@ -1983,6 +1999,54 @@ func (s *Coordinator) execThrow(raw string, start time.Time) (*QueryResult, erro
 		State:    byte(state),
 		Message:  msg,
 	}
+}
+
+func (s *Coordinator) execPrint(raw string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	rem := strings.TrimSpace(raw)
+	if remAfter, ok := sqlutil.TrimPrefixKeyword(rem, "PRINT"); ok {
+		rem = strings.TrimSpace(remAfter)
+	}
+	rem = strings.TrimRight(rem, ";")
+	rem = strings.TrimSpace(rem)
+
+	if rem == "" {
+		return &QueryResult{
+			Success:    true,
+			Command:    "PRINT",
+			Messages:   []string{""},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	evalMap := make(map[string]any)
+	if cs != nil {
+		cs.Mu.Lock()
+		for k, v := range cs.Vars {
+			evalMap[k] = v
+			clean := strings.TrimPrefix(k, "@")
+			evalMap[clean] = v
+		}
+		cs.Mu.Unlock()
+	}
+
+	p := proc.NewParser(proc.NewLexer(rem))
+	msg := rem
+	if ast := p.ParseExpr(); ast != nil {
+		if res, err := proc.EvalRowExpr(ast, evalMap, nil); err == nil && res != nil {
+			msg = fmt.Sprintf("%v", res)
+		} else if strings.HasPrefix(rem, "'") && strings.HasSuffix(rem, "'") && len(rem) >= 2 {
+			msg = strings.ReplaceAll(rem[1:len(rem)-1], "''", "'")
+		}
+	} else if strings.HasPrefix(rem, "'") && strings.HasSuffix(rem, "'") && len(rem) >= 2 {
+		msg = strings.ReplaceAll(rem[1:len(rem)-1], "''", "'")
+	}
+
+	return &QueryResult{
+		Success:    true,
+		Command:    "PRINT",
+		Messages:   []string{msg},
+		DurationUS: time.Since(start).Microseconds(),
+	}, nil
 }
 
 // isSelectOrParenthesizedQuery reports whether the query string represents a SELECT or WITH statement,

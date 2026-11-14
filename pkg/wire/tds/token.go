@@ -526,6 +526,11 @@ func BuildInfo(number int32, state byte, class byte, msg, serverName, procName s
 	return buf.Bytes()
 }
 
+// WriteInfoDirect writes an INFO token (0xAB) directly into buf.
+func WriteInfoDirect(buf *bytes.Buffer, number int32, state byte, class byte, msg, serverName, procName string, lineNum int32) {
+	buf.Write(BuildInfo(number, state, class, msg, serverName, procName, lineNum))
+}
+
 // writeTypeInfo writes the TYPE_INFO block (type id plus type-specific length/scale/collation) for col.
 func writeTypeInfo(buf *bytes.Buffer, col ColumnInfo) {
 	buf.WriteByte(col.Type)

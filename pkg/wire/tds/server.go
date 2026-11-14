@@ -1328,7 +1328,7 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 	buf := stream.Buffer()
 
 	for _, msg := range res.Logs {
-		buf.Write(BuildInfo(0, 1, 10, msg, "LionSQL", "", 1))
+		WriteInfoDirect(buf, 0, 1, 0, msg, "LionSQL", "", 1)
 	}
 
 	returnStatus := engine.ReturnStatusFromValue(res.ReturnValue)
@@ -1549,10 +1549,11 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 	buf := stream.Buffer()
 
 	upperCmd := strings.ToUpper(res.Command)
-	if upperCmd == "PRINT" {
-		for _, msg := range res.Messages {
-			buf.Write(BuildInfo(0, 1, 0, msg, "LionSQL", "", 1))
+	for _, msg := range res.Messages {
+		if strings.HasPrefix(msg, "Return code: ") || strings.HasPrefix(msg, "Database context set to ") {
+			continue
 		}
+		WriteInfoDirect(buf, 0, 1, 0, msg, "LionSQL", "", 1)
 	}
 	if upperCmd == "BEGIN" {
 		sess.inTx = true
@@ -2672,10 +2673,11 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 	buf := stream.Buffer()
 
 	upperCmd := strings.ToUpper(res.Command)
-	if upperCmd == "PRINT" {
-		for _, msg := range res.Messages {
-			buf.Write(BuildInfo(0, 1, 0, msg, "LionSQL", "", 1))
+	for _, msg := range res.Messages {
+		if strings.HasPrefix(msg, "Return code: ") || strings.HasPrefix(msg, "Database context set to ") {
+			continue
 		}
+		WriteInfoDirect(buf, 0, 1, 0, msg, "LionSQL", "", 1)
 	}
 	if upperCmd == "USE" {
 		newDB := "master"
