@@ -360,6 +360,7 @@
 * **도입 배경 및 배제 근거**:
   - 기존 WiredTiger `AddColumn`의 전수 재작성 방식은 수천만 건 테이블에서 수 초~수 분의 쓰기 락 지연을 유발할 뿐만 아니라, 재작성 루프 중 세션/커서 오픈 실패 시 스키마와 디스크 데이터가 영구 불일치하는 심각한 에러 은폐 결함(`AUDIT-FULL-012`)을 유발함.
   - 현대 메이저 RDBMS(PostgreSQL v11+, MySQL 8.0 InnoDB, SQL Server)의 표준 아키텍처인 Instant DDL과 다층 디코더 패딩을 도입하여 성능과 데이터 안정성을 동시에 달성함.
+  - 전체 물리 스펙 및 바이너리 레이아웃은 공식 규격서 [`PHYSICAL_TABLE_FORMAT.ko.md`](PHYSICAL_TABLE_FORMAT.ko.md)에 영구 성문화함.
 
 ### ㉛ 비파괴적 데이터베이스 시딩 및 기존 데이터 보호 불변식 (Non-Destructive Seeding & Zero-Overwrite Invariant, Invariant 14)
 * **결정 사항**:

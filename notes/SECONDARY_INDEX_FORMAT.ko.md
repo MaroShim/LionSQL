@@ -1,12 +1,18 @@
 # LionSQL 보조 인덱스 물리 바이너리 포맷 규격서
 (`notes/SECONDARY_INDEX_FORMAT.ko.md`)
 
+> - **최초 작성일**: 2026-11-14
+> - **최종 갱신일**: 2026-11-14
+> - **문서 상태**: 공식 물리 스토리지 규격서 (Physical Storage Specification SSOT)
+> - **연계 불변식**: `GEMINI.md` [Invariant 15: Canonical Secondary Index Key/Value Codec], `notes/ENGINEERING_CONTEXT.ko.md` [불변식 ㉜: 보조 인덱스 정렬 보존 바이너리 코덱 및 물리 B-Tree 실체화 불변식]
+> - **물리 테이블 포맷 연계**: [`PHYSICAL_TABLE_FORMAT.ko.md`](PHYSICAL_TABLE_FORMAT.ko.md) (LionSQL 물리 테이블 및 바이너리 튜플 V2 규격서), `GEMINI.md` [Invariant 13: Single Canonical V2 Binary Tuple Codec], `notes/ENGINEERING_CONTEXT.ko.md` [불변식 ㉚], [`pkg/storage/tuple.go`](../pkg/storage/tuple.go)
+
 ---
 
 ## 1. 개요 및 설계 목적 (Overview & Objectives)
 
 LionSQL은 단일 실행 파일 내에 초고속 인메모리 OCC 엔진(`memengine`)과 고신뢰성 디스크 MVCC 엔진(`wiredtiger`)을 동시에 제공합니다.
-보조 인덱스(Secondary Index)는 메인 테이블의 기본 키(Primary Key) 외에 추가적인 컬럼 조합에 대해 $O(\log N)$ 탐색, 범위 스캔(Range Scan), 그리고 고유성 제약(Unique Constraint)을 제공하는 핵심 스토리지 자료구조입니다.
+보조 인덱스(Secondary Index)는 메인 테이블의 기본 키(Primary Key) 및 바이너리 튜플([`PHYSICAL_TABLE_FORMAT.ko.md`](PHYSICAL_TABLE_FORMAT.ko.md)) 외에 추가적인 컬럼 조합에 대해 $O(\log N)$ 탐색, 범위 스캔(Range Scan), 그리고 고유성 제약(Unique Constraint)을 제공하는 핵심 스토리지 자료구조입니다.
 
 본 문서는 보조 인덱스의 디스크 물리 저장 포맷, 순서 보존 바이너리 직렬화 규약, 고유/비고유 인덱스 구분 방식, 복합 인덱스 프리픽스 매칭 프로토콜을 공식 규격으로 정의합니다.
 
@@ -15,7 +21,7 @@ LionSQL은 단일 실행 파일 내에 초고속 인메모리 OCC 엔진(`memeng
 ## 2. 물리 저장 구조 및 네임스페이스 규약 (Physical URI & Engine Schema)
 
 ### 2.1 테이블 URI 네임스페이스
-LionSQL의 각 보조 인덱스는 기본 테이블과 격리된 독립된 물리 B-Tree 테이블로 생성 및 관리됩니다.
+LionSQL의 각 보조 인덱스는 기본 테이블([`PHYSICAL_TABLE_FORMAT.ko.md`](PHYSICAL_TABLE_FORMAT.ko.md), `table:<PhysicalTableName>`)과 격리된 독립된 물리 B-Tree 테이블로 생성 및 관리됩니다.
 ```
 URI: table:_idx_<PhysicalTableName>_<IndexName>
 ```
@@ -130,3 +136,14 @@ WiredTiger B-Tree는 기본적으로 키의 유일성을 전제하므로, 동일
    - `DropIndex`: 커서 풀 evict ➔ `go_wt_session_drop` 물리 B-Tree 삭제.
    - `DropTable`: 메인 테이블과 연관된 모든 보조 인덱스 B-Tree 일괄 자동 삭제.
    - `TruncateTables`: 연결된 모든 보조 인덱스 B-Tree 일괄 Truncate.
+
+---
+
+## 7. 관련 문서 및 교차 참조 (Cross References)
+
+- **물리 테이블 포맷 규격서**: [`PHYSICAL_TABLE_FORMAT.ko.md`](PHYSICAL_TABLE_FORMAT.ko.md)
+- **핵심 불변식 정의**: `GEMINI.md` [Invariant 15: Canonical Secondary Index Key/Value Codec], [Invariant 13: Single Canonical V2 Binary Tuple Codec]
+- **엔지니어링 컨텍스트**: `notes/ENGINEERING_CONTEXT.ko.md` [불변식 ㉜: 보조 인덱스 정렬 보존 바이너리 코덱], [불변식 ㉚: 스키마 진화 및 V2 튜플 코덱]
+- **보조 인덱스 구현체**: [`pkg/storage/wiredtiger/wt_engine.go`](../pkg/storage/wiredtiger/wt_engine.go)
+- **보조 인덱스 회귀 검증 스위트**: [`pkg/storage/wiredtiger/wt_secondary_index_test.go`](../pkg/storage/wiredtiger/wt_secondary_index_test.go)
+

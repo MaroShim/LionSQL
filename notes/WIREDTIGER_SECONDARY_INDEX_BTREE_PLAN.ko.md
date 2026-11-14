@@ -1,6 +1,13 @@
 # WiredTiger B-Tree 보조 인덱스 실체화 아키텍처 계획서
 (`WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`)
 
+> - **최초 작성일**: 2026-11-14
+> - **최종 갱신일**: 2026-11-14
+> - **과제 식별 코드**: `FEAT-WT-SECONDARY-INDEX-BTREE-1`
+> - **구현 상태**: 구현 완료 (`DONE`, 커밋 `6594a748`)
+> - **공식 물리 규격서**: [`SECONDARY_INDEX_FORMAT.ko.md`](SECONDARY_INDEX_FORMAT.ko.md) (보조 인덱스 물리 규격서), [`PHYSICAL_TABLE_FORMAT.ko.md`](PHYSICAL_TABLE_FORMAT.ko.md) (물리 테이블 포맷 규격서)
+> - **연계 불변식**: `GEMINI.md` [Invariant 15: Canonical Secondary Index Key/Value Codec], [Invariant 13: Single Canonical V2 Binary Tuple Codec], `notes/ENGINEERING_CONTEXT.ko.md` [불변식 ㉜], [불변식 ㉚]
+
 ---
 
 ## 1. 배경 및 과거 누락 원인 분석 (Root Cause & Historical Context)

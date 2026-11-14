@@ -140,6 +140,7 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
    - `ADD COLUMN`: Instant $O(1)$ schema expansion. Tuples written under older schemas have $N > \text{encodedCols}$; newly added columns are padded from default or `NULL` without buffer overflows.
    - `DROP COLUMN`: Instant $O(1)$ on tail columns ($N < \text{encodedCols}$). Dropping non-terminal (middle) columns on non-empty tables is strictly rejected with explicit `ErrDropColumnNotTail`.
    - **Operational Anti-Pattern & Architectural Rationale**: Dropping middle columns at runtime on a populated production database is an operational anti-pattern that threatens online OLTP availability. Physical table rewrites cause prolonged runtime stalls and exclusive table locks; logical schema tombstone masking drastically inflates engine complexity, impairs verification testability, and regresses the 0.5ns fixed-offset decoding hot path. LionSQL strictly prescribes the production-standard **Copy-and-Switch** pattern (`CREATE TABLE new AS SELECT ...` followed by atomic rename) for middle-column reorganization.
+   - Full specification codified in [`notes/PHYSICAL_TABLE_FORMAT.ko.md`](notes/PHYSICAL_TABLE_FORMAT.ko.md).
 
 ### Invariant 14: Non-Destructive Seeding & Zero-Overwrite Invariant (Fresh-Instance Safety)
 1. **Fresh-Instance Invariance for Sample Data**:

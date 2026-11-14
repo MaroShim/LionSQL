@@ -32,6 +32,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - known follow-ups: hex literals (`0x01`) are lexed as strings, breaking `replicate(0x01, n)` (`394_babel_babel_4547.slt` now fails honestly instead of passing on echoed text); `CAST('$100.123' AS MONEY)` returns `0.0000`; `LEN(money)` length differs from SQL Server
 
 ### Added
+- codify canonical physical storage specifications and architecture references:
+  - add `notes/PHYSICAL_TABLE_FORMAT.ko.md` defining single canonical V2 binary tuple codec (`0x02`), 4-byte aligned fixed header, flags, and $O(1)$ Instant Tail DDL (`GEMINI.md` [Invariant 13])
+  - add creation and revision dates, cross-links, and specifications in `notes/SECONDARY_INDEX_FORMAT.ko.md`, `notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`, and `notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`
 - WiredTiger physical B-Tree secondary index materialization and O(log N) point/range scan (`FEAT-WT-SECONDARY-INDEX-BTREE-1`):
   - physically materialize secondary indexes as independent WiredTiger B-Tree tables (`table:_idx_<tableName>_<indexName>`) with `key_format=u,value_format=u`, eliminating full table scans (`scanLocked`) and in-memory slice reversals
   - implement `wtIndexBTreeCursor` supporting $O(\log N)$ cursor seek (`search_near`), forward sequential traversal (`IndexScan`), and backward traversal (`IndexScanDesc`)
