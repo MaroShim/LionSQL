@@ -168,6 +168,17 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
    - `IndexScan`, `IndexScanDesc`, and `checkUniqueIndexesLocked` must exclusively utilize direct B-Tree cursor operations (`search_near`, `search`, `prev`), permanently banning full-table sequential scans (`scanLocked`) and in-memory slice reversals.
    - Full specification codified in [`notes/PHYSICAL_TABLE_FORMAT.ko.md`](notes/PHYSICAL_TABLE_FORMAT.ko.md).
 
+### Invariant 16: Zero-Tampering Oracle Test Invariant (Test Integrity & Read-Only Ground Truth)
+1. **Immutable Ground Truth Primacy (`[RULE:ZeroOracleTampering]`)**:
+   - All test suites and files under `test/slt/`, `test/slt_proc/`, and `test/corpora/` are strictly **READ-ONLY** canonical oracle baselines.
+   - Modifying, weakening, deleting, or re-harvesting `.slt` files or test expectations to force tests to pass is strictly considered test fraud / anti-pattern and permanently forbidden.
+   - If an engine query fails against an oracle test, the engine code must be fixed to satisfy the oracle, or if an authentic incompatibility or upstream bug is discovered, it must be reported to the user. Under no circumstances may an agent or script unilaterally mutate `.slt` expectation cells.
+2. **Multi-Layer Defensive Lockdown**:
+   - Layer 1 (OS Filesystem Permission): All `*.slt` files are set to read-only `chmod 444`.
+   - Layer 2 (Pre-Commit & Release Firewall): `scripts/verify_no_slt_mutation.sh` strictly aborts commits and release pipelines if any `.slt` or `test/corpora/` changes are staged.
+   - Layer 3 (Cryptographic Checksum Verification): `test/slt_proc/CHECKSUMS.sha256` verifies 100% SHA-256 hash integrity across all 1,289 test suites in `TestOracleIntegrity_ZeroTampering`.
+   - Layer 4 (Architecture Contract): Codified in `GEMINI.md`.
+
 ---
 
 ## 3. Explicit Spec-Out Decisions (Engine Simplicity & KISS)

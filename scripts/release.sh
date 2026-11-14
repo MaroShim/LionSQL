@@ -299,6 +299,10 @@ else
     fi
 fi
 
+# Gate 0.5: Zero-Tampering Oracle Test Invariant Gate
+echo -e "[Gate 0.5/6] Verifying Zero-Tampering Oracle Test Invariant..."
+"${ROOT_DIR}/scripts/verify_no_slt_mutation.sh"
+
 echo "Compiling 3 official release binaries..."
 # 1. macOS Apple Silicon (arm64)
 go build -tags wiredtiger -buildvcs=false -o bin/lionsql-darwin-arm64 ./cmd/lionsql

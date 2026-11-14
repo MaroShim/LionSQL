@@ -1,7 +1,11 @@
 package slt_proc_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"lionsql/pkg/catalog"
@@ -10,6 +14,45 @@ import (
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 )
+
+// TestOracleIntegrity_ZeroTampering verifies that zero .slt oracle test files have been altered,
+// enforcing Invariant 16: Zero-Tampering Oracle Test Invariant.
+func TestOracleIntegrity_ZeroTampering(t *testing.T) {
+	data, err := os.ReadFile("CHECKSUMS.sha256")
+	if err != nil {
+		t.Fatalf("failed to read CHECKSUMS.sha256: %v", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+	verified := 0
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) != 2 {
+			continue
+		}
+		expectedHash := parts[0]
+		relPath := parts[1]
+
+		fileBytes, err := os.ReadFile(relPath)
+		if err != nil {
+			t.Fatalf("[ZERO-TAMPERING-FAIL] missing oracle test file %s: %v", relPath, err)
+		}
+		h := sha256.Sum256(fileBytes)
+		actualHash := hex.EncodeToString(h[:])
+		if actualHash != expectedHash {
+			t.Fatalf("[ZERO-TAMPERING-FAIL] Oracle file tampering detected in %s!\nExpected SHA256: %s\nActual SHA256:   %s\n[RULE:ZeroOracleTampering] External oracle files are strictly immutable.", relPath, expectedHash, actualHash)
+		}
+		verified++
+	}
+
+	if verified < 1289 {
+		t.Fatalf("expected at least 1,289 verified oracle suites in CHECKSUMS.sha256, found %d", verified)
+	}
+}
 
 func discoverProcSLTFiles(t *testing.T) []string {
 	t.Helper()

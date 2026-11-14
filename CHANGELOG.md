@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Security
+- enforce Zero-Tampering Oracle Test Invariant (`[RULE:ZeroOracleTampering]`, Invariant 16):
+  - deploy `scripts/verify_no_slt_mutation.sh` and Git pre-commit hook preventing any modification to `*.slt` or `test/corpora/` oracle files
+  - lock all `*.slt` test suites to read-only permission (`chmod 444`) across `test/slt/` and `test/slt_proc/`
+  - establish cryptographic checksum manifest `test/slt_proc/CHECKSUMS.sha256` verified by `TestOracleIntegrity_ZeroTampering` across all 1,289 test suites
+  - integrate Gate 0.5 into `scripts/release.sh` fail-closed release verification pipeline
+
 ### Fixed
 - support SQL Server 2022 JSON functions and column type alias (`FIX-TSQL-JSON-FUNCTIONS-EXT-1`):
   - support `JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS`, and aggregation function signatures `JSON_OBJECTAGG`, `JSON_ARRAYAGG` in `pkg/proc/` and `pkg/storage/`
