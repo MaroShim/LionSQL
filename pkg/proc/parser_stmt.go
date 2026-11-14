@@ -510,6 +510,9 @@ func (p *Parser) parseDeclare() (Statement, error) {
 	var stmts []Statement
 	varName := name
 	for {
+		if p.curTokenIs(TokenAs) {
+			p.nextToken() // eat optional AS keyword: DECLARE @var AS type
+		}
 		if !p.curTokenIs(TokenIdent) {
 			return nil, fmt.Errorf("expected data type for %s, got %s", varName, p.curToken.Literal)
 		}

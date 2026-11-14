@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- support SQL Server 2022 JSON functions and column type alias (`FIX-TSQL-JSON-FUNCTIONS-EXT-1`):
+  - support `JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS`, and aggregation function signatures `JSON_OBJECTAGG`, `JSON_ARRAYAGG` in `pkg/proc/` and `pkg/storage/`
+  - support `ABSENT ON NULL` (default) and `NULL ON NULL` clauses for `JSON_OBJECT` and `JSON_ARRAY`
+  - support optional `AS` keyword in `DECLARE @var AS type` and Unicode `N'...'` literals in session variable parsing
+  - add unit test coverage in `pkg/proc/builtins_json_test.go` and verify Gate 5 oracle tests in `test/slt_proc/mssql_jdbc_oracle/3124_jdbc_datatypes_jsonfunction.slt`
 - map TDS constraint and engine errors to official Microsoft SQL Server error numbers (`FIX-TDS-ERROR-NUMBER-MAP-1`):
   - map Primary Key violation (`storage.ErrKeyExists`) to Msg 2627 (Severity 14, State 1)
   - map Unique index violation (`storage.ErrUniqueViolation`) to Msg 2601 (Severity 14, State 1)

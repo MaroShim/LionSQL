@@ -231,7 +231,7 @@
 | `DONE` | **`FIX-TRIGGER-FOR-KEYWORD-1`** |  | Engine | P1 | CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** |  | Engine | P1 | CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX)) 미평가 에코 버그 및 MONEY/SMALLMONEY 4자리 소수점 스케일(1.2345) 보정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-INSERT-EXEC-1`** |  | Engine | P1 | INSERT INTO <table> EXEC <proc_name> 프로시저 결과셋 적재 구문 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`FIX-TSQL-JSON-FUNCTIONS-EXT-1`** | `1.0-GA` | Engine | P1 | mssql-jdbc JSONFunctionTest.java 호환성: SQL Server JSON 컬럼 타입 별칭 및 JSON_OBJECT, JSON_ARRAY, JSON_PATH_EXISTS 내장 함수 지원 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-TSQL-JSON-FUNCTIONS-EXT-1`** | `1.0-GA` | Engine | P1 | mssql-jdbc JSONFunctionTest.java 호환성: SQL Server JSON 컬럼 타입 별칭 및 JSON_OBJECT, JSON_ARRAY, JSON_PATH_EXISTS 내장 함수 지원 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-TSQL-MONEY-STRING-PARSE-1`** |  | Eval | P2 | CAST of currency-symbol strings to MONEY and LEN(MONEY) parity with SQL Server | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TSQL-OFFSET-VAR-1`** | `1.0-GA` | Engine | P2 | OFFSET @var ROWS FETCH NEXT @var ROWS ONLY 프로시저 내 변수 바인딩 파싱 실패 (unexpected token @skip) | [`test/slt_proc/26_offset_fetch_paging.slt`](test/slt_proc/26_offset_fetch_paging.slt) |  |
 | `DONE` | **`FIX-TSQL-OUTPUT-PARAM-1`** | `1.0-GA` | Engine | P1 | EXEC proc @x OUTPUT 호출자 변수로 값 미전달: DECLARE @x; EXEC sp_double 21, @x OUTPUT; SELECT @x 가 42 대신 NULL | [`test/slt_proc/27_rowcount_and_dml_results.slt`](test/slt_proc/27_rowcount_and_dml_results.slt) |  |
@@ -2695,8 +2695,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] mssql-jdbc JSONFunctionTest.java 호환성: SQL Server JSON 컬럼 타입 별칭 및 JSON_OBJECT, JSON_ARRAY, JSON_PATH_EXISTS 내장 함수 지원 `FIX-TSQL-JSON-FUNCTIONS-EXT-1`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-12 15:29:18
+### [DONE] mssql-jdbc JSONFunctionTest.java 호환성: SQL Server JSON 컬럼 타입 별칭 및 JSON_OBJECT, JSON_ARRAY, JSON_PATH_EXISTS 내장 함수 지원 `FIX-TSQL-JSON-FUNCTIONS-EXT-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-14 10:23:29
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
 

@@ -685,6 +685,113 @@ func (p *Parser) parseFunctionCall(name string) Expr {
 		}
 	}
 
+	if strings.EqualFold(name, "JSON_OBJECT") || strings.EqualFold(name, "JSON_OBJECTAGG") {
+		var args []Expr
+		nullOption := "ABSENT"
+		for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+			if p.curTokenIs(TokenNull) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ABSENT")) {
+				if p.peekTokenIs(TokenOn) || (p.peekTokenIs(TokenIdent) && strings.EqualFold(p.peekToken.Literal, "ON")) {
+					lit := strings.ToUpper(p.curToken.Literal)
+					p.nextToken()
+					p.nextToken()
+					if p.curTokenIs(TokenNull) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "NULL")) {
+						p.nextToken()
+					}
+					nullOption = lit
+					break
+				}
+			}
+
+			keyExpr := p.parseExpression(precLowest)
+			if keyExpr == nil {
+				break
+			}
+			args = append(args, keyExpr)
+
+			if p.curTokenIs(TokenColon) {
+				p.nextToken() // eat :
+				valExpr := p.parseExpression(precLowest)
+				if valExpr != nil {
+					args = append(args, valExpr)
+				}
+			}
+
+			if p.curTokenIs(TokenNull) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ABSENT")) {
+				if p.peekTokenIs(TokenOn) || (p.peekTokenIs(TokenIdent) && strings.EqualFold(p.peekToken.Literal, "ON")) {
+					lit := strings.ToUpper(p.curToken.Literal)
+					p.nextToken()
+					p.nextToken()
+					if p.curTokenIs(TokenNull) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "NULL")) {
+						p.nextToken()
+					}
+					nullOption = lit
+					break
+				}
+			}
+
+			if p.curTokenIs(TokenComma) {
+				p.nextToken()
+			} else {
+				break
+			}
+		}
+
+		if p.curTokenIs(TokenRParen) {
+			p.nextToken()
+		}
+		args = append(args, &LiteralExpr{Val: storage.StringValue("__OPT:" + nullOption)})
+		return &FunctionCallExpr{Name: strings.ToUpper(name), Args: args}
+	}
+
+	if strings.EqualFold(name, "JSON_ARRAY") {
+		var args []Expr
+		nullOption := "ABSENT"
+		for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+			if p.curTokenIs(TokenNull) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ABSENT")) {
+				if p.peekTokenIs(TokenOn) || (p.peekTokenIs(TokenIdent) && strings.EqualFold(p.peekToken.Literal, "ON")) {
+					lit := strings.ToUpper(p.curToken.Literal)
+					p.nextToken()
+					p.nextToken()
+					if p.curTokenIs(TokenNull) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "NULL")) {
+						p.nextToken()
+					}
+					nullOption = lit
+					break
+				}
+			}
+
+			arg := p.parseExpression(precLowest)
+			if arg != nil {
+				args = append(args, arg)
+			}
+
+			if p.curTokenIs(TokenNull) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ABSENT")) {
+				if p.peekTokenIs(TokenOn) || (p.peekTokenIs(TokenIdent) && strings.EqualFold(p.peekToken.Literal, "ON")) {
+					lit := strings.ToUpper(p.curToken.Literal)
+					p.nextToken()
+					p.nextToken()
+					if p.curTokenIs(TokenNull) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "NULL")) {
+						p.nextToken()
+					}
+					nullOption = lit
+					break
+				}
+			}
+
+			if p.curTokenIs(TokenComma) {
+				p.nextToken()
+			} else {
+				break
+			}
+		}
+
+		if p.curTokenIs(TokenRParen) {
+			p.nextToken()
+		}
+		args = append(args, &LiteralExpr{Val: storage.StringValue("__OPT:" + nullOption)})
+		return &FunctionCallExpr{Name: "JSON_ARRAY", Args: args}
+	}
+
 	var args []Expr
 	isDistinct := false
 	if p.curTokenIs(TokenDistinct) {

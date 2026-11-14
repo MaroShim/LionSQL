@@ -289,6 +289,10 @@ func ParseSessionVarValue(s string) any {
 	if strings.EqualFold(s, "FALSE") {
 		return false
 	}
+	if (strings.HasPrefix(s, "N'") || strings.HasPrefix(s, "n'")) && strings.HasSuffix(s, "'") && len(s) >= 3 {
+		inner := s[2 : len(s)-1]
+		return strings.ReplaceAll(inner, "''", "'")
+	}
 	if strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2 {
 		inner := s[1 : len(s)-1]
 		return strings.ReplaceAll(inner, "''", "'")

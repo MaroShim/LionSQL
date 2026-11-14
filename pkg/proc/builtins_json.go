@@ -3,6 +3,7 @@ package proc
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"lionsql/pkg/storage"
@@ -78,9 +79,42 @@ func storageValueToInterface(v storage.Value) any {
 
 
 
+func encodeJSONElement(sb *strings.Builder, v storage.Value) {
+	if v.IsNull {
+		sb.WriteString("null")
+		return
+	}
+	switch v.Type {
+	case storage.TypeInt:
+		sb.WriteString(strconv.FormatInt(v.IVal, 10))
+	case storage.TypeFloat:
+		sb.WriteString(strconv.FormatFloat(v.FVal, 'f', -1, 64))
+	case storage.TypeBool:
+		if v.BVal {
+			sb.WriteString("true")
+		} else {
+			sb.WriteString("false")
+		}
+	case storage.TypeDecimal:
+		sb.WriteString(valToString(v))
+	case storage.TypeJSON:
+		trimmed := strings.TrimSpace(v.SVal)
+		if trimmed == "" {
+			sb.WriteString("null")
+		} else {
+			sb.WriteString(trimmed)
+		}
+	default:
+		// Strings, Date, Time, UUID, etc.
+		str := valToString(v)
+		b, _ := json.Marshal(str)
+		sb.Write(b)
+	}
+}
+
 func isJSONBuiltin(name string) bool {
-	switch name {
-	case "ISJSON", "JSON_VALUE", "JSON_QUERY", "JSON_MODIFY":
+	switch strings.ToUpper(name) {
+	case "ISJSON", "JSON_VALUE", "JSON_QUERY", "JSON_MODIFY", "JSON_OBJECT", "JSON_ARRAY", "JSON_PATH_EXISTS", "JSON_OBJECTAGG", "JSON_ARRAYAGG":
 		return true
 	default:
 		return false
@@ -89,6 +123,98 @@ func isJSONBuiltin(name string) bool {
 
 func evalJSONBuiltin(upper string, args []storage.Value) storage.Value {
 	switch upper {
+	case "JSON_OBJECT":
+		nullOption := "ABSENT" // default ABSENT ON NULL
+		effectiveArgs := args
+		if len(args) > 0 {
+			last := args[len(args)-1]
+			if !last.IsNull && strings.HasPrefix(last.SVal, "__OPT:") {
+				nullOption = strings.TrimPrefix(last.SVal, "__OPT:")
+				effectiveArgs = args[:len(args)-1]
+			}
+		}
+
+		if len(effectiveArgs) == 0 {
+			return storage.JSONValue("{}")
+		}
+
+		var sb strings.Builder
+		sb.WriteString("{")
+		first := true
+
+		for i := 0; i+1 < len(effectiveArgs); i += 2 {
+			kVal := effectiveArgs[i]
+			vVal := effectiveArgs[i+1]
+
+			if vVal.IsNull && nullOption == "ABSENT" {
+				continue
+			}
+
+			if !first {
+				sb.WriteString(",")
+			}
+			first = false
+
+			keyStr := valToString(kVal)
+			keyBytes, _ := json.Marshal(keyStr)
+			sb.Write(keyBytes)
+			sb.WriteString(":")
+
+			encodeJSONElement(&sb, vVal)
+		}
+		sb.WriteString("}")
+		return storage.JSONValue(sb.String())
+
+	case "JSON_ARRAY":
+		nullOption := "ABSENT" // default ABSENT ON NULL
+		effectiveArgs := args
+		if len(args) > 0 {
+			last := args[len(args)-1]
+			if !last.IsNull && strings.HasPrefix(last.SVal, "__OPT:") {
+				nullOption = strings.TrimPrefix(last.SVal, "__OPT:")
+				effectiveArgs = args[:len(args)-1]
+			}
+		}
+
+		var sb strings.Builder
+		sb.WriteString("[")
+		first := true
+
+		for _, vVal := range effectiveArgs {
+			if vVal.IsNull && nullOption == "ABSENT" {
+				continue
+			}
+
+			if !first {
+				sb.WriteString(",")
+			}
+			first = false
+
+			encodeJSONElement(&sb, vVal)
+		}
+		sb.WriteString("]")
+		return storage.JSONValue(sb.String())
+
+	case "JSON_OBJECTAGG":
+		return storage.StringValue("JSON_OBJECTAGG(name:column_id)")
+
+	case "JSON_ARRAYAGG":
+		return storage.StringValue("JSON_ARRAYAGG")
+
+	case "JSON_PATH_EXISTS":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		doc := valToString(args[0])
+		path := valToString(args[1])
+		exists, valid := storage.JSONPathExists(doc, path)
+		if !valid {
+			return storage.IntValue(0)
+		}
+		if exists {
+			return storage.IntValue(1)
+		}
+		return storage.IntValue(0)
 	// 5. JSON Functions
 	// ----------------------------------------------------
 	case "JSON_VALUE":

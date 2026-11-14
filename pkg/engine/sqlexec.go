@@ -1427,6 +1427,9 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			if len(varFields) == 0 {
 				continue
 			}
+			if len(varFields) > 2 && strings.EqualFold(varFields[1], "AS") {
+				varFields = append(varFields[:1], varFields[2:]...)
+			}
 			varName := varFields[0]
 			if !strings.HasPrefix(varName, "@") {
 				varName = "@" + varName

@@ -530,6 +530,23 @@ func parsePathSegments(p string) []string {
 	return segments
 }
 
+// JSONPathExists checks if a specified SQL/JSON path exists in the input JSON document.
+// Returns (exists bool, validJSON bool). If doc is not valid JSON, validJSON is false.
+func JSONPathExists(doc string, path string) (bool, bool) {
+	doc = strings.TrimSpace(doc)
+	if doc == "" {
+		return false, false
+	}
+	_, ok := navigatePath(doc, path)
+	if !ok {
+		if _, err := getParsedJSONDOM(doc); err != nil {
+			return false, false
+		}
+		return false, true
+	}
+	return true, true
+}
+
 // ExtractJSONIndexKey extracts an index key value from a JSON document at the specified path.
 func ExtractJSONIndexKey(docStr string, path string) Value {
 	if docStr == "" {
