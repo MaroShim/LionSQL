@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -457,15 +458,21 @@ func (e *Engine) saveDiskSnapshotLocked(snapLSN int64) error {
 	return os.Rename(tmpFile, targetFile)
 }
 
-func (e *Engine) loadDiskLocked() int64 {
+func (e *Engine) loadDiskLocked() (int64, error) {
 	if e.dataDir == "" {
-		return 0
+		return 0, nil
 	}
 
 	mpkFile := filepath.Join(e.dataDir, "tables.mpk")
 	data, err := os.ReadFile(mpkFile)
-	if err != nil || len(data) == 0 {
-		return 0
+	if err != nil {
+		if os.IsNotExist(err) || errors.Is(err, os.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("failed to read RDB snapshot file %q: %w", mpkFile, err)
+	}
+	if len(data) == 0 {
+		return 0, fmt.Errorf("RDB snapshot file %q is empty or truncated", mpkFile)
 	}
 
 	var snapLSN int64
@@ -477,7 +484,10 @@ func (e *Engine) loadDiskLocked() int64 {
 		loaded = container.Tables
 	} else {
 		if err := UnmarshalMsgPack(data, &loaded); err != nil || loaded == nil {
-			return 0
+			if err != nil {
+				return 0, fmt.Errorf("failed to unmarshal RDB snapshot file %q: %w", mpkFile, err)
+			}
+			return 0, fmt.Errorf("RDB snapshot file %q contains nil table map", mpkFile)
 		}
 	}
 
@@ -507,7 +517,9 @@ func (e *Engine) loadDiskLocked() int64 {
 		if td.Indexes == nil {
 			td.Indexes = make(map[string]*IndexData)
 		}
-		_ = td.restoreIndexesLocked()
+		if err := td.restoreIndexesLocked(); err != nil {
+			return 0, fmt.Errorf("failed to restore secondary indexes for table %q from RDB snapshot: %w", td.Schema.Name, err)
+		}
 		if td.Schema.IsPartitioned() {
 			if td.Partitions == nil {
 				td.Partitions = make(map[string]map[string]struct{})
@@ -522,6 +534,6 @@ func (e *Engine) loadDiskLocked() int64 {
 		td.Versions = nil
 	}
 	e.rebuildFKCacheLocked()
-	return snapLSN
+	return snapLSN, nil
 }
 

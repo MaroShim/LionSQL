@@ -418,6 +418,34 @@ LionSQL은 일급 라이프사이클 서브커맨드를 지원하는 현대적 �
 ./bin/lionsql set <key> <val>   # 실행 중인 인스턴스의 설정 동적 변경 (sudo 스타일 암호 인증)
 ```
 
+### 대화형 SQL REPL 셸 및 헤드리스 CLI (`lionsql cli`)
+
+외부 클라이언트 도구(`psql`, `sqlcmd`) 설치 없이 단일 바이너리만으로 로컬 데이터베이스에 대해 대화형 REPL 셸, 인라인 쿼리(`-e`), 스크립트 파일 배치(`-f`)를 즉시 실행할 수 있습니다. OS 커널 파일 잠금(`dirlock`)을 통해 실행 중인 데몬과의 동시 접근 충돌을 자동으로 방어합니다.
+
+| 옵션 / 플래그 | 별칭 (Aliases) | 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `cli` / `-i` | `--interactive`, `-shell` | `false` | 대화형 SQL/T-SQL REPL 셸 실행 (`exit`, `quit`, `.exit`로 종료) |
+| `-e "<sql>"` | `--execute`, `sql "<sql>"` | `""` | 인라인 SQL/T-SQL 문장을 헤드리스로 즉시 실행하고 표 형식으로 결과 출력 |
+| `-f <path>` | `--file` | `""` | 지정된 `.sql` 배치 스크립트 파일을 읽어 순차 실행 (`GO` 구분자 지원) |
+| `-dir <path>` | `-data`, `-data-dir` | `data` | 대상 데이터베이스 데이터 디렉터리 경로 |
+| `-engine <type>` | `--engine` | `wiredtiger` | 스토리지 엔진 백엔드 선택 (`wiredtiger` 또는 `memory`) |
+| `-disk <type>` | `--disk` | 플랫폼 기본값 | 디스크 영속성 포맷 지정 (`wiredtiger` 또는 `compact`) |
+| `-memory <mode>` | `--memory` | `compact` | 인메모리 튜플 레이아웃 모드 (`compact` 권장) |
+
+```bash
+# 1. 대화형 REPL 셸 진입 (다중 라인 입력, 세미콜론(;) 또는 GO로 실행)
+./bin/lionsql cli -dir=./data
+./bin/lionsql -i -engine=memory -dir=./data
+
+# 2. 헤드리스 인라인 쿼리 실행 (스크립트 및 CI/CD 파이프라인 자동화)
+./bin/lionsql -e "SELECT 1 + 1 AS result, @@VERSION AS version;"
+./bin/lionsql cli -dir=./data -e "CREATE TABLE items (id INT PRIMARY KEY, name VARCHAR(50)); INSERT INTO items VALUES (1, 'LionSQL'); SELECT * FROM items;"
+
+# 3. SQL 스크립트 파일 일괄 실행
+./bin/lionsql -f ./scripts/demo_seed.sql
+./bin/lionsql cli -dir=./data -f ./migrations/init_schema.sql
+```
+
 ### 스키마 마이그레이션 CLI (`lionsql migrate`)
 
 ```bash

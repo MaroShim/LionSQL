@@ -454,7 +454,11 @@ func (e *Engine) OpenWithOptions(opts Options) (err error) {
 		// 1. Load baseline snapshot (RDB) if enabled
 		var snapLSN int64
 		if opts.EnableRDB {
-			snapLSN = e.loadDiskLocked()
+			var loadErr error
+			snapLSN, loadErr = e.loadDiskLocked()
+			if loadErr != nil {
+				return fmt.Errorf("RDB snapshot load error: %w", loadErr)
+			}
 			e.nextLSN.Store(snapLSN)
 		}
 

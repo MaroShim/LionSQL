@@ -7,12 +7,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **CLI & Developer Experience (`lionsql cli`, `pkg/cli/cli.go`, `cmd/lionsql/sql.go`, `cmd/lionsql/main.go`)**:
+  - Implement unified interactive SQL/T-SQL REPL shell (`lionsql cli`, `-i`, `--interactive`, `-shell`) and headless query execution engine (`-e` / `--execute` inline SQL, `-f` / `--file` batch script files with `GO` separator support, multi-result set tabular formatting) directly inside the standalone binary per `[RULE:HeadlessParity]`.
+- **Storage & Process Mutual Exclusion (`pkg/storage/dirlock`, `cmd/lionsql/server.go`, `pkg/storage/memengine/memengine.go`)**:
+  - Implement cross-platform OS-level non-blocking exclusive directory locking (`flock(LOCK_EX|LOCK_NB)` on Unix, `LockFileEx` on Windows) on `<dataDir>/lionsql.lock` with in-process reference counting, eliminating TOCTOU race conditions and split-brain corruption when multiple processes attempt to open the same data directory concurrently (`[RULE:PlatformPrimitives]`, `[RULE:ConflictPrevention]`).
+- **Build & Release Infrastructure (`pkg/config/version.go`, `scripts/release.sh`)**:
+  - Support dynamic injection of `Version`, `GitCommit`, and `BuildDate` at compile time via `-ldflags -X` across all release and benchmark binaries.
+
 ### Performance
 - **Planner & Execution (`PERF-EXISTS-SUBQUERY-LIMIT-1`, Defect 73)**:
   - Push down implicit `LIMIT 1` and early-exit termination to subqueries nested under `EXISTS (...)` across standalone scalar selection, WHERE predicates, conditional DDL statements (`IF EXISTS (subquery) <DDL>`), and stored procedure bytecode compilation (`*ExistsExpr` with `OpSelectInto` and `OpIsNotNull`).
   - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
 
 ### Fixed
+- **Storage & Durability (`pkg/storage/memengine/persistence.go`, `memengine.go`)**:
+  - Enforce fail-closed startup when RDB snapshot file (`tables.mpk`) exists on disk but is corrupted, truncated (0-byte), or unreadable, returning an explicit error instead of silently booting with an empty catalog and risking overwriting committed data (`[RULE:ExplicitError]`, `[RULE:AtomicSaves]`).
+  - Guarantee deterministic resource cleanup (`e.wal.Close()`, `e.dirLock.Release()`) via `defer` when `memengine.OpenWithOptions` fails midway through initialization, eliminating leaked file descriptors (`[RULE:HandleHygiene]`, `[RULE:DoubleCloseSafety]`).
+- **Configuration (`pkg/config/config.go`)**:
+  - Fail fast with an explicit diagnostic error when an auto-discovered `lionsql.json` exists on disk but contains malformed JSON, falling back to `DefaultConfig()` strictly when the configuration file is absent (`[RULE:ExplicitError]`, `[RULE:SafeDefaults]`).
 - **Storage & Engine (`FIX-CONCURRENT-UPDATE-LOST-UPDATE-1`, vm.go:2136, 2250, sqlexec_dml.go:1105~1255, sqlexec_select.go:1360~1430, tx.go:700, 1000, 3005)**:
   - Eliminate lost updates and enforce write conflict detection across concurrent conditional UPDATE and DELETE statements per `[RULE:ConflictPrevention]`, `[RULE:AtomicSaves]`, and `[RULE:ExplicitError]`:
     1. Propagate `f.tx.Update` and `f.tx.Delete` errors in VDBE execution engine (`pkg/proc/runtime/vm.go:execUpdateWhere`, `execDeleteWhere`), eliminating silent error swallowing and surfacing `ErrSerializationFailure` and write conflicts to callers.
