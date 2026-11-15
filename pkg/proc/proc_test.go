@@ -1,6 +1,7 @@
 package proc
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -236,3 +237,29 @@ END
 		t.Errorf("Expected 5! = 120, got %d", res.ReturnValue.IVal)
 	}
 }
+
+func TestRegression_AUDIT_093_017_CompilerFreesTempRegisters(t *testing.T) {
+	var sb strings.Builder
+	sb.WriteString("CREATE PROCEDURE RegLeakCheck AS BEGIN\n")
+	for i := 0; i < 40; i++ {
+		sb.WriteString(fmt.Sprintf("    DECLARE @v%d INT = %d;\n", i, i))
+		sb.WriteString("    WAITFOR DELAY '00:00:00';\n")
+		sb.WriteString("    SELECT 1, 2, 3;\n")
+	}
+	sb.WriteString("END;")
+
+	plan, err := Parse(sb.String())
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	prog, err := CompileProcedure(plan)
+	if err != nil {
+		t.Fatalf("CompileProcedure failed: %v", err)
+	}
+	// 40 declared variables + at most a few recycled scratch registers (< 60 total).
+	// Without freeing valReg / WAITFOR / scalar SELECT registers, NumRegisters would exceed 240.
+	if prog.NumRegisters > 60 {
+		t.Fatalf("expected bounded NumRegisters <= 60 (temp registers recycled), got %d", prog.NumRegisters)
+	}
+}
+

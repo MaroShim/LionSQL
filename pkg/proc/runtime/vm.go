@@ -682,9 +682,14 @@ func (e *Executor) Run(prog *proc.Program, procName string, params map[string]an
 
 // RunContext executes a precompiled bytecode program with ambient transaction and cancellation semantics.
 func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName string, params map[string]any, session storage.Session) (*ExecutionResult, error) {
+	return e.RunContextWithOptions(ctx, prog, procName, params, session, storage.TxOptions{})
+}
+
+// RunContextWithOptions executes a precompiled bytecode program with ambient transaction and explicit transaction options.
+func (e *Executor) RunContextWithOptions(ctx context.Context, prog *proc.Program, procName string, params map[string]any, session storage.Session, opts storage.TxOptions) (*ExecutionResult, error) {
 	start := time.Now()
 
-	tx, err := session.BeginTx(storage.TxOptions{})
+	tx, err := session.BeginTx(opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin ambient transaction: %w", err)
 	}
@@ -766,7 +771,11 @@ func (e *Executor) ExecuteInTxWithSessionContext(ctx context.Context, prog *proc
 
 	retVal, err := frame.Execute(0)
 	if err != nil {
-		return &ExecutionResult{ActiveTx: frame.tx}, err
+		var activeTx storage.Transaction
+		if frame.tranCount > 0 {
+			activeTx = frame.tx
+		}
+		return &ExecutionResult{ActiveTx: activeTx}, err
 	}
 
 	return frame.buildExecutionResult(start, retVal), nil
@@ -802,6 +811,14 @@ func (frame *VMFrame) buildExecutionResult(start time.Time, retVal any) *Executi
 		rowCount = int64(len(rows))
 	}
 
+	var activeTx storage.Transaction
+	if frame.tranCount > 0 {
+		activeTx = frame.tx
+	} else if frame.tx != nil {
+		_ = frame.tx.Commit()
+		activeTx = nil
+	}
+
 	return &ExecutionResult{
 		ReturnValue:  retVal,
 		Logs:         frame.logs,
@@ -813,7 +830,7 @@ func (frame *VMFrame) buildExecutionResult(start time.Time, retVal any) *Executi
 		LastIdentity: frame.lastIdentity,
 		Vars:         collectFrameVars(frame),
 		ResultSets:   resultSets,
-		ActiveTx:     frame.tx,
+		ActiveTx:     activeTx,
 	}
 }
 

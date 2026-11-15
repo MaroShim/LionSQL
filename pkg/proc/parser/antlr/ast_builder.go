@@ -6,6 +6,7 @@ import (
 
 	"github.com/antlr4-go/antlr/v4"
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -90,11 +91,9 @@ func (b *ASTBuilder) VisitBatch_level_statement(ctx *Batch_level_statementContex
 func (b *ASTBuilder) VisitCreate_or_alter_procedure(ctx *Create_or_alter_procedureContext) interface{} {
 	var procName string
 	if ctx.Func_proc_name_schema() != nil {
-		procName = ctx.Func_proc_name_schema().GetText()
-		if idx := strings.LastIndex(procName, "."); idx >= 0 {
-			procName = procName[idx+1:]
-		}
-		procName = strings.Trim(procName, "[]")
+		raw := ctx.Func_proc_name_schema().GetText()
+		parts := strings.Split(raw, ".")
+		procName = sqlutil.CleanIdentifier(parts[len(parts)-1])
 	}
 
 	params := make([]proc.ParamDef, 0)
@@ -102,9 +101,25 @@ func (b *ASTBuilder) VisitCreate_or_alter_procedure(ctx *Create_or_alter_procedu
 		pName := p.LOCAL_ID().GetText()
 		pType := storage.TypeVarChar
 		if p.Data_type() != nil {
-			pType = parseDataTypeString(p.Data_type().GetText())
+			pType = proc.ParseDataType(p.Data_type().GetText())
 		}
-		params = append(params, proc.ParamDef{Name: pName, Type: pType})
+		isOutput := p.OUT() != nil || p.OUTPUT() != nil
+		var defaultExpr proc.Expr
+		if p.Procedure_param_default_value() != nil {
+			defText := p.Procedure_param_default_value().GetText()
+			defLexer := proc.NewLexer(defText)
+			defParser := proc.NewParser(defLexer)
+			expr := defParser.ParseExpression(proc.PrecLowest)
+			if expr != nil && len(defParser.Errors()) == 0 {
+				defaultExpr = expr
+			}
+		}
+		params = append(params, proc.ParamDef{
+			Name:    pName,
+			Type:    pType,
+			Output:  isOutput,
+			Default: defaultExpr,
+		})
 	}
 
 	var stmts []proc.Statement
@@ -124,10 +139,17 @@ func (b *ASTBuilder) VisitCreate_or_alter_procedure(ctx *Create_or_alter_procedu
 		if clauseText == "" || clauseText == ";" {
 			continue
 		}
+
 		cLexer := proc.NewLexer(clauseText)
 		cParser := proc.NewParser(cLexer)
 		s, sErr := cParser.ParseStatement()
 		if sErr != nil || s == nil {
+			return nil
+		}
+		if cParser.CurTokenIs(proc.TokenSemicolon) {
+			cParser.NextToken()
+		}
+		if !cParser.CurTokenIs(proc.TokenEOF) {
 			return nil
 		}
 		stmts = append(stmts, s)
@@ -144,36 +166,5 @@ func (b *ASTBuilder) VisitCreate_or_alter_procedure(ctx *Create_or_alter_procedu
 		Name:   procName,
 		Params: params,
 		Body:   body,
-	}
-}
-
-func parseDataTypeString(s string) storage.DataType {
-	switch strings.ToUpper(s) {
-	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL", "INT2", "INT4", "INT8":
-		return storage.TypeInt
-	case "VARCHAR", "TEXT", "NVARCHAR", "CHAR", "BPCHAR", "SYSNAME":
-		return storage.TypeVarChar
-	case "REAL", "FLOAT4":
-		return storage.TypeReal
-	case "FLOAT", "DOUBLE", "FLOAT8":
-		return storage.TypeFloat
-	case "DECIMAL", "NUMERIC", "MONEY", "SMALLMONEY":
-		return storage.TypeDecimal
-	case "BIT", "BOOL", "BOOLEAN":
-		return storage.TypeBool
-	case "DATETIME", "TIMESTAMP", "TIMESTAMPTZ", "DATETIME2", "SMALLDATETIME", "DATETIMEOFFSET":
-		return storage.TypeDateTime
-	case "DATE":
-		return storage.TypeDate
-	case "TIME", "TIMETZ":
-		return storage.TypeTime
-	case "UUID", "UNIQUEIDENTIFIER", "GUID":
-		return storage.TypeUUID
-	case "VARBINARY", "BINARY", "BYTEA", "BLOB", "IMAGE", "ROWVERSION":
-		return storage.TypeBinary
-	case "JSON", "JSONB":
-		return storage.TypeJSON
-	default:
-		return storage.TypeVarChar
 	}
 }

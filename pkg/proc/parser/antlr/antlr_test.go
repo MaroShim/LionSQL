@@ -165,3 +165,55 @@ END;
 		t.Fatalf("expected non-empty bytecode instructions")
 	}
 }
+
+func TestRegression_AUDIT_093_018_AntlrCreateProcedureNeverDropsUnparsedStatements(t *testing.T) {
+	// 1. Include vendor clause (WITH RECOMPILE), OUTPUT param, DEFAULT param, and multiple statements
+	script := `
+CREATE OR ALTER PROCEDURE Audit018Proc
+    @id INT,
+    @out INT OUTPUT,
+    @opt INT = 42
+WITH RECOMPILE
+AS
+BEGIN
+    DECLARE @x INT = 10;
+    SET @x = @x + @id;
+    RETURN @x;
+END;
+`
+	plan, err := parser.BuildProcedure(script)
+	if err != nil {
+		t.Fatalf("BuildProcedure failed: %v", err)
+	}
+
+	// Verify params: OUTPUT flag and DEFAULT expression preservation
+	if len(plan.Params) != 3 {
+		t.Fatalf("expected 3 params, got %d", len(plan.Params))
+	}
+	if !plan.Params[1].Output {
+		t.Errorf("expected param @out to have Output=true, got false")
+	}
+	if plan.Params[2].Default == nil {
+		t.Errorf("expected param @opt to have non-nil Default expression, got nil")
+	}
+
+	blk, ok := plan.Body.(*proc.BlockStmt)
+	if !ok || blk == nil || len(blk.Statements) != 3 {
+		t.Fatalf("expected all 3 statements in procedure body BlockStmt to be preserved, got %+v", plan.Body)
+	}
+
+	// 2. Reject unparsed trailing garbage tokens in statement
+	badScript := `
+CREATE OR ALTER PROCEDURE Audit018Garbage
+    @id INT
+WITH RECOMPILE
+AS
+BEGIN
+    SELECT 1 INVALID_GARBAGE_1 INVALID_GARBAGE_2;
+END;
+`
+	if badPlan, err := parser.BuildProcedure(badScript); err == nil {
+		t.Fatalf("expected procedure with trailing garbage tokens to fail build, got %+v", badPlan)
+	}
+}
+

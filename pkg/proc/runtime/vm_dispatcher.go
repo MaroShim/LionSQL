@@ -18,6 +18,17 @@ import (
 // tableVarGlobalSeq guarantees strictly monotonic and unique naming across rapid table variable declarations.
 var tableVarGlobalSeq atomic.Uint64
 
+func cleanOutputColName(col string) string {
+	lower := strings.ToLower(col)
+	if strings.HasPrefix(lower, "inserted.") {
+		return col[len("inserted."):]
+	}
+	if strings.HasPrefix(lower, "deleted.") {
+		return col[len("deleted."):]
+	}
+	return col
+}
+
 // handleCatch checks the active catchStack on error, routing execution to the catch handler if present.
 func (f *VMFrame) handleCatch(err error, pc *int) error {
 	if err == nil {
@@ -1212,19 +1223,29 @@ vmLoop:
 				vals := make([]any, len(data.OutputCols))
 				cols := make([]string, len(data.OutputCols))
 				for idx, outCol := range data.OutputCols {
-					cols[idx] = outCol
+					cleanCol := cleanOutputColName(outCol)
+					cols[idx] = cleanCol
 					var val storage.Value
 					if v, ok := rec.Get(outCol); ok {
+						val = v
+					} else if v, ok := rec.Get(cleanCol); ok {
 						val = v
 					} else if tableSchema != nil {
 						if colSchema, _, found := tableSchema.FindColumn(outCol); found {
 							if v, ok := rec.Get(colSchema.Name); ok {
 								val = v
 							}
+						} else if colSchema, _, found := tableSchema.FindColumn(cleanCol); found {
+							if v, ok := rec.Get(colSchema.Name); ok {
+								val = v
+							}
 						}
 					}
 					anyVal := valToAny(val)
-					row[outCol] = anyVal
+					row[cleanCol] = anyVal
+					if cleanCol != outCol {
+						row[outCol] = anyVal
+					}
 					vals[idx] = anyVal
 				}
 				f.rows = append(f.rows, row)
@@ -1382,13 +1403,19 @@ vmLoop:
 						vals := make([]any, len(data.OutputCols))
 						cols := make([]string, len(data.OutputCols))
 						for idx, outCol := range data.OutputCols {
-							cols[idx] = outCol
+							cleanCol := cleanOutputColName(outCol)
+							cols[idx] = cleanCol
 							var stVal storage.Value
 							if _, colIdx, ok := tableSchema.FindColumn(outCol); ok && colIdx >= 0 && colIdx < len(updatedRow.Values) {
 								stVal = updatedRow.Values[colIdx]
+							} else if _, colIdx, ok := tableSchema.FindColumn(cleanCol); ok && colIdx >= 0 && colIdx < len(updatedRow.Values) {
+								stVal = updatedRow.Values[colIdx]
 							}
 							anyVal := valToAny(stVal)
-							row[outCol] = anyVal
+							row[cleanCol] = anyVal
+							if cleanCol != outCol {
+								row[outCol] = anyVal
+							}
 							vals[idx] = anyVal
 						}
 						f.rows = append(f.rows, row)
@@ -1491,19 +1518,29 @@ vmLoop:
 				vals := make([]any, len(data.OutputCols))
 				cols := make([]string, len(data.OutputCols))
 				for idx, outCol := range data.OutputCols {
-					cols[idx] = outCol
+					cleanCol := cleanOutputColName(outCol)
+					cols[idx] = cleanCol
 					var stVal storage.Value
 					if v, ok := merged.Get(outCol); ok {
+						stVal = v
+					} else if v, ok := merged.Get(cleanCol); ok {
 						stVal = v
 					} else if tableSchema != nil {
 						if colSchema, _, found := tableSchema.FindColumn(outCol); found {
 							if v, ok := merged.Get(colSchema.Name); ok {
 								stVal = v
 							}
+						} else if colSchema, _, found := tableSchema.FindColumn(cleanCol); found {
+							if v, ok := merged.Get(colSchema.Name); ok {
+								stVal = v
+							}
 						}
 					}
 					anyVal := valToAny(stVal)
-					row[outCol] = anyVal
+					row[cleanCol] = anyVal
+					if cleanCol != outCol {
+						row[outCol] = anyVal
+					}
 					vals[idx] = anyVal
 				}
 				f.rows = append(f.rows, row)
@@ -1601,13 +1638,19 @@ vmLoop:
 				vals := make([]any, len(data.OutputCols))
 				cols := make([]string, len(data.OutputCols))
 				for idx, outCol := range data.OutputCols {
-					cols[idx] = outCol
+					cleanCol := cleanOutputColName(outCol)
+					cols[idx] = cleanCol
 					var stVal storage.Value
 					if v, ok := oldRec.Get(outCol); ok {
 						stVal = v
+					} else if v, ok := oldRec.Get(cleanCol); ok {
+						stVal = v
 					}
 					anyVal := valToAny(stVal)
-					row[outCol] = anyVal
+					row[cleanCol] = anyVal
+					if cleanCol != outCol {
+						row[outCol] = anyVal
+					}
 					vals[idx] = anyVal
 				}
 				f.rows = append(f.rows, row)

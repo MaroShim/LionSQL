@@ -1,6 +1,7 @@
 package proc_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"unsafe"
@@ -245,6 +246,30 @@ END;
 		t.Errorf("expected STORE_VAR instruction in disassembly:\n%s", dis)
 	}
 }
+
+func TestRegression_AUDIT_093_017_CompilerRegisterReclaim(t *testing.T) {
+	// A batch script with 20 consecutive declarations, waitfors, and scalar selects
+	var sb strings.Builder
+	sb.WriteString("CREATE PROCEDURE TestRegReclaim AS BEGIN\n")
+	for i := 0; i < 20; i++ {
+		sb.WriteString(fmt.Sprintf("    DECLARE @v%d INT = %d;\n", i, i))
+		sb.WriteString("    WAITFOR DELAY '00:00:01';\n")
+		sb.WriteString("    SELECT 10, 20, 30;\n")
+	}
+	sb.WriteString("    RETURN 0;\nEND;")
+
+	prog, err := proc.Compile(sb.String())
+	if err != nil {
+		t.Fatalf("failed to compile procedure: %v", err)
+	}
+
+	// If registers were not freed across statements, NumRegisters would linearly grow to >= 80.
+	// With proper register reclamation, NumRegisters must remain bounded <= 4.
+	if prog.NumRegisters > 4 {
+		t.Fatalf("expected NumRegisters <= 4 due to freeReg reclamation, got %d (register leak detected!)", prog.NumRegisters)
+	}
+}
+
 
 
 
