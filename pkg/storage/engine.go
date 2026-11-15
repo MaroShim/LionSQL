@@ -36,6 +36,7 @@ var (
 	ErrReadOnlyTransaction  = errors.New("cannot execute mutation in read-only transaction (SQLSTATE 25006)")
 	ErrReadOnlyReplica      = errors.New("cannot execute write operations on read-only replica (SQLSTATE 25006)")
 	ErrTableFull            = errors.New("table data limit exceeded (SQLSTATE 53200)")
+	ErrEngineTainted        = errors.New("storage: engine is tainted due to unrecoverable I/O or fsync failure")
 )
 
 // IsWriteConflict checks whether an error is a concurrency write-write conflict
@@ -1234,6 +1235,7 @@ type Transaction interface {
 	IndexOnlyScan(tableName string, indexName string, low, high *Value) (Cursor, error)
 	IndexScanDesc(tableName string, indexName string, low, high *Value) (Cursor, error)
 	ListTables() ([]*TableSchema, error)
+	Validate() error
 	Commit() error
 	Rollback() error
 	Savepoint(name string) error

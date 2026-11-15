@@ -867,5 +867,181 @@ func TestWiredTiger_TableVariable_RollbackExemption(t *testing.T) {
 	}
 }
 
+// TestWiredTiger_Savepoint_Rollback_RemovesInsertedIndexKey verifies that rolling back an INSERT
+// to a savepoint removes the secondary index entry, preventing ghost index keys and false unique collisions.
+func TestWiredTiger_Savepoint_Rollback_RemovesInsertedIndexKey(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_sp_insert_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "db")
+	eng := New()
+	if err := eng.Open(dbPath); err != nil {
+		t.Fatalf("failed to open engine: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "email", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+	if err := eng.CreateIndex(&storage.IndexSchema{
+		Name:      "idx_users_email",
+		TableName: "users",
+		Columns:   []string{"email"},
+		Unique:    true,
+	}); err != nil {
+		t.Fatalf("CreateIndex failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx.Rollback()
+
+	if err := tx.Savepoint("sp1"); err != nil {
+		t.Fatalf("Savepoint sp1 failed: %v", err)
+	}
+
+	// Insert row 1
+	if err := tx.Insert("users", storage.Record{"id": storage.IntValue(1), "email": storage.StringValue("alice@test.com")}); err != nil {
+		t.Fatalf("Insert row 1 failed: %v", err)
+	}
+
+	// RollbackTo sp1 (must undo Insert and remove index entry)
+	if err := tx.RollbackTo("sp1"); err != nil {
+		t.Fatalf("RollbackTo sp1 failed: %v", err)
+	}
+
+	// Now insert row 2 with same email alice@test.com. If ghost index key remained, this would fail with unique violation!
+	if err := tx.Insert("users", storage.Record{"id": storage.IntValue(2), "email": storage.StringValue("alice@test.com")}); err != nil {
+		t.Fatalf("Insert row 2 after savepoint rollback failed (ghost index key was not removed): %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+}
+
+// TestWiredTiger_Savepoint_Rollback_RestoresDeletedIndexKey verifies that rolling back a DELETE
+// to a savepoint properly restores the secondary index entries that were removed during DELETE.
+func TestWiredTiger_Savepoint_Rollback_RestoresDeletedIndexKey(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_sp_delete_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "db")
+	eng := New()
+	if err := eng.Open(dbPath); err != nil {
+		t.Fatalf("failed to open engine: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "email", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+	if err := eng.CreateIndex(&storage.IndexSchema{
+		Name:      "idx_users_email",
+		TableName: "users",
+		Columns:   []string{"email"},
+		Unique:    true,
+	}); err != nil {
+		t.Fatalf("CreateIndex failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	// Initial seed
+	txInit, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := txInit.Insert("users", storage.Record{"id": storage.IntValue(1), "email": storage.StringValue("bob@test.com")}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := txInit.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Delete and rollback to savepoint
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx.Rollback()
+
+	if err := tx.Savepoint("sp1"); err != nil {
+		t.Fatalf("Savepoint sp1 failed: %v", err)
+	}
+
+	if err := tx.Delete("users", storage.IntValue(1)); err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+
+	if err := tx.RollbackTo("sp1"); err != nil {
+		t.Fatalf("RollbackTo sp1 failed: %v", err)
+	}
+
+	// 1. Verify index scan finds bob@test.com
+	bobKey := storage.StringValue("bob@test.com")
+	cur, err := tx.IndexScan("users", "idx_users_email", &bobKey, &bobKey)
+	if err != nil {
+		t.Fatalf("IndexScan bob failed: %v", err)
+	}
+	found := false
+	for cur.Next() {
+		rec, _ := cur.Record()
+		if rec["id"].IVal == 1 {
+			found = true
+		}
+	}
+	cur.Close()
+	if !found {
+		t.Fatalf("expected bob@test.com to be restored in secondary index after Delete rollback")
+	}
+
+	// 2. Trying to insert a new row with bob@test.com must collide with the restored unique index
+	err = tx.Insert("users", storage.Record{"id": storage.IntValue(2), "email": storage.StringValue("bob@test.com")})
+	if err == nil {
+		t.Fatalf("expected unique violation when inserting duplicate bob@test.com after Delete rollback, got nil")
+	}
+	if !errors.Is(err, storage.ErrUniqueViolation) {
+		t.Fatalf("expected ErrUniqueViolation, got: %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+}
+
+
 
 

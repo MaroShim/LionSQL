@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"strings"
 	"testing"
 
 	"lionsql/pkg/storage"
@@ -132,5 +133,45 @@ func TestMemEngine_CommitFailure_NoPartialMutationLeak(t *testing.T) {
 			t.Fatalf("original key C1 missing from idx_items_code after rollback!")
 		}
 		curOld.Close()
+	})
+
+	t.Run("Index restore failure during rollback must be explicitly propagated and not swallowed", func(t *testing.T) {
+		tx, err := sess.BeginTx(storage.TxOptions{})
+		if err != nil {
+			t.Fatalf("BeginTx failed: %v", err)
+		}
+		defer tx.Rollback()
+
+		if err := tx.Update("items", storage.IntValue(1), storage.Record{"id": storage.IntValue(1), "code": storage.StringValue("C3"), "sku": storage.StringValue("S3")}); err != nil {
+			t.Fatalf("Update failed: %v", err)
+		}
+
+		memTx := tx.(*Transaction)
+		td, err := memTx.getTableLocked("items")
+		if err != nil {
+			t.Fatalf("getTableLocked failed: %v", err)
+		}
+		idxSku := td.Indexes["idx_items_sku"]
+		idxCode := td.Indexes["idx_items_code"]
+
+		realSkuSL := idxSku.sl
+		realCodeSL := idxCode.sl
+		// Corrupt idxSku so commit fails in Phase B
+		idxSku.sl = nil
+		// Corrupt idxCode so rollback cannot restore old index entry
+		idxCode.sl = nil
+		defer func() {
+			idxSku.sl = realSkuSL
+			idxCode.sl = realCodeSL
+		}()
+
+		err = tx.Commit()
+		if err == nil {
+			t.Fatalf("expected commit to fail, got nil")
+		}
+		errMsg := err.Error()
+		if !strings.Contains(errMsg, "critical rollback failure") || !strings.Contains(errMsg, "failed to restore index") {
+			t.Fatalf("expected rollback failure to be explicitly propagated in error message, got: %s", errMsg)
+		}
 	})
 }

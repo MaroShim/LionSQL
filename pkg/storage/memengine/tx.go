@@ -1818,6 +1818,207 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 	}, nil
 }
 
+// Validate performs pre-commit validation (OCC conflict check, unique constraint check,
+// memory limit guard) without modifying in-memory shards or committing.
+func (tx *Transaction) Validate() error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+
+	if tx.opts.ReadOnly || len(tx.changes) == 0 {
+		return nil
+	}
+
+	// 1. Collect distinct table names and affected shards
+	if tx.tableSet == nil {
+		tx.tableSet = make(map[string]*TableData, 4)
+	} else {
+		clear(tx.tableSet)
+	}
+	if tx.shardMasks == nil {
+		tx.shardMasks = make(map[string]shardMask, 4)
+	} else {
+		clear(tx.shardMasks)
+	}
+	tx.tableNames = tx.tableNames[:0]
+	tx.neededShards = tx.neededShards[:0]
+
+	for _, ch := range tx.changes {
+		td := ch.td
+		sIdx := ch.shardIdx
+		if td == nil {
+			var err error
+			td, err = tx.getTableLocked(ch.table)
+			if err != nil {
+				return err
+			}
+			sIdx = hashShard(ch.key)
+		}
+		tx.tableSet[td.Schema.Name] = td
+		m := tx.shardMasks[td.Schema.Name]
+		m[sIdx/64] |= (uint64(1) << (sIdx % 64))
+		tx.shardMasks[td.Schema.Name] = m
+	}
+
+	for name := range tx.tableSet {
+		tx.tableNames = append(tx.tableNames, name)
+	}
+	sort.Strings(tx.tableNames)
+
+	for _, tName := range tx.tableNames {
+		td := tx.tableSet[tName]
+		mask := tx.shardMasks[tName]
+		for sIdx := 0; sIdx < numTableShards; sIdx++ {
+			if (mask[sIdx/64] & (uint64(1) << (sIdx % 64))) != 0 {
+				tx.neededShards = append(tx.neededShards, shardRef{
+					tableName: tName,
+					shardIdx:  sIdx,
+					td:        td,
+				})
+			}
+		}
+	}
+
+	for _, tName := range tx.tableNames {
+		tx.tableSet[tName].mu.RLock()
+	}
+	defer func() {
+		for i := len(tx.neededShards) - 1; i >= 0; i-- {
+			tx.neededShards[i].td.shards[tx.neededShards[i].shardIdx].mu.RUnlock()
+		}
+		for i := len(tx.tableNames) - 1; i >= 0; i-- {
+			tx.tableSet[tx.tableNames[i]].mu.RUnlock()
+		}
+	}()
+
+	for i := range tx.neededShards {
+		tx.neededShards[i].td.shards[tx.neededShards[i].shardIdx].mu.RLock()
+	}
+
+	return tx.verifyOCCAndConstraintsLocked()
+}
+
+func (tx *Transaction) verifyOCCAndConstraintsLocked() error {
+	var seenUniqueKeys map[string]map[string]string // lazy allocated only when unique indexes exist
+
+	for _, ch := range tx.changes {
+		td := ch.td
+		sIdx := ch.shardIdx
+		if td == nil {
+			var err error
+			td, err = tx.getTableLocked(ch.table)
+			if err != nil {
+				return err
+			}
+			sIdx = hashShard(ch.key)
+		}
+		sh := &td.shards[sIdx]
+		entry, exists := sh.entries[ch.key]
+		curVer := entry.ver
+		if ch.kind == changeInsert {
+			if exists {
+				return storage.ErrSerializationFailure
+			}
+			for _, idxData := range td.Indexes {
+				if idxData.Schema.Disabled {
+					continue
+				}
+				if idxData.Schema.Unique {
+					keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
+					if !keyVal.IsNull {
+						if seenUniqueKeys == nil {
+							seenUniqueKeys = make(map[string]map[string]string)
+						}
+						mapID := td.Schema.Name + ":" + idxData.Schema.Name
+						if seenUniqueKeys[mapID] == nil {
+							seenUniqueKeys[mapID] = make(map[string]string)
+						}
+						encodedKey := keyVal.String()
+						if otherPK, collides := seenUniqueKeys[mapID][encodedKey]; collides && otherPK != ch.key {
+							return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+						}
+						seenUniqueKeys[mapID][encodedKey] = ch.key
+
+						existing := idxData.ScanRange(&keyVal, &keyVal)
+						for _, epk := range existing {
+							if epk != ch.key && !tx.isIndexKeyLocallyReleased(td.Schema.Name, epk, td, &idxData.Schema, keyVal) {
+								return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+							}
+						}
+					}
+				}
+			}
+		} else {
+			if curVer != ch.baseVer {
+				return storage.ErrSerializationFailure
+			}
+			if ch.kind == changeUpdate {
+				for _, idxData := range td.Indexes {
+					if idxData.Schema.Disabled {
+						continue
+					}
+					if idxData.Schema.Unique {
+						keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
+						if !keyVal.IsNull {
+							if seenUniqueKeys == nil {
+								seenUniqueKeys = make(map[string]map[string]string)
+							}
+							mapID := td.Schema.Name + ":" + idxData.Schema.Name
+							if seenUniqueKeys[mapID] == nil {
+								seenUniqueKeys[mapID] = make(map[string]string)
+							}
+							encodedKey := keyVal.String()
+							if otherPK, collides := seenUniqueKeys[mapID][encodedKey]; collides && otherPK != ch.key {
+								return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+							}
+							seenUniqueKeys[mapID][encodedKey] = ch.key
+
+							existing := idxData.ScanRange(&keyVal, &keyVal)
+							for _, epk := range existing {
+								if epk != ch.key && !tx.isIndexKeyLocallyReleased(td.Schema.Name, epk, td, &idxData.Schema, keyVal) {
+									return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Enforce in-memory engine storage memory limit guard (MEM-3)
+	if maxLimit := tx.engine.maxDataBytes.Load(); maxLimit > 0 {
+		hasInsertOrUpdate := false
+		for _, ch := range tx.changes {
+			if ch.kind == changeInsert || ch.kind == changeUpdate {
+				hasInsertOrUpdate = true
+				break
+			}
+		}
+		if hasInsertOrUpdate {
+			cnt := tx.engine.commitCounter.Add(1)
+			currHeap := tx.engine.cachedHeapBytes.Load()
+			if cnt&127 == 0 || currHeap == 0 {
+				currHeap = CurrentHeapBytes()
+				tx.engine.cachedHeapBytes.Store(currHeap)
+			}
+			if currHeap >= maxLimit {
+				currHeap = CurrentHeapBytes()
+				tx.engine.cachedHeapBytes.Store(currHeap)
+				if currHeap >= maxLimit {
+					return fmt.Errorf("%w: in-memory engine storage memory limit exceeded (%s >= %s)",
+						storage.ErrTableFull, formatBytes(currHeap), formatBytes(maxLimit))
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func (tx *Transaction) Commit() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
@@ -1935,120 +2136,8 @@ func (tx *Transaction) Commit() error {
 	shardsLocked = true
 
 	// 5. Verify OCC version conflicts and unique constraints
-	var seenUniqueKeys map[string]map[string]string // lazy allocated only when unique indexes exist
-
-	for _, ch := range tx.changes {
-		td := ch.td
-		sIdx := ch.shardIdx
-		if td == nil {
-			var err error
-			td, err = tx.getTableLocked(ch.table)
-			if err != nil {
-				return err
-			}
-			sIdx = hashShard(ch.key)
-		}
-		sh := &td.shards[sIdx]
-		entry, exists := sh.entries[ch.key]
-		curVer := entry.ver
-		if ch.kind == changeInsert {
-			if exists {
-				return storage.ErrSerializationFailure
-			}
-			for _, idxData := range td.Indexes {
-				if idxData.Schema.Disabled {
-					continue
-				}
-				if idxData.Schema.Unique {
-					keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
-					if !keyVal.IsNull {
-						if seenUniqueKeys == nil {
-							seenUniqueKeys = make(map[string]map[string]string)
-						}
-						mapID := td.Schema.Name + ":" + idxData.Schema.Name
-						if seenUniqueKeys[mapID] == nil {
-							seenUniqueKeys[mapID] = make(map[string]string)
-						}
-						encodedKey := keyVal.String()
-						if otherPK, collides := seenUniqueKeys[mapID][encodedKey]; collides && otherPK != ch.key {
-							return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
-						}
-						seenUniqueKeys[mapID][encodedKey] = ch.key
-
-						existing := idxData.ScanRange(&keyVal, &keyVal)
-						for _, epk := range existing {
-							if epk != ch.key && !tx.isIndexKeyLocallyReleased(td.Schema.Name, epk, td, &idxData.Schema, keyVal) {
-								return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
-							}
-						}
-					}
-				}
-			}
-		} else {
-			if curVer != ch.baseVer {
-				return storage.ErrSerializationFailure
-			}
-			if ch.kind == changeUpdate {
-				for _, idxData := range td.Indexes {
-					if idxData.Schema.Disabled {
-						continue
-					}
-					if idxData.Schema.Unique {
-						keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
-						if !keyVal.IsNull {
-							if seenUniqueKeys == nil {
-								seenUniqueKeys = make(map[string]map[string]string)
-							}
-							mapID := td.Schema.Name + ":" + idxData.Schema.Name
-							if seenUniqueKeys[mapID] == nil {
-								seenUniqueKeys[mapID] = make(map[string]string)
-							}
-							encodedKey := keyVal.String()
-							if otherPK, collides := seenUniqueKeys[mapID][encodedKey]; collides && otherPK != ch.key {
-								return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
-							}
-							seenUniqueKeys[mapID][encodedKey] = ch.key
-
-							existing := idxData.ScanRange(&keyVal, &keyVal)
-							for _, epk := range existing {
-								if epk != ch.key && !tx.isIndexKeyLocallyReleased(td.Schema.Name, epk, td, &idxData.Schema, keyVal) {
-									return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// 5.1 Enforce in-memory engine storage memory limit guard (MEM-3)
-	if maxLimit := tx.engine.maxDataBytes.Load(); maxLimit > 0 {
-		hasInsertOrUpdate := false
-		for _, ch := range tx.changes {
-			if ch.kind == changeInsert || ch.kind == changeUpdate {
-				hasInsertOrUpdate = true
-				break
-			}
-		}
-		if hasInsertOrUpdate {
-			// Sample heap bytes periodically (every 128 commits) or use atomic cache (VPERF-1)
-			cnt := tx.engine.commitCounter.Add(1)
-			currHeap := tx.engine.cachedHeapBytes.Load()
-			if cnt&127 == 0 || currHeap == 0 {
-				currHeap = CurrentHeapBytes()
-				tx.engine.cachedHeapBytes.Store(currHeap)
-			}
-			if currHeap >= maxLimit {
-				// Re-verify accurately on threshold hit before failing
-				currHeap = CurrentHeapBytes()
-				tx.engine.cachedHeapBytes.Store(currHeap)
-				if currHeap >= maxLimit {
-					return fmt.Errorf("%w: in-memory engine storage memory limit exceeded (%s >= %s)",
-						storage.ErrTableFull, formatBytes(currHeap), formatBytes(maxLimit))
-				}
-			}
-		}
+	if err := tx.verifyOCCAndConstraintsLocked(); err != nil {
+		return err
 	}
 
 	// 6. Apply changes and update secondary indexes atomically
@@ -2148,7 +2237,8 @@ func (tx *Transaction) Commit() error {
 
 	undos := make([]commitUndoOp, 0, len(items)*4)
 
-	rollbackApplied := func() {
+	rollbackApplied := func() error {
+		var rbErrs []error
 		for i := len(undos) - 1; i >= 0; i-- {
 			u := undos[i]
 			switch u.kind {
@@ -2161,11 +2251,24 @@ func (tx *Transaction) Commit() error {
 			case undoRemovePartitionKey:
 				u.td.removePartitionKey(u.partID, u.key)
 			case undoInsertIndexEntry:
-				_ = u.idxData.Insert(u.idxKey, u.key, u.incVals)
+				if err := u.idxData.Insert(u.idxKey, u.key, u.incVals); err != nil {
+					rbErrs = append(rbErrs, fmt.Errorf("memengine: failed to restore index %s for key %s: %w", u.idxData.Schema.Name, u.key, err))
+				}
 			case undoDeleteIndexEntry:
 				u.idxData.Delete(u.idxKey, u.key)
 			}
 		}
+		if len(rbErrs) > 0 {
+			return errors.Join(rbErrs...)
+		}
+		return nil
+	}
+
+	wrapCommitErr := func(cause error) error {
+		if rbErr := rollbackApplied(); rbErr != nil {
+			return fmt.Errorf("%w (critical rollback failure: %v)", cause, rbErr)
+		}
+		return cause
 	}
 
 	// Phase A: Remove old index entries for all updates and deletes first,
@@ -2228,8 +2331,7 @@ func (tx *Transaction) Commit() error {
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
 				if err := idxData.Insert(newKey, ch.key, incVals); err != nil {
-					rollbackApplied()
-					return err
+					return wrapCommitErr(err)
 				}
 				undos = append(undos, commitUndoOp{
 					kind:    undoDeleteIndexEntry,
@@ -2280,8 +2382,7 @@ func (tx *Transaction) Commit() error {
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
 				if err := idxData.Insert(newKey, ch.key, incVals); err != nil {
-					rollbackApplied()
-					return err
+					return wrapCommitErr(err)
 				}
 				undos = append(undos, commitUndoOp{
 					kind:    undoDeleteIndexEntry,
@@ -2338,22 +2439,19 @@ func (tx *Transaction) Commit() error {
 					var err error
 					td, err = tx.getTableLocked(ch.table)
 					if err != nil {
-						rollbackApplied()
-						return err
+						return wrapCommitErr(err)
 					}
 				}
 				if td != nil {
 					var err error
 					rawData, err = storage.EncodeRow(&td.Schema, ch.row)
 					if err != nil {
-						rollbackApplied()
-						return fmt.Errorf("memengine: failed to serialize row for WAL table %s: %w", ch.table, err)
+						return wrapCommitErr(fmt.Errorf("memengine: failed to serialize row for WAL table %s: %w", ch.table, err))
 					}
 				}
 			}
 			if rawData == nil && ch.kind != changeDelete {
-				rollbackApplied()
-				return fmt.Errorf("memengine: missing serialized row data for WAL table %s", ch.table)
+				return wrapCommitErr(fmt.Errorf("memengine: missing serialized row data for WAL table %s", ch.table))
 			}
 			ops = append(ops, WALOp{
 				Type:    opType,
@@ -2367,8 +2465,7 @@ func (tx *Transaction) Commit() error {
 			var err error
 			walRec, walSeq, err = tx.engine.appendWALFrameLocked(ops)
 			if err != nil {
-				rollbackApplied()
-				return err
+				return wrapCommitErr(err)
 			}
 		} else {
 			tx.commitLSN = tx.engine.nextLSN.Add(1)
@@ -2388,8 +2485,7 @@ func (tx *Transaction) Commit() error {
 	// in-memory shard changes can be rolled back cleanly via rollbackApplied().
 	if needWAL && walSeq > 0 {
 		if err := tx.engine.finishWALCommitLocked(walSeq); err != nil {
-			rollbackApplied()
-			return err
+			return wrapCommitErr(err)
 		}
 		tx.commitLSN = walRec.LSN
 		tx.commitTimestamp = walRec.Timestamp

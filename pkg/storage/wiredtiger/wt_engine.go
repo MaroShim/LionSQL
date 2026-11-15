@@ -252,6 +252,7 @@ static int go_wt_cursor_remove_key(WT_CURSOR *cursor, const char *key) {
 import "C"
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -292,6 +293,43 @@ type Engine struct {
 	sessMu      sync.Mutex
 	sessions    map[*WTSession]struct{}
 	rowCounts   map[string]*atomic.Int64
+	tainted     atomic.Bool
+	taintMu     sync.RWMutex
+	taintErr    error
+}
+
+func (e *Engine) markTainted(err error) {
+	if e == nil {
+		return
+	}
+	e.taintMu.Lock()
+	defer e.taintMu.Unlock()
+	if !e.tainted.Load() {
+		e.taintErr = err
+		e.tainted.Store(true)
+	}
+}
+
+func (e *Engine) checkTainted() error {
+	if e == nil || !e.tainted.Load() {
+		return nil
+	}
+	e.taintMu.RLock()
+	defer e.taintMu.RUnlock()
+	return fmt.Errorf("%w: %v", storage.ErrEngineTainted, e.taintErr)
+}
+
+func (e *Engine) IsTainted() bool {
+	return e != nil && e.tainted.Load()
+}
+
+func (e *Engine) TaintError() error {
+	if e == nil || !e.tainted.Load() {
+		return nil
+	}
+	e.taintMu.RLock()
+	defer e.taintMu.RUnlock()
+	return e.taintErr
 }
 
 // New creates a new WiredTiger storage engine instance.
@@ -1859,6 +1897,12 @@ func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error)
 		return nil, fmt.Errorf("session is closed")
 	}
 
+	if !opts.ReadOnly {
+		if err := s.engine.checkTainted(); err != nil {
+			return nil, err
+		}
+	}
+
 	ret := C.go_wt_session_begin(s.sess, nil)
 	if ret != 0 {
 		return nil, fmt.Errorf("begin_transaction failed with code %d", ret)
@@ -2077,6 +2121,9 @@ func (tx *WTTx) InsertRow(tableName string, row storage.Row) error {
 }
 
 func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record storage.Record) error {
+	if err := tx.sess.engine.checkTainted(); err != nil {
+		return err
+	}
 	normalized := make(storage.Record, len(record))
 	for k, v := range record {
 		if col, _, ok := tbl.FindColumn(k); ok {
@@ -2168,10 +2215,13 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 
 	tx.hasWrites = true
 	if len(tx.savepoints) > 0 {
+		recCopy := make([]byte, len(recBytes))
+		copy(recCopy, recBytes)
 		tx.undoLog = append(tx.undoLog, wtUndoOp{
-			table: tableName,
-			pk:    pkVal,
-			kind:  wtUndoDelete,
+			table:   tableName,
+			pk:      pkVal,
+			kind:    wtUndoDelete,
+			newData: recCopy,
 		})
 	}
 	if tx.sess.engine.hasHook.Load() && !storage.IsTemporaryTable(tableName) {
@@ -2245,6 +2295,9 @@ func (tx *WTTx) UpdateRow(tableName string, pk storage.Value, row storage.Row) e
 }
 
 func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk storage.Value, record storage.Record) error {
+	if err := tx.sess.engine.checkTainted(); err != nil {
+		return err
+	}
 	oldData, err := tx.getRawBytesLocked(tableName, pk)
 	if err != nil {
 		return err
@@ -2377,6 +2430,9 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 }
 
 func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
+	if err := tx.sess.engine.checkTainted(); err != nil {
+		return err
+	}
 	if err := tx.checkReferencingFKsOnDeleteLocked(tableName, pk); err != nil {
 		return err
 	}
@@ -3166,6 +3222,25 @@ func (c *wtIndexBTreeCursor) Err() error {
 	return c.err
 }
 
+// Validate performs pre-commit validation for WiredTiger and its embedded tempTx.
+func (tx *WTTx) Validate() error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+
+	if err := tx.sess.engine.checkTainted(); err != nil {
+		return err
+	}
+
+	if tx.tempTx != nil {
+		return tx.tempTx.Validate()
+	}
+	return nil
+}
+
 func (tx *WTTx) Commit() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
@@ -3173,6 +3248,39 @@ func (tx *WTTx) Commit() error {
 	if tx.closed {
 		return storage.ErrTxClosed
 	}
+
+	if err := tx.sess.engine.checkTainted(); err != nil {
+		tx.closed = true
+		tempTx := tx.tempTx
+		tx.tempTx = nil
+		if tempTx != nil {
+			_ = tempTx.Rollback()
+		}
+		_ = C.go_wt_session_rollback(tx.sess.sess, nil)
+		_ = C.go_wt_session_reset(tx.sess.sess)
+		tx.sess.mu.Lock()
+		tx.sess.activeTx = false
+		tx.sess.mu.Unlock()
+		return err
+	}
+
+	// 1. Pre-Commit Validation: Validate tempTx BEFORE committing WiredTiger
+	// to prevent split-brain commit atomicity violations ([FIX-HYBRID-TX-SPLIT-BRAIN-1]).
+	if tx.tempTx != nil {
+		if err := tx.tempTx.Validate(); err != nil {
+			tx.closed = true
+			tempTx := tx.tempTx
+			tx.tempTx = nil
+			_ = tempTx.Rollback()
+			_ = C.go_wt_session_rollback(tx.sess.sess, nil)
+			_ = C.go_wt_session_reset(tx.sess.sess)
+			tx.sess.mu.Lock()
+			tx.sess.activeTx = false
+			tx.sess.mu.Unlock()
+			return err
+		}
+	}
+
 	tx.closed = true
 	hasWrites := tx.hasWrites
 	rowDeltas := tx.rowDeltas
@@ -3234,7 +3342,8 @@ func (tx *WTTx) Commit() error {
 
 	if eng.FsyncPolicy() == memengine.FsyncAlways {
 		if err := eng.syncUpTo(tx.sess.sess, seq); err != nil {
-			return err
+			eng.markTainted(err)
+			return fmt.Errorf("%w: wiredtiger fsync failed: %v", storage.ErrEngineTainted, err)
 		}
 	}
 	return nil
@@ -3345,18 +3454,41 @@ func (tx *WTTx) RollbackTo(name string) error {
 		}
 	}
 
+	var rbErrs []error
 	// Undo operations in reverse order down to targetLen
 	for i := len(tx.undoLog) - 1; i >= targetLen; i-- {
 		op := tx.undoLog[i]
 		switch op.kind {
 		case wtUndoDelete:
-			_ = tx.removeRawLocked(op.table, op.pk)
+			tbl, err := tx.getTableLocked(op.table)
+			if err == nil && len(tbl.Indexes) > 0 && len(op.newData) > 0 {
+				if rec, rerr := decodeRecord(tbl, op.newData); rerr == nil {
+					pkStr := op.pk.String()
+					for _, idx := range tbl.Indexes {
+						key, _, _ := formatIndexKeyValue(rec, &idx, pkStr)
+						idxURI := tbl.IndexURI(idx.Name)
+						if idxCur, cerr := tx.sess.acquireCursor(idxURI); cerr == nil {
+							if rerr := removeIndexEntry(idxCur, key); rerr != nil {
+								rbErrs = append(rbErrs, rerr)
+							}
+							tx.sess.releaseCursor(idxURI, idxCur)
+						} else {
+							rbErrs = append(rbErrs, cerr)
+						}
+					}
+				}
+			}
+			if rerr := tx.removeRawLocked(op.table, op.pk); rerr != nil {
+				rbErrs = append(rbErrs, rerr)
+			}
 			if tx.rowDeltas != nil {
 				tx.rowDeltas[op.table]--
 			}
 		case wtUndoPut:
 			if len(op.oldData) > 0 {
-				_ = tx.putRawBytesLocked(op.table, op.pk, op.oldData)
+				if perr := tx.putRawBytesLocked(op.table, op.pk, op.oldData); perr != nil {
+					rbErrs = append(rbErrs, perr)
+				}
 				if tx.rowDeltas != nil {
 					tx.rowDeltas[op.table]++
 				}
@@ -3380,17 +3512,26 @@ func (tx *WTTx) RollbackTo(name string) error {
 							newKey, _, _ := formatIndexKeyValue(newRec, &idx, pkStr)
 							if oldKey != newKey {
 								idxURI := tbl.IndexURI(idx.Name)
-								if idxCur, err := tx.sess.acquireCursor(idxURI); err == nil {
-									_ = removeIndexEntry(idxCur, newKey)
+								if idxCur, cerr := tx.sess.acquireCursor(idxURI); cerr == nil {
+									if rerr := removeIndexEntry(idxCur, newKey); rerr != nil {
+										rbErrs = append(rbErrs, rerr)
+									}
 									tx.sess.releaseCursor(idxURI, idxCur)
+								} else {
+									rbErrs = append(rbErrs, cerr)
 								}
 							}
 						}
 					}
 				}
-				_ = tx.putRawBytesLocked(op.table, op.pk, op.oldData)
+				if perr := tx.putRawBytesLocked(op.table, op.pk, op.oldData); perr != nil {
+					rbErrs = append(rbErrs, perr)
+				}
 			}
 		}
+	}
+	if len(rbErrs) > 0 {
+		return errors.Join(rbErrs...)
 	}
 	tx.undoLog = tx.undoLog[:targetLen]
 
@@ -3492,7 +3633,10 @@ func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes [
 				idxURI := tbl.IndexURI(idx.Name)
 				if idxCur, err := tx.sess.acquireCursor(idxURI); err == nil {
 					k, v, _ := formatIndexKeyValue(rec, &idx, pkStr)
-					_ = insertIndexEntry(idxCur, k, v)
+					if err := insertIndexEntry(idxCur, k, v); err != nil {
+						tx.sess.releaseCursor(idxURI, idxCur)
+						return err
+					}
 					tx.sess.releaseCursor(idxURI, idxCur)
 				}
 			}
