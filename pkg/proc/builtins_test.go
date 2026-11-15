@@ -1295,6 +1295,35 @@ func TestBuiltin_DialectBest7(t *testing.T) {
 	}
 }
 
+func TestBuiltins_DateDiff_DateDiffBig_DayOfYear(t *testing.T) {
+	d1 := storage.StringValue("2026-01-01")
+	d2 := storage.StringValue("2026-01-10")
+
+	dayParts := []string{"day", "dd", "d", "dayofyear", "dy", "y", "weekday", "dw", "w"}
+	for _, fn := range []string{"DATEDIFF", "DATEDIFF_BIG"} {
+		for _, part := range dayParts {
+			res := EvalBuiltin(fn, []storage.Value{storage.StringValue(part), d1, d2})
+			if res.IsNull {
+				t.Fatalf("%s(%s, ...) returned NULL, expected 9", fn, part)
+			}
+			if res.IVal != 9 {
+				t.Fatalf("%s(%s, ...) expected 9, got %d", fn, part, res.IVal)
+			}
+		}
+	}
+
+	// Boundary crossing test: '2026-01-01 23:59:59' and '2026-01-02 00:00:01' is 1 day boundary crossed
+	b1 := storage.StringValue("2026-01-01 23:59:59")
+	b2 := storage.StringValue("2026-01-02 00:00:01")
+	for _, fn := range []string{"DATEDIFF", "DATEDIFF_BIG"} {
+		res := EvalBuiltin(fn, []storage.Value{storage.StringValue("dayofyear"), b1, b2})
+		if res.IsNull || res.IVal != 1 {
+			t.Fatalf("%s(dayofyear, boundary) expected 1, got %v (IsNull=%v)", fn, res.IVal, res.IsNull)
+		}
+	}
+}
+
+
 
 
 

@@ -69,6 +69,10 @@ func normalizeDatePart(dp string) string {
 		return "second"
 	case "millisecond", "ms":
 		return "millisecond"
+	case "microsecond", "mcs":
+		return "microsecond"
+	case "nanosecond", "ns":
+		return "nanosecond"
 	case "epoch":
 		return "epoch"
 	default:
@@ -120,9 +124,10 @@ func evalDateDiff(part string, t1, t2 time.Time) storage.Value {
 		m1 := t1.Year()*12 + int(t1.Month())
 		m2 := t2.Year()*12 + int(t2.Month())
 		return storage.IntValue(int64(m2 - m1))
-	case "day":
-		diff := t2.Sub(t1)
-		return storage.IntValue(int64(diff.Hours() / 24))
+	case "day", "dayofyear", "weekday":
+		d1 := time.Date(t1.Year(), t1.Month(), t1.Day(), 0, 0, 0, 0, time.UTC)
+		d2 := time.Date(t2.Year(), t2.Month(), t2.Day(), 0, 0, 0, 0, time.UTC)
+		return storage.IntValue(int64(d2.Sub(d1) / (24 * time.Hour)))
 	case "week":
 		diff := t2.Sub(t1)
 		return storage.IntValue(int64(diff.Hours() / (24 * 7)))
@@ -138,6 +143,12 @@ func evalDateDiff(part string, t1, t2 time.Time) storage.Value {
 	case "millisecond":
 		diff := t2.Sub(t1)
 		return storage.IntValue(diff.Milliseconds())
+	case "microsecond":
+		diff := t2.Sub(t1)
+		return storage.IntValue(diff.Microseconds())
+	case "nanosecond":
+		diff := t2.Sub(t1)
+		return storage.IntValue(diff.Nanoseconds())
 	default:
 		return storage.NullValue(storage.TypeInt)
 	}

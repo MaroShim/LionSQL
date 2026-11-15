@@ -219,7 +219,7 @@
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-CONCURRENT-UPDATE-LOST-UPDATE-1`** | `1.0-GA` | Storage | P2 | 조건절 UPDATE 동시성 실행 시 최신 커밋 버전 Current Read 검증 및 갱신 손실(Lost Update) 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-CURSOR-LIFECYCLE-1`** |  | Engine | P1 | 커서 DEALLOCATE 및 배치 종료 시 세션 커서 레지스트리 정리 및 재선언 충돌 해결 | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`FIX-DATEDIFF-BIG-DAYOFYEAR-1`** |  | Proc | P2 | DATEDIFF_BIG(dayofyear, ...) returns NULL | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `DONE` | **`FIX-DATEDIFF-BIG-DAYOFYEAR-1`** |  | Proc | P2 | DATEDIFF_BIG(dayofyear, ...) returns NULL | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-DDL-DEFAULT-CHECK-1`** | `1.0-GA` | Engine | P2 | CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DEFAULT-EXPR-DYNAMIC-EVAL-1`** | `1.0-GA` | Engine | P2 | DEFAULT 표현식(NEWID, GETDATE 등) 파싱 시점 캐싱 폐지 및 INSERT 실행 시 동적 평가 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-EVAL-NOT-IN-NULL-3VL-1`** | `1.0-GA` | Engine | P2 | NOT IN 서브쿼리 및 리스트에 NULL 포함 시 3치 논리(3VL UNKNOWN) 엄격 적용 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
@@ -2645,8 +2645,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] DATEDIFF_BIG(dayofyear, ...) returns NULL `FIX-DATEDIFF-BIG-DAYOFYEAR-1`
-- **Domain**: Proc | **Priority**: P2 | **Updated**: 2026-11-13 23:06:52
+### [DONE] DATEDIFF_BIG(dayofyear, ...) returns NULL `FIX-DATEDIFF-BIG-DAYOFYEAR-1`
+- **Domain**: Proc | **Priority**: P2 | **Updated**: 2026-11-15 06:54:15
 - **Plan Doc**: [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
 
 ---
