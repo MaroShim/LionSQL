@@ -145,8 +145,8 @@ func EncodeRow(schema *TableSchema, row Row) ([]byte, error) {
 	}
 
 	numCols := len(schema.Columns)
-	if numCols > math.MaxUint16 {
-		return nil, fmt.Errorf("tuple: column count %d exceeds uint16 limit (%d)", numCols, math.MaxUint16)
+	if numCols > MaxColumnsPerTable {
+		return nil, fmt.Errorf("%w: column count %d exceeds maximum limit (%d)", ErrTooManyColumns, numCols, MaxColumnsPerTable)
 	}
 	nullBitmapLen := (numCols + 7) / 8
 
@@ -161,8 +161,8 @@ func EncodeRowToBuffer(schema *TableSchema, row Row, buf []byte) ([]byte, error)
 	}
 
 	numCols := len(schema.Columns)
-	if numCols > math.MaxUint16 {
-		return nil, fmt.Errorf("tuple: column count %d exceeds uint16 limit (%d)", numCols, math.MaxUint16)
+	if numCols > MaxColumnsPerTable {
+		return nil, fmt.Errorf("%w: column count %d exceeds maximum limit (%d)", ErrTooManyColumns, numCols, MaxColumnsPerTable)
 	}
 	nullBitmapLen := (numCols + 7) / 8
 
@@ -304,6 +304,9 @@ func readTupleHeader(data []byte) (flags byte, encodedCols int, bitmap []byte, o
 	}
 	flags = data[1]
 	encodedCols = int(binary.LittleEndian.Uint16(data[2:4]))
+	if encodedCols > MaxColumnsPerTable {
+		return 0, 0, nil, 0, fmt.Errorf("%w: encoded column count %d exceeds maximum limit (%d)", ErrInvalidTupleHeader, encodedCols, MaxColumnsPerTable)
+	}
 	nullBitmapLen := (encodedCols + 7) / 8
 	if len(data) < 4+nullBitmapLen {
 		return 0, 0, nil, 0, ErrTupleBufferTooShort

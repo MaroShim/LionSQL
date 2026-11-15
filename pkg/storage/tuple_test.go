@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -632,6 +634,42 @@ func TestTupleCodec_InstantAddColumnPadding(t *testing.T) {
 		t.Fatalf("expected ErrInvalidTupleHeader on legacy V1 0x01 buffer, got %v", err)
 	}
 }
+
+func TestRegression_AUDIT_093_011_EncodeRowToBufferUint16OverflowGuard(t *testing.T) {
+	// 1. 1025 columns must be rejected with ErrTooManyColumns
+	cols1025 := make([]Column, MaxColumnsPerTable+1)
+	for i := range cols1025 {
+		cols1025[i] = Column{Name: fmt.Sprintf("c%d", i), Type: TypeInt}
+	}
+	schema1025 := &TableSchema{Name: "big", Columns: cols1025}
+	row1025 := Row{Values: make([]Value, MaxColumnsPerTable+1)}
+	_, err := EncodeRowToBuffer(schema1025, row1025, nil)
+	if !errors.Is(err, ErrTooManyColumns) {
+		t.Fatalf("expected ErrTooManyColumns when column count exceeds 1024, got: %v", err)
+	}
+
+	// 2. Exact 1024 columns must succeed
+	cols1024 := make([]Column, MaxColumnsPerTable)
+	for i := range cols1024 {
+		cols1024[i] = Column{Name: fmt.Sprintf("c%d", i), Type: TypeInt}
+	}
+	schema1024 := &TableSchema{Name: "max", Columns: cols1024}
+	row1024 := Row{Values: make([]Value, MaxColumnsPerTable)}
+	buf, err := EncodeRowToBuffer(schema1024, row1024, nil)
+	if err != nil {
+		t.Fatalf("expected 1024 columns to succeed, got error: %v", err)
+	}
+
+	// 3. Decoding a tuple with encodedCols > 1024 must be rejected as invalid header
+	corruptBuf := make([]byte, len(buf))
+	copy(corruptBuf, buf)
+	binary.LittleEndian.PutUint16(corruptBuf[2:4], uint16(MaxColumnsPerTable+1))
+	_, err = DecodeTuple(schema1024, corruptBuf)
+	if !errors.Is(err, ErrInvalidTupleHeader) && !errors.Is(err, ErrTooManyColumns) {
+		t.Fatalf("expected ErrInvalidTupleHeader or ErrTooManyColumns on corrupt encodedCols > 1024, got: %v", err)
+	}
+}
+
 
 
 

@@ -1077,4 +1077,286 @@ func TestRegression_AUDIT_093_005_SnapSchemaRefreshedOnIndexDDL(t *testing.T) {
 	}
 }
 
+func TestRegression_AUDIT_093_003_WALReplayCorruptTupleFailsClosed(t *testing.T) {
+	eng := New()
+	if err := eng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "audit003_tbl",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	// 1. OpInsert with corrupt Data (version 0x01 instead of 0x02) must fail closed
+	corruptInsert := WALRecord{
+		LSN: 10,
+		Ops: []WALOp{
+			{
+				Type:    OpInsert,
+				Table:   "audit003_tbl",
+				Key:     "1",
+				Data:    []byte{0x01, 0x00, 0x02, 0x00},
+				BaseVer: 1,
+			},
+		},
+	}
+	if err := eng.applyWALRecordLocked(corruptInsert); err == nil {
+		t.Fatalf("expected applyWALRecordLocked OpInsert with corrupt tuple to fail closed, got nil")
+	}
+
+	// 2. OpUpdate with corrupt Data must fail closed and NOT append orphan key to sh.keys
+	corruptUpdate := WALRecord{
+		LSN: 11,
+		Ops: []WALOp{
+			{
+				Type:    OpUpdate,
+				Table:   "audit003_tbl",
+				Key:     "999",
+				Data:    []byte{0x01, 0x00, 0x02, 0x00},
+				BaseVer: 2,
+			},
+		},
+	}
+	if err := eng.applyWALRecordLocked(corruptUpdate); err == nil {
+		t.Fatalf("expected applyWALRecordLocked OpUpdate with corrupt tuple to fail closed, got nil")
+	}
+	td := eng.tables["audit003_tbl"]
+	sh := &td.shards[hashShard("999")]
+	if _, exists := sh.entries["999"]; exists {
+		t.Fatalf("expected key 999 to not exist in shard entries after failed OpUpdate decode")
+	}
+	if td.hasKey("999") {
+		t.Fatalf("expected key 999 to not exist in td.Keys after failed OpUpdate decode")
+	}
+
+	// 3. OpInsert targeting non-existent table must fail closed
+	noTableInsert := WALRecord{
+		LSN: 12,
+		Ops: []WALOp{
+			{
+				Type:  OpInsert,
+				Table: "no_such_table",
+				Key:   "1",
+				Data:  []byte{0x02, 0x00, 0x01, 0x00, 0x00},
+			},
+		},
+	}
+	if err := eng.applyWALRecordLocked(noTableInsert); err == nil {
+		t.Fatalf("expected applyWALRecordLocked OpInsert for missing table to fail closed, got nil")
+	}
+
+	// 4. OpInsert with empty data and nil Record must fail closed
+	emptyInsert := WALRecord{
+		LSN: 13,
+		Ops: []WALOp{
+			{
+				Type:  OpInsert,
+				Table: "audit003_tbl",
+				Key:   "2",
+			},
+		},
+	}
+	if err := eng.applyWALRecordLocked(emptyInsert); err == nil {
+		t.Fatalf("expected applyWALRecordLocked OpInsert with missing data and record to fail closed, got nil")
+	}
+}
+
+func TestRegression_AUDIT_093_004_ReplayWALClosedFileStatErrorFailsClosed(t *testing.T) {
+	tmpDir := t.TempDir()
+	walPath := filepath.Join(tmpDir, "wal.aof")
+	// Write a mid-file corrupt header (8 bytes with invalid frameLen=0) so ReplayWAL fails closed
+	if err := os.WriteFile(walPath, []byte{0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04}, 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	_, err := ReplayWAL(walPath, func(rec WALRecord) error {
+		return nil
+	})
+	if err == nil {
+		t.Fatalf("expected ReplayWAL to return error on corrupted frame header, got nil")
+	}
+
+	// 2. Non-existent WAL returns (0, nil) cleanly
+	cleanLSN, cleanErr := ReplayWAL(filepath.Join(tmpDir, "missing.aof"), func(rec WALRecord) error {
+		return nil
+	})
+	if cleanErr != nil || cleanLSN != 0 {
+		t.Fatalf("expected non-existent WAL to return (0, nil), got (%d, %v)", cleanLSN, cleanErr)
+	}
+}
+
+func TestRegression_AUDIT_093_006_GetTableAndListTablesReturnDeepClone(t *testing.T) {
+	eng := New()
+	if err := eng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "audit006_tbl",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "email", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_audit006_email", Columns: []string{"email"}},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sch, err := eng.GetTable("audit006_tbl")
+	if err != nil {
+		t.Fatalf("GetTable failed: %v", err)
+	}
+	sch.Columns[0].Name = "MUTATED_COL"
+	sch.Indexes[0].Disabled = true
+
+	sch2, err := eng.GetTable("audit006_tbl")
+	if err != nil {
+		t.Fatalf("GetTable 2 failed: %v", err)
+	}
+	if sch2.Columns[0].Name != "id" || sch2.Indexes[0].Disabled {
+		t.Fatalf("GetTable did not return a deep clone; engine schema was mutated: %+v", sch2)
+	}
+
+	list, err := eng.ListTables()
+	if err != nil || len(list) != 1 {
+		t.Fatalf("ListTables failed: %v", err)
+	}
+	list[0].Columns[0].Name = "MUTATED_FROM_LIST"
+	sch3, _ := eng.GetTable("audit006_tbl")
+	if sch3.Columns[0].Name != "id" {
+		t.Fatalf("ListTables did not return a deep clone; engine schema was mutated: %+v", sch3)
+	}
+
+	// Verify Transaction.ListTables returns an independent deep clone
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+	tx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx.Rollback()
+
+	txList, err := tx.ListTables()
+	if err != nil || len(txList) != 1 {
+		t.Fatalf("tx.ListTables failed: %v", err)
+	}
+	txList[0].Columns[0].Name = "MUTATED_FROM_TX_LIST"
+	txList[0].Indexes[0].Disabled = true
+
+	sch4, _ := eng.GetTable("audit006_tbl")
+	if sch4.Columns[0].Name != "id" || sch4.Indexes[0].Disabled {
+		t.Fatalf("tx.ListTables did not return a deep clone; engine schema was mutated: %+v", sch4)
+	}
+}
+
+func TestRegression_AUDIT_093_010_LoadDiskLockedNilTableGuard(t *testing.T) {
+	tmpDir := t.TempDir()
+	container := SnapshotContainer{
+		SnapshotLSN: 5,
+		Tables: map[string]*TableData{
+			"nil_table": nil,
+		},
+	}
+	raw, err := MarshalMsgPack(container)
+	if err != nil {
+		t.Fatalf("MarshalMsgPack failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "tables.mpk"), raw, 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	eng := New()
+	err = eng.Open(tmpDir)
+	if err == nil {
+		_ = eng.Close()
+		t.Fatalf("expected Open to return fail-closed error on nil table entry in RDB snapshot, got nil")
+	}
+}
+
+func TestRegression_AUDIT_093_010_LoadDiskLockedCaseCollisionAndSchemaIntegrity(t *testing.T) {
+	t.Run("CaseCollisionRejection", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		container := SnapshotContainer{
+			SnapshotLSN: 5,
+			Tables: map[string]*TableData{
+				"users": {
+					Schema: storage.TableSchema{
+						Name: "users",
+						Columns: []storage.Column{
+							{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+						},
+					},
+				},
+				"USERS": {
+					Schema: storage.TableSchema{
+						Name: "USERS",
+						Columns: []storage.Column{
+							{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+						},
+					},
+				},
+			},
+		}
+		raw, err := MarshalMsgPack(container)
+		if err != nil {
+			t.Fatalf("MarshalMsgPack failed: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "tables.mpk"), raw, 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		eng := New()
+		err = eng.Open(tmpDir)
+		if err == nil {
+			_ = eng.Close()
+			t.Fatalf("expected Open to return fail-closed error on case-colliding table entries in RDB snapshot, got nil")
+		}
+	})
+
+	t.Run("EmptySchemaNameRejection", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		container := SnapshotContainer{
+			SnapshotLSN: 5,
+			Tables: map[string]*TableData{
+				"bad_table": {
+					Schema: storage.TableSchema{
+						Name: "",
+						Columns: []storage.Column{
+							{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+						},
+					},
+				},
+			},
+		}
+		raw, err := MarshalMsgPack(container)
+		if err != nil {
+			t.Fatalf("MarshalMsgPack failed: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, "tables.mpk"), raw, 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+
+		eng := New()
+		err = eng.Open(tmpDir)
+		if err == nil {
+			_ = eng.Close()
+			t.Fatalf("expected Open to return fail-closed error on empty schema name in RDB snapshot, got nil")
+		}
+	})
+}
+
+
 

@@ -130,7 +130,7 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
 1. **4-Byte 32-Bit Aligned Fixed Header**:
    - `Byte 0`: `Version` (`0x02`, `TupleCodecVersion` / `TupleCodecV2`)
    - `Byte 1`: `Flags` (`0x00` default, reserved bits: `FLAG_NO_NULLS 0x01`, `FLAG_COMPRESSED 0x02`, `FLAG_TOAST 0x04`, `FLAG_EXTENDED 0x08`)
-   - `Bytes 2..3`: `encodedCols` (`uint16` Little-Endian, $0 \sim 65,535$)
+   - `Bytes 2..3`: `encodedCols` (`uint16` Little-Endian, $0 \sim 1,024$). **SQL Server 호환 표준 상한 (`storage.MaxColumnsPerTable = 1024`)**. `CREATE TABLE`, `ALTER TABLE ADD COLUMN`, 및 튜플 인코딩/디코딩 전반에서 1,024개 초과 시 즉시 `ErrTooManyColumns` / `ErrInvalidTupleHeader`로 Fail-Closed 차단.
    - `Bytes 4 .. 4 + ceil(encodedCols/8)`: `NullBitmap` (1-to-1 ordinal mapping to columns)
    - `Bytes 4 + ceil(encodedCols/8) .. end`: Dense sequential payloads for non-null columns
 2. **Fail-Fast Firewall & Zero Legacy V1 Fallbacks**:

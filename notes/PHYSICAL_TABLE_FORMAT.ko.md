@@ -101,7 +101,7 @@ flowchart LR
 | :--- | :--- | :--- | :--- |
 | **Byte 0** | `Version` | `uint8` (`0x02`) | **TupleCodecV2 고정 매직 바이트**. `0x02`가 아닌 버퍼는 즉시 `ErrInvalidTupleHeader`로 Fail-Fast 차단. |
 | **Byte 1** | `Flags` | `uint8` (`0x00`) | 미래 확장성 선할당 플래그 비트 필드 (하단 참조). |
-| **Bytes 2..3** | `encodedCols` | `uint16` (LE) | 해당 튜플에 실제 인코딩된 컬럼의 총 개수 ($0 \sim 65,535$). Instant DDL의 핵심 지표. |
+| **Bytes 2..3** | `encodedCols` | `uint16` (LE) | 해당 튜플에 실제 인코딩된 컬럼의 총 개수 ($0 \sim 1,024$). **SQL Server 호환 표준 상한 (`storage.MaxColumnsPerTable = 1024`)**. DDL 생성 및 튜플 디코딩 시 1,024개 초과 시 즉시 `ErrTooManyColumns` / `ErrInvalidTupleHeader`로 Fail-Closed 차단. |
 
 #### 헤더 플래그 비트 정의 (Byte 1)
 | 비트 마스크 | 식별자 | 설명 |

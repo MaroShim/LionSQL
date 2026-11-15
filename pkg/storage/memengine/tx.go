@@ -319,7 +319,7 @@ func (tx *Transaction) ListTables() ([]*storage.TableSchema, error) {
 	}
 	res := make([]*storage.TableSchema, 0, len(*snap))
 	for _, td := range *snap {
-		cp := td.Schema
+		cp := td.SnapshotSchema().Clone()
 		res = append(res, &cp)
 	}
 	sort.Slice(res, func(i, j int) bool {
@@ -2647,6 +2647,14 @@ func (tx *Transaction) commitTableVariablesLocked() error {
 		}
 		sh.mu.Unlock()
 	}
+
+	// Purge processed table variable changes from tx.changes so that
+	// subsequent commit/rollback operations are completely idempotent.
+	for _, ch := range tvChanges {
+		changeKey := ch.table + ":" + ch.key
+		delete(tx.changes, changeKey)
+	}
+
 	return errors.Join(errs...)
 }
 

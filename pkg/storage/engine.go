@@ -12,6 +12,9 @@ import (
 	"lionsql/pkg/sqlutil"
 )
 
+// MaxColumnsPerTable is the standard SQL Server parity maximum column limit per table (1,024).
+const MaxColumnsPerTable = 1024
+
 var (
 	ErrTableNotFound        = errors.New("table not found")
 	ErrTableExists          = errors.New("table already exists")
@@ -37,6 +40,7 @@ var (
 	ErrReadOnlyReplica      = errors.New("cannot execute write operations on read-only replica (SQLSTATE 25006)")
 	ErrTableFull            = errors.New("table data limit exceeded (SQLSTATE 53200)")
 	ErrEngineTainted        = errors.New("storage: engine is tainted due to unrecoverable I/O or fsync failure")
+	ErrTooManyColumns       = errors.New("table exceeds maximum column limit (1024 columns)")
 )
 
 // IsWriteConflict checks whether an error is a concurrency write-write conflict

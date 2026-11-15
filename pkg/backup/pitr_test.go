@@ -399,3 +399,60 @@ func TestP1_High_Defect9_5_RestorePITR_DDLSyncCatalog(t *testing.T) {
 		t.Errorf("expected products table to exist in engine after PITR OpCreateTable, got: %v", err)
 	}
 }
+
+type nonMemEngineWrapper struct {
+	storage.Engine
+}
+
+func TestPITR_ApplyWALRecord_CorruptTuple_FailsClosed(t *testing.T) {
+	rawEng := memengine.New()
+	if err := rawEng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer rawEng.Close()
+
+	tblSchema := &storage.TableSchema{
+		Name: "items_pitr",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	if err := rawEng.CreateTable(tblSchema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	eng := &nonMemEngineWrapper{Engine: rawEng}
+
+	// 1. OpInsert with corrupt tuple data (invalid version byte 0x01)
+	corruptInsert := memengine.WALRecord{
+		LSN: 1,
+		Ops: []memengine.WALOp{
+			{
+				Type:  memengine.OpInsert,
+				Table: "items_pitr",
+				Key:   "1",
+				Data:  []byte{0x01, 0x00, 0x02, 0x00},
+			},
+		},
+	}
+	if err := backup.ApplyWALRecordToEngine(eng, corruptInsert); err == nil {
+		t.Fatalf("expected ApplyWALRecordToEngine to fail closed on corrupt OpInsert tuple data, got nil")
+	}
+
+	// 2. OpUpdate with corrupt tuple data
+	corruptUpdate := memengine.WALRecord{
+		LSN: 2,
+		Ops: []memengine.WALOp{
+			{
+				Type:  memengine.OpUpdate,
+				Table: "items_pitr",
+				Key:   "1",
+				Data:  []byte{0x01, 0x00, 0x02, 0x00},
+			},
+		},
+	}
+	if err := backup.ApplyWALRecordToEngine(eng, corruptUpdate); err == nil {
+		t.Fatalf("expected ApplyWALRecordToEngine to fail closed on corrupt OpUpdate tuple data, got nil")
+	}
+}

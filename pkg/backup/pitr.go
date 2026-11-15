@@ -186,9 +186,16 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 			rec := op.Record
 			if rec == nil && len(op.Data) > 0 {
 				tblSchema, err := eng.GetTable(op.Table)
-				if err == nil {
-					rec, _ = storage.DecodeTuple(tblSchema, op.Data)
+				if err != nil {
+					return fmt.Errorf("pitr apply insert get table %s failed: %w", op.Table, err)
 				}
+				rec, err = storage.DecodeTuple(tblSchema, op.Data)
+				if err != nil {
+					return fmt.Errorf("pitr apply insert decode tuple failed on table %s (pk=%s): %w", op.Table, op.Key, err)
+				}
+			}
+			if rec == nil {
+				return fmt.Errorf("pitr apply insert missing record and data on table %s (pk=%s)", op.Table, op.Key)
 			}
 			if err := tx.Insert(op.Table, rec); err != nil {
 				return err
@@ -203,7 +210,14 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 			}
 			rec := op.Record
 			if rec == nil && len(op.Data) > 0 {
-				rec, _ = storage.DecodeTuple(tblSchema, op.Data)
+				var err error
+				rec, err = storage.DecodeTuple(tblSchema, op.Data)
+				if err != nil {
+					return fmt.Errorf("pitr apply update decode tuple failed on table %s (pk=%s): %w", op.Table, op.Key, err)
+				}
+			}
+			if rec == nil {
+				return fmt.Errorf("pitr apply update missing record and data on table %s (pk=%s)", op.Table, op.Key)
 			}
 			pkCol, err := tblSchema.PrimaryKeyColumn()
 			if err != nil {

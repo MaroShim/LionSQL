@@ -13,6 +13,10 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	if len(schema.Columns) > storage.MaxColumnsPerTable {
+		return fmt.Errorf("%w: table %q has %d columns (max %d)", storage.ErrTooManyColumns, schema.Name, len(schema.Columns), storage.MaxColumnsPerTable)
+	}
+
 	if _, exists := sqlutil.MapGetFold(e.tables, schema.Name); exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableExists, schema.Name)
 	}
@@ -764,6 +768,9 @@ func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.Table
 	trialSchema := td.Schema.Clone()
 	if err := mutator(&trialSchema); err != nil {
 		return err
+	}
+	if len(trialSchema.Columns) > storage.MaxColumnsPerTable {
+		return fmt.Errorf("%w: altered table %q would have %d columns (max %d)", storage.ErrTooManyColumns, tableName, len(trialSchema.Columns), storage.MaxColumnsPerTable)
 	}
 
 	return e.applySchemaMigrationLocked(td, &trialSchema, !storage.IsTemporaryTable(td.Schema.Name))

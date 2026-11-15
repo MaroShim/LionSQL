@@ -206,7 +206,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 		case OpInsert:
 			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
-				continue
+				return fmt.Errorf("memengine: wal replay OpInsert table %q not found", op.Table)
 			}
 			var row storage.Row
 			if len(op.Data) > 0 {
@@ -217,6 +217,8 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				}
 			} else if op.Record != nil {
 				row = td.Schema.RecordToRow(op.Record)
+			} else {
+				return fmt.Errorf("memengine: wal replay OpInsert missing record and data on table %q (pk=%s)", td.Schema.Name, op.Key)
 			}
 			if !td.hasKey(op.Key) {
 				td.Keys = append(td.Keys, op.Key)
@@ -240,7 +242,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 		case OpUpdate:
 			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
-				continue
+				return fmt.Errorf("memengine: wal replay OpUpdate table %q not found", op.Table)
 			}
 			oldRow, _, err := td.getRowAndVer(op.Key)
 			hadOld := (err == nil)
@@ -253,6 +255,8 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				}
 			} else if op.Record != nil {
 				row = td.Schema.RecordToRow(op.Record)
+			} else {
+				return fmt.Errorf("memengine: wal replay OpUpdate missing record and data on table %q (pk=%s)", td.Schema.Name, op.Key)
 			}
 			if !hadOld {
 				td.Keys = append(td.Keys, op.Key)
@@ -290,7 +294,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 		case OpDelete:
 			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
-				continue
+				return fmt.Errorf("memengine: wal replay OpDelete table %q not found", op.Table)
 			}
 			oldRow, hadOld := td.deleteRowAndVer(op.Key)
 			if td.Schema.IsPartitioned() && hadOld {
@@ -566,6 +570,7 @@ func (e *Engine) loadDiskLocked() (int64, error) {
 	}
 
 	e.tables = make(map[string]*TableData)
+	seenFold := make(map[string]string, len(loaded))
 	for name, td := range loaded {
 		if storage.IsTemporaryTable(name) {
 			continue
@@ -573,6 +578,14 @@ func (e *Engine) loadDiskLocked() (int64, error) {
 		if td == nil {
 			return 0, fmt.Errorf("RDB snapshot file %q contains nil table entry for %q", mpkFile, name)
 		}
+		if td.Schema.Name == "" {
+			return 0, fmt.Errorf("RDB snapshot file %q contains table entry %q with empty schema name", mpkFile, name)
+		}
+		lower := strings.ToLower(name)
+		if existing, collided := seenFold[lower]; collided {
+			return 0, fmt.Errorf("RDB snapshot file %q contains case-colliding table entries: %q and %q", mpkFile, existing, name)
+		}
+		seenFold[lower] = name
 		e.tables[name] = td
 	}
 	for _, td := range e.tables {

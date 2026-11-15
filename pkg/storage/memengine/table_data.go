@@ -106,6 +106,7 @@ func (td *TableData) updateSchemaIndexDisabled(idxName string, disabled bool) {
 	for i := range td.Schema.Indexes {
 		if sqlutil.EqualFoldIdent(td.Schema.Indexes[i].Name, idxName) {
 			td.Schema.Indexes[i].Disabled = disabled
+			td.refreshSnapSchemaLocked()
 			break
 		}
 	}

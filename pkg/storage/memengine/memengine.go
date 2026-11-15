@@ -479,6 +479,9 @@ func (e *Engine) OpenWithOptions(opts Options) (err error) {
 			// AND the recovered state is durably persisted (fsynced + renamed + dir-synced) to tables.mpk.
 			// Otherwise, a second crash during recovery would permanently lose compactingPath transactions!
 			_, compactStatErr := os.Stat(compactingPath)
+			if compactStatErr != nil && !os.IsNotExist(compactStatErr) && !errors.Is(compactStatErr, os.ErrNotExist) {
+				return fmt.Errorf("failed to stat compacting WAL %q: %w", compactingPath, compactStatErr)
+			}
 			hadCompactingWAL := compactStatErr == nil
 			if hadCompactingWAL {
 				maxLSN, rErr := ReplayWAL(compactingPath, replayHandler)

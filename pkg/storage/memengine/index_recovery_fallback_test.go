@@ -172,6 +172,11 @@ func TestSecondaryIndex_DisableAndFallbackToTableScanOnRebuildFailure(t *testing
 	if !foundIdx.Disabled {
 		t.Errorf("expected Schema.Indexes disabled flag to be true")
 	}
+	snap := td.SnapshotSchema()
+	foundSnapIdx, _, snapOk := snap.FindIndex("idx_users_email")
+	if !snapOk || !foundSnapIdx.Disabled {
+		t.Errorf("expected td.SnapshotSchema() to also reflect Disabled: true after auto-rebuild failure")
+	}
 
 	// 6. Verify FindIndexByColumn skips the disabled index
 	if _, found := td.Schema.FindIndexByColumn("email"); found {

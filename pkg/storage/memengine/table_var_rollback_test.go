@@ -243,3 +243,140 @@ func TestTableVariable_RollbackIndexErrorPropagation(t *testing.T) {
 	}
 }
 
+// TestTableVariable_CommitThenDeferRollback verifies that idiomatic defer tx.Rollback()
+// following a successful tx.Commit() does not double-apply table variable modifications
+// or corrupt commitLSN / commitTimestamp.
+func TestTableVariable_CommitThenDeferRollback(t *testing.T) {
+	eng := New()
+	defer eng.Close()
+
+	tvSchema := &storage.TableSchema{
+		Name: "__tv_sess1_double_apply",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(tvSchema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	doTx := func() (int64, error) {
+		tx, err := sess.BeginTx(storage.TxOptions{})
+		if err != nil {
+			return 0, err
+		}
+		defer func() {
+			_ = tx.Rollback()
+		}()
+
+		if err := tx.Insert("__tv_sess1_double_apply", storage.Record{
+			"id":  storage.IntValue(1),
+			"val": storage.StringValue("hello"),
+		}); err != nil {
+			return 0, err
+		}
+
+		if err := tx.Commit(); err != nil {
+			return 0, err
+		}
+		return tx.CommitLSN(), nil
+	}
+
+	lsn, err := doTx()
+	if err != nil {
+		t.Fatalf("doTx failed: %v", err)
+	}
+	if lsn <= 0 {
+		t.Fatalf("expected positive commitLSN after commit, got %d", lsn)
+	}
+
+	// Verify table variable has exactly 1 row (no double application!)
+	txRead, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx read failed: %v", err)
+	}
+	defer txRead.Rollback()
+
+	cur, err := txRead.Scan("__tv_sess1_double_apply")
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	defer cur.Close()
+
+	cnt := 0
+	for cur.Next() {
+		cnt++
+	}
+	if cnt != 1 {
+		t.Fatalf("expected table variable to have exactly 1 row, got %d (double applied!)", cnt)
+	}
+}
+
+// TestTableVariable_ReadYourOwnWritesInsideActiveTx verifies that uncommitted
+// table variable writes are immediately visible to subsequent reads within the same tx.
+func TestTableVariable_ReadYourOwnWritesInsideActiveTx(t *testing.T) {
+	eng := New()
+	defer eng.Close()
+
+	tvSchema := &storage.TableSchema{
+		Name: "__tv_sess1_ryow",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(tvSchema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx.Rollback()
+
+	if err := tx.Insert("__tv_sess1_ryow", storage.Record{
+		"id":  storage.IntValue(100),
+		"val": storage.StringValue("uncommitted_yet_visible"),
+	}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+
+	// 1. tx.Get inside active transaction
+	rec, err := tx.Get("__tv_sess1_ryow", storage.IntValue(100))
+	if err != nil {
+		t.Fatalf("tx.Get failed to find uncommitted table variable write: %v", err)
+	}
+	if rec["val"].SVal != "uncommitted_yet_visible" {
+		t.Fatalf("expected 'uncommitted_yet_visible', got: %v", rec["val"])
+	}
+
+	// 2. tx.Scan inside active transaction
+	cur, err := tx.Scan("__tv_sess1_ryow")
+	if err != nil {
+		t.Fatalf("tx.Scan failed: %v", err)
+	}
+	cnt := 0
+	for cur.Next() {
+		cnt++
+	}
+	cur.Close()
+	if cnt != 1 {
+		t.Fatalf("tx.Scan expected 1 row, got %d", cnt)
+	}
+}
+
+
