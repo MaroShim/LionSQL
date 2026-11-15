@@ -80,7 +80,12 @@ func (p *Parser) parseExpression(precedence int) Expr {
 					p.addError("expected pattern expression after NOT LIKE")
 					return nil
 				}
-				leftExp = &LikeExpr{Expr: leftExp, Not: true, Pattern: pattern}
+				var escExpr Expr
+				if p.curTokenIs(TokenEscape) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ESCAPE")) {
+					p.nextToken() // eat ESCAPE
+					escExpr = p.parseExpression(precSum)
+				}
+				leftExp = &LikeExpr{Expr: leftExp, Not: true, Pattern: pattern, Escape: escExpr}
 				break
 			}
 			if p.curTokenIs(TokenBetween) {
@@ -170,7 +175,12 @@ func (p *Parser) parseExpression(precedence int) Expr {
 				p.addError(fmt.Sprintf("expected pattern expression after LIKE at line %d:%d", p.curToken.Line, p.curToken.Col))
 				return nil
 			}
-			leftExp = &LikeExpr{Expr: leftExp, Not: false, Pattern: pattern}
+			var escExpr Expr
+			if p.curTokenIs(TokenEscape) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ESCAPE")) {
+				p.nextToken() // eat ESCAPE
+				escExpr = p.parseExpression(precSum)
+			}
+			leftExp = &LikeExpr{Expr: leftExp, Not: false, Pattern: pattern, Escape: escExpr}
 
 		case TokenIs:
 			p.nextToken() // eat IS

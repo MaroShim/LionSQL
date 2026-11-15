@@ -465,7 +465,23 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		if sv, ok := patVal.(storage.Value); ok {
 			strPat = fmt.Sprintf("%v", sv.Interface())
 		}
-		matched := sqlutil.MatchLike(strPat, strVal, true)
+		escStr := ""
+		if e.Escape != nil {
+			escVal, err := EvalRowExpr(e.Escape, row, execSubquery)
+			if err != nil {
+				return nil, err
+			}
+			if !isNullVal(escVal) {
+				escStr = fmt.Sprintf("%v", escVal)
+				if sv, ok := escVal.(storage.Value); ok {
+					escStr = fmt.Sprintf("%v", sv.Interface())
+				}
+				if len([]rune(escStr)) != 1 {
+					return nil, fmt.Errorf("The ESCAPE clause must be a single character")
+				}
+			}
+		}
+		matched := sqlutil.MatchLikeEscape(strPat, strVal, escStr, true)
 		if e.Not {
 			return !matched, nil
 		}
@@ -1374,6 +1390,11 @@ func toFloat(v any) (float64, bool) {
 		return float64(val), true
 	}
 	return 0, false
+}
+
+// IsTruthyValue determines if an arbitrary value is truthy in SQL boolean context.
+func IsTruthyValue(v any) bool {
+	return isTruthyValue(v)
 }
 
 func isTruthyValue(v any) bool {

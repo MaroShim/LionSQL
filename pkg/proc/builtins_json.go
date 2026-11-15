@@ -241,11 +241,17 @@ func evalJSONBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 
 	case "JSON_QUERY":
-		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+		if len(args) < 1 || args[0].IsNull {
 			return storage.NullValue(storage.TypeJSON)
 		}
+		path := "$"
+		if len(args) >= 2 {
+			if args[1].IsNull {
+				return storage.NullValue(storage.TypeJSON)
+			}
+			path = valToString(args[1])
+		}
 		doc := valToString(args[0])
-		path := valToString(args[1])
 		val, ok := storage.JSONQueryByPath(doc, path)
 		if !ok || val == "" {
 			return storage.NullValue(storage.TypeJSON)

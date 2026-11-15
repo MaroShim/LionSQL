@@ -1096,7 +1096,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.046 T-SQL & Standard Configuration Parameters: SET
-	if sqlutil.HasPrefixKeyword(trimmed, "SET") && !strings.HasPrefix(trimmed, "SET @") {
+	if sqlutil.HasPrefixKeyword(trimmed, "SET") && !strings.HasPrefix(strings.TrimSpace(trimmed[3:]), "@") {
 		rest := strings.TrimSpace(trimmed[3:])
 
 		// A. SET TRANSACTION ISOLATION LEVEL <level>
@@ -1455,6 +1455,33 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			if !strings.HasPrefix(varName, "@") {
 				varName = "@" + varName
 			}
+			if len(varFields) > 1 {
+				rawType := strings.ToUpper(varFields[1])
+				typeName := rawType
+				varLen := -1
+				if idx := strings.Index(typeName, "("); idx != -1 {
+					inner := strings.Trim(typeName[idx+1:], " )")
+					typeName = typeName[:idx]
+					if inner != "MAX" {
+						if l, err := strconv.Atoi(inner); err == nil {
+							varLen = l
+						}
+					}
+				} else {
+					// In T-SQL, VARCHAR, CHAR, NVARCHAR, NCHAR, BINARY, VARBINARY
+					// default to length 1 when declared without explicit length specification.
+					switch typeName {
+					case "VARCHAR", "CHAR", "NVARCHAR", "NCHAR", "BINARY", "VARBINARY":
+						varLen = 1
+					}
+				}
+				if varLen > 0 {
+					if cs.VarLengths == nil {
+						cs.VarLengths = make(map[string]int)
+					}
+					cs.VarLengths[varName] = varLen
+				}
+			}
 			var val any = nil
 			if len(eqParts) == 2 {
 				expr := strings.TrimSpace(eqParts[1])
@@ -1479,6 +1506,13 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 					}
 				}
 			}
+			if val != nil {
+				if maxLen, ok := cs.VarLengths[varName]; ok && maxLen > 0 {
+					if sVal, ok := val.(string); ok && len(sVal) > maxLen {
+						val = sVal[:maxLen]
+					}
+				}
+			}
 			cs.Vars[varName] = val
 		}
 		cs.Mu.Unlock()
@@ -1499,6 +1533,11 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			expr = strings.ReplaceAll(expr, k, fmt.Sprintf("%v", v))
 		}
 		val := parseSessionVarValue(expr)
+		if maxLen, ok := cs.VarLengths["@"+varName]; ok && maxLen > 0 {
+			if sVal, ok := val.(string); ok && len(sVal) > maxLen {
+				val = sVal[:maxLen]
+			}
+		}
 		cs.Vars["@"+varName] = val
 		return &QueryResult{
 			Success:    true,

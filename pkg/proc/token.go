@@ -89,6 +89,7 @@ const (
 	TokenIn
 	TokenBetween
 	TokenLike
+	TokenEscape
 	TokenIs
 	TokenCursor
 	TokenOpen
@@ -261,6 +262,7 @@ var keywords = map[string]TokenType{
 	"IN":          TokenIn,
 	"BETWEEN":     TokenBetween,
 	"LIKE":        TokenLike,
+	"ESCAPE":      TokenEscape,
 	"IS":          TokenIs,
 	"CURSOR":      TokenCursor,
 	"OPEN":        TokenOpen,
@@ -355,6 +357,8 @@ func (t TokenType) String() string {
 		return "BETWEEN"
 	case TokenLike:
 		return "LIKE"
+	case TokenEscape:
+		return "ESCAPE"
 	case TokenIs:
 		return "IS"
 	case TokenJSONExtract:

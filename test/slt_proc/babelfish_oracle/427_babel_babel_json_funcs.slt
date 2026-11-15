@@ -59,41 +59,41 @@ insert into invalid_json_strings (invalid_vc, invalid_nvc, invalid_text) values 
 query TTT
 select ISJSON(valid_vc), ISJSON(valid_nvc), ISJSON(valid_text) from valid_json_strings;
 ----
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
-1 1 1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
+1	1	1
 
 query TTT
 select ISJSON(invalid_vc), ISJSON(invalid_nvc), ISJSON(invalid_text) from invalid_json_strings;
 ----
-0 0 0
-1 1 1
-0 0 0
-0 0 0
-0 0 0
-0 0 0
-0 0 0
+0	0	0
+1	1	1
+0	0	0
+0	0	0
+0	0	0
+0	0	0
+0	0	0
 
 statement ok
 create table json_value_query_table (vc VARCHAR(max), nvc NVARCHAR(max), t text);
 
 statement ok
-DECLARE @jsonInfo NVARCHAR(MAX)
+DECLARE @jsonInfo NVARCHAR(MAX);
 SET @jsonInfo=N'{  
      "info":{    
        "type":1,  
@@ -112,122 +112,195 @@ SET @jsonInfo=N'{
       "ext":"yes",
       "type":"Basic3",
       "type":"Basic1"
-  }'
-insert into json_value_query_table (vc, nvc, t) values (@jsonInfo, @jsonInfo, @jsonInfo)
+  }';
+insert into json_value_query_table (vc, nvc, t) values (@jsonInfo, @jsonInfo, @jsonInfo);
 
-statement ok
+query TTT
 select JSON_VALUE(vc, '$'), JSON_VALUE(nvc, '$'), JSON_VALUE(t, '$') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
+query TTT
 select JSON_VALUE(vc, '$.info.type'), JSON_VALUE(nvc, '$.info.type'), JSON_VALUE(t, '$.info.type') from json_value_query_table;
+----
+1	1	1
 
-statement ok
+query TTT
 select JSON_VALUE(vc, '$.type'), JSON_VALUE(nvc, '$.type'), JSON_VALUE(t, '$.type') from json_value_query_table;
+----
+Basic2	Basic2	Basic2
 
-statement ok
+query TTT
 select JSON_VALUE(vc, '$.nokey'), JSON_VALUE(nvc, '$.nokey'), JSON_VALUE(t, '$.nokey') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
+query TTT
 select JSON_VALUE(vc, '$.ext'), JSON_VALUE(nvc, '$.ext'), JSON_VALUE(t, '$.ext') from json_value_query_table;
+----
+yes	yes	yes
 
-statement ok
-select JSON_VALUE(vc, '$.info.address.town'), JSON_VALUE(nvc, '$.info.address.town'), JSON_VALUE(t, '$.info.address.town') from json_value_query_table
+query TTT
+select JSON_VALUE(vc, '$.info.address.town'), JSON_VALUE(nvc, '$.info.address.town'), JSON_VALUE(t, '$.info.address.town') from json_value_query_table;
+----
+Bristol	Bristol	Bristol
 
-statement ok
-select JSON_VALUE(vc, '$.info."address"'), JSON_VALUE(nvc, '$.info."address"'), JSON_VALUE(t, '$.info."address"') from json_value_query_table
+query TTT
+select JSON_VALUE(vc, '$.info."address"'), JSON_VALUE(nvc, '$.info."address"'), JSON_VALUE(t, '$.info."address"') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_VALUE(vc, '$.info.tags'), JSON_VALUE(nvc, '$.info.tags'), JSON_VALUE(t, '$.info.tags') from json_value_query_table
+query TTT
+select JSON_VALUE(vc, '$.info.tags'), JSON_VALUE(nvc, '$.info.tags'), JSON_VALUE(t, '$.info.tags') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_VALUE(vc, '$.info.type[0]'), JSON_VALUE(nvc, '$.info.type[0]'), JSON_VALUE(t, '$.info.type[0]') from json_value_query_table
+query TTT
+select JSON_VALUE(vc, '$.info.type[0]'), JSON_VALUE(nvc, '$.info.type[0]'), JSON_VALUE(t, '$.info.type[0]') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_VALUE(vc, 'strict $.info.tags[0]'), JSON_VALUE(nvc, 'strict $.info.tags[0]'), JSON_VALUE(t, 'strict $.info.tags[0]') from json_value_query_table
+query TTT
+select JSON_VALUE(vc, 'strict $.info.tags[0]'), JSON_VALUE(nvc, 'strict $.info.tags[0]'), JSON_VALUE(t, 'strict $.info.tags[0]') from json_value_query_table;
+----
+Sport	Sport	Sport
 
-statement ok
-select JSON_VALUE(vc, '$.info.none'), JSON_VALUE(nvc, '$.info.none'), JSON_VALUE(t, '$.info.none') from json_value_query_table
+query TTT
+select JSON_VALUE(vc, '$.info.none'), JSON_VALUE(nvc, '$.info.none'), JSON_VALUE(t, '$.info.none') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
+query TTT
 select JSON_VALUE(vc, 'strict $'), JSON_VALUE(nvc, 'strict $'), JSON_VALUE(t, 'strict $') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
+query TTT
 select JSON_VALUE(vc, 'strict $.info.type'), JSON_VALUE(nvc, 'strict $.info.type'), JSON_VALUE(t, 'strict $.info.type') from json_value_query_table;
+----
+1	1	1
 
-statement ok
-select JSON_VALUE(vc, 'strict $.info.address.town'), JSON_VALUE(nvc, 'strict $.info.address.town'), JSON_VALUE(t, 'strict $.info.address.town') from json_value_query_table
+query TTT
+select JSON_VALUE(vc, 'strict $.info.address.town'), JSON_VALUE(nvc, 'strict $.info.address.town'), JSON_VALUE(t, 'strict $.info.address.town') from json_value_query_table;
+----
+Bristol	Bristol	Bristol
 
-statement ok
-select JSON_VALUE(vc, 'strict $.info."address"'), JSON_VALUE(nvc, 'strict $.info."address"'), JSON_VALUE(t, 'strict $.info."address"') from json_value_query_table
+query TTT
+select JSON_VALUE(vc, 'strict $.info."address"'), JSON_VALUE(nvc, 'strict $.info."address"'), JSON_VALUE(t, 'strict $.info."address"') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_VALUE(vc, 'strict $.info.tags'), JSON_VALUE(nvc, 'strict $.info.tags'), JSON_VALUE(t, 'strict $.info.tags') from json_value_query_table
+query TTT
+select JSON_VALUE(vc, 'strict $.info.tags'), JSON_VALUE(nvc, 'strict $.info.tags'), JSON_VALUE(t, 'strict $.info.tags') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_VALUE(vc, 'strict $.info.type[0]'), JSON_VALUE(nvc, 'strict $.info.type[0]'), JSON_VALUE(t, 'strict $.info.type[0]') from json_value_query_table
+query TTT
+select JSON_VALUE(vc, 'strict $.info.type[0]'), JSON_VALUE(nvc, 'strict $.info.type[0]'), JSON_VALUE(t, 'strict $.info.type[0]') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_VALUE(vc, 'strict $.info.tags[0]'), JSON_VALUE(nvc, 'strict $.info.tags[0]'), JSON_VALUE(t, 'strict $.info.tags[0]') from json_value_query_table
+query TTT
+select JSON_VALUE(vc, 'strict $.info.tags[0]'), JSON_VALUE(nvc, 'strict $.info.tags[0]'), JSON_VALUE(t, 'strict $.info.tags[0]') from json_value_query_table;
+----
+Sport	Sport	Sport
 
-statement ok
-select JSON_VALUE(vc, 'strict $.info.none'), JSON_VALUE(nvc, 'strict $.info.none'), JSON_VALUE(t, 'strict $.info.none') from json_value_query_table
+query TTT
+select JSON_VALUE(vc, 'strict $.info.none'), JSON_VALUE(nvc, 'strict $.info.none'), JSON_VALUE(t, 'strict $.info.none') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
+query TTT
 select JSON_QUERY(vc), JSON_QUERY(nvc), JSON_QUERY(t) from json_value_query_table;
+----
+{"ext":"yes","info":{"address":{"country":"England Duplicate","county":"Avon","town":"Bristol"},"tags":["Sport","Water polo"],"type":1},"key":12,"type":"Basic1","what":35}	{"ext":"yes","info":{"address":{"country":"England Duplicate","county":"Avon","town":"Bristol"},"tags":["Sport","Water polo"],"type":1},"key":12,"type":"Basic1","what":35}	{"ext":"yes","info":{"address":{"country":"England Duplicate","county":"Avon","town":"Bristol"},"tags":["Sport","Water polo"],"type":1},"key":12,"type":"Basic1","what":35}
 
-statement ok
+query TTT
 select JSON_QUERY(vc, '$'), JSON_QUERY(nvc, '$'), JSON_QUERY(t, '$') from json_value_query_table;
+----
+{"ext":"yes","info":{"address":{"country":"England Duplicate","county":"Avon","town":"Bristol"},"tags":["Sport","Water polo"],"type":1},"key":12,"type":"Basic1","what":35}	{"ext":"yes","info":{"address":{"country":"England Duplicate","county":"Avon","town":"Bristol"},"tags":["Sport","Water polo"],"type":1},"key":12,"type":"Basic1","what":35}	{"ext":"yes","info":{"address":{"country":"England Duplicate","county":"Avon","town":"Bristol"},"tags":["Sport","Water polo"],"type":1},"key":12,"type":"Basic1","what":35}
 
-statement ok
+query TTT
 select JSON_QUERY(vc, '$.info.type'), JSON_QUERY(nvc, '$.info.type'), JSON_QUERY(t, '$.info.type') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_QUERY(vc, '$.info.address.town'), JSON_QUERY(nvc, '$.info.address.town'), JSON_QUERY(t, '$.info.address.town') from json_value_query_table
+query TTT
+select JSON_QUERY(vc, '$.info.address.town'), JSON_QUERY(nvc, '$.info.address.town'), JSON_QUERY(t, '$.info.address.town') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_QUERY(vc, '$.info."address"'), JSON_QUERY(nvc, '$.info."address"'), JSON_QUERY(t, '$.info."address"') from json_value_query_table
+query TTT
+select JSON_QUERY(vc, '$.info."address"'), JSON_QUERY(nvc, '$.info."address"'), JSON_QUERY(t, '$.info."address"') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_QUERY(vc, '$.info.tags'), JSON_QUERY(nvc, '$.info.tags'), JSON_QUERY(t, '$.info.tags') from json_value_query_table
+query TTT
+select JSON_QUERY(vc, '$.info.tags'), JSON_QUERY(nvc, '$.info.tags'), JSON_QUERY(t, '$.info.tags') from json_value_query_table;
+----
+["Sport","Water polo"]	["Sport","Water polo"]	["Sport","Water polo"]
 
-statement ok
-select JSON_QUERY(vc, '$.info.type[0]'), JSON_QUERY(nvc, '$.info.type[0]'), JSON_QUERY(t, '$.info.type[0]') from json_value_query_table
+query TTT
+select JSON_QUERY(vc, '$.info.type[0]'), JSON_QUERY(nvc, '$.info.type[0]'), JSON_QUERY(t, '$.info.type[0]') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_QUERY(vc, 'strict $.info.tags[0]'), JSON_QUERY(nvc, 'strict $.info.tags[0]'), JSON_QUERY(t, 'strict $.info.tags[0]') from json_value_query_table
+query TTT
+select JSON_QUERY(vc, 'strict $.info.tags[0]'), JSON_QUERY(nvc, 'strict $.info.tags[0]'), JSON_QUERY(t, 'strict $.info.tags[0]') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_QUERY(vc, '$.info.none'), JSON_QUERY(nvc, '$.info.none'), JSON_QUERY(t, '$.info.none') from json_value_query_table
+query TTT
+select JSON_QUERY(vc, '$.info.none'), JSON_QUERY(nvc, '$.info.none'), JSON_QUERY(t, '$.info.none') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
+query TTT
 select JSON_QUERY(vc), JSON_QUERY(nvc), JSON_QUERY(t) from json_value_query_table;
+----
+{"ext":"yes","info":{"address":{"country":"England Duplicate","county":"Avon","town":"Bristol"},"tags":["Sport","Water polo"],"type":1},"key":12,"type":"Basic1","what":35}	{"ext":"yes","info":{"address":{"country":"England Duplicate","county":"Avon","town":"Bristol"},"tags":["Sport","Water polo"],"type":1},"key":12,"type":"Basic1","what":35}	{"ext":"yes","info":{"address":{"country":"England Duplicate","county":"Avon","town":"Bristol"},"tags":["Sport","Water polo"],"type":1},"key":12,"type":"Basic1","what":35}
 
-statement ok
+query TTT
 select JSON_QUERY(vc, 'strict $'), JSON_QUERY(nvc, 'strict $'), JSON_QUERY(t, 'strict $') from json_value_query_table;
+----
+{"ext":"yes","info":{"address":{"country":"England Duplicate","county":"Avon","town":"Bristol"},"tags":["Sport","Water polo"],"type":1},"key":12,"type":"Basic1","what":35}	{"ext":"yes","info":{"address":{"country":"England Duplicate","county":"Avon","town":"Bristol"},"tags":["Sport","Water polo"],"type":1},"key":12,"type":"Basic1","what":35}	{"ext":"yes","info":{"address":{"country":"England Duplicate","county":"Avon","town":"Bristol"},"tags":["Sport","Water polo"],"type":1},"key":12,"type":"Basic1","what":35}
 
-statement ok
+query TTT
 select JSON_QUERY(vc, 'strict $.info.type'), JSON_QUERY(nvc, 'strict $.info.type'), JSON_QUERY(t, 'strict $.info.type') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_QUERY(vc, 'strict $.info.address.town'), JSON_QUERY(nvc, 'strict $.info.address.town'), JSON_QUERY(t, 'strict $.info.address.town') from json_value_query_table
+query TTT
+select JSON_QUERY(vc, 'strict $.info.address.town'), JSON_QUERY(nvc, 'strict $.info.address.town'), JSON_QUERY(t, 'strict $.info.address.town') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_QUERY(vc, 'strict $.info."address"'), JSON_QUERY(nvc, 'strict $.info."address"'), JSON_QUERY(t, 'strict $.info."address"') from json_value_query_table
+query TTT
+select JSON_QUERY(vc, 'strict $.info."address"'), JSON_QUERY(nvc, 'strict $.info."address"'), JSON_QUERY(t, 'strict $.info."address"') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_QUERY(vc, 'strict $.info.tags'), JSON_QUERY(nvc, 'strict $.info.tags'), JSON_QUERY(t, 'strict $.info.tags') from json_value_query_table
+query TTT
+select JSON_QUERY(vc, 'strict $.info.tags'), JSON_QUERY(nvc, 'strict $.info.tags'), JSON_QUERY(t, 'strict $.info.tags') from json_value_query_table;
+----
+["Sport","Water polo"]	["Sport","Water polo"]	["Sport","Water polo"]
 
-statement ok
-select JSON_QUERY(vc, 'strict $.info.type[0]'), JSON_QUERY(nvc, 'strict $.info.type[0]'), JSON_QUERY(t, 'strict $.info.type[0]') from json_value_query_table
+query TTT
+select JSON_QUERY(vc, 'strict $.info.type[0]'), JSON_QUERY(nvc, 'strict $.info.type[0]'), JSON_QUERY(t, 'strict $.info.type[0]') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_QUERY(vc, 'strict $.info.tags[0]'), JSON_QUERY(nvc, 'strict $.info.tags[0]'), JSON_QUERY(t, 'strict $.info.tags[0]') from json_value_query_table
+query TTT
+select JSON_QUERY(vc, 'strict $.info.tags[0]'), JSON_QUERY(nvc, 'strict $.info.tags[0]'), JSON_QUERY(t, 'strict $.info.tags[0]') from json_value_query_table;
+----
+NULL	NULL	NULL
 
-statement ok
-select JSON_QUERY(vc, 'strict $.info.none'), JSON_QUERY(nvc, 'strict $.info.none'), JSON_QUERY(t, 'strict $.info.none') from json_value_query_table
+query TTT
+select JSON_QUERY(vc, 'strict $.info.none'), JSON_QUERY(nvc, 'strict $.info.none'), JSON_QUERY(t, 'strict $.info.none') from json_value_query_table;
+----
+NULL	NULL	NULL
 
 statement ok
 DROP TABLE valid_json_strings
 DROP TABLE invalid_json_strings
 DROP TABLE json_value_query_table
-

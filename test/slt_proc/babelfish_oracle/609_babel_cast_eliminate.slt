@@ -10,77 +10,101 @@ CREATE TABLE cast_eliminate2( [ROID] [bigint] NOT NULL PRIMARY KEY );
 statement ok
 set babelfish_showplan_all on
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate  WHERE (CAST(ROID AS BIGINT) = 1)
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate  WHERE (CAST(ROID AS int) = 1)
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate  WHERE (ROID = cast(1 as bigint))
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate  WHERE (CAST(ROID AS BIGINT) = cast( 1 as bigint ))
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate2  WHERE (CAST(ROID AS BIGINT) = 1)
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate2  WHERE (CAST(ROID AS int) = 1)
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate2  WHERE (ROID = cast(1 as bigint))
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate  WHERE (CAST(ROID AS BIGINT) = cast( 1 as bigint ))
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE (CAST(ROID AS BIGINT) = 1) OR (CAST(ROID AS BIGINT) = 2)
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE (CAST(ROID AS BIGINT) = 1) AND (CAST(s_int AS BIGINT) = 2)
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE 1 = (CAST(ROID AS BIGINT))
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(ROID AS BIGINT) as INT) = 1
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(s_int AS INT) = 1
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(s_int AS BIGINT) as INT) = 1
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(CAST(s_int AS BIGINT) as INT) as SMALLINT) = 1
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE b_int = 10 AND NOT ((CAST(CAST(CAST(s_int AS BIGINT) as INT) as SMALLINT) = 1 OR CAST(ROID AS BIGINT) > 10) AND ROID NOT IN (12, 34))
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(ROID AS BIGINT) as SMALLINT) = 1
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(ROID AS SMALLINT) as BIGINT) = 1
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(b_int AS BIGINT) = 1
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(b_int AS INT) = 1
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(ROID AS BIGINT) as SMALLINT) = CAST(s_int AS INT)
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE CAST(CAST(ROID AS numeric) as int) = 1
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE (CAST(ROID AS BIGINT) < 1) OR (CAST(ROID AS BIGINT) > 2)
+----
 
-statement ok
+query I
 SELECT 1 AS [C1] FROM cast_eliminate WHERE (CAST(ROID AS BIGINT) >= 1) AND (CAST(ROID AS BIGINT) <= 2)
+----
 
 statement ok
 set babelfish_showplan_all off

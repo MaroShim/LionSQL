@@ -1160,12 +1160,26 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 				startReg = projRegs[0]
 			}
 			count := int32(len(projRegs))
+
+			var jmpFalse int = -1
+			if s.Where != nil {
+				wReg, err := c.compileExpr(s.Where)
+				if err != nil {
+					return err
+				}
+				jmpFalse = c.emit(OpJumpIfFalse, wReg, 0, 0, nil)
+			}
+
 			c.emit(OpResultRow, startReg, count, 0, &ResultRowData{
 				Columns:  colNames,
 				StartReg: startReg,
 				Count:    count,
 				Regs:     projRegs,
 			})
+
+			if jmpFalse != -1 {
+				c.patchJumpTarget(jmpFalse, c.currentPC())
+			}
 			return nil
 		}
 
@@ -1464,8 +1478,19 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		if e.Not {
 			flags = 1
 		}
-		c.emitWithFlags(OpLike, flags, valReg, valReg, patReg, nil)
-		c.freeReg(1)
+		var aux any
+		if e.Escape != nil {
+			escReg, err := c.compileExpr(e.Escape)
+			if err != nil {
+				return 0, err
+			}
+			aux = escReg
+			c.emitWithFlags(OpLike, flags, valReg, valReg, patReg, aux)
+			c.freeReg(2)
+		} else {
+			c.emitWithFlags(OpLike, flags, valReg, valReg, patReg, nil)
+			c.freeReg(1)
+		}
 		return valReg, nil
 
 	case *IsNullExpr:

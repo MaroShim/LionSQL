@@ -1038,6 +1038,11 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 	}
 
 	rawList := strings.TrimSpace(cleaned[6:])
+	var whereClause string
+	if whereIdx := sqlutil.FindTopLevelKeyword(cleaned, "WHERE"); whereIdx != -1 {
+		rawList = strings.TrimSpace(cleaned[6:whereIdx])
+		whereClause = strings.TrimSpace(cleaned[whereIdx+5:])
+	}
 	for {
 		if rem, ok := sqlutil.TrimPrefixKeyword(rawList, "ALL"); ok {
 			rawList = rem
@@ -1110,6 +1115,52 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 		columns = append(columns, alias)
 		vals = append(vals, val)
 		row[colKey] = val
+	}
+
+	if whereClause != "" {
+		p := proc.NewParser(proc.NewLexer(whereClause))
+		expr := p.ParseExpr()
+		if expr != nil && len(p.Errors()) == 0 {
+			varRow := make(map[string]any, len(row))
+			if cs != nil {
+				cs.Mu.Lock()
+				for k, v := range cs.Vars {
+					varRow[k] = v
+				}
+				cs.Mu.Unlock()
+			}
+			for k, v := range row {
+				varRow[k] = v
+			}
+			val, err := proc.EvalRowExpr(expr, varRow, nil)
+			if err != nil {
+				return nil, err
+			}
+			matched := proc.IsTruthyValue(val)
+			if !matched {
+				return &QueryResult{
+					Success:      true,
+					Command:      "SELECT",
+					Columns:      columns,
+					Rows:         []map[string]any{},
+					Values:       [][]any{},
+					RowsAffected: 0,
+					DurationUS:   time.Since(start).Microseconds(),
+				}, nil
+			}
+		} else {
+			if !evaluateWhereConditionMap(row, whereClause) {
+				return &QueryResult{
+					Success:      true,
+					Command:      "SELECT",
+					Columns:      columns,
+					Rows:         []map[string]any{},
+					Values:       [][]any{},
+					RowsAffected: 0,
+					DurationUS:   time.Since(start).Microseconds(),
+				}, nil
+			}
+		}
 	}
 
 	return &QueryResult{

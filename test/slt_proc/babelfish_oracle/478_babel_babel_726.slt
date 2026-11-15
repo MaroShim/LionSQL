@@ -53,173 +53,229 @@ create table babel_726_t1 (
     a28 numeric
 )
 
-statement ok
+query T
 select coalesce(a1, a2) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a2, a1) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a2, a3) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a3, a2) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a3, a4) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a4, a3) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a4, a5) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a5, a4) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a5, a6) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a6, a5) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a6, a7) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a7, a6) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a7, a8) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a8, a7) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a8, a9) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a9, a8) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a9, a10) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a10, a9) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a10, a11) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a11, a10) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a11, a12) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a12, a11) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a12, a13) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a13, a12) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a13, a14) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a14, a13) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a14, a15) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a15, a14) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a15, a16) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a16, a15) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a16, a17) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a17, a16) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a17, a18) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a18, a17) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a18, a19) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a19, a18) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a19, a20) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a20, a19) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a20, a21) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a21, a20) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a21, a22) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a22, a21) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a22, a23) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a23, a22) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a23, a24) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a24, a23) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a24, a25) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a25, a24) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a25, a26) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a26, a25) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a26, a27) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a27, a26) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a28, a24) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a24, a28) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a28, a8) from babel_726_t1
+----
 
-statement ok
+query T
 select coalesce(a8, a28) from babel_726_t1
+----
 
 statement ok
 create table babel_726_t2 (a int, b varchar(10), c float)

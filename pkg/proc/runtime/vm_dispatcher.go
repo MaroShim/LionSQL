@@ -549,7 +549,23 @@ vmLoop:
 		} else {
 			str := valToString(f.regs[inst.B])
 			pat := valToString(f.regs[inst.C])
-			matched := matchLike(str, pat)
+			esc := ""
+			if auxData := f.aux(&inst); auxData != nil {
+				hasEsc := false
+				if s, ok := auxData.(string); ok {
+					esc = s
+					hasEsc = true
+				} else if r, ok := auxData.(int32); ok && int(r) >= 0 && int(r) < len(f.regs) {
+					if !f.regs[r].IsNull {
+						esc = valToString(f.regs[r])
+						hasEsc = true
+					}
+				}
+				if hasEsc && len([]rune(esc)) != 1 {
+					return nil, fmt.Errorf("The ESCAPE clause must be a single character")
+				}
+			}
+			matched := matchLike(str, pat, esc)
 			if inst.Flags&1 != 0 {
 				matched = !matched
 			}

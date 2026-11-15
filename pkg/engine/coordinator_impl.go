@@ -436,6 +436,7 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 		Session:         sess,
 		Database:        defaultDB,
 		Vars:            make(map[string]any),
+		VarLengths:      make(map[string]int),
 		TableVars:       make(map[string]string),
 		TempTableMap:    make(map[string]string),
 		EphemeralTables: make(map[string]*EphemeralTable),

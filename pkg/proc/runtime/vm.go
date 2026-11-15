@@ -3408,8 +3408,8 @@ func recordToMap(rec storage.Record) map[string]any {
 	return m
 }
 
-func matchLike(str, pattern string) bool {
-	return sqlutil.MatchLike(pattern, str, true)
+func matchLike(str, pattern, escape string) bool {
+	return sqlutil.MatchLikeEscape(pattern, str, escape, true)
 }
 
 func isTransientTable(name string) bool {

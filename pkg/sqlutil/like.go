@@ -12,13 +12,18 @@ import (
 // '[^...]' matches any character not in the bracket set/range.
 // If caseInsensitive is true, matching is case-insensitive.
 func MatchLike(pattern, str string, caseInsensitive bool) bool {
+	return MatchLikeEscape(pattern, str, "", caseInsensitive)
+}
+
+// MatchLikeEscape evaluates SQL LIKE matching with an optional custom escape character.
+func MatchLikeEscape(pattern, str, escape string, caseInsensitive bool) bool {
 	if pattern == "%" {
 		return true
 	}
 	if pattern == "" {
 		return str == ""
 	}
-	if !strings.ContainsAny(pattern, "%_[") {
+	if escape == "" && !strings.ContainsAny(pattern, "%_[") {
 		if caseInsensitive {
 			return strings.EqualFold(str, pattern)
 		}
@@ -27,6 +32,14 @@ func MatchLike(pattern, str string, caseInsensitive bool) bool {
 
 	pRunes := []rune(pattern)
 	sRunes := []rune(str)
+
+	var escRune rune
+	if len(escape) > 0 {
+		escRunes := []rune(escape)
+		if len(escRunes) > 0 {
+			escRune = escRunes[0]
+		}
+	}
 
 	pLen := len(pRunes)
 	sLen := len(sRunes)
@@ -38,6 +51,15 @@ func MatchLike(pattern, str string, caseInsensitive bool) bool {
 
 	for sIdx < sLen {
 		if pIdx < pLen {
+			if escRune != 0 && pRunes[pIdx] == escRune && pIdx+1 < pLen {
+				pIdx++
+				if matchRune(pRunes[pIdx], sRunes[sIdx], caseInsensitive) {
+					pIdx++
+					sIdx++
+					continue
+				}
+				goto backtrack
+			}
 			if pRunes[pIdx] == '[' {
 				matched, nextPIdx, isBracket := matchBracket(pRunes, pIdx, pLen, sRunes[sIdx], caseInsensitive)
 				if isBracket {
@@ -90,7 +112,7 @@ func matchBracket(pRunes []rune, pIdx, pLen int, ch rune, caseInsensitive bool) 
 		}
 	}
 	if endIdx == -1 {
-		return false, pIdx, false
+		return false, pIdx, true
 	}
 
 	start := pIdx + 1

@@ -138,7 +138,11 @@ func SplitStatements(query string) []string {
 		}
 
 		if inQuote {
-			if ch == quoteChar && (i == 0 || query[i-1] != '\\') {
+			if ch == quoteChar {
+				if i+1 < n && query[i+1] == quoteChar {
+					i++ // Skip escaped doubled quote ''
+					continue
+				}
 				inQuote = false
 			}
 			continue

@@ -98,6 +98,7 @@ type ClientSession struct {
 	TranCount       int  // T-SQL @@TRANCOUNT transaction nesting depth (0 = autocommit)
 	ddlUndoLog      []DDLUndoOp // LIFO stack of DDL operations executed within current transaction for atomic rollback
 	Vars            map[string]any
+	VarLengths      map[string]int    // @var -> max length constraint (e.g. VARCHAR(1))
 	TableVars       map[string]string // @table_var -> physical table name
 	TempTables      []string          // session-scoped #temp_tables
 	TempTableMap    map[string]string // user #temp_table name -> physical __temp_<sessionID>_tableName

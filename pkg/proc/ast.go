@@ -694,11 +694,12 @@ func (e *BetweenExpr) String() string {
 	return fmt.Sprintf("%s %sBETWEEN %s AND %s", e.Expr.String(), notStr, e.Low.String(), e.High.String())
 }
 
-// LikeExpr represents Expr [NOT] LIKE Pattern
+// LikeExpr represents Expr [NOT] LIKE Pattern [ESCAPE Escape]
 type LikeExpr struct {
 	Expr    Expr
 	Not     bool
 	Pattern Expr
+	Escape  Expr
 }
 
 func (e *LikeExpr) exprNode() {}
@@ -715,7 +716,11 @@ func (e *LikeExpr) String() string {
 	if e.Pattern != nil {
 		patStr = e.Pattern.String()
 	}
-	return fmt.Sprintf("%s %sLIKE %s", exprStr, notStr, patStr)
+	escStr := ""
+	if e.Escape != nil {
+		escStr = fmt.Sprintf(" ESCAPE %s", e.Escape.String())
+	}
+	return fmt.Sprintf("%s %sLIKE %s%s", exprStr, notStr, patStr, escStr)
 }
 
 // IsNullExpr represents Expr IS [NOT] NULL
