@@ -2331,6 +2331,9 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 					continue
 				}
 			}
+			if data.Column == "1" || data.Column == "*" || data.Column == "" {
+				return storage.IntValue(1), nil
+			}
 			if val, ok := r[data.Column]; ok {
 				return toStorageValue(val), nil
 			}
@@ -2354,6 +2357,9 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 		}
 		if f.isPKCol(targetTable, data.WhereCol) {
 			if rec, err := f.tx.Get(targetTable, pkVal); err == nil && rec != nil {
+				if data.Column == "1" || data.Column == "*" || data.Column == "" {
+					return storage.IntValue(1), nil
+				}
 				if v, ok := rec[data.Column]; ok {
 					return v, nil
 				}
@@ -2396,6 +2402,9 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 			}
 		}
 
+		if data.Column == "1" || data.Column == "*" || data.Column == "" {
+			return storage.IntValue(1), nil
+		}
 		if v, ok := rec[data.Column]; ok {
 			return v, nil
 		}

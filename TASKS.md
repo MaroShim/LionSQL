@@ -302,6 +302,7 @@
 | `DONE` | **`PERF-CTE-EPHEMERAL-1`** |  | Durability | P2 | 세션 로컬 에페머럴 CTE 버퍼 및 Zero-DDL 최적화 | [`notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md`](notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md) |  |
 | `DONE` | **`PERF-CTE-LOWERING-VDBE-1`** |  | Durability | P2 | Writable CTE Stored Procedure 바이트코드 Lowering 가속 | [`notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-EXEC-TUPLE-DEFENSIVE-PAD-1`** | `1.0-GA` | Engine | P2 | Volcano 쿼리 실행기 동적 프로젝션 슬라이스 경계 방어 및 가변 폭 튜플 자동 Null 패딩 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`PERF-EXISTS-SUBQUERY-LIMIT-1`** | `1.0-GA` | Engine | P2 | EXISTS (SELECT ...) 구문 평가 시 암시적 LIMIT 1 푸시다운 및 1건 조기 탈출(결함 73) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-GROVE-CONCURRENCY-1`** |  | Durability | P2 | Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 | [`notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 2 (`PERF-HOTSPOT-LATCH-... |
 | `DONE` | **`PERF-HYBRID-TEMPMEM-1`** |  | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OCC-FLAT-DECODE-1`** |  | Storage | P2 | FlatRecord 스캔 디코딩 할당 최적화 (Option A: SSO 2중 할당 제거 및 Arena 슬랩 풀링) |  |  |
@@ -3327,6 +3328,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-12 09:51:04
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+
+---
+
+### [DONE] EXISTS (SELECT ...) 구문 평가 시 암시적 LIMIT 1 푸시다운 및 1건 조기 탈출(결함 73) `PERF-EXISTS-SUBQUERY-LIMIT-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-15 00:49:46
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
 
 ---
 

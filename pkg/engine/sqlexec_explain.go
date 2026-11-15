@@ -820,7 +820,11 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 			offset = mEnd
 			continue
 		}
-		innerRes, err := execSubquery(innerSQL)
+		limitedSQL := ensureExistsLimit1(innerSQL)
+		innerRes, err := execSubquery(limitedSQL)
+		if err != nil {
+			innerRes, err = execSubquery(innerSQL)
+		}
 		if err != nil {
 			// If inner query failed (e.g. contains outer reference), skip so planner can decorrelate
 			offset = mEnd

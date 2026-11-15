@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Performance
+- **Planner & Execution (`PERF-EXISTS-SUBQUERY-LIMIT-1`, Defect 73)**:
+  - Push down implicit `LIMIT 1` and early-exit termination to subqueries nested under `EXISTS (...)` across standalone scalar selection, WHERE predicates, conditional DDL statements (`IF EXISTS (subquery) <DDL>`), and stored procedure bytecode compilation (`*ExistsExpr` with `OpSelectInto` and `OpIsNotNull`).
+  - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
+
 ### Fixed
 - **Engine & DML Semantics (`FIX-UPDATE-SNAPSHOT-COLUMN-SWAP-1`, Defect 56)**:
   - Enforce immutable tuple snapshot evaluation (`origSnapshot := rec.Clone()`) for multi-column `UPDATE` assignments, eliminating intermediate update contamination and guaranteeing atomic column swaps (`SET a = b, b = a`, `SET a = a + b, b = a`).

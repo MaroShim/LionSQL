@@ -797,3 +797,21 @@ func appendOutputRow(projs []outputProj, oldRec, newRec storage.Record, schema *
 	}
 	*outputVals = append(*outputVals, vals)
 }
+
+// ensureExistsLimit1 rewrites an uncorrelated subquery inside an EXISTS clause
+// to push down LIMIT 1, avoiding full-table buffering and enabling early exit on 1 row.
+func ensureExistsLimit1(rawSQL string) string {
+	trimmed := strings.TrimSpace(rawSQL)
+	if trimmed == "" {
+		return rawSQL
+	}
+	if sqlutil.ContainsKeyword(trimmed, "LIMIT", false) || sqlutil.ContainsKeyword(trimmed, "TOP", false) {
+		return rawSQL
+	}
+	semi := ""
+	if strings.HasSuffix(trimmed, ";") {
+		semi = ";"
+		trimmed = strings.TrimSpace(trimmed[:len(trimmed)-1])
+	}
+	return trimmed + " LIMIT 1" + semi
+}

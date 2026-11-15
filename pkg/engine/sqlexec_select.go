@@ -319,7 +319,12 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		after := strings.TrimSpace(trimmed[6:])
 		if strings.HasPrefix(after, "(") && strings.HasSuffix(after, ")") {
 			subSQL := strings.TrimSpace(after[1 : len(after)-1])
-			if res, err := s.executeNestedSessionSQL(cs, subSQL); err == nil && len(res.Rows) > 0 {
+			limitedSQL := ensureExistsLimit1(subSQL)
+			res, err := s.executeNestedSessionSQL(cs, limitedSQL)
+			if err != nil {
+				res, err = s.executeNestedSessionSQL(cs, subSQL)
+			}
+			if err == nil && len(res.Rows) > 0 {
 				return true, "exists"
 			}
 			return false, "exists"

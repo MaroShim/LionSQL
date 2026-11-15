@@ -1603,6 +1603,28 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		})
 		return r, nil
 
+	case *ExistsExpr:
+		tbl := ""
+		var whereVal Expr
+		if e.Query != nil {
+			tbl = e.Query.From.Name
+			whereVal = e.Query.Where
+		}
+		r := c.allocReg()
+		subReg := c.allocReg()
+		c.emit(OpSelectInto, subReg, 0, 0, &SelectIntoData{
+			Column:   "1",
+			Table:    tbl,
+			WhereVal: whereVal,
+		})
+		if !e.Not {
+			c.emit(OpIsNotNull, r, subReg, 0, nil)
+		} else {
+			c.emit(OpIsNull, r, subReg, 0, nil)
+		}
+		c.freeReg(1)
+		return r, nil
+
 	case *CastExpr:
 		srcReg, err := c.compileExpr(e.Expr)
 		if err != nil {

@@ -568,7 +568,13 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		if execSubquery == nil || e.Query == nil {
 			return false, nil
 		}
-		rows, _, err := execSubquery(e.Query.String())
+		subquerySQL := e.Query.String()
+		if e.Query.Limit < 0 && e.Query.LimitExpr == nil {
+			clone := *e.Query
+			clone.Limit = 1
+			subquerySQL = clone.String()
+		}
+		rows, _, err := execSubquery(subquerySQL)
 		hasRows := err == nil && len(rows) > 0
 		if e.Not {
 			return !hasRows, nil

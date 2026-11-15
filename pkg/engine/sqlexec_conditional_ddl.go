@@ -51,7 +51,11 @@ func (s *Coordinator) tryExecConditionalDDL(query string, start time.Time, cs *C
 			if isDDLStatement(body) {
 				thenClause, elseClause := splitTopLevelElse(body)
 
-				subRes, err := s.runInternalQuery(cs, subquery)
+				limitedSQL := ensureExistsLimit1(subquery)
+				subRes, err := s.runInternalQuery(cs, limitedSQL)
+				if err != nil {
+					subRes, err = s.runInternalQuery(cs, subquery)
+				}
 				if err != nil {
 					return nil, true, fmt.Errorf("conditional DDL subquery error: %w", err)
 				}
