@@ -76,6 +76,7 @@ type WALWriter struct {
 	periodicOnce sync.Once
 	stopCh       chan struct{}
 	closed       bool
+	brokenErr    error
 	closeOnce    sync.Once
 	bytesTotal   int64
 	syncCount    atomic.Int64
@@ -184,9 +185,29 @@ func (w *WALWriter) writeFrame(rec WALRecord) (int64, error) {
 		w.mu.Unlock()
 		return 0, fmt.Errorf("WAL writer is closed")
 	}
+	if w.brokenErr != nil {
+		err := w.brokenErr
+		w.mu.Unlock()
+		return 0, err
+	}
 
+	prevOffset := w.bytesTotal
 	n, err := w.file.Write(frame)
+	if err == nil && n != len(frame) {
+		err = io.ErrShortWrite
+	}
 	if err != nil {
+		// If a partial write occurred before the error, truncate back to prevOffset immediately
+		// so partial garbage bytes do not remain in the WAL file ([RULE:AtomicSaves]).
+		if n > 0 {
+			if truncErr := w.file.Truncate(prevOffset); truncErr != nil {
+				w.brokenErr = fmt.Errorf("failed to roll back partial WAL write (%d bytes at offset %d) after write error (%v): %w", n, prevOffset, err, truncErr)
+				bErr := w.brokenErr
+				w.mu.Unlock()
+				return 0, bErr
+			}
+			_, _ = w.file.Seek(prevOffset, io.SeekStart)
+		}
 		w.mu.Unlock()
 		return 0, fmt.Errorf("failed to write WAL frame: %w", err)
 	}
@@ -264,9 +285,9 @@ func (w *WALWriter) Size() int64 {
 	return w.bytesTotal
 }
 
-// Rotate atomically syncs and closes the active WAL file, renames it to rotatedPath,
-// and immediately opens a fresh active WAL file at the original path.
-// This guarantees zero transaction log truncation or data loss during archiving.
+// Rotate atomically syncs the active WAL file, renames it to rotatedPath,
+// opens and verifies a fresh active WAL file at the original path BEFORE closing the old handle,
+// and syncs the parent directory. This guarantees w.file is never left closed on error.
 func (w *WALWriter) Rotate(rotatedPath string) error {
 	w.syncMu.Lock()
 	defer w.syncMu.Unlock()
@@ -277,33 +298,34 @@ func (w *WALWriter) Rotate(rotatedPath string) error {
 		return fmt.Errorf("WAL writer is closed")
 	}
 
-	// 1. Flush any pending buffers to disk
+	// 1. Flush any pending buffers to disk while current file remains open
 	if err := w.file.Sync(); err != nil {
 		return fmt.Errorf("failed to sync WAL file before rotation: %w", err)
 	}
 
-	// 2. Close current file descriptor
-	if err := w.file.Close(); err != nil {
-		return fmt.Errorf("failed to close WAL file for rotation: %w", err)
-	}
-
-	// 3. Atomically rename current file to rotatedPath
+	// 2. Atomically rename current file to rotatedPath while keeping w.file open
 	if err := os.Rename(w.path, rotatedPath); err != nil {
-		// Attempt to reopen original if rename failed
-		reopenFile, _ := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		w.file = reopenFile
 		return fmt.Errorf("failed to rename WAL file to %s: %w", rotatedPath, err)
 	}
 
-	// 4. Open fresh active WAL file at original path
+	// 3. Open fresh active WAL file at original path BEFORE closing the old descriptor
 	newFile, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0644)
 	if err != nil {
+		// Restore original path so the active WAL writer remains intact and usable
+		_ = os.Rename(rotatedPath, w.path)
 		return fmt.Errorf("failed to create fresh WAL file after rotation: %w", err)
 	}
 
+	// 4. Swap active file handle and close old descriptor
+	oldFile := w.file
 	w.file = newFile
 	w.bytesTotal = 0
+	w.brokenErr = nil
 	w.syncedSeq = w.writeSeq
+
+	if err := oldFile.Close(); err != nil {
+		return fmt.Errorf("failed to close rotated WAL file descriptor: %w", err)
+	}
 
 	// 5. Fsync parent directory so the rename (w.path -> rotatedPath) and new file entry are durable on disk
 	if err := syncDir(filepath.Dir(w.path)); err != nil {
@@ -313,6 +335,7 @@ func (w *WALWriter) Rotate(rotatedPath string) error {
 }
 
 // Truncate safely resets the WAL file to 0 bytes after an AOF rewrite.
+// Opens the new truncated file descriptor first and verifies no error occurred before closing the old descriptor.
 func (w *WALWriter) Truncate() error {
 	w.syncMu.Lock()
 	defer w.syncMu.Unlock()
@@ -323,19 +346,24 @@ func (w *WALWriter) Truncate() error {
 		return fmt.Errorf("WAL writer is closed")
 	}
 
-	if err := w.file.Close(); err != nil {
-		return err
-	}
-
-	// Truncate file to empty while preserving O_APPEND semantics
-	file, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0644)
+	// 1. Open truncated file descriptor FIRST while preserving O_APPEND semantics.
+	// If OpenFile fails, w.file remains open and intact.
+	newFile, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to truncate WAL file: %w", err)
 	}
-	w.file = file
+
+	// 2. Swap active file handle and close old descriptor
+	oldFile := w.file
+	w.file = newFile
 	w.bytesTotal = 0
+	w.brokenErr = nil
 	// Everything previously written has been discarded; nothing is pending.
 	w.syncedSeq = w.writeSeq
+
+	if err := oldFile.Close(); err != nil {
+		return fmt.Errorf("failed to close previous WAL file descriptor after truncate: %w", err)
+	}
 
 	return nil
 }

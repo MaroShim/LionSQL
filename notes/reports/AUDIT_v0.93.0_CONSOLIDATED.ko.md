@@ -12,14 +12,14 @@
 
 ## 1. 2중 감사 및 사전 릴리스 결함 색출 요약
 
-릴리스 사전 점검 파이프라인(Gate 0~6 및 4대 확장 강도 테스트) 및 추가 델타 2중 감사(`a1364f05..HEAD`)를 통해 총 19건의 잠재적 엣지 결함을 능동적으로 발굴하고 전원 완치했습니다.
+릴리스 사전 점검 파이프라인(Gate 0~6 및 4대 확장 강도 테스트) 및 추가 델타 2중 감사(`a1364f05..HEAD`)를 통해 총 20건의 잠재적 엣지 결함을 능동적으로 발굴하고 전원 완치했습니다.
 
 | 구분 | 발굴 결함 수 | 완치(Fixed) 수 | 미해결(Open) 수 | 판정 |
 | :--- | :---: | :---: | :---: | :---: |
-| **P0 (치명적 데이터/크래시/상호배제 결함)** | 7건 | 7건 | 0건 | **PASS** |
+| **P0 (치명적 데이터/크래시/상호배제 결함)** | 8건 | 8건 | 0건 | **PASS** |
 | **P1 (기능/호환성/리소스 위생 결함)** | 10건 | 10건 | 0건 | **PASS** |
 | **P2 (테스트 동기화/경계값 조정)** | 2건 | 2건 | 0건 | **PASS** |
-| **합계** | **19건** | **19건** | **0건** | **100% CLEAN** |
+| **합계** | **20건** | **20건** | **0건** | **100% CLEAN** |
 
 ---
 
@@ -47,6 +47,9 @@
 7. **[P0-07] 복구 중 2차 장애(Double-Crash) 시 `wal.aof.compacting` 조기 삭제 및 스냅샷/디렉토리 `fsync` 누락 결함 (`pkg/storage/memengine/memengine.go`, `persistence.go`, `wal.go`)**
    - **원인**: (1) `OpenWithOptions`에서 `wal.aof.compacting`을 메모리로 재생한 직후 디스크에 영구 저장하기 전에 즉시 `os.Remove(compactingPath)`를 호출하여, 복구 도중 재차 크래시가 발생하면 해당 트랜잭션들이 영구 유실됨. (2) `saveDiskSnapshotLocked`에서 `os.WriteFile` 후 `f.Sync()` 없이 `os.Rename`을 수행하고 디렉토리 엔트리 `syncDir()`도 호출하지 않아 정전 시 0바이트 스냅샷 또는 메타데이터 유실 위험 존재.
    - **치료**: (1) `writeFileAtomicDurable` 및 `syncDir`를 도입하여 `tables.mpk.tmp` 작성 -> `f.Sync()` -> `os.Rename` -> `syncDir(e.dataDir)` 순서를 엄격히 강제. (2) 복구 시 `wal.aof.compacting`과 `wal.aof`를 모두 재생한 뒤 `saveDiskSnapshotLocked` 및 디렉토리 동기화가 완전히 성공한 이후에만 `wal.aof.compacting`을 삭제하고 다시 디렉토리 `syncDir`를 수행하도록 수정하여 복구 도중 반복 장애(Double-Crash)에도 100% 멱등 무손실 복구를 보장.
+8. **[P0-08] `WALWriter` 부분 쓰기(Partial Write) 잔재 방치 및 `Rotate`/`Truncate` 시 구 파일 선(先)-닫기로 인한 핸들 파손 결함 (`pkg/storage/memengine/wal.go`)**
+   - **원인**: (1) `writeFrame`에서 `w.file.Write(frame)` 도중 디스크 풀(`ENOSPC`) 등으로 일부 바이트(`n > 0`)만 기록된 채 에러가 반환되면 해당 불완전 바이트가 제거되지 않고 남아 이후 정상 쓰기가 이어질 때 파일 중간 손상을 유발. (2) `Rotate`와 `Truncate`에서 새 파일을 열기 전에 기존 `w.file.Close()`를 먼저 호출하여, 새 파일 오픈 실패 시 `w.file`이 닫힌 상태로 방치됨.
+   - **치료**: (1) `writeFrame`에서 쓰기 오류 발생 시 `n > 0`이면 즉시 `w.file.Truncate(prevOffset)`(실패 시 `w.brokenErr`로 추가 쓰기 차단)를 수행해 불완전 바이트를 제거. (2) `Rotate`와 `Truncate` 모두 새 파일 디스크립터(`newFile`)를 먼저 열고 에러가 없음을 확인한 뒤에야 기존 `oldFile.Close()`를 호출하도록 순서를 역전하여 에러 발생 시에도 기존 WAL 핸들의 무결성을 100% 보존.
 
 ### P1 결함 (호환성, 리소스 위생 및 릴레이셔널 연산 정확도 - 완치 완료)
 7. **[P1-01] `memengine.OpenWithOptions` 초기화 도중 실패 시 WAL 파일 핸들 및 디렉토리 락 누수 (`pkg/storage/memengine/memengine.go`)**

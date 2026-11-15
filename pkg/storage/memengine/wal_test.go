@@ -920,6 +920,66 @@ func TestMemEngine_DoubleCrashDuringCompactionRecoveryPreservesWAL(t *testing.T)
 	}
 }
 
+func TestWAL_RotateAndTruncate_KeepOldFileOpenOnFailure(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lionsql_wal_rot_trunc_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	aofPath := filepath.Join(tempDir, "wal.aof")
+	w, err := NewWALWriter(aofPath, FsyncAlways)
+	if err != nil {
+		t.Fatalf("NewWALWriter failed: %v", err)
+	}
+	defer w.Close()
+
+	// Write record 1
+	if err := w.Append(WALRecord{LSN: 1, Ops: []WALOp{{Type: OpInsert, Table: "t", Key: "1"}}}); err != nil {
+		t.Fatalf("Append 1 failed: %v", err)
+	}
+
+	// 1. Force Rotate to fail by specifying an invalid target directory path
+	invalidRotateTarget := filepath.Join(tempDir, "nonexistent_subdir", "wal.aof.compacting")
+	if err := w.Rotate(invalidRotateTarget); err == nil {
+		t.Fatalf("expected Rotate to fail when target directory does not exist")
+	}
+
+	// Verify w.file was NOT closed and can still append record 2 cleanly
+	if err := w.Append(WALRecord{LSN: 2, Ops: []WALOp{{Type: OpInsert, Table: "t", Key: "2"}}}); err != nil {
+		t.Fatalf("Append 2 after failed Rotate should succeed on preserved descriptor, got: %v", err)
+	}
+
+	// 2. Force Truncate to fail by making wal.aof read-only (0400) so os.OpenFile(O_WRONLY|O_TRUNC) fails,
+	// while the already-open w.file descriptor remains writable!
+	if err := os.Chmod(aofPath, 0400); err != nil {
+		t.Fatalf("Chmod 0400 failed: %v", err)
+	}
+	if err := w.Truncate(); err == nil {
+		_ = os.Chmod(aofPath, 0644)
+		t.Fatalf("expected Truncate to fail on read-only file path")
+	}
+	_ = os.Chmod(aofPath, 0644)
+
+	// Verify w.file was NOT closed by the failed Truncate and can still append record 3 cleanly
+	if err := w.Append(WALRecord{LSN: 3, Ops: []WALOp{{Type: OpInsert, Table: "t", Key: "3"}}}); err != nil {
+		t.Fatalf("Append 3 after failed Truncate should succeed on preserved descriptor, got: %v", err)
+	}
+
+	var replayed []int64
+	maxLSN, err := ReplayWAL(aofPath, func(rec WALRecord) error {
+		replayed = append(replayed, rec.LSN)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ReplayWAL failed: %v", err)
+	}
+	if maxLSN != 3 || len(replayed) != 3 {
+		t.Fatalf("expected all 3 records to be intact and replayable, got maxLSN=%d, replayed=%v", maxLSN, replayed)
+	}
+}
+
+
 
 
 
