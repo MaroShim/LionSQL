@@ -28,6 +28,7 @@ import (
 	"lionsql/pkg/replication"
 	"lionsql/pkg/seed"
 	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/dirlock"
 	"lionsql/pkg/storage/memengine"
 	"lionsql/pkg/storage/wiredtiger"
 	"lionsql/pkg/wire"
@@ -408,6 +409,19 @@ func runServer(args []string) error {
 		) {
 			return nil
 		}
+
+		// 1. Acquire OS-level exclusive directory lock to prevent TOCTOU concurrent instances
+		dirLock, lockErr := dirlock.Acquire(cfg.Server.DataDir)
+		if lockErr != nil {
+			fmt.Printf("\n[LionSQL] Error: Another LionSQL server or process is already running on data directory '%s'.\n", cfg.Server.DataDir)
+			fmt.Printf("         Lock error: %v\n", lockErr)
+			fmt.Println("         To view status:  lionsql status")
+			fmt.Println("         To stop daemon:  lionsql stop")
+			fmt.Println("         To restart:      lionsql restart")
+			fmt.Println()
+			os.Exit(1)
+		}
+		defer dirLock.Release()
 
 		// Prevent multiple server instances from running concurrently on the same data directory
 		if existingPid, err := readPidFile(resolvedPidFile); err == nil && isProcessAlive(existingPid) && existingPid != os.Getpid() {

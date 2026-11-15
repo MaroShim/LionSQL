@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/dirlock"
 )
 
 // CurrentHeapBytes returns the current live heap memory allocated in bytes via runtime/metrics.
@@ -121,6 +122,7 @@ type Engine struct {
 	fkCacheMu        sync.RWMutex
 	fkCache          map[string][]ChildFKRef
 	wal              *WALWriter
+	dirLock          *dirlock.DirLock
 	fsyncPolicy      FsyncPolicy
 	nextLSN          atomic.Int64
 	aofThreshold     int64 // Size threshold in bytes to trigger AOF rewrite compaction
@@ -386,7 +388,7 @@ func (e *Engine) Open(dir string) error {
 }
 
 // OpenWithOptions initializes the engine with explicit Redis-style persistence options.
-func (e *Engine) OpenWithOptions(opts Options) error {
+func (e *Engine) OpenWithOptions(opts Options) (err error) {
 	e.mu.Lock()
 	if e.stopCh != nil {
 		close(e.stopCh)
@@ -399,7 +401,31 @@ func (e *Engine) OpenWithOptions(opts Options) error {
 		_ = e.wal.Close()
 		e.wal = nil
 	}
+	if e.dirLock != nil {
+		_ = e.dirLock.Release()
+		e.dirLock = nil
+	}
 	defer e.mu.Unlock()
+
+	// [Handle Hygiene & Fail-Closed Guard] If initialization fails at any point,
+	// ensure all opened resources (WAL writer, directory lock, background loop)
+	// are closed and reset immediately to prevent dangling handles ([RULE:HandleHygiene]).
+	defer func() {
+		if err != nil {
+			if e.wal != nil {
+				_ = e.wal.Close()
+				e.wal = nil
+			}
+			if e.dirLock != nil {
+				_ = e.dirLock.Release()
+				e.dirLock = nil
+			}
+			if e.stopCh != nil {
+				close(e.stopCh)
+				e.stopCh = nil
+			}
+		}
+	}()
 
 	e.closed = false
 	e.isClosed.Store(false)
@@ -414,6 +440,13 @@ func (e *Engine) OpenWithOptions(opts Options) error {
 
 	if opts.DataDir != "" {
 		e.dataDir = filepath.Clean(opts.DataDir)
+		if opts.EnableAOF || opts.EnableRDB {
+			dl, lockErr := dirlock.Acquire(e.dataDir)
+			if lockErr != nil {
+				return fmt.Errorf("memengine: failed to acquire data directory lock: %w", lockErr)
+			}
+			e.dirLock = dl
+		}
 		if err := os.MkdirAll(e.dataDir, 0755); err != nil {
 			return fmt.Errorf("failed to create data directory: %w", err)
 		}
@@ -517,7 +550,7 @@ func (e *Engine) Close() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	var saveErr, walErr error
+	var saveErr, walErr, lockErr error
 	if e.dataDir != "" && e.opts.EnableRDB {
 		saveErr = e.saveDiskLocked()
 	}
@@ -525,6 +558,10 @@ func (e *Engine) Close() error {
 		walErr = e.wal.Close()
 		e.wal = nil
 	}
-	return errors.Join(saveErr, walErr)
+	if e.dirLock != nil {
+		lockErr = e.dirLock.Release()
+		e.dirLock = nil
+	}
+	return errors.Join(saveErr, walErr, lockErr)
 }
 

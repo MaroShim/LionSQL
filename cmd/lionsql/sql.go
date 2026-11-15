@@ -179,9 +179,8 @@ func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.E
 	var eng storage.Engine
 
 	pidFile := filepath.Join(cleanDir, "lionsql.pid")
-	daemonActive := false
 	if pid, err := readPidFile(pidFile); err == nil && isProcessAlive(pid) {
-		daemonActive = true
+		return nil, nil, fmt.Errorf("cannot access data directory %q directly (LionSQL daemon PID %d is currently running; connect via HTTP/PGWire/TDS or stop the daemon first)", cleanDir, pid)
 	}
 
 	normDisk := strings.ToLower(strings.TrimSpace(diskType))
@@ -189,9 +188,6 @@ func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.E
 	case "wiredtiger", "wt":
 		eng = wiredtiger.New()
 		if err := eng.Open(cleanDir); err != nil {
-			if daemonActive {
-				return nil, nil, fmt.Errorf("failed to open wiredtiger storage at %q (LionSQL daemon is currently running on this data directory; connect via HTTP/PGWire/TDS or stop the daemon first): %w", cleanDir, err)
-			}
 			return nil, nil, fmt.Errorf("failed to open wiredtiger storage at %q: %w", cleanDir, err)
 		}
 	case "compact", "none", "memory", "mem":
@@ -202,9 +198,6 @@ func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.E
 			warnIfMemoryPerformanceDeprecated(mode)
 		}
 		if err := memEng.OpenWithOptions(opts); err != nil {
-			if daemonActive {
-				return nil, nil, fmt.Errorf("failed to open memory storage at %q (LionSQL daemon is currently running on this data directory; connect via HTTP/PGWire/TDS or stop the daemon first): %w", cleanDir, err)
-			}
 			return nil, nil, fmt.Errorf("failed to open memory storage: %w", err)
 		}
 		eng = memEng
