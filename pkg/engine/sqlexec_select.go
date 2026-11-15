@@ -1360,13 +1360,13 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 	isExplicitTx := (cs != nil && cs.Tx != nil)
 	maxAttempts := 1
 	if !isExplicitTx {
-		maxAttempts = 5
+		maxAttempts = 32
 	}
 
 	var lastErr error
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		if attempt > 0 {
-			time.Sleep(time.Duration(attempt*5) * time.Millisecond)
+			time.Sleep(time.Duration(attempt*500+storage.FastRandN(1500)) * time.Microsecond)
 		}
 
 		var tx storage.Transaction

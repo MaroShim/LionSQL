@@ -954,6 +954,9 @@ func runServer(args []string) error {
 
 	shutdownDone := make(chan struct{})
 	go func() {
+		if outboxDispatcher != nil {
+			outboxDispatcher.Stop()
+		}
 		if cdcStreamer != nil {
 			cdcStreamer.Close()
 		}

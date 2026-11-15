@@ -368,9 +368,24 @@ func (s *Server) SetGeneralLogFile(filePath string) error {
 	return nil
 }
 
-// Close gracefully flushes and closes server log writers and session pools.
+// Close gracefully flushes and closes server log writers, background workers, and session pools.
 func (s *Server) Close() error {
-	return s.coordinator.Close()
+	if s.crons != nil {
+		s.crons.Stop()
+	}
+	if s.outboxDispatcher != nil {
+		s.outboxDispatcher.Stop()
+	}
+	if s.webhooks != nil {
+		_ = s.webhooks.Close()
+	}
+	if s.broker != nil {
+		s.broker.Close()
+	}
+	if s.coordinator != nil {
+		return s.coordinator.Close()
+	}
+	return nil
 }
 
 // ExecuteSQL parses and runs one or more SQL statements on the default session.

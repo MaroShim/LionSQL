@@ -5,6 +5,7 @@ import (
 
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/engine"
+	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 )
 
@@ -37,15 +38,16 @@ func TestEngine_DisabledIndexFallbackToTableScan(t *testing.T) {
 	}
 
 	// 3. Mark the index disabled in the schema to simulate post-recovery disabled state
-	schema, err := eng.GetTable("accounts")
-	if err != nil {
-		t.Fatalf("GetTable failed: %v", err)
+	if err := eng.AlterTable("accounts", func(s *storage.TableSchema) error {
+		idx, _, found := s.FindIndex("ix_acc_email")
+		if !found || idx == nil {
+			t.Fatalf("FindIndex failed to locate ix_acc_email")
+		}
+		idx.Disabled = true
+		return nil
+	}); err != nil {
+		t.Fatalf("AlterTable failed: %v", err)
 	}
-	idx, _, found := schema.FindIndex("ix_acc_email")
-	if !found || idx == nil {
-		t.Fatalf("FindIndex failed to locate ix_acc_email")
-	}
-	idx.Disabled = true
 
 	// 4. Verify sys.indexes reports is_disabled = true
 	res, err := coord.ExecuteSQL("SELECT name, is_disabled FROM sys.indexes WHERE name = 'ix_acc_email';")

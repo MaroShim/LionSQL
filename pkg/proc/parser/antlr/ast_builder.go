@@ -127,9 +127,10 @@ func (b *ASTBuilder) VisitCreate_or_alter_procedure(ctx *Create_or_alter_procedu
 		cLexer := proc.NewLexer(clauseText)
 		cParser := proc.NewParser(cLexer)
 		s, sErr := cParser.ParseStatement()
-		if sErr == nil && s != nil {
-			stmts = append(stmts, s)
+		if sErr != nil || s == nil {
+			return nil
 		}
+		stmts = append(stmts, s)
 	}
 
 	var body proc.Statement

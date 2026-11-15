@@ -766,7 +766,7 @@ func (e *Executor) ExecuteInTxWithSessionContext(ctx context.Context, prog *proc
 
 	retVal, err := frame.Execute(0)
 	if err != nil {
-		return nil, err
+		return &ExecutionResult{ActiveTx: frame.tx}, err
 	}
 
 	return frame.buildExecutionResult(start, retVal), nil
@@ -1448,10 +1448,17 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 	for _, trg := range trgs {
 		subFrame := f.executor.newFrame(trg.Program, f.tx)
 		subFrame.callDepth = f.callDepth + 1
+		subFrame.session = f.session
+		subFrame.ctx = f.ctx
+		subFrame.tranCount = f.tranCount
+		subFrame.txFailed = f.txFailed
 		for k, v := range transients {
 			subFrame.transientTables[k] = v
 		}
 		_, err := subFrame.Execute(0)
+		f.tx = subFrame.tx
+		f.tranCount = subFrame.tranCount
+		f.txFailed = subFrame.txFailed
 		logs := subFrame.logs
 		f.executor.releaseFrame(subFrame)
 
@@ -1706,6 +1713,10 @@ func (f *VMFrame) execInsertExec(data *proc.DMLData) (int64, error) {
 
 		subFrame := f.executor.newFrame(prog, f.tx)
 		subFrame.callDepth = f.callDepth + 1
+		subFrame.session = f.session
+		subFrame.ctx = f.ctx
+		subFrame.tranCount = f.tranCount
+		subFrame.txFailed = f.txFailed
 		if f.transientTables != nil {
 			for k, v := range f.transientTables {
 				subFrame.transientTables[k] = v
@@ -1713,6 +1724,9 @@ func (f *VMFrame) execInsertExec(data *proc.DMLData) (int64, error) {
 		}
 		subFrame.bindParams(params)
 		_, err := subFrame.Execute(0)
+		f.tx = subFrame.tx
+		f.tranCount = subFrame.tranCount
+		f.txFailed = subFrame.txFailed
 		if err != nil {
 			f.executor.releaseFrame(subFrame)
 			return 0, err
@@ -3032,6 +3046,10 @@ func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (
 
 	subFrame := f.executor.newFrame(prog, f.tx)
 	subFrame.callDepth = f.callDepth + 1
+	subFrame.session = f.session
+	subFrame.ctx = f.ctx
+	subFrame.tranCount = f.tranCount
+	subFrame.txFailed = f.txFailed
 	if f.transientTables != nil {
 		for k, v := range f.transientTables {
 			subFrame.transientTables[k] = v
@@ -3039,6 +3057,9 @@ func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (
 	}
 	subFrame.bindParams(params)
 	retVal, err := subFrame.Execute(0)
+	f.tx = subFrame.tx
+	f.tranCount = subFrame.tranCount
+	f.txFailed = subFrame.txFailed
 	if err == nil && len(outSlots) > 0 {
 		for i, p := range prog.Params {
 			if i < len(outSlots) && outSlots[i] >= 0 && int(outSlots[i]) < len(f.slots) {

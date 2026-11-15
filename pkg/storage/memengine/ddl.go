@@ -184,11 +184,14 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 		return insertErr
 	}
 
+	td.mu.Lock()
 	if td.Indexes == nil {
 		td.Indexes = make(map[string]*IndexData)
 	}
 	td.Indexes[index.Name] = idxData
 	td.Schema.Indexes = append(td.Schema.Indexes, *index)
+	td.refreshSnapSchemaLocked()
+	td.mu.Unlock()
 
 	if !storage.IsTemporaryTable(index.TableName) {
 		if _, err := e.recordWALLocked([]WALOp{{
@@ -196,6 +199,7 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 			Table:       index.TableName,
 			IndexSchema: index,
 		}}); err != nil {
+			td.mu.Lock()
 			delete(td.Indexes, index.Name)
 			for i := range td.Schema.Indexes {
 				if td.Schema.Indexes[i].Name == index.Name {
@@ -203,6 +207,8 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 					break
 				}
 			}
+			td.refreshSnapSchemaLocked()
+			td.mu.Unlock()
 			return err
 		}
 	}
@@ -218,8 +224,10 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
+	td.mu.Lock()
 	foundIdx, idxPos, exists := td.Schema.FindIndex(indexName)
 	if !exists {
+		td.mu.Unlock()
 		return fmt.Errorf("%w: %s", storage.ErrIndexNotFound, indexName)
 	}
 
@@ -228,6 +236,8 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 
 	sqlutil.MapDeleteFold(td.Indexes, foundIdx.Name)
 	td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], td.Schema.Indexes[idxPos+1:]...)
+	td.refreshSnapSchemaLocked()
+	td.mu.Unlock()
 
 	if !storage.IsTemporaryTable(tableName) {
 		if _, err := e.recordWALLocked([]WALOp{{
@@ -235,10 +245,13 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 			Table:     tableName,
 			IndexName: indexName,
 		}}); err != nil {
+			td.mu.Lock()
 			if backupIdxData != nil {
 				td.Indexes[backupSchemaIdx.Name] = backupIdxData
 			}
 			td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], append([]storage.IndexSchema{backupSchemaIdx}, td.Schema.Indexes[idxPos:]...)...)
+			td.refreshSnapSchemaLocked()
+			td.mu.Unlock()
 			return err
 		}
 	}
@@ -614,7 +627,9 @@ func (e *Engine) GetTable(tableName string) (*storage.TableSchema, error) {
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
-	cp := td.Schema
+	td.mu.RLock()
+	cp := td.Schema.Clone()
+	td.mu.RUnlock()
 	return &cp, nil
 }
 
@@ -624,7 +639,9 @@ func (e *Engine) ListTables() ([]*storage.TableSchema, error) {
 
 	result := make([]*storage.TableSchema, 0, len(e.tables))
 	for _, td := range e.tables {
-		cp := td.Schema
+		td.mu.RLock()
+		cp := td.Schema.Clone()
+		td.mu.RUnlock()
 		result = append(result, &cp)
 	}
 	sort.Slice(result, func(i, j int) bool {

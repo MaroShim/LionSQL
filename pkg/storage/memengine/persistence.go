@@ -81,6 +81,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if e.opts.Mode == MemoryCompact {
 				td.layout = BuildFlatRecordLayout(op.Schema)
 			}
+			td.refreshSnapSchemaLocked()
 			td.initShards()
 			for _, idx := range op.Schema.Indexes {
 				td.Indexes[idx.Name] = &IndexData{
@@ -99,12 +100,18 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if td, exists := sqlutil.MapGetFold(e.tables, oldName); exists {
 				sqlutil.MapDeleteFold(e.tables, oldName)
 				td.Schema.Name = newName
+				td.refreshSnapSchemaLocked()
 				e.tables[newName] = td
 				for _, otherTd := range e.tables {
+					changed := false
 					for i := range otherTd.Schema.ForeignKeys {
 						if strings.EqualFold(otherTd.Schema.ForeignKeys[i].ParentTable, oldName) {
 							otherTd.Schema.ForeignKeys[i].ParentTable = newName
+							changed = true
 						}
+					}
+					if changed {
+						otherTd.refreshSnapSchemaLocked()
 					}
 				}
 				e.rebuildFKCacheLocked()
@@ -184,6 +191,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if !idxFound {
 				td.Schema.Indexes = append(td.Schema.Indexes, *op.IndexSchema)
 			}
+			td.refreshSnapSchemaLocked()
 		case OpDropIndex:
 			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
@@ -194,6 +202,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if idxFound {
 				td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], td.Schema.Indexes[idxPos+1:]...)
 			}
+			td.refreshSnapSchemaLocked()
 		case OpInsert:
 			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
@@ -204,7 +213,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				var err error
 				row, err = storage.DecodeTupleToRow(&td.Schema, op.Data)
 				if err != nil {
-					continue
+					return fmt.Errorf("memengine: wal replay OpInsert tuple decode failed on table %q (pk=%s): %w", td.Schema.Name, op.Key, err)
 				}
 			} else if op.Record != nil {
 				row = td.Schema.RecordToRow(op.Record)
@@ -235,18 +244,18 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			}
 			oldRow, _, err := td.getRowAndVer(op.Key)
 			hadOld := (err == nil)
-			if !hadOld {
-				td.Keys = append(td.Keys, op.Key)
-			}
 			var row storage.Row
 			if len(op.Data) > 0 {
 				var err error
 				row, err = storage.DecodeTupleToRow(&td.Schema, op.Data)
 				if err != nil {
-					continue
+					return fmt.Errorf("memengine: wal replay OpUpdate tuple decode failed on table %q (pk=%s): %w", td.Schema.Name, op.Key, err)
 				}
 			} else if op.Record != nil {
 				row = td.Schema.RecordToRow(op.Record)
+			}
+			if !hadOld {
+				td.Keys = append(td.Keys, op.Key)
 			}
 			td.putRowAndVer(op.Key, row, op.BaseVer+1)
 			if td.Schema.IsPartitioned() {
@@ -561,6 +570,9 @@ func (e *Engine) loadDiskLocked() (int64, error) {
 		if storage.IsTemporaryTable(name) {
 			continue
 		}
+		if td == nil {
+			return 0, fmt.Errorf("RDB snapshot file %q contains nil table entry for %q", mpkFile, name)
+		}
 		e.tables[name] = td
 	}
 	for _, td := range e.tables {
@@ -572,6 +584,7 @@ func (e *Engine) loadDiskLocked() (int64, error) {
 		} else {
 			td.layout = nil
 		}
+		td.refreshSnapSchemaLocked()
 		if td.Versions == nil {
 			td.Versions = make(map[string]int64)
 			for k := range td.Rows {

@@ -79,13 +79,17 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 		tx = cs.Tx
 		isEphemeral = false
 	} else {
-		session, err := s.engine.NewSession()
+		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
 			return nil, err
 		}
-		defer session.Close()
+		defer closeFn()
 
-		t, err := session.BeginTx(storage.TxOptions{})
+		var txOpts storage.TxOptions
+		if cs != nil {
+			txOpts = cs.TxOptions()
+		}
+		t, err := session.BeginTx(txOpts)
 		if err != nil {
 			return nil, err
 		}

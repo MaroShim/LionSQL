@@ -61,24 +61,39 @@ func runSQL(args []string) error {
 	}
 	query := strings.Join(queries, " ")
 
+	visited := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) {
+		visited[f.Name] = true
+	})
+	explicitEngine := visited["engine"] || visited["disk"]
+	explicitMemory := visited["memory"]
+
 	resolvedDisk := *diskType
 	if resolvedDisk == "" {
-		if strings.ToLower(*engineType) == "memory" {
-			resolvedDisk = "compact"
-		} else if *engineType != "" {
-			resolvedDisk = *engineType
-		} else {
-			resolvedDisk = config.DefaultDisk()
+		if explicitEngine {
+			if strings.ToLower(*engineType) == "memory" {
+				resolvedDisk = "compact"
+			} else if *engineType != "" {
+				resolvedDisk = *engineType
+			} else {
+				resolvedDisk = config.DefaultDisk()
+			}
 		}
 	} else if strings.ToLower(resolvedDisk) == "memory" {
 		resolvedDisk = "compact"
 	}
 
-	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, *memoryType)
+	resolvedMem := *memoryType
+	if !explicitMemory {
+		resolvedMem = ""
+	}
+
+	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, resolvedMem)
 	if err != nil {
 		return err
 	}
 	defer eng.Close()
+	defer coord.Close()
 
 	res, err := coord.ExecuteSQL(query)
 	if err != nil {
@@ -118,24 +133,39 @@ func runCLI(args []string) error {
 		*execSQL = strings.Join(remaining, " ")
 	}
 
+	visited := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) {
+		visited[f.Name] = true
+	})
+	explicitEngine := visited["engine"] || visited["disk"]
+	explicitMemory := visited["memory"]
+
 	resolvedDisk := *diskType
 	if resolvedDisk == "" {
-		if strings.ToLower(*engineType) == "memory" {
-			resolvedDisk = "compact"
-		} else if *engineType != "" {
-			resolvedDisk = *engineType
-		} else {
-			resolvedDisk = config.DefaultDisk()
+		if explicitEngine {
+			if strings.ToLower(*engineType) == "memory" {
+				resolvedDisk = "compact"
+			} else if *engineType != "" {
+				resolvedDisk = *engineType
+			} else {
+				resolvedDisk = config.DefaultDisk()
+			}
 		}
 	} else if strings.ToLower(resolvedDisk) == "memory" {
 		resolvedDisk = "compact"
 	}
 
-	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, *memoryType)
+	resolvedMem := *memoryType
+	if !explicitMemory {
+		resolvedMem = ""
+	}
+
+	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, resolvedMem)
 	if err != nil {
 		return err
 	}
 	defer eng.Close()
+	defer coord.Close()
 
 	cfg := cli.Config{
 		Execute:     *execSQL,
@@ -180,10 +210,32 @@ func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.E
 
 	pidFile := filepath.Join(cleanDir, "lionsql.pid")
 	if pid, err := readPidFile(pidFile); err == nil && isProcessAlive(pid) {
-		return nil, nil, fmt.Errorf("cannot access data directory %q directly (LionSQL daemon PID %d is currently running; connect via HTTP/PGWire/TDS or stop the daemon first)", cleanDir, pid)
+		return nil, nil, fmt.Errorf("cannot access data directory %q directly (LionSQL daemon is currently running with PID %d; connect via HTTP/PGWire/TDS or stop the daemon first)", cleanDir, pid)
 	}
 
 	normDisk := strings.ToLower(strings.TrimSpace(diskType))
+	explicitEngine := normDisk != ""
+	if normDisk == "memory" || normDisk == "mem" || normDisk == "none" {
+		normDisk = "compact"
+	} else if normDisk == "wt" {
+		normDisk = "wiredtiger"
+	}
+
+	if existingManifest, err := config.ResolveExistingEngineManifest(cleanDir, normDisk, explicitEngine); err != nil {
+		return nil, nil, err
+	} else if existingManifest != nil {
+		normDisk = existingManifest.Disk
+		if strings.TrimSpace(memoryType) == "" && existingManifest.Memory != "" {
+			memoryType = existingManifest.Memory
+		}
+	}
+	if normDisk == "" {
+		normDisk = config.DefaultDisk()
+	}
+	if strings.TrimSpace(memoryType) == "" {
+		memoryType = config.DefaultMemory()
+	}
+
 	switch normDisk {
 	case "wiredtiger", "wt":
 		eng = wiredtiger.New()
@@ -206,7 +258,9 @@ func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.E
 	}
 
 	cat := catalog.New(eng)
-	_ = cat.SetPersistenceDir(cleanDir)
+	if err := cat.SetPersistenceDir(cleanDir); err != nil {
+		log.Printf("[LionSQL] Warning: Failed to set catalog persistence dir: %v", err)
+	}
 
 	coord := engine.NewCoordinator(cat, eng, engine.Config{
 		DefaultWorkMem: 64 * 1024 * 1024,

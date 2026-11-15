@@ -457,7 +457,10 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 	defer file.Close()
 
 	stat, err := file.Stat()
-	if err != nil || stat.Size() == 0 {
+	if err != nil {
+		return 0, fmt.Errorf("wal: failed to stat WAL file %s: %w", cleanPath, err)
+	}
+	if stat.Size() == 0 {
 		return 0, nil
 	}
 

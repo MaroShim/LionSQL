@@ -987,3 +987,94 @@ func TestP1_High_Scope005_DeleteThenInsertSamePKInSameTx(t *testing.T) {
 	}
 }
 
+func TestRegression_AUDIT_093_001_TableVarNoDoubleApplyOnDeferRollback(t *testing.T) {
+	eng := New()
+	if err := eng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	tvSchema := &storage.TableSchema{
+		Name: "__tv_audit001",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(tvSchema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx.Insert("__tv_audit001", storage.Record{
+		"id":  storage.IntValue(1),
+		"val": storage.StringValue("once"),
+	}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+	// Simulate idiomatic defer tx.Rollback() after tx.Commit()
+	_ = tx.Rollback()
+
+	cnt, err := eng.TableRowCount("__tv_audit001")
+	if err != nil {
+		t.Fatalf("TableRowCount failed: %v", err)
+	}
+	if cnt != 1 {
+		t.Fatalf("expected TableRowCount=1 (no double apply), got %d", cnt)
+	}
+}
+
+func TestRegression_AUDIT_093_005_SnapSchemaRefreshedOnIndexDDL(t *testing.T) {
+	eng := New()
+	if err := eng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "audit005_tbl",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "code", Type: storage.TypeVarChar},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	if err := eng.CreateIndex(&storage.IndexSchema{
+		Name:      "idx_audit005_code",
+		TableName: "audit005_tbl",
+		Columns:   []string{"code"},
+		Unique:    true,
+	}); err != nil {
+		t.Fatalf("CreateIndex failed: %v", err)
+	}
+
+	td := eng.tables["audit005_tbl"]
+	snap := td.snapSchema
+	if snap == nil || len(snap.Indexes) != 1 || snap.Indexes[0].Name != "idx_audit005_code" {
+		t.Fatalf("expected snapSchema to reflect Created index, got %+v", snap)
+	}
+
+	if err := eng.DropIndex("audit005_tbl", "idx_audit005_code"); err != nil {
+		t.Fatalf("DropIndex failed: %v", err)
+	}
+	snapAfter := td.snapSchema
+	if snapAfter == nil || len(snapAfter.Indexes) != 0 {
+		t.Fatalf("expected snapSchema to have 0 indexes after DropIndex, got %+v", snapAfter)
+	}
+}
+
+

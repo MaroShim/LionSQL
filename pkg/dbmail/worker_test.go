@@ -262,3 +262,36 @@ func TestWorker_BackgroundLifecycle(t *testing.T) {
 
 	worker.Stop()
 }
+
+func TestRegression_AUDIT_093_021_SanitizeSMTPHeaderCRLFInjection(t *testing.T) {
+	coord, cleanup := setupTestDBMailCoordinator(t)
+	defer cleanup()
+
+	_, err := coord.ExecuteSQL("EXEC msdb.dbo.sp_send_dbmail @recipients = 'victim@example.com\r\nBcc: attacker@evil.com', @subject = 'Safe\r\nX-Injected: pwned', @body = 'Hello';")
+	if err != nil {
+		t.Fatalf("queue email failed: %v", err)
+	}
+
+	cfg := DefaultConfig()
+	cfg.FromEmail = "bot@lionsql.local\r\nX-Evil: 1"
+	cfg.FromName = "LionSQL\r\nAdmin"
+	client := NewCoordinatorClient(coord)
+	worker := NewWorker(cfg, client)
+
+	var capturedMsg string
+	worker.SetSendMailFunc(func(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
+		capturedMsg = string(msg)
+		return nil
+	})
+
+	count, err := worker.ProcessBatch(context.Background())
+	if err != nil {
+		t.Fatalf("ProcessBatch failed: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 item processed, got %d", count)
+	}
+	if strings.Contains(capturedMsg, "\r\nX-Injected:") || strings.Contains(capturedMsg, "\r\nBcc:") || strings.Contains(capturedMsg, "\r\nX-Evil:") {
+		t.Fatalf("CRLF injection was not sanitized in headers: %q", capturedMsg)
+	}
+}

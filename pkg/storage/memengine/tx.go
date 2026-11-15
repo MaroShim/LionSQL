@@ -55,6 +55,7 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 	tx.commitLSN = 0
 	tx.commitTimestamp = 0
 	tx.closed = false
+	tx.committed = false
 	tx.inPool = false
 	if opts.ReadOnly {
 		tx.snapTables = s.engine.tablesAtomic.Load()
@@ -191,6 +192,7 @@ type Transaction struct {
 	tableNames        []string
 	neededShards      []shardRef
 	closed            bool
+	committed         bool
 	inPool            bool
 }
 
@@ -198,8 +200,7 @@ func (tx *Transaction) resetForPoolLocked() {
 	tx.engine = nil
 	tx.snapshotLSN = 0
 	tx.snapshotTimestamp = 0
-	tx.commitLSN = 0
-	tx.commitTimestamp = 0
+	tx.committed = false
 	tx.snapTables = nil
 
 	// Downsize maps if oversized, else clear() to prevent GC memory retention ([RULE:BoundedBuffers])
@@ -2045,8 +2046,18 @@ func (tx *Transaction) Commit() error {
 	tx.closed = true
 
 	if tx.opts.ReadOnly || len(tx.changes) == 0 {
+		tx.committed = true
 		return nil
 	}
+
+	defer func() {
+		if !tx.committed {
+			_ = tx.commitTableVariablesLocked()
+			if tx.changes != nil {
+				clear(tx.changes)
+			}
+		}
+	}()
 
 	// 1. Collect distinct table names and affected shards using 64-bit masks (zero nested map allocations)
 	if tx.tableSet == nil {
@@ -2510,6 +2521,11 @@ func (tx *Transaction) Commit() error {
 	// Release shard and table locks after WAL commit is durable
 	unlockAll()
 
+	tx.committed = true
+	if tx.changes != nil {
+		clear(tx.changes)
+	}
+
 	return nil
 }
 
@@ -2521,11 +2537,13 @@ func (tx *Transaction) Rollback() error {
 		return storage.ErrTxClosed
 	}
 
-	// Commit any changes to table variables (@table_var / __tv_*)
+	// Commit any changes to table variables (@table_var / __tv_*) only if not already committed.
 	// Per MS SQL Server T-SQL standard, table variables are exempt from transaction rollback.
 	var tvErr error
-	if err := tx.commitTableVariablesLocked(); err != nil {
-		tvErr = fmt.Errorf("memengine: failed to commit table variable changes during rollback: %w", err)
+	if !tx.committed {
+		if err := tx.commitTableVariablesLocked(); err != nil {
+			tvErr = fmt.Errorf("memengine: failed to commit table variable changes during rollback: %w", err)
+		}
 	}
 
 	tx.closed = true

@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"net"
 	"testing"
+
+	"lionsql/pkg/storage"
 )
 
 // sendNamedRPC sends an RPCRequest addressed by procedure name (as go-mssqldb, tedious and pymssql do).
@@ -337,4 +339,38 @@ END;
 	if doneOffset < 0 || statusOffset >= doneOffset {
 		t.Fatalf("expected RETURNSTATUS (offset %d) to precede DONEPROC (offset %d)", statusOffset, doneOffset)
 	}
+}
+
+func TestRegression_AUDIT_093_019_StorageValueNullSerialization(t *testing.T) {
+	cols := []ColumnInfo{
+		{Name: "id", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "name", Type: TypeNVarChar, Size: 100, Nullable: true},
+	}
+	rowWithTypedNull := map[string]any{
+		"id":   1,
+		"name": unwrapTdsOutputValue(nil),
+	}
+	// Verify isNilTdsValue handles nil and typed storage.Value{IsNull: true}
+	var buf bytes.Buffer
+	WriteRowDirect(&buf, cols, map[string]any{
+		"id":   1,
+		"name": nil,
+	})
+	expectedNilBytes := append([]byte(nil), buf.Bytes()...)
+
+	// Compare with storage.NullValue(storage.TypeVarChar)
+	buf.Reset()
+	WriteRowDirect(&buf, cols, map[string]any{
+		"id":   storage.IntValue(1),
+		"name": storage.NullValue(storage.TypeVarChar),
+	})
+	if !bytes.Equal(buf.Bytes(), expectedNilBytes) {
+		t.Fatalf("expected storage.Value{IsNull: true} to serialize identically to nil in ROW token: got %x, want %x", buf.Bytes(), expectedNilBytes)
+	}
+	nbcrow1 := BuildNBCRow(cols, []any{1, nil})
+	nbcrow2 := BuildNBCRow(cols, []any{storage.IntValue(1), storage.NullValue(storage.TypeVarChar)})
+	if !bytes.Equal(nbcrow1, nbcrow2) {
+		t.Fatalf("expected storage.Value{IsNull: true} to serialize identically to nil in NBCROW token: got %x, want %x", nbcrow2, nbcrow1)
+	}
+	_ = rowWithTypedNull
 }

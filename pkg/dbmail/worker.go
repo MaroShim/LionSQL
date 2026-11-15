@@ -255,7 +255,9 @@ func (w *Worker) ProcessBatch(ctx context.Context) (int, error) {
 			updateSQL := fmt.Sprintf(`UPDATE sysmail_mailitems 
 				SET sent_status = 'sent', sent_date = CURRENT_TIMESTAMP, last_mod_date = CURRENT_TIMESTAMP 
 				WHERE mailitem_id = %d;`, item.ID)
-			_, _ = w.client.Exec(ctx, updateSQL)
+			if _, uerr := w.client.Exec(ctx, updateSQL); uerr != nil {
+				return processedCount, fmt.Errorf("failed to update sent_status for mailitem_id %d: %w", item.ID, uerr)
+			}
 
 			logSQL := fmt.Sprintf(`INSERT INTO sysmail_log (log_id, mailitem_id, event_type, log_date, description)
 				VALUES (%d, %d, 'information', CURRENT_TIMESTAMP, 'Mail item %d sent successfully.');`, logID, item.ID, item.ID)
@@ -265,7 +267,9 @@ func (w *Worker) ProcessBatch(ctx context.Context) (int, error) {
 			updateSQL := fmt.Sprintf(`UPDATE sysmail_mailitems 
 				SET sent_status = 'failed', last_mod_date = CURRENT_TIMESTAMP 
 				WHERE mailitem_id = %d;`, item.ID)
-			_, _ = w.client.Exec(ctx, updateSQL)
+			if _, uerr := w.client.Exec(ctx, updateSQL); uerr != nil {
+				return processedCount, fmt.Errorf("failed to update failed status for mailitem_id %d: %w", item.ID, uerr)
+			}
 
 			desc := strings.ReplaceAll(sendErr.Error(), "'", "''")
 			logSQL := fmt.Sprintf(`INSERT INTO sysmail_log (log_id, mailitem_id, event_type, log_date, description)
@@ -278,10 +282,16 @@ func (w *Worker) ProcessBatch(ctx context.Context) (int, error) {
 	return processedCount, nil
 }
 
+func sanitizeSMTPHeader(s string) string {
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	return s
+}
+
 func (w *Worker) dispatchItem(sendFn SendMailFunc, item MailItem) error {
-	from := item.FromAddress
+	from := sanitizeSMTPHeader(item.FromAddress)
 	if from == "" {
-		from = w.cfg.FromEmail
+		from = sanitizeSMTPHeader(w.cfg.FromEmail)
 	}
 
 	toRecipients := parseEmailList(item.Recipients)
@@ -305,7 +315,7 @@ func (w *Worker) dispatchItem(sendFn SendMailFunc, item MailItem) error {
 
 	var msgBuf bytes.Buffer
 	if w.cfg.FromName != "" {
-		msgBuf.WriteString(fmt.Sprintf("From: %s <%s>\r\n", w.cfg.FromName, from))
+		msgBuf.WriteString(fmt.Sprintf("From: %s <%s>\r\n", sanitizeSMTPHeader(w.cfg.FromName), from))
 	} else {
 		msgBuf.WriteString(fmt.Sprintf("From: %s\r\n", from))
 	}
@@ -316,9 +326,9 @@ func (w *Worker) dispatchItem(sendFn SendMailFunc, item MailItem) error {
 		msgBuf.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(ccRecipients, ", ")))
 	}
 	if item.ReplyTo != "" {
-		msgBuf.WriteString(fmt.Sprintf("Reply-To: %s\r\n", item.ReplyTo))
+		msgBuf.WriteString(fmt.Sprintf("Reply-To: %s\r\n", sanitizeSMTPHeader(item.ReplyTo)))
 	}
-	msgBuf.WriteString(fmt.Sprintf("Subject: %s\r\n", item.Subject))
+	msgBuf.WriteString(fmt.Sprintf("Subject: %s\r\n", sanitizeSMTPHeader(item.Subject)))
 	msgBuf.WriteString("MIME-Version: 1.0\r\n")
 	msgBuf.WriteString(fmt.Sprintf("Content-Type: %s\r\n", contentType))
 	msgBuf.WriteString("\r\n")
@@ -420,7 +430,7 @@ func parseEmailList(s string) []string {
 	for _, part := range strings.FieldsFunc(s, func(r rune) bool {
 		return r == ';' || r == ','
 	}) {
-		trimmed := strings.TrimSpace(part)
+		trimmed := strings.TrimSpace(sanitizeSMTPHeader(part))
 		if trimmed != "" {
 			list = append(list, trimmed)
 		}

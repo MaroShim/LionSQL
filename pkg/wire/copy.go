@@ -401,7 +401,13 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 		}
 		defer localSess.Close()
 
-		tx, err = localSess.BeginTx(storage.TxOptions{})
+		var txOpts storage.TxOptions
+		if s.coordinator != nil {
+			if cs := s.coordinator.GetSession(sessID); cs != nil {
+				txOpts = cs.TxOptions()
+			}
+		}
+		tx, err = localSess.BeginTx(txOpts)
 		if err != nil {
 			_ = WriteError(conn, fmt.Sprintf("failed to begin transaction: %v", err))
 			_ = s.writeReady(conn, sessID)

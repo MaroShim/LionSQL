@@ -1801,10 +1801,13 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 	// 5. ALTER TABLE <table> ADD [CONSTRAINT <name>] CHECK (...)
 	if sqlutil.HasPrefixKeyword(body, "ADD") && (sqlutil.ContainsKeyword(body, "CHECK", false) || strings.Contains(bodyUpper, "CHECK(")) && !sqlutil.ContainsKeyword(body, "COLUMN", false) {
 		if checkExpr := parseColumnCheckExpr(body); checkExpr != "" {
-			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 				sch.CheckConstraints = append(sch.CheckConstraints, checkExpr)
 				return nil
-			})
+			}); err != nil {
+				return nil, err
+			}
+			s.InvalidatePKBypassCache()
 		}
 		return &QueryResult{
 			Success:    true,
@@ -1907,16 +1910,22 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		if ddIdx != -1 {
 			colName := cleanIdentifier(strings.TrimSpace(afterAlter[:ddIdx]))
 			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				found := false
 				for i := range sch.Columns {
 					if strings.EqualFold(sch.Columns[i].Name, colName) {
 						sch.Columns[i].Default = ""
+						found = true
 						break
 					}
+				}
+				if !found {
+					return fmt.Errorf("%w: column %q does not exist in table %q", storage.ErrColumnNotFound, colName, tableName)
 				}
 				return nil
 			}); err != nil {
 				return nil, err
 			}
+			s.InvalidatePKBypassCache()
 			return &QueryResult{
 				Success:    true,
 				Command:    "ALTER TABLE",
@@ -1937,16 +1946,22 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			colName := cleanIdentifier(strings.TrimSpace(afterAlter[:sdIdx]))
 			defExpr := cleanDefaultExpr(strings.TrimSpace(afterAlter[sdIdx+len("SET DEFAULT"):]))
 			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				found := false
 				for i := range sch.Columns {
 					if strings.EqualFold(sch.Columns[i].Name, colName) {
 						sch.Columns[i].Default = defExpr
+						found = true
 						break
 					}
+				}
+				if !found {
+					return fmt.Errorf("%w: column %q does not exist in table %q", storage.ErrColumnNotFound, colName, tableName)
 				}
 				return nil
 			}); err != nil {
 				return nil, err
 			}
+			s.InvalidatePKBypassCache()
 			return &QueryResult{
 				Success:    true,
 				Command:    "ALTER TABLE",
@@ -1983,16 +1998,22 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			}
 			newType := parseSQLDataType(baseType)
 			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				found := false
 				for i := range sch.Columns {
 					if strings.EqualFold(sch.Columns[i].Name, colName) {
 						sch.Columns[i].Type = newType
+						found = true
 						break
 					}
+				}
+				if !found {
+					return fmt.Errorf("%w: column %q does not exist in table %q", storage.ErrColumnNotFound, colName, tableName)
 				}
 				return nil
 			}); err != nil {
 				return nil, err
 			}
+			s.InvalidatePKBypassCache()
 			return &QueryResult{
 				Success:    true,
 				Command:    "ALTER TABLE",
@@ -2039,16 +2060,22 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			oldName := cleanIdentifier(strings.TrimSpace(afterRename[:toIdx]))
 			newName := cleanIdentifier(strings.TrimSpace(afterRename[toIdx+len("TO"):]))
 			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				found := false
 				for i := range sch.Columns {
 					if strings.EqualFold(sch.Columns[i].Name, oldName) {
 						sch.Columns[i].Name = newName
+						found = true
 						break
 					}
+				}
+				if !found {
+					return fmt.Errorf("%w: column %q does not exist in table %q", storage.ErrColumnNotFound, oldName, tableName)
 				}
 				return nil
 			}); err != nil {
 				return nil, err
 			}
+			s.InvalidatePKBypassCache()
 			if cs != nil {
 				cs.Mu.Lock()
 				if cs.Tx != nil {
@@ -2086,16 +2113,22 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		if nullIdx != -1 {
 			colName := cleanIdentifier(strings.TrimSpace(afterAlter[:nullIdx]))
 			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				found := false
 				for i := range sch.Columns {
 					if strings.EqualFold(sch.Columns[i].Name, colName) {
 						sch.Columns[i].Nullable = isDrop
+						found = true
 						break
 					}
+				}
+				if !found {
+					return fmt.Errorf("%w: column %q does not exist in table %q", storage.ErrColumnNotFound, colName, tableName)
 				}
 				return nil
 			}); err != nil {
 				return nil, err
 			}
+			s.InvalidatePKBypassCache()
 			return &QueryResult{
 				Success:    true,
 				Command:    "ALTER TABLE",
@@ -2111,11 +2144,17 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		if sqlutil.HasPrefixKeyword(rest, "COLUMN") {
 			rest = strings.TrimSpace(rest[len("COLUMN"):])
 		}
+		dropIfExists := false
 		if sqlutil.HasPrefixKeyword(rest, "IF EXISTS") {
+			dropIfExists = true
 			rest = strings.TrimSpace(rest[len("IF EXISTS"):])
 		}
 		var droppedCols []string
 		for _, part := range strings.Split(rest, ",") {
+			if sqlutil.HasPrefixKeyword(strings.TrimSpace(part), "IF EXISTS") {
+				dropIfExists = true
+				part = strings.TrimSpace(strings.TrimSpace(part)[len("IF EXISTS"):])
+			}
 			c := cleanIdentifier(part)
 			if c != "" && !strings.EqualFold(c, "IF") && !strings.EqualFold(c, "EXISTS") {
 				droppedCols = append(droppedCols, c)
@@ -2132,6 +2171,13 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 				}
 			}
 			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				if !dropIfExists {
+					for _, dc := range droppedCols {
+						if _, _, found := sch.FindColumn(dc); !found {
+							return fmt.Errorf("%w: column %q does not exist in table %q", storage.ErrColumnNotFound, dc, tableName)
+						}
+					}
+				}
 				newCols := make([]storage.Column, 0, len(sch.Columns))
 				for _, col := range sch.Columns {
 					shouldDrop := false
@@ -2150,6 +2196,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			}); err != nil {
 				return nil, err
 			}
+			s.InvalidatePKBypassCache()
 			if cs != nil {
 				cs.Mu.Lock()
 				if cs.Tx != nil {

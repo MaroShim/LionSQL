@@ -26,6 +26,7 @@
 | `PENDING` | **`ARCH-PARALLEL-SCAN-1`** | `v1.99.0` | Engine | P2 | 멀티코어 병렬 분석 쿼리 실행기 (ParallelSeqScan) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** |  | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
+| `DONE` | **`AUDIT-093-PRE-RELEASE`** |  | QUALITY | P2 | Pre-v0.93.0 Dual-AI Adversarial Code Audit (v0.92.0..HEAD, 22 Defects Remediated) | [`notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md`](notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md) |  |
 | `DONE` | **`AUDIT-135-DUAL-REVIEW`** |  | Integrity | P1 | 전 소스코드 135단계 듀얼 AI 정밀 코드 리뷰 및 엣지 케이스 감사 | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) | 135/135 스코프 완주 (총 134건 결함 식별 및 등록 완료) |
 | `DONE` | **`AUDIT-CORE-DEEP-RESCAN`** |  | Integrity | P1 | 12대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan) | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) |  |
 | `DONE` | **`AUDIT-CROSS-CONTAINS`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사: strings.Contains 기반 SQL 키워드/연산자 단순 매칭 안티패턴 발굴 및 토크나이저 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
@@ -533,6 +534,12 @@
 **Details & Resolution**:
 - **설계 계획서**: [`notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/ARCH_VDBE_ROUTING_1_PLAN.ko.md)
 - **목표**: `pkg/wire` 및 `pkg/engine`의 문자열 매칭(`strings.HasPrefix(cs.ID, "pg-")`, `FROM (` 슬라이싱) 휴리스틱을 완전 제거하고, AST 노드와 카탈로그/세션 Dialect 기반의 견고한 역량 검증으로 전환
+
+---
+
+### [DONE] Pre-v0.93.0 Dual-AI Adversarial Code Audit (v0.92.0..HEAD, 22 Defects Remediated) `AUDIT-093-PRE-RELEASE`
+- **Domain**: QUALITY | **Priority**: P2 | **Updated**: 2026-11-15 14:13:44
+- **Plan Doc**: [`notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md`](notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md)
 
 ---
 

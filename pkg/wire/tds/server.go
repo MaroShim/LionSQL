@@ -988,7 +988,7 @@ func (s *Server) parseLogin7(payload []byte, sess *ConnectionSession) {
 func (sess *ConnectionSession) buildRow(cols []ColumnInfo, values []any) []byte {
 	if sess != nil && sess.TDSVersion >= 0x73000000 {
 		for _, v := range values {
-			if v == nil {
+			if isNilTdsValue(v) {
 				return BuildNBCRow(cols, values)
 			}
 		}

@@ -672,6 +672,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 				c.varTypes[varName] = storage.TypeInt
 			}
 			c.emit(OpStoreVar, valReg, slot, 0, varName)
+			c.freeReg(1)
 		}
 		return nil
 
@@ -1083,6 +1084,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			mode = 1
 		}
 		c.emit(OpWaitfor, valReg, mode, 0, nil)
+		c.freeReg(1)
 		return nil
 
 	case *GeneralSelectStmt:
@@ -1168,6 +1170,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 					return err
 				}
 				jmpFalse = c.emit(OpJumpIfFalse, wReg, 0, 0, nil)
+				c.freeReg(1)
 			}
 
 			c.emit(OpResultRow, startReg, count, 0, &ResultRowData{
@@ -1176,6 +1179,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 				Count:    count,
 				Regs:     projRegs,
 			})
+			c.freeReg(count)
 
 			if jmpFalse != -1 {
 				c.patchJumpTarget(jmpFalse, c.currentPC())

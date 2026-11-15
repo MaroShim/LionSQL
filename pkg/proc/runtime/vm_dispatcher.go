@@ -992,7 +992,7 @@ vmLoop:
 		}
 
 		// Fast-path Direct Row Insert: bypass Record map allocations when schema matches and no triggers exist
-		canDirectInsert := !isTransientTable(targetTable) && tableSchema != nil && !tableSchema.HasCheckConstraints() && !hasTriggers && len(cols) == len(tableSchema.Columns) && len(data.ValExprs) == len(tableSchema.Columns) && identityCol == nil
+		canDirectInsert := !isTransientTable(targetTable) && tableSchema != nil && !tableSchema.HasCheckConstraints() && !hasTriggers && len(cols) == len(tableSchema.Columns) && len(data.ValExprs) == len(tableSchema.Columns) && identityCol == nil && (len(data.OutputCols) == 0 || len(data.IntoVars) > 0)
 		if canDirectInsert {
 			for i, col := range cols {
 				if !strings.EqualFold(col, tableSchema.Columns[i].Name) {
@@ -1008,6 +1008,7 @@ vmLoop:
 				f.rowScratch = f.rowScratch[:len(tableSchema.Columns)]
 			}
 			allFast := true
+			var notNullErr error
 			for i := range tableSchema.Columns {
 				stVal, ok := f.evalRowExprFast(data.ValExprs[i])
 				if !ok {
@@ -1015,7 +1016,11 @@ vmLoop:
 					break
 				}
 				colSchema := tableSchema.Columns[i]
-				if colSchema.Type != stVal.Type {
+				if !colSchema.Nullable && stVal.IsNull {
+					notNullErr = fmt.Errorf("cannot insert the value NULL into column '%s', table '%s'; column does not allow nulls (%w)", colSchema.Name, targetTable, storage.ErrNotNullViolation)
+					break
+				}
+				if !stVal.IsNull && colSchema.Type != stVal.Type {
 					if colSchema.Type == storage.TypeDecimal && stVal.Type == storage.TypeFloat && colSchema.Scale >= 0 {
 						stVal = proc.ParseLiteralDefault(strconv.FormatFloat(stVal.FVal, 'f', colSchema.Scale, 64), colSchema.Type)
 					} else {
@@ -1026,6 +1031,12 @@ vmLoop:
 				if (strings.EqualFold(colSchema.Name, "id") || strings.HasSuffix(strings.ToLower(colSchema.Name), "id")) && stVal.Type == storage.TypeInt && !stVal.IsNull {
 					f.lastIdentity = stVal.IVal
 				}
+			}
+			if notNullErr != nil {
+				if catchErr := f.handleCatch(notNullErr, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
 			}
 			if allFast {
 				if err := f.tx.InsertRow(targetTable, storage.Row{Values: f.rowScratch}); err != nil {

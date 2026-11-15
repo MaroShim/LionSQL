@@ -655,6 +655,7 @@ var tdsRowBufferPool = sync.Pool{
 
 // writeColumnValue serializes a non-NULL column value according to its column type.
 func writeColumnValue(buf *bytes.Buffer, col ColumnInfo, val any) {
+	val = unwrapTdsOutputValue(val)
 	switch col.Type {
 	case TypeIntN:
 		intVal := toInt64(val)
@@ -869,7 +870,7 @@ func WriteRowDirect(destBuf *bytes.Buffer, cols []ColumnInfo, row map[string]any
 
 	for _, col := range cols {
 		val := getRowValueCaseInsensitive(row, col.Name)
-		if val == nil {
+		if isNilTdsValue(val) {
 			switch col.Type {
 			case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN, TypeDateN, TypeTimeN, TypeDateTime2N, TypeDateTimeOffsetN, TypeGuid:
 				destBuf.WriteByte(0) // Length 0 indicates NULL
@@ -910,7 +911,7 @@ func BuildRow(cols []ColumnInfo, values []any) []byte {
 			val = values[i]
 		}
 
-		if val == nil {
+		if isNilTdsValue(val) {
 			switch col.Type {
 			case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN, TypeDateN, TypeTimeN, TypeDateTime2N, TypeDateTimeOffsetN, TypeGuid:
 				buf.WriteByte(0) // Length 0 indicates NULL
@@ -962,7 +963,7 @@ func BuildNBCRow(cols []ColumnInfo, values []any) []byte {
 		if i < len(values) {
 			val = values[i]
 		}
-		if val == nil {
+		if isNilTdsValue(val) {
 			bitmap[i/8] |= 1 << (i % 8)
 		}
 	}
@@ -1007,7 +1008,7 @@ func WriteNBCRowDirect(destBuf *bytes.Buffer, cols []ColumnInfo, row map[string]
 
 	for i := 0; i < numCols; i++ {
 		val := getRowValueCaseInsensitive(row, cols[i].Name)
-		if val == nil {
+		if isNilTdsValue(val) {
 			bitmap[i/8] |= 1 << (i % 8)
 		}
 	}

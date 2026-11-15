@@ -145,6 +145,9 @@ func EncodeRow(schema *TableSchema, row Row) ([]byte, error) {
 	}
 
 	numCols := len(schema.Columns)
+	if numCols > math.MaxUint16 {
+		return nil, fmt.Errorf("tuple: column count %d exceeds uint16 limit (%d)", numCols, math.MaxUint16)
+	}
 	nullBitmapLen := (numCols + 7) / 8
 
 	buf := make([]byte, 4+nullBitmapLen, 64)
@@ -158,6 +161,9 @@ func EncodeRowToBuffer(schema *TableSchema, row Row, buf []byte) ([]byte, error)
 	}
 
 	numCols := len(schema.Columns)
+	if numCols > math.MaxUint16 {
+		return nil, fmt.Errorf("tuple: column count %d exceeds uint16 limit (%d)", numCols, math.MaxUint16)
+	}
 	nullBitmapLen := (numCols + 7) / 8
 
 	neededLen := 4 + nullBitmapLen

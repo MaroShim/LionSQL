@@ -1121,6 +1121,13 @@ func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, st
 
 	if activeTx != nil {
 		res, err = s.executor.ExecuteInTxWithSessionContext(ctx, prog, argMap, activeTx, sess, nil)
+		if res != nil && res.ActiveTx != nil && cs != nil {
+			cs.Mu.Lock()
+			if cs.Tx == activeTx {
+				cs.Tx = res.ActiveTx
+			}
+			cs.Mu.Unlock()
+		}
 	} else {
 		session, closeFn, acqErr := s.acquireSessionForQuery(cs)
 		if acqErr != nil {
@@ -1544,7 +1551,11 @@ func (s *Coordinator) execAnonymousBlock(query string, start time.Time, cs *Clie
 		createdSession = sess
 		defer sess.Close()
 
-		t, err := sess.BeginTx(storage.TxOptions{})
+		var txOpts storage.TxOptions
+		if cs != nil {
+			txOpts = cs.TxOptions()
+		}
+		t, err := sess.BeginTx(txOpts)
 		if err != nil {
 			return nil, err
 		}

@@ -522,15 +522,31 @@ func (cs *ClientSession) ExecuteProgram(
 	if cs.Tx != nil {
 		tx := cs.Tx
 		sess := cs.Session
+		cs.sessInUse = true
+		cs.Mu.Unlock()
+
 		res, err = exec.ExecuteInTxWithSessionContext(ctx, prog, paramMap, tx, sess, nil)
+
+		cs.Mu.Lock()
+		cs.sessInUse = false
 		cs.lastUsedAt = time.Now()
+		if res != nil && res.ActiveTx != nil {
+			cs.Tx = res.ActiveTx
+		}
 		if err != nil {
 			isTimeoutOrCancel := errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
 			if cs.IsPostgres() || isTimeoutOrCancel {
 				cs.TxFailed = true
 			}
 		}
+		drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
 		cs.Mu.Unlock()
+		if drainTx != nil {
+			_ = drainTx.Rollback()
+		}
+		if drainFn != nil {
+			drainFn(drainSess)
+		}
 		return res, false, err
 	}
 

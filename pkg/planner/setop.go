@@ -218,23 +218,6 @@ func extractTrailingOrderByAndLimit(sql string) (query string, orderBy string, l
 
 	query = trimmed
 	return
-
-	if orderByIdx != -1 && limitIdx == -1 {
-		query = strings.TrimSpace(trimmed[:orderByIdx])
-		orderBy = strings.TrimSpace(trimmed[orderByIdx+8:])
-		return
-	}
-
-	if orderByIdx == -1 && limitIdx != -1 {
-		query = strings.TrimSpace(trimmed[:limitIdx])
-		limitStr := strings.TrimSpace(trimmed[limitIdx+5:])
-		if lim, err := strconv.ParseInt(limitStr, 10, 64); err == nil {
-			limit = lim
-		}
-		return
-	}
-
-	return trimmed, "", -1
 }
 
 // BuildSetOpPlan constructs a left-deep PlanNode tree combining subplans with SetOp, Sort, and Limit nodes.

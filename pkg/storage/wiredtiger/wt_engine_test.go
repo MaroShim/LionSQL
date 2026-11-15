@@ -1347,5 +1347,173 @@ func TestP1_Batch3_SessionResetAfterCommitConflict(t *testing.T) {
 	}
 }
 
+func TestRegression_AUDIT_093_002_RollbackToPreservesUnchangedUniqueIndex(t *testing.T) {
+	tmpDir := t.TempDir()
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "users_sp",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "email", Type: storage.TypeVarChar},
+			{Name: "score", Type: storage.TypeInt},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_users_sp_email", Columns: []string{"email"}, Unique: true},
+			{Name: "idx_users_sp_score", Columns: []string{"score"}, Unique: false},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx1, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx 1 failed: %v", err)
+	}
+	if err := tx1.Insert("users_sp", storage.Record{
+		"id":    storage.IntValue(1),
+		"email": storage.StringValue("alice@example.com"),
+		"score": storage.IntValue(10),
+	}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx1.Commit(); err != nil {
+		t.Fatalf("Commit 1 failed: %v", err)
+	}
+
+	// Start tx2, create savepoint, update score (leaving unique email unchanged), then RollbackTo
+	tx2, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx 2 failed: %v", err)
+	}
+	if err := tx2.Savepoint("sp1"); err != nil {
+		t.Fatalf("Savepoint failed: %v", err)
+	}
+	if err := tx2.Update("users_sp", storage.IntValue(1), storage.Record{
+		"id":    storage.IntValue(1),
+		"email": storage.StringValue("alice@example.com"),
+		"score": storage.IntValue(99),
+	}); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+	if err := tx2.RollbackTo("sp1"); err != nil {
+		t.Fatalf("RollbackTo failed: %v", err)
+	}
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("Commit 2 failed: %v", err)
+	}
+
+	// Verify unique index on email still finds id=1 and score=10, and score=99 is not orphaned
+	tx3, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx 3 failed: %v", err)
+	}
+	defer tx3.Rollback()
+
+	emailKey := storage.StringValue("alice@example.com")
+	cur, err := tx3.IndexScan("users_sp", "idx_users_sp_email", &emailKey, &emailKey)
+	if err != nil {
+		t.Fatalf("IndexScan on email failed: %v", err)
+	}
+	if !cur.Next() {
+		_ = cur.Close()
+		t.Fatalf("expected unique index entry for alice@example.com to remain intact after RollbackTo")
+	}
+	_ = cur.Close()
+
+	score99 := storage.IntValue(99)
+	cur99, err := tx3.IndexScan("users_sp", "idx_users_sp_score", &score99, &score99)
+	if err != nil {
+		t.Fatalf("IndexScan on score=99 failed: %v", err)
+	}
+	if cur99.Next() {
+		_ = cur99.Close()
+		t.Fatalf("expected rolled-back score=99 index entry to be removed after RollbackTo")
+	}
+	_ = cur99.Close()
+}
+
+func TestRegression_AUDIT_093_007_DropPartitionCleansUpSecondaryIndexes(t *testing.T) {
+	tmpDir := t.TempDir()
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "events_part",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "ym", Type: storage.TypeVarChar},
+			{Name: "tag", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_events_tag", Columns: []string{"tag"}},
+		},
+		Partition: &storage.PartitionDef{
+			Column: "ym",
+			Func:   "COLUMN",
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	_ = tx.Insert("events_part", storage.Record{"id": storage.IntValue(1), "ym": storage.StringValue("202601"), "tag": storage.StringValue("jan-tag")})
+	_ = tx.Insert("events_part", storage.Record{"id": storage.IntValue(2), "ym": storage.StringValue("202602"), "tag": storage.StringValue("feb-tag")})
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	if err := eng.DropPartition("events_part", "202601"); err != nil {
+		t.Fatalf("DropPartition failed: %v", err)
+	}
+
+	cnt, err := eng.TableRowCount("events_part")
+	if err != nil || cnt != 1 {
+		t.Fatalf("expected TableRowCount=1 after DropPartition, got %d (err=%v)", cnt, err)
+	}
+
+	txRead, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx read failed: %v", err)
+	}
+	defer txRead.Rollback()
+
+	janKey := storage.StringValue("jan-tag")
+	cur, err := txRead.IndexScan("events_part", "idx_events_tag", &janKey, &janKey)
+	if err != nil {
+		t.Fatalf("IndexScan failed: %v", err)
+	}
+	if cur.Next() {
+		_ = cur.Close()
+		t.Fatalf("expected secondary index entry for dropped partition to be removed")
+	}
+	_ = cur.Close()
+}
+
+
 
 

@@ -55,6 +55,10 @@
    - **원칙 1 (명시적 영속성 옵션 제공)**: `-durability=schema_only|schema_and_data` CLI 플래그 및 `lionsql.json`의 `server.durability` 설정을 도입하여, `memengine`을 사용하면서도 디스크 영속성(`wal.aof` + `tables.mpk`)이 필요한 경우 `-engine=memory -durability=schema_and_data`로 직관적으로 선택할 수 있게 한다.
    - **원칙 2 (Windows 환경의 기본값 보존 - `[RULE:SafeDefaults]`)**: CGO `WiredTiger`가 내장되지 않아 `memengine`이 기본 단독 엔진으로 동작하는 Windows 환경(`runtime.GOOS == "windows"`)에서는, 아무 플래그 없이 기본 실행했을 때의 데이터 유실을 방지하기 위해 기본값을 `SCHEMA_AND_DATA`(`wal.aof` + `tables.mpk`)로 유지한다 (Windows에서도 `-ephemeral` 또는 `-durability=schema_only` 지정 시 `SCHEMA_ONLY`로 동작).
    - **원칙 3 (기동 배너 및 로그 가시성 확보)**: `memengine`(`SCHEMA_ONLY`)으로 서버가 기동될 때 콘솔 기동 배너에 `[Storage Mode] In-Memory (SCHEMA_ONLY: Schema & Procedures persisted, Row data ephemeral in RAM)`를 명확히 출력하여 운영자가 현재 영속성 모드를 즉시 인지할 수 있도록 한다.
+   - **원칙 4 (`MemoryModePerformance` Deprecation 및 `TupleCodecV2` 단일 포맷 일원화 - `[RULE:RadicalKISS]`, Invariant 13)**:
+     - 영속성 축(`SCHEMA_ONLY` vs `SCHEMA_AND_DATA`)과 메모리 레이아웃 축(`compact` vs `performance`)은 서로 독립적이며, `v0.94.0` 이후에도 `memengine`의 메모리 저장 포맷 기본값은 **`compact`(`MemoryModeCompact`, V2 바이너리 튜플 코덱 `TupleCodecV2`)**를 영구 유지한다.
+     - 레거시 `performance` 모드(`MemoryModePerformance`, `shard.rows map[string]storage.Row`)는 Go GC 포인터 스캔 부하, RAM 3배 과소모, `wiredtiger`와의 물리 코덱 검증 괴리, 그리고 `table_data.go` / `tx.go` / `ddl_alter.go` 전반의 불필요한 이중 분기(`if td.mode == MemoryModeCompact`)를 유발하므로 **Deprecated(도태 대상)**로 공식 지정한다.
+     - `v0.93.0` ~ `v0.94.0`에서 `-memory-mode=performance`를 공식 Deprecated로 고지하고, `1.0-GA` 이전에 `shard.rows` 맵 및 이중 분기를 제거하여 `memengine` 내부 레이아웃을 `TupleCodecV2` (`compact`) 단일 경로로 완전히 통합한다 (하위 호환성을 위해 `-memory-mode` 플래그 입력 시 경고/무시 처리).
 3. **1.0 이전 조기 전환(Early Switch) 전략**:
    - 이 기본값 전환은 `1.0-GA` 직전에 급박하게 바꾸는 것이 아니라, **`v0.93.0` 릴리스 직후 차기 마일스톤(`v0.94.0` / `1.0-GA` 초입)에서 가장 먼저 전환**하여 `1.0-GA`에 도달하기 전까지 충분한 통합 테스트 및 운영 검증 기간을 확보한다.
 

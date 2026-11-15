@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"lionsql/pkg/storage"
 )
 
 // withOutputParams wraps extraTokens so that RETURNVALUE (0xAC) tokens for every
@@ -34,13 +36,36 @@ func withOutputParams(extraTokens func(*bytes.Buffer), params []RPCParam, procPa
 			if name == "" && i < len(procParamNames) {
 				name = procParamNames[i]
 			}
-			val := lookupFinalVar(finalVars, name)
+			val := unwrapTdsOutputValue(lookupFinalVar(finalVars, name))
 			col := outputColumnInfo(p, val)
 			if col.Type == TypeNVarChar && val != nil {
 				val = outputStringValue(val)
 			}
 			WriteReturnValue(buf, uint16(i), name, col, val)
 		}
+	}
+}
+
+func unwrapTdsOutputValue(v any) any {
+	if isNilTdsValue(v) {
+		return nil
+	}
+	switch sv := v.(type) {
+	case storage.Value:
+		if sv.Type == storage.TypeBinary {
+			return sv.Bytes()
+		}
+		return sv.Interface()
+	case *storage.Value:
+		if sv == nil {
+			return nil
+		}
+		if sv.Type == storage.TypeBinary {
+			return sv.Bytes()
+		}
+		return sv.Interface()
+	default:
+		return v
 	}
 }
 

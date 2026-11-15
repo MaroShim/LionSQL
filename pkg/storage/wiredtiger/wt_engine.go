@@ -1065,6 +1065,14 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotPartitioned, tableName)
 	}
 
+	e.evictAllCursors(tbl.Name)
+	if tbl.PhysicalName != "" && tbl.PhysicalName != tbl.Name {
+		e.evictAllCursors(tbl.PhysicalName)
+	}
+	for _, idx := range tbl.Indexes {
+		e.evictAllCursors(tbl.IndexURI(idx.Name))
+	}
+
 	var sess *C.WT_SESSION
 	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
 		return fmt.Errorf("open_session failed: %d", ret)
@@ -1080,15 +1088,29 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 	}
 	defer C.go_wt_cursor_close(cur)
 
+	type deletedPartitionRow struct {
+		pkStr string
+		rec   storage.Record
+	}
+	var deletedRows []deletedPartitionRow
+
 	matched := 0
 	for C.go_wt_cursor_next(cur) == 0 {
+		var pKey *C.char
+		var pkStr string
+		if kret := C.go_wt_cursor_get_key(cur, &pKey); kret == 0 && pKey != nil {
+			pkStr = C.GoString(pKey)
+		}
 		var pData unsafe.Pointer
 		var sz C.size_t
 		if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret == 0 && pData != nil {
 			rec, err := decodeRecord(tbl, C.GoBytes(pData, C.int(sz)))
 			if err == nil {
-				pKey, err := tbl.ComputePartitionKey(rec)
-				if err == nil && pKey == partitionName {
+				pKeyVal, err := tbl.ComputePartitionKey(rec)
+				if err == nil && pKeyVal == partitionName {
+					if len(tbl.Indexes) > 0 && pkStr != "" {
+						deletedRows = append(deletedRows, deletedPartitionRow{pkStr: pkStr, rec: rec})
+					}
 					C.go_wt_cursor_remove(cur)
 					matched++
 				}
@@ -1099,10 +1121,31 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 		return fmt.Errorf("%w: partition %q in table %q", storage.ErrPartitionNotFound, partitionName, tableName)
 	}
 
-	if !storage.IsTemporaryTable(tableName) {
+	if len(deletedRows) > 0 && len(tbl.Indexes) > 0 {
+		for _, idx := range tbl.Indexes {
+			cIdxURI := C.CString(tbl.IndexURI(idx.Name))
+			var idxCur *C.WT_CURSOR
+			if C.go_wt_open_cursor(sess, cIdxURI, &idxCur) == 0 {
+				for _, dr := range deletedRows {
+					k, _, _ := formatIndexKeyValue(dr.rec, &idx, dr.pkStr)
+					_ = removeIndexEntry(idxCur, k)
+				}
+				C.go_wt_cursor_close(idxCur)
+			}
+			C.free(unsafe.Pointer(cIdxURI))
+		}
+	}
+
+	if !storage.IsTemporaryTable(tbl.Name) {
+		if cnt := e.getRowCountAtomicLocked(tbl.Name); cnt != nil {
+			newCnt := cnt.Add(-int64(matched))
+			if newCnt < 0 {
+				cnt.Store(0)
+			}
+		}
 		e.recordWALLocked([]memengine.WALOp{{
 			Type:  memengine.OpDropPartition,
-			Table: tableName,
+			Table: tbl.Name,
 			Key:   partitionName,
 		}})
 	}
@@ -1440,14 +1483,16 @@ func (e *Engine) GetTable(tableName string) (*storage.TableSchema, error) {
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
-	return t, nil
+	cp := t.Clone()
+	return &cp, nil
 }
 
 func (e *Engine) ListTables() ([]*storage.TableSchema, error) {
 	e.mu.RLock()
 	res := make([]*storage.TableSchema, 0, len(e.tables))
 	for _, t := range e.tables {
-		res = append(res, t)
+		cp := t.Clone()
+		res = append(res, &cp)
 	}
 	tempEng := e.tempEng
 	e.mu.RUnlock()
@@ -2300,7 +2345,7 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 		recCopy := make([]byte, len(recBytes))
 		copy(recCopy, recBytes)
 		tx.undoLog = append(tx.undoLog, wtUndoOp{
-			table:   tableName,
+			table:   tbl.Name,
 			pk:      pkVal,
 			kind:    wtUndoDelete,
 			newData: recCopy,
@@ -2469,7 +2514,7 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 		newDataCopy := make([]byte, len(recBytes))
 		copy(newDataCopy, recBytes)
 		tx.undoLog = append(tx.undoLog, wtUndoOp{
-			table:   tableName,
+			table:   tbl.Name,
 			pk:      pk,
 			kind:    wtUndoUpdate,
 			oldData: oldData,
@@ -2570,7 +2615,7 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 	tx.hasWrites = true
 	if len(oldData) > 0 {
 		tx.undoLog = append(tx.undoLog, wtUndoOp{
-			table:   tableName,
+			table:   tbl.Name,
 			pk:      pk,
 			kind:    wtUndoPut,
 			oldData: oldData,
@@ -3403,8 +3448,10 @@ func (tx *WTTx) Commit() error {
 	}
 
 	if tempTx != nil {
-		if err := tempTx.Commit(); err != nil {
-			return err
+		commitErr := tempTx.Commit()
+		_ = tempTx.Rollback()
+		if commitErr != nil {
+			return commitErr
 		}
 	}
 
@@ -3579,15 +3626,23 @@ func (tx *WTTx) RollbackTo(name string) error {
 				rbErrs = append(rbErrs, rerr)
 			}
 			if tx.rowDeltas != nil {
-				tx.rowDeltas[op.table]--
+				if tbl != nil {
+					tx.rowDeltas[tbl.Name]--
+				} else {
+					tx.rowDeltas[op.table]--
+				}
 			}
 		case wtUndoPut:
 			if len(op.oldData) > 0 {
-				if perr := tx.putRawBytesLocked(op.table, op.pk, op.oldData); perr != nil {
+				if perr := tx.putRawBytesLocked(op.table, op.pk, op.oldData, true); perr != nil {
 					rbErrs = append(rbErrs, perr)
 				}
 				if tx.rowDeltas != nil {
-					tx.rowDeltas[op.table]++
+					if tbl, err := tx.getTableLocked(op.table); err == nil && tbl != nil {
+						tx.rowDeltas[tbl.Name]++
+					} else {
+						tx.rowDeltas[op.table]++
+					}
 				}
 			}
 		case wtUndoUpdate:
@@ -3605,13 +3660,16 @@ func (tx *WTTx) RollbackTo(name string) error {
 					if oldErr == nil && newErr == nil {
 						pkStr := op.pk.String()
 						for _, idx := range tbl.Indexes {
-							oldKey, _, _ := formatIndexKeyValue(oldRec, &idx, pkStr)
-							newKey, _, _ := formatIndexKeyValue(newRec, &idx, pkStr)
-							if oldKey != newKey {
+							oldKey, oldVal, _ := formatIndexKeyValue(oldRec, &idx, pkStr)
+							newKey, newVal, _ := formatIndexKeyValue(newRec, &idx, pkStr)
+							if oldKey != newKey || oldVal != newVal {
 								idxURI := tbl.IndexURI(idx.Name)
 								if idxCur, cerr := tx.sess.acquireCursor(idxURI); cerr == nil {
 									if rerr := removeIndexEntry(idxCur, newKey); rerr != nil {
 										rbErrs = append(rbErrs, rerr)
+									}
+									if ierr := insertIndexEntry(idxCur, oldKey, oldVal); ierr != nil {
+										rbErrs = append(rbErrs, ierr)
 									}
 									tx.sess.releaseCursor(idxURI, idxCur)
 								} else {
@@ -3621,7 +3679,7 @@ func (tx *WTTx) RollbackTo(name string) error {
 						}
 					}
 				}
-				if perr := tx.putRawBytesLocked(op.table, op.pk, op.oldData); perr != nil {
+				if perr := tx.putRawBytesLocked(op.table, op.pk, op.oldData, false); perr != nil {
 					rbErrs = append(rbErrs, perr)
 				}
 			}
@@ -3695,7 +3753,7 @@ func (tx *WTTx) ReleaseSavepoint(name string) error {
 	return nil
 }
 
-func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes []byte) error {
+func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes []byte, updateIndexes bool) error {
 	tbl, err := tx.getTableLocked(tableName)
 	if err != nil {
 		return err
@@ -3724,7 +3782,7 @@ func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes [
 			return wtOpError("cursor put", int(ret))
 		}
 	}
-	if len(tbl.Indexes) > 0 {
+	if updateIndexes && len(tbl.Indexes) > 0 {
 		if rec, err := decodeRecord(tbl, recBytes); err == nil {
 			for _, idx := range tbl.Indexes {
 				idxURI := tbl.IndexURI(idx.Name)
@@ -3752,7 +3810,7 @@ func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Rec
 		return err
 	}
 
-	return tx.putRawBytesLocked(tableName, pk, recBytes)
+	return tx.putRawBytesLocked(tableName, pk, recBytes, true)
 }
 
 func (tx *WTTx) removeRawLocked(tableName string, pk storage.Value) error {

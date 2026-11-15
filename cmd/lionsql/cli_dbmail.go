@@ -65,6 +65,7 @@ func runDbMailWorker(args []string) error {
 
 	log.Printf("[DatabaseMail] Worker started. Polling %s at interval %v...", *dbURL, cfg.PollInterval)
 	if err := worker.Start(ctx); err != nil {
+		_ = client.Close()
 		return err
 	}
 
