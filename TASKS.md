@@ -20,6 +20,7 @@
 | `PENDING` | **`AI-STARTER-3`** | `v1.30.0` | Ecosystem | P2 | 호환성 매트릭스 문서 (되는 것/안 되는 것) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
 | `PENDING` | **`AI-STARTER-4`** | `v1.99.0` | Research | P3 | Go 임베디드 모드 타당성 조사 (SQLite 대비) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-ANTLR-ORACLE-1`** | `1.0-GA` | Architecture | P2 | ANTLR4 기반 T-SQL 문법 검증 및 미지원 기능 정밀 진단 오라클 아키텍처 | [`notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md`](notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md) |  |
+| `PENDING` | **`ARCH-EPHEMERAL-SCHEMA-PERSISTENCE-1`** | `1.0-GA` | Storage | P1 | Ephemeral Mode Schema-Only Persistence (SQL Server SCHEMA_ONLY / MySQL MEMORY Parity: Persist DDL Schemas, Indexes & Catalog Objects Across Restarts While Keeping Row Data Ephemeral) | [`notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md`](notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-INTRA-QUERY-PARALLEL-1`** |  | Architecture | P3 | 단일 쿼리 멀티코어 병렬 실행 (Intra-Query Parallelism) 영구 기각 (Spec-Out) | [`GEMINI.md`](GEMINI.md) |  |
 | `PENDING` | **`ARCH-LOGICAL-NAMESPACE-1`** | `v1.10.0` | ENGINE | P2 | 프리픽스 기반 논리적 네임스페이스 및 USE <dbname> 물리 매핑 아키텍처 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-PARALLEL-SCAN-1`** | `v1.99.0` | Engine | P2 | 멀티코어 병렬 분석 쿼리 실행기 (ParallelSeqScan) | [`ROADMAP.md`](ROADMAP.md) |  |
@@ -474,6 +475,13 @@
 - **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-11 16:23:01
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md`](notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md)
+
+---
+
+### [PENDING] Ephemeral Mode Schema-Only Persistence (SQL Server SCHEMA_ONLY / MySQL MEMORY Parity: Persist DDL Schemas, Indexes & Catalog Objects Across Restarts While Keeping Row Data Ephemeral) `ARCH-EPHEMERAL-SCHEMA-PERSISTENCE-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-15 12:33:58
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md`](notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md)
 
 ---
 
