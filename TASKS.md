@@ -210,7 +210,7 @@
 | `DONE` | **`FEAT-TRANSACTIONAL-DDL-1`** | `1.0-GA` | Engine | P1 | Transactional DDL (CREATE/DROP/ALTER/RENAME/INDEX 롤백 지원) 및 세션-트랜잭션 경계 격리 안전성 강화 | [`notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`](notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`** | `1.0-GA` | Engine | P2 | Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TYPE-ROWVERSION-MONOTONIC-COUNTER-1`** | `1.0-GA` | Storage | P2 | ROWVERSION 데이터 타입 DDL 파싱 및 INSERT/UPDATE 시 @@DBTS 단조 증가 바이너리 자동 스탬핑 | [`doc/REFERENCE_MANUAL.ko.md`](doc/REFERENCE_MANUAL.ko.md) |  |
-| `PENDING` | **`FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`** | `1.0-GA` | Engine | P2 | 테이블 DDL 변경 시 VDBE 바이트코드 프로시저 및 실행 계획 캐시 자동 Invalidate | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
+| `DONE` | **`FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`** | `1.0-GA` | Engine | P2 | 테이블 DDL 변경 시 VDBE 바이트코드 프로시저 및 실행 계획 캐시 자동 Invalidate | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `PENDING` | **`FEAT-VECTOR-1`** | `v1.60.0` | FEAT | P2 | Pure-Go Vector Search Engine (pgvector compat) | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WAL-ARCHIVER-INPROCESS-1`** | `1.0-GA` | Storage | P3 | WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WASM-UDF-1`** | `v1.99.0` | Engine | P2 | WebAssembly 런타임 샌드박스 UDF (wazero) | [`ROADMAP.md`](ROADMAP.md) |  |
@@ -2583,8 +2583,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] 테이블 DDL 변경 시 VDBE 바이트코드 프로시저 및 실행 계획 캐시 자동 Invalidate `FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 12:52:23
+### [DONE] 테이블 DDL 변경 시 VDBE 바이트코드 프로시저 및 실행 계획 캐시 자동 Invalidate `FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-15 07:08:05
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md)
 
