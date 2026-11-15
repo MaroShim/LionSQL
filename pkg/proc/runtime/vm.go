@@ -41,6 +41,7 @@ type ExecutionResult struct {
 	LastIdentity int64
 	Vars         map[string]any // Final variable states after execution
 	ResultSets   []VMResultSet  // Sequential result sets for multiple SELECT queries
+	ActiveTx     storage.Transaction
 }
 
 // TriggerEntry holds metadata and precompiled bytecode for a trigger.
@@ -812,6 +813,7 @@ func (frame *VMFrame) buildExecutionResult(start time.Time, retVal any) *Executi
 		LastIdentity: frame.lastIdentity,
 		Vars:         collectFrameVars(frame),
 		ResultSets:   resultSets,
+		ActiveTx:     frame.tx,
 	}
 }
 
@@ -2272,16 +2274,15 @@ func (f *VMFrame) execTruncate(tableName string) error {
 	defer cursor.Close()
 
 	tableSchema, _ := f.getTableSchema(tblName)
-	isCompPK := tableSchema != nil && tableSchema.IsCompositePK()
-	var pkColName string
-	if !isCompPK && tableSchema != nil {
-		if pkCol, perr := tableSchema.PrimaryKeyColumn(); perr == nil && pkCol != nil {
-			pkColName = pkCol.Name
-		}
-	}
 
 	var pks []storage.Value
 	for cursor.Next() {
+		if row, rerr := cursor.Row(); rerr == nil && len(row.Values) > 0 && tableSchema != nil {
+			if pkVal, ok := tableSchema.ResolveRowPK(row); ok {
+				pks = append(pks, pkVal)
+				continue
+			}
+		}
 		rec, err := cursor.Record()
 		if err != nil {
 			return fmt.Errorf("failed to read record during TRUNCATE scan: %w", err)
@@ -2289,20 +2290,19 @@ func (f *VMFrame) execTruncate(tableName string) error {
 		if rec == nil {
 			continue
 		}
-		if isCompPK {
+		if tableSchema != nil {
 			if pkVal, ok := tableSchema.ResolveRecordPK(rec); ok {
 				pks = append(pks, pkVal)
-			}
-			continue
-		}
-		if pkColName != "" {
-			if v, ok := rec[pkColName]; ok {
-				pks = append(pks, v)
 				continue
 			}
 		}
-		if v, ok := rec["id"]; ok {
+		if v, ok := rec.Get(storage.SyntheticPKRowIDName); ok {
 			pks = append(pks, v)
+			continue
+		}
+		if v, ok := rec.Get("id"); ok {
+			pks = append(pks, v)
+			continue
 		}
 	}
 

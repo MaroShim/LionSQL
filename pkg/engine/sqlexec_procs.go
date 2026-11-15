@@ -1563,11 +1563,20 @@ func (s *Coordinator) execAnonymousBlock(query string, start time.Time, cs *Clie
 		return nil, fmt.Errorf("execute anonymous block error: %w", err)
 	}
 
-	if createdSession != nil && tx != nil {
-		if err := tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
+	commitTx := tx
+	if res != nil && res.ActiveTx != nil {
+		commitTx = res.ActiveTx
+	}
+
+	if createdSession != nil && commitTx != nil {
+		if err := commitTx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
 			return nil, fmt.Errorf("failed to commit anonymous block tx: %w", err)
 		}
 		tx = nil
+	} else if cs != nil && res != nil && res.ActiveTx != nil && cs.Tx != nil && res.ActiveTx != cs.Tx {
+		cs.Mu.Lock()
+		cs.Tx = res.ActiveTx
+		cs.Mu.Unlock()
 	}
 
 	if cs != nil && res.Vars != nil {

@@ -737,51 +737,26 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *Clien
 				return nil, err
 			}
 
-			var pkColName string
-			var pkColIdx int = -1
-			isCompPK := tbl.IsCompositePK()
-			if !isCompPK {
-				if pkCol, perr := tbl.PrimaryKeyColumn(); perr == nil && pkCol != nil {
-					pkColName = pkCol.Name
-					_, pkColIdx, _ = tbl.FindColumn(pkColName)
-				}
-			}
-
 			var pks []storage.Value
 			for cur.Next() {
-				if isCompPK {
-					if rec, rcerr := cur.Record(); rcerr == nil {
-						if pkVal, ok := tbl.ResolveRecordPK(rec); ok {
-							pks = append(pks, pkVal)
-						}
+				if row, rerr := cur.Row(); rerr == nil && len(row.Values) > 0 {
+					if pkVal, ok := tbl.ResolveRowPK(row); ok {
+						pks = append(pks, pkVal)
+						continue
 					}
-					continue
 				}
-				row, rerr := cur.Row()
-				if rerr == nil && len(row.Values) > 0 {
-					if pkColIdx >= 0 && pkColIdx < len(row.Values) {
-						pks = append(pks, row.Values[pkColIdx])
-					} else {
-						pks = append(pks, row.Values[0])
+				if rec, rcerr := cur.Record(); rcerr == nil && rec != nil {
+					if pkVal, ok := tbl.ResolveRecordPK(rec); ok {
+						pks = append(pks, pkVal)
+						continue
 					}
-				} else {
-					rec, rcerr := cur.Record()
-					if rcerr == nil {
-						if pkColName != "" {
-							if v, ok := rec[pkColName]; ok {
-								pks = append(pks, v)
-								continue
-							}
-							for k, v := range rec {
-								if strings.EqualFold(k, pkColName) {
-									pks = append(pks, v)
-									continue
-								}
-							}
-						}
-						if v, ok := rec["id"]; ok {
-							pks = append(pks, v)
-						}
+					if v, ok := rec.Get(storage.SyntheticPKRowIDName); ok {
+						pks = append(pks, v)
+						continue
+					}
+					if v, ok := rec.Get("id"); ok {
+						pks = append(pks, v)
+						continue
 					}
 				}
 			}

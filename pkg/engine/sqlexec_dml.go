@@ -599,7 +599,6 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			}
 			return nil, fmt.Errorf("check constraint violation on %q: %w", tableName, err)
 		}
-		fmt.Printf("DEBUG: rec inserting into %s: %+v\n", tableName, rec)
 		if err := tx.Insert(tableName, rec); err != nil {
 			if onConflict != nil && onConflict.action == conflictActionDoNothing {
 				errLower := strings.ToLower(err.Error())
@@ -1023,7 +1022,6 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			}
 			return nil, fmt.Errorf("check constraint violation on %q: %w", tableName, err)
 		}
-		fmt.Printf("DEBUG: rec inserting into %s: %+v\n", tableName, rec)
 		if err := tx.Insert(tableName, rec); err != nil {
 			if onConflict != nil && onConflict.action == conflictActionDoNothing {
 				errLower := strings.ToLower(err.Error())
