@@ -285,9 +285,9 @@ func (w *WALWriter) Size() int64 {
 	return w.bytesTotal
 }
 
-// Rotate atomically syncs the active WAL file, renames it to rotatedPath,
-// opens and verifies a fresh active WAL file at the original path BEFORE closing the old handle,
-// and syncs the parent directory. This guarantees w.file is never left closed on error.
+// Rotate atomically syncs the active WAL file, opens and verifies a fresh staging WAL file FIRST,
+// renames the active WAL to rotatedPath and the staging file to w.path, and only then closes the old handle.
+// This guarantees that neither w.file nor w.path is left closed or missing if file creation or rename fails.
 func (w *WALWriter) Rotate(rotatedPath string) error {
 	w.syncMu.Lock()
 	defer w.syncMu.Unlock()
@@ -303,20 +303,29 @@ func (w *WALWriter) Rotate(rotatedPath string) error {
 		return fmt.Errorf("failed to sync WAL file before rotation: %w", err)
 	}
 
-	// 2. Atomically rename current file to rotatedPath while keeping w.file open
+	// 2. Open and verify the new WAL file FIRST (at staging path) before renaming or closing the old file
+	tmpNewPath := w.path + ".new"
+	newFile, err := os.OpenFile(tmpNewPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create staging WAL file before rotation: %w", err)
+	}
+
+	// 3. Atomically rename current file to rotatedPath while keeping w.file open
 	if err := os.Rename(w.path, rotatedPath); err != nil {
+		_ = newFile.Close()
+		_ = os.Remove(tmpNewPath)
 		return fmt.Errorf("failed to rename WAL file to %s: %w", rotatedPath, err)
 	}
 
-	// 3. Open fresh active WAL file at original path BEFORE closing the old descriptor
-	newFile, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0644)
-	if err != nil {
-		// Restore original path so the active WAL writer remains intact and usable
+	// 4. Atomically move the verified new file into w.path
+	if err := os.Rename(tmpNewPath, w.path); err != nil {
 		_ = os.Rename(rotatedPath, w.path)
-		return fmt.Errorf("failed to create fresh WAL file after rotation: %w", err)
+		_ = newFile.Close()
+		_ = os.Remove(tmpNewPath)
+		return fmt.Errorf("failed to activate new WAL file after rotation: %w", err)
 	}
 
-	// 4. Swap active file handle and close old descriptor
+	// 5. Swap active file handle and close old descriptor
 	oldFile := w.file
 	w.file = newFile
 	w.bytesTotal = 0
@@ -327,7 +336,7 @@ func (w *WALWriter) Rotate(rotatedPath string) error {
 		return fmt.Errorf("failed to close rotated WAL file descriptor: %w", err)
 	}
 
-	// 5. Fsync parent directory so the rename (w.path -> rotatedPath) and new file entry are durable on disk
+	// 6. Fsync parent directory so the rename (w.path -> rotatedPath) and new file entry are durable on disk
 	if err := syncDir(filepath.Dir(w.path)); err != nil {
 		return fmt.Errorf("failed to sync WAL directory after rotation: %w", err)
 	}
@@ -335,7 +344,8 @@ func (w *WALWriter) Rotate(rotatedPath string) error {
 }
 
 // Truncate safely resets the WAL file to 0 bytes after an AOF rewrite.
-// Opens the new truncated file descriptor first and verifies no error occurred before closing the old descriptor.
+// Opens and verifies a new staging file descriptor first, atomically renames it over w.path,
+// and only then closes the old descriptor.
 func (w *WALWriter) Truncate() error {
 	w.syncMu.Lock()
 	defer w.syncMu.Unlock()
@@ -346,14 +356,22 @@ func (w *WALWriter) Truncate() error {
 		return fmt.Errorf("WAL writer is closed")
 	}
 
-	// 1. Open truncated file descriptor FIRST while preserving O_APPEND semantics.
-	// If OpenFile fails, w.file remains open and intact.
-	newFile, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0644)
+	// 1. Open fresh empty staging file descriptor FIRST while preserving O_APPEND semantics.
+	// If OpenFile fails, w.file and its contents on disk remain open and intact.
+	tmpNewPath := w.path + ".new"
+	newFile, err := os.OpenFile(tmpNewPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0644)
 	if err != nil {
-		return fmt.Errorf("failed to truncate WAL file: %w", err)
+		return fmt.Errorf("failed to create staging file for WAL truncate: %w", err)
 	}
 
-	// 2. Swap active file handle and close old descriptor
+	// 2. Atomically replace w.path with the new empty file BEFORE closing the old descriptor
+	if err := os.Rename(tmpNewPath, w.path); err != nil {
+		_ = newFile.Close()
+		_ = os.Remove(tmpNewPath)
+		return fmt.Errorf("failed to rename staging file for WAL truncate: %w", err)
+	}
+
+	// 3. Swap active file handle and close old descriptor
 	oldFile := w.file
 	w.file = newFile
 	w.bytesTotal = 0
@@ -363,6 +381,10 @@ func (w *WALWriter) Truncate() error {
 
 	if err := oldFile.Close(); err != nil {
 		return fmt.Errorf("failed to close previous WAL file descriptor after truncate: %w", err)
+	}
+
+	if err := syncDir(filepath.Dir(w.path)); err != nil {
+		return fmt.Errorf("failed to sync WAL directory after truncate: %w", err)
 	}
 
 	return nil

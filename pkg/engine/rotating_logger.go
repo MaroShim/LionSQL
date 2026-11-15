@@ -106,10 +106,12 @@ func (w *RotatingLogWriter) WriteLine(v any) error {
 }
 
 // rotate rolls log files up to MaxRotatedBackups (.1, .2, .3).
+// Opens the new staging log file first and checks for errors before renaming or closing the existing file.
 func (w *RotatingLogWriter) rotate() error {
-	if w.file != nil {
-		_ = w.file.Close()
-		w.file = nil
+	tmpNewPath := w.filePath + ".new"
+	f, err := os.OpenFile(tmpNewPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create rotated log file %q: %w", w.filePath, err)
 	}
 
 	for i := MaxRotatedBackups - 1; i >= 1; i-- {
@@ -121,14 +123,25 @@ func (w *RotatingLogWriter) rotate() error {
 	}
 
 	backupPath := fmt.Sprintf("%s.1", w.filePath)
-	_ = os.Rename(w.filePath, backupPath)
-
-	f, err := os.OpenFile(w.filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to create rotated log file %q: %w", w.filePath, err)
+	if err := os.Rename(w.filePath, backupPath); err != nil && !os.IsNotExist(err) {
+		_ = f.Close()
+		_ = os.Remove(tmpNewPath)
+		return fmt.Errorf("failed to rotate log file %q to %q: %w", w.filePath, backupPath, err)
 	}
+
+	if err := os.Rename(tmpNewPath, w.filePath); err != nil {
+		_ = os.Rename(backupPath, w.filePath)
+		_ = f.Close()
+		_ = os.Remove(tmpNewPath)
+		return fmt.Errorf("failed to activate rotated log file %q: %w", w.filePath, err)
+	}
+
+	oldFile := w.file
 	w.file = f
 	w.currentSize = 0
+	if oldFile != nil {
+		_ = oldFile.Close()
+	}
 	return nil
 }
 

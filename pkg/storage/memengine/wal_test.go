@@ -950,20 +950,28 @@ func TestWAL_RotateAndTruncate_KeepOldFileOpenOnFailure(t *testing.T) {
 		t.Fatalf("Append 2 after failed Rotate should succeed on preserved descriptor, got: %v", err)
 	}
 
-	// 2. Force Truncate to fail by making wal.aof read-only (0400) so os.OpenFile(O_WRONLY|O_TRUNC) fails,
-	// while the already-open w.file descriptor remains writable!
-	if err := os.Chmod(aofPath, 0400); err != nil {
-		t.Fatalf("Chmod 0400 failed: %v", err)
+	// 2. Force Truncate (and Rotate) to fail when opening the staging file (wal.aof.new) by creating a read-only file at wal.aof.new,
+	// verifying that neither os.Rename nor oldFile.Close() is executed and the existing w.file descriptor remains intact!
+	stagingPath := aofPath + ".new"
+	if err := os.WriteFile(stagingPath, []byte("readonly"), 0400); err != nil {
+		t.Fatalf("WriteFile stagingPath 0400 failed: %v", err)
 	}
 	if err := w.Truncate(); err == nil {
-		_ = os.Chmod(aofPath, 0644)
-		t.Fatalf("expected Truncate to fail on read-only file path")
+		_ = os.Chmod(stagingPath, 0644)
+		_ = os.Remove(stagingPath)
+		t.Fatalf("expected Truncate to fail when staging file cannot be opened for write")
 	}
-	_ = os.Chmod(aofPath, 0644)
+	if err := w.Rotate(filepath.Join(tempDir, "wal.aof.compacting")); err == nil {
+		_ = os.Chmod(stagingPath, 0644)
+		_ = os.Remove(stagingPath)
+		t.Fatalf("expected Rotate to fail before rename when staging file cannot be opened for write")
+	}
+	_ = os.Chmod(stagingPath, 0644)
+	_ = os.Remove(stagingPath)
 
-	// Verify w.file was NOT closed by the failed Truncate and can still append record 3 cleanly
+	// Verify w.file was NOT closed and w.path was NOT renamed or truncated, and can still append record 3 cleanly
 	if err := w.Append(WALRecord{LSN: 3, Ops: []WALOp{{Type: OpInsert, Table: "t", Key: "3"}}}); err != nil {
-		t.Fatalf("Append 3 after failed Truncate should succeed on preserved descriptor, got: %v", err)
+		t.Fatalf("Append 3 after failed Truncate/Rotate should succeed on preserved descriptor, got: %v", err)
 	}
 
 	var replayed []int64
