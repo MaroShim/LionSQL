@@ -94,6 +94,8 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 			Table:  schema.Name,
 			Schema: schema,
 		}}); err != nil {
+			delete(e.tables, schema.Name)
+			e.rebuildFKCacheLocked()
 			return err
 		}
 	}
@@ -194,6 +196,13 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 			Table:       index.TableName,
 			IndexSchema: index,
 		}}); err != nil {
+			delete(td.Indexes, index.Name)
+			for i := range td.Schema.Indexes {
+				if td.Schema.Indexes[i].Name == index.Name {
+					td.Schema.Indexes = append(td.Schema.Indexes[:i], td.Schema.Indexes[i+1:]...)
+					break
+				}
+			}
 			return err
 		}
 	}
@@ -214,6 +223,9 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 		return fmt.Errorf("%w: %s", storage.ErrIndexNotFound, indexName)
 	}
 
+	backupIdxData := td.Indexes[foundIdx.Name]
+	backupSchemaIdx := *foundIdx
+
 	sqlutil.MapDeleteFold(td.Indexes, foundIdx.Name)
 	td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], td.Schema.Indexes[idxPos+1:]...)
 
@@ -223,6 +235,10 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 			Table:     tableName,
 			IndexName: indexName,
 		}}); err != nil {
+			if backupIdxData != nil {
+				td.Indexes[backupSchemaIdx.Name] = backupIdxData
+			}
+			td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], append([]storage.IndexSchema{backupSchemaIdx}, td.Schema.Indexes[idxPos:]...)...)
 			return err
 		}
 	}
@@ -393,6 +409,8 @@ func (e *Engine) DropTable(tableName string) error {
 			Type:  OpDropTable,
 			Table: td.Schema.Name,
 		}}); err != nil {
+			e.tables[td.Schema.Name] = td
+			e.rebuildFKCacheLocked()
 			return err
 		}
 	}
@@ -445,8 +463,22 @@ func (e *Engine) TruncateTables(tableNames []string, cascade bool) error {
 		}
 	}
 
-	// Truncate all tables in targetSet
+	// Record WAL operations before truncating in-memory shard entries
 	var walOps []WALOp
+	for _, td := range targetSet {
+		if !storage.IsTemporaryTable(td.Schema.Name) {
+			walOps = append(walOps, WALOp{
+				Type:  OpTruncateTable,
+				Table: td.Schema.Name,
+			})
+		}
+	}
+	if len(walOps) > 0 {
+		if _, err := e.recordWALLocked(walOps); err != nil {
+			return err
+		}
+	}
+
 	for _, td := range targetSet {
 		td.mu.Lock()
 		td.truncateShardsLocked()
@@ -456,19 +488,6 @@ func (e *Engine) TruncateTables(tableNames []string, cascade bool) error {
 			idx.Entries = nil
 		}
 		td.mu.Unlock()
-
-		if !storage.IsTemporaryTable(td.Schema.Name) {
-			walOps = append(walOps, WALOp{
-				Type:  OpTruncateTable,
-				Table: td.Schema.Name,
-			})
-		}
-	}
-
-	if len(walOps) > 0 {
-		if _, err := e.recordWALLocked(walOps); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -501,6 +520,16 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 		return fmt.Errorf("%w: partition %q in table %q", storage.ErrPartitionNotFound, partitionName, tableName)
 	}
 
+	if !storage.IsTemporaryTable(td.Schema.Name) {
+		if _, err := e.recordWALLocked([]WALOp{{
+			Type:  OpDropPartition,
+			Table: td.Schema.Name,
+			Key:   partitionName,
+		}}); err != nil {
+			return err
+		}
+	}
+
 	// Delete all rows in partition and purge secondary index references
 	for pk := range pksSet {
 		oldRow, hadOld := td.deleteRowAndVerLocked(pk)
@@ -515,16 +544,6 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 
 	// Rebuild keys
 	td.Keys = td.collectKeys(nil)
-
-	if !storage.IsTemporaryTable(td.Schema.Name) {
-		if _, err := e.recordWALLocked([]WALOp{{
-			Type:  OpDropPartition,
-			Table: td.Schema.Name,
-			Key:   partitionName,
-		}}); err != nil {
-			return err
-		}
-	}
 
 	return nil
 }
@@ -636,6 +655,16 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 		return fmt.Errorf("%w: %s", storage.ErrTableExists, newClean)
 	}
 
+	if !storage.IsTemporaryTable(newClean) {
+		if _, err := e.recordWALLocked([]WALOp{{
+			Type:  OpRenameTable,
+			Table: newClean,
+			Key:   oldClean,
+		}}); err != nil {
+			return err
+		}
+	}
+
 	for k := range e.tables {
 		if strings.EqualFold(k, oldClean) {
 			delete(e.tables, k)
@@ -666,15 +695,6 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 
 	e.rebuildFKCacheLocked()
 
-	if !storage.IsTemporaryTable(newClean) {
-		if _, err := e.recordWALLocked([]WALOp{{
-			Type:  OpRenameTable,
-			Table: newClean,
-			Key:   oldClean,
-		}}); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 

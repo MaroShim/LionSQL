@@ -13,6 +13,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
 
 ### Fixed
+- **Storage & Engine (`FIX-MEMENGINE-DDL-WAL-FAILCLOSED-1`, ddl.go:96, 196, 225, 395, 465, 520, 660)**:
+  - Enforce fail-closed catalog consistency when WAL write fails during DDL execution in `pkg/storage/memengine`:
+    1. Revert in-memory catalog additions (`delete(e.tables)`) and rebuild FK cache on `CreateTable` WAL append failure.
+    2. Restore dropped table descriptor (`e.tables[name] = td`) and rebuild FK cache on `DropTable` WAL append failure.
+    3. Revert secondary index additions and removals on `CreateIndex` and `DropIndex` WAL append failure.
+    4. Enforce write-WAL-first ordering for `TruncateTables`, `DropPartition`, and `RenameTable`, guaranteeing that in-memory shard entries and table names are only mutated after WAL persistence succeeds.
 - **Storage & Engine (`FIX-COMMIT-PARTIAL-MUTATION-RECOVERY-1`, tx.go:2054~2289)**:
   - Enforce atomic transaction rollback on commit failure by introducing fine-grained LIFO undo logging (`commitUndoOp`) in `pkg/storage/memengine/tx.go`:
     1. Pre-compute all flat record serialization (`EncodeRowToFlat`) and partition keys (`ComputePartitionKeyFromRow`) during the initial preparation loop before any persistent mutations occur, failing fast without state alterations.
