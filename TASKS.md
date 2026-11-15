@@ -190,7 +190,7 @@
 | `DONE` | **`DEPRECATE-OCC-PERF-1`** |  | Storage | P2 | v1.0 이전 OCC performance 모드(-memory=performance) Deprecate 명기 (v1.0 옵션 유지) |  |  |
 | `DONE` | **`DOC-REVAMP-10`** | `1.0-GA` | Documentation | P2 | 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 | [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md) |  |
 | `DONE` | **`DOGFOOD-SPRINT-1`** |  | Performance | P1 | LionSQL 자체 백엔드 기반 정형 스프린트/태스크 관리 시스템 구축 (Dogfooding) |  |  |
-| `PENDING` | **`DURA-HYBRID-COMMIT-TAINT-1`** | `1.0-GA` | Storage | P2 | WiredTiger C 커밋 실패 시 Fail-Closed markTainted 방어벽 확립 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
+| `DONE` | **`DURA-HYBRID-COMMIT-TAINT-1`** | `1.0-GA` | Storage | P2 | WiredTiger C 커밋 실패 시 Fail-Closed markTainted 방어벽 확립 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `IN_PROGRESS` | **`DURA-KILL-1`** | `1.0-GA` | Durability | P2 | kill -9 크래시 복구 장기 라운드 검증 |  |  |
 | `DONE` | **`DURA-SLT-1`** |  | Durability | P2 | SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 | [`notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`DURA-SLT-2`** |  | Durability | P2 | SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 | [`notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md) |  |
@@ -2374,8 +2374,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] WiredTiger C 커밋 실패 시 Fail-Closed markTainted 방어벽 확립 `DURA-HYBRID-COMMIT-TAINT-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-15 11:08:53
+### [DONE] WiredTiger C 커밋 실패 시 Fail-Closed markTainted 방어벽 확립 `DURA-HYBRID-COMMIT-TAINT-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-15 12:28:29
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
 

@@ -86,6 +86,7 @@ type WALWriter struct {
 	syncMu    sync.Mutex
 	writeSeq  int64
 	syncedSeq int64
+	syncFn    func(*os.File) error
 }
 
 // NewWALWriter opens or creates a WAL file at the given path.
@@ -252,19 +253,42 @@ func (w *WALWriter) syncAll() error {
 }
 
 // syncLeaderLocked must be called with syncMu held.
+// Aligning with WiredTiger (WT_PANIC) and PostgreSQL (fsyncgate PANIC), if fsync fails after
+// frames have been written into the OS page cache, the WAL writer is immediately tainted
+// (w.brokenErr) so all concurrent followers and subsequent write/commit attempts fail-stop.
 func (w *WALWriter) syncLeaderLocked() error {
 	w.mu.Lock()
+	if w.brokenErr != nil {
+		err := w.brokenErr
+		w.mu.Unlock()
+		return err
+	}
 	target := w.writeSeq
 	file := w.file
 	closed := w.closed
+	syncFn := w.syncFn
 	w.mu.Unlock()
 
 	if closed || file == nil || w.syncedSeq >= target {
 		return nil
 	}
 	w.syncCount.Add(1)
-	if err := file.Sync(); err != nil {
-		return err
+	var err error
+	if syncFn != nil {
+		err = syncFn(file)
+	} else {
+		err = file.Sync()
+	}
+	if err != nil {
+		taintErr := fmt.Errorf("wal: fatal fsync failure (WAL tainted): %w", err)
+		w.mu.Lock()
+		if w.brokenErr == nil {
+			w.brokenErr = taintErr
+		} else {
+			taintErr = w.brokenErr
+		}
+		w.mu.Unlock()
+		return taintErr
 	}
 	w.syncedSeq = target
 	return nil

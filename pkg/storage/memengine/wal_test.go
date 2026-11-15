@@ -987,6 +987,69 @@ func TestWAL_RotateAndTruncate_KeepOldFileOpenOnFailure(t *testing.T) {
 	}
 }
 
+func TestWAL_FsyncFailureTaintsWriter(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lionsql_wal_taint_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	eng := New()
+	eng.SetFsyncPolicy(FsyncAlways)
+	if err := eng.Open(tempDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "accounts",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "balance", Type: storage.TypeInt},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+
+	// 1. Commit valid initial record (id=1, balance=1000)
+	tx1, _ := sess.BeginTx(storage.TxOptions{})
+	_ = tx1.Insert("accounts", storage.Record{"id": storage.IntValue(1), "balance": storage.IntValue(1000)})
+	if err := tx1.Commit(); err != nil {
+		t.Fatalf("tx1 commit failed: %v", err)
+	}
+
+	// 2. Inject simulated fsync EIO failure while write(2) still succeeds
+	eng.wal.mu.Lock()
+	eng.wal.syncFn = func(f *os.File) error {
+		return fmt.Errorf("simulated hardware EIO during fsync")
+	}
+	eng.wal.mu.Unlock()
+
+	tx2, _ := sess.BeginTx(storage.TxOptions{})
+	_ = tx2.Update("accounts", storage.IntValue(1), storage.Record{"id": storage.IntValue(1), "balance": storage.IntValue(9999)})
+	err2 := tx2.Commit()
+	if err2 == nil || !strings.Contains(err2.Error(), "WAL tainted") {
+		t.Fatalf("expected tx2 Commit to fail with WAL tainted error, got: %v", err2)
+	}
+
+	// 3. Even if underlying disk syncFn recovers later, the WAL writer must remain tainted (WT_PANIC fail-stop parity)
+	eng.wal.mu.Lock()
+	eng.wal.syncFn = nil
+	eng.wal.mu.Unlock()
+
+	tx3, _ := sess.BeginTx(storage.TxOptions{})
+	_ = tx3.Insert("accounts", storage.Record{"id": storage.IntValue(2), "balance": storage.IntValue(2000)})
+	err3 := tx3.Commit()
+	if err3 == nil || !strings.Contains(err3.Error(), "WAL tainted") {
+		t.Fatalf("expected subsequent tx3 Commit to be rejected on tainted WAL writer, got: %v", err3)
+	}
+}
+
+
 
 
 
