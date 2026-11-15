@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"strings"
 	"testing"
 
 	"lionsql/pkg/storage"
@@ -170,6 +171,75 @@ func TestTableVariable_SavepointRollbackExemption(t *testing.T) {
 	curTV.Close()
 	if tvCount != 2 {
 		t.Fatalf("expected table variable to have 2 rows, got %d", tvCount)
+	}
+}
+
+// TestTableVariable_RollbackIndexErrorPropagation verifies that unique index errors
+// occurring while committing table variable changes during rollback are not silently swallowed.
+func TestTableVariable_RollbackIndexErrorPropagation(t *testing.T) {
+	eng := New()
+	defer eng.Close()
+
+	tvSchema := &storage.TableSchema{
+		Name: "__tv_sess1_concurr",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "code", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{
+				Name:      "idx_tv_code",
+				TableName: "__tv_sess1_concurr",
+				Columns:   []string{"code"},
+				Unique:    true,
+			},
+		},
+	}
+	if err := eng.CreateTable(tvSchema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess1, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession 1 failed: %v", err)
+	}
+	defer sess1.Close()
+
+	sess2, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession 2 failed: %v", err)
+	}
+	defer sess2.Close()
+
+	// tx1 inserts code "SHARED_CODE"
+	tx1, err := sess1.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx 1 failed: %v", err)
+	}
+	if err := tx1.Insert("__tv_sess1_concurr", storage.Record{"id": storage.IntValue(1), "code": storage.StringValue("SHARED_CODE")}); err != nil {
+		t.Fatalf("tx1 Insert failed: %v", err)
+	}
+
+	// Concurrent tx2 inserts and commits the same unique code "SHARED_CODE"
+	tx2, err := sess2.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx 2 failed: %v", err)
+	}
+	if err := tx2.Insert("__tv_sess1_concurr", storage.Record{"id": storage.IntValue(2), "code": storage.StringValue("SHARED_CODE")}); err != nil {
+		t.Fatalf("tx2 Insert failed: %v", err)
+	}
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("tx2 Commit failed: %v", err)
+	}
+
+	// tx1 rolls back, which attempts to commit its table variable change with duplicate unique code.
+	// This MUST return an explicit error and not be silently swallowed!
+	rbErr := tx1.Rollback()
+	if rbErr == nil {
+		t.Fatalf("expected Rollback() to fail due to unique index collision on table variable, got nil")
+	}
+	if !strings.Contains(rbErr.Error(), "unique constraint violation on index") && !strings.Contains(rbErr.Error(), "duplicate key") {
+		t.Fatalf("expected error mentioning unique violation or duplicate key, got: %v", rbErr)
 	}
 }
 

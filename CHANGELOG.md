@@ -13,6 +13,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
 
 ### Fixed
+- **Storage & Engine (`FIX-ROLLBACK-INDEX-RESTORE-ERROR-HANDLING-1`, tx.go:2240, 2500~2615, persistence.go:170~290, wt_engine.go:1420~1480)**:
+  - Eliminate silent swallowing of secondary index restoration and modification errors during transaction rollback, table variable commit, WAL replay, and savepoint undo per `[RULE:ExplicitError]` and Invariant 9:
+    1. Update `commitTableVariablesLocked()` in `pkg/storage/memengine/tx.go` to return `error`, capturing and propagating all index insertion errors (`idxData.Insert`), flat record encoding failures, and missing table lookups to `tx.Rollback()`.
+    2. Eliminate silent `_ = idxData.Insert` ignores in `pkg/storage/memengine/persistence.go` during WAL crash recovery replay (`OpInsert`, `OpUpdate`, and `OpCreateIndex`), passing include columns and failing closed with structured diagnostics on duplicate keys or corrupted indexes.
+    3. Harden savepoint rollback (`RollbackTo`) in `pkg/storage/wiredtiger/wt_engine.go` to cleanly remove inserted secondary index entries on undone PUTs, restore deleted index entries via `putRawBytesLocked` on undone DELETEs, and revert updated index keys on undone UPDATEs, joining and propagating all undo errors via `errors.Join`.
+    4. Propagate index restoration failures during `rollbackApplied()` in `memengine.Commit()` to wrap the commit error with critical rollback failure diagnostics.
 - **Storage & Engine (`FIX-MEMENGINE-DDL-WAL-FAILCLOSED-1`, ddl.go:96, 196, 225, 395, 465, 520, 660)**:
   - Enforce fail-closed catalog consistency when WAL write fails during DDL execution in `pkg/storage/memengine`:
     1. Revert in-memory catalog additions (`delete(e.tables)`) and rebuild FK cache on `CreateTable` WAL append failure.

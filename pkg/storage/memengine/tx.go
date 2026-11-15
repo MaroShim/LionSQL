@@ -2507,16 +2507,19 @@ func (tx *Transaction) Rollback() error {
 
 	// Commit any changes to table variables (@table_var / __tv_*)
 	// Per MS SQL Server T-SQL standard, table variables are exempt from transaction rollback.
-	tx.commitTableVariablesLocked()
+	var tvErr error
+	if err := tx.commitTableVariablesLocked(); err != nil {
+		tvErr = fmt.Errorf("memengine: failed to commit table variable changes during rollback: %w", err)
+	}
 
 	tx.closed = true
 	tx.releaseToPoolLocked()
-	return nil
+	return tvErr
 }
 
-func (tx *Transaction) commitTableVariablesLocked() {
+func (tx *Transaction) commitTableVariablesLocked() error {
 	if len(tx.changes) == 0 {
-		return
+		return nil
 	}
 	var tvChanges []rowChange
 	for _, ch := range tx.changes {
@@ -2525,15 +2528,17 @@ func (tx *Transaction) commitTableVariablesLocked() {
 		}
 	}
 	if len(tvChanges) == 0 {
-		return
+		return nil
 	}
 
+	var errs []error
 	for _, ch := range tvChanges {
 		td := ch.td
 		if td == nil {
 			var err error
 			td, err = tx.getTableLocked(ch.table)
 			if err != nil {
+				errs = append(errs, fmt.Errorf("table %q not found for table variable change: %w", ch.table, err))
 				continue
 			}
 		}
@@ -2554,6 +2559,8 @@ func (tx *Transaction) commitTableVariablesLocked() {
 			if td.mode == MemoryCompact && td.layout != nil {
 				if flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row); err == nil {
 					sh.entries[ch.key] = shardEntry{ver: 1, flatBuf: flatBuf}
+				} else {
+					errs = append(errs, fmt.Errorf("table variable %q encode flat row failed: %w", td.Schema.Name, err))
 				}
 			} else {
 				sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
@@ -2564,12 +2571,16 @@ func (tx *Transaction) commitTableVariablesLocked() {
 				}
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
-				_ = idxData.Insert(newKey, ch.key, incVals)
+				if err := idxData.Insert(newKey, ch.key, incVals); err != nil {
+					errs = append(errs, fmt.Errorf("table variable %q index %q insert failed: %w", td.Schema.Name, idxData.Schema.Name, err))
+				}
 			}
 		case changeUpdate:
 			if td.mode == MemoryCompact && td.layout != nil {
 				if flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row); err == nil {
 					sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, flatBuf: flatBuf}
+				} else {
+					errs = append(errs, fmt.Errorf("table variable %q encode flat row failed: %w", td.Schema.Name, err))
 				}
 			} else {
 				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
@@ -2584,7 +2595,9 @@ func (tx *Transaction) commitTableVariablesLocked() {
 				}
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
-				_ = idxData.Insert(newKey, ch.key, incVals)
+				if err := idxData.Insert(newKey, ch.key, incVals); err != nil {
+					errs = append(errs, fmt.Errorf("table variable %q index %q update insert failed: %w", td.Schema.Name, idxData.Schema.Name, err))
+				}
 			}
 		case changeDelete:
 			delete(sh.entries, ch.key)
@@ -2600,6 +2613,7 @@ func (tx *Transaction) commitTableVariablesLocked() {
 		}
 		sh.mu.Unlock()
 	}
+	return errors.Join(errs...)
 }
 
 func (tx *Transaction) Savepoint(name string) error {

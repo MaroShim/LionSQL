@@ -2,7 +2,6 @@ package memengine
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -170,12 +169,10 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				return true
 			})
 			if scanErr != nil {
-				log.Printf("[memengine] CRITICAL: replay OpCreateIndex failed on table %q index %q: %v", td.Schema.Name, op.IndexSchema.Name, scanErr)
-				continue
+				return fmt.Errorf("memengine: replay OpCreateIndex failed on table %q index %q: %w", td.Schema.Name, op.IndexSchema.Name, scanErr)
 			}
 			if insertErr != nil {
-				log.Printf("[memengine] CRITICAL: replay OpCreateIndex failed on table %q index %q: %v", td.Schema.Name, op.IndexSchema.Name, insertErr)
-				continue
+				return fmt.Errorf("memengine: replay OpCreateIndex failed on table %q index %q: %w", td.Schema.Name, op.IndexSchema.Name, insertErr)
 			}
 			if td.Indexes == nil {
 				td.Indexes = make(map[string]*IndexData)
@@ -220,8 +217,14 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				}
 			}
 			for _, idxData := range td.Indexes {
+				if idxData.Schema.Disabled {
+					continue
+				}
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, row, &idxData.Schema)
-				_ = idxData.Insert(newKey, op.Key)
+				incVals := extractIncludeValuesFromRow(&td.Schema, row, idxData.Schema.IncludeCols)
+				if err := idxData.Insert(newKey, op.Key, incVals); err != nil {
+					return fmt.Errorf("memengine: wal replay insert index %q on table %q failed (pk=%s): %w", idxData.Schema.Name, td.Schema.Name, op.Key, err)
+				}
 			}
 		case OpUpdate:
 			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
@@ -260,12 +263,18 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				}
 			}
 			for _, idxData := range td.Indexes {
+				if idxData.Schema.Disabled {
+					continue
+				}
 				if hadOld {
 					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
 					idxData.Delete(oldKey, op.Key)
 				}
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, row, &idxData.Schema)
-				_ = idxData.Insert(newKey, op.Key)
+				incVals := extractIncludeValuesFromRow(&td.Schema, row, idxData.Schema.IncludeCols)
+				if err := idxData.Insert(newKey, op.Key, incVals); err != nil {
+					return fmt.Errorf("memengine: wal replay update index %q on table %q failed (pk=%s): %w", idxData.Schema.Name, td.Schema.Name, op.Key, err)
+				}
 			}
 		case OpDelete:
 			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
@@ -286,6 +295,9 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			}
 			if hadOld {
 				for _, idxData := range td.Indexes {
+					if idxData.Schema.Disabled {
+						continue
+					}
 					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
 					idxData.Delete(oldKey, op.Key)
 				}
