@@ -750,6 +750,10 @@ func (e *Engine) Close() error {
 }
 
 func (e *Engine) CreateTable(schema *storage.TableSchema) error {
+	if schema != nil && len(schema.Columns) > storage.MaxColumnsPerTable {
+		return fmt.Errorf("%w: table %q has %d columns (max %d)", storage.ErrTooManyColumns, schema.Name, len(schema.Columns), storage.MaxColumnsPerTable)
+	}
+
 	if schema != nil && storage.IsTemporaryTable(schema.Name) {
 		return e.tempEng.CreateTable(schema)
 	}
@@ -1079,6 +1083,16 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 	}
 	defer C.go_wt_session_close(sess)
 
+	if ret := C.go_wt_session_begin(sess, nil); ret != 0 {
+		return fmt.Errorf("begin_transaction failed: %d", ret)
+	}
+	txCommitted := false
+	defer func() {
+		if !txCommitted {
+			_ = C.go_wt_session_rollback(sess, nil)
+		}
+	}()
+
 	uri := C.CString(tbl.TableURI())
 	defer C.free(unsafe.Pointer(uri))
 
@@ -1105,15 +1119,21 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 		var sz C.size_t
 		if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret == 0 && pData != nil {
 			rec, err := decodeRecord(tbl, C.GoBytes(pData, C.int(sz)))
-			if err == nil {
-				pKeyVal, err := tbl.ComputePartitionKey(rec)
-				if err == nil && pKeyVal == partitionName {
-					if len(tbl.Indexes) > 0 && pkStr != "" {
-						deletedRows = append(deletedRows, deletedPartitionRow{pkStr: pkStr, rec: rec})
-					}
-					C.go_wt_cursor_remove(cur)
-					matched++
+			if err != nil {
+				return fmt.Errorf("DropPartition: decode record failed on table %s pk %s: %w", tbl.Name, pkStr, err)
+			}
+			pKeyVal, err := tbl.ComputePartitionKey(rec)
+			if err != nil {
+				return fmt.Errorf("DropPartition: compute partition key failed on table %s pk %s: %w", tbl.Name, pkStr, err)
+			}
+			if pKeyVal == partitionName {
+				if len(tbl.Indexes) > 0 && pkStr != "" {
+					deletedRows = append(deletedRows, deletedPartitionRow{pkStr: pkStr, rec: rec})
 				}
+				if rret := C.go_wt_cursor_remove(cur); rret != 0 {
+					return wtOpError("cursor_remove", int(rret))
+				}
+				matched++
 			}
 		}
 	}
@@ -1125,16 +1145,27 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 		for _, idx := range tbl.Indexes {
 			cIdxURI := C.CString(tbl.IndexURI(idx.Name))
 			var idxCur *C.WT_CURSOR
-			if C.go_wt_open_cursor(sess, cIdxURI, &idxCur) == 0 {
-				for _, dr := range deletedRows {
-					k, _, _ := formatIndexKeyValue(dr.rec, &idx, dr.pkStr)
-					_ = removeIndexEntry(idxCur, k)
-				}
-				C.go_wt_cursor_close(idxCur)
+			if ret := C.go_wt_open_cursor(sess, cIdxURI, &idxCur); ret != 0 {
+				C.free(unsafe.Pointer(cIdxURI))
+				return fmt.Errorf("open index cursor %s failed: %d", idx.Name, ret)
 			}
+			for _, dr := range deletedRows {
+				k, _, _ := formatIndexKeyValue(dr.rec, &idx, dr.pkStr)
+				if err := removeIndexEntry(idxCur, k); err != nil {
+					C.go_wt_cursor_close(idxCur)
+					C.free(unsafe.Pointer(cIdxURI))
+					return fmt.Errorf("remove index entry failed on %s: %w", idx.Name, err)
+				}
+			}
+			C.go_wt_cursor_close(idxCur)
 			C.free(unsafe.Pointer(cIdxURI))
 		}
 	}
+
+	if ret := C.go_wt_session_commit(sess, nil); ret != 0 {
+		return fmt.Errorf("commit_transaction failed: %d", ret)
+	}
+	txCommitted = true
 
 	if !storage.IsTemporaryTable(tbl.Name) {
 		if cnt := e.getRowCountAtomicLocked(tbl.Name); cnt != nil {
@@ -1400,6 +1431,9 @@ func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.Table
 	trialSchema := t.Clone()
 	if err := mutator(&trialSchema); err != nil {
 		return err
+	}
+	if len(trialSchema.Columns) > storage.MaxColumnsPerTable {
+		return fmt.Errorf("%w: altered table %q would have %d columns (max %d)", storage.ErrTooManyColumns, tableName, len(trialSchema.Columns), storage.MaxColumnsPerTable)
 	}
 
 	// [Invariant 13: Schema Evolution & Instant DDL 3-Layer Defense]
@@ -2059,22 +2093,6 @@ func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error)
 	}, nil
 }
 
-type wtUndoKind int
-
-const (
-	wtUndoDelete wtUndoKind = iota
-	wtUndoPut
-	wtUndoUpdate
-)
-
-type wtUndoOp struct {
-	table   string
-	pk      storage.Value
-	kind    wtUndoKind
-	oldData []byte
-	newData []byte
-}
-
 // WTTx manages ACID mutations in WiredTiger and routes temporary tables to tempTx lazily.
 type WTTx struct {
 	sess              *WTSession
@@ -2087,7 +2105,7 @@ type WTTx struct {
 	mu                sync.Mutex
 	closed            bool
 	hasWrites         bool
-	undoLog           []wtUndoOp
+	undoLog           []*storage.PhysiologicalRecord
 	savepoints        map[string]int
 	spNames           []string
 	tempSpPreCreated  map[string]bool
@@ -2096,6 +2114,13 @@ type WTTx struct {
 	tableCache        map[string]*storage.TableSchema
 	snapTables        []*storage.TableSchema
 	rowDeltas         map[string]int64
+}
+
+func (tx *WTTx) clearUndoLogLocked() {
+	for _, rec := range tx.undoLog {
+		storage.ReleasePhysRecord(rec)
+	}
+	tx.undoLog = nil
 }
 
 func (tx *WTTx) ensureTempTxLocked() (storage.Transaction, error) {
@@ -2326,30 +2351,43 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 		return wtOpError("cursor_insert", int(ret))
 	}
 
+	var physRec *storage.PhysiologicalRecord
+	if len(tx.savepoints) > 0 {
+		recCopy := make([]byte, len(recBytes))
+		copy(recCopy, recBytes)
+		physRec = storage.AcquirePhysRecord(storage.OpInsert, tbl.Name, pkVal, nil, recCopy)
+	}
+
 	for _, idx := range tbl.Indexes {
 		idxURI := tbl.IndexURI(idx.Name)
 		idxCur, err := tx.sess.acquireCursor(idxURI)
 		if err != nil {
+			if physRec != nil {
+				storage.ReleasePhysRecord(physRec)
+			}
 			return err
 		}
 		k, v, _ := formatIndexKeyValue(record, &idx, pkStr)
 		if err := insertIndexEntry(idxCur, k, v); err != nil {
 			tx.sess.releaseCursor(idxURI, idxCur)
+			if physRec != nil {
+				storage.ReleasePhysRecord(physRec)
+			}
 			return err
 		}
 		tx.sess.releaseCursor(idxURI, idxCur)
+		if physRec != nil {
+			physRec.NewIdx = append(physRec.NewIdx, storage.IndexImage{
+				URI:   idxURI,
+				Key:   k,
+				Value: v,
+			})
+		}
 	}
 
 	tx.hasWrites = true
-	if len(tx.savepoints) > 0 {
-		recCopy := make([]byte, len(recBytes))
-		copy(recCopy, recBytes)
-		tx.undoLog = append(tx.undoLog, wtUndoOp{
-			table:   tbl.Name,
-			pk:      pkVal,
-			kind:    wtUndoDelete,
-			newData: recCopy,
-		})
+	if physRec != nil {
+		tx.undoLog = append(tx.undoLog, physRec)
 	}
 	if tx.sess.engine.hasHook.Load() && !storage.IsTemporaryTable(tableName) {
 		recCopy := make([]byte, len(recBytes))
@@ -2485,11 +2523,20 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 		return wtOpError("cursor_update", int(ret))
 	}
 
+	var physRec *storage.PhysiologicalRecord
+	if len(tx.savepoints) > 0 {
+		newDataCopy := make([]byte, len(recBytes))
+		copy(newDataCopy, recBytes)
+		oldDataCopy := make([]byte, len(oldData))
+		copy(oldDataCopy, oldData)
+		physRec = storage.AcquirePhysRecord(storage.OpUpdate, tbl.Name, pk, oldDataCopy, newDataCopy)
+	}
+
 	if len(tbl.Indexes) > 0 {
 		oldRec, err := decodeRecord(tbl, oldData)
 		if err == nil {
 			for _, idx := range tbl.Indexes {
-				oldKey, _, _ := formatIndexKeyValue(oldRec, &idx, pkStr)
+				oldKey, oldVal, _ := formatIndexKeyValue(oldRec, &idx, pkStr)
 				newKey, newVal, _ := formatIndexKeyValue(existing, &idx, pkStr)
 				if oldKey == newKey {
 					continue
@@ -2502,24 +2549,31 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 				_ = removeIndexEntry(idxCur, oldKey)
 				if err := insertIndexEntry(idxCur, newKey, newVal); err != nil {
 					tx.sess.releaseCursor(idxURI, idxCur)
+					if physRec != nil {
+						storage.ReleasePhysRecord(physRec)
+					}
 					return err
 				}
 				tx.sess.releaseCursor(idxURI, idxCur)
+				if physRec != nil {
+					physRec.OldIdx = append(physRec.OldIdx, storage.IndexImage{
+						URI:   idxURI,
+						Key:   oldKey,
+						Value: oldVal,
+					})
+					physRec.NewIdx = append(physRec.NewIdx, storage.IndexImage{
+						URI:   idxURI,
+						Key:   newKey,
+						Value: newVal,
+					})
+				}
 			}
 		}
 	}
 
 	tx.hasWrites = true
-	if len(tx.savepoints) > 0 {
-		newDataCopy := make([]byte, len(recBytes))
-		copy(newDataCopy, recBytes)
-		tx.undoLog = append(tx.undoLog, wtUndoOp{
-			table:   tbl.Name,
-			pk:      pk,
-			kind:    wtUndoUpdate,
-			oldData: oldData,
-			newData: newDataCopy,
-		})
+	if physRec != nil {
+		tx.undoLog = append(tx.undoLog, physRec)
 	}
 	if tx.sess.engine.hasHook.Load() && !storage.IsTemporaryTable(tableName) {
 		recCopy := make([]byte, len(recBytes))
@@ -2599,6 +2653,13 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 		return wtOpError("cursor_remove", int(ret))
 	}
 
+	var physRec *storage.PhysiologicalRecord
+	if len(tx.savepoints) > 0 && len(oldData) > 0 {
+		oldDataCopy := make([]byte, len(oldData))
+		copy(oldDataCopy, oldData)
+		physRec = storage.AcquirePhysRecord(storage.OpDelete, tbl.Name, pk, oldDataCopy, nil)
+	}
+
 	if existingRec != nil && len(tbl.Indexes) > 0 {
 		for _, idx := range tbl.Indexes {
 			idxURI := tbl.IndexURI(idx.Name)
@@ -2606,20 +2667,22 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 			if err != nil {
 				continue
 			}
-			k, _, _ := formatIndexKeyValue(existingRec, &idx, pkStr)
+			k, v, _ := formatIndexKeyValue(existingRec, &idx, pkStr)
 			_ = removeIndexEntry(idxCur, k)
 			tx.sess.releaseCursor(idxURI, idxCur)
+			if physRec != nil {
+				physRec.OldIdx = append(physRec.OldIdx, storage.IndexImage{
+					URI:   idxURI,
+					Key:   k,
+					Value: v,
+				})
+			}
 		}
 	}
 
 	tx.hasWrites = true
-	if len(oldData) > 0 {
-		tx.undoLog = append(tx.undoLog, wtUndoOp{
-			table:   tbl.Name,
-			pk:      pk,
-			kind:    wtUndoPut,
-			oldData: oldData,
-		})
+	if physRec != nil {
+		tx.undoLog = append(tx.undoLog, physRec)
 	}
 	if tx.sess.engine.hasHook.Load() && !storage.IsTemporaryTable(tableName) {
 		tx.walOps = append(tx.walOps, memengine.WALOp{
@@ -3416,7 +3479,7 @@ func (tx *WTTx) Commit() error {
 	walOps := tx.walOps
 	tx.walOps = nil
 	tx.spWALIndices = nil
-	tx.undoLog = nil
+	tx.clearUndoLogLocked()
 	tx.savepoints = nil
 	tx.spNames = nil
 	tx.tempSpPreCreated = nil
@@ -3505,7 +3568,7 @@ func (tx *WTTx) Rollback() error {
 	tx.tableCache = nil
 	tx.walOps = nil
 	tx.spWALIndices = nil
-	tx.undoLog = nil
+	tx.clearUndoLogLocked()
 	tx.savepoints = nil
 	tx.spNames = nil
 	tx.tempSpPreCreated = nil
@@ -3599,91 +3662,77 @@ func (tx *WTTx) RollbackTo(name string) error {
 	}
 
 	var rbErrs []error
-	// Undo operations in reverse order down to targetLen
+	// Undo operations in reverse order down to targetLen using ARIES Physiological Logging
 	for i := len(tx.undoLog) - 1; i >= targetLen; i-- {
 		op := tx.undoLog[i]
-		switch op.kind {
-		case wtUndoDelete:
-			tbl, err := tx.getTableLocked(op.table)
-			if err == nil && len(tbl.Indexes) > 0 && len(op.newData) > 0 {
-				if rec, rerr := decodeRecord(tbl, op.newData); rerr == nil {
-					pkStr := op.pk.String()
-					for _, idx := range tbl.Indexes {
-						key, _, _ := formatIndexKeyValue(rec, &idx, pkStr)
-						idxURI := tbl.IndexURI(idx.Name)
-						if idxCur, cerr := tx.sess.acquireCursor(idxURI); cerr == nil {
-							if rerr := removeIndexEntry(idxCur, key); rerr != nil {
-								rbErrs = append(rbErrs, rerr)
-							}
-							tx.sess.releaseCursor(idxURI, idxCur)
-						} else {
-							rbErrs = append(rbErrs, cerr)
-						}
+		switch op.Kind {
+		case storage.OpInsert:
+			// Undo Insert: remove all inserted index entries, then remove raw row
+			for _, img := range op.NewIdx {
+				if idxCur, cerr := tx.sess.acquireCursor(img.URI); cerr == nil {
+					if rerr := removeIndexEntry(idxCur, img.Key); rerr != nil {
+						rbErrs = append(rbErrs, rerr)
 					}
+					tx.sess.releaseCursor(img.URI, idxCur)
+				} else {
+					rbErrs = append(rbErrs, cerr)
 				}
 			}
-			if rerr := tx.removeRawLocked(op.table, op.pk); rerr != nil {
+			if rerr := tx.removeRawLocked(op.Table, op.PK); rerr != nil {
 				rbErrs = append(rbErrs, rerr)
 			}
 			if tx.rowDeltas != nil {
-				if tbl != nil {
-					tx.rowDeltas[tbl.Name]--
-				} else {
-					tx.rowDeltas[op.table]--
-				}
+				tx.rowDeltas[op.Table]--
 			}
-		case wtUndoPut:
-			if len(op.oldData) > 0 {
-				if perr := tx.putRawBytesLocked(op.table, op.pk, op.oldData, true); perr != nil {
+		case storage.OpDelete:
+			// Undo Delete: restore raw row, then restore all deleted index entries
+			if len(op.OldTuple) > 0 {
+				if perr := tx.putRawBytesLocked(op.Table, op.PK, op.OldTuple, false); perr != nil {
 					rbErrs = append(rbErrs, perr)
 				}
-				if tx.rowDeltas != nil {
-					if tbl, err := tx.getTableLocked(op.table); err == nil && tbl != nil {
-						tx.rowDeltas[tbl.Name]++
+				for _, img := range op.OldIdx {
+					if idxCur, cerr := tx.sess.acquireCursor(img.URI); cerr == nil {
+						if ierr := insertIndexEntry(idxCur, img.Key, img.Value); ierr != nil {
+							rbErrs = append(rbErrs, ierr)
+						}
+						tx.sess.releaseCursor(img.URI, idxCur)
 					} else {
-						tx.rowDeltas[op.table]++
+						rbErrs = append(rbErrs, cerr)
 					}
+				}
+				if tx.rowDeltas != nil {
+					tx.rowDeltas[op.Table]++
 				}
 			}
-		case wtUndoUpdate:
-			if len(op.oldData) > 0 {
-				tbl, err := tx.getTableLocked(op.table)
-				if err == nil && len(tbl.Indexes) > 0 {
-					var oldRec, newRec storage.Record
-					var oldErr, newErr error
-					if len(op.oldData) > 0 {
-						oldRec, oldErr = decodeRecord(tbl, op.oldData)
+		case storage.OpUpdate:
+			// Undo Update: remove new index entries, restore old index entries, restore old row
+			for _, img := range op.NewIdx {
+				if idxCur, cerr := tx.sess.acquireCursor(img.URI); cerr == nil {
+					if rerr := removeIndexEntry(idxCur, img.Key); rerr != nil {
+						rbErrs = append(rbErrs, rerr)
 					}
-					if len(op.newData) > 0 {
-						newRec, newErr = decodeRecord(tbl, op.newData)
-					}
-					if oldErr == nil && newErr == nil {
-						pkStr := op.pk.String()
-						for _, idx := range tbl.Indexes {
-							oldKey, oldVal, _ := formatIndexKeyValue(oldRec, &idx, pkStr)
-							newKey, newVal, _ := formatIndexKeyValue(newRec, &idx, pkStr)
-							if oldKey != newKey || oldVal != newVal {
-								idxURI := tbl.IndexURI(idx.Name)
-								if idxCur, cerr := tx.sess.acquireCursor(idxURI); cerr == nil {
-									if rerr := removeIndexEntry(idxCur, newKey); rerr != nil {
-										rbErrs = append(rbErrs, rerr)
-									}
-									if ierr := insertIndexEntry(idxCur, oldKey, oldVal); ierr != nil {
-										rbErrs = append(rbErrs, ierr)
-									}
-									tx.sess.releaseCursor(idxURI, idxCur)
-								} else {
-									rbErrs = append(rbErrs, cerr)
-								}
-							}
-						}
-					}
+					tx.sess.releaseCursor(img.URI, idxCur)
+				} else {
+					rbErrs = append(rbErrs, cerr)
 				}
-				if perr := tx.putRawBytesLocked(op.table, op.pk, op.oldData, false); perr != nil {
+			}
+			for _, img := range op.OldIdx {
+				if idxCur, cerr := tx.sess.acquireCursor(img.URI); cerr == nil {
+					if ierr := insertIndexEntry(idxCur, img.Key, img.Value); ierr != nil {
+						rbErrs = append(rbErrs, ierr)
+					}
+					tx.sess.releaseCursor(img.URI, idxCur)
+				} else {
+					rbErrs = append(rbErrs, cerr)
+				}
+			}
+			if len(op.OldTuple) > 0 {
+				if perr := tx.putRawBytesLocked(op.Table, op.PK, op.OldTuple, false); perr != nil {
 					rbErrs = append(rbErrs, perr)
 				}
 			}
 		}
+		storage.ReleasePhysRecord(op)
 	}
 	if len(rbErrs) > 0 {
 		return errors.Join(rbErrs...)
@@ -3748,6 +3797,10 @@ func (tx *WTTx) ReleaseSavepoint(name string) error {
 			delete(tx.tempSpPreCreated, tx.spNames[i])
 		}
 		tx.spNames = tx.spNames[:idx]
+	}
+
+	if len(tx.savepoints) == 0 {
+		tx.clearUndoLogLocked()
 	}
 
 	return nil

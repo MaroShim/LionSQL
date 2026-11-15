@@ -1444,6 +1444,184 @@ func TestRegression_AUDIT_093_002_RollbackToPreservesUnchangedUniqueIndex(t *tes
 	_ = cur99.Close()
 }
 
+func TestWiredTiger_ARIES_Savepoint_ComprehensiveUndo(t *testing.T) {
+	tmpDir := t.TempDir()
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "items_aries",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "sku", Type: storage.TypeVarChar},
+			{Name: "category", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_items_sku", Columns: []string{"sku"}, Unique: true},
+			{Name: "idx_items_cat", Columns: []string{"category"}, Unique: false},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	// 1. Initial row
+	txInit, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx init failed: %v", err)
+	}
+	if err := txInit.Insert("items_aries", storage.Record{
+		"id":       storage.IntValue(1),
+		"sku":      storage.StringValue("SKU-A"),
+		"category": storage.StringValue("ELEC"),
+	}); err != nil {
+		t.Fatalf("Insert initial failed: %v", err)
+	}
+	if err := txInit.Commit(); err != nil {
+		t.Fatalf("Commit init failed: %v", err)
+	}
+
+	// 2. Active Tx with nested savepoints
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+
+	if err := tx.Savepoint("sp1"); err != nil {
+		t.Fatalf("Savepoint sp1 failed: %v", err)
+	}
+
+	// Test Delete Undo: delete id=1, then savepoint sp2
+	if err := tx.Delete("items_aries", storage.IntValue(1)); err != nil {
+		t.Fatalf("Delete id=1 failed: %v", err)
+	}
+	skuA := storage.StringValue("SKU-A")
+	curA, err := tx.IndexScan("items_aries", "idx_items_sku", &skuA, &skuA)
+	if err != nil {
+		t.Fatalf("IndexScan skuA failed: %v", err)
+	}
+	if curA.Next() {
+		_ = curA.Close()
+		t.Fatalf("expected SKU-A to be removed after delete")
+	}
+	_ = curA.Close()
+
+	if err := tx.Savepoint("sp2"); err != nil {
+		t.Fatalf("Savepoint sp2 failed: %v", err)
+	}
+
+	// Test Insert Undo: insert id=2 (SKU-B), insert id=3 (SKU-C), then savepoint sp3
+	if err := tx.Insert("items_aries", storage.Record{
+		"id":       storage.IntValue(2),
+		"sku":      storage.StringValue("SKU-B"),
+		"category": storage.StringValue("BOOK"),
+	}); err != nil {
+		t.Fatalf("Insert id=2 failed: %v", err)
+	}
+	if err := tx.Insert("items_aries", storage.Record{
+		"id":       storage.IntValue(3),
+		"sku":      storage.StringValue("SKU-C"),
+		"category": storage.StringValue("HOME"),
+	}); err != nil {
+		t.Fatalf("Insert id=3 failed: %v", err)
+	}
+
+	if err := tx.Savepoint("sp3"); err != nil {
+		t.Fatalf("Savepoint sp3 failed: %v", err)
+	}
+
+	// Test Update Undo: update id=3 to SKU-C-MOD and GARDEN
+	if err := tx.Update("items_aries", storage.IntValue(3), storage.Record{
+		"id":       storage.IntValue(3),
+		"sku":      storage.StringValue("SKU-C-MOD"),
+		"category": storage.StringValue("GARDEN"),
+	}); err != nil {
+		t.Fatalf("Update id=3 failed: %v", err)
+	}
+
+	// Rollback to sp3: should undo the update of id=3
+	if err := tx.RollbackTo("sp3"); err != nil {
+		t.Fatalf("RollbackTo sp3 failed: %v", err)
+	}
+	rec3, err := tx.Get("items_aries", storage.IntValue(3))
+	if err != nil || rec3 == nil || rec3["sku"].String() != "SKU-C" || rec3["category"].String() != "HOME" {
+		t.Fatalf("expected id=3 to revert to SKU-C/HOME, got: %v (err=%v)", rec3, err)
+	}
+	skuCMod := storage.StringValue("SKU-C-MOD")
+	curCMod, _ := tx.IndexScan("items_aries", "idx_items_sku", &skuCMod, &skuCMod)
+	if curCMod.Next() {
+		_ = curCMod.Close()
+		t.Fatalf("expected SKU-C-MOD to be removed from index after rollback")
+	}
+	_ = curCMod.Close()
+
+	// Rollback to sp2: should undo insert of id=3 and id=2
+	if err := tx.RollbackTo("sp2"); err != nil {
+		t.Fatalf("RollbackTo sp2 failed: %v", err)
+	}
+	rec2, err := tx.Get("items_aries", storage.IntValue(2))
+	if err == nil && rec2 != nil {
+		t.Fatalf("expected id=2 to be absent after rollback to sp2, found: %v", rec2)
+	}
+	skuB := storage.StringValue("SKU-B")
+	curB, _ := tx.IndexScan("items_aries", "idx_items_sku", &skuB, &skuB)
+	if curB.Next() {
+		_ = curB.Close()
+		t.Fatalf("expected SKU-B to be removed from index after rollback to sp2")
+	}
+	_ = curB.Close()
+
+	// Rollback to sp1: should undo delete of id=1 (restore row and both indexes)
+	if err := tx.RollbackTo("sp1"); err != nil {
+		t.Fatalf("RollbackTo sp1 failed: %v", err)
+	}
+	rec1, err := tx.Get("items_aries", storage.IntValue(1))
+	if err != nil || rec1 == nil || rec1["sku"].String() != "SKU-A" || rec1["category"].String() != "ELEC" {
+		t.Fatalf("expected id=1 to be restored to SKU-A/ELEC, got: %v (err=%v)", rec1, err)
+	}
+	curARestored, _ := tx.IndexScan("items_aries", "idx_items_sku", &skuA, &skuA)
+	if !curARestored.Next() {
+		_ = curARestored.Close()
+		t.Fatalf("expected SKU-A index to be restored after rollback to sp1")
+	}
+	_ = curARestored.Close()
+
+	catElec := storage.StringValue("ELEC")
+	curCat, _ := tx.IndexScan("items_aries", "idx_items_cat", &catElec, &catElec)
+	if !curCat.Next() {
+		_ = curCat.Close()
+		t.Fatalf("expected ELEC non-unique index to be restored after rollback to sp1")
+	}
+	_ = curCat.Close()
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit tx failed: %v", err)
+	}
+
+	// 3. Verify in independent read-only transaction
+	txVerify, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx verify failed: %v", err)
+	}
+	defer txVerify.Rollback()
+
+	curFinal, _ := txVerify.IndexScan("items_aries", "idx_items_sku", &skuA, &skuA)
+	if !curFinal.Next() {
+		_ = curFinal.Close()
+		t.Fatalf("expected SKU-A to be present in final committed state")
+	}
+	_ = curFinal.Close()
+}
+
 func TestRegression_AUDIT_093_007_DropPartitionCleansUpSecondaryIndexes(t *testing.T) {
 	tmpDir := t.TempDir()
 	eng := New()
@@ -1513,6 +1691,54 @@ func TestRegression_AUDIT_093_007_DropPartitionCleansUpSecondaryIndexes(t *testi
 	}
 	_ = cur.Close()
 }
+
+func TestRegression_AUDIT_093_006_GetTableAndListTablesReturnDeepClone(t *testing.T) {
+	tmpDir := t.TempDir()
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "wt_audit006",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "email", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_wt_audit006_email", Columns: []string{"email"}},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sch, err := eng.GetTable("wt_audit006")
+	if err != nil {
+		t.Fatalf("GetTable failed: %v", err)
+	}
+	sch.Columns[0].Name = "MUTATED_COL"
+	sch.Indexes[0].Disabled = true
+
+	sch2, err := eng.GetTable("wt_audit006")
+	if err != nil {
+		t.Fatalf("GetTable 2 failed: %v", err)
+	}
+	if sch2.Columns[0].Name != "id" || sch2.Indexes[0].Disabled {
+		t.Fatalf("WiredTiger GetTable did not return a deep clone; engine schema was mutated: %+v", sch2)
+	}
+
+	list, err := eng.ListTables()
+	if err != nil || len(list) != 1 {
+		t.Fatalf("ListTables failed: %v", err)
+	}
+	list[0].Columns[0].Name = "MUTATED_FROM_LIST"
+	sch3, _ := eng.GetTable("wt_audit006")
+	if sch3.Columns[0].Name != "id" {
+		t.Fatalf("WiredTiger ListTables did not return a deep clone; engine schema was mutated: %+v", sch3)
+	}
+}
+
 
 
 
