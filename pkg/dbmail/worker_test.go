@@ -295,3 +295,60 @@ func TestRegression_AUDIT_093_021_SanitizeSMTPHeaderCRLFInjection(t *testing.T) 
 		t.Fatalf("CRLF injection was not sanitized in headers: %q", capturedMsg)
 	}
 }
+
+func TestRegression_AUDIT_093_021_SanitizeSMTPHeaderNULByteInjection(t *testing.T) {
+	injected := "Safe\x00Header\r\nInjected:\x00Value"
+	sanitized := sanitizeSMTPHeader(injected)
+	if strings.Contains(sanitized, "\x00") || strings.Contains(sanitized, "\r") || strings.Contains(sanitized, "\n") {
+		t.Fatalf("expected all NUL, CR, and LF bytes to be stripped, got: %q", sanitized)
+	}
+	if sanitized != "SafeHeaderInjected:Value" {
+		t.Fatalf("expected 'SafeHeaderInjected:Value', got %q", sanitized)
+	}
+}
+
+func TestRegression_AUDIT_093_021_SqlDBClientDoubleCloseSafety(t *testing.T) {
+	client := NewSQLDBClient(nil)
+	if err := client.Close(); err != nil {
+		t.Fatalf("first Close on nil db failed: %v", err)
+	}
+	if err := client.Close(); err != nil {
+		t.Fatalf("second Close on nil db failed: %v", err)
+	}
+}
+
+type errLogClient struct {
+	DBClient
+}
+
+func (c *errLogClient) Exec(ctx context.Context, query string) (int64, error) {
+	if strings.Contains(query, "INSERT INTO sysmail_log") {
+		return 0, errors.New("simulated sysmail_log disk failure")
+	}
+	return c.DBClient.Exec(ctx, query)
+}
+
+func TestRegression_AUDIT_093_021_ProcessBatchLogFailureFailsClosed(t *testing.T) {
+	coord, cleanup := setupTestDBMailCoordinator(t)
+	defer cleanup()
+
+	_, err := coord.ExecuteSQL("EXEC msdb.dbo.sp_send_dbmail @recipients = 'test@example.com', @subject = 'Test', @body = 'Msg';")
+	if err != nil {
+		t.Fatalf("queue email failed: %v", err)
+	}
+
+	cfg := DefaultConfig()
+	client := &errLogClient{DBClient: NewCoordinatorClient(coord)}
+	worker := NewWorker(cfg, client)
+	worker.SetSendMailFunc(func(addr string, a smtp.Auth, from string, to []string, msg []byte) error {
+		return nil
+	})
+
+	_, err = worker.ProcessBatch(context.Background())
+	if err == nil {
+		t.Fatalf("expected ProcessBatch to fail closed when sysmail_log insert fails, got nil")
+	}
+	if !strings.Contains(err.Error(), "simulated sysmail_log disk failure") {
+		t.Fatalf("expected error to mention simulated failure, got: %v", err)
+	}
+}

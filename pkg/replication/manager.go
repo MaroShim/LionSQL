@@ -456,3 +456,10 @@ func (m *Manager) Close() error {
 	return nil
 }
 
+// IsClosed reports whether the replication manager has been closed.
+func (m *Manager) IsClosed() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.closed
+}
+

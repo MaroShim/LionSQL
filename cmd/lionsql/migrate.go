@@ -80,24 +80,14 @@ func runMigrateUp(args []string) error {
 		return fmt.Errorf("migrations directory validation error: %w", err)
 	}
 
-	resolvedDisk := *diskType
-	if resolvedDisk == "" {
-		if strings.ToLower(*engineType) == "memory" {
-			resolvedDisk = "compact"
-		} else if *engineType != "" {
-			resolvedDisk = *engineType
-		} else {
-			resolvedDisk = config.DefaultDisk()
-		}
-	} else if strings.ToLower(resolvedDisk) == "memory" {
-		resolvedDisk = "compact"
-	}
+	resolvedDisk, resolvedMem := resolveEngineOptions(fs, *engineType, *diskType, *memoryType)
 
-	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, *memoryType)
+	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, resolvedMem)
 	if err != nil {
 		return err
 	}
 	defer eng.Close()
+	defer coord.Close()
 
 	ctx := context.Background()
 	fmt.Printf("[lionsql] Applying migrations from %s...\n", *migrationsDir)
@@ -136,24 +126,14 @@ func runMigrateDown(args []string) error {
 		return fmt.Errorf("migrations directory validation error: %w", err)
 	}
 
-	resolvedDisk := *diskType
-	if resolvedDisk == "" {
-		if strings.ToLower(*engineType) == "memory" {
-			resolvedDisk = "compact"
-		} else if *engineType != "" {
-			resolvedDisk = *engineType
-		} else {
-			resolvedDisk = config.DefaultDisk()
-		}
-	} else if strings.ToLower(resolvedDisk) == "memory" {
-		resolvedDisk = "compact"
-	}
+	resolvedDisk, resolvedMem := resolveEngineOptions(fs, *engineType, *diskType, *memoryType)
 
-	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, *memoryType)
+	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, resolvedMem)
 	if err != nil {
 		return err
 	}
 	defer eng.Close()
+	defer coord.Close()
 
 	ctx := context.Background()
 	fmt.Printf("[lionsql] Rolling back migrations from %s...\n", *migrationsDir)
@@ -190,24 +170,14 @@ func runMigrateStatus(args []string) error {
 		return fmt.Errorf("migrations directory validation error: %w", err)
 	}
 
-	resolvedDisk := *diskType
-	if resolvedDisk == "" {
-		if strings.ToLower(*engineType) == "memory" {
-			resolvedDisk = "compact"
-		} else if *engineType != "" {
-			resolvedDisk = *engineType
-		} else {
-			resolvedDisk = config.DefaultDisk()
-		}
-	} else if strings.ToLower(resolvedDisk) == "memory" {
-		resolvedDisk = "compact"
-	}
+	resolvedDisk, resolvedMem := resolveEngineOptions(fs, *engineType, *diskType, *memoryType)
 
-	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, *memoryType)
+	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, resolvedMem)
 	if err != nil {
 		return err
 	}
 	defer eng.Close()
+	defer coord.Close()
 
 	ctx := context.Background()
 	statuses, err := migrate.Status(ctx, coord, *migrationsDir)

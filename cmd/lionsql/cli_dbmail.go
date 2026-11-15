@@ -58,6 +58,7 @@ func runDbMailWorker(args []string) error {
 	}
 
 	client := dbmail.NewSQLDBClient(db)
+	defer client.Close()
 	worker := dbmail.NewWorker(cfg, client)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -65,7 +66,6 @@ func runDbMailWorker(args []string) error {
 
 	log.Printf("[DatabaseMail] Worker started. Polling %s at interval %v...", *dbURL, cfg.PollInterval)
 	if err := worker.Start(ctx); err != nil {
-		_ = client.Close()
 		return err
 	}
 

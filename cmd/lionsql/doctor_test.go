@@ -168,3 +168,77 @@ func TestP1_Batch6_DoctorCloseOnErrorTerminalRestoreAndTimerCleanup(t *testing.T
 		}
 	})
 }
+
+func TestRegression_AUDIT_093_020_OpenCoordinatorHonorsEngineManifest(t *testing.T) {
+	tmpDir := t.TempDir()
+	wtEng := wiredtiger.New()
+	if err := wtEng.Open(tmpDir); err != nil {
+		t.Fatalf("wtEng.Open failed: %v", err)
+	}
+	_ = wtEng.Close()
+
+	// Write lionsql.engine.json manifest declaring wiredtiger
+	manifestJSON := `{"version":1,"disk":"wiredtiger","memory":"compact"}`
+	if err := os.WriteFile(filepath.Join(tmpDir, "lionsql.engine.json"), []byte(manifestJSON), 0644); err != nil {
+		t.Fatalf("WriteFile manifest failed: %v", err)
+	}
+
+	// 1. Opening with empty diskType ("") must auto-resolve "wiredtiger" from manifest
+	eng, coord, err := openCoordinatorWithOptions(tmpDir, "", "")
+	if err != nil {
+		t.Fatalf("openCoordinatorWithOptions with empty diskType failed: %v", err)
+	}
+	if _, isWT := eng.(*wiredtiger.Engine); !isWT {
+		_ = coord.Close()
+		_ = eng.Close()
+		t.Fatalf("expected *wiredtiger.Engine from manifest resolution, got %T", eng)
+	}
+	_ = coord.Close()
+	_ = eng.Close()
+
+	// 2. Opening with explicit mismatched diskType ("compact") must fail closed
+	if _, _, err := openCoordinatorWithOptions(tmpDir, "compact", ""); err == nil {
+		t.Fatalf("expected error when opening WiredTiger directory with explicit compact engine, got nil")
+	}
+}
+
+func TestRegression_AUDIT_093_020_OpenCoordinatorWritesManifestForFreshDirectory(t *testing.T) {
+	freshDir := t.TempDir()
+	eng, coord, err := openCoordinatorWithOptions(freshDir, "compact", "compact")
+	if err != nil {
+		t.Fatalf("openCoordinatorWithOptions on fresh directory failed: %v", err)
+	}
+	_ = coord.Close()
+	_ = eng.Close()
+
+	manifest, err := config.ReadEngineManifest(freshDir)
+	if err != nil || manifest == nil {
+		t.Fatalf("expected lionsql.engine.json to be created on fresh directory, got error: %v, manifest: %v", err, manifest)
+	}
+	if manifest.Disk != "compact" {
+		t.Fatalf("expected manifest to record disk=compact, got: %s", manifest.Disk)
+	}
+}
+
+func TestRegression_AUDIT_093_020_MigrateSubcommandAutoResolvesManifestWithoutEngineFlag(t *testing.T) {
+	wtDir := t.TempDir()
+	migDir := t.TempDir()
+
+	wtEng := wiredtiger.New()
+	if err := wtEng.Open(wtDir); err != nil {
+		t.Fatalf("wtEng.Open failed: %v", err)
+	}
+	_ = wtEng.Close()
+
+	// Write lionsql.engine.json manifest declaring wiredtiger
+	manifestJSON := `{"version":1,"disk":"wiredtiger","memory":"compact"}`
+	if err := os.WriteFile(filepath.Join(wtDir, "lionsql.engine.json"), []byte(manifestJSON), 0644); err != nil {
+		t.Fatalf("WriteFile manifest failed: %v", err)
+	}
+
+	// runMigrateStatus without -engine flag must transparently auto-resolve wiredtiger from manifest
+	if err := runMigrateStatus([]string{"-data=" + wtDir, "-dir=" + migDir}); err != nil {
+		t.Fatalf("expected runMigrateStatus to succeed with auto-resolved manifest, got: %v", err)
+	}
+}
+

@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"database/sql"
 	"fmt"
+	"log"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -28,7 +29,9 @@ type DBClient interface {
 
 // sqlDBClient adapts a standard database/sql connection pool.
 type sqlDBClient struct {
-	db *sql.DB
+	db        *sql.DB
+	closeOnce sync.Once
+	closeErr  error
 }
 
 func NewSQLDBClient(db *sql.DB) DBClient {
@@ -80,10 +83,12 @@ func (c *sqlDBClient) Exec(ctx context.Context, query string) (int64, error) {
 }
 
 func (c *sqlDBClient) Close() error {
-	if c.db != nil {
-		return c.db.Close()
-	}
-	return nil
+	c.closeOnce.Do(func() {
+		if c.db != nil {
+			c.closeErr = c.db.Close()
+		}
+	})
+	return c.closeErr
 }
 
 // coordinatorClient adapts an in-process Coordinator for embedded execution and hermetic testing.
@@ -261,7 +266,9 @@ func (w *Worker) ProcessBatch(ctx context.Context) (int, error) {
 
 			logSQL := fmt.Sprintf(`INSERT INTO sysmail_log (log_id, mailitem_id, event_type, log_date, description)
 				VALUES (%d, %d, 'information', CURRENT_TIMESTAMP, 'Mail item %d sent successfully.');`, logID, item.ID, item.ID)
-			_, _ = w.client.Exec(ctx, logSQL)
+			if _, lerr := w.client.Exec(ctx, logSQL); lerr != nil {
+				return processedCount, fmt.Errorf("failed to insert sysmail_log for mailitem_id %d: %w", item.ID, lerr)
+			}
 		} else {
 			// Mark as failed
 			updateSQL := fmt.Sprintf(`UPDATE sysmail_mailitems 
@@ -272,9 +279,12 @@ func (w *Worker) ProcessBatch(ctx context.Context) (int, error) {
 			}
 
 			desc := strings.ReplaceAll(sendErr.Error(), "'", "''")
+			desc = strings.ReplaceAll(desc, "\x00", "")
 			logSQL := fmt.Sprintf(`INSERT INTO sysmail_log (log_id, mailitem_id, event_type, log_date, description)
 				VALUES (%d, %d, 'error', CURRENT_TIMESTAMP, 'Transmission failed: %s');`, logID, item.ID, desc)
-			_, _ = w.client.Exec(ctx, logSQL)
+			if _, lerr := w.client.Exec(ctx, logSQL); lerr != nil {
+				return processedCount, fmt.Errorf("failed to insert sysmail_log for mailitem_id %d: %w", item.ID, lerr)
+			}
 		}
 		processedCount++
 	}
@@ -285,6 +295,7 @@ func (w *Worker) ProcessBatch(ctx context.Context) (int, error) {
 func sanitizeSMTPHeader(s string) string {
 	s = strings.ReplaceAll(s, "\r", "")
 	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\x00", "")
 	return s
 }
 
@@ -400,6 +411,8 @@ func (w *Worker) nextLogID(ctx context.Context) int64 {
 	if w.logIDCounter.Load() == 0 {
 		if rows, err := w.client.Query(ctx, "SELECT MAX(log_id) AS max_id FROM sysmail_log;"); err == nil && len(rows) > 0 {
 			w.logIDCounter.Store(toInt64(rows[0]["max_id"]))
+		} else if err != nil {
+			log.Printf("[DatabaseMail] Warning: Failed to query MAX(log_id) from sysmail_log: %v", err)
 		}
 	}
 	return w.logIDCounter.Add(1)

@@ -270,3 +270,8 @@ func (s *Streamer) Close() {
 		delete(s.subscribers, id)
 	}
 }
+
+// IsClosed reports whether the streamer has been closed.
+func (s *Streamer) IsClosed() bool {
+	return s.closed.Load()
+}

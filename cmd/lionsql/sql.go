@@ -61,32 +61,7 @@ func runSQL(args []string) error {
 	}
 	query := strings.Join(queries, " ")
 
-	visited := make(map[string]bool)
-	fs.Visit(func(f *flag.Flag) {
-		visited[f.Name] = true
-	})
-	explicitEngine := visited["engine"] || visited["disk"]
-	explicitMemory := visited["memory"]
-
-	resolvedDisk := *diskType
-	if resolvedDisk == "" {
-		if explicitEngine {
-			if strings.ToLower(*engineType) == "memory" {
-				resolvedDisk = "compact"
-			} else if *engineType != "" {
-				resolvedDisk = *engineType
-			} else {
-				resolvedDisk = config.DefaultDisk()
-			}
-		}
-	} else if strings.ToLower(resolvedDisk) == "memory" {
-		resolvedDisk = "compact"
-	}
-
-	resolvedMem := *memoryType
-	if !explicitMemory {
-		resolvedMem = ""
-	}
+	resolvedDisk, resolvedMem := resolveEngineOptions(fs, *engineType, *diskType, *memoryType)
 
 	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, resolvedMem)
 	if err != nil {
@@ -133,32 +108,7 @@ func runCLI(args []string) error {
 		*execSQL = strings.Join(remaining, " ")
 	}
 
-	visited := make(map[string]bool)
-	fs.Visit(func(f *flag.Flag) {
-		visited[f.Name] = true
-	})
-	explicitEngine := visited["engine"] || visited["disk"]
-	explicitMemory := visited["memory"]
-
-	resolvedDisk := *diskType
-	if resolvedDisk == "" {
-		if explicitEngine {
-			if strings.ToLower(*engineType) == "memory" {
-				resolvedDisk = "compact"
-			} else if *engineType != "" {
-				resolvedDisk = *engineType
-			} else {
-				resolvedDisk = config.DefaultDisk()
-			}
-		}
-	} else if strings.ToLower(resolvedDisk) == "memory" {
-		resolvedDisk = "compact"
-	}
-
-	resolvedMem := *memoryType
-	if !explicitMemory {
-		resolvedMem = ""
-	}
+	resolvedDisk, resolvedMem := resolveEngineOptions(fs, *engineType, *diskType, *memoryType)
 
 	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, resolvedMem)
 	if err != nil {
@@ -177,6 +127,35 @@ func runCLI(args []string) error {
 	}
 
 	return cli.RunCLI(cfg, coord)
+}
+
+func resolveEngineOptions(fs *flag.FlagSet, engineType, diskType, memoryType string) (resolvedDisk, resolvedMem string) {
+	visited := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) {
+		visited[f.Name] = true
+	})
+	explicitEngine := visited["engine"] || visited["disk"]
+	explicitMemory := visited["memory"]
+
+	resolvedDisk = diskType
+	if resolvedDisk == "" {
+		if explicitEngine {
+			if strings.ToLower(engineType) == "memory" {
+				resolvedDisk = "compact"
+			} else if engineType != "" {
+				resolvedDisk = engineType
+			} else {
+				resolvedDisk = config.DefaultDisk()
+			}
+		}
+	} else if strings.ToLower(resolvedDisk) == "memory" {
+		resolvedDisk = "compact"
+	}
+
+	if explicitMemory {
+		resolvedMem = memoryType
+	}
+	return resolvedDisk, resolvedMem
 }
 
 func reorderArgs(args []string) []string {
@@ -221,20 +200,12 @@ func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.E
 		normDisk = "wiredtiger"
 	}
 
-	if existingManifest, err := config.ResolveExistingEngineManifest(cleanDir, normDisk, explicitEngine); err != nil {
+	manifest, err := config.ResolveOrWriteEngineManifest(cleanDir, normDisk, memoryType, explicitEngine, strings.TrimSpace(memoryType) != "")
+	if err != nil {
 		return nil, nil, err
-	} else if existingManifest != nil {
-		normDisk = existingManifest.Disk
-		if strings.TrimSpace(memoryType) == "" && existingManifest.Memory != "" {
-			memoryType = existingManifest.Memory
-		}
 	}
-	if normDisk == "" {
-		normDisk = config.DefaultDisk()
-	}
-	if strings.TrimSpace(memoryType) == "" {
-		memoryType = config.DefaultMemory()
-	}
+	normDisk = manifest.Disk
+	memoryType = manifest.Memory
 
 	switch normDisk {
 	case "wiredtiger", "wt":

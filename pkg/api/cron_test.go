@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"lionsql/pkg/catalog"
+	"lionsql/pkg/cdc"
+	"lionsql/pkg/replication"
 	"lionsql/pkg/storage/memengine"
 )
 
@@ -333,3 +335,37 @@ func TestCronScheduler_GracefulStopWaitsForRunningJobs(t *testing.T) {
 		t.Fatalf("cs.Stop() returned before running job finished")
 	}
 }
+
+func TestRegression_AUDIT_093_022_APIServerCloseStopsAllBackgroundWorkers(t *testing.T) {
+	srv := setupTestServer()
+
+	cdcStreamer := cdc.NewStreamer(100)
+	srv.SetCDCStreamer(cdcStreamer)
+
+	repMgr, err := replication.NewManager(replication.Config{
+		NodeID: "test-node",
+		Role:   replication.RolePrimary,
+	})
+	if err != nil {
+		t.Fatalf("NewManager failed: %v", err)
+	}
+	srv.SetReplicationManager(repMgr)
+
+	// Close server and verify all background components are stopped
+	if err := srv.Close(); err != nil {
+		t.Fatalf("first srv.Close() failed: %v", err)
+	}
+
+	if !cdcStreamer.IsClosed() {
+		t.Fatalf("expected cdcStreamer to be closed by srv.Close()")
+	}
+	if !repMgr.IsClosed() {
+		t.Fatalf("expected repMgr to be closed by srv.Close()")
+	}
+
+	// Idempotent second Close must not panic or error
+	if err := srv.Close(); err != nil {
+		t.Fatalf("second srv.Close() failed: %v", err)
+	}
+}
+

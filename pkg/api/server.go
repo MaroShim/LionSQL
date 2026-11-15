@@ -65,6 +65,8 @@ type Server struct {
 	appHandler       http.Handler
 	startTime        time.Time
 	memCache         memStatsCache
+	closeOnce        sync.Once
+	closeErr         error
 }
 
 // NewServer initializes a new Server with default in-memory auth service.
@@ -370,22 +372,30 @@ func (s *Server) SetGeneralLogFile(filePath string) error {
 
 // Close gracefully flushes and closes server log writers, background workers, and session pools.
 func (s *Server) Close() error {
-	if s.crons != nil {
-		s.crons.Stop()
-	}
-	if s.outboxDispatcher != nil {
-		s.outboxDispatcher.Stop()
-	}
-	if s.webhooks != nil {
-		_ = s.webhooks.Close()
-	}
-	if s.broker != nil {
-		s.broker.Close()
-	}
-	if s.coordinator != nil {
-		return s.coordinator.Close()
-	}
-	return nil
+	s.closeOnce.Do(func() {
+		if s.crons != nil {
+			s.crons.Stop()
+		}
+		if s.outboxDispatcher != nil {
+			s.outboxDispatcher.Stop()
+		}
+		if s.cdcStreamer != nil {
+			s.cdcStreamer.Close()
+		}
+		if s.replication != nil {
+			_ = s.replication.Close()
+		}
+		if s.webhooks != nil {
+			_ = s.webhooks.Close()
+		}
+		if s.broker != nil {
+			s.broker.Close()
+		}
+		if s.coordinator != nil {
+			s.closeErr = s.coordinator.Close()
+		}
+	})
+	return s.closeErr
 }
 
 // ExecuteSQL parses and runs one or more SQL statements on the default session.
