@@ -611,3 +611,62 @@ func TestRegression_AUDIT_IndexOnlyScan_CompositeMaterializeFailure(t *testing.T
 		}
 	}
 }
+
+// TestRegression_AUDIT_FULL_005_IndexDataRestoreErrorHandling verifies that IndexData.Restore()
+// properly surfaces errors when restoring from corrupt or constraint-violating entries, per [RULE:ExplicitError].
+func TestRegression_AUDIT_FULL_005_IndexDataRestoreErrorHandling(t *testing.T) {
+	// 1. Corrupt unique index with duplicate entries
+	uniqueIdx := &IndexData{
+		Schema: storage.IndexSchema{
+			Name:      "idx_unique_code",
+			TableName: "products",
+			Columns:   []string{"code"},
+			Unique:    true,
+		},
+		Entries: []IndexEntry{
+			{
+				Key: storage.StringValue("DUPLICATE_CODE"),
+				PKs: []string{"pk1", "pk2"}, // Unique index cannot have multiple PKs for the same key
+			},
+		},
+	}
+
+	// Restore should fail explicitly
+	err := uniqueIdx.Restore()
+	if err == nil {
+		t.Fatalf("expected error from Restore() on duplicate keys in unique index, got nil")
+	}
+
+	// Subsequent Insert should fail closed with the restoration error
+	if err := uniqueIdx.Insert(storage.StringValue("NEW_CODE"), "pk3"); err == nil {
+		t.Fatalf("expected Insert to fail after restore failure, got nil")
+	}
+
+	// Subsequent queries should fail-safe without panic
+	if pks := uniqueIdx.ScanRange(nil, nil); pks != nil {
+		t.Fatalf("expected ScanRange to return nil for uninitialized index, got %v", pks)
+	}
+
+	// 2. Valid index should restore cleanly
+	validIdx := &IndexData{
+		Schema: storage.IndexSchema{
+			Name:      "idx_non_unique",
+			TableName: "products",
+			Columns:   []string{"category"},
+			Unique:    false,
+		},
+		Entries: []IndexEntry{
+			{
+				Key: storage.StringValue("electronics"),
+				PKs: []string{"pk1", "pk2"},
+			},
+		},
+	}
+	if err := validIdx.Restore(); err != nil {
+		t.Fatalf("expected valid index Restore() to succeed, got %v", err)
+	}
+	pks := validIdx.ScanRange(nil, nil)
+	if len(pks) != 2 {
+		t.Fatalf("expected 2 PKs from valid restored index, got %v", pks)
+	}
+}

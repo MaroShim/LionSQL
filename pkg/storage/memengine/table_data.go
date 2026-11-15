@@ -21,35 +21,65 @@ type IndexData struct {
 	Entries []IndexEntry        `json:"entries,omitempty"` // For JSON/MessagePack persistence
 	sl      *SkipList           `json:"-"`
 	once    sync.Once           `json:"-"`
+	initErr error               `json:"-"`
 }
 
-func (idx *IndexData) getSkipList() *SkipList {
+func (idx *IndexData) init() error {
 	idx.once.Do(func() {
 		if idx.sl == nil {
 			sl := NewSkipList(idx.Schema.Unique)
 			if len(idx.Entries) > 0 {
-				_ = sl.FromEntries(idx.Entries)
+				if err := sl.FromEntries(idx.Entries); err != nil {
+					idx.initErr = fmt.Errorf("memengine: failed to restore secondary index %q from entries: %w", idx.Schema.Name, err)
+					log.Printf("[memengine] %v", idx.initErr)
+					return
+				}
 			}
 			idx.sl = sl
 		}
 	})
+	return idx.initErr
+}
+
+// Restore explicitly initializes the SkipList from Entries, returning an error if restoration failed.
+func (idx *IndexData) Restore() error {
+	return idx.init()
+}
+
+func (idx *IndexData) getSkipList() *SkipList {
+	_ = idx.init()
 	return idx.sl
 }
 
 func (idx *IndexData) Insert(key storage.Value, pk string, incVals ...[]storage.Value) error {
-	return idx.getSkipList().Insert(key, pk, incVals...)
+	if err := idx.init(); err != nil {
+		return err
+	}
+	if idx.sl == nil {
+		return fmt.Errorf("memengine: secondary index %q skip list uninitialized", idx.Schema.Name)
+	}
+	return idx.sl.Insert(key, pk, incVals...)
 }
 
 func (idx *IndexData) Delete(key storage.Value, pk string) {
-	idx.getSkipList().Delete(key, pk)
+	if err := idx.init(); err != nil || idx.sl == nil {
+		return
+	}
+	idx.sl.Delete(key, pk)
 }
 
 func (idx *IndexData) ScanRange(low, high *storage.Value) []string {
-	return idx.getSkipList().ScanRange(low, high)
+	if err := idx.init(); err != nil || idx.sl == nil {
+		return nil
+	}
+	return idx.sl.ScanRange(low, high)
 }
 
 func (idx *IndexData) ScanRangeEntries(low, high *storage.Value) []SkipListEntry {
-	return idx.getSkipList().ScanRangeEntries(low, high)
+	if err := idx.init(); err != nil || idx.sl == nil {
+		return nil
+	}
+	return idx.sl.ScanRangeEntries(low, high)
 }
 
 // SyncEntries exports the in-memory SkipList into the Entries slice for disk snapshot persistence.

@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
 
 ### Fixed
+- **Storage & Engine (`FIX-MEMENGINE-INDEX-RESTORE-ERROR-HANDLING-1`, table_data.go:31, persistence.go:163, 469)**:
+  - Eliminate silent swallowing of secondary index restoration and WAL replay errors in `pkg/storage/memengine/table_data.go` and `persistence.go` per `[RULE:ExplicitError]`:
+    1. Replace `_ = sl.FromEntries(idx.Entries)` in `table_data.go` with tracked initialization error handling (`initErr`), exposing `Restore() error` and fail-closed checks on `Insert()`, `Delete()`, `ScanRange()`, and `ScanRangeEntries()`.
+    2. Check and log errors during disk snapshot secondary index restoration (`idx.Restore()`) in `persistence.go`.
+    3. Fix WAL replay of `OpCreateIndex` in `persistence.go` to extract `IncludeCols` and capture insertion errors, preventing silent data or constraint corruption.
 - **Storage & Engine (`FIX-MEMENGINE-SERIALIZATION-ERROR-HANDLING-1`, tx.go:1737, 2052)**:
   - Eliminate silent swallowing of deserialization and serialization errors in `pkg/storage/memengine/tx.go` per `[RULE:ExplicitError]`:
     1. Fix `IndexOnlyScan` (line 1737) `resolver` to reject corrupt entries (`return nil, false`) instead of silently ignoring `materializeWithLayout` errors and returning truncated single-column partial records for composite indexes.

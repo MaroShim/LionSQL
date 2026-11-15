@@ -2,6 +2,7 @@ package memengine
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -158,11 +159,20 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				Schema:  *op.IndexSchema,
 				Entries: make([]IndexEntry, 0),
 			}
+			var insertErr error
 			td.forEachRow(func(pk string, row storage.Row) bool {
 				keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, row, op.IndexSchema)
-				_ = idxData.Insert(keyVal, pk)
+				incVals := extractIncludeValuesFromRow(&td.Schema, row, op.IndexSchema.IncludeCols)
+				if err := idxData.Insert(keyVal, pk, incVals); err != nil {
+					insertErr = err
+					return false
+				}
 				return true
 			})
+			if insertErr != nil {
+				log.Printf("[memengine] CRITICAL: replay OpCreateIndex failed on table %q index %q: %v", td.Schema.Name, op.IndexSchema.Name, insertErr)
+				continue
+			}
 			if td.Indexes == nil {
 				td.Indexes = make(map[string]*IndexData)
 			}
@@ -457,7 +467,9 @@ func (e *Engine) loadDiskLocked() int64 {
 			td.Indexes = make(map[string]*IndexData)
 		}
 		for _, idx := range td.Indexes {
-			idx.getSkipList()
+			if err := idx.Restore(); err != nil {
+				log.Printf("[memengine] CRITICAL: failed to restore secondary index %q on table %q from snapshot: %v", idx.Schema.Name, td.Schema.Name, err)
+			}
 		}
 		if td.Schema.IsPartitioned() {
 			if td.Partitions == nil {
