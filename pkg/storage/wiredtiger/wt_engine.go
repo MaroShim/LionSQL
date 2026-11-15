@@ -76,6 +76,10 @@ static int go_wt_open_cursor(WT_SESSION *session, const char *uri, WT_CURSOR **c
     return session->open_cursor(session, uri, NULL, NULL, cursorp);
 }
 
+static int go_wt_open_cursor_config(WT_SESSION *session, const char *uri, const char *config, WT_CURSOR **cursorp) {
+    return session->open_cursor(session, uri, NULL, config, cursorp);
+}
+
 static int go_wt_cursor_close(WT_CURSOR *cursor) {
     return cursor->close(cursor);
 }
@@ -1366,6 +1370,22 @@ func formatIndexKeyValue(rec storage.Record, idx *storage.IndexSchema, pkStr str
 	return keyStr + "\x00" + pkStr, "", isNull
 }
 
+func (e *Engine) isUniqueIndexURI(uri string) bool {
+	if !strings.HasPrefix(uri, "table:_idx_") {
+		return false
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	for _, tbl := range e.tables {
+		for _, idx := range tbl.Indexes {
+			if tbl.IndexURI(idx.Name) == uri {
+				return idx.Unique
+			}
+		}
+	}
+	return false
+}
+
 func insertIndexEntry(cur *C.WT_CURSOR, key, val string) error {
 	var kData, vData unsafe.Pointer
 	if len(key) > 0 {
@@ -1377,6 +1397,9 @@ func insertIndexEntry(cur *C.WT_CURSOR, key, val string) error {
 	C.go_wt_cursor_set_key_raw(cur, kData, C.size_t(len(key)))
 	C.go_wt_cursor_set_val_raw(cur, vData, C.size_t(len(val)))
 	if ret := C.go_wt_cursor_insert(cur); ret != 0 {
+		if ret == C.WT_DUPLICATE_KEY {
+			return storage.ErrUniqueViolation
+		}
 		return wtOpError("cursor_insert_index", int(ret))
 	}
 	return nil
@@ -1454,7 +1477,15 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	var tblCur, idxCur *C.WT_CURSOR
 	if ret := C.go_wt_open_cursor(sess, primURI, &tblCur); ret == 0 {
 		defer C.go_wt_cursor_close(tblCur)
-		if ret := C.go_wt_open_cursor(sess, cIdxURI, &idxCur); ret == 0 {
+		var openRet C.int
+		if index.Unique {
+			cConfig := C.CString("overwrite=false")
+			openRet = C.go_wt_open_cursor_config(sess, cIdxURI, cConfig, &idxCur)
+			C.free(unsafe.Pointer(cConfig))
+		} else {
+			openRet = C.go_wt_open_cursor(sess, cIdxURI, &idxCur)
+		}
+		if openRet == 0 {
 			defer C.go_wt_cursor_close(idxCur)
 			for C.go_wt_cursor_next(tblCur) == 0 {
 				var pKey *C.char
@@ -1737,7 +1768,15 @@ func (s *WTSession) acquireCursor(uri string) (*C.WT_CURSOR, error) {
 	}
 
 	var cur *C.WT_CURSOR
-	if ret := C.go_wt_open_cursor(s.sess, cURI, &cur); ret != 0 {
+	var ret C.int
+	if s.engine != nil && s.engine.isUniqueIndexURI(uri) {
+		cConfig := C.CString("overwrite=false")
+		ret = C.go_wt_open_cursor_config(s.sess, cURI, cConfig, &cur)
+		C.free(unsafe.Pointer(cConfig))
+	} else {
+		ret = C.go_wt_open_cursor(s.sess, cURI, &cur)
+	}
+	if ret != 0 {
 		return nil, fmt.Errorf("open_cursor failed: %d", ret)
 	}
 
@@ -2279,7 +2318,10 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 					continue
 				}
 				_ = removeIndexEntry(idxCur, oldKey)
-				_ = insertIndexEntry(idxCur, newKey, newVal)
+				if err := insertIndexEntry(idxCur, newKey, newVal); err != nil {
+					tx.sess.releaseCursor(idxURI, idxCur)
+					return err
+				}
 				tx.sess.releaseCursor(idxURI, idxCur)
 			}
 		}
@@ -3584,6 +3626,9 @@ func (c *WTCursor) Err() error {
 func wtOpError(op string, ret int) error {
 	if ret == wtRollback {
 		return fmt.Errorf("%w (wiredtiger %s code %d)", storage.ErrSerializationFailure, op, ret)
+	}
+	if ret == C.WT_DUPLICATE_KEY {
+		return fmt.Errorf("%w (wiredtiger %s code %d)", storage.ErrUniqueViolation, op, ret)
 	}
 	return fmt.Errorf("%s failed with code %d", op, ret)
 }

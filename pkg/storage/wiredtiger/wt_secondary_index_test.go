@@ -590,3 +590,76 @@ func TestSecondaryIndex_LargeDatasetPerformance(t *testing.T) {
 	}
 	t.Logf("10,000 rows secondary index scan completed in %v", elapsed)
 }
+
+// TestWiredTiger_UniqueIndex_OverwriteFalse_DuplicateKeyRejection verifies that unique index cursors
+// are opened with overwrite=false, preventing silent duplicate overwrites at the B-Tree cursor level
+// and returning storage.ErrUniqueViolation.
+func TestWiredTiger_UniqueIndex_OverwriteFalse_DuplicateKeyRejection(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_sec_idx_unique_overwrite_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "db")
+	eng := New()
+	if err := eng.Open(dbPath); err != nil {
+		t.Fatalf("failed to open engine: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "products",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "sku", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	idxSKU := &storage.IndexSchema{
+		Name:      "idx_products_sku",
+		TableName: "products",
+		Columns:   []string{"sku"},
+		Unique:    true,
+	}
+	if err := eng.CreateIndex(idxSKU); err != nil {
+		t.Fatalf("CreateIndex failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	wtSess := sess.(*WTSession)
+	tbl, err := eng.GetTable("products")
+	if err != nil {
+		t.Fatalf("GetTable failed: %v", err)
+	}
+	idxURI := tbl.IndexURI("idx_products_sku")
+
+	cur, err := wtSess.acquireCursor(idxURI)
+	if err != nil {
+		t.Fatalf("acquireCursor failed: %v", err)
+	}
+	defer wtSess.releaseCursor(idxURI, cur)
+
+	k, v, _ := formatIndexKeyValue(storage.Record{"sku": storage.StringValue("SKU-1001")}, idxSKU, "1")
+	if err := insertIndexEntry(cur, k, v); err != nil {
+		t.Fatalf("first insertIndexEntry should succeed, got: %v", err)
+	}
+
+	// Attempt inserting the exact same unique index key with different PK value "2"
+	// With overwrite=false, WiredTiger MUST reject this with storage.ErrUniqueViolation
+	// (instead of silently replacing "1" with "2")
+	k2, v2, _ := formatIndexKeyValue(storage.Record{"sku": storage.StringValue("SKU-1001")}, idxSKU, "2")
+	err = insertIndexEntry(cur, k2, v2)
+	if !errors.Is(err, storage.ErrUniqueViolation) {
+		t.Fatalf("expected ErrUniqueViolation on duplicate unique index insert, got: %v", err)
+	}
+}
+
