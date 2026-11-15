@@ -663,3 +663,120 @@ func TestWiredTiger_UniqueIndex_OverwriteFalse_DuplicateKeyRejection(t *testing.
 	}
 }
 
+// TestWiredTiger_Savepoint_Rollback_RemovesUpdatedIndexKey verifies that rolling back an UPDATE
+// to a savepoint properly removes the new secondary index keys inserted during UPDATE,
+// preventing ghost orphan index entries and false unique constraint violations.
+func TestWiredTiger_Savepoint_Rollback_RemovesUpdatedIndexKey(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_savepoint_idx_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "db")
+	eng := New()
+	if err := eng.Open(dbPath); err != nil {
+		t.Fatalf("failed to open engine: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "accounts",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "email", Type: storage.TypeVarChar},
+			{Name: "balance", Type: storage.TypeInt},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	idxEmail := &storage.IndexSchema{
+		Name:      "idx_accounts_email",
+		TableName: "accounts",
+		Columns:   []string{"email"},
+		Unique:    true,
+	}
+	if err := eng.CreateIndex(idxEmail); err != nil {
+		t.Fatalf("CreateIndex failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx.Rollback()
+
+	// 1. Insert initial row: (1, 'alice@old.com', 100)
+	err = tx.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(1),
+		"email":   storage.StringValue("alice@old.com"),
+		"balance": storage.IntValue(100),
+	})
+	if err != nil {
+		t.Fatalf("Insert initial row failed: %v", err)
+	}
+
+	// 2. Create savepoint sp1
+	if err := tx.Savepoint("sp1"); err != nil {
+		t.Fatalf("Savepoint sp1 failed: %v", err)
+	}
+
+	// 3. Update row to 'alice@new.com'
+	err = tx.Update("accounts", storage.IntValue(1), storage.Record{
+		"id":      storage.IntValue(1),
+		"email":   storage.StringValue("alice@new.com"),
+		"balance": storage.IntValue(200),
+	})
+	if err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	// 4. Rollback to savepoint sp1
+	if err := tx.RollbackTo("sp1"); err != nil {
+		t.Fatalf("RollbackTo sp1 failed: %v", err)
+	}
+
+	// 5. Now try to insert a different row (id: 2) with 'alice@new.com'.
+	// Since the previous update to 'alice@new.com' was rolled back,
+	// 'alice@new.com' MUST NOT be in the unique index!
+	err = tx.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(2),
+		"email":   storage.StringValue("alice@new.com"),
+		"balance": storage.IntValue(300),
+	})
+	if err != nil {
+		t.Fatalf("Insert after savepoint rollback failed (ghost index entry was not removed): %v", err)
+	}
+
+	// 6. Also verify that scanning for 'alice@old.com' finds row 1
+	oldKey := storage.StringValue("alice@old.com")
+	cur, err := tx.IndexScan("accounts", "idx_accounts_email", &oldKey, &oldKey)
+	if err != nil {
+		t.Fatalf("IndexScan alice@old.com failed: %v", err)
+	}
+	foundOld := false
+	for cur.Next() {
+		rec, rerr := cur.Record()
+		if rerr == nil && rec["id"].IVal == 1 {
+			foundOld = true
+		}
+	}
+	cur.Close()
+	if !foundOld {
+		t.Fatalf("expected to find row 1 with alice@old.com in index scan")
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+}
+
+

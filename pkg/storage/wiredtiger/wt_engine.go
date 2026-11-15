@@ -1893,6 +1893,7 @@ type wtUndoKind int
 const (
 	wtUndoDelete wtUndoKind = iota
 	wtUndoPut
+	wtUndoUpdate
 )
 
 type wtUndoOp struct {
@@ -1900,6 +1901,7 @@ type wtUndoOp struct {
 	pk      storage.Value
 	kind    wtUndoKind
 	oldData []byte
+	newData []byte
 }
 
 // WTTx manages ACID mutations in WiredTiger and routes temporary tables to tempTx lazily.
@@ -2329,11 +2331,14 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 
 	tx.hasWrites = true
 	if len(tx.savepoints) > 0 {
+		newDataCopy := make([]byte, len(recBytes))
+		copy(newDataCopy, recBytes)
 		tx.undoLog = append(tx.undoLog, wtUndoOp{
 			table:   tableName,
 			pk:      pk,
-			kind:    wtUndoPut,
+			kind:    wtUndoUpdate,
 			oldData: oldData,
+			newData: newDataCopy,
 		})
 	}
 	if tx.sess.engine.hasHook.Load() && !storage.IsTemporaryTable(tableName) {
@@ -3355,6 +3360,35 @@ func (tx *WTTx) RollbackTo(name string) error {
 				if tx.rowDeltas != nil {
 					tx.rowDeltas[op.table]++
 				}
+			}
+		case wtUndoUpdate:
+			if len(op.oldData) > 0 {
+				tbl, err := tx.getTableLocked(op.table)
+				if err == nil && len(tbl.Indexes) > 0 {
+					var oldRec, newRec storage.Record
+					var oldErr, newErr error
+					if len(op.oldData) > 0 {
+						oldRec, oldErr = decodeRecord(tbl, op.oldData)
+					}
+					if len(op.newData) > 0 {
+						newRec, newErr = decodeRecord(tbl, op.newData)
+					}
+					if oldErr == nil && newErr == nil {
+						pkStr := op.pk.String()
+						for _, idx := range tbl.Indexes {
+							oldKey, _, _ := formatIndexKeyValue(oldRec, &idx, pkStr)
+							newKey, _, _ := formatIndexKeyValue(newRec, &idx, pkStr)
+							if oldKey != newKey {
+								idxURI := tbl.IndexURI(idx.Name)
+								if idxCur, err := tx.sess.acquireCursor(idxURI); err == nil {
+									_ = removeIndexEntry(idxCur, newKey)
+									tx.sess.releaseCursor(idxURI, idxCur)
+								}
+							}
+						}
+					}
+				}
+				_ = tx.putRawBytesLocked(op.table, op.pk, op.oldData)
 			}
 		}
 	}
