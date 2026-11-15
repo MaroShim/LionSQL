@@ -1910,9 +1910,10 @@ func splitDeclParts(s string) []string {
 }
 
 func formatSQLValue(v any) string {
-	if v == nil {
+	if isNilTdsValue(v) {
 		return "NULL"
 	}
+	v = unwrapTdsOutputValue(v)
 	switch val := v.(type) {
 	case string:
 		return "'" + strings.ReplaceAll(val, "'", "''") + "'"
@@ -1935,9 +1936,10 @@ func formatSQLValue(v any) string {
 }
 
 func inferSQLType(v any) string {
-	if v == nil {
+	if isNilTdsValue(v) {
 		return "NVARCHAR(MAX)"
 	}
+	v = unwrapTdsOutputValue(v)
 	switch v.(type) {
 	case int, int32:
 		return "INT"

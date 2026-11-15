@@ -372,5 +372,52 @@ func TestRegression_AUDIT_093_019_StorageValueNullSerialization(t *testing.T) {
 	if !bytes.Equal(nbcrow1, nbcrow2) {
 		t.Fatalf("expected storage.Value{IsNull: true} to serialize identically to nil in NBCROW token: got %x, want %x", nbcrow2, nbcrow1)
 	}
+
+	// 1. Verify formatSQLValue with storage.Value and typed pointers
+	if got := formatSQLValue(storage.NullValue(storage.TypeInt)); got != "NULL" {
+		t.Fatalf("expected formatSQLValue(NullValue) == 'NULL', got %q", got)
+	}
+	if got := formatSQLValue((*storage.Value)(nil)); got != "NULL" {
+		t.Fatalf("expected formatSQLValue((*storage.Value)(nil)) == 'NULL', got %q", got)
+	}
+	if got := formatSQLValue(storage.IntValue(42)); got != "42" {
+		t.Fatalf("expected formatSQLValue(IntValue(42)) == '42', got %q", got)
+	}
+	if got := formatSQLValue(storage.StringValue("hello")); got != "'hello'" {
+		t.Fatalf("expected formatSQLValue(StringValue('hello')) == ''hello'', got %q", got)
+	}
+
+	// 2. Verify inferSQLType with storage.Value
+	if got := inferSQLType(storage.NullValue(storage.TypeInt)); got != "NVARCHAR(MAX)" {
+		t.Fatalf("expected inferSQLType(NullValue) == 'NVARCHAR(MAX)', got %q", got)
+	}
+	if got := inferSQLType(storage.IntValue(42)); got != "BIGINT" {
+		t.Fatalf("expected inferSQLType(IntValue(42)) == 'BIGINT', got %q", got)
+	}
+
+	// 3. Verify outputColumnInfo with raw storage.Value
+	pInt := RPCParam{Name: "@val", Type: TypeInt4}
+	colIntNull := outputColumnInfo(pInt, storage.NullValue(storage.TypeInt))
+	if colIntNull.Type != TypeIntN {
+		t.Fatalf("expected outputColumnInfo(NullValue) Type == TypeIntN, got %v", colIntNull.Type)
+	}
+	colIntVal := outputColumnInfo(pInt, storage.IntValue(99))
+	if colIntVal.Type != TypeIntN {
+		t.Fatalf("expected outputColumnInfo(IntValue) Type == TypeIntN, got %v", colIntVal.Type)
+	}
+
+	// 4. Verify WriteReturnValue with storage.NullValue and pointer
+	var retBuf1, retBuf2, retBuf3 bytes.Buffer
+	colNVar := ColumnInfo{Name: "@ret", Type: TypeNVarChar, Size: 100, Nullable: true}
+	WriteReturnValue(&retBuf1, 1, "@ret", colNVar, nil)
+	WriteReturnValue(&retBuf2, 1, "@ret", colNVar, storage.NullValue(storage.TypeVarChar))
+	nullVal := storage.NullValue(storage.TypeVarChar)
+	WriteReturnValue(&retBuf3, 1, "@ret", colNVar, &nullVal)
+	if !bytes.Equal(retBuf1.Bytes(), retBuf2.Bytes()) {
+		t.Fatalf("expected WriteReturnValue with storage.NullValue to match nil: got %x, want %x", retBuf2.Bytes(), retBuf1.Bytes())
+	}
+	if !bytes.Equal(retBuf1.Bytes(), retBuf3.Bytes()) {
+		t.Fatalf("expected WriteReturnValue with *storage.NullValue to match nil: got %x, want %x", retBuf3.Bytes(), retBuf1.Bytes())
+	}
 	_ = rowWithTypedNull
 }

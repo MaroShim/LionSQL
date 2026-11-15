@@ -99,6 +99,11 @@ func lookupFinalVar(vars map[string]any, name string) any {
 // outputColumnInfo chooses the TDS type used to return an OUTPUT parameter.
 // The integer width follows the type the client declared so the driver can bind it back unchanged.
 func outputColumnInfo(p RPCParam, val any) ColumnInfo {
+	if isNilTdsValue(val) {
+		val = nil
+	} else {
+		val = unwrapTdsOutputValue(val)
+	}
 	col := ColumnInfo{Name: p.Name, Nullable: true}
 	intSize := declaredIntSize(p)
 	switch v := val.(type) {
