@@ -502,7 +502,9 @@ func (c *Coordinator) idleSessionReapLoop(interval time.Duration) {
 }
 
 // ReapIdleClientSessions detaches and returns pinned storage sessions from idle ClientSessions
-// that have no active transaction (cs.Tx == nil) and no in-flight queries (!cs.sessInUse).
+// whose last activity exceeds idleTTL and which have no in-flight queries (!cs.sessInUse && cs.activeQueries == 0).
+// If a session has an abandoned uncommitted transaction (cs.Tx != nil), it is forcibly rolled back before
+// detachment to release storage locks and prevent memory leaks.
 func (c *Coordinator) ReapIdleClientSessions(idleTTL time.Duration) int {
 	if idleTTL <= 0 {
 		return 0
@@ -521,7 +523,12 @@ func (c *Coordinator) ReapIdleClientSessions(idleTTL time.Duration) int {
 	var detached []storage.Session
 	for _, cs := range snapshot {
 		cs.Mu.Lock()
-		if !cs.closed && cs.Tx == nil && !cs.sessInUse && cs.activeQueries == 0 && cs.Session != nil && now.Sub(cs.lastUsedAt) >= idleTTL {
+		if !cs.closed && !cs.sessInUse && cs.activeQueries == 0 && cs.Session != nil && now.Sub(cs.lastUsedAt) >= idleTTL {
+			if cs.Tx != nil {
+				_ = cs.Tx.Rollback()
+				cs.Tx = nil
+				cs.TxFailed = false
+			}
 			detached = append(detached, cs.Session)
 			cs.Session = nil
 		}

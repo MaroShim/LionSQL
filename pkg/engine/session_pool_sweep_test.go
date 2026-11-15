@@ -141,7 +141,13 @@ func TestCoordinator_ReapIdleClientSessions_ReclaimsAndReacquiresSafely(t *testi
 	}
 
 	// Simulate idle-client becoming idle beyond ClientSessionIdleTTL and wait for background reaper.
+	// Meanwhile, active-tx-client is actively utilized so it is not treated as an abandoned transaction.
 	waitUntilCondition(t, time.Second, "idle client session storage detachment", func() bool {
+		if actCs := coord.GetSession("active-tx-client"); actCs != nil {
+			actCs.Mu.Lock()
+			actCs.lastUsedAt = time.Now()
+			actCs.Mu.Unlock()
+		}
 		cs := coord.GetSession("idle-client")
 		if cs == nil {
 			return false
@@ -181,5 +187,58 @@ func TestCoordinator_ReapIdleClientSessions_ReclaimsAndReacquiresSafely(t *testi
 	}
 	if len(res.Rows) != 1 || res.Rows[0]["v"] != int64(42) {
 		t.Fatalf("unexpected row after idle reacquire: %+v", res.Rows)
+	}
+}
+
+func TestCoordinator_ReapIdleClientSessions_AbandonedTransactionRollback(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := NewCoordinator(cat, eng, Config{
+		ClientSessionIdleTTL: 20 * time.Millisecond,
+		SessionSweepInterval: 10 * time.Millisecond,
+	})
+	defer coord.Close()
+
+	ctx := context.Background()
+	_, err := coord.ExecuteSessionSQLContext(ctx, "sess-abandoned", "CREATE TABLE t_abandoned (id INT PRIMARY KEY, val INT)")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// Begin a transaction on sess-abandoned and insert a row without committing
+	if err := coord.BeginSessionTx("sess-abandoned", storage.TxOptions{}); err != nil {
+		t.Fatalf("BeginSessionTx failed: %v", err)
+	}
+	_, err = coord.ExecuteSessionSQLContext(ctx, "sess-abandoned", "INSERT INTO t_abandoned VALUES (1, 100)")
+	if err != nil {
+		t.Fatalf("INSERT in transaction failed: %v", err)
+	}
+
+	// Verify the session has active transaction and pinned session
+	cs := coord.GetSession("sess-abandoned")
+	if cs == nil {
+		t.Fatalf("expected session sess-abandoned to exist")
+	}
+	cs.Mu.Lock()
+	hasTx := cs.Tx != nil && cs.Session != nil
+	cs.Mu.Unlock()
+	if !hasTx {
+		t.Fatalf("expected sess-abandoned to have active transaction and session")
+	}
+
+	// Wait for idleTTL (20ms) to elapse, triggering ReapIdleClientSessions
+	waitUntilCondition(t, 500*time.Millisecond, "abandoned transaction rollback and session reap", func() bool {
+		cs.Mu.Lock()
+		defer cs.Mu.Unlock()
+		return cs.Tx == nil && cs.Session == nil
+	})
+
+	// After rollback and reap, verify the uncommitted row was NOT persisted
+	res, err := coord.ExecuteSQL("SELECT * FROM t_abandoned WHERE id = 1")
+	if err != nil {
+		t.Fatalf("SELECT failed: %v", err)
+	}
+	if len(res.Rows) != 0 {
+		t.Fatalf("expected uncommitted transaction to be rolled back (0 rows), got %d rows", len(res.Rows))
 	}
 }
