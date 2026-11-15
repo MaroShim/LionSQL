@@ -402,3 +402,133 @@ func TestSession_Regression_TransactionTermination_And_PoolReturn_Consistency(t 
 	}
 }
 
+// TestSession_Regression_DisconnectDuringActiveTransaction_InFlightDrain verifies that
+// when CloseSession is invoked while a query is still in-flight under an active explicit transaction (cs.Tx != nil),
+// 1) cs.Tx is NOT prematurely rolled back and wiped from under the running query goroutine.
+// 2) Once all in-flight queries finish and activeQueries drains to 0, cs.Tx is cleanly rolled back.
+// 3) Subsequent sessions can immediately modify the same rows without lock leaks or conflict.
+func TestSession_Regression_DisconnectDuringActiveTransaction_InFlightDrain(t *testing.T) {
+	memEng := memengine.New()
+	cat := catalog.New(memEng)
+	coord := NewCoordinator(cat, memEng, Config{})
+	defer coord.Close()
+
+	ctx := context.Background()
+	_, err := coord.ExecuteSessionSQLContext(ctx, "default", "CREATE TABLE items (id INT PRIMARY KEY, val INT);")
+	if err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
+	_, err = coord.ExecuteSessionSQLContext(ctx, "default", "INSERT INTO items (id, val) VALUES (1, 100);")
+	if err != nil {
+		t.Fatalf("failed to insert initial row: %v", err)
+	}
+
+	sessID := "active-tx-inflight-sess"
+	cs, err := coord.GetOrCreateSession(sessID)
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	_, err = coord.ExecuteSessionSQLContext(ctx, sessID, "BEGIN TRANSACTION;")
+	if err != nil {
+		t.Fatalf("failed to begin transaction: %v", err)
+	}
+
+	_, err = coord.ExecuteSessionSQLContext(ctx, sessID, "UPDATE items SET val = 200 WHERE id = 1;")
+	if err != nil {
+		t.Fatalf("failed to update row in transaction: %v", err)
+	}
+
+	cs.Mu.Lock()
+	if cs.Tx == nil {
+		cs.Mu.Unlock()
+		t.Fatalf("expected active transaction on session")
+	}
+	activeTx := cs.Tx
+	cs.Mu.Unlock()
+
+	queryRunning := make(chan struct{})
+	queryFinished := make(chan struct{})
+	var inFlightTxBeforeClose storage.Transaction
+	var inFlightTxDuringClose storage.Transaction
+
+	// Simulate an in-flight query running under the active transaction
+	go func() {
+		defer close(queryFinished)
+		// Mark query as running and hold cs.activeQueries
+		cs.Mu.Lock()
+		cs.activeQueries++
+		inFlightTxBeforeClose = cs.Tx
+		cs.Mu.Unlock()
+
+		defer func() {
+			cs.Mu.Lock()
+			cs.activeQueries--
+			drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
+			cs.Mu.Unlock()
+			if drainTx != nil {
+				_ = drainTx.Rollback()
+			}
+			if drainFn != nil {
+				drainFn(drainSess)
+			}
+		}()
+
+		close(queryRunning)
+
+		// Simulate doing work inside transaction for 50ms
+		time.Sleep(50 * time.Millisecond)
+
+		cs.Mu.Lock()
+		inFlightTxDuringClose = cs.Tx
+		cs.Mu.Unlock()
+	}()
+
+	<-queryRunning
+
+	// While query is actively in-flight on activeTx, client disconnects
+	coord.CloseSession(sessID)
+
+	// Wait for in-flight query to finish
+	<-queryFinished
+
+	if inFlightTxBeforeClose == nil {
+		t.Fatalf("FAIL: inFlightTxBeforeClose was nil")
+	}
+	if inFlightTxDuringClose == nil {
+		t.Fatalf("FAIL: cs.Tx was prematurely cleared while query was still in-flight!")
+	}
+	if inFlightTxDuringClose != activeTx {
+		t.Fatalf("FAIL: cs.Tx changed unexpectedly during in-flight query execution")
+	}
+
+	// Verify uncommitted changes were rolled back completely and no lock leaks
+	res, err := coord.ExecuteSessionSQLContext(ctx, "default", "SELECT val FROM items WHERE id = 1;")
+	if err != nil {
+		t.Fatalf("failed to query items after rollback: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(res.Rows))
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["val"]) != "100" {
+		t.Fatalf("expected val to remain 100 after rollback, got %v", res.Rows[0]["val"])
+	}
+
+	// Verify another session can immediately update row 1 without conflict or lock leak
+	sess2ID := "active-tx-new-sess"
+	_, err = coord.ExecuteSessionSQLContext(ctx, sess2ID, "BEGIN TRANSACTION;")
+	if err != nil {
+		t.Fatalf("new session begin failed: %v", err)
+	}
+	_, err = coord.ExecuteSessionSQLContext(ctx, sess2ID, "UPDATE items SET val = 300 WHERE id = 1;")
+	if err != nil {
+		t.Fatalf("new session update failed (lock leak?): %v", err)
+	}
+	_, err = coord.ExecuteSessionSQLContext(ctx, sess2ID, "COMMIT;")
+	if err != nil {
+		t.Fatalf("new session commit failed: %v", err)
+	}
+	coord.CloseSession(sess2ID)
+}
+
+

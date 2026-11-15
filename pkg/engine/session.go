@@ -124,17 +124,22 @@ type ClientSession struct {
 }
 
 // checkAndDrainClosedLocked checks whether the session was marked closed while queries were in-flight,
-// and if all queries have completed, detaches the session and returns the drain release callback.
+// and if all queries have completed, detaches the session, clears any active transaction, and returns
+// the transaction to roll back, the storage session, and the drain release callback.
 // MUST be called while holding cs.Mu.
-func (cs *ClientSession) checkAndDrainClosedLocked() (storage.Session, func(storage.Session)) {
-	if cs.closed && cs.activeQueries <= 0 && !cs.sessInUse && cs.Session != nil {
+func (cs *ClientSession) checkAndDrainClosedLocked() (storage.Transaction, storage.Session, func(storage.Session)) {
+	if cs.closed && cs.activeQueries <= 0 && !cs.sessInUse {
+		drainTx := cs.Tx
+		cs.Tx = nil
+		cs.TxFailed = false
+
 		drainSess := cs.Session
 		drainFn := cs.releaseOnDrain
 		cs.Session = nil
 		cs.releaseOnDrain = nil
-		return drainSess, drainFn
+		return drainTx, drainSess, drainFn
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 // GetQueryContext safely returns the active query context for this session, or context.Background() if none is set.
@@ -538,8 +543,11 @@ func (cs *ClientSession) ExecuteProgram(
 			cs.Mu.Lock()
 			cs.sessInUse = false
 			cs.lastUsedAt = time.Now()
-			drainSess, drainFn := cs.checkAndDrainClosedLocked()
+			drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
 			cs.Mu.Unlock()
+			if drainTx != nil {
+				_ = drainTx.Rollback()
+			}
 			if drainFn != nil {
 				drainFn(drainSess)
 			}

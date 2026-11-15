@@ -443,13 +443,16 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 				cs.QueryCtx = nil
 				cs.RunningQuery = ""
 			}
-			drainSess, drainFn := cs.checkAndDrainClosedLocked()
+			drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
 			cs.Mu.Unlock()
 			if lastActive {
 				cs.ClearCancel()
 				if !hasTimeout && ctx.Done() != nil {
 					cancel()
 				}
+			}
+			if drainTx != nil {
+				_ = drainTx.Rollback()
 			}
 			if drainFn != nil {
 				drainFn(drainSess)

@@ -463,8 +463,11 @@ func (c *Coordinator) acquireSessionForQuery(cs *ClientSession) (storage.Session
 				cs.Mu.Lock()
 				cs.sessInUse = false
 				cs.lastUsedAt = time.Now()
-				drainSess, drainFn := cs.checkAndDrainClosedLocked()
+				drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
 				cs.Mu.Unlock()
+				if drainTx != nil {
+					_ = drainTx.Rollback()
+				}
 				if drainFn != nil {
 					drainFn(drainSess)
 				}
@@ -577,16 +580,17 @@ func (c *Coordinator) CloseSession(id string) {
 	}
 
 	if exists && cs != nil {
-		// 1. Immediately cancel in-flight queries and rollback active transaction first
-		// to guarantee zero leaked storage locks and instant release of resources.
+		// 1. Immediately cancel in-flight queries.
 		cs.CancelQuery()
 
 		cs.Mu.Lock()
-		if cs.Tx != nil {
-			_ = cs.Tx.Rollback()
+		inFlight := cs.activeQueries > 0 || cs.sessInUse
+		var immediateTx storage.Transaction
+		if !inFlight {
+			immediateTx = cs.Tx
 			cs.Tx = nil
+			cs.TxFailed = false
 		}
-		cs.TxFailed = false
 
 		// 2. Snapshot table variable & temp table names to drop outside lock ([RULE:LockHierarchy])
 		var toDropLocal []string
@@ -608,7 +612,6 @@ func (c *Coordinator) CloseSession(id string) {
 
 		cs.closed = true
 		storageSess := cs.Session
-		inFlight := cs.activeQueries > 0 || cs.sessInUse
 
 		if !isDefault {
 			if inFlight {
@@ -629,6 +632,11 @@ func (c *Coordinator) CloseSession(id string) {
 			}
 		}
 		cs.Mu.Unlock()
+
+		// Rollback immediate transaction outside lock ([RULE:LockHierarchy])
+		if immediateTx != nil {
+			_ = immediateTx.Rollback()
+		}
 
 		// 3. Drop tables outside cs.Mu lock to prevent lock hierarchy deadlocks
 		if c.engine != nil {
