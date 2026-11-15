@@ -1365,6 +1365,9 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 	if !pushdownRes.IsContradiction && !forceTableScan && schema != nil {
 		if forceIndex != "" {
 			for i := range schema.Indexes {
+				if schema.Indexes[i].Disabled {
+					continue
+				}
 				if strings.EqualFold(schema.Indexes[i].Name, forceIndex) {
 					chosenIndex = &schema.Indexes[i]
 					break
@@ -1467,6 +1470,9 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 						var singleIdx *storage.IndexSchema
 						for i := range schema.Indexes {
 							cand := &schema.Indexes[i]
+							if cand.Disabled {
+								continue
+							}
 							if len(cand.Columns) == 1 && strings.EqualFold(cand.Columns[0], colName) {
 								singleIdx = cand
 								break

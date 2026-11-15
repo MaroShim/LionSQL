@@ -211,7 +211,7 @@ func GenerateSysCatalogRows(src Source, norm string, currDb string) (columns []s
 					"is_unique_constraint": false,
 					"fill_factor":          0,
 					"is_padded":            false,
-					"is_disabled":          false,
+					"is_disabled":          idx.Disabled,
 					"is_hypothetical":      false,
 					"allow_row_locks":      true,
 					"allow_page_locks":     true,

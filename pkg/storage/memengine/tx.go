@@ -450,6 +450,9 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 	// Validate unique index constraints
 	td.mu.RLock()
 	for _, idxData := range td.Indexes {
+		if idxData.Schema.Disabled {
+			continue
+		}
 		if idxData.Schema.Unique {
 			keyVal := extractIndexKeyFromRecord(record, &idxData.Schema)
 			if !keyVal.IsNull {
@@ -469,6 +472,9 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 		for epk, locRow := range localRows {
 			if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
 				for _, idx := range schema.Indexes {
+					if idx.Disabled {
+						continue
+					}
 					if idx.Unique {
 						keyVal := extractIndexKeyFromRecord(record, &idx)
 						locVal := extractIndexKeyFromRowWithSchema(&schema, locRow, &idx)
@@ -790,6 +796,9 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 	// Validate unique index constraints on updated record
 	td.mu.RLock()
 	for _, idxData := range td.Indexes {
+		if idxData.Schema.Disabled {
+			continue
+		}
 		if idxData.Schema.Unique {
 			keyVal := extractIndexKeyFromRecord(updated, &idxData.Schema)
 			if !keyVal.IsNull {
@@ -809,6 +818,9 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 		for epk, locRow := range localRows {
 			if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
 				for _, idx := range schema.Indexes {
+					if idx.Disabled {
+						continue
+					}
 					if idx.Unique {
 						keyVal := extractIndexKeyFromRecord(updated, &idx)
 						locVal := extractIndexKeyFromRowWithSchema(&schema, locRow, &idx)
@@ -1546,6 +1558,10 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 		tx.engine.mu.RUnlock()
 		return nil, fmt.Errorf("%w: %s on table %s", storage.ErrIndexNotFound, indexName, tableName)
 	}
+	if idxData.Schema.Disabled {
+		tx.engine.mu.RUnlock()
+		return nil, fmt.Errorf("%w: index %q on table %s is disabled", storage.ErrIndexDisabled, indexName, tableName)
+	}
 
 	if tx.opts.ReadOnly || (len(tx.local[tableName]) == 0 && len(tx.deleted[tableName]) == 0) {
 		candidatePKs := idxData.ScanRange(low, high)
@@ -1678,6 +1694,10 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 	if !exists {
 		tx.engine.mu.RUnlock()
 		return nil, fmt.Errorf("%w: %s on table %s", storage.ErrIndexNotFound, indexName, tableName)
+	}
+	if idxData.Schema.Disabled {
+		tx.engine.mu.RUnlock()
+		return nil, fmt.Errorf("%w: index %q on table %s is disabled", storage.ErrIndexDisabled, indexName, tableName)
 	}
 
 	pkCol, _ := snapSchema.PrimaryKeyColumn()
@@ -1936,6 +1956,9 @@ func (tx *Transaction) Commit() error {
 				return storage.ErrSerializationFailure
 			}
 			for _, idxData := range td.Indexes {
+				if idxData.Schema.Disabled {
+					continue
+				}
 				if idxData.Schema.Unique {
 					keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 					if !keyVal.IsNull {
@@ -1967,6 +1990,9 @@ func (tx *Transaction) Commit() error {
 			}
 			if ch.kind == changeUpdate {
 				for _, idxData := range td.Indexes {
+					if idxData.Schema.Disabled {
+						continue
+					}
 					if idxData.Schema.Unique {
 						keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 						if !keyVal.IsNull {
@@ -2054,6 +2080,9 @@ func (tx *Transaction) Commit() error {
 					}
 				}
 				for _, idxData := range td.Indexes {
+					if idxData.Schema.Disabled {
+						continue
+					}
 					if u.ch.kind != changeDelete {
 						newKey := extractIndexKeyFromRowWithSchema(&td.Schema, u.ch.row, &idxData.Schema)
 						idxData.Delete(newKey, u.key)
@@ -2071,6 +2100,9 @@ func (tx *Transaction) Commit() error {
 					}
 				}
 				for _, idxData := range td.Indexes {
+					if idxData.Schema.Disabled {
+						continue
+					}
 					newKey := extractIndexKeyFromRowWithSchema(&td.Schema, u.ch.row, &idxData.Schema)
 					idxData.Delete(newKey, u.key)
 				}
@@ -2119,6 +2151,9 @@ func (tx *Transaction) Commit() error {
 				td.addPartitionKey(partID, ch.key)
 			}
 			for _, idxData := range td.Indexes {
+				if idxData.Schema.Disabled {
+					continue
+				}
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
 				if err := idxData.Insert(newKey, ch.key, incVals); err != nil {
@@ -2163,6 +2198,9 @@ func (tx *Transaction) Commit() error {
 				}
 			}
 			for _, idxData := range td.Indexes {
+				if idxData.Schema.Disabled {
+					continue
+				}
 				if hadOld {
 					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
 					idxData.Delete(oldKey, ch.key)
@@ -2186,6 +2224,9 @@ func (tx *Transaction) Commit() error {
 			}
 			if hadOld {
 				for _, idxData := range td.Indexes {
+					if idxData.Schema.Disabled {
+						continue
+					}
 					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
 					idxData.Delete(oldKey, ch.key)
 				}
@@ -2353,6 +2394,9 @@ func (tx *Transaction) commitTableVariablesLocked() {
 				sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
 			}
 			for _, idxData := range td.Indexes {
+				if idxData.Schema.Disabled {
+					continue
+				}
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
 				_ = idxData.Insert(newKey, ch.key, incVals)
@@ -2366,6 +2410,9 @@ func (tx *Transaction) commitTableVariablesLocked() {
 				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
 			}
 			for _, idxData := range td.Indexes {
+				if idxData.Schema.Disabled {
+					continue
+				}
 				if hadOld {
 					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
 					idxData.Delete(oldKey, ch.key)
@@ -2378,6 +2425,9 @@ func (tx *Transaction) commitTableVariablesLocked() {
 			delete(sh.entries, ch.key)
 			if hadOld {
 				for _, idxData := range td.Indexes {
+					if idxData.Schema.Disabled {
+						continue
+					}
 					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
 					idxData.Delete(oldKey, ch.key)
 				}

@@ -471,11 +471,7 @@ func (e *Engine) loadDiskLocked() int64 {
 		if td.Indexes == nil {
 			td.Indexes = make(map[string]*IndexData)
 		}
-		for _, idx := range td.Indexes {
-			if err := idx.Restore(); err != nil {
-				log.Printf("[memengine] CRITICAL: failed to restore secondary index %q on table %q from snapshot: %v", idx.Schema.Name, td.Schema.Name, err)
-			}
-		}
+		_ = td.restoreIndexesLocked()
 		if td.Schema.IsPartitioned() {
 			if td.Partitions == nil {
 				td.Partitions = make(map[string]map[string]struct{})

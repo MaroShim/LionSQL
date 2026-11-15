@@ -512,7 +512,7 @@ func FindIndexAndBounds(schema *storage.TableSchema, whereClause string) (*stora
 	// 2. Try single-column index
 	for i := range schema.Indexes {
 		candIdx := &schema.Indexes[i]
-		if len(candIdx.Columns) != 1 {
+		if candIdx.Disabled || len(candIdx.Columns) != 1 {
 			continue
 		}
 		colName := strings.ToLower(candIdx.Columns[0])
@@ -543,7 +543,7 @@ func FindIndexAndBounds(schema *storage.TableSchema, whereClause string) (*stora
 	// 3. Try functional expression index
 	for i := range schema.Indexes {
 		candIdx := &schema.Indexes[i]
-		if !candIdx.IsExpression() {
+		if candIdx.Disabled || !candIdx.IsExpression() {
 			continue
 		}
 		targetCol := candIdx.ExprColumn
@@ -655,10 +655,13 @@ func ParseIndexCond(cond string, schema *storage.TableSchema, targetIndexName ..
 	// A. If targetIndexName is explicitly specified, prioritize columns of that index
 	if len(targetIndexName) > 0 && targetIndexName[0] != "" && schema != nil {
 		var targetIdx *storage.IndexSchema
-		if idx, _, found := schema.FindIndex(targetIndexName[0]); found && idx != nil {
+		if idx, _, found := schema.FindIndex(targetIndexName[0]); found && idx != nil && !idx.Disabled {
 			targetIdx = idx
 		} else {
 			for i := range schema.Indexes {
+				if schema.Indexes[i].Disabled {
+					continue
+				}
 				if strings.EqualFold(schema.Indexes[i].Name, targetIndexName[0]) {
 					targetIdx = &schema.Indexes[i]
 					break
@@ -693,6 +696,9 @@ func ParseIndexCond(cond string, schema *storage.TableSchema, targetIndexName ..
 	// B. If schema has indexes, prioritize columns belonging to indexes
 	if schema != nil && len(schema.Indexes) > 0 {
 		for i := range schema.Indexes {
+			if schema.Indexes[i].Disabled {
+				continue
+			}
 			for _, col := range schema.Indexes[i].Columns {
 				if low, high, found := extractColBounds(col); found {
 					return low, high

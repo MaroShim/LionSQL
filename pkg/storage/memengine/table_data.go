@@ -6,6 +6,7 @@ import (
 	"sort"
 	"sync"
 
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -43,7 +44,19 @@ func (idx *IndexData) init() error {
 
 // Restore explicitly initializes the SkipList from Entries, returning an error if restoration failed.
 func (idx *IndexData) Restore() error {
-	return idx.init()
+	if idx.initErr != nil {
+		return idx.initErr
+	}
+	sl := NewSkipList(idx.Schema.Unique)
+	if len(idx.Entries) > 0 {
+		if err := sl.FromEntries(idx.Entries); err != nil {
+			idx.initErr = fmt.Errorf("memengine: failed to restore secondary index %q from entries: %w", idx.Schema.Name, err)
+			return idx.initErr
+		}
+	}
+	idx.sl = sl
+	idx.initErr = nil
+	return nil
 }
 
 func (idx *IndexData) getSkipList() *SkipList {
@@ -87,6 +100,70 @@ func (idx *IndexData) SyncEntries() {
 	if idx.sl != nil {
 		idx.Entries = idx.sl.ToEntries()
 	}
+}
+
+func (td *TableData) updateSchemaIndexDisabled(idxName string, disabled bool) {
+	for i := range td.Schema.Indexes {
+		if sqlutil.EqualFoldIdent(td.Schema.Indexes[i].Name, idxName) {
+			td.Schema.Indexes[i].Disabled = disabled
+			break
+		}
+	}
+}
+
+func (td *TableData) rebuildIndexLocked(idx *IndexData) error {
+	newIdx := &IndexData{
+		Schema:  idx.Schema,
+		Entries: make([]IndexEntry, 0),
+	}
+	newIdx.Schema.Disabled = false
+	var insertErr error
+	scanErr := td.forEachRow(func(pk string, row storage.Row) bool {
+		keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, row, &idx.Schema)
+		incVals := extractIncludeValuesFromRow(&td.Schema, row, idx.Schema.IncludeCols)
+		if err := newIdx.Insert(keyVal, pk, incVals); err != nil {
+			insertErr = err
+			return false
+		}
+		return true
+	})
+	if scanErr != nil {
+		return scanErr
+	}
+	if insertErr != nil {
+		return insertErr
+	}
+	idx.sl = newIdx.sl
+	idx.Entries = newIdx.Entries
+	idx.initErr = nil
+	idx.Schema.Disabled = false
+	return nil
+}
+
+func (td *TableData) restoreIndexesLocked() error {
+	if td.Indexes == nil {
+		td.Indexes = make(map[string]*IndexData)
+		return nil
+	}
+	for _, idx := range td.Indexes {
+		if err := idx.Restore(); err != nil {
+			log.Printf("[memengine] WARN: secondary index %q on table %q restore failed (%v); attempting automatic rebuild from table rows...", idx.Schema.Name, td.Schema.Name, err)
+			rebuildErr := td.rebuildIndexLocked(idx)
+			if rebuildErr == nil {
+				log.Printf("[memengine] INFO: successfully auto-rebuilt secondary index %q on table %q from table rows", idx.Schema.Name, td.Schema.Name)
+				idx.Schema.Disabled = false
+				td.updateSchemaIndexDisabled(idx.Schema.Name, false)
+			} else {
+				log.Printf("[memengine] ERROR: auto-rebuild failed for secondary index %q on table %q (%v); marking index DISABLED (queries will fall back to sequential table scan)", idx.Schema.Name, td.Schema.Name, rebuildErr)
+				idx.Schema.Disabled = true
+				td.updateSchemaIndexDisabled(idx.Schema.Name, true)
+			}
+		} else {
+			idx.Schema.Disabled = false
+			td.updateSchemaIndexDisabled(idx.Schema.Name, false)
+		}
+	}
+	return nil
 }
 
 const numTableShards = 256

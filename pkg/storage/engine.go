@@ -17,6 +17,7 @@ var (
 	ErrTableExists          = errors.New("table already exists")
 	ErrIndexNotFound        = errors.New("index not found")
 	ErrIndexExists          = errors.New("index already exists")
+	ErrIndexDisabled        = errors.New("index is disabled")
 	ErrUniqueViolation      = errors.New("unique constraint violation on index")
 	ErrKeyNotFound          = errors.New("key not found")
 	ErrKeyExists            = errors.New("key already exists (primary key constraint)")
@@ -136,6 +137,7 @@ type IndexSchema struct {
 	Expression  string   `json:"expression,omitempty" msgpack:"expression,omitempty"`
 	ExprColumn  string   `json:"expr_column,omitempty" msgpack:"expr_column,omitempty"`
 	ExprPath    string   `json:"expr_path,omitempty" msgpack:"expr_path,omitempty"`
+	Disabled    bool     `json:"disabled,omitempty" msgpack:"disabled,omitempty"`
 }
 
 // IsExpression reports whether the index is a functional expression index on a JSON document or column expression.
@@ -688,9 +690,25 @@ func (s *TableSchema) FindIndex(name string) (*IndexSchema, int, bool) {
 	return nil, -1, false
 }
 
+// FindActiveIndex finds a non-disabled index by name.
+func (s *TableSchema) FindActiveIndex(name string) (*IndexSchema, int, bool) {
+	for i := range s.Indexes {
+		if s.Indexes[i].Disabled {
+			continue
+		}
+		if sqlutil.EqualFoldIdent(s.Indexes[i].Name, name) {
+			return &s.Indexes[i], i, true
+		}
+	}
+	return nil, -1, false
+}
+
 // FindIndexByColumn finds an index whose leading indexed column matches colName.
 func (s *TableSchema) FindIndexByColumn(colName string) (*IndexSchema, bool) {
 	for i := range s.Indexes {
+		if s.Indexes[i].Disabled {
+			continue
+		}
 		if len(s.Indexes[i].Columns) > 0 && strings.EqualFold(s.Indexes[i].Columns[0], colName) {
 			return &s.Indexes[i], true
 		}
@@ -710,7 +728,7 @@ func (s *TableSchema) FindExpressionIndex(colName, jsonPath string) (*IndexSchem
 	}
 	for i := range s.Indexes {
 		idx := &s.Indexes[i]
-		if !idx.IsExpression() {
+		if idx.Disabled || !idx.IsExpression() {
 			continue
 		}
 		targetCol := idx.ExprColumn
@@ -745,6 +763,9 @@ func (s *TableSchema) FindBestCompositeIndex(eqCols map[string]bool) (*IndexSche
 	bestPrefixLen := 0
 	for i := range s.Indexes {
 		idx := &s.Indexes[i]
+		if idx.Disabled {
+			continue
+		}
 		prefixLen := 0
 		for _, col := range idx.Columns {
 			if eqCols[strings.ToLower(col)] {

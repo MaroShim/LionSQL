@@ -2577,6 +2577,9 @@ func (f *VMFrame) findMatchingIndex(tableName string, whereExpr proc.Expr) (stri
 	eqMap := extractAllEqConditions(whereExpr)
 	if len(eqMap) > 1 {
 		for _, idx := range schema.Indexes {
+			if idx.Disabled {
+				continue
+			}
 			if len(idx.Columns) > 1 {
 				allMatched := true
 				var vals []storage.Value
@@ -2623,6 +2626,9 @@ func (f *VMFrame) findMatchingIndex(tableName string, whereExpr proc.Expr) (stri
 			}
 			if colName != "" && valExpr != nil {
 				for _, idx := range schema.Indexes {
+					if idx.Disabled {
+						continue
+					}
 					if len(idx.Columns) == 1 && sqlutil.EqualFoldIdent(idx.Columns[0], colName) {
 						if vAny, err := proc.EvalRowExpr(valExpr, evalCtx, nil); err == nil {
 							stVal := toStorageValue(vAny)
@@ -2636,6 +2642,9 @@ func (f *VMFrame) findMatchingIndex(tableName string, whereExpr proc.Expr) (stri
 		if colRef, ok := e.Expr.(*proc.ColumnRefExpr); ok {
 			colName := cleanSymbol(colRef.Name)
 			for _, idx := range schema.Indexes {
+				if idx.Disabled {
+					continue
+				}
 				if len(idx.Columns) == 1 && sqlutil.EqualFoldIdent(idx.Columns[0], colName) {
 					var lowVal, highVal *storage.Value
 					if vLow, err := proc.EvalRowExpr(e.Low, evalCtx, nil); err == nil {
