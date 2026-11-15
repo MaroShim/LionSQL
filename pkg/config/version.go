@@ -8,24 +8,25 @@ import (
 )
 
 // Version is the authoritative single source of truth for the LionSQL release version.
-const Version = "0.92.0"
+// Can be overridden at build time via -ldflags "-X 'lionsql/pkg/config.Version=...'".
+var Version = "0.92.0"
 
 // Injected via ldflags or auto-detected via debug.ReadBuildInfo()
 var (
-	BuildDate = "2026-11-12 13:45:00 KST"
-	GitCommit = "4a7dd6b"
+	BuildDate = "unknown"
+	GitCommit = "dev"
 )
 
 func init() {
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, setting := range info.Settings {
-			if setting.Key == "vcs.revision" {
+			if setting.Key == "vcs.revision" && (GitCommit == "dev" || GitCommit == "unknown" || GitCommit == "") {
 				GitCommit = setting.Value
 				if len(GitCommit) > 12 {
 					GitCommit = GitCommit[:12]
 				}
 			}
-			if setting.Key == "vcs.time" {
+			if setting.Key == "vcs.time" && (BuildDate == "unknown" || BuildDate == "") {
 				if t, err := time.Parse(time.RFC3339, setting.Value); err == nil {
 					BuildDate = t.Local().Format("2006-01-02 15:04:05 MST")
 				} else {
@@ -33,6 +34,9 @@ func init() {
 				}
 			}
 		}
+	}
+	if BuildDate == "unknown" || BuildDate == "" {
+		BuildDate = time.Now().Format("2006-01-02 15:04:05 MST")
 	}
 }
 

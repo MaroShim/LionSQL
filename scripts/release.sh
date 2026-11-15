@@ -303,28 +303,33 @@ fi
 echo -e "[Gate 0.5/6] Verifying Zero-Tampering Oracle Test Invariant..."
 "${ROOT_DIR}/scripts/verify_no_slt_mutation.sh"
 
-echo "Compiling 3 official release binaries..."
+# Prepare release build metadata ldflags
+RELEASE_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo "dev")"
+RELEASE_BUILD_DATE="$(date +"%Y-%m-%d %H:%M:%S %Z")"
+RELEASE_LDFLAGS="-X 'lionsql/pkg/config.Version=${VER}' -X 'lionsql/pkg/config.GitCommit=${RELEASE_COMMIT}' -X 'lionsql/pkg/config.BuildDate=${RELEASE_BUILD_DATE}'"
+
+echo "Compiling 3 official release binaries (Version: ${VER}, Commit: ${RELEASE_COMMIT}, Date: ${RELEASE_BUILD_DATE})..."
 # 1. macOS Apple Silicon (arm64)
-go build -tags wiredtiger -buildvcs=false -o bin/lionsql-darwin-arm64 ./cmd/lionsql
+go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/lionsql-darwin-arm64 ./cmd/lionsql
 cp bin/lionsql-darwin-arm64 bin/lionsql
 echo -e "${CLR_GREEN}Build OK: bin/lionsql-darwin-arm64 (macOS Apple Silicon)${CLR_RESET}"
 
 # 2. Linux amd64 (Pure Go Zero-Cgo)
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o bin/lionsql-linux-amd64 ./cmd/lionsql
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/lionsql-linux-amd64 ./cmd/lionsql
 echo -e "${CLR_GREEN}Build OK: bin/lionsql-linux-amd64 (Linux x86_64)${CLR_RESET}"
 
 # 3. Windows amd64 (Pure Go Zero-Cgo, 1ms timer)
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql-windows-amd64.exe ./cmd/lionsql
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/lionsql-windows-amd64.exe ./cmd/lionsql
 echo -e "${CLR_GREEN}Build OK: bin/lionsql-windows-amd64.exe (Windows x86_64)${CLR_RESET}"
 
 if [ "${SKIP_TESTS}" = true ]; then
     echo -e "${CLR_YELLOW}Skipping test pipeline (--skip-tests specified).${CLR_RESET}"
 else
     echo -e "Compiling benchmark and verification binaries..."
-    go build -tags wiredtiger -buildvcs=false -o bin/sqllogictest ./cmd/sqllogictest
-    go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
-    go build -tags wiredtiger -buildvcs=false -o bin/crashtest ./cmd/crashtest
-    go build -tags wiredtiger -buildvcs=false -o bin/soaktest ./cmd/soaktest
+    go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/sqllogictest ./cmd/sqllogictest
+    go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
+    go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/crashtest ./cmd/crashtest
+    go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/soaktest ./cmd/soaktest
 
     echo -e "[Gate 1/6] Running core unit & regression tests across all packages..."
     go test -tags wiredtiger -count=1 ./pkg/...
@@ -489,7 +494,7 @@ echo -e "Updated: ${CLR_BOLD}CHANGELOG.md${CLR_RESET}"
 
 # 4.2. Update pkg/config/version.go
 # If base SemVer (e.g. 0.90.0-beta4 -> base 0.90.0)
-sed -i.bak -E "s/const Version = \".*\"/const Version = \"${VER}\"/" "${VERSION_GO_FILE}"
+sed -i.bak -E "s/(var|const) Version = \".*\"/var Version = \"${VER}\"/" "${VERSION_GO_FILE}"
 rm -f "${VERSION_GO_FILE}.bak"
 echo -e "Updated: ${CLR_BOLD}pkg/config/version.go${CLR_RESET} -> ${VER}"
 
