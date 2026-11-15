@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
 
 ### Fixed
+- **Storage & Engine (`FIX-COMMIT-PARTIAL-MUTATION-RECOVERY-1`, tx.go:2054~2289)**:
+  - Enforce atomic transaction rollback on commit failure by introducing fine-grained LIFO undo logging (`commitUndoOp`) in `pkg/storage/memengine/tx.go`:
+    1. Pre-compute all flat record serialization (`EncodeRowToFlat`) and partition keys (`ComputePartitionKeyFromRow`) during the initial preparation loop before any persistent mutations occur, failing fast without state alterations.
+    2. Register immediate, symmetric undo operations for every single shard entry update/delete, partition key addition/removal, and secondary index insert/delete into a zero-allocation `undos` LIFO stack.
+    3. Eliminate the defect where midway failures during Phase B (such as secondary index insert errors or partition errors) left uncommitted shard entries, partition keys, or preceding secondary index keys leaked into the committed engine state.
 - **Storage & Engine (`FIX-TX-UNIQUE-KEY-RELEASE-COLLISION-1`, tx.go:460, 805, 1978, 2012, 2054)**:
   - Fix false positive `ErrUniqueViolation` and commit validation collisions when a unique key is reused after being released (via DELETE or UPDATE) within the same transaction in `pkg/storage/memengine`:
     1. Implement `isIndexKeyLocallyReleased` to detect if an index key collision candidate has already been deleted (`isLocallyDeleted`) or updated to a different key value (`getLocal`) in the transaction workspace, bypassing spurious duplicate key errors in `tx.Insert` and `tx.Update`.

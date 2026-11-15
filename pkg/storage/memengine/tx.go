@@ -2053,13 +2053,16 @@ func (tx *Transaction) Commit() error {
 
 	// 6. Apply changes and update secondary indexes atomically
 	type changeItem struct {
-		ch       rowChange
-		td       *TableData
-		sh       *tableShard
-		sIdx     int
-		hadOld   bool
-		oldEntry shardEntry
-		oldRow   storage.Row
+		ch        rowChange
+		td        *TableData
+		sh        *tableShard
+		sIdx      int
+		hadOld    bool
+		oldEntry  shardEntry
+		oldRow    storage.Row
+		flatBuf   []byte
+		newPartID string
+		oldPartID string
 	}
 	items := make([]changeItem, 0, len(tx.changes))
 	for _, ch := range tx.changes {
@@ -2079,82 +2082,89 @@ func (tx *Transaction) Commit() error {
 		if err != nil {
 			return err
 		}
-		items = append(items, changeItem{
-			ch:       ch,
-			td:       td,
-			sh:       sh,
-			sIdx:     sIdx,
-			hadOld:   hadOld,
-			oldEntry: oldEntry,
-			oldRow:   oldRow,
-		})
-	}
 
-	type undoRecord struct {
-		sh       *tableShard
-		key      string
-		oldEntry shardEntry
-		hadOld   bool
-		td       *TableData
-		oldRow   storage.Row
-		ch       rowChange
-	}
-	appliedUndos := make([]undoRecord, 0, len(items))
+		var flatBuf []byte
+		if td.mode == MemoryCompact && td.layout != nil && (ch.kind == changeInsert || ch.kind == changeUpdate) {
+			var err error
+			flatBuf, err = td.layout.EncodeRowToFlat(&td.Schema, ch.row)
+			if err != nil {
+				return err
+			}
+		}
 
-	type deletedIdxEntry struct {
-		idxData *IndexData
-		key     storage.Value
-		pk      string
-		incVals []storage.Value
-	}
-	var deletedIdxEntries []deletedIdxEntry
-
-	rollbackApplied := func() {
-		for i := len(appliedUndos) - 1; i >= 0; i-- {
-			u := appliedUndos[i]
-			td := u.td
-			sh := u.sh
-			if u.hadOld {
-				sh.entries[u.key] = u.oldEntry
-				if td.Schema.IsPartitioned() {
-					newPartID, _ := td.Schema.ComputePartitionKeyFromRow(u.ch.row)
-					oldPartID, _ := td.Schema.ComputePartitionKeyFromRow(u.oldRow)
-					if newPartID != "" && newPartID != oldPartID {
-						td.removePartitionKey(newPartID, u.key)
-					}
-					if oldPartID != "" {
-						td.addPartitionKey(oldPartID, u.key)
-					}
+		var newPartID, oldPartID string
+		if td.Schema.IsPartitioned() {
+			if ch.kind == changeInsert || ch.kind == changeUpdate {
+				var err error
+				newPartID, err = td.Schema.ComputePartitionKeyFromRow(ch.row)
+				if err != nil {
+					return err
 				}
-				for _, idxData := range td.Indexes {
-					if idxData.Schema.Disabled {
-						continue
-					}
-					if u.ch.kind != changeDelete {
-						newKey := extractIndexKeyFromRowWithSchema(&td.Schema, u.ch.row, &idxData.Schema)
-						idxData.Delete(newKey, u.key)
-					}
-				}
-			} else {
-				delete(sh.entries, u.key)
-				if td.Schema.IsPartitioned() {
-					partID, _ := td.Schema.ComputePartitionKeyFromRow(u.ch.row)
-					if partID != "" {
-						td.removePartitionKey(partID, u.key)
-					}
-				}
-				for _, idxData := range td.Indexes {
-					if idxData.Schema.Disabled {
-						continue
-					}
-					newKey := extractIndexKeyFromRowWithSchema(&td.Schema, u.ch.row, &idxData.Schema)
-					idxData.Delete(newKey, u.key)
+			}
+			if (ch.kind == changeUpdate || ch.kind == changeDelete) && hadOld {
+				var err error
+				oldPartID, err = td.Schema.ComputePartitionKeyFromRow(oldRow)
+				if err != nil {
+					return err
 				}
 			}
 		}
-		// Re-insert all old index entries that were removed in Phase A
-		for _, d := range deletedIdxEntries {
-			_ = d.idxData.Insert(d.key, d.pk, d.incVals)
+
+		items = append(items, changeItem{
+			ch:        ch,
+			td:        td,
+			sh:        sh,
+			sIdx:      sIdx,
+			hadOld:    hadOld,
+			oldEntry:  oldEntry,
+			oldRow:    oldRow,
+			flatBuf:   flatBuf,
+			newPartID: newPartID,
+			oldPartID: oldPartID,
+		})
+	}
+
+	type undoKind uint8
+	const (
+		undoRestoreShardEntry undoKind = iota
+		undoDeleteShardEntry
+		undoAddPartitionKey
+		undoRemovePartitionKey
+		undoInsertIndexEntry
+		undoDeleteIndexEntry
+	)
+
+	type commitUndoOp struct {
+		kind     undoKind
+		sh       *tableShard
+		td       *TableData
+		key      string
+		partID   string
+		idxData  *IndexData
+		idxKey   storage.Value
+		incVals  []storage.Value
+		oldEntry shardEntry
+	}
+
+	undos := make([]commitUndoOp, 0, len(items)*4)
+
+	rollbackApplied := func() {
+		for i := len(undos) - 1; i >= 0; i-- {
+			u := undos[i]
+			switch u.kind {
+			case undoRestoreShardEntry:
+				u.sh.entries[u.key] = u.oldEntry
+			case undoDeleteShardEntry:
+				delete(u.sh.entries, u.key)
+			case undoAddPartitionKey:
+				u.td.addPartitionKey(u.partID, u.key)
+			case undoRemovePartitionKey:
+				u.td.removePartitionKey(u.partID, u.key)
+			case undoInsertIndexEntry:
+				_ = u.idxData.Insert(u.idxKey, u.key, u.incVals)
+			case undoDeleteIndexEntry:
+				u.idxData.Delete(u.idxKey, u.key)
+			}
 		}
 	}
 
@@ -2169,10 +2179,11 @@ func (tx *Transaction) Commit() error {
 				oldKey := extractIndexKeyFromRowWithSchema(&item.td.Schema, item.oldRow, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&item.td.Schema, item.oldRow, idxData.Schema.IncludeCols)
 				idxData.Delete(oldKey, item.ch.key)
-				deletedIdxEntries = append(deletedIdxEntries, deletedIdxEntry{
+				undos = append(undos, commitUndoOp{
+					kind:    undoInsertIndexEntry,
 					idxData: idxData,
-					key:     oldKey,
-					pk:      item.ch.key,
+					idxKey:  oldKey,
+					key:     item.ch.key,
 					incVals: incVals,
 				})
 			}
@@ -2186,28 +2197,30 @@ func (tx *Transaction) Commit() error {
 		sh := item.sh
 		oldEntry := item.oldEntry
 		hadOld := item.hadOld
-		oldRow := item.oldRow
 
 		switch ch.kind {
 		case changeInsert:
 			if td.mode == MemoryCompact && td.layout != nil {
-				flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row)
-				if err != nil {
-					rollbackApplied()
-					return err
-				}
-				sh.entries[ch.key] = shardEntry{ver: 1, flatBuf: flatBuf}
+				sh.entries[ch.key] = shardEntry{ver: 1, flatBuf: item.flatBuf}
 			} else {
 				sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
 			}
-			if td.Schema.IsPartitioned() {
-				partID, err := td.Schema.ComputePartitionKeyFromRow(ch.row)
-				if err != nil {
-					rollbackApplied()
-					return err
-				}
-				td.addPartitionKey(partID, ch.key)
+			undos = append(undos, commitUndoOp{
+				kind: undoDeleteShardEntry,
+				sh:   sh,
+				key:  ch.key,
+			})
+
+			if td.Schema.IsPartitioned() && item.newPartID != "" {
+				td.addPartitionKey(item.newPartID, ch.key)
+				undos = append(undos, commitUndoOp{
+					kind:   undoRemovePartitionKey,
+					td:     td,
+					partID: item.newPartID,
+					key:    ch.key,
+				})
 			}
+
 			for _, idxData := range td.Indexes {
 				if idxData.Schema.Disabled {
 					continue
@@ -2218,43 +2231,48 @@ func (tx *Transaction) Commit() error {
 					rollbackApplied()
 					return err
 				}
+				undos = append(undos, commitUndoOp{
+					kind:    undoDeleteIndexEntry,
+					idxData: idxData,
+					idxKey:  newKey,
+					key:     ch.key,
+				})
 			}
+
 		case changeUpdate:
 			if td.mode == MemoryCompact && td.layout != nil {
-				flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row)
-				if err != nil {
-					rollbackApplied()
-					return err
-				}
-				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, flatBuf: flatBuf}
+				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, flatBuf: item.flatBuf}
 			} else {
 				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
 			}
-			if td.Schema.IsPartitioned() {
-				var oldPartID, newPartID string
-				if hadOld {
-					var err error
-					oldPartID, err = td.Schema.ComputePartitionKeyFromRow(oldRow)
-					if err != nil {
-						rollbackApplied()
-						return err
-					}
+			undos = append(undos, commitUndoOp{
+				kind:     undoRestoreShardEntry,
+				sh:       sh,
+				key:      ch.key,
+				oldEntry: oldEntry,
+			})
+
+			if td.Schema.IsPartitioned() && item.oldPartID != item.newPartID {
+				if item.oldPartID != "" {
+					td.removePartitionKey(item.oldPartID, ch.key)
+					undos = append(undos, commitUndoOp{
+						kind:   undoAddPartitionKey,
+						td:     td,
+						partID: item.oldPartID,
+						key:    ch.key,
+					})
 				}
-				var err error
-				newPartID, err = td.Schema.ComputePartitionKeyFromRow(ch.row)
-				if err != nil {
-					rollbackApplied()
-					return err
-				}
-				if oldPartID != newPartID {
-					if oldPartID != "" {
-						td.removePartitionKey(oldPartID, ch.key)
-					}
-					if newPartID != "" {
-						td.addPartitionKey(newPartID, ch.key)
-					}
+				if item.newPartID != "" {
+					td.addPartitionKey(item.newPartID, ch.key)
+					undos = append(undos, commitUndoOp{
+						kind:   undoRemovePartitionKey,
+						td:     td,
+						partID: item.newPartID,
+						key:    ch.key,
+					})
 				}
 			}
+
 			for _, idxData := range td.Indexes {
 				if idxData.Schema.Disabled {
 					continue
@@ -2265,27 +2283,33 @@ func (tx *Transaction) Commit() error {
 					rollbackApplied()
 					return err
 				}
+				undos = append(undos, commitUndoOp{
+					kind:    undoDeleteIndexEntry,
+					idxData: idxData,
+					idxKey:  newKey,
+					key:     ch.key,
+				})
 			}
+
 		case changeDelete:
 			delete(sh.entries, ch.key)
-			if td.Schema.IsPartitioned() && hadOld {
-				partID, err := td.Schema.ComputePartitionKeyFromRow(oldRow)
-				if err != nil {
-					rollbackApplied()
-					return err
-				}
-				td.removePartitionKey(partID, ch.key)
+			undos = append(undos, commitUndoOp{
+				kind:     undoRestoreShardEntry,
+				sh:       sh,
+				key:      ch.key,
+				oldEntry: oldEntry,
+			})
+
+			if td.Schema.IsPartitioned() && hadOld && item.oldPartID != "" {
+				td.removePartitionKey(item.oldPartID, ch.key)
+				undos = append(undos, commitUndoOp{
+					kind:   undoAddPartitionKey,
+					td:     td,
+					partID: item.oldPartID,
+					key:    ch.key,
+				})
 			}
 		}
-		appliedUndos = append(appliedUndos, undoRecord{
-			sh:       sh,
-			key:      ch.key,
-			oldEntry: oldEntry,
-			hadOld:   hadOld,
-			td:       td,
-			oldRow:   oldRow,
-			ch:       ch,
-		})
 	}
 
 	// 7. Assign monotonic LSN and append WAL frame while shard locks are still held
