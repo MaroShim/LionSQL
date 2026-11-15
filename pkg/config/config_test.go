@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"lionsql/pkg/config"
@@ -227,6 +228,26 @@ func TestAutoDiscoverConfig(t *testing.T) {
 	cfg, path, err = config.AutoDiscoverConfig("", tmpDir)
 	if err != nil || path != dataConfig || cfg.Server.Engine != "memory" {
 		t.Errorf("auto-discovery from dataDir failed: path=%s, engine=%s, err=%v", path, cfg.Server.Engine, err)
+	}
+
+	// 3. When discovered lionsql.json exists but contains corrupted JSON, must fail fast with explicit error ([RULE:ExplicitError])
+	corruptDir, err := os.MkdirTemp("", "lionsql_corrupt_config_*")
+	if err != nil {
+		t.Fatalf("failed to create corrupt temp dir: %v", err)
+	}
+	defer os.RemoveAll(corruptDir)
+
+	corruptConfig := filepath.Join(corruptDir, "lionsql.json")
+	if err := os.WriteFile(corruptConfig, []byte(`{"server": {invalid json`), 0644); err != nil {
+		t.Fatalf("write corruptConfig failed: %v", err)
+	}
+
+	cfg, path, err = config.AutoDiscoverConfig("", corruptDir)
+	if err == nil {
+		t.Fatalf("expected error on corrupted config file, but got nil (path=%s, cfg=%+v)", path, cfg)
+	}
+	if !strings.Contains(err.Error(), "invalid") {
+		t.Errorf("expected error message to mention 'invalid', got: %v", err)
 	}
 }
 

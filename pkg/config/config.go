@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -288,6 +289,8 @@ func LoadFromFile(filePath string) (*Config, error) {
 // AutoDiscoverConfig attempts to locate an existing config file or falls back to defaults.
 // Precedence: explicitPath > ./lionsql.json > <dataDir>/lionsql.json > Built-in Defaults.
 // Applies environment variable overrides as per [RULE:ConfigHierarchy].
+// When a config file is missing, it safely falls back to defaults ([RULE:SafeDefaults]).
+// When a discovered config file is corrupted or unreadable, it fails fast with an explicit error ([RULE:ExplicitError]).
 func AutoDiscoverConfig(explicitPath string, dataDir string) (*Config, string, error) {
 	var resCfg *Config
 	var resPath string
@@ -299,20 +302,32 @@ func AutoDiscoverConfig(explicitPath string, dataDir string) (*Config, string, e
 		}
 		resCfg = cfg
 		resPath = explicitPath
-	} else if fi, err := os.Stat("lionsql.json"); err == nil && !fi.IsDir() {
-		cfg, err := LoadFromFile("lionsql.json")
-		if err == nil {
+	} else if fi, err := os.Stat("lionsql.json"); err == nil {
+		if !fi.IsDir() {
+			cfg, err := LoadFromFile("lionsql.json")
+			if err != nil {
+				return nil, "", fmt.Errorf("discovered config file %q is invalid: %w", "lionsql.json", err)
+			}
 			resCfg = cfg
 			resPath = "lionsql.json"
 		}
-	} else if dataDir != "" {
+	} else if !os.IsNotExist(err) && !errors.Is(err, os.ErrNotExist) {
+		return nil, "", fmt.Errorf("failed to access config file %q: %w", "lionsql.json", err)
+	}
+
+	if resCfg == nil && dataDir != "" {
 		dataConfig := filepath.Join(dataDir, "lionsql.json")
-		if fi, err := os.Stat(dataConfig); err == nil && !fi.IsDir() {
-			cfg, err := LoadFromFile(dataConfig)
-			if err == nil {
+		if fi, err := os.Stat(dataConfig); err == nil {
+			if !fi.IsDir() {
+				cfg, err := LoadFromFile(dataConfig)
+				if err != nil {
+					return nil, "", fmt.Errorf("discovered config file %q is invalid: %w", dataConfig, err)
+				}
 				resCfg = cfg
 				resPath = dataConfig
 			}
+		} else if !os.IsNotExist(err) && !errors.Is(err, os.ErrNotExist) {
+			return nil, "", fmt.Errorf("failed to access config file %q: %w", dataConfig, err)
 		}
 	}
 
