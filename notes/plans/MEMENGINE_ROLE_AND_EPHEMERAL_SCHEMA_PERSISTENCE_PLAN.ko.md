@@ -42,9 +42,17 @@
 | 구분 | 주력 역할 및 권장 워크로드 | 스키마/카탈로그 영속성 | 로우 데이터(Row) 영속성 |
 | :--- | :--- | :---: | :---: |
 | **1. `WiredTiger`** (`-disk=wiredtiger`) | **Production Persistent OLTP 주력 엔진**<br>- 대규모 트랜잭션 데이터, 금융/원장/비즈니스 영구 데이터<br>- 페이지 단위 B+Tree 체크포인트 및 MVCC | **영구 보존**<br>(B+Tree `_ lion_meta`) | **영구 보존**<br>(MVCC + WAL) |
-| **2. `memengine` Persistent** (`-disk=compact`) | **소규모/단일 바이너리(`CGO_ENABLED=0`) 영속 엔진**<br>- CGO 미지원 환경 또는 소규모 임베디드 DB<br>- AOF(`wal.aof`) + RDB 스냅샷(`tables.mpk`) | **영구 보존**<br>(`tables.mpk` + `wal.aof`) | **영구 보존**<br>(`tables.mpk` + `wal.aof`) |
-| **3. `memengine` Ephemeral** (`-ephemeral`, `DataDir != ""`) | **`SCHEMA_ONLY` 초고속 인메모리 OLTP 엔진**<br>- 세션 스토어, 실시간 리더보드, 캐시, 고속 스테이징<br>- DML 디스크 I/O **0%** (순수 RAM 속도) | **영구 보존**<br>(`schemas.mpk` + 카탈로그) | **휘발성 (Ephemeral)**<br>(재기동 시 0 rows 초기화) |
-| **4. `memengine` Anonymous** (`DataDir == ""`) | **순수 익명 메모리 엔진 (단위 테스트 / 내부 임시 버퍼)**<br>- `sqllogictest`, 단위 테스트, `#temp` / `@table_var` | **휘발성**<br>(디스크 디렉토리 없음) | **휘발성**<br>(디스크 디렉토리 없음) |
+| **3. `memengine` (`SCHEMA_ONLY` - `memengine` 기본값)** | **인메모리 OLTP 주력 엔진 (`-engine=memory` 기본)**<br>- 세션 스토어, 실시간 리더보드, 캐시, 고속 스테이징<br>- DML 디스크 I/O **0%** (순수 RAM 속도) | **영구 보존**<br>(`schemas.mpk` + 카탈로그) | **휘발성 (Ephemeral)**<br>(재기동 시 0 rows 초기화) |
+| **4. `memengine` (`SCHEMA_AND_DATA` - 명시적 옵션)** | **단일 바이너리(`CGO_ENABLED=0` / Windows 폴백) 영속 엔진**<br>- CGO 미지원 환경 또는 명시적 인메모리 영속 옵션 지정 시<br>- AOF(`wal.aof`) + RDB 스냅샷(`tables.mpk`) | **영구 보존**<br>(`tables.mpk` + `wal.aof`) | **영구 보존**<br>(`tables.mpk` + `wal.aof`) |
+| **5. `memengine` Anonymous** (`DataDir == ""`) | **순수 익명 메모리 엔진 (단위 테스트 / 내부 임시 버퍼)**<br>- `sqllogictest`, 단위 테스트, `#temp` / `@table_var` | **휘발성**<br>(디스크 디렉토리 없음) | **휘발성**<br>(디스크 디렉토리 없음) |
+
+### 2.3 1.0-GA 아키텍처 결단 및 조기 전환(Early Transition) 원칙
+1. **LionSQL 전체 기본 엔진과 `memengine` 기본 모드의 명확한 분리**:
+   - **LionSQL의 기본 스토리지 엔진(`DefaultEngine` / `DefaultDisk`)은 이미 `WiredTiger`**이다. 따라서 디스크에 스키마와 데이터를 모두 영구 보존해야 하는 표준 OLTP 워크로드는 기본적으로 `WiredTiger`가 전담한다.
+   - 사용자가 기본값(`WiredTiger`) 대신 **`-engine=memory` (`memengine`)를 명시적으로 선택했다는 것은 디스크 WAL/스냅샷 오버헤드 없는 순수 인메모리 처리 성능을 의도한 것**이다.
+   - 따라서 `memengine`은 SQL Server In-Memory OLTP와 같이 `SCHEMA_ONLY`와 `SCHEMA_AND_DATA` 두 가지 영속성 수준을 모두 제공하되, **`memengine`의 기본값(Default)을 `SCHEMA_ONLY` (스키마 및 카탈로그만 디스크 영속화, 로우 데이터는 100% RAM 휘발성)**로 설정하고 `SCHEMA_AND_DATA`(WAL + RDB)는 명시적 옵션(또는 WiredTiger가 없는 Windows 폴백)으로 제공한다.
+2. **1.0 이전 조기 전환(Early Switch) 전략**:
+   - 이 기본값 전환은 `1.0-GA` 직전에 급박하게 바꾸는 것이 아니라, **`v0.93.0` 릴리스 직후 차기 마일스톤(`v0.94.0` / `1.0-GA` 초입)에서 가장 먼저 전환**하여 `1.0-GA`에 도달하기 전까지 충분한 통합 테스트 및 운영 검증 기간을 확보한다.
 
 ---
 
