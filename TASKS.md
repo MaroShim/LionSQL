@@ -195,7 +195,7 @@
 | `DONE` | **`DURA-SLT-2`** |  | Durability | P2 | SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 | [`notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`DURA-SOAK-1`** | `1.0-GA` | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
 | `PENDING` | **`FEAT-CDC-DUCKDB-INITIAL-SNAPSHOT-CHECKPOINT-1`** | `1.0-GA` | Ecosystem | P2 | CDC 및 DuckDB 연동 최초 스냅샷 적재, LSN 체크포인트 영속화 및 자동 재연결 파이프라인 | [`guide/DUCKDB_INTEGRATION_GUIDE.ko.md`](guide/DUCKDB_INTEGRATION_GUIDE.ko.md) |  |
-| `PENDING` | **`FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`** | `1.0-GA` | CLI | P2 | lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 | [`doc/USER_MANUAL.ko.md`](doc/USER_MANUAL.ko.md) |  |
+| `DONE` | **`FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`** | `1.0-GA` | CLI | P2 | lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 | [`doc/USER_MANUAL.ko.md`](doc/USER_MANUAL.ko.md) |  |
 | `DONE` | **`FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`** | `1.0-GA` | Mail | P2 | SQL Server DatabaseMail 외부 워커 프로세스 분리 및 sp_send_dbmail 지원 | [`notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md`](notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-DATADIR-ENGINE-MANIFEST-1`** | `1.0-GA` | Storage | P1 | 데이터 폴더 초기화 시 엔진 매니페스트(lionsql.engine.json: wiredtiger/compact, 코덱 버전) 원자적 기록, 재기동 시 자동 감지 및 이종 엔진 명시 시 Fail-Closed 차단 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FEAT-DUAL-AI-AUDIT-PIPELINE-1`** | `1.0-GA` | Durability | P1 | Dual-AI (Antigravity & Claude) Pre-Release Audit Pipeline Automation: scripts/audit_diff.sh and scripts/release.sh Gate 0 integration | [`notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`](notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md) |  |
@@ -2477,8 +2477,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 `FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`
-- **Domain**: CLI | **Priority**: P2 | **Updated**: 2026-11-14 12:32:11
+### [DONE] lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 `FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`
+- **Domain**: CLI | **Priority**: P2 | **Updated**: 2026-11-15 07:16:58
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`doc/USER_MANUAL.ko.md`](doc/USER_MANUAL.ko.md)
 

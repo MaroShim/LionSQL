@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 
 	"lionsql/pkg/catalog"
+	"lionsql/pkg/cli"
 	"lionsql/pkg/config"
 	"lionsql/pkg/engine"
 	"lionsql/pkg/pathutil"
@@ -110,6 +111,63 @@ func runSQL(args []string) error {
 	return nil
 }
 
+func runCLI(args []string) error {
+	fs := flag.NewFlagSet("cli", flag.ContinueOnError)
+	dataDir := fs.String("data", "data", "Path to database data directory")
+	fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
+	fs.StringVar(dataDir, "dir", "data", "Path to database data directory")
+	engineType := fs.String("engine", config.DefaultEngine(), "Storage engine backend: wiredtiger or memory")
+	diskType := fs.String("disk", "", "Low-level disk persistence backend (compact, wiredtiger)")
+	memoryType := fs.String("memory", config.DefaultMemory(), "In-memory tuple representation: compact (default) or performance [Deprecated]")
+
+	execSQL := fs.String("e", "", "Execute inline SQL query")
+	fs.StringVar(execSQL, "execute", "", "Execute inline SQL query")
+	fileSQL := fs.String("f", "", "Execute SQL batch file")
+	fs.StringVar(fileSQL, "file", "", "Execute SQL batch file")
+	interactive := fs.Bool("i", false, "Start interactive SQL REPL shell")
+	fs.BoolVar(interactive, "interactive", false, "Start interactive SQL REPL shell")
+	fs.BoolVar(interactive, "shell", false, "Start interactive SQL REPL shell")
+
+	if err := fs.Parse(reorderArgs(args)); err != nil {
+		return err
+	}
+
+	remaining := fs.Args()
+	if *execSQL == "" && *fileSQL == "" && len(remaining) > 0 && !*interactive {
+		*execSQL = strings.Join(remaining, " ")
+	}
+
+	resolvedDisk := *diskType
+	if resolvedDisk == "" {
+		if strings.ToLower(*engineType) == "memory" {
+			resolvedDisk = "compact"
+		} else if *engineType != "" {
+			resolvedDisk = *engineType
+		} else {
+			resolvedDisk = config.DefaultDisk()
+		}
+	} else if strings.ToLower(resolvedDisk) == "memory" {
+		resolvedDisk = "compact"
+	}
+
+	eng, coord, err := openCoordinatorWithOptions(*dataDir, resolvedDisk, *memoryType)
+	if err != nil {
+		return err
+	}
+	defer eng.Close()
+
+	cfg := cli.Config{
+		Execute:     *execSQL,
+		File:        *fileSQL,
+		Interactive: *interactive || (*execSQL == "" && *fileSQL == ""),
+		In:          os.Stdin,
+		Out:         os.Stdout,
+		Err:         os.Stderr,
+	}
+
+	return cli.RunCLI(cfg, coord)
+}
+
 func reorderArgs(args []string) []string {
 	var flags []string
 	var nonFlags []string
@@ -134,7 +192,7 @@ func openCoordinator(dataDir, engineType string) (storage.Engine, *engine.Coordi
 
 func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.Engine, *engine.Coordinator, error) {
 	cleanDir := filepath.Clean(dataDir)
-	if err := pathutil.ValidateDir(cleanDir, false); err != nil {
+	if err := pathutil.ValidateDir(cleanDir, true); err != nil {
 		return nil, nil, fmt.Errorf("data directory validation error: %w", err)
 	}
 	var eng storage.Engine

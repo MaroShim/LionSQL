@@ -27,6 +27,7 @@ Commands (기본 명령체계):
   doctor                 Run self-diagnostic health checks on host, ports, and storage
   init-config [path]     Generate a default lionsql.json configuration file
   migrate <subcommand>   Manage declarative database schema migrations (status, up, down)
+  cli                    Start interactive SQL shell or execute batch SQL
   sql "<statement>"      Execute one-off SQL statements against the local database
   get [key]              Query runtime configuration parameter(s) from running instance
   set <key> <val>        Update runtime configuration parameter (sudo-like password prompt)
@@ -37,6 +38,11 @@ Commands (기본 명령체계):
   help                   Show this help message
 
 Options by Category (옵션 상세):
+
+  [Interactive & Batch SQL Execution]
+    -i, -interactive       Start interactive SQL REPL shell (aliases: cli, -shell)
+    -e, -execute <query>   Execute inline SQL statement and print results
+    -f, -file <path>       Execute SQL statements from a file
 
   [Network & Wire Protocols]
     -http <addr>           HTTP service & Web Studio address (default: 127.0.0.1:8090, empty to disable)
@@ -118,12 +124,36 @@ Examples:
   lionsql -dir=./mydb -http=:8090 # Start server on custom directory and port
   lionsql doctor                  # Run system health and diagnostic checks
   lionsql init-config             # Create default lionsql.json configuration
+  lionsql -i                      # Start interactive SQL REPL shell
+  lionsql -e "SELECT 1;"          # Execute inline SQL statement
+  lionsql -f ./schema.sql         # Execute SQL statements from file
   lionsql sql "SELECT 1;"         # Execute one-off SQL statement
 `, config.Version, config.CompactVersion())
 }
 
 func printVersion() {
 	fmt.Println(config.DetailedVersion())
+}
+
+func isCLICall(args []string) bool {
+	for _, arg := range args {
+		name := arg
+		if strings.HasPrefix(name, "--") {
+			name = name[2:]
+		} else if strings.HasPrefix(name, "-") {
+			name = name[1:]
+		} else {
+			continue
+		}
+		if eq := strings.IndexByte(name, '='); eq != -1 {
+			name = name[:eq]
+		}
+		switch strings.ToLower(name) {
+		case "i", "interactive", "shell", "e", "execute", "f", "file":
+			return true
+		}
+	}
+	return false
 }
 
 func main() {
@@ -138,6 +168,18 @@ func main() {
 	// Intercept version flags immediately
 	if len(os.Args) > 1 && (os.Args[1] == "-v" || os.Args[1] == "-version" || os.Args[1] == "--version" || os.Args[1] == "version") {
 		printVersion()
+		return
+	}
+
+	// Intercept CLI flags (-i, --interactive, -e, --execute, -f, --file, -shell, --shell)
+	if len(os.Args) > 1 && isCLICall(os.Args[1:]) {
+		if err := runCLI(os.Args[1:]); err != nil {
+			if err == flag.ErrHelp {
+				return
+			}
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 
@@ -200,12 +242,30 @@ func main() {
 		}
 		fmt.Printf("\n[LionSQL] Default configuration generated successfully: %s\n\n", targetPath)
 
+	case "cli":
+		if err := runCLI(subargs); err != nil {
+			if err == flag.ErrHelp {
+				return
+			}
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
 	case "migrate":
 		if err := runMigrate(subargs); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	case "sql":
+		if len(subargs) == 0 || isCLICall(subargs) {
+			if err := runCLI(subargs); err != nil {
+				if err == flag.ErrHelp {
+					return
+				}
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
 		if err := runSQL(subargs); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
