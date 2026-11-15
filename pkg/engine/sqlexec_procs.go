@@ -1049,10 +1049,15 @@ func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, st
 					break
 				}
 			}
+			if targetParam == "" {
+				return nil, fmt.Errorf("Error 8145, Level 16, State 1, Procedure %s: @%s is not a parameter for procedure %s.", procName, k, procName)
+			}
 			valStr = v
 		} else if i < len(procMeta.Params) {
 			targetParam = procMeta.Params[i].Name
 			paramType = procMeta.Params[i].Type
+		} else {
+			return nil, fmt.Errorf("Error 8144, Level 16, State 2, Procedure %s: Procedure or function %s has too many arguments specified.", procName, procName)
 		}
 
 		valStr, isOut := stripTrailingOutputKeyword(valStr)

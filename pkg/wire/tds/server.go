@@ -510,6 +510,23 @@ func (s *Server) executeVDBEPreparedFastPath(
 	for i, p := range boundParams {
 		if p.Name != "" {
 			cleanName := strings.TrimPrefix(p.Name, "@")
+			if prog != nil && len(prog.Params) > 0 {
+				matched := false
+				for _, pd := range prog.Params {
+					if strings.EqualFold(strings.TrimPrefix(pd.Name, "@"), cleanName) {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					var buf bytes.Buffer
+					msg := fmt.Sprintf("@%s is not a parameter for procedure %s.", cleanName, prog.Name)
+					buf.Write(BuildError(8145, 1, 16, msg, "LionSQL", prog.Name, 1))
+					buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
+					_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+					return true
+				}
+			}
 			paramMap[cleanName] = p.Value
 			paramMap["@"+cleanName] = p.Value
 		}
@@ -3688,6 +3705,12 @@ func extractTdsErrorInfo(err error) (int32, byte, byte, string) {
 	}
 	if strings.Contains(errLower, "string or binary data would be truncated") || strings.Contains(errLower, "data would be truncated") {
 		return 8152, 14, 16, err.Error()
+	}
+	if strings.Contains(errLower, "is not a parameter for procedure") || strings.Contains(errLower, "8145") {
+		return 8145, 1, 16, err.Error()
+	}
+	if strings.Contains(errLower, "has too many arguments specified") || strings.Contains(errLower, "8144") {
+		return 8144, 2, 16, err.Error()
 	}
 	if strings.Contains(errLower, "could not find stored procedure") {
 		return 2812, 62, 16, err.Error()

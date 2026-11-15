@@ -224,7 +224,7 @@
 | `DONE` | **`FIX-DEFAULT-EXPR-DYNAMIC-EVAL-1`** | `1.0-GA` | Engine | P2 | DEFAULT 표현식(NEWID, GETDATE 등) 파싱 시점 캐싱 폐지 및 INSERT 실행 시 동적 평가 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-EVAL-NOT-IN-NULL-3VL-1`** | `1.0-GA` | Engine | P2 | NOT IN 서브쿼리 및 리스트에 NULL 포함 시 3치 논리(3VL UNKNOWN) 엄격 적용 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-EXEC-DEFAULT-KEYWORD-1`** |  | Parser | P2 | EXEC arg DEFAULT keyword must bind the declared default instead of the string literal | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
-| `PENDING` | **`FIX-EXEC-UNKNOWN-NAMED-ARG-1`** |  | Engine | P2 | EXEC with an unknown named argument must raise error 8145 instead of being ignored | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `DONE` | **`FIX-EXEC-UNKNOWN-NAMED-ARG-1`** |  | Engine | P2 | EXEC with an unknown named argument must raise error 8145 instead of being ignored | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `PENDING` | **`FIX-FK-CONCURRENT-PARENT-LOCK-1`** | `1.0-GA` | Storage | P2 | 동시성 FK 검증 시 부모 행 삭제 방지 참조 락 체계 확립 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-GROUPBY-STRING-AGG-1`** |  | Engine | P1 | GROUP BY 쿼리에서 STRING_AGG(col, sep) 그룹별 집계 누락(NULL 반환) 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-HTTP-REAP-ABANDONED-TX-1`** | `1.0-GA` | API | P2 | Web Studio/HTTP 유휴 세션 회수 시 미종료 트랜잭션 자동 롤백 및 스토리지 잠금 해제 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
@@ -2678,8 +2678,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] EXEC with an unknown named argument must raise error 8145 instead of being ignored `FIX-EXEC-UNKNOWN-NAMED-ARG-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-13 23:06:52
+### [DONE] EXEC with an unknown named argument must raise error 8145 instead of being ignored `FIX-EXEC-UNKNOWN-NAMED-ARG-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-15 07:03:58
 - **Plan Doc**: [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
 
 ---

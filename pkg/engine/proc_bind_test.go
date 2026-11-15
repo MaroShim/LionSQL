@@ -201,3 +201,85 @@ func TestBuildSpExecuteSQL_NoCascadingSubstitution(t *testing.T) {
 	}
 }
 
+func TestExecProcedure_UnknownNamedArgument_Error8145(t *testing.T) {
+	memEng := memengine.New()
+	cat := catalog.New(memEng)
+	coord := NewCoordinator(cat, memEng, Config{})
+	defer coord.Close()
+
+	ctx := t.Context()
+	_, err := coord.ExecuteSessionSQLContext(ctx, "default", `
+CREATE PROCEDURE sp_test_8145
+    @a INT,
+    @b VARCHAR(50) = 'hello'
+AS
+BEGIN
+    SELECT @a AS a, @b AS b;
+END;
+`)
+	if err != nil {
+		t.Fatalf("failed to create procedure: %v", err)
+	}
+
+	// 1. Valid execution with known named arguments should succeed
+	res, err := coord.ExecuteSessionSQLContext(ctx, "default", "EXEC sp_test_8145 @a = 10, @b = 'world';")
+	if err != nil || !res.Success {
+		t.Fatalf("valid EXEC failed: %v", err)
+	}
+
+	// 2. Execution with unknown named argument @unknown should fail with Error 8145
+	res, err = coord.ExecuteSessionSQLContext(ctx, "default", "EXEC sp_test_8145 @a = 10, @unknown = 20;")
+	if err == nil && (res == nil || res.Success) {
+		t.Fatalf("expected Error 8145 for unknown argument @unknown, but execution succeeded!")
+	}
+
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	} else if res != nil && !res.Success {
+		errMsg = res.Error
+	}
+
+	if !strings.Contains(errMsg, "8145") || !strings.Contains(errMsg, "@unknown is not a parameter for procedure") {
+		t.Fatalf("expected error message to contain '8145' and '@unknown is not a parameter for procedure', got: %q", errMsg)
+	}
+}
+
+func TestExecProcedure_TooManyArguments_Error8144(t *testing.T) {
+	memEng := memengine.New()
+	cat := catalog.New(memEng)
+	coord := NewCoordinator(cat, memEng, Config{})
+	defer coord.Close()
+
+	ctx := t.Context()
+	_, err := coord.ExecuteSessionSQLContext(ctx, "default", `
+CREATE PROCEDURE sp_test_8144
+    @a INT
+AS
+BEGIN
+    SELECT @a AS a;
+END;
+`)
+	if err != nil {
+		t.Fatalf("failed to create procedure: %v", err)
+	}
+
+	// 1. Positional call with 2 arguments when only 1 is declared
+	res, err := coord.ExecuteSessionSQLContext(ctx, "default", "EXEC sp_test_8144 10, 20;")
+	if err == nil && (res == nil || res.Success) {
+		t.Fatalf("expected Error 8144 for too many arguments, but execution succeeded!")
+	}
+
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
+	} else if res != nil && !res.Success {
+		errMsg = res.Error
+	}
+
+	if !strings.Contains(errMsg, "8144") || !strings.Contains(errMsg, "has too many arguments specified") {
+		t.Fatalf("expected error message to contain '8144' and 'has too many arguments specified', got: %q", errMsg)
+	}
+}
+
+
