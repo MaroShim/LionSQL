@@ -334,3 +334,25 @@ END;
 	}
 }
 
+func TestTDS_BatchError_DriverNavigation(t *testing.T) {
+	db, cleanup := openTdsServerForMultiResults(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Batch where statement 1 produces result set, and statement 2 fails
+	batchSQL := "SELECT 100 AS num, 'first' AS label; SELECT * FROM non_existent_table_9999;"
+	rows, err := db.QueryContext(ctx, batchSQL)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+		}
+		if rows.NextResultSet() {
+			t.Fatalf("expected NextResultSet to return false on error")
+		}
+	} else {
+		t.Logf("Driver reported immediate error: %v", err)
+	}
+}
+

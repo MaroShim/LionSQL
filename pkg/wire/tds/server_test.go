@@ -10,7 +10,9 @@ import (
 
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/engine"
+	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 )
 
@@ -947,6 +949,78 @@ func TestTDS_UseDatabase_ViaRPCExecuteSQL_EnvChange(t *testing.T) {
 	utf16DB := EncodeUTF16LE("RpcDb")
 	if !bytes.Contains(payload, utf16DB) {
 		t.Fatalf("expected UTF-16LE RpcDb in ENVCHANGE token payload")
+	}
+}
+
+func TestTDS_BatchError_DoneTokenGuaranteed(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	// Send multi-statement batch where statement 1 succeeds and statement 2 fails
+	payload := sendSQLBatch(t, conn, "SELECT 100 AS num; SELECT * FROM non_existent_table_9999;")
+
+	// Verify ERROR token (0xAA) is present
+	if !bytes.Contains(payload, []byte{TokenError}) {
+		t.Fatalf("expected TokenError (0xAA) in response, got: %x", payload)
+	}
+
+	// Verify DONE token (0xFD) is present with DoneError (0x02) flag
+	if !bytes.Contains(payload, []byte{TokenDone}) {
+		t.Fatalf("expected TokenDone (0xFD) in response, got: %x", payload)
+	}
+
+	// In TDS [MS-TDS], the DONE token has structure:
+	// Byte 0: TokenDone (0xFD)
+	// Bytes 1..2: Status (uint16 LittleEndian). Must have DoneError (0x02) bit set!
+	idx := bytes.Index(payload, []byte{TokenDone})
+	if idx == -1 || idx+3 > len(payload) {
+		t.Fatalf("truncated DONE token at index %d, payload len=%d", idx, len(payload))
+	}
+	status := binary.LittleEndian.Uint16(payload[idx+1 : idx+3])
+	if status&DoneError == 0 {
+		t.Fatalf("expected DoneError (0x02) flag set in DONE token status, got status=0x%04x", status)
+	}
+}
+
+func TestTDS_PanicRecovery_DoneErrorToken(t *testing.T) {
+	srv := setupTestServer(t)
+
+	// Register a UDF that deliberately panics
+	proc.RegisterScalarFunction("tds_panic_test", func(args []storage.Value) storage.Value {
+		panic("deliberate catastrophic TDS query panic")
+	})
+
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	// Execute the panicking query
+	payload := sendSQLBatch(t, conn, "SELECT tds_panic_test();")
+
+	// Must contain ERROR token (0xAA)
+	if !bytes.Contains(payload, []byte{TokenError}) {
+		t.Fatalf("expected TokenError (0xAA) in response to panicking query, got: %x", payload)
+	}
+
+	// Must contain DONE token (0xFD)
+	if !bytes.Contains(payload, []byte{TokenDone}) {
+		t.Fatalf("expected TokenDone (0xFD) in response to panicking query, got: %x", payload)
+	}
+
+	// Verify DoneError (0x02) flag in DONE token
+	idx := bytes.Index(payload, []byte{TokenDone})
+	if idx == -1 || idx+3 > len(payload) {
+		t.Fatalf("truncated DONE token at index %d", idx)
+	}
+	status := binary.LittleEndian.Uint16(payload[idx+1 : idx+3])
+	if status&DoneError == 0 {
+		t.Fatalf("expected DoneError (0x02) flag set in DONE token, got status=0x%04x", status)
+	}
+
+	// Connection must remain alive and responsive for subsequent queries
+	resAfter := sendSQLBatch(t, conn, "SELECT 42 AS val;")
+	if !bytes.Contains(resAfter, []byte{TokenDone}) || !bytes.Contains(resAfter, EncodeUTF16LE("val")) {
+		t.Fatalf("expected successful subsequent query after recovered panic, got: %x", resAfter)
 	}
 }
 

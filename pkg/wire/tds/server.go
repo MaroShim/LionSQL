@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -94,6 +95,13 @@ func (s *Server) SetCoordinator(coord engine.SQLCoordinator) {
 			s.executor.SetIdentityProvider(ip)
 		}
 	}
+}
+
+// Coordinator returns the underlying SQLCoordinator used by the TDS server.
+func (s *Server) Coordinator() engine.SQLCoordinator {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.coordinator
 }
 
 // SetBytecodePlanCache sets or replaces the bytecode plan cache and updates the executor.
@@ -734,6 +742,16 @@ func (s *Server) runQueryWithAttention(
 	queryDone := make(chan struct{})
 	go func() {
 		defer close(queryDone)
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[PANIC-RECOVERY][TDS] session %s recovered from query panic: %v\nstack:\n%s", sess.SessionID, r, debug.Stack())
+				var buf bytes.Buffer
+				num, state, sev, msg := extractTdsErrorInfo(fmt.Errorf("internal query error: %v", r))
+				buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
+				buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
+				_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+			}
+		}()
 		execFn(ctx)
 	}()
 
@@ -1343,7 +1361,13 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 		cols := s.inferColumnInfos(qr)
 		buf.Write(BuildColMetaData(cols))
 
-		_ = s.streamQueryRows(stream, sess, cols, res.Rows, res.Values)
+		if streamErr := s.streamQueryRows(stream, sess, cols, res.Rows, res.Values); streamErr != nil {
+			num, state, sev, msg := extractTdsErrorInfo(streamErr)
+			buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
+			WriteDoneDirect(buf, TokenDoneInProc, DoneFinal|DoneError, 0xC1, 0)
+			_ = stream.Close()
+			return
+		}
 
 		doneStatus := DoneFinal
 		if sess.inTx {
@@ -1589,7 +1613,13 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 			cols := s.inferColumnInfos(cur)
 			buf.Write(BuildColMetaData(cols))
 
-			_ = s.streamQueryRows(stream, sess, cols, cur.Rows, cur.Values)
+			if streamErr := s.streamQueryRows(stream, sess, cols, cur.Rows, cur.Values); streamErr != nil {
+				num, state, sev, msg := extractTdsErrorInfo(streamErr)
+				buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
+				WriteDoneDirect(buf, TokenDoneInProc, DoneFinal|DoneError, 0xC1, 0)
+				_ = stream.Close()
+				return
+			}
 
 			WriteDoneDirect(buf, TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(cur.Rows)))
 		} else if cur.Next != nil {
@@ -2763,7 +2793,13 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 			cols := s.inferColumnInfos(cur)
 			buf.Write(BuildColMetaData(cols))
 
-			_ = s.streamQueryRows(stream, sess, cols, cur.Rows, cur.Values)
+			if streamErr := s.streamQueryRows(stream, sess, cols, cur.Rows, cur.Values); streamErr != nil {
+				num, state, sev, msg := extractTdsErrorInfo(streamErr)
+				buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
+				WriteDoneDirect(buf, TokenDone, DoneFinal|DoneError, 0xC1, 0)
+				_ = stream.Close()
+				return
+			}
 
 			WriteDoneDirect(buf, TokenDone, doneStatus|DoneCount, 0xC1, uint64(len(cur.Rows)))
 		} else {
