@@ -1133,9 +1133,7 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	defer cursor.Close()
 
 	setPairs := sqlutil.SplitSetClauses(setClause)
-	updatesMap := make(map[string]string, len(setPairs))
 	for _, pair := range setPairs {
-		updatesMap[pair.Column] = pair.Value
 		if _, _, found := schema.FindColumn(pair.Column); !found {
 			if isEphemeral && tx != nil {
 				_ = tx.Rollback()
@@ -1172,8 +1170,11 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 			return nil, fmt.Errorf("table %q has no primary key to identify row for update", tableName)
 		}
 
-		recUpdates := make(storage.Record)
-		for colName, exprStr := range updatesMap {
+		origSnapshot := rec.Clone()
+		recUpdates := make(storage.Record, len(setPairs))
+		for _, pair := range setPairs {
+			colName := pair.Column
+			exprStr := pair.Value
 			colSchema, _, found := schema.FindColumn(colName)
 			targetType := storage.TypeVarChar
 			targetCol := colName
@@ -1181,18 +1182,18 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 				targetCol = colSchema.Name
 				targetType = colSchema.Type
 			}
-			val, err := evalUpdateExpr(exprStr, rec, targetType)
+			val, err := evalUpdateExpr(exprStr, origSnapshot, targetType)
 			if err != nil {
 				if isEphemeral && tx != nil {
 					_ = tx.Rollback()
 				}
 				return nil, err
 			}
-			recUpdates[targetCol] = val
+			recUpdates.Set(targetCol, val)
 		}
 
 		if hasPK {
-			toUpdate = append(toUpdate, updateEntry{pk: pkVal, rec: recUpdates, orig: rec.Clone()})
+			toUpdate = append(toUpdate, updateEntry{pk: pkVal, rec: recUpdates, orig: origSnapshot})
 		}
 	}
 

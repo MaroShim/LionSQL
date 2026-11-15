@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **Engine & DML Semantics (`FIX-UPDATE-SNAPSHOT-COLUMN-SWAP-1`, Defect 56)**:
+  - Enforce immutable tuple snapshot evaluation (`origSnapshot := rec.Clone()`) for multi-column `UPDATE` assignments, eliminating intermediate update contamination and guaranteeing atomic column swaps (`SET a = b, b = a`, `SET a = a + b, b = a`).
+  - Eliminate randomized map iteration in DML assignment evaluation by processing `setPairs` in deterministic sequence order with `recUpdates.Set(targetCol, val)` casing preservation.
 - **Types, Storage & Protocols (`FIX-TYPE-REAL-FLOAT-DISTINCTION-1`, Defect 101)**:
   - Completely decouple `REAL` (4-byte IEEE 754 float32, `storage.TypeReal`) from `FLOAT` (8-byte IEEE 754 float64, `storage.TypeFloat`) across storage codecs, DDL parsers, and wire protocols.
   - Enforce on-disk binary tuple layout isolation: `REAL` consumes exactly 4 bytes in V2 binary tuple encoding (`TupleCodecV2`) while `FLOAT` consumes 8 bytes, guaranteeing permanent on-disk binary format invariance prior to 1.0-GA.
