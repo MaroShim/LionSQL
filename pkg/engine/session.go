@@ -213,20 +213,29 @@ func (cs *ClientSession) CancelQuery() bool {
 	return false
 }
 
-// IsReadOnly returns true if the session or host node was configured as read-only.
-func (cs *ClientSession) IsReadOnly() bool {
+// isReadOnlyLocked returns true if the session or host node was configured as read-only.
+// Caller must hold cs.Mu.
+func (cs *ClientSession) isReadOnlyLocked() bool {
 	if cs == nil {
 		return false
 	}
 	if cs.IsReadOnlyFn != nil && cs.IsReadOnlyFn() {
 		return true
 	}
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
 	if ro, ok := cs.Vars["transaction_read_only"].(bool); ok && ro {
 		return true
 	}
 	return false
+}
+
+// IsReadOnly returns true if the session or host node was configured as read-only.
+func (cs *ClientSession) IsReadOnly() bool {
+	if cs == nil {
+		return false
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	return cs.isReadOnlyLocked()
 }
 
 // TxOptions returns the configured transaction options for this session.
@@ -530,7 +539,7 @@ func (cs *ClientSession) ExecuteProgram(
 		cs.Mu.Lock()
 		cs.sessInUse = false
 		cs.lastUsedAt = time.Now()
-		if res != nil && res.ActiveTx != nil {
+		if res != nil {
 			cs.Tx = res.ActiveTx
 		}
 		if err != nil {
@@ -568,7 +577,11 @@ func (cs *ClientSession) ExecuteProgram(
 				drainFn(drainSess)
 			}
 		}()
-		res, err = exec.RunContext(ctx, prog, stmtLabel, paramMap, sess)
+		var txOpts storage.TxOptions
+		if cs != nil {
+			txOpts = cs.TxOptions()
+		}
+		res, err = exec.RunContextWithOptions(ctx, prog, stmtLabel, paramMap, sess, txOpts)
 		return res, false, err
 	}
 	cs.Mu.Unlock()
@@ -579,7 +592,11 @@ func (cs *ClientSession) ExecuteProgram(
 			return nil, false, err
 		}
 		defer sess.Close()
-		res, err = exec.RunContext(ctx, prog, stmtLabel, paramMap, sess)
+		var txOpts storage.TxOptions
+		if cs != nil {
+			txOpts = cs.TxOptions()
+		}
+		res, err = exec.RunContextWithOptions(ctx, prog, stmtLabel, paramMap, sess, txOpts)
 		return res, false, err
 	}
 

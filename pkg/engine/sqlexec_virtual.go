@@ -121,23 +121,6 @@ func (s *Coordinator) GetTableRowCount(name string) int64 {
 				return cnt
 			}
 		}
-		sess, err := s.engine.NewSession()
-		if err == nil && sess != nil {
-			defer sess.Close()
-			tx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
-			if err == nil {
-				defer tx.Rollback()
-				cursor, err := tx.Scan(name)
-				if err == nil {
-					var cnt int64
-					for cursor.Next() {
-						cnt++
-					}
-					cursor.Close()
-					return cnt
-				}
-			}
-		}
 	}
 	return 0
 }

@@ -653,10 +653,7 @@ func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) e
 	if cs.Session == nil {
 		return fmt.Errorf("no storage engine session available")
 	}
-	if ro, ok := cs.Vars["transaction_read_only"].(bool); ok && ro {
-		opts.ReadOnly = true
-	}
-	if s.IsReadOnly() {
+	if cs.isReadOnlyLocked() || s.IsReadOnly() {
 		opts.ReadOnly = true
 	}
 	tx, err := cs.Session.BeginTx(opts)

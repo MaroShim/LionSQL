@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"lionsql/pkg/proc"
-	"lionsql/pkg/proc/runtime"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
@@ -1109,32 +1108,9 @@ func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, st
 		}
 	}
 
-	var res *runtime.ExecutionResult
-	var activeTx storage.Transaction
-	var sess storage.Session
-	if cs != nil {
-		cs.Mu.Lock()
-		activeTx = cs.Tx
-		sess = cs.Session
-		cs.Mu.Unlock()
-	}
-
-	if activeTx != nil {
-		res, err = s.executor.ExecuteInTxWithSessionContext(ctx, prog, argMap, activeTx, sess, nil)
-		if res != nil && res.ActiveTx != nil && cs != nil {
-			cs.Mu.Lock()
-			if cs.Tx == activeTx {
-				cs.Tx = res.ActiveTx
-			}
-			cs.Mu.Unlock()
-		}
-	} else {
-		session, closeFn, acqErr := s.acquireSessionForQuery(cs)
-		if acqErr != nil {
-			return nil, acqErr
-		}
-		defer closeFn()
-		res, err = s.executor.RunContext(ctx, prog, procName, argMap, session)
+	res, txAborted, err := cs.ExecuteProgram(ctx, prog, s.executor, argMap, s.engine, procName)
+	if txAborted {
+		return nil, errors.New("current transaction is aborted, commands ignored until end of transaction block")
 	}
 	if err != nil {
 		if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
@@ -1539,60 +1515,12 @@ func (s *Coordinator) execAnonymousBlock(query string, start time.Time, cs *Clie
 		cs.Mu.Unlock()
 	}
 
-	var tx storage.Transaction
-	var createdSession storage.Session
-	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
-	} else {
-		sess, err := s.engine.NewSession()
-		if err != nil {
-			return nil, err
-		}
-		createdSession = sess
-		defer sess.Close()
-
-		var txOpts storage.TxOptions
-		if cs != nil {
-			txOpts = cs.TxOptions()
-		}
-		t, err := sess.BeginTx(txOpts)
-		if err != nil {
-			return nil, err
-		}
-		tx = t
-		defer func() {
-			if tx != nil {
-				_ = tx.Rollback()
-			}
-		}()
+	res, txAborted, err := cs.ExecuteProgram(ctx, prog, s.executor, params, s.engine, "AnonymousBlock")
+	if txAborted {
+		return nil, errors.New("current transaction is aborted, commands ignored until end of transaction block")
 	}
-
-	var activeSess storage.Session
-	if cs != nil && cs.Session != nil {
-		activeSess = cs.Session
-	} else {
-		activeSess = createdSession
-	}
-
-	res, err := s.executor.ExecuteInTxWithSessionContext(ctx, prog, params, tx, activeSess, nil)
 	if err != nil {
 		return nil, fmt.Errorf("execute anonymous block error: %w", err)
-	}
-
-	commitTx := tx
-	if res != nil && res.ActiveTx != nil {
-		commitTx = res.ActiveTx
-	}
-
-	if createdSession != nil && commitTx != nil {
-		if err := commitTx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
-			return nil, fmt.Errorf("failed to commit anonymous block tx: %w", err)
-		}
-		tx = nil
-	} else if cs != nil && res != nil && res.ActiveTx != nil && cs.Tx != nil && res.ActiveTx != cs.Tx {
-		cs.Mu.Lock()
-		cs.Tx = res.ActiveTx
-		cs.Mu.Unlock()
 	}
 
 	if cs != nil && res.Vars != nil {

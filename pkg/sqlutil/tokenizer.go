@@ -1031,6 +1031,147 @@ func FindKeyword(s string, keyword string, allowInsideParens bool) int {
 	return indices[0]
 }
 
+// KeywordMatch represents a matched keyword token at depth 0.
+type KeywordMatch struct {
+	Pos     int
+	End     int
+	Keyword string
+}
+
+type parsedKW struct {
+	raw   string
+	words []string
+}
+
+// FindAllTopLevelAnyKeywords returns all starting byte indices and matched keyword strings in s
+// occurring at depth 0 outside single/double quotes, brackets, comments, and parentheses.
+// Keywords are checked in the provided order at each match position (pass longer multi-word variants first).
+func FindAllTopLevelAnyKeywords(s string, keywords ...string) []KeywordMatch {
+	if len(keywords) == 0 {
+		return nil
+	}
+	var parsed []parsedKW
+	minWordLen := 1000000
+	for _, kw := range keywords {
+		w := strings.Fields(kw)
+		if len(w) > 0 {
+			parsed = append(parsed, parsedKW{raw: kw, words: w})
+			if len(w[0]) < minWordLen {
+				minWordLen = len(w[0])
+			}
+		}
+	}
+	n := len(s)
+	if n < minWordLen || len(parsed) == 0 {
+		return nil
+	}
+
+	var matches []KeywordMatch
+	depth := 0
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBracket := false
+	inLineComment := false
+	inBlockComment := false
+
+	for i := 0; i < n; i++ {
+		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+
+		if inSingleQuote {
+			if ch == '\'' {
+				if i+1 < n && s[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			if ch == '"' {
+				if i+1 < n && s[i+1] == '"' {
+					i++
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+		if inBracket {
+			if ch == ']' {
+				if i+1 < n && s[i+1] == ']' {
+					i++
+					continue
+				}
+				inBracket = false
+			}
+			continue
+		}
+
+		// Check start of comments or quotes outside any quote/bracket
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
+
+		if ch == '\'' {
+			inSingleQuote = true
+			continue
+		}
+		if ch == '"' {
+			inDoubleQuote = true
+			continue
+		}
+		if ch == '[' {
+			inBracket = true
+			continue
+		}
+
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+
+		if depth == 0 {
+			for _, kw := range parsed {
+				if end, ok := matchWordsAt(s, i, kw.words); ok {
+					matches = append(matches, KeywordMatch{Pos: i, End: end, Keyword: kw.raw})
+					i = end - 1
+					break
+				}
+			}
+		}
+	}
+
+	return matches
+}
+
 // SplitJoinCond splits a simple or parenthesized join condition (e.g. "a.id = b.id", "(a.id = b.id)")
 // by the top-level '=' operator. It returns leftKey and rightKey trimmed, or empty strings if invalid.
 func SplitJoinCond(cond string) (string, string) {

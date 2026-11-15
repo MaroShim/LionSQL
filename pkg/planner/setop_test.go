@@ -138,3 +138,46 @@ func TestPlanner_BuildSetOpPlan(t *testing.T) {
 		t.Errorf("set node mismatch: op=%s, children=%d", setNode.SetOp, len(setNode.Children))
 	}
 }
+
+func TestRegression_AUDIT_093_016_SetOpExtractTrailingOrderByAndLimit(t *testing.T) {
+	// 1. Verify trailing LIMIT and OFFSET without ORDER BY
+	sq1, ok1 := planner.FindTopLevelSetOps("SELECT id FROM a UNION ALL SELECT id FROM b LIMIT 10 OFFSET 5")
+	if !ok1 || sq1 == nil || sq1.Limit != 10 || sq1.Offset != 5 {
+		t.Fatalf("expected Limit=10, Offset=5 on setop query, got %+v", sq1)
+	}
+	if len(sq1.Segments) != 2 || sq1.Segments[1].Query != "SELECT id FROM b" {
+		t.Fatalf("expected branch 1 to be stripped of LIMIT/OFFSET, got %+v", sq1.Segments[1])
+	}
+
+	// 2. Verify trailing OFFSET without LIMIT
+	sq2, ok2 := planner.FindTopLevelSetOps("SELECT id FROM a UNION ALL SELECT id FROM b OFFSET 3")
+	if !ok2 || sq2 == nil || sq2.Offset != 3 || sq2.Limit != -1 {
+		t.Fatalf("expected Offset=3, Limit=-1, got %+v", sq2)
+	}
+	if len(sq2.Segments) != 2 || sq2.Segments[1].Query != "SELECT id FROM b" {
+		t.Fatalf("expected trailing OFFSET to be stripped cleanly from final branch, got %+v", sq2)
+	}
+
+	// 3. Verify ORDER BY + LIMIT + OFFSET
+	sq3, ok3 := planner.FindTopLevelSetOps("SELECT id FROM a UNION SELECT id FROM b ORDER BY id DESC LIMIT 20 OFFSET 10")
+	if !ok3 || sq3 == nil || sq3.OrderBy != "id DESC" || sq3.Limit != 20 || sq3.Offset != 10 {
+		t.Fatalf("expected OrderBy='id DESC', Limit=20, Offset=10, got %+v", sq3)
+	}
+	if len(sq3.Segments) != 2 || sq3.Segments[1].Query != "SELECT id FROM b" {
+		t.Fatalf("expected trailing clauses stripped from branch 1, got %+v", sq3.Segments[1])
+	}
+
+	// 4. Verify ORDER BY + OFFSET without LIMIT
+	sq4, ok4 := planner.FindTopLevelSetOps("SELECT id FROM a UNION SELECT id FROM b ORDER BY id ASC OFFSET 7")
+	if !ok4 || sq4 == nil || sq4.OrderBy != "id ASC" || sq4.Offset != 7 || sq4.Limit != -1 {
+		t.Fatalf("expected OrderBy='id ASC', Offset=7, Limit=-1, got %+v", sq4)
+	}
+
+	// 5. Verify line comment containing UNION does not trigger false positive SetOp
+	sq5, ok5 := planner.FindTopLevelSetOps("SELECT id FROM a -- check UNION compatibility\nWHERE status = 1")
+	if ok5 {
+		t.Fatalf("expected comment containing UNION not to be detected as set op, got %+v", sq5)
+	}
+}
+
+

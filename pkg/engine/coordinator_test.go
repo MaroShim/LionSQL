@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -2063,6 +2064,311 @@ func TestCoordinator_ConcurrentInsert_Identity_NoConflict(t *testing.T) {
 		t.Fatalf("expected %d batch rows, got %v", expectedBatchRows, selectBatchRes.Rows[0]["total"])
 	}
 }
+
+func TestRegression_AUDIT_093_008_TriggerAndNestedProcTransactionPropagation(t *testing.T) {
+	eng := memengine.New()
+	if err := eng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	_, err := coord.ExecuteSQL("CREATE TABLE audit008_tbl (id INT PRIMARY KEY, val VARCHAR(50));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	_, err = coord.ExecuteSQL(`
+CREATE PROCEDURE InnerCommitProc AS
+BEGIN
+	INSERT INTO audit008_tbl VALUES (10, 'from_inner');
+	COMMIT TRAN;
+END;`)
+	if err != nil {
+		t.Fatalf("CREATE PROCEDURE InnerCommitProc failed: %v", err)
+	}
+	_, err = coord.ExecuteSQL(`
+CREATE PROCEDURE OuterCallerProc AS
+BEGIN
+	BEGIN TRAN;
+	INSERT INTO audit008_tbl VALUES (1, 'from_outer');
+	EXEC InnerCommitProc;
+END;`)
+	if err != nil {
+		t.Fatalf("CREATE PROCEDURE OuterCallerProc failed: %v", err)
+	}
+
+	if _, err := coord.ExecuteSessionSQL("sess-008", "EXEC OuterCallerProc;"); err != nil {
+		t.Fatalf("EXEC OuterCallerProc failed: %v", err)
+	}
+	cs, _ := coord.GetOrCreateSession("sess-008")
+	cs.Mu.Lock()
+	hasTx008 := cs.Tx != nil
+	cs.Mu.Unlock()
+	if hasTx008 {
+		t.Fatalf("expected session transaction to be nil after InnerCommitProc committed, but cs.Tx is non-nil")
+	}
+	res, err := coord.ExecuteSessionSQL("sess-008", "SELECT COUNT(*) AS cnt FROM audit008_tbl;")
+	if err != nil || fmt.Sprintf("%v", res.Rows[0]["cnt"]) != "2" {
+		t.Fatalf("expected 2 committed rows in audit008_tbl, got %v (err=%v)", res, err)
+	}
+}
+
+func TestRegression_AUDIT_093_009_DirectInsertNotNullAndOutputClause(t *testing.T) {
+	eng := memengine.New()
+	if err := eng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	_, err := coord.ExecuteSQL("CREATE TABLE audit009_tbl (id INT PRIMARY KEY, name VARCHAR(50) NOT NULL);")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// 1. Stored procedure with INSERT ... OUTPUT inserted.id (without INTO @var) must return result set
+	_, err = coord.ExecuteSQL(`
+CREATE PROCEDURE InsertWithOutputProc AS
+BEGIN
+	INSERT INTO audit009_tbl (id, name) OUTPUT inserted.id, inserted.name VALUES (1, 'alice');
+END;`)
+	if err != nil {
+		t.Fatalf("CREATE PROCEDURE InsertWithOutputProc failed: %v", err)
+	}
+	outRes, err := coord.ExecuteSQL("EXEC InsertWithOutputProc;")
+	if err != nil {
+		t.Fatalf("EXEC InsertWithOutputProc failed: %v", err)
+	}
+	if len(outRes.Rows) != 1 || fmt.Sprintf("%v", outRes.Rows[0]["name"]) != "alice" {
+		t.Fatalf("expected 1 OUTPUT row with name='alice', got: %+v", outRes.Rows)
+	}
+
+	// 2. Stored procedure with direct INSERT of NULL into NOT NULL column must fail with ErrNotNullViolation
+	_, err = coord.ExecuteSQL(`
+CREATE PROCEDURE InsertNullViolationProc AS
+BEGIN
+	INSERT INTO audit009_tbl (id, name) VALUES (2, NULL);
+END;`)
+	if err != nil {
+		t.Fatalf("CREATE PROCEDURE InsertNullViolationProc failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL("EXEC InsertNullViolationProc;"); err == nil {
+		t.Fatalf("expected NOT NULL violation when inserting NULL via VM direct insert fast-path, got nil")
+	}
+}
+
+func TestRegression_AUDIT_093_011_CreateTableMaxColumnLimit(t *testing.T) {
+	eng := memengine.New()
+	if err := eng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	// 1. CREATE TABLE with 1025 columns must fail with ErrTooManyColumns
+	cols := make([]string, storage.MaxColumnsPerTable+1)
+	cols[0] = "id INT PRIMARY KEY"
+	for i := 1; i <= storage.MaxColumnsPerTable; i++ {
+		cols[i] = fmt.Sprintf("c%d INT", i)
+	}
+	ddl1025 := fmt.Sprintf("CREATE TABLE tbl_too_many (%s);", strings.Join(cols, ", "))
+	_, err := coord.ExecuteSQL(ddl1025)
+	if !errors.Is(err, storage.ErrTooManyColumns) {
+		t.Fatalf("expected ErrTooManyColumns for CREATE TABLE with 1025 columns, got: %v", err)
+	}
+}
+
+func TestRegression_AUDIT_093_012_AlterTableNonExistentColumnErrors(t *testing.T) {
+	eng := memengine.New()
+	if err := eng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	_, err := coord.ExecuteSQL("CREATE TABLE audit012_tbl (id INT PRIMARY KEY, name VARCHAR(50));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// 1. Non-existent column alterations must fail with ErrColumnNotFound
+	ddls := []string{
+		"ALTER TABLE audit012_tbl ALTER COLUMN no_such_col SET DEFAULT 'x';",
+		"ALTER TABLE audit012_tbl ALTER COLUMN no_such_col DROP DEFAULT;",
+		"ALTER TABLE audit012_tbl ALTER COLUMN no_such_col TYPE VARCHAR(100);",
+		"ALTER TABLE audit012_tbl RENAME COLUMN no_such_col TO other_col;",
+		"ALTER TABLE audit012_tbl ALTER COLUMN no_such_col SET NOT NULL;",
+		"ALTER TABLE audit012_tbl ALTER COLUMN no_such_col DROP NOT NULL;",
+		"ALTER TABLE audit012_tbl DROP COLUMN no_such_col;",
+	}
+	for _, q := range ddls {
+		if _, err := coord.ExecuteSQL(q); !errors.Is(err, storage.ErrColumnNotFound) {
+			t.Fatalf("expected ErrColumnNotFound for %q, got: %v", q, err)
+		}
+	}
+
+	// 2. DROP COLUMN IF EXISTS on non-existent column must succeed without error
+	if _, err := coord.ExecuteSQL("ALTER TABLE audit012_tbl DROP COLUMN IF EXISTS no_such_col;"); err != nil {
+		t.Fatalf("expected DROP COLUMN IF EXISTS to succeed, got error: %v", err)
+	}
+
+	// 3. Malformed ADD CHECK () with empty expression must fail closed with error (no silent success)
+	if _, err := coord.ExecuteSQL("ALTER TABLE audit012_tbl ADD CHECK ();"); err == nil {
+		t.Fatalf("expected ADD CHECK () with empty expression to return error, got nil")
+	}
+
+	// 4. Multi-column drop with one non-existent column must fail and preserve existing columns
+	if _, err := coord.ExecuteSQL("ALTER TABLE audit012_tbl DROP COLUMN name, no_such_col;"); !errors.Is(err, storage.ErrColumnNotFound) {
+		t.Fatalf("expected ErrColumnNotFound for multi-column drop with missing column, got: %v", err)
+	}
+	tbl, err := eng.GetTable("audit012_tbl")
+	if err != nil || len(tbl.Columns) != 2 {
+		t.Fatalf("expected audit012_tbl to retain both columns after failed multi-drop, got: %+v (err=%v)", tbl, err)
+	}
+}
+
+type audit013NoRowCountEngine struct {
+	storage.Engine
+	sessionOpened int
+}
+
+func (n *audit013NoRowCountEngine) NewSession() (storage.Session, error) {
+	n.sessionOpened++
+	return n.Engine.NewSession()
+}
+
+func TestRegression_AUDIT_093_013_GetTableRowCountFastPathAndNoTxLeak(t *testing.T) {
+	baseEng := memengine.New()
+	if err := baseEng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer baseEng.Close()
+
+	mockEng := &audit013NoRowCountEngine{Engine: baseEng}
+	cat := catalog.New(mockEng)
+	coord := engine.NewCoordinator(cat, mockEng, engine.DefaultConfig())
+	defer coord.Close()
+
+	if _, err := coord.ExecuteSQL("CREATE TABLE audit013_tbl (id INT PRIMARY KEY);"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL("INSERT INTO audit013_tbl VALUES (1), (2), (3), (4), (5);"); err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	// Reset session counter after table setup
+	mockEng.sessionOpened = 0
+
+	// Calling GetTableRowCount must NEVER open a storage session or perform a full-table scan
+	cnt := coord.GetTableRowCount("audit013_tbl")
+	if mockEng.sessionOpened > 0 {
+		t.Fatalf("expected 0 sessions opened during GetTableRowCount, but %d sessions were opened (full table scan fallback detected!)", mockEng.sessionOpened)
+	}
+	if cnt != 0 {
+		t.Fatalf("expected 0 for engine without TableRowCount, got %d", cnt)
+	}
+}
+
+func TestRegression_AUDIT_093_014_ExecuteProgramSyncsSessionTxOnCommitOrRollback(t *testing.T) {
+	eng := memengine.New()
+	if err := eng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	if _, err := coord.ExecuteSQL("CREATE TABLE audit014_tbl (id INT PRIMARY KEY);"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL(`
+CREATE PROCEDURE CommitActiveTxProc AS
+BEGIN
+	INSERT INTO audit014_tbl VALUES (1);
+	COMMIT TRAN;
+END;`); err != nil {
+		t.Fatalf("CREATE PROCEDURE failed: %v", err)
+	}
+
+	cs, _ := coord.GetOrCreateSession("sess-014")
+	if _, err := coord.ExecuteSessionSQL("sess-014", "BEGIN TRAN;"); err != nil {
+		t.Fatalf("BEGIN TRAN failed: %v", err)
+	}
+	cs.Mu.Lock()
+	hasTx014 := cs.Tx != nil
+	cs.Mu.Unlock()
+	if !hasTx014 {
+		t.Fatalf("expected active transaction on sess-014 after BEGIN TRAN")
+	}
+
+	if _, err := coord.ExecuteSessionSQL("sess-014", "EXEC CommitActiveTxProc;"); err != nil {
+		t.Fatalf("EXEC CommitActiveTxProc failed: %v", err)
+	}
+	cs.Mu.Lock()
+	hasTx014After := cs.Tx != nil
+	cs.Mu.Unlock()
+	if hasTx014After {
+		t.Fatalf("expected cs.Tx to be synced to nil after procedure committed transaction")
+	}
+	// Subsequent query on same session must succeed cleanly without ErrTxClosed
+	if _, err := coord.ExecuteSessionSQL("sess-014", "INSERT INTO audit014_tbl VALUES (2);"); err != nil {
+		t.Fatalf("subsequent INSERT on sess-014 failed: %v", err)
+	}
+}
+
+func TestRegression_AUDIT_093_015_ReadOnlySessionRejectsMergeAndAnonymousBlock(t *testing.T) {
+	eng := memengine.New()
+	if err := eng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	if _, err := coord.ExecuteSQL("CREATE TABLE audit015_dst (id INT PRIMARY KEY, val INT);"); err != nil {
+		t.Fatalf("CREATE TABLE dst failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL("CREATE TABLE audit015_src (id INT PRIMARY KEY, val INT);"); err != nil {
+		t.Fatalf("CREATE TABLE src failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL("INSERT INTO audit015_src VALUES (1, 100);"); err != nil {
+		t.Fatalf("INSERT src failed: %v", err)
+	}
+
+	cs, _ := coord.GetOrCreateSession("sess-015-ro")
+	cs.Mu.Lock()
+	cs.Vars["transaction_read_only"] = true
+	cs.Mu.Unlock()
+
+	// 1. MERGE on read-only session must fail with ErrReadOnlyTransaction
+	mergeSQL := `MERGE INTO audit015_dst AS t USING audit015_src AS s ON t.id = s.id WHEN NOT MATCHED THEN INSERT (id, val) VALUES (s.id, s.val);`
+	if _, err := coord.ExecuteSessionSQL("sess-015-ro", mergeSQL); err == nil || !strings.Contains(err.Error(), "read-only") {
+		t.Fatalf("expected read-only error for MERGE on read-only session, got: %v", err)
+	}
+
+	// 2. Anonymous BEGIN...END block on read-only session must fail with ErrReadOnlyTransaction
+	anonSQL := `BEGIN INSERT INTO audit015_dst VALUES (2, 200); END`
+	if _, err := coord.ExecuteSessionSQL("sess-015-ro", anonSQL); err == nil || !strings.Contains(err.Error(), "read-only") {
+		t.Fatalf("expected read-only error for anonymous block on read-only session, got: %v", err)
+	}
+}
+
 
 
 

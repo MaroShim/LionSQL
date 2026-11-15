@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"lionsql/pkg/sqlutil"
 )
@@ -15,11 +14,12 @@ type SetOpSegment struct {
 	Query string
 }
 
-// SetOpQuery represents a parsed chain of set operations with optional trailing ORDER BY and LIMIT.
+// SetOpQuery represents a parsed chain of set operations with optional trailing ORDER BY, LIMIT, and OFFSET.
 type SetOpQuery struct {
 	Segments []SetOpSegment
 	OrderBy  string
-	Limit    int64
+	Limit    int64 // default: -1 (unlimited)
+	Offset   int64 // default: 0
 }
 
 // HasTopLevelSetOp quickly checks if the query contains top-level set operators without full parsing.
@@ -29,129 +29,175 @@ func HasTopLevelSetOp(query string) bool {
 }
 
 // FindTopLevelSetOps parses top-level set operators (UNION, UNION ALL, INTERSECT, EXCEPT, MINUS)
-// ignoring operators enclosed within parentheses (subqueries, CTEs) or string literals.
+// ignoring operators enclosed within parentheses (subqueries, CTEs), string literals, or comments.
 func FindTopLevelSetOps(query string) (*SetOpQuery, bool) {
 	trimmed := strings.TrimRight(strings.TrimSpace(query), ";")
-	outerQuery, trailingOrderBy, trailingLimit := extractTrailingOrderByAndLimit(trimmed)
-	outerQuery = sqlutil.UnwrapOuterParens(outerQuery)
-	trimmed = outerQuery
-	if trailingOrderBy != "" {
-		trimmed += " ORDER BY " + trailingOrderBy
-	}
-	if trailingLimit >= 0 {
-		trimmed += " LIMIT " + strconv.FormatInt(trailingLimit, 10)
-	}
-	n := len(trimmed)
-	if n < 7 { // Shortest: "SELECT"
+	if len(trimmed) < 7 { // Shortest: "SELECT"
 		return nil, false
 	}
 
-	type kwMatch struct {
-		name       string
-		normalized string
-		length     int
+	cleanSQL, trailingOrderBy, trailingLimit, trailingOffset := extractTrailingOrderByAndLimit(trimmed)
+	cleanSQL = sqlutil.UnwrapOuterParens(cleanSQL)
+
+	// List of set operator keywords in preference order (multi-word first)
+	setOpKeywords := []string{
+		"INTERSECT DISTINCT",
+		"INTERSECT ALL",
+		"EXCEPT DISTINCT",
+		"EXCEPT ALL",
+		"UNION DISTINCT",
+		"UNION ALL",
+		"INTERSECT",
+		"EXCEPT",
+		"MINUS",
+		"UNION",
 	}
 
-	// Keywords in descending order of length to prefer multi-word variants ("UNION ALL" over "UNION")
-	keywords := []kwMatch{
-		{"INTERSECT DISTINCT", "INTERSECT", 18},
-		{"INTERSECT ALL", "INTERSECT", 13},
-		{"EXCEPT DISTINCT", "EXCEPT", 15},
-		{"EXCEPT ALL", "EXCEPT", 10},
-		{"UNION DISTINCT", "UNION", 14},
-		{"UNION ALL", "UNION ALL", 9},
-		{"INTERSECT", "INTERSECT", 9},
-		{"EXCEPT", "EXCEPT", 6},
-		{"MINUS", "EXCEPT", 5},
-		{"UNION", "UNION", 5},
+	matches := sqlutil.FindAllTopLevelAnyKeywords(cleanSQL, setOpKeywords...)
+	if len(matches) == 0 {
+		return nil, false
 	}
 
 	var segments []SetOpSegment
 	segStart := 0
 	lastOp := ""
 
-	parenDepth := 0
-	bracketDepth := 0
-	inSingleQuote := false
-	inDoubleQuote := false
-
-	isBoundary := func(b byte) bool {
-		return unicode.IsSpace(rune(b)) || b == ')' || b == '(' || b == ';' || b == ','
+	for _, m := range matches {
+		chunk := strings.TrimSpace(cleanSQL[segStart:m.Pos])
+		segments = append(segments, SetOpSegment{
+			Op:    lastOp,
+			Query: sqlutil.UnwrapOuterParens(chunk),
+		})
+		lastOp = normalizeSetOp(m.Keyword)
+		segStart = m.End
 	}
 
-	for i := 0; i < n; i++ {
-		ch := trimmed[i]
+	// Last segment contains remaining SQL
+	lastChunk := strings.TrimSpace(cleanSQL[segStart:])
+	lastQuery, extraOrder, extraLimit, extraOffset := extractTrailingOrderByAndLimit(lastChunk)
+	if trailingOrderBy == "" {
+		trailingOrderBy = extraOrder
+	}
+	if trailingLimit < 0 {
+		trailingLimit = extraLimit
+	}
+	if trailingOffset <= 0 {
+		trailingOffset = extraOffset
+	}
 
-		// Handle string literals
-		if ch == '\'' && !inDoubleQuote {
-			if inSingleQuote && i+1 < n && trimmed[i+1] == '\'' {
-				i++ // Skip escaped single quote ''
-				continue
+	segments = append(segments, SetOpSegment{
+		Op:    lastOp,
+		Query: sqlutil.UnwrapOuterParens(lastQuery),
+	})
+
+	if len(segments) < 2 {
+		return nil, false
+	}
+
+	return &SetOpQuery{
+		Segments: segments,
+		OrderBy:  trailingOrderBy,
+		Limit:    trailingLimit,
+		Offset:   trailingOffset,
+	}, true
+}
+
+func normalizeSetOp(kw string) string {
+	upper := strings.ToUpper(kw)
+	switch upper {
+	case "INTERSECT DISTINCT", "INTERSECT ALL", "INTERSECT":
+		return "INTERSECT"
+	case "EXCEPT DISTINCT", "EXCEPT ALL", "EXCEPT", "MINUS":
+		return "EXCEPT"
+	case "UNION DISTINCT", "UNION":
+		return "UNION"
+	case "UNION ALL":
+		return "UNION ALL"
+	default:
+		return upper
+	}
+}
+
+func extractTrailingOrderByAndLimit(sql string) (query string, orderBy string, limit int64, offset int64) {
+	trimmed := strings.TrimSpace(sql)
+	limit = -1
+	offset = 0
+
+	orderByIdx := sqlutil.FindTopLevelKeyword(trimmed, "ORDER BY")
+	limitIdx := sqlutil.FindTopLevelKeyword(trimmed, "LIMIT")
+	offsetIdx := sqlutil.FindTopLevelKeyword(trimmed, "OFFSET")
+
+	// Determine where the main query body ends
+	cutIdx := -1
+	if orderByIdx != -1 {
+		cutIdx = orderByIdx
+	} else if limitIdx != -1 && offsetIdx != -1 {
+		if limitIdx < offsetIdx {
+			cutIdx = limitIdx
+		} else {
+			cutIdx = offsetIdx
+		}
+	} else if limitIdx != -1 {
+		cutIdx = limitIdx
+	} else if offsetIdx != -1 {
+		cutIdx = offsetIdx
+	}
+
+	if cutIdx == -1 {
+		query = trimmed
+		return
+	}
+
+	query = strings.TrimSpace(trimmed[:cutIdx])
+	trailing := trimmed[cutIdx:]
+
+	// 1. ORDER BY
+	if orderByIdx != -1 {
+		orderStr := trailing[8:] // after "ORDER BY"
+		nextLimit := sqlutil.FindTopLevelKeyword(orderStr, "LIMIT")
+		nextOffset := sqlutil.FindTopLevelKeyword(orderStr, "OFFSET")
+
+		endOrder := len(orderStr)
+		if nextLimit != -1 && nextOffset != -1 {
+			if nextLimit < nextOffset {
+				endOrder = nextLimit
+			} else {
+				endOrder = nextOffset
 			}
-			inSingleQuote = !inSingleQuote
-			continue
+		} else if nextLimit != -1 {
+			endOrder = nextLimit
+		} else if nextOffset != -1 {
+			endOrder = nextOffset
 		}
-		if ch == '"' && !inSingleQuote {
-			if inDoubleQuote && i+1 < n && trimmed[i+1] == '"' {
-				i++ // Skip escaped double quote ""
-				continue
-			}
-			inDoubleQuote = !inDoubleQuote
-			continue
-		}
-		if inSingleQuote || inDoubleQuote {
-			continue
-		}
+		orderBy = strings.TrimSpace(orderStr[:endOrder])
+	}
 
-		// Handle brackets and parentheses
-		if ch == '[' {
-			bracketDepth++
-			continue
-		}
-		if ch == ']' && bracketDepth > 0 {
-			bracketDepth--
-			continue
-		}
-		if bracketDepth > 0 {
-			continue
-		}
-
-		if ch == '(' {
-			parenDepth++
-			continue
-		}
-		if ch == ')' {
-			if parenDepth > 0 {
-				parenDepth--
-			}
-			continue
-		}
-
-		// Only inspect top-level tokens outside of parentheses
-		if parenDepth == 0 {
-			// Check preceding character boundary
-			prevOk := (i == 0) || isBoundary(trimmed[i-1])
-			if !prevOk {
-				continue
-			}
-
-			// Test keywords
-			for _, kw := range keywords {
-				if i+kw.length <= n {
-					sub := trimmed[i : i+kw.length]
-					if strings.EqualFold(sub, kw.name) {
-						// Check trailing character boundary
-						nextOk := (i+kw.length == n) || isBoundary(trimmed[i+kw.length])
-						if nextOk {
-							chunk := strings.TrimSpace(trimmed[segStart:i])
-							segments = append(segments, SetOpSegment{
-								Op:    lastOp,
-								Query: cleanSubqueryParens(chunk),
-							})
-							lastOp = kw.normalized
-							i += kw.length
-							segStart = i
-							break
+	// 2. LIMIT
+	if limitIdx != -1 {
+		relLimitIdx := sqlutil.FindTopLevelKeyword(trailing, "LIMIT")
+		if relLimitIdx != -1 {
+			limitStr := trailing[relLimitIdx+5:]
+			tokens := sqlutil.SplitTopLevelTokens(limitStr)
+			if len(tokens) > 0 {
+				firstTok := tokens[0]
+				// Check for MySQL "LIMIT offset, count"
+				if commaIdx := strings.Index(firstTok, ","); commaIdx != -1 {
+					offPart := strings.TrimSpace(firstTok[:commaIdx])
+					limPart := strings.TrimSpace(firstTok[commaIdx+1:])
+					if o, err := strconv.ParseInt(offPart, 10, 64); err == nil {
+						offset = o
+					}
+					if l, err := strconv.ParseInt(limPart, 10, 64); err == nil {
+						limit = l
+					}
+				} else {
+					if l, err := strconv.ParseInt(firstTok, 10, 64); err == nil {
+						limit = l
+					}
+					// check for "LIMIT n OFFSET m"
+					if len(tokens) >= 3 && strings.EqualFold(tokens[1], "OFFSET") {
+						if o, err := strconv.ParseInt(tokens[2], 10, 64); err == nil {
+							offset = o
 						}
 					}
 				}
@@ -159,64 +205,27 @@ func FindTopLevelSetOps(query string) (*SetOpQuery, bool) {
 		}
 	}
 
-	if len(segments) == 0 {
-		return nil, false
-	}
-
-	// Last segment contains remaining SQL, plus potential trailing ORDER BY and LIMIT
-	lastChunk := strings.TrimSpace(trimmed[segStart:])
-	lastQuery, orderBy, limit := extractTrailingOrderByAndLimit(lastChunk)
-
-	segments = append(segments, SetOpSegment{
-		Op:    lastOp,
-		Query: cleanSubqueryParens(lastQuery),
-	})
-
-	return &SetOpQuery{
-		Segments: segments,
-		OrderBy:  orderBy,
-		Limit:    limit,
-	}, true
-}
-
-func cleanSubqueryParens(sql string) string {
-	return sqlutil.UnwrapOuterParens(sql)
-}
-
-func extractTrailingOrderByAndLimit(sql string) (query string, orderBy string, limit int64) {
-	trimmed := strings.TrimSpace(sql)
-	limit = -1
-
-	// Find top-level ORDER BY and LIMIT from the right
-	orderByIdx := sqlutil.FindTopLevelKeyword(trimmed, "ORDER BY")
-	limitIdx := sqlutil.FindTopLevelKeyword(trimmed, "LIMIT")
-
-	if orderByIdx != -1 && limitIdx != -1 && limitIdx > orderByIdx {
-		query = strings.TrimSpace(trimmed[:orderByIdx])
-		orderBy = strings.TrimSpace(trimmed[orderByIdx+8 : limitIdx])
-		limitStr := strings.TrimSpace(trimmed[limitIdx+5:])
-		if lim, err := strconv.ParseInt(limitStr, 10, 64); err == nil {
-			limit = lim
+	// 3. OFFSET (if not already parsed)
+	if offsetIdx != -1 && offset == 0 {
+		relOffsetIdx := sqlutil.FindTopLevelKeyword(trailing, "OFFSET")
+		if relOffsetIdx != -1 {
+			offsetStr := trailing[relOffsetIdx+6:]
+			tokens := sqlutil.SplitTopLevelTokens(offsetStr)
+			if len(tokens) > 0 {
+				if o, err := strconv.ParseInt(tokens[0], 10, 64); err == nil {
+					offset = o
+				}
+				// check T-SQL "OFFSET o ROWS FETCH NEXT n ROWS ONLY"
+				if len(tokens) >= 5 && strings.EqualFold(tokens[1], "ROWS") && strings.EqualFold(tokens[2], "FETCH") &&
+					(strings.EqualFold(tokens[3], "NEXT") || strings.EqualFold(tokens[3], "FIRST")) {
+					if l, err := strconv.ParseInt(tokens[4], 10, 64); err == nil {
+						limit = l
+					}
+				}
+			}
 		}
-		return
 	}
 
-	if orderByIdx != -1 {
-		query = strings.TrimSpace(trimmed[:orderByIdx])
-		orderBy = strings.TrimSpace(trimmed[orderByIdx+8:])
-		return
-	}
-
-	if limitIdx != -1 {
-		query = strings.TrimSpace(trimmed[:limitIdx])
-		limitStr := strings.TrimSpace(trimmed[limitIdx+5:])
-		if lim, err := strconv.ParseInt(limitStr, 10, 64); err == nil {
-			limit = lim
-		}
-		return
-	}
-
-	query = trimmed
 	return
 }
 
@@ -280,14 +289,19 @@ func (p *Planner) BuildSetOpPlan(setQuery *SetOpQuery, buildSubPlan func(subSQL 
 		}
 	}
 
-	// Apply trailing LIMIT across the unified result set
-	if setQuery.Limit >= 0 {
+	// Apply trailing LIMIT and OFFSET across the unified result set
+	if setQuery.Limit >= 0 || setQuery.Offset > 0 {
+		estRows := currPlan.EstimatedRows
+		if setQuery.Limit >= 0 && setQuery.Limit < estRows {
+			estRows = setQuery.Limit
+		}
 		currPlan = &PlanNode{
 			Type:          NodeLimit,
 			LimitCount:    setQuery.Limit,
+			OffsetCount:   setQuery.Offset,
 			StartupCost:   currPlan.StartupCost,
 			TotalCost:     currPlan.TotalCost,
-			EstimatedRows: setQuery.Limit,
+			EstimatedRows: estRows,
 			Children:      []*PlanNode{currPlan},
 		}
 	}

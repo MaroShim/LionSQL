@@ -1612,9 +1612,9 @@ func (s *Coordinator) execSetOpSelect(setQuery *planner.SetOpQuery, start time.T
 		currIter = execution.NewSortIterator(currIter, setQuery.OrderBy)
 	}
 
-	// 4. Trailing LIMIT across entire set operation result
-	if setQuery.Limit >= 0 {
-		currIter = execution.NewLimitIterator(currIter, setQuery.Limit, 0)
+	// 4. Trailing LIMIT and OFFSET across entire set operation result
+	if setQuery.Limit >= 0 || setQuery.Offset > 0 {
+		currIter = execution.NewLimitIterator(currIter, setQuery.Limit, setQuery.Offset)
 	}
 
 	// 5. Open and materialize results

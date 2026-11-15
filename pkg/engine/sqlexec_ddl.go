@@ -1800,15 +1800,17 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 
 	// 5. ALTER TABLE <table> ADD [CONSTRAINT <name>] CHECK (...)
 	if sqlutil.HasPrefixKeyword(body, "ADD") && (sqlutil.ContainsKeyword(body, "CHECK", false) || strings.Contains(bodyUpper, "CHECK(")) && !sqlutil.ContainsKeyword(body, "COLUMN", false) {
-		if checkExpr := parseColumnCheckExpr(body); checkExpr != "" {
-			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
-				sch.CheckConstraints = append(sch.CheckConstraints, checkExpr)
-				return nil
-			}); err != nil {
-				return nil, err
-			}
-			s.InvalidatePKBypassCache()
+		checkExpr := parseColumnCheckExpr(body)
+		if checkExpr == "" {
+			return nil, fmt.Errorf("invalid check constraint syntax: missing expression")
 		}
+		if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			sch.CheckConstraints = append(sch.CheckConstraints, checkExpr)
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+		s.InvalidatePKBypassCache()
 		return &QueryResult{
 			Success:    true,
 			Command:    "ALTER TABLE",
