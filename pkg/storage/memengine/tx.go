@@ -458,7 +458,7 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 			if !keyVal.IsNull {
 				existing := idxData.ScanRange(&keyVal, &keyVal)
 				for _, epk := range existing {
-					if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
+					if epk != pkKey && !tx.isIndexKeyLocallyReleased(tableName, epk, td, &idxData.Schema, keyVal) {
 						td.mu.RUnlock()
 						return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
 					}
@@ -804,7 +804,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 			if !keyVal.IsNull {
 				existing := idxData.ScanRange(&keyVal, &keyVal)
 				for _, epk := range existing {
-					if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
+					if epk != pkKey && !tx.isIndexKeyLocallyReleased(tableName, epk, td, &idxData.Schema, keyVal) {
 						td.mu.RUnlock()
 						return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
 					}
@@ -1977,7 +1977,7 @@ func (tx *Transaction) Commit() error {
 
 						existing := idxData.ScanRange(&keyVal, &keyVal)
 						for _, epk := range existing {
-							if epk != ch.key {
+							if epk != ch.key && !tx.isIndexKeyLocallyReleased(td.Schema.Name, epk, td, &idxData.Schema, keyVal) {
 								return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
 							}
 						}
@@ -2011,7 +2011,7 @@ func (tx *Transaction) Commit() error {
 
 							existing := idxData.ScanRange(&keyVal, &keyVal)
 							for _, epk := range existing {
-								if epk != ch.key {
+								if epk != ch.key && !tx.isIndexKeyLocallyReleased(td.Schema.Name, epk, td, &idxData.Schema, keyVal) {
 									return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
 								}
 							}
@@ -2052,6 +2052,44 @@ func (tx *Transaction) Commit() error {
 	}
 
 	// 6. Apply changes and update secondary indexes atomically
+	type changeItem struct {
+		ch       rowChange
+		td       *TableData
+		sh       *tableShard
+		sIdx     int
+		hadOld   bool
+		oldEntry shardEntry
+		oldRow   storage.Row
+	}
+	items := make([]changeItem, 0, len(tx.changes))
+	for _, ch := range tx.changes {
+		td := ch.td
+		sIdx := ch.shardIdx
+		if td == nil {
+			var err error
+			td, err = tx.getTableLocked(ch.table)
+			if err != nil {
+				return err
+			}
+			sIdx = hashShard(ch.key)
+		}
+		sh := &td.shards[sIdx]
+		oldEntry, hadOld := sh.entries[ch.key]
+		oldRow, err := oldEntry.materialize(td)
+		if err != nil {
+			return err
+		}
+		items = append(items, changeItem{
+			ch:       ch,
+			td:       td,
+			sh:       sh,
+			sIdx:     sIdx,
+			hadOld:   hadOld,
+			oldEntry: oldEntry,
+			oldRow:   oldRow,
+		})
+	}
+
 	type undoRecord struct {
 		sh       *tableShard
 		key      string
@@ -2061,7 +2099,16 @@ func (tx *Transaction) Commit() error {
 		oldRow   storage.Row
 		ch       rowChange
 	}
-	appliedUndos := make([]undoRecord, 0, len(tx.changes))
+	appliedUndos := make([]undoRecord, 0, len(items))
+
+	type deletedIdxEntry struct {
+		idxData *IndexData
+		key     storage.Value
+		pk      string
+		incVals []storage.Value
+	}
+	var deletedIdxEntries []deletedIdxEntry
+
 	rollbackApplied := func() {
 		for i := len(appliedUndos) - 1; i >= 0; i-- {
 			u := appliedUndos[i]
@@ -2087,9 +2134,6 @@ func (tx *Transaction) Commit() error {
 						newKey := extractIndexKeyFromRowWithSchema(&td.Schema, u.ch.row, &idxData.Schema)
 						idxData.Delete(newKey, u.key)
 					}
-					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, u.oldRow, &idxData.Schema)
-					incVals := extractIncludeValuesFromRow(&td.Schema, u.oldRow, idxData.Schema.IncludeCols)
-					_ = idxData.Insert(oldKey, u.key, incVals)
 				}
 			} else {
 				delete(sh.entries, u.key)
@@ -2108,27 +2152,41 @@ func (tx *Transaction) Commit() error {
 				}
 			}
 		}
+		// Re-insert all old index entries that were removed in Phase A
+		for _, d := range deletedIdxEntries {
+			_ = d.idxData.Insert(d.key, d.pk, d.incVals)
+		}
 	}
 
-	for _, ch := range tx.changes {
-		td := ch.td
-		sIdx := ch.shardIdx
-		if td == nil {
-			var err error
-			td, err = tx.getTableLocked(ch.table)
-			if err != nil {
-				rollbackApplied()
-				return err
+	// Phase A: Remove old index entries for all updates and deletes first,
+	// so that reused unique keys within the same transaction do not collide.
+	for _, item := range items {
+		if (item.ch.kind == changeUpdate || item.ch.kind == changeDelete) && item.hadOld {
+			for _, idxData := range item.td.Indexes {
+				if idxData.Schema.Disabled {
+					continue
+				}
+				oldKey := extractIndexKeyFromRowWithSchema(&item.td.Schema, item.oldRow, &idxData.Schema)
+				incVals := extractIncludeValuesFromRow(&item.td.Schema, item.oldRow, idxData.Schema.IncludeCols)
+				idxData.Delete(oldKey, item.ch.key)
+				deletedIdxEntries = append(deletedIdxEntries, deletedIdxEntry{
+					idxData: idxData,
+					key:     oldKey,
+					pk:      item.ch.key,
+					incVals: incVals,
+				})
 			}
-			sIdx = hashShard(ch.key)
 		}
-		sh := &td.shards[sIdx]
-		oldEntry, hadOld := sh.entries[ch.key]
-		oldRow, err := oldEntry.materialize(td)
-		if err != nil {
-			rollbackApplied()
-			return err
-		}
+	}
+
+	// Phase B: Apply table row updates and insert new index entries
+	for _, item := range items {
+		ch := item.ch
+		td := item.td
+		sh := item.sh
+		oldEntry := item.oldEntry
+		hadOld := item.hadOld
+		oldRow := item.oldRow
 
 		switch ch.kind {
 		case changeInsert:
@@ -2201,10 +2259,6 @@ func (tx *Transaction) Commit() error {
 				if idxData.Schema.Disabled {
 					continue
 				}
-				if hadOld {
-					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
-					idxData.Delete(oldKey, ch.key)
-				}
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
 				if err := idxData.Insert(newKey, ch.key, incVals); err != nil {
@@ -2221,15 +2275,6 @@ func (tx *Transaction) Commit() error {
 					return err
 				}
 				td.removePartitionKey(partID, ch.key)
-			}
-			if hadOld {
-				for _, idxData := range td.Indexes {
-					if idxData.Schema.Disabled {
-						continue
-					}
-					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
-					idxData.Delete(oldKey, ch.key)
-				}
 			}
 		}
 		appliedUndos = append(appliedUndos, undoRecord{
@@ -2696,6 +2741,22 @@ func (tx *Transaction) isLocallyDeleted(table, key string) bool {
 	}
 	if d, ok := tx.deleted[table]; ok {
 		return d[key]
+	}
+	return false
+}
+
+func (tx *Transaction) isIndexKeyLocallyReleased(tableName string, epk string, td *TableData, idx *storage.IndexSchema, targetKey storage.Value) bool {
+	if td != nil {
+		tableName = td.Schema.Name
+	}
+	if tx.isLocallyDeleted(tableName, epk) {
+		return true
+	}
+	if locRow, hasLoc := tx.getLocal(tableName, epk); hasLoc {
+		locVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, idx)
+		if !locVal.Equal(targetKey) {
+			return true
+		}
 	}
 	return false
 }

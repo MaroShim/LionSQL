@@ -260,6 +260,7 @@
 | `DONE` | **`FIX-TSQL-TOPLEVEL-SELECT-ASSIGN-1`** |  | Engine | P1 | 최상위 배치 및 sp_executesql에서 SELECT @var = expr 구문을 비교식이 아닌 T-SQL 변수 대입으로 처리 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-UNION-CHAIN-1`** | `1.0-GA` | Engine | P1 | 3개 이상 UNION 체인 중복 제거 오류: SELECT 1 UNION SELECT 2 UNION SELECT 2 ORDER BY 1 이 1,1,2 반환(프로시저 내부는 NULL,NULL,2) | [`test/slt_proc/30_case_and_set_ops_in_procs.slt`](test/slt_proc/30_case_and_set_ops_in_procs.slt) |  |
 | `DONE` | **`FIX-TSQL-XACT-STATE-1`** |  | Engine | P1 | TRY...CATCH 트랜잭션 상태 내장 함수 XACT_STATE() 지원 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-TX-UNIQUE-KEY-RELEASE-COLLISION-1`** | `2` | --domain | P2 | 동일 트랜잭션 내 unique 키 해제 후 재사용 시 허위 중복 충돌 방지 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-TYPE-REAL-FLOAT-DISTINCTION-1`** | `1.0-GA` | Storage | P2 | REAL(4-byte float32) vs FLOAT(8-byte float64) 데이터 타입 분리 및 스토리지/프로토콜 정합성 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-UPDATE-SNAPSHOT-COLUMN-SWAP-1`** | `1.0-GA` | Engine | P2 | UPDATE 다중 컬럼 대입 시 원본 튜플 스냅샷 기반 평가(SET a = b, b = a 원자적 스왑 보장) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-VM-HIDDEN-ROWID-1`** |  | Engine | P1 | PK 없는 테이블에 대한 VDBE VM OpInsert 실행 시 숨은 _row_id 자동 발번 누락 수정 | [`1.0-GA`](1.0-GA) |  |
@@ -2922,6 +2923,13 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 ### [DONE] TRY...CATCH 트랜잭션 상태 내장 함수 XACT_STATE() 지원 `FIX-TSQL-XACT-STATE-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-13 08:25:40
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [DONE] 동일 트랜잭션 내 unique 키 해제 후 재사용 시 허위 중복 충돌 방지 `FIX-TX-UNIQUE-KEY-RELEASE-COLLISION-1`
+- **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-15 07:48:47
+- **Milestone**: `2`
+- **Plan Doc**: [`--prio`](--prio)
 
 ---
 
