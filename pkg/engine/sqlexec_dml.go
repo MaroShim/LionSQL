@@ -1103,165 +1103,226 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
 	}
 
-	var tx storage.Transaction
-	var isEphemeral bool
-	if cs != nil && cs.Tx != nil {
-		tx = wrapSessionTx(cs, cs.Tx)
-		isEphemeral = false
-	} else {
-		session, closeFn, err := s.acquireSessionForQuery(cs)
-		if err != nil {
-			return nil, err
-		}
-		defer closeFn()
-
-		t, err := session.BeginTx(cs.TxOptions())
-		if err != nil {
-			return nil, err
-		}
-		tx = wrapSessionTx(cs, t)
-		isEphemeral = true
-		defer tx.Rollback()
+	isExplicitTx := (cs != nil && cs.Tx != nil)
+	maxAttempts := 1
+	if !isExplicitTx {
+		maxAttempts = 5
 	}
 
-	cursor, err := tx.Scan(tableName)
-	if err != nil {
-		if isEphemeral {
-			_ = tx.Rollback()
-		}
-		return nil, err
-	}
-	defer cursor.Close()
-
-	setPairs := sqlutil.SplitSetClauses(setClause)
-	for _, pair := range setPairs {
-		if _, _, found := schema.FindColumn(pair.Column); !found {
-			if isEphemeral && tx != nil {
-				_ = tx.Rollback()
-			}
-			return nil, fmt.Errorf("column %q does not exist in table %q", pair.Column, tableName)
-		}
-	}
-
-	type updateEntry struct {
-		pk   storage.Value
-		rec  storage.Record
-		orig storage.Record
-	}
-	toUpdate := make([]updateEntry, 0)
-
-	for cursor.Next() {
-		rec, err := cursor.Record()
-		if err != nil {
-			if isEphemeral {
-				_ = tx.Rollback()
-			}
-			return nil, fmt.Errorf("failed to read record during UPDATE scan: %w", err)
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt*5) * time.Millisecond)
 		}
 
-		if whereClause != "" && !evaluateWhereCondition(rec, whereClause) {
-			continue
-		}
-
-		pkVal, hasPK := schema.ResolveRecordPK(rec)
-		if !hasPK {
-			if isEphemeral {
-				_ = tx.Rollback()
-			}
-			return nil, fmt.Errorf("table %q has no primary key to identify row for update", tableName)
-		}
-
-		origSnapshot := rec.Clone()
-		recUpdates := make(storage.Record, len(setPairs))
-		for _, pair := range setPairs {
-			colName := pair.Column
-			exprStr := pair.Value
-			colSchema, _, found := schema.FindColumn(colName)
-			targetType := storage.TypeVarChar
-			targetCol := colName
-			if found {
-				targetCol = colSchema.Name
-				targetType = colSchema.Type
-			}
-			val, err := evalUpdateExpr(exprStr, origSnapshot, targetType)
+		var tx storage.Transaction
+		var isEphemeral bool
+		var closeFn func()
+		if isExplicitTx {
+			tx = wrapSessionTx(cs, cs.Tx)
+			isEphemeral = false
+		} else {
+			session, fn, err := s.acquireSessionForQuery(cs)
 			if err != nil {
-				if isEphemeral && tx != nil {
-					_ = tx.Rollback()
-				}
 				return nil, err
 			}
-			recUpdates.Set(targetCol, val)
-		}
+			closeFn = fn
 
-		if hasPK {
-			toUpdate = append(toUpdate, updateEntry{pk: pkVal, rec: recUpdates, orig: origSnapshot})
-		}
-	}
-
-	var outputProjs []outputProj
-	if rawOutput != "" {
-		outputProjs = parseOutputClause(rawOutput)
-	}
-	var outputRows []map[string]any
-	var outputVals [][]any
-	var outputCols []string
-	if len(outputProjs) > 0 {
-		_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
-	}
-
-	updatedCount := int64(0)
-	for _, item := range toUpdate {
-		if schema != nil && schema.HasCheckConstraints() {
-			merged := item.orig.Clone()
-			for k, v := range item.rec {
-				merged[k] = v
+			t, err := session.BeginTx(cs.TxOptions())
+			if err != nil {
+				closeFn()
+				return nil, err
 			}
-			if err := proc.ValidateRecordChecks(schema, merged); err != nil {
-				if isEphemeral {
-					_ = tx.Rollback()
-				}
-				return nil, fmt.Errorf("check constraint violation on %q: %w", tableName, err)
-			}
+			tx = wrapSessionTx(cs, t)
+			isEphemeral = true
 		}
-		if err := tx.Update(tableName, item.pk, item.rec); err != nil {
+
+		cursor, err := tx.Scan(tableName)
+		if err != nil {
 			if isEphemeral {
 				_ = tx.Rollback()
+				if closeFn != nil {
+					closeFn()
+				}
 			}
-			if errors.Is(err, storage.ErrKeyExists) || errors.Is(err, storage.ErrUniqueViolation) {
-				return nil, fmt.Errorf("duplicate key value violates unique constraint on %q: %w", tableName, err)
-			}
-			return nil, fmt.Errorf("update row error: %w", err)
+			return nil, err
 		}
 
+		setPairs := sqlutil.SplitSetClauses(setClause)
+		for _, pair := range setPairs {
+			if _, _, found := schema.FindColumn(pair.Column); !found {
+				cursor.Close()
+				if isEphemeral && tx != nil {
+					_ = tx.Rollback()
+					if closeFn != nil {
+						closeFn()
+					}
+				}
+				return nil, fmt.Errorf("column %q does not exist in table %q", pair.Column, tableName)
+			}
+		}
+
+		type updateEntry struct {
+			pk   storage.Value
+			rec  storage.Record
+			orig storage.Record
+		}
+		toUpdate := make([]updateEntry, 0)
+
+		var scanErr error
+		for cursor.Next() {
+			rec, err := cursor.Record()
+			if err != nil {
+				scanErr = fmt.Errorf("failed to read record during UPDATE scan: %w", err)
+				break
+			}
+
+			if whereClause != "" && !evaluateWhereCondition(rec, whereClause) {
+				continue
+			}
+
+			pkVal, hasPK := schema.ResolveRecordPK(rec)
+			if !hasPK {
+				scanErr = fmt.Errorf("table %q has no primary key to identify row for update", tableName)
+				break
+			}
+
+			origSnapshot := rec.Clone()
+			recUpdates := make(storage.Record, len(setPairs))
+			var evalErr error
+			for _, pair := range setPairs {
+				colName := pair.Column
+				exprStr := pair.Value
+				colSchema, _, found := schema.FindColumn(colName)
+				targetType := storage.TypeVarChar
+				targetCol := colName
+				if found {
+					targetCol = colSchema.Name
+					targetType = colSchema.Type
+				}
+				val, err := evalUpdateExpr(exprStr, origSnapshot, targetType)
+				if err != nil {
+					evalErr = err
+					break
+				}
+				recUpdates.Set(targetCol, val)
+			}
+			if evalErr != nil {
+				scanErr = evalErr
+				break
+			}
+
+			if hasPK {
+				toUpdate = append(toUpdate, updateEntry{pk: pkVal, rec: recUpdates, orig: origSnapshot})
+			}
+		}
+		cursor.Close()
+
+		if scanErr != nil {
+			if isEphemeral && tx != nil {
+				_ = tx.Rollback()
+				if closeFn != nil {
+					closeFn()
+				}
+			}
+			return nil, scanErr
+		}
+
+		var outputProjs []outputProj
+		if rawOutput != "" {
+			outputProjs = parseOutputClause(rawOutput)
+		}
+		var outputRows []map[string]any
+		var outputVals [][]any
+		var outputCols []string
 		if len(outputProjs) > 0 {
-			newRec := make(storage.Record, len(item.orig))
-			for k, v := range item.orig {
-				newRec[k] = v
-			}
-			for k, v := range item.rec {
-				newRec[k] = v
-			}
-			appendOutputRow(outputProjs, item.orig, newRec, schema, &outputRows, &outputVals)
+			_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
 		}
-		updatedCount++
+
+		updatedCount := int64(0)
+		var updateErr error
+		for _, item := range toUpdate {
+			if schema != nil && schema.HasCheckConstraints() {
+				merged := item.orig.Clone()
+				for k, v := range item.rec {
+					merged[k] = v
+				}
+				if err := proc.ValidateRecordChecks(schema, merged); err != nil {
+					updateErr = fmt.Errorf("check constraint violation on %q: %w", tableName, err)
+					break
+				}
+			}
+			if err := tx.Update(tableName, item.pk, item.rec); err != nil {
+				if isEphemeral && storage.IsWriteConflict(err) {
+					updateErr = err
+					break
+				}
+				if errors.Is(err, storage.ErrKeyExists) || errors.Is(err, storage.ErrUniqueViolation) {
+					updateErr = fmt.Errorf("duplicate key value violates unique constraint on %q: %w", tableName, err)
+					break
+				}
+				updateErr = fmt.Errorf("update row error: %w", err)
+				break
+			}
+
+			if len(outputProjs) > 0 {
+				newRec := make(storage.Record, len(item.orig))
+				for k, v := range item.orig {
+					newRec[k] = v
+				}
+				for k, v := range item.rec {
+					newRec[k] = v
+				}
+				appendOutputRow(outputProjs, item.orig, newRec, schema, &outputRows, &outputVals)
+			}
+			updatedCount++
+		}
+
+		if updateErr != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+				if closeFn != nil {
+					closeFn()
+				}
+				if storage.IsWriteConflict(updateErr) {
+					lastErr = updateErr
+					continue
+				}
+			}
+			return nil, updateErr
+		}
+
+		if isEphemeral {
+			if err := tx.Commit(); err != nil {
+				_ = tx.Rollback()
+				if closeFn != nil {
+					closeFn()
+				}
+				if storage.IsWriteConflict(err) {
+					lastErr = err
+					continue
+				}
+				return nil, fmt.Errorf("commit error: %w", err)
+			}
+			tx = nil
+			if closeFn != nil {
+				closeFn()
+			}
+		}
+
+		return &QueryResult{
+			Success:      true,
+			Command:      "UPDATE",
+			Columns:      outputCols,
+			Rows:         outputRows,
+			Values:       outputVals,
+			RowsAffected: updatedCount,
+			DurationUS:   time.Since(start).Microseconds(),
+			Messages:     []string{fmt.Sprintf("%d rows updated in %q", updatedCount, tableName)},
+		}, nil
 	}
 
-	if isEphemeral {
-		if err := tx.Commit(); err != nil {
-			return nil, fmt.Errorf("commit error: %w", err)
-		}
-	}
-
-	return &QueryResult{
-		Success:      true,
-		Command:      "UPDATE",
-		Columns:      outputCols,
-		Rows:         outputRows,
-		Values:       outputVals,
-		RowsAffected: updatedCount,
-		DurationUS:   time.Since(start).Microseconds(),
-		Messages:     []string{fmt.Sprintf("%d rows updated in %q", updatedCount, tableName)},
-	}, nil
+	return nil, lastErr
 }
 
 func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {

@@ -48,6 +48,18 @@
    - `TestWiredTiger_Savepoint_Rollback_RestoresDeletedIndexKey`: Delete 롤백 후 보조 인덱스로 정상 조회되는지 검증.
    - `TestWiredTiger_Savepoint_Rollback_RemovesInsertedIndexKey`: Insert 롤백 후 보조 인덱스에서 유령 키가 완전 제거되는지 검증.
 
+### Phase 3: 테이블 변수 롤백 반영 시 보조 인덱스 오류 전파 (`pkg/storage/memengine/tx.go`)
+1. `commitTableVariablesLocked()` 시그니처를 `error` 반환형으로 개편:
+   - 테이블 변수(@table_var / `__tv_*`)의 롤백 반영 시 고유 인덱스 삽입(`idxData.Insert`) 오류를 `_ =`로 삼키지 않고 `errors.Join`으로 수집.
+   - 플랫 레코드 인코딩 실패 및 테이블 미존재 에러 전파.
+2. `tx.Rollback()`에서 `commitTableVariablesLocked()` 반환 에러를 캡처하여 상위로 반환.
+3. 단위 테스트: `TestTableVariable_RollbackIndexErrorPropagation` 추가 (동시성 고유키 충돌 시 롤백 에러 검증).
+
+### Phase 4: WAL 크래시 복구 재생 시 보조 인덱스 Fail-Closed 보장 (`pkg/storage/memengine/persistence.go`)
+1. `applyWALRecordLocked` 내 `OpInsert`, `OpUpdate`, `OpCreateIndex`에서 `_ = idxData.Insert` 제거.
+2. 인덱스 `IncludeCols` 정상 전달 및 인덱스 삽입 실패 시 즉시 Fail-Closed 진단 에러 반환.
+3. 단위 테스트: `TestMemEngine_WAL_ReplayIndexErrorPropagation` 추가 (WAL 재생 시 고유키 충돌 시 기동 중단 검증).
+
 ---
 
 ## 3. 검증 전략 (`[RULE:PipelineVerification]`)

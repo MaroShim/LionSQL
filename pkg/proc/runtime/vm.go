@@ -2134,12 +2134,16 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		newRows = make([]map[string]any, 0, len(toUpdate))
 	}
 	for _, item := range toUpdate {
-		if err := f.tx.Update(targetTable, item.pk, item.updates); err == nil {
-			updatedCount++
-			if hasTriggers {
-				oldRows = append(oldRows, item.oldRow)
-				newRows = append(newRows, item.newRow)
+		if err := f.tx.Update(targetTable, item.pk, item.updates); err != nil {
+			if errors.Is(err, storage.ErrKeyNotFound) {
+				continue
 			}
+			return 0, fmt.Errorf("update error on %s: %w", targetTable, err)
+		}
+		updatedCount++
+		if hasTriggers {
+			oldRows = append(oldRows, item.oldRow)
+			newRows = append(newRows, item.newRow)
 		}
 	}
 
@@ -2245,11 +2249,15 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 		deletedRows = make([]map[string]any, 0, len(toDelete))
 	}
 	for _, item := range toDelete {
-		if err := f.tx.Delete(targetTable, item.pk); err == nil {
-			deletedCount++
-			if hasTriggers {
-				deletedRows = append(deletedRows, item.row)
+		if err := f.tx.Delete(targetTable, item.pk); err != nil {
+			if errors.Is(err, storage.ErrKeyNotFound) {
+				continue
 			}
+			return 0, fmt.Errorf("delete error on %s: %w", targetTable, err)
+		}
+		deletedCount++
+		if hasTriggers {
+			deletedRows = append(deletedRows, item.row)
 		}
 	}
 

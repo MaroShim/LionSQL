@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
 
 ### Fixed
+- **Storage & Engine (`FIX-CONCURRENT-UPDATE-LOST-UPDATE-1`, vm.go:2136, 2250, sqlexec_dml.go:1105~1255, sqlexec_select.go:1360~1430, tx.go:700, 1000, 3005)**:
+  - Eliminate lost updates and enforce write conflict detection across concurrent conditional UPDATE and DELETE statements per `[RULE:ConflictPrevention]`, `[RULE:AtomicSaves]`, and `[RULE:ExplicitError]`:
+    1. Propagate `f.tx.Update` and `f.tx.Delete` errors in VDBE execution engine (`pkg/proc/runtime/vm.go:execUpdateWhere`, `execDeleteWhere`), eliminating silent error swallowing and surfacing `ErrSerializationFailure` and write conflicts to callers.
+    2. Track initial observed versions ($V_{obs}$) in `memCursor` across read-write scans, and enforce strict version conflict detection in `updateLocked` and `deleteLocked` (`pkg/storage/memengine/tx.go`) when current row version differs from observed version, preserving original base versions across commit validation.
+    3. Implement bounded transparent retry (up to 5 attempts with jitter backoff) for ephemeral autocommit UPDATE statements in `sqlexec_dml.go` and `sqlexec_select.go` on write conflict, guaranteeing that concurrent single-statement updates re-evaluate against latest committed state without losing updates while fast-failing explicit multi-statement transaction blocks.
 - **Storage & Engine (`FIX-ROLLBACK-INDEX-RESTORE-ERROR-HANDLING-1`, tx.go:2240, 2500~2615, persistence.go:170~290, wt_engine.go:1420~1480)**:
   - Eliminate silent swallowing of secondary index restoration and modification errors during transaction rollback, table variable commit, WAL replay, and savepoint undo per `[RULE:ExplicitError]` and Invariant 9:
     1. Update `commitTableVariablesLocked()` in `pkg/storage/memengine/tx.go` to return `error`, capturing and propagating all index insertion errors (`idxData.Insert`), flat record encoding failures, and missing table lookups to `tx.Rollback()`.

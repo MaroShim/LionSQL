@@ -1357,93 +1357,126 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 		return nil, proc.DiagnoseParseFailure(cleaned, err)
 	}
 
-	var tx storage.Transaction
-	var isEphemeral bool
-	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
-	} else {
-		session, closeFn, err := s.acquireSessionForQuery(cs)
-		if err != nil {
-			return nil, err
-		}
-		defer closeFn()
+	isExplicitTx := (cs != nil && cs.Tx != nil)
+	maxAttempts := 1
+	if !isExplicitTx {
+		maxAttempts = 5
+	}
 
-		t, err := session.BeginTx(cs.TxOptions())
-		if err != nil {
-			return nil, err
+	var lastErr error
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt*5) * time.Millisecond)
 		}
-		tx = t
-		isEphemeral = true
-		defer func() {
+
+		var tx storage.Transaction
+		var isEphemeral bool
+		var closeFn func()
+		if isExplicitTx {
+			tx = cs.Tx
+		} else {
+			session, fn, err := s.acquireSessionForQuery(cs)
+			if err != nil {
+				return nil, err
+			}
+			closeFn = fn
+
+			t, err := session.BeginTx(cs.TxOptions())
+			if err != nil {
+				closeFn()
+				return nil, err
+			}
+			tx = t
+			isEphemeral = true
+		}
+
+		var params map[string]any
+		if cs != nil {
+			cs.Mu.Lock()
+			if len(cs.Vars) > 0 {
+				params = make(map[string]any, len(cs.Vars))
+				for k, v := range cs.Vars {
+					params[k] = v
+				}
+			}
+			if cs.IsPostgres() {
+				if params == nil {
+					params = make(map[string]any)
+				}
+				params["identity_insert_all"] = true
+			}
+			cs.Mu.Unlock()
+		}
+
+		ctx := cs.GetQueryContext()
+		execRes, err := s.executor.ExecuteInTxContext(ctx, prog, params, tx, nil)
+		if err != nil {
 			if isEphemeral && tx != nil {
 				_ = tx.Rollback()
 			}
-		}()
-	}
+			if closeFn != nil {
+				closeFn()
+			}
+			if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
+				return nil, fmt.Errorf("canceling statement due to user request")
+			}
+			if isEphemeral && storage.IsWriteConflict(err) {
+				lastErr = err
+				continue
+			}
+			return nil, err
+		}
 
-	var params map[string]any
-	if cs != nil {
-		cs.Mu.Lock()
-		if len(cs.Vars) > 0 {
-			params = make(map[string]any, len(cs.Vars))
-			for k, v := range cs.Vars {
-				params[k] = v
+		if isEphemeral {
+			if err := tx.Commit(); err != nil {
+				_ = tx.Rollback()
+				if closeFn != nil {
+					closeFn()
+				}
+				if storage.IsWriteConflict(err) {
+					lastErr = err
+					continue
+				}
+				return nil, fmt.Errorf("failed to commit transaction: %w", err)
+			}
+			tx = nil
+			if closeFn != nil {
+				closeFn()
 			}
 		}
-		if cs.IsPostgres() {
-			if params == nil {
-				params = make(map[string]any)
-			}
-			params["identity_insert_all"] = true
-		}
-		cs.Mu.Unlock()
-	}
 
-	ctx := cs.GetQueryContext()
-	execRes, err := s.executor.ExecuteInTxContext(ctx, prog, params, tx, nil)
-	if err != nil {
-		if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
-			return nil, fmt.Errorf("canceling statement due to user request")
-		}
-		return nil, err
-	}
-
-	if isEphemeral {
-		if err := tx.Commit(); err != nil {
-			return nil, fmt.Errorf("failed to commit transaction: %w", err)
-		}
-		tx = nil
-	}
-
-	if execRes.LastIdentity > 0 {
-		if kind, table, ok := dmlHead(cleaned); ok && kind == dmlInsert {
-			s.SetTableLastIdentity(cleanIdentifier(table), execRes.LastIdentity)
-		}
-	}
-
-	if cs != nil {
-		cs.Mu.Lock()
 		if execRes.LastIdentity > 0 {
-			cs.Vars["identity"] = execRes.LastIdentity
-			cs.Vars["@@identity"] = execRes.LastIdentity
+			if kind, table, ok := dmlHead(cleaned); ok && kind == dmlInsert {
+				s.SetTableLastIdentity(cleanIdentifier(table), execRes.LastIdentity)
+			}
 		}
-		cs.Vars["rowcount"] = execRes.RowsAffected
-		cs.Vars["@@rowcount"] = execRes.RowsAffected
-		cs.Mu.Unlock()
+
+		if cs != nil {
+			cs.Mu.Lock()
+			if execRes.LastIdentity > 0 {
+				cs.Vars["identity"] = execRes.LastIdentity
+				cs.Vars["@@identity"] = execRes.LastIdentity
+			}
+			cs.Vars["rowcount"] = execRes.RowsAffected
+			cs.Vars["@@rowcount"] = execRes.RowsAffected
+			cs.Mu.Unlock()
+		}
+
+		msg := fmt.Sprintf("(%d rows affected)", execRes.RowsAffected)
+		if len(execRes.Logs) > 0 {
+			msg = strings.Join(execRes.Logs, "\n")
+		}
+
+		return &QueryResult{
+			Success:      true,
+			Command:      command,
+			RowsAffected: execRes.RowsAffected,
+			DurationUS:   time.Since(start).Microseconds(),
+			Messages:     []string{msg},
+		}, nil
 	}
 
-	msg := fmt.Sprintf("(%d rows affected)", execRes.RowsAffected)
-	if len(execRes.Logs) > 0 {
-		msg = strings.Join(execRes.Logs, "\n")
-	}
-
-	return &QueryResult{
-		Success:      true,
-		Command:      command,
-		RowsAffected: execRes.RowsAffected,
-		DurationUS:   time.Since(start).Microseconds(),
-		Messages:     []string{msg},
-	}, nil
+	return nil, lastErr
 }
 
 func (s *Coordinator) execVDBESelect(cleaned string, start time.Time, cs *ClientSession) (*QueryResult, error) {

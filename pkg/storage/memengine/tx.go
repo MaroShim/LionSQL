@@ -702,6 +702,15 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 		return err
 	}
 
+	origBaseVer := tx.getBaseVer(tableName, pkKey)
+	if origBaseVer > 0 && ver != origBaseVer {
+		return storage.ErrSerializationFailure
+	}
+	if origBaseVer == 0 {
+		tx.setBaseVer(tableName, pkKey, ver)
+		origBaseVer = ver
+	}
+
 	updated := make(storage.Record, len(base))
 	for col, val := range base {
 		updated[col] = val
@@ -849,8 +858,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 		newPkKey = newPkVal.String()
 	}
 
-	tx.setBaseVer(tableName, pkKey, ver)
-	originalBaseVer := tx.getBaseVer(tableName, pkKey)
+	originalBaseVer := origBaseVer
 
 	updatedRow := schema.RecordToRow(updated)
 	if newPkKey != pkKey {
@@ -995,6 +1003,15 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 		return err
 	}
 
+	origBaseVer := tx.getBaseVer(tableName, pkKey)
+	if origBaseVer > 0 && ver != origBaseVer {
+		return storage.ErrSerializationFailure
+	}
+	if origBaseVer == 0 {
+		tx.setBaseVer(tableName, pkKey, ver)
+		origBaseVer = ver
+	}
+
 	// Find all child tables that have a foreign key referencing tableName
 	childRefs := tx.engine.GetChildFKRefs(tableName)
 
@@ -1042,8 +1059,7 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 		}
 	}
 
-	tx.setBaseVer(tableName, pkKey, ver)
-	originalBaseVer := tx.getBaseVer(tableName, pkKey)
+	originalBaseVer := origBaseVer
 
 	tx.removeLocal(tableName, pkKey)
 	tx.markDeleted(tableName, pkKey)
@@ -2990,6 +3006,14 @@ func (c *memCursor) Record() (storage.Record, error) {
 	if !c.isValidPosition() {
 		return nil, fmt.Errorf("cursor out of range or closed")
 	}
+	if c.tx != nil && !c.tx.opts.ReadOnly && c.hasCurEntry && c.idx >= 0 && c.idx < len(c.keys) {
+		c.tx.mu.Lock()
+		pkKey := c.keys[c.idx]
+		if c.tx.getBaseVer(c.tableName, pkKey) == 0 {
+			c.tx.setBaseVer(c.tableName, pkKey, c.curEntry.ver)
+		}
+		c.tx.mu.Unlock()
+	}
 	if c.curRec == nil && c.td != nil {
 		row, err := c.Row()
 		if err != nil {
@@ -3007,6 +3031,14 @@ func (c *memCursor) Record() (storage.Record, error) {
 func (c *memCursor) Row() (storage.Row, error) {
 	if !c.isValidPosition() {
 		return storage.Row{}, fmt.Errorf("cursor out of range or closed")
+	}
+	if c.tx != nil && !c.tx.opts.ReadOnly && c.hasCurEntry && c.idx >= 0 && c.idx < len(c.keys) {
+		c.tx.mu.Lock()
+		pkKey := c.keys[c.idx]
+		if c.tx.getBaseVer(c.tableName, pkKey) == 0 {
+			c.tx.setBaseVer(c.tableName, pkKey, c.curEntry.ver)
+		}
+		c.tx.mu.Unlock()
 	}
 	if len(c.curRow.Values) > 0 {
 		return c.curRow, nil
