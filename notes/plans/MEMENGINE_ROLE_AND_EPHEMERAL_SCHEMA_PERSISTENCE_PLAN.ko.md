@@ -48,10 +48,14 @@
 
 ### 2.3 1.0-GA 아키텍처 결단 및 조기 전환(Early Transition) 원칙
 1. **LionSQL 전체 기본 엔진과 `memengine` 기본 모드의 명확한 분리**:
-   - **LionSQL의 기본 스토리지 엔진(`DefaultEngine` / `DefaultDisk`)은 이미 `WiredTiger`**이다. 따라서 디스크에 스키마와 데이터를 모두 영구 보존해야 하는 표준 OLTP 워크로드는 기본적으로 `WiredTiger`가 전담한다.
+   - **LionSQL의 기본 스토리지 엔진(`DefaultEngine` / `DefaultDisk`)은 이미 `WiredTiger`**이다 (macOS / Linux). 따라서 디스크에 스키마와 데이터를 모두 영구 보존해야 하는 표준 OLTP 워크로드는 기본적으로 `WiredTiger`가 전담한다.
    - 사용자가 기본값(`WiredTiger`) 대신 **`-engine=memory` (`memengine`)를 명시적으로 선택했다는 것은 디스크 WAL/스냅샷 오버헤드 없는 순수 인메모리 처리 성능을 의도한 것**이다.
-   - 따라서 `memengine`은 SQL Server In-Memory OLTP와 같이 `SCHEMA_ONLY`와 `SCHEMA_AND_DATA` 두 가지 영속성 수준을 모두 제공하되, **`memengine`의 기본값(Default)을 `SCHEMA_ONLY` (스키마 및 카탈로그만 디스크 영속화, 로우 데이터는 100% RAM 휘발성)**로 설정하고 `SCHEMA_AND_DATA`(WAL + RDB)는 명시적 옵션(또는 WiredTiger가 없는 Windows 폴백)으로 제공한다.
-2. **1.0 이전 조기 전환(Early Switch) 전략**:
+   - 따라서 `memengine`은 SQL Server In-Memory OLTP와 같이 `SCHEMA_ONLY`와 `SCHEMA_AND_DATA` 두 가지 영속성 수준을 모두 제공하되, **`memengine`의 기본값(Default)을 `SCHEMA_ONLY` (스키마 및 카탈로그만 디스크 영속화, 로우 데이터는 100% RAM 휘발성)**로 설정하고 `SCHEMA_AND_DATA`(WAL + RDB)는 명시적 옵션으로 제공한다.
+2. **전환 세부 원칙 (합의 사항)**:
+   - **원칙 1 (명시적 영속성 옵션 제공)**: `-durability=schema_only|schema_and_data` CLI 플래그 및 `lionsql.json`의 `server.durability` 설정을 도입하여, `memengine`을 사용하면서도 디스크 영속성(`wal.aof` + `tables.mpk`)이 필요한 경우 `-engine=memory -durability=schema_and_data`로 직관적으로 선택할 수 있게 한다.
+   - **원칙 2 (Windows 환경의 기본값 보존 - `[RULE:SafeDefaults]`)**: CGO `WiredTiger`가 내장되지 않아 `memengine`이 기본 단독 엔진으로 동작하는 Windows 환경(`runtime.GOOS == "windows"`)에서는, 아무 플래그 없이 기본 실행했을 때의 데이터 유실을 방지하기 위해 기본값을 `SCHEMA_AND_DATA`(`wal.aof` + `tables.mpk`)로 유지한다 (Windows에서도 `-ephemeral` 또는 `-durability=schema_only` 지정 시 `SCHEMA_ONLY`로 동작).
+   - **원칙 3 (기동 배너 및 로그 가시성 확보)**: `memengine`(`SCHEMA_ONLY`)으로 서버가 기동될 때 콘솔 기동 배너에 `[Storage Mode] In-Memory (SCHEMA_ONLY: Schema & Procedures persisted, Row data ephemeral in RAM)`를 명확히 출력하여 운영자가 현재 영속성 모드를 즉시 인지할 수 있도록 한다.
+3. **1.0 이전 조기 전환(Early Switch) 전략**:
    - 이 기본값 전환은 `1.0-GA` 직전에 급박하게 바꾸는 것이 아니라, **`v0.93.0` 릴리스 직후 차기 마일스톤(`v0.94.0` / `1.0-GA` 초입)에서 가장 먼저 전환**하여 `1.0-GA`에 도달하기 전까지 충분한 통합 테스트 및 운영 검증 기간을 확보한다.
 
 ---
@@ -102,16 +106,23 @@ type SchemaSnapshotContainer struct {
 - 임시 테이블(`#temp`, `##global_temp`, `@table_var` / `__tv_*`)은 `saveSchemaSnapshotLocked()` 대상에서 철저히 제외한다.
 - DDL은 실행 빈도가 매우 낮고 `schemas.mpk` 파일 크기는 수백 개의 테이블이 있어도 수십 KB 이내이므로, `writeFileAtomicDurable`을 통한 동기식 원자적 저장이 수 밀리초 이내에 완료된다.
 
-### 3.3 서버(`cmd/lionsql/server.go`) 및 시스템 카탈로그(`pkg/catalog`) 연동
-`cmd/lionsql/server.go`에서 `-ephemeral` 플래그가 지정되었을 때의 초기화 경로를 다음과 같이 교정한다:
+### 3.3 서버(`cmd/lionsql/server.go`), 설정(`pkg/config`) 및 시스템 카탈로그(`pkg/catalog`) 연동
+`v0.94.0` 전환 시 `pkg/config/config.go`와 `cmd/lionsql/server.go`의 초기화 경로를 다음과 같이 구성한다:
 
-1. **데이터 디렉토리 및 디렉토리 락(`dirlock`) 유지**:
-   - `cfg.Server.DataDir`가 지정되어 있으면 `-ephemeral` 모드에서도 `dirlock.Acquire(cfg.Server.DataDir)`를 획득하여, 두 프로세스가 동시에 동일한 디렉토리의 `schemas.mpk` 및 카탈로그 파일(`procedures.json` 등)을 덮어쓰는 경쟁 조건을 방지한다.
-2. **`memengine` 옵션 전달**:
-   - 기존에는 `cfg.Server.Ephemeral == true`일 때 `opts.DataDir = ""`로 지워버렸으나, 이를 **`opts.DataDir = cfg.Server.DataDir`, `opts.EnableAOF = false`, `opts.EnableRDB = false`**로 전달한다.
-3. **시스템 카탈로그(`pkg/catalog`) 영속화 활성화**:
+1. **CLI 플래그 및 설정(`server.durability`) 추가**:
+   - `-durability=schema_only|schema_and_data` CLI 플래그 및 `cfg.Server.Durability` 필드를 추가한다 (`-ephemeral`은 `-durability=schema_only`의 하위 호환 별칭으로 유지).
+   - **OS별 `memengine` 기본 영속성 결정**:
+     - macOS / Linux (`runtime.GOOS != "windows"`): 기본 스토리지 엔진은 `WiredTiger`이며, 사용자가 `-engine=memory` (`memengine`)를 선택한 경우 기본 `Durability`는 `schema_only`로 동작한다 (`-durability=schema_and_data` 지정 시 WAL + RDB 활성화).
+     - Windows (`runtime.GOOS == "windows"`): `memengine`이 기본 단독 엔진이므로, 명시적 플래그가 없을 때 기본 `Durability`는 `schema_and_data`(`wal.aof` + `tables.mpk`)를 유지하여 데이터 안전성을 보장한다 (`-ephemeral` 또는 `-durability=schema_only` 지정 시 `schema_only`로 동작).
+2. **데이터 디렉토리 및 디렉토리 락(`dirlock`) 유지**:
+   - `cfg.Server.DataDir`가 지정되어 있으면 `SCHEMA_ONLY` 모드에서도 `dirlock.Acquire(cfg.Server.DataDir)`를 획득하여, 두 프로세스가 동시에 동일한 디렉토리의 `schemas.mpk` 및 카탈로그 파일(`procedures.json` 등)을 덮어쓰는 경쟁 조건을 방지한다.
+3. **`memengine` 옵션 전달**:
+   - 기존에는 `cfg.Server.Ephemeral == true`일 때 `opts.DataDir = ""`로 지워버렸으나, `SCHEMA_ONLY` 모드에서는 **`opts.DataDir = cfg.Server.DataDir`, `opts.EnableAOF = false`, `opts.EnableRDB = false`**로 전달한다.
+4. **시스템 카탈로그(`pkg/catalog`) 영속화 활성화**:
    - 기존 `if !cfg.Server.Ephemeral && cfg.Server.DataDir != ""` 조건에서 `!cfg.Server.Ephemeral` 제약을 제거하고 **`if cfg.Server.DataDir != ""`**일 때 항상 `cat.SetPersistenceDir(cfg.Server.DataDir)`를 호출한다.
-   - 이를 통해 `-ephemeral` 모드에서도 **저장 프로시저(`procedures.json`), 뷰(`views.json`), 트리거(`triggers.json`), 시퀀스(`sequences.json`), 사용자定義 타입/함수**가 재기동 후에도 100% 보존된다.
+   - 이를 통해 `SCHEMA_ONLY` 모드에서도 **저장 프로시저(`procedures.json`), 뷰(`views.json`), 트리거(`triggers.json`), 시퀀스(`sequences.json`), 사용자 정의 타입/함수**가 재기동 후에도 100% 보존된다.
+5. **기동 배너 및 로그 가시성**:
+   - `SCHEMA_ONLY` 모드로 기동 시 콘솔 기동 배너에 `[Storage Mode] In-Memory (SCHEMA_ONLY: Schema & Procedures persisted, Row data ephemeral in RAM)`를 명확히 출력한다.
 
 ---
 
@@ -125,9 +136,10 @@ type SchemaSnapshotContainer struct {
 3. `ddl.go` 및 `ddl_alter.go`의 `CreateTable`, `DropTable`, `RenameTable`, `CreateIndex`, `DropIndex`, `AlterTable`에서 `!e.opts.EnableAOF && !e.opts.EnableRDB && e.dataDir != ""`일 때 `saveSchemaSnapshotLocked()`를 호출(실패 시 인메모리 DDL 상태 롤백 보장).
 4. `Close()` 시에도 Ephemeral Schema-Only 모드(`e.dataDir != ""`)면 `saveSchemaSnapshotLocked()`를 호출하여 스키마 일관성 보장.
 
-### Step 2: `cmd/lionsql/server.go` 연동
-1. `-ephemeral` 모드에서도 `opts.DataDir = cfg.Server.DataDir`를 유지하고 `cat.SetPersistenceDir(cfg.Server.DataDir)`를 활성화.
-2. 기동 배너 및 로그 메시지를 `"EPHEMERAL SCHEMA_ONLY mode (persistent schema & catalog, pure in-memory ephemeral rows)"`로 명확히 표시.
+### Step 2: `pkg/config` 및 `cmd/lionsql/server.go` 연동
+1. `-durability=schema_only|schema_and_data` 플래그 및 OS별 기본값(macOS/Linux `memengine` 기본 `schema_only`, Windows 기본 `schema_and_data`) 반영.
+2. `SCHEMA_ONLY` 모드에서도 `opts.DataDir = cfg.Server.DataDir`를 유지하고 `cat.SetPersistenceDir(cfg.Server.DataDir)`를 활성화.
+3. 기동 배너 및 로그 메시지를 `[Storage Mode] In-Memory (SCHEMA_ONLY: Schema & Procedures persisted, Row data ephemeral in RAM)`로 명확히 표시.
 
 ### Step 3: 단위 및 통합 회귀 테스트 작성 (`pkg/storage/memengine/ephemeral_test.go`)
 1. **`TestEphemeralEngine_SchemaPersistsAcrossRestartWithZeroRows`**:
