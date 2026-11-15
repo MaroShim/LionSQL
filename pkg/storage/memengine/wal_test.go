@@ -3,8 +3,10 @@ package memengine
 import (
 	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -548,9 +550,9 @@ func TestWAL_Regression_P0_03_MidFileCorruptionDoesNotTruncateValidTail(t *testi
 		t.Fatalf("ReadFile failed: %v", err)
 	}
 
-	// Record 1 starts at offset 0. Frame length is 4 bytes BigEndian.
+	// Record 1 starts at offset 0. Frame header is 8 bytes (4-byte length + 4-byte CRC32).
 	rec1Len := binary.BigEndian.Uint32(data[0:4])
-	rec2Offset := 4 + rec1Len
+	rec2Offset := walFrameHeaderSize + rec1Len
 
 	// Corrupt record 2's frame length to 0xFFFFFFFF (> 64MB)
 	binary.BigEndian.PutUint32(data[rec2Offset:rec2Offset+4], 0xFFFFFFFF)
@@ -649,6 +651,275 @@ func TestWAL_Regression_P0_03_TailTornWriteTruncatesCleanly(t *testing.T) {
 	if afterStat.Size() != validSize {
 		t.Fatalf("tail torn garbage was not truncated cleanly! want %d, got %d", validSize, afterStat.Size())
 	}
+
+	// Subcase B: Append a full 8-byte header (declaring 64 bytes payload) + only 5 payload bytes (incomplete payload write)
+	f2, err := os.OpenFile(aofPath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatalf("OpenFile failed: %v", err)
+	}
+	var tornFrame [walFrameHeaderSize + 5]byte
+	binary.BigEndian.PutUint32(tornFrame[0:4], 64)
+	binary.BigEndian.PutUint32(tornFrame[4:8], 0xCAFEBABE)
+	copy(tornFrame[8:], []byte{1, 2, 3, 4, 5})
+	if _, err := f2.Write(tornFrame[:]); err != nil {
+		t.Fatalf("Write torn payload failed: %v", err)
+	}
+	f2.Close()
+
+	maxLSN2, replayErr2 := ReplayWAL(aofPath, func(rec WALRecord) error {
+		return nil
+	})
+	if replayErr2 != nil {
+		t.Fatalf("expected clean recovery on incomplete tail payload, got err: %v", replayErr2)
+	}
+	if maxLSN2 != 2 {
+		t.Fatalf("expected maxLSN=2, got %d", maxLSN2)
+	}
+	afterStat2, err := os.Stat(aofPath)
+	if err != nil {
+		t.Fatalf("Stat after second replay failed: %v", err)
+	}
+	if afterStat2.Size() != validSize {
+		t.Fatalf("incomplete tail payload was not truncated cleanly! want %d, got %d", validSize, afterStat2.Size())
+	}
 }
+
+func TestWAL_CorruptedLastFrameFullLengthFailsClosed(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lionsql_wal_last_corrupt_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	aofPath := filepath.Join(tempDir, "wal.aof")
+	wal, err := NewWALWriter(aofPath, FsyncAlways)
+	if err != nil {
+		t.Fatalf("NewWALWriter failed: %v", err)
+	}
+
+	// Write 2 valid records
+	for i := int64(1); i <= 2; i++ {
+		rec := WALRecord{
+			LSN: i,
+			Ops: []WALOp{
+				{Type: OpInsert, Table: "t", Record: storage.Record{"id": storage.IntValue(i), "name": storage.StringValue("intact_value")}},
+			},
+		}
+		if err := wal.Append(rec); err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
+	}
+	if err := wal.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	origData, err := os.ReadFile(aofPath)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
+	origSize := int64(len(origData))
+
+	rec1Len := binary.BigEndian.Uint32(origData[0:4])
+	rec2Offset := int(walFrameHeaderSize + rec1Len)
+	rec2Len := binary.BigEndian.Uint32(origData[rec2Offset : rec2Offset+4])
+	if int64(rec2Offset+walFrameHeaderSize+int(rec2Len)) != origSize {
+		t.Fatalf("expected rec2 to end exactly at fileSize %d", origSize)
+	}
+
+	// Case 1: Bit-rot inside the last frame's payload (full frame length present on disk -> CRC32 mismatch).
+	// Must fail-closed and MUST NOT truncate the last frame.
+	corruptCRCData := append([]byte(nil), origData...)
+	corruptCRCData[len(corruptCRCData)-1] ^= 0xFF
+	if err := os.WriteFile(aofPath, corruptCRCData, 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	_, err = ReplayWAL(aofPath, func(rec WALRecord) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Fatalf("expected checksum mismatch error on corrupted last frame, got: %v", err)
+	}
+	stat1, err := os.Stat(aofPath)
+	if err != nil {
+		t.Fatalf("Stat failed: %v", err)
+	}
+	if stat1.Size() != origSize {
+		t.Fatalf("file was illegally truncated on last-frame CRC corruption! want %d, got %d", origSize, stat1.Size())
+	}
+
+	// Case 2: Invalid MessagePack payload on the last frame with matching CRC32 (full frame length present on disk).
+	// Must still fail-closed on unmarshal error and MUST NOT truncate the last frame.
+	corruptMsgPackData := append([]byte(nil), origData...)
+	payloadStart := rec2Offset + walFrameHeaderSize
+	for i := payloadStart; i < len(corruptMsgPackData); i++ {
+		corruptMsgPackData[i] = 0xC1 // 0xC1 is the permanently never-used byte in MessagePack spec
+	}
+	forgedCRC := crc32.ChecksumIEEE(corruptMsgPackData[payloadStart:])
+	binary.BigEndian.PutUint32(corruptMsgPackData[rec2Offset+4:rec2Offset+8], forgedCRC)
+	if err := os.WriteFile(aofPath, corruptMsgPackData, 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	_, err = ReplayWAL(aofPath, func(rec WALRecord) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "corrupted payload unmarshal") {
+		t.Fatalf("expected corrupted payload unmarshal error on last frame, got: %v", err)
+	}
+	stat2, err := os.Stat(aofPath)
+	if err != nil {
+		t.Fatalf("Stat failed: %v", err)
+	}
+	if stat2.Size() != origSize {
+		t.Fatalf("file was illegally truncated on last-frame unmarshal corruption! want %d, got %d", origSize, stat2.Size())
+	}
+
+	// Case 3: Complete 8-byte header at physical tail with invalid frameLen == 0.
+	// Must fail-closed with corrupted frame length error and MUST NOT truncate.
+	corruptHdrData := append([]byte(nil), origData[:rec2Offset]...)
+	var badHdr [walFrameHeaderSize]byte
+	binary.BigEndian.PutUint32(badHdr[0:4], 0)
+	binary.BigEndian.PutUint32(badHdr[4:8], 0)
+	corruptHdrData = append(corruptHdrData, badHdr[:]...)
+	if err := os.WriteFile(aofPath, corruptHdrData, 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	_, err = ReplayWAL(aofPath, func(rec WALRecord) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "corrupted frame length") {
+		t.Fatalf("expected corrupted frame length error, got: %v", err)
+	}
+	stat3, err := os.Stat(aofPath)
+	if err != nil {
+		t.Fatalf("Stat failed: %v", err)
+	}
+	if stat3.Size() != int64(len(corruptHdrData)) {
+		t.Fatalf("file was illegally truncated on corrupt tail header! want %d, got %d", len(corruptHdrData), stat3.Size())
+	}
+}
+
+func TestMemEngine_DoubleCrashDuringCompactionRecoveryPreservesWAL(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "lionsql_wal_double_crash_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	eng := New()
+	eng.SetFsyncPolicy(FsyncAlways)
+	if err := eng.Open(tempDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+
+	schema := &storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "amount", Type: storage.TypeInt},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+	for i := int64(1); i <= 10; i++ {
+		tx, _ := sess.BeginTx(storage.TxOptions{})
+		_ = tx.Insert("orders", storage.Record{"id": storage.IntValue(i), "amount": storage.IntValue(i * 100)})
+		if err := tx.Commit(); err != nil {
+			t.Fatalf("commit %d failed: %v", i, err)
+		}
+	}
+
+	// Simulate Crash #1 occurring during RewriteAOF right after rotating wal.aof -> wal.aof.compacting
+	// (before tables.mpk snapshot is written) and after 5 more commits (11..15) land in the new wal.aof.
+	compactingPath := filepath.Join(tempDir, "wal.aof.compacting")
+	aofPath := filepath.Join(tempDir, "wal.aof")
+	if err := eng.wal.Rotate(compactingPath); err != nil {
+		t.Fatalf("Rotate failed: %v", err)
+	}
+	for i := int64(11); i <= 15; i++ {
+		tx, _ := sess.BeginTx(storage.TxOptions{})
+		_ = tx.Insert("orders", storage.Record{"id": storage.IntValue(i), "amount": storage.IntValue(i * 100)})
+		if err := tx.Commit(); err != nil {
+			t.Fatalf("commit %d failed: %v", i, err)
+		}
+	}
+	// Release OS handles without calling eng.Close() (so tables.mpk is NOT written yet)
+	_ = eng.wal.Close()
+	if eng.dirLock != nil {
+		_ = eng.dirLock.Release()
+	}
+
+	// Subcase A: Suppose wal.aof has a corrupted frame so recovery attempt #1 fails midway after replaying wal.aof.compacting.
+	// wal.aof.compacting MUST NOT be deleted before recovery and snapshot persistence succeed!
+	validAOFBytes, err := os.ReadFile(aofPath)
+	if err != nil {
+		t.Fatalf("ReadFile(wal.aof) failed: %v", err)
+	}
+	corruptedAOF := append([]byte(nil), validAOFBytes...)
+	corruptedAOF[len(corruptedAOF)-1] ^= 0xFF
+	if err := os.WriteFile(aofPath, corruptedAOF, 0644); err != nil {
+		t.Fatalf("WriteFile corrupted wal.aof failed: %v", err)
+	}
+
+	failedEng := New()
+	if err := failedEng.Open(tempDir); err == nil {
+		_ = failedEng.Close()
+		t.Fatalf("expected Open to fail on corrupted wal.aof")
+	}
+	// Verify wal.aof.compacting still exists on disk and was NOT prematurely deleted!
+	if _, err := os.Stat(compactingPath); err != nil {
+		t.Fatalf("wal.aof.compacting was prematurely deleted before recovery completed: %v", err)
+	}
+
+	// Restore intact wal.aof and run Recovery #1
+	if err := os.WriteFile(aofPath, validAOFBytes, 0644); err != nil {
+		t.Fatalf("WriteFile restored wal.aof failed: %v", err)
+	}
+	recEng1 := New()
+	if err := recEng1.Open(tempDir); err != nil {
+		t.Fatalf("Recovery #1 Open failed: %v", err)
+	}
+
+	// Verify tables.mpk was durably created during Open() before wal.aof.compacting was removed
+	if _, err := os.Stat(filepath.Join(tempDir, "tables.mpk")); err != nil {
+		t.Fatalf("expected tables.mpk to be persisted before retiring wal.aof.compacting: %v", err)
+	}
+	if _, err := os.Stat(compactingPath); !os.IsNotExist(err) {
+		t.Fatalf("expected wal.aof.compacting to be retired after tables.mpk was persisted")
+	}
+
+	// Simulate Crash #2 immediately after Open() returns (without calling recEng1.Close()!)
+	if recEng1.wal != nil {
+		_ = recEng1.wal.Close()
+	}
+	if recEng1.dirLock != nil {
+		_ = recEng1.dirLock.Release()
+	}
+
+	// Recovery #2: Reopen a 3rd engine instance and verify all 15 orders (1..15) are 100% preserved!
+	recEng2 := New()
+	if err := recEng2.Open(tempDir); err != nil {
+		t.Fatalf("Recovery #2 Open after double crash failed: %v", err)
+	}
+	defer recEng2.Close()
+
+	rSess, _ := recEng2.NewSession()
+	defer rSess.Close()
+	rTx, _ := rSess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer rTx.Rollback()
+
+	cur, err := rTx.Scan("orders")
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	count := 0
+	for cur.Next() {
+		count++
+	}
+	if count != 15 {
+		t.Fatalf("expected all 15 orders to survive double crash during compaction recovery, got %d", count)
+	}
+}
+
+
 
 

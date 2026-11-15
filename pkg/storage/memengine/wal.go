@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"log"
 	"os"
@@ -158,7 +159,11 @@ func (w *WALWriter) Append(rec WALRecord) error {
 	return w.syncForPolicy(seq)
 }
 
-// writeFrame marshals rec and writes a single length-prefixed frame to the OS file buffer
+// walFrameHeaderSize is the 8-byte header size for each WAL frame:
+// [4-byte big-endian payload length | 4-byte big-endian IEEE CRC32 checksum].
+const walFrameHeaderSize = 8
+
+// writeFrame marshals rec and writes a single length+CRC32-prefixed frame to the OS file buffer
 // under w.mu, returning the assigned write sequence number without calling fsync.
 func (w *WALWriter) writeFrame(rec WALRecord) (int64, error) {
 	payload, err := MarshalMsgPack(rec)
@@ -166,11 +171,13 @@ func (w *WALWriter) writeFrame(rec WALRecord) (int64, error) {
 		return 0, fmt.Errorf("failed to marshal MessagePack WAL record: %w", err)
 	}
 
-	// Build single contiguous frame [4-byte big-endian length | payload] outside the lock
-	// so we issue a single write(2) syscall under w.mu.
-	frame := make([]byte, 4+len(payload))
-	binary.BigEndian.PutUint32(frame[:4], uint32(len(payload)))
-	copy(frame[4:], payload)
+	// Build single contiguous frame [4-byte big-endian length | 4-byte CRC32 | payload]
+	// outside the lock so we issue a single write(2) syscall under w.mu.
+	checksum := crc32.ChecksumIEEE(payload)
+	frame := make([]byte, walFrameHeaderSize+len(payload))
+	binary.BigEndian.PutUint32(frame[0:4], uint32(len(payload)))
+	binary.BigEndian.PutUint32(frame[4:8], checksum)
+	copy(frame[walFrameHeaderSize:], payload)
 
 	w.mu.Lock()
 	if w.closed || w.file == nil {
@@ -297,6 +304,11 @@ func (w *WALWriter) Rotate(rotatedPath string) error {
 	w.file = newFile
 	w.bytesTotal = 0
 	w.syncedSeq = w.writeSeq
+
+	// 5. Fsync parent directory so the rename (w.path -> rotatedPath) and new file entry are durable on disk
+	if err := syncDir(filepath.Dir(w.path)); err != nil {
+		return fmt.Errorf("failed to sync WAL directory after rotation: %w", err)
+	}
 	return nil
 }
 
@@ -380,20 +392,20 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 	fileSize := stat.Size()
 	isTailTorn := false
 
-	// Binary MessagePack length-prefixed frames
+	// Binary MessagePack length+CRC32-prefixed frames:
+	// [4-byte BigEndian frameLen | 4-byte BigEndian CRC32 | payload (frameLen bytes)]
 	reader := bufio.NewReaderSize(file, 64*1024)
 	frameIdx := 0
 
 	for {
-		var lenBuf [4]byte
-		n, err := io.ReadFull(reader, lenBuf[:])
+		var hdrBuf [walFrameHeaderSize]byte
+		n, err := io.ReadFull(reader, hdrBuf[:])
 		if err == io.EOF {
 			// Case 1: Clean EOF exactly on record boundary.
 			break
 		}
 		if err == io.ErrUnexpectedEOF {
-			// Case 2-a: Header incomplete at tail.
-			// Must verify that this is truly the physical end of file.
+			// Case 2-a: Incomplete 8-byte header at physical tail (1..7 bytes written before crash).
 			if validOffset+int64(n) == fileSize {
 				isTailTorn = true
 				break
@@ -405,39 +417,39 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 			return maxLSN, fmt.Errorf("wal: fatal I/O read error at offset %d: %w", validOffset, err)
 		}
 
-		frameLen := binary.BigEndian.Uint32(lenBuf[:])
+		frameLen := binary.BigEndian.Uint32(hdrBuf[0:4])
+		expectedCRC := binary.BigEndian.Uint32(hdrBuf[4:8])
 		if frameLen == 0 || frameLen > 64*1024*1024 { // Cap at 64MB per tx batch
-			// Check if this is an incomplete torn frame at the physical tail of the file.
-			if validOffset+4 == fileSize {
-				isTailTorn = true
-				break
-			}
-			// Case 4: Mid-file corruption. Never truncate intact subsequent tail!
+			// Case 4: Invalid/corrupted frame length in complete 8-byte header.
+			// Never mistake a corrupt header length for a torn write or truncate the file.
 			return maxLSN, fmt.Errorf("wal: corrupted frame length %d at offset %d (file size %d)", frameLen, validOffset, fileSize)
 		}
 
 		payload := make([]byte, frameLen)
 		pn, err := io.ReadFull(reader, payload)
 		if err != nil {
-			if (err == io.EOF || err == io.ErrUnexpectedEOF) && validOffset+4+int64(pn) == fileSize {
-				// Case 2-b: Torn write in payload at exact physical tail.
+			if (err == io.EOF || err == io.ErrUnexpectedEOF) && validOffset+walFrameHeaderSize+int64(pn) == fileSize {
+				// Case 2-b: True incomplete/torn write in payload at exact physical tail (fewer than frameLen bytes exist).
 				isTailTorn = true
 				break
 			}
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				return maxLSN, fmt.Errorf("wal: premature EOF reading payload at offset %d (file size %d)", validOffset+4, fileSize)
+				return maxLSN, fmt.Errorf("wal: premature EOF reading payload at offset %d (file size %d)", validOffset+walFrameHeaderSize, fileSize)
 			}
-			return maxLSN, fmt.Errorf("wal: fatal I/O read error for payload at offset %d: %w", validOffset+4, err)
+			return maxLSN, fmt.Errorf("wal: fatal I/O read error for payload at offset %d: %w", validOffset+walFrameHeaderSize, err)
+		}
+
+		// All 8 + frameLen bytes of the frame are completely present on disk (NOT an incomplete write).
+		// Any CRC32 mismatch or MessagePack unmarshal failure from this point on is genuine data corruption,
+		// even on the final frame of the file, and MUST fail-closed without truncating ([RULE:ExplicitError], Invariant 9).
+		actualCRC := crc32.ChecksumIEEE(payload)
+		if actualCRC != expectedCRC {
+			return maxLSN, fmt.Errorf("wal: frame checksum mismatch at offset %d (expected 0x%08x, got 0x%08x, file size %d)", validOffset, expectedCRC, actualCRC, fileSize)
 		}
 
 		var rec WALRecord
 		if err := UnmarshalMsgPack(payload, &rec); err != nil {
-			// Corrupted payload. Check if this is the physical tail.
-			if validOffset+4+int64(frameLen) == fileSize {
-				isTailTorn = true
-				break
-			}
-			return maxLSN, fmt.Errorf("wal: corrupted payload unmarshal at offset %d (file size %d): %w", validOffset+4, fileSize, err)
+			return maxLSN, fmt.Errorf("wal: corrupted payload unmarshal at offset %d (file size %d): %w", validOffset+walFrameHeaderSize, fileSize, err)
 		}
 
 		if err := applyFn(rec); err != nil {
@@ -448,7 +460,7 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 		if rec.LSN > maxLSN {
 			maxLSN = rec.LSN
 		}
-		validOffset += int64(4 + frameLen)
+		validOffset += int64(walFrameHeaderSize + frameLen)
 	}
 
 	// Strictly restrict truncation to verified tail torn writes.
@@ -456,6 +468,9 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 	if isTailTorn && fileSize > validOffset {
 		if err := file.Truncate(validOffset); err != nil {
 			return maxLSN, fmt.Errorf("wal: failed to truncate torn tail at offset %d: %w", validOffset, err)
+		}
+		if err := file.Sync(); err != nil {
+			return maxLSN, fmt.Errorf("wal: failed to sync WAL after truncating torn tail at offset %d: %w", validOffset, err)
 		}
 	}
 

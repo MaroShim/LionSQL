@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -342,8 +343,13 @@ func (e *Engine) RewriteAOF() error {
 		return fmt.Errorf("AOF rewrite snapshot error: %w", err)
 	}
 
-	// 3. Remove the frozen compacting WAL file after snapshot commitment
-	_ = os.Remove(compactingWAL)
+	// 3. Remove the frozen compacting WAL file ONLY after snapshot file and parent directory are durably synced to disk
+	if err := os.Remove(compactingWAL); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove compacting WAL after snapshot: %w", err)
+	}
+	if err := syncDir(e.dataDir); err != nil {
+		return fmt.Errorf("failed to sync data directory after removing compacting WAL: %w", err)
+	}
 	return nil
 }
 
@@ -362,7 +368,12 @@ func (e *Engine) rewriteAOFLocked() error {
 	if err := e.saveDiskSnapshotLocked(snapLSN); err != nil {
 		return fmt.Errorf("AOF rewrite snapshot error: %w", err)
 	}
-	_ = os.Remove(compactingWAL)
+	if err := os.Remove(compactingWAL); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove compacting WAL after snapshot: %w", err)
+	}
+	if err := syncDir(e.dataDir); err != nil {
+		return fmt.Errorf("failed to sync data directory after removing compacting WAL: %w", err)
+	}
 	return nil
 }
 
@@ -452,10 +463,64 @@ func (e *Engine) saveDiskSnapshotLocked(snapLSN int64) error {
 	tmpFile := filepath.Join(e.dataDir, "tables.mpk.tmp")
 	targetFile := filepath.Join(e.dataDir, "tables.mpk")
 
-	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+	return writeFileAtomicDurable(tmpFile, targetFile, data)
+}
+
+// writeFileAtomicDurable writes data to tmpPath, fsyncs the temporary file so all blocks
+// reach physical storage before the directory rename, atomically renames tmpPath to targetPath,
+// and fsyncs the parent directory so the directory entry update is durable ([RULE:AtomicSaves]).
+func writeFileAtomicDurable(tmpPath, targetPath string, data []byte) error {
+	f, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open temporary snapshot file %q: %w", tmpPath, err)
+	}
+
+	n, writeErr := f.Write(data)
+	if writeErr == nil && n < len(data) {
+		writeErr = fmt.Errorf("short write on temporary snapshot file %q (%d/%d bytes)", tmpPath, n, len(data))
+	}
+	if writeErr != nil {
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to write temporary snapshot file %q: %w", tmpPath, writeErr)
+	}
+
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to fsync temporary snapshot file %q: %w", tmpPath, err)
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to close temporary snapshot file %q: %w", tmpPath, err)
+	}
+
+	if err := os.Rename(tmpPath, targetPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to rename snapshot file %q -> %q: %w", tmpPath, targetPath, err)
+	}
+
+	if err := syncDir(filepath.Dir(targetPath)); err != nil {
+		return fmt.Errorf("failed to fsync parent directory of %q: %w", targetPath, err)
+	}
+	return nil
+}
+
+// syncDir opens a directory and calls Sync() to flush directory entry metadata (rename/remove/create) to disk.
+func syncDir(dirPath string) error {
+	if dirPath == "" || runtime.GOOS == "windows" {
+		return nil
+	}
+	d, err := os.Open(filepath.Clean(dirPath))
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmpFile, targetFile)
+	syncErr := d.Sync()
+	closeErr := d.Close()
+	if syncErr != nil {
+		return syncErr
+	}
+	return closeErr
 }
 
 func (e *Engine) loadDiskLocked() (int64, error) {

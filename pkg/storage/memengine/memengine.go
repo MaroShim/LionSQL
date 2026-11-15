@@ -451,9 +451,9 @@ func (e *Engine) OpenWithOptions(opts Options) (err error) {
 			return fmt.Errorf("failed to create data directory: %w", err)
 		}
 
-		// 1. Load baseline snapshot (RDB) if enabled
+		// 1. Load baseline snapshot (RDB) if enabled or if AOF compaction snapshot exists
 		var snapLSN int64
-		if opts.EnableRDB {
+		if opts.EnableRDB || opts.EnableAOF {
 			var loadErr error
 			snapLSN, loadErr = e.loadDiskLocked()
 			if loadErr != nil {
@@ -474,8 +474,13 @@ func (e *Engine) OpenWithOptions(opts Options) (err error) {
 				return e.applyWALRecordLocked(rec)
 			}
 
-			// If a crash occurred during AOF compaction, replay the compacting WAL first
-			if _, err := os.Stat(compactingPath); err == nil {
+			// If a crash occurred during AOF compaction, replay the compacting WAL first.
+			// CRITICAL ([RULE:AtomicSaves]): Do NOT delete compactingPath until BOTH WAL files are replayed
+			// AND the recovered state is durably persisted (fsynced + renamed + dir-synced) to tables.mpk.
+			// Otherwise, a second crash during recovery would permanently lose compactingPath transactions!
+			_, compactStatErr := os.Stat(compactingPath)
+			hadCompactingWAL := compactStatErr == nil
+			if hadCompactingWAL {
 				maxLSN, rErr := ReplayWAL(compactingPath, replayHandler)
 				if rErr != nil {
 					return fmt.Errorf("compacting WAL replay error: %w", rErr)
@@ -483,7 +488,6 @@ func (e *Engine) OpenWithOptions(opts Options) (err error) {
 				if maxLSN > e.nextLSN.Load() {
 					e.nextLSN.Store(maxLSN)
 				}
-				_ = os.Remove(compactingPath)
 			}
 
 			maxLSN, err := ReplayWAL(aofPath, replayHandler)
@@ -492,6 +496,20 @@ func (e *Engine) OpenWithOptions(opts Options) (err error) {
 			}
 			if maxLSN > e.nextLSN.Load() {
 				e.nextLSN.Store(maxLSN)
+			}
+
+			// If we recovered from an interrupted compaction (wal.aof.compacting), durably persist the
+			// combined recovered state to tables.mpk and fsync the directory BEFORE unlinking wal.aof.compacting.
+			if hadCompactingWAL {
+				if err := e.saveDiskSnapshotLocked(e.nextLSN.Load()); err != nil {
+					return fmt.Errorf("failed to persist recovered snapshot before retiring compacting WAL: %w", err)
+				}
+				if err := os.Remove(compactingPath); err != nil && !os.IsNotExist(err) {
+					return fmt.Errorf("failed to remove retired compacting WAL: %w", err)
+				}
+				if err := syncDir(e.dataDir); err != nil {
+					return fmt.Errorf("failed to sync data directory after retiring compacting WAL: %w", err)
+				}
 			}
 
 			// 3. Open WAL writer for future append-only logging

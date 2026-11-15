@@ -21,7 +21,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
 
 ### Fixed
-- **Storage & Durability (`pkg/storage/memengine/persistence.go`, `memengine.go`)**:
+- **Storage & Durability (`pkg/storage/memengine/wal.go`, `persistence.go`, `memengine.go`)**:
+  - Upgrade WAL frame layout to an 8-byte header (`[4-byte BigEndian length | 4-byte BigEndian IEEE CRC32 | payload]`) and strictly distinguish incomplete tail torn writes (`io.ErrUnexpectedEOF` where fewer bytes than `8` or `frameLen` exist at EOF) from full-frame data corruption in `ReplayWAL`, failing closed without truncating when a complete frame has a CRC32 mismatch, invalid frame length, or MessagePack unmarshal error (`[RULE:ExplicitError]`, Invariant 9).
+  - Enforce durable atomic snapshot persistence (`writeFileAtomicDurable`) and double-crash recovery safety: explicitly call `f.Sync()` on `tables.mpk.tmp` before `os.Rename`, call `syncDir(e.dataDir)` after `os.Rename` and WAL rotation/removal, and retain `wal.aof.compacting` during crash recovery until both `wal.aof.compacting` and `wal.aof` are replayed and the combined state is durably persisted to `tables.mpk` (`[RULE:AtomicSaves]`).
   - Enforce fail-closed startup when RDB snapshot file (`tables.mpk`) exists on disk but is corrupted, truncated (0-byte), or unreadable, returning an explicit error instead of silently booting with an empty catalog and risking overwriting committed data (`[RULE:ExplicitError]`, `[RULE:AtomicSaves]`).
   - Guarantee deterministic resource cleanup (`e.wal.Close()`, `e.dirLock.Release()`) via `defer` when `memengine.OpenWithOptions` fails midway through initialization, eliminating leaked file descriptors (`[RULE:HandleHygiene]`, `[RULE:DoubleCloseSafety]`).
 - **Configuration (`pkg/config/config.go`)**:

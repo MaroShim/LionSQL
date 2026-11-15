@@ -409,8 +409,10 @@ func runServer(args []string) error {
 		) {
 			return nil
 		}
+	}
 
-		// 1. Acquire OS-level exclusive directory lock to prevent TOCTOU concurrent instances
+	// Acquire OS-level exclusive directory lock for persistent server processes (both foreground and daemon child worker)
+	if !cfg.Server.Ephemeral && cfg.Server.DataDir != "" {
 		dirLock, lockErr := dirlock.Acquire(cfg.Server.DataDir)
 		if lockErr != nil {
 			fmt.Printf("\n[LionSQL] Error: Another LionSQL server or process is already running on data directory '%s'.\n", cfg.Server.DataDir)
@@ -422,24 +424,28 @@ func runServer(args []string) error {
 			os.Exit(1)
 		}
 		defer dirLock.Release()
+	}
 
-		// Prevent multiple server instances from running concurrently on the same data directory
-		if existingPid, err := readPidFile(resolvedPidFile); err == nil && isProcessAlive(existingPid) && existingPid != os.Getpid() {
-			fmt.Printf("\n[LionSQL] Error: Another LionSQL server instance (PID %d) is already running for data directory '%s'.\n", existingPid, cfg.Server.DataDir)
-			fmt.Println("         To view status:  lionsql status")
-			fmt.Println("         To stop daemon:  lionsql stop")
-			fmt.Println("         To restart:      lionsql restart")
-			fmt.Println()
-			os.Exit(1)
-		}
-
-		// Record PID for this foreground process atomically ([RULE:AtomicSaves], Scope-130)
-		_ = writePidFileAtomic(resolvedPidFile, os.Getpid())
-		defer func() {
-			if curPid, err := readPidFile(resolvedPidFile); err == nil && curPid == os.Getpid() {
-				_ = os.Remove(resolvedPidFile)
+	if !*isChildWorker {
+		if !cfg.Server.Ephemeral && cfg.Server.DataDir != "" {
+			// Prevent multiple server instances from running concurrently on the same data directory
+			if existingPid, err := readPidFile(resolvedPidFile); err == nil && isProcessAlive(existingPid) && existingPid != os.Getpid() {
+				fmt.Printf("\n[LionSQL] Error: Another LionSQL server instance (PID %d) is already running for data directory '%s'.\n", existingPid, cfg.Server.DataDir)
+				fmt.Println("         To view status:  lionsql status")
+				fmt.Println("         To stop daemon:  lionsql stop")
+				fmt.Println("         To restart:      lionsql restart")
+				fmt.Println()
+				os.Exit(1)
 			}
-		}()
+
+			// Record PID for this foreground process atomically ([RULE:AtomicSaves], Scope-130)
+			_ = writePidFileAtomic(resolvedPidFile, os.Getpid())
+			defer func() {
+				if curPid, err := readPidFile(resolvedPidFile); err == nil && curPid == os.Getpid() {
+					_ = os.Remove(resolvedPidFile)
+				}
+			}()
+		}
 
 		// Pre-flight port collision verification for server mode
 		if *backupTarget == "" && *restoreSource == "" {
