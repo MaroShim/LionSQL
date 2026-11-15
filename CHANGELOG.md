@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
 
 ### Fixed
+- **Storage & Engine (`FIX-MEMENGINE-SERIALIZATION-ERROR-HANDLING-1`, tx.go:1737, 2052)**:
+  - Eliminate silent swallowing of deserialization and serialization errors in `pkg/storage/memengine/tx.go` per `[RULE:ExplicitError]`:
+    1. Fix `IndexOnlyScan` (line 1737) `resolver` to reject corrupt entries (`return nil, false`) instead of silently ignoring `materializeWithLayout` errors and returning truncated single-column partial records for composite indexes.
+    2. Fix `Commit()` Step 6 (line 2052) to fail-closed with `rollbackApplied()` on table lookup failures and partition key computation errors instead of silently skipping via `continue`.
+    3. Fix `Commit()` Stage 3.1 pre-encoding and Stage 7 WALOp construction to surface `storage.EncodeRow` serialization errors with clean table/shard lock teardown, preventing nil payload emission to WAL.
 - **Engine & Query Execution (`FIX-TSQL-LIKE-ESCAPE-BRACKET-1`, `FIX-TSQL-DEFAULT-VAR-LENGTH-1`)**:
   - Implement full Microsoft T-SQL `ESCAPE` clause syntax in Pratt parser, AST, compiler, and VDBE runtime (`LIKE <pattern> ESCAPE <char>`), with strict single-character length validation (`pkg/sqlutil/like.go`, `pkg/proc/compiler.go`, `pkg/proc/runtime/vm_dispatcher.go`).
   - Enforce case-sensitive escape rune matching and fail-closed handling for unclosed wildcard brackets (`[`) in `sqlutil.MatchLike`.

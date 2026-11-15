@@ -1742,11 +1742,14 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 		if len(idxData.Schema.Columns) > 1 {
 			if td != nil {
 				if entry, curSch, curLay, exists := td.getEntryWithLayout(pk); exists {
-					if row, err := entry.materializeWithLayout(td.mode, curSch, curLay, nil); err == nil {
-						return curSch.RowToRecord(row), true
+					row, err := entry.materializeWithLayout(td.mode, curSch, curLay, nil)
+					if err != nil {
+						return nil, false
 					}
+					return curSch.RowToRecord(row), true
 				}
 			}
+			return nil, false
 		}
 		rec := make(storage.Record, len(idxData.Schema.Columns)+len(idxData.Schema.IncludeCols)+1)
 		if len(idxData.Schema.Columns) == 1 {
@@ -1809,7 +1812,7 @@ func (tx *Transaction) Commit() error {
 			var err error
 			td, err = tx.getTableLocked(ch.table)
 			if err != nil {
-				continue
+				return err
 			}
 			sIdx = hashShard(ch.key)
 		}
@@ -1844,6 +1847,24 @@ func (tx *Transaction) Commit() error {
 		tx.tableSet[tName].mu.RLock()
 	}
 
+	var shardsLocked bool
+	var unlocked bool
+	unlockAll := func() {
+		if unlocked {
+			return
+		}
+		unlocked = true
+		if shardsLocked {
+			for i := len(tx.neededShards) - 1; i >= 0; i-- {
+				tx.neededShards[i].td.shards[tx.neededShards[i].shardIdx].mu.Unlock()
+			}
+		}
+		for i := len(tx.tableNames) - 1; i >= 0; i-- {
+			tx.tableSet[tx.tableNames[i]].mu.RUnlock()
+		}
+	}
+	defer unlockAll()
+
 	// 3.1 Pre-encode WAL payloads BEFORE acquiring shard exclusive locks (Stage 4 Out-of-Lock WAL Encoding)
 	// Eliminates CPU-heavy MsgPack row serialization while table shards are locked.
 	needWAL := (tx.engine.wal != nil || tx.engine.walHook != nil)
@@ -1857,10 +1878,12 @@ func (tx *Transaction) Commit() error {
 				td = tx.tableSet[ch.table]
 			}
 			if td != nil {
-				if rawData, err := storage.EncodeRow(&td.Schema, ch.row); err == nil {
-					ch.walData = rawData
-					tx.changes[chKey] = ch
+				rawData, err := storage.EncodeRow(&td.Schema, ch.row)
+				if err != nil {
+					return fmt.Errorf("memengine: failed to serialize row for WAL table %s: %w", ch.table, err)
 				}
+				ch.walData = rawData
+				tx.changes[chKey] = ch
 			}
 		}
 	}
@@ -1869,21 +1892,7 @@ func (tx *Transaction) Commit() error {
 	for i := range tx.neededShards {
 		tx.neededShards[i].td.shards[tx.neededShards[i].shardIdx].mu.Lock()
 	}
-
-	var unlocked bool
-	unlockAll := func() {
-		if unlocked {
-			return
-		}
-		unlocked = true
-		for i := len(tx.neededShards) - 1; i >= 0; i-- {
-			tx.neededShards[i].td.shards[tx.neededShards[i].shardIdx].mu.Unlock()
-		}
-		for i := len(tx.tableNames) - 1; i >= 0; i-- {
-			tx.tableSet[tx.tableNames[i]].mu.RUnlock()
-		}
-	}
-	defer unlockAll()
+	shardsLocked = true
 
 	// 5. Verify OCC version conflicts and unique constraints
 	var seenUniqueKeys map[string]map[string]string // lazy allocated only when unique indexes exist
@@ -1895,7 +1904,7 @@ func (tx *Transaction) Commit() error {
 			var err error
 			td, err = tx.getTableLocked(ch.table)
 			if err != nil {
-				continue
+				return err
 			}
 			sIdx = hashShard(ch.key)
 		}
@@ -2056,7 +2065,8 @@ func (tx *Transaction) Commit() error {
 			var err error
 			td, err = tx.getTableLocked(ch.table)
 			if err != nil {
-				continue
+				rollbackApplied()
+				return err
 			}
 			sIdx = hashShard(ch.key)
 		}
@@ -2081,9 +2091,12 @@ func (tx *Transaction) Commit() error {
 				sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
 			}
 			if td.Schema.IsPartitioned() {
-				if partID, err := td.Schema.ComputePartitionKeyFromRow(ch.row); err == nil {
-					td.addPartitionKey(partID, ch.key)
+				partID, err := td.Schema.ComputePartitionKeyFromRow(ch.row)
+				if err != nil {
+					rollbackApplied()
+					return err
 				}
+				td.addPartitionKey(partID, ch.key)
 			}
 			for _, idxData := range td.Indexes {
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
@@ -2107,9 +2120,19 @@ func (tx *Transaction) Commit() error {
 			if td.Schema.IsPartitioned() {
 				var oldPartID, newPartID string
 				if hadOld {
-					oldPartID, _ = td.Schema.ComputePartitionKeyFromRow(oldRow)
+					var err error
+					oldPartID, err = td.Schema.ComputePartitionKeyFromRow(oldRow)
+					if err != nil {
+						rollbackApplied()
+						return err
+					}
 				}
-				newPartID, _ = td.Schema.ComputePartitionKeyFromRow(ch.row)
+				var err error
+				newPartID, err = td.Schema.ComputePartitionKeyFromRow(ch.row)
+				if err != nil {
+					rollbackApplied()
+					return err
+				}
 				if oldPartID != newPartID {
 					if oldPartID != "" {
 						td.removePartitionKey(oldPartID, ch.key)
@@ -2134,9 +2157,12 @@ func (tx *Transaction) Commit() error {
 		case changeDelete:
 			delete(sh.entries, ch.key)
 			if td.Schema.IsPartitioned() && hadOld {
-				if partID, err := td.Schema.ComputePartitionKeyFromRow(oldRow); err == nil {
-					td.removePartitionKey(partID, ch.key)
+				partID, err := td.Schema.ComputePartitionKeyFromRow(oldRow)
+				if err != nil {
+					rollbackApplied()
+					return err
 				}
+				td.removePartitionKey(partID, ch.key)
 			}
 			if hadOld {
 				for _, idxData := range td.Indexes {
@@ -2179,11 +2205,25 @@ func (tx *Transaction) Commit() error {
 			if rawData == nil && ch.kind != changeDelete {
 				td := ch.td
 				if td == nil {
-					td, _ = tx.getTableLocked(ch.table)
+					var err error
+					td, err = tx.getTableLocked(ch.table)
+					if err != nil {
+						rollbackApplied()
+						return err
+					}
 				}
 				if td != nil {
-					rawData, _ = storage.EncodeRow(&td.Schema, ch.row)
+					var err error
+					rawData, err = storage.EncodeRow(&td.Schema, ch.row)
+					if err != nil {
+						rollbackApplied()
+						return fmt.Errorf("memengine: failed to serialize row for WAL table %s: %w", ch.table, err)
+					}
 				}
+			}
+			if rawData == nil && ch.kind != changeDelete {
+				rollbackApplied()
+				return fmt.Errorf("memengine: missing serialized row data for WAL table %s", ch.table)
 			}
 			ops = append(ops, WALOp{
 				Type:    opType,

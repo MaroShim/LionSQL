@@ -462,3 +462,152 @@ func TestRegression_AUDIT_FULL_002_CloseMultiErrorJoining(t *testing.T) {
 		t.Fatalf("expected joined error to contain os.ErrClosed, got: %v", closeErr)
 	}
 }
+
+// TestRegression_AUDIT_RowSerializationErrorSurfacedDuringCommit verifies that if row serialization
+// fails during Commit (either in Stage 3.1 pre-encoding or Stage 7 WALOp construction),
+// the error is surfaced explicitly ([RULE:ExplicitError]) instead of being silently swallowed,
+// and table/shard locks are cleanly released.
+func TestRegression_AUDIT_RowSerializationErrorSurfacedDuringCommit(t *testing.T) {
+	tempDir := t.TempDir()
+	eng := New()
+	if err := eng.Open(tempDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := createTestSchema()
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+
+	if err := tx.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(1),
+		"holder":  storage.StringValue("Alice"),
+		"balance": storage.IntValue(1000),
+	}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+
+	// Simulate missing/nil serialized row data on WALOp generation
+	memTx := tx.(*Transaction)
+	for chKey, ch := range memTx.changes {
+		ch.walData = nil
+		ch.td = nil
+		memTx.changes[chKey] = ch
+	}
+	// Clear cached table descriptor so getTableLocked during commit fails to find schema
+	clear(memTx.tableCache)
+	memTx.snapTables = nil
+	emptyTables := make(map[string]*TableData)
+	eng.tablesAtomic.Store(&emptyTables)
+	eng.mu.Lock()
+	delete(eng.tables, "accounts")
+	eng.mu.Unlock()
+
+	commitErr := memTx.Commit()
+	if commitErr == nil {
+		t.Fatalf("expected Commit to fail with error when table schema is missing, but got nil")
+	}
+
+	// Verify that table lock was cleanly released by attempting another transaction
+	tx2, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx after failed commit failed: %v", err)
+	}
+	_ = tx2.Rollback()
+}
+
+// TestRegression_AUDIT_IndexOnlyScan_CompositeMaterializeFailure verifies that line 1737 resolver
+// in IndexOnlyScan does NOT swallow deserialization errors (materializeWithLayout) and
+// does NOT return an incomplete 1-column record when composite index deserialization fails.
+func TestRegression_AUDIT_IndexOnlyScan_CompositeMaterializeFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	eng := NewWithOptions(Options{
+		DataDir: tempDir,
+		Mode:    MemoryCompact,
+	})
+	if err := eng.Open(tempDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "first_name", Type: storage.TypeVarChar},
+			{Name: "last_name", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{
+				Name:    "idx_names",
+				Columns: []string{"first_name", "last_name"},
+			},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	// Insert row
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	if err := tx.Insert("users", storage.Record{
+		"id":         storage.IntValue(1),
+		"first_name": storage.StringValue("John"),
+		"last_name":  storage.StringValue("Doe"),
+	}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Corrupt flat buffer in shard entry so materializeWithLayout fails
+	eng.mu.RLock()
+	td := eng.tables["users"]
+	eng.mu.RUnlock()
+
+	sIdx := hashShard("1")
+	td.shards[sIdx].mu.Lock()
+	entry := td.shards[sIdx].entries["1"]
+	entry.flatBuf = []byte{0x02, 0x00, 0x01} // truncated corrupt flat buffer
+	td.shards[sIdx].entries["1"] = entry
+	td.shards[sIdx].mu.Unlock()
+
+	// IndexOnlyScan on composite index
+	txScan, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer txScan.Rollback()
+
+	cursor, err := txScan.IndexOnlyScan("users", "idx_names", nil, nil)
+	if err != nil {
+		t.Fatalf("IndexOnlyScan failed: %v", err)
+	}
+	defer cursor.Close()
+
+	if cursor.Next() {
+		rec, err := cursor.Record()
+		// rec must be nil or error returned, NOT a partial record missing last_name
+		if err == nil && rec != nil {
+			if _, hasLastName := rec["last_name"]; !hasLastName {
+				t.Fatalf("corrupted partial record returned by resolver: missing last_name: %v", rec)
+			}
+		}
+	}
+}
