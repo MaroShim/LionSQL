@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed (Breaking & Upcoming Storage Architecture Notices)
+- **[v0.93.0 Breaking Change] WiredTiger Physical Storage Format Upgraded to V2 (`pkg/storage`, `pkg/storage/wiredtiger`, Invariants 13 & 15)**:
+  - Standardized all WiredTiger table tuples on the canonical **V2 binary tuple codec (`TupleCodecV2` = `0x02`)** featuring a 4-byte 32-bit aligned fixed header (`[Byte 0: Version 0x02 | Byte 1: Flags | Bytes 2..3: encodedCols (uint16 LE) | NullBitmap | Dense Payloads]`) with instant $O(1)$ tail `ADD/DROP COLUMN` DDL and zero legacy V1 fallback branches (fail-fast `ErrInvalidTupleHeader`).
+  - Standardized all WiredTiger secondary indexes on independent physical B-Tree tables (`table:_idx_<TableName>_<IndexName>`) with binary format (`key_format=u, value_format=u`) and order-preserving monotonic key encoding (`storage.EncodeIndexKeyPart`).
+  - **Migration Note**: Data directories created with `v0.92.x` or earlier (V1 tuple format) are incompatible with `v0.93.0` and must be exported/migrated or initialized on a fresh data directory.
+- **[v0.94.0 Upcoming Default Change Notice] `memengine` Default Durability Transition to `SCHEMA_ONLY` (`ARCH-EPHEMERAL-SCHEMA-PERSISTENCE-1`)**:
+  - While LionSQL's default storage engine remains **`WiredTiger`** (full disk persistence of both schema and row data), starting in **`v0.94.0`**, the default mode when selecting **`memengine`** (`-engine=memory`) will change from `SCHEMA_AND_DATA` (WAL + RDB snapshot) to **`SCHEMA_ONLY`** (DDL table/index schemas and catalog objects are durably persisted to `<dataDir>/schemas.mpk` across restarts, while DML row data is 100% pure in-memory ephemeral with zero disk I/O).
+  - Full row persistence (`wal.aof` + `tables.mpk`) in `memengine` will remain available in `v0.94.0+` via explicit configuration (and as the standalone fallback on Windows).
+
 ### Added
 - **CLI & Developer Experience (`lionsql cli`, `pkg/cli/cli.go`, `cmd/lionsql/sql.go`, `cmd/lionsql/main.go`)**:
   - Implement unified interactive SQL/T-SQL REPL shell (`lionsql cli`, `-i`, `--interactive`, `-shell`) and headless query execution engine (`-e` / `--execute` inline SQL, `-f` / `--file` batch script files with `GO` separator support, multi-result set tabular formatting) directly inside the standalone binary per `[RULE:HeadlessParity]`.
