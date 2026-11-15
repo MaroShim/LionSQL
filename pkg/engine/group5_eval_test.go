@@ -267,3 +267,104 @@ func TestParseInCondition_Regression(t *testing.T) {
 		}
 	}
 }
+
+// TestEval_NotIn_Null_ThreeValuedLogic verifies that NOT IN predicates containing NULL
+// strictly adhere to SQL-92 Three-Valued Logic (3VL UNKNOWN) and evaluate to false in WHERE clauses.
+func TestEval_NotIn_Null_ThreeValuedLogic(t *testing.T) {
+	rec1 := map[string]any{"val": 30, "status": "ACTIVE"}
+	rec2 := map[string]any{"val": 10, "status": "INACTIVE"}
+	recNull := map[string]any{"val": nil, "status": nil}
+
+	// 1. evaluateSingleConditionMap direct unit tests
+	// val=30 NOT IN (10, 20, NULL): 30 is not 10 or 20, but NULL is present -> UNKNOWN -> false
+	if evaluateSingleConditionMap(rec1, "val NOT IN (10, 20, NULL)") {
+		t.Fatalf("expected false for val NOT IN (10, 20, NULL) when val=30, got true")
+	}
+
+	// status='ACTIVE' NOT IN ('INACTIVE', NULL): ACTIVE is not INACTIVE, but NULL is present -> UNKNOWN -> false
+	if evaluateSingleConditionMap(rec1, "status NOT IN ('INACTIVE', NULL)") {
+		t.Fatalf("expected false for status NOT IN ('INACTIVE', NULL) when status='ACTIVE', got true")
+	}
+
+	// val=10 NOT IN (10, 20, NULL): 10 matches -> FALSE
+	if evaluateSingleConditionMap(rec2, "val NOT IN (10, 20, NULL)") {
+		t.Fatalf("expected false for val NOT IN (10, 20, NULL) when val=10, got true")
+	}
+
+	// val=30 NOT IN (10, 20): no NULL present, 30 not in (10, 20) -> TRUE
+	if !evaluateSingleConditionMap(rec1, "val NOT IN (10, 20)") {
+		t.Fatalf("expected true for val NOT IN (10, 20) when val=30, got false")
+	}
+
+	// val=NULL NOT IN (10, 20): LHS is NULL -> UNKNOWN -> false
+	if evaluateSingleConditionMap(recNull, "val NOT IN (10, 20)") {
+		t.Fatalf("expected false for val NOT IN (10, 20) when val is NULL, got true")
+	}
+
+	// 2. evaluateWhereCondition integration
+	sRec1 := storage.Record{"val": storage.IntValue(30)}
+	if evaluateWhereCondition(sRec1, "val NOT IN (10, 20, NULL)") {
+		t.Fatalf("expected evaluateWhereCondition to return false for NOT IN with NULL")
+	}
+	if !evaluateWhereCondition(sRec1, "val NOT IN (10, 20)") {
+		t.Fatalf("expected evaluateWhereCondition to return true for NOT IN without NULL")
+	}
+}
+
+func TestCoordinator_Query_NotIn_Null_ThreeValuedLogic(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := NewCoordinator(cat, eng, Config{})
+	defer coord.Close()
+
+	_, err := coord.ExecuteSQL(`CREATE TABLE t_3vl (id INT PRIMARY KEY, num INT);`)
+	if err != nil {
+		t.Fatalf("create table failed: %v", err)
+	}
+
+	_, err = coord.ExecuteSQL(`INSERT INTO t_3vl VALUES (1, 10), (2, 20), (3, 30);`)
+	if err != nil {
+		t.Fatalf("insert failed: %v", err)
+	}
+
+	// 1. SELECT WHERE num NOT IN (20, NULL) -> must return 0 rows
+	// (20 is matched -> false; 10 and 30 do not match 20, but with NULL -> UNKNOWN -> filtered out)
+	res, err := coord.ExecuteSQL(`SELECT * FROM t_3vl WHERE num NOT IN (20, NULL);`)
+	if err != nil {
+		t.Fatalf("select with NOT IN NULL failed: %v", err)
+	}
+	if len(res.Rows) != 0 {
+		t.Fatalf("expected 0 rows for 'num NOT IN (20, NULL)', got %d rows: %+v", len(res.Rows), res.Rows)
+	}
+
+	// 2. SELECT WHERE num NOT IN (40, 50) -> must return all 3 rows (10, 20, 30)
+	res, err = coord.ExecuteSQL(`SELECT * FROM t_3vl WHERE num NOT IN (40, 50);`)
+	if err != nil {
+		t.Fatalf("select with NOT IN without NULL failed: %v", err)
+	}
+	if len(res.Rows) != 3 {
+		t.Fatalf("expected 3 rows for 'num NOT IN (40, 50)', got %d rows", len(res.Rows))
+	}
+
+	// 3. Subquery containing NULL in NOT IN:
+	// CREATE TABLE t_nulls (val INT);
+	// INSERT INTO t_nulls VALUES (20), (NULL);
+	// SELECT * FROM t_3vl WHERE num NOT IN (SELECT val FROM t_nulls); -> 0 rows
+	_, err = coord.ExecuteSQL(`CREATE TABLE t_nulls (id INT PRIMARY KEY, val INT);`)
+	if err != nil {
+		t.Fatalf("create t_nulls failed: %v", err)
+	}
+	_, err = coord.ExecuteSQL(`INSERT INTO t_nulls VALUES (1, 20), (2, NULL);`)
+	if err != nil {
+		t.Fatalf("insert t_nulls failed: %v", err)
+	}
+	res, err = coord.ExecuteSQL(`SELECT * FROM t_3vl WHERE num NOT IN (SELECT val FROM t_nulls);`)
+	if err != nil {
+		t.Fatalf("subquery select failed: %v", err)
+	}
+	if len(res.Rows) != 0 {
+		t.Fatalf("expected 0 rows for subquery containing NULL, got %d rows: %+v", len(res.Rows), res.Rows)
+	}
+}
+
+

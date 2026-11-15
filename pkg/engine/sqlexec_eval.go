@@ -180,6 +180,9 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		if !ok || val == nil {
 			return false
 		}
+		if sv, ok := val.(storage.Value); ok && sv.IsNull {
+			return false
+		}
 		var isBool bool
 		var bVal bool
 		if b, ok := val.(bool); ok {
@@ -192,8 +195,13 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 
 		strVal := fmt.Sprintf("%v", val)
 		found := false
+		hasNull := false
 		for _, rawItem := range sqlutil.SplitTopLevel(valList, ',') {
 			rawItem = strings.TrimSpace(rawItem)
+			if strings.EqualFold(rawItem, "NULL") {
+				hasNull = true
+				continue
+			}
 			var item string
 			if (strings.HasPrefix(rawItem, "N'") || strings.HasPrefix(rawItem, "n'")) && strings.HasSuffix(rawItem, "'") && len(rawItem) >= 3 {
 				item = strings.ReplaceAll(rawItem[2:len(rawItem)-1], "''", "'")
@@ -208,10 +216,20 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 				break
 			}
 		}
-		if isNot {
-			return !found
+		if found {
+			return !isNot
 		}
-		return found
+		if hasNull {
+			// SQL-92 Three-Valued Logic (3VL):
+			// If target value was not found in the list, but the list contains NULL,
+			// the result of 'x IN (..., NULL)' is UNKNOWN, and 'x NOT IN (..., NULL)' is UNKNOWN.
+			// In a WHERE filter predicate, UNKNOWN evaluates to false (row is filtered out).
+			return false
+		}
+		if isNot {
+			return true
+		}
+		return false
 	}
 
 	upperWhere := strings.ToUpper(whereStr)
