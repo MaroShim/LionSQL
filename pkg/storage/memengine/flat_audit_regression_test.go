@@ -514,9 +514,9 @@ func TestCompactAudit_F3_AddColumnWALFailureRollsBack(t *testing.T) {
 	if td.layout.NumColumns != 2 {
 		t.Fatalf("expected FlatRecordLayout rolled back to 2 columns on WAL failure, got %d", td.layout.NumColumns)
 	}
-	row, _, ok := td.getRowAndVer("1")
-	if !ok || len(row.Values) != 2 || row.Values[1].SVal != "alice" {
-		t.Fatalf("expected row intact after WAL rollback, got ok=%v row=%+v", ok, row)
+	row, _, err := td.getRowAndVer("1")
+	if err != nil || len(row.Values) != 2 || row.Values[1].SVal != "alice" {
+		t.Fatalf("expected row intact after WAL rollback, got err=%v row=%+v", err, row)
 	}
 }
 

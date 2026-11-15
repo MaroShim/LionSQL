@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -1112,7 +1113,7 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 	}
 
 	matched := false
-	parentTd.forEachRow(func(pkStr string, row storage.Row) bool {
+	scanErr := parentTd.forEachRow(func(pkStr string, row storage.Row) bool {
 		if tx.isLocallyDeleted(fk.ParentTable, pkStr) {
 			return true
 		}
@@ -1125,6 +1126,9 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 		}
 		return true
 	})
+	if scanErr != nil {
+		return false, scanErr
+	}
 	if matched {
 		return true, nil
 	}
@@ -1173,7 +1177,7 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 	}
 
 	var matchingPKs []storage.Value
-	childTd.forEachRow(func(pkStr string, row storage.Row) bool {
+	scanErr := childTd.forEachRow(func(pkStr string, row storage.Row) bool {
 		if tx.isLocallyDeleted(childTable, pkStr) {
 			return true
 		}
@@ -1187,6 +1191,9 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 		}
 		return true
 	})
+	if scanErr != nil {
+		return nil, scanErr
+	}
 
 	if localRows, ok := tx.local[childTable]; ok {
 		for pkStr, row := range localRows {
@@ -1249,9 +1256,12 @@ func (tx *Transaction) Get(tableName string, pk storage.Value) (storage.Record, 
 			return nil, err
 		}
 		pkKey := pk.String()
-		row, _, exists := td.getRowAndVer(pkKey)
-		if !exists {
-			return nil, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+		row, _, err := td.getRowAndVer(pkKey)
+		if err != nil {
+			if errors.Is(err, storage.ErrKeyNotFound) {
+				return nil, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+			}
+			return nil, err
 		}
 		return td.SnapshotSchema().RowToRecord(row), nil
 	}
@@ -1285,9 +1295,12 @@ func (tx *Transaction) GetRow(tableName string, pk storage.Value) (storage.Row, 
 			return storage.Row{}, err
 		}
 		pkKey := pk.String()
-		row, _, exists := td.getRowAndVer(pkKey)
-		if !exists {
-			return storage.Row{}, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+		row, _, err := td.getRowAndVer(pkKey)
+		if err != nil {
+			if errors.Is(err, storage.ErrKeyNotFound) {
+				return storage.Row{}, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+			}
+			return storage.Row{}, err
 		}
 		return row, nil
 	}
@@ -1327,10 +1340,12 @@ func (tx *Transaction) getRowAndVerUnderLock(tableName, pkKey string, clone bool
 	if err != nil {
 		return storage.Row{}, 0, err
 	}
-	row, ver, exists := td.getRowAndVer(pkKey)
-
-	if !exists {
-		return storage.Row{}, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+	row, ver, err := td.getRowAndVer(pkKey)
+	if err != nil {
+		if errors.Is(err, storage.ErrKeyNotFound) {
+			return storage.Row{}, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+		}
+		return storage.Row{}, 0, err
 	}
 
 	if clone {
@@ -2259,17 +2274,19 @@ func (tx *Transaction) Commit() error {
 		tx.commitTimestamp = time.Now().UnixNano()
 	}
 
-	// Release shard and table locks before WAL fsync / AOF compaction
-	unlockAll()
-
-	// 8. Perform group commit fsync and optional AOF compaction outside shard/table locks
+	// 8. Perform group commit fsync before releasing shard and table locks so that if fsync fails,
+	// in-memory shard changes can be rolled back cleanly via rollbackApplied().
 	if needWAL && walSeq > 0 {
 		if err := tx.engine.finishWALCommitLocked(walSeq); err != nil {
+			rollbackApplied()
 			return err
 		}
 		tx.commitLSN = walRec.LSN
 		tx.commitTimestamp = walRec.Timestamp
 	}
+
+	// Release shard and table locks after WAL commit is durable
+	unlockAll()
 
 	return nil
 }

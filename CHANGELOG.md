@@ -13,6 +13,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
 
 ### Fixed
+- **Storage & Engine (`FIX-MEMENGINE-FLAT-DECODING-AND-FSYNC-CONSISTENCY-1`, table_data.go:239, 301, tx.go:1252, 1288, 1330, 2260)**:
+  - Surface explicit flat record decoding errors and enforce ACID commit consistency on WAL fsync failure per `[RULE:ExplicitError]` and `[RULE:AtomicSaves]`:
+    1. Update `TableData.getRowAndVer` to return `(storage.Row, int64, error)`, distinguishing missing keys (`storage.ErrKeyNotFound`) from corrupt record decoding failures for the specific failed row.
+    2. Propagate row decoding errors through `tx.Get`, `tx.GetRow`, and `tx.getRowAndVerUnderLock`, eliminating the defect where corrupted rows were falsely reported as non-existent (`ErrKeyNotFound`).
+    3. Update `TableData.forEachRow` to return `error`, aborting scans immediately with structured diagnostics when any flat record fails decoding rather than silently skipping rows.
+    4. Move `finishWALCommitLocked` (group commit fsync) prior to `unlockAll()` in `Transaction.Commit()`, guaranteeing that if disk fsync fails, in-memory shard modifications are rolled back cleanly via `rollbackApplied()` with zero leaked dirty rows or locks.
 - **Engine & Storage (`FIX-TRANSACTION-TERMINATION-POOL-RETURN-CONSISTENCY-1`, sqlexec_dml.go, sqlexec.go, session_pool.go, wt_engine.go, tx.go)**:
   - Enforce absolute lifecycle consistency between transaction termination and session/object pool returns per `[RULE:DoubleCloseSafety]`, `[RULE:CleanTeardown]`, and `[RULE:ZeroAllocation]`:
     1. Bind ephemeral autocommit DML statements (`ExecuteInsert`, `ExecuteInsertSelect`, `ExecuteUpdate`, `ExecuteDelete`, `ExecuteSelectInto`) to `defer tx.Rollback()`, guaranteeing that transactions are rolled back and recycled before `closeFn()` returns storage sessions to `SessionPool` (even on runtime errors).

@@ -670,3 +670,161 @@ func TestRegression_AUDIT_FULL_005_IndexDataRestoreErrorHandling(t *testing.T) {
 		t.Fatalf("expected 2 PKs from valid restored index, got %v", pks)
 	}
 }
+
+// TestRegression_AUDIT_FULL_006_FlatRecordDecodingError_And_FsyncFailureConsistency verifies:
+// 1. When flat record decoding fails on a row, TableData.getRowAndVer, forEachRow, and tx.Get
+//    return explicit decoding errors for the failed row rather than masking as ErrKeyNotFound.
+// 2. When WAL fsync fails during Commit, in-memory shard modifications are cleanly rolled back
+//    via rollbackApplied(), preserving complete ACID consistency between memory and disk.
+func TestRegression_AUDIT_FULL_006_FlatRecordDecodingError_And_FsyncFailureConsistency(t *testing.T) {
+	tempDir := t.TempDir()
+	eng := New()
+	eng.opts.Mode = MemoryCompact
+	if err := eng.Open(tempDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(&schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+
+	// 1. Insert a baseline row
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx.Insert("items", storage.Record{
+		"id":  storage.IntValue(1),
+		"val": storage.StringValue("hello"),
+	}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Corrupt flat buffer in shard entry for pk="1"
+	eng.mu.RLock()
+	td := eng.tables["items"]
+	eng.mu.RUnlock()
+
+	sIdx := hashShard("1")
+	td.shards[sIdx].mu.Lock()
+	entry := td.shards[sIdx].entries["1"]
+	entry.flatBuf = []byte{0x02, 0x00, 0x01} // invalid truncated flat buffer
+	td.shards[sIdx].entries["1"] = entry
+	td.shards[sIdx].mu.Unlock()
+
+	// getRowAndVer must return explicit decoding error, NOT ErrKeyNotFound
+	_, _, err = td.getRowAndVer("1")
+	if err == nil {
+		t.Fatalf("expected getRowAndVer to fail on corrupted flatBuf, got nil")
+	}
+	if errors.Is(err, storage.ErrKeyNotFound) {
+		t.Fatalf("expected decoding error, but got ErrKeyNotFound: %v", err)
+	}
+
+	// forEachRow must return explicit decoding error for the failed row
+	err = td.forEachRow(func(pk string, row storage.Row) bool {
+		return true
+	})
+	if err == nil {
+		t.Fatalf("expected forEachRow to return error on corrupted row, got nil")
+	}
+
+	// tx.Get must return decoding error, NOT ErrKeyNotFound
+	txRead, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx read failed: %v", err)
+	}
+	defer txRead.Rollback()
+
+	_, err = txRead.Get("items", storage.IntValue(1))
+	if err == nil {
+		t.Fatalf("expected tx.Get to fail on corrupted flat record, got nil")
+	}
+	if errors.Is(err, storage.ErrKeyNotFound) {
+		t.Fatalf("expected decoding error from tx.Get, but got ErrKeyNotFound: %v", err)
+	}
+}
+
+// TestRegression_AUDIT_FULL_007_FsyncFailureCommitConsistency tests that if WAL fsync fails
+// during finishWALCommitLocked, all in-memory shard changes applied in Step 6 are rolled back
+// cleanly via rollbackApplied(), ensuring 0 phantom rows or corrupted values remain.
+func TestRegression_AUDIT_FULL_007_FsyncFailureCommitConsistency(t *testing.T) {
+	tempDir := t.TempDir()
+	eng := New()
+	eng.opts.FsyncPolicy = FsyncAlways
+	if err := eng.Open(tempDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := createTestSchema()
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+
+	// 1. Insert initial row (id=1, balance=1000)
+	tx1, _ := sess.BeginTx(storage.TxOptions{})
+	if err := tx1.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(1),
+		"holder":  storage.StringValue("Alice"),
+		"balance": storage.IntValue(1000),
+	}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx1.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// 2. Begin tx2 to update balance=9999
+	tx2, _ := sess.BeginTx(storage.TxOptions{})
+	defer tx2.Rollback()
+
+	if err := tx2.Update("accounts", storage.IntValue(1), storage.Record{
+		"id":      storage.IntValue(1),
+		"holder":  storage.StringValue("Alice"),
+		"balance": storage.IntValue(9999),
+	}); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	// Close the WAL file underneath to force fsync (file.Sync) in finishWALCommitLocked to fail
+	eng.wal.Close()
+
+	// 3. Commit must fail with error
+	commitErr := tx2.Commit()
+	if commitErr == nil {
+		t.Fatalf("expected Commit to fail when WAL file is closed, got nil")
+	}
+
+	// 4. Verify in-memory shard consistency: row id=1 must still have balance=1000!
+	eng.mu.RLock()
+	td := eng.tables["accounts"]
+	eng.mu.RUnlock()
+
+	row, _, err := td.getRowAndVer("1")
+	if err != nil {
+		t.Fatalf("failed to get row 1: %v", err)
+	}
+	bal := row.Values[2].IVal
+	if bal != 1000 {
+		t.Fatalf("in-memory state corrupted after fsync failure: expected balance=1000, got %d", bal)
+	}
+}

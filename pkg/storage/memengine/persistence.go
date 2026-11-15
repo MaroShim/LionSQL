@@ -160,7 +160,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				Entries: make([]IndexEntry, 0),
 			}
 			var insertErr error
-			td.forEachRow(func(pk string, row storage.Row) bool {
+			scanErr := td.forEachRow(func(pk string, row storage.Row) bool {
 				keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, row, op.IndexSchema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, row, op.IndexSchema.IncludeCols)
 				if err := idxData.Insert(keyVal, pk, incVals); err != nil {
@@ -169,6 +169,10 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				}
 				return true
 			})
+			if scanErr != nil {
+				log.Printf("[memengine] CRITICAL: replay OpCreateIndex failed on table %q index %q: %v", td.Schema.Name, op.IndexSchema.Name, scanErr)
+				continue
+			}
 			if insertErr != nil {
 				log.Printf("[memengine] CRITICAL: replay OpCreateIndex failed on table %q index %q: %v", td.Schema.Name, op.IndexSchema.Name, insertErr)
 				continue
@@ -224,7 +228,8 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if !exists {
 				continue
 			}
-			oldRow, _, hadOld := td.getRowAndVer(op.Key)
+			oldRow, _, err := td.getRowAndVer(op.Key)
+			hadOld := (err == nil)
 			if !hadOld {
 				td.Keys = append(td.Keys, op.Key)
 			}

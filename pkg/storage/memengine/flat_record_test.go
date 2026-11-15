@@ -702,10 +702,10 @@ func TestFlatRecord_CorruptedBufferExplicitError(t *testing.T) {
 	}
 	sh.mu.Unlock()
 
-	// getRowAndVer must return false without panic or returning empty corrupted row
-	_, _, ok := td.getRowAndVer("bad_key")
-	if ok {
-		t.Fatalf("expected getRowAndVer to fail on corrupted flatBuf, but got ok=true")
+	// getRowAndVer must return error without panic or returning empty corrupted row
+	_, _, err := td.getRowAndVer("bad_key")
+	if err == nil {
+		t.Fatalf("expected getRowAndVer to fail on corrupted flatBuf, but got err=nil")
 	}
 }
 
@@ -958,8 +958,8 @@ func TestP1_Batch3_ReopenNoGoroutineLeakAndCorruptMaterialize(t *testing.T) {
 	sIdx := hashShard("1")
 	td.shards[sIdx].entries["1"] = shardEntry{ver: 1, flatBuf: []byte{0x01}} // truncated buffer
 
-	if _, _, ok := td.getRowAndVer("1"); ok {
-		t.Fatalf("expected getRowAndVer to return false on corrupted flatBuf")
+	if _, _, err := td.getRowAndVer("1"); err == nil {
+		t.Fatalf("expected getRowAndVer to return error on corrupted flatBuf")
 	}
 	if _, hadOld := td.deleteRowAndVer("1"); !hadOld {
 		t.Fatalf("expected deleteRowAndVer to report hadOld=true while safely handling corrupt flatBuf")

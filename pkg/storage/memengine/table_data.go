@@ -236,18 +236,18 @@ func (td *TableData) getEntryAndVer(pk string) (shardEntry, bool) {
 	return entry, ok
 }
 
-func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
+func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, error) {
 	entry, schemaSnap, layoutSnap, ok := td.getEntryWithLayout(pk)
 	if !ok {
-		return storage.Row{}, 0, false
+		return storage.Row{}, 0, storage.ErrKeyNotFound
 	}
 	r, err := entry.materializeWithLayout(td.mode, schemaSnap, layoutSnap, nil)
 	if err != nil {
-		// [RULE:ExplicitError] Log corruption and fail safe rather than silently returning empty row
+		// [RULE:ExplicitError] Log corruption and return explicit error for failed row
 		log.Printf("[memengine] flat record materialize error on table %q pk %q: %v", schemaSnap.Name, pk, err)
-		return storage.Row{}, 0, false
+		return storage.Row{}, 0, fmt.Errorf("memengine: failed to decode flat record on table %q pk %q: %w", schemaSnap.Name, pk, err)
 	}
-	return r, entry.ver, true
+	return r, entry.ver, nil
 }
 
 func (td *TableData) hasKey(pk string) bool {
@@ -298,7 +298,7 @@ func (td *TableData) deleteRowAndVer(pk string) (storage.Row, bool) {
 	return td.deleteRowAndVerLocked(pk)
 }
 
-func (td *TableData) forEachRow(fn func(pk string, row storage.Row) bool) {
+func (td *TableData) forEachRow(fn func(pk string, row storage.Row) bool) error {
 	td.ensureShardsInit()
 	td.mu.RLock()
 	defer td.mu.RUnlock()
@@ -310,15 +310,17 @@ func (td *TableData) forEachRow(fn func(pk string, row storage.Row) bool) {
 		for k, entry := range sh.entries {
 			r, err := entry.materializeWithLayout(td.mode, schemaSnap, layoutSnap, nil)
 			if err != nil {
-				continue
+				sh.mu.RUnlock()
+				return fmt.Errorf("memengine: failed to decode flat record on table %q pk %q: %w", schemaSnap.Name, k, err)
 			}
 			if !fn(k, r) {
 				sh.mu.RUnlock()
-				return
+				return nil
 			}
 		}
 		sh.mu.RUnlock()
 	}
+	return nil
 }
 
 func (td *TableData) rowCount() int64 {

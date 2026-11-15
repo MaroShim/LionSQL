@@ -166,7 +166,7 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 
 	// Populate index from existing rows
 	var insertErr error
-	td.forEachRow(func(pk string, row storage.Row) bool {
+	scanErr := td.forEachRow(func(pk string, row storage.Row) bool {
 		keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, row, index)
 		incVals := extractIncludeValuesFromRow(&td.Schema, row, index.IncludeCols)
 		if err := idxData.Insert(keyVal, pk, incVals); err != nil {
@@ -175,6 +175,9 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 		}
 		return true
 	})
+	if scanErr != nil {
+		return scanErr
+	}
 	if insertErr != nil {
 		return insertErr
 	}
