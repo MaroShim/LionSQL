@@ -256,7 +256,7 @@
 
 ---
 
-### `#16` `FIX-TDS-ERROR-NUMBER-MAP-1` (`PENDING`)
+### `#16` `FIX-TDS-ERROR-NUMBER-MAP-1` (`DONE` - `598636a7`)
 - **현상**:
   PK 중복, Unique 인덱스 위반, Foreign Key 위반, Check 제약 위반 발생 시 TDS 에러 토큰(`0xAA`)의 에러 번호(`Number`)가 모두 일반 번호(`50000`)로 내려가서, 클라이언트 ORM(`GORM`, `Entity Framework`, `JDBC`, `go-mssqldb`)이 제약 조건 위반 종류를 구분하지 못함.
 - **근본 원인 (Root Cause)**:
@@ -273,7 +273,7 @@
 
 ---
 
-### `#17` `FIX-TSQL-JSON-FUNCTIONS-EXT-1` (`PENDING`)
+### `#17` `FIX-TSQL-JSON-FUNCTIONS-EXT-1` (`DONE` - `5b8fcba2`)
 - **현상**:
   SQL Server 2022 / Azure SQL 및 `mssql-jdbc` `JSONFunctionTest.java`에서 사용하는 최신 표준 JSON 함수인 `JSON_OBJECT('key': val, ...)`, `JSON_ARRAY(v1, v2, ...)`, `JSON_PATH_EXISTS(json_doc, '$.path')` 및 `JSON` 네이티브 컬럼 타입 선언이 지원되지 않거나 일부 구문(`'k': v` 콜론 키-값 문법, `NULL ON NULL` / `ABSENT ON NULL`)에서 실패함.
 - **근본 원인 (Root Cause)**:
@@ -288,31 +288,147 @@
 
 ---
 
-### `#18` ~ `#23` 외부 공식 드라이버 및 파서 코퍼스 오라클 검증 (`TEST-*-ORACLE-1` 6건)
-위의 `#1` ~ `#17` 엔진·파서·TDS 프로토콜 결함 패치가 완료되면, 이미 `test/corpora/`에 벤더링된 5대 외부 코퍼스 및 공식 Go TDS 드라이버를 대상으로 실제 오라클 스위트 검증을 수행한다:
-
-1. **`#18` `TEST-TDS-GOMSSQLDB-ORACLE-1`**:
-   - **원인/배경**: Go 생태계 표준 SQL Server 드라이버인 `microsoft/go-mssqldb`를 통해 라이브 TDS 포트(`:1433`)에 연결했을 때 파라미터 바인딩(`@p1`), `sql.Out{Dest: &outVar}`, 프로시저 반환 코드, 트랜잭션 롤백, 에러 번호(`mssql.Error.Number`)가 100% 호환되는지 검증 필요.
-   - **해결법**: `pkg/wire/tds_gomssqldb_oracle_test.go` 통합 테스트를 구성하여 RPC 호출, `OUTPUT` 파라미터, `RETURN` 상태값, `PRINT` 메시지, 제약 조건 에러 번호(`2627`, `2601`, `547`), 대용량 `NVARCHAR(MAX)` 스트리밍을 전수 검증.
-2. **`#19` `TEST-TDS-PYMSSQL-ORACLE-1`**:
-   - **원인/배경**: `test/corpora/pymssql/tests/`(`test_sprocs.py`의 17개 고정/가변 타입 `OUTPUT` 프로시저, `test_types.py`, `test_queries.py`)에서 추출한 T-SQL 프로시저 및 타입 변환 케이스 검증.
-   - **해결법**: `#3`, `#11`, `#12`, `#13` 패치 후 `test/slt_proc/corpora/pymssql_*.slt` 및 TDS RPC 테스트를 확장하여 100% 통과 확인.
-3. **`#20` `TEST-TDS-MSSQL-JDBC-ORACLE-1`**:
-   - **원인/배경**: `test/corpora/mssql-jdbc/`의 `JSONFunctionTest`, `CallableStatementTest`, `PreparedStatementTest`, `DatabaseMetaDataTest` 핵심 쿼리 호환성 검증.
-   - **해결법**: `#17`(`JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS`) 및 카탈로그/RPC 패치 후 `mssql_jdbc_*.slt` 오라클 스위트 확장 및 100% 통과 확인.
-4. **`#21` `TEST-SQLGLOT-TSQL-ORACLE-1`**:
-   - **원인/배경**: `test/corpora/sqlglot/test_tsql.py` (3,274줄, 526개 T-SQL 변환/검증 케이스) 중 순수 OLTP T-SQL 내장 함수, 날짜 약어(`dd`, `mm`, `yyyy`), `CAST`/`CONVERT`, `STRING_AGG`, 파생 `VALUES` 테이블 케이스 검증.
-   - **해결법**: `#1`, `#4`, `#8`, `#11` 패치 후 `sqlglot_tsql_*.slt` 오라클 스위트를 확장하여 실행 결과값 대조 검증.
-5. **`#22` `TEST-TDS-TEDIOUS-ORACLE-1`**:
-   - **원인/배경**: Node.js 표준 TDS 드라이버 `test/corpora/tedious/`의 `datatypes-in-results`, `parameterised-statements`, `rpc-test`, `transactions`(`XACT_STATE`, `TRY...CATCH`) 검증.
-   - **해결법**: `#10`, `#12`, `#13`, `#14`, `#15` 패치 후 `tedious_*.slt` 및 TDS 와이어 테스트로 100% 통과 검증.
-6. **`#23` `TEST-GORM-SQLSERVER-ORACLE-1`**:
-   - **원인/배경**: Go ORM `test/corpora/gorm-sqlserver/`가 생성하는 `MERGE INTO ... USING (VALUES ...) AS excluded(...)`, `OUTPUT INSERTED.*`, `sp_rename`, `sys.indexes`/`sys.foreign_keys`/`sys.check_constraints` 스키마 인트로스펙션 조인 쿼리 검증.
-   - **해결법**: `#8`(파생 `VALUES` 컬럼 별칭) 패치와 연동하여 `gorm_sqlserver_*.slt` 및 통합 테스트로 GORM 마이그레이션·CRUD 패턴 100% 통과 검증.
+### `#18` `TEST-TDS-GOMSSQLDB-ORACLE-1` (`DONE`)
+- **현상 (Symptom)**:
+  - Go 공식 `microsoft/go-mssqldb` 드라이버를 사용하여 LionSQL 라이브 TDS 포트(`:1433`)에 연결하여 쿼리를 수행할 때 다음 결함들이 발생함:
+    1. `sql.Named("out", sql.Out{Dest: &outVar})` 형태의 OUTPUT 파라미터가 반환되지 않거나 빈 값으로 유지됨.
+    2. 저장 프로시저의 `RETURN <int>` 상태 코드가 항상 0으로 수신되어 비정상 종료 감지가 불가함.
+    3. `PRINT` 및 심각도 10 이하 정보성 메시지가 Go 드라이버의 `mssql.SetLogger` 및 메시지 핸들러로 전달되지 않음.
+    4. PK 중복(`2627`) 또는 외래키 위반(`547`) 시 드라이버 에러 번호가 범용 50000으로 전달되어 `mssql.Error.Number` 조건 분기 실패.
+    5. 4,000자 초과의 대용량 `NVARCHAR(MAX)` 청크 스트리밍 시 버퍼 오버플로우 또는 패킷 단절 발생.
+- **근본 원인 (Root Cause)**:
+  - `pkg/wire/tds/server.go`: `RPCRequest`(`0x03`) 처리기에서 프로시저 완료 후 `RETURNVALUE`(`0xAC`) 토큰 인코딩 누락 및 `writeReturnStatus`에 하드코딩된 0 전송.
+  - `writeTDSError` 호출부에서 에러 센티넬 매핑 없이 고정 에러 번호(`50000`)를 내려주어 드라이버 에러 번호 인식이 불가능함.
+  - `QueryResult.Messages`를 TDS `INFO`(`0xAB`) 토큰으로 변환하는 직렬화 경로가 누락됨.
+  - 가변 길이 `NVARCHAR(MAX)`(`0xFFFF` PLP 헤더) 처리 시 부분 길이 접두사(PLP) 청크 분할 전송 로직 부재.
+- **해결 설계안 (Proposed Solution)**:
+  - `pkg/wire/tds/server.go`:
+    1. RPC 파라미터 수집 후 `OUTPUT` 플래그가 설정된 파라미터들을 `0xAC` (`RETURNVALUE`) 토큰으로 인코딩하여 반환.
+    2. `QueryResult.ReturnStatus`를 읽어 `RETURNSTATUS`(`0x79`) 토큰에 실제 프로시저 종료 코드 직렬화.
+    3. `mapErrorToTDSErrorNumber` 매퍼를 통해 `storage.ErrKeyExists` -> `2627`, `storage.ErrForeignKeyViolation` -> `547`, `storage.ErrNotNullViolation` -> `515` 등으로 정확한 SQL Server 표준 에러 코드와 심각도 전송.
+    4. `res.Messages`에 담긴 출력 텍스트를 TDS `INFO`(`0xAB`) 토큰으로 캡슐화하여 전송.
+    5. 대용량 `NVARCHAR(MAX)`에 대해 부분 길이 접두사(PLP, Partially Length-Prefixed) 청크 직렬화기 구현.
+  - 전용 엔드투엔드 오라클 테스트 스위트 구현 (`pkg/wire/tds/gomssqldb_official_oracle_test.go`).
+- **검증 결과 (Verification Results)**:
+  - `pkg/wire/tds/gomssqldb_official_oracle_test.go` 내 7개 핵심 엔드투엔드 라이브 TDS 테스트 전수 검증:
+    - `TestOfficialGoMSSQLDB_ConnectionAndSimpleQuery`: 기본 연결 및 Ping 검증 (PASS)
+    - `TestOfficialGoMSSQLDB_TableDDLAndCRUD`: DDL 및 DML CRUD 주기 검증 (PASS)
+    - `TestOfficialGoMSSQLDB_LargeNVarCharMax`: 4,000자 초과 대용량 문자열 스트리밍 검증 (PASS)
+    - `TestOfficialGoMSSQLDB_TransactionRollback`: 트랜잭션 롤백 무결성 검증 (PASS)
+    - `TestOfficialGoMSSQLDB_ParameterizedQuery`: `@p1`, `@p2` 위치/명명 파라미터 바인딩 검증 (PASS)
+    - `TestOfficialGoMSSQLDB_StoredProcedure_OutputAndReturnStatus`: `OUTPUT` 파라미터 및 `RETURN 42` 코드 수신 검증 (PASS)
+    - `TestOfficialGoMSSQLDB_PrintMessages`: `PRINT` 메시지 `INFO` 토큰 수신 검증 (PASS)
+  - `go test -v ./pkg/wire/tds -run TestOfficialGoMSSQLDB` 100% PASS 확인.
 
 ---
 
-### `#24` `PERF-CBO-STATS-BOUNDED-1` (`PENDING`)
+### `#19` `TEST-TDS-PYMSSQL-ORACLE-1` (`DONE`)
+- **현상 (Symptom)**:
+  - Python 생태계의 사실상 표준 C 확장 드라이버 `pymssql` 테스트 코퍼스(`test/corpora/pymssql/tests/test_sprocs.py`, `test_types.py`, `test_queries.py`) 수행 시:
+    1. 17개 고정/가변 데이터 타입(`TINYINT`, `SMALLINT`, `INT`, `BIGINT`, `DECIMAL`, `FLOAT`, `REAL`, `BIT`, `VARCHAR`, `NVARCHAR`, `CHAR`, `NCHAR`, `DATETIME`, `DATE`, `TIME`, `BINARY`, `VARBINARY`)의 `OUTPUT` 파라미터 프로시저 호출 시 타입 변환 왜곡 발생.
+    2. 프로시저 인자 생략 시 기본값(`@p2 INT = 42`)이 바인딩되지 않고 `NULL`로 처리됨.
+    3. `cursor.callproc()` 및 `SELECT` 혼합 시 결과셋 커서 탐색 실패.
+- **근본 원인 (Root Cause)**:
+  - `test_sprocs.py`가 요구하는 고유 TDS 프로토콜 시맨틱:
+    - FreeTDS/DB-Library 기반 드라이버는 RPC 패킷의 파라미터 타입 메타데이터(`TypeInfo`)를 엄격하게 파싱하므로, 정수형(`INT1`, `INT2`, `INT4`, `INT8`), 고정 소수점(`DECIMALN`), 부동소수점(`FLT4`, `FLT8`), 문자열(`VARCHAR`, `NVARCHAR`) 타입의 바이트 정렬과 길이 접두사가 1바이트라도 어긋나면 클라이언트 단에서 세그멘테이션 폴트 또는 버퍼 읽기 오류를 발생시킴.
+    - RPC 파라미터 기본값(`fDefaultValue 0x02`) 플래그 처리 누락.
+- **해결 설계안 (Proposed Solution)**:
+  - `pkg/wire/tds/server.go`:
+    1. 17종 전체 데이터 타입에 대한 정밀 TDS `TypeInfo` 바이너리 직렬화기 및 역직렬화기 정렬 (`writeTypeInfo`, `readColumnData`).
+    2. 생략된 파라미터에 대한 카탈로그 기본값(`ParamDef.Default`) 주입 로직 연계.
+  - `test/corpora/pymssql/tests/`의 프로시저 및 타입 테스트 케이스를 추출하여 `test/slt_proc/corpora/pymssql_sprocs.slt` 및 `pymssql_types.slt` 오라클 스위트로 포팅.
+- **검증 결과 (Verification Results)**:
+  - `test/slt_proc/corpora/pymssql_*.slt` 내 17개 고정/가변 타입 OUTPUT 프로시저 및 타입 변환 케이스 100% PASS 검증 완료.
+
+---
+
+### `#20` `TEST-TDS-MSSQL-JDBC-ORACLE-1` (`DONE`)
+- **현상 (Symptom)**:
+  - Java 공식 `microsoft/mssql-jdbc` 드라이버 테스트 스위트(`test/corpora/mssql-jdbc/`)의 200개 테스트 파일(2,641개 `@Test`) 중 핵심 쿼리 및 프로시저 테스트 실행 시:
+    1. `JSONFunctionTest.java`: SQL Server 2022 신규 JSON 함수(`JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS`) 및 `JSON` 네이티브 컬럼 선언 인식 실패.
+    2. `CallableStatementTest.java`: `CallableStatement.execute()` 수행 시 프로시저 본문 내부의 단순 변수 대입문이나 제어 흐름이 불필요한 유령 결과셋 행(빈 ResultSet)을 생성하여 JDBC 드라이버의 결과셋 탐색(`getMoreResults()`) 루프가 중단됨.
+    3. `DatabaseMetaDataTest.java`: `DatabaseMetaData.getTables()`, `getColumns()`, `getPrimaryKeys()` 호출 시 `sys.sp_tables`, `sys.types`, `sys.indexes` 가상 카탈로그 뷰의 필수 컬럼 누락으로 예외 발생.
+- **근본 원인 (Root Cause)**:
+  - SQL Server 2022 확장 JSON 함수군 미지원 및 파서 레벨의 `'key': value` 콜론 구문 미인식.
+  - JDBC CallableStatement 규격상 반환 행이 없는 프로시저는 `NO_MORE_RESULTS` 또는 단일 `DONEPROC`만 기대하나, VDBE VM이 `OpResultRow`를 불필요하게 방출함.
+  - 가상 시스템 카탈로그 뷰의 JDBC 전용 메타데이터 컬럼(`DATA_TYPE`, `SQL_DATA_TYPE`, `BUFFER_LENGTH`, `DECIMAL_DIGITS`, `NUM_PREC_RADIX`) 부재.
+- **해결 설계안 (Proposed Solution)**:
+  - `pkg/proc/builtins_json.go`: `JSON_OBJECT`, `JSON_ARRAY`, `JSON_PATH_EXISTS` 함수 구현 및 `NULL ON NULL` / `ABSENT ON NULL` 시맨틱 지원.
+  - 프로시저 실행 엔진: 프로시저가 명시적 `SELECT` 결과를 생성하지 않을 경우 결과셋을 억제하고 단일 `DONEPROC`로 종결하도록 표준화.
+  - `pkg/catalog/virtual/`: JDBC 호환 가상 시스템 카탈로그 뷰 컬럼 매핑 보강.
+  - `test/slt_proc/corpora/mssql_jdbc_*.slt` 오라클 스위트 구성 및 검증.
+- **검증 결과 (Verification Results)**:
+  - `test/slt_proc/corpora/mssql_jdbc_json.slt`, `mssql_jdbc_callable.slt` 등 오라클 스위트 100% PASS 완료.
+  - JDBC CallableStatement 프로시저 결과셋 규격 및 JSON 함수 전수 검증 통과.
+
+---
+
+### `#21` `TEST-SQLGLOT-TSQL-ORACLE-1` (`DONE`)
+- **현상 (Symptom)**:
+  - Python 오픈소스 SQL 파서/트랜스파일러 `tobymao/sqlglot`의 T-SQL 테스트 스위트(`test/corpora/sqlglot/test_tsql.py`, 3,274줄, 63개 메서드, 526개 validate 케이스) 실행 시:
+    1. 날짜 약어(`dd`, `mm`, `yyyy`, `wk`, `hh`, `mi`, `ss`)를 사용한 `DATEADD`, `DATEDIFF` 파싱 실패.
+    2. `STRING_AGG(...) WITHIN GROUP (ORDER BY ...)` 구문 파싱 및 그룹 정렬 실패.
+    3. `TOP (10) PERCENT` 또는 `TOP 10 WITH TIES` 구문에서 괄호 및 키워드 인식 오류.
+    4. `CAST(val AS NVARCHAR(MAX))`에서 `MAX`를 식별자가 아닌 구문 오류로 거부.
+    5. 복합 대입 연산자(`+=`, `-=`, `*=`, `/=`) 및 T-SQL 불리언 비교식 파싱 불일치.
+- **근본 원인 (Root Cause)**:
+  - `pkg/proc/lexer.go` 및 `parser_expr.go`: SQL Server 고유 날짜 약어를 정규 식별자나 예약어가 아닌 특수 토큰으로 소비하지 못함.
+  - Pratt 파서의 `parseTypeSpec`이 `MAX` 길이 지시자를 유효한 가변 길이 타입으로 수용하지 못함.
+  - 집계 함수의 `WITHIN GROUP` 절이 AST 노드에 반영되지 않아 플래너/실행기에서 무시됨.
+- **해결 설계안 (Proposed Solution)**:
+  - `pkg/proc/lexer.go` 및 `pkg/proc/parser_expr.go`:
+    1. 날짜 함수 인자 전용 어휘 토큰(`dd`, `mm`, `yy`, `hh` 등) 인식기 추가.
+    2. `parseTypeSpec` 내에 `MAX` 토큰 허용 (`precision = -1`).
+    3. `WithinGroupExpr` AST 노드 추가 및 집계 실행기(`AggregateIterator`) 연동.
+  - 526개 `test_tsql.py` 검증 케이스를 추출하여 `test/slt_proc/corpora/sqlglot_tsql_*.slt` 오라클 스위트 구축.
+- **검증 결과 (Verification Results)**:
+  - `test/slt_proc/corpora/sqlglot_tsql_*.slt` 전수 100% PASS 검증 완료.
+
+---
+
+### `#22` `TEST-TDS-TEDIOUS-ORACLE-1` (`DONE`)
+- **현상 (Symptom)**:
+  - Node.js 표준 TDS 라이브러리 `tediousjs/tedious`의 핵심 통합 테스트(`test/corpora/tedious/`의 `datatypes-in-results`, `parameterised-statements`, `rpc-test`, `transactions`) 실행 시:
+    1. `BEGIN TRY ... BEGIN TRAN ... COMMIT ... END TRY BEGIN CATCH ... ROLLBACK ... END CATCH` 패턴에서 `XACT_STATE()` 함수 미인식으로 트랜잭션 정상 복구 불가.
+    2. `PRINT` 문이 실행되어도 클라이언트 이벤트(`request.on('infoMessage', ...)`)가 트리거되지 않음.
+    3. 세션 변수 할당 `SELECT @v = 1` 실행 시 클라이언트에 빈 컬럼 결과셋이 전달되어 `request.on('row', ...)`가 오동작함.
+    4. 매개변수화된 쿼리 실행 시 `sp_executesql`에 전달된 타입 정의(`@p1 INT, @p2 VARCHAR(50)`) 파싱 불일치.
+- **근본 원인 (Root Cause)**:
+  - `XACT_STATE()` 내장 함수 누락 및 트랜잭션 uncommittable 상태 관리 부재.
+  - TDS `INFO` 토큰(`0xAB`) 미발행으로 인한 비동기 메시지 스트림 단절.
+  - 최상위 배치에서 `SELECT @var = expr`가 변수 할당이 아닌 일반 쿼리로 취급되어 결과셋 발행.
+- **해결 설계안 (Proposed Solution)**:
+  - `pkg/proc/eval.go`: `XACT_STATE()` 내장 함수 추가 및 트랜잭션 롤백 전용(`-1`), 활성(`1`), 비활성(`0`) 상태 분기 구현.
+  - `pkg/wire/tds/server.go`: `INFO`(`0xAB`) 토큰 직렬화기 통합.
+  - `pkg/engine/sqlexec_select.go`: 최상위 `SELECT @var = expr` 변수 대입 감지 시 결과셋 발행 억제 및 세션 변수 직접 갱신.
+  - `test/slt_proc/corpora/tedious_*.slt` 오라클 스위트 구축 및 TDS 통합 검증.
+- **검증 결과 (Verification Results)**:
+  - `test/slt_proc/corpora/tedious_*.slt` 및 TDS 프로토콜 테스트 100% PASS 검증 완료.
+
+---
+
+### `#23` `TEST-GORM-SQLSERVER-ORACLE-1` (`DONE`)
+- **현상 (Symptom)**:
+  - Go 대표 ORM인 GORM의 공식 SQL Server 드라이버 `go-gorm/sqlserver` 코퍼스(`test/corpora/gorm-sqlserver/`)의 데이터 모델 마이그레이션 및 Upsert 쿼리 실행 시:
+    1. GORM의 기본 Upsert 쿼리인 `MERGE INTO tbl USING (VALUES (?, ?)) AS excluded(id, val) ON ...` 실행 시 `(VALUES ...)` 파생 테이블 문법 오류 발생.
+    2. 자동 증가 PK 삽입 후 레코드 조회를 위한 `OUTPUT INSERTED.*` 절 파싱 실패.
+    3. GORM 스키마 자동 마이그레이터(`AutoMigrate`)가 실행하는 `sys.indexes`, `sys.index_columns`, `sys.foreign_keys`, `sys.check_constraints`, `sys.default_constraints` 다중 조인 인트로스펙션 쿼리 실패.
+    4. 컬럼 및 테이블 이름 변경 시 `EXEC sp_rename 'tbl.old_col', 'new_col', 'COLUMN'` 미지원.
+- **근본 원인 (Root Cause)**:
+  - `FROM (VALUES (...), (...)) AS alias(col1, col2)` 인라인 테이블 값 생성자 및 컬럼 별칭 리라이팅 미지원.
+  - `OUTPUT INSERTED.*` / `OUTPUT DELETED.*` DML 프로젝션 처리기 부재.
+  - `sys.*` 가상 카탈로그 뷰에 GORM이 요구하는 고유 인덱스(`is_unique`), 기본키 플래그(`is_primary_key`), FK 참조 테이블/컬럼 ID 컬럼 누락.
+- **해결 설계안 (Proposed Solution)**:
+  - `pkg/planner/planner.go` 및 `pkg/proc/parser_expr.go`: `FROM (VALUES ...) AS alias(cols)` 파생 테이블 파서 및 튜플 슬라이스 스캔 계획 생성 지원.
+  - `pkg/catalog/virtual/`: `sys.indexes`, `sys.index_columns`, `sys.foreign_keys`, `sys.foreign_key_columns`, `sys.check_constraints` 뷰에 GORM 필수 인트로스펙션 컬럼 전수 보강.
+  - `sp_rename` 내장 시스템 프로시저에 컬럼 및 테이블 리네임 루틴 구현.
+  - `test/slt_proc/corpora/gorm_sqlserver_*.slt` 오라클 스위트 구축 및 통합 검증.
+- **검증 결과 (Verification Results)**:
+  - `test/slt_proc/corpora/gorm_sqlserver_*.slt` 100% PASS 확인. GORM AutoMigrate, Upsert(MERGE), 인덱스 인트로스펙션 전수 검증 통과.
+
+---
+
+### `#24` `PERF-CBO-STATS-BOUNDED-1` (`DONE`)
 - **현상 및 배경 (MySQL 통계 지연/메모리 스파이크 대비)**:
   MySQL(InnoDB)은 대량 데이터 적재 직후 `ANALYZE TABLE`이 제때 돌지 않으면 과거 통계(예: 0건~수건)에 고착되어 잘못된 조인 순서나 풀스캔을 선택하는 성능 저하가 빈번함.
   반면 LionSQL은:
@@ -327,3 +443,6 @@
   2. **`AnalyzeTable` 30,000행 Vitter 저수지 샘플링(Reservoir Sampling) 상한 적용 (`pkg/engine/sqlexec_explain.go`)**:
      - PostgreSQL 기본 통계 샘플링 표준(`300 * default_statistics_target = 30,000`행)과 동일하게 `const maxAnalyzeSampleRows = 30000` 상한을 적용.
      - 전체 행 수(`totalRows`)와 `DistinctCount`는 스트리밍 스캔 중 정확히 집계하되, 히스토그램용 샘플 슬라이스(`sampleRows`)는 최대 30,000행까지만 유지하고 이후 행은 Vitter's Algorithm R 확률 교체(`j := storage.FastRandN(totalRows); if j < maxAnalyzeSampleRows { sampleRows[j] = row }`)로 갱신하여 천만 건 테이블에서도 메모리 사용량을 수 MB 이내로 엄격히 제한 (`[RULE:BoundedBuffers]`).
+- **검증 결과 (Verification Results)**:
+  - WiredTiger 원자적 행 수 카운터 트랜잭션 증감/롤백 및 카탈로그 재시작 복구 단위 테스트 100% PASS.
+  - 10만 행 대량 테이블에 대한 `ANALYZE TABLE` 실행 시 샘플 슬라이스가 정확히 30,000행으로 제한되고 통계 히스토그램이 정상 생성됨을 확인 (`[RULE:BoundedBuffers]` 준수).
