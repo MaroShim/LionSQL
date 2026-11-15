@@ -732,6 +732,7 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		}
 	}
 	cs.Mu.Unlock()
+	defer tx.Rollback()
 
 	err = tx.Commit()
 	if err != nil {

@@ -1798,6 +1798,10 @@ func (s *WTSession) Reset() error {
 	if s.closed || s.sess == nil {
 		return nil
 	}
+	if s.activeTx {
+		_ = C.go_wt_session_rollback(s.sess, nil)
+		s.activeTx = false
+	}
 	for cur := range s.allCursors {
 		C.go_wt_cursor_reset(cur)
 	}

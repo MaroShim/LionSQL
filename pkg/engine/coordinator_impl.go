@@ -792,6 +792,10 @@ func (c *Coordinator) Close() error {
 	c.sessMu.Lock()
 	if defCs, ok := c.sessions["default"]; ok && defCs != nil {
 		defCs.Mu.Lock()
+		if defCs.Tx != nil {
+			_ = defCs.Tx.Rollback()
+			defCs.Tx = nil
+		}
 		if defCs.Session != nil {
 			if c.pool != nil {
 				c.pool.ReleaseSession(defCs.Session)

@@ -26,6 +26,11 @@ type Session struct {
 	engine *Engine
 }
 
+// Reset implements the SessionPool reset interface for idle sessions.
+func (s *Session) Reset() error {
+	return nil
+}
+
 func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 	if s.engine.isClosed.Load() {
 		return nil, fmt.Errorf("engine is closed")

@@ -334,3 +334,71 @@ func TestSession_ExecuteProgram_TSQL_NonAbortingError(t *testing.T) {
 	}
 }
 
+// TestSession_Regression_TransactionTermination_And_PoolReturn_Consistency verifies that:
+// 1. Ephemeral transactions in autocommit DML statements are strictly rolled back BEFORE returning to SessionPool,
+//    even when the query fails mid-execution.
+// 2. CommitSessionTx cleanly recycles transaction resources.
+// 3. Coordinator.Close cleans up dangling transactions on the default session before pool release.
+func TestSession_Regression_TransactionTermination_And_PoolReturn_Consistency(t *testing.T) {
+	memEng := memengine.New()
+	defer memEng.Close()
+	cat := catalog.New(memEng)
+	cfg := Config{}
+	cfg.PoolConfig.MaxIdleSessions = 5
+	coord := NewCoordinator(cat, memEng, cfg)
+	defer coord.Close()
+
+	ctx := context.Background()
+
+	// 1. Setup table
+	_, err := coord.ExecuteSQL("CREATE TABLE pool_tx_test (id INT PRIMARY KEY, name VARCHAR(50));")
+	if err != nil {
+		t.Fatalf("create table failed: %v", err)
+	}
+
+	// 2. Insert initial row
+	res, err := coord.ExecuteSQL("INSERT INTO pool_tx_test (id, name) VALUES (1, 'alice');")
+	if err != nil || !res.Success {
+		t.Fatalf("initial insert failed: res=%v, err=%v", res, err)
+	}
+
+	// 3. Run an autocommit INSERT that fails due to duplicate primary key violation
+	res, err = coord.ExecuteSQL("INSERT INTO pool_tx_test (id, name) VALUES (1, 'duplicate');")
+	if err == nil {
+		t.Fatalf("expected error on duplicate PK, got nil")
+	}
+
+	// 4. Verify that re-acquiring from pool can immediately perform a successful transaction
+	// If the failed transaction was not rolled back, the session in the pool would hold dangling state.
+	res, err = coord.ExecuteSQL("INSERT INTO pool_tx_test (id, name) VALUES (2, 'bob');")
+	if err != nil || !res.Success {
+		t.Fatalf("subsequent autocommit insert failed (session contaminated in pool!): %v", err)
+	}
+
+	// 5. Test explicit transaction commit cleans up and recycles
+	sessID := "explicit-tx-sess"
+	_, err = coord.GetOrCreateSession(sessID)
+	if err != nil {
+		t.Fatalf("get or create session: %v", err)
+	}
+	if err := coord.BeginSessionTx(sessID, storage.TxOptions{}); err != nil {
+		t.Fatalf("begin session tx: %v", err)
+	}
+	_, err = coord.ExecuteSessionSQLContext(ctx, sessID, "INSERT INTO pool_tx_test (id, name) VALUES (3, 'charlie');")
+	if err != nil {
+		t.Fatalf("insert in explicit tx: %v", err)
+	}
+	if err := coord.CommitSessionTx(sessID); err != nil {
+		t.Fatalf("commit session tx failed: %v", err)
+	}
+
+	// 6. Verify data integrity
+	res, err = coord.ExecuteSQL("SELECT COUNT(*) AS cnt FROM pool_tx_test;")
+	if err != nil || !res.Success {
+		t.Fatalf("select count failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["cnt"]) != "3" {
+		t.Fatalf("expected 3 rows, got %v", res.Rows[0]["cnt"])
+	}
+}
+

@@ -1306,6 +1306,7 @@ func (s *Coordinator) execSelectInto(targetTable, projections, fromClause string
 			}
 			tx = t
 			isEphemeral = true
+			defer tx.Rollback()
 		}
 
 		for idx, row := range selRes.Rows {

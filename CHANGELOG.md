@@ -13,6 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
 
 ### Fixed
+- **Engine & Storage (`FIX-TRANSACTION-TERMINATION-POOL-RETURN-CONSISTENCY-1`, sqlexec_dml.go, sqlexec.go, session_pool.go, wt_engine.go, tx.go)**:
+  - Enforce absolute lifecycle consistency between transaction termination and session/object pool returns per `[RULE:DoubleCloseSafety]`, `[RULE:CleanTeardown]`, and `[RULE:ZeroAllocation]`:
+    1. Bind ephemeral autocommit DML statements (`ExecuteInsert`, `ExecuteInsertSelect`, `ExecuteUpdate`, `ExecuteDelete`, `ExecuteSelectInto`) to `defer tx.Rollback()`, guaranteeing that transactions are rolled back and recycled before `closeFn()` returns storage sessions to `SessionPool` (even on runtime errors).
+    2. Add `defer tx.Rollback()` in `CommitSessionTx` to guarantee clean `txPool` recycling for `memengine` and deterministic rollback on commit failures.
+    3. Ensure `Coordinator.Close()` aborts dangling transactions on the default session before releasing it to `SessionPool`.
+    4. Guard `WTSession.Reset()` with automatic rollback of active transactions (`if s.activeTx`), preventing contaminated sessions from re-entering `SessionPool`.
+    5. Implement `Session.Reset()` on `memengine.Session` to conform to `SessionPool` reset contract.
 - **Storage & Engine (`FIX-MEMENGINE-INDEX-RESTORE-ERROR-HANDLING-1`, table_data.go:31, persistence.go:163, 469)**:
   - Eliminate silent swallowing of secondary index restoration and WAL replay errors in `pkg/storage/memengine/table_data.go` and `persistence.go` per `[RULE:ExplicitError]`:
     1. Replace `_ = sl.FromEntries(idx.Entries)` in `table_data.go` with tracked initialization error handling (`initErr`), exposing `Restore() error` and fail-closed checks on `Insert()`, `Delete()`, `ScanRange()`, and `ScanRangeEntries()`.

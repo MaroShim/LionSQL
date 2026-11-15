@@ -314,6 +314,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		}
 		tx = wrapSessionTx(cs, t)
 		isEphemeral = true
+		defer tx.Rollback()
 	}
 
 	var nextAllocID int64 = 0
@@ -757,6 +758,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 		}
 		tx = wrapSessionTx(cs, t)
 		isEphemeral = true
+		defer tx.Rollback()
 	}
 
 	var nextAllocID int64 = 0
@@ -1121,6 +1123,7 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		}
 		tx = wrapSessionTx(cs, t)
 		isEphemeral = true
+		defer tx.Rollback()
 	}
 
 	cursor, err := tx.Scan(tableName)
@@ -1312,6 +1315,7 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		}
 		tx = wrapSessionTx(cs, t)
 		isEphemeral = true
+		defer tx.Rollback()
 	}
 
 	cursor, err := tx.Scan(tableName)
