@@ -597,7 +597,7 @@ func formatStorageVal(v storage.Value) any {
 		return v.IVal
 	case storage.TypeVarChar:
 		return v.SVal
-	case storage.TypeFloat:
+	case storage.TypeFloat, storage.TypeReal:
 		return v.FVal
 	case storage.TypeDecimal:
 		return v.Decimal()
@@ -813,6 +813,20 @@ func isDecValue(v any) bool {
 		return true
 	case storage.Value:
 		return n.Type == storage.TypeDecimal
+	default:
+		return false
+	}
+}
+
+func isFloatValue(v any) bool {
+	if v == nil {
+		return false
+	}
+	switch n := v.(type) {
+	case float64, float32:
+		return true
+	case storage.Value:
+		return n.Type == storage.TypeFloat
 	default:
 		return false
 	}

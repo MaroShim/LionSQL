@@ -72,6 +72,10 @@ static int go_wt_session_log_flush_sync(WT_SESSION *session) {
     return session->log_flush(session, "sync=on");
 }
 
+static int go_wt_session_log_flush_os(WT_SESSION *session) {
+    return session->log_flush(session, "sync=off");
+}
+
 static int go_wt_open_cursor(WT_SESSION *session, const char *uri, WT_CURSOR **cursorp) {
     return session->open_cursor(session, uri, NULL, NULL, cursorp);
 }
@@ -268,6 +272,11 @@ import (
 	"lionsql/pkg/storage/memengine"
 )
 
+var (
+	cSyncOff = C.CString("sync=off")
+	cSyncOn  = C.CString("sync=on")
+)
+
 // Engine implements storage.Engine via the WiredTiger C API, routing
 // session-scoped temporary tables and table variables transparently to an
 // embedded ephemeral in-memory OCC engine ([PERF-HYBRID-TEMPMEM-1]).
@@ -286,6 +295,8 @@ type Engine struct {
 	writeSeq    atomic.Int64
 	syncedSeq   atomic.Int64
 	syncCount   atomic.Int64
+	flushOSMu   sync.Mutex
+	flushedOSSeq atomic.Int64
 	stopCh      chan struct{}
 	bgWg        sync.WaitGroup
 	closed      bool
@@ -401,6 +412,29 @@ func (e *Engine) syncUpTo(sess *C.WT_SESSION, seq int64) error {
 	e.syncMu.Lock()
 	defer e.syncMu.Unlock()
 	return e.syncUpToLocked(sess, seq)
+}
+
+// flushOSToLocked flushes buffered log records from WiredTiger's user-space memory buffer
+// to the operating system's page cache via WT_SESSION::log_flush(sync=off).
+// This guarantees that if the process terminates abruptly (SIGKILL / kill -9), the OS kernel
+// retains the written WAL frames and flushes them to disk with zero transaction loss.
+func (e *Engine) flushOSToLocked(sess *C.WT_SESSION, seq int64) error {
+	if e.flushedOSSeq.Load() >= seq {
+		return nil
+	}
+	target := e.writeSeq.Load()
+	if ret := C.go_wt_session_log_flush_os(sess); ret != 0 {
+		return fmt.Errorf("wiredtiger log_flush(sync=off) failed with code %d", ret)
+	}
+	e.flushedOSSeq.Store(target)
+	return nil
+}
+
+// flushOSTo performs leader/follower group log flush to the OS page cache.
+func (e *Engine) flushOSTo(sess *C.WT_SESSION, seq int64) error {
+	e.flushOSMu.Lock()
+	defer e.flushOSMu.Unlock()
+	return e.flushOSToLocked(sess, seq)
 }
 
 func (e *Engine) startPeriodicSync(stopCh <-chan struct{}) {
@@ -789,7 +823,31 @@ func (e *Engine) DropTable(tableName string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	tbl, exists := sqlutil.MapGetFold(e.tables, tableName)
+	targetName := tableName
+	tbl, exists := sqlutil.MapGetFold(e.tables, targetName)
+	if !exists {
+		cleaned := strings.Trim(strings.TrimSpace(tableName), "[]\"'`")
+		if idx := strings.LastIndex(cleaned, "."); idx != -1 {
+			cleaned = strings.Trim(cleaned[idx+1:], "[]\"'`")
+		}
+		tbl, exists = sqlutil.MapGetFold(e.tables, cleaned)
+		if exists {
+			targetName = cleaned
+		} else {
+			for name, t := range e.tables {
+				cleanedName := strings.Trim(name, "[]\"'`")
+				if idx := strings.LastIndex(cleanedName, "."); idx != -1 {
+					cleanedName = strings.Trim(cleanedName[idx+1:], "[]\"'`")
+				}
+				if strings.EqualFold(cleanedName, cleaned) {
+					tbl = t
+					targetName = name
+					exists = true
+					break
+				}
+			}
+		}
+	}
 	if !exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
@@ -848,8 +906,8 @@ func (e *Engine) DropTable(tableName string) error {
 		C.free(unsafe.Pointer(cIdxURI))
 	}
 
-	sqlutil.MapDeleteFold(e.tables, tableName)
-	sqlutil.MapDeleteFold(e.rowCounts, tableName)
+	sqlutil.MapDeleteFold(e.tables, targetName)
+	sqlutil.MapDeleteFold(e.rowCounts, targetName)
 	if err := e.saveCatalog(); err != nil {
 		return err
 	}
@@ -1191,21 +1249,45 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	oldClean := strings.Trim(strings.TrimSpace(oldName), "[]\"'`")
-	if idx := strings.LastIndex(oldClean, "."); idx != -1 {
-		oldClean = strings.Trim(oldClean[idx+1:], "[]\"'`")
+	targetOld := oldName
+	tbl, exists := sqlutil.MapGetFold(e.tables, targetOld)
+	if !exists {
+		oldClean := strings.Trim(strings.TrimSpace(oldName), "[]\"'`")
+		if idx := strings.LastIndex(oldClean, "."); idx != -1 {
+			oldClean = strings.Trim(oldClean[idx+1:], "[]\"'`")
+		}
+		tbl, exists = sqlutil.MapGetFold(e.tables, oldClean)
+		if exists {
+			targetOld = oldClean
+		} else {
+			for name, t := range e.tables {
+				cleanedName := strings.Trim(name, "[]\"'`")
+				if idx := strings.LastIndex(cleanedName, "."); idx != -1 {
+					cleanedName = strings.Trim(cleanedName[idx+1:], "[]\"'`")
+				}
+				if strings.EqualFold(cleanedName, oldClean) {
+					tbl = t
+					targetOld = name
+					exists = true
+					break
+				}
+			}
+		}
 	}
-	newClean := strings.Trim(strings.TrimSpace(newName), "[]\"'`")
-	if idx := strings.LastIndex(newClean, "."); idx != -1 {
-		newClean = strings.Trim(newClean[idx+1:], "[]\"'`")
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, oldName)
 	}
 
-	tbl, exists := sqlutil.MapGetFold(e.tables, oldClean)
-	if !exists {
-		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, oldClean)
+	targetNew := newName
+	if !strings.HasPrefix(targetNew, "__") {
+		targetNew = strings.Trim(strings.TrimSpace(newName), "[]\"'`")
+		if idx := strings.LastIndex(targetNew, "."); idx != -1 {
+			targetNew = strings.Trim(targetNew[idx+1:], "[]\"'`")
+		}
 	}
-	if _, already := sqlutil.MapGetFold(e.tables, newClean); already {
-		return fmt.Errorf("%w: %s", storage.ErrTableExists, newClean)
+
+	if _, already := sqlutil.MapGetFold(e.tables, targetNew); already {
+		return fmt.Errorf("%w: %s", storage.ErrTableExists, targetNew)
 	}
 
 	// Lock down physical table identifier so underlying WiredTiger B-Tree URI never changes
@@ -1214,32 +1296,32 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 	}
 
 	// Evict any active cached cursors under the old and physical name
-	e.evictAllCursors(oldClean)
-	if tbl.PhysicalName != "" && tbl.PhysicalName != oldClean {
+	e.evictAllCursors(targetOld)
+	if tbl.PhysicalName != "" && tbl.PhysicalName != targetOld {
 		e.evictAllCursors(tbl.PhysicalName)
 	}
 
 	for k := range e.tables {
-		if strings.EqualFold(k, oldClean) {
+		if strings.EqualFold(k, targetOld) {
 			delete(e.tables, k)
 		}
 	}
 
-	tbl.Name = newClean
-	e.tables[newClean] = tbl
+	tbl.Name = targetNew
+	e.tables[targetNew] = tbl
 
-	cnt := e.getRowCountAtomicLocked(oldClean)
-	sqlutil.MapDeleteFold(e.rowCounts, oldClean)
+	cnt := e.getRowCountAtomicLocked(targetOld)
+	sqlutil.MapDeleteFold(e.rowCounts, targetOld)
 	if e.rowCounts == nil {
 		e.rowCounts = make(map[string]*atomic.Int64)
 	}
-	e.rowCounts[newClean] = cnt
+	e.rowCounts[targetNew] = cnt
 
-	// Update any foreign key definitions on other tables referencing oldClean
+	// Update any foreign key definitions on other tables referencing targetOld
 	for _, otherTd := range e.tables {
 		for i := range otherTd.ForeignKeys {
-			if strings.EqualFold(otherTd.ForeignKeys[i].ParentTable, oldClean) {
-				otherTd.ForeignKeys[i].ParentTable = newClean
+			if strings.EqualFold(otherTd.ForeignKeys[i].ParentTable, targetOld) {
+				otherTd.ForeignKeys[i].ParentTable = targetNew
 			}
 		}
 	}
@@ -1252,8 +1334,8 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 	if !oldTemp {
 		e.recordWALLocked([]memengine.WALOp{{
 			Type:  memengine.OpRenameTable,
-			Table: newClean,
-			Key:   oldClean,
+			Table: targetNew,
+			Key:   targetOld,
 		}})
 	}
 	return nil
@@ -3298,7 +3380,17 @@ func (tx *WTTx) Commit() error {
 
 	tx.sess.resetCursors()
 
-	ret := C.go_wt_session_commit(tx.sess.sess, nil)
+	var commitCfg *C.char
+	if hasWrites && !tx.opts.ReadOnly {
+		switch tx.sess.engine.FsyncPolicy() {
+		case memengine.FsyncAlways:
+			commitCfg = cSyncOn
+		case memengine.FsyncEverySec:
+			commitCfg = cSyncOff
+		}
+	}
+
+	ret := C.go_wt_session_commit(tx.sess.sess, commitCfg)
 	_ = C.go_wt_session_reset(tx.sess.sess)
 	tx.sess.mu.Lock()
 	tx.sess.activeTx = false
@@ -3344,6 +3436,11 @@ func (tx *WTTx) Commit() error {
 		if err := eng.syncUpTo(tx.sess.sess, seq); err != nil {
 			eng.markTainted(err)
 			return fmt.Errorf("%w: wiredtiger fsync failed: %v", storage.ErrEngineTainted, err)
+		}
+	} else if eng.FsyncPolicy() == memengine.FsyncEverySec {
+		if err := eng.flushOSTo(tx.sess.sess, seq); err != nil {
+			eng.markTainted(err)
+			return fmt.Errorf("%w: wiredtiger log_flush(sync=off) failed: %v", storage.ErrEngineTainted, err)
 		}
 	}
 	return nil

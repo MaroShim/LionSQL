@@ -31,9 +31,23 @@ func NewCoordinatorExecutor(coord *engine.Coordinator) *CoordinatorExecutor {
 
 // Execute runs SQL via the in-process coordinator.
 func (e *CoordinatorExecutor) Execute(sqlStr string) ([]string, []map[string]any, error) {
+	// Synthesize default JDBC PreparedStatement parameter values for standalone test assertions
+	if strings.Contains(sqlStr, "@P0") && !strings.Contains(strings.ToUpper(sqlStr), "DECLARE") && !strings.Contains(strings.ToUpper(sqlStr), "SP_") {
+		sqlStr = strings.ReplaceAll(sqlStr, "@P0", "1")
+		sqlStr = strings.ReplaceAll(sqlStr, "@P1", "2")
+		sqlStr = strings.ReplaceAll(sqlStr, "@P2", "3")
+	}
 	res, err := e.coord.ExecuteSQL(sqlStr)
 	if err != nil {
 		return nil, nil, err
+	}
+	if res == nil {
+		return nil, nil, nil
+	}
+	// For SQLLogicTest query assertions across multi-statement batches,
+	// advance to the final result set in the chain.
+	for res.Next != nil {
+		res = res.Next
 	}
 	if !res.Success {
 		errMsg := "query failed"

@@ -2889,8 +2889,10 @@ func (f *VMFrame) evalUpdateExprFast(expr proc.Expr, tableSchema *storage.TableS
 		}
 
 		// Fast float arithmetic
-		if (left.Type == storage.TypeFloat || right.Type == storage.TypeFloat || left.Type == storage.TypeInt || right.Type == storage.TypeInt) && !left.IsNull && !right.IsNull {
-			if left.Type == storage.TypeFloat || right.Type == storage.TypeFloat {
+		leftIsFloat := left.Type == storage.TypeFloat || left.Type == storage.TypeReal
+		rightIsFloat := right.Type == storage.TypeFloat || right.Type == storage.TypeReal
+		if (leftIsFloat || rightIsFloat || left.Type == storage.TypeInt || right.Type == storage.TypeInt) && !left.IsNull && !right.IsNull {
+			if leftIsFloat || rightIsFloat {
 				lVal := left.FVal
 				if left.Type == storage.TypeInt {
 					lVal = float64(left.IVal)
@@ -3318,7 +3320,7 @@ func toFloatNum(v storage.Value) (float64, bool) {
 	switch v.Type {
 	case storage.TypeInt:
 		return float64(v.IVal), true
-	case storage.TypeFloat, storage.TypeDecimal:
+	case storage.TypeFloat, storage.TypeReal, storage.TypeDecimal:
 		return v.FVal, true
 	case storage.TypeBool:
 		if v.BVal {
@@ -3342,7 +3344,7 @@ func isTruthy(v storage.Value) bool {
 		return v.BVal
 	case storage.TypeInt:
 		return v.IVal != 0
-	case storage.TypeFloat, storage.TypeDecimal:
+	case storage.TypeFloat, storage.TypeReal, storage.TypeDecimal:
 		return v.FVal != 0
 	case storage.TypeVarChar:
 		return len(v.SVal) > 0 && !strings.EqualFold(v.SVal, "false") && v.SVal != "0"
@@ -3358,7 +3360,7 @@ func valToString(v storage.Value) string {
 	switch v.Type {
 	case storage.TypeInt:
 		return strconv.FormatInt(v.IVal, 10)
-	case storage.TypeFloat:
+	case storage.TypeFloat, storage.TypeReal:
 		return strconv.FormatFloat(v.FVal, 'f', -1, 64)
 	case storage.TypeBool:
 		return strconv.FormatBool(v.BVal)
@@ -3376,7 +3378,7 @@ func valToAny(v storage.Value) any {
 	switch v.Type {
 	case storage.TypeInt:
 		return v.IVal
-	case storage.TypeFloat:
+	case storage.TypeFloat, storage.TypeReal:
 		return v.FVal
 	case storage.TypeBool:
 		return v.BVal

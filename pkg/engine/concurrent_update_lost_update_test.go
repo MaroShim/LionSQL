@@ -94,6 +94,73 @@ func TestConcurrent_Update_LostUpdate_Prevention(t *testing.T) {
 	}
 }
 
+// TestConcurrent_Update_HighContentionStress verifies 50 concurrent workers
+// under high-contention bank account incrementing.
+func TestConcurrent_Update_HighContentionStress(t *testing.T) {
+	coord, cleanup := setupTestCoord(t)
+	defer cleanup()
+
+	if _, err := coord.ExecuteSQL("CREATE TABLE accounts_stress (id INT PRIMARY KEY, balance INT)"); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL("INSERT INTO accounts_stress (id, balance) VALUES (1, 0)"); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+
+	const numWorkers = 100
+	var wg sync.WaitGroup
+	wg.Add(numWorkers)
+
+	errCh := make(chan error, numWorkers)
+
+	for i := 0; i < numWorkers; i++ {
+		go func(workerID int) {
+			defer wg.Done()
+			sessID := fmt.Sprintf("stress-worker-%d", workerID)
+			// Under extreme 100-worker contention on a single row, autocommit will retry on conflict.
+			res, err := coord.ExecuteSessionSQL(sessID, "UPDATE accounts_stress SET balance = balance + 1 WHERE id = 1")
+			if err != nil {
+				errCh <- fmt.Errorf("worker %d failed: %w", workerID, err)
+				return
+			}
+			if res.RowsAffected != 1 {
+				errCh <- fmt.Errorf("worker %d expected 1 row affected, got %d", workerID, res.RowsAffected)
+				return
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	var errs []error
+	for err := range errCh {
+		errs = append(errs, err)
+	}
+	if len(errs) > 0 {
+		t.Fatalf("100-worker high contention had %d failures: %v", len(errs), errs[0])
+	}
+
+	res, err := coord.ExecuteSQL("SELECT balance FROM accounts_stress WHERE id = 1")
+	if err != nil {
+		t.Fatalf("Select failed: %v", err)
+	}
+	val := res.Rows[0]["balance"]
+	var balance int64
+	switch v := val.(type) {
+	case int64:
+		balance = v
+	case int:
+		balance = int64(v)
+	case storage.Value:
+		balance = v.IVal
+	}
+
+	if balance != 100 {
+		t.Fatalf("Expected balance = 100, got %d", balance)
+	}
+}
+
 // TestConcurrent_Update_PredicateExclusion verifies that when multiple workers compete
 // for a row matching a condition (e.g. status = 'PENDING'), exactly one worker updates the row
 // and subsequent/concurrent workers do not double-update.

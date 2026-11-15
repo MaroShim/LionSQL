@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/tabwriter"
 
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/cli"
@@ -89,25 +88,7 @@ func runSQL(args []string) error {
 		return fmt.Errorf("sql execution error: %s", res.Error)
 	}
 
-	if len(res.Columns) > 0 {
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-		fmt.Fprintln(w, strings.Join(res.Columns, "\t"))
-		for _, row := range res.Rows {
-			var vals []string
-			for _, col := range res.Columns {
-				v := row[col]
-				if v == nil {
-					vals = append(vals, "NULL")
-				} else {
-					vals = append(vals, fmt.Sprintf("%v", v))
-				}
-			}
-			fmt.Fprintln(w, strings.Join(vals, "\t"))
-		}
-		w.Flush()
-	}
-
-	fmt.Printf("(%d row(s) affected, %d µs)\n", res.RowsAffected, res.DurationUS)
+	cli.FormatQueryResult(os.Stdout, res)
 	return nil
 }
 

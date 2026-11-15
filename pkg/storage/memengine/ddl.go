@@ -381,7 +381,24 @@ func (e *Engine) DropTable(tableName string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	td, exists := sqlutil.MapGetFold(e.tables, tableName)
+	targetName := tableName
+	td, exists := sqlutil.MapGetFold(e.tables, targetName)
+	if !exists {
+		cleaned := cleanTablePrefix(tableName)
+		td, exists = sqlutil.MapGetFold(e.tables, cleaned)
+		if exists {
+			targetName = cleaned
+		} else {
+			for name, t := range e.tables {
+				if strings.EqualFold(cleanTablePrefix(name), cleaned) {
+					td = t
+					targetName = name
+					exists = true
+					break
+				}
+			}
+		}
+	}
 	if !exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
@@ -402,7 +419,7 @@ func (e *Engine) DropTable(tableName string) error {
 		}
 	}
 
-	sqlutil.MapDeleteFold(e.tables, tableName)
+	sqlutil.MapDeleteFold(e.tables, targetName)
 	e.rebuildFKCacheLocked()
 	if !storage.IsTemporaryTable(td.Schema.Name) {
 		if _, err := e.recordWALLocked([]WALOp{{
@@ -644,46 +661,66 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	oldClean := cleanTablePrefix(oldName)
-	newClean := cleanTablePrefix(newName)
-
-	td, exists := sqlutil.MapGetFold(e.tables, oldClean)
+	targetOld := oldName
+	td, exists := sqlutil.MapGetFold(e.tables, targetOld)
 	if !exists {
-		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, oldClean)
+		oldClean := cleanTablePrefix(oldName)
+		td, exists = sqlutil.MapGetFold(e.tables, oldClean)
+		if exists {
+			targetOld = oldClean
+		} else {
+			for name, t := range e.tables {
+				if strings.EqualFold(cleanTablePrefix(name), oldClean) {
+					td = t
+					targetOld = name
+					exists = true
+					break
+				}
+			}
+		}
 	}
-	if _, already := sqlutil.MapGetFold(e.tables, newClean); already {
-		return fmt.Errorf("%w: %s", storage.ErrTableExists, newClean)
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, oldName)
 	}
 
-	if !storage.IsTemporaryTable(newClean) {
+	targetNew := newName
+	if !strings.HasPrefix(targetNew, "__") {
+		targetNew = cleanTablePrefix(newName)
+	}
+
+	if _, already := sqlutil.MapGetFold(e.tables, targetNew); already {
+		return fmt.Errorf("%w: %s", storage.ErrTableExists, targetNew)
+	}
+
+	if !storage.IsTemporaryTable(targetNew) {
 		if _, err := e.recordWALLocked([]WALOp{{
 			Type:  OpRenameTable,
-			Table: newClean,
-			Key:   oldClean,
+			Table: targetNew,
+			Key:   targetOld,
 		}}); err != nil {
 			return err
 		}
 	}
 
 	for k := range e.tables {
-		if strings.EqualFold(k, oldClean) {
+		if strings.EqualFold(k, targetOld) {
 			delete(e.tables, k)
 		}
 	}
 
 	td.mu.Lock()
-	td.Schema.Name = newClean
+	td.Schema.Name = targetNew
 	td.refreshSnapSchemaLocked()
 	td.mu.Unlock()
-	e.tables[newClean] = td
+	e.tables[targetNew] = td
 
-	// Update any foreign key definitions on other tables referencing oldClean
+	// Update any foreign key definitions on other tables referencing targetOld
 	for _, otherTd := range e.tables {
 		otherTd.mu.Lock()
 		changed := false
 		for i := range otherTd.Schema.ForeignKeys {
-			if strings.EqualFold(otherTd.Schema.ForeignKeys[i].ParentTable, oldClean) {
-				otherTd.Schema.ForeignKeys[i].ParentTable = newClean
+			if strings.EqualFold(otherTd.Schema.ForeignKeys[i].ParentTable, targetOld) {
+				otherTd.Schema.ForeignKeys[i].ParentTable = targetNew
 				changed = true
 			}
 		}

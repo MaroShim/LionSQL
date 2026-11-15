@@ -231,17 +231,15 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 			vals[i] = val
 			continue
 		}
-		if f.alias != "" {
-			if val, ok := tuple.GetOK(f.alias); ok {
-				if _, isCol := f.parsed.(*proc.ColumnRefExpr); !isCol {
-					vals[i] = val
-					continue
-				}
-			}
-		}
 		if f.parsed != nil {
 			if res, ok := EvalTupleExprWithSubquery(tuple, f.parsed, subExec); ok {
 				vals[i] = res
+				continue
+			}
+		}
+		if f.alias != "" {
+			if val, ok := tuple.GetOK(f.alias); ok {
+				vals[i] = val
 				continue
 			}
 		}

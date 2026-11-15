@@ -79,8 +79,16 @@ func TestOutboxDispatcher_GeneralCDCToMemorySink(t *testing.T) {
 		t.Errorf("Expected table 'orders', got '%s'", msg.Table)
 	}
 
-	// Verify stats
-	stats := dispatcher.Stats()
+	// Verify stats deterministically
+	deadline := time.Now().Add(2 * time.Second)
+	var stats cdc.DispatcherStats
+	for time.Now().Before(deadline) {
+		stats = dispatcher.Stats()
+		if stats.DispatchedCount >= 1 {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
 	if stats.DispatchedCount != 1 {
 		t.Errorf("Expected DispatchedCount 1, got %d", stats.DispatchedCount)
 	}
@@ -191,7 +199,17 @@ func TestOutboxDispatcher_RetryAndExponentialBackoff(t *testing.T) {
 		t.Fatalf("Expected message to eventually succeed after retries, got %d", sink.Count())
 	}
 
-	stats := dispatcher.Stats()
+	// Poll deterministically for dispatcher stats to reflect completed dispatch
+	deadline := time.Now().Add(2 * time.Second)
+	var stats cdc.DispatcherStats
+	for time.Now().Before(deadline) {
+		stats = dispatcher.Stats()
+		if stats.DispatchedCount >= 1 {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
 	if stats.RetriedCount < 2 {
 		t.Errorf("Expected at least 2 retries, got %d", stats.RetriedCount)
 	}

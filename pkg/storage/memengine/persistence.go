@@ -319,9 +319,31 @@ type SnapshotContainer struct {
 // RewriteAOF generates a fresh snapshot (tables.mpk) using SQLite WAL2-style Dual-WAL rotation,
 // rotating active.wal to compacting.wal in ~1 microsecond so incoming transactions are never stalled ([발굴 결함 1-1]).
 func (e *Engine) RewriteAOF() error {
+	if e.dataDir == "" || e.wal == nil {
+		return nil
+	}
+	compactingWAL := filepath.Join(e.dataDir, "wal.aof.compacting")
+
+	// 1. Atomically rotate active WAL file under short-lived lock (WAL2 Ping-Pong)
 	e.mu.Lock()
-	defer e.mu.Unlock()
-	return e.rewriteAOFLocked()
+	e.walOrderMu.Lock()
+	snapLSN := e.nextLSN.Load()
+	err := e.wal.Rotate(compactingWAL)
+	e.walOrderMu.Unlock()
+	e.mu.Unlock()
+
+	if err != nil {
+		return fmt.Errorf("AOF rewrite rotate error: %w", err)
+	}
+
+	// 2. Dump in-memory snapshot with snapLSN without holding e.mu (non-blocking for incoming commits)
+	if err := e.saveDiskSnapshotLocked(snapLSN); err != nil {
+		return fmt.Errorf("AOF rewrite snapshot error: %w", err)
+	}
+
+	// 3. Remove the frozen compacting WAL file after snapshot commitment
+	_ = os.Remove(compactingWAL)
+	return nil
 }
 
 func (e *Engine) rewriteAOFLocked() error {
@@ -329,23 +351,16 @@ func (e *Engine) rewriteAOFLocked() error {
 		return nil
 	}
 	compactingWAL := filepath.Join(e.dataDir, "wal.aof.compacting")
-
-	// 1. Atomically rotate active WAL file under short-lived lock (WAL2 Ping-Pong)
 	e.walOrderMu.Lock()
 	snapLSN := e.nextLSN.Load()
 	err := e.wal.Rotate(compactingWAL)
 	e.walOrderMu.Unlock()
-
 	if err != nil {
 		return fmt.Errorf("AOF rewrite rotate error: %w", err)
 	}
-
-	// 2. Dump in-memory snapshot with snapLSN (non-blocking for incoming commits)
 	if err := e.saveDiskSnapshotLocked(snapLSN); err != nil {
 		return fmt.Errorf("AOF rewrite snapshot error: %w", err)
 	}
-
-	// 3. Remove the frozen compacting WAL file after snapshot commitment
 	_ = os.Remove(compactingWAL)
 	return nil
 }
@@ -396,12 +411,17 @@ func (e *Engine) saveDiskSnapshotLocked(snapLSN int64) error {
 		td.mu.Lock()
 		td.partMu.RLock()
 	}
-	defer func() {
+	unlockTables := func() {
 		for i := len(tNames) - 1; i >= 0; i-- {
 			td := persistTables[tNames[i]]
 			td.partMu.RUnlock()
 			td.clearShardsSyncMapsAlreadyLocked()
 			td.mu.Unlock()
+		}
+	}
+	defer func() {
+		if tNames != nil {
+			unlockTables()
 		}
 	}()
 
@@ -420,6 +440,10 @@ func (e *Engine) saveDiskSnapshotLocked(snapLSN int64) error {
 		Tables:      persistTables,
 	}
 	data, err := MarshalMsgPack(container)
+	// Explicitly release table locks before disk write syscalls ([RULE:LatencyBudget], [RULE:LockHierarchy])
+	unlockTables()
+	tNames = nil // prevent double-unlock in defer
+
 	if err != nil {
 		return fmt.Errorf("failed to encode tables to MessagePack: %w", err)
 	}

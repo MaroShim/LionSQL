@@ -649,6 +649,8 @@ func TestEvalRowExpr_CastBit(t *testing.T) {
 		{name: "cast str false", sql: "SELECT CAST('false' AS BIT)", want: false},
 		{name: "cast float nonzero", sql: "SELECT CAST(1.5 AS BIT)", want: true},
 		{name: "cast null", sql: "SELECT CAST(NULL AS BIT)", want: nil},
+		{name: "cast int real", sql: "SELECT CAST ( 6 AS REAL )", want: float64(6)},
+		{name: "cast real div", sql: "SELECT DISTINCT + 20 + CAST ( 6 AS REAL ) / - 32", want: float64(19.8125)},
 	}
 
 	for _, tt := range tests {

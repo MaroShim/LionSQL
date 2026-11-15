@@ -28,33 +28,39 @@ type Config struct {
 }
 
 // FormatQueryResult writes tabular query results to the given writer.
+// If multiple result sets are chained via res.Next, all result sets are rendered sequentially.
 func FormatQueryResult(w io.Writer, res *engine.QueryResult) {
 	if res == nil {
 		return
 	}
-	if len(res.Columns) > 0 {
-		tw := tabwriter.NewWriter(w, 0, 0, 3, ' ', 0)
-		fmt.Fprintln(tw, strings.Join(res.Columns, "\t"))
-		for _, row := range res.Rows {
-			var vals []string
-			for _, col := range res.Columns {
-				v := row[col]
-				if v == nil {
-					vals = append(vals, "NULL")
-				} else {
-					vals = append(vals, fmt.Sprintf("%v", v))
+	for cur := res; cur != nil; cur = cur.Next {
+		if len(cur.Columns) > 0 {
+			tw := tabwriter.NewWriter(w, 0, 0, 3, ' ', 0)
+			fmt.Fprintln(tw, strings.Join(cur.Columns, "\t"))
+			for _, row := range cur.Rows {
+				var vals []string
+				for _, col := range cur.Columns {
+					v := row[col]
+					if v == nil {
+						vals = append(vals, "NULL")
+					} else {
+						vals = append(vals, fmt.Sprintf("%v", v))
+					}
 				}
+				fmt.Fprintln(tw, strings.Join(vals, "\t"))
 			}
-			fmt.Fprintln(tw, strings.Join(vals, "\t"))
+			tw.Flush()
 		}
-		tw.Flush()
-	}
-	for _, msg := range res.Messages {
-		if strings.TrimSpace(msg) != "" {
-			fmt.Fprintln(w, msg)
+		for _, msg := range cur.Messages {
+			if strings.TrimSpace(msg) != "" {
+				fmt.Fprintln(w, msg)
+			}
+		}
+		fmt.Fprintf(w, "(%d row(s) affected, %d µs)\n", cur.RowsAffected, cur.DurationUS)
+		if cur.Next != nil {
+			fmt.Fprintln(w)
 		}
 	}
-	fmt.Fprintf(w, "(%d row(s) affected, %d µs)\n", res.RowsAffected, res.DurationUS)
 }
 
 // RunCLI executes SQL statements non-interactively (-e, -f) or launches the interactive REPL.

@@ -441,6 +441,52 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 		return nil, false
 
 	case proc.TokenPlus, proc.TokenMinus, proc.TokenAsterisk, proc.TokenSlash, proc.TokenDiv, proc.TokenPercent:
+		// Decimal support
+		if isDecValue(left) || isDecValue(right) {
+			lDec, _ := tryDecimal(left)
+			rDec, _ := tryDecimal(right)
+			switch e.Op {
+			case proc.TokenPlus:
+				return lDec.Add(rDec), true
+			case proc.TokenMinus:
+				return lDec.Sub(rDec), true
+			case proc.TokenAsterisk:
+				return lDec.Mul(rDec), true
+			case proc.TokenSlash:
+				divRes, err := lDec.Div(rDec, 4)
+				if err == nil {
+					return divRes, true
+				}
+				return nil, false
+			}
+		}
+
+		// Float arithmetic: if either operand is explicitly a float, evaluate as float
+		if isFloatValue(left) || isFloatValue(right) {
+			lF, lOkF := toFloat64(left)
+			rF, rOkF := toFloat64(right)
+			if lOkF && rOkF {
+				switch e.Op {
+				case proc.TokenPlus:
+					return lF + rF, true
+				case proc.TokenMinus:
+					return lF - rF, true
+				case proc.TokenAsterisk:
+					return lF * rF, true
+				case proc.TokenSlash:
+					if rF == 0 {
+						return nil, false
+					}
+					return lF / rF, true
+				case proc.TokenPercent:
+					if int64(rF) == 0 {
+						return nil, true
+					}
+					return int64(lF) % int64(rF), true
+				}
+			}
+		}
+
 		// Fast-path: both operands are integer
 		lInt, lOk := toInt64(left)
 		rInt, rOk := toInt64(right)
@@ -467,42 +513,6 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 				return lInt % rInt, true
 			}
 			return nil, false
-		}
-		if e.Op == proc.TokenDiv {
-			lF, lOkF := toFloat64(left)
-			rF, rOkF := toFloat64(right)
-			if lOkF && rOkF {
-				rI := int64(rF)
-				lI := int64(lF)
-				if rI == 0 {
-					return nil, true
-				}
-				if lI == math.MinInt64 && rI == -1 {
-					return nil, false
-				}
-				return lI / rI, true
-			}
-			return nil, false
-		}
-
-		// Decimal support
-		if isDecValue(left) || isDecValue(right) {
-			lDec, _ := tryDecimal(left)
-			rDec, _ := tryDecimal(right)
-			switch e.Op {
-			case proc.TokenPlus:
-				return lDec.Add(rDec), true
-			case proc.TokenMinus:
-				return lDec.Sub(rDec), true
-			case proc.TokenAsterisk:
-				return lDec.Mul(rDec), true
-			case proc.TokenSlash:
-				divRes, err := lDec.Div(rDec, 4)
-				if err == nil {
-					return divRes, true
-				}
-				return nil, false
-			}
 		}
 
 		// Float arithmetic

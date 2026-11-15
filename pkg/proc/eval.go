@@ -551,7 +551,7 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		switch res.Type {
 		case storage.TypeInt:
 			return res.IVal, nil
-		case storage.TypeFloat:
+		case storage.TypeFloat, storage.TypeReal:
 			return res.FVal, nil
 		case storage.TypeBool:
 			return res.BVal, nil
@@ -1373,7 +1373,7 @@ func toFloat(v any) (float64, bool) {
 			return 0.0, true
 		} else if val.Type == storage.TypeInt {
 			return float64(val.IVal), true
-		} else if val.Type == storage.TypeFloat {
+		} else if val.Type == storage.TypeFloat || val.Type == storage.TypeReal {
 			return val.FVal, true
 		} else if val.Type == storage.TypeDecimal {
 			return val.Decimal().Float64(), true
@@ -1461,29 +1461,45 @@ func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style i
 			return fail(fmt.Errorf("unsupported conversion from %v to int", v.Type))
 		}
 
-	case storage.TypeFloat:
+	case storage.TypeFloat, storage.TypeReal:
 		switch v.Type {
-		case storage.TypeFloat:
-			return v, nil
+		case storage.TypeFloat, storage.TypeReal:
+			if targetType == storage.TypeReal {
+				return storage.RealValue(float32(v.FVal)), nil
+			}
+			return storage.FloatValue(v.FVal), nil
 		case storage.TypeInt:
+			if targetType == storage.TypeReal {
+				return storage.RealValue(float32(v.IVal)), nil
+			}
 			return storage.FloatValue(float64(v.IVal)), nil
 		case storage.TypeBool:
+			var f float64
 			if v.BVal {
-				return storage.FloatValue(1.0), nil
+				f = 1.0
 			}
-			return storage.FloatValue(0.0), nil
+			if targetType == storage.TypeReal {
+				return storage.RealValue(float32(f)), nil
+			}
+			return storage.FloatValue(f), nil
 		case storage.TypeVarChar:
 			s := strings.TrimSpace(v.SVal)
 			f, err := strconv.ParseFloat(s, 64)
 			if err != nil {
-				return fail(fmt.Errorf("conversion failed when converting %q to data type float", v.SVal))
+				return fail(fmt.Errorf("conversion failed when converting %q to data type float/real", v.SVal))
+			}
+			if targetType == storage.TypeReal {
+				return storage.RealValue(float32(f)), nil
 			}
 			return storage.FloatValue(f), nil
 		case storage.TypeDecimal:
 			f := v.DVal.Float64()
+			if targetType == storage.TypeReal {
+				return storage.RealValue(float32(f)), nil
+			}
 			return storage.FloatValue(f), nil
 		default:
-			return fail(fmt.Errorf("unsupported conversion from %v to float", v.Type))
+			return fail(fmt.Errorf("unsupported conversion from %v to float/real", v.Type))
 		}
 
 	case storage.TypeVarChar:
