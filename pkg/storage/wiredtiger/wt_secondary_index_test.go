@@ -779,4 +779,93 @@ func TestWiredTiger_Savepoint_Rollback_RemovesUpdatedIndexKey(t *testing.T) {
 	}
 }
 
+// TestWiredTiger_TableVariable_RollbackExemption verifies that table variables routed to tempEng
+// survive WTTx.Rollback() and retain their inserted rows per T-SQL standard.
+func TestWiredTiger_TableVariable_RollbackExemption(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_tv_rollback_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "db")
+	eng := New()
+	if err := eng.Open(dbPath); err != nil {
+		t.Fatalf("failed to open engine: %v", err)
+	}
+	defer eng.Close()
+
+	// 1. Regular disk table
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable items failed: %v", err)
+	}
+
+	// 2. Table variable (__tv_*)
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "__tv_sess1_log",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "info", Type: storage.TypeVarChar},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable __tv_sess1_log failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	_ = tx.Insert("items", storage.Record{"id": storage.IntValue(1)})
+	_ = tx.Insert("__tv_sess1_log", storage.Record{"id": storage.IntValue(1), "info": storage.StringValue("logged before rollback")})
+
+	// Rollback transaction
+	if err := tx.Rollback(); err != nil {
+		t.Fatalf("Rollback failed: %v", err)
+	}
+
+	// Read in a new transaction
+	txRead, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx read failed: %v", err)
+	}
+	defer txRead.Rollback()
+
+	// items must be 0
+	curItems, _ := txRead.Scan("items")
+	itemCount := 0
+	for curItems.Next() {
+		itemCount++
+	}
+	curItems.Close()
+	if itemCount != 0 {
+		t.Fatalf("expected items to have 0 rows after rollback, got %d", itemCount)
+	}
+
+	// __tv_sess1_log must retain 1 row
+	curTV, _ := txRead.Scan("__tv_sess1_log")
+	tvCount := 0
+	var infoVal string
+	for curTV.Next() {
+		tvCount++
+		rec, _ := curTV.Record()
+		infoVal = rec["info"].SVal
+	}
+	curTV.Close()
+	if tvCount != 1 || infoVal != "logged before rollback" {
+		t.Fatalf("expected table variable in WiredTiger hybrid mode to retain 1 row, got %d (info: %q)", tvCount, infoVal)
+	}
+}
+
+
 

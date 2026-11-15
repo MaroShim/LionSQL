@@ -238,7 +238,7 @@
 | `DONE` | **`FIX-SQL-DERIVED-VALUES-1`** |  | Engine | P1 | FROM (VALUES (...), (...)) AS alias(col1, col2) 인라인 테이블 값 생성자 및 컬럼 별칭 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQL-PAREN-SELECT-1`** |  | Engine | P1 | 괄호로 감싸진 (SELECT ...) 최상위 쿼리 및 뷰/CTE 본문 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQLUTIL-PARSER-1`** |  | Engine | P2 | pkg/sqlutil SQL 파서/정규화기 결함 보강 및 렉서 공통화 | [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md) |  |
-| `PENDING` | **`FIX-TABLE-VAR-TX-ROLLBACK-EXEMPT-1`** | `1.0-GA` | Engine | P2 | T-SQL 테이블 변수(@table_var) 트랜잭션 롤백 면제 및 TRY...CATCH 에러 로깅 보존 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-TABLE-VAR-TX-ROLLBACK-EXEMPT-1`** | `1.0-GA` | Engine | P2 | T-SQL 테이블 변수(@table_var) 트랜잭션 롤백 면제 및 TRY...CATCH 에러 로깅 보존 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`FIX-TDS-BATCH-ERROR-DONE-TOKEN-1`** | `1.0-GA` | Wire | P2 | TDS 배치 문장 에러 발생 시 DONE_ERROR 종단 토큰 발송 보장(클라이언트 드라이버 행 방지) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TDS-ERROR-NUMBER-MAP-1`** |  | Wire | P1 | PK/Unique/FK/Check 제약 조건 위반 시 SQL Server 표준 에러 번호(2627, 2601, 547) 매핑 반환 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TDS-PRINT-INFO-TOKEN-1`** |  | Wire | P1 | PRINT 문 실행 결과를 TDS INFO(0xAB) 토큰으로 클라이언트에 실시간 전송 | [`1.0-GA`](1.0-GA) |  |
@@ -2780,8 +2780,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] T-SQL 테이블 변수(@table_var) 트랜잭션 롤백 면제 및 TRY...CATCH 에러 로깅 보존 `FIX-TABLE-VAR-TX-ROLLBACK-EXEMPT-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-14 11:23:23
+### [DONE] T-SQL 테이블 변수(@table_var) 트랜잭션 롤백 면제 및 TRY...CATCH 에러 로깅 보존 `FIX-TABLE-VAR-TX-ROLLBACK-EXEMPT-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-15 03:04:11
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
 

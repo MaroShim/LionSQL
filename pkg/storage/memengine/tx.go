@@ -2298,9 +2298,93 @@ func (tx *Transaction) Rollback() error {
 	if tx.inPool {
 		return storage.ErrTxClosed
 	}
+
+	// Commit any changes to table variables (@table_var / __tv_*)
+	// Per MS SQL Server T-SQL standard, table variables are exempt from transaction rollback.
+	tx.commitTableVariablesLocked()
+
 	tx.closed = true
 	tx.releaseToPoolLocked()
 	return nil
+}
+
+func (tx *Transaction) commitTableVariablesLocked() {
+	if len(tx.changes) == 0 {
+		return
+	}
+	var tvChanges []rowChange
+	for _, ch := range tx.changes {
+		if storage.IsTableVariable(ch.table) {
+			tvChanges = append(tvChanges, ch)
+		}
+	}
+	if len(tvChanges) == 0 {
+		return
+	}
+
+	for _, ch := range tvChanges {
+		td := ch.td
+		if td == nil {
+			var err error
+			td, err = tx.getTableLocked(ch.table)
+			if err != nil {
+				continue
+			}
+		}
+		sIdx := ch.shardIdx
+		if sIdx < 0 || sIdx >= numTableShards {
+			sIdx = hashShard(ch.key)
+		}
+		sh := &td.shards[sIdx]
+		sh.mu.Lock()
+		oldEntry, hadOld := sh.entries[ch.key]
+		var oldRow storage.Row
+		if hadOld {
+			oldRow, _ = oldEntry.materialize(td)
+		}
+
+		switch ch.kind {
+		case changeInsert:
+			if td.mode == MemoryCompact && td.layout != nil {
+				if flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row); err == nil {
+					sh.entries[ch.key] = shardEntry{ver: 1, flatBuf: flatBuf}
+				}
+			} else {
+				sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
+			}
+			for _, idxData := range td.Indexes {
+				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
+				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
+				_ = idxData.Insert(newKey, ch.key, incVals)
+			}
+		case changeUpdate:
+			if td.mode == MemoryCompact && td.layout != nil {
+				if flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row); err == nil {
+					sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, flatBuf: flatBuf}
+				}
+			} else {
+				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
+			}
+			for _, idxData := range td.Indexes {
+				if hadOld {
+					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
+					idxData.Delete(oldKey, ch.key)
+				}
+				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
+				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
+				_ = idxData.Insert(newKey, ch.key, incVals)
+			}
+		case changeDelete:
+			delete(sh.entries, ch.key)
+			if hadOld {
+				for _, idxData := range td.Indexes {
+					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
+					idxData.Delete(oldKey, ch.key)
+				}
+			}
+		}
+		sh.mu.Unlock()
+	}
 }
 
 func (tx *Transaction) Savepoint(name string) error {
@@ -2355,11 +2439,40 @@ func (tx *Transaction) RollbackTo(name string) error {
 		return fmt.Errorf("%w: %s", storage.ErrSavepointNotFound, name)
 	}
 
+	// Preserve changes to table variables across savepoint rollback per T-SQL standard
+	tvChanges := make(map[string]rowChange)
+	for k, ch := range tx.changes {
+		if storage.IsTableVariable(ch.table) {
+			tvChanges[k] = ch
+		}
+	}
+	tvLocal := make(map[string]map[string]storage.Row)
+	for tbl, rows := range tx.local {
+		if storage.IsTableVariable(tbl) {
+			tvLocal[tbl] = make(map[string]storage.Row, len(rows))
+			for k, r := range rows {
+				tvLocal[tbl][k] = r
+			}
+		}
+	}
+
 	// Restore snapshot state
 	tx.local = cloneLocalMap(state.local)
 	tx.baseVers = cloneBaseVersMap(state.baseVers)
 	tx.deleted = cloneDeletedMap(state.deleted)
 	tx.changes = cloneChangesMap(state.changes)
+
+	for k, ch := range tvChanges {
+		tx.changes[k] = ch
+	}
+	for tbl, rows := range tvLocal {
+		if tx.local[tbl] == nil {
+			tx.local[tbl] = make(map[string]storage.Row, len(rows))
+		}
+		for k, r := range rows {
+			tx.local[tbl][k] = r
+		}
+	}
 
 	// Invalidate subsequent savepoints defined after this savepoint
 	idx := -1

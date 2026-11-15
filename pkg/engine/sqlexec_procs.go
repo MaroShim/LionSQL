@@ -1551,7 +1551,14 @@ func (s *Coordinator) execAnonymousBlock(query string, start time.Time, cs *Clie
 		}()
 	}
 
-	res, err := s.executor.ExecuteInTxContext(ctx, prog, params, tx, nil)
+	var activeSess storage.Session
+	if cs != nil && cs.Session != nil {
+		activeSess = cs.Session
+	} else {
+		activeSess = createdSession
+	}
+
+	res, err := s.executor.ExecuteInTxWithSessionContext(ctx, prog, params, tx, activeSess, nil)
 	if err != nil {
 		return nil, fmt.Errorf("execute anonymous block error: %w", err)
 	}

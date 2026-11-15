@@ -195,3 +195,59 @@ END;
 	}
 }
 
+func TestTableVariables_RollbackExemptionInTryCatch(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	sessionID := "sess-tv-rollback"
+
+	// Create physical table
+	if _, err := coord.ExecuteSessionSQL(sessionID, "CREATE TABLE bank_accounts (id INT PRIMARY KEY, balance INT);"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	batch := `
+DECLARE @audit TABLE (step VARCHAR(50), status VARCHAR(20));
+BEGIN TRY
+    BEGIN TRANSACTION;
+    INSERT INTO bank_accounts VALUES (1, 1000);
+    INSERT INTO @audit VALUES ('step1_insert', 'STARTED');
+
+    -- Cause error: duplicate PK insert
+    INSERT INTO bank_accounts VALUES (1, 2000);
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    ROLLBACK TRANSACTION;
+    INSERT INTO @audit VALUES ('step2_error_logged', 'ROLLED_BACK');
+END CATCH;
+
+SELECT step, status FROM @audit ORDER BY step ASC;
+`
+	res, err := coord.ExecuteSessionSQL(sessionID, batch)
+	if err != nil {
+		t.Fatalf("ExecuteSessionSQL batch failed: %v", err)
+	}
+
+	// bank_accounts must be empty because the transaction was rolled back
+	accRes, err := coord.ExecuteSessionSQL(sessionID, "SELECT * FROM bank_accounts;")
+	if err != nil {
+		t.Fatalf("SELECT bank_accounts failed: %v", err)
+	}
+	if len(accRes.Rows) != 0 {
+		t.Fatalf("expected bank_accounts to have 0 rows after rollback, got %d", len(accRes.Rows))
+	}
+
+	// @audit table variable MUST contain BOTH records ('step1_insert' and 'step2_error_logged')
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected @audit to retain 2 rows across rollback, got %d rows: %+v", len(res.Rows), res.Rows)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["step"]) != "step1_insert" || fmt.Sprintf("%v", res.Rows[1]["step"]) != "step2_error_logged" {
+		t.Fatalf("unexpected audit rows: %+v", res.Rows)
+	}
+}
+
+

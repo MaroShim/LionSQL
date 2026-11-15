@@ -243,6 +243,25 @@ func isTempPrefix(name string) bool {
 		strings.HasPrefix(lower, "__var_")
 }
 
+// IsTableVariable returns true if tableName represents a T-SQL table variable (@var, __tv_*, or __var_*).
+func IsTableVariable(name string) bool {
+	if len(name) == 0 {
+		return false
+	}
+	clean := strings.Trim(strings.TrimSpace(name), "[]\"'`")
+	if idx := strings.LastIndex(clean, "."); idx != -1 {
+		clean = strings.Trim(clean[idx+1:], "[]\"'`")
+	}
+	if len(clean) == 0 {
+		return false
+	}
+	if clean[0] == '@' {
+		return true
+	}
+	lower := strings.ToLower(clean)
+	return strings.HasPrefix(lower, "__tv_") || strings.HasPrefix(lower, "__var_")
+}
+
 // TableSchema defines a table structure.
 type TableSchema struct {
 	Name             string             `json:"name"`
