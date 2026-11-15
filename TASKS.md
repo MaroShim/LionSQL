@@ -244,7 +244,7 @@
 | `DONE` | **`FIX-TDS-PRINT-INFO-TOKEN-1`** |  | Wire | P1 | PRINT 문 실행 결과를 TDS INFO(0xAB) 토큰으로 클라이언트에 실시간 전송 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** |  | Wire | P1 | TDS RPC(0x03) 직접 프로시저 호출 시 OUTPUT/INOUT 파라미터 RETURNVALUE(0xAC) 토큰 반환 및 생략된 기본값(@param = default) 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TDS-RPC-RETURN-STATUS-1`** |  | Wire | P1 | TDS RPC 프로시저 RETURN <int> 실행 시 실제 종료 코드를 RETURNSTATUS(0x79) 토큰으로 전송 | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`FIX-TDS-USE-ENVCHANGE-TOKEN-1`** | `1.0-GA` | Wire | P2 | TDS USE 구문 실행 시 클라이언트 UI 동기화를 위한 ENVCHANGE(0xE3) 토큰 정상 방출 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-TDS-USE-ENVCHANGE-TOKEN-1`** | `1.0-GA` | Wire | P2 | TDS USE 구문 실행 시 클라이언트 UI 동기화를 위한 ENVCHANGE(0xE3) 토큰 정상 방출 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`FIX-TRIGGER-DML-INVOCATION-PIPELINE-1`** | `1.0-GA` | Engine | P2 | INSERT/UPDATE/DELETE DML 실행 파이프라인 직후 카탈로그 AFTER 트리거 자동 발화 연동 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TRIGGER-FOR-KEYWORD-1`** |  | Engine | P1 | CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TRUNCATE-TX-ROLLBACK-DEFERRED-1`** | `1.0-GA` | Storage | P2 | 트랜잭션 내 TRUNCATE 실행 시 물리 삭제 커밋 시점 지연(Deferred Drop) 및 롤백 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
@@ -2818,8 +2818,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] TDS USE 구문 실행 시 클라이언트 UI 동기화를 위한 ENVCHANGE(0xE3) 토큰 정상 방출 `FIX-TDS-USE-ENVCHANGE-TOKEN-1`
-- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-14 11:23:23
+### [DONE] TDS USE 구문 실행 시 클라이언트 UI 동기화를 위한 ENVCHANGE(0xE3) 토큰 정상 방출 `FIX-TDS-USE-ENVCHANGE-TOKEN-1`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-15 06:30:33
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
 

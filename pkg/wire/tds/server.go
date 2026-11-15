@@ -1555,6 +1555,7 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		}
 		WriteInfoDirect(buf, 0, 1, 0, msg, "LionSQL", "", 1)
 	}
+	checkAndWriteEnvChangeDatabase(buf, res, sess)
 	if upperCmd == "BEGIN" {
 		sess.inTx = true
 		sess.txDescriptor = atomic.AddUint64(&s.txCounter, 1)
@@ -2602,6 +2603,35 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 	}
 }
 
+// checkAndWriteEnvChangeDatabase inspects a QueryResult for virtual database context switches
+// and writes an ENVCHANGE (0xE3) token to the TDS stream to synchronize client UI context.
+func checkAndWriteEnvChangeDatabase(buf *bytes.Buffer, res *engine.QueryResult, sess *ConnectionSession) {
+	if res == nil || sess == nil || buf == nil {
+		return
+	}
+	upperCmd := strings.ToUpper(res.Command)
+	var newDB string
+	for _, msg := range res.Messages {
+		if strings.HasPrefix(msg, "Database context set to ") {
+			newDB = strings.TrimSuffix(strings.TrimPrefix(msg, "Database context set to "), ".")
+			break
+		}
+	}
+	if newDB == "" && upperCmd == "USE" {
+		newDB = "master"
+	}
+	if newDB != "" {
+		oldDB := sess.Database
+		if oldDB == "" {
+			oldDB = "master"
+		}
+		if newDB != oldDB || upperCmd == "USE" {
+			sess.Database = newDB
+			buf.Write(BuildEnvChangeDatabase(newDB, oldDB))
+		}
+	}
+}
+
 func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *ConnectionSession, ctx context.Context) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
@@ -2699,18 +2729,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		}
 		WriteInfoDirect(buf, 0, 1, 0, msg, "LionSQL", "", 1)
 	}
-	if upperCmd == "USE" {
-		newDB := "master"
-		if len(res.Messages) > 0 && strings.HasPrefix(res.Messages[0], "Database context set to ") {
-			newDB = strings.TrimSuffix(strings.TrimPrefix(res.Messages[0], "Database context set to "), ".")
-		}
-		oldDB := sess.Database
-		if oldDB == "" {
-			oldDB = "master"
-		}
-		sess.Database = newDB
-		buf.Write(BuildEnvChangeDatabase(newDB, oldDB))
-	}
+	checkAndWriteEnvChangeDatabase(buf, res, sess)
 	if upperCmd == "BEGIN" {
 		sess.inTx = true
 		sess.txDescriptor = atomic.AddUint64(&s.txCounter, 1)

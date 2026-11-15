@@ -908,6 +908,48 @@ func TestTDS_TolerantUseDatabase(t *testing.T) {
 	}
 }
 
+func TestTDS_UseDatabase_MultiStatementBatch_EnvChange(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	// Send multi-statement batch: USE [MultiBatchDB]; SELECT DB_NAME() AS curr_db;
+	payload := sendSQLBatch(t, conn, "USE [MultiBatchDB]; SELECT DB_NAME() AS curr_db;")
+
+	// Verify TokenEnvChange (0xE3) is present in the response stream
+	if !bytes.Contains(payload, []byte{TokenEnvChange}) {
+		t.Fatalf("expected TokenEnvChange (0xE3) in response to multi-statement USE batch, got: %x", payload)
+	}
+
+	// Verify database change payload contains MultiBatchDB
+	utf16DB := EncodeUTF16LE("MultiBatchDB")
+	if !bytes.Contains(payload, utf16DB) {
+		t.Fatalf("expected UTF-16LE MultiBatchDB in ENVCHANGE token payload")
+	}
+}
+
+func TestTDS_UseDatabase_ViaRPCExecuteSQL_EnvChange(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	// Execute USE via sp_executesql (ProcID 10)
+	var execSqlParams bytes.Buffer
+	execSqlParams.Write(buildNVarCharParam("@stmt", false, "USE [RpcDb];"))
+
+	payload := sendRPC(t, conn, 10, 0, execSqlParams.Bytes())
+
+	// Verify TokenEnvChange (0xE3) is present in RPC response
+	if !bytes.Contains(payload, []byte{TokenEnvChange}) {
+		t.Fatalf("expected TokenEnvChange (0xE3) in response to sp_executesql USE, got: %x", payload)
+	}
+
+	utf16DB := EncodeUTF16LE("RpcDb")
+	if !bytes.Contains(payload, utf16DB) {
+		t.Fatalf("expected UTF-16LE RpcDb in ENVCHANGE token payload")
+	}
+}
+
 func BenchmarkTDS_BuildBoundSQL(b *testing.B) {
 	srv := &Server{}
 	query := "SELECT id, name, balance FROM accounts WHERE id = @p1 AND branch_id = @p2 AND status = @p3;"
