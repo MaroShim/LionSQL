@@ -1,9 +1,10 @@
 # Casdoor + LionSQL Dual-Protocol Integration Guide (`PostgreSQL` & `MSSQL`)
 
-> - **Document Version**: v1.1.0
+> - **Document Version**: v1.2.0
 > - **Initial Created**: 2026-10-31
-> - **Last Updated**: 2026-11-14
-> - **Target Version**: LionSQL v1.0.x / Casdoor (Beego + XORM + Casbin)
+> - **Last Updated**: 2026-11-16
+> - **Target Release**: LionSQL v0.93.0+
+> - **Integration Target**: Casdoor (Beego + XORM + Casbin)
 > - **Supported Protocols**: PostgreSQL Wire Protocol v3 (`:5433`), Microsoft SQL Server TDS 7.x/8.0 (`:1433`)
 > - **한국어 문서**: [`guide/CASDOOR_INTEGRATION_GUIDE.ko.md`](CASDOOR_INTEGRATION_GUIDE.ko.md)
 

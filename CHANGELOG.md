@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - verify GoCD enterprise CI/CD schema migration, Liquibase locks, agent registry, and pipeline triggers across both PGWire (:5433) and TDS (:1433) (`INTEG-GOCD-1`)
 - verify Wiki.js modern enterprise wiki Knex/Drizzle migrations, page CRUD revisions, and bracket syntax across both PGWire (:5433) and TDS (:1433) (`INTEG-WIKIJS-1`)
 - publish GoCD and Wiki.js official enterprise integration guides for both PGWire and TDS listeners (`guide/GOCD_INTEGRATION_GUIDE.*`, `guide/WIKIJS_INTEGRATION_GUIDE.*`)
+- clean re-initialize fresh databases and verify compatibility for 7 major enterprise services (Grafana, Gitea, Metabase, Casdoor, Vaultwarden, Umami, Apache Answer) with full dual-protocol coverage across PGWire (:5433) and TDS (:1433)
+- update all 14 official integration guides and catalog index in `guide/` to official release v0.93.0+
 
 ### Fixed
 - enforce 0600 file permissions on atomic configuration file writes (`WriteToFileAtomic`)

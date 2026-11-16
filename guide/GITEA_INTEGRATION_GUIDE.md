@@ -1,9 +1,9 @@
 # Official LionSQL Integration & Operation Guide for Gitea (`guide/GITEA_INTEGRATION_GUIDE.md`)
 
-> - **Document Version**: v1.1.0
+> - **Document Version**: v1.2.0
 > - **Initial Created**: 2026-10-30
-> - **Last Updated**: 2026-11-14
-> - **Target Release**: LionSQL v0.90.0-beta4+
+> - **Last Updated**: 2026-11-16
+> - **Target Release**: LionSQL v0.93.0+
 > - **Integration Target**: Gitea v1.23 ~ v1.27+ (unmodified official binary/source)
 > - **Supported Wire Protocols**:
 >   - **PostgreSQL Wire Protocol v3** (default TCP `:5433`)

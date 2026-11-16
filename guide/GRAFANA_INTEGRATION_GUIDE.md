@@ -1,9 +1,9 @@
 # Official Grafana Integration & Dual Data Source Guide on LionSQL (`guide/GRAFANA_INTEGRATION_GUIDE.md`)
 
-> - **Document Version**: v1.1.0
+> - **Document Version**: v1.2.0
 > - **Initial Created**: 2026-10-31
-> - **Last Updated**: 2026-11-14
-> - **Target Release**: LionSQL v0.90.0-beta4+
+> - **Last Updated**: 2026-11-16
+> - **Target Release**: LionSQL v0.93.0+
 > - **Target Application**: Grafana v10.x ~ v13.x+ (`github.com/grafana/grafana`, zero-modification integration)
 > - **Database Drivers**:
 >   - Internal Metadata Backend: `github.com/lib/pq` (XORM over PostgreSQL Wire Protocol v3, TCP `:5433`)

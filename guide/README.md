@@ -1,10 +1,10 @@
 # LionSQL Official Application Integration Guides (`guide/`)
 
-> - **Document Version**: v1.1.0
+> - **Document Version**: v1.2.0
 > - **Initial Created**: 2026-11-02
-> - **Last Updated**: 2026-11-14
-> - **Target Release**: LionSQL v0.90.0-beta4+
-> - **Verified Services**: 13 Enterprise Open-Source Applications
+> - **Last Updated**: 2026-11-16
+> - **Target Release**: LionSQL v0.93.0+
+> - **Verified Services**: 15 Enterprise Open-Source Applications
 > - **한국어 문서**: [`guide/README.ko.md`](README.ko.md)
 
 This directory contains official step-by-step deployment, migration, and operational guides for running popular open-source applications and enterprise services directly on **LionSQL** with zero source code modifications.

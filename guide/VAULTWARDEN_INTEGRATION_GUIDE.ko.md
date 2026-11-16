@@ -1,9 +1,9 @@
 # LionSQL 기반 Vaultwarden 구축 및 운영 공식 연동 가이드 (`guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md`)
 
-> - **문서 버전**: v1.1.0
+> - **문서 버전**: v1.2.0
 > - **최초 작성일**: 2026-11-01
-> - **최종 업데이트**: 2026-11-14
-> - **대상 릴리즈**: LionSQL v0.90.0-beta4+
+> - **최종 업데이트**: 2026-11-16
+> - **대상 릴리즈**: LionSQL v0.93.0+
 > - **연동 대상**: Vaultwarden (공식 Docker 이미지 `vaultwarden/server:latest` 무수정 연동)
 > - **지원 유선 프로토콜**:
 >   - **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)

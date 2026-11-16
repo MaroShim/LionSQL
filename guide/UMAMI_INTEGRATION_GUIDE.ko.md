@@ -1,8 +1,9 @@
 # LionSQL Umami 연동 가이드 (`UMAMI_INTEGRATION_GUIDE.ko.md`)
 
-> - **문서 버전**: v1.1.0
+> - **문서 버전**: v1.2.0
 > - **최초 작성일**: 2026-11-01
-> - **최종 업데이트**: 2026-11-14
+> - **최종 업데이트**: 2026-11-16
+> - **대상 릴리즈**: LionSQL v0.93.0+
 > - **대상 애플리케이션**: Umami v2 (웹 분석 플랫폼)
 > - **연동 프로토콜**: **PostgreSQL Wire Protocol v3** (`TCP :5433`)
 > - **English Guide**: [`guide/UMAMI_INTEGRATION_GUIDE.md`](UMAMI_INTEGRATION_GUIDE.md)

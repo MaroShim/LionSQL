@@ -1,9 +1,9 @@
 # Official Deployment and Operation Guide for Apache Answer on LionSQL (`guide/ANSWER_INTEGRATION_GUIDE.md`)
 
-> - **Document Version**: v1.1.0
+> - **Document Version**: v1.2.0
 > - **Initial Created**: 2026-11-01
-> - **Last Updated**: 2026-11-14
-> - **Target Release**: LionSQL v0.90.0-beta4+
+> - **Last Updated**: 2026-11-16
+> - **Target Release**: LionSQL v0.93.0+
 > - **Target Application**: Apache Answer v1.4+ (Unmodified official source/binary)
 > - **Supported Protocol**:
 >   - **PostgreSQL Wire Protocol v3** (Default TCP `:5433`)
@@ -109,7 +109,7 @@ curl -s -X POST http://127.0.0.1:9080/answer/api/v1/user/login/email \
 
 ### Q1: `table "pg_tables" not found`
 - **Cause**: In older LionSQL versions, system catalog queries were routed to physical storage.
-- **Fix**: Upgrade to LionSQL v0.90.0-beta4 or later, which routes virtual catalog queries to the virtual view engine.
+- **Fix**: Upgrade to LionSQL v0.93.0 or later, which routes virtual catalog queries to the virtual view engine.
 
 ### Q2: `missing primary key id` on batch INSERT
 - **Cause**: Multi-row batch inserts omitting identity columns failed to auto-generate IDs in previous VDBE releases.

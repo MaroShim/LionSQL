@@ -1,6 +1,7 @@
 package engine_test
 
 import (
+	"fmt"
 	"testing"
 
 	"lionsql/pkg/catalog"
@@ -56,7 +57,7 @@ func TestCasdoor_CompositePrimaryKeyAndHexBinary(t *testing.T) {
 	if sel.Rows[0]["category"] != "Payment" {
 		t.Errorf("expected category 'Payment', got %v", sel.Rows[0]["category"])
 	}
-	if sel.Rows[0]["addresses"] != "0x5b5d" {
+	if fmt.Sprint(sel.Rows[0]["addresses"]) != "0x5b5d" {
 		t.Errorf("expected addresses '0x5b5d', got %v", sel.Rows[0]["addresses"])
 	}
 

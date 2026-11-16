@@ -1,9 +1,9 @@
 # LionSQL 기반 Apache Answer 구축 및 운영 공식 연동 가이드 (`guide/ANSWER_INTEGRATION_GUIDE.ko.md`)
 
-> - **문서 버전**: v1.1.0
+> - **문서 버전**: v1.2.0
 > - **최초 작성일**: 2026-11-01
-> - **최종 업데이트**: 2026-11-14
-> - **대상 릴리즈**: LionSQL v0.90.0-beta4+
+> - **최종 업데이트**: 2026-11-16
+> - **대상 릴리즈**: LionSQL v0.93.0+
 > - **연동 대상**: Apache Answer v1.4+ (공식 소스/바이너리 무수정 연동)
 > - **지원 유선 프로토콜**:
 >   - **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
@@ -110,7 +110,7 @@ curl -s -X POST http://127.0.0.1:9080/answer/api/v1/user/login/email \
 
 ### Q1: `table "pg_tables" not found` 오류가 발생하는 경우
 - **원인**: 이전 버전 LionSQL에서 시스템 카탈로그 쿼리가 물리 스토리지로 직접 라우팅되어 발생합니다.
-- **해결**: LionSQL v0.90.0-beta4 이상으로 업그레이드하십시오. `isVirtualCatalogQuery` 라우터가 활성화되어 가상 카탈로그 뷰로 자동 처리됩니다.
+- **해결**: LionSQL v0.93.0 이상으로 업그레이드하십시오. `isVirtualCatalogQuery` 라우터가 활성화되어 가상 카탈로그 뷰로 자동 처리됩니다.
 
 ### Q2: 다중 행 INSERT 시 `missing primary key id` 오류가 발생하는 경우
 - **원인**: VDBE `OpInsert` 실행기에서 identity 컬럼 자동 증가 번호 발급이 누락된 구버전 엔진 문제입니다.

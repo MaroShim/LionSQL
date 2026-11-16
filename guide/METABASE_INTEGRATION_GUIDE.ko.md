@@ -1,9 +1,9 @@
 # Metabase BI 연동 가이드 (`METABASE_INTEGRATION_GUIDE.ko.md`)
 
-> - **문서 버전**: v1.0.0
+> - **문서 버전**: v1.1.0
 > - **최초 작성일**: 2026-11-01
-> - **최종 업데이트**: 2026-11-14
-> - **대상 릴리즈**: LionSQL v0.90.0-beta4+
+> - **최종 업데이트**: 2026-11-16
+> - **대상 릴리즈**: LionSQL v0.93.0+
 > - **연동 대상**: Metabase (Docker 공식 이미지 `metabase/metabase:latest`)
 > - **지원 유선 프로토콜**:
 >   - **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
@@ -18,7 +18,7 @@ LionSQL은 **PostgreSQL Wire 프로토콜(TCP :5433)**과 **Microsoft SQL Server
 
 ## 1. 사전 요구사항
 
-- **LionSQL 바이너리** (v0.90.0+)
+- **LionSQL 바이너리** (v0.93.0+)
 - **Docker** 및 Docker Compose (Metabase 컨테이너 구동용)
 
 ---
