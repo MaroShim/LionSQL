@@ -9,7 +9,7 @@ import (
 
 // Version is the authoritative single source of truth for the LionSQL release version.
 // Can be overridden at build time via -ldflags "-X 'lionsql/pkg/config.Version=...'".
-var Version = "0.92.0"
+var Version = "0.93.0"
 
 // Injected via ldflags or auto-detected via debug.ReadBuildInfo()
 var (
