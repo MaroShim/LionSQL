@@ -322,6 +322,31 @@ echo -e "${CLR_GREEN}Build OK: bin/lionsql-linux-amd64 (Linux x86_64)${CLR_RESET
 CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/lionsql-windows-amd64.exe ./cmd/lionsql
 echo -e "${CLR_GREEN}Build OK: bin/lionsql-windows-amd64.exe (Windows x86_64)${CLR_RESET}"
 
+# Automated Release Binary Integrity Gate (Firewall against unstripped symbols & missing tags)
+echo "Validating compiled release binaries integrity..."
+for bin_target in "bin/lionsql-darwin-arm64" "bin/lionsql-linux-amd64" "bin/lionsql-windows-amd64.exe"; do
+    if [ ! -f "${bin_target}" ]; then
+        echo -e "${CLR_RED}Binary Validation FAILED: Required release binary ${bin_target} not found!${CLR_RESET}"
+        exit 1
+    fi
+    bin_size=$(wc -c < "${bin_target}" | tr -d ' ')
+    # 45 MiB ceiling (47,185,920 bytes) to strictly reject unstripped DWARF bloating (>54 MiB)
+    if [ "${bin_size}" -gt 47185920 ]; then
+        echo -e "${CLR_RED}Binary Validation FAILED: ${bin_target} size (${bin_size} bytes) exceeds 45 MiB ceiling! Must be stripped via -s -w.${CLR_RESET}"
+        exit 1
+    fi
+done
+
+if ! ./bin/lionsql version | grep -q "v${VER}"; then
+    echo -e "${CLR_RED}Binary Validation FAILED: ./bin/lionsql version does not match target v${VER}!${CLR_RESET}"
+    exit 1
+fi
+if ! ./bin/lionsql version | grep -q "WiredTiger"; then
+    echo -e "${CLR_RED}Binary Validation FAILED: ./bin/lionsql missing WiredTiger engine! Must be built with -tags wiredtiger.${CLR_RESET}"
+    exit 1
+fi
+echo -e "${CLR_GREEN}Binary Validation Gate OK: All 3 binaries verified (<45MB stripped, valid version, WiredTiger engine).${CLR_RESET}"
+
 if [ "${SKIP_TESTS}" = true ]; then
     echo -e "${CLR_YELLOW}Skipping test pipeline (--skip-tests specified).${CLR_RESET}"
 else
@@ -653,23 +678,43 @@ else
             [ -f "bin/lionsql-linux-amd64" ] && ASSETS+=("bin/lionsql-linux-amd64")
             [ -f "bin/lionsql-windows-amd64.exe" ] && ASSETS+=("bin/lionsql-windows-amd64.exe")
 
-            # Check if comprehensive release notes exist in notes/ (e.g. notes/RELEASE_NOTES_v0.90.0.md)
+            # Check if comprehensive release notes exist in notes/ (e.g. notes/release_notes/RELEASE_NOTES_v0.90.0.md)
             GH_NOTES_CONTENT=""
             NOTES_DOC_MD="${ROOT_DIR}/notes/release_notes/RELEASE_NOTES_${TAG}.md"
             if [ -f "${NOTES_DOC_MD}" ]; then
                 echo -e "Found formal release notes in ${CLR_BOLD}${NOTES_DOC_MD}${CLR_RESET}."
                 GH_NOTES_CONTENT="$(cat "${NOTES_DOC_MD}")"
-                GH_NOTES_CONTENT+=$'\n\n---\n\n<details>\n<summary><b>Detailed Changelog Delta</b></summary>\n\n'
-                # Strip out ## [version] header since it's already represented in tag and summary
-                CLEAN_DELTA="$(echo "${RELEASE_NOTES}" | sed -E '/^## \[/d')"
-                GH_NOTES_CONTENT+="${CLEAN_DELTA}"
-                GH_NOTES_CONTENT+=$'\n</details>'
             else
                 GH_NOTES_CONTENT="${RELEASE_NOTES}"
             fi
 
             GH_NOTES_FILE="$(mktemp)"
             printf "%s\n" "${GH_NOTES_CONTENT}" > "${GH_NOTES_FILE}"
+
+            # Sanitize unescaped @variable names outside code spans to strictly prevent GitHub fake contributor attribution
+            python3 -c "
+import sys, re
+path = sys.argv[1]
+with open(path, 'r', encoding='utf-8') as f:
+    text = f.read()
+lines = text.splitlines()
+in_code = False
+out = []
+for line in lines:
+    if line.strip().startswith('\`\`\`'):
+        in_code = not in_code
+        out.append(line)
+        continue
+    if in_code:
+        out.append(line)
+        continue
+    parts = line.split('\`')
+    for i in range(0, len(parts), 2):
+        parts[i] = re.sub(r'(^|\s)@([a-zA-Z_][a-zA-Z0-9_]*)', r'\1\`@\2\`', parts[i])
+    out.append('\`'.join(parts))
+with open(path, 'w', encoding='utf-8') as f:
+    f.write('\n'.join(out) + '\n')
+" "${GH_NOTES_FILE}"
 
             gh release create "${TAG}" \
                 --title "LionSQL ${TAG}" \
