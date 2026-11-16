@@ -5,18 +5,20 @@
 > - **Last Updated**: 2026-11-16
 > - **Target Release**: LionSQL v0.93.0+
 > - **Integration Target**: Wiki.js (Modern open-source wiki, Node.js/TypeScript + Knex/Drizzle ORM based)
-> - **Supported Wire Protocol**: **PostgreSQL Wire Protocol v3** (default TCP `:5433`)
+> - **Supported Wire Protocol**: **PostgreSQL Wire Protocol v3** (default TCP `:5433`) and **Microsoft SQL Server TDS 7.x/8.0** (default TCP `:1433`)
 > - **한국어 문서**: [`guide/WIKIJS_INTEGRATION_GUIDE.ko.md`](WIKIJS_INTEGRATION_GUIDE.ko.md)
 
-This document provides instructions for integrating **Wiki.js**, a modern open-source enterprise wiki platform used by over 50,000 organizations worldwide, with LionSQL using the PostgreSQL Wire Protocol (PGWire v3, default port `:5433`).
+This document provides instructions for integrating **Wiki.js**, a modern open-source enterprise wiki platform used by over 50,000 organizations worldwide, with LionSQL using either the PostgreSQL Wire Protocol (PGWire v3, default port `:5433`) or Microsoft SQL Server TDS Protocol (default port `:1433`).
 
 ---
 
 ## 1. Overview and Compatibility Architecture
 
-Wiki.js communicates with relational databases in a Node.js runtime using `node-postgres` (`pg`), **Knex.js**, and **Drizzle ORM**.
+Wiki.js communicates with relational databases in a Node.js runtime using `node-postgres` (`pg`), **Knex.js**, and **Drizzle ORM**. Knex officially supports both `postgres` and `mssql` dialects, allowing operators to choose either wire protocol.
 
-- **Supported Protocol**: PostgreSQL Wire Protocol v3 (`pg`, `:5433`)
+- **Supported Protocols**: 
+  - **PostgreSQL Wire Protocol v3** (`pg`, `:5433`): `postgres://<user>:<pass>@<host>:5433/wikijs`
+  - **Microsoft SQL Server TDS 7.x/8.0** (`tedious`, `:1433`): Knex MSSQL Dialect (bracket identifiers, `OUTPUT INSERTED` support)
 - **LionSQL Recommended Engine**: WiredTiger (Large markdown document revision control and high-speed B+Tree indexing)
 - **Applied Migrations**: Knex / Drizzle automated migrations (`knex_migrations`, `knex_migrations_lock`)
 - **Primary Tables**:
@@ -45,10 +47,12 @@ Wiki.js communicates with relational databases in a Node.js runtime using `node-
 ### Step 1: Start LionSQL Server
 Start the server with a fresh data directory (`data_wikijs`) and the PostgreSQL listener enabled:
 ```bash
-./bin/lionsql -dir data_wikijs -engine wiredtiger -pg 0.0.0.0:5433 -http 127.0.0.1:8097 -admin-pass="WikiPass2026!"
+./bin/lionsql -dir data_wikijs -engine wiredtiger -pg 0.0.0.0:5433 -tds 0.0.0.0:1433 -http 127.0.0.1:8097 -admin-pass="WikiPass2026!"
 ```
 
 ### Step 2: Start Wiki.js Container
+
+#### Option A: PostgreSQL Wire Protocol (`:5433`)
 ```bash
 docker run -d \
   --name wikijs \
@@ -62,8 +66,23 @@ docker run -d \
   ghcr.io/requarks/wiki:2
 ```
 
-*For local source deployments, configure `config.yml`:*
+#### Option B: Microsoft SQL Server TDS Protocol (`:1433`)
+```bash
+docker run -d \
+  --name wikijs-mssql \
+  -p 3000:3000 \
+  -e DB_TYPE=mssql \
+  -e DB_HOST=host.docker.internal \
+  -e DB_PORT=1433 \
+  -e DB_NAME=wikijs \
+  -e DB_USER=sa \
+  -e DB_PASS="WikiPass2026!" \
+  ghcr.io/requarks/wiki:2
+```
+
+*For local source deployments, configure `config.yml` (PostgreSQL or SQL Server):*
 ```yaml
+# PostgreSQL PGWire (:5433)
 port: 3000
 db:
   type: postgres
@@ -71,6 +90,20 @@ db:
   port: 5433
   user: postgres
   pass: WikiPass2026!
+  db: wikijs
+  schema: public
+  ssl: false
+
+# Or MS SQL Server TDS (:1433)
+# port: 3000
+# db:
+#   type: mssql
+#   host: 127.0.0.1
+#   port: 1433
+#   user: sa
+#   pass: WikiPass2026!
+#   db: wikijs
+#   ssl: false
   db: wikijs
   schema: public
   ssl: false

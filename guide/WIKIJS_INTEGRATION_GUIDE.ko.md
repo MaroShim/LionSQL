@@ -5,18 +5,20 @@
 > - **최종 업데이트**: 2026-11-16
 > - **대상 릴리즈**: LionSQL v0.93.0+
 > - **연동 대상**: Wiki.js (Node.js/TypeScript 기반 모던 오픈소스 위키, Knex / Drizzle ORM 기반)
-> - **지원 유선 프로토콜**: **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
+> - **지원 유선 프로토콜**: **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`) 및 **Microsoft SQL Server TDS 7.x/8.0** (기본 TCP `:1433`)
 > - **English Guide**: [`guide/WIKIJS_INTEGRATION_GUIDE.md`](WIKIJS_INTEGRATION_GUIDE.md)
 
-본 문서는 전 세계 5만 개 이상의 조직에서 사용하는 현대적인 엔터프라이즈 오픈소스 위키 플랫폼인 **Wiki.js**를 LionSQL의 PostgreSQL Wire Protocol (PGWire v3, 기본 포트 `:5433`) 백엔드로 무수정 연동(Zero-Modification)하는 방법을 설명합니다.
+본 문서는 전 세계 5만 개 이상의 조직에서 사용하는 현대적인 엔터프라이즈 오픈소스 위키 플랫폼인 **Wiki.js**를 LionSQL의 PostgreSQL Wire Protocol (PGWire v3, 기본 포트 `:5433`) 또는 Microsoft SQL Server TDS Protocol (기본 포트 `:1433`) 백엔드로 무수정 연동(Zero-Modification)하는 방법을 설명합니다.
 
 ---
 
 ## 1. 개요 및 호환성 아키텍처
 
-Wiki.js는 Node.js 런타임에서 `node-postgres`(`pg`), **Knex.js**, 그리고 **Drizzle ORM**을 통해 관계형 데이터베이스와 통신합니다.
+Wiki.js는 Node.js 런타임에서 `node-postgres`(`pg`), **Knex.js**, 그리고 **Drizzle ORM**을 통해 관계형 데이터베이스와 통신합니다. Knex.js의 `mssql` 및 `postgres` 방언(dialect)을 모두 공식 지원하므로, 사용 환경에 따라 원하는 유선 프로토콜을 선택할 수 있습니다.
 
-- **지원 프로토콜**: PostgreSQL Wire Protocol v3 (`pg`, `:5433`)
+- **지원 프로토콜**: 
+  - **PostgreSQL Wire Protocol v3** (`pg`, `:5433`): `postgres://<user>:<pass>@<host>:5433/wikijs`
+  - **Microsoft SQL Server TDS 7.x/8.0** (`tedious`, `:1433`): Knex MSSQL Dialect (대괄호 식별자, `OUTPUT INSERTED` 지원)
 - **LionSQL 권장 스토리지 엔진**: WiredTiger (대용량 마크다운 문서 버전 관리 및 고속 인덱싱 지원)
 - **적용 마이그레이션**: Knex / Drizzle 자동 마이그레이션 (`knex_migrations`, `knex_migrations_lock`)
 - **주요 테이블**:
@@ -45,10 +47,12 @@ Wiki.js는 Node.js 런타임에서 `node-postgres`(`pg`), **Knex.js**, 그리고
 ### 1단계: LionSQL 서버 구동
 신규 데이터 디렉터리(`data_wikijs`)를 지정하고 PostgreSQL 와이어 포트를 오픈합니다:
 ```bash
-./bin/lionsql -dir data_wikijs -engine wiredtiger -pg 0.0.0.0:5433 -http 127.0.0.1:8097 -admin-pass="WikiPass2026!"
+./bin/lionsql -dir data_wikijs -engine wiredtiger -pg 0.0.0.0:5433 -tds 0.0.0.0:1433 -http 127.0.0.1:8097 -admin-pass="WikiPass2026!"
 ```
 
 ### 2단계: Wiki.js 컨테이너 구동
+
+#### 옵션 A: PostgreSQL Wire Protocol (`:5433`) 연동
 ```bash
 docker run -d \
   --name wikijs \
@@ -62,8 +66,23 @@ docker run -d \
   ghcr.io/requarks/wiki:2
 ```
 
-*로컬 소스 구동 시 `config.yml` 설정:*
+#### 옵션 B: Microsoft SQL Server TDS Protocol (`:1433`) 연동
+```bash
+docker run -d \
+  --name wikijs-mssql \
+  -p 3000:3000 \
+  -e DB_TYPE=mssql \
+  -e DB_HOST=host.docker.internal \
+  -e DB_PORT=1433 \
+  -e DB_NAME=wikijs \
+  -e DB_USER=sa \
+  -e DB_PASS="WikiPass2026!" \
+  ghcr.io/requarks/wiki:2
+```
+
+*로컬 소스 구동 시 `config.yml` 설정 (PostgreSQL 또는 MS SQL Server):*
 ```yaml
+# PostgreSQL PGWire (:5433)
 port: 3000
 db:
   type: postgres
@@ -71,6 +90,20 @@ db:
   port: 5433
   user: postgres
   pass: WikiPass2026!
+  db: wikijs
+  schema: public
+  ssl: false
+
+# 또는 MS SQL Server TDS (:1433)
+# port: 3000
+# db:
+#   type: mssql
+#   host: 127.0.0.1
+#   port: 1433
+#   user: sa
+#   pass: WikiPass2026!
+#   db: wikijs
+#   ssl: false
   db: wikijs
   schema: public
   ssl: false

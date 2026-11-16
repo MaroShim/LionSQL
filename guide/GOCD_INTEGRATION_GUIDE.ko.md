@@ -5,18 +5,20 @@
 > - **최종 업데이트**: 2026-11-16
 > - **대상 릴리즈**: LionSQL v0.93.0+
 > - **연동 대상**: GoCD (Thoughtworks 엔터프라이즈 CI/CD 서버, Java/Hibernate + Liquibase 기반)
-> - **지원 유선 프로토콜**: **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
+> - **지원 유선 프로토콜**: **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`) 및 **Microsoft SQL Server TDS 7.x/8.0** (기본 TCP `:1433`)
 > - **English Guide**: [`guide/GOCD_INTEGRATION_GUIDE.md`](GOCD_INTEGRATION_GUIDE.md)
 
-본 문서는 Thoughtworks의 오픈소스 엔터프라이즈 지속적 배포(CD) 및 파이프라인 오케스트레이션 플랫폼인 **GoCD**를 LionSQL의 PostgreSQL Wire Protocol (PGWire v3, 기본 포트 `:5433`) 백엔드로 연동하는 방법을 설명합니다.
+본 문서는 Thoughtworks의 오픈소스 엔터프라이즈 지속적 배포(CD) 및 파이프라인 오케스트레이션 플랫폼인 **GoCD**를 LionSQL의 PostgreSQL Wire Protocol (PGWire v3, 기본 포트 `:5433`) 또는 Microsoft SQL Server TDS Protocol (기본 포트 `:1433`) 백엔드로 연동하는 방법을 설명합니다.
 
 ---
 
 ## 1. 개요 및 호환성 아키텍처
 
-GoCD는 Java 런타임 환경에서 공식 PostgreSQL JDBC 드라이버(`org.postgresql.Driver`), Hibernate ORM, 그리고 스키마 버전 관리 도구인 **Liquibase**를 통해 데이터베이스와 통신합니다.
+GoCD는 Java 런타임 환경에서 공식 PostgreSQL JDBC 드라이버(`org.postgresql.Driver`) 또는 Microsoft SQL Server JDBC 드라이버(`com.microsoft.sqlserver.jdbc.SQLServerDriver`), Hibernate ORM, 그리고 스키마 버전 관리 도구인 **Liquibase**를 통해 데이터베이스와 통신합니다.
 
-- **지원 프로토콜**: PostgreSQL Wire Protocol v3 (JDBC `:5433`)
+- **지원 프로토콜**: 
+  - **PostgreSQL Wire Protocol v3** (JDBC `:5433`): `jdbc:postgresql://<host>:5433/gocd`
+  - **Microsoft SQL Server TDS 7.x/8.0** (JDBC `:1433`): `jdbc:sqlserver://<host>:1433;databaseName=gocd;encrypt=false`
 - **LionSQL 권장 스토리지 엔진**: WiredTiger (고동시성 빌드/스테이지 상태 전이 및 ACID 트랜잭션 보장)
 - **적용 마이그레이션**: Liquibase 기반 `DATABASECHANGELOGLOCK` 락 제어 및 `DATABASECHANGELOG` 자동 스키마 마이그레이션
 - **주요 테이블**:
@@ -45,10 +47,12 @@ GoCD는 Java 런타임 환경에서 공식 PostgreSQL JDBC 드라이버(`org.pos
 ### 1단계: LionSQL 서버 구동
 신규 데이터 디렉터리(`data_gocd`)를 지정하여 PostgreSQL 와이어 프로토콜 리스너를 구동합니다:
 ```bash
-./bin/lionsql -dir data_gocd -engine wiredtiger -pg 0.0.0.0:5433 -http 127.0.0.1:8096 -admin-pass="GoCDPass2026!"
+./bin/lionsql -dir data_gocd -engine wiredtiger -pg 0.0.0.0:5433 -tds 0.0.0.0:1433 -http 127.0.0.1:8096 -admin-pass="GoCDPass2026!"
 ```
 
 ### 2단계: GoCD 데이터베이스 환경변수 설정 및 컨테이너 구동
+
+#### 옵션 A: PostgreSQL Wire Protocol (`:5433`) 연동
 ```bash
 docker run -d \
   --name gocd-server \
@@ -63,14 +67,38 @@ docker run -d \
   gocd/gocd-server:v24.2.0
 ```
 
-*로컬 환경 구동 시 `db.properties` 파일 설정:*
+#### 옵션 B: Microsoft SQL Server TDS Protocol (`:1433`) 연동
+```bash
+docker run -d \
+  --name gocd-server-mssql \
+  -p 8153:8153 \
+  -e GO_CONFIG_REPO_GC_DISABLED=true \
+  -e DB_TYPE=sqlserver \
+  -e DB_HOST=host.docker.internal \
+  -e DB_PORT=1433 \
+  -e DB_NAME=gocd \
+  -e DB_USER=sa \
+  -e DB_PASSWORD="GoCDPass2026!" \
+  gocd/gocd-server:v24.2.0
+```
+
+*로컬 환경 구동 시 `db.properties` 파일 설정 (PostgreSQL 또는 SQL Server):*
 ```properties
+# PostgreSQL PGWire (:5433)
 db.type=postgresql
 db.host=127.0.0.1
 db.port=5433
 db.name=gocd
 db.user=postgres
 db.password=GoCDPass2026!
+
+# 또는 MS SQL Server TDS (:1433)
+# db.type=sqlserver
+# db.host=127.0.0.1
+# db.port=1433
+# db.name=gocd
+# db.user=sa
+# db.password=GoCDPass2026!
 ```
 
 ---
