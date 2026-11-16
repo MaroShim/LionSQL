@@ -31,6 +31,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
 
 ### Refactored
+- **Legacy Regex Planner Elimination (`cmd/lionsql`, `pkg/planner`, `pkg/config`, Invariant 7)**:
+  - Permanently eliminate dead legacy regex-based SELECT planner fallback (`-enable-legacy-regex-planner`, `defaultLegacyRegexFallback`, `splitSelectClauses`, and `extractTop`), enforcing 100% pure AST parsing per Invariant 7 and deleting 400+ lines of dead heuristics (`[RULE:RadicalKISS]`).
 - **KISS, Modular Abstraction & Zero-Allocation Cleanups (`cmd/lionsql`, `pkg/config`, `pkg/wire/tds`, `pkg/proc`, `pkg/engine`)**:
   - Export canonical `config.NormalizeDiskBackend(disk)` and replace duplicate inline disk backend parsing heuristics in `cmd/lionsql/sql.go` (`[RULE:ModularAbstraction]`, Invariant 8).
   - Unify TDS `ROW` NULL value encoding in `WriteRowDirect` and `BuildRow` onto the zero-allocation `writeNullColumnValue` helper, eliminating 30+ lines of duplicate inline switch logic and repetitive byte slice heap allocations (`[RULE:ZeroAllocation]`, `[RULE:RadicalKISS]`).

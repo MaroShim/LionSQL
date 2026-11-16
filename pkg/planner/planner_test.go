@@ -552,16 +552,10 @@ func TestPlanner_ColumnContainingKeyword(t *testing.T) {
 	}
 }
 
-func TestPlanner_PureASTDefault_And_LegacyRegexOption(t *testing.T) {
-	defer planner.SetDefaultLegacyRegexFallback(false)
-	planner.SetDefaultLegacyRegexFallback(false)
-
+func TestPlanner_PureASTMode(t *testing.T) {
 	p := planner.NewPlanner()
-	if p.EnableLegacyRegexFallback {
-		t.Fatal("expected EnableLegacyRegexFallback to default to false (Pure AST Mode)")
-	}
 
-	// 1. Window functions (OVER) now parse natively through Pure AST Mode without legacy regex fallback
+	// 1. Window functions (OVER) parse natively through Pure AST Mode
 	winSQL := "SELECT id, ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary DESC) AS rn FROM employees WHERE salary > 1000"
 	qWin, err := p.ParseSelect(winSQL)
 	if err != nil {
@@ -587,16 +581,10 @@ func TestPlanner_PureASTDefault_And_LegacyRegexOption(t *testing.T) {
 		t.Errorf("unexpected CTE info in Pure AST mode: %+v", qCTE.CTEs)
 	}
 
-	// 3. Invalid non-AST syntax is rejected immediately when legacy regex fallback is disabled
+	// 3. Invalid non-AST syntax is rejected immediately
 	_, err = p.ParseSelect("NOT_A_SELECT 123")
-	if err == nil || !strings.Contains(err.Error(), "legacy regex fallback disabled") {
-		t.Fatalf("expected Pure AST mode error mentioning 'legacy regex fallback disabled', got: %v", err)
-	}
-
-	// 4. Toggling SetDefaultLegacyRegexFallback(true) enables the opt-in flag
-	planner.SetDefaultLegacyRegexFallback(true)
-	if !planner.IsDefaultLegacyRegexFallbackEnabled() {
-		t.Fatal("expected IsDefaultLegacyRegexFallbackEnabled() to be true after toggle")
+	if err == nil {
+		t.Fatal("expected error for invalid SELECT statement")
 	}
 }
 

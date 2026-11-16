@@ -23,7 +23,6 @@ import (
 	"lionsql/pkg/config"
 	"lionsql/pkg/execution"
 	"lionsql/pkg/pathutil"
-	"lionsql/pkg/planner"
 	_ "lionsql/pkg/proc/parser/antlr"
 	"lionsql/pkg/replication"
 	"lionsql/pkg/seed"
@@ -115,7 +114,6 @@ func runServer(args []string) error {
 	outboxWebhook := fs.String("outbox-webhook", "", "Webhook URL for outbox message forwarding")
 	outboxKafka := fs.String("outbox-kafka", "", "Kafka REST Proxy endpoint (e.g. http://localhost:8082)")
 	outboxRabbitMQ := fs.String("outbox-rabbitmq", "", "RabbitMQ Management API endpoint (e.g. http://localhost:15672)")
-	enableLegacyRegexPlanner := fs.Bool("enable-legacy-regex-planner", false, "Enable legacy regex-based SELECT planner fallback (default: false, pure AST mode)")
 
 	// Daemon control flags
 	var daemon bool
@@ -301,10 +299,6 @@ func runServer(args []string) error {
 		cfg.Outbox.Enabled = true
 		cfg.Outbox.RabbitMQURL = *outboxRabbitMQ
 	}
-	if visited["enable-legacy-regex-planner"] {
-		cfg.Server.EnableLegacyRegexPlanner = *enableLegacyRegexPlanner
-	}
-	planner.SetDefaultLegacyRegexFallback(cfg.Server.EnableLegacyRegexPlanner)
 
 	if strings.TrimSpace(cfg.Server.DataDir) == "" {
 		cfg.Server.DataDir = defaultDataDir

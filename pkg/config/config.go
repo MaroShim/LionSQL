@@ -22,7 +22,6 @@ type ServerConfig struct {
 	PIDFile                  string `json:"pid_file,omitempty"`
 	LogFile                  string `json:"log_file,omitempty"`
 	AppPath                  string `json:"app_path,omitempty"`
-	EnableLegacyRegexPlanner bool   `json:"enable_legacy_regex_planner,omitempty"`
 }
 
 // TLSConfig defines encryption parameters for wire protocols.
@@ -358,9 +357,6 @@ func ApplyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("LIONSQL_APP"); v != "" {
 		cfg.Server.AppPath = v
-	}
-	if v := strings.TrimSpace(strings.ToLower(os.Getenv("LIONSQL_ENABLE_LEGACY_REGEX_PLANNER"))); v == "1" || v == "true" || v == "yes" {
-		cfg.Server.EnableLegacyRegexPlanner = true
 	}
 }
 

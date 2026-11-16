@@ -7,7 +7,6 @@ import (
 	"math/bits"
 	"strconv"
 	"strings"
-	"sync/atomic"
 
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
@@ -204,39 +203,14 @@ func (q *QueryInfo) Clone() *QueryInfo {
 	return &cp
 }
 
-// defaultLegacyRegexFallback controls whether new Planner instances permit
-// falling back to legacy regex-based SQL slicing when AST parsing fails (PLANNER-AST-1).
-// Default is false (Pure AST Mode). Can be toggled via --enable-legacy-regex-planner.
-var defaultLegacyRegexFallback atomic.Bool
-
-// SetDefaultLegacyRegexFallback sets the process-wide default for legacy regex planner fallback.
-func SetDefaultLegacyRegexFallback(enabled bool) {
-	defaultLegacyRegexFallback.Store(enabled)
-}
-
-// IsDefaultLegacyRegexFallbackEnabled returns true if legacy regex planner fallback is enabled by default.
-func IsDefaultLegacyRegexFallbackEnabled() bool {
-	return defaultLegacyRegexFallback.Load()
-}
-
 // Planner constructs and optimizes execution plans for SQL queries.
 type Planner struct {
-	PartitionGetter           func(table string) []string
-	EnableLegacyRegexFallback bool
+	PartitionGetter func(table string) []string
 }
 
 // NewPlanner creates a new query planner instance.
 func NewPlanner() *Planner {
-	return &Planner{
-		EnableLegacyRegexFallback: defaultLegacyRegexFallback.Load(),
-	}
-}
-
-func (p *Planner) isLegacyRegexEnabled() bool {
-	if p != nil && p.EnableLegacyRegexFallback {
-		return true
-	}
-	return defaultLegacyRegexFallback.Load()
+	return &Planner{}
 }
 
 func cleanIdent(s string) string {
@@ -393,183 +367,19 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
-	// Pure AST-First Path (PLANNER-AST-1):
+	// Pure AST Path (PLANNER-AST-1):
 	// Parse via Pratt AST parser (including window functions OVER and CTEs).
-	if parsedStmt, err := proc.ParseSQL(cleaned); err == nil {
-		if sel, ok := parsedStmt.(*proc.GeneralSelectStmt); ok {
-			qInfo := FromAST(sel)
-			qInfo.RawQuery = query
-			return qInfo, nil
-		}
-	}
-
-	// Default behavior disables the legacy regex fallback; it is only used when
-	// explicitly opted in via --enable-legacy-regex-planner or EnableLegacyRegexFallback.
-	if !p.isLegacyRegexEnabled() {
-		return nil, fmt.Errorf("invalid SELECT statement for AST planning (legacy regex fallback disabled): %q", cleaned)
-	}
-
-	isAnalyze := false
-	upper := strings.ToUpper(cleaned)
-	if strings.HasPrefix(upper, "EXPLAIN ANALYZE ") {
-		isAnalyze = true
-		cleaned = strings.TrimSpace(cleaned[16:])
-	} else if strings.HasPrefix(upper, "EXPLAIN ") {
-		cleaned = strings.TrimSpace(cleaned[8:])
-	}
-
-	ctes, mainSQL := ParseCTEs(cleaned)
-
-	var projStr, fromClause, whereClause, groupByStr, havingClause, orderByClause string
-	var limitCount int64 = -1
-	var offsetCount int64 = 0
-
-	pStr, fClause, wClause, gStr, hClause, oClause, lCount, offCount, ok := splitSelectClauses(mainSQL)
-	if !ok {
-		return nil, fmt.Errorf("invalid SELECT statement for planning: %q", mainSQL)
-	}
-	projStr = pStr
-	fromClause = fClause
-	whereClause = wClause
-	groupByStr = gStr
-	havingClause = hClause
-	orderByClause = oClause
-	limitCount = lCount
-	offsetCount = offCount
-
-	if whereClause != "" {
-		pExpr := proc.NewParser(proc.NewLexer(whereClause)).ParseExpr()
-		if pExpr != nil {
-			folded := proc.FoldConstants(pExpr)
-			whereClause = folded.String()
-		}
-	}
-
-	baseTable, baseAlias, joins, err := parseFromAndJoins(fromClause)
+	parsedStmt, err := proc.ParseSQL(cleaned)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid SELECT statement for AST planning: %w", err)
 	}
-	var joinInfo *JoinInfo
-	if len(joins) > 0 {
-		joinInfo = joins[0]
+	sel, ok := parsedStmt.(*proc.GeneralSelectStmt)
+	if !ok {
+		return nil, fmt.Errorf("statement is not a SELECT statement: %q", cleaned)
 	}
-
-	isDistinct := false
-	if strings.HasPrefix(strings.ToUpper(projStr), "DISTINCT ") {
-		isDistinct = true
-		projStr = strings.TrimSpace(projStr[9:])
-	}
-
-	var projections []string
-	if projStr == "*" || projStr == "" {
-		projections = []string{"*"}
-	} else {
-		for _, col := range SplitProjections(projStr) {
-			c := strings.TrimSpace(col)
-			if c != "" {
-				projections = append(projections, c)
-			}
-		}
-	}
-
-	var groupByCols []string
-	groupByMod := proc.GroupByNormal
-	if groupByStr != "" {
-		gTrim := strings.TrimSpace(groupByStr)
-		gUpper := strings.ToUpper(gTrim)
-		if strings.HasPrefix(gUpper, "ROLLUP") {
-			groupByMod = proc.GroupByRollup
-			inner := strings.TrimSpace(gTrim[6:])
-			inner = strings.TrimPrefix(inner, "(")
-			inner = strings.TrimSuffix(inner, ")")
-			for _, col := range strings.Split(inner, ",") {
-				c := strings.TrimSpace(col)
-				if c != "" {
-					groupByCols = append(groupByCols, c)
-				}
-			}
-		} else if strings.HasPrefix(gUpper, "CUBE") {
-			groupByMod = proc.GroupByCube
-			inner := strings.TrimSpace(gTrim[4:])
-			inner = strings.TrimPrefix(inner, "(")
-			inner = strings.TrimSuffix(inner, ")")
-			for _, col := range strings.Split(inner, ",") {
-				c := strings.TrimSpace(col)
-				if c != "" {
-					groupByCols = append(groupByCols, c)
-				}
-			}
-		} else if strings.HasSuffix(gUpper, "WITH ROLLUP") {
-			groupByMod = proc.GroupByRollup
-			inner := strings.TrimSpace(gTrim[:len(gTrim)-11])
-			for _, col := range strings.Split(inner, ",") {
-				c := strings.TrimSpace(col)
-				if c != "" {
-					groupByCols = append(groupByCols, c)
-				}
-			}
-		} else if strings.HasSuffix(gUpper, "WITH CUBE") {
-			groupByMod = proc.GroupByCube
-			inner := strings.TrimSpace(gTrim[:len(gTrim)-9])
-			for _, col := range strings.Split(inner, ",") {
-				c := strings.TrimSpace(col)
-				if c != "" {
-					groupByCols = append(groupByCols, c)
-				}
-			}
-		} else {
-			for _, col := range strings.Split(groupByStr, ",") {
-				c := strings.TrimSpace(col)
-				if c != "" {
-					groupByCols = append(groupByCols, c)
-				}
-			}
-		}
-	}
-
-	hasAgg := len(groupByCols) > 0 || havingClause != ""
-	for _, proj := range projections {
-		if sqlutil.ContainsKeyword(proj, "OVER", true) {
-			continue
-		}
-		pUpper := strings.ToUpper(maskSubqueries(proj))
-		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
-			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
-			strings.Contains(pUpper, "MAX(") || strings.Contains(pUpper, "GROUPING(") ||
-			strings.Contains(pUpper, "PERCENTILE_CONT(") || strings.Contains(pUpper, "PERCENTILE_DISC(") ||
-			strings.Contains(pUpper, "APPROX_PERCENTILE(") || strings.Contains(pUpper, "MEDIAN(") {
-			hasAgg = true
-			break
-		}
-	}
-
-	var winDefs []WindowDef
-	for _, proj := range projections {
-		if w, ok := ParseWindowDef(proj); ok {
-			winDefs = append(winDefs, *w)
-		}
-	}
-
-	return &QueryInfo{
-		RawQuery:      query,
-		CTEs:          ctes,
-		TableName:     baseTable,
-		TableAlias:    baseAlias,
-		Join:          joinInfo,
-		Joins:         joins,
-		Projections:   projections,
-		WindowDefs:    winDefs,
-		WhereClause:   whereClause,
-		GroupByCols:   groupByCols,
-		GroupByMod:    groupByMod,
-		HavingClause:  havingClause,
-		OrderByClause: orderByClause,
-		LimitCount:    limitCount,
-		OffsetCount:   offsetCount,
-		HasAggregates: hasAgg,
-		Distinct:      isDistinct,
-		IsAnalyze:     isAnalyze,
-	}, nil
+	qInfo := FromAST(sel)
+	qInfo.RawQuery = query
+	return qInfo, nil
 }
 
 // ParseCTEs parses common table expressions defined via WITH clause.
