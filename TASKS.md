@@ -549,8 +549,12 @@
 ---
 
 ### [PENDING] Unified TxManager (DDL + DML) Architecture `ARCH-UNIFIED-TX-MANAGER`
-- **Domain**: ENGINE | **Priority**: P2 | **Updated**: 2026-11-16 13:12:12
+- **Domain**: ENGINE | **Priority**: P2 | **Updated**: 2026-11-16 23:20:00
 - **Plan Doc**: [`notes/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/UNIFIED_TX_MANAGER_PLAN.ko.md)
+- **Execution Order & Dependencies**:
+  - **1단계**: `pkg/tx` 코어 인터페이스 & 상태 머신 선행 구축 (`Idle`, `Active`, `InError`, `Committed`, `Aborted`)
+  - **2단계**: `REFACTOR-SESSION-TRANSACTION-INVARIANT-1`과 결합하여 `Session`에 `TxManager` 1:1 장착 및 1세션 1Tx 불변식/`sess.mu` 직렬화 확립
+  - **3단계**: 와이어 프로토콜(PGWire, TDS, HTTP) 및 VDBE 실행기를 `sess.TxManager()` 단일 진입점으로 통합 바인딩
 
 ---
 
@@ -3753,9 +3757,12 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 `REFACTOR-SESSION-TRANSACTION-INVARIANT-1`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 06:18:24
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 23:20:00
 - **Milestone**: `v0.94.0`
-- **Plan Doc**: [`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`](notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`](notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md), [`notes/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/UNIFIED_TX_MANAGER_PLAN.ko.md)
+- **Execution Order & Dependencies**:
+  - **선행 작업**: `ARCH-UNIFIED-TX-MANAGER`의 1단계 (`pkg/tx` 코어 인터페이스 & 상태 머신 구현) 완료 직후 착수
+  - **결합 작업**: `Session` 구조체에 `TxManager` 1:1 장착, `sess.mu.Lock()` 직렬화 락 도입, 중복 `BEGIN` 방어, 오류 격리 'E' 상태 머신 결합, 세션 `Close()` 시 자동 롤백 Fail-Safe 구현
 
 ---
 
