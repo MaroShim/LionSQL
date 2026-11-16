@@ -27,7 +27,8 @@ type EngineManifest struct {
 	CreatedByVersion  string `json:"created_by_version"`
 }
 
-func normalizeDiskBackend(disk string) string {
+// NormalizeDiskBackend maps aliases like "wt", "mem", "memory", "none", "off" to canonical "wiredtiger" or "compact".
+func NormalizeDiskBackend(disk string) string {
 	switch strings.ToLower(strings.TrimSpace(disk)) {
 	case "wiredtiger", "wt":
 		return "wiredtiger"
@@ -39,7 +40,7 @@ func normalizeDiskBackend(disk string) string {
 }
 
 func diskToCanonicalEngine(disk string) string {
-	if normalizeDiskBackend(disk) == "wiredtiger" {
+	if NormalizeDiskBackend(disk) == "wiredtiger" {
 		return "wiredtiger"
 	}
 	return "memory"
@@ -64,9 +65,9 @@ func ReadEngineManifest(dataDir string) (*EngineManifest, error) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("failed to parse engine manifest %q: %w", manifestPath, err)
 	}
-	m.Disk = normalizeDiskBackend(m.Disk)
+	m.Disk = NormalizeDiskBackend(m.Disk)
 	if m.Disk == "" {
-		m.Disk = normalizeDiskBackend(m.Engine)
+		m.Disk = NormalizeDiskBackend(m.Engine)
 	}
 	if m.Engine == "" {
 		m.Engine = diskToCanonicalEngine(m.Disk)
@@ -154,7 +155,7 @@ func WriteEngineManifestAtomic(dataDir string, m *EngineManifest) error {
 //     - When explicitEngineSet is false, it automatically adopts the manifest's disk and memory settings.
 //  2. If dataDir is fresh (no manifest and no legacy files), it writes a new lionsql.engine.json atomically.
 func ResolveOrWriteEngineManifest(dataDir string, requestedDisk string, requestedMemory string, explicitEngineSet bool, explicitMemorySet bool) (*EngineManifest, error) {
-	normDisk := normalizeDiskBackend(requestedDisk)
+	normDisk := NormalizeDiskBackend(requestedDisk)
 	if normDisk == "" {
 		normDisk = DefaultDisk()
 	}
@@ -211,7 +212,7 @@ func ResolveOrWriteEngineManifest(dataDir string, requestedDisk string, requeste
 // If dataDir already contains lionsql.engine.json (or legacy engine markers), it returns the resolved manifest
 // and validates against explicitEngineSet. If dataDir is fresh/uninitialized, it returns (nil, nil).
 func ResolveExistingEngineManifest(dataDir string, requestedDisk string, explicitEngineSet bool) (*EngineManifest, error) {
-	normDisk := normalizeDiskBackend(requestedDisk)
+	normDisk := NormalizeDiskBackend(requestedDisk)
 	if normDisk == "" {
 		normDisk = DefaultDisk()
 	}

@@ -192,13 +192,8 @@ func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.E
 		return nil, nil, fmt.Errorf("cannot access data directory %q directly (LionSQL daemon is currently running with PID %d; connect via HTTP/PGWire/TDS or stop the daemon first)", cleanDir, pid)
 	}
 
-	normDisk := strings.ToLower(strings.TrimSpace(diskType))
-	explicitEngine := normDisk != ""
-	if normDisk == "memory" || normDisk == "mem" || normDisk == "none" {
-		normDisk = "compact"
-	} else if normDisk == "wt" {
-		normDisk = "wiredtiger"
-	}
+	normDisk := config.NormalizeDiskBackend(diskType)
+	explicitEngine := strings.TrimSpace(diskType) != ""
 
 	manifest, err := config.ResolveOrWriteEngineManifest(cleanDir, normDisk, memoryType, explicitEngine, strings.TrimSpace(memoryType) != "")
 	if err != nil {

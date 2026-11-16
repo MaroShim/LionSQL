@@ -27,7 +27,7 @@ func ResolvePreparedProcedure(query string, cat *catalog.Catalog, cache *runtime
 		return nil
 	}
 	trimmed := strings.TrimSpace(query)
-	if !sqlutil.HasPrefixKeyword(trimmed, "EXEC") && !sqlutil.HasPrefixKeyword(trimmed, "EXECUTE") && !sqlutil.HasPrefixKeyword(trimmed, "CALL") {
+	if !sqlutil.HasAnyPrefixKeyword(trimmed, "EXEC", "EXECUTE", "CALL") {
 		return nil
 	}
 

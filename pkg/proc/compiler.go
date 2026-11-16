@@ -78,7 +78,7 @@ func NewCompiler() *Compiler {
 func Compile(sql string) (*Program, error) {
 	trimmed := strings.TrimSpace(sql)
 
-	if sqlutil.HasPrefixKeyword(trimmed, "CREATE PROCEDURE") || sqlutil.HasPrefixKeyword(trimmed, "CREATE PROC") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE PROCEDURE", "CREATE PROC") {
 		lexer := NewLexer(sql)
 		parser := NewParser(lexer)
 		stmt, err := parser.ParseProcedure()
@@ -113,15 +113,15 @@ func Compile(sql string) (*Program, error) {
 		return CompileTrigger(stmt)
 	}
 
-	if sqlutil.HasPrefixKeyword(trimmed, "SELECT") || sqlutil.HasPrefixKeyword(trimmed, "WITH") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "SELECT", "WITH") {
 		return CompileQuery(sql)
 	}
 
-	if sqlutil.HasPrefixKeyword(trimmed, "INSERT") || sqlutil.HasPrefixKeyword(trimmed, "UPDATE") || sqlutil.HasPrefixKeyword(trimmed, "DELETE") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "INSERT", "UPDATE", "DELETE") {
 		return CompileStatement(sql)
 	}
 
-	if sqlutil.HasPrefixKeyword(trimmed, "IF") || sqlutil.HasPrefixKeyword(trimmed, "WHILE") || sqlutil.HasPrefixKeyword(trimmed, "BEGIN") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "IF", "WHILE", "BEGIN") {
 		return CompileAnonymousBlock(sql)
 	}
 

@@ -871,22 +871,7 @@ func WriteRowDirect(destBuf *bytes.Buffer, cols []ColumnInfo, row map[string]any
 	for _, col := range cols {
 		val := getRowValueCaseInsensitive(row, col.Name)
 		if isNilTdsValue(val) {
-			switch col.Type {
-			case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN, TypeDateN, TypeTimeN, TypeDateTime2N, TypeDateTimeOffsetN, TypeGuid:
-				destBuf.WriteByte(0) // Length 0 indicates NULL
-			case TypeNVarChar, TypeVarChar, TypeBigVarBin:
-				if col.IsPLP || col.Size == -1 {
-					destBuf.Write([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
-				} else {
-					destBuf.Write([]byte{0xFF, 0xFF}) // 0xFFFF indicates NULL
-				}
-			default:
-				if col.IsPLP || col.Size == -1 {
-					destBuf.Write([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
-				} else {
-					destBuf.Write([]byte{0xFF, 0xFF})
-				}
-			}
+			writeNullColumnValue(destBuf, col)
 			continue
 		}
 
@@ -912,22 +897,7 @@ func BuildRow(cols []ColumnInfo, values []any) []byte {
 		}
 
 		if isNilTdsValue(val) {
-			switch col.Type {
-			case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN, TypeDateN, TypeTimeN, TypeDateTime2N, TypeDateTimeOffsetN, TypeGuid:
-				buf.WriteByte(0) // Length 0 indicates NULL
-			case TypeNVarChar, TypeVarChar, TypeBigVarBin:
-				if col.IsPLP || col.Size == -1 {
-					buf.Write([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
-				} else {
-					buf.Write([]byte{0xFF, 0xFF}) // 0xFFFF indicates NULL
-				}
-			default:
-				if col.IsPLP || col.Size == -1 {
-					buf.Write([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF})
-				} else {
-					buf.Write([]byte{0xFF, 0xFF})
-				}
-			}
+			writeNullColumnValue(buf, col)
 			continue
 		}
 

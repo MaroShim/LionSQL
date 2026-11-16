@@ -30,6 +30,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Push down implicit `LIMIT 1` and early-exit termination to subqueries nested under `EXISTS (...)` across standalone scalar selection, WHERE predicates, conditional DDL statements (`IF EXISTS (subquery) <DDL>`), and stored procedure bytecode compilation (`*ExistsExpr` with `OpSelectInto` and `OpIsNotNull`).
   - Eliminate full-table scans when validating existence predicates against large tables, guaranteeing sub-microsecond $O(1)$ fast exit on the very first matching tuple.
 
+### Refactored
+- **KISS, Modular Abstraction & Zero-Allocation Cleanups (`cmd/lionsql`, `pkg/config`, `pkg/wire/tds`, `pkg/proc`, `pkg/engine`)**:
+  - Export canonical `config.NormalizeDiskBackend(disk)` and replace duplicate inline disk backend parsing heuristics in `cmd/lionsql/sql.go` (`[RULE:ModularAbstraction]`, Invariant 8).
+  - Unify TDS `ROW` NULL value encoding in `WriteRowDirect` and `BuildRow` onto the zero-allocation `writeNullColumnValue` helper, eliminating 30+ lines of duplicate inline switch logic and repetitive byte slice heap allocations (`[RULE:ZeroAllocation]`, `[RULE:RadicalKISS]`).
+  - Standardize multiple `sqlutil.HasPrefixKeyword` chains across `pkg/proc/compiler.go`, `pkg/engine/cte_lowering.go`, and `pkg/engine/proc_bind.go` onto the single-pass `sqlutil.HasAnyPrefixKeyword`, eliminating redundant whitespace and comment rescanning (`[RULE:ModularAbstraction]`).
+
 ### Fixed
 - **Pre-v0.93.0 Dual-AI (Antigravity × Claude) Adversarial Audit Remediation (`AUDIT-093-001`..`AUDIT-093-022`, `notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md`)**:
   - **Table Variable Double-Commit & Pool Leak (`AUDIT-093-001`, `pkg/storage/memengine/tx.go`, `pkg/storage/wiredtiger/wt_engine.go`)**: Track `committed bool` on `memengine.Transaction` so idiomatic `defer tx.Rollback()` after `tx.Commit()` never double-applies `commitTableVariablesLocked()` or zeroes `commitLSN`/`commitTimestamp`, ensure failed `Commit()` aborts still preserve table variable mutations, and release `tempTx` back to `txPool` via `tempTx.Rollback()` in `WTTx.Commit()`.

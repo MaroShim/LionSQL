@@ -30,10 +30,7 @@ func detectLinearWritableCTE(ctes []planner.CTEInfo, mainSQL string) bool {
 		inner := strings.TrimSpace(cte.InnerSQL)
 
 		// Must be INSERT, UPDATE, or DELETE
-		isInsert := sqlutil.HasPrefixKeyword(inner, "INSERT")
-		isUpdate := sqlutil.HasPrefixKeyword(inner, "UPDATE")
-		isDelete := sqlutil.HasPrefixKeyword(inner, "DELETE")
-		if !isInsert && !isUpdate && !isDelete {
+		if !sqlutil.HasAnyPrefixKeyword(inner, "INSERT", "UPDATE", "DELETE") {
 			return false
 		}
 
