@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- support dual-parser automatic fallback for `ALTER PROCEDURE` with vendor clauses (c9db8e6d)
+- implement Single Page Application (SPA) Chroot handler with `os.DirFS` subfolder assets and immutable caching (c9db8e6d)
+- enforce T-SQL Hekaton PK rules: `DURABILITY = SCHEMA_AND_DATA` requires PK (Msg 41321), `DURABILITY = SCHEMA_ONLY` allows PK-less table creation with synthetic `_row_id` (c9db8e6d)
+- support currency-symbol string parsing (`$`, `₩`, `€`, `£`, `¥`), parenthesized negatives, style 1/2 formatting, and `LEN(MONEY)` 2-decimal parity (c9db8e6d)
+- support `GENERATE_SERIES(start, stop [, step])` for table-valued functions and set-returning projections (c9db8e6d)
+
+### Changed
+- unify `memengine` onto pointerless `compact` mode and remove legacy `performance` mode (0ed35ad9)
+- modernize CLI storage flags to `-engine wiredtiger|compact` and remove obsolete `-ephemeral` (0ed35ad9)
+
+
 ## [0.93.0] - 2026-11-16
 
 ### Added
