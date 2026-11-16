@@ -359,6 +359,9 @@ func (tx *Transaction) InsertRow(tableName string, row storage.Row) error {
 	}
 	schema := td.Schema
 
+	// Defensive copy: isolate row to eliminate caller slice mutation side-effects ([RULE:DefensiveIndexing])
+	row = cloneRow(row)
+
 	if _, rvIdx, hasRV := schema.RowVersionColumn(); hasRV {
 		if rvIdx >= 0 && rvIdx < len(row.Values) {
 			row.Values[rvIdx] = storage.BinaryValue(storage.NextRowVersion())
@@ -378,15 +381,14 @@ func (tx *Transaction) InsertRow(tableName string, row storage.Row) error {
 				} else if td.hasKey(pkKey) {
 					return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, schema.Name)
 				}
-				rowClone := cloneRow(row)
-				tx.putLocal(schema.Name, pkKey, rowClone, 0)
+				tx.putLocal(schema.Name, pkKey, row, 0)
 				tx.unmarkDeleted(schema.Name, pkKey)
 				tx.changes[schema.Name+":"+pkKey] = rowChange{
 					kind:     changeInsert,
 					table:    schema.Name,
 					key:      pkKey,
 					baseVer:  0,
-					row:      rowClone,
+					row:      row,
 					td:       td,
 					shardIdx: hashShard(pkKey),
 				}
@@ -2015,6 +2017,11 @@ func (tx *Transaction) verifyOCCAndConstraintsLocked() error {
 	}
 
 	// Enforce in-memory engine storage memory limit guard (MEM-3)
+	return tx.checkMemoryLimitLocked()
+}
+
+// checkMemoryLimitLocked enforces in-memory engine storage memory limit guard (MEM-3).
+func (tx *Transaction) checkMemoryLimitLocked() error {
 	if maxLimit := tx.engine.maxDataBytes.Load(); maxLimit > 0 {
 		hasInsertOrUpdate := false
 		for _, ch := range tx.changes {
@@ -2040,7 +2047,6 @@ func (tx *Transaction) verifyOCCAndConstraintsLocked() error {
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -2056,6 +2062,11 @@ func (tx *Transaction) Commit() error {
 	if tx.opts.ReadOnly || len(tx.changes) == 0 {
 		tx.committed = true
 		return nil
+	}
+
+	// Enforce in-memory engine storage memory limit guard on commit path (MEM-3)
+	if err := tx.checkMemoryLimitLocked(); err != nil {
+		return err
 	}
 
 	defer func() {

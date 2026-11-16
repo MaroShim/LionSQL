@@ -204,6 +204,19 @@ func (l *FlatRecordLayout) EncodeRowToFlat(schema *storage.TableSchema, row stor
 
 		case storage.TypeDateTime:
 			tVal := val.TVal
+			if tVal.IsZero() && val.SVal != "" {
+				parsed, err := storage.ParseDateTime(val.SVal)
+				if err != nil {
+					return nil, fmt.Errorf("column %q: %w", col.Name, err)
+				}
+				tVal = parsed
+			} else if tVal.IsZero() && val.Type == storage.TypeVarChar {
+				parsed, err := storage.ParseDateTime(val.String())
+				if err != nil {
+					return nil, fmt.Errorf("column %q: %w", col.Name, err)
+				}
+				tVal = parsed
+			}
 			binary.LittleEndian.PutUint64(slot, uint64(tVal.UnixNano()))
 
 		case storage.TypeDate:

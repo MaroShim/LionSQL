@@ -205,12 +205,21 @@ func TimeValueFromAny(v Value) Value {
 	return TimeValueFromString(v.String())
 }
 
+// ParseDateTime parses various date/time formats into time.Time.
+func ParseDateTime(s string) (time.Time, error) {
+	val, err := DateTimeValueFromAny(Value{Type: TypeVarChar, SVal: s})
+	if err != nil {
+		return time.Time{}, err
+	}
+	return val.TVal, nil
+}
+
 // DateTimeValueFromAny converts an existing storage.Value to TypeDateTime.
 func DateTimeValueFromAny(v Value) (Value, error) {
 	if v.IsNull {
 		return NullValue(TypeDateTime), nil
 	}
-	if v.Type == TypeDateTime {
+	if v.Type == TypeDateTime && !v.TVal.IsZero() {
 		return v, nil
 	}
 	str := strings.Trim(strings.TrimSpace(v.String()), "'\"")

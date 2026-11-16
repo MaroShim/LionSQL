@@ -195,6 +195,17 @@ func TestWriteToFileAtomic_AndReload(t *testing.T) {
 		t.Errorf("temporary swap file should be cleaned up")
 	}
 
+	// Verify permissions (0600)
+	if runtime.GOOS != "windows" {
+		fi, err := os.Stat(targetPath)
+		if err != nil {
+			t.Fatalf("failed to stat target path: %v", err)
+		}
+		if fi.Mode().Perm() != 0600 {
+			t.Errorf("expected 0600 permissions on saved config, got %#o", fi.Mode().Perm())
+		}
+	}
+
 	// Reload
 	reloaded, err := config.LoadFromFile(targetPath)
 	if err != nil {
@@ -461,5 +472,81 @@ func TestApplyEnvOverrides_AdminCredentials(t *testing.T) {
 		t.Errorf("expected AppPath './dist', got %q", cfg.Server.AppPath)
 	}
 }
+
+func TestNormalizePeers(t *testing.T) {
+	cases := []struct {
+		input    []string
+		expected []string
+	}{
+		{input: nil, expected: nil},
+		{input: []string{""}, expected: nil},
+		{input: []string{"none"}, expected: nil},
+		{input: []string{"NULL"}, expected: nil},
+		{input: []string{"nil"}, expected: nil},
+		{input: []string{"[]"}, expected: nil},
+		{input: []string{"-"}, expected: nil},
+		{input: []string{"http://node1:8090", "none", "  http://node2:8090  "}, expected: []string{"http://node1:8090", "http://node2:8090"}},
+	}
+	for i, c := range cases {
+		got := config.NormalizePeers(c.input)
+		if len(got) != len(c.expected) {
+			t.Fatalf("case %d length mismatch: expected %v, got %v", i, c.expected, got)
+		}
+		for j := range got {
+			if got[j] != c.expected[j] {
+				t.Errorf("case %d item %d mismatch: expected %q, got %q", i, j, c.expected[j], got[j])
+			}
+		}
+	}
+}
+
+func TestTLSConfig_Validate(t *testing.T) {
+	// Both empty -> OK
+	cfg := config.TLSConfig{}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("expected empty TLS to be valid, got: %v", err)
+	}
+
+	// Cert only -> Error
+	cfgCertOnly := config.TLSConfig{CertFile: "/path/to/cert.pem"}
+	if err := cfgCertOnly.Validate(); err == nil {
+		t.Errorf("expected error for cert-only TLS config, got nil")
+	}
+
+	// Key only -> Error
+	cfgKeyOnly := config.TLSConfig{KeyFile: "/path/to/key.pem"}
+	if err := cfgKeyOnly.Validate(); err == nil {
+		t.Errorf("expected error for key-only TLS config, got nil")
+	}
+
+	// Both present -> OK
+	cfgBoth := config.TLSConfig{CertFile: "/path/to/cert.pem", KeyFile: "/path/to/key.pem"}
+	if err := cfgBoth.Validate(); err != nil {
+		t.Errorf("expected pair TLS config to be valid, got: %v", err)
+	}
+}
+
+func TestConfig_ClusterTokenValidation(t *testing.T) {
+	// Standalone -> OK even with empty token
+	cfgStandalone := config.DefaultConfig()
+	cfgStandalone.Replication.ClusterToken = ""
+	if err := cfgStandalone.Validate(); err != nil {
+		t.Errorf("expected standalone config without cluster token to be valid, got: %v", err)
+	}
+
+	// Clustered with peers -> requires cluster token
+	cfgClustered := config.DefaultConfig()
+	cfgClustered.Replication.Peers = []string{"http://peer1:8090"}
+	cfgClustered.Replication.ClusterToken = ""
+	if err := cfgClustered.Validate(); err == nil {
+		t.Errorf("expected clustered config without cluster token to fail validation, got nil")
+	}
+
+	cfgClustered.Replication.ClusterToken = "SecretToken123"
+	if err := cfgClustered.Validate(); err != nil {
+		t.Errorf("expected clustered config with token to be valid, got: %v", err)
+	}
+}
+
 
 

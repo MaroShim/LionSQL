@@ -107,9 +107,15 @@ func runSet(args []string) error {
 	val := posArgs[1]
 
 	// 1. Password resolution: Flag > LIONSQL_ADMIN_PASS env > Interactive terminal prompt
+	visited := make(map[string]bool)
+	fs.Visit(func(f *flag.Flag) {
+		visited[f.Name] = true
+	})
 	password := *passFlag
-	if password == "" {
-		password = os.Getenv("LIONSQL_ADMIN_PASS")
+	if !visited["pass"] {
+		if envPass := os.Getenv("LIONSQL_ADMIN_PASS"); envPass != "" {
+			password = envPass
+		}
 	}
 	if password == "" {
 		fd := int(os.Stdin.Fd())

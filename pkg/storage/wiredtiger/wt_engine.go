@@ -1109,7 +1109,14 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 	var deletedRows []deletedPartitionRow
 
 	matched := 0
-	for C.go_wt_cursor_next(cur) == 0 {
+	for {
+		nret := C.go_wt_cursor_next(cur)
+		if nret != 0 {
+			if nret != C.WT_NOTFOUND {
+				return wtOpError("cursor_next during DropPartition", int(nret))
+			}
+			break
+		}
 		var pKey *C.char
 		var pkStr string
 		if kret := C.go_wt_cursor_get_key(cur, &pKey); kret == 0 && pKey != nil {
@@ -1215,7 +1222,14 @@ func (e *Engine) GetPartitions(tableName string) ([]storage.PartitionInfo, error
 	defer C.go_wt_cursor_close(cur)
 
 	partCounts := make(map[string]int64)
-	for C.go_wt_cursor_next(cur) == 0 {
+	for {
+		nret := C.go_wt_cursor_next(cur)
+		if nret != 0 {
+			if nret != C.WT_NOTFOUND {
+				return nil, wtOpError("cursor_next during GetPartitions", int(nret))
+			}
+			break
+		}
 		var pData unsafe.Pointer
 		var sz C.size_t
 		if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret == 0 && pData != nil {
@@ -1401,6 +1415,10 @@ func (e *Engine) RenameTable(oldName, newName string) error {
 	}
 
 	if err := e.saveCatalog(); err != nil {
+		// Rollback rename in memory to avoid catalog inconsistency
+		delete(e.tables, targetNew)
+		tbl.Name = targetOld
+		e.tables[targetOld] = tbl
 		return err
 	}
 
@@ -1686,7 +1704,15 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 		}
 		if openRet == 0 {
 			defer C.go_wt_cursor_close(idxCur)
-			for C.go_wt_cursor_next(tblCur) == 0 {
+			for {
+				nret := C.go_wt_cursor_next(tblCur)
+				if nret != 0 {
+					if nret != C.WT_NOTFOUND {
+						_ = C.go_wt_session_drop(sess, cIdxURI)
+						return wtOpError("cursor_next during index build", int(nret))
+					}
+					break
+				}
 				var pKey *C.char
 				if kret := C.go_wt_cursor_get_key(tblCur, &pKey); kret != 0 || pKey == nil {
 					continue
@@ -3348,6 +3374,9 @@ func (c *wtIndexBTreeCursor) Next() bool {
 }
 
 func (c *wtIndexBTreeCursor) Row() (storage.Row, error) {
+	if c.err != nil {
+		return storage.Row{}, c.err
+	}
 	if c.closed || c.cur == nil || c.eof || c.currPK == "" {
 		return storage.Row{}, fmt.Errorf("cursor closed or out of range")
 	}
@@ -3360,6 +3389,9 @@ func (c *wtIndexBTreeCursor) Row() (storage.Row, error) {
 }
 
 func (c *wtIndexBTreeCursor) Record() (storage.Record, error) {
+	if c.err != nil {
+		return nil, c.err
+	}
 	if c.closed || c.cur == nil || c.eof || c.currPK == "" {
 		return nil, fmt.Errorf("cursor closed or out of range")
 	}
@@ -3376,7 +3408,7 @@ func (c *wtIndexBTreeCursor) Record() (storage.Record, error) {
 }
 
 func (c *wtIndexBTreeCursor) RawTuple() ([]byte, bool) {
-	if c.closed || c.cur == nil || c.eof || c.currPK == "" {
+	if c.err != nil || c.closed || c.cur == nil || c.eof || c.currPK == "" {
 		return nil, false
 	}
 	c.tx.mu.Lock()
@@ -3395,7 +3427,7 @@ func (c *wtIndexBTreeCursor) RawTuple() ([]byte, bool) {
 
 func (c *wtIndexBTreeCursor) Close() error {
 	if c.closed || c.cur == nil {
-		return nil
+		return c.err
 	}
 	c.closed = true
 	cur := c.cur
@@ -3405,7 +3437,7 @@ func (c *wtIndexBTreeCursor) Close() error {
 	} else {
 		C.go_wt_cursor_close(cur)
 	}
-	return nil
+	return c.err
 }
 
 func (c *wtIndexBTreeCursor) Err() error {
@@ -3931,6 +3963,9 @@ func (c *WTCursor) Next() bool {
 }
 
 func (c *WTCursor) Record() (storage.Record, error) {
+	if c.err != nil {
+		return nil, c.err
+	}
 	if c.closed || c.cur == nil || c.eof {
 		return nil, fmt.Errorf("cursor closed")
 	}
@@ -3945,6 +3980,9 @@ func (c *WTCursor) Record() (storage.Record, error) {
 }
 
 func (c *WTCursor) Row() (storage.Row, error) {
+	if c.err != nil {
+		return storage.Row{}, c.err
+	}
 	if c.closed || c.cur == nil || c.eof {
 		return storage.Row{}, fmt.Errorf("cursor closed")
 	}
@@ -3959,7 +3997,7 @@ func (c *WTCursor) Row() (storage.Row, error) {
 }
 
 func (c *WTCursor) RawTuple() ([]byte, bool) {
-	if c.closed || c.cur == nil || c.eof {
+	if c.err != nil || c.closed || c.cur == nil || c.eof {
 		return nil, false
 	}
 
@@ -3988,7 +4026,7 @@ func decodeRow(schema *storage.TableSchema, data []byte) (storage.Row, error) {
 
 func (c *WTCursor) Close() error {
 	if c.closed || c.cur == nil {
-		return nil
+		return c.err
 	}
 	c.closed = true
 	cur := c.cur
@@ -3998,7 +4036,7 @@ func (c *WTCursor) Close() error {
 	} else {
 		C.go_wt_cursor_close(cur)
 	}
-	return nil
+	return c.err
 }
 
 func (c *WTCursor) Err() error {

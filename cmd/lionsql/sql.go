@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -217,7 +216,8 @@ func openCoordinatorWithOptions(dataDir, diskType, memoryType string) (storage.E
 
 	cat := catalog.New(eng)
 	if err := cat.SetPersistenceDir(cleanDir); err != nil {
-		log.Printf("[LionSQL] Warning: Failed to set catalog persistence dir: %v", err)
+		_ = eng.Close()
+		return nil, nil, fmt.Errorf("failed to initialize system catalog: %w", err)
 	}
 
 	coord := engine.NewCoordinator(cat, eng, engine.Config{

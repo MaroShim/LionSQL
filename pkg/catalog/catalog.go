@@ -563,7 +563,9 @@ func (c *Catalog) SetPersistenceDir(dir string) error {
 	// 1. Load CBO table statistics if present
 	statsFile := filepath.Join(cleanDir, "cbo_stats.json")
 	if _, err := os.Stat(statsFile); err == nil {
-		_ = c.loadTableStatsFileLocked(statsFile)
+		if err := c.loadTableStatsFileLocked(statsFile); err != nil {
+			return err
+		}
 	}
 
 	// 2. Load catalog objects (procedures, functions, triggers, views) if present

@@ -1120,3 +1120,82 @@ func TestDecodeFlatToRowWithArena_And_CursorOwnership(t *testing.T) {
 	}
 }
 
+func TestFlatRecord_DatetimeFromString(t *testing.T) {
+	schema := &storage.TableSchema{
+		Name: "events",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "created_at", Type: storage.TypeDateTime},
+		},
+	}
+	layout := BuildFlatRecordLayout(schema)
+
+	// String value passed for DATETIME column
+	row := storage.Row{
+		Values: []storage.Value{
+			storage.IntValue(1),
+			storage.StringValue("2026-11-16 16:40:00"),
+		},
+	}
+	encoded, err := layout.EncodeRowToFlat(schema, row)
+	if err != nil {
+		t.Fatalf("EncodeRowToFlat with string datetime failed: %v", err)
+	}
+
+	decodedRow, err := layout.DecodeFlatToRow(schema, encoded)
+	if err != nil {
+		t.Fatalf("DecodeFlatToRow failed: %v", err)
+	}
+
+	if decodedRow.Values[1].Type != storage.TypeDateTime {
+		t.Fatalf("expected TypeDateTime, got %v", decodedRow.Values[1].Type)
+	}
+	expectedTime := time.Date(2026, 11, 16, 16, 40, 0, 0, time.UTC)
+	if !decodedRow.Values[1].TVal.Equal(expectedTime) {
+		t.Fatalf("expected decoded time %v, got %v", expectedTime, decodedRow.Values[1].TVal)
+	}
+}
+
+func TestInsertRow_NoCallerSliceMutation(t *testing.T) {
+	eng := New()
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "versions",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "rv", Type: storage.TypeBinary, IsRowVersion: true},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx.Rollback()
+
+	originalRV := storage.BinaryValue([]byte{0x00, 0x00})
+	callerValues := []storage.Value{
+		storage.IntValue(42),
+		originalRV,
+	}
+	callerRow := storage.Row{Values: callerValues}
+
+	if err := tx.InsertRow("versions", callerRow); err != nil {
+		t.Fatalf("InsertRow failed: %v", err)
+	}
+
+	// Verify that caller's slice was not mutated in place!
+	if string(callerRow.Values[1].BinVal) != string(originalRV.BinVal) {
+		t.Fatalf("caller row was mutated as a side effect! original=%v, got=%v", originalRV, callerRow.Values[1])
+	}
+}
+
+

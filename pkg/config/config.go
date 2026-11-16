@@ -32,9 +32,20 @@ type TLSConfig struct {
 	KeyFile    string `json:"key_file,omitempty"`
 }
 
-// IsEnabled returns true if TLS is explicitly enabled, required, or certificates are configured.
+// IsEnabled returns true if TLS is explicitly enabled, required, or certificates/keys are configured.
 func (t TLSConfig) IsEnabled() bool {
-	return t.Enabled || t.RequireSSL || strings.TrimSpace(t.CertFile) != ""
+	return t.Enabled || t.RequireSSL || strings.TrimSpace(t.CertFile) != "" || strings.TrimSpace(t.KeyFile) != ""
+}
+
+// Validate verifies TLS configuration completeness.
+// Certificate and private key files must be provided as a pair; providing only one is strictly prohibited.
+func (t TLSConfig) Validate() error {
+	hasCert := strings.TrimSpace(t.CertFile) != ""
+	hasKey := strings.TrimSpace(t.KeyFile) != ""
+	if (hasCert && !hasKey) || (!hasCert && hasKey) {
+		return errors.New("incomplete TLS configuration: both certificate (cert_file) and private key (key_file) must be provided together")
+	}
+	return nil
 }
 
 // NetworkConfig defines listener endpoints and protocols.
@@ -342,6 +353,23 @@ func AutoDiscoverConfig(explicitPath string, dataDir string) (*Config, string, e
 	return resCfg, resPath, nil
 }
 
+// NormalizePeers cleans and standardizes peer endpoint URLs, filtering out empty strings,
+// "none", "null", "nil", "[]", or "-" entries.
+func NormalizePeers(raw []string) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var clean []string
+	for _, p := range raw {
+		trimmed := strings.TrimSpace(p)
+		if trimmed == "" || strings.EqualFold(trimmed, "none") || strings.EqualFold(trimmed, "null") || strings.EqualFold(trimmed, "nil") || trimmed == "[]" || trimmed == "-" {
+			continue
+		}
+		clean = append(clean, trimmed)
+	}
+	return clean
+}
+
 // ApplyEnvOverrides overrides configuration settings with environment variables.
 // Follows [RULE:ConfigHierarchy]: CLI Arguments > Environment Variables > Config File > Built-in Defaults.
 func ApplyEnvOverrides(cfg *Config) {
@@ -362,6 +390,9 @@ func ApplyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("LIONSQL_APP"); v != "" {
 		cfg.Server.AppPath = v
+	}
+	if v := os.Getenv("LIONSQL_CLUSTER_TOKEN"); v != "" {
+		cfg.Replication.ClusterToken = v
 	}
 }
 
@@ -432,7 +463,23 @@ func (c *Config) IsDefaultAdminPassword() bool {
 	return c.Auth.AdminPass == DefaultAdminPass || strings.TrimSpace(c.Auth.AdminPass) == ""
 }
 
+// Validate validates configuration integrity and safety rules.
+func (c *Config) Validate() error {
+	if err := c.ValidateSecurityGuard(); err != nil {
+		return err
+	}
+	if err := c.Network.TLS.Validate(); err != nil {
+		return err
+	}
+	isClustered := c.Replication.PrimaryURL != "" || len(c.Replication.Peers) > 0 || c.Replication.AutoFailover
+	if isClustered && strings.TrimSpace(c.Replication.ClusterToken) == "" {
+		return errors.New("cluster token cannot be empty when replication or peer quorum is configured (specify non-empty cluster_token or -cluster-token)")
+	}
+	return nil
+}
+
 // WriteToFileAtomic writes configuration to disk via a temporary swap file and atomic rename.
+// Enforces 0600 permissions to protect sensitive authentication and cluster credentials.
 func WriteToFileAtomic(cfg *Config, targetPath string) error {
 	cleanPath := filepath.Clean(targetPath)
 	dir := filepath.Dir(cleanPath)
@@ -449,7 +496,7 @@ func WriteToFileAtomic(cfg *Config, targetPath string) error {
 	data = append(data, '\n')
 
 	tmpPath := cleanPath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write temporary config file: %w", err)
 	}
 
@@ -457,6 +504,7 @@ func WriteToFileAtomic(cfg *Config, targetPath string) error {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("failed to atomically rename config file: %w", err)
 	}
+	_ = os.Chmod(cleanPath, 0600)
 
 	return nil
 }

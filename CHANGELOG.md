@@ -14,6 +14,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - support currency-symbol string parsing (`$`, `₩`, `€`, `£`, `¥`), parenthesized negatives, style 1/2 formatting, and `LEN(MONEY)` 2-decimal parity (c9db8e6d)
 - support `GENERATE_SERIES(start, stop [, step])` for table-valued functions and set-returning projections (c9db8e6d)
 
+### Fixed
+- enforce 0600 file permissions on atomic configuration file writes (`WriteToFileAtomic`)
+- enforce deterministic configuration hierarchy (CLI > Env > Config File > Defaults) and eliminate environment variable overrides of explicit CLI arguments
+- disallow empty cluster tokens when replication/clustering is configured and normalize peer endpoints (`none`, `null`, `nil`, `[]`)
+- enforce complete TLS certificate and key pairs; reject incomplete single-file TLS configurations fail-closed
+- route HTTP listener runtime errors into graceful shutdown pipeline with non-zero exit codes to prevent stale locks
+- fail-closed immediately upon system catalog metadata initialization errors (`SetPersistenceDir`)
+- propagate WiredTiger cursor move and scan errors in `WTCursor`, `wtIndexBTreeCursor`, `DropPartition`, and `GetPartitions`
+- enforce in-memory engine storage memory limits (`checkMemoryLimitLocked`) on the `Commit()` path
+- eliminate `InsertRow` caller slice mutation side-effects via upfront defensive cloning
+- support string date/time representations in `compact` FlatRecord Datetime encoder
+- prevent disappearing WAL paths by handling rollback rename failures in `WALWriter.Rotate` and rollback in-memory renames on catalog save failures
+
 ### Changed
 - unify `memengine` onto pointerless `compact` mode and remove legacy `performance` mode (0ed35ad9)
 - modernize CLI storage flags to `-engine wiredtiger|compact` and remove obsolete `-ephemeral` (0ed35ad9)

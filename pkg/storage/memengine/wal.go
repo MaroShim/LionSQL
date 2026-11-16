@@ -343,7 +343,12 @@ func (w *WALWriter) Rotate(rotatedPath string) error {
 
 	// 4. Atomically move the verified new file into w.path
 	if err := os.Rename(tmpNewPath, w.path); err != nil {
-		_ = os.Rename(rotatedPath, w.path)
+		if rbErr := os.Rename(rotatedPath, w.path); rbErr != nil {
+			w.brokenErr = fmt.Errorf("fatal: failed to activate new WAL file %s (%w) and rollback rename from %s failed: %v", w.path, err, rotatedPath, rbErr)
+			_ = newFile.Close()
+			_ = os.Remove(tmpNewPath)
+			return w.brokenErr
+		}
 		_ = newFile.Close()
 		_ = os.Remove(tmpNewPath)
 		return fmt.Errorf("failed to activate new WAL file after rotation: %w", err)

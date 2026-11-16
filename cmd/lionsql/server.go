@@ -242,11 +242,15 @@ func runServer(args []string) error {
 	if visited["auto-failover"] {
 		cfg.Replication.AutoFailover = *autoFailover
 	}
-	if visited["peers"] && *peersFlag != "" {
-		cfg.Replication.Peers = strings.Split(*peersFlag, ",")
-		for i := range cfg.Replication.Peers {
-			cfg.Replication.Peers[i] = strings.TrimSpace(cfg.Replication.Peers[i])
+	if visited["peers"] {
+		trimmed := strings.TrimSpace(*peersFlag)
+		if trimmed == "" || strings.EqualFold(trimmed, "none") || strings.EqualFold(trimmed, "null") || strings.EqualFold(trimmed, "nil") || trimmed == "[]" || trimmed == "-" {
+			cfg.Replication.Peers = []string{}
+		} else {
+			cfg.Replication.Peers = config.NormalizePeers(strings.Split(trimmed, ","))
 		}
+	} else {
+		cfg.Replication.Peers = config.NormalizePeers(cfg.Replication.Peers)
 	}
 	if visited["self-url"] {
 		cfg.Replication.SelfURL = *selfURLFlag
@@ -259,11 +263,6 @@ func runServer(args []string) error {
 	}
 	if visited["cluster-token"] {
 		cfg.Replication.ClusterToken = *clusterTokenFlag
-	}
-	if cfg.Replication.ClusterToken == "" {
-		if envToken := os.Getenv("LIONSQL_CLUSTER_TOKEN"); envToken != "" {
-			cfg.Replication.ClusterToken = envToken
-		}
 	}
 	if visited["pidfile"] {
 		cfg.Server.PIDFile = *pidFile
@@ -321,6 +320,15 @@ func runServer(args []string) error {
 	resolvedLogFile := cfg.Server.LogFile
 	if resolvedLogFile == "" {
 		resolvedLogFile = filepath.Join(cfg.Server.DataDir, "lionsql.log")
+	}
+
+	// Validate TLS and cluster security invariants
+	if err := cfg.Network.TLS.Validate(); err != nil {
+		log.Fatalf("[LionSQL] %v", err)
+	}
+	isClustered := cfg.Replication.PrimaryURL != "" || len(cfg.Replication.Peers) > 0 || cfg.Replication.AutoFailover
+	if isClustered && strings.TrimSpace(cfg.Replication.ClusterToken) == "" {
+		log.Fatalf("[LionSQL] Configuration error: cluster token cannot be empty when replication or peer quorum is configured (specify non-empty -cluster-token or LIONSQL_CLUSTER_TOKEN)")
 	}
 
 	// 4. Standalone Self-Diagnostic Health Verification (--doctor)
@@ -543,7 +551,7 @@ func runServer(args []string) error {
 	cat := catalog.New(eng)
 	if cfg.Server.DataDir != "" {
 		if err := cat.SetPersistenceDir(cfg.Server.DataDir); err != nil {
-			log.Printf("[LionSQL] Warning: Failed to set catalog persistence dir: %v", err)
+			log.Fatalf("[LionSQL] Fatal: Failed to initialize system catalog: %v", err)
 		}
 	}
 
@@ -896,6 +904,8 @@ func runServer(args []string) error {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
+	serverExitCode := 0
+
 	go func() {
 		stats := server.Pool().Stats()
 		bCtx := bannerContext{
@@ -928,9 +938,14 @@ func runServer(args []string) error {
 			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				if strings.Contains(err.Error(), "address already in use") {
 					fmt.Printf("\n[LionSQL] Error: HTTP service port conflict (%s): %v\n\n", cfg.Network.HTTPAddr, err)
-					os.Exit(1)
+				} else {
+					log.Printf("[LionSQL] HTTP server runtime error: %v", err)
 				}
-				log.Fatalf("HTTP server failure: %v", err)
+				serverExitCode = 1
+				select {
+				case stop <- syscall.SIGTERM:
+				default:
+				}
 			}
 		}
 	}()
@@ -978,6 +993,10 @@ func runServer(args []string) error {
 		log.Println("[LionSQL] Server components stopped gracefully.")
 	case <-ctx.Done():
 		log.Println("[LionSQL] Shutdown deadline reached; terminating remaining tasks.")
+	}
+
+	if serverExitCode != 0 {
+		os.Exit(serverExitCode)
 	}
 
 	return nil
