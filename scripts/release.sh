@@ -314,8 +314,8 @@ go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/l
 cp bin/lionsql-darwin-arm64 bin/lionsql
 echo -e "${CLR_GREEN}Build OK: bin/lionsql-darwin-arm64 (macOS Apple Silicon)${CLR_RESET}"
 
-# 2. Linux amd64 (Pure Go Zero-Cgo)
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/lionsql-linux-amd64 ./cmd/lionsql
+# 2. Linux amd64
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/lionsql-linux-amd64 ./cmd/lionsql
 echo -e "${CLR_GREEN}Build OK: bin/lionsql-linux-amd64 (Linux x86_64)${CLR_RESET}"
 
 # 3. Windows amd64 (Pure Go Zero-Cgo, 1ms timer)
