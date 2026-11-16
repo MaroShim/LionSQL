@@ -68,7 +68,7 @@ LionSQL `v0.93.0` is an enterprise milestone release that hardens database kerne
   - Pre-compiles bytecode VM programs into session storage (`cs.PreparedStmts`) and manages integer statement handles.
   - Reuses pre-compiled bytecode routines directly in `sp_execute`, substantially reducing latency on repeated parameter calls.
 - **Parameter Sequence & Duplicate Binding Guards (Msg 119 / Msg 8143)**:
-  - Fails fast when positional parameters follow named parameters (`Msg 119: Must pass parameter N and subsequent parameters as '@name = value'`).
+  - Fails fast when positional parameters follow named parameters (`Msg 119: Must pass parameter N and subsequent parameters as name = value`).
   - Rejects duplicate parameter bindings supplied both positionally and by name (`Msg 8143: Parameter was supplied multiple times`).
 - **Unpunctuated Semicolon-Free EXEC Batch Splitting (`SplitStatements`)**:
   - Context-aware splitting of contiguous `EXEC` statements separated solely by newlines without semicolons.

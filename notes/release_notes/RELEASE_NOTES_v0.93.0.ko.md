@@ -69,7 +69,7 @@ LionSQL `v0.93.0` 버전은 228개 누적 커밋에 대한 Dual-AI 전수 적대
   - `sp_prepare` 호출 시 파싱 및 바이트코드 컴파일 결과를 세션 내부 캐시(`cs.PreparedStmts`)에 저장하고 정수 핸들을 반환.
   - 바이트코드 VM 내부에서 `sp_execute` 실행 시 사전 컴파일된 프로그램을 인라인 재사용하여 반복 쿼리 실행 지연시간 대폭 단축.
 - **매개변수 순서 및 다중 바인딩 가드 (Msg 119 / Msg 8143)**:
-  - 위치 매개변수(`val`)가 명명된 매개변수(`@p = val`) 뒤에 오는 것을 원천 차단 (`Msg 119: Must pass parameter N and subsequent parameters as '@name = value'`).
+  - 위치 매개변수(`val`)가 명명된 매개변수(`@p = val`) 뒤에 오는 것을 원천 차단 (`Msg 119: Must pass parameter N and subsequent parameters as name = value`).
   - 동일한 매개변수가 위치 및 이름으로 중복 전달될 경우 즉시 차단 (`Msg 8143: Parameter was supplied multiple times`).
 - **세미콜론 없는 다중 EXEC 배치 파싱 (`SplitStatements`)**:
   - 배치 스크립트에서 세미콜론 없이 개행문자로 분리된 연속 `EXEC` 문을 문맥 인식 기반으로 정확히 분할하도록 개선.
