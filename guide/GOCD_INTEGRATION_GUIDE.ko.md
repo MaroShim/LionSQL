@@ -16,9 +16,9 @@
 
 GoCD는 Java 런타임 환경에서 공식 PostgreSQL JDBC 드라이버(`org.postgresql.Driver`) 또는 Microsoft SQL Server JDBC 드라이버(`com.microsoft.sqlserver.jdbc.SQLServerDriver`), Hibernate ORM, 그리고 스키마 버전 관리 도구인 **Liquibase**를 통해 데이터베이스와 통신합니다.
 
-- **지원 프로토콜**: 
-  - **PostgreSQL Wire Protocol v3** (JDBC `:5433`): `jdbc:postgresql://<host>:5433/gocd`
-  - **Microsoft SQL Server TDS 7.x/8.0** (JDBC `:1433`): `jdbc:sqlserver://<host>:1433;databaseName=gocd;encrypt=false`
+- **지원 프로토콜 및 포트 권장**: 
+  - **PostgreSQL Wire Protocol v3** (JDBC `:5433`, 기본 권장): `jdbc:postgresql://<host>:5433/gocd` — Liquibase 분산 마이그레이션 락(`DATABASECHANGELOGLOCK`) 및 Hibernate 트랜잭션 왕복 레이턴시가 가장 빠르고 안정적입니다.
+  - **Microsoft SQL Server TDS 7.x/8.0** (JDBC `:1433`): `jdbc:sqlserver://<host>:1433;databaseName=gocd;encrypt=false` — 사내 인프라 표준이 Microsoft SQL Server 정책으로 일원화된 경우 권장합니다.
 - **LionSQL 권장 스토리지 엔진**: WiredTiger (고동시성 빌드/스테이지 상태 전이 및 ACID 트랜잭션 보장)
 - **적용 마이그레이션**: Liquibase 기반 `DATABASECHANGELOGLOCK` 락 제어 및 `DATABASECHANGELOG` 자동 스키마 마이그레이션
 - **주요 테이블**:

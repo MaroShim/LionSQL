@@ -79,6 +79,11 @@ Metabase 관리자 화면 (`Settings` ➔ `Admin Settings` ➔ `Databases` ➔ `
 
 `Save` 버튼을 누르면 연결 검증 및 스키마 인트로스펙션이 즉시 수행됩니다.
 
+> [!TIP]
+> **프로토콜 선택 권장 가이드 (포트 비교)**:
+> - **PostgreSQL 드라이버 (`:5433`) (기본 권장)**: Metabase의 JDBC 동기화 엔진이 `pg_catalog` 및 `information_schema`를 통해 대량의 테이블/컬럼 메타데이터를 더 빠르고 가볍게 인트로스펙션합니다. 일반적인 BI 대시보드 및 비주얼 쿼리 빌더(MBQL) 작업에 가장 최적화되어 있습니다.
+> - **SQL Server 드라이버 (`:1433`) 권장 시점**: 분석가가 대시보드 내 네이티브 SQL 에디터에서 Microsoft SQL Server 고유의 T-SQL 함수(`DATEDIFF`, `DATEADD`, `CHARINDEX`)나 대괄호 식별자(`[...]`) 문법을 직접 작성하고자 할 때 권장합니다.
+
 ---
 
 ## 5. 비주얼 쿼리 빌더(MBQL) 및 SQL 질의 활용

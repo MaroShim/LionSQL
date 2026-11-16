@@ -31,7 +31,7 @@ LionSQL supports Casdoor's **XORM + Casbin** persistence layer out of the box wi
 
 ## 3. Configuring Casdoor (`conf/app.conf`)
 
-### Mode A: PostgreSQL Wire Protocol (`:5433`)
+### Mode A: PostgreSQL Wire Protocol (`:5433`) (Recommended)
 
 Configure `driverName` and `dataSourceName` in `conf/app.conf`:
 
@@ -64,6 +64,11 @@ tableNamePrefix =
 showSql = false
 initAdminPassword = "123"
 ```
+
+> [!TIP]
+> **Protocol Selection & Recommendation Guide (Port Comparison)**:
+> - **Mode A: PostgreSQL Wire (`:5433`) (Default Recommendation)**: Casdoor's XORM persistence layer manages session tokens, signing keys, and binary fields (`addresses VARBINARY`) natively using UTF-8 and standard byte arrays. The PostgreSQL driver (`lib/pq`) provides lower connection latency and eliminates character encoding translation overhead.
+> - **Mode B: Microsoft SQL Server TDS (`:1433`)**: Recommended when corporate Active Directory, Azure, or Windows Server policies require standardized SQL Server connection strings (`sqlserver://`) or when infrastructure monitoring is centralized around port 1433.
 
 ---
 

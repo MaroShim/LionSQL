@@ -52,6 +52,14 @@ This allows LionSQL to serve Grafana across **two distinct channels simultaneous
 3. **Full Envelope Encryption & Advisory Lock Compatibility**:
    - Natively supports PostgreSQL `BYTEA` (`\x<hex>`) round-trip binary serialization for Grafana's `data_keys` envelope encryption subsystem and PostgreSQL session/transaction advisory locks (`pg_try_advisory_lock`).
 
+> [!TIP]
+> **Protocol Selection & Recommendation Guide**:
+> - **Internal Metadata Backend DB**: **PostgreSQL Wire Protocol (`:5433`) (Required & Standard)**
+>   - Grafana core relies on the XORM `github.com/lib/pq` driver for metadata management; use port `:5433`.
+> - **Dashboard Query Data Sources**:
+>   - **Default Recommendation: PostgreSQL Wire Protocol (`:5433`)**: Provides minimal driver latency and seamless analytical time-series macros (`$__timeFilter`, `date_trunc`, `EXTRACT(EPOCH)`).
+>   - **When to Use TDS (`:1433`)**: Recommended when migrating pre-existing Microsoft SQL Server dashboard panels and queries (`DATEDIFF`, `DATEADD`, T-SQL dialects) with zero modifications, or when analysts are experienced in T-SQL.
+
 ---
 
 ## 2. Prerequisites & Starting LionSQL

@@ -20,14 +20,14 @@
 
 | 애플리케이션 | 분야 | 언어 / ORM 스택 | 지원 와이어 프로토콜 | 한국어 가이드 | 영문 가이드 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Gitea** | DevOps / Git 호스팅 | Go + XORM | PGWire (`:5433`) & TDS (`:1433`) | [`GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md) | [`GITEA_INTEGRATION_GUIDE.md`](GITEA_INTEGRATION_GUIDE.md) |
-| **Grafana** | 관측성 및 대시보드 | Go + XORM / SQL 플러그인 | PGWire (`:5433`) & TDS (`:1433`) | [`GRAFANA_INTEGRATION_GUIDE.ko.md`](GRAFANA_INTEGRATION_GUIDE.ko.md) | [`GRAFANA_INTEGRATION_GUIDE.md`](GRAFANA_INTEGRATION_GUIDE.md) |
-| **GoCD** | 엔터프라이즈 CI/CD 서버 | Java + Hibernate + Liquibase | PGWire (`:5433`) & TDS (`:1433`) | [`GOCD_INTEGRATION_GUIDE.ko.md`](GOCD_INTEGRATION_GUIDE.ko.md) | [`GOCD_INTEGRATION_GUIDE.md`](GOCD_INTEGRATION_GUIDE.md) |
-| **Wiki.js** | 엔터프라이즈 위키 및 지식관리 | Node.js + Knex / Drizzle | PGWire (`:5433`) & TDS (`:1433`) | [`WIKIJS_INTEGRATION_GUIDE.ko.md`](WIKIJS_INTEGRATION_GUIDE.ko.md) | [`WIKIJS_INTEGRATION_GUIDE.md`](WIKIJS_INTEGRATION_GUIDE.md) |
-| **Metabase** | BI 및 데이터 분석 | Clojure/JVM + JDBC | PGWire (`:5433`) & TDS (`:1433`) | [`METABASE_INTEGRATION_GUIDE.ko.md`](METABASE_INTEGRATION_GUIDE.ko.md) | [`METABASE_INTEGRATION_GUIDE.md`](METABASE_INTEGRATION_GUIDE.md) |
-| **DuckDB** | 고성능 임베디드 OLAP / HTAP | C++ / Python / CLI | PGWire (`:5433`) & REST CDC (`:8090`) | [`DUCKDB_INTEGRATION_GUIDE.ko.md`](DUCKDB_INTEGRATION_GUIDE.ko.md) | [`DUCKDB_INTEGRATION_GUIDE.md`](DUCKDB_INTEGRATION_GUIDE.md) |
+| **Gitea** | DevOps / Git 호스팅 | Go + XORM | PGWire (`:5433`, 권장) & TDS (`:1433`) | [`GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md) | [`GITEA_INTEGRATION_GUIDE.md`](GITEA_INTEGRATION_GUIDE.md) |
+| **Grafana** | 관측성 및 대시보드 | Go + XORM / SQL 플러그인 | PGWire (`:5433`, 메타/쿼리 권장) & TDS (`:1433`) | [`GRAFANA_INTEGRATION_GUIDE.ko.md`](GRAFANA_INTEGRATION_GUIDE.ko.md) | [`GRAFANA_INTEGRATION_GUIDE.md`](GRAFANA_INTEGRATION_GUIDE.md) |
+| **GoCD** | 엔터프라이즈 CI/CD 서버 | Java + Hibernate + Liquibase | PGWire (`:5433`, 권장) & TDS (`:1433`) | [`GOCD_INTEGRATION_GUIDE.ko.md`](GOCD_INTEGRATION_GUIDE.ko.md) | [`GOCD_INTEGRATION_GUIDE.md`](GOCD_INTEGRATION_GUIDE.md) |
+| **Wiki.js** | 엔터프라이즈 위키 및 지식관리 | Node.js + Knex / Drizzle | PGWire (`:5433`, 권장) & TDS (`:1433`) | [`WIKIJS_INTEGRATION_GUIDE.ko.md`](WIKIJS_INTEGRATION_GUIDE.ko.md) | [`WIKIJS_INTEGRATION_GUIDE.md`](WIKIJS_INTEGRATION_GUIDE.md) |
+| **Metabase** | BI 및 데이터 분석 | Clojure/JVM + JDBC | PGWire (`:5433`, 권장) & TDS (`:1433`) | [`METABASE_INTEGRATION_GUIDE.ko.md`](METABASE_INTEGRATION_GUIDE.ko.md) | [`METABASE_INTEGRATION_GUIDE.md`](METABASE_INTEGRATION_GUIDE.md) |
+| **DuckDB** | 고성능 임베디드 OLAP / HTAP | C++ / Python / CLI | PGWire (`:5433`, 권장) & REST CDC (`:8090`) | [`DUCKDB_INTEGRATION_GUIDE.ko.md`](DUCKDB_INTEGRATION_GUIDE.ko.md) | [`DUCKDB_INTEGRATION_GUIDE.md`](DUCKDB_INTEGRATION_GUIDE.md) |
 | **Vaultwarden** | 비밀번호 관리 (Bitwarden) | Rust + Diesel ORM | PGWire (`:5433`) | [`VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](VAULTWARDEN_INTEGRATION_GUIDE.ko.md) | [`VAULTWARDEN_INTEGRATION_GUIDE.md`](VAULTWARDEN_INTEGRATION_GUIDE.md) |
-| **Casdoor** | 통합 인증 IAM / OIDC SSO | Go + XORM + Casbin | PGWire (`:5433`) & TDS (`:1433`) | [`CASDOOR_INTEGRATION_GUIDE.ko.md`](CASDOOR_INTEGRATION_GUIDE.ko.md) | [`CASDOOR_INTEGRATION_GUIDE.md`](CASDOOR_INTEGRATION_GUIDE.md) |
+| **Casdoor** | 통합 인증 IAM / OIDC SSO | Go + XORM + Casbin | PGWire (`:5433`, 권장) & TDS (`:1433`) | [`CASDOOR_INTEGRATION_GUIDE.ko.md`](CASDOOR_INTEGRATION_GUIDE.ko.md) | [`CASDOOR_INTEGRATION_GUIDE.md`](CASDOOR_INTEGRATION_GUIDE.md) |
 | **Umami** | 웹 애널리틱스 | Node.js / Next.js + Prisma | PGWire (`:5433`) | [`UMAMI_INTEGRATION_GUIDE.ko.md`](UMAMI_INTEGRATION_GUIDE.ko.md) | [`UMAMI_INTEGRATION_GUIDE.md`](UMAMI_INTEGRATION_GUIDE.md) |
 | **Apache Answer** | Q&A 지식베이스 | Go + XORM | PGWire (`:5433`) | [`ANSWER_INTEGRATION_GUIDE.ko.md`](ANSWER_INTEGRATION_GUIDE.ko.md) | [`ANSWER_INTEGRATION_GUIDE.md`](ANSWER_INTEGRATION_GUIDE.md) |
 | **Woodpecker CI** | CI/CD 파이프라인 엔진 | Go + XORM | PGWire (`:5433`) | [`WOODPECKER_INTEGRATION_GUIDE.ko.md`](WOODPECKER_INTEGRATION_GUIDE.ko.md) | [`WOODPECKER_INTEGRATION_GUIDE.md`](WOODPECKER_INTEGRATION_GUIDE.md) |

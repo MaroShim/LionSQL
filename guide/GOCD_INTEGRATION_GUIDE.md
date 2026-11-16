@@ -16,9 +16,9 @@ This document explains how to integrate Thoughtworks' open-source enterprise con
 
 GoCD communicates with databases in a Java runtime environment using the official PostgreSQL JDBC driver (`org.postgresql.Driver`) or Microsoft SQL Server JDBC driver (`com.microsoft.sqlserver.jdbc.SQLServerDriver`), Hibernate ORM, and **Liquibase** for database schema migrations.
 
-- **Supported Protocols**: 
-  - **PostgreSQL Wire Protocol v3** (JDBC `:5433`): `jdbc:postgresql://<host>:5433/gocd`
-  - **Microsoft SQL Server TDS 7.x/8.0** (JDBC `:1433`): `jdbc:sqlserver://<host>:1433;databaseName=gocd;encrypt=false`
+- **Supported Protocols & Port Recommendation**: 
+  - **PostgreSQL Wire Protocol v3** (JDBC `:5433`, Default Recommendation): `jdbc:postgresql://<host>:5433/gocd` — Provides minimal latency and maximum throughput for Liquibase migration locking (`DATABASECHANGELOGLOCK`) and Hibernate pipeline transitions.
+  - **Microsoft SQL Server TDS 7.x/8.0** (JDBC `:1433`): `jdbc:sqlserver://<host>:1433;databaseName=gocd;encrypt=false` — Recommended when organizational policies require SQL Server compliant connection strings.
 - **LionSQL Recommended Engine**: WiredTiger (MVCC ACID transactions and high-concurrency pipeline state transitions)
 - **Applied Migrations**: Liquibase-driven `DATABASECHANGELOGLOCK` lock management and `DATABASECHANGELOG` automated schema execution
 - **Primary Tables**:

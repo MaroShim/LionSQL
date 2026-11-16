@@ -31,7 +31,7 @@ LionSQL은 단일 바이너리 데이터베이스 엔진으로서 Casdoor의 **X
 
 ## 3. Casdoor 설정 (`conf/app.conf`)
 
-### Mode A: PostgreSQL Wire Protocol (`:5433`) 연동
+### Mode A: PostgreSQL Wire Protocol (`:5433`) 연동 (권장)
 
 `conf/app.conf`에서 `driverName`과 `dataSourceName`을 아래와 같이 구성합니다:
 
@@ -64,6 +64,11 @@ tableNamePrefix =
 showSql = false
 initAdminPassword = "123"
 ```
+
+> [!TIP]
+> **프로토콜 선택 권장 가이드 (포트 비교)**:
+> - **Mode A: PostgreSQL Wire (`:5433`) (기본 권장)**: Casdoor의 XORM 영속성 계층은 세션 토큰, 서명 키, 바이너리 주소(`addresses VARBINARY`) 등을 UTF-8 및 표준 바이트 배열로 다룹니다. PostgreSQL 드라이버(`lib/pq`)가 문자셋 및 인코딩 변환 오버헤드 없이 가장 빠르고 안정적인 레이턴시를 제공합니다.
+> - **Mode B: Microsoft SQL Server TDS (`:1433`) 권장 시점**: 조직 내 Active Directory, Azure, Windows Server 인프라에서 Microsoft SQL Server 표준 접속 형식(`sqlserver://`)을 준수해야 하거나, 사내 모니터링 체계가 TDS 포트 기반으로 통합되어 있을 때 권장합니다.
 
 ---
 

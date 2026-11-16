@@ -53,6 +53,14 @@ LionSQL은 외부 데몬(PgBouncer, Redis, Nginx, etcd) 의존성이 전혀 없�
 3. **고급 보안 및 암호화 호환성 (Envelope Encryption)**:
    - Grafana의 시크릿 관리 서브시스템이 요구하는 `BYTEA`(`\x<hex>`) 바이너리 암호화 키(`data_keys`) 직렬화/역직렬화 및 어드바이저리 락(`pg_try_advisory_lock`)을 완벽히 지원합니다.
 
+> [!TIP]
+> **프로토콜 선택 및 권장 가이드 (Protocol Recommendation)**:
+> - **내부 메타데이터 백엔드 DB**: **PostgreSQL Wire Protocol (`:5433`) (필수/표준)**
+>   - Grafana 공식 코어는 XORM 기반 `github.com/lib/pq` 드라이버로 내부 스키마를 관리하므로 포트 `:5433`을 지정합니다.
+> - **대시보드 쿼리 데이터 소스**:
+>   - **기본 권장: PostgreSQL Wire Protocol (`:5433`)**: Grafana 내장 시계열 매크로(`$__timeFilter`, `date_trunc`, `EXTRACT(EPOCH)`) 및 실시간 집계 쿼리 처리 시 드라이버 오버헤드가 적고 빠른 응답성을 보장합니다.
+>   - **TDS Protocol (`:1433`) 권장 시점**: 기존 Microsoft SQL Server 대시보드 패널 쿼리(`DATEDIFF`, `DATEADD`, T-SQL 함수)를 무수정으로 그대로 마이그레이션하거나 사내 DBA/분석가가 T-SQL 문법에 익숙할 때 권장합니다.
+
 ---
 
 ## 2. 사전 요구사항 및 LionSQL 기동

@@ -16,9 +16,9 @@ This document provides instructions for integrating **Wiki.js**, a modern open-s
 
 Wiki.js communicates with relational databases in a Node.js runtime using `node-postgres` (`pg`), **Knex.js**, and **Drizzle ORM**. Knex officially supports both `postgres` and `mssql` dialects, allowing operators to choose either wire protocol.
 
-- **Supported Protocols**: 
-  - **PostgreSQL Wire Protocol v3** (`pg`, `:5433`): `postgres://<user>:<pass>@<host>:5433/wikijs`
-  - **Microsoft SQL Server TDS 7.x/8.0** (`tedious`, `:1433`): Knex MSSQL Dialect (bracket identifiers, `OUTPUT INSERTED` support)
+- **Supported Protocols & Port Recommendation**: 
+  - **PostgreSQL Wire Protocol v3** (`pg`, `:5433`, Default Recommendation): `postgres://<user>:<pass>@<host>:5433/wikijs` — Provides the highest throughput and lowest latency for Knex.js full-text search indexing and JSON tag filtering.
+  - **Microsoft SQL Server TDS 7.x/8.0** (`tedious`, `:1433`): Knex MSSQL Dialect (bracket identifiers, `OUTPUT INSERTED` support) — Recommended when organizational policies standardize on SQL Server connections.
 - **LionSQL Recommended Engine**: WiredTiger (Large markdown document revision control and high-speed B+Tree indexing)
 - **Applied Migrations**: Knex / Drizzle automated migrations (`knex_migrations`, `knex_migrations_lock`)
 - **Primary Tables**:

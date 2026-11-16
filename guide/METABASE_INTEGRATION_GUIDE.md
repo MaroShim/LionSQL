@@ -83,6 +83,11 @@ In Metabase, navigate to `Settings` ➔ `Admin Settings` ➔ `Databases` ➔ `Ad
 
 Click **Save**. Metabase will immediately verify the connection and initiate schema synchronization.
 
+> [!TIP]
+> **Protocol Selection & Recommendation Guide (Port Comparison)**:
+> - **PostgreSQL Driver (`:5433`) (Default Recommendation)**: Metabase's JDBC sync engine performs schema introspection significantly faster via `pg_catalog` and ANSI `information_schema` views. Recommended for standard BI dashboarding and Visual Query Builder (MBQL) workflows.
+> - **When to Use SQL Server Driver (`:1433`)**: Recommended when business analysts prefer writing Microsoft T-SQL syntax (`DATEDIFF`, `DATEADD`, bracket identifiers `[...]`, stored procedures) directly in the Native SQL Query editor.
+
 ---
 
 ## 5. Visual Query Builder (MBQL) & Native SQL Queries
