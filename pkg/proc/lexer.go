@@ -289,7 +289,7 @@ func (l *Lexer) NextToken() Token {
 		} else if isDigit(l.ch) {
 			if l.ch == '0' && (l.peekChar() == 'x' || l.peekChar() == 'X') {
 				hexLit := l.readHexLiteral()
-				tok = Token{Type: TokenString, Literal: hexLit, Line: tokLine, Col: tokCol}
+				tok = Token{Type: TokenBinary, Literal: hexLit, Line: tokLine, Col: tokCol}
 				return tok
 			}
 			lit, isFloat := l.readNumber()

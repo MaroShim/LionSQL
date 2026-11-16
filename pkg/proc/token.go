@@ -14,6 +14,7 @@ const (
 	TokenVariable // @var_name
 	TokenInt      // 123
 	TokenString   // 'hello'
+	TokenBinary   // 0x01, 0xFF
 	TokenFloat    // 12.34
 	TokenBool     // TRUE, FALSE
 

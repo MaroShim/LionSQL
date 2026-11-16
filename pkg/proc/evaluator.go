@@ -290,6 +290,9 @@ func evalExpr(expr Expr, ctx *ExecutionContext) (storage.Value, error) {
 	case *VariableExpr:
 		val, exists := ctx.Variables[e.Name]
 		if !exists {
+			if strings.HasPrefix(e.Name, "@@") && IsBuiltinFunction(e.Name) {
+				return EvalBuiltin(e.Name, nil), nil
+			}
 			return storage.Value{}, fmt.Errorf("%w: %s", ErrVariableUndefined, e.Name)
 		}
 		return val, nil

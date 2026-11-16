@@ -80,7 +80,7 @@ func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 			p.nextToken()
 			if def := p.parseExpression(precLowest); def != nil {
 				params[len(params)-1].Default = def
-			} else if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenInt) || p.curTokenIs(TokenFloat) || p.curTokenIs(TokenString) || p.curTokenIs(TokenNull) {
+			} else if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenInt) || p.curTokenIs(TokenFloat) || p.curTokenIs(TokenString) || p.curTokenIs(TokenBinary) || p.curTokenIs(TokenNull) {
 				p.nextToken()
 			}
 		}
@@ -217,7 +217,7 @@ func (p *Parser) ParseFunction() (*CreateFunctionStmt, error) {
 		// Skip optional default value e.g. = NULL, = 0
 		if p.curTokenIs(TokenAssign) || p.curTokenIs(TokenEq) {
 			p.nextToken()
-			if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenInt) || p.curTokenIs(TokenFloat) || p.curTokenIs(TokenString) || p.curTokenIs(TokenNull) {
+			if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenInt) || p.curTokenIs(TokenFloat) || p.curTokenIs(TokenString) || p.curTokenIs(TokenBinary) || p.curTokenIs(TokenNull) {
 				p.nextToken()
 			}
 		}

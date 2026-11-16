@@ -330,7 +330,9 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		switch args[0].Type {
 		case storage.TypeVarChar, storage.TypeJSON:
 			return storage.IntValue(int64(len(args[0].SVal)))
-		case storage.TypeInt, storage.TypeFloat, storage.TypeDateTime:
+		case storage.TypeBinary:
+			return storage.IntValue(int64(len(args[0].BinVal)))
+		case storage.TypeInt, storage.TypeFloat, storage.TypeReal, storage.TypeDateTime:
 			return storage.IntValue(8)
 		case storage.TypeDecimal, storage.TypeUUID:
 			return storage.IntValue(16)
@@ -522,16 +524,26 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 
 	case "REPLICATE", "REPEAT":
 		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			if len(args) > 0 && args[0].Type == storage.TypeBinary {
+				return storage.NullValue(storage.TypeBinary)
+			}
 			return storage.NullValue(storage.TypeVarChar)
 		}
 		if args[1].IVal <= 0 {
+			if args[0].Type == storage.TypeBinary {
+				return storage.BinaryValue([]byte{})
+			}
 			return storage.StringValue("")
 		}
-		str := valToString(args[0])
 		n := int(args[1].IVal)
-		if n > 8000 {
-			n = 8000
+		if n > 64*1024*1024 {
+			n = 64 * 1024 * 1024
 		}
+		if args[0].Type == storage.TypeBinary {
+			raw := args[0].Bytes()
+			return storage.BinaryValue(bytes.Repeat(raw, n))
+		}
+		str := valToString(args[0])
 		return storage.StringValue(strings.Repeat(str, n))
 
 	case "GREP", "REGEXP_LIKE":

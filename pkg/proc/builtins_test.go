@@ -1051,7 +1051,7 @@ func TestBuiltin_TSQLExpansions(t *testing.T) {
 		"STRING_ESCAPE", "SQUARE", "ISJSON", "JSON_MODIFY",
 		"HOST_NAME", "HOST_ID", "CURRENT_USER", "USER_NAME", "SUSER_NAME", "SUSER_SNAME",
 		"USER_ID", "SUSER_ID", "@@VERSION", "VERSION", "@@SERVERNAME", "@@SPID", "SPID",
-		"@@MAX_CONNECTIONS", "@@LANGUAGE", "@@DATEFIRST", "@@DBTS", "COL_NAME",
+		"@@MAX_CONNECTIONS", "@@MAX_PRECISION", "@@LANGUAGE", "@@DATEFIRST", "@@DBTS", "COL_NAME",
 	}
 	for _, fn := range newFuncs {
 		if !IsBuiltinFunction(fn) {
@@ -1061,6 +1061,24 @@ func TestBuiltin_TSQLExpansions(t *testing.T) {
 }
 
 func TestBuiltin_AdvancedTSQLFunctions(t *testing.T) {
+	if mp := EvalBuiltin("@@MAX_PRECISION", nil); mp.IVal != 38 {
+		t.Errorf("@@MAX_PRECISION expected 38, got %d", mp.IVal)
+	}
+
+	// Test DATALENGTH with Real and Binary
+	if dlReal := EvalBuiltin("DATALENGTH", []storage.Value{storage.RealValue(123.45)}); dlReal.IVal != 8 {
+		t.Errorf("DATALENGTH(Real) expected 8, got %d", dlReal.IVal)
+	}
+	if dlBin := EvalBuiltin("DATALENGTH", []storage.Value{storage.BinaryValue([]byte{0x01, 0x02, 0x03})}); dlBin.IVal != 3 {
+		t.Errorf("DATALENGTH(Binary) expected 3, got %d", dlBin.IVal)
+	}
+
+	// Test REPLICATE on Binary
+	repBin := EvalBuiltin("REPLICATE", []storage.Value{storage.BinaryValue([]byte{0xAB}), storage.IntValue(4)})
+	if repBin.Type != storage.TypeBinary || len(repBin.Bytes()) != 4 || repBin.SVal != "0xabababab" {
+		t.Errorf("REPLICATE(Binary) expected 4 bytes 0xabababab, got %v (%s)", repBin, repBin.SVal)
+	}
+
 	// 1. GREATEST & LEAST
 	g := EvalBuiltin("GREATEST", []storage.Value{storage.IntValue(10), storage.IntValue(50), storage.IntValue(30)})
 	if g.IVal != 50 {

@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - enforce T-SQL Hekaton PK rules: `DURABILITY = SCHEMA_AND_DATA` requires PK (Msg 41321), `DURABILITY = SCHEMA_ONLY` allows PK-less table creation with synthetic `_row_id` (c9db8e6d)
 - support currency-symbol string parsing (`$`, `₩`, `€`, `£`, `¥`), parenthesized negatives, style 1/2 formatting, and `LEN(MONEY)` 2-decimal parity (c9db8e6d)
 - support `GENERATE_SERIES(start, stop [, step])` for table-valued functions and set-returning projections (c9db8e6d)
+- support 0x hex binary literals (`TokenBinary`) in T-SQL procedural expressions and binary repetition in `REPLICATE` (`FIX-LEXER-HEX-BINARY-LITERAL-1`)
+- support `@@MAX_PRECISION` system function/variable returning standard precision 38
 
 ### Fixed
 - enforce 0600 file permissions on atomic configuration file writes (`WriteToFileAtomic`)
@@ -27,6 +29,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - support string date/time representations in `compact` FlatRecord Datetime encoder
 - prevent disappearing WAL paths by handling rollback rename failures in `WALWriter.Rotate` and rollback in-memory renames on catalog save failures
 - preserve rotated WAL segments (`.frozen.*`) on archive failures in `WALArchiver.RotateAndArchive` to guarantee zero data loss and propagate manifest update errors
+- support `TypeReal` and `TypeBinary` byte calculations in `DATALENGTH` and enforce `BINARY(N)` zero-padding in `CAST`/`CONVERT`
 
 ### Changed
 - unify `memengine` onto pointerless `compact` mode and remove legacy `performance` mode (0ed35ad9)

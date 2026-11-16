@@ -1411,6 +1411,9 @@ func (f *VMFrame) getVar(name string) (storage.Value, bool) {
 		if strings.EqualFold(name, "@@DATEFIRST") || strings.EqualFold(clean, "DATEFIRST") || strings.EqualFold(clean, "@DATEFIRST") {
 			return storage.IntValue(7), true
 		}
+		if strings.EqualFold(name, "@@MAX_PRECISION") || strings.EqualFold(clean, "MAX_PRECISION") || strings.EqualFold(clean, "@MAX_PRECISION") {
+			return storage.IntValue(38), true
+		}
 		if strings.EqualFold(name, "@@DBTS") || strings.EqualFold(clean, "DBTS") || strings.EqualFold(clean, "@DBTS") {
 			return storage.BinaryValue(proc.GetCurrentDBTS()), true
 		}

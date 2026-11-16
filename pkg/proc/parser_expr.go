@@ -328,6 +328,10 @@ func (p *Parser) parsePrefix() Expr {
 		expr := &LiteralExpr{Val: storage.StringValue(p.curToken.Literal)}
 		p.nextToken()
 		return expr
+	case TokenBinary:
+		expr := &LiteralExpr{Val: storage.BinaryValueFromString(p.curToken.Literal)}
+		p.nextToken()
+		return expr
 	case TokenBool:
 		val := strings.ToUpper(p.curToken.Literal) == "TRUE"
 		expr := &LiteralExpr{Val: storage.BoolValue(val)}
@@ -509,6 +513,9 @@ func (p *Parser) parseTypeSpec() (storage.DataType, int, int) {
 		if p.curTokenIs(TokenRParen) {
 			p.nextToken()
 		}
+	}
+	if prec == 0 && strings.EqualFold(cleanFirst, "BINARY") {
+		prec = 1
 	}
 	// Optional PostgreSQL [WITH | WITHOUT] TIME ZONE suffix
 	if p.curTokenIs(TokenWith) || (p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "WITH") || strings.EqualFold(p.curToken.Literal, "WITHOUT"))) {

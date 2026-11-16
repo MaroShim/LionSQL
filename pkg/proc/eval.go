@@ -197,6 +197,10 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 				return v, nil
 			}
 		}
+		if strings.HasPrefix(e.Name, "@@") && IsBuiltinFunction(e.Name) {
+			sv := EvalBuiltin(e.Name, nil)
+			return storageValToAny(sv), nil
+		}
 		return e.Name, nil
 
 	case *ColumnRefExpr:
@@ -1282,6 +1286,28 @@ func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[str
 	}
 }
 
+func storageValToAny(res storage.Value) any {
+	if res.IsNull {
+		return nil
+	}
+	switch res.Type {
+	case storage.TypeInt:
+		return res.IVal
+	case storage.TypeFloat, storage.TypeReal:
+		return res.FVal
+	case storage.TypeBool:
+		return res.BVal
+	case storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
+		return res.TVal
+	case storage.TypeBinary:
+		return res
+	case storage.TypeDecimal:
+		return res
+	default:
+		return res.SVal
+	}
+}
+
 func anyToStorageVal(v any) storage.Value {
 	if v == nil {
 		return storage.NullValue(storage.TypeUnknown)
@@ -1638,7 +1664,18 @@ func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style i
 		return storage.UUIDValue(norm), nil
 
 	case storage.TypeBinary:
-		return storage.BinaryValueFromString(v.String()), nil
+		bv := storage.BinaryValueFromString(v.String())
+		if prec > 0 {
+			raw := bv.Bytes()
+			if len(raw) < prec {
+				padded := make([]byte, prec)
+				copy(padded, raw)
+				return storage.BinaryValue(padded), nil
+			} else if len(raw) > prec {
+				return storage.BinaryValue(raw[:prec]), nil
+			}
+		}
+		return bv, nil
 
 	default:
 		return v, nil

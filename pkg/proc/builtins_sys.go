@@ -153,6 +153,7 @@ func isSysBuiltin(name string) bool {
 		"CURRENT_SCHEMA", "CURRENT_SCHEMAS", "CURRENT_DATABASE", "CURRENT_SETTING",
 		"IS_SRVROLEMEMBER", "IS_MEMBER", "HAS_PERMS_BY_NAME", "HAS_DBACCESS", "PERMISSIONS", "PWDENCRYPT", "PWDCOMPARE",
 		"@@VERSION", "VERSION", "@@MICROSOFTVERSION", "@@SERVERNAME", "@@SPID", "SPID", "@@MAX_CONNECTIONS", "@@LANGUAGE",
+		"@@MAX_PRECISION", "MAX_PRECISION",
 		"@@TRANCOUNT", "TRANCOUNT", "@@LOCK_TIMEOUT", "LOCK_TIMEOUT", "@@OPTIONS", "OPTIONS", "@@NESTLEVEL", "NESTLEVEL",
 		"@@FETCH_STATUS", "FETCH_STATUS", "@@CURSOR_ROWS", "CURSOR_ROWS",
 		"@@DATEFIRST", "DATEFIRST", "@@DBTS", "DBTS",
@@ -537,6 +538,9 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 
 	case "@@MAX_CONNECTIONS":
 		return storage.IntValue(32767)
+
+	case "@@MAX_PRECISION", "MAX_PRECISION":
+		return storage.IntValue(38)
 
 	case "@@LANGUAGE":
 		return storage.StringValue("us_english")
