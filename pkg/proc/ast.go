@@ -140,6 +140,7 @@ type CastExpr struct {
 	Scale      int
 	Style      int
 	Try        bool
+	IsFixed    bool
 }
 
 func (e *CastExpr) exprNode() {}

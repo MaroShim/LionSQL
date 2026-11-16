@@ -200,13 +200,14 @@ func (p *Parser) parseExpression(precedence int) Expr {
 			if !p.curTokenIs(TokenIdent) {
 				return nil
 			}
-			dt, prec, scale := p.parseTypeSpec()
+			dt, prec, scale, isFixed := p.parseTypeSpec()
 			leftExp = &CastExpr{
 				Expr:       leftExp,
 				TargetType: dt,
 				Precision:  prec,
 				Scale:      scale,
 				Try:        false,
+				IsFixed:    isFixed,
 			}
 
 		case TokenEq, TokenNeq, TokenLt, TokenLte, TokenGt, TokenGte:
@@ -475,7 +476,7 @@ func (p *Parser) parsePrefix() Expr {
 	}
 }
 
-func (p *Parser) parseTypeSpec() (storage.DataType, int, int) {
+func (p *Parser) parseTypeSpec() (storage.DataType, int, int, bool) {
 	firstLit := p.curToken.Literal
 	dt := parseDataType(firstLit)
 	p.nextToken()
@@ -538,7 +539,8 @@ func (p *Parser) parseTypeSpec() (storage.DataType, int, int) {
 		// Pass array literals (e.g. '{a,b}'::text[] or '{1,2}'::int4[] in ANY($2::text[])) through as string
 		dt = storage.TypeVarChar
 	}
-	return dt, prec, scale
+	isFixed := strings.EqualFold(cleanFirst, "BINARY") || strings.EqualFold(cleanFirst, "CHAR") || strings.EqualFold(cleanFirst, "NCHAR")
+	return dt, prec, scale, isFixed
 }
 
 func (p *Parser) parseCast(try bool) Expr {
@@ -558,7 +560,7 @@ func (p *Parser) parseCast(try bool) Expr {
 	if !p.curTokenIs(TokenIdent) {
 		return nil
 	}
-	dt, prec, scale := p.parseTypeSpec()
+	dt, prec, scale, isFixed := p.parseTypeSpec()
 	if !p.curTokenIs(TokenRParen) {
 		return nil
 	}
@@ -569,6 +571,7 @@ func (p *Parser) parseCast(try bool) Expr {
 		Precision:  prec,
 		Scale:      scale,
 		Try:        try,
+		IsFixed:    isFixed,
 	}
 }
 
@@ -581,7 +584,7 @@ func (p *Parser) parseConvert(try bool) Expr {
 	if !p.curTokenIs(TokenIdent) {
 		return nil
 	}
-	dt, prec, scale := p.parseTypeSpec()
+	dt, prec, scale, isFixed := p.parseTypeSpec()
 	if !p.curTokenIs(TokenComma) {
 		return nil
 	}
@@ -614,6 +617,7 @@ func (p *Parser) parseConvert(try bool) Expr {
 		Scale:      scale,
 		Style:      style,
 		Try:        try,
+		IsFixed:    isFixed,
 	}
 }
 

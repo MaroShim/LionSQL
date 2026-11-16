@@ -291,7 +291,7 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 			return nil, true
 		}
 		sVal := toStorageValFromAny(val)
-		casted, err := proc.EvalCast(sVal, e.TargetType, e.Precision, e.Scale, e.Style, e.Try)
+		casted, err := proc.EvalCast(sVal, e.TargetType, e.Precision, e.Scale, e.Style, e.Try, e.IsFixed)
 		if err != nil {
 			return nil, false
 		}

@@ -670,7 +670,7 @@ func (p *Parser) parseColumnDefs() ([]ColumnDef, error) {
 			colName := cleanSchemaPrefix(ident)
 			p.nextToken()
 
-			dt, prec, scale := p.parseTypeSpec()
+			dt, prec, scale, _ := p.parseTypeSpec()
 
 			isPK := false
 			isNotNull := false

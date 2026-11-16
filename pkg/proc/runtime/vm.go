@@ -3603,6 +3603,10 @@ func valToAny(v storage.Value) any {
 		return v.BVal
 	case storage.TypeDateTime:
 		return v.TVal
+	case storage.TypeBinary:
+		return v
+	case storage.TypeDecimal:
+		return v
 	default:
 		return v.SVal
 	}

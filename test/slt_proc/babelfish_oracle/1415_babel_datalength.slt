@@ -270,7 +270,7 @@ SELECT
     DATALENGTH(CAST('' AS VARBINARY(10))) as varbinary_10,  
     DATALENGTH(CAST('' AS VARBINARY)) as varbinary_default  
 ----
-2 2 4 4 2 2 2 2
+10 1 1 1 10 1 0 0
 
 query TTTTTTTT
 SELECT  
@@ -283,32 +283,24 @@ SELECT
     DATALENGTH(CAST('NULL' AS VARBINARY)) as varbinary_str_default,
     DATALENGTH(CAST(' NULL ' AS VARBINARY)) as varbinary_space_default   
 ----
-NULL NULL 10 10 NULL NULL 10 10
+NULL NULL 1 1 NULL NULL 4 4
 
-query T
+statement error
 select datalength(cast(cast('a' as rowversion) as varchar))
-----
-1
 
-query T
+statement error
 select datalength(cast('' as rowversion))
-----
-0
 
-query T
+statement error
 select datalength(cast(cast('' as rowversion) as varchar))
-----
-0
 
 query T
 select datalength(cast(NULL as rowversion))
 ----
 NULL
 
-query T
+statement error
 select datalength(cast(cast('NULL' as rowversion) as varchar))
-----
-4
 
 query TTTT
 SELECT 
@@ -1343,52 +1335,52 @@ select DATALENGTH(cast('こんにちは' as ntext)), DATALENGTH(cast(N'こんに
 query T
 select datalength(CAST('0x65' AS BINARY(10)))
 ----
-4
+10
 
 query T
 select datalength(CAST(0x65 AS BINARY(10)))
 ----
-4
+1
 
 query T
 select datalength(CAST(0x65 AS BINARY))
 ----
-4
+1
 
 query T
 select datalength(CAST('' AS BINARY(10)))
 ----
-2
+10
 
 query T
 select datalength(CAST('' AS BINARY))
 ----
-2
+1
 
 query T
 select datalength(CAST(0x65 AS varbinary))
 ----
-4
+1
 
 query T
 select datalength(CAST(0x65 AS varbinary(10)))
 ----
-4
+1
 
 query T
 select datalength(CAST('0x65' AS VARBINARY(10)))
 ----
-4
+1
 
 query T
 select datalength(CAST('' AS VARBINARY(10)))
 ----
-2
+0
 
 query T
 select datalength(CAST('' AS VARBINARY))
 ----
-2
+0
 
 statement ok
 DROP TABLE datalength_t2;

@@ -605,6 +605,8 @@ func formatStorageVal(v storage.Value) any {
 		return v.BVal
 	case storage.TypeDateTime:
 		return v.TVal
+	case storage.TypeBinary:
+		return v
 	default:
 		return v.String()
 	}

@@ -350,7 +350,7 @@ func evalExpr(expr Expr, ctx *ExecutionContext) (storage.Value, error) {
 			}
 			return storage.Value{}, err
 		}
-		return EvalCast(val, e.TargetType, e.Precision, e.Scale, e.Style, e.Try)
+		return EvalCast(val, e.TargetType, e.Precision, e.Scale, e.Style, e.Try, e.IsFixed)
 	}
 
 	return storage.Value{}, fmt.Errorf("unsupported expression: %T", expr)

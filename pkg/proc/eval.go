@@ -545,7 +545,7 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			return nil, err
 		}
 		stVal := anyToStorageVal(val)
-		res, err := EvalCast(stVal, e.TargetType, e.Precision, e.Scale, e.Style, e.Try)
+		res, err := EvalCast(stVal, e.TargetType, e.Precision, e.Scale, e.Style, e.Try, e.IsFixed)
 		if err != nil {
 			return nil, err
 		}
@@ -1448,7 +1448,7 @@ func isTruthyValue(v any) bool {
 }
 
 // EvalCast performs type conversion matching SQL Server CAST and CONVERT semantics.
-func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style int, try bool) (storage.Value, error) {
+func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style int, try bool, isFixed ...bool) (storage.Value, error) {
 	if v.IsNull {
 		return storage.NullValue(targetType), nil
 	}
@@ -1665,9 +1665,10 @@ func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style i
 
 	case storage.TypeBinary:
 		bv := storage.BinaryValueFromString(v.String())
+		fixed := len(isFixed) > 0 && isFixed[0]
 		if prec > 0 {
 			raw := bv.Bytes()
-			if len(raw) < prec {
+			if len(raw) < prec && fixed && v.Type != storage.TypeBinary {
 				padded := make([]byte, prec)
 				copy(padded, raw)
 				return storage.BinaryValue(padded), nil

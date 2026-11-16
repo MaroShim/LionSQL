@@ -175,7 +175,7 @@ select -~~~~~-2
 query T
 select ~@@max_precision
 ----
-~@@max_precision
+-39
 
 statement ok
 declare @v int = 2 set @v = ~@@max_precision select @v
@@ -209,7 +209,7 @@ select 10%+3
 query T
 select 100%@@max_precision
 ----
-100%@@max_precision
+24
 
 statement ok
 declare @v int select 99%@v
@@ -239,7 +239,7 @@ declare @v int = 10 set @v = 3%@v select @v
 query TTTTTTTTTTTTTTTTTTTTT
 select 99&-5,99&+5,99&~5,99&-5,99&+5,99&~5,88|-~+2,88|+~+2,88|~~+2,77^-~+2,77^+~+2,77^~~+2,+~+2,~-2,+~-2-~-2,~~~~~2,+~~~~~-2,10%-3,10%+3,10%3,100%@@max_precision
 ----
-99 1 98 99 1 98 91 -3 90 78 -80 79 -3 1 0 -3 1 1 1 1 100%@@max_precision
+99 1 98 99 1 98 91 -3 90 78 -80 79 -3 1 0 -3 1 1 1 1 24
 
 query T
 select 12|~+2

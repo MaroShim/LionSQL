@@ -527,6 +527,7 @@ type CastData struct {
 	Scale      int
 	Style      int
 	Try        bool
+	IsFixed    bool
 }
 
 func (d *CastData) String() string {

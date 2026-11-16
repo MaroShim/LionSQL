@@ -655,7 +655,7 @@ vmLoop:
 		if !ok || castData == nil {
 			return nil, fmt.Errorf("invalid OpCast metadata")
 		}
-		resVal, err := proc.EvalCast(srcVal, castData.TargetType, castData.Precision, castData.Scale, castData.Style, castData.Try)
+		resVal, err := proc.EvalCast(srcVal, castData.TargetType, castData.Precision, castData.Scale, castData.Style, castData.Try, castData.IsFixed)
 		if err != nil {
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
 				return nil, catchErr

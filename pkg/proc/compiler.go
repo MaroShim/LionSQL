@@ -1668,6 +1668,7 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 			Scale:      e.Scale,
 			Style:      e.Style,
 			Try:        e.Try,
+			IsFixed:    e.IsFixed,
 		})
 		return srcReg, nil
 
