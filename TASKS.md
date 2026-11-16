@@ -243,6 +243,7 @@
 | `DONE` | **`FIX-MEMENGINE-DDL-WAL-FAILCLOSED-1`** | `1` | --domain | P2 | DDL WAL 기록 실패 시 인메모리 카탈로그 복구 및 선기록 패턴 적용 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-MEMENGINE-WAL-FSYNC-ROLLBACK-1`** | `1.0-GA` | Storage | P2 | MemEngine WAL fsync 실패 시 메모리 데이터 잔류(Phantom Commit) 롤백 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-OCC-COMPACT-AUDIT-1`** | `1.0-GA` | Storage | P1 | MemoryCompact 2단계 Audit 결함 수정 (Arena UAF, AlterTable 레이아웃/WAL, memCursor 레이스, varSlot 오버플로우) | [`notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md`](notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md) |  |
+| `PENDING` | **`FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`** | `1.0-GA` | Storage | P1 | PITR 기준 백업 시점/LSN 불변성 검증, 백업-WAL LSN 경계 필터링 및 LSN 연속성(Gap) 누락 검출 보완 | [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md) |  |
 | `DONE` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-TEMP-TABLE-DDL-1`** |  | Engine | P1 | 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-ROLLBACK-INDEX-RESTORE-ERROR-HANDLING-1`** |  | Engine | P2 | 커밋 및 세이브포인트 롤백 과정에서 보조 인덱스 복원 오류 전파 및 복원 누락 방어 |  |  |
@@ -291,6 +292,7 @@
 | `DONE` | **`INTEG-ANSWER-1`** |  | Durability | P2 | Apache Answer (Q&A 지식베이스) |  |  |
 | `PENDING` | **`INTEG-DIRECTUS-1`** | `v1.30.0` | Ecosystem | P2 | Directus (Headless CMS/데이터 API) Fast-Fail 호환성 탐색 |  |  |
 | `PENDING` | **`INTEG-GHOST-1`** | `v1.30.0` | Ecosystem | P2 | Ghost (블로그/출판 플랫폼) Fast-Fail 호환성 탐색 |  |  |
+| `PENDING` | **`INTEG-GOCD-1`** | `1.0-GA` | Ecosystem | P2 | GoCD (엔터프라이즈 CI/CD 서버) 스키마 마이그레이션 및 세션 호환성 검증 | [`notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md) |  |
 | `PENDING` | **`INTEG-MATTERMOST-1`** | `v1.40.0` | Ecosystem | P3 | Mattermost (팀 협업 채팅) — **[v1.1.0 로드맵]** |  |  |
 | `DONE` | **`INTEG-METABASE-1`** |  | Durability | P2 | Metabase (BI 대시보드) | [`notes/plans/METABASE_INTEGRATION_PLAN.ko.md`](notes/plans/METABASE_INTEGRATION_PLAN.ko.md) |  |
 | `PENDING` | **`INTEG-NOCODB-1`** | `v1.40.0` | Ecosystem | P3 | NocoDB (노코드 DB 스튜디오) — **[v1.1.0 로드맵]** |  |  |
@@ -298,6 +300,7 @@
 | `DONE` | **`INTEG-UMAMI-1`** |  | Durability | P2 | Umami (웹 애널리틱스) |  |  |
 | `DONE` | **`INTEG-VAULTWARDEN-1`** |  | Durability | P2 | Vaultwarden (비밀번호 관리) | [`notes/plans/VAULTWARDEN_INTEGRATION_PLAN.ko.md`](notes/plans/VAULTWARDEN_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`INTEG-VIKUNJA-1`** |  | Durability | P2 | Vikunja (프로젝트 칸반 & To-Do) | [`notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md) |  |
+| `PENDING` | **`INTEG-WIKIJS-1`** | `1.0-GA` | Ecosystem | P2 | Wiki.js (Node.js/Knex 기반 위키 및 문서 플랫폼) 스키마 마이그레이션 및 쿼리 호환성 검증 | [`notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md) |  |
 | `DONE` | **`INTEG-WOODPECKER-1`** |  | Durability | P2 | Woodpecker CI (CI/CD 엔진) | [`notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md) |  |
 | `PENDING` | **`LOC-1`** | `v1.99.0` | Engine | P3 | MSSQL Collation 및 유니코드 다국어 로케일 정렬/비교 | [`notes/plans/COLLATION_AND_LOCALE_PLAN.md`](notes/plans/COLLATION_AND_LOCALE_PLAN.md) |  |
 | `DONE` | **`M1`** |  | Ecosystem | P3 | v0.90.0 Feature Freeze & Production Hardening (100% PASS) |  |  |
@@ -2835,6 +2838,13 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [PENDING] PITR 기준 백업 시점/LSN 불변성 검증, 백업-WAL LSN 경계 필터링 및 LSN 연속성(Gap) 누락 검출 보완 `FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-16 08:38:56
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
+
+---
+
 ### [DONE] EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 `FIX-PROC-EXEC-RETURN-VAR-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-13 00:38:19
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
@@ -3162,6 +3172,13 @@ v1.0.0 정식 릴리즈 직전 필수 관문. 근거: doc/RELEASE_AUDIT_PROTOCOL
 
 ---
 
+### [PENDING] GoCD (엔터프라이즈 CI/CD 서버) 스키마 마이그레이션 및 세션 호환성 검증 `INTEG-GOCD-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 08:54:01
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md)
+
+---
+
 ### [PENDING] Mattermost (팀 협업 채팅) — **[v1.1.0 로드맵]** `INTEG-MATTERMOST-1`
 - **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-12 07:38:34
 - **Milestone**: `v1.40.0`
@@ -3258,6 +3275,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - 회귀 테스트: `pkg/engine/vikunja_compat_test.go`
 - 스택: Go + XORM / PGWire (`TCP :5433`)
 - 80개 이상의 XORM 마이그레이션 100% 무오류 자동 적용, 사용자 회원가입(`POST /api/v1/register`), JWT 로그인(`POST /api/v1/login`, 복합 `OR` 술어 처리), 프로젝트 및 4대 뷰(List/Gantt/Table/Kanban) 생성(`PUT /api/v1/projects`), 칸반 태스크 생성 및 상태 변경(`PUT /api/v1/projects/:id/tasks`, `POST /api/v1/tasks/:id`), 재귀 CTE(`WITH RECURSIVE`) 프로젝트 계층 탐색, 웹 UI 서빙 완벽 동작 검증 (Vikunja 순정 컨테이너 소스 수정 0줄)
+
+---
+
+### [PENDING] Wiki.js (Node.js/Knex 기반 위키 및 문서 플랫폼) 스키마 마이그레이션 및 쿼리 호환성 검증 `INTEG-WIKIJS-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 08:54:05
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md)
 
 ---
 
