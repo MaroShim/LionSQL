@@ -1439,7 +1439,11 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 	itemMap := make(map[string]shardEntry, len(keys))
 	for i, k := range keys {
 		if locRow, ok := tx.getLocal(tableName, k); ok {
-			itemMap[k] = shardEntry{row: locRow}
+			var flatBuf []byte
+			if snapLayout != nil && snapSchema != nil {
+				flatBuf, _ = snapLayout.EncodeRowToFlat(snapSchema, locRow)
+			}
+			itemMap[k] = shardEntry{flatBuf: flatBuf}
 		} else {
 			itemMap[k] = entries[i]
 		}
@@ -1447,7 +1451,11 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 	if localRows, ok := tx.local[tableName]; ok {
 		for k, r := range localRows {
 			if !tx.isLocallyDeleted(tableName, k) {
-				itemMap[k] = shardEntry{row: r}
+				var flatBuf []byte
+				if snapLayout != nil && snapSchema != nil {
+					flatBuf, _ = snapLayout.EncodeRowToFlat(snapSchema, r)
+				}
+				itemMap[k] = shardEntry{flatBuf: flatBuf}
 			}
 		}
 	}
@@ -2330,11 +2338,7 @@ func (tx *Transaction) Commit() error {
 
 		switch ch.kind {
 		case changeInsert:
-			if td.mode == MemoryCompact && td.layout != nil {
-				sh.entries[ch.key] = shardEntry{ver: 1, flatBuf: item.flatBuf}
-			} else {
-				sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
-			}
+			sh.entries[ch.key] = shardEntry{ver: 1, flatBuf: item.flatBuf}
 			undos = append(undos, commitUndoOp{
 				kind: undoDeleteShardEntry,
 				sh:   sh,
@@ -2369,11 +2373,7 @@ func (tx *Transaction) Commit() error {
 			}
 
 		case changeUpdate:
-			if td.mode == MemoryCompact && td.layout != nil {
-				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, flatBuf: item.flatBuf}
-			} else {
-				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
-			}
+			sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, flatBuf: item.flatBuf}
 			undos = append(undos, commitUndoOp{
 				kind:     undoRestoreShardEntry,
 				sh:       sh,
@@ -2448,6 +2448,17 @@ func (tx *Transaction) Commit() error {
 		ops := make([]WALOp, 0, len(tx.changes))
 		for _, ch := range tx.changes {
 			if storage.IsTemporaryTable(ch.table) {
+				continue
+			}
+			chTD := ch.td
+			if chTD == nil {
+				var err error
+				chTD, err = tx.getTableLocked(ch.table)
+				if err != nil {
+					return wrapCommitErr(err)
+				}
+			}
+			if chTD != nil && chTD.Schema.Durability == storage.DurabilitySchemaOnly {
 				continue
 			}
 			var opType WALOpType
@@ -2590,14 +2601,10 @@ func (tx *Transaction) commitTableVariablesLocked() error {
 
 		switch ch.kind {
 		case changeInsert:
-			if td.mode == MemoryCompact && td.layout != nil {
-				if flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row); err == nil {
-					sh.entries[ch.key] = shardEntry{ver: 1, flatBuf: flatBuf}
-				} else {
-					errs = append(errs, fmt.Errorf("table variable %q encode flat row failed: %w", td.Schema.Name, err))
-				}
+			if flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row); err == nil {
+				sh.entries[ch.key] = shardEntry{ver: 1, flatBuf: flatBuf}
 			} else {
-				sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
+				errs = append(errs, fmt.Errorf("table variable %q encode flat row failed: %w", td.Schema.Name, err))
 			}
 			for _, idxData := range td.Indexes {
 				if idxData.Schema.Disabled {
@@ -2610,14 +2617,10 @@ func (tx *Transaction) commitTableVariablesLocked() error {
 				}
 			}
 		case changeUpdate:
-			if td.mode == MemoryCompact && td.layout != nil {
-				if flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row); err == nil {
-					sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, flatBuf: flatBuf}
-				} else {
-					errs = append(errs, fmt.Errorf("table variable %q encode flat row failed: %w", td.Schema.Name, err))
-				}
+			if flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, ch.row); err == nil {
+				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, flatBuf: flatBuf}
 			} else {
-				sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
+				errs = append(errs, fmt.Errorf("table variable %q encode flat row failed: %w", td.Schema.Name, err))
 			}
 			for _, idxData := range td.Indexes {
 				if idxData.Schema.Disabled {
@@ -2978,7 +2981,7 @@ func (c *memCursor) Next() bool {
 		if len(c.entries) > c.idx {
 			c.curEntry = c.entries[c.idx]
 			c.hasCurEntry = true
-			c.curRow = c.curEntry.row
+			c.curRow = storage.Row{}
 			c.curRec = nil
 			return true
 		}
@@ -3016,7 +3019,7 @@ func (c *memCursor) Next() bool {
 				c.snapSchema = schemaSnap
 				c.snapLayout = layoutSnap
 				c.hasCurEntry = true
-				c.curRow = entry.row
+				c.curRow = storage.Row{}
 				c.curRec = nil
 				return true
 			}

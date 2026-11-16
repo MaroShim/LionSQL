@@ -387,16 +387,12 @@ func stageMigratedShardsLocked(
 			}
 
 			if diff.needReencode {
-				if td.mode == MemoryCompact {
-					flatBuf, err := newLayout.EncodeRowToFlat(nextSchema, newRow)
-					if err != nil {
-						stageErr = err
-						break
-					}
-					staged[i][pk] = shardEntry{ver: entry.ver, flatBuf: flatBuf}
-				} else {
-					staged[i][pk] = shardEntry{ver: entry.ver, row: newRow}
+				flatBuf, err := newLayout.EncodeRowToFlat(nextSchema, newRow)
+				if err != nil {
+					stageErr = err
+					break
 				}
+				staged[i][pk] = shardEntry{ver: entry.ver, flatBuf: flatBuf}
 			}
 		}
 		sh.mu.RUnlock()

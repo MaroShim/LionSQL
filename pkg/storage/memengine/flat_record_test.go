@@ -605,7 +605,6 @@ func TestVerifyTableMode_FlatBufferStored(t *testing.T) {
 	sh.mu.RUnlock()
 
 	t.Logf("Mode = %v", td.mode)
-	t.Logf("Entry row.Values len = %d", len(entry.row.Values))
 	t.Logf("Entry flatBuf len    = %d", len(entry.flatBuf))
 
 	if td.mode != OCCModeFlat {
@@ -613,9 +612,6 @@ func TestVerifyTableMode_FlatBufferStored(t *testing.T) {
 	}
 	if len(entry.flatBuf) == 0 {
 		t.Fatalf("expected entry.flatBuf to be non-empty, but was 0")
-	}
-	if len(entry.row.Values) != 0 {
-		t.Fatalf("expected entry.row.Values to be 0 in flat mode, but got %d", len(entry.row.Values))
 	}
 }
 

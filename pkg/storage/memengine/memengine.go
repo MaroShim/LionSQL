@@ -43,21 +43,16 @@ func formatBytes(b int64) string {
 type MemoryMode int
 
 const (
-	// MemoryPerformance uses direct Go struct references for sub-nanosecond 0.2ns O(1) access.
-	//
-	// Deprecated: Use MemoryCompact instead. Scheduled for removal post-1.0.
-	MemoryPerformance MemoryMode = 0
 	// MemoryCompact uses pointer-free flat byte buffers for 83% memory compaction and zero GC scan.
-	MemoryCompact MemoryMode = 1
+	// As of v0.94.0, MemoryCompact is the single unified in-memory engine architecture.
+	MemoryCompact MemoryMode = 0
 
-	// Legacy aliases for backward compatibility during transition.
-
-	// Deprecated: Use MemoryCompact instead. Scheduled for removal post-1.0.
-	OCCModeRaw  = MemoryPerformance
-	OCCModeFlat = MemoryCompact
-	// Deprecated: Use MemoryCompact instead. Scheduled for removal post-1.0.
-	OCCModePerformance = MemoryPerformance
-	OCCModeCompact     = MemoryCompact
+	// Legacy aliases for backward compatibility (all unified to MemoryCompact).
+	MemoryPerformance  MemoryMode = MemoryCompact
+	OCCModeFlat                   = MemoryCompact
+	OCCModeCompact                = MemoryCompact
+	OCCModePerformance            = MemoryCompact
+	OCCModeRaw                    = MemoryCompact
 )
 
 // OCCMode is a legacy alias for MemoryMode.
@@ -66,12 +61,10 @@ type OCCMode = MemoryMode
 // ParseMemoryMode parses a memory layout representation string into a MemoryMode.
 func ParseMemoryMode(s string) (MemoryMode, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "compact", "flat":
+	case "compact", "flat", "performance", "raw", "fast", "speed", "":
 		return MemoryCompact, nil
-	case "performance", "raw", "fast", "speed", "":
-		return MemoryPerformance, nil
 	default:
-		return MemoryPerformance, fmt.Errorf("unknown memory mode: %q (expected 'compact' or 'performance')", s)
+		return MemoryCompact, fmt.Errorf("unknown memory mode: %q (expected 'compact')", s)
 	}
 }
 

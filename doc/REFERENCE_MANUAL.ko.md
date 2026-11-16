@@ -18,7 +18,7 @@
   * 관리 및 도구 서브커맨드: `doctor`, `init-config`, `migrate`, `sql`, `backup`, `restore`, `version`
 * **1.2. 전역 CLI 플래그 사양**
   * 네트워크 리스너: `-http`, `-pg`, `-tds`, `-tls`, `-tls-cert`, `-tls-key`, `-require-ssl`
-  * 스토리지 백엔드: `-dir`, `-engine` (`wiredtiger`, `memory`), `-ephemeral`, `-auto-seed`
+  * 스토리지 백엔드: `-dir`, `-engine` (`wiredtiger`, `compact`), `-auto-seed`
   * 리소스 거버너: `-max-memory` (`<size>` e.g. `2GB`, `4096MB`, 기본값: 물리 RAM의 65%), `-work-mem` (기본값: `64MB`), `-max-workers`, `-max-idle-sessions`
   * 보안 및 인증: `-auth` (기본값: `true`), `-admin-email`, `-admin-pass`, `-jwt-secret`
   * 로깅 및 트레이싱: `-dev`, `-slow-log`, `-slow-threshold-ms` (기본값: `100.0ms`), `-general-log`
@@ -256,8 +256,7 @@ lionsql [command] [flags...]
   | `-http` | string | `:8090` | REST API 및 내장 Web Studio 리스너 TCP 주소 (비활성화: `""`) |
   | `-pg` | string | `:5433` | PostgreSQL Wire Protocol v3 호환 리스너 TCP 주소 (비활성화: `""`) |
   | `-tds` | string | `:1433` | MS SQL Server TDS 7.x/8.0 호환 리스너 TCP 주소 (비활성화: `""`) |
-  | `-engine` | string | `wiredtiger` | 기본 스토리지 백엔드 선택 (`wiredtiger` 또는 `memory`) |
-  | `-ephemeral` | bool | `false` | 디스크 파일 I/O를 100% 배제하는 초고속 순수 인메모리 휘발성 모드 |
+  | `-engine` | string | `wiredtiger` | 기본 스토리지 백엔드 선택 (`wiredtiger` 또는 `compact`) |
   | `-dev` | bool | `false` | 개발자 모드 활성화 (SQL 쿼리 파싱/실행 계획 상세 콘솔 컬러 출력) |
   | `-max-memory` | string | `""` | 엔진 글로벌 메모리 상한 (예: `2GB`, `4096MB`). 빈 값일 경우 호스트 물리 RAM의 65%로 자동 제한 |
   | `-work-mem` | string | `64MB` | 연산자당 정렬(External Sort) 및 해시 조인 작업 메모리 예산 |
@@ -733,7 +732,7 @@ LionSQL은 스토리지 엔진(`-engine`)과 WAL 동기화 모드(`-fsync`), 작
 
 | 워크로드 프로파일 | 권장 옵션 조합 | 트랜잭션 처리량 (TPS) | P99 지연 시간 | 데이터 내구성 (RPO) | 주요 적용 유스케이스 |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **초저지연 인메모리** | `-engine memory`<br>`-ephemeral`<br>`-fsync off` | **20,000 ~ 25,000+ TPS**<br>(> 540k tpmC) | **< 1.0 ms** | 휘발성 (N/A) | 게임 세션, 캐시 스토어, CI 고속 테스트 |
+| **초저지연 인메모리** | `-engine compact`<br>`-dir ""` | **20,000 ~ 25,000+ TPS**<br>(> 540k tpmC) | **< 1.0 ms** | 휘발성 (N/A) | 게임 세션, 캐시 스토어, CI 고속 테스트 |
 | **표준 프로덕션 OLTP**<br>(권장 기본값) | `-engine wiredtiger`<br>`-fsync everysec`<br>`-max-memory 4GB` | **12,000 ~ 16,800+ TPS**<br>(~ 457k tpmC) | **< 10 ms** | 최대 1초 (1s Fsync) | 일반 SaaS, 이커머스 주문/고객 관리 |
 | **무손실 금융 원장** | `-engine wiredtiger`<br>`-fsync always`<br>`-max-workers 128` | **1,700 ~ 1,860+ TPS**<br>(Group Commit 적용) | **15 ~ 25 ms** | **RPO = 0 (무손실)** | 금융 이체, 결제 승인, 감사 원장 |
 | **대용량 분석/배치** | `-engine wiredtiger`<br>`-work-mem 256MB` | **디스크 스필 배제** | 배치 최적화 | 최대 1초 | 대규모 ETL, 마감 정산 집계 |

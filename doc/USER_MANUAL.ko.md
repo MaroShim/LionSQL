@@ -62,7 +62,7 @@
   * 데이터 무결성 및 시스템 진단 (`./bin/lionsql doctor`)
 * **3.5. 스토리지 엔진 선택 및 데이터 디렉토리**
   * 영속 디스크 MVCC 스토리지 (`--engine=wiredtiger`, `--dir=data`)
-  * 고속 인메모리 OCC 스토리지 (`--engine=memory`, `--ephemeral`)
+  * 고속 인메모리 OCC 스토리지 (`--engine=compact`, `--dir=""`)
   * WAL/AOF 영속성 및 자동 스냅샷 컴팩션 주기 설정
 * **3.6. 글로벌 메모리 거버너 및 리소스 튜닝**
   * 시스템 물리 RAM 65% 동적 산정 및 런타임 상한제 (`--max-memory`)
@@ -669,13 +669,45 @@ OK: tolerant_ddl set to true (in-memory volatile)
 
 ### 3.5. 스토리지 엔진 선택 및 실무 워크로드 레시피
 
-자세한 분석은 [`TRANSACTION_PERFORMANCE_GUIDE.ko.md`](TRANSACTION_PERFORMANCE_GUIDE.ko.md) 문서를 참조하십시오. 실무에서 가장 빈번한 4대 실행 레시피는 다음과 같습니다:
+LionSQL은 기본적으로 데이터 디렉토리(`-dir`)가 지정되면 모든 DDL과 데이터를 디스크에 안전하게 영구 저장하는 **완전한 ACID 트랜잭션 데이터베이스**입니다. 플랫폼별로 최적의 스토리지 엔진이 기본 제공됩니다:
 
-#### 레시피 1: 초고속 로컬 테스트 및 CI 파이프라인 (In-Memory Ephemeral)
-```bash
-lionsql serve -disk compact -ephemeral -fsync off -max-memory 2GB
+* **Windows**: **Pure-Go `compact` (In-Memory OCC + AOF/WAL) 엔진 기본 채택**  
+  외부 C 라이브러리 및 Cgo 의존성을 100% 배제하여 단일 정적 실행 파일(`lionsql.exe`)로 자립 구동되며, WAL 및 스냅샷 컴팩션을 통해 재시작 후에도 100% 완전한 영속성을 보장합니다.
+* **macOS / Linux**: **`WiredTiger` (MVCC B+Tree) 엔진 기본 채택**  
+  대규모 프로덕션 OLTP 워크로드를 위해 초고성능 디스크 MVCC 엔진을 기본 채택하며, 필요 시 `-disk compact`를 선택할 수 있습니다.
+
+#### 테이블 레벨 영속성 제어: T-SQL `WITH (DURABILITY = ...)` 표준
+
+LionSQL은 서버 전체를 위험하게 휘발성으로 만드는 전역 플래그(`-ephemeral`) 대신, **Microsoft SQL Server In-Memory OLTP 표준인 테이블 단위 내구성(Table-Level Durability)**을 제공합니다:
+
+```sql
+-- 1. 영구 보존 테이블 (기본값): 스키마 및 행 데이터 영구 보존
+CREATE TABLE dbo.Orders (
+    OrderID INT NOT NULL PRIMARY KEY,
+    Amount DECIMAL(18,2)
+) WITH (DURABILITY = SCHEMA_AND_DATA);
+
+-- 2. 고속 캐시/세션 테이블 (DURABILITY = SCHEMA_ONLY):
+--    - 스키마와 인덱스는 카탈로그에 영구 보존
+--    - 로우 데이터는 DML 시 WAL 로깅을 스킵하여 초고속 RAM 속도로 처리 (재기동 시 0행으로 리셋)
+CREATE TABLE dbo.WebSession (
+    SessionID VARCHAR(64) NOT NULL PRIMARY KEY,
+    Payload NVARCHAR(MAX)
+) WITH (MEMORY_OPTIMIZED = ON, DURABILITY = SCHEMA_ONLY);
 ```
-* 디스크 파일 I/O를 100% 차단하고 포인터리스 `compact` 인메모리 레이아웃(기본값)으로 최소 메모리 및 최소 GC 지터 상태에서 초고속 테스트를 수행합니다. (레거시 `-disk none` 및 `-engine memory` 플래그도 `-disk compact`로 자동 매핑되며, `-memory performance`는 v1.0 이후 제거 예정인 Deprecated 옵션입니다.)
+
+> [!NOTE]
+> `WITH (DURABILITY = SCHEMA_ONLY)`로 생성된 테이블은 서버가 재시작되어도 스키마 정의(`TableSchema`)와 인덱스 구조가 온전히 복원되므로, 클라이언트 애플리케이션에서 `table not found` 에러가 발생하지 않습니다. 로우 데이터만 0행으로 초기화되어 캐시/작업 큐/세션 저장소에 최적화된 성능을 제공합니다. (기존 전역 `-ephemeral` CLI 옵션은 완전히 삭제되었으며, 휘발성 테이블은 T-SQL DDL 옵션을 사용하고 1회성 인메모리 테스트는 `-dir ""`를 지정합니다.)
+
+#### 실무 4대 실행 레시피
+
+자세한 분석은 [`TRANSACTION_PERFORMANCE_GUIDE.ko.md`](TRANSACTION_PERFORMANCE_GUIDE.ko.md) 문서를 참조하십시오:
+
+#### 레시피 1: 초고속 Pure-Go 인메모리 OCC 모드 (Windows 기본값 / 초저지연)
+```bash
+lionsql serve -dir /var/lib/lionsql/data -disk compact -fsync everysec -max-memory 2GB
+```
+* 포인터리스 `compact` 인메모리 레이아웃으로 최소 메모리 및 최소 GC 지터 상태에서 20,000+ TPS 초고속 처리를 수행하며, AOF/WAL을 통해 안전하게 영구 저장됩니다. (임시 인메모리 테스트 시 `-dir ""`를 지정할 수 있습니다.)
 
 #### 레시피 2: 표준 엔터프라이즈 프로덕션 OLTP (권장 기본값)
 ```bash

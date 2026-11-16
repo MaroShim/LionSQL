@@ -171,8 +171,7 @@ const numTableShards = 256
 
 type shardEntry struct {
 	ver     int64
-	row     storage.Row // active when mode == MemoryPerformance
-	flatBuf []byte      // active when mode == MemoryCompact (zero GC pointers)
+	flatBuf []byte // active pointer-free buffer (zero GC pointers)
 }
 
 func (e shardEntry) materialize(td *TableData) (storage.Row, error) {
@@ -180,17 +179,17 @@ func (e shardEntry) materialize(td *TableData) (storage.Row, error) {
 }
 
 func (e shardEntry) materializeWithArena(td *TableData, arena *storage.Arena) (storage.Row, error) {
-	if td.mode == MemoryCompact && len(e.flatBuf) > 0 && len(e.row.Values) == 0 {
+	if len(e.flatBuf) > 0 && td.layout != nil {
 		return td.layout.DecodeFlatToRowWithArena(&td.Schema, e.flatBuf, arena)
 	}
-	return e.row, nil
+	return storage.Row{}, nil
 }
 
 func (e shardEntry) materializeWithLayout(mode MemoryMode, schema *storage.TableSchema, layout *FlatRecordLayout, arena *storage.Arena) (storage.Row, error) {
-	if mode == MemoryCompact && len(e.flatBuf) > 0 && len(e.row.Values) == 0 && layout != nil && schema != nil {
+	if len(e.flatBuf) > 0 && layout != nil && schema != nil {
 		return layout.DecodeFlatToRowWithArena(schema, e.flatBuf, arena)
 	}
-	return e.row, nil
+	return storage.Row{}, nil
 }
 
 type tableShard struct {
@@ -271,14 +270,14 @@ func (td *TableData) initShards() {
 }
 
 func (td *TableData) buildShardEntry(row storage.Row, ver int64) shardEntry {
-	if td.mode == MemoryCompact && td.layout != nil {
+	if td.layout != nil {
 		flatBuf, err := td.layout.EncodeRowToFlat(&td.Schema, row)
 		if err == nil {
 			return shardEntry{ver: ver, flatBuf: flatBuf}
 		}
 		log.Printf("[memengine] flat record encode fallback on table %q: %v", td.Schema.Name, err)
 	}
-	return shardEntry{ver: ver, row: row}
+	return shardEntry{ver: ver}
 }
 
 func (td *TableData) initShardsInternal() {
@@ -367,7 +366,7 @@ func (td *TableData) deleteRowAndVerLocked(pk string) (storage.Row, bool) {
 		}
 		log.Printf("[memengine] flat record delete materialize error on table %q pk %q: %v", schemaSnap.Name, pk, err)
 	}
-	return entry.row, hadOld
+	return storage.Row{}, hadOld
 }
 
 func (td *TableData) deleteRowAndVer(pk string) (storage.Row, bool) {
@@ -577,14 +576,10 @@ func (td *TableData) addColumnValues(val storage.Value) error {
 	td.mu.Lock()
 	defer td.mu.Unlock()
 
-	var newLayout *FlatRecordLayout
-	var oldSchema storage.TableSchema
-	if td.mode == MemoryCompact {
-		newLayout = BuildFlatRecordLayout(&td.Schema)
-		oldSchema = td.Schema.Clone()
-		if len(oldSchema.Columns) > 1 {
-			oldSchema.Columns = oldSchema.Columns[:len(oldSchema.Columns)-1]
-		}
+	newLayout := BuildFlatRecordLayout(&td.Schema)
+	oldSchema := td.Schema.Clone()
+	if len(oldSchema.Columns) > 1 {
+		oldSchema.Columns = oldSchema.Columns[:len(oldSchema.Columns)-1]
 	}
 
 	var staged [numTableShards]map[string]shardEntry
@@ -594,39 +589,27 @@ func (td *TableData) addColumnValues(val storage.Value) error {
 		staged[i] = make(map[string]shardEntry, len(sh.entries))
 		var stageErr error
 		for k, entry := range sh.entries {
-			if td.mode == MemoryCompact {
-				var origRow storage.Row
-				if len(entry.flatBuf) > 0 && len(entry.row.Values) == 0 && td.layout != nil {
-					var err error
-					origRow, err = td.layout.DecodeFlatToRow(&oldSchema, entry.flatBuf)
-					if err != nil {
-						stageErr = err
-						break
-					}
-				} else {
-					origRow = entry.row
-				}
-				newVals := make([]storage.Value, len(origRow.Values)+1)
-				copy(newVals, origRow.Values)
-				newVals[len(origRow.Values)] = val
-				newRow := storage.Row{Values: newVals}
-				newBuf, err := newLayout.EncodeRowToFlat(&td.Schema, newRow)
+			var origRow storage.Row
+			if len(entry.flatBuf) > 0 && td.layout != nil {
+				var err error
+				origRow, err = td.layout.DecodeFlatToRow(&oldSchema, entry.flatBuf)
 				if err != nil {
 					stageErr = err
 					break
 				}
-				staged[i][k] = shardEntry{
-					ver:     entry.ver,
-					flatBuf: newBuf,
-				}
-			} else {
-				newVals := make([]storage.Value, len(entry.row.Values)+1)
-				copy(newVals, entry.row.Values)
-				newVals[len(entry.row.Values)] = val
-				staged[i][k] = shardEntry{
-					ver: entry.ver,
-					row: storage.Row{Values: newVals},
-				}
+			}
+			newVals := make([]storage.Value, len(origRow.Values)+1)
+			copy(newVals, origRow.Values)
+			newVals[len(origRow.Values)] = val
+			newRow := storage.Row{Values: newVals}
+			newBuf, err := newLayout.EncodeRowToFlat(&td.Schema, newRow)
+			if err != nil {
+				stageErr = err
+				break
+			}
+			staged[i][k] = shardEntry{
+				ver:     entry.ver,
+				flatBuf: newBuf,
 			}
 		}
 		sh.mu.RUnlock()

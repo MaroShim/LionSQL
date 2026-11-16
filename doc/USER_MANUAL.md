@@ -62,7 +62,7 @@ This document is the **official User Manual** for the LionSQL database engine, p
   * Data integrity and system diagnostics (`./bin/lionsql doctor`)
 * **3.5. Storage Engine Selection and Data Directory**
   * Persistent disk MVCC storage (`--engine=wiredtiger`, `--dir=data`)
-  * High-speed in-memory OCC storage (`--engine=memory`, `--ephemeral`)
+  * High-speed in-memory OCC storage (`--engine=compact`, `--dir=""`)
   * WAL/AOF durability and automatic snapshot compaction intervals
 * **3.6. Global Memory Governor and Resource Tuning**
   * Dynamic sizing at 65% of host physical RAM and runtime upper bound (`--max-memory`)
@@ -669,13 +669,45 @@ OK: tolerant_ddl set to true (in-memory volatile)
 
 ### 3.5. Storage Engine Selection and Practical Workload Recipes
 
-For an in-depth analysis, refer to [`TRANSACTION_PERFORMANCE_GUIDE.md`](TRANSACTION_PERFORMANCE_GUIDE.md) (or the Korean counterpart [`TRANSACTION_PERFORMANCE_GUIDE.ko.md`](TRANSACTION_PERFORMANCE_GUIDE.ko.md)). The four most frequent production recipes are:
+LionSQL operates as a **fully ACID-compliant, persistent transactional database** whenever a data directory (`-dir`) is provided. The optimal storage engine is configured out of the box per platform:
 
-#### Recipe 1: Ultra-Fast Local Testing and CI Pipelines (In-Memory Ephemeral)
-```bash
-lionsql serve -disk compact -ephemeral -fsync off -max-memory 2GB
+* **Windows**: **Pure-Go `compact` (In-Memory OCC + AOF/WAL) Default**  
+  Eliminates 100% of external C libraries and Cgo dependencies, producing a standalone static binary (`lionsql.exe`) that guarantees full persistence and crash recovery across restarts via WAL and snapshot compaction.
+* **macOS / Linux**: **`WiredTiger` (MVCC B+Tree) Default**  
+  Employs the high-concurrency disk MVCC engine for enterprise production OLTP workloads, with `-disk compact` available on demand.
+
+#### Table-Level Durability Control: T-SQL `WITH (DURABILITY = ...)` Standard
+
+Rather than relying on risky, global server-level ephemeral flags (`-ephemeral`), LionSQL adopts the **Microsoft SQL Server In-Memory OLTP standard for Table-Level Durability**:
+
+```sql
+-- 1. Standard Persistent Table (Default): Schema and row data are fully persistent
+CREATE TABLE dbo.Orders (
+    OrderID INT NOT NULL PRIMARY KEY,
+    Amount DECIMAL(18,2)
+) WITH (DURABILITY = SCHEMA_AND_DATA);
+
+-- 2. Ultra-Fast Cache / Session Table (DURABILITY = SCHEMA_ONLY):
+--    - Schema definition and indexes are permanently stored in the catalog
+--    - Row mutations bypass WAL logging for pure RAM throughput (reset to 0 rows on restart)
+CREATE TABLE dbo.WebSession (
+    SessionID VARCHAR(64) NOT NULL PRIMARY KEY,
+    Payload NVARCHAR(MAX)
+) WITH (MEMORY_OPTIMIZED = ON, DURABILITY = SCHEMA_ONLY);
 ```
-* Completely eliminates disk file I/O while using the default pointer-free `compact` in-memory layout for minimal heap footprint and GC jitter. (Legacy `-disk none` and `-engine memory` map automatically to `-disk compact`; `-memory performance` is deprecated in v1.0 and scheduled for removal post-1.0.)
+
+> [!NOTE]
+> Tables created with `WITH (DURABILITY = SCHEMA_ONLY)` preserve their schema definitions (`TableSchema`) and secondary indexes across server restarts, preventing `table not found` exceptions in client applications while resetting volatile row data to zero rows. (The legacy server-wide `-ephemeral` flag has been completely removed in favor of granular DDL options, and volatile testing is performed via `-dir ""`.)
+
+#### The Four Production Workload Recipes
+
+For an in-depth analysis, refer to [`TRANSACTION_PERFORMANCE_GUIDE.md`](TRANSACTION_PERFORMANCE_GUIDE.md):
+
+#### Recipe 1: Ultra-Fast Pure-Go In-Memory OCC Mode (Windows Default / Sub-Millisecond)
+```bash
+lionsql serve -dir /var/lib/lionsql/data -disk compact -fsync everysec -max-memory 2GB
+```
+* Delivers 20,000+ TPS with zero GC jitter via pointer-free `compact` memory layout and durable AOF/WAL logging. (For temporary volatile tests, specify `-dir ""`.)
 
 #### Recipe 2: Standard Enterprise Production OLTP (Recommended Default)
 ```bash

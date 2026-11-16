@@ -166,9 +166,14 @@ func DefaultMemory() string {
 // On Windows (runtime.GOOS == "windows"), the default is "memory" (In-Memory OCC with FlatRecord and AOF durability).
 func DefaultEngine() string {
 	if runtime.GOOS == "windows" {
-		return "memory"
+		return "compact"
 	}
 	return "wiredtiger"
+}
+
+// GetEngine returns the normalized storage engine backend ("compact" or "wiredtiger").
+func (s *ServerConfig) GetEngine() string {
+	return s.GetDisk()
 }
 
 // GetDisk returns the normalized disk persistence backend ("compact" or "wiredtiger").

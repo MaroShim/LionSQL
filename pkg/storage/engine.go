@@ -269,6 +269,12 @@ func IsTableVariable(name string) bool {
 	return strings.HasPrefix(lower, "__tv_") || strings.HasPrefix(lower, "__var_")
 }
 
+// Durability options for tables (Microsoft SQL Server / In-Memory OLTP parity)
+const (
+	DurabilitySchemaAndData = "SCHEMA_AND_DATA"
+	DurabilitySchemaOnly    = "SCHEMA_ONLY"
+)
+
 // TableSchema defines a table structure.
 type TableSchema struct {
 	Name             string             `json:"name"`
@@ -278,6 +284,8 @@ type TableSchema struct {
 	ForeignKeys      []ForeignKeySchema `json:"foreign_keys,omitempty"`
 	CheckConstraints []string           `json:"check_constraints,omitempty"`
 	Partition        *PartitionDef      `json:"partition,omitempty"`
+	Durability       string             `json:"durability,omitempty"`       // "SCHEMA_AND_DATA" (default) or "SCHEMA_ONLY"
+	MemoryOptimized  bool               `json:"memory_optimized,omitempty"` // true if WITH (MEMORY_OPTIMIZED = ON)
 }
 
 // Clone returns a deep copy of TableSchema so callers can mutate trial copies safely.

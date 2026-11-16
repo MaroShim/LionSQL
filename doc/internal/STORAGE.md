@@ -221,11 +221,18 @@ Tables defined without an explicit primary key, derived tables, and common table
 - **Standardized Properties**: Factory function `NewSyntheticPKColumn(kind SyntheticPKKind) Column` creates columns with uniform properties (`PrimaryKey: true`, `Identity: true`, `Nullable: false`, `TypeInt`).
 - **Identity Inspection & Stripping**: `IsSyntheticPKName(name)`, `IsSyntheticPKColumn(col)`, and `StripSyntheticPKColumns(cols)` unify column classification and ensure internal identity columns are cleanly stripped prior to user result serialization.
 
-### 4.4. In-Memory Ephemeral Engine Mode (`--ephemeral`)
-For testing, embedded caches, and ephemeral compute pods, LionSQL supports pure in-memory operation:
-- Invoked via `--ephemeral` flag or `ephemeral: true` configuration.
-- Completely suppresses WAL/AOF log disk writes, background fsyncs, and table snapshot creation.
-- Inspected via `DBCC PERSISTENCE` and `DBCC USEROPTIONS`.
+### 4.4. Table-Level Durability & In-Memory Ephemeral Engine Mode
+
+For high-speed caches, web sessions, and ETL staging, LionSQL standardizes on **Microsoft SQL Server In-Memory OLTP Table-Level Durability** (`WITH (DURABILITY = SCHEMA_ONLY)`):
+- **`DURABILITY = SCHEMA_ONLY`**:
+  - Tables persist schema metadata, column types, and secondary index definitions permanently in `catalog.json` / `tables.mpk`.
+  - Transaction commits bypass AOF/WAL frame writing for pure RAM execution speed with zero disk write amplification.
+  - On engine restart, the table definition is restored cleanly with 0 rows (preventing `table not found` client errors).
+- **Server-Wide Mode**:
+  - Legacy `--ephemeral` flag is deprecated in v1.0 in favor of granular DDL table durability.
+  - Volatile testing is achieved simply by specifying an empty or temporary data directory (`-dir ""`).
+- **Inspection**:
+  - Inspected via `DBCC PERSISTENCE` and `DBCC USEROPTIONS`.
 
 ---
 

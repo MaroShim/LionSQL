@@ -78,9 +78,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				Partitions: make(map[string]map[string]struct{}),
 				mode:       e.opts.Mode,
 			}
-			if e.opts.Mode == MemoryCompact {
-				td.layout = BuildFlatRecordLayout(op.Schema)
-			}
+			td.layout = BuildFlatRecordLayout(op.Schema)
 			td.refreshSnapSchemaLocked()
 			td.initShards()
 			for _, idx := range op.Schema.Indexes {
@@ -452,6 +450,13 @@ func (e *Engine) saveDiskSnapshotLocked(snapLSN int64) error {
 
 	for _, name := range tNames {
 		td := persistTables[name]
+		if td.Schema.Durability == storage.DurabilitySchemaOnly {
+			// SCHEMA_ONLY tables persist schema and index definitions on disk, but keep row data ephemeral (zero rows dumped).
+			td.Rows = nil
+			td.Versions = nil
+			td.Keys = nil
+			continue
+		}
 		if err := td.syncShardsToMapsAlreadyLocked(); err != nil {
 			return err
 		}
@@ -592,11 +597,7 @@ func (e *Engine) loadDiskLocked() (int64, error) {
 		// Unexported runtime layout metadata is not serialized by MsgPack; restore it before initShards()
 		// so RDB rows re-enter shards in the engine's configured MemoryMode without stale heap duplicates.
 		td.mode = e.opts.Mode
-		if td.mode == MemoryCompact {
-			td.layout = BuildFlatRecordLayout(&td.Schema)
-		} else {
-			td.layout = nil
-		}
+		td.layout = BuildFlatRecordLayout(&td.Schema)
 		td.refreshSnapSchemaLocked()
 		if td.Versions == nil {
 			td.Versions = make(map[string]int64)

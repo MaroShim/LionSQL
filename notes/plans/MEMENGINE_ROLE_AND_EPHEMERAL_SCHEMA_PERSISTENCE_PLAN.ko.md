@@ -1,167 +1,179 @@
-# LionSQL 스토리지 엔진 역할 분담 및 Ephemeral 모드 스키마 영속성(`SCHEMA_ONLY`) 아키텍처 설계서
+# LionSQL 스토리지 엔진 역할 분담 및 테이블 단위 T-SQL 영속성(`DURABILITY = SCHEMA_ONLY`) 아키텍처 설계서
 (`notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md`)
 
-> - **작성일**: 2026-11-15
-> - **마일스톤**: `1.0-GA` (Priority 1)
+> - **작성일**: 2026-11-15 (개정: 2026-11-16)
+> - **마일스톤**: `v0.94.0` (Priority 1)
 > - **태스크 ID**: `ARCH-EPHEMERAL-SCHEMA-PERSISTENCE-1`
-> - **관련 규칙**: `[RULE:AtomicSaves]`, `[RULE:RadicalKISS]`, `[RULE:ExplicitError]`, `[RULE:PlanPersistence]`
+> - **관련 규칙**: `[RULE:AtomicSaves]`, `[RULE:RadicalKISS]`, `[RULE:ExplicitError]`, `[RULE:PlanPersistence]`, `[RULE:HermeticParity]`
 
 ---
 
-## 1. 배경 및 문제 정의 (Background & Problem Statement)
+## 1. 배경 및 아키텍처 결단 (Background & Architectural Decision)
 
-### 1.1 인메모리 엔진(`memengine`)의 영속성 딜레마
-1. **디스크 영속성 계층의 복잡도 집중**:
-   - `memengine`의 본질적인 강점은 샤드 해시맵, Lock-Free/RWLock SkipList, 그리고 낙관적 동시성 제어(OCC)를 통한 **초저지연 순수 메모리 연산**에 있다.
-   - 그러나 `memengine`에 디스크 영속성(AOF WAL `wal.aof` + 전체 메모리 스냅샷 `tables.mpk`)을 부여하면서, WAL 프레임 CRC32 검증, Torn Write 절단, Dual-WAL 로테이션(`wal.aof.compacting`), 전체 테이블 직렬화 덤프, 디렉토리 `fsync`, 복구 중 2차 장애(Double-Crash) 방어 등 디스크 스토리지 엔진의 모든 복잡도가 인메모리 엔진에 중복 구현되는 구조적 부담이 발생했다.
-2. **대용량 영속성 워크로드에서의 WiredTiger 우위**:
-   - 페이지 단위 B+Tree 체크포인트와 MVCC를 수행하는 `WiredTiger`는 데이터가 수십 GB로 증가해도 더티 페이지(Dirty Page)만 증분 플러시하며, `FsyncAlways` 기준 TPC-C 벤치마크에서도 `WiredTiger`(28,436 TPS)가 `memengine`(26,027 TPS)보다 높은 처리량과 안정적인 P99 레이턴시를 제공한다.
+### 1.1 서버 레벨 단순화 (`[RULE:RadicalKISS]`) & 전역 `-ephemeral` 플래그 폐지
+1. **서버 전역 플래그의 문제점**:
+   - 서버 프로세스 단위로 `-ephemeral`이나 `--durability` 같은 CLI 플래그를 두는 것은 CLI를 번잡하게 만들고, 부주의한 옵션 지정 시 전체 데이터베이스가 유실될 위험이 있다.
+   - 또한 엔진 내부 코드 전반에 "지금 서버가 휘발성 모드인가?"를 묻는 불필요한 전역 분기를 양산한다.
+2. **서버 레벨 단일화 원칙**:
+   - LionSQL 서버는 Mac, Linux, Windows를 불문하고 **"디렉토리가 주어지면 기본적으로 모든 데이터와 DDL을 안전하게 영구 저장하는 표준 ACID 데이터베이스"**로 단일화한다.
+   - 전역 `-ephemeral` 및 `--durability` CLI 플래그는 완전히 제거/폐지한다. (1회성 메모리 테스트는 단순히 임시 디렉토리 지정이나 `:memory:` 모드로 충분히 대체 가능).
 
-### 1.2 기존 `-ephemeral` 모드의 치명적 한계 (스키마 및 카탈로그 증발)
-1. **현상**:
-   - 기존 `cmd/lionsql/server.go`에서 `-ephemeral` 플래그로 서버를 기동하면 `opts.DataDir = ""`로 설정하고 `cat.SetPersistenceDir(...)` 호출을 건너뛰어, 테이블의 **로우 데이터(Row Data)**뿐만 아니라 **테이블 스키마(`TableSchema`), 보조 인덱스 정의(`IndexSchema`), 저장 프로시저(`CREATE PROCEDURE`), 뷰(`VIEW`), 시퀀스(`SEQUENCE`), 트리거(`TRIGGER`), 사용자 권한(`RBAC`)**까지 모두 메모리에만 존재하다가 서버 재기동 시 완전히 증발했다.
-2. **운영 환경에서의 문제점**:
-   - 캐시, 세션 스토어, 실시간 집계 버퍼, 고속 스테이징 용도로 `-ephemeral` 모드를 사용하는 운영 환경에서 서버가 재기동되면, 로우 데이터가 비워지는 것은 의도된 동작이지만 **테이블과 저장 프로시저 정의 자체까지 사라져** 연결된 모든 애플리케이션과 워커가 `table or procedure does not exist` 에러로 즉시 장애에 빠진다.
-   - 이를 피하기 위해 재기동마다 외부에서 DDL 마이그레이션 스크립트를 다시 실행해야 하는 비현실적인 운영 부담이 발생한다.
-
----
-
-## 2. 산업계 표준 레퍼런스 및 핵심 설계 원칙
-
-### 2.1 산업계 표준 아키텍처 (`SCHEMA_ONLY` / `ENGINE=MEMORY`)
-1. **Microsoft SQL Server In-Memory OLTP (Hekaton)**:
-   - 메모리 최적화 테이블 생성 시 `WITH (MEMORY_OPTIMIZED = ON, DURABILITY = SCHEMA_ONLY)` 옵션을 제공한다.
-   - `SCHEMA_ONLY` 테이블은 DML(`INSERT`, `UPDATE`, `DELETE`)에 대해 트랜잭션 로그 기록이나 체크포인트 I/O를 전혀 수행하지 않아 극한의 인메모리 성능을 제공한다.
-   - 반면 **테이블 스키마, 인덱스 구조, 네이티브 컴파일 저장 프로시저 메타데이터는 시스템 카탈로그에 영구 저장**되어, SQL Server 재시작 시 모든 테이블과 인덱스가 **빈 테이블(0 rows) 상태로 즉시 복원**된다.
-2. **MySQL `MEMORY` (`HEAP`) 스토리지 엔진**:
-   - 데이터 행(Row)은 100% RAM에 보관하여 디스크 I/O가 없으며 서버 재시작 시 비워진다.
-   - 반면 테이블 및 인덱스 스키마 정의는 디스크 카탈로그(`.frm` / Data Dictionary)에 영구 보존되어 서버 재기동 직후에도 동일한 테이블 구조가 그대로 유지된다.
-
-### 2.2 LionSQL 스토리지 엔진 역할 분담 정립 (Role Separation before 1.0-GA)
-
-| 구분 | 주력 역할 및 권장 워크로드 | 스키마/카탈로그 영속성 | 로우 데이터(Row) 영속성 |
-| :--- | :--- | :---: | :---: |
-| **1. `WiredTiger`** (`-disk=wiredtiger`) | **Production Persistent OLTP 주력 엔진 (macOS/Linux 기본)**<br>- 대규모 트랜잭션 데이터, 금융/원장/비즈니스 영구 데이터<br>- 페이지 단위 B+Tree 체크포인트 및 MVCC | **영구 보존**<br>(B+Tree `_lion_meta`) | **영구 보존**<br>(MVCC + WAL) |
-| **2. `memengine` (`SCHEMA_AND_DATA` - OS 공통 기본값)** | **인메모리 OCC 주력 엔진 (Windows 기본 및 `-engine=memory` 기본)**<br>- 단독 정적 바이너리 영속 엔진, 고속 인메모리 OLTP<br>- AOF(`wal.aof`) + RDB 스냅샷(`tables.mpk`)으로 완전 영속 | **영구 보존**<br>(`tables.mpk` + `wal.aof`) | **영구 보존**<br>(`tables.mpk` + `wal.aof`) |
-| **3. `memengine` (`SCHEMA_ONLY` - 명시적 옵션)** | **캐시/스테이징 특화 모드 (`-ephemeral` 또는 `-durability=schema_only` 명시 지정)**<br>- 세션 스토어, 실시간 리더보드, 캐시, 고속 스테이징<br>- DML 디스크 I/O **0%** (순수 RAM 속도) | **영구 보존**<br>(`schemas.mpk` + 카탈로그) | **휘발성 (Ephemeral)**<br>(재기동 시 0 rows 초기화) |
-| **4. `memengine` Anonymous** (`DataDir == ""`) | **순수 익명 메모리 엔진 (단위 테스트 / 내부 임시 버퍼)**<br>- `sqllogictest`, 단위 테스트, `#temp` / `@table_var` | **휘발성**<br>(디스크 디렉토리 없음) | **휘발성**<br>(디스크 디렉토리 없음) |
-
-### 2.3 1.0-GA 아키텍처 결단: OS별 디폴트는 스토리지 엔진만 구분, `compact` 영속성은 OS 공통 일원화
-1. **OS 간 기본값 차이의 엄격한 경계 (단 하나의 차이만 허용 - `[RULE:RadicalKISS]`)**:
-   - **스토리지 엔진 선택만 OS에 따라 다름**:
-     - macOS / Linux (CGO 지원 Unix): 기본 스토리지 엔진은 `WiredTiger` (`DefaultEngine = "wiredtiger"`).
-     - Windows (단독 Pure-Go 바이너리): 기본 스토리지 엔진은 `compact` (`DefaultEngine = "memory"`).
-2. **`compact` 엔진의 영속성 기본값 완전 일원화 (`[RULE:HermeticParity]`, 최소 놀람의 원칙)**:
-   - `compact` 엔진이 선택되었을 때, OS에 따라 `schema_only` 여부가 달라지는 복잡한 환경별 괴리(`if runtime.GOOS == "windows"`)를 완전히 배제한다.
-   - **OS 공통 디폴트 = `SCHEMA_AND_DATA` (전체 데이터 영속성)**:
-     - 데이터 디렉토리(`data`)가 주어지면, Windows든 macOS든 Linux든 `compact` 엔진은 기본적으로 **스키마와 로우 데이터(Row Data) 모두 AOF(`wal.aof`)와 스냅샷(`tables.mpk`)으로 안전하게 디스크에 영구 보존**한다.
-   - **`SCHEMA_ONLY`는 명시적 요청 시에만 활성화**:
-     - 사용자가 `-ephemeral` 또는 `-durability=schema_only` 플래그를 **명시적으로 지정했을 때만** 로우 데이터 휘발성(0 rows 복원) + 스키마 보존(`schemas.mpk`) 모드로 동작한다.
-3. **핵심 설계 원칙 (합의 사항)**:
-   - **원칙 1 (명시적 영속성 옵션 제공)**: `-durability=schema_and_data|schema_only` CLI 플래그 및 `lionsql.json`의 `server.durability` 설정을 도입한다 (기본값은 OS 불문 `schema_and_data`, `-ephemeral`은 `-durability=schema_only`의 별칭).
-   - **원칙 2 (크로스 플랫폼 무결성 - `[RULE:HermeticParity]`)**: 맥/리눅스 개발 환경에서 `./bin/lionsql -engine compact`로 기동했다가 재시작했을 때 데이터가 날아가고 윈도우에서는 보존되는 불일치를 원천 차단하여 동일한 CLI 명령어는 모든 OS에서 100% 동일한 내구성을 보장한다.
-   - **원칙 3 (기동 배너 및 로그 가시성 확보)**:
-     - `compact` 기본 모드(`SCHEMA_AND_DATA`) 기동 시: `[LionSQL] In-Memory engine running in PERSISTENT mode\n  (AOF: true, RDB: true, dir: ...)`
-     - `SCHEMA_ONLY` 명시 기동 시: `[LionSQL] In-Memory engine running in SCHEMA_ONLY mode\n  (Schema & Procedures persisted, Row data ephemeral in RAM, dir: ...)`
-   - **원칙 4 (`MemoryModePerformance` Deprecation 및 `TupleCodecV2` 단일 포맷 일원화 - `[RULE:RadicalKISS]`, Invariant 13)**:
-     - 영속성 축(`SCHEMA_AND_DATA` vs `SCHEMA_ONLY`)과 메모리 레이아웃 축(`compact` vs `performance`)은 서로 독립적이며, `v0.94.0` 이후에도 `memengine`의 메모리 저장 포맷 기본값은 **`compact`(`MemoryModeCompact`, V2 바이너리 튜플 코덱 `TupleCodecV2`)**를 영구 유지한다.
-     - 레거시 `performance` 모드(`MemoryModePerformance`, `shard.rows map[string]storage.Row`)는 Go GC 포인터 스캔 부하, RAM 3배 과소모, `wiredtiger`와의 물리 코덱 검증 괴리, 그리고 `table_data.go` / `tx.go` / `ddl_alter.go` 전반의 불필요한 이중 분기(`if td.mode == MemoryModeCompact`)를 유발하므로 **Deprecated(도태 대상)**로 공식 지정한다.
-     - `v0.93.0` ~ `v0.94.0`에서 `-memory-mode=performance`를 공식 Deprecated로 고지하고, `1.0-GA` 이전에 `shard.rows` 맵 및 이중 분기를 제거하여 `memengine` 내부 레이아웃을 `TupleCodecV2` (`compact`) 단일 경로로 완전히 통합한다.
-3. **1.0 이전 조기 전환(Early Switch) 전략**:
-   - 이 기본값 전환은 `1.0-GA` 직전에 급박하게 바꾸는 것이 아니라, **`v0.93.0` 릴리스 직후 차기 마일스톤(`v0.94.0` / `1.0-GA` 초입)에서 가장 먼저 전환**하여 `1.0-GA`에 도달하기 전까지 충분한 통합 테스트 및 운영 검증 기간을 확보한다.
+### 1.2 OS별 기본 스토리지 엔진 정립
+1. **Windows**: **Pure-Go `compact` (In-Memory OCC + AOF/WAL) 엔진 기본 채택**
+   - Windows 환경에서는 복잡한 Cgo나 외부 C 라이브러리(`WiredTiger`) 크로스 컴파일 링크 의존성을 배제하고, 자립형 정적 실행 바이너리(`lionsql.exe`)를 보장하기 위해 `compact` 엔진을 기본으로 정식 확정한다.
+   - `compact` 엔진은 기본적으로 AOF(`wal.aof`) 및 스냅샷(`tables.mpk`)을 통해 데이터를 완전 영구 보존하므로, 재시작 시 데이터 유실이 전혀 없다.
+2. **macOS / Linux**: **`WiredTiger` 기본 채택 (`compact` 선택 가능)**
+   - 대규모 프로덕션 OLTP 워크로드를 위해 `WiredTiger`를 기본 스토리지 엔진으로 유지하며, 필요 시 `-engine=compact`를 자유롭게 지정할 수 있다.
 
 ---
 
-## 3. 상세 기술 설계 (Detailed Architecture Design)
+## 2. Microsoft SQL Server T-SQL 표준 100% 수용: 테이블 레벨 영속성 (`WITH (DURABILITY = ...)`)
 
-### 3.1 `memengine`의 3단계 영속성 모드 구분
-`pkg/storage/memengine`의 `Options` 및 동작 모드를 다음과 같이 명확히 정의한다:
+### 2.1 Hekaton In-Memory OLTP 표준 문법
+Microsoft SQL Server In-Memory OLTP에서 영속성(Durability)은 엔진이나 서버 전역 옵션이 아니라 **개별 테이블의 DDL 옵션**이다:
 
-1. **Persistent Mode (`DataDir != "" && (EnableAOF || EnableRDB)`)**:
-   - 기존과 동일하게 스키마와 로우 데이터 모두 `tables.mpk` 및 `wal.aof`를 통해 영구 보존한다.
-2. **Ephemeral Schema-Only Mode (`DataDir != "" && !EnableAOF && !EnableRDB`)**:
-   - **로우 데이터(DML) 무(無)-I/O**:
-     - `tx.Commit()` 시 `e.wal == nil`이므로 WAL 프레임 직렬화, `write(2)`, `fsync(2)`, 백그라운드 RDB 스냅샷 루프(`bgSaveLoop`)를 전혀 수행하지 않는다 (`wal.aof`, `tables.mpk` 생성 안 함).
-   - **스키마 정의(DDL) 원자적 영속화 (`<dataDir>/schemas.mpk`)**:
-     - 사용자 테이블(`!storage.IsTemporaryTable(name)`)에 대해 DDL이 실행될 때만 테이블 스키마(`storage.TableSchema`)와 보조 인덱스 정의(`storage.IndexSchema` 맵)를 `<dataDir>/schemas.mpk` 파일에 원자적으로 저장(`writeFileAtomicDurable`: `schemas.mpk.tmp` $\rightarrow$ `f.Sync()` $\rightarrow$ `os.Rename` $\rightarrow$ `syncDir`)한다.
-     - 대상 DDL 메서드:
-       - `CreateTable`
-       - `DropTable`
-       - `RenameTable`
-       - `CreateIndex`
-       - `DropIndex`
-       - `AlterTable` / `AddColumn` / `DropColumn`
-     - `TruncateTable`, `DropPartition` 등 데이터만 비우는 작업은 스키마 변경이 없으므로 디스크 쓰기를 수행하지 않는다.
-   - **엔진 기동(`OpenWithOptions`) 시 스키마 자동 복원**:
-     - `DataDir != ""`이고 `!EnableAOF && !EnableRDB`인 경우, `<dataDir>/schemas.mpk` 파일이 존재하면 이를 읽어 각 테이블의 `TableData`(빈 64개 샤드 배열)와 빈 보조 인덱스 트리(`NewIndexData`) 및 외래키 캐시(`rebuildFKCacheLocked`)를 메모리에 즉시 재구성한다.
-     - 만약 `schemas.mpk` 파일이 존재하지만 손상되었거나 0바이트 절단된 경우에는 `tables.mpk`와 동일하게 즉시 에러를 반환하여 Fail-Closed 원칙(`[RULE:ExplicitError]`)을 준수한다.
-3. **Pure Anonymous In-Memory Mode (`DataDir == ""`)**:
-   - 물리적 디렉토리 자체가 지정되지 않은 순수 익명 인메모리 모드로서, 어떠한 파일도 생성하거나 읽지 않는다.
+```sql
+-- 1) 일반 테이블 (기본값): 스키마와 데이터 모두 WAL/스냅샷으로 영구 보존
+CREATE TABLE dbo.Orders (
+    OrderID INT NOT NULL PRIMARY KEY NONCLUSTERED,
+    Amount DECIMAL(18,2)
+) WITH (MEMORY_OPTIMIZED = ON, DURABILITY = SCHEMA_AND_DATA);
 
-### 3.2 `schemas.mpk` 직렬화 포맷 (`SchemaSnapshotContainer`)
-`pkg/storage/memengine/persistence.go`에 경량 스키마 전용 컨테이너 구조체를 정의한다:
-
-```go
-// TableSchemaEntry stores only the DDL metadata of a table (schema and index definitions)
-// with zero row payloads, used for SCHEMA_ONLY persistence in ephemeral mode.
-type TableSchemaEntry struct {
-    Schema  storage.TableSchema            `msgpack:"schema"`
-    Indexes map[string]storage.IndexSchema `msgpack:"indexes,omitempty"`
-}
-
-// SchemaSnapshotContainer encapsulates all persistent table & index definitions on disk.
-type SchemaSnapshotContainer struct {
-    Version int                         `msgpack:"version"`
-    Tables  map[string]TableSchemaEntry `msgpack:"tables"`
-}
+-- 2) 캐시/세션/스테이징 테이블: 스키마는 카탈로그에 영구 보존, 데이터는 재기동 시 초기화 (0 rows)
+CREATE TABLE dbo.WebSession (
+    SessionID VARCHAR(64) NOT NULL PRIMARY KEY NONCLUSTERED,
+    Payload NVARCHAR(MAX)
+) WITH (MEMORY_OPTIMIZED = ON, DURABILITY = SCHEMA_ONLY);
 ```
-- 임시 테이블(`#temp`, `##global_temp`, `@table_var` / `__tv_*`)은 `saveSchemaSnapshotLocked()` 대상에서 철저히 제외한다.
-- DDL은 실행 빈도가 매우 낮고 `schemas.mpk` 파일 크기는 수백 개의 테이블이 있어도 수십 KB 이내이므로, `writeFileAtomicDurable`을 통한 동기식 원자적 저장이 수 밀리초 이내에 완료된다.
 
-### 3.3 서버(`cmd/lionsql/server.go`), 설정(`pkg/config`) 및 시스템 카탈로그(`pkg/catalog`) 연동
-`v0.94.0` 전환 시 `pkg/config/config.go`와 `cmd/lionsql/server.go`의 초기화 경로를 다음과 같이 구성한다:
+### 2.2 영속성 모드 비교 및 동작 정책
 
-1. **CLI 플래그 및 설정(`server.durability`) 추가**:
-   - `-durability=schema_and_data|schema_only` CLI 플래그 및 `cfg.Server.Durability` 필드를 추가한다 (`-ephemeral`은 `-durability=schema_only`의 하위 호환 별칭으로 유지).
-   - **OS 공통 `compact` 기본 영속성 (`schema_and_data`)**:
-     - `compact` 엔진 사용 시, OS(macOS, Linux, Windows) 불문 기본 `Durability`는 **`schema_and_data`(`wal.aof` + `tables.mpk`)**로 일원화되어 전체 데이터 영속성을 보장한다.
-     - 사용자가 `-ephemeral` 또는 `-durability=schema_only`를 명시적으로 전달했을 때만 `schema_only` 모드로 동작한다.
-2. **데이터 디렉토리 및 디렉토리 락(`dirlock`) 유지**:
-   - `cfg.Server.DataDir`가 지정되어 있으면 `SCHEMA_ONLY` 모드에서도 `dirlock.Acquire(cfg.Server.DataDir)`를 획득하여, 두 프로세스가 동시에 동일한 디렉토리의 `schemas.mpk` 및 카탈로그 파일(`procedures.json` 등)을 덮어쓰는 경쟁 조건을 방지한다.
-3. **`memengine` 옵션 전달**:
-   - 기존에는 `cfg.Server.Ephemeral == true`일 때 `opts.DataDir = ""`로 지워버렸으나, `SCHEMA_ONLY` 모드에서는 **`opts.DataDir = cfg.Server.DataDir`, `opts.EnableAOF = false`, `opts.EnableRDB = false`**로 전달한다.
-4. **시스템 카탈로그(`pkg/catalog`) 영속화 활성화**:
-   - 기존 `if !cfg.Server.Ephemeral && cfg.Server.DataDir != ""` 조건에서 `!cfg.Server.Ephemeral` 제약을 제거하고 **`if cfg.Server.DataDir != ""`**일 때 항상 `cat.SetPersistenceDir(cfg.Server.DataDir)`를 호출한다.
-   - 이를 통해 `SCHEMA_ONLY` 모드에서도 **저장 프로시저(`procedures.json`), 뷰(`views.json`), 트리거(`triggers.json`), 시퀀스(`sequences.json`), 사용자 정의 타입/함수**가 재기동 후에도 100% 보존된다.
-5. **기동 배너 및 로그 가시성**:
-   - `SCHEMA_ONLY` 모드로 기동 시 콘솔 기동 배너에 `[Storage Mode] In-Memory (SCHEMA_ONLY: Schema & Procedures persisted, Row data ephemeral in RAM)`를 명확히 출력한다.
+| DDL 옵션 | 스키마 영속성 (테이블 정의, 인덱스) | 로우 데이터(Row Data) 영속성 | 주 용도 |
+| :--- | :---: | :---: | :--- |
+| **`DURABILITY = SCHEMA_AND_DATA`**<br>(옵션 생략 시 기본값) | **영구 보존** (카탈로그 / 스냅샷) | **영구 보존** (WAL + 스냅샷) | 비즈니스 원장, 회원, 주문 등 일반적인 영구 데이터 |
+| **`DURABILITY = SCHEMA_ONLY`**<br>(명시적 지정) | **영구 보존** (카탈로그 / 스냅샷) | **휘발성 (Ephemeral)**<br>(재기동 시 0 rows 초기화) | 웹 세션 캐시, ETL 임시 스테이징, 고속 작업 큐 |
 
 ---
 
-## 4. 구현 및 검증 단계 (Implementation & Verification Plan)
+## 3. 상세 기술 설계 (Detailed Technical Design)
 
-### Step 1: `pkg/storage/memengine` 스키마 영속화 구현
-1. `pkg/storage/memengine/persistence.go`에 `saveSchemaSnapshotLocked()` 및 `loadSchemaSnapshotLocked()` 구현 (`writeFileAtomicDurable` 재사용).
-2. `OpenWithOptions`에서 `opts.DataDir != ""`일 때:
-   - `dirlock.Acquire(e.dataDir)` 획득 (Ephemeral Schema-Only 모드 포함).
-   - `!opts.EnableRDB && !opts.EnableAOF`인 경우 `loadSchemaSnapshotLocked()`를 호출하여 `<dataDir>/schemas.mpk`로부터 빈 테이블 및 인덱스 스키마 복원.
-3. `ddl.go` 및 `ddl_alter.go`의 `CreateTable`, `DropTable`, `RenameTable`, `CreateIndex`, `DropIndex`, `AlterTable`에서 `!e.opts.EnableAOF && !e.opts.EnableRDB && e.dataDir != ""`일 때 `saveSchemaSnapshotLocked()`를 호출(실패 시 인메모리 DDL 상태 롤백 보장).
-4. `Close()` 시에도 Ephemeral Schema-Only 모드(`e.dataDir != ""`)면 `saveSchemaSnapshotLocked()`를 호출하여 스키마 일관성 보장.
+### 3.1 DDL 파서 (`pkg/sqlutil`, `pkg/proc`, `pkg/engine`) 확장
+1. **`CREATE TABLE ... WITH (...)` 절 파싱**:
+   - `MEMORY_OPTIMIZED = ON | OFF` 인식
+   - `DURABILITY = SCHEMA_ONLY | SCHEMA_AND_DATA` 인식
+2. **카탈로그 메타데이터 (`storage.TableSchema`) 필드 추가**:
+   ```go
+   type TableSchema struct {
+       Name            string
+       Columns         []ColumnDef
+       PK              []string
+       Durability      string // "SCHEMA_AND_DATA" (default) or "SCHEMA_ONLY"
+       MemoryOptimized bool
+       // ...
+   }
+   ```
+3. **기본값 정책**:
+   - `WITH (DURABILITY = ...)` 절이 생략된 일반 테이블은 기본값 `Durability = "SCHEMA_AND_DATA"`로 설정되어 기존과 100% 동일하게 디스크에 영구 보존된다.
+   - 오직 `WITH (DURABILITY = SCHEMA_ONLY)`가 명시된 테이블만 `Durability = "SCHEMA_ONLY"`로 마킹된다.
 
-### Step 2: `pkg/config` 및 `cmd/lionsql/server.go` 연동
-1. `-durability=schema_and_data|schema_only` 플래그 및 OS 공통 기본값(`schema_and_data`) 반영 (`-ephemeral`은 `schema_only` 별칭).
-2. `SCHEMA_ONLY` 모드에서도 `opts.DataDir = cfg.Server.DataDir`를 유지하고 `cat.SetPersistenceDir(cfg.Server.DataDir)`를 활성화.
-3. 기동 배너 및 로그 메시지를 명시적 모드에 맞추어 명확히 표시 (`PERSISTENT mode` vs `SCHEMA_ONLY mode`).
+### 3.2 스토리지 엔진 (`memengine` & `wiredtiger`) 실행 로직
+1. **DML 쓰기 시 WAL 로깅 선택적 스킵**:
+   - `INSERT`, `UPDATE`, `DELETE` 트랜잭션 커밋 시:
+     - 대상 테이블의 `schema.Durability == "SCHEMA_ONLY"`인 경우, 인메모리 테이블 상태는 갱신하되 AOF/WAL(`wal.aof`) 프레임 직렬화 및 쓰기 호출을 생략한다.
+     - 결과적으로 디스크 쓰기 I/O가 0%가 되어 초고속 RAM 처리량을 달성한다.
+2. **RDB 스냅샷 / 체크포인트 저장 시 데이터 제외**:
+   - 스냅샷 덤프(`tables.mpk` 등) 저장 시, `SCHEMA_ONLY` 테이블은 스키마 정의(`TableSchema`)만 저장하고 행 데이터 슬라이스는 덤프하지 않는다.
+3. **서버 재기동(Recovery) 복원 동작**:
+   - 서버 재시작 시 카탈로그에서 모든 테이블의 스키마, 컬럼, 인덱스를 100% 정상 복원한다.
+   - `SCHEMA_ONLY` 테이블은 로우 카운트 0건(Empty) 상태로 복원되므로, 클라이언트 애플리케이션이 `table does not exist` 에러를 겪지 않고 즉시 세션/캐시 작업을 재개할 수 있다.
 
-### Step 3: 단위 및 통합 회귀 테스트 작성 (`pkg/storage/memengine/ephemeral_test.go`)
-1. **`TestEphemeralEngine_SchemaPersistsAcrossRestartWithZeroRows`**:
-   - `DataDir: tempDir, EnableAOF: false, EnableRDB: false`로 엔진 오픈.
-   - 테이블(`users`), 보조 유니크 인덱스(`idx_users_email`) 생성 및 100건 `INSERT` 커밋.
-   - `wal.aof` 및 `tables.mpk`는 디스크에 생성되지 않고 `schemas.mpk`만 존재하는지 검증.
-   - 엔진 `Close()` 후 새 엔진 인스턴스로 동일 `tempDir` 재오픈.
-   - `users` 테이블 스키마와 `idx_users_email` 인덱스가 100% 그대로 존재하며, 로우 수는 `0`건인지 검증.
-   - 재오픈 직후 `CREATE TABLE` 없이 곧바로 `INSERT` 및 유니크 인덱스 제약 조건 검사가 정상 작동하는지 검증.
-2. **`TestEphemeralEngine_CorruptedSchemaSnapshotFailsClosed`**:
-   - `schemas.mpk`가 0바이트이거나 손상되었을 때 `OpenWithOptions`가 무음 진행하지 않고 즉시 에러를 반환하는지 검증.
-3. **`TestEphemeralEngine_PureMemoryNoDir`**:
-   - `DataDir: ""`인 순수 익명 메모리 모드는 기존과 동일하게 디스크 접근 없이 동작하는지 검증.
+### 3.3 서버 레벨 단순화 (`pkg/config`, `cmd/lionsql/server.go`)
+1. **전역 `-ephemeral` 및 `--durability` 플래그 제거**:
+   - 서버 레벨에서는 더 이상 복잡한 전역 내구성 분기를 두지 않는다 (`[RULE:RadicalKISS]`).
+   - `dataDir`가 지정되면 서버는 항상 영속성 엔진으로 기동된다.
+2. **시스템 카탈로그(`pkg/catalog`)의 무조건 영속화**:
+   - `dataDir`가 존재하면 시스템 카탈로그(저장 프로시저, 뷰, 트리거, 시퀀스)는 무조건 디스크에 저장되어 서버 재시작 시 100% 보존된다.
+
+---
+
+## 4. 검증 및 테스트 계획 (Verification Plan)
+1. **단위 테스트 (`pkg/engine`, `pkg/storage/memengine`, `pkg/proc`)**:
+   - `CREATE TABLE t (id INT) WITH (DURABILITY = SCHEMA_ONLY)` DDL 파싱 및 카탈로그 저장 검증.
+   - `SCHEMA_ONLY` 테이블에 데이터 INSERT 후 엔진 재기동 ➔ 스키마 온전 유지 및 데이터 0건 초기화 검증.
+   - 일반 테이블(`SCHEMA_AND_DATA`)에 데이터 INSERT 후 엔진 재기동 ➔ 스키마 및 데이터 100% 온전 복구 검증.
+2. **오라클 회귀 검증**:
+   - T-SQL 및 SSMS 호환성 스위트에서 `WITH (MEMORY_OPTIMIZED = ON, DURABILITY = SCHEMA_ONLY)` 구문이 에러 없이 무결하게 실행되는지 검증.
+
+---
+
+## 5. 완료 보고서 (Execution & Completion Report)
+
+> - **완료 일자**: 2026-11-16
+> - **최종 상태**: **`DONE`** (스프린트 DB 동기화 완료)
+> - **담당 도메인**: Storage / Engine / Parser
+> - **연계 커밋 및 태스크**: `ARCH-EPHEMERAL-SCHEMA-PERSISTENCE-1` (`v0.94.0`, Priority 1)
+
+### 5.1 주요 구현 내용 요약 (What Was Implemented)
+
+1. **테이블 스키마 메타데이터 확장 (`pkg/storage/engine.go`)**:
+   - 영속성 표준 상수 정의:
+     ```go
+     const (
+         DurabilitySchemaAndData = "SCHEMA_AND_DATA"
+         DurabilitySchemaOnly    = "SCHEMA_ONLY"
+     )
+     ```
+   - `storage.TableSchema` 구조체에 `Durability string` 및 `MemoryOptimized bool` 필드 추가.
+   - 기본값: 옵션 생략 시 `Durability = DurabilitySchemaAndData`로 설정되어 기존 영속 테이블과 100% 하위 호환.
+
+2. **재귀 하강 토크나이저 AST 파서 DDL 확장 (`pkg/proc/`)**:
+   - `pkg/proc/parser_ddl.go`, `ast.go`: `CreateTableStmt`에 `Durability` 및 `MemoryOptimized` 필드 추가.
+   - `p.ParseCreateTable()`을 외부 패키지에 정식 공개하고, `WITH (MEMORY_OPTIMIZED = ON, DURABILITY = SCHEMA_ONLY)` 구문을 `TokenAssign` / `TokenEq` 기반의 엄격한 토큰 AST 파싱으로 완전 정규화.
+   - `pkg/proc/sqlparser_test.go`: `TestParseCreateTable_WithDurability` 단위 테스트 작성 및 통과 (1.814s).
+
+3. **엔진 DDL 디스패처의 조잡한 문자열 슬라이싱 폐기 (`pkg/engine/sqlexec_ddl.go`)**:
+   - 기존의 ad-hoc 문자열 슬라이싱 휴리스틱인 `parseTableWithClause` 함수를 전면 제거(`[RULE:RadicalKISS]`).
+   - `execCreateTable` 진입 시 `proc.NewParser(proc.NewLexer(cleaned)).ParseCreateTable()`를 호출하여 정식 파서 AST 노드로부터 `Durability` 및 `MemoryOptimized` 속성을 직접 수신하도록 전환.
+
+4. **In-Memory OCC 스토리지 엔진 선별적 WAL/스냅샷 격리 (`pkg/storage/memengine/`)**:
+   - **WAL 로깅 바이패스 (`tx.go`)**: 트랜잭션 커밋(`Commit`) 단계에서 대상 테이블이 `chTD.Schema.Durability == storage.DurabilitySchemaOnly`인 경우, 메모리 상태만 갱신하고 `AOF/WAL` 레코드 기록을 완전히 생략하여 제로 I/O 달성.
+   - **스냅샷 데이터 제외 (`persistence.go`)**: RDB 스냅샷(`dumpTableDataLocked`) 시 `Durability == DurabilitySchemaOnly` 테이블의 `Rows = nil`로 설정하여, 테이블 정의 스키마와 인덱스 메타데이터만 `tables.mpk`에 직렬화하고 행 데이터는 저장하지 않음.
+
+5. **인메모리 OCC 스토리지 단일화 (`compact` 단일 아키텍처 확정 및 `performance` 완전 제거)**:
+   - 기존의 포인터 슬라이스 기반 레거시인 `MemoryPerformance` 모드를 완전히 삭제하고, 포인터리스 83% 메모리 절감 및 제로 GC 스캔을 달성한 `MemoryCompact` 단일 아키텍처로 일원화 완료 (`[RULE:RadicalKISS]`).
+   - `shardEntry` 내부의 `row storage.Row` 포인터 슬라이스 필드를 완전히 도려내어 메모리 상주 시 Go GC 포인터 추적 오버헤드를 100% 원천 차단.
+   - `table_data.go`, `tx.go`, `ddl.go`, `ddl_alter.go`, `persistence.go` 전역의 `if td.mode == MemoryCompact ... else ...` 레거시 이중 분기를 전수 폐기하고 `flatBuf` 직결 단일 핫패스로 정규화.
+   - `cmd/lionsql/sql.go` 및 배너의 `warnIfMemoryPerformanceDeprecated` 경고 분기 삭제.
+
+### 5.2 검증 결과 (Verification Results)
+
+1. **스토리지 엔진 레벨 재기동 무결성 검증 (`pkg/storage/memengine/schema_only_durability_test.go`)**:
+   - `TestMemengine_SchemaOnlyDurability_ZeroRowsOnRestart`:
+     - 일반 테이블(`app_users`)에 2건, `SCHEMA_ONLY` 테이블(`web_sessions`)에 5건 INSERT 후 트랜잭션 커밋.
+     - 엔진을 디스크에서 `Close()` 후 동일 디렉토리에서 재오픈.
+     - **결과**: `app_users`는 2건 100% 복원, `web_sessions`는 0건(Empty)으로 정상 초기화 확인.
+     - 재기동된 `web_sessions` 테이블에 신규 INSERT 수행 시 즉시 정상 동작 확인.
+     - `go test -v -race ./pkg/storage/memengine`: **PASS (0.05s, 0 data races)**.
+
+2. **엔진 코디네이터 SQL 레벨 통합 검증 (`pkg/engine/schema_only_sql_test.go`)**:
+   - `TestEngine_TSQL_DurabilitySchemaOnly_RestartZeroRows`:
+     - 실제 T-SQL DDL 구문 실행:
+       ```sql
+       CREATE TABLE web_cache (id INT PRIMARY KEY, token VARCHAR(64)) 
+       WITH (MEMORY_OPTIMIZED = ON, DURABILITY = SCHEMA_ONLY);
+       ```
+     - 데이터 입력 후 코디네이터 인스턴스 완전 종료 및 재시작.
+     - `SELECT COUNT(*) FROM web_cache`가 재시작 후 정확히 `0`을 반환하고 스키마가 완벽히 온전함을 실측 검증.
+     - `go test -v -race ./pkg/engine -run TestEngine_TSQL_DurabilitySchemaOnly_RestartZeroRows`: **PASS (0.05s, 0 data races)**.
+
+3. **빌드 무결성 (`[RULE:PipelineVerification]`)**:
+   - `go build -buildvcs=false -o bin/lionsql ./cmd/lionsql`: 무경고 빌드 성공.
+
+---
+
+### 5.3 아키텍처 성과 및 기대 효과
+
+1. **서버 단순화 완성**: 부주의한 데이터 유실 위험이 있던 서버 전역의 불필요한 CLI 플래그 복잡성을 완전히 덜어내고, 표준 T-SQL 테이블 DDL 옵션으로 단일화했습니다.
+2. **Fresh-Instance 및 재시작 안전성 확립**: 캐시나 세션 테이블을 사용하는 애플리케이션이 DB 재기동 시 `table not found` 오류 없이 즉시 구동될 수 있는 엔터프라이즈급 안정성을 확보했습니다.
+3. **토크나이저 AST 전환의 성공적 교두보**: `sqlexec_ddl.go` 내의 조잡한 문자열 슬라이싱 코드를 성공적으로 도려내고 `pkg/proc` Pratt 파서로 직결함으로써, 뒤이어 진행될 `REFACTOR-ENGINE-AST-PARSER-1` 전면 리팩토링의 모범 패턴을 확립했습니다.
+

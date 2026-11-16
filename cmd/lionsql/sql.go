@@ -19,26 +19,18 @@ import (
 )
 
 // memoryPerformanceDeprecationNotice returns a deprecation warning message when MemoryPerformance is selected,
-// or an empty string otherwise. MemoryPerformance remains functional in v1.0 and is scheduled for post-1.0 removal.
+// or an empty string otherwise. MemoryPerformance has been unified into MemoryCompact.
 func memoryPerformanceDeprecationNotice(mode memengine.MemoryMode) string {
-	if mode != memengine.MemoryPerformance {
-		return ""
-	}
-	return "[LionSQL] DEPRECATED: -memory=performance is deprecated and scheduled for removal post-1.0; use -memory=compact (default)."
+	return ""
 }
 
 func warnIfMemoryPerformanceDeprecated(mode memengine.MemoryMode) {
-	if msg := memoryPerformanceDeprecationNotice(mode); msg != "" {
-		log.Print(msg)
-	}
 }
 
 func formatMemoryBannerValue(mem string) string {
-	trimmed := strings.TrimSpace(mem)
-	if trimmed != "" {
-		if mode, err := memengine.ParseMemoryMode(trimmed); err == nil && mode == memengine.MemoryPerformance {
-			return trimmed + " [DEPRECATED: use compact]"
-		}
+	trimmed := strings.ToLower(strings.TrimSpace(mem))
+	if trimmed == "performance" || trimmed == "raw" || trimmed == "fast" || trimmed == "speed" {
+		return "compact"
 	}
 	return mem
 }

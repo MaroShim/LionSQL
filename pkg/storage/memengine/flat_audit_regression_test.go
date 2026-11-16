@@ -448,8 +448,8 @@ func TestCompactAudit_F3_AddColumnFailClosedOnDecodeError(t *testing.T) {
 	sh.mu.RLock()
 	gotEntry := sh.entries[pk]
 	sh.mu.RUnlock()
-	if len(gotEntry.row.Values) != 0 {
-		t.Fatalf("expected fail-closed rollback without overwriting shard entry row, got %+v", gotEntry.row.Values)
+	if len(gotEntry.flatBuf) == 0 {
+		t.Fatalf("expected non-empty flatBuf after rollback")
 	}
 }
 

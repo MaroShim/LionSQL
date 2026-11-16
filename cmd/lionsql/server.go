@@ -70,10 +70,9 @@ func runServer(args []string) error {
 	fs.StringVar(dataDir, "data", defaultDataDir, "Alias for -dir")
 	fs.StringVar(dataDir, "data-dir", defaultDataDir, "Alias for -dir")
 
-	engineType := fs.String("engine", "", "Storage engine backend: wiredtiger or memory (default: wiredtiger on macOS/Linux, memory on Windows)")
-	diskType := fs.String("disk", "", "Low-level disk persistence backend: wiredtiger or compact")
-	memoryType := fs.String("memory", "", "In-memory tuple representation: compact (default, flat zero-gc) or performance [Deprecated]")
-	ephemeralFlag := fs.Bool("ephemeral", false, "Run in purely in-memory ephemeral mode with zero disk persistence")
+	engineType := fs.String("engine", "", "Storage engine backend: wiredtiger or compact (default: wiredtiger on macOS/Linux, compact on Windows)")
+	diskType := fs.String("disk", "", "Legacy alias for -engine")
+	memoryType := fs.String("memory", "", "Legacy alias for in-memory layout")
 	autoSeed := fs.Bool("seed", false, "Automatically seed demo sample database (embedded demo_seed.sql) on startup")
 	adminEmail := fs.String("admin-email", "admin@lionsql.local", "Default superuser email")
 	adminPass := fs.String("admin-pass", "1234567890", "Default superuser password")
@@ -175,17 +174,14 @@ func runServer(args []string) error {
 	if visited["dir"] || visited["data"] || visited["data-dir"] {
 		cfg.Server.DataDir = *dataDir
 	}
-	if visited["disk"] {
-		cfg.Server.Disk = *diskType
+	if visited["disk"] && !visited["engine"] {
+		cfg.Server.Engine = *diskType
 	}
 	if visited["memory"] {
 		cfg.Server.Memory = *memoryType
 	}
 	if visited["engine"] {
 		cfg.Server.Engine = *engineType
-	}
-	if visited["ephemeral"] {
-		cfg.Server.Ephemeral = *ephemeralFlag
 	}
 	if visited["seed"] {
 		cfg.Server.AutoSeed = *autoSeed
@@ -306,7 +302,7 @@ func runServer(args []string) error {
 
 	explicitEngineSet := visited["engine"] || visited["disk"] || loadedConfigPath != ""
 	explicitMemorySet := visited["memory"] || (loadedConfigPath != "" && cfg.Server.Memory != "")
-	if !cfg.Server.Ephemeral && cfg.Server.DataDir != "" {
+	if cfg.Server.DataDir != "" {
 		if existingManifest, err := config.ResolveExistingEngineManifest(cfg.Server.DataDir, cfg.Server.GetDisk(), explicitEngineSet); err != nil {
 			log.Fatalf("[LionSQL] %v", err)
 		} else if existingManifest != nil {
@@ -406,7 +402,7 @@ func runServer(args []string) error {
 	}
 
 	// Acquire OS-level exclusive directory lock for persistent server processes (both foreground and daemon child worker)
-	if !cfg.Server.Ephemeral && cfg.Server.DataDir != "" {
+	if cfg.Server.DataDir != "" {
 		dirLock, lockErr := dirlock.Acquire(cfg.Server.DataDir)
 		if lockErr != nil {
 			fmt.Printf("\n[LionSQL] Error: Another LionSQL server or process is already running on data directory '%s'.\n", cfg.Server.DataDir)
@@ -421,7 +417,7 @@ func runServer(args []string) error {
 	}
 
 	if !*isChildWorker {
-		if !cfg.Server.Ephemeral && cfg.Server.DataDir != "" {
+		if cfg.Server.DataDir != "" {
 			// Prevent multiple server instances from running concurrently on the same data directory
 			if existingPid, err := readPidFile(resolvedPidFile); err == nil && isProcessAlive(existingPid) && existingPid != os.Getpid() {
 				fmt.Printf("\n[LionSQL] Error: Another LionSQL server instance (PID %d) is already running for data directory '%s'.\n", existingPid, cfg.Server.DataDir)
@@ -489,7 +485,7 @@ func runServer(args []string) error {
 	}
 	warnIfMemoryPerformanceDeprecated(memMode)
 
-	if !cfg.Server.Ephemeral {
+	if cfg.Server.DataDir != "" {
 		if err := pathutil.ValidateDir(cfg.Server.DataDir, true); err != nil {
 			log.Fatalf("[LionSQL] Data directory validation failed: %v", err)
 		}
@@ -512,8 +508,8 @@ func runServer(args []string) error {
 
 	switch resolvedDisk {
 	case "wiredtiger":
-		if cfg.Server.Ephemeral {
-			log.Fatalf("[LionSQL] Ephemeral mode (-ephemeral) is only supported with -disk=compact. WiredTiger is a disk-persistent engine.")
+		if cfg.Server.DataDir == "" {
+			log.Fatalf("[LionSQL] WiredTiger requires a valid data directory (-dir). For ephemeral in-memory use, select -engine=compact with -dir \"\".")
 		}
 		if err := os.MkdirAll(cfg.Server.DataDir, 0755); err != nil {
 			log.Fatalf("[LionSQL] Failed to create data directory: %v", err)
@@ -527,13 +523,12 @@ func runServer(args []string) error {
 		memEng := memengine.New()
 		opts := memengine.DefaultOptions(cfg.Server.DataDir)
 		opts.Mode = memMode
-		if cfg.Server.Ephemeral {
+		if cfg.Server.DataDir == "" {
 			opts.EnableAOF = false
 			opts.EnableRDB = false
-			opts.DataDir = ""
-			log.Printf("[LionSQL] In-Memory engine running in EPHEMERAL mode (pure in-memory, zero disk persistence, layout: %s)", resolvedMemory)
+			log.Printf("[LionSQL] In-Memory engine running in volatile mode (-dir \"\", zero disk persistence)")
 		} else {
-			log.Printf("[LionSQL] In-Memory engine running in PERSISTENT mode\n  (AOF: %v, RDB: %v, dir: %s, layout: %s)", opts.EnableAOF, opts.EnableRDB, cfg.Server.DataDir, resolvedMemory)
+			log.Printf("[LionSQL] In-Memory engine running in PERSISTENT mode\n  (AOF: %v, RDB: %v, dir: %s)", opts.EnableAOF, opts.EnableRDB, cfg.Server.DataDir)
 		}
 		if err := memEng.OpenWithOptions(opts); err != nil {
 			log.Fatalf("Failed to open storage engine: %v", err)
@@ -546,7 +541,7 @@ func runServer(args []string) error {
 
 	// 6. Initialize System Catalog
 	cat := catalog.New(eng)
-	if !cfg.Server.Ephemeral && cfg.Server.DataDir != "" {
+	if cfg.Server.DataDir != "" {
 		if err := cat.SetPersistenceDir(cfg.Server.DataDir); err != nil {
 			log.Printf("[LionSQL] Warning: Failed to set catalog persistence dir: %v", err)
 		}

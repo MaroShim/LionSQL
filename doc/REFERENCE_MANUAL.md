@@ -20,7 +20,7 @@ For an introductory installation guide, quick start, and application tutorials, 
   * Administrative and utility subcommands: `doctor`, `init-config`, `migrate`, `sql`, `backup`, `restore`, `version`
 * **1.2. Global CLI Flag Specifications**
   * Network listeners: `-http`, `-pg`, `-tds`, `-tls`, `-tls-cert`, `-tls-key`, `-require-ssl`
-  * Storage backend: `-dir`, `-engine` (`wiredtiger`, `memory`), `-ephemeral`, `-auto-seed`
+  * Storage backend: `-dir`, `-engine` (`wiredtiger`, `compact`), `-auto-seed`
   * Resource governor: `-max-memory` (`<size>` e.g. `2GB`, `4096MB`, default: 65% of physical RAM), `-work-mem` (default: `64MB`), `-max-workers`, `-max-idle-sessions`
   * Security and authentication: `-auth` (default: `true`), `-admin-email`, `-admin-pass`, `-jwt-secret`
   * Logging and tracing: `-dev`, `-slow-log`, `-slow-threshold-ms` (default: `100.0ms`), `-general-log`
@@ -258,8 +258,7 @@ Launches the server as a foreground process in the current terminal session. Rea
   | `-http` | string | `:8090` | TCP address for the REST API and embedded Web Studio listener (disabled: `""`) |
   | `-pg` | string | `:5433` | TCP address for the PostgreSQL Wire Protocol v3 compatible listener (disabled: `""`) |
   | `-tds` | string | `:1433` | TCP address for the MS SQL Server TDS 7.x/8.0 compatible listener (disabled: `""`) |
-  | `-engine` | string | `wiredtiger` | Primary storage backend selection (`wiredtiger` or `memory`) |
-  | `-ephemeral` | bool | `false` | Ultra-fast pure in-memory volatile mode that completely bypasses disk file I/O |
+  | `-engine` | string | `wiredtiger` | Primary storage backend selection (`wiredtiger` or `compact`) |
   | `-dev` | bool | `false` | Enable developer mode (emits colored console traces for SQL parsing and execution plans) |
   | `-max-memory` | string | `""` | Engine global memory ceiling (e.g. `2GB`, `4096MB`). If empty, automatically restricted to 65% of host physical RAM |
   | `-work-mem` | string | `64MB` | Per-operator memory budget for external sorting (External Sort) and hash joins |
@@ -736,7 +735,7 @@ LionSQL offers tailored transaction profiles ranging from ultra-low-latency in-m
 
 | Workload Profile | Recommended Option Combination | Transaction Throughput (TPS) | P99 Latency | Data Durability (RPO) | Primary Target Use Cases |
 | :--- | :--- | :---: | :---: | :---: | :--- |
-| **Ultra-Low-Latency In-Memory** | `-engine memory`<br>`-ephemeral`<br>`-fsync off` | **20,000 ~ 25,000+ TPS**<br>(> 540k tpmC) | **< 1.0 ms** | Volatile (N/A) | Gaming sessions, caching layers, high-speed CI test harnesses |
+| **Ultra-Low-Latency In-Memory** | `-engine compact`<br>`-dir ""` | **20,000 ~ 25,000+ TPS**<br>(> 540k tpmC) | **< 1.0 ms** | Volatile (N/A) | Gaming sessions, caching layers, high-speed CI test harnesses |
 | **Standard Production OLTP**<br>(Recommended Default) | `-engine wiredtiger`<br>`-fsync everysec`<br>`-max-memory 4GB` | **12,000 ~ 16,800+ TPS**<br>(~ 457k tpmC) | **< 10 ms** | Up to 1 second (1s Fsync) | General SaaS applications, E-Commerce order/customer management |
 | **Zero-Loss Financial Ledger** | `-engine wiredtiger`<br>`-fsync always`<br>`-max-workers 128` | **1,700 ~ 1,860+ TPS**<br>(With Group Commit) | **15 ~ 25 ms** | **RPO = 0 (Zero Loss)** | Financial transfers, payment authorizations, compliance audit ledgers |
 | **Large-Capacity Analytics / Batch** | `-engine wiredtiger`<br>`-work-mem 256MB` | **Zero Disk Spill** | Batch-optimized | Up to 1 second | Large-scale ETL processing, closing settlement aggregation |

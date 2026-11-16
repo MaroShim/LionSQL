@@ -36,10 +36,10 @@ func assertAllEntriesFlat(t *testing.T, td *TableData) {
 		sh := &td.shards[i]
 		sh.mu.RLock()
 		for pk, entry := range sh.entries {
-			if len(entry.flatBuf) == 0 || len(entry.row.Values) != 0 {
+			if len(entry.flatBuf) == 0 {
 				sh.mu.RUnlock()
-				t.Fatalf("table %q pk %q reverted to non-flat entry: flatLen=%d rowVals=%d",
-					td.Schema.Name, pk, len(entry.flatBuf), len(entry.row.Values))
+				t.Fatalf("table %q pk %q reverted to non-flat entry: flatLen=%d",
+					td.Schema.Name, pk, len(entry.flatBuf))
 			}
 		}
 		sh.mu.RUnlock()

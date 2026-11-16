@@ -54,6 +54,27 @@ CREATE TABLE employees (
 - **Identity Column**: `IDENTITY(seed, increment)` or `AUTO_INCREMENT` auto-generates monotonic integers.
 - **Foreign Keys**: `FOREIGN KEY ... REFERENCES ... [ON DELETE <action>] [ON UPDATE <action>]` supports `CASCADE`, `SET NULL`, `RESTRICT`, and `NO ACTION`.
 
+#### Table-Level Durability (`WITH (DURABILITY = ...)`)
+
+LionSQL supports Microsoft SQL Server In-Memory OLTP syntax for table-level persistence:
+
+```sql
+-- Standard persistent table (default)
+CREATE TABLE orders (
+    id INT PRIMARY KEY,
+    amount DECIMAL(18,2)
+) WITH (DURABILITY = SCHEMA_AND_DATA);
+
+-- Ultra-fast volatile table (schema preserved across restarts, row data reset to 0 rows)
+CREATE TABLE web_sessions (
+    session_id VARCHAR(64) PRIMARY KEY,
+    payload NVARCHAR(MAX)
+) WITH (MEMORY_OPTIMIZED = ON, DURABILITY = SCHEMA_ONLY);
+```
+
+- `DURABILITY = SCHEMA_AND_DATA`: Default. Schema and all row mutations are durably written to WAL/AOF and persisted across restarts.
+- `DURABILITY = SCHEMA_ONLY`: Schema, columns, constraints, and secondary index structures are permanently stored in the catalog. DML operations bypass WAL logging for zero-I/O memory speed; rows are safely reset to zero upon server restart.
+
 ### 2.2. Dropping Tables
 
 ```sql
