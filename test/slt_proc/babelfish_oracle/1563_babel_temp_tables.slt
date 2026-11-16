@@ -16,7 +16,7 @@ BEGIN
     INSERT INTO #tt_sp_local VALUES(2);
 END;
 
-statement error
+statement ok
 CREATE procedure temp_table_vu_prepare_sp_exception AS
 BEGIN
 	  CREATE TABLE #tt (a int);

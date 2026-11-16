@@ -4,7 +4,7 @@
 statement ok
 CREATE TABLE t141(c1 int, c2 int); 
 
-statement ok
+statement error
 DECLARE @a int; 
 SELECT @a = c1, c2 FROM t141
 
@@ -17,7 +17,7 @@ begin transaction
 statement ok
 CREATE TABLE t141(c1 int, c2 int); 
 
-statement ok
+statement error
 DECLARE @a int; 
 SELECT @a = c1, c2 FROM t141
 

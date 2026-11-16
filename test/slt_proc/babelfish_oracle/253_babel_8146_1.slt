@@ -6,10 +6,8 @@ CREATE PROCEDURE p8146
 AS 
 SELECT 1
 
-query T
+statement error
 EXEC p8146 1
-----
-1
 
 statement ok
 DROP PROCEDURE p8146
@@ -22,10 +20,8 @@ CREATE PROCEDURE p8146
 AS 
 SELECT 1
 
-query T
+statement error
 EXEC p8146 1
-----
-1
 
 statement ok
 if (@@trancount > 0) rollback tran

@@ -130,6 +130,26 @@ func ParseLiteralDefault(s string, targetType DataType) Value {
 		return DateTimeValue(time.Now().UTC())
 	}
 
+	if strings.HasPrefix(upper, "CAST(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(s[5 : len(s)-1])
+		if asIdx := strings.Index(strings.ToUpper(inner), " AS "); asIdx != -1 {
+			castExpr := strings.TrimSpace(inner[:asIdx])
+			castType := strings.TrimSpace(strings.ToUpper(inner[asIdx+4:]))
+			if strings.HasPrefix(castType, "DATETIME") || strings.HasPrefix(castType, "TIMESTAMP") {
+				return ParseLiteralDefault(castExpr, TypeDateTime)
+			}
+			if strings.HasPrefix(castType, "DATE") {
+				return ParseLiteralDefault(castExpr, TypeDate)
+			}
+			if strings.HasPrefix(castType, "TIME") {
+				return ParseLiteralDefault(castExpr, TypeTime)
+			}
+			if strings.HasPrefix(castType, "INT") {
+				return ParseLiteralDefault(castExpr, TypeInt)
+			}
+		}
+	}
+
 	isNStr := (strings.HasPrefix(s, "N'") || strings.HasPrefix(s, "n'")) && strings.HasSuffix(s, "'") && len(s) >= 3
 	isRegularStr := strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2
 	if isNStr || isRegularStr {
@@ -194,6 +214,11 @@ func ParseLiteralDefault(s string, targetType DataType) Value {
 		return DateValueFromString(s)
 	case TypeTime:
 		return TimeValueFromString(s)
+	case TypeDateTime:
+		if dt, err := DateTimeValueFromAny(StringValue(s)); err == nil {
+			return dt
+		}
+		return NullValue(TypeDateTime)
 	case TypeInt:
 		if i, err := strconv.ParseInt(s, 10, 64); err == nil {
 			return IntValue(i)

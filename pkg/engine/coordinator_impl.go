@@ -65,16 +65,14 @@ type Coordinator struct {
 	replication        *replication.Manager
 	pkBypassCache      map[uint64]*PKLookupPlan
 	pkBypassMu         sync.RWMutex
-	lastIdentities     map[string]int64
-	lastIdentMu        sync.RWMutex
 	identSlots         sync.Map // lowerTableName (string) -> *TableIdentity
 	schemaVersion      atomic.Uint64
 	autoAnalyzer         *AutoAnalyzer
 	startTime            time.Time
 	tolerantDDL          atomic.Bool
 	clientSessionIdleTTL time.Duration
-	dbMailMu             sync.Mutex
-	dbMailInitialized    bool
+	dbMailInitOnce       sync.Once
+	dbMailInitErr        error
 	dbMailItemCounter    atomic.Int64
 	dbMailLogCounter     atomic.Int64
 	stopCh               chan struct{}
@@ -134,7 +132,6 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 		slowQueries:          NewSlowQueryLogger(cfg.SlowThreshold),
 		generalLog:           NewGeneralLogger(cfg.EnableGeneralLog),
 		pkBypassCache:        make(map[uint64]*PKLookupPlan, 256),
-		lastIdentities:       make(map[string]int64),
 		startTime:            time.Now(),
 		clientSessionIdleTTL: clientIdleTTL,
 		stopCh:               make(chan struct{}),

@@ -980,6 +980,12 @@ func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, st
 	switch procLower {
 	case "sp_executesql":
 		return s.execSpExecuteSQL(args, start, cs, ctx)
+	case "sp_prepare":
+		return s.execSpPrepare(args, rawArgs, start, cs)
+	case "sp_execute":
+		return s.execSpExecute(args, rawArgs, start, cs, ctx)
+	case "sp_unprepare":
+		return s.execSpUnprepare(args, start, cs)
 	case "sp_send_dbmail":
 		return s.execSpSendDbMail(args, rawArgs, start, cs)
 	case "sp_babelfish_configure":
@@ -1339,18 +1345,10 @@ func (s *Coordinator) execSpExecuteSQL(args []string, start time.Time, cs *Clien
 	}
 
 	// Remaining arguments are bind parameters (named or positional)
-	for _, arg := range valArgs {
-		arg = strings.TrimSpace(arg)
-		if eqIdx := findTopLevelEquals(arg); eqIdx != -1 {
-			lhs := strings.TrimSpace(arg[:eqIdx])
-			rhs := strings.TrimSpace(arg[eqIdx+1:])
-			lhsLower := strings.ToLower(lhs)
-			cleanRHS := cleanOutputSuffix(rhs)
-			namedArgs[lhsLower] = formatBoundArgValue(cleanRHS, cs)
-		} else {
-			cleanArg := cleanOutputSuffix(arg)
-			posArgs = append(posArgs, formatBoundArgValue(cleanArg, cs))
-		}
+	decls := parseSpParamDeclarations(paramsDecl)
+	namedArgs, posArgs, err := validateAndExtractSpArgs(valArgs, decls, cs)
+	if err != nil {
+		return nil, err
 	}
 
 	stmt = strings.TrimSpace(stmt)
@@ -1362,7 +1360,6 @@ func (s *Coordinator) execSpExecuteSQL(args []string, start time.Time, cs *Clien
 
 	nestedCtx := context.WithValue(ctx, reentrantQueryKey{}, true)
 	var res *QueryResult
-	var err error
 	if cs != nil {
 		res, err = s.ExecuteSessionSQLContext(nestedCtx, cs.ID, boundSQL)
 	} else {
@@ -1375,6 +1372,186 @@ func (s *Coordinator) execSpExecuteSQL(args []string, start time.Time, cs *Clien
 		res.DurationUS = time.Since(start).Microseconds()
 	}
 	return res, nil
+}
+
+func (s *Coordinator) execSpPrepare(args []string, rawArgs []string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if len(args) < 3 {
+		return nil, fmt.Errorf("sp_prepare requires @handle OUT, @params, and @stmt")
+	}
+
+	outVar := ""
+	if len(rawArgs) > 0 {
+		raw0 := strings.TrimSpace(rawArgs[0])
+		if eqIdx := strings.IndexByte(raw0, '='); eqIdx != -1 {
+			raw0 = strings.TrimSpace(raw0[eqIdx+1:])
+		}
+		raw0, isOut := stripTrailingOutputKeyword(raw0)
+		if isOut && strings.HasPrefix(raw0, "@") {
+			outVar = raw0
+		}
+	}
+	if outVar == "" {
+		arg0 := strings.TrimSpace(args[0])
+		if eqIdx := strings.IndexByte(arg0, '='); eqIdx != -1 {
+			arg0 = strings.TrimSpace(arg0[eqIdx+1:])
+		}
+		arg0, isOut := stripTrailingOutputKeyword(arg0)
+		if isOut && strings.HasPrefix(arg0, "@") {
+			outVar = arg0
+		}
+	}
+
+	paramsDecl := extractArgValue(args[1], cs)
+	stmt := extractArgValue(args[2], cs)
+
+	decls := parseSpParamDeclarations(paramsDecl)
+	paramNames := make([]string, len(decls))
+	for i, d := range decls {
+		paramNames[i] = d.Name
+	}
+
+	prog, _ := s.executor.Cache().GetOrCompile(stmt)
+
+	if cs == nil {
+		return nil, fmt.Errorf("sp_prepare requires an active session")
+	}
+
+	cs.Mu.Lock()
+	if cs.PreparedStmts == nil {
+		cs.PreparedStmts = make(map[string]*PreparedStatement)
+	}
+	handle := int64(len(cs.PreparedStmts) + 1)
+	handleStr := strconv.FormatInt(handle, 10)
+	prep := &PreparedStatement{
+		Name:       handleStr,
+		Query:      stmt,
+		Program:    prog,
+		ParamNames: paramNames,
+	}
+	cs.PreparedStmts[handleStr] = prep
+	if outVar != "" {
+		if cs.Vars == nil {
+			cs.Vars = make(map[string]any)
+		}
+		cs.Vars[outVar] = handle
+		cs.Vars[strings.ToLower(outVar)] = handle
+	}
+	cs.Mu.Unlock()
+
+	return &QueryResult{
+		Success:    true,
+		Command:    "EXEC",
+		DurationUS: time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Coordinator) execSpExecute(args []string, rawArgs []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("sp_execute requires @handle")
+	}
+
+	if cs == nil {
+		return nil, fmt.Errorf("sp_execute requires an active session")
+	}
+
+	handleVal := extractArgValue(args[0], cs)
+	handleStr := fmt.Sprintf("%v", handleVal)
+
+	cs.Mu.Lock()
+	prep, exists := cs.PreparedStmts[handleStr]
+	cs.Mu.Unlock()
+
+	if !exists || prep == nil {
+		return nil, fmt.Errorf("prepared statement handle %s not found", handleStr)
+	}
+
+	valArgs := args[1:]
+	if prep.Program != nil {
+		return s.execPreparedStatement(prep, valArgs, start, cs, ctx)
+	}
+
+	// Fallback to dynamic execution via sp_executesql binding
+	decls := make([]spParamDecl, len(prep.ParamNames))
+	for i, name := range prep.ParamNames {
+		decls[i] = spParamDecl{Name: name}
+	}
+	namedArgs, posArgs, err := validateAndExtractSpArgs(valArgs, decls, cs)
+	if err != nil {
+		return nil, err
+	}
+	paramsDecl := strings.Join(prep.ParamNames, ", ")
+	boundSQL := buildSpExecuteSQL(prep.Query, paramsDecl, namedArgs, posArgs)
+	nestedCtx := context.WithValue(ctx, reentrantQueryKey{}, true)
+	res, err := s.ExecuteSessionSQLContext(nestedCtx, cs.ID, boundSQL)
+	if err != nil {
+		return nil, err
+	}
+	if res != nil {
+		res.DurationUS = time.Since(start).Microseconds()
+	}
+	return res, nil
+}
+
+func (s *Coordinator) execSpUnprepare(args []string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("sp_unprepare requires @handle")
+	}
+
+	if cs != nil {
+		handleVal := extractArgValue(args[0], cs)
+		handleStr := fmt.Sprintf("%v", handleVal)
+
+		cs.Mu.Lock()
+		delete(cs.PreparedStmts, handleStr)
+		cs.Mu.Unlock()
+	}
+
+	return &QueryResult{
+		Success:    true,
+		Command:    "EXEC",
+		DurationUS: time.Since(start).Microseconds(),
+	}, nil
+}
+
+func validateAndExtractSpArgs(valArgs []string, decls []spParamDecl, cs *ClientSession) (map[string]string, []string, error) {
+	seenNamed := false
+	supplied := make(map[string]bool)
+	namedArgs := make(map[string]string)
+	var posArgs []string
+
+	for i, arg := range valArgs {
+		arg = strings.TrimSpace(arg)
+		if eqIdx := findTopLevelEquals(arg); eqIdx != -1 {
+			seenNamed = true
+			lhs := strings.TrimSpace(arg[:eqIdx])
+			rhs := strings.TrimSpace(arg[eqIdx+1:])
+			pKey := strings.ToLower(lhs)
+			if !strings.HasPrefix(pKey, "@") {
+				pKey = "@" + pKey
+			}
+			if supplied[pKey] {
+				return nil, nil, fmt.Errorf("parameter %q was supplied multiple times", lhs)
+			}
+			supplied[pKey] = true
+			namedArgs[pKey] = formatBoundArgValue(cleanOutputSuffix(rhs), cs)
+		} else {
+			if seenNamed {
+				return nil, nil, fmt.Errorf("must pass parameter %d and subsequent parameters as '@name = value'", i+1)
+			}
+			if i < len(decls) {
+				pKey := strings.ToLower(decls[i].Name)
+				if !strings.HasPrefix(pKey, "@") {
+					pKey = "@" + pKey
+				}
+				if supplied[pKey] {
+					return nil, nil, fmt.Errorf("parameter %q was supplied multiple times", decls[i].Name)
+				}
+				supplied[pKey] = true
+			}
+			posArgs = append(posArgs, formatBoundArgValue(cleanOutputSuffix(arg), cs))
+		}
+	}
+	return namedArgs, posArgs, nil
 }
 
 type spParamDecl struct {

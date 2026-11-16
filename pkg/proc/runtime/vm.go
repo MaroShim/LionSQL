@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"lionsql/pkg/execution"
@@ -223,6 +224,14 @@ type Executor struct {
 	identProvider  IdentityProvider
 	identMu        sync.RWMutex
 	lastIdentities map[string]int64
+	prepMu         sync.RWMutex
+	prepStmts      map[string]*prepStmtEntry
+	nextPrepID     atomic.Int64
+}
+
+type prepStmtEntry struct {
+	prog       *proc.Program
+	paramNames []string
 }
 
 // NewExecutor creates a procedure and trigger executor.
@@ -235,6 +244,7 @@ func NewExecutor(cache *PlanCache) *Executor {
 		udfs:           make(map[string]*UDFEntry),
 		triggers:       make(map[string]map[string][]*TriggerEntry),
 		lastIdentities: make(map[string]int64),
+		prepStmts:      make(map[string]*prepStmtEntry),
 		framePool: sync.Pool{
 			New: func() any {
 				return &VMFrame{
@@ -348,6 +358,28 @@ func (e *Executor) getProcedureGetter() ProcedureGetter {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.procGetter
+}
+
+func (e *Executor) allocPrepHandle() int64 {
+	return e.nextPrepID.Add(1)
+}
+
+func (e *Executor) savePreparedStmt(handle string, prog *proc.Program, paramNames []string) {
+	e.prepMu.Lock()
+	defer e.prepMu.Unlock()
+	if e.prepStmts == nil {
+		e.prepStmts = make(map[string]*prepStmtEntry)
+	}
+	e.prepStmts[handle] = &prepStmtEntry{prog: prog, paramNames: paramNames}
+}
+
+func (e *Executor) getPreparedStmt(handle string) (*proc.Program, []string) {
+	e.prepMu.RLock()
+	defer e.prepMu.RUnlock()
+	if entry, ok := e.prepStmts[handle]; ok && entry != nil {
+		return entry.prog, entry.paramNames
+	}
+	return nil, nil
 }
 
 // SetTableGetter configures the schema lookup function for relational queries.
@@ -1705,6 +1737,63 @@ func (f *VMFrame) execInsertExec(data *proc.DMLData) (int64, error) {
 				cols = res.Columns
 			}
 		}
+	} else if strings.EqualFold(procName, "sp_prepare") {
+		if len(execStmt.Args) >= 3 {
+			paramDefVal, _ := proc.EvalRowExpr(execStmt.Args[1], f.buildRowEvalMap(nil), nil)
+			batchVal, _ := proc.EvalRowExpr(execStmt.Args[2], f.buildRowEvalMap(nil), nil)
+			paramDefStr := fmt.Sprintf("%v", paramDefVal)
+			batchStr := fmt.Sprintf("%v", batchVal)
+
+			prog, err := f.executor.Cache().GetOrCompile(batchStr)
+			if err != nil {
+				prog, _ = proc.Compile(batchStr)
+			}
+			paramNames := parseSpParamNames(paramDefStr)
+			handle := f.executor.allocPrepHandle()
+			handleStr := strconv.FormatInt(handle, 10)
+			f.executor.savePreparedStmt(handleStr, prog, paramNames)
+
+			if varExpr, ok := execStmt.Args[0].(*proc.VariableExpr); ok {
+				f.setVar(varExpr.Name, storage.IntValue(handle))
+			}
+		}
+		return 0, nil
+	} else if strings.EqualFold(procName, "sp_execute") {
+		if len(execStmt.Args) >= 1 {
+			handleVal, _ := proc.EvalRowExpr(execStmt.Args[0], f.buildRowEvalMap(nil), nil)
+			handleStr := fmt.Sprintf("%v", handleVal)
+			prog, paramNames := f.executor.getPreparedStmt(handleStr)
+			if prog != nil {
+				paramMap := make(map[string]any)
+				for i, arg := range execStmt.Args[1:] {
+					vAny, _ := proc.EvalRowExpr(arg, f.buildRowEvalMap(nil), nil)
+					if i < len(paramNames) {
+						paramMap[paramNames[i]] = vAny
+						paramMap[strings.TrimPrefix(paramNames[i], "@")] = vAny
+					}
+					paramMap[fmt.Sprintf("p%d", i+1)] = vAny
+					paramMap[fmt.Sprintf("@p%d", i+1)] = vAny
+				}
+				res, err := f.executor.ExecuteInTx(prog, paramMap, f.tx, f.transientTables)
+				if err != nil {
+					return 0, err
+				}
+				if res != nil {
+					if len(res.Logs) > 0 {
+						f.logs = append(f.logs, res.Logs...)
+					}
+					rows = res.Rows
+					cols = res.Columns
+				}
+			}
+		}
+	} else if strings.EqualFold(procName, "sp_unprepare") {
+		if len(execStmt.Args) >= 1 {
+			handleVal, _ := proc.EvalRowExpr(execStmt.Args[0], f.buildRowEvalMap(nil), nil)
+			handleStr := fmt.Sprintf("%v", handleVal)
+			f.executor.savePreparedStmt(handleStr, nil, nil)
+		}
+		return 0, nil
 	} else {
 		prog, found := f.executor.Cache().GetByName(procName)
 		if !found {
@@ -3031,6 +3120,87 @@ func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (
 		return storage.Value{Type: storage.TypeInt, IVal: 0}, err
 	}
 
+	if strings.EqualFold(procName, "sp_prepare") {
+		if len(argRegs) >= 3 {
+			paramDefStr := ""
+			batchStr := ""
+			if int(argRegs[1]) < len(f.regs) {
+				paramDefStr = f.regs[argRegs[1]].String()
+				if f.regs[argRegs[1]].Type == storage.TypeVarChar {
+					paramDefStr = f.regs[argRegs[1]].SVal
+				}
+			}
+			if int(argRegs[2]) < len(f.regs) {
+				batchStr = f.regs[argRegs[2]].String()
+				if f.regs[argRegs[2]].Type == storage.TypeVarChar {
+					batchStr = f.regs[argRegs[2]].SVal
+				}
+			}
+			prog, err := f.executor.Cache().GetOrCompile(batchStr)
+			if err != nil {
+				prog, _ = proc.Compile(batchStr)
+			}
+			paramNames := parseSpParamNames(paramDefStr)
+			handle := f.executor.allocPrepHandle()
+			handleStr := strconv.FormatInt(handle, 10)
+			f.executor.savePreparedStmt(handleStr, prog, paramNames)
+
+			if len(outSlots) > 0 && int(outSlots[0]) < len(f.slots) {
+				f.slots[outSlots[0]] = storage.IntValue(handle)
+			}
+			if int(argRegs[0]) < len(f.regs) {
+				f.regs[argRegs[0]] = storage.IntValue(handle)
+			}
+		}
+		return storage.Value{Type: storage.TypeInt, IVal: 0}, nil
+	}
+
+	if strings.EqualFold(procName, "sp_execute") {
+		if len(argRegs) >= 1 {
+			handleVal := int64(0)
+			if int(argRegs[0]) < len(f.regs) {
+				handleVal = f.regs[argRegs[0]].IVal
+				if f.regs[argRegs[0]].Type == storage.TypeVarChar {
+					if n, err := strconv.ParseInt(f.regs[argRegs[0]].SVal, 10, 64); err == nil {
+						handleVal = n
+					}
+				}
+			}
+			handleStr := strconv.FormatInt(handleVal, 10)
+			prog, paramNames := f.executor.getPreparedStmt(handleStr)
+			if prog != nil {
+				paramMap := make(map[string]any)
+				for i, regIdx := range argRegs[1:] {
+					if int(regIdx) < len(f.regs) {
+						vAny := valToAny(f.regs[regIdx])
+						if i < len(paramNames) {
+							paramMap[paramNames[i]] = vAny
+							paramMap[strings.TrimPrefix(paramNames[i], "@")] = vAny
+						}
+						paramMap[fmt.Sprintf("p%d", i+1)] = vAny
+						paramMap[fmt.Sprintf("@p%d", i+1)] = vAny
+					}
+				}
+				res, err := f.executor.ExecuteInTx(prog, paramMap, f.tx, f.transientTables)
+				if err != nil {
+					return storage.NullValue(storage.TypeUnknown), err
+				}
+				if res != nil && len(res.Logs) > 0 {
+					f.logs = append(f.logs, res.Logs...)
+				}
+			}
+		}
+		return storage.Value{Type: storage.TypeInt, IVal: 0}, nil
+	}
+
+	if strings.EqualFold(procName, "sp_unprepare") {
+		if len(argRegs) >= 1 && int(argRegs[0]) < len(f.regs) {
+			handleStr := strconv.FormatInt(f.regs[argRegs[0]].IVal, 10)
+			f.executor.savePreparedStmt(handleStr, nil, nil)
+		}
+		return storage.Value{Type: storage.TypeInt, IVal: 0}, nil
+	}
+
 	prog, found := f.executor.Cache().GetByName(procName)
 	if !found {
 		if pg := f.executor.getProcedureGetter(); pg != nil {
@@ -3618,4 +3788,20 @@ func tryPointLookup(tx storage.Transaction, qInfo *planner.QueryInfo, schema *st
 	}
 
 	return []map[string]any{rowMap}, cols, true
+}
+
+func parseSpParamNames(declStr string) []string {
+	declStr = strings.TrimSpace(declStr)
+	if declStr == "" {
+		return nil
+	}
+	parts := strings.Split(declStr, ",")
+	var names []string
+	for _, p := range parts {
+		fields := strings.Fields(strings.TrimSpace(p))
+		if len(fields) > 0 && strings.HasPrefix(fields[0], "@") {
+			names = append(names, fields[0])
+		}
+	}
+	return names
 }

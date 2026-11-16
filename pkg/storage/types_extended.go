@@ -217,6 +217,14 @@ func DateTimeValueFromAny(v Value) (Value, error) {
 	if idx := strings.Index(str, " m="); idx != -1 {
 		str = strings.TrimSpace(str[:idx])
 	}
+	// Normalize single-digit timezone hour e.g. " +8:00" -> " +08:00"
+	if len(str) >= 5 {
+		tail := str[len(str)-5:]
+		if (tail[0] == '+' || tail[0] == '-') && tail[1] >= '0' && tail[1] <= '9' && tail[2] == ':' && tail[3] >= '0' && tail[3] <= '9' && tail[4] >= '0' && tail[4] <= '9' {
+			prefix := str[:len(str)-5]
+			str = prefix + string(tail[0]) + "0" + tail[1:]
+		}
+	}
 	layouts := []string{
 		time.RFC3339Nano,
 		time.RFC3339,

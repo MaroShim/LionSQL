@@ -220,17 +220,23 @@ func (s *Coordinator) execPreparedStatement(prep *PreparedStatement, rawArgs []s
 	}
 
 	// 2. Build parameter map
+	seenNamed := false
+	supplied := make(map[string]bool)
 	paramMap := make(map[string]any, len(args)*2)
 	for i, arg := range args {
 		var paramName string
 		var val any
 
 		if strings.Contains(arg, "=") {
+			seenNamed = true
 			parts := strings.SplitN(arg, "=", 2)
 			paramName = strings.TrimSpace(parts[0])
 			valStr := strings.TrimSpace(parts[1])
 			val = parseArgValue(valStr, cs)
 		} else {
+			if seenNamed {
+				return nil, fmt.Errorf("must pass parameter %d and subsequent parameters as '@name = value'", i+1)
+			}
 			if i < len(prep.ParamNames) {
 				paramName = prep.ParamNames[i]
 			} else {
@@ -238,6 +244,15 @@ func (s *Coordinator) execPreparedStatement(prep *PreparedStatement, rawArgs []s
 			}
 			val = parseArgValue(arg, cs)
 		}
+
+		pKey := strings.ToLower(paramName)
+		if !strings.HasPrefix(pKey, "@") {
+			pKey = "@" + pKey
+		}
+		if supplied[pKey] {
+			return nil, fmt.Errorf("parameter %q was supplied multiple times", paramName)
+		}
+		supplied[pKey] = true
 
 		cleanK := strings.TrimPrefix(paramName, "@")
 		paramMap[paramName] = val

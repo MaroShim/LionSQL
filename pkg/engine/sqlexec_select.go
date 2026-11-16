@@ -1100,6 +1100,24 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 				if fn, ok := ast.(*proc.FunctionCallExpr); ok && !proc.IsBuiltinFunction(fn.Name) {
 					return nil, fmt.Errorf("unknown scalar function or invalid expression: %s", exprStr)
 				}
+				var varRow map[string]any
+				if cs != nil {
+					cs.Mu.Lock()
+					if len(cs.Vars) > 0 {
+						varRow = make(map[string]any, len(cs.Vars))
+						for k, v := range cs.Vars {
+							varRow[k] = v
+						}
+					}
+					cs.Mu.Unlock()
+				}
+				if res, err := proc.EvalRowExpr(ast, varRow, nil); err != nil {
+					if _, isCol := ast.(*proc.ColumnRefExpr); !isCol {
+						return nil, err
+					}
+				} else if res != nil {
+					val = res
+				}
 			}
 		}
 		if alias == "" {

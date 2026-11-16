@@ -61,7 +61,7 @@ select * from #tt; -- should only print value '1'
 statement ok
 drop table #tt;
 
-statement error
+statement ok
 CREATE procedure temp_table_sp_exception AS
 BEGIN
 	  CREATE TABLE #tt (a int);

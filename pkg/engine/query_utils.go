@@ -46,6 +46,18 @@ func isIfHeader(s string) bool {
 	return sqlutil.HasPrefixKeyword(StripLeadingComments(s), "IF")
 }
 
+func isExecHeader(s string) bool {
+	return sqlutil.HasAnyPrefixKeyword(StripLeadingComments(s), "EXEC", "EXECUTE")
+}
+
+func isStatementStart(s string) bool {
+	return sqlutil.HasAnyPrefixKeyword(StripLeadingComments(s),
+		"SELECT", "INSERT", "UPDATE", "DELETE", "DECLARE", "SET",
+		"EXEC", "EXECUTE", "DROP", "CREATE", "ALTER", "PRINT",
+		"BEGIN", "COMMIT", "ROLLBACK", "IF", "WHILE",
+	)
+}
+
 func hasNextTokenElse(s string, idx int) bool {
 	n := len(s)
 	for idx < n {
@@ -110,6 +122,7 @@ func SplitStatements(query string) []string {
 	blockDepth := 0
 	isIfStmt := false
 	isProcStmt := false
+	isExecStmt := false
 	hasHadBegin := false
 	hasHadDollarQuote := false
 	needHeaderCheck := true
@@ -196,8 +209,28 @@ func SplitStatements(query string) []string {
 			if ch > ' ' {
 				isIfStmt = isIfHeader(query[start:])
 				isProcStmt = isProcOrFuncHeader(query[start:])
+				isExecStmt = isExecHeader(query[start:])
 				hasHadBegin = false
 				needHeaderCheck = false
+			}
+		}
+
+		if ch == '\n' && isExecStmt && blockDepth == 0 {
+			trimmedPrev := strings.TrimRight(query[start:i], " \t\r")
+			if !strings.HasSuffix(trimmedPrev, ",") && isStatementStart(query[i+1:]) {
+				stmt := strings.TrimSpace(query[start:i])
+				if stmt != "" && StripLeadingComments(stmt) != "" {
+					stmts = append(stmts, stmt)
+				}
+				start = i + 1
+				isIfStmt = false
+				isProcStmt = false
+				isExecStmt = false
+				hasHadBegin = false
+				hasHadDollarQuote = false
+				blockDepth = 0
+				needHeaderCheck = true
+				continue
 			}
 		}
 
@@ -231,6 +264,7 @@ func SplitStatements(query string) []string {
 			start = i + 1
 			isIfStmt = false
 			isProcStmt = false
+			isExecStmt = false
 			hasHadBegin = false
 			hasHadDollarQuote = false
 			blockDepth = 0

@@ -7,10 +7,8 @@ begin
 select @a
 end
 
-query T
+statement error
 EXEC p8144 1, 2
-----
-1
 
 statement ok
 drop procedure p8144
@@ -24,10 +22,8 @@ begin
 select @a
 end
 
-query T
+statement error
 EXEC p8144 1, 2
-----
-1
 
 statement ok
 if (@@trancount > 0) rollback tran

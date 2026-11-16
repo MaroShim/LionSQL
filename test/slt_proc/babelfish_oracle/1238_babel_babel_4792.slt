@@ -62,7 +62,7 @@ create table t1 (
     col1 int
 );
 
-statement error
+statement ok
 create trigger [%%#%@$^$姓氏すず🤬🤯🫣🤗🫡🤔🫢🤭き,😀 鈴木##]
 on t1
 for

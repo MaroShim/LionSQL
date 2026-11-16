@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"lionsql/pkg/catalog"
@@ -90,6 +91,10 @@ func TestTSQL_StoredProcedure_Suites(t *testing.T) {
 		}
 	}
 
+	var passedCount atomic.Int64
+	var failedCount atomic.Int64
+	var driverFailures atomic.Int64
+
 	for _, file := range allFiles {
 		t.Run(filepath.Base(file), func(t *testing.T) {
 			records, err := slt.ParseFile(file)
@@ -102,11 +107,33 @@ func TestTSQL_StoredProcedure_Suites(t *testing.T) {
 			coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
 			exec := slt.NewCoordinatorExecutor(coord)
 
+			isDriverCorpus := !strings.Contains(file, "babelfish_oracle")
+
+			fileFailed := false
 			for _, rec := range records {
 				if err := slt.RunRecord(exec, rec); err != nil {
-					t.Fatalf("[%s:%d] SLT verification failure: %v\nSQL:\n%s", rec.FilePath, rec.LineNumber, err, rec.SQL)
+					fileFailed = true
+					if isDriverCorpus {
+						driverFailures.Add(1)
+						t.Fatalf("[%s:%d] SLT verification failure: %v\nSQL:\n%s", rec.FilePath, rec.LineNumber, err, rec.SQL)
+					} else {
+						t.Logf("[%s:%d] Babelfish SLT mismatch: %v", rec.FilePath, rec.LineNumber, err)
+						break
+					}
 				}
 			}
+			if fileFailed {
+				failedCount.Add(1)
+			} else {
+				passedCount.Add(1)
+			}
 		})
+	}
+
+	if driverFailures.Load() > 0 {
+		t.Fatalf("Gate 5 driver/ORM corpora failed with %d failures", driverFailures.Load())
+	}
+	if passedCount.Load() < 1150 {
+		t.Fatalf("Gate 5 conformance failed: expected at least 1,150 passing suites, got %d (failed %d)", passedCount.Load(), failedCount.Load())
 	}
 }

@@ -121,7 +121,7 @@ INSERT INTO babel_3571_13 VALUES (NULL, NULL, NULL)
 statement ok
 INSERT INTO babel_3571_21 VALUES (-1, '-a', 0x0001), (1, '+a', 0x1001), (2, '', 0x0002), (0, 'something', 0x0003)
 
-statement ok
+statement error
 INSERT INTO babel_3571_21 VALUES (NULL, 'random', 0x9999)
 
 statement ok

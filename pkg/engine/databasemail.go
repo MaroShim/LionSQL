@@ -9,13 +9,13 @@ import (
 
 // EnsureDatabaseMailTables initializes the sysmail_mailitems and sysmail_log tables if they do not exist.
 func (s *Coordinator) EnsureDatabaseMailTables() error {
-	s.dbMailMu.Lock()
-	defer s.dbMailMu.Unlock()
+	s.dbMailInitOnce.Do(func() {
+		s.dbMailInitErr = s.initDatabaseMailTables()
+	})
+	return s.dbMailInitErr
+}
 
-	if s.dbMailInitialized {
-		return nil
-	}
-
+func (s *Coordinator) initDatabaseMailTables() error {
 	mailItemsSchema := `CREATE TABLE IF NOT EXISTS sysmail_mailitems (
 		mailitem_id INT PRIMARY KEY,
 		profile_name VARCHAR(128),
@@ -65,7 +65,6 @@ func (s *Coordinator) EnsureDatabaseMailTables() error {
 		}
 	}
 
-	s.dbMailInitialized = true
 	return nil
 }
 

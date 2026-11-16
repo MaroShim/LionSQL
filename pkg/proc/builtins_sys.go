@@ -150,7 +150,7 @@ func isSysBuiltin(name string) bool {
 		"DATABASEPROPERTYEX", "OBJECTPROPERTY", "COLUMNPROPERTY", "INDEXPROPERTY", "OBJECT_SCHEMA_NAME", "TYPE_ID", "TYPE_NAME",
 		"HOST_NAME", "HOST_ID", "CURRENT_USER", "USER_NAME", "SUSER_NAME", "SUSER_SNAME", "USER_ID", "SUSER_ID",
 		"ORIGINAL_LOGIN", "SYSTEM_USER", "FILEPROPERTY", "FILEGROUPPROPERTY", "FULLTEXTSERVICEPROPERTY",
-		"CURRENT_SCHEMA", "CURRENT_SCHEMAS", "CURRENT_DATABASE",
+		"CURRENT_SCHEMA", "CURRENT_SCHEMAS", "CURRENT_DATABASE", "CURRENT_SETTING",
 		"IS_SRVROLEMEMBER", "IS_MEMBER", "HAS_PERMS_BY_NAME", "HAS_DBACCESS", "PERMISSIONS", "PWDENCRYPT", "PWDCOMPARE",
 		"@@VERSION", "VERSION", "@@MICROSOFTVERSION", "@@SERVERNAME", "@@SPID", "SPID", "@@MAX_CONNECTIONS", "@@LANGUAGE",
 		"@@TRANCOUNT", "TRANCOUNT", "@@LOCK_TIMEOUT", "LOCK_TIMEOUT", "@@OPTIONS", "OPTIONS", "@@NESTLEVEL", "NESTLEVEL",
@@ -464,6 +464,26 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 
 	case "CURRENT_SCHEMAS":
 		return storage.StringValue("{public}")
+
+	case "CURRENT_SETTING":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		setting := strings.ToLower(strings.Trim(strings.TrimSpace(valToString(args[0])), "'\""))
+		switch setting {
+		case "server_version":
+			return storage.StringValue("15.0")
+		case "server_version_num":
+			return storage.StringValue("150000")
+		case "search_path":
+			return storage.StringValue("public")
+		case "standard_conforming_strings":
+			return storage.StringValue("on")
+		case "transaction_isolation":
+			return storage.StringValue("read committed")
+		default:
+			return storage.StringValue("")
+		}
 
 	case "DB_ID":
 		return storage.IntValue(1)

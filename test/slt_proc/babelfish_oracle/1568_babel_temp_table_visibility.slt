@@ -42,10 +42,10 @@ statement ok
 if object_id('#t4122') is null
     print 'fail'
 
-statement ok
+statement error
 ALTER TABLE #sys_comprehensive ADD bonus MONEY CHECK (bonus >= 0 AND bonus <= 50000)
 
-statement ok
+statement error
 ALTER TABLE #sys_comprehensive ADD CONSTRAINT chk_department CHECK (department IN ('Sales', 'Engineering', 'Marketing', 'Unknown'))
 
 statement ok

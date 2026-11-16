@@ -47,15 +47,11 @@ EXEC p492 1, @c=3; -- Mixed positional and named arguments
 ----
 1 NULL 3
 
-query TTT
+statement error
 EXEC p492 1, @x=2, @y=3; -- Unknown non-default argument names
-----
-1 NULL NULL
 
-query TTT
+statement error
 EXEC p492 1, 2, 3, 4; -- Supply arguments more than the procedure expects
-----
-1 2 3
 
 statement ok
 DROP PROC p492;
@@ -69,10 +65,8 @@ EXEC p492 1, 2, 3; -- Valid call
 ----
 1 2 3
 
-query TTT
+statement error
 EXEC p492 1, 2, @x=5; -- Unknown default argument name
-----
-1 2 3
 
 statement ok
 DROP PROC p492;
