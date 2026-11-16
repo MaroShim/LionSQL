@@ -13,6 +13,12 @@ import (
 // ErrPITRTargetReached is a sentinel error signaling that the target recovery point was reached.
 var ErrPITRTargetReached = errors.New("PITR target reached")
 
+// ErrPITRTargetBeforeBase is returned when the target recovery point is earlier than the base backup.
+var ErrPITRTargetBeforeBase = errors.New("PITR target is before base backup")
+
+// ErrPITRLSNGapDetected is returned when an LSN gap is detected during PITR recovery.
+var ErrPITRLSNGapDetected = errors.New("PITR LSN gap detected: missing WAL records")
+
 // PITROptions specifies target parameters for Point-In-Time Recovery.
 type PITROptions struct {
 	RestoreOptions RestoreOptions
@@ -261,8 +267,25 @@ func RestorePITR(baseBackupPath string, archiveDir string, eng storage.Engine, c
 	startTime := time.Now()
 	res := &PITRResult{}
 
-	// 1. Restore baseline snapshot if provided
+	var baseManifest *Manifest
+	// 1. Inspect and restore baseline snapshot if provided
 	if baseBackupPath != "" {
+		var err error
+		baseManifest, err = ReadBackupManifestFile(baseBackupPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read baseline manifest from %s: %w", baseBackupPath, err)
+		}
+
+		// [RULE:ExplicitError] Fail fast if recovery targets are strictly before base backup creation
+		if !opts.TargetTime.IsZero() && opts.TargetTime.Before(baseManifest.CreatedAt) {
+			return nil, fmt.Errorf("%w: target time %s is before base backup creation time %s",
+				ErrPITRTargetBeforeBase, opts.TargetTime.Format(time.RFC3339Nano), baseManifest.CreatedAt.Format(time.RFC3339Nano))
+		}
+		if opts.TargetLSN > 0 && baseManifest.SnapshotLSN > 0 && opts.TargetLSN < baseManifest.SnapshotLSN {
+			return nil, fmt.Errorf("%w: target LSN %d is before base backup snapshot LSN %d",
+				ErrPITRTargetBeforeBase, opts.TargetLSN, baseManifest.SnapshotLSN)
+		}
+
 		baseRes, err := RestoreBackupFile(baseBackupPath, eng, cat, opts.RestoreOptions)
 		if err != nil {
 			return nil, fmt.Errorf("failed to restore baseline snapshot %s: %w", baseBackupPath, err)
@@ -287,6 +310,13 @@ func RestorePITR(baseBackupPath string, archiveDir string, eng storage.Engine, c
 	}
 
 	// 3. Incrementally replay WAL records in strict LSN order
+	var baseLSN int64
+	var lastAppliedLSN int64
+	if baseManifest != nil && baseManifest.SnapshotLSN > 0 {
+		baseLSN = baseManifest.SnapshotLSN
+		lastAppliedLSN = baseLSN
+	}
+
 	stopped := false
 	for _, seg := range segments {
 		if stopped {
@@ -295,6 +325,11 @@ func RestorePITR(baseBackupPath string, archiveDir string, eng storage.Engine, c
 
 		res.ArchivedSegmentsParsed++
 		_, rErr := memengine.ReplayWAL(seg.Path, func(rec memengine.WALRecord) error {
+			// Skip records already committed in the base backup snapshot
+			if baseLSN > 0 && rec.LSN <= baseLSN {
+				return nil
+			}
+
 			recTime := time.Unix(0, rec.Timestamp).UTC()
 
 			// Check Target Time condition
@@ -309,6 +344,13 @@ func RestorePITR(baseBackupPath string, archiveDir string, eng storage.Engine, c
 				res.TargetReached = true
 				stopped = true
 				return ErrPITRTargetReached
+			}
+
+			// Strict LSN Continuity / Gap Detection
+			if lastAppliedLSN > 0 && rec.LSN != lastAppliedLSN+1 {
+				stopped = true
+				return fmt.Errorf("%w: expected contiguous LSN %d, got %d (missing LSNs %d..%d)",
+					ErrPITRLSNGapDetected, lastAppliedLSN+1, rec.LSN, lastAppliedLSN+1, rec.LSN-1)
 			}
 
 			// Synchronize catalog stats on DDL mutations ([발굴 결함 9-5])
@@ -332,6 +374,7 @@ func RestorePITR(baseBackupPath string, archiveDir string, eng storage.Engine, c
 				return err
 			}
 
+			lastAppliedLSN = rec.LSN
 			res.WALRecordsReplayed++
 			res.FinalLSN = rec.LSN
 			res.FinalTimestamp = recTime

@@ -41,6 +41,7 @@ type RestoreResult struct {
 	TriggersRestored   int           `json:"triggers_restored"`
 	ViewsRestored      int           `json:"views_restored"`
 	Duration           time.Duration `json:"duration_ms"`
+	Manifest           *Manifest     `json:"manifest,omitempty"`
 }
 
 // normalizeTableName strips quotes, brackets, and schema qualifiers for consistent lookup.
@@ -273,6 +274,15 @@ func restoreCore(r io.Reader, eng storage.Engine, cat *catalog.Catalog, opts Res
 
 	result := &RestoreResult{}
 
+	// Read and record manifest if present
+	manifestPath := filepath.Join(tmpDir, "manifest.json")
+	if manifestData, err := os.ReadFile(manifestPath); err == nil {
+		var m Manifest
+		if err := json.Unmarshal(manifestData, &m); err == nil {
+			result.Manifest = &m
+		}
+	}
+
 	// 2. Read and restore schemas
 	schemasPath := filepath.Join(tmpDir, "schemas.json")
 	schemaData, err := os.ReadFile(schemasPath)
@@ -460,4 +470,48 @@ func RestoreBackupFile(filePath string, eng storage.Engine, cat *catalog.Catalog
 	defer f.Close()
 
 	return RestoreBackup(f, eng, cat, opts)
+}
+
+// ReadBackupManifest reads only manifest.json from a backup archive stream without extracting table data.
+func ReadBackupManifest(r io.Reader) (*Manifest, error) {
+	gz, err := gzip.NewReader(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open gzip stream: %w", err)
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to read tar header: %w", err)
+		}
+		cleanName := filepath.Clean(hdr.Name)
+		if cleanName == "manifest.json" {
+			data, err := io.ReadAll(tr)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read manifest.json: %w", err)
+			}
+			var manifest Manifest
+			if err := json.Unmarshal(data, &manifest); err != nil {
+				return nil, fmt.Errorf("failed to parse manifest.json: %w", err)
+			}
+			return &manifest, nil
+		}
+	}
+	return nil, fmt.Errorf("backup archive missing manifest.json")
+}
+
+// ReadBackupManifestFile reads manifest.json from a backup file path.
+func ReadBackupManifestFile(filePath string) (*Manifest, error) {
+	cleanPath := filepath.Clean(filePath)
+	f, err := os.Open(cleanPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open backup file %s: %w", cleanPath, err)
+	}
+	defer f.Close()
+	return ReadBackupManifest(f)
 }

@@ -20,6 +20,7 @@ import (
 type Manifest struct {
 	Version         string         `json:"version"`
 	CreatedAt       time.Time      `json:"created_at"`
+	SnapshotLSN     int64          `json:"snapshot_lsn,omitempty"`
 	TablesCount     int            `json:"tables_count"`
 	TotalRecords    int64          `json:"total_records"`
 	ProceduresCount int            `json:"procedures_count"`
@@ -68,9 +69,15 @@ func CreateBackup(w io.Writer, eng storage.Engine, cat *catalog.Catalog) (*Manif
 	}
 	defer os.RemoveAll(tmpDir)
 
+	snapLSN := tx.SnapshotLSN()
+	if snapLSN == 0 {
+		snapLSN = eng.CurrentLSN()
+	}
+
 	manifest := &Manifest{
 		Version:      config.Version,
 		CreatedAt:    startTime,
+		SnapshotLSN:  snapLSN,
 		TablesCount:  len(tables),
 		Tables:       make([]TableSummary, 0, len(tables)),
 	}
