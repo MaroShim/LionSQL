@@ -526,7 +526,7 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			if expr == nil {
 				return nil, fmt.Errorf("expected expression after %s =", varName)
 			}
-			stmt.Projections = append(stmt.Projections, Projection{Expr: expr, Alias: varName})
+			stmt.Projections = append(stmt.Projections, Projection{Expr: expr, Alias: varName, IsAssign: true})
 			if p.curTokenIs(TokenComma) {
 				p.nextToken()
 				continue
@@ -550,7 +550,7 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			p.nextToken()
 		}
 
-		stmt.Projections = append(stmt.Projections, Projection{Expr: expr, Alias: alias})
+		stmt.Projections = append(stmt.Projections, Projection{Expr: expr, Alias: alias, IsAssign: false})
 
 		if p.curTokenIs(TokenComma) {
 			p.nextToken()
@@ -563,7 +563,7 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	hasAssign := false
 	hasNonAssign := false
 	for _, proj := range stmt.Projections {
-		if strings.HasPrefix(proj.Alias, "@") {
+		if proj.IsAssign {
 			hasAssign = true
 		} else {
 			hasNonAssign = true

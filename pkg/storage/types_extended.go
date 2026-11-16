@@ -165,21 +165,30 @@ func ParseTime(s string) (time.Time, int64, error) {
 func TimeValue(t time.Time) Value {
 	base := time.Date(1970, 1, 1, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), time.UTC)
 	ns := int64(t.Hour())*3600*1e9 + int64(t.Minute())*60*1e9 + int64(t.Second())*1e9 + int64(t.Nanosecond())
+	sVal := base.Format("15:04:05")
+	if base.Nanosecond() > 0 {
+		sVal = base.Format("15:04:05.999999999")
+	}
 	return Value{
 		Type: TypeTime,
 		TVal: base,
 		IVal: ns,
-		SVal: base.Format("15:04:05"),
+		SVal: sVal,
 	}
 }
 
 // TimeValueFromString creates a storage.Value of TypeTime from string.
 func TimeValueFromString(s string) Value {
-	t, _, err := ParseTime(s)
+	clean := strings.Trim(strings.TrimSpace(s), "'\"")
+	t, _, err := ParseTime(clean)
 	if err != nil {
 		t = time.Time{}
 	}
-	return TimeValue(t)
+	v := TimeValue(t)
+	if clean != "" {
+		v.SVal = clean
+	}
+	return v
 }
 
 // TimeValueFromAny converts an existing storage.Value to TypeTime.

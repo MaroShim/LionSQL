@@ -640,8 +640,8 @@ func CompareValues(a, b any) int {
 	sa, isStrA := toRawString(a)
 	sb, isStrB := toRawString(b)
 	if isStrA && isStrB {
-		cA := sqlutil.CanonicalIdent(sa)
-		cB := sqlutil.CanonicalIdent(sb)
+		cA := strings.TrimRight(sqlutil.CanonicalIdent(sa), " ")
+		cB := strings.TrimRight(sqlutil.CanonicalIdent(sb), " ")
 		return strings.Compare(cA, cB)
 	}
 

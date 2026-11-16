@@ -215,14 +215,17 @@ func ParseLiteralDefault(s string, targetType DataType) Value {
 				return IntValue(lhs >> rhs)
 			}
 		}
+		return NullValue(TypeInt)
 	case TypeFloat:
 		if f, err := strconv.ParseFloat(s, 64); err == nil {
 			return FloatValue(f)
 		}
+		return NullValue(TypeFloat)
 	case TypeReal:
 		if f, err := strconv.ParseFloat(s, 32); err == nil {
 			return RealValue(float32(f))
 		}
+		return NullValue(TypeReal)
 	case TypeDecimal:
 		return DecimalValue(s)
 	case TypeBool:

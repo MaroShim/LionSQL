@@ -1200,6 +1200,9 @@ func SplitJoinCond(cond string) (string, string) {
 // CleanIdentifier strips quotes (`"`, `'`), backticks (```), and brackets (`[`, `]`) from an identifier.
 func CleanIdentifier(s string) string {
 	s = strings.TrimSpace(s)
+	if (strings.HasPrefix(s, "N'") || strings.HasPrefix(s, "n'")) && strings.HasSuffix(s, "'") && len(s) >= 3 {
+		s = s[2 : len(s)-1]
+	}
 	return strings.Trim(s, "\"`'[]")
 }
 

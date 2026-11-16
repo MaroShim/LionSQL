@@ -889,8 +889,9 @@ func (s *DeallocateCursorStmt) String() string {
 
 // Projection represents a projected expression in a SELECT query.
 type Projection struct {
-	Expr  Expr
-	Alias string
+	Expr     Expr
+	Alias    string
+	IsAssign bool
 }
 
 func (p Projection) String() string {

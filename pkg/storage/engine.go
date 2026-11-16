@@ -1061,6 +1061,12 @@ func (v Value) String() string {
 	case TypeDate:
 		return v.TVal.Format("2006-01-02")
 	case TypeTime:
+		if v.SVal != "" {
+			return v.SVal
+		}
+		if v.TVal.Nanosecond() > 0 {
+			return v.TVal.Format("15:04:05.999999999")
+		}
 		return v.TVal.Format("15:04:05")
 	case TypeUUID:
 		return v.SVal
@@ -1102,7 +1108,9 @@ func (v Value) Equal(other Value) bool {
 	switch v.Type {
 	case TypeInt:
 		return v.IVal == other.IVal
-	case TypeVarChar, TypeJSON:
+	case TypeVarChar:
+		return strings.TrimRight(v.SVal, " ") == strings.TrimRight(other.SVal, " ")
+	case TypeJSON:
 		return v.SVal == other.SVal
 	case TypeFloat, TypeReal:
 		return v.FVal == other.FVal || math.Abs(v.FVal-other.FVal) < 1e-9
@@ -1162,7 +1170,16 @@ func (v Value) Compare(other Value) int {
 			return 1
 		}
 		return 0
-	case TypeVarChar, TypeJSON:
+	case TypeVarChar:
+		s1 := strings.TrimRight(v.SVal, " ")
+		s2 := strings.TrimRight(other.SVal, " ")
+		if s1 < s2 {
+			return -1
+		} else if s1 > s2 {
+			return 1
+		}
+		return 0
+	case TypeJSON:
 		if v.SVal < other.SVal {
 			return -1
 		} else if v.SVal > other.SVal {

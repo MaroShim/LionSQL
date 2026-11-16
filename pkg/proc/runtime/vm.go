@@ -3300,7 +3300,15 @@ func storageEq(a, b storage.Value) bool {
 	if ok1 && ok2 {
 		return n1 == n2
 	}
-	return strings.EqualFold(valToString(a), valToString(b))
+	s1 := strings.TrimRight(valToString(a), " ")
+	s2 := strings.TrimRight(valToString(b), " ")
+	if (strings.HasPrefix(s1, "0x") || strings.HasPrefix(s1, "0X")) &&
+		(strings.HasPrefix(s2, "0x") || strings.HasPrefix(s2, "0X")) {
+		h1 := strings.TrimRight(strings.ToLower(s1[2:]), "0")
+		h2 := strings.TrimRight(strings.ToLower(s2[2:]), "0")
+		return h1 == h2
+	}
+	return strings.EqualFold(s1, s2)
 }
 
 func storageLt(a, b storage.Value) bool {
@@ -3312,7 +3320,7 @@ func storageLt(a, b storage.Value) bool {
 	if ok1 && ok2 {
 		return n1 < n2
 	}
-	return valToString(a) < valToString(b)
+	return strings.TrimRight(valToString(a), " ") < strings.TrimRight(valToString(b), " ")
 }
 
 func storageLte(a, b storage.Value) bool {
@@ -3324,7 +3332,7 @@ func storageLte(a, b storage.Value) bool {
 	if ok1 && ok2 {
 		return n1 <= n2
 	}
-	return valToString(a) <= valToString(b)
+	return strings.TrimRight(valToString(a), " ") <= strings.TrimRight(valToString(b), " ")
 }
 
 func storageGt(a, b storage.Value) bool {
@@ -3336,7 +3344,7 @@ func storageGt(a, b storage.Value) bool {
 	if ok1 && ok2 {
 		return n1 > n2
 	}
-	return valToString(a) > valToString(b)
+	return strings.TrimRight(valToString(a), " ") > strings.TrimRight(valToString(b), " ")
 }
 
 func storageGte(a, b storage.Value) bool {
@@ -3348,7 +3356,7 @@ func storageGte(a, b storage.Value) bool {
 	if ok1 && ok2 {
 		return n1 >= n2
 	}
-	return valToString(a) >= valToString(b)
+	return strings.TrimRight(valToString(a), " ") >= strings.TrimRight(valToString(b), " ")
 }
 
 func toFloatNum(v storage.Value) (float64, bool) {

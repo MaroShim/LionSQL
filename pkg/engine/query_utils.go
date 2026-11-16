@@ -109,6 +109,9 @@ func SplitStatements(query string) []string {
 	inBlockComment := false
 	blockDepth := 0
 	isIfStmt := false
+	isProcStmt := false
+	hasHadBegin := false
+	hasHadDollarQuote := false
 	needHeaderCheck := true
 
 	for i := 0; i < n; i++ {
@@ -168,6 +171,7 @@ func SplitStatements(query string) []string {
 				}
 				if isValidTag {
 					inDollarQuote = true
+					hasHadDollarQuote = true
 					dollarTag = tag
 					i += len(tag) - 1
 					needHeaderCheck = false
@@ -191,12 +195,15 @@ func SplitStatements(query string) []string {
 		if needHeaderCheck {
 			if ch > ' ' {
 				isIfStmt = isIfHeader(query[start:])
+				isProcStmt = isProcOrFuncHeader(query[start:])
+				hasHadBegin = false
 				needHeaderCheck = false
 			}
 		}
 
 		if (i == 0 || !IsIdentChar(query[i-1])) && i+5 <= n && strings.EqualFold(query[i:i+5], "BEGIN") && (i+5 == n || !IsIdentChar(query[i+5])) {
 			if !isBeginTransaction(query[i+5:]) {
+				hasHadBegin = true
 				blockDepth++
 			}
 		} else if (i == 0 || !IsIdentChar(query[i-1])) && i+4 <= n && strings.EqualFold(query[i:i+4], "CASE") && (i+4 == n || !IsIdentChar(query[i+4])) {
@@ -214,12 +221,18 @@ func SplitStatements(query string) []string {
 			if isIfStmt && hasNextTokenElse(query, i+1) {
 				continue
 			}
+			if isProcStmt && !hasHadBegin && !hasHadDollarQuote {
+				continue
+			}
 			stmt := strings.TrimSpace(query[start:i])
 			if stmt != "" && StripLeadingComments(stmt) != "" {
 				stmts = append(stmts, stmt)
 			}
 			start = i + 1
 			isIfStmt = false
+			isProcStmt = false
+			hasHadBegin = false
+			hasHadDollarQuote = false
 			blockDepth = 0
 			needHeaderCheck = true
 		}

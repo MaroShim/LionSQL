@@ -1091,7 +1091,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		// 0. Variable assignment SELECT (e.g. SELECT @x = 100, @y = 200 or SELECT @price = price FROM items WHERE id = 1)
 		isAssign := false
 		for _, p := range s.Projections {
-			if strings.HasPrefix(p.Alias, "@") {
+			if p.IsAssign {
 				isAssign = true
 				break
 			}

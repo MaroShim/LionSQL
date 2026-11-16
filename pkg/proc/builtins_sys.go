@@ -334,6 +334,8 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 			return storage.StringValue("MSSQLSERVER")
 		case "COLLATION":
 			return storage.StringValue("SQL_Latin1_General_CP1_CI_AS")
+		case "COLLATIONID":
+			return storage.IntValue(8732)
 		case "ISCLUSTERED", "ISHADRENABLED", "ISINTEGRATEDSECURITYONLY":
 			return storage.IntValue(0)
 		default:
@@ -562,6 +564,8 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 			return storage.StringValue("ONLINE")
 		case "COLLATION":
 			return storage.StringValue("SQL_Latin1_General_CP1_CI_AS")
+		case "COLLATIONID":
+			return storage.IntValue(8732)
 		case "COMPARISONSTYLE":
 			return storage.IntValue(196609)
 		case "EDITION":

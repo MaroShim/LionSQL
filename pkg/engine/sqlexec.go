@@ -1463,9 +1463,12 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				if idx := strings.Index(typeName, "("); idx != -1 {
 					inner := strings.Trim(typeName[idx+1:], " )")
 					typeName = typeName[:idx]
-					if inner != "MAX" {
-						if l, err := strconv.Atoi(inner); err == nil {
-							varLen = l
+					switch typeName {
+					case "VARCHAR", "CHAR", "NVARCHAR", "NCHAR", "BINARY", "VARBINARY":
+						if inner != "MAX" {
+							if l, err := strconv.Atoi(inner); err == nil {
+								varLen = l
+							}
 						}
 					}
 				} else {
@@ -1481,6 +1484,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 						cs.VarLengths = make(map[string]int)
 					}
 					cs.VarLengths[varName] = varLen
+				} else if cs.VarLengths != nil {
+					delete(cs.VarLengths, varName)
 				}
 			}
 			var val any = nil

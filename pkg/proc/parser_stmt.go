@@ -59,8 +59,13 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return &ContinueStmt{}, nil
 	case TokenCommit, TokenRollback, TokenSave, TokenSavepoint:
 		return p.parseTx()
+	case TokenSemicolon:
+		p.nextToken() // eat empty statement / stray semicolon
+		return &BlockStmt{}, nil
 	case TokenSelect:
 		return p.parseSelect()
+	case TokenWith:
+		return p.parseWith()
 	case TokenLParen:
 		// Parenthesized statement, e.g. (SELECT ...)
 		p.nextToken() // eat '('

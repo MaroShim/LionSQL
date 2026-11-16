@@ -551,6 +551,16 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 		s.InvalidatePKBypassCache()
 		s.SetTableLastIdentity(tableName, 0)
 
+		// Clean up any triggers attached to this table
+		if s.catalog != nil {
+			for _, trg := range s.catalog.GetTableTriggers(tableName) {
+				_ = s.catalog.DropTrigger(trg.Name)
+				if s.executor != nil {
+					s.executor.UnregisterTrigger(trg.Name)
+				}
+			}
+		}
+
 		return &QueryResult{
 			Success:    true,
 			Command:    "DROP TABLE",
@@ -1910,7 +1920,12 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		}
 		ddIdx := sqlutil.FindTopLevelKeyword(afterAlter, "DROP DEFAULT")
 		if ddIdx != -1 {
-			colName := cleanIdentifier(strings.TrimSpace(afterAlter[:ddIdx]))
+			rawCol := strings.TrimSpace(afterAlter[:ddIdx])
+			colFields := strings.Fields(rawCol)
+			if len(colFields) == 0 {
+				return nil, fmt.Errorf("missing column name before DROP DEFAULT")
+			}
+			colName := cleanIdentifier(colFields[0])
 			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 				found := false
 				for i := range sch.Columns {
@@ -1945,7 +1960,12 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		}
 		sdIdx := sqlutil.FindTopLevelKeyword(afterAlter, "SET DEFAULT")
 		if sdIdx != -1 {
-			colName := cleanIdentifier(strings.TrimSpace(afterAlter[:sdIdx]))
+			rawCol := strings.TrimSpace(afterAlter[:sdIdx])
+			colFields := strings.Fields(rawCol)
+			if len(colFields) == 0 {
+				return nil, fmt.Errorf("missing column name before SET DEFAULT")
+			}
+			colName := cleanIdentifier(colFields[0])
 			defExpr := cleanDefaultExpr(strings.TrimSpace(afterAlter[sdIdx+len("SET DEFAULT"):]))
 			if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 				found := false

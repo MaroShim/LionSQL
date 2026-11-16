@@ -1764,7 +1764,7 @@ vmLoop:
 			if len(rows) > 0 {
 				lastRow := rows[len(rows)-1]
 				for _, p := range data.Projections {
-					if strings.HasPrefix(p.Alias, "@") {
+					if p.IsAssign {
 						if v, ok := lastRow[p.Alias]; ok {
 							f.setVar(p.Alias, toStorageValue(v))
 						}
@@ -1774,7 +1774,7 @@ vmLoop:
 			if len(data.Projections) > 0 {
 				allVars := true
 				for _, p := range data.Projections {
-					if !strings.HasPrefix(p.Alias, "@") {
+					if !p.IsAssign {
 						allVars = false
 						break
 					}
@@ -1833,7 +1833,7 @@ vmLoop:
 					if colName != cleanName {
 						outRow[colName] = vAny
 					}
-					if strings.HasPrefix(colName, "@") {
+					if p.IsAssign {
 						f.setVar(colName, toStorageValue(vAny))
 					}
 				}
@@ -1866,7 +1866,7 @@ vmLoop:
 		if len(data.Projections) > 0 {
 			allVars := true
 			for _, p := range data.Projections {
-				if !strings.HasPrefix(p.Alias, "@") {
+				if !p.IsAssign {
 					allVars = false
 					break
 				}

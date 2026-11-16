@@ -2369,6 +2369,25 @@ func TestRegression_AUDIT_093_015_ReadOnlySessionRejectsMergeAndAnonymousBlock(t
 	}
 }
 
+func TestRegression_Select_AliasWithAtSign(t *testing.T) {
+	query := "select 'foo' as N'@var';"
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	res, err := coord.ExecuteSQL(query)
+	if err != nil {
+		t.Fatalf("ExecuteSQL failed: %v", err)
+	}
+	if len(res.Columns) != 1 || res.Columns[0] != "@var" {
+		t.Fatalf("expected column '@var', got %v", res.Columns)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["@var"] != "foo" {
+		t.Fatalf("expected row [@var:foo], got %v", res.Rows)
+	}
+}
+
 
 
 

@@ -510,10 +510,12 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 			return "MSSQLSERVER", "servername"
 		case "COLLATION":
 			return "SQL_Latin1_General_CP1_CI_AS", "collation"
+		case "COLLATIONID":
+			return int64(8732), "collationid"
 		case "ISCLUSTERED", "ISHADRENABLED", "ISINTEGRATEDSECURITYONLY":
 			return int64(0), strings.ToLower(arg)
 		default:
-			return "", strings.ToLower(arg)
+			return nil, strings.ToLower(arg)
 		}
 	}
 
