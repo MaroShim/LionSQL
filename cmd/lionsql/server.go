@@ -533,7 +533,7 @@ func runServer(args []string) error {
 			opts.DataDir = ""
 			log.Printf("[LionSQL] In-Memory engine running in EPHEMERAL mode (pure in-memory, zero disk persistence, layout: %s)", resolvedMemory)
 		} else {
-			log.Printf("[LionSQL] In-Memory engine running in PERSISTENT mode (AOF: %v, RDB: %v, dir: %s, layout: %s)", opts.EnableAOF, opts.EnableRDB, cfg.Server.DataDir, resolvedMemory)
+			log.Printf("[LionSQL] In-Memory engine running in PERSISTENT mode\n  (AOF: %v, RDB: %v, dir: %s, layout: %s)", opts.EnableAOF, opts.EnableRDB, cfg.Server.DataDir, resolvedMemory)
 		}
 		if err := memEng.OpenWithOptions(opts); err != nil {
 			log.Fatalf("Failed to open storage engine: %v", err)
