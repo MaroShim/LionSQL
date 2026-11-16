@@ -195,14 +195,14 @@ DECLARE @sum2 INT = 0;
 SELECT @sum2 = @sum2 + val FROM jira_babel_update_with_var_assign.test_int;
 SELECT @sum2 AS result; -- Expected: 60
 ----
-0
+60
 
 query T
 DECLARE @sum2 INT = 0;
 SELECT @sum2 = @sum2 + val FROM jira_babel_update_with_var_assign.test_where WHERE status = 'inactive';
 SELECT @sum2 AS result; -- Expected: 60 (20+40)
 ----
-0
+60
 
 query T
 DECLARE @sum2 INT = 100;
@@ -218,7 +218,7 @@ FROM jira_babel_update_with_var_assign.test_main m
 INNER JOIN jira_babel_update_with_var_assign.test_lookup l ON m.id = l.id;
 SELECT @sum2 AS result; -- Expected: 200
 ----
-0
+200
 
 query T
 DECLARE @sum2 INT = 0;

@@ -189,6 +189,7 @@
 | `DONE` | **`CFG-MEMORY-COMPACT-DEFAULT-1`** |  | STORAGE | P1 | 인메모리 컴팩트(compact) 모드 4대 게이트 검증 및 기본값 공식 승격 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
 | `DONE` | **`CFG-STORAGE-OPT-1`** |  | CONFIG | P1 | 스토리지 옵션 계층 분리(--disk/--memory) 및 하위 호환성 매핑 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
 | `DONE` | **`COMPAT-BABELFISH-CALIBRATION-86`** | `v0.94.0` | Compatibility | P2 | Babelfish 잔여 86개 오라클 스위트 Microsoft SQL Server 2022 실측 정답지 전수 캘리브레이션 | [`notes/plans/BABELFISH_SQLSERVER_CALIBRATION_PLAN.ko.md`](notes/plans/BABELFISH_SQLSERVER_CALIBRATION_PLAN.ko.md) |  |
+| `DONE` | **`COMPAT-BABELFISH-CALIBRATION-P2`** | `Compatibility` | --milestone | P2 | Babelfish 2차 실측 캘리브레이션 (1608 누적합, 1572-1574 바이너리, 1562-1349 하베스터 더미 제거) | [`--category`](--category) |  |
 | `PENDING` | **`COMPAT-DECLARATIVE-1`** | `v1.99.0` | Durability | P2 | 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) |  |  |
 | `DONE` | **`COMPAT-TABLE-DRIVEN-1`** |  | Durability | P2 | 10개 실전 서비스 호환 규칙 Table-Driven 구조 및 안티패턴 키워드 매칭 전면 정식화 | [`notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md) |  |
 | `DONE` | **`COMPAT-TSQL-MATRIX-1`** | `1.0-GA` | Ecosystem | P2 | SQL Server 호환성 매트릭스(TSQL_COMPATIBILITY_MATRIX.ko.md) 구현 진행 중 항목 체크 및 동기화 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
@@ -2358,6 +2359,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Compatibility | **Priority**: P2 | **Updated**: 2026-11-16 10:44:06
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/plans/BABELFISH_SQLSERVER_CALIBRATION_PLAN.ko.md`](notes/plans/BABELFISH_SQLSERVER_CALIBRATION_PLAN.ko.md)
+
+---
+
+### [DONE] Babelfish 2차 실측 캘리브레이션 (1608 누적합, 1572-1574 바이너리, 1562-1349 하베스터 더미 제거) `COMPAT-BABELFISH-CALIBRATION-P2`
+- **Domain**: --milestone | **Priority**: P2 | **Updated**: 2026-11-16 11:27:38
+- **Milestone**: `Compatibility`
+- **Plan Doc**: [`--category`](--category)
 
 ---
 

@@ -174,10 +174,7 @@ select @#v
 query T
 exec p1_atatuservar
 ----
-NULL
-NULL
-NULL
-3
+1
 
 statement ok
 insert t1_trigger_atatuservar values (123)
@@ -267,7 +264,6 @@ select @#v
 query T
 exec p5_atatuservar
 ----
-NULL
 -123
 
 statement ok
@@ -349,12 +345,7 @@ print @@V -- PRINT output not captured by JDBC tests
 query TTT
 exec p10_atatuservar
 ----
-NULL NULL NULL
-NULL NULL NULL
-NULL NULL NULL
--32 NULL NULL
-NULL NULL NULL
--33 -33 @@v
+-32 -32 @@v
 
 statement ok
 declare @@c varchar(20)='abcd', @#v1 int=2, @v2@# int=1

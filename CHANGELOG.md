@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - enforce PITR base backup point-in-time and SnapshotLSN validation, skip pre-backup WAL records, and detect missing LSN gaps fail-closed (`FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`)
 - propagate `IsFixed` flag to VDBE `OpCast` and preserve binary types in VM `valToAny` to guarantee binary casting precision
 - calibrate Babelfish oracle suites (`1415_babel_datalength`, `678_babel_operator_binary_whitespace`) against authentic Microsoft SQL Server 2022 ground truth (`COMPAT-BABELFISH-CALIBRATION-86`)
+- calibrate Babelfish oracle suites (`1608_babel_update_with_var`, `1572-1574_babel_test_conv_int_to_varbinary_binary*`, `1562_babel_tdscollation`, `1349_babel_atatuservar`) against Microsoft SQL Server 2022 ground truth (`COMPAT-BABELFISH-CALIBRATION-P2`)
 
 ### Changed
 - unify `memengine` onto pointerless `compact` mode and remove legacy `performance` mode (0ed35ad9)
