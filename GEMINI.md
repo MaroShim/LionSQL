@@ -21,9 +21,14 @@ LionSQL enforces a permanent two-tier parser architecture to achieve sub-microse
 3. **Pluggable Registration**: Decoupled via `ProcedureFallbackParser` SPI in `pkg/proc` with zero circular import dependencies.
 4. **Permanent Invariance**: Both parsers and automatic fallback mechanisms must be continuously maintained and tested in `pkg/proc/runtime/regression_test.go`.
 
-### Invariant 2: Instance-Based Database Isolation & Tolerant Virtual `USE`
-1. **Single-Catalog per Process**: Each LionSQL instance services exactly one isolated database catalog per data directory (`--data-dir`). Cross-database multiplexing inside a single kernel is explicitly **Spec-Out** to prevent noisy-neighbor memory leaks, lock contention, and security blast radius.
-2. **Tolerant Virtual `USE <dbname>` No-Op**: For 100% compatibility with SSMS, DBeaver, and migration scripts, `USE <dbname>` (`USE master`, `USE [SalesDB]`) is accepted as a tolerant virtual no-op, synchronizing TDS environment tokens (`0xE3 ENVCHANGE`) and virtual session contexts (`DB_NAME()`, `CURRENT_DATABASE()`) without syntax errors.
+### Invariant 2: Instance-Based Database Isolation, Tolerant Virtual `USE` & Logical 3-Tier Composite Key
+1. **Single-Storage Kernel per Process (Zero Physical Namespace Partitioning)**: Each LionSQL instance services an integrated storage engine (In-Memory OCC / WiredTiger B+Tree) per data directory (`--data-dir`). Physical namespace partitioning (multiplexing isolated B-Tree engines or separate database storage partitions within a single process) is strictly **Spec-Out** to prevent 2PC coordinator overhead, cross-db lock contention, memory fragmentation, and cache degradation.
+2. **Tolerant Virtual `USE <dbname>` & Session Context**: For 100% compatibility with SSMS, DBeaver, and migration scripts, `USE <dbname>` (`USE master`, `USE [SalesDB]`) synchronizes TDS environment tokens (`0xE3 ENVCHANGE`) and virtual session contexts (`DB_NAME()`, `CURRENT_DATABASE()`) without syntax errors.
+3. **Model B: Logical 3-Tier Composite Key Architecture (`Database.Schema.Table`)**:
+   - LionSQL standardizes on **Model B (Logical Composite Key Hierarchy)** without physical partitioning:
+     - 3-tier identifiers (`[SalesDB].[dbo].[Orders]`) are logically mapped onto the single unified catalog via composite naming (`__db_<dbname>_<schema>_<tablename>`).
+     - Enables identical table names to cleanly coexist across different logical databases (`SalesDB.dbo.Users` vs `AuthDB.dbo.Users`) within the same high-performance storage engine.
+     - Guarantees zero-network-overhead local cross-database joins (`SELECT ... FROM DB1.dbo.A JOIN DB2.dbo.B`) executed at sub-microsecond in-memory speed via the Volcano CBO engine, with zero 2PC distributed transactions (`ARCH-LOGICAL-NAMESPACE-1`).
 
 ### Invariant 3: Non-Blocking Read Committed & Snapshot Isolation
 1. **Non-Blocking Reads**: Both storage engines eliminate traditional 2PL shared read locks. Reads never block writes, and writes never block reads.

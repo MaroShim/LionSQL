@@ -1,21 +1,25 @@
 # LionSQL 프리픽스 기반 논리적 네임스페이스 및 테이블 변수 통합 아키텍처 설계서 (`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-10
-> - **문서 성격**: 1.0 T-SQL 호환성 및 다중 데이터베이스/테이블 변수 통합 핵심 아키텍처 사양서
+> - **최종 개정일**: 2026-11-16 (Model B: 논리 복합 키 모델 공식 채택 및 GEMINI.md Invariant 2 연동)
+> - **문서 성격**: 1.0 T-SQL 호환성 및 다중 데이터베이스/테이블 변수 통합 핵심 아키텍처 사양서 (Model B: Logical Composite Key)
 > - **과제 식별 코드**: `ARCH-LOGICAL-NAMESPACE-1`
-> - **적용 원칙**: `[RULE:RadicalKISS]`, `[RULE:PlanPersistence]`, Invariant 2 (Instance-Based Single Kernel Primacy)
+> - **적용 원칙**: `[RULE:RadicalKISS]`, `[RULE:PlanPersistence]`, Invariant 2 (Instance-Based Single Kernel Primacy & Model B)
 > - **대체 대상**: 기존 물리 폴더 리부팅 방식 ([`notes/plans/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md`](IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md)) 공식 폐기 및 본 사양서로 통합 승격
 
 ---
 
-## 1. 패러다임 전환: 물리 엔진 리부팅에서 논리적 네임스페이스로
+## 1. 패러다임 전환: 물리 파티셔닝 배제 및 모델 B(논리 복합 키) 채택
 
 관계형 데이터베이스(RDBMS)에서 `Database`와 `Table Variable`은 본질적으로 **객체의 식별 범위를 한정하는 논리적 네임스페이스(Logical Namespace)**입니다.
 
-- **기존 발상의 한계**: 물리 폴더 분리 및 프로세스 내 In-Process Reboot 방식은 동시 다중 세션 핑퐁, 크로스 DB 조인 불가, CGo 리로드 불안정성이라는 치명적 결함을 노출함.
-- **새로운 핵심 원칙**:
-  - 단 하나의 고성능 스토리지 커널(In-Memory OCC / WiredTiger B+Tree)을 상시 유지함.
-  - 데이터베이스, 세션 임시 테이블, 로컬 테이블 변수를 **엄격히 분리된 물리 식별자 프리픽스(Prefix)**로 매핑하여 100% 충돌 없이 동시 공존시킴.
+- **물리 네임스페이스 파티셔닝의 기각 (Spec-Out)**:
+  - 데이터베이스별로 독립된 스토리지 B-Tree 엔진 인스턴스를 띄우거나 물리적 네임스페이스 파티셔닝을 적용하면, 크로스 DB 조인 시 2단계 커밋(2PC) 분산 트랜잭션 관리자, 락 계층 교착, 단일 WAL 복구 스트림 파괴, 캐시 미스 급증이라는 치명적 결함을 초래합니다.
+- **모델 B(논리 복합 키 아키텍처)의 핵심 원칙**:
+  - **단일 고성능 스토리지 커널(Zero-Partitioning)**: In-Memory OCC 및 WiredTiger B+Tree의 단일 엔진 인스턴스를 유지합니다.
+  - **논리 3단 계층(`Database.Schema.Table`) 매핑**: 물리 스토리지는 1개이지만, 카탈로그 내부 키를 `Database.Schema.Table` 논리 복합 키(또는 내부 접두사 `__db_<dbname>_<schema>_<tablename>`)로 관리합니다.
+  - **동명 테이블 공존 보장**: `SalesDB.dbo.Users`와 `AuthDB.dbo.Users`가 물리 엔진 충돌 없이 독립된 테이블로 완벽히 공존합니다.
+  - **초고속 로컬 크로스 DB 조인**: 모든 테이블이 단일 스토리지 엔진 메모리/디스크 공간에 위치하므로, 2PC 네트워크 오버헤드 없이 서브마이크로초 로컬 해시 조인으로 처리됩니다.
 
 ---
 
