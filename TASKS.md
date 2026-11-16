@@ -297,7 +297,7 @@
 | `DONE` | **`INTEG-ANSWER-1`** |  | Durability | P2 | Apache Answer (Q&A 지식베이스) |  |  |
 | `PENDING` | **`INTEG-DIRECTUS-1`** | `v1.30.0` | Ecosystem | P2 | Directus (Headless CMS/데이터 API) Fast-Fail 호환성 탐색 |  |  |
 | `PENDING` | **`INTEG-GHOST-1`** | `v1.30.0` | Ecosystem | P2 | Ghost (블로그/출판 플랫폼) Fast-Fail 호환성 탐색 |  |  |
-| `PENDING` | **`INTEG-GOCD-1`** | `1.0-GA` | Ecosystem | P2 | GoCD (엔터프라이즈 CI/CD 서버) 스키마 마이그레이션 및 세션 호환성 검증 | [`notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md) |  |
+| `DONE` | **`INTEG-GOCD-1`** | `1.0-GA` | Ecosystem | P2 | GoCD (엔터프라이즈 CI/CD 서버) 스키마 마이그레이션 및 세션 호환성 검증 | [`notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md) |  |
 | `PENDING` | **`INTEG-MATTERMOST-1`** | `v1.40.0` | Ecosystem | P3 | Mattermost (팀 협업 채팅) — **[v1.1.0 로드맵]** |  |  |
 | `DONE` | **`INTEG-METABASE-1`** |  | Durability | P2 | Metabase (BI 대시보드) | [`notes/plans/METABASE_INTEGRATION_PLAN.ko.md`](notes/plans/METABASE_INTEGRATION_PLAN.ko.md) |  |
 | `PENDING` | **`INTEG-NOCODB-1`** | `v1.40.0` | Ecosystem | P3 | NocoDB (노코드 DB 스튜디오) — **[v1.1.0 로드맵]** |  |  |
@@ -305,7 +305,7 @@
 | `DONE` | **`INTEG-UMAMI-1`** |  | Durability | P2 | Umami (웹 애널리틱스) |  |  |
 | `DONE` | **`INTEG-VAULTWARDEN-1`** |  | Durability | P2 | Vaultwarden (비밀번호 관리) | [`notes/plans/VAULTWARDEN_INTEGRATION_PLAN.ko.md`](notes/plans/VAULTWARDEN_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`INTEG-VIKUNJA-1`** |  | Durability | P2 | Vikunja (프로젝트 칸반 & To-Do) | [`notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md) |  |
-| `PENDING` | **`INTEG-WIKIJS-1`** | `1.0-GA` | Ecosystem | P2 | Wiki.js (Node.js/Knex 기반 위키 및 문서 플랫폼) 스키마 마이그레이션 및 쿼리 호환성 검증 | [`notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md) |  |
+| `DONE` | **`INTEG-WIKIJS-1`** | `1.0-GA` | Ecosystem | P2 | Wiki.js (Node.js/Knex 기반 위키 및 문서 플랫폼) 스키마 마이그레이션 및 쿼리 호환성 검증 | [`notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md) |  |
 | `DONE` | **`INTEG-WOODPECKER-1`** |  | Durability | P2 | Woodpecker CI (CI/CD 엔진) | [`notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md) |  |
 | `PENDING` | **`LOC-1`** | `v1.99.0` | Engine | P3 | MSSQL Collation 및 유니코드 다국어 로케일 정렬/비교 | [`notes/plans/COLLATION_AND_LOCALE_PLAN.md`](notes/plans/COLLATION_AND_LOCALE_PLAN.md) |  |
 | `DONE` | **`M1`** |  | Ecosystem | P3 | v0.90.0 Feature Freeze & Production Hardening (100% PASS) |  |  |
@@ -3212,8 +3212,8 @@ v1.0.0 정식 릴리즈 직전 필수 관문. 근거: doc/RELEASE_AUDIT_PROTOCOL
 
 ---
 
-### [PENDING] GoCD (엔터프라이즈 CI/CD 서버) 스키마 마이그레이션 및 세션 호환성 검증 `INTEG-GOCD-1`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 08:54:01
+### [DONE] GoCD (엔터프라이즈 CI/CD 서버) 스키마 마이그레이션 및 세션 호환성 검증 `INTEG-GOCD-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 12:04:39
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md)
 
@@ -3318,8 +3318,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Wiki.js (Node.js/Knex 기반 위키 및 문서 플랫폼) 스키마 마이그레이션 및 쿼리 호환성 검증 `INTEG-WIKIJS-1`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 08:54:05
+### [DONE] Wiki.js (Node.js/Knex 기반 위키 및 문서 플랫폼) 스키마 마이그레이션 및 쿼리 호환성 검증 `INTEG-WIKIJS-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 12:04:39
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md)
 

@@ -4,7 +4,7 @@
 > - **Initial Created**: 2026-11-02
 > - **Last Updated**: 2026-11-14
 > - **Target Release**: LionSQL v0.90.0-beta4+
-> - **Verified Services**: 11 Enterprise Open-Source Applications
+> - **Verified Services**: 13 Enterprise Open-Source Applications
 > - **한국어 문서**: [`guide/README.ko.md`](README.ko.md)
 
 This directory contains official step-by-step deployment, migration, and operational guides for running popular open-source applications and enterprise services directly on **LionSQL** with zero source code modifications.
@@ -16,12 +16,14 @@ This directory contains official step-by-step deployment, migration, and operati
 
 ---
 
-## Verified Application Matrix (11 Services)
+## Verified Application Matrix (13 Services)
 
 | Application | Category | Language / ORM | Wire Protocol(s) | English Guide | Korean Guide |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Gitea** | DevOps / Git Hosting | Go + XORM | PGWire (`:5433`) & TDS (`:1433`) | [`GITEA_INTEGRATION_GUIDE.md`](GITEA_INTEGRATION_GUIDE.md) | [`GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md) |
 | **Grafana** | Observability & Dashboards | Go + XORM / SQL Plugins | PGWire (`:5433`) & TDS (`:1433`) | [`GRAFANA_INTEGRATION_GUIDE.md`](GRAFANA_INTEGRATION_GUIDE.md) | [`GRAFANA_INTEGRATION_GUIDE.ko.md`](GRAFANA_INTEGRATION_GUIDE.ko.md) |
+| **GoCD** | Enterprise CI/CD Server | Java + Hibernate + Liquibase | PGWire (`:5433`) | [`GOCD_INTEGRATION_GUIDE.md`](GOCD_INTEGRATION_GUIDE.md) | [`GOCD_INTEGRATION_GUIDE.ko.md`](GOCD_INTEGRATION_GUIDE.ko.md) |
+| **Wiki.js** | Enterprise Wiki & Documentation | Node.js + Knex / Drizzle | PGWire (`:5433`) | [`WIKIJS_INTEGRATION_GUIDE.md`](WIKIJS_INTEGRATION_GUIDE.md) | [`WIKIJS_INTEGRATION_GUIDE.ko.md`](WIKIJS_INTEGRATION_GUIDE.ko.md) |
 | **Metabase** | BI & Analytics | Clojure/JVM + JDBC | PGWire (`:5433`) & TDS (`:1433`) | [`METABASE_INTEGRATION_GUIDE.md`](METABASE_INTEGRATION_GUIDE.md) | [`METABASE_INTEGRATION_GUIDE.ko.md`](METABASE_INTEGRATION_GUIDE.ko.md) |
 | **DuckDB** | High-Performance Embedded OLAP / HTAP | C++ / Python / CLI | PGWire (`:5433`) & REST CDC (`:8090`) | [`DUCKDB_INTEGRATION_GUIDE.md`](DUCKDB_INTEGRATION_GUIDE.md) | [`DUCKDB_INTEGRATION_GUIDE.ko.md`](DUCKDB_INTEGRATION_GUIDE.ko.md) |
 | **Vaultwarden** | Password Manager (Bitwarden) | Rust + Diesel ORM | PGWire (`:5433`) | [`VAULTWARDEN_INTEGRATION_GUIDE.md`](VAULTWARDEN_INTEGRATION_GUIDE.md) | [`VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](VAULTWARDEN_INTEGRATION_GUIDE.ko.md) |

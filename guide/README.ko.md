@@ -4,7 +4,7 @@
 > - **최초 작성일**: 2026-11-02
 > - **최종 업데이트**: 2026-11-14
 > - **대상 릴리즈**: LionSQL v0.90.0-beta4+
-> - **검증 서비스**: 11대 엔터프라이즈 오픈소스 애플리케이션
+> - **검증 서비스**: 13대 엔터프라이즈 오픈소스 애플리케이션
 > - **English Guide**: [`guide/README.md`](README.md)
 
 이 디렉토리는 주요 오픈소스 애플리케이션 및 엔터프라이즈 서비스를 소스 코드 수정 없이(Zero-Modification) **LionSQL** 위에서 구동하기 위한 공식 구축·마이그레이션·운영 가이드를 모아둔 곳입니다.
@@ -16,12 +16,14 @@
 
 ---
 
-## 검증 완료 애플리케이션 일람표 (11대 서비스)
+## 검증 완료 애플리케이션 일람표 (13대 서비스)
 
 | 애플리케이션 | 분야 | 언어 / ORM 스택 | 지원 와이어 프로토콜 | 한국어 가이드 | 영문 가이드 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Gitea** | DevOps / Git 호스팅 | Go + XORM | PGWire (`:5433`) & TDS (`:1433`) | [`GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md) | [`GITEA_INTEGRATION_GUIDE.md`](GITEA_INTEGRATION_GUIDE.md) |
 | **Grafana** | 관측성 및 대시보드 | Go + XORM / SQL 플러그인 | PGWire (`:5433`) & TDS (`:1433`) | [`GRAFANA_INTEGRATION_GUIDE.ko.md`](GRAFANA_INTEGRATION_GUIDE.ko.md) | [`GRAFANA_INTEGRATION_GUIDE.md`](GRAFANA_INTEGRATION_GUIDE.md) |
+| **GoCD** | 엔터프라이즈 CI/CD 서버 | Java + Hibernate + Liquibase | PGWire (`:5433`) | [`GOCD_INTEGRATION_GUIDE.ko.md`](GOCD_INTEGRATION_GUIDE.ko.md) | [`GOCD_INTEGRATION_GUIDE.md`](GOCD_INTEGRATION_GUIDE.md) |
+| **Wiki.js** | 엔터프라이즈 위키 및 지식관리 | Node.js + Knex / Drizzle | PGWire (`:5433`) | [`WIKIJS_INTEGRATION_GUIDE.ko.md`](WIKIJS_INTEGRATION_GUIDE.ko.md) | [`WIKIJS_INTEGRATION_GUIDE.md`](WIKIJS_INTEGRATION_GUIDE.md) |
 | **Metabase** | BI 및 데이터 분석 | Clojure/JVM + JDBC | PGWire (`:5433`) & TDS (`:1433`) | [`METABASE_INTEGRATION_GUIDE.ko.md`](METABASE_INTEGRATION_GUIDE.ko.md) | [`METABASE_INTEGRATION_GUIDE.md`](METABASE_INTEGRATION_GUIDE.md) |
 | **DuckDB** | 고성능 임베디드 OLAP / HTAP | C++ / Python / CLI | PGWire (`:5433`) & REST CDC (`:8090`) | [`DUCKDB_INTEGRATION_GUIDE.ko.md`](DUCKDB_INTEGRATION_GUIDE.ko.md) | [`DUCKDB_INTEGRATION_GUIDE.md`](DUCKDB_INTEGRATION_GUIDE.md) |
 | **Vaultwarden** | 비밀번호 관리 (Bitwarden) | Rust + Diesel ORM | PGWire (`:5433`) | [`VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](VAULTWARDEN_INTEGRATION_GUIDE.ko.md) | [`VAULTWARDEN_INTEGRATION_GUIDE.md`](VAULTWARDEN_INTEGRATION_GUIDE.md) |

@@ -12,6 +12,7 @@ bin/
 
 # Data directories
 data/
+data_*/
 /backup/
 data_backup*/
 data_grafana/
