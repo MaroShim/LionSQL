@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- design and codify Unified Transaction Manager (TxManager) and 4 Core Pillars architecture in `notes/UNIFIED_TX_MANAGER_PLAN.ko.md` (`ARCH-UNIFIED-TX-MANAGER`)
 - support dual-parser automatic fallback for `ALTER PROCEDURE` with vendor clauses (c9db8e6d)
 - implement Single Page Application (SPA) Chroot handler with `os.DirFS` subfolder assets and immutable caching (c9db8e6d)
 - enforce T-SQL Hekaton PK rules: `DURABILITY = SCHEMA_AND_DATA` requires PK (Msg 41321), `DURABILITY = SCHEMA_ONLY` allows PK-less table creation with synthetic `_row_id` (c9db8e6d)
@@ -23,6 +24,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - update all 14 official integration guides and catalog index in `guide/` to official release v0.93.0+
 
 ### Fixed
+- resolve composite unique index duplicate check false-positives when containing NULL columns (`Value.ContainsNull`) across `memengine` and `wiredtiger`
+- resolve transaction snapshot visibility for dynamic temporary derived tables (`#__dt_*`) in `memengine`
+- resolve Casdoor PGWire migration type mismatch by mapping virtual info_schema to standard SQL type names (`pgInfoSchemaDataType`)
+- resolve Casdoor VDBE Fast-Path NULL parameter binding as SQL NULL instead of string `"NULL"` in `handleExecute`
+- resolve Casdoor TDS XORM index query by providing `type_desc = 'NONCLUSTERED'` in virtual system catalog
+- resolve identifier join filter misclassification in `sqlutil.ExtractEqualityFilter`
 - enforce 0600 file permissions on atomic configuration file writes (`WriteToFileAtomic`)
 - enforce deterministic configuration hierarchy (CLI > Env > Config File > Defaults) and eliminate environment variable overrides of explicit CLI arguments
 - disallow empty cluster tokens when replication/clustering is configured and normalize peer endpoints (`none`, `null`, `nil`, `[]`)

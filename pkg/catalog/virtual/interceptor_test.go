@@ -738,3 +738,41 @@ param.parameter_id ASC`
 	}
 }
 
+func TestPG_CasdoorColumnIntrospection(t *testing.T) {
+	src := &mockVirtualSource{
+		tables: []*storage.TableSchema{
+			{
+				Name: "permission_rule",
+				Columns: []storage.Column{
+					{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+					{Name: "ptype", Type: storage.TypeVarChar},
+					{Name: "v0", Type: storage.TypeVarChar},
+					{Name: "v4", Type: storage.TypeVarChar},
+				},
+			},
+		},
+	}
+
+	q := `SELECT column_name, column_default, is_nullable, data_type, character_maximum_length, description,
+    CASE WHEN p.contype = 'p' THEN true ELSE false END AS primarykey,
+    CASE WHEN p.contype = 'u' THEN true ELSE false END AS uniquekey
+FROM pg_attribute f
+    JOIN pg_class c ON c.oid = f.attrelid JOIN pg_type t ON t.oid = f.atttypid
+    LEFT JOIN pg_attrdef d ON d.adrelid = c.oid AND d.adnum = f.attnum
+    LEFT JOIN pg_description de ON f.attrelid=de.objoid AND f.attnum=de.objsubid
+    LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
+    LEFT JOIN pg_constraint p ON p.conrelid = c.oid AND f.attnum = ANY (p.conkey)
+    LEFT JOIN pg_class AS g ON p.confrelid = g.oid
+    LEFT JOIN INFORMATION_SCHEMA.COLUMNS s ON s.column_name=f.attname AND c.relname=s.table_name
+WHERE n.nspname= s.table_schema AND c.relkind = 'r'::char AND c.relname = 'permission_rule' AND s.table_schema = 'public' AND f.attnum > 0 ORDER BY f.attnum;`
+
+	res, err := virtual.Execute(src, q)
+	if err != nil {
+		t.Fatalf("virtual.Execute failed: %v", err)
+	}
+	if len(res.Rows) != 4 {
+		t.Fatalf("expected 4 column rows, got %d", len(res.Rows))
+	}
+}
+
+

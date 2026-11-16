@@ -67,6 +67,34 @@ func pgTypeName(t storage.DataType) string {
 	}
 }
 
+// pgInfoSchemaDataType returns the standard SQL data type name for INFORMATION_SCHEMA.COLUMNS.
+func pgInfoSchemaDataType(t storage.DataType) string {
+	switch t {
+	case storage.TypeInt:
+		return "integer"
+	case storage.TypeFloat:
+		return "double precision"
+	case storage.TypeDecimal:
+		return "numeric"
+	case storage.TypeBool:
+		return "boolean"
+	case storage.TypeDateTime:
+		return "timestamp without time zone"
+	case storage.TypeDate:
+		return "date"
+	case storage.TypeTime:
+		return "time without time zone"
+	case storage.TypeUUID:
+		return "uuid"
+	case storage.TypeBinary:
+		return "bytea"
+	case storage.TypeJSON:
+		return "json"
+	default:
+		return "character varying"
+	}
+}
+
 // pgTypeLen maps a storage DataType to pg_type.typlen (-1 = varlena).
 func pgTypeLen(t storage.DataType) int {
 	switch t {
@@ -471,7 +499,7 @@ func execColumnMetadataSelect(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"schema_name", "pure_name", "table_name",
 		"postgres_table_id", "column_name", "postgres_column_id",
-		"attnum", "atttypid", "data_type", "is_nullable",
+		"attnum", "atttypid", "data_type", "typname", "udt_name", "is_nullable",
 		"char_max_length", "character_maximum_length",
 		"numeric_precision", "numeric_scale",
 		"default_value", "column_default", "column_comment", "description",
@@ -488,7 +516,8 @@ func execColumnMetadataSelect(src Source, sql string) (*Result, error) {
 		toid := tableBaseOID(tIdx)
 		for i, c := range t.Columns {
 			oid := pgTypeOID(c.Type)
-			dtName := pgTypeName(c.Type)
+			dtName := pgInfoSchemaDataType(c.Type)
+			typName := pgTypeName(c.Type)
 			isNullable := "YES"
 			if c.PrimaryKey || !c.Nullable {
 				isNullable = "NO"
@@ -539,6 +568,8 @@ func execColumnMetadataSelect(src Source, sql string) (*Result, error) {
 				"f.attnum":                 int16(i + 1),
 				"atttypid":                 oid,
 				"data_type":                dtName,
+				"typname":                  typName,
+				"udt_name":                 typName,
 				"is_nullable":              isNullable,
 				"char_max_length":          maxLen,
 				"character_maximum_length": maxLen,

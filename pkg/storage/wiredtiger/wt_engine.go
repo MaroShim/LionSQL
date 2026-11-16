@@ -1571,7 +1571,7 @@ func encodeSecondaryIndexKey(idx *storage.IndexSchema, v storage.Value) string {
 
 func formatIndexKeyValue(rec storage.Record, idx *storage.IndexSchema, pkStr string) (key string, val string, isNull bool) {
 	keyVal := storage.ExtractIndexKeyFromRecord(rec, idx)
-	if keyVal.IsNull {
+	if keyVal.ContainsNull() {
 		isNull = true
 	}
 	var keyStr string
@@ -2733,7 +2733,7 @@ func (tx *WTTx) checkUniqueIndexesLocked(tableName string, tbl *storage.TableSch
 			continue
 		}
 		keyVal := storage.ExtractIndexKeyFromRecord(rec, &idx)
-		if keyVal.IsNull {
+		if keyVal.ContainsNull() {
 			continue
 		}
 		var keyStr string

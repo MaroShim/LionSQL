@@ -595,7 +595,7 @@ func execSysIndexColumns(src Source, sql string) (*Result, error) {
 }
 
 func execXORMIndexes(src Source, sql string) (*Result, error) {
-	columns := []string{"INDEX_NAME", "COLUMN_NAME", "IS_UNIQUE", "key_ordinal", "column_id", "index_id"}
+	columns := []string{"INDEX_NAME", "COLUMN_NAME", "IS_UNIQUE", "key_ordinal", "column_id", "index_id", "type", "type_desc"}
 	targetTable := ""
 	if tbl, ok := sqlutil.ExtractEqualityFilter(sql, "object_name(ixs.object_id)", "object_name(i.object_id)", "object_name(object_id)", "object_name", "table_name"); ok {
 		targetTable = tbl
@@ -644,6 +644,10 @@ func execXORMIndexes(src Source, sql string) (*Result, error) {
 					"ixs.is_unique":      true,
 					"is_primary_key":     true,
 					"ixs.is_primary_key": 1,
+					"type":               int64(1),
+					"ixs.type":           int64(1),
+					"type_desc":          "CLUSTERED",
+					"ixs.type_desc":      "CLUSTERED",
 					"key_ordinal":        keyOrdinal,
 					"ixcs.key_ordinal":   keyOrdinal,
 					"column_id":          keyOrdinal,
@@ -677,6 +681,10 @@ func execXORMIndexes(src Source, sql string) (*Result, error) {
 						"ixs.is_unique":      idx.Unique,
 						"is_primary_key":     false,
 						"ixs.is_primary_key": 0,
+						"type":               int64(2),
+						"ixs.type":           int64(2),
+						"type_desc":          "NONCLUSTERED",
+						"ixs.type_desc":      "NONCLUSTERED",
 						"key_ordinal":        keyOrdinal,
 						"ixcs.key_ordinal":   keyOrdinal,
 						"column_id":          keyOrdinal,

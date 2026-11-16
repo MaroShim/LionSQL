@@ -27,6 +27,7 @@
 | `PENDING` | **`ARCH-PARALLEL-SCAN-1`** | `v1.99.0` | Engine | P2 | 멀티코어 병렬 분석 쿼리 실행기 (ParallelSeqScan) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `v0.94.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
+| `PENDING` | **`ARCH-UNIFIED-TX-MANAGER`** |  | ENGINE | P2 | Unified TxManager (DDL + DML) Architecture | [`notes/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** |  | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
 | `DONE` | **`AUDIT-093-PRE-RELEASE`** |  | QUALITY | P2 | Pre-v0.93.0 Dual-AI Adversarial Code Audit (v0.92.0..HEAD, 22 Defects Remediated) | [`notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md`](notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md) |  |
 | `DONE` | **`AUDIT-135-DUAL-REVIEW`** |  | Integrity | P1 | 전 소스코드 135단계 듀얼 AI 정밀 코드 리뷰 및 엣지 케이스 감사 | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) | 135/135 스코프 완주 (총 134건 결함 식별 및 등록 완료) |
@@ -544,6 +545,12 @@
 - **Domain**: ARCHITECTURE | **Priority**: P2 | **Updated**: 2026-11-16 00:42:58
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md)
+
+---
+
+### [PENDING] Unified TxManager (DDL + DML) Architecture `ARCH-UNIFIED-TX-MANAGER`
+- **Domain**: ENGINE | **Priority**: P2 | **Updated**: 2026-11-16 13:12:12
+- **Plan Doc**: [`notes/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/UNIFIED_TX_MANAGER_PLAN.ko.md)
 
 ---
 

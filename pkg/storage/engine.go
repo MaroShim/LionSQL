@@ -921,6 +921,17 @@ func NullValue(t DataType) Value {
 	return Value{Type: t, IsNull: true}
 }
 
+// ContainsNull reports whether the value is NULL or, for composite index keys, contains any NULL component.
+func (v Value) ContainsNull() bool {
+	if v.IsNull {
+		return true
+	}
+	if v.Type == TypeVarChar && (strings.Contains(v.SVal, "\x00NULL") || v.SVal == "NULL") {
+		return true
+	}
+	return false
+}
+
 // EncodeIndexKeyPart encodes a Value into an order-preserving string for composite index keys.
 func EncodeIndexKeyPart(v Value) string {
 	if v.IsNull {

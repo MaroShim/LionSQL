@@ -150,7 +150,7 @@ func isSysBuiltin(name string) bool {
 		"DATABASEPROPERTYEX", "OBJECTPROPERTY", "COLUMNPROPERTY", "INDEXPROPERTY", "OBJECT_SCHEMA_NAME", "TYPE_ID", "TYPE_NAME",
 		"HOST_NAME", "HOST_ID", "CURRENT_USER", "USER_NAME", "SUSER_NAME", "SUSER_SNAME", "USER_ID", "SUSER_ID",
 		"ORIGINAL_LOGIN", "SYSTEM_USER", "FILEPROPERTY", "FILEGROUPPROPERTY", "FULLTEXTSERVICEPROPERTY",
-		"CURRENT_SCHEMA", "CURRENT_SCHEMAS", "CURRENT_DATABASE", "CURRENT_SETTING",
+		"CURRENT_SCHEMA", "CURRENT_SCHEMAS", "CURRENT_DATABASE", "CURRENT_SETTING", "SET_CONFIG",
 		"IS_SRVROLEMEMBER", "IS_MEMBER", "HAS_PERMS_BY_NAME", "HAS_DBACCESS", "PERMISSIONS", "PWDENCRYPT", "PWDCOMPARE",
 		"@@VERSION", "VERSION", "@@MICROSOFTVERSION", "@@SERVERNAME", "@@SPID", "SPID", "@@MAX_CONNECTIONS", "@@LANGUAGE",
 		"@@MAX_PRECISION", "MAX_PRECISION",
@@ -485,6 +485,13 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		default:
 			return storage.StringValue("")
 		}
+
+	case "SET_CONFIG":
+		if len(args) < 2 || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		newVal := valToString(args[1])
+		return storage.StringValue(newVal)
 
 	case "DB_ID":
 		return storage.IntValue(1)

@@ -819,7 +819,10 @@ func ExtractEqualityFilter(sql string, targetCols ...string) (string, bool) {
 					val = strings.ReplaceAll(sql[valStart:curr], "''", "'")
 					return val, true
 				} else {
-					// Read unquoted token/number (supporting decimal '.', negative '-', and identifiers)
+					// Read unquoted token/number (supporting decimal '.', negative '-', and params like @p, $1)
+					ch := sql[curr]
+					isParam := ch == '@' || ch == '$' || ch == '?'
+					isNum := (ch >= '0' && ch <= '9') || ((ch == '-' || ch == '+') && curr+1 < n && ((sql[curr+1] >= '0' && sql[curr+1] <= '9') || sql[curr+1] == '.'))
 					valStart := curr
 					if curr < n && (sql[curr] == '-' || sql[curr] == '+') {
 						curr++
@@ -828,8 +831,12 @@ func ExtractEqualityFilter(sql string, targetCols ...string) (string, bool) {
 						curr++
 					}
 					val = sql[valStart:curr]
-					if len(val) > 0 {
-						return val, true
+					upperVal := strings.ToUpper(val)
+					isKw := upperVal == "TRUE" || upperVal == "FALSE" || upperVal == "NULL"
+					if isParam || isNum || isKw {
+						if len(val) > 0 {
+							return val, true
+						}
 					}
 				}
 			}

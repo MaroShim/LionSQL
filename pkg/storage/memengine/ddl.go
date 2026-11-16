@@ -306,7 +306,7 @@ func extractIndexKey(rec storage.Record, cols []string) storage.Value {
 		if v, ok := rec.Get(c); ok {
 			sb.WriteString(storage.EncodeIndexKeyPart(v))
 		} else {
-			sb.WriteString("NULL")
+			sb.WriteString("\x00NULL")
 		}
 	}
 	return storage.StringValue(sb.String())
@@ -335,7 +335,7 @@ func extractIndexKeyFromRow(schema *storage.TableSchema, row storage.Row, cols [
 				continue
 			}
 		}
-		sb.WriteString("NULL")
+		sb.WriteString("\x00NULL")
 	}
 	return storage.StringValue(sb.String())
 }

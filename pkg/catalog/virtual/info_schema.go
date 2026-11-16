@@ -120,7 +120,7 @@ func generateInfoSchemaColumns(src Source, whereClause string) ([]string, []map[
 			if !c.Nullable {
 				nullable = "NO"
 			}
-			dataType := pgTypeName(c.Type)
+			dataType := pgInfoSchemaDataType(c.Type)
 			var charMaxLen any
 			var numPrec, numPrecRad, numScale any
 			var dtPrec any
@@ -285,7 +285,7 @@ func generateInfoSchemaParameters(src Source, whereClause string) ([]string, []m
 	if src != nil {
 		for _, p := range src.ListProcedures() {
 			for i, param := range p.Params {
-				dtName := pgTypeName(param.Type)
+				dtName := pgInfoSchemaDataType(param.Type)
 				allRows = append(allRows, map[string]any{
 					"specific_catalog":         "postgres",
 					"specific_schema":          defSchema,

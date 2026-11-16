@@ -14,8 +14,6 @@ bin/
 data/
 data_*/
 /backup/
-data_backup*/
-data_grafana/
 *.db
 *.log
 *.wt

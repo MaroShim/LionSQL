@@ -82,7 +82,7 @@ func (sl *SkipList) Insert(key storage.Value, pk string, incVals ...[]storage.Va
 
 	// Key already exists in SkipList
 	if curr != nil && curr.Key.Equal(key) {
-		if sl.unique && !key.IsNull && len(curr.Items) > 0 {
+		if sl.unique && !key.ContainsNull() && len(curr.Items) > 0 {
 			for i := range curr.Items {
 				if curr.Items[i].PK == pk {
 					curr.Items[i].IncludeValues = inc

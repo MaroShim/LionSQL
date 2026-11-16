@@ -291,6 +291,23 @@ func (tx *Transaction) getTableLocked(tableName string) (*TableData, error) {
 			return td, nil
 		}
 	}
+	// Fallback for tables created dynamically during this transaction (e.g. temporary derived tables #__dt_*,
+	// or tables created by concurrent/inner operations).
+	if tx.engine != nil {
+		if curSnap := tx.engine.tablesAtomic.Load(); curSnap != nil {
+			if td, exists := sqlutil.MapGetFold(*curSnap, tableName); exists {
+				tx.tableCache[tableName] = td
+				return td, nil
+			}
+		}
+		tx.engine.mu.RLock()
+		td, exists := sqlutil.MapGetFold(tx.engine.tables, tableName)
+		tx.engine.mu.RUnlock()
+		if exists {
+			tx.tableCache[tableName] = td
+			return td, nil
+		}
+	}
 	return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 }
 
@@ -302,6 +319,19 @@ func (tx *Transaction) getTableReadOnly(tableName string) (*TableData, error) {
 	}
 	if snap != nil {
 		if td, exists := sqlutil.MapGetFold(*snap, tableName); exists {
+			return td, nil
+		}
+	}
+	if tx.engine != nil {
+		if curSnap := tx.engine.tablesAtomic.Load(); curSnap != nil {
+			if td, exists := sqlutil.MapGetFold(*curSnap, tableName); exists {
+				return td, nil
+			}
+		}
+		tx.engine.mu.RLock()
+		td, exists := sqlutil.MapGetFold(tx.engine.tables, tableName)
+		tx.engine.mu.RUnlock()
+		if exists {
 			return td, nil
 		}
 	}
@@ -458,7 +488,7 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 		}
 		if idxData.Schema.Unique {
 			keyVal := extractIndexKeyFromRecord(record, &idxData.Schema)
-			if !keyVal.IsNull {
+			if !keyVal.ContainsNull() {
 				existing := idxData.ScanRange(&keyVal, &keyVal)
 				for _, epk := range existing {
 					if epk != pkKey && !tx.isIndexKeyLocallyReleased(tableName, epk, td, &idxData.Schema, keyVal) {
@@ -481,7 +511,7 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 					if idx.Unique {
 						keyVal := extractIndexKeyFromRecord(record, &idx)
 						locVal := extractIndexKeyFromRowWithSchema(&schema, locRow, &idx)
-						if !keyVal.IsNull && !locVal.IsNull && keyVal.Equal(locVal) {
+						if !keyVal.ContainsNull() && !locVal.ContainsNull() && keyVal.Equal(locVal) {
 							return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idx.Name)
 						}
 					}
@@ -813,7 +843,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 		}
 		if idxData.Schema.Unique {
 			keyVal := extractIndexKeyFromRecord(updated, &idxData.Schema)
-			if !keyVal.IsNull {
+			if !keyVal.ContainsNull() {
 				existing := idxData.ScanRange(&keyVal, &keyVal)
 				for _, epk := range existing {
 					if epk != pkKey && !tx.isIndexKeyLocallyReleased(tableName, epk, td, &idxData.Schema, keyVal) {
@@ -836,7 +866,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 					if idx.Unique {
 						keyVal := extractIndexKeyFromRecord(updated, &idx)
 						locVal := extractIndexKeyFromRowWithSchema(&schema, locRow, &idx)
-						if !keyVal.IsNull && !locVal.IsNull && keyVal.Equal(locVal) {
+						if !keyVal.ContainsNull() && !locVal.ContainsNull() && keyVal.Equal(locVal) {
 							return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idx.Name)
 						}
 					}
@@ -1955,7 +1985,7 @@ func (tx *Transaction) verifyOCCAndConstraintsLocked() error {
 				}
 				if idxData.Schema.Unique {
 					keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
-					if !keyVal.IsNull {
+					if !keyVal.ContainsNull() {
 						if seenUniqueKeys == nil {
 							seenUniqueKeys = make(map[string]map[string]string)
 						}
@@ -1989,7 +2019,7 @@ func (tx *Transaction) verifyOCCAndConstraintsLocked() error {
 					}
 					if idxData.Schema.Unique {
 						keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
-						if !keyVal.IsNull {
+						if !keyVal.ContainsNull() {
 							if seenUniqueKeys == nil {
 								seenUniqueKeys = make(map[string]map[string]string)
 							}

@@ -164,7 +164,7 @@ func ExtractIndexKeyFromRecord(rec Record, idx *IndexSchema) Value {
 		if v, ok := rec.Get(c); ok {
 			sb.WriteString(EncodeIndexKeyPart(v))
 		} else {
-			sb.WriteString("NULL")
+			sb.WriteString("\x00NULL")
 		}
 	}
 	return StringValue(sb.String())

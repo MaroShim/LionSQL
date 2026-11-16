@@ -405,4 +405,10 @@ func TestPredicate_HardeningProbes(t *testing.T) {
 	if v, ok := ExtractEqualityFilter("SELECT * FROM sys.tables AS tbl WHERE ((tbl.name = 'orders'))", "tbl.name"); !ok || v != "orders" {
 		t.Fatalf("ExtractEqualityFilter double-nested grouping failed: got %q, ok=%v", v, ok)
 	}
+
+	// 7. ExtractEqualityFilter skips identifier join conditions and extracts true literal filter
+	joinQuery := "SELECT f.attname FROM pg_attribute f JOIN INFORMATION_SCHEMA.COLUMNS s ON c.relname = s.table_name WHERE c.relname = 'permission_rule'"
+	if v, ok := ExtractEqualityFilter(joinQuery, "c.relname", "s.table_name"); !ok || v != "permission_rule" {
+		t.Fatalf("ExtractEqualityFilter should skip identifier join condition and extract literal, got %q, ok=%v", v, ok)
+	}
 }

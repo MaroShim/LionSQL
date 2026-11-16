@@ -1664,9 +1664,13 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 				var anyVal any = paramVal
 				if i < len(portal.ParamValues) {
 					pv := portal.ParamValues[i]
-					if !pv.IsNull || pv.Type != storage.TypeUnknown {
+					if pv.IsNull {
+						anyVal = nil
+					} else if pv.Type != storage.TypeUnknown {
 						anyVal = pv
 					}
+				} else if strings.EqualFold(paramVal, "NULL") {
+					anyVal = nil
 				}
 				paramMap[pName] = anyVal
 				paramMap[atName] = anyVal

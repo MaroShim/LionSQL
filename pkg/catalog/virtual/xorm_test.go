@@ -370,5 +370,49 @@ func TestXORMMSSQL_GetIndexes_WithTrailingWhere(t *testing.T) {
 	}
 }
 
+func TestXORMMSSQL_CasdoorIndexIntrospection(t *testing.T) {
+	src := &mockVirtualSource{
+		tables: []*storage.TableSchema{
+			{
+				Name: "permission_rule",
+				Columns: []storage.Column{
+					{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+					{Name: "ptype", Type: storage.TypeVarChar},
+					{Name: "v0", Type: storage.TypeVarChar},
+				},
+				Indexes: []storage.IndexSchema{
+					{Name: "IDX_permission_rule_v0", Columns: []string{"v0"}, Unique: false},
+				},
+			},
+		},
+	}
+
+	// Exact Casdoor query with TYPE_DESC='NONCLUSTERED' leading
+	q := `SELECT
+		IXS.NAME AS [INDEX_NAME],
+		C.NAME AS [COLUMN_NAME],
+		IXS.is_unique AS [IS_UNIQUE]
+	FROM SYS.INDEXES IXS
+	INNER JOIN SYS.INDEX_COLUMNS IXCS ON IXS.OBJECT_ID=IXCS.OBJECT_ID AND IXS.INDEX_ID = IXCS.INDEX_ID
+	INNER JOIN SYS.COLUMNS C ON IXS.OBJECT_ID=C.OBJECT_ID AND IXCS.COLUMN_ID=C.COLUMN_ID
+	WHERE IXS.TYPE_DESC='NONCLUSTERED' and OBJECT_NAME(IXS.OBJECT_ID) = 'permission_rule'`
+
+	res, err := virtual.Execute(src, q)
+	if err != nil {
+		t.Fatalf("virtual.Execute failed: %v", err)
+	}
+
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 index row, got %d", len(res.Rows))
+	}
+	if res.Rows[0]["INDEX_NAME"] != "IDX_permission_rule_v0" {
+		t.Errorf("expected IDX_permission_rule_v0, got %v", res.Rows[0]["INDEX_NAME"])
+	}
+	if res.Rows[0]["COLUMN_NAME"] != "v0" {
+		t.Errorf("expected v0, got %v", res.Rows[0]["COLUMN_NAME"])
+	}
+}
+
+
 
 
