@@ -217,3 +217,64 @@ END;
 	}
 }
 
+func TestAlterProcedure_FallbackAutomaticIntegration(t *testing.T) {
+	// 1. ALTER PROCEDURE with vendor-specific clause (WITH RECOMPILE)
+	alterScript := `
+ALTER PROCEDURE UpdateRates
+    @rate DECIMAL(18,4)
+WITH RECOMPILE
+AS
+BEGIN
+    RETURN 0;
+END;
+`
+	plan, err := proc.Parse(alterScript)
+	if err != nil {
+		t.Fatalf("proc.Parse(ALTER PROCEDURE) failed: %v", err)
+	}
+	if !plan.IsAlter {
+		t.Errorf("expected plan.IsAlter=true, got false")
+	}
+	if plan.Name != "UpdateRates" {
+		t.Errorf("expected plan.Name='UpdateRates', got %q", plan.Name)
+	}
+
+	prog, err := proc.Compile(alterScript)
+	if err != nil {
+		t.Fatalf("proc.Compile(ALTER PROCEDURE) failed: %v", err)
+	}
+	if prog == nil || len(prog.Instructions) == 0 {
+		t.Fatalf("expected non-empty compiled bytecode for ALTER PROCEDURE")
+	}
+
+	// 2. CREATE OR ALTER PROC with vendor-specific clause
+	orAlterScript := `
+CREATE OR ALTER PROC CalculateBonus
+    @emp_id INT
+WITH RECOMPILE
+AS
+BEGIN
+    RETURN 100;
+END;
+`
+	planOrAlter, err := proc.Parse(orAlterScript)
+	if err != nil {
+		t.Fatalf("proc.Parse(CREATE OR ALTER PROC) failed: %v", err)
+	}
+	if !planOrAlter.OrAlter {
+		t.Errorf("expected planOrAlter.OrAlter=true, got false")
+	}
+	if planOrAlter.Name != "CalculateBonus" {
+		t.Errorf("expected planOrAlter.Name='CalculateBonus', got %q", planOrAlter.Name)
+	}
+
+	progOrAlter, err := proc.Compile(orAlterScript)
+	if err != nil {
+		t.Fatalf("proc.Compile(CREATE OR ALTER PROC) failed: %v", err)
+	}
+	if progOrAlter == nil || len(progOrAlter.Instructions) == 0 {
+		t.Fatalf("expected non-empty compiled bytecode for CREATE OR ALTER PROC")
+	}
+}
+
+

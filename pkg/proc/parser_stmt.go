@@ -97,7 +97,7 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return p.parseWaitfor()
 	case TokenCreate:
 		if p.peekTokenIs(TokenTable) {
-			return p.parseCreateTable()
+			return p.ParseCreateTable()
 		}
 		if p.peekTokenIs(TokenIndex) || p.peekTokenIs(TokenUnique) {
 			return p.ParseCreateIndex()

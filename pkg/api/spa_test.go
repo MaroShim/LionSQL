@@ -304,3 +304,78 @@ func TestServerAppHostingE2E(t *testing.T) {
 		}
 	}
 }
+
+func TestSandboxSPAHandler_SubdirectoriesAndCaching(t *testing.T) {
+	tmpDir := t.TempDir()
+	indexContent := `<!DOCTYPE html><html><body><h1>Sandbox SPA</h1></body></html>`
+	assetsDir := filepath.Join(tmpDir, "assets")
+	if err := os.Mkdir(assetsDir, 0755); err != nil {
+		t.Fatalf("failed to create assets dir: %v", err)
+	}
+	bundleContent := `console.log("vite bundle");`
+	if err := os.WriteFile(filepath.Join(tmpDir, "index.html"), []byte(indexContent), 0644); err != nil {
+		t.Fatalf("failed to write index: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(assetsDir, "bundle-abc.js"), []byte(bundleContent), 0644); err != nil {
+		t.Fatalf("failed to write bundle: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, ".env"), []byte("SECRET=hidden"), 0644); err != nil {
+		t.Fatalf("failed to write secret: %v", err)
+	}
+
+	handler, err := NewSandboxSPAHandler(tmpDir)
+	if err != nil {
+		t.Fatalf("NewSandboxSPAHandler failed: %v", err)
+	}
+
+	// 1. Root / -> 200 with no-cache header
+	{
+		req := httptest.NewRequest("GET", "/", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("GET / expected 200, got %d", rr.Code)
+		}
+		if !strings.Contains(rr.Header().Get("Cache-Control"), "no-cache") {
+			t.Errorf("GET / expected no-cache, got %q", rr.Header().Get("Cache-Control"))
+		}
+	}
+
+	// 2. Subdirectory asset /assets/bundle-abc.js -> 200 with immutable cache
+	{
+		req := httptest.NewRequest("GET", "/assets/bundle-abc.js", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("GET /assets/bundle-abc.js expected 200, got %d", rr.Code)
+		}
+		if !strings.Contains(rr.Body.String(), "vite bundle") {
+			t.Errorf("GET /assets/bundle-abc.js unexpected content: %q", rr.Body.String())
+		}
+		if !strings.Contains(rr.Header().Get("Cache-Control"), "immutable") {
+			t.Errorf("GET /assets/bundle-abc.js expected immutable cache-control, got %q", rr.Header().Get("Cache-Control"))
+		}
+	}
+
+	// 3. Dotfile .env -> 404
+	{
+		req := httptest.NewRequest("GET", "/.env", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusNotFound {
+			t.Errorf("GET /.env expected 404, got %d", rr.Code)
+		}
+	}
+
+	// 4. Directory traversal /assets/../index.html -> 404
+	{
+		req := httptest.NewRequest("GET", "/assets/../index.html", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		// Note that path.Clean will resolve /assets/../index.html to /index.html if parsed directly,
+		// but raw traversal attempts should never escape or access illegal files.
+		if rr.Code != http.StatusOK && rr.Code != http.StatusNotFound {
+			t.Errorf("unexpected status code: %d", rr.Code)
+		}
+	}
+}

@@ -107,6 +107,12 @@ func valToString(v storage.Value) string {
 		return "0"
 	case storage.TypeDateTime:
 		return v.TVal.Format("2006-01-02 15:04:05")
+	case storage.TypeDecimal:
+		if v.DVal.Scale() == 4 {
+			// In SQL Server, MONEY/SMALLMONEY converted to character in string builtins defaults to 2 decimal places (Style 0)
+			return v.DVal.Rescale(2).String()
+		}
+		return v.String()
 	default:
 		return v.String()
 	}

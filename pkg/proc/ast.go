@@ -1132,9 +1132,11 @@ type ColumnDef struct {
 
 // CreateTableStmt represents CREATE TABLE ...
 type CreateTableStmt struct {
-	Name        string
-	IfNotExists bool
-	Columns     []ColumnDef
+	Name            string
+	IfNotExists     bool
+	Columns         []ColumnDef
+	Durability      string
+	MemoryOptimized bool
 }
 
 func (s *CreateTableStmt) stmtNode() {}

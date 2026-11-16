@@ -559,6 +559,8 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			return res.TVal, nil
 		case storage.TypeBinary:
 			return res, nil
+		case storage.TypeDecimal:
+			return res, nil
 		default:
 			return res.SVal, nil
 		}
@@ -1287,6 +1289,8 @@ func anyToStorageVal(v any) storage.Value {
 	switch val := v.(type) {
 	case storage.Value:
 		return val
+	case storage.Decimal:
+		return storage.DecimalValueFromDecimal(val)
 	case int64:
 		return storage.IntValue(val)
 	case int:
@@ -1515,6 +1519,12 @@ func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style i
 			} else {
 				str = string(v.Bytes())
 			}
+		case storage.TypeDecimal:
+			if v.DVal.Scale() == 4 {
+				str = formatMoneyToString(v.DVal, style)
+			} else {
+				str = v.String()
+			}
 		default:
 			if style > 0 {
 				if t, err := parseDateTimeByStyle(v.String(), 120); err == nil {
@@ -1632,6 +1642,47 @@ func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style i
 
 	default:
 		return v, nil
+	}
+}
+
+func formatMoneyToString(d storage.Decimal, style int) string {
+	switch style {
+	case 1:
+		// Style 1: commas every three digits to the left of the decimal point, and two digits to the right
+		rescaled := d.Rescale(2)
+		s := rescaled.String()
+		negative := false
+		if strings.HasPrefix(s, "-") {
+			negative = true
+			s = s[1:]
+		}
+		parts := strings.Split(s, ".")
+		intPart := parts[0]
+		fracPart := "00"
+		if len(parts) > 1 {
+			fracPart = parts[1]
+		}
+		var b strings.Builder
+		n := len(intPart)
+		for i, r := range intPart {
+			if i > 0 && (n-i)%3 == 0 {
+				b.WriteByte(',')
+			}
+			b.WriteRune(r)
+		}
+		out := b.String() + "." + fracPart
+		if negative {
+			out = "-" + out
+		}
+		return out
+
+	case 2, 126:
+		// Style 2 and 126: no commas, four digits to the right of the decimal point
+		return d.Rescale(4).String()
+
+	default:
+		// Style 0 (default): no commas, and two digits to the right of the decimal point
+		return d.Rescale(2).String()
 	}
 }
 

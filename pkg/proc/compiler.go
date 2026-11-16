@@ -78,7 +78,10 @@ func NewCompiler() *Compiler {
 func Compile(sql string) (*Program, error) {
 	trimmed := strings.TrimSpace(sql)
 
-	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE PROCEDURE", "CREATE PROC") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed,
+		"CREATE PROCEDURE", "CREATE PROC",
+		"CREATE OR ALTER PROCEDURE", "CREATE OR ALTER PROC",
+		"ALTER PROCEDURE", "ALTER PROC") {
 		lexer := NewLexer(sql)
 		parser := NewParser(lexer)
 		stmt, err := parser.ParseProcedure()

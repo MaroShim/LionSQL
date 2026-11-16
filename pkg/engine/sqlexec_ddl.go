@@ -180,15 +180,29 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		rawPartition = strings.TrimSpace(remainder[len("PARTITION BY"):])
 	}
 
+	tableDurability := storage.DurabilitySchemaAndData
+	tableMemoryOptimized := false
+	p := proc.NewParser(proc.NewLexer(cleaned))
+	if stmt, err := p.ParseCreateTable(); err == nil && stmt != nil {
+		if stmt.Durability != "" {
+			tableDurability = stmt.Durability
+		}
+		tableMemoryOptimized = stmt.MemoryOptimized
+	}
+
 	colDefs := splitColumnDefs(colsDef)
 	if len(colDefs) == 0 {
 		return nil, fmt.Errorf("no columns defined for table %s", tableName)
 	}
 
 	schema := &storage.TableSchema{
-		Name:    tableName,
-		Columns: make([]storage.Column, 0, len(colDefs)),
+		Name:            tableName,
+		Columns:         make([]storage.Column, 0, len(colDefs)),
+		Durability:      tableDurability,
+		MemoryOptimized: tableMemoryOptimized,
 	}
+
+	var tablePKCols []string
 
 	for _, cDef := range colDefs {
 		cDefTrimmed := strings.TrimSpace(cDef)
@@ -211,9 +225,12 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 					innerCols := cDefTrimmed[openIdx+1 : closeIdx]
 					for _, pkCol := range sqlutil.SplitTopLevel(innerCols, ',') {
 						cleaned := cleanIdentifier(pkCol)
-						for i := range schema.Columns {
-							if strings.EqualFold(schema.Columns[i].Name, cleaned) {
-								schema.Columns[i].PrimaryKey = true
+						if cleaned != "" {
+							tablePKCols = append(tablePKCols, cleaned)
+							for i := range schema.Columns {
+								if strings.EqualFold(schema.Columns[i].Name, cleaned) {
+									schema.Columns[i].PrimaryKey = true
+								}
 							}
 						}
 					}
@@ -346,6 +363,21 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 				schema.ForeignKeys = append(schema.ForeignKeys, *fk)
 			}
 		}
+	}
+
+	for _, pkCol := range tablePKCols {
+		for i := range schema.Columns {
+			if strings.EqualFold(schema.Columns[i].Name, pkCol) {
+				schema.Columns[i].PrimaryKey = true
+			}
+		}
+	}
+
+	// Memory-Optimized Primary Key Invariant:
+	// In SQL Server T-SQL (Hekaton), a memory-optimized table with DURABILITY = SCHEMA_AND_DATA must have a primary key (Msg 41321).
+	// With DURABILITY = SCHEMA_ONLY, a primary key is not required (a synthetic _row_id will be provided).
+	if schema.MemoryOptimized && schema.Durability != storage.DurabilitySchemaOnly && !schema.HasPrimaryKey() {
+		return nil, fmt.Errorf("the memory optimized table %q with DURABILITY = SCHEMA_AND_DATA must have a primary key", tableName)
 	}
 
 	// Ensure table has a primary key: if none marked, inject synthetic hidden _row_id

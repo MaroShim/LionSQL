@@ -162,9 +162,20 @@ func (b *ASTBuilder) VisitCreate_or_alter_procedure(ctx *Create_or_alter_procedu
 		body = &proc.BlockStmt{Statements: stmts}
 	}
 
+	isAlter := false
+	isOrAlter := false
+	trimmed := strings.TrimSpace(b.script)
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE OR ALTER PROCEDURE", "CREATE OR ALTER PROC") {
+		isOrAlter = true
+	} else if sqlutil.HasAnyPrefixKeyword(trimmed, "ALTER PROCEDURE", "ALTER PROC") {
+		isAlter = true
+	}
+
 	return &proc.CreateProcStmt{
-		Name:   procName,
-		Params: params,
-		Body:   body,
+		Name:    procName,
+		Params:  params,
+		Body:    body,
+		IsAlter: isAlter,
+		OrAlter: isOrAlter,
 	}
 }

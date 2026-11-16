@@ -871,5 +871,31 @@ func TestEvalRowExpr_Like_And_Any_SQL3VL(t *testing.T) {
 	}
 }
 
+func TestParseCreateTable_WithDurability(t *testing.T) {
+	sql := `CREATE TABLE WebSessions (
+		SessionID INT PRIMARY KEY,
+		Data VARCHAR(255)
+	) WITH (MEMORY_OPTIMIZED = ON, DURABILITY = SCHEMA_ONLY);`
+
+	stmt, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	createStmt, ok := stmt.(*proc.CreateTableStmt)
+	if !ok {
+		t.Fatalf("expected *CreateTableStmt, got %T", stmt)
+	}
+	if createStmt.Name != "WebSessions" {
+		t.Errorf("expected table name WebSessions, got %s", createStmt.Name)
+	}
+	if !createStmt.MemoryOptimized {
+		t.Errorf("expected MemoryOptimized true, got false")
+	}
+	if createStmt.Durability != "SCHEMA_ONLY" {
+		t.Errorf("expected Durability SCHEMA_ONLY, got %s", createStmt.Durability)
+	}
+}
+
+
 
 

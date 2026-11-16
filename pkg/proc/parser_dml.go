@@ -385,7 +385,7 @@ func (p *Parser) ParseSQLStatement() (Statement, error) {
 
 	case TokenCreate:
 		if p.peekTokenIs(TokenTable) {
-			return p.parseCreateTable()
+			return p.ParseCreateTable()
 		}
 		if p.peekTokenIs(TokenIndex) || p.peekTokenIs(TokenUnique) {
 			return p.ParseCreateIndex()

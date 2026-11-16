@@ -125,10 +125,20 @@ func (p *Parser) Errors() []string {
 	return p.errors
 }
 
-// Parse parses a CREATE PROCEDURE script.
+// Parse parses a CREATE PROCEDURE or ALTER PROCEDURE script.
 func Parse(sql string) (*CreateProcStmt, error) {
 	p := NewParser(NewLexer(sql))
-	return p.ParseProcedure()
+	stmt, err := p.ParseProcedure()
+	if err != nil {
+		if fb := GetProcedureFallback(); fb != nil {
+			fbStmt, fbErr := fb(sql)
+			if fbErr == nil && fbStmt != nil {
+				return fbStmt, nil
+			}
+		}
+		return nil, err
+	}
+	return stmt, nil
 }
 
 // ParseFunction parses a CREATE FUNCTION script.

@@ -1059,6 +1059,25 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 		return nil, fmt.Errorf("no projections specified in SELECT")
 	}
 
+	// Check for set-returning generate_series in scalar projection (e.g. SELECT cast(generate_series(1, 10) as numeric))
+	for _, item := range projItems {
+		if idx := strings.Index(strings.ToLower(item), "generate_series"); idx != -1 {
+			openP := strings.Index(item[idx:], "(")
+			if openP != -1 {
+				absOpen := idx + openP
+				closeP := sqlutil.FindMatchingParen(item, absOpen)
+				if closeP != -1 {
+					seriesArgs := item[absOpen+1 : closeP]
+					prefix := item[:idx]
+					suffix := item[closeP+1:]
+					rewrittenItem := prefix + "value" + suffix
+					rewrittenSQL := fmt.Sprintf("SELECT %s FROM generate_series(%s)", rewrittenItem, seriesArgs)
+					return s.execSelect(rewrittenSQL, start, cs)
+				}
+			}
+		}
+	}
+
 	var columns []string
 	var vals []any
 	row := make(map[string]any, len(projItems))
@@ -1844,11 +1863,15 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		rawTable := qInfo.TableName
 		tableName := cleanIdentifier(rawTable)
 
-		// Check for Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
+		// Check for Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100) or FROM generate_series(1, 10)
 		trimmedRaw := strings.TrimSpace(rawTable)
 		if openP := strings.IndexByte(trimmedRaw, '('); openP != -1 && strings.HasSuffix(trimmedRaw, ")") {
 			tvfName := cleanIdentifier(strings.TrimSpace(trimmedRaw[:openP]))
 			argsRaw := trimmedRaw[openP+1 : len(trimmedRaw)-1]
+
+			if strings.EqualFold(tvfName, "generate_series") {
+				return s.execGenerateSeries(argsRaw, qInfo, start, cs)
+			}
 			fnMeta, err := s.catalog.GetFunction(tvfName)
 			if err == nil && fnMeta != nil && fnMeta.IsTableValued {
 				var argVals []string
@@ -2645,6 +2668,161 @@ func (s *Coordinator) tryExecSelectVarAssignment(query string, start time.Time, 
 		Rows:         nil,
 		Values:       nil,
 		RowsAffected: int64(len(selRes.Rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Coordinator) evalIntArg(exprStr string, cs *ClientSession) (int64, error) {
+	exprStr = strings.TrimSpace(exprStr)
+	if n, err := strconv.ParseInt(exprStr, 10, 64); err == nil {
+		return n, nil
+	}
+	val, _ := s.evalScalarExpr(exprStr, cs)
+	switch v := val.(type) {
+	case int64:
+		return v, nil
+	case int:
+		return int64(v), nil
+	case storage.Value:
+		if v.Type == storage.TypeInt {
+			return v.IVal, nil
+		}
+		if n, err := strconv.ParseInt(v.String(), 10, 64); err == nil {
+			return n, nil
+		}
+	case string:
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return n, nil
+		}
+	}
+	if n, err := strconv.ParseInt(fmt.Sprintf("%v", val), 10, 64); err == nil {
+		return n, nil
+	}
+	return 0, fmt.Errorf("invalid integer argument %q in generate_series", exprStr)
+}
+
+func (s *Coordinator) execGenerateSeries(argsRaw string, qInfo *planner.QueryInfo, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	args := sqlutil.SplitTopLevel(argsRaw, ',')
+	if len(args) < 2 {
+		return nil, fmt.Errorf("generate_series requires at least 2 arguments (start, stop)")
+	}
+
+	startVal, err := s.evalIntArg(args[0], cs)
+	if err != nil {
+		return nil, err
+	}
+	stopVal, err := s.evalIntArg(args[1], cs)
+	if err != nil {
+		return nil, err
+	}
+	stepVal := int64(1)
+	if len(args) >= 3 {
+		step, err := s.evalIntArg(args[2], cs)
+		if err != nil {
+			return nil, err
+		}
+		if step == 0 {
+			return nil, fmt.Errorf("step size cannot equal zero")
+		}
+		stepVal = step
+	}
+
+	var count int64
+	if stepVal > 0 && stopVal >= startVal {
+		count = (stopVal-startVal)/stepVal + 1
+	} else if stepVal < 0 && stopVal <= startVal {
+		count = (startVal-stopVal)/(-stepVal) + 1
+	}
+
+	// Defensive resource bounds ([RULE:BoundedBuffers])
+	if count > 1000000 {
+		return nil, fmt.Errorf("generate_series exceeded maximum row limit of 1,000,000 (requested %d)", count)
+	}
+
+	alias := "generate_series"
+	if qInfo != nil && qInfo.TableAlias != "" {
+		alias = qInfo.TableAlias
+	}
+
+	isWildcard := qInfo == nil || len(qInfo.Projections) == 0 || (len(qInfo.Projections) == 1 && (qInfo.Projections[0] == "*" || qInfo.Projections[0] == ""))
+
+	var columns []string
+	if isWildcard {
+		columns = []string{"value"}
+	} else {
+		for _, p := range qInfo.Projections {
+			colName := p
+			if _, asPart, ok := sqlutil.SplitAsAlias(p); ok {
+				colName = cleanIdentifier(asPart)
+			} else if eqIdx := strings.Index(p, "="); eqIdx != -1 {
+				colName = cleanIdentifier(p[:eqIdx])
+			} else if dotIdx := strings.LastIndex(p, "."); dotIdx != -1 {
+				colName = cleanIdentifier(p[dotIdx+1:])
+			}
+			columns = append(columns, colName)
+		}
+	}
+
+	rows := make([]map[string]any, 0, count)
+	values := make([][]any, 0, count)
+
+	curr := startVal
+	for i := int64(0); i < count; i++ {
+		rowMap := map[string]any{
+			"value":           curr,
+			"generate_series": curr,
+		}
+		if alias != "" {
+			rowMap[alias+".value"] = curr
+			rowMap[alias+".generate_series"] = curr
+		}
+		if cs != nil {
+			cs.Mu.Lock()
+			for k, v := range cs.Vars {
+				rowMap[k] = v
+			}
+			cs.Mu.Unlock()
+		}
+
+		if isWildcard {
+			rows = append(rows, map[string]any{"value": curr})
+			values = append(values, []any{curr})
+		} else {
+			outRow := make(map[string]any, len(columns))
+			outVals := make([]any, len(columns))
+			for cIdx, proj := range qInfo.Projections {
+				exprStr := proj
+				if beforeAs, _, ok := sqlutil.SplitAsAlias(proj); ok {
+					exprStr = strings.TrimSpace(beforeAs)
+				} else if eqIdx := strings.Index(proj, "="); eqIdx != -1 {
+					exprStr = strings.TrimSpace(proj[eqIdx+1:])
+				}
+
+				p := proc.NewParser(proc.NewLexer(exprStr))
+				ast := p.ParseExpr()
+				if ast != nil {
+					res, _ := proc.EvalRowExpr(ast, rowMap, nil)
+					outRow[columns[cIdx]] = res
+					outVals[cIdx] = res
+				} else {
+					outRow[columns[cIdx]] = curr
+					outVals[cIdx] = curr
+				}
+			}
+			rows = append(rows, outRow)
+			values = append(values, outVals)
+		}
+
+		curr += stepVal
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         rows,
+		Values:       values,
+		RowsAffected: int64(len(rows)),
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }

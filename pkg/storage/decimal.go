@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"unicode"
 )
 
 var (
@@ -73,10 +74,88 @@ func NewDecimalFromFloat(f float64, scale int32) Decimal {
 	return dec
 }
 
+// cleanNumberOrCurrencyString normalizes string inputs for Decimal and MONEY conversion:
+// 1. Strips parenthesized negative: ($123.45) or (123.45) -> negative = true
+// 2. Strips trailing minus: 123.45- -> negative = true
+// 3. Strips currency symbols: $, ¢, £, ¤, ¥, ₩, €, \
+// 4. Strips thousands grouping commas: 1,234.56 -> 1234.56
+func cleanNumberOrCurrencyString(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", false
+	}
+
+	negative := false
+
+	// Parenthesized negative: ($123.45) or (123.45)
+	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
+		negative = true
+		s = strings.TrimSpace(s[1 : len(s)-1])
+	}
+
+	// Trailing minus: 123.45- or $123.45-
+	if strings.HasSuffix(s, "-") {
+		negative = true
+		s = strings.TrimSpace(s[:len(s)-1])
+	}
+
+	// Leading sign
+	if strings.HasPrefix(s, "-") {
+		negative = true
+		s = strings.TrimSpace(s[1:])
+	} else if strings.HasPrefix(s, "+") {
+		s = strings.TrimSpace(s[1:])
+	}
+
+	isCurrencyRune := func(r rune) bool {
+		switch r {
+		case '$', '¢', '£', '¤', '¥', '₩', '€', '\\':
+			return true
+		default:
+			return false
+		}
+	}
+
+	s = strings.TrimFunc(s, func(r rune) bool {
+		return unicode.IsSpace(r) || isCurrencyRune(r)
+	})
+
+	// Check if sign was placed after currency symbol, e.g. $-123.45
+	if strings.HasPrefix(s, "-") {
+		negative = true
+		s = strings.TrimSpace(s[1:])
+	} else if strings.HasPrefix(s, "+") {
+		s = strings.TrimSpace(s[1:])
+	}
+
+	s = strings.TrimFunc(s, func(r rune) bool {
+		return unicode.IsSpace(r) || isCurrencyRune(r)
+	})
+
+	// Remove grouping commas
+	if strings.Contains(s, ",") {
+		s = strings.ReplaceAll(s, ",", "")
+	}
+
+	// If after stripping, string is empty (e.g. input was "$" or "," or "\"), it represents 0
+	if s == "" {
+		return "0", false
+	}
+
+	return s, negative
+}
+
 // ParseDecimal parses a string into an exact Decimal.
-// Supports integers ("123"), decimals ("123.45", "-0.0500"), and scientific notation ("1e-2").
+// Supports integers ("123"), decimals ("123.45", "-0.0500"), scientific notation ("1e-2"),
+// and SQL Server currency formatted strings ("$1,234.56", "($50.00)", "₩10,000").
 func ParseDecimal(s string) (Decimal, error) {
 	s = strings.TrimSpace(s)
+	if s == "" {
+		return ZeroDecimal(0), ErrInvalidDecimal
+	}
+
+	var negative bool
+	s, negative = cleanNumberOrCurrencyString(s)
 	if s == "" {
 		return ZeroDecimal(0), ErrInvalidDecimal
 	}
@@ -96,11 +175,10 @@ func ParseDecimal(s string) (Decimal, error) {
 		s = fStr
 	}
 
-	negative := false
 	if s[0] == '+' {
 		s = s[1:]
 	} else if s[0] == '-' {
-		negative = true
+		negative = !negative
 		s = s[1:]
 	}
 

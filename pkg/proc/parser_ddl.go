@@ -544,7 +544,8 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 }
 
 
-func (p *Parser) parseCreateTable() (*CreateTableStmt, error) {
+// ParseCreateTable parses a CREATE TABLE statement into a CreateTableStmt AST.
+func (p *Parser) ParseCreateTable() (*CreateTableStmt, error) {
 	p.nextToken() // eat CREATE
 	if !p.curTokenIs(TokenTable) {
 		return nil, fmt.Errorf("expected TABLE after CREATE")
@@ -584,14 +585,55 @@ func (p *Parser) parseCreateTable() (*CreateTableStmt, error) {
 	if p.curTokenIs(TokenRParen) {
 		p.nextToken()
 	}
+
+	durability := "SCHEMA_AND_DATA"
+	memoryOptimized := false
+	if p.curTokenIs(TokenWith) {
+		p.nextToken()
+		if p.curTokenIs(TokenLParen) {
+			p.nextToken()
+			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+				key := strings.ToUpper(p.curToken.Literal)
+				p.nextToken()
+				if p.curTokenIs(TokenAssign) || p.curTokenIs(TokenEq) {
+					p.nextToken()
+					val := strings.ToUpper(p.curToken.Literal)
+					p.nextToken()
+					switch key {
+					case "DURABILITY":
+						if val == "SCHEMA_ONLY" {
+							durability = "SCHEMA_ONLY"
+						} else if val == "SCHEMA_AND_DATA" {
+							durability = "SCHEMA_AND_DATA"
+						}
+					case "MEMORY_OPTIMIZED":
+						if val == "ON" || val == "TRUE" || val == "1" {
+							memoryOptimized = true
+						} else if val == "OFF" || val == "FALSE" || val == "0" {
+							memoryOptimized = false
+						}
+					}
+				}
+				if p.curTokenIs(TokenComma) {
+					p.nextToken()
+				}
+			}
+			if p.curTokenIs(TokenRParen) {
+				p.nextToken()
+			}
+		}
+	}
+
 	if p.curTokenIs(TokenSemicolon) {
 		p.nextToken()
 	}
 
 	return &CreateTableStmt{
-		Name:        tableName,
-		IfNotExists: ifNotExists,
-		Columns:     cols,
+		Name:            tableName,
+		IfNotExists:     ifNotExists,
+		Columns:         cols,
+		Durability:      durability,
+		MemoryOptimized: memoryOptimized,
 	}, nil
 }
 
