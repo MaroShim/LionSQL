@@ -1034,3 +1034,112 @@ func TestApacheAnswer_PGWire_Connection(t *testing.T) {
 	}
 }
 
+// TestRegression_Enterprise_PGWire_NullParamBinding verifies that parameterized NULL values
+// bound via PGWire extended query protocol are inserted as genuine SQL NULL rather than
+// the literal string "NULL", preventing XORM and ORM struct cascade fetch panics (Casdoor defect).
+func TestRegression_Enterprise_PGWire_NullParamBinding(t *testing.T) {
+	srv, port := startTestPGServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("host=127.0.0.1 port=%d user=sa password=lionsql dbname=casdoor sslmode=disable", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE permission (
+			id INT PRIMARY KEY,
+			name VARCHAR(100) NOT NULL,
+			enforcer VARCHAR(100)
+		);
+	`); err != nil {
+		t.Fatalf("CREATE TABLE permission failed: %v", err)
+	}
+
+	// Insert row with explicit nil parameter for enforcer
+	if _, err := db.ExecContext(ctx, `INSERT INTO permission (id, name, enforcer) VALUES ($1, $2, $3)`, 1, "admin_perm", nil); err != nil {
+		t.Fatalf("INSERT with nil parameter failed: %v", err)
+	}
+
+	// Query back and verify enforcer is genuinely NULL (not "NULL" string)
+	var id int
+	var name string
+	var enforcer sql.NullString
+	if err := db.QueryRowContext(ctx, `SELECT id, name, enforcer FROM permission WHERE id = 1`).Scan(&id, &name, &enforcer); err != nil {
+		t.Fatalf("SELECT failed: %v", err)
+	}
+
+	if enforcer.Valid {
+		t.Fatalf("Expected enforcer to be SQL NULL, but got Valid=true with value: %q", enforcer.String)
+	}
+
+	// Query with IS NULL predicate to guarantee engine indexing and filter parity
+	var count int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM permission WHERE enforcer IS NULL`).Scan(&count); err != nil {
+		t.Fatalf("SELECT COUNT(*) WHERE enforcer IS NULL failed: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("Expected 1 row with enforcer IS NULL, got: %d", count)
+	}
+}
+
+// TestRegression_Enterprise_PGWire_InformationSchemaDataTypes verifies that
+// information_schema.columns.data_type returns standard SQL type names ("integer", "character varying")
+// rather than low-level internal pg_type typnames ("int4"), satisfying XORM type introspection.
+func TestRegression_Enterprise_PGWire_InformationSchemaDataTypes(t *testing.T) {
+	srv, port := startTestPGServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("host=127.0.0.1 port=%d user=sa password=lionsql dbname=casdoor sslmode=disable", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := db.ExecContext(ctx, `
+		CREATE TABLE test_types (
+			id INT PRIMARY KEY,
+			title VARCHAR(200) NOT NULL
+		);
+	`); err != nil {
+		t.Fatalf("CREATE TABLE test_types failed: %v", err)
+	}
+
+	rows, err := db.QueryContext(ctx, `
+		SELECT column_name, data_type 
+		FROM information_schema.columns 
+		WHERE table_name = 'test_types' 
+		ORDER BY ordinal_position
+	`)
+	if err != nil {
+		t.Fatalf("Query information_schema.columns failed: %v", err)
+	}
+	defer rows.Close()
+
+	typeMap := make(map[string]string)
+	for rows.Next() {
+		var colName, dataType string
+		if err := rows.Scan(&colName, &dataType); err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+		typeMap[colName] = dataType
+	}
+
+	if typeMap["id"] != "integer" {
+		t.Errorf("Expected id data_type 'integer', got %q", typeMap["id"])
+	}
+	if typeMap["title"] != "character varying" {
+		t.Errorf("Expected title data_type 'character varying', got %q", typeMap["title"])
+	}
+}
+
+

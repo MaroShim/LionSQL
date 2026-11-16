@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- add dedicated enterprise regression test suites for composite unique NULLs, dynamic derived tables, PGWire NULL binding, and info_schema data types across storage and wire engines
 - design and codify Unified Transaction Manager (TxManager) and 4 Core Pillars architecture in `notes/UNIFIED_TX_MANAGER_PLAN.ko.md` (`ARCH-UNIFIED-TX-MANAGER`)
 - support dual-parser automatic fallback for `ALTER PROCEDURE` with vendor clauses (c9db8e6d)
 - implement Single Page Application (SPA) Chroot handler with `os.DirFS` subfolder assets and immutable caching (c9db8e6d)
