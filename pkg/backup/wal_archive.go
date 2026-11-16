@@ -145,7 +145,10 @@ func (a *WALArchiver) ArchiveSegment(walPath string) (*ArchivedSegment, error) {
 	}
 
 	// 4. Update archive manifest atomically
-	_ = a.updateManifestLocked(seg)
+	if err := a.updateManifestLocked(seg); err != nil {
+		_ = os.Remove(targetPath)
+		return nil, fmt.Errorf("failed to update archive manifest: %w", err)
+	}
 
 	return &seg, nil
 }
@@ -161,13 +164,19 @@ func (a *WALArchiver) RotateAndArchive(writer *memengine.WALWriter, walPath stri
 		if err := writer.Rotate(rotatedPath); err != nil {
 			return nil, fmt.Errorf("atomic WAL rotation failed: %w", err)
 		}
-		defer os.Remove(rotatedPath)
 
 		// Archive the frozen segment (which is completely immutable and isolated from new writes)
 		seg, err := a.ArchiveSegment(rotatedPath)
 		if err != nil {
-			return nil, err
+			// [RULE:AtomicSaves] [RULE:ExplicitError]
+			// DO NOT delete the rotated WAL segment on archive failure!
+			// Preserving rotatedPath guarantees zero data loss and allows retrying
+			// the archive operation or manual disaster recovery.
+			return nil, fmt.Errorf("archive segment failed (rotated WAL preserved at %s): %w", rotatedPath, err)
 		}
+
+		// Only clean up the frozen segment after archiving has fully succeeded
+		_ = os.Remove(rotatedPath)
 		return seg, nil
 	}
 

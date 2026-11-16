@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - eliminate `InsertRow` caller slice mutation side-effects via upfront defensive cloning
 - support string date/time representations in `compact` FlatRecord Datetime encoder
 - prevent disappearing WAL paths by handling rollback rename failures in `WALWriter.Rotate` and rollback in-memory renames on catalog save failures
+- preserve rotated WAL segments (`.frozen.*`) on archive failures in `WALArchiver.RotateAndArchive` to guarantee zero data loss and propagate manifest update errors
 
 ### Changed
 - unify `memengine` onto pointerless `compact` mode and remove legacy `performance` mode (0ed35ad9)

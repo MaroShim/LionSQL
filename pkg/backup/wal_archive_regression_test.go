@@ -128,3 +128,85 @@ func TestWALArchiver_Regression_P0_15_ConcurrentWriteTruncateLoss(t *testing.T) 
 			totalExpected, totalFound, archivedCount, activeCount, totalExpected-totalFound)
 	}
 }
+
+// TestWALArchiver_PreserveRotatedSegmentOnFailure verifies that if ArchiveSegment fails,
+// the original rotated WAL file (.frozen.*) is NEVER removed and remains intact on disk.
+func TestWALArchiver_PreserveRotatedSegmentOnFailure(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "lionsql_wal_preserve_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	archiveDir := filepath.Join(tmpDir, "wal_archive")
+	walPath := filepath.Join(tmpDir, "active.wal")
+
+	archiver, err := backup.NewWALArchiver(archiveDir)
+	if err != nil {
+		t.Fatalf("NewWALArchiver failed: %v", err)
+	}
+
+	writer, err := memengine.NewWALWriter(walPath, memengine.FsyncAlways)
+	if err != nil {
+		t.Fatalf("NewWALWriter failed: %v", err)
+	}
+	defer writer.Close()
+
+	// Write 10 records to active WAL
+	t0 := time.Now().UnixNano()
+	for i := int64(1); i <= 10; i++ {
+		err := writer.Append(memengine.WALRecord{
+			LSN:       i,
+			Timestamp: t0 + i*1000,
+			Ops: []memengine.WALOp{
+				{
+					Type:  memengine.OpInsert,
+					Table: "orders",
+					Key:   fmt.Sprintf("%d", i),
+					Record: storage.Record{
+						"id":    storage.IntValue(i),
+						"price": storage.IntValue(i * 100),
+					},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("Append failed: %v", err)
+		}
+	}
+
+	// Make archive directory read-only so archiving fails when creating temporary copy
+	if err := os.Chmod(archiveDir, 0555); err != nil {
+		t.Fatalf("Chmod failed: %v", err)
+	}
+	defer os.Chmod(archiveDir, 0755)
+
+	// Attempt RotateAndArchive - this MUST fail because archiveDir is read-only
+	_, err = archiver.RotateAndArchive(writer, walPath)
+	if err == nil {
+		t.Fatalf("Expected RotateAndArchive to fail on read-only archiveDir, but succeeded")
+	}
+
+	// Inspect tmpDir to check if any .frozen file exists
+	matches, err := filepath.Glob(filepath.Join(tmpDir, "active.wal.frozen.*"))
+	if err != nil {
+		t.Fatalf("Glob failed: %v", err)
+	}
+
+	if len(matches) == 0 {
+		t.Fatalf("[DATA LOSS BUG DETECTED] Rotated WAL segment was deleted even though archiving failed!")
+	}
+
+	// Verify that the preserved frozen segment can be replayed completely
+	var replayedCount int64
+	_, err = memengine.ReplayWAL(matches[0], func(rec memengine.WALRecord) error {
+		replayedCount++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Replay preserved WAL failed: %v", err)
+	}
+	if replayedCount != 10 {
+		t.Fatalf("Expected 10 records in preserved frozen WAL, got %d", replayedCount)
+	}
+}
