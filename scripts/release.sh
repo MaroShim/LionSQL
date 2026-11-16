@@ -576,14 +576,36 @@ fi
 
 # 4.5. Register in notes/README.ko.md and notes/README.md if not present
 if [ -f "${NOTES_README_KO}" ] && ! grep -q "RELEASE_NOTES_${TAG}" "${NOTES_README_KO}"; then
-    sed -i.bak -E "s|(7\. \*\*마일스톤 실전 검증 보고서 및 포스트모텀.*?\*\*:)|\\1\n   - **[\`RELEASE_NOTES_${TAG}.ko.md\`](\`RELEASE_NOTES_${TAG}.ko.md\`)** ([English](RELEASE_NOTES_${TAG}.md)): LionSQL ${TAG} 공식 릴리즈 노트.|g" "${NOTES_README_KO}"
-    rm -f "${NOTES_README_KO}.bak"
+    python3 -c "
+import sys
+tag = sys.argv[1]
+path = sys.argv[2]
+with open(path, 'r', encoding='utf-8') as f:
+    content = f.read()
+target = '* **공식 릴리즈 노트 아카이브 (`notes/release_notes/`)**:\n'
+insertion = f'  * **[\`RELEASE_NOTES_{tag}.ko.md\`](release_notes/RELEASE_NOTES_{tag}.ko.md)** ([English](release_notes/RELEASE_NOTES_{tag}.md)): LionSQL {tag} 공식 릴리즈 노트.\n'
+if target in content:
+    content = content.replace(target, target + insertion, 1)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content)
+" "${TAG}" "${NOTES_README_KO}"
     echo -e "Registered in: ${CLR_BOLD}notes/README.ko.md${CLR_RESET}"
 fi
 
 if [ -f "${NOTES_README_EN}" ] && ! grep -q "RELEASE_NOTES_${TAG}" "${NOTES_README_EN}"; then
-    sed -i.bak -E "s|(7\. \*\*Production Integration Reports & Postmortems\*\*:)|\\1\n   - **[\`RELEASE_NOTES_${TAG}.md\`](\`RELEASE_NOTES_${TAG}.md\`)** ([Korean](RELEASE_NOTES_${TAG}.ko.md)): LionSQL ${TAG} official release notes.|g" "${NOTES_README_EN}"
-    rm -f "${NOTES_README_EN}.bak"
+    python3 -c "
+import sys
+tag = sys.argv[1]
+path = sys.argv[2]
+with open(path, 'r', encoding='utf-8') as f:
+    content = f.read()
+target = '* **Official Release Notes Archive (`notes/release_notes/`)**:\n'
+insertion = f'  * **[\`RELEASE_NOTES_{tag}.md\`](release_notes/RELEASE_NOTES_{tag}.md)** ([Korean](release_notes/RELEASE_NOTES_{tag}.ko.md)): LionSQL {tag} official release notes.\n'
+if target in content:
+    content = content.replace(target, target + insertion, 1)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content)
+" "${TAG}" "${NOTES_README_EN}"
     echo -e "Registered in: ${CLR_BOLD}notes/README.md${CLR_RESET}"
 fi
 
