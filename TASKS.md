@@ -222,6 +222,7 @@
 | `PENDING` | **`FEAT-WAL-ARCHIVER-INPROCESS-1`** | `1.0-GA` | Storage | P3 | WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WASM-UDF-1`** | `v1.99.0` | Engine | P2 | WebAssembly 런타임 샌드박스 UDF (wazero) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `PENDING` | **`FEAT-WEB-STUDIO-HYBRID-1`** | `1.0-GA` | API | P2 | Web Studio 하이브리드 지원 (--no-studio 플래그 및 lionsql studio 서브커맨드 프록시) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `IN_PROGRESS` | **`FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`** | `v0.94.0` | Storage | P1 | Windows WiredTiger Static Bundle (Precompiled libwiredtiger.a Vendoring & Cross-Platform Cgo Build Parity) | [`notes/plans/WINDOWS_WIREDTIGER_STATIC_BUNDLE_PLAN.ko.md`](notes/plans/WINDOWS_WIREDTIGER_STATIC_BUNDLE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WT-SECONDARY-INDEX-BTREE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 | [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md) |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-COMMIT-PARTIAL-MUTATION-RECOVERY-1`** | `1` | --domain | P2 | Commit 중도 실패 시 부분 변경(Shard/Partition/Index) 복구 누락 결함 수정 | [`--prio`](--prio) |  |
@@ -2677,6 +2678,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: API | **Priority**: P2 | **Updated**: 2026-11-14 00:08:33
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
+
+---
+
+### [IN_PROGRESS] Windows WiredTiger Static Bundle (Precompiled libwiredtiger.a Vendoring & Cross-Platform Cgo Build Parity) `FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-16
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/plans/WINDOWS_WIREDTIGER_STATIC_BUNDLE_PLAN.ko.md`](notes/plans/WINDOWS_WIREDTIGER_STATIC_BUNDLE_PLAN.ko.md)
 
 ---
 
