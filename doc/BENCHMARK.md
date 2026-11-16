@@ -1,13 +1,15 @@
 # LionSQL Performance Tuning & Benchmark Guide
 
 > - **Created**: 2026-09-22
-> - **Last Updated**: 2026-11-09
+> - **Last Updated**: 2026-11-16
 > - **Engine Release**: v0.92.0
 > - **한국어 문서**: [doc/BENCHMARK.ko.md](BENCHMARK.ko.md)
 > - **Historical Baseline Archive**: [doc/history/BENCHMARK_20261031.md](history/BENCHMARK_20261031.md) (v0.90.0 Baseline)
 
-
 This document outlines the benchmark methodology, workload profiles, command-line arguments, and tuning recommendations for LionSQL under high-concurrency OLTP workloads.
+
+> [!NOTE]
+> **Benchmark Purpose & Disclaimer**: The benchmark results presented in this document are intended solely for internal version-to-version performance comparison and continuous engine improvement. They are neither rigorous nor suitable for comparative performance evaluation against other database products.
 
 ---
 
