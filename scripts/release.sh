@@ -306,7 +306,7 @@ echo -e "[Gate 0.5/6] Verifying Zero-Tampering Oracle Test Invariant..."
 # Prepare release build metadata ldflags
 RELEASE_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo "dev")"
 RELEASE_BUILD_DATE="$(date +"%Y-%m-%d %H:%M:%S %Z")"
-RELEASE_LDFLAGS="-X 'lionsql/pkg/config.Version=${VER}' -X 'lionsql/pkg/config.GitCommit=${RELEASE_COMMIT}' -X 'lionsql/pkg/config.BuildDate=${RELEASE_BUILD_DATE}'"
+RELEASE_LDFLAGS="-s -w -X 'lionsql/pkg/config.Version=${VER}' -X 'lionsql/pkg/config.GitCommit=${RELEASE_COMMIT}' -X 'lionsql/pkg/config.BuildDate=${RELEASE_BUILD_DATE}'"
 
 echo "Compiling 3 official release binaries (Version: ${VER}, Commit: ${RELEASE_COMMIT}, Date: ${RELEASE_BUILD_DATE})..."
 # 1. macOS Apple Silicon (arm64)
