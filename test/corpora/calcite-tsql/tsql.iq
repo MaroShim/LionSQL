@@ -1,0 +1,38 @@
+# Apache Calcite T-SQL test cases (extracted from tsql.iq)
+
+# Test CHARINDEX
+!set dialect tsql
+SELECT CHARINDEX('server', 'sql server database') AS pos;
++-----+
+| pos |
++-----+
+|   5 |
++-----+
+(1 row)
+
+# Test IIF
+SELECT IIF(10 > 5, 'TRUE_BRANCH', 'FALSE_BRANCH') AS res;
++-------------+
+| res         |
++-------------+
+| TRUE_BRANCH |
++-------------+
+(1 row)
+
+# Test REVERSE & LEN
+SELECT REVERSE('hello') AS rev, LEN('hello world') AS len;
++-------+-----+
+| rev   | len |
++-------+-----+
+| olleh |  11 |
++-------+-----+
+(1 row)
+
+# Test DATEADD & DATEDIFF
+SELECT DATEDIFF(day, '2026-01-01', '2026-01-11') AS diff;
++------+
+| diff |
++------+
+|   10 |
++------+
+(1 row)

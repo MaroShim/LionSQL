@@ -1,0 +1,45 @@
+# test/slt_proc/antlr_tsql_oracle/3302_antlr_tsql_syntax_window_and_cte.slt
+# ANTLR4 T-SQL Official Grammar CTE and Window Functions Oracle Suite
+
+statement ok
+CREATE TABLE antlr_employees (
+    emp_id INT PRIMARY KEY,
+    dept_id INT NOT NULL,
+    salary INT NOT NULL
+);
+
+statement ok
+INSERT INTO antlr_employees VALUES
+(1, 10, 5000),
+(2, 10, 8000),
+(3, 10, 6000),
+(4, 20, 9000),
+(5, 20, 7500);
+
+# Common Table Expression (CTE)
+query III
+WITH HighSalary AS (
+    SELECT emp_id, dept_id, salary
+    FROM antlr_employees
+    WHERE salary >= 7000
+)
+SELECT emp_id, dept_id, salary
+FROM HighSalary
+ORDER BY salary DESC;
+----
+4 20 9000
+2 10 8000
+5 20 7500
+
+# Aggregations partitioned by group
+query II
+SELECT dept_id, SUM(salary)
+FROM antlr_employees
+GROUP BY dept_id
+ORDER BY dept_id;
+----
+10 19000
+20 16500
+
+statement ok
+DROP TABLE antlr_employees;

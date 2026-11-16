@@ -1,0 +1,32 @@
+# test/slt_proc/calcite_oracle/3502_calcite_tsql_conditionals_and_math.slt
+# Apache Calcite T-SQL Conditionals and Math Functions Oracle Suite
+
+query T
+SELECT IIF(10 > 5, 'TRUE_BRANCH', 'FALSE_BRANCH');
+----
+TRUE_BRANCH
+
+query T
+SELECT IIF(3 > 8, 'TRUE_BRANCH', 'FALSE_BRANCH');
+----
+FALSE_BRANCH
+
+query T
+SELECT ISNULL(NULL, 'FALLBACK_VALUE');
+----
+FALLBACK_VALUE
+
+query T
+SELECT COALESCE(NULL, NULL, 'THIRD_VALUE');
+----
+THIRD_VALUE
+
+query II
+SELECT ABS(-42), ABS(42);
+----
+42 42
+
+query R
+SELECT ROUND(123.456, 2);
+----
+123.460

@@ -1,0 +1,22 @@
+# test/slt_proc/calcite_oracle/3501_calcite_tsql_strings_and_dates.slt
+# Apache Calcite T-SQL String and Date Built-in Functions Oracle Suite
+
+query I
+SELECT CHARINDEX('server', 'sql server database');
+----
+5
+
+query TI
+SELECT REVERSE('hello'), LEN('hello world');
+----
+olleh 11
+
+query I
+SELECT DATEDIFF(day, '2026-01-01', '2026-01-11');
+----
+10
+
+query T
+SELECT CONCAT('SQL', ' ', 'Server', ' ', '2022');
+----
+SQL Server 2022

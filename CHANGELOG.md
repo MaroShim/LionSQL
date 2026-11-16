@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - support `GENERATE_SERIES(start, stop [, step])` for table-valued functions and set-returning projections (c9db8e6d)
 - support 0x hex binary literals (`TokenBinary`) in T-SQL procedural expressions and binary repetition in `REPLICATE` (`FIX-LEXER-HEX-BINARY-LITERAL-1`)
 - support `@@MAX_PRECISION` system function/variable returning standard precision 38
+- ingest and integrate 4 canonical T-SQL external corpora into Gate 5 oracle suites: Microsoft Northwind & Pubs (14 tables, M:N orders, reports-to hierarchy), ANTLR4 T-SQL grammar (MERGE, hints, windowing), Knex.js MSSQL builder (output inserted, offset-fetch, migration locks), and Apache Calcite T-SQL builtins (charindex, reverse, datediff, iif) (`CORPUS-NORTHWIND-PUBS-1`, `CORPUS-ANTLR-TSQL-1`, `CORPUS-KNEX-MSSQL-1`, `CORPUS-CALCITE-TSQL-1`)
 
 ### Fixed
 - enforce 0600 file permissions on atomic configuration file writes (`WriteToFileAtomic`)

@@ -1,0 +1,48 @@
+# test/slt_proc/knex_oracle/3401_knex_mssql_builder_output_and_paging.slt
+# Knex.js MSSQL Dialect OUTPUT INSERTED and Paging Queries Oracle Suite
+
+statement ok
+CREATE TABLE knex_users (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    email NVARCHAR(100) NOT NULL,
+    name NVARCHAR(100) NOT NULL,
+    active INT DEFAULT 1
+);
+
+# Knex insert with output inserted.id
+query I
+INSERT INTO [knex_users] ([email], [name], [active]) OUTPUT INSERTED.[id] VALUES ('alice@knex.js', 'Alice', 1);
+----
+1
+
+query I
+INSERT INTO [knex_users] ([email], [name], [active]) OUTPUT INSERTED.[id] VALUES ('bob@knex.js', 'Bob', 1);
+----
+2
+
+query I
+INSERT INTO [knex_users] ([email], [name], [active]) OUTPUT INSERTED.[id] VALUES ('charlie@knex.js', 'Charlie', 0);
+----
+3
+
+query I
+INSERT INTO [knex_users] ([email], [name], [active]) OUTPUT INSERTED.[id] VALUES ('david@knex.js', 'David', 1);
+----
+4
+
+# Knex TOP (N) selection
+query IT
+SELECT TOP (2) [id], [name] FROM [knex_users] WHERE [active] = 1 ORDER BY [id] ASC;
+----
+1 Alice
+2 Bob
+
+# Knex OFFSET ... FETCH NEXT ... ROWS ONLY paging
+query IT
+SELECT [id], [name] FROM [knex_users] ORDER BY [id] ASC OFFSET 1 ROWS FETCH NEXT 2 ROWS ONLY;
+----
+2 Bob
+3 Charlie
+
+statement ok
+DROP TABLE knex_users;

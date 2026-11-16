@@ -50,8 +50,8 @@ func TestOracleIntegrity_ZeroTampering(t *testing.T) {
 		verified++
 	}
 
-	if verified < 1289 {
-		t.Fatalf("expected at least 1,289 verified oracle suites in CHECKSUMS.sha256, found %d", verified)
+	if verified < 1299 {
+		t.Fatalf("expected at least 1,299 verified oracle suites in CHECKSUMS.sha256, found %d", verified)
 	}
 }
 
@@ -71,8 +71,8 @@ func discoverProcSLTFiles(t *testing.T) []string {
 
 func TestTSQL_StoredProcedure_Suites(t *testing.T) {
 	allFiles := discoverProcSLTFiles(t)
-	if len(allFiles) < 1289 {
-		t.Fatalf("expected at least 1,289 authentic Gate 5 T-SQL & External Corpora .slt suites, found %d", len(allFiles))
+	if len(allFiles) < 1299 {
+		t.Fatalf("expected at least 1,299 authentic Gate 5 T-SQL & External Corpora .slt suites, found %d", len(allFiles))
 	}
 
 	requiredDirs := []string{
@@ -83,6 +83,10 @@ func TestTSQL_StoredProcedure_Suites(t *testing.T) {
 		"gorm_oracle",
 		"mssql_jdbc_oracle",
 		"adventureworks_oracle",
+		"northwind_oracle",
+		"antlr_tsql_oracle",
+		"knex_oracle",
+		"calcite_oracle",
 	}
 	for _, dir := range requiredDirs {
 		matches, _ := filepath.Glob(filepath.Join(dir, "*.slt"))

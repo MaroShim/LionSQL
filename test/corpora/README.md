@@ -10,5 +10,9 @@
 | [`tedious/`](tedious/) | `tediousjs/tedious` (`test/integration/`, `test/unit/`) | MIT | 86개 `.ts`, 971개 `it()` 케이스 | Node.js TDS 프로토콜, 데이터 타입 정밀도(`DATETIME` 밀리초 반올림 등), `sp_executesql` 입출력 파라미터, `sp_prepare`/`sp_execute`, 중첩 트랜잭션 |
 | [`gorm-sqlserver/`](gorm-sqlserver/) | `go-gorm/sqlserver` (`*.go.txt`) | MIT | 9개 파일 (`create`, `migrator`, `error_translator` 등) | Go GORM SQL Server ORM 실전 쿼리: `MERGE USING (VALUES ...)` Upsert, `OUTPUT INSERTED.*`, `SET IDENTITY_INSERT`, 에러 번호(`2627`, `2601`, `547`), 카탈로그 3중 조인 |
 | [`adventureworks/`](adventureworks/) | `microsoft/sql-server-samples` (`AdventureWorksLT`) | MS-PL / MIT | 11개 테이블, DDL/Seed/Queries | Microsoft 공식 AdventureWorksLT 경량 OLTP 스키마: 외래 키(FK), IDENTITY 채번, 다중 조인, 집계, 상관 서브쿼리, CTE 실전 쿼리 검증 |
+| [`northwind/`](northwind/) | `microsoft/sql-server-samples` (`Northwind & Pubs`) | MS-PL / MIT | 14개 테이블, DDL/Seed/Queries | Microsoft 공식 25년 표준 Northwind & Pubs 관계형 스키마: M:N 주문 상세, 계층적 셀프 조인(ReportsTo), 도서 판매 및 집계 뷰 |
+| [`antlr-tsql/`](antlr-tsql/) | `antlr/grammars-v4` (`sql/tsql/examples/`) | BSD-3-Clause | 5개 핵심 구문 파일 | 공식 EBNF 기반 T-SQL 어휘/구문 분석: 복합 `MERGE`, 테이블 힌트(`WITH (NOLOCK)`), 윈도우 프레임, `TRY...CATCH` |
+| [`knex-mssql/`](knex-mssql/) | `knex/knex` (`test/unit/dialects/mssql.js`) | MIT | JS 쿼리 빌더 테스트 세트 | Node.js Knex ORM (Wiki.js, Ghost): `OUTPUT INSERTED.*`, `OFFSET...FETCH` 페이징, 대괄호 식별자, 마이그레이션 락 관리 |
+| [`calcite-tsql/`](calcite-tsql/) | `apache/calcite` (`core/src/test/.../tsql.iq`) | Apache-2.0 | `.iq` Quasiquote 테스트 세트 | Apache Calcite T-SQL 빌트인 함수 의미론: `CHARINDEX`, `REVERSE`, `LEN`, `DATEDIFF`, `IIF`, `ISNULL` |
 
 > **참고**: `gorm-sqlserver/` 내부의 Go 소스 파일들은 루트 `go.mod`와의 외부 모듈(`gorm.io/gorm`) 의존성 충돌 및 `go test ./...` 오염을 방지하기 위해 `.go.txt` 확장자로 보관합니다.

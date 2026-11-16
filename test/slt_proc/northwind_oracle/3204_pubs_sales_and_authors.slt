@@ -1,0 +1,88 @@
+# test/slt_proc/northwind_oracle/3204_pubs_sales_and_authors.slt
+# Microsoft SQL Server Pubs Sample Database Authors and Book Sales Oracle Suite
+
+statement ok
+CREATE TABLE pubs_authors (
+    au_id VARCHAR(11) PRIMARY KEY,
+    au_lname VARCHAR(40) NOT NULL,
+    au_fname VARCHAR(20) NOT NULL,
+    city VARCHAR(20) NOT NULL,
+    state CHAR(2) NOT NULL
+);
+
+statement ok
+CREATE TABLE pubs_titles (
+    title_id VARCHAR(6) PRIMARY KEY,
+    title VARCHAR(80) NOT NULL,
+    type VARCHAR(12) NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    ytd_sales INT NOT NULL
+);
+
+statement ok
+CREATE TABLE pubs_titleauthor (
+    au_id VARCHAR(11) NOT NULL,
+    title_id VARCHAR(6) NOT NULL,
+    royaltyper INT NOT NULL,
+    PRIMARY KEY (au_id, title_id)
+);
+
+statement ok
+INSERT INTO pubs_authors VALUES
+('A01', 'White', 'Johnson', 'Menlo Park', 'CA'),
+('A02', 'Green', 'Marjorie', 'Oakland', 'CA'),
+('A03', 'Carson', 'Cheryl', 'Berkeley', 'CA');
+
+statement ok
+INSERT INTO pubs_titles VALUES
+('T01', 'Executive Database Guide', 'business', 19.99, 4095),
+('T02', 'Cooking with Computers', 'business', 11.95, 3876),
+('T03', 'Gourmet Microwave', 'mod_cook', 2.99, 2032);
+
+statement ok
+INSERT INTO pubs_titleauthor VALUES
+('A01', 'T01', 100),
+('A02', 'T02', 100),
+('A02', 'T03', 100);
+
+# Query 1: Join Authors to Titles via titleauthor
+query TTT
+SELECT a.au_lname, t.title, t.type
+FROM pubs_authors a
+JOIN pubs_titleauthor ta ON a.au_id = ta.au_id
+JOIN pubs_titles t ON ta.title_id = t.title_id
+ORDER BY a.au_lname, t.title;
+----
+Green 'Cooking with Computers' business
+Green 'Gourmet Microwave' mod_cook
+White 'Executive Database Guide' business
+
+# Query 2: Aggregate Sales Revenue by Type
+query TIR
+SELECT type, COUNT(title_id), SUM(price * ytd_sales)
+FROM pubs_titles
+GROUP BY type
+ORDER BY type;
+----
+business 2 128177.250
+mod_cook 1 6075.680
+
+# Query 3: Multi-author filter
+query TT
+SELECT a.au_lname, a.city
+FROM pubs_authors a
+WHERE a.state = 'CA'
+ORDER BY a.au_lname;
+----
+Carson Berkeley
+Green Oakland
+White 'Menlo Park'
+
+statement ok
+DROP TABLE pubs_titleauthor;
+
+statement ok
+DROP TABLE pubs_titles;
+
+statement ok
+DROP TABLE pubs_authors;

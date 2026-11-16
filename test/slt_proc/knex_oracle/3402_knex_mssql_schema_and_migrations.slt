@@ -1,0 +1,64 @@
+# test/slt_proc/knex_oracle/3402_knex_mssql_schema_and_migrations.slt
+# Knex.js MSSQL Migration Tables and Lock Lifecycle Oracle Suite
+
+statement ok
+CREATE TABLE [knex_migrations] (
+    [id] INT IDENTITY(1,1) PRIMARY KEY,
+    [name] NVARCHAR(255) NOT NULL,
+    [batch] INT NOT NULL
+);
+
+statement ok
+CREATE TABLE [knex_migrations_lock] (
+    [index] INT PRIMARY KEY,
+    [is_locked] INT NOT NULL
+);
+
+statement ok
+INSERT INTO [knex_migrations_lock] ([index], [is_locked]) VALUES (1, 0);
+
+query II
+SELECT [index], [is_locked] FROM [knex_migrations_lock] WHERE [index] = 1;
+----
+1 0
+
+# Acquire lock
+statement ok
+UPDATE [knex_migrations_lock] SET [is_locked] = 1 WHERE [index] = 1 AND [is_locked] = 0;
+
+query II
+SELECT [index], [is_locked] FROM [knex_migrations_lock] WHERE [index] = 1;
+----
+1 1
+
+# Record applied migration
+query I
+INSERT INTO [knex_migrations] ([name], [batch]) OUTPUT INSERTED.[id] VALUES ('20261116000000_create_initial_schema.js', 1);
+----
+1
+
+query I
+INSERT INTO [knex_migrations] ([name], [batch]) OUTPUT INSERTED.[id] VALUES ('20261116000001_add_articles_table.js', 1);
+----
+2
+
+query ITI
+SELECT [id], [name], [batch] FROM [knex_migrations] ORDER BY [id] ASC;
+----
+1 20261116000000_create_initial_schema.js 1
+2 20261116000001_add_articles_table.js 1
+
+# Release lock
+statement ok
+UPDATE [knex_migrations_lock] SET [is_locked] = 0 WHERE [index] = 1;
+
+query II
+SELECT [index], [is_locked] FROM [knex_migrations_lock] WHERE [index] = 1;
+----
+1 0
+
+statement ok
+DROP TABLE [knex_migrations];
+
+statement ok
+DROP TABLE [knex_migrations_lock];

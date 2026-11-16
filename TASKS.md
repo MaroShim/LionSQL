@@ -193,6 +193,10 @@
 | `PENDING` | **`COMPAT-DECLARATIVE-1`** | `v1.99.0` | Durability | P2 | 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) |  |  |
 | `DONE` | **`COMPAT-TABLE-DRIVEN-1`** |  | Durability | P2 | 10개 실전 서비스 호환 규칙 Table-Driven 구조 및 안티패턴 키워드 매칭 전면 정식화 | [`notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md) |  |
 | `DONE` | **`COMPAT-TSQL-MATRIX-1`** | `1.0-GA` | Ecosystem | P2 | SQL Server 호환성 매트릭스(TSQL_COMPATIBILITY_MATRIX.ko.md) 구현 진행 중 항목 체크 및 동기화 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
+| `DONE` | **`CORPUS-ANTLR-TSQL-1`** | `1.0-GA` | Ecosystem | P2 | ANTLR4 공식 T-SQL 그래머 코퍼스 수집 및 구문/파서 회귀 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
+| `DONE` | **`CORPUS-CALCITE-TSQL-1`** | `1.0-GA` | Ecosystem | P2 | Apache Calcite T-SQL 빌트인 함수/표현식 코퍼스 수집 및 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
+| `DONE` | **`CORPUS-KNEX-MSSQL-1`** | `1.0-GA` | Ecosystem | P2 | Knex.js MSSQL Dialect 쿼리 코퍼스 수집 및 Wiki.js 대응 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
+| `DONE` | **`CORPUS-NORTHWIND-PUBS-1`** | `1.0-GA` | Ecosystem | P2 | Northwind 및 Pubs 공식 표준 관계형 코퍼스 수집 및 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`DEPRECATE-OCC-PERF-1`** |  | Storage | P2 | v1.0 이전 OCC performance 모드(-memory=performance) Deprecate 명기 (v1.0 옵션 유지) |  |  |
 | `DONE` | **`DOC-REVAMP-10`** | `1.0-GA` | Documentation | P2 | 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 | [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md) |  |
 | `DONE` | **`DOGFOOD-SPRINT-1`** |  | Performance | P1 | LionSQL 자체 백엔드 기반 정형 스프린트/태스크 관리 시스템 구축 (Dogfooding) |  |  |
@@ -2401,6 +2405,34 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-12 09:51:04
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md)
+
+---
+
+### [DONE] ANTLR4 공식 T-SQL 그래머 코퍼스 수집 및 구문/파서 회귀 스위트 구축 `CORPUS-ANTLR-TSQL-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 11:44:40
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md)
+
+---
+
+### [DONE] Apache Calcite T-SQL 빌트인 함수/표현식 코퍼스 수집 및 SLT 오라클 스위트 구축 `CORPUS-CALCITE-TSQL-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 11:46:25
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md)
+
+---
+
+### [DONE] Knex.js MSSQL Dialect 쿼리 코퍼스 수집 및 Wiki.js 대응 SLT 오라클 스위트 구축 `CORPUS-KNEX-MSSQL-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 11:45:35
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md)
+
+---
+
+### [DONE] Northwind 및 Pubs 공식 표준 관계형 코퍼스 수집 및 SLT 오라클 스위트 구축 `CORPUS-NORTHWIND-PUBS-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 11:43:28
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md)
 
 ---
 

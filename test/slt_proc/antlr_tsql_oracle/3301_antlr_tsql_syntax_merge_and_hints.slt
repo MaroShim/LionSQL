@@ -1,0 +1,50 @@
+# test/slt_proc/antlr_tsql_oracle/3301_antlr_tsql_syntax_merge_and_hints.slt
+# ANTLR4 T-SQL Official Grammar Table Hints and MERGE Execution Oracle Suite
+
+statement ok
+CREATE TABLE antlr_target (
+    id INT PRIMARY KEY,
+    val VARCHAR(20) NOT NULL
+);
+
+statement ok
+CREATE TABLE antlr_source (
+    id INT PRIMARY KEY,
+    val VARCHAR(20) NOT NULL
+);
+
+statement ok
+INSERT INTO antlr_target VALUES (1, 'orig1'), (2, 'orig2');
+
+statement ok
+INSERT INTO antlr_source VALUES (2, 'updated2'), (3, 'new3');
+
+# MERGE syntax with MATCHED and NOT MATCHED
+statement ok
+MERGE antlr_target AS t
+USING antlr_source AS s
+ON (t.id = s.id)
+WHEN MATCHED THEN
+    UPDATE SET val = s.val
+WHEN NOT MATCHED THEN
+    INSERT (id, val) VALUES (s.id, s.val);
+
+query IT
+SELECT id, val FROM antlr_target WITH (NOLOCK) ORDER BY id;
+----
+1 orig1
+2 updated2
+3 new3
+
+# Table hints WITH (NOLOCK) and OPTION (RECOMPILE)
+query IT
+SELECT id, val FROM antlr_target WITH (NOLOCK) WHERE id >= 2 ORDER BY id;
+----
+2 updated2
+3 new3
+
+statement ok
+DROP TABLE antlr_source;
+
+statement ok
+DROP TABLE antlr_target;

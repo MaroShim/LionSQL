@@ -1,0 +1,72 @@
+# test/slt_proc/northwind_oracle/3203_northwind_products_and_suppliers.slt
+# Microsoft SQL Server Northwind Products, Suppliers, and Hierarchical Self-Join Oracle Suite
+
+statement ok
+CREATE TABLE nw_emp (
+    emp_id INT PRIMARY KEY,
+    first_name VARCHAR(10) NOT NULL,
+    last_name VARCHAR(20) NOT NULL,
+    reports_to INT NULL
+);
+
+statement ok
+INSERT INTO nw_emp VALUES
+(1, 'Nancy', 'Davolio', 2),
+(2, 'Andrew', 'Fuller', NULL),
+(3, 'Janet', 'Leverling', 2),
+(5, 'Steven', 'Buchanan', 2),
+(6, 'Michael', 'Suyama', 5);
+
+# Query 1: Self-Join Hierarchical Reporting Chain
+query TTT
+SELECT e.first_name, e.last_name, m.last_name
+FROM nw_emp e
+LEFT JOIN nw_emp m ON e.reports_to = m.emp_id
+ORDER BY e.emp_id;
+----
+Nancy Davolio Fuller
+Andrew Fuller NULL
+Janet Leverling Fuller
+Steven Buchanan Fuller
+Michael Suyama Buchanan
+
+statement ok
+CREATE TABLE nw_prods (
+    prod_id INT PRIMARY KEY,
+    name VARCHAR(40) NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    stock INT NOT NULL,
+    discontinued INT NOT NULL
+);
+
+statement ok
+INSERT INTO nw_prods VALUES
+(1, 'Chai', 18.00, 39, 0),
+(2, 'Chang', 19.00, 17, 0),
+(3, 'Aniseed Syrup', 10.00, 13, 0),
+(5, 'Gumbo Mix', 21.35, 0, 1),
+(9, 'Kobe Niku', 97.00, 29, 1);
+
+# Query 2: Product Filters and Stock Availability
+query TRII
+SELECT name, price, stock, discontinued
+FROM nw_prods
+WHERE discontinued = 0 AND price >= 15.00
+ORDER BY price DESC;
+----
+Chang 19.000 17 0
+Chai 18.000 39 0
+
+# Query 3: Aggregation with HAVING
+query I
+SELECT COUNT(prod_id)
+FROM nw_prods
+WHERE stock > 0;
+----
+4
+
+statement ok
+DROP TABLE nw_prods;
+
+statement ok
+DROP TABLE nw_emp;

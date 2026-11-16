@@ -1,0 +1,91 @@
+# test/slt_proc/northwind_oracle/3202_northwind_orders_and_customers.slt
+# Microsoft SQL Server Northwind Multi-Table Joins & Order Totals Oracle Suite
+
+statement ok
+CREATE TABLE nw_cust (
+    cust_id VARCHAR(5) PRIMARY KEY,
+    name VARCHAR(40) NOT NULL,
+    city VARCHAR(15) NOT NULL
+);
+
+statement ok
+CREATE TABLE nw_orders (
+    order_id INT PRIMARY KEY,
+    cust_id VARCHAR(5) NOT NULL,
+    freight DECIMAL(10,2) NOT NULL
+);
+
+statement ok
+CREATE TABLE nw_items (
+    order_id INT NOT NULL,
+    prod_id INT NOT NULL,
+    qty INT NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    PRIMARY KEY (order_id, prod_id)
+);
+
+statement ok
+INSERT INTO nw_cust VALUES
+('ALFKI', 'Alfreds Futterkiste', 'Berlin'),
+('ANATR', 'Ana Trujillo Emparedados', 'Mexico D.F.'),
+('ANTON', 'Antonio Moreno Taqueria', 'Mexico D.F.');
+
+statement ok
+INSERT INTO nw_orders VALUES
+(1001, 'ALFKI', 25.50),
+(1002, 'ALFKI', 15.00),
+(1003, 'ANATR', 30.00);
+
+statement ok
+INSERT INTO nw_items VALUES
+(1001, 1, 10, 18.00),
+(1001, 2, 5, 20.00),
+(1002, 1, 20, 18.00),
+(1003, 3, 15, 22.00);
+
+# Query 1: Join Customer and Orders
+query ITR
+SELECT o.order_id, c.name, o.freight
+FROM nw_orders o
+JOIN nw_cust c ON o.cust_id = c.cust_id
+ORDER BY o.order_id;
+----
+1001 'Alfreds Futterkiste' 25.500
+1002 'Alfreds Futterkiste' 15.000
+1003 'Ana Trujillo Emparedados' 30.000
+
+# Query 2: Aggregate Order Lines
+query ITR
+SELECT o.order_id, c.name, SUM(i.qty * i.price)
+FROM nw_orders o
+JOIN nw_cust c ON o.cust_id = c.cust_id
+JOIN nw_items i ON o.order_id = i.order_id
+GROUP BY o.order_id, c.name
+ORDER BY o.order_id;
+----
+1001 'Alfreds Futterkiste' 280.000
+1002 'Alfreds Futterkiste' 360.000
+1003 'Ana Trujillo Emparedados' 330.000
+
+# Query 3: Left Join to find Customers with zero orders
+statement ok
+INSERT INTO nw_cust VALUES ('BERGS', 'Berglunds snabbkop', 'Lulea');
+
+query TT
+SELECT c.cust_id, c.name
+FROM nw_cust c
+LEFT JOIN nw_orders o ON c.cust_id = o.cust_id
+WHERE o.order_id IS NULL
+ORDER BY c.cust_id;
+----
+ANTON 'Antonio Moreno Taqueria'
+BERGS 'Berglunds snabbkop'
+
+statement ok
+DROP TABLE nw_items;
+
+statement ok
+DROP TABLE nw_orders;
+
+statement ok
+DROP TABLE nw_cust;

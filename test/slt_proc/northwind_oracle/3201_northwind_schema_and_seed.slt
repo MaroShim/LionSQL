@@ -1,0 +1,64 @@
+# test/slt_proc/northwind_oracle/3201_northwind_schema_and_seed.slt
+# Microsoft SQL Server Northwind Schema Creation and Data Ingestion Oracle Suite
+
+statement ok
+CREATE TABLE nw_categories (
+    category_id INT IDENTITY(1,1) PRIMARY KEY,
+    category_name NVARCHAR(15) NOT NULL,
+    description NVARCHAR(200) NULL
+);
+
+statement ok
+INSERT INTO nw_categories (category_name, description) VALUES
+('Beverages', 'Soft drinks, coffees, teas'),
+('Condiments', 'Sweet and savory sauces'),
+('Confections', 'Desserts, candies, and sweet breads'),
+('Dairy Products', 'Cheeses'),
+('Grains/Cereals', 'Breads, crackers, pasta'),
+('Meat/Poultry', 'Prepared meats'),
+('Produce', 'Dried fruit and bean curd'),
+('Seafood', 'Seaweed and fish');
+
+query IT
+SELECT category_id, category_name FROM nw_categories ORDER BY category_id;
+----
+1 Beverages
+2 Condiments
+3 Confections
+4 Dairy Products
+5 Grains/Cereals
+6 Meat/Poultry
+7 Produce
+8 Seafood
+
+statement ok
+CREATE TABLE nw_customers (
+    customer_id NCHAR(5) PRIMARY KEY,
+    company_name NVARCHAR(40) NOT NULL,
+    contact_name NVARCHAR(30) NULL,
+    city NVARCHAR(15) NULL,
+    country NVARCHAR(15) NULL
+);
+
+statement ok
+INSERT INTO nw_customers (customer_id, company_name, contact_name, city, country) VALUES
+('ALFKI', 'Alfreds Futterkiste', 'Maria Anders', 'Berlin', 'Germany'),
+('ANATR', 'Ana Trujillo Emparedados', 'Ana Trujillo', 'Mexico D.F.', 'Mexico'),
+('ANTON', 'Antonio Moreno Taqueria', 'Antonio Moreno', 'Mexico D.F.', 'Mexico'),
+('BERGS', 'Berglunds snabbkop', 'Christina Berglund', 'Lulea', 'Sweden'),
+('BLAUS', 'Blauer See Delikatessen', 'Hanna Moos', 'Mannheim', 'Germany'),
+('BOLID', 'Bolido Comidas', 'Martin Sommer', 'Madrid', 'Spain'),
+('BONAP', 'Bon app', 'Laurence Lebihan', 'Marseille', 'France'),
+('BOTTM', 'Bottom-Dollar Markets', 'Elizabeth Lincoln', 'Tsawassen', 'Canada');
+
+query TT
+SELECT customer_id, city FROM nw_customers WHERE country = 'Germany' ORDER BY customer_id;
+----
+ALFKI Berlin
+BLAUS Mannheim
+
+statement ok
+DROP TABLE nw_customers;
+
+statement ok
+DROP TABLE nw_categories;
