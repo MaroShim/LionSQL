@@ -51,10 +51,12 @@ func NewRotatingLogWriter(filePath string, maxBytes int64) (*RotatingLogWriter, 
 }
 
 func (w *RotatingLogWriter) openFile() error {
-	f, err := os.OpenFile(w.filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	// [RULE:PathSecurity] Enforce strict 0600 permissions to protect sensitive query data
+	f, err := os.OpenFile(w.filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open log file %q: %w", w.filePath, err)
 	}
+	_ = os.Chmod(w.filePath, 0600)
 	fi, err := f.Stat()
 	if err != nil {
 		_ = f.Close()
@@ -109,10 +111,12 @@ func (w *RotatingLogWriter) WriteLine(v any) error {
 // Opens the new staging log file first and checks for errors before renaming or closing the existing file.
 func (w *RotatingLogWriter) rotate() error {
 	tmpNewPath := w.filePath + ".new"
-	f, err := os.OpenFile(tmpNewPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0644)
+	// [RULE:PathSecurity] Enforce 0600 on rotated staging log
+	f, err := os.OpenFile(tmpNewPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to create rotated log file %q: %w", w.filePath, err)
 	}
+	_ = os.Chmod(tmpNewPath, 0600)
 
 	for i := MaxRotatedBackups - 1; i >= 1; i-- {
 		oldPath := fmt.Sprintf("%s.%d", w.filePath, i)

@@ -74,3 +74,43 @@ func TestP1_BatchM5_StorageSyncerContract(t *testing.T) {
 		t.Fatalf("syncer.Sync failed: %v", err)
 	}
 }
+
+// TestRegression_DaemonLogFilePermissions verifies TASK-SEC-01:
+// Daemon log files must be created with strict 0600 permissions to protect sensitive query data ([RULE:PathSecurity]).
+func TestRegression_DaemonLogFilePermissions(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "lionsql_daemon.log")
+
+	// 1. Initial creation must enforce 0600
+	fd, err := openDaemonLogFile(logPath)
+	if err != nil {
+		t.Fatalf("openDaemonLogFile failed: %v", err)
+	}
+	_ = fd.Close()
+
+	stat, err := os.Stat(logPath)
+	if err != nil {
+		t.Fatalf("failed to stat log file: %v", err)
+	}
+	if stat.Mode().Perm() != 0600 {
+		t.Fatalf("expected log file permission 0600, got %04o", stat.Mode().Perm())
+	}
+
+	// 2. Existing file with relaxed permission (e.g. 0644) must be tightened to 0600 upon re-opening
+	if err := os.Chmod(logPath, 0644); err != nil {
+		t.Fatalf("failed to set 0644 on test file: %v", err)
+	}
+	fd2, err := openDaemonLogFile(logPath)
+	if err != nil {
+		t.Fatalf("openDaemonLogFile reopen failed: %v", err)
+	}
+	_ = fd2.Close()
+
+	stat2, err := os.Stat(logPath)
+	if err != nil {
+		t.Fatalf("failed to stat log file after reopen: %v", err)
+	}
+	if stat2.Mode().Perm() != 0600 {
+		t.Fatalf("reopened log file permission was not tightened to 0600: got %04o", stat2.Mode().Perm())
+	}
+}

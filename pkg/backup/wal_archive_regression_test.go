@@ -210,3 +210,52 @@ func TestWALArchiver_PreserveRotatedSegmentOnFailure(t *testing.T) {
 		t.Fatalf("Expected 10 records in preserved frozen WAL, got %d", replayedCount)
 	}
 }
+
+// TestRegression_WALArchivePermissions verifies TASK-SEC-04:
+// WAL archive segments must be written with strict 0600 permissions to protect sensitive WAL data ([RULE:PathSecurity]).
+func TestRegression_WALArchivePermissions(t *testing.T) {
+	tmpDir := t.TempDir()
+	archiveDir := filepath.Join(tmpDir, "wal_archive")
+	walPath := filepath.Join(tmpDir, "active.wal")
+
+	archiver, err := backup.NewWALArchiver(archiveDir)
+	if err != nil {
+		t.Fatalf("NewWALArchiver failed: %v", err)
+	}
+
+	writer, err := memengine.NewWALWriter(walPath, memengine.FsyncAlways)
+	if err != nil {
+		t.Fatalf("NewWALWriter failed: %v", err)
+	}
+	defer writer.Close()
+
+	if err := writer.Append(memengine.WALRecord{
+		LSN:       1,
+		Timestamp: time.Now().UnixNano(),
+		Ops: []memengine.WALOp{
+			{
+				Type:  memengine.OpInsert,
+				Table: "test",
+				Key:   "1",
+				Record: storage.Record{
+					"id": storage.IntValue(1),
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("Append failed: %v", err)
+	}
+
+	seg, err := archiver.RotateAndArchive(writer, walPath)
+	if err != nil {
+		t.Fatalf("RotateAndArchive failed: %v", err)
+	}
+
+	stat, err := os.Stat(seg.Path)
+	if err != nil {
+		t.Fatalf("failed to stat archived segment: %v", err)
+	}
+	if stat.Mode().Perm() != 0600 {
+		t.Fatalf("expected archived segment permission 0600, got %04o", stat.Mode().Perm())
+	}
+}

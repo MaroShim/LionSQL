@@ -115,10 +115,12 @@ func (a *WALArchiver) ArchiveSegment(walPath string) (*ArchivedSegment, error) {
 	}
 	defer src.Close()
 
-	dst, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	// [RULE:PathSecurity] Enforce 0600 permissions on WAL archive segments
+	dst, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary archive file: %w", err)
 	}
+	_ = os.Chmod(tmpPath, 0600)
 
 	written, err := io.Copy(dst, src)
 	_ = dst.Sync()

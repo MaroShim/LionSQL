@@ -183,8 +183,8 @@ func startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineTyp
 	}
 	childArgs = append(childArgs, "-is-child-worker=true")
 
-	// Open log file (append mode)
-	logFd, err := os.OpenFile(filepath.Clean(logFile), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	// Open log file (append mode, restricted to 0600 for security [RULE:PathSecurity])
+	logFd, err := openDaemonLogFile(logFile)
 	if err != nil {
 		fmt.Printf("[LionSQL] Failed to open log file %s: %v\n", logFile, err)
 		os.Exit(1)
@@ -259,6 +259,17 @@ func renderDaemonStartupOutput(childPID int, engineType, dataDir, logFile, pidFi
 	}
 
 	return b.String()
+}
+
+// openDaemonLogFile opens the daemon log file with 0600 permissions ([RULE:PathSecurity]).
+func openDaemonLogFile(logFile string) (*os.File, error) {
+	cleanPath := filepath.Clean(logFile)
+	logFd, err := os.OpenFile(cleanPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		return nil, err
+	}
+	_ = os.Chmod(cleanPath, 0600)
+	return logFd, nil
 }
 
 // writePidFileAtomic writes the PID file via a temporary swap file and atomic rename ([RULE:AtomicSaves], Scope-130).

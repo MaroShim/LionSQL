@@ -184,9 +184,12 @@ func parseValueExpression(exprStr string) any {
 	if strings.EqualFold(trimmed, "FALSE") {
 		return false
 	}
-	// String literal '...'
+	// String literal '...' or T-SQL Unicode N'...'
 	if len(trimmed) >= 2 && trimmed[0] == '\'' && trimmed[len(trimmed)-1] == '\'' {
 		return strings.ReplaceAll(trimmed[1:len(trimmed)-1], "''", "'")
+	}
+	if len(trimmed) >= 3 && (trimmed[0] == 'N' || trimmed[0] == 'n') && trimmed[1] == '\'' && trimmed[len(trimmed)-1] == '\'' {
+		return strings.ReplaceAll(trimmed[2:len(trimmed)-1], "''", "'")
 	}
 	// Integer
 	if i, err := strconv.ParseInt(trimmed, 10, 64); err == nil {

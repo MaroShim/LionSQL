@@ -160,3 +160,55 @@ func TestMerge_Regression_P0_18_StreamLookupAndMemoryGuardrail(t *testing.T) {
 		t.Logf("[P0-18 PASS] BY SOURCE full-scan MERGE safely protected by memory guardrail: %v", err)
 	})
 }
+
+// TestRegression_MergeValues_EscapedQuotes verifies TASK-EXEC-01 (결함 8-5):
+// Inline MERGE USING (VALUES ...) source parsing must properly unescape double single-quotes
+// ('' -> ') for both standard literals ('...') and T-SQL Unicode literals (N'...').
+func TestRegression_MergeValues_EscapedQuotes(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := NewCoordinator(cat, eng, Config{})
+	defer coord.Close()
+
+	if _, err := coord.ExecuteSQL(`
+		CREATE TABLE merge_quotes_target (
+			id INT PRIMARY KEY,
+			title VARCHAR(100),
+			author VARCHAR(100)
+		);
+	`); err != nil {
+		t.Fatalf("create table failed: %v", err)
+	}
+
+	mergeSQL := `
+	MERGE merge_quotes_target AS t
+	USING (VALUES (1, 'It''s a great book', N'Flannery O''Connor')) AS s(id, title, author)
+	ON t.id = s.id
+	WHEN NOT MATCHED THEN
+		INSERT (id, title, author) VALUES (s.id, s.title, s.author);
+	`
+	if _, err := coord.ExecuteSQL(mergeSQL); err != nil {
+		t.Fatalf("MERGE with escaped quotes failed: %v", err)
+	}
+
+	res, err := coord.ExecuteSQL("SELECT title, author FROM merge_quotes_target WHERE id = 1;")
+	if err != nil {
+		t.Fatalf("SELECT failed: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(res.Rows))
+	}
+
+	titleVal := fmt.Sprintf("%v", res.Rows[0]["title"])
+	authorVal := fmt.Sprintf("%v", res.Rows[0]["author"])
+
+	expectedTitle := "It's a great book"
+	expectedAuthor := "Flannery O'Connor"
+
+	if titleVal != expectedTitle {
+		t.Fatalf("expected title %q, got %q", expectedTitle, titleVal)
+	}
+	if authorVal != expectedAuthor {
+		t.Fatalf("expected author %q, got %q", expectedAuthor, authorVal)
+	}
+}
