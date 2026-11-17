@@ -1437,6 +1437,22 @@ CAST(c.is_enabled AS bit) ASC`
 		t.Fatalf("expected ComparisonStyle=196609, got %v", resCollation.Rows[0]["ComparisonStyle"])
 	}
 
+	// 15b. Azure Data Studio Session Properties Initialization Query
+	qADSSessionProp := `SELECT ISNULL(SESSIONPROPERTY ('ANSI_NULLS'), 0) AS [ANSI_NULLS], ISNULL(SESSIONPROPERTY ('QUOTED_IDENTIFIER'), 1) AS [QUOTED_IDENTIFIER]`
+	resSessProp, err := coord.ExecuteSQL(qADSSessionProp)
+	if err != nil {
+		t.Fatalf("ADS session property query failed: %v", err)
+	}
+	if len(resSessProp.Rows) != 1 {
+		t.Fatalf("expected 1 row for session properties, got %d", len(resSessProp.Rows))
+	}
+	if fmt.Sprintf("%v", resSessProp.Rows[0]["ANSI_NULLS"]) != "1" {
+		t.Fatalf("expected ANSI_NULLS=1, got %v", resSessProp.Rows[0]["ANSI_NULLS"])
+	}
+	if fmt.Sprintf("%v", resSessProp.Rows[0]["QUOTED_IDENTIFIER"]) != "1" {
+		t.Fatalf("expected QUOTED_IDENTIFIER=1, got %v", resSessProp.Rows[0]["QUOTED_IDENTIFIER"])
+	}
+
 	// 16. SSMS Complex Table Enumeration Query with sys.indexes & sys.data_spaces & sys.extended_properties
 	qSSMSComplexTables := `SELECT
 tbl.name AS [Name],

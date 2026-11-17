@@ -541,6 +541,20 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		}
 	}
 
+	// SESSIONPROPERTY('prop')
+	if strings.HasPrefix(upper, "SESSIONPROPERTY(") && strings.HasSuffix(upper, ")") {
+		arg := strings.TrimSpace(trimmed[len("SESSIONPROPERTY(") : len(trimmed)-1])
+		arg = strings.Trim(arg, "'\"")
+		switch strings.ToUpper(arg) {
+		case "ANSI_NULLS", "ANSI_PADDING", "ANSI_WARNINGS", "ARITHABORT", "CONCAT_NULL_YIELDS_NULL", "QUOTED_IDENTIFIER":
+			return int64(1), strings.ToLower(arg)
+		case "NUMERIC_ROUNDABORT":
+			return int64(0), strings.ToLower(arg)
+		default:
+			return nil, strings.ToLower(arg)
+		}
+	}
+
 	// COLLATIONPROPERTY('collation', 'property')
 	if strings.HasPrefix(upper, "COLLATIONPROPERTY(") && strings.HasSuffix(upper, ")") {
 		inner := strings.TrimSpace(trimmed[len("COLLATIONPROPERTY(") : len(trimmed)-1])

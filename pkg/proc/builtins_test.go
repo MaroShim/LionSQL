@@ -1148,6 +1148,12 @@ func TestBuiltin_AdvancedTSQLFunctions(t *testing.T) {
 	if idxProp := EvalBuiltin("INDEXPROPERTY", []storage.Value{storage.IntValue(1), storage.StringValue("idx_pk"), storage.StringValue("IsUnique")}); idxProp.IVal != 1 {
 		t.Errorf("INDEXPROPERTY IsUnique expected 1, got %d", idxProp.IVal)
 	}
+	if sessProp := EvalBuiltin("SESSIONPROPERTY", []storage.Value{storage.StringValue("ANSI_NULLS")}); sessProp.IVal != 1 {
+		t.Errorf("SESSIONPROPERTY ANSI_NULLS expected 1, got %d", sessProp.IVal)
+	}
+	if sessProp := EvalBuiltin("SESSIONPROPERTY", []storage.Value{storage.StringValue("QUOTED_IDENTIFIER")}); sessProp.IVal != 1 {
+		t.Errorf("SESSIONPROPERTY QUOTED_IDENTIFIER expected 1, got %d", sessProp.IVal)
+	}
 	if schema := EvalBuiltin("OBJECT_SCHEMA_NAME", []storage.Value{storage.IntValue(1)}); schema.SVal != "dbo" {
 		t.Errorf("OBJECT_SCHEMA_NAME expected 'dbo', got %q", schema.SVal)
 	}
