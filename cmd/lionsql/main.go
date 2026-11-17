@@ -24,24 +24,25 @@ Quickstart:
   lionsql -i                     # Start interactive SQL shell
 
 Commands:
-  start | stop | restart | status  Daemon lifecycle management
-  serve                            Run database server in foreground (default)
-  cli | sql "<statement>"          Interactive SQL shell or one-off query execution
-  doctor                           Run self-diagnostic health checks on host & storage
-  backup | restore <file>          Point-in-time database backup and restore
-  migrate <subcommand>             Declarative schema migrations (status, up, down)
-  init-config [path]               Generate default lionsql.json configuration file
-  version                          Display version and engine information
+  start | stop              Start or stop background daemon
+  restart | status          Restart daemon or check running status
+  serve                     Run database server in foreground (default)
+  cli | sql "<statement>"   Interactive SQL shell or one-off query
+  doctor                    Run system and storage diagnostic checks
+  backup | restore <file>   Point-in-time database backup and restore
+  migrate <subcommand>      Manage schema migrations (status, up, down)
+  init-config [path]        Generate default configuration file
+  version                   Display version and engine information
 
 Common Options:
-  -dir <path>            Database data directory (default: ./data)
-  -engine <type>         Storage engine: wiredtiger or compact (default: wiredtiger)
-  -http <addr>           HTTP service & Web Studio address (default: 127.0.0.1:8090)
-  -pg <addr>             PostgreSQL v3 wire port (default: 127.0.0.1:5433)
-  -tds <addr>            MS SQL Server TDS wire port (default: 127.0.0.1:1433)
-  -dev                   Developer mode (real-time query & parameter tracing)
-  -seed                  Seed demo sample database on startup
-  -config <path>         Path to JSON configuration file (auto-detects ./lionsql.json)
+  -dir <path>               Database data directory (default: ./data)
+  -engine <type>            Storage engine: wiredtiger or compact (default: wiredtiger)
+  -http <addr>              HTTP service & Web Studio address (default: 127.0.0.1:8090)
+  -pg <addr>                PostgreSQL v3 wire port (default: 127.0.0.1:5433)
+  -tds <addr>               MS SQL Server TDS wire port (default: 127.0.0.1:1433)
+  -dev                      Developer mode (real-time query & parameter tracing)
+  -seed                     Seed demo sample database on startup
+  -config <path>            Path to JSON configuration file (auto-detects ./lionsql.json)
 
 Examples:
   lionsql start                   # Start background daemon
