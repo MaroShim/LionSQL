@@ -25,6 +25,7 @@ import (
 	"lionsql/pkg/proc/runtime"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
+	"lionsql/pkg/tlsutil"
 )
 
 // Server implements a native Microsoft SQL Server TDS 7.x/8.0 wire protocol listener.
@@ -829,6 +830,20 @@ func (s *Server) handlePrelogin(conn net.Conn, pkt *Packet, sess *ConnectionSess
 
 	var serverEncrypt byte
 	shouldDoTLS := false
+
+	if tlsCfg == nil {
+		// Like Microsoft SQL Server, if client requests encryption and no custom certificate was configured,
+		// automatically provision a self-signed TLS certificate to enable encrypted credentials/session.
+		if clientEncrypt == EncryptReq || clientEncrypt == EncryptOn || clientEncrypt == EncryptOff || requireSSL {
+			autoCfg, autoErr := tlsutil.NewSelfSignedTLSConfig()
+			if autoErr == nil {
+				s.mu.Lock()
+				s.tlsConfig = autoCfg
+				tlsCfg = autoCfg
+				s.mu.Unlock()
+			}
+		}
+	}
 
 	if tlsCfg == nil {
 		if requireSSL || clientEncrypt == EncryptReq {

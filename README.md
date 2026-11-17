@@ -194,7 +194,7 @@ Upon startup, the console displays the connection endpoints:
  [HTTP API]       http://127.0.0.1:8090/api/health
  [CDC Stream]     http://127.0.0.1:8090/api/cdc/stream (NDJSON / SSE)
  [Superuser Auth] admin@lionsql.local (JWT Auth: false)
- [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / SSMS
+ [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / SSMS / Azure Data Studio (macOS/Linux)
  [Postgres Wire]  psql -h 127.0.0.1 -p 5433 (PostgreSQL v3 protocol, psql / pgx)
  [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 (TDS 7.x/8.0 protocol, sqlcmd / SSMS)
  [Data Directory] data

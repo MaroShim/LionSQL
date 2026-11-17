@@ -120,6 +120,46 @@ Beekeeper Studio는 **PostgreSQL** 또는 **SQL Server** 연결 모드를 모두
 
 ---
 
+### 2.5. Azure Data Studio (ADS) (macOS / Linux 네이티브 클라이언트 가이드)
+
+> [!NOTE]
+> **ADS 서비스 및 업데이트 상태 안내**: Microsoft는 신규 기능 개발을 VS Code `mssql` 확장으로 일원화함에 따라 Azure Data Studio의 대규모 기능 업데이트를 공식 종료하였으며, Homebrew Cask 역시 비활성화되었습니다. 그러나 Apple Silicon macOS(arm64) 및 Linux에서 가상머신(Windows 에뮬레이션) 없이 네이티브로 실행할 수 있는 독립형 공식 Microsoft GUI 클라이언트라는 실질적인 장점이 있습니다. LionSQL TDS(`:1433`)와 100% 호환되므로, 필요 시 공식 CDN을 통해 최종 안정 버전을 직접 설치하여 유용하게 활용할 수 있습니다.
+
+#### 1. 설치 방법 (공식 Microsoft CDN 직접 다운로드)
+- **macOS (Apple Silicon arm64)**:
+  ```bash
+  curl -L -o /tmp/azuredatastudio.zip "https://download.microsoft.com/download/6b2bfeac-9c1b-4182-9a2f-ce86ff8cc371/azuredatastudio-macos-arm64-1.52.0.zip"
+  unzip -q /tmp/azuredatastudio.zip -d /Applications
+  xattr -cr "/Applications/Azure Data Studio.app"
+  sudo ln -sf "/Applications/Azure Data Studio.app/Contents/Resources/app/bin/code" /opt/homebrew/bin/azuredatastudio
+  ```
+- **macOS (Intel x64) / Linux**:
+  Microsoft 공식 다운로드 아카이브에서 `azuredatastudio-macos-1.52.0.zip` 또는 `.tar.gz`/`.deb`/`.rpm` 수동 설치.
+
+#### 2. 연결 대화상자 설정
+1. 새 연결(New Connection) 클릭.
+2. 파라미터 입력:
+   - **연결 유형 (Connection Type)**: `Microsoft SQL Server`
+   - **서버 (Server)**: `127.0.0.1,1433` (또는 `localhost,1433`)
+   - **인증 유형 (Authentication Type)**: `SQL 로그인 (SQL Login)`
+   - **사용자 이름 (User name)**: `sa`
+   - **비밀번호 (Password)**: (서버 관리자 비밀번호, 개발 모드 기본값: `1234567890`)
+   - **데이터베이스 (Database)**: `master`
+   - **고급 (Advanced) / 암호화 옵션**:
+     - **암호화 (Encrypt)**: `Mandatory` 또는 `Optional` (LionSQL이 자동 자체서명 TLS를 제공하여 둘 다 즉시 접속 가능)
+     - **서버 인증서 신뢰 (Trust server certificate)**: `True (체크)`
+
+#### 3. 지원 기능 검증
+- **개체 탐색기 (Object Explorer)**:
+  - 데이터베이스 트리 브라우징 (`sys.databases` + `has_dbaccess` 가상 카탈로그 연동)
+  - 테이블 및 스키마 탐색 (`sys.tables` + `sys.schemas`)
+  - 열/인덱스/키 상세 노드 탐색 (`sys.all_columns` + `sys.types`)
+- **데이터 조회 및 편집**:
+  - 테이블 우클릭 `상위 1000개 데이터 조회(Select Top 1000 Rows)` 3-Part 이름 정상 매핑.
+  - T-SQL 쿼리 에디터 대화형 실행 및 결과 그리드 출력.
+
+---
+
 ## 3. 명령줄 인터페이스 (CLI) 연결
 
 ### 3.1. PostgreSQL CLI (`psql`)

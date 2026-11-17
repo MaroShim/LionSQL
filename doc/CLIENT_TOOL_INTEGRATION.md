@@ -144,6 +144,45 @@ DbGate is an open-source database manager that supports connecting to LionSQL vi
    - Live row count display derived dynamically via transaction cursors.
    - Interactive data grid with `OFFSET ... ROWS FETCH NEXT ... ROWS ONLY` paging.
 
+---
+
+### 2.5. Azure Data Studio (ADS) (Native macOS / Linux GUI Guide)
+
+> [!NOTE]
+> **ADS Status & Maintenance Notice**: While Microsoft has officially discontinued major feature additions for Azure Data Studio in favor of the VS Code `mssql` extension (and Homebrew Cask has been disabled), ADS provides a distinct advantage: it is a standalone, official Microsoft SQL Server GUI tool that runs natively on macOS (Apple Silicon arm64 / Intel) and Linux without requiring a Windows virtual machine or x64 emulation. LionSQL's TDS engine (`:1433`) is 100% compatible with ADS, and users can obtain and use the final stable release (v1.52.0) via Microsoft's official CDN.
+
+#### 1. Installation (Direct Microsoft CDN)
+- **macOS (Apple Silicon arm64)**:
+  ```bash
+  curl -L -o /tmp/azuredatastudio.zip "https://download.microsoft.com/download/6b2bfeac-9c1b-4182-9a2f-ce86ff8cc371/azuredatastudio-macos-arm64-1.52.0.zip"
+  unzip -q /tmp/azuredatastudio.zip -d /Applications
+  xattr -cr "/Applications/Azure Data Studio.app"
+  sudo ln -sf "/Applications/Azure Data Studio.app/Contents/Resources/app/bin/code" /opt/homebrew/bin/azuredatastudio
+  ```
+- **macOS (Intel x64) / Linux**:
+  Download `azuredatastudio-macos-1.52.0.zip` or `.deb`/`.rpm`/`.tar.gz` directly from the Microsoft release archive.
+
+#### 2. Connection Settings
+1. Click **New Connection**.
+2. Parameters:
+   - **Connection Type**: `Microsoft SQL Server`
+   - **Server**: `127.0.0.1,1433` (or `localhost,1433`)
+   - **Authentication Type**: `SQL Login`
+   - **User name**: `sa`
+   - **Password**: (database administrator password, default dev: `1234567890`)
+   - **Database**: `master`
+   - **Advanced / Encryption**:
+     - **Encrypt**: `Mandatory` or `Optional` (LionSQL auto-provisions a self-signed TLS cert for seamless encrypted handshake)
+     - **Trust server certificate**: `True`
+
+#### 3. Verified Features
+- **Object Explorer**:
+  - Full database tree exploration (`sys.databases` + `has_dbaccess()`)
+  - Table and schema tree inspection (`sys.tables` + `sys.schemas`)
+  - Column, primary key, and secondary index sub-node browsing (`sys.all_columns` + `sys.types`)
+- **Querying & Interactive Grid**:
+  - Right-click `Select Top 1000 Rows` with 3-part qualified naming.
+  - Interactive T-SQL query editor execution with grid results.
 
 ---
 
