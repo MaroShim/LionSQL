@@ -256,6 +256,47 @@ func (l *Lexer) NextToken() Token {
 		tok.Line = tokLine
 		tok.Col = tokCol
 		return tok
+	case '$':
+		if l.peekChar() == '$' {
+			l.readChar() // eat first '$'
+			l.readChar() // eat second '$'
+			startPos := l.pos
+			for {
+				if l.ch == 0 {
+					break
+				}
+				if l.ch == '$' && l.peekChar() == '$' {
+					content := l.input[startPos:l.pos]
+					l.readChar() // eat closing '$'
+					l.readChar() // eat closing '$'
+					tok.Type = TokenString
+					tok.Literal = content
+					tok.Line = tokLine
+					tok.Col = tokCol
+					return tok
+				}
+				l.readChar()
+			}
+			tok.Type = TokenString
+			tok.Literal = l.input[startPos:l.pos]
+			tok.Line = tokLine
+			tok.Col = tokCol
+			return tok
+		} else if isDigit(l.peekChar()) {
+			startPos := l.pos
+			l.readChar() // eat '$'
+			for isDigit(l.ch) {
+				l.readChar()
+			}
+			tok.Type = TokenVariable
+			tok.Literal = l.input[startPos:l.pos]
+			tok.Line = tokLine
+			tok.Col = tokCol
+			return tok
+		}
+		tok = Token{Type: TokenIllegal, Literal: "$", Line: tokLine, Col: tokCol}
+		l.readChar()
+		return tok
 	case '.':
 		if isDigit(l.peekChar()) {
 			lit, isFloat := l.readNumber()

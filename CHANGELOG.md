@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- complete Docker E2E full integration verification for Wiki.js v2 (42 tables) and GoCD v24.1.0 (107 Liquibase changesets, 25 tables, `_BUILDS`/`_STAGES` views, trigger functions) and publish official reports (`notes/reports/WIKIJS_INTEGRATION_REPORT.ko.md`, `notes/reports/GOCD_INTEGRATION_REPORT.ko.md`)
+- refine Web Studio Tables & Records UI layout by positioning `+ New Table` as the right-aligned primary header CTA and isolating `Drop Table` inside a dedicated Danger Zone at the bottom of Schema & DDL subview (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`)
+- support PostgreSQL `CREATE OR REPLACE FUNCTION ... RETURNS TRIGGER AS $$ ... $$` dollar-quoted bodies and `CREATE OR REPLACE TRIGGER ... EXECUTE PROCEDURE ...` syntax for Liquibase migrations (`pkg/proc/lexer.go`, `pkg/proc/parser_ddl.go`, `pkg/engine/sqlexec.go`)
+- support `<> ALL ('{...}')` array comparison in `pkg/proc/eval.go` and `string_agg` / `count(*)` virtual catalog aggregation in `pkg/catalog/virtual/result.go`
 - enforce two-tier row size limits across storage engine: Layer 1 In-Row inline limit 8,060 bytes (`storage.MaxInlineRowSize = 8060`, `ErrInlineRowTooLarge`) and Layer 2 Max Logical Row limit 16 MB (`storage.MaxRowSize = 16 * 1024 * 1024`, `ErrRowTooLarge`) with unit tests and DDL validation (`GEMINI.md` [Invariant 13])
 - implement `pg_catalog.pg_get_keywords()` virtual catalog view supporting JDBC `DatabaseMetaData.getSQLKeywords()` for Liquibase and Metabase migrations
 - restructure architecture and specification documents into canonical `doc/internal/` and `doc/` directories, promoting Unified TxManager (`doc/internal/UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md`), Physical Table Format (`doc/internal/PHYSICAL_TABLE_FORMAT.ko.md`), 2-Tier Parser (`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`), VDBE Directory, and Spec-Out catalog with 278 link instances safely updated
@@ -29,6 +33,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - update all 14 official integration guides and catalog index in `guide/` to official release v0.93.0+
 
 ### Fixed
+- resolve Lexer infinite loop on PostgreSQL positional parameters (`$1`, `$2`) and standalone `$` tokens by ensuring forward character advancement (`l.readChar()`) in `pkg/proc/lexer.go`
+- route PGWire prepared statements referencing catalog views (`_builds`, `_stages`) to Tier-2 CBO View Expansion instead of VDBE physical table scans (`referencesCatalogView` in `pkg/wire/server.go`)
+- expose PostgreSQL JDBC `DatabaseMetaData.getColumns()` required fields (`nspname`, `atttypmod`, `attlen`, `attnotnull`, `relname`, `adsrc`) in `pkg/catalog/virtual/pg.go`
+- filter synthetic primary key (`_row_id`) from wildcard projections (`SELECT *`) in `pkg/execution/project.go`
 - resolve composite unique index duplicate check false-positives when containing NULL columns (`Value.ContainsNull`) across `memengine` and `wiredtiger`
 - resolve transaction snapshot visibility for dynamic temporary derived tables (`#__dt_*`) in `memengine`
 - resolve Casdoor PGWire migration type mismatch by mapping virtual info_schema to standard SQL type names (`pgInfoSchemaDataType`)

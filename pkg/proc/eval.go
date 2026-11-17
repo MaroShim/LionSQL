@@ -313,7 +313,7 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			return false, nil
 
 		default:
-			if fn, ok := e.Right.(*FunctionCallExpr); ok && strings.EqualFold(fn.Name, "ANY") && len(fn.Args) == 1 {
+			if fn, ok := e.Right.(*FunctionCallExpr); ok && (strings.EqualFold(fn.Name, "ANY") || strings.EqualFold(fn.Name, "SOME")) && len(fn.Args) == 1 {
 				leftVal, err := EvalRowExpr(e.Left, row, execSubquery)
 				if err != nil {
 					return nil, err
@@ -323,6 +323,17 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 					return nil, err
 				}
 				return evalRowAnyComparison(e.Op, leftVal, rightVal)
+			}
+			if fn, ok := e.Right.(*FunctionCallExpr); ok && strings.EqualFold(fn.Name, "ALL") && len(fn.Args) == 1 {
+				leftVal, err := EvalRowExpr(e.Left, row, execSubquery)
+				if err != nil {
+					return nil, err
+				}
+				rightVal, err := EvalRowExpr(fn.Args[0], row, execSubquery)
+				if err != nil {
+					return nil, err
+				}
+				return evalRowAllComparison(e.Op, leftVal, rightVal)
 			}
 			leftVal, err := EvalRowExpr(e.Left, row, execSubquery)
 			if err != nil {
@@ -690,6 +701,14 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 					return evalRowAnyComparison(e.Op, val, sVal)
 				}
 			}
+		} else if e.Quantifier == TokenAll && len(targetVals) == 1 {
+			if sVal, ok := targetVals[0].(string); ok {
+				trimmed := strings.TrimSpace(sVal)
+				if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "'{") ||
+					strings.HasPrefix(strings.ToUpper(trimmed), "ARRAY[") {
+					return evalRowAllComparison(e.Op, val, sVal)
+				}
+			}
 		}
 
 		if len(targetVals) == 0 {
@@ -746,14 +765,7 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 	return nil, fmt.Errorf("unsupported AST expression: %T", expr)
 }
 
-func evalRowAnyComparison(op TokenType, leftVal, rightVal any) (any, error) {
-	if leftVal == nil || isNullVal(leftVal) || rightVal == nil || isNullVal(rightVal) {
-		return nil, nil
-	}
-	leftStr := fmt.Sprintf("%v", leftVal)
-	if sv, ok := leftVal.(storage.Value); ok {
-		leftStr = fmt.Sprintf("%v", sv.Interface())
-	}
+func extractArrayElements(rightVal any) []string {
 	var elements []string
 	switch arr := rightVal.(type) {
 	case []string:
@@ -787,6 +799,18 @@ func evalRowAnyComparison(op TokenType, leftVal, rightVal any) (any, error) {
 			}
 		}
 	}
+	return elements
+}
+
+func evalRowAnyComparison(op TokenType, leftVal, rightVal any) (any, error) {
+	if leftVal == nil || isNullVal(leftVal) || rightVal == nil || isNullVal(rightVal) {
+		return nil, nil
+	}
+	leftStr := fmt.Sprintf("%v", leftVal)
+	if sv, ok := leftVal.(storage.Value); ok {
+		leftStr = fmt.Sprintf("%v", sv.Interface())
+	}
+	elements := extractArrayElements(rightVal)
 
 	hasUnknown := false
 	for _, elem := range elements {
@@ -810,6 +834,43 @@ func evalRowAnyComparison(op TokenType, leftVal, rightVal any) (any, error) {
 		return nil, nil
 	}
 	return false, nil
+}
+
+func evalRowAllComparison(op TokenType, leftVal, rightVal any) (any, error) {
+	if leftVal == nil || isNullVal(leftVal) || rightVal == nil || isNullVal(rightVal) {
+		return nil, nil
+	}
+	leftStr := fmt.Sprintf("%v", leftVal)
+	if sv, ok := leftVal.(storage.Value); ok {
+		leftStr = fmt.Sprintf("%v", sv.Interface())
+	}
+	elements := extractArrayElements(rightVal)
+	if len(elements) == 0 {
+		return true, nil
+	}
+
+	hasUnknown := false
+	for _, elem := range elements {
+		if strings.EqualFold(elem, "NULL") {
+			hasUnknown = true
+			continue
+		}
+		cmp, err := evalRowBinaryOp(op, leftStr, elem)
+		if err != nil {
+			return nil, err
+		}
+		if isNullVal(cmp) {
+			hasUnknown = true
+			continue
+		}
+		if !isTruthyValue(cmp) {
+			return false, nil
+		}
+	}
+	if hasUnknown {
+		return nil, nil
+	}
+	return true, nil
 }
 
 func isNullVal(v any) bool {

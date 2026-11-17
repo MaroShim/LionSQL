@@ -25,6 +25,19 @@ func TestGoCD_LiquibaseAndHibernateCompatibility(t *testing.T) {
 		t.Fatalf("expected 1 version row, got %d", len(res.Rows))
 	}
 
+	// 1.5. Liquibase DatabaseMetaData.getSQLKeywords query
+	kwRes, err := coord.ExecuteSQL(`select string_agg(word, ',') from pg_catalog.pg_get_keywords() where word <> ALL ('{ALL,AND,ANY}')`)
+	if err != nil {
+		t.Fatalf("Liquibase getSQLKeywords failed: %v", err)
+	}
+	if len(kwRes.Rows) != 1 {
+		t.Fatalf("expected 1 row from string_agg, got %d", len(kwRes.Rows))
+	}
+	aggVal, ok := kwRes.Rows[0]["string_agg"].(string)
+	if !ok || aggVal == "" {
+		t.Fatalf("expected non-empty string_agg result, got %v", kwRes.Rows[0])
+	}
+
 	// 2. Liquibase Lock table creation & lock acquisition
 	_, err = coord.ExecuteSQL(`
 		CREATE TABLE DATABASECHANGELOGLOCK (
@@ -147,5 +160,70 @@ func TestGoCD_LiquibaseAndHibernateCompatibility(t *testing.T) {
 	}
 	if res.Rows[0]["HOSTNAME"] != "build-worker-1" || res.Rows[0]["NAME"] != "prod-deploy-pipeline" {
 		t.Errorf("unexpected query result: %v", res.Rows[0])
+	}
+
+	// 7. PostgreSQL Trigger Function & EXECUTE PROCEDURE DDL (GoCD Liquibase migration syntax)
+	_, err = coord.ExecuteSQL(`
+		CREATE OR REPLACE FUNCTION update_stage_status_fn() RETURNS TRIGGER AS $$
+		BEGIN
+			RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+	`)
+	if err != nil {
+		t.Fatalf("CREATE OR REPLACE FUNCTION ... RETURNS TRIGGER failed: %v", err)
+	}
+
+	_, err = coord.ExecuteSQL(`
+		CREATE TRIGGER trg_pipeline_status AFTER INSERT ON PIPELINES
+		FOR EACH ROW EXECUTE PROCEDURE update_stage_status_fn();
+	`)
+	if err != nil {
+		t.Fatalf("CREATE TRIGGER ... EXECUTE PROCEDURE failed: %v", err)
+	}
+
+	// 8. PostgreSQL JDBC DatabaseMetaData.getColumns() required fields (nspname, atttypmod, attnotnull, attlen)
+	colMetaRes, err := coord.ExecuteSQL(`
+		SELECT n.nspname, c.relname, a.attname, a.atttypid, a.attnotnull, a.atttypmod, a.attlen, a.attnum
+		FROM pg_catalog.pg_class c
+		JOIN pg_catalog.pg_namespace n ON (c.relnamespace = n.oid)
+		JOIN pg_catalog.pg_attribute a ON (c.oid = a.attrelid)
+		WHERE c.relname = 'PIPELINES'
+	`)
+	if err != nil {
+		t.Fatalf("JDBC getColumns metadata query failed: %v", err)
+	}
+	if len(colMetaRes.Rows) == 0 {
+		t.Fatalf("expected column metadata rows for PIPELINES, got 0")
+	}
+	if colMetaRes.Rows[0]["nspname"] == nil || colMetaRes.Rows[0]["atttypmod"] == nil {
+		t.Errorf("expected non-nil nspname and atttypmod in pg_attribute join, got %v", colMetaRes.Rows[0])
+	}
+
+	// 9. GoCD _builds View creation & wildcard + alias projection
+	_, err = coord.ExecuteSQL(`
+		CREATE TABLE BUILDS (
+			ID BIGINT IDENTITY(1,1) PRIMARY KEY,
+			NAME VARCHAR(255) NOT NULL,
+			STATE VARCHAR(50) NOT NULL
+		);
+	`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE BUILDS failed: %v", err)
+	}
+	_, err = coord.ExecuteSQL(`INSERT INTO BUILDS (NAME, STATE) VALUES ('compile-job', 'Scheduled');`)
+	if err != nil {
+		t.Fatalf("INSERT INTO BUILDS failed: %v", err)
+	}
+	_, err = coord.ExecuteSQL(`CREATE VIEW _builds AS SELECT ID, NAME, STATE FROM BUILDS;`)
+	if err != nil {
+		t.Fatalf("CREATE VIEW _builds failed: %v", err)
+	}
+	viewRes, err := coord.ExecuteSQL(`SELECT *, id AS buildId FROM _builds WHERE state != 'Completed';`)
+	if err != nil {
+		t.Fatalf("SELECT from _builds view failed: %v", err)
+	}
+	if len(viewRes.Rows) != 1 || viewRes.Rows[0]["buildId"] == nil {
+		t.Errorf("expected 1 row with buildId from _builds view, got %v", viewRes.Rows)
 	}
 }

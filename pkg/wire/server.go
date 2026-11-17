@@ -850,6 +850,23 @@ func canCompileToVDBE(query string, qc proc.QueryCharacteristics) bool {
 	return true
 }
 
+func (s *Server) referencesCatalogView(qc proc.QueryCharacteristics) bool {
+	if s.catalog == nil {
+		return false
+	}
+	for _, tbl := range qc.TargetTables {
+		if v, err := s.catalog.GetView(tbl); err == nil && v != nil {
+			return true
+		}
+		if idx := strings.LastIndex(tbl, "."); idx != -1 {
+			if v, err := s.catalog.GetView(tbl[idx+1:]); err == nil && v != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (s *Server) compileQueryToProgram(query string) (*proc.Program, error) {
 	translated := sqlutil.TranslatePgParamsToAtParams(query)
 	if cache := s.BytecodePlanCache(); cache != nil {
@@ -903,7 +920,7 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements *Prepared
 	}
 
 	qc := proc.ExtractQueryCharacteristics(queryStr)
-	if canCompileToVDBE(queryStr, qc) {
+	if canCompileToVDBE(queryStr, qc) && !s.referencesCatalogView(qc) {
 		if prog, err := s.compileQueryToProgram(queryStr); err == nil && prog != nil {
 			prep.Program = prog
 		}

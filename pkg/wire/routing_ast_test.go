@@ -3,7 +3,9 @@ package wire
 import (
 	"testing"
 
+	"lionsql/pkg/catalog"
 	"lionsql/pkg/proc"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestRoutingAST_VirtualCatalogAndVDBECompilation(t *testing.T) {
@@ -105,5 +107,28 @@ func TestRoutingAST_VirtualCatalogAndVDBECompilation(t *testing.T) {
 				t.Errorf("canCompileToVDBE() = %v, want %v for query: %s", canVDBE, tt.wantVDBE, tt.query)
 			}
 		})
+	}
+}
+
+func TestRoutingAST_CatalogViewBypassesVDBE(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	if err := cat.CreateView(&catalog.View{Name: "_BUILDS", Query: "SELECT id, state FROM builds"}); err != nil {
+		t.Fatalf("failed to create view: %v", err)
+	}
+
+	srv := &Server{
+		engine:  eng,
+		catalog: cat,
+	}
+
+	qc := proc.ExtractQueryCharacteristics("SELECT *, id AS buildId FROM _builds WHERE state != 'Completed'")
+	if !srv.referencesCatalogView(qc) {
+		t.Errorf("expected referencesCatalogView to return true for view _builds")
+	}
+
+	qcTable := proc.ExtractQueryCharacteristics("SELECT * FROM builds WHERE state != 'Completed'")
+	if srv.referencesCatalogView(qcTable) {
+		t.Errorf("expected referencesCatalogView to return false for base table builds")
 	}
 }

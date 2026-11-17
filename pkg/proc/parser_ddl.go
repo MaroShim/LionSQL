@@ -169,6 +169,15 @@ func (p *Parser) ParseFunction() (*CreateFunctionStmt, error) {
 	}
 	p.nextToken()
 
+	// Optional OR ALTER / OR REPLACE
+	if p.curTokenIs(TokenOr) {
+		p.nextToken()
+		if !p.curTokenIs(TokenAlter) && !strings.EqualFold(p.curToken.Literal, "REPLACE") {
+			return nil, fmt.Errorf("expected ALTER or REPLACE after OR, got %s", p.curToken.Literal)
+		}
+		p.nextToken()
+	}
+
 	if !p.curTokenIs(TokenFunction) {
 		return nil, fmt.Errorf("expected FUNCTION, got %s", p.curToken.Literal)
 	}
@@ -249,7 +258,7 @@ func (p *Parser) ParseFunction() (*CreateFunctionStmt, error) {
 	}
 	p.nextToken()
 
-	if !p.curTokenIs(TokenIdent) {
+	if !p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenTrigger) && !p.curTokenIs(TokenTable) {
 		return nil, fmt.Errorf("expected return data type after RETURNS, got %s", p.curToken.Literal)
 	}
 	retType := parseDataType(p.curToken.Literal)
@@ -272,7 +281,15 @@ func (p *Parser) ParseFunction() (*CreateFunctionStmt, error) {
 	p.nextToken()
 
 	var body Statement
-	if p.curTokenIs(TokenLParen) {
+	if p.curTokenIs(TokenString) {
+		// PostgreSQL dollar-quoted or string literal body: AS $$ ... $$ LANGUAGE plpgsql;
+		p.nextToken() // eat string
+		// skip optional LANGUAGE and trailing semicolons
+		for p.curTokenIs(TokenIdent) || p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+		body = &BlockStmt{Statements: []Statement{}}
+	} else if p.curTokenIs(TokenLParen) {
 		// Single paren-enclosed statement e.g. CREATE PROCEDURE p AS (SELECT ...)
 		p.nextToken() // eat '('
 		var err error
@@ -326,11 +343,11 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 	}
 	p.nextToken()
 
-	// Optional OR ALTER
+	// Optional OR ALTER / OR REPLACE
 	if p.curTokenIs(TokenOr) {
 		p.nextToken()
-		if !p.curTokenIs(TokenAlter) {
-			return nil, fmt.Errorf("expected ALTER after OR, got %s", p.curToken.Literal)
+		if !p.curTokenIs(TokenAlter) && !strings.EqualFold(p.curToken.Literal, "REPLACE") {
+			return nil, fmt.Errorf("expected ALTER or REPLACE after OR, got %s", p.curToken.Literal)
 		}
 		p.nextToken()
 	}
@@ -472,7 +489,7 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 		// Optional: FOR EACH ROW
 		if p.curTokenIs(TokenFor) {
 			p.nextToken()
-			for !p.curTokenIs(TokenBegin) && !p.curTokenIs(TokenAs) && !p.curTokenIs(TokenWhen) && !p.curTokenIs(TokenEOF) {
+			for !p.curTokenIs(TokenBegin) && !p.curTokenIs(TokenAs) && !p.curTokenIs(TokenWhen) && !p.curTokenIs(TokenEOF) && !(p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "EXECUTE")) {
 				p.nextToken()
 			}
 		}
@@ -480,7 +497,7 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 		// Optional: WHEN condition
 		if p.curTokenIs(TokenWhen) {
 			p.nextToken()
-			for !p.curTokenIs(TokenBegin) && !p.curTokenIs(TokenAs) && !p.curTokenIs(TokenEOF) {
+			for !p.curTokenIs(TokenBegin) && !p.curTokenIs(TokenAs) && !p.curTokenIs(TokenEOF) && !(p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "EXECUTE")) {
 				p.nextToken()
 			}
 		}
@@ -495,7 +512,13 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 	}
 
 	var body Statement
-	if p.curTokenIs(TokenLParen) {
+	if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "EXECUTE") {
+		p.nextToken() // eat EXECUTE
+		for !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+		body = &BlockStmt{Statements: []Statement{}}
+	} else if p.curTokenIs(TokenLParen) {
 		// Single paren-enclosed statement e.g. CREATE PROCEDURE p AS (SELECT ...)
 		p.nextToken() // eat '('
 		var err error

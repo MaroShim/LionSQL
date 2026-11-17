@@ -164,3 +164,36 @@ END;
 	}
 }
 
+func TestLexer_DollarQuotedStringsAndPositionalParams(t *testing.T) {
+	input := `SELECT $1, $12, $$body with 'quotes' and $1 inside$$, $ FROM tbl`
+	l := NewLexer(input)
+
+	expected := []struct {
+		typ TokenType
+		lit string
+	}{
+		{TokenSelect, "SELECT"},
+		{TokenVariable, "$1"},
+		{TokenComma, ","},
+		{TokenVariable, "$12"},
+		{TokenComma, ","},
+		{TokenString, "body with 'quotes' and $1 inside"},
+		{TokenComma, ","},
+		{TokenIllegal, "$"},
+		{TokenFrom, "FROM"},
+		{TokenIdent, "tbl"},
+		{TokenEOF, ""},
+	}
+
+	for i, exp := range expected {
+		tok := l.NextToken()
+		if tok.Type != exp.typ {
+			t.Fatalf("[%d] expected token type %v, got %v (lit: %q)", i, exp.typ, tok.Type, tok.Literal)
+		}
+		if tok.Literal != exp.lit {
+			t.Fatalf("[%d] expected literal %q, got %q", i, exp.lit, tok.Literal)
+		}
+	}
+}
+
+

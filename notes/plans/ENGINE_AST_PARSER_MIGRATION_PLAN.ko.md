@@ -89,6 +89,10 @@ LionSQL의 쿼리 실행 엔진(`pkg/engine`)은 프로시저 엔진(`pkg/proc`)
 
 ## 4. 단계별 실행 계획 (Execution Phases)
 
+### Phase 0: `pkg/proc/lexer.go` 구조적 정규화 및 캡슐화 리팩토링 (선행 기반 정비)
+- **전진 불변성(Forward-Progress Invariant) 확립**: `NextToken()`의 거대 `switch` 문에서 일부 분기는 조기 `return`하고 일부 분기는 함수 하단의 `l.readChar()`로 떨어지는(Fallthrough) 비일관적 구조를 전면 개편. 모든 토큰 리더 헬퍼(`readDollarToken`, `readOperatorToken`, `readIdentOrKeyword`, `readNumberToken`)가 자신의 소비 범위를 명확히 책임지고, 미인식/단일 문자 토큰도 100% 포인터를 전진시키도록 구조적으로 보장하여 무한 루프 가능성을 원천 차단.
+- **내부 상태 캡슐화 강화 (`l.ch`, `l.readChar()` 외부 노출 차단)**: `pkg/proc/characteristics.go`(`readTableIdentifier`) 등 외부 파일에서 Lexer 내부 필드(`l.ch`)를 직접 읽거나 `l.readChar()`를 수동 호출하는 캡슐화 위반을 제거하고, 모든 구문 특성 추출이 오직 공식 `NextToken()` / `PeekToken()` 스트림 API만을 통하도록 단일화.
+
 ### Phase 1: `pkg/proc` DDL AST 및 파서 확장
 - `pkg/proc/ast.go`: `CreateTableStmt`, `AlterTableStmt`, `DropTableStmt`, `CreateIndexStmt`, `DropIndexStmt`, `TruncateStmt` AST 완전 정의.
 - `pkg/proc/parser_ddl.go`: 모든 DDL 문법의 정식 재귀 하강 파싱 구현 및 100% 토큰 단위 검증.

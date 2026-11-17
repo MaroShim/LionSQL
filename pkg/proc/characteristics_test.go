@@ -18,6 +18,15 @@ func TestExtractQueryCharacteristics(t *testing.T) {
 		wantConflict  bool
 	}{
 		{
+			name:          "GoCD Hibernate Positional Parameter Query",
+			sql:           "select this_.pipelineName as y0_ from pipelinestates this_ where this_.locked=$1",
+			wantType:      "SELECT",
+			wantTables:    []string{"pipelinestates"},
+			wantReturning: false,
+			wantOutput:    false,
+			wantConflict:  false,
+		},
+		{
 			name:          "simple select",
 			sql:           "SELECT * FROM users WHERE id = 1",
 			wantType:      "SELECT",

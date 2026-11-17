@@ -129,6 +129,11 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 		filteredRows = filteredRows[:limitCount]
 	}
 
+	// 3.5. Aggregate Functions (e.g. string_agg, count)
+	if aggRes, ok, err := handleVirtualAggregate(filteredRows, projStr); ok {
+		return aggRes, err
+	}
+
 	// 4. Projection
 	var selectedCols []string
 	colSourceMap := make(map[string]string)
@@ -750,3 +755,69 @@ func getMapValueCaseInsensitive(rec map[string]any, col string) any {
 	}
 	return nil
 }
+
+func handleVirtualAggregate(filteredRows []map[string]any, projStr string) (*Result, bool, error) {
+	trimmed := strings.TrimSpace(projStr)
+	upper := strings.ToUpper(trimmed)
+	if !strings.HasPrefix(upper, "STRING_AGG(") && !strings.HasPrefix(upper, "COUNT(") {
+		return nil, false, nil
+	}
+
+	alias := ""
+	colExpr := trimmed
+	if asIdx := sqlutil.FindTopLevelKeyword(trimmed, "AS"); asIdx != -1 {
+		alias = cleanIdentifier(strings.TrimSpace(trimmed[asIdx+2:]))
+		colExpr = strings.TrimSpace(trimmed[:asIdx])
+	} else if a, expr, ok := parseImplicitAlias(trimmed); ok {
+		alias = a
+		colExpr = expr
+	}
+
+	upperExpr := strings.ToUpper(colExpr)
+	if strings.HasPrefix(upperExpr, "STRING_AGG(") && strings.HasSuffix(upperExpr, ")") {
+		inner := colExpr[len("STRING_AGG(") : len(colExpr)-1]
+		parts := sqlutil.SplitTopLevel(inner, ',')
+		if len(parts) >= 1 {
+			argCol := cleanIdentifier(strings.TrimSpace(parts[0]))
+			delim := ""
+			if len(parts) >= 2 {
+				delim = strings.Trim(strings.TrimSpace(parts[1]), "'\"")
+			}
+			var vals []string
+			for _, fr := range filteredRows {
+				v := getMapValueCaseInsensitive(fr, argCol)
+				if v != nil {
+					s := fmt.Sprintf("%v", v)
+					if s != "" {
+						vals = append(vals, s)
+					}
+				}
+			}
+			resStr := strings.Join(vals, delim)
+			outCol := alias
+			if outCol == "" {
+				outCol = "string_agg"
+			}
+			return &Result{
+				Columns: []string{outCol},
+				Rows: []map[string]any{
+					{outCol: resStr},
+				},
+			}, true, nil
+		}
+	} else if strings.HasPrefix(upperExpr, "COUNT(") && strings.HasSuffix(upperExpr, ")") {
+		outCol := alias
+		if outCol == "" {
+			outCol = "count"
+		}
+		return &Result{
+			Columns: []string{outCol},
+			Rows: []map[string]any{
+				{outCol: int64(len(filteredRows))},
+			},
+		}, true, nil
+	}
+
+	return nil, false, nil
+}
+

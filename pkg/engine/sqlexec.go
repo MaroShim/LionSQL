@@ -1671,7 +1671,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 		return s.execDropProcedure(trimmed, start)
 	}
-	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE FUNCTION", "CREATE OR ALTER FUNCTION", "ALTER FUNCTION") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", "CREATE OR ALTER FUNCTION", "ALTER FUNCTION") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1684,7 +1684,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execDropFunction(trimmed, start)
 	}
 	if sqlutil.HasAnyPrefixKeyword(trimmed,
-		"CREATE TRIGGER", "CREATE OR ALTER TRIGGER", "ALTER TRIGGER",
+		"CREATE TRIGGER", "CREATE OR REPLACE TRIGGER", "CREATE OR ALTER TRIGGER", "ALTER TRIGGER",
 		"CREATE TEMP TRIGGER", "CREATE TEMPORARY TRIGGER",
 	) {
 		if err := s.checkWriteAllowed(); err != nil {
