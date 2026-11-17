@@ -2,10 +2,10 @@ package engine
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
+	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 )
 
@@ -24,49 +24,13 @@ func (s *Coordinator) execDeclareCursor(query string, start time.Time, cs *Clien
 		return nil, fmt.Errorf("active session required for cursor declaration")
 	}
 
-	trimmed := strings.TrimSpace(query)
-	trimmed = strings.TrimRight(trimmed, ";")
-
-	// Squeeze "DECLARE "
-	rest := strings.TrimSpace(trimmed[len("DECLARE "):])
-
-	// Split by "FOR"
-	forIdx := sqlutil.FindTopLevelKeyword(rest, "FOR")
-	if forIdx == -1 {
-		return nil, fmt.Errorf("syntax error: DECLARE CURSOR requires 'FOR <query>'")
+	stmt, err := proc.ParseServerCursorDeclare(query)
+	if err != nil {
+		return nil, err
 	}
 
-	header := strings.TrimSpace(rest[:forIdx])
-	cursorQuery := strings.TrimSpace(rest[forIdx+len("FOR"):])
-
-	if cursorQuery == "" {
-		return nil, fmt.Errorf("syntax error: empty query in DECLARE CURSOR")
-	}
-
-	headerTokens := strings.Fields(header)
-	if len(headerTokens) == 0 {
-		return nil, fmt.Errorf("syntax error: cursor name required")
-	}
-
-	cursorName := cleanIdentifier(headerTokens[0])
-	if cursorName == "" {
-		return nil, fmt.Errorf("syntax error: invalid cursor name")
-	}
+	cursorName := stmt.Name
 	lookupKey := strings.ToLower(cursorName)
-
-	var withHold bool
-	var scroll bool
-	var binary bool
-
-	if sqlutil.ContainsKeyword(header, "WITH HOLD", false) {
-		withHold = true
-	}
-	if sqlutil.ContainsKeyword(header, "SCROLL", false) && !sqlutil.ContainsKeyword(header, "NO SCROLL", false) {
-		scroll = true
-	}
-	if sqlutil.ContainsKeyword(header, "BINARY", false) {
-		binary = true
-	}
 
 	cs.Mu.Lock()
 	if cs.Cursors == nil {
@@ -79,7 +43,7 @@ func (s *Coordinator) execDeclareCursor(query string, start time.Time, cs *Clien
 	cs.Mu.Unlock()
 
 	// Execute underlying query to materialize cursor snapshot
-	res, err := s.execSelect(cursorQuery, start, cs)
+	res, err := s.execSelect(stmt.Query, start, cs)
 	if err != nil {
 		return nil, fmt.Errorf("cursor query execution failed: %w", err)
 	}
@@ -87,14 +51,14 @@ func (s *Coordinator) execDeclareCursor(query string, start time.Time, cs *Clien
 	cs.Mu.Lock()
 	cs.Cursors[lookupKey] = &SessionCursor{
 		Name:       cursorName,
-		Query:      cursorQuery,
+		Query:      stmt.Query,
 		Columns:    res.Columns,
 		Rows:       res.Rows,
 		Pos:        0,
 		IsOpen:     true,
-		WithHold:   withHold,
-		Scroll:     scroll,
-		Binary:     binary,
+		WithHold:   stmt.WithHold,
+		Scroll:     stmt.Scroll,
+		Binary:     stmt.Binary,
 		DeclaredAt: time.Now(),
 	}
 	cs.Mu.Unlock()
@@ -104,110 +68,6 @@ func (s *Coordinator) execDeclareCursor(query string, start time.Time, cs *Clien
 		Command:    "DECLARE CURSOR",
 		DurationUS: time.Since(start).Microseconds(),
 	}, nil
-}
-
-// parseCursorParams extracts direction, count, and target cursor name from FETCH or MOVE arguments.
-func parseCursorParams(raw string) (dir string, count int, isAll bool, cursorName string, err error) {
-	raw = strings.TrimSpace(strings.TrimRight(raw, ";"))
-	tokens := strings.Fields(raw)
-	if len(tokens) == 0 {
-		return "", 0, false, "", fmt.Errorf("syntax error: cursor name required")
-	}
-
-	// Last token is cursor name
-	cursorName = cleanIdentifier(tokens[len(tokens)-1])
-	tokens = tokens[:len(tokens)-1]
-
-	// Strip optional FROM or IN
-	if len(tokens) > 0 {
-		lastTok := strings.ToUpper(tokens[len(tokens)-1])
-		if lastTok == "FROM" || lastTok == "IN" {
-			tokens = tokens[:len(tokens)-1]
-		}
-	}
-
-	dir = "FORWARD"
-	count = 1
-
-	if len(tokens) == 0 {
-		return dir, count, false, cursorName, nil
-	}
-
-	upper0 := strings.ToUpper(tokens[0])
-
-	switch len(tokens) {
-	case 1:
-		switch upper0 {
-		case "NEXT":
-			return "NEXT", 1, false, cursorName, nil
-		case "PRIOR":
-			return "PRIOR", 1, false, cursorName, nil
-		case "FIRST":
-			return "FIRST", 1, false, cursorName, nil
-		case "LAST":
-			return "LAST", 1, false, cursorName, nil
-		case "ALL":
-			return "FORWARD", 0, true, cursorName, nil
-		case "FORWARD":
-			return "FORWARD", 1, false, cursorName, nil
-		case "BACKWARD":
-			return "BACKWARD", 1, false, cursorName, nil
-		default:
-			// Could be numeric count e.g. "10" or "-5"
-			n, parseErr := strconv.Atoi(tokens[0])
-			if parseErr != nil {
-				return "", 0, false, "", fmt.Errorf("syntax error: unexpected token %q", tokens[0])
-			}
-			if n >= 0 {
-				return "FORWARD", n, false, cursorName, nil
-			}
-			return "BACKWARD", -n, false, cursorName, nil
-		}
-
-	case 2:
-		upper1 := strings.ToUpper(tokens[1])
-		switch upper0 {
-		case "FORWARD":
-			if upper1 == "ALL" {
-				return "FORWARD", 0, true, cursorName, nil
-			}
-			n, parseErr := strconv.Atoi(tokens[1])
-			if parseErr != nil {
-				return "", 0, false, "", fmt.Errorf("syntax error in FORWARD count: %w", parseErr)
-			}
-			return "FORWARD", n, false, cursorName, nil
-
-		case "BACKWARD":
-			if upper1 == "ALL" {
-				return "BACKWARD", 0, true, cursorName, nil
-			}
-			n, parseErr := strconv.Atoi(tokens[1])
-			if parseErr != nil {
-				return "", 0, false, "", fmt.Errorf("syntax error in BACKWARD count: %w", parseErr)
-			}
-			return "BACKWARD", n, false, cursorName, nil
-
-		case "ABSOLUTE":
-			n, parseErr := strconv.Atoi(tokens[1])
-			if parseErr != nil {
-				return "", 0, false, "", fmt.Errorf("syntax error in ABSOLUTE count: %w", parseErr)
-			}
-			return "ABSOLUTE", n, false, cursorName, nil
-
-		case "RELATIVE":
-			n, parseErr := strconv.Atoi(tokens[1])
-			if parseErr != nil {
-				return "", 0, false, "", fmt.Errorf("syntax error in RELATIVE count: %w", parseErr)
-			}
-			return "RELATIVE", n, false, cursorName, nil
-
-		default:
-			return "", 0, false, "", fmt.Errorf("syntax error: unrecognized cursor direction %q", tokens[0])
-		}
-
-	default:
-		return "", 0, false, "", fmt.Errorf("syntax error: too many arguments for cursor operation")
-	}
 }
 
 // advanceCursor evaluates direction and count on cursor rows and returns the slice of fetched rows.
@@ -222,18 +82,12 @@ func advanceCursor(cur *SessionCursor, dir string, count int, isAll bool) []map[
 	switch dir {
 	case "NEXT", "FORWARD":
 		if isAll {
-			count = total - cur.Pos
-			if count < 0 {
-				count = 0
-			}
+			count = max(total-cur.Pos, 0)
 		}
 		if count <= 0 || cur.Pos >= total {
 			return []map[string]any{}
 		}
-		end := cur.Pos + count
-		if end > total {
-			end = total
-		}
+		end := min(cur.Pos+count, total)
 		fetched = cur.Rows[cur.Pos:end]
 		cur.Pos = end
 
@@ -266,12 +120,8 @@ func advanceCursor(cur *SessionCursor, dir string, count int, isAll bool) []map[
 		if count <= 0 || cur.Pos <= 0 {
 			return []map[string]any{}
 		}
-		start := cur.Pos - count
-		if start < 0 {
-			start = 0
-		}
+		start := max(cur.Pos-count, 0)
 		slice := cur.Rows[start:cur.Pos]
-		// Reverse to match BACKWARD order
 		fetched = make([]map[string]any, len(slice))
 		for i, r := range slice {
 			fetched[len(slice)-1-i] = r
@@ -285,7 +135,6 @@ func advanceCursor(cur *SessionCursor, dir string, count int, isAll bool) []map[
 		} else if count < 0 {
 			targetIdx = total + count
 		} else {
-			// count == 0: position before first row
 			cur.Pos = 0
 			return []map[string]any{}
 		}
@@ -326,14 +175,7 @@ func (s *Coordinator) execFetchCursor(query string, start time.Time, cs *ClientS
 		return nil, fmt.Errorf("active session required for cursor fetch")
 	}
 
-	trimmed := strings.TrimSpace(query)
-	upper := strings.ToUpper(trimmed)
-	rest := strings.TrimSpace(trimmed[len("FETCH"):])
-	if strings.HasPrefix(upper, "FETCH ") {
-		rest = strings.TrimSpace(trimmed[6:])
-	}
-
-	dir, count, isAll, cursorName, err := parseCursorParams(rest)
+	stmt, err := proc.ParseServerCursorFetchOrMove(query)
 	if err != nil {
 		return nil, err
 	}
@@ -341,15 +183,15 @@ func (s *Coordinator) execFetchCursor(query string, start time.Time, cs *ClientS
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()
 
-	cur, exists := cs.Cursors[strings.ToLower(cursorName)]
+	cur, exists := cs.Cursors[strings.ToLower(stmt.CursorName)]
 	if !exists {
-		return nil, fmt.Errorf("cursor %q does not exist", cursorName)
+		return nil, fmt.Errorf("cursor %q does not exist", stmt.CursorName)
 	}
 	if !cur.IsOpen {
-		return nil, fmt.Errorf("cursor %q is not open", cursorName)
+		return nil, fmt.Errorf("cursor %q is not open", stmt.CursorName)
 	}
 
-	fetched := advanceCursor(cur, dir, count, isAll)
+	fetched := advanceCursor(cur, stmt.Direction, stmt.Count, stmt.IsAll)
 
 	return &QueryResult{
 		Success:      true,
@@ -367,14 +209,7 @@ func (s *Coordinator) execMoveCursor(query string, start time.Time, cs *ClientSe
 		return nil, fmt.Errorf("active session required for cursor move")
 	}
 
-	trimmed := strings.TrimSpace(query)
-	upper := strings.ToUpper(trimmed)
-	rest := strings.TrimSpace(trimmed[len("MOVE"):])
-	if strings.HasPrefix(upper, "MOVE ") {
-		rest = strings.TrimSpace(trimmed[5:])
-	}
-
-	dir, count, isAll, cursorName, err := parseCursorParams(rest)
+	stmt, err := proc.ParseServerCursorFetchOrMove(query)
 	if err != nil {
 		return nil, err
 	}
@@ -382,15 +217,15 @@ func (s *Coordinator) execMoveCursor(query string, start time.Time, cs *ClientSe
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()
 
-	cur, exists := cs.Cursors[strings.ToLower(cursorName)]
+	cur, exists := cs.Cursors[strings.ToLower(stmt.CursorName)]
 	if !exists {
-		return nil, fmt.Errorf("cursor %q does not exist", cursorName)
+		return nil, fmt.Errorf("cursor %q does not exist", stmt.CursorName)
 	}
 	if !cur.IsOpen {
-		return nil, fmt.Errorf("cursor %q is not open", cursorName)
+		return nil, fmt.Errorf("cursor %q is not open", stmt.CursorName)
 	}
 
-	movedRows := advanceCursor(cur, dir, count, isAll)
+	movedRows := advanceCursor(cur, stmt.Direction, stmt.Count, stmt.IsAll)
 	countMoved := len(movedRows)
 
 	return &QueryResult{
@@ -407,19 +242,11 @@ func (s *Coordinator) execOpenCursor(query string, start time.Time, cs *ClientSe
 		return nil, fmt.Errorf("active session required for cursor open")
 	}
 
-	trimmed := strings.TrimSpace(query)
-	trimmed = strings.TrimRight(trimmed, ";")
-	upper := strings.ToUpper(trimmed)
-	rest := strings.TrimSpace(trimmed[len("OPEN"):])
-	if strings.HasPrefix(upper, "OPEN ") {
-		rest = strings.TrimSpace(trimmed[5:])
+	target, err := proc.ParseServerCursorOpenOrClose(query, "OPEN")
+	if err != nil {
+		return nil, err
 	}
-
-	target := cleanIdentifier(rest)
 	lookupKey := strings.ToLower(target)
-	if target == "" {
-		return nil, fmt.Errorf("syntax error: cursor name required for OPEN")
-	}
 
 	cs.Mu.Lock()
 	cur, exists := cs.Cursors[lookupKey]
@@ -462,15 +289,10 @@ func (s *Coordinator) execCloseCursor(query string, start time.Time, cs *ClientS
 		return nil, fmt.Errorf("active session required for cursor close")
 	}
 
-	trimmed := strings.TrimSpace(query)
-	trimmed = strings.TrimRight(trimmed, ";")
-	upper := strings.ToUpper(trimmed)
-	rest := strings.TrimSpace(trimmed[len("CLOSE"):])
-	if strings.HasPrefix(upper, "CLOSE ") {
-		rest = strings.TrimSpace(trimmed[6:])
+	target, err := proc.ParseServerCursorOpenOrClose(query, "CLOSE")
+	if err != nil {
+		return nil, err
 	}
-
-	target := cleanIdentifier(rest)
 	upperTarget := strings.ToUpper(target)
 
 	cs.Mu.Lock()
@@ -488,10 +310,6 @@ func (s *Coordinator) execCloseCursor(query string, start time.Time, cs *ClientS
 			Messages:   []string{"CLOSE ALL"},
 			DurationUS: time.Since(start).Microseconds(),
 		}, nil
-	}
-
-	if target == "" {
-		return nil, fmt.Errorf("syntax error: cursor name required for CLOSE")
 	}
 
 	cur, exists := cs.Cursors[strings.ToLower(target)]

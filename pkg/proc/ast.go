@@ -1337,6 +1337,23 @@ func (s *ReindexStmt) String() string {
 	return fmt.Sprintf("REINDEX %s", s.Target)
 }
 
+// ServerCursorDeclareStmt represents a PostgreSQL/T-SQL server-side DECLARE <name> ... CURSOR ... FOR <query>.
+type ServerCursorDeclareStmt struct {
+	Name     string
+	Binary   bool
+	Scroll   bool
+	WithHold bool
+	Query    string
+}
+
+// ServerCursorFetchStmt represents FETCH or MOVE [direction] [count] [FROM|IN] <cursor_name>.
+type ServerCursorFetchStmt struct {
+	Direction  string
+	Count      int
+	IsAll      bool
+	CursorName string
+}
+
 // ExistsExpr represents [NOT] EXISTS (SELECT ...)
 type ExistsExpr struct {
 	Query *GeneralSelectStmt

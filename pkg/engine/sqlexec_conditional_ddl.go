@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 )
 
@@ -17,28 +18,24 @@ import (
 //   - IF NOT EXISTS (...) BEGIN CREATE TABLE ...; CREATE INDEX ...; END
 func (s *Coordinator) tryExecConditionalDDL(query string, start time.Time, cs *ClientSession) (*QueryResult, bool, error) {
 	trimmed := strings.TrimSpace(query)
-	upper := strings.ToUpper(trimmed)
-	if !strings.HasPrefix(upper, "IF ") && !strings.HasPrefix(upper, "IF\t") && !strings.HasPrefix(upper, "IF\n") {
+	if !sqlutil.HasPrefixKeyword(trimmed, "IF") {
 		return nil, false, nil
 	}
 
 	afterIf := strings.TrimSpace(trimmed[2:])
-	upperAfter := strings.ToUpper(afterIf)
 
 	// 1. Pattern: IF [NOT] EXISTS ( <subquery> ) <body...>
 	var isNot bool
 	openParen := -1
 
-	if strings.HasPrefix(upperAfter, "NOT") {
-		rest := strings.TrimSpace(afterIf[3:])
-		if strings.HasPrefix(strings.ToUpper(rest), "EXISTS") {
-			isNot = true
-			idx := sqlutil.FindTopLevelChar(rest, '(')
-			if idx != -1 {
-				openParen = len(afterIf) - len(rest) + idx
-			}
+	if sqlutil.HasPrefixKeyword(afterIf, "NOT EXISTS") {
+		isNot = true
+		rest := strings.TrimSpace(afterIf[len("NOT EXISTS"):])
+		idx := sqlutil.FindTopLevelChar(rest, '(')
+		if idx != -1 {
+			openParen = len(afterIf) - len(rest) + idx
 		}
-	} else if strings.HasPrefix(upperAfter, "EXISTS") {
+	} else if sqlutil.HasPrefixKeyword(afterIf, "EXISTS") {
 		isNot = false
 		openParen = sqlutil.FindTopLevelChar(afterIf, '(')
 	}
@@ -85,24 +82,23 @@ func (s *Coordinator) tryExecConditionalDDL(query string, start time.Time, cs *C
 	}
 
 	// 2. Pattern: IF OBJECT_ID(...) IS [NOT] NULL <body...>
-	if strings.HasPrefix(upperAfter, "OBJECT_ID") {
+	if sqlutil.HasPrefixKeyword(afterIf, "OBJECT_ID") {
 		objOpen := sqlutil.FindTopLevelChar(afterIf, '(')
 		if objOpen != -1 {
 			objClose := sqlutil.FindMatchingParen(afterIf, objOpen)
 			if objClose != -1 && objClose+1 < len(afterIf) {
 				objCall := strings.TrimSpace(afterIf[:objClose+1])
 				rest := strings.TrimSpace(afterIf[objClose+1:])
-				upperRest := strings.ToUpper(rest)
 
 				var isNull bool
 				var body string
 				matched := false
 
-				if strings.HasPrefix(upperRest, "IS NOT NULL") {
+				if sqlutil.HasPrefixKeyword(rest, "IS NOT NULL") {
 					isNull = false
 					body = strings.TrimSpace(rest[len("IS NOT NULL"):])
 					matched = true
-				} else if strings.HasPrefix(upperRest, "IS NULL") {
+				} else if sqlutil.HasPrefixKeyword(rest, "IS NULL") {
 					isNull = true
 					body = strings.TrimSpace(rest[len("IS NULL"):])
 					matched = true
@@ -170,38 +166,19 @@ func (s *Coordinator) runInternalQuery(cs *ClientSession, sql string) (*QueryRes
 	return s.ExecuteSQL(sql)
 }
 
-// isDDLStatement inspects whether the body (possibly wrapped in BEGIN...END or comments) contains a DDL statement.
+// isDDLStatement inspects whether the body (possibly wrapped in BEGIN...END or comments) starts with a DDL statement.
 func isDDLStatement(stmt string) bool {
-	s := strings.TrimSpace(stmt)
-	for {
-		if strings.HasPrefix(s, "/*") {
-			end := strings.Index(s, "*/")
-			if end != -1 {
-				s = strings.TrimSpace(s[end+2:])
-				continue
-			}
-		}
-		if strings.HasPrefix(s, "--") {
-			end := strings.Index(s, "\n")
-			if end != -1 {
-				s = strings.TrimSpace(s[end+1:])
-				continue
-			}
-			return false
-		}
-		break
+	l := proc.NewLexer(stmt)
+	tok := l.NextToken()
+	for tok.Type == proc.TokenBegin || tok.Type == proc.TokenSemicolon {
+		tok = l.NextToken()
 	}
-
-	upper := strings.ToUpper(s)
-	if strings.HasPrefix(upper, "BEGIN") && (len(upper) == 5 || upper[5] == ' ' || upper[5] == '\t' || upper[5] == '\n') {
-		s = strings.TrimSpace(s[5:])
-		upper = strings.ToUpper(s)
+	switch tok.Type {
+	case proc.TokenCreate, proc.TokenDrop, proc.TokenAlter, proc.TokenTruncate:
+		return true
+	default:
+		return strings.EqualFold(tok.Literal, "TRUNCATE") || strings.EqualFold(tok.Literal, "REINDEX")
 	}
-
-	return strings.HasPrefix(upper, "CREATE ") ||
-		strings.HasPrefix(upper, "DROP ") ||
-		strings.HasPrefix(upper, "ALTER ") ||
-		strings.HasPrefix(upper, "TRUNCATE ")
 }
 
 // unwrapBlock removes enclosing BEGIN ... END blocks and trailing semicolons.
@@ -210,12 +187,9 @@ func unwrapBlock(stmt string) string {
 	s = strings.TrimRight(s, ";")
 	s = strings.TrimSpace(s)
 
-	upper := strings.ToUpper(s)
-	if strings.HasPrefix(upper, "BEGIN") && (len(upper) == 5 || upper[5] == ' ' || upper[5] == '\t' || upper[5] == '\n') {
-		if strings.HasSuffix(upper, "END") {
-			inner := strings.TrimSpace(s[5 : len(s)-3])
-			return strings.TrimRight(inner, ";")
-		}
+	if sqlutil.HasPrefixKeyword(s, "BEGIN") && len(s) >= 8 && strings.EqualFold(s[len(s)-3:], "END") && !IsIdentChar(s[len(s)-4]) {
+		inner := strings.TrimSpace(s[5 : len(s)-3])
+		return strings.TrimRight(inner, ";")
 	}
 	return s
 }

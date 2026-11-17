@@ -111,8 +111,8 @@ LionSQL의 쿼리 실행 엔진(`pkg/engine`)은 프로시저 엔진(`pkg/proc`)
 - `sqlexec_ddl.go`의 수동 톰스톤 리네임 및 언도 스택 조작 로직을 `txddl.Manager` 호출로 대체.
 - Dirty DDL Read 방지 및 동시성 격리 테스트 작성 (`coordinator_concurrency_regression_test.go`).
 
-### Phase 4: 기타 엔진 모듈(`dml_parser`, `cursor`) 정규화
-- `sqlexec_cursor.go`, `dml_parser.go`의 수동 분리 로직을 `pkg/proc` 파서로 이관.
+### Phase 4: 기타 엔진 모듈(`sqlexec_cursor`, `sqlexec_conditional_ddl`) 정규화 (완료 `[x]`)
+- [x] `sqlexec_cursor.go`, `sqlexec_conditional_ddl.go`의 수동 문자열 분리 로직(`parseCursorParams`, `strings.Fields`, `strings.Index` 기반 주석 스킵)을 `pkg/proc` 파서(`ParseServerCursorDeclare`, `ParseServerCursorFetchOrMove`, `ParseServerCursorOpenOrClose`, `proc.NewLexer`) 및 `pkg/sqlutil`로 이관하고 `TestArch_NoManualSQLParsingInDDL` 정적 가드 감시 대상에 편입 완료.
 
 ---
 

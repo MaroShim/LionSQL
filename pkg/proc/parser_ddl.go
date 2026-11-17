@@ -2,8 +2,10 @@ package proc
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -2106,6 +2108,182 @@ func (p *Parser) ParseReindex() (*ReindexStmt, error) {
 	target := cleanSchemaPrefix(p.curToken.Literal)
 	p.nextToken()
 	return &ReindexStmt{Target: target}, nil
+}
+
+// ParseServerCursorDeclare parses DECLARE <name> [BINARY] [INSENSITIVE] [NO SCROLL|SCROLL] CURSOR [WITH|WITHOUT HOLD] FOR <query>.
+func ParseServerCursorDeclare(query string) (*ServerCursorDeclareStmt, error) {
+	trimmed := strings.TrimRight(strings.TrimSpace(query), ";")
+	if !sqlutil.HasPrefixKeyword(trimmed, "DECLARE") {
+		return nil, fmt.Errorf("invalid DECLARE CURSOR syntax")
+	}
+	rest := strings.TrimSpace(trimmed[len("DECLARE"):])
+
+	forIdx := sqlutil.FindTopLevelKeyword(rest, "FOR")
+	if forIdx == -1 {
+		return nil, fmt.Errorf("syntax error: DECLARE CURSOR requires 'FOR <query>'")
+	}
+
+	header := strings.TrimSpace(rest[:forIdx])
+	cursorQuery := strings.TrimSpace(rest[forIdx+len("FOR"):])
+	if cursorQuery == "" {
+		return nil, fmt.Errorf("syntax error: empty query in DECLARE CURSOR")
+	}
+
+	p := NewParser(NewLexer(header))
+	if p.curTokenIs(TokenEOF) || p.curToken.Literal == "" {
+		return nil, fmt.Errorf("syntax error: cursor name required")
+	}
+	cursorName := cleanSchemaPrefix(p.curToken.Literal)
+	if cursorName == "" {
+		return nil, fmt.Errorf("syntax error: invalid cursor name")
+	}
+	p.nextToken()
+
+	stmt := &ServerCursorDeclareStmt{
+		Name:  cursorName,
+		Query: cursorQuery,
+	}
+
+	var prevUpper string
+	for !p.curTokenIs(TokenEOF) {
+		upper := strings.ToUpper(p.curToken.Literal)
+		switch upper {
+		case "BINARY":
+			stmt.Binary = true
+		case "SCROLL":
+			if prevUpper != "NO" {
+				stmt.Scroll = true
+			} else {
+				stmt.Scroll = false
+			}
+		case "HOLD":
+			if prevUpper == "WITH" {
+				stmt.WithHold = true
+			}
+		}
+		prevUpper = upper
+		p.nextToken()
+	}
+
+	return stmt, nil
+}
+
+// ParseServerCursorFetchOrMove parses FETCH or MOVE [direction] [count] [FROM|IN] <cursor_name>.
+func ParseServerCursorFetchOrMove(query string) (*ServerCursorFetchStmt, error) {
+	p := NewParser(NewLexer(query))
+	if p.curTokenIs(TokenFetch) || strings.EqualFold(p.curToken.Literal, "FETCH") || strings.EqualFold(p.curToken.Literal, "MOVE") {
+		p.nextToken()
+	}
+
+	var tokens []string
+	for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenMinus) && p.peekTokenIs(TokenInt) {
+			p.nextToken()
+			tokens = append(tokens, "-"+p.curToken.Literal)
+			p.nextToken()
+			continue
+		}
+		tokens = append(tokens, p.curToken.Literal)
+		p.nextToken()
+	}
+
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("syntax error: cursor name required")
+	}
+
+	cursorName := cleanSchemaPrefix(tokens[len(tokens)-1])
+	tokens = tokens[:len(tokens)-1]
+
+	if len(tokens) > 0 {
+		lastTok := strings.ToUpper(tokens[len(tokens)-1])
+		if lastTok == "FROM" || lastTok == "IN" {
+			tokens = tokens[:len(tokens)-1]
+		}
+	}
+
+	stmt := &ServerCursorFetchStmt{
+		Direction:  "FORWARD",
+		Count:      1,
+		CursorName: cursorName,
+	}
+
+	if len(tokens) == 0 {
+		return stmt, nil
+	}
+
+	upper0 := strings.ToUpper(tokens[0])
+	switch len(tokens) {
+	case 1:
+		switch upper0 {
+		case "NEXT", "PRIOR", "FIRST", "LAST", "FORWARD", "BACKWARD":
+			stmt.Direction = upper0
+			return stmt, nil
+		case "ALL":
+			stmt.Direction = "FORWARD"
+			stmt.Count = 0
+			stmt.IsAll = true
+			return stmt, nil
+		default:
+			n, err := strconv.Atoi(tokens[0])
+			if err != nil {
+				return nil, fmt.Errorf("syntax error: unexpected token %q", tokens[0])
+			}
+			if n >= 0 {
+				stmt.Direction = "FORWARD"
+				stmt.Count = n
+			} else {
+				stmt.Direction = "BACKWARD"
+				stmt.Count = -n
+			}
+			return stmt, nil
+		}
+
+	case 2:
+		upper1 := strings.ToUpper(tokens[1])
+		switch upper0 {
+		case "FORWARD", "BACKWARD":
+			stmt.Direction = upper0
+			if upper1 == "ALL" {
+				stmt.Count = 0
+				stmt.IsAll = true
+				return stmt, nil
+			}
+			n, err := strconv.Atoi(tokens[1])
+			if err != nil {
+				return nil, fmt.Errorf("syntax error in %s count: %w", upper0, err)
+			}
+			stmt.Count = n
+			return stmt, nil
+
+		case "ABSOLUTE", "RELATIVE":
+			stmt.Direction = upper0
+			n, err := strconv.Atoi(tokens[1])
+			if err != nil {
+				return nil, fmt.Errorf("syntax error in %s count: %w", upper0, err)
+			}
+			stmt.Count = n
+			return stmt, nil
+
+		default:
+			return nil, fmt.Errorf("syntax error: unrecognized cursor direction %q", tokens[0])
+		}
+
+	default:
+		return nil, fmt.Errorf("syntax error: too many arguments for cursor operation")
+	}
+}
+
+// ParseServerCursorOpenOrClose parses OPEN <name> or CLOSE <name|ALL>.
+func ParseServerCursorOpenOrClose(query string, expectedVerb string) (string, error) {
+	p := NewParser(NewLexer(query))
+	if !strings.EqualFold(p.curToken.Literal, expectedVerb) {
+		return "", fmt.Errorf("syntax error: expected %s", expectedVerb)
+	}
+	p.nextToken()
+	if p.curTokenIs(TokenSemicolon) || p.curTokenIs(TokenEOF) || p.curToken.Literal == "" {
+		return "", fmt.Errorf("syntax error: cursor name required for %s", expectedVerb)
+	}
+	return cleanSchemaPrefix(p.curToken.Literal), nil
 }
 
 
