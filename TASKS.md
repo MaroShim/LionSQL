@@ -15,10 +15,10 @@
 | Status | ID | Milestone | Domain | Priority | Title | Plan Doc | Metrics |
 | :---: | :---: | :---: | :---: | :---: | :--- | :--- | :--- |
 | `DONE` | **`1.8`** | `1.0-GA` | Durability | P2 | 1.0 GA 검증 및 잔여 정리 | [`notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`](notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md) |  |
-| `PENDING` | **`AI-STARTER-1`** | `v1.30.0` | Ecosystem | P2 | AI 에이전트용 컨텍스트 문서 (llms.txt, AGENTS.md 템플릿) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
-| `PENDING` | **`AI-STARTER-2`** | `v1.30.0` | Ecosystem | P2 | 랜딩 AI 앱 스타터 섹션 및 Go/Node/Python 최소 예제 | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
-| `PENDING` | **`AI-STARTER-3`** | `v1.30.0` | Ecosystem | P2 | 호환성 매트릭스 문서 (되는 것/안 되는 것) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
-| `PENDING` | **`AI-STARTER-4`** | `v1.99.0` | Research | P3 | Go 임베디드 모드 타당성 조사 (SQLite 대비) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
+| `PENDING` | **`AI-STARTER-1`** | `v1.30.0` | Ecosystem | P2 | AI 에이전트용 컨텍스트 문서 (llms.txt, AGENTS.md 템플릿) | [`notes/plans/AI_APP_STARTER_PLAN.ko.md`](notes/plans/AI_APP_STARTER_PLAN.ko.md) |  |
+| `PENDING` | **`AI-STARTER-2`** | `v1.30.0` | Ecosystem | P2 | 랜딩 AI 앱 스타터 섹션 및 Go/Node/Python 최소 예제 | [`notes/plans/AI_APP_STARTER_PLAN.ko.md`](notes/plans/AI_APP_STARTER_PLAN.ko.md) |  |
+| `PENDING` | **`AI-STARTER-3`** | `v1.30.0` | Ecosystem | P2 | 호환성 매트릭스 문서 (되는 것/안 되는 것) | [`notes/plans/AI_APP_STARTER_PLAN.ko.md`](notes/plans/AI_APP_STARTER_PLAN.ko.md) |  |
+| `PENDING` | **`AI-STARTER-4`** | `v1.99.0` | Research | P3 | Go 임베디드 모드 타당성 조사 (SQLite 대비) | [`notes/plans/AI_APP_STARTER_PLAN.ko.md`](notes/plans/AI_APP_STARTER_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-ANTLR-ORACLE-1`** | `1.0-GA` | Architecture | P2 | ANTLR4 기반 T-SQL 문법 검증 및 미지원 기능 정밀 진단 오라클 아키텍처 | [`notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md`](notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-ARIES-LOGGING-1`** |  | ARCH | P2 | Implement ARIES Physiological Undo/Redo Logging for Savepoints | [`notes/plans/ARCH_ARIES_LOGGING_PLAN.ko.md`](notes/plans/ARCH_ARIES_LOGGING_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-EPHEMERAL-SCHEMA-PERSISTENCE-1`** | `v0.94.0` | Storage | P1 | Ephemeral Mode Schema-Only Persistence (SQL Server SCHEMA_ONLY / MySQL MEMORY Parity: Persist DDL Schemas, Indexes & Catalog Objects Across Restarts While Keeping Row Data Ephemeral) | [`notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md`](notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md) |  |
@@ -27,33 +27,33 @@
 | `PENDING` | **`ARCH-PARALLEL-SCAN-1`** | `v1.99.0` | Engine | P2 | 멀티코어 병렬 분석 쿼리 실행기 (ParallelSeqScan) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `v0.94.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-UNIFIED-TX-MANAGER`** |  | ENGINE | P2 | Unified TxManager (DDL + DML) Architecture | [`notes/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
+| `PENDING` | **`ARCH-UNIFIED-TX-MANAGER`** |  | ENGINE | P2 | Unified TxManager (DDL + DML) Architecture | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** |  | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
 | `DONE` | **`AUDIT-093-PRE-RELEASE`** |  | QUALITY | P2 | Pre-v0.93.0 Dual-AI Adversarial Code Audit (v0.92.0..HEAD, 22 Defects Remediated) | [`notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md`](notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md) |  |
 | `DONE` | **`AUDIT-135-DUAL-REVIEW`** |  | Integrity | P1 | 전 소스코드 135단계 듀얼 AI 정밀 코드 리뷰 및 엣지 케이스 감사 | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) | 135/135 스코프 완주 (총 134건 결함 식별 및 등록 완료) |
 | `DONE` | **`AUDIT-CORE-DEEP-RESCAN`** |  | Integrity | P1 | 12대 고복잡도 핵심 코어 구역 다중 결함 심층 전수 감사 (Deep Core Precision Rescan) | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) |  |
-| `DONE` | **`AUDIT-CROSS-CONTAINS`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사: strings.Contains 기반 SQL 키워드/연산자 단순 매칭 안티패턴 발굴 및 토크나이저 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `DONE` | **`AUDIT-CROSS-PREFIX`** | `1.0-GA` | Engine | P2 | 코드베이스 전수 조사: strings.HasPrefix/HasSuffix 기반 SQL 구문/예약어 경계 미검사 안티패턴 발굴 및 HasPrefixKeyword 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `DONE` | **`AUDIT-CROSS-SPLIT`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사: strings.Split 기반 SQL 절/파라미터/WHERE 단순 분할 안티패턴 발굴 및 sqlutil 분할 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-CROSS-CONTAINS`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사: strings.Contains 기반 SQL 키워드/연산자 단순 매칭 안티패턴 발굴 및 토크나이저 전환 | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-CROSS-PREFIX`** | `1.0-GA` | Engine | P2 | 코드베이스 전수 조사: strings.HasPrefix/HasSuffix 기반 SQL 구문/예약어 경계 미검사 안티패턴 발굴 및 HasPrefixKeyword 전환 | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-CROSS-SPLIT`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사: strings.Split 기반 SQL 절/파라미터/WHERE 단순 분할 안티패턴 발굴 및 sqlutil 분할 전환 | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`AUDIT-FINAL-SAFETY-NET-1`** | `1.0-GA` | Integrity | P2 | LionSQL 1.0-GA 4대 핵심 도메인 최종 방어벽(Panic-Free, No-Orphan, No-Silent, No-Deadlock) 전수 정밀 감사 | [`notes/plans/PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md`](notes/plans/PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md) |  |
 | `DONE` | **`AUDIT-FULL-008`** | `Protocol` | --milestone | P1 | TDS ALL_HEADERS 길이 및 헤더 타입(1,2,3) 검증을 통한 대용량 RPC(sp_executesql) 스트림 손상 방지 | [`--category`](--category) |  |
-| `DONE` | **`AUDIT-FULL-032`** | `1.0-GA` | Protocol | P1 | formatParamForSQL의 NUMERIC OID 1700 고정밀 Decimal 유실 방지 (float64 다운캐스팅 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-FULL-032`** | `1.0-GA` | Protocol | P1 | formatParamForSQL의 NUMERIC OID 1700 고정밀 Decimal 유실 방지 (float64 다운캐스팅 제거) | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`AUDIT-FULL-033`** | `Protocol` | --milestone | P1 | TDS 미인증 세션의 SQL Batch 임의 실행 방지 및 로그인 실패 후 좀비 세션 강제 종료 (인증 우회 방지) | [`--category`](--category) |  |
 | `DONE` | **`AUDIT-FULL-034`** | `Protocol` | --milestone | P1 | TDS B_VARCHAR/US_VARCHAR 헤더를 UTF-16 문자 수(코드 유닛)로 산출하여 한글/비ASCII 문자열 프레이밍 파탄 방지 | [`--category`](--category) |  |
 | `DONE` | **`AUDIT-FULL-035`** | `Security` | --milestone | P1 | REST API 관리자 엔드포인트(쿼리취소, 활성쿼리, 로그, 실시간CDC스트림) wrapSuperuser 및 wrapAuth 인증 가드 장착 | [`--category`](--category) |  |
 | `DONE` | **`AUDIT-FULL-036`** | `Performance` | --milestone | P1 | REST API 레코드 필터 LIKE 평가 시 매 행 동적 regexp.Compile 제거 및 sqlutil.MatchLike 위임으로 CPU/GC 병목 해소 | [`--category`](--category) |  |
 | `DONE` | **`AUDIT-FULL-037`** | `Security` | --milestone | P1 | /api/backup 엔드포인트 권한을 wrapSuperuser로 격상하여 일반/테이블제한 API Key를 통한 전체 DB 덤프 유출(권한상승) 방지 | [`--category`](--category) |  |
 | `DONE` | **`AUDIT-FULL-039`** | `Security` | --milestone | P1 | RevokeAllTokens 호출 시 saveLocked 디스크 영속화를 수행하여 재부팅 시 파기된 JWT 토큰 부활 방지 | [`--category`](--category) |  |
-| `DONE` | **`AUDIT-FULL-13DOM`** |  | Integrity | P1 | 전 13대 도메인(175개 파일, 113,056 LOC) 듀얼 AI 라인 단위 적대적 감사 완료 및 40개 결함 도출 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `DONE` | **`AUDIT-FULL-PATCH`** | `1.0-GA` | Integrity | P1 | 전수 감사 발굴 40대 결함(Critical 2건 완치, High 26건, Med/Low 12건) TDD 순차 패치 및 무결점 회귀 검증 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `DONE` | **`AUDIT-FULL-SQL-CORE`** | `1.0-GA` | Engine | P1 | 전수 감사 잔여 Parser/Planner/Exec/Catalog 결함 패치 (AUDIT-FULL-005, 006, 014~022, 024~029) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `DONE` | **`AUDIT-FULL-STORAGE-WT`** | `1.0-GA` | Storage | P1 | 전수 감사 잔여 Storage/WT 결함 패치 (AUDIT-FULL-002, 007, 011, 012, 013) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `DONE` | **`AUDIT-FULL-WIRE-SEC`** | `1.0-GA` | Protocol | P1 | 전수 감사 잔여 Wire/TDS 프레이밍 및 API/Auth/Replication 보안 결함 패치 (AUDIT-FULL-008, 023, 030~040) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `DONE` | **`AUDIT-INDEX-A`** | `1.0-GA` | Engine | P1 | strings.Index 전수 교체 패턴 A: SQL 예약어(WITH, FOR, AS, SERVERPROPERTY) 단순 매칭 토크나이저 전환 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `DONE` | **`AUDIT-INDEX-B`** | `1.0-GA` | Engine | P2 | strings.Index 전수 교체 패턴 B: DDL/DML/MERGE/PIVOT 단순 괄호 탐색의 FindMatchingParen 균형 파서 전수 교체 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
-| `DONE` | **`AUDIT-INDEX-C`** | `1.0-GA` | Engine | P1 | strings.Index 전수 교체 패턴 C: WHERE 및 PK 바이패스 등호(=) 리터럴 오염 방지 및 토크나이저 연동 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-FULL-13DOM`** |  | Integrity | P1 | 전 13대 도메인(175개 파일, 113,056 LOC) 듀얼 AI 라인 단위 적대적 감사 완료 및 40개 결함 도출 | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-FULL-PATCH`** | `1.0-GA` | Integrity | P1 | 전수 감사 발굴 40대 결함(Critical 2건 완치, High 26건, Med/Low 12건) TDD 순차 패치 및 무결점 회귀 검증 | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-FULL-SQL-CORE`** | `1.0-GA` | Engine | P1 | 전수 감사 잔여 Parser/Planner/Exec/Catalog 결함 패치 (AUDIT-FULL-005, 006, 014~022, 024~029) | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-FULL-STORAGE-WT`** | `1.0-GA` | Storage | P1 | 전수 감사 잔여 Storage/WT 결함 패치 (AUDIT-FULL-002, 007, 011, 012, 013) | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-FULL-WIRE-SEC`** | `1.0-GA` | Protocol | P1 | 전수 감사 잔여 Wire/TDS 프레이밍 및 API/Auth/Replication 보안 결함 패치 (AUDIT-FULL-008, 023, 030~040) | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-INDEX-A`** | `1.0-GA` | Engine | P1 | strings.Index 전수 교체 패턴 A: SQL 예약어(WITH, FOR, AS, SERVERPROPERTY) 단순 매칭 토크나이저 전환 | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-INDEX-B`** | `1.0-GA` | Engine | P2 | strings.Index 전수 교체 패턴 B: DDL/DML/MERGE/PIVOT 단순 괄호 탐색의 FindMatchingParen 균형 파서 전수 교체 | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`AUDIT-INDEX-C`** | `1.0-GA` | Engine | P1 | strings.Index 전수 교체 패턴 C: WHERE 및 PK 바이패스 등호(=) 리터럴 오염 방지 및 토크나이저 연동 | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`AUDIT-LOG-1`** | `v1.99.0` | Integrity | P2 | 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템 | [`notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md) |  |
-| `DONE` | **`AUDIT-PATCH-P0`** |  | Integrity | P1 | 전수 감사 P0 (Must Fix 37선) 결함 TDD 순차 패치 및 회귀 검증 | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |  |
+| `DONE` | **`AUDIT-PATCH-P0`** |  | Integrity | P1 | 전수 감사 P0 (Must Fix 37선) 결함 TDD 순차 패치 및 회귀 검증 | [`notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |  |
 | `DONE` | **`AUDIT-PATCH-P1`** |  | Core | P1 | 1.0 전수 감사 P1 (Should Fix 47선) 난이도별(하/중/상) 순차 안정화 패치 | [`notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md`](notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md) | 1단계(하 21건), 2단계(중 18건), 3단계(상 8건) P1 ... |
 | `DONE` | **`AUDIT-STRINGS-CATALOG`** | `1.0-GA` | Catalog | P1 | 코드베이스 전수 조사 Phase 2: pkg/catalog 가상 뷰 인터셉터 strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-STRINGS-DISPATCH`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사 Phase 5: pkg/engine 구문 디스패치 및 query_utils strings.* 안티패턴 전수 제거 | [`GEMINI.md`](GEMINI.md) |  |
@@ -193,11 +193,11 @@
 | `DONE` | **`COMPAT-BABELFISH-CALIBRATION-P2`** | `Compatibility` | --milestone | P2 | Babelfish 2차 실측 캘리브레이션 (1608 누적합, 1572-1574 바이너리, 1562-1349 하베스터 더미 제거) | [`--category`](--category) |  |
 | `PENDING` | **`COMPAT-DECLARATIVE-1`** | `v1.99.0` | Durability | P2 | 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) |  |  |
 | `DONE` | **`COMPAT-TABLE-DRIVEN-1`** |  | Durability | P2 | 10개 실전 서비스 호환 규칙 Table-Driven 구조 및 안티패턴 키워드 매칭 전면 정식화 | [`notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/plans/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md) |  |
-| `DONE` | **`COMPAT-TSQL-MATRIX-1`** | `1.0-GA` | Ecosystem | P2 | SQL Server 호환성 매트릭스(TSQL_COMPATIBILITY_MATRIX.ko.md) 구현 진행 중 항목 체크 및 동기화 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
-| `DONE` | **`CORPUS-ANTLR-TSQL-1`** | `1.0-GA` | Ecosystem | P2 | ANTLR4 공식 T-SQL 그래머 코퍼스 수집 및 구문/파서 회귀 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
-| `DONE` | **`CORPUS-CALCITE-TSQL-1`** | `1.0-GA` | Ecosystem | P2 | Apache Calcite T-SQL 빌트인 함수/표현식 코퍼스 수집 및 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
-| `DONE` | **`CORPUS-KNEX-MSSQL-1`** | `1.0-GA` | Ecosystem | P2 | Knex.js MSSQL Dialect 쿼리 코퍼스 수집 및 Wiki.js 대응 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
-| `DONE` | **`CORPUS-NORTHWIND-PUBS-1`** | `1.0-GA` | Ecosystem | P2 | Northwind 및 Pubs 공식 표준 관계형 코퍼스 수집 및 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
+| `DONE` | **`COMPAT-TSQL-MATRIX-1`** | `1.0-GA` | Ecosystem | P2 | SQL Server 호환성 매트릭스(TSQL_COMPATIBILITY_MATRIX.ko.md) 구현 진행 중 항목 체크 및 동기화 | [`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](doc/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
+| `DONE` | **`CORPUS-ANTLR-TSQL-1`** | `1.0-GA` | Ecosystem | P2 | ANTLR4 공식 T-SQL 그래머 코퍼스 수집 및 구문/파서 회귀 스위트 구축 | [`notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
+| `DONE` | **`CORPUS-CALCITE-TSQL-1`** | `1.0-GA` | Ecosystem | P2 | Apache Calcite T-SQL 빌트인 함수/표현식 코퍼스 수집 및 SLT 오라클 스위트 구축 | [`notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
+| `DONE` | **`CORPUS-KNEX-MSSQL-1`** | `1.0-GA` | Ecosystem | P2 | Knex.js MSSQL Dialect 쿼리 코퍼스 수집 및 Wiki.js 대응 SLT 오라클 스위트 구축 | [`notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
+| `DONE` | **`CORPUS-NORTHWIND-PUBS-1`** | `1.0-GA` | Ecosystem | P2 | Northwind 및 Pubs 공식 표준 관계형 코퍼스 수집 및 SLT 오라클 스위트 구축 | [`notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`DEPRECATE-OCC-PERF-1`** |  | Storage | P2 | v1.0 이전 OCC performance 모드(-memory=performance) Deprecate 명기 (v1.0 옵션 유지) |  |  |
 | `DONE` | **`DOC-REVAMP-10`** | `1.0-GA` | Documentation | P2 | 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 | [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md) |  |
 | `DONE` | **`DOGFOOD-SPRINT-1`** |  | Performance | P1 | LionSQL 자체 백엔드 기반 정형 스프린트/태스크 관리 시스템 구축 (Dogfooding) |  |  |
@@ -208,48 +208,48 @@
 | `IN_PROGRESS` | **`DURA-SOAK-1`** | `1.0-GA` | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
 | `PENDING` | **`FEAT-CDC-DUCKDB-INITIAL-SNAPSHOT-CHECKPOINT-1`** | `1.0-GA` | Ecosystem | P2 | CDC 및 DuckDB 연동 최초 스냅샷 적재, LSN 체크포인트 영속화 및 자동 재연결 파이프라인 | [`guide/DUCKDB_INTEGRATION_GUIDE.ko.md`](guide/DUCKDB_INTEGRATION_GUIDE.ko.md) |  |
 | `DONE` | **`FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`** | `1.0-GA` | CLI | P2 | lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 | [`doc/USER_MANUAL.ko.md`](doc/USER_MANUAL.ko.md) |  |
-| `DONE` | **`FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`** | `1.0-GA` | Mail | P2 | SQL Server DatabaseMail 외부 워커 프로세스 분리 및 sp_send_dbmail 지원 | [`notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md`](notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`** | `1.0-GA` | Mail | P2 | SQL Server DatabaseMail 외부 워커 프로세스 분리 및 sp_send_dbmail 지원 | [`notes/plans/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md`](notes/plans/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-DATADIR-ENGINE-MANIFEST-1`** | `1.0-GA` | Storage | P1 | 데이터 폴더 초기화 시 엔진 매니페스트(lionsql.engine.json: wiredtiger/compact, 코덱 버전) 원자적 기록, 재기동 시 자동 감지 및 이종 엔진 명시 시 Fail-Closed 차단 | [`1.0-GA`](1.0-GA) |  |
-| `DONE` | **`FEAT-DUAL-AI-AUDIT-PIPELINE-1`** | `1.0-GA` | Durability | P1 | Dual-AI (Antigravity & Claude) Pre-Release Audit Pipeline Automation: scripts/audit_diff.sh and scripts/release.sh Gate 0 integration | [`notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`](notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-DUAL-AI-AUDIT-PIPELINE-1`** | `1.0-GA` | Durability | P1 | Dual-AI (Antigravity & Claude) Pre-Release Audit Pipeline Automation: scripts/audit_diff.sh and scripts/release.sh Gate 0 integration | [`notes/plans/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`](notes/plans/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-MATVIEW-ALIAS-1`** | `v1.20.0` | FEAT | P2 | Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) | [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PUREGO-WT-ENGINE`** | `v1.20.0` | Storage | P3 | WiredTiger 호환 자체 Pure-Go MVCC 스토리지 엔진 구현 및 CGo 분리 (Post-1.0) |  |  |
 | `DONE` | **`FEAT-SANDBOX-SPA-HANDLER-OSDIRFS-1`** | `v0.94.0` | ARCHITECTURE | P2 | Modernize SPA Hosting with Go os.DirFS Chroot Sandbox and Subdirectory Support | [`notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md`](notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`** | `v0.94.0` | Security | P2 | 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리) | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
-| `PENDING` | **`FEAT-SQL-SERVER-AGENT-INPROCESS-1`** | `v0.94.0` | Engine | P2 | SQL Server Agent 인-프로세스 스케줄러 (msdb.dbo.sysjobs, sysjobhistory, sp_add_job) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-SQL-SERVER-AGENT-INPROCESS-1`** | `v0.94.0` | Engine | P2 | SQL Server Agent 인-프로세스 스케줄러 (msdb.dbo.sysjobs, sysjobhistory, sp_add_job) | [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TABLE-VAR-1`** |  | Engine | P2 | T-SQL 테이블 변수(DECLARE @tbl TABLE) 지원 및 DML/배치 라이프사이클 통합 | [`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TDS-MULTIPLE-RESULT-SETS-1`** | `1.0-GA` | Wire | P2 | TDS 다중 결과 집합(Multiple Result Sets / Sequential NextResult) 스트리밍 반환 지원 | [`notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md`](notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TIMESERIES-LSM-1`** | `v1.99.0` | FEAT | P2 | LSM Time-Series Chunk Storage & time_bucket | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TOLERANT-DDL-1`** |  | FEAT | P2 | Dynamic Runtime Tolerant DDL CLI Switch & PostgreSQL 42704 SQLSTATE | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
-| `DONE` | **`FEAT-TRANSACTIONAL-DDL-1`** | `1.0-GA` | Engine | P1 | Transactional DDL (CREATE/DROP/ALTER/RENAME/INDEX 롤백 지원) 및 세션-트랜잭션 경계 격리 안전성 강화 | [`notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`](notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`** | `v0.94.0` | Engine | P2 | Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-TRANSACTIONAL-DDL-1`** | `1.0-GA` | Engine | P1 | Transactional DDL (CREATE/DROP/ALTER/RENAME/INDEX 롤백 지원) 및 세션-트랜잭션 경계 격리 안전성 강화 | [`notes/plans/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`](notes/plans/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`** | `v0.94.0` | Engine | P2 | Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 | [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TYPE-ROWVERSION-MONOTONIC-COUNTER-1`** | `1.0-GA` | Storage | P2 | ROWVERSION 데이터 타입 DDL 파싱 및 INSERT/UPDATE 시 @@DBTS 단조 증가 바이너리 자동 스탬핑 | [`doc/REFERENCE_MANUAL.ko.md`](doc/REFERENCE_MANUAL.ko.md) |  |
 | `DONE` | **`FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`** | `1.0-GA` | Engine | P2 | 테이블 DDL 변경 시 VDBE 바이트코드 프로시저 및 실행 계획 캐시 자동 Invalidate | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `PENDING` | **`FEAT-VECTOR-1`** | `v1.60.0` | FEAT | P2 | Pure-Go Vector Search Engine (pgvector compat) | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-WAL-ARCHIVER-INPROCESS-1`** | `1.0-GA` | Storage | P3 | WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-WAL-ARCHIVER-INPROCESS-1`** | `1.0-GA` | Storage | P3 | WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 | [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WASM-UDF-1`** | `v1.99.0` | Engine | P2 | WebAssembly 런타임 샌드박스 UDF (wazero) | [`ROADMAP.md`](ROADMAP.md) |  |
-| `PENDING` | **`FEAT-WEB-STUDIO-HYBRID-1`** | `1.0-GA` | API | P2 | Web Studio 하이브리드 지원 (--no-studio 플래그 및 lionsql studio 서브커맨드 프록시) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-WEB-STUDIO-HYBRID-1`** | `1.0-GA` | API | P2 | Web Studio 하이브리드 지원 (--no-studio 플래그 및 lionsql studio 서브커맨드 프록시) | [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `SPEC-OUT` | **`FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`** | `v0.94.0` | 1 | P2 | Storage | [`--milestone`](--milestone) |  |
-| `DONE` | **`FEAT-WT-SECONDARY-INDEX-BTREE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 | [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-WT-SECONDARY-INDEX-BTREE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 | [`notes/plans/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/plans/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md) |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-COMMIT-PARTIAL-MUTATION-RECOVERY-1`** | `1` | --domain | P2 | Commit 중도 실패 시 부분 변경(Shard/Partition/Index) 복구 누락 결함 수정 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-CONCURRENT-UPDATE-LOST-UPDATE-1`** | `1.0-GA` | Storage | P2 | 조건절 UPDATE 동시성 실행 시 최신 커밋 버전 Current Read 검증 및 갱신 손실(Lost Update) 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-CURSOR-LIFECYCLE-1`** |  | Engine | P1 | 커서 DEALLOCATE 및 배치 종료 시 세션 커서 레지스트리 정리 및 재선언 충돌 해결 | [`1.0-GA`](1.0-GA) |  |
-| `DONE` | **`FIX-DATEDIFF-BIG-DAYOFYEAR-1`** |  | Proc | P2 | DATEDIFF_BIG(dayofyear, ...) returns NULL | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `DONE` | **`FIX-DATEDIFF-BIG-DAYOFYEAR-1`** |  | Proc | P2 | DATEDIFF_BIG(dayofyear, ...) returns NULL | [`notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-DDL-DEFAULT-CHECK-1`** | `1.0-GA` | Engine | P2 | CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DEFAULT-EXPR-DYNAMIC-EVAL-1`** | `1.0-GA` | Engine | P2 | DEFAULT 표현식(NEWID, GETDATE 등) 파싱 시점 캐싱 폐지 및 INSERT 실행 시 동적 평가 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-DUAL-PARSER-ALTER-PROC-FALLBACK-1`** | `v0.94.0` | Parser | P1 | ALTER PROCEDURE 및 CREATE OR ALTER PROC 파싱 오류 시 ANTLR4 Fallback 자동 연동 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`FIX-EVAL-NOT-IN-NULL-3VL-1`** | `1.0-GA` | Engine | P2 | NOT IN 서브쿼리 및 리스트에 NULL 포함 시 3치 논리(3VL UNKNOWN) 엄격 적용 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
-| `DONE` | **`FIX-EXEC-DEFAULT-KEYWORD-1`** |  | Parser | P2 | EXEC arg DEFAULT keyword must bind the declared default instead of the string literal | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
-| `DONE` | **`FIX-EXEC-UNKNOWN-NAMED-ARG-1`** |  | Engine | P2 | EXEC with an unknown named argument must raise error 8145 instead of being ignored | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `DONE` | **`FIX-EXEC-DEFAULT-KEYWORD-1`** |  | Parser | P2 | EXEC arg DEFAULT keyword must bind the declared default instead of the string literal | [`notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `DONE` | **`FIX-EXEC-UNKNOWN-NAMED-ARG-1`** |  | Engine | P2 | EXEC with an unknown named argument must raise error 8145 instead of being ignored | [`notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `PENDING` | **`FIX-FK-CONCURRENT-PARENT-LOCK-1`** | `v0.94.0` | Storage | P2 | 동시성 FK 검증 시 부모 행 삭제 방지 참조 락 체계 확립 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-GROUPBY-STRING-AGG-1`** |  | Engine | P1 | GROUP BY 쿼리에서 STRING_AGG(col, sep) 그룹별 집계 누락(NULL 반환) 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-HTTP-REAP-ABANDONED-TX-1`** | `1.0-GA` | API | P2 | Web Studio/HTTP 유휴 세션 회수 시 미종료 트랜잭션 자동 롤백 및 스토리지 잠금 해제 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-HYBRID-TX-SPLIT-BRAIN-1`** | `1.0-GA` | Storage | P2 | 하이브리드 트랜잭션 2PC 부재로 인한 분할 커밋(Split-Brain) 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
-| `DONE` | **`FIX-LEXER-HEX-BINARY-LITERAL-1`** |  | Parser | P2 | Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `DONE` | **`FIX-LEXER-HEX-BINARY-LITERAL-1`** |  | Parser | P2 | Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) | [`notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-MEMENGINE-DDL-WAL-FAILCLOSED-1`** | `1` | --domain | P2 | DDL WAL 기록 실패 시 인메모리 카탈로그 복구 및 선기록 패턴 적용 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-MEMENGINE-WAL-FSYNC-ROLLBACK-1`** | `1.0-GA` | Storage | P2 | MemEngine WAL fsync 실패 시 메모리 데이터 잔류(Phantom Commit) 롤백 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-OCC-COMPACT-AUDIT-1`** | `1.0-GA` | Storage | P1 | MemoryCompact 2단계 Audit 결함 수정 (Arena UAF, AlterTable 레이아웃/WAL, memCursor 레이스, varSlot 오버플로우) | [`notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md`](notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md) |  |
-| `DONE` | **`FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`** | `1.0-GA` | Storage | P1 | PITR 기준 백업 시점/LSN 불변성 검증, 백업-WAL LSN 경계 필터링 및 LSN 연속성(Gap) 누락 검출 보완 | [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md) |  |
+| `DONE` | **`FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`** | `1.0-GA` | Storage | P1 | PITR 기준 백업 시점/LSN 불변성 검증, 백업-WAL LSN 경계 필터링 및 LSN 연속성(Gap) 누락 검출 보완 | [`notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md) |  |
 | `DONE` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-TEMP-TABLE-DDL-1`** |  | Engine | P1 | 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-ROLLBACK-INDEX-RESTORE-ERROR-HANDLING-1`** |  | Engine | P2 | 커밋 및 세이브포인트 롤백 과정에서 보조 인덱스 복원 오류 전파 및 복원 누락 방어 |  |  |
@@ -271,7 +271,7 @@
 | `DONE` | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** |  | Engine | P1 | CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX)) 미평가 에코 버그 및 MONEY/SMALLMONEY 4자리 소수점 스케일(1.2345) 보정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-INSERT-EXEC-1`** |  | Engine | P1 | INSERT INTO <table> EXEC <proc_name> 프로시저 결과셋 적재 구문 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-JSON-FUNCTIONS-EXT-1`** | `1.0-GA` | Engine | P1 | mssql-jdbc JSONFunctionTest.java 호환성: SQL Server JSON 컬럼 타입 별칭 및 JSON_OBJECT, JSON_ARRAY, JSON_PATH_EXISTS 내장 함수 지원 | [`1.0-GA`](1.0-GA) |  |
-| `DONE` | **`FIX-TSQL-MONEY-STRING-PARSE-1`** |  | Eval | P2 | CAST of currency-symbol strings to MONEY and LEN(MONEY) parity with SQL Server | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `DONE` | **`FIX-TSQL-MONEY-STRING-PARSE-1`** |  | Eval | P2 | CAST of currency-symbol strings to MONEY and LEN(MONEY) parity with SQL Server | [`notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TSQL-OFFSET-VAR-1`** | `1.0-GA` | Engine | P2 | OFFSET @var ROWS FETCH NEXT @var ROWS ONLY 프로시저 내 변수 바인딩 파싱 실패 (unexpected token @skip) | [`test/slt_proc/26_offset_fetch_paging.slt`](test/slt_proc/26_offset_fetch_paging.slt) |  |
 | `DONE` | **`FIX-TSQL-OUTPUT-PARAM-1`** | `1.0-GA` | Engine | P1 | EXEC proc @x OUTPUT 호출자 변수로 값 미전달: DECLARE @x; EXEC sp_double 21, @x OUTPUT; SELECT @x 가 42 대신 NULL | [`test/slt_proc/27_rowcount_and_dml_results.slt`](test/slt_proc/27_rowcount_and_dml_results.slt) |  |
 | `DONE` | **`FIX-TSQL-PROC-UNION-ALL-1`** | `1.0-GA` | Engine | P2 | 프로시저 본문 내 UNION ALL 파싱 실패 (unexpected token ALL), 프로시저 밖은 정상 | [`test/slt_proc/30_case_expressions_and_set_ops.slt`](test/slt_proc/30_case_expressions_and_set_ops.slt) |  |
@@ -325,12 +325,12 @@
 | `DONE` | **`PERF-COMPLEX-QUERY-COLUMNAR`** |  | Architecture | P3 | 순수 Columnar Vectorization 전면 재작성 영구 기각 (Spec-Out) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-CTE-EPHEMERAL-1`** |  | Durability | P2 | 세션 로컬 에페머럴 CTE 버퍼 및 Zero-DDL 최적화 | [`notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md`](notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md) |  |
 | `DONE` | **`PERF-CTE-LOWERING-VDBE-1`** |  | Durability | P2 | Writable CTE Stored Procedure 바이트코드 Lowering 가속 | [`notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md) |  |
-| `DONE` | **`PERF-EXEC-TUPLE-DEFENSIVE-PAD-1`** | `1.0-GA` | Engine | P2 | Volcano 쿼리 실행기 동적 프로젝션 슬라이스 경계 방어 및 가변 폭 튜플 자동 Null 패딩 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`PERF-EXEC-TUPLE-DEFENSIVE-PAD-1`** | `1.0-GA` | Engine | P2 | Volcano 쿼리 실행기 동적 프로젝션 슬라이스 경계 방어 및 가변 폭 튜플 자동 Null 패딩 | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`PERF-EXISTS-SUBQUERY-LIMIT-1`** | `1.0-GA` | Engine | P2 | EXISTS (SELECT ...) 구문 평가 시 암시적 LIMIT 1 푸시다운 및 1건 조기 탈출(결함 73) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-GROVE-CONCURRENCY-1`** |  | Durability | P2 | Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 | [`notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 2 (`PERF-HOTSPOT-LATCH-... |
 | `DONE` | **`PERF-HYBRID-TEMPMEM-1`** |  | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OCC-FLAT-DECODE-1`** |  | Storage | P2 | FlatRecord 스캔 디코딩 할당 최적화 (Option A: SSO 2중 할당 제거 및 Arena 슬랩 풀링) |  |  |
-| `SPEC-OUT` | **`PERF-OCC-INSTANT-DROP-COL-1`** | `Spec-Out` | Storage | P2 | In-Memory OCC FlatRecordLayout 컬럼 가상 스킵 마스킹을 통한 Instant DROP COLUMN (O(1) DDL) 지원 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `SPEC-OUT` | **`PERF-OCC-INSTANT-DROP-COL-1`** | `Spec-Out` | Storage | P2 | In-Memory OCC FlatRecordLayout 컬럼 가상 스킵 마스킹을 통한 Instant DROP COLUMN (O(1) DDL) 지원 | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`PERF-OCC-ZERO-LOCK-1`** | `Spec-Out` | Storage | P3 | In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 영구 기각 (Spec-Out) | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | `v0.94.0` | Engine | P3 | WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** |  | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
@@ -344,7 +344,7 @@
 | `PENDING` | **`PERF-VDBE-FRAME-SLIM-1`** | `v1.10.0` | Engine | P2 | VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-WAL-ZERO-ALLOC-1`** | `v1.10.0` | Storage | P2 | In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 writeFrame Zero-Alloc | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WIRE-ZEROALLOC-1`** |  | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
-| `DONE` | **`PERF-WT-INSTANT-ADD-COL-1`** | `1.0-GA` | Storage | P2 | WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `DONE` | **`PERF-WT-INSTANT-ADD-COL-1`** | `1.0-GA` | Storage | P2 | WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) | [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`PERF-WT-ROW-DIRECT-1`** | `v1.10.0` | Storage | P2 | WiredTiger InsertRow 중간 Record 맵 2중 할당 우회 및 EncodeRowToBuffer 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | `1.0-GA` | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
 | `DONE` | **`PLANNER-SLIM-1`** |  | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
@@ -385,11 +385,11 @@
 | `DONE` | **`TEST-TDS-PYMSSQL-ORACLE-1`** | `1.0-GA` | Protocol | P1 | pymssql 공식 테스트 스위트(test_sprocs.py 17개 고정/가변 타입 OUTPUT 프로시저, test_types.py, test_queries.py 등 ~200케이스) TDS/Gate 5 오라클 포팅 및 검증 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`TEST-TDS-TEDIOUS-ORACLE-1`** | `1.0-GA` | Protocol | P1 | tediousjs/tedious 통합 테스트(datatypes-in-results, parameterised-statements, rpc-test, prepare-execute, transactions 등 971개 케이스) TDS/엔진 오라클 포팅 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`TSQL-FUNC-AT-TIME-ZONE`** | `v1.10.0` | Engine | P2 | AT TIME ZONE 시간대 변환 구문 및 함수 (IANA/Windows Timezone) | [`notes/plans/TIMEZONE_LOCALE_PARSING_PLAN.ko.md`](notes/plans/TIMEZONE_LOCALE_PARSING_PLAN.ko.md) |  |
-| `DONE` | **`TSQL-FUNC-COMPRESS`** | `1.0-GA` | Engine | P2 | COMPRESS 및 DECOMPRESS GZIP 바이너리 압축/해제 내장 함수 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
+| `DONE` | **`TSQL-FUNC-COMPRESS`** | `1.0-GA` | Engine | P2 | COMPRESS 및 DECOMPRESS GZIP 바이너리 압축/해제 내장 함수 | [`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](doc/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
 | `PENDING` | **`TSQL-FUNC-PARSE`** | `v1.10.0` | Engine | P2 | PARSE 및 TRY_PARSE 문화권(Culture) 기반 문자열 파싱 함수 | [`notes/plans/TIMEZONE_LOCALE_PARSING_PLAN.ko.md`](notes/plans/TIMEZONE_LOCALE_PARSING_PLAN.ko.md) |  |
-| `PENDING` | **`TSQL-MULTI-TVF-1`** | `v1.60.0` | Engine | P2 | T-SQL 멀티-스테이트먼트 테이블 반환 함수 (Multi-Statement TVF) | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
-| `DONE` | **`TSQL-SYSVAR-DATEFIRST-DBTS`** | `1.0-GA` | Engine | P2 | @@DATEFIRST 및 @@DBTS 시스템 세션/타임스탬프 변수 지원 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
-| `PENDING` | **`TSQL-TVP-TYPE-1`** | `v1.60.0` | Engine | P3 | T-SQL 사용자 정의 테이블 타입(CREATE TYPE ... AS TABLE) 및 TVP 매개변수 지원 | [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
+| `PENDING` | **`TSQL-MULTI-TVF-1`** | `v1.60.0` | Engine | P2 | T-SQL 멀티-스테이트먼트 테이블 반환 함수 (Multi-Statement TVF) | [`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](doc/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
+| `DONE` | **`TSQL-SYSVAR-DATEFIRST-DBTS`** | `1.0-GA` | Engine | P2 | @@DATEFIRST 및 @@DBTS 시스템 세션/타임스탬프 변수 지원 | [`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](doc/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
+| `PENDING` | **`TSQL-TVP-TYPE-1`** | `v1.60.0` | Engine | P3 | T-SQL 사용자 정의 테이블 타입(CREATE TYPE ... AS TABLE) 및 TVP 매개변수 지원 | [`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](doc/TSQL_COMPATIBILITY_MATRIX.ko.md) |  |
 | `DONE` | **`TUNE-DOC-SYNC-1`** |  | Documentation | P2 | 1.0 GA 벤치마크 및 공식 문서 실측치 일괄 동기화 |  |  |
 | `DONE` | **`TUNE-HOTSPOT-OCC-1`** |  | Durability | P2 | 고동시성 핫스팟 OCC 경합 완화 및 와이어 버퍼 풀링 |  | - [x] **Phase 3 (`TUNE-EPHEMERAL-VERI... |
 | `DONE` | **`TUNE-SP-FASTPATH-1`** |  | Durability | P2 | TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 | [`notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md) | - [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)... |
@@ -462,28 +462,28 @@
 ### [PENDING] AI 에이전트용 컨텍스트 문서 (llms.txt, AGENTS.md 템플릿) `AI-STARTER-1`
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 14:21:00
 - **Milestone**: `v1.30.0`
-- **Plan Doc**: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/AI_APP_STARTER_PLAN.ko.md`](notes/plans/AI_APP_STARTER_PLAN.ko.md)
 
 ---
 
 ### [PENDING] 랜딩 AI 앱 스타터 섹션 및 Go/Node/Python 최소 예제 `AI-STARTER-2`
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 14:21:00
 - **Milestone**: `v1.30.0`
-- **Plan Doc**: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/AI_APP_STARTER_PLAN.ko.md`](notes/plans/AI_APP_STARTER_PLAN.ko.md)
 
 ---
 
 ### [PENDING] 호환성 매트릭스 문서 (되는 것/안 되는 것) `AI-STARTER-3`
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 14:21:00
 - **Milestone**: `v1.30.0`
-- **Plan Doc**: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/AI_APP_STARTER_PLAN.ko.md`](notes/plans/AI_APP_STARTER_PLAN.ko.md)
 
 ---
 
 ### [PENDING] Go 임베디드 모드 타당성 조사 (SQLite 대비) `AI-STARTER-4`
 - **Domain**: Research | **Priority**: P3 | **Updated**: 2026-11-16 14:21:00
 - **Milestone**: `v1.99.0`
-- **Plan Doc**: [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/AI_APP_STARTER_PLAN.ko.md`](notes/plans/AI_APP_STARTER_PLAN.ko.md)
 
 ---
 
@@ -550,7 +550,7 @@
 
 ### [PENDING] Unified TxManager (DDL + DML) Architecture `ARCH-UNIFIED-TX-MANAGER`
 - **Domain**: ENGINE | **Priority**: P2 | **Updated**: 2026-11-16 14:21:00
-- **Plan Doc**: [`notes/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/UNIFIED_TX_MANAGER_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md)
 
 ---
 
@@ -622,21 +622,21 @@
 ### [DONE] 코드베이스 전수 조사: strings.Contains 기반 SQL 키워드/연산자 단순 매칭 안티패턴 발굴 및 토크나이저 전환 `AUDIT-CROSS-CONTAINS`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 
 ---
 
 ### [DONE] 코드베이스 전수 조사: strings.HasPrefix/HasSuffix 기반 SQL 구문/예약어 경계 미검사 안티패턴 발굴 및 HasPrefixKeyword 전환 `AUDIT-CROSS-PREFIX`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 
 ---
 
 ### [DONE] 코드베이스 전수 조사: strings.Split 기반 SQL 절/파라미터/WHERE 단순 분할 안티패턴 발굴 및 sqlutil 분할 전환 `AUDIT-CROSS-SPLIT`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 
 ---
 
@@ -657,7 +657,7 @@
 ### [DONE] formatParamForSQL의 NUMERIC OID 1700 고정밀 Decimal 유실 방지 (float64 다운캐스팅 제거) `AUDIT-FULL-032`
 - **Domain**: Protocol | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 
 ---
 
@@ -705,21 +705,21 @@
 
 ### [DONE] 전 13대 도메인(175개 파일, 113,056 LOC) 듀얼 AI 라인 단위 적대적 감사 완료 및 40개 결함 도출 `AUDIT-FULL-13DOM`
 - **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 
 ---
 
 ### [DONE] 전수 감사 발굴 40대 결함(Critical 2건 완치, High 26건, Med/Low 12건) TDD 순차 패치 및 무결점 회귀 검증 `AUDIT-FULL-PATCH`
 - **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 
 ---
 
 ### [DONE] 전수 감사 잔여 Parser/Planner/Exec/Catalog 결함 패치 (AUDIT-FULL-005, 006, 014~022, 024~029) `AUDIT-FULL-SQL-CORE`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 - **Target Files**: `pkg/proc/lexer.go, pkg/proc/parser_dml.go, pkg/proc/eval.go, pkg/proc/runtime/vm_dispatcher.go, pkg/engine/coordinator_impl.go, pkg/engine/session.go, pkg/engine/sqlexec_auth.go, pkg/engine/sqlexec_explain.go, pkg/execution/eval.go, pkg/execution/builder.go, pkg/planner/bounds.go, pkg/planner/decorrelate.go, pkg/sqlutil/tokenizer.go, pkg/catalog/virtual/result.go, pkg/catalog/virtual/mssql.go`
 
 **Phases & Checklist**:
@@ -742,14 +742,14 @@
 - [x] **`AUDIT-FULL-029` (High)**: `virtual/mssql.go:539` `execReferentialConstraintsForeignKey` `referenced_object_id` `1000` 고정 수정
 
 **Details & Resolution**:
-전수 감사(notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 Parser/VDBE/Planner/Execution/Sqlutil/VirtualCatalog 도메인 17대 잔여 결함 패치 wave.
+전수 감사(notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 Parser/VDBE/Planner/Execution/Sqlutil/VirtualCatalog 도메인 17대 잔여 결함 패치 wave.
 
 ---
 
 ### [DONE] 전수 감사 잔여 Storage/WT 결함 패치 (AUDIT-FULL-002, 007, 011, 012, 013) `AUDIT-FULL-STORAGE-WT`
 - **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 - **Target Files**: `pkg/storage/memengine/memengine.go, pkg/storage/wiredtiger/wt_engine.go`
 
 **Phases & Checklist**:
@@ -762,14 +762,14 @@
 - [ ] **`AUDIT-FULL-013` (Medium)**: `wt_engine.go:257` `Sync` 시 락 해제 후 세션 오픈 경합 및 `RenameTable` WAL 누락 수정
 
 **Details & Resolution**:
-전수 감사(notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 Storage/WiredTiger 도메인 잔여 결함 패치 wave. (참고: AUDIT-FULL-001/009는 잔여 항목으로 단계적 처리)
+전수 감사(notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 Storage/WiredTiger 도메인 잔여 결함 패치 wave. (참고: AUDIT-FULL-001/009는 잔여 항목으로 단계적 처리)
 
 ---
 
 ### [DONE] 전수 감사 잔여 Wire/TDS 프레이밍 및 API/Auth/Replication 보안 결함 패치 (AUDIT-FULL-008, 023, 030~040) `AUDIT-FULL-WIRE-SEC`
 - **Domain**: Protocol | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 - **Target Files**: `pkg/wire/server.go, pkg/wire/param_rules.go, pkg/wire/copy.go, pkg/wire/tds/server.go, pkg/wire/tds/token.go, pkg/api/server.go, pkg/api/records_filter.go, pkg/api/handlers_import_export.go, pkg/auth/auth.go, pkg/replication/handlers.go`
 
 **Phases & Checklist**:
@@ -788,14 +788,14 @@
 - [x] **`AUDIT-FULL-040` (High)**: `replication/handlers.go:12` HA 복제/승격/강등/투표/WAL 스트림 엔드포인트 인증/인가 강제
 
 **Details & Resolution**:
-전수 감사(notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 PGWire/TDS 프로토콜 프레이밍 및 API/Auth/Replication 무인증 보안 13대 결함 패치 wave.
+전수 감사(notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 중 PGWire/TDS 프로토콜 프레이밍 및 API/Auth/Replication 무인증 보안 13대 결함 패치 wave.
 
 ---
 
 ### [DONE] strings.Index 전수 교체 패턴 A: SQL 예약어(WITH, FOR, AS, SERVERPROPERTY) 단순 매칭 토크나이저 전환 `AUDIT-INDEX-A`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 - **Target Files**: `pkg/engine/sqlexec.go, pkg/engine/sqlexec_cursor.go, pkg/engine/sqlexec_merge.go, pkg/wire/tds/server.go, pkg/engine/sqlexec_select.go, pkg/engine/sqlexec_eval.go, pkg/engine/sqlexec_string_split.go`
 
 **Phases & Checklist**:
@@ -810,7 +810,7 @@
 ### [DONE] strings.Index 전수 교체 패턴 B: DDL/DML/MERGE/PIVOT 단순 괄호 탐색의 FindMatchingParen 균형 파서 전수 교체 `AUDIT-INDEX-B`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 - **Target Files**: `pkg/engine/sqlexec_ddl.go, pkg/engine/sqlexec_conditional_ddl.go, pkg/engine/sqlexec_pivot.go, pkg/engine/sqlexec_merge.go, pkg/engine/dml_parser.go`
 
 **Phases & Checklist**:
@@ -825,7 +825,7 @@
 ### [DONE] strings.Index 전수 교체 패턴 C: WHERE 및 PK 바이패스 등호(=) 리터럴 오염 방지 및 토크나이저 연동 `AUDIT-INDEX-C`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 - **Target Files**: `pkg/engine/pk_bypass.go, pkg/engine/sqlexec_dml.go`
 
 **Phases & Checklist**:
@@ -844,7 +844,7 @@
 
 ### [DONE] 전수 감사 P0 (Must Fix 37선) 결함 TDD 순차 패치 및 회귀 검증 `AUDIT-PATCH-P0`
 - **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
-- **Plan Doc**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md)
+- **Plan Doc**: [`notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md)
 
 **Phases & Checklist**:
 - [x] Batch 1: 보안 및 접근 제어 코어 (P0-06 ~ P0-10, 5건) TDD 패치
@@ -2411,35 +2411,35 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [DONE] SQL Server 호환성 매트릭스(TSQL_COMPATIBILITY_MATRIX.ko.md) 구현 진행 중 항목 체크 및 동기화 `COMPAT-TSQL-MATRIX-1`
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md)
+- **Plan Doc**: [`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](doc/TSQL_COMPATIBILITY_MATRIX.ko.md)
 
 ---
 
 ### [DONE] ANTLR4 공식 T-SQL 그래머 코퍼스 수집 및 구문/파서 회귀 스위트 구축 `CORPUS-ANTLR-TSQL-1`
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md)
 
 ---
 
 ### [DONE] Apache Calcite T-SQL 빌트인 함수/표현식 코퍼스 수집 및 SLT 오라클 스위트 구축 `CORPUS-CALCITE-TSQL-1`
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md)
 
 ---
 
 ### [DONE] Knex.js MSSQL Dialect 쿼리 코퍼스 수집 및 Wiki.js 대응 SLT 오라클 스위트 구축 `CORPUS-KNEX-MSSQL-1`
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md)
 
 ---
 
 ### [DONE] Northwind 및 Pubs 공식 표준 관계형 코퍼스 수집 및 SLT 오라클 스위트 구축 `CORPUS-NORTHWIND-PUBS-1`
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/plans/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md)
 
 ---
 
@@ -2541,7 +2541,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 **Details & Resolution**:
 - 설계 계획서: [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
 - 확장 로드맵: [`notes/SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md`](notes/SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md)
-- 업계 적용 및 권장 범위: [`notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md)
+- 업계 적용 및 권장 범위: [`doc/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](doc/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md)
 - `select1.test`: 1,031 쿼리 (2.29s)
 - `select2.test`: 1,031 쿼리 (2.18s)
 - `select3.test`: 3,351 쿼리 (5.88s)
@@ -2594,7 +2594,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [DONE] SQL Server DatabaseMail 외부 워커 프로세스 분리 및 sp_send_dbmail 지원 `FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`
 - **Domain**: Mail | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md`](notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md`](notes/plans/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md)
 
 ---
 
@@ -2608,7 +2608,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [DONE] Dual-AI (Antigravity & Claude) Pre-Release Audit Pipeline Automation: scripts/audit_diff.sh and scripts/release.sh Gate 0 integration `FEAT-DUAL-AI-AUDIT-PIPELINE-1`
 - **Domain**: Durability | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`](notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`](notes/plans/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md)
 
 ---
 
@@ -2646,7 +2646,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [PENDING] SQL Server Agent 인-프로세스 스케줄러 (msdb.dbo.sysjobs, sysjobhistory, sp_add_job) `FEAT-SQL-SERVER-AGENT-INPROCESS-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `v0.94.0`
-- **Plan Doc**: [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
 
 ---
 
@@ -2679,14 +2679,14 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [DONE] Transactional DDL (CREATE/DROP/ALTER/RENAME/INDEX 롤백 지원) 및 세션-트랜잭션 경계 격리 안전성 강화 `FEAT-TRANSACTIONAL-DDL-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`](notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`](notes/plans/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md)
 
 ---
 
 ### [PENDING] Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 `FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `v0.94.0`
-- **Plan Doc**: [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
 
 ---
 
@@ -2714,7 +2714,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [PENDING] WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 `FEAT-WAL-ARCHIVER-INPROCESS-1`
 - **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
 
 ---
 
@@ -2728,7 +2728,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [PENDING] Web Studio 하이브리드 지원 (--no-studio 플래그 및 lionsql studio 서브커맨드 프록시) `FEAT-WEB-STUDIO-HYBRID-1`
 - **Domain**: API | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
 
 ---
 
@@ -2742,7 +2742,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [DONE] WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 `FEAT-WT-SECONDARY-INDEX-BTREE-1`
 - **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/plans/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md)
 
 ---
 
@@ -2775,7 +2775,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ### [DONE] DATEDIFF_BIG(dayofyear, ...) returns NULL `FIX-DATEDIFF-BIG-DAYOFYEAR-1`
 - **Domain**: Proc | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
-- **Plan Doc**: [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
 
 ---
 
@@ -2809,13 +2809,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ### [DONE] EXEC arg DEFAULT keyword must bind the declared default instead of the string literal `FIX-EXEC-DEFAULT-KEYWORD-1`
 - **Domain**: Parser | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
-- **Plan Doc**: [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
 
 ---
 
 ### [DONE] EXEC with an unknown named argument must raise error 8145 instead of being ignored `FIX-EXEC-UNKNOWN-NAMED-ARG-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
-- **Plan Doc**: [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
 
 ---
 
@@ -2848,7 +2848,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ### [DONE] Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) `FIX-LEXER-HEX-BINARY-LITERAL-1`
 - **Domain**: Parser | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
-- **Plan Doc**: [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
 
 ---
 
@@ -2888,7 +2888,7 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 ### [DONE] PITR 기준 백업 시점/LSN 불변성 검증, 백업-WAL LSN 경계 필터링 및 LSN 연속성(Gap) 누락 검출 보완 `FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`
 - **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-16 14:21:02
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
+- **Plan Doc**: [`notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
 
 ---
 
@@ -3027,7 +3027,7 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ### [DONE] CAST of currency-symbol strings to MONEY and LEN(MONEY) parity with SQL Server `FIX-TSQL-MONEY-STRING-PARSE-1`
 - **Domain**: Eval | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
-- **Plan Doc**: [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/plans/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
 
 ---
 
@@ -3517,7 +3517,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ### [DONE] Volcano 쿼리 실행기 동적 프로젝션 슬라이스 경계 방어 및 가변 폭 튜플 자동 Null 패딩 `PERF-EXEC-TUPLE-DEFENSIVE-PAD-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 
 ---
 
@@ -3563,7 +3563,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ### [SPEC-OUT] In-Memory OCC FlatRecordLayout 컬럼 가상 스킵 마스킹을 통한 Instant DROP COLUMN (O(1) DDL) 지원 `PERF-OCC-INSTANT-DROP-COL-1`
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-12 05:06:55
 - **Milestone**: `Spec-Out`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 
 ---
 
@@ -3679,7 +3679,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ### [DONE] WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) `PERF-WT-INSTANT-ADD-COL-1`
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+- **Plan Doc**: [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
 
 ---
 
@@ -4023,7 +4023,7 @@ T-SQL AT TIME ZONE 절 지원 및 IANA/Windows 타임존 데이터셋 연동 날
 ### [DONE] COMPRESS 및 DECOMPRESS GZIP 바이너리 압축/해제 내장 함수 `TSQL-FUNC-COMPRESS`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md)
+- **Plan Doc**: [`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](doc/TSQL_COMPATIBILITY_MATRIX.ko.md)
 
 **Details & Resolution**:
 표준 gzip 알고리즘 기반 바이너리 압축(COMPRESS) 및 복원(DECOMPRESS) 스칼라 함수 지원
@@ -4043,7 +4043,7 @@ T-SQL PARSE/TRY_PARSE 구문 및 USING <culture> (en-US, ko-KR 등) 로케일 �
 ### [PENDING] T-SQL 멀티-스테이트먼트 테이블 반환 함수 (Multi-Statement TVF) `TSQL-MULTI-TVF-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `v1.60.0`
-- **Plan Doc**: [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md)
+- **Plan Doc**: [`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](doc/TSQL_COMPATIBILITY_MATRIX.ko.md)
 
 **Details & Resolution**:
 CREATE FUNCTION ... RETURNS @table TABLE (...) AS BEGIN ... END 형태의 절차적 블록 실행 및 VDBE 가상 머신 재진입, 임시 결과 테이블 버퍼링 지원
@@ -4053,7 +4053,7 @@ CREATE FUNCTION ... RETURNS @table TABLE (...) AS BEGIN ... END 형태의 절차
 ### [DONE] @@DATEFIRST 및 @@DBTS 시스템 세션/타임스탬프 변수 지원 `TSQL-SYSVAR-DATEFIRST-DBTS`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md)
+- **Plan Doc**: [`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](doc/TSQL_COMPATIBILITY_MATRIX.ko.md)
 
 **Details & Resolution**:
 주의 첫째 날 설정(@@DATEFIRST) 및 데이터베이스 전역 고유 rowversion 타임스탬프 카운터(@@DBTS) 세션 변수 지원
@@ -4063,7 +4063,7 @@ CREATE FUNCTION ... RETURNS @table TABLE (...) AS BEGIN ... END 형태의 절차
 ### [PENDING] T-SQL 사용자 정의 테이블 타입(CREATE TYPE ... AS TABLE) 및 TVP 매개변수 지원 `TSQL-TVP-TYPE-1`
 - **Domain**: Engine | **Priority**: P3 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `v1.60.0`
-- **Plan Doc**: [`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](notes/TSQL_COMPATIBILITY_MATRIX.ko.md)
+- **Plan Doc**: [`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](doc/TSQL_COMPATIBILITY_MATRIX.ko.md)
 - **Target Files**: `pkg/engine/sqlexec_ddl.go, pkg/proc/parser.go, pkg/proc/runtime/vm_dispatcher.go, pkg/wire/tds/server.go`
 
 **Phases & Checklist**:

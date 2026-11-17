@@ -10,6 +10,32 @@
 
 LionSQL은 순수 Go 및 Cgo(WiredTiger)로 구현된 엔터프라이즈급 고동시성 임베디드 OLTP 데이터베이스 엔진입니다. 외부 운영 의존성(PgBouncer, Redis, ZooKeeper 등)이 전혀 없는 단일 정적 바이너리로 패키징되어 배포되며, 다중 스토리지 엔진 기반 ACID 보장, 완전한 Microsoft T-SQL 절차적 실행 엔진, 멀티 와이어 프로토콜 상호운용성(PostgreSQL v3 및 Microsoft TDS), 내장 커넥션 풀러, 그리고 내장 웹 관리 스튜디오(Web Studio)를 단일 프로세스 내에 유기적으로 통합합니다.
 
+### 1.1 LionSQL 4대 코어 컴포넌트 아키텍처 (The Four Pillars)
+LionSQL은 외부 데몬 의존성이 전무한 **단일 정적 독립 실행형(Zero-Sidecar) OLTP RDBMS**로서, 다음 4대 핵심 컴포넌트가 결합하여 완전한 엔터프라이즈 ACID와 서브-마이크로초 대화형 처리 성능을 달성합니다:
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│                     LionSQL Autonomous Database Kernel                    │
+├─────────────────────────────────────┬─────────────────────────────────────┤
+│ 1. 2-Tier 파싱 엔진 (Parser Tier)    │ 2. VDBE & CBO 실행 엔진 (Execution)  │
+│ - Pratt Recursive-Descent Fast-Path │ - SQLite 스타일 VDBE 바이트코드 VM  │
+│ - ANTLR4 Full T-SQL/PG Fallback     │ - Volcano Iterator 모델 & 해시 조인 │
+│ ➔ "서브-마이크로초 문법 완전 정복"  │ ➔ "sync.Pool 제로 할당 초고속 실행" │
+├─────────────────────────────────────┼─────────────────────────────────────┤
+│ 3. 통합 TxManager (Orchestrator)     │ 4. ARIES & 스토리지 (Storage & WAL) │
+│ - 4대 트랜잭션 경계(명시/묵시/에러/단절) │ - ARIES Physiological Undo Logging │
+│ - DDL 섀도우 카탈로그 롤백 오케스트레이션│ - In-Memory OCC & WiredTiger MVCC   │
+│ ➔ "세션 트랜잭션 무결성의 단일 두뇌" │ ➔ "1바이트 오차 없는 물리 복구 손발"│
+└─────────────────────────────────────┴─────────────────────────────────────┘
+```
+
+1. **2-Tier 파싱 엔진 (감각 기관)**: 수십 종의 프레임워크(Gitea, Casdoor, Grafana, Answer 등)가 생성하는 방대한 T-SQL/Postgres 방언을 서브-마이크로초 속도로 해석하는 관문 ([`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)).
+2. **VDBE & CBO 실행 엔진 (심장)**: 레지스터 재활용(`sync.Pool`)과 제로 힙 할당으로 쿼리를 초고속 가상 머신 상에서 인터랙티브하게 태워내는 실행기 ([`doc/internal/VDBE.ko.md`](internal/VDBE.ko.md), [`doc/internal/CBO_VOLCANO.md`](internal/CBO_VOLCANO.md)).
+3. **통합 TxManager (두뇌)**: 세션별 트랜잭션의 시작, 오류 격리, 세이브포인트 부분 롤백, DDL+DML 원자적 2단계 커밋을 한 치의 누수 없이 통제하는 총괄 지휘관 ([`doc/internal/UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md`](internal/UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md)).
+4. **ARIES & 스토리지 엔진 (근육)**: 테이블 레코드와 B-Tree 인덱스를 Before/After 이미지(`PhysiologicalRecord`)로 물리적 역재생(Undo)하여 장애 복구와 세이브포인트 롤백을 오차 없이 완결하는 토대 ([`doc/internal/PHYSICAL_TABLE_FORMAT.ko.md`](internal/PHYSICAL_TABLE_FORMAT.ko.md), [`doc/internal/STORAGE.md`](internal/STORAGE.md)).
+
+### 1.2 전체 시스템 계층 구조
+
 ```
 +---------------------------------------------------------------------------------------------------------+
 |                                        Client Ecosystem & Interfaces                                    |

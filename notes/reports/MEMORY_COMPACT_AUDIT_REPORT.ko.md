@@ -38,7 +38,7 @@
 
 ### Finding 2 [CRITICAL] `ALTER TABLE DROP COLUMN` / `ALTER COLUMN TYPE` 시 `TableData.layout`·`flatBuf`·WAL 미갱신
 
-- **연관 결함**: [`AUDIT-FULL-009`](file:///Users/maro/Projects/SQLion/notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 확장
+- **연관 결함**: [`AUDIT-FULL-009`](FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 확장
 - **발생 위치**:
   - [`pkg/storage/memengine/ddl.go`](file:///Users/maro/Projects/SQLion/pkg/storage/memengine/ddl.go#L681-L695) (`Engine.AlterTable`)
   - [`pkg/engine/sqlexec_ddl.go`](file:///Users/maro/Projects/SQLion/pkg/engine/sqlexec_ddl.go#L1815) (`ALTER COLUMN ... TYPE`), [L1932](file:///Users/maro/Projects/SQLion/pkg/engine/sqlexec_ddl.go#L1932) (`DROP COLUMN`)
@@ -54,7 +54,7 @@
 
 ### Finding 3 [HIGH] `memCursor` 지연 디코딩과 DDL(`AddColumn`/`AlterTable`) 간 데이터 레이스 및 디코드 실패 시 빈 행 덮어쓰기
 
-- **연관 결함**: [`AUDIT-FULL-001`](file:///Users/maro/Projects/SQLion/notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md#L44-L69) 확장
+- **연관 결함**: [`AUDIT-FULL-001`](FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md#L44-L69) 확장
 - **발생 위치**:
   - [`pkg/storage/memengine/tx.go`](file:///Users/maro/Projects/SQLion/pkg/storage/memengine/tx.go#L1347-L1348) (`Scan`), `memCursor.Row` / `RowWithArena` ([L2577](file:///Users/maro/Projects/SQLion/pkg/storage/memengine/tx.go#L2577), [L2603](file:///Users/maro/Projects/SQLion/pkg/storage/memengine/tx.go#L2603))
   - [`pkg/storage/memengine/ddl.go`](file:///Users/maro/Projects/SQLion/pkg/storage/memengine/ddl.go#L615-L629) (`AddColumn`)
@@ -84,7 +84,7 @@
 
 ### Finding 5 [MEDIUM] `syncShardsToMapsLocked` 디코드 실패 시 빈 행 스냅샷 저장 및 스냅샷 락 경계
 
-- **연관 결함**: [`AUDIT-FULL-004`](file:///Users/maro/Projects/SQLion/notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 연계
+- **연관 결함**: [`AUDIT-FULL-004`](FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) 연계
 - **발생 위치**:
   - [`pkg/storage/memengine/table_data.go`](file:///Users/maro/Projects/SQLion/pkg/storage/memengine/table_data.go#L301-L320) (`syncShardsToMapsLocked`)
   - [`pkg/storage/memengine/persistence.go`](file:///Users/maro/Projects/SQLion/pkg/storage/memengine/persistence.go#L340-L368) (`saveDiskSnapshotLocked`)

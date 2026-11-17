@@ -249,7 +249,7 @@ LionSQL accelerates complex analytical queries to sub-50ms latencies while prese
 * **Detailed Engineering Plan & Task Checklist**:  
   [`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](../notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)
 * **2-Tier Query Execution Engine Architecture Specification**:  
-  [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)
+  [`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)
 * **OLTP Transactional Benchmarks & Tuning Guide**:  
   [`doc/BENCHMARK.md`](BENCHMARK.md)
 * **Official User Manual**:  

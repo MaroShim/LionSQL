@@ -4,7 +4,7 @@
 > - **작성일**: 2026-11-15
 > - **감사 범위**: `v0.92.0..HEAD` 변경 및 신규 추가된 전체 프로덕션 Go 소스코드 (총 111개 프로덕션 파일, 6개 도메인 전수 라인 단위 감사)
 > - **감사 모드**: Line-by-Line Dual-AI Adversarial Audit (Antigravity 1차 아키텍처/로직 전수 분석 × Claude 2차 적대적 공격 및 엣지 케이스 교차 검증)
-> - **준수 규약**: `doc/RELEASE_AUDIT_PROTOCOL.ko.md` 및 `notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`
+> - **준수 규약**: `doc/RELEASE_AUDIT_PROTOCOL.ko.md` 및 `notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`
 
 ---
 
@@ -225,7 +225,7 @@
     - TDD Green 단계 적용:
       1. `pkg/storage/tuple.go`: `EncodeRow`, `EncodeRowToBuffer`에서 1,024개 초과 시 즉시 `ErrTooManyColumns` 반환. `readTupleHeader`에서 `encodedCols > 1024` 감지 시 즉시 `ErrInvalidTupleHeader` 반환.
       2. `memengine` 및 `wiredtiger`의 `CreateTable` 및 `AlterTable` DDL에서 1,024개 초과 시 즉시 `ErrTooManyColumns` 거절.
-      3. 공식 규격 문서화: `notes/PHYSICAL_TABLE_FORMAT.ko.md` 및 `GEMINI.md` [Invariant 13]에 1,024개 상한 및 불변식 공식 명문화 완료.
+      3. 공식 규격 문서화: `doc/internal/PHYSICAL_TABLE_FORMAT.ko.md` 및 `GEMINI.md` [Invariant 13]에 1,024개 상한 및 불변식 공식 명문화 완료.
     - `TestRegression_AUDIT_093_011_EncodeRowToBufferUint16OverflowGuard` 및 `TestRegression_AUDIT_093_011_CreateTableMaxColumnLimit` 통과 (100% PASS, 0 data races).
   - **판정**: `RESOLVED`
 

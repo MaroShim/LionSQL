@@ -145,7 +145,10 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
    - `ADD COLUMN`: Instant $O(1)$ schema expansion. Tuples written under older schemas have $N > \text{encodedCols}$; newly added columns are padded from default or `NULL` without buffer overflows.
    - `DROP COLUMN`: Instant $O(1)$ on tail columns ($N < \text{encodedCols}$). Dropping non-terminal (middle) columns on non-empty tables is strictly rejected with explicit `ErrDropColumnNotTail`.
    - **Operational Anti-Pattern & Architectural Rationale**: Dropping middle columns at runtime on a populated production database is an operational anti-pattern that threatens online OLTP availability. Physical table rewrites cause prolonged runtime stalls and exclusive table locks; logical schema tombstone masking drastically inflates engine complexity, impairs verification testability, and regresses the 0.5ns fixed-offset decoding hot path. LionSQL strictly prescribes the production-standard **Copy-and-Switch** pattern (`CREATE TABLE new AS SELECT ...` followed by atomic rename) for middle-column reorganization.
-   - Full specification codified in [`notes/PHYSICAL_TABLE_FORMAT.ko.md`](notes/PHYSICAL_TABLE_FORMAT.ko.md).
+4. **Two-Tier Row Size Limits & Fail-Closed Bounds (In-Row 8,060B & Logical Row 16MB)**:
+   - **Layer 1 (In-Row Inline Limit: 8,060 Bytes)**: 고정 길이 컬럼의 인라인 합계 상한(`storage.MaxInlineRowSize = 8060`). SQL Server 물리적 제약(`8,060 Bytes`)과 1:1로 일치하며 WiredTiger 32KB B-Tree 리프 노드 패킹 효율(Fan-out)을 보장. 고정 컬럼 크기 합(`FixedRowSize()`)이 8,060B를 초과하면 `CREATE TABLE` / `ALTER TABLE` 시 `ErrInlineRowTooLarge`로 즉시 Fail-Closed 차단.
+   - **Layer 2 (Max Logical Row Limit: 16 MB)**: LOB(`VARCHAR(MAX)`, `NVARCHAR(MAX)`, `VARBINARY(MAX)`, `JSON`, `TEXT`)를 포함한 단일 논리 레코드 최대 상한(`storage.MaxRowSize = 16 * 1024 * 1024`). 고동시성 워커 풀(32 워커)에서 비대 튜플로 인한 OOM(Out-Of-Memory)을 원천 차단하고 `work_mem = 64MB` 정합성 및 네트워크 스트리밍 안전성 보장. 16MB 초과 시 `EncodeRowToBuffer` 및 `readTupleHeader`에서 `ErrRowTooLarge`로 Fail-Closed 차단.
+   - Full specification codified in [`doc/internal/PHYSICAL_TABLE_FORMAT.ko.md`](doc/internal/PHYSICAL_TABLE_FORMAT.ko.md).
 
 ### Invariant 14: Non-Destructive Seeding & Zero-Overwrite Invariant (Fresh-Instance Safety)
 1. **Fresh-Instance Invariance for Sample Data**:
@@ -171,7 +174,7 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
 4. **Single-Transaction Parity & Zero Full-Scan Invariant**:
    - Primary table mutations and all associated secondary index B-Tree modifications execute strictly within the same `WT_SESSION` transaction boundary, guaranteeing atomic rollback on `tx.Rollback()`.
    - `IndexScan`, `IndexScanDesc`, and `checkUniqueIndexesLocked` must exclusively utilize direct B-Tree cursor operations (`search_near`, `search`, `prev`), permanently banning full-table sequential scans (`scanLocked`) and in-memory slice reversals.
-   - Full specification codified in [`notes/PHYSICAL_TABLE_FORMAT.ko.md`](notes/PHYSICAL_TABLE_FORMAT.ko.md).
+   - Full specification codified in [`doc/internal/PHYSICAL_TABLE_FORMAT.ko.md`](doc/internal/PHYSICAL_TABLE_FORMAT.ko.md).
 
 ### Invariant 16: Zero-Tampering Oracle Test Invariant (Test Integrity & Read-Only Ground Truth)
 1. **Immutable Ground Truth Primacy (`[RULE:ZeroOracleTampering]`)**:
@@ -281,7 +284,9 @@ For deep architectural context, negative knowledge, and historical postmortems, 
 - [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md): Core invariants, detailed spec-out rationales, and engineering philosophies.
 - [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md): Circular import prevention, CGo tags, sandbox isolation, Decimal JSON safety.
 - [`notes/TAXONOMY.ko.md`](notes/TAXONOMY.ko.md): Complete task identification taxonomy (`P1~P3`, `VPERF-1~18`, `A~D`).
-- [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md): 2-Tier query engine specification.
+- [`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md): 2-Tier query engine specification.
+- [`doc/SPEC_OUT_DECISIONS.ko.md`](doc/SPEC_OUT_DECISIONS.ko.md): Explicit Spec-Out decisions catalog.
+- [`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](doc/TSQL_COMPATIBILITY_MATRIX.ko.md): T-SQL syntax and function compatibility matrix.
 - [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md): In-Memory OCC performance optimization history, WiredTiger beat roadmap, and 104k tpmC architecture.
 - [`notes/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](notes/plans/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md): Windows daemon decoupling and 1ms timer architecture.
 - [`notes/README.md`](notes/README.md) / [`notes/README.ko.md`](notes/README.ko.md): Master index of all completed architecture plans.

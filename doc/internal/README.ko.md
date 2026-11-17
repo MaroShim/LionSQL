@@ -13,10 +13,19 @@
   * `storage.Engine` 인터페이스 규약 및 백엔드 추상화 계약.
   * In-Memory OCC (단조 증가 정수 버전 기반) vs WiredTiger 락프리 B+Tree 페이지 구조.
   * 체크포인트, AOF 로그 압축, 물리 스토리지 디렉터리 레이아웃 및 메타데이터 영속화 (`catalog.json`, `cbo_stats.json`).
+* **[`PHYSICAL_TABLE_FORMAT.ko.md`](PHYSICAL_TABLE_FORMAT.ko.md)**
+  * 통합 물리 스토리지 포맷 공식 규격서 (테이블 튜플 V2 포맷 & 보조 인덱스 B-Tree 키/값 포맷).
+  * 4바이트 정렬 고정 헤더, `NullBitmap`, 1,024개 컬럼 상한(`storage.MaxColumnsPerTable = 1024`), $O(1)$ Instant Tail DDL 불변식.
+  * 2계층 레코드 크기 상한 규약: Layer 1 인라인 8,060 Bytes (`storage.MaxInlineRowSize`) & Layer 2 논리 레코드 16 MB (`storage.MaxRowSize`).
 * **[`RECORD_BINARY_FORMAT.md`](RECORD_BINARY_FORMAT.md)**
   * 스키마 인식형 콤팩트 바이너리 튜플 직렬화 명세 (`pkg/storage/tuple.go`).
   * 비트 단위 레이아웃: `0x01` 버전 헤더, $\lceil N/8 \rceil$ NULL 비트맵, 고밀도 ZigZag Varint 페이로드.
   * 계보: PostgreSQL 힙 튜플 `t_bits`, CockroachDB/TiDB KV 인코딩, Protobuf Varint.
+* **[`TRANSACTIONAL_DDL_SHADOW_CATALOG_ARCHITECTURE.ko.md`](TRANSACTIONAL_DDL_SHADOW_CATALOG_ARCHITECTURE.ko.md)**
+  * Shadow Catalog 기반 트랜잭션 DDL 격리 및 롤백 보장 아키텍처.
+* **[`UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md`](UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md)**
+  * LionSQL 4대 코어 컴포넌트 아키텍처 (The Four Pillars) 및 DDL+DML 통합 트랜잭션 매니저(`pkg/tx`) 공식 규격서.
+  * 4대 트랜잭션 경계(명시적, 묵시적 오토커밋, 오류 격리 'E', 세션 단절 자동 롤백) 및 계층형 세이브포인트 스택.
 * **[`TRANSACTION_CONCURRENCY.md`](TRANSACTION_CONCURRENCY.md)**
   * 양대 스토리지 백엔드 전반의 트랜잭션 격리 및 동시성 제어 모델 명세.
   * 논블로킹 스냅샷 읽기 및 세션 프라이빗 워크스페이스 격리.
@@ -27,10 +36,14 @@
 * **[`ZERO_ALLOCATION_ARCHITECTURE.md`](ZERO_ALLOCATION_ARCHITECTURE.md)**
   * 20,000+ TPS를 견인하는 제로 할당 메모리 아키텍처 및 버퍼 재사용/GC 완화 전략.
   * 계층별 분석: TDS 단일 프레임 풀링, PGWire 바이너리 바인드 직접 디코딩, 무할당 카탈로그 사전 필터링(`containsFold`), VDBE 레지스터 재활용, Volcano 청크 스트리밍(`TupleChunk` sync.Pool), WiredTiger `WT_CURSOR` 풀링/리셋.
-* **[`VDBE.md`](VDBE.md)**
+* **[`VDBE.md`](VDBE.md)** / **[`VDBE.ko.md`](VDBE.ko.md)**
   * SQLite 스타일의 레지스터 기반 가상 데이터베이스 엔진(VDBE) 아키텍처.
   * 바이트코드 명령어 사양 (`OpInit`, `OpOpenRead`, `OpIndexScan`, `OpRelQuery`, `OpYield`).
   * `sync.Pool` 레지스터 재사용 및 컴파일된 실행 계획 캐싱 (`*runtime.PlanCache`).
+* **[`VDBE_BYTECODE_DIRECTORY.ko.md`](VDBE_BYTECODE_DIRECTORY.ko.md)**
+  * VDBE & 16-Byte 바이트코드 마스터 디렉토리 — 세대별 진화사, 카테고리별 Opcode 맵, 바이트코드 레퍼런스.
+* **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**
+  * 단순 질의(VDBE Fast-Path)와 복합 관계대수(CBO Volcano)를 분리하는 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 명세서.
 * **[`CBO_VOLCANO.md`](CBO_VOLCANO.md)**
   * Volcano 반복자 파이프라인 (`SeqScan`, `IndexScan`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`).
   * 비용 기반 옵티마이저(CBO), 선택도 모델 및 64-버킷 균등 깊이 히스토그램.
@@ -41,6 +54,8 @@
   * **PostgreSQL Wire Protocol v3** (포트 `5433`): 단순 및 확장 쿼리 프로토콜 (`Parse`, `Bind`, `Execute`, `Sync`), 파라미터 바인딩, SSL/TLS 협상.
   * **Microsoft SQL Server TDS 7.x/8.0** (포트 `1433`): Prelogin, Login7, RPC 패킷 처리, `sp_prepexec` 바이트코드 플랜 캐시 직결.
   * 클라이언트 호환성 매트릭스 및 고루틴 커넥션 풀러.
+* **[`PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)**
+  * 다중 와이어 프로토콜(PGWire v3, TDS 7.x/8.0) 에뮬레이션 경계 및 호환성 한계 규격서.
 
 ---
 

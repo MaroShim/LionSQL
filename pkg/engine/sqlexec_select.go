@@ -1984,7 +1984,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	// ARCH-NOTE(KISS-5 / REV-ENG-008): Formerly, ~800 lines of prototype legacy regex-based table scan (reSelectStmt),
 	// manual in-memory filtering, and bubble/slice sorting resided here. That redundant 3rd execution
 	// path was retired in favor of the unified 2-tier engine (VDBE Fast-Path + Volcano CBO).
-	// Full architectural context is documented in notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md.
+	// Full architectural context is documented in doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md.
 	if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
 		return s.execScalarSelect(cleaned, start, cs)
 	}

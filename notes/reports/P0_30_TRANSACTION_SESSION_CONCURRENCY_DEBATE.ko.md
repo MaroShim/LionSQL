@@ -9,7 +9,7 @@
 
 ## 1. 개요 및 논의의 발단
 
-LionSQL 1.0 정식 릴리스 대비 전수 감사 결함 중 `P0-30` 과제는 사전 감사 보고서(`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md:2380-2445`, 심층 구역 2)에서 발굴된 다음 결함들을 포괄하여 완치하기 위한 목적으로 시작되었습니다:
+LionSQL 1.0 정식 릴리스 대비 전수 감사 결함 중 `P0-30` 과제는 사전 감사 보고서(`notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md:2380-2445`, 심층 구역 2)에서 발굴된 다음 결함들을 포괄하여 완치하기 위한 목적으로 시작되었습니다:
 
 1. **타임아웃 발생 시 세션 트랜잭션 상태 미반영**: 타임아웃/취소 발생 시 `cs.TxFailed` 플래그 설정이 누락되어 불완전 트랜잭션이 이후 `COMMIT` 시 영구 커밋되는 결함.
 2. **방언(T-SQL vs PostgreSQL) 간 트랜잭션 실패 처리 불일치**: `sqlexec.go:508`에서 `if cs.TxFailed && cs.IsPostgres()`로 되어 있어 TDS(T-SQL) 세션에서는 실패 플래그가 켜져 있어도 `COMMIT`을 강행하는 결함.

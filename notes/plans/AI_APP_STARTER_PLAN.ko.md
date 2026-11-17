@@ -1,4 +1,4 @@
-# AI 앱 스타터 포지셔닝 및 에이전트 친화 문서 계획서 (`notes/AI_APP_STARTER_PLAN.ko.md`)
+# AI 앱 스타터 포지셔닝 및 에이전트 친화 문서 계획서 (`notes/plans/AI_APP_STARTER_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-09
 > - **상태**: Pending (Post-1.0 후보)

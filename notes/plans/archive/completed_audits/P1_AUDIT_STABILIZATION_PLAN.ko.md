@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-09
 > - **과제 식별 코드**: `AUDIT-PATCH-P1`
-> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](../PRE_RELEASE_AUDIT_TRIAGE.ko.md), [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](../PRE_RELEASE_AUDIT_FINDINGS.ko.md)
+> - **참조 원천 SSOT**: [`notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](../../../reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md), [`notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](../../../reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
 > - **적용 원칙**: `[RULE:RadicalKISS]`, `[RULE:PipelineVerification]`, `[RULE:DefensiveIndexing]`, `[RULE:HandleHygiene]`, `[RULE:ExplicitError]`, `[RULE:PlanPersistence]`
 > - **목적**: P0 37건 전량 완치 이후, 1.0 안정화 대상인 P1(Should Fix) 47건에 대해 구현 난이도 및 시스템 파급도 기준 **하(Low, 21건) / 중(Medium, 18건) / 상(High, 8건)**으로 정밀 분류하고, 패키지 경계 기반 미니 배치(Mini-Batch) TDD 실행 전략을 수립함.
 

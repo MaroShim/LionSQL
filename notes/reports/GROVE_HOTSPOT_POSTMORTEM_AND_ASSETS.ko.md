@@ -1,4 +1,4 @@
-# Grove 벤치마크 핫스팟 분석 및 성능 정상화 포스트모템 (`notes/GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md`)
+# Grove 벤치마크 핫스팟 분석 및 성능 정상화 포스트모템 (`notes/reports/GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md`)
 
 > - **최종 갱신일**: 2026-11-02
 > - **최초 작성일**: 2026-11-02

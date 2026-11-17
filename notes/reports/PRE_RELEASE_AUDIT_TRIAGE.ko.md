@@ -1,8 +1,8 @@
-# LionSQL 1.0 전수 감사 결과 공식 Triage(결함 분류) 보고서 (`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`)
+# LionSQL 1.0 전수 감사 결과 공식 Triage(결함 분류) 보고서 (`notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md`)
 
 > - **최초 작성일**: 2026-11-07
 > - **과제 식별 코드**: `AUDIT-TRIAGE-POST`
-> - **참조 원천 SSOT**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md) (총 206건 결함 누적: 1단계 134건 + 2단계 72건)
+> - **참조 원천 SSOT**: [`notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md) (총 206건 결함 누적: 1단계 134건 + 2단계 72건)
 > - **분류 원칙**: `[RULE:RadicalKISS]`, `[RULE:AtomicSaves]`, `[RULE:ExplicitError]`, `[RULE:ConcurrencySafety]`
 > - **목적**: 1단계 광역 전수 감사(134건) 및 2단계 15대 핵심 코어 심층 감사(72건)로 발굴된 총 206건의 결함에 대해 1.0 릴리스 대비 우선순위 등급(P0/P1/P2/P3)을 확정하고, 1.0 GA 품질 게이트를 위한 TDD 패치 실행 계획을 수립함.
 
@@ -96,7 +96,7 @@
 29. **`P0-29` [sync.Pool 레지스터/슬라이스 재활용 잔류 포인터 GC 누수 일괄 박멸]** [완료] (`proc/runtime/vm.go:725-780`, `execution/iterator.go:385`, `execution/chunk.go:37`, `storage/memengine/tx.go:185` / 결함 3-1)
     - VDBE VM `VMFrame.resetForPool`, Volcano `ReleaseValuesSlice` 및 `PutChunk`의 `clear(s[:cap(s)])`, In-Memory `tx.resetForPoolLocked`를 전면 구축하여 슬라이스 cap 뒤쪽 잔류 포인터로 인한 영구 메모리 누수 원천 차단 완치 (`[RULE:ZeroAllocation]`).
 30. **`P0-30` [트랜잭션 코디네이터 & 세션 동시성 5대 Lock Scope Shrinking 완치]** [완료] (`engine/coordinator_impl.go:354`, `engine/session_pool.go`, `engine/sqlexec.go` / 결함 2-1, 2-3, 2-4, D-1~D-8)
-    - 신규 거대 락 추가 없이 Lock Scope Shrinking 원칙으로 (1) `acquireSessionForQuery`의 `cs.sessInUse` 5ns 원자적 확인 및 동시 Autocommit/서브쿼리 시 `SessionPool` 임시 세션 폴백(`WT_SESSION*` 동시 접근 원천 차단), (2) `reentrantQueryKey{}` 기반 재귀 쿼리 부모 워커 슬롯 재사용(`AcquireWorker` 세마포어 고갈 데드락 원천 차단), (3) `SessionPool` `p.mu.Unlock()` 이후 `sess.Close()` 호출(`p.mu -> CGo` 역전 차단), (4) `GetActiveQueries` Copy-First 스냅샷(`sessMu.RLock -> cs.Mu.Lock` 체인 해체), (5) 타임아웃/취소 시 방언 불문 `cs.TxFailed = true` 마킹 및 `COMMIT` 시 강제 물리 롤백 완치 ([`notes/P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md`](P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md)).
+    - 신규 거대 락 추가 없이 Lock Scope Shrinking 원칙으로 (1) `acquireSessionForQuery`의 `cs.sessInUse` 5ns 원자적 확인 및 동시 Autocommit/서브쿼리 시 `SessionPool` 임시 세션 폴백(`WT_SESSION*` 동시 접근 원천 차단), (2) `reentrantQueryKey{}` 기반 재귀 쿼리 부모 워커 슬롯 재사용(`AcquireWorker` 세마포어 고갈 데드락 원천 차단), (3) `SessionPool` `p.mu.Unlock()` 이후 `sess.Close()` 호출(`p.mu -> CGo` 역전 차단), (4) `GetActiveQueries` Copy-First 스냅샷(`sessMu.RLock -> cs.Mu.Lock` 체인 해체), (5) 타임아웃/취소 시 방언 불문 `cs.TxFailed = true` 마킹 및 `COMMIT` 시 강제 물리 롤백 완치 ([`notes/reports/P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md`](P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md)).
 31. **`P0-32` [중첩 트랜잭션 내부 `COMMIT` 시 외부 트랜잭션 조기 물리 커밋 및 ACID 원자성 파괴 방지]** [완료] (`proc/runtime/vm_dispatcher.go:535-570`, `proc/runtime/vm.go:608`, `engine/sqlexec.go:529-635` / Scope 068)
     - T-SQL 명세상 `f.tranCount > 1`인 중첩 트랜잭션 COMMIT 시 카운터만 감소시키고 최종 `f.tranCount == 0`일 때만 스토리지 물리 커밋을 수행하도록 가드를 설치하고, 중첩 ROLLBACK 시 무조건 `tranCount = 0` 리셋 및 전체 롤백, 외부 트랜잭션 진입 시 부모 트랜잭션 뎁스 보존, 대화형 세션 `ClientSession.TranCount` 및 `@@TRANCOUNT` 동기화 TDD 회귀 검증 완료 (ACID All-or-Nothing 및 Invariant 6 보장).
 

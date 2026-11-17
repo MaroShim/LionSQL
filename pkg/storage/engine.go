@@ -15,6 +15,12 @@ import (
 // MaxColumnsPerTable is the standard SQL Server parity maximum column limit per table (1,024).
 const MaxColumnsPerTable = 1024
 
+// MaxInlineRowSize is the standard SQL Server parity maximum in-row inline byte limit (8,060 bytes).
+const MaxInlineRowSize = 8060
+
+// MaxRowSize is the absolute upper bound for a single logical tuple including LOB/overflow columns (16 MB).
+const MaxRowSize = 16 * 1024 * 1024
+
 var (
 	ErrTableNotFound        = errors.New("table not found")
 	ErrTableExists          = errors.New("table already exists")
@@ -41,6 +47,8 @@ var (
 	ErrTableFull            = errors.New("table data limit exceeded (SQLSTATE 53200)")
 	ErrEngineTainted        = errors.New("storage: engine is tainted due to unrecoverable I/O or fsync failure")
 	ErrTooManyColumns       = errors.New("table exceeds maximum column limit (1024 columns)")
+	ErrInlineRowTooLarge    = errors.New("table exceeds maximum in-row inline size (8060 bytes)")
+	ErrRowTooLarge          = errors.New("row size exceeds maximum limit (16MB)")
 )
 
 // IsWriteConflict checks whether an error is a concurrency write-write conflict
@@ -343,6 +351,48 @@ func (s *TableSchema) HasCheckConstraints() bool {
 	}
 	return false
 }
+
+// FixedRowSize computes the minimal in-row footprint of all fixed-size columns and header metadata.
+func (s *TableSchema) FixedRowSize() int {
+	if s == nil {
+		return 0
+	}
+	numCols := len(s.Columns)
+	nullBitmapLen := (numCols + 7) / 8
+	size := 4 + nullBitmapLen // 4-byte V2 header + NullBitmap
+	for _, col := range s.Columns {
+		switch col.Type {
+		case TypeInt:
+			size += 8
+		case TypeFloat:
+			size += 8
+		case TypeReal:
+			size += 4
+		case TypeBool:
+			size += 1
+		case TypeDateTime, TypeDate, TypeTime:
+			size += 8
+		case TypeUUID:
+			size += 16
+		case TypeDecimal:
+			size += 16
+		}
+	}
+	return size
+}
+
+// ValidateRowSize validates that the table schema does not exceed the SQL Server in-row limit (8,060 bytes).
+func (s *TableSchema) ValidateRowSize() error {
+	if s == nil {
+		return errors.New("nil table schema")
+	}
+	fixedSize := s.FixedRowSize()
+	if fixedSize > MaxInlineRowSize {
+		return fmt.Errorf("%w: fixed column footprint %d bytes exceeds maximum in-row inline limit (%d bytes)", ErrInlineRowTooLarge, fixedSize, MaxInlineRowSize)
+	}
+	return nil
+}
+
 
 // TableURI returns the WiredTiger table URI ("table:<physical_name>").
 func (s *TableSchema) TableURI() string {

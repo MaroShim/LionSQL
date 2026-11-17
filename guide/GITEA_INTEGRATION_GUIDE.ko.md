@@ -9,7 +9,7 @@
 >   - **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
 >   - **Microsoft SQL Server TDS 7.x/8.0** (기본 TCP `:1433`)
 > - **참조 문서**:
->   - 아키텍처 포스트모템: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](../notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)
+>   - 아키텍처 포스트모템: [`notes/reports/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](../notes/reports/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)
 >   - 실전 연동 검증 보고서: [`notes/GITEA_INTEGRATION_REPORT.ko.md`](../notes/reports/GITEA_INTEGRATION_REPORT.ko.md)
 > - **English Guide**: [`guide/GITEA_INTEGRATION_GUIDE.md`](GITEA_INTEGRATION_GUIDE.md)
 

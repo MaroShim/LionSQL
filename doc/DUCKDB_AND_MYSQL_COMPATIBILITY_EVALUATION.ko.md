@@ -3,7 +3,7 @@
 > - **최초 작성일**: 2026-11-04
 > - **최종 갱신일**: 2026-11-04
 
-## — LionSQL is NOT DuckDB: 엔터프라이즈 OLTP의 엄격함과 기각된 편의 기능 (`notes/DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`)
+## — LionSQL is NOT DuckDB: 엔터프라이즈 OLTP의 엄격함과 기각된 편의 기능 (`doc/DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`)
 
 > - **최초 작성일**: 2026-11-04  
 > - **문서 성격**: **Architecture Decision Record (ADR) & Negative Knowledge Note**  

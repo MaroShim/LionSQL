@@ -90,7 +90,7 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 
 ## 2. LionSQL 1.0 / v1.0.0 LTS Production Readiness & The 6 Golden Release Gates
 
-To tag the official **LionSQL 1.0 / v1.0.0 LTS** release, every candidate build must strictly pass the **6 Golden Release Verification Gates** permanently automated in [`scripts/release.sh`](scripts/release.sh) (detailed in [`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)), alongside enterprise ecosystem criteria:
+To tag the official **LionSQL 1.0 / v1.0.0 LTS** release, every candidate build must strictly pass the **6 Golden Release Verification Gates** permanently automated in [`scripts/release.sh`](scripts/release.sh) (detailed in [`doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)), alongside enterprise ecosystem criteria:
 
 ```
                   [ The 6 Golden Release Verification Gates (scripts/release.sh) ]
@@ -202,13 +202,13 @@ Core Unit &   13-Domain     TPC-C Extreme                   SQLLogicTest  T-SQL 
 * **Official Release `v0.91.0` & Multi-Platform Static Binaries**:
   Packaged and published official standalone static binaries for macOS (arm64), Linux (amd64), and Windows (amd64) with zero external dynamic dependencies.
 * **The 6 Golden Release Verification Gates (`scripts/release.sh`)**:
-  Permanently integrated 6 mandatory automated verification gates into `scripts/release.sh` (Core Unit & 100k TPS, 13-Domain Smoke, TPC-C >700k tpmC, SQLLogicTest 409k queries, T-SQL 30-Suite, and SIGKILL Crash/Leak Sentinels), accompanied by technical whitepaper ([`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)).
+  Permanently integrated 6 mandatory automated verification gates into `scripts/release.sh` (Core Unit & 100k TPS, 13-Domain Smoke, TPC-C >700k tpmC, SQLLogicTest 409k queries, T-SQL 30-Suite, and SIGKILL Crash/Leak Sentinels), accompanied by technical whitepaper ([`doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)).
 * **WiredTiger Crash Durability Hotfix (`crashtest`)**:
   Real-time detection and resolution of `transaction_sync=(enabled=true,method=none)` in `pkg/storage/wiredtiger/wt_engine.go` during Gate 6 crash testing, achieving 100% data integrity and zero committed row loss across 3 rounds of 7,853 transactions under non-graceful `kill -9` termination.
 * **Single-Binary Embedded SPA Web Server Hosting (`WEB-SPA-1`)**:
   Delivered ahead of schedule (pulled forward from Phase 10). Implemented `--app=<path>` smart flag and `LIONSQL_APP` env var supporting single-file HTML and flat directory hosting with HTML5 History API fallback and strict Flat Directory Invariant (path traversal immunity).
 * **Pre-Release 100-Step Dual AI Code Review (`AUDIT-100-DUAL-REVIEW`)**:
-  Initiated comprehensive source code audit across all 199 pure Go files divided into 100 micro-scopes via Gemini (deep semantic reasoning) and Claude (adversarial edge cases). Scopes 001~020 completed with 18 defects cataloged and scheduled in [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md).
+  Initiated comprehensive source code audit across all 199 pure Go files divided into 100 micro-scopes via Gemini (deep semantic reasoning) and Claude (adversarial edge cases). Scopes 001~020 completed with 18 defects cataloged and scheduled in [`notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md).
 * **10 Real-World Production App Integrations (Zero Code Change)**:
   Completed end-to-end integration and permanent hermetic regression test suites for 10 production applications:
   - **Gitea** (116 tables, XORM, dual TDS/PGWire)
@@ -304,7 +304,7 @@ Cross-DB Join & Sonic     Storage Engine Preview    Headless CMS Ecosystem    Me
   - Adhering to Semantic Versioning (SemVer), this milestone is designated as **`v1.50.0 LTS`**—a milestone symbolizing architectural maturity and multi-engine flexibility without imposing enterprise upgrade friction.
 
 ### 5.3. AI App Starter Suite, S3 Pre-signed URLs & Headless CMS Integrations (`v1.30.0`)
-- **AI App Starter Positioning & Agent-Friendly Documentation (`AI-STARTER-1~3`)**: Position LionSQL as "a SQLite-light, PostgreSQL-compatible server database" for AI-generated services, leveraging the single binary, dual wire protocols, built-in BaaS (REST, webhooks, RLS, SSE), and SQLLogicTest 100% evidence ([`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md)). Deliverables include `llms.txt` / `AGENTS.md` agent context (`AI-STARTER-1`), compatibility matrix (`AI-STARTER-3`), and landing page starter section with Go/Node/Python examples (`AI-STARTER-2`).
+- **AI App Starter Positioning & Agent-Friendly Documentation (`AI-STARTER-1~3`)**: Position LionSQL as "a SQLite-light, PostgreSQL-compatible server database" for AI-generated services, leveraging the single binary, dual wire protocols, built-in BaaS (REST, webhooks, RLS, SSE), and SQLLogicTest 100% evidence ([`notes/plans/AI_APP_STARTER_PLAN.ko.md`](notes/plans/AI_APP_STARTER_PLAN.ko.md)). Deliverables include `llms.txt` / `AGENTS.md` agent context (`AI-STARTER-1`), compatibility matrix (`AI-STARTER-3`), and landing page starter section with Go/Node/Python examples (`AI-STARTER-2`).
 - **Client-Side S3 Pre-signed URLs & SigV4 Signer (`S3-1`)**: Lightweight AWS SigV4 signer generating direct S3/MinIO upload/download URLs, offloading large binary blob handling without in-kernel bloat.
 - **Headless CMS & Publishing Integrations (`INTEG-DIRECTUS-1`, `INTEG-GHOST-1`)**: Fast-fail compatibility exploration and driver verification for Directus (data API engine) and Ghost (publishing platform).
 
@@ -369,7 +369,7 @@ Cross-DB Join & Sonic     Storage Engine Preview    Headless CMS Ecosystem    Me
 | **Phase 6** | Single Standalone Binary CLI & Web Studio Suite | Tooling & UI | `v0.90.0` | **Completed** | [`notes/UNIFIED_CLI_PLAN.md`](notes/plans/UNIFIED_CLI_PLAN.md) |
 | **Phase 6** | Global Memory Governor & Circuit Breakers | Resource Mgmt | `v0.90.0` | **Completed** | [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **Phase 6** | TDS RPC Positional Mapping & Tool Audit (`TOOL-AUDIT-1`) | Wire Protocols | `v0.90.0` | **Completed** | [`notes/TOOL_AUDIT_PLAN.ko.md`](notes/plans/TOOL_AUDIT_PLAN.ko.md) |
-| **Phase 6** | 2-Tier Query Execution Architecture (`KISS-5`, `ARCH-2TIER-1`) | Query Engine | `v0.90.0` | **Completed** | [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md) |
+| **Phase 6** | 2-Tier Query Execution Architecture (`KISS-5`, `ARCH-2TIER-1`) | Query Engine | `v0.90.0` | **Completed** | [`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md) |
 | **Phase 6** | In-Memory OCC 5-Point Tuning (`VPERF-15` ~ `VPERF-18`) | Storage Engine | `v0.90.0` | **Completed** | [`doc/BENCHMARK.md`](doc/BENCHMARK.md) |
 | **Phase 6** | 13-Domain Extended Integration Smoke Suite (`SMOKE-EXT-1`) | Quality & Testing | `v0.90.0` | **Completed** | [`scripts/README.md`](scripts/README.md) |
 | **Phase 7** | 10대 실전 프로덕션 앱 생태계 연동 (Gitea ~ Vikunja) | Ecosystem | `v0.95.0` | **Completed** | [`notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md`](notes/plans/APP_INTEGRATION_EXPANSION_PLAN.ko.md) |
@@ -380,11 +380,11 @@ Cross-DB Join & Sonic     Storage Engine Preview    Headless CMS Ecosystem    Me
 | **Phase 7** | In-Memory OCC 104만 tpmC 초격차 성능 달성 | Storage Engine | `v0.95.0` | **Completed** | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
 | **Phase 7** | 고집적 포인터리스 인메모리 엔진 `OCC-Dense` (`MemoryCompact`) 기본값 승격 및 통합 | Storage Engine | `v0.95.0` | **Completed** | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |
 | **Phase 7** | `v0.91.0` 공식 릴리스 및 3대 플랫폼 정적 바이너리 배포 | Release | `v0.91.0` | **Completed** | [`CHANGELOG.md`](CHANGELOG.md) |
-| **Phase 7** | 6대 골든 릴리즈 검증 게이트 자동화 (`scripts/release.sh`) | Quality & CI | `v0.91.0` | **Completed** | [`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md) |
-| **Phase 7** | WiredTiger `SIGKILL` 크래시 내구성 핫픽스 (`wt_engine.go`) | Storage & WAL | `v0.91.0` | **Completed** | [`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md) |
+| **Phase 7** | 6대 골든 릴리즈 검증 게이트 자동화 (`scripts/release.sh`) | Quality & CI | `v0.91.0` | **Completed** | [`doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md) |
+| **Phase 7** | WiredTiger `SIGKILL` 크래시 내구성 핫픽스 (`wt_engine.go`) | Storage & WAL | `v0.91.0` | **Completed** | [`doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md) |
 | **Phase 7** | 단일 바이너리 내장 SPA 웹 서버 호스팅 (`WEB-SPA-1`) | Tooling & UI | `v0.91.0` | **Completed** | [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) |
-| **Phase 7A** | 100단계 듀얼 AI 전수 감사 P0(31선) 완치 및 신뢰성 베이스라인 태깅 | Quality & Audit | `v0.92.0` | **In Progress** | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |
-| **Phase 7B** | P1(53선) 엔터프라이즈 완결성 및 6대 게이트 최종 검증 (`v1.0.0-rc1`) | Quality & Hardening | `v0.95.0` | **Scheduled** | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |
+| **Phase 7A** | 100단계 듀얼 AI 전수 감사 P0(31선) 완치 및 신뢰성 베이스라인 태깅 | Quality & Audit | `v0.92.0` | **In Progress** | [`notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |
+| **Phase 7B** | P1(53선) 엔터프라이즈 완결성 및 6대 게이트 최종 검증 (`v1.0.0-rc1`) | Quality & Hardening | `v0.95.0` | **Scheduled** | [`notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |
 | **Phase 8** | 공식 LionSQL v1.0.0 LTS 출시 및 6대 게이트 최종 사인오프 | Release | `v1.0.0 LTS` | **Target Q4 2026** | [`CHANGELOG.md`](CHANGELOG.md) |
 | **Phase 8** | 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 (`PERF-SUBQUERY-MEMO-1`) | Query Engine | `v1.0.0 LTS` | **Completed** | [`notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md`](notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md) |
 | **Phase 9A** | 프리픽스 기반 논리적 네임스페이스 및 로컬 크로스 DB 조인 (`ARCH-LOGICAL-NAMESPACE-1`) | Query Engine | `v1.10.0` | **Planned** | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |
@@ -392,7 +392,7 @@ Cross-DB Join & Sonic     Storage Engine Preview    Headless CMS Ecosystem    Me
 | **Phase 9A** | 고성능 SIMD JSON (ByteDance Sonic) 기반 복제 스트리밍 가속 (`PERF-REPL-SONIC-1`) | High Availability | `v1.10.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#51-logical-database-namespace-cross-db-join--t-sql-extensions-v1100) |
 | **Phase 9B** | Native Pure-Go B+Tree 엔진 프리뷰 & 공통 Projection Pushdown 디코딩 (`FEAT-PUREGO-WT-ENGINE`, `PERF-PROJECTION-PUSHDOWN-1`, `--storage=purego`, `CGO_ENABLED=0`) | Storage Engine | `v1.20.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#52-native-pure-go-btree-storage-engine-unified-projection--matview-virtual-alias-experimental-v1200---production-lts-v1500) |
 | **Phase 9B** | Materialized View 가상 앨리어스 & Tolerant Refresh (`FEAT-MATVIEW-ALIAS-1`) | Query Engine | `v1.20.0` | **Planned** | [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |
-| **Phase 9C** | AI App Starter Positioning & Agent-Friendly Documentation (`AI-STARTER-1~3`) | Ecosystem | `v1.30.0` | **Planned** | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |
+| **Phase 9C** | AI App Starter Positioning & Agent-Friendly Documentation (`AI-STARTER-1~3`) | Ecosystem | `v1.30.0` | **Planned** | [`notes/plans/AI_APP_STARTER_PLAN.ko.md`](notes/plans/AI_APP_STARTER_PLAN.ko.md) |
 | **Phase 9C** | 클라이언트 사이드 S3 Pre-signed URL 및 SigV4 서명기 (`S3-1`) | Cloud & Storage | `v1.30.0` | **Planned** | [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/plans/S3_PRESIGNED_STORAGE_PLAN.md) |
 | **Phase 9C** | Headless CMS & Publishing 연동 Fast-Fail 탐색 (`INTEG-DIRECTUS-1`, `INTEG-GHOST-1`) | Ecosystem | `v1.30.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#53-ai-app-starter-suite-s3-pre-signed-urls--headless-cms-integrations-v1300) |
 | **Phase 9D** | Query Optimizer Deep Tuning & Buffer Hardening | Query Planner | `v1.40.0` | **Planned** | [`ROADMAP.md`](ROADMAP.md#54-query-optimizer-deep-tuning--heavy-enterprise-app-integrations-v1400) |

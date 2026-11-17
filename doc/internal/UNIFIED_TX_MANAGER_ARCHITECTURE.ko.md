@@ -1,8 +1,10 @@
 # LionSQL 통합 트랜잭션 매니저 (Unified TxManager: DDL + DML) 아키텍처 설계서
+`doc/internal/UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md`
 
 - **문서 식별자**: `ARCH-UNIFIED-TX-MANAGER-1`
-- **상태**: Draft / Planned (스프린트 백로그 등록)
-- **작성일**: 2026-11-16
+- **상태**: 공식 코어 엔진 아키텍처 규격서 (Core Engine Architecture Specification SSOT)
+- **최초 작성일**: 2026-11-16
+- **최종 갱신일**: 2026-11-17
 - **관련 황금률**: `[RULE:PlanPersistence]`, `[RULE:RadicalKISS]`, `[RULE:ZeroAllocation]`, `[RULE:AtomicSaves]`
 - **아키텍처 불변성**: `GEMINI.md` Invariant 3 (Non-Blocking Read Committed & Snapshot Isolation), Invariant 6 (Benchmark & Transaction Modeling Integrity)
 
@@ -187,45 +189,3 @@ type TxContext struct {
    - Autocommit 단일 쿼리의 경우 `sync.Pool`로부터 `TxContext`를 대여/반납하여 힙 할당 0을 달성.
 3. **`[RULE:StyleIntegrity]`**:
    - 모든 주석, 로그, 문서에 장식용 이모지 일체 배제.
-
----
-
-## 7. 단계별 실행 로드맵 (Roadmap)
-
-### 7.1 TxManager 구현과 1세션 1트랜잭션 불변식의 선후 관계 및 3단계 실행 순서
-TxManager 아키텍처 구현(`ARCH-UNIFIED-TX-MANAGER`)과 1세션 1트랜잭션 불변식 확립(`REFACTOR-SESSION-TRANSACTION-INVARIANT-1`)은 다음과 같은 엄격한 선후 의존성을 가지며, 단방향 3단계 파이프라인으로 실행합니다:
-
-```mermaid
-flowchart TD
-    Step1["[1단계] pkg/tx 코어 인터페이스 & 상태 머신 구현<br/>(Idle, Active, InError, Committed, Aborted 및 4대 경계)"]
-    Step2["[2단계] Session 바인딩 & 1세션 1트랜잭션 불변식 확립<br/>(sess.mu 직렬화, 중복 BEGIN 방어, 오류 격리 'E', 세션 Close 자동 롤백)"]
-    Step3["[3단계] 와이어 프로토콜 & VDBE 바인딩<br/>(PGWire, TDS, HTTP 및 VDBE가 sess.TxManager 단일 진입점 경유)"]
-
-    Step1 --> Step2 --> Step3
-```
-
-1. **[1단계: 코어 타입 및 상태 머신 선행 (`pkg/tx`)]**:
-   - 세션이 보장해야 할 '단 1개의 트랜잭션'의 실체(Entity)와 라이프사이클 상태 머신을 먼저 독립 패키지로 완성.
-   - 외부 세션/네트워크 의존성 없이 `pkg/tx` 단위 테스트로 100% 격리 검증.
-2. **[2단계: 세션 장착 및 불변식 확립 (`pkg/engine/session.go`)]**:
-   - `Session` 구조체에 `txManager TxManager`를 1:1로 장착.
-   - 세션 실행 직렬화 락(`sess.mu.Lock()`) 도입으로 동시 명령 인입 레이스 방지.
-   - 이미 `Active` 상태일 때의 `BEGIN` 처리, 에러 발생 시 `InError` 상태 강제, 세션 비정상 종료 시 자동 롤백 구현.
-3. **[3단계: 와이어 프로토콜 및 VDBE 실행기 연결]**:
-   - PGWire, TDS, HTTP, VDBE에 산재해 있던 개별 raw 트랜잭션 포인터를 전면 폐지하고 `sess.TxManager()` 단일 진입점으로 통일.
-
-### 7.2 마일스톤 단계별 세부 계획
-
-| 단계 | 목표 | 주요 작업 내용 | 연관 태스크 ID |
-|:---|:---|:---|:---|
-| **Phase 0** | **사전 검증 완료** | **[완료]** 7대 엔터프라이즈 서비스 실기동 마이그레이션 완주 (Gitea, Casdoor, Answer, Grafana 등) | `GA-VALID-3` |
-| **Phase 1** | **인터페이스 & 상태 머신** | `pkg/tx` 패키지 신설, `TxManager`, `TxContext`, `TxState` 상태 머신 및 4대 트랜잭션 경계 확립 | `ARCH-UNIFIED-TX-MANAGER` |
-| **Phase 2** | **1세션 1트랜잭션 바인딩** | `session.go` 직렬화 락(`sess.mu`), 1세션 1Tx 불변식, 오류 격리 'E' 상태 및 자동 롤백 결합 | `REFACTOR-SESSION-TRANSACTION-INVARIANT-1` |
-| **Phase 3** | **DML & Savepoint 통합** | `memengine`/`wiredtiger` 트랜잭션 핸들 캡슐화, `SAVEPOINT`/`ROLLBACK TO` 스택 구현 | `ARCH-UNIFIED-TX-MANAGER` |
-| **Phase 4** | **DDL 섀도우 카탈로그 통합** | 트랜잭셔널 DDL(Postgres 호환 `BEGIN; CREATE ...; ROLLBACK;`) 2PC 섀도 카탈로그 완성 | `REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1` |
-
----
-
-## 8. 결론 및 권고 사항
-- **작업 순서 규정**: `REFACTOR-SESSION-TRANSACTION-INVARIANT-1`은 `ARCH-UNIFIED-TX-MANAGER`의 Phase 1(`pkg/tx` 상태 머신)이 완성된 직후, 세션에 TxManager를 바인딩하는 Phase 2 단계에서 직렬화 락과 함께 원자적으로 결합하여 구현합니다.
-- 이를 통해 세션 내부의 임시 패치성 코드 작성을 원천 방지하고(`[RULE:ModularAbstraction]`), 깔끔하고 견고한 4대 기둥 아키텍처를 완성합니다.

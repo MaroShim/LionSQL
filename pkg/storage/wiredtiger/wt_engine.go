@@ -753,6 +753,11 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 	if schema != nil && len(schema.Columns) > storage.MaxColumnsPerTable {
 		return fmt.Errorf("%w: table %q has %d columns (max %d)", storage.ErrTooManyColumns, schema.Name, len(schema.Columns), storage.MaxColumnsPerTable)
 	}
+	if schema != nil {
+		if err := schema.ValidateRowSize(); err != nil {
+			return err
+		}
+	}
 
 	if schema != nil && storage.IsTemporaryTable(schema.Name) {
 		return e.tempEng.CreateTable(schema)
@@ -1452,6 +1457,9 @@ func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.Table
 	}
 	if len(trialSchema.Columns) > storage.MaxColumnsPerTable {
 		return fmt.Errorf("%w: altered table %q would have %d columns (max %d)", storage.ErrTooManyColumns, tableName, len(trialSchema.Columns), storage.MaxColumnsPerTable)
+	}
+	if err := trialSchema.ValidateRowSize(); err != nil {
+		return err
 	}
 
 	// [Invariant 13: Schema Evolution & Instant DDL 3-Layer Defense]

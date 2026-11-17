@@ -82,7 +82,7 @@ type Instruction struct {
 ```
 
 > **아키텍처 불변식 (16바이트 고정 레이아웃 vs 8바이트 압축)**:
-> `Instruction` 구조체를 8바이트로 축소하는 방안(`int16` 피연산자 또는 `uint64` 비트패킹)은 영구 기각(Spec-Out)되었습니다. 일반적인 OLTP 프로시저(15~100 명령어, 240B~1.6KB)는 이미 32KB~64KB L1 데이터 캐시 내에 100% 상주합니다. 반면 `int16`은 점프 오프셋과 즉시 정수값을 32,767로 제한하여 대형 스크립트를 파괴하며, `uint64` 비트패킹은 매 디스패치마다 시프트/마스크 연산 오버헤드를 유발합니다. 상세 내용은 [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](../../notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) 및 [`notes/VDBE_BYTECODE_DIRECTORY.ko.md`](../../notes/VDBE_BYTECODE_DIRECTORY.ko.md)를 참조하십시오.
+> `Instruction` 구조체를 8바이트로 축소하는 방안(`int16` 피연산자 또는 `uint64` 비트패킹)은 영구 기각(Spec-Out)되었습니다. 일반적인 OLTP 프로시저(15~100 명령어, 240B~1.6KB)는 이미 32KB~64KB L1 데이터 캐시 내에 100% 상주합니다. 반면 `int16`은 점프 오프셋과 즉시 정수값을 32,767로 제한하여 대형 스크립트를 파괴하며, `uint64` 비트패킹은 매 디스패치마다 시프트/마스크 연산 오버헤드를 유발합니다. 상세 내용은 [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](../../notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) 및 [`doc/internal/VDBE_BYTECODE_DIRECTORY.ko.md`](VDBE_BYTECODE_DIRECTORY.ko.md)를 참조하십시오.
 
 ### 3.1. 초기화 및 제어 흐름 Opcode
 

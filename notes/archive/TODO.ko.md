@@ -45,7 +45,7 @@ LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-beta0`(Feature Freeze 기�
 
 | 과제 코드 | 핵심 구현 과제 | 대상 패키지 | 상태 | 증적 및 기술 문서 |
 | :---: | :--- | :--- | :---: | :--- |
-| **`TDS-RPC-AUDIT-1`** | TDS RPC 핸들러(`sp_prepare`, `sp_prepexec`) 파라미터 이름 의존성 전면 제거 및 100% 위치 매핑 일원화 | `pkg/wire/tds` | **완료 (`[x]`)** | [`notes/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](../TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md) |
+| **`TDS-RPC-AUDIT-1`** | TDS RPC 핸들러(`sp_prepare`, `sp_prepexec`) 파라미터 이름 의존성 전면 제거 및 100% 위치 매핑 일원화 | `pkg/wire/tds` | **완료 (`[x]`)** | [`notes/reports/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](../reports/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md) |
 | **`TOOL-AUDIT-1`** | 외부 GUI 클라이언트(DBeaver, DbGate, SSMS, Beekeeper Studio) 9단계 E2E 검증, `FormatResultWithSQL` alias/case 정규화, 고동시성 300회 스트레스 통과 | `pkg/catalog/virtual`, `pkg/wire/tds`, `pkg/wire` | **완료 (`[x]`)** | [`notes/TOOL_AUDIT_PLAN.ko.md`](../plans/TOOL_AUDIT_PLAN.ko.md), [`doc/CLIENT_TOOL_INTEGRATION.md`](../../doc/CLIENT_TOOL_INTEGRATION.md) |
 | **`TDS-COMPAT-1`** | WiredTiger TRUNCATE TABLE 트랜잭션 격리 및 assertion 크래시 방지 | `pkg/storage/wiredtiger`, `pkg/engine` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](../reports/TDS_COMPATIBILITY_REPORT.md) |
 | **`TDS-COMPAT-2`** | 유니코드 N-prefix (`N'...'`) TDS UTF-16LE 직렬화 EOF 방지 | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](../reports/TDS_COMPATIBILITY_REPORT.md) |
@@ -89,7 +89,7 @@ LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-beta0`(Feature Freeze 기�
 
 | 과제 코드 | 핵심 구현 과제 | 대상 패키지 | 상태 | 증적 및 기술 문서 |
 | :---: | :--- | :--- | :---: | :--- |
-| **`KISS-5`** | 코어 엔진 3갈래 쿼리 실행 경로(`sqlexec_select` vs `execution` Iterator vs VDBE) 단일화 및 2-Tier 영구 아키텍처 확정 (`ARCH-2TIER-1`) | `pkg/engine`, `pkg/execution`, `pkg/proc/runtime` | **완료 (`[x]`)** | [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md) |
+| **`KISS-5`** | 코어 엔진 3갈래 쿼리 실행 경로(`sqlexec_select` vs `execution` Iterator vs VDBE) 단일화 및 2-Tier 영구 아키텍처 확정 (`ARCH-2TIER-1`) | `pkg/engine`, `pkg/execution`, `pkg/proc/runtime` | **완료 (`[x]`)** | [`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../../doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md) |
 | **`ARCH-LEX-2`** | MERGE, STRING_SPLIT, PROCS 잔여 수동 분할 루프 `sqlutil.Tokenizer` 전면 일원화 | `pkg/sqlutil`, `pkg/engine` | **완료 (`[x]`)** | [`REFACTORING.ko.md`](../../REFACTORING.ko.md) |
 | **`REFACTOR-TYPE-GUESS-1`** | 휴리스틱 타입 추론 및 임의 문자열 수치 강제변환 안티패턴 전면 제거 | `pkg/sqlutil`, `pkg/engine`, `pkg/execution`, `pkg/proc`, `pkg/wire`, `pkg/api` | **완료 (`[x]`)** | [`notes/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](../plans/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md) |
 | **`REFACTOR-OVER-SPECIFICATION-1`** | T-SQL 디스패처 100% 위치 매핑, SERVERPROPERTY 하이재킹 제거 및 가상 카탈로그 도구 종속성 정돈 | `pkg/engine`, `pkg/wire/tds`, `pkg/catalog/virtual` | **완료 (`[x]`)** | [`notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md`](../plans/OVER_SPECIFICATION_REMEDIATION_PLAN.md) |
@@ -234,7 +234,7 @@ LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-beta0`(Feature Freeze 기�
   - New-Order/Delivery/Stock-Level 12회 소켓 핑퐁을 1-RTT 단일 배치로 통합하고 16wh/32wk 최적화로 7,400+ TPS 달성.
 - [x] **코어 엔진 3갈래 쿼리 실행 경로 단일화 및 2-Tier 아키텍처 영구 불변 확정 (`KISS-5`, `ARCH-2TIER-1`) (2026-10-24)**:
   - 단순 OLTP 직결(Tier 1, <1µs)과 복합 Volcano CBO 반복자(Tier 2)로 2-Tier 단일화 완료.
-  - 상세 결정 내역: [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md).
+  - 상세 결정 내역: [`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../../doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md).
 - [x] **MERGE, STRING_SPLIT, PROCS 잔여 수동 분할 루프 `sqlutil.Tokenizer` 전면 일원화 (`ARCH-LEX-2`) (2026-10-24)**:
   - 파서 전반의 비표준 문자열 분할 루프를 공통 어휘 스캐너로 단일화 ([`REFACTORING.ko.md`](../../REFACTORING.ko.md)).
 - [x] **In-Memory OCC 3대 핫패스 고속화 (`VPERF-17`) (2026-10-24)**:

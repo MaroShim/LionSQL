@@ -1,4 +1,4 @@
-# LionSQL 실용주의 아키텍처 선택 9선 (`notes/LIONSQL_PRAGMATIC_ARCHITECTURAL_CHOICES.ko.md`)
+# LionSQL 실용주의 아키텍처 선택 9선 (`doc/LIONSQL_PRAGMATIC_ARCHITECTURAL_CHOICES.ko.md`)
 
 > - **최초 작성일**: 2026-11-11
 > - **문서 성격**: LionSQL 핵심 아키텍처 의사결정 백서 (Radical KISS & Architectural Pragmatism)

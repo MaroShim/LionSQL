@@ -271,6 +271,10 @@ func EncodeRowToBuffer(schema *TableSchema, row Row, buf []byte) ([]byte, error)
 		}
 	}
 
+	if len(buf) > MaxRowSize {
+		return nil, fmt.Errorf("%w: encoded row size %d bytes exceeds maximum limit (%d bytes)", ErrRowTooLarge, len(buf), MaxRowSize)
+	}
+
 	return buf, nil
 }
 
@@ -298,6 +302,9 @@ func EncodeTupleToBuffer(schema *TableSchema, rec Record, buf []byte) ([]byte, e
 func readTupleHeader(data []byte) (flags byte, encodedCols int, bitmap []byte, offset int, err error) {
 	if len(data) < 4 {
 		return 0, 0, nil, 0, ErrTupleBufferTooShort
+	}
+	if len(data) > MaxRowSize {
+		return 0, 0, nil, 0, fmt.Errorf("%w: tuple buffer length %d bytes exceeds maximum limit (%d bytes)", ErrRowTooLarge, len(data), MaxRowSize)
 	}
 	if data[0] != TupleCodecVersion {
 		return 0, 0, nil, 0, fmt.Errorf("%w: got 0x%02x, expected 0x%02x", ErrInvalidTupleHeader, data[0], TupleCodecVersion)

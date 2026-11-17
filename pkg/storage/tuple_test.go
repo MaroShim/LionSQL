@@ -670,6 +670,68 @@ func TestRegression_AUDIT_093_011_EncodeRowToBufferUint16OverflowGuard(t *testin
 	}
 }
 
+func TestRegression_TwoTierRowSizeLimits(t *testing.T) {
+	// 1. Layer 1: In-Row Fixed Columns Limit (8,060 Bytes)
+	// Create table with 1007 TypeInt columns (8 bytes each).
+	// Header = 4 bytes, NullBitmap = (1007 + 7) / 8 = 127 bytes.
+	// Fixed size = 4 + 127 + 1007*8 = 8,056 + 131 = 8,187 bytes > 8,060 bytes.
+	// Exactly 1000 TypeInt columns: 4 + 125 + 8000 = 8,129 bytes > 8060 bytes.
+	// Let's compute precisely: (8060 - 4 - NullBitmap) / 8.
+	// For 1000 columns: NullBitmap = 125 bytes, total = 8,129 bytes.
+	// For 990 columns: NullBitmap = 124 bytes, fixed = 4 + 124 + 990*8 = 8,048 bytes <= 8060 bytes.
+	// For 992 columns: NullBitmap = 124 bytes, fixed = 4 + 124 + 992*8 = 8,064 bytes > 8060 bytes.
+
+	colsValid := make([]Column, 990)
+	for i := range colsValid {
+		colsValid[i] = Column{Name: fmt.Sprintf("c%d", i), Type: TypeInt}
+	}
+	schemaValid := &TableSchema{Name: "valid_inrow", Columns: colsValid}
+	if err := schemaValid.ValidateRowSize(); err != nil {
+		t.Fatalf("expected 990 columns (8,048 bytes) to pass ValidateRowSize, got: %v", err)
+	}
+
+	colsExcess := make([]Column, 992)
+	for i := range colsExcess {
+		colsExcess[i] = Column{Name: fmt.Sprintf("c%d", i), Type: TypeInt}
+	}
+	schemaExcess := &TableSchema{Name: "excess_inrow", Columns: colsExcess}
+	if err := schemaExcess.ValidateRowSize(); !errors.Is(err, ErrInlineRowTooLarge) {
+		t.Fatalf("expected ErrInlineRowTooLarge for 992 int columns (8,064 bytes), got: %v", err)
+	}
+
+	// 2. Layer 2: Max Logical Row Limit (16 MB)
+	// Encode a row whose total payload exceeds MaxRowSize (16MB).
+	bigSchema := &TableSchema{
+		Name: "big_blob_table",
+		Columns: []Column{
+			{Name: "id", Type: TypeInt},
+			{Name: "payload", Type: TypeVarChar},
+		},
+	}
+	// Create string exceeding 16MB
+	hugeStr := make([]byte, MaxRowSize+1024)
+	hugeRow := Row{
+		Values: []Value{
+			IntValue(1),
+			StringValue(string(hugeStr)),
+		},
+	}
+	_, err := EncodeRow(bigSchema, hugeRow)
+	if !errors.Is(err, ErrRowTooLarge) {
+		t.Fatalf("expected ErrRowTooLarge for row exceeding 16MB, got: %v", err)
+	}
+
+	// 3. Layer 2: readTupleHeader buffer check
+	// A tuple buffer > MaxRowSize must be rejected immediately
+	hugeBuf := make([]byte, MaxRowSize+16)
+	hugeBuf[0] = TupleCodecVersion
+	_, _, _, _, err = readTupleHeader(hugeBuf)
+	if !errors.Is(err, ErrRowTooLarge) {
+		t.Fatalf("expected ErrRowTooLarge on readTupleHeader for buffer exceeding 16MB, got: %v", err)
+	}
+}
+
+
 
 
 

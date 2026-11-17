@@ -1,4 +1,4 @@
-# Nine Pragmatic Architectural Choices of LionSQL (`notes/LIONSQL_PRAGMATIC_ARCHITECTURAL_CHOICES.md`)
+# Nine Pragmatic Architectural Choices of LionSQL (`doc/LIONSQL_PRAGMATIC_ARCHITECTURAL_CHOICES.md`)
 
 > - **Created**: 2026-11-11
 > - **Document Purpose**: LionSQL Core Architecture Decision Whitepaper (Radical KISS & Engineering Pragmatism)

@@ -1,4 +1,4 @@
-# LionSQL P0-29: Go sync.Pool 및 슬라이스 재활용 시 잔류 포인터 메모리 누수 분석 (`notes/P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md`)
+# LionSQL P0-29: Go sync.Pool 및 슬라이스 재활용 시 잔류 포인터 메모리 누수 분석 (`notes/reports/P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md`)
 
 > - **최초 작성일**: 2026-11-08
 > - **도메인**: Go 런타임 메모리 모델, 가비지 컬렉터(GC), Zero-Allocation 아키텍처

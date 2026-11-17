@@ -82,7 +82,7 @@ WiredTiger durability is controlled via `SetFsyncPolicy()` and `FsyncPolicy()`:
 
 > [!IMPORTANT]
 > **Zero-`transaction_sync` Invariant (`GEMINI.md` Invariant 10)**  
-> Never specify `transaction_sync` in `WiredTigerOpenConfig`. Enabling transaction sync forces WiredTiger to serialize all transaction commits through a single C global mutex, collapsing multi-worker throughput from 146,000 TPS to 4,800 TPS. Durability is strictly maintained via `log=(enabled=true)` and background/group flush. For detailed postmortem and benchmarks, see [`notes/WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md`](../../notes/WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md).
+> Never specify `transaction_sync` in `WiredTigerOpenConfig`. Enabling transaction sync forces WiredTiger to serialize all transaction commits through a single C global mutex, collapsing multi-worker throughput from 146,000 TPS to 4,800 TPS. Durability is strictly maintained via `log=(enabled=true)` and background/group flush. For detailed postmortem and benchmarks, see [`notes/reports/WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md`](../../notes/reports/WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md).
 
 ---
 

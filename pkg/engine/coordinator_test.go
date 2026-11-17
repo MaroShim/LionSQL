@@ -2185,6 +2185,18 @@ func TestRegression_AUDIT_093_011_CreateTableMaxColumnLimit(t *testing.T) {
 	if !errors.Is(err, storage.ErrTooManyColumns) {
 		t.Fatalf("expected ErrTooManyColumns for CREATE TABLE with 1025 columns, got: %v", err)
 	}
+
+	// 2. CREATE TABLE with fixed columns exceeding 8,060 bytes must fail with ErrInlineRowTooLarge
+	colsExcess := make([]string, 993)
+	colsExcess[0] = "id INT PRIMARY KEY"
+	for i := 1; i < 993; i++ {
+		colsExcess[i] = fmt.Sprintf("c%d INT", i)
+	}
+	ddlExcess := fmt.Sprintf("CREATE TABLE tbl_too_large (%s);", strings.Join(colsExcess, ", "))
+	_, err = coord.ExecuteSQL(ddlExcess)
+	if !errors.Is(err, storage.ErrInlineRowTooLarge) {
+		t.Fatalf("expected ErrInlineRowTooLarge for CREATE TABLE exceeding 8060 bytes, got: %v", err)
+	}
 }
 
 func TestRegression_AUDIT_093_012_AlterTableNonExistentColumnErrors(t *testing.T) {

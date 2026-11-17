@@ -91,14 +91,14 @@ LionSQL은 v0.92.0까지 튜플 바이너리 코덱(V2), Pointer-Free FlatRecord
 - **목표**: `SELECT` 실행 시 `Rows []map[string]any`와 `Values [][]any`를 중복 생성하는 대신, 와이어 프로토콜(PGWire/TDS)이 `RawRows []storage.Row` (`[][]storage.Value`)를 직접 소비하도록 파이프라인을 일원화하여 셀당 `any` 인터페이스 박싱과 행당 `map` 할당을 제거.
 - **주의사항**: REST JSON API 및 내부 테스트 헬퍼 중 `res.Rows` 맵을 직접 참조하는 호출부와의 하위 호환성을 위해 지연 변환(`LazyRows()`) 또는 호출자 힌트 플래그(`WantTypedRows`)를 함께 설계해야 함.
 - **[2026-11-13 적정성 감사 판정 — 영구 기각 (Spec-Out `DONE`)]**:
-  - 현재 REST JSON API, Web Studio, 저장 프로시저 내부 결과 소비, 수천 개의 통합 테스트가 `QueryResult.Rows` (`[]map[string]any`)와 `Values` 단일 표준 계약을 사용하고 있음. `LazyRows()`나 `WantTypedRows` 플래그로 호출 경로를 이원화하면 엔진 전역의 API 계약이 파편화되고 `nil` 참조 회귀 위험이 급증함 (`[RULE:RadicalKISS]`). 와이어 계층은 이미 `PERF-WIRE-ZEROALLOC-1`을 통해 포지셔널 `res.Values` 슬롯을 직접 인덱싱하고 있으므로 추가 이원화는 영구 배제함 ([`notes/SPEC_OUT_DECISIONS.ko.md`](file:///Users/maro/Projects/SQLion/notes/SPEC_OUT_DECISIONS.ko.md) #24 등재).
+  - 현재 REST JSON API, Web Studio, 저장 프로시저 내부 결과 소비, 수천 개의 통합 테스트가 `QueryResult.Rows` (`[]map[string]any`)와 `Values` 단일 표준 계약을 사용하고 있음. `LazyRows()`나 `WantTypedRows` 플래그로 호출 경로를 이원화하면 엔진 전역의 API 계약이 파편화되고 `nil` 참조 회귀 위험이 급증함 (`[RULE:RadicalKISS]`). 와이어 계층은 이미 `PERF-WIRE-ZEROALLOC-1`을 통해 포지셔널 `res.Values` 슬롯을 직접 인덱싱하고 있으므로 추가 이원화는 영구 배제함 ([`doc/SPEC_OUT_DECISIONS.ko.md`](../../doc/SPEC_OUT_DECISIONS.ko.md) #24 등재).
 
 ### 4.2. [5순위] `PERF-TDS-ZEROCOPY-FRAME-1`: TDS `tdsStreamWriter` 인플레이스 패킷 프레이밍
 - **목표**: `tdsStreamWriter`가 내부 `bytes.Buffer` 대신 `tdsFramePool32K` 슬라이스를 직접 보유하며 오프셋 `HeaderSize(8)`부터 토큰을 기록하고, 패킷 경계(`maxPayload`) 도달 시 앞단 8바이트 헤더만 채워 즉시 `w.Write()`를 호출함으로써 중간 복사(`copy`)를 완전 제거.
 - **[2026-11-13 적정성 감사 판정 — 영구 기각 (Spec-Out `DONE`)]**:
-  - `PERF-WIRE-ZEROALLOC-1`을 통해 이미 32KB 풀 버퍼 기반 0 allocs/op 스트리밍이 달성되었으며, 네트워크 I/O 경로의 지배적 시간은 커널 TCP `write` 시스템 콜($\sim 5\mu\text{s}$)임. CPU L1 캐시 내에서의 32KB `copy`($< 1\mu\text{s}$)를 아끼기 위해 수동 8바이트 오프셋 슬라이싱을 도입하는 것은 패킷 경계/플러시 오프바이원 버그 위험만 키우는 오버 엔지니어링이므로 영구 배제함 ([`notes/SPEC_OUT_DECISIONS.ko.md`](file:///Users/maro/Projects/SQLion/notes/SPEC_OUT_DECISIONS.ko.md) #23 등재).
+  - `PERF-WIRE-ZEROALLOC-1`을 통해 이미 32KB 풀 버퍼 기반 0 allocs/op 스트리밍이 달성되었으며, 네트워크 I/O 경로의 지배적 시간은 커널 TCP `write` 시스템 콜($\sim 5\mu\text{s}$)임. CPU L1 캐시 내에서의 32KB `copy`($< 1\mu\text{s}$)를 아끼기 위해 수동 8바이트 오프셋 슬라이싱을 도입하는 것은 패킷 경계/플러시 오프바이원 버그 위험만 키우는 오버 엔지니어링이므로 영구 배제함 ([`doc/SPEC_OUT_DECISIONS.ko.md`](../../doc/SPEC_OUT_DECISIONS.ko.md) #23 등재).
 
 ### 4.3. [6순위] `PERF-CACHE-SHARD-1`: `PlanCache` 및 세션 레지스트리 32-Shard 분할
 - **목표**: `PlanCache`의 단일 `sync.RWMutex`를 프로시저/쿼리 해시 기반 32개 샤드(`cacheShard [32]struct{ mu sync.RWMutex; ... padding [40]byte }`)로 분리하여 64코어 이상 하이엔드 서버에서의 L1 캐시라인 바운싱을 원천 차단.
 - **[2026-11-13 적정성 감사 판정 — 영구 기각 (Spec-Out `DONE`)]**:
-  - 쓰기 경합이 잦은 테이블 스토리지(`memengine` 256-Shard)와 달리, 서버 공용 `PlanCache`는 초기 프로시저 컴파일 이후 99.9999% 읽기 전용(`GetByName`)으로 동작함. 프로시저 1건 실행($2 \sim 50\mu\text{s}$) 대비 `PlanCache` 맵 조회($\sim 15\text{ns}$) 비중은 극미하므로, 32-Shard 분할과 40바이트 패딩은 해시 오버헤드와 LRU 용량 관리 파편화만 초래하는 전형적인 YAGNI 위반이므로 영구 배제함 ([`notes/SPEC_OUT_DECISIONS.ko.md`](file:///Users/maro/Projects/SQLion/notes/SPEC_OUT_DECISIONS.ko.md) #22 등재).
+  - 쓰기 경합이 잦은 테이블 스토리지(`memengine` 256-Shard)와 달리, 서버 공용 `PlanCache`는 초기 프로시저 컴파일 이후 99.9999% 읽기 전용(`GetByName`)으로 동작함. 프로시저 1건 실행($2 \sim 50\mu\text{s}$) 대비 `PlanCache` 맵 조회($\sim 15\text{ns}$) 비중은 극미하므로, 32-Shard 분할과 40바이트 패딩은 해시 오버헤드와 LRU 용량 관리 파편화만 초래하는 전형적인 YAGNI 위반이므로 영구 배제함 ([`doc/SPEC_OUT_DECISIONS.ko.md`](../../doc/SPEC_OUT_DECISIONS.ko.md) #22 등재).

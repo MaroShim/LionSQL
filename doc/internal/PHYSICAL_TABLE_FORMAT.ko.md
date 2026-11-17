@@ -1,6 +1,6 @@
 # LionSQL 물리 스토리지 포맷 공식 규격서
 (Physical Storage Specification: Table Tuples & Secondary Index B-Trees)
-`notes/PHYSICAL_TABLE_FORMAT.ko.md`
+`doc/internal/PHYSICAL_TABLE_FORMAT.ko.md`
 
 > - **최초 작성일**: 2026-11-14
 > - **최종 갱신일**: 2026-11-14
@@ -138,7 +138,15 @@ LionSQL은 디스크에 저장된 튜플을 물리적으로 전수 재작성(Ful
    - **중간 컬럼 삭제 금지**: 데이터가 존재하는 테이블에서 중간 컬럼(Middle Column) 삭제 요청은 즉시 **`ErrDropColumnNotTail` 에러와 함께 Fail-Closed로 거부**됩니다.
    - **Copy-and-Switch 표준**: 런타임 중간 컬럼 삭제는 온라인 OLTP의 심각한 운영 안티패턴이므로, 테이블 구조 개편 시 엔터프라이즈 정석인 **Copy-and-Switch** (`CREATE TABLE new AS SELECT ...` 후 원자적 `RENAME`)를 공식 해법으로 규정합니다.
 
-### 2.5 제로 알로케이션 단일 컬럼 추출 (`ExtractColumnFromTuple`)
+### 2.5 2계층 레코드 크기 상한 규약 (Two-Tier Row Size Limits)
+LionSQL은 SQL Server 100% 호환성 및 WiredTiger 32KB B-Tree 리프 페이지 패킹 효율과 동시성 워커 풀 OOM 방어를 위해 엄격한 **2계층 레코드 크기 상한 정책**을 강제합니다:
+
+| 계층 | 상한 크기 | 상수 명칭 | 검증 시점 및 Fail-Closed 동작 |
+| :--- | :--- | :--- | :--- |
+| **Layer 1: In-Row 인라인 상한** | **8,060 Bytes** | `storage.MaxInlineRowSize` | **DDL 정의 시점**: 고정 길이 컬럼들의 인라인 합계(`FixedRowSize()`)가 8,060 바이트를 초과하면 `CREATE TABLE` / `ALTER TABLE` 단계에서 즉시 `ErrInlineRowTooLarge`로 거부. SQL Server 물리 제약 및 32KB B-Tree Fan-out 보장. |
+| **Layer 2: Max Logical Row 상한** | **16 MB** | `storage.MaxRowSize` | **튜플 인코딩/디코딩 시점**: LOB(`VARCHAR(MAX)`, `JSON`, `TEXT`)를 포함한 단일 논리 튜플의 바이트 크기가 16MB를 초과하면 `EncodeRowToBuffer` 및 `readTupleHeader`에서 즉시 `ErrRowTooLarge`로 거부. 고동시성 워커 풀(32 워커) 메모리 폭주 및 OOM 차단. |
+
+### 2.6 제로 알로케이션 단일 컬럼 추출 (`ExtractColumnFromTuple`)
 전체 행을 디코딩하지 않고 단일 컬럼 값만 조건 평가(`WHERE`)나 프로젝션에 필요한 경우, `ExtractColumnFromTuple`을 통해 힙 할당 없이 $O(1)$로 값을 즉시 추출합니다 (0 allocs, 25.8ns; 전체 디코딩 223ns 대비 8.6배 가속).
 
 ---

@@ -1,4 +1,4 @@
-# LionSQL 1.0 전 소스코드 135단계 듀얼 AI (Gemini × Claude) 정밀 감사 결과 기록부 (`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`)
+# LionSQL 1.0 전 소스코드 135단계 듀얼 AI (Gemini × Claude) 정밀 감사 결과 기록부 (`notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md`)
 
 > - **최초 작성일**: 2026-11-06
 > - **문서 성격**: 1.0 릴리스 대비 135단계 듀얼 AI 전수 코드 리뷰에서 도출된 모든 아키텍처 결함, 동시성 레이스, 데드락, 메모리 누수, 침묵하는 에러(`_ = err`), 경계값 결함을 영구 누적 기록하는 물리 저장소 (SSOT)

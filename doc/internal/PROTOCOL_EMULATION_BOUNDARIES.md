@@ -1,4 +1,4 @@
-# LionSQL Multi-Protocol Emulation Boundaries & Scope (`notes/PROTOCOL_EMULATION_BOUNDARIES.md`)
+# LionSQL Multi-Protocol Emulation Boundaries & Scope (`doc/internal/PROTOCOL_EMULATION_BOUNDARIES.md`)
 
 > - **Created**: 2026-10-10
 > - **Last Updated**: 2026-10-24

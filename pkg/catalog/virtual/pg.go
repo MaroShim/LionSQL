@@ -776,13 +776,20 @@ func registerCatalogView(name string, view VirtualCatalogView) {
 
 // IsPgCatalogTable reports whether tableName identifies a registered pg_catalog or information_schema virtual view.
 func IsPgCatalogTable(tableName string) bool {
-	_, ok := catalogViewRegistry[strings.ToLower(strings.TrimSpace(tableName))]
+	norm := strings.ToLower(strings.TrimSpace(tableName))
+	if strings.Contains(norm, "(") {
+		norm = strings.TrimSpace(norm[:strings.Index(norm, "(")])
+	}
+	_, ok := catalogViewRegistry[norm]
 	return ok
 }
 
 // ExecPgCatalogSelect handles SELECT queries against registered pg_catalog.* and information_schema.* virtual views.
 func ExecPgCatalogSelect(src Source, tableName, projStr, whereClause, orderByClause string, limitCount int) (*Result, error) {
 	norm := strings.ToLower(strings.TrimSpace(tableName))
+	if strings.Contains(norm, "(") {
+		norm = strings.TrimSpace(norm[:strings.Index(norm, "(")])
+	}
 	view, ok := catalogViewRegistry[norm]
 	if !ok {
 		return nil, fmt.Errorf("unknown pg_catalog or information_schema view: %s", tableName)
@@ -835,6 +842,7 @@ func init() {
 	regPG("pg_partitioned_table", generatePgPartitionedTable)
 	regPG("pg_extension", generatePgExtension)
 	regPG("pg_available_extensions", generatePgAvailableExtensions)
+	regPG("pg_get_keywords", generatePgGetKeywords)
 }
 
 func generatePgDatabase(src Source, whereClause string) ([]string, []map[string]any) {
@@ -1799,3 +1807,151 @@ func generatePgAvailableExtensions(src Source, whereClause string) ([]string, []
 	columns := []string{"name", "default_version", "installed_version", "comment"}
 	return columns, []map[string]any{}
 }
+
+func generatePgGetKeywords(src Source, whereClause string) ([]string, []map[string]any) {
+	columns := []string{"word", "catcode", "catdesc"}
+	keywords := []struct {
+		word    string
+		catcode string
+		catdesc string
+	}{
+		{"all", "R", "reserved"},
+		{"analyse", "R", "reserved"},
+		{"analyze", "R", "reserved"},
+		{"and", "R", "reserved"},
+		{"any", "R", "reserved"},
+		{"array", "R", "reserved"},
+		{"as", "R", "reserved"},
+		{"asc", "R", "reserved"},
+		{"asymmetric", "R", "reserved"},
+		{"authorization", "T", "reserved (can be function or type)"},
+		{"between", "U", "unreserved"},
+		{"bigint", "U", "unreserved"},
+		{"binary", "T", "reserved (can be function or type)"},
+		{"bit", "U", "unreserved"},
+		{"boolean", "U", "unreserved"},
+		{"both", "R", "reserved"},
+		{"by", "U", "unreserved"},
+		{"case", "R", "reserved"},
+		{"cast", "R", "reserved"},
+		{"char", "U", "unreserved"},
+		{"character", "U", "unreserved"},
+		{"check", "R", "reserved"},
+		{"coalesce", "T", "reserved (can be function or type)"},
+		{"collate", "R", "reserved"},
+		{"column", "R", "reserved"},
+		{"constraint", "R", "reserved"},
+		{"create", "R", "reserved"},
+		{"cross", "T", "reserved (can be function or type)"},
+		{"current_catalog", "R", "reserved"},
+		{"current_date", "R", "reserved"},
+		{"current_role", "R", "reserved"},
+		{"current_schema", "T", "reserved (can be function or type)"},
+		{"current_time", "R", "reserved"},
+		{"current_timestamp", "R", "reserved"},
+		{"current_user", "R", "reserved"},
+		{"default", "R", "reserved"},
+		{"deferrable", "R", "reserved"},
+		{"delete", "R", "reserved"},
+		{"desc", "R", "reserved"},
+		{"distinct", "R", "reserved"},
+		{"do", "R", "reserved"},
+		{"drop", "R", "reserved"},
+		{"else", "R", "reserved"},
+		{"end", "R", "reserved"},
+		{"except", "R", "reserved"},
+		{"exists", "T", "reserved (can be function or type)"},
+		{"extract", "T", "reserved (can be function or type)"},
+		{"false", "R", "reserved"},
+		{"fetch", "R", "reserved"},
+		{"filter", "U", "unreserved"},
+		{"float", "U", "unreserved"},
+		{"for", "R", "reserved"},
+		{"foreign", "R", "reserved"},
+		{"from", "R", "reserved"},
+		{"full", "T", "reserved (can be function or type)"},
+		{"grant", "R", "reserved"},
+		{"group", "R", "reserved"},
+		{"having", "R", "reserved"},
+		{"ilike", "T", "reserved (can be function or type)"},
+		{"in", "R", "reserved"},
+		{"initially", "R", "reserved"},
+		{"inner", "T", "reserved (can be function or type)"},
+		{"insert", "R", "reserved"},
+		{"int", "U", "unreserved"},
+		{"integer", "U", "unreserved"},
+		{"intersect", "R", "reserved"},
+		{"interval", "U", "unreserved"},
+		{"into", "R", "reserved"},
+		{"is", "T", "reserved (can be function or type)"},
+		{"isnull", "T", "reserved (can be function or type)"},
+		{"join", "T", "reserved (can be function or type)"},
+		{"lateral", "R", "reserved"},
+		{"leading", "R", "reserved"},
+		{"left", "T", "reserved (can be function or type)"},
+		{"like", "T", "reserved (can be function or type)"},
+		{"limit", "R", "reserved"},
+		{"local", "U", "unreserved"},
+		{"localtime", "R", "reserved"},
+		{"localtimestamp", "R", "reserved"},
+		{"natural", "T", "reserved (can be function or type)"},
+		{"not", "R", "reserved"},
+		{"notnull", "T", "reserved (can be function or type)"},
+		{"null", "R", "reserved"},
+		{"nullif", "T", "reserved (can be function or type)"},
+		{"numeric", "U", "unreserved"},
+		{"offset", "R", "reserved"},
+		{"on", "R", "reserved"},
+		{"only", "R", "reserved"},
+		{"or", "R", "reserved"},
+		{"order", "R", "reserved"},
+		{"outer", "T", "reserved (can be function or type)"},
+		{"over", "U", "unreserved"},
+		{"overlaps", "T", "reserved (can be function or type)"},
+		{"partition", "U", "unreserved"},
+		{"placing", "R", "reserved"},
+		{"position", "T", "reserved (can be function or type)"},
+		{"primary", "R", "reserved"},
+		{"references", "R", "reserved"},
+		{"returning", "R", "reserved"},
+		{"right", "T", "reserved (can be function or type)"},
+		{"row", "U", "unreserved"},
+		{"select", "R", "reserved"},
+		{"session_user", "R", "reserved"},
+		{"set", "U", "unreserved"},
+		{"similar", "T", "reserved (can be function or type)"},
+		{"smallint", "U", "unreserved"},
+		{"some", "R", "reserved"},
+		{"substring", "T", "reserved (can be function or type)"},
+		{"symmetric", "R", "reserved"},
+		{"table", "R", "reserved"},
+		{"tablesample", "T", "reserved (can be function or type)"},
+		{"then", "R", "reserved"},
+		{"time", "U", "unreserved"},
+		{"timestamp", "U", "unreserved"},
+		{"to", "R", "reserved"},
+		{"trailing", "R", "reserved"},
+		{"true", "R", "reserved"},
+		{"union", "R", "reserved"},
+		{"unique", "R", "reserved"},
+		{"user", "R", "reserved"},
+		{"using", "R", "reserved"},
+		{"values", "R", "reserved"},
+		{"varchar", "U", "unreserved"},
+		{"variadic", "R", "reserved"},
+		{"when", "R", "reserved"},
+		{"where", "R", "reserved"},
+		{"window", "R", "reserved"},
+		{"with", "R", "reserved"},
+	}
+	allRows := make([]map[string]any, 0, len(keywords))
+	for _, kw := range keywords {
+		allRows = append(allRows, map[string]any{
+			"word":    kw.word,
+			"catcode": kw.catcode,
+			"catdesc": kw.catdesc,
+		})
+	}
+	return columns, allRows
+}
+

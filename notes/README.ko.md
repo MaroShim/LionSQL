@@ -19,13 +19,13 @@
   * **코드베이스 내 암초 지도(Landmines & Fragile Spots)**: 순환 참조 방지 SPI 패턴, 샌드박스 소켓 격리, 원자적 파일 I/O 및 Decimal JSON 무결성.
 * **[`TAXONOMY.ko.md`](TAXONOMY.ko.md)** (한국어)
   * **과제 식별 코드 체계 일람표**: 우선순위(`P1~P3`), 복합 쿼리 최적화(`VPERF`), 릴리스 게이트(`GA-REGEX`), 문법 완비(`S-1~S-7`) 마스터 인덱스.
-* **[`WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md`](WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md)** (한국어)
+* **[`WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md`](reports/WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md)** (한국어)
   * **WiredTiger 고동시성 락 직렬화 분석 및 4계층 봉인 포스트모텀**: `transaction_sync` 옵션으로 인한 96% 성능 급락(146k ➔ 4.8k TPS)의 C 라이브러리 내부 원인, MongoDB 실태 조사, 10회 연속 `kill -9` 100% 무손실 복구 실증 및 영구 재발 방지 4계층 잠금 체계.
-* **[`HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)** ([English](HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md))
+* **[`HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](../doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)** ([English](../doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md))
   * **6대 골든 릴리즈 게이트 엔지니어링 신뢰성 철학**: 릴리즈마다 기계적으로 실행되는 6대 검증 게이트(단위, 13대 도메인 스모크, TPC-C 75만 tpmC, SLT 41만 쿼리, T-SQL 30대 스위트, SIGKILL 전원 차단 무손실 복구)가 어떻게 데이터베이스의 가치를 엔터프라이즈 미션 크리티컬 인프라로 격상시키는가에 대한 기술 백서.
-* **[`PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)**
+* **[`PROTOCOL_EMULATION_BOUNDARIES.md`](../doc/internal/PROTOCOL_EMULATION_BOUNDARIES.md)**
   * **다중 프로토콜 에뮬레이션 경계**: TDS(1433), PGWire(5433), MySQL 호환 구문의 수용 범위와 중단 기준.
-* **[`TSQL_COMPATIBILITY_MATRIX.ko.md`](TSQL_COMPATIBILITY_MATRIX.ko.md)** (한국어)
+* **[`TSQL_COMPATIBILITY_MATRIX.ko.md`](../doc/TSQL_COMPATIBILITY_MATRIX.ko.md)** (한국어)
   * **T-SQL 호환성 전수 매트릭스 및 갭 분석**: 연산자, 프로시저 제어 구문, 커서, 내장 함수(100여종), 시스템 변수, 트랜잭션 옵션 전수 분석 및 미구현(Gap) 로드맵.
 * **전역 로드맵 및 단일 진실 공급원 (SSOT Backlogs)**:
   * **[`TODO.md`](../TODO.md)**: 3단계 우선순위 실시간 엔지니어링 대시보드 (Sprint DB와 100% 동기화).
@@ -39,11 +39,11 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 
 * **[`PRE_RELEASE_AUDIT_PLAN.ko.md`](plans/PRE_RELEASE_AUDIT_PLAN.ko.md)**
   * 전 소스코드 135단계 듀얼 AI(Gemini × Claude) 크로스 감사 마스터 플랜 및 13대 도메인 매트릭스 (`AUDIT-135-DUAL-REVIEW`).
-* **[`PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md)**
+* **[`PRE_RELEASE_AUDIT_FINDINGS.ko.md`](reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md)**
   * 135단계 전수 감사 과정에서 발굴된 실측 결함 누적 매트릭스 (135/135 완주, 총 134건 결함 기록 완료).
-* **[`PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md)**
+* **[`PRE_RELEASE_AUDIT_TRIAGE.ko.md`](reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md)**
   * 1단계/2단계 전수 감사 발굴 206건 결함 분류(P0~P3) 및 1.0 필수 패치 37선 확정 보고서 (`AUDIT-TRIAGE-POST`).
-* **[`P0_AUDIT_COMPREHENSIVE_RETROSPECTIVE.ko.md`](P0_AUDIT_COMPREHENSIVE_RETROSPECTIVE.ko.md)**
+* **[`P0_AUDIT_COMPREHENSIVE_RETROSPECTIVE.ko.md`](reports/P0_AUDIT_COMPREHENSIVE_RETROSPECTIVE.ko.md)**
   * 1.0 전수 감사 P0 (Must Fix 37선) 전량 완치 종합 회고 및 엔지니어링 포스트모템 (5대 도메인 결함 분석, 5대 핵심 아키텍처 피벗, Negative Knowledge 및 0-Race 품질 백서).
 * **1.0 P0 핵심 아키텍처 플랜 & 심층 분석 백서**:
   * **[`P0_01_04_FLATRECORD_BINARY_LAYOUT_AND_SCHEMA_EVOLUTION_PLAN.ko.md`](plans/P0_01_04_FLATRECORD_BINARY_LAYOUT_AND_SCHEMA_EVOLUTION_PLAN.ko.md)**: FlatRecord 힙 오프셋 충돌 해소(`slot[7]` 격리 태그) 및 `ALTER TABLE ADD COLUMN` 스키마 에볼루션 아키텍처.
@@ -58,9 +58,9 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
   * **[`P0_23_DECIMAL_FIXED_POINT_PRECISION_PLAN.ko.md`](plans/P0_23_DECIMAL_FIXED_POINT_PRECISION_PLAN.ko.md)**: 금융 DECIMAL/NUMERIC/MONEY 고정소수점 타입의 IEEE 754 Float 강등 오매핑 차단 및 임의 정밀도 보존.
   * **[`P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md`](plans/P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md)**: 네트워크 단절 시 트랜잭션 최우선 롤백 및 DDL 데드락 방지 세션 드레인 아키텍처.
   * **[`P0_27_35_WIRE_AND_HTTP_BOUNDED_PAYLOAD_LIMIT_PLAN.ko.md`](plans/P0_27_35_WIRE_AND_HTTP_BOUNDED_PAYLOAD_LIMIT_PLAN.ko.md)**: TDS/PGWire 64MB 패킷 프레임 상한 및 HTTP Chunked 스트림 32MB 바디 제한 DoS 방어벽.
-  * **[`P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md`](P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md)**: Go `sync.Pool` 슬라이스 용량 비대화 실측 및 잔류 포인터 GC 누수 박멸 포스트모템 (`[RULE:ZeroAllocation]`).
-  * **[`P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md`](P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md)**: 세션 동시성 격착, Lock Scope Shrinking 및 서브쿼리 교착 차단 심층 기술 토론.
-  * **[`IN_MEMORY_OCC_DELETE_INSERT_ANOMALY_POSTMORTEM.ko.md`](IN_MEMORY_OCC_DELETE_INSERT_ANOMALY_POSTMORTEM.ko.md)**: 동일 트랜잭션 내 동일 키 DELETE 후 INSERT 시 위양성 쓰기 충돌(`Scope-005`) 포스트모템 및 Mutation Coalescing 아키텍처.
+  * **[`P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md`](reports/P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md)**: Go `sync.Pool` 슬라이스 용량 비대화 실측 및 잔류 포인터 GC 누수 박멸 포스트모템 (`[RULE:ZeroAllocation]`).
+  * **[`P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md`](reports/P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md)**: 세션 동시성 격착, Lock Scope Shrinking 및 서브쿼리 교착 차단 심층 기술 토론.
+  * **[`IN_MEMORY_OCC_DELETE_INSERT_ANOMALY_POSTMORTEM.ko.md`](reports/IN_MEMORY_OCC_DELETE_INSERT_ANOMALY_POSTMORTEM.ko.md)**: 동일 트랜잭션 내 동일 키 DELETE 후 INSERT 시 위양성 쓰기 충돌(`Scope-005`) 포스트모템 및 Mutation Coalescing 아키텍처.
   * **[`P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md`](plans/P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md)**: RLS 순수 AST 구조적 결합 테넌트 격리 및 `sp_executesql` $O(N)$ Single-Pass 선형 스캐너 아키텍처.
   * **[`P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md`](plans/P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md)**: 중첩 트랜잭션 조기 물리 커밋 방지 및 T-SQL `@@TRANCOUNT` ACID 원자성 수호 아키텍처 (`Invariant 6`).
   * **[`P0_33_36_SETOP_MATERIALIZATION_AND_REST_STREAMING_PLAN.ko.md`](plans/P0_33_36_SETOP_MATERIALIZATION_AND_REST_STREAMING_PLAN.ko.md)**: 집합 연산(`UNION/EXCEPT`) LazyTuple 조기 구체화 누락 결과셋 증발 방지 및 REST API 단일 윈도우 스트리밍.
@@ -87,8 +87,8 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 * **[`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](plans/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)**: 키 래치 완전 제거를 통한 160k TPS 회귀 복구 및 CI 성능 게이트 구축 계획서.
 
 ### 3.2. 쿼리 엔진, 옵티마이저 & 파서 (Engine, Planner & Parser)
-* **[`VDBE_BYTECODE_DIRECTORY.ko.md`](VDBE_BYTECODE_DIRECTORY.ko.md)**: **VDBE & 16-Byte 바이트코드 마스터 디렉토리** — 1세대(Goja 폐기)부터 4세대(218k TPS Lock-Free 달성)까지의 진화 타임라인, 카테고리별 문서 맵(ISA, 2-Tier 라우팅, 극한 튜닝 백서, Babelfish 검증), 소스 코드 패키지 가이드.
-* **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 단순 질의(VDBE)와 복합 관계대수(CBO)를 분리하는 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 명세서.
+* **[`VDBE_BYTECODE_DIRECTORY.ko.md`](../doc/internal/VDBE_BYTECODE_DIRECTORY.ko.md)**: **VDBE & 16-Byte 바이트코드 마스터 디렉토리** — 1세대(Goja 폐기)부터 4세대(218k TPS Lock-Free 달성)까지의 진화 타임라인, 카테고리별 문서 맵(ISA, 2-Tier 라우팅, 극한 튜닝 백서, Babelfish 검증), 소스 코드 패키지 가이드.
+* **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 단순 질의(VDBE)와 복합 관계대수(CBO)를 분리하는 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 명세서.
 * **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md)**: AST 및 Dialect 타입 기반 2-Tier 쿼리 라우팅 정규화 계획서 (`ARCH-VDBE-ROUTING-1`).
 * **[`VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md`](plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md)**: 가상 카탈로그(`pkg/catalog/virtual` & `sqlexec_dbcc`) 구조 통합, 830줄 단일 테이블 이관, Zero-Alloc One-Pass 절 스캐너(`SplitSelectClauses`) 및 보일러플레이트 리팩토링 아키텍처 (`REFACTOR-VIRTUAL-CATALOG-1`).
 * **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](plans/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 카탈로그 라우팅 리팩토링 검증 보고서 (527ns 실측).
@@ -136,17 +136,17 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 
 실전 장애 극복 과정에서 얻은 교훈, 사각지대 분석 및 아키텍처 불변성을 지키기 위해 의도적으로 기각된 평가서입니다.
 
-* **[`SPEC_OUT_DECISIONS.ko.md`](SPEC_OUT_DECISIONS.ko.md)**
+* **[`SPEC_OUT_DECISIONS.ko.md`](../doc/SPEC_OUT_DECISIONS.ko.md)**
   * LionSQL 21대 기각 결정(Negative Knowledge) 전용 카탈로그 (PL/pgSQL 중복 인터프리터, XML DML, 분산 2PC, Wasm UDF, MySQL 고유 DML, 인메모리 압축, Delta WAL, 중간 컬럼 DROP 등 21개 항목의 이론적 기각 사유 및 표준 대체안 집대성).
-* **[`DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`](DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md)**
+* **[`DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`](../doc/DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md)**
   * DuckDB 스타일 편의 문법(`SELECT * EXCLUDE`, `FROM <table>;`) 및 MySQL 추가 호환 구문의 기각 사유와 불변 경계 평가 (오타 침묵 방지 및 RDBMS 엄격성 수호).
 * **[`EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](plans/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)**
   * `WHERE col IN ()` 빈 괄호 평가 허용 여부에 대한 분석, 1.0 엄격 에러 유지 및 무분별한 토글 플래그 배제 원칙.
-* **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)**
+* **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](reports/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)**
   * Gitea XORM 실전 연동 중 노출된 결함 원인 분석 및 "인간 작성 SQL vs ORM 기계 생성 SQL" 테스트 사각지대 영구 분석.
-* **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)**
+* **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](reports/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)**
   * TDS RPC `sp_executesql` 파라미터 해석 리그레션 분석, Beekeeper Studio 접속 오류 규명 및 위치 기반(Ordinal Positional) 폴백 복원 포스트모텀.
-* **[`GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md`](GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md)**
+* **[`GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md`](reports/GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md)**
   * Grove 핫스팟 최적화 과정에서 도출된 핵심 자산(VDBE 슬롯 인덱싱, OCC vs WT 역할 분담, 락 컨보이/OS 타이머 퀀텀 실체) 심층 포스트모텀.
 
 ---

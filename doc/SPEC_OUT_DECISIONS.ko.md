@@ -1,4 +1,4 @@
-# LionSQL 21대 기각 결정(Negative Knowledge) 전용 카탈로그 (`notes/SPEC_OUT_DECISIONS.ko.md`)
+# LionSQL 21대 기각 결정(Negative Knowledge) 전용 카탈로그 (`doc/SPEC_OUT_DECISIONS.ko.md`)
 
 > - **최초 작성일**: 2026-11-06
 > - **최종 갱신일**: 2026-11-12

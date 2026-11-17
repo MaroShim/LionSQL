@@ -20,7 +20,7 @@ LionSQL은 단일 정적 바이너리 내에 고성능 OLTP 엔진(In-Memory OCC
 | 순위 | 과제 ID | 과제명 (Task Name) | 도메인 | 기대 효과 (ROI) |
 | :---: | :--- | :--- | :---: | :--- |
 | **1** | `DOC-KO-CORE-1` | **핵심 영문 문서 4종 한글 공식화 (`*.ko.md`)** | 국문화 | 진입 장벽 완전 제거 (아키텍처, 벤치마크, 툴 연동, VDBE) |
-| **2** | `DOC-SPEC-OUT-1` | **14대 기각 결정(Negative Knowledge) 전용 카탈로그 신설** | 아키텍처 | 헛바퀴 개발 방지 및 아키텍처 불변성 단일 SSOT 확립 (`notes/SPEC_OUT_DECISIONS.ko.md`) |
+| **2** | `DOC-SPEC-OUT-1` | **14대 기각 결정(Negative Knowledge) 전용 카탈로그 신설** | 아키텍처 | 헛바퀴 개발 방지 및 아키텍처 불변성 단일 SSOT 확립 (`doc/SPEC_OUT_DECISIONS.ko.md`) |
 | **3** | `DOC-EX-STARTER-1` | **내장 SPA 웹 서버 1분 스타터 예제 저장소 (`examples/`)** | DX/체험 | `lionsql server --app=...` 즉시 체험 가능한 단일 파일/Flat 폴더 예제 |
 | **4** | `DOC-LINT-CI-1` | **로컬 마크다운 링크 깨짐(Broken Links) 검사기 도입** | 품질/무결성 | 수작업 링크 누락 방지 및 단위 테스트 연동 (`test/doc_links_test.go`) |
 | **5** | `DOC-TSQL-CHEAT-1` | **T-SQL 함수/문법 3초 검색 치트시트 (`doc/TSQL_CHEATSHEET.ko.md`)** | 레퍼런스 | 개발자 검색 시간 90% 단축 (함수별 지원 여부/대체안 매트릭스) |
@@ -45,7 +45,7 @@ LionSQL은 단일 정적 바이너리 내에 고성능 OLTP 엔진(In-Memory OCC
 - **목표**: 영문 원본의 기술적 깊이를 100% 보존하면서 자연스러운 한글 공식 문서로 구축하고 카탈로그 동기화.
 
 #### 과제 2. `DOC-SPEC-OUT-1`: 14대 기각 결정(Negative Knowledge) 전용 카탈로그 신설
-- **신설 파일**: `notes/SPEC_OUT_DECISIONS.ko.md`
+- **신설 파일**: `doc/SPEC_OUT_DECISIONS.ko.md`
 - **목표**: PL/pgSQL 중복 인터프리터 기각, XML DML 기각, OCC 백그라운드 진공 기각, 분산 2PC(XA) 기각, Wasm UDF 기각, MySQL DML 기각, 인메모리 압축(Option B) 기각, 빈 괄호 `IN ()` 무분별한 토글 플래그 기각 등 14대 Spec-Out 항목의 이론적·실전적 배경(Why Not)을 집대성하여 AI와 협업자의 헛바퀴 완벽 차단.
 
 #### 과제 3. `DOC-EX-STARTER-1`: 내장 SPA 웹 서버 1분 스타터 예제 저장소 (`examples/`)

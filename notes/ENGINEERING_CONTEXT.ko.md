@@ -141,7 +141,7 @@
      - **대안 2 (SQLite 스타일 VDBE 100% 단일화) 영구 배제 원칙**:
        - **"복잡한 쿼리에 대해서는 빠르게 하는 것보다 옳게(Correctly & Safely) 하는 것이 최우선이다."**
        - 다중 조인, 윈도우 함수, 재귀 CTE를 무리하게 바이트코드로 컴파일하려는 시도는 수십만 라인의 컴파일러 비대화(Bloat), 디버깅 난도 폭증, 시스템 취약성만 초래하며, I/O 집약적 쿼리에서 실질적 성능 이득도 없음.
-       - 따라서 2-Tier 아키텍처는 완전 통합을 위한 과도기가 아니며, **단순 쿼리의 '속도'와 복합 쿼리의 '정확성/모듈화'를 각각 최우선한 최종 불변 설계**로 영구 유지함 ([`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)).
+       - 따라서 2-Tier 아키텍처는 완전 통합을 위한 과도기가 아니며, **단순 쿼리의 '속도'와 복합 쿼리의 '정확성/모듈화'를 각각 최우선한 최종 불변 설계**로 영구 유지함 ([`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)).
 
 ---
 
@@ -360,7 +360,7 @@
 * **도입 배경 및 배제 근거**:
   - 기존 WiredTiger `AddColumn`의 전수 재작성 방식은 수천만 건 테이블에서 수 초~수 분의 쓰기 락 지연을 유발할 뿐만 아니라, 재작성 루프 중 세션/커서 오픈 실패 시 스키마와 디스크 데이터가 영구 불일치하는 심각한 에러 은폐 결함(`AUDIT-FULL-012`)을 유발함.
   - 현대 메이저 RDBMS(PostgreSQL v11+, MySQL 8.0 InnoDB, SQL Server)의 표준 아키텍처인 Instant DDL과 다층 디코더 패딩을 도입하여 성능과 데이터 안정성을 동시에 달성함.
-  - 전체 물리 스펙 및 바이너리 레이아웃은 공식 규격서 [`PHYSICAL_TABLE_FORMAT.ko.md`](PHYSICAL_TABLE_FORMAT.ko.md)에 영구 성문화함.
+  - 전체 물리 스펙 및 바이너리 레이아웃은 공식 규격서 [`PHYSICAL_TABLE_FORMAT.ko.md`](../doc/internal/PHYSICAL_TABLE_FORMAT.ko.md)에 영구 성문화함.
 
 ### ㉛ 비파괴적 데이터베이스 시딩 및 기존 데이터 보호 불변식 (Non-Destructive Seeding & Zero-Overwrite Invariant, Invariant 14)
 * **결정 사항**:
@@ -390,7 +390,7 @@
      - 고유 인덱스(`Unique`): `Key = indexKey`, `Value = pk`. 단, `NULL` 값은 SQL 표준에 따라 비고유 포맷(`\x00NULL\x00 + pk`, Value `""`)으로 분기 저장하여 다중 NULL 저장을 안전하게 수용함.
      - 비고유 인덱스: `Key = indexKey + "\x00" + pk`, `Value = ""` 구조로 B-Tree 고유성을 보장하면서 동일 키를 가진 행들을 기본 키 순으로 밀집 정렬함.
   4. **단일 트랜잭션 원자적 동기화 및 풀스캔 영구 배제**:
-     - 기본 테이블과 모든 보조 인덱스 갱신은 단일 `WT_SESSION` 트랜잭션 경계 내에서 원자적으로 실행되며, `IndexScan`/`IndexScanDesc`/`checkUniqueIndexesLocked`는 커서 B-Tree 직접 탐색(`search_near`, `search`)만을 사용하고 기존의 전체 테이블 풀스캔(`scanLocked`)을 100% 영구 배제함. 상세 규격: [`notes/PHYSICAL_TABLE_FORMAT.ko.md`](notes/PHYSICAL_TABLE_FORMAT.ko.md).
+     - 기본 테이블과 모든 보조 인덱스 갱신은 단일 `WT_SESSION` 트랜잭션 경계 내에서 원자적으로 실행되며, `IndexScan`/`IndexScanDesc`/`checkUniqueIndexesLocked`는 커서 B-Tree 직접 탐색(`search_near`, `search`)만을 사용하고 기존의 전체 테이블 풀스캔(`scanLocked`)을 100% 영구 배제함. 상세 규격: [`doc/internal/PHYSICAL_TABLE_FORMAT.ko.md`](../doc/internal/PHYSICAL_TABLE_FORMAT.ko.md).
 
 ---
 

@@ -249,7 +249,7 @@ LionSQL은 Row 기반 저장소의 장점을 극대화하면서 분석 지연시
 * **상세 엔지니어링 계획 및 구현 체크리스트**:  
   [`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](../notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)
 * **2-Tier 쿼리 실행 엔진 아키텍처 명세**:  
-  [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)
+  [`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)
 * **OLTP 트랜잭션 벤치마크 및 튜닝 가이드**:  
   [`doc/BENCHMARK.md`](BENCHMARK.md)
 * **공식 사용자 매뉴얼**:  

@@ -8,8 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- enforce two-tier row size limits across storage engine: Layer 1 In-Row inline limit 8,060 bytes (`storage.MaxInlineRowSize = 8060`, `ErrInlineRowTooLarge`) and Layer 2 Max Logical Row limit 16 MB (`storage.MaxRowSize = 16 * 1024 * 1024`, `ErrRowTooLarge`) with unit tests and DDL validation (`GEMINI.md` [Invariant 13])
+- implement `pg_catalog.pg_get_keywords()` virtual catalog view supporting JDBC `DatabaseMetaData.getSQLKeywords()` for Liquibase and Metabase migrations
+- restructure architecture and specification documents into canonical `doc/internal/` and `doc/` directories, promoting Unified TxManager (`doc/internal/UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md`), Physical Table Format (`doc/internal/PHYSICAL_TABLE_FORMAT.ko.md`), 2-Tier Parser (`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`), VDBE Directory, and Spec-Out catalog with 278 link instances safely updated
+- codify LionSQL 4 Core Pillars architecture in `doc/ARCHITECTURE.ko.md`
 - add dedicated enterprise regression test suites for composite unique NULLs, dynamic derived tables, PGWire NULL binding, and info_schema data types across storage and wire engines
-- design and codify Unified Transaction Manager (TxManager) and 4 Core Pillars architecture in `notes/UNIFIED_TX_MANAGER_PLAN.ko.md` (`ARCH-UNIFIED-TX-MANAGER`)
+- design and codify Unified Transaction Manager (TxManager) and 4 Core Pillars architecture in `notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md` (`ARCH-UNIFIED-TX-MANAGER`)
 - support dual-parser automatic fallback for `ALTER PROCEDURE` with vendor clauses (c9db8e6d)
 - implement Single Page Application (SPA) Chroot handler with `os.DirFS` subfolder assets and immutable caching (c9db8e6d)
 - enforce T-SQL Hekaton PK rules: `DURABILITY = SCHEMA_AND_DATA` requires PK (Msg 41321), `DURABILITY = SCHEMA_ONLY` allows PK-less table creation with synthetic `_row_id` (c9db8e6d)
@@ -533,12 +537,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 - automate Dual-AI (Antigravity & Claude) pre-release audit pipeline (`FEAT-DUAL-AI-AUDIT-PIPELINE-1`):
-  - enhance `scripts/audit_diff.sh` to extract production Go diffs between release tags and generate structured 4-axis adversarial audit prompts and consolidated report templates (`notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`)
+  - enhance `scripts/audit_diff.sh` to extract production Go diffs between release tags and generate structured 4-axis adversarial audit prompts and consolidated report templates (`notes/plans/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`)
   - integrate Gate 0 into `scripts/release.sh`, enforcing that a pre-release audit report exists with zero unresolved P0 defects before compiling release binaries and tagging
   - support `--skip-audit` flag in `scripts/release.sh` strictly for emergency hotfixes
 - codify canonical physical storage specifications and architecture references:
-  - add `notes/PHYSICAL_TABLE_FORMAT.ko.md` defining single canonical V2 binary tuple codec (`0x02`), 4-byte aligned fixed header, flags, $O(1)$ Instant Tail DDL, and secondary index B-Tree key/value codecs (`GEMINI.md` [Invariant 13, 15])
-  - add creation and revision dates, cross-links, and specifications in `notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md` and `notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`
+  - add `doc/internal/PHYSICAL_TABLE_FORMAT.ko.md` defining single canonical V2 binary tuple codec (`0x02`), 4-byte aligned fixed header, flags, $O(1)$ Instant Tail DDL, and secondary index B-Tree key/value codecs (`GEMINI.md` [Invariant 13, 15])
+  - add creation and revision dates, cross-links, and specifications in `notes/plans/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md` and `notes/plans/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`
 - WiredTiger physical B-Tree secondary index materialization and O(log N) point/range scan (`FEAT-WT-SECONDARY-INDEX-BTREE-1`):
   - physically materialize secondary indexes as independent WiredTiger B-Tree tables (`table:_idx_<tableName>_<indexName>`) with `key_format=u,value_format=u`, eliminating full table scans (`scanLocked`) and in-memory slice reversals
   - implement `wtIndexBTreeCursor` supporting $O(\log N)$ cursor seek (`search_near`), forward sequential traversal (`IndexScan`), and backward traversal (`IndexScanDesc`)
@@ -589,12 +593,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - unify standalone `VALUES` query dispatch in `sqlexec.go` and `MERGE USING (VALUES ...)` in `sqlexec_merge.go` (`[RULE:ModularAbstraction]`)
 - support `CREATE TRIGGER ... FOR INSERT, UPDATE, DELETE` as canonical T-SQL `AFTER` synonym (`FIX-TRIGGER-FOR-KEYWORD-1`):
   - parse `TokenFor` in trigger header definition (`pkg/proc/parser_ddl.go`), normalizing timing to `AFTER` and adding defensive validation against empty trigger event lists
-- author official strategic product positioning whitepaper (`notes/LIONSQL_POSITIONING_WHITEPAPER.ko.md`) detailing the PGWire v3 gateway + native T-SQL VDBE VM architecture, eliminating duplicate PL/pgSQL engines, and providing realistic 1.3x~2x throughput benchmarks and full compatibility verification suite analysis
+- author official strategic product positioning whitepaper (`doc/LIONSQL_POSITIONING_WHITEPAPER.ko.md`) detailing the PGWire v3 gateway + native T-SQL VDBE VM architecture, eliminating duplicate PL/pgSQL engines, and providing realistic 1.3x~2x throughput benchmarks and full compatibility verification suite analysis
 - persist storage engine manifest (`lionsql.engine.json`) in each initialized data directory (`FEAT-DATADIR-ENGINE-MANIFEST-1`): record `engine` (`wiredtiger` or `memory`), `disk`, `memory`, and `tuple_codec_version` (`2`) atomically on directory creation, automatically adopt the directory's engine on subsequent startups when `-engine`/`-disk` is omitted, fail closed with `ErrEngineMismatch` when an explicit flag conflicts with the initialized directory's engine, and automatically detect and backfill legacy pre-manifest directories (`[RULE:AtomicSaves]`, `[RULE:ExplicitError]`)
 - vendor 5 external T-SQL and TDS compatibility corpora (`sqlglot`, `tedious`, `pymssql`, `gorm-sqlserver`, `mssql-jdbc`) under `test/corpora/`, harvest 144 value-verified `.slt` oracle suites, and prune 1,855 synthetic padding suites from Gate 5 (`test/slt_proc/`) so Gate 5 runs 1,289 authentic, zero-padding suites (30 core suites, 1,115 AWS Babelfish suites, and 144 external corpora suites across 9,089 queries, 28,089 statements, and 37,178 total records) (`[RULE:RadicalKISS]`)
 - complete 10-point documentation system revamp and engineering knowledge base upgrade (`DOC-REVAMP-10`):
   - author official Korean versions for 4 core manuals: `doc/ARCHITECTURE.ko.md`, `doc/BENCHMARK.ko.md`, `doc/CLIENT_TOOL_INTEGRATION.ko.md`, and `doc/internal/VDBE.ko.md` with complete technical fidelity
-  - establish persistent negative knowledge catalog in `notes/SPEC_OUT_DECISIONS.ko.md` documenting the theoretical rationale and adopted alternatives for all 21 permanently rejected architecture items
+  - establish persistent negative knowledge catalog in `doc/SPEC_OUT_DECISIONS.ko.md` documenting the theoretical rationale and adopted alternatives for all 21 permanently rejected architecture items
   - create instant embedded static SPA web app starter examples in `examples/single-file-dashboard` (single-file Tailwind CDN) and `examples/flat-spa-app` (3-file flat HTML5 SPA) with English and Korean README quickstarts
   - implement hermetic local markdown link integrity tester (`test/doc_links_test.go`) validating 294 documentation files across `doc/`, `notes/`, `guide/`, and `examples/` in 0.07s
   - add 1-page condensed 3-second T-SQL syntax and function cheatsheet (`doc/TSQL_CHEATSHEET.ko.md` and `doc/TSQL_CHEATSHEET.md`) sorted alphabetically (A-Z)
@@ -617,7 +621,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - add `2026-11-11` comparative benchmark report (`notes/benchmark_runs/WIRE_TEMP_OCC_BENCH_20261111.ko.md`) documenting zero-alloc wire streaming, WiredTiger temp-table bypass, OCC `compact` vs `performance`, and live TCP TPC-C results
 - route temporary tables and table variables (`#`, `__temp_`, `__tv_`, `__var_`) transparently to an embedded ephemeral `memengine` inside the WiredTiger storage engine with zero `.wt` disk files and full mixed-transaction/savepoint parity (`PERF-HYBRID-TEMPMEM-1`)
 - add T-SQL compatibility matrix regression tests for inline TVFs (`RETURNS TABLE`), `TRIM` 2-argument cutset, virtual `USE <dbname>` session contexts, and `SET` session options (`COMPAT-TSQL-MATRIX-1`)
-- register `COMPAT-TSQL-MATRIX-1` sprint tracking task for `notes/TSQL_COMPATIBILITY_MATRIX.ko.md` verification and sync
+- register `COMPAT-TSQL-MATRIX-1` sprint tracking task for `doc/TSQL_COMPATIBILITY_MATRIX.ko.md` verification and sync
 
 ### Changed
 - refactor virtual system catalog execution architecture (`REFACTOR-VIRTUAL-CATALOG-1`): migrate 830-line `sys.*` single-table catalog generation switch from `pkg/engine/sqlexec_dbcc.go` into `pkg/catalog/virtual/mssql_single.go` (`GenerateSysCatalogRows`), eliminate duplicated `findTopLevelKeyword` by delegating `ExtractSQLParts` to `sqlutil.SplitSelectClauses`, extract common URN/ObjectID helpers and current DB resolver across `pkg/catalog/virtual/mssql.go`, and add `GetPartitions` / `ListTableStats` provider assertions in `sqlexec_virtual.go` with 100% behavioral parity
@@ -796,7 +800,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Total Elimination of Regular Expressions (`GA-REGEX`)**: Completely eradicate regular expressions across CBO planner, VDBE runtime, LIKE execution filters, and PGWire dollar parameters (`$N`) in favor of zero-allocation deterministic tokenizers and state machines (`sqlutil.ReplacePgParams`, `sqlutil.MatchLike`).
 - **T-SQL Bracket Wildcards in LIKE Operator**: Harden `sqlutil.MatchLike` with native T-SQL bracket wildcards (`[...]`, `[^...]`, `[_]`, `[%]`) and range evaluation for robust collation filtering and XORM introspection.
 - **WiredTiger ACID Crash Durability Hardening**: Restore `transaction_sync=(enabled=true,method=none)` in WiredTiger configuration, guaranteeing user-space transaction log buffers flush to OS on commit and survive abrupt `kill -9` power-cuts without data loss (`crashtest` verified).
-- **6-Stage Golden Release Verification Gate**: Permanently integrate 6 automated verification gates (Core Unit & 100k TPS Gate, 13-Domain Smoke Test, TPC-C >700k tpmC Saturation, SQLLogicTest 409k Queries, T-SQL 14-Suite Procedures, and SIGKILL Crash/Leak Sentinels) into `scripts/release.sh`, accompanied by bilingual engineering whitepapers ([`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md) / [`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md`](notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md)).
+- **6-Stage Golden Release Verification Gate**: Permanently integrate 6 automated verification gates (Core Unit & 100k TPS Gate, 13-Domain Smoke Test, TPC-C >700k tpmC Saturation, SQLLogicTest 409k Queries, T-SQL 14-Suite Procedures, and SIGKILL Crash/Leak Sentinels) into `scripts/release.sh`, accompanied by bilingual engineering whitepapers ([`doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md) / [`doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md`](doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md)).
 - **In-Memory OCC Pointer-Free Flat Record Hardening (`OCC-HYPER-2`)**: Introduce flat record layout codec with immutable layouts, achieving 67.5% memory reduction while maintaining stable A/B validation.
 - refactor virtual catalog interceptor to table-driven static route table, eliminating sequential IF-chain order sensitivity (`REFACTOR-CATALOG-INTERCEPTOR-1`)
 - format `TASKS.md` table sorted strictly by `id ASC` to eliminate git diff churn on status transitions
@@ -1118,7 +1122,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Documentation
 - author official Gitea dual-protocol (TDS & PGWire) integration and production tuning guide (doc/GITEA_INTEGRATION_GUIDE.ko.md) (ab20199)
-- author postmortem report on ORM SQL compatibility and test blind spots with Section 5 PGWire findings (notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) (d2f4ffa, ab20199)
+- author postmortem report on ORM SQL compatibility and test blind spots with Section 5 PGWire findings (notes/reports/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) (d2f4ffa, ab20199)
 - record permanent architectural spec-out decisions for MySQL DML extensions (GEMINI.md, TODO.md, notes/ENGINEERING_CONTEXT.ko.md) (78061cb)
 - author Gitea integration milestone report and update index (GITEA-MILESTONE-1) (bbd9f72)
 - register Gitea milestone deliverable and backlog in TODO dashboard (ce9e08b)
@@ -1274,7 +1278,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Retained the high-performance 2-tier engine: **Tier 1 (VDBE Fast-Path, 0.5~2µs)** for single-table, index-range, and scalar lookups, and **Tier 2 (Volcano CBO, 15~50µs)** for relational algebra, multi-table joins, subqueries, and optimizer hints.
   - Removed over 350 lines of redundant prototype table-scan code, in-memory sorting, and the legacy `reSelectStmt` regular expression from `pkg/engine/sqlexec_select.go`, leaving an architectural epitaph comment.
   - Eliminated silent error swallowing when Volcano or Planner encounters invalid queries, immediately returning descriptive SQL errors to users (Golden Rule 7).
-  - Documented full architectural context, trade-offs, and decision invariants in `notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`.
+  - Documented full architectural context, trade-offs, and decision invariants in `doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`.
 - `ARCH-EVAL-1`: Unified arithmetic and binary operator evaluation into `pkg/engine/evaluator.go` (Golden Rule 15 KISS, DRY & Deletion-First):
   - Created `EvalBinaryOp`, `CoerceAndCalculate`, `ToNumeric`, `ResolveOperand`, and `EvalUpdateExpr` integrating with `pkg/storage/coerce.go` Type Promotion Lattice (Decimal > Float > Int > Bool) and unified zero-division guards.
   - Eliminated over 120 lines of repetitive arithmetic switch-case blocks, ad-hoc operand resolution, and the unused `reEvalArithExpr` regular expression from `pkg/engine/sqlexec_eval.go`.
@@ -1362,7 +1366,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Documentation
 - Replaced machine-specific absolute `file:///Users/maro/Projects/LionSQL/...` links with portable relative links in `doc/README.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/DATA_DICTIONARY.md`, and `doc/WEB_STUDIO_GUIDE.ko.md`, so documentation links resolve on any checkout.
 - Added `doc/TESTING.md`, a consolidated local build, test, and regression guide covering the 3-stage pipeline, `-run` filtering, build tags and conditional tests, a per-package and per-work-item regression test map, test authoring rules, Go micro-benchmarks, TPC-C performance regression, and an A/B comparison procedure. Linked from `README.md`, `CONTRIBUTING.md`, and `doc/README.md`.
-- Restructured `notes/` directory: renamed Korean documentation files to `.ko.md` (`ENGINEERING_CONTEXT.ko.md`, `PITFALLS_AND_TRICKS.ko.md`, `README.ko.md`, `TAXONOMY.ko.md`), authored an English `notes/README.md`, moved and renamed multi-protocol boundaries document to `notes/PROTOCOL_EMULATION_BOUNDARIES.md`, and renamed `ANTLR_PARSER_COMPACT_STRATEGY.md` to `ANTLR_PARSER_COMPACTION_PLAN.md`.
+- Restructured `notes/` directory: renamed Korean documentation files to `.ko.md` (`ENGINEERING_CONTEXT.ko.md`, `PITFALLS_AND_TRICKS.ko.md`, `README.ko.md`, `TAXONOMY.ko.md`), authored an English `notes/README.md`, moved and renamed multi-protocol boundaries document to `doc/internal/PROTOCOL_EMULATION_BOUNDARIES.md`, and renamed `ANTLR_PARSER_COMPACT_STRATEGY.md` to `ANTLR_PARSER_COMPACTION_PLAN.md`.
 - Standardized REST API documentation naming: renamed `doc/API_REFERENCE.md` to `doc/REST_API_REFERENCE.md` and `doc/AUTO_REST_API.md` to `doc/REST_API_RECORDS_GUIDE.md`, updating all inbound links across documentation and root guides.
 - Replaced machine-specific console output paths in documentation examples (`doc/USER_MANUAL.ko.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/ARCHITECTURE.md`) with generic relative paths (`./data`, `lionsql/`).
 - Updated `doc/JSON_INDEXING_GUIDE.md` Section 7 to a completed implementation status matrix detailing all 5 stages of JSON built-ins, expression B-Tree indexing, CBO optimization, and regression test suites.

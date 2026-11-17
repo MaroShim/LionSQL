@@ -1,5 +1,5 @@
 # 트랜잭셔널 DDL 섀도 카탈로그 및 지연 작업 큐 아키텍처 명세서
-(`notes/TRANSACTIONAL_DDL_SHADOW_CATALOG_ARCHITECTURE.ko.md`)
+(`doc/internal/TRANSACTIONAL_DDL_SHADOW_CATALOG_ARCHITECTURE.ko.md`)
 
 > - **문서 유형**: 아키텍처 설계 명세서 (Architectural Specification)
 > - **버전**: v1.0.0

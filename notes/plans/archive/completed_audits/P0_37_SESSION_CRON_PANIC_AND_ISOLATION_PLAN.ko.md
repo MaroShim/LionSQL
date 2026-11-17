@@ -10,7 +10,7 @@
 ## 1. 배경 및 문제 분석
 
 ### 1.1 초기 감사 의견에 대한 정정 (Negative Knowledge)
-초기 감사 보고서(`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`)에서는 크론 작업의 고아/OOM 방지를 위해 `exec.CommandContext` 기반의 외부 자식 프로세스(Child Process) 격리 실행 모델을 제안하였으나, 다음과 같은 엔진 코어 원칙으로 인해 이는 배제되어야 마땅한 오버스펙임이 확인되었습니다:
+초기 감사 보고서(`notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md`)에서는 크론 작업의 고아/OOM 방지를 위해 `exec.CommandContext` 기반의 외부 자식 프로세스(Child Process) 격리 실행 모델을 제안하였으나, 다음과 같은 엔진 코어 원칙으로 인해 이는 배제되어야 마땅한 오버스펙임이 확인되었습니다:
 1. **스토리지 락 충돌**: LionSQL은 프로세스당 단일 카탈로그/데이터 디렉토리 불변식(`Invariant 2`)을 엄격히 준수하며, WiredTiger 스토리지 엔진은 물리 파일 락(`WiredTiger.lock`)으로 인해 동일 데이터 디렉토리에 대해 두 번째 프로세스의 기동이 원천 불가합니다.
 2. **기능의 본질**: LionSQL 크론은 OS 쉘 스크립트를 실행하는 것이 아니라, 데이터베이스 내부의 SQL(`DELETE FROM sessions ...`) 또는 저장 프로시저(`EXEC proc`)를 실행하는 **인-데이터베이스(In-DB) 스케줄러**입니다.
 

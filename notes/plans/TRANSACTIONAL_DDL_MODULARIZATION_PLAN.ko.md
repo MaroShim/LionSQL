@@ -8,7 +8,7 @@
 > - **대상 마일스톤**: `v1.10.0` (Post-1.0 실무 운영 안정화 제2그룹)
 > - **신규 패키지**: `pkg/catalog/txddl` (또는 `pkg/engine/txddl`)
 > - **연계 규칙**: `[RULE:AtomicSaves]`, `[RULE:ConflictPrevention]`, `[RULE:ModularAbstraction]`, `[RULE:RadicalKISS]`, `[RULE:PlanPersistence]`, `[RULE:ContinuousBacklog]`
-> - **연계 문서**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md), [`notes/PHYSICAL_TABLE_FORMAT.ko.md`](../PHYSICAL_TABLE_FORMAT.ko.md)
+> - **연계 문서**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md), [`doc/internal/PHYSICAL_TABLE_FORMAT.ko.md`](../../doc/internal/PHYSICAL_TABLE_FORMAT.ko.md)
 
 ---
 

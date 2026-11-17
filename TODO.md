@@ -18,7 +18,7 @@
   ./bin/sprint set <ID> <PENDING|IN_PROGRESS|DONE> && ./bin/sprint backup TASKS.md
   ```
 - **연계 핵심 문서**:
-  - 전수 감사 결함 기록부 (40대 결함 패치 추적): [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+  - 전수 감사 결함 기록부 (40대 결함 패치 추적): [`notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/reports/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
   - Post-1.0 후보 & P2 이관 백로그 (92건): [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md)
   - 영구 Spec-Out 및 아키텍처 헌법: [`GEMINI.md`](GEMINI.md), [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
   - 전략 로드맵: [`ROADMAP.md`](ROADMAP.md)

@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-08
 > - **문서 상태**: 공식 엔지니어링 회고 및 아키텍처 방법론 (Engineering Context & Retrospective)
-> - **주요 참조**: [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md), [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md), [`notes/ENGINEERING_CONTEXT.ko.md`](ENGINEERING_CONTEXT.ko.md)
+> - **주요 참조**: [`notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md), [`notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md), [`notes/ENGINEERING_CONTEXT.ko.md`](ENGINEERING_CONTEXT.ko.md)
 
 ---
 

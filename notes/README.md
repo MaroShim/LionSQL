@@ -19,9 +19,9 @@ Foundational engineering principles, architectural invariants, code landmines, a
   * **Codebase Landmines & Fragile Spots**: SPI decoupling against circular imports, sandbox network isolation, atomic file I/O, and Decimal JSON safety.
 * **[`TAXONOMY.ko.md`](TAXONOMY.ko.md)** (Korean)
   * **Task Identifier Taxonomy**: Consolidated reference for `P1~P3` (priority tasks), `VPERF` (complex queries), `GA-REGEX` (zero-regex gates), and `S-1~S-7` (syntax completeness).
-* **[`HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md`](HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md)** ([Korean](HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md))
+* **[`HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md`](../doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md)** ([Korean](../doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md))
   * **The 6 Golden Release Gates Philosophy**: Technical whitepaper on how executing 6 automated mechanical verification gates on every single release elevates LionSQL to enterprise-grade mission-critical infrastructure.
-* **[`PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)**
+* **[`PROTOCOL_EMULATION_BOUNDARIES.md`](../doc/internal/PROTOCOL_EMULATION_BOUNDARIES.md)**
   * **Multi-Protocol Emulation Boundaries**: TDS (1433), PGWire (5433), and MySQL wire compatibility scopes and cutoff boundaries.
 * **Master Roadmap & SSOT Backlogs**:
   * **[`TODO.md`](../TODO.md)**: 3-tier active engineering dashboard (100% synchronized with SQLite sprint DB).
@@ -35,7 +35,7 @@ Active verification audits and hardening projects driving LionSQL toward the 1.0
 
 * **[`PRE_RELEASE_AUDIT_PLAN.ko.md`](plans/PRE_RELEASE_AUDIT_PLAN.ko.md)** (Korean)
   * 135-step dual AI (Gemini × Claude) cross-audit master plan across all 13 engine domains (`AUDIT-135-DUAL-REVIEW`).
-* **[`PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md)** (Korean)
+* **[`PRE_RELEASE_AUDIT_FINDINGS.ko.md`](reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md)** (Korean)
   * Consolidated matrix of defect findings discovered during the pre-release audit (135/135 completed, 134 defects logged).
 * **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)** (Korean)
   * Unified SSOT plan for total elimination of regular expressions in favor of deterministic tokenizers (`GA-REGEX-DDL-1` - `GA-REGEX-FINAL-3`, `SEC-PGWIRE-PARAM-1`).
@@ -55,7 +55,7 @@ Technical design specifications and refactoring blueprints organized by engine d
 * **[`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](plans/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)** (Korean): Eliminating key latches to restore 160k TPS and establishing regression prevention gates.
 
 ### 3.2. Query Engine, Optimizer & Parser
-* **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)** (Korean): Permanent 2-tier query execution architecture decoupling simple OLTP (VDBE) from complex relational algebra (CBO).
+* **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)** (Korean): Permanent 2-tier query execution architecture decoupling simple OLTP (VDBE) from complex relational algebra (CBO).
 * **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md)** (Korean): AST and dialect-based 2-tier query routing normalization (`ARCH-VDBE-ROUTING-1`).
 * **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](plans/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)** (Korean): Structural catalog routing via symbol tables and AST (measured 527ns).
 * **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)** (Korean): Large join (10+ tables) query optimization and dynamic root selection (`OPT-LARGE-JOIN-1`).
@@ -98,11 +98,11 @@ Empirical verification benchmarks and production application test reports.
 
 Hard-learned operational lessons, test blind-spot analyses, and explicit evaluation notes preserving architectural boundaries.
 
-* **[`DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`](DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md)** (Korean): Rationale for rejecting DuckDB friendly syntax (`SELECT * EXCLUDE`, `FROM <table>;`) and MySQL DML extensions to prevent silent typo bugs.
+* **[`DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`](../doc/DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md)** (Korean): Rationale for rejecting DuckDB friendly syntax (`SELECT * EXCLUDE`, `FROM <table>;`) and MySQL DML extensions to prevent silent typo bugs.
 * **[`EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](plans/EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)** (Korean): Analysis of empty `IN ()` predicates, retaining 1.0 strict syntax errors, and rejection of ad-hoc toggle flags.
-* **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)** (Korean): Postmortem on Gitea XORM integration bugs and resolving the blind spot between human-crafted vs ORM-generated SQL.
-* **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)** (Korean): Postmortem on TDS RPC `sp_executesql` parameter resolution regression and restoration of ordinal positional fallback.
-* **[`GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md`](GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md)** (Korean): Postmortem on Grove benchmark hotspot optimizations and four permanent assets.
+* **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](reports/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)** (Korean): Postmortem on Gitea XORM integration bugs and resolving the blind spot between human-crafted vs ORM-generated SQL.
+* **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](reports/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)** (Korean): Postmortem on TDS RPC `sp_executesql` parameter resolution regression and restoration of ordinal positional fallback.
+* **[`GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md`](reports/GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md)** (Korean): Postmortem on Grove benchmark hotspot optimizations and four permanent assets.
 
 ---
 

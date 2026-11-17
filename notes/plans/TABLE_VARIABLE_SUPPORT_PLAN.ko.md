@@ -106,5 +106,5 @@ DELETE FROM @items WHERE id = 1;
 ---
 
 ## 4. 기대 효과 및 호환성 향상
-- T-SQL 호환성 매트릭스([`notes/TSQL_COMPATIBILITY_MATRIX.ko.md`](../TSQL_COMPATIBILITY_MATRIX.ko.md))에서 테이블 변수(`@tbl`)를 **"완전 지원"**으로 승격.
+- T-SQL 호환성 매트릭스([`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](../../doc/TSQL_COMPATIBILITY_MATRIX.ko.md))에서 테이블 변수(`@tbl`)를 **"완전 지원"**으로 승격.
 - 복잡한 ETL 프로시저, 계산 중간 결과 버퍼링, 복수 행 처리 배치 스크립트의 100% 네이티브 호환성 달성.
