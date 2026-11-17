@@ -4,7 +4,7 @@
 > - **최종 갱신일**: 2026-11-11
 > - **과제 식별 코드**: `PERF-SUBQUERY-MEMO-1`
 > - **적용 마일스톤**: `1.0-GA` (즉시 구현 및 포함)
-> - **핵심 불변식**: `[RULE:RadicalKISS]`, `[RULE:BoundedBuffers]`, `[RULE:PlanPersistence]`, [`GEMINI.md`](../../GEMINI.md) Invariant 17 (Kim's AST Decorrelation Spec-Out & Memoization Primacy)
+> - **핵심 불변식**: `[RULE:RadicalKISS]`, `[RULE:BoundedBuffers]`, `[RULE:PlanPersistence]`, [`GEMINI.md`](../../../GEMINI.md) Invariant 17 (Kim's AST Decorrelation Spec-Out & Memoization Primacy)
 > - **대체 대상**: 기존 복합 집계 AST 재작성 및 미니 TPC-H 스위트(`BENCH-TPCH-1`, Count Bug 위험으로 영구 Spec-Out 폐기)
 
 ---

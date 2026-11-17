@@ -4,7 +4,7 @@
 > - **최종 갱신일**: 2026-11-09
 > - **과제 식별 코드**: `SSMS-OE-COMPAT-1` (완료) / `SSMS-OE-COMPAT-2` (진행 중 — SMO 테이블/하위 객체 바인딩)
 > - **상태**: **Phase 1~4 완료 (서버 접속, Databases 트리, Tables 목록 표시 성공) / Phase 5 진행 중 (SMO `NullReferenceException` 해결 및 하위 노드 확장 검증)**
-> - **관련 불변식**: [`GEMINI.md`](../../GEMINI.md) Invariant 2 (Tolerant Virtual `USE`), Invariant 7 (Zero-Regex SQL Parsing), Invariant 11 (TDS Windows Host Platform Parity)
+> - **관련 불변식**: [`GEMINI.md`](../../../GEMINI.md) Invariant 2 (Tolerant Virtual `USE`), Invariant 7 (Zero-Regex SQL Parsing), Invariant 11 (TDS Windows Host Platform Parity)
 
 ---
 

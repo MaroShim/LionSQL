@@ -149,7 +149,7 @@ Gen 3 튜닝 도중 단일 행 극단 경합(100개 워커가 단 1개 행만 �
 
 ### 4.2 계획 목표치 대비 최종 실측 성과 비교 (Verified Final Metrics)
 
-당초 본 계획서가 목표로 삼았던 지표(`12,000 ~ 25,000+ TPS`, `P50 50µs 이하`)와, Gen 1~4 최적화가 모두 반영된 현재 LionSQL(`v0.92.0`, Apple M1 8-Core 기준, 공식 수록: [`doc/BENCHMARK.md`](../../doc/BENCHMARK.md))의 **실제 측정 결과**를 비교하면 모든 지표에서 목표치를 수 배~십수 배 초과 달성했습니다:
+당초 본 계획서가 목표로 삼았던 지표(`12,000 ~ 25,000+ TPS`, `P50 50µs 이하`)와, Gen 1~4 최적화가 모두 반영된 현재 LionSQL(`v0.92.0`, Apple M1 8-Core 기준, 공식 수록: [`doc/BENCHMARK.md`](../../../doc/BENCHMARK.md))의 **실제 측정 결과**를 비교하면 모든 지표에서 목표치를 수 배~십수 배 초과 달성했습니다:
 
 #### 1) 마이크로 연산 및 메모리 할당 지표
 
@@ -180,5 +180,5 @@ Gen 3 튜닝 도중 단일 행 극단 경합(100개 워커가 단 1개 행만 �
 - **VDBE VM 프레임 및 슬롯/레지스터 풀**: [`pkg/proc/runtime/vm.go`](../../pkg/proc/runtime/vm.go)
 - **평탄화 단일 디스패치 루프**: [`pkg/proc/runtime/vm_dispatcher.go`](../../pkg/proc/runtime/vm_dispatcher.go)
 - **VDBE 성능 회귀 방지 게이트 테스트**: [`pkg/proc/runtime/perf_regression_gate_test.go`](../../pkg/proc/runtime/perf_regression_gate_test.go)
-- **공식 VDBE 인터널 명세서**: [`doc/internal/VDBE.md`](../../doc/internal/VDBE.md)
-- **공식 벤치마크 가이드 및 실측 리포트**: [`doc/BENCHMARK.md`](../../doc/BENCHMARK.md)
+- **공식 VDBE 인터널 명세서**: [`doc/internal/VDBE.md`](../../../doc/internal/VDBE.md)
+- **공식 벤치마크 가이드 및 실측 리포트**: [`doc/BENCHMARK.md`](../../../doc/BENCHMARK.md)

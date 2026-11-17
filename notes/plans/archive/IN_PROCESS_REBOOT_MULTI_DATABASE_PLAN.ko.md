@@ -3,7 +3,7 @@
 > - **최초 작성일**: 2026-11-07
 > - **폐기 일자**: 2026-11-10
 > - **상태**: **[SUPERSEDED / 공식 폐기]**
-> - **대체 아키텍처**: [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) (프리픽스 기반 논리적 네임스페이스 아키텍처)
+> - **대체 아키텍처**: [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](../LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) (프리픽스 기반 논리적 네임스페이스 아키텍처)
 > - **폐기 사유 (Root Cause)**:
 >   1. **동시 다중 세션 파탄 (Global Blocking)**: 프로세스 전체가 1개의 물리 폴더 엔진만 서비스하므로, 다중 클라이언트(세션 A가 `SalesDB`, 세션 B가 `HRDB`) 접근 시 엔진 언로드/리부팅 핑퐁 트래싱(Thrashing) 발생.
 >   2. **크로스 데이터베이스 조인(Cross-DB Join) 원천 불가**: 단일 시점 1개 디스크 폴더만 마운트되어 `SalesDB.Orders JOIN HRDB.Employees` 조인 불가능.

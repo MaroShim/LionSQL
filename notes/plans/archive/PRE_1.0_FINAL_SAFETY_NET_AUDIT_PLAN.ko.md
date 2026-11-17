@@ -1,7 +1,7 @@
 # LionSQL 1.0-GA 최종 안정성 및 방어벽 전수 감사 계획서 (`PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-12
-> - **상태**: **완료 (4대 Scope 전수 감사 및 17건 방어벽 보강 완료 — 최종 보고서: [`notes/reports/PRE_1.0_FINAL_SAFETY_NET_AUDIT_REPORT.ko.md`](../reports/PRE_1.0_FINAL_SAFETY_NET_AUDIT_REPORT.ko.md))**
+> - **상태**: **완료 (4대 Scope 전수 감사 및 17건 방어벽 보강 완료 — 최종 보고서: [`notes/reports/PRE_1.0_FINAL_SAFETY_NET_AUDIT_REPORT.ko.md`](../../reports/PRE_1.0_FINAL_SAFETY_NET_AUDIT_REPORT.ko.md))**
 > - **마일스톤**: `1.0-GA` (정식 릴리스 직전 최종 방어벽 검증)
 > - **연계 태스크**: `AUDIT-FINAL-SAFETY-NET-1` (`DONE`)
 > - **핵심 불변식**: `[RULE:DefensiveIndexing]`, `[RULE:ZeroOrphan]`, `[RULE:HandleHygiene]`, `[RULE:ExplicitError]`, `[RULE:LockHierarchy]`, `[RULE:PanicRecovery]`

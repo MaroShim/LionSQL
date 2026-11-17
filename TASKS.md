@@ -189,7 +189,7 @@
 | `DONE` | **`BUG-WT-UNIQUE-INDEX-UNENFORCED-1`** |  | Integrity | P2 | WiredTiger 스토리지 엔진 보조 유니크 인덱스 제약 검증 및 색인 누락 방지 (WT Unique Index Bug) |  |  |
 | `DONE` | **`CFG-MEMORY-COMPACT-DEFAULT-1`** |  | STORAGE | P1 | 인메모리 컴팩트(compact) 모드 4대 게이트 검증 및 기본값 공식 승격 | [`notes/plans/archive/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/archive/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
 | `DONE` | **`CFG-STORAGE-OPT-1`** |  | CONFIG | P1 | 스토리지 옵션 계층 분리(--disk/--memory) 및 하위 호환성 매핑 | [`notes/plans/archive/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/archive/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
-| `DONE` | **`COMPAT-BABELFISH-CALIBRATION-86`** | `v0.94.0` | Compatibility | P2 | Babelfish 잔여 86개 오라클 스위트 Microsoft SQL Server 2022 실측 정답지 전수 캘리브레이션 | [`notes/plans/archive/BABELFISH_SQLSERVER_CALIBRATION_PLAN.ko.md`](notes/plans/archive/BABELFISH_SQLSERVER_CALIBRATION_PLAN.ko.md) |  |
+| `DONE` | **`COMPAT-BABELFISH-CALIBRATION-86`** | `v0.94.0` | Compatibility | P2 | Babelfish 잔여 86개 오라클 스위트 Microsoft SQL Server 2022 실측 정답지 전수 캘리브레이션 | [`notes/reports/BABELFISH_INTEGRATION_REPORT.ko.md`](notes/reports/BABELFISH_INTEGRATION_REPORT.ko.md) |  |
 | `DONE` | **`COMPAT-BABELFISH-CALIBRATION-P2`** | `Compatibility` | --milestone | P2 | Babelfish 2차 실측 캘리브레이션 (1608 누적합, 1572-1574 바이너리, 1562-1349 하베스터 더미 제거) | [`--category`](--category) |  |
 | `PENDING` | **`COMPAT-DECLARATIVE-1`** | `v1.99.0` | Durability | P2 | 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) |  |  |
 | `DONE` | **`COMPAT-TABLE-DRIVEN-1`** |  | Durability | P2 | 10개 실전 서비스 호환 규칙 Table-Driven 구조 및 안티패턴 키워드 매칭 전면 정식화 | [`notes/plans/archive/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/plans/archive/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md) |  |
@@ -298,7 +298,7 @@
 | `DONE` | **`INTEG-ANSWER-1`** |  | Durability | P2 | Apache Answer (Q&A 지식베이스) |  |  |
 | `PENDING` | **`INTEG-DIRECTUS-1`** | `v1.30.0` | Ecosystem | P2 | Directus (Headless CMS/데이터 API) Fast-Fail 호환성 탐색 |  |  |
 | `PENDING` | **`INTEG-GHOST-1`** | `v1.30.0` | Ecosystem | P2 | Ghost (블로그/출판 플랫폼) Fast-Fail 호환성 탐색 |  |  |
-| `DONE` | **`INTEG-GOCD-1`** | `1.0-GA` | Ecosystem | P2 | GoCD (엔터프라이즈 CI/CD 서버) 스키마 마이그레이션 및 세션 호환성 검증 | [`notes/plans/archive/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/archive/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md) |  |
+| `DONE` | **`INTEG-GOCD-1`** | `1.0-GA` | Ecosystem | P2 | GoCD (엔터프라이즈 CI/CD 서버) 스키마 마이그레이션 및 세션 호환성 검증 | [`guide/README.ko.md`](guide/README.ko.md) |  |
 | `PENDING` | **`INTEG-MATTERMOST-1`** | `v1.40.0` | Ecosystem | P3 | Mattermost (팀 협업 채팅) — **[v1.1.0 로드맵]** |  |  |
 | `DONE` | **`INTEG-METABASE-1`** |  | Durability | P2 | Metabase (BI 대시보드) | [`notes/reports/METABASE_INTEGRATION_REPORT.ko.md`](notes/reports/METABASE_INTEGRATION_REPORT.ko.md) |  |
 | `PENDING` | **`INTEG-NOCODB-1`** | `v1.40.0` | Ecosystem | P3 | NocoDB (노코드 DB 스튜디오) — **[v1.1.0 로드맵]** |  |  |
@@ -306,7 +306,7 @@
 | `DONE` | **`INTEG-UMAMI-1`** |  | Durability | P2 | Umami (웹 애널리틱스) |  |  |
 | `DONE` | **`INTEG-VAULTWARDEN-1`** |  | Durability | P2 | Vaultwarden (비밀번호 관리) | [`notes/reports/VAULTWARDEN_INTEGRATION_REPORT.ko.md`](notes/reports/VAULTWARDEN_INTEGRATION_REPORT.ko.md) |  |
 | `DONE` | **`INTEG-VIKUNJA-1`** |  | Durability | P2 | Vikunja (프로젝트 칸반 & To-Do) | [`notes/reports/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/reports/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md) |  |
-| `DONE` | **`INTEG-WIKIJS-1`** | `1.0-GA` | Ecosystem | P2 | Wiki.js (Node.js/Knex 기반 위키 및 문서 플랫폼) 스키마 마이그레이션 및 쿼리 호환성 검증 | [`notes/plans/archive/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/archive/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md) |  |
+| `DONE` | **`INTEG-WIKIJS-1`** | `1.0-GA` | Ecosystem | P2 | Wiki.js (Node.js/Knex 기반 위키 및 문서 플랫폼) 스키마 마이그레이션 및 쿼리 호환성 검증 | [`guide/README.ko.md`](guide/README.ko.md) |  |
 | `DONE` | **`INTEG-WOODPECKER-1`** |  | Durability | P2 | Woodpecker CI (CI/CD 엔진) | [`notes/reports/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/reports/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md) |  |
 | `PENDING` | **`LOC-1`** | `v1.99.0` | Engine | P3 | MSSQL Collation 및 유니코드 다국어 로케일 정렬/비교 | [`notes/plans/COLLATION_AND_LOCALE_PLAN.md`](notes/plans/COLLATION_AND_LOCALE_PLAN.md) |  |
 | `DONE` | **`M1`** |  | Ecosystem | P3 | v0.90.0 Feature Freeze & Production Hardening (100% PASS) |  |  |
@@ -436,14 +436,14 @@
 - [x] **회귀 검증**: 3-Stage Pipeline (Build, Test `-race`) 100% PASS (0 data race)
 
 **Details & Resolution**:
-- 인수인계 및 실측 기록서: [`notes/GA_VALIDATION_HANDOFF_PLAN.ko.md`](notes/plans/archive/GA_VALIDATION_HANDOFF_PLAN.ko.md)
+- 인수인계 및 실측 기록서: [`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)
 1. `SLT-FIX-1`: `pkg/slt/parser.go` 다중 `onlyif`/`skipif` 구조적 지시자 평가기(`shouldSkip`, OR 시맨틱스) 도입 및 조기 `halt` 오작동 완치
 2. `SLT-FIX-2`: `pkg/planner/bounds.go` 및 `planner.go` 중첩 괄호 `AND` 평탄화, 동일 컬럼 다중 바운드 교집합 병합 및 인덱스 범위 잔여 필터 보존
 3. `SLT-FIX-3`: `pkg/proc/` 및 `pkg/engine` `SELECT ALL` 수량자, 단항 `+` 연산자, `CAST(... AS SIGNED)` 및 `DIV` 정수 나눗셈 연산자 VDBE/Volcano 지원
 4. `SLT-FIX-4`: `pkg/execution/aggregate.go` `GROUP BY` 사칙연산 프로젝션 AST 파싱 및 `matchColName` 식별자 오탐 차단
 5. `SLT-RUNNER-DEBT`: `pkg/slt/` 및 `cmd/sqllogictest` 5대 기술부채 전면 해소 (`skipNext` 단일 불리언 제거, `ParseOptions`/`-target` 플래그로 타겟 방언 가변화, `FormatCell` `%.3f` SQLite SLT 표준 부동소수점 포맷팅, `statement error [pattern]` 에러 패턴 검증, `splitRowFields` 따옴표/탭/공백 안전 토크나이저 전환)
 - 설계 계획서: [`notes/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](notes/plans/archive/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)
-- 설계 계획서: [`notes/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`](notes/GA_REGEX_DDL_REFACTORING_PLAN.ko.md)
+- 설계 계획서: [`notes/plans/archive/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/archive/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)
 - **1) T-SQL 페이징 치환기 (`sqlexec_select.go`)**: `mssqlTopRe`, `mssqlDistinctTopRe`, `mssqlOffsetFetchRe` ➔ `sqlutil.NormalizeMSSQLPagination` 모듈화 및 토크나이저 전환 (`"regexp"` 제거)
 - **2) SQLite 호환 테이블 IN 구문 (`sqlexec_select.go`)**: `reBareTableIn` (`WHERE x IN tbl`) ➔ `sqlutil.DesugarBareTableIn` 토크나이저 전환 (`"regexp"` 제거)
 - **3) JDBC 메타데이터 배치 치환기 (`sqlexec_jdbc_metadata.go`)**: `reJdbcTempSpExec`, `reJdbcSelectFrom` ➔ `sqlutil.SplitTopLevel` 및 `FindTopLevelKeyword` 전환 (`"regexp"` 제거)
@@ -2369,7 +2369,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [DONE] Babelfish 잔여 86개 오라클 스위트 Microsoft SQL Server 2022 실측 정답지 전수 캘리브레이션 `COMPAT-BABELFISH-CALIBRATION-86`
 - **Domain**: Compatibility | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `v0.94.0`
-- **Plan Doc**: [`notes/plans/archive/BABELFISH_SQLSERVER_CALIBRATION_PLAN.ko.md`](notes/plans/archive/BABELFISH_SQLSERVER_CALIBRATION_PLAN.ko.md)
+- **Plan Doc**: [`notes/reports/BABELFISH_INTEGRATION_REPORT.ko.md`](notes/reports/BABELFISH_INTEGRATION_REPORT.ko.md)
 
 ---
 
@@ -3200,7 +3200,7 @@ v1.0.0 정식 릴리즈 직전 필수 관문. 근거: doc/RELEASE_AUDIT_PROTOCOL
 - **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 
 **Details & Resolution**:
-- 연동 보고서: [`notes/ANSWER_INTEGRATION_REPORT.ko.md`](notes/ANSWER_INTEGRATION_REPORT.ko.md)
+- 연동 보고서: [`notes/ANSWER_INTEGRATION_REPORT.ko.md`](notes/reports/ANSWER_INTEGRATION_REPORT.ko.md)
 - 운영 가이드: [`guide/ANSWER_INTEGRATION_GUIDE.ko.md`](guide/ANSWER_INTEGRATION_GUIDE.ko.md) / [`guide/ANSWER_INTEGRATION_GUIDE.md`](guide/ANSWER_INTEGRATION_GUIDE.md)
 - 스택: Go + XORM / PGWire (`TCP :5433`)
 - 35개 테이블 스키마 자동 생성, VDBE 다중 행 배치 Identity 키 자동 발급, 관리자 로그인, 질문/답변 E2E 100% 무오류 완료 (Answer 소스 수정 0줄)
@@ -3222,7 +3222,7 @@ v1.0.0 정식 릴리즈 직전 필수 관문. 근거: doc/RELEASE_AUDIT_PROTOCOL
 ### [DONE] GoCD (엔터프라이즈 CI/CD 서버) 스키마 마이그레이션 및 세션 호환성 검증 `INTEG-GOCD-1`
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/plans/archive/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/archive/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md)
+- **Plan Doc**: [`guide/README.ko.md`](guide/README.ko.md)
 
 ---
 
@@ -3257,8 +3257,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Plan Doc**: [`notes/reports/METABASE_INTEGRATION_REPORT.ko.md`](notes/reports/METABASE_INTEGRATION_REPORT.ko.md)
 
 **Details & Resolution**:
-- 연동 계획서: [`notes/METABASE_INTEGRATION_PLAN.ko.md`](notes/METABASE_INTEGRATION_PLAN.ko.md)
-- 연동 보고서: [`notes/METABASE_INTEGRATION_REPORT.ko.md`](notes/METABASE_INTEGRATION_REPORT.ko.md)
+- 연동 계획서: [`guide/METABASE_INTEGRATION_GUIDE.ko.md`](guide/METABASE_INTEGRATION_GUIDE.ko.md)
+- 연동 보고서: [`notes/METABASE_INTEGRATION_REPORT.ko.md`](notes/reports/METABASE_INTEGRATION_REPORT.ko.md)
 - 운영 가이드: [`guide/METABASE_INTEGRATION_GUIDE.ko.md`](guide/METABASE_INTEGRATION_GUIDE.ko.md) / [`guide/METABASE_INTEGRATION_GUIDE.md`](guide/METABASE_INTEGRATION_GUIDE.md)
 - 회귀 테스트: `pkg/engine/metabase_compat_test.go`
 - 스택: Clojure/JVM + JDBC (`pgjdbc`, `mssql-jdbc`) / 듀얼 프로토콜 (PGWire + TDS)
@@ -3289,7 +3289,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 
 **Details & Resolution**:
-- 상세 보고서: [`notes/UMAMI_INTEGRATION_REPORT.ko.md`](notes/UMAMI_INTEGRATION_REPORT.ko.md)
+- 상세 보고서: [`notes/UMAMI_INTEGRATION_REPORT.ko.md`](notes/reports/UMAMI_INTEGRATION_REPORT.ko.md)
 - 운영 가이드: [`guide/UMAMI_INTEGRATION_GUIDE.ko.md`](guide/UMAMI_INTEGRATION_GUIDE.ko.md) / [`guide/UMAMI_INTEGRATION_GUIDE.md`](guide/UMAMI_INTEGRATION_GUIDE.md)
 - 단위 및 회귀 테스트: `pkg/engine/umami_compat_test.go` (`TestUmami_PrismaCanConnectQuery`, `TestUmami_PrismaTableNamespaceQuery`, `TestUmami_CountDerivedTableQuery`)
 - 스택: Next.js 16.4.2 + Prisma ORM / PGWire (`TCP :5433`)
@@ -3302,8 +3302,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Plan Doc**: [`notes/reports/VAULTWARDEN_INTEGRATION_REPORT.ko.md`](notes/reports/VAULTWARDEN_INTEGRATION_REPORT.ko.md)
 
 **Details & Resolution**:
-- 연동 계획서: [`notes/VAULTWARDEN_INTEGRATION_PLAN.ko.md`](notes/VAULTWARDEN_INTEGRATION_PLAN.ko.md)
-- 연동 보고서: [`notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md`](notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md)
+- 연동 계획서: [`guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md)
+- 연동 보고서: [`notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md`](notes/reports/VAULTWARDEN_INTEGRATION_REPORT.ko.md)
 - 운영 가이드: [`guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md) / [`guide/VAULTWARDEN_INTEGRATION_GUIDE.md`](guide/VAULTWARDEN_INTEGRATION_GUIDE.md)
 - 회귀 테스트: `pkg/engine/vaultwarden_compat_test.go`
 - 스택: Rust + Diesel ORM / PGWire (`TCP :5433`)
@@ -3316,8 +3316,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Plan Doc**: [`notes/reports/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/reports/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
 
 **Details & Resolution**:
-- 설계 계획서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)
-- 통합 보고서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
+- 설계 계획서: [`guide/WOODPECKER_INTEGRATION_GUIDE.ko.md`](guide/WOODPECKER_INTEGRATION_GUIDE.ko.md)
+- 통합 보고서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/reports/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
 - 운영 가이드: [`guide/VIKUNJA_INTEGRATION_GUIDE.ko.md`](guide/VIKUNJA_INTEGRATION_GUIDE.ko.md) / [`guide/VIKUNJA_INTEGRATION_GUIDE.md`](guide/VIKUNJA_INTEGRATION_GUIDE.md)
 - 회귀 테스트: `pkg/engine/vikunja_compat_test.go`
 - 스택: Go + XORM / PGWire (`TCP :5433`)
@@ -3328,7 +3328,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ### [DONE] Wiki.js (Node.js/Knex 기반 위키 및 문서 플랫폼) 스키마 마이그레이션 및 쿼리 호환성 검증 `INTEG-WIKIJS-1`
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
-- **Plan Doc**: [`notes/plans/archive/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/archive/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md)
+- **Plan Doc**: [`guide/README.ko.md`](guide/README.ko.md)
 
 ---
 
@@ -3337,8 +3337,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Plan Doc**: [`notes/reports/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/reports/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
 
 **Details & Resolution**:
-- 설계 계획서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)
-- 통합 보고서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
+- 설계 계획서: [`guide/WOODPECKER_INTEGRATION_GUIDE.ko.md`](guide/WOODPECKER_INTEGRATION_GUIDE.ko.md)
+- 통합 보고서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/reports/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
 - 운영 가이드: [`guide/WOODPECKER_INTEGRATION_GUIDE.ko.md`](guide/WOODPECKER_INTEGRATION_GUIDE.ko.md) / [`guide/WOODPECKER_INTEGRATION_GUIDE.md`](guide/WOODPECKER_INTEGRATION_GUIDE.md)
 - 회귀 테스트: `pkg/engine/woodpecker_compat_test.go`
 - 스택: Go + XORM / PGWire (`TCP :5433`)
@@ -3699,7 +3699,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **개념**: *"사람들은 터미널이 아니라 브라우저로 문서를 본다."*
 - **기능**: DB 엔진 바이너리 순수성을 유지하면서 공식 배포 아카이브(`tar.gz`/`zip`) 내에 소스코드를 제외한 순수 문서(`docs/`)와 오프라인 브라우저 뷰어(`docs/index.html`) 번들링.
 - **특징**: 폐쇄망/에어갭 환경 100% 자립, 오프라인 문서 검색, SQL 예제 즉시 실행(`[Try in Studio]`) 연동.
-- **설계 참조**: [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
+- **설계 참조**: [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
 
 ---
 

@@ -30,7 +30,7 @@
 ### 2.1. 코어 엔진 및 CLI 아키텍처
 1. **[`UNIFIED_CLI_PLAN.md`](../plans/archive/UNIFIED_CLI_PLAN.md)**: 단일 정적 바이너리(`bin/lionsql`) 라이프사이클 통합 및 서브커맨드 체계화.
 2. **[`WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](../plans/archive/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md)**: Windows 서비스 데몬 분리, 1ms 고해상도 타이머(`timeBeginPeriod`) 및 크로스 컴파일 파이프라인.
-3. **[`OVER_SPECIFICATION_REMEDIATION_PLAN.md`](../plans/archive/OVER_SPECIFICATION_REMEDIATION_PLAN.md)**: 도구별 오버스펙 및 애드혹 하드코딩 전면 제거.
+3. **[`SPEC_OUT_DECISIONS.ko.md`](../../doc/SPEC_OUT_DECISIONS.ko.md)**: 도구별 오버스펙 및 애드혹 하드코딩 전면 제거.
 4. **[`TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](../plans/archive/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md)**: 휴리스틱 타입 추측 안티패턴 완전 퇴출 및 엄격한 정적 타이핑 확립.
 5. **[`SQL_ABSTRACTION_LAYER_PLAN.md`](../plans/archive/SQL_ABSTRACTION_LAYER_PLAN.md)**: In-Memory OCC와 WiredTiger를 일원화하는 스토리지 추상화 레이어 구축.
 6. **[`ANTLR_PARSER_COMPACTION_PLAN.md`](../plans/archive/ANTLR_PARSER_COMPACTION_PLAN.md)**: ANTLR4 T-SQL 문법 통합, 단일 파일 컴파일 및 메모리 압축.
@@ -51,7 +51,7 @@
 15. **[`EXTENDED_SMOKE_TEST_PLAN.md`](../plans/archive/EXTENDED_SMOKE_TEST_PLAN.md)**: 13개 도메인 확장 통합 스모크 테스트 스위트.
 16. **[`TOOL_AUDIT_PLAN.ko.md`](../plans/archive/TOOL_AUDIT_PLAN.ko.md)**: SSMS, DBeaver, DbGate, Beekeeper 쿼리 호환성 및 카탈로그 감사.
 17. **[`BENCHMARK_DIR_SAFETY_PLAN.md`](../plans/archive/BENCHMARK_DIR_SAFETY_PLAN.md)**: 비파괴적 벤치마크 디렉토리 격리 및 데이터 보호 아키텍처.
-18. **[`GA_VALIDATION_HANDOFF_PLAN.ko.md`](../plans/archive/GA_VALIDATION_HANDOFF_PLAN.ko.md)**: 0.90 GA 검증 및 핸드오버 계획서.
+18. **[`HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](../../doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)**: 0.90 GA 검증 및 핸드오버 계획서.
 
 ---
 

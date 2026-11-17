@@ -30,7 +30,7 @@ This directory preserves completed architectural plans, historical backlog recor
 ### 2.1. Core Engine & CLI Architecture
 1. **[`UNIFIED_CLI_PLAN.md`](../plans/archive/UNIFIED_CLI_PLAN.md)**: Single self-contained binary (`bin/lionsql`) lifecycle unification and subcommands restructuring.
 2. **[`WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](../plans/archive/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md)**: Windows service decoupling, 1ms high-resolution timer (`timeBeginPeriod`), and cross-compilation pipeline.
-3. **[`OVER_SPECIFICATION_REMEDIATION_PLAN.md`](../plans/archive/OVER_SPECIFICATION_REMEDIATION_PLAN.md)**: Elimination of tool-specific over-specifications and ad-hoc hardcodings across SQL parser and wire protocols.
+3. **[`SPEC_OUT_DECISIONS.ko.md`](../../doc/SPEC_OUT_DECISIONS.ko.md)**: Elimination of tool-specific over-specifications and ad-hoc hardcodings across SQL parser and wire protocols.
 4. **[`TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](../plans/archive/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md)**: Strict typing enforcement eliminating heuristic type guessing across wire gateways.
 5. **[`SQL_ABSTRACTION_LAYER_PLAN.md`](../plans/archive/SQL_ABSTRACTION_LAYER_PLAN.md)**: Storage-engine-agnostic SQL abstraction layer unifying In-Memory OCC and WiredTiger backends.
 6. **[`ANTLR_PARSER_COMPACTION_PLAN.md`](../plans/archive/ANTLR_PARSER_COMPACTION_PLAN.md)**: ANTLR4 grammar consolidation, single-file compilation, and memory compaction plan.
@@ -51,7 +51,7 @@ This directory preserves completed architectural plans, historical backlog recor
 15. **[`EXTENDED_SMOKE_TEST_PLAN.md`](../plans/archive/EXTENDED_SMOKE_TEST_PLAN.md)**: 13-domain extended integration smoke test suite architecture and verification.
 16. **[`TOOL_AUDIT_PLAN.ko.md`](../plans/archive/TOOL_AUDIT_PLAN.ko.md)**: GUI client tools (SSMS, DbGate, DBeaver, Beekeeper Studio) query compatibility and virtual catalog audit.
 17. **[`BENCHMARK_DIR_SAFETY_PLAN.md`](../plans/archive/BENCHMARK_DIR_SAFETY_PLAN.md)**: Non-destructive benchmark directory lifecycle and data protection architecture.
-18. **[`GA_VALIDATION_HANDOFF_PLAN.ko.md`](../plans/archive/GA_VALIDATION_HANDOFF_PLAN.ko.md)**: 0.90 GA validation and engineering handover plan.
+18. **[`HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](../../doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)**: 0.90 GA validation and engineering handover plan.
 
 ---
 

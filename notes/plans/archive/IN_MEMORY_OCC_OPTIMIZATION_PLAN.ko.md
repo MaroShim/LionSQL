@@ -358,7 +358,7 @@ LionSQL 인메모리 OCC 엔진(`pkg/storage/memengine`)의 Go 힙 메모리 점
 
 > - **작성일**: 2026-11-11
 > - **대상 태스크**: `PERF-OCC-FLAT-DECODE-1`
-> - **실측 근거**: [`notes/benchmark_runs/WIRE_TEMP_OCC_BENCH_20261111.ko.md`](../benchmark_runs/WIRE_TEMP_OCC_BENCH_20261111.ko.md)
+> - **실측 근거**: [`notes/benchmark_runs/WIRE_TEMP_OCC_BENCH_20261111.ko.md`](../../benchmark_runs/WIRE_TEMP_OCC_BENCH_20261111.ko.md)
 
 ### 8.1 문제 정의: 순차 스캔 시 행 디코딩 할당 병목
 `compact`(`MemoryCompact`) 모드는 1만 행 기준 힙 점유율 `-60.8%` 및 GC 포인터 0개화로 동시성 TPC-C에서 우위를 보였으나, `BenchmarkMemEngine_AB_Scan` 기준 `ModeFlat_Scan1000`(`311,051 ns`, **`4,007 allocs/op`**)으로 `ModeRaw_Scan1000`(`167,475 ns`, `7 allocs/op`) 대비 행당 4회의 디코딩 힙 할당이 남아 있었습니다:

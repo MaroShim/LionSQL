@@ -4,7 +4,7 @@
 > - **최종 갱신일**: 2026-11-11
 > - **상태**: 완료 (`DONE` - Zero-Alloc 직렬화, 16KB/512행 PGWire 청크 스트리밍, TDS `WritePLPUTF16LE`/단일 패스 슬롯 인덱스/스트리밍 프레임 플러시 검증 완료)
 > - **연계 태스크 ID**: `PERF-WIRE-ZEROALLOC-1` (Taxonomy `P-3`)
-> - **연계 이슈/문서**: [`TODO.md`](../../TODO.md), [`TASKS.md`](../../TASKS.md), [`notes/TAXONOMY.ko.md`](../TAXONOMY.ko.md) `P-3`
+> - **연계 이슈/문서**: [`TODO.md`](../../../TODO.md), [`TASKS.md`](../../../TASKS.md), [`notes/TAXONOMY.ko.md`](../../TAXONOMY.ko.md) `P-3`
 
 ---
 

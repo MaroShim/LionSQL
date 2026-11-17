@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-08
 > - **문서 상태**: 공식 엔지니어링 회고 및 아키텍처 방법론 (Engineering Context & Retrospective)
-> - **주요 참조**: [`notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md), [`notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md), [`notes/ENGINEERING_CONTEXT.ko.md`](ENGINEERING_CONTEXT.ko.md)
+> - **주요 참조**: [`notes/reports/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](PRE_RELEASE_AUDIT_TRIAGE.ko.md), [`notes/reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](PRE_RELEASE_AUDIT_FINDINGS.ko.md), [`notes/ENGINEERING_CONTEXT.ko.md`](../ENGINEERING_CONTEXT.ko.md)
 
 ---
 
@@ -148,7 +148,7 @@ AI가 작성한 코드는 컴파일이 잘 되고, 기본 테스트를 통과하
 AI의 진정한 강점은 새로운 코드를 마구 쏟아내는 것이 아니라, **이미 존재하는 코드에서 패턴의 모순과 락 불일치를 기계적으로 전수 대조하는 감사(Audit) 능력**에 있습니다. 개발 파이프라인에서 코드 작성보다 **"적대적 전수 감사 프롬프트"**에 더 많은 시간과 연산 자원을 배분해야 합니다.
 
 ### 교훈 3: 시스템 불변식(Invariants)을 헌법으로 명문화하라
-`Invariant 7: Zero-Regex`, `Invariant 9: Zero-Truncate WAL`, `Invariant 21: Outbox Lossless Delivery`처럼, 시스템의 핵심 규칙을 자연어 헌법 수준으로 명문화하여 에이전트의 시스템 프롬프트([`GEMINI.md`](../GEMINI.md))에 박아두어야 합니다. 불변식이 명확할 때 AI는 감사 모드에서 그 규칙을 어긴 코드를 자비 없이 잡아냅니다.
+`Invariant 7: Zero-Regex`, `Invariant 9: Zero-Truncate WAL`, `Invariant 21: Outbox Lossless Delivery`처럼, 시스템의 핵심 규칙을 자연어 헌법 수준으로 명문화하여 에이전트의 시스템 프롬프트([`GEMINI.md`](../../GEMINI.md))에 박아두어야 합니다. 불변식이 명확할 때 AI는 감사 모드에서 그 규칙을 어긴 코드를 자비 없이 잡아냅니다.
 
 ### 교훈 4: TDD(Red ➔ Green ➔ Pipeline)만이 유일한 해독제다
 발견된 결함을 즉시 코드로 고치려 들면, AI는 또다시 그럴듯한 땜질(Ad-hoc patch)을 덮어씌웁니다.

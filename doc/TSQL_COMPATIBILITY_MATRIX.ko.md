@@ -188,7 +188,7 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
 
 ### 진행 중 및 잔여 확장 후보 (Active & Candidate Gaps)
 10. **논리 네임스페이스 DB 프리픽스 & 크로스 DB 조인 (`ARCH-LOGICAL-NAMESPACE-1`)** [`PENDING` / `v1.1.0 로드맵`]:
-    - 1.0에서는 엔터프라이즈 클라이언트(SSMS, DBeaver) 호환을 위한 가상 No-op `USE <dbname>`이 안정적으로 지원되며, 차기 버전에서 `__db_<dbname>_*` 물리 접두사 격리 및 3-Part Name 크로스 DB 조인으로 확장 ([`LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)).
+    - 1.0에서는 엔터프라이즈 클라이언트(SSMS, DBeaver) 호환을 위한 가상 No-op `USE <dbname>`이 안정적으로 지원되며, 차기 버전에서 `__db_<dbname>_*` 물리 접두사 격리 및 3-Part Name 크로스 DB 조인으로 확장 ([`LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](../notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)).
 11. **사용자 정의 테이블 타입 (`CREATE TYPE ... AS TABLE`) 및 TVP (`TSQL-TVP-TYPE-1`)** [`v1.6.0 로드맵`]:
     - 1.0에서는 세션 테이블 변수(`@tbl`)와 임시 테이블(`#temp`)을 통해 동일한 테이블 구조 전달 요구사항을 100% 수용. 바이너리 TDS `0xF3 TVPTYPE` 패킷 및 정식 타입 등록은 v1.6.0에 배정.
 12. **멀티-스테이트먼트 TVF (`TSQL-MULTI-TVF-1`)** [`v1.6.0 로드맵`]:

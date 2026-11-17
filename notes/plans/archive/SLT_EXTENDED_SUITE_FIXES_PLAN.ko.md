@@ -3,7 +3,7 @@
 > - **최초 작성일**: 2026-11-01
 > - **상태**: 완료 (Completed) — `SLT-FIX-1` ~ `SLT-FIX-4` 구현 완료, 단위/회귀 테스트 전수 PASS, `go test -race ./...` 100% 통과
 > - **과제 식별 코드**: `SLT-FIX-1` ~ `SLT-FIX-4` (상위 과제: `GA-VALID-1` / `DURA-SLT-2`)
-> - **관련 문서**: [`notes/GA_VALIDATION_HANDOFF_PLAN.ko.md`](GA_VALIDATION_HANDOFF_PLAN.ko.md), [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
+> - **관련 문서**: [`notes/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](../../../doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md), [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
 
 ---
 

@@ -154,7 +154,7 @@
 * **방침**: 일반적인 상용 OLTP 및 TPC-C 부하에서 발생하지 않는 극단적 마진 및 부가 편의 항목이므로, 1.0 코드베이스의 복잡도를 억제(`[RULE:RadicalKISS]`)하기 위해 v1.1.0 로드맵으로 안전하게 이관.
 
 ### P3 (By-Design / Spec-Out - 25건 전수 목록)
-버그가 아닌 LionSQL 엔진 아키텍처 불변 규칙([`GEMINI.md`](../GEMINI.md)) 및 의도적 Fast-Fail 설계에 따른 정상 동작 (No Action):
+버그가 아닌 LionSQL 엔진 아키텍처 불변 규칙([`GEMINI.md`](../../GEMINI.md)) 및 의도적 Fast-Fail 설계에 따른 정상 동작 (No Action):
 1. **PL/pgSQL 인터프리터 미지원**: T-SQL VDBE VM으로 단일 통합된 의도적 단일 엔진 아키텍처.
 2. **2PL 비관적 잠금 (SELECT FOR UPDATE 레코드 락 체인) 미지원**: Non-blocking OCC/MVCC 단일 채택.
 3. **READ UNCOMMITTED (더티 리드) 미지원**: ACID 데이터 정합성 보장을 위한 Non-blocking Read Committed/Snapshot 단일 강제.

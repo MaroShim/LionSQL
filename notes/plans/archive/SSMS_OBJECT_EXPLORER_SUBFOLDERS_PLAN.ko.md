@@ -3,7 +3,7 @@
 > - **작성일**: 2026-11-12
 > - **과제 식별 코드**: `SSMS-OE-SUBFOLDERS` / `SSMS-OE-COMPAT-2` / `SSMS-OE-3PART-TOP` / `SSMS-OE-SMO-VERIFY`
 > - **상태**: 진행 중 (In Progress)
-> - **관련 불변식**: [`GEMINI.md`](../../GEMINI.md) Invariant 2 (Tolerant Virtual `USE`), Invariant 7 (Zero-Regex SQL Parsing), Invariant 11 (TDS Windows Host Platform Parity), Invariant 12 (`sqlutil` Primacy)
+> - **관련 불변식**: [`GEMINI.md`](../../../GEMINI.md) Invariant 2 (Tolerant Virtual `USE`), Invariant 7 (Zero-Regex SQL Parsing), Invariant 11 (TDS Windows Host Platform Parity), Invariant 12 (`sqlutil` Primacy)
 
 ---
 
