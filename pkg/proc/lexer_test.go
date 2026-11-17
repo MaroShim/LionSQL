@@ -196,4 +196,21 @@ func TestLexer_DollarQuotedStringsAndPositionalParams(t *testing.T) {
 	}
 }
 
+func TestLexer_ForwardProgressOnStandaloneDotAndSymbols(t *testing.T) {
+	// Verify that standalone '.', '!', '$', and arbitrary symbols never stall the lexer
+	input := "SELECT a . b, ! , $ , ? FROM [dbo]..[tbl]"
+	l := NewLexer(input)
 
+	maxSteps := 50
+	steps := 0
+	for {
+		tok := l.NextToken()
+		steps++
+		if tok.Type == TokenEOF {
+			break
+		}
+		if steps >= maxSteps {
+			t.Fatalf("lexer failed to make forward progress (exceeded %d steps), stuck at token %+v", maxSteps, tok)
+		}
+	}
+}

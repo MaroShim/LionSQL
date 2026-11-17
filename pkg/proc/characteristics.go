@@ -83,9 +83,12 @@ func ExtractQueryCharacteristics(sql string) QueryCharacteristics {
 		// 3. Table references extraction: FROM, JOIN, INTO, UPDATE
 		isStandaloneUpdate := tok.Type == TokenUpdate && strings.ToUpper(prevTok.Literal) != "DO" && !qc.HasOnConflict
 		if tok.Type == TokenFrom || tok.Type == TokenJoin || tok.Type == TokenInto || isStandaloneUpdate {
-			hasOpenParen, tbl := readTableIdentifier(l)
+			hasOpenParen, hasSubquery, tbl := readTableIdentifier(l)
 			if tok.Type == TokenFrom && hasOpenParen {
 				qc.HasDerivedTable = true
+			}
+			if hasSubquery {
+				qc.HasSubquery = true
 			}
 			if tbl != "" {
 				norm := cleanTableRef(tbl)
@@ -102,62 +105,45 @@ func ExtractQueryCharacteristics(sql string) QueryCharacteristics {
 	return qc
 }
 
-func readTableIdentifier(l *Lexer) (bool, string) {
+func readTableIdentifier(l *Lexer) (bool, bool, string) {
 	hadParen := false
+	tok := l.NextToken()
 	// Skip opening parens in parenthesized FROM clauses: FROM ("tbl" JOIN ...)
-	for {
-		if l.ch == ' ' || l.ch == '\t' || l.ch == '\r' || l.ch == '\n' {
-			l.readChar()
-		} else if l.ch == '(' {
-			hadParen = true
-			l.readChar()
-		} else {
-			break
-		}
+	for tok.Type == TokenLParen {
+		hadParen = true
+		tok = l.NextToken()
 	}
 
-	tok := l.NextToken()
 	if tok.Type == TokenEOF || tok.Type == TokenSelect || tok.Type == TokenWith {
 		// Subquery or empty
-		return hadParen, ""
+		return hadParen, tok.Type == TokenSelect || tok.Type == TokenWith, ""
 	}
 
 	if tok.Type == TokenDoubleColon {
 		nextTok := l.NextToken()
-		return hadParen, "::" + nextTok.Literal
+		return hadParen, false, "::" + nextTok.Literal
 	}
 
 	if tok.Type != TokenIdent && tok.Type != TokenString && tok.Type < 100 {
 		// Only consider identifiers, string-escaped idents, or unreserved keywords
 		if tok.Literal == "" {
-			return hadParen, ""
+			return hadParen, false, ""
 		}
 	}
 
 	var parts []string
 	parts = append(parts, tok.Literal)
 
-	for {
-		// Check if next token is a dot '.'
-		peekCh := l.ch
-		for peekCh == ' ' || peekCh == '\t' || peekCh == '\r' || peekCh == '\n' {
-			l.readChar()
-			peekCh = l.ch
-		}
-		if peekCh == '.' {
-			l.readChar() // consume '.'
-			nextTok := l.NextToken()
-			if nextTok.Type != TokenEOF && (nextTok.Type == TokenIdent || nextTok.Type == TokenString || nextTok.Type < 100) {
-				parts = append(parts, nextTok.Literal)
-			} else {
-				break
-			}
+	for l.ConsumeDotIfPresent() {
+		nextTok := l.NextToken()
+		if nextTok.Type != TokenEOF && (nextTok.Type == TokenIdent || nextTok.Type == TokenString || nextTok.Type < 100) {
+			parts = append(parts, nextTok.Literal)
 		} else {
 			break
 		}
 	}
 
-	return hadParen, strings.Join(parts, ".")
+	return hadParen, false, strings.Join(parts, ".")
 }
 
 func cleanTableRef(raw string) string {

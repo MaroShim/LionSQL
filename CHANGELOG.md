@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- refactor `pkg/proc/lexer.go` and `pkg/proc/characteristics.go` (Phase 0 of `ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md`): enforce defensive forward-progress invariant in `NextToken()`, fix standalone `.` infinite loop, deduplicate 4-way dot-chaining identifier helpers (`readDelimitedIdentifier`, `readChainedSuffix`, `consumeRawDotChain`), and eliminate direct `l.ch`/`l.readChar()` encapsulation violations via `ConsumeDotIfPresent()`
 - complete Docker E2E full integration verification for Wiki.js v2 (42 tables) and GoCD v24.1.0 (107 Liquibase changesets, 25 tables, `_BUILDS`/`_STAGES` views, trigger functions) and publish official reports (`notes/reports/WIKIJS_INTEGRATION_REPORT.ko.md`, `notes/reports/GOCD_INTEGRATION_REPORT.ko.md`)
 - refine Web Studio Tables & Records UI layout by positioning `+ New Table` as the right-aligned primary header CTA and isolating `Drop Table` inside a dedicated Danger Zone at the bottom of Schema & DDL subview (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`)
 - support PostgreSQL `CREATE OR REPLACE FUNCTION ... RETURNS TRIGGER AS $$ ... $$` dollar-quoted bodies and `CREATE OR REPLACE TRIGGER ... EXECUTE PROCEDURE ...` syntax for Liquibase migrations (`pkg/proc/lexer.go`, `pkg/proc/parser_ddl.go`, `pkg/engine/sqlexec.go`)
