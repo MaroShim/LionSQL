@@ -452,3 +452,147 @@ func TestADS_Prelogin_EncryptionOptional_PlaintextLogin(t *testing.T) {
 		t.Fatalf("expected 'plain_test' in plaintext SQL batch response")
 	}
 }
+
+// 7. Full Real-World Azure Data Studio Lifecycle Simulation
+func TestADS_RealWorld_FullLifecycle_Simulation(t *testing.T) {
+	server, cleanup := setupADSTestServer(t)
+	defer cleanup()
+
+	conn := connectADSClient(t, server)
+	tlsConn := performADSTLSHandshake(t, conn, EncryptOn)
+
+	// Step 7.1: Environment Detection Batch
+	envBatch := `DECLARE @edition sysname;
+SET @edition = cast(SERVERPROPERTY(N'EDITION') as sysname);
+SELECT case when @edition = N'SQL Azure' then 2 else 1 end as 'DatabaseEngineType',
+SERVERPROPERTY('EngineEdition') AS DatabaseEngineEdition,
+SERVERPROPERTY('ProductVersion') AS ProductVersion,
+@@MICROSOFTVERSION AS MicrosoftVersion;
+select host_platform from sys.dm_os_host_info
+if @edition = N'SQL Azure' 
+  select 'TCP' as ConnectionProtocol
+else
+  exec ('select CONVERT(nvarchar(40),CONNECTIONPROPERTY(''net_transport'')) as ConnectionProtocol')`
+	envResp := sendADSSQLBatch(t, tlsConn, envBatch)
+	if !bytes.Contains(envResp, EncodeUTF16LE("DatabaseEngineType")) {
+		t.Fatalf("expected DatabaseEngineType in env response")
+	}
+
+	// Step 7.2: Session Init (#SVer with Processors)
+	sverBatch := `create table #SVer(ID int,  Name  sysname, Internal_Value int, Value nvarchar(512))
+          insert #SVer exec master.dbo.xp_msver
+          insert #SVer select t.*
+          from sys.dm_os_host_info
+          CROSS APPLY (
+          VALUES
+          (1001, 'host_platform', 0, host_platform),
+          (1002, 'host_distribution', 0, host_distribution),
+          (1003, 'host_release', 0, host_release),
+          (1004, 'host_service_pack_level', 0, host_service_pack_level),
+          (1005, 'host_sku', host_sku, ''),
+          (1006, 'HardwareGeneration', '', ''),
+          (1007, 'ServiceTier', '', ''),
+          (1008, 'ReservedStorageSizeMB', '0', '0'),
+          (1009, 'UsedStorageSizeMB', '0', '0')
+          ) t(id, [name], internal_value, [value])
+
+SELECT
+(select Internal_Value from #SVer where Name = N'ProcessorCount') AS [Processors]
+
+        drop table #SVer`
+	sverResp := sendADSSQLBatch(t, tlsConn, sverBatch)
+	if !bytes.Contains(sverResp, EncodeUTF16LE("Processors")) {
+		t.Fatalf("expected Processors column in #SVer response, got %v", sverResp)
+	}
+
+	// Step 7.2.1: ADS sys.syslanguages query
+	langBatch := `SELECT s.name AS [Name], s.alias AS [Alias], s.lcid AS [LocaleID], s.langid AS [LangID] FROM sys.syslanguages s ORDER BY [Name] ASC`
+	langResp := sendADSSQLBatch(t, tlsConn, langBatch)
+	if !bytes.Contains(langResp, EncodeUTF16LE("us_english")) || !bytes.Contains(langResp, EncodeUTF16LE("English")) {
+		t.Fatalf("expected us_english/English in sys.syslanguages response")
+	}
+
+	// Step 7.2.2: SMO Server Facet Batch 2 (@MasterPath + IsCaseSensitive + MasterDBPath)
+	facetBatch := `declare @MasterPath nvarchar(512)
+declare @LogPath nvarchar(512)
+declare @ErrorLog nvarchar(512)
+declare @ErrorLogPath nvarchar(512)
+declare @SmoRoot nvarchar(512)
+SELECT
+CAST(case when 'a' <> 'A' then 1 else 0 end AS bit) AS [IsCaseSensitive],
+@@MAX_PRECISION AS [MaxPrecision],
+@ErrorLogPath AS [ErrorLogPath],
+@SmoRoot AS [RootDirectory],
+@LogPath AS [MasterDBLogPath],
+@MasterPath AS [MasterDBPath]`
+	facetResp := sendADSSQLBatch(t, tlsConn, facetBatch)
+	if !bytes.Contains(facetResp, EncodeUTF16LE("IsCaseSensitive")) || !bytes.Contains(facetResp, EncodeUTF16LE("MasterDBPath")) {
+		t.Fatalf("expected IsCaseSensitive/MasterDBPath in facet response")
+	}
+
+	// Step 7.3: Seed a user table in lionsql/master
+	sendADSSQLBatch(t, tlsConn, "CREATE TABLE products (product_id INT PRIMARY KEY, title VARCHAR(50), price INT);")
+	sendADSSQLBatch(t, tlsConn, "INSERT INTO products VALUES (1, 'LionBook', 1500), (2, 'LionTab', 800);")
+
+	// Step 7.4: ADS User Databases Tree Query
+	dbUserBatch := `SELECT
+dtb.name AS [Name],
+
+        case
+        when dtb.collation_name is null then 0x200
+        else 0
+        end |
+        case
+        when 1 = dtb.is_in_standby then 0x40
+        else 0
+        end |
+        case dtb.state
+        when 1 then 0x2
+        when 2 then 0x8
+        when 3 then 0x4
+        when 4 then 0x10
+        when 5 then 0x100
+        when 6 then 0x20
+        else 1
+        end
+       AS [Status]
+FROM
+master.sys.databases AS dtb
+WHERE
+((CAST(case when dtb.name in ('master','model','msdb','tempdb') then 1 else dtb.is_distributor end AS bit)='0'))
+ORDER BY
+[Name] ASC`
+	dbUserResp := sendADSSQLBatch(t, tlsConn, dbUserBatch)
+	if !bytes.Contains(dbUserResp, EncodeUTF16LE("lionsql")) {
+		t.Fatalf("expected 'lionsql' in user databases response")
+	}
+	if !bytes.Contains(dbUserResp, EncodeUTF16LE("Name")) || !bytes.Contains(dbUserResp, EncodeUTF16LE("Status")) {
+		t.Fatalf("expected Name and Status columns in user databases response")
+	}
+
+	// Step 7.5: ADS System Databases Tree Query
+	dbSysBatch := `SELECT dtb.name AS [Name] FROM master.sys.databases AS dtb
+WHERE ((CAST(case when dtb.name in ('master','model','msdb','tempdb') then 1 else dtb.is_distributor end AS bit)='1'))
+ORDER BY [Name] ASC`
+	dbSysResp := sendADSSQLBatch(t, tlsConn, dbSysBatch)
+	if !bytes.Contains(dbSysResp, EncodeUTF16LE("master")) || !bytes.Contains(dbSysResp, EncodeUTF16LE("tempdb")) {
+		t.Fatalf("expected master/tempdb in system databases response")
+	}
+
+	// Step 7.6: ADS Object Explorer Table Browsing Query
+	tablesBatch := `SELECT t.name AS [name], s.name AS [schema_name], t.object_id, t.type
+FROM sys.tables t
+JOIN sys.schemas s ON t.schema_id = s.schema_id
+ORDER BY s.name, t.name;`
+	tablesResp := sendADSSQLBatch(t, tlsConn, tablesBatch)
+	if !bytes.Contains(tablesResp, EncodeUTF16LE("products")) {
+		t.Fatalf("expected 'products' table in sys.tables response")
+	}
+
+	// Step 7.7: ADS Data Grid TOP 1000 Query
+	top1000Batch := `SELECT TOP 1000 [product_id], [title], [price] FROM [products];`
+	top1000Resp := sendADSSQLBatch(t, tlsConn, top1000Batch)
+	if !bytes.Contains(top1000Resp, EncodeUTF16LE("LionBook")) || !bytes.Contains(top1000Resp, EncodeUTF16LE("LionTab")) {
+		t.Fatalf("expected LionBook and LionTab in TOP 1000 response")
+	}
+}

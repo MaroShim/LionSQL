@@ -1,6 +1,7 @@
 package virtual
 
 import (
+	"fmt"
 	"runtime"
 	"strings"
 	"time"
@@ -236,6 +237,9 @@ func GenerateSysCatalogRows(src Source, norm string, currDb string) (columns []s
 			"page_verify_option_desc", "is_auto_create_stats_on", "is_auto_update_stats_on",
 			"containment", "containment_desc", "is_fulltext_enabled", "is_distributor",
 			"is_cdc_enabled", "is_encrypted", "catalog_collation_type", "catalog_collation_type_desc",
+			"is_accessible", "is_trustworthy_on", "is_broker_enabled", "is_master_key_enc_by_server",
+			"default_language_lcid", "default_language_name", "default_fulltext_language_lcid", "default_fulltext_language_name",
+			"status", "Status", "urn", "Urn",
 		}
 		dbList := []struct {
 			name string
@@ -249,39 +253,51 @@ func GenerateSysCatalogRows(src Source, norm string, currDb string) (columns []s
 		}
 		for _, db := range dbList {
 			allRows = append(allRows, map[string]any{
-				"name":                          db.name,
-				"schema_name":                   "dbo",
-				"database_id":                   db.id,
-				"source_database_id":            nil,
-				"owner_sid":                     nil,
-				"create_date":                   defaultDate,
-				"compatibility_level":           150,
-				"collation_name":                "SQL_Latin1_General_CP1_CI_AS",
-				"user_access":                   0,
-				"user_access_desc":              "MULTI_USER",
-				"is_read_only":                  false,
-				"is_auto_close_on":              false,
-				"is_auto_shrink_on":             false,
-				"state":                         0,
-				"state_desc":                    "ONLINE",
-				"is_in_standby":                 false,
-				"snapshot_isolation_state":      1,
-				"snapshot_isolation_state_desc": "ON",
-				"is_read_committed_snapshot_on": true,
-				"recovery_model":                1,
-				"recovery_model_desc":           "FULL",
-				"page_verify_option":            2,
-				"page_verify_option_desc":       "CHECKSUM",
-				"is_auto_create_stats_on":       true,
-				"is_auto_update_stats_on":       true,
-				"containment":                   0,
-				"containment_desc":              "NONE",
-				"is_fulltext_enabled":           false,
-				"is_distributor":                false,
-				"is_cdc_enabled":                false,
-				"is_encrypted":                  false,
-				"catalog_collation_type":        int64(0),
-				"catalog_collation_type_desc":   "DATABASE_DEFAULT",
+				"name":                           db.name,
+				"schema_name":                    "dbo",
+				"database_id":                    db.id,
+				"source_database_id":             nil,
+				"owner_sid":                      nil,
+				"create_date":                    defaultDate,
+				"compatibility_level":            150,
+				"collation_name":                 "SQL_Latin1_General_CP1_CI_AS",
+				"user_access":                    0,
+				"user_access_desc":               "MULTI_USER",
+				"is_read_only":                   false,
+				"is_auto_close_on":               false,
+				"is_auto_shrink_on":              false,
+				"state":                          0,
+				"state_desc":                     "ONLINE",
+				"is_in_standby":                  false,
+				"snapshot_isolation_state":       1,
+				"snapshot_isolation_state_desc":  "ON",
+				"is_read_committed_snapshot_on":  true,
+				"recovery_model":                 1,
+				"recovery_model_desc":            "FULL",
+				"page_verify_option":             2,
+				"page_verify_option_desc":        "CHECKSUM",
+				"is_auto_create_stats_on":        true,
+				"is_auto_update_stats_on":        true,
+				"containment":                    0,
+				"containment_desc":               "NONE",
+				"is_fulltext_enabled":            false,
+				"is_distributor":                 false,
+				"is_cdc_enabled":                 false,
+				"is_encrypted":                   false,
+				"catalog_collation_type":         int64(0),
+				"catalog_collation_type_desc":    "DATABASE_DEFAULT",
+				"is_accessible":                  true,
+				"is_trustworthy_on":              false,
+				"is_broker_enabled":              false,
+				"is_master_key_enc_by_server":    false,
+				"default_language_lcid":          int32(1033),
+				"default_language_name":          "us_english",
+				"default_fulltext_language_lcid": int32(1033),
+				"default_fulltext_language_name": "English",
+				"status":                         int32(1),
+				"Status":                         int32(1),
+				"urn":                            fmt.Sprintf("Server[@Name='MSSQLSERVER']/Database[@Name='%s']", db.name),
+				"Urn":                            fmt.Sprintf("Server[@Name='MSSQLSERVER']/Database[@Name='%s']", db.name),
 			})
 		}
 		return columns, allRows, true, nil
@@ -550,6 +566,37 @@ func GenerateSysCatalogRows(src Source, norm string, currDb string) (columns []s
 		allRows = []map[string]any{}
 		return columns, allRows, true, nil
 
+	case "sys.server_triggers", "sysservertriggers", "sys_server_triggers":
+		columns = []string{
+			"name", "object_id", "parent_class", "parent_class_desc",
+			"type", "type_desc", "create_date", "modify_date",
+			"is_ms_shipped", "is_disabled", "is_not_for_replication", "execute_as_principal_id",
+		}
+		allRows = []map[string]any{}
+		return columns, allRows, true, nil
+
+	case "sys.server_assembly_modules", "sysserverassemblymodules", "sys_server_assembly_modules":
+		columns = []string{
+			"object_id", "assembly_id", "assembly_class", "assembly_method",
+			"null_on_null_input", "execute_as_principal_id",
+		}
+		allRows = []map[string]any{}
+		return columns, allRows, true, nil
+
+	case "sys.database_service_objectives", "sysdatabaseserviceobjectives", "sys_database_service_objectives":
+		columns = []string{
+			"database_id", "edition", "service_objective", "elastic_pool_name",
+		}
+		allRows = []map[string]any{}
+		return columns, allRows, true, nil
+
+	case "sys.database_scoped_configurations", "sysdatabasescopedconfigurations", "sys_database_scoped_configurations":
+		columns = []string{
+			"configuration_id", "name", "value", "value_for_secondary", "is_value_default",
+		}
+		allRows = []map[string]any{}
+		return columns, allRows, true, nil
+
 	case "sys.foreign_keys", "sysforeignkeys", "sys_foreign_keys":
 		columns = []string{"name", "object_id", "parent_object_id", "referenced_object_id"}
 		for tIdx, t := range tables {
@@ -585,6 +632,41 @@ func GenerateSysCatalogRows(src Source, norm string, currDb string) (columns []s
 			{"configuration_id": 1568, "name": "clr enabled", "value": 0, "minimum": 0, "maximum": 1, "value_in_use": 0, "description": "CLR integration enabled", "is_dynamic": true, "is_advanced": true},
 			{"configuration_id": 1576, "name": "remote admin connections", "value": 0, "minimum": 0, "maximum": 1, "value_in_use": 0, "description": "Dedicated Admin Connection (DAC) allowed from remote clients", "is_dynamic": true, "is_advanced": true},
 			{"configuration_id": 1579, "name": "filestream access level", "value": 0, "minimum": 0, "maximum": 2, "value_in_use": 0, "description": "FileStream access level", "is_dynamic": true, "is_advanced": true},
+		}
+		return columns, allRows, true, nil
+
+	case "sys.syslanguages", "syslanguages", "sys_syslanguages":
+		columns = []string{
+			"langid", "dateformat", "datefirst", "upgrade", "name", "alias",
+			"months", "shortmonths", "days", "lcid", "msglangid",
+		}
+		allRows = []map[string]any{
+			{
+				"langid":      int16(0),
+				"dateformat":  "mdy",
+				"datefirst":   uint8(7),
+				"upgrade":     int32(0),
+				"name":        "us_english",
+				"alias":       "English",
+				"months":      "January,February,March,April,May,June,July,August,September,October,November,December",
+				"shortmonths": "Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec",
+				"days":        "Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday",
+				"lcid":        int32(1033),
+				"msglangid":   int16(1033),
+			},
+			{
+				"langid":      int16(29),
+				"dateformat":  "ymd",
+				"datefirst":   uint8(7),
+				"upgrade":     int32(0),
+				"name":        "한국어",
+				"alias":       "Korean",
+				"months":      "1월,2월,3월,4월,5월,6월,7월,8월,9월,10월,11월,12월",
+				"shortmonths": "1월,2월,3월,4월,5월,6월,7월,8월,9월,10월,11월,12월",
+				"days":        "월요일,화요일,수요일,목요일,금요일,토요일,일요일",
+				"lcid":        int32(1042),
+				"msglangid":   int16(1042),
+			},
 		}
 		return columns, allRows, true, nil
 

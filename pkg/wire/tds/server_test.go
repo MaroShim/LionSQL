@@ -1342,6 +1342,49 @@ SELECT
 	}
 }
 
+func TestTDS_ADS_ProcessorsBatch(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	adsProcessorsBatch := `create table #SVer(ID int,  Name  sysname, Internal_Value int, Value nvarchar(512))
+          insert #SVer exec master.dbo.xp_msver
+          insert #SVer select t.*
+          from sys.dm_os_host_info
+          CROSS APPLY (
+          VALUES
+          (1001, 'host_platform', 0, host_platform),
+          (1002, 'host_distribution', 0, host_distribution),
+          (1003, 'host_release', 0, host_release),
+          (1004, 'host_service_pack_level', 0, host_service_pack_level),
+          (1005, 'host_sku', host_sku, ''),
+          (1006, 'HardwareGeneration', '', ''),
+          (1007, 'ServiceTier', '', ''),
+          (1008, 'ReservedStorageSizeMB', '0', '0'),
+          (1009, 'UsedStorageSizeMB', '0', '0')
+          ) t(id, [name], internal_value, [value])
+
+          -- Managed Instance-specific properties
+          if (SERVERPROPERTY('EngineEdition') = 8)
+          begin
+          DECLARE @gen4memoryPerCoreMB float = 7168.0
+          end
+
+SELECT
+(select Internal_Value from #SVer where Name = N'ProcessorCount') AS [Processors]
+
+        drop table #SVer`
+
+	payload := sendSQLBatch(t, conn, adsProcessorsBatch)
+
+	if !bytes.Contains(payload, EncodeUTF16LE("Processors")) {
+		t.Fatalf("expected 'Processors' column in ADS processors response, got %v", payload)
+	}
+	if bytes.Contains(payload, EncodeUTF16LE("HostPlatform")) {
+		t.Fatalf("did not expect 'HostPlatform' column in ADS processors response")
+	}
+}
+
 func TestTDS_SSMS_DacStoreEngineInfo(t *testing.T) {
 	srv := setupTestServer(t)
 	conn := connectClient(t, srv)

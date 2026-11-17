@@ -302,6 +302,16 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 					upperCol == "DEFAULT_IS_NULL" {
 					val = true
 					found = true
+				} else if upperCol == "STATUS" || strings.Contains(upperSrc, "AS [STATUS]") || strings.Contains(upperSrc, "AS STATUS") || strings.Contains(upperSrc, "CASE DTB.STATE") {
+					val = int32(1) // Normal / Online
+					found = true
+				} else if upperCol == "URN" || strings.Contains(upperSrc, "AS [URN]") || strings.Contains(upperSrc, "AS URN") {
+					dbName := "master"
+					if n, ok := fr["name"].(string); ok && n != "" {
+						dbName = n
+					}
+					val = fmt.Sprintf("Server[@Name='MSSQLSERVER']/Database[@Name='%s']", dbName)
+					found = true
 				} else if strings.Contains(upperSrc, "REPLACE") && strings.Contains(upperSrc, "ISNULL") {
 					val = ""
 					found = true

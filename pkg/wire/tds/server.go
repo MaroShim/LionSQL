@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"net"
+	stdlibRuntime "runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -1570,6 +1571,13 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		return
 	}
 
+	// SSMS SMO Server Facet Batch (@MasterPath + IsCaseSensitive + MasterDBPath)
+	if s.handleSsmsServerFacetBatch(conn, trimmed, sess, extraTokens, true) {
+		return
+	}
+
+
+
 	// System function / version short-circuit
 	if cols, vals, ok := matchVersionQuery(trimmed); ok {
 		if s.DevMode() {
@@ -2758,6 +2766,13 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		return
 	}
 
+	// SSMS SMO Server Facet Batch (@MasterPath + IsCaseSensitive + MasterDBPath)
+	if s.handleSsmsServerFacetBatch(conn, trimmed, sess, nil, false) {
+		return
+	}
+
+
+
 	// System function / version short-circuit
 	if cols, vals, ok := matchVersionQuery(trimmed); ok {
 		if s.DevMode() {
@@ -3373,40 +3388,93 @@ func (s *Server) handleSsmsServerInitBatch(conn net.Conn, trimmed string, sess *
 	}
 
 	if !strings.Contains(upper, "SERVER_URN") {
-		// Standalone SMO HostPlatform discovery batch (#SVer + xp_msver + select HostPlatform)
-		if strings.Contains(upper, "HOSTPLATFORM") || strings.Contains(upper, "HOST_PLATFORM") {
-			cols := []ColumnInfo{
-				{Name: "HostPlatform", Type: TypeNVarChar, Size: 128, Nullable: true},
-			}
-			vals := []any{"Windows"}
-
-			var buf bytes.Buffer
-			buf.Write(BuildColMetaData(cols))
-			buf.Write(sess.buildRow(cols, vals))
-
-			doneStatus := DoneFinal
-			if sess.inTx {
-				doneStatus |= DoneInXact
-			}
-
-			if isRPC {
-				buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
-				if extraTokens != nil {
-					extraTokens(&buf)
-				}
-				buf.Write(BuildReturnStatus(0))
-				buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
-			} else {
-				buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, 1))
-			}
-
-			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
-			if s.DevMode() {
-				log.Printf("[DEV][TDS][Success] query=SSMS SMO HostPlatform Batch cols=[HostPlatform] rows=1 duration=0µs")
-			}
-			return true
+		// Standalone SMO property discovery batch (#SVer + xp_msver + SELECT ... drop table #SVer)
+		dropIdx := strings.LastIndex(upper, "DROP TABLE #SVER")
+		searchTarget := trimmed
+		if dropIdx != -1 {
+			searchTarget = trimmed[:dropIdx]
 		}
-		return false
+		selectIdx := strings.LastIndex(strings.ToUpper(searchTarget), "SELECT")
+		if selectIdx == -1 {
+			return false
+		}
+		selectBody := searchTarget[selectIdx+6:]
+
+		var cols []ColumnInfo
+		var vals []any
+
+		aliases := extractSelectAliases(selectBody)
+		for _, alias := range aliases {
+			switch strings.ToUpper(alias) {
+			case "PROCESSORS", "PROCESSORCOUNT":
+				cols = append(cols, ColumnInfo{Name: "Processors", Type: TypeIntN, Size: 4, Nullable: true})
+				numCPU := stdlibRuntime.NumCPU()
+				if numCPU <= 0 {
+					numCPU = 4
+				}
+				vals = append(vals, int32(numCPU))
+			case "HOSTPLATFORM", "HOST_PLATFORM":
+				cols = append(cols, ColumnInfo{Name: "HostPlatform", Type: TypeNVarChar, Size: 128, Nullable: true})
+				vals = append(vals, "Windows")
+			case "PHYSICALMEMORY":
+				cols = append(cols, ColumnInfo{Name: "PhysicalMemory", Type: TypeIntN, Size: 4, Nullable: true})
+				vals = append(vals, int32(16384))
+			case "PLATFORM":
+				cols = append(cols, ColumnInfo{Name: "Platform", Type: TypeNVarChar, Size: 128, Nullable: true})
+				vals = append(vals, "NT INTEL X64")
+			default:
+				cols = append(cols, ColumnInfo{Name: alias, Type: TypeNVarChar, Size: 256, Nullable: true})
+				vals = append(vals, "")
+			}
+		}
+
+		if len(cols) == 0 {
+			if strings.Contains(selectBody, "PROCESSOR") {
+				cols = []ColumnInfo{
+					{Name: "Processors", Type: TypeIntN, Size: 4, Nullable: true},
+				}
+				numCPU := stdlibRuntime.NumCPU()
+				if numCPU <= 0 {
+					numCPU = 4
+				}
+				vals = []any{int32(numCPU)}
+			} else {
+				cols = []ColumnInfo{
+					{Name: "HostPlatform", Type: TypeNVarChar, Size: 128, Nullable: true},
+				}
+				vals = []any{"Windows"}
+			}
+		}
+
+		var buf bytes.Buffer
+		buf.Write(BuildColMetaData(cols))
+		buf.Write(sess.buildRow(cols, vals))
+
+		doneStatus := DoneFinal
+		if sess.inTx {
+			doneStatus |= DoneInXact
+		}
+
+		if isRPC {
+			buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
+			if extraTokens != nil {
+				extraTokens(&buf)
+			}
+			buf.Write(BuildReturnStatus(0))
+			buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
+		} else {
+			buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, 1))
+		}
+
+		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+		if s.DevMode() {
+			var colNames []string
+			for _, c := range cols {
+				colNames = append(colNames, c.Name)
+			}
+			log.Printf("[DEV][TDS][Success] query=SSMS SMO Property Batch cols=%v rows=1 duration=0µs", colNames)
+		}
+		return true
 	}
 
 	cols := []ColumnInfo{
@@ -3473,6 +3541,22 @@ func (s *Server) handleSsmsServerInitBatch(conn net.Conn, trimmed string, sess *
 	return true
 }
 
+// extractSelectAliases parses aliases (e.g. AS [Name] or AS Name) from a SELECT clause.
+func extractSelectAliases(body string) []string {
+	var aliases []string
+	tokens := strings.Fields(body)
+	for i := 0; i < len(tokens)-1; i++ {
+		if strings.EqualFold(tokens[i], "AS") {
+			alias := tokens[i+1]
+			alias = strings.Trim(alias, "[],;\"'")
+			if alias != "" {
+				aliases = append(aliases, alias)
+			}
+		}
+	}
+	return aliases
+}
+
 // handleSsmsServerPropertiesBatch handles the Microsoft SMO Server Properties & Facets batch.
 // SSMS Object Explorer executes this multi-statement batch (declaring @HkeyLocal, xp_instance_regread, sys.dm_hadr_cluster)
 // whenever an object or node is expanded to populate server properties and facets.
@@ -3497,7 +3581,6 @@ func (s *Server) handleSsmsServerPropertiesBatch(conn net.Conn, trimmed string, 
 		{Name: "ErrorLogPath", Type: TypeNVarChar, Size: 512, Nullable: true},
 		{Name: "RootDirectory", Type: TypeNVarChar, Size: 512, Nullable: true},
 		{Name: "IsCaseSensitive", Type: TypeBitN, Size: 1, Nullable: true},
-		{Name: "IsLocalDB", Type: TypeBitN, Size: 1, Nullable: true},
 		{Name: "MaxPrecision", Type: TypeIntN, Size: 4, Nullable: true},
 		{Name: "IsFullTextInstalled", Type: TypeBitN, Size: 1, Nullable: true},
 		{Name: "VersionString", Type: TypeNVarChar, Size: 128, Nullable: true},
@@ -3506,6 +3589,7 @@ func (s *Server) handleSsmsServerPropertiesBatch(conn net.Conn, trimmed string, 
 		{Name: "ProductUpdateLevel", Type: TypeNVarChar, Size: 128, Nullable: true},
 		{Name: "IsSingleUser", Type: TypeBitN, Size: 1, Nullable: true},
 		{Name: "EngineEdition", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "Collation", Type: TypeNVarChar, Size: 128, Nullable: true},
 		{Name: "IsClustered", Type: TypeBitN, Size: 1, Nullable: true},
 		{Name: "NetName", Type: TypeNVarChar, Size: 256, Nullable: true},
 		{Name: "ComputerNamePhysicalNetBIOS", Type: TypeNVarChar, Size: 256, Nullable: true},
@@ -3515,7 +3599,7 @@ func (s *Server) handleSsmsServerPropertiesBatch(conn net.Conn, trimmed string, 
 		{Name: "DefaultFile", Type: TypeNVarChar, Size: 512, Nullable: true},
 		{Name: "DefaultLog", Type: TypeNVarChar, Size: 512, Nullable: true},
 		{Name: "ResourceVersionString", Type: TypeNVarChar, Size: 128, Nullable: true},
-		{Name: "ResourceLastUpdateDateTime", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "ResourceLastUpdateDateTime", Type: TypeDateTimeN, Size: 8, Nullable: true},
 		{Name: "CollationID", Type: TypeIntN, Size: 4, Nullable: true},
 		{Name: "ComparisonStyle", Type: TypeIntN, Size: 4, Nullable: true},
 		{Name: "SqlCharSet", Type: TypeIntN, Size: 4, Nullable: true},
@@ -3559,7 +3643,6 @@ func (s *Server) handleSsmsServerPropertiesBatch(conn net.Conn, trimmed string, 
 		"C:\\data",                           // ErrorLogPath
 		"C:\\LionSQL",                        // RootDirectory
 		false,                                // IsCaseSensitive
-		false,                                // IsLocalDB
 		int32(38),                            // MaxPrecision
 		false,                                // IsFullTextInstalled
 		"15.0.2000.5",                        // VersionString
@@ -3568,6 +3651,7 @@ func (s *Server) handleSsmsServerPropertiesBatch(conn net.Conn, trimmed string, 
 		"",                                   // ProductUpdateLevel
 		false,                                // IsSingleUser
 		int32(3),                             // EngineEdition
+		"SQL_Latin1_General_CP1_CI_AS",       // Collation
 		false,                                // IsClustered
 		"MSSQLSERVER",                        // NetName
 		"MSSQLSERVER",                        // ComputerNamePhysicalNetBIOS
@@ -3577,7 +3661,7 @@ func (s *Server) handleSsmsServerPropertiesBatch(conn net.Conn, trimmed string, 
 		"C:\\data",                           // DefaultFile
 		"C:\\data",                           // DefaultLog
 		"15.0.2000.5",                        // ResourceVersionString
-		"2026-01-01 00:00:00",                // ResourceLastUpdateDateTime
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), // ResourceLastUpdateDateTime
 		int32(872479760),                     // CollationID
 		int32(196609),                        // ComparisonStyle
 		int32(0),                             // SqlCharSet
@@ -3635,6 +3719,103 @@ func (s *Server) handleSsmsServerPropertiesBatch(conn net.Conn, trimmed string, 
 	}
 	return true
 }
+
+// handleSsmsServerFacetBatch handles the Microsoft SMO Server Configuration Facets Batch (declare @MasterPath ... SELECT CAST(case when 'a' <> 'A' ...)).
+// SSMS and Azure Data Studio Object Explorer execute this multi-statement batch to populate server-level properties, collation, and root paths.
+func (s *Server) handleSsmsServerFacetBatch(conn net.Conn, trimmed string, sess *ConnectionSession, extraTokens func(*bytes.Buffer), isRPC bool) bool {
+	upper := strings.ToUpper(trimmed)
+	if !strings.Contains(upper, "@MASTERPATH") || !strings.Contains(upper, "ISCASESENSITIVE") || !strings.Contains(upper, "MASTERDBPATH") {
+		return false
+	}
+
+	cols := []ColumnInfo{
+		{Name: "IsCaseSensitive", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "MaxPrecision", Type: TypeIntN, Size: 1, Nullable: true},
+		{Name: "ErrorLogPath", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "RootDirectory", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "PathSeparator", Type: TypeNVarChar, Size: 10, Nullable: true},
+		{Name: "IsFullTextInstalled", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "MasterDBLogPath", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "MasterDBPath", Type: TypeNVarChar, Size: 512, Nullable: true},
+		{Name: "VersionString", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "Edition", Type: TypeNVarChar, Size: 256, Nullable: true},
+		{Name: "ProductLevel", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "IsSingleUser", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "EngineEdition", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "Collation", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "NetName", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "IsClustered", Type: TypeBitN, Size: 1, Nullable: true},
+		{Name: "ResourceVersionString", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "ResourceLastUpdateDateTime", Type: TypeDateTimeN, Size: 8, Nullable: true},
+		{Name: "CollationID", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "ComparisonStyle", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "SqlCharSet", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "SqlCharSetName", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "SqlSortOrder", Type: TypeIntN, Size: 4, Nullable: true},
+		{Name: "SqlSortOrderName", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "BuildClrVersionString", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "ComputerNamePhysicalNetBIOS", Type: TypeNVarChar, Size: 128, Nullable: true},
+		{Name: "IsPolyBaseInstalled", Type: TypeBitN, Size: 1, Nullable: true},
+	}
+
+	vals := []any{
+		false,                                                                      // IsCaseSensitive
+		int32(38),                                                                  // MaxPrecision
+		"C:\\Program Files\\Microsoft SQL Server\\MSSQL15.MSSQLSERVER\\MSSQL\\Log", // ErrorLogPath
+		"C:\\Program Files\\Microsoft SQL Server\\MSSQL15.MSSQLSERVER\\MSSQL",      // RootDirectory
+		"\\",                                                                       // PathSeparator
+		false,                                                                      // IsFullTextInstalled
+		"C:\\Program Files\\Microsoft SQL Server\\MSSQL15.MSSQLSERVER\\MSSQL\\DATA", // MasterDBLogPath
+		"C:\\Program Files\\Microsoft SQL Server\\MSSQL15.MSSQLSERVER\\MSSQL\\DATA", // MasterDBPath
+		"15.0.2000.5",                                                              // VersionString
+		"Developer Edition (64-bit)",                                               // Edition
+		"RTM",                                                                      // ProductLevel
+		false,                                                                      // IsSingleUser
+		int32(3),                                                                   // EngineEdition
+		"SQL_Latin1_General_CP1_CI_AS",                                             // Collation
+		"MSSQLSERVER",                                                              // NetName
+		false,                                                                      // IsClustered
+		"15.0.2000.5",                                                              // ResourceVersionString
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),                               // ResourceLastUpdateDateTime
+		int32(872479760),                                                           // CollationID
+		int32(196609),                                                              // ComparisonStyle
+		int32(1),                                                                   // SqlCharSet
+		"iso_1",                                                                    // SqlCharSetName
+		int32(52),                                                                  // SqlSortOrder
+		"nocase_iso",                                                               // SqlSortOrderName
+		"v4.0.30319",                                                               // BuildClrVersionString
+		"MSSQLSERVER",                                                              // ComputerNamePhysicalNetBIOS
+		false,                                                                      // IsPolyBaseInstalled
+	}
+
+	var buf bytes.Buffer
+	buf.Write(BuildColMetaData(cols))
+	buf.Write(sess.buildRow(cols, vals))
+
+	doneStatus := DoneFinal
+	if sess.inTx {
+		doneStatus |= DoneInXact
+	}
+
+	if isRPC {
+		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
+		if extraTokens != nil {
+			extraTokens(&buf)
+		}
+		buf.Write(BuildReturnStatus(0))
+		buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
+	} else {
+		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, 1))
+	}
+
+	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+	if s.DevMode() {
+		log.Printf("[DEV][TDS][Success] query=SSMS SMO Server Facet Batch cols=[IsCaseSensitive, ... IsPolyBaseInstalled] rows=1 duration=0µs")
+	}
+	return true
+}
+
+
 
 // tdsErrorDescriber is an interface implemented by errors providing structured TDS error information.
 type tdsErrorDescriber interface {

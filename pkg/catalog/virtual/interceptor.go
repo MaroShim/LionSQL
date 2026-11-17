@@ -139,7 +139,7 @@ func IsVirtualCatalogJoinQuery(sql string) bool {
 	if strings.Contains(upper, "SYS.INDEXES") && matchAny(upper, "JOIN", "IS_PRIMARY_KEY", "TYPE_DESC", "HAS_FILTER", "INDEX_ID") {
 		return true
 	}
-	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.KEY_CONSTRAINTS", "SYS.FOREIGN_KEYS", "SYS.CHECK_CONSTRAINTS", "SYS.DEFAULT_CONSTRAINTS", "SYS.STATS", "SYS.TRIGGERS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS", "SYS.SQL_MODULES", "SYS.ALL_SQL_MODULES", "SYS.SYSTEM_SQL_MODULES", "SYS.PROCEDURES", "SYS.ALL_PARAMETERS", "FN_HELPCOLLATIONS") {
+	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.KEY_CONSTRAINTS", "SYS.FOREIGN_KEYS", "SYS.CHECK_CONSTRAINTS", "SYS.DEFAULT_CONSTRAINTS", "SYS.STATS", "SYS.TRIGGERS", "SYS.SERVER_TRIGGERS", "SERVER_TRIGGERS", "DATABASE_SERVICE_OBJECTIVES", "DATABASE_SCOPED_CONFIGURATIONS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS", "SYS.SQL_MODULES", "SYS.ALL_SQL_MODULES", "SYS.SYSTEM_SQL_MODULES", "SYS.PROCEDURES", "SYS.ALL_PARAMETERS", "FN_HELPCOLLATIONS") {
 		return true
 	}
 	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") && matchAny(upper, "JOIN", "SCHEMANAME") {
@@ -364,6 +364,33 @@ var catalogRouteTable = []RouteRule{
 		},
 		Handler: func(src Source, sql string) (*Result, error) {
 			return execSysObjectsTriggers(sql)
+		},
+	},
+	{
+		Name: "MSSQL_ServerTriggers",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "SYS.SERVER_TRIGGERS") || strings.Contains(upper, "SERVER_TRIGGERS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execSysServerTriggers(sql)
+		},
+	},
+	{
+		Name: "MSSQL_DatabaseServiceObjectives",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "DATABASE_SERVICE_OBJECTIVES")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execDatabaseServiceObjectives(sql)
+		},
+	},
+	{
+		Name: "MSSQL_DatabaseScopedConfigurations",
+		Match: func(upper string, qc *proc.QueryCharacteristics) bool {
+			return strings.Contains(upper, "DATABASE_SCOPED_CONFIGURATIONS")
+		},
+		Handler: func(src Source, sql string) (*Result, error) {
+			return execDatabaseScopedConfigurations(sql)
 		},
 	},
 	{

@@ -1002,6 +1002,34 @@ func execSysObjectsTriggers(sql string) (*Result, error) {
 	return FormatResultWithSQL(columns, allRows, sql)
 }
 
+func execSysServerTriggers(sql string) (*Result, error) {
+	columns := []string{
+		"Name", "ID", "IsEnabled", "Urn",
+		"name", "object_id", "parent_class", "parent_class_desc",
+		"type", "type_desc", "create_date", "modify_date",
+		"is_ms_shipped", "is_disabled", "is_not_for_replication",
+		"execute_as_principal_id",
+	}
+	var allRows []map[string]any
+	return FormatResultWithSQL(columns, allRows, sql)
+}
+
+func execDatabaseServiceObjectives(sql string) (*Result, error) {
+	columns := []string{
+		"database_id", "edition", "service_objective", "elastic_pool_name",
+	}
+	var allRows []map[string]any
+	return FormatResultWithSQL(columns, allRows, sql)
+}
+
+func execDatabaseScopedConfigurations(sql string) (*Result, error) {
+	columns := []string{
+		"configuration_id", "name", "value", "value_for_secondary", "is_value_default",
+	}
+	var allRows []map[string]any
+	return FormatResultWithSQL(columns, allRows, sql)
+}
+
 func execSysObjectsMetadata(src Source, sql string) (*Result, error) {
 	columns := []string{"objectId", "object_id", "modifyDate", "modify_date", "createDate", "create_date", "type", "type_desc", "pureName", "pure_name", "name", "schemaName", "schema_name", "schema", "table", "s.name", "o.name", "role", "select", "update", "insert", "delete"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
