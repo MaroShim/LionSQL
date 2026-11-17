@@ -338,3 +338,117 @@ SELECT note FROM ads_notes WHERE id = 1;`
 		t.Fatalf("expected 'LionSQL ADS Native Support' in Query Editor result")
 	}
 }
+
+// 6. Azure Data Studio Plaintext Negotiation (Encrypt=Optional / EncryptOff)
+func TestADS_Prelogin_EncryptionOptional_PlaintextLogin(t *testing.T) {
+	server, cleanup := setupADSTestServer(t)
+	defer cleanup()
+
+	conn := connectADSClient(t, server)
+
+	// Step 1: Send Prelogin with EncryptOff (0x00)
+	preloginPayload := BuildPreloginResponse(EncryptOff)
+	if err := WritePacket(conn, PacketPrelogin, 0, preloginPayload); err != nil {
+		t.Fatalf("failed to send Prelogin packet: %v", err)
+	}
+
+	// Step 2: Read Prelogin response (server must respond with EncryptNotSup so client doesn't do TLS)
+	respPkt, err := ReadPacket(conn)
+	if err != nil {
+		t.Fatalf("failed to read Prelogin response: %v", err)
+	}
+	if respPkt.Type != PacketTabular {
+		t.Fatalf("expected PacketTabular (0x04) in prelogin response, got 0x%02X", respPkt.Type)
+	}
+	opts := ParsePrelogin(respPkt.Payload)
+	serverEnc, ok := opts[PreloginOptionEncryption]
+	if !ok || len(serverEnc) == 0 {
+		t.Fatalf("missing encryption option in server prelogin response")
+	}
+	if serverEnc[0] != EncryptNotSup {
+		t.Fatalf("expected EncryptNotSup (0x02) for EncryptOff request, got 0x%02X", serverEnc[0])
+	}
+
+	// Step 3: Send Login7 directly over plaintext connection (without TLS handshake)
+	var loginBuf bytes.Buffer
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint32(0))
+	_ = binary.Write(&loginBuf, binary.BigEndian, uint32(0x74000004))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint32(4096))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint32(1))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint32(1234))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint32(0))
+	loginBuf.WriteByte(0x20)
+	loginBuf.WriteByte(0x03)
+	loginBuf.WriteByte(0x00)
+	loginBuf.WriteByte(0x00)
+	_ = binary.Write(&loginBuf, binary.LittleEndian, int32(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint32(1033))
+
+	userName := "sa"
+	appName := "azuredatastudio"
+	dbName := "master"
+	headerLen := uint16(94)
+
+	u16User := EncodeUTF16LE(userName)
+	u16App := EncodeUTF16LE(appName)
+	u16DB := EncodeUTF16LE(dbName)
+
+	ibUser := headerLen
+	cchUser := uint16(len(userName))
+	ibApp := ibUser + uint16(len(u16User))
+	cchApp := uint16(len(appName))
+	ibDB := ibApp + uint16(len(u16App))
+	cchDB := uint16(len(dbName))
+
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, ibUser)
+	_ = binary.Write(&loginBuf, binary.LittleEndian, cchUser)
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, ibApp)
+	_ = binary.Write(&loginBuf, binary.LittleEndian, cchApp)
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, ibDB)
+	_ = binary.Write(&loginBuf, binary.LittleEndian, cchDB)
+	loginBuf.Write([]byte{0x00, 0x15, 0x5D, 0x12, 0x34, 0x56})
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint16(0))
+	_ = binary.Write(&loginBuf, binary.LittleEndian, uint32(0))
+
+	loginBuf.Write(u16User)
+	loginBuf.Write(u16App)
+	loginBuf.Write(u16DB)
+
+	rawLogin := loginBuf.Bytes()
+	binary.LittleEndian.PutUint32(rawLogin[:4], uint32(len(rawLogin)))
+
+	if err := WritePacket(conn, PacketLogin7, 0, rawLogin); err != nil {
+		t.Fatalf("failed to send Login7 packet: %v", err)
+	}
+
+	loginResp, err := ReadPacket(conn)
+	if err != nil {
+		t.Fatalf("failed to read Login7 response: %v", err)
+	}
+	if loginResp.Type != PacketTabular {
+		t.Fatalf("expected PacketTabular (0x04) in login response, got 0x%02X", loginResp.Type)
+	}
+
+	// Step 4: Verify SQL queries execute over plaintext connection
+	payload := sendADSSQLBatch(t, conn, "SELECT 12345 AS plain_test;")
+	if !bytes.Contains(payload, EncodeUTF16LE("plain_test")) {
+		t.Fatalf("expected 'plain_test' in plaintext SQL batch response")
+	}
+}

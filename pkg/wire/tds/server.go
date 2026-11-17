@@ -591,6 +591,11 @@ const HandshakeTimeout = 10 * time.Second
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
+	var remoteAddr string
+	if conn != nil && conn.RemoteAddr() != nil {
+		remoteAddr = conn.RemoteAddr().String()
+	}
+
 	// Scope-101/104: Handshake read deadline to prevent Slowloris connection starvation
 	_ = conn.SetReadDeadline(time.Now().Add(HandshakeTimeout))
 
@@ -601,6 +606,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// 1. Detect direct TLS (TDS 8.0) vs TDS 7.x prelogin
 	var firstByte [1]byte
 	if _, err := io.ReadFull(conn, firstByte[:]); err != nil {
+		if s.DevMode() {
+			log.Printf("[DEV][TDS][ConnError] failed to read initial byte from %s: %v", remoteAddr, err)
+		}
 		return
 	}
 
@@ -641,6 +649,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 	if firstPkt.Type == PacketPrelogin {
 		conn, err = s.handlePrelogin(conn, firstPkt, sess)
 		if err != nil {
+			if s.DevMode() {
+				log.Printf("[DEV][TDS][PreloginError] handlePrelogin failed for %s: %v", remoteAddr, err)
+			}
 			return
 		}
 	}
@@ -808,6 +819,11 @@ func (s *Server) runQueryWithAttention(
 }
 
 func (s *Server) handlePrelogin(conn net.Conn, pkt *Packet, sess *ConnectionSession) (net.Conn, error) {
+	var remoteAddr string
+	if conn != nil && conn.RemoteAddr() != nil {
+		remoteAddr = conn.RemoteAddr().String()
+	}
+
 	s.mu.Lock()
 	tlsCfg := s.tlsConfig
 	requireSSL := s.requireSSL
@@ -834,7 +850,7 @@ func (s *Server) handlePrelogin(conn net.Conn, pkt *Packet, sess *ConnectionSess
 	if tlsCfg == nil {
 		// Like Microsoft SQL Server, if client requests encryption and no custom certificate was configured,
 		// automatically provision a self-signed TLS certificate to enable encrypted credentials/session.
-		if clientEncrypt == EncryptReq || clientEncrypt == EncryptOn || clientEncrypt == EncryptOff || requireSSL {
+		if clientEncrypt == EncryptReq || clientEncrypt == EncryptOn || requireSSL {
 			autoCfg, autoErr := tlsutil.NewSelfSignedTLSConfig()
 			if autoErr == nil {
 				s.mu.Lock()
@@ -864,9 +880,10 @@ func (s *Server) handlePrelogin(conn net.Conn, pkt *Packet, sess *ConnectionSess
 				serverEncrypt = EncryptOn
 				shouldDoTLS = true
 			case EncryptOff:
-				// Negotiate encryption to protect credentials and connection
-				serverEncrypt = EncryptOn
-				shouldDoTLS = true
+				// Client explicitly requested unencrypted connection (Encrypt=False/Optional).
+				// Do not force TLS tunnel when requireSSL is false, avoiding untrusted cert rejection.
+				serverEncrypt = EncryptNotSup
+				shouldDoTLS = false
 			default:
 				// EncryptNotSup
 				serverEncrypt = EncryptNotSup
@@ -885,6 +902,9 @@ func (s *Server) handlePrelogin(conn net.Conn, pkt *Packet, sess *ConnectionSess
 		handshakeConn := NewTDSHandshakeConn(conn, sess.SPID)
 		tlsConn := tls.Server(handshakeConn, tlsCfg)
 		if err := tlsConn.Handshake(); err != nil {
+			if s.DevMode() {
+				log.Printf("[DEV][TDS][PreloginError] TLS handshake failed for %s (spid=%d): %v", remoteAddr, sess.SPID, err)
+			}
 			return nil, fmt.Errorf("TDS TLS handshake failed: %w", err)
 		}
 		handshakeConn.FinishHandshake()
