@@ -143,34 +143,7 @@ func (p *Parser) parseGoto() (Statement, error) {
 }
 
 func (p *Parser) parseTruncate() (Statement, error) {
-	p.nextToken() // eat TRUNCATE
-	if p.curTokenIs(TokenTable) {
-		p.nextToken()
-	}
-	var tables []string
-	for {
-		if !p.curTokenIs(TokenIdent) {
-			return nil, fmt.Errorf("expected table name in TRUNCATE, got %s at %d:%d", p.curToken.Literal, p.curToken.Line, p.curToken.Col)
-		}
-		tables = append(tables, cleanSchemaPrefix(p.curToken.Literal))
-		p.nextToken()
-		if p.curTokenIs(TokenComma) {
-			p.nextToken()
-			continue
-		}
-		break
-	}
-	cascade := false
-	if p.curTokenIs(TokenCascade) {
-		cascade = true
-		p.nextToken()
-	} else if p.curTokenIs(TokenRestrict) {
-		p.nextToken()
-	}
-	if p.curTokenIs(TokenSemicolon) {
-		p.nextToken()
-	}
-	return &TruncateStmt{Tables: tables, Cascade: cascade}, nil
+	return p.ParseTruncate()
 }
 
 func (p *Parser) parseOpen() (Statement, error) {

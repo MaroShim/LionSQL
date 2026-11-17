@@ -1123,26 +1123,89 @@ func (s *GeneralSelectStmt) String() string {
 
 // ColumnDef defines a table column in DDL.
 type ColumnDef struct {
-	Name       string
-	Type       storage.DataType
-	PrimaryKey bool
-	Nullable   bool
-	Precision  int
-	Scale      int
+	Name         string
+	Type         storage.DataType
+	PrimaryKey   bool
+	Nullable     bool
+	Identity     bool
+	IsRowVersion bool
+	Unique       bool
+	Precision    int
+	Scale        int
+	Default      string
+	CheckExpr    string
+	ForeignKey   *storage.ForeignKeySchema
 }
 
-// CreateTableStmt represents CREATE TABLE ...
+// CreateTableStmt represents CREATE [TEMP|TEMPORARY] TABLE [IF NOT EXISTS] ...
 type CreateTableStmt struct {
-	Name            string
-	IfNotExists     bool
-	Columns         []ColumnDef
-	Durability      string
-	MemoryOptimized bool
+	Name             string
+	IfNotExists      bool
+	Temporary        bool
+	Columns          []ColumnDef
+	PrimaryKeyCols   []string
+	ForeignKeys      []storage.ForeignKeySchema
+	UniqueIndexes    []storage.IndexSchema
+	CheckConstraints []string
+	Partition        *storage.PartitionDef
+	Durability       string
+	MemoryOptimized  bool
 }
 
 func (s *CreateTableStmt) stmtNode() {}
 func (s *CreateTableStmt) String() string {
 	return fmt.Sprintf("CREATE TABLE %s", s.Name)
+}
+
+// AlterActionType enumerates the sub-actions of an ALTER TABLE statement.
+type AlterActionType string
+
+const (
+	AlterAddColumn         AlterActionType = "ADD_COLUMN"
+	AlterDropColumn        AlterActionType = "DROP_COLUMN"
+	AlterColumnSetDefault  AlterActionType = "ALTER_COLUMN_SET_DEFAULT"
+	AlterColumnDropDefault AlterActionType = "ALTER_COLUMN_DROP_DEFAULT"
+	AlterColumnSetNotNull  AlterActionType = "ALTER_COLUMN_SET_NOT_NULL"
+	AlterColumnDropNotNull AlterActionType = "ALTER_COLUMN_DROP_NOT_NULL"
+	AlterColumnType        AlterActionType = "ALTER_COLUMN_TYPE"
+	AlterRenameTable       AlterActionType = "RENAME_TABLE"
+	AlterRenameColumn      AlterActionType = "RENAME_COLUMN"
+	AlterAddPrimaryKey     AlterActionType = "ADD_PRIMARY_KEY"
+	AlterAddUnique         AlterActionType = "ADD_UNIQUE"
+	AlterAddForeignKey     AlterActionType = "ADD_FOREIGN_KEY"
+	AlterAddCheck          AlterActionType = "ADD_CHECK"
+	AlterDropConstraint    AlterActionType = "DROP_CONSTRAINT"
+	AlterDropPartition     AlterActionType = "DROP_PARTITION"
+	AlterSetStorageParams  AlterActionType = "SET_STORAGE_PARAMS"
+)
+
+// AlterTableAction represents a single clause inside ALTER TABLE.
+type AlterTableAction struct {
+	Type           AlterActionType
+	IfExists       bool
+	IfNotExists    bool
+	Column         ColumnDef
+	ColumnName     string
+	NewName        string
+	DropColumns    []string
+	DefaultExpr    string
+	ConstraintName string
+	ConstraintCols []string
+	ForeignKey     *storage.ForeignKeySchema
+	CheckExpr      string
+	PartitionName  string
+}
+
+// AlterTableStmt represents ALTER TABLE [IF EXISTS] <table> <actions...>
+type AlterTableStmt struct {
+	Table    string
+	IfExists bool
+	Actions  []AlterTableAction
+}
+
+func (s *AlterTableStmt) stmtNode() {}
+func (s *AlterTableStmt) String() string {
+	return fmt.Sprintf("ALTER TABLE %s", s.Table)
 }
 
 // CreateIndexStmt represents CREATE [UNIQUE] INDEX ... ON table (cols...) [INCLUDE (inc_cols...)]
@@ -1175,10 +1238,12 @@ func (s *CreateIndexStmt) String() string {
 	return fmt.Sprintf("CREATE %sINDEX %s ON %s (%s)%s", u, s.Name, s.Table, strings.Join(s.Columns, ", "), inc)
 }
 
-// DropTableStmt represents DROP TABLE [IF EXISTS] table
+// DropTableStmt represents DROP TABLE [IF EXISTS] table [, table2 ...] [CASCADE]
 type DropTableStmt struct {
 	Name     string
+	Names    []string
 	IfExists bool
+	Cascade  bool
 }
 
 func (s *DropTableStmt) stmtNode() {}
@@ -1186,11 +1251,12 @@ func (s *DropTableStmt) String() string {
 	return fmt.Sprintf("DROP TABLE %s", s.Name)
 }
 
-// DropIndexStmt represents DROP INDEX index [ON table]
+// DropIndexStmt represents DROP INDEX [IF EXISTS] index [ON table] [CASCADE]
 type DropIndexStmt struct {
 	Name     string
 	Table    string
 	IfExists bool
+	Cascade  bool
 }
 
 func (s *DropIndexStmt) stmtNode() {}
@@ -1198,15 +1264,77 @@ func (s *DropIndexStmt) String() string {
 	return fmt.Sprintf("DROP INDEX %s", s.Name)
 }
 
-// TruncateStmt represents TRUNCATE TABLE t1 [, t2 ...] [CASCADE]
+// TruncateStmt represents TRUNCATE [TABLE] [ONLY] t1 [, t2 ...] [RESTART IDENTITY | CONTINUE IDENTITY] [CASCADE | RESTRICT]
 type TruncateStmt struct {
-	Tables  []string
-	Cascade bool
+	Tables          []string
+	Cascade         bool
+	RestartIdentity bool
 }
 
 func (s *TruncateStmt) stmtNode() {}
 func (s *TruncateStmt) String() string {
 	return fmt.Sprintf("TRUNCATE TABLE %s", strings.Join(s.Tables, ", "))
+}
+
+// CreateViewStmt represents CREATE [OR REPLACE|OR ALTER] VIEW [IF NOT EXISTS] <name> AS <select> or ALTER VIEW <name> AS <select>
+type CreateViewStmt struct {
+	Name        string
+	SelectSQL   string
+	OrReplace   bool
+	IfNotExists bool
+	IsAlter     bool
+}
+
+func (s *CreateViewStmt) stmtNode() {}
+func (s *CreateViewStmt) String() string {
+	if s.IsAlter {
+		return fmt.Sprintf("ALTER VIEW %s AS %s", s.Name, s.SelectSQL)
+	}
+	return fmt.Sprintf("CREATE VIEW %s AS %s", s.Name, s.SelectSQL)
+}
+
+// DropViewStmt represents DROP VIEW [IF EXISTS] <name>
+type DropViewStmt struct {
+	Name     string
+	IfExists bool
+}
+
+func (s *DropViewStmt) stmtNode() {}
+func (s *DropViewStmt) String() string {
+	return fmt.Sprintf("DROP VIEW %s", s.Name)
+}
+
+// CreateStatisticsStmt represents CREATE STATISTICS <name> ON <table> (<cols...>)
+type CreateStatisticsStmt struct {
+	Name    string
+	Table   string
+	Columns []string
+}
+
+func (s *CreateStatisticsStmt) stmtNode() {}
+func (s *CreateStatisticsStmt) String() string {
+	return fmt.Sprintf("CREATE STATISTICS %s ON %s (%s)", s.Name, s.Table, strings.Join(s.Columns, ", "))
+}
+
+// DropStatisticsStmt represents DROP STATISTICS <name> ON <table> or DROP STATISTICS <table>.<name>
+type DropStatisticsStmt struct {
+	Name  string
+	Table string
+}
+
+func (s *DropStatisticsStmt) stmtNode() {}
+func (s *DropStatisticsStmt) String() string {
+	return fmt.Sprintf("DROP STATISTICS %s", s.Name)
+}
+
+// ReindexStmt represents REINDEX [TABLE|INDEX] <target>
+type ReindexStmt struct {
+	Target string
+}
+
+func (s *ReindexStmt) stmtNode() {}
+func (s *ReindexStmt) String() string {
+	return fmt.Sprintf("REINDEX %s", s.Target)
 }
 
 // ExistsExpr represents [NOT] EXISTS (SELECT ...)

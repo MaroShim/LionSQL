@@ -3,6 +3,8 @@ package proc
 import (
 	"fmt"
 	"strings"
+
+	"lionsql/pkg/storage"
 )
 
 // ParseProcedure parses a full CREATE PROCEDURE script.
@@ -567,83 +569,152 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 }
 
 
-// ParseCreateTable parses a CREATE TABLE statement into a CreateTableStmt AST.
-func (p *Parser) ParseCreateTable() (*CreateTableStmt, error) {
-	p.nextToken() // eat CREATE
-	if !p.curTokenIs(TokenTable) {
-		return nil, fmt.Errorf("expected TABLE after CREATE")
+// CleanDefaultExpr strips redundant outer parentheses from a SQL DEFAULT expression
+// while preserving function call argument parentheses (e.g. "((0))" -> "0", "(NEWID7())" -> "NEWID7()").
+func CleanDefaultExpr(s string) string {
+	s = strings.TrimSpace(s)
+	for strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
+		inner := s[1 : len(s)-1]
+		depth := 0
+		balanced := true
+		inSingleQuote := false
+		for i := 0; i < len(inner); i++ {
+			ch := inner[i]
+			if ch == '\'' {
+				inSingleQuote = !inSingleQuote
+				continue
+			}
+			if inSingleQuote {
+				continue
+			}
+			if ch == '(' {
+				depth++
+			} else if ch == ')' {
+				depth--
+				if depth < 0 {
+					balanced = false
+					break
+				}
+			}
+		}
+		if balanced && depth == 0 {
+			if strings.HasSuffix(s, "()") && !strings.HasPrefix(inner, "(") && strings.Index(s, "(") == len(s)-2 {
+				break
+			}
+			s = strings.TrimSpace(inner)
+		} else {
+			break
+		}
 	}
-	p.nextToken()
+	return s
+}
+
+// ParseCreateTable parses a CREATE [TEMP|TEMPORARY] TABLE [IF NOT EXISTS] statement into a CreateTableStmt AST.
+func (p *Parser) ParseCreateTable() (*CreateTableStmt, error) {
+	if !p.curTokenIs(TokenCreate) {
+		return nil, fmt.Errorf("expected CREATE, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat CREATE
+
+	isTemp := false
+	if p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "TEMP") || strings.EqualFold(p.curToken.Literal, "TEMPORARY")) {
+		isTemp = true
+		p.nextToken()
+	}
+
+	if !p.curTokenIs(TokenTable) {
+		return nil, fmt.Errorf("expected TABLE after CREATE, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat TABLE
 
 	ifNotExists := false
-	if p.curTokenIs(TokenIf) {
+	if p.curTokenIs(TokenIf) || strings.EqualFold(p.curToken.Literal, "IF") {
 		p.nextToken()
-		if !p.curTokenIs(TokenNot) {
-			return nil, fmt.Errorf("expected NOT after IF in CREATE TABLE")
+		if p.curTokenIs(TokenNot) || strings.EqualFold(p.curToken.Literal, "NOT") {
+			p.nextToken()
 		}
-		p.nextToken()
-		if !p.curTokenIs(TokenExists) {
-			return nil, fmt.Errorf("expected EXISTS after NOT in CREATE TABLE")
+		if p.curTokenIs(TokenExists) || strings.EqualFold(p.curToken.Literal, "EXISTS") {
+			ifNotExists = true
+			p.nextToken()
 		}
-		p.nextToken()
-		ifNotExists = true
 	}
 
-	if !p.curTokenIs(TokenIdent) {
-		return nil, fmt.Errorf("expected table name, got %s", p.curToken.Literal)
+	if p.curToken.Literal == "" || p.curTokenIs(TokenLParen) || p.curTokenIs(TokenEOF) {
+		return nil, fmt.Errorf("invalid CREATE TABLE syntax: missing table name")
 	}
 	tableName := cleanSchemaPrefix(p.curToken.Literal)
 	p.nextToken()
 
 	if !p.curTokenIs(TokenLParen) {
-		return nil, fmt.Errorf("expected ( in CREATE TABLE")
+		return nil, fmt.Errorf("invalid CREATE TABLE syntax: missing opening parenthesis")
 	}
-	p.nextToken()
+	p.nextToken() // eat '('
 
-	cols, err := p.parseColumnDefs()
-	if err != nil {
+	stmt := &CreateTableStmt{
+		Name:            tableName,
+		IfNotExists:     ifNotExists,
+		Temporary:       isTemp,
+		Durability:      storage.DurabilitySchemaAndData,
+		MemoryOptimized: false,
+	}
+
+	if err := p.parseTableBody(stmt); err != nil {
 		return nil, err
 	}
 
-	if p.curTokenIs(TokenRParen) {
-		p.nextToken()
+	if !p.curTokenIs(TokenRParen) {
+		return nil, fmt.Errorf("invalid CREATE TABLE syntax: unbalanced parentheses")
 	}
+	p.nextToken() // eat ')'
 
-	durability := "SCHEMA_AND_DATA"
-	memoryOptimized := false
-	if p.curTokenIs(TokenWith) {
-		p.nextToken()
-		if p.curTokenIs(TokenLParen) {
+	// Parse trailing clauses: WITH (...) and/or PARTITION BY ...
+	for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenWith) || strings.EqualFold(p.curToken.Literal, "WITH") {
 			p.nextToken()
-			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
-				key := strings.ToUpper(p.curToken.Literal)
+			if p.curTokenIs(TokenLParen) {
 				p.nextToken()
-				if p.curTokenIs(TokenAssign) || p.curTokenIs(TokenEq) {
+				for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+					key := strings.ToUpper(p.curToken.Literal)
 					p.nextToken()
-					val := strings.ToUpper(p.curToken.Literal)
-					p.nextToken()
-					switch key {
-					case "DURABILITY":
-						if val == "SCHEMA_ONLY" {
-							durability = "SCHEMA_ONLY"
-						} else if val == "SCHEMA_AND_DATA" {
-							durability = "SCHEMA_AND_DATA"
-						}
-					case "MEMORY_OPTIMIZED":
-						if val == "ON" || val == "TRUE" || val == "1" {
-							memoryOptimized = true
-						} else if val == "OFF" || val == "FALSE" || val == "0" {
-							memoryOptimized = false
+					if p.curTokenIs(TokenAssign) || p.curTokenIs(TokenEq) {
+						p.nextToken()
+						val := strings.ToUpper(p.curToken.Literal)
+						p.nextToken()
+						switch key {
+						case "DURABILITY":
+							if val == "SCHEMA_ONLY" {
+								stmt.Durability = storage.DurabilitySchemaOnly
+							} else if val == "SCHEMA_AND_DATA" {
+								stmt.Durability = storage.DurabilitySchemaAndData
+							}
+						case "MEMORY_OPTIMIZED":
+							if val == "ON" || val == "TRUE" || val == "1" {
+								stmt.MemoryOptimized = true
+							} else if val == "OFF" || val == "FALSE" || val == "0" {
+								stmt.MemoryOptimized = false
+							}
 						}
 					}
+					if p.curTokenIs(TokenComma) {
+						p.nextToken()
+					}
 				}
-				if p.curTokenIs(TokenComma) {
+				if p.curTokenIs(TokenRParen) {
 					p.nextToken()
 				}
 			}
-			if p.curTokenIs(TokenRParen) {
-				p.nextToken()
+		} else if strings.EqualFold(p.curToken.Literal, "PARTITION") {
+			p.nextToken() // eat PARTITION
+			if p.curTokenIs(TokenBy) || strings.EqualFold(p.curToken.Literal, "BY") {
+				p.nextToken() // eat BY
 			}
+			partDef, err := p.parsePartitionByClause()
+			if err != nil {
+				return nil, err
+			}
+			stmt.Partition = partDef
+		} else {
+			p.nextToken()
 		}
 	}
 
@@ -651,81 +722,66 @@ func (p *Parser) ParseCreateTable() (*CreateTableStmt, error) {
 		p.nextToken()
 	}
 
-	return &CreateTableStmt{
-		Name:            tableName,
-		IfNotExists:     ifNotExists,
-		Columns:         cols,
-		Durability:      durability,
-		MemoryOptimized: memoryOptimized,
+	return stmt, nil
+}
+
+func (p *Parser) parsePartitionByClause() (*storage.PartitionDef, error) {
+	if p.curTokenIs(TokenEOF) || p.curTokenIs(TokenSemicolon) {
+		return nil, fmt.Errorf("expected partition expression after PARTITION BY")
+	}
+	firstTok := p.curToken.Literal
+	p.nextToken()
+	if p.curTokenIs(TokenLParen) {
+		fn := strings.ToUpper(strings.TrimSpace(firstTok))
+		p.nextToken() // eat '('
+		col := cleanSchemaPrefix(p.curToken.Literal)
+		p.nextToken()
+		if p.curTokenIs(TokenRParen) {
+			p.nextToken()
+		}
+		return &storage.PartitionDef{
+			Expr:   fmt.Sprintf("%s(%s)", fn, col),
+			Column: col,
+			Func:   fn,
+		}, nil
+	}
+	col := cleanSchemaPrefix(firstTok)
+	return &storage.PartitionDef{
+		Expr:   col,
+		Column: col,
+		Func:   "COLUMN",
 	}, nil
 }
 
-func (p *Parser) parseColumnDefs() ([]ColumnDef, error) {
-	var cols []ColumnDef
+func (p *Parser) parseTableBody(stmt *CreateTableStmt) error {
+	hasRowVersion := false
 	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
-		if p.curTokenIs(TokenIdent) {
-			ident := p.curToken.Literal
-			upper := strings.ToUpper(ident)
-			if upper == "PRIMARY" || upper == "CONSTRAINT" {
-				p.nextToken()
-				if strings.ToUpper(p.curToken.Literal) == "KEY" {
-					p.nextToken()
-				}
-				if p.curTokenIs(TokenLParen) {
-					p.nextToken()
-					pkCol := cleanSchemaPrefix(p.curToken.Literal)
-					p.nextToken()
-					if p.curTokenIs(TokenRParen) {
-						p.nextToken()
-					}
-					for i := range cols {
-						if strings.EqualFold(cols[i].Name, pkCol) {
-							cols[i].PrimaryKey = true
-						}
-					}
-				}
-				if p.curTokenIs(TokenComma) {
-					p.nextToken()
-				}
-				continue
-			}
-
-			colName := cleanSchemaPrefix(ident)
+		if p.curTokenIs(TokenComma) {
 			p.nextToken()
+			continue
+		}
 
-			dt, prec, scale, _ := p.parseTypeSpec()
-
-			isPK := false
-			isNotNull := false
-
-			for p.curTokenIs(TokenIdent) || p.curTokenIs(TokenNot) || p.curTokenIs(TokenNull) {
-				tUpper := strings.ToUpper(p.curToken.Literal)
-				if tUpper == "PRIMARY" {
-					p.nextToken()
-					if strings.ToUpper(p.curToken.Literal) == "KEY" {
-						p.nextToken()
-					}
-					isPK = true
-					isNotNull = true
-				} else if p.curTokenIs(TokenNot) {
-					p.nextToken()
-					if p.curTokenIs(TokenNull) {
-						p.nextToken()
-						isNotNull = true
-					}
-				} else {
-					p.nextToken()
-				}
+		// Check if this item is a table-level constraint:
+		// [CONSTRAINT <name>] (PRIMARY KEY | FOREIGN KEY | UNIQUE | CHECK)
+		if p.isTableConstraintStart() {
+			if err := p.parseTableLevelConstraint(stmt); err != nil {
+				return err
 			}
-
-			cols = append(cols, ColumnDef{
-				Name:       colName,
-				Type:       dt,
-				PrimaryKey: isPK,
-				Nullable:   !isNotNull,
-				Precision:  prec,
-				Scale:      scale,
-			})
+		} else {
+			col, err := p.parseSingleColumnDef(stmt.Name)
+			if err != nil {
+				return err
+			}
+			if col.IsRowVersion {
+				if hasRowVersion {
+					return fmt.Errorf("a table can only have one rowversion column")
+				}
+				hasRowVersion = true
+			}
+			if col.ForeignKey != nil {
+				stmt.ForeignKeys = append(stmt.ForeignKeys, *col.ForeignKey)
+			}
+			stmt.Columns = append(stmt.Columns, col)
 		}
 
 		if p.curTokenIs(TokenComma) {
@@ -734,7 +790,500 @@ func (p *Parser) parseColumnDefs() ([]ColumnDef, error) {
 			break
 		}
 	}
-	return cols, nil
+
+	// Apply table-level PRIMARY KEY columns onto matching column definitions
+	for _, pkCol := range stmt.PrimaryKeyCols {
+		for i := range stmt.Columns {
+			if strings.EqualFold(stmt.Columns[i].Name, pkCol) {
+				stmt.Columns[i].PrimaryKey = true
+				stmt.Columns[i].Nullable = false
+			}
+		}
+	}
+
+	return nil
+}
+
+func (p *Parser) isTableConstraintStart() bool {
+	upper := strings.ToUpper(p.curToken.Literal)
+	peekUpper := strings.ToUpper(p.peekToken.Literal)
+	switch upper {
+	case "CONSTRAINT":
+		return true
+	case "PRIMARY":
+		return peekUpper == "KEY"
+	case "FOREIGN":
+		return peekUpper == "KEY"
+	case "UNIQUE":
+		return p.peekTokenIs(TokenLParen) || peekUpper == "CLUSTERED" || peekUpper == "NONCLUSTERED"
+	case "CHECK":
+		return p.peekTokenIs(TokenLParen)
+	default:
+		return false
+	}
+}
+
+func (p *Parser) parseTableLevelConstraint(stmt *CreateTableStmt) error {
+	var cName string
+	if strings.EqualFold(p.curToken.Literal, "CONSTRAINT") {
+		p.nextToken() // eat CONSTRAINT
+		cName = cleanSchemaPrefix(p.curToken.Literal)
+		p.nextToken()
+	}
+
+	kw := strings.ToUpper(p.curToken.Literal)
+	switch kw {
+	case "PRIMARY":
+		p.nextToken() // eat PRIMARY
+		if strings.EqualFold(p.curToken.Literal, "KEY") {
+			p.nextToken() // eat KEY
+		}
+		if strings.EqualFold(p.curToken.Literal, "CLUSTERED") || strings.EqualFold(p.curToken.Literal, "NONCLUSTERED") {
+			p.nextToken()
+		}
+		cols := p.parseIdentListInParens()
+		stmt.PrimaryKeyCols = append(stmt.PrimaryKeyCols, cols...)
+		p.skipConstraintTrailingOptions()
+		return nil
+
+	case "UNIQUE":
+		p.nextToken() // eat UNIQUE
+		if strings.EqualFold(p.curToken.Literal, "CLUSTERED") || strings.EqualFold(p.curToken.Literal, "NONCLUSTERED") {
+			p.nextToken()
+		}
+		cols := p.parseIdentListInParens()
+		if len(cols) > 0 {
+			if cName == "" {
+				cName = fmt.Sprintf("uq_%s_%s", stmt.Name, strings.Join(cols, "_"))
+			}
+			stmt.UniqueIndexes = append(stmt.UniqueIndexes, storage.IndexSchema{
+				Name:      cName,
+				TableName: stmt.Name,
+				Columns:   cols,
+				Unique:    true,
+			})
+		}
+		p.skipConstraintTrailingOptions()
+		return nil
+
+	case "FOREIGN":
+		p.nextToken() // eat FOREIGN
+		if strings.EqualFold(p.curToken.Literal, "KEY") {
+			p.nextToken() // eat KEY
+		}
+		childCols := p.parseIdentListInParens()
+		fk, err := p.parseReferencesClause(cName, stmt.Name, childCols)
+		if err != nil {
+			return err
+		}
+		stmt.ForeignKeys = append(stmt.ForeignKeys, *fk)
+		return nil
+
+	case "CHECK":
+		p.nextToken() // eat CHECK
+		chkExpr := p.parseRawParenContent()
+		if chkExpr != "" {
+			stmt.CheckConstraints = append(stmt.CheckConstraints, chkExpr)
+		}
+		return nil
+
+	default:
+		// Skip unknown table-level constraint safely until comma or closing paren
+		p.skipUntilCommaOrRParen()
+		return nil
+	}
+}
+
+func (p *Parser) skipConstraintTrailingOptions() {
+	for !p.curTokenIs(TokenComma) && !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenLParen) {
+			_ = p.parseRawParenContent()
+		} else {
+			p.nextToken()
+		}
+	}
+}
+
+func (p *Parser) parseIdentListInParens() []string {
+	var cols []string
+	if !p.curTokenIs(TokenLParen) {
+		return cols
+	}
+	p.nextToken() // eat '('
+	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+			continue
+		}
+		col := cleanSchemaPrefix(p.curToken.Literal)
+		if col != "" {
+			cols = append(cols, col)
+		}
+		p.nextToken()
+		if p.curTokenIs(TokenAsc) || p.curTokenIs(TokenDesc) || strings.EqualFold(p.curToken.Literal, "ASC") || strings.EqualFold(p.curToken.Literal, "DESC") {
+			p.nextToken()
+		}
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+	if p.curTokenIs(TokenRParen) {
+		p.nextToken() // eat ')'
+	}
+	return cols
+}
+
+func (p *Parser) parseReferencesClause(constraintName, childTable string, childCols []string) (*storage.ForeignKeySchema, error) {
+	if !strings.EqualFold(p.curToken.Literal, "REFERENCES") {
+		return nil, fmt.Errorf("expected REFERENCES in FOREIGN KEY constraint, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat REFERENCES
+
+	if p.curTokenIs(TokenEOF) || p.curTokenIs(TokenComma) || p.curTokenIs(TokenRParen) {
+		return nil, fmt.Errorf("expected parent table name after REFERENCES")
+	}
+	parentTable := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	var parentCols []string
+	if p.curTokenIs(TokenLParen) {
+		parentCols = p.parseIdentListInParens()
+	}
+
+	onDelete := storage.ActionNoAction
+	onUpdate := storage.ActionNoAction
+
+	for !p.curTokenIs(TokenComma) && !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenOn) || strings.EqualFold(p.curToken.Literal, "ON") {
+			p.nextToken() // eat ON
+			isDelete := p.curTokenIs(TokenDelete) || strings.EqualFold(p.curToken.Literal, "DELETE")
+			isUpdate := p.curTokenIs(TokenUpdate) || strings.EqualFold(p.curToken.Literal, "UPDATE")
+			if isDelete || isUpdate {
+				p.nextToken() // eat DELETE or UPDATE
+				act := strings.ToUpper(p.curToken.Literal)
+				p.nextToken()
+				if (act == "SET" || act == "NO") && !p.curTokenIs(TokenComma) && !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+					act = act + " " + strings.ToUpper(p.curToken.Literal)
+					p.nextToken()
+				}
+				parsedAct := storage.ParseForeignKeyAction(act)
+				if isDelete {
+					onDelete = parsedAct
+				} else {
+					onUpdate = parsedAct
+				}
+				continue
+			}
+		}
+		if strings.EqualFold(p.curToken.Literal, "NOT") || strings.EqualFold(p.curToken.Literal, "NULL") ||
+			strings.EqualFold(p.curToken.Literal, "DEFAULT") || strings.EqualFold(p.curToken.Literal, "PRIMARY") ||
+			strings.EqualFold(p.curToken.Literal, "UNIQUE") || strings.EqualFold(p.curToken.Literal, "CHECK") ||
+			strings.EqualFold(p.curToken.Literal, "IDENTITY") || strings.EqualFold(p.curToken.Literal, "CONSTRAINT") {
+			break
+		}
+		p.nextToken()
+	}
+
+	if constraintName == "" && len(childCols) > 0 {
+		constraintName = fmt.Sprintf("fk_%s_%s", parentTable, childCols[0])
+	}
+
+	return &storage.ForeignKeySchema{
+		Name:          constraintName,
+		ChildTable:    childTable,
+		ChildColumns:  childCols,
+		ParentTable:   parentTable,
+		ParentColumns: parentCols,
+		OnDelete:      onDelete,
+		OnUpdate:      onUpdate,
+	}, nil
+}
+
+func (p *Parser) parseSingleColumnDef(tableName string) (ColumnDef, error) {
+	colName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+	return p.parseColumnTypeAndConstraints(colName, tableName)
+}
+
+func (p *Parser) parseColumnTypeAndConstraints(colName, tableName string) (ColumnDef, error) {
+	rawType := strings.ToUpper(strings.Trim(p.curToken.Literal, "[]\"'`"))
+	hasTypeParen := p.peekTokenIs(TokenLParen)
+	dt, prec, scale, _ := p.parseTypeSpec()
+
+	isSerial := rawType == "SERIAL" || rawType == "BIGSERIAL" || rawType == "SMALLSERIAL"
+	isRowVersion := rawType == "ROWVERSION"
+
+	if rawType == "FLOAT" {
+		if prec > 0 && prec <= 24 {
+			dt = storage.TypeReal
+			prec = 24
+		} else {
+			dt = storage.TypeFloat
+			prec = 53
+		}
+	} else if dt == storage.TypeReal {
+		prec = 24
+	} else if dt == storage.TypeFloat {
+		prec = 53
+	} else if dt == storage.TypeDecimal {
+		if rawType == "MONEY" {
+			prec = 19
+			scale = 4
+		} else if rawType == "SMALLMONEY" {
+			prec = 10
+			scale = 4
+		} else if !hasTypeParen && prec == 0 {
+			prec = 18
+			scale = 2
+		}
+	}
+
+	if isRowVersion {
+		dt = storage.TypeBinary
+		prec = 8
+	}
+
+	isPK := false
+	isIdentity := isSerial || rawType == "IDENTITY"
+	isNotNull := isSerial || isRowVersion
+	isUnique := false
+	isGeneratedIdentity := false
+	var defaultExpr string
+	var checkExpr string
+	var colFK *storage.ForeignKeySchema
+	var currentConstraintName string
+
+	for !p.curTokenIs(TokenComma) && !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		upper := strings.ToUpper(p.curToken.Literal)
+		switch upper {
+		case "CONSTRAINT":
+			p.nextToken()
+			currentConstraintName = cleanSchemaPrefix(p.curToken.Literal)
+			p.nextToken()
+
+		case "PRIMARY":
+			p.nextToken()
+			if strings.EqualFold(p.curToken.Literal, "KEY") {
+				p.nextToken()
+			}
+			if strings.EqualFold(p.curToken.Literal, "CLUSTERED") || strings.EqualFold(p.curToken.Literal, "NONCLUSTERED") {
+				p.nextToken()
+			}
+			if p.curTokenIs(TokenAsc) || p.curTokenIs(TokenDesc) {
+				p.nextToken()
+			}
+			isPK = true
+			isNotNull = true
+
+		case "NOT":
+			p.nextToken()
+			if p.curTokenIs(TokenNull) || strings.EqualFold(p.curToken.Literal, "NULL") {
+				p.nextToken()
+				isNotNull = true
+			}
+
+		case "NULL":
+			p.nextToken()
+
+		case "UNIQUE":
+			p.nextToken()
+			if strings.EqualFold(p.curToken.Literal, "CLUSTERED") || strings.EqualFold(p.curToken.Literal, "NONCLUSTERED") {
+				p.nextToken()
+			}
+			isUnique = true
+
+		case "IDENTITY", "AUTO_INCREMENT", "AUTOINCREMENT":
+			p.nextToken()
+			if p.curTokenIs(TokenLParen) {
+				_ = p.parseRawParenContent()
+			}
+			isIdentity = true
+
+		case "GENERATED":
+			p.nextToken()
+			for !p.curTokenIs(TokenComma) && !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+				if strings.EqualFold(p.curToken.Literal, "IDENTITY") {
+					p.nextToken()
+					if p.curTokenIs(TokenLParen) {
+						_ = p.parseRawParenContent()
+					}
+					isGeneratedIdentity = true
+					isIdentity = true
+					isNotNull = true
+					break
+				}
+				p.nextToken()
+			}
+
+		case "DEFAULT":
+			p.nextToken() // eat DEFAULT
+			val := p.parseDDLDefaultValue()
+			if !isGeneratedIdentity {
+				defaultExpr = val
+			}
+
+		case "CHECK":
+			p.nextToken() // eat CHECK
+			checkExpr = p.parseRawParenContent()
+
+		case "REFERENCES":
+			fk, err := p.parseReferencesClause(currentConstraintName, tableName, []string{colName})
+			if err != nil {
+				return ColumnDef{}, err
+			}
+			colFK = fk
+			currentConstraintName = ""
+
+		default:
+			if p.curTokenIs(TokenLParen) {
+				_ = p.parseRawParenContent()
+			} else {
+				p.nextToken()
+			}
+		}
+	}
+
+	if isGeneratedIdentity {
+		defaultExpr = ""
+	}
+
+	return ColumnDef{
+		Name:         colName,
+		Type:         dt,
+		PrimaryKey:   isPK,
+		Nullable:     !isNotNull,
+		Identity:     isIdentity,
+		IsRowVersion: isRowVersion,
+		Unique:       isUnique,
+		Precision:    prec,
+		Scale:        scale,
+		Default:      defaultExpr,
+		CheckExpr:    checkExpr,
+		ForeignKey:   colFK,
+	}, nil
+}
+
+func (p *Parser) parseDDLDefaultValue() string {
+	if p.curTokenIs(TokenEOF) || p.curTokenIs(TokenComma) || p.curTokenIs(TokenRParen) {
+		return ""
+	}
+	if p.curTokenIs(TokenString) {
+		lit := "'" + strings.ReplaceAll(p.curToken.Literal, "'", "''") + "'"
+		p.nextToken()
+		return lit
+	}
+	if p.curTokenIs(TokenLParen) {
+		content := p.parseRawParenContent()
+		return CleanDefaultExpr("(" + content + ")")
+	}
+	if p.curTokenIs(TokenMinus) || p.curTokenIs(TokenPlus) {
+		sign := p.curToken.Literal
+		p.nextToken()
+		val := p.curToken.Literal
+		p.nextToken()
+		if sign == "-" {
+			return "-" + val
+		}
+		return val
+	}
+	tokLit := p.curToken.Literal
+	upper := strings.ToUpper(tokLit)
+	if upper == "NOT" || upper == "NULL" || upper == "PRIMARY" || upper == "UNIQUE" || upper == "CHECK" || upper == "REFERENCES" || upper == "CONSTRAINT" {
+		if upper == "NULL" {
+			p.nextToken()
+		}
+		return ""
+	}
+	p.nextToken()
+	if p.curTokenIs(TokenLParen) {
+		args := p.parseRawParenContent()
+		return tokLit + "(" + args + ")"
+	}
+	return CleanDefaultExpr(tokLit)
+}
+
+func (p *Parser) parseRawParenContent() string {
+	if !p.curTokenIs(TokenLParen) {
+		return ""
+	}
+	p.nextToken() // eat outer '('
+	depth := 1
+	var b strings.Builder
+	prevLit := ""
+	for depth > 0 && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenLParen) {
+			depth++
+			if prevLit != "" && prevLit != "(" && !isFuncLikeIdent(prevLit) {
+				b.WriteByte(' ')
+			}
+			b.WriteByte('(')
+			prevLit = "("
+			p.nextToken()
+			continue
+		}
+		if p.curTokenIs(TokenRParen) {
+			depth--
+			if depth == 0 {
+				p.nextToken() // eat matching outer ')'
+				break
+			}
+			b.WriteByte(')')
+			prevLit = ")"
+			p.nextToken()
+			continue
+		}
+		lit := p.curToken.Literal
+		if p.curTokenIs(TokenString) {
+			lit = "'" + strings.ReplaceAll(lit, "'", "''") + "'"
+		}
+		if b.Len() > 0 && prevLit != "(" && lit != "," && lit != ")" {
+			b.WriteByte(' ')
+		}
+		b.WriteString(lit)
+		prevLit = lit
+		p.nextToken()
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func isFuncLikeIdent(s string) bool {
+	if s == "" {
+		return false
+	}
+	upper := strings.ToUpper(s)
+	switch upper {
+	case "AND", "OR", "NOT", "IN", "CHECK", "VALUES", "=", "<>", "!=", "<", ">", "<=", ">=", "+", "-", "*", "/":
+		return false
+	default:
+		return isLetter(rune(s[0]))
+	}
+}
+
+func (p *Parser) skipUntilCommaOrRParen() {
+	depth := 0
+	for !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenLParen) {
+			depth++
+		} else if p.curTokenIs(TokenRParen) {
+			if depth == 0 {
+				return
+			}
+			depth--
+		} else if p.curTokenIs(TokenComma) && depth == 0 {
+			return
+		}
+		p.nextToken()
+	}
+}
+
+func (p *Parser) parseColumnDefs() ([]ColumnDef, error) {
+	stmt := &CreateTableStmt{}
+	if err := p.parseTableBody(stmt); err != nil {
+		return nil, err
+	}
+	return stmt.Columns, nil
 }
 
 // ParseColumnDefs parses column definitions inside parenthesis.
@@ -742,6 +1291,347 @@ func (p *Parser) ParseColumnDefs() ([]ColumnDef, error) {
 	return p.parseColumnDefs()
 }
 
+// ParseAlterTable parses an ALTER TABLE statement into an AlterTableStmt AST.
+func (p *Parser) ParseAlterTable() (*AlterTableStmt, error) {
+	if !p.curTokenIs(TokenAlter) {
+		return nil, fmt.Errorf("invalid ALTER TABLE syntax: expected ALTER, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat ALTER
+	if !p.curTokenIs(TokenTable) {
+		return nil, fmt.Errorf("invalid ALTER TABLE syntax: expected TABLE, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat TABLE
+
+	ifExists := false
+	if p.curTokenIs(TokenIf) || strings.EqualFold(p.curToken.Literal, "IF") {
+		p.nextToken()
+		if p.curTokenIs(TokenExists) || strings.EqualFold(p.curToken.Literal, "EXISTS") {
+			ifExists = true
+			p.nextToken()
+		}
+	}
+
+	if p.curToken.Literal == "" || p.curTokenIs(TokenEOF) || p.curTokenIs(TokenSemicolon) {
+		return nil, fmt.Errorf("invalid ALTER TABLE syntax: missing table name")
+	}
+	tableName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	stmt := &AlterTableStmt{
+		Table:    tableName,
+		IfExists: ifExists,
+	}
+
+	for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+			continue
+		}
+		actions, err := p.parseAlterTableAction(tableName)
+		if err != nil {
+			return nil, err
+		}
+		stmt.Actions = append(stmt.Actions, actions...)
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+
+	if len(stmt.Actions) == 0 {
+		return nil, fmt.Errorf("unsupported ALTER TABLE action: empty action")
+	}
+
+	return stmt, nil
+}
+
+func (p *Parser) parseAlterTableAction(tableName string) ([]AlterTableAction, error) {
+	kw := strings.ToUpper(p.curToken.Literal)
+	switch kw {
+	case "DROP":
+		p.nextToken() // eat DROP
+		sub := strings.ToUpper(p.curToken.Literal)
+		switch sub {
+		case "PARTITION":
+			p.nextToken() // eat PARTITION
+			partName := strings.Trim(strings.TrimSpace(p.curToken.Literal), "';\" ")
+			p.nextToken()
+			return []AlterTableAction{{
+				Type:          AlterDropPartition,
+				PartitionName: partName,
+			}}, nil
+
+		case "CONSTRAINT", "FOREIGN":
+			p.nextToken() // eat CONSTRAINT or FOREIGN
+			if sub == "FOREIGN" && strings.EqualFold(p.curToken.Literal, "KEY") {
+				p.nextToken() // eat KEY
+			}
+			dropIfExists := false
+			if p.curTokenIs(TokenIf) || strings.EqualFold(p.curToken.Literal, "IF") {
+				p.nextToken()
+				if p.curTokenIs(TokenExists) || strings.EqualFold(p.curToken.Literal, "EXISTS") {
+					dropIfExists = true
+					p.nextToken()
+				}
+			}
+			cName := cleanSchemaPrefix(p.curToken.Literal)
+			p.nextToken()
+			if p.curTokenIs(TokenCascade) || p.curTokenIs(TokenRestrict) || strings.EqualFold(p.curToken.Literal, "CASCADE") || strings.EqualFold(p.curToken.Literal, "RESTRICT") {
+				p.nextToken()
+			}
+			return []AlterTableAction{{
+				Type:           AlterDropConstraint,
+				IfExists:       dropIfExists,
+				ConstraintName: cName,
+			}}, nil
+
+		default:
+			if sub == "COLUMN" {
+				p.nextToken() // eat COLUMN
+			}
+			dropIfExists := false
+			if p.curTokenIs(TokenIf) || strings.EqualFold(p.curToken.Literal, "IF") {
+				p.nextToken()
+				if p.curTokenIs(TokenExists) || strings.EqualFold(p.curToken.Literal, "EXISTS") {
+					dropIfExists = true
+					p.nextToken()
+				}
+			}
+			var dropCols []string
+			for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+				if p.curTokenIs(TokenIf) || strings.EqualFold(p.curToken.Literal, "IF") {
+					p.nextToken()
+					if p.curTokenIs(TokenExists) || strings.EqualFold(p.curToken.Literal, "EXISTS") {
+						dropIfExists = true
+						p.nextToken()
+					}
+				}
+				colName := cleanSchemaPrefix(p.curToken.Literal)
+				if colName != "" {
+					dropCols = append(dropCols, colName)
+				}
+				p.nextToken()
+				if p.curTokenIs(TokenComma) {
+					nextUpper := strings.ToUpper(p.peekToken.Literal)
+					if nextUpper == "ADD" || nextUpper == "DROP" || nextUpper == "ALTER" || nextUpper == "RENAME" || nextUpper == "SET" {
+						break
+					}
+					p.nextToken() // eat ',' and continue reading next dropped column name
+				} else {
+					break
+				}
+			}
+			return []AlterTableAction{{
+				Type:        AlterDropColumn,
+				IfExists:    dropIfExists,
+				DropColumns: dropCols,
+			}}, nil
+		}
+
+	case "RENAME":
+		p.nextToken() // eat RENAME
+		if strings.EqualFold(p.curToken.Literal, "TO") {
+			p.nextToken() // eat TO
+			newTbl := cleanSchemaPrefix(p.curToken.Literal)
+			p.nextToken()
+			return []AlterTableAction{{
+				Type:    AlterRenameTable,
+				NewName: newTbl,
+			}}, nil
+		}
+		if strings.EqualFold(p.curToken.Literal, "COLUMN") {
+			p.nextToken() // eat COLUMN
+		}
+		oldCol := cleanSchemaPrefix(p.curToken.Literal)
+		p.nextToken()
+		if strings.EqualFold(p.curToken.Literal, "TO") {
+			p.nextToken() // eat TO
+		}
+		newCol := cleanSchemaPrefix(p.curToken.Literal)
+		p.nextToken()
+		return []AlterTableAction{{
+			Type:       AlterRenameColumn,
+			ColumnName: oldCol,
+			NewName:    newCol,
+		}}, nil
+
+	case "SET":
+		p.nextToken() // eat SET
+		if p.curTokenIs(TokenLParen) {
+			_ = p.parseRawParenContent()
+		} else {
+			p.skipUntilCommaOrRParen()
+		}
+		return []AlterTableAction{{
+			Type: AlterSetStorageParams,
+		}}, nil
+
+	case "ALTER":
+		p.nextToken() // eat ALTER
+		if strings.EqualFold(p.curToken.Literal, "COLUMN") {
+			p.nextToken() // eat COLUMN
+		}
+		colName := cleanSchemaPrefix(p.curToken.Literal)
+		p.nextToken()
+
+		op := strings.ToUpper(p.curToken.Literal)
+		switch op {
+		case "DROP":
+			p.nextToken() // eat DROP
+			target := strings.ToUpper(p.curToken.Literal)
+			if target == "DEFAULT" {
+				p.nextToken()
+				return []AlterTableAction{{
+					Type:       AlterColumnDropDefault,
+					ColumnName: colName,
+				}}, nil
+			}
+			if target == "NOT" {
+				p.nextToken() // eat NOT
+				if p.curTokenIs(TokenNull) || strings.EqualFold(p.curToken.Literal, "NULL") {
+					p.nextToken()
+				}
+				return []AlterTableAction{{
+					Type:       AlterColumnDropNotNull,
+					ColumnName: colName,
+				}}, nil
+			}
+			return nil, fmt.Errorf("unsupported ALTER COLUMN DROP target: %s", target)
+
+		case "SET":
+			p.nextToken() // eat SET
+			target := strings.ToUpper(p.curToken.Literal)
+			if target == "DEFAULT" {
+				p.nextToken() // eat DEFAULT
+				defExpr := p.parseDDLDefaultValue()
+				return []AlterTableAction{{
+					Type:        AlterColumnSetDefault,
+					ColumnName:  colName,
+					DefaultExpr: defExpr,
+				}}, nil
+			}
+			if target == "NOT" {
+				p.nextToken() // eat NOT
+				if p.curTokenIs(TokenNull) || strings.EqualFold(p.curToken.Literal, "NULL") {
+					p.nextToken()
+				}
+				return []AlterTableAction{{
+					Type:       AlterColumnSetNotNull,
+					ColumnName: colName,
+				}}, nil
+			}
+			if target == "DATA" {
+				p.nextToken() // eat DATA
+				if strings.EqualFold(p.curToken.Literal, "TYPE") {
+					p.nextToken() // eat TYPE
+				}
+				return p.parseAlterColumnTypeAction(colName)
+			}
+			return nil, fmt.Errorf("unsupported ALTER COLUMN SET target: %s", target)
+
+		case "TYPE":
+			p.nextToken() // eat TYPE
+			return p.parseAlterColumnTypeAction(colName)
+
+		default:
+			// T-SQL style: ALTER TABLE t ALTER COLUMN c <new_type> [NOT NULL | NULL]
+			return p.parseAlterColumnTypeAction(colName)
+		}
+
+	case "ADD":
+		p.nextToken() // eat ADD
+		var actions []AlterTableAction
+		for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+			if strings.EqualFold(p.curToken.Literal, "ADD") {
+				p.nextToken()
+			}
+			if p.isTableConstraintStart() {
+				tmpStmt := &CreateTableStmt{Name: tableName}
+				if err := p.parseTableLevelConstraint(tmpStmt); err != nil {
+					return nil, err
+				}
+				if len(tmpStmt.PrimaryKeyCols) > 0 {
+					actions = append(actions, AlterTableAction{
+						Type:           AlterAddPrimaryKey,
+						ConstraintCols: tmpStmt.PrimaryKeyCols,
+					})
+				}
+				for _, uq := range tmpStmt.UniqueIndexes {
+					actions = append(actions, AlterTableAction{
+						Type:           AlterAddUnique,
+						ConstraintName: uq.Name,
+						ConstraintCols: uq.Columns,
+					})
+				}
+				for i := range tmpStmt.ForeignKeys {
+					fk := tmpStmt.ForeignKeys[i]
+					actions = append(actions, AlterTableAction{
+						Type:           AlterAddForeignKey,
+						ConstraintName: fk.Name,
+						ForeignKey:     &fk,
+					})
+				}
+				for _, chk := range tmpStmt.CheckConstraints {
+					actions = append(actions, AlterTableAction{
+						Type:      AlterAddCheck,
+						CheckExpr: chk,
+					})
+				}
+			} else {
+				if strings.EqualFold(p.curToken.Literal, "COLUMN") {
+					p.nextToken() // eat COLUMN
+				}
+				ifNotExists := false
+				if p.curTokenIs(TokenIf) || strings.EqualFold(p.curToken.Literal, "IF") {
+					p.nextToken()
+					if p.curTokenIs(TokenNot) || strings.EqualFold(p.curToken.Literal, "NOT") {
+						p.nextToken()
+					}
+					if p.curTokenIs(TokenExists) || strings.EqualFold(p.curToken.Literal, "EXISTS") {
+						ifNotExists = true
+						p.nextToken()
+					}
+				}
+				colDef, err := p.parseSingleColumnDef(tableName)
+				if err != nil {
+					return nil, err
+				}
+				actions = append(actions, AlterTableAction{
+					Type:        AlterAddColumn,
+					IfNotExists: ifNotExists,
+					Column:      colDef,
+				})
+			}
+
+			if p.curTokenIs(TokenComma) {
+				nextUpper := strings.ToUpper(p.peekToken.Literal)
+				if nextUpper == "DROP" || nextUpper == "ALTER" || nextUpper == "RENAME" || nextUpper == "SET" {
+					break
+				}
+				p.nextToken() // eat ',' and continue ADD list
+			} else {
+				break
+			}
+		}
+		return actions, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported ALTER TABLE action: %s", p.curToken.Literal)
+	}
+}
+
+func (p *Parser) parseAlterColumnTypeAction(colName string) ([]AlterTableAction, error) {
+	colDef, err := p.parseColumnTypeAndConstraints(colName, "")
+	if err != nil {
+		return nil, err
+	}
+	return []AlterTableAction{{
+		Type:       AlterColumnType,
+		ColumnName: colName,
+		Column:     colDef,
+	}}, nil
+}
 
 func (p *Parser) ParseCreateIndex() (*CreateIndexStmt, error) {
 	p.nextToken() // eat CREATE
@@ -826,7 +1716,7 @@ func (p *Parser) ParseCreateIndex() (*CreateIndexStmt, error) {
 		}
 	} else {
 		for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
-			if p.curTokenIs(TokenIdent) {
+			if p.curTokenIs(TokenIdent) || p.curToken.Literal != "" {
 				cols = append(cols, cleanSchemaPrefix(p.curToken.Literal))
 				p.nextToken()
 				if p.curTokenIs(TokenAsc) || p.curTokenIs(TokenDesc) || strings.EqualFold(p.curToken.Literal, "ASC") || strings.EqualFold(p.curToken.Literal, "DESC") {
@@ -848,21 +1738,7 @@ func (p *Parser) ParseCreateIndex() (*CreateIndexStmt, error) {
 	if strings.EqualFold(p.curToken.Literal, "INCLUDE") {
 		p.nextToken()
 		if p.curTokenIs(TokenLParen) {
-			p.nextToken()
-			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
-				if p.curTokenIs(TokenIdent) {
-					includeCols = append(includeCols, cleanSchemaPrefix(p.curToken.Literal))
-					p.nextToken()
-				}
-				if p.curTokenIs(TokenComma) {
-					p.nextToken()
-				} else {
-					break
-				}
-			}
-			if p.curTokenIs(TokenRParen) {
-				p.nextToken()
-			}
+			includeCols = p.parseIdentListInParens()
 		}
 	}
 
@@ -895,54 +1771,120 @@ func (p *Parser) ParseCreateIndex() (*CreateIndexStmt, error) {
 	}, nil
 }
 
+// ParseDropTable parses DROP TABLE [IF EXISTS] t1 [, t2 ...] [CASCADE | RESTRICT].
+func (p *Parser) ParseDropTable() (*DropTableStmt, error) {
+	if p.curTokenIs(TokenDrop) {
+		p.nextToken() // eat DROP
+	}
+	return p.parseDropTable()
+}
+
 func (p *Parser) parseDropTable() (*DropTableStmt, error) {
+	if !p.curTokenIs(TokenTable) {
+		return nil, fmt.Errorf("invalid DROP TABLE syntax: expected TABLE, got %s", p.curToken.Literal)
+	}
 	p.nextToken() // eat TABLE
+
 	ifExists := false
-	if p.curTokenIs(TokenIf) {
+	if p.curTokenIs(TokenIf) || strings.EqualFold(p.curToken.Literal, "IF") {
 		p.nextToken()
-		if p.curTokenIs(TokenExists) {
+		if p.curTokenIs(TokenExists) || strings.EqualFold(p.curToken.Literal, "EXISTS") {
 			ifExists = true
 			p.nextToken()
 		}
 	}
-	if !p.curTokenIs(TokenIdent) {
-		return nil, fmt.Errorf("expected table name in DROP TABLE")
+	if p.curToken.Literal == "" || p.curTokenIs(TokenEOF) || p.curTokenIs(TokenSemicolon) {
+		return nil, fmt.Errorf("invalid DROP TABLE syntax: missing table name")
 	}
-	tblName := cleanSchemaPrefix(p.curToken.Literal)
-	p.nextToken()
+
+	var names []string
+	for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenCascade) || strings.EqualFold(p.curToken.Literal, "CASCADE") ||
+			p.curTokenIs(TokenRestrict) || strings.EqualFold(p.curToken.Literal, "RESTRICT") {
+			break
+		}
+		name := cleanSchemaPrefix(p.curToken.Literal)
+		if name != "" {
+			names = append(names, name)
+		}
+		p.nextToken()
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+
+	if len(names) == 0 {
+		return nil, fmt.Errorf("invalid DROP TABLE syntax: missing table name")
+	}
+
+	cascade := false
+	for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenCascade) || strings.EqualFold(p.curToken.Literal, "CASCADE") {
+			cascade = true
+		}
+		p.nextToken()
+	}
 	if p.curTokenIs(TokenSemicolon) {
 		p.nextToken()
 	}
 
 	return &DropTableStmt{
-		Name:     tblName,
+		Name:     names[0],
+		Names:    names,
 		IfExists: ifExists,
+		Cascade:  cascade,
 	}, nil
 }
 
+// ParseDropIndex parses DROP INDEX [IF EXISTS] <name> [ON <table>] [CASCADE | RESTRICT].
+func (p *Parser) ParseDropIndex() (*DropIndexStmt, error) {
+	if p.curTokenIs(TokenDrop) {
+		p.nextToken() // eat DROP
+	}
+	return p.parseDropIndex()
+}
+
 func (p *Parser) parseDropIndex() (*DropIndexStmt, error) {
+	if !p.curTokenIs(TokenIndex) {
+		return nil, fmt.Errorf("invalid DROP INDEX syntax: expected INDEX, got %s", p.curToken.Literal)
+	}
 	p.nextToken() // eat INDEX
-	ifExists := false
-	if p.curTokenIs(TokenIf) {
+
+	if strings.EqualFold(p.curToken.Literal, "CONCURRENTLY") {
 		p.nextToken()
-		if p.curTokenIs(TokenExists) {
+	}
+
+	ifExists := false
+	if p.curTokenIs(TokenIf) || strings.EqualFold(p.curToken.Literal, "IF") {
+		p.nextToken()
+		if p.curTokenIs(TokenExists) || strings.EqualFold(p.curToken.Literal, "EXISTS") {
 			ifExists = true
 			p.nextToken()
 		}
 	}
-	if !p.curTokenIs(TokenIdent) {
-		return nil, fmt.Errorf("expected index name in DROP INDEX")
+	if p.curToken.Literal == "" || p.curTokenIs(TokenEOF) || p.curTokenIs(TokenSemicolon) {
+		return nil, fmt.Errorf("invalid DROP INDEX syntax: expected DROP INDEX [IF EXISTS] <name> [ON <table>] [CASCADE]")
 	}
 	idxName := cleanSchemaPrefix(p.curToken.Literal)
 	p.nextToken()
 
 	tblName := ""
-	if p.curTokenIs(TokenOn) {
-		p.nextToken()
-		if p.curTokenIs(TokenIdent) {
-			tblName = cleanSchemaPrefix(p.curToken.Literal)
+	cascade := false
+	for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenOn) || strings.EqualFold(p.curToken.Literal, "ON") {
 			p.nextToken()
+			if p.curToken.Literal != "" && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+				tblName = cleanSchemaPrefix(p.curToken.Literal)
+				p.nextToken()
+			}
+			continue
 		}
+		if p.curTokenIs(TokenCascade) || strings.EqualFold(p.curToken.Literal, "CASCADE") {
+			cascade = true
+		}
+		p.nextToken()
 	}
 	if p.curTokenIs(TokenSemicolon) {
 		p.nextToken()
@@ -952,6 +1894,218 @@ func (p *Parser) parseDropIndex() (*DropIndexStmt, error) {
 		Name:     idxName,
 		Table:    tblName,
 		IfExists: ifExists,
+		Cascade:  cascade,
 	}, nil
 }
+
+// ParseTruncate parses TRUNCATE [TABLE] [ONLY] t1 [*] [, t2 ...] [RESTART IDENTITY | CONTINUE IDENTITY] [CASCADE | RESTRICT].
+func (p *Parser) ParseTruncate() (*TruncateStmt, error) {
+	if !p.curTokenIs(TokenTruncate) && !strings.EqualFold(p.curToken.Literal, "TRUNCATE") {
+		return nil, fmt.Errorf("invalid TRUNCATE TABLE syntax")
+	}
+	p.nextToken() // eat TRUNCATE
+	if p.curTokenIs(TokenTable) || strings.EqualFold(p.curToken.Literal, "TABLE") {
+		p.nextToken() // eat TABLE
+	}
+
+	var tables []string
+	cascade := false
+	restartIdentity := true
+
+	for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		upper := strings.ToUpper(p.curToken.Literal)
+		if upper == "ONLY" {
+			p.nextToken()
+			continue
+		}
+		if upper == "RESTART" {
+			p.nextToken()
+			if strings.EqualFold(p.curToken.Literal, "IDENTITY") {
+				p.nextToken()
+			}
+			restartIdentity = true
+			continue
+		}
+		if upper == "CONTINUE" {
+			p.nextToken()
+			if strings.EqualFold(p.curToken.Literal, "IDENTITY") {
+				p.nextToken()
+			}
+			restartIdentity = false
+			continue
+		}
+		if p.curTokenIs(TokenCascade) || upper == "CASCADE" {
+			cascade = true
+			p.nextToken()
+			continue
+		}
+		if p.curTokenIs(TokenRestrict) || upper == "RESTRICT" {
+			cascade = false
+			p.nextToken()
+			continue
+		}
+		if p.curTokenIs(TokenLParen) {
+			p.nextToken()
+			continue
+		}
+		if p.curTokenIs(TokenRParen) || p.curTokenIs(TokenAsterisk) || p.curTokenIs(TokenComma) {
+			p.nextToken()
+			continue
+		}
+
+		tbl := cleanSchemaPrefix(strings.TrimSuffix(p.curToken.Literal, "*"))
+		if tbl != "" {
+			tables = append(tables, tbl)
+		}
+		p.nextToken()
+	}
+
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+
+	if len(tables) == 0 {
+		return nil, fmt.Errorf("invalid TRUNCATE TABLE syntax: missing table name")
+	}
+
+	return &TruncateStmt{
+		Tables:          tables,
+		Cascade:         cascade,
+		RestartIdentity: restartIdentity,
+	}, nil
+}
+
+// ParseDropView parses DROP VIEW [IF EXISTS] <name>.
+func (p *Parser) ParseDropView() (*DropViewStmt, error) {
+	if !p.curTokenIs(TokenDrop) {
+		return nil, fmt.Errorf("invalid DROP VIEW syntax")
+	}
+	p.nextToken() // eat DROP
+	if !strings.EqualFold(p.curToken.Literal, "VIEW") {
+		return nil, fmt.Errorf("invalid DROP VIEW syntax")
+	}
+	p.nextToken() // eat VIEW
+
+	ifExists := false
+	if p.curTokenIs(TokenIf) || strings.EqualFold(p.curToken.Literal, "IF") {
+		p.nextToken()
+		if p.curTokenIs(TokenExists) || strings.EqualFold(p.curToken.Literal, "EXISTS") {
+			ifExists = true
+			p.nextToken()
+		}
+	}
+
+	if p.curToken.Literal == "" || p.curTokenIs(TokenEOF) || p.curTokenIs(TokenSemicolon) {
+		return nil, fmt.Errorf("invalid DROP VIEW syntax: missing view name")
+	}
+	viewName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	return &DropViewStmt{
+		Name:     viewName,
+		IfExists: ifExists,
+	}, nil
+}
+
+// ParseCreateStatistics parses CREATE STATISTICS <name> ON <table> (<cols...>).
+func (p *Parser) ParseCreateStatistics() (*CreateStatisticsStmt, error) {
+	if !p.curTokenIs(TokenCreate) {
+		return nil, fmt.Errorf("invalid CREATE STATISTICS syntax: expected CREATE STATISTICS <name> ON <table> (<cols>)")
+	}
+	p.nextToken() // eat CREATE
+	if !strings.EqualFold(p.curToken.Literal, "STATISTICS") {
+		return nil, fmt.Errorf("invalid CREATE STATISTICS syntax: expected CREATE STATISTICS <name> ON <table> (<cols>)")
+	}
+	p.nextToken() // eat STATISTICS
+
+	if p.curToken.Literal == "" || p.curTokenIs(TokenOn) || p.curTokenIs(TokenEOF) {
+		return nil, fmt.Errorf("invalid CREATE STATISTICS syntax: expected CREATE STATISTICS <name> ON <table> (<cols>)")
+	}
+	statName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	if !p.curTokenIs(TokenOn) && !strings.EqualFold(p.curToken.Literal, "ON") {
+		return nil, fmt.Errorf("invalid CREATE STATISTICS syntax: expected CREATE STATISTICS <name> ON <table> (<cols>)")
+	}
+	p.nextToken() // eat ON
+
+	if p.curToken.Literal == "" || p.curTokenIs(TokenLParen) || p.curTokenIs(TokenEOF) {
+		return nil, fmt.Errorf("invalid CREATE STATISTICS syntax: expected CREATE STATISTICS <name> ON <table> (<cols>)")
+	}
+	tableName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	if !p.curTokenIs(TokenLParen) {
+		return nil, fmt.Errorf("invalid CREATE STATISTICS syntax: expected CREATE STATISTICS <name> ON <table> (<cols>)")
+	}
+	cols := p.parseIdentListInParens()
+
+	return &CreateStatisticsStmt{
+		Name:    statName,
+		Table:   tableName,
+		Columns: cols,
+	}, nil
+}
+
+// ParseDropStatistics parses DROP STATISTICS <name> ON <table> or DROP STATISTICS <table>.<name>.
+func (p *Parser) ParseDropStatistics() (*DropStatisticsStmt, error) {
+	if !p.curTokenIs(TokenDrop) {
+		return nil, fmt.Errorf("invalid DROP STATISTICS syntax: expected DROP STATISTICS <name> ON <table> or DROP STATISTICS <table>.<name>")
+	}
+	p.nextToken() // eat DROP
+	if !strings.EqualFold(p.curToken.Literal, "STATISTICS") {
+		return nil, fmt.Errorf("invalid DROP STATISTICS syntax: expected DROP STATISTICS <name> ON <table> or DROP STATISTICS <table>.<name>")
+	}
+	p.nextToken() // eat STATISTICS
+
+	if p.curToken.Literal == "" || p.curTokenIs(TokenEOF) || p.curTokenIs(TokenSemicolon) {
+		return nil, fmt.Errorf("invalid DROP STATISTICS syntax: expected DROP STATISTICS <name> ON <table> or DROP STATISTICS <table>.<name>")
+	}
+
+	rawFirst := p.curToken.Literal
+	p.nextToken()
+
+	if p.curTokenIs(TokenOn) || strings.EqualFold(p.curToken.Literal, "ON") {
+		p.nextToken() // eat ON
+		tableName := cleanSchemaPrefix(p.curToken.Literal)
+		p.nextToken()
+		return &DropStatisticsStmt{
+			Name:  cleanSchemaPrefix(rawFirst),
+			Table: tableName,
+		}, nil
+	}
+
+	cleaned := strings.Trim(strings.TrimSpace(rawFirst), "[]\"'`")
+	if idx := strings.LastIndex(cleaned, "."); idx != -1 {
+		tbl := cleanSchemaPrefix(cleaned[:idx])
+		stat := cleanSchemaPrefix(cleaned[idx+1:])
+		return &DropStatisticsStmt{
+			Name:  stat,
+			Table: tbl,
+		}, nil
+	}
+
+	return &DropStatisticsStmt{
+		Name: cleanSchemaPrefix(rawFirst),
+	}, nil
+}
+
+// ParseReindex parses REINDEX [TABLE | INDEX] <target>.
+func (p *Parser) ParseReindex() (*ReindexStmt, error) {
+	if !strings.EqualFold(p.curToken.Literal, "REINDEX") {
+		return nil, fmt.Errorf("invalid REINDEX syntax")
+	}
+	p.nextToken() // eat REINDEX
+	if p.curTokenIs(TokenTable) || p.curTokenIs(TokenIndex) ||
+		strings.EqualFold(p.curToken.Literal, "TABLE") || strings.EqualFold(p.curToken.Literal, "INDEX") {
+		p.nextToken()
+	}
+	if p.curToken.Literal == "" || p.curTokenIs(TokenEOF) || p.curTokenIs(TokenSemicolon) {
+		return nil, fmt.Errorf("invalid REINDEX syntax: missing target name")
+	}
+	target := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+	return &ReindexStmt{Target: target}, nil
+}
+
 

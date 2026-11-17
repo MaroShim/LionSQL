@@ -1,6 +1,12 @@
 package proc
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -214,3 +220,57 @@ func TestLexer_ForwardProgressOnStandaloneDotAndSymbols(t *testing.T) {
 		}
 	}
 }
+
+// TestArch_LexerEncapsulation enforces that no file in pkg/proc outside of lexer.go
+// directly accesses internal Lexer cursor fields or methods (ch, pos, readPos, readChar, peekChar).
+func TestArch_LexerEncapsulation(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("failed to read pkg/proc directory: %v", err)
+	}
+
+	forbiddenMembers := map[string]bool{
+		"readChar":          true,
+		"peekChar":          true,
+		"readPos":           true,
+		"advancePastIndex":  true,
+		"peekNonSpaceByte":  true,
+		"consumeRawDotChain": true,
+	}
+
+	fset := token.NewFileSet()
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || name == "lexer.go" {
+			continue
+		}
+
+		f, err := parser.ParseFile(fset, filepath.Clean(name), nil, 0)
+		if err != nil {
+			t.Fatalf("failed to parse %s: %v", name, err)
+		}
+
+		ast.Inspect(f, func(n ast.Node) bool {
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			member := sel.Sel.Name
+			if forbiddenMembers[member] {
+				pos := fset.Position(sel.Pos())
+				t.Errorf("[ARCH-GUARD] %s:%d:%d accesses private Lexer member .%s outside lexer.go",
+					name, pos.Line, pos.Column, member)
+			}
+			// Check direct .ch or .pos access on lexer variable 'l'
+			if ident, ok := sel.X.(*ast.Ident); ok && (ident.Name == "l" || ident.Name == "lexer") {
+				if member == "ch" || member == "pos" || member == "input" {
+					pos := fset.Position(sel.Pos())
+					t.Errorf("[ARCH-GUARD] %s:%d:%d accesses private Lexer field %s.%s outside lexer.go",
+						name, pos.Line, pos.Column, ident.Name, member)
+				}
+			}
+			return true
+		})
+	}
+}
+

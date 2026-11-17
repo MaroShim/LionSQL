@@ -89,18 +89,22 @@ LionSQL의 쿼리 실행 엔진(`pkg/engine`)은 프로시저 엔진(`pkg/proc`)
 
 ## 4. 단계별 실행 계획 (Execution Phases)
 
-### Phase 0: `pkg/proc/lexer.go` 구조적 정규화 및 캡슐화 리팩토링 (선행 기반 정비)
-- **전진 불변성(Forward-Progress Invariant) 확립**: `NextToken()`의 거대 `switch` 문에서 일부 분기는 조기 `return`하고 일부 분기는 함수 하단의 `l.readChar()`로 떨어지는(Fallthrough) 비일관적 구조를 전면 개편. 모든 토큰 리더 헬퍼(`readDollarToken`, `readOperatorToken`, `readIdentOrKeyword`, `readNumberToken`)가 자신의 소비 범위를 명확히 책임지고, 미인식/단일 문자 토큰도 100% 포인터를 전진시키도록 구조적으로 보장하여 무한 루프 가능성을 원천 차단.
-- **내부 상태 캡슐화 강화 (`l.ch`, `l.readChar()` 외부 노출 차단)**: `pkg/proc/characteristics.go`(`readTableIdentifier`) 등 외부 파일에서 Lexer 내부 필드(`l.ch`)를 직접 읽거나 `l.readChar()`를 수동 호출하는 캡슐화 위반을 제거하고, 모든 구문 특성 추출이 오직 공식 `NextToken()` / `PeekToken()` 스트림 API만을 통하도록 단일화.
+### Phase 0: `pkg/proc/lexer.go` 구조적 정규화 및 캡슐화 리팩토링 (선행 기반 정비 — 완료 `[x]`)
+- [x] **전진 불변성(Forward-Progress Invariant) 확립**: `NextToken()`의 거대 `switch` 문에서 일부 분기는 조기 `return`하고 일부 분기는 함수 하단의 `l.readChar()`로 떨어지는(Fallthrough) 비일관적 구조를 전면 개편. 모든 토큰 리더 헬퍼(`readDollarToken`, `readBangComparison`, `readDelimitedIdentifier`, `consumeRawDotChain`)가 자신의 소비 범위를 명확히 책임지고, 미인식/단일 문자 토큰도 100% 포인터를 전진시키도록 구조적으로 보장하여 무한 루프 가능성을 원천 차단.
+- [x] **내부 상태 캡슐화 강화 (`l.ch`, `l.readChar()` 외부 노출 차단)**: `pkg/proc/characteristics.go`(`readTableIdentifier`) 등 외부 파일에서 Lexer 내부 필드(`l.ch`)를 직접 읽거나 `l.readChar()`를 수동 호출하는 캡슐화 위반을 제거하고, `TestArch_LexerEncapsulation`(`go/ast` 정적 가드)을 통해 `lexer.go` 외부 접근을 영구 봉쇄.
 
-### Phase 1: `pkg/proc` DDL AST 및 파서 확장
-- `pkg/proc/ast.go`: `CreateTableStmt`, `AlterTableStmt`, `DropTableStmt`, `CreateIndexStmt`, `DropIndexStmt`, `TruncateStmt` AST 완전 정의.
-- `pkg/proc/parser_ddl.go`: 모든 DDL 문법의 정식 재귀 하강 파싱 구현 및 100% 토큰 단위 검증.
-- 단위 테스트: 복합 제약조건, 따옴표 내 특수문자, `WITH (...)` 옵션 등을 포함한 회귀 테스트 작성.
+### Phase 1: `pkg/proc` DDL AST 및 파서 확장 (완료 `[x]`)
+- [x] `pkg/proc/ast.go`: `CreateTableStmt`, `AlterTableStmt` (`AlterTableAction`), `DropTableStmt`, `CreateIndexStmt`, `DropIndexStmt`, `TruncateStmt`, `CreateViewStmt`, `DropViewStmt`, `CreateStatisticsStmt`, `DropStatisticsStmt`, `ReindexStmt` AST 완전 정의.
+- [x] `pkg/proc/parser_ddl.go`: 모든 DDL 문법의 정식 재귀 하강 파싱 구현 및 100% 토큰 단위 검증 (`CleanDefaultExpr`, 복합 `ALTER TABLE`, 인라인/테이블 레벨 제약조건, `WITH` 및 `PARTITION BY` 옵션 포함).
+- [x] 단위 테스트: 복합 제약조건, 따옴표 내 특수문자, `WITH (...)` 옵션 등을 포함한 회귀 테스트 작성 (`pkg/proc/ddl_ast_test.go`).
 
 ### Phase 2: `sqlexec_ddl.go` 전면 리팩토링 (레거시 파싱 폐기)
 - `sqlexec_ddl.go` 내의 13개 이상 수동 슬라이싱 헬퍼 함수 완전 삭제 (`[RULE:RadicalKISS]`).
 - `execCreateTable`, `execAlterTable`, `execDropTable`, `execCreateIndex`, `execDropIndex`가 `proc.Parser`를 호출하여 AST를 직접 수신하도록 전환.
+
+### Phase 2.5 (`ARCH-AST-GUARD-1`): `go/ast` 정적 분석 아키텍처 가드를 통한 수동 문자열 파싱 재유입 영구 차단
+- `pkg/engine/arch_guard_test.go` (`TestArch_NoManualSQLParsingInEngine`) 신설.
+- `pkg/engine/*.go` 프로덕션 코드의 Go AST를 스캔하여 DDL/DML 실행 모듈 내 금지된 `strings.*` 슬라이싱 함수(`strings.Index`, `strings.Split`, `strings.Contains`, `strings.Fields`) 및 로컬 `func parse*` / `func split*` 수동 파서 정의가 재유입되면 즉시 `go test`를 실패시켜 Invariant 12를 물리적으로 강제.
 
 ### Phase 3: `txddl` 트랜잭션 격리 계층 연동
 - `pkg/catalog/txddl` 구현 (`ShadowCatalog` + `DeferredActionQueue`).

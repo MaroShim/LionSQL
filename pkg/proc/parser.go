@@ -294,24 +294,24 @@ func isReservedAfterProjection(tok TokenType) bool {
 
 // ParseDataType maps SQL data type names to internal storage.DataType.
 func ParseDataType(s string) storage.DataType {
-	switch strings.ToUpper(strings.Trim(s, "[]")) {
-	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL", "INT2", "INT4", "INT8", "SIGNED", "UNSIGNED", "ROWVERSION":
+	switch strings.ToUpper(strings.Trim(strings.TrimSpace(s), "[]\"'`")) {
+	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "IDENTITY", "SERIAL", "BIGSERIAL", "SMALLSERIAL", "INT2", "INT4", "INT8", "SIGNED", "UNSIGNED", "ROWVERSION":
 		return storage.TypeInt
-	case "VARCHAR", "TEXT", "NVARCHAR", "CHAR", "BPCHAR", "SYSNAME":
+	case "VARCHAR", "TEXT", "NVARCHAR", "CHAR", "NCHAR", "BPCHAR", "SYSNAME", "CHARACTER VARYING":
 		return storage.TypeVarChar
 	case "REAL", "FLOAT4":
 		return storage.TypeReal
-	case "FLOAT", "DOUBLE", "FLOAT8":
+	case "FLOAT", "DOUBLE", "FLOAT8", "DOUBLE PRECISION":
 		return storage.TypeFloat
 	case "DECIMAL", "NUMERIC", "MONEY", "SMALLMONEY":
 		return storage.TypeDecimal
 	case "BIT", "BOOL", "BOOLEAN":
 		return storage.TypeBool
-	case "DATETIME", "TIMESTAMP", "TIMESTAMPTZ", "DATETIME2", "SMALLDATETIME", "DATETIMEOFFSET":
+	case "DATETIME", "TIMESTAMP", "TIMESTAMPTZ", "DATETIME2", "SMALLDATETIME", "DATETIMEOFFSET", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITHOUT TIME ZONE":
 		return storage.TypeDateTime
 	case "DATE":
 		return storage.TypeDate
-	case "TIME", "TIMETZ":
+	case "TIME", "TIMETZ", "TIME WITH TIME ZONE", "TIME WITHOUT TIME ZONE":
 		return storage.TypeTime
 	case "UUID", "UNIQUEIDENTIFIER", "GUID":
 		return storage.TypeUUID
