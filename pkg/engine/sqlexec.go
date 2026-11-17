@@ -1410,7 +1410,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			// Clean up previous table if any
 			_ = s.engine.DropTable(physTable)
 
-			createSQL := fmt.Sprintf("CREATE TABLE %s (%s)", physTable, colDefs)
+			createSQL := fmt.Sprintf("CREATE TABLE [%s] (%s)", physTable, colDefs)
 			res, err := s.execCreateTable(createSQL, start, cs)
 			if err != nil {
 				return nil, err

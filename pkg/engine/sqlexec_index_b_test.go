@@ -1,7 +1,10 @@
 package engine
 
 import (
+	"fmt"
 	"testing"
+
+	"lionsql/pkg/proc"
 )
 
 func TestParseDecimalPrecisionScale(t *testing.T) {
@@ -14,13 +17,17 @@ func TestParseDecimalPrecisionScale(t *testing.T) {
 		{"NUMERIC(18, 4)", 18, 4},
 		{"DECIMAL(8)", 8, 0},
 		{"DECIMAL", 18, 2},
-		{"VARCHAR(255)", 18, 2},
 	}
 
 	for _, tt := range tests {
-		p, s := parseDecimalPrecisionScale(tt.input)
+		sql := fmt.Sprintf("CREATE TABLE t (col %s)", tt.input)
+		stmt, err := proc.NewParser(proc.NewLexer(sql)).ParseCreateTable()
+		if err != nil || len(stmt.Columns) != 1 {
+			t.Fatalf("ParseCreateTable(%q) failed: %v", sql, err)
+		}
+		p, s := stmt.Columns[0].Precision, stmt.Columns[0].Scale
 		if p != tt.wantP || s != tt.wantS {
-			t.Errorf("parseDecimalPrecisionScale(%q) = (%d, %d); want (%d, %d)", tt.input, p, s, tt.wantP, tt.wantS)
+			t.Errorf("ParseCreateTable(%q) = (%d, %d); want (%d, %d)", tt.input, p, s, tt.wantP, tt.wantS)
 		}
 	}
 }

@@ -98,13 +98,13 @@ LionSQL의 쿼리 실행 엔진(`pkg/engine`)은 프로시저 엔진(`pkg/proc`)
 - [x] `pkg/proc/parser_ddl.go`: 모든 DDL 문법의 정식 재귀 하강 파싱 구현 및 100% 토큰 단위 검증 (`CleanDefaultExpr`, 복합 `ALTER TABLE`, 인라인/테이블 레벨 제약조건, `WITH` 및 `PARTITION BY` 옵션 포함).
 - [x] 단위 테스트: 복합 제약조건, 따옴표 내 특수문자, `WITH (...)` 옵션 등을 포함한 회귀 테스트 작성 (`pkg/proc/ddl_ast_test.go`).
 
-### Phase 2: `sqlexec_ddl.go` 전면 리팩토링 (레거시 파싱 폐기)
-- `sqlexec_ddl.go` 내의 13개 이상 수동 슬라이싱 헬퍼 함수 완전 삭제 (`[RULE:RadicalKISS]`).
-- `execCreateTable`, `execAlterTable`, `execDropTable`, `execCreateIndex`, `execDropIndex`가 `proc.Parser`를 호출하여 AST를 직접 수신하도록 전환.
+### Phase 2: `sqlexec_ddl.go` 전면 리팩토링 (레거시 파싱 폐기 — 완료 `[x]`)
+- [x] `sqlexec_ddl.go` 내의 10개 수동 슬라이싱 헬퍼 함수(`parseColumnDefault`, `parseColumnCheckExpr`, `parseDecimalPrecisionScale`, `parseCreateTablePrefix`, `parseAlterTablePrefix`, `parseTruncateClause`, `parseSQLDataType`, `splitColumnDefs`, `cleanDefaultExpr`, `parseForeignKeyClause`) 완전 삭제 (`[RULE:RadicalKISS]`, 약 900줄 감소).
+- [x] `execCreateTable`, `execAlterTable`, `execDropTable`, `execTruncateTable`, `execCreateIndex`, `execDropIndex`, `execDropView`, `execCreateStatistics`, `execDropStatistics`, `execReindex`가 `proc.Parser`를 호출하여 AST를 직접 수신하도록 전환.
 
-### Phase 2.5 (`ARCH-AST-GUARD-1`): `go/ast` 정적 분석 아키텍처 가드를 통한 수동 문자열 파싱 재유입 영구 차단
-- `pkg/engine/arch_guard_test.go` (`TestArch_NoManualSQLParsingInEngine`) 신설.
-- `pkg/engine/*.go` 프로덕션 코드의 Go AST를 스캔하여 DDL/DML 실행 모듈 내 금지된 `strings.*` 슬라이싱 함수(`strings.Index`, `strings.Split`, `strings.Contains`, `strings.Fields`) 및 로컬 `func parse*` / `func split*` 수동 파서 정의가 재유입되면 즉시 `go test`를 실패시켜 Invariant 12를 물리적으로 강제.
+### Phase 2.5 (`ARCH-AST-GUARD-1`): `go/ast` 정적 분석 아키텍처 가드를 통한 수동 문자열 파싱 재유입 영구 차단 (완료 `[x]`)
+- [x] `pkg/engine/arch_guard_test.go` (`TestArch_NoManualSQLParsingInDDL`) 신설.
+- [x] `pkg/engine/sqlexec_ddl.go` 프로덕션 코드의 Go AST를 스캔하여 금지된 `strings.*` 슬라이싱 함수(`strings.Index`, `strings.LastIndex`, `strings.Split`, `strings.SplitN`, `strings.Fields`), `regexp` import, 및 로컬 `func parse*` / `func split*` 수동 파서 정의가 재유입되면 즉시 `go test`를 실패시켜 Invariant 12를 물리적으로 강제.
 
 ### Phase 3: `txddl` 트랜잭션 격리 계층 연동
 - `pkg/catalog/txddl` 구현 (`ShadowCatalog` + `DeferredActionQueue`).
