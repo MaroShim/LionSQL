@@ -122,6 +122,7 @@ Clicking the **`DDL`** button in the upper-right corner opens the DDL export mod
 
 ### 3.3. Safe Drop Table Confirmation Modal (`UI-DROP-CONFIRM`)
 A strict two-stage safety mechanism prevents accidental data loss:
+- **Danger Zone Isolation**: The `Drop Table` action is cleanly isolated from the default data exploration bar into the **Danger Zone** section at the bottom of the `Schema & DDL` subview.
 - **Name Verification**: Clicking `Drop Table` invokes a confirmation dialog rather than executing immediately.
 - **Activation Rule**: The red `Drop Table` confirmation button remains disabled until the user types the exact table name into the confirmation field without typos.
 

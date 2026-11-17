@@ -435,3 +435,44 @@ func TestOverviewMonitoringElements(t *testing.T) {
 	}
 }
 
+func TestTablesAndRecordsHeaderAndDangerZoneLayout(t *testing.T) {
+	data, err := IndexHTML()
+	if err != nil {
+		t.Fatalf("failed to read index HTML: %v", err)
+	}
+	html := string(data)
+
+	// 1. Verify New Table is to the right of Seed Sample Data in header bar
+	idxSeed := strings.Index(html, `id="btn-seed-sample"`)
+	idxNewTable := strings.Index(html, `openCreateTableModal()`)
+	if idxSeed == -1 || idxNewTable == -1 {
+		t.Fatalf("missing seed sample data or new table button in HTML")
+	}
+	if idxSeed >= idxNewTable {
+		t.Errorf("expected Seed Sample Data (idx: %d) to be placed before New Table (idx: %d) so New Table is on the far right", idxSeed, idxNewTable)
+	}
+
+	// 2. Verify Drop Table is in Danger Zone inside subview-schema
+	idxSchema := strings.Index(html, `id="subview-schema"`)
+	idxDangerZone := strings.Index(html, `Danger Zone`)
+	idxDropTable := strings.Index(html, `id="btn-drop-table"`)
+	if idxSchema == -1 || idxDangerZone == -1 || idxDropTable == -1 {
+		t.Fatalf("missing subview-schema, Danger Zone, or btn-drop-table in HTML")
+	}
+	if !(idxSchema < idxDangerZone && idxDangerZone < idxDropTable) {
+		t.Errorf("expected Drop Table to be located inside subview-schema within Danger Zone: schema=%d, dangerZone=%d, dropBtn=%d", idxSchema, idxDangerZone, idxDropTable)
+	}
+
+	// 3. Verify Drop Table is removed from the table-select control bar
+	idxTableSelect := strings.Index(html, `id="table-select"`)
+	idxSubRecords := strings.Index(html, `id="btn-sub-records"`)
+	if idxTableSelect == -1 || idxSubRecords == -1 {
+		t.Fatalf("missing table-select or btn-sub-records in HTML")
+	}
+	controlBarSection := html[idxTableSelect:idxSubRecords]
+	if strings.Contains(controlBarSection, "btn-drop-table") {
+		t.Errorf("expected btn-drop-table to be removed from control bar between table-select and btn-sub-records")
+	}
+}
+
+

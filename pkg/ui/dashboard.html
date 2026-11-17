@@ -1236,8 +1236,8 @@
           </div>
         </div>
         <div style="display: flex; gap: 8px;">
-          <button class="btn" style="background: var(--primary);" onclick="openCreateTableModal()">+ New Table</button>
           <button id="btn-seed-sample" class="btn btn-secondary" onclick="seedSampleData()">Seed Sample Data</button>
+          <button class="btn" style="background: var(--primary);" onclick="openCreateTableModal()">+ New Table</button>
         </div>
       </div>
 
@@ -1246,7 +1246,6 @@
           <option value="">-- Select Table --</option>
         </select>
         <button class="btn btn-secondary" onclick="loadTables()">Refresh</button>
-        <button id="btn-drop-table" class="btn btn-secondary btn-danger-subtle" onclick="dropCurrentTable()">Drop Table</button>
 
         <div style="display: flex; gap: 6px; margin-left: auto;">
           <button id="btn-sub-records" class="btn" onclick="switchTableSubView('records')">Data Records</button>
@@ -1342,6 +1341,17 @@
 
         <h4 style="font-size: 0.85rem; margin-top: 20px; margin-bottom: 8px; color: var(--text-muted);">Auto-Generated DDL Definition:</h4>
         <pre id="schema-ddl-box" class="console-box" style="color: var(--console-text); max-height: 180px;">-- DDL preview will appear here</pre>
+
+        <!-- Danger Zone: Drop Table -->
+        <div style="margin-top: 24px; padding: 14px 16px; border: 1px solid var(--danger); border-radius: 6px; background: rgba(239, 68, 68, 0.05); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <div style="font-size: 0.9rem; font-weight: 600; color: var(--danger);">Danger Zone</div>
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+              Permanently drops this table and all its stored records. This action cannot be undone.
+            </div>
+          </div>
+          <button id="btn-drop-table" class="btn btn-secondary btn-danger-subtle" style="font-size: 0.82rem; padding: 6px 14px; border-color: var(--danger); color: var(--danger);" onclick="dropCurrentTable()">Drop Table</button>
+        </div>
       </div>
 
       <!-- Subview: Security Rules (RLS) -->
