@@ -722,6 +722,11 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 			} else if p.curTokenIs(TokenJoin) {
 				p.nextToken() // eat JOIN
 				joinType = "CROSS"
+				if strings.EqualFold(p.curToken.Literal, "LATERAL") {
+					p.nextToken() // eat LATERAL
+					joinType = "CROSS APPLY"
+					isApply = true
+				}
 			} else {
 				return nil, fmt.Errorf("expected APPLY or JOIN after CROSS, got %s", p.curToken.Literal)
 			}
@@ -754,7 +759,11 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					return nil, fmt.Errorf("expected JOIN, got %s", p.curToken.Literal)
 				}
 				p.nextToken() // eat JOIN
-				if joinHint != "" {
+				if strings.EqualFold(p.curToken.Literal, "LATERAL") {
+					p.nextToken() // eat LATERAL
+					joinType = "OUTER APPLY"
+					isApply = true
+				} else if joinHint != "" {
 					joinType = joinType + " " + joinHint
 				}
 			}
@@ -773,7 +782,11 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				return nil, fmt.Errorf("expected JOIN after RIGHT, got %s", p.curToken.Literal)
 			}
 			p.nextToken() // eat JOIN
-			if joinHint != "" {
+			if strings.EqualFold(p.curToken.Literal, "LATERAL") {
+				p.nextToken() // eat LATERAL
+				joinType = "OUTER APPLY"
+				isApply = true
+			} else if joinHint != "" {
 				joinType = joinType + " " + joinHint
 			}
 		} else if p.curTokenIs(TokenFull) {
@@ -805,11 +818,20 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				return nil, fmt.Errorf("expected JOIN, got %s", p.curToken.Literal)
 			}
 			p.nextToken() // eat JOIN
-			if joinHint != "" {
+			if strings.EqualFold(p.curToken.Literal, "LATERAL") {
+				p.nextToken() // eat LATERAL
+				joinType = "CROSS APPLY"
+				isApply = true
+			} else if joinHint != "" {
 				joinType = "INNER " + joinHint
 			}
 		} else if p.curTokenIs(TokenJoin) {
 			p.nextToken() // eat JOIN
+			if strings.EqualFold(p.curToken.Literal, "LATERAL") {
+				p.nextToken() // eat LATERAL
+				joinType = "CROSS APPLY"
+				isApply = true
+			}
 		}
 
 		if p.curTokenIs(TokenLParen) && (p.peekTokenIs(TokenSelect) || p.peekTokenIs(TokenWith)) {

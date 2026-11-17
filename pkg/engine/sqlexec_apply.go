@@ -19,10 +19,11 @@ var maxApplyRows = 100000
 // to prevent excessive subquery execution loops on unbounded scans ([RULE:BoundedBuffers]).
 var maxApplyLeftRows = 100000
 
-// hasApply reports whether the query contains a CROSS APPLY or OUTER APPLY join.
+// hasApply reports whether the query contains a CROSS APPLY, OUTER APPLY, or LATERAL join.
 func hasApply(query string) bool {
 	return sqlutil.ContainsKeyword(query, "CROSS APPLY", false) ||
-		sqlutil.ContainsKeyword(query, "OUTER APPLY", false)
+		sqlutil.ContainsKeyword(query, "OUTER APPLY", false) ||
+		sqlutil.ContainsKeyword(query, "LATERAL", false)
 }
 
 // execApplySelect handles SELECT queries containing CROSS APPLY or OUTER APPLY clauses.

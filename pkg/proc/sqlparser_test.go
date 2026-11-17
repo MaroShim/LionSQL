@@ -896,6 +896,39 @@ func TestParseCreateTable_WithDurability(t *testing.T) {
 	}
 }
 
+func TestParseSQL_LateralJoin(t *testing.T) {
+	sql := `SELECT r.id, elem
+		FROM "report" r
+		CROSS JOIN LATERAL jsonb_array_elements(r.parameters -> 'goals') elem
+		WHERE r.type = 'goal';`
+
+	stmt, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel, ok := stmt.(*proc.GeneralSelectStmt)
+	if !ok {
+		t.Fatalf("expected *GeneralSelectStmt, got %T", stmt)
+	}
+	if len(sel.Joins) != 1 {
+		t.Fatalf("expected 1 join, got %d", len(sel.Joins))
+	}
+	j := sel.Joins[0]
+	if j.Type != "CROSS APPLY" {
+		t.Errorf("expected join type 'CROSS APPLY', got %q", j.Type)
+	}
+	if j.Table.Name != "jsonb_array_elements" {
+		t.Errorf("expected table name 'jsonb_array_elements', got %q", j.Table.Name)
+	}
+	if !j.Table.IsTVF {
+		t.Errorf("expected IsTVF true, got false")
+	}
+	if j.Table.Alias != "elem" {
+		t.Errorf("expected alias 'elem', got %q", j.Table.Alias)
+	}
+}
+
+
 
 
 
