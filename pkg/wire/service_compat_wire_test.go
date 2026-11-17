@@ -856,7 +856,17 @@ func TestVaultwarden_PGWire_Connection(t *testing.T) {
 		t.Fatalf("db.PingContext (PGWire) failed: %v", err)
 	}
 
-	// Vaultwarden Diesel ORM tables
+	// Vaultwarden Diesel ORM tables and migrations tracking
+	_, err = db.ExecContext(ctx, `
+		CREATE TABLE "__diesel_schema_migrations" (
+			version VARCHAR(50) PRIMARY KEY NOT NULL,
+			run_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+	`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE __diesel_schema_migrations failed: %v", err)
+	}
+
 	_, err = db.ExecContext(ctx, `
 		CREATE TABLE users (
 			uuid VARCHAR(40) PRIMARY KEY,
@@ -882,6 +892,11 @@ func TestVaultwarden_PGWire_Connection(t *testing.T) {
 		t.Fatalf("CREATE TABLE ciphers failed: %v", err)
 	}
 
+	// Track migration versions
+	if _, err := db.ExecContext(ctx, `INSERT INTO "__diesel_schema_migrations" (version) VALUES ('2019-09-12-100000'), ('2020-03-13-205045');`); err != nil {
+		t.Fatalf("INSERT __diesel_schema_migrations failed: %v", err)
+	}
+
 	_, err = db.ExecContext(ctx, `INSERT INTO users (uuid, email, name, password_hash) VALUES ('u-1', 'user@vaultwarden.local', 'User One', 'hash123');`)
 	if err != nil {
 		t.Fatalf("INSERT users failed: %v", err)
@@ -901,6 +916,14 @@ func TestVaultwarden_PGWire_Connection(t *testing.T) {
 	}
 	if email != "user@vaultwarden.local" || cipherName != "GitHub Login" || cipherType != 1 {
 		t.Errorf("unexpected Vaultwarden PGWire result: %s, %s, %d", email, cipherName, cipherType)
+	}
+
+	var migrationCount int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM "__diesel_schema_migrations";`).Scan(&migrationCount); err != nil {
+		t.Fatalf("Query migration count failed: %v", err)
+	}
+	if migrationCount != 2 {
+		t.Fatalf("Expected 2 migration records, got: %d", migrationCount)
 	}
 }
 
