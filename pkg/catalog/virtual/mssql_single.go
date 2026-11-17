@@ -1053,6 +1053,33 @@ func GenerateSysCatalogRows(src Source, norm string, currDb string) (columns []s
 			},
 		)
 		return columns, allRows, true, nil
+
+	case "backupset", "msdb.dbo.backupset", "dbo.backupset", "msdb..backupset":
+		columns = []string{
+			"backup_set_id", "backup_set_uuid", "media_set_id", "first_family_number",
+			"first_recovery_fork_guid", "last_recovery_fork_guid", "fork_point_lsn",
+			"database_name", "type", "backup_start_date", "backup_finish_date",
+			"checkpoint_lsn", "database_backup_lsn", "database_creation_date",
+			"backup_size", "user_name", "is_copy_only",
+		}
+		allRows = []map[string]any{}
+		return columns, allRows, true, nil
+
+	case "backupmediafamily", "msdb.dbo.backupmediafamily", "dbo.backupmediafamily", "msdb..backupmediafamily":
+		columns = []string{
+			"media_set_id", "family_sequence_number", "media_family_id", "device_type",
+			"physical_device_name", "logical_device_name",
+		}
+		allRows = []map[string]any{}
+		return columns, allRows, true, nil
+
+	case "backupfile", "msdb.dbo.backupfile", "dbo.backupfile", "msdb..backupfile":
+		columns = []string{
+			"backup_set_id", "first_family_number", "file_number", "filegroup_name",
+			"logical_name", "physical_name", "file_type",
+		}
+		allRows = []map[string]any{}
+		return columns, allRows, true, nil
 	}
 
 	return nil, nil, false, nil

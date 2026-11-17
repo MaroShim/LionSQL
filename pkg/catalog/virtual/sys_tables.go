@@ -60,6 +60,10 @@ var sysViewAliases = map[string]struct{}{
 	"sysjobhistory": {}, "sys.sysjobhistory": {}, "dbo.sysjobhistory": {},
 	"sysalerts": {}, "sys.sysalerts": {}, "dbo.sysalerts": {},
 	"sysoperators": {}, "sys.sysoperators": {}, "dbo.sysoperators": {},
+	// SQL Server Backup & Restore / msdb catalog views
+	"backupset": {}, "msdb.dbo.backupset": {}, "dbo.backupset": {}, "msdb..backupset": {},
+	"backupmediafamily": {}, "msdb.dbo.backupmediafamily": {}, "dbo.backupmediafamily": {}, "msdb..backupmediafamily": {},
+	"backupfile": {}, "msdb.dbo.backupfile": {}, "dbo.backupfile": {}, "msdb..backupfile": {},
 }
 
 // IsSysCatalogTable reports whether norm identifies any registered sys.* view or alias in the table.

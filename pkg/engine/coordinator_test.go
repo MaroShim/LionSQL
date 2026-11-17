@@ -1453,6 +1453,45 @@ CAST(c.is_enabled AS bit) ASC`
 		t.Fatalf("expected QUOTED_IDENTIFIER=1, got %v", resSessProp.Rows[0]["QUOTED_IDENTIFIER"])
 	}
 
+	// 15c. Azure Data Studio Context Info Query
+	qADSContextInfo := `SELECT CONVERT(NVARCHAR(36), CONTEXT_INFO()) AS [ContextInfo]`
+	resContextInfo, err := coord.ExecuteSQL(qADSContextInfo)
+	if err != nil {
+		t.Fatalf("ADS context info query failed: %v", err)
+	}
+	if len(resContextInfo.Rows) != 1 {
+		t.Fatalf("expected 1 row for context info, got %d", len(resContextInfo.Rows))
+	}
+
+	// 15d. Azure Data Studio Database Dashboard CTE Query (sys.master_files & msdb..backupset)
+	qADSDashboardCTE := `WITH
+    db_size
+    AS
+    (
+        SELECT database_id, CAST(SUM(CAST(size AS BIGINT)) * 8.0 / 1024 AS BIGINT) size
+        FROM sys.master_files
+        GROUP BY database_id
+    ),
+    db_backup
+    AS
+    (
+        SELECT database_name, MAX(backup_start_date) AS last_backup
+        FROM msdb..backupset
+        GROUP BY database_name
+    )
+SELECT name, state_desc AS state, db_size.size, db_backup.last_backup
+FROM sys.databases LEFT JOIN db_size ON sys.databases.database_id = db_size.database_id
+LEFT JOIN db_backup ON sys.databases.name = db_backup.database_name
+WHERE state_desc='ONLINE'
+ORDER BY name ASC`
+	resDashboard, err := coord.ExecuteSQL(qADSDashboardCTE)
+	if err != nil {
+		t.Fatalf("ADS dashboard CTE query failed: %v", err)
+	}
+	if len(resDashboard.Rows) == 0 {
+		t.Fatalf("expected at least 1 database row in dashboard CTE query, got 0")
+	}
+
 	// 16. SSMS Complex Table Enumeration Query with sys.indexes & sys.data_spaces & sys.extended_properties
 	qSSMSComplexTables := `SELECT
 tbl.name AS [Name],

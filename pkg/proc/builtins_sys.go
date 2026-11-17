@@ -145,7 +145,7 @@ func isSysBuiltin(name string) bool {
 		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID", "SETVAL", "NEXTVAL",
 		"SCOPE_IDENTITY", "SERVERPROPERTY", "SESSIONPROPERTY", "CONNECTIONPROPERTY", "COLLATIONPROPERTY",
 		"ERROR_NUMBER", "ERROR_MESSAGE", "ERROR_LINE", "ERROR_SEVERITY", "ERROR_STATE", "ERROR_PROCEDURE", "@@ERROR",
-		"XACT_STATE",
+		"XACT_STATE", "CONTEXT_INFO",
 		"OBJECT_ID", "OBJECT_NAME", "COL_LENGTH", "COL_NAME", "SCHEMA_NAME", "SCHEMA_ID", "DB_NAME", "DB_ID", "APP_NAME", "IDENT_CURRENT",
 		"DATABASEPROPERTYEX", "OBJECTPROPERTY", "COLUMNPROPERTY", "INDEXPROPERTY", "OBJECT_SCHEMA_NAME", "TYPE_ID", "TYPE_NAME",
 		"HOST_NAME", "HOST_ID", "CURRENT_USER", "USER_NAME", "SUSER_NAME", "SUSER_SNAME", "USER_ID", "SUSER_ID",
@@ -356,6 +356,9 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		default:
 			return storage.NullValue(storage.TypeInt)
 		}
+
+	case "CONTEXT_INFO":
+		return storage.NullValue(storage.TypeBinary)
 
 	case "COLLATIONPROPERTY":
 		if len(args) < 2 || args[0].IsNull || args[1].IsNull {

@@ -944,6 +944,9 @@ func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSessio
 
 			if needsAuth {
 				if _, err := authSvc.AuthenticateLogin(sess.UserName, sess.Password); err != nil {
+					if s.DevMode() {
+						log.Printf("[DEV][TDS][LoginFailed] user=%s password_len=%d err=%v", sess.UserName, len(sess.Password), err)
+					}
 					errMsg := fmt.Sprintf("Login failed for user '%s'.", sess.UserName)
 					errToken := BuildError(18456, 1, 14, errMsg, "LionSQL", "", 1)
 					doneToken := BuildDone(TokenDone, DoneError, 0, 0)
@@ -953,6 +956,9 @@ func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSessio
 					errResp.Write(doneToken)
 					_ = sess.writePacket(conn, PacketTabular, errResp.Bytes())
 					return false
+				}
+				if s.DevMode() {
+					log.Printf("[DEV][TDS][LoginSuccess] user=%s", sess.UserName)
 				}
 			}
 		}
