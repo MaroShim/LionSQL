@@ -232,9 +232,9 @@ func (l *Lexer) scanToken(tokLine, tokCol int) Token {
 			ident := l.readIdentifier()
 			upper := strings.ToUpper(ident)
 			if kwType, ok := keywords[upper]; ok {
-				return Token{Type: kwType, Literal: upper, Line: tokLine, Col: tokCol}
+				return Token{Type: kwType, Literal: upper, Raw: ident, Line: tokLine, Col: tokCol}
 			}
-			return Token{Type: TokenIdent, Literal: ident, Line: tokLine, Col: tokCol}
+			return Token{Type: TokenIdent, Literal: ident, Raw: ident, Line: tokLine, Col: tokCol}
 		}
 		if isDigit(l.ch) {
 			if l.ch == '0' && (l.peekChar() == 'x' || l.peekChar() == 'X') {

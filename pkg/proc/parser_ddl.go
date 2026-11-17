@@ -644,8 +644,20 @@ func (p *Parser) ParseCreateTable() (*CreateTableStmt, error) {
 	if p.curToken.Literal == "" || p.curTokenIs(TokenLParen) || p.curTokenIs(TokenEOF) {
 		return nil, fmt.Errorf("invalid CREATE TABLE syntax: missing table name")
 	}
-	tableName := cleanSchemaPrefix(p.curToken.Literal)
-	p.nextToken()
+
+	var nameTokens []string
+	for !p.curTokenIs(TokenLParen) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		nameTokens = append(nameTokens, p.curToken.IdentLiteral())
+		p.nextToken()
+	}
+	rawTableName := strings.Join(nameTokens, " ")
+	if len(nameTokens) == 3 && nameTokens[0] == "{" && nameTokens[2] == "}" {
+		rawTableName = "{" + nameTokens[1] + "}"
+	}
+	tableName := cleanSchemaPrefix(rawTableName)
+	if tableName == "" {
+		return nil, fmt.Errorf("invalid CREATE TABLE syntax: missing table name")
+	}
 
 	if !p.curTokenIs(TokenLParen) {
 		return nil, fmt.Errorf("invalid CREATE TABLE syntax: missing opening parenthesis")
@@ -1004,7 +1016,7 @@ func (p *Parser) parseReferencesClause(constraintName, childTable string, childC
 }
 
 func (p *Parser) parseSingleColumnDef(tableName string) (ColumnDef, error) {
-	colName := cleanSchemaPrefix(p.curToken.Literal)
+	colName := cleanSchemaPrefix(p.curToken.IdentLiteral())
 	p.nextToken()
 	return p.parseColumnTypeAndConstraints(colName, tableName)
 }
@@ -1025,10 +1037,13 @@ func (p *Parser) parseColumnTypeAndConstraints(colName, tableName string) (Colum
 			dt = storage.TypeFloat
 			prec = 53
 		}
+		scale = 0
 	} else if dt == storage.TypeReal {
 		prec = 24
+		scale = 0
 	} else if dt == storage.TypeFloat {
 		prec = 53
+		scale = 0
 	} else if dt == storage.TypeDecimal {
 		if rawType == "MONEY" {
 			prec = 19
@@ -1040,11 +1055,13 @@ func (p *Parser) parseColumnTypeAndConstraints(colName, tableName string) (Colum
 			prec = 18
 			scale = 2
 		}
-	}
-
-	if isRowVersion {
+	} else if isRowVersion {
 		dt = storage.TypeBinary
 		prec = 8
+		scale = 0
+	} else {
+		prec = 0
+		scale = 0
 	}
 
 	isPK := false

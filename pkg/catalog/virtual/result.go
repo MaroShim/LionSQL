@@ -759,7 +759,7 @@ func getMapValueCaseInsensitive(rec map[string]any, col string) any {
 func handleVirtualAggregate(filteredRows []map[string]any, projStr string) (*Result, bool, error) {
 	trimmed := strings.TrimSpace(projStr)
 	upper := strings.ToUpper(trimmed)
-	if !strings.HasPrefix(upper, "STRING_AGG(") && !strings.HasPrefix(upper, "COUNT(") {
+	if !strings.HasPrefix(upper, "STRING_AGG(") {
 		return nil, false, nil
 	}
 
@@ -805,17 +805,6 @@ func handleVirtualAggregate(filteredRows []map[string]any, projStr string) (*Res
 				},
 			}, true, nil
 		}
-	} else if strings.HasPrefix(upperExpr, "COUNT(") && strings.HasSuffix(upperExpr, ")") {
-		outCol := alias
-		if outCol == "" {
-			outCol = "count"
-		}
-		return &Result{
-			Columns: []string{outCol},
-			Rows: []map[string]any{
-				{outCol: int64(len(filteredRows))},
-			},
-		}, true, nil
 	}
 
 	return nil, false, nil

@@ -437,8 +437,18 @@ func IsCompoundAssign(tok TokenType) (TokenType, bool) {
 type Token struct {
 	Type    TokenType
 	Literal string
+	Raw     string
 	Line    int
 	Col     int
+}
+
+// IdentLiteral returns the original case-preserved lexeme when a keyword token
+// is used in an identifier position (e.g. column named "output").
+func (t Token) IdentLiteral() string {
+	if t.Raw != "" {
+		return t.Raw
+	}
+	return t.Literal
 }
 
 func (t Token) String() string {
