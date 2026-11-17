@@ -248,6 +248,7 @@ func renderDaemonStartupOutput(childPID int, engineType, dataDir, logFile, pidFi
 	b.WriteString("   Check status:   lionsql status (or -status)\n")
 	b.WriteString("   Stop daemon:    lionsql stop (or -stop)\n")
 	b.WriteString("   Restart daemon: lionsql restart (or -restart)\n")
+	b.WriteString("   Help & Options: lionsql -h (summary) | lionsql --help (full options)\n")
 	b.WriteString("============================================================\n")
 
 	// The Very Last Line Invariant:

@@ -10,7 +10,52 @@ import (
 	"lionsql/pkg/config"
 )
 
-func printUsage() {
+func printShortUsage() {
+	fmt.Printf(`LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v%s)
+%s
+
+Usage:
+  lionsql <command> [arguments...]
+  lionsql [options...]
+
+Quickstart:
+  lionsql start                  # Run as background daemon
+  lionsql                        # Run foreground server (:5433, :1433, :8090)
+  lionsql -i                     # Start interactive SQL shell
+
+Commands:
+  start | stop | restart | status  Daemon lifecycle management
+  serve                            Run database server in foreground (default)
+  cli | sql "<statement>"          Interactive SQL shell or one-off query execution
+  doctor                           Run self-diagnostic health checks on host & storage
+  backup | restore <file>          Point-in-time database backup and restore
+  migrate <subcommand>             Declarative schema migrations (status, up, down)
+  init-config [path]               Generate default lionsql.json configuration file
+  version                          Display version and engine information
+
+Common Options:
+  -dir <path>            Database data directory (default: ./data)
+  -engine <type>         Storage engine: wiredtiger or compact (default: wiredtiger)
+  -http <addr>           HTTP service & Web Studio address (default: 127.0.0.1:8090)
+  -pg <addr>             PostgreSQL v3 wire port (default: 127.0.0.1:5433)
+  -tds <addr>            MS SQL Server TDS wire port (default: 127.0.0.1:1433)
+  -dev                   Developer mode (real-time query & parameter tracing)
+  -seed                  Seed demo sample database on startup
+  -config <path>         Path to JSON configuration file (auto-detects ./lionsql.json)
+
+Examples:
+  lionsql start                   # Start background daemon
+  lionsql status                  # Check background daemon status
+  lionsql stop                    # Stop background daemon
+  lionsql -i                      # Start interactive SQL REPL shell
+  lionsql sql "SELECT 1;"         # Execute one-off SQL statement
+
+For full options and comprehensive manual (Replication, Outbox, Memory, TLS), run:
+  lionsql --help
+`, config.Version, config.CompactVersion())
+}
+
+func printFullUsage() {
 	fmt.Printf(`LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v%s)
 %s
 
@@ -79,11 +124,8 @@ Options by Category (옵션 상세):
     -slow-threshold-ms <N> Threshold in ms to record slow queries (default: 100.0)
     -general-log <path>    Enable general query logging (e.g. data/general.log, pass 'true' for default)
 
-  [Daemon Lifecycle (Background Mode)]
+  [Daemon Configuration]
     -d, -daemon            Run server as background daemon
-    -stop                  Stop running background daemon
-    -restart               Restart running background daemon
-    -status                Query status of running daemon
     -pidfile <path>        Path to PID file (default: <dir>/lionsql.pid)
     -logfile <path>        Path to daemon log file (default: <dir>/lionsql.log)
 
@@ -97,9 +139,7 @@ Options by Category (옵션 상세):
     -election-timeout-ms <N>  Leader election vote timeout (default: 1500ms)
     -cluster-token <token>    Pre-shared cluster secret token for HA replication authentication (or LIONSQL_CLUSTER_TOKEN)
 
-  [Backup, Restore & PITR]
-    -backup <file>         Perform live snapshot backup to target archive and exit
-    -restore <file>        Restore database from backup archive and exit
+  [Backup & PITR Options]
     -wal-archive <dir>     Path to WAL archive directory for continuous archiving and PITR
     -restore-time <ts>     Target timestamp for Point-In-Time Recovery
     -restore-lsn <lsn>     Target Log Sequence Number for Point-In-Time Recovery
@@ -126,6 +166,10 @@ Examples:
   lionsql -f ./schema.sql         # Execute SQL statements from file
   lionsql sql "SELECT 1;"         # Execute one-off SQL statement
 `, config.Version, config.CompactVersion())
+}
+
+func printUsage() {
+	printFullUsage()
 }
 
 func printVersion() {
@@ -157,9 +201,15 @@ func main() {
 	defer cleanupPlatformTimer()
 
 	// Intercept help flags immediately
-	if len(os.Args) > 1 && (os.Args[1] == "-h" || os.Args[1] == "-help" || os.Args[1] == "--help" || os.Args[1] == "-?" || os.Args[1] == "help") {
-		printUsage()
-		return
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "-h", "-?":
+			printShortUsage()
+			return
+		case "--help", "-help", "help":
+			printFullUsage()
+			return
+		}
 	}
 
 	// Intercept version flags immediately
@@ -309,11 +359,13 @@ func main() {
 		}
 	case "version", "--version", "-v":
 		printVersion()
-	case "help", "--help", "-h":
-		printUsage()
+	case "-h", "-?":
+		printShortUsage()
+	case "help", "--help", "-help":
+		printFullUsage()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %q\n\n", os.Args[1])
-		printUsage()
+		printShortUsage()
 		os.Exit(1)
 	}
 }

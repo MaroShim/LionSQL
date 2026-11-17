@@ -1095,7 +1095,8 @@ func renderStartupBanner(cfg *config.Config, ctx bannerContext) string {
 	}
 
 	b.WriteString("--------------------------------------------------------------------------------\n")
-	b.WriteString("Press Ctrl+C to stop server\n")
+	b.WriteString(" Quick Help: lionsql -h (summary) | lionsql --help (full options)\n")
+	b.WriteString(" Press Ctrl+C to stop server\n")
 
 	// The Very Last Line Invariant:
 	// If the superuser password is unchanged (default or empty), output the ALL-CAPS security notice
