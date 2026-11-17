@@ -47,6 +47,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
 CHANGELOG_FILE="${ROOT_DIR}/CHANGELOG.md"
+VERSION_FILE="${ROOT_DIR}/VERSION"
 VERSION_GO_FILE="${ROOT_DIR}/pkg/config/version.go"
 README_FILE="${ROOT_DIR}/README.md"
 README_KO_FILE="${ROOT_DIR}/README.ko.md"
@@ -473,6 +474,7 @@ echo ""
 echo -e "${CLR_BLUE}[4/5] Synchronizing Version SSOT Across Files...${CLR_RESET}"
 
 CHANGELOG_FILE="${ROOT_DIR}/CHANGELOG.md"
+VERSION_FILE="${ROOT_DIR}/VERSION"
 VERSION_GO_FILE="${ROOT_DIR}/pkg/config/version.go"
 README_FILE="${ROOT_DIR}/README.md"
 README_KO_FILE="${ROOT_DIR}/README.ko.md"
@@ -521,7 +523,8 @@ echo -e "Updated: ${CLR_BOLD}CHANGELOG.md${CLR_RESET}"
 # If base SemVer (e.g. 0.90.0-beta4 -> base 0.90.0)
 sed -i.bak -E "s/(var|const) Version = \".*\"/var Version = \"${VER}\"/" "${VERSION_GO_FILE}"
 rm -f "${VERSION_GO_FILE}.bak"
-echo -e "Updated: ${CLR_BOLD}pkg/config/version.go${CLR_RESET} -> ${VER}"
+echo "${VER}" > "${VERSION_FILE}"
+echo -e "Updated: ${CLR_BOLD}pkg/config/version.go & VERSION${CLR_RESET} -> ${VER}"
 
 # 4.3. Update README.md & README.ko.md badges
 sed -i.bak -E "s/badge\/version-v[0-9A-Za-z\.\-]+-blue\.svg/badge\/version-v${SHIELD_VER}-blue.svg/g" "${README_FILE}"
@@ -641,7 +644,7 @@ echo ""
 echo -e "${CLR_BLUE}[5/5] Creating Release Commit, Git Tag, and Pushing...${CLR_RESET}"
 
 # Stage modified version files and generated notes
-git add "${CHANGELOG_FILE}" "${VERSION_GO_FILE}" "${README_FILE}" "${README_KO_FILE}"
+git add "${CHANGELOG_FILE}" "${VERSION_GO_FILE}" "${VERSION_FILE}" "${README_FILE}" "${README_KO_FILE}"
 [ -f "${NOTES_DOC_MD}" ] && git add "${NOTES_DOC_MD}"
 [ -f "${NOTES_DOC_KO}" ] && git add "${NOTES_DOC_KO}"
 [ -f "${NOTES_README_KO}" ] && git add "${NOTES_README_KO}"

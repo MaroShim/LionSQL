@@ -86,71 +86,71 @@ Commands (기본 명령체계):
 Options by Category (옵션 상세):
 
   [Interactive & Batch SQL Execution]
-    -i, -interactive       Start interactive SQL REPL shell (aliases: cli, -shell)
-    -e, -execute <query>   Execute inline SQL statement and print results
-    -f, -file <path>       Execute SQL statements from a file
+    -i, -interactive           Start interactive SQL REPL shell (aliases: cli, -shell)
+    -e, -execute <query>       Execute inline SQL statement and print results
+    -f, -file <path>           Execute SQL statements from a file
 
   [Network & Wire Protocols]
-    -http <addr>           HTTP service & Web Studio address (default: 127.0.0.1:8090, empty to disable)
-    -app <path>            Host single-page HTML file or flat static assets directory (SPA Mode)
-    -pg <addr>             PostgreSQL v3 wire listen address (default: 127.0.0.1:5433, empty to disable)
-    -tds <addr>            MS SQL Server TDS listen address (default: 127.0.0.1:1433, empty to disable)
-    -tls                   Enable SSL/TLS encrypted wire connections
-    -tls-cert <path>       Path to TLS certificate file (auto-generates self-signed if omitted)
-    -tls-key <path>        Path to TLS private key file
-    -require-ssl           Enforce mandatory SSL/TLS for all wire clients
+    -http <addr>               HTTP service & Web Studio address (default: 127.0.0.1:8090, empty to disable)
+    -app <path>                Host single-page HTML file or flat static assets directory (SPA Mode)
+    -pg <addr>                 PostgreSQL v3 wire listen address (default: 127.0.0.1:5433, empty to disable)
+    -tds <addr>                MS SQL Server TDS listen address (default: 127.0.0.1:1433, empty to disable)
+    -tls                       Enable SSL/TLS encrypted wire connections
+    -tls-cert <path>           Path to TLS certificate file (auto-generates self-signed if omitted)
+    -tls-key <path>            Path to TLS private key file
+    -require-ssl               Enforce mandatory SSL/TLS for all wire clients
 
   [Storage & Persistence]
-    -dir <path>            Database data directory (default: ./data) (aliases: -data, -data-dir)
-    -engine <type>         Storage engine backend: wiredtiger or compact (default: wiredtiger on macOS/Linux, compact on Windows)
-                             - wiredtiger: High-concurrency Disk B+Tree MVCC engine for enterprise databases
-                             - compact   : Pure-Go In-Memory OCC engine with zero-GC flat buffers and AOF/WAL durability (alias: memory)
-    -seed                  Automatically seed demo e-commerce sample database on startup
-    -config <path>         Path to JSON configuration file (auto-detects ./lionsql.json)
+    -dir <path>                Database data directory (default: ./data) (aliases: -data, -data-dir)
+    -engine <type>             Storage engine backend: wiredtiger or compact (default: wiredtiger on macOS/Linux, compact on Windows)
+                                 - wiredtiger: High-concurrency Disk B+Tree MVCC engine for enterprise databases
+                                 - compact   : Pure-Go In-Memory OCC engine with zero-GC flat buffers and AOF/WAL durability (alias: memory)
+    -seed                      Automatically seed demo e-commerce sample database on startup
+    -config <path>             Path to JSON configuration file (auto-detects ./lionsql.json)
 
   [Memory & Performance]
-    -max-memory <size>     Global heap memory budget in MB/GB (default: 65%% of physical RAM, e.g. 4096MB)
-    -work-mem <size>       Memory budget per query operator (default: 64MB, e.g. 64MB, 128MB)
-    -max-workers <N>       Max concurrent query execution workers (default: NumCPU * 4)
-    -max-idle-sessions <N> Max idle storage sessions retained in pool (default: 64)
+    -max-memory <size>         Global heap memory budget in MB/GB (default: 65%% of physical RAM, e.g. 4096MB)
+    -work-mem <size>           Memory budget per query operator (default: 64MB, e.g. 64MB, 128MB)
+    -max-workers <N>           Max concurrent query execution workers (default: NumCPU * 4)
+    -max-idle-sessions <N>     Max idle storage sessions retained in pool (default: 64)
 
   [Security & Authentication]
-    -auth                  Enforce JWT authentication on protected REST endpoints (default: true)
-    -admin-email <email>   Default superuser email (default: admin@lionsql.local)
-    -admin-pass <pass>     Default superuser password (default: 1234567890)
+    -auth                      Enforce JWT authentication on protected REST endpoints (default: true)
+    -admin-email <email>       Default superuser email (default: admin@lionsql.local)
+    -admin-pass <pass>         Default superuser password (default: 1234567890)
 
   [Logging & Diagnostics]
-    -dev                   Enable developer mode (real-time query & parameter tracing on console)
-    -slow-log <path>       Path to slow query log file (e.g. data/slow_query.log, pass 'true' for default)
-    -slow-threshold-ms <N> Threshold in ms to record slow queries (default: 100.0)
-    -general-log <path>    Enable general query logging (e.g. data/general.log, pass 'true' for default)
+    -dev                       Enable developer mode (real-time query & parameter tracing on console)
+    -slow-log <path>           Path to slow query log file (e.g. data/slow_query.log, pass 'true' for default)
+    -slow-threshold-ms <N>     Threshold in ms to record slow queries (default: 100.0)
+    -general-log <path>        Enable general query logging (e.g. data/general.log, pass 'true' for default)
 
   [Daemon Configuration]
-    -d, -daemon            Run server as background daemon
-    -pidfile <path>        Path to PID file (default: <dir>/lionsql.pid)
-    -logfile <path>        Path to daemon log file (default: <dir>/lionsql.log)
+    -d, -daemon                Run server as background daemon
+    -pidfile <path>            Path to PID file (default: <dir>/lionsql.pid)
+    -logfile <path>            Path to daemon log file (default: <dir>/lionsql.log)
 
   [High Availability & Replication]
-    -replica-of <url>      Primary server HTTP URL to replicate from (e.g. http://127.0.0.1:8090)
-    -node-id <id>          Unique replication node identifier
-    -auto-failover         Enable Always On automatic failover upon primary heartbeat timeout
-    -peers <urls>          Comma-separated list of peer HTTP URLs for quorum election
-    -self-url <url>        HTTP URL of this node used for peer routing and failover election
-    -heartbeat-timeout-ms <N> Heartbeat failure detection timeout (default: 3000ms)
-    -election-timeout-ms <N>  Leader election vote timeout (default: 1500ms)
-    -cluster-token <token>    Pre-shared cluster secret token for HA replication authentication (or LIONSQL_CLUSTER_TOKEN)
+    -replica-of <url>          Primary server HTTP URL to replicate from (e.g. http://127.0.0.1:8090)
+    -node-id <id>              Unique replication node identifier
+    -auto-failover             Enable Always On automatic failover upon primary heartbeat timeout
+    -peers <urls>              Comma-separated list of peer HTTP URLs for quorum election
+    -self-url <url>            HTTP URL of this node used for peer routing and failover election
+    -heartbeat-timeout-ms <N>  Heartbeat failure detection timeout (default: 3000ms)
+    -election-timeout-ms <N>   Leader election vote timeout (default: 1500ms)
+    -cluster-token <token>     Pre-shared cluster secret token for HA replication authentication (or LIONSQL_CLUSTER_TOKEN)
 
   [Backup & PITR Options]
-    -wal-archive <dir>     Path to WAL archive directory for continuous archiving and PITR
-    -restore-time <ts>     Target timestamp for Point-In-Time Recovery
-    -restore-lsn <lsn>     Target Log Sequence Number for Point-In-Time Recovery
+    -wal-archive <dir>         Path to WAL archive directory for continuous archiving and PITR
+    -restore-time <ts>         Target timestamp for Point-In-Time Recovery
+    -restore-lsn <lsn>         Target Log Sequence Number for Point-In-Time Recovery
 
   [Transactional Outbox Broker]
-    -outbox                Enable Transactional Outbox broker dispatcher
-    -outbox-table <table>  Filter outbox dispatcher to specific table (default: all)
-    -outbox-webhook <url>  Webhook URL for outbox message forwarding
-    -outbox-kafka <url>    Kafka REST Proxy endpoint (e.g. http://localhost:8082)
-    -outbox-rabbitmq <url> RabbitMQ Management API endpoint (e.g. http://localhost:15672)
+    -outbox                    Enable Transactional Outbox broker dispatcher
+    -outbox-table <table>      Filter outbox dispatcher to specific table (default: all)
+    -outbox-webhook <url>      Webhook URL for outbox message forwarding
+    -outbox-kafka <url>        Kafka REST Proxy endpoint (e.g. http://localhost:8082)
+    -outbox-rabbitmq <url>     RabbitMQ Management API endpoint (e.g. http://localhost:15672)
 
 Examples:
   lionsql start                   # Start LionSQL as background daemon
