@@ -124,11 +124,17 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 				}
 				if len(tblCols) > 0 {
 					for _, col := range tblCols {
+						if storage.IsSyntheticPKName(col) {
+							continue
+						}
 						addField(cleanPrefix+"."+col, col)
 					}
 				} else if child != nil {
 					matchedAny := false
 					for _, col := range child.Schema() {
+						if storage.IsSyntheticPKName(col) {
+							continue
+						}
 						if strings.HasPrefix(strings.ToLower(col), strings.ToLower(cleanPrefix)+".") {
 							colName := col[len(cleanPrefix)+1:]
 							addField(col, colName)
@@ -137,6 +143,9 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 					}
 					if !matchedAny {
 						for _, col := range child.Schema() {
+							if storage.IsSyntheticPKName(col) {
+								continue
+							}
 							addField(col, col)
 						}
 					}
