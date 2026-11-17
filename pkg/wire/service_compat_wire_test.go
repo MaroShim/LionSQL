@@ -989,6 +989,39 @@ func TestUmami_PGWire_Connection(t *testing.T) {
 	if siteName != "My Blog" || browser != "Chrome" {
 		t.Errorf("unexpected Umami PGWire result: %s, %s", siteName, browser)
 	}
+
+	// Prisma migrations tracking table verification
+	_, err = db.ExecContext(ctx, `
+		CREATE TABLE _prisma_migrations (
+			id VARCHAR(36) PRIMARY KEY,
+			checksum VARCHAR(64) NOT NULL,
+			finished_at TIMESTAMP WITH TIME ZONE,
+			migration_name VARCHAR(255) NOT NULL,
+			logs TEXT,
+			rolled_back_at TIMESTAMP WITH TIME ZONE,
+			started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+			applied_steps_count INTEGER DEFAULT 0
+		);
+	`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE _prisma_migrations failed: %v", err)
+	}
+
+	_, err = db.ExecContext(ctx, `INSERT INTO _prisma_migrations (id, checksum, migration_name, applied_steps_count) VALUES ('m-14', 'c14', '14_add_link_and_pixel', 1);`)
+	if err != nil {
+		t.Fatalf("INSERT _prisma_migrations failed: %v", err)
+	}
+
+	// Umami Migration 14: LATERAL join query execution verification (mapped to APPLY join)
+	qLateral := `SELECT w.name, sub.browser FROM website w CROSS JOIN LATERAL (SELECT s.browser FROM session s WHERE s.website_id = w.website_id) sub;`
+	var latName, latBrowser string
+	err = db.QueryRowContext(ctx, qLateral).Scan(&latName, &latBrowser)
+	if err != nil {
+		t.Fatalf("CROSS JOIN LATERAL execution failed: %v", err)
+	}
+	if latName != "My Blog" || latBrowser != "Chrome" {
+		t.Errorf("unexpected LATERAL join result: %s, %s", latName, latBrowser)
+	}
 }
 
 func TestApacheAnswer_PGWire_Connection(t *testing.T) {
