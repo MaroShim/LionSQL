@@ -46,7 +46,7 @@ LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-beta0`(Feature Freeze 기�
 | 과제 코드 | 핵심 구현 과제 | 대상 패키지 | 상태 | 증적 및 기술 문서 |
 | :---: | :--- | :--- | :---: | :--- |
 | **`TDS-RPC-AUDIT-1`** | TDS RPC 핸들러(`sp_prepare`, `sp_prepexec`) 파라미터 이름 의존성 전면 제거 및 100% 위치 매핑 일원화 | `pkg/wire/tds` | **완료 (`[x]`)** | [`notes/reports/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](../reports/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md) |
-| **`TOOL-AUDIT-1`** | 외부 GUI 클라이언트(DBeaver, DbGate, SSMS, Beekeeper Studio) 9단계 E2E 검증, `FormatResultWithSQL` alias/case 정규화, 고동시성 300회 스트레스 통과 | `pkg/catalog/virtual`, `pkg/wire/tds`, `pkg/wire` | **완료 (`[x]`)** | [`notes/TOOL_AUDIT_PLAN.ko.md`](../plans/TOOL_AUDIT_PLAN.ko.md), [`doc/CLIENT_TOOL_INTEGRATION.md`](../../doc/CLIENT_TOOL_INTEGRATION.md) |
+| **`TOOL-AUDIT-1`** | 외부 GUI 클라이언트(DBeaver, DbGate, SSMS, Beekeeper Studio) 9단계 E2E 검증, `FormatResultWithSQL` alias/case 정규화, 고동시성 300회 스트레스 통과 | `pkg/catalog/virtual`, `pkg/wire/tds`, `pkg/wire` | **완료 (`[x]`)** | [`notes/TOOL_AUDIT_PLAN.ko.md`](../plans/archive/TOOL_AUDIT_PLAN.ko.md), [`doc/CLIENT_TOOL_INTEGRATION.md`](../../doc/CLIENT_TOOL_INTEGRATION.md) |
 | **`TDS-COMPAT-1`** | WiredTiger TRUNCATE TABLE 트랜잭션 격리 및 assertion 크래시 방지 | `pkg/storage/wiredtiger`, `pkg/engine` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](../reports/TDS_COMPATIBILITY_REPORT.md) |
 | **`TDS-COMPAT-2`** | 유니코드 N-prefix (`N'...'`) TDS UTF-16LE 직렬화 EOF 방지 | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](../reports/TDS_COMPATIBILITY_REPORT.md) |
 | **`TDS-COMPAT-3`** | BIT 컬럼 수치 리터럴(`1`/`0`) 불리언 강제 변환(`CastValueToType`) 보강 | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](../reports/TDS_COMPATIBILITY_REPORT.md) |
@@ -60,17 +60,17 @@ LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-beta0`(Feature Freeze 기�
 | **`PG-COMPAT-2`** | 기본키(PK) 중복 삽입 시 Unique Violation 에러 방출 | `pkg/engine`, `pkg/storage` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](../reports/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **`PG-COMPAT-3`** | 관계형 조인 시 우측 자식 컬럼 프로젝션 누락 보강 | `pkg/execution` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](../reports/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **`PREP-1`** | Prepared Statement 메모리 방어용 세션별 Bounded LRU 캐시 | `pkg/wire`, `pkg/wire/tds` | **완료 (`[x]`)** | 256개 상한 LRU, 장기 커넥션 OOM 원천 차단 |
-| **`UNIFY-CLI`** | 단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 | `cmd/lionsql`, `cmd/server` | **완료 (`[x]`)** | [`notes/UNIFIED_CLI_PLAN.md`](../plans/UNIFIED_CLI_PLAN.md) |
+| **`UNIFY-CLI`** | 단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 | `cmd/lionsql`, `cmd/server` | **완료 (`[x]`)** | [`notes/UNIFIED_CLI_PLAN.md`](../plans/archive/UNIFIED_CLI_PLAN.md) |
 | **`CLI-VERSION-1`** | 단일 바이너리 CLI 버전/빌드 정보 듀얼 출력 (상세 Option A & 디폴트 기동 Option B) | `pkg/config`, `cmd/lionsql`, `pkg/api` | **완료 (`[x]`)** | `debug.ReadBuildInfo()` VCS 자동 추출, `version`/`-v`/`--version` 리포트 |
-| **`CLI-WINDOWS-DAEMON-1`** | `daemon.go` 플랫폼 분리(`daemon_unix.go`, `daemon_windows.go`), 1ms 고해상도 타이머 및 Windows 바이너리(`bin/lionsql.exe`) 빌드 활성화 | `cmd/lionsql` | **완료 (`[x]`)** | [`notes/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](../plans/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md) |
+| **`CLI-WINDOWS-DAEMON-1`** | `daemon.go` 플랫폼 분리(`daemon_unix.go`, `daemon_windows.go`), 1ms 고해상도 타이머 및 Windows 바이너리(`bin/lionsql.exe`) 빌드 활성화 | `cmd/lionsql` | **완료 (`[x]`)** | [`notes/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](../plans/archive/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md) |
 
 ### 2.2. 스토리지 엔진 & OCC 수직 성능 최적화 트랙
 
 | 과제 코드 | 핵심 구현 과제 | 대상 패키지 | 상태 | 증적 및 기술 문서 |
 | :---: | :--- | :--- | :---: | :--- |
-| **`VPERF-15`** | In-Memory OCC 5대 최적화 (비트마스크 샤드 추적, Table/Shard 캐싱, 지연 유니크셋, 비차단 AOF 압축, 힙 오염 제거) | `pkg/storage/memengine` | **완료 (`[x]`)** | [`../plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](../plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) Stage 1, 3, 5, 6 |
-| **`VPERF-16`** | Go 런타임 메모리 거버너 연동 GOGC 디폴트 최적화(GOGC=200 + GOMEMLIMIT) 전면 적용 | `pkg/execution`, `pkg/config`, `cmd/` | **완료 (`[x]`)** | [`../plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](../plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) Stage 2 (+22.9% 향상) |
-| **`VPERF-17`** | In-Memory OCC 3대 핫패스 고속화 (IntValue/FloatValue 0-Alloc 지연생성, 락 외부 사전 WAL 인코딩, 샤드 엔트리 단일 맵화) | `pkg/storage`, `pkg/storage/memengine` | **완료 (`[x]`)** | [`../plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](../plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) Stage 4 & 7 (18,037 TPS) |
+| **`VPERF-15`** | In-Memory OCC 5대 최적화 (비트마스크 샤드 추적, Table/Shard 캐싱, 지연 유니크셋, 비차단 AOF 압축, 힙 오염 제거) | `pkg/storage/memengine` | **완료 (`[x]`)** | [`../plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](../plans/archive/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) Stage 1, 3, 5, 6 |
+| **`VPERF-16`** | Go 런타임 메모리 거버너 연동 GOGC 디폴트 최적화(GOGC=200 + GOMEMLIMIT) 전면 적용 | `pkg/execution`, `pkg/config`, `cmd/` | **완료 (`[x]`)** | [`../plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](../plans/archive/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) Stage 2 (+22.9% 향상) |
+| **`VPERF-17`** | In-Memory OCC 3대 핫패스 고속화 (IntValue/FloatValue 0-Alloc 지연생성, 락 외부 사전 WAL 인코딩, 샤드 엔트리 단일 맵화) | `pkg/storage`, `pkg/storage/memengine` | **완료 (`[x]`)** | [`../plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](../plans/archive/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) Stage 4 & 7 (18,037 TPS) |
 | **`VPERF-18`** | In-Memory OCC 읽기 핫패스 무락 카탈로그 스냅샷(`tablesAtomic`), GetRow 무할당 슬라이스 조회, txPool 재사용 안전성 확보 | `pkg/storage/memengine`, `cmd/tpcc_kernel` | **완료 (`[x]`)** | 카탈로그 RWMutex 경합 제거, ReadOnly 베이스버전 우회, 실측 779k tpmC 달성 |
 | **`VPERF-1`** | In-Memory OCC 커밋 시 런타임 메트릭스 STW 및 슬라이스 힙 할당 제거 | `pkg/storage/memengine` | **완료 (`[x]`)** | [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](../../doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **`VPERF-2`** | Autocommit 쿼리 `ClientSession.Session` 재사용으로 WT 커서 풀 보존 | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | 세션별 커서 풀 파괴 방지 및 CGo 세션 재사용 |
@@ -91,8 +91,8 @@ LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-beta0`(Feature Freeze 기�
 | :---: | :--- | :--- | :---: | :--- |
 | **`KISS-5`** | 코어 엔진 3갈래 쿼리 실행 경로(`sqlexec_select` vs `execution` Iterator vs VDBE) 단일화 및 2-Tier 영구 아키텍처 확정 (`ARCH-2TIER-1`) | `pkg/engine`, `pkg/execution`, `pkg/proc/runtime` | **완료 (`[x]`)** | [`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../../doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md) |
 | **`ARCH-LEX-2`** | MERGE, STRING_SPLIT, PROCS 잔여 수동 분할 루프 `sqlutil.Tokenizer` 전면 일원화 | `pkg/sqlutil`, `pkg/engine` | **완료 (`[x]`)** | [`REFACTORING.ko.md`](../../REFACTORING.ko.md) |
-| **`REFACTOR-TYPE-GUESS-1`** | 휴리스틱 타입 추론 및 임의 문자열 수치 강제변환 안티패턴 전면 제거 | `pkg/sqlutil`, `pkg/engine`, `pkg/execution`, `pkg/proc`, `pkg/wire`, `pkg/api` | **완료 (`[x]`)** | [`notes/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](../plans/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md) |
-| **`REFACTOR-OVER-SPECIFICATION-1`** | T-SQL 디스패처 100% 위치 매핑, SERVERPROPERTY 하이재킹 제거 및 가상 카탈로그 도구 종속성 정돈 | `pkg/engine`, `pkg/wire/tds`, `pkg/catalog/virtual` | **완료 (`[x]`)** | [`notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md`](../plans/OVER_SPECIFICATION_REMEDIATION_PLAN.md) |
+| **`REFACTOR-TYPE-GUESS-1`** | 휴리스틱 타입 추론 및 임의 문자열 수치 강제변환 안티패턴 전면 제거 | `pkg/sqlutil`, `pkg/engine`, `pkg/execution`, `pkg/proc`, `pkg/wire`, `pkg/api` | **완료 (`[x]`)** | [`notes/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](../plans/archive/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md) |
+| **`REFACTOR-OVER-SPECIFICATION-1`** | T-SQL 디스패처 100% 위치 매핑, SERVERPROPERTY 하이재킹 제거 및 가상 카탈로그 도구 종속성 정돈 | `pkg/engine`, `pkg/wire/tds`, `pkg/catalog/virtual` | **완료 (`[x]`)** | [`notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md`](../plans/archive/OVER_SPECIFICATION_REMEDIATION_PLAN.md) |
 | **`KISS-1`** | 미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 (1,169줄 순수 삭제) | `pkg/proc`, `pkg/catalog`, `cmd/` | **완료 (`[x]`)** | [`doc/FOUNDATIONAL_DESIGN_DECISIONS.md`](../../doc/FOUNDATIONAL_DESIGN_DECISIONS.md) |
 | **`KISS-2`** | 가상 PG 카탈로그 및 information_schema 생성기 중복 단일화 | `pkg/engine`, `pkg/catalog/virtual` | **완료 (`[x]`)** | 1,690줄 코드 중복 제거 및 `virtual.Source` 단일화 |
 
@@ -152,7 +152,7 @@ LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-beta0`(Feature Freeze 기�
 
 | 과제 코드 | 영역 | 핵심 구현 과제 | 대상 위치 | 목표 릴리스 | 관련 기술 문서 |
 | :---: | :---: | :--- | :--- | :---: | :--- |
-| **`AUDIT-LOG-1`** | 보안/감사 | **엔터프라이즈 암호학적 SHA-256 불변 감사 로그 서브시스템 (MPSC 링버퍼, CLI 검증기)** | `pkg/audit`, `cmd/lionsql` | `v1.1.0` | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](../plans/IMMUTABLE_AUDIT_LOG_PLAN.md) |
+| **`AUDIT-LOG-1`** | 보안/감사 | **엔터프라이즈 암호학적 SHA-256 불변 감사 로그 서브시스템 (MPSC 링버퍼, CLI 검증기)** | `pkg/audit`, `cmd/lionsql` | `v1.1.0` | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](../plans/archive/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **`TDS-MOD-1`** | 와이어/모듈 | **TDS 거대 단일 파일(`server.go` 2.6k줄) 관심사별 모듈 분해 (Handshake/RPC/Batch/Server)** | `pkg/wire/tds` | `v1.1.0` | 1.0 안정성 최우선에 따라 이관 |
 | **`TDS-COMPAT-6`** | ORM/와이어 | **다중 결과셋 (Multiple Result Sets) 스트리밍 지원 (Dapper `QueryMultiple` 필수)** | `pkg/engine`, `pkg/wire/tds` | `v1.1.0` | [`doc/TDS_COMPATIBILITY_REPORT.md`](../reports/TDS_COMPATIBILITY_REPORT.md) |
 | **`S3-1` ~ `S3-4`** | 스토리지/클라우드 | **클라우드 S3 Pre-signed URL 직접 업로드 및 순수 Go SigV4 서명기 연동** | `pkg/storage/s3sign`, `pkg/config`, `pkg/api`, `pkg/proc` | `v1.1.0` | [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](../plans/S3_PRESIGNED_STORAGE_PLAN.md) |
@@ -224,7 +224,7 @@ LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-beta0`(Feature Freeze 기�
   - In-Memory OCC 및 WiredTiger 듀얼 백엔드 전반에 걸쳐 ~3초 이내 100% PASS 달성.
 - [x] **외부 GUI 클라이언트(SSMS, DbGate, DBeaver, Beekeeper) 9단계 E2E 심층 감사 완결 (`TOOL-AUDIT-1`) (2026-10-25)**:
   - 4대 대표 GUI 도구에 대한 실전 세션 초기화, 메타데이터 인트로스펙션, 결과셋 정규화(`FormatResultWithSQL`), 고동시성 300회 연결 스트레스 검증 100% 통과.
-  - [`notes/TOOL_AUDIT_PLAN.ko.md`](../plans/TOOL_AUDIT_PLAN.ko.md) 및 [`doc/CLIENT_TOOL_INTEGRATION.md`](../../doc/CLIENT_TOOL_INTEGRATION.md) 반영 완료.
+  - [`notes/TOOL_AUDIT_PLAN.ko.md`](../plans/archive/TOOL_AUDIT_PLAN.ko.md) 및 [`doc/CLIENT_TOOL_INTEGRATION.md`](../../doc/CLIENT_TOOL_INTEGRATION.md) 반영 완료.
 - [x] **In-Memory OCC 읽기 핫패스 무락 카탈로그 스냅샷(`tablesAtomic`) 및 무할당 슬라이스 조회 (`VPERF-18`) (2026-10-25)**:
   - 카탈로그 전역 RWMutex 경합 완전 제거, ReadOnly 베이스버전/복제 우회, 21컬럼 Record map 할당 방지.
   - 3.4 벤치마크 실측: In-Memory OCC **779k tpmC** / WiredTiger **833k tpmC** 달성.

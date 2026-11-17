@@ -81,7 +81,7 @@
     2. `RollbackTo`의 `wtUndoInsert`/`wtUndoDelete`에서 정규화된 `tbl.Name`을 사용해 `tx.rowDeltas[tbl.Name]`을 갱신하도록 수정.
   - **2차 근본 아키텍처 개편 (ARIES Physiological Logging 정식 도입)**:
     - 1차 패치의 "런타임 커서 재조회 및 튜플 역디코딩" 방식은 롤백 시점의 커서 에러나 스키마 변경 시 여전히 인덱스 복구가 누락될 위험이 존재하며, `Delete` 롤백 시 보조 인덱스를 복구하지 못하는 결함이 잔존함을 적대적 분석으로 추가 확인.
-    - 이에 따라 SQLite/ARIES 표준에 기반한 **Before/After Image 물리-논리적 로깅(`pkg/storage/aries_log.go`)**을 정식 설계/도입 (`notes/plans/ARCH_ARIES_LOGGING_PLAN.ko.md`):
+    - 이에 따라 SQLite/ARIES 표준에 기반한 **Before/After Image 물리-논리적 로깅(`pkg/storage/aries_log.go`)**을 정식 설계/도입 (`notes/plans/archive/ARCH_ARIES_LOGGING_PLAN.ko.md`):
       1. `PhysiologicalRecord`: 원자적 상태 변경마다 `OldTuple`, `NewTuple`, `OldIdx([]IndexImage)`, `NewIdx([]IndexImage)` 스냅샷 보존.
       2. `Insert`: 신규 튜플 및 생성된 인덱스 키 스냅샷(`NewIdx`) 기록.
       3. `Delete`: 이전 튜플 및 삭제된 모든 보조 인덱스 키 스냅샷(`OldIdx`) 기록 (기존 누락 결함 완벽 해결).

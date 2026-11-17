@@ -1,4 +1,4 @@
-# LionSQL 복합 쿼리 성능 튜닝 및 최적화 마스터 플랜 (`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`)
+# LionSQL 복합 쿼리 성능 튜닝 및 최적화 마스터 플랜 (`notes/plans/archive/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`)
 
 > - **최종 갱신일**: 2026-11-11 (BENCH-TPCH-1 AST 재작성 영구 대체 및 PERF-SUBQUERY-MEMO-1 통합)
 > - **최초 작성일**: 2026-10-29

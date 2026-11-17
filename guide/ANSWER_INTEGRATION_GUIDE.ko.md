@@ -9,7 +9,7 @@
 >   - **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
 > - **참조 문서**:
 >   - 실전 연동 검증 보고서: [`notes/ANSWER_INTEGRATION_REPORT.ko.md`](../notes/reports/ANSWER_INTEGRATION_REPORT.ko.md)
->   - 모듈러 아키텍처 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md)
+>   - 모듈러 아키텍처 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/plans/archive/MODULAR_ARCHITECTURE_PLAN.ko.md)
 > - **English Guide**: [`guide/ANSWER_INTEGRATION_GUIDE.md`](ANSWER_INTEGRATION_GUIDE.md)
 
 ---

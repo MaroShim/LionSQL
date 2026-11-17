@@ -28,9 +28,9 @@ flowchart LR
 | 세대 | 버전 / 시기 | 핵심 아키텍처 전환점 | 대표 문서 (읽기 순서) |
 |:---:|:---:|---|---|
 | **1세대** | `v0.3.0` | **Goja JS 런타임 전면 폐기 및 단일 T-SQL VDBE 통합**<br/>• 초기 프로토타입의 JS 인터프리터(`dop251/goja`)가 유발하던 힙 할당 및 타입 변환 병목 제거<br/>• 스토어드 프로시저와 대화형 SQL(`SELECT/DML`)을 단일 VDBE 바이트코드 파이프라인으로 일원화 | 1. [`ENGINEERING_CONTEXT.ko.md` (§1.⑨, §2.①)](ENGINEERING_CONTEXT.ko.md)<br/>2. [`doc/internal/VDBE.md`](../doc/internal/VDBE.md) |
-| **2세대** | `v0.7.0` ~ `v0.11.0` | **16-Byte 고정폭 ISA 확립, Fused Jump 및 2-Tier 하이브리드 아키텍처 완성**<br/>• L1 캐시 라인(64B)에 정확히 4개씩 정렬되는 **16바이트 `Instruction`** 및 8바이트 압축 영구 기각(`§1.㉜`)<br/>• `OpLeJumpFalse` 등 복합 비교-점프 명령어(Superinstruction)와 `OpAddInt` 정수 전용 Fast-Path 도입<br/>• 단순 OLTP는 Tier 1(VDBE), 복합 관계대수(JOIN/Window/CTE)는 Tier 2(Volcano CBO)로 분리 | 3. [`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)<br/>4. [`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md)<br/>5. [`WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md) |
-| **3세대** | `v0.90.0` | **VDBE 런타임 5대 제로 할당(Zero-Allocation) 극한 튜닝**<br/>• ① 4-Way Loop Unrolling ② `vmFrame` `sync.Pool` 풀링 ③ 스키마/인덱스 포인터 컴파일 타임 바인딩(`Aux`) ④ `OpGetRow`/`OpUpdateRow` Fast-Path ⑤ `LocalTable` $O(1)$ 슬라이스 인덱싱<br/>• PGWire(`Parse/Execute`) 및 TDS(`sp_prepexec`) 프리페어드 바이트코드 직결 실행 | 6. [`VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)<br/>7. [`TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md)<br/>8. [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](../doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md) |
-| **4세대** | `v0.91.0` ~ `1.0` | **키 래치/슬립 병목 해체, 218k TPS 돌파 및 CI 성능 회귀 게이트 봉인**<br/>• VDBE `KeyLatch` 샤드 뮤텍스 및 OCC 백오프 `time.Sleep(50µs)` 제거로 OS 스케줄러 컨텍스트 스위칭 박멸<br/>• `TransferFunds` **218,282 TPS (OCC) / 141,472 TPS (WT)**, P50 **23.17µs** 달성 및 CI 게이트화 | 9. [`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](plans/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)<br/>10. [`GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md`](../../notes/reports/GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md)<br/>11. [`doc/BENCHMARK.md` (§3.3, §3.5)](../doc/BENCHMARK.md) |
+| **2세대** | `v0.7.0` ~ `v0.11.0` | **16-Byte 고정폭 ISA 확립, Fused Jump 및 2-Tier 하이브리드 아키텍처 완성**<br/>• L1 캐시 라인(64B)에 정확히 4개씩 정렬되는 **16바이트 `Instruction`** 및 8바이트 압축 영구 기각(`§1.㉜`)<br/>• `OpLeJumpFalse` 등 복합 비교-점프 명령어(Superinstruction)와 `OpAddInt` 정수 전용 Fast-Path 도입<br/>• 단순 OLTP는 Tier 1(VDBE), 복합 관계대수(JOIN/Window/CTE)는 Tier 2(Volcano CBO)로 분리 | 3. [`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)<br/>4. [`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](../../notes/plans/archive/ARCH_VDBE_ROUTING_1_PLAN.ko.md)<br/>5. [`WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](../../notes/plans/archive/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md) |
+| **3세대** | `v0.90.0` | **VDBE 런타임 5대 제로 할당(Zero-Allocation) 극한 튜닝**<br/>• ① 4-Way Loop Unrolling ② `vmFrame` `sync.Pool` 풀링 ③ 스키마/인덱스 포인터 컴파일 타임 바인딩(`Aux`) ④ `OpGetRow`/`OpUpdateRow` Fast-Path ⑤ `LocalTable` $O(1)$ 슬라이스 인덱싱<br/>• PGWire(`Parse/Execute`) 및 TDS(`sp_prepexec`) 프리페어드 바이트코드 직결 실행 | 6. [`VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](../../notes/plans/archive/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)<br/>7. [`TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](../../notes/plans/archive/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md)<br/>8. [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](../doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md) |
+| **4세대** | `v0.91.0` ~ `1.0` | **키 래치/슬립 병목 해체, 218k TPS 돌파 및 CI 성능 회귀 게이트 봉인**<br/>• VDBE `KeyLatch` 샤드 뮤텍스 및 OCC 백오프 `time.Sleep(50µs)` 제거로 OS 스케줄러 컨텍스트 스위칭 박멸<br/>• `TransferFunds` **218,282 TPS (OCC) / 141,472 TPS (WT)**, P50 **23.17µs** 달성 및 CI 게이트화 | 9. [`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](../../notes/plans/archive/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)<br/>10. [`GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md`](../../notes/reports/GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md)<br/>11. [`doc/BENCHMARK.md` (§3.3, §3.5)](../doc/BENCHMARK.md) |
 
 ---
 
@@ -60,13 +60,13 @@ SQL 쿼리와 T-SQL 구문이 어떤 기준으로 VDBE(Tier 1)와 Volcano CBO(Ti
 * **[`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**
   * **역할**: **Tier 1 (VDBE Bytecode Fast-Path)** 과 **Tier 2 (Volcano CBO Engine)** 의 역할 분담을 정의한 영구 불변 아키텍처 헌장 (`ARCH-2TIER-1`).
   * **핵심 내용**: 왜 모든 복잡 관계대수 쿼리(12-Table JOIN, Window, Recursive CTE)를 억지로 바이트코드로 번역하지 않고 `OpRelQuery` 하이브리드 브릿지를 통해 Volcano CBO와 결합하는가에 대한 공학적 해답.
-* **[`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md)**
+* **[`notes/plans/archive/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](../../notes/plans/archive/ARCH_VDBE_ROUTING_1_PLAN.ko.md)**
   * **역할**: 파서 단계의 결정론적 AST 특성 비트마스크(`QueryCharacteristics`) 기반 VDBE 라우팅 정규화 명세 (`ARCH-VDBE-ROUTING-1`).
   * **핵심 내용**: 문자열 휴리스틱을 배제하고 파싱 시점에 단일 테이블 PK Point Lookup/DML 여부를 $O(1)$ 비트마스크로 판별하여 서브마이크로초 VDBE Fast-Path로 직행시키는 파이프라인.
-* **[`notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)**
+* **[`notes/plans/archive/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](../../notes/plans/archive/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)**
   * **역할**: `WITH ... INSERT/UPDATE/DELETE RETURNING` (Writable CTE) 구문을 에페메랄 테이블 변수와 루프 바이트코드로 직접 컴파일하는 Lowering 설계서 (`ARCH-CTE-VDBE-1`).
   * **핵심 내용**: 비재귀 선형 데이터 수정 CTE를 `OpDeclareTable` ➔ `OpInsertRow` ➔ 커서 루프 바이트코드로 Lowering하여 트랜잭션 원자성과 Zero-Regex 원칙을 동시에 달성한 과정.
-* **[`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md)**
+* **[`notes/plans/archive/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](../../notes/plans/archive/TABLE_VARIABLE_SUPPORT_PLAN.ko.md)**
   * **역할**: T-SQL 테이블 변수(`DECLARE @t TABLE (...)`)의 VDBE 바이트코드 생명주기 명세.
   * **핵심 내용**: `OpDeclareTable` 오프코드와 VM 프레임 내부 에페메랄 스토리지(`localTables`)를 통한 트랜잭션 롤백 무관(Rollback-Immune) 메모리 테이블 구현.
 
@@ -75,16 +75,16 @@ SQL 쿼리와 T-SQL 구문이 어떤 기준으로 VDBE(Tier 1)와 Volcano CBO(Ti
 ### Category C. VDBE 런타임 극한 성능 튜닝 & 회귀 방어 (Performance Tuning & Gates)
 VDBE 가상머신의 명령어 디스패치 루프, 레지스터/프레임 풀링, 락 제거, 그리고 최종 실측 벤치마크 지표를 집대성한 백서입니다.
 
-* **[`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)** *(Core Tuning Whitepaper)*
+* **[`notes/plans/archive/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](../../notes/plans/archive/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)** *(Core Tuning Whitepaper)*
   * **역할**: **VDBE 바이트코드 VM 아키텍처 진화 및 극한 성능 튜닝 종합 백서 (1세대~4세대 통합본)**.
   * **핵심 내용**:
     * 1세대 Goja 교체부터 2세대 16-Byte ISA & Fused Jump, 3세대 5대 Zero-Alloc 런타임 혁신(4-Way Unrolling, `vmFrame` 풀링, 스키마 포인터 사전 바인딩, `OpGetRow`/`OpUpdateRow`, `LocalTable` 정수 인덱싱), 4세대 Lock-Free 복구까지의 전 과정.
     * **최종 실측 지표**: `cmd/bench` `TransferFunds` 프로시저 **OCC 218,282 TPS (P50 23.17µs)** / **WiredTiger 141,472 TPS (P50 38.75µs)**, `cmd/tpcc_runtime` **759k~863k tpmC**.
     * **§5 심층 분석**: 16-Byte vs 8-Byte 명령어 레이아웃의 L1 캐시/디코딩 트레이드오프 및 16-Byte 영구 채택 사유.
-* **[`notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md)**
+* **[`notes/plans/archive/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](../../notes/plans/archive/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md)**
   * **역할**: PGWire Extended Query 및 TDS RPC에서 저장 프로시저 호출 시 SQL 파서를 우회하고 캐싱된 `*proc.Program` 바이트코드를 직접 실행하는 Fast-Path 튜닝 계획서.
   * **핵심 내용**: `OpGetSlot`/`OpUpdateSlot` 컴파일 타임 칼럼 오프셋 고정과 세션 간 프로시저 바이트코드 공유(`ProcedureProgramCache`)를 통한 실행 시간 63% 단축.
-* **[`notes/plans/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](plans/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)**
+* **[`notes/plans/archive/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](../../notes/plans/archive/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)**
   * **역할**: VDBE `KeyLatch` 뮤텍스 및 OCC 백오프 슬립 제거를 통한 성능 회귀 복구 및 CI 성능 방어선 구축 보고서 (`PERF-RECOVERY-1`).
   * **핵심 내용**: `pkg/proc/runtime/perf_regression_gate_test.go`를 통해 VDBE `TransferFunds` 처리량이 회귀하지 않도록 강제하는 자동화 게이트.
 * **[`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md)**
@@ -101,7 +101,7 @@ T-SQL 저장 프로시저 문법 호환성 범위, Dual-Parser 폴백, 그리고
 
 * **[`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](../TSQL_COMPATIBILITY_MATRIX.ko.md)**
   * **역할**: T-SQL 프로시저 제어문(`IF...ELSE`, `WHILE`, `TRY...CATCH`, `RETURN`), 커서(`DECLARE/OPEN/FETCH/CLOSE`), 테이블 변수, 내장 함수 및 시스템 변수(`@@ROWCOUNT`, `@@ERROR`, `@@TRANCOUNT`) 전수 호환성 매트릭스.
-* **[`notes/plans/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](plans/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)** & **[`notes/reports/BABELFISH_INTEGRATION_REPORT.ko.md`](reports/BABELFISH_INTEGRATION_REPORT.ko.md)**
+* **[`notes/plans/archive/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](../../notes/plans/archive/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)** & **[`notes/reports/BABELFISH_INTEGRATION_REPORT.ko.md`](reports/BABELFISH_INTEGRATION_REPORT.ko.md)**
   * **역할**: AWS Babelfish for Aurora PostgreSQL의 T-SQL 저장 프로시저 테스트를 이식한 9개 SLT 스위트(`test/slt_proc/`) 구축 및 100% 통과 검증 보고서.
 
 ---

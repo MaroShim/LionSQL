@@ -33,13 +33,13 @@ Foundational engineering principles, architectural invariants, code landmines, a
 
 Active verification audits and hardening projects driving LionSQL toward the 1.0 General Availability release.
 
-* **[`PRE_RELEASE_AUDIT_PLAN.ko.md`](plans/PRE_RELEASE_AUDIT_PLAN.ko.md)** (Korean)
+* **[`PRE_RELEASE_AUDIT_PLAN.ko.md`](plans/archive/PRE_RELEASE_AUDIT_PLAN.ko.md)** (Korean)
   * 135-step dual AI (Gemini × Claude) cross-audit master plan across all 13 engine domains (`AUDIT-135-DUAL-REVIEW`).
 * **[`PRE_RELEASE_AUDIT_FINDINGS.ko.md`](reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md)** (Korean)
   * Consolidated matrix of defect findings discovered during the pre-release audit (135/135 completed, 134 defects logged).
-* **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)** (Korean)
+* **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](plans/archive/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)** (Korean)
   * Unified SSOT plan for total elimination of regular expressions in favor of deterministic tokenizers (`GA-REGEX-DDL-1` - `GA-REGEX-FINAL-3`, `SEC-PGWIRE-PARAM-1`).
-* **[`DURABILITY_VERIFICATION_PLAN.ko.md`](plans/DURABILITY_VERIFICATION_PLAN.ko.md)** (Korean)
+* **[`DURABILITY_VERIFICATION_PLAN.ko.md`](plans/archive/DURABILITY_VERIFICATION_PLAN.ko.md)** (Korean)
   * Master verification plan for crash resilience (kill tests), soak stress tests, and dogfooding reliability.
 
 ---
@@ -49,25 +49,25 @@ Active verification audits and hardening projects driving LionSQL toward the 1.0
 Technical design specifications and refactoring blueprints organized by engine domain.
 
 ### 3.1. Storage Engine & OCC Concurrency
-* **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)** (Korean): In-Memory OCC evolution, beating WiredTiger, 104k tpmC architecture, and Option A flat record hardening (`OCC-HYPER`).
+* **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](plans/archive/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)** (Korean): In-Memory OCC evolution, beating WiredTiger, 104k tpmC architecture, and Option A flat record hardening (`OCC-HYPER`).
 * **[`FLAT_RECORD_RELIABILITY_PLAN.ko.md`](plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)** (Korean): Pointer-free flat record encoding reliability and decoding verification plan.
-* **[`LAZY_DECODING_P2_PLAN.ko.md`](plans/LAZY_DECODING_P2_PLAN.ko.md)** (Korean): Columnar lazy decoding design eliminating unnecessary row unpacking costs.
-* **[`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](plans/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)** (Korean): Eliminating key latches to restore 160k TPS and establishing regression prevention gates.
+* **[`LAZY_DECODING_P2_PLAN.ko.md`](plans/archive/LAZY_DECODING_P2_PLAN.ko.md)** (Korean): Columnar lazy decoding design eliminating unnecessary row unpacking costs.
+* **[`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](plans/archive/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)** (Korean): Eliminating key latches to restore 160k TPS and establishing regression prevention gates.
 
 ### 3.2. Query Engine, Optimizer & Parser
 * **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)** (Korean): Permanent 2-tier query execution architecture decoupling simple OLTP (VDBE) from complex relational algebra (CBO).
-* **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md)** (Korean): AST and dialect-based 2-tier query routing normalization (`ARCH-VDBE-ROUTING-1`).
-* **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](plans/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)** (Korean): Structural catalog routing via symbol tables and AST (measured 527ns).
-* **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)** (Korean): Large join (10+ tables) query optimization and dynamic root selection (`OPT-LARGE-JOIN-1`).
-* **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)** (Korean): Planner slimming and pure AST transition plan (`PLANNER-SLIM-1`, `PLANNER-AST-1`).
-* **[`VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)** (Korean): Opcode loop unrolling, register pool recycling, and branch prediction optimizations.
-* **[`WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)** (Korean): Bytecode compiler lowering for writable Common Table Expressions.
-* **[`SQL_PARSER_HARDENING_PLAN.ko.md`](plans/SQL_PARSER_HARDENING_PLAN.ko.md)** (Korean): Hardening SQL parser against literal contamination and semicolon truncation.
+* **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](plans/archive/ARCH_VDBE_ROUTING_1_PLAN.ko.md)** (Korean): AST and dialect-based 2-tier query routing normalization (`ARCH-VDBE-ROUTING-1`).
+* **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](plans/archive/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)** (Korean): Structural catalog routing via symbol tables and AST (measured 527ns).
+* **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](plans/archive/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)** (Korean): Large join (10+ tables) query optimization and dynamic root selection (`OPT-LARGE-JOIN-1`).
+* **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](plans/archive/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)** (Korean): Planner slimming and pure AST transition plan (`PLANNER-SLIM-1`, `PLANNER-AST-1`).
+* **[`VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](plans/archive/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)** (Korean): Opcode loop unrolling, register pool recycling, and branch prediction optimizations.
+* **[`WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](plans/archive/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)** (Korean): Bytecode compiler lowering for writable Common Table Expressions.
+* **[`SQL_PARSER_HARDENING_PLAN.ko.md`](plans/archive/SQL_PARSER_HARDENING_PLAN.ko.md)** (Korean): Hardening SQL parser against literal contamination and semicolon truncation.
 
 ### 3.3. Wire Protocols & Networking
-* **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)** (Korean): Server vertical pipeline optimization from socket reception down to adaptive group commits.
-* **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)** (Korean): Embedded single-binary Web Studio and SPA hosting architecture (`WEB-SPA-1`, official guide: [`doc/WEB_APP_HOSTING_GUIDE.md`](../doc/WEB_APP_HOSTING_GUIDE.md)).
-* **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](plans/MODULAR_ARCHITECTURE_PLAN.ko.md)** (Korean): TDS/Wire layer internal file decomposition without interface disruption (`TDS-MOD-1`).
+* **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](plans/archive/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)** (Korean): Server vertical pipeline optimization from socket reception down to adaptive group commits.
+* **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](plans/archive/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)** (Korean): Embedded single-binary Web Studio and SPA hosting architecture (`WEB-SPA-1`, official guide: [`doc/WEB_APP_HOSTING_GUIDE.md`](../doc/WEB_APP_HOSTING_GUIDE.md)).
+* **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](plans/archive/MODULAR_ARCHITECTURE_PLAN.ko.md)** (Korean): TDS/Wire layer internal file decomposition without interface disruption (`TDS-MOD-1`).
 
 ---
 
@@ -90,7 +90,7 @@ Empirical verification benchmarks and production application test reports.
 ### 4.2. Standard Benchmarks & Soak Load Testing
 * **[`SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md`](reports/SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md)** ([English](reports/SLT_FULL_SUITE_100_PERCENT_REPORT.md)): SQLite official SQLLogicTest (107 suites, 551,217 queries) 100% flawless pass report and cures for 8 deep engine defects.
 * **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](reports/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)** (Korean): 1-hour soak stress test (720k ops / 393k commits), `SQLSTATE 40001` conflict handling, and WiredTiger 500MB cache convergence.
-* **[`COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)** (Korean): SSB Star Schema & Mini TPC-H representative queries, DuckDB/ClickHouse comparison, and 1.0 freeze status.
+* **[`COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](plans/archive/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)** (Korean): SSB Star Schema & Mini TPC-H representative queries, DuckDB/ClickHouse comparison, and 1.0 freeze status.
 
 ---
 
@@ -116,7 +116,7 @@ Hard-learned operational lessons, test blind-spot analyses, and explicit evaluat
   * Architectural design for HNSW vector indexing and time-series compressed chunking.
 * **[`OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)** (Korean)
   * Offline documentation bundling and embedded web viewer design (`PKG-OFFLINE-DOCS-1`).
-* **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](plans/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)** (Korean)
+* **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](plans/archive/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)** (Korean)
   * Babelfish T-SQL Stored Procedure dedicated SLT test suite creation plan.
 * **Official Release Notes Archive (`notes/release_notes/`)**:
   * **[`RELEASE_NOTES_v0.92.0.md`](release_notes/RELEASE_NOTES_v0.92.0.md)** ([Korean](release_notes/RELEASE_NOTES_v0.92.0.ko.md)): LionSQL v0.92.0 official release notes (37 P0 defect remediations, WiredTiger lock removal, all-time high TPC-C throughput).

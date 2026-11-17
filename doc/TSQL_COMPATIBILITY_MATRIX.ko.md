@@ -84,7 +84,7 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
 | **전역 임시 테이블** | `CREATE TABLE ##global_temp (...)` | **부분 지원 (1.0 인메모리 공유 지원)** | 모든 활성 클라이언트 세션 간 데이터가 공유되는 전역 임시 네임스페이스(`__gtemp_<name>`)로 라우팅되어 동시성 ACID 보장. 1.0에서는 프로세스 수명주기와 동기화되어 인스턴스 재시작 시 자동 소멸되며, 멀티 DB 프리픽스 격리는 v1.1.0 `ARCH-LOGICAL-NAMESPACE-1` 로드맵에서 고도화 |
 | **테이블 변수** | `DECLARE @tbl TABLE (id INT, val VARCHAR(50));` | **완전 지원** | 세션 배치, 익명 블록, 저장 프로시저 완벽 지원(`__tv_*`), `INSERT`/`SELECT`/`UPDATE`/`DELETE`/`JOIN` 및 자동 정리 (`PERF-HYBRID-TEMPMEM-1` 인메모리 바이패스 `DONE`) |
 | **DB 컨텍스트 전환** | `USE <dbname>;` | **완전 지원 (가상 No-op, Invariant 2)** | Microsoft SSMS, DBeaver, JDBC, .NET SqlClient 100% 접속 호환을 위한 가상 No-op 보장. `DB_NAME()`, `CURRENT_DATABASE()` 가상 함수 및 TDS `0xE3 ENVCHANGE` 환경 토큰 완벽 동기화. 프로세스당 단일 카탈로그 불변식 준수 (물리 프리픽스 네임스페이스 및 크로스 DB 조인은 v1.1.0 `ARCH-LOGICAL-NAMESPACE-1`) |
-| **정렬 규칙 (Collation)** | `COLLATE <collation_name>` | **완전 지원 (설계 완료, 1.0 정책)** | TypeScript 하이브리드 모델: DDL 및 식별자 `COLLATE <name>` 구문 100% 수용 + 기본 로케일 런타임 제로-오버헤드 소거(`compareFn == nil`, 0.5ns, 0-alloc). 대소문자 무시(CI) 정규화 기본 탑재 및 Go `proc.RegisterCollation` SPI 지원 완료. 선언적 TOML 확장은 v1.99.0 `LOC-1` 로드맵 ([`notes/plans/COLLATION_AND_LOCALE_PLAN.ko.md`](plans/COLLATION_AND_LOCALE_PLAN.ko.md)) |
+| **정렬 규칙 (Collation)** | `COLLATE <collation_name>` | **완전 지원 (설계 완료, 1.0 정책)** | TypeScript 하이브리드 모델: DDL 및 식별자 `COLLATE <name>` 구문 100% 수용 + 기본 로케일 런타임 제로-오버헤드 소거(`compareFn == nil`, 0.5ns, 0-alloc). 대소문자 무시(CI) 정규화 기본 탑재 및 Go `proc.RegisterCollation` SPI 지원 완료. 선언적 TOML 확장은 v1.99.0 `LOC-1` 로드맵 ([`notes/plans/archive/COLLATION_AND_LOCALE_PLAN.ko.md`](../notes/plans/archive/COLLATION_AND_LOCALE_PLAN.ko.md)) |
 | **사용자 정의 테이블 타입** | `CREATE TYPE MyTableType AS TABLE (...)` | **미구현 (1.0 대체 방안 수립)** | TVP(Table-Valued Parameters) 전제 조건. 1.0 엔진에서는 세션 테이블 변수(`@tbl`) 또는 임시 테이블(`#temp`)을 통해 100% 기능적 대체 가능. 정식 구문 카탈로그 등록 및 바이너리 TDS `0xF3 TVPTYPE` 토큰 역직렬화는 v1.6.0 `TSQL-TVP-TYPE-1` 로드맵 확정 |
 | **테이블 반환 함수 (TVF)** | `CREATE FUNCTION fn() RETURNS TABLE AS RETURN ...` | **부분 지원 (인라인 TVF 완전 지원)** | 인라인 TVF(`CREATE FUNCTION ... RETURNS TABLE AS RETURN (SELECT ...)`) 등록, 카탈로그 보관, FROM 절 서브쿼리 인라인 리라이팅 및 조인 100% 완전 지원 (`pkg/engine/sqlexec_ddl.go`). 절차적 본문을 가진 멀티-스테이트먼트 TVF(`RETURNS @tbl TABLE (...) AS BEGIN ... END`)는 v1.6.0 `TSQL-MULTI-TVF-1` 로드맵 확정 |
 
@@ -198,7 +198,7 @@ LionSQL은 엔터프라이즈 마이크로소프트 SQL Server(T-SQL)와의 원�
     - `AT TIME ZONE` 시간대 변환 절 및 함수 (`TSQL-FUNC-AT-TIME-ZONE`): IANA/Windows 시간대 매핑 테이블 연동 (v1.1.0).
     - `PARSE` 및 `TRY_PARSE` 문화권(Culture) 기반 문자열 파싱 함수 (`TSQL-FUNC-PARSE`): `golang.org/x/text` 연동 (v1.1.0).
 14. **Collation & 다국어 정렬/비교 아키텍처 (`LOC-1`)** [`v1.99.0 로드맵`]:
-    - TypeScript 하이브리드 모델: 외부 `COLLATE` 구문 100% 파싱 수용, 기본 로케일 런타임 소거(`0.5ns`, `0-alloc`), Go UDF SPI(`proc.RegisterCollation`) 지원 완료. 선언적 무컴파일 확장(`config/collations.toml`)은 v1.99.0 로드맵 ([`notes/plans/COLLATION_AND_LOCALE_PLAN.ko.md`](plans/COLLATION_AND_LOCALE_PLAN.ko.md)).
+    - TypeScript 하이브리드 모델: 외부 `COLLATE` 구문 100% 파싱 수용, 기본 로케일 런타임 소거(`0.5ns`, `0-alloc`), Go UDF SPI(`proc.RegisterCollation`) 지원 완료. 선언적 무컴파일 확장(`config/collations.toml`)은 v1.99.0 로드맵 ([`notes/plans/archive/COLLATION_AND_LOCALE_PLAN.ko.md`](../notes/plans/archive/COLLATION_AND_LOCALE_PLAN.ko.md)).
 15. **양방향 스크롤 커서 (`SCROLL`, `FETCH PRIOR`)** [`영구 Spec-Out`]:
     - 메모리 과점유 방지 및 서브마이크로초 지연시간 유지를 위해 `FORWARD_ONLY`만 지원 결정됨 (ADR Invariant).
 

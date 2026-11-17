@@ -1,4 +1,4 @@
-# SSMS (SQL Server Management Studio) Object Explorer 완벽 호환성 아키텍처 및 진행 현황 (`notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`)
+# SSMS (SQL Server Management Studio) Object Explorer 완벽 호환성 아키텍처 및 진행 현황 (`notes/plans/archive/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-09
 > - **최종 갱신일**: 2026-11-09

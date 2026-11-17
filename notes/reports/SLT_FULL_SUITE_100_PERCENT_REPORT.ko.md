@@ -166,7 +166,7 @@ v0.90.0 릴리즈 게이트 안정화 과정에서 SQLite 전용 비표준 문�
    - 무거운 Cascades 옵티마이저를 매번 구동하는 엔진들은 "쿼리 플래닝 시간 > 실제 데이터 스캔 시간" 역전 현상으로 느려지는 반면, LionSQL은 제로 할당에 가까운 Pratt 파서와 VDBE/경량 Volcano 2-Tier 라우팅으로 즉시 실행합니다.
 2. **`select4.test` & `select5.test` (최대 64개 테이블 조인) 상태 공간 폭발 억제**:
    - 다수의 RDBMS가 `random/*` 스위트에서는 빠르다가도 `select5.test`(최대 64-way 콤마 조인)에서 지수적 조인 순서 탐색이나 카테시안 곱 폭발에 빠져 수 분~수십 분 동안 정체됩니다.
-   - LionSQL은 [`OPT-LARGE-JOIN-1`](../plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) 최적화(Selinger DP 탐색 임계치 `MaxJoinDPThreshold = 6` 제한 + BFS 기반 Spanning Tree 조인 키 추론 + 단일 행 필터/최소 카디널리티 베이스 테이블 동적 루트 선정 + `1=0` 공집합 Fast-Fail)를 통해 `select5.test`의 732개 고난도 다중 조인을 **12.67초** 만에 주파합니다.
+   - LionSQL은 [`OPT-LARGE-JOIN-1`](../plans/archive/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) 최적화(Selinger DP 탐색 임계치 `MaxJoinDPThreshold = 6` 제한 + BFS 기반 Spanning Tree 조인 키 추론 + 단일 행 필터/최소 카디널리티 베이스 테이블 동적 루트 선정 + `1=0` 공집합 Fast-Fail)를 통해 `select5.test`의 732개 고난도 다중 조인을 **12.67초** 만에 주파합니다.
 3. **무경합 고루틴 워커 풀(`-parallel 8`) 및 파일별 독립 인메모리 인스턴스**:
    - 각 테스트 파일이 공유 락이나 글로벌 카탈로그 경합 없이 독립된 `Coordinator` + `memengine` 인스턴스에서 병렬 실행되어 멀티코어 CPU를 100% 활용합니다.
    - 결과적으로 **순수 Go로 작성된 엔진이면서도 C/C++ 임베디드 엔진(SQLite, DuckDB)과 동일한 체급(30~50초대)**에서 55만 쿼리를 돌파하며, 일반 클라이언트-서버 RDBMS 및 Go 기반 분산 SQL 엔진 대비 **5배~20배 이상 빠른 검증 속도**를 제공합니다.

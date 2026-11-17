@@ -5,7 +5,7 @@
 > - **문서 성격**: 1.0 T-SQL 호환성 및 다중 데이터베이스/테이블 변수 통합 핵심 아키텍처 사양서 (Model B: Logical Composite Key)
 > - **과제 식별 코드**: `ARCH-LOGICAL-NAMESPACE-1`
 > - **적용 원칙**: `[RULE:RadicalKISS]`, `[RULE:PlanPersistence]`, Invariant 2 (Instance-Based Single Kernel Primacy & Model B)
-> - **대체 대상**: 기존 물리 폴더 리부팅 방식 ([`notes/plans/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md`](IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md)) 공식 폐기 및 본 사양서로 통합 승격
+> - **대체 대상**: 기존 물리 폴더 리부팅 방식 ([`notes/plans/archive/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md`](archive/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md)) 공식 폐기 및 본 사양서로 통합 승격
 
 ---
 

@@ -1,4 +1,4 @@
-# LionSQL 스토리지 옵션 계층 분리(--disk / --memory) 및 인메모리 컴팩트 기본값 전환 계획서 (`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`)
+# LionSQL 스토리지 옵션 계층 분리(--disk / --memory) 및 인메모리 컴팩트 기본값 전환 계획서 (`notes/plans/archive/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-10
 > - **문서 성격**: 스토리지 엔진 옵션 직교화 및 1.0 인메모리 Flat 컴팩트 레코드 기본값 승격 아키텍처 사양서

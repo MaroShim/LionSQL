@@ -1,5 +1,5 @@
 # 윈도우 WiredTiger 사전 빌드 정적 번들링 및 Cgo 크로스 플랫폼 일원화 설계서
-(`notes/plans/WINDOWS_WIREDTIGER_STATIC_BUNDLE_PLAN.ko.md`)
+(`notes/plans/archive/WINDOWS_WIREDTIGER_STATIC_BUNDLE_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-16
 > - **마일스톤**: `v0.94.0` (Priority 1)

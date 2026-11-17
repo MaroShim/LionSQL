@@ -4,7 +4,7 @@
 > - **최초 작성일**: 2026-10-31
 > - **과제 식별 코드**: `DURA-SOAK-1`, `DURA-SOAK-F1`, `DURA-SOAK-F2`
 > - **검증 도구**: [`cmd/soaktest/main.go`](../../cmd/soaktest/main.go)
-> - **관련 계획서**: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](../plans/DURABILITY_VERIFICATION_PLAN.ko.md)
+> - **관련 계획서**: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](../plans/archive/DURABILITY_VERIFICATION_PLAN.ko.md)
 > - **상태**: 1단계(1시간 WiredTiger PGWire 소크 및 초기 발견 이슈 2건 조치) 완료 (`[x]`)
 
 ---

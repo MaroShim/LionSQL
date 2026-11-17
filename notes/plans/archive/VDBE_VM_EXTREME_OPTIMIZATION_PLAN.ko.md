@@ -1,4 +1,4 @@
-# T-SQL VDBE 바이트코드 VM 아키텍처 진화사 및 극한 튜닝 종합 백서 (`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`)
+# T-SQL VDBE 바이트코드 VM 아키텍처 진화사 및 극한 튜닝 종합 백서 (`notes/plans/archive/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-02 (1차~3차 진화 통합 재구성: 2026-11-12)
 > - **최종 갱신일**: 2026-11-12 (전 단계 구현 완료, 218k TPS 및 863k tpmC 실측 검증 반영)

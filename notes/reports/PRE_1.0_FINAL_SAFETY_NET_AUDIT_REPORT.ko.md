@@ -4,7 +4,7 @@
 > - **상태**: **완료 (4대 Scope 전수 감사 및 17대 안전망 보강 패치 적용 완료)**
 > - **마일스톤**: `1.0-GA` (정식 릴리스 직전 최종 방어벽 사인오프)
 > - **연계 태스크**: `AUDIT-FINAL-SAFETY-NET-1` (`DONE`)
-> - **기반 계획서**: [`notes/plans/PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md`](../plans/PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md)
+> - **기반 계획서**: [`notes/plans/PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md`](../plans/archive/PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md)
 > - **적용 불변식**: `[RULE:DefensiveIndexing]`, `[RULE:ZeroOrphan]`, `[RULE:HandleHygiene]`, `[RULE:ExplicitError]`, `[RULE:LockHierarchy]`, `[RULE:PanicRecovery]`, `[RULE:ConcurrencySafety]`
 
 ---

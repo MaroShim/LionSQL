@@ -157,7 +157,7 @@ flowchart TD
        - `COLMETADATA` -> `ROW` -> `DONE` 토큰에 `Status = DoneFinal | DoneCount` 플래그 부여하여 배치 종료 신호 전달.
   3. **VDBE VM 저장 프로시저 다중 결과셋 지원**: 프로시저 내부에서 다중 `SELECT` 실행 시 결과셋 프레임을 분리하여 `Next` 체인으로 전파.
   4. **클라이언트 드라이버 호환성 오라클 검증**: ADO.NET / JDBC / `go-mssqldb`의 `NextResultSet()` 및 `SELECT 1 AS a; SELECT 2 AS b;` 다중 셋 반환 회귀 테스트 작성.
-  5. **아키텍처 계획서 영속화 (`[RULE:PlanPersistence]`)**: [`notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md`](TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md) 등록 완료.
+  5. **아키텍처 계획서 영속화 (`[RULE:PlanPersistence]`)**: [`notes/plans/archive/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md`](archive/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md) 등록 완료.
 
 ### [결함 108 / 태스크: `FIX-WT-CURSOR-ERROR-PROPAGATION-1`] [완료] WTCursor.Next() 에러 전파 부재로 인한 사일런트 데이터 누락 방지 (Cursor.Err() 인터페이스 확립)
 * **분류**: `Storage / WiredTiger / Cursor / Data Integrity` | **위치**: `pkg/storage/engine.go`, `pkg/storage/wiredtiger/wt_engine.go`, `pkg/execution/scan.go`
@@ -170,7 +170,7 @@ flowchart TD
   2. **`WTCursor` 에러 보존 및 전파**: `ret != 0 && ret != C.WT_NOTFOUND`인 경우 `c.err = fmt.Errorf(...)`를 래치하고 `false` 반환.
   3. **전체 커서 구현체 정합성 보장**: `wtIndexBTreeCursor`, `memCursor`, `SliceCursor`, 테스트 모의 커서에 `Err() error` 전면 구현.
   4. **스캔 루프 Fail-Closed 에러 점검**: `pkg/execution/scan.go` 등 쿼리 스캔 루프에서 `!cursor.Next()` 발생 시 `cursor.Err()`를 점검하여 즉시 Fail-Closed 쿼리 실패 처리.
-  5. **아키텍처 계획서 영속화 (`[RULE:PlanPersistence]`)**: [`notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md`](WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md) 등록 완료.
+  5. **아키텍처 계획서 영속화 (`[RULE:PlanPersistence]`)**: [`notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md`](archive/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md) 등록 완료.
 
 ---
 

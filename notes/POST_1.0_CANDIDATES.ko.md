@@ -57,7 +57,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 ### 도메인 A. 개발자 경험 및 편의성 (Ergonomics & Standalone Ecosystem)
 
 #### 1. `FRIENDLY-SQL`: DuckDB 스타일 편의 SQL 문법 지원
-- **상세 설계서**: [`notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)
+- **상세 설계서**: [`notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](plans/archive/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)
 - **주요 구현 내용**:
   1. `SELECT * EXCLUDE (col1, col2) FROM tbl`: 와일드카드 프로젝션에서 특정 컬럼 제외.
   2. `FROM tbl;`: `SELECT *` 생략형 테이블 전체 스캔 구문 허용.
@@ -89,7 +89,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
     - 어떤 제어 방식을 택하든(Default On, Strict Mode, Dialect 분기) 뚜렷한 장단점과 설계적 결함이 공존하므로, **명확한 설계적 확신과 실제 사용자 요구가 수렴될 때까지 Candidates에 둔 채 성급한 구현을 영구 보류**함.
 
 #### 2. `WEB-SPA-1`: 단일 바이너리 내장 SPA 웹 서버 호스팅
-- **상세 설계서**: [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)
+- **상세 설계서**: [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](plans/archive/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)
 - **주요 구현 내용**:
   1. `--app <dir>` 및 `--public <dir>` CLI 플래그 추가.
   2. React/Vue/Svelte 빌드 정적 자산을 DB 엔진과 동일한 단일 바이너리에서 HTTP 서빙.
@@ -119,7 +119,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 ### 도메인 B. 처리량 및 엔터프라이즈 보안 (Pipeline & Enterprise Governance)
 
 #### 3. `PERF-SERVER-PIPELINE-P3-P4`: 서버 파이프라인 Phase 3/4 — **[영구 보류 (Spec-Out)]**
-- **상세 설계서**: [`notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)
+- **상세 설계서**: [`notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](plans/archive/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)
 - **주요 제안 내용**:
   1. Generic LRU 커서/Prepared Statement 캐시 도입.
   2. ReadOnly 쿼리에 대해 트랜잭션 락/OCC 스냅샷 생성 비용을 면제하는 자동 바이패스 경로 구축.
@@ -134,7 +134,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
   - **결론**: 형식과 실제가 다른 SQL의 본질적인 특성상 완벽한 안전성을 담보할 수 없으므로, **ReadOnly 자동 바이패스는 영구 기각(Spec-Out)**하고 표준 트랜잭션 경계를 엄격히 유지합니다.
 
 #### 4. `AUDIT-LOG-1`: SHA-256 불변 감사 로그 서브시스템
-- **상세 설계서**: [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](plans/IMMUTABLE_AUDIT_LOG_PLAN.md)
+- **상세 설계서**: [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](plans/archive/IMMUTABLE_AUDIT_LOG_PLAN.md)
 - **주요 구현 내용**:
   1. 모든 DDL 변경, 사용자 권한 수정, 주요 DML 이력을 기록하는 Append-Only 전용 로그 블록.
   2. 이전 블록의 SHA-256 해시를 다음 레코드에 포함하는 해시 체인 구조.
@@ -173,14 +173,14 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 ### 도메인 C. 옵티마이저 & 분석 성능 쥐어짜기 (CBO & Analytical Performance)
 
 #### 7. `BENCH-TPCH-1`: Mini TPC-H 스위트 및 CBO 서브쿼리 Decorrelation ➔ **[영구 대체 및 구현 안 함 (Spec-Out)]**
-- **상태**: **영구 기각 (Replaced by [`PERF-SUBQUERY-MEMO-1`](plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md#9-bench-tpch-1-영구-대체-및-상관-서브쿼리-유계-메모이제이션-perf-subquery-memo-1))**
+- **상태**: **영구 기각 (Replaced by [`PERF-SUBQUERY-MEMO-1`](plans/archive/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md#9-bench-tpch-1-영구-대체-및-상관-서브쿼리-유계-메모이제이션-perf-subquery-memo-1))**
 - **대체 및 기각 사유**:
   1. 1단계 `[NOT] EXISTS`/`IN` Semi-Join 탈상관화는 이미 [`pkg/planner/decorrelate.go`](../pkg/planner/decorrelate.go)로 완료됨.
   2. 집계 포함 상관 서브쿼리에 대한 Kim's AST 재작성은 **Count Bug(`COUNT(*)=0` vs `NULL`)** 및 3VL 정합성 훼손 위험이 극심하여 **구현 안 함(Spec-Out)** 확정.
   3. 대신 30줄의 **단일 쿼리 스코프 유계 메모이제이션 캐시(`PERF-SUBQUERY-MEMO-1`, `1.0(?)` 후보)**로 100% 의미 무결성 보장과 최대 1,000배 성능 개선을 대체 달성 (`COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md` §9 통합).
 
 #### 8. `PERF-COMPLEX-QUERY-2`: Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join)
-- **상세 설계서**: [`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)
+- **상세 설계서**: [`notes/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](plans/archive/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)
 - **주요 구현 내용**:
   1. Go 맵 기반 해시 조인을 CPU 캐시 친화적인 단일 연속 메모리 슬라이스 오픈 어드레싱 해시 테이블로 전환.
   2. 정수 조인 키에 대해 해시 계산을 바이패스하고 비트 연산으로 슬롯 직결.
@@ -196,7 +196,7 @@ LionSQL은 v0.90.1을 거치며 **1.0 GA 릴리스에 필요한 모든 핵심 �
 ### 도메인 D. 코어 스토리지 & 프로토콜 딥 아키텍처 (Deep Kernel Redesign)
 
 #### 9. `OCC-HYPER-2`: In-Memory OCC Pointer-Free Flat Record & Memory Compaction
-- **상세 설계서**: [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
+- **상세 설계서**: [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](plans/archive/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)
 - **주요 구현 내용**:
   1. 레코드 표현을 Go 인터페이스 슬라이스(`[]any`)에서 오프셋 기반 단일 연속 바이트(`[]byte`)로 전면 개편.
   2. 튜플 언박싱 없이 고정 오프셋 O(1) 직접 읽기(0.5ns) 달성.

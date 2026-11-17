@@ -1,4 +1,4 @@
-# SSMS Object Explorer 하위 폴더(Columns, Keys, Constraints, Indexes, Triggers) 완벽 지원 계획 (`notes/plans/SSMS_OBJECT_EXPLORER_SUBFOLDERS_PLAN.ko.md`)
+# SSMS Object Explorer 하위 폴더(Columns, Keys, Constraints, Indexes, Triggers) 완벽 지원 계획 (`notes/plans/archive/SSMS_OBJECT_EXPLORER_SUBFOLDERS_PLAN.ko.md`)
 
 > - **작성일**: 2026-11-12
 > - **과제 식별 코드**: `SSMS-OE-SUBFOLDERS` / `SSMS-OE-COMPAT-2` / `SSMS-OE-3PART-TOP` / `SSMS-OE-SMO-VERIFY`

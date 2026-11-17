@@ -37,7 +37,7 @@
 
 LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인 전수 감사 및 무결성 강화 프로젝트입니다.
 
-* **[`PRE_RELEASE_AUDIT_PLAN.ko.md`](plans/PRE_RELEASE_AUDIT_PLAN.ko.md)**
+* **[`PRE_RELEASE_AUDIT_PLAN.ko.md`](plans/archive/PRE_RELEASE_AUDIT_PLAN.ko.md)**
   * 전 소스코드 135단계 듀얼 AI(Gemini × Claude) 크로스 감사 마스터 플랜 및 13대 도메인 매트릭스 (`AUDIT-135-DUAL-REVIEW`).
 * **[`PRE_RELEASE_AUDIT_FINDINGS.ko.md`](reports/PRE_RELEASE_AUDIT_FINDINGS.ko.md)**
   * 135단계 전수 감사 과정에서 발굴된 실측 결함 누적 매트릭스 (135/135 완주, 총 134건 결함 기록 완료).
@@ -46,32 +46,32 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 * **[`P0_AUDIT_COMPREHENSIVE_RETROSPECTIVE.ko.md`](reports/P0_AUDIT_COMPREHENSIVE_RETROSPECTIVE.ko.md)**
   * 1.0 전수 감사 P0 (Must Fix 37선) 전량 완치 종합 회고 및 엔지니어링 포스트모템 (5대 도메인 결함 분석, 5대 핵심 아키텍처 피벗, Negative Knowledge 및 0-Race 품질 백서).
 * **1.0 P0 핵심 아키텍처 플랜 & 심층 분석 백서**:
-  * **[`P0_01_04_FLATRECORD_BINARY_LAYOUT_AND_SCHEMA_EVOLUTION_PLAN.ko.md`](plans/P0_01_04_FLATRECORD_BINARY_LAYOUT_AND_SCHEMA_EVOLUTION_PLAN.ko.md)**: FlatRecord 힙 오프셋 충돌 해소(`slot[7]` 격리 태그) 및 `ALTER TABLE ADD COLUMN` 스키마 에볼루션 아키텍처.
-  * **[`P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md`](plans/P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md)**: WAL 비정상 절삭 방지 및 4-State MECE Fail-Closed 복구 아키텍처 (`Invariant 9`, `ADR-027`).
-  * **[`P0_06_07_09_RBAC_SECURITY_AND_PERSISTENCE_PLAN.ko.md`](plans/P0_06_07_09_RBAC_SECURITY_AND_PERSISTENCE_PLAN.ko.md)**: RBAC 익명 관리자 백도어 제거, 명시적 DENY 우선권 보장 및 `auth.json` 원자적 영속화.
-  * **[`P0_08_CDC_OUTBOX_AT_LEAST_ONCE_BACKPRESSURE_PLAN.ko.md`](plans/P0_08_CDC_OUTBOX_AT_LEAST_ONCE_BACKPRESSURE_PLAN.ko.md)**: CDC Outbox 외부 브로커 전송 실패 시 무음 폐기 방지 및 지수 백오프 백프레셔 (`ADR-026`).
-  * **[`P0_10_34_REPLICATION_CDC_LOSSLESS_STREAMING_PLAN.ko.md`](plans/P0_10_34_REPLICATION_CDC_LOSSLESS_STREAMING_PLAN.ko.md)**: CDC Lossless Bridge 2단계 핸드오버 및 복제 브로드캐스터 Fail-Closed 슬로우 레플리카 격리 (`[RULE:NonBlockingSink]`, `[RULE:ExplicitError]`).
-  * **[`P0_11_12_13_OPERATOR_BOUNDED_WORKMEM_GUARD_PLAN.ko.md`](plans/P0_11_12_13_OPERATOR_BOUNDED_WORKMEM_GUARD_PLAN.ko.md)**: 쿼리 실행 오퍼레이터(CUBE 12차원 상한, Window/MergeJoin 64MB WorkMem 실시간 추적) 유계 메모리 가드레일 (`[RULE:BoundedBuffers]`).
-  * **[`P0_15_WAL_ARCHIVE_ATOMIC_ROTATION_PLAN.ko.md`](plans/P0_15_WAL_ARCHIVE_ATOMIC_ROTATION_PLAN.ko.md)**: WAL 아카이브 회전 중 신규 트랜잭션 Truncate 절삭 방지 및 원자적 세그먼트 스왑 아키텍처.
-  * **[`P0_16_RESTORE_ATOMIC_ROLLBACK_AND_FK_TOPOSORT_PLAN.ko.md`](plans/P0_16_RESTORE_ATOMIC_ROLLBACK_AND_FK_TOPOSORT_PLAN.ko.md)**: 백업 복원 실패 시 원본 스냅샷 원자적 롤백 및 Kahn 외래키 위상 정렬 복원 아키텍처.
-  * **[`P0_18_19_DML_STREAMING_AND_FAIL_CLOSED_ROLLBACK_PLAN.ko.md`](plans/P0_18_19_DML_STREAMING_AND_FAIL_CLOSED_ROLLBACK_PLAN.ko.md)**: MERGE 문 PK 다이렉트 스트리밍(5만 행 유계 상한) 및 DML 스캔 중 I/O 에러 시 Fail-Closed 원자적 롤백.
-  * **[`P0_23_DECIMAL_FIXED_POINT_PRECISION_PLAN.ko.md`](plans/P0_23_DECIMAL_FIXED_POINT_PRECISION_PLAN.ko.md)**: 금융 DECIMAL/NUMERIC/MONEY 고정소수점 타입의 IEEE 754 Float 강등 오매핑 차단 및 임의 정밀도 보존.
-  * **[`P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md`](plans/P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md)**: 네트워크 단절 시 트랜잭션 최우선 롤백 및 DDL 데드락 방지 세션 드레인 아키텍처.
-  * **[`P0_27_35_WIRE_AND_HTTP_BOUNDED_PAYLOAD_LIMIT_PLAN.ko.md`](plans/P0_27_35_WIRE_AND_HTTP_BOUNDED_PAYLOAD_LIMIT_PLAN.ko.md)**: TDS/PGWire 64MB 패킷 프레임 상한 및 HTTP Chunked 스트림 32MB 바디 제한 DoS 방어벽.
+  * **[`P0_01_04_FLATRECORD_BINARY_LAYOUT_AND_SCHEMA_EVOLUTION_PLAN.ko.md`](plans/archive/P0_01_04_FLATRECORD_BINARY_LAYOUT_AND_SCHEMA_EVOLUTION_PLAN.ko.md)**: FlatRecord 힙 오프셋 충돌 해소(`slot[7]` 격리 태그) 및 `ALTER TABLE ADD COLUMN` 스키마 에볼루션 아키텍처.
+  * **[`P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md`](plans/archive/P0_03_WAL_FAIL_CLOSED_CRASH_RECOVERY_PLAN.ko.md)**: WAL 비정상 절삭 방지 및 4-State MECE Fail-Closed 복구 아키텍처 (`Invariant 9`, `ADR-027`).
+  * **[`P0_06_07_09_RBAC_SECURITY_AND_PERSISTENCE_PLAN.ko.md`](plans/archive/P0_06_07_09_RBAC_SECURITY_AND_PERSISTENCE_PLAN.ko.md)**: RBAC 익명 관리자 백도어 제거, 명시적 DENY 우선권 보장 및 `auth.json` 원자적 영속화.
+  * **[`P0_08_CDC_OUTBOX_AT_LEAST_ONCE_BACKPRESSURE_PLAN.ko.md`](plans/archive/P0_08_CDC_OUTBOX_AT_LEAST_ONCE_BACKPRESSURE_PLAN.ko.md)**: CDC Outbox 외부 브로커 전송 실패 시 무음 폐기 방지 및 지수 백오프 백프레셔 (`ADR-026`).
+  * **[`P0_10_34_REPLICATION_CDC_LOSSLESS_STREAMING_PLAN.ko.md`](plans/archive/P0_10_34_REPLICATION_CDC_LOSSLESS_STREAMING_PLAN.ko.md)**: CDC Lossless Bridge 2단계 핸드오버 및 복제 브로드캐스터 Fail-Closed 슬로우 레플리카 격리 (`[RULE:NonBlockingSink]`, `[RULE:ExplicitError]`).
+  * **[`P0_11_12_13_OPERATOR_BOUNDED_WORKMEM_GUARD_PLAN.ko.md`](plans/archive/P0_11_12_13_OPERATOR_BOUNDED_WORKMEM_GUARD_PLAN.ko.md)**: 쿼리 실행 오퍼레이터(CUBE 12차원 상한, Window/MergeJoin 64MB WorkMem 실시간 추적) 유계 메모리 가드레일 (`[RULE:BoundedBuffers]`).
+  * **[`P0_15_WAL_ARCHIVE_ATOMIC_ROTATION_PLAN.ko.md`](plans/archive/P0_15_WAL_ARCHIVE_ATOMIC_ROTATION_PLAN.ko.md)**: WAL 아카이브 회전 중 신규 트랜잭션 Truncate 절삭 방지 및 원자적 세그먼트 스왑 아키텍처.
+  * **[`P0_16_RESTORE_ATOMIC_ROLLBACK_AND_FK_TOPOSORT_PLAN.ko.md`](plans/archive/P0_16_RESTORE_ATOMIC_ROLLBACK_AND_FK_TOPOSORT_PLAN.ko.md)**: 백업 복원 실패 시 원본 스냅샷 원자적 롤백 및 Kahn 외래키 위상 정렬 복원 아키텍처.
+  * **[`P0_18_19_DML_STREAMING_AND_FAIL_CLOSED_ROLLBACK_PLAN.ko.md`](plans/archive/P0_18_19_DML_STREAMING_AND_FAIL_CLOSED_ROLLBACK_PLAN.ko.md)**: MERGE 문 PK 다이렉트 스트리밍(5만 행 유계 상한) 및 DML 스캔 중 I/O 에러 시 Fail-Closed 원자적 롤백.
+  * **[`P0_23_DECIMAL_FIXED_POINT_PRECISION_PLAN.ko.md`](plans/archive/P0_23_DECIMAL_FIXED_POINT_PRECISION_PLAN.ko.md)**: 금융 DECIMAL/NUMERIC/MONEY 고정소수점 타입의 IEEE 754 Float 강등 오매핑 차단 및 임의 정밀도 보존.
+  * **[`P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md`](plans/archive/P0_26_SESSION_DISCONNECT_ROLLBACK_AND_DRAIN_PLAN.ko.md)**: 네트워크 단절 시 트랜잭션 최우선 롤백 및 DDL 데드락 방지 세션 드레인 아키텍처.
+  * **[`P0_27_35_WIRE_AND_HTTP_BOUNDED_PAYLOAD_LIMIT_PLAN.ko.md`](plans/archive/P0_27_35_WIRE_AND_HTTP_BOUNDED_PAYLOAD_LIMIT_PLAN.ko.md)**: TDS/PGWire 64MB 패킷 프레임 상한 및 HTTP Chunked 스트림 32MB 바디 제한 DoS 방어벽.
   * **[`P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md`](reports/P0_29_GO_SYNC_POOL_SLICE_LEAK_POSTMORTEM.ko.md)**: Go `sync.Pool` 슬라이스 용량 비대화 실측 및 잔류 포인터 GC 누수 박멸 포스트모템 (`[RULE:ZeroAllocation]`).
   * **[`P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md`](reports/P0_30_TRANSACTION_SESSION_CONCURRENCY_DEBATE.ko.md)**: 세션 동시성 격착, Lock Scope Shrinking 및 서브쿼리 교착 차단 심층 기술 토론.
   * **[`IN_MEMORY_OCC_DELETE_INSERT_ANOMALY_POSTMORTEM.ko.md`](reports/IN_MEMORY_OCC_DELETE_INSERT_ANOMALY_POSTMORTEM.ko.md)**: 동일 트랜잭션 내 동일 키 DELETE 후 INSERT 시 위양성 쓰기 충돌(`Scope-005`) 포스트모템 및 Mutation Coalescing 아키텍처.
-  * **[`P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md`](plans/P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md)**: RLS 순수 AST 구조적 결합 테넌트 격리 및 `sp_executesql` $O(N)$ Single-Pass 선형 스캐너 아키텍처.
-  * **[`P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md`](plans/P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md)**: 중첩 트랜잭션 조기 물리 커밋 방지 및 T-SQL `@@TRANCOUNT` ACID 원자성 수호 아키텍처 (`Invariant 6`).
-  * **[`P0_33_36_SETOP_MATERIALIZATION_AND_REST_STREAMING_PLAN.ko.md`](plans/P0_33_36_SETOP_MATERIALIZATION_AND_REST_STREAMING_PLAN.ko.md)**: 집합 연산(`UNION/EXCEPT`) LazyTuple 조기 구체화 누락 결과셋 증발 방지 및 REST API 단일 윈도우 스트리밍.
-  * **[`P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md`](plans/P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md)**: 크론 자식 프로세스 환상 탈피, 전사 세션 글로벌 패닉 완충망(`[RULE:PanicRecovery]`) 및 동시성 격리 아키텍처.
-* **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)**
+  * **[`P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md`](plans/archive/P0_31_RLS_AST_ISOLATION_AND_DYNAMIC_SQL_PLAN.ko.md)**: RLS 순수 AST 구조적 결합 테넌트 격리 및 `sp_executesql` $O(N)$ Single-Pass 선형 스캐너 아키텍처.
+  * **[`P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md`](plans/archive/P0_32_NESTED_TRANSACTION_ACID_PLAN.ko.md)**: 중첩 트랜잭션 조기 물리 커밋 방지 및 T-SQL `@@TRANCOUNT` ACID 원자성 수호 아키텍처 (`Invariant 6`).
+  * **[`P0_33_36_SETOP_MATERIALIZATION_AND_REST_STREAMING_PLAN.ko.md`](plans/archive/P0_33_36_SETOP_MATERIALIZATION_AND_REST_STREAMING_PLAN.ko.md)**: 집합 연산(`UNION/EXCEPT`) LazyTuple 조기 구체화 누락 결과셋 증발 방지 및 REST API 단일 윈도우 스트리밍.
+  * **[`P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md`](plans/archive/P0_37_SESSION_CRON_PANIC_AND_ISOLATION_PLAN.ko.md)**: 크론 자식 프로세스 환상 탈피, 전사 세션 글로벌 패닉 완충망(`[RULE:PanicRecovery]`) 및 동시성 격리 아키텍처.
+* **[`REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](plans/archive/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md)**
   * LionSQL 전역 정규식 완전 박멸 및 결정론적 토크나이저 전환 단일 SSOT 종합 계획서 (`GA-REGEX-DDL-1` ~ `GA-REGEX-FINAL-3`, `SEC-PGWIRE-PARAM-1`).
-* **[`DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)**
+* **[`DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](plans/archive/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md)**
   * LionSQL 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 (`DOC-REVAMP-10`).
-* **[`DURABILITY_VERIFICATION_PLAN.ko.md`](plans/DURABILITY_VERIFICATION_PLAN.ko.md)**
+* **[`DURABILITY_VERIFICATION_PLAN.ko.md`](plans/archive/DURABILITY_VERIFICATION_PLAN.ko.md)**
   * 킬 테스트(SIGKILL 즉시 복구), 소크 테스트, 개밥 먹기(Dogfooding) 기반 실전 운영 내구성 검증 계획서.
-* **[`PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md`](plans/PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md)** / **[`PRE_1.0_FINAL_SAFETY_NET_AUDIT_REPORT.ko.md`](reports/PRE_1.0_FINAL_SAFETY_NET_AUDIT_REPORT.ko.md)**
+* **[`PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md`](plans/archive/PRE_1.0_FINAL_SAFETY_NET_AUDIT_PLAN.ko.md)** / **[`PRE_1.0_FINAL_SAFETY_NET_AUDIT_REPORT.ko.md`](reports/PRE_1.0_FINAL_SAFETY_NET_AUDIT_REPORT.ko.md)**
   * LionSQL 1.0-GA 정식 릴리스 직전 4대 도메인(와이어/코디네이터/스토리지/VDBE) × 4대 결함 분류 체계 정밀 정적 전수 감사 계획서 및 17대 콜드 패스 방어벽 보강 완료 보고서 (`AUDIT-FINAL-SAFETY-NET-1`).
 
 ---
@@ -81,28 +81,28 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 엔진의 각 핵심 서브시스템별 설계 및 리팩토링 명세서입니다.
 
 ### 3.1. 스토리지 엔진 & 고동시성 트랜잭션 (Storage & OCC)
-* **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Option A 플랫 레코드 하드닝 (`OCC-HYPER`).
+* **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](plans/archive/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Option A 플랫 레코드 하드닝 (`OCC-HYPER`).
 * **[`FLAT_RECORD_RELIABILITY_PLAN.ko.md`](plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md)**: 포인터 없는 플랫 레코드 인코딩의 안정성 및 디코딩 신뢰성 검증 계획서.
-* **[`LAZY_DECODING_P2_PLAN.ko.md`](plans/LAZY_DECODING_P2_PLAN.ko.md)**: 레코드 전체 언패킹 비용을 없애는 칼럼 단위 지연 디코딩(Lazy Decoding) 설계 계획서.
-* **[`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](plans/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)**: 키 래치 완전 제거를 통한 160k TPS 회귀 복구 및 CI 성능 게이트 구축 계획서.
+* **[`LAZY_DECODING_P2_PLAN.ko.md`](plans/archive/LAZY_DECODING_P2_PLAN.ko.md)**: 레코드 전체 언패킹 비용을 없애는 칼럼 단위 지연 디코딩(Lazy Decoding) 설계 계획서.
+* **[`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](plans/archive/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)**: 키 래치 완전 제거를 통한 160k TPS 회귀 복구 및 CI 성능 게이트 구축 계획서.
 
 ### 3.2. 쿼리 엔진, 옵티마이저 & 파서 (Engine, Planner & Parser)
 * **[`VDBE_BYTECODE_DIRECTORY.ko.md`](../doc/internal/VDBE_BYTECODE_DIRECTORY.ko.md)**: **VDBE & 16-Byte 바이트코드 마스터 디렉토리** — 1세대(Goja 폐기)부터 4세대(218k TPS Lock-Free 달성)까지의 진화 타임라인, 카테고리별 문서 맵(ISA, 2-Tier 라우팅, 극한 튜닝 백서, Babelfish 검증), 소스 코드 패키지 가이드.
 * **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](../doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 단순 질의(VDBE)와 복합 관계대수(CBO)를 분리하는 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 명세서.
-* **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md)**: AST 및 Dialect 타입 기반 2-Tier 쿼리 라우팅 정규화 계획서 (`ARCH-VDBE-ROUTING-1`).
-* **[`VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md`](plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md)**: 가상 카탈로그(`pkg/catalog/virtual` & `sqlexec_dbcc`) 구조 통합, 830줄 단일 테이블 이관, Zero-Alloc One-Pass 절 스캐너(`SplitSelectClauses`) 및 보일러플레이트 리팩토링 아키텍처 (`REFACTOR-VIRTUAL-CATALOG-1`).
-* **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](plans/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 카탈로그 라우팅 리팩토링 검증 보고서 (527ns 실측).
-* **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)**: 10개 이상 테이블 조인 최적화 및 공집합 조기 탈락 설계 계획서 (`OPT-LARGE-JOIN-1`).
-* **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)**: 플래너 슬림화 및 순수 AST 전환 설계 계획서 (`PLANNER-SLIM-1`, `PLANNER-AST-1`).
-* **[`VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)**: VDBE 바이트코드 VM 아키텍처 진화(1~4세대) 및 극한 성능 튜닝 백서 (4-Way Unrolling, `vmFrame` 풀링, 16-Byte ISA 트레이드오프, 218k TPS 실측).
+* **[`ARCH_VDBE_ROUTING_1_PLAN.ko.md`](plans/archive/ARCH_VDBE_ROUTING_1_PLAN.ko.md)**: AST 및 Dialect 타입 기반 2-Tier 쿼리 라우팅 정규화 계획서 (`ARCH-VDBE-ROUTING-1`).
+* **[`VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md`](plans/archive/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md)**: 가상 카탈로그(`pkg/catalog/virtual` & `sqlexec_dbcc`) 구조 통합, 830줄 단일 테이블 이관, Zero-Alloc One-Pass 절 스캐너(`SplitSelectClauses`) 및 보일러플레이트 리팩토링 아키텍처 (`REFACTOR-VIRTUAL-CATALOG-1`).
+* **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](plans/archive/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 카탈로그 라우팅 리팩토링 검증 보고서 (527ns 실측).
+* **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](plans/archive/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)**: 10개 이상 테이블 조인 최적화 및 공집합 조기 탈락 설계 계획서 (`OPT-LARGE-JOIN-1`).
+* **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](plans/archive/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)**: 플래너 슬림화 및 순수 AST 전환 설계 계획서 (`PLANNER-SLIM-1`, `PLANNER-AST-1`).
+* **[`VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](plans/archive/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)**: VDBE 바이트코드 VM 아키텍처 진화(1~4세대) 및 극한 성능 튜닝 백서 (4-Way Unrolling, `vmFrame` 풀링, 16-Byte ISA 트레이드오프, 218k TPS 실측).
 * **[`MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md)**: 6대 마이크로 아키텍처 제로 할당 핫패스 튜닝 계획서 (`PERF-VDBE-FRAME-SLIM-1`, `PERF-WAL-ZERO-ALLOC-1`, `PERF-WT-ROW-DIRECT-1` 등).
-* **[`WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)**: 쓰기 가능한 CTE(Writable CTE)를 VDBE 바이트코드로 직접 컴파일하는 Lowering 설계.
-* **[`SQL_PARSER_HARDENING_PLAN.ko.md`](plans/SQL_PARSER_HARDENING_PLAN.ko.md)**: 리터럴 오염 방지 및 세미콜론 절단 방지를 위한 SQL 파서 하드닝 계획서.
+* **[`WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](plans/archive/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)**: 쓰기 가능한 CTE(Writable CTE)를 VDBE 바이트코드로 직접 컴파일하는 Lowering 설계.
+* **[`SQL_PARSER_HARDENING_PLAN.ko.md`](plans/archive/SQL_PARSER_HARDENING_PLAN.ko.md)**: 리터럴 오염 방지 및 세미콜론 절단 방지를 위한 SQL 파서 하드닝 계획서.
 
 ### 3.3. 와이어 프로토콜 & 네트워킹 (Wire & Protocols)
-* **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: 소켓 수신부터 VDBE 및 WAL 적응형 그룹 커밋에 이르는 서버 수직 파이프라인 최적화 마스터 플랜.
-* **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)**: 단일 정적 바이너리 내장 웹 스튜디오 및 SPA 서빙 아키텍처 계획서 (`WEB-SPA-1`, 공식 가이드: [`doc/WEB_APP_HOSTING_GUIDE.ko.md`](../doc/WEB_APP_HOSTING_GUIDE.ko.md)).
-* **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](plans/MODULAR_ARCHITECTURE_PLAN.ko.md)**: TDS/와이어 레이어 인터페이스 불변 파일 분리 및 모듈러 아키텍처 평가 계획서 (`TDS-MOD-1`).
+* **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](plans/archive/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: 소켓 수신부터 VDBE 및 WAL 적응형 그룹 커밋에 이르는 서버 수직 파이프라인 최적화 마스터 플랜.
+* **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](plans/archive/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)**: 단일 정적 바이너리 내장 웹 스튜디오 및 SPA 서빙 아키텍처 계획서 (`WEB-SPA-1`, 공식 가이드: [`doc/WEB_APP_HOSTING_GUIDE.ko.md`](../doc/WEB_APP_HOSTING_GUIDE.ko.md)).
+* **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](plans/archive/MODULAR_ARCHITECTURE_PLAN.ko.md)**: TDS/와이어 레이어 인터페이스 불변 파일 분리 및 모듈러 아키텍처 평가 계획서 (`TDS-MOD-1`).
 
 ---
 
@@ -127,7 +127,7 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
   * SQLite 공식 SQLLogicTest (SLT) 107개 풀세트(551,217 쿼리) 100% 무결점 통과 실측 보고서 및 8대 심층 엔진 결함 완치 기록.
 * **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](reports/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)**
   * 1시간 장시간 고부하(72만 ops / 39.3만 커밋) 실측 검증, `SQLSTATE 40001` 충돌 처리 및 WiredTiger 500MB 캐시 수렴 분석 보고서.
-* **[`COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)**
+* **[`COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](plans/archive/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md)**
   * SSB (Star Schema Benchmark) 및 Mini TPC-H 5대 대표 쿼리 실측, DuckDB/ClickHouse 비교 분석 및 1.0 완료 동결 보고.
 
 ---
@@ -161,7 +161,7 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
   * HNSW 벡터 인덱스 및 시계열 압축 청크 아키텍처 설계 계획서.
 * **[`OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)**
   * 배포 패키지 오프라인 문서 번들링 및 내장 뷰어 설계 계획서 (`PKG-OFFLINE-DOCS-1`).
-* **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](plans/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)**
+* **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](plans/archive/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)**
   * AWS Babelfish T-SQL Stored Procedure 전용 SLT 테스트 스위트 구축 계획서.
 * **공식 릴리즈 노트 아카이브 (`notes/release_notes/`)**:
   * **[`RELEASE_NOTES_v0.92.0.ko.md`](release_notes/RELEASE_NOTES_v0.92.0.ko.md)** ([English](release_notes/RELEASE_NOTES_v0.92.0.md)): LionSQL v0.92.0 공식 릴리즈 노트 (37선 P0 전수 결함 완치, WiredTiger 고동시성 락 해제, TPC-C 역대 최고 성능).

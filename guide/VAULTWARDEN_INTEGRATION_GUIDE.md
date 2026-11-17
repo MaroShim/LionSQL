@@ -9,7 +9,7 @@
 >   - **PostgreSQL Wire Protocol v3** (Default TCP `:5433`)
 > - **Reference Documents**:
 >   - Integration Report: [`notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md`](../notes/reports/VAULTWARDEN_INTEGRATION_REPORT.ko.md)
->   - Modular Architecture Plan: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md)
+>   - Modular Architecture Plan: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/plans/archive/MODULAR_ARCHITECTURE_PLAN.ko.md)
 > - **한국어 문서**: [`guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](VAULTWARDEN_INTEGRATION_GUIDE.ko.md)
 
 ---

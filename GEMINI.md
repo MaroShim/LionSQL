@@ -287,8 +287,8 @@ For deep architectural context, negative knowledge, and historical postmortems, 
 - [`doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md): 2-Tier query engine specification.
 - [`doc/SPEC_OUT_DECISIONS.ko.md`](doc/SPEC_OUT_DECISIONS.ko.md): Explicit Spec-Out decisions catalog.
 - [`doc/TSQL_COMPATIBILITY_MATRIX.ko.md`](doc/TSQL_COMPATIBILITY_MATRIX.ko.md): T-SQL syntax and function compatibility matrix.
-- [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md): In-Memory OCC performance optimization history, WiredTiger beat roadmap, and 104k tpmC architecture.
-- [`notes/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](notes/plans/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md): Windows daemon decoupling and 1ms timer architecture.
+- [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/archive/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md): In-Memory OCC performance optimization history, WiredTiger beat roadmap, and 104k tpmC architecture.
+- [`notes/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](notes/plans/archive/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md): Windows daemon decoupling and 1ms timer architecture.
 - [`notes/README.md`](notes/README.md) / [`notes/README.ko.md`](notes/README.ko.md): Master index of all completed architecture plans.
 - [`TASKS.md`](TASKS.md): Active Single Source of Truth (SSOT) task & sprint database mirror (`TODO.md` deprecated).
 - [`ROADMAP.md`](ROADMAP.md): Strategic release horizons and milestone gates.

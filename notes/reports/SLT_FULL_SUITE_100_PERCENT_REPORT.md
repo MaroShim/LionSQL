@@ -170,7 +170,7 @@ When running the identical SQLLogicTest corpus (`551,217` queries, `19,211` stat
    - Engines that invoke heavy Cascades optimizers suffer from planning inversion (planning time > data scan time). LionSQL executes instantly through its zero-allocation Pratt parser and 2-tier VDBE/Volcano routing.
 2. **State-Space Explosion Suppression on Large Joins (`select4/5.test` up to 64-way joins)**:
    - Many RDBMSs freeze on `select5.test` due to factorial join order search and Cartesian product explosions.
-   - LionSQL's [`OPT-LARGE-JOIN-1`](../plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) optimization (Selinger DP threshold capped at `MaxJoinDPThreshold = 6` + BFS Spanning Tree join key deduction + dynamic root selection by single-row filter/minimum cardinality + `1=0` empty set fast-fail) completes all 732 complex joins in `select5.test` in **12.67s**.
+   - LionSQL's [`OPT-LARGE-JOIN-1`](../plans/archive/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) optimization (Selinger DP threshold capped at `MaxJoinDPThreshold = 6` + BFS Spanning Tree join key deduction + dynamic root selection by single-row filter/minimum cardinality + `1=0` empty set fast-fail) completes all 732 complex joins in `select5.test` in **12.67s**.
 3. **Contention-Free Goroutine Worker Pool (`-parallel 8`) and Isolated Per-File Memory Instances**:
    - Each test file runs in an isolated `Coordinator` + `memengine` instance without shared catalog mutexes or global lock contention, saturating 100% of multi-core CPU capacity.
    - Despite being implemented in pure Go, LionSQL matches C/C++ embedded engines (SQLite, DuckDB) in the **30-50s tier**, running **5x to 20x faster** than traditional client-server DBMSs and Go-based distributed SQL systems.

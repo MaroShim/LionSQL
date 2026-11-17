@@ -1,5 +1,5 @@
 # Dual-AI (Antigravity & Claude) 릴리스 사전 적대적 코드 감사 파이프라인 아키텍처 사양서
-(`notes/plans/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`)
+(`notes/plans/archive/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-14
 > - **최종 갱신일**: 2026-11-14

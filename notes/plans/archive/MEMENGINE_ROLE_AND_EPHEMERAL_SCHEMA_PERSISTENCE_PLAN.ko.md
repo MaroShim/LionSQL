@@ -1,5 +1,5 @@
 # LionSQL 스토리지 엔진 역할 분담 및 테이블 단위 T-SQL 영속성(`DURABILITY = SCHEMA_ONLY`) 아키텍처 설계서
-(`notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md`)
+(`notes/plans/archive/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md`)
 
 > - **작성일**: 2026-11-15 (개정: 2026-11-16)
 > - **마일스톤**: `v0.94.0` (Priority 1)

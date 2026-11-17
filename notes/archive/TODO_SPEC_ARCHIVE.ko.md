@@ -27,7 +27,7 @@
 
 #### 2. [Post-1.0 (v1.1.0) 연기] 엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`pkg/audit`, `AUDIT-LOG-1`)
 * **마일스톤 분류**: 1.0 LTS 출시 기준 일원화(Gate 4는 기존 TDE, RBAC, HTTP 감사 추적으로 충족)에 따라 **Post-1.0 (`v1.1.0`)** 마일스톤으로 연기 확정.
-* **표준 규격**: PCI-DSS v4.0 Requirement 10, SOC 2 Type II, HIPAA §164.312(b) ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](../plans/IMMUTABLE_AUDIT_LOG_PLAN.md))
+* **표준 규격**: PCI-DSS v4.0 Requirement 10, SOC 2 Type II, HIPAA §164.312(b) ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](../plans/archive/IMMUTABLE_AUDIT_LOG_PLAN.md))
 * **핵심 아키텍처 및 구현 요구사항**:
   1. **SHA-256 해시 체이닝 (Cryptographic Hash Chaining)**:
      - 각 감사 레코드는 이전 레코드의 해시값을 포함하여 연결 ($H_n = \text{SHA256}(H_{n-1} \parallel R_n)$).

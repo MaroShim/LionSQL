@@ -1,4 +1,4 @@
-# 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 설계서 (`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`)
+# 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 설계서 (`notes/plans/archive/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-10
 > - **최종 갱신일**: 2026-11-11
