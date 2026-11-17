@@ -19,9 +19,9 @@ Usage:
   lionsql [options...]
 
 Quickstart:
-  lionsql start                  # Run as background daemon
-  lionsql                        # Run foreground server (:5433, :1433, :8090)
-  lionsql -i                     # Start interactive SQL shell
+  lionsql start             # Run as background daemon
+  lionsql                   # Run foreground server (:5433, :1433, :8090)
+  lionsql -i                # Start interactive SQL shell
 
 Commands:
   start | stop              Start or stop background daemon
@@ -45,11 +45,11 @@ Common Options:
   -config <path>            Path to JSON configuration file (auto-detects ./lionsql.json)
 
 Examples:
-  lionsql start                   # Start background daemon
-  lionsql status                  # Check background daemon status
-  lionsql stop                    # Stop background daemon
-  lionsql -i                      # Start interactive SQL REPL shell
-  lionsql sql "SELECT 1;"         # Execute one-off SQL statement
+  lionsql start             # Start background daemon
+  lionsql status            # Check background daemon status
+  lionsql stop              # Stop background daemon
+  lionsql -i                # Start interactive SQL REPL shell
+  lionsql sql "SELECT 1;"   # Execute one-off SQL statement
 
 For full options and comprehensive manual (Replication, Outbox, Memory, TLS), run:
   lionsql --help
