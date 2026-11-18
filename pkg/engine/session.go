@@ -397,6 +397,88 @@ func (cs *ClientSession) UnregisterTempTable(tbl string) {
 	delete(cs.TempTableMap, strings.TrimPrefix(lower, "#"))
 }
 
+// RegisterTableVar associates a table variable name (e.g. "@tbl") with its physical storage table name.
+func (cs *ClientSession) RegisterTableVar(name, phys string) {
+	if cs == nil {
+		return
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.TableVars == nil {
+		cs.TableVars = make(map[string]string)
+	}
+	clean := "@" + strings.TrimPrefix(strings.ToLower(name), "@")
+	cs.TableVars[clean] = phys
+}
+
+// GetTableVarPhysical returns the physical storage table name for a table variable if registered.
+func (cs *ClientSession) GetTableVarPhysical(name string) (string, bool) {
+	if cs == nil {
+		return "", false
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.TableVars == nil {
+		return "", false
+	}
+	clean := "@" + strings.TrimPrefix(strings.ToLower(name), "@")
+	phys, exists := cs.TableVars[clean]
+	return phys, exists
+}
+
+// drainStorageTablesToDropLocked extracts all unique physical table names from TableVars and TempTableMap,
+// resets session-scoped temporary objects (TableVars, TempTableMap, EphemeralTables, PreparedStmts, Cursors),
+// and returns the physical table names to drop. Caller must hold cs.Mu.
+func (cs *ClientSession) drainStorageTablesToDropLocked() []string {
+	if cs == nil {
+		return nil
+	}
+	totalCap := len(cs.TableVars) + len(cs.TempTableMap)
+	if totalCap == 0 {
+		cs.EphemeralTables = nil
+		cs.PreparedStmts = nil
+		if cs.Cursors != nil {
+			clear(cs.Cursors)
+		}
+		return nil
+	}
+	seen := make(map[string]struct{}, totalCap)
+	toDrop := make([]string, 0, totalCap)
+
+	for _, phys := range cs.TableVars {
+		if _, ok := seen[phys]; !ok {
+			seen[phys] = struct{}{}
+			toDrop = append(toDrop, phys)
+		}
+	}
+	for _, phys := range cs.TempTableMap {
+		if _, ok := seen[phys]; !ok {
+			seen[phys] = struct{}{}
+			toDrop = append(toDrop, phys)
+		}
+	}
+
+	cs.TableVars = nil
+	cs.TempTableMap = nil
+	cs.EphemeralTables = nil
+	cs.PreparedStmts = nil
+	if cs.Cursors != nil {
+		clear(cs.Cursors)
+	}
+	return toDrop
+}
+
+// DrainStorageTablesToDrop safely locks the session, extracts all registered temporary storage table names,
+// resets ephemeral session objects, and returns the physical table names to drop.
+func (cs *ClientSession) DrainStorageTablesToDrop() []string {
+	if cs == nil {
+		return nil
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	return cs.drainStorageTablesToDropLocked()
+}
+
 // TempTablePhysicalNames returns a slice of all unique physical table names currently registered for this session.
 func (cs *ClientSession) TempTablePhysicalNames() []string {
 	if cs == nil {

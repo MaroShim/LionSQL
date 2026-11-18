@@ -1453,12 +1453,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			}
 
 			if cs != nil {
-				cs.Mu.Lock()
-				if cs.TableVars == nil {
-					cs.TableVars = make(map[string]string)
-				}
-				cs.TableVars[varName] = physTable
-				cs.Mu.Unlock()
+				cs.RegisterTableVar(varName, physTable)
 			}
 
 			return &QueryResult{

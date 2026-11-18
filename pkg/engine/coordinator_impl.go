@@ -613,21 +613,7 @@ func (c *Coordinator) CloseSession(id string) {
 		}
 
 		// 2. Snapshot table variable & temp table names to drop outside lock ([RULE:LockHierarchy])
-		var toDropLocal []string
-		for _, physTable := range cs.TableVars {
-			toDropLocal = append(toDropLocal, physTable)
-		}
-		for _, phys := range cs.TempTableMap {
-			toDropLocal = append(toDropLocal, phys)
-		}
-
-		cs.TableVars = nil
-		cs.TempTableMap = nil
-		cs.EphemeralTables = nil
-		cs.PreparedStmts = nil
-		if cs.Cursors != nil {
-			clear(cs.Cursors)
-		}
+		toDropLocal := cs.drainStorageTablesToDropLocked()
 
 		cs.closed = true
 		storageSess := cs.Session
@@ -660,11 +646,7 @@ func (c *Coordinator) CloseSession(id string) {
 		}
 
 		// 3. Drop tables outside cs.Mu lock to prevent lock hierarchy deadlocks
-		if c.engine != nil {
-			for _, tbl := range toDropLocal {
-				_ = c.engine.DropTable(tbl)
-			}
-		}
+		c.dropSessionStorageTables(toDropLocal)
 
 		if storageSess != nil && !isDefault {
 			if c.pool != nil {
@@ -703,21 +685,7 @@ func (c *Coordinator) ResetSession(id string, resetTx bool) error {
 	}
 
 	// Snapshot local temp tables and table variables to drop outside lock ([RULE:LockHierarchy])
-	var toDropLocal []string
-	for _, physTable := range cs.TableVars {
-		toDropLocal = append(toDropLocal, physTable)
-	}
-	for _, phys := range cs.TempTableMap {
-		toDropLocal = append(toDropLocal, phys)
-	}
-
-	cs.TableVars = nil
-	cs.TempTableMap = nil
-	cs.EphemeralTables = nil
-	cs.PreparedStmts = nil
-	if cs.Cursors != nil {
-		clear(cs.Cursors)
-	}
+	toDropLocal := cs.drainStorageTablesToDropLocked()
 
 	// Reset user variables and restore default system variables
 	cs.Vars = make(map[string]any)
@@ -743,13 +711,19 @@ func (c *Coordinator) ResetSession(id string, resetTx bool) error {
 	}
 
 	// 2. Drop physical temp tables outside lock
-	if c.engine != nil {
-		for _, tbl := range toDropLocal {
-			_ = c.engine.DropTable(tbl)
-		}
-	}
+	c.dropSessionStorageTables(toDropLocal)
 
 	return nil
+}
+
+// dropSessionStorageTables drops the given list of physical temporary/table-variable storage tables.
+func (c *Coordinator) dropSessionStorageTables(tables []string) {
+	if c.engine == nil {
+		return
+	}
+	for _, tbl := range tables {
+		_ = c.engine.DropTable(tbl)
+	}
 }
 
 // GetSession returns the active ClientSession by ID, or nil if not found.

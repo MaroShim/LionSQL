@@ -415,7 +415,7 @@
 | `DONE` | **`REFACTOR-CLIENT-SESSION-TX-SSOT-1`** |  | Engine | P1 | ClientSession 트랜잭션 관리 단일 창구 통합 (tx.Manager SSOT 및 cs.Tx() 접근자 마이그레이션) | [`notes/CLIENT_SESSION_TX_REFACTOR_PLAN.ko.md`](notes/CLIENT_SESSION_TX_REFACTOR_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-ENGINE-AST-PARSER-1`** | `v0.94.0` | Engine | P1 | 엔진 내부 35+개 조잡한 문자열 파싱 레거시 전수 제거 및 pkg/proc Pratt AST 전면 전환 | [`notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md`](notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-OCC-FLAT-1`** |  | Storage | P2 | Flat 코덱 신뢰성 및 동시성 결함 보강 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
-| `PENDING` | **`REFACTOR-SESSION-OBJECTS-LIFECYCLE-SSOT-1`** |  | Engine | P2 | 세션 임시 객체(TableVars, TempTables, EphemeralTables) 라이프사이클 SSOT 통합 | [`notes/SESSION_OBJECTS_LIFECYCLE_SSOT_PLAN.ko.md`](notes/SESSION_OBJECTS_LIFECYCLE_SSOT_PLAN.ko.md) |  |
+| `DONE` | **`REFACTOR-SESSION-OBJECTS-LIFECYCLE-SSOT-1`** |  | Engine | P2 | 세션 임시 객체(TableVars, TempTables, EphemeralTables) 라이프사이클 SSOT 통합 | [`notes/SESSION_OBJECTS_LIFECYCLE_SSOT_PLAN.ko.md`](notes/SESSION_OBJECTS_LIFECYCLE_SSOT_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-SESSION-TRANSACTION-INVARIANT-1`** | `1.0-GA` | Engine | P1 | 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-TEMPORARY-TABLES-SSOT-1`** |  | Engine | P2 | TempTables 슬라이스 제거 및 TempTableMap 단일 진실원천 통합 | [`notes/TEMPORARY_TABLES_SSOT_PLAN.ko.md`](notes/TEMPORARY_TABLES_SSOT_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`** | `1.0-GA` | Engine | P1 | 트랜잭셔널 DDL 섀도 카탈로그 격리 및 크래시 데이터 유실 방지 | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
@@ -4233,8 +4233,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] 세션 임시 객체(TableVars, TempTables, EphemeralTables) 라이프사이클 SSOT 통합 `REFACTOR-SESSION-OBJECTS-LIFECYCLE-SSOT-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 13:42:58
+### [DONE] 세션 임시 객체(TableVars, TempTables, EphemeralTables) 라이프사이클 SSOT 통합 `REFACTOR-SESSION-OBJECTS-LIFECYCLE-SSOT-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 13:56:17
 - **Plan Doc**: [`notes/SESSION_OBJECTS_LIFECYCLE_SSOT_PLAN.ko.md`](notes/SESSION_OBJECTS_LIFECYCLE_SSOT_PLAN.ko.md)
 
 ---
