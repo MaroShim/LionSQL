@@ -225,9 +225,10 @@ func (s *BlockStmt) String() string {
 
 // DeclareStmt represents DECLARE @var TYPE [= Expr]
 type DeclareStmt struct {
-	Name string
-	Type storage.DataType
-	Init Expr
+	Name      string
+	Type      storage.DataType
+	Precision int
+	Init      Expr
 }
 
 func (s *DeclareStmt) stmtNode() {}
@@ -1125,6 +1126,8 @@ func (s *GeneralSelectStmt) String() string {
 type ColumnDef struct {
 	Name         string
 	Type         storage.DataType
+	RawType      string
+	IsFixed      bool
 	PrimaryKey   bool
 	Nullable     bool
 	Identity     bool

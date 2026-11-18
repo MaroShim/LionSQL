@@ -317,7 +317,14 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		return storage.StringValue(string([]byte{byte(code)}))
 
-	case "LEN", "LENGTH":
+	case "LEN":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		s := strings.TrimRight(valToString(args[0]), " ")
+		return storage.IntValue(int64(len([]rune(s))))
+
+	case "LENGTH":
 		if len(args) == 0 || args[0].IsNull {
 			return storage.NullValue(storage.TypeInt)
 		}

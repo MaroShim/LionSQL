@@ -497,9 +497,15 @@ func (p *Parser) parseDeclare() (Statement, error) {
 		dt := parseDataType(p.curToken.Literal)
 		p.nextToken()
 
-		// Skip optional (length/precision, scale) e.g. VARCHAR(50), DECIMAL(15, 2)
+		// Parse optional (length/precision, scale) e.g. VARCHAR(50), DECIMAL(15, 2)
+		prec := 0
 		if p.curTokenIs(TokenLParen) {
 			p.nextToken()
+			if p.curTokenIs(TokenInt) {
+				if parsedInt, err := strconv.Atoi(p.curToken.Literal); err == nil {
+					prec = parsedInt
+				}
+			}
 			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
 				p.nextToken()
 			}
@@ -514,7 +520,7 @@ func (p *Parser) parseDeclare() (Statement, error) {
 			initExpr = p.parseExpression(precLowest)
 		}
 
-		stmts = append(stmts, &DeclareStmt{Name: varName, Type: dt, Init: initExpr})
+		stmts = append(stmts, &DeclareStmt{Name: varName, Type: dt, Precision: prec, Init: initExpr})
 
 		if p.curTokenIs(TokenComma) {
 			p.nextToken()

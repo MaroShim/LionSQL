@@ -1081,16 +1081,21 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		}
 	}
 
+	dml, parseErr := ParseDMLCommand(cleaned)
+	if parseErr != nil {
+		return nil, parseErr
+	}
+
+	if dml.From != "" {
+		return s.execUpdateFromJoin(dml, start, cs)
+	}
+
 	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT or RETURNING clause present)
 	hasOutput := sqlutil.ContainsKeyword(cleaned, "OUTPUT", false) || sqlutil.ContainsKeyword(cleaned, "RETURNING", false)
 	if !hasOutput {
 		if res, err := s.execVBDEDML("UPDATE", cleaned, start, cs); err == nil {
 			return res, nil
 		}
-	}
-	dml, parseErr := ParseDMLCommand(cleaned)
-	if parseErr != nil {
-		return nil, parseErr
 	}
 
 	tableName := cleanIdentifier(dml.Table)
@@ -1335,16 +1340,21 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		}
 	}
 
+	dml, parseErr := ParseDMLCommand(cleaned)
+	if parseErr != nil {
+		return nil, parseErr
+	}
+
+	if dml.From != "" {
+		return s.execDeleteFromJoin(dml, start, cs)
+	}
+
 	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT or RETURNING clause present)
 	hasOutput := sqlutil.ContainsKeyword(cleaned, "OUTPUT", false) || sqlutil.ContainsKeyword(cleaned, "RETURNING", false)
 	if !hasOutput {
 		if res, err := s.execVBDEDML("DELETE", cleaned, start, cs); err == nil {
 			return res, nil
 		}
-	}
-	dml, parseErr := ParseDMLCommand(cleaned)
-	if parseErr != nil {
-		return nil, parseErr
 	}
 
 	tableName := cleanIdentifier(dml.Table)
@@ -1456,5 +1466,221 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		RowsAffected: deletedCount,
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     []string{fmt.Sprintf("%d rows deleted from %q", deletedCount, tableName)},
+	}, nil
+}
+
+func resolveTargetTableAndRef(dmlTable, dmlFrom string, eng storage.Engine) (targetTable, targetRef, fromClause string) {
+	cleanTable := cleanIdentifier(dmlTable)
+	if _, err := eng.GetTable(cleanTable); err == nil {
+		targetTable = cleanTable
+		targetRef = cleanTable
+	} else {
+		tokens := strings.Fields(dmlFrom)
+		for i, tok := range tokens {
+			cleanTok := cleanIdentifier(tok)
+			if strings.EqualFold(cleanTok, cleanTable) && i > 0 {
+				prevTok := cleanIdentifier(tokens[i-1])
+				if _, err := eng.GetTable(prevTok); err == nil {
+					targetTable = prevTok
+					targetRef = cleanTable
+					break
+				}
+			}
+		}
+		if targetTable == "" {
+			targetTable = cleanTable
+			targetRef = cleanTable
+		}
+	}
+
+	fromClause = dmlFrom
+	if !sqlutil.ContainsKeyword(fromClause, targetTable, false) && !sqlutil.ContainsKeyword(fromClause, targetRef, false) {
+		fromClause = targetTable + ", " + fromClause
+	}
+	return targetTable, targetRef, fromClause
+}
+
+func (s *Coordinator) execDeleteFromJoin(dml *DMLStatement, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	targetTable, targetRef, fromClause := resolveTargetTableAndRef(dml.Table, dml.From, s.engine)
+	schema, err := s.engine.GetTable(targetTable)
+	if err != nil {
+		return nil, fmt.Errorf("table %q not found: %w", targetTable, err)
+	}
+	pkCol, err := schema.PrimaryKeyColumn()
+	if err != nil {
+		return nil, fmt.Errorf("table %q has no primary key: %w", targetTable, err)
+	}
+
+	drivingQuery := fmt.Sprintf("SELECT %s.%s AS __lionsql_pk__ FROM %s", targetRef, pkCol.Name, fromClause)
+	if dml.Where != "" {
+		drivingQuery += " WHERE " + dml.Where
+	}
+
+	selectRes, err := s.execSelect(drivingQuery, start, cs)
+	if err != nil {
+		return nil, fmt.Errorf("executing driving query for DELETE FROM: %w", err)
+	}
+
+	var tx storage.Transaction
+	var isEphemeral bool
+	if cs != nil && cs.Tx != nil {
+		tx = wrapSessionTx(cs, cs.Tx)
+		isEphemeral = false
+	} else {
+		session, closeFn, err := s.acquireSessionForQuery(cs)
+		if err != nil {
+			return nil, err
+		}
+		defer closeFn()
+		tx, err = session.BeginTx(storage.TxOptions{})
+		if err != nil {
+			return nil, err
+		}
+		isEphemeral = true
+	}
+
+	deletedCount := int64(0)
+	for _, row := range selectRes.Rows {
+		pkRaw, ok := row["__lionsql_pk__"]
+		if !ok || pkRaw == nil {
+			continue
+		}
+		pkVal := storage.ValueFromAny(pkRaw, pkCol.Type)
+		if err := tx.Delete(targetTable, pkVal); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, err
+		}
+		deletedCount++
+	}
+
+	if isEphemeral {
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "DELETE",
+		Columns:      []string{"rows_affected"},
+		Rows:         []map[string]any{{"rows_affected": deletedCount}},
+		RowsAffected: deletedCount,
+		DurationUS:   time.Since(start).Microseconds(),
+		Messages:     []string{fmt.Sprintf("%d rows deleted from %q", deletedCount, targetTable)},
+	}, nil
+}
+
+func (s *Coordinator) execUpdateFromJoin(dml *DMLStatement, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	targetTable, targetRef, fromClause := resolveTargetTableAndRef(dml.Table, dml.From, s.engine)
+	schema, err := s.engine.GetTable(targetTable)
+	if err != nil {
+		return nil, fmt.Errorf("table %q not found: %w", targetTable, err)
+	}
+	pkCol, err := schema.PrimaryKeyColumn()
+	if err != nil {
+		return nil, fmt.Errorf("table %q has no primary key: %w", targetTable, err)
+	}
+
+	assignments := splitAssignments(dml.Set)
+	if len(assignments) == 0 {
+		return nil, fmt.Errorf("empty SET clause in UPDATE")
+	}
+
+	type colUpd struct {
+		colName  string
+		aliasCol string
+	}
+	var updCols []colUpd
+	var selectExprs []string
+	selectExprs = append(selectExprs, fmt.Sprintf("%s.%s AS __lionsql_pk__", targetRef, pkCol.Name))
+
+	for i, a := range assignments {
+		eqIdx := sqlutil.FindTopLevelChar(a, '=')
+		if eqIdx == -1 {
+			return nil, fmt.Errorf("invalid assignment in SET: %q", a)
+		}
+		targetCol := cleanIdentifier(a[:eqIdx])
+		if idx := strings.Index(targetCol, "."); idx != -1 {
+			targetCol = cleanIdentifier(targetCol[idx+1:])
+		}
+		exprVal := strings.TrimSpace(a[eqIdx+1:])
+		alias := fmt.Sprintf("__upd_%d__", i)
+		selectExprs = append(selectExprs, fmt.Sprintf("(%s) AS %s", exprVal, alias))
+		updCols = append(updCols, colUpd{colName: targetCol, aliasCol: alias})
+	}
+
+	drivingQuery := fmt.Sprintf("SELECT %s FROM %s", strings.Join(selectExprs, ", "), fromClause)
+	if dml.Where != "" {
+		drivingQuery += " WHERE " + dml.Where
+	}
+
+	selectRes, err := s.execSelect(drivingQuery, start, cs)
+	if err != nil {
+		return nil, fmt.Errorf("executing driving query for UPDATE FROM: %w", err)
+	}
+
+	var tx storage.Transaction
+	var isEphemeral bool
+	if cs != nil && cs.Tx != nil {
+		tx = wrapSessionTx(cs, cs.Tx)
+		isEphemeral = false
+	} else {
+		session, closeFn, err := s.acquireSessionForQuery(cs)
+		if err != nil {
+			return nil, err
+		}
+		defer closeFn()
+		tx, err = session.BeginTx(storage.TxOptions{})
+		if err != nil {
+			return nil, err
+		}
+		isEphemeral = true
+	}
+
+	updatedCount := int64(0)
+	for _, row := range selectRes.Rows {
+		pkRaw, ok := row["__lionsql_pk__"]
+		if !ok || pkRaw == nil {
+			continue
+		}
+		pkVal := storage.ValueFromAny(pkRaw, pkCol.Type)
+		rec, err := tx.Get(targetTable, pkVal)
+		if err != nil {
+			continue
+		}
+		for _, u := range updCols {
+			newVal := row[u.aliasCol]
+			colDef, _, found := schema.FindColumn(u.colName)
+			if found {
+				rec[u.colName] = storage.ValueFromAny(newVal, colDef.Type)
+			} else {
+				rec[u.colName] = storage.ValueFromAny(newVal, storage.TypeVarChar)
+			}
+		}
+		if err := tx.Update(targetTable, pkVal, rec); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, err
+		}
+		updatedCount++
+	}
+
+	if isEphemeral {
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "UPDATE",
+		Columns:      []string{"rows_affected"},
+		Rows:         []map[string]any{{"rows_affected": updatedCount}},
+		RowsAffected: updatedCount,
+		DurationUS:   time.Since(start).Microseconds(),
+		Messages:     []string{fmt.Sprintf("%d rows updated in %q", updatedCount, targetTable)},
 	}, nil
 }

@@ -1209,6 +1209,7 @@ func (p *Parser) parseColumnTypeAndConstraints(colName, tableName string) (Colum
 
 	isSerial := rawType == "SERIAL" || rawType == "BIGSERIAL" || rawType == "SMALLSERIAL"
 	isRowVersion := rawType == "ROWVERSION"
+	isFixed := rawType == "CHAR" || rawType == "NCHAR" || rawType == "BPCHAR" || rawType == "BINARY"
 
 	if rawType == "FLOAT" {
 		if prec > 0 && prec <= 24 {
@@ -1240,6 +1241,12 @@ func (p *Parser) parseColumnTypeAndConstraints(colName, tableName string) (Colum
 		dt = storage.TypeBinary
 		prec = 8
 		scale = 0
+	} else if dt == storage.TypeVarChar || dt == storage.TypeBinary {
+		if prec == 0 && isFixed {
+			prec = 1
+		}
+	} else if dt == storage.TypeInt {
+		// keep rawType (TINYINT, SMALLINT, INT, BIGINT)
 	} else {
 		prec = 0
 		scale = 0
@@ -1352,6 +1359,8 @@ func (p *Parser) parseColumnTypeAndConstraints(colName, tableName string) (Colum
 	return ColumnDef{
 		Name:         colName,
 		Type:         dt,
+		RawType:      rawType,
+		IsFixed:      isFixed,
 		PrimaryKey:   isPK,
 		Nullable:     !isNotNull,
 		Identity:     isIdentity,

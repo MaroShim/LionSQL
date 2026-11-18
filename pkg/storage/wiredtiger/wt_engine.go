@@ -2682,6 +2682,12 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 	}
 	record = normalized
 
+	var normErr error
+	record, normErr = storage.ValidateAndNormalizeRecord(tbl, record)
+	if normErr != nil {
+		return normErr
+	}
+
 	if rvCol, _, hasRV := tbl.RowVersionColumn(); hasRV {
 		record[rvCol.Name] = storage.BinaryValue(storage.NextRowVersion())
 	}
@@ -2886,6 +2892,12 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 
 	if rvCol, _, hasRV := tbl.RowVersionColumn(); hasRV {
 		existing[rvCol.Name] = storage.BinaryValue(storage.NextRowVersion())
+	}
+
+	var normErr error
+	existing, normErr = storage.ValidateAndNormalizeRecord(tbl, existing)
+	if normErr != nil {
+		return normErr
 	}
 
 	if err := tx.checkForeignKeyLocked(tbl, existing); err != nil {

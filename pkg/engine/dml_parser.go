@@ -29,6 +29,7 @@ type DMLStatement struct {
 	Values  string // text following VALUES (INSERT ... VALUES)
 	Select  string // query text (INSERT ... SELECT), including optional parentheses
 	Set     string // SET clause body (UPDATE)
+	From    string // FROM / USING clause for UPDATE ... FROM / DELETE ... FROM
 	Where   string // WHERE clause body (UPDATE / DELETE)
 }
 
@@ -244,10 +245,9 @@ func ParseDMLCommand(sql string) (*DMLStatement, error) {
 	}
 }
 
-// splitOutputWhere splits `[OUTPUT <out>] [WHERE <cond>] [RETURNING <out>]` (as it appears after
-// the target / SET clause) at top-level keywords. head is the text before the
-// first clause keyword.
-func splitOutputWhere(body string) (head, output, where string) {
+// splitOutputWhere splits `[OUTPUT <out>] [FROM/USING <from>] [WHERE <cond>] [RETURNING <out>]`
+// at top-level keywords. head is the text before the first clause keyword.
+func splitOutputWhere(body string) (head, output, from, where string) {
 	whereIdx := sqlutil.FindTopLevelKeyword(body, "WHERE")
 	outIdx := sqlutil.FindTopLevelKeyword(body, "OUTPUT")
 	retIdx := sqlutil.FindTopLevelKeyword(body, "RETURNING")
@@ -272,9 +272,13 @@ func splitOutputWhere(body string) (head, output, where string) {
 	}
 	head = strings.TrimSpace(body[:end])
 	if fromIdx := sqlutil.FindTopLevelKeyword(head, "FROM"); fromIdx != -1 {
+		from = strings.TrimSpace(head[fromIdx+len("FROM"):])
 		head = strings.TrimSpace(head[:fromIdx])
+	} else if usingIdx := sqlutil.FindTopLevelKeyword(head, "USING"); usingIdx != -1 {
+		from = strings.TrimSpace(head[usingIdx+len("USING"):])
+		head = strings.TrimSpace(head[:usingIdx])
 	}
-	return head, output, where
+	return head, output, from, where
 }
 
 func parseInsertBody(st *DMLStatement, sc *dmlScanner) error {
@@ -347,15 +351,15 @@ func parseUpdateBody(st *DMLStatement, sc *dmlScanner) error {
 	if sc.skipSpace() == 0 || !sc.keyword("SET") {
 		return fmt.Errorf("invalid UPDATE syntax")
 	}
-	st.Set, st.Output, st.Where = splitOutputWhere(sc.s[sc.pos:])
+	st.Set, st.Output, st.From, st.Where = splitOutputWhere(sc.s[sc.pos:])
 	return nil
 }
 
 func parseDeleteBody(st *DMLStatement, sc *dmlScanner) error {
-	head, out, where := splitOutputWhere(sc.s[sc.pos:])
-	if head != "" && !sqlutil.HasPrefixKeyword(head, "USING") {
+	head, out, from, where := splitOutputWhere(sc.s[sc.pos:])
+	if head != "" {
 		return fmt.Errorf("invalid DELETE syntax")
 	}
-	st.Output, st.Where = out, where
+	st.Output, st.From, st.Where = out, from, where
 	return nil
 }

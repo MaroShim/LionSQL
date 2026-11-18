@@ -246,21 +246,17 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 			vals[i] = val
 			continue
 		}
-		if f.parsed != nil {
-			if res, ok := EvalTupleExprWithContext(tuple, f.parsed, subExec, p.sessionVars); ok {
-				vals[i] = res
-				continue
-			}
-		}
 		if f.alias != "" {
 			if val, ok := tuple.GetOK(f.alias); ok {
 				vals[i] = val
 				continue
 			}
 		}
-		if val, ok := tuple.GetOK(f.alias); ok {
-			vals[i] = val
-			continue
+		if f.parsed != nil {
+			if res, ok := EvalTupleExprWithContext(tuple, f.parsed, subExec, p.sessionVars); ok {
+				vals[i] = res
+				continue
+			}
 		}
 		val, found := lookupVal(tuple, f.expr)
 		if !found {

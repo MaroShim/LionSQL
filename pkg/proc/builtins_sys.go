@@ -180,7 +180,28 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 	case "XACT_STATE":
 		return storage.IntValue(0)
 
-	case "ISNULL", "COALESCE", "IFNULL", "NVL":
+	case "ISNULL":
+		if len(args) < 2 {
+			if len(args) == 1 {
+				return args[0]
+			}
+			return storage.NullValue(storage.TypeUnknown)
+		}
+		if !args[0].IsNull {
+			return args[0]
+		}
+		res := args[1]
+		if !res.IsNull && args[0].Precision > 0 {
+			if res.Type == storage.TypeVarChar {
+				runes := []rune(res.SVal)
+				if len(runes) > args[0].Precision {
+					res.SVal = string(runes[:args[0].Precision])
+				}
+			}
+		}
+		return res
+
+	case "COALESCE", "IFNULL", "NVL":
 		for _, a := range args {
 			if !a.IsNull {
 				return a

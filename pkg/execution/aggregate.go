@@ -596,6 +596,12 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 		return err
 	}
 
+	if a.parsedHaving != nil {
+		if err := validateHavingClause(a.parsedHaving, a.groupKeys); err != nil {
+			return err
+		}
+	}
+
 	if a.colIndexMap == nil {
 		a.colIndexMap = NewColumnIndexMapFromCols(a.Schema())
 	}
@@ -1263,4 +1269,128 @@ func (a *AggregateIterator) Schema() []string {
 
 func (a *AggregateIterator) ColIndexMap() *ColumnIndexMap {
 	return a.colIndexMap
+}
+
+func validateHavingClause(expr proc.Expr, groupKeys []string) error {
+	if expr == nil {
+		return nil
+	}
+
+	groupKeySet := make(map[string]struct{}, len(groupKeys)*2)
+	for _, k := range groupKeys {
+		clean := strings.ToLower(cleanIdentifierParts(k))
+		groupKeySet[clean] = struct{}{}
+		if idx := strings.Index(clean, "."); idx != -1 {
+			groupKeySet[clean[idx+1:]] = struct{}{}
+		}
+	}
+
+	var check func(e proc.Expr, inAgg bool) error
+	check = func(e proc.Expr, inAgg bool) error {
+		if e == nil {
+			return nil
+		}
+		switch node := e.(type) {
+		case *proc.ColumnRefExpr:
+			if inAgg {
+				return nil
+			}
+			colName := strings.ToLower(cleanIdentifierParts(node.Name))
+			bareCol := colName
+			if idx := strings.Index(bareCol, "."); idx != -1 {
+				bareCol = bareCol[idx+1:]
+			}
+			if _, ok := groupKeySet[colName]; ok {
+				return nil
+			}
+			if _, ok := groupKeySet[bareCol]; ok {
+				return nil
+			}
+			return fmt.Errorf("column %q must appear in the GROUP BY clause or be used in an aggregate function", node.Name)
+
+		case *proc.FunctionCallExpr:
+			fnName := strings.ToUpper(node.Name)
+			if fnName == "COUNT" || fnName == "SUM" || fnName == "TOTAL" || fnName == "AVG" ||
+				fnName == "MIN" || fnName == "MAX" || fnName == "GROUP_CONCAT" || fnName == "STRING_AGG" ||
+				fnName == "STDEV" || fnName == "STDEVP" || fnName == "VAR" || fnName == "VARP" {
+				for _, arg := range node.Args {
+					if err := check(arg, true); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			for _, arg := range node.Args {
+				if err := check(arg, inAgg); err != nil {
+					return err
+				}
+			}
+			return nil
+
+		case *proc.BinaryExpr:
+			if err := check(node.Left, inAgg); err != nil {
+				return err
+			}
+			return check(node.Right, inAgg)
+
+		case *proc.UnaryExpr:
+			return check(node.Expr, inAgg)
+
+		case *proc.CaseExpr:
+			if node.Operand != nil {
+				if err := check(node.Operand, inAgg); err != nil {
+					return err
+				}
+			}
+			for _, w := range node.Whens {
+				if err := check(w.Condition, inAgg); err != nil {
+					return err
+				}
+				if err := check(w.Result, inAgg); err != nil {
+					return err
+				}
+			}
+			if node.Else != nil {
+				if err := check(node.Else, inAgg); err != nil {
+					return err
+				}
+			}
+			return nil
+
+		case *proc.BetweenExpr:
+			if err := check(node.Expr, inAgg); err != nil {
+				return err
+			}
+			if err := check(node.Low, inAgg); err != nil {
+				return err
+			}
+			return check(node.High, inAgg)
+
+		case *proc.InExpr:
+			if err := check(node.Expr, inAgg); err != nil {
+				return err
+			}
+			for _, it := range node.List {
+				if err := check(it, inAgg); err != nil {
+					return err
+				}
+			}
+			return nil
+
+		case *proc.CastExpr:
+			return check(node.Expr, inAgg)
+
+		case *proc.IsNullExpr:
+			return check(node.Expr, inAgg)
+
+		case *proc.LikeExpr:
+			if err := check(node.Expr, inAgg); err != nil {
+				return err
+			}
+			return check(node.Pattern, inAgg)
+		}
+		return nil
+	}
+
+	return check(expr, false)
 }

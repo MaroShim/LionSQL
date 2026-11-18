@@ -457,10 +457,24 @@ vmLoop:
 		}
 
 	case proc.OpAnd:
-		f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) && isTruthy(f.regs[inst.C]))
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if (!vb.IsNull && !isTruthy(vb)) || (!vc.IsNull && !isTruthy(vc)) {
+			f.regs[inst.A] = storage.BoolValue(false)
+		} else if vb.IsNull || vc.IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(true)
+		}
 
 	case proc.OpOr:
-		f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) || isTruthy(f.regs[inst.C]))
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if (!vb.IsNull && isTruthy(vb)) || (!vc.IsNull && isTruthy(vc)) {
+			f.regs[inst.A] = storage.BoolValue(true)
+		} else if vb.IsNull || vc.IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(false)
+		}
 
 	case proc.OpBitOr:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
@@ -845,6 +859,8 @@ vmLoop:
 			schema.Columns[i] = storage.Column{
 				Name:       c.Name,
 				Type:       c.Type,
+				RawType:    c.RawType,
+				IsFixed:    c.IsFixed,
 				PrimaryKey: c.PrimaryKey,
 				Nullable:   c.Nullable,
 				Precision:  c.Precision,

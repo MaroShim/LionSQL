@@ -1221,6 +1221,12 @@ func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[str
 		if fn != nil && fn.Distinct {
 			candidates = append(candidates, fmt.Sprintf("%s(DISTINCT %s)", uName, rawArgs))
 		}
+		if fn != nil && fn.HasOver {
+			candidates = append(candidates,
+				fn.String(),
+				fmt.Sprintf("%s(%s) OVER (%s)", uName, rawArgs, fn.OverClause),
+			)
+		}
 		candidates = append(candidates,
 			fmt.Sprintf("%s(%s)", uName, rawArgs),
 			fmt.Sprintf("%s(DISTINCT %s)", uName, rawArgs),
@@ -1239,6 +1245,10 @@ func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[str
 	}
 
 	if isAggFn {
+		if fn != nil && fn.HasOver {
+			// Window aggregate must NOT fall back to single-row scalar evaluation
+			return nil, nil
+		}
 		if uName == "COUNT" {
 			if len(args) == 0 {
 				return int64(1), nil
@@ -1268,13 +1278,43 @@ func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[str
 		return nil, nil
 	}
 
-	if uName == "ISNULL" || uName == "COALESCE" {
+	if uName == "ISNULL" {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("ISNULL requires 2 arguments")
+		}
+		v0, err := EvalRowExpr(args[0], row, execSubquery)
+		if err != nil {
+			return nil, err
+		}
+		if v0 != nil && !isNullVal(v0) {
+			return v0, nil
+		}
+		v1, err := EvalRowExpr(args[1], row, execSubquery)
+		if err != nil {
+			return nil, err
+		}
+		if v1 == nil || isNullVal(v1) {
+			return nil, nil
+		}
+		// In T-SQL, ISNULL binds to data type and length of check_expression!
+		if castExpr, ok := args[0].(*CastExpr); ok && castExpr.Precision > 0 {
+			if s, isStr := v1.(string); isStr {
+				runes := []rune(s)
+				if len(runes) > castExpr.Precision {
+					v1 = string(runes[:castExpr.Precision])
+				}
+			}
+		}
+		return v1, nil
+	}
+
+	if uName == "COALESCE" {
 		for _, a := range args {
 			v, err := EvalRowExpr(a, row, execSubquery)
 			if err != nil {
 				return nil, err
 			}
-			if v != nil {
+			if v != nil && !isNullVal(v) {
 				return v, nil
 			}
 		}
@@ -1511,7 +1551,9 @@ func isTruthyValue(v any) bool {
 // EvalCast performs type conversion matching SQL Server CAST and CONVERT semantics.
 func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style int, try bool, isFixed ...bool) (storage.Value, error) {
 	if v.IsNull {
-		return storage.NullValue(targetType), nil
+		nv := storage.NullValue(targetType)
+		nv.Precision = prec
+		return nv, nil
 	}
 
 	fail := func(err error) (storage.Value, error) {

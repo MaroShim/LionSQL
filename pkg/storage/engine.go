@@ -127,16 +127,18 @@ func (t DataType) String() string {
 
 // Column defines metadata for a single column.
 type Column struct {
-	Name       string   `json:"name" msgpack:"name"`
-	Type       DataType `json:"type" msgpack:"type"`
-	PrimaryKey bool     `json:"primary_key" msgpack:"primary_key"`
-	Nullable   bool     `json:"nullable" msgpack:"nullable"`
+	Name         string   `json:"name" msgpack:"name"`
+	Type         DataType `json:"type" msgpack:"type"`
+	RawType      string   `json:"raw_type,omitempty" msgpack:"raw_type,omitempty"`
+	IsFixed      bool     `json:"is_fixed,omitempty" msgpack:"is_fixed,omitempty"`
+	PrimaryKey   bool     `json:"primary_key" msgpack:"primary_key"`
+	Nullable     bool     `json:"nullable" msgpack:"nullable"`
 	Identity     bool     `json:"identity,omitempty" msgpack:"identity,omitempty"`
 	IsRowVersion bool     `json:"is_rowversion,omitempty" msgpack:"is_rowversion,omitempty"`
 	Hidden       bool     `json:"hidden,omitempty" msgpack:"hidden,omitempty"`
-	Precision  int      `json:"precision,omitempty" msgpack:"precision,omitempty"`
-	Scale      int      `json:"scale,omitempty" msgpack:"scale,omitempty"`
-	Default    string   `json:"default,omitempty" msgpack:"default,omitempty"`
+	Precision    int      `json:"precision,omitempty" msgpack:"precision,omitempty"`
+	Scale        int      `json:"scale,omitempty" msgpack:"scale,omitempty"`
+	Default      string   `json:"default,omitempty" msgpack:"default,omitempty"`
 	CheckExpr    string   `json:"check_expr,omitempty" msgpack:"check_expr,omitempty"`
 	ComputedExpr string   `json:"computed_expr,omitempty" msgpack:"computed_expr,omitempty"`
 	IsComputed   bool     `json:"is_computed,omitempty" msgpack:"is_computed,omitempty"`
@@ -874,15 +876,16 @@ func (s *TableSchema) FindBestCompositeIndex(eqCols map[string]bool) (*IndexSche
 
 // Value represents a typed field value.
 type Value struct {
-	Type   DataType
-	IsNull bool
-	IVal   int64
-	SVal   string
-	FVal   float64
-	BVal   bool
-	TVal   time.Time
-	DVal   Decimal
-	BinVal string
+	Type      DataType
+	IsNull    bool
+	IVal      int64
+	SVal      string
+	FVal      float64
+	BVal      bool
+	TVal      time.Time
+	DVal      Decimal
+	BinVal    string
+	Precision int
 }
 
 // Bytes returns the raw byte slice for TypeBinary values.

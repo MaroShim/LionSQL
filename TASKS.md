@@ -244,6 +244,7 @@
 | `PENDING` | **`FEAT-TSQL-CREATE-SYNONYM-1`** | `v1.2.0` | Engine | P3 | T-SQL CREATE SYNONYM 동의어 객체 지원 |  |  |
 | `PENDING` | **`FEAT-TSQL-GOTO-LABEL-1`** | `v1.1.0` | Engine | P3 | T-SQL LABEL 및 GOTO 흐름 제어 구문 지원 |  |  |
 | `DONE` | **`FEAT-TYPE-ROWVERSION-MONOTONIC-COUNTER-1`** | `1.0-GA` | Storage | P2 | ROWVERSION 데이터 타입 DDL 파싱 및 INSERT/UPDATE 시 @@DBTS 단조 증가 바이너리 자동 스탬핑 | [`doc/REFERENCE_MANUAL.ko.md`](doc/REFERENCE_MANUAL.ko.md) |  |
+| `DONE` | **`FEAT-TYPE-VALIDATOR-AND-NORMALIZER-1`** | `-` | Engine | P1 | 컬럼 타입별 데이터 검증기 및 정규화 엔진 (VARCHAR/CHAR/DECIMAL/TINYINT) | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`** | `1.0-GA` | Engine | P2 | 테이블 DDL 변경 시 VDBE 바이트코드 프로시저 및 실행 계획 캐시 자동 Invalidate | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `PENDING` | **`FEAT-VECTOR-1`** | `v1.60.0` | FEAT | P2 | Pure-Go Vector Search Engine (pgvector compat) | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WAL-ARCHIVER-INPROCESS-1`** | `1.0-GA` | Storage | P3 | WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
@@ -251,6 +252,7 @@
 | `PENDING` | **`FEAT-WEB-STUDIO-HYBRID-1`** | `1.0-GA` | API | P2 | Web Studio 하이브리드 지원 (--no-studio 플래그 및 lionsql studio 서브커맨드 프록시) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `SPEC-OUT` | **`FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`** | `v0.94.0` | 1 | P2 | Storage | [`--milestone`](--milestone) |  |
 | `DONE` | **`FEAT-WT-SECONDARY-INDEX-BTREE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 | [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md) |  |
+| `DONE` | **`FIX-3VL-AND-OR-NULL-LOGIC-1`** |  | Engine | P2 | VDBE VM OpAnd/OpOr 3-Valued Logic(3VL) NULL 평가 결함 수정 |  |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-COMMIT-PARTIAL-MUTATION-RECOVERY-1`** | `1` | --domain | P2 | Commit 중도 실패 시 부분 변경(Shard/Partition/Index) 복구 누락 결함 수정 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-COMPUTED-COLUMN-SELECT-EVAL-1`** | `v0.94.0` | Engine | P1 | 계산된 열(Computed Column) SELECT 시 동적 수식 평가 (NULL 반환 결함 수정) |  |  |
@@ -266,6 +268,7 @@
 | `DONE` | **`FIX-EXEC-UNKNOWN-NAMED-ARG-1`** |  | Engine | P2 | EXEC with an unknown named argument must raise error 8145 instead of being ignored | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `PENDING` | **`FIX-FK-CONCURRENT-PARENT-LOCK-1`** | `v0.94.0` | Storage | P2 | 동시성 FK 검증 시 부모 행 삭제 방지 참조 락 체계 확립 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-GROUPBY-STRING-AGG-1`** |  | Engine | P1 | GROUP BY 쿼리에서 STRING_AGG(col, sep) 그룹별 집계 누락(NULL 반환) 수정 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-HAVING-NON-AGG-VALIDATION-1`** | `-` | Engine | P2 | HAVING 절 비집계/비GROUP BY 컬럼 시맨틱 검증 결함 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-HTTP-REAP-ABANDONED-TX-1`** | `1.0-GA` | API | P2 | Web Studio/HTTP 유휴 세션 회수 시 미종료 트랜잭션 자동 롤백 및 스토리지 잠금 해제 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-HYBRID-TX-SPLIT-BRAIN-1`** | `1.0-GA` | Storage | P2 | 하이브리드 트랜잭션 2PC 부재로 인한 분할 커밋(Split-Brain) 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-LEXER-HEX-BINARY-LITERAL-1`** |  | Parser | P2 | Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
@@ -295,7 +298,9 @@
 | `DONE` | **`FIX-TRUNCATE-TX-ROLLBACK-DEFERRED-1`** | `1.0-GA` | Storage | P2 | 트랜잭션 내 TRUNCATE 실행 시 물리 삭제 커밋 시점 지연(Deferred Drop) 및 롤백 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** |  | Engine | P1 | CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX)) 미평가 에코 버그 및 MONEY/SMALLMONEY 4자리 소수점 스케일(1.2345) 보정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-INSERT-EXEC-1`** |  | Engine | P1 | INSERT INTO <table> EXEC <proc_name> 프로시저 결과셋 적재 구문 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-TSQL-ISNULL-TRUNCATION-1`** | `-` | Engine | P2 | T-SQL ISNULL() 첫 번째 인자 데이터 타입/길이 고정(Truncation) 결함 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TSQL-JSON-FUNCTIONS-EXT-1`** | `1.0-GA` | Engine | P1 | mssql-jdbc JSONFunctionTest.java 호환성: SQL Server JSON 컬럼 타입 별칭 및 JSON_OBJECT, JSON_ARRAY, JSON_PATH_EXISTS 내장 함수 지원 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-TSQL-LEN-TRAILING-SPACES-1`** | `-` | Engine | P2 | T-SQL LEN() 후행 공백(Trailing Spaces) 제외 계산 결함 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TSQL-MONEY-STRING-PARSE-1`** |  | Eval | P2 | CAST of currency-symbol strings to MONEY and LEN(MONEY) parity with SQL Server | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TSQL-OFFSET-VAR-1`** | `1.0-GA` | Engine | P2 | OFFSET @var ROWS FETCH NEXT @var ROWS ONLY 프로시저 내 변수 바인딩 파싱 실패 (unexpected token @skip) | [`test/slt_proc/26_offset_fetch_paging.slt`](test/slt_proc/26_offset_fetch_paging.slt) |  |
 | `DONE` | **`FIX-TSQL-OUTPUT-PARAM-1`** | `1.0-GA` | Engine | P1 | EXEC proc @x OUTPUT 호출자 변수로 값 미전달: DECLARE @x; EXEC sp_double 21, @x OUTPUT; SELECT @x 가 42 대신 NULL | [`test/slt_proc/27_rowcount_and_dml_results.slt`](test/slt_proc/27_rowcount_and_dml_results.slt) |  |
@@ -307,9 +312,11 @@
 | `DONE` | **`FIX-TX-UNIQUE-KEY-RELEASE-COLLISION-1`** | `2` | --domain | P2 | 동일 트랜잭션 내 unique 키 해제 후 재사용 시 허위 중복 충돌 방지 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-TX-WRITE-WRITE-CONFLICT-ISOLATION-1`** | `v0.94.0` | Storage | P1 | 동시 트랜잭션 Write-Write 충돌 방지 및 직렬화 충돌 감지 (Last-Write-Wins 차단 및 WT 동작 일치) |  |  |
 | `DONE` | **`FIX-TYPE-REAL-FLOAT-DISTINCTION-1`** | `1.0-GA` | Storage | P2 | REAL(4-byte float32) vs FLOAT(8-byte float64) 데이터 타입 분리 및 스토리지/프로토콜 정합성 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-UPDATE-FROM-JOIN-PROPAGATION-1`** |  | Engine | P2 | UPDATE/DELETE ... FROM JOIN 조인 결과 타깃 테이블 반영 결함 수정 | [`notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md`](notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md) |  |
 | `DONE` | **`FIX-UPDATE-SNAPSHOT-COLUMN-SWAP-1`** | `1.0-GA` | Engine | P2 | UPDATE 다중 컬럼 대입 시 원본 튜플 스냅샷 기반 평가(SET a = b, b = a 원자적 스왑 보장) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-VM-HIDDEN-ROWID-1`** |  | Engine | P1 | PK 없는 테이블에 대한 VDBE VM OpInsert 실행 시 숨은 _row_id 자동 발번 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-WIN-NEGATIVE-DEFAULT-1`** | `1.0-GA` | Engine | P2 | LAG/LEAD 윈도우 함수 음수 기본값 인자(LEAD(val, 1, -1)) 파싱 시 0 반환 오류 수정 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-WINDOW-AVG-SLIDING-FRAME-1`** |  | Engine | P2 | AVG(...) OVER (ORDER BY ...) 슬라이딩 프레임 누적 평균 계산 결함 수정 | [`notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md`](notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WT-CURSOR-ERROR-PROPAGATION-1`** | `1.0-GA` | Storage | P1 | WTCursor.Next() 에러 전파 부재로 인한 사일런트 데이터 누락 방지 (Cursor.Err() 인터페이스 확립) | [`notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md`](notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WT-FSYNC-FAIL-CLOSED-1`** | `1.0-GA` | Storage | P2 | WiredTiger Fsync 실패 시 Fail-Closed Taint 격리 및 팬텀 커밋 방어 | [`notes/plans/FIX_WT_TEMP_AND_FSYNC_COMMIT_ATOMILITY_PLAN.ko.md`](notes/plans/FIX_WT_TEMP_AND_FSYNC_COMMIT_ATOMILITY_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WT-SAVEPOINT-INDEX-CORRUPTION-1`** | `1.0-GA` | Storage | P2 | WiredTiger 세이브포인트 롤백 시 보조 인덱스 키 누수 및 고아 인덱스 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
@@ -2869,6 +2876,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] 컬럼 타입별 데이터 검증기 및 정규화 엔진 (VARCHAR/CHAR/DECIMAL/TINYINT) `FEAT-TYPE-VALIDATOR-AND-NORMALIZER-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 07:42:49
+- **Milestone**: `-`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
+
+---
+
 ### [DONE] 테이블 DDL 변경 시 VDBE 바이트코드 프로시저 및 실행 계획 캐시 자동 Invalidate `FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
@@ -2915,6 +2929,11 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md)
+
+---
+
+### [DONE] VDBE VM OpAnd/OpOr 3-Valued Logic(3VL) NULL 평가 결함 수정 `FIX-3VL-AND-OR-NULL-LOGIC-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 07:42:49
 
 ---
 
@@ -3013,6 +3032,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [DONE] GROUP BY 쿼리에서 STRING_AGG(col, sep) 그룹별 집계 누락(NULL 반환) 수정 `FIX-GROUPBY-STRING-AGG-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:02
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [DONE] HAVING 절 비집계/비GROUP BY 컬럼 시맨틱 검증 결함 수정 `FIX-HAVING-NON-AGG-VALIDATION-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 07:29:01
+- **Milestone**: `-`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
 
 ---
 
@@ -3215,10 +3241,24 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [DONE] T-SQL ISNULL() 첫 번째 인자 데이터 타입/길이 고정(Truncation) 결함 수정 `FIX-TSQL-ISNULL-TRUNCATION-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 07:42:49
+- **Milestone**: `-`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
+
+---
+
 ### [DONE] mssql-jdbc JSONFunctionTest.java 호환성: SQL Server JSON 컬럼 타입 별칭 및 JSON_OBJECT, JSON_ARRAY, JSON_PATH_EXISTS 내장 함수 지원 `FIX-TSQL-JSON-FUNCTIONS-EXT-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:02
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [DONE] T-SQL LEN() 후행 공백(Trailing Spaces) 제외 계산 결함 수정 `FIX-TSQL-LEN-TRAILING-SPACES-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 07:42:49
+- **Milestone**: `-`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
 
 ---
 
@@ -3295,6 +3335,12 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [DONE] UPDATE/DELETE ... FROM JOIN 조인 결과 타깃 테이블 반영 결함 수정 `FIX-UPDATE-FROM-JOIN-PROPAGATION-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 07:28:02
+- **Plan Doc**: [`notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md`](notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md)
+
+---
+
 ### [DONE] UPDATE 다중 컬럼 대입 시 원본 튜플 스냅샷 기반 평가(SET a = b, b = a 원자적 스왑 보장) `FIX-UPDATE-SNAPSHOT-COLUMN-SWAP-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
@@ -3312,6 +3358,12 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [DONE] AVG(...) OVER (ORDER BY ...) 슬라이딩 프레임 누적 평균 계산 결함 수정 `FIX-WINDOW-AVG-SLIDING-FRAME-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 07:42:49
+- **Plan Doc**: [`notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md`](notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md)
 
 ---
 

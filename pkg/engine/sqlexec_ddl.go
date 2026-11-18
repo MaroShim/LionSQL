@@ -48,6 +48,8 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		schema.Columns = append(schema.Columns, storage.Column{
 			Name:         c.Name,
 			Type:         c.Type,
+			RawType:      c.RawType,
+			IsFixed:      c.IsFixed,
 			PrimaryKey:   c.PrimaryKey,
 			Nullable:     c.Nullable,
 			Identity:     c.Identity,
