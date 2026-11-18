@@ -6,7 +6,7 @@
 > 모든 태스크 추가, 상태 변경, 마일스톤 수정은 반드시 `./bin/sprint` CLI를 통해서만 수행해야 합니다.
 > 수정 후 `./bin/sprint backup TASKS.md` 명령으로 이 문서를 동기화하십시오.
 
-> - **Last Synced**: 2026-11-18
+> - **Last Synced**: 2026-11-19
 > - **Primary Source of Truth (SSOT)**: SQLite `sprint_tasks` Table
 > - **Backup File**: Auto-synced on task update & Git commit
 
@@ -235,6 +235,9 @@
 | `DONE` | **`FEAT-SANDBOX-SPA-HANDLER-OSDIRFS-1`** | `v0.94.0` | ARCHITECTURE | P2 | Modernize SPA Hosting with Go os.DirFS Chroot Sandbox and Subdirectory Support | [`notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md`](notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`** | `v0.94.0` | Security | P2 | 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리) | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `PENDING` | **`FEAT-SQL-SERVER-AGENT-INPROCESS-1`** | `v0.94.0` | Engine | P2 | SQL Server Agent 인-프로세스 스케줄러 (msdb.dbo.sysjobs, sysjobhistory, sp_add_job) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`** | `v0.94.0` | Engine | P2 | 서버 전역 dialect_preference 설정 체계 및 CLI/환경변수 바인딩 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-SUPERSET-EXPR-COLLATE-1`** | `v0.94.0` | Engine | P2 | 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-SUPERSET-ILIKE-SYNTAX-1`** | `v0.94.0` | Engine | P2 | pkg/proc/ Native Pratt Parser 및 VDBE ILIKE 연산자 전역 지원 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TABLE-VAR-1`** |  | Engine | P2 | T-SQL 테이블 변수(DECLARE @tbl TABLE) 지원 및 DML/배치 라이프사이클 통합 | [`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TDS-MULTIPLE-RESULT-SETS-1`** | `1.0-GA` | Wire | P2 | TDS 다중 결과 집합(Multiple Result Sets / Sequential NextResult) 스트리밍 반환 지원 | [`notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md`](notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TIMESERIES-LSM-1`** | `v1.99.0` | FEAT | P2 | LSM Time-Series Chunk Storage & time_bucket | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
@@ -446,6 +449,7 @@
 | `DONE` | **`TEST-OCC-FLAT-3`** |  | Storage | P2 | Flat 모드 쿼리 엔진 풀 스위트 회귀 검증 (SLT 및 Babelfish) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `PENDING` | **`TEST-OCC-FLAT-4`** | `1.0-GA` | Storage | P2 | Flat 모드 24h 장기 소크 및 가변 길이 UPDATE 단편화 검증 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `DONE` | **`TEST-SQLGLOT-TSQL-ORACLE-1`** | `1.0-GA` | Engine | P1 | tobymao/sqlglot test_tsql.py(3,274줄, 63개 메서드, 526개 validate 케이스) T-SQL 표현식·내장함수·날짜약어·집합연산 파서/실행 오라클 검증 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`TEST-SUPERSET-GUIDE-E2E-PARITY-1`** | `v0.94.0` | Test | P2 | 단일 통합 슈퍼셋 가이드 문서 E2E 듀얼 프로토콜 검증 테스트 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
 | `DONE` | **`TEST-TDS-GOMSSQLDB-ORACLE-1`** |  | Wire | P1 | 공식 microsoft/go-mssqldb 드라이버 테스트 스위트(550+ 케이스) 라이브 TDS 통합 오라클 이식 및 검증 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`TEST-TDS-MSSQL-JDBC-ORACLE-1`** | `1.0-GA` | Protocol | P1 | microsoft/mssql-jdbc 공식 테스트 스위트(200개 파일, 2,641개 @Test, datatypes/callablestatement/preparedStatement/databasemetadata) 핵심 T-SQL 및 카탈로그 오라클 수확 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`TEST-TDS-PYMSSQL-ORACLE-1`** | `1.0-GA` | Protocol | P1 | pymssql 공식 테스트 스위트(test_sprocs.py 17개 고정/가변 타입 OUTPUT 프로시저, test_types.py, test_queries.py 등 ~200케이스) TDS/Gate 5 오라클 포팅 및 검증 | [`1.0-GA`](1.0-GA) |  |
@@ -2849,6 +2853,27 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] 서버 전역 dialect_preference 설정 체계 및 CLI/환경변수 바인딩 `FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 22:58:39
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md)
+
+---
+
+### [PENDING] 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 `FEAT-SUPERSET-EXPR-COLLATE-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 22:58:37
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md)
+
+---
+
+### [PENDING] pkg/proc/ Native Pratt Parser 및 VDBE ILIKE 연산자 전역 지원 `FEAT-SUPERSET-ILIKE-SYNTAX-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 22:58:34
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md)
+
+---
+
 ### [DONE] T-SQL 테이블 변수(DECLARE @tbl TABLE) 지원 및 DML/배치 라이프사이클 통합 `FEAT-TABLE-VAR-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Plan Doc**: [`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md)
@@ -4479,6 +4504,13 @@ SSMS Object Explorer 테이블 하위 트리(Columns, Keys, Indexes, Triggers) �
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] 단일 통합 슈퍼셋 가이드 문서 E2E 듀얼 프로토콜 검증 테스트 `TEST-SUPERSET-GUIDE-E2E-PARITY-1`
+- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-18 22:58:42
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md)
 
 ---
 
