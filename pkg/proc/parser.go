@@ -242,10 +242,15 @@ func CleanSchemaPrefix(name string) string {
 		return last
 	}
 
-	// Multi-part identifiers (e.g. mydb.dbo.accounts, mydb..accounts, server.mydb.dbo.accounts):
+	// 3 or more real parts (e.g. server.mydb.dbo.accounts, mydb.dbo.accounts):
 	// Under LionSQL's instance-level isolation, database catalog prefixes are stripped,
 	// returning the target table name.
-	if len(cleanedParts) >= 3 || len(parts) >= 3 {
+	if len(cleanedParts) >= 3 {
+		return last
+	}
+
+	// 2 parts with empty middle (e.g. mydb..accounts): db prefix with default schema, return table
+	if len(parts) >= 3 && parts[0] != "" && parts[1] == "" {
 		return last
 	}
 

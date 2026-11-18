@@ -169,3 +169,16 @@ func TestParser_DropTruncateAndStatisticsDDL(t *testing.T) {
 		t.Errorf("unexpected DropStatisticsStmt: %+v", dropStatStmt)
 	}
 }
+
+func TestParser_CreateTable_ComputedColumn(t *testing.T) {
+	sql := `CREATE TABLE computed_column_vu_prepare_t2 (a INT, b AS (a + c) / 4 PERSISTED, c INT);`
+	p := NewParser(NewLexer(sql))
+	stmt, err := p.ParseCreateTable()
+	if err != nil {
+		t.Fatalf("ParseCreateTable failed: %v", err)
+	}
+	t.Logf("Parsed %d columns: %+v", len(stmt.Columns), stmt.Columns)
+	if len(stmt.Columns) != 3 {
+		t.Fatalf("expected 3 columns, got %d", len(stmt.Columns))
+	}
+}

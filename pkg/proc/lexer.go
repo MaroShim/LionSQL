@@ -221,6 +221,11 @@ func (l *Lexer) scanToken(tokLine, tokCol int) Token {
 			}
 			return Token{Type: TokenInt, Literal: lit, Line: tokLine, Col: tokCol}
 		}
+		if l.peekChar() == '.' || isLetter(l.peekChar()) || l.peekChar() == '[' || l.peekChar() == '"' || l.peekChar() == '`' {
+			startPos := l.pos
+			l.consumeRawDotChain()
+			return Token{Type: TokenIdent, Literal: l.input[startPos:l.pos], Raw: l.input[startPos:l.pos], Line: tokLine, Col: tokCol}
+		}
 		l.readChar()
 		return Token{Type: TokenIllegal, Literal: ".", Line: tokLine, Col: tokCol}
 	default:
@@ -338,6 +343,10 @@ func (l *Lexer) readDollarToken(tokLine, tokCol int) Token {
 			l.readChar()
 		}
 		return Token{Type: TokenVariable, Literal: l.input[startPos:l.pos], Line: tokLine, Col: tokCol}
+	}
+	if isLetter(l.peekChar()) {
+		ident := l.readIdentifier()
+		return Token{Type: TokenIdent, Literal: ident, Raw: ident, Line: tokLine, Col: tokCol}
 	}
 	l.readChar()
 	return Token{Type: TokenIllegal, Literal: "$", Line: tokLine, Col: tokCol}
@@ -607,7 +616,7 @@ func (l *Lexer) readString() string {
 }
 
 func isLetter(ch rune) bool {
-	return unicode.IsLetter(ch) || ch == '_' || ch == '#'
+	return unicode.IsLetter(ch) || ch == '_' || ch == '#' || ch == '$'
 }
 
 func isDigit(ch rune) bool {

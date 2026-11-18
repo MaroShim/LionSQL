@@ -650,9 +650,27 @@ func (p *Parser) ParseCreateTable() (*CreateTableStmt, error) {
 		nameTokens = append(nameTokens, p.curToken.IdentLiteral())
 		p.nextToken()
 	}
-	rawTableName := strings.Join(nameTokens, " ")
+	var b strings.Builder
+	for i, tok := range nameTokens {
+		if i > 0 {
+			prev := nameTokens[i-1]
+			if prev != "" && tok != "" &&
+				(isIdentCharByte(prev[len(prev)-1]) && isIdentCharByte(tok[0])) &&
+				(prev != "{" && tok != "}") {
+				b.WriteString(tok)
+				continue
+			}
+			b.WriteByte(' ')
+		}
+		b.WriteString(tok)
+	}
+	rawTableName := b.String()
 	if len(nameTokens) == 3 && nameTokens[0] == "{" && nameTokens[2] == "}" {
 		rawTableName = "{" + nameTokens[1] + "}"
+	} else {
+		rawTableName = strings.ReplaceAll(rawTableName, " . ", ".")
+		rawTableName = strings.ReplaceAll(rawTableName, ". ", ".")
+		rawTableName = strings.ReplaceAll(rawTableName, " .", ".")
 	}
 	tableName := cleanSchemaPrefix(rawTableName)
 	if tableName == "" {
@@ -727,8 +745,20 @@ func (p *Parser) ParseCreateTable() (*CreateTableStmt, error) {
 				return nil, err
 			}
 			stmt.Partition = partDef
-		} else {
+		} else if strings.EqualFold(p.curToken.Literal, "ON") || strings.EqualFold(p.curToken.Literal, "TEXTIMAGE_ON") || strings.EqualFold(p.curToken.Literal, "FILESTREAM_ON") {
 			p.nextToken()
+			if !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+				if p.curTokenIs(TokenLParen) {
+					_ = p.parseRawParenContent()
+				} else {
+					p.nextToken()
+					if p.curTokenIs(TokenLParen) {
+						_ = p.parseRawParenContent()
+					}
+				}
+			}
+		} else {
+			break
 		}
 	}
 
@@ -844,7 +874,10 @@ func (p *Parser) parseTableLevelConstraint(stmt *CreateTableStmt) error {
 		cName = cleanSchemaPrefix(p.curToken.Literal)
 		p.nextToken()
 	}
+	return p.parseTableLevelConstraintAfterName(stmt, cName)
+}
 
+func (p *Parser) parseTableLevelConstraintAfterName(stmt *CreateTableStmt, cName string) error {
 	kw := strings.ToUpper(p.curToken.Literal)
 	switch kw {
 	case "PRIMARY":
@@ -1015,10 +1048,156 @@ func (p *Parser) parseReferencesClause(constraintName, childTable string, childC
 	}, nil
 }
 
+func isIdentCharByte(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '#' || ch == '$' || ch == '@'
+}
+
+func isDataTypeKeyword(s string) bool {
+	upper := strings.ToUpper(strings.Trim(s, "[]\"'`"))
+	switch upper {
+	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "INT2", "INT4", "INT8", "BIT", "BOOLEAN", "BOOL",
+		"FLOAT", "REAL", "DOUBLE", "FLOAT4", "FLOAT8", "DECIMAL", "NUMERIC", "MONEY", "SMALLMONEY",
+		"VARCHAR", "NVARCHAR", "CHAR", "NCHAR", "TEXT", "NTEXT", "BPCHAR", "SYSNAME",
+		"DATE", "DATETIME", "DATETIME2", "SMALLDATETIME", "DATETIMEOFFSET", "TIME", "TIMETZ", "TIMESTAMP", "TIMESTAMPTZ",
+		"BINARY", "VARBINARY", "BYTEA", "BLOB", "IMAGE", "ROWVERSION", "UNIQUEIDENTIFIER", "UUID", "GUID", "XML", "JSON", "JSONB":
+		return true
+	default:
+		return false
+	}
+}
+
 func (p *Parser) parseSingleColumnDef(tableName string) (ColumnDef, error) {
-	colName := cleanSchemaPrefix(p.curToken.IdentLiteral())
-	p.nextToken()
+	// Collect column name tokens (handles 123a, @, $, etc.)
+	var nameParts []string
+	for !p.curTokenIs(TokenLParen) && !p.curTokenIs(TokenComma) && !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+		upper := strings.ToUpper(p.curToken.Literal)
+		if len(nameParts) > 0 && (upper == "AS" || isDataTypeKeyword(upper)) {
+			break
+		}
+		// If we already have 1 valid identifier, do not consume a second identifier token into the column name
+		if len(nameParts) == 1 {
+			first := nameParts[0]
+			if len(first) > 0 && (isLetter(rune(first[0])) || first[0] == '_' || first[0] == '[' || first[0] == '"' || first[0] == '`') {
+				break
+			}
+		}
+		lit := p.curToken.IdentLiteral()
+		if lit == "" {
+			lit = p.curToken.Literal
+		}
+		nameParts = append(nameParts, lit)
+		p.nextToken()
+		if p.curTokenIs(TokenComma) || p.curTokenIs(TokenRParen) {
+			break
+		}
+		if len(nameParts) == 1 && (nameParts[0] == "@" || nameParts[0] == "$") {
+			break
+		}
+	}
+	colName := cleanSchemaPrefix(strings.Join(nameParts, ""))
+	if colName == "" {
+		colName = "col"
+	}
+
+	// Case 1: single identifier without type: CREATE TABLE t (a) or CREATE TABLE t (a, b int)
+	if p.curTokenIs(TokenComma) || p.curTokenIs(TokenRParen) {
+		dt := storage.TypeInt
+		if isDataTypeKeyword(colName) {
+			dt = parseDataType(colName)
+		}
+		return ColumnDef{
+			Name:     colName,
+			Type:     dt,
+			Nullable: true,
+		}, nil
+	}
+
+	// Case 2: Computed column: `col AS expr`
+	if strings.EqualFold(p.curToken.Literal, "AS") {
+		p.nextToken() // eat AS
+		return p.parseComputedColumn(colName, tableName)
+	}
+
+	// Case 3: Type before column name: `CREATE TABLE t (int a)`
+	if isDataTypeKeyword(colName) && (p.curTokenIs(TokenIdent) || (p.curToken.Literal != "" && isLetter(rune(p.curToken.Literal[0])))) {
+		actualName := cleanSchemaPrefix(p.curToken.IdentLiteral())
+		actualType := colName
+		p.nextToken()
+		dt := parseDataType(actualType)
+		return ColumnDef{
+			Name:     actualName,
+			Type:     dt,
+			Nullable: true,
+		}, nil
+	}
+
+	// Case 4: Standard column definition with type and constraints
 	return p.parseColumnTypeAndConstraints(colName, tableName)
+}
+
+func (p *Parser) parseComputedColumn(colName, tableName string) (ColumnDef, error) {
+	depth := 0
+	var exprTokens []string
+	isNotNull := false
+	isUnique := false
+
+	for !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) {
+		if depth == 0 {
+			if p.curTokenIs(TokenComma) || p.curTokenIs(TokenRParen) {
+				break
+			}
+			upper := strings.ToUpper(p.curToken.Literal)
+			if upper == "PERSISTED" {
+				p.nextToken() // eat PERSISTED
+				continue
+			}
+			if upper == "NOT" && strings.EqualFold(p.peekToken.Literal, "NULL") {
+				isNotNull = true
+				p.nextToken() // eat NOT
+				p.nextToken() // eat NULL
+				continue
+			}
+			if upper == "NULL" {
+				p.nextToken() // eat NULL
+				continue
+			}
+			if upper == "UNIQUE" {
+				isUnique = true
+				p.nextToken() // eat UNIQUE
+				continue
+			}
+		}
+
+		if p.curTokenIs(TokenLParen) {
+			depth++
+			exprTokens = append(exprTokens, "(")
+			p.nextToken()
+			continue
+		}
+		if p.curTokenIs(TokenRParen) {
+			depth--
+			exprTokens = append(exprTokens, ")")
+			p.nextToken()
+			continue
+		}
+
+		lit := p.curToken.Literal
+		if p.curTokenIs(TokenString) {
+			lit = "'" + strings.ReplaceAll(lit, "'", "''") + "'"
+		}
+		exprTokens = append(exprTokens, lit)
+		p.nextToken()
+	}
+
+	computedExpr := strings.Join(exprTokens, " ")
+
+	return ColumnDef{
+		Name:      colName,
+		Type:      storage.TypeVarChar,
+		Nullable:  !isNotNull,
+		Unique:    isUnique,
+		CheckExpr: computedExpr,
+	}, nil
 }
 
 func (p *Parser) parseColumnTypeAndConstraints(colName, tableName string) (ColumnDef, error) {
@@ -1565,7 +1744,59 @@ func (p *Parser) parseAlterTableAction(tableName string) ([]AlterTableAction, er
 			if strings.EqualFold(p.curToken.Literal, "ADD") {
 				p.nextToken()
 			}
-			if p.isTableConstraintStart() {
+			curUpper := strings.ToUpper(p.curToken.Literal)
+			if curUpper == "DEFAULT" {
+				p.nextToken() // eat DEFAULT
+				act, err := p.parseAlterTableDefaultExprAndFor(tableName, "")
+				if err != nil {
+					return nil, err
+				}
+				actions = append(actions, act)
+			} else if curUpper == "CONSTRAINT" {
+				p.nextToken() // eat CONSTRAINT
+				cName := cleanSchemaPrefix(p.curToken.Literal)
+				p.nextToken() // eat constraint name
+				if strings.EqualFold(p.curToken.Literal, "DEFAULT") {
+					p.nextToken() // eat DEFAULT
+					act, err := p.parseAlterTableDefaultExprAndFor(tableName, cName)
+					if err != nil {
+						return nil, err
+					}
+					actions = append(actions, act)
+				} else {
+					tmpStmt := &CreateTableStmt{Name: tableName}
+					if err := p.parseTableLevelConstraintAfterName(tmpStmt, cName); err != nil {
+						return nil, err
+					}
+					if len(tmpStmt.PrimaryKeyCols) > 0 {
+						actions = append(actions, AlterTableAction{
+							Type:           AlterAddPrimaryKey,
+							ConstraintCols: tmpStmt.PrimaryKeyCols,
+						})
+					}
+					for _, uq := range tmpStmt.UniqueIndexes {
+						actions = append(actions, AlterTableAction{
+							Type:           AlterAddUnique,
+							ConstraintName: uq.Name,
+							ConstraintCols: uq.Columns,
+						})
+					}
+					for i := range tmpStmt.ForeignKeys {
+						fk := tmpStmt.ForeignKeys[i]
+						actions = append(actions, AlterTableAction{
+							Type:           AlterAddForeignKey,
+							ConstraintName: fk.Name,
+							ForeignKey:     &fk,
+						})
+					}
+					for _, chk := range tmpStmt.CheckConstraints {
+						actions = append(actions, AlterTableAction{
+							Type:      AlterAddCheck,
+							CheckExpr: chk,
+						})
+					}
+				}
+			} else if p.isTableConstraintStart() {
 				tmpStmt := &CreateTableStmt{Name: tableName}
 				if err := p.parseTableLevelConstraint(tmpStmt); err != nil {
 					return nil, err
@@ -1650,6 +1881,68 @@ func (p *Parser) parseAlterColumnTypeAction(colName string) ([]AlterTableAction,
 		ColumnName: colName,
 		Column:     colDef,
 	}}, nil
+}
+
+func (p *Parser) parseAlterTableDefaultExprAndFor(tableName, cName string) (AlterTableAction, error) {
+	depth := 0
+	var b strings.Builder
+	prevLit := ""
+	for !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) {
+		if depth == 0 && strings.EqualFold(p.curToken.Literal, "FOR") {
+			break
+		}
+		if p.curTokenIs(TokenLParen) {
+			depth++
+			if prevLit != "" && prevLit != "(" && !isFuncLikeIdent(prevLit) {
+				b.WriteByte(' ')
+			}
+			b.WriteByte('(')
+			prevLit = "("
+			p.nextToken()
+			continue
+		}
+		if p.curTokenIs(TokenRParen) {
+			depth--
+			b.WriteByte(')')
+			prevLit = ")"
+			p.nextToken()
+			continue
+		}
+		lit := p.curToken.Literal
+		if p.curTokenIs(TokenString) {
+			lit = "'" + strings.ReplaceAll(lit, "'", "''") + "'"
+		}
+		if b.Len() > 0 && prevLit != "(" && lit != "," && lit != ")" {
+			b.WriteByte(' ')
+		}
+		b.WriteString(lit)
+		prevLit = lit
+		p.nextToken()
+	}
+
+	defExpr := CleanDefaultExpr(strings.TrimSpace(b.String()))
+	if !strings.EqualFold(p.curToken.Literal, "FOR") {
+		return AlterTableAction{}, fmt.Errorf("expected FOR in ALTER TABLE ADD DEFAULT, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat FOR
+
+	colName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken() // eat colName
+
+	// Optional WITH VALUES
+	if strings.EqualFold(p.curToken.Literal, "WITH") {
+		p.nextToken()
+		if strings.EqualFold(p.curToken.Literal, "VALUES") {
+			p.nextToken()
+		}
+	}
+
+	return AlterTableAction{
+		Type:           AlterColumnSetDefault,
+		ColumnName:     colName,
+		DefaultExpr:    defExpr,
+		ConstraintName: cName,
+	}, nil
 }
 
 func (p *Parser) ParseCreateIndex() (*CreateIndexStmt, error) {
