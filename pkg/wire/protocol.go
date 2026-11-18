@@ -428,6 +428,12 @@ func WriteError(w io.Writer, message string) error {
 	upper := strings.ToUpper(message)
 	if strings.Contains(upper, "SERIALIZATION FAILURE") {
 		code = "40001" // serialization_failure (retryable)
+	} else if strings.Contains(upper, "CHECK CONSTRAINT VIOLATION") || strings.Contains(upper, "VIOLATES CHECK CONSTRAINT") {
+		code = "23514" // check_violation
+	} else if strings.Contains(upper, "FOREIGN KEY CONSTRAINT VIOLATION") || strings.Contains(upper, "VIOLATES FOREIGN KEY CONSTRAINT") {
+		code = "23503" // foreign_key_violation
+	} else if strings.Contains(upper, "NOT NULL CONSTRAINT VIOLATION") || strings.Contains(upper, "VIOLATES NOT-NULL CONSTRAINT") || strings.Contains(upper, "COLUMN DOES NOT ALLOW NULLS") {
+		code = "23502" // not_null_violation
 	} else if strings.Contains(upper, "INDEX") && (strings.Contains(upper, "DOES NOT EXIST") || strings.Contains(upper, "NOT FOUND")) {
 		code = "42704" // undefined_object (standard PostgreSQL error code for non-existent index)
 	} else if strings.Contains(upper, "NOT FOUND") || strings.Contains(upper, "DOES NOT EXIST") {

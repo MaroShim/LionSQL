@@ -2182,6 +2182,10 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	fastChecks := f.extractFastEqConditions(tableSchema, data.WhereExpr)
 	rawCur, hasRaw := cursor.(storage.RawTupleCursor)
 
+	f.syncEvalCtx()
+	var scratchCtx map[string]any
+	var checkMerged storage.Record
+
 	for cursor.Next() {
 		if hasRaw && canSkipRawTuple(rawCur, tableSchema, fastChecks) {
 			continue
@@ -2191,11 +2195,11 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		if err != nil {
 			return 0, fmt.Errorf("failed to read record during UPDATE scan: %w", err)
 		}
-		rowMap := recordToMap(rec)
 
 		var rowContext map[string]any
 		if data.WhereExpr != nil {
-			rowContext = f.buildRowEvalMap(rowMap)
+			scratchCtx = f.fillRowEvalMapFromRecord(scratchCtx, rec)
+			rowContext = scratchCtx
 			if !proc.EvalBoolExpr(data.WhereExpr, rowContext, nil) {
 				continue
 			}
@@ -2217,17 +2221,21 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		}
 
 		if rowContext == nil {
-			rowContext = f.buildRowEvalMap(rowMap)
+			scratchCtx = f.fillRowEvalMapFromRecord(scratchCtx, rec)
+			rowContext = scratchCtx
 		}
 
-		recUpdates := make(storage.Record, len(data.Assignments))
+		var rowMap map[string]any
 		var newRowMap map[string]any
 		if hasTriggers {
+			rowMap = recordToMap(rec)
 			newRowMap = make(map[string]any, len(rowMap))
 			for k, v := range rowMap {
 				newRowMap[k] = v
 			}
 		}
+
+		recUpdates := make(storage.Record, len(data.Assignments))
 
 		for _, assign := range data.Assignments {
 			val, err := proc.EvalUpdateRowExpr(assign.Value, rowContext, nil)
@@ -2244,7 +2252,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 					}
 				}
 			} else {
-				for k := range rowMap {
+				for k := range rec {
 					if sqlutil.EqualFoldIdent(k, colName) {
 						colName = k
 						break
@@ -2259,14 +2267,18 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 
 		if hasPk {
 			if tableSchema != nil && tableSchema.HasCheckConstraints() {
-				merged := make(storage.Record, len(rec)+len(recUpdates))
+				if checkMerged == nil {
+					checkMerged = make(storage.Record, len(rec)+len(recUpdates))
+				} else {
+					clear(checkMerged)
+				}
 				for k, v := range rec {
-					merged[k] = v
+					checkMerged[k] = v
 				}
 				for k, v := range recUpdates {
-					merged[k] = v
+					checkMerged[k] = v
 				}
-				if err := proc.ValidateRecordChecks(tableSchema, merged); err != nil {
+				if err := proc.ValidateRecordChecks(tableSchema, checkMerged); err != nil {
 					return 0, err
 				}
 			}
@@ -2364,6 +2376,9 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 	fastChecks := f.extractFastEqConditions(tableSchema, data.WhereExpr)
 	rawCur, hasRaw := cursor.(storage.RawTupleCursor)
 
+	f.syncEvalCtx()
+	var scratchCtx map[string]any
+
 	for cursor.Next() {
 		if hasRaw && canSkipRawTuple(rawCur, tableSchema, fastChecks) {
 			continue
@@ -2373,11 +2388,10 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 		if err != nil {
 			return 0, fmt.Errorf("failed to read record during DELETE scan: %w", err)
 		}
-		rowMap := recordToMap(rec)
 
 		if data.WhereExpr != nil {
-			rowContext := f.buildRowEvalMap(rowMap)
-			if !proc.EvalBoolExpr(data.WhereExpr, rowContext, nil) {
+			scratchCtx = f.fillRowEvalMapFromRecord(scratchCtx, rec)
+			if !proc.EvalBoolExpr(data.WhereExpr, scratchCtx, nil) {
 				continue
 			}
 		}
@@ -2399,7 +2413,7 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 		if hasPk {
 			item := delItem{pk: pkVal}
 			if hasTriggers {
-				item.row = rowMap
+				item.row = recordToMap(rec)
 			}
 			toDelete = append(toDelete, item)
 		}
@@ -2980,6 +2994,25 @@ func (f *VMFrame) buildRowEvalMap(row map[string]any) map[string]any {
 		ctx[strings.ToLower(k)] = v
 	}
 	return ctx
+}
+
+// fillRowEvalMapFromRecord populates a reusable scratch map directly from a storage.Record
+// and f.evalCtx without per-row map allocations ([RULE:ZeroAllocation]).
+func (f *VMFrame) fillRowEvalMapFromRecord(dst map[string]any, rec storage.Record) map[string]any {
+	if dst == nil {
+		dst = make(map[string]any, len(f.evalCtx)+len(rec)*2)
+	} else {
+		clear(dst)
+	}
+	for k, v := range f.evalCtx {
+		dst[k] = v
+	}
+	for k, v := range rec {
+		anyVal := valToAny(v)
+		dst[k] = anyVal
+		dst[strings.ToLower(k)] = anyVal
+	}
+	return dst
 }
 
 // evalRowExprFast evaluates simple literal or variable expressions directly without building evalCtx map.

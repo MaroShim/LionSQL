@@ -47,3 +47,38 @@ func TestDecodeTextParamValue_HexAndLeadingZeroStringsStayVarChar(t *testing.T) 
 		}
 	}
 }
+
+func TestWriteError_ConstraintViolationSQLStates(t *testing.T) {
+	cases := []struct {
+		msg      string
+		wantCode string
+	}{
+		{
+			msg:      `check constraint violation: new row for relation "users" violates check constraint (age >= 18)`,
+			wantCode: "23514",
+		},
+		{
+			msg:      `check constraint violation on "orders": amount > 0`,
+			wantCode: "23514",
+		},
+		{
+			msg:      `foreign key constraint violation: key (user_id)=(99) is not present in table "users"`,
+			wantCode: "23503",
+		},
+		{
+			msg:      `not null constraint violation: column "email"`,
+			wantCode: "23502",
+		},
+	}
+
+	for _, tc := range cases {
+		var buf bytes.Buffer
+		if err := WriteError(&buf, tc.msg); err != nil {
+			t.Fatal(err)
+		}
+		wantField := []byte("C" + tc.wantCode + "\x00")
+		if !bytes.Contains(buf.Bytes(), wantField) {
+			t.Fatalf("for %q, expected SQLSTATE %s in ErrorResponse, got %q", tc.msg, tc.wantCode, buf.String())
+		}
+	}
+}
