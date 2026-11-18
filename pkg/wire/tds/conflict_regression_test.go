@@ -96,4 +96,24 @@ func TestTDS_WT_WriteWriteConflict_Autocommit_FailsFast(t *testing.T) {
 	if ra != 1 {
 		t.Fatalf("expected 1 row affected on retry, got %d", ra)
 	}
+
+	// 5. Simulate abrupt TCP socket disconnect of Session 1 while holding an uncommitted write lock
+	if _, err := db1.ExecContext(ctx, "BEGIN TRANSACTION; UPDATE accounts SET balance = 999 WHERE id = 1;"); err != nil {
+		t.Fatalf("db1 raw BEGIN+UPDATE failed: %v", err)
+	}
+	// Abruptly close db1 connection pool (closes underlying TCP socket without COMMIT/ROLLBACK)
+	_ = db1.Close()
+
+	// Session 2 must succeed once the server detects the closed socket and runs defer CloseSession()
+	var disconnectRecovered bool
+	for i := 0; i < 20; i++ {
+		if _, err := db2.ExecContext(ctx, "UPDATE accounts SET balance = 400 WHERE id = 1"); err == nil {
+			disconnectRecovered = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !disconnectRecovered {
+		t.Fatalf("expected activeWriters lock to be released immediately after Session 1 socket disconnect")
+	}
 }

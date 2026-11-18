@@ -8,7 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
-- enforce Go-level sharded active writer locks (`activeWriters`) in `pkg/storage/wiredtiger/wt_engine.go` across 64 shards, ensuring cross-platform fail-fast write-write conflict detection (`ErrSerializationFailure`) parity with in-memory OCC engine (`[RULE:HermeticParity]`, Invariant 3)
+- add fresh-initialized WiredTiger enterprise service compatibility suites (`pkg/wire/service_compat_wt_wire_test.go`, `pkg/engine/services_wt_compat_test.go`) verifying Apache Answer, GoCD, Wiki.js, Casdoor, Vaultwarden, Umami, Metabase, Grafana, Gitea, Woodpecker, and Vikunja on WiredTiger B+Tree storage
+- enforce Go-level sharded active writer locks (`activeWriters`) in `pkg/storage/wiredtiger/wt_engine.go` across 64 shards with automatic lock release on `WTTx.Commit`, `WTTx.Rollback`, `WTSession.Reset`, and `WTSession.Close`, ensuring cross-platform fail-fast write-write conflict detection (`ErrSerializationFailure`) parity with in-memory OCC engine (`[RULE:HermeticParity]`, Invariant 3)
 - add comprehensive multi-layer write-write conflict regression test suite (`pkg/storage/wiredtiger/wt_active_writers_test.go`, `pkg/proc/runtime/vm_update_conflict_test.go`, `pkg/wire/tds/conflict_regression_test.go`) covering storage engine, VDBE executor, coordinator, and TDS wire protocol
 - auto-detect local Git commit hash in `pkg/config/version.go` via `.git/HEAD` inspection, eliminating `commit: dev` fallback in local builds
 - persist foreground server system and error logs to `data/lionsql.log` via `io.MultiWriter(os.Stderr, logFd)`, ensuring parity with daemon mode while keeping non-dev console output clean

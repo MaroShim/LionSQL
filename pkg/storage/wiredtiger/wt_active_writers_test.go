@@ -106,4 +106,30 @@ func TestWT_ActiveWriters_FailFastConflict(t *testing.T) {
 	if err := tx2.Commit(); err != nil {
 		t.Fatalf("tx2 Commit failed: %v", err)
 	}
+
+	// 6. Test direct Session.Close() / Session.Reset() cleanup when tx is abandoned without Rollback()
+	txAbandoned, err := sess1.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("txAbandoned BeginTx failed: %v", err)
+	}
+	if err := txAbandoned.Update("users", storage.IntValue(1), storage.Record{"name": storage.StringValue("abandoned_val")}); err != nil {
+		t.Fatalf("txAbandoned update failed: %v", err)
+	}
+	// Close sess1 directly without calling txAbandoned.Rollback() (simulating abrupt session teardown)
+	if err := sess1.Close(); err != nil {
+		t.Fatalf("sess1.Close() failed: %v", err)
+	}
+
+	// Session 2 must immediately be able to update row 1 because sess1.Close() cleaned up activeWriters
+	tx3, err := sess2.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("tx3 BeginTx failed: %v", err)
+	}
+	defer tx3.Rollback()
+	if err := tx3.Update("users", storage.IntValue(1), storage.Record{"name": storage.StringValue("recovered_after_sess_close")}); err != nil {
+		t.Fatalf("expected tx3 update to succeed after sess1.Close(), got: %v", err)
+	}
+	if err := tx3.Commit(); err != nil {
+		t.Fatalf("tx3 Commit failed: %v", err)
+	}
 }

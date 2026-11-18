@@ -2125,6 +2125,7 @@ type WTSession struct {
 	mu         sync.Mutex
 	closed     bool
 	activeTx   bool
+	currentTx  *WTTx
 	cursorPool map[string][]*C.WT_CURSOR
 	allCursors map[*C.WT_CURSOR]struct{}
 	toClose    []*C.WT_CURSOR
@@ -2190,6 +2191,11 @@ func (s *WTSession) Close() error {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.currentTx != nil {
+		s.currentTx.releaseAcquiredLocksLocked()
+		s.currentTx = nil
+	}
 
 	if s.closed || s.sess == nil {
 		return nil
@@ -2319,6 +2325,11 @@ func (s *WTSession) Reset() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.currentTx != nil {
+		s.currentTx.releaseAcquiredLocksLocked()
+		s.currentTx = nil
+	}
+
 	if s.closed || s.sess == nil {
 		return nil
 	}
@@ -2350,6 +2361,11 @@ func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error)
 		}
 	}
 
+	if s.currentTx != nil {
+		s.currentTx.releaseAcquiredLocksLocked()
+		s.currentTx = nil
+	}
+
 	ret := C.go_wt_session_begin(s.sess, nil)
 	if ret != 0 {
 		return nil, fmt.Errorf("begin_transaction failed with code %d", ret)
@@ -2375,20 +2391,23 @@ func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error)
 		txID = s.engine.nextTxID.Add(1)
 	}
 
-	return &WTTx{
+	wttx := &WTTx{
 		sess:              s,
 		txID:              txID,
 		opts:              opts,
 		snapshotLSN:       snapLSN,
 		snapshotTimestamp: snapTS,
 		snapTables:        snapTables,
-	}, nil
+	}
+	s.currentTx = wttx
+	return wttx, nil
 }
 
 // WTTx manages ACID mutations in WiredTiger and routes temporary tables to tempTx lazily.
 type WTTx struct {
 	sess              *WTSession
 	txID              uint64
+	lockMu            sync.Mutex
 	acquiredLocks     []wtLockRef
 	tempTx            storage.Transaction
 	opts              storage.TxOptions
@@ -2417,6 +2436,10 @@ func (tx *WTTx) tryAcquireWriteLockLocked(tableName string, pkKey string) error 
 	}
 	lockKey := tableName + "\x00" + pkKey
 	sIdx := hashWTLockKey(lockKey)
+
+	tx.lockMu.Lock()
+	defer tx.lockMu.Unlock()
+
 	sh := &eng.lockShards[sIdx]
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
@@ -2438,6 +2461,9 @@ func (tx *WTTx) tryAcquireWriteLockLocked(tableName string, pkKey string) error 
 }
 
 func (tx *WTTx) releaseAcquiredLocksLocked() {
+	tx.lockMu.Lock()
+	defer tx.lockMu.Unlock()
+
 	if len(tx.acquiredLocks) == 0 {
 		return
 	}
