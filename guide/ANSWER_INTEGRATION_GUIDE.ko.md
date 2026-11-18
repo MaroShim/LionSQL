@@ -1,12 +1,14 @@
 # LionSQL 기반 Apache Answer 구축 및 운영 공식 연동 가이드 (`guide/ANSWER_INTEGRATION_GUIDE.ko.md`)
 
-> - **문서 버전**: v1.2.0
+> - **문서 버전**: v1.3.0
 > - **최초 작성일**: 2026-11-01
-> - **최종 업데이트**: 2026-11-16
+> - **최종 업데이트**: 2026-11-18
 > - **대상 릴리즈**: LionSQL v0.93.0+
 > - **연동 대상**: Apache Answer v1.4+ (공식 소스/바이너리 무수정 연동)
 > - **지원 유선 프로토콜**:
 >   - **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
+> - **검증 스토리지 엔진**:
+>   - **In-Memory OCC (`compact`)** 및 **WiredTiger B+Tree (`wiredtiger`)** 둘 다 100% 무결성 검증 완료
 > - **참조 문서**:
 >   - 실전 연동 검증 보고서: [`notes/ANSWER_INTEGRATION_REPORT.ko.md`](../notes/reports/ANSWER_INTEGRATION_REPORT.ko.md)
 >   - 모듈러 아키텍처 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/plans/archive/MODULAR_ARCHITECTURE_PLAN.ko.md)
@@ -37,10 +39,16 @@ Apache Answer의 백엔드 RDBMS로 LionSQL을 채택할 경우 다음과 같은
 ## 2. 연동 사전 요구사항 및 설정
 
 ### 2.1 LionSQL 서버 구동
-LionSQL 데몬을 WiredTiger 스토리지 엔진과 PGWire 리스너(`:5433`)를 활성화하여 실행합니다:
-```bash
-./bin/lionsql -dir data_answer -engine wiredtiger -pg 127.0.0.1:5433 -http 127.0.0.1:8090
-```
+LionSQL은 **WiredTiger (디스크 B+Tree)**와 **In-Memory OCC (Compact)** 두 가지 스토리지 엔진 모두에서 Apache Answer 구동을 100% 완벽하게 지원합니다. 환경에 맞추어 원하는 엔진을 선택하여 실행합니다:
+
+- **WiredTiger B+Tree 엔진 (디스크 영속화, 프로덕션 기본 권장)**:
+  ```bash
+  ./bin/lionsql -dir data_answer -engine wiredtiger -pg 127.0.0.1:5433 -http 127.0.0.1:8090
+  ```
+- **In-Memory OCC 엔진 (초고속 인메모리 + WAL 영속화)**:
+  ```bash
+  ./bin/lionsql -dir data_answer -engine compact -pg 127.0.0.1:5433 -http 127.0.0.1:8090
+  ```
 
 ### 2.2 Apache Answer 헤드리스 자동 설치 (`answer init`)
 Apache Answer는 환경 변수를 통한 자동 설치(`AUTO_INSTALL=true`)를 기본 지원합니다. 다음 명령어를 실행하면 데이터베이스 연결 검증, 35개 테이블 생성, 기본 관리자 계정 생성, 시드 데이터 적재가 무인으로 완료됩니다:

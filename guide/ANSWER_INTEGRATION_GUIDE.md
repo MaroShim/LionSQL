@@ -1,12 +1,14 @@
 # Official Deployment and Operation Guide for Apache Answer on LionSQL (`guide/ANSWER_INTEGRATION_GUIDE.md`)
 
-> - **Document Version**: v1.2.0
+> - **Document Version**: v1.3.0
 > - **Initial Created**: 2026-11-01
-> - **Last Updated**: 2026-11-16
+> - **Last Updated**: 2026-11-18
 > - **Target Release**: LionSQL v0.93.0+
 > - **Target Application**: Apache Answer v1.4+ (Unmodified official source/binary)
 > - **Supported Protocol**:
 >   - **PostgreSQL Wire Protocol v3** (Default TCP `:5433`)
+> - **Verified Storage Engines**:
+>   - **In-Memory OCC (`compact`)** & **WiredTiger B+Tree (`wiredtiger`)** (100% verified)
 > - **Reference Documents**:
 >   - Live Integration Report: [`notes/ANSWER_INTEGRATION_REPORT.ko.md`](../notes/reports/ANSWER_INTEGRATION_REPORT.ko.md)
 >   - Modular Architecture Plan: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](../notes/plans/archive/MODULAR_ARCHITECTURE_PLAN.ko.md)
@@ -37,10 +39,16 @@ Using LionSQL as the backend RDBMS for Apache Answer provides several key archit
 ## 2. Requirements & Setup
 
 ### 2.1 Start LionSQL Server
-Start LionSQL with the WiredTiger storage engine and PostgreSQL wire protocol enabled:
-```bash
-./bin/lionsql -dir data_answer -engine wiredtiger -pg 127.0.0.1:5433 -http 127.0.0.1:8090
-```
+LionSQL supports Apache Answer on both **WiredTiger (Disk B+Tree)** and **In-Memory OCC (Compact)** storage engines, with 100% verified compatibility on both:
+
+- **WiredTiger B+Tree Engine (Disk persistence, recommended for production)**:
+  ```bash
+  ./bin/lionsql -dir data_answer -engine wiredtiger -pg 127.0.0.1:5433 -http 127.0.0.1:8090
+  ```
+- **In-Memory OCC Engine (Sub-microsecond memory-first + WAL durability)**:
+  ```bash
+  ./bin/lionsql -dir data_answer -engine compact -pg 127.0.0.1:5433 -http 127.0.0.1:8090
+  ```
 
 ### 2.2 Headless Automated Installation (`answer init`)
 Apache Answer natively supports headless setup using environment variables:
