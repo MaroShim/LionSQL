@@ -454,15 +454,13 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 			log.Printf("[PANIC-RECOVERY] session %s recovered from query panic: %v\n%s", sessionID, r, stack)
 			if cs != nil {
 				cs.Mu.Lock()
-				if cs.Tx() != nil {
-					_ = cs.Tx().Rollback()
-					cs.txLegacy = nil
-					cs.TranCount = 0
-				}
 				if cs.TxMgr != nil {
 					_ = cs.TxMgr.Rollback(context.Background())
+				} else if cs.Tx() != nil {
+					_ = cs.Tx().Rollback()
 				}
-				cs.TxFailed = false
+				cs.ClearTxFailed()
+				cs.ResetTranCount()
 				cs.Vars["error"] = int64(50000)
 				cs.Mu.Unlock()
 			}
@@ -560,11 +558,9 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 		select {
 		case <-queryCtx.Done():
 			if cs != nil {
-				cs.Mu.Lock()
 				if cs.Tx() != nil {
-					cs.TxFailed = true
+					cs.MarkTxFailed()
 				}
-				cs.Mu.Unlock()
 			}
 			if errors.Is(queryCtx.Err(), context.DeadlineExceeded) {
 				execErr = fmt.Errorf("canceling statement due to statement timeout")
@@ -577,10 +573,8 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 
 		// If transaction has failed (e.g. in PostgreSQL mode or after statement timeout), reject all commands except ROLLBACK (or COMMIT which rolls back in CommitSessionTx)
 		if cs != nil {
-			cs.Mu.Lock()
-			failed := cs.TxFailed
+			failed := cs.IsTxFailed()
 			isPG := cs.IsPostgres()
-			cs.Mu.Unlock()
 			if failed && !isRollbackOrResetQuery(stmt) && (isPG || !sqlutil.HasPrefixKeyword(stmt, "COMMIT")) {
 				execErr = fmt.Errorf("current transaction is aborted, commands ignored until end of transaction block")
 				return nil, execErr
@@ -606,7 +600,7 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 				}
 				cs.Vars["error"] = errNum
 				if cs.Tx() != nil && (cs.IsPostgres() || isTimeoutOrCancel) {
-					cs.TxFailed = true
+					cs.MarkTxFailed()
 				}
 				cs.Mu.Unlock()
 			}
@@ -730,10 +724,7 @@ func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) e
 			return fmt.Errorf("transaction already active on session %s", cs.ID)
 		}
 		// T-SQL dialect: nested BEGIN TRANSACTION increments @@TRANCOUNT without error
-		cs.TranCount++
-		if cs.TxMgr != nil {
-			cs.TxMgr.IncNestLevel()
-		}
+		cs.IncTranCount()
 		return nil
 	}
 	if cs.Session == nil {
@@ -742,23 +733,18 @@ func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) e
 	if cs.isReadOnlyLocked() || s.IsReadOnly() {
 		opts.ReadOnly = true
 	}
-	var stx storage.Transaction
 	if cs.TxMgr != nil {
-		txCtx, startErr := cs.TxMgr.Begin(context.Background(), tx.Options{ReadOnly: opts.ReadOnly})
+		_, startErr := cs.TxMgr.Begin(context.Background(), tx.Options{ReadOnly: opts.ReadOnly})
 		if startErr != nil {
 			return fmt.Errorf("failed to start transaction: %w", startErr)
 		}
-		stx = txCtx.StorageTx
 	} else {
-		t, startErr := cs.Session.BeginTx(opts)
+		_, startErr := cs.Session.BeginTx(opts)
 		if startErr != nil {
 			return fmt.Errorf("failed to start transaction: %w", startErr)
 		}
-		stx = t
 	}
-	cs.txLegacy = stx
-	cs.TranCount = 1
-	cs.TxFailed = false
+	cs.ClearTxFailed()
 	return nil
 }
 
@@ -776,15 +762,14 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 	}
 
 	// If transaction has failed, ROLLBACK the underlying transaction across all dialects
-	if cs.TxFailed {
+	if cs.IsTxFailed() {
 		if cs.TxMgr != nil {
 			_ = cs.TxMgr.Rollback(context.Background())
-		} else if cs.txLegacy != nil {
-			_ = cs.txLegacy.Rollback()
+		} else if tx := cs.Tx(); tx != nil {
+			_ = tx.Rollback()
 		}
-		cs.txLegacy = nil
-		cs.TranCount = 0
-		cs.TxFailed = false
+		cs.ResetTranCount()
+		cs.ClearTxFailed()
 		ddlOps := cs.ddlUndoLog
 		cs.ddlUndoLog = nil
 		if cs.Cursors != nil {
@@ -806,12 +791,9 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		return fmt.Errorf("current transaction is aborted, commands ignored until end of transaction block")
 	}
 
-	if cs.TranCount > 1 {
+	if cs.TranCount() > 1 {
 		// T-SQL nested transaction: decrement tranCount only, do not physically commit
-		cs.TranCount--
-		if cs.TxMgr != nil {
-			cs.TxMgr.DecNestLevel()
-		}
+		cs.DecTranCount()
 		cs.Mu.Unlock()
 		if s.Metrics() != nil {
 			s.Metrics().RecordTransaction("commit")
@@ -821,9 +803,8 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 
 	tx := cs.Tx()
 	txMgr := cs.TxMgr
-	cs.txLegacy = nil
-	cs.TranCount = 0
-	cs.TxFailed = false
+	cs.ResetTranCount()
+	cs.ClearTxFailed()
 	ddlOps := cs.ddlUndoLog
 	cs.ddlUndoLog = nil
 	// Close non-WITH HOLD cursors on COMMIT
@@ -878,9 +859,8 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 	}
 	tx := cs.Tx()
 	txMgr := cs.TxMgr
-	cs.txLegacy = nil
-	cs.TranCount = 0
-	cs.TxFailed = false
+	cs.ResetTranCount()
+	cs.ClearTxFailed()
 	ddlOps := cs.ddlUndoLog
 	cs.ddlUndoLog = nil
 	// Close all cursors on ROLLBACK (per SQL standard lifecycle)

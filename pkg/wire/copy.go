@@ -384,7 +384,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			_ = s.writeReady(conn, sessID)
 			return
 		}
-		if actTx, ok := cs.GetActiveTx(); ok {
+		if actTx := cs.Tx(); actTx != nil {
 			tx = actTx
 			inTx = true
 		}
@@ -576,7 +576,7 @@ func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
 			_ = s.writeReady(conn, sessID)
 			return
 		}
-		if actTx, ok := cs.GetActiveTx(); ok {
+		if actTx := cs.Tx(); actTx != nil {
 			tx = actTx
 			inTx = true
 		}

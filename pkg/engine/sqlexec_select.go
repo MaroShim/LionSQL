@@ -401,21 +401,17 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		return int64(51), "@@spid"
 	case "@@TRANCOUNT":
 		if cs != nil {
-			cs.Mu.Lock()
-			tc := int64(cs.TranCount)
+			tc := int64(cs.TranCount())
 			if tc == 0 && cs.Tx() != nil {
 				tc = 1
 			}
-			cs.Mu.Unlock()
 			return tc, "@@trancount"
 		}
 		return int64(0), "@@trancount"
 	case "XACT_STATE()", "XACT_STATE":
 		if cs != nil {
-			cs.Mu.Lock()
-			hasTx := cs.TranCount > 0
-			failed := cs.TxFailed
-			cs.Mu.Unlock()
+			hasTx := cs.InTransaction() || cs.TranCount() > 0 || cs.Tx() != nil
+			failed := cs.IsTxFailed()
 			if !hasTx {
 				return int64(0), "xact_state"
 			}

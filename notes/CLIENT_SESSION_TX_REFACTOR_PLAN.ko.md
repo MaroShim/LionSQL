@@ -54,8 +54,12 @@
   - `pkg/engine/coordinator_impl.go` (`CloseSession`, `ResetSessionState`)
   - `pkg/engine/*_test.go` regression test suites
 
-### Stage 4: Verification & Final Cleanup
-- Build: `go build -buildvcs=false -o bin/lionsql ./cmd/lionsql`
-- Test: `go test -v -race ./pkg/tx/... ./pkg/engine/...`
-- Full Suite: `go test -v -race ./...`
+### Stage 4: Verification & Final Cleanup (COMPLETED)
+- Build: `go build -buildvcs=false -o bin/lionsql ./cmd/lionsql` (0 errors)
+- Test: `go test -v -race ./pkg/tx/... ./pkg/engine/...` (100% PASS, 0 data races)
+- Legacy Field Eradication (Phase 3 Completed):
+  - Completely removed `txLegacy storage.Transaction`, `TranCount int`, and `TxFailed bool` from `ClientSession` struct.
+  - Completely removed deprecated `cs.GetActiveTx()` across `pkg/wire` and `pkg/engine`.
+  - Replaced all call sites with canonical accessors: `cs.Tx()`, `cs.TranCount()`, `cs.IncTranCount()`, `cs.DecTranCount()`, `cs.ResetTranCount()`, `cs.IsTxFailed()`, `cs.MarkTxFailed()`, `cs.ClearTxFailed()`.
+  - Zero dual-state tracking remains across the database engine.
 - Update `CHANGELOG.md` and commit with Conventional Commits.

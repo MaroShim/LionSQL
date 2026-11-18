@@ -1434,9 +1434,7 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 		if retErr != nil {
 			if startedImplicitTx && cs != nil {
 				_ = s.RollbackSessionTx(cs.ID)
-				cs.Mu.Lock()
-				cs.TxFailed = false
-				cs.Mu.Unlock()
+				cs.ClearTxFailed()
 			} else if usedSavepoint && cs != nil {
 				cs.Mu.Lock()
 				if cs.Tx() != nil {

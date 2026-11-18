@@ -144,12 +144,15 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 
 	coord.autoAnalyzer = NewAutoAnalyzer(coord, DefaultAutoAnalyzeConfig())
 	executor.SetIdentityProvider(coord)
-	executor.SetQueryExecutor(func(ctx context.Context, sql string, tx storage.Transaction, vars map[string]storage.Value) ([]map[string]any, []string, error) {
+	executor.SetQueryExecutor(func(ctx context.Context, sql string, stx storage.Transaction, vars map[string]storage.Value) ([]map[string]any, []string, error) {
 		cs := &ClientSession{
-			ID:   "internal-vm-subquery",
-			User: "sa",
-			txLegacy: tx,
-			Vars: make(map[string]any, len(vars)*2),
+			ID:    "internal-vm-subquery",
+			User:  "sa",
+			TxMgr: tx.NewManager("internal-vm-subquery", nil, coord.engine, nil),
+			Vars:  make(map[string]any, len(vars)*2),
+		}
+		if stx != nil {
+			cs.TxMgr.SetActiveStorageTx(stx)
 		}
 		for k, v := range vars {
 			cs.Vars[k] = v.Interface()
@@ -544,9 +547,6 @@ func (c *Coordinator) ReapIdleClientSessions(idleTTL time.Duration) int {
 				} else {
 					_ = cs.Tx().Rollback()
 				}
-				cs.txLegacy = nil
-				cs.TranCount = 0
-				cs.TxFailed = false
 				log.Printf("[TX-IDLE-TIMEOUT] session=%s forcibly rolled back uncommitted transaction after %v idle (threshold=%v)", cs.ID, idleDur.Round(time.Millisecond), idleTTL)
 			}
 			detached = append(detached, cs.Session)
@@ -610,9 +610,6 @@ func (c *Coordinator) CloseSession(id string) {
 		if !inFlight {
 			immediateTx = cs.Tx()
 			immediateTxMgr = cs.TxMgr
-			cs.txLegacy = nil
-			cs.TranCount = 0
-			cs.TxFailed = false
 		}
 
 		// 2. Snapshot table variable & temp table names to drop outside lock ([RULE:LockHierarchy])
@@ -705,9 +702,6 @@ func (c *Coordinator) ResetSession(id string, resetTx bool) error {
 	if resetTx && cs.Tx() != nil {
 		txToRollback = cs.Tx()
 		txMgrToRollback = cs.TxMgr
-		cs.txLegacy = nil
-		cs.TranCount = 0
-		cs.TxFailed = false
 		ddlOps = cs.ddlUndoLog
 		cs.ddlUndoLog = nil
 	}
@@ -785,15 +779,7 @@ func (c *Coordinator) GetSessionTxStatus(id string) byte {
 	if !exists || cs == nil {
 		return 'I'
 	}
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
-	if cs.Tx() == nil {
-		return 'I'
-	}
-	if cs.TxFailed {
-		return 'E'
-	}
-	return 'T'
+	return cs.TxStatus()
 }
 
 // SetSessionUser updates the active user principal on an interactive session.
@@ -919,8 +905,11 @@ func (c *Coordinator) Close() error {
 	if defCs, ok := c.sessions["default"]; ok && defCs != nil {
 		defCs.Mu.Lock()
 		if defCs.Tx() != nil {
-			_ = defCs.Tx().Rollback()
-			defCs.txLegacy = nil
+			if defCs.TxMgr != nil {
+				_ = defCs.TxMgr.Rollback(context.Background())
+			} else {
+				_ = defCs.Tx().Rollback()
+			}
 		}
 		if defCs.Session != nil {
 			if c.pool != nil {

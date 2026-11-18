@@ -1993,10 +1993,8 @@ func TestCoordinator_Regression_P0_37_QueryPanicRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetOrCreateSession failed: %v", err)
 	}
-	cs.Mu.Lock()
 	txActive := cs.Tx() != nil
-	tranCount := cs.TranCount
-	cs.Mu.Unlock()
+	tranCount := cs.TranCount()
 
 	if txActive || tranCount != 0 {
 		t.Errorf("expected transaction to be rolled back and cleaned up after panic, but txActive=%v, tranCount=%d", txActive, tranCount)

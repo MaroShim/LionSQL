@@ -163,3 +163,10 @@ func (c *Context) DecNestLevel() int {
 	}
 	return c.NestLevel
 }
+
+// SetNestLevel sets the transaction nesting depth directly.
+func (c *Context) SetNestLevel(n int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.NestLevel = n
+}

@@ -96,10 +96,7 @@ type ClientSession struct {
 	SPID            int
 	Dialect         Dialect
 	Session         storage.Session
-	txLegacy        storage.Transaction // legacy transitional field for internal engine synchronization
-	TxFailed        bool // whether current transaction encountered an error ('E' in PGWire)
-	TranCount       int  // T-SQL @@TRANCOUNT transaction nesting depth (0 = autocommit)
-	TxMgr           *tx.Manager // dedicated transaction manager and command serializer
+	TxMgr           *tx.Manager // dedicated transaction manager and command serializer (SSOT)
 	ddlUndoLog      []DDLUndoOp // LIFO stack of DDL operations executed within current transaction for atomic rollback
 	Vars            map[string]any
 	VarLengths      map[string]int    // @var -> max length constraint (e.g. VARCHAR(1))
@@ -137,9 +134,6 @@ func (cs *ClientSession) checkAndDrainClosedLocked() (storage.Transaction, stora
 		if cs.TxMgr != nil {
 			_ = cs.TxMgr.Rollback(context.Background())
 		}
-		cs.txLegacy = nil
-		cs.TranCount = 0
-		cs.TxFailed = false
 
 		drainSess := cs.Session
 		drainFn := cs.releaseOnDrain
@@ -449,85 +443,80 @@ func (cs *ClientSession) UnregisterTempTable(tbl string) {
 
 // IsTxFailed reports whether the session's active transaction has aborted ('E' status in PGWire).
 func (cs *ClientSession) IsTxFailed() bool {
-	if cs == nil {
+	if cs == nil || cs.TxMgr == nil {
 		return false
 	}
-	if cs.TxMgr != nil {
-		return cs.TxMgr.IsInError()
-	}
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
-	return cs.TxFailed
+	return cs.TxMgr.IsInError()
 }
 
 // MarkTxFailed marks the session's active transaction as aborted after an execution failure.
 func (cs *ClientSession) MarkTxFailed() {
-	if cs == nil {
+	if cs == nil || cs.TxMgr == nil {
 		return
 	}
-	if cs.TxMgr != nil {
-		cs.TxMgr.SetInError(errors.New("transaction aborted by execution failure"))
-	}
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
-	cs.TxFailed = true
+	cs.TxMgr.SetInError(errors.New("transaction aborted by execution failure"))
 }
 
 // ClearTxFailed resets the transaction aborted status.
 func (cs *ClientSession) ClearTxFailed() {
-	if cs == nil {
+	if cs == nil || cs.TxMgr == nil {
 		return
 	}
-	cs.Mu.Lock()
-	cs.TxFailed = false
-	cs.Mu.Unlock()
-	if cs.TxMgr != nil && cs.TxMgr.Current() != nil {
-		ctx := cs.TxMgr.Current()
-		if ctx.GetState() == tx.StateInError {
-			ctx.SetState(tx.StateActive)
-			ctx.Err = nil
-		}
-	}
+	cs.TxMgr.ClearInError()
 }
 
 // TranCount returns the transaction nesting depth (T-SQL @@TRANCOUNT).
-func (cs *ClientSession) TranCountVal() int {
-	if cs == nil {
+func (cs *ClientSession) TranCount() int {
+	if cs == nil || cs.TxMgr == nil {
 		return 0
 	}
-	if cs.TxMgr != nil {
-		return cs.TxMgr.NestLevel()
+	return cs.TxMgr.NestLevel()
+}
+
+// TranCountVal returns the transaction nesting depth (alias for TranCount).
+func (cs *ClientSession) TranCountVal() int {
+	return cs.TranCount()
+}
+
+// IncTranCount increments the transaction nesting depth.
+func (cs *ClientSession) IncTranCount() int {
+	if cs == nil || cs.TxMgr == nil {
+		return 0
 	}
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
-	return cs.TranCount
+	return cs.TxMgr.IncNestLevel()
+}
+
+// DecTranCount decrements the transaction nesting depth.
+func (cs *ClientSession) DecTranCount() int {
+	if cs == nil || cs.TxMgr == nil {
+		return 0
+	}
+	return cs.TxMgr.DecNestLevel()
+}
+
+// ResetTranCount resets the transaction nesting depth to 0.
+func (cs *ClientSession) ResetTranCount() {
+	if cs == nil || cs.TxMgr == nil {
+		return
+	}
+	cs.TxMgr.SetNestLevel(0)
 }
 
 // InTransaction reports whether the session is currently in an active transaction block.
 func (cs *ClientSession) InTransaction() bool {
-	if cs == nil {
+	if cs == nil || cs.TxMgr == nil {
 		return false
 	}
-	if cs.TxMgr != nil {
-		return cs.TxMgr.InTransaction()
-	}
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
-	return cs.txLegacy != nil
+	return cs.TxMgr.InTransaction()
 }
 
 // Tx returns the active storage transaction if one is open, or nil if none.
-// All transaction reads are safely mediated via TxMgr.
+// All transaction state is strictly mediated via cs.TxMgr (SSOT).
 func (cs *ClientSession) Tx() storage.Transaction {
-	if cs == nil {
+	if cs == nil || cs.TxMgr == nil {
 		return nil
 	}
-	if cs.TxMgr != nil {
-		return cs.TxMgr.ActiveStorageTx()
-	}
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
-	return cs.txLegacy
+	return cs.TxMgr.ActiveStorageTx()
 }
 
 // ActiveTx returns the active storage transaction if one is open, or nil if none.
@@ -535,40 +524,15 @@ func (cs *ClientSession) ActiveTx() storage.Transaction {
 	return cs.Tx()
 }
 
-// GetActiveTx returns the active transaction if one is open.
-func (cs *ClientSession) GetActiveTx() (storage.Transaction, bool) {
-	if cs == nil {
-		return nil, false
-	}
-	if cs.TxMgr != nil {
-		stx := cs.TxMgr.ActiveStorageTx()
-		return stx, stx != nil
-	}
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
-	return cs.txLegacy, cs.txLegacy != nil
-}
-
 // TxStatus returns the transaction status indicator for PGWire ('I' = idle, 'T' = in transaction, 'E' = aborted transaction).
 func (cs *ClientSession) TxStatus() byte {
-	if cs == nil {
+	if cs == nil || cs.TxMgr == nil {
 		return 'I'
 	}
-	if cs.TxMgr != nil {
-		if cs.TxMgr.IsInError() {
-			return 'E'
-		}
-		if cs.TxMgr.InTransaction() {
-			return 'T'
-		}
-		return 'I'
-	}
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
-	if cs.TxFailed {
+	if cs.TxMgr.IsInError() {
 		return 'E'
 	}
-	if cs.txLegacy != nil {
+	if cs.TxMgr.InTransaction() {
 		return 'T'
 	}
 	return 'I'
@@ -619,7 +583,7 @@ func (cs *ClientSession) ExecuteProgram(
 
 	cs.Mu.Lock()
 	cs.lastUsedAt = time.Now()
-	if cs.TxFailed {
+	if cs.IsTxFailed() {
 		cs.Mu.Unlock()
 		return nil, true, nil
 	}
@@ -636,7 +600,6 @@ func (cs *ClientSession) ExecuteProgram(
 		cs.sessInUse = false
 		cs.lastUsedAt = time.Now()
 		if res != nil {
-			cs.txLegacy = res.ActiveTx
 			if cs.TxMgr != nil {
 				cs.TxMgr.SetActiveStorageTx(res.ActiveTx)
 			}
@@ -644,7 +607,6 @@ func (cs *ClientSession) ExecuteProgram(
 		if err != nil {
 			isTimeoutOrCancel := errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
 			if cs.IsPostgres() || isTimeoutOrCancel {
-				cs.TxFailed = true
 				if cs.TxMgr != nil {
 					cs.TxMgr.SetInError(err)
 				}

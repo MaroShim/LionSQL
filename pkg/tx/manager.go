@@ -127,6 +127,14 @@ func (m *Manager) DecNestLevel() int {
 	return m.current.DecNestLevel()
 }
 
+// SetNestLevel sets the transaction nesting depth.
+// Caller must hold Manager.Lock() or invoke within serialized session execution.
+func (m *Manager) SetNestLevel(n int) {
+	if m.current != nil {
+		m.current.SetNestLevel(n)
+	}
+}
+
 // Session returns the underlying storage session.
 func (m *Manager) Session() storage.Session {
 	return m.session
@@ -238,6 +246,14 @@ func (m *Manager) Rollback(ctx context.Context) error {
 func (m *Manager) SetInError(err error) {
 	if m.current != nil {
 		m.current.SetError(err)
+	}
+}
+
+// ClearInError recovers the current transaction from StateInError back to StateActive.
+func (m *Manager) ClearInError() {
+	if m.current != nil && m.current.GetState() == StateInError {
+		m.current.SetState(StateActive)
+		m.current.Err = nil
 	}
 }
 
