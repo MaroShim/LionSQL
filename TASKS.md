@@ -380,7 +380,7 @@
 | `DONE` | **`REFACTOR-OCC-FLAT-1`** |  | Storage | P2 | Flat 코덱 신뢰성 및 동시성 결함 보강 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-SESSION-TRANSACTION-INVARIANT-1`** | `1.0-GA` | Engine | P1 | 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`** | `1.0-GA` | Engine | P1 | 트랜잭셔널 DDL 섀도 카탈로그 격리 및 크래시 데이터 유실 방지 | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
-| `PENDING` | **`REFACTOR-TSQL-SESSION-VARS-VDBE-1`** | `v0.94.0` | Engine | P1 | sqlexec 텍스트 치환 전면 폐지 및 T-SQL 세션 변수 VDBE AST/레지스터 바인딩 일원화 | [`notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md`](notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md) |  |
+| `DONE` | **`REFACTOR-TSQL-SESSION-VARS-VDBE-1`** | `v0.94.0` | Engine | P1 | sqlexec 텍스트 치환 전면 폐지 및 T-SQL 세션 변수 VDBE AST/레지스터 바인딩 일원화 | [`notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md`](notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-VIRTUAL-CATALOG-1`** | `1.0-GA` | Catalog | P2 | 가상 카탈로그(pkg/catalog/virtual & sqlexec_dbcc) 구조 통합 및 보일러플레이트 리팩토링 | [`notes/plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md`](notes/plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`REPL-STREAM-BIN-1`** | `v1.60.0` | Replication | P2 | Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 |  |  |
 | `DONE` | **`RESEARCH-INPROCESS-REBOOT-USE`** | `Spec-Out` | Research | P3 | [Post-1.0 초안] In-Process Graceful Reboot 기반 물리 서브폴더 USE DB 전환 아키텍처 연구 | [`notes/plans/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md`](notes/plans/IN_PROCESS_REBOOT_MULTI_DATABASE_PLAN.ko.md) |  |
@@ -3968,8 +3968,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] sqlexec 텍스트 치환 전면 폐지 및 T-SQL 세션 변수 VDBE AST/레지스터 바인딩 일원화 `REFACTOR-TSQL-SESSION-VARS-VDBE-1`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:04
+### [DONE] sqlexec 텍스트 치환 전면 폐지 및 T-SQL 세션 변수 VDBE AST/레지스터 바인딩 일원화 `REFACTOR-TSQL-SESSION-VARS-VDBE-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 02:43:19
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md`](notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md)
 
