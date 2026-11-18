@@ -429,10 +429,17 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		runes := []rune(valToString(args[0]))
 		rawStart := int(args[1].IVal) // 1-indexed
-		length := len(runes)
-		if len(args) >= 3 {
-			length = int(args[2].IVal)
+		if len(args) == 2 {
+			if rawStart < 1 {
+				return storage.StringValue(string(runes))
+			}
+			start := rawStart - 1
+			if start >= len(runes) {
+				return storage.StringValue("")
+			}
+			return storage.StringValue(string(runes[start:]))
 		}
+		length := int(args[2].IVal)
 		if length <= 0 || rawStart+length-1 < 1 {
 			return storage.StringValue("")
 		}

@@ -355,7 +355,15 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 	var orderByClause string
 	if len(stmt.OrderBy) > 0 {
 		var obStrs []string
+		isWildcard := len(stmt.Projections) == 0 || (len(stmt.Projections) == 1 && (stmt.Projections[0].Expr.String() == "*" || stmt.Projections[0].Expr.String() == ""))
 		for _, o := range stmt.OrderBy {
+			if lit, ok := o.Expr.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
+				ord := int(lit.Val.IVal)
+				if ord < 1 || (!isWildcard && ord > len(stmt.Projections)) {
+					qErr = fmt.Errorf("ORDER BY position %d is not in select list", ord)
+					break
+				}
+			}
 			obStrs = append(obStrs, o.String())
 		}
 		orderByClause = strings.Join(obStrs, ", ")
@@ -1805,6 +1813,13 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 				sortAfterProj = true
 				break
 			}
+			for _, p := range q.Projections {
+				parts := strings.Split(p, " AS ")
+				if len(parts) == 2 && strings.EqualFold(strings.TrimSpace(parts[1]), clean) {
+					sortAfterProj = true
+					break
+				}
+			}
 		}
 	}
 
@@ -2846,6 +2861,27 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		cleanType = "INNER"
 	}
 
+	var rightFilters, postJoinFilters []string
+	if join.Filter != "" {
+		for _, subCond := range splitAndConditions(join.Filter) {
+			refs := ExtractColumnRefs(subCond)
+			hasOuter := false
+			for _, ref := range refs {
+				if ref.TableOrAlias != "" && !strings.EqualFold(ref.TableOrAlias, rTable) && !strings.EqualFold(ref.TableOrAlias, rAlias) {
+					hasOuter = true
+					break
+				}
+			}
+			if hasOuter {
+				postJoinFilters = append(postJoinFilters, subCond)
+			} else {
+				rightFilters = append(rightFilters, subCond)
+			}
+		}
+	}
+	rightFilter := strings.Join(rightFilters, " AND ")
+	postJoinFilter := strings.Join(postJoinFilters, " AND ")
+
 	if joinStrategy == "LOOP" {
 		innerScanNode := &PlanNode{
 			Type:          NodeIndexScan,
@@ -2853,7 +2889,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 			Alias:         rAlias,
 			IndexName:     innerIndex.Name,
 			IndexCond:     fmt.Sprintf("(%s = %s)", innerIndex.Columns[0], leftKey),
-			FilterCond:    join.Filter,
+			FilterCond:    rightFilter,
 			StartupCost:   0.25,
 			TotalCost:     0.35,
 			EstimatedRows: 1,
@@ -2878,10 +2914,10 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 			TotalCost:     rScanCost,
 			EstimatedRows: rRows,
 		}
-		if join.Filter != "" {
+		if rightFilter != "" {
 			rScanNode = &PlanNode{
 				Type:          NodeFilter,
-				FilterCond:    join.Filter,
+				FilterCond:    rightFilter,
 				StartupCost:   0.0,
 				TotalCost:     rScanCost + float64(rRows)*CPUTupleCost,
 				EstimatedRows: int64(math.Max(1, float64(rRows)*0.5)),
@@ -2912,10 +2948,10 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 			TotalCost:     rScanCost,
 			EstimatedRows: rRows,
 		}
-		if join.Filter != "" {
+		if rightFilter != "" {
 			rScanNode = &PlanNode{
 				Type:          NodeFilter,
-				FilterCond:    join.Filter,
+				FilterCond:    rightFilter,
 				StartupCost:   0.0,
 				TotalCost:     rScanCost + float64(rRows)*CPUTupleCost,
 				EstimatedRows: int64(math.Max(1, float64(rRows)*0.5)),
@@ -2951,6 +2987,17 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 			TotalCost:     hashJoinTotalCost,
 			EstimatedRows: joinEstRows,
 			Children:      []*PlanNode{currentNode, hashNode},
+		}
+	}
+
+	if postJoinFilter != "" {
+		nextNode = &PlanNode{
+			Type:          NodeFilter,
+			FilterCond:    postJoinFilter,
+			StartupCost:   nextNode.StartupCost,
+			TotalCost:     nextNode.TotalCost + float64(joinEstRows)*CPUTupleCost,
+			EstimatedRows: int64(math.Max(1, float64(joinEstRows)*0.5)),
+			Children:      []*PlanNode{nextNode},
 		}
 	}
 

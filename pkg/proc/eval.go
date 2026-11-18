@@ -1027,11 +1027,19 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return nil, nil
 		}
+		if i1, isInt1 := isInteger(left); isInt1 {
+			if i2, isInt2 := isInteger(right); isInt2 {
+				if (i2 > 0 && i1 > math.MaxInt64-i2) || (i2 < 0 && i1 < math.MinInt64-i2) {
+					return nil, fmt.Errorf("arithmetic overflow error: bigint out of range")
+				}
+				return i1 + i2, nil
+			}
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
 		if isNum1 && isNum2 {
 			sum := n1 + n2
-			if sum == math.Trunc(sum) {
+			if sum == math.Trunc(sum) && sum >= float64(math.MinInt64) && sum < float64(math.MaxInt64) {
 				return int64(sum), nil
 			}
 			return sum, nil
@@ -1042,11 +1050,19 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return nil, nil
 		}
+		if i1, isInt1 := isInteger(left); isInt1 {
+			if i2, isInt2 := isInteger(right); isInt2 {
+				if (i2 < 0 && i1 > math.MaxInt64+i2) || (i2 > 0 && i1 < math.MinInt64+i2) {
+					return nil, fmt.Errorf("arithmetic overflow error: bigint out of range")
+				}
+				return i1 - i2, nil
+			}
+		}
 		n1, isNum1 := toArithmeticFloat(left)
 		n2, isNum2 := toArithmeticFloat(right)
 		if isNum1 && isNum2 {
 			diff := n1 - n2
-			if diff == math.Trunc(diff) {
+			if diff == math.Trunc(diff) && diff >= float64(math.MinInt64) && diff < float64(math.MaxInt64) {
 				return int64(diff), nil
 			}
 			return diff, nil
@@ -1057,11 +1073,26 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return nil, nil
 		}
+		if i1, isInt1 := isInteger(left); isInt1 {
+			if i2, isInt2 := isInteger(right); isInt2 {
+				if i1 != 0 && i2 != 0 {
+					if (i1 == -1 && i2 == math.MinInt64) || (i2 == -1 && i1 == math.MinInt64) {
+						return nil, fmt.Errorf("arithmetic overflow error: bigint out of range")
+					}
+					res := i1 * i2
+					if res/i2 != i1 {
+						return nil, fmt.Errorf("arithmetic overflow error: bigint out of range")
+					}
+					return res, nil
+				}
+				return int64(0), nil
+			}
+		}
 		n1, isNum1 := toArithmeticFloat(left)
 		n2, isNum2 := toArithmeticFloat(right)
 		if isNum1 && isNum2 {
 			prod := n1 * n2
-			if prod == math.Trunc(prod) {
+			if prod == math.Trunc(prod) && prod >= float64(math.MinInt64) && prod < float64(math.MaxInt64) {
 				return int64(prod), nil
 			}
 			return prod, nil
@@ -1075,10 +1106,10 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if i1, isInt1 := isInteger(left); isInt1 {
 			if i2, isInt2 := isInteger(right); isInt2 {
 				if i2 == 0 {
-					return nil, nil
+					return nil, fmt.Errorf("division by zero: divide by zero error encountered")
 				}
 				if i1 == math.MinInt64 && i2 == -1 {
-					return nil, fmt.Errorf("arithmetic overflow error encountered")
+					return nil, fmt.Errorf("arithmetic overflow error: bigint out of range")
 				}
 				return i1 / i2, nil
 			}
@@ -1087,10 +1118,10 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		n2, isNum2 := toArithmeticFloat(right)
 		if isNum1 && isNum2 {
 			if n2 == 0 {
-				return nil, nil
+				return nil, fmt.Errorf("division by zero: divide by zero error encountered")
 			}
 			div := n1 / n2
-			if div == math.Trunc(div) {
+			if div == math.Trunc(div) && div >= float64(math.MinInt64) && div < float64(math.MaxInt64) {
 				return int64(div), nil
 			}
 			return div, nil

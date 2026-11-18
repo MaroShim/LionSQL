@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"lionsql/pkg/planner"
-	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -836,7 +835,7 @@ func toStorageValFromAny(v any) storage.Value {
 func formatKeyVal(val any) string {
 	switch v := val.(type) {
 	case string:
-		return sqlutil.CanonicalIdent(v)
+		return strings.ToLower(strings.TrimRight(v, " "))
 	case int64:
 		return strconv.FormatInt(v, 10)
 	case int:
@@ -851,13 +850,13 @@ func formatKeyVal(val any) string {
 			return strconv.FormatInt(v.IVal, 10)
 		}
 		if v.Type == storage.TypeVarChar {
-			return sqlutil.CanonicalIdent(v.SVal)
+			return strings.ToLower(strings.TrimRight(v.SVal, " "))
 		}
-		return sqlutil.CanonicalIdent(fmt.Sprintf("%v", v))
+		return strings.ToLower(strings.TrimRight(fmt.Sprintf("%v", v), " "))
 	case float64:
 		return strconv.FormatFloat(v, 'f', -1, 64)
 	default:
-		return sqlutil.CanonicalIdent(fmt.Sprintf("%v", val))
+		return strings.ToLower(strings.TrimRight(fmt.Sprintf("%v", val), " "))
 	}
 }
 

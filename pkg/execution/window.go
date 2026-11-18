@@ -79,53 +79,30 @@ func (w *WindowIterator) Open(ctx context.Context) (retErr error) {
 		w.rows = append(w.rows, t)
 	}
 
-	if len(w.rows) == 0 {
-		w.schema = w.child.Schema()
-		w.colIndexMap = w.child.ColIndexMap()
-		return nil
-	}
-
 	currCols := append([]string(nil), w.child.Schema()...)
 	currIndexMap := w.child.ColIndexMap()
 	if currIndexMap == nil {
 		currIndexMap = NewColumnIndexMapFromCols(currCols)
 	}
 
-	// Process each window definition and augment rows with the computed values
-	for _, winDef := range w.windowDefs {
-		// Validate partition and order by columns exist in the child schema
-		for _, pCol := range winDef.PartitionKeys {
-			cleanPCol := strings.TrimSpace(cleanIdentifierParts(pCol))
-			if cleanPCol == "" || strings.ContainsAny(cleanPCol, " +-*/%|()") {
-				continue
-			}
-			if _, ok := currIndexMap.Index(cleanPCol); !ok {
-				bare := cleanPCol
-				if dot := strings.Index(bare, "."); dot != -1 {
-					bare = bare[dot+1:]
-				}
-				if _, ok2 := currIndexMap.Index(bare); !ok2 {
-					return fmt.Errorf("column %q does not exist", pCol)
-				}
+	if len(w.rows) == 0 {
+		for _, winDef := range w.windowDefs {
+			if err := w.validateWindowDef(winDef, currIndexMap); err != nil {
+				_ = w.child.Close()
+				return err
 			}
 		}
-		for _, ord := range winDef.OrderByKeys {
-			cleanOrd := strings.TrimSpace(cleanIdentifierParts(ord.Column))
-			if cleanOrd == "" || strings.ContainsAny(cleanOrd, " +-*/%|()") {
-				continue
-			}
-			if _, err := strconv.ParseInt(cleanOrd, 10, 64); err == nil {
-				continue
-			}
-			if _, ok := currIndexMap.Index(cleanOrd); !ok {
-				bare := cleanOrd
-				if dot := strings.Index(bare, "."); dot != -1 {
-					bare = bare[dot+1:]
-				}
-				if _, ok2 := currIndexMap.Index(bare); !ok2 {
-					return fmt.Errorf("column %q does not exist", ord.Column)
-				}
-			}
+		w.schema = w.child.Schema()
+		w.colIndexMap = w.child.ColIndexMap()
+		return nil
+	}
+
+	// Process each window definition and augment rows with the computed values
+	for _, winDef := range w.windowDefs {
+		// Validate partition, order by, and argument columns exist in the child schema
+		if err := w.validateWindowDef(winDef, currIndexMap); err != nil {
+			_ = w.child.Close()
+			return err
 		}
 
 		winValues := make([]any, len(w.rows))
@@ -213,6 +190,82 @@ func (w *WindowIterator) Open(ctx context.Context) (retErr error) {
 	w.schema = currCols
 	w.colIndexMap = currIndexMap
 	w.currIdx = 0
+	return nil
+}
+
+func (w *WindowIterator) validateWindowDef(winDef planner.WindowDef, indexMap *ColumnIndexMap) error {
+	// Validate partition columns
+	for _, pCol := range winDef.PartitionKeys {
+		cleanPCol := strings.TrimSpace(cleanIdentifierParts(pCol))
+		if cleanPCol == "" || strings.ContainsAny(cleanPCol, " +-*/%|()") {
+			continue
+		}
+		if _, ok := indexMap.Index(cleanPCol); !ok {
+			bare := cleanPCol
+			if dot := strings.Index(bare, "."); dot != -1 {
+				bare = bare[dot+1:]
+			}
+			if _, ok2 := indexMap.Index(bare); !ok2 {
+				return fmt.Errorf("column %q does not exist", pCol)
+			}
+		}
+	}
+	// Validate order by columns
+	for _, ord := range winDef.OrderByKeys {
+		cleanOrd := strings.TrimSpace(cleanIdentifierParts(ord.Column))
+		if cleanOrd == "" || strings.ContainsAny(cleanOrd, " +-*/%|()") {
+			continue
+		}
+		if _, err := strconv.ParseInt(cleanOrd, 10, 64); err == nil {
+			continue
+		}
+		if _, ok := indexMap.Index(cleanOrd); !ok {
+			bare := cleanOrd
+			if dot := strings.Index(bare, "."); dot != -1 {
+				bare = bare[dot+1:]
+			}
+			if _, ok2 := indexMap.Index(bare); !ok2 {
+				return fmt.Errorf("column %q does not exist", ord.Column)
+			}
+		}
+	}
+	// Validate function arguments
+	for _, arg := range winDef.Args {
+		cleanArg := strings.TrimSpace(cleanIdentifierParts(arg))
+		if cleanArg == "" || cleanArg == "*" || strings.HasPrefix(cleanArg, "'") {
+			continue
+		}
+		if _, err := strconv.ParseFloat(cleanArg, 64); err == nil {
+			continue
+		}
+		refs := planner.ExtractColumnRefs(arg)
+		if len(refs) == 0 {
+			if !strings.ContainsAny(cleanArg, " +-*/%|()") {
+				if _, ok := indexMap.Index(cleanArg); !ok {
+					bare := cleanArg
+					if dot := strings.Index(bare, "."); dot != -1 {
+						bare = bare[dot+1:]
+					}
+					if _, ok2 := indexMap.Index(bare); !ok2 {
+						return fmt.Errorf("column %q does not exist", arg)
+					}
+				}
+			}
+		} else {
+			for _, ref := range refs {
+				col := ref.Column
+				if _, ok := indexMap.Index(col); !ok {
+					qualified := col
+					if ref.TableOrAlias != "" {
+						qualified = ref.TableOrAlias + "." + col
+					}
+					if _, ok2 := indexMap.Index(qualified); !ok2 {
+						return fmt.Errorf("column %q does not exist", col)
+					}
+				}
+			}
+		}
+	}
 	return nil
 }
 

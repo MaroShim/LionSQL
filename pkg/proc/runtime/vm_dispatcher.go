@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -114,7 +115,9 @@ vmLoop:
 
 	case proc.OpJumpIfEqInt:
 		va, vb := f.regs[inst.A], f.regs[inst.B]
-		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
+		if va.IsNull || vb.IsNull {
+			pc = int(inst.C)
+		} else if va.Type == storage.TypeInt && vb.Type == storage.TypeInt {
 			if va.IVal == vb.IVal {
 				pc = int(inst.C)
 			}
@@ -125,7 +128,9 @@ vmLoop:
 
 	case proc.OpJumpIfNeqInt:
 		va, vb := f.regs[inst.A], f.regs[inst.B]
-		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
+		if va.IsNull || vb.IsNull {
+			pc = int(inst.C)
+		} else if va.Type == storage.TypeInt && vb.Type == storage.TypeInt {
 			if va.IVal != vb.IVal {
 				pc = int(inst.C)
 			}
@@ -136,7 +141,9 @@ vmLoop:
 
 	case proc.OpJumpIfLtInt:
 		va, vb := f.regs[inst.A], f.regs[inst.B]
-		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
+		if va.IsNull || vb.IsNull {
+			pc = int(inst.C)
+		} else if va.Type == storage.TypeInt && vb.Type == storage.TypeInt {
 			if va.IVal < vb.IVal {
 				pc = int(inst.C)
 			}
@@ -147,7 +154,9 @@ vmLoop:
 
 	case proc.OpJumpIfLteInt:
 		va, vb := f.regs[inst.A], f.regs[inst.B]
-		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
+		if va.IsNull || vb.IsNull {
+			pc = int(inst.C)
+		} else if va.Type == storage.TypeInt && vb.Type == storage.TypeInt {
 			if va.IVal <= vb.IVal {
 				pc = int(inst.C)
 			}
@@ -158,7 +167,9 @@ vmLoop:
 
 	case proc.OpJumpIfGtInt:
 		va, vb := f.regs[inst.A], f.regs[inst.B]
-		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
+		if va.IsNull || vb.IsNull {
+			pc = int(inst.C)
+		} else if va.Type == storage.TypeInt && vb.Type == storage.TypeInt {
 			if va.IVal > vb.IVal {
 				pc = int(inst.C)
 			}
@@ -169,7 +180,9 @@ vmLoop:
 
 	case proc.OpJumpIfGteInt:
 		va, vb := f.regs[inst.A], f.regs[inst.B]
-		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
+		if va.IsNull || vb.IsNull {
+			pc = int(inst.C)
+		} else if va.Type == storage.TypeInt && vb.Type == storage.TypeInt {
 			if va.IVal >= vb.IVal {
 				pc = int(inst.C)
 			}
@@ -179,37 +192,43 @@ vmLoop:
 		continue vmLoop
 
 	case proc.OpJumpIfEq:
-		if storageEq(f.regs[inst.A], f.regs[inst.B]) {
+		va, vb := f.regs[inst.A], f.regs[inst.B]
+		if va.IsNull || vb.IsNull || storageEq(va, vb) {
 			pc = int(inst.C)
 		}
 		continue vmLoop
 
 	case proc.OpJumpIfNeq:
-		if !storageEq(f.regs[inst.A], f.regs[inst.B]) {
+		va, vb := f.regs[inst.A], f.regs[inst.B]
+		if va.IsNull || vb.IsNull || !storageEq(va, vb) {
 			pc = int(inst.C)
 		}
 		continue vmLoop
 
 	case proc.OpJumpIfLt:
-		if storageLt(f.regs[inst.A], f.regs[inst.B]) {
+		va, vb := f.regs[inst.A], f.regs[inst.B]
+		if va.IsNull || vb.IsNull || storageLt(va, vb) {
 			pc = int(inst.C)
 		}
 		continue vmLoop
 
 	case proc.OpJumpIfLte:
-		if storageLte(f.regs[inst.A], f.regs[inst.B]) {
+		va, vb := f.regs[inst.A], f.regs[inst.B]
+		if va.IsNull || vb.IsNull || storageLte(va, vb) {
 			pc = int(inst.C)
 		}
 		continue vmLoop
 
 	case proc.OpJumpIfGt:
-		if storageGt(f.regs[inst.A], f.regs[inst.B]) {
+		va, vb := f.regs[inst.A], f.regs[inst.B]
+		if va.IsNull || vb.IsNull || storageGt(va, vb) {
 			pc = int(inst.C)
 		}
 		continue vmLoop
 
 	case proc.OpJumpIfGte:
-		if storageGte(f.regs[inst.A], f.regs[inst.B]) {
+		va, vb := f.regs[inst.A], f.regs[inst.B]
+		if va.IsNull || vb.IsNull || storageGte(va, vb) {
 			pc = int(inst.C)
 		}
 		continue vmLoop
@@ -368,49 +387,45 @@ vmLoop:
 	case proc.OpCopy:
 		f.regs[inst.A] = f.regs[inst.B]
 
-	case proc.OpAdd:
+	case proc.OpAdd, proc.OpAddInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
 		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			if (vc.IVal > 0 && vb.IVal > math.MaxInt64-vc.IVal) || (vc.IVal < 0 && vb.IVal < math.MinInt64-vc.IVal) {
+				if catchErr := f.handleCatch(fmt.Errorf("arithmetic overflow error: bigint out of range"), &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
+			}
 			f.regs[inst.A] = storage.IntValue(vb.IVal + vc.IVal)
 		} else {
 			f.regs[inst.A] = storageAdd(vb, vc)
 		}
 
-	case proc.OpAddInt:
+	case proc.OpSub, proc.OpSubInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
 		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
-			f.regs[inst.A] = storage.IntValue(vb.IVal + vc.IVal)
-		} else {
-			f.regs[inst.A] = storageAdd(vb, vc)
-		}
-
-	case proc.OpSub:
-		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			if (vc.IVal < 0 && vb.IVal > math.MaxInt64+vc.IVal) || (vc.IVal > 0 && vb.IVal < math.MinInt64+vc.IVal) {
+				if catchErr := f.handleCatch(fmt.Errorf("arithmetic overflow error: bigint out of range"), &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
+			}
 			f.regs[inst.A] = storage.IntValue(vb.IVal - vc.IVal)
 		} else {
 			f.regs[inst.A] = storageSub(vb, vc)
 		}
 
-	case proc.OpSubInt:
+	case proc.OpMul, proc.OpMulInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
 		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
-			f.regs[inst.A] = storage.IntValue(vb.IVal - vc.IVal)
-		} else {
-			f.regs[inst.A] = storageSub(vb, vc)
-		}
-
-	case proc.OpMul:
-		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
-			f.regs[inst.A] = storage.IntValue(vb.IVal * vc.IVal)
-		} else {
-			f.regs[inst.A] = storageMul(vb, vc)
-		}
-
-	case proc.OpMulInt:
-		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			if vb.IVal != 0 && vc.IVal != 0 {
+				if (vb.IVal == -1 && vc.IVal == math.MinInt64) || (vc.IVal == -1 && vb.IVal == math.MinInt64) || (vb.IVal*vc.IVal)/vc.IVal != vb.IVal {
+					if catchErr := f.handleCatch(fmt.Errorf("arithmetic overflow error: bigint out of range"), &pc); catchErr != nil {
+						return nil, catchErr
+					}
+					continue vmLoop
+				}
+			}
 			f.regs[inst.A] = storage.IntValue(vb.IVal * vc.IVal)
 		} else {
 			f.regs[inst.A] = storageMul(vb, vc)

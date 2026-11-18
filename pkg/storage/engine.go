@@ -751,6 +751,20 @@ func (s *TableSchema) PrimaryKeyColumn() (*Column, error) {
 	return nil, fmt.Errorf("no primary key defined on table %q", s.Name)
 }
 
+// PrimaryKeyColumns returns all primary key columns defined on the table schema.
+func (s *TableSchema) PrimaryKeyColumns() []*Column {
+	if s == nil {
+		return nil
+	}
+	var cols []*Column
+	for i := range s.Columns {
+		if s.Columns[i].PrimaryKey {
+			cols = append(cols, &s.Columns[i])
+		}
+	}
+	return cols
+}
+
 // RowVersionColumn returns the ROWVERSION column if defined on the table.
 func (s *TableSchema) RowVersionColumn() (*Column, int, bool) {
 	if s == nil {

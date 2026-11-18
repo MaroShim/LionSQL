@@ -1506,12 +1506,17 @@ func (s *Coordinator) execDeleteFromJoin(dml *DMLStatement, start time.Time, cs 
 	if err != nil {
 		return nil, fmt.Errorf("table %q not found: %w", targetTable, err)
 	}
-	pkCol, err := schema.PrimaryKeyColumn()
-	if err != nil {
+	pkCols := schema.PrimaryKeyColumns()
+	if len(pkCols) == 0 {
 		return nil, fmt.Errorf("table %q has no primary key: %w", targetTable, err)
 	}
 
-	drivingQuery := fmt.Sprintf("SELECT %s.%s AS __lionsql_pk__ FROM %s", targetRef, pkCol.Name, fromClause)
+	var pkExprs []string
+	for i, col := range pkCols {
+		pkExprs = append(pkExprs, fmt.Sprintf("%s.%s AS __lionsql_pk_%d__", targetRef, col.Name, i))
+	}
+
+	drivingQuery := fmt.Sprintf("SELECT %s FROM %s", strings.Join(pkExprs, ", "), fromClause)
 	if dml.Where != "" {
 		drivingQuery += " WHERE " + dml.Where
 	}
@@ -1541,11 +1546,28 @@ func (s *Coordinator) execDeleteFromJoin(dml *DMLStatement, start time.Time, cs 
 
 	deletedCount := int64(0)
 	for _, row := range selectRes.Rows {
-		pkRaw, ok := row["__lionsql_pk__"]
-		if !ok || pkRaw == nil {
+		var pkParts []string
+		var singleVal storage.Value
+		valid := true
+		for i, col := range pkCols {
+			pkRaw, ok := row[fmt.Sprintf("__lionsql_pk_%d__", i)]
+			if !ok || pkRaw == nil {
+				valid = false
+				break
+			}
+			v := storage.ValueFromAny(pkRaw, col.Type)
+			singleVal = v
+			pkParts = append(pkParts, v.String())
+		}
+		if !valid {
 			continue
 		}
-		pkVal := storage.ValueFromAny(pkRaw, pkCol.Type)
+		var pkVal storage.Value
+		if len(pkCols) > 1 {
+			pkVal = storage.StringValue(strings.Join(pkParts, "\x1f"))
+		} else {
+			pkVal = singleVal
+		}
 		if err := tx.Delete(targetTable, pkVal); err != nil {
 			if isEphemeral {
 				_ = tx.Rollback()
@@ -1578,8 +1600,8 @@ func (s *Coordinator) execUpdateFromJoin(dml *DMLStatement, start time.Time, cs 
 	if err != nil {
 		return nil, fmt.Errorf("table %q not found: %w", targetTable, err)
 	}
-	pkCol, err := schema.PrimaryKeyColumn()
-	if err != nil {
+	pkCols := schema.PrimaryKeyColumns()
+	if len(pkCols) == 0 {
 		return nil, fmt.Errorf("table %q has no primary key: %w", targetTable, err)
 	}
 
@@ -1594,7 +1616,9 @@ func (s *Coordinator) execUpdateFromJoin(dml *DMLStatement, start time.Time, cs 
 	}
 	var updCols []colUpd
 	var selectExprs []string
-	selectExprs = append(selectExprs, fmt.Sprintf("%s.%s AS __lionsql_pk__", targetRef, pkCol.Name))
+	for i, col := range pkCols {
+		selectExprs = append(selectExprs, fmt.Sprintf("%s.%s AS __lionsql_pk_%d__", targetRef, col.Name, i))
+	}
 
 	for i, a := range assignments {
 		eqIdx := sqlutil.FindTopLevelChar(a, '=')
@@ -1641,11 +1665,28 @@ func (s *Coordinator) execUpdateFromJoin(dml *DMLStatement, start time.Time, cs 
 
 	updatedCount := int64(0)
 	for _, row := range selectRes.Rows {
-		pkRaw, ok := row["__lionsql_pk__"]
-		if !ok || pkRaw == nil {
+		var pkParts []string
+		var singleVal storage.Value
+		valid := true
+		for i, col := range pkCols {
+			pkRaw, ok := row[fmt.Sprintf("__lionsql_pk_%d__", i)]
+			if !ok || pkRaw == nil {
+				valid = false
+				break
+			}
+			v := storage.ValueFromAny(pkRaw, col.Type)
+			singleVal = v
+			pkParts = append(pkParts, v.String())
+		}
+		if !valid {
 			continue
 		}
-		pkVal := storage.ValueFromAny(pkRaw, pkCol.Type)
+		var pkVal storage.Value
+		if len(pkCols) > 1 {
+			pkVal = storage.StringValue(strings.Join(pkParts, "\x1f"))
+		} else {
+			pkVal = singleVal
+		}
 		rec, err := tx.Get(targetTable, pkVal)
 		if err != nil {
 			continue

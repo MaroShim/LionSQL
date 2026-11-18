@@ -3469,14 +3469,17 @@ func storageDiv(a, b storage.Value) (storage.Value, error) {
 	}
 	if a.Type == storage.TypeInt && b.Type == storage.TypeInt {
 		if b.IVal == 0 {
-			return storage.NullValue(storage.TypeUnknown), nil
+			return storage.NullValue(storage.TypeUnknown), fmt.Errorf("division by zero: divide by zero error encountered")
+		}
+		if a.IVal == math.MinInt64 && b.IVal == -1 {
+			return storage.NullValue(storage.TypeUnknown), fmt.Errorf("arithmetic overflow error: bigint out of range")
 		}
 		return storage.IntValue(a.IVal / b.IVal), nil
 	}
 	n1, _ := toFloatNum(a)
 	n2, _ := toFloatNum(b)
 	if n2 == 0 {
-		return storage.NullValue(storage.TypeUnknown), nil
+		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("division by zero: divide by zero error encountered")
 	}
 	div := n1 / n2
 	if div == math.Trunc(div) {

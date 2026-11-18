@@ -72,4 +72,13 @@ func TestWindow_InvalidColumnValidation(t *testing.T) {
 	if !strings.Contains(errOrd.Error(), "invalid_ord_col") || !strings.Contains(errOrd.Error(), "does not exist") {
 		t.Errorf("expected error mentioning invalid_ord_col, got: %v", errOrd)
 	}
+
+	// 3. Invalid column in Window function argument (FIX-WINDOW-ARG-INVALID-COLUMN-1)
+	_, errArg := coord.ExecuteSQL("SELECT id, AVG(non_existent_col) OVER (PARTITION BY val) AS win_avg FROM _t_win;")
+	if errArg == nil {
+		t.Fatalf("expected error for non_existent_col in Window function argument, got success")
+	}
+	if !strings.Contains(errArg.Error(), "non_existent_col") || !strings.Contains(errArg.Error(), "does not exist") {
+		t.Errorf("expected error mentioning non_existent_col, got: %v", errArg)
+	}
 }

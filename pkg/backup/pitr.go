@@ -225,16 +225,24 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 			if rec == nil {
 				return fmt.Errorf("pitr apply update missing record and data on table %s (pk=%s)", op.Table, op.Key)
 			}
-			pkCol, err := tblSchema.PrimaryKeyColumn()
-			if err != nil {
-				return err
-			}
 			var pkVal storage.Value
-			if rec != nil {
-				pkVal = rec[pkCol.Name]
-			}
-			if pkVal.IsNull || pkVal.Type == 0 {
-				pkVal = memengine.ParsePKValue(op.Key, pkCol.Type)
+			if tblSchema.IsCompositePK() {
+				if resolved, ok := tblSchema.ResolveRecordPK(rec); ok && !resolved.IsNull {
+					pkVal = resolved
+				} else {
+					pkVal = storage.StringValue(op.Key)
+				}
+			} else {
+				pkCol, err := tblSchema.PrimaryKeyColumn()
+				if err != nil {
+					return err
+				}
+				if rec != nil {
+					pkVal = rec[pkCol.Name]
+				}
+				if pkVal.IsNull || pkVal.Type == 0 {
+					pkVal = memengine.ParsePKValue(op.Key, pkCol.Type)
+				}
 			}
 			if err := tx.Update(op.Table, pkVal, rec); err != nil {
 				return err
@@ -247,11 +255,16 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 			if err != nil {
 				return err
 			}
-			pkCol, err := tblSchema.PrimaryKeyColumn()
-			if err != nil {
-				return err
+			var pkVal storage.Value
+			if tblSchema.IsCompositePK() {
+				pkVal = storage.StringValue(op.Key)
+			} else {
+				pkCol, err := tblSchema.PrimaryKeyColumn()
+				if err != nil {
+					return err
+				}
+				pkVal = memengine.ParsePKValue(op.Key, pkCol.Type)
 			}
-			pkVal := memengine.ParsePKValue(op.Key, pkCol.Type)
 			if err := tx.Delete(op.Table, pkVal); err != nil {
 				return err
 			}

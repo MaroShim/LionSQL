@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
@@ -227,6 +228,52 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 			}
 		}
 	}()
+
+	childCols := s.child.Schema()
+	childIndexMap := s.child.ColIndexMap()
+	if childIndexMap == nil && len(childCols) > 0 {
+		childIndexMap = NewColumnIndexMapFromCols(childCols)
+	}
+
+	if childIndexMap != nil {
+		for _, item := range s.items {
+			if pos, err := strconv.Atoi(item.key); err == nil {
+				if pos < 1 || pos > len(childCols) {
+					return fmt.Errorf("ORDER BY position %d is not in select list", pos)
+				}
+				continue
+			}
+			cleanKey := strings.TrimSpace(cleanIdentifierParts(item.key))
+			if cleanKey == "" {
+				continue
+			}
+			if item.parsed != nil {
+				refs := planner.ExtractColumnRefs(item.key)
+				for _, ref := range refs {
+					col := ref.Column
+					if _, ok := childIndexMap.Index(col); !ok {
+						qualified := col
+						if ref.TableOrAlias != "" {
+							qualified = ref.TableOrAlias + "." + col
+						}
+						if _, ok2 := childIndexMap.Index(qualified); !ok2 {
+							return fmt.Errorf("column %q does not exist", col)
+						}
+					}
+				}
+				continue
+			}
+			if _, ok := childIndexMap.Index(cleanKey); !ok {
+				bare := cleanKey
+				if dot := strings.Index(bare, "."); dot != -1 {
+					bare = bare[dot+1:]
+				}
+				if _, ok2 := childIndexMap.Index(bare); !ok2 {
+					return fmt.Errorf("column %q does not exist", item.key)
+				}
+			}
+		}
+	}
 
 	if s.workMem <= 0 {
 		s.workMem = DefaultWorkMem

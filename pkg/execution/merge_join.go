@@ -134,6 +134,8 @@ func (m *MergeJoinIterator) Open(ctx context.Context) error {
 		if err == io.EOF {
 			m.leftEOF = true
 		} else {
+			_ = m.left.Close()
+			_ = m.right.Close()
 			return err
 		}
 	} else {
@@ -145,6 +147,8 @@ func (m *MergeJoinIterator) Open(ctx context.Context) error {
 		if err == io.EOF {
 			m.rightEOF = true
 		} else {
+			_ = m.left.Close()
+			_ = m.right.Close()
 			return err
 		}
 	} else {

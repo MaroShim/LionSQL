@@ -147,6 +147,8 @@ func (s *SetOpIterator) Open(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
+				_ = s.left.Close()
+				_ = s.right.Close()
 				return ctx.Err()
 			default:
 			}
@@ -156,6 +158,8 @@ func (s *SetOpIterator) Open(ctx context.Context) error {
 				break
 			}
 			if err != nil {
+				_ = s.left.Close()
+				_ = s.right.Close()
 				return fmt.Errorf("set operator right child materialization error: %w", err)
 			}
 			key := encodeTupleKey(&t)

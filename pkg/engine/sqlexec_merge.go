@@ -132,7 +132,11 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 		}
 	}
 
-	sourcePKExpr, hasPKDirectLookup := extractMergePKEquality(parsed.onCondition, parsed.targetTable, parsed.targetAlias, pkCol.Name)
+	var sourcePKExpr string
+	var hasPKDirectLookup bool
+	if !targetSchema.IsCompositePK() {
+		sourcePKExpr, hasPKDirectLookup = extractMergePKEquality(parsed.onCondition, parsed.targetTable, parsed.targetAlias, pkCol.Name)
+	}
 
 	matchedTargetKeys := make(map[string]bool)
 	newlyInsertedKeys := make(map[string]bool)
@@ -354,7 +358,10 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 		if matchedTargetIdx >= 0 {
 			// WHEN MATCHED
 			tRec := targetRows[matchedTargetIdx]
-			pkVal := tRec[pkCol.Name]
+			pkVal, ok := targetSchema.ResolveRecordPK(tRec)
+			if !ok {
+				pkVal = tRec[pkCol.Name]
+			}
 			pkKey := pkVal.String()
 			matchedTargetKeys[pkKey] = true
 
@@ -475,7 +482,9 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 				if err := tx.Insert(parsed.targetTable, newRec); err != nil {
 					return nil, fmt.Errorf("MERGE INSERT failed: %w", err)
 				}
-				if pkVal, ok := newRec[pkCol.Name]; ok {
+				if pkVal, ok := targetSchema.ResolveRecordPK(newRec); ok {
+					newlyInsertedKeys[pkVal.String()] = true
+				} else if pkVal, ok := newRec[pkCol.Name]; ok {
 					newlyInsertedKeys[pkVal.String()] = true
 				}
 				targetRows = append(targetRows, newRec)
@@ -492,7 +501,10 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 		}
 		for idx := 0; idx < initialTargetCount; idx++ {
 			tRec := targetRows[idx]
-			pkVal := tRec[pkCol.Name]
+			pkVal, ok := targetSchema.ResolveRecordPK(tRec)
+			if !ok {
+				pkVal = tRec[pkCol.Name]
+			}
 			pkKey := pkVal.String()
 			if matchedTargetKeys[pkKey] || newlyInsertedKeys[pkKey] {
 				continue

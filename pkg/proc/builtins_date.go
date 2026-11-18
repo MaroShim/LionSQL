@@ -129,17 +129,21 @@ func evalDateDiff(part string, t1, t2 time.Time) storage.Value {
 		d2 := time.Date(t2.Year(), t2.Month(), t2.Day(), 0, 0, 0, 0, time.UTC)
 		return storage.IntValue(int64(d2.Sub(d1) / (24 * time.Hour)))
 	case "week":
-		diff := t2.Sub(t1)
-		return storage.IntValue(int64(diff.Hours() / (24 * 7)))
+		d1 := time.Date(t1.Year(), t1.Month(), t1.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -int(t1.Weekday()))
+		d2 := time.Date(t2.Year(), t2.Month(), t2.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, -int(t2.Weekday()))
+		return storage.IntValue(int64(d2.Sub(d1) / (7 * 24 * time.Hour)))
 	case "hour":
-		diff := t2.Sub(t1)
-		return storage.IntValue(int64(diff.Hours()))
+		h1 := time.Date(t1.Year(), t1.Month(), t1.Day(), t1.Hour(), 0, 0, 0, time.UTC)
+		h2 := time.Date(t2.Year(), t2.Month(), t2.Day(), t2.Hour(), 0, 0, 0, time.UTC)
+		return storage.IntValue(int64(h2.Sub(h1) / time.Hour))
 	case "minute":
-		diff := t2.Sub(t1)
-		return storage.IntValue(int64(diff.Minutes()))
+		m1 := time.Date(t1.Year(), t1.Month(), t1.Day(), t1.Hour(), t1.Minute(), 0, 0, time.UTC)
+		m2 := time.Date(t2.Year(), t2.Month(), t2.Day(), t2.Hour(), t2.Minute(), 0, 0, time.UTC)
+		return storage.IntValue(int64(m2.Sub(m1) / time.Minute))
 	case "second":
-		diff := t2.Sub(t1)
-		return storage.IntValue(int64(diff.Seconds()))
+		s1 := time.Date(t1.Year(), t1.Month(), t1.Day(), t1.Hour(), t1.Minute(), t1.Second(), 0, time.UTC)
+		s2 := time.Date(t2.Year(), t2.Month(), t2.Day(), t2.Hour(), t2.Minute(), t2.Second(), 0, time.UTC)
+		return storage.IntValue(int64(s2.Sub(s1) / time.Second))
 	case "millisecond":
 		diff := t2.Sub(t1)
 		return storage.IntValue(diff.Milliseconds())

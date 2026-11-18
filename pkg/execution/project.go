@@ -240,6 +240,14 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 			}
 			continue
 		}
+		if f.parsed != nil {
+			if _, isLit := f.parsed.(*proc.LiteralExpr); isLit {
+				if res, ok := EvalTupleExprWithContext(tuple, f.parsed, subExec, p.sessionVars); ok {
+					vals[i] = res
+					continue
+				}
+			}
+		}
 		// Prioritize qualified expression (e.g. "o.amount", "u.name") over unqualified alias
 		// to prevent shadowing when multiple relations share identical column names.
 		if val, ok := tuple.GetOK(f.expr); ok {

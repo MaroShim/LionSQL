@@ -15,6 +15,7 @@ type trackingIterator struct {
 	openCalled  bool
 	closeCalled bool
 	failOpen    bool
+	failNext    bool
 }
 
 func (m *trackingIterator) Open(ctx context.Context) error {
@@ -26,6 +27,9 @@ func (m *trackingIterator) Open(ctx context.Context) error {
 }
 
 func (m *trackingIterator) Next(ctx context.Context) (execution.Tuple, error) {
+	if m.failNext {
+		return execution.Tuple{}, fmt.Errorf("mock next failed")
+	}
 	return execution.Tuple{}, nil
 }
 
@@ -83,5 +87,29 @@ func TestEngine_OpenError_VolcanoCleanTeardown(t *testing.T) {
 	// Verify table can be dropped immediately without handle/cursor locks
 	if _, err := coord.ExecuteSQL("DROP TABLE _t_cursor_leak;"); err != nil {
 		t.Fatalf("failed to drop table after query error (cursor leak suspected): %v", err)
+	}
+}
+
+func TestSetOpAndMergeJoin_OpenError_ClosesChildren(t *testing.T) {
+	// Bug 34 (E-1): SetOpIterator.Open right child Next() failure closes both children
+	left := &trackingIterator{}
+	right := &trackingIterator{failNext: true}
+	setOp := execution.NewSetOpIterator(left, right, execution.SetOpIntersect)
+	if err := setOp.Open(context.Background()); err == nil {
+		t.Fatalf("expected SetOpIterator.Open to fail on right child Next error")
+	}
+	if !left.closeCalled || !right.closeCalled {
+		t.Fatalf("[LEAK DEFECT] SetOpIterator.Open failed to close children: left.closeCalled=%v, right.closeCalled=%v", left.closeCalled, right.closeCalled)
+	}
+
+	// Bug 35 (E-2): MergeJoinIterator.Open initial pull failure closes both children
+	mjLeft := &trackingIterator{}
+	mjRight := &trackingIterator{failNext: true}
+	mj := execution.NewMergeJoinIterator(mjLeft, mjRight, "col", "col", "INNER")
+	if err := mj.Open(context.Background()); err == nil {
+		t.Fatalf("expected MergeJoinIterator.Open to fail on initial Next error")
+	}
+	if !mjLeft.closeCalled || !mjRight.closeCalled {
+		t.Fatalf("[LEAK DEFECT] MergeJoinIterator.Open failed to close children: left.closeCalled=%v, right.closeCalled=%v", mjLeft.closeCalled, mjRight.closeCalled)
 	}
 }

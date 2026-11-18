@@ -31,6 +31,22 @@
 | **17** | `FIX-CTE-DML-UPDATABLE-TARGET-1` | Engine / DML | **보통** | WITH CTE AS (...) DELETE/UPDATE 실행 시 CTE 임시 뷰 미인식 및 원본 테이블 갱신/삭제 실패 결함 | **완료 (DONE)** |
 | **18** | `FIX-OPEN-ERROR-ITERATOR-LEAK-ALL-1` | Execution / Storage | **치명적** | Volcano 반복자 전반(Window, Sort) Open 에러 시 하위 커서 미정리 누수 결함 | **완료 (DONE)** |
 | **19** | `FIX-WINDOW-INVALID-COLUMN-VALIDATION-1` | Execution / Window | **보통** | 윈도우 함수 PARTITION BY / ORDER BY에 존재하지 않는 컬럼 지정 시 사일런트 뭉개짐 결함 | **완료 (DONE)** |
+| **20** | `FIX-COMPOSITE-PK-DML-OVERWRITE-1` | Engine / DML | **치명적** | 복합 기본키(Composite PK) 테이블 DML(CTE, JOIN UPDATE/DELETE) 실행 시 엉뚱한 행 덮어쓰기 및 데이터 오염 결함 (Data Corruption) | **완료 (DONE)** |
+| **21** | `FIX-WINDOW-ARG-INVALID-COLUMN-1` | Execution / Window | **보통** | 윈도우 함수 내부 인자 표현식(예: `AVG(bad_col) OVER (...)`)에 비유효 컬럼 지정 시 사일런트 NULL 반환 결함 | **완료 (DONE)** |
+| **22** | `FIX-ORDERBY-INVALID-COLUMN-AND-ORDINAL-1` | Planner / Execution | **보통** | ORDER BY 절 비유효 컬럼 및 범위 초과 서수(Ordinal 0 또는 프로젝션 수 초과) 지정 시 사일런트 무시 결함 | **완료 (DONE)** |
+| **23** | `FIX-SUBSTRING-NONPOSITIVE-POS-1` | Engine / Builtin | **보통** | `SUBSTRING(str, pos)` 2인자 호출 시 `pos <= 0`일 때 문자열 끝부분이 슬라이싱 길이 공식 오류로 절삭되는 결함 | **완료 (DONE)** |
+| **24** | `FIX-STR-COMPARE-CANONICAL-STRIP-1` | Execution / Eval | **치명적** | 문자열 값 비교 시 `CanonicalIdent` 대괄호(`[...]`)/따옴표 무단 제거로 `'[ADMIN]' = 'ADMIN'` 오매칭 결함 (Data Distortion) | **완료 (DONE)** |
+| **25** | `FIX-SP-NULL-EQUAL-3VL-1` | Engine / SP | **치명적** | 저장 프로시저(SP) 내 NULL 비교 연산 시 `Value.Equal`의 스토리지 레벨 true 반환으로 인해 `IF @a = @b`가 TRUE 평가되는 ANSI 3VL 파괴 결함 | **완료 (DONE)** |
+| **26** | `FIX-DIV-BY-ZERO-ERROR-VISIBILITY-1` | Engine / VDBE | **보통** | 나눗셈 연산자(`/`)의 0 나누기 시 `division by zero` 에러 은폐 및 사일런트 NULL 반환 결함 | **완료 (DONE)** |
+| **27** | `FIX-DATEDIFF-BOUNDARY-CROSSING-1` | Engine / Builtin | **보통** | T-SQL 공식 스펙상 `DATEDIFF`의 단위 경계선(Boundary) 통과 횟수 계산 스펙 위반 결함 (단순 경과 시간 나눗셈으로 인한 0 반환) | **완료 (DONE)** |
+| **28** | `FIX-ARITHMETIC-OVERFLOW-DETECTION-1` | Execution / Eval | **보통** | 정수 곱셈/덧셈 산술 연산 시 64비트(BIGINT) 최댓값 초과 오버플로 미검출 및 음수 래핑(`-2`) 결함 | **완료 (DONE)** |
+| **29** | `FIX-WT-INDEX-COMPOSITE-PK-SCAN-1` | Storage / WiredTiger | **치명적** | WiredTiger 보조 인덱스 스캔(`wtIndexBTreeCursor`) 시 복합 PK 파싱 실패(`ParsePKValue`)로 조회 0건 증발 결함 | **완료 (DONE)** |
+| **30** | `FIX-WT-FK-COMPOSITE-PK-CASCADE-1` | Storage / WiredTiger | **치명적** | WiredTiger 외래키 `ON DELETE CASCADE / SET NULL` 시 복합 PK 자식 키 추출 누락으로 고아 레코드 잔존 결함 | **완료 (DONE)** |
+| **31** | `FIX-MERGE-INTO-COMPOSITE-PK-1` | Engine / DML | **높음** | `MERGE INTO` 구문에서 복합 PK 타깃 테이블 매칭/갱신/삭제 시 첫 번째 컬럼만 추출하여 오동작하는 결함 | **완료 (DONE)** |
+| **32** | `FIX-PITR-WAL-COMPOSITE-PK-1` | Storage / PITR | **높음** | PITR(시점 복구) WAL 재생 시 복합 PK 테이블 `UPDATE/DELETE` 복구 유실 결함 | **완료 (DONE)** |
+| **33** | `FIX-HASH-JOIN-KEY-CANONICAL-STRIP-1` | Execution / Join | **치명적** | Hash Join 조인 키 생성기(`formatKeyVal`)의 `CanonicalIdent` 호출로 인한 대괄호/따옴표 제거 및 이종 문자열 오조인 결함 | **완료 (DONE)** |
+| **34** | `FIX-SETOP-OPEN-ERROR-CURSOR-LEAK-1` | Execution / SetOp | **높음** | `SetOpIterator.Open()` 우측 자식 Materialization 에러 시 양쪽 커서 누수 결함 | **완료 (DONE)** |
+| **35** | `FIX-MERGE-JOIN-OPEN-ERROR-CURSOR-LEAK-1` | Execution / Join | **높음** | `MergeJoinIterator.Open()` 초기 튜플 Pull 에러 시 양쪽 자식 커서 누수 결함 | **완료 (DONE)** |
 
 ---
 
@@ -357,6 +373,217 @@
 
 ---
 
+### 2.19 결함 20: 복합 기본키(Composite PK) 테이블 DML 실행 시 엉뚱한 행 덮어쓰기 (`FIX-COMPOSITE-PK-DML-OVERWRITE-1`)
+
+#### 1) 근본 원인
+- `pkg/engine/sqlexec_dml.go` (`execUpdateFromJoin`, `execDeleteFromJoin`) 및 `pkg/engine/sqlexec_explain.go` (`execUpdatableCTEDML`):
+  1. 기저 테이블 스키마 조회 시 `schema.PrimaryKeyColumn()`을 호출하여 단일 컬럼(`k1`)만 수집함.
+  2. 테이블이 복합 기본키 `PRIMARY KEY (k1, k2)`를 갖는 경우, 드라이빙 쿼리에서 `k1 AS __lionsql_pk__` 1개만 프로젝션함.
+  3. 행 식별 및 변경 적용 단계에서 복합 키 전체 `(k1, k2)`가 아닌 `k1` 단일 컬럼만으로 대상을 조회/적용하여, 동일한 `k1` 값을 공유하는 다른 모든 튜플(예: `(1, 10)`, `(1, 20)`)이 의도치 않게 동일 값으로 덮어써지거나 부당 삭제되는 심각한 데이터 파괴(Data Corruption) 발생.
+
+#### 2) 수정 아키텍처
+1. **복합 기본키 전체 컬럼 수집 및 드라이빙 프로젝션**:
+   - `baseSchema.PrimaryKeyColumns()` 또는 `baseSchema.PrimaryKeyColNames()`를 사용하여 모든 PK 컬럼 목록을 획득.
+   - 드라이빙 SELECT 쿼리에서 모든 PK 컬럼을 각각 고유 별칭(`__lionsql_pk_0__`, `__lionsql_pk_1__`, ...)으로 프로젝션.
+2. **복합 PK 키 조합 기반 1:1 행 식별 및 갱신/삭제**:
+   - 행 갱신/삭제 시 각 행의 복합 PK 값들을 바인딩하여 복합 키 기반 레코드 조회(`tx.Get(compositeKey)` 또는 복합 조건 매칭)를 수행.
+   - 조건에 부합하는 타깃 레코드만 정확히 1:1로 갱신/삭제되도록 격리하여 데이터 정합성 보장.
+
+---
+
+### 2.20 결함 21: 윈도우 함수 내부 인자에 비유효 컬럼 지정 시 사일런트 NULL 반환 (`FIX-WINDOW-ARG-INVALID-COLUMN-1`)
+
+#### 1) 근본 원인
+- `pkg/execution/window.go` (`WindowIterator.Open`):
+  - `PARTITION BY` 및 `ORDER BY` 절의 컬럼명에 대해서는 유효성 검사가 추가되었으나, 윈도우 함수 본체(`WindowFunction`)의 인자 식(`winFn.Arg`, 예: `AVG(non_existent_col)`)에 대한 컬럼 유효성 검증기가 누락되어 있음.
+  - 평가 시 `lookupVal`이 `nil`을 반환하여 컴파일 에러 없이 조용히 통과되고 전체 결과셋에 `NULL`이 채워짐.
+
+#### 2) 수정 아키텍처
+- `WindowIterator.Open()` 단계에서 `winDef.Functions`를 순회:
+  - 각 윈도우 함수의 인자 식(`winFn.Arg`)에서 컬럼 식별자(함수 호출 제외 순수 컬럼 및 식별자)를 추출.
+  - 자식 릴레이션의 스키마 및 `currIndexMap`에 해당 컬럼이 존재하는지 사전 검증.
+  - 미존재 시 조용히 통과시키지 않고 즉시 `fmt.Errorf("column %q does not exist", colName)`를 반환하여 컴파일 단계에서 차단 (`[RULE:ExplicitError]`).
+
+---
+
+### 2.21 결함 22: ORDER BY 절 비유효 컬럼 및 범위 초과 서수(Ordinal) 미검증 (`FIX-ORDERBY-INVALID-COLUMN-AND-ORDINAL-1`)
+
+#### 1) 근본 원인
+- `pkg/planner/planner.go` (`FromAST` / `BuildPlan`) 및 `pkg/execution/sort.go`:
+  - `GROUP BY`의 경우 서수 검증 및 비유효 컬럼 검증이 추가되었으나, `ORDER BY` 항목에 대해서는 서수 범위(`1 <= idx <= len(projections)`) 검증과 스키마/프로젝션 컬럼 존재 여부 검사가 누락됨.
+  - `ORDER BY 0`, `ORDER BY 999`, `ORDER BY non_existent_col` 지정 시 정렬이 조용히 무시되거나 비정상 통과됨.
+
+#### 2) 수정 아키텍처
+1. **서수(Ordinal) 범위 엄격 검증**:
+   - 정수 리터럴인 경우 `1 <= ord <= len(projections)` 범위를 확인하고, 범위를 벗어난 경우 즉시 `fmt.Errorf("ORDER BY position %d is not in select list", ord)` 에러 반환.
+2. **컬럼 식별자 스키마/별칭 유효성 검증**:
+   - 식별자인 경우 프로젝션 별칭, 프로젝션 원본 표현식, 그리고 기본 입력 테이블 스키마에 존재하는지 확인.
+   - 어느 곳에도 존재하지 않는 경우 즉시 `fmt.Errorf("column %q does not exist", colName)` 에러 반환.
+
+---
+
+### 2.22 결함 23: SUBSTRING(str, pos) 2인자 호출 시 pos <= 0일 때 문자열 끝부분 절삭 오류 (`FIX-SUBSTRING-NONPOSITIVE-POS-1`)
+
+#### 1) 근본 원인
+- `pkg/proc/builtins_string.go` (431~454라인):
+  - 2인자 `SUBSTRING(str, pos)` 호출 시 기본 길이로 `length = len(runes)`가 설정됨.
+  - 그러나 3인자 슬라이싱 계산 공식 `if rawStart < 1 { start = 0; count = rawStart + length - 1 }`이 2인자 호출에도 무조건 적용됨.
+  - 예를 들어 `SUBSTRING('hello', 0)`의 경우 `count = 0 + 5 - 1 = 4`가 되어 마지막 문자 `'o'`가 잘려 `'hell'`이 반환되고, `SUBSTRING('hello', -2)`는 `count = -2 + 5 - 1 = 2`가 되어 `'he'`만 반환됨.
+
+#### 2) 수정 아키텍처
+- 2인자 호출(`len(args) == 2`)의 시맨틱은 "시작 위치부터 문자열 끝까지"이므로, `rawStart <= 0`인 경우에도 추출 끝 인덱스는 항상 원본 문자열의 끝(`end = len(runes)`)이어야 함.
+- `len(args) == 2`인 경우 `rawStart < 1`이더라도 길이를 감산하지 않고 `start = 0`, `end = len(runes)`로 슬라이싱하도록 분기 보정.
+
+---
+
+### 2.23 결함 24: 문자열 값 비교 시 대괄호/따옴표 무단 제거로 인한 오매칭 (`FIX-STR-COMPARE-CANONICAL-STRIP-1`)
+
+#### 1) 근본 원인
+- `pkg/execution/iterator.go` (688~692라인, `CompareValues`):
+  ```go
+  if isStrA && isStrB {
+      cA := strings.TrimRight(sqlutil.CanonicalIdent(sa), " ")
+      cB := strings.TrimRight(sqlutil.CanonicalIdent(sb), " ")
+      return strings.Compare(cA, cB)
+  }
+  ```
+  - 테이블 및 컬럼 식별자(Identifier) 전용 정규화 함수인 `sqlutil.CanonicalIdent`를 데이터 값(Data Value) 비교 함수에서 호출함.
+  - `CanonicalIdent`가 데이터 내부의 대괄호(`[...]`), 백틱, 따옴표를 무조건 벗겨내어 `'[ADMIN]'`과 `'ADMIN'`이 동일한 문자열로 비교되어 잘못 매칭되는 치명적 데이터 왜곡(Data Distortion) 발생.
+
+#### 2) 수정 아키텍처
+- `CompareValues`에서 `sqlutil.CanonicalIdent` 호출을 전면 제거.
+- 데이터 값 비교는 식별자 이스케이프 제거 없이 순수 문자열 값을 보존하여 대소문자 및 후행 공백 트림(`strings.TrimRight(sa, " ")`)만 수행하도록 수정 (`[RULE:ModularAbstraction]`, `[RULE:RadicalKISS]`).
+
+---
+
+### 2.24 결함 25: 저장 프로시저(SP) 내 NULL 비교 연산 시 ANSI 3-Valued Logic 파괴 (`FIX-SP-NULL-EQUAL-3VL-1`)
+
+#### 1) 근본 원인
+- `pkg/proc/evaluator.go` (399~401라인) 및 `pkg/storage/engine.go` (1191라인, `Value.Equal`):
+  - `Value.Equal()`은 해시 맵 키나 세트 연산 등 스토리지 물리적 동등성을 위해 `v.IsNull && other.IsNull`일 때 `true`를 반환하도록 설계됨.
+  - SP 내 표현식 평가기(`evaluator.go`)의 `TokenEqual`/`TokenNotEqual` 비교에서 이 함수를 그대로 호출하여, `IF @a = @b`가 `@a`, `@b`가 모두 NULL임에도 `TRUE`로 평가되어 비즈니스 로직 분기 오류 발생.
+
+#### 2) 수정 아키텍처
+- `pkg/proc/evaluator.go`의 비교 연산자(`TokenEqual`, `TokenNotEqual`, `<`, `<=`, `>`, `>=`) 처리 시 피연산자 중 하나라도 `IsNull`이면 즉시 `storage.NullValue(storage.TypeBool)`를 반환하도록 3VL 가드 적용.
+- 조건문 평가(`evalCondition`)에서 조건식이 NULL이면 FALSE로 평가되어 ELSE 분기로 정상 진입하도록 보장.
+
+---
+
+### 2.25 결함 26: 나눗셈 연산자(/)의 0 나누기 에러 은폐 및 사일런트 NULL 반환 (`FIX-DIV-BY-ZERO-ERROR-VISIBILITY-1`)
+
+#### 1) 근본 원인
+- `pkg/proc/runtime/vm.go` (3471~3473라인, `storageDiv`) 및 `pkg/execution/eval.go` (585라인):
+  - 정수 나눗셈(`DIV`)과 모듈로(`%`)는 0 나누기 시 `division by zero` 에러를 정상 발생시키지만, 슬래시(`/`) 나눗셈 연산자는 분모가 0일 때 조용히 `NULL`을 반환하도록 하드코딩되어 결함을 은폐함.
+
+#### 2) 수정 아키텍처
+- 분모가 0인 경우 사일런트 NULL 반환을 완전히 제거하고 `fmt.Errorf("division by zero")` (PostgreSQL 규격) 및 `fmt.Errorf("divide by zero error encountered")` (T-SQL 규격) 명시적 에러를 반환하도록 통일 (`[RULE:ExplicitError]`).
+
+---
+
+### 2.26 결함 27: T-SQL DATEDIFF 경계선(Boundary) 계산 스펙 위반 (`FIX-DATEDIFF-BOUNDARY-CROSSING-1`)
+
+#### 1) 근본 원인
+- `pkg/proc/builtins_date.go` (131~140라인, `evalDateDiff`):
+  - T-SQL 공식 스펙상 `DATEDIFF(datepart, start, end)`는 해당 datepart의 경계선(Boundary) 통과 횟수를 계산해야 함.
+  - 현재 구현은 단순 경과 시간을 `24*7` 또는 `3600`으로 나누어 반환하므로, 토요일 23:59에서 일요일 00:01(주 경계 통과) 또는 23:59에서 00:01(시간 경계 통과) 시 경계선을 통과했음에도 경과 시간이 부족하여 0을 반환함.
+
+#### 2) 수정 아키텍처
+- `week`, `hour`, `minute`, `second` datepart에 대해 각 일시를 해당 단위의 시작점(Truncate/Floor)으로 정렬한 후 단위 차이를 계산하도록 보정:
+  - `week`: 두 일시를 일요일 00:00:00으로 Floor한 후 일수 차이 / 7
+  - `hour`: 분/초/나노초를 0으로 Floor한 후 시간 차이 계산
+  - `minute`: 초/나노초를 0으로 Floor한 후 분 차이 계산
+
+---
+
+### 2.27 결함 28: 정수 산술 연산 시 64비트 오버플로 미검출 및 음수 래핑 (`FIX-ARITHMETIC-OVERFLOW-DETECTION-1`)
+
+#### 1) 근본 원인
+- `pkg/execution/eval.go` (578~583라인, `evalTupleBinaryExprWithContext`):
+  - Go의 원시 `int64` 연산자를 그대로 사용하여 64비트 정수 최댓값(BIGINT Max: 9,223,372,036,854,775,807)을 초과하는 곱셈/덧셈 연산 시 비트 래핑으로 인해 `-2` 등의 엉뚱한 음수가 반환됨.
+
+#### 2) 수정 아키텍처
+- 정수 덧셈 및 곱셈 연산 시 `math.MaxInt64`, `math.MinInt64` 범위 초과를 사전 검출하여 오버플로 발생 시 명시적 `fmt.Errorf("bigint out of range")` / `fmt.Errorf("arithmetic overflow error converting expression to data type bigint")` 에러 반환 (`[RULE:ExplicitError]`).
+
+---
+
+### 2.28 결함 29: WiredTiger 보조 인덱스 스캔 시 복합 PK 파싱 실패로 조회 0건 증발 (`FIX-WT-INDEX-COMPOSITE-PK-SCAN-1`)
+
+#### 1) 근본 원인
+- `pkg/storage/wiredtiger/wt_engine.go:3786-3828` (`wtIndexBTreeCursor`):
+  - `Row()`, `Record()`, `RawTuple()`에서 복합 PK(`"1\x1f20"`)가 저장된 `c.currPK`에 대해 `c.tbl.PrimaryKeyColumn()`으로 첫 번째 컬럼 타입만 조회한 뒤 `storage.ParsePKValue(c.currPK, pkCol.Type)`를 호출함.
+  - `strconv.ParseInt("1\x1f20", 10, 64)`가 실패하여 `IntValue(0)`으로 변환되어 메인 테이블 조회가 `ErrKeyNotFound`로 실패함.
+
+#### 2) 수정 아키텍처
+- `c.tbl.IsCompositePK()`가 `true`인 경우 `storage.ParsePKValue`를 거치지 않고 `storage.StringValue(c.currPK)`를 그대로 메인 테이블 조회 키로 전달.
+
+---
+
+### 2.29 결함 30: WiredTiger 외래키 `ON DELETE CASCADE / SET NULL` 복합 PK 자식 삭제 누락 (`FIX-WT-FK-COMPOSITE-PK-CASCADE-1`)
+
+#### 1) 근본 원인
+- `pkg/storage/wiredtiger/wt_engine.go:3260, 3294-3297` (`checkReferencingFKsOnDeleteLocked`):
+  - 자식 테이블이 복합 PK를 가질 때 `cTbl.PrimaryKeyColumn()`으로 첫 번째 PK 컬럼 값만 추출하여 `tx.deleteLocked` / `tx.updateLocked`에 전달하므로 실제 복합 키(`"1\x1f10"`)와 불일치하여 자식 행 삭제/갱신이 누락됨.
+
+#### 2) 수정 아키텍처
+- `memengine`과 동일하게 `cTbl.ResolveRowPK(row)`를 사용하여 복합 PK 전체가 결합된 `Value`를 추출하여 `matchingPKs`에 적재하도록 수정.
+
+---
+
+### 2.30 결함 31: `MERGE INTO` 구문에서 복합 PK 타깃 테이블 매칭/갱신/삭제 오동작 (`FIX-MERGE-INTO-COMPOSITE-PK-1`)
+
+#### 1) 근본 원인
+- `pkg/engine/sqlexec_merge.go:67, 135, 357, 370, 386, 478, 495`:
+  - 타깃 레코드의 키를 `tRec[pkCol.Name]` 단일 컬럼으로만 추출하여 `tx.Update`, `tx.Delete`, `matchedTargetKeys`, `newlyInsertedKeys`에 사용함으로써 복합 PK 테이블에서 MERGE 연산이 오동작함.
+
+#### 2) 수정 아키텍처
+- `targetSchema.ResolveRecordPK(tRec)`을 일관되게 호출하여 단일 및 복합 PK 모두 정확한 키 `Value`와 문자열 식별자를 사용하도록 통일.
+
+---
+
+### 2.31 결함 32: PITR(시점 복구) WAL 재생 시 복합 PK 테이블 `UPDATE/DELETE` 복구 유실 (`FIX-PITR-WAL-COMPOSITE-PK-1`)
+
+#### 1) 근본 원인
+- `pkg/backup/pitr.go:228-257`:
+  - WAL 재생 중 `OpUpdate`는 `rec[pkCol.Name]`만 추출하고 `OpDelete`는 `memengine.ParsePKValue(op.Key, pkCol.Type)`으로 복합 키 문자열 파싱을 시도하여 복구가 유실됨.
+
+#### 2) 수정 아키텍처
+- `tblSchema.IsCompositePK()`인 경우 `OpUpdate`는 `tblSchema.ResolveRecordPK(rec)`, `OpDelete`는 `storage.StringValue(op.Key)`를 사용하도록 수정.
+
+---
+
+### 2.32 결함 33: Hash Join 조인 키 생성기(`formatKeyVal`)의 대괄호/따옴표 제거로 인한 오조인 (`FIX-HASH-JOIN-KEY-CANONICAL-STRIP-1`)
+
+#### 1) 근본 원인
+- `pkg/execution/join.go:836-862` (`formatKeyVal`):
+  - 해시 조인의 조인 키 정규화 시 `sqlutil.CanonicalIdent`를 호출하여 데이터 값 내부의 대괄호(`[...]`), 따옴표, 백틱을 무단 제거함에 따라 `'[code1]'`과 `'code1'`이 동일 해시 버킷으로 매칭되어 오조인 발생.
+
+#### 2) 수정 아키텍처
+- `formatKeyVal`에서 `sqlutil.CanonicalIdent` 호출을 제거하고 `strings.ToLower(strings.TrimRight(v, " "))`만 수행하도록 수정.
+
+---
+
+### 2.33 결함 34: `SetOpIterator.Open()` 우측 자식 Materialization 에러 시 양쪽 커서 누수 (`FIX-SETOP-OPEN-ERROR-CURSOR-LEAK-1`)
+
+#### 1) 근본 원인
+- `pkg/execution/setop.go:146-164` (`SetOpIterator.Open`):
+  - `s.left.Open` 및 `s.right.Open` 성공 후 `INTERSECT`/`EXCEPT` 우측 자식 튜플 Materialization 도중 에러 또는 컨텍스트 취소 발생 시 이미 열린 `s.left`와 `s.right`를 닫지 않고 반환함.
+
+#### 2) 수정 아키텍처
+- `Open(ctx context.Context) (retErr error)`로 변경하고 `defer` 클린업 가드를 통해 `retErr != nil` 시 양쪽 자식 이터레이터를 즉시 `Close()`하도록 수정 (`[RULE:HandleHygiene]`).
+
+---
+
+### 2.34 결함 35: `MergeJoinIterator.Open()` 초기 튜플 Pull 에러 시 양쪽 자식 커서 누수 (`FIX-MERGE-JOIN-OPEN-ERROR-CURSOR-LEAK-1`)
+
+#### 1) 근본 원인
+- `pkg/execution/merge_join.go:131-152` (`MergeJoinIterator.Open`):
+  - 양쪽 자식 `Open` 이후 초기 튜플 `Next(ctx)` 호출 중 에러 발생 시 이미 열린 `m.left`, `m.right` 커서를 닫지 않고 반환함.
+
+#### 2) 수정 아키텍처
+- `Open(ctx context.Context) (retErr error)`로 변경하고 `defer` 클린업 가드를 통해 `retErr != nil` 시 `m.left`와 `m.right`를 안전하게 닫도록 수정 (`[RULE:HandleHygiene]`).
+
+---
+
 ## 3. 회귀 테스트(Regression Test) 구축 전략
 
 각 결함별로 독립된 유닛 및 통합 테스트 파일을 작성하여 검증한다:
@@ -414,9 +641,37 @@
     - `SELECT dept_id, COUNT(*) FROM _t GROUP BY non_existent_col` -> `column "non_existent_col" does not exist` 컴파일 에러 검증 (PASS)
     - `SELECT id, ROW_NUMBER() OVER (PARTITION BY bad_col ...)` -> `column "bad_col" does not exist` 컴파일 에러 검증 (PASS)
     - `SELECT id, ROW_NUMBER() OVER (ORDER BY invalid_ord_col)` -> `column "invalid_ord_col" does not exist` 컴파일 에러 검증 (PASS)
+    - `SELECT id, AVG(non_existent_col) OVER (PARTITION BY val)` -> `column "non_existent_col" does not exist` 컴파일 에러 검증 (PASS)
 14. `pkg/engine/cte_dml_test.go`:
     - `WITH dupes AS (...) DELETE FROM dupes WHERE rn > 1` -> 기저 테이블 중복 행 삭제 검증 (PASS)
     - `WITH target AS (...) UPDATE target SET val = 999 WHERE id = 1` -> 기저 테이블 갱신 검증 (PASS)
+15. `pkg/engine/composite_pk_dml_test.go`:
+    - 복합 기본키 테이블에서 CTE UPDATE 실행 시 타깃 조건에 해당하는 특정 행만 갱신되고 다른 행이 보존되는지 검증 (PASS)
+    - 복합 기본키 테이블에서 CTE DELETE 실행 시 특정 행만 삭제되고 다른 행이 보존되는지 검증 (PASS)
+    - 복합 기본키 테이블에서 JOIN UPDATE/DELETE 실행 시 행 덮어쓰기 및 오염 방지 검증 (PASS)
+16. `pkg/engine/window_arg_invalid_col_test.go`:
+    - `SELECT id, AVG(non_existent_col) OVER (PARTITION BY dept_id) FROM t` -> 명시적 `column "non_existent_col" does not exist` 에러 검증 (PASS)
+17. `pkg/engine/orderby_validation_test.go`:
+    - `SELECT id, val FROM t ORDER BY non_existent_col` -> 명시적 `column "non_existent_col" does not exist` 에러 검증 (PASS)
+    - `SELECT id, val FROM t ORDER BY 0` -> 명시적 `ORDER BY position 0 is not in select list` 에러 검증 (PASS)
+    - `SELECT id, val FROM t ORDER BY 999` -> 명시적 범위 초과 에러 검증 (PASS)
+18. `pkg/proc/builtins_string_test.go`:
+    - `SUBSTRING('hello', 1)` -> `'hello'`, `SUBSTRING('hello', 0)` -> `'hello'`, `SUBSTRING('hello', -2)` -> `'hello'` 정상 반환 검증 (PASS)
+19. `pkg/engine/audit_round4_regression_test.go`:
+    - `SELECT * FROM _t WHERE tag = 'ADMIN'` 실행 시 `'[ADMIN]'`이 오매칭되지 않고 오직 `'ADMIN'`만 반환되는지 검증 (PASS)
+    - SP 내 `DECLARE @a INT = NULL; DECLARE @b INT = NULL; IF @a = @b ... ELSE ...` 실행 시 3VL에 의해 ELSE 블록 진입 검증 (PASS)
+    - `SELECT 10 / 0` 실행 시 사일런트 NULL이 아닌 `division by zero` 명시적 에러 반환 검증 (PASS)
+    - `DATEDIFF(week/hour/minute)` 경계선 통과 횟수 `(1, 1, 1)` 계산 검증 (PASS)
+    - `SELECT 9223372036854775807 * 2` 및 `+ 1` 실행 시 음수 래핑 없이 `arithmetic overflow error: bigint out of range` 명시적 에러 반환 검증 (PASS)
+    - 복합 PK 타깃 테이블에 대한 `MERGE INTO` (`WHEN MATCHED THEN UPDATE`, `WHEN NOT MATCHED THEN INSERT`, `WHEN NOT MATCHED BY SOURCE THEN DELETE`) 정합성 검증 (PASS)
+    - `'[code1]'`과 `'code1'` Hash Join 시 오조인(False-Positive Join) 미발생 검증 (PASS)
+20. `pkg/storage/wiredtiger/wt_composite_pk_test.go`:
+    - WiredTiger 복합 PK 보조 인덱스 스캔(`SELECT * FROM t WHERE val = 500`) 시 누락 없이 2건 반환 검증 (PASS)
+    - WiredTiger 복합 PK 자식 테이블 `ON DELETE CASCADE` 정상 동작 검증 (PASS)
+21. `pkg/backup/pitr_composite_pk_test.go`:
+    - 복합 PK 테이블의 WAL `UPDATE`/`DELETE` 기록 재생(PITR) 정합성 검증 (PASS)
+22. `pkg/engine/open_error_cursor_leak_test.go` (`TestSetOpAndMergeJoin_OpenError_ClosesChildren`):
+    - `SetOpIterator.Open()` 및 `MergeJoinIterator.Open()` 도중 자식 에러 발생 시 양쪽 자식 `Close()` 호출 검증 (PASS)
 
 ---
 

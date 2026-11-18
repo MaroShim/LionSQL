@@ -41,12 +41,21 @@ func TestAnsiSQL_NewBugsRegression(t *testing.T) {
 	}
 
 	// 2. SUBSTRING 2 arguments
-	resSub2, err := coord.ExecuteSQL("SELECT SUBSTRING('hello', 2) AS s;")
+	resSub2, err := coord.ExecuteSQL("SELECT SUBSTRING('hello', 2) AS s, SUBSTRING('hello', 1) AS s1, SUBSTRING('hello', 0) AS s0, SUBSTRING('hello', -2) AS s_neg;")
 	if err != nil {
 		t.Fatalf("SUBSTRING 2-arg failed: %v", err)
 	}
 	if fmt.Sprintf("%v", resSub2.Rows[0]["s"]) != "ello" {
 		t.Errorf("expected 'ello', got %v", resSub2.Rows[0]["s"])
+	}
+	if fmt.Sprintf("%v", resSub2.Rows[0]["s1"]) != "hello" {
+		t.Errorf("expected 'hello', got %v", resSub2.Rows[0]["s1"])
+	}
+	if fmt.Sprintf("%v", resSub2.Rows[0]["s0"]) != "hello" {
+		t.Errorf("expected 'hello', got %v", resSub2.Rows[0]["s0"])
+	}
+	if fmt.Sprintf("%v", resSub2.Rows[0]["s_neg"]) != "hello" {
+		t.Errorf("expected 'hello', got %v", resSub2.Rows[0]["s_neg"])
 	}
 
 	// 3. SETOP INTERSECT precedence over UNION

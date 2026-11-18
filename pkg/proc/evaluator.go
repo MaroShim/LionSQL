@@ -389,23 +389,41 @@ func evalBinary(op TokenType, left, right storage.Value) (storage.Value, error) 
 		if op == TokenDiv || (left.Type == storage.TypeInt && right.Type == storage.TypeInt) {
 			rInt := int64(asFloat(right))
 			if rInt == 0 {
-				return storage.NullValue(storage.TypeInt), nil
+				return storage.Value{}, ErrDivisionByZero
 			}
 			return storage.IntValue(int64(asFloat(left)) / rInt), nil
 		}
 		return storage.FloatValue(asFloat(left) / asFloat(right)), nil
 
 	case TokenEq:
+		if left.IsNull || right.IsNull {
+			return storage.NullValue(storage.TypeBool), nil
+		}
 		return storage.BoolValue(left.Equal(right)), nil
 	case TokenNeq:
+		if left.IsNull || right.IsNull {
+			return storage.NullValue(storage.TypeBool), nil
+		}
 		return storage.BoolValue(!left.Equal(right)), nil
 	case TokenLt:
+		if left.IsNull || right.IsNull {
+			return storage.NullValue(storage.TypeBool), nil
+		}
 		return storage.BoolValue(compareValues(left, right) < 0), nil
 	case TokenLte:
+		if left.IsNull || right.IsNull {
+			return storage.NullValue(storage.TypeBool), nil
+		}
 		return storage.BoolValue(compareValues(left, right) <= 0), nil
 	case TokenGt:
+		if left.IsNull || right.IsNull {
+			return storage.NullValue(storage.TypeBool), nil
+		}
 		return storage.BoolValue(compareValues(left, right) > 0), nil
 	case TokenGte:
+		if left.IsNull || right.IsNull {
+			return storage.NullValue(storage.TypeBool), nil
+		}
 		return storage.BoolValue(compareValues(left, right) >= 0), nil
 	case TokenAnd:
 		return storage.BoolValue(isTruthy(left) && isTruthy(right)), nil

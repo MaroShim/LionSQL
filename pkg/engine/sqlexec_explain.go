@@ -1606,19 +1606,36 @@ func (s *Coordinator) execUpdatableCTEDML(cs *ClientSession, cte planner.CTEInfo
 		return nil, fmt.Errorf("updatable CTE base table %q not found: %w", baseTableName, err)
 	}
 
-	pkCol, err := baseSchema.PrimaryKeyColumn()
-	pkName := ""
-	if err == nil && pkCol != nil {
-		pkName = pkCol.Name
-	} else if len(baseSchema.Columns) > 0 {
-		pkName = baseSchema.Columns[0].Name
-	} else {
+	pkCols := baseSchema.PrimaryKeyColumns()
+	tempSchema, _ := s.engine.GetTable(tempName)
+	var validPKCols []*storage.Column
+	for _, col := range pkCols {
+		if c, ok := tempSchemaHasCol(tempSchema, col.Name); ok {
+			validPKCols = append(validPKCols, c)
+		}
+	}
+	if len(pkCols) == 0 || len(validPKCols) < len(pkCols) {
+		validPKCols = nil
+		for i := range baseSchema.Columns {
+			col := &baseSchema.Columns[i]
+			if _, ok := tempSchemaHasCol(tempSchema, col.Name); ok {
+				validPKCols = append(validPKCols, col)
+			}
+		}
+	}
+	pkCols = validPKCols
+	if len(pkCols) == 0 {
 		return nil, fmt.Errorf("updatable CTE base table %q has no identifiable key column", baseTableName)
+	}
+
+	var pkNames []string
+	for _, c := range pkCols {
+		pkNames = append(pkNames, c.Name)
 	}
 
 	// 2. Select PKs of matching rows from the materialized CTE ephemeral table
 	filterWhere := dml.Where
-	selectSQL := fmt.Sprintf("SELECT %s FROM %s", pkName, tempName)
+	selectSQL := fmt.Sprintf("SELECT %s FROM %s", strings.Join(pkNames, ", "), tempName)
 	if filterWhere != "" {
 		selectSQL += " WHERE " + filterWhere
 	}
@@ -1642,24 +1659,68 @@ func (s *Coordinator) execUpdatableCTEDML(cs *ClientSession, cte planner.CTEInfo
 		}, nil
 	}
 
-	// 3. Format primary key values for the mutation IN clause
-	var pkVals []string
-	for _, row := range pkRes.Rows {
-		for _, v := range row {
+	// 3. Format primary key predicate for mutation against the base table
+	var whereClause string
+	if len(pkCols) == 1 {
+		colName := pkCols[0].Name
+		var pkVals []string
+		for _, row := range pkRes.Rows {
+			v, ok := row[colName]
+			if !ok {
+				for _, rVal := range row {
+					v = rVal
+					break
+				}
+			}
 			pkVals = append(pkVals, formatSQLLiteralValue(v))
-			break
 		}
+		whereClause = fmt.Sprintf("%s IN (%s)", colName, strings.Join(pkVals, ", "))
+	} else {
+		var rowPreds []string
+		for _, row := range pkRes.Rows {
+			var colConds []string
+			for _, col := range pkCols {
+				v, ok := row[col.Name]
+				if !ok {
+					for rKey, rVal := range row {
+						if strings.EqualFold(rKey, col.Name) {
+							v = rVal
+							ok = true
+							break
+						}
+					}
+				}
+				if !ok || v == nil {
+					colConds = append(colConds, fmt.Sprintf("%s IS NULL", col.Name))
+				} else {
+					colConds = append(colConds, fmt.Sprintf("%s = %s", col.Name, formatSQLLiteralValue(v)))
+				}
+			}
+			if len(colConds) > 0 {
+				rowPreds = append(rowPreds, fmt.Sprintf("(%s)", strings.Join(colConds, " AND ")))
+			}
+		}
+		whereClause = strings.Join(rowPreds, " OR ")
 	}
 
 	// 4. Execute mutation against the underlying physical base table
-	inClause := strings.Join(pkVals, ", ")
 	if dml.kind == dmlDelete {
-		delSQL := fmt.Sprintf("DELETE FROM %s WHERE %s IN (%s)", baseTableName, pkName, inClause)
+		delSQL := fmt.Sprintf("DELETE FROM %s WHERE %s", baseTableName, whereClause)
 		return s.execDelete(delSQL, start, cs)
 	} else {
-		updSQL := fmt.Sprintf("UPDATE %s SET %s WHERE %s IN (%s)", baseTableName, dml.Set, pkName, inClause)
+		updSQL := fmt.Sprintf("UPDATE %s SET %s WHERE %s", baseTableName, dml.Set, whereClause)
 		return s.execUpdate(updSQL, start, cs)
 	}
+}
+
+func tempSchemaHasCol(sch *storage.TableSchema, colName string) (*storage.Column, bool) {
+	if sch == nil {
+		return &storage.Column{Name: colName}, true
+	}
+	if c, _, found := sch.FindColumn(colName); found {
+		return c, true
+	}
+	return nil, false
 }
 
 func formatSQLLiteralValue(v any) string {

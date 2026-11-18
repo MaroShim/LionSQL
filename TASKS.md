@@ -253,16 +253,20 @@
 | `SPEC-OUT` | **`FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`** | `v0.94.0` | 1 | P2 | Storage | [`--milestone`](--milestone) |  |
 | `DONE` | **`FEAT-WT-SECONDARY-INDEX-BTREE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 | [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md) |  |
 | `DONE` | **`FIX-3VL-AND-OR-NULL-LOGIC-1`** |  | Engine | P2 | VDBE VM OpAnd/OpOr 3-Valued Logic(3VL) NULL 평가 결함 수정 |  |  |
+| `DONE` | **`FIX-ARITHMETIC-OVERFLOW-DETECTION-1`** | `1.0-GA` | Execution | P2 | 정수 산술 연산 64비트 오버플로 검출 및 bigint out of range 에러 반환 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-COMMIT-PARTIAL-MUTATION-RECOVERY-1`** | `1` | --domain | P2 | Commit 중도 실패 시 부분 변경(Shard/Partition/Index) 복구 누락 결함 수정 | [`--prio`](--prio) |  |
+| `DONE` | **`FIX-COMPOSITE-PK-DML-OVERWRITE-1`** | `1.0-GA` | Engine | P1 | 복합 기본키 테이블 DML 실행 시 복합 키 전체 바인딩 및 행 오염 방지 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-COMPUTED-COLUMN-SELECT-EVAL-1`** | `v0.94.0` | Engine | P1 | 계산된 열(Computed Column) SELECT 시 동적 수식 평가 (NULL 반환 결함 수정) |  |  |
 | `DONE` | **`FIX-CONCURRENT-UPDATE-LOST-UPDATE-1`** | `1.0-GA` | Storage | P2 | 조건절 UPDATE 동시성 실행 시 최신 커밋 버전 Current Read 검증 및 갱신 손실(Lost Update) 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-CTE-DML-UPDATABLE-TARGET-1`** | `1.0-GA` | Engine | P1 | WITH CTE 기반 DELETE/UPDATE 실행 시 기저 원본 테이블 매핑 지원 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-CURSOR-DECLARE-OPEN-LIFECYCLE-1`** | `v0.94.0` | Engine | P1 | 커서 DECLARE 및 OPEN 생명주기 분리 (DECLARE 시 조기 오픈 및 already open 에러 방지) |  |  |
 | `DONE` | **`FIX-CURSOR-LIFECYCLE-1`** |  | Engine | P1 | 커서 DEALLOCATE 및 배치 종료 시 세션 커서 레지스트리 정리 및 재선언 충돌 해결 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DATEDIFF-BIG-DAYOFYEAR-1`** |  | Proc | P2 | DATEDIFF_BIG(dayofyear, ...) returns NULL | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `DONE` | **`FIX-DATEDIFF-BOUNDARY-CROSSING-1`** | `1.0-GA` | Engine | P2 | T-SQL DATEDIFF datepart 경계선 통과 계산 스펙 준수 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DDL-DEFAULT-CHECK-1`** | `1.0-GA` | Engine | P2 | CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DEFAULT-EXPR-DYNAMIC-EVAL-1`** | `1.0-GA` | Engine | P2 | DEFAULT 표현식(NEWID, GETDATE 등) 파싱 시점 캐싱 폐지 및 INSERT 실행 시 동적 평가 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-DIV-BY-ZERO-ERROR-VISIBILITY-1`** | `1.0-GA` | Engine | P2 | 나눗셈(/) 0 나누기 시 명시적 division by zero 에러 반환 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DUAL-PARSER-ALTER-PROC-FALLBACK-1`** | `v0.94.0` | Parser | P1 | ALTER PROCEDURE 및 CREATE OR ALTER PROC 파싱 오류 시 ANTLR4 Fallback 자동 연동 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`FIX-EVAL-NOT-IN-NULL-3VL-1`** | `1.0-GA` | Engine | P2 | NOT IN 서브쿼리 및 리스트에 NULL 포함 시 3치 논리(3VL UNKNOWN) 엄격 적용 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-EXEC-DEFAULT-KEYWORD-1`** |  | Parser | P2 | EXEC arg DEFAULT keyword must bind the declared default instead of the string literal | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
@@ -272,16 +276,21 @@
 | `DONE` | **`FIX-GROUPBY-ORDINAL-POSITION-1`** |  | Planner | P1 | GROUP BY 1 서수 위치(Ordinal Position) 지원 및 단일 그룹 압축 결함 수정 |  |  |
 | `DONE` | **`FIX-GROUPBY-OUTPUT-ALIAS-1`** |  | Planner | P2 | GROUP BY <alias> 프로젝션 별칭 평가 지원 |  |  |
 | `DONE` | **`FIX-GROUPBY-STRING-AGG-1`** |  | Engine | P1 | GROUP BY 쿼리에서 STRING_AGG(col, sep) 그룹별 집계 누락(NULL 반환) 수정 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-HASH-JOIN-KEY-CANONICAL-STRIP-1`** | `1.0-GA` | Execution | P1 | Hash Join 조인 키 생성기 formatKeyVal의 CanonicalIdent 대괄호 제거 오조인 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-HAVING-NON-AGG-VALIDATION-1`** | `-` | Engine | P2 | HAVING 절 비집계/비GROUP BY 컬럼 시맨틱 검증 결함 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-HTTP-REAP-ABANDONED-TX-1`** | `1.0-GA` | API | P2 | Web Studio/HTTP 유휴 세션 회수 시 미종료 트랜잭션 자동 롤백 및 스토리지 잠금 해제 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-HYBRID-TX-SPLIT-BRAIN-1`** | `1.0-GA` | Storage | P2 | 하이브리드 트랜잭션 2PC 부재로 인한 분할 커밋(Split-Brain) 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-LEXER-HEX-BINARY-LITERAL-1`** |  | Parser | P2 | Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-MEMENGINE-DDL-WAL-FAILCLOSED-1`** | `1` | --domain | P2 | DDL WAL 기록 실패 시 인메모리 카탈로그 복구 및 선기록 패턴 적용 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-MEMENGINE-WAL-FSYNC-ROLLBACK-1`** | `1.0-GA` | Storage | P2 | MemEngine WAL fsync 실패 시 메모리 데이터 잔류(Phantom Commit) 롤백 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-MERGE-INTO-COMPOSITE-PK-1`** | `1.0-GA` | Engine | P1 | MERGE INTO 구문 복합 PK 타깃 테이블 매칭/갱신/삭제 정합성 보장 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-MERGE-JOIN-OPEN-ERROR-CURSOR-LEAK-1`** | `1.0-GA` | Execution | P1 | MergeJoinIterator.Open 초기 튜플 Pull 에러 시 양쪽 자식 커서 클린업 보장 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-OCC-COMPACT-AUDIT-1`** | `1.0-GA` | Storage | P1 | MemoryCompact 2단계 Audit 결함 수정 (Arena UAF, AlterTable 레이아웃/WAL, memCursor 레이스, varSlot 오버플로우) | [`notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md`](notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-OPEN-ERROR-CURSOR-LEAK-1`** |  | Execution | P1 | Open() 에러 시 하위 자식 이터레이터/스토리지 커서 미정리 누수 결함 수정 |  |  |
 | `DONE` | **`FIX-OPEN-ERROR-ITERATOR-LEAK-ALL-1`** | `1.0-GA` | Execution | P1 | Volcano 이터레이터 전반(Window, Sort) Open 에러 시 하위 커서 정리 보장 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-ORDERBY-INVALID-COLUMN-AND-ORDINAL-1`** | `1.0-GA` | Planner | P2 | ORDER BY 절 비유효 컬럼 및 범위 초과 서수 유효성 검증 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`** | `1.0-GA` | Storage | P1 | PITR 기준 백업 시점/LSN 불변성 검증, 백업-WAL LSN 경계 필터링 및 LSN 연속성(Gap) 누락 검출 보완 | [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md) |  |
+| `DONE` | **`FIX-PITR-WAL-COMPOSITE-PK-1`** | `1.0-GA` | Storage | P2 | PITR WAL 재생 시 복합 PK 테이블 UPDATE/DELETE 복구 유실 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-TEMP-TABLE-DDL-1`** |  | Engine | P1 | 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-ROLLBACK-INDEX-RESTORE-ERROR-HANDLING-1`** |  | Engine | P2 | 커밋 및 세이브포인트 롤백 과정에서 보조 인덱스 복원 오류 전파 및 복원 누락 방어 |  |  |
@@ -289,11 +298,15 @@
 | `DONE` | **`FIX-SESSION-DRAIN-CLOSE-UAF-1`** | `1.0-GA` | Engine | P2 | CloseSession 시 In-flight 쿼리 Drain 대기 보장 및 CGo UAF 크래시 방지 | [`notes/plans/FIX_SESSION_DRAIN_CLOSE_UAF_PLAN.ko.md`](notes/plans/FIX_SESSION_DRAIN_CLOSE_UAF_PLAN.ko.md) |  |
 | `DONE` | **`FIX-SESSION-VAR-EXPR-EVAL-1`** | `v0.94.0` | Engine | P1 | SET @var = expr 대화형 세션 변수 수식 평가 결함 수정 (산술 연산 보존 및 proc.EvalRowExpr 바인딩) | [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md) |  |
 | `DONE` | **`FIX-SETOP-INTERSECT-PRECEDENCE-1`** |  | Planner | P1 | 집합 연산자 INTERSECT 우선순위(Precedence) 플래닝 결함 수정 |  |  |
+| `DONE` | **`FIX-SETOP-OPEN-ERROR-CURSOR-LEAK-1`** | `1.0-GA` | Execution | P1 | SetOpIterator.Open 우측 자식 Materialization 에러 시 양쪽 커서 클린업 보장 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-SP-NULL-EQUAL-3VL-1`** | `1.0-GA` | Engine | P1 | 저장 프로시저 내 변수 NULL 비교 시 ANSI 3VL 준수 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQL-DERIVED-VALUES-1`** |  | Engine | P1 | FROM (VALUES (...), (...)) AS alias(col1, col2) 인라인 테이블 값 생성자 및 컬럼 별칭 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQL-PAREN-SELECT-1`** |  | Engine | P1 | 괄호로 감싸진 (SELECT ...) 최상위 쿼리 및 뷰/CTE 본문 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQL-TRIM-BOTH-FROM-PARSING-1`** |  | Engine | P2 | ANSI SQL TRIM(BOTH/LEADING/TRAILING FROM) 문법 파싱 및 평가 지원 |  |  |
 | `DONE` | **`FIX-SQLUTIL-PARSER-1`** |  | Engine | P2 | pkg/sqlutil SQL 파서/정규화기 결함 보강 및 렉서 공통화 | [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md) |  |
+| `DONE` | **`FIX-STR-COMPARE-CANONICAL-STRIP-1`** | `1.0-GA` | Execution | P1 | 문자열 값 비교 시 CanonicalIdent 대괄호 무단 제거 방지 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SUBQUERY-WILDCARD-PROJECTION-LEAK-1`** | `1.0-GA` | Planner | P1 | IN/NOT IN 서브쿼리 SEMI/ANTI 조인 시 SELECT * 와일드카드 프로젝션 오염 방지 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-SUBSTRING-NONPOSITIVE-POS-1`** | `1.0-GA` | Engine | P2 | SUBSTRING 2인자 pos <= 0 비양수 시작 오프셋 문자열 끝 절삭 결함 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-SUBSTRING-TWO-ARGUMENTS-1`** |  | Engine | P2 | SUBSTRING/SUBSTR 2인자 표준 호출(start부터 끝까지) 지원 |  |  |
 | `DONE` | **`FIX-TABLE-VAR-TX-ROLLBACK-EXEMPT-1`** | `1.0-GA` | Engine | P2 | T-SQL 테이블 변수(@table_var) 트랜잭션 롤백 면제 및 TRY...CATCH 에러 로깅 보존 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TDS-BATCH-ERROR-DONE-TOKEN-1`** | `1.0-GA` | Wire | P2 | TDS 배치 문장 에러 발생 시 DONE_ERROR 종단 토큰 발송 보장(클라이언트 드라이버 행 방지) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
@@ -326,11 +339,14 @@
 | `DONE` | **`FIX-UPDATE-SNAPSHOT-COLUMN-SWAP-1`** | `1.0-GA` | Engine | P2 | UPDATE 다중 컬럼 대입 시 원본 튜플 스냅샷 기반 평가(SET a = b, b = a 원자적 스왑 보장) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-VM-HIDDEN-ROWID-1`** |  | Engine | P1 | PK 없는 테이블에 대한 VDBE VM OpInsert 실행 시 숨은 _row_id 자동 발번 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-WIN-NEGATIVE-DEFAULT-1`** | `1.0-GA` | Engine | P2 | LAG/LEAD 윈도우 함수 음수 기본값 인자(LEAD(val, 1, -1)) 파싱 시 0 반환 오류 수정 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-WINDOW-ARG-INVALID-COLUMN-1`** | `1.0-GA` | Execution | P2 | 윈도우 함수 내부 인자 비유효 컬럼 시맨틱 검증 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WINDOW-AVG-SLIDING-FRAME-1`** |  | Engine | P2 | AVG(...) OVER (ORDER BY ...) 슬라이딩 프레임 누적 평균 계산 결함 수정 | [`notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md`](notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WINDOW-FIRST-LAST-VALUE-1`** |  | Execution | P1 | FIRST_VALUE 및 LAST_VALUE 윈도우 함수 구현 (사일런트 NULL 해결) |  |  |
 | `DONE` | **`FIX-WINDOW-INVALID-COLUMN-VALIDATION-1`** | `1.0-GA` | Execution | P1 | 윈도우 함수 PARTITION BY/ORDER BY 비유효 컬럼 시맨틱 검증 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WT-CURSOR-ERROR-PROPAGATION-1`** | `1.0-GA` | Storage | P1 | WTCursor.Next() 에러 전파 부재로 인한 사일런트 데이터 누락 방지 (Cursor.Err() 인터페이스 확립) | [`notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md`](notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-WT-FK-COMPOSITE-PK-CASCADE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 외래키 ON DELETE CASCADE/SET NULL 복합 PK 자식 삭제 누락 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WT-FSYNC-FAIL-CLOSED-1`** | `1.0-GA` | Storage | P2 | WiredTiger Fsync 실패 시 Fail-Closed Taint 격리 및 팬텀 커밋 방어 | [`notes/plans/FIX_WT_TEMP_AND_FSYNC_COMMIT_ATOMILITY_PLAN.ko.md`](notes/plans/FIX_WT_TEMP_AND_FSYNC_COMMIT_ATOMILITY_PLAN.ko.md) |  |
+| `DONE` | **`FIX-WT-INDEX-COMPOSITE-PK-SCAN-1`** | `1.0-GA` | Storage | P1 | WiredTiger 보조 인덱스 스캔 시 복합 PK 파싱 실패 및 조회 증발 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WT-SAVEPOINT-INDEX-CORRUPTION-1`** | `1.0-GA` | Storage | P2 | WiredTiger 세이브포인트 롤백 시 보조 인덱스 키 누수 및 고아 인덱스 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WT-UNIQUE-INDEX-OVERWRITE-FALSE-1`** | `1.0-GA` | Storage | P2 | WiredTiger 유니크 인덱스 B-Tree 조작 시 overwrite=false 강제하여 중복 키 사일런트 덮어쓰기 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FRIENDLY-SQL`** |  | Ecosystem | P3 | DuckDB-Style Friendly SQL 문법 지원 | [`notes/plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/plans/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md) |  |
@@ -2949,6 +2965,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] 정수 산술 연산 64비트 오버플로 검출 및 bigint out of range 에러 반환 `FIX-ARITHMETIC-OVERFLOW-DETECTION-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-18 09:44:27
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
 ### [DONE] information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 `FIX-CATALOG-ISC-VIEWS-ORDER-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
@@ -2960,6 +2983,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1`
 - **Plan Doc**: [`--prio`](--prio)
+
+---
+
+### [DONE] 복합 기본키 테이블 DML 실행 시 복합 키 전체 바인딩 및 행 오염 방지 `FIX-COMPOSITE-PK-DML-OVERWRITE-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 09:44:27
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
 
 ---
 
@@ -3001,6 +3031,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] T-SQL DATEDIFF datepart 경계선 통과 계산 스펙 준수 `FIX-DATEDIFF-BOUNDARY-CROSSING-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 09:44:27
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
 ### [DONE] CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 `FIX-DDL-DEFAULT-CHECK-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
 - **Milestone**: `1.0-GA`
@@ -3012,6 +3049,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
+### [DONE] 나눗셈(/) 0 나누기 시 명시적 division by zero 에러 반환 `FIX-DIV-BY-ZERO-ERROR-VISIBILITY-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 09:44:27
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
 
@@ -3071,6 +3115,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] Hash Join 조인 키 생성기 formatKeyVal의 CanonicalIdent 대괄호 제거 오조인 수정 `FIX-HASH-JOIN-KEY-CANONICAL-STRIP-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-18 09:44:28
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
+
+---
+
 ### [DONE] HAVING 절 비집계/비GROUP BY 컬럼 시맨틱 검증 결함 수정 `FIX-HAVING-NON-AGG-VALIDATION-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 07:29:01
 - **Milestone**: `-`
@@ -3112,6 +3163,20 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] MERGE INTO 구문 복합 PK 타깃 테이블 매칭/갱신/삭제 정합성 보장 `FIX-MERGE-INTO-COMPOSITE-PK-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 09:44:28
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
+
+---
+
+### [DONE] MergeJoinIterator.Open 초기 튜플 Pull 에러 시 양쪽 자식 커서 클린업 보장 `FIX-MERGE-JOIN-OPEN-ERROR-CURSOR-LEAK-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-18 09:44:28
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
+
+---
+
 ### [DONE] MemoryCompact 2단계 Audit 결함 수정 (Arena UAF, AlterTable 레이아웃/WAL, memCursor 레이스, varSlot 오버플로우) `FIX-OCC-COMPACT-AUDIT-1`
 - **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-16 14:21:02
 - **Milestone**: `1.0-GA`
@@ -3143,10 +3208,24 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [DONE] ORDER BY 절 비유효 컬럼 및 범위 초과 서수 유효성 검증 `FIX-ORDERBY-INVALID-COLUMN-AND-ORDINAL-1`
+- **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-18 09:44:27
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
+
+---
+
 ### [DONE] PITR 기준 백업 시점/LSN 불변성 검증, 백업-WAL LSN 경계 필터링 및 LSN 연속성(Gap) 누락 검출 보완 `FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`
 - **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-16 14:21:02
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md)
+
+---
+
+### [DONE] PITR WAL 재생 시 복합 PK 테이블 UPDATE/DELETE 복구 유실 수정 `FIX-PITR-WAL-COMPOSITE-PK-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-18 09:44:28
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
 
 ---
 
@@ -3193,6 +3272,20 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [DONE] SetOpIterator.Open 우측 자식 Materialization 에러 시 양쪽 커서 클린업 보장 `FIX-SETOP-OPEN-ERROR-CURSOR-LEAK-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-18 09:44:28
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
+
+---
+
+### [DONE] 저장 프로시저 내 변수 NULL 비교 시 ANSI 3VL 준수 `FIX-SP-NULL-EQUAL-3VL-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 09:44:27
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
 ### [DONE] FROM (VALUES (...), (...)) AS alias(col1, col2) 인라인 테이블 값 생성자 및 컬럼 별칭 지원 `FIX-SQL-DERIVED-VALUES-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:02
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
@@ -3216,8 +3309,22 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [DONE] 문자열 값 비교 시 CanonicalIdent 대괄호 무단 제거 방지 `FIX-STR-COMPARE-CANONICAL-STRIP-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-18 09:44:27
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
 ### [DONE] IN/NOT IN 서브쿼리 SEMI/ANTI 조인 시 SELECT * 와일드카드 프로젝션 오염 방지 `FIX-SUBQUERY-WILDCARD-PROJECTION-LEAK-1`
 - **Domain**: Planner | **Priority**: P1 | **Updated**: 2026-11-18 08:20:12
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
+
+---
+
+### [DONE] SUBSTRING 2인자 pos <= 0 비양수 시작 오프셋 문자열 끝 절삭 결함 수정 `FIX-SUBSTRING-NONPOSITIVE-POS-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 09:44:27
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
 
@@ -3431,6 +3538,13 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [DONE] 윈도우 함수 내부 인자 비유효 컬럼 시맨틱 검증 `FIX-WINDOW-ARG-INVALID-COLUMN-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-18 09:44:27
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
+
+---
+
 ### [DONE] AVG(...) OVER (ORDER BY ...) 슬라이딩 프레임 누적 평균 계산 결함 수정 `FIX-WINDOW-AVG-SLIDING-FRAME-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 07:42:49
 - **Plan Doc**: [`notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md`](notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md)
@@ -3456,10 +3570,24 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [DONE] WiredTiger 외래키 ON DELETE CASCADE/SET NULL 복합 PK 자식 삭제 누락 수정 `FIX-WT-FK-COMPOSITE-PK-CASCADE-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-18 09:44:28
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
+
+---
+
 ### [DONE] WiredTiger Fsync 실패 시 Fail-Closed Taint 격리 및 팬텀 커밋 방어 `FIX-WT-FSYNC-FAIL-CLOSED-1`
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/FIX_WT_TEMP_AND_FSYNC_COMMIT_ATOMILITY_PLAN.ko.md`](notes/plans/FIX_WT_TEMP_AND_FSYNC_COMMIT_ATOMILITY_PLAN.ko.md)
+
+---
+
+### [DONE] WiredTiger 보조 인덱스 스캔 시 복합 PK 파싱 실패 및 조회 증발 수정 `FIX-WT-INDEX-COMPOSITE-PK-SCAN-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-18 09:44:27
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
 
 ---
 

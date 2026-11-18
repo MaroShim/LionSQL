@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"lionsql/pkg/proc"
-	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -103,7 +102,7 @@ func NewColumnIndexMapFromCols(cols []string) *ColumnIndexMap {
 func cleanIdentifierParts(name string) string {
 	parts := strings.Split(name, ".")
 	for i, p := range parts {
-		parts[i] = strings.Trim(strings.TrimSpace(p), "[]\"'`")
+		parts[i] = strings.Trim(strings.TrimSpace(p), "[]\"`")
 	}
 	return strings.Join(parts, ".")
 }
@@ -686,8 +685,8 @@ func CompareValues(a, b any) int {
 	sa, isStrA := toRawString(a)
 	sb, isStrB := toRawString(b)
 	if isStrA && isStrB {
-		cA := strings.TrimRight(sqlutil.CanonicalIdent(sa), " ")
-		cB := strings.TrimRight(sqlutil.CanonicalIdent(sb), " ")
+		cA := strings.TrimRight(strings.ToLower(sa), " ")
+		cB := strings.TrimRight(strings.ToLower(sb), " ")
 		return strings.Compare(cA, cB)
 	}
 
@@ -729,8 +728,8 @@ func CompareValues(a, b any) int {
 			}
 		}
 		vb := fmt.Sprintf("%v", b)
-		cA := sqlutil.CanonicalIdent(va)
-		cB := sqlutil.CanonicalIdent(vb)
+		cA := strings.ToLower(strings.TrimRight(va, " "))
+		cB := strings.ToLower(strings.TrimRight(vb, " "))
 		return strings.Compare(cA, cB)
 	case bool:
 		if vb, ok := b.(bool); ok {

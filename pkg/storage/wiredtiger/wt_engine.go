@@ -3257,8 +3257,7 @@ func (tx *WTTx) checkReferencingFKsOnDeleteLocked(tableName string, pk storage.V
 		if err != nil {
 			continue
 		}
-		cPkCol, err := cTbl.PrimaryKeyColumn()
-		if err != nil {
+		if _, err := cTbl.PrimaryKeyColumn(); err != nil {
 			continue
 		}
 
@@ -3291,9 +3290,8 @@ func (tx *WTTx) checkReferencingFKsOnDeleteLocked(tableName string, pk storage.V
 		for cur.Next() {
 			row, rErr := cur.Row()
 			if rErr == nil && cTbl.RowMatchesFK(row, cr.fk.ChildColumns, parentValues) {
-				_, pkIdx, _ := cTbl.FindColumn(cPkCol.Name)
-				if pkIdx >= 0 && pkIdx < len(row.Values) {
-					matchingPKs = append(matchingPKs, row.Values[pkIdx])
+				if childPK, ok := cTbl.ResolveRowPK(row); ok && !childPK.IsNull {
+					matchingPKs = append(matchingPKs, childPK)
 				}
 			}
 		}
@@ -3783,11 +3781,16 @@ func (c *wtIndexBTreeCursor) Row() (storage.Row, error) {
 	if c.closed || c.cur == nil || c.eof || c.currPK == "" {
 		return storage.Row{}, fmt.Errorf("cursor closed or out of range")
 	}
-	pkCol, err := c.tbl.PrimaryKeyColumn()
-	if err != nil {
-		return storage.Row{}, err
+	var pkVal storage.Value
+	if c.tbl.IsCompositePK() {
+		pkVal = storage.StringValue(c.currPK)
+	} else {
+		pkCol, err := c.tbl.PrimaryKeyColumn()
+		if err != nil {
+			return storage.Row{}, err
+		}
+		pkVal = storage.ParsePKValue(c.currPK, pkCol.Type)
 	}
-	pkVal := storage.ParsePKValue(c.currPK, pkCol.Type)
 	return c.tx.GetRow(c.tbl.Name, pkVal)
 }
 
@@ -3798,11 +3801,16 @@ func (c *wtIndexBTreeCursor) Record() (storage.Record, error) {
 	if c.closed || c.cur == nil || c.eof || c.currPK == "" {
 		return nil, fmt.Errorf("cursor closed or out of range")
 	}
-	pkCol, err := c.tbl.PrimaryKeyColumn()
-	if err != nil {
-		return nil, err
+	var pkVal storage.Value
+	if c.tbl.IsCompositePK() {
+		pkVal = storage.StringValue(c.currPK)
+	} else {
+		pkCol, err := c.tbl.PrimaryKeyColumn()
+		if err != nil {
+			return nil, err
+		}
+		pkVal = storage.ParsePKValue(c.currPK, pkCol.Type)
 	}
-	pkVal := storage.ParsePKValue(c.currPK, pkCol.Type)
 	row, err := c.tx.GetRow(c.tbl.Name, pkVal)
 	if err != nil {
 		return nil, err
@@ -3816,11 +3824,16 @@ func (c *wtIndexBTreeCursor) RawTuple() ([]byte, bool) {
 	}
 	c.tx.mu.Lock()
 	defer c.tx.mu.Unlock()
-	pkCol, err := c.tbl.PrimaryKeyColumn()
-	if err != nil {
-		return nil, false
+	var pkVal storage.Value
+	if c.tbl.IsCompositePK() {
+		pkVal = storage.StringValue(c.currPK)
+	} else {
+		pkCol, err := c.tbl.PrimaryKeyColumn()
+		if err != nil {
+			return nil, false
+		}
+		pkVal = storage.ParsePKValue(c.currPK, pkCol.Type)
 	}
-	pkVal := storage.ParsePKValue(c.currPK, pkCol.Type)
 	data, err := c.tx.getRawBytesLocked(c.tbl.Name, pkVal)
 	if err != nil || len(data) == 0 {
 		return nil, false
