@@ -19,6 +19,7 @@ import (
 	"lionsql/pkg/replication"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
+	"lionsql/pkg/tx"
 )
 
 // QueryResult represents the outcome of a SQL statement execution (aliased from engine.QueryResult).
@@ -400,6 +401,13 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 		return nil, err
 	}
 
+	// [RULE:ConcurrencySafety] 1-Session 1-Transaction Invariant:
+	// Top-level queries on the same session are strictly serialized via TxMgr.
+	if !isNested && cs.TxMgr != nil {
+		cs.TxMgr.Lock()
+		defer cs.TxMgr.Unlock()
+	}
+
 	overallStart := time.Now()
 	var queryCtx context.Context
 	var cancel context.CancelFunc
@@ -663,6 +671,9 @@ func (s *Coordinator) ensureClientStorageSession(cs *ClientSession) error {
 	cs.lastUsedAt = time.Now()
 	if !cs.closed && cs.Session == nil {
 		cs.Session = acquired
+		if cs.TxMgr != nil {
+			cs.TxMgr.SetSession(acquired)
+		}
 		acquired = nil
 	}
 	cs.Mu.Unlock()
@@ -706,11 +717,21 @@ func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) e
 	if cs.isReadOnlyLocked() || s.IsReadOnly() {
 		opts.ReadOnly = true
 	}
-	tx, err := cs.Session.BeginTx(opts)
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
+	var stx storage.Transaction
+	if cs.TxMgr != nil {
+		txCtx, startErr := cs.TxMgr.Begin(context.Background(), tx.Options{ReadOnly: opts.ReadOnly})
+		if startErr != nil {
+			return fmt.Errorf("failed to start transaction: %w", startErr)
+		}
+		stx = txCtx.StorageTx
+	} else {
+		t, startErr := cs.Session.BeginTx(opts)
+		if startErr != nil {
+			return fmt.Errorf("failed to start transaction: %w", startErr)
+		}
+		stx = t
 	}
-	cs.Tx = tx
+	cs.Tx = stx
 	cs.TranCount = 1
 	cs.TxFailed = false
 	return nil
@@ -731,7 +752,11 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 
 	// If transaction has failed, ROLLBACK the underlying transaction across all dialects
 	if cs.TxFailed {
-		_ = cs.Tx.Rollback()
+		if cs.TxMgr != nil {
+			_ = cs.TxMgr.Rollback(context.Background())
+		} else {
+			_ = cs.Tx.Rollback()
+		}
 		cs.Tx = nil
 		cs.TranCount = 0
 		cs.TxFailed = false
@@ -767,6 +792,7 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 	}
 
 	tx := cs.Tx
+	txMgr := cs.TxMgr
 	cs.Tx = nil
 	cs.TranCount = 0
 	cs.TxFailed = false
@@ -784,9 +810,13 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		}
 	}
 	cs.Mu.Unlock()
-	defer tx.Rollback()
 
-	err = tx.Commit()
+	if txMgr != nil {
+		err = txMgr.Commit(context.Background())
+	} else {
+		defer tx.Rollback()
+		err = tx.Commit()
+	}
 	if err != nil {
 		s.executeDDLUndoOps(cs, ddlOps)
 		if s.Metrics() != nil {
@@ -819,6 +849,7 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 		return fmt.Errorf("no active transaction to rollback on session %s", cs.ID)
 	}
 	tx := cs.Tx
+	txMgr := cs.TxMgr
 	cs.Tx = nil
 	cs.TranCount = 0
 	cs.TxFailed = false
@@ -835,7 +866,11 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 	}
 	cs.Mu.Unlock()
 
-	err = tx.Rollback()
+	if txMgr != nil {
+		err = txMgr.Rollback(context.Background())
+	} else if tx != nil {
+		err = tx.Rollback()
+	}
 	s.executeDDLUndoOps(cs, ddlOps)
 	if err != nil {
 		return fmt.Errorf("rollback error: %w", err)

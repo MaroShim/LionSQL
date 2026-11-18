@@ -3,11 +3,12 @@
 
 > - **공식 아키텍처 규격서**: [`doc/internal/UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md`](../../doc/internal/UNIFIED_TX_MANAGER_ARCHITECTURE.ko.md)
 > - **문서 식별자**: `ARCH-UNIFIED-TX-MANAGER-1`
-> - **상태**: Draft / Planned (스프린트 백로그 등록)
+> - **상태**: In Progress (Approved Unified Master Execution Pipeline for 1.0)
 > - **최초 작성일**: 2026-11-16
-> - **최종 갱신일**: 2026-11-17
-> - **관련 황금률**: `[RULE:PlanPersistence]`, `[RULE:RadicalKISS]`, `[RULE:ZeroAllocation]`, `[RULE:AtomicSaves]`
-> - **아키텍처 불변성**: `GEMINI.md` Invariant 3 (Non-Blocking Read Committed & Snapshot Isolation), Invariant 6 (Benchmark & Transaction Modeling Integrity)
+> - **최종 갱신일**: 2026-11-18
+> - **통합 태스크 클러스터**: `ARCH-UNIFIED-TX-MANAGER` (마스터) ➔ `REFACTOR-SESSION-TRANSACTION-INVARIANT-1` + `REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`
+> - **관련 황금률**: `[RULE:PlanPersistence]`, `[RULE:RadicalKISS]`, `[RULE:ZeroAllocation]`, `[RULE:AtomicSaves]`, `[RULE:LockHierarchy]`
+> - **아키텍처 불변성**: `GEMINI.md` Invariant 3 (Non-Blocking Read Committed & Snapshot Isolation), Invariant 6 (Benchmark & Transaction Modeling Integrity), Invariant 17 (Single Unified SQL Grammar & Zero-Protocol-Branch)
 
 ---
 
@@ -50,6 +51,13 @@ LionSQL은 외부 데몬 의존성이 전무한 **단일 정적 독립 실행형
 
 ### 2.2 추진 방향: DDL + DML 통합 트랜잭션 관리자
 DML 전용 TX와 DDL 전용 TX를 개별 모듈로 격리하지 않고, **단일 프로세스 내의 통합 트랜잭션 관리자(`pkg/tx`)**를 신설하여 두 영역을 단일 생명주기 아래에서 일관되게 제어합니다.
+
+### 2.3 1.0 TX 처리 일원화 아키텍처 결정 (ADR-20261118-UNIFIED-TX)
+- **결정 배경**: 기존에 분리 등록되어 있던 두 P1 태스크 `REFACTOR-SESSION-TRANSACTION-INVARIANT-1`(1세션 1트랜잭션 직렬화)과 `REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`(트랜잭셔널 DDL 섀도 카탈로그)을 순차 패치로 진행할 경우, 세션 락 임시 땜질 후 재작업(Rework)이 발생하는 비효율이 존재함.
+- **핵심 결정**:
+  1. `pkg/tx` 전담 모듈을 신설하고 `ClientSession`이 `TxManager`를 1:1로 소유하도록 바인딩함으로써, **"1세션 = 1물리 트랜잭션 = 완전 직렬 실행" 불변식을 구조적으로 저절로 달성**함.
+  2. `TxContext` 내부에 DML 스토리지 트랜잭션과 DDL `ShadowCatalog` 및 `DeferredActionQueue`를 단일 생명주기로 일원화하여, Dirty DDL Read 차단 및 $O(1)$ 원자적 롤백을 단일 파이프라인으로 완결함.
+  3. 따라서 `ARCH-UNIFIED-TX-MANAGER`를 마스터 태스크로 하여 두 P1 태스크를 완전히 포괄·해소함.
 
 ---
 

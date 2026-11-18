@@ -18,6 +18,7 @@ import (
 	"lionsql/pkg/replication"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
+	"lionsql/pkg/tx"
 )
 
 // Config defines options for initializing a Coordinator.
@@ -444,6 +445,7 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 		IsReadOnlyFn:    c.IsReadOnly,
 		lastUsedAt:      time.Now(),
 	}
+	cs.TxMgr = tx.NewManager(id, sess, c.engine, nil)
 	c.sessions[id] = cs
 	return cs, nil
 }
@@ -452,13 +454,11 @@ func (c *Coordinator) acquireSessionForQuery(cs *ClientSession) (storage.Session
 	if cs != nil {
 		cs.Mu.Lock()
 		cs.lastUsedAt = time.Now()
-		if cs.Session != nil && !cs.sessInUse {
-			cs.sessInUse = true
+		if cs.Session != nil {
 			sess := cs.Session
 			cs.Mu.Unlock()
 			return sess, func() {
 				cs.Mu.Lock()
-				cs.sessInUse = false
 				cs.lastUsedAt = time.Now()
 				drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
 				cs.Mu.Unlock()

@@ -28,7 +28,7 @@
 | `PENDING` | **`ARCH-PARALLEL-SCAN-1`** | `v1.99.0` | Engine | P2 | 멀티코어 병렬 분석 쿼리 실행기 (ParallelSeqScan) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `v0.94.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-UNIFIED-TX-MANAGER`** |  | ENGINE | P2 | Unified TxManager (DDL + DML) Architecture | [`notes/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
+| `IN_PROGRESS` | **`ARCH-UNIFIED-TX-MANAGER`** | `1.0-GA` | ENGINE | P1 | Unified TxManager (DDL + DML) Architecture | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** |  | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`ARCH-WT-FILE-LAYOUT-1`** | `v0.94.0` | Storage | P2 | WiredTiger 물리 파일 레이아웃(테이블별 파일 vs 단일 파일) 및 세컨더리 인덱스 멀티플렉싱(인덱스별 vs 테이블당 1개 vs 테이블 파일 합본) 아키텍처 설계 및 전환 | [`notes/plans/WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING_PLAN.ko.md`](notes/plans/WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING_PLAN.ko.md) |  |
 | `DONE` | **`AUDIT-093-PRE-RELEASE`** |  | QUALITY | P2 | Pre-v0.93.0 Dual-AI Adversarial Code Audit (v0.92.0..HEAD, 22 Defects Remediated) | [`notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md`](notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md) |  |
@@ -378,8 +378,8 @@
 | `DONE` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** |  | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-ENGINE-AST-PARSER-1`** | `v0.94.0` | Engine | P1 | 엔진 내부 35+개 조잡한 문자열 파싱 레거시 전수 제거 및 pkg/proc Pratt AST 전면 전환 | [`notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md`](notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-OCC-FLAT-1`** |  | Storage | P2 | Flat 코덱 신뢰성 및 동시성 결함 보강 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
-| `PENDING` | **`REFACTOR-SESSION-TRANSACTION-INVARIANT-1`** | `v0.94.0` | Engine | P1 | 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 | [`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`](notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md) |  |
-| `IN_PROGRESS` | **`REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`** | `v0.94.0` | Engine | P1 | 트랜잭셔널 DDL 섀도 카탈로그 격리 및 크래시 데이터 유실 방지 | [`notes/plans/TRANSACTIONAL_DDL_MODULARIZATION_PLAN.ko.md`](notes/plans/TRANSACTIONAL_DDL_MODULARIZATION_PLAN.ko.md) |  |
+| `DONE` | **`REFACTOR-SESSION-TRANSACTION-INVARIANT-1`** | `1.0-GA` | Engine | P1 | 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
+| `IN_PROGRESS` | **`REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`** | `1.0-GA` | Engine | P1 | 트랜잭셔널 DDL 섀도 카탈로그 격리 및 크래시 데이터 유실 방지 | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
 | `PENDING` | **`REFACTOR-TSQL-SESSION-VARS-VDBE-1`** | `v0.94.0` | Engine | P1 | sqlexec 텍스트 치환 전면 폐지 및 T-SQL 세션 변수 VDBE AST/레지스터 바인딩 일원화 | [`notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md`](notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-VIRTUAL-CATALOG-1`** | `1.0-GA` | Catalog | P2 | 가상 카탈로그(pkg/catalog/virtual & sqlexec_dbcc) 구조 통합 및 보일러플레이트 리팩토링 | [`notes/plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md`](notes/plans/VIRTUAL_CATALOG_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`REPL-STREAM-BIN-1`** | `v1.60.0` | Replication | P2 | Replication 네트워크 Length-Prefixed Binary Frame Zero-Copy 스트리밍 |  |  |
@@ -581,9 +581,10 @@
 
 ---
 
-### [PENDING] Unified TxManager (DDL + DML) Architecture `ARCH-UNIFIED-TX-MANAGER`
-- **Domain**: ENGINE | **Priority**: P2 | **Updated**: 2026-11-16 14:21:00
-- **Plan Doc**: [`notes/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/UNIFIED_TX_MANAGER_PLAN.ko.md)
+### [IN_PROGRESS] Unified TxManager (DDL + DML) Architecture `ARCH-UNIFIED-TX-MANAGER`
+- **Domain**: ENGINE | **Priority**: P1 | **Updated**: 2026-11-18 01:42:07
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md)
 
 ---
 
@@ -3953,17 +3954,17 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 `REFACTOR-SESSION-TRANSACTION-INVARIANT-1`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:04
-- **Milestone**: `v0.94.0`
-- **Plan Doc**: [`notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md`](notes/plans/REFACTOR_SESSION_TRANSACTION_INVARIANT_PLAN.ko.md)
+### [DONE] 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 `REFACTOR-SESSION-TRANSACTION-INVARIANT-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 01:49:58
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md)
 
 ---
 
 ### [IN_PROGRESS] 트랜잭셔널 DDL 섀도 카탈로그 격리 및 크래시 데이터 유실 방지 `REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:04
-- **Milestone**: `v0.94.0`
-- **Plan Doc**: [`notes/plans/TRANSACTIONAL_DDL_MODULARIZATION_PLAN.ko.md`](notes/plans/TRANSACTIONAL_DDL_MODULARIZATION_PLAN.ko.md)
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md)
 
 ---
 

@@ -11,6 +11,7 @@ import (
 	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
 	"lionsql/pkg/storage"
+	"lionsql/pkg/tx"
 )
 
 // PreparedStatement stores compiled bytecode and parameter definitions for repeated execution.
@@ -98,6 +99,7 @@ type ClientSession struct {
 	Tx              storage.Transaction
 	TxFailed        bool // whether current transaction encountered an error ('E' in PGWire)
 	TranCount       int  // T-SQL @@TRANCOUNT transaction nesting depth (0 = autocommit)
+	TxMgr           *tx.Manager // dedicated transaction manager and command serializer
 	ddlUndoLog      []DDLUndoOp // LIFO stack of DDL operations executed within current transaction for atomic rollback
 	Vars            map[string]any
 	VarLengths      map[string]int    // @var -> max length constraint (e.g. VARCHAR(1))
