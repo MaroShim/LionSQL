@@ -221,18 +221,37 @@ The Web Studio provides immediate visual table inspection, real-time query execu
 
 ### Connecting via `psql` (PostgreSQL Client)
 
+LionSQL natively serves the PostgreSQL Wire Protocol v3 on port `5433`. On macOS and Linux, you can connect immediately using your existing `psql` CLI without installing Microsoft SQL Server tools:
+
 ```bash
+# Connect using standard connection parameters
 psql -h 127.0.0.1 -p 5433 -U admin -d postgres
+
+# Or connect via PostgreSQL connection URI
+psql "postgres://admin@127.0.0.1:5433/postgres?sslmode=disable"
 ```
 
+> [!TIP]
+> **Unified SQL Superset**: LionSQL executes queries within a single unified dialect superset. Inside your `psql` session, you can freely mix PostgreSQL syntax (`LIMIT`, `ILIKE`, `::type`, `->>`) and SQL Server syntax (`TOP`, `ISNULL()`, `@variables`, stored procedures). See the [Unified SQL Superset Guide](doc/UNIFIED_SQL_SUPERSET_GUIDE.ko.md) for full details.
+
 ```sql
--- Query sample seeded data
-SELECT * FROM accounts;
+-- 1. Inspect tables and schema with native psql meta-commands
+\dt
+\d accounts
 
--- Check execution plan and cost estimates
+-- 2. Enable sub-millisecond execution timing
+\timing
+
+-- 3. Query data using PostgreSQL LIMIT or SQL Server TOP interchangeably
+SELECT * FROM accounts LIMIT 5;
+SELECT TOP 5 id, balance FROM accounts ORDER BY balance DESC;
+
+-- 4. Case-insensitive search (ILIKE) and JSON arrow extraction (->>)
+SELECT id, username FROM users WHERE email ILIKE '%@gmail.com';
+SELECT id, profile->>'role' AS role FROM users WHERE profile->>'role' = 'admin';
+
+-- 5. Execution plans and session memory budget
 EXPLAIN ANALYZE SELECT * FROM accounts WHERE balance > 600 ORDER BY balance DESC;
-
--- Configure session query memory budget
 SET work_mem = '128MB';
 SHOW work_mem;
 ```

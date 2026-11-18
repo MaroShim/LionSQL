@@ -219,18 +219,37 @@ http://127.0.0.1:8090/_/
 
 ### `psql` (PostgreSQL 공식 클라이언트) 접속
 
+LionSQL은 PostgreSQL Wire Protocol v3(포트 `:5433`)를 기본 내장하고 있으므로, macOS 및 Linux 환경에서 별도의 Microsoft SQL Server 도구(`sqlcmd`, SSMS)를 설치하지 않아도 기존에 설치된 표준 `psql` CLI로 즉시 접속할 수 있습니다:
+
 ```bash
+# 기본 접속 파라미터 지정 방식
 psql -h 127.0.0.1 -p 5433 -U admin -d postgres
+
+# 또는 단일 Connection URI 방식
+psql "postgres://admin@127.0.0.1:5433/postgres?sslmode=disable"
 ```
 
+> [!TIP]
+> **단일 통합 슈퍼셋 지원**: LionSQL은 단일 융합 방언 슈퍼셋으로 동작합니다. `psql` 세션 안에서도 PostgreSQL 문법(`LIMIT`, `ILIKE`, `::type`, `->>`)뿐만 아니라 SQL Server 문법(`TOP`, `ISNULL()`, `@세션변수`, T-SQL 저장 프로시저 호출)을 아무런 제약 없이 혼용할 수 있습니다. 자세한 내용은 [단일 통합 슈퍼셋 SQL 가이드](doc/UNIFIED_SQL_SUPERSET_GUIDE.ko.md)를 참고하십시오.
+
 ```sql
--- 계좌 데이터 조회
-SELECT * FROM accounts;
+-- 1. psql 기본 메타 커맨드로 테이블 및 스키마 검사
+\dt
+\d accounts
 
--- 실행 계획 및 비용 추정치 검증
+-- 2. 서브-밀리초 쿼리 실행 시간 측정 활성화
+\timing
+
+-- 3. 통합 슈퍼셋 쿼리 실행 (Postgres LIMIT과 SQL Server TOP 혼용 가능)
+SELECT * FROM accounts LIMIT 5;
+SELECT TOP 5 id, balance FROM accounts ORDER BY balance DESC;
+
+-- 4. 대소문자 무시 검색 (ILIKE) 및 JSON 화살표 연산자 (->>)
+SELECT id, username FROM users WHERE email ILIKE '%@gmail.com';
+SELECT id, profile->>'role' AS role FROM users WHERE profile->>'role' = 'admin';
+
+-- 5. 실행 계획 및 세션 쿼리 메모리 예산 설정
 EXPLAIN ANALYZE SELECT * FROM accounts WHERE balance > 600 ORDER BY balance DESC;
-
--- 세션 쿼리 메모리 예산 설정
 SET work_mem = '128MB';
 SHOW work_mem;
 ```
