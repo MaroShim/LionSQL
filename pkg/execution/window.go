@@ -260,7 +260,7 @@ func (w *WindowIterator) computeWindowFunction(winDef planner.WindowDef, indices
 			}
 		}
 
-	case "SUM", "COUNT", "AVG", "MIN", "MAX":
+	case "SUM", "COUNT", "AVG", "MIN", "MAX", "FIRST_VALUE", "LAST_VALUE":
 		w.computeWindowAggregate(winDef, indices, winValues)
 
 	case "PERCENTILE_CONT", "PERCENTILE_DISC", "APPROX_PERCENTILE", "MEDIAN":
@@ -433,6 +433,16 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 			for _, rowIdx := range indices {
 				winValues[rowIdx] = maxVal
 			}
+		case "FIRST_VALUE":
+			firstVal := getValFromRow(w.rows[indices[0]], targetCol, parsedExpr)
+			for _, rowIdx := range indices {
+				winValues[rowIdx] = firstVal
+			}
+		case "LAST_VALUE":
+			lastVal := getValFromRow(w.rows[indices[len(indices)-1]], targetCol, parsedExpr)
+			for _, rowIdx := range indices {
+				winValues[rowIdx] = lastVal
+			}
 		}
 		return
 	}
@@ -529,6 +539,12 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 				}
 			}
 			winValues[rowIdx] = maxVal
+
+		case "FIRST_VALUE":
+			winValues[rowIdx] = getValFromRow(w.rows[indices[startK]], targetCol, parsedExpr)
+
+		case "LAST_VALUE":
+			winValues[rowIdx] = getValFromRow(w.rows[indices[endK]], targetCol, parsedExpr)
 		}
 	}
 }

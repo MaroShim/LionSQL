@@ -193,6 +193,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	}
 
 	if err := exec.Open(ctx); err != nil {
+		_ = exec.Close()
 		if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
 			return nil, fmt.Errorf("canceling statement due to user request")
 		}
@@ -1608,31 +1609,32 @@ func (s *Coordinator) execSetOpSelect(setQuery *planner.SetOpQuery, start time.T
 		return nil, fmt.Errorf("set operator requires at least 2 query branches")
 	}
 
-	// 1. Execute branch 0
-	firstRes, err := s.execSelect(setQuery.Segments[0].Query, start, cs)
-	if err != nil {
-		return nil, fmt.Errorf("set operation initial query failed: %w", err)
+	type branchResult struct {
+		iter execution.Iterator
+		op   string
 	}
-	outCols := firstRes.Columns
-	var currIter execution.Iterator = execution.NewSliceIterator(firstRes.Rows, outCols)
 
-	// 2. Chained execution of subsequent branches
-	for i := 1; i < len(setQuery.Segments); i++ {
+	var outCols []string
+	var reducedBranches []branchResult
+
+	// Pass 1: Execute branches and reduce INTERSECT with higher precedence
+	for i := 0; i < len(setQuery.Segments); i++ {
 		seg := setQuery.Segments[i]
-		nextRes, err := s.execSelect(seg.Query, start, cs)
+		res, err := s.execSelect(seg.Query, start, cs)
 		if err != nil {
 			return nil, fmt.Errorf("set operation branch %d (%s) failed: %w", i, seg.Op, err)
 		}
-		if len(nextRes.Columns) != len(outCols) {
+		if i == 0 {
+			outCols = res.Columns
+		} else if len(res.Columns) != len(outCols) {
 			return nil, fmt.Errorf("all queries combined using %s must have an equal number of expressions (%d != %d)",
-				seg.Op, len(outCols), len(nextRes.Columns))
+				seg.Op, len(outCols), len(res.Columns))
 		}
 
-		// Map right branch columns positionally to outCols (handles duplicate column names like SELECT c2, c2)
-		var rightIter execution.Iterator
-		if len(nextRes.Values) == len(nextRes.Rows) && len(nextRes.Values) > 0 {
-			alignedRows := make([]map[string]any, len(nextRes.Values))
-			for rIdx, rowVals := range nextRes.Values {
+		var bIter execution.Iterator
+		if len(res.Values) == len(res.Rows) && len(res.Values) > 0 {
+			alignedRows := make([]map[string]any, len(res.Values))
+			for rIdx, rowVals := range res.Values {
 				m := make(map[string]any, len(outCols))
 				for cIdx, colName := range outCols {
 					if cIdx < len(rowVals) {
@@ -1641,13 +1643,13 @@ func (s *Coordinator) execSetOpSelect(setQuery *planner.SetOpQuery, start time.T
 				}
 				alignedRows[rIdx] = m
 			}
-			rightIter = execution.NewSliceIterator(alignedRows, outCols)
+			bIter = execution.NewSliceIterator(alignedRows, outCols)
 		} else {
-			alignedRows := make([]map[string]any, len(nextRes.Rows))
-			for rIdx, r := range nextRes.Rows {
+			alignedRows := make([]map[string]any, len(res.Rows))
+			for rIdx, r := range res.Rows {
 				m := make(map[string]any, len(outCols))
 				for cIdx, outCol := range outCols {
-					inCol := nextRes.Columns[cIdx]
+					inCol := res.Columns[cIdx]
 					if v, ok := r[inCol]; ok {
 						m[outCol] = v
 					} else if v, ok := r[strings.ToLower(inCol)]; ok {
@@ -1656,14 +1658,35 @@ func (s *Coordinator) execSetOpSelect(setQuery *planner.SetOpQuery, start time.T
 				}
 				alignedRows[rIdx] = m
 			}
-			rightIter = execution.NewSliceIterator(alignedRows, outCols)
+			bIter = execution.NewSliceIterator(alignedRows, outCols)
 		}
-		setOpType, err := execution.ParseSetOpType(seg.Op)
+
+		if seg.Op == "INTERSECT" && len(reducedBranches) > 0 {
+			prev := reducedBranches[len(reducedBranches)-1]
+			reducedBranches[len(reducedBranches)-1] = branchResult{
+				iter: execution.NewSetOpIterator(prev.iter, bIter, execution.SetOpIntersect),
+				op:   prev.op,
+			}
+		} else {
+			reducedBranches = append(reducedBranches, branchResult{
+				iter: bIter,
+				op:   seg.Op,
+			})
+		}
+	}
+
+	if len(reducedBranches) == 0 {
+		return nil, fmt.Errorf("empty set operation branches")
+	}
+
+	// Pass 2: Left-associative reduction for remaining operators (UNION, UNION ALL, EXCEPT, MINUS)
+	var currIter execution.Iterator = reducedBranches[0].iter
+	for i := 1; i < len(reducedBranches); i++ {
+		setOpType, err := execution.ParseSetOpType(reducedBranches[i].op)
 		if err != nil {
 			return nil, err
 		}
-
-		currIter = execution.NewSetOpIterator(currIter, rightIter, setOpType)
+		currIter = execution.NewSetOpIterator(currIter, reducedBranches[i].iter, setOpType)
 	}
 
 	// 3. Trailing ORDER BY across entire set operation result
@@ -1679,6 +1702,7 @@ func (s *Coordinator) execSetOpSelect(setQuery *planner.SetOpQuery, start time.T
 	// 5. Open and materialize results
 	ctx := cs.GetQueryContext()
 	if err := currIter.Open(ctx); err != nil {
+		_ = currIter.Close()
 		if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
 			return nil, fmt.Errorf("canceling statement due to user request")
 		}

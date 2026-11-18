@@ -180,4 +180,43 @@ func TestRegression_AUDIT_093_016_SetOpExtractTrailingOrderByAndLimit(t *testing
 	}
 }
 
+func TestPlanner_BuildSetOpPlan_IntersectPrecedence(t *testing.T) {
+	p := planner.NewPlanner()
+	sql := "SELECT 1 UNION ALL SELECT 2 INTERSECT SELECT 2"
+	setQuery, ok := planner.FindTopLevelSetOps(sql)
+	if !ok || setQuery == nil {
+		t.Fatalf("FindTopLevelSetOps failed for %q", sql)
+	}
+
+	plan, err := p.BuildSetOpPlan(setQuery, func(subSQL string) (*planner.PlanNode, error) {
+		return &planner.PlanNode{
+			Type:          planner.NodeTableScan,
+			Relation:      subSQL,
+			TotalCost:     1.0,
+			EstimatedRows: 1,
+		}, nil
+	})
+	if err != nil {
+		t.Fatalf("BuildSetOpPlan failed: %v", err)
+	}
+
+	// Root should be UNION ALL
+	if plan.SetOp != "UNION ALL" {
+		t.Fatalf("expected root to be 'UNION ALL', got %q", plan.SetOp)
+	}
+	if len(plan.Children) != 2 {
+		t.Fatalf("expected 2 children, got %d", len(plan.Children))
+	}
+	// Left child should be SELECT 1
+	if plan.Children[0].Relation != "SELECT 1" {
+		t.Errorf("expected left child relation 'SELECT 1', got %q", plan.Children[0].Relation)
+	}
+	// Right child should be INTERSECT node (SELECT 2 INTERSECT SELECT 2)
+	right := plan.Children[1]
+	if right.SetOp != "INTERSECT" {
+		t.Errorf("expected right child to be 'INTERSECT', got %q", right.SetOp)
+	}
+}
+
+
 

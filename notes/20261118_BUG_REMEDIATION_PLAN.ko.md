@@ -19,6 +19,13 @@
 | **5** | `FIX-TSQL-ISNULL-TRUNCATION-1` | Engine / Builtin | **낮음** | T-SQL 공식 스펙상 `ISNULL(check, repl)`은 첫 번째 인자의 데이터 타입과 길이에 고정(Truncate)되어야 하나, COALESCE처럼 긴 쪽으로 승격되는 결함 | **완료 (DONE)** |
 | **6** | `FEAT-TYPE-VALIDATOR-AND-NORMALIZER-1` | Storage / Engine | **높음** | 컬럼 타입별 데이터 검증기 및 정규화 엔진 부재로 인한 제약 위반 (VARCHAR 길이 초과, DECIMAL 정밀도 오버플로, TINYINT 범위 초과, CHAR 고정 공백 패딩 누락) | **완료 (DONE)** |
 | **7** | `FIX-3VL-AND-OR-NULL-LOGIC-1` | Engine / VDBE | **보통** | VDBE 바이트코드 `OpAnd`/`OpOr`에서 ANSI SQL 3-Valued Logic(3VL) 미준수로 `TRUE AND NULL`이 `false`로 평가되는 결함 | **완료 (DONE)** |
+| **8** | `FIX-GROUPBY-ORDINAL-POSITION-1` | Planner / Engine | **높음** | `GROUP BY 1` 등 정수 위치 지정 시 SELECT 프로젝션 서수 컬럼이 아닌 상수 리터럴로 취급되어 전체 행이 1개 그룹으로 압축되는 결함 | **완료 (DONE)** |
+| **9** | `FIX-GROUPBY-OUTPUT-ALIAS-1` | Planner / Engine | **보통** | `GROUP BY <alias>` 지정 시 출력 별칭을 해석하지 못하고 `nil`로 평가되어 전체 행이 1개 그룹으로 압축되는 결함 | **완료 (DONE)** |
+| **10** | `FIX-SETOP-INTERSECT-PRECEDENCE-1` | Planner / SetOp | **높음** | 집합 연산자 결합 시 `INTERSECT`의 높은 우선순위가 무시되고 좌측 우선 순차 평가되어 잘못된 결과셋 도출 결함 | **완료 (DONE)** |
+| **11** | `FIX-SQL-TRIM-BOTH-FROM-PARSING-1` | Engine / Parser | **보통** | ANSI SQL 표준 `TRIM([BOTH|LEADING|TRAILING] FROM)` 문법 미인식으로 식 전체가 원문 문자열 값으로 반환되는 결함 | **완료 (DONE)** |
+| **12** | `FIX-WINDOW-FIRST-LAST-VALUE-1` | Execution / Window | **높음** | 윈도우 함수 `FIRST_VALUE(...) OVER (...)`, `LAST_VALUE(...) OVER (...)` 실행기 미구현으로 조용히 `NULL` 반환 결함 | **완료 (DONE)** |
+| **13** | `FIX-SUBSTRING-TWO-ARGUMENTS-1` | Engine / Builtin | **보통** | `SUBSTRING(str, pos)` 2인자 표준 호출 시 길이 생략을 처리하지 못하고 조용히 `NULL`을 반환하는 결함 | **완료 (DONE)** |
+| **14** | `FIX-OPEN-ERROR-CURSOR-LEAK-1` | Execution / Storage | **치명적** | Volcano 및 집계 실행기 `Open()` 중 에러 발생 시 기오픈된 자식 이터레이터/스토리지 커서가 미정리되어 테이블 잠금 및 핸들 누수 발생 결함 | **완료 (DONE)** |
 
 ---
 
@@ -202,6 +209,84 @@
 
 ---
 
+### 2.8 결함 8 & 9: `GROUP BY` 서수 위치(Ordinal) 및 프로젝션 별칭(Alias) 미해석 결함 (`FIX-GROUPBY-ORDINAL-POSITION-1`, `FIX-GROUPBY-OUTPUT-ALIAS-1`)
+
+#### 1) 근본 원인
+- `GROUP BY 1, 2` 구문 파싱 시 `1`이 정수 리터럴로 컴파일되어 모든 행에서 동일한 상수 값 `1`로 평가됨. 결과적으로 테이블의 모든 행이 단 1개의 그룹으로 묶이고 집계(`COUNT(*)`)가 전체 행 개수로 합쳐지는 치명적 결함 발생.
+- `GROUP BY <alias>` 구문 사용 시 플래너와 집계기가 출력 별칭을 기본 테이블 컬럼 목록에서만 조회하여 실패(`nil`), 모든 행이 `nil` 그룹으로 묶여 1개 행으로 왜곡됨.
+
+#### 2) 수정 아키텍처
+- `pkg/planner/planner.go` 및 `pkg/execution/aggregate.go`:
+  - `GROUP BY` 항목이 정수 리터럴(`1`, `2`, ...)인 경우, 프로젝션 리스트의 1-기반 인덱스 표현식(`projections[idx-1]`)으로 치환.
+  - `GROUP BY` 항목이 식별자인 경우, 프로젝션의 별칭 목록(`aliasMap`)과 먼저 대조하여 일치하는 프로젝션 표현식으로 바인딩.
+
+---
+
+### 2.9 결함 10: 집합 연산자 `INTERSECT` 우선순위(Precedence) 플래닝 결함 (`FIX-SETOP-INTERSECT-PRECEDENCE-1`)
+
+#### 1) 근본 원인
+- `pkg/planner/setop.go:243`의 `BuildSetOpPlan`에서 집합 연산 브랜치들을 좌측부터 단순 순차 결합(`Left-Deep PlanNode`)함.
+- `A UNION B INTERSECT C`를 `(A UNION B) INTERSECT C`로 평가하여, ANSI SQL-92 및 PostgreSQL 표준(`A UNION (B INTERSECT C)`)을 위반하고 잘못된 행 집합을 반환함.
+
+#### 2) 수정 아키텍처
+- `pkg/planner/setop.go`:
+  - 집합 연산자 우선순위 트리를 2계층으로 파싱/조립:
+    - 1차: `INTERSECT` 연산자를 우선적으로 묶어 서브트리 노드(`NodeSetOp: INTERSECT`) 생성.
+    - 2차: 상위 레벨에서 `UNION` / `UNION ALL` / `EXCEPT`를 결합.
+
+---
+
+### 2.10 결함 11: ANSI SQL `TRIM(BOTH/LEADING/TRAILING FROM)` 문법 미인식 결함 (`FIX-SQL-TRIM-BOTH-FROM-PARSING-1`)
+
+#### 1) 근본 원인
+- 파서가 `TRIM(BOTH 'x' FROM '...')`와 같은 표준 키워드 인자를 함수 호출로 파싱하지 못하고 리터럴 표현식으로 폴백하여 식 원문 문자열(`"TRIM(...)"`)을 컬럼 값으로 그대로 반환함.
+
+#### 2) 수정 아키텍처
+- `pkg/proc/parser_expr.go` 또는 `pkg/sqlutil`:
+  - `TRIM` 전용 파서에서 `BOTH`, `LEADING`, `TRAILING` 및 `FROM` 키워드를 감지하여 타깃 문자열과 제거할 문자 집합을 표준 `TRIM/LTRIM/RTRIM` AST 함수로 정규화 변환.
+
+---
+
+### 2.11 결함 12: 윈도우 함수 `FIRST_VALUE` / `LAST_VALUE` 사일런트 NULL 결함 (`FIX-WINDOW-FIRST-LAST-VALUE-1`)
+
+#### 1) 근본 원인
+- `pkg/execution/window.go:182`의 함수 디스패처에 `FIRST_VALUE` 및 `LAST_VALUE` 핸들러가 누락되어 있어, 문법 파서를 통과한 후에도 아무 값도 계산하지 않고 조용히 `NULL`을 반환함 (`[RULE:ExplicitError]` 위반).
+
+#### 2) 수정 아키텍처
+- `pkg/execution/window.go`:
+  - `case "FIRST_VALUE":` 파티션 내 첫 번째 유효 행의 인자 식 값 반환.
+  - `case "LAST_VALUE":` 윈도우 프레임(`ROWS BETWEEN ...`) 범위 내의 마지막 행 인자 식 값 반환.
+
+---
+
+### 2.12 결함 13: `SUBSTRING(str, pos)` 2인자 표준 호출 결함 (`FIX-SUBSTRING-TWO-ARGUMENTS-1`)
+
+#### 1) 근본 원인
+- `pkg/proc/builtins_string.go:418`에서 `if len(args) < 3`일 때 무조건 `storage.NullValue`를 반환하도록 하드코딩되어 있어, 길이 인자를 생략하는 표준 2인자 호출(`SUBSTRING(s, 2)`)이 `NULL`로 처리됨.
+
+#### 2) 수정 아키텍처
+- `pkg/proc/builtins_string.go`:
+  - `len(args) == 2`인 경우, `length := len(runes) - start`로 계산하여 시작 위치부터 문자열 끝까지의 슬라이스를 정상 반환.
+
+---
+
+### 2.13 결함 14: Volcano 및 집계 실행기 `Open()` 중 에러 시 자식 이터레이터/스토리지 커서 미정리 누수 결함 (`FIX-OPEN-ERROR-CURSOR-LEAK-1`)
+
+#### 1) 근본 원인
+- `pkg/execution/aggregate.go`:
+  - `a.child.Open(ctx)` 호출 후 `validateHavingClause` 또는 메모리 한도 검사 등에서 에러 발생 시, 조기 반환(`return err`)으로 인해 `a.child.Close()`가 호출되지 않음.
+- `pkg/engine/sqlexec_select.go:195` 및 `line 1681`:
+  - `if err := exec.Open(ctx); err != nil { return nil, err }` 이후에 `defer exec.Close()`가 배치되어 있어, `exec.Open()` 호출 도중 에러가 반환되면 `exec.Close()`가 전혀 등록되지 않고 유실됨.
+- 이로 인해 하위의 `SeqScanIterator` / `IndexScanIterator`가 오픈한 WiredTiger B+Tree 커서(`session->open_cursor`)가 닫히지 않고 프로세스 수명 동안 유지되어 테이블 잠금(`EBUSY`), 스키마 DDL 실패, 파일 디스크립터 누수가 발생함 (`[RULE:HandleHygiene]`, `[RULE:DoubleCloseSafety]` 위반).
+
+#### 2) 수정 아키텍처
+- `pkg/execution/aggregate.go`:
+  - `Open(ctx context.Context) (retErr error)`에 `defer func() { if retErr != nil { _ = a.child.Close() } }()`를 적용하여, `Open()` 내부의 어떤 에러나 조기 탈출 시에도 하위 자식 이터레이터의 자원이 결정론적으로 즉시 해제되도록 보장.
+- `pkg/engine/sqlexec_select.go`:
+  - `exec.Open(ctx)` 및 `currIter.Open(ctx)` 에러 반환 시 즉시 `_ = exec.Close()` / `_ = currIter.Close()`를 명시적으로 호출하여 전체 실행기 트리 및 하위 스토리지 커서를 100% 정리한 뒤 에러를 반환.
+
+---
+
 ## 3. 회귀 테스트(Regression Test) 구축 전략
 
 각 결함별로 독립된 유닛 및 통합 테스트 파일을 작성하여 검증한다:
@@ -235,6 +320,23 @@
 7. `pkg/engine/three_valued_logic_test.go`:
    - `TRUE AND NULL` -> `NULL`, `FALSE AND NULL` -> `false`, `NULL AND NULL` -> `NULL` (PASS)
    - `TRUE OR NULL` -> `true`, `FALSE OR NULL` -> `NULL`, `NULL OR NULL` -> `NULL` (PASS)
+8. `pkg/engine/groupby_ordinal_alias_test.go`:
+   - `GROUP BY 1` 서수 위치 매핑 및 2개 그룹 정상 분할 검증 (PASS)
+   - `GROUP BY d` 프로젝션 별칭 매핑 및 2개 그룹 정상 분할 검증 (PASS)
+   - `GROUP BY 99` 범위 초과 시 명시적 컴파일 에러 검증 (PASS)
+   - `GROUP BY 2` (집계 함수) 지정 시 명시적 컴파일 에러 검증 (PASS)
+9. `pkg/planner/setop_test.go`:
+   - `BuildSetOpPlan_IntersectPrecedence`: `INTERSECT`의 높은 우선순위 트리 구성 검증 (PASS)
+10. `pkg/engine/ansi_sql_regression_test.go`:
+    - `TRIM(BOTH 'x' FROM 'xxxhelloxxx')` -> `'hello'` (PASS)
+    - `TRIM(LEADING 'x' FROM 'xxxhelloxxx')` -> `'helloxxx'` (PASS)
+    - `TRIM(TRAILING 'x' FROM 'xxxhelloxxx')` -> `'xxxhello'` (PASS)
+    - `SUBSTRING('hello', 2)` -> `'ello'` (PASS)
+    - `SELECT 1 AS val UNION ALL SELECT 2 INTERSECT SELECT 2` -> 2개 행 `[1, 2]` 반환 (PASS)
+    - 윈도우 함수 `FIRST_VALUE` 및 `LAST_VALUE` 계산 검증 (PASS)
+11. `pkg/engine/open_error_cursor_leak_test.go`:
+    - `Aggregate_OpenError_ClosesChildIterator`: Open 실패 시 하위 child.Close() 호출 검증 (PASS)
+    - `Engine_OpenError_VolcanoCleanTeardown`: 쿼리 실행 에러 직후 DROP TABLE 성공 검증 (커서 미누수, PASS)
 
 ---
 

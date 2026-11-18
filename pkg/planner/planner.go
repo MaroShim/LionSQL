@@ -171,6 +171,7 @@ func (n *PlanNode) Clone() *PlanNode {
 
 // QueryInfo represents the structured parts of a parsed SELECT query.
 type QueryInfo struct {
+	Err           error
 	RawQuery      string
 	CTEs          []CTEInfo
 	TableName     string
@@ -307,8 +308,39 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 	}
 
 	var groupByCols []string
+	var qErr error
 	for _, g := range stmt.GroupBy {
-		groupByCols = append(groupByCols, g.String())
+		resolvedCol := ""
+		if lit, ok := g.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
+			ord := int(lit.Val.IVal)
+			if ord < 1 || ord > len(stmt.Projections) {
+				qErr = fmt.Errorf("GROUP BY position %d is not in select list", ord)
+				break
+			}
+			proj := stmt.Projections[ord-1]
+			if hasTopLevelAggregateExpr(proj.Expr) {
+				qErr = fmt.Errorf("aggregate functions are not allowed in GROUP BY")
+				break
+			}
+			resolvedCol = proj.Expr.String()
+		}
+		if resolvedCol == "" {
+			gStr := g.String()
+			for _, p := range stmt.Projections {
+				if p.Alias != "" && strings.EqualFold(p.Alias, gStr) {
+					if hasTopLevelAggregateExpr(p.Expr) {
+						qErr = fmt.Errorf("aggregate functions are not allowed in GROUP BY")
+						break
+					}
+					resolvedCol = p.Expr.String()
+					break
+				}
+			}
+		}
+		if resolvedCol == "" {
+			resolvedCol = g.String()
+		}
+		groupByCols = append(groupByCols, resolvedCol)
 	}
 	if len(groupByCols) > 0 {
 		hasAgg = true
@@ -339,6 +371,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 	}
 
 	return &QueryInfo{
+		Err:           qErr,
 		RawQuery:      stmt.RawSQL,
 		CTEs:          ctes,
 		TableName:     fromTable,
@@ -378,6 +411,9 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		return nil, fmt.Errorf("statement is not a SELECT statement: %q", cleaned)
 	}
 	qInfo := FromAST(sel)
+	if qInfo != nil && qInfo.Err != nil {
+		return nil, qInfo.Err
+	}
 	qInfo.RawQuery = query
 	return qInfo, nil
 }

@@ -375,16 +375,22 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		return storage.StringValue(strings.Trim(arg1, arg0))
 
 	case "LTRIM":
-		if len(args) == 0 || args[0].IsNull {
+		if len(args) == 0 || args[0].IsNull || (len(args) >= 2 && args[1].IsNull) {
 			return storage.NullValue(storage.TypeVarChar)
 		}
-		return storage.StringValue(strings.TrimLeft(valToString(args[0]), " \t\r\n"))
+		if len(args) == 1 {
+			return storage.StringValue(strings.TrimLeft(valToString(args[0]), " \t\r\n"))
+		}
+		return storage.StringValue(strings.TrimLeft(valToString(args[1]), valToString(args[0])))
 
 	case "RTRIM":
-		if len(args) == 0 || args[0].IsNull {
+		if len(args) == 0 || args[0].IsNull || (len(args) >= 2 && args[1].IsNull) {
 			return storage.NullValue(storage.TypeVarChar)
 		}
-		return storage.StringValue(strings.TrimRight(valToString(args[0]), " \t\r\n"))
+		if len(args) == 1 {
+			return storage.StringValue(strings.TrimRight(valToString(args[0]), " \t\r\n"))
+		}
+		return storage.StringValue(strings.TrimRight(valToString(args[1]), valToString(args[0])))
 
 	case "LEFT":
 		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
@@ -415,12 +421,18 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		return storage.StringValue(string(runes[len(runes)-n:]))
 
 	case "SUBSTRING", "SUBSTR":
-		if len(args) < 3 || args[0].IsNull || args[1].IsNull || args[2].IsNull {
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		if len(args) >= 3 && args[2].IsNull {
 			return storage.NullValue(storage.TypeVarChar)
 		}
 		runes := []rune(valToString(args[0]))
-		rawStart := int(args[1].IVal) // T-SQL is 1-indexed
-		length := int(args[2].IVal)
+		rawStart := int(args[1].IVal) // 1-indexed
+		length := len(runes)
+		if len(args) >= 3 {
+			length = int(args[2].IVal)
+		}
 		if length <= 0 || rawStart+length-1 < 1 {
 			return storage.StringValue("")
 		}

@@ -588,16 +588,21 @@ func (a *AggregateIterator) parseFields() {
 	a.colIndexMap = colMap
 }
 
-func (a *AggregateIterator) Open(ctx context.Context) error {
+func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 	if a.child == nil {
 		return fmt.Errorf("aggregate: child iterator is nil")
 	}
 	if err := a.child.Open(ctx); err != nil {
 		return err
 	}
+	defer func() {
+		if retErr != nil {
+			_ = a.child.Close()
+		}
+	}()
 
 	if a.parsedHaving != nil {
-		if err := validateHavingClause(a.parsedHaving, a.groupKeys); err != nil {
+		if err := validateHavingClause(a.parsedHaving, a.groupKeys, a.fields); err != nil {
 			return err
 		}
 	}
@@ -1271,17 +1276,81 @@ func (a *AggregateIterator) ColIndexMap() *ColumnIndexMap {
 	return a.colIndexMap
 }
 
-func validateHavingClause(expr proc.Expr, groupKeys []string) error {
+func exprHasAgg(expr proc.Expr) bool {
+	if expr == nil {
+		return false
+	}
+	hasAgg := false
+	var walk func(e proc.Expr)
+	walk = func(e proc.Expr) {
+		if e == nil || hasAgg {
+			return
+		}
+		switch node := e.(type) {
+		case *proc.FunctionCallExpr:
+			fnName := strings.ToUpper(node.Name)
+			if fnName == "COUNT" || fnName == "SUM" || fnName == "TOTAL" || fnName == "AVG" ||
+				fnName == "MIN" || fnName == "MAX" || fnName == "GROUP_CONCAT" || fnName == "STRING_AGG" ||
+				fnName == "STDEV" || fnName == "STDEVP" || fnName == "VAR" || fnName == "VARP" ||
+				fnName == "MEDIAN" || fnName == "PERCENTILE_CONT" || fnName == "PERCENTILE_DISC" || fnName == "APPROX_PERCENTILE" {
+				hasAgg = true
+				return
+			}
+			for _, arg := range node.Args {
+				walk(arg)
+			}
+		case *proc.BinaryExpr:
+			walk(node.Left)
+			walk(node.Right)
+		case *proc.UnaryExpr:
+			walk(node.Expr)
+		case *proc.CaseExpr:
+			walk(node.Operand)
+			for _, w := range node.Whens {
+				walk(w.Condition)
+				walk(w.Result)
+			}
+			walk(node.Else)
+		case *proc.BetweenExpr:
+			walk(node.Expr)
+			walk(node.Low)
+			walk(node.High)
+		case *proc.InExpr:
+			walk(node.Expr)
+			for _, item := range node.List {
+				walk(item)
+			}
+		case *proc.LikeExpr:
+			walk(node.Expr)
+			walk(node.Pattern)
+		}
+	}
+	walk(expr)
+	return hasAgg
+}
+
+func validateHavingClause(expr proc.Expr, groupKeys []string, fields []aggField) error {
 	if expr == nil {
 		return nil
 	}
 
-	groupKeySet := make(map[string]struct{}, len(groupKeys)*2)
+	groupKeySet := make(map[string]struct{}, (len(groupKeys)+len(fields))*2)
 	for _, k := range groupKeys {
 		clean := strings.ToLower(cleanIdentifierParts(k))
 		groupKeySet[clean] = struct{}{}
 		if idx := strings.Index(clean, "."); idx != -1 {
 			groupKeySet[clean[idx+1:]] = struct{}{}
+		}
+	}
+	for _, f := range fields {
+		if !f.isLiteral || exprHasAgg(f.parsed) {
+			if f.alias != "" {
+				clean := strings.ToLower(cleanIdentifierParts(f.alias))
+				groupKeySet[clean] = struct{}{}
+				if idx := strings.Index(clean, "."); idx != -1 {
+					groupKeySet[clean[idx+1:]] = struct{}{}
+				}
+			}
 		}
 	}
 

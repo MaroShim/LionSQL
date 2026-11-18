@@ -667,6 +667,43 @@ func (p *Parser) parseCase() Expr {
 func (p *Parser) parseFunctionCall(name string) Expr {
 	p.nextToken() // eat (
 
+	if strings.EqualFold(name, "TRIM") {
+		isAnsiTrim := false
+		trimType := "BOTH"
+		currUpper := strings.ToUpper(p.curToken.Literal)
+		if currUpper == "BOTH" || currUpper == "LEADING" || currUpper == "TRAILING" {
+			isAnsiTrim = true
+			trimType = currUpper
+			p.nextToken()
+		}
+		var cutset Expr
+		if isAnsiTrim || p.curTokenIs(TokenFrom) || (p.peekTokenIs(TokenFrom) && !p.curTokenIs(TokenComma)) {
+			if !p.curTokenIs(TokenFrom) {
+				cutset = p.parseExpression(precLowest)
+			}
+			if p.curTokenIs(TokenFrom) {
+				p.nextToken() // eat FROM
+			}
+			source := p.parseExpression(precLowest)
+			if p.curTokenIs(TokenRParen) {
+				p.nextToken() // eat )
+			}
+			fnName := "TRIM"
+			if trimType == "LEADING" {
+				fnName = "LTRIM"
+			} else if trimType == "TRAILING" {
+				fnName = "RTRIM"
+			}
+			if cutset == nil {
+				cutset = &LiteralExpr{Val: storage.StringValue(" \t\r\n")}
+			}
+			return &FunctionCallExpr{
+				Name: fnName,
+				Args: []Expr{cutset, source},
+			}
+		}
+	}
+
 	if strings.EqualFold(name, "EXTRACT") {
 		field := p.curToken.Literal
 		p.nextToken() // eat field token

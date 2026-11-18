@@ -229,42 +229,61 @@ func extractTrailingOrderByAndLimit(sql string) (query string, orderBy string, l
 	return
 }
 
-// BuildSetOpPlan constructs a left-deep PlanNode tree combining subplans with SetOp, Sort, and Limit nodes.
+func makeSetOpPlanNode(left, right *PlanNode, op string) *PlanNode {
+	opCost := (left.TotalCost + right.TotalCost) * 1.05
+	opRows := left.EstimatedRows + right.EstimatedRows
+	if op == "INTERSECT" {
+		if right.EstimatedRows < left.EstimatedRows {
+			opRows = right.EstimatedRows
+		} else {
+			opRows = left.EstimatedRows
+		}
+	}
+	return &PlanNode{
+		Type:          NodeSetOp,
+		SetOp:         op,
+		StartupCost:   left.StartupCost + right.StartupCost,
+		TotalCost:     opCost,
+		EstimatedRows: opRows,
+		Children:      []*PlanNode{left, right},
+	}
+}
+
+// BuildSetOpPlan constructs a precedence-aware PlanNode tree combining subplans with SetOp, Sort, and Limit nodes.
+// INTERSECT binds with higher precedence than UNION and EXCEPT according to ANSI SQL standards.
 func (p *Planner) BuildSetOpPlan(setQuery *SetOpQuery, buildSubPlan func(subSQL string) (*PlanNode, error)) (*PlanNode, error) {
 	if setQuery == nil || len(setQuery.Segments) < 2 {
 		return nil, fmt.Errorf("set operation requires at least 2 query branches")
 	}
 
-	currPlan, err := buildSubPlan(setQuery.Segments[0].Query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to plan initial set query branch: %w", err)
-	}
+	// Pass 1: Plan all sub-branches and reduce INTERSECT with higher precedence
+	var reducedPlans []*PlanNode
+	var reducedOps []string
 
-	for i := 1; i < len(setQuery.Segments); i++ {
+	for i := 0; i < len(setQuery.Segments); i++ {
 		seg := setQuery.Segments[i]
-		rightPlan, err := buildSubPlan(seg.Query)
+		plan, err := buildSubPlan(seg.Query)
 		if err != nil {
 			return nil, fmt.Errorf("failed to plan set query branch %d (%s): %w", i, seg.Op, err)
 		}
 
-		opCost := (currPlan.TotalCost + rightPlan.TotalCost) * 1.05
-		opRows := currPlan.EstimatedRows + rightPlan.EstimatedRows
-		if seg.Op == "INTERSECT" {
-			if rightPlan.EstimatedRows < currPlan.EstimatedRows {
-				opRows = rightPlan.EstimatedRows
-			} else {
-				opRows = currPlan.EstimatedRows
-			}
+		if seg.Op == "INTERSECT" && len(reducedPlans) > 0 {
+			prevPlan := reducedPlans[len(reducedPlans)-1]
+			reducedPlans[len(reducedPlans)-1] = makeSetOpPlanNode(prevPlan, plan, "INTERSECT")
+		} else {
+			reducedPlans = append(reducedPlans, plan)
+			reducedOps = append(reducedOps, seg.Op)
 		}
+	}
 
-		currPlan = &PlanNode{
-			Type:          NodeSetOp,
-			SetOp:         seg.Op,
-			StartupCost:   currPlan.StartupCost + rightPlan.StartupCost,
-			TotalCost:     opCost,
-			EstimatedRows: opRows,
-			Children:      []*PlanNode{currPlan, rightPlan},
-		}
+	if len(reducedPlans) == 0 {
+		return nil, fmt.Errorf("empty set operation branches")
+	}
+
+	// Pass 2: Left-associative reduction for remaining operators (UNION, UNION ALL, EXCEPT, MINUS)
+	currPlan := reducedPlans[0]
+	for i := 1; i < len(reducedPlans); i++ {
+		currPlan = makeSetOpPlanNode(currPlan, reducedPlans[i], reducedOps[i])
 	}
 
 	// Apply trailing ORDER BY across the unified result set
