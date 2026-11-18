@@ -558,8 +558,17 @@ type VMFrame struct {
 }
 
 func (f *VMFrame) bindParams(params map[string]any) {
+	// 1. First pass: bare keys without '@' prefix
 	for k, v := range params {
-		f.setParamVar(cleanSymbol(k), toStorageValue(v))
+		if !strings.HasPrefix(k, "@") {
+			f.setParamVar(cleanSymbol(k), toStorageValue(v))
+		}
+	}
+	// 2. Second pass: explicit '@' prefixed keys (canonical session variables override bare keys)
+	for k, v := range params {
+		if strings.HasPrefix(k, "@") {
+			f.setParamVar(cleanSymbol(k), toStorageValue(v))
+		}
 	}
 	f.bindDeclaredDefaults(params)
 	if len(params) > 0 {

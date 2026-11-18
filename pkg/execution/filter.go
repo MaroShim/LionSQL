@@ -19,6 +19,7 @@ type FilterIterator struct {
 	parsed           proc.Expr
 	hasParsed        bool
 	subqueryExecutor func(sql string) ([]map[string]any, []string, error)
+	sessionVars      map[string]any
 	inChunk          Chunk
 	outChunk         Chunk
 	outIdx           int
@@ -53,6 +54,11 @@ func NewFilterIterator(child Iterator, condition string) *FilterIterator {
 // SetSubqueryExecutor sets an optional subquery executor for evaluating correlated or scalar subqueries.
 func (f *FilterIterator) SetSubqueryExecutor(exec func(sql string) ([]map[string]any, []string, error)) {
 	f.subqueryExecutor = exec
+}
+
+// SetSessionVars sets session variables context for evaluating variable expressions (@var) in filter predicates.
+func (f *FilterIterator) SetSessionVars(vars map[string]any) {
+	f.sessionVars = vars
 }
 
 func (f *FilterIterator) Open(ctx context.Context) error {
@@ -171,10 +177,10 @@ func (f *FilterIterator) evaluate(t Tuple) bool {
 	}
 
 	if f.hasParsed && f.parsed != nil {
-		return EvalTupleBoolExprWithSubquery(t, f.parsed, subExec)
+		return EvalTupleBoolExprWithContext(t, f.parsed, subExec, f.sessionVars)
 	}
 
-	return EvalConditionTupleWithSubquery(t, f.condition, subExec)
+	return EvalConditionTupleWithContext(t, f.condition, subExec, f.sessionVars)
 }
 
 // EvalConditionTuple evaluates a SQL condition string against a Tuple.
@@ -184,6 +190,11 @@ func EvalConditionTuple(t Tuple, cond string) bool {
 
 // EvalConditionTupleWithSubquery evaluates a SQL condition string against a Tuple with optional SubqueryExecutor.
 func EvalConditionTupleWithSubquery(t Tuple, cond string, subExec proc.SubqueryExecutor) bool {
+	return EvalConditionTupleWithContext(t, cond, subExec, nil)
+}
+
+// EvalConditionTupleWithContext evaluates a SQL condition string against a Tuple with optional SubqueryExecutor and session variables.
+func EvalConditionTupleWithContext(t Tuple, cond string, subExec proc.SubqueryExecutor, sessionVars map[string]any) bool {
 	cond = strings.TrimSpace(cond)
 	if cond == "" || cond == "1=1" || cond == "1 = 1" {
 		return true
@@ -196,13 +207,13 @@ func EvalConditionTupleWithSubquery(t Tuple, cond string, subExec proc.SubqueryE
 	p := proc.NewParser(proc.NewLexer(cond))
 	expr := p.ParseExpr()
 	if expr != nil && len(p.Errors()) == 0 {
-		return proc.EvalBoolExpr(expr, t.ToEvalMap(), subExec)
+		return EvalTupleBoolExprWithContext(t, expr, subExec, sessionVars)
 	}
 
 	orParts := splitLogicalParts(cond, " OR ")
 	if len(orParts) > 1 {
 		for _, part := range orParts {
-			if EvalConditionTupleWithSubquery(t, part, subExec) {
+			if EvalConditionTupleWithContext(t, part, subExec, sessionVars) {
 				return true
 			}
 		}
@@ -212,7 +223,7 @@ func EvalConditionTupleWithSubquery(t Tuple, cond string, subExec proc.SubqueryE
 	andParts := splitLogicalParts(cond, " AND ")
 	if len(andParts) > 1 {
 		for _, part := range andParts {
-			if !EvalConditionTupleWithSubquery(t, part, subExec) {
+			if !EvalConditionTupleWithContext(t, part, subExec, sessionVars) {
 				return false
 			}
 		}

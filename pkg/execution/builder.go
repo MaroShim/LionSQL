@@ -86,6 +86,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 			if opts.SubqueryExecutor != nil {
 				fIter.SetSubqueryExecutor(opts.SubqueryExecutor)
 			}
+			if opts.SessionVars != nil {
+				fIter.SetSessionVars(opts.SessionVars)
+			}
 			op = fIter
 		} else {
 			op = it
@@ -103,6 +106,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		if opts.SubqueryExecutor != nil {
 			fIter.SetSubqueryExecutor(opts.SubqueryExecutor)
 		}
+		if opts.SessionVars != nil {
+			fIter.SetSessionVars(opts.SessionVars)
+		}
 		op = fIter
 
 	case planner.NodeProjection:
@@ -116,6 +122,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		pIter := NewProjectionIterator(child, plan.Projections)
 		if opts.SubqueryExecutor != nil {
 			pIter.SetSubqueryExecutor(opts.SubqueryExecutor)
+		}
+		if opts.SessionVars != nil {
+			pIter.SetSessionVars(opts.SessionVars)
 		}
 		op = pIter
 

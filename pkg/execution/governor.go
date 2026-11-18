@@ -26,6 +26,7 @@ type ExecutorOptions struct {
 	TempDir          string                                                 `json:"temp_dir"`
 	Arena            *storage.Arena                                         `json:"-"`
 	SubqueryExecutor func(sql string) ([]map[string]any, []string, error) `json:"-"`
+	SessionVars      map[string]any                                         `json:"-"`
 }
 
 // DefaultExecutorOptions returns production default execution options.

@@ -32,6 +32,12 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 // EvalTupleExprWithSubquery recursively evaluates an AST expression directly against a Tuple
 // with optional SubqueryExecutor callback for correlated or scalar subqueries.
 func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.SubqueryExecutor) (any, bool) {
+	return EvalTupleExprWithContext(t, expr, execSubquery, nil)
+}
+
+// EvalTupleExprWithContext recursively evaluates an AST expression directly against a Tuple
+// with optional SubqueryExecutor callback and session variables.
+func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.SubqueryExecutor, sessionVars map[string]any) (any, bool) {
 	if expr == nil {
 		return nil, false
 	}
@@ -96,10 +102,26 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 		if val, ok := t.GetOK(e.Name); ok {
 			return val, true
 		}
+		if sessionVars != nil {
+			if val, ok := sessionVars[e.Name]; ok {
+				return val, true
+			}
+			lower := strings.ToLower(e.Name)
+			if val, ok := sessionVars[lower]; ok {
+				return val, true
+			}
+			bare := strings.TrimPrefix(lower, "@")
+			if val, ok := sessionVars[bare]; ok {
+				return val, true
+			}
+			if val, ok := sessionVars["@"+bare]; ok {
+				return val, true
+			}
+		}
 		return nil, false
 
 	case *proc.UnaryExpr:
-		val, ok := EvalTupleExprWithSubquery(t, e.Expr, execSubquery)
+		val, ok := EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
 		if !ok {
 			return nil, false
 		}
@@ -153,33 +175,44 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 		}
 
 	case *proc.BinaryExpr:
-		res, ok := evalTupleBinaryExprWithSubquery(t, e, execSubquery)
+		res, ok := evalTupleBinaryExprWithContext(t, e, execSubquery, sessionVars)
 		if ok {
 			return res, true
 		}
 		// Fallback for complex binary expressions (e.g. JSON operators ->, ->>, etc.)
-		res, err := proc.EvalRowExpr(e, t.ToEvalMap(), execSubquery)
+		evalMap := t.ToEvalMap()
+		if len(sessionVars) > 0 {
+			combined := make(map[string]any, len(evalMap)+len(sessionVars))
+			for k, v := range evalMap {
+				combined[k] = v
+			}
+			for k, v := range sessionVars {
+				combined[k] = v
+			}
+			evalMap = combined
+		}
+		res, err := proc.EvalRowExpr(e, evalMap, execSubquery)
 		if err == nil {
 			return res, true
 		}
 		return nil, false
 
 	case *proc.BetweenExpr:
-		val, ok := EvalTupleExprWithSubquery(t, e.Expr, execSubquery)
+		val, ok := EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
 		if !ok || val == nil {
 			val = nil
 		}
 		if sv, ok := val.(storage.Value); ok && sv.IsNull {
 			val = nil
 		}
-		low, okL := EvalTupleExprWithSubquery(t, e.Low, execSubquery)
+		low, okL := EvalTupleExprWithContext(t, e.Low, execSubquery, sessionVars)
 		if !okL || low == nil {
 			low = nil
 		}
 		if sv, ok := low.(storage.Value); ok && sv.IsNull {
 			low = nil
 		}
-		high, okH := EvalTupleExprWithSubquery(t, e.High, execSubquery)
+		high, okH := EvalTupleExprWithContext(t, e.High, execSubquery, sessionVars)
 		if !okH || high == nil {
 			high = nil
 		}
@@ -210,7 +243,7 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 		if len(e.List) == 0 && e.Query == nil {
 			return e.Not, true
 		}
-		val, ok := EvalTupleExprWithSubquery(t, e.Expr, execSubquery)
+		val, ok := EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
 		if !ok || val == nil {
 			return nil, true
 		}
@@ -252,7 +285,7 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 			}
 		} else {
 			for _, item := range e.List {
-				itemVal, okItem := EvalTupleExprWithSubquery(t, item, execSubquery)
+				itemVal, okItem := EvalTupleExprWithContext(t, item, execSubquery, sessionVars)
 				if !okItem || itemVal == nil {
 					hasNull = true
 					continue
@@ -276,7 +309,7 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 		return e.Not, true
 
 	case *proc.IsNullExpr:
-		val, ok := EvalTupleExprWithSubquery(t, e.Expr, execSubquery)
+		val, ok := EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
 		if !ok || val == nil {
 			return !e.Not, true
 		}
@@ -286,7 +319,7 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 		return e.Not, true
 
 	case *proc.CastExpr:
-		val, ok := EvalTupleExprWithSubquery(t, e.Expr, execSubquery)
+		val, ok := EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
 		if !ok || val == nil {
 			return nil, true
 		}
@@ -298,7 +331,18 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 		return formatStorageVal(casted), true
 
 	case *proc.ExistsExpr:
-		val, err := proc.EvalRowExpr(e, t.ToEvalMap(), execSubquery)
+		evalMap := t.ToEvalMap()
+		if len(sessionVars) > 0 {
+			combined := make(map[string]any, len(evalMap)+len(sessionVars))
+			for k, v := range evalMap {
+				combined[k] = v
+			}
+			for k, v := range sessionVars {
+				combined[k] = v
+			}
+			evalMap = combined
+		}
+		val, err := proc.EvalRowExpr(e, evalMap, execSubquery)
 		if err != nil || val == nil {
 			return false, false
 		}
@@ -308,7 +352,18 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 		return false, false
 
 	case *proc.ScalarSubqueryExpr:
-		val, err := proc.EvalRowExpr(e, t.ToEvalMap(), execSubquery)
+		evalMap := t.ToEvalMap()
+		if len(sessionVars) > 0 {
+			combined := make(map[string]any, len(evalMap)+len(sessionVars))
+			for k, v := range evalMap {
+				combined[k] = v
+			}
+			for k, v := range sessionVars {
+				combined[k] = v
+			}
+			evalMap = combined
+		}
+		val, err := proc.EvalRowExpr(e, evalMap, execSubquery)
 		if err != nil {
 			return nil, false
 		}
@@ -316,7 +371,18 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 
 	default:
 		// Fallback for complex functions or expressions: use ToEvalMap
-		res, err := proc.EvalRowExpr(expr, t.ToEvalMap(), execSubquery)
+		evalMap := t.ToEvalMap()
+		if len(sessionVars) > 0 {
+			combined := make(map[string]any, len(evalMap)+len(sessionVars))
+			for k, v := range evalMap {
+				combined[k] = v
+			}
+			for k, v := range sessionVars {
+				combined[k] = v
+			}
+			evalMap = combined
+		}
+		res, err := proc.EvalRowExpr(expr, evalMap, execSubquery)
 		if err != nil {
 			return nil, false
 		}
@@ -331,9 +397,14 @@ func evalTupleBinaryExpr(t Tuple, e *proc.BinaryExpr) (any, bool) {
 
 // evalTupleBinaryExprWithSubquery evaluates binary operations with optional SubqueryExecutor.
 func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery proc.SubqueryExecutor) (any, bool) {
+	return evalTupleBinaryExprWithContext(t, e, execSubquery, nil)
+}
+
+// evalTupleBinaryExprWithContext evaluates binary operations with optional SubqueryExecutor and session variables.
+func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery proc.SubqueryExecutor, sessionVars map[string]any) (any, bool) {
 	// Logical AND/OR short-circuiting with SQL 3-Valued Logic (NULL = UNKNOWN)
 	if e.Op == proc.TokenAnd {
-		leftVal, okL := EvalTupleExprWithSubquery(t, e.Left, execSubquery)
+		leftVal, okL := EvalTupleExprWithContext(t, e.Left, execSubquery, sessionVars)
 		if !okL {
 			return false, false
 		}
@@ -346,7 +417,7 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 				return false, true
 			}
 		}
-		rightVal, okR := EvalTupleExprWithSubquery(t, e.Right, execSubquery)
+		rightVal, okR := EvalTupleExprWithContext(t, e.Right, execSubquery, sessionVars)
 		if !okR {
 			return false, false
 		}
@@ -371,7 +442,7 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 	}
 
 	if e.Op == proc.TokenOr {
-		leftVal, okL := EvalTupleExprWithSubquery(t, e.Left, execSubquery)
+		leftVal, okL := EvalTupleExprWithContext(t, e.Left, execSubquery, sessionVars)
 		if !okL {
 			return false, false
 		}
@@ -384,7 +455,7 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 				return true, true
 			}
 		}
-		rightVal, okR := EvalTupleExprWithSubquery(t, e.Right, execSubquery)
+		rightVal, okR := EvalTupleExprWithContext(t, e.Right, execSubquery, sessionVars)
 		if !okR {
 			return false, false
 		}
@@ -408,8 +479,8 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 		return false, false
 	}
 
-	left, okL := EvalTupleExprWithSubquery(t, e.Left, execSubquery)
-	right, okR := EvalTupleExprWithSubquery(t, e.Right, execSubquery)
+	left, okL := EvalTupleExprWithContext(t, e.Left, execSubquery, sessionVars)
+	right, okR := EvalTupleExprWithContext(t, e.Right, execSubquery, sessionVars)
 	if !okL || !okR {
 		return nil, false
 	}
@@ -607,9 +678,25 @@ func EvalTupleBoolExpr(t Tuple, expr proc.Expr) bool {
 
 // EvalTupleBoolExprWithSubquery evaluates a boolean condition directly against a Tuple with optional SubqueryExecutor.
 func EvalTupleBoolExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.SubqueryExecutor) bool {
-	res, ok := EvalTupleExprWithSubquery(t, expr, execSubquery)
+	return EvalTupleBoolExprWithContext(t, expr, execSubquery, nil)
+}
+
+// EvalTupleBoolExprWithContext evaluates a boolean condition directly against a Tuple with optional SubqueryExecutor and session variables.
+func EvalTupleBoolExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.SubqueryExecutor, sessionVars map[string]any) bool {
+	res, ok := EvalTupleExprWithContext(t, expr, execSubquery, sessionVars)
 	if !ok {
-		return proc.EvalBoolExpr(expr, t.ToEvalMap(), execSubquery)
+		evalMap := t.ToEvalMap()
+		if len(sessionVars) > 0 {
+			combined := make(map[string]any, len(evalMap)+len(sessionVars))
+			for k, v := range evalMap {
+				combined[k] = v
+			}
+			for k, v := range sessionVars {
+				combined[k] = v
+			}
+			evalMap = combined
+		}
+		return proc.EvalBoolExpr(expr, evalMap, execSubquery)
 	}
 	if res == nil {
 		return false

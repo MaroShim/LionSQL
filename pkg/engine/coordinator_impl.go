@@ -454,11 +454,13 @@ func (c *Coordinator) acquireSessionForQuery(cs *ClientSession) (storage.Session
 	if cs != nil {
 		cs.Mu.Lock()
 		cs.lastUsedAt = time.Now()
-		if cs.Session != nil {
+		if cs.Session != nil && !cs.sessInUse {
+			cs.sessInUse = true
 			sess := cs.Session
 			cs.Mu.Unlock()
 			return sess, func() {
 				cs.Mu.Lock()
+				cs.sessInUse = false
 				cs.lastUsedAt = time.Now()
 				drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
 				cs.Mu.Unlock()

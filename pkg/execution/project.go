@@ -27,6 +27,7 @@ type ProjectionIterator struct {
 	schema           []string
 	colIndexMap      *ColumnIndexMap
 	subqueryExecutor func(sql string) ([]map[string]any, []string, error)
+	sessionVars      map[string]any
 	inChunk          Chunk
 	outChunk         Chunk
 	outIdx           int
@@ -35,6 +36,11 @@ type ProjectionIterator struct {
 // SetSubqueryExecutor sets an optional subquery executor for evaluating scalar or correlated subqueries in projections.
 func (p *ProjectionIterator) SetSubqueryExecutor(exec func(sql string) ([]map[string]any, []string, error)) {
 	p.subqueryExecutor = exec
+}
+
+// SetSessionVars sets session variables context for evaluating variable expressions (@var) in projections.
+func (p *ProjectionIterator) SetSessionVars(vars map[string]any) {
+	p.sessionVars = vars
 }
 
 // isWildcard reports whether a projection item is an unqualified or table-qualified wildcard (* or alias.*).
@@ -241,7 +247,7 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 			continue
 		}
 		if f.parsed != nil {
-			if res, ok := EvalTupleExprWithSubquery(tuple, f.parsed, subExec); ok {
+			if res, ok := EvalTupleExprWithContext(tuple, f.parsed, subExec, p.sessionVars); ok {
 				vals[i] = res
 				continue
 			}
@@ -258,7 +264,22 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 		}
 		val, found := lookupVal(tuple, f.expr)
 		if !found {
-			val, _ = lookupVal(tuple, f.alias)
+			val, found = lookupVal(tuple, f.alias)
+		}
+		if !found && p.sessionVars != nil {
+			if v, ok := p.sessionVars[f.expr]; ok {
+				val = v
+				found = true
+			} else if v, ok := p.sessionVars[strings.TrimPrefix(f.expr, "@")]; ok {
+				val = v
+				found = true
+			} else if v, ok := p.sessionVars[strings.ToLower(f.expr)]; ok {
+				val = v
+				found = true
+			} else if v, ok := p.sessionVars[strings.ToLower(strings.TrimPrefix(f.expr, "@"))]; ok {
+				val = v
+				found = true
+			}
 		}
 		vals[i] = val
 	}
