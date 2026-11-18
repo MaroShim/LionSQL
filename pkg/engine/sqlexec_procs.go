@@ -944,16 +944,9 @@ func stripTrailingOutputKeyword(s string) (string, bool) {
 }
 
 func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
-	return s.execProcedureCallWithRaw(query, query, start, cs)
-}
-
-func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, start time.Time, cs *ClientSession) (*QueryResult, error) {
-	returnVar, rawProcName, rawArgs := extractExecReturnVarAndOutputArgs(rawQuery)
+	returnVar, rawProcName, rawArgs := extractExecReturnVarAndOutputArgs(query)
 	procName, args := ParseProcArgs(query)
 	if returnVar != "" {
-		// When rawQuery had `EXEC @rc = procName ...`, variable substitution on `query`
-		// may have replaced `@rc` with `NULL` or a literal (e.g. `EXEC NULL = procName ...`).
-		// Strip the leading `... =` from `query` before parsing procName and args.
 		trimmedQ := strings.TrimSpace(query)
 		if rem, ok := sqlutil.TrimAnyPrefixKeyword(trimmedQ, "EXECUTE", "EXEC", "CALL"); ok {
 			if eqIdx := sqlutil.FindTopLevelChar(rem, '='); eqIdx != -1 {
@@ -1079,6 +1072,28 @@ func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, st
 
 		if targetParam != "" {
 			isQuoted := strings.HasPrefix(valStr, "'") || strings.HasPrefix(valStr, "N'") || strings.HasPrefix(valStr, "n'") || strings.HasPrefix(valStr, "\"")
+			if !isQuoted && strings.HasPrefix(valStr, "@") && cs != nil {
+				cs.Mu.Lock()
+				var v any
+				var found bool
+				if cs.Vars != nil {
+					v, found = cs.Vars[valStr]
+					if !found {
+						v, found = cs.Vars[strings.TrimPrefix(valStr, "@")]
+					}
+					if !found {
+						v, found = cs.Vars[strings.ToLower(valStr)]
+					}
+					if !found {
+						v, found = cs.Vars[strings.ToLower(strings.TrimPrefix(valStr, "@"))]
+					}
+				}
+				cs.Mu.Unlock()
+				if found {
+					argMap[targetParam] = v
+					continue
+				}
+			}
 			if !isQuoted && strings.EqualFold(valStr, "NULL") {
 				argMap[targetParam] = nil
 				continue
@@ -1139,16 +1154,32 @@ func (s *Coordinator) execProcedureCallWithRaw(query string, rawQuery string, st
 			if retVal == nil {
 				retVal = int64(0)
 			}
-			cs.Vars[returnVar] = retVal
-			cs.Vars[strings.ToLower(returnVar)] = retVal
+			cleanRet := strings.TrimPrefix(returnVar, "@")
+			lowerRet := strings.ToLower(cleanRet)
+			cs.Vars["@"+cleanRet] = retVal
+			cs.Vars[cleanRet] = retVal
+			cs.Vars["@"+lowerRet] = retVal
+			cs.Vars[lowerRet] = retVal
 		}
 		if len(outputBindings) > 0 && res.Vars != nil {
 			for targetParam, callerVar := range outputBindings {
 				cleanParam := strings.ToLower(strings.TrimPrefix(targetParam, "@"))
-				if outVal, ok := res.Vars[cleanParam]; ok {
-					cs.Vars[callerVar] = outVal
-				} else if outVal, ok := res.Vars[targetParam]; ok {
-					cs.Vars[callerVar] = outVal
+				var outVal any
+				var found bool
+				if v, ok := res.Vars[cleanParam]; ok {
+					outVal = v
+					found = true
+				} else if v, ok := res.Vars[targetParam]; ok {
+					outVal = v
+					found = true
+				}
+				if found {
+					cleanCall := strings.TrimPrefix(callerVar, "@")
+					lowerCall := strings.ToLower(cleanCall)
+					cs.Vars["@"+cleanCall] = outVal
+					cs.Vars[cleanCall] = outVal
+					cs.Vars["@"+lowerCall] = outVal
+					cs.Vars[lowerCall] = outVal
 				}
 			}
 		}

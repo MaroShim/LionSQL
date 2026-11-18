@@ -1636,7 +1636,12 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				val = sVal[:maxLen]
 			}
 		}
-		cs.Vars["@"+varName] = val
+		clean := strings.TrimPrefix(varName, "@")
+		lower := strings.ToLower(clean)
+		cs.Vars["@"+clean] = val
+		cs.Vars[clean] = val
+		cs.Vars["@"+lower] = val
+		cs.Vars[lower] = val
 		return &QueryResult{
 			Success:    true,
 			Command:    "SET",
@@ -1694,42 +1699,6 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			return s.execAnonymousBlock(trimmed, start, cs)
 		}
 	}
-
-	// 0.3 Substitute session variables in SQL query if present
-	rawBeforeVarSub := trimmed
-	cs.Mu.Lock()
-	if len(cs.Vars) > 0 {
-		keys := make([]string, 0, len(cs.Vars))
-		for k := range cs.Vars {
-			if strings.HasPrefix(k, "@") && !strings.HasPrefix(k, "@@") {
-				keys = append(keys, k)
-			}
-		}
-		sort.Slice(keys, func(i, j int) bool {
-			return len(keys[i]) > len(keys[j])
-		})
-
-		for _, k := range keys {
-			v := cs.Vars[k]
-			var varRep string
-			switch val := v.(type) {
-			case nil:
-				varRep = "NULL"
-			case int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8, float64, float32, bool:
-				varRep = fmt.Sprintf("%v", val)
-			case string:
-				escaped := strings.ReplaceAll(val, "'", "''")
-				varRep = fmt.Sprintf("'%s'", escaped)
-			default:
-				sVal := fmt.Sprintf("%v", val)
-				escaped := strings.ReplaceAll(sVal, "'", "''")
-				varRep = fmt.Sprintf("'%s'", escaped)
-			}
-			trimmed = substituteParamOutsideQuotes(trimmed, k, varRep)
-		}
-		upper = strings.ToUpper(trimmed)
-	}
-	cs.Mu.Unlock()
 
 	// 0.4 Query Execution Plan: EXPLAIN [ANALYZE]
 	if sqlutil.HasPrefixKeyword(trimmed, "EXPLAIN") {
@@ -1836,7 +1805,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 2. Procedure Invocation: EXEC / CALL / sp_*
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "EXEC", "EXECUTE", "CALL") || strings.HasPrefix(strings.ToUpper(trimmed), "SP_") {
-		return s.execProcedureCallWithRaw(trimmed, rawBeforeVarSub, start, cs)
+		return s.execProcedureCall(trimmed, start, cs)
 	}
 
 	// 2.1 User Exception: RAISERROR

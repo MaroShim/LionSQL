@@ -119,6 +119,12 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	}
 	if cs != nil {
 		cs.Mu.Lock()
+		if len(cs.Vars) > 0 {
+			opts.SessionVars = make(map[string]any, len(cs.Vars))
+			for k, v := range cs.Vars {
+				opts.SessionVars[k] = v
+			}
+		}
 		if wmVal, ok := cs.Vars["work_mem"]; ok {
 			switch v := wmVal.(type) {
 			case int64:
@@ -2595,19 +2601,6 @@ func (s *Coordinator) tryExecSelectVarAssignment(query string, start time.Time, 
 	}
 
 	// Case 2: Relational assignment with FROM clause: SELECT @price = price FROM items WHERE id = 1
-	substitutedFrom := fromClause
-	if cs != nil {
-		cs.Mu.Lock()
-		if len(cs.Vars) > 0 {
-			for k, v := range cs.Vars {
-				if strings.HasPrefix(k, "@") && !strings.HasPrefix(k, "@@") {
-					substitutedFrom = substituteParamOutsideQuotes(substitutedFrom, k, fmt.Sprintf("%v", v))
-				}
-			}
-		}
-		cs.Mu.Unlock()
-	}
-
 	hasAtVar := false
 	var projParts []string
 	for i, a := range assignments {
@@ -2618,9 +2611,9 @@ func (s *Coordinator) tryExecSelectVarAssignment(query string, start time.Time, 
 	}
 	var rewrittenSQL string
 	if hasAtVar {
-		rewrittenSQL = fmt.Sprintf("SELECT *, %s %s", strings.Join(projParts, ", "), substitutedFrom)
+		rewrittenSQL = fmt.Sprintf("SELECT *, %s %s", strings.Join(projParts, ", "), fromClause)
 	} else {
-		rewrittenSQL = fmt.Sprintf("SELECT %s %s", strings.Join(projParts, ", "), substitutedFrom)
+		rewrittenSQL = fmt.Sprintf("SELECT %s %s", strings.Join(projParts, ", "), fromClause)
 	}
 
 	selRes, err := s.execSelect(rewrittenSQL, start, cs)
