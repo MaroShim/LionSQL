@@ -340,6 +340,7 @@
 | `DONE` | **`M3`** |  | Ecosystem | P3 | 내구성 및 신뢰성 1차 검증 완료 이력 |  |  |
 | `DONE` | **`OCC-HYPER-2`** |  | STORAGE | P2 | In-Memory OCC Pointer-Free Flat Record A/B Benchmark & Implementation | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`OPT-LARGE-JOIN-1`** |  | Durability | P2 | 대규모 조인(10+ Tables) 최적화 | [`notes/plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) |  |
+| `DONE` | **`OPT-SUBQUERY-HASHSET-MATERIALIZATION-1`** |  | Engine | P2 | 비상관 IN (SELECT) 서브쿼리 In-Memory HashSet 구체화 최적화 (10,000건 Cap, hasNull, Canonical Type Normalization) | [`notes/20261118_SUBQUERY_HASHSET_MATERIALIZATION_PLAN.ko.md`](notes/20261118_SUBQUERY_HASHSET_MATERIALIZATION_PLAN.ko.md) |  |
 | `DONE` | **`P-2`** |  | Performance | P1 | WiredTiger VDBE 바이너리 튜플 지연 역직렬화 |  | - [x] **Phase 1 (`BENCH-P2-BASE`)**: ... |
 | `PENDING` | **`P2-BACKLOG`** | `v1.99.0` | Engine | P3 | Post-1.0 P2 Deferred Audit Items (92 Cases) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`P2-STABILIZE-AB-1`** |  | engine | P2 | P2 그룹 A/B 경계값 클램핑 및 내장함수 정합성 가드 10건 보강 | [`notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md`](notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md) |  |
@@ -3622,6 +3623,12 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 **Details & Resolution**:
 - 설계 계획서: [`notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)
+
+---
+
+### [DONE] 비상관 IN (SELECT) 서브쿼리 In-Memory HashSet 구체화 최적화 (10,000건 Cap, hasNull, Canonical Type Normalization) `OPT-SUBQUERY-HASHSET-MATERIALIZATION-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 06:41:39
+- **Plan Doc**: [`notes/20261118_SUBQUERY_HASHSET_MATERIALIZATION_PLAN.ko.md`](notes/20261118_SUBQUERY_HASHSET_MATERIALIZATION_PLAN.ko.md)
 
 ---
 

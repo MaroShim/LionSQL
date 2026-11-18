@@ -883,34 +883,54 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		if isNot {
 			if !hasRows {
 				replacement = "1=1"
+			} else if len(innerRes.Rows) == 1 {
+				row := NewSQLRow(innerRes.Rows[0], innerRes.Columns)
+				if rowVal, ok := row.GetFirst(); ok {
+					if rowVal == nil {
+						replacement = "1=0"
+					} else {
+						replacement = fmt.Sprintf("%s NOT IN ('%v')", lhs, rowVal)
+					}
+				}
 			} else {
-				var vals []string
+				if len(innerRes.Rows) > MaxSubqueryHashSetCapacity {
+					return "", fmt.Errorf("subquery result exceeds maximum hashset capacity of %d rows ([RULE:BoundedBuffers])", MaxSubqueryHashSetCapacity)
+				}
+				hashSet := NewSubqueryHashSet(len(innerRes.Rows))
 				for _, r := range innerRes.Rows {
 					row := NewSQLRow(r, innerRes.Columns)
 					if rowVal, ok := row.GetFirst(); ok {
-						if rowVal == nil {
-							vals = append(vals, "NULL")
-						} else {
-							vals = append(vals, fmt.Sprintf("'%v'", rowVal))
-						}
+						hashSet.Add(rowVal)
 					}
 				}
-				if len(vals) > 0 {
-					replacement = fmt.Sprintf("%s NOT IN (%s)", lhs, strings.Join(vals, ", "))
-				}
+				token := RegisterSubqueryHashSet(hashSet)
+				replacement = fmt.Sprintf("%s NOT IN (%s)", lhs, token)
 			}
 		} else {
-			if hasRows {
-				var vals []string
+			if !hasRows {
+				replacement = "1=0"
+			} else if len(innerRes.Rows) == 1 {
+				row := NewSQLRow(innerRes.Rows[0], innerRes.Columns)
+				if rowVal, ok := row.GetFirst(); ok {
+					if rowVal == nil {
+						replacement = "1=0"
+					} else {
+						replacement = fmt.Sprintf("%s IN (%s)", lhs, formatSubqueryVal(rowVal))
+					}
+				}
+			} else {
+				if len(innerRes.Rows) > MaxSubqueryHashSetCapacity {
+					return "", fmt.Errorf("subquery result exceeds maximum hashset capacity of %d rows ([RULE:BoundedBuffers])", MaxSubqueryHashSetCapacity)
+				}
+				hashSet := NewSubqueryHashSet(len(innerRes.Rows))
 				for _, r := range innerRes.Rows {
 					row := NewSQLRow(r, innerRes.Columns)
 					if rowVal, ok := row.GetFirst(); ok {
-						vals = append(vals, formatSubqueryVal(rowVal))
+						hashSet.Add(rowVal)
 					}
 				}
-				if len(vals) > 0 {
-					replacement = fmt.Sprintf("%s IN (%s)", lhs, strings.Join(vals, ", "))
-				}
+				token := RegisterSubqueryHashSet(hashSet)
+				replacement = fmt.Sprintf("%s IN (%s)", lhs, token)
 			}
 		}
 		result = result[:mStart] + replacement + result[mEnd:]

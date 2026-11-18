@@ -257,6 +257,16 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 		if !ok || val == nil {
 			return false
 		}
+		// Fast-Path: Materialized In-Memory Subquery HashSet ($O(1)$)
+		if len(pred.Items) == 1 {
+			trimmedItem := strings.TrimSpace(pred.Items[0])
+			if strings.HasPrefix(trimmedItem, "__subq_hashset_") && strings.HasSuffix(trimmedItem, "__") {
+				if set, found := proc.LookupSubqueryHashSet(trimmedItem); found {
+					normKey, isNull := proc.NormalizeSubqueryKey(val)
+					return set.Evaluate(normKey, isNull, pred.IsNot)
+				}
+			}
+		}
 		strVal := fmt.Sprintf("%v", val)
 		found := false
 		for _, rawItem := range pred.Items {

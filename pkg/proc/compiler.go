@@ -1430,6 +1430,21 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		return leftReg, nil
 
 	case *InExpr:
+		if len(e.List) == 1 {
+			if colRef, ok := e.List[0].(*ColumnRefExpr); ok && strings.HasPrefix(colRef.Name, "__subq_hashset_") {
+				valReg, err := c.compileExpr(e.Expr)
+				if err != nil {
+					return 0, err
+				}
+				c.emit(OpSubqueryHashSetIn, valReg, valReg, 0, &CallData{
+					Name: colRef.Name,
+				})
+				if e.Not {
+					c.emit(OpNot, valReg, valReg, 0, nil)
+				}
+				return valReg, nil
+			}
+		}
 		valReg, err := c.compileExpr(e.Expr)
 		if err != nil {
 			return 0, err

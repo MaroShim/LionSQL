@@ -250,6 +250,18 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 		if sv, ok := val.(storage.Value); ok && sv.IsNull {
 			return nil, true
 		}
+
+		// Fast-Path: Materialized In-Memory Subquery HashSet ($O(1)$)
+		if len(e.List) == 1 {
+			if colRef, ok := e.List[0].(*proc.ColumnRefExpr); ok && strings.HasPrefix(colRef.Name, "__subq_hashset_") && strings.HasSuffix(colRef.Name, "__") {
+				if set, found := proc.LookupSubqueryHashSet(colRef.Name); found {
+					normKey, isNull := proc.NormalizeSubqueryKey(val)
+					res := set.Evaluate(normKey, isNull, e.Not)
+					return res, true
+				}
+			}
+		}
+
 		found := false
 		hasNull := false
 		if e.Query != nil {

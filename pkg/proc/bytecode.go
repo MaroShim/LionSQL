@@ -136,10 +136,15 @@ const (
 
 	// Time Delay & Pause
 	OpWaitfor
+
+	// Materialized Subquery HashSet In ($O(1)$)
+	OpSubqueryHashSetIn
 )
 
 func (op OpCode) String() string {
 	switch op {
+	case OpSubqueryHashSetIn:
+		return "SUBQUERY_HASHSET_IN"
 	case OpMod:
 		return "MOD"
 	case OpWaitfor:

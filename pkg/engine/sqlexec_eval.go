@@ -176,6 +176,19 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 	row := NewSQLRow(rec)
 
 	if colName, isNot, valList, ok := parseInCondition(whereStr); ok {
+		// Fast-Path: Materialized In-Memory Subquery HashSet ($O(1)$)
+		trimmedValList := strings.TrimSpace(valList)
+		if strings.HasPrefix(trimmedValList, "__subq_hashset_") && strings.HasSuffix(trimmedValList, "__") {
+			if set, ok := LookupSubqueryHashSet(trimmedValList); ok {
+				val, ok := row.Get(colName)
+				if !ok || val == nil {
+					return false
+				}
+				normKey, isNull := NormalizeSubqueryKey(val)
+				return set.Evaluate(normKey, isNull, isNot)
+			}
+		}
+
 		val, ok := row.Get(colName)
 		if !ok || val == nil {
 			return false

@@ -643,6 +643,26 @@ vmLoop:
 			f.regs[inst.A] = storage.BoolValue(false)
 		}
 
+	case proc.OpSubqueryHashSetIn:
+		val := f.regs[inst.B]
+		callData, ok := f.aux(&inst).(*proc.CallData)
+		if !ok || callData == nil {
+			f.regs[inst.A] = storage.BoolValue(false)
+			break
+		}
+		if val.IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+			break
+		}
+		set, found := proc.LookupSubqueryHashSet(callData.Name)
+		if !found {
+			f.regs[inst.A] = storage.BoolValue(false)
+			break
+		}
+		normKey, isNull := proc.NormalizeSubqueryKey(val)
+		res := set.Evaluate(normKey, isNull, false)
+		f.regs[inst.A] = storage.BoolValue(res)
+
 	case proc.OpIsNull:
 		f.regs[inst.A] = storage.BoolValue(f.regs[inst.B].IsNull)
 
