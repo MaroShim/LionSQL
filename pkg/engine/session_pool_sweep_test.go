@@ -242,3 +242,35 @@ func TestCoordinator_ReapIdleClientSessions_AbandonedTransactionRollback(t *test
 		t.Fatalf("expected uncommitted transaction to be rolled back (0 rows), got %d rows", len(res.Rows))
 	}
 }
+
+func TestCoordinator_ShowIdleInTransactionSessionTimeoutAndDefaults(t *testing.T) {
+	defCfg := DefaultConfig()
+	if defCfg.ClientSessionIdleTTL != 5*time.Minute {
+		t.Fatalf("expected default ClientSessionIdleTTL = 5m, got %v", defCfg.ClientSessionIdleTTL)
+	}
+	if defCfg.SessionSweepInterval != 10*time.Second {
+		t.Fatalf("expected default SessionSweepInterval = 10s, got %v", defCfg.SessionSweepInterval)
+	}
+
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := NewCoordinator(cat, eng, defCfg)
+	defer coord.Close()
+
+	res, err := coord.ExecuteSQL("SHOW idle_in_transaction_session_timeout;")
+	if err != nil {
+		t.Fatalf("SHOW idle_in_transaction_session_timeout failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["idle_in_transaction_session_timeout"] != "5min" {
+		t.Fatalf("expected '5min', got %+v", res.Rows)
+	}
+
+	coord.SetClientSessionIdleTTL(30 * time.Second)
+	res2, err := coord.ExecuteSQL("SHOW idle_in_transaction_session_timeout;")
+	if err != nil {
+		t.Fatalf("SHOW after SetClientSessionIdleTTL failed: %v", err)
+	}
+	if len(res2.Rows) != 1 || res2.Rows[0]["idle_in_transaction_session_timeout"] != "30s" {
+		t.Fatalf("expected '30s', got %+v", res2.Rows)
+	}
+}

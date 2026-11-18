@@ -249,7 +249,7 @@ func (tx *Transaction) resetForPoolLocked() {
 	tx.tableNames = tx.tableNames[:0]
 	tx.neededShards = tx.neededShards[:0]
 	tx.releaseAcquiredLocksLocked()
-	if len(tx.acquiredLocks) > 128 {
+	if cap(tx.acquiredLocks) > 128 {
 		tx.acquiredLocks = make([]lockRef, 0, 16)
 	}
 }
@@ -282,20 +282,29 @@ func (tx *Transaction) tryAcquireWriteLockLocked(td *TableData, pkKey string) er
 }
 
 func (tx *Transaction) releaseAcquiredLocksLocked() {
-	if len(tx.acquiredLocks) == 0 {
+	nLocks := len(tx.acquiredLocks)
+	if nLocks == 0 {
 		return
 	}
+	shrinkMap := nLocks > 128
 	for _, ref := range tx.acquiredLocks {
 		if ref.td != nil && ref.shardIdx >= 0 && ref.shardIdx < numTableShards {
 			sh := &ref.td.shards[ref.shardIdx]
 			sh.mu.Lock()
 			if sh.activeWriters != nil && sh.activeWriters[ref.key] == tx.txID {
 				delete(sh.activeWriters, ref.key)
+				if shrinkMap && len(sh.activeWriters) == 0 {
+					sh.activeWriters = nil
+				}
 			}
 			sh.mu.Unlock()
 		}
 	}
-	tx.acquiredLocks = tx.acquiredLocks[:0]
+	if shrinkMap {
+		tx.acquiredLocks = nil
+	} else {
+		tx.acquiredLocks = tx.acquiredLocks[:0]
+	}
 }
 
 func (tx *Transaction) releaseToPoolLocked() {

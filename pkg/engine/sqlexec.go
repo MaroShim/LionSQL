@@ -1458,6 +1458,17 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				valStr = "on"
 			case "max_connections":
 				valStr = "100"
+			case "idle_in_transaction_session_timeout", "tx_idle_timeout":
+				ttl := s.ClientSessionIdleTTL()
+				if ttl <= 0 {
+					valStr = "0"
+				} else if ttl%time.Minute == 0 {
+					valStr = fmt.Sprintf("%dmin", int(ttl/time.Minute))
+				} else if ttl%time.Second == 0 {
+					valStr = fmt.Sprintf("%ds", int(ttl/time.Second))
+				} else {
+					valStr = fmt.Sprintf("%dms", ttl.Milliseconds())
+				}
 			default:
 				valStr = "off"
 			}

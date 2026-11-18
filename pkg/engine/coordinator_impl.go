@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -30,7 +31,7 @@ type Config struct {
 	EnableAuth           bool
 	PoolConfig           PoolConfig
 	ClientSessionIdleTTL time.Duration // Idle duration after which an inactive ClientSession releases its pinned storage session (default 5m)
-	SessionSweepInterval time.Duration // Interval for checking idle ClientSessions (default 5m)
+	SessionSweepInterval time.Duration // Interval for checking idle ClientSessions (default 10s)
 }
 
 // DefaultConfig returns default configuration parameters.
@@ -41,7 +42,7 @@ func DefaultConfig() Config {
 		EnableGeneralLog:     false,
 		PoolConfig:           DefaultPoolConfig(),
 		ClientSessionIdleTTL: 5 * time.Minute,
-		SessionSweepInterval: 5 * time.Minute,
+		SessionSweepInterval: 10 * time.Second,
 	}
 }
 
@@ -71,7 +72,7 @@ type Coordinator struct {
 	autoAnalyzer         *AutoAnalyzer
 	startTime            time.Time
 	tolerantDDL          atomic.Bool
-	clientSessionIdleTTL time.Duration
+	clientSessionIdleTTL atomic.Int64
 	dbMailInitOnce       sync.Once
 	dbMailInitErr        error
 	dbMailItemCounter    atomic.Int64
@@ -109,7 +110,7 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 	}
 	sweepInterval := cfg.SessionSweepInterval
 	if sweepInterval <= 0 {
-		sweepInterval = 5 * time.Minute
+		sweepInterval = 10 * time.Second
 		if clientIdleTTL < sweepInterval {
 			sweepInterval = clientIdleTTL
 		}
@@ -119,24 +120,24 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 	}
 
 	coord := &Coordinator{
-		catalog:              cat,
-		engine:               eng,
-		planCache:            proc.NewPlanCache(),
-		executor:             executor,
-		auth:                 cfg.AuthService,
-		enableAuth:           cfg.EnableAuth,
-		pool:                 pool,
-		sessions:             make(map[string]*ClientSession),
-		globalTempCreators:   make(map[string]string),
-		defaultWorkMem:       cfg.DefaultWorkMem,
-		metrics:              NewMetricsCollector(),
-		slowQueries:          NewSlowQueryLogger(cfg.SlowThreshold),
-		generalLog:           NewGeneralLogger(cfg.EnableGeneralLog),
-		pkBypassCache:        make(map[uint64]*PKLookupPlan, 256),
-		startTime:            time.Now(),
-		clientSessionIdleTTL: clientIdleTTL,
-		stopCh:               make(chan struct{}),
+		catalog:            cat,
+		engine:             eng,
+		planCache:          proc.NewPlanCache(),
+		executor:           executor,
+		auth:               cfg.AuthService,
+		enableAuth:         cfg.EnableAuth,
+		pool:               pool,
+		sessions:           make(map[string]*ClientSession),
+		globalTempCreators: make(map[string]string),
+		defaultWorkMem:     cfg.DefaultWorkMem,
+		metrics:            NewMetricsCollector(),
+		slowQueries:        NewSlowQueryLogger(cfg.SlowThreshold),
+		generalLog:         NewGeneralLogger(cfg.EnableGeneralLog),
+		pkBypassCache:      make(map[uint64]*PKLookupPlan, 256),
+		startTime:          time.Now(),
+		stopCh:             make(chan struct{}),
 	}
+	coord.clientSessionIdleTTL.Store(int64(clientIdleTTL))
 
 	coord.bgWg.Add(1)
 	go coord.idleSessionReapLoop(sweepInterval)
@@ -488,6 +489,16 @@ func (c *Coordinator) acquireSessionForQuery(cs *ClientSession) (storage.Session
 	return sess, func() { _ = sess.Close() }, nil
 }
 
+// ClientSessionIdleTTL returns the configured idle timeout for client sessions and uncommitted transactions.
+func (c *Coordinator) ClientSessionIdleTTL() time.Duration {
+	return time.Duration(c.clientSessionIdleTTL.Load())
+}
+
+// SetClientSessionIdleTTL updates the idle timeout for client sessions and uncommitted transactions.
+func (c *Coordinator) SetClientSessionIdleTTL(d time.Duration) {
+	c.clientSessionIdleTTL.Store(int64(d))
+}
+
 func (c *Coordinator) idleSessionReapLoop(interval time.Duration) {
 	defer c.bgWg.Done()
 	ticker := time.NewTicker(interval)
@@ -498,7 +509,7 @@ func (c *Coordinator) idleSessionReapLoop(interval time.Duration) {
 		case <-c.stopCh:
 			return
 		case <-ticker.C:
-			c.ReapIdleClientSessions(c.clientSessionIdleTTL)
+			c.ReapIdleClientSessions(c.ClientSessionIdleTTL())
 		}
 	}
 }
@@ -525,11 +536,13 @@ func (c *Coordinator) ReapIdleClientSessions(idleTTL time.Duration) int {
 	var detached []storage.Session
 	for _, cs := range snapshot {
 		cs.Mu.Lock()
-		if !cs.closed && !cs.sessInUse && cs.activeQueries == 0 && cs.Session != nil && now.Sub(cs.lastUsedAt) >= idleTTL {
+		idleDur := now.Sub(cs.lastUsedAt)
+		if !cs.closed && !cs.sessInUse && cs.activeQueries == 0 && cs.Session != nil && idleDur >= idleTTL {
 			if cs.Tx != nil {
 				_ = cs.Tx.Rollback()
 				cs.Tx = nil
 				cs.TxFailed = false
+				log.Printf("[TX-IDLE-TIMEOUT] session=%s forcibly rolled back uncommitted transaction after %v idle (threshold=%v)", cs.ID, idleDur.Round(time.Millisecond), idleTTL)
 			}
 			detached = append(detached, cs.Session)
 			cs.Session = nil

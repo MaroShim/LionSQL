@@ -113,6 +113,7 @@ Options by Category (옵션 상세):
     -work-mem <size>           Memory budget per query operator (default: 64MB, e.g. 64MB, 128MB)
     -max-workers <N>           Max concurrent query execution workers (default: NumCPU * 4)
     -max-idle-sessions <N>     Max idle storage sessions retained in pool (default: 64)
+    -tx-idle-timeout <dur>     Idle transaction/session timeout before automatic rollback (default: 5m, Sweep: 10s)
 
   [Security & Authentication]
     -auth                      Enforce JWT authentication on protected REST endpoints (default: true)

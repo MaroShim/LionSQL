@@ -2464,25 +2464,34 @@ func (tx *WTTx) releaseAcquiredLocksLocked() {
 	tx.lockMu.Lock()
 	defer tx.lockMu.Unlock()
 
-	if len(tx.acquiredLocks) == 0 {
+	nLocks := len(tx.acquiredLocks)
+	if nLocks == 0 {
 		return
 	}
 	eng := tx.sess.engine
 	if eng == nil {
-		tx.acquiredLocks = tx.acquiredLocks[:0]
+		tx.acquiredLocks = nil
 		return
 	}
+	shrinkMap := nLocks > 128
 	for _, ref := range tx.acquiredLocks {
 		if ref.shardIdx >= 0 && ref.shardIdx < numWTLockShards {
 			sh := &eng.lockShards[ref.shardIdx]
 			sh.mu.Lock()
 			if sh.activeWriters != nil && sh.activeWriters[ref.key] == tx.txID {
 				delete(sh.activeWriters, ref.key)
+				if shrinkMap && len(sh.activeWriters) == 0 {
+					sh.activeWriters = nil
+				}
 			}
 			sh.mu.Unlock()
 		}
 	}
-	tx.acquiredLocks = tx.acquiredLocks[:0]
+	if shrinkMap {
+		tx.acquiredLocks = nil
+	} else {
+		tx.acquiredLocks = tx.acquiredLocks[:0]
+	}
 }
 
 func (tx *WTTx) clearUndoLogLocked() {

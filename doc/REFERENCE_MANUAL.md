@@ -264,6 +264,7 @@ Launches the server as a foreground process in the current terminal session. Rea
   | `-work-mem` | string | `64MB` | Per-operator memory budget for external sorting (External Sort) and hash joins |
   | `-max-workers` | int | `256` | Maximum size of the goroutine worker pool handling client requests concurrently |
   | `-max-idle-sessions` | int | `64` | Maximum allowable number of idle session connections preserved in the pool |
+  | `-tx-idle-timeout` | duration | `5m` | Automatic rollback and reaping timeout for uncommitted transactions and idle sessions (sweep interval: `10s`, queryable via `SHOW idle_in_transaction_session_timeout`) |
   | `-auth` | bool | `true` | Whether the user authentication and RBAC authorization layer is enabled |
   | `-admin-email` | string | `admin@lionsql.local` | Superuser account email generated during initial bootstrap |
   | `-admin-pass` | string | `1234567890` | Superuser account password (strongly recommended to change after initial run) |

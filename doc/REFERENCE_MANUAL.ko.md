@@ -262,6 +262,7 @@ lionsql [command] [flags...]
   | `-work-mem` | string | `64MB` | 연산자당 정렬(External Sort) 및 해시 조인 작업 메모리 예산 |
   | `-max-workers` | int | `256` | 클라이언트 요청을 병렬 처리할 고루틴 워커 풀(Worker Pool)의 최대 크기 |
   | `-max-idle-sessions` | int | `64` | 유휴 상태로 유지할 세션 커넥션 풀의 최대 허용 개수 |
+  | `-tx-idle-timeout` | duration | `5m` | 미커밋 트랜잭션 및 유휴 세션 자동 롤백/회수 타임아웃 (검사 주기: `10s`, 조회: `SHOW idle_in_transaction_session_timeout`) |
   | `-auth` | bool | `true` | 사용자 인증 및 RBAC 인가 계층 활성화 여부 |
   | `-admin-email` | string | `admin@lionsql.local` | 최초 부트스트랩 시 생성될 최고 관리자 계정 이메일 |
   | `-admin-pass` | string | `1234567890` | 최고 관리자 계정 비밀번호 (최초 실행 후 변경 권장) |

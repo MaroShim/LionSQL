@@ -163,6 +163,21 @@ func (s *Server) SetTolerantDDL(enabled bool) {
 	}
 }
 
+// SetClientSessionIdleTTL updates the idle transaction/session timeout on the underlying coordinator.
+func (s *Server) SetClientSessionIdleTTL(d time.Duration) {
+	if s.coordinator != nil {
+		s.coordinator.SetClientSessionIdleTTL(d)
+	}
+}
+
+// ClientSessionIdleTTL returns the configured idle transaction/session timeout.
+func (s *Server) ClientSessionIdleTTL() time.Duration {
+	if s.coordinator != nil {
+		return s.coordinator.ClientSessionIdleTTL()
+	}
+	return 5 * time.Minute
+}
+
 
 func (s *Server) newPlanner() *planner.Planner {
 	p := planner.NewPlanner()
