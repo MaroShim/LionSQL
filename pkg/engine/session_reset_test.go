@@ -50,7 +50,7 @@ func TestCoordinator_ResetSession_IsolatesConnectionPoolState(t *testing.T) {
 		sess.Mu.Unlock()
 		t.Fatalf("expected active uncommitted tx")
 	}
-	if len(sess.TempTables) == 0 {
+	if len(sess.TempTableMap) == 0 {
 		sess.Mu.Unlock()
 		t.Fatalf("expected active temp tables")
 	}

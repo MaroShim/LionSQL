@@ -617,12 +617,11 @@ func (c *Coordinator) CloseSession(id string) {
 		for _, physTable := range cs.TableVars {
 			toDropLocal = append(toDropLocal, physTable)
 		}
-		for _, tempTbl := range cs.TempTables {
-			toDropLocal = append(toDropLocal, tempTbl)
+		for _, phys := range cs.TempTableMap {
+			toDropLocal = append(toDropLocal, phys)
 		}
 
 		cs.TableVars = nil
-		cs.TempTables = nil
 		cs.TempTableMap = nil
 		cs.EphemeralTables = nil
 		cs.PreparedStmts = nil
@@ -708,12 +707,11 @@ func (c *Coordinator) ResetSession(id string, resetTx bool) error {
 	for _, physTable := range cs.TableVars {
 		toDropLocal = append(toDropLocal, physTable)
 	}
-	for _, tempTbl := range cs.TempTables {
-		toDropLocal = append(toDropLocal, tempTbl)
+	for _, phys := range cs.TempTableMap {
+		toDropLocal = append(toDropLocal, phys)
 	}
 
 	cs.TableVars = nil
-	cs.TempTables = nil
 	cs.TempTableMap = nil
 	cs.EphemeralTables = nil
 	cs.PreparedStmts = nil

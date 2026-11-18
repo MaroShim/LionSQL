@@ -417,7 +417,7 @@
 | `DONE` | **`REFACTOR-OCC-FLAT-1`** |  | Storage | P2 | Flat 코덱 신뢰성 및 동시성 결함 보강 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `PENDING` | **`REFACTOR-SESSION-OBJECTS-LIFECYCLE-SSOT-1`** |  | Engine | P2 | 세션 임시 객체(TableVars, TempTables, EphemeralTables) 라이프사이클 SSOT 통합 | [`notes/SESSION_OBJECTS_LIFECYCLE_SSOT_PLAN.ko.md`](notes/SESSION_OBJECTS_LIFECYCLE_SSOT_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-SESSION-TRANSACTION-INVARIANT-1`** | `1.0-GA` | Engine | P1 | 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
-| `PENDING` | **`REFACTOR-TEMPORARY-TABLES-SSOT-1`** |  | Engine | P2 | TempTables 슬라이스 제거 및 TempTableMap 단일 진실원천 통합 | [`notes/TEMPORARY_TABLES_SSOT_PLAN.ko.md`](notes/TEMPORARY_TABLES_SSOT_PLAN.ko.md) |  |
+| `DONE` | **`REFACTOR-TEMPORARY-TABLES-SSOT-1`** |  | Engine | P2 | TempTables 슬라이스 제거 및 TempTableMap 단일 진실원천 통합 | [`notes/TEMPORARY_TABLES_SSOT_PLAN.ko.md`](notes/TEMPORARY_TABLES_SSOT_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-TRANSACTIONAL-DDL-ISOLATION-1`** | `1.0-GA` | Engine | P1 | 트랜잭셔널 DDL 섀도 카탈로그 격리 및 크래시 데이터 유실 방지 | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-TRANSACTIONAL-DDL-UNDO-SSOT-1`** |  | Engine | P1 | 트랜잭셔널 DDL 언두 및 커밋 액션 tx.Context SSOT 일원화 | [`notes/TRANSACTIONAL_DDL_UNDO_SSOT_PLAN.ko.md`](notes/TRANSACTIONAL_DDL_UNDO_SSOT_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-TSQL-SESSION-VARS-VDBE-1`** | `v0.94.0` | Engine | P1 | sqlexec 텍스트 치환 전면 폐지 및 T-SQL 세션 변수 VDBE AST/레지스터 바인딩 일원화 | [`notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md`](notes/plans/REFACTOR_TSQL_SESSION_VARS_VDBE_PLAN.ko.md) |  |
@@ -4246,8 +4246,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] TempTables 슬라이스 제거 및 TempTableMap 단일 진실원천 통합 `REFACTOR-TEMPORARY-TABLES-SSOT-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 13:42:58
+### [DONE] TempTables 슬라이스 제거 및 TempTableMap 단일 진실원천 통합 `REFACTOR-TEMPORARY-TABLES-SSOT-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 13:53:07
 - **Plan Doc**: [`notes/TEMPORARY_TABLES_SSOT_PLAN.ko.md`](notes/TEMPORARY_TABLES_SSOT_PLAN.ko.md)
 
 ---

@@ -72,8 +72,7 @@ type ClientSession struct {
 	Vars            map[string]any
 	VarLengths      map[string]int    // @var -> max length constraint (e.g. VARCHAR(1))
 	TableVars       map[string]string // @table_var -> physical table name
-	TempTables      []string          // session-scoped #temp_tables
-	TempTableMap    map[string]string // user #temp_table name -> physical __temp_<sessionID>_tableName
+	TempTableMap    map[string]string // user #temp_table name -> physical __temp_<sessionID>_tableName (SSOT)
 	EphemeralTables map[string]*EphemeralTable // session-local in-memory ephemeral tables (e.g. materialized CTEs)
 	PreparedStmts   map[string]*PreparedStatement
 	Cursors         map[string]*SessionCursor // server-side cursor state
@@ -340,27 +339,17 @@ func (cs *ClientSession) RegisterTempTable(tbl string) string {
 		clean := strings.TrimPrefix(lower, "#")
 		phys = fmt.Sprintf("__temp_%s_%s", sessID, clean)
 	} else {
+		// Bare temporary table name (e.g. Postgres CREATE TEMP TABLE tbl)
 		userKey = lower
 		phys = fmt.Sprintf("__temp_%s_%s", sessID, lower)
-		cs.TempTableMap["#"+userKey] = phys
 	}
 	cs.TempTableMap[userKey] = phys
-	found := false
-	for _, existing := range cs.TempTables {
-		if existing == phys {
-			found = true
-			break
-		}
-	}
-	if !found {
-		cs.TempTables = append(cs.TempTables, phys)
-	}
 	return phys
 }
 
 // GetTempTablePhysical returns the registered physical table name for a local #temp table if registered.
 func (cs *ClientSession) GetTempTablePhysical(tbl string) (string, bool) {
-	if cs == nil || !strings.HasPrefix(tbl, "#") || strings.HasPrefix(tbl, "##") || strings.HasPrefix(tbl, "#__") {
+	if cs == nil || strings.HasPrefix(tbl, "##") || strings.HasPrefix(tbl, "#__") {
 		return tbl, false
 	}
 	cs.Mu.Lock()
@@ -368,8 +357,20 @@ func (cs *ClientSession) GetTempTablePhysical(tbl string) (string, bool) {
 	if cs.TempTableMap == nil {
 		return "", false
 	}
-	phys, exists := cs.TempTableMap[strings.ToLower(tbl)]
-	return phys, exists
+	lower := strings.ToLower(tbl)
+	if phys, exists := cs.TempTableMap[lower]; exists {
+		return phys, true
+	}
+	if !strings.HasPrefix(lower, "#") {
+		if phys, exists := cs.TempTableMap["#"+lower]; exists {
+			return phys, true
+		}
+	} else {
+		if phys, exists := cs.TempTableMap[strings.TrimPrefix(lower, "#")]; exists {
+			return phys, true
+		}
+	}
+	return "", false
 }
 
 // UnregisterTempTable unregisters a dropped local temporary table.
@@ -383,33 +384,38 @@ func (cs *ClientSession) UnregisterTempTable(tbl string) {
 		return
 	}
 	lower := strings.ToLower(tbl)
-	if strings.HasPrefix(lower, "__temp_") {
-		for k, v := range cs.TempTableMap {
-			if strings.EqualFold(v, lower) {
-				delete(cs.TempTableMap, k)
-			}
-		}
-		for i, t := range cs.TempTables {
-			if strings.EqualFold(t, lower) {
-				cs.TempTables = append(cs.TempTables[:i], cs.TempTables[i+1:]...)
-				break
-			}
-		}
+	sessID := MangleSessionIDForIdent(cs.ID)
+	prefix := fmt.Sprintf("__temp_%s_", strings.ToLower(sessID))
+	if strings.HasPrefix(lower, prefix) {
+		clean := strings.TrimPrefix(lower, prefix)
+		delete(cs.TempTableMap, "#"+clean)
+		delete(cs.TempTableMap, clean)
 		return
 	}
-	if !strings.HasPrefix(lower, "#") || strings.HasPrefix(lower, "##") || strings.HasPrefix(lower, "#__") {
-		return
+	delete(cs.TempTableMap, lower)
+	delete(cs.TempTableMap, "#"+strings.TrimPrefix(lower, "#"))
+	delete(cs.TempTableMap, strings.TrimPrefix(lower, "#"))
+}
+
+// TempTablePhysicalNames returns a slice of all unique physical table names currently registered for this session.
+func (cs *ClientSession) TempTablePhysicalNames() []string {
+	if cs == nil {
+		return nil
 	}
-	phys, exists := cs.TempTableMap[lower]
-	if exists {
-		delete(cs.TempTableMap, lower)
-		for i, t := range cs.TempTables {
-			if t == phys || t == lower {
-				cs.TempTables = append(cs.TempTables[:i], cs.TempTables[i+1:]...)
-				break
-			}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if len(cs.TempTableMap) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(cs.TempTableMap))
+	physList := make([]string, 0, len(cs.TempTableMap))
+	for _, phys := range cs.TempTableMap {
+		if _, ok := seen[phys]; !ok {
+			seen[phys] = struct{}{}
+			physList = append(physList, phys)
 		}
 	}
+	return physList
 }
 
 // IsTxFailed reports whether the session's active transaction has aborted ('E' status in PGWire).
