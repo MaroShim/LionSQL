@@ -1427,6 +1427,9 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 	}
 
 	var tempTableNames []string
+	origMainSQL := mainSQL
+	cteTempMap := make(map[string]string, len(ctes))
+	cteMap := make(map[string]planner.CTEInfo, len(ctes))
 	defer func() {
 		if retErr != nil {
 			if startedImplicitTx && cs != nil {
@@ -1490,6 +1493,8 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 		// 2. Materialize into session-local in-memory ephemeral table (Zero-DDL)
 		tempName := fmt.Sprintf("#__cte_%s_%d", cte.Name, atomic.AddUint64(&cteGlobalSeq, 1))
 		tempTableNames = append(tempTableNames, tempName)
+		cteTempMap[strings.ToLower(cleanIdentifier(cte.Name))] = tempName
+		cteMap[strings.ToLower(cleanIdentifier(cte.Name))] = cte
 
 		if len(res.Columns) == 0 {
 			continue
@@ -1550,7 +1555,21 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 		mainSQL = replaceIdentOutsideQuotes(mainSQL, cte.Name, tempName)
 	}
 
-	mainRes, mainErr := s.execSingleStatement(cs, mainSQL)
+	var mainRes *QueryResult
+	var mainErr error
+
+	if dml, err := ParseDMLCommand(origMainSQL); err == nil && (dml.kind == dmlDelete || dml.kind == dmlUpdate) {
+		cleanTbl := strings.ToLower(cleanIdentifier(dml.Table))
+		if targetCTE, isCTE := cteMap[cleanTbl]; isCTE {
+			tempName := cteTempMap[cleanTbl]
+			mainRes, mainErr = s.execUpdatableCTEDML(cs, targetCTE, tempName, dml, start)
+		} else {
+			mainRes, mainErr = s.execSingleStatement(cs, mainSQL)
+		}
+	} else {
+		mainRes, mainErr = s.execSingleStatement(cs, mainSQL)
+	}
+
 	if mainErr != nil {
 		return nil, mainErr
 	}
@@ -1570,6 +1589,100 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 	}
 
 	return mainRes, nil
+}
+
+func (s *Coordinator) execUpdatableCTEDML(cs *ClientSession, cte planner.CTEInfo, tempName string, dml *DMLStatement, start time.Time) (*QueryResult, error) {
+	// 1. Parse the CTE query to find the underlying base table
+	p := planner.NewPlanner()
+	unwrappedInner := sqlutil.UnwrapOuterParens(strings.TrimSpace(cte.InnerSQL))
+	qInfo, err := p.ParseSelect(unwrappedInner)
+	if err != nil || qInfo == nil || qInfo.TableName == "" {
+		return nil, fmt.Errorf("updatable CTE %q: cannot determine underlying base table: %w", cte.Name, err)
+	}
+
+	baseTableName := cleanIdentifier(qInfo.TableName)
+	baseSchema, err := s.engine.GetTable(baseTableName)
+	if err != nil {
+		return nil, fmt.Errorf("updatable CTE base table %q not found: %w", baseTableName, err)
+	}
+
+	pkCol, err := baseSchema.PrimaryKeyColumn()
+	pkName := ""
+	if err == nil && pkCol != nil {
+		pkName = pkCol.Name
+	} else if len(baseSchema.Columns) > 0 {
+		pkName = baseSchema.Columns[0].Name
+	} else {
+		return nil, fmt.Errorf("updatable CTE base table %q has no identifiable key column", baseTableName)
+	}
+
+	// 2. Select PKs of matching rows from the materialized CTE ephemeral table
+	filterWhere := dml.Where
+	selectSQL := fmt.Sprintf("SELECT %s FROM %s", pkName, tempName)
+	if filterWhere != "" {
+		selectSQL += " WHERE " + filterWhere
+	}
+
+	pkRes, err := s.execSelect(selectSQL, start, cs)
+	if err != nil {
+		return nil, fmt.Errorf("updatable CTE %q failed to evaluate target rows: %w", cte.Name, err)
+	}
+
+	if len(pkRes.Rows) == 0 {
+		cmd := "DELETE"
+		if dml.kind == dmlUpdate {
+			cmd = "UPDATE"
+		}
+		return &QueryResult{
+			Success:      true,
+			Command:      cmd,
+			RowsAffected: 0,
+			Columns:      []string{"RowsAffected"},
+			Rows:         []map[string]any{{"RowsAffected": int64(0)}},
+		}, nil
+	}
+
+	// 3. Format primary key values for the mutation IN clause
+	var pkVals []string
+	for _, row := range pkRes.Rows {
+		for _, v := range row {
+			pkVals = append(pkVals, formatSQLLiteralValue(v))
+			break
+		}
+	}
+
+	// 4. Execute mutation against the underlying physical base table
+	inClause := strings.Join(pkVals, ", ")
+	if dml.kind == dmlDelete {
+		delSQL := fmt.Sprintf("DELETE FROM %s WHERE %s IN (%s)", baseTableName, pkName, inClause)
+		return s.execDelete(delSQL, start, cs)
+	} else {
+		updSQL := fmt.Sprintf("UPDATE %s SET %s WHERE %s IN (%s)", baseTableName, dml.Set, pkName, inClause)
+		return s.execUpdate(updSQL, start, cs)
+	}
+}
+
+func formatSQLLiteralValue(v any) string {
+	if v == nil {
+		return "NULL"
+	}
+	switch val := v.(type) {
+	case int, int8, int16, int32, int64:
+		return fmt.Sprintf("%d", val)
+	case uint, uint8, uint16, uint32, uint64:
+		return fmt.Sprintf("%d", val)
+	case float32, float64:
+		return fmt.Sprintf("%f", val)
+	case bool:
+		if val {
+			return "1"
+		}
+		return "0"
+	case string:
+		return fmt.Sprintf("'%s'", strings.ReplaceAll(val, "'", "''"))
+	default:
+		return fmt.Sprintf("'%v'", val)
+	}
 }
 
 func replaceIdentOutsideQuotes(sqlStr, oldIdent, newIdent string) string {

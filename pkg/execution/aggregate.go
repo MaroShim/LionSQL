@@ -607,6 +607,45 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 		}
 	}
 
+	childMap := a.child.ColIndexMap()
+	if childMap == nil {
+		childMap = NewColumnIndexMapFromCols(a.child.Schema())
+	}
+	for _, k := range a.groupKeys {
+		trimmed := strings.TrimSpace(k)
+		if trimmed == "" || strings.ContainsAny(trimmed, " +-*/%|()") || strings.HasPrefix(trimmed, "'") || strings.HasPrefix(trimmed, "\"") {
+			continue
+		}
+		if _, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+			continue
+		}
+		cleanK := cleanIdentifierParts(trimmed)
+		bareK := cleanK
+		if dot := strings.Index(bareK, "."); dot != -1 {
+			bareK = bareK[dot+1:]
+		}
+
+		found := false
+		if childMap != nil {
+			if _, ok := childMap.Index(cleanK); ok {
+				found = true
+			} else if _, ok := childMap.Index(bareK); ok {
+				found = true
+			}
+		}
+		if !found {
+			for _, f := range a.fields {
+				if strings.EqualFold(cleanIdentifierParts(f.alias), cleanK) || strings.EqualFold(cleanIdentifierParts(f.alias), bareK) {
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			return fmt.Errorf("column %q does not exist", k)
+		}
+	}
+
 	if a.colIndexMap == nil {
 		a.colIndexMap = NewColumnIndexMapFromCols(a.Schema())
 	}

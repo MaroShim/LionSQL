@@ -22,10 +22,15 @@
 | **8** | `FIX-GROUPBY-ORDINAL-POSITION-1` | Planner / Engine | **높음** | `GROUP BY 1` 등 정수 위치 지정 시 SELECT 프로젝션 서수 컬럼이 아닌 상수 리터럴로 취급되어 전체 행이 1개 그룹으로 압축되는 결함 | **완료 (DONE)** |
 | **9** | `FIX-GROUPBY-OUTPUT-ALIAS-1` | Planner / Engine | **보통** | `GROUP BY <alias>` 지정 시 출력 별칭을 해석하지 못하고 `nil`로 평가되어 전체 행이 1개 그룹으로 압축되는 결함 | **완료 (DONE)** |
 | **10** | `FIX-SETOP-INTERSECT-PRECEDENCE-1` | Planner / SetOp | **높음** | 집합 연산자 결합 시 `INTERSECT`의 높은 우선순위가 무시되고 좌측 우선 순차 평가되어 잘못된 결과셋 도출 결함 | **완료 (DONE)** |
-| **11** | `FIX-SQL-TRIM-BOTH-FROM-PARSING-1` | Engine / Parser | **보통** | ANSI SQL 표준 `TRIM([BOTH|LEADING|TRAILING] FROM)` 문법 미인식으로 식 전체가 원문 문자열 값으로 반환되는 결함 | **완료 (DONE)** |
+| **11** | `FIX-SQL-TRIM-BOTH-FROM-PARSING-1` | Engine / Parser | **보통** | ANSI SQL 표준 `TRIM([BOTH/LEADING/TRAILING] FROM)` 문법 미인식으로 식 전체가 원문 문자열 값으로 반환되는 결함 | **완료 (DONE)** |
 | **12** | `FIX-WINDOW-FIRST-LAST-VALUE-1` | Execution / Window | **높음** | 윈도우 함수 `FIRST_VALUE(...) OVER (...)`, `LAST_VALUE(...) OVER (...)` 실행기 미구현으로 조용히 `NULL` 반환 결함 | **완료 (DONE)** |
 | **13** | `FIX-SUBSTRING-TWO-ARGUMENTS-1` | Engine / Builtin | **보통** | `SUBSTRING(str, pos)` 2인자 표준 호출 시 길이 생략을 처리하지 못하고 조용히 `NULL`을 반환하는 결함 | **완료 (DONE)** |
 | **14** | `FIX-OPEN-ERROR-CURSOR-LEAK-1` | Execution / Storage | **치명적** | Volcano 및 집계 실행기 `Open()` 중 에러 발생 시 기오픈된 자식 이터레이터/스토리지 커서가 미정리되어 테이블 잠금 및 핸들 누수 발생 결함 | **완료 (DONE)** |
+| **15** | `FIX-SUBQUERY-WILDCARD-PROJECTION-LEAK-1` | Planner / Projection | **높음** | IN / NOT IN 서브쿼리 사용 시 SEMI/ANTI 조인 릴레이션의 컬럼이 SELECT * 와일드카드 프로젝션에 강제 누출되는 결함 | **완료 (DONE)** |
+| **16** | `FIX-GROUPBY-INVALID-COLUMN-VALIDATION-1` | Planner / Execution | **치명적** | GROUP BY 절에 테이블에 존재하지 않는 비유효 컬럼 지정 시 컴파일 에러 없이 조용히 전 행이 1개 그룹으로 뭉개지는 결함 | **완료 (DONE)** |
+| **17** | `FIX-CTE-DML-UPDATABLE-TARGET-1` | Engine / DML | **보통** | WITH CTE AS (...) DELETE/UPDATE 실행 시 CTE 임시 뷰 미인식 및 원본 테이블 갱신/삭제 실패 결함 | **완료 (DONE)** |
+| **18** | `FIX-OPEN-ERROR-ITERATOR-LEAK-ALL-1` | Execution / Storage | **치명적** | Volcano 반복자 전반(Window, Sort) Open 에러 시 하위 커서 미정리 누수 결함 | **완료 (DONE)** |
+| **19** | `FIX-WINDOW-INVALID-COLUMN-VALIDATION-1` | Execution / Window | **보통** | 윈도우 함수 PARTITION BY / ORDER BY에 존재하지 않는 컬럼 지정 시 사일런트 뭉개짐 결함 | **완료 (DONE)** |
 
 ---
 
@@ -285,6 +290,71 @@
 - `pkg/engine/sqlexec_select.go`:
   - `exec.Open(ctx)` 및 `currIter.Open(ctx)` 에러 반환 시 즉시 `_ = exec.Close()` / `_ = currIter.Close()`를 명시적으로 호출하여 전체 실행기 트리 및 하위 스토리지 커서를 100% 정리한 뒤 에러를 반환.
 
+### 2.14 결함 15: IN / NOT IN 서브쿼리 사용 시 SELECT * 와일드카드 프로젝션 컬럼 오염 결함 (`FIX-SUBQUERY-WILDCARD-PROJECTION-LEAK-1`)
+
+#### 1) 근본 원인
+- `pkg/planner/planner.go` 내 `BuildMultiJoinPlanWithStats` (약 1111라인):
+  - `pkg/planner/decorrelate.go`가 `WHERE val IN (SELECT val FROM _t2)` 서브쿼리를 decorrelate하여 `SEMI` / `ANTI` 조인으로 변환 후 `q.Joins`에 등록함.
+  - 플래너가 `SELECT *` 와일드카드를 실제 프로젝션 컬럼 목록으로 확장할 때, `q.Joins`의 모든 조인 대상을 순회하며 조인 타입(`SEMI`/`ANTI`)을 확인하지 않고 서브쿼리 내부 릴레이션의 모든 컬럼(`_t2.id`, `_t2.val`)을 `q.Projections`에 무조건 덧붙임.
+  - 결과적으로 외부 테이블의 컬럼 외에 서브쿼리 테이블의 컬럼까지 클라이언트에게 노출되어 ORM 엔티티 매핑 및 스키마 정합성이 파괴됨.
+
+#### 2) 수정 아키텍처
+- `pkg/planner/planner.go`:
+  - 와일드카드 `*` 확장 루프에서 조인 타입이 `SEMI` 또는 `ANTI`인 경우 (`j.Type == "SEMI" || j.Type == "ANTI"`) 프로젝션 스키마 확장 목록에서 제외하여 외부 주 릴레이션의 컬럼만 프로젝션에 유지되도록 가드 추가.
+
+---
+
+### 2.15 결함 16: GROUP BY 비유효 컬럼 지정 시 전 행 1개 그룹 뭉개짐 결함 (`FIX-GROUPBY-INVALID-COLUMN-VALIDATION-1`)
+
+#### 1) 근본 원인
+- `pkg/planner/planner.go` 및 `pkg/execution/aggregate.go`:
+  - `GROUP BY non_existent_col` 등 테이블 및 프로젝션에 존재하지 않는 컬럼명을 지정했을 때, 플래너에서 시맨틱 유효성 검사를 수행하지 않고 통과시킴.
+  - `AggregateIterator`가 행 평가 시 `lookupVal(tuple, k)`를 호출하면 `k`를 찾지 못해 `(nil, false)`가 반환되고, 모든 행이 동일한 NULL 해시 키로 분류되어 단 1개의 그룹으로 뭉개짐.
+  - 사용자는 쿼리 오타나 잘못된 컬럼을 인지하지 못한 채 완전히 왜곡된 통계 수치를 받게 됨 (`[RULE:ExplicitError]` 위반).
+
+#### 2) 수정 아키텍처
+- `pkg/planner/planner.go`:
+  - `GROUP BY` 항목 검증 단계에서, 그룹 키가 프로젝션 별칭이나 입력 릴레이션(또는 CTE, 파생 테이블)의 실제 스키마 컬럼인지 검증.
+  - 유효한 컬럼이나 별칭, 또는 정수 서수 위치가 아닌 경우 즉시 `column "%s" does not exist` 컴파일 에러를 반환하여 Fail-Closed 차단.
+
+---
+
+### 2.16 결함 17: WITH CTE 기반 DELETE / UPDATE 실행 시 기저 원본 테이블 매핑 지원 (`FIX-CTE-DML-UPDATABLE-TARGET-1`)
+
+#### 1) 근본 원인
+- `pkg/engine/sqlexec_dml.go`:
+  - `WITH cte AS (...) DELETE FROM cte WHERE ...` 또는 `UPDATE cte SET ...` 구문 실행 시, CTE가 `#___cte_...` 형태의 가상 테이블로 파싱/생성되지만, DML 실행기는 실제 스토리지 물리 테이블 카탈로그에서만 대상을 조회하여 `table "#__cte_..." not found` 에러가 발생함.
+  - T-SQL 및 표준 SQL의 Updatable CTE 스펙에 따라, CTE가 단일 기저 테이블을 프로젝션하는 경우 해당 기저 물리 테이블의 기본키(PK)를 추적하여 실제 물리 테이블의 레코드를 DELETE/UPDATE 처리해야 함.
+
+#### 2) 수정 아키텍처
+- `pkg/engine/sqlexec_dml.go`:
+  - DELETE / UPDATE 대상 테이블이 CTE 뷰인 경우, CTE 정의 AST를 분석하여 기저 물리 테이블 이름 및 행 식별자(PK)를 도출.
+  - CTE 필터 조건에 부합하는 PK 목록을 선별한 뒤, 기저 원본 물리 테이블에 대해 원자적 DELETE / UPDATE를 수행하도록 Updatable CTE DML 라우팅 파이프라인 구축.
+
+### 2.17 결함 18: Volcano 반복자 전반(Window, Sort) Open 에러 시 하위 커서 미정리 누수 결함 (`FIX-OPEN-ERROR-ITERATOR-LEAK-ALL-1`)
+
+#### 1) 근본 원인
+- `pkg/execution/window.go:49` (`WindowIterator.Open`):
+  - `w.child.Next(ctx)` 호출 루프 도중 I/O 에러가 발생하거나 `w.workMem` 초과 시 `_ = w.child.Close()`가 누락된 채 즉시 반환되는 경로 존재 (`line 65`).
+- `pkg/execution/sort.go:212` (`SortIterator.Open`):
+  - `retErr != nil` 시 `s.releaseSpillResources()`만 호출하고 `s.child.Close()`를 호출하지 않아 정렬 단계 에러 시 하위 테이블 커서가 미정리 상태로 남음.
+
+#### 2) 수정 아키텍처
+- `WindowIterator.Open`: `defer func() { if retErr != nil && w.child != nil { _ = w.child.Close() } }()` 적용.
+- `SortIterator.Open`: `defer func() { if retErr != nil { s.releaseSpillResources(); if s.child != nil { _ = s.child.Close() } } }()` 적용.
+
+---
+
+### 2.18 결함 19: 윈도우 함수 PARTITION BY / ORDER BY 비유효 컬럼 시맨틱 검증 결함 (`FIX-WINDOW-INVALID-COLUMN-VALIDATION-1`)
+
+#### 1) 근본 원인
+- `pkg/execution/window.go:102`:
+  - `winDef.PartitionKeys` 또는 `winDef.OrderByKeys`에 오타나 존재하지 않는 컬럼명이 들어올 경우, `t.Get(col)`이 조용히 `nil`을 반환하여 전 행이 단 1개의 파티션으로 묶이거나 정렬이 무시됨.
+
+#### 2) 수정 아키텍처
+- `WindowIterator.Open`:
+  - 자식 릴레이션의 `Schema()` 및 `ColIndexMap()`을 검사하여, 파티션 키나 정렬 키가 유효하지 않은 경우 즉시 `column "%s" does not exist` 에러를 반환.
+
 ---
 
 ## 3. 회귀 테스트(Regression Test) 구축 전략
@@ -337,6 +407,16 @@
 11. `pkg/engine/open_error_cursor_leak_test.go`:
     - `Aggregate_OpenError_ClosesChildIterator`: Open 실패 시 하위 child.Close() 호출 검증 (PASS)
     - `Engine_OpenError_VolcanoCleanTeardown`: 쿼리 실행 에러 직후 DROP TABLE 성공 검증 (커서 미누수, PASS)
+12. `pkg/engine/subquery_wildcard_leak_test.go`:
+    - `SELECT * FROM _t1 WHERE val IN (SELECT val FROM _t2)` -> 오직 `_t1`의 컬럼만 반환 검증 (PASS)
+    - `SELECT * FROM _t1 WHERE val NOT IN (SELECT val FROM _t2)` -> 오직 `_t1`의 컬럼만 반환 검증 (PASS)
+13. `pkg/engine/groupby_invalid_col_test.go`:
+    - `SELECT dept_id, COUNT(*) FROM _t GROUP BY non_existent_col` -> `column "non_existent_col" does not exist` 컴파일 에러 검증 (PASS)
+    - `SELECT id, ROW_NUMBER() OVER (PARTITION BY bad_col ...)` -> `column "bad_col" does not exist` 컴파일 에러 검증 (PASS)
+    - `SELECT id, ROW_NUMBER() OVER (ORDER BY invalid_ord_col)` -> `column "invalid_ord_col" does not exist` 컴파일 에러 검증 (PASS)
+14. `pkg/engine/cte_dml_test.go`:
+    - `WITH dupes AS (...) DELETE FROM dupes WHERE rn > 1` -> 기저 테이블 중복 행 삭제 검증 (PASS)
+    - `WITH target AS (...) UPDATE target SET val = 999 WHERE id = 1` -> 기저 테이블 갱신 검증 (PASS)
 
 ---
 

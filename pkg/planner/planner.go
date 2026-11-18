@@ -1145,6 +1145,10 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			}
 		}
 		for _, j := range allJoins {
+			if strings.EqualFold(j.Type, "SEMI") || strings.EqualFold(j.Type, "ANTI") ||
+				strings.EqualFold(j.Type, "LEFT SEMI") || strings.EqualFold(j.Type, "LEFT ANTI") {
+				continue
+			}
 			rPrefix := j.Alias
 			if rPrefix == "" {
 				rPrefix = j.Table

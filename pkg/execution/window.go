@@ -46,13 +46,18 @@ func (w *WindowIterator) SetWorkMem(bytes int64) {
 	}
 }
 
-func (w *WindowIterator) Open(ctx context.Context) error {
+func (w *WindowIterator) Open(ctx context.Context) (retErr error) {
 	if w.child == nil {
 		return fmt.Errorf("window: child iterator is nil")
 	}
 	if err := w.child.Open(ctx); err != nil {
 		return err
 	}
+	defer func() {
+		if retErr != nil && w.child != nil {
+			_ = w.child.Close()
+		}
+	}()
 
 	w.rows = nil
 	w.accumMemory = 0
@@ -88,6 +93,41 @@ func (w *WindowIterator) Open(ctx context.Context) error {
 
 	// Process each window definition and augment rows with the computed values
 	for _, winDef := range w.windowDefs {
+		// Validate partition and order by columns exist in the child schema
+		for _, pCol := range winDef.PartitionKeys {
+			cleanPCol := strings.TrimSpace(cleanIdentifierParts(pCol))
+			if cleanPCol == "" || strings.ContainsAny(cleanPCol, " +-*/%|()") {
+				continue
+			}
+			if _, ok := currIndexMap.Index(cleanPCol); !ok {
+				bare := cleanPCol
+				if dot := strings.Index(bare, "."); dot != -1 {
+					bare = bare[dot+1:]
+				}
+				if _, ok2 := currIndexMap.Index(bare); !ok2 {
+					return fmt.Errorf("column %q does not exist", pCol)
+				}
+			}
+		}
+		for _, ord := range winDef.OrderByKeys {
+			cleanOrd := strings.TrimSpace(cleanIdentifierParts(ord.Column))
+			if cleanOrd == "" || strings.ContainsAny(cleanOrd, " +-*/%|()") {
+				continue
+			}
+			if _, err := strconv.ParseInt(cleanOrd, 10, 64); err == nil {
+				continue
+			}
+			if _, ok := currIndexMap.Index(cleanOrd); !ok {
+				bare := cleanOrd
+				if dot := strings.Index(bare, "."); dot != -1 {
+					bare = bare[dot+1:]
+				}
+				if _, ok2 := currIndexMap.Index(bare); !ok2 {
+					return fmt.Errorf("column %q does not exist", ord.Column)
+				}
+			}
+		}
+
 		winValues := make([]any, len(w.rows))
 
 		// 1. Group rows into partitions: map of partitionKey -> []int (row indices)

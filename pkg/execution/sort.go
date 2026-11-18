@@ -222,6 +222,9 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 	defer func() {
 		if retErr != nil {
 			s.releaseSpillResources()
+			if s.child != nil {
+				_ = s.child.Close()
+			}
 		}
 	}()
 
