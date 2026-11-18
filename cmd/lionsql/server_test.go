@@ -1,7 +1,9 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -40,5 +42,29 @@ func TestResolveDefaultDataDirFromExe(t *testing.T) {
 				t.Errorf("expected %q, got %q", tc.expected, actual)
 			}
 		})
+	}
+}
+
+func TestOpenDaemonLogFile_PermissionsAndAutoDir(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "sub", "test_lionsql.log")
+
+	fd, err := openDaemonLogFile(logPath)
+	if err != nil {
+		t.Fatalf("openDaemonLogFile failed: %v", err)
+	}
+	defer fd.Close()
+
+	testMsg := "[LionSQL] Foreground Tee Log Verification"
+	if _, err := fd.WriteString(testMsg + "\n"); err != nil {
+		t.Fatalf("failed to write to log fd: %v", err)
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read created log file: %v", err)
+	}
+	if !strings.Contains(string(data), testMsg) {
+		t.Errorf("expected log file to contain %q, got %q", testMsg, string(data))
 	}
 }

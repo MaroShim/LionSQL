@@ -265,6 +265,9 @@ func renderDaemonStartupOutput(childPID int, engineType, dataDir, logFile, pidFi
 // openDaemonLogFile opens the daemon log file with 0600 permissions ([RULE:PathSecurity]).
 func openDaemonLogFile(logFile string) (*os.File, error) {
 	cleanPath := filepath.Clean(logFile)
+	if err := os.MkdirAll(filepath.Dir(cleanPath), 0755); err != nil {
+		return nil, err
+	}
 	logFd, err := os.OpenFile(cleanPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return nil, err

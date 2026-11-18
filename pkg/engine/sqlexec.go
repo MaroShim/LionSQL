@@ -24,6 +24,14 @@ import (
 
 // QueryResult represents the outcome of a SQL statement execution (aliased from engine.QueryResult).
 
+func truncateForLog(s string, maxLen int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + " ...[truncated]"
+}
+
 // parseTableVarDecl parses DECLARE @var TABLE [(colDefs...)] using lexical token scanning.
 // Returns (varName, colDefs, isTableDecl, hasColDefs).
 func parseTableVarDecl(query string) (varName string, colDefs string, isTableDecl bool, hasColDefs bool) {
@@ -489,6 +497,17 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 		}
 		if s.Metrics() != nil {
 			s.Metrics().RecordQuery(cmd, dur, isErr, isSlow)
+		}
+		if isErr {
+			var errStr string
+			if execErr != nil {
+				errStr = execErr.Error()
+			} else if lastRes != nil {
+				errStr = lastRes.Error
+			}
+			log.Printf("[QUERY-ERROR] session=%s duration=%s err=%s query=%q", sessionID, dur, errStr, truncateForLog(query, 500))
+		} else if isSlow {
+			log.Printf("[SLOW-QUERY] session=%s duration=%s rows=%d query=%q", sessionID, dur, rowsAffected, truncateForLog(query, 500))
 		}
 
 		if !isNested {

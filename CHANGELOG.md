@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- auto-detect local Git commit hash in `pkg/config/version.go` via `.git/HEAD` inspection, eliminating `commit: dev` fallback in local builds
+- persist foreground server system and error logs to `data/lionsql.log` via `io.MultiWriter(os.Stderr, logFd)`, ensuring parity with daemon mode while keeping non-dev console output clean
+- log query execution failures (`[QUERY-ERROR]`) and slow queries (`[SLOW-QUERY]`) in `pkg/engine/sqlexec.go` to `data/lionsql.log` for diagnostic visibility without enabling full `-dev` query tracing
 - support PostgreSQL syntax sugar: route `CREATE TEMP TABLE` / `CREATE TEMPORARY TABLE` to session-isolated temporary tables (`__temp_<sessID>_*`), lower `RETURNING` to `OUTPUT` record streaming, and support `LIMIT/OFFSET` (`FEAT-POSTGRES-SYNTAX-SUGAR-1`)
 - implement T-SQL `OPENJSON` Table-Valued Function (TVF) with default 3-column mode (`key`, `value`, `type`), `WITH (...)` explicit schema projection, `AS JSON` nested extraction, and JSON path navigation (`FEAT-OPENJSON-TVF-1`)
 - add `SubstituteIdentsSinglePass` in `pkg/sqlutil/params.go` for safe, single-pass token-boundary identifier substitution outside strings and comments

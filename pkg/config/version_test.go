@@ -11,6 +11,7 @@ func TestVersion_CompactAndDetailed(t *testing.T) {
 	}
 
 	compact := CompactVersion()
+	t.Logf("CompactVersion output: %s", compact)
 	if !strings.HasPrefix(compact, "(built: ") {
 		t.Errorf("expected compact version to start with '(built: ', got %q", compact)
 	}

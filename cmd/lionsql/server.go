@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -424,7 +425,20 @@ func runServer(args []string) error {
 		defer dirLock.Release()
 	}
 
+	var fgLogFd *os.File
 	if !*isChildWorker {
+		// In foreground server mode, tee all system/error logs to data/lionsql.log ([RULE:ExplicitError], [RULE:PathSecurity])
+		if *backupTarget == "" && *restoreSource == "" && *archiveWalFile == "" && cfg.Server.DataDir != "" && resolvedLogFile != "" {
+			if fd, err := openDaemonLogFile(resolvedLogFile); err == nil {
+				fgLogFd = fd
+				log.SetOutput(io.MultiWriter(os.Stderr, fgLogFd))
+				defer func() {
+					log.SetOutput(os.Stderr)
+					_ = fgLogFd.Close()
+				}()
+			}
+		}
+
 		if cfg.Server.DataDir != "" {
 			// Prevent multiple server instances from running concurrently on the same data directory
 			if existingPid, err := readPidFile(resolvedPidFile); err == nil && isProcessAlive(existingPid) && existingPid != os.Getpid() {
@@ -932,7 +946,11 @@ func runServer(args []string) error {
 			bCtx.OutboxFilter = cfg.Outbox.TableFilter
 		}
 
-		fmt.Print(renderStartupBanner(cfg, bCtx))
+		banner := renderStartupBanner(cfg, bCtx)
+		fmt.Print(banner)
+		if fgLogFd != nil {
+			_, _ = fgLogFd.WriteString(banner)
+		}
 
 		if httpServer != nil {
 			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
