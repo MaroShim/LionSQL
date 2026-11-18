@@ -594,6 +594,8 @@ func (e *Engine) Open(dir string) error {
 
 	e.loadCatalog()
 
+	e.cleanupOrphanTempFiles()
+
 	if err := e.migrateIndexFiles(); err != nil {
 		_ = C.go_wt_close(conn)
 		e.conn = nil
@@ -608,6 +610,22 @@ func (e *Engine) Open(dir string) error {
 	go e.startPeriodicSync(stopCh)
 
 	return nil
+}
+
+// cleanupOrphanTempFiles removes unclosed temporary table files (#__dt_*.wt) left over
+// from crashes or abrupt process terminations ([RULE:CleanTeardown]).
+func (e *Engine) cleanupOrphanTempFiles() {
+	if e.homeDir == "" {
+		return
+	}
+	pattern := filepath.Join(e.homeDir, "#__dt_*.wt")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return
+	}
+	for _, f := range matches {
+		_ = os.Remove(f)
+	}
 }
 
 func (e *Engine) catalogPath() string {
