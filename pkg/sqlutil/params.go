@@ -322,3 +322,118 @@ func SubstituteParamOutsideQuotes(query string, paramName string, formattedVal s
 	return SubstituteParamsSinglePass(query, map[string]string{paramName: formattedVal})
 }
 
+// SubstituteIdentsSinglePass substitutes identifier tokens outside strings and comments in a single pass.
+func SubstituteIdentsSinglePass(query string, bindings map[string]string) string {
+	if len(bindings) == 0 {
+		return query
+	}
+
+	normBindings := make(map[string]string, len(bindings))
+	for k, v := range bindings {
+		normBindings[strings.ToLower(strings.Trim(k, "[]\"'`"))] = v
+	}
+
+	var b strings.Builder
+	b.Grow(len(query) + 32)
+
+	inString := false
+	var quoteChar rune
+	runes := []rune(query)
+
+	i := 0
+	for i < len(runes) {
+		ch := runes[i]
+		if inString {
+			b.WriteRune(ch)
+			if ch == quoteChar {
+				if i+1 < len(runes) && runes[i+1] == quoteChar {
+					b.WriteRune(runes[i+1])
+					i += 2
+					continue
+				}
+				inString = false
+			}
+			i++
+			continue
+		}
+
+		if ch == '\'' || ch == '"' {
+			inString = true
+			quoteChar = ch
+			b.WriteRune(ch)
+			i++
+			continue
+		}
+
+		// Bracketed identifier: [ident]
+		if ch == '[' {
+			closeIdx := -1
+			for j := i + 1; j < len(runes); j++ {
+				if runes[j] == ']' {
+					closeIdx = j
+					break
+				}
+			}
+			if closeIdx != -1 {
+				ident := strings.ToLower(string(runes[i+1 : closeIdx]))
+				if rep, ok := normBindings[ident]; ok {
+					b.WriteString(rep)
+				} else {
+					b.WriteString(string(runes[i : closeIdx+1]))
+				}
+				i = closeIdx + 1
+				continue
+			}
+		}
+
+		// Line comment (-- ...)
+		if ch == '-' && i+1 < len(runes) && runes[i+1] == '-' {
+			b.WriteRune(ch)
+			b.WriteRune(runes[i+1])
+			i += 2
+			for i < len(runes) && runes[i] != '\n' {
+				b.WriteRune(runes[i])
+				i++
+			}
+			continue
+		}
+
+		// Block comment (/* ... */)
+		if ch == '/' && i+1 < len(runes) && runes[i+1] == '*' {
+			b.WriteRune(ch)
+			b.WriteRune(runes[i+1])
+			i += 2
+			for i < len(runes) {
+				if runes[i] == '*' && i+1 < len(runes) && runes[i+1] == '/' {
+					b.WriteRune('*')
+					b.WriteRune('/')
+					i += 2
+					break
+				}
+				b.WriteRune(runes[i])
+				i++
+			}
+			continue
+		}
+
+		if isRuneIdentChar(ch) {
+			start := i
+			for i < len(runes) && isRuneIdentChar(runes[i]) {
+				i++
+			}
+			ident := strings.ToLower(string(runes[start:i]))
+			if rep, ok := normBindings[ident]; ok {
+				b.WriteString(rep)
+			} else {
+				b.WriteString(string(runes[start:i]))
+			}
+			continue
+		}
+
+		b.WriteRune(ch)
+		i++
+	}
+
+	return b.String()
+}
+

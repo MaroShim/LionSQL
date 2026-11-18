@@ -1866,6 +1866,11 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		return s.execStringSplitSelect(cleaned, start, cs)
 	}
 
+	// 0.65. T-SQL OPENJSON table-valued function: SELECT ... FROM OPENJSON(...)
+	if isOpenJsonSelect(cleaned) {
+		return s.execOpenJsonSelect(cleaned, start, cs)
+	}
+
 	p := s.newPlanner()
 	qInfo, parseErr := p.ParseSelect(cleaned)
 	if parseErr == nil && qInfo != nil {

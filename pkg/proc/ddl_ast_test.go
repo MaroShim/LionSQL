@@ -182,3 +182,39 @@ func TestParser_CreateTable_ComputedColumn(t *testing.T) {
 		t.Fatalf("expected 3 columns, got %d", len(stmt.Columns))
 	}
 }
+
+func TestParser_CreateTable_Agents(t *testing.T) {
+	sql := `CREATE TABLE AGENTS (
+			ID BIGINT IDENTITY(1,1) PRIMARY KEY,
+			UUID VARCHAR(255) NOT NULL,
+			HOSTNAME VARCHAR(255) NOT NULL,
+			IPADDRESS VARCHAR(45) NOT NULL,
+			ISDISABLED INT DEFAULT 0
+		);`
+	p := NewParser(NewLexer(sql))
+	stmt, err := p.ParseCreateTable()
+	if err != nil {
+		t.Fatalf("ParseCreateTable AGENTS failed: %v", err)
+	}
+	if len(stmt.Columns) != 5 {
+		t.Fatalf("expected 5 columns, got %d", len(stmt.Columns))
+	}
+}
+
+func TestParser_CreateTable_Devices(t *testing.T) {
+	sql := `CREATE TABLE devices (
+		uuid VARCHAR(50) NOT NULL,
+		user_uuid VARCHAR(50) NOT NULL,
+		name VARCHAR(100) NULL,
+		created_at TIMESTAMP NULL,
+		PRIMARY KEY (uuid, user_uuid)
+	);`
+	p := NewParser(NewLexer(sql))
+	stmt, err := p.ParseCreateTable()
+	if err != nil {
+		t.Fatalf("ParseCreateTable devices failed: %v", err)
+	}
+	if len(stmt.Columns) != 4 {
+		t.Fatalf("expected 4 columns, got %d", len(stmt.Columns))
+	}
+}

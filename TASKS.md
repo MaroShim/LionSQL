@@ -6,7 +6,7 @@
 > 모든 태스크 추가, 상태 변경, 마일스톤 수정은 반드시 `./bin/sprint` CLI를 통해서만 수행해야 합니다.
 > 수정 후 `./bin/sprint backup TASKS.md` 명령으로 이 문서를 동기화하십시오.
 
-> - **Last Synced**: 2026-11-17
+> - **Last Synced**: 2026-11-18
 > - **Primary Source of Truth (SSOT)**: SQLite `sprint_tasks` Table
 > - **Backup File**: Auto-synced on task update & Git commit
 
@@ -214,6 +214,8 @@
 | `DONE` | **`FEAT-DATADIR-ENGINE-MANIFEST-1`** | `1.0-GA` | Storage | P1 | 데이터 폴더 초기화 시 엔진 매니페스트(lionsql.engine.json: wiredtiger/compact, 코덱 버전) 원자적 기록, 재기동 시 자동 감지 및 이종 엔진 명시 시 Fail-Closed 차단 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FEAT-DUAL-AI-AUDIT-PIPELINE-1`** | `1.0-GA` | Durability | P1 | Dual-AI (Antigravity & Claude) Pre-Release Audit Pipeline Automation: scripts/audit_diff.sh and scripts/release.sh Gate 0 integration | [`notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`](notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-MATVIEW-ALIAS-1`** | `v1.20.0` | FEAT | P2 | Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) | [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-OPENJSON-TVF-1`** | `v0.94.0` | Engine | P2 | T-SQL OPENJSON Table-Valued Function (TVF) 파싱 및 가상 테이블 스캔 엔진 구현 | [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-POSTGRES-SYNTAX-SUGAR-1`** | `v0.94.0` | Engine | P2 | PostgreSQL 호환 문법 슈가 지원 (CREATE TEMP TABLE DDL 라우팅 및 RETURNING -> OUTPUT AST 로워링) | [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PUREGO-WT-ENGINE`** | `v1.20.0` | Storage | P3 | WiredTiger 호환 자체 Pure-Go MVCC 스토리지 엔진 구현 및 CGo 분리 (Post-1.0) |  |  |
 | `DONE` | **`FEAT-SANDBOX-SPA-HANDLER-OSDIRFS-1`** | `v0.94.0` | ARCHITECTURE | P2 | Modernize SPA Hosting with Go os.DirFS Chroot Sandbox and Subdirectory Support | [`notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md`](notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`** | `v0.94.0` | Security | P2 | 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리) | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
@@ -257,6 +259,7 @@
 | `DONE` | **`FIX-ROLLBACK-INDEX-RESTORE-ERROR-HANDLING-1`** |  | Engine | P2 | 커밋 및 세이브포인트 롤백 과정에서 보조 인덱스 복원 오류 전파 및 복원 누락 방어 |  |  |
 | `DONE` | **`FIX-SECONDARY-INDEX-RECOVERY-FALLBACK-1`** | `2` | --domain | P2 | 2차 인덱스 복원 실패 시 자동 재구축 및 Table Scan 폴백 비활성화 체계 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-SESSION-DRAIN-CLOSE-UAF-1`** | `1.0-GA` | Engine | P2 | CloseSession 시 In-flight 쿼리 Drain 대기 보장 및 CGo UAF 크래시 방지 | [`notes/plans/FIX_SESSION_DRAIN_CLOSE_UAF_PLAN.ko.md`](notes/plans/FIX_SESSION_DRAIN_CLOSE_UAF_PLAN.ko.md) |  |
+| `DONE` | **`FIX-SESSION-VAR-EXPR-EVAL-1`** | `v0.94.0` | Engine | P1 | SET @var = expr 대화형 세션 변수 수식 평가 결함 수정 (산술 연산 보존 및 proc.EvalRowExpr 바인딩) | [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md) |  |
 | `DONE` | **`FIX-SQL-DERIVED-VALUES-1`** |  | Engine | P1 | FROM (VALUES (...), (...)) AS alias(col1, col2) 인라인 테이블 값 생성자 및 컬럼 별칭 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQL-PAREN-SELECT-1`** |  | Engine | P1 | 괄호로 감싸진 (SELECT ...) 최상위 쿼리 및 뷰/CTE 본문 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SQLUTIL-PARSER-1`** |  | Engine | P2 | pkg/sqlutil SQL 파서/정규화기 결함 보강 및 렉서 공통화 | [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md) |  |
@@ -282,6 +285,7 @@
 | `DONE` | **`FIX-TSQL-UNION-CHAIN-1`** | `1.0-GA` | Engine | P1 | 3개 이상 UNION 체인 중복 제거 오류: SELECT 1 UNION SELECT 2 UNION SELECT 2 ORDER BY 1 이 1,1,2 반환(프로시저 내부는 NULL,NULL,2) | [`test/slt_proc/30_case_and_set_ops_in_procs.slt`](test/slt_proc/30_case_and_set_ops_in_procs.slt) |  |
 | `DONE` | **`FIX-TSQL-XACT-STATE-1`** |  | Engine | P1 | TRY...CATCH 트랜잭션 상태 내장 함수 XACT_STATE() 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TX-UNIQUE-KEY-RELEASE-COLLISION-1`** | `2` | --domain | P2 | 동일 트랜잭션 내 unique 키 해제 후 재사용 시 허위 중복 충돌 방지 | [`--prio`](--prio) |  |
+| `PENDING` | **`FIX-TX-WRITE-WRITE-CONFLICT-ISOLATION-1`** | `1` | --domain | P2 | 동시 트랜잭션 Write-Write 충돌 방지 및 직렬화 충돌 감지 (Last-Write-Wins 결함 방지 및 ErrWriteConflict / Lock-Wait) | [`--priority`](--priority) |  |
 | `DONE` | **`FIX-TYPE-REAL-FLOAT-DISTINCTION-1`** | `1.0-GA` | Storage | P2 | REAL(4-byte float32) vs FLOAT(8-byte float64) 데이터 타입 분리 및 스토리지/프로토콜 정합성 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-UPDATE-SNAPSHOT-COLUMN-SWAP-1`** | `1.0-GA` | Engine | P2 | UPDATE 다중 컬럼 대입 시 원본 튜플 스냅샷 기반 평가(SET a = b, b = a 원자적 스왑 보장) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-VM-HIDDEN-ROWID-1`** |  | Engine | P1 | PK 없는 테이블에 대한 VDBE VM OpInsert 실행 시 숨은 _row_id 자동 발번 누락 수정 | [`1.0-GA`](1.0-GA) |  |
@@ -2635,6 +2639,20 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] T-SQL OPENJSON Table-Valued Function (TVF) 파싱 및 가상 테이블 스캔 엔진 구현 `FEAT-OPENJSON-TVF-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 00:40:31
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md)
+
+---
+
+### [DONE] PostgreSQL 호환 문법 슈가 지원 (CREATE TEMP TABLE DDL 라우팅 및 RETURNING -> OUTPUT AST 로워링) `FEAT-POSTGRES-SYNTAX-SUGAR-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 00:38:29
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md)
+
+---
+
 ### [PENDING] WiredTiger 호환 자체 Pure-Go MVCC 스토리지 엔진 구현 및 CGo 분리 (Post-1.0) `FEAT-PUREGO-WT-ENGINE`
 - **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `v1.20.0`
@@ -2939,6 +2957,13 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [DONE] SET @var = expr 대화형 세션 변수 수식 평가 결함 수정 (산술 연산 보존 및 proc.EvalRowExpr 바인딩) `FIX-SESSION-VAR-EXPR-EVAL-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 00:26:58
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md)
+
+---
+
 ### [DONE] FROM (VALUES (...), (...)) AS alias(col1, col2) 인라인 테이블 값 생성자 및 컬럼 별칭 지원 `FIX-SQL-DERIVED-VALUES-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:02
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
@@ -3098,6 +3123,13 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 - **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `2`
 - **Plan Doc**: [`--prio`](--prio)
+
+---
+
+### [PENDING] 동시 트랜잭션 Write-Write 충돌 방지 및 직렬화 충돌 감지 (Last-Write-Wins 결함 방지 및 ErrWriteConflict / Lock-Wait) `FIX-TX-WRITE-WRITE-CONFLICT-ISOLATION-1`
+- **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-18 00:46:24
+- **Milestone**: `1`
+- **Plan Doc**: [`--priority`](--priority)
 
 ---
 

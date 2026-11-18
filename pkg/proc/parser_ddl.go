@@ -1119,7 +1119,7 @@ func (p *Parser) parseSingleColumnDef(tableName string) (ColumnDef, error) {
 	}
 
 	// Case 3: Type before column name: `CREATE TABLE t (int a)`
-	if isDataTypeKeyword(colName) && (p.curTokenIs(TokenIdent) || (p.curToken.Literal != "" && isLetter(rune(p.curToken.Literal[0])))) {
+	if isDataTypeKeyword(colName) && !isDataTypeKeyword(p.curToken.Literal) && !p.peekTokenIs(TokenLParen) && (p.curTokenIs(TokenIdent) || (p.curToken.Literal != "" && isLetter(rune(p.curToken.Literal[0])))) {
 		actualName := cleanSchemaPrefix(p.curToken.IdentLiteral())
 		actualType := colName
 		p.nextToken()

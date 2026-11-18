@@ -296,6 +296,56 @@ func parseSessionVarValue(s string) any {
 	return ParseSessionVarValue(s)
 }
 
+func evalSessionVarExpr(rawExpr string, vars map[string]any) any {
+	expr := strings.TrimSpace(rawExpr)
+	expr = strings.TrimRight(expr, ";")
+	expr = strings.TrimSpace(expr)
+	if expr == "" {
+		return nil
+	}
+
+	// 1. Fast-path for single literals without operators or variable references
+	if !strings.ContainsAny(expr, "@+-*/%()") {
+		return parseSessionVarValue(expr)
+	}
+
+	// 2. Parse into AST expression and evaluate via proc.EvalRowExpr
+	evalVars := make(map[string]any, len(vars)*2)
+	for k, v := range vars {
+		evalVars[k] = v
+		evalVars[strings.ToLower(k)] = v
+	}
+
+	p := proc.NewParser(proc.NewLexer(expr))
+	if ast := p.ParseExpr(); ast != nil {
+		if val, err := proc.EvalRowExpr(ast, evalVars, nil); err == nil {
+			return val
+		}
+	}
+
+	// 3. Fallback: replace known session variables and attempt scalar literal parse
+	substituted := expr
+	if len(vars) > 0 {
+		keys := make([]string, 0, len(vars))
+		for k := range vars {
+			keys = append(keys, k)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			return len(keys[i]) > len(keys[j])
+		})
+		for _, k := range keys {
+			v := vars[k]
+			switch val := v.(type) {
+			case string:
+				substituted = strings.ReplaceAll(substituted, k, "'"+strings.ReplaceAll(val, "'", "''")+"'")
+			default:
+				substituted = strings.ReplaceAll(substituted, k, fmt.Sprintf("%v", val))
+			}
+		}
+	}
+	return parseSessionVarValue(substituted)
+}
+
 func isIdentChar(ch byte) bool {
 	return IsIdentChar(ch)
 }
@@ -892,11 +942,24 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	if cs != nil {
 		cs.Mu.Lock()
 		_, _, isTblDecl, _ := parseTableVarDecl(trimmed)
+		isCreateTbl := sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE TABLE", "CREATE TEMP TABLE", "CREATE TEMPORARY TABLE")
 		if len(cs.TableVars) > 0 && !isTblDecl {
 			for varName, physTable := range cs.TableVars {
 				trimmed = substituteParamOutsideQuotes(trimmed, "@"+strings.TrimPrefix(varName, "@"), "["+physTable+"]")
 			}
 			upper = strings.ToUpper(trimmed)
+		}
+		if len(cs.TempTableMap) > 0 && !isCreateTbl {
+			bareBindings := make(map[string]string)
+			for userTbl, physTable := range cs.TempTableMap {
+				if !strings.HasPrefix(userTbl, "#") {
+					bareBindings[userTbl] = "[" + physTable + "]"
+				}
+			}
+			if len(bareBindings) > 0 {
+				trimmed = sqlutil.SubstituteIdentsSinglePass(trimmed, bareBindings)
+				upper = strings.ToUpper(trimmed)
+			}
 		}
 		cs.Mu.Unlock()
 	}
@@ -1490,11 +1553,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			}
 			var val any = nil
 			if len(eqParts) == 2 {
-				expr := strings.TrimSpace(eqParts[1])
-				for k, v := range cs.Vars {
-					expr = strings.ReplaceAll(expr, k, fmt.Sprintf("%v", v))
-				}
-				val = parseSessionVarValue(expr)
+				val = evalSessionVarExpr(eqParts[1], cs.Vars)
 				if len(varFields) > 1 {
 					typeName := strings.ToUpper(varFields[1])
 					if idx := strings.Index(typeName, "("); idx != -1 {
@@ -1533,12 +1592,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	if varName, rawExpr, ok := parseSetLocalVarCommand(trimmed); ok {
 		cs.Mu.Lock()
 		defer cs.Mu.Unlock()
-		expr := strings.TrimSpace(rawExpr)
-		expr = strings.TrimRight(expr, ";")
-		for k, v := range cs.Vars {
-			expr = strings.ReplaceAll(expr, k, fmt.Sprintf("%v", v))
-		}
-		val := parseSessionVarValue(expr)
+		val := evalSessionVarExpr(rawExpr, cs.Vars)
 		if maxLen, ok := cs.VarLengths["@"+varName]; ok && maxLen > 0 {
 			if sVal, ok := val.(string); ok && len(sVal) > maxLen {
 				val = sVal[:maxLen]
@@ -1763,7 +1817,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 3. DDL: CREATE TABLE
-	if sqlutil.HasPrefixKeyword(trimmed, "CREATE TABLE") {
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE TABLE", "CREATE TEMP TABLE", "CREATE TEMPORARY TABLE") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}

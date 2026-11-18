@@ -312,7 +312,7 @@ func MangleSessionIDForIdent(sessID string) string {
 // ResolveTempTableName returns the physical table name for a session-scoped temporary table without registering it.
 // If it is not a local temporary table (e.g. ##global_temp, or ordinary table), it returns the input unchanged.
 func (cs *ClientSession) ResolveTempTableName(tbl string) string {
-	if cs == nil || !strings.HasPrefix(tbl, "#") || strings.HasPrefix(tbl, "##") || strings.HasPrefix(tbl, "#__") {
+	if cs == nil {
 		return tbl
 	}
 	cs.Mu.Lock()
@@ -323,13 +323,16 @@ func (cs *ClientSession) ResolveTempTableName(tbl string) string {
 			return phys
 		}
 	}
+	if !strings.HasPrefix(tbl, "#") || strings.HasPrefix(tbl, "##") || strings.HasPrefix(tbl, "#__") {
+		return tbl
+	}
 	// Deterministically compute mangled physical name without phantom registration
 	clean := strings.TrimPrefix(lower, "#")
 	sessID := MangleSessionIDForIdent(cs.ID)
 	return fmt.Sprintf("__temp_%s_%s", sessID, clean)
 }
 
-// RegisterTempTable registers a newly created local temporary table (either #name or __temp_<sessID>_<name>).
+// RegisterTempTable registers a newly created local temporary table (either #name, __temp_<sessID>_<name>, or bare temp table name).
 func (cs *ClientSession) RegisterTempTable(tbl string) string {
 	if cs == nil {
 		return tbl
@@ -352,7 +355,9 @@ func (cs *ClientSession) RegisterTempTable(tbl string) string {
 		clean := strings.TrimPrefix(lower, "#")
 		phys = fmt.Sprintf("__temp_%s_%s", sessID, clean)
 	} else {
-		return tbl
+		userKey = lower
+		phys = fmt.Sprintf("__temp_%s_%s", sessID, lower)
+		cs.TempTableMap["#"+userKey] = phys
 	}
 	cs.TempTableMap[userKey] = phys
 	found := false

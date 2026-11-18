@@ -23,6 +23,13 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 	}
 
 	tableName := stmt.Name
+	if stmt.Temporary && !strings.HasPrefix(tableName, "#") && !strings.HasPrefix(tableName, "__temp_") {
+		if cs != nil {
+			tableName = cs.RegisterTempTable(tableName)
+		} else {
+			tableName = "__temp_default_" + tableName
+		}
+	}
 	if len(stmt.Columns) == 0 {
 		return nil, fmt.Errorf("no columns defined for table %s", tableName)
 	}
