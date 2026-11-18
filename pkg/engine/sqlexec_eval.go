@@ -640,8 +640,8 @@ func (s *Coordinator) execIndexSelect(qInfo *planner.QueryInfo, tableName string
 
 	// Acquire transaction.
 	var tx storage.Transaction
-	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
+	if cs != nil && cs.Tx() != nil {
+		tx = cs.Tx()
 	} else {
 		session, err := s.engine.NewSession()
 		if err != nil {

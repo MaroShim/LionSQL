@@ -374,8 +374,8 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 			var tx storage.Transaction
 			var session storage.Session
 			var shouldCommit bool
-			if cs != nil && cs.Tx != nil {
-				tx = cs.Tx
+			if cs != nil && cs.Tx() != nil {
+				tx = cs.Tx()
 			} else {
 				var err error
 				session, err = s.engine.NewSession()

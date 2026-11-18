@@ -412,6 +412,7 @@
 | `DONE` | **`PLANNER-SLIM-1`** |  | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** |  | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** |  | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
+| `DONE` | **`REFACTOR-CLIENT-SESSION-TX-SSOT-1`** |  | Engine | P1 | ClientSession 트랜잭션 관리 단일 창구 통합 (tx.Manager SSOT 및 cs.Tx() 접근자 마이그레이션) | [`notes/CLIENT_SESSION_TX_REFACTOR_PLAN.ko.md`](notes/CLIENT_SESSION_TX_REFACTOR_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-ENGINE-AST-PARSER-1`** | `v0.94.0` | Engine | P1 | 엔진 내부 35+개 조잡한 문자열 파싱 레거시 전수 제거 및 pkg/proc Pratt AST 전면 전환 | [`notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md`](notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-OCC-FLAT-1`** |  | Storage | P2 | Flat 코덱 신뢰성 및 동시성 결함 보강 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-SESSION-TRANSACTION-INVARIANT-1`** | `1.0-GA` | Engine | P1 | 1세션 1트랜잭션 불변식 확립 및 세션 명령 직렬화 아키텍처 개편 | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
@@ -4207,6 +4208,12 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ### [DONE] Table-Driven Virtual Catalog Interceptor Refactoring `REFACTOR-CATALOG-INTERCEPTOR-1`
 - **Domain**: REFACTOR | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Plan Doc**: [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md)
+
+---
+
+### [DONE] ClientSession 트랜잭션 관리 단일 창구 통합 (tx.Manager SSOT 및 cs.Tx() 접근자 마이그레이션) `REFACTOR-CLIENT-SESSION-TX-SSOT-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 13:27:02
+- **Plan Doc**: [`notes/CLIENT_SESSION_TX_REFACTOR_PLAN.ko.md`](notes/CLIENT_SESSION_TX_REFACTOR_PLAN.ko.md)
 
 ---
 

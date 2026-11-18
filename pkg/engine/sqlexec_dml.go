@@ -298,8 +298,8 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 
 	var tx storage.Transaction
 	var isEphemeral bool
-	if cs != nil && cs.Tx != nil {
-		tx = wrapSessionTx(cs, cs.Tx)
+	if cs != nil && cs.Tx() != nil {
+		tx = wrapSessionTx(cs, cs.Tx())
 		isEphemeral = false
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
@@ -741,8 +741,8 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 	// 3. Begin Transaction if not already in session transaction
 	var tx storage.Transaction
 	var isEphemeral bool
-	if cs != nil && cs.Tx != nil {
-		tx = wrapSessionTx(cs, cs.Tx)
+	if cs != nil && cs.Tx() != nil {
+		tx = wrapSessionTx(cs, cs.Tx())
 		isEphemeral = false
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
@@ -1108,7 +1108,7 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
 	}
 
-	isExplicitTx := (cs != nil && cs.Tx != nil)
+	isExplicitTx := (cs != nil && cs.Tx() != nil)
 	maxAttempts := 1
 	if !isExplicitTx {
 		maxAttempts = 5
@@ -1124,7 +1124,7 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		var isEphemeral bool
 		var closeFn func()
 		if isExplicitTx {
-			tx = wrapSessionTx(cs, cs.Tx)
+			tx = wrapSessionTx(cs, cs.Tx())
 			isEphemeral = false
 		} else {
 			session, fn, err := s.acquireSessionForQuery(cs)
@@ -1368,8 +1368,8 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 
 	var tx storage.Transaction
 	var isEphemeral bool
-	if cs != nil && cs.Tx != nil {
-		tx = wrapSessionTx(cs, cs.Tx)
+	if cs != nil && cs.Tx() != nil {
+		tx = wrapSessionTx(cs, cs.Tx())
 		isEphemeral = false
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
@@ -1528,8 +1528,8 @@ func (s *Coordinator) execDeleteFromJoin(dml *DMLStatement, start time.Time, cs 
 
 	var tx storage.Transaction
 	var isEphemeral bool
-	if cs != nil && cs.Tx != nil {
-		tx = wrapSessionTx(cs, cs.Tx)
+	if cs != nil && cs.Tx() != nil {
+		tx = wrapSessionTx(cs, cs.Tx())
 		isEphemeral = false
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
@@ -1647,8 +1647,8 @@ func (s *Coordinator) execUpdateFromJoin(dml *DMLStatement, start time.Time, cs 
 
 	var tx storage.Transaction
 	var isEphemeral bool
-	if cs != nil && cs.Tx != nil {
-		tx = wrapSessionTx(cs, cs.Tx)
+	if cs != nil && cs.Tx() != nil {
+		tx = wrapSessionTx(cs, cs.Tx())
 		isEphemeral = false
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)

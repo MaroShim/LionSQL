@@ -74,8 +74,8 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	}
 
 	var tx storage.Transaction
-	if cs != nil && cs.Tx != nil {
-		tx = wrapSessionTx(cs, cs.Tx)
+	if cs != nil && cs.Tx() != nil {
+		tx = wrapSessionTx(cs, cs.Tx())
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
@@ -403,7 +403,7 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		if cs != nil {
 			cs.Mu.Lock()
 			tc := int64(cs.TranCount)
-			if tc == 0 && cs.Tx != nil {
+			if tc == 0 && cs.Tx() != nil {
 				tc = 1
 			}
 			cs.Mu.Unlock()
@@ -1350,8 +1350,8 @@ func (s *Coordinator) execSelectInto(targetTable, projections, fromClause string
 	if len(selRes.Rows) > 0 {
 		var tx storage.Transaction
 		var isEphemeral bool
-		if cs != nil && cs.Tx != nil {
-			tx = cs.Tx
+		if cs != nil && cs.Tx() != nil {
+			tx = cs.Tx()
 			isEphemeral = false
 		} else {
 			session, closeFn, err := s.acquireSessionForQuery(cs)
@@ -1417,7 +1417,7 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 		return nil, proc.DiagnoseParseFailure(cleaned, err)
 	}
 
-	isExplicitTx := (cs != nil && cs.Tx != nil)
+	isExplicitTx := (cs != nil && cs.Tx() != nil)
 	maxAttempts := 1
 	if !isExplicitTx {
 		maxAttempts = 32
@@ -1433,7 +1433,7 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 		var isEphemeral bool
 		var closeFn func()
 		if isExplicitTx {
-			tx = cs.Tx
+			tx = cs.Tx()
 		} else {
 			session, fn, err := s.acquireSessionForQuery(cs)
 			if err != nil {
@@ -1552,8 +1552,8 @@ func (s *Coordinator) execVDBESelect(cleaned string, start time.Time, cs *Client
 	}
 
 	var tx storage.Transaction
-	if cs != nil && cs.Tx != nil {
-		tx = wrapSessionTx(cs, cs.Tx)
+	if cs != nil && cs.Tx() != nil {
+		tx = wrapSessionTx(cs, cs.Tx())
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {

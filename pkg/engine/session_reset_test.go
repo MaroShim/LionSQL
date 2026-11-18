@@ -46,7 +46,7 @@ func TestCoordinator_ResetSession_IsolatesConnectionPoolState(t *testing.T) {
 		t.Fatalf("expected active session %s", sessID)
 	}
 	sess.Mu.Lock()
-	if sess.Tx == nil {
+	if sess.Tx() == nil {
 		sess.Mu.Unlock()
 		t.Fatalf("expected active uncommitted tx")
 	}
@@ -82,7 +82,7 @@ func TestCoordinator_ResetSession_IsolatesConnectionPoolState(t *testing.T) {
 
 	// 6. Verify session variables were reset
 	sess.Mu.Lock()
-	if sess.Tx != nil {
+	if sess.Tx() != nil {
 		sess.Mu.Unlock()
 		t.Fatalf("expected nil Tx after reset")
 	}

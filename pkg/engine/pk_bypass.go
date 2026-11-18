@@ -417,8 +417,8 @@ func (s *Coordinator) tryPKLookupBypass(query string, start time.Time, cs *Clien
 
 	// Acquire transaction handle
 	var tx storage.Transaction
-	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
+	if cs != nil && cs.Tx() != nil {
+		tx = cs.Tx()
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {

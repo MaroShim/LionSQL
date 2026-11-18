@@ -454,10 +454,13 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 			log.Printf("[PANIC-RECOVERY] session %s recovered from query panic: %v\n%s", sessionID, r, stack)
 			if cs != nil {
 				cs.Mu.Lock()
-				if cs.Tx != nil {
-					_ = cs.Tx.Rollback()
-					cs.Tx = nil
+				if cs.Tx() != nil {
+					_ = cs.Tx().Rollback()
+					cs.txLegacy = nil
 					cs.TranCount = 0
+				}
+				if cs.TxMgr != nil {
+					_ = cs.TxMgr.Rollback(context.Background())
 				}
 				cs.TxFailed = false
 				cs.Vars["error"] = int64(50000)
@@ -558,7 +561,7 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 		case <-queryCtx.Done():
 			if cs != nil {
 				cs.Mu.Lock()
-				if cs.Tx != nil {
+				if cs.Tx() != nil {
 					cs.TxFailed = true
 				}
 				cs.Mu.Unlock()
@@ -602,7 +605,7 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 					}
 				}
 				cs.Vars["error"] = errNum
-				if cs.Tx != nil && (cs.IsPostgres() || isTimeoutOrCancel) {
+				if cs.Tx() != nil && (cs.IsPostgres() || isTimeoutOrCancel) {
 					cs.TxFailed = true
 				}
 				cs.Mu.Unlock()
@@ -722,12 +725,15 @@ func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) e
 	if cs.closed {
 		return fmt.Errorf("session %s is closed", cs.ID)
 	}
-	if cs.Tx != nil {
+	if cs.Tx() != nil {
 		if cs.IsPostgres() {
 			return fmt.Errorf("transaction already active on session %s", cs.ID)
 		}
 		// T-SQL dialect: nested BEGIN TRANSACTION increments @@TRANCOUNT without error
 		cs.TranCount++
+		if cs.TxMgr != nil {
+			cs.TxMgr.IncNestLevel()
+		}
 		return nil
 	}
 	if cs.Session == nil {
@@ -750,7 +756,7 @@ func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) e
 		}
 		stx = t
 	}
-	cs.Tx = stx
+	cs.txLegacy = stx
 	cs.TranCount = 1
 	cs.TxFailed = false
 	return nil
@@ -764,7 +770,7 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 	}
 	cs.Mu.Lock()
 	cs.lastUsedAt = time.Now()
-	if cs.Tx == nil {
+	if cs.Tx() == nil {
 		cs.Mu.Unlock()
 		return fmt.Errorf("no active transaction to commit on session %s", cs.ID)
 	}
@@ -773,10 +779,10 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 	if cs.TxFailed {
 		if cs.TxMgr != nil {
 			_ = cs.TxMgr.Rollback(context.Background())
-		} else {
-			_ = cs.Tx.Rollback()
+		} else if cs.txLegacy != nil {
+			_ = cs.txLegacy.Rollback()
 		}
-		cs.Tx = nil
+		cs.txLegacy = nil
 		cs.TranCount = 0
 		cs.TxFailed = false
 		ddlOps := cs.ddlUndoLog
@@ -803,6 +809,9 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 	if cs.TranCount > 1 {
 		// T-SQL nested transaction: decrement tranCount only, do not physically commit
 		cs.TranCount--
+		if cs.TxMgr != nil {
+			cs.TxMgr.DecNestLevel()
+		}
 		cs.Mu.Unlock()
 		if s.Metrics() != nil {
 			s.Metrics().RecordTransaction("commit")
@@ -810,9 +819,9 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		return nil
 	}
 
-	tx := cs.Tx
+	tx := cs.Tx()
 	txMgr := cs.TxMgr
-	cs.Tx = nil
+	cs.txLegacy = nil
 	cs.TranCount = 0
 	cs.TxFailed = false
 	ddlOps := cs.ddlUndoLog
@@ -863,13 +872,13 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 	}
 	cs.Mu.Lock()
 	cs.lastUsedAt = time.Now()
-	if cs.Tx == nil {
+	if cs.Tx() == nil {
 		cs.Mu.Unlock()
 		return fmt.Errorf("no active transaction to rollback on session %s", cs.ID)
 	}
-	tx := cs.Tx
+	tx := cs.Tx()
 	txMgr := cs.TxMgr
-	cs.Tx = nil
+	cs.txLegacy = nil
 	cs.TranCount = 0
 	cs.TxFailed = false
 	ddlOps := cs.ddlUndoLog
@@ -1109,15 +1118,22 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	if namePart, ok := trimAnyPrefix(upper, trimmed, "SAVE TRANSACTION", "SAVE TRAN", "SAVEPOINT"); ok {
 		cs.Mu.Lock()
 		defer cs.Mu.Unlock()
-		if cs.Tx == nil {
+		if cs.Tx() == nil {
 			return nil, fmt.Errorf("no active transaction to create savepoint on session %s", cs.ID)
 		}
 		spName := cleanSavepointName(namePart)
 		if spName == "" {
 			return nil, fmt.Errorf("syntax error: savepoint name required")
 		}
-		if err := cs.Tx.Savepoint(spName); err != nil {
-			return nil, fmt.Errorf("savepoint error: %w", err)
+		if cs.TxMgr != nil {
+			if err := cs.TxMgr.Savepoint(spName); err != nil {
+				return nil, fmt.Errorf("savepoint error: %w", err)
+			}
+		}
+		if cs.Tx() != nil {
+			if err := cs.Tx().Savepoint(spName); err != nil {
+				return nil, fmt.Errorf("savepoint error: %w", err)
+			}
 		}
 		return &QueryResult{
 			Success:    true,
@@ -1130,15 +1146,22 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	if namePart, ok := trimAnyPrefix(upper, trimmed, "RELEASE SAVEPOINT", "RELEASE"); ok {
 		cs.Mu.Lock()
 		defer cs.Mu.Unlock()
-		if cs.Tx == nil {
+		if cs.Tx() == nil {
 			return nil, fmt.Errorf("no active transaction to release savepoint on session %s", cs.ID)
 		}
 		spName := cleanSavepointName(namePart)
 		if spName == "" {
 			return nil, fmt.Errorf("syntax error: savepoint name required")
 		}
-		if err := cs.Tx.ReleaseSavepoint(spName); err != nil {
-			return nil, fmt.Errorf("release savepoint error: %w", err)
+		if cs.TxMgr != nil {
+			if err := cs.TxMgr.ReleaseSavepoint(spName); err != nil {
+				return nil, fmt.Errorf("release savepoint error: %w", err)
+			}
+		}
+		if cs.Tx() != nil {
+			if err := cs.Tx().ReleaseSavepoint(spName); err != nil {
+				return nil, fmt.Errorf("release savepoint error: %w", err)
+			}
 		}
 		return &QueryResult{
 			Success:    true,
@@ -1162,10 +1185,15 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		if spName != "" {
 			cs.Mu.Lock()
 			defer cs.Mu.Unlock()
-			if cs.Tx == nil {
+			if cs.Tx() == nil {
 				return nil, fmt.Errorf("no active transaction to rollback on session %s", cs.ID)
 			}
-			err := cs.Tx.RollbackTo(spName)
+			if cs.TxMgr != nil {
+				if err := cs.TxMgr.RollbackTo(spName); err != nil {
+					return nil, fmt.Errorf("rollback to savepoint error: %w", err)
+				}
+			}
+			err := cs.Tx().RollbackTo(spName)
 			if err != nil {
 				return nil, fmt.Errorf("rollback to savepoint error: %w", err)
 			}

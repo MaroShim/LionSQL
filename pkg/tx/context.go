@@ -59,20 +59,24 @@ type Context struct {
 	// Error that placed the transaction into StateInError
 	Err error
 
+	// NestLevel represents transaction nesting depth (T-SQL @@TRANCOUNT parity, default 1)
+	NestLevel int
+
 	CreatedAt time.Time
 }
 
 // NewContext creates a new transaction context in StateActive.
 func NewContext(id uint64, sess storage.Session, stx storage.Transaction, opts Options, ephemeral bool) *Context {
 	return &Context{
-		ID:         id,
-		State:      StateActive,
-		Opts:       opts,
-		Ephemeral:  ephemeral,
-		Session:    sess,
+		ID:            id,
+		State:         StateActive,
+		Opts:          opts,
+		Ephemeral:     ephemeral,
+		Session:       sess,
 		StorageTx:     stx,
 		Savepoints:    NewSavepointStack(),
 		ShadowCatalog: NewShadowCatalog(),
+		NestLevel:     1,
 		CreatedAt:     time.Now(),
 	}
 }
@@ -133,4 +137,29 @@ func (c *Context) ClearDeferredActions() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.DeferredActions = nil
+}
+
+// GetNestLevel returns the transaction nesting level.
+func (c *Context) GetNestLevel() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.NestLevel
+}
+
+// IncNestLevel increments the transaction nesting depth (T-SQL BEGIN TRAN nesting).
+func (c *Context) IncNestLevel() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.NestLevel++
+	return c.NestLevel
+}
+
+// DecNestLevel decrements the transaction nesting depth (T-SQL COMMIT TRAN nesting).
+func (c *Context) DecNestLevel() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.NestLevel > 0 {
+		c.NestLevel--
+	}
+	return c.NestLevel
 }

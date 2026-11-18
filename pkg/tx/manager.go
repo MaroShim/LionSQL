@@ -60,11 +60,71 @@ func (m *Manager) Current() *Context {
 }
 
 // State returns the current transaction state.
+// Caller must hold Manager.Lock() or invoke within serialized session execution.
 func (m *Manager) State() State {
 	if m.current == nil {
 		return StateIdle
 	}
 	return m.current.GetState()
+}
+
+// InTransaction reports whether an explicit, non-ephemeral transaction is active.
+// Caller must hold Manager.Lock() or invoke within serialized session execution.
+func (m *Manager) InTransaction() bool {
+	return m.current != nil && !m.current.Ephemeral
+}
+
+// IsInError reports whether the current transaction has failed (PGWire 'E' state).
+// Caller must hold Manager.Lock() or invoke within serialized session execution.
+func (m *Manager) IsInError() bool {
+	if m.current == nil {
+		return false
+	}
+	return m.current.GetState() == StateInError
+}
+
+// ActiveStorageTx returns the active storage transaction if one exists.
+// Caller must hold Manager.Lock() or invoke within serialized session execution.
+func (m *Manager) ActiveStorageTx() storage.Transaction {
+	if m.current == nil {
+		return nil
+	}
+	return m.current.StorageTx
+}
+
+// SetActiveStorageTx updates the active storage transaction (e.g. after procedure execution).
+// Caller must hold Manager.Lock() or invoke within serialized session execution.
+func (m *Manager) SetActiveStorageTx(stx storage.Transaction) {
+	if m.current != nil {
+		m.current.StorageTx = stx
+	}
+}
+
+// NestLevel returns the current transaction nesting level (T-SQL @@TRANCOUNT).
+// Caller must hold Manager.Lock() or invoke within serialized session execution.
+func (m *Manager) NestLevel() int {
+	if m.current == nil || m.current.Ephemeral {
+		return 0
+	}
+	return m.current.GetNestLevel()
+}
+
+// IncNestLevel increments the transaction nesting depth.
+// Caller must hold Manager.Lock() or invoke within serialized session execution.
+func (m *Manager) IncNestLevel() int {
+	if m.current == nil {
+		return 0
+	}
+	return m.current.IncNestLevel()
+}
+
+// DecNestLevel decrements the transaction nesting depth.
+// Caller must hold Manager.Lock() or invoke within serialized session execution.
+func (m *Manager) DecNestLevel() int {
+	if m.current == nil {
+		return 0
+	}
+	return m.current.DecNestLevel()
 }
 
 // Session returns the underlying storage session.

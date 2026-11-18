@@ -148,7 +148,7 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 		cs := &ClientSession{
 			ID:   "internal-vm-subquery",
 			User: "sa",
-			Tx:   tx,
+			txLegacy: tx,
 			Vars: make(map[string]any, len(vars)*2),
 		}
 		for k, v := range vars {
@@ -538,14 +538,22 @@ func (c *Coordinator) ReapIdleClientSessions(idleTTL time.Duration) int {
 		cs.Mu.Lock()
 		idleDur := now.Sub(cs.lastUsedAt)
 		if !cs.closed && !cs.sessInUse && cs.activeQueries == 0 && cs.Session != nil && idleDur >= idleTTL {
-			if cs.Tx != nil {
-				_ = cs.Tx.Rollback()
-				cs.Tx = nil
+			if cs.Tx() != nil {
+				if cs.TxMgr != nil {
+					_ = cs.TxMgr.Rollback(context.Background())
+				} else {
+					_ = cs.Tx().Rollback()
+				}
+				cs.txLegacy = nil
+				cs.TranCount = 0
 				cs.TxFailed = false
 				log.Printf("[TX-IDLE-TIMEOUT] session=%s forcibly rolled back uncommitted transaction after %v idle (threshold=%v)", cs.ID, idleDur.Round(time.Millisecond), idleTTL)
 			}
 			detached = append(detached, cs.Session)
 			cs.Session = nil
+			if cs.TxMgr != nil {
+				cs.TxMgr.SetSession(nil)
+			}
 		}
 		cs.Mu.Unlock()
 	}
@@ -598,9 +606,12 @@ func (c *Coordinator) CloseSession(id string) {
 		cs.Mu.Lock()
 		inFlight := cs.activeQueries > 0 || cs.sessInUse
 		var immediateTx storage.Transaction
+		var immediateTxMgr *tx.Manager
 		if !inFlight {
-			immediateTx = cs.Tx
-			cs.Tx = nil
+			immediateTx = cs.Tx()
+			immediateTxMgr = cs.TxMgr
+			cs.txLegacy = nil
+			cs.TranCount = 0
 			cs.TxFailed = false
 		}
 
@@ -646,7 +657,9 @@ func (c *Coordinator) CloseSession(id string) {
 		cs.Mu.Unlock()
 
 		// Rollback immediate transaction outside lock ([RULE:LockHierarchy])
-		if immediateTx != nil {
+		if immediateTxMgr != nil {
+			_ = immediateTxMgr.Rollback(context.Background())
+		} else if immediateTx != nil {
 			_ = immediateTx.Rollback()
 		}
 
@@ -689,10 +702,10 @@ func (c *Coordinator) ResetSession(id string, resetTx bool) error {
 		ddlOps          []DDLUndoOp
 	)
 
-	if resetTx && cs.Tx != nil {
-		txToRollback = cs.Tx
+	if resetTx && cs.Tx() != nil {
+		txToRollback = cs.Tx()
 		txMgrToRollback = cs.TxMgr
-		cs.Tx = nil
+		cs.txLegacy = nil
 		cs.TranCount = 0
 		cs.TxFailed = false
 		ddlOps = cs.ddlUndoLog
@@ -774,7 +787,7 @@ func (c *Coordinator) GetSessionTxStatus(id string) byte {
 	}
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()
-	if cs.Tx == nil {
+	if cs.Tx() == nil {
 		return 'I'
 	}
 	if cs.TxFailed {
@@ -905,9 +918,9 @@ func (c *Coordinator) Close() error {
 	c.sessMu.Lock()
 	if defCs, ok := c.sessions["default"]; ok && defCs != nil {
 		defCs.Mu.Lock()
-		if defCs.Tx != nil {
-			_ = defCs.Tx.Rollback()
-			defCs.Tx = nil
+		if defCs.Tx() != nil {
+			_ = defCs.Tx().Rollback()
+			defCs.txLegacy = nil
 		}
 		if defCs.Session != nil {
 			if c.pool != nil {

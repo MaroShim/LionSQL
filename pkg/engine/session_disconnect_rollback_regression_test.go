@@ -62,7 +62,7 @@ func TestSession_Regression_P0_26_DisconnectRollback(t *testing.T) {
 
 	// Verify session 1 has active transaction
 	cs1.Mu.Lock()
-	if cs1.Tx == nil {
+	if cs1.Tx() == nil {
 		cs1.Mu.Unlock()
 		t.Fatalf("expected active transaction on session 1, got nil")
 	}
@@ -440,11 +440,11 @@ func TestSession_Regression_DisconnectDuringActiveTransaction_InFlightDrain(t *t
 	}
 
 	cs.Mu.Lock()
-	if cs.Tx == nil {
+	if cs.Tx() == nil {
 		cs.Mu.Unlock()
 		t.Fatalf("expected active transaction on session")
 	}
-	activeTx := cs.Tx
+	activeTx := cs.Tx()
 	cs.Mu.Unlock()
 
 	queryRunning := make(chan struct{})
@@ -458,7 +458,7 @@ func TestSession_Regression_DisconnectDuringActiveTransaction_InFlightDrain(t *t
 		// Mark query as running and hold cs.activeQueries
 		cs.Mu.Lock()
 		cs.activeQueries++
-		inFlightTxBeforeClose = cs.Tx
+		inFlightTxBeforeClose = cs.Tx()
 		cs.Mu.Unlock()
 
 		defer func() {
@@ -480,7 +480,7 @@ func TestSession_Regression_DisconnectDuringActiveTransaction_InFlightDrain(t *t
 		time.Sleep(50 * time.Millisecond)
 
 		cs.Mu.Lock()
-		inFlightTxDuringClose = cs.Tx
+		inFlightTxDuringClose = cs.Tx()
 		cs.Mu.Unlock()
 	}()
 

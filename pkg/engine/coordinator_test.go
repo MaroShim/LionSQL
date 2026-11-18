@@ -1994,7 +1994,7 @@ func TestCoordinator_Regression_P0_37_QueryPanicRecovery(t *testing.T) {
 		t.Fatalf("GetOrCreateSession failed: %v", err)
 	}
 	cs.Mu.Lock()
-	txActive := cs.Tx != nil
+	txActive := cs.Tx() != nil
 	tranCount := cs.TranCount
 	cs.Mu.Unlock()
 
@@ -2160,10 +2160,10 @@ END;`)
 	}
 	cs, _ := coord.GetOrCreateSession("sess-008")
 	cs.Mu.Lock()
-	hasTx008 := cs.Tx != nil
+	hasTx008 := cs.Tx() != nil
 	cs.Mu.Unlock()
 	if hasTx008 {
-		t.Fatalf("expected session transaction to be nil after InnerCommitProc committed, but cs.Tx is non-nil")
+		t.Fatalf("expected session transaction to be nil after InnerCommitProc committed, but cs.Tx() is non-nil")
 	}
 	res, err := coord.ExecuteSessionSQL("sess-008", "SELECT COUNT(*) AS cnt FROM audit008_tbl;")
 	if err != nil || fmt.Sprintf("%v", res.Rows[0]["cnt"]) != "2" {
@@ -2376,7 +2376,7 @@ END;`); err != nil {
 		t.Fatalf("BEGIN TRAN failed: %v", err)
 	}
 	cs.Mu.Lock()
-	hasTx014 := cs.Tx != nil
+	hasTx014 := cs.Tx() != nil
 	cs.Mu.Unlock()
 	if !hasTx014 {
 		t.Fatalf("expected active transaction on sess-014 after BEGIN TRAN")
@@ -2386,10 +2386,10 @@ END;`); err != nil {
 		t.Fatalf("EXEC CommitActiveTxProc failed: %v", err)
 	}
 	cs.Mu.Lock()
-	hasTx014After := cs.Tx != nil
+	hasTx014After := cs.Tx() != nil
 	cs.Mu.Unlock()
 	if hasTx014After {
-		t.Fatalf("expected cs.Tx to be synced to nil after procedure committed transaction")
+		t.Fatalf("expected cs.Tx() to be synced to nil after procedure committed transaction")
 	}
 	// Subsequent query on same session must succeed cleanly without ErrTxClosed
 	if _, err := coord.ExecuteSessionSQL("sess-014", "INSERT INTO audit014_tbl VALUES (2);"); err != nil {

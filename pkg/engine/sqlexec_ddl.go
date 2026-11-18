@@ -123,7 +123,7 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 
 	if cs != nil {
 		cs.Mu.Lock()
-		if cs.Tx != nil {
+		if cs.Tx() != nil {
 			if strings.HasPrefix(tableName, "#") || strings.HasPrefix(strings.ToLower(tableName), "__temp_") {
 				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
 					Kind:      DDLUndoDropTempTable,
@@ -180,7 +180,7 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 	inTx := false
 	if cs != nil {
 		cs.Mu.Lock()
-		inTx = (cs.Tx != nil)
+		inTx = (cs.Tx() != nil)
 		cs.Mu.Unlock()
 	}
 
@@ -347,7 +347,7 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *Clien
 	}
 
 	// If inside an active transaction, perform transactional truncate across all specified tables
-	if cs != nil && cs.Tx != nil {
+	if cs != nil && cs.Tx() != nil {
 		targetSet := make(map[string]bool, len(resolvedTables))
 		for _, t := range resolvedTables {
 			targetSet[strings.ToLower(t)] = true
@@ -397,7 +397,7 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *Clien
 				return nil, err
 			}
 
-			cur, err := cs.Tx.Scan(tableName)
+			cur, err := cs.Tx().Scan(tableName)
 			if err != nil {
 				return nil, err
 			}
@@ -428,7 +428,7 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *Clien
 			cur.Close()
 
 			for _, pk := range pks {
-				if err := cs.Tx.Delete(tableName, pk); err != nil {
+				if err := cs.Tx().Delete(tableName, pk); err != nil {
 					return nil, err
 				}
 			}
@@ -494,7 +494,7 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time, cs *ClientS
 		}
 		if cs != nil {
 			cs.Mu.Lock()
-			if cs.Tx != nil {
+			if cs.Tx() != nil {
 				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
 					Kind:      DDLUndoDropCreatedIndex,
 					TableName: stmt.Table,
@@ -583,7 +583,7 @@ func (s *Coordinator) execDropIndex(query string, start time.Time, cs *ClientSes
 
 	if cs != nil && idxBackup != nil {
 		cs.Mu.Lock()
-		if cs.Tx != nil {
+		if cs.Tx() != nil {
 			cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
 				Kind:        DDLUndoRestoreDroppedIndex,
 				TableName:   tableName,
@@ -1155,7 +1155,7 @@ func (s *Coordinator) execAlterTableAddColumns(tableName string, actions []proc.
 		addedCols = append(addedCols, c.Name)
 		if cs != nil {
 			cs.Mu.Lock()
-			if cs.Tx != nil {
+			if cs.Tx() != nil {
 				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
 					Kind:       DDLUndoDropAddedColumn,
 					TableName:  tableName,
@@ -1422,7 +1422,7 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 		}
 		if cs != nil {
 			cs.Mu.Lock()
-			if cs.Tx != nil {
+			if cs.Tx() != nil {
 				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
 					Kind:    DDLUndoRenameTable,
 					OldName: tableName,
@@ -1461,7 +1461,7 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 		s.InvalidatePKBypassCache()
 		if cs != nil {
 			cs.Mu.Lock()
-			if cs.Tx != nil {
+			if cs.Tx() != nil {
 				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
 					Kind:      DDLUndoRenameColumn,
 					TableName: tableName,
@@ -1550,7 +1550,7 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 		s.InvalidatePKBypassCache()
 		if cs != nil {
 			cs.Mu.Lock()
-			if cs.Tx != nil {
+			if cs.Tx() != nil {
 				for _, b := range droppedColBackups {
 					cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
 						Kind:         DDLUndoRestoreDroppedColumn,

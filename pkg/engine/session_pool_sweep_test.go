@@ -161,7 +161,7 @@ func TestCoordinator_ReapIdleClientSessions_ReclaimsAndReacquiresSafely(t *testi
 	// Active transaction client MUST retain its storage session.
 	activeCs := coord.GetSession("active-tx-client")
 	activeCs.Mu.Lock()
-	activeHasSess := activeCs.Session != nil && activeCs.Tx != nil
+	activeHasSess := activeCs.Session != nil && activeCs.Tx() != nil
 	activeCs.Mu.Unlock()
 	if !activeHasSess {
 		t.Fatalf("active transaction session must not have cs.Session detached")
@@ -220,7 +220,7 @@ func TestCoordinator_ReapIdleClientSessions_AbandonedTransactionRollback(t *test
 		t.Fatalf("expected session sess-abandoned to exist")
 	}
 	cs.Mu.Lock()
-	hasTx := cs.Tx != nil && cs.Session != nil
+	hasTx := cs.Tx() != nil && cs.Session != nil
 	cs.Mu.Unlock()
 	if !hasTx {
 		t.Fatalf("expected sess-abandoned to have active transaction and session")
@@ -230,7 +230,7 @@ func TestCoordinator_ReapIdleClientSessions_AbandonedTransactionRollback(t *test
 	waitUntilCondition(t, 500*time.Millisecond, "abandoned transaction rollback and session reap", func() bool {
 		cs.Mu.Lock()
 		defer cs.Mu.Unlock()
-		return cs.Tx == nil && cs.Session == nil
+		return cs.Tx() == nil && cs.Session == nil
 	})
 
 	// After rollback and reap, verify the uncommitted row was NOT persisted

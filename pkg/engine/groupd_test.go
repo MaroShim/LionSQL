@@ -166,8 +166,8 @@ END;`
 	if err != nil {
 		t.Fatalf("GetOrCreateSession failed: %v", err)
 	}
-	if cs.Tx == nil {
-		t.Fatalf("expected active cs.Tx, got nil")
+	if cs.Tx() == nil {
+		t.Fatalf("expected active cs.Tx(), got nil")
 	}
 
 	// Execute procedure inside transaction

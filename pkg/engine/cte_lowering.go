@@ -461,7 +461,7 @@ func (s *Coordinator) tryExecuteLoweredLinearWritableCTE(ctx context.Context, ct
 
 	if cs != nil {
 		cs.Mu.Lock()
-		activeTx = cs.Tx
+		activeTx = cs.Tx()
 		session = cs.Session
 		cs.Mu.Unlock()
 	}

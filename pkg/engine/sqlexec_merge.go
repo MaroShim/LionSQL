@@ -75,8 +75,8 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 
 	var tx storage.Transaction
 	var isEphemeral bool
-	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
+	if cs != nil && cs.Tx() != nil {
+		tx = cs.Tx()
 		isEphemeral = false
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)

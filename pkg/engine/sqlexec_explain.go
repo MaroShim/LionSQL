@@ -1407,7 +1407,7 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 
 	if hasWrite && cs != nil {
 		cs.Mu.Lock()
-		hasActiveTx := cs.Tx != nil
+		hasActiveTx := cs.Tx() != nil
 		cs.Mu.Unlock()
 
 		if !hasActiveTx {
@@ -1417,8 +1417,8 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 			startedImplicitTx = true
 		} else {
 			cs.Mu.Lock()
-			if cs.Tx != nil {
-				if err := cs.Tx.Savepoint(cteSavepointName); err == nil {
+			if cs.Tx() != nil {
+				if err := cs.Tx().Savepoint(cteSavepointName); err == nil {
 					usedSavepoint = true
 				}
 			}
@@ -1439,8 +1439,8 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 				cs.Mu.Unlock()
 			} else if usedSavepoint && cs != nil {
 				cs.Mu.Lock()
-				if cs.Tx != nil {
-					_ = cs.Tx.RollbackTo(cteSavepointName)
+				if cs.Tx() != nil {
+					_ = cs.Tx().RollbackTo(cteSavepointName)
 				}
 				cs.Mu.Unlock()
 			}
@@ -1581,8 +1581,8 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 		startedImplicitTx = false
 	} else if usedSavepoint && cs != nil {
 		cs.Mu.Lock()
-		if cs.Tx != nil {
-			_ = cs.Tx.ReleaseSavepoint(cteSavepointName)
+		if cs.Tx() != nil {
+			_ = cs.Tx().ReleaseSavepoint(cteSavepointName)
 		}
 		cs.Mu.Unlock()
 		usedSavepoint = false

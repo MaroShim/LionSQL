@@ -442,7 +442,7 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 		for _, sess := range s.SnapshotSessions() {
 			cmdStr := "AWAITING COMMAND"
 			sess.Mu.Lock()
-			if sess.Tx != nil {
+			if sess.Tx() != nil {
 				cmdStr = "TRANSACTION ACTIVE"
 			}
 			sessDb := sess.Database
@@ -564,7 +564,7 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 			}
 			if cs != nil {
 				cs.Mu.Lock()
-				if cs.Tx != nil {
+				if cs.Tx() != nil {
 					cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
 						Kind:       DDLUndoRenameColumn,
 						TableName:  tableName,
@@ -593,7 +593,7 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 		}
 		if cs != nil {
 			cs.Mu.Lock()
-			if cs.Tx != nil {
+			if cs.Tx() != nil {
 				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
 					Kind:    DDLUndoRenameTable,
 					OldName: oldTblName,

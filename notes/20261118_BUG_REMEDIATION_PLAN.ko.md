@@ -672,6 +672,32 @@
     - 복합 PK 테이블의 WAL `UPDATE`/`DELETE` 기록 재생(PITR) 정합성 검증 (PASS)
 22. `pkg/engine/open_error_cursor_leak_test.go` (`TestSetOpAndMergeJoin_OpenError_ClosesChildren`):
     - `SetOpIterator.Open()` 및 `MergeJoinIterator.Open()` 도중 자식 에러 발생 시 양쪽 자식 `Close()` 호출 검증 (PASS)
+23. `pkg/engine/ansi_sql_regression_test.go` (`TestAnsiSQL_NewBugsRegression` - Bug 23):
+    - `SUBSTRING('hello', 0)` 및 `SUBSTRING('hello', -2)` 등 음수/0 위치 지정 시 문자열 끝이 절삭되지 않고 끝까지 정상 반환 검증 (PASS)
+24. `pkg/engine/audit_round4_regression_test.go` (`TestAuditRound4_BracketStringAndHashJoin` - Bug 24):
+    - `'[ADMIN]'`과 `'ADMIN'` 비교 시 대괄호가 무단 제거되어 오매칭되지 않고 분리 평가 검증 (PASS)
+25. `pkg/engine/audit_round4_regression_test.go` (`TestAuditRound4_StoredProcNull3VL` - Bug 25):
+    - 저장 프로시저 내 `IF @a = @b` 및 `IF @a <> 10` (둘 다 NULL) 비교 시 3VL(Unknown)로 평가되어 ELSE 분기 진입 검증 (PASS)
+26. `pkg/engine/audit_round4_regression_test.go` (`TestAuditRound4_DivZeroAndOverflowAndDateDiff` - Bug 26):
+    - `SELECT 10 / 0` 실행 시 사일런트 NULL이 아닌 명시적 `division by zero` 에러 반환 검증 (PASS)
+27. `pkg/engine/audit_round4_regression_test.go` (`TestAuditRound4_DivZeroAndOverflowAndDateDiff` - Bug 27):
+    - `DATEDIFF(week/hour/minute)` 경계선 통과 횟수 `(1, 1, 1)` 계산 공식 정합성 검증 (PASS)
+28. `pkg/engine/audit_round4_regression_test.go` (`TestAuditRound4_DivZeroAndOverflowAndDateDiff` - Bug 28):
+    - `9223372036854775807 * 2` 및 `+ 1` 오버플로 시 음수 래핑 없이 `arithmetic overflow: bigint out of range` 에러 반환 검증 (PASS)
+29. `pkg/storage/wiredtiger/wt_composite_pk_test.go` (`TestWiredTiger_CompositePK_IndexScanAndFKCascade` - Bug 29):
+    - WiredTiger 보조 인덱스 스캔 시 복합 PK 파싱 및 2건 온전 반환 검증 (PASS)
+30. `pkg/storage/wiredtiger/wt_composite_pk_test.go` (`TestWiredTiger_CompositePK_IndexScanAndFKCascade` - Bug 30):
+    - WiredTiger 복합 PK 외래키 `ON DELETE CASCADE` 연쇄 삭제 정합성 검증 (PASS)
+31. `pkg/engine/audit_round4_regression_test.go` (`TestAuditRound4_MergeIntoCompositePK` - Bug 31):
+    - 복합 PK 타깃 테이블에 대한 `MERGE INTO` (MATCHED UPDATE, NOT MATCHED INSERT, NOT MATCHED BY SOURCE DELETE) 정합성 검증 (PASS)
+32. `pkg/backup/pitr_composite_pk_test.go` (`TestPITR_CompositePK_UpdateAndDelete` - Bug 32):
+    - 복합 PK 테이블의 WAL `UPDATE`/`DELETE` 기록 PITR 복구 시 무결성 검증 (PASS)
+33. `pkg/engine/audit_round4_regression_test.go` (`TestAuditRound4_BracketStringAndHashJoin` - Bug 33):
+    - `'[code1]'`과 `'code1'` Hash Join 시 대괄호 제거로 인한 오조인(False Join) 방지 검증 (PASS)
+34. `pkg/engine/open_error_cursor_leak_test.go` (`TestSetOpAndMergeJoin_OpenError_ClosesChildren` - Bug 34):
+    - `SetOpIterator.Open()` 도중 우측 자식 에러 발생 시 양쪽 커서 안전 닫힘 검증 (PASS)
+35. `pkg/engine/open_error_cursor_leak_test.go` (`TestSetOpAndMergeJoin_OpenError_ClosesChildren` - Bug 35):
+    - `MergeJoinIterator.Open()` 초기 Pull 에러 시 양쪽 자식 커서 안전 닫힘 검증 (PASS)
 
 ---
 

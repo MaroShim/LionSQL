@@ -265,8 +265,8 @@ func (s *Coordinator) execPreparedStatement(prep *PreparedStatement, rawArgs []s
 	// 3. Acquire transaction
 	var tx storage.Transaction
 	var isEphemeral bool
-	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
+	if cs != nil && cs.Tx() != nil {
+		tx = cs.Tx()
 	} else {
 		session, err := s.engine.NewSession()
 		if err != nil {
