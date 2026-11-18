@@ -453,6 +453,11 @@ func (s *Server) CloseSession(id string) {
 	s.coordinator.CloseSession(id)
 }
 
+// ResetSession restores a persistent client session to a clean, isolated initial state for connection pooling reuse.
+func (s *Server) ResetSession(id string, resetTx bool) error {
+	return s.coordinator.ResetSession(id, resetTx)
+}
+
 // GetSession returns the active ClientSession by ID, or nil if not found.
 func (s *Server) GetSession(id string) *ClientSession {
 	return s.coordinator.GetSession(id)
@@ -624,6 +629,7 @@ func (s *Server) routes() {
 	// SQL Query Execution API
 	s.mux.HandleFunc("POST /api/sql", s.wrapAuth(s.handleExecuteSQL, false, ""))
 	s.mux.HandleFunc("POST /api/query/cancel", s.wrapSuperuser(s.handleQueryCancel))
+	s.mux.HandleFunc("POST /api/session/reset", s.wrapSuperuser(s.handleSessionReset))
 	s.mux.HandleFunc("GET /api/queries/active", s.wrapSuperuser(s.handleListActiveQueries))
 	s.mux.HandleFunc("GET /api/overview", s.wrapAuth(s.handleOverviewStats, false, ""))
 

@@ -667,6 +667,92 @@ func (c *Coordinator) CloseSession(id string) {
 	}
 }
 
+// ResetSession restores a persistent client session to a clean, isolated initial state for connection pooling reuse.
+// If resetTx is true, any active uncommitted transaction is rolled back.
+// All temporary tables (#temp), table variables, session cursors, and custom session variables are reset.
+func (c *Coordinator) ResetSession(id string, resetTx bool) error {
+	if id == "" {
+		return nil
+	}
+
+	cs := c.GetSession(id)
+	if cs == nil {
+		return nil
+	}
+
+	cs.Mu.Lock()
+	cs.lastUsedAt = time.Now()
+
+	var (
+		txToRollback    storage.Transaction
+		txMgrToRollback *tx.Manager
+		ddlOps          []DDLUndoOp
+	)
+
+	if resetTx && cs.Tx != nil {
+		txToRollback = cs.Tx
+		txMgrToRollback = cs.TxMgr
+		cs.Tx = nil
+		cs.TranCount = 0
+		cs.TxFailed = false
+		ddlOps = cs.ddlUndoLog
+		cs.ddlUndoLog = nil
+	}
+
+	// Snapshot local temp tables and table variables to drop outside lock ([RULE:LockHierarchy])
+	var toDropLocal []string
+	for _, physTable := range cs.TableVars {
+		toDropLocal = append(toDropLocal, physTable)
+	}
+	for _, tempTbl := range cs.TempTables {
+		toDropLocal = append(toDropLocal, tempTbl)
+	}
+
+	cs.TableVars = nil
+	cs.TempTables = nil
+	cs.TempTableMap = nil
+	cs.EphemeralTables = nil
+	cs.PreparedStmts = nil
+	if cs.Cursors != nil {
+		clear(cs.Cursors)
+	}
+
+	// Reset user variables and restore default system variables
+	cs.Vars = make(map[string]any)
+	cs.Vars["transaction_isolation"] = "read committed"
+	cs.Vars["search_path"] = `"$user", public`
+	cs.Vars["timezone"] = "UTC"
+	cs.VarLengths = nil
+
+	// Revert user impersonation (SETUSER / EXECUTE AS)
+	if cs.OriginalUser != "" {
+		cs.User = cs.OriginalUser
+		cs.OriginalUser = ""
+	}
+	cs.Database = "master"
+
+	cs.Mu.Unlock()
+
+	// 1. Rollback transaction outside lock ([RULE:LockHierarchy])
+	if txMgrToRollback != nil {
+		_ = txMgrToRollback.Rollback(context.Background())
+	} else if txToRollback != nil {
+		_ = txToRollback.Rollback()
+	}
+	if len(ddlOps) > 0 {
+		c.executeDDLUndoOps(cs, ddlOps)
+	}
+
+	// 2. Drop physical temp tables outside lock
+	if c.engine != nil {
+		for _, tbl := range toDropLocal {
+			_ = c.engine.DropTable(tbl)
+		}
+	}
+
+	return nil
+}
+
 // GetSession returns the active ClientSession by ID, or nil if not found.
 func (c *Coordinator) GetSession(id string) *ClientSession {
 	c.sessMu.RLock()

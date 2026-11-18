@@ -1191,23 +1191,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	// 0.045 Connection Pool Reset: DISCARD ALL / RESET ALL / DEALLOCATE ALL / UNLISTEN *
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "DISCARD", "RESET ALL", "DEALLOCATE ALL", "UNLISTEN") {
 		if cs != nil {
-			cs.Mu.Lock()
-			if s.engine != nil {
-				for _, physTable := range cs.TableVars {
-					_ = s.engine.DropTable(physTable)
-				}
-				for _, tempTbl := range cs.TempTables {
-					_ = s.engine.DropTable(tempTbl)
-				}
-			}
-			cs.TableVars = nil
-			cs.TempTables = nil
-			cs.TempTableMap = nil
-			cs.EphemeralTables = nil
-			if sqlutil.HasAnyPrefixKeyword(trimmed, "DISCARD ALL", "RESET ALL", "DEALLOCATE ALL") {
-				cs.PreparedStmts = nil
-			}
-			cs.Mu.Unlock()
+			resetTx := !sqlutil.HasPrefixKeyword(trimmed, "DISCARD TEMP")
+			_ = s.ResetSession(cs.ID, resetTx)
 		}
 		return &QueryResult{
 			Success:    true,

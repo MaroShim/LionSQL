@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -118,6 +119,37 @@ func (s *Server) handleQueryCancel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":  true,
 		"canceled": canceled,
+	})
+}
+
+func (s *Server) handleSessionReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		SessionID string `json:"session_id"`
+		ResetTx   *bool  `json:"reset_tx"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if req.SessionID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("session_id is required"))
+		return
+	}
+	resetTx := true
+	if req.ResetTx != nil {
+		resetTx = *req.ResetTx
+	}
+	if err := s.coordinator.ResetSession(req.SessionID, resetTx); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("session %s successfully reset", req.SessionID),
 	})
 }
 

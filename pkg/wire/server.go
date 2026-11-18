@@ -469,6 +469,15 @@ func (c *PreparedStatementCache) Delete(name string) {
 	}
 }
 
+// Clear removes all prepared statements from the cache.
+func (c *PreparedStatementCache) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.unnamed = nil
+	c.items = make(map[string]*list.Element)
+	c.lruList.Init()
+}
+
 // Len returns the current number of cached prepared statements.
 func (c *PreparedStatementCache) Len() int {
 	c.mu.Lock()
@@ -735,7 +744,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			if sqlutil.HasPrefixKeyword(trimmed, "COPY") {
 				s.handleCopy(conn, trimmed, sessID)
 			} else {
-				s.handleSimpleQuery(conn, query, sessID)
+				s.handleSimpleQuery(conn, query, sessID, statements, portals)
 			}
 
 		case 'P': // Parse
@@ -769,7 +778,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 }
 
-func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string) {
+func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string, statements *PreparedStatementCache, portals map[string]*Portal) {
 	if s.DevMode() {
 		log.Printf("[DEV][PGWire][SimpleQuery] %s", strings.TrimSpace(query))
 	}
@@ -805,6 +814,33 @@ func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string) {
 		} else {
 			_ = WriteCommandComplete(conn, "ROLLBACK")
 		}
+		return
+
+	// Connection Pool Reset commands
+	case "DISCARD ALL", "RESET ALL", "DEALLOCATE ALL":
+		if statements != nil {
+			statements.Clear()
+		}
+		if portals != nil {
+			clear(portals)
+		}
+		_ = s.coordinator.ResetSession(sessID, true)
+		_ = WriteCommandComplete(conn, upper)
+		return
+
+	case "DISCARD PLANS":
+		if statements != nil {
+			statements.Clear()
+		}
+		if portals != nil {
+			clear(portals)
+		}
+		_ = WriteCommandComplete(conn, "DISCARD PLANS")
+		return
+
+	case "DISCARD TEMP", "DISCARD TEMPORARY":
+		_ = s.coordinator.ResetSession(sessID, false)
+		_ = WriteCommandComplete(conn, "DISCARD TEMP")
 		return
 	}
 

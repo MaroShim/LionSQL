@@ -57,6 +57,7 @@ func ReadPacket(r io.Reader) (*Packet, error) {
 	var firstType byte
 	var spid uint16
 	var packetID byte
+	var fullStatus byte
 
 	for {
 		var hdr [HeaderSize]byte
@@ -88,6 +89,7 @@ func ReadPacket(r io.Reader) (*Packet, error) {
 			spid = pSPID
 			packetID = pID
 		}
+		fullStatus |= status
 		fullPayload = append(fullPayload, chunk...)
 
 		if status&StatusEOM != 0 {
@@ -97,7 +99,7 @@ func ReadPacket(r io.Reader) (*Packet, error) {
 
 	return &Packet{
 		Type:     firstType,
-		Status:   StatusEOM,
+		Status:   fullStatus,
 		SPID:     spid,
 		PacketID: packetID,
 		Payload:  fullPayload,
@@ -172,11 +174,19 @@ func WritePacket(w io.Writer, pType byte, spid uint16, payload []byte) error {
 	return WritePacketWithSize(w, pType, spid, payload, DefaultPacketSize)
 }
 
+// WritePacketWithStatus writes a payload chunked into TDS frames to w with custom status flags and default packet size.
+func WritePacketWithStatus(w io.Writer, pType byte, status byte, spid uint16, payload []byte) error {
+	return WritePacketWithStatusAndSize(w, pType, status, spid, payload, DefaultPacketSize)
+}
+
 // WritePacketWithSize writes a payload chunked into TDS frames to w with the specified packet size.
-// It bundles the 8-byte TDS header and payload chunk into a single contiguous frame buffer.
-// It utilizes tiered sync.Pools (4K, 8K, 16K, 32K) to eliminate heap allocations and execute
-// a single atomic write per packet (halving OS syscall overhead).
 func WritePacketWithSize(w io.Writer, pType byte, spid uint16, payload []byte, packetSize uint32) error {
+	return WritePacketWithStatusAndSize(w, pType, StatusNormal, spid, payload, packetSize)
+}
+
+// WritePacketWithStatusAndSize writes a payload chunked into TDS frames to w with custom status flags and packet size.
+// It bundles the 8-byte TDS header and payload chunk into a single contiguous frame buffer.
+func WritePacketWithStatusAndSize(w io.Writer, pType byte, extraStatus byte, spid uint16, payload []byte, packetSize uint32) error {
 	if packetSize < 512 || packetSize > 32768 {
 		packetSize = DefaultPacketSize
 	}
@@ -188,7 +198,7 @@ func WritePacketWithSize(w io.Writer, pType byte, spid uint16, payload []byte, p
 
 	if len(payload) == 0 {
 		frame[0] = pType
-		frame[1] = StatusEOM
+		frame[1] = extraStatus | StatusEOM
 		binary.BigEndian.PutUint16(frame[2:4], HeaderSize)
 		binary.BigEndian.PutUint16(frame[4:6], spid)
 		frame[6] = 1 // PacketID
@@ -209,9 +219,9 @@ func WritePacketWithSize(w io.Writer, pType byte, spid uint16, payload []byte, p
 		}
 
 		isLast := (offset + chunkLen) >= len(payload)
-		var status byte = StatusNormal
+		status := extraStatus | StatusNormal
 		if isLast {
-			status = StatusEOM
+			status = extraStatus | StatusEOM
 		}
 
 		packetLen := uint16(HeaderSize + chunkLen)

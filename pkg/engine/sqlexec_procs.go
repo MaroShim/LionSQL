@@ -971,6 +971,16 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 
 	procLower := strings.ToLower(procName)
 	switch procLower {
+	case "sp_reset_connection":
+		if cs != nil {
+			_ = s.ResetSession(cs.ID, true)
+		}
+		return &QueryResult{
+			Success:    true,
+			Command:    "RESET",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"Connection reset successfully"},
+		}, nil
 	case "sp_executesql":
 		return s.execSpExecuteSQL(args, start, cs, ctx)
 	case "sp_prepare":

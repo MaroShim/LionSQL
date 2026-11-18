@@ -89,6 +89,9 @@ type SQLCoordinator interface {
 	// CloseSession gracefully closes and unregisters a client session.
 	CloseSession(id string)
 
+	// ResetSession restores a persistent client session to a clean, isolated initial state for connection pooling reuse.
+	ResetSession(id string, resetTx bool) error
+
 	// CancelSessionQuery triggers cooperative cancellation for the currently active statement on sessionID.
 	CancelSessionQuery(sessionID string) bool
 

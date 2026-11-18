@@ -707,6 +707,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 			}
 		}
 
+		if sess.authenticated {
+			if p.Status&StatusResetConnection != 0 {
+				_ = s.coordinator.ResetSession(sess.SessionID, true)
+			} else if p.Status&StatusResetConnectionSkipTran != 0 {
+				_ = s.coordinator.ResetSession(sess.SessionID, false)
+			}
+		}
+
 		switch p.Type {
 		case PacketPrelogin:
 			var err error
@@ -1137,6 +1145,11 @@ func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession, 
 
 	procID := rpc.ProcID
 	switch strings.ToLower(rpc.ProcName) {
+	case "sp_reset_connection":
+		_ = s.coordinator.ResetSession(sess.SessionID, true)
+		done := BuildDone(TokenDone, DoneFinal, 0, 0)
+		_ = sess.writePacket(conn, PacketTabular, done)
+		return
 	case "sp_executesql":
 		if procID == 0 {
 			procID = 10
@@ -1173,6 +1186,12 @@ func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession, 
 	default:
 		if rpc.ProcName != "" {
 			procName := cleanProcedureName(rpc.ProcName)
+			if strings.EqualFold(procName, "sp_reset_connection") {
+				_ = s.coordinator.ResetSession(sess.SessionID, true)
+				done := BuildDone(TokenDone, DoneFinal, 0, 0)
+				_ = sess.writePacket(conn, PacketTabular, done)
+				return
+			}
 			if s.catalog != nil {
 				if pMeta, err := s.catalog.GetProcedure(procName); err == nil && pMeta != nil && pMeta.Body != "" {
 					if cache := s.BytecodePlanCache(); cache != nil {
