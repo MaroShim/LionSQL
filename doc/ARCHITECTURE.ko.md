@@ -7,19 +7,51 @@
 
 ---
 
-## 1. 개요 및 아키텍처 비전
+## 1. 아키텍처 비전과 4대 설계 철학 (Why LionSQL?)
 
 LionSQL은 외부 데몬(PgBouncer, Redis, ZooKeeper, Nginx 등) 의존성이 전무한 **단일 정적 독립 실행형(Zero-Sidecar Standalone) 고동시성 임베디드 OLTP RDBMS**입니다. Go 언어 기반의 견고한 세션/가상머신 코어와 고성능 스토리지 엔진(In-Memory OCC 및 WiredTiger MVCC B+Tree)이 결합되어, 단일 프로세스 내에서 서브 마이크로초 단위의 대화형 쿼리 처리와 엔터프라이즈 ACID 내구성을 제공합니다.
 
-### 1.1. LionSQL 핵심 설계 원칙
-1. **Scale-Up First (단일 노드 극한 포화)**: 분산 2PC(Two-Phase Commit)의 네트워크 오버헤드를 배제하고, 멀티코어 하드웨어 자원을 100% 활용하여 단일 노드에서 20,000~140,000+ TPS를 달성합니다.
-2. **Multi-Wire Native Interoperability**: Microsoft SQL Server TDS(`:1433`), PostgreSQL Wire v3(`:5433`), REST/HTTP API 및 웹 스튜디오(`:8090`)를 단일 엔진에서 동시 서비스합니다.
-3. **Single Source of Truth (SSOT)**: 트랜잭션, DDL 롤백 액션, 세션 임시 객체 수명주기를 분산된 상태 플래그 없이 단일 진실원천 객체(`tx.Manager`, `tx.Context`, `ClientSession`)로 일원화합니다.
-4. **Zero-Regex & Deterministic Lexical Safety**: SQL 쿼리 라우팅 및 절 컴파일 과정에서 정규식(Regex)을 배제하고 결정론적 2-Tier 파서와 어휘 분석기(`pkg/sqlutil`)를 사용합니다.
+### 1.1. 설계 철학과 명시적 트레이드오프 (선택과 집중)
+LionSQL 아키텍처의 강력함은 *"무엇이든 다 지원한다"*가 아니라, **"고성능 OLTP를 위해 무엇을 과감히 배제(Spec-Out)하고 무엇에 집중했는가"**에서 출발합니다:
+
+1. **Scale-Up First (단일 노드 극한 포화 vs 분산 2PC 배제)**:
+   - 분산 트랜잭션의 2단계 커밋(2PC) 네트워크 지연과 장애 조율 오버헤드를 배제합니다.
+   - 단일 노드의 멀티코어 하드웨어 자원을 100% 포화시켜 단일 머신에서 초당 **20,000 ~ 140,000+ TPS**를 달성합니다.
+2. **Zero-Regex & Deterministic Lexical Safety (문맥 인식 파싱 vs 정규식 배제)**:
+   - 중첩 괄호, 문자열 리터럴, 인용 부호가 혼재된 SQL에 대해 정규식(Regex)을 적용하면 침범과 절단 버그가 불가피합니다.
+   - 모든 쿼리 라우팅과 절 분할에서 정규식을 원천 배제하고 결정론적 어휘 분석기(`pkg/sqlutil`)와 2-Tier 파서만을 사용합니다.
+3. **Single-File Secondary Index Multiplexing (B+Tree 다중화 vs 파일 폭증 배제)**:
+   - 인덱스마다 물리 파일을 생성하면 빈번한 DDL에서 OS 파일 디스크립터 고갈과 `EBUSY` 경합이 발생합니다.
+   - 테이블당 모든 보조 인덱스를 단 하나의 B+Tree 파일(`_idx_<Table>.wt`)로 다중화하여 트랜잭션 내부에서 $O(1)$ 즉시 인덱스 생성을 보장합니다.
+4. **Non-Blocking Snapshot Read (논블로킹 읽기 vs 무거운 2PL 배제)**:
+   - 읽기 작업이 쓰기 락에 블로킹되는 전통적인 2PL(Two-Phase Locking) 공유 락을 전면 배제합니다.
+   - 읽기는 쓰기를 결코 막지 않으며, 쓰기 또한 읽기를 결코 차단하지 않는 비차단 스냅샷 격리를 제공합니다.
+
+### 1.2. 4대 코어 컴포넌트의 유기적 결합 (The Four Pillars)
+
+LionSQL은 인체의 유기적 시스템처럼 4개의 기둥이 맞물려 단일 프로세스로 동작합니다:
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│                     LionSQL Autonomous Database Kernel                    │
+├─────────────────────────────────────┬─────────────────────────────────────┤
+│ 1. 2-Tier 파싱 엔진 (감각 기관)     │ 2. VDBE & CBO 실행 엔진 (심장)      │
+│ - Pratt Recursive-Descent Fast-Path │ - SQLite 스타일 VDBE 바이트코드 VM  │
+│ - ANTLR4 Full T-SQL/PG Fallback     │ - Volcano Iterator 모델 & 해시 조인 │
+│ ➔ "서브-마이크로초 문법 완전 정복"  │ ➔ "sync.Pool 제로 할당 초고속 실행" │
+├─────────────────────────────────────┼─────────────────────────────────────┤
+│ 3. 통합 TxManager (두뇌)            │ 4. 스토리지 커널 & 튜플 코덱 (근육) │
+│ - 1-세션 1-트랜잭션 SSOT 불변식     │ - In-Memory OCC & WiredTiger MVCC   │
+│ - LIFO RollbackActions 큐           │ - V2 Binary Tuple Codec             │
+│ ➔ "세션 트랜잭션 무결성의 단일 두뇌" │ ➔ "1바이트 오차 없는 물리 복구 손발"│
+└─────────────────────────────────────┴─────────────────────────────────────┘
+```
 
 ---
 
-### 1.2. 전체 시스템 계층 아키텍처 다이어그램
+## 2. 전체 엔드투엔드 파이프라인 아키텍처
+
+클라이언트 요청이 네트워크 패킷으로 인입되어 스토리지 파일에 영속화되고 롤백되기까지의 단일 데이터 흐름입니다.
 
 ```mermaid
 flowchart TD
@@ -92,11 +124,24 @@ flowchart TD
 
 ---
 
-## 2. 핵심 아키텍처 하위 시스템
+## 3. 핵심 서브시스템 심층 분석 및 불변식 (Invariants)
 
-### 2.1. 세션 관리 및 트랜잭션 SSOT (`pkg/engine`, `pkg/tx`)
+### 3.1. 멀티 와이어 프로토콜 & 세션 코디네이터 (`pkg/wire`, `pkg/engine`)
 
-LionSQL은 다중 커넥션 풀링 환경에서 트랜잭션 상태 불일치를 원천 차단하기 위해 **1-세션 1-트랜잭션 불변식**을 엄격히 적용합니다.
+1. **Microsoft TDS 7.x/8.0 & 영구 Windows 호스트 에뮬레이션 (Invariant 11)**:
+   - SSMS, ADO.NET 연동 시 PRELOGIN, LOGIN7, SQLBatch, RPC 토큰을 처리합니다.
+   - **TDS Windows Platform Parity**: macOS나 Linux에서 실행 중이더라도 TDS 세션 및 시스템 뷰(`sys.dm_os_host_info`)는 항상 `host_platform = "Windows"`, `host_release = "10.0"`을 반환하여 SSMS Object Explorer의 `InvalidOperationException`을 원천 방지합니다.
+2. **PostgreSQL Wire Protocol v3 & 대량 복사 스트리밍**:
+   - Simple Query 및 Extended Query(`Parse`, `Bind`, `Execute`, `Sync`)를 지원합니다.
+   - `COPY FROM STDIN` 및 `COPY TO STDOUT`을 32KB 단위 논블로킹 스트리밍으로 완벽 지원합니다(`psql \copy` 호환).
+3. **커넥션 풀 격리 및 완결적 세션 리셋 (`ResetSession`)**:
+   - TDS `sp_reset_connection`, PGWire `DISCARD ALL` 수신 시 활성 트랜잭션을 안전하게 롤백하고, 사용자 변수 복구 및 세션 임시 객체 일괄 수거(`cs.DrainStorageTablesToDrop()`)를 수행하여 커넥션 풀 오염을 방지합니다.
+
+---
+
+### 3.2. 통합 트랜잭션 매니저 & 상태 관리 SSOT (`pkg/tx`, `pkg/engine`)
+
+LionSQL은 분산된 상태 플래그를 완전히 배제하고 단일 진실원천(SSOT) 아키텍처를 강제합니다:
 
 ```
 [ ClientSession ]
@@ -115,95 +160,75 @@ LionSQL은 다중 커넥션 풀링 환경에서 트랜잭션 상태 불일치를
    - CloseSession / ResetSession 시 c.dropSessionStorageTables()로 완결
 ```
 
-1. **트랜잭셔널 DDL 라이프사이클 통합**:
-   - `tx.Context`에 LIFO 순서로 등록되는 `RollbackActions []func() error` 및 커밋 시 실행되는 `DeferredActions []func() error`를 통해 DDL 롤백과 섀도 카탈로그 복구를 단일 트랜잭션 경계 내에서 완결합니다.
-   - 기존의 세션별 수동 언두 큐(`cs.ddlUndoLog`)를 완전히 폐지하여 유휴 세션 타임아웃, 예기치 못한 패닉, 커넥션 단절 시에도 톰스톤 물리 테이블이 100% 자동 정리됩니다.
-2. **커넥션 풀 리셋 완결성 (`ResetSession`)**:
-   - TDS `sp_reset_connection` / `StatusResetConnection`, PGWire `DISCARD ALL` 수신 시 `ResetSession`이 미완료 트랜잭션을 롤백하고 세션 임시 객체를 전면 드레인/드롭하여 커넥션 풀 재사용 시 오염을 방지합니다.
+1. **1-세션 1-트랜잭션 불변식**:
+   - `cs.Tx` 직접 필드 참조를 폐지하고 `cs.Tx()`, `cs.TranCount()` 등 공식 접근자를 통해 `tx.Manager`가 유일한 진실 원천으로 동작합니다.
+2. **트랜잭셔널 DDL 라이프사이클 통합**:
+   - `tx.Context`에 등록되는 **LIFO `RollbackActions []func() error`** 및 **Commit `DeferredActions []func() error`**를 통해, 트랜잭션 롤백 시 섀도 카탈로그 복원 및 톰스톤 테이블 삭제가 자동 완결됩니다.
+   - 수동 DDL 언두 큐(`cs.ddlUndoLog`)를 전면 폐지하여 유휴 세션 타임아웃, 비정상 커넥션 단절, 패닉 복구 시에도 물리 누수가 발생하지 않습니다.
+3. **세션 임시 객체 수명주기 캡슐화**:
+   - $O(N)$ 슬라이스 탐색을 유발하던 `TempTables []string`을 제거하고 `TempTableMap` $O(1)$ 맵으로 통합했습니다.
+   - `CloseSession`과 `ResetSession`에 중복되던 수거 코드를 `cs.DrainStorageTablesToDrop()` 단일 메서드로 캡슐화했습니다.
 
 ---
 
-### 2.2. Dual-Parser 아키텍처 및 자동 폴백 전략 (`pkg/proc`)
+### 3.3. 2-Tier 파서 & VDBE 바이트코드 가상 머신 (`pkg/proc`)
 
-서브 마이크로초 지연시간과 Microsoft T-SQL 복합 스크립트 100% 호환성을 동시에 만족하기 위해 영구 2계층 파서 구조를 채택합니다.
+1. **Dual-Parser 아키텍처 및 자동 폴백 (Invariant 1)**:
+   - **Tier 1 (Fast-Path Pratt Parser)**: 제로 알로케이션 렉서 기반으로 표준 DDL/DML, 제어문(`IF`, `WHILE`, `TRY...CATCH`)을 서브 마이크로초 단위로 파싱.
+   - **Tier 2 (ANTLR4 Fallback Parser)**: 복합 T-SQL 절(`WITH RECOMPILE`, `[dbo].[Proc]`, 커서 선언문) 감지 시 공식 ANTLR4 파서로 자동 폴백.
+2. **Context-Blind `strings.*` 및 Regex 사용 금지 (Invariant 7 & 12)**:
+   - SQL은 Dyck 언어(중첩 괄호)와 문자열/주석 리터럴 문맥을 가집니다.
+   - 어휘 분석 및 절 분할에 플랫 `strings.*`나 정규식 대신 문맥 인식 토크나이저(`pkg/sqlutil`)를 사용합니다.
+3. **VDBE Bytecode Virtual Machine (`pkg/proc/runtime/vm.go`)**:
+   - SQLite 스타일의 바이트코드 가상 머신으로, 대화형 DQL/DML과 T-SQL 절차적 루틴을 동일한 Opcode 스트림 상에서 실행합니다.
+   - `sync.Pool` 기반 레지스터 재활용으로 가비지 컬렉션(GC) 압력을 완화합니다.
 
-```mermaid
-flowchart TD
-    A["클라이언트 SQL 쿼리"] --> B["1계층: Native Pratt Parser\n(pkg/proc/lexer.go, parser.go)"]
-    B -- "파싱 성공\n(고빈도 DDL/DML, 제어문, 단순 쿼리)" --> E["통합 AST (*proc.CreateProcStmt)"]
-    B -- "구문 실패 / 특수 문법 감지\n(WITH RECOMPILE, [dbo].[Proc], 벤더 옵션)" --> C["2계층: ANTLR4 Fallback\n(pkg/proc/parser/antlr)"]
-    C -- "공식 TSqlParser.g4 구문 트리 파싱" --> D["ASTBuilder 변환"]
-    D --> E
-    E --> F["VDBE 바이트코드 컴파일러"]
-    F --> G["VDBE 가상 머신 실행"]
+---
+
+### 3.4. 비용 기반 최적화기 (CBO) & Volcano 실행기 (`pkg/cbo`, `pkg/execution`)
+
+1. **카탈로그 통계 & 비용 모델**:
+   - `ANALYZE TABLE`을 통해 총 행 수, 튜플 폭, NDV(Number of Distinct Values), 널 비율 및 64-버킷 등깊이 히스토그램을 수집하여 최적의 조인(Hash Join vs Nested Loop) 및 인덱스 스캔을 결정합니다.
+2. **비상관 서브쿼리 메모리 최적화**:
+   - 인메모리 `SubqueryHashSet`(10,000행 한도)을 통해 $O(1)$ 초고속 멤버십 검사를 수행합니다.
+3. **Volcano 반복자 및 외부 머지 정렬**:
+   - `work_mem`(기본 64MB) 임계값을 초과하는 대규모 정렬 발생 시 디스크 임시 파일로 스필한 뒤 N-way Min-Heap으로 병합 정렬합니다.
+
+---
+
+### 3.5. 듀얼 스토리지 커널 & 물리 스토리지 포맷 (`pkg/storage`)
+
+```
+                                [ storage.Engine Interface ]
+                                              │
+                    ┌─────────────────────────┴─────────────────────────┐
+                    │                                                   │
+                    ▼                                                   ▼
+     [ WiredTiger Storage Engine ]                       [ In-Memory OCC Storage Engine ]
+     (pkg/storage/wiredtiger)                            (pkg/storage/memengine)
+     - libwiredtiger 기반 Cgo 바인딩                     - Pure Go 엔진 (Zero Cgo)
+     - 락프리 B+Tree 인덱싱 구조                         - 행 단위 버전 관리 및 OCC 유효성 검증
+     - Hazard Pointer 기반 메모리 보호                   - 정렬된 인메모리 보조 인덱스 슬라이스
+     - MVCC 트랜잭션 스냅샷 격리                         - 하이브리드 영속성:
+     - 64-샤드 activeWriters 쓰기 충돌 방어                * MessagePack 스냅샷 (tables.mpk)
+     - Zero-transaction_sync (140,000+ TPS)               * Append-Only Log (wal.aof)
 ```
 
-- **1계층 (Fast-Path Native Pratt Parser)**: 제로 힙 할당 렉서 기반으로 표준 DDL/DML, 제어문(`IF`, `WHILE`, `TRY...CATCH`), 트랜잭션 구문을 문장당 서브 마이크로초 단위로 파싱.
-- **2계층 (ANTLR4 Fallback Parser)**: 공식 Microsoft `TSqlParser.g4` 문법 기반 파서로, 대괄호 복합 식별자, `WITH RECOMPILE`, 복합 힌트 등 특수 문법을 자동 인지하여 폴백.
+1. **WiredTiger 고동시성 & Zero-`transaction_sync` 불변식 (Invariant 10)**:
+   - `transaction_sync` 설정을 배제하여 글로벌 C 트랜잭션 락 병목을 원천 제거(5,000 TPS ➔ 140,000 TPS).
+   - 그룹 커밋과 1초 주기 백그라운드 플러시로 100% 지속적인 크래시 복구 내구성을 보장합니다.
+   - 64-샤드 `activeWriters` 락을 통해 In-Memory OCC 엔진과 동일한 즉시 쓰기 충돌 감지(`ErrSerializationFailure`) 패리티를 제공합니다.
+2. **보조 인덱스 B+Tree 다중화 (Invariant 15)**:
+   - 테이블당 모든 보조 인덱스를 단 하나의 `_idx_<Table>.wt` 파일 내에 `<lower(IndexName)>\x00` 키 접두사로 다중화(`ARCH-WT-FILE-LAYOUT-1`).
+   - `WT_ITEM` 바이너리 포맷을 적용하여 C NUL 문자(`\0`) 절단 결함을 방지하고 순서 보존 단조 인코딩을 적용합니다.
+3. **V2 정규 바이너리 튜플 코덱 (Invariant 13)**:
+   - 4바이트 정렬 헤더, 1,024개 컬럼 상한, 널 비트맵.
+   - 테이블 끝단 컬럼의 `ADD/DROP COLUMN`을 데이터 복사 없이 $O(1)$ 즉시 수행(Instant Tail DDL).
+   - Layer 1 인라인 8,060B 상한(`storage.MaxInlineRowSize`) 및 Layer 2 단일 논리 행 16MB 상한(`storage.MaxRowSize`)의 2계층 방어벽 적용.
 
 ---
 
-### 2.3. 비용 기반 최적화기 (CBO) & Volcano 실행 엔진 (`pkg/cbo`, `pkg/execution`)
-
-1. **비용 기반 최적화기 (CBO)**:
-   - 카탈로그 통계(`ANALYZE TABLE`) 기반 행 수, 튜플 폭, NDV(고유값 수), 널 비율, 64-버킷 등깊이 히스토그램을 토대로 물리 실행 계획(SeqScan vs IndexScan, HashJoin vs IndexNestedLoopJoin)을 수립합니다.
-   - 비상관 서브쿼리를 위한 인메모리 `SubqueryHashSet`(10,000행 한도)을 통해 $O(1)$ 멤버십 조회를 수행합니다.
-2. **Volcano 반복자 파이프라인 (`pkg/execution`)**:
-   - `Init()`, `Next()`, `Close()` 인터페이스를 기반으로 하는 파이프라인 합성 모델.
-   - `work_mem`(기본 64MB) 임계값 초과 시 디스크 임시 런 파일로 스필되는 외부 머지 소트(`SortIterator`) 지원.
-
----
-
-### 2.4. Native VDBE 바이트코드 가상 머신 (`pkg/proc/runtime/vm.go`)
-
-SQLite 스타일의 레지스터 기반 가상 머신으로, T-SQL 저장 프로시저의 제어 로직과 대화형 인터랙티브 SQL(`SELECT`, `INSERT`, `UPDATE`, `DELETE`)을 동일한 바이트코드 프로그램 상에서 실행합니다.
-
-- **Zero-Parse 바이트코드 캐싱**: 프리페어드 스테이트먼트(`sp_prepare`, PGWire `Parse`)의 컴파일된 AST 및 Opcode 프로그램을 캐싱하여 런타임 어휘 분석 오버헤드를 생략.
-- **`sync.Pool` 레지스터 풀링**: 쿼리 실행 시 레지스터 슬라이스를 풀링하여 메모리 할당 및 GC 부하를 최소화.
-
----
-
-### 2.5. 듀얼 스토리지 커널 & 물리 스토리지 포맷 (`pkg/storage`)
-
-LionSQL은 `storage.Engine` 인터페이스 계약 뒤로 두 가지 상호 보완적인 고성능 스토리지 엔진을 제공합니다.
-
-#### (1) 스토리지 엔진 비교
-
-| 항목 | WiredTiger MVCC (`wiredtiger`) | In-Memory OCC (`memengine`) |
-|---|---|---|
-| **구현 언어** | Cgo (`libwiredtiger` 임베디드) | Pure Go (`CGO_ENABLED=0` 지원) |
-| **동시성 모델** | Hazard Pointer 기반 B+Tree MVCC | 단조 버전 카운터 기반 OCC |
-| **쓰기 충돌 제어** | 64-샤드 `activeWriters` 락 기반 Fail-Fast 감지 | 트랜잭션 검증 시 즉시 `ErrWriteConflict` |
-| **내구성 메커니즘** | WiredTiger 그룹 커밋 및 1초 주기 백그라운드 동기화 | MessagePack 스냅샷 + Append-Only Log (WAL) |
-| **동시성 처리량** | **140,000+ TPS** (글로벌 동기화 락 배제) | **20,000+ TPS** (초저지연 인메모리) |
-
-#### (2) 보조 인덱스 B+Tree 다중화 (Invariant 15)
-- 테이블당 모든 보조 인덱스를 단 하나의 WiredTiger 파일(`_idx_<Table>.wt`)로 다중화(`ARCH-WT-FILE-LAYOUT-1`).
-- 키 네임스페이스를 `<lower(IndexName)>\x00`로 접두하여 인덱스 생성/삭제 시 물리 파일 생성/삭제 오버헤드(`EBUSY`)를 전면 배제.
-- `WT_ITEM` 바이너리 포맷을 적용하여 C NUL 문자(`\0`) 절단 결함을 원천 방지하고 순서 보존 단조 인코딩 적용.
-
-#### (3) V2 정규 바이너리 튜플 코덱 (Invariant 13)
-- **4바이트 정렬 헤더**: 버전(`0x02`), 플래그, `encodedCols` (최대 1,024개 컬럼 상한).
-- **Instant Tail DDL**: 테이블 끝단 컬럼의 `ADD COLUMN` / `DROP COLUMN`을 물리 재기록 없이 $O(1)$ 시간에 수행.
-- **2계층 행 크기 제한**: Layer 1 인라인 고정 크기 8,060B 상한 (`storage.MaxInlineRowSize`) 및 Layer 2 단일 논리 행 16MB 상한 (`storage.MaxRowSize`).
-
----
-
-### 2.6. 멀티 와이어 프로토콜 & 클라이언트 도구 호환성 (`pkg/wire`)
-
-1. **Microsoft SQL Server TDS 7.x/8.0 (`pkg/wire/tds`)**:
-   - 기본 포트 `:1433`. PRELOGIN, LOGIN7, SQLBatch, RPC 토큰 완벽 에뮬레이션.
-   - **TDS Windows Host Parity Invariant (Invariant 11)**: SSMS Object Explorer 호환을 위해 호스트 OS와 무관하게 시스템 뷰(`sys.dm_os_host_info`) 및 환경 배치가 항상 `Windows 10.0`을 반환.
-2. **PostgreSQL Wire Protocol v3 (`pkg/wire`)**:
-   - 기본 포트 `:5433`. Simple Query 및 Extended Query 지원.
-   - `COPY FROM STDIN` / `COPY TO STDOUT` 스트리밍 지원 (`psql \copy` 및 `pg_dump` 호환).
-3. **내장 웹 관리 스튜디오 (`pkg/api`, `pkg/ui`)**:
-   - 기본 포트 `:8090` (`/_/` 경로에서 `embed.FS`로 서빙).
-   - Server-Sent Events (SSE) 기반 실시간 데이터 동기화 및 쿼리 실행기, 테이블 뷰어, 백업/복원 UI 제공.
-
----
-
-## 3. 디렉터리 레이아웃 및 패키지 구조
+## 4. 디렉터리 레이아웃 및 패키지 구조
 
 ```
 lionsql/
@@ -238,19 +263,19 @@ lionsql/
 
 ---
 
-## 4. 품질 보증 및 3단계 검증 파이프라인
+## 5. 품질 보증 및 3단계 검증 파이프라인
 
-모든 코드 수정 및 기능 추가는 **3단계 파이프라인(`[RULE:PipelineVerification]`)**을 엄격히 통과해야 합니다:
+모든 코드 수정 및 기능 추가는 **3단계 검증 파이프라인(`[RULE:PipelineVerification]`)**을 엄격히 통과해야 합니다:
 
-1. **컴파일 무결성 (Build)**:
+1. **1단계: 컴파일 무결성 검증 (Build)**
    ```bash
    go build -buildvcs=false -o bin/lionsql ./cmd/lionsql
    ```
-2. **동시성 레이스 프리 테스트 (Test)**:
+2. **2단계: 레이스 프리 테스트 검증 (Test)**
    ```bash
    go test -v -race ./...
    ```
    - 전 패키지 100% 통과(PASS) 및 데이터 레이스 0건(0 data races) 필수.
-3. **정형 커밋 및 이모지 엄금 (Commit)**:
+3. **3단계: 정형 커밋 규격 준수 (Commit)**
    - Conventional Commits 형식(`feat:`, `fix:`, `refactor:` 등) 준수.
    - 주석, 커밋 메시지, 문서 전반에서 장식용 이모지 전면 배제(`[RULE:StyleIntegrity]`).
