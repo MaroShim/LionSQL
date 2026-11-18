@@ -175,8 +175,14 @@ var txPool = sync.Pool{
 			tableNames:   make([]string, 0, 4),
 			neededShards: make([]shardRef, 0, 16),
 			acquiredLocks: make([]lockRef, 0, 16),
+			readCache:    make(map[string]cachedRow, 16),
 		}
 	},
+}
+
+type cachedRow struct {
+	row storage.Row
+	ver int64
 }
 
 // Transaction handles copy-on-write delta mutations with zero start overhead, OCC validation, and atomic commit.
@@ -202,6 +208,7 @@ type Transaction struct {
 	tableNames        []string
 	neededShards      []shardRef
 	acquiredLocks     []lockRef
+	readCache         map[string]cachedRow              // "table\x00key" -> cached decoded row & ver
 	closed            bool
 	committed         bool
 	inPool            bool
@@ -240,6 +247,12 @@ func (tx *Transaction) resetForPoolLocked() {
 		tx.changes = make(map[string]rowChange, 16)
 	} else if tx.changes != nil {
 		clear(tx.changes)
+	}
+
+	if len(tx.readCache) > 128 {
+		tx.readCache = make(map[string]cachedRow, 16)
+	} else if tx.readCache != nil {
+		clear(tx.readCache)
 	}
 
 	clear(tx.savepoints)
@@ -1478,6 +1491,15 @@ func (tx *Transaction) getRowAndVerUnderLock(tableName, pkKey string, clone bool
 			}
 			return row, ver, nil
 		}
+
+		// Check transaction-local read cache ([RULE:ZeroAllocation])
+		cacheKey := tableName + "\x00" + pkKey
+		if cached, ok := tx.readCache[cacheKey]; ok {
+			if clone {
+				return cloneRow(cached.row), cached.ver, nil
+			}
+			return cached.row, cached.ver, nil
+		}
 	}
 
 	td, err := tx.getTableLocked(tableName)
@@ -1490,6 +1512,10 @@ func (tx *Transaction) getRowAndVerUnderLock(tableName, pkKey string, clone bool
 			return storage.Row{}, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
 		}
 		return storage.Row{}, 0, err
+	}
+
+	if !tx.opts.ReadOnly && tx.readCache != nil {
+		tx.readCache[tableName+"\x00"+pkKey] = cachedRow{row: row, ver: ver}
 	}
 
 	if clone {
@@ -3016,11 +3042,17 @@ func (tx *Transaction) putLocal(table, key string, row storage.Row, baseVer int6
 	}
 	t[key] = row
 	tx.setBaseVer(table, key, baseVer)
+	if tx.readCache != nil {
+		tx.readCache[table+"\x00"+key] = cachedRow{row: row, ver: baseVer}
+	}
 }
 
 func (tx *Transaction) removeLocal(table, key string) {
 	if t, ok := tx.local[table]; ok {
 		delete(t, key)
+	}
+	if tx.readCache != nil {
+		delete(tx.readCache, table+"\x00"+key)
 	}
 }
 

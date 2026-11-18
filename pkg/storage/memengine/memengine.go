@@ -425,9 +425,7 @@ func (e *Engine) OpenWithOptions(opts Options) (err error) {
 	e.isClosed.Store(false)
 	e.opts = opts
 	e.fsyncPolicy = opts.FsyncPolicy
-	if opts.AOFThreshold > 0 {
-		e.aofThreshold = opts.AOFThreshold
-	}
+	e.aofThreshold = opts.AOFThreshold
 	if opts.MaxDataBytes > 0 {
 		e.maxDataBytes.Store(opts.MaxDataBytes)
 	}
