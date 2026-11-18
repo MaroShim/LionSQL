@@ -161,7 +161,9 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
 
 ### Invariant 15: Canonical Secondary Index Key/Value Codec (Order-Preserving Binary Encoding & Single-Transaction B-Tree Parity)
 1. **Physical Namespace & Binary Format Invariance (`key_format=u, value_format=u`)**:
-   - Each secondary index is materialized as an independent WiredTiger physical B-Tree table (`table:_idx_<PhysicalTableName>_<IndexName>`).
+   - All secondary indexes of a table are multiplexed into one WiredTiger B-Tree file per table (`table:_idx_<PhysicalTableName>` ➔ `_idx_<PhysicalTableName>.wt`, `ARCH-WT-FILE-LAYOUT-1`). Every entry key is namespaced by `<lower(IndexName)>\x00` (`IndexSchema.KeyPrefix`).
+   - **Lazy file lifecycle**: `<Table>.wt` is created by `CREATE TABLE`; `_idx_<Table>.wt` is created only when the table first has an index (`CREATE TABLE` with indexes or the first `CREATE INDEX`) and is removed only by `DROP TABLE`. `CREATE INDEX` (after the first) and `DROP INDEX` are pure key insert/range-delete operations inside one transaction and never create or drop files (no `EBUSY`). Index cursors must stay inside their own prefix range.
+   - **Startup migration**: legacy per-index files (`_idx_<Table>_<Index>.wt`) are copied into the multiplexed file and dropped at `Engine.Open` (idempotent, copy-then-drop), with no `catalog.json` change.
    - Binary format (`WT_ITEM`) is unconditionally enforced to eliminate C NUL-termination (`\0`) truncation defects across composite column separators (`\x00`), NULL representations (`\x00NULL`), and primary key suffixes.
 2. **Order-Preserving Monotonic Scalar Encodings (`storage.EncodeIndexKeyPart`)**:
    - Signed integers (`TypeInt`): XOR with sign-bit `0x8000000000000000` mapped monotonically to 16-character hex strings (`00...00` to `ff...ff`).
@@ -169,8 +171,8 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
    - Timestamps (`TypeDateTime`): ISO 8601 UTC chronological formatting.
    - Nulls (`\x00NULL`): Prepended with `0x00` ensuring NULL values consistently sort before all non-null values.
 3. **Unique vs. Non-Unique Key/Value Layout**:
-   - **Unique Index (`Unique == true`)**: `Key = indexKey`, `Value = pk` (string). Fast-fail duplicate key detection ($O(\log N)$) via `cursor->search`. Multiple NULL values are safely accommodated via non-unique layout without constraint collisions.
-   - **Non-Unique Index (`Unique == false`)**: `Key = indexKey + "\x00" + pk`, `Value = ""` (empty). Primary key concatenation guarantees global uniqueness within the B-Tree while clustering identical index keys in primary-key order.
+   - **Unique Index (`Unique == true`)**: `Key = prefix + indexKey`, `Value = pk` (string). Fast-fail duplicate key detection ($O(\log N)$) via `cursor->search`. Multiple NULL values are safely accommodated via non-unique layout without constraint collisions.
+   - **Non-Unique Index (`Unique == false`)**: `Key = prefix + indexKey + "\x00" + pk`, `Value = ""` (empty). Primary key concatenation guarantees global uniqueness within the B-Tree while clustering identical index keys in primary-key order.
 4. **Single-Transaction Parity & Zero Full-Scan Invariant**:
    - Primary table mutations and all associated secondary index B-Tree modifications execute strictly within the same `WT_SESSION` transaction boundary, guaranteeing atomic rollback on `tx.Rollback()`.
    - `IndexScan`, `IndexScanDesc`, and `checkUniqueIndexesLocked` must exclusively utilize direct B-Tree cursor operations (`search_near`, `search`, `prev`), permanently banning full-table sequential scans (`scanLocked`) and in-memory slice reversals.

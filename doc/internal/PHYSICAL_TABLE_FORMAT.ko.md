@@ -33,8 +33,7 @@ flowchart TD
     end
 
     subgraph SecondaryIndexes ["2. 보조 인덱스 물리 B-Tree (Secondary Indexes)"]
-        SI1["URI: table:_idx_<PhysicalTableName>_<IndexName1><br/>key_format=u, value_format=u<br/>Key: Order-Preserving IndexKey (+ PK) -> Value: PK or Empty"]
-        SI2["URI: table:_idx_<PhysicalTableName>_<IndexName2><br/>key_format=u, value_format=u<br/>Key: Order-Preserving IndexKey (+ PK) -> Value: PK or Empty"]
+        SI1["URI: table:_idx_<PhysicalTableName> (테이블당 1개, 첫 인덱스 생성 시 지연 생성)<br/>key_format=u, value_format=u<br/>Key: <lower(IndexName)>\x00 + Order-Preserving IndexKey (+ PK) -> Value: PK or Empty"]
     end
 
     PrimaryTable <-->|"Single-Transaction Atomic Parity (tx.Commit / tx.Rollback)"| SecondaryIndexes
@@ -53,16 +52,23 @@ config: "key_format=S,value_format=u"
 - **`PhysicalTableName` 불변성**:
   - 테이블 이름 변경(`RenameTable`, 트랜잭션 DDL 톰스톤 등) 시에도 물리 URI는 변경되지 않고 보존됩니다.
 
-### 1.2 보조 인덱스 물리 URI (`table:_idx_<PhysicalTableName>_<IndexName>`)
+### 1.2 보조 인덱스 통합 물리 파일 (`table:_idx_<PhysicalTableName>`)
 ```
-URI: table:_idx_<PhysicalTableName>_<IndexName>
+URI: table:_idx_<PhysicalTableName>
 config: "key_format=u,value_format=u"
 ```
+`ARCH-WT-FILE-LAYOUT-1`: 테이블의 모든 세컨더리 인덱스는 인덱스 개수와 무관하게 **테이블당 단 하나의 통합 파일(`_idx_<PhysicalTableName>.wt`)**에 멀티플렉싱됩니다.
+- **인덱스 네임스페이스 접두사**: 모든 엔트리 키는 `<lower(IndexName)>\x00`(`IndexSchema.KeyPrefix`)로 시작하며, 인덱스 커서는 자신의 접두사 범위 안에서만 순회합니다.
+- **지연 생성 및 수명주기**:
+  - `<Table>.wt`는 `CREATE TABLE`이 생성하고, `_idx_<Table>.wt`는 테이블이 처음 인덱스를 가질 때(인덱스를 포함한 `CREATE TABLE` 또는 첫 `CREATE INDEX`) 생성됩니다. 인덱스가 없는 테이블에는 파일이 만들어지지 않습니다.
+  - 두 번째 이후 `CREATE INDEX`와 모든 `DROP INDEX`는 파일을 생성/삭제하지 않고 단일 트랜잭션 안에서 키 삽입/범위 삭제만 수행합니다 (`EBUSY` 불가, 롤백 시 WiredTiger MVCC가 자동 복구). 마지막 인덱스를 `DROP`해도 빈 파일은 유지되어 재사용되며, `DROP TABLE`만 파일을 삭제합니다.
+  - 첫 `CREATE INDEX`의 파일 생성만 트랜잭션 롤백 대상이 아니며, 남은 빈 파일은 무해합니다.
+- **구버전 자동 마이그레이션**: `Engine.Open` 시 레거시 `_idx_<Table>_<Index>.wt`를 통합 파일로 복사(멱등)한 뒤 삭제합니다. `catalog.json` 변경은 없습니다.
 - **`key_format=u` (Raw Binary Items, `WT_ITEM`)**:
-  - `key_format=S` (C NUL-종단 문자열)를 사용할 경우, 복합 컬럼 구분자나 NULL 마커로 사용되는 `\x00` 바이트에서 문자열이 조기 절단(NUL-termination truncation)되는 치명적 결함이 발생합니다.
-  - `key_format=u`를 채택하여 임의의 바이너리 바이트 시퀀스를 완벽히 보존하며, WiredTiger B-Tree의 기본 바이트 단위 `memcmp` 비교를 통해 Go 언어의 문자열 사전순 정렬(`str1 < str2`)과 100% 동일한 정렬 동작을 보장합니다.
+  - `key_format=S` (C NUL-종단 문자열)를 사용할 경우, 접두사/복합 컬럼 구분자나 NULL 마커로 사용되는 `\x00` 바이트에서 문자열이 조기 절단되는 치명적 결함이 발생합니다.
+  - `key_format=u`를 채택하여 임의의 바이너리 바이트 시퀀스를 완벽히 보존하며, B-Tree의 바이트 단위 `memcmp` 비교가 Go 문자열 사전순 정렬과 100% 동일한 정렬을 보장합니다.
 - **`value_format=u` (Raw Binary Items, `WT_ITEM`)**:
-  - 인덱스 엔트리에 대응하는 기본 키(Primary Key) 문자열을 바이트 손실 없이 저장합니다.
+  - Unique 인덱스는 대응하는 기본 키(Primary Key) 문자열을, Non-Unique 인덱스는 빈 값을 바이트 손실 없이 저장합니다.
 
 ### 1.3 In-Memory OCC 플랫 레코드 (`memengine`)
 In-Memory OCC 엔진은 포인터 추적으로 인한 CPU 캐시 미스와 Go GC 스캔 오버헤드를 원천 차단하기 위해 무압축 고정 오프셋 기반의 **포인터리스 플랫 레코드(Pointer-Free Flat Record)** 레이아웃을 사용하며 (`Invariant 14 Spec-Out`), 디스크 동기화(AOF/Snapshot) 시에는 본 V2 바이너리 튜플 코덱으로 상호 직렬화됩니다. 보조 인덱스는 $O(\log N)$ 동시성 SkipList로 관리됩니다.

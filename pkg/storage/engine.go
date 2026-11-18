@@ -405,16 +405,36 @@ func (s *TableSchema) TableURI() string {
 	return "table:" + s.Name
 }
 
-// IndexURI returns the WiredTiger secondary index URI ("table:_idx_<physical_name>_<index_name>").
-func (s *TableSchema) IndexURI(indexName string) string {
+// IndexFileURI returns the WiredTiger URI of the single multiplexed secondary index file
+// shared by every index of this table ("table:_idx_<physical_name>"). Individual indexes are
+// separated inside that file by IndexSchema.KeyPrefix (ARCH-WT-FILE-LAYOUT-1).
+func (s *TableSchema) IndexFileURI() string {
 	if s == nil {
 		return ""
 	}
-	base := s.Name
-	if s.PhysicalName != "" {
-		base = s.PhysicalName
+	return "table:_idx_" + s.physicalBase()
+}
+
+// LegacyIndexURI returns the pre-multiplexing per-index file URI
+// ("table:_idx_<physical_name>_<index_name>"). It exists only for startup migration.
+func (s *TableSchema) LegacyIndexURI(indexName string) string {
+	if s == nil {
+		return ""
 	}
-	return fmt.Sprintf("table:_idx_%s_%s", base, indexName)
+	return fmt.Sprintf("table:_idx_%s_%s", s.physicalBase(), indexName)
+}
+
+func (s *TableSchema) physicalBase() string {
+	if s.PhysicalName != "" {
+		return s.PhysicalName
+	}
+	return s.Name
+}
+
+// KeyPrefix returns the namespace prefix ("<lower(index name)>\x00") under which all entries of
+// this index are stored inside the table's multiplexed secondary index file.
+func (s *IndexSchema) KeyPrefix() string {
+	return strings.ToLower(s.Name) + "\x00"
 }
 
 // ParsePKValue parses a string representation into a Value of the specified DataType.

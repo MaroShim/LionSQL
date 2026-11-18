@@ -640,7 +640,7 @@ func TestWiredTiger_UniqueIndex_OverwriteFalse_DuplicateKeyRejection(t *testing.
 	if err != nil {
 		t.Fatalf("GetTable failed: %v", err)
 	}
-	idxURI := tbl.IndexURI("idx_products_sku")
+	idxURI := tbl.IndexFileURI()
 
 	cur, err := wtSess.acquireCursor(idxURI)
 	if err != nil {

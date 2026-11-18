@@ -571,6 +571,14 @@ func (e *Engine) Open(dir string) error {
 
 	e.loadCatalog()
 
+	if err := e.migrateIndexFiles(); err != nil {
+		_ = C.go_wt_close(conn)
+		e.conn = nil
+		e.closed = true
+		e.connClosed.Store(true)
+		return fmt.Errorf("secondary index file migration failed: %w", err)
+	}
+
 	stopCh := make(chan struct{})
 	e.stopCh = stopCh
 	e.bgWg.Add(1)
@@ -604,17 +612,10 @@ func (e *Engine) loadCatalog() {
 		if e.conn != nil {
 			var sess *C.WT_SESSION
 			if C.go_wt_open_session(e.conn, &sess) == 0 {
-				config := C.CString("key_format=u,value_format=u")
 				for _, t := range e.tables {
 					cnt := e.countTableRows(sess, t)
 					e.getRowCountAtomicLocked(t.Name).Store(cnt)
-					for _, idx := range t.Indexes {
-						idxURI := C.CString(t.IndexURI(idx.Name))
-						_ = C.go_wt_session_create(sess, idxURI, config)
-						C.free(unsafe.Pointer(idxURI))
-					}
 				}
-				C.free(unsafe.Pointer(config))
 				C.go_wt_session_close(sess)
 			}
 		}
@@ -801,14 +802,15 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		return fmt.Errorf("session->create failed with code %d", ret)
 	}
 
-	for _, idx := range schema.Indexes {
-		idxURI := C.CString(schema.IndexURI(idx.Name))
-		idxConfig := C.CString("key_format=u,value_format=u")
-		idxRet := C.go_wt_session_create(sess, idxURI, idxConfig)
-		C.free(unsafe.Pointer(idxURI))
-		C.free(unsafe.Pointer(idxConfig))
-		if idxRet != 0 {
-			return fmt.Errorf("session->create index %q failed with code %d", idx.Name, idxRet)
+	// Lazy index file (ARCH-WT-FILE-LAYOUT-1): <table>.wt is always created; the single multiplexed
+	// _idx_<table>.wt is created only when the table has indexes (or on its first CREATE INDEX) and
+	// is removed only by DROP TABLE. DROP INDEX never touches the file layout.
+	if len(schema.Indexes) > 0 {
+		if err := createIndexFile(sess, schema); err != nil {
+			cleanupURI := C.CString(schema.TableURI())
+			_ = C.go_wt_session_drop(sess, cleanupURI)
+			C.free(unsafe.Pointer(cleanupURI))
+			return err
 		}
 	}
 
@@ -907,13 +909,11 @@ func (e *Engine) DropTable(tableName string) error {
 		return fmt.Errorf("wiredtiger drop table %q (%s) failed with code %d", tableName, tbl.TableURI(), dropRet)
 	}
 
-	for _, idx := range tbl.Indexes {
-		idxURI := tbl.IndexURI(idx.Name)
-		e.evictAllCursors(idxURI)
-		cIdxURI := C.CString(idxURI)
-		_ = C.go_wt_session_drop(sess, cIdxURI)
-		C.free(unsafe.Pointer(cIdxURI))
-	}
+	idxFileURI := tbl.IndexFileURI()
+	e.evictAllCursors(idxFileURI)
+	cIdxURI := C.CString(idxFileURI)
+	_ = C.go_wt_session_drop(sess, cIdxURI)
+	C.free(unsafe.Pointer(cIdxURI))
 
 	sqlutil.MapDeleteFold(e.tables, targetName)
 	sqlutil.MapDeleteFold(e.rowCounts, targetName)
@@ -1029,12 +1029,12 @@ func (e *Engine) truncatePermTables(tableNames []string, cascade bool) error {
 		}
 		C.free(unsafe.Pointer(uri))
 
-		for _, idx := range tbl.Indexes {
-			idxURI := tbl.IndexURI(idx.Name)
-			e.evictAllCursors(idxURI)
-			cIdxURI := C.CString(idxURI)
-			_ = C.go_wt_session_truncate(sess, cIdxURI)
-			C.free(unsafe.Pointer(cIdxURI))
+		// The multiplexed index file is empty by invariant when the table has no indexes.
+		if len(tbl.Indexes) > 0 {
+			if err := truncateIndexFile(sess, tbl); err != nil {
+				return err
+			}
+			e.evictAllCursors(tbl.IndexFileURI())
 		}
 
 		if !storage.IsTemporaryTable(tbl.Name) {
@@ -1050,6 +1050,26 @@ func (e *Engine) truncatePermTables(tableNames []string, cascade bool) error {
 
 	if len(walOps) > 0 {
 		e.recordWALLocked(walOps)
+	}
+	return nil
+}
+
+// truncateIndexFile empties the table's multiplexed index file, falling back to drop+create when
+// WiredTiger refuses the in-place truncate.
+func truncateIndexFile(sess *C.WT_SESSION, tbl *storage.TableSchema) error {
+	idxFileURI := tbl.IndexFileURI()
+	cIdxURI := C.CString(idxFileURI)
+	defer C.free(unsafe.Pointer(cIdxURI))
+	if tret := C.go_wt_session_truncate(sess, cIdxURI); tret == 0 {
+		return nil
+	}
+	if dret := C.go_wt_session_drop(sess, cIdxURI); dret != 0 {
+		return fmt.Errorf("wiredtiger truncate drop failed for index file of table %q (uri: %s): code %d", tbl.Name, idxFileURI, dret)
+	}
+	cIdxConfig := C.CString(indexFileConfig)
+	defer C.free(unsafe.Pointer(cIdxConfig))
+	if cret := C.go_wt_session_create(sess, cIdxURI, cIdxConfig); cret != 0 {
+		return fmt.Errorf("wiredtiger truncate recreate failed for index file of table %q (uri: %s): code %d", tbl.Name, idxFileURI, cret)
 	}
 	return nil
 }
@@ -1078,9 +1098,7 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 	if tbl.PhysicalName != "" && tbl.PhysicalName != tbl.Name {
 		e.evictAllCursors(tbl.PhysicalName)
 	}
-	for _, idx := range tbl.Indexes {
-		e.evictAllCursors(tbl.IndexURI(idx.Name))
-	}
+	e.evictAllCursors(tbl.IndexFileURI())
 
 	var sess *C.WT_SESSION
 	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
@@ -1155,7 +1173,7 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 
 	if len(deletedRows) > 0 && len(tbl.Indexes) > 0 {
 		for _, idx := range tbl.Indexes {
-			cIdxURI := C.CString(tbl.IndexURI(idx.Name))
+			cIdxURI := C.CString(tbl.IndexFileURI())
 			var idxCur *C.WT_CURSOR
 			if ret := C.go_wt_open_cursor(sess, cIdxURI, &idxCur); ret != 0 {
 				C.free(unsafe.Pointer(cIdxURI))
@@ -1589,27 +1607,303 @@ func formatIndexKeyValue(rec storage.Record, idx *storage.IndexSchema, pkStr str
 		keyStr = storage.EncodeIndexKeyPart(keyVal)
 	}
 
+	// All indexes of a table share one file; the index name prefix namespaces the entries.
+	prefix := idx.KeyPrefix()
 	if idx.Unique && !isNull {
-		return keyStr, pkStr, false
+		return prefix + keyStr, pkStr, false
 	}
-	return keyStr + "\x00" + pkStr, "", isNull
+	return prefix + keyStr + "\x00" + pkStr, "", isNull
 }
 
-func (e *Engine) isUniqueIndexURI(uri string) bool {
+// isIndexFileURI reports whether uri is the multiplexed secondary index file of a known table.
+func (e *Engine) isIndexFileURI(uri string) bool {
 	if !strings.HasPrefix(uri, "table:_idx_") {
 		return false
 	}
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	for _, tbl := range e.tables {
-		for _, idx := range tbl.Indexes {
-			if tbl.IndexURI(idx.Name) == uri {
-				return idx.Unique
-			}
+		if tbl.IndexFileURI() == uri {
+			return true
 		}
 	}
 	return false
 }
+
+// removeIndexRange deletes every entry whose key starts with prefix from the multiplexed index
+// file inside a single WiredTiger transaction (all-or-nothing).
+func removeIndexRange(sess *C.WT_SESSION, idxFileURI, prefix string) error {
+	cURI := C.CString(idxFileURI)
+	defer C.free(unsafe.Pointer(cURI))
+
+	if ret := C.go_wt_session_begin(sess, nil); ret != 0 {
+		return fmt.Errorf("begin_transaction failed: %d", ret)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = C.go_wt_session_rollback(sess, nil)
+		}
+	}()
+
+	var cur *C.WT_CURSOR
+	if ret := C.go_wt_open_cursor(sess, cURI, &cur); ret != 0 {
+		return fmt.Errorf("open index file cursor %s failed: %d", idxFileURI, ret)
+	}
+	defer C.go_wt_cursor_close(cur)
+
+	C.go_wt_cursor_set_key_raw(cur, unsafe.Pointer(unsafe.StringData(prefix)), C.size_t(len(prefix)))
+	var exact C.int
+	ret := C.go_wt_cursor_search_near(cur, &exact)
+	done := false
+	switch {
+	case ret == C.WT_NOTFOUND:
+		done = true
+	case ret != 0:
+		return wtOpError("cursor_search_near during index range removal", int(ret))
+	case exact < 0:
+		if nret := C.go_wt_cursor_next(cur); nret == C.WT_NOTFOUND {
+			done = true
+		} else if nret != 0 {
+			return wtOpError("cursor_next during index range removal", int(nret))
+		}
+	}
+
+	for !done {
+		var kData unsafe.Pointer
+		var kSz C.size_t
+		if kret := C.go_wt_cursor_get_key_raw(cur, &kData, &kSz); kret != 0 || kData == nil {
+			return wtOpError("cursor_get_key during index range removal", int(kret))
+		}
+		if !strings.HasPrefix(string(C.GoBytes(kData, C.int(kSz))), prefix) {
+			break
+		}
+		if rret := C.go_wt_cursor_remove(cur); rret != 0 {
+			return wtOpError("cursor_remove during index range removal", int(rret))
+		}
+		if nret := C.go_wt_cursor_next(cur); nret != 0 {
+			if nret != C.WT_NOTFOUND {
+				return wtOpError("cursor_next during index range removal", int(nret))
+			}
+			break
+		}
+	}
+
+	if cret := C.go_wt_session_commit(sess, nil); cret != 0 {
+		return fmt.Errorf("commit_transaction failed: %d", cret)
+	}
+	committed = true
+	return nil
+}
+
+// buildIndexEntries backfills every existing row of t into the multiplexed index file for index.
+// The whole build runs in one WiredTiger transaction and is rolled back on any failure.
+func buildIndexEntries(sess *C.WT_SESSION, t *storage.TableSchema, index *storage.IndexSchema) error {
+	if ret := C.go_wt_session_begin(sess, nil); ret != 0 {
+		return fmt.Errorf("begin_transaction failed: %d", ret)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = C.go_wt_session_rollback(sess, nil)
+		}
+	}()
+
+	primURI := C.CString(t.TableURI())
+	defer C.free(unsafe.Pointer(primURI))
+	cIdxURI := C.CString(t.IndexFileURI())
+	defer C.free(unsafe.Pointer(cIdxURI))
+	cConfig := C.CString("overwrite=false")
+	defer C.free(unsafe.Pointer(cConfig))
+
+	var tblCur, idxCur *C.WT_CURSOR
+	if ret := C.go_wt_open_cursor(sess, primURI, &tblCur); ret != 0 {
+		return fmt.Errorf("open table cursor %s failed: %d", t.TableURI(), ret)
+	}
+	defer C.go_wt_cursor_close(tblCur)
+	if ret := C.go_wt_open_cursor_config(sess, cIdxURI, cConfig, &idxCur); ret != 0 {
+		return fmt.Errorf("open index file cursor %s failed: %d", t.IndexFileURI(), ret)
+	}
+	defer C.go_wt_cursor_close(idxCur)
+
+	for {
+		nret := C.go_wt_cursor_next(tblCur)
+		if nret != 0 {
+			if nret != C.WT_NOTFOUND {
+				return wtOpError("cursor_next during index build", int(nret))
+			}
+			break
+		}
+		var pKey *C.char
+		if kret := C.go_wt_cursor_get_key(tblCur, &pKey); kret != 0 || pKey == nil {
+			return wtOpError("cursor_get_key during index build", int(kret))
+		}
+		pkStr := C.GoString(pKey)
+
+		var pData unsafe.Pointer
+		var sz C.size_t
+		if vret := C.go_wt_cursor_get_val_raw(tblCur, &pData, &sz); vret != 0 || pData == nil {
+			return wtOpError("cursor_get_val during index build", int(vret))
+		}
+		rec, err := decodeRecord(t, C.GoBytes(pData, C.int(sz)))
+		if err != nil {
+			return fmt.Errorf("index build: decode record pk %s: %w", pkStr, err)
+		}
+
+		k, v, isNull := formatIndexKeyValue(rec, index, pkStr)
+		if index.Unique && !isNull {
+			var kData unsafe.Pointer
+			if len(k) > 0 {
+				kData = unsafe.Pointer(unsafe.StringData(k))
+			}
+			C.go_wt_cursor_set_key_raw(idxCur, kData, C.size_t(len(k)))
+			found := C.go_wt_cursor_search(idxCur) == 0
+			C.go_wt_cursor_reset(idxCur)
+			if found {
+				return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, k[len(index.KeyPrefix()):], index.Name)
+			}
+		}
+		if err := insertIndexEntry(idxCur, k, v); err != nil {
+			return err
+		}
+	}
+
+	if cret := C.go_wt_session_commit(sess, nil); cret != 0 {
+		return fmt.Errorf("commit_transaction failed: %d", cret)
+	}
+	committed = true
+	return nil
+}
+
+// wtENOENT is the POSIX "no such file or object" code WiredTiger returns for a missing URI.
+const wtENOENT = 2
+
+// migrateLegacyIndex moves a pre-multiplexing per-index file ("table:_idx_<T>_<I>") into the
+// table's multiplexed index file and drops the legacy file. It is idempotent: the copy overwrites,
+// and the legacy file is dropped only after the copy has been committed.
+func migrateLegacyIndex(sess *C.WT_SESSION, t *storage.TableSchema, idx *storage.IndexSchema) error {
+	legacyURI := t.LegacyIndexURI(idx.Name)
+	cLegacy := C.CString(legacyURI)
+	defer C.free(unsafe.Pointer(cLegacy))
+	cIdxURI := C.CString(t.IndexFileURI())
+	defer C.free(unsafe.Pointer(cIdxURI))
+
+	copyAll := func() (found bool, err error) {
+		var src *C.WT_CURSOR
+		if ret := C.go_wt_open_cursor(sess, cLegacy, &src); ret != 0 {
+			if ret == wtENOENT {
+				return false, nil
+			}
+			return false, fmt.Errorf("open legacy index %s failed: %d", legacyURI, ret)
+		}
+		defer C.go_wt_cursor_close(src)
+
+		if ret := C.go_wt_session_begin(sess, nil); ret != 0 {
+			return true, fmt.Errorf("begin_transaction failed: %d", ret)
+		}
+		committed := false
+		defer func() {
+			if !committed {
+				_ = C.go_wt_session_rollback(sess, nil)
+			}
+		}()
+
+		var dst *C.WT_CURSOR
+		if ret := C.go_wt_open_cursor(sess, cIdxURI, &dst); ret != 0 {
+			return true, fmt.Errorf("open index file cursor %s failed: %d", t.IndexFileURI(), ret)
+		}
+		defer C.go_wt_cursor_close(dst)
+
+		prefix := idx.KeyPrefix()
+		for {
+			nret := C.go_wt_cursor_next(src)
+			if nret != 0 {
+				if nret != C.WT_NOTFOUND {
+					return true, wtOpError("cursor_next during legacy index migration", int(nret))
+				}
+				break
+			}
+			var kData, vData unsafe.Pointer
+			var kSz, vSz C.size_t
+			if kret := C.go_wt_cursor_get_key_raw(src, &kData, &kSz); kret != 0 || kData == nil {
+				return true, wtOpError("cursor_get_key during legacy index migration", int(kret))
+			}
+			if vret := C.go_wt_cursor_get_val_raw(src, &vData, &vSz); vret != 0 {
+				return true, wtOpError("cursor_get_val during legacy index migration", int(vret))
+			}
+			key := prefix + string(C.GoBytes(kData, C.int(kSz)))
+			var val string
+			if vData != nil && vSz > 0 {
+				val = string(C.GoBytes(vData, C.int(vSz)))
+			}
+			if err := insertIndexEntry(dst, key, val); err != nil {
+				return true, err
+			}
+		}
+		if cret := C.go_wt_session_commit(sess, nil); cret != 0 {
+			return true, fmt.Errorf("commit_transaction failed: %d", cret)
+		}
+		committed = true
+		return true, nil
+	}
+
+	found, err := copyAll()
+	if err != nil {
+		return fmt.Errorf("migrate legacy index %s: %w", legacyURI, err)
+	}
+	if !found {
+		return nil
+	}
+	if ret := C.go_wt_session_drop(sess, cLegacy); ret != 0 {
+		// The data is already safely migrated; a leftover legacy file only wastes disk space
+		// and the idempotent migration retries the drop on the next start.
+		fmt.Fprintf(os.Stderr, "wiredtiger: WARNING: failed to drop legacy index file %s after migration (code %d)\n", legacyURI, ret)
+	}
+	return nil
+}
+
+// migrateIndexFiles guarantees that every table owns its multiplexed index file and migrates any
+// legacy per-index files left by older versions (ARCH-WT-FILE-LAYOUT-1).
+func (e *Engine) migrateIndexFiles() error {
+	if e.conn == nil || len(e.tables) == 0 {
+		return nil
+	}
+	var sess *C.WT_SESSION
+	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
+		return fmt.Errorf("open_session failed: %d", ret)
+	}
+	defer C.go_wt_session_close(sess)
+
+	for _, t := range e.tables {
+		if len(t.Indexes) == 0 {
+			continue
+		}
+		if err := createIndexFile(sess, t); err != nil {
+			return err
+		}
+		for i := range t.Indexes {
+			if err := migrateLegacyIndex(sess, t, &t.Indexes[i]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// createIndexFile creates the table's multiplexed index file; it is a no-op when it already exists.
+func createIndexFile(sess *C.WT_SESSION, t *storage.TableSchema) error {
+	cURI := C.CString(t.IndexFileURI())
+	defer C.free(unsafe.Pointer(cURI))
+	cConfig := C.CString(indexFileConfig)
+	defer C.free(unsafe.Pointer(cConfig))
+	if ret := C.go_wt_session_create(sess, cURI, cConfig); ret != 0 {
+		return fmt.Errorf("create index file %s failed: %d", t.IndexFileURI(), ret)
+	}
+	return nil
+}
+
+// indexFileConfig is the WiredTiger create config of the per-table multiplexed index file.
+const indexFileConfig = "key_format=u,value_format=u"
 
 func insertIndexEntry(cur *C.WT_CURSOR, key, val string) error {
 	var kData, vData unsafe.Pointer
@@ -1679,84 +1973,19 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 		return fmt.Errorf("%w: %s", storage.ErrIndexExists, index.Name)
 	}
 
-	idxURI := t.IndexURI(index.Name)
-	cIdxURI := C.CString(idxURI)
-	defer C.free(unsafe.Pointer(cIdxURI))
-	cIdxConfig := C.CString("key_format=u,value_format=u")
-	defer C.free(unsafe.Pointer(cIdxConfig))
-
 	var sess *C.WT_SESSION
 	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
 		return fmt.Errorf("open_session failed: %d", ret)
 	}
 	defer C.go_wt_session_close(sess)
 
-	if ret := C.go_wt_session_create(sess, cIdxURI, cIdxConfig); ret != 0 {
-		return fmt.Errorf("session->create index %q failed with code %d", index.Name, ret)
+	// The multiplexed index file is created on the table's first index and reused afterwards:
+	// building an index is a key insert inside one transaction, rolled back automatically on failure.
+	if err := createIndexFile(sess, t); err != nil {
+		return err
 	}
-
-	// Backfill existing rows if table contains data
-	primURI := C.CString(t.TableURI())
-	defer C.free(unsafe.Pointer(primURI))
-
-	var tblCur, idxCur *C.WT_CURSOR
-	if ret := C.go_wt_open_cursor(sess, primURI, &tblCur); ret == 0 {
-		defer C.go_wt_cursor_close(tblCur)
-		var openRet C.int
-		if index.Unique {
-			cConfig := C.CString("overwrite=false")
-			openRet = C.go_wt_open_cursor_config(sess, cIdxURI, cConfig, &idxCur)
-			C.free(unsafe.Pointer(cConfig))
-		} else {
-			openRet = C.go_wt_open_cursor(sess, cIdxURI, &idxCur)
-		}
-		if openRet == 0 {
-			defer C.go_wt_cursor_close(idxCur)
-			for {
-				nret := C.go_wt_cursor_next(tblCur)
-				if nret != 0 {
-					if nret != C.WT_NOTFOUND {
-						_ = C.go_wt_session_drop(sess, cIdxURI)
-						return wtOpError("cursor_next during index build", int(nret))
-					}
-					break
-				}
-				var pKey *C.char
-				if kret := C.go_wt_cursor_get_key(tblCur, &pKey); kret != 0 || pKey == nil {
-					continue
-				}
-				pkStr := C.GoString(pKey)
-
-				var pData unsafe.Pointer
-				var sz C.size_t
-				if vret := C.go_wt_cursor_get_val_raw(tblCur, &pData, &sz); vret != 0 || pData == nil {
-					continue
-				}
-				rec, err := decodeRecord(t, C.GoBytes(pData, C.int(sz)))
-				if err != nil {
-					continue
-				}
-
-				k, v, isNull := formatIndexKeyValue(rec, index, pkStr)
-				if index.Unique && !isNull {
-					var kData unsafe.Pointer
-					if len(k) > 0 {
-						kData = unsafe.Pointer(unsafe.StringData(k))
-					}
-					C.go_wt_cursor_set_key_raw(idxCur, kData, C.size_t(len(k)))
-					if C.go_wt_cursor_search(idxCur) == 0 {
-						C.go_wt_cursor_reset(idxCur)
-						_ = C.go_wt_session_drop(sess, cIdxURI)
-						return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, k, index.Name)
-					}
-					C.go_wt_cursor_reset(idxCur)
-				}
-				if err := insertIndexEntry(idxCur, k, v); err != nil {
-					_ = C.go_wt_session_drop(sess, cIdxURI)
-					return err
-				}
-			}
-		}
+	if err := buildIndexEntries(sess, t, index); err != nil {
+		return err
 	}
 
 	t.Indexes = append(t.Indexes, *index)
@@ -1789,15 +2018,15 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 		return fmt.Errorf("%w: %s", storage.ErrIndexNotFound, indexName)
 	}
 
-	idxURI := t.IndexURI(idxSchema.Name)
-	e.evictAllCursors(idxURI)
-
+	// DROP INDEX never drops a file (no EBUSY, no layout change): it deletes the index's key
+	// range from the table's multiplexed index file inside one transaction.
 	var sess *C.WT_SESSION
-	if ret := C.go_wt_open_session(e.conn, &sess); ret == 0 {
-		cIdxURI := C.CString(idxURI)
-		_ = C.go_wt_session_drop(sess, cIdxURI)
-		C.free(unsafe.Pointer(cIdxURI))
-		C.go_wt_session_close(sess)
+	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
+		return fmt.Errorf("open_session failed: %d", ret)
+	}
+	defer C.go_wt_session_close(sess)
+	if err := removeIndexRange(sess, t.IndexFileURI(), idxSchema.KeyPrefix()); err != nil {
+		return fmt.Errorf("drop index %q: %w", indexName, err)
 	}
 
 	t.Indexes = append(t.Indexes[:idxPos], t.Indexes[idxPos+1:]...)
@@ -1918,9 +2147,9 @@ func (s *WTSession) evictCursors(tableName string) {
 	}
 	prefixTable := "table:" + tableName
 	prefixIndex := "index:" + tableName + ":"
-	prefixIdxTable := "table:_idx_" + tableName + "_"
+	idxFileURI := "table:_idx_" + tableName
 	for curURI, pool := range s.cursorPool {
-		if curURI == prefixTable || strings.HasPrefix(curURI, prefixIndex) || strings.HasPrefix(curURI, prefixIdxTable) || curURI == tableName {
+		if curURI == prefixTable || strings.HasPrefix(curURI, prefixIndex) || curURI == idxFileURI || curURI == tableName {
 			s.toClose = append(s.toClose, pool...)
 			delete(s.cursorPool, curURI)
 		}
@@ -2002,7 +2231,7 @@ func (s *WTSession) acquireCursor(uri string) (*C.WT_CURSOR, error) {
 
 	var cur *C.WT_CURSOR
 	var ret C.int
-	if s.engine != nil && s.engine.isUniqueIndexURI(uri) {
+	if s.engine != nil && s.engine.isIndexFileURI(uri) {
 		cConfig := C.CString("overwrite=false")
 		ret = C.go_wt_open_cursor_config(s.sess, cURI, cConfig, &cur)
 		C.free(unsafe.Pointer(cConfig))
@@ -2393,7 +2622,7 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 	}
 
 	for _, idx := range tbl.Indexes {
-		idxURI := tbl.IndexURI(idx.Name)
+		idxURI := tbl.IndexFileURI()
 		idxCur, err := tx.sess.acquireCursor(idxURI)
 		if err != nil {
 			if physRec != nil {
@@ -2575,7 +2804,7 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 				if oldKey == newKey {
 					continue
 				}
-				idxURI := tbl.IndexURI(idx.Name)
+				idxURI := tbl.IndexFileURI()
 				idxCur, err := tx.sess.acquireCursor(idxURI)
 				if err != nil {
 					continue
@@ -2696,7 +2925,7 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 
 	if existingRec != nil && len(tbl.Indexes) > 0 {
 		for _, idx := range tbl.Indexes {
-			idxURI := tbl.IndexURI(idx.Name)
+			idxURI := tbl.IndexFileURI()
 			idxCur, err := tx.sess.acquireCursor(idxURI)
 			if err != nil {
 				continue
@@ -2751,12 +2980,13 @@ func (tx *WTTx) checkUniqueIndexesLocked(tableName string, tbl *storage.TableSch
 			keyStr = storage.EncodeIndexKeyPart(keyVal)
 		}
 
-		idxURI := tbl.IndexURI(idx.Name)
+		idxURI := tbl.IndexFileURI()
 		cur, err := tx.sess.acquireCursor(idxURI)
 		if err != nil {
 			return err
 		}
 
+		keyStr = idx.KeyPrefix() + keyStr
 		var kData unsafe.Pointer
 		if len(keyStr) > 0 {
 			kData = unsafe.Pointer(unsafe.StringData(keyStr))
@@ -3147,20 +3377,21 @@ func (tx *WTTx) indexScanBTreeLocked(tableName string, indexName string, low, hi
 		return nil, fmt.Errorf("%w: %s on table %s", storage.ErrIndexNotFound, indexName, tableName)
 	}
 
-	idxURI := tbl.IndexURI(idx.Name)
+	idxURI := tbl.IndexFileURI()
 	cur, err := tx.sess.acquireCursor(idxURI)
 	if err != nil {
 		return nil, err
 	}
 
 	btreeCur := &wtIndexBTreeCursor{
-		tx:   tx,
-		sess: tx.sess,
-		tbl:  tbl,
-		idx:  idx,
-		uri:  idxURI,
-		cur:  cur,
-		desc: desc,
+		tx:     tx,
+		sess:   tx.sess,
+		tbl:    tbl,
+		idx:    idx,
+		prefix: idx.KeyPrefix(),
+		uri:    idxURI,
+		cur:    cur,
+		desc:   desc,
 	}
 
 	if low != nil {
@@ -3194,6 +3425,7 @@ type wtIndexBTreeCursor struct {
 	sess    *WTSession
 	tbl     *storage.TableSchema
 	idx     *storage.IndexSchema
+	prefix  string // key namespace of this index inside the multiplexed index file
 	uri     string
 	cur     *C.WT_CURSOR
 	lowKey  string
@@ -3218,12 +3450,15 @@ func (c *wtIndexBTreeCursor) Next() bool {
 		if !c.started {
 			c.started = true
 			if !c.desc {
-				// Ascending initial seek
+				// Ascending initial seek: first key >= prefix [+ low bound]
+				searchKey := c.prefix
 				if c.hasLow {
-					searchKey := c.lowKey
+					searchKey = c.prefix + c.lowKey
 					if !c.idx.Unique {
-						searchKey = c.lowKey + "\x00"
+						searchKey += "\x00"
 					}
+				}
+				{
 					var kData unsafe.Pointer
 					if len(searchKey) > 0 {
 						kData = unsafe.Pointer(unsafe.StringData(searchKey))
@@ -3247,22 +3482,18 @@ func (c *wtIndexBTreeCursor) Next() bool {
 							return false
 						}
 					}
-				} else {
-					if nret := C.go_wt_cursor_next(c.cur); nret != 0 {
-						c.eof = true
-						if nret != C.WT_NOTFOUND {
-							c.err = fmt.Errorf("wiredtiger index cursor next error: %d (%s)", nret, C.GoString(C.wiredtiger_strerror(nret)))
-						}
-						return false
-					}
 				}
 			} else {
-				// Descending initial seek
+				// Descending initial seek: last key <= upper bound. Without an explicit high bound the
+				// sentinel "<prefix minus NUL>\x01" sorts right after every key of this index.
+				searchKey := c.prefix[:len(c.prefix)-1] + "\x01"
 				if c.hasHigh {
-					searchKey := c.highKey
+					searchKey = c.prefix + c.highKey
 					if !c.idx.Unique {
-						searchKey = c.highKey + "\x00\xff\xff\xff\xff"
+						searchKey += "\x00\xff\xff\xff\xff"
 					}
+				}
+				{
 					var kData unsafe.Pointer
 					if len(searchKey) > 0 {
 						kData = unsafe.Pointer(unsafe.StringData(searchKey))
@@ -3285,14 +3516,6 @@ func (c *wtIndexBTreeCursor) Next() bool {
 							}
 							return false
 						}
-					}
-				} else {
-					if pret := C.go_wt_cursor_prev(c.cur); pret != 0 {
-						c.eof = true
-						if pret != C.WT_NOTFOUND {
-							c.err = fmt.Errorf("wiredtiger index cursor prev error: %d (%s)", pret, C.GoString(C.wiredtiger_strerror(pret)))
-						}
-						return false
 					}
 				}
 			}
@@ -3327,6 +3550,20 @@ func (c *wtIndexBTreeCursor) Next() bool {
 			return false
 		}
 		keyStr := string(C.GoBytes(pKeyData, C.int(keySz)))
+
+		// The index file multiplexes every index of the table: stay inside this index's namespace.
+		if !strings.HasPrefix(keyStr, c.prefix) {
+			if !c.desc {
+				if keyStr < c.prefix {
+					continue
+				}
+			} else if keyStr > c.prefix {
+				continue
+			}
+			c.eof = true
+			return false
+		}
+		keyStr = keyStr[len(c.prefix):]
 
 		var curIndexKey, curPK string
 		if c.idx.Unique {
@@ -3878,7 +4115,7 @@ func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes [
 	if updateIndexes && len(tbl.Indexes) > 0 {
 		if rec, err := decodeRecord(tbl, recBytes); err == nil {
 			for _, idx := range tbl.Indexes {
-				idxURI := tbl.IndexURI(idx.Name)
+				idxURI := tbl.IndexFileURI()
 				if idxCur, err := tx.sess.acquireCursor(idxURI); err == nil {
 					k, v, _ := formatIndexKeyValue(rec, &idx, pkStr)
 					if err := insertIndexEntry(idxCur, k, v); err != nil {
@@ -3929,7 +4166,7 @@ func (tx *WTTx) removeRawLocked(tableName string, pk storage.Value) error {
 		if oldData, err := tx.getRawBytesLocked(tableName, pk); err == nil && len(oldData) > 0 {
 			if oldRec, err := decodeRecord(tbl, oldData); err == nil {
 				for _, idx := range tbl.Indexes {
-					idxURI := tbl.IndexURI(idx.Name)
+					idxURI := tbl.IndexFileURI()
 					if idxCur, err := tx.sess.acquireCursor(idxURI); err == nil {
 						k, _, _ := formatIndexKeyValue(oldRec, &idx, pkStr)
 						_ = removeIndexEntry(idxCur, k)
