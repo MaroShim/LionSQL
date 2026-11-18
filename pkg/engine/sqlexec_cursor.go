@@ -55,7 +55,9 @@ func (s *Coordinator) execDeclareCursor(query string, start time.Time, cs *Clien
 		Columns:    res.Columns,
 		Rows:       res.Rows,
 		Pos:        0,
-		IsOpen:     true,
+		IsOpen:     false, // T-SQL lifecycle: cursor is declared closed until explicit OPEN
+		EverOpened: false,
+		IsClosed:   false,
 		WithHold:   stmt.WithHold,
 		Scroll:     stmt.Scroll,
 		Binary:     stmt.Binary,
@@ -188,7 +190,13 @@ func (s *Coordinator) execFetchCursor(query string, start time.Time, cs *ClientS
 		return nil, fmt.Errorf("cursor %q does not exist", stmt.CursorName)
 	}
 	if !cur.IsOpen {
-		return nil, fmt.Errorf("cursor %q is not open", stmt.CursorName)
+		if !cur.EverOpened && !cur.IsClosed {
+			// PostgreSQL compatibility: FETCH immediately after DECLARE auto-opens cursor
+			cur.IsOpen = true
+			cur.EverOpened = true
+		} else {
+			return nil, fmt.Errorf("cursor %q is not open", stmt.CursorName)
+		}
 	}
 
 	fetched := advanceCursor(cur, stmt.Direction, stmt.Count, stmt.IsAll)
@@ -272,6 +280,8 @@ func (s *Coordinator) execOpenCursor(query string, start time.Time, cs *ClientSe
 		cur.Rows = res.Rows
 		cur.Pos = 0
 		cur.IsOpen = true
+		cur.EverOpened = true
+		cur.IsClosed = false
 	}
 	cs.Mu.Unlock()
 
@@ -301,6 +311,7 @@ func (s *Coordinator) execCloseCursor(query string, start time.Time, cs *ClientS
 	if upperTarget == "ALL" {
 		for _, cur := range cs.Cursors {
 			cur.IsOpen = false
+			cur.IsClosed = true
 			cur.Rows = nil
 			cur.Pos = 0
 		}
@@ -318,6 +329,7 @@ func (s *Coordinator) execCloseCursor(query string, start time.Time, cs *ClientS
 	}
 
 	cur.IsOpen = false
+	cur.IsClosed = true
 	cur.Rows = nil
 	cur.Pos = 0
 

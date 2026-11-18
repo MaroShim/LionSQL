@@ -740,6 +740,7 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		if cs.Cursors != nil {
 			for _, cur := range cs.Cursors {
 				cur.IsOpen = false
+				cur.IsClosed = true
 				cur.Rows = nil
 				cur.Pos = 0
 			}
@@ -776,6 +777,7 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		for _, cur := range cs.Cursors {
 			if !cur.WithHold {
 				cur.IsOpen = false
+				cur.IsClosed = true
 				cur.Rows = nil
 				cur.Pos = 0
 			}
@@ -826,6 +828,7 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 	if cs.Cursors != nil {
 		for _, cur := range cs.Cursors {
 			cur.IsOpen = false
+			cur.IsClosed = true
 			cur.Rows = nil
 			cur.Pos = 0
 		}

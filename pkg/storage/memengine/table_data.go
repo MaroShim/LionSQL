@@ -193,9 +193,10 @@ func (e shardEntry) materializeWithLayout(mode MemoryMode, schema *storage.Table
 }
 
 type tableShard struct {
-	mu      sync.RWMutex
-	entries map[string]shardEntry
-	_pad    [32]byte
+	mu            sync.RWMutex
+	entries       map[string]shardEntry
+	activeWriters map[string]uint64 // pkKey -> txID (uncommitted active writer tracking)
+	_pad          [32]byte
 }
 
 // TableData stores rows in memory for a single table with fine-grained sharded OCC version tracking and secondary indexes.
@@ -284,6 +285,9 @@ func (td *TableData) initShardsInternal() {
 	for i := 0; i < numTableShards; i++ {
 		if td.shards[i].entries == nil {
 			td.shards[i].entries = make(map[string]shardEntry)
+		}
+		if td.shards[i].activeWriters == nil {
+			td.shards[i].activeWriters = make(map[string]uint64)
 		}
 	}
 	if len(td.Rows) > 0 {

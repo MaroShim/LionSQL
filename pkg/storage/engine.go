@@ -137,7 +137,14 @@ type Column struct {
 	Precision  int      `json:"precision,omitempty" msgpack:"precision,omitempty"`
 	Scale      int      `json:"scale,omitempty" msgpack:"scale,omitempty"`
 	Default    string   `json:"default,omitempty" msgpack:"default,omitempty"`
-	CheckExpr  string   `json:"check_expr,omitempty" msgpack:"check_expr,omitempty"`
+	CheckExpr    string   `json:"check_expr,omitempty" msgpack:"check_expr,omitempty"`
+	ComputedExpr string   `json:"computed_expr,omitempty" msgpack:"computed_expr,omitempty"`
+	IsComputed   bool     `json:"is_computed,omitempty" msgpack:"is_computed,omitempty"`
+}
+
+// HasComputedExpr reports whether the column is a computed (virtual/generated) column.
+func (c Column) HasComputedExpr() bool {
+	return (c.IsComputed && c.ComputedExpr != "") || (c.ComputedExpr != "")
 }
 
 // IndexSchema defines metadata for a secondary index.

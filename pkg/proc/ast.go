@@ -1134,6 +1134,8 @@ type ColumnDef struct {
 	Scale        int
 	Default      string
 	CheckExpr    string
+	ComputedExpr string
+	IsComputed   bool
 	ForeignKey   *storage.ForeignKeySchema
 }
 

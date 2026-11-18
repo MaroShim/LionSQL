@@ -49,6 +49,7 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 	tx := txPool.Get().(*Transaction)
 	tx.mu.Lock()
 	tx.engine = s.engine
+	tx.txID = s.engine.nextTxID.Add(1)
 	tx.opts = opts
 	tx.snapshotLSN = snapLSN
 	tx.snapshotTimestamp = snapTS
@@ -57,6 +58,7 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 	tx.closed = false
 	tx.committed = false
 	tx.inPool = false
+	tx.acquiredLocks = tx.acquiredLocks[:0]
 	if opts.ReadOnly {
 		tx.snapTables = s.engine.tablesAtomic.Load()
 	} else {
@@ -151,6 +153,12 @@ type shardRef struct {
 	td        *TableData
 }
 
+type lockRef struct {
+	td       *TableData
+	shardIdx int
+	key      string
+}
+
 type shardMask [numTableShards / 64]uint64
 
 var txPool = sync.Pool{
@@ -166,6 +174,7 @@ var txPool = sync.Pool{
 			shardMasks:   make(map[string]shardMask, 4),
 			tableNames:   make([]string, 0, 4),
 			neededShards: make([]shardRef, 0, 16),
+			acquiredLocks: make([]lockRef, 0, 16),
 		}
 	},
 }
@@ -174,6 +183,7 @@ var txPool = sync.Pool{
 type Transaction struct {
 	mu                sync.Mutex
 	engine            *Engine
+	txID              uint64
 	opts              storage.TxOptions
 	snapshotLSN       int64
 	snapshotTimestamp int64
@@ -191,6 +201,7 @@ type Transaction struct {
 	shardMasks        map[string]shardMask
 	tableNames        []string
 	neededShards      []shardRef
+	acquiredLocks     []lockRef
 	closed            bool
 	committed         bool
 	inPool            bool
@@ -237,6 +248,54 @@ func (tx *Transaction) resetForPoolLocked() {
 	clear(tx.shardMasks)
 	tx.tableNames = tx.tableNames[:0]
 	tx.neededShards = tx.neededShards[:0]
+	tx.releaseAcquiredLocksLocked()
+	if len(tx.acquiredLocks) > 128 {
+		tx.acquiredLocks = make([]lockRef, 0, 16)
+	}
+}
+
+func (tx *Transaction) tryAcquireWriteLockLocked(td *TableData, pkKey string) error {
+	if td == nil {
+		return nil
+	}
+	td.ensureShardsInit()
+	sIdx := hashShard(pkKey)
+	sh := &td.shards[sIdx]
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
+
+	if sh.activeWriters == nil {
+		sh.activeWriters = make(map[string]uint64)
+	}
+	if owner, exists := sh.activeWriters[pkKey]; exists && owner != tx.txID {
+		return storage.ErrSerializationFailure
+	}
+	if _, exists := sh.activeWriters[pkKey]; !exists {
+		sh.activeWriters[pkKey] = tx.txID
+		tx.acquiredLocks = append(tx.acquiredLocks, lockRef{
+			td:       td,
+			shardIdx: sIdx,
+			key:      pkKey,
+		})
+	}
+	return nil
+}
+
+func (tx *Transaction) releaseAcquiredLocksLocked() {
+	if len(tx.acquiredLocks) == 0 {
+		return
+	}
+	for _, ref := range tx.acquiredLocks {
+		if ref.td != nil && ref.shardIdx >= 0 && ref.shardIdx < numTableShards {
+			sh := &ref.td.shards[ref.shardIdx]
+			sh.mu.Lock()
+			if sh.activeWriters != nil && sh.activeWriters[ref.key] == tx.txID {
+				delete(sh.activeWriters, ref.key)
+			}
+			sh.mu.Unlock()
+		}
+	}
+	tx.acquiredLocks = tx.acquiredLocks[:0]
 }
 
 func (tx *Transaction) releaseToPoolLocked() {
@@ -405,6 +464,9 @@ func (tx *Transaction) InsertRow(tableName string, row storage.Row) error {
 			pkVal := row.Values[pkIdx]
 			if !pkVal.IsNull {
 				pkKey := pkVal.String()
+				if err := tx.tryAcquireWriteLockLocked(td, pkKey); err != nil {
+					return err
+				}
 				if tx.isLocallyDeleted(schema.Name, pkKey) {
 				} else if _, inLocal := tx.getLocal(schema.Name, pkKey); inLocal {
 					return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, schema.Name)
@@ -468,6 +530,9 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 	}
 
 	pkKey := pkVal.String()
+	if err := tx.tryAcquireWriteLockLocked(td, pkKey); err != nil {
+		return err
+	}
 
 	// Check if key exists in local writes or engine
 	if tx.isLocallyDeleted(tableName, pkKey) {
@@ -667,6 +732,9 @@ func (tx *Transaction) UpdateRow(tableName string, pk storage.Value, row storage
 	// Fast-path for tables without secondary indexes, foreign keys, child FK refs, or partitioning
 	if len(schema.Indexes) == 0 && len(schema.ForeignKeys) == 0 && len(tx.engine.GetChildFKRefs(schema.Name)) == 0 && !schema.IsPartitioned() {
 		pkKey := pk.String()
+		if err := tx.tryAcquireWriteLockLocked(td, pkKey); err != nil {
+			return err
+		}
 		_, ver, err := tx.getRowAndVerUnderLock(schema.Name, pkKey, false)
 		if err != nil {
 			return err
@@ -730,6 +798,9 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 	schema := td.Schema
 
 	pkKey := pk.String()
+	if err := tx.tryAcquireWriteLockLocked(td, pkKey); err != nil {
+		return err
+	}
 	base, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey, false)
 	if err != nil {
 		return err
@@ -1031,6 +1102,9 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 	tableName = td.Schema.Name
 
 	pkKey := pk.String()
+	if err := tx.tryAcquireWriteLockLocked(td, pkKey); err != nil {
+		return err
+	}
 	base, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey, false)
 	if err != nil {
 		return err
@@ -2083,6 +2157,7 @@ func (tx *Transaction) checkMemoryLimitLocked() error {
 func (tx *Transaction) Commit() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
+	defer tx.releaseAcquiredLocksLocked()
 
 	if tx.closed {
 		return storage.ErrTxClosed

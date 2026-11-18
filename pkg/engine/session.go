@@ -27,9 +27,11 @@ type SessionCursor struct {
 	Query      string
 	Columns    []string
 	Rows       []map[string]any
-	Pos        int // next row index to fetch (0-indexed)
-	IsOpen     bool
-	WithHold   bool
+	Pos         int // next row index to fetch (0-indexed)
+	IsOpen      bool
+	EverOpened  bool // true once OPEN has been executed
+	IsClosed    bool // true once CLOSE has been executed
+	WithHold    bool
 	Scroll     bool
 	Binary     bool
 	DeclaredAt time.Time

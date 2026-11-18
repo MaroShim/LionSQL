@@ -362,10 +362,15 @@ func TestServerSideCursor_OpenAlreadyOpenFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DECLARE CURSOR failed: %v", err)
 	}
-	// Cursor is open immediately after DECLARE: calling OPEN must fail
+	// T-SQL Lifecycle: DECLARE defines cursor; explicit OPEN must succeed without 'already open' error
+	if _, err = coord.ExecuteSessionSQL(sessID, "OPEN cur_open;"); err != nil {
+		t.Fatalf("expected OPEN after DECLARE to succeed, got error: %v", err)
+	}
+
+	// Calling OPEN a second time on an active cursor must fail with 'already open'
 	_, err = coord.ExecuteSessionSQL(sessID, "OPEN cur_open;")
 	if err == nil || !strings.Contains(err.Error(), "already open") {
-		t.Fatalf("expected 'already open' error on opening already-open cursor, got: %v", err)
+		t.Fatalf("expected 'already open' error on duplicate OPEN, got: %v", err)
 	}
 
 	// CLOSE cur_open
@@ -423,6 +428,52 @@ func TestServerSideCursor_DeallocateAndReDeclareLifecycle(t *testing.T) {
 	}
 	if _, err := coord.ExecuteSessionSQL(sessID, "DEALLOCATE GLOBAL cur_life;"); err != nil {
 		t.Fatalf("DEALLOCATE GLOBAL failed: %v", err)
+	}
+}
+
+// TestServerSideCursor_TSQLLifecycle_DeclareOpenFetch explicitly tests user-reported scenario:
+// DECLARE test_cur CURSOR FOR SELECT ... followed immediately by OPEN test_cur must NOT return
+// 'already open' error, and subsequent duplicate OPEN must correctly fail.
+func TestServerSideCursor_TSQLLifecycle_DeclareOpenFetch(t *testing.T) {
+	coord := setupCursorTestDB(t)
+	sessID := "tsql-cur-sess"
+
+	// 1. DECLARE test_cur
+	_, err := coord.ExecuteSessionSQL(sessID, "DECLARE test_cur CURSOR FOR SELECT id, name FROM t_cursor_users ORDER BY id;")
+	if err != nil {
+		t.Fatalf("DECLARE CURSOR failed: %v", err)
+	}
+
+	// 2. OPEN test_cur: must succeed cleanly without 'already open' error!
+	openRes, err := coord.ExecuteSessionSQL(sessID, "OPEN test_cur;")
+	if err != nil {
+		t.Fatalf("OPEN test_cur failed immediately after DECLARE: %v", err)
+	}
+	if !openRes.Success {
+		t.Fatalf("OPEN test_cur expected success, got: %+v", openRes)
+	}
+
+	// 3. Duplicate OPEN while already open must fail with 'already open'
+	_, err = coord.ExecuteSessionSQL(sessID, "OPEN test_cur;")
+	if err == nil || !strings.Contains(err.Error(), "already open") {
+		t.Fatalf("expected 'already open' error on second OPEN, got: %v", err)
+	}
+
+	// 4. FETCH NEXT from opened cursor
+	fetchRes, err := coord.ExecuteSessionSQL(sessID, "FETCH NEXT FROM test_cur;")
+	if err != nil {
+		t.Fatalf("FETCH NEXT failed: %v", err)
+	}
+	if len(fetchRes.Rows) != 1 || fetchRes.Rows[0]["name"] != "Alice" {
+		t.Fatalf("expected Alice, got: %v", fetchRes.Rows)
+	}
+
+	// 5. CLOSE and DEALLOCATE
+	if _, err := coord.ExecuteSessionSQL(sessID, "CLOSE test_cur;"); err != nil {
+		t.Fatalf("CLOSE failed: %v", err)
+	}
+	if _, err := coord.ExecuteSessionSQL(sessID, "DEALLOCATE test_cur;"); err != nil {
+		t.Fatalf("DEALLOCATE failed: %v", err)
 	}
 }
 

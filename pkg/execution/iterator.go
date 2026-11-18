@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
@@ -550,10 +551,41 @@ func FormatRecord(rec storage.Record, schema *storage.TableSchema, alias string,
 		}
 	}
 
-	return Tuple{
+	t := Tuple{
 		Values: vals,
 		Index:  colMap,
 	}
+
+	for i, c := range schema.Columns {
+		if c.HasComputedExpr() && vals[i] == nil {
+			if expr, err := getOrParseComputedExpr(c.ComputedExpr); err == nil && expr != nil {
+				if compVal, ok := EvalTupleExpr(t, expr); ok {
+					vals[i] = compVal
+				}
+			}
+		}
+	}
+
+	return t
+}
+
+var computedExprCache sync.Map // map[string]proc.Expr
+
+func getOrParseComputedExpr(exprStr string) (proc.Expr, error) {
+	trimmed := strings.TrimSpace(exprStr)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if v, ok := computedExprCache.Load(trimmed); ok {
+		return v.(proc.Expr), nil
+	}
+	p := proc.NewParser(proc.NewLexer(trimmed))
+	expr := p.ParseExpr()
+	if expr == nil {
+		return nil, fmt.Errorf("failed to parse computed expr %q", trimmed)
+	}
+	computedExprCache.Store(trimmed, expr)
+	return expr, nil
 }
 
 // FormatRow converts a storage.Row into a Tuple using precomputed column offsets without map lookups.
@@ -582,10 +614,22 @@ func FormatRowWithArena(row storage.Row, schema *storage.TableSchema, alias stri
 		vals[i] = formatStorageVal(row.Values[i])
 	}
 
-	return Tuple{
+	t := Tuple{
 		Values: vals,
 		Index:  colMap,
 	}
+
+	for i, c := range schema.Columns {
+		if c.HasComputedExpr() && (i >= numVals || row.Values[i].IsNull || vals[i] == nil) {
+			if expr, err := getOrParseComputedExpr(c.ComputedExpr); err == nil && expr != nil {
+				if compVal, ok := EvalTupleExpr(t, expr); ok {
+					vals[i] = compVal
+				}
+			}
+		}
+	}
+
+	return t
 }
 
 func formatStorageVal(v storage.Value) any {

@@ -56,6 +56,8 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 			Scale:        c.Scale,
 			Default:      c.Default,
 			CheckExpr:    c.CheckExpr,
+			ComputedExpr: c.ComputedExpr,
+			IsComputed:   c.IsComputed,
 		})
 	}
 
@@ -1105,6 +1107,8 @@ func (s *Coordinator) execAlterTableAddColumns(tableName string, actions []proc.
 			Scale:        c.Scale,
 			Default:      c.Default,
 			CheckExpr:    c.CheckExpr,
+			ComputedExpr: c.ComputedExpr,
+			IsComputed:   c.IsComputed,
 		}
 
 		if c.IsRowVersion {

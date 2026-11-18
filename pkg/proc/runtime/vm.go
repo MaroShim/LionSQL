@@ -1493,8 +1493,8 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 	}
 
 	transients := map[string][]map[string]any{
-		"inserted": inserted,
-		"deleted":  deleted,
+		"inserted": sanitizeTransientRows(inserted),
+		"deleted":  sanitizeTransientRows(deleted),
 	}
 
 	for _, trg := range trgs {
@@ -1522,6 +1522,24 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 		}
 	}
 	return nil
+}
+
+func sanitizeTransientRows(rows []map[string]any) []map[string]any {
+	if len(rows) == 0 {
+		return rows
+	}
+	res := make([]map[string]any, len(rows))
+	for i, r := range rows {
+		clean := make(map[string]any, len(r))
+		for k, v := range r {
+			if strings.HasPrefix(k, "_") {
+				continue
+			}
+			clean[k] = v
+		}
+		res[i] = clean
+	}
+	return res
 }
 
 func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
@@ -3645,6 +3663,9 @@ func recordToMap(rec storage.Record) map[string]any {
 	}
 	m := make(map[string]any, len(rec))
 	for k, v := range rec {
+		if strings.HasPrefix(k, "_") {
+			continue
+		}
 		m[k] = valToAny(v)
 	}
 	return m

@@ -123,6 +123,7 @@ type Engine struct {
 	maxDataBytes     atomic.Int64
 	cachedHeapBytes  atomic.Int64
 	commitCounter    atomic.Uint64
+	nextTxID         atomic.Uint64
 	walHook          func(rec WALRecord)
 	stopCh           chan struct{}
 	bgWg             sync.WaitGroup

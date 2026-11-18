@@ -1192,11 +1192,13 @@ func (p *Parser) parseComputedColumn(colName, tableName string) (ColumnDef, erro
 	computedExpr := strings.Join(exprTokens, " ")
 
 	return ColumnDef{
-		Name:      colName,
-		Type:      storage.TypeVarChar,
-		Nullable:  !isNotNull,
-		Unique:    isUnique,
-		CheckExpr: computedExpr,
+		Name:         colName,
+		Type:         storage.TypeVarChar,
+		Nullable:     !isNotNull,
+		Unique:       isUnique,
+		CheckExpr:    computedExpr,
+		ComputedExpr: computedExpr,
+		IsComputed:   true,
 	}, nil
 }
 

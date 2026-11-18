@@ -189,6 +189,26 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
    - Layer 3 (Cryptographic Checksum Verification): `test/slt_proc/CHECKSUMS.sha256` verifies 100% SHA-256 hash integrity across all 1,289 test suites in `TestOracleIntegrity_ZeroTampering`.
    - Layer 4 (Architecture Contract): Codified in `GEMINI.md`.
 
+### Invariant 17: Single Unified SQL Grammar & Zero-Protocol-Branch Invariant (`[RULE:ZeroProtocolBranch]`)
+1. **Single Unified Superset Grammar (Zero Protocol Bifurcation)**:
+   - LionSQL standardizes on a **Single Unified SQL Grammar (Superset Unification)** across all wire listeners and access interfaces.
+   - Any valid SQL query, DDL/DML statement, function, or expression must execute identically whether received via TDS (`:1433`), PostgreSQL Wire Protocol v3 (`:5433`), or Web Studio / HTTP API (`:8090`).
+   - The engine core acts as a single, ultra-fast database kernel combining the best ergonomics of Microsoft SQL Server T-SQL and PostgreSQL (`TOP` and `LIMIT/OFFSET`, `#temp` and `CREATE TEMP TABLE`, `OUTPUT` and `RETURNING`, `IDENTITY` and `SERIAL`).
+2. **Strict Prohibition of `IsPostgres()` / `IsTDS()` Conditional Grammar Forking (`[RULE:ZeroProtocolBranch]`)**:
+   - The tokenizer, lexer, AST parser, CBO planner, and VDBE execution engine must **NEVER** inspect connection protocol flags (`cs.IsPostgres()`, `cs.IsTDS()`) to conditionally alter core SQL grammar parsing, clause availability, or operator resolution.
+   - Introducing split-brain grammar branches (`if cs.IsPostgres() { ... } else { ... }`) in SQL parsing or evaluation paths violates `[RULE:RadicalKISS]`, inflates test matrices, causes cognitive load when copy-pasting queries across tools, and is permanently prohibited.
+3. **Deterministic Syntactic Disambiguation over Wire Context**:
+   - Syntactic ambiguities between T-SQL and PostgreSQL must be resolved purely through deterministic grammatical context:
+     - `::` Casting vs Scope Resolution: If followed by an identifier and opening parenthesis `(`, it is parsed as a static method call (`geography::Point(...)`); otherwise, it is parsed as an expression type cast (`expr::TypeName`).
+     - Array Subscripts vs Bracket Quoting: If `[` immediately follows an evaluated primary expression term without intervening tokens, it is parsed as an array/JSON subscript (`tags[1]`); if `[` initiates a token, it is parsed as a bracket-quoted identifier (`[User Name]`).
+     - Unary vs Binary `~`: A leading/prefix `~` is parsed as unary bitwise NOT (`~0`, `a & ~b`); an infix `~` between two expressions is parsed as a binary regular expression match (`col ~ '^[A-Z]'`).
+     - Sequences: The unified sequence catalog serves both T-SQL `NEXT VALUE FOR <seq>` and PostgreSQL `nextval('<seq>')` simultaneously without wire distinctions.
+     - Schema Resolution: Unified search order resolves local tables smoothly whether instructed via `USE <dbname>` or `SET search_path = ...`.
+4. **Multi-Layer Defensive Lockdown**:
+   - Layer 1 (Unit Test Assertion): All grammar and dialect features must have parity tests asserting identical behavior across both TDS and PGWire sessions in `pkg/engine/regression_v110_compat_test.go`.
+   - Layer 2 (Linter & Review Gate): Prohibits introduction of `IsPostgres()` or `IsTDS()` checks in `pkg/proc/` parser/compiler packages.
+   - Layer 3 (Architecture Contract): Codified in `GEMINI.md` and `notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`.
+
 ---
 
 ## 3. Explicit Spec-Out Decisions (Engine Simplicity & KISS)
