@@ -53,6 +53,9 @@ type Context struct {
 	// Deferred actions executed upon successful physical commit (e.g., physical table deletion)
 	DeferredActions []func() error
 
+	// Rollback actions executed in LIFO order upon transaction abort/rollback (e.g., table drop on rollback)
+	RollbackActions []func() error
+
 	// ShadowCatalog overlay for transactional DDL
 	ShadowCatalog *ShadowCatalog
 
@@ -137,6 +140,36 @@ func (c *Context) ClearDeferredActions() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.DeferredActions = nil
+}
+
+// AddRollbackAction enqueues an action to be executed in LIFO order upon transaction rollback.
+func (c *Context) AddRollbackAction(fn func() error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.RollbackActions = append(c.RollbackActions, fn)
+}
+
+// ExecuteRollbackActions runs all enqueued rollback actions in LIFO (reverse) order.
+func (c *Context) ExecuteRollbackActions() error {
+	c.mu.Lock()
+	actions := c.RollbackActions
+	c.RollbackActions = nil
+	c.mu.Unlock()
+
+	var firstErr error
+	for i := len(actions) - 1; i >= 0; i-- {
+		if err := actions[i](); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// ClearRollbackActions discards all rollback actions without executing them (e.g. upon successful commit).
+func (c *Context) ClearRollbackActions() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.RollbackActions = nil
 }
 
 // GetNestLevel returns the transaction nesting level.

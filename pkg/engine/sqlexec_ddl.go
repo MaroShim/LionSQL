@@ -12,7 +12,160 @@ import (
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
+	"lionsql/pkg/tx"
 )
+
+func (s *Coordinator) getTxContext(cs *ClientSession) *tx.Context {
+	if cs == nil || cs.Tx() == nil || cs.TxMgr == nil {
+		return nil
+	}
+	return cs.TxMgr.Current()
+}
+
+func (s *Coordinator) recordDDLDropCreatedTable(cs *ClientSession, tableName string) {
+	if txCtx := s.getTxContext(cs); txCtx != nil {
+		txCtx.AddRollbackAction(func() error {
+			_ = s.engine.DropTable(tableName)
+			s.InvalidatePKBypassCache()
+			return nil
+		})
+	}
+}
+
+func (s *Coordinator) recordDDLDropTempTable(cs *ClientSession, tableName string) {
+	if txCtx := s.getTxContext(cs); txCtx != nil {
+		txCtx.AddRollbackAction(func() error {
+			if cs != nil {
+				phys, ok := cs.GetTempTablePhysical(tableName)
+				cs.UnregisterTempTable(tableName)
+				if ok && phys != "" && phys != tableName {
+					_ = s.engine.DropTable(phys)
+				}
+			}
+			_ = s.engine.DropTable(tableName)
+			s.InvalidatePKBypassCache()
+			return nil
+		})
+	}
+}
+
+func (s *Coordinator) recordDDLRestoreDroppedTable(cs *ClientSession, tableName, tombstone string) {
+	if txCtx := s.getTxContext(cs); txCtx != nil {
+		if tombstone != "" {
+			txCtx.AddDeferredAction(func() error {
+				_ = s.engine.DropTable(tombstone)
+				return nil
+			})
+			txCtx.AddRollbackAction(func() error {
+				if tableName != "" {
+					_ = s.engine.RenameTable(tombstone, tableName)
+					s.InvalidatePKBypassCache()
+				}
+				return nil
+			})
+		}
+	}
+}
+
+func (s *Coordinator) recordDDLRestoreDroppedTempTable(cs *ClientSession, tableName, tombstone string) {
+	if txCtx := s.getTxContext(cs); txCtx != nil {
+		if tombstone != "" {
+			txCtx.AddDeferredAction(func() error {
+				_ = s.engine.DropTable(tombstone)
+				return nil
+			})
+			txCtx.AddRollbackAction(func() error {
+				if tableName != "" && cs != nil {
+					phys := cs.RegisterTempTable(tableName)
+					_ = s.engine.RenameTable(tombstone, phys)
+				}
+				return nil
+			})
+		}
+	}
+}
+
+func (s *Coordinator) recordDDLDropCreatedIndex(cs *ClientSession, tableName, indexName string) {
+	if txCtx := s.getTxContext(cs); txCtx != nil {
+		txCtx.AddRollbackAction(func() error {
+			_ = s.engine.DropIndex(tableName, indexName)
+			return nil
+		})
+	}
+}
+
+func (s *Coordinator) recordDDLRestoreDroppedIndex(cs *ClientSession, tableName string, idxBackup *storage.IndexSchema) {
+	if txCtx := s.getTxContext(cs); txCtx != nil {
+		if idxBackup != nil {
+			txCtx.AddRollbackAction(func() error {
+				_ = s.engine.CreateIndex(idxBackup)
+				return nil
+			})
+		}
+	}
+}
+
+func (s *Coordinator) recordDDLDropAddedColumn(cs *ClientSession, tableName, colName string) {
+	if txCtx := s.getTxContext(cs); txCtx != nil {
+		txCtx.AddRollbackAction(func() error {
+			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				for idx, col := range sch.Columns {
+					if strings.EqualFold(col.Name, colName) {
+						sch.Columns = append(sch.Columns[:idx], sch.Columns[idx+1:]...)
+						break
+					}
+				}
+				return nil
+			})
+			s.InvalidatePKBypassCache()
+			return nil
+		})
+	}
+}
+
+func (s *Coordinator) recordDDLRestoreDroppedColumn(cs *ClientSession, tableName string, colBackup *storage.Column) {
+	if txCtx := s.getTxContext(cs); txCtx != nil {
+		if colBackup != nil {
+			txCtx.AddRollbackAction(func() error {
+				_ = s.engine.AddColumn(tableName, colBackup)
+				s.InvalidatePKBypassCache()
+				return nil
+			})
+		}
+	}
+}
+
+func (s *Coordinator) recordDDLRenameTable(cs *ClientSession, oldName, newName string) {
+	if txCtx := s.getTxContext(cs); txCtx != nil {
+		txCtx.AddRollbackAction(func() error {
+			if newName != "" && oldName != "" {
+				_ = s.engine.RenameTable(newName, oldName)
+				s.InvalidatePKBypassCache()
+			}
+			return nil
+		})
+	}
+}
+
+func (s *Coordinator) recordDDLRenameColumn(cs *ClientSession, tableName, oldName, newName string) {
+	if txCtx := s.getTxContext(cs); txCtx != nil {
+		txCtx.AddRollbackAction(func() error {
+			if tableName != "" && oldName != "" && newName != "" {
+				_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+					for idx := range sch.Columns {
+						if strings.EqualFold(sch.Columns[idx].Name, newName) {
+							sch.Columns[idx].Name = oldName
+							break
+						}
+					}
+					return nil
+				})
+				s.InvalidatePKBypassCache()
+			}
+			return nil
+		})
+	}
+}
 
 func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
@@ -121,22 +274,10 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		}
 	}
 
-	if cs != nil {
-		cs.Mu.Lock()
-		if cs.Tx() != nil {
-			if strings.HasPrefix(tableName, "#") || strings.HasPrefix(strings.ToLower(tableName), "__temp_") {
-				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-					Kind:      DDLUndoDropTempTable,
-					TableName: tableName,
-				})
-			} else {
-				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-					Kind:      DDLUndoDropCreatedTable,
-					TableName: schema.Name,
-				})
-			}
-		}
-		cs.Mu.Unlock()
+	if strings.HasPrefix(tableName, "#") || strings.HasPrefix(strings.ToLower(tableName), "__temp_") {
+		s.recordDDLDropTempTable(cs, tableName)
+	} else {
+		s.recordDDLDropCreatedTable(cs, schema.Name)
 	}
 
 	s.InvalidatePKBypassCache()
@@ -203,13 +344,7 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 				return nil, err
 			}
 			cs.UnregisterTempTable(tableName)
-			cs.Mu.Lock()
-			cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-				Kind:          DDLUndoRestoreDroppedTempTable,
-				TableName:     tableName,
-				TombstoneName: tombstone,
-			})
-			cs.Mu.Unlock()
+			s.recordDDLRestoreDroppedTempTable(cs, tableName, tombstone)
 			s.InvalidatePKBypassCache()
 			return &QueryResult{
 				Success:    true,
@@ -254,15 +389,7 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 			if err := s.engine.RenameTable(tableName, tombstone); err != nil {
 				return nil, err
 			}
-			schClone := sch.Clone()
-			cs.Mu.Lock()
-			cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-				Kind:          DDLUndoRestoreDroppedTable,
-				TableName:     sch.Name,
-				TombstoneName: tombstone,
-				SchemaBackup:  &schClone,
-			})
-			cs.Mu.Unlock()
+			s.recordDDLRestoreDroppedTable(cs, sch.Name, tombstone)
 		}
 
 		s.InvalidatePKBypassCache()
@@ -492,17 +619,7 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time, cs *ClientS
 			}
 			return nil, err
 		}
-		if cs != nil {
-			cs.Mu.Lock()
-			if cs.Tx() != nil {
-				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-					Kind:      DDLUndoDropCreatedIndex,
-					TableName: stmt.Table,
-					IndexName: stmt.Name,
-				})
-			}
-			cs.Mu.Unlock()
-		}
+		s.recordDDLDropCreatedIndex(cs, stmt.Table, stmt.Name)
 		msg := fmt.Sprintf("Index %q created successfully on table %q.", stmt.Name, stmt.Table)
 		if stmt.Unique {
 			msg = fmt.Sprintf("Unique index %q created successfully on table %q.", stmt.Name, stmt.Table)
@@ -581,17 +698,7 @@ func (s *Coordinator) execDropIndex(query string, start time.Time, cs *ClientSes
 		return nil, err
 	}
 
-	if cs != nil && idxBackup != nil {
-		cs.Mu.Lock()
-		if cs.Tx() != nil {
-			cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-				Kind:        DDLUndoRestoreDroppedIndex,
-				TableName:   tableName,
-				IndexSchema: idxBackup,
-			})
-		}
-		cs.Mu.Unlock()
-	}
+	s.recordDDLRestoreDroppedIndex(cs, tableName, idxBackup)
 
 	return &QueryResult{
 		Success:    true,
@@ -1153,17 +1260,7 @@ func (s *Coordinator) execAlterTableAddColumns(tableName string, actions []proc.
 			})
 		}
 		addedCols = append(addedCols, c.Name)
-		if cs != nil {
-			cs.Mu.Lock()
-			if cs.Tx() != nil {
-				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-					Kind:       DDLUndoDropAddedColumn,
-					TableName:  tableName,
-					ColumnName: c.Name,
-				})
-			}
-			cs.Mu.Unlock()
-		}
+		s.recordDDLDropAddedColumn(cs, tableName, c.Name)
 	}
 
 	s.InvalidatePKBypassCache()
@@ -1420,17 +1517,7 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 		if err := s.engine.RenameTable(tableName, newName); err != nil {
 			return nil, err
 		}
-		if cs != nil {
-			cs.Mu.Lock()
-			if cs.Tx() != nil {
-				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-					Kind:    DDLUndoRenameTable,
-					OldName: tableName,
-					NewName: newName,
-				})
-			}
-			cs.Mu.Unlock()
-		}
+		s.recordDDLRenameTable(cs, tableName, newName)
 		s.InvalidatePKBypassCache()
 		return &QueryResult{
 			Success:    true,
@@ -1459,18 +1546,7 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 			return nil, err
 		}
 		s.InvalidatePKBypassCache()
-		if cs != nil {
-			cs.Mu.Lock()
-			if cs.Tx() != nil {
-				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-					Kind:      DDLUndoRenameColumn,
-					TableName: tableName,
-					OldName:   oldName,
-					NewName:   newName,
-				})
-			}
-			cs.Mu.Unlock()
-		}
+		s.recordDDLRenameColumn(cs, tableName, oldName, newName)
 		return &QueryResult{
 			Success:    true,
 			Command:    "ALTER TABLE",
@@ -1548,18 +1624,8 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 			return nil, err
 		}
 		s.InvalidatePKBypassCache()
-		if cs != nil {
-			cs.Mu.Lock()
-			if cs.Tx() != nil {
-				for _, b := range droppedColBackups {
-					cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-						Kind:         DDLUndoRestoreDroppedColumn,
-						TableName:    tableName,
-						ColumnBackup: b,
-					})
-				}
-			}
-			cs.Mu.Unlock()
+		for _, b := range droppedColBackups {
+			s.recordDDLRestoreDroppedColumn(cs, tableName, b)
 		}
 		return &QueryResult{
 			Success:    true,

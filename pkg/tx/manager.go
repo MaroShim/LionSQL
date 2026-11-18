@@ -201,13 +201,17 @@ func (m *Manager) Commit(ctx context.Context) error {
 		if err := txCtx.StorageTx.Commit(); err != nil {
 			_ = txCtx.StorageTx.Rollback()
 			txCtx.ClearDeferredActions()
+			_ = txCtx.ExecuteRollbackActions()
 			txCtx.SetState(StateAborted)
 			m.current = nil
 			return fmt.Errorf("storage commit failed: %w", err)
 		}
 	}
 
-	// 2. Execute deferred physical actions (e.g. physical file drop)
+	// 2. Clear rollback actions upon successful commit
+	txCtx.ClearRollbackActions()
+
+	// 3. Execute deferred physical actions (e.g. drop tombstones, finalize DDL)
 	if err := txCtx.ExecuteDeferredActions(); err != nil {
 		// Log or return error (commit has already occurred in WAL/storage)
 		txCtx.SetState(StateCommitted)
@@ -236,6 +240,11 @@ func (m *Manager) Rollback(ctx context.Context) error {
 
 	// 2. Clear deferred actions without executing them
 	txCtx.ClearDeferredActions()
+
+	// 3. Execute rollback actions in LIFO order (e.g. drop created tables, restore tombstones)
+	if err := txCtx.ExecuteRollbackActions(); err != nil && rollErr == nil {
+		rollErr = err
+	}
 
 	txCtx.SetState(StateAborted)
 	m.current = nil

@@ -562,18 +562,7 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 			}); err != nil {
 				return nil, err
 			}
-			if cs != nil {
-				cs.Mu.Lock()
-				if cs.Tx() != nil {
-					cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-						Kind:       DDLUndoRenameColumn,
-						TableName:  tableName,
-						OldName:    oldColName,
-						NewName:    newColName,
-					})
-				}
-				cs.Mu.Unlock()
-			}
+			s.recordDDLRenameColumn(cs, tableName, oldColName, newColName)
 			s.InvalidatePKBypassCache()
 
 			return &QueryResult{
@@ -591,17 +580,7 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 		if err := s.engine.RenameTable(oldTblName, newTblName); err != nil {
 			return nil, err
 		}
-		if cs != nil {
-			cs.Mu.Lock()
-			if cs.Tx() != nil {
-				cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-					Kind:    DDLUndoRenameTable,
-					OldName: oldTblName,
-					NewName: newTblName,
-				})
-			}
-			cs.Mu.Unlock()
-		}
+		s.recordDDLRenameTable(cs, oldTblName, newTblName)
 		s.InvalidatePKBypassCache()
 
 		return &QueryResult{

@@ -62,34 +62,6 @@ const (
 // DDLUndoKind defines the undo operation kind for transactional DDL rollback.
 type DDLUndoKind int
 
-const (
-	DDLUndoDropCreatedTable DDLUndoKind = iota
-	DDLUndoRestoreDroppedTable
-	DDLUndoDropAddedColumn
-	DDLUndoRestoreDroppedColumn
-	DDLUndoRenameTable
-	DDLUndoRenameColumn
-	DDLUndoDropCreatedIndex
-	DDLUndoRestoreDroppedIndex
-	DDLUndoDropTempTable
-	DDLUndoRestoreDroppedTempTable
-)
-
-// DDLUndoOp records a single DDL operation executed inside a transaction for atomic rollback.
-type DDLUndoOp struct {
-	Kind          DDLUndoKind
-	TableName     string
-	OldName       string
-	NewName       string
-	ColumnName    string
-	IndexName     string
-	TombstoneName string
-	IndexSchema   *storage.IndexSchema
-	ColumnBackup  *storage.Column
-	SchemaBackup  *storage.TableSchema
-	Savepoint     string
-}
-
 // ClientSession maintains interactive connection state: open transaction, session variables, and query cancellation context.
 type ClientSession struct {
 	ID              string
@@ -97,7 +69,6 @@ type ClientSession struct {
 	Dialect         Dialect
 	Session         storage.Session
 	TxMgr           *tx.Manager // dedicated transaction manager and command serializer (SSOT)
-	ddlUndoLog      []DDLUndoOp // LIFO stack of DDL operations executed within current transaction for atomic rollback
 	Vars            map[string]any
 	VarLengths      map[string]int    // @var -> max length constraint (e.g. VARCHAR(1))
 	TableVars       map[string]string // @table_var -> physical table name

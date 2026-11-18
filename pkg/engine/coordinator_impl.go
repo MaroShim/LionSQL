@@ -696,14 +696,11 @@ func (c *Coordinator) ResetSession(id string, resetTx bool) error {
 	var (
 		txToRollback    storage.Transaction
 		txMgrToRollback *tx.Manager
-		ddlOps          []DDLUndoOp
 	)
 
 	if resetTx && cs.Tx() != nil {
 		txToRollback = cs.Tx()
 		txMgrToRollback = cs.TxMgr
-		ddlOps = cs.ddlUndoLog
-		cs.ddlUndoLog = nil
 	}
 
 	// Snapshot local temp tables and table variables to drop outside lock ([RULE:LockHierarchy])
@@ -745,9 +742,6 @@ func (c *Coordinator) ResetSession(id string, resetTx bool) error {
 		_ = txMgrToRollback.Rollback(context.Background())
 	} else if txToRollback != nil {
 		_ = txToRollback.Rollback()
-	}
-	if len(ddlOps) > 0 {
-		c.executeDDLUndoOps(cs, ddlOps)
 	}
 
 	// 2. Drop physical temp tables outside lock

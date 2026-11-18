@@ -232,3 +232,90 @@ func TestTxManager_SessionSerialization(t *testing.T) {
 		t.Fatalf("expected counter %d, got %d", workers*iterations, counter)
 	}
 }
+
+func TestTxManager_RollbackActions_LIFO(t *testing.T) {
+	mgr, _, cleanup := setupTestTxManager(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	txCtx, err := mgr.Begin(ctx, tx.Options{})
+	if err != nil {
+		t.Fatalf("Begin failed: %v", err)
+	}
+
+	var executionLog []string
+
+	// Register rollback actions 1, 2, 3
+	txCtx.AddRollbackAction(func() error {
+		executionLog = append(executionLog, "rollback_action_1")
+		return nil
+	})
+	txCtx.AddRollbackAction(func() error {
+		executionLog = append(executionLog, "rollback_action_2")
+		return nil
+	})
+	txCtx.AddRollbackAction(func() error {
+		executionLog = append(executionLog, "rollback_action_3")
+		return nil
+	})
+
+	// Also add a deferred commit action that should NOT run on rollback
+	deferredRan := false
+	txCtx.AddDeferredAction(func() error {
+		deferredRan = true
+		return nil
+	})
+
+	if err := mgr.Rollback(ctx); err != nil {
+		t.Fatalf("Rollback failed: %v", err)
+	}
+
+	if deferredRan {
+		t.Fatalf("deferred commit action must not run on rollback")
+	}
+
+	// Must execute in LIFO order: 3 -> 2 -> 1
+	expected := []string{"rollback_action_3", "rollback_action_2", "rollback_action_1"}
+	if len(executionLog) != len(expected) {
+		t.Fatalf("expected %d rollback actions executed, got %d", len(expected), len(executionLog))
+	}
+	for i, v := range expected {
+		if executionLog[i] != v {
+			t.Errorf("expected executionLog[%d] == %s, got %s", i, v, executionLog[i])
+		}
+	}
+}
+
+func TestTxManager_CommitClearsRollbackActions(t *testing.T) {
+	mgr, _, cleanup := setupTestTxManager(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	txCtx, err := mgr.Begin(ctx, tx.Options{})
+	if err != nil {
+		t.Fatalf("Begin failed: %v", err)
+	}
+
+	rollbackRan := false
+	commitRan := false
+
+	txCtx.AddRollbackAction(func() error {
+		rollbackRan = true
+		return nil
+	})
+	txCtx.AddDeferredAction(func() error {
+		commitRan = true
+		return nil
+	})
+
+	if err := mgr.Commit(ctx); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	if !commitRan {
+		t.Fatalf("expected commit deferred action to run")
+	}
+	if rollbackRan {
+		t.Fatalf("rollback action must not run on commit")
+	}
+}

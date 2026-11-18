@@ -770,8 +770,6 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		}
 		cs.ResetTranCount()
 		cs.ClearTxFailed()
-		ddlOps := cs.ddlUndoLog
-		cs.ddlUndoLog = nil
 		if cs.Cursors != nil {
 			for _, cur := range cs.Cursors {
 				cur.IsOpen = false
@@ -781,7 +779,6 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 			}
 		}
 		cs.Mu.Unlock()
-		s.executeDDLUndoOps(cs, ddlOps)
 		if s.Metrics() != nil {
 			s.Metrics().RecordTransaction("rollback")
 		}
@@ -805,8 +802,6 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 	txMgr := cs.TxMgr
 	cs.ResetTranCount()
 	cs.ClearTxFailed()
-	ddlOps := cs.ddlUndoLog
-	cs.ddlUndoLog = nil
 	// Close non-WITH HOLD cursors on COMMIT
 	if cs.Cursors != nil {
 		for _, cur := range cs.Cursors {
@@ -822,12 +817,11 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 
 	if txMgr != nil {
 		err = txMgr.Commit(context.Background())
-	} else {
+	} else if tx != nil {
 		defer tx.Rollback()
 		err = tx.Commit()
 	}
 	if err != nil {
-		s.executeDDLUndoOps(cs, ddlOps)
 		if s.Metrics() != nil {
 			if errors.Is(err, storage.ErrSerializationFailure) {
 				s.Metrics().RecordTransaction("conflict")
@@ -838,7 +832,6 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 		return fmt.Errorf("commit error: %w", err)
 	}
 
-	s.finalizeDDLCommitOps(ddlOps)
 	if s.Metrics() != nil {
 		s.Metrics().RecordTransaction("commit")
 	}
@@ -861,8 +854,6 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 	txMgr := cs.TxMgr
 	cs.ResetTranCount()
 	cs.ClearTxFailed()
-	ddlOps := cs.ddlUndoLog
-	cs.ddlUndoLog = nil
 	// Close all cursors on ROLLBACK (per SQL standard lifecycle)
 	if cs.Cursors != nil {
 		for _, cur := range cs.Cursors {
@@ -879,7 +870,6 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 	} else if tx != nil {
 		err = tx.Rollback()
 	}
-	s.executeDDLUndoOps(cs, ddlOps)
 	if err != nil {
 		return fmt.Errorf("rollback error: %w", err)
 	}
@@ -887,87 +877,6 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 		s.Metrics().RecordTransaction("rollback")
 	}
 	return nil
-}
-
-func (s *Coordinator) executeDDLUndoOps(cs *ClientSession, ops []DDLUndoOp) {
-	for i := len(ops) - 1; i >= 0; i-- {
-		op := ops[i]
-		switch op.Kind {
-		case DDLUndoDropCreatedTable:
-			_ = s.engine.DropTable(op.TableName)
-			s.InvalidatePKBypassCache()
-		case DDLUndoRestoreDroppedTable:
-			if op.TombstoneName != "" && op.TableName != "" {
-				_ = s.engine.RenameTable(op.TombstoneName, op.TableName)
-				s.InvalidatePKBypassCache()
-			}
-		case DDLUndoDropAddedColumn:
-			_ = s.engine.AlterTable(op.TableName, func(sch *storage.TableSchema) error {
-				for idx, col := range sch.Columns {
-					if strings.EqualFold(col.Name, op.ColumnName) {
-						sch.Columns = append(sch.Columns[:idx], sch.Columns[idx+1:]...)
-						break
-					}
-				}
-				return nil
-			})
-			s.InvalidatePKBypassCache()
-		case DDLUndoRestoreDroppedColumn:
-			if op.ColumnBackup != nil {
-				_ = s.engine.AddColumn(op.TableName, op.ColumnBackup)
-				s.InvalidatePKBypassCache()
-			}
-		case DDLUndoRenameTable:
-			if op.NewName != "" && op.OldName != "" {
-				_ = s.engine.RenameTable(op.NewName, op.OldName)
-				s.InvalidatePKBypassCache()
-			}
-		case DDLUndoRenameColumn:
-			if op.TableName != "" && op.OldName != "" && op.NewName != "" {
-				_ = s.engine.AlterTable(op.TableName, func(sch *storage.TableSchema) error {
-					for idx := range sch.Columns {
-						if strings.EqualFold(sch.Columns[idx].Name, op.NewName) {
-							sch.Columns[idx].Name = op.OldName
-							break
-						}
-					}
-					return nil
-				})
-				s.InvalidatePKBypassCache()
-			}
-		case DDLUndoDropCreatedIndex:
-			_ = s.engine.DropIndex(op.TableName, op.IndexName)
-		case DDLUndoRestoreDroppedIndex:
-			if op.IndexSchema != nil {
-				_ = s.engine.CreateIndex(op.IndexSchema)
-			}
-		case DDLUndoDropTempTable:
-			if cs != nil {
-				phys, ok := cs.GetTempTablePhysical(op.TableName)
-				cs.UnregisterTempTable(op.TableName)
-				if ok && phys != "" && phys != op.TableName {
-					_ = s.engine.DropTable(phys)
-				}
-			}
-			_ = s.engine.DropTable(op.TableName)
-			s.InvalidatePKBypassCache()
-		case DDLUndoRestoreDroppedTempTable:
-			if op.TombstoneName != "" && op.TableName != "" {
-				if cs != nil {
-					phys := cs.RegisterTempTable(op.TableName)
-					_ = s.engine.RenameTable(op.TombstoneName, phys)
-				}
-			}
-		}
-	}
-}
-
-func (s *Coordinator) finalizeDDLCommitOps(ops []DDLUndoOp) {
-	for _, op := range ops {
-		if (op.Kind == DDLUndoRestoreDroppedTable || op.Kind == DDLUndoRestoreDroppedTempTable) && op.TombstoneName != "" {
-			_ = s.engine.DropTable(op.TombstoneName)
-		}
-	}
 }
 
 func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*QueryResult, error) {
