@@ -170,6 +170,18 @@ func (cs *ClientSession) GetUser() string {
 	return cs.User
 }
 
+// GetShadowCatalog returns the active transaction's ShadowCatalog overlay, or nil if none.
+func (cs *ClientSession) GetShadowCatalog() *tx.ShadowCatalog {
+	if cs == nil || cs.TxMgr == nil {
+		return nil
+	}
+	ctx := cs.TxMgr.Current()
+	if ctx == nil {
+		return nil
+	}
+	return ctx.ShadowCatalog
+}
+
 // HasCancelFunc reports whether an active statement cancellation function is set under cancelMu.
 func (cs *ClientSession) HasCancelFunc() bool {
 	if cs == nil {
@@ -683,16 +695,41 @@ type sessionTxWrapper struct {
 	cs *ClientSession
 }
 
+func (w *sessionTxWrapper) isDropped(tableName string) bool {
+	if w.cs != nil {
+		if shadow := w.cs.GetShadowCatalog(); shadow != nil && shadow.IsTableDropped(tableName) {
+			return true
+		}
+	}
+	return false
+}
+
 func (w *sessionTxWrapper) GetTable(name string) (*storage.TableSchema, error) {
 	if w.cs != nil {
 		if eph := w.cs.GetEphemeralTable(name); eph != nil {
 			return eph.Schema, nil
+		}
+		if shadow := w.cs.GetShadowCatalog(); shadow != nil {
+			if shadow.IsTableDropped(name) {
+				return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, name)
+			}
+			if sch, ok := shadow.GetTable(name); ok {
+				return sch, nil
+			}
+		}
+	}
+	if w.Transaction != nil {
+		if tg, ok := w.Transaction.(interface{ GetTable(string) (*storage.TableSchema, error) }); ok {
+			return tg.GetTable(name)
 		}
 	}
 	return nil, storage.ErrTableNotFound
 }
 
 func (w *sessionTxWrapper) Scan(tableName string) (storage.Cursor, error) {
+	if w.isDropped(tableName) {
+		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
 	if w.cs != nil {
 		if eph := w.cs.GetEphemeralTable(tableName); eph != nil {
 			return storage.NewSliceCursor(eph.Schema, eph.Rows, eph.Recs), nil
@@ -702,6 +739,9 @@ func (w *sessionTxWrapper) Scan(tableName string) (storage.Cursor, error) {
 }
 
 func (w *sessionTxWrapper) ScanPartitions(tableName string, partitions []string) (storage.Cursor, error) {
+	if w.isDropped(tableName) {
+		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
 	if w.cs != nil {
 		if eph := w.cs.GetEphemeralTable(tableName); eph != nil {
 			return storage.NewSliceCursor(eph.Schema, eph.Rows, eph.Recs), nil
@@ -711,6 +751,9 @@ func (w *sessionTxWrapper) ScanPartitions(tableName string, partitions []string)
 }
 
 func (w *sessionTxWrapper) Get(tableName string, pk storage.Value) (storage.Record, error) {
+	if w.isDropped(tableName) {
+		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
 	if w.cs != nil {
 		if eph := w.cs.GetEphemeralTable(tableName); eph != nil {
 			pkStr := pk.String()
@@ -726,6 +769,9 @@ func (w *sessionTxWrapper) Get(tableName string, pk storage.Value) (storage.Reco
 }
 
 func (w *sessionTxWrapper) GetRow(tableName string, pk storage.Value) (storage.Row, error) {
+	if w.isDropped(tableName) {
+		return storage.Row{}, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
 	if w.cs != nil {
 		if eph := w.cs.GetEphemeralTable(tableName); eph != nil {
 			pkStr := pk.String()
@@ -738,6 +784,62 @@ func (w *sessionTxWrapper) GetRow(tableName string, pk storage.Value) (storage.R
 		}
 	}
 	return w.Transaction.GetRow(tableName, pk)
+}
+
+func (w *sessionTxWrapper) IndexScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
+	if w.isDropped(tableName) {
+		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	return w.Transaction.IndexScan(tableName, indexName, low, high)
+}
+
+func (w *sessionTxWrapper) IndexOnlyScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
+	if w.isDropped(tableName) {
+		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	return w.Transaction.IndexOnlyScan(tableName, indexName, low, high)
+}
+
+func (w *sessionTxWrapper) IndexScanDesc(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
+	if w.isDropped(tableName) {
+		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	return w.Transaction.IndexScanDesc(tableName, indexName, low, high)
+}
+
+func (w *sessionTxWrapper) Insert(tableName string, record storage.Record) error {
+	if w.isDropped(tableName) {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	return w.Transaction.Insert(tableName, record)
+}
+
+func (w *sessionTxWrapper) InsertRow(tableName string, row storage.Row) error {
+	if w.isDropped(tableName) {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	return w.Transaction.InsertRow(tableName, row)
+}
+
+func (w *sessionTxWrapper) Update(tableName string, pk storage.Value, record storage.Record) error {
+	if w.isDropped(tableName) {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	return w.Transaction.Update(tableName, pk, record)
+}
+
+func (w *sessionTxWrapper) UpdateRow(tableName string, pk storage.Value, row storage.Row) error {
+	if w.isDropped(tableName) {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	return w.Transaction.UpdateRow(tableName, pk, row)
+}
+
+func (w *sessionTxWrapper) Delete(tableName string, pk storage.Value) error {
+	if w.isDropped(tableName) {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	return w.Transaction.Delete(tableName, pk)
 }
 
 // wrapSessionTx wraps a storage.Transaction with session ephemeral table interception.

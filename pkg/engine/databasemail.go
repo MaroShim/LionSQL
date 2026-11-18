@@ -37,7 +37,7 @@ func (s *Coordinator) initDatabaseMailTables() error {
 		last_mod_date DATETIME
 	);`
 
-	if _, err := s.ExecuteSQL(mailItemsSchema); err != nil && !strings.Contains(strings.ToLower(err.Error()), "already exists") {
+	if _, err := s.ExecuteSessionSQL("__sys_dbmail", mailItemsSchema); err != nil && !strings.Contains(strings.ToLower(err.Error()), "already exists") {
 		return fmt.Errorf("failed to create sysmail_mailitems table: %w", err)
 	}
 
@@ -49,17 +49,17 @@ func (s *Coordinator) initDatabaseMailTables() error {
 		description VARCHAR
 	);`
 
-	if _, err := s.ExecuteSQL(mailLogSchema); err != nil && !strings.Contains(strings.ToLower(err.Error()), "already exists") {
+	if _, err := s.ExecuteSessionSQL("__sys_dbmail", mailLogSchema); err != nil && !strings.Contains(strings.ToLower(err.Error()), "already exists") {
 		return fmt.Errorf("failed to create sysmail_log table: %w", err)
 	}
 
 	// Initialize ID counters from maximum IDs currently stored in tables
-	if res, err := s.ExecuteSQL("SELECT MAX(mailitem_id) AS max_id FROM sysmail_mailitems;"); err == nil && len(res.Rows) > 0 {
+	if res, err := s.ExecuteSessionSQL("__sys_dbmail", "SELECT MAX(mailitem_id) AS max_id FROM sysmail_mailitems;"); err == nil && len(res.Rows) > 0 {
 		if maxID, ok := toInt64Value(res.Rows[0]["max_id"]); ok {
 			s.dbMailItemCounter.Store(maxID)
 		}
 	}
-	if res, err := s.ExecuteSQL("SELECT MAX(log_id) AS max_id FROM sysmail_log;"); err == nil && len(res.Rows) > 0 {
+	if res, err := s.ExecuteSessionSQL("__sys_dbmail", "SELECT MAX(log_id) AS max_id FROM sysmail_log;"); err == nil && len(res.Rows) > 0 {
 		if maxID, ok := toInt64Value(res.Rows[0]["max_id"]); ok {
 			s.dbMailLogCounter.Store(maxID)
 		}

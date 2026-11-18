@@ -217,8 +217,9 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 			}, nil
 		}
 
-		// Permanent table drop inside active transaction: Tombstone rename for safe rollback
-		sch, err := s.engine.GetTable(tableName)
+		// Permanent table drop inside active transaction:
+		// Check table existence via s.getTable(cs, tableName)
+		sch, err := s.getTable(cs, tableName)
 		if err != nil {
 			if (stmt.IfExists || s.TolerantDDL()) && errors.Is(err, storage.ErrTableNotFound) {
 				return &QueryResult{
@@ -231,20 +232,36 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 			return nil, err
 		}
 
-		tombstone := fmt.Sprintf("__tombstone_%s_%d_%s", cs.ID, time.Now().UnixNano(), sch.Name)
-		if err := s.engine.RenameTable(tableName, tombstone); err != nil {
-			return nil, err
+		// 1. Mark dropped in ShadowCatalog so this transaction immediately perceives it as dropped
+		if shadow := cs.GetShadowCatalog(); shadow != nil {
+			shadow.MarkTableDropped(tableName)
 		}
 
-		schClone := sch.Clone()
-		cs.Mu.Lock()
-		cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
-			Kind:          DDLUndoRestoreDroppedTable,
-			TableName:     sch.Name,
-			TombstoneName: tombstone,
-			SchemaBackup:  &schClone,
-		})
-		cs.Mu.Unlock()
+		// 2. Enqueue deferred physical drop on transaction commit (Zero Dirty DDL Read!)
+		canonicalName := sch.Name
+		if cs.TxMgr != nil && cs.TxMgr.Current() != nil {
+			txCtx := cs.TxMgr.Current()
+			txCtx.AddDeferredAction(func() error {
+				_ = s.engine.DropTable(canonicalName)
+				s.InvalidatePKBypassCache()
+				return nil
+			})
+		} else {
+			// Fallback legacy tombstone rename if TxMgr is inactive
+			tombstone := fmt.Sprintf("__tombstone_%s_%d_%s", cs.ID, time.Now().UnixNano(), sch.Name)
+			if err := s.engine.RenameTable(tableName, tombstone); err != nil {
+				return nil, err
+			}
+			schClone := sch.Clone()
+			cs.Mu.Lock()
+			cs.ddlUndoLog = append(cs.ddlUndoLog, DDLUndoOp{
+				Kind:          DDLUndoRestoreDroppedTable,
+				TableName:     sch.Name,
+				TombstoneName: tombstone,
+				SchemaBackup:  &schClone,
+			})
+			cs.Mu.Unlock()
+		}
 
 		s.InvalidatePKBypassCache()
 		s.SetTableLastIdentity(tableName, 0)

@@ -846,11 +846,19 @@ func (c *Coordinator) Close() error {
 	return nil
 }
 
-// getTable retrieves a table schema, prioritizing session-local ephemeral tables before falling back to the engine catalog.
+// getTable retrieves a table schema, prioritizing session-local ephemeral tables and transaction ShadowCatalog before falling back to the engine catalog.
 func (c *Coordinator) getTable(cs *ClientSession, name string) (*storage.TableSchema, error) {
 	if cs != nil {
 		if eph := cs.GetEphemeralTable(name); eph != nil {
 			return eph.Schema, nil
+		}
+		if shadow := cs.GetShadowCatalog(); shadow != nil {
+			if shadow.IsTableDropped(name) {
+				return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, name)
+			}
+			if sch, ok := shadow.GetTable(name); ok {
+				return sch, nil
+			}
 		}
 	}
 	if c.engine == nil {

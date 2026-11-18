@@ -348,7 +348,7 @@ func (s *Coordinator) tryPKLookupBypass(query string, start time.Time, cs *Clien
 			}
 		}
 
-		schema, err := s.engine.GetTable(pq.tableName)
+		schema, err := s.getTable(cs, pq.tableName)
 		if err != nil || schema == nil {
 			if errors.Is(err, storage.ErrTableNotFound) {
 				return nil, fmt.Errorf("table %q not found: %w", pq.tableName, err), true

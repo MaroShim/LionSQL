@@ -53,8 +53,8 @@ type Context struct {
 	// Deferred actions executed upon successful physical commit (e.g., physical table deletion)
 	DeferredActions []func() error
 
-	// ShadowCatalog overlay for transactional DDL (Phase 3)
-	ShadowCatalog any
+	// ShadowCatalog overlay for transactional DDL
+	ShadowCatalog *ShadowCatalog
 
 	// Error that placed the transaction into StateInError
 	Err error
@@ -70,9 +70,10 @@ func NewContext(id uint64, sess storage.Session, stx storage.Transaction, opts O
 		Opts:       opts,
 		Ephemeral:  ephemeral,
 		Session:    sess,
-		StorageTx:  stx,
-		Savepoints: NewSavepointStack(),
-		CreatedAt:  time.Now(),
+		StorageTx:     stx,
+		Savepoints:    NewSavepointStack(),
+		ShadowCatalog: NewShadowCatalog(),
+		CreatedAt:     time.Now(),
 	}
 }
 
