@@ -2036,7 +2036,13 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		pkAny, _ := proc.EvalRowExpr(pkValExpr, evalCtx, nil)
 		pkVal := toStorageValue(pkAny)
 		oldRec, err := f.tx.Get(targetTable, pkVal)
-		if err == nil && oldRec != nil {
+		if err != nil {
+			if errors.Is(err, storage.ErrKeyNotFound) {
+				return 0, nil
+			}
+			return 0, err
+		}
+		if oldRec != nil {
 			oldRowMap := recordToMap(oldRec)
 			rowCtx := f.buildRowEvalMap(oldRowMap)
 			if data.WhereExpr != nil && !proc.EvalBoolExpr(data.WhereExpr, rowCtx, nil) {
@@ -2312,7 +2318,13 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 		pkAny, _ := proc.EvalRowExpr(valExpr, evalCtx, nil)
 		pkVal := toStorageValue(pkAny)
 		oldRec, err := f.tx.Get(targetTable, pkVal)
-		if err == nil && oldRec != nil {
+		if err != nil {
+			if errors.Is(err, storage.ErrKeyNotFound) {
+				return 0, nil
+			}
+			return 0, err
+		}
+		if oldRec != nil {
 			if err := f.tx.Delete(targetTable, pkVal); err != nil {
 				return 0, fmt.Errorf("delete error on %s: %w", targetTable, err)
 			}

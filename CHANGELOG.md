@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- enforce Go-level sharded active writer locks (`activeWriters`) in `pkg/storage/wiredtiger/wt_engine.go` across 64 shards, ensuring cross-platform fail-fast write-write conflict detection (`ErrSerializationFailure`) parity with in-memory OCC engine (`[RULE:HermeticParity]`, Invariant 3)
+- add comprehensive multi-layer write-write conflict regression test suite (`pkg/storage/wiredtiger/wt_active_writers_test.go`, `pkg/proc/runtime/vm_update_conflict_test.go`, `pkg/wire/tds/conflict_regression_test.go`) covering storage engine, VDBE executor, coordinator, and TDS wire protocol
 - auto-detect local Git commit hash in `pkg/config/version.go` via `.git/HEAD` inspection, eliminating `commit: dev` fallback in local builds
 - persist foreground server system and error logs to `data/lionsql.log` via `io.MultiWriter(os.Stderr, logFd)`, ensuring parity with daemon mode while keeping non-dev console output clean
 - log query execution failures (`[QUERY-ERROR]`) and slow queries (`[SLOW-QUERY]`) in `pkg/engine/sqlexec.go` to `data/lionsql.log` for diagnostic visibility without enabling full `-dev` query tracing
@@ -17,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - multiplex all WiredTiger secondary indexes of a table into one lazily created `_idx_<Table>.wt` file with `<lower(IndexName)>\x00` key namespaces (`ARCH-WT-FILE-LAYOUT-1`): `CREATE INDEX` (after the first) and `DROP INDEX` become pure transactional key insert/range-delete (no `session->create/drop`, no `EBUSY`), `DROP/TRUNCATE TABLE` handle a single index file, and legacy `_idx_<Table>_<Index>.wt` files are migrated automatically at `Engine.Open` (`pkg/storage/wiredtiger/wt_engine.go`, `pkg/storage/engine.go`, `GEMINI.md` Invariant 15)
 
 ### Fixed
+- fix VDBE `execUpdateWhere` and `execDeleteWhere` silently swallowing `f.tx.Get` serialization/conflict errors into 0-row success (`return 0, nil`) in `pkg/proc/runtime/vm.go`, properly propagating non-`ErrKeyNotFound` errors to callers
+- fix WiredTiger `getRawBytesLocked` in `pkg/storage/wiredtiger/wt_engine.go` masking `WT_ROLLBACK` (-31800) into `storage.ErrKeyNotFound`, ensuring explicit `storage.ErrSerializationFailure` propagation on write conflicts
 - resolve interactive session variable arithmetic evaluation bug (`SET @var = @var + 50`) by binding `proc.EvalRowExpr` to preserve typed numeric/string values in `cs.Vars` (`FIX-SESSION-VAR-EXPR-EVAL-1`)
 - fix DDL AST parser false-positive 'Type before column name' detection when column name is also a data type keyword followed by another data type keyword (e.g. `UUID VARCHAR(255)`) in `pkg/proc/parser_ddl.go`
 - complete Phase 4 of `ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md` (`REFACTOR-ENGINE-AST-PARSER-1`): migrate `pkg/engine/sqlexec_cursor.go` and `pkg/engine/sqlexec_conditional_ddl.go` to `pkg/proc` parser/lexer (`ParseServerCursorDeclare`, `ParseServerCursorFetchOrMove`, `ParseServerCursorOpenOrClose`), eliminate `parseCursorParams` and `strings.Fields`/`strings.Index`, and expand `TestArch_NoManualSQLParsingInDDL` AST guard coverage

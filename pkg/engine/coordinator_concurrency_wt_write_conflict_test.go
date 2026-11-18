@@ -44,18 +44,44 @@ func TestWT_Concurrent_UncommittedWrite_ConflictFailsFast(t *testing.T) {
 		t.Fatalf("sess1 expected 1 row affected, got %d", res1.RowsAffected)
 	}
 
-	// 2. Session 2 attempts to update the SAME row while Session 1 is uncommitted.
-	_, err2 := coord.ExecuteSessionSQL(sess2, "UPDATE wt_t SET val = 30 WHERE id = 1")
+	// 2. Session 2 attempts autocommit UPDATE on the SAME row while Session 1 is uncommitted.
+	res2, err2 := coord.ExecuteSessionSQL(sess2, "UPDATE wt_t SET val = 30 WHERE id = 1")
 	if err2 == nil {
-		t.Fatalf("CRITICAL BUG IN WT: Session 2 update succeeded on a row with an active uncommitted writer! Expected serialization failure, got nil")
+		t.Fatalf("CRITICAL BUG IN WT: Session 2 update succeeded on an uncommitted row! Result: %+v", res2)
 	}
-
-	t.Logf("WT err2: %v", err2); if !storage.IsWriteConflict(err2) {
+	if !storage.IsWriteConflict(err2) {
 		t.Fatalf("expected write conflict error (ErrSerializationFailure), got: %v", err2)
 	}
 
-	// 3. Session 1 commits
+	// 3. Session 2 attempts autocommit DELETE on the SAME row while Session 1 is uncommitted.
+	resDel, errDel := coord.ExecuteSessionSQL(sess2, "DELETE FROM wt_t WHERE id = 1")
+	if errDel == nil {
+		t.Fatalf("CRITICAL BUG IN WT: Session 2 delete succeeded on an uncommitted row! Result: %+v", resDel)
+	}
+	if !storage.IsWriteConflict(errDel) {
+		t.Fatalf("expected write conflict error (ErrSerializationFailure) on DELETE, got: %v", errDel)
+	}
+
+	// 4. Session 1 commits
 	if _, err := coord.ExecuteSessionSQL(sess1, "COMMIT"); err != nil {
 		t.Fatalf("sess1 Commit failed: %v", err)
+	}
+
+	// 5. Session 2 retries autocommit UPDATE after Session 1 committed -> MUST SUCCEED
+	res2Retry, err2Retry := coord.ExecuteSessionSQL(sess2, "UPDATE wt_t SET val = 40 WHERE id = 1")
+	if err2Retry != nil {
+		t.Fatalf("Session 2 retry update failed after session 1 commit: %v", err2Retry)
+	}
+	if res2Retry.RowsAffected != 1 {
+		t.Fatalf("Session 2 expected 1 row affected, got %d", res2Retry.RowsAffected)
+	}
+
+	// 6. Verify final value is 40
+	resVal, err := coord.ExecuteSQL("SELECT val FROM wt_t WHERE id = 1")
+	if err != nil {
+		t.Fatalf("SELECT failed: %v", err)
+	}
+	if len(resVal.Rows) != 1 || resVal.Rows[0]["val"] != int64(40) {
+		t.Fatalf("expected final val = 40, got: %+v", resVal.Rows)
 	}
 }

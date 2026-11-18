@@ -277,6 +277,27 @@ var (
 	cSyncOn  = C.CString("sync=on")
 )
 
+const numWTLockShards = 64
+
+type wtLockShard struct {
+	mu            sync.RWMutex
+	activeWriters map[string]uint64 // lockKey (table + "\x00" + pk) -> txID
+}
+
+type wtLockRef struct {
+	shardIdx int
+	key      string
+}
+
+func hashWTLockKey(key string) int {
+	var h uint64 = 14695981039346656037
+	for i := 0; i < len(key); i++ {
+		h ^= uint64(key[i])
+		h *= 1099511628211
+	}
+	return int(h % numWTLockShards)
+}
+
 // Engine implements storage.Engine via the WiredTiger C API, routing
 // session-scoped temporary tables and table variables transparently to an
 // embedded ephemeral in-memory OCC engine ([PERF-HYBRID-TEMPMEM-1]).
@@ -287,6 +308,8 @@ type Engine struct {
 	tables      map[string]*storage.TableSchema
 	tempEng     *memengine.Engine
 	nextLSN     atomic.Int64
+	nextTxID    atomic.Uint64
+	lockShards  [numWTLockShards]wtLockShard
 	walHook     func(rec memengine.WALRecord)
 	hasHook     atomic.Bool
 	walOrderMu  sync.Mutex
@@ -2347,8 +2370,14 @@ func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error)
 		snapTables, _ = s.engine.ListTables()
 	}
 
+	var txID uint64
+	if s.engine != nil {
+		txID = s.engine.nextTxID.Add(1)
+	}
+
 	return &WTTx{
 		sess:              s,
+		txID:              txID,
 		opts:              opts,
 		snapshotLSN:       snapLSN,
 		snapshotTimestamp: snapTS,
@@ -2359,6 +2388,8 @@ func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error)
 // WTTx manages ACID mutations in WiredTiger and routes temporary tables to tempTx lazily.
 type WTTx struct {
 	sess              *WTSession
+	txID              uint64
+	acquiredLocks     []wtLockRef
 	tempTx            storage.Transaction
 	opts              storage.TxOptions
 	snapshotLSN       int64
@@ -2377,6 +2408,55 @@ type WTTx struct {
 	tableCache        map[string]*storage.TableSchema
 	snapTables        []*storage.TableSchema
 	rowDeltas         map[string]int64
+}
+
+func (tx *WTTx) tryAcquireWriteLockLocked(tableName string, pkKey string) error {
+	eng := tx.sess.engine
+	if eng == nil {
+		return nil
+	}
+	lockKey := tableName + "\x00" + pkKey
+	sIdx := hashWTLockKey(lockKey)
+	sh := &eng.lockShards[sIdx]
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
+
+	if sh.activeWriters == nil {
+		sh.activeWriters = make(map[string]uint64)
+	}
+	if owner, exists := sh.activeWriters[lockKey]; exists && owner != tx.txID {
+		return storage.ErrSerializationFailure
+	}
+	if _, exists := sh.activeWriters[lockKey]; !exists {
+		sh.activeWriters[lockKey] = tx.txID
+		tx.acquiredLocks = append(tx.acquiredLocks, wtLockRef{
+			shardIdx: sIdx,
+			key:      lockKey,
+		})
+	}
+	return nil
+}
+
+func (tx *WTTx) releaseAcquiredLocksLocked() {
+	if len(tx.acquiredLocks) == 0 {
+		return
+	}
+	eng := tx.sess.engine
+	if eng == nil {
+		tx.acquiredLocks = tx.acquiredLocks[:0]
+		return
+	}
+	for _, ref := range tx.acquiredLocks {
+		if ref.shardIdx >= 0 && ref.shardIdx < numWTLockShards {
+			sh := &eng.lockShards[ref.shardIdx]
+			sh.mu.Lock()
+			if sh.activeWriters != nil && sh.activeWriters[ref.key] == tx.txID {
+				delete(sh.activeWriters, ref.key)
+			}
+			sh.mu.Unlock()
+		}
+	}
+	tx.acquiredLocks = tx.acquiredLocks[:0]
 }
 
 func (tx *WTTx) clearUndoLogLocked() {
@@ -2567,6 +2647,10 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 		return fmt.Errorf("%w: missing primary key %s", storage.ErrNotNullViolation, colName)
 	}
 
+	if err := tx.tryAcquireWriteLockLocked(tbl.Name, pkVal.String()); err != nil {
+		return err
+	}
+
 	if err := tx.checkForeignKeyLocked(tbl, record); err != nil {
 		return err
 	}
@@ -2726,6 +2810,9 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 	if err := tx.sess.engine.checkTainted(); err != nil {
 		return err
 	}
+	if err := tx.tryAcquireWriteLockLocked(tbl.Name, pk.String()); err != nil {
+		return err
+	}
 	oldData, err := tx.getRawBytesLocked(tableName, pk)
 	if err != nil {
 		return err
@@ -2875,6 +2962,9 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 
 func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 	if err := tx.sess.engine.checkTainted(); err != nil {
+		return err
+	}
+	if err := tx.tryAcquireWriteLockLocked(tableName, pk.String()); err != nil {
 		return err
 	}
 	if err := tx.checkReferencingFKsOnDeleteLocked(tableName, pk); err != nil {
@@ -3230,6 +3320,9 @@ func (tx *WTTx) getRawBytesLocked(tableName string, pk storage.Value) ([]byte, e
 	var pData unsafe.Pointer
 	var sz C.size_t
 	if ret := C.go_wt_cursor_get(cur, cKey, &pData, &sz); ret != 0 || pData == nil {
+		if ret == wtRollback {
+			return nil, wtOpError("cursor_get", int(ret))
+		}
 		return nil, storage.ErrKeyNotFound
 	}
 
@@ -3711,6 +3804,7 @@ func (tx *WTTx) Validate() error {
 func (tx *WTTx) Commit() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
+	defer tx.releaseAcquiredLocksLocked()
 
 	if tx.closed {
 		return storage.ErrTxClosed
@@ -3836,6 +3930,7 @@ func (tx *WTTx) Commit() error {
 func (tx *WTTx) Rollback() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
+	defer tx.releaseAcquiredLocksLocked()
 
 	if tx.closed {
 		return storage.ErrTxClosed
