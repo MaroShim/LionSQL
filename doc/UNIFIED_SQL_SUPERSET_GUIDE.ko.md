@@ -1,6 +1,9 @@
 # LionSQL 단일 통합 슈퍼셋 SQL 가이드 (`doc/UNIFIED_SQL_SUPERSET_GUIDE.ko.md`)
 
-> **한 줄 요약**: LionSQL에서는 PostgreSQL이나 SQL Server 중 어떤 클라이언트로 접속하든 상관없이, 두 데이터베이스의 편리한 문법을 손에 익은 그대로 자유롭게 섞어 쓸 수 있습니다. 시맨틱 충돌이 발생할 때는 SQL Server라는 단단한 닻(Default Preference)을 기준으로 삼아 데이터 정합성을 철저히 지킵니다.
+> - **최초 작성일**: 2026-10-25
+> - **최종 갱신일**: 2026-11-19
+> - **상태**: 공식 가이드 및 통합 슈퍼셋 시맨틱 원칙 반영
+> - **한 줄 요약**: LionSQL에서는 PostgreSQL이나 SQL Server 중 어떤 클라이언트로 접속하든 상관없이, 두 데이터베이스의 편리한 문법을 손에 익은 그대로 자유롭게 섞어 쓸 수 있습니다. 시맨틱 충돌이 발생할 때는 SQL Server라는 단단한 닻(Default Preference)을 기준으로 삼아 데이터 정합성을 철저히 지킵니다.
 
 ---
 
