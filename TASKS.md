@@ -236,8 +236,8 @@
 | `DONE` | **`FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`** | `v0.94.0` | Security | P2 | 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리) | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `PENDING` | **`FEAT-SQL-SERVER-AGENT-INPROCESS-1`** | `v0.94.0` | Engine | P2 | SQL Server Agent 인-프로세스 스케줄러 (msdb.dbo.sysjobs, sysjobhistory, sp_add_job) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`** | `v0.94.0` | Engine | P2 | 서버 전역 dialect_preference 설정 체계 및 CLI/환경변수 바인딩 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-SUPERSET-EXPR-COLLATE-1`** | `v0.94.0` | Engine | P2 | 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-SUPERSET-ILIKE-SYNTAX-1`** | `v0.94.0` | Engine | P2 | pkg/proc/ Native Pratt Parser 및 VDBE ILIKE 연산자 전역 지원 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
+| `IN_PROGRESS` | **`FEAT-SUPERSET-EXPR-COLLATE-1`** | `v0.94.0` | Engine | P2 | 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
+| `IN_PROGRESS` | **`FEAT-SUPERSET-ILIKE-SYNTAX-1`** | `v0.94.0` | Engine | P2 | pkg/proc/ Native Pratt Parser 및 VDBE ILIKE 연산자 전역 지원 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TABLE-VAR-1`** |  | Engine | P2 | T-SQL 테이블 변수(DECLARE @tbl TABLE) 지원 및 DML/배치 라이프사이클 통합 | [`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TDS-MULTIPLE-RESULT-SETS-1`** | `1.0-GA` | Wire | P2 | TDS 다중 결과 집합(Multiple Result Sets / Sequential NextResult) 스트리밍 반환 지원 | [`notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md`](notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TIMESERIES-LSM-1`** | `v1.99.0` | FEAT | P2 | LSM Time-Series Chunk Storage & time_bucket | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
@@ -270,6 +270,7 @@
 | `DONE` | **`FIX-DDL-DEFAULT-CHECK-1`** | `1.0-GA` | Engine | P2 | CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DEFAULT-EXPR-DYNAMIC-EVAL-1`** | `1.0-GA` | Engine | P2 | DEFAULT 표현식(NEWID, GETDATE 등) 파싱 시점 캐싱 폐지 및 INSERT 실행 시 동적 평가 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-DIV-BY-ZERO-ERROR-VISIBILITY-1`** | `1.0-GA` | Engine | P2 | 나눗셈(/) 0 나누기 시 명시적 division by zero 에러 반환 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-DML-OUTPUT-INTO-TABLE-VAR-1`** | `v0.94.0` | Engine | P1 | INSERT ... OUTPUT ... INTO @table_variable 데이터 사일런트 유실 패치 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-DUAL-PARSER-ALTER-PROC-FALLBACK-1`** | `v0.94.0` | Parser | P1 | ALTER PROCEDURE 및 CREATE OR ALTER PROC 파싱 오류 시 ANTLR4 Fallback 자동 연동 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`FIX-EVAL-NOT-IN-NULL-3VL-1`** | `1.0-GA` | Engine | P2 | NOT IN 서브쿼리 및 리스트에 NULL 포함 시 3치 논리(3VL UNKNOWN) 엄격 적용 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-EXEC-DEFAULT-KEYWORD-1`** |  | Parser | P2 | EXEC arg DEFAULT keyword must bind the declared default instead of the string literal | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
@@ -283,6 +284,7 @@
 | `DONE` | **`FIX-HAVING-NON-AGG-VALIDATION-1`** | `-` | Engine | P2 | HAVING 절 비집계/비GROUP BY 컬럼 시맨틱 검증 결함 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-HTTP-REAP-ABANDONED-TX-1`** | `1.0-GA` | API | P2 | Web Studio/HTTP 유휴 세션 회수 시 미종료 트랜잭션 자동 롤백 및 스토리지 잠금 해제 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-HYBRID-TX-SPLIT-BRAIN-1`** | `1.0-GA` | Storage | P2 | 하이브리드 트랜잭션 2PC 부재로 인한 분할 커밋(Split-Brain) 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-IDENTITY-SEED-INCREMENT-HONORED-1`** | `v0.94.0` | Storage | P2 | IDENTITY(seed, increment) 초기 시드 및 증가분 스토리지 시퀀스 반영 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-LEXER-HEX-BINARY-LITERAL-1`** |  | Parser | P2 | Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-MEMENGINE-DDL-WAL-FAILCLOSED-1`** | `1` | --domain | P2 | DDL WAL 기록 실패 시 인메모리 카탈로그 복구 및 선기록 패턴 적용 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-MEMENGINE-WAL-FSYNC-ROLLBACK-1`** | `1.0-GA` | Storage | P2 | MemEngine WAL fsync 실패 시 메모리 데이터 잔류(Phantom Commit) 롤백 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
@@ -294,8 +296,14 @@
 | `DONE` | **`FIX-ORDERBY-INVALID-COLUMN-AND-ORDINAL-1`** | `1.0-GA` | Planner | P2 | ORDER BY 절 비유효 컬럼 및 범위 초과 서수 유효성 검증 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`** | `1.0-GA` | Storage | P1 | PITR 기준 백업 시점/LSN 불변성 검증, 백업-WAL LSN 경계 필터링 및 LSN 연속성(Gap) 누락 검출 보완 | [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md) |  |
 | `DONE` | **`FIX-PITR-WAL-COMPOSITE-PK-1`** | `1.0-GA` | Storage | P2 | PITR WAL 재생 시 복합 PK 테이블 UPDATE/DELETE 복구 유실 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-PROC-CTE-EPHEMERAL-DISPATCH-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 내부 CTE(WITH) EphemeralTable 바인딩 연동 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-PROC-LOCAL-TEMP-TABLE-LIFECYCLE-1`** | `v0.94.0` | Engine | P2 | 프로시저 로컬 #temp 테이블 프로시저 종료 시 자동 파기 훅 구현 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `PENDING` | **`FIX-PROC-PARAM-SHADOWING-DUPLICATE-CHECK-1`** | `v0.94.0` | Engine | P2 | 프로시저 매개변수와 동일 이름 로컬 변수 재선언 차단(Msg 134) | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `PENDING` | **`FIX-PROC-PARSER-MERGE-TOKEN-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 본문 MERGE INTO 구문 파싱 및 컴파일 허용 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `PENDING` | **`FIX-PROC-PARSER-STATIC-DDL-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 본문 정적 DDL(ALTER TABLE 등) 파싱 허용 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-PROC-TEMP-TABLE-DDL-1`** |  | Engine | P1 | 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
+| `PENDING` | **`FIX-PROC-VIEW-EXPANSION-DISPATCH-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 내부 VIEW 카탈로그 서브쿼리 확장 연동 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-ROLLBACK-INDEX-RESTORE-ERROR-HANDLING-1`** |  | Engine | P2 | 커밋 및 세이브포인트 롤백 과정에서 보조 인덱스 복원 오류 전파 및 복원 누락 방어 |  |  |
 | `DONE` | **`FIX-SECONDARY-INDEX-RECOVERY-FALLBACK-1`** | `2` | --domain | P2 | 2차 인덱스 복원 실패 시 자동 재구축 및 Table Scan 폴백 비활성화 체계 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-SESSION-DRAIN-CLOSE-UAF-1`** | `1.0-GA` | Engine | P2 | CloseSession 시 In-flight 쿼리 Drain 대기 보장 및 CGo UAF 크래시 방지 | [`notes/plans/FIX_SESSION_DRAIN_CLOSE_UAF_PLAN.ko.md`](notes/plans/FIX_SESSION_DRAIN_CLOSE_UAF_PLAN.ko.md) |  |
@@ -321,6 +329,8 @@
 | `PENDING` | **`FIX-TRIGGER-DML-INVOCATION-PIPELINE-1`** | `v0.94.0` | Engine | P2 | INSERT/UPDATE/DELETE DML 실행 파이프라인 직후 카탈로그 AFTER 트리거 자동 발화 연동 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TRIGGER-FOR-KEYWORD-1`** |  | Engine | P1 | CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TRIGGER-INSERTED-HIDDEN-COL-FILTER-1`** | `v0.94.0` | Engine | P1 | 트리거 INSERTED/DELETED 가상 테이블 시스템 숨김 컬럼(_row_id) 필터링 |  |  |
+| `PENDING` | **`FIX-TRIGGER-ROWCOUNT-INITIALIZATION-1`** | `v0.94.0` | Engine | P2 | AFTER 트리거 진입 시 @@ROWCOUNT 직전 DML affectedRows 전달 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `PENDING` | **`FIX-TRIGGER-SCOPE-IDENTITY-ISOLATION-1`** | `v0.94.0` | Engine | P1 | 트리거 구동 시 SCOPE_IDENTITY() 스코프 격리 스택 구현 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-TRUNCATE-TX-ROLLBACK-DEFERRED-1`** | `1.0-GA` | Storage | P2 | 트랜잭션 내 TRUNCATE 실행 시 물리 삭제 커밋 시점 지연(Deferred Drop) 및 롤백 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** |  | Engine | P1 | CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX)) 미평가 에코 버그 및 MONEY/SMALLMONEY 4자리 소수점 스케일(1.2345) 보정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-INSERT-EXEC-1`** |  | Engine | P1 | INSERT INTO <table> EXEC <proc_name> 프로시저 결과셋 적재 구문 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
@@ -2860,15 +2870,15 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 `FEAT-SUPERSET-EXPR-COLLATE-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 22:58:37
+### [IN_PROGRESS] 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 `FEAT-SUPERSET-EXPR-COLLATE-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:05:49
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md)
 
 ---
 
-### [PENDING] pkg/proc/ Native Pratt Parser 및 VDBE ILIKE 연산자 전역 지원 `FEAT-SUPERSET-ILIKE-SYNTAX-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 22:58:34
+### [IN_PROGRESS] pkg/proc/ Native Pratt Parser 및 VDBE ILIKE 연산자 전역 지원 `FEAT-SUPERSET-ILIKE-SYNTAX-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:05:49
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md)
 
@@ -3088,6 +3098,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] INSERT ... OUTPUT ... INTO @table_variable 데이터 사일런트 유실 패치 `FIX-DML-OUTPUT-INTO-TABLE-VAR-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 23:58:59
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
+
+---
+
 ### [DONE] ALTER PROCEDURE 및 CREATE OR ALTER PROC 파싱 오류 시 ANTLR4 Fallback 자동 연동 `FIX-DUAL-PARSER-ALTER-PROC-FALLBACK-1`
 - **Domain**: Parser | **Priority**: P1 | **Updated**: 2026-11-16 14:21:02
 - **Milestone**: `v0.94.0`
@@ -3169,6 +3186,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
+### [PENDING] IDENTITY(seed, increment) 초기 시드 및 증가분 스토리지 시퀀스 반영 `FIX-IDENTITY-SEED-INCREMENT-HONORED-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
 
 ---
 
@@ -3258,15 +3282,57 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [PENDING] Stored Procedure 내부 CTE(WITH) EphemeralTable 바인딩 연동 `FIX-PROC-CTE-EPHEMERAL-DISPATCH-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
+
+---
+
 ### [DONE] EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 `FIX-PROC-EXEC-RETURN-VAR-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:02
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
 
+### [PENDING] 프로시저 로컬 #temp 테이블 프로시저 종료 시 자동 파기 훅 구현 `FIX-PROC-LOCAL-TEMP-TABLE-LIFECYCLE-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
+
+---
+
+### [PENDING] 프로시저 매개변수와 동일 이름 로컬 변수 재선언 차단(Msg 134) `FIX-PROC-PARAM-SHADOWING-DUPLICATE-CHECK-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
+
+---
+
+### [PENDING] Stored Procedure 본문 MERGE INTO 구문 파싱 및 컴파일 허용 `FIX-PROC-PARSER-MERGE-TOKEN-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
+
+---
+
+### [PENDING] Stored Procedure 본문 정적 DDL(ALTER TABLE 등) 파싱 허용 `FIX-PROC-PARSER-STATIC-DDL-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
+
+---
+
 ### [DONE] 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 `FIX-PROC-TEMP-TABLE-DDL-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:02
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [PENDING] Stored Procedure 내부 VIEW 카탈로그 서브쿼리 확장 연동 `FIX-PROC-VIEW-EXPANSION-DISPATCH-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
 
 ---
 
@@ -3425,6 +3491,20 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 ### [DONE] 트리거 INSERTED/DELETED 가상 테이블 시스템 숨김 컬럼(_row_id) 필터링 `FIX-TRIGGER-INSERTED-HIDDEN-COL-FILTER-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 01:22:07
 - **Milestone**: `v0.94.0`
+
+---
+
+### [PENDING] AFTER 트리거 진입 시 @@ROWCOUNT 직전 DML affectedRows 전달 `FIX-TRIGGER-ROWCOUNT-INITIALIZATION-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
+
+---
+
+### [PENDING] 트리거 구동 시 SCOPE_IDENTITY() 스코프 격리 스택 구현 `FIX-TRIGGER-SCOPE-IDENTITY-ISOLATION-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 23:58:59
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
 
 ---
 
