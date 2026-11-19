@@ -657,6 +657,24 @@ func (cs *ClientSession) ExecuteProgram(
 			}
 			paramMap["__session_temp_tables__"] = tempCopy
 		}
+		if cs.Vars != nil {
+			if id, ok := cs.Vars["identity"]; ok && id != nil {
+				if paramMap == nil {
+					paramMap = make(map[string]any)
+				}
+				if _, exists := paramMap["identity"]; !exists {
+					paramMap["identity"] = id
+				}
+			}
+			if (stmtLabel == "AnonymousBlock" || stmtLabel == "PGWirePrepared") && cs.Vars["scope_identity"] != nil {
+				if paramMap == nil {
+					paramMap = make(map[string]any)
+				}
+				if _, exists := paramMap["scope_identity"]; !exists {
+					paramMap["scope_identity"] = cs.Vars["scope_identity"]
+				}
+			}
+		}
 		cs.Mu.Unlock()
 	}
 	if cs == nil {
@@ -670,6 +688,22 @@ func (cs *ClientSession) ExecuteProgram(
 		defer sess.Close()
 		res, err = exec.RunContext(ctx, prog, stmtLabel, paramMap, sess)
 		return res, false, err
+	}
+
+	syncIdentity := func(r *runtime.ExecutionResult) {
+		if r == nil {
+			return
+		}
+		if cs.Vars == nil {
+			cs.Vars = make(map[string]any)
+		}
+		if r.LastIdentity > 0 {
+			cs.Vars["identity"] = r.LastIdentity
+			cs.Vars["@@identity"] = r.LastIdentity
+		}
+		if r.ScopeIdentity > 0 {
+			cs.Vars["scope_identity"] = r.ScopeIdentity
+		}
 	}
 
 	cs.Mu.Lock()
@@ -694,6 +728,7 @@ func (cs *ClientSession) ExecuteProgram(
 			if cs.TxMgr != nil {
 				cs.TxMgr.SetActiveStorageTx(res.ActiveTx)
 			}
+			syncIdentity(res)
 		}
 		if err != nil {
 			isTimeoutOrCancel := errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
@@ -723,6 +758,7 @@ func (cs *ClientSession) ExecuteProgram(
 			cs.Mu.Lock()
 			cs.sessInUse = false
 			cs.lastUsedAt = time.Now()
+			syncIdentity(res)
 			drainTx, drainSess, drainFn := cs.checkAndDrainClosedLocked()
 			cs.Mu.Unlock()
 			if drainTx != nil {
@@ -752,6 +788,9 @@ func (cs *ClientSession) ExecuteProgram(
 			txOpts = cs.TxOptions()
 		}
 		res, err = exec.RunContextWithOptions(ctx, prog, stmtLabel, paramMap, sess, txOpts)
+		cs.Mu.Lock()
+		syncIdentity(res)
+		cs.Mu.Unlock()
 		return res, false, err
 	}
 

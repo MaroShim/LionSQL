@@ -1630,6 +1630,14 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 		"deleted":  sanitizeTransientRows(deleted),
 	}
 
+	affected := len(inserted)
+	if len(deleted) > affected {
+		affected = len(deleted)
+	}
+	if f.rowCount > 0 && affected == 0 {
+		affected = int(f.rowCount)
+	}
+
 	for _, trg := range trgs {
 		subFrame := f.executor.newFrame(trg.Program, f.tx)
 		subFrame.callDepth = f.callDepth + 1
@@ -1638,6 +1646,7 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 		subFrame.tranCount = f.tranCount
 		subFrame.txFailed = f.txFailed
 		subFrame.lastIdentity = f.lastIdentity // pass ambient session @@IDENTITY
+		subFrame.rowCount = int64(affected)   // [R1-08]: Propagate triggering DML affected rows to trigger scope @@ROWCOUNT
 		for k, v := range transients {
 			subFrame.transientTables[k] = v
 		}
@@ -1825,6 +1834,7 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 				rowMap[identityCol.Name] = curID
 			}
 			f.lastIdentity = curID
+			f.scopeIdentity = curID
 			if f.vars != nil {
 				f.vars["identity"] = storage.IntValue(curID)
 				f.vars["scope_identity"] = storage.IntValue(curID)
@@ -2139,6 +2149,7 @@ func (f *VMFrame) execInsertExec(data *proc.DMLData) (int64, error) {
 				rowMap[identityCol.Name] = curID
 			}
 			f.lastIdentity = curID
+			f.scopeIdentity = curID
 			if f.vars != nil {
 				f.vars["identity"] = storage.IntValue(curID)
 				f.vars["scope_identity"] = storage.IntValue(curID)

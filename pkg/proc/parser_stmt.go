@@ -97,6 +97,8 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return p.parseGoto()
 	case TokenWaitfor:
 		return p.parseWaitfor()
+	case TokenAlter:
+		return p.ParseAlterTable()
 	case TokenCreate:
 		if p.peekTokenIs(TokenTable) {
 			return p.ParseCreateTable()

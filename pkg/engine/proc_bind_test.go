@@ -282,4 +282,42 @@ END;
 	}
 }
 
+func TestStoredProcedure_StaticAlterTable_R1_09(t *testing.T) {
+	memEng := memengine.New()
+	defer memEng.Close()
+	cat := catalog.New(memEng)
+	coord := NewCoordinator(cat, memEng, DefaultConfig())
+	defer coord.Close()
+
+	sessID := "sess-alter-proc"
+	if _, err := coord.ExecuteSessionSQL(sessID, "CREATE TABLE t_alter_tbl (id INT PRIMARY KEY);"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	procSQL := `
+CREATE PROCEDURE sp_TestDdlProc AS
+BEGIN
+    ALTER TABLE t_alter_tbl ADD col_new INT;
+END;`
+	if _, err := coord.ExecuteSessionSQL(sessID, procSQL); err != nil {
+		t.Fatalf("CREATE PROCEDURE with static ALTER TABLE failed: %v", err)
+	}
+
+	if _, err := coord.ExecuteSessionSQL(sessID, "EXEC sp_TestDdlProc;"); err != nil {
+		t.Fatalf("EXEC sp_TestDdlProc failed: %v", err)
+	}
+
+	tbl, err := memEng.GetTable("t_alter_tbl")
+	if err != nil {
+		t.Fatalf("GetTable failed: %v", err)
+	}
+	col, _, found := tbl.FindColumn("col_new")
+	if !found || col == nil {
+		t.Fatalf("column col_new was not added by ALTER TABLE inside stored procedure")
+	}
+	if col.Type != storage.TypeInt {
+		t.Fatalf("expected column type INT, got %v", col.Type)
+	}
+}
+
 

@@ -1129,6 +1129,9 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 		return nil, fmt.Errorf("procedure execution error: %w", err)
 	}
 
+	if res != nil {
+		s.RecordLastIdentity(res.LastIdentity, res.ScopeIdentity)
+	}
 	if res != nil && cs != nil {
 		cs.Mu.Lock()
 		if cs.Vars == nil {
@@ -1723,12 +1726,25 @@ func (s *Coordinator) execAnonymousBlock(query string, start time.Time, cs *Clie
 		return nil, fmt.Errorf("execute anonymous block error: %w", err)
 	}
 
-	if cs != nil && res.Vars != nil {
+	if res != nil {
+		s.RecordLastIdentity(res.LastIdentity, res.ScopeIdentity)
+	}
+	if cs != nil && res != nil {
 		cs.Mu.Lock()
 		for k, v := range res.Vars {
 			clean := strings.TrimPrefix(k, "@")
+			if strings.EqualFold(clean, "identity") || strings.EqualFold(clean, "scope_identity") || strings.EqualFold(clean, "rowcount") || strings.EqualFold(clean, "error") {
+				continue
+			}
 			cs.Vars["@"+clean] = v
 			delete(cs.Vars, clean)
+		}
+		if res.LastIdentity > 0 {
+			cs.Vars["identity"] = res.LastIdentity
+			cs.Vars["@@identity"] = res.LastIdentity
+		}
+		if res.ScopeIdentity > 0 {
+			cs.Vars["scope_identity"] = res.ScopeIdentity
 		}
 		cs.Mu.Unlock()
 	}

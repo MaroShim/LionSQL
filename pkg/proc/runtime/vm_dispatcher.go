@@ -1211,6 +1211,86 @@ vmLoop:
 			}
 		}
 
+	case proc.OpAlterTable:
+		stmt, ok := f.aux(&inst).(*proc.AlterTableStmt)
+		if !ok || stmt == nil {
+			return nil, fmt.Errorf("invalid OpAlterTable metadata")
+		}
+		physTable := f.resolveTable(stmt.Table)
+		executed := false
+		if f.executor != nil && f.executor.queryExecutor != nil {
+			alterSQL := stmt.String()
+			_, _, err := f.executor.queryExecutor(f.ctx, alterSQL, f.tx, nil)
+			if err != nil {
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
+			}
+			executed = true
+		}
+		if !executed && f.executor != nil && physTable != "" {
+			if tm := f.executor.getTableManager(); tm != nil {
+				for _, act := range stmt.Actions {
+					switch act.Type {
+					case proc.AlterAddColumn:
+						if adder, ok := tm.(interface {
+							AddColumn(tableName string, col *storage.Column) error
+						}); ok {
+							c := act.Column
+							col := &storage.Column{
+								Name:       c.Name,
+								Type:       c.Type,
+								Nullable:   c.Nullable,
+								Precision:  c.Precision,
+								Scale:      c.Scale,
+								Default:    c.Default,
+								CheckExpr:  c.CheckExpr,
+								IsComputed: c.IsComputed,
+							}
+							if err := adder.AddColumn(physTable, col); err != nil {
+								if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+									return nil, catchErr
+								}
+								continue vmLoop
+							}
+						}
+					case proc.AlterDropColumn:
+						if alterer, ok := tm.(interface {
+							AlterTable(tableName string, mutator func(schema *storage.TableSchema) error) error
+						}); ok {
+							dropCols := act.DropColumns
+							if len(dropCols) == 0 && act.ColumnName != "" {
+								dropCols = []string{act.ColumnName}
+							}
+							if err := alterer.AlterTable(physTable, func(sch *storage.TableSchema) error {
+								newCols := make([]storage.Column, 0, len(sch.Columns))
+								for _, col := range sch.Columns {
+									shouldDrop := false
+									for _, dc := range dropCols {
+										if strings.EqualFold(col.Name, dc) {
+											shouldDrop = true
+											break
+										}
+									}
+									if !shouldDrop {
+										newCols = append(newCols, col)
+									}
+								}
+								sch.Columns = newCols
+								return nil
+							}); err != nil {
+								if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+									return nil, catchErr
+								}
+								continue vmLoop
+							}
+						}
+					}
+				}
+			}
+		}
+
 	case proc.OpInsert:
 		data, ok := f.aux(&inst).(*proc.DMLData)
 		if !ok || data == nil {

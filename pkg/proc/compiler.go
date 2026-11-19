@@ -668,6 +668,10 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		c.emit(OpDropIndex, 0, 0, 0, s)
 		return nil
 
+	case *AlterTableStmt:
+		c.emit(OpAlterTable, 0, 0, 0, s)
+		return nil
+
 	case *DeclareStmt:
 		varName := cleanVarName(s.Name)
 		lower := strings.ToLower(varName)

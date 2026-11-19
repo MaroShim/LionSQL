@@ -635,7 +635,10 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		}
 		switch res.Type {
 		case storage.TypeInt:
-			return storage.Value{Type: storage.TypeInt, IVal: res.IVal, Precision: e.Precision}, nil
+			if e.Precision == 8 {
+				return storage.Value{Type: storage.TypeInt, IVal: res.IVal, Precision: 8}, nil
+			}
+			return res.IVal, nil
 		case storage.TypeFloat, storage.TypeReal:
 			return res.FVal, nil
 		case storage.TypeBool:

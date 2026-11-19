@@ -70,8 +70,10 @@ type Coordinator struct {
 	replication        *replication.Manager
 	pkBypassCache      map[uint64]*PKLookupPlan
 	pkBypassMu         sync.RWMutex
-	identSlots         sync.Map // lowerTableName (string) -> *TableIdentity
-	schemaVersion      atomic.Uint64
+	identSlots              sync.Map // lowerTableName (string) -> *TableIdentity
+	lastGlobalIdentity      atomic.Int64
+	lastGlobalScopeIdentity atomic.Int64
+	schemaVersion           atomic.Uint64
 	autoAnalyzer         *AutoAnalyzer
 	startTime            time.Time
 	tolerantDDL          atomic.Bool
@@ -175,6 +177,8 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 		var err error
 		if sqlutil.HasPrefixKeyword(trimmed, "MERGE") {
 			res, err = coord.execMerge(trimmed, time.Now(), cs)
+		} else if sqlutil.HasPrefixKeyword(trimmed, "ALTER") {
+			res, err = coord.execAlterTable(trimmed, time.Now(), cs)
 		} else {
 			res, err = coord.execSelect(sql, time.Now(), cs)
 		}
@@ -278,6 +282,24 @@ func (c *Coordinator) SetTableLastIdentity(tableName string, id int64) {
 		}
 	}
 	slot.initialized.Store(true)
+	if c.lastGlobalIdentity.Load() == 0 {
+		c.lastGlobalIdentity.Store(id)
+	}
+	if c.lastGlobalScopeIdentity.Load() == 0 {
+		c.lastGlobalScopeIdentity.Store(id)
+	}
+}
+
+// RecordLastIdentity updates the coordinator-wide last generated identity and scope identity values
+// to support cross-connection CLI tools (e.g., sequential `psql -c` commands) while preserving
+// per-session `cs.Vars` isolation when active within the same connection.
+func (c *Coordinator) RecordLastIdentity(lastID, scopeID int64) {
+	if lastID > 0 {
+		c.lastGlobalIdentity.Store(lastID)
+	}
+	if scopeID > 0 {
+		c.lastGlobalScopeIdentity.Store(scopeID)
+	}
 }
 
 // GetTableLastIdentity retrieves the most recent identity value generated for a table.

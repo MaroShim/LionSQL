@@ -268,7 +268,7 @@
 | `DONE` | **`FIX-CTE-DML-UPDATABLE-TARGET-1`** | `1.0-GA` | Engine | P1 | WITH CTE 기반 DELETE/UPDATE 실행 시 기저 원본 테이블 매핑 지원 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-CURSOR-DECLARE-OPEN-LIFECYCLE-1`** | `v0.94.0` | Engine | P1 | 커서 DECLARE 및 OPEN 생명주기 분리 (DECLARE 시 조기 오픈 및 already open 에러 방지) |  |  |
 | `DONE` | **`FIX-CURSOR-LIFECYCLE-1`** |  | Engine | P1 | 커서 DEALLOCATE 및 배치 종료 시 세션 커서 레지스트리 정리 및 재선언 충돌 해결 | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`FIX-DATEADD-MONTH-END-CLAMP-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
+| `DONE` | **`FIX-DATEADD-MONTH-END-CLAMP-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-DATEADD-MONTH-END-CLAMPING-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DATEDIFF-BIG-DAYOFYEAR-1`** |  | Proc | P2 | DATEDIFF_BIG(dayofyear, ...) returns NULL | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-DATEDIFF-BOUNDARY-CROSSING-1`** | `1.0-GA` | Engine | P2 | T-SQL DATEDIFF datepart 경계선 통과 계산 스펙 준수 | [`1.0-GA`](1.0-GA) |  |
@@ -292,11 +292,11 @@
 | `DONE` | **`FIX-HYBRID-TX-SPLIT-BRAIN-1`** | `1.0-GA` | Storage | P2 | 하이브리드 트랜잭션 2PC 부재로 인한 분할 커밋(Split-Brain) 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-IDENTITY-SEED-INCREMENT-HONORED-1`** | `v0.94.0` | Storage | P2 | IDENTITY(seed, increment) 초기 시드 및 증가분 스토리지 시퀀스 반영 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-INT-ARITHMETIC-OVERFLOW-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`FIX-INT-ARITHMETIC-OVERFLOW-ERROR-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
-| `PENDING` | **`FIX-LEFT-NEGATIVE-LENGTH-ERROR-1`** |  | 3 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
+| `DONE` | **`FIX-INT-ARITHMETIC-OVERFLOW-ERROR-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
+| `DONE` | **`FIX-LEFT-NEGATIVE-LENGTH-ERROR-1`** |  | 3 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-LEXER-HEX-BINARY-LITERAL-1`** |  | Parser | P2 | Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-MATH-DOMAIN-ERROR-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`FIX-MATH-DOMAIN-ERROR-POLICY-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
+| `DONE` | **`FIX-MATH-DOMAIN-ERROR-POLICY-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-MEMENGINE-DDL-WAL-FAILCLOSED-1`** | `1` | --domain | P2 | DDL WAL 기록 실패 시 인메모리 카탈로그 복구 및 선기록 패턴 적용 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-MEMENGINE-WAL-FSYNC-ROLLBACK-1`** | `1.0-GA` | Storage | P2 | MemEngine WAL fsync 실패 시 메모리 데이터 잔류(Phantom Commit) 롤백 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-MERGE-INTO-COMPOSITE-PK-1`** | `1.0-GA` | Engine | P1 | MERGE INTO 구문 복합 PK 타깃 테이블 매칭/갱신/삭제 정합성 보장 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
@@ -311,9 +311,9 @@
 | `DONE` | **`FIX-PROC-DUPLICATE-VARIABLE-DECLARATION-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-LOCAL-TEMP-TABLE-LIFECYCLE-1`** | `v0.94.0` | Engine | P2 | 프로시저 로컬 #temp 테이블 프로시저 종료 시 자동 파기 훅 구현 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
-| `PENDING` | **`FIX-PROC-PARAM-SHADOWING-DUPLICATE-CHECK-1`** | `v0.94.0` | Engine | P2 | 프로시저 매개변수와 동일 이름 로컬 변수 재선언 차단(Msg 134) | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `DONE` | **`FIX-PROC-PARAM-SHADOWING-DUPLICATE-CHECK-1`** | `v0.94.0` | Engine | P2 | 프로시저 매개변수와 동일 이름 로컬 변수 재선언 차단(Msg 134) | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-PROC-PARSER-MERGE-TOKEN-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 본문 MERGE INTO 구문 파싱 및 컴파일 허용 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
-| `PENDING` | **`FIX-PROC-PARSER-STATIC-DDL-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 본문 정적 DDL(ALTER TABLE 등) 파싱 허용 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `DONE` | **`FIX-PROC-PARSER-STATIC-DDL-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 본문 정적 DDL(ALTER TABLE 등) 파싱 허용 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-PROC-TEMP-TABLE-DDL-1`** |  | Engine | P1 | 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-VIEW-EXPANSION-DISPATCH-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 내부 VIEW 카탈로그 서브쿼리 확장 연동 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-ROLLBACK-INDEX-RESTORE-ERROR-HANDLING-1`** |  | Engine | P2 | 커밋 및 세이브포인트 롤백 과정에서 보조 인덱스 복원 오류 전파 및 복원 누락 방어 |  |  |
@@ -340,10 +340,10 @@
 | `DONE` | **`FIX-TDS-RPC-OUTPUT-TOKEN-1`** |  | Wire | P1 | TDS RPC(0x03) 직접 프로시저 호출 시 OUTPUT/INOUT 파라미터 RETURNVALUE(0xAC) 토큰 반환 및 생략된 기본값(@param = default) 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TDS-RPC-RETURN-STATUS-1`** |  | Wire | P1 | TDS RPC 프로시저 RETURN <int> 실행 시 실제 종료 코드를 RETURNSTATUS(0x79) 토큰으로 전송 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TDS-USE-ENVCHANGE-TOKEN-1`** | `1.0-GA` | Wire | P2 | TDS USE 구문 실행 시 클라이언트 UI 동기화를 위한 ENVCHANGE(0xE3) 토큰 정상 방출 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
-| `PENDING` | **`FIX-TRIGGER-DML-INVOCATION-PIPELINE-1`** | `v0.94.0` | Engine | P2 | INSERT/UPDATE/DELETE DML 실행 파이프라인 직후 카탈로그 AFTER 트리거 자동 발화 연동 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-TRIGGER-DML-INVOCATION-PIPELINE-1`** | `v0.94.0` | Engine | P2 | INSERT/UPDATE/DELETE DML 실행 파이프라인 직후 카탈로그 AFTER 트리거 자동 발화 연동 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TRIGGER-FOR-KEYWORD-1`** |  | Engine | P1 | CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TRIGGER-INSERTED-HIDDEN-COL-FILTER-1`** | `v0.94.0` | Engine | P1 | 트리거 INSERTED/DELETED 가상 테이블 시스템 숨김 컬럼(_row_id) 필터링 |  |  |
-| `PENDING` | **`FIX-TRIGGER-ROWCOUNT-INITIALIZATION-1`** | `v0.94.0` | Engine | P2 | AFTER 트리거 진입 시 @@ROWCOUNT 직전 DML affectedRows 전달 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `DONE` | **`FIX-TRIGGER-ROWCOUNT-INITIALIZATION-1`** | `v0.94.0` | Engine | P2 | AFTER 트리거 진입 시 @@ROWCOUNT 직전 DML affectedRows 전달 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-TRIGGER-SCOPE-IDENTITY-ISOLATION-1`** | `v0.94.0` | Engine | P1 | 트리거 구동 시 SCOPE_IDENTITY() 스코프 격리 스택 구현 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-TRUNCATE-TX-ROLLBACK-DEFERRED-1`** | `1.0-GA` | Storage | P2 | 트랜잭션 내 TRUNCATE 실행 시 물리 삭제 커밋 시점 지연(Deferred Drop) 및 롤백 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** |  | Engine | P1 | CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX)) 미평가 에코 버그 및 MONEY/SMALLMONEY 4자리 소수점 스케일(1.2345) 보정 | [`1.0-GA`](1.0-GA) |  |
@@ -3120,8 +3120,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] Engine `FIX-DATEADD-MONTH-END-CLAMP-1`
-- **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 00:47:09
+### [DONE] Engine `FIX-DATEADD-MONTH-END-CLAMP-1`
+- **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 06:20:49
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
 
 ---
@@ -3278,14 +3278,14 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] Engine `FIX-INT-ARITHMETIC-OVERFLOW-ERROR-1`
-- **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 00:47:09
+### [DONE] Engine `FIX-INT-ARITHMETIC-OVERFLOW-ERROR-1`
+- **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 06:20:49
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
 
 ---
 
-### [PENDING] Engine `FIX-LEFT-NEGATIVE-LENGTH-ERROR-1`
-- **Domain**: 3 | **Priority**: P2 | **Updated**: 2026-11-19 00:47:09
+### [DONE] Engine `FIX-LEFT-NEGATIVE-LENGTH-ERROR-1`
+- **Domain**: 3 | **Priority**: P2 | **Updated**: 2026-11-19 06:20:49
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
 
 ---
@@ -3303,8 +3303,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] Engine `FIX-MATH-DOMAIN-ERROR-POLICY-1`
-- **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 00:47:09
+### [DONE] Engine `FIX-MATH-DOMAIN-ERROR-POLICY-1`
+- **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 06:20:49
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
 
 ---
@@ -3416,8 +3416,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] 프로시저 매개변수와 동일 이름 로컬 변수 재선언 차단(Msg 134) `FIX-PROC-PARAM-SHADOWING-DUPLICATE-CHECK-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+### [DONE] 프로시저 매개변수와 동일 이름 로컬 변수 재선언 차단(Msg 134) `FIX-PROC-PARAM-SHADOWING-DUPLICATE-CHECK-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 06:20:49
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
 
@@ -3430,8 +3430,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] Stored Procedure 본문 정적 DDL(ALTER TABLE 등) 파싱 허용 `FIX-PROC-PARSER-STATIC-DDL-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+### [DONE] Stored Procedure 본문 정적 DDL(ALTER TABLE 등) 파싱 허용 `FIX-PROC-PARSER-STATIC-DDL-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 06:20:48
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
 
@@ -3602,8 +3602,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] INSERT/UPDATE/DELETE DML 실행 파이프라인 직후 카탈로그 AFTER 트리거 자동 발화 연동 `FIX-TRIGGER-DML-INVOCATION-PIPELINE-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
+### [DONE] INSERT/UPDATE/DELETE DML 실행 파이프라인 직후 카탈로그 AFTER 트리거 자동 발화 연동 `FIX-TRIGGER-DML-INVOCATION-PIPELINE-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 06:20:49
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
 
@@ -3621,8 +3621,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] AFTER 트리거 진입 시 @@ROWCOUNT 직전 DML affectedRows 전달 `FIX-TRIGGER-ROWCOUNT-INITIALIZATION-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+### [DONE] AFTER 트리거 진입 시 @@ROWCOUNT 직전 DML affectedRows 전달 `FIX-TRIGGER-ROWCOUNT-INITIALIZATION-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 06:20:48
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
 

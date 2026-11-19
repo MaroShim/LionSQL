@@ -212,7 +212,7 @@ func (p *ProjectionIterator) Open(ctx context.Context) error {
 	return nil
 }
 
-func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
+func (p *ProjectionIterator) projectTuple(tuple Tuple) (Tuple, error) {
 	if p.isSelectAll && len(p.fields) == 0 {
 		tuple.Materialize()
 		if p.child != nil {
@@ -223,7 +223,7 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 				tuple.Values = padded
 			}
 		}
-		return tuple
+		return tuple, nil
 	}
 	tuple.Materialize()
 	vals := make([]any, len(p.fields))
@@ -252,6 +252,9 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 		if f.parsed != nil {
 			if _, isLit := f.parsed.(*proc.LiteralExpr); isLit {
 				if res, ok := EvalTupleExprWithContext(tuple, f.parsed, subExec, p.sessionVars); ok {
+					if err, isErr := res.(error); isErr {
+						return Tuple{}, err
+					}
 					vals[i] = res
 					continue
 				}
@@ -271,6 +274,9 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 		}
 		if f.parsed != nil {
 			if res, ok := EvalTupleExprWithContext(tuple, f.parsed, subExec, p.sessionVars); ok {
+				if err, isErr := res.(error); isErr {
+					return Tuple{}, err
+				}
 				vals[i] = res
 				continue
 			}
@@ -300,7 +306,7 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 	return Tuple{
 		Values: vals,
 		Index:  p.colIndexMap,
-	}
+	}, nil
 }
 
 func (p *ProjectionIterator) NextChunk(ctx context.Context, dest *Chunk) error {
@@ -323,7 +329,11 @@ func (p *ProjectionIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 	}
 
 	for _, tuple := range p.inChunk.Tuples {
-		dest.Tuples = append(dest.Tuples, p.projectTuple(tuple))
+		pt, err := p.projectTuple(tuple)
+		if err != nil {
+			return err
+		}
+		dest.Tuples = append(dest.Tuples, pt)
 	}
 	return nil
 }

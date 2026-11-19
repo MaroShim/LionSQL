@@ -528,6 +528,12 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 
 	left, okL := EvalTupleExprWithContext(t, e.Left, execSubquery, sessionVars)
 	right, okR := EvalTupleExprWithContext(t, e.Right, execSubquery, sessionVars)
+	if errL, isErr := left.(error); isErr {
+		return errL, true
+	}
+	if errR, isErr := right.(error); isErr {
+		return errR, true
+	}
 	if !okL || !okR {
 		return nil, false
 	}
@@ -616,12 +622,45 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 		lInt, lOk := toInt64(left)
 		rInt, rOk := toInt64(right)
 		if lOk && rOk {
+			if isInt32Val(left) && isInt32Val(right) {
+				switch e.Op {
+				case proc.TokenPlus:
+					res := lInt + rInt
+					if res < math.MinInt32 || res > math.MaxInt32 {
+						return fmt.Errorf("Msg 8115, Level 16, State 2: Arithmetic overflow error converting expression to data type int."), true
+					}
+					return res, true
+				case proc.TokenMinus:
+					res := lInt - rInt
+					if res < math.MinInt32 || res > math.MaxInt32 {
+						return fmt.Errorf("Msg 8115, Level 16, State 2: Arithmetic overflow error converting expression to data type int."), true
+					}
+					return res, true
+				case proc.TokenAsterisk:
+					res := lInt * rInt
+					if (lInt != 0 && res/lInt != rInt) || res < math.MinInt32 || res > math.MaxInt32 {
+						return fmt.Errorf("Msg 8115, Level 16, State 2: Arithmetic overflow error converting expression to data type int."), true
+					}
+					return res, true
+				}
+			}
 			switch e.Op {
 			case proc.TokenPlus:
+				if (rInt > 0 && lInt > math.MaxInt64-rInt) || (rInt < 0 && lInt < math.MinInt64-rInt) {
+					return fmt.Errorf("arithmetic overflow error: bigint out of range"), true
+				}
 				return lInt + rInt, true
 			case proc.TokenMinus:
+				if (rInt < 0 && lInt > math.MaxInt64+rInt) || (rInt > 0 && lInt < math.MinInt64+rInt) {
+					return fmt.Errorf("arithmetic overflow error: bigint out of range"), true
+				}
 				return lInt - rInt, true
 			case proc.TokenAsterisk:
+				if lInt != 0 && rInt != 0 {
+					if (lInt == -1 && rInt == math.MinInt64) || (rInt == -1 && lInt == math.MinInt64) || lInt*rInt/rInt != lInt {
+						return fmt.Errorf("arithmetic overflow error: bigint out of range"), true
+					}
+				}
 				return lInt * rInt, true
 			case proc.TokenSlash, proc.TokenDiv:
 				if rInt == 0 || (lInt == math.MinInt64 && rInt == -1) {
@@ -769,5 +808,29 @@ func EvalTupleBoolExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Sub
 		return len(v) > 0 && !strings.EqualFold(v, "false") && v != "0"
 	default:
 		return true
+	}
+}
+
+func isInt32Val(v any) bool {
+	if v == nil {
+		return false
+	}
+	switch val := v.(type) {
+	case int32, int16, int8, uint16, uint8:
+		return true
+	case int:
+		return val >= math.MinInt32 && val <= math.MaxInt32
+	case int64:
+		return val >= math.MinInt32 && val <= math.MaxInt32
+	case storage.Value:
+		if val.Type == storage.TypeInt {
+			if val.Precision == 8 {
+				return false
+			}
+			return val.Precision == 4 || (val.Precision == 0 && val.IVal >= math.MinInt32 && val.IVal <= math.MaxInt32)
+		}
+		return false
+	default:
+		return false
 	}
 }

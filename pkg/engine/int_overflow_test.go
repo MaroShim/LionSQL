@@ -76,4 +76,20 @@ func TestEngine_IntegerArithmeticOverflow(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("Int_Column_Addition_Overflow_Table", func(t *testing.T) {
+		if _, err := coord.ExecuteSQL("CREATE TABLE r2_int_ovf (n INT PRIMARY KEY);"); err != nil {
+			t.Fatalf("CREATE TABLE failed: %v", err)
+		}
+		if _, err := coord.ExecuteSQL("INSERT INTO r2_int_ovf VALUES (2147483647);"); err != nil {
+			t.Fatalf("INSERT failed: %v", err)
+		}
+		res, err := coord.ExecuteSQL("SELECT n + 1 AS res FROM r2_int_ovf;")
+		if err == nil {
+			t.Fatalf("expected arithmetic overflow error, got success: %+v", res.Rows)
+		}
+		if !strings.Contains(err.Error(), "Arithmetic overflow error converting expression to data type int") {
+			t.Fatalf("expected Msg 8115 arithmetic overflow, got: %v", err)
+		}
+	})
 }

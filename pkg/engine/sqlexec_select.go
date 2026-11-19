@@ -458,6 +458,9 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 				return val, "@@identity"
 			}
 		}
+		if gid := s.lastGlobalIdentity.Load(); gid > 0 {
+			return gid, "@@identity"
+		}
 		return nil, "@@identity"
 	case "SCOPE_IDENTITY()", "SCOPE_IDENTITY":
 		if cs != nil {
@@ -467,6 +470,9 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 			if ok && val != nil {
 				return val, "scope_identity"
 			}
+		}
+		if gsid := s.lastGlobalScopeIdentity.Load(); gsid > 0 {
+			return gsid, "scope_identity"
 		}
 		return nil, "scope_identity"
 	}
@@ -1536,6 +1542,8 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 				s.SetTableLastIdentity(cleanIdentifier(table), targetID)
 			}
 		}
+
+		s.RecordLastIdentity(execRes.LastIdentity, execRes.ScopeIdentity)
 
 		if cs != nil {
 			cs.Mu.Lock()

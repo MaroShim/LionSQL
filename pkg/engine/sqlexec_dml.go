@@ -489,6 +489,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 					cs.Mu.Unlock()
 				}
 				s.SetTableLastIdentity(schema.Name, curID)
+				s.RecordLastIdentity(curID, curID)
 			} else {
 				if v, ok := rec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
 					if cs != nil {
@@ -498,6 +499,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						cs.Mu.Unlock()
 					}
 					s.SetTableLastIdentity(schema.Name, v.IVal)
+					s.RecordLastIdentity(v.IVal, v.IVal)
 				}
 			}
 		}
@@ -932,6 +934,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 					cs.Mu.Unlock()
 				}
 				s.SetTableLastIdentity(schema.Name, curID)
+				s.RecordLastIdentity(curID, curID)
 			} else {
 				if v, ok := rec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
 					if cs != nil {
@@ -941,6 +944,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 						cs.Mu.Unlock()
 					}
 					s.SetTableLastIdentity(schema.Name, v.IVal)
+					s.RecordLastIdentity(v.IVal, v.IVal)
 				}
 			}
 		}

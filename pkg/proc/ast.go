@@ -1238,6 +1238,62 @@ type AlterTableAction struct {
 	PartitionName  string
 }
 
+func (a AlterTableAction) String() string {
+	switch a.Type {
+	case AlterAddColumn:
+		if a.IfNotExists {
+			return fmt.Sprintf("ADD COLUMN IF NOT EXISTS %s %s", a.Column.Name, a.Column.RawType)
+		}
+		nullStr := ""
+		if !a.Column.Nullable {
+			nullStr = " NOT NULL"
+		}
+		defStr := ""
+		if a.Column.Default != "" {
+			defStr = " DEFAULT " + a.Column.Default
+		}
+		rawType := a.Column.RawType
+		if rawType == "" {
+			rawType = a.Column.Type.String()
+		}
+		return fmt.Sprintf("ADD %s %s%s%s", a.Column.Name, rawType, nullStr, defStr)
+	case AlterDropColumn:
+		if len(a.DropColumns) > 0 {
+			return fmt.Sprintf("DROP COLUMN %s", strings.Join(a.DropColumns, ", "))
+		}
+		if a.IfExists {
+			return fmt.Sprintf("DROP COLUMN IF EXISTS %s", a.ColumnName)
+		}
+		return fmt.Sprintf("DROP COLUMN %s", a.ColumnName)
+	case AlterRenameColumn:
+		return fmt.Sprintf("RENAME COLUMN %s TO %s", a.ColumnName, a.NewName)
+	case AlterRenameTable:
+		return fmt.Sprintf("RENAME TO %s", a.NewName)
+	case AlterColumnSetNotNull:
+		return fmt.Sprintf("ALTER COLUMN %s SET NOT NULL", a.ColumnName)
+	case AlterColumnDropNotNull:
+		return fmt.Sprintf("ALTER COLUMN %s DROP NOT NULL", a.ColumnName)
+	case AlterColumnType:
+		rawType := a.Column.RawType
+		if rawType == "" {
+			rawType = a.Column.Type.String()
+		}
+		return fmt.Sprintf("ALTER COLUMN %s TYPE %s", a.ColumnName, rawType)
+	case AlterAddPrimaryKey:
+		return fmt.Sprintf("ADD PRIMARY KEY (%s)", strings.Join(a.ConstraintCols, ", "))
+	case AlterAddUnique:
+		return fmt.Sprintf("ADD UNIQUE (%s)", strings.Join(a.ConstraintCols, ", "))
+	case AlterAddCheck:
+		return fmt.Sprintf("ADD CHECK (%s)", a.CheckExpr)
+	case AlterDropConstraint:
+		return fmt.Sprintf("DROP CONSTRAINT %s", a.ConstraintName)
+	case AlterDropPartition:
+		return fmt.Sprintf("DROP PARTITION %s", a.PartitionName)
+	default:
+		return ""
+	}
+}
+
 // AlterTableStmt represents ALTER TABLE [IF EXISTS] <table> <actions...>
 type AlterTableStmt struct {
 	Table    string
@@ -1247,7 +1303,24 @@ type AlterTableStmt struct {
 
 func (s *AlterTableStmt) stmtNode() {}
 func (s *AlterTableStmt) String() string {
-	return fmt.Sprintf("ALTER TABLE %s", s.Table)
+	var sb strings.Builder
+	sb.WriteString("ALTER TABLE ")
+	if s.IfExists {
+		sb.WriteString("IF EXISTS ")
+	}
+	sb.WriteString(s.Table)
+	if len(s.Actions) > 0 {
+		sb.WriteString(" ")
+		acts := make([]string, 0, len(s.Actions))
+		for _, a := range s.Actions {
+			actStr := a.String()
+			if actStr != "" {
+				acts = append(acts, actStr)
+			}
+		}
+		sb.WriteString(strings.Join(acts, ", "))
+	}
+	return sb.String()
 }
 
 // CreateIndexStmt represents CREATE [UNIQUE] INDEX ... ON table (cols...) [INCLUDE (inc_cols...)]

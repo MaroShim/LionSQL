@@ -105,6 +105,7 @@ const (
 	OpDropTable
 	OpCreateIndex
 	OpDropIndex
+	OpAlterTable
 
 	// Cursor Operations
 	OpCursorOpen
@@ -318,6 +319,8 @@ func (op OpCode) String() string {
 		return "CREATE_INDEX"
 	case OpDropIndex:
 		return "DROP_INDEX"
+	case OpAlterTable:
+		return "ALTER_TABLE"
 	case OpCursorOpen:
 		return "CURSOR_OPEN"
 	case OpCursorFetch:
