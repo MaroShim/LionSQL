@@ -365,7 +365,7 @@
 | `DONE` | **`FIX-WINDOW-AVG-SLIDING-FRAME-1`** |  | Engine | P2 | AVG(...) OVER (ORDER BY ...) 슬라이딩 프레임 누적 평균 계산 결함 수정 | [`notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md`](notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WINDOW-FIRST-LAST-VALUE-1`** |  | Execution | P1 | FIRST_VALUE 및 LAST_VALUE 윈도우 함수 구현 (사일런트 NULL 해결) |  |  |
 | `DONE` | **`FIX-WINDOW-INVALID-COLUMN-VALIDATION-1`** | `1.0-GA` | Execution | P1 | 윈도우 함수 PARTITION BY/ORDER BY 비유효 컬럼 시맨틱 검증 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
-| `PENDING` | **`FIX-WINDOW-NTILE-PERCENT-RANK-CUME-DIST-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
+| `DONE` | **`FIX-WINDOW-NTILE-PERCENT-RANK-CUME-DIST-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-WT-CURSOR-ERROR-PROPAGATION-1`** | `1.0-GA` | Storage | P1 | WTCursor.Next() 에러 전파 부재로 인한 사일런트 데이터 누락 방지 (Cursor.Err() 인터페이스 확립) | [`notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md`](notes/plans/WT_CURSOR_ERROR_PROPAGATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WT-FK-COMPOSITE-PK-CASCADE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 외래키 ON DELETE CASCADE/SET NULL 복합 PK 자식 삭제 누락 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WT-FSYNC-FAIL-CLOSED-1`** | `1.0-GA` | Storage | P2 | WiredTiger Fsync 실패 시 Fail-Closed Taint 격리 및 팬텀 커밋 방어 | [`notes/plans/FIX_WT_TEMP_AND_FSYNC_COMMIT_ATOMILITY_PLAN.ko.md`](notes/plans/FIX_WT_TEMP_AND_FSYNC_COMMIT_ATOMILITY_PLAN.ko.md) |  |
@@ -3742,8 +3742,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] Engine `FIX-WINDOW-NTILE-PERCENT-RANK-CUME-DIST-1`
-- **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 00:47:09
+### [DONE] Engine `FIX-WINDOW-NTILE-PERCENT-RANK-CUME-DIST-1`
+- **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 03:18:32
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
 
 ---

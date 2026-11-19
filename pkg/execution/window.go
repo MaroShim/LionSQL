@@ -305,6 +305,66 @@ func (w *WindowIterator) computeWindowFunction(winDef planner.WindowDef, indices
 			winValues[rowIdx] = currentRank
 		}
 
+	case "NTILE":
+		buckets := int64(1)
+		if len(winDef.Args) > 0 {
+			if n, err := strconv.ParseInt(strings.TrimSpace(winDef.Args[0]), 10, 64); err == nil && n > 0 {
+				buckets = n
+			}
+		}
+		totalRows := int64(len(indices))
+		base := totalRows / buckets
+		rem := totalRows % buckets
+		for i, rowIdx := range indices {
+			idx := int64(i)
+			var b int64
+			if idx < rem*(base+1) {
+				b = 1 + idx/(base+1)
+			} else {
+				idxPrime := idx - rem*(base+1)
+				if base > 0 {
+					b = 1 + rem + idxPrime/base
+				} else {
+					b = buckets
+				}
+			}
+			winValues[rowIdx] = b
+		}
+
+	case "PERCENT_RANK":
+		n := len(indices)
+		if n <= 1 {
+			for _, rowIdx := range indices {
+				winValues[rowIdx] = float64(0)
+			}
+		} else {
+			currentRank := int64(1)
+			for i, rowIdx := range indices {
+				if i > 0 {
+					prevIdx := indices[i-1]
+					if !sameSortKeys(w.rows[rowIdx], w.rows[prevIdx], winDef.OrderByKeys) {
+						currentRank = int64(i + 1)
+					}
+				}
+				pct := float64(currentRank-1) / float64(n-1)
+				winValues[rowIdx] = pct
+			}
+		}
+
+	case "CUME_DIST":
+		n := len(indices)
+		for i := 0; i < n; {
+			j := i
+			for j+1 < n && sameSortKeys(w.rows[indices[j+1]], w.rows[indices[i]], winDef.OrderByKeys) {
+				j++
+			}
+			cume := float64(j+1) / float64(n)
+			for k := i; k <= j; k++ {
+				winValues[indices[k]] = cume
+			}
+			i = j + 1
+		}
+
 	case "LEAD":
 		targetCol := ""
 		offset := 1
