@@ -1692,6 +1692,11 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 			return insertedCount, fmt.Errorf("insert error into %s: %w", data.Table, err)
 		}
 		insertedCount++
+		if len(data.OutputCols) > 0 {
+			if err := f.routeOutputRow(data, nil, rec, nil, tableSchema); err != nil {
+				return insertedCount, err
+			}
+		}
 		if hasTriggers {
 			newRows = append(newRows, rowMap)
 		}
@@ -1994,6 +1999,11 @@ func (f *VMFrame) execInsertExec(data *proc.DMLData) (int64, error) {
 			return insertedCount, fmt.Errorf("insert error into %s: %w", data.Table, err)
 		}
 		insertedCount++
+		if len(data.OutputCols) > 0 {
+			if err := f.routeOutputRow(data, nil, rec, nil, tableSchema); err != nil {
+				return insertedCount, err
+			}
+		}
 		if hasTriggers {
 			newRows = append(newRows, rowMap)
 		}
@@ -2095,53 +2105,15 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 				return 0, fmt.Errorf("update error on %s: %w", targetTable, err)
 			}
 			if len(data.OutputCols) > 0 {
-				if len(data.IntoVars) > 0 {
-					for idx, outCol := range data.OutputCols {
-						if idx < len(data.IntoVars) {
-							intoVar := data.IntoVars[idx]
-							if v, ok := recUpdates.Get(outCol); ok {
-								f.setVar(intoVar, v)
-							} else if v, ok := oldRec.Get(outCol); ok {
-								f.setVar(intoVar, v)
-							} else if tableSchema != nil {
-								if colSchema, _, found := tableSchema.FindColumn(outCol); found {
-									if v, ok := recUpdates.Get(colSchema.Name); ok {
-										f.setVar(intoVar, v)
-									} else if v, ok := oldRec.Get(colSchema.Name); ok {
-										f.setVar(intoVar, v)
-									}
-								}
-							}
-						}
-					}
-				} else {
-					row := make(map[string]any, len(data.OutputCols))
-					vals := make([]any, len(data.OutputCols))
-					cols := make([]string, len(data.OutputCols))
-					for idx, outCol := range data.OutputCols {
-						cols[idx] = outCol
-						var stVal storage.Value
-						if v, ok := recUpdates.Get(outCol); ok {
-							stVal = v
-						} else if v, ok := oldRec.Get(outCol); ok {
-							stVal = v
-						} else if tableSchema != nil {
-							if colSchema, _, found := tableSchema.FindColumn(outCol); found {
-								if v, ok := recUpdates.Get(colSchema.Name); ok {
-									stVal = v
-								} else if v, ok := oldRec.Get(colSchema.Name); ok {
-									stVal = v
-								}
-							}
-						}
-						anyVal := valToAny(stVal)
-						row[outCol] = anyVal
-						vals[idx] = anyVal
-					}
-					f.rows = append(f.rows, row)
-					f.values = append(f.values, vals)
-					f.columns = cols
-					f.rowCount = int64(len(f.rows))
+				newRec := make(storage.Record, len(oldRec)+len(recUpdates))
+				for k, v := range oldRec {
+					newRec[k] = v
+				}
+				for k, v := range recUpdates {
+					newRec[k] = v
+				}
+				if err := f.routeOutputRow(data, oldRec, newRec, nil, tableSchema); err != nil {
+					return 0, err
 				}
 			}
 			if err := f.fireTriggers(targetTable, "UPDATE", []map[string]any{newRowMap}, []map[string]any{oldRowMap}); err != nil {
@@ -2173,6 +2145,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	type updateItem struct {
 		pk      storage.Value
 		updates storage.Record
+		orig    storage.Record
 		oldRow  map[string]any
 		newRow  map[string]any
 	}
@@ -2285,6 +2258,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			item := updateItem{
 				pk:      pkVal,
 				updates: recUpdates,
+				orig:    rec.Clone(),
 			}
 			if hasTriggers {
 				item.oldRow = rowMap
@@ -2309,6 +2283,18 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			return 0, fmt.Errorf("update error on %s: %w", targetTable, err)
 		}
 		updatedCount++
+		if len(data.OutputCols) > 0 {
+			newRec := make(storage.Record, len(item.orig)+len(item.updates))
+			for k, v := range item.orig {
+				newRec[k] = v
+			}
+			for k, v := range item.updates {
+				newRec[k] = v
+			}
+			if err := f.routeOutputRow(data, item.orig, newRec, nil, tableSchema); err != nil {
+				return 0, err
+			}
+		}
 		if hasTriggers {
 			oldRows = append(oldRows, item.oldRow)
 			newRows = append(newRows, item.newRow)
@@ -2340,6 +2326,12 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 			if err := f.tx.Delete(targetTable, pkVal); err != nil {
 				return 0, fmt.Errorf("delete error on %s: %w", targetTable, err)
 			}
+			if len(data.OutputCols) > 0 {
+				tableSchema, _ := f.getTableSchema(targetTable)
+				if err := f.routeOutputRow(data, oldRec, nil, nil, tableSchema); err != nil {
+					return 0, err
+				}
+			}
 			if err := f.fireTriggers(targetTable, "DELETE", nil, []map[string]any{recordToMap(oldRec)}); err != nil {
 				return 0, fmt.Errorf("trigger error on %s: %w", targetTable, err)
 			}
@@ -2367,8 +2359,9 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 	hasTriggers := f.executor != nil && f.executor.HasTriggers(targetTable, "DELETE")
 
 	type delItem struct {
-		pk  storage.Value
-		row map[string]any
+		pk   storage.Value
+		orig storage.Record
+		row  map[string]any
 	}
 	var toDelete []delItem
 
@@ -2411,7 +2404,7 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 			}
 		}
 		if hasPk {
-			item := delItem{pk: pkVal}
+			item := delItem{pk: pkVal, orig: rec.Clone()}
 			if hasTriggers {
 				item.row = recordToMap(rec)
 			}
@@ -2432,6 +2425,11 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 			return 0, fmt.Errorf("delete error on %s: %w", targetTable, err)
 		}
 		deletedCount++
+		if len(data.OutputCols) > 0 && item.orig != nil {
+			if err := f.routeOutputRow(data, item.orig, nil, nil, tableSchema); err != nil {
+				return 0, err
+			}
+		}
 		if hasTriggers {
 			deletedRows = append(deletedRows, item.row)
 		}

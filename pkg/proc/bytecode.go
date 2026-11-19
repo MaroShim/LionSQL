@@ -382,17 +382,19 @@ type RaiserrorData struct {
 
 // DMLData holds metadata for DML instructions.
 type DMLData struct {
-	Table       string
-	Columns     []string
-	ValExprs    []Expr
-	Assignments []UpdateAssignment
-	WhereCol    string
-	WhereVal    Expr
-	WhereExpr   Expr
-	Select      *GeneralSelectStmt
-	Exec        *ExecStmt
-	OutputCols  []string
-	IntoVars    []string
+	Table         string
+	Columns       []string
+	ValExprs      []Expr
+	Assignments   []UpdateAssignment
+	WhereCol      string
+	WhereVal      Expr
+	WhereExpr     Expr
+	Select        *GeneralSelectStmt
+	Exec          *ExecStmt
+	OutputCols    []string
+	IntoVars      []string
+	IntoTable     string
+	IntoTableCols []string
 }
 
 // TableVarData holds metadata for table variable declaration.

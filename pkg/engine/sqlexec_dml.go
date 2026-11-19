@@ -176,6 +176,80 @@ func splitAssignments(s string) []string {
 	return parts
 }
 
+func (s *Coordinator) routeOutputRowDirect(tx storage.Transaction, outInfo outputClauseInfo, oldRec, newRec storage.Record, schema *storage.TableSchema, cs *ClientSession, outputRows *[]map[string]any, outputVals *[][]any) error {
+	if len(outInfo.Projs) == 0 {
+		return nil
+	}
+	if outInfo.IntoTable != "" {
+		targetTable := outInfo.IntoTable
+		if cs != nil && cs.TableVars != nil {
+			if phys, ok := cs.TableVars[strings.ToLower(targetTable)]; ok {
+				targetTable = phys
+			} else if phys, ok := cs.TableVars["@"+strings.ToLower(targetTable)]; ok {
+				targetTable = phys
+			}
+		}
+		targetSchema, err := s.engine.GetTable(targetTable)
+		if err != nil || targetSchema == nil {
+			return fmt.Errorf("target table %q in OUTPUT INTO not found: %w", outInfo.IntoTable, err)
+		}
+
+		rec, cols := evaluateOutputRecord(outInfo.Projs, oldRec, newRec, schema)
+		targetRec := make(storage.Record)
+		if len(outInfo.IntoCols) > 0 {
+			for i, colName := range outInfo.IntoCols {
+				if i < len(cols) {
+					targetRec[colName] = rec[cols[i]]
+				}
+			}
+		} else {
+			var targetCols []storage.Column
+			for _, c := range targetSchema.Columns {
+				if !c.Hidden {
+					targetCols = append(targetCols, c)
+				}
+			}
+			for i, col := range targetCols {
+				if i < len(cols) {
+					targetRec[col.Name] = rec[cols[i]]
+				}
+			}
+		}
+
+		for _, col := range targetSchema.Columns {
+			if val, exists := targetRec.Get(col.Name); exists {
+				if !val.IsNull && val.Type != col.Type {
+					targetRec[col.Name] = proc.ParseLiteralDefault(val.String(), col.Type)
+				}
+			} else {
+				if col.Default != "" {
+					targetRec[col.Name] = proc.ParseLiteralDefault(col.Default, col.Type)
+				} else if col.Identity {
+					nextID := s.AllocTableIdentity(targetTable, 1, func() int64 {
+						var maxID int64 = 0
+						if cur, err := tx.Scan(targetTable); err == nil {
+							for cur.Next() {
+								if r, err := cur.Record(); err == nil {
+									if v, ok := r.Get(col.Name); ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
+										maxID = v.IVal
+									}
+								}
+							}
+							cur.Close()
+						}
+						return maxID
+					})
+					targetRec[col.Name] = storage.IntValue(nextID)
+				}
+			}
+		}
+		return tx.Insert(targetTable, targetRec)
+	}
+
+	appendOutputRow(outInfo.Projs, oldRec, newRec, schema, outputRows, outputVals)
+	return nil
+}
+
 func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
@@ -336,14 +410,15 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		})
 	}
 
-	var outputProjs []outputProj
+	var outInfo outputClauseInfo
 	if rawOutput != "" {
-		outputProjs = parseOutputClause(rawOutput)
+		outInfo = parseOutputClauseInfo(rawOutput)
 	}
+	outputProjs := outInfo.Projs
 	var outputRows []map[string]any
 	var outputVals [][]any
 	var outputCols []string
-	if len(outputProjs) > 0 {
+	if len(outputProjs) > 0 && outInfo.IntoTable == "" {
 		_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
 	}
 
@@ -586,7 +661,12 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						}
 						return nil, fmt.Errorf("update row error in ON CONFLICT: %w", err)
 					}
-					appendOutputRow(outputProjs, existingRec, updatedRec, schema, &outputRows, &outputVals)
+					if err := s.routeOutputRowDirect(tx, outInfo, existingRec, updatedRec, schema, cs, &outputRows, &outputVals); err != nil {
+						if isEphemeral {
+							_ = tx.Rollback()
+						}
+						return nil, err
+					}
 					insertedCount++
 					continue
 				}
@@ -615,7 +695,12 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			return nil, fmt.Errorf("insert row error: %w", err)
 		}
 
-		appendOutputRow(outputProjs, nil, rec, schema, &outputRows, &outputVals)
+		if err := s.routeOutputRowDirect(tx, outInfo, nil, rec, schema, cs, &outputRows, &outputVals); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, err
+		}
 		insertedCount++
 	}
 
@@ -779,15 +864,16 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 		})
 	}
 
-	var outputProjs []outputProj
+	var outInfo outputClauseInfo
 	rawOutput = strings.TrimSpace(rawOutput)
 	if rawOutput != "" {
-		outputProjs = parseOutputClause(rawOutput)
+		outInfo = parseOutputClauseInfo(rawOutput)
 	}
+	outputProjs := outInfo.Projs
 	var outputRows []map[string]any
 	var outputVals [][]any
 	var outputCols []string
-	if len(outputProjs) > 0 {
+	if len(outputProjs) > 0 && outInfo.IntoTable == "" {
 		_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
 	}
 
@@ -1009,7 +1095,12 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 						}
 						return nil, fmt.Errorf("update row error in ON CONFLICT: %w", err)
 					}
-					appendOutputRow(outputProjs, existingRec, updatedRec, schema, &outputRows, &outputVals)
+					if err := s.routeOutputRowDirect(tx, outInfo, existingRec, updatedRec, schema, cs, &outputRows, &outputVals); err != nil {
+						if isEphemeral {
+							_ = tx.Rollback()
+						}
+						return nil, err
+					}
 					insertedCount++
 					continue
 				}
@@ -1038,7 +1129,12 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			return nil, fmt.Errorf("insert row error on %q: %w", tableName, err)
 		}
 
-		appendOutputRow(outputProjs, nil, rec, schema, &outputRows, &outputVals)
+		if err := s.routeOutputRowDirect(tx, outInfo, nil, rec, schema, cs, &outputRows, &outputVals); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, err
+		}
 		insertedCount++
 	}
 
@@ -1233,14 +1329,15 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 			return nil, scanErr
 		}
 
-		var outputProjs []outputProj
+		var outInfo outputClauseInfo
 		if rawOutput != "" {
-			outputProjs = parseOutputClause(rawOutput)
+			outInfo = parseOutputClauseInfo(rawOutput)
 		}
+		outputProjs := outInfo.Projs
 		var outputRows []map[string]any
 		var outputVals [][]any
 		var outputCols []string
-		if len(outputProjs) > 0 {
+		if len(outputProjs) > 0 && outInfo.IntoTable == "" {
 			_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
 		}
 
@@ -1278,7 +1375,10 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 				for k, v := range item.rec {
 					newRec[k] = v
 				}
-				appendOutputRow(outputProjs, item.orig, newRec, schema, &outputRows, &outputVals)
+				if err := s.routeOutputRowDirect(tx, outInfo, item.orig, newRec, schema, cs, &outputRows, &outputVals); err != nil {
+					updateErr = err
+					break
+				}
 			}
 			updatedCount++
 		}
@@ -1427,14 +1527,15 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		}
 	}
 
-	var outputProjs []outputProj
+	var outInfo outputClauseInfo
 	if rawOutput != "" {
-		outputProjs = parseOutputClause(rawOutput)
+		outInfo = parseOutputClauseInfo(rawOutput)
 	}
+	outputProjs := outInfo.Projs
 	var outputRows []map[string]any
 	var outputVals [][]any
 	var outputCols []string
-	if len(outputProjs) > 0 {
+	if len(outputProjs) > 0 && outInfo.IntoTable == "" {
 		_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
 	}
 
@@ -1447,7 +1548,12 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 			return nil, fmt.Errorf("delete error: %w", err)
 		}
 
-		appendOutputRow(outputProjs, item.orig, nil, schema, &outputRows, &outputVals)
+		if err := s.routeOutputRowDirect(tx, outInfo, item.orig, nil, schema, cs, &outputRows, &outputVals); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, err
+		}
 		deletedCount++
 	}
 

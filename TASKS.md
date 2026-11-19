@@ -270,7 +270,7 @@
 | `DONE` | **`FIX-DDL-DEFAULT-CHECK-1`** | `1.0-GA` | Engine | P2 | CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DEFAULT-EXPR-DYNAMIC-EVAL-1`** | `1.0-GA` | Engine | P2 | DEFAULT 표현식(NEWID, GETDATE 등) 파싱 시점 캐싱 폐지 및 INSERT 실행 시 동적 평가 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-DIV-BY-ZERO-ERROR-VISIBILITY-1`** | `1.0-GA` | Engine | P2 | 나눗셈(/) 0 나누기 시 명시적 division by zero 에러 반환 | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`FIX-DML-OUTPUT-INTO-TABLE-VAR-1`** | `v0.94.0` | Engine | P1 | INSERT ... OUTPUT ... INTO @table_variable 데이터 사일런트 유실 패치 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `DONE` | **`FIX-DML-OUTPUT-INTO-TABLE-VAR-1`** | `v0.94.0` | Engine | P1 | INSERT ... OUTPUT ... INTO @table_variable 데이터 사일런트 유실 패치 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-DUAL-PARSER-ALTER-PROC-FALLBACK-1`** | `v0.94.0` | Parser | P1 | ALTER PROCEDURE 및 CREATE OR ALTER PROC 파싱 오류 시 ANTLR4 Fallback 자동 연동 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`FIX-EVAL-NOT-IN-NULL-3VL-1`** | `1.0-GA` | Engine | P2 | NOT IN 서브쿼리 및 리스트에 NULL 포함 시 3치 논리(3VL UNKNOWN) 엄격 적용 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-EXEC-DEFAULT-KEYWORD-1`** |  | Parser | P2 | EXEC arg DEFAULT keyword must bind the declared default instead of the string literal | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
@@ -3098,8 +3098,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] INSERT ... OUTPUT ... INTO @table_variable 데이터 사일런트 유실 패치 `FIX-DML-OUTPUT-INTO-TABLE-VAR-1`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 23:58:59
+### [DONE] INSERT ... OUTPUT ... INTO @table_variable 데이터 사일런트 유실 패치 `FIX-DML-OUTPUT-INTO-TABLE-VAR-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-19 00:45:36
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
 

@@ -85,12 +85,11 @@ func (p *Parser) parseSelect() (Statement, error) {
 	return stmt, nil
 }
 
-func (p *Parser) parseOutputClause() ([]string, []string) {
+func (p *Parser) parseOutputClause() (cols []string, intoVars []string, intoTable string, intoTableCols []string) {
 	if !p.curTokenIs(TokenOutput) {
-		return nil, nil
+		return nil, nil, "", nil
 	}
 	p.nextToken() // eat OUTPUT
-	var cols []string
 	for !p.curTokenIs(TokenInto) && !p.curTokenIs(TokenSelect) && !p.curTokenIs(TokenValues) && !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
 		col := cleanSchemaPrefix(p.curToken.Literal)
 		p.nextToken()
@@ -106,29 +105,48 @@ func (p *Parser) parseOutputClause() ([]string, []string) {
 			break
 		}
 	}
-	var intoVars []string
 	if p.curTokenIs(TokenInto) {
 		p.nextToken() // eat INTO
-		for !p.curTokenIs(TokenSelect) && !p.curTokenIs(TokenValues) && !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
-			v := cleanVarName(p.curToken.Literal)
+		if !p.curTokenIs(TokenSelect) && !p.curTokenIs(TokenValues) && !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+			target := p.curToken.Literal
 			p.nextToken()
-			intoVars = append(intoVars, v)
-			if p.curTokenIs(TokenComma) {
-				p.nextToken()
+			if p.curTokenIs(TokenLParen) {
+				p.nextToken() // eat (
+				for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+					intoTableCols = append(intoTableCols, cleanSchemaPrefix(p.curToken.Literal))
+					p.nextToken()
+					if p.curTokenIs(TokenComma) {
+						p.nextToken()
+					}
+				}
+				if p.curTokenIs(TokenRParen) {
+					p.nextToken() // eat )
+				}
+				intoTable = target
+				intoVars = []string{cleanVarName(target)}
+			} else if p.curTokenIs(TokenComma) {
+				intoVars = append(intoVars, cleanVarName(target))
+				for p.curTokenIs(TokenComma) {
+					p.nextToken() // eat ,
+					if !p.curTokenIs(TokenSelect) && !p.curTokenIs(TokenValues) && !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+						intoVars = append(intoVars, cleanVarName(p.curToken.Literal))
+						p.nextToken()
+					}
+				}
 			} else {
-				break
+				intoTable = target
+				intoVars = []string{cleanVarName(target)}
 			}
 		}
 	}
-	return cols, intoVars
+	return cols, intoVars, intoTable, intoTableCols
 }
 
-func (p *Parser) parseReturningClause() ([]string, []string) {
+func (p *Parser) parseReturningClause() (cols []string, intoVars []string, intoTable string, intoTableCols []string) {
 	if !p.curTokenIs(TokenReturning) {
-		return nil, nil
+		return nil, nil, "", nil
 	}
 	p.nextToken() // eat RETURNING
-	var cols []string
 	for !p.curTokenIs(TokenInto) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
 		col := cleanSchemaPrefix(p.curToken.Literal)
 		p.nextToken()
@@ -144,25 +162,45 @@ func (p *Parser) parseReturningClause() ([]string, []string) {
 			break
 		}
 	}
-	var intoVars []string
 	if p.curTokenIs(TokenInto) {
 		p.nextToken() // eat INTO
-		for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
-			v := cleanVarName(p.curToken.Literal)
+		if !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+			target := p.curToken.Literal
 			p.nextToken()
-			intoVars = append(intoVars, v)
-			if p.curTokenIs(TokenComma) {
-				p.nextToken()
+			if p.curTokenIs(TokenLParen) {
+				p.nextToken() // eat (
+				for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+					intoTableCols = append(intoTableCols, cleanSchemaPrefix(p.curToken.Literal))
+					p.nextToken()
+					if p.curTokenIs(TokenComma) {
+						p.nextToken()
+					}
+				}
+				if p.curTokenIs(TokenRParen) {
+					p.nextToken() // eat )
+				}
+				intoTable = target
+				intoVars = []string{cleanVarName(target)}
+			} else if p.curTokenIs(TokenComma) {
+				intoVars = append(intoVars, cleanVarName(target))
+				for p.curTokenIs(TokenComma) {
+					p.nextToken() // eat ,
+					if !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+						intoVars = append(intoVars, cleanVarName(p.curToken.Literal))
+						p.nextToken()
+					}
+				}
 			} else {
-				break
+				intoTable = target
+				intoVars = []string{cleanVarName(target)}
 			}
 		}
 	}
-	return cols, intoVars
+	return cols, intoVars, intoTable, intoTableCols
 }
 
 func (p *Parser) parseOutputCols() []string {
-	cols, _ := p.parseOutputClause()
+	cols, _, _, _ := p.parseOutputClause()
 	return cols
 }
 
@@ -218,7 +256,7 @@ func (p *Parser) parseUpdate() (Statement, error) {
 		}
 	}
 
-	outputCols, intoVars := p.parseOutputClause()
+	outputCols, intoVars, intoTable, intoTableCols := p.parseOutputClause()
 
 	// MSSQL allows UPDATE <table> SET ... [FROM <source_table_or_join>] [WHERE ...]
 	if p.curTokenIs(TokenFrom) {
@@ -241,9 +279,13 @@ func (p *Parser) parseUpdate() (Statement, error) {
 	}
 
 	if p.curTokenIs(TokenReturning) {
-		rCols, rVars := p.parseReturningClause()
+		rCols, rVars, rTable, rTableCols := p.parseReturningClause()
 		outputCols = append(outputCols, rCols...)
 		intoVars = append(intoVars, rVars...)
+		if intoTable == "" {
+			intoTable = rTable
+			intoTableCols = rTableCols
+		}
 	}
 
 	if p.curTokenIs(TokenSemicolon) {
@@ -254,22 +296,26 @@ func (p *Parser) parseUpdate() (Statement, error) {
 	if bin, ok := whereExpr.(*BinaryExpr); ok && bin.Op == TokenEq {
 		if colRef, isCol := bin.Left.(*ColumnRefExpr); isCol {
 			return &UpdateStmt{
-				Table:       tblName,
-				Assignments: assigns,
-				WhereCol:    cleanSchemaPrefix(colRef.Name),
-				WhereVal:    bin.Right,
-				OutputCols:  outputCols,
-				IntoVars:    intoVars,
+				Table:         tblName,
+				Assignments:   assigns,
+				WhereCol:      cleanSchemaPrefix(colRef.Name),
+				WhereVal:      bin.Right,
+				OutputCols:    outputCols,
+				IntoVars:      intoVars,
+				IntoTable:     intoTable,
+				IntoTableCols: intoTableCols,
 			}, nil
 		}
 	}
 
 	return &UpdateWhereStmt{
-		Table:       tblName,
-		Assignments: assigns,
-		OutputCols:  outputCols,
-		IntoVars:    intoVars,
-		Where:       whereExpr,
+		Table:         tblName,
+		Assignments:   assigns,
+		OutputCols:    outputCols,
+		IntoVars:      intoVars,
+		IntoTable:     intoTable,
+		IntoTableCols: intoTableCols,
+		Where:         whereExpr,
 	}, nil
 }
 
@@ -284,7 +330,7 @@ func (p *Parser) parseDelete() (Statement, error) {
 	tblName := cleanSchemaPrefix(p.curToken.Literal)
 	p.nextToken()
 
-	outputCols, intoVars := p.parseOutputClause()
+	outputCols, intoVars, intoTable, intoTableCols := p.parseOutputClause()
 
 	// MSSQL allows DELETE <table> ... [FROM <source_table_or_join>] [WHERE ...]
 	if p.curTokenIs(TokenFrom) {
@@ -307,9 +353,13 @@ func (p *Parser) parseDelete() (Statement, error) {
 	}
 
 	if p.curTokenIs(TokenReturning) {
-		rCols, rVars := p.parseReturningClause()
+		rCols, rVars, rTable, rTableCols := p.parseReturningClause()
 		outputCols = append(outputCols, rCols...)
 		intoVars = append(intoVars, rVars...)
+		if intoTable == "" {
+			intoTable = rTable
+			intoTableCols = rTableCols
+		}
 	}
 
 	if p.curTokenIs(TokenSemicolon) {
@@ -319,20 +369,24 @@ func (p *Parser) parseDelete() (Statement, error) {
 	if bin, ok := whereExpr.(*BinaryExpr); ok && bin.Op == TokenEq {
 		if colRef, isCol := bin.Left.(*ColumnRefExpr); isCol {
 			return &DeleteStmt{
-				Table:      tblName,
-				WhereCol:   cleanSchemaPrefix(colRef.Name),
-				WhereVal:   bin.Right,
-				OutputCols: outputCols,
-				IntoVars:   intoVars,
+				Table:         tblName,
+				WhereCol:      cleanSchemaPrefix(colRef.Name),
+				WhereVal:      bin.Right,
+				OutputCols:    outputCols,
+				IntoVars:      intoVars,
+				IntoTable:     intoTable,
+				IntoTableCols: intoTableCols,
 			}, nil
 		}
 	}
 
 	return &DeleteWhereStmt{
-		Table:      tblName,
-		OutputCols: outputCols,
-		IntoVars:   intoVars,
-		Where:      whereExpr,
+		Table:         tblName,
+		OutputCols:    outputCols,
+		IntoVars:      intoVars,
+		IntoTable:     intoTable,
+		IntoTableCols: intoTableCols,
+		Where:         whereExpr,
 	}, nil
 }
 
@@ -1233,7 +1287,7 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 		p.nextToken()
 	}
 
-	outputCols, intoVars := p.parseOutputClause()
+	outputCols, intoVars, intoTable, intoTableCols := p.parseOutputClause()
 
 	if p.curTokenIs(TokenSelect) {
 		p.nextToken() // eat SELECT
@@ -1242,19 +1296,25 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 			return nil, err
 		}
 		if p.curTokenIs(TokenReturning) {
-			rCols, rVars := p.parseReturningClause()
+			rCols, rVars, rTable, rTableCols := p.parseReturningClause()
 			outputCols = append(outputCols, rCols...)
 			intoVars = append(intoVars, rVars...)
+			if intoTable == "" {
+				intoTable = rTable
+				intoTableCols = rTableCols
+			}
 		}
 		if p.curTokenIs(TokenSemicolon) {
 			p.nextToken()
 		}
 		return &GeneralInsertStmt{
-			Table:      tblName,
-			Columns:    cols,
-			OutputCols: outputCols,
-			IntoVars:   intoVars,
-			Select:     sel,
+			Table:         tblName,
+			Columns:       cols,
+			OutputCols:    outputCols,
+			IntoVars:      intoVars,
+			IntoTable:     intoTable,
+			IntoTableCols: intoTableCols,
+			Select:        sel,
 		}, nil
 	}
 
@@ -1264,11 +1324,13 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 			return nil, err
 		}
 		return &GeneralInsertStmt{
-			Table:      tblName,
-			Columns:    cols,
-			OutputCols: outputCols,
-			IntoVars:   intoVars,
-			Exec:       execStmt.(*ExecStmt),
+			Table:         tblName,
+			Columns:       cols,
+			OutputCols:    outputCols,
+			IntoVars:      intoVars,
+			IntoTable:     intoTable,
+			IntoTableCols: intoTableCols,
+			Exec:          execStmt.(*ExecStmt),
 		}, nil
 	}
 
@@ -1305,9 +1367,13 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 	}
 
 	if p.curTokenIs(TokenReturning) {
-		rCols, rVars := p.parseReturningClause()
+		rCols, rVars, rTable, rTableCols := p.parseReturningClause()
 		outputCols = append(outputCols, rCols...)
 		intoVars = append(intoVars, rVars...)
+		if intoTable == "" {
+			intoTable = rTable
+			intoTableCols = rTableCols
+		}
 	}
 
 	if p.curTokenIs(TokenSemicolon) {
@@ -1315,11 +1381,13 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 	}
 
 	return &GeneralInsertStmt{
-		Table:      tblName,
-		Columns:    cols,
-		OutputCols: outputCols,
-		IntoVars:   intoVars,
-		Tuples:     tuples,
+		Table:         tblName,
+		Columns:       cols,
+		OutputCols:    outputCols,
+		IntoVars:      intoVars,
+		IntoTable:     intoTable,
+		IntoTableCols: intoTableCols,
+		Tuples:        tuples,
 	}, nil
 }
 

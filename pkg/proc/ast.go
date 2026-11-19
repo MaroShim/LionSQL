@@ -421,11 +421,13 @@ func (s *SelectIntoStmt) String() string {
 
 // InsertStmt represents INSERT INTO table (cols...) [OUTPUT ...] VALUES (exprs...)
 type InsertStmt struct {
-	Table      string
-	Columns    []string
-	Values     []Expr
-	OutputCols []string
-	IntoVars   []string
+	Table         string
+	Columns       []string
+	Values        []Expr
+	OutputCols    []string
+	IntoVars      []string
+	IntoTable     string
+	IntoTableCols []string
 }
 
 func (s *InsertStmt) stmtNode() {}
@@ -446,12 +448,14 @@ type UpdateAssignment struct {
 
 // UpdateStmt represents UPDATE table SET col1 = expr1, ... [OUTPUT ...] WHERE pk_col = expr
 type UpdateStmt struct {
-	Table       string
-	Assignments []UpdateAssignment
-	WhereCol    string
-	WhereVal    Expr
-	OutputCols  []string
-	IntoVars    []string
+	Table         string
+	Assignments   []UpdateAssignment
+	WhereCol      string
+	WhereVal      Expr
+	OutputCols    []string
+	IntoVars      []string
+	IntoTable     string
+	IntoTableCols []string
 }
 
 func (s *UpdateStmt) stmtNode() {}
@@ -466,11 +470,13 @@ func (s *UpdateStmt) String() string {
 
 // DeleteStmt represents DELETE FROM table [OUTPUT ...] WHERE pk_col = expr
 type DeleteStmt struct {
-	Table      string
-	WhereCol   string
-	WhereVal   Expr
-	OutputCols []string
-	IntoVars   []string
+	Table         string
+	WhereCol      string
+	WhereVal      Expr
+	OutputCols    []string
+	IntoVars      []string
+	IntoTable     string
+	IntoTableCols []string
 }
 
 func (s *DeleteStmt) stmtNode() {}
@@ -816,11 +822,13 @@ func (e *QuantifiedComparisonExpr) String() string {
 
 // UpdateWhereStmt represents UPDATE table SET col1 = expr1, ... [OUTPUT ...] WHERE <arbitrary condition>
 type UpdateWhereStmt struct {
-	Table       string
-	Assignments []UpdateAssignment
-	OutputCols  []string
-	IntoVars    []string
-	Where       Expr
+	Table         string
+	Assignments   []UpdateAssignment
+	OutputCols    []string
+	IntoVars      []string
+	IntoTable     string
+	IntoTableCols []string
+	Where         Expr
 }
 
 func (s *UpdateWhereStmt) stmtNode() {}
@@ -841,10 +849,12 @@ func (s *UpdateWhereStmt) String() string {
 
 // DeleteWhereStmt represents DELETE FROM table [OUTPUT ...] WHERE <arbitrary condition>
 type DeleteWhereStmt struct {
-	Table      string
-	OutputCols []string
-	IntoVars   []string
-	Where      Expr
+	Table         string
+	OutputCols    []string
+	IntoVars      []string
+	IntoTable     string
+	IntoTableCols []string
+	Where         Expr
 }
 
 func (s *DeleteWhereStmt) stmtNode() {}
@@ -1400,13 +1410,15 @@ func (e *ExistsExpr) String() string {
 
 // GeneralInsertStmt represents INSERT INTO table (cols) [OUTPUT ...] VALUES (tuples...) or INSERT INTO table (cols) [OUTPUT ...] SELECT ... or INSERT INTO table (cols) [OUTPUT ...] EXEC ...
 type GeneralInsertStmt struct {
-	Table      string
-	Columns    []string
-	OutputCols []string
-	IntoVars   []string
-	Tuples     [][]Expr
-	Select     *GeneralSelectStmt
-	Exec       *ExecStmt
+	Table         string
+	Columns       []string
+	OutputCols    []string
+	IntoVars      []string
+	IntoTable     string
+	IntoTableCols []string
+	Tuples        [][]Expr
+	Select        *GeneralSelectStmt
+	Exec          *ExecStmt
 }
 
 func (s *GeneralInsertStmt) stmtNode() {}

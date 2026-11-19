@@ -30,6 +30,189 @@ func cleanOutputColName(col string) string {
 	return col
 }
 
+func (f *VMFrame) routeOutputRow(data *proc.DMLData, oldRec, newRec storage.Record, rowValues []storage.Value, tableSchema *storage.TableSchema) error {
+	if data == nil || len(data.OutputCols) == 0 {
+		return nil
+	}
+
+	outputValues := make([]storage.Value, len(data.OutputCols))
+	outputCleanCols := make([]string, len(data.OutputCols))
+
+	for idx, outCol := range data.OutputCols {
+		lower := strings.ToLower(outCol)
+		cleanCol := cleanOutputColName(outCol)
+		outputCleanCols[idx] = cleanCol
+
+		var stVal storage.Value
+		if strings.HasPrefix(lower, "deleted.") {
+			if oldRec != nil {
+				if v, ok := oldRec.Get(cleanCol); ok {
+					stVal = v
+				} else if tableSchema != nil {
+					if colSchema, _, found := tableSchema.FindColumn(cleanCol); found {
+						if v, ok := oldRec.Get(colSchema.Name); ok {
+							stVal = v
+						}
+					}
+				}
+			}
+		} else if strings.HasPrefix(lower, "inserted.") {
+			if newRec != nil {
+				if v, ok := newRec.Get(cleanCol); ok {
+					stVal = v
+				} else if tableSchema != nil {
+					if colSchema, _, found := tableSchema.FindColumn(cleanCol); found {
+						if v, ok := newRec.Get(colSchema.Name); ok {
+							stVal = v
+						}
+					}
+				}
+			} else if len(rowValues) > 0 && tableSchema != nil {
+				if _, colIdx, ok := tableSchema.FindColumn(cleanCol); ok && colIdx >= 0 && colIdx < len(rowValues) {
+					stVal = rowValues[colIdx]
+				}
+			}
+		} else {
+			if newRec != nil {
+				if v, ok := newRec.Get(cleanCol); ok {
+					stVal = v
+				} else if tableSchema != nil {
+					if colSchema, _, found := tableSchema.FindColumn(cleanCol); found {
+						if v, ok := newRec.Get(colSchema.Name); ok {
+							stVal = v
+						}
+					}
+				}
+			} else if oldRec != nil {
+				if v, ok := oldRec.Get(cleanCol); ok {
+					stVal = v
+				} else if tableSchema != nil {
+					if colSchema, _, found := tableSchema.FindColumn(cleanCol); found {
+						if v, ok := oldRec.Get(colSchema.Name); ok {
+							stVal = v
+						}
+					}
+				}
+			} else if len(rowValues) > 0 && tableSchema != nil {
+				if _, colIdx, ok := tableSchema.FindColumn(cleanCol); ok && colIdx >= 0 && colIdx < len(rowValues) {
+					stVal = rowValues[colIdx]
+				}
+			}
+		}
+		outputValues[idx] = stVal
+	}
+
+	// Determine destination: Table / Table-Variable vs Scalar-Vars vs Result-Set
+	intoTarget := data.IntoTable
+	if intoTarget == "" && len(data.IntoVars) == 1 {
+		cand := data.IntoVars[0]
+		if f.tableVars != nil {
+			if _, ok := f.tableVars[strings.ToLower(cand)]; ok {
+				intoTarget = cand
+			} else if _, ok := f.tableVars["@"+strings.ToLower(cand)]; ok {
+				intoTarget = "@" + cand
+			}
+		}
+		if intoTarget == "" {
+			if schema, err := f.getTableSchema(cand); err == nil && schema != nil {
+				intoTarget = cand
+			}
+		}
+	}
+
+	if intoTarget != "" {
+		targetPhys := f.resolveTable(intoTarget)
+		targetSchema, err := f.getTableSchema(targetPhys)
+		if err == nil && targetSchema != nil {
+			targetRec := make(storage.Record)
+			if len(data.IntoTableCols) > 0 {
+				for i, colName := range data.IntoTableCols {
+					if i < len(outputValues) {
+						targetRec.Set(colName, outputValues[i])
+					}
+				}
+			} else {
+				var targetCols []storage.Column
+				for _, c := range targetSchema.Columns {
+					if !c.Hidden {
+						targetCols = append(targetCols, c)
+					}
+				}
+				for i, col := range targetCols {
+					if i < len(outputValues) {
+						targetRec.Set(col.Name, outputValues[i])
+					}
+				}
+			}
+
+			// Defaults and identities for target table
+			for _, col := range targetSchema.Columns {
+				if val, exists := targetRec.Get(col.Name); exists {
+					if !val.IsNull && val.Type != col.Type {
+						converted := proc.ParseLiteralDefault(val.String(), col.Type)
+						targetRec.Set(col.Name, converted)
+					}
+				} else {
+					if col.Default != "" {
+						targetRec.Set(col.Name, proc.ParseLiteralDefault(col.Default, col.Type))
+					} else if col.Identity {
+						var nextID int64 = 1
+						if f.executor != nil {
+							nextID = f.executor.AllocIdentity(targetPhys, 1, func() int64 {
+								var maxID int64 = 0
+								if cur, err := f.tx.Scan(targetPhys); err == nil {
+									for cur.Next() {
+										if r, err := cur.Record(); err == nil {
+											if v, ok := r.Get(col.Name); ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
+												maxID = v.IVal
+											}
+										}
+									}
+									cur.Close()
+								}
+								return maxID
+							})
+						}
+						targetRec.Set(col.Name, storage.IntValue(nextID))
+					}
+				}
+			}
+
+			if err := f.tx.Insert(targetPhys, targetRec); err != nil {
+				return fmt.Errorf("OUTPUT INTO %s error: %w", intoTarget, err)
+			}
+			return nil
+		}
+	}
+
+	if len(data.IntoVars) > 0 {
+		for idx, stVal := range outputValues {
+			if idx < len(data.IntoVars) {
+				f.setVar(data.IntoVars[idx], stVal)
+			}
+		}
+		return nil
+	}
+
+	// Bare OUTPUT clause -> append to query result set
+	row := make(map[string]any, len(data.OutputCols))
+	vals := make([]any, len(data.OutputCols))
+	for idx, outCol := range data.OutputCols {
+		cleanCol := outputCleanCols[idx]
+		anyVal := valToAny(outputValues[idx])
+		row[cleanCol] = anyVal
+		if cleanCol != outCol {
+			row[outCol] = anyVal
+		}
+		vals[idx] = anyVal
+	}
+	f.rows = append(f.rows, row)
+	f.values = append(f.values, vals)
+	f.columns = outputCleanCols
+	f.rowCount = int64(len(f.rows))
+	return nil
+}
+
 // handleCatch checks the active catchStack on error, routing execution to the catch handler if present.
 func (f *VMFrame) handleCatch(err error, pc *int) error {
 	if err == nil {
@@ -1059,7 +1242,7 @@ vmLoop:
 		}
 
 		// Fast-path Direct Row Insert: bypass Record map allocations when schema matches and no triggers exist
-		canDirectInsert := !isTransientTable(targetTable) && tableSchema != nil && !tableSchema.HasCheckConstraints() && !hasTriggers && len(cols) == len(tableSchema.Columns) && len(data.ValExprs) == len(tableSchema.Columns) && identityCol == nil && (len(data.OutputCols) == 0 || len(data.IntoVars) > 0)
+		canDirectInsert := !isTransientTable(targetTable) && tableSchema != nil && !tableSchema.HasCheckConstraints() && !hasTriggers && len(cols) == len(tableSchema.Columns) && len(data.ValExprs) == len(tableSchema.Columns) && identityCol == nil && (len(data.OutputCols) == 0 || len(data.IntoVars) > 0 || data.IntoTable != "")
 		if canDirectInsert {
 			for i, col := range cols {
 				if !strings.EqualFold(col, tableSchema.Columns[i].Name) {
@@ -1113,14 +1296,12 @@ vmLoop:
 					continue vmLoop
 				}
 				f.rowCount++
-				if len(data.OutputCols) > 0 && len(data.IntoVars) > 0 {
-					for idx, outCol := range data.OutputCols {
-						if idx < len(data.IntoVars) {
-							intoVar := data.IntoVars[idx]
-							if _, colIdx, ok := tableSchema.FindColumn(outCol); ok && colIdx >= 0 && colIdx < len(f.rowScratch) {
-								f.setVar(intoVar, f.rowScratch[colIdx])
-							}
+				if len(data.OutputCols) > 0 {
+					if err := f.routeOutputRow(data, nil, nil, f.rowScratch, tableSchema); err != nil {
+						if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+							return nil, catchErr
 						}
+						continue vmLoop
 					}
 				}
 				continue vmLoop
@@ -1259,55 +1440,11 @@ vmLoop:
 		}
 		f.rowCount++
 		if len(data.OutputCols) > 0 {
-			if len(data.IntoVars) > 0 {
-				for idx, outCol := range data.OutputCols {
-					if idx < len(data.IntoVars) {
-						intoVar := data.IntoVars[idx]
-						if val, ok := rec.Get(outCol); ok {
-							f.setVar(intoVar, val)
-						} else if tableSchema != nil {
-							if colSchema, _, found := tableSchema.FindColumn(outCol); found {
-								if val, ok := rec.Get(colSchema.Name); ok {
-									f.setVar(intoVar, val)
-								}
-							}
-						}
-					}
+			if err := f.routeOutputRow(data, nil, rec, nil, tableSchema); err != nil {
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
 				}
-			} else {
-				row := make(map[string]any, len(data.OutputCols))
-				vals := make([]any, len(data.OutputCols))
-				cols := make([]string, len(data.OutputCols))
-				for idx, outCol := range data.OutputCols {
-					cleanCol := cleanOutputColName(outCol)
-					cols[idx] = cleanCol
-					var val storage.Value
-					if v, ok := rec.Get(outCol); ok {
-						val = v
-					} else if v, ok := rec.Get(cleanCol); ok {
-						val = v
-					} else if tableSchema != nil {
-						if colSchema, _, found := tableSchema.FindColumn(outCol); found {
-							if v, ok := rec.Get(colSchema.Name); ok {
-								val = v
-							}
-						} else if colSchema, _, found := tableSchema.FindColumn(cleanCol); found {
-							if v, ok := rec.Get(colSchema.Name); ok {
-								val = v
-							}
-						}
-					}
-					anyVal := valToAny(val)
-					row[cleanCol] = anyVal
-					if cleanCol != outCol {
-						row[outCol] = anyVal
-					}
-					vals[idx] = anyVal
-				}
-				f.rows = append(f.rows, row)
-				f.values = append(f.values, vals)
-				f.columns = cols
-				f.rowCount = int64(len(f.rows))
+				continue vmLoop
 			}
 		}
 		if hasTriggers {
@@ -1445,39 +1582,19 @@ vmLoop:
 				}
 				f.rowCount = 1
 				if len(data.OutputCols) > 0 {
-					if len(data.IntoVars) > 0 {
-						for idx, outCol := range data.OutputCols {
-							if idx < len(data.IntoVars) {
-								intoVar := data.IntoVars[idx]
-								if _, colIdx, ok := tableSchema.FindColumn(outCol); ok && colIdx >= 0 && colIdx < len(updatedRow.Values) {
-									f.setVar(intoVar, updatedRow.Values[colIdx])
-								}
-							}
+					var oldRec storage.Record
+					if tableSchema != nil {
+						oldRec = tableSchema.RowToRecord(oldRow)
+					}
+					var newRec storage.Record
+					if tableSchema != nil {
+						newRec = tableSchema.RowToRecord(updatedRow)
+					}
+					if err := f.routeOutputRow(data, oldRec, newRec, nil, tableSchema); err != nil {
+						if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+							return nil, catchErr
 						}
-					} else {
-						row := make(map[string]any, len(data.OutputCols))
-						vals := make([]any, len(data.OutputCols))
-						cols := make([]string, len(data.OutputCols))
-						for idx, outCol := range data.OutputCols {
-							cleanCol := cleanOutputColName(outCol)
-							cols[idx] = cleanCol
-							var stVal storage.Value
-							if _, colIdx, ok := tableSchema.FindColumn(outCol); ok && colIdx >= 0 && colIdx < len(updatedRow.Values) {
-								stVal = updatedRow.Values[colIdx]
-							} else if _, colIdx, ok := tableSchema.FindColumn(cleanCol); ok && colIdx >= 0 && colIdx < len(updatedRow.Values) {
-								stVal = updatedRow.Values[colIdx]
-							}
-							anyVal := valToAny(stVal)
-							row[cleanCol] = anyVal
-							if cleanCol != outCol {
-								row[outCol] = anyVal
-							}
-							vals[idx] = anyVal
-						}
-						f.rows = append(f.rows, row)
-						f.values = append(f.values, vals)
-						f.columns = cols
-						f.rowCount = int64(len(f.rows))
+						continue vmLoop
 					}
 				}
 				continue vmLoop
@@ -1554,55 +1671,11 @@ vmLoop:
 			for k, v := range rec {
 				merged[k] = v
 			}
-			if len(data.IntoVars) > 0 {
-				for idx, outCol := range data.OutputCols {
-					if idx < len(data.IntoVars) {
-						intoVar := data.IntoVars[idx]
-						if v, ok := merged.Get(outCol); ok {
-							f.setVar(intoVar, v)
-						} else if tableSchema != nil {
-							if colSchema, _, found := tableSchema.FindColumn(outCol); found {
-								if v, ok := merged.Get(colSchema.Name); ok {
-									f.setVar(intoVar, v)
-								}
-							}
-						}
-					}
+			if err := f.routeOutputRow(data, oldRec, merged, nil, tableSchema); err != nil {
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
 				}
-			} else {
-				row := make(map[string]any, len(data.OutputCols))
-				vals := make([]any, len(data.OutputCols))
-				cols := make([]string, len(data.OutputCols))
-				for idx, outCol := range data.OutputCols {
-					cleanCol := cleanOutputColName(outCol)
-					cols[idx] = cleanCol
-					var stVal storage.Value
-					if v, ok := merged.Get(outCol); ok {
-						stVal = v
-					} else if v, ok := merged.Get(cleanCol); ok {
-						stVal = v
-					} else if tableSchema != nil {
-						if colSchema, _, found := tableSchema.FindColumn(outCol); found {
-							if v, ok := merged.Get(colSchema.Name); ok {
-								stVal = v
-							}
-						} else if colSchema, _, found := tableSchema.FindColumn(cleanCol); found {
-							if v, ok := merged.Get(colSchema.Name); ok {
-								stVal = v
-							}
-						}
-					}
-					anyVal := valToAny(stVal)
-					row[cleanCol] = anyVal
-					if cleanCol != outCol {
-						row[outCol] = anyVal
-					}
-					vals[idx] = anyVal
-				}
-				f.rows = append(f.rows, row)
-				f.values = append(f.values, vals)
-				f.columns = cols
-				f.rowCount = int64(len(f.rows))
+				continue vmLoop
 			}
 		}
 		if oldRec != nil && hasTriggers {
@@ -1680,39 +1753,12 @@ vmLoop:
 		}
 		f.rowCount = 1
 		if len(data.OutputCols) > 0 && oldRec != nil {
-			if len(data.IntoVars) > 0 {
-				for idx, outCol := range data.OutputCols {
-					if idx < len(data.IntoVars) {
-						intoVar := data.IntoVars[idx]
-						if v, ok := oldRec.Get(outCol); ok {
-							f.setVar(intoVar, v)
-						}
-					}
+			tableSchema, _ := f.getTableSchema(targetTable)
+			if err := f.routeOutputRow(data, oldRec, nil, nil, tableSchema); err != nil {
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
 				}
-			} else {
-				row := make(map[string]any, len(data.OutputCols))
-				vals := make([]any, len(data.OutputCols))
-				cols := make([]string, len(data.OutputCols))
-				for idx, outCol := range data.OutputCols {
-					cleanCol := cleanOutputColName(outCol)
-					cols[idx] = cleanCol
-					var stVal storage.Value
-					if v, ok := oldRec.Get(outCol); ok {
-						stVal = v
-					} else if v, ok := oldRec.Get(cleanCol); ok {
-						stVal = v
-					}
-					anyVal := valToAny(stVal)
-					row[cleanCol] = anyVal
-					if cleanCol != outCol {
-						row[outCol] = anyVal
-					}
-					vals[idx] = anyVal
-				}
-				f.rows = append(f.rows, row)
-				f.values = append(f.values, vals)
-				f.columns = cols
-				f.rowCount = int64(len(f.rows))
+				continue vmLoop
 			}
 		}
 		hasTriggersDel := f.executor != nil && f.executor.HasTriggers(targetTable, "DELETE")

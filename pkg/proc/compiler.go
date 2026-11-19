@@ -860,11 +860,13 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			c.getOrAllocSlot(cleanVarName(v))
 		}
 		c.emit(OpInsert, 0, 0, 0, &DMLData{
-			Table:      s.Table,
-			Columns:    s.Columns,
-			ValExprs:   s.Values,
-			OutputCols: s.OutputCols,
-			IntoVars:   s.IntoVars,
+			Table:         s.Table,
+			Columns:       s.Columns,
+			ValExprs:      s.Values,
+			OutputCols:    s.OutputCols,
+			IntoVars:      s.IntoVars,
+			IntoTable:     s.IntoTable,
+			IntoTableCols: s.IntoTableCols,
 		})
 		return nil
 
@@ -874,31 +876,37 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		}
 		if s.Exec != nil {
 			c.emit(OpInsert, 0, 0, 0, &DMLData{
-				Table:      s.Table,
-				Columns:    s.Columns,
-				Exec:       s.Exec,
-				OutputCols: s.OutputCols,
-				IntoVars:   s.IntoVars,
+				Table:         s.Table,
+				Columns:       s.Columns,
+				Exec:          s.Exec,
+				OutputCols:    s.OutputCols,
+				IntoVars:      s.IntoVars,
+				IntoTable:     s.IntoTable,
+				IntoTableCols: s.IntoTableCols,
 			})
 			return nil
 		}
 		if s.Select != nil {
 			c.emit(OpInsert, 0, 0, 0, &DMLData{
-				Table:      s.Table,
-				Columns:    s.Columns,
-				Select:     s.Select,
-				OutputCols: s.OutputCols,
-				IntoVars:   s.IntoVars,
+				Table:         s.Table,
+				Columns:       s.Columns,
+				Select:        s.Select,
+				OutputCols:    s.OutputCols,
+				IntoVars:      s.IntoVars,
+				IntoTable:     s.IntoTable,
+				IntoTableCols: s.IntoTableCols,
 			})
 			return nil
 		}
 		for _, tuple := range s.Tuples {
 			c.emit(OpInsert, 0, 0, 0, &DMLData{
-				Table:      s.Table,
-				Columns:    s.Columns,
-				ValExprs:   tuple,
-				OutputCols: s.OutputCols,
-				IntoVars:   s.IntoVars,
+				Table:         s.Table,
+				Columns:       s.Columns,
+				ValExprs:      tuple,
+				OutputCols:    s.OutputCols,
+				IntoVars:      s.IntoVars,
+				IntoTable:     s.IntoTable,
+				IntoTableCols: s.IntoTableCols,
 			})
 		}
 		return nil
@@ -908,12 +916,14 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			c.getOrAllocSlot(cleanVarName(v))
 		}
 		c.emit(OpUpdate, 0, 0, 0, &DMLData{
-			Table:       s.Table,
-			Assignments: s.Assignments,
-			WhereCol:    s.WhereCol,
-			WhereVal:    s.WhereVal,
-			OutputCols:  s.OutputCols,
-			IntoVars:    s.IntoVars,
+			Table:         s.Table,
+			Assignments:   s.Assignments,
+			WhereCol:      s.WhereCol,
+			WhereVal:      s.WhereVal,
+			OutputCols:    s.OutputCols,
+			IntoVars:      s.IntoVars,
+			IntoTable:     s.IntoTable,
+			IntoTableCols: s.IntoTableCols,
 		})
 		return nil
 
@@ -922,11 +932,13 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			c.getOrAllocSlot(cleanVarName(v))
 		}
 		c.emit(OpUpdateWhere, 0, 0, 0, &DMLData{
-			Table:       s.Table,
-			Assignments: s.Assignments,
-			WhereExpr:   s.Where,
-			OutputCols:  s.OutputCols,
-			IntoVars:    s.IntoVars,
+			Table:         s.Table,
+			Assignments:   s.Assignments,
+			WhereExpr:     s.Where,
+			OutputCols:    s.OutputCols,
+			IntoVars:      s.IntoVars,
+			IntoTable:     s.IntoTable,
+			IntoTableCols: s.IntoTableCols,
 		})
 		return nil
 
@@ -935,11 +947,13 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			c.getOrAllocSlot(cleanVarName(v))
 		}
 		c.emit(OpDelete, 0, 0, 0, &DMLData{
-			Table:      s.Table,
-			WhereCol:   s.WhereCol,
-			WhereVal:   s.WhereVal,
-			OutputCols: s.OutputCols,
-			IntoVars:   s.IntoVars,
+			Table:         s.Table,
+			WhereCol:      s.WhereCol,
+			WhereVal:      s.WhereVal,
+			OutputCols:    s.OutputCols,
+			IntoVars:      s.IntoVars,
+			IntoTable:     s.IntoTable,
+			IntoTableCols: s.IntoTableCols,
 		})
 		return nil
 
@@ -948,10 +962,12 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			c.getOrAllocSlot(cleanVarName(v))
 		}
 		c.emit(OpDeleteWhere, 0, 0, 0, &DMLData{
-			Table:      s.Table,
-			WhereExpr:  s.Where,
-			OutputCols: s.OutputCols,
-			IntoVars:   s.IntoVars,
+			Table:         s.Table,
+			WhereExpr:     s.Where,
+			OutputCols:    s.OutputCols,
+			IntoVars:      s.IntoVars,
+			IntoTable:     s.IntoTable,
+			IntoTableCols: s.IntoTableCols,
 		})
 		return nil
 

@@ -250,4 +250,45 @@ SELECT step, status FROM @audit ORDER BY step ASC;
 	}
 }
 
+func TestTableVariables_OutputIntoClause(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	sessionID := "sess-tv-output-into"
+
+	if _, err := coord.ExecuteSessionSQL(sessionID, "CREATE TABLE items (id INT PRIMARY KEY, name VARCHAR(50), price INT);"); err != nil {
+		t.Fatalf("CREATE TABLE items failed: %v", err)
+	}
+
+	batch := `
+DECLARE @inserted TABLE (out_id INT, out_name VARCHAR(50));
+INSERT INTO items (id, name, price)
+OUTPUT INSERTED.id, INSERTED.name INTO @inserted (out_id, out_name)
+VALUES (10, 'Notebook', 500), (20, 'Tablet', 1200);
+
+SELECT out_id, out_name FROM @inserted ORDER BY out_id ASC;
+`
+	res, err := coord.ExecuteSessionSQL(sessionID, batch)
+	if err != nil {
+		t.Fatalf("ExecuteSessionSQL batch failed: %v", err)
+	}
+
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows in @inserted, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["out_name"]) != "Notebook" || fmt.Sprintf("%v", res.Rows[1]["out_name"]) != "Tablet" {
+		t.Fatalf("unexpected @inserted rows: %+v", res.Rows)
+	}
+
+	// Verify items table has 2 rows
+	itemRes, err := coord.ExecuteSessionSQL(sessionID, "SELECT COUNT(*) AS cnt FROM items;")
+	if err != nil || len(itemRes.Rows) != 1 || fmt.Sprintf("%v", itemRes.Rows[0]["cnt"]) != "2" {
+		t.Fatalf("expected items to have 2 rows: %+v", itemRes.Rows)
+	}
+}
+
+
 

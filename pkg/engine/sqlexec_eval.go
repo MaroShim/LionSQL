@@ -751,7 +751,47 @@ type outputProj struct {
 	column string
 }
 
+type outputClauseInfo struct {
+	Projs     []outputProj
+	IntoTable string
+	IntoCols  []string
+}
+
+func parseOutputClauseInfo(raw string) outputClauseInfo {
+	var info outputClauseInfo
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return info
+	}
+
+	projsPart := raw
+	if intoIdx := sqlutil.FindTopLevelKeyword(raw, "INTO"); intoIdx != -1 {
+		projsPart = strings.TrimSpace(raw[:intoIdx])
+		intoPart := strings.TrimSpace(raw[intoIdx+len("INTO"):])
+		if lp := sqlutil.FindTopLevelChar(intoPart, '('); lp != -1 {
+			info.IntoTable = cleanIdentifier(strings.TrimSpace(intoPart[:lp]))
+			rp := sqlutil.FindTopLevelChar(intoPart[lp:], ')')
+			if rp != -1 {
+				colsStr := intoPart[lp+1 : lp+rp]
+				for _, c := range sqlutil.SplitTopLevel(colsStr, ',') {
+					if col := cleanIdentifier(c); col != "" {
+						info.IntoCols = append(info.IntoCols, col)
+					}
+				}
+			}
+		} else {
+			info.IntoTable = cleanIdentifier(intoPart)
+		}
+	}
+
+	info.Projs = parseOutputClause(projsPart)
+	return info
+}
+
 func parseOutputClause(raw string) []outputProj {
+	if intoIdx := sqlutil.FindTopLevelKeyword(raw, "INTO"); intoIdx != -1 {
+		raw = strings.TrimSpace(raw[:intoIdx])
+	}
 	parts := sqlutil.SplitTopLevel(raw, ',')
 	var projs []outputProj
 	for _, p := range parts {
@@ -788,8 +828,8 @@ func parseOutputClause(raw string) []outputProj {
 	return projs
 }
 
-func evaluateOutputRow(projs []outputProj, oldRec, newRec storage.Record, schema *storage.TableSchema) (map[string]any, []string) {
-	row := make(map[string]any)
+func evaluateOutputRecord(projs []outputProj, oldRec, newRec storage.Record, schema *storage.TableSchema) (map[string]storage.Value, []string) {
+	row := make(map[string]storage.Value, len(projs))
 	var cols []string
 
 	for _, p := range projs {
@@ -802,16 +842,19 @@ func evaluateOutputRow(projs []outputProj, oldRec, newRec storage.Record, schema
 				for _, c := range schema.Columns {
 					cols = append(cols, c.Name)
 					if targetRec != nil {
-						row[c.Name] = formatStorageValue(targetRec[c.Name])
+						if v, ok := targetRec.Get(c.Name); ok {
+							row[c.Name] = v
+						} else {
+							row[c.Name] = storage.NullValue(c.Type)
+						}
 					} else {
-						row[c.Name] = nil
+						row[c.Name] = storage.NullValue(c.Type)
 					}
 				}
 			}
 			continue
 		}
 
-		var val any = nil
 		targetRec := newRec
 		if p.source == "DELETED" {
 			targetRec = oldRec
@@ -819,13 +862,29 @@ func evaluateOutputRow(projs []outputProj, oldRec, newRec storage.Record, schema
 			targetRec = oldRec
 		}
 
+		var sv storage.Value = storage.NullValue(storage.TypeVarChar)
 		if targetRec != nil {
-			if sv, ok := targetRec.Get(p.column); ok {
-				val = formatStorageValue(sv)
+			if v, ok := targetRec.Get(p.column); ok {
+				sv = v
+			} else if schema != nil {
+				if colSchema, _, found := schema.FindColumn(p.column); found {
+					if v, ok := targetRec.Get(colSchema.Name); ok {
+						sv = v
+					}
+				}
 			}
 		}
-		row[p.alias] = val
+		row[p.alias] = sv
 		cols = append(cols, p.alias)
+	}
+	return row, cols
+}
+
+func evaluateOutputRow(projs []outputProj, oldRec, newRec storage.Record, schema *storage.TableSchema) (map[string]any, []string) {
+	rec, cols := evaluateOutputRecord(projs, oldRec, newRec, schema)
+	row := make(map[string]any, len(cols))
+	for _, c := range cols {
+		row[c] = formatStorageValue(rec[c])
 	}
 	return row, cols
 }
