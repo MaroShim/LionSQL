@@ -310,6 +310,9 @@ func (s *Coordinator) execPreparedStatement(prep *PreparedStatement, rawArgs []s
 			cs.Vars["identity"] = execRes.LastIdentity
 			cs.Vars["@@identity"] = execRes.LastIdentity
 		}
+		if execRes.ScopeIdentity > 0 {
+			cs.Vars["scope_identity"] = execRes.ScopeIdentity
+		}
 		cs.Vars["rowcount"] = execRes.RowsAffected
 		cs.Vars["@@rowcount"] = execRes.RowsAffected
 		cs.Mu.Unlock()

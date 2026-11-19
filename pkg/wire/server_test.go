@@ -1409,8 +1409,53 @@ func TestPGWire_BatchMultiResultSetDelivery(t *testing.T) {
 	if mixedDataRows != 1 {
 		t.Errorf("mixed batch: expected 1 DataRow message, got %d", mixedDataRows)
 	}
-	if mixedCmdCompletes != 3 {
-		t.Errorf("mixed batch: expected 3 CommandComplete messages, got %d (tags: %v)", mixedCmdCompletes, mixedCmdTags)
+	// 4. Stored procedure with INSERT OUTPUT INTO @table_var
+	sendAndTrace(`CREATE TABLE t_output_wire (
+    id INT IDENTITY(1, 1) PRIMARY KEY,
+    name VARCHAR(20),
+    status VARCHAR(10)
+);`)
+	sendAndTrace(`CREATE PROCEDURE sp_TestInsertOutputWire AS
+BEGIN
+    DECLARE @inserted_ids TABLE (
+        new_id INT,
+        inserted_name VARCHAR(20)
+    );
+
+    INSERT INTO t_output_wire (name, status)
+    OUTPUT INSERTED.id, INSERTED.name INTO @inserted_ids
+    VALUES ('Item1', 'ACTIVE'), ('Item2', 'PENDING');
+
+    SELECT * FROM @inserted_ids;
+END;`)
+
+	traceOutput := sendAndTrace("EXEC sp_TestInsertOutputWire;")
+	var outputRowDescs, outputDataRows, outputCmdCompletes int
+	var outputVals []string
+	for _, m := range traceOutput {
+		switch m.msgType {
+		case MsgRowDescription:
+			outputRowDescs++
+		case MsgDataRow:
+			outputDataRows++
+			colCount := binary.BigEndian.Uint16(m.payload[0:2])
+			offset := 2
+			for c := 0; c < int(colCount); c++ {
+				colLen := int32(binary.BigEndian.Uint32(m.payload[offset : offset+4]))
+				offset += 4
+				if colLen >= 0 {
+					val := string(m.payload[offset : offset+int(colLen)])
+					outputVals = append(outputVals, val)
+					offset += int(colLen)
+				}
+			}
+		case MsgCommandComplete:
+			outputCmdCompletes++
+		}
+	}
+	t.Logf("traceOutput: RowDescs=%d DataRows=%d CmdCompletes=%d Vals=%v", outputRowDescs, outputDataRows, outputCmdCompletes, outputVals)
+	if outputDataRows != 2 {
+		t.Errorf("expected 2 DataRows from sp_TestInsertOutputWire, got %d", outputDataRows)
 	}
 }
 

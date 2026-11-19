@@ -463,9 +463,6 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		if cs != nil {
 			cs.Mu.Lock()
 			val, ok := cs.Vars["scope_identity"]
-			if !ok || val == nil {
-				val, ok = cs.Vars["identity"]
-			}
 			cs.Mu.Unlock()
 			if ok && val != nil {
 				return val, "scope_identity"
@@ -1530,9 +1527,13 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 			}
 		}
 
-		if execRes.LastIdentity > 0 {
+		targetID := execRes.ScopeIdentity
+		if targetID <= 0 {
+			targetID = execRes.LastIdentity
+		}
+		if targetID > 0 {
 			if kind, table, ok := dmlHead(cleaned); ok && kind == dmlInsert {
-				s.SetTableLastIdentity(cleanIdentifier(table), execRes.LastIdentity)
+				s.SetTableLastIdentity(cleanIdentifier(table), targetID)
 			}
 		}
 
@@ -1541,6 +1542,9 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 			if execRes.LastIdentity > 0 {
 				cs.Vars["identity"] = execRes.LastIdentity
 				cs.Vars["@@identity"] = execRes.LastIdentity
+			}
+			if execRes.ScopeIdentity > 0 {
+				cs.Vars["scope_identity"] = execRes.ScopeIdentity
 			}
 			cs.Vars["rowcount"] = execRes.RowsAffected
 			cs.Vars["@@rowcount"] = execRes.RowsAffected

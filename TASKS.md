@@ -338,7 +338,7 @@
 | `DONE` | **`FIX-TRIGGER-FOR-KEYWORD-1`** |  | Engine | P1 | CREATE TRIGGER ... FOR INSERT/UPDATE/DELETE (AFTER 동의어) 파싱 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TRIGGER-INSERTED-HIDDEN-COL-FILTER-1`** | `v0.94.0` | Engine | P1 | 트리거 INSERTED/DELETED 가상 테이블 시스템 숨김 컬럼(_row_id) 필터링 |  |  |
 | `PENDING` | **`FIX-TRIGGER-ROWCOUNT-INITIALIZATION-1`** | `v0.94.0` | Engine | P2 | AFTER 트리거 진입 시 @@ROWCOUNT 직전 DML affectedRows 전달 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
-| `PENDING` | **`FIX-TRIGGER-SCOPE-IDENTITY-ISOLATION-1`** | `v0.94.0` | Engine | P1 | 트리거 구동 시 SCOPE_IDENTITY() 스코프 격리 스택 구현 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `DONE` | **`FIX-TRIGGER-SCOPE-IDENTITY-ISOLATION-1`** | `v0.94.0` | Engine | P1 | 트리거 구동 시 SCOPE_IDENTITY() 스코프 격리 스택 구현 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-TRUNCATE-TX-ROLLBACK-DEFERRED-1`** | `1.0-GA` | Storage | P2 | 트랜잭션 내 TRUNCATE 실행 시 물리 삭제 커밋 시점 지연(Deferred Drop) 및 롤백 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-TSQL-CAST-MAX-AND-MONEY-1`** |  | Engine | P1 | CAST(... AS NVARCHAR(MAX)/VARCHAR(MAX)/VARBINARY(MAX)) 미평가 에코 버그 및 MONEY/SMALLMONEY 4자리 소수점 스케일(1.2345) 보정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-TSQL-INSERT-EXEC-1`** |  | Engine | P1 | INSERT INTO <table> EXEC <proc_name> 프로시저 결과셋 적재 구문 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
@@ -3565,8 +3565,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] 트리거 구동 시 SCOPE_IDENTITY() 스코프 격리 스택 구현 `FIX-TRIGGER-SCOPE-IDENTITY-ISOLATION-1`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-18 23:58:59
+### [DONE] 트리거 구동 시 SCOPE_IDENTITY() 스코프 격리 스택 구현 `FIX-TRIGGER-SCOPE-IDENTITY-ISOLATION-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-19 02:27:04
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
 

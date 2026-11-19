@@ -1138,6 +1138,9 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 			cs.Vars["identity"] = res.LastIdentity
 			cs.Vars["@@identity"] = res.LastIdentity
 		}
+		if res.ScopeIdentity > 0 {
+			cs.Vars["scope_identity"] = res.ScopeIdentity
+		}
 		if returnVar != "" {
 			retVal := res.ReturnValue
 			if retVal == nil {

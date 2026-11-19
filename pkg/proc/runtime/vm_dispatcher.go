@@ -1284,6 +1284,7 @@ vmLoop:
 				f.rowScratch[i] = stVal
 				if (strings.EqualFold(colSchema.Name, "id") || strings.HasSuffix(strings.ToLower(colSchema.Name), "id")) && stVal.Type == storage.TypeInt && !stVal.IsNull {
 					f.lastIdentity = stVal.IVal
+					f.scopeIdentity = stVal.IVal
 				}
 			}
 			if notNullErr != nil {
@@ -1365,6 +1366,7 @@ vmLoop:
 				}
 				if (strings.EqualFold(col, "id") || strings.HasSuffix(strings.ToLower(col), "id")) && stVal.Type == storage.TypeInt && !stVal.IsNull {
 					f.lastIdentity = stVal.IVal
+					f.scopeIdentity = stVal.IVal
 				}
 			}
 		}
@@ -1386,6 +1388,7 @@ vmLoop:
 					}
 				}
 				f.lastIdentity = val.IVal
+				f.scopeIdentity = val.IVal
 				if f.vars != nil {
 					f.vars["identity"] = storage.IntValue(val.IVal)
 					f.vars["scope_identity"] = storage.IntValue(val.IVal)
@@ -1420,6 +1423,7 @@ vmLoop:
 					rowMap[identityCol.Name] = nextID
 				}
 				f.lastIdentity = nextID
+				f.scopeIdentity = nextID
 				if f.vars != nil {
 					f.vars["identity"] = storage.IntValue(nextID)
 					f.vars["scope_identity"] = storage.IntValue(nextID)
@@ -2140,8 +2144,8 @@ vmLoop:
 			}
 		}
 		if strings.EqualFold(callData.Name, "SCOPE_IDENTITY") {
-			if f.lastIdentity > 0 {
-				f.regs[inst.A] = storage.IntValue(f.lastIdentity)
+			if f.scopeIdentity > 0 {
+				f.regs[inst.A] = storage.IntValue(f.scopeIdentity)
 			} else {
 				f.regs[inst.A] = storage.NullValue(storage.TypeInt)
 			}

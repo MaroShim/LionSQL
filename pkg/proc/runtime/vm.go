@@ -32,17 +32,18 @@ type VMResultSet struct {
 
 // ExecutionResult captures the output and metrics of a procedure, function, or query execution.
 type ExecutionResult struct {
-	ReturnValue  any
-	Logs         []string
-	Duration     time.Duration
-	Rows         []map[string]any // Relational result tuples for OpRelQuery
-	Columns      []string         // Result projection column names
-	Values       [][]any          // Positional values per row for duplicate column preservation
-	RowsAffected int64
-	LastIdentity int64
-	Vars         map[string]any // Final variable states after execution
-	ResultSets   []VMResultSet  // Sequential result sets for multiple SELECT queries
-	ActiveTx     storage.Transaction
+	ReturnValue   any
+	Logs          []string
+	Duration      time.Duration
+	Rows          []map[string]any // Relational result tuples for OpRelQuery
+	Columns       []string         // Result projection column names
+	Values        [][]any          // Positional values per row for duplicate column preservation
+	RowsAffected  int64
+	LastIdentity  int64 // @@IDENTITY (session-wide, updated by current frame and any fired triggers/sub-frames)
+	ScopeIdentity int64 // SCOPE_IDENTITY() (isolated to current execution frame scope)
+	Vars          map[string]any // Final variable states after execution
+	ResultSets    []VMResultSet  // Sequential result sets for multiple SELECT queries
+	ActiveTx      storage.Transaction
 }
 
 // TriggerEntry holds metadata and precompiled bytecode for a trigger.
@@ -573,6 +574,7 @@ type VMFrame struct {
 	tranCount       int
 	txFailed        bool
 	lastIdentity    int64
+	scopeIdentity   int64
 	lastError       int
 	lastErrorMsg    string
 	lastErrorLine   int
@@ -605,6 +607,16 @@ func (f *VMFrame) bindParams(params map[string]any) {
 		}
 	}
 	f.bindDeclaredDefaults(params)
+	if idAny, ok := params["identity"]; ok {
+		if idVal := toStorageValue(idAny); idVal.Type == storage.TypeInt && idVal.IVal > 0 && f.lastIdentity == 0 {
+			f.lastIdentity = idVal.IVal
+		}
+	}
+	if scopeAny, ok := params["scope_identity"]; ok {
+		if scopeVal := toStorageValue(scopeAny); scopeVal.Type == storage.TypeInt && scopeVal.IVal > 0 && f.scopeIdentity == 0 {
+			f.scopeIdentity = scopeVal.IVal
+		}
+	}
 	if len(params) > 0 {
 		f.evalCtxDirty = true
 	}
@@ -916,9 +928,10 @@ func (frame *VMFrame) buildExecutionResult(start time.Time, retVal any) *Executi
 		Rows:         rows,
 		Columns:      columns,
 		Values:       values,
-		RowsAffected: rowCount,
-		LastIdentity: frame.lastIdentity,
-		Vars:         collectFrameVars(frame),
+		RowsAffected:  rowCount,
+		LastIdentity:  frame.lastIdentity,
+		ScopeIdentity: frame.scopeIdentity,
+		Vars:          collectFrameVars(frame),
 		ResultSets:   resultSets,
 		ActiveTx:     activeTx,
 	}
@@ -1007,6 +1020,7 @@ func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame
 	f.tranCount = 0
 	f.txFailed = false
 	f.lastIdentity = 0
+	f.scopeIdentity = 0
 	f.lastError = 0
 	f.lastErrorMsg = ""
 	f.lastErrorLine = 0
@@ -1082,6 +1096,7 @@ func (f *VMFrame) resetForPool() {
 	f.tranCount = 0
 	f.txFailed = false
 	f.lastIdentity = 0
+	f.scopeIdentity = 0
 	f.lastError = 0
 	f.lastErrorMsg = ""
 	f.lastErrorLine = 0
@@ -1493,8 +1508,8 @@ func (f *VMFrame) getVar(name string) (storage.Value, bool) {
 			return storage.BinaryValue(proc.GetCurrentDBTS()), true
 		}
 	} else if strings.EqualFold(name, "SCOPE_IDENTITY") || strings.EqualFold(name, "SCOPE_IDENTITY()") {
-		if f.lastIdentity > 0 {
-			return storage.IntValue(f.lastIdentity), true
+		if f.scopeIdentity > 0 {
+			return storage.IntValue(f.scopeIdentity), true
 		}
 		return storage.NullValue(storage.TypeInt), true
 	} else if strings.EqualFold(name, "ERROR_NUMBER()") || strings.EqualFold(name, "ERROR_NUMBER") {
@@ -1579,6 +1594,7 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 		subFrame.ctx = f.ctx
 		subFrame.tranCount = f.tranCount
 		subFrame.txFailed = f.txFailed
+		subFrame.lastIdentity = f.lastIdentity // pass ambient session @@IDENTITY
 		for k, v := range transients {
 			subFrame.transientTables[k] = v
 		}
@@ -1586,6 +1602,10 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 		f.tx = subFrame.tx
 		f.tranCount = subFrame.tranCount
 		f.txFailed = subFrame.txFailed
+		if subFrame.lastIdentity > 0 {
+			f.lastIdentity = subFrame.lastIdentity // @@IDENTITY updated by trigger execution
+		}
+		// Notice: f.scopeIdentity is strictly NOT updated by triggers (Scope Identity Isolation)
 		logs := subFrame.logs
 		f.executor.releaseFrame(subFrame)
 
@@ -3257,6 +3277,7 @@ func (f *VMFrame) callUDF(fnName string, argRegs []int32) (storage.Value, error)
 
 	subFrame := f.executor.newFrame(udf.Program, f.tx)
 	subFrame.callDepth = f.callDepth + 1
+	subFrame.lastIdentity = f.lastIdentity
 	if f.transientTables != nil {
 		for k, v := range f.transientTables {
 			subFrame.transientTables[k] = v
@@ -3264,6 +3285,9 @@ func (f *VMFrame) callUDF(fnName string, argRegs []int32) (storage.Value, error)
 	}
 	subFrame.bindParams(params)
 	retVal, err := subFrame.Execute(0)
+	if subFrame.lastIdentity > 0 {
+		f.lastIdentity = subFrame.lastIdentity
+	}
 	logs := subFrame.logs
 	f.executor.releaseFrame(subFrame)
 
@@ -3408,11 +3432,15 @@ func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (
 			subFrame.transientTables[k] = v
 		}
 	}
+	subFrame.lastIdentity = f.lastIdentity // ambient session @@IDENTITY
 	subFrame.bindParams(params)
 	retVal, err := subFrame.Execute(0)
 	f.tx = subFrame.tx
 	f.tranCount = subFrame.tranCount
 	f.txFailed = subFrame.txFailed
+	if subFrame.lastIdentity > 0 {
+		f.lastIdentity = subFrame.lastIdentity // @@IDENTITY updated by proc execution
+	}
 	if err == nil && len(outSlots) > 0 {
 		for i, p := range prog.Params {
 			if i < len(outSlots) && outSlots[i] >= 0 && int(outSlots[i]) < len(f.slots) {
