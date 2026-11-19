@@ -961,7 +961,7 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 			Messages:   []string{"Connection reset successfully"},
 		}, nil
 	case "sp_executesql":
-		return s.execSpExecuteSQL(args, start, cs, ctx)
+		return s.execSpExecuteSQL(args, rawArgs, start, cs, ctx)
 	case "sp_prepare":
 		return s.execSpPrepare(args, rawArgs, start, cs)
 	case "sp_execute":
@@ -1335,7 +1335,7 @@ func extractArgValue(arg string, cs *ClientSession) string {
 	return unwrapOrVar(arg, cs)
 }
 
-func (s *Coordinator) execSpExecuteSQL(args []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
+func (s *Coordinator) execSpExecuteSQL(args []string, rawArgs []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("sp_executesql requires at least 1 parameter (@stmt)")
 	}
@@ -1348,6 +1348,10 @@ func (s *Coordinator) execSpExecuteSQL(args []string, start time.Time, cs *Clien
 	var posArgs []string
 
 	valArgs := args[1:]
+	rawValArgs := rawArgs
+	if len(rawValArgs) > 0 {
+		rawValArgs = rawValArgs[1:]
+	}
 	if len(valArgs) > 0 {
 		firstVal := strings.TrimSpace(valArgs[0])
 		eqIdx := findTopLevelEquals(firstVal)
@@ -1367,11 +1371,55 @@ func (s *Coordinator) execSpExecuteSQL(args []string, start time.Time, cs *Clien
 		if isParamsDecl {
 			paramsDecl = extractArgValue(firstVal, cs)
 			valArgs = valArgs[1:]
+			if len(rawValArgs) > 0 {
+				rawValArgs = rawValArgs[1:]
+			}
 		}
 	}
 
-	// Remaining arguments are bind parameters (named or positional)
+	// Track OUTPUT bindings: innerParam -> callerVarName (e.g. "@out" -> "@res")
+	outputBindings := make(map[string]string)
 	decls := parseSpParamDeclarations(paramsDecl)
+	for i, vArg := range valArgs {
+		rawA := ""
+		if i < len(rawValArgs) {
+			rawA = rawValArgs[i]
+		}
+		targetParam := ""
+		callerVar := ""
+		if eqIdx := findTopLevelEquals(vArg); eqIdx != -1 {
+			targetParam = strings.TrimSpace(vArg[:eqIdx])
+			rhs := strings.TrimSpace(vArg[eqIdx+1:])
+			if rawA != "" {
+				if rEq := findTopLevelEquals(rawA); rEq != -1 {
+					rhs = strings.TrimSpace(rawA[rEq+1:])
+				}
+			}
+			rhsClean, isOut := stripTrailingOutputKeyword(rhs)
+			if isOut && strings.HasPrefix(rhsClean, "@") {
+				callerVar = rhsClean
+			}
+		} else {
+			if i < len(decls) {
+				targetParam = decls[i].Name
+			}
+			argVal := vArg
+			if rawA != "" {
+				argVal = rawA
+			}
+			argClean, isOut := stripTrailingOutputKeyword(argVal)
+			if isOut && strings.HasPrefix(argClean, "@") {
+				callerVar = argClean
+			}
+		}
+		if targetParam != "" && callerVar != "" {
+			if !strings.HasPrefix(targetParam, "@") {
+				targetParam = "@" + targetParam
+			}
+			outputBindings[strings.ToLower(targetParam)] = callerVar
+		}
+	}
+
 	namedArgs, posArgs, err := validateAndExtractSpArgs(valArgs, decls, cs)
 	if err != nil {
 		return nil, err
@@ -1383,6 +1431,15 @@ func (s *Coordinator) execSpExecuteSQL(args []string, start time.Time, cs *Clien
 	}
 
 	boundSQL := buildSpExecuteSQL(stmt, paramsDecl, namedArgs, posArgs)
+	// If the inner statement is an assignment to an OUTPUT parameter (e.g. SELECT @out = 99),
+	// ensure the target parameter is declared/initialized so tryExecSelectVarAssignment records it in cs.Vars
+	if len(outputBindings) > 0 {
+		var initDecls []string
+		for targetParam := range outputBindings {
+			initDecls = append(initDecls, fmt.Sprintf("DECLARE %s VARCHAR(MAX) = NULL;", targetParam))
+		}
+		boundSQL = strings.Join(initDecls, " ") + " " + boundSQL
+	}
 
 	nestedCtx := context.WithValue(ctx, reentrantQueryKey{}, true)
 	var res *QueryResult
@@ -1397,6 +1454,36 @@ func (s *Coordinator) execSpExecuteSQL(args []string, start time.Time, cs *Clien
 	if res != nil {
 		res.DurationUS = time.Since(start).Microseconds()
 	}
+
+	// Propagate OUTPUT parameters back to caller's session variable context
+	if cs != nil && len(outputBindings) > 0 {
+		cs.Mu.Lock()
+		if cs.Vars == nil {
+			cs.Vars = make(map[string]any)
+		}
+		for targetParam, callerVar := range outputBindings {
+			cleanTarget := strings.ToLower(strings.TrimPrefix(targetParam, "@"))
+			var outVal any
+			var found bool
+			if v, ok := cs.Vars[cleanTarget]; ok {
+				outVal = v
+				found = true
+			} else if v, ok := cs.Vars["@"+cleanTarget]; ok {
+				outVal = v
+				found = true
+			}
+			if found {
+				cleanCall := strings.TrimPrefix(callerVar, "@")
+				lowerCall := strings.ToLower(cleanCall)
+				cs.Vars["@"+cleanCall] = outVal
+				cs.Vars[cleanCall] = outVal
+				cs.Vars["@"+lowerCall] = outVal
+				cs.Vars[lowerCall] = outVal
+			}
+		}
+		cs.Mu.Unlock()
+	}
+
 	return res, nil
 }
 
@@ -1559,6 +1646,14 @@ func validateAndExtractSpArgs(valArgs []string, decls []spParamDecl, cs *ClientS
 				return nil, nil, fmt.Errorf("parameter %q was supplied multiple times", lhs)
 			}
 			supplied[pKey] = true
+			// In T-SQL sp_executesql, if the argument is an OUTPUT parameter (@p = @v OUTPUT),
+			// and @v is an unassigned variable or output target, do NOT replace @p in the statement
+			// with NULL or its initial value; let the inner statement assign to @p directly.
+			_, isOut := stripTrailingOutputKeyword(rhs)
+			if isOut {
+				// Do not bind/substitute this parameter in namedArgs so the inner assignment executes
+				continue
+			}
 			namedArgs[pKey] = formatBoundArgValue(cleanOutputSuffix(rhs), cs)
 		} else {
 			if seenNamed {

@@ -2302,6 +2302,8 @@ vmLoop:
 		for _, regIdx := range callData.ArgRegs {
 			if regIdx >= 0 && int(regIdx) < len(f.regs) {
 				args = append(args, f.regs[regIdx])
+			} else {
+				args = append(args, storage.NullValue(storage.TypeUnknown))
 			}
 		}
 		if strings.EqualFold(callData.Name, "SCOPE_IDENTITY") {

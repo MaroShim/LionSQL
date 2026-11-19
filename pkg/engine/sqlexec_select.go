@@ -437,6 +437,26 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		return int64(5432), "@@options"
 	case "@@DATEFIRST":
 		return int64(7), "@@datefirst"
+	case "@@NESTLEVEL":
+		if cs != nil {
+			cs.Mu.Lock()
+			val, ok := cs.Vars["nestlevel"]
+			cs.Mu.Unlock()
+			if ok && val != nil {
+				return val, "@@nestlevel"
+			}
+		}
+		return int64(0), "@@nestlevel"
+	case "@@FETCH_STATUS":
+		if cs != nil {
+			cs.Mu.Lock()
+			val, ok := cs.Vars["fetch_status"]
+			cs.Mu.Unlock()
+			if ok && val != nil {
+				return val, "@@fetch_status"
+			}
+		}
+		return int64(-1), "@@fetch_status"
 	case "@@DBTS":
 		return proc.GetCurrentDBTS(), "@@dbts"
 	case "@@ERROR", "ERROR_NUMBER()", "ERROR_NUMBER":
@@ -1174,7 +1194,11 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 			if alias == "" && sqlutil.HasPrefixKeyword(exprStr, "EXISTS") {
 				alias = "exists"
 			}
-			if resolved, err := s.resolveSubqueriesWithSession(exprStr, cs); err == nil && resolved != exprStr {
+			resolved, err := s.resolveSubqueriesWithSession(exprStr, cs)
+			if err != nil {
+				return nil, err
+			}
+			if resolved != exprStr {
 				exprStr = resolved
 			}
 		}
@@ -1969,6 +1993,35 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	p := s.newPlanner()
 	qInfo, parseErr := p.ParseSelect(cleaned)
 	if parseErr == nil && qInfo != nil {
+		// PostgreSQL / SQL Standard compatibility (ERROR 42P10):
+		// For SELECT DISTINCT, all ORDER BY expressions must appear in the SELECT projection list.
+		isSelectStar := len(qInfo.Projections) == 1 && qInfo.Projections[0] == "*"
+		if qInfo.Distinct && qInfo.OrderByClause != "" && !isSelectStar {
+			orderItems := sqlutil.ParseOrderBy(qInfo.OrderByClause)
+			for _, item := range orderItems {
+				cleanOrderCol := strings.ToLower(cleanIdentifier(item.Column))
+				if _, err := strconv.Atoi(cleanOrderCol); err == nil {
+					continue // positional ordinal order by 1, 2
+				}
+				matched := false
+				for _, proj := range qInfo.Projections {
+					cleanProj := strings.ToLower(cleanIdentifier(proj))
+					if cleanProj == cleanOrderCol || strings.HasSuffix(cleanProj, "."+cleanOrderCol) || strings.HasSuffix(cleanProj, " as "+cleanOrderCol) {
+						matched = true
+						break
+					}
+					parts := strings.Split(strings.ToLower(proj), " as ")
+					if len(parts) == 2 && strings.TrimSpace(parts[1]) == cleanOrderCol {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					return nil, fmt.Errorf("ERROR 42P10: for SELECT DISTINCT, ORDER BY expressions must appear in select list (%s)", item.Column)
+				}
+			}
+		}
+
 		_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
 			_, err := s.getTable(cs, cleanIdentifier(tbl))
 			return err == nil

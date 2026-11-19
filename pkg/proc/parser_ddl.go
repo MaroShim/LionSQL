@@ -929,9 +929,15 @@ func (p *Parser) parseTableLevelConstraintAfterName(stmt *CreateTableStmt, cName
 	case "CHECK":
 		p.nextToken() // eat CHECK
 		chkExpr := p.parseRawParenContent()
-		if chkExpr != "" {
-			stmt.CheckConstraints = append(stmt.CheckConstraints, chkExpr)
+		if strings.TrimSpace(chkExpr) == "" {
+			return fmt.Errorf("CHECK constraint cannot be empty")
 		}
+		chkParser := NewParser(NewLexer(chkExpr))
+		chkParsed := chkParser.ParseExpr()
+		if chkParsed == nil || !chkParser.curTokenIs(TokenEOF) || len(chkParser.Errors()) > 0 {
+			return fmt.Errorf("invalid CHECK constraint: %s", chkExpr)
+		}
+		stmt.CheckConstraints = append(stmt.CheckConstraints, chkExpr)
 		return nil
 
 	default:
@@ -1364,6 +1370,14 @@ func (p *Parser) parseColumnTypeAndConstraints(colName, tableName string) (Colum
 		case "CHECK":
 			p.nextToken() // eat CHECK
 			checkExpr = p.parseRawParenContent()
+			if strings.TrimSpace(checkExpr) == "" {
+				return ColumnDef{}, fmt.Errorf("CHECK constraint cannot be empty")
+			}
+			chkParser := NewParser(NewLexer(checkExpr))
+			chkParsed := chkParser.ParseExpr()
+			if chkParsed == nil || !chkParser.curTokenIs(TokenEOF) || len(chkParser.Errors()) > 0 {
+				return ColumnDef{}, fmt.Errorf("invalid CHECK constraint: %s", checkExpr)
+			}
 
 		case "REFERENCES":
 			fk, err := p.parseReferencesClause(currentConstraintName, tableName, []string{colName})
@@ -2507,6 +2521,8 @@ func ParseServerCursorDeclare(query string) (*ServerCursorDeclareStmt, error) {
 		switch upper {
 		case "BINARY":
 			stmt.Binary = true
+		case "FORWARD_ONLY", "FAST_FORWARD":
+			stmt.Scroll = false
 		case "SCROLL":
 			if prevUpper != "NO" {
 				stmt.Scroll = true

@@ -199,7 +199,22 @@ func (s *Coordinator) execFetchCursor(query string, start time.Time, cs *ClientS
 		}
 	}
 
+	// Validate SCROLL vs FORWARD_ONLY
+	dirUpper := strings.ToUpper(stmt.Direction)
+	if !cur.Scroll && (dirUpper == "PRIOR" || dirUpper == "FIRST" || dirUpper == "LAST" || dirUpper == "ABSOLUTE" || dirUpper == "BACKWARD" || (dirUpper == "RELATIVE" && stmt.Count < 0)) {
+		return nil, fmt.Errorf("Msg 16911, Level 16, State 1: A fetch type '%s' cannot be used with forward only cursor '%s'.", stmt.Direction, stmt.CursorName)
+	}
+
 	fetched := advanceCursor(cur, stmt.Direction, stmt.Count, stmt.IsAll)
+
+	if cs.Vars == nil {
+		cs.Vars = make(map[string]any)
+	}
+	if len(fetched) > 0 {
+		cs.Vars["fetch_status"] = int64(0)
+	} else {
+		cs.Vars["fetch_status"] = int64(-1)
+	}
 
 	return &QueryResult{
 		Success:      true,

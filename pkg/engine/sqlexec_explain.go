@@ -878,6 +878,9 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		if len(innerRes.Columns) > 1 {
 			return "", fmt.Errorf("subquery must return only one column, returned %d", len(innerRes.Columns))
 		}
+		if len(innerRes.Rows) > 1 {
+			return "", fmt.Errorf("Msg 512, Level 16, State 4: Subquery returned more than 1 value. This is not permitted when the subquery follows =, !=, <, <= , >, >= or when the subquery is used as an expression.")
+		}
 		hasRows := len(innerRes.Rows) > 0
 		replacement := "1=0"
 		if isNot {
@@ -988,6 +991,9 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		}
 		if len(innerRes.Columns) > 1 {
 			return "", fmt.Errorf("subquery must return only one column, returned %d", len(innerRes.Columns))
+		}
+		if len(innerRes.Rows) > 1 {
+			return "", fmt.Errorf("Msg 512, Level 16, State 4: Subquery returned more than 1 value. This is not permitted when the subquery follows =, !=, <, <= , >, >= or when the subquery is used as an expression.")
 		}
 
 		normOp := matchedOp
@@ -1103,6 +1109,9 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		}
 		if len(innerRes.Columns) > 1 {
 			return "", fmt.Errorf("subquery must return only one column, returned %d", len(innerRes.Columns))
+		}
+		if len(innerRes.Rows) > 1 {
+			return "", fmt.Errorf("Msg 512, Level 16, State 4: Subquery returned more than 1 value. This is not permitted when the subquery follows =, !=, <, <= , >, >= or when the subquery is used as an expression.")
 		}
 		replacement := "NULL"
 		if len(innerRes.Rows) > 0 {

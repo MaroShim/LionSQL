@@ -51,6 +51,7 @@ type aggField struct {
 	isDistinct  bool
 	percentile  float64
 	parsed      proc.Expr
+	fnExpr      proc.Expr
 	orderByExpr proc.Expr
 	orderByDesc bool
 }
@@ -522,6 +523,7 @@ func (a *AggregateIterator) parseFields() {
 						rawExpr:    rawCall,
 						origExpr:   exprPart,
 						parsed:     parsedArg,
+						fnExpr:     fn,
 					})
 					a.schema = append(a.schema, alias)
 					continue
@@ -606,6 +608,7 @@ func (a *AggregateIterator) parseFields() {
 						rawExpr:     exprPart,
 						origExpr:    wg.String(),
 						parsed:      parsedArg,
+						fnExpr:      wg,
 						orderByExpr: wg.OrderBy,
 						orderByDesc: wg.Desc,
 					})
@@ -718,6 +721,21 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 		}
 	}
 
+	// ANSI SQL: If query has GROUP BY, any non-aggregate projection field must be in groupKeys
+	if len(a.groupKeys) > 0 {
+		for _, f := range a.fields {
+			exprToCheck := f.fnExpr
+			if exprToCheck == nil {
+				exprToCheck = f.parsed
+			}
+			if exprToCheck != nil && !exprHasAgg(exprToCheck) && !f.isLiteral {
+				if err := validateHavingClause(exprToCheck, a.groupKeys, nil); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	childMap := a.child.ColIndexMap()
 	if childMap == nil {
 		childMap = NewColumnIndexMapFromCols(a.child.Schema())
@@ -727,7 +745,7 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 		if colIdx := sqlutil.FindTopLevelKeyword(trimmed, "COLLATE"); colIdx != -1 {
 			trimmed = strings.TrimSpace(trimmed[:colIdx])
 		}
-		if trimmed == "" || strings.ContainsAny(trimmed, " +-*/%|()") || strings.HasPrefix(trimmed, "'") || strings.HasPrefix(trimmed, "\"") {
+		if trimmed == "" || strings.EqualFold(trimmed, "NULL") || strings.ContainsAny(trimmed, " +-*/%|()") || strings.HasPrefix(trimmed, "'") || strings.HasPrefix(trimmed, "\"") {
 			continue
 		}
 		if _, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
@@ -1509,6 +1527,9 @@ func exprHasAgg(expr proc.Expr) bool {
 			for _, arg := range node.Args {
 				walk(arg)
 			}
+		case *proc.WithinGroupExpr:
+			hasAgg = true
+			return
 		case *proc.BinaryExpr:
 			walk(node.Left)
 			walk(node.Right)

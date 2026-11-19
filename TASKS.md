@@ -65,7 +65,7 @@
 | `PENDING` | **`AUDIT-R36-C6-DDL-SCHEMA-AND-SEQUENCE-INTEGRITY`** | `v0.94.0` | Engine | P1 | Live Audit R3-R6 Cluster 6: DDL 스키마 무결성(ALTER COLUMN TYPE 검증 R4-18, 다중 DROP TABLE R6-027, CHECK/DEFAULT 서브쿼리 차단 R6-028,029, DROP CONSTRAINT R3-43/R5-044, 미존재·중복 컬럼 및 FK 검증) 및 시퀀스(NEXT VALUE FOR R3-29, nextval R5-013, MIN/MAX/RESTART) | [`notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md`](notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md) |  |
 | `PENDING` | **`AUDIT-R36-C7-GROUPBY-WINDOW-SETOP-AND-CONCURRENCY`** | `v0.94.0` | Engine | P1 | Live Audit R3-R6 Cluster 7: GROUP BY + Window/HAVING 서브쿼리(R3-47, R4-04), SELECT FOR UPDATE 행 락(R6-001), SAVEPOINT 덮어쓰기/RELEASE(R6-006,007), EXCEPT ALL 및 중첩 SetOp(R3-26, R6-012), GROUPING SETS, TOP/FETCH/LIMIT 경계 검증 | [`notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md`](notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md) |  |
 | `PENDING` | **`AUDIT-R36-C8-TYPES-CAST-MATH-DATE-STRING-JSON`** | `v0.94.0` | Engine | P1 | Live Audit R3-R6 Cluster 8: TRY_CAST 오버플로 NULL(R5-011), DECIMAL(20,0) 정밀도(R5-012), UNION 타입 검증(R5-016), SUM(BIGINT)/ABS/SQUARE/단항 음수 오버플로, IIF 단락 평가(R3-12), 날짜 산술 및 문자열/JSON/내장함수 Arity·도메인 검증 | [`notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md`](notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md) |  |
-| `PENDING` | **`AUDIT-ROUND10-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 10 Engine & Execution (ENG-001~010) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND10.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND10.ko.md) |  |
+| `DONE` | **`AUDIT-ROUND10-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 10 Engine & Execution (ENG-001~010) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND10.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND10.ko.md) |  |
 | `PENDING` | **`AUDIT-ROUND11-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 11 Sequences, Limits & Isolation (ENG-011~017) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND11.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND11.ko.md) |  |
 | `PENDING` | **`AUDIT-ROUND12-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 12 JSON strict, CONVERT style & Cultural Parse (ENG-018~022) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND12.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND12.ko.md) |  |
 | `PENDING` | **`AUDIT-ROUND9-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 9 Security/RBAC (SEC-001~009) & ACID (ACID-001~008) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md) |  |
@@ -1072,8 +1072,8 @@
 
 ---
 
-### [PENDING] Live Audit Round 10 Engine & Execution (ENG-001~010) Remediation `AUDIT-ROUND10-REMEDY`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-19 08:53:00
+### [DONE] Live Audit Round 10 Engine & Execution (ENG-001~010) Remediation `AUDIT-ROUND10-REMEDY`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-19 09:43:10
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND10.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND10.ko.md)
 

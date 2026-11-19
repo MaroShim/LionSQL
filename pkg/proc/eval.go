@@ -136,7 +136,11 @@ func ValidateRecordChecks(schema *storage.TableSchema, rec storage.Record) error
 		p := NewParser(NewLexer(checkStr))
 		expr := p.ParseExpr()
 		if expr == nil || len(p.Errors()) > 0 {
-			return nil
+			errStr := "syntax error in CHECK constraint"
+			if len(p.Errors()) > 0 {
+				errStr = p.Errors()[0]
+			}
+			return fmt.Errorf("%w: invalid CHECK constraint (%s): %s", storage.ErrCheckViolation, checkStr, errStr)
 		}
 		val, err := EvalRowExpr(expr, rowMap, nil)
 		if err != nil || isNullVal(val) {
@@ -700,7 +704,13 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		sql := e.String()
 		sql = strings.Trim(sql, "()")
 		rows, cols, err := execSubquery(sql)
-		if err != nil || len(rows) == 0 {
+		if err != nil {
+			return nil, err
+		}
+		if len(rows) > 1 {
+			return nil, fmt.Errorf("Msg 512, Level 16, State 4: Subquery returned more than 1 value. This is not permitted when the subquery follows =, !=, <, <= , >, >= or when the subquery is used as an expression.")
+		}
+		if len(rows) == 0 {
 			return nil, nil
 		}
 		firstRow := rows[0]

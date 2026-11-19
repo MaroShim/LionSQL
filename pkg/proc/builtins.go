@@ -69,7 +69,7 @@ func ValidateBuiltinArity(name string, argc int) error {
 		}
 
 	// 1 to 3 arguments
-	case "STR", "LEAD", "LAG":
+	case "STR", "LEAD", "LAG", "ROUND":
 		if argc < 1 || argc > 3 {
 			return fmt.Errorf("The %s function requires 1 to 3 arguments.", lower)
 		}
@@ -90,7 +90,7 @@ func ValidateBuiltinArity(name string, argc int) error {
 		}
 
 	// 2 to 3 arguments
-	case "ROUND", "CHARINDEX", "SUBSTRING", "SUBSTR", "LPAD", "RPAD", "FORMAT",
+	case "CHARINDEX", "SUBSTRING", "SUBSTR", "LPAD", "RPAD", "FORMAT",
 		"DATE_TRUNC", "SET_BIT", "SET_CONFIG", "SETVAL", "PWDCOMPARE", "AWK", "STRING_SPLIT":
 		if argc < 2 || argc > 3 {
 			return fmt.Errorf("The %s function requires 2 to 3 arguments.", lower)
@@ -115,8 +115,14 @@ func ValidateBuiltinArity(name string, argc int) error {
 			return fmt.Errorf("The %s function requires 4 argument(s).", lower)
 		}
 
+	// 3 to 5 arguments
+	case "TIMEFROMPARTS":
+		if argc != 3 && argc != 5 {
+			return fmt.Errorf("The %s function requires 3 or 5 argument(s).", lower)
+		}
+
 	// 5 arguments
-	case "TIMEFROMPARTS", "SMALLDATETIMEFROMPARTS":
+	case "SMALLDATETIMEFROMPARTS":
 		if argc != 5 {
 			return fmt.Errorf("The %s function requires 5 argument(s).", lower)
 		}

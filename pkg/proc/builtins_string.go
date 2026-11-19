@@ -572,6 +572,9 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		str := valToString(args[0])
 		oldSub := valToString(args[1])
+		if oldSub == "" {
+			return storage.StringValue(str)
+		}
 		newSub := valToString(args[2])
 		return storage.StringValue(strings.ReplaceAll(str, oldSub, newSub))
 
@@ -593,10 +596,10 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		target := valToString(args[1])
 		start := 1
 		if len(args) >= 3 && !args[2].IsNull {
+			if args[2].IVal <= 0 {
+				return storage.IntValue(0)
+			}
 			start = int(args[2].IVal)
-		}
-		if start < 1 {
-			start = 1
 		}
 		runes := []rune(target)
 		if start > len(runes) {
@@ -661,7 +664,13 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 			}
 			return storage.NullValue(storage.TypeVarChar)
 		}
-		if args[1].IVal <= 0 {
+		if args[1].IVal < 0 {
+			if args[0].Type == storage.TypeBinary {
+				return storage.NullValue(storage.TypeBinary)
+			}
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		if args[1].IVal == 0 {
 			if args[0].Type == storage.TypeBinary {
 				return storage.BinaryValue([]byte{})
 			}

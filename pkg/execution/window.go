@@ -196,6 +196,16 @@ func (w *WindowIterator) Open(ctx context.Context) (retErr error) {
 
 func (w *WindowIterator) validateWindowDef(winDef planner.WindowDef, indexMap *ColumnIndexMap) error {
 	fn := strings.ToUpper(winDef.Function)
+	// Check if window function is recognized
+	switch fn {
+	case "ROW_NUMBER", "RANK", "DENSE_RANK", "NTILE", "LAG", "LEAD", "PERCENT_RANK", "CUME_DIST",
+		"SUM", "COUNT", "AVG", "MIN", "MAX", "FIRST_VALUE", "LAST_VALUE",
+		"PERCENTILE_CONT", "PERCENTILE_DISC", "APPROX_PERCENTILE", "MEDIAN":
+		// supported
+	default:
+		return fmt.Errorf("function %s does not exist or is unsupported as a window function", strings.ToLower(fn))
+	}
+
 	// Validate function arity
 	if err := proc.ValidateBuiltinArity(fn, len(winDef.Args)); err != nil {
 		return err
@@ -208,12 +218,27 @@ func (w *WindowIterator) validateWindowDef(winDef planner.WindowDef, indexMap *C
 		}
 	}
 	if fn == "NTILE" && len(winDef.Args) > 0 {
-		if n, err := strconv.ParseInt(strings.TrimSpace(winDef.Args[0]), 10, 64); err == nil && n <= 0 {
-			return fmt.Errorf("Msg 3146, Level 16, State 1: The argument of the NTILE function must be a positive integer.")
+		n, err := strconv.ParseInt(strings.TrimSpace(winDef.Args[0]), 10, 64)
+		if err != nil || n <= 0 {
+			return fmt.Errorf("ERROR 22003: Msg 7812, Level 16, State 1: The argument of NTILE must be greater than zero.")
+		}
+	}
+	if (fn == "PERCENTILE_CONT" || fn == "PERCENTILE_DISC") && len(winDef.Args) > 0 {
+		// Args[0] is percentile fraction if 1 arg or within group, or Args[1]
+		targetFractionStr := winDef.Args[0]
+		if len(winDef.Args) > 1 {
+			targetFractionStr = winDef.Args[1]
+		}
+		if p, err := strconv.ParseFloat(strings.TrimSpace(targetFractionStr), 64); err == nil {
+			if p < 0.0 || p > 1.0 {
+				return fmt.Errorf("ERROR 22003: Msg 8704, Level 16, State 1: Percentile value %v must be between 0.0 and 1.0.", p)
+			}
 		}
 	}
 	if (fn == "LAG" || fn == "LEAD") && len(winDef.Args) > 1 {
-		if offset, err := strconv.ParseInt(strings.TrimSpace(winDef.Args[1]), 10, 64); err == nil && offset < 0 {
+		argStr := strings.TrimSpace(winDef.Args[1])
+		argStr = strings.ReplaceAll(argStr, " ", "")
+		if offset, err := strconv.ParseInt(argStr, 10, 64); err == nil && offset < 0 {
 			return fmt.Errorf("Msg 8730, Level 16, State 1: Offset argument of LAG or LEAD function must be a non-negative integer.")
 		}
 	}

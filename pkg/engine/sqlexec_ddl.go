@@ -206,6 +206,15 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		if c.Identity && incr == 0 {
 			incr = 1
 		}
+		if c.Unique {
+			uqName := fmt.Sprintf("uq_%s_%s", tableName, c.Name)
+			schema.Indexes = append(schema.Indexes, storage.IndexSchema{
+				Name:      uqName,
+				TableName: tableName,
+				Columns:   []string{c.Name},
+				Unique:    true,
+			})
+		}
 		schema.Columns = append(schema.Columns, storage.Column{
 			Name:              c.Name,
 			Type:              c.Type,
