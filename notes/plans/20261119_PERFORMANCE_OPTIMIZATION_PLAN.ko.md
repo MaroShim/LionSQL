@@ -151,3 +151,16 @@ go test -tags wiredtiger ./pkg/execution/... ./pkg/engine/... ./pkg/proc/... ./p
 1. **Phase 1 (`Filter`/`Project` `ToEvalMap` 지연화)** 부터 착수: 수정량이 가장 작고 모든 SELECT/WHERE 쿼리에 즉각적인 효과가 발생한다.
 2. **Phase 2 (`AggregateIterator` 슬라이스화)** 와 **Phase 3 (`Values`/`Rows` 이중 할당 제거)** 를 순차 진행하여 분석/대량 조회 병목을 해소한다.
 3. **Phase 4, 5, 6** 을 마무리하고 전체 벤치마크 리포트를 정리한다.
+
+---
+
+## 6. 실행 현황 및 결정 사항 (Status & Decisions)
+
+- **적용 완료 (1.0 이전 핫 패스 최적화 완료, 부작용 최소화 검증)**:
+  - `PERF-OPT-FILTER-PROJECT-EVALMAP-1` (Phase 1 / P0): Filter/Project 무조건 `ToEvalMap()` 및 클로저 힙 할당 지연화 완료 (커밋 `51a68543`)
+  - `PERF-OPT-AGGREGATE-GROUP-SLICES-1` (Phase 2 / P1): `AggregateIterator` 그룹당 9개 map 할당을 고정 슬라이스로 전환 완료 (커밋 `376887cb`)
+  - `PERF-OPT-PATINDEX-REGEX-CACHE-1` (Phase 6 / P5): `PATINDEX` 등 내장 함수 정규식 컴파일 Bounded RWMutex 캐싱 완료 (커밋 `ed3d3e81`)
+- **Post-1.0 이관 (사용자 지침에 따른 잔여 Pending 항목 1.0 이후 검토)**:
+  - `PERF-OPT-SELECT-VALUES-ROWS-DEDUPE-1` (Phase 3 / P2): Wire 세션 한정 옵트인 및 EnsureRows() 적용 검토 -> `Post-1.0` 이관
+  - `PERF-OPT-HASH-JOIN-INT-FASTPATH-1` (Phase 4 / P3): 정수-문자열 이종 타입 조인 안전 검증 후 적용 검토 -> `Post-1.0` 이관
+  - `PERF-OPT-PROJECTION-SRCIDX-DEFER-DECODE-1` (Phase 5 / P4): 와이드 테이블 선택 디코딩 -> `Post-1.0` 이관

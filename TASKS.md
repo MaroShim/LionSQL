@@ -419,10 +419,10 @@
 | `DONE` | **`PERF-OCC-ZERO-LOCK-1`** | `Spec-Out` | Storage | P3 | In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 영구 기각 (Spec-Out) | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OPT-AGGREGATE-GROUP-SLICES-1`** | `1` | --domain | P2 | AggregateIterator 그룹당 9개 map 할당을 고정 슬라이스로 전환 (P1) | [`--prio`](--prio) |  |
 | `DONE` | **`PERF-OPT-FILTER-PROJECT-EVALMAP-1`** | `1` | --domain | P2 | Filter/Project 무조건 ToEvalMap() 및 Materialize() 지연화로 불필요한 디코딩/할당 제거 (P0) | [`--prio`](--prio) |  |
-| `PENDING` | **`PERF-OPT-HASH-JOIN-INT-FASTPATH-1`** | `2` | --domain | P2 | HashJoinIterator 정수 키 Fast-Path 및 키 인덱스 사전 바인딩 (P3) | [`--prio`](--prio) |  |
+| `PENDING` | **`PERF-OPT-HASH-JOIN-INT-FASTPATH-1`** | `Post-1.0` | --domain | P2 | HashJoinIterator 정수 키 Fast-Path 및 키 인덱스 사전 바인딩 (P3) | [`--prio`](--prio) |  |
 | `DONE` | **`PERF-OPT-PATINDEX-REGEX-CACHE-1`** | `3` | --domain | P2 | PATINDEX 등 내장 함수 정규식 컴파일 결과 LRU/RWMutex 캐싱 (P5) | [`--prio`](--prio) |  |
-| `PENDING` | **`PERF-OPT-PROJECTION-SRCIDX-DEFER-DECODE-1`** | `2` | --domain | P2 | ProjectionIterator 일반 컬럼 srcIdx 사전 바인딩 및 LazyTuple 선택 디코딩 (P4) | [`--prio`](--prio) |  |
-| `PENDING` | **`PERF-OPT-SELECT-VALUES-ROWS-DEDUPE-1`** | `2` | --domain | P2 | sqlexec_select.go Values/Rows 이중 할당 제거 및 Wire 프로토콜 Values 직결 (P2) | [`--prio`](--prio) |  |
+| `PENDING` | **`PERF-OPT-PROJECTION-SRCIDX-DEFER-DECODE-1`** | `Post-1.0` | --domain | P2 | ProjectionIterator 일반 컬럼 srcIdx 사전 바인딩 및 LazyTuple 선택 디코딩 (P4) | [`--prio`](--prio) |  |
+| `PENDING` | **`PERF-OPT-SELECT-VALUES-ROWS-DEDUPE-1`** | `Post-1.0` | --domain | P2 | sqlexec_select.go Values/Rows 이중 할당 제거 및 Wire 프로토콜 Values 직결 (P2) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | `v0.94.0` | Engine | P3 | WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** |  | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
 | `PENDING` | **`PERF-REPL-SONIC-1`** | `v1.10.0` | Replication | P2 | 고성능 SIMD JSON (ByteDance Sonic) 기반 복제 스트리밍 가속 |  |  |
@@ -4245,8 +4245,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] HashJoinIterator 정수 키 Fast-Path 및 키 인덱스 사전 바인딩 (P3) `PERF-OPT-HASH-JOIN-INT-FASTPATH-1`
-- **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-19 01:27:15
-- **Milestone**: `2`
+- **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-19 01:49:14
+- **Milestone**: `Post-1.0`
 - **Plan Doc**: [`--prio`](--prio)
 
 ---
@@ -4259,15 +4259,15 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] ProjectionIterator 일반 컬럼 srcIdx 사전 바인딩 및 LazyTuple 선택 디코딩 (P4) `PERF-OPT-PROJECTION-SRCIDX-DEFER-DECODE-1`
-- **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-19 01:27:15
-- **Milestone**: `2`
+- **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-19 01:49:14
+- **Milestone**: `Post-1.0`
 - **Plan Doc**: [`--prio`](--prio)
 
 ---
 
 ### [PENDING] sqlexec_select.go Values/Rows 이중 할당 제거 및 Wire 프로토콜 Values 직결 (P2) `PERF-OPT-SELECT-VALUES-ROWS-DEDUPE-1`
-- **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-19 01:41:36
-- **Milestone**: `2`
+- **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-19 01:49:14
+- **Milestone**: `Post-1.0`
 - **Plan Doc**: [`--prio`](--prio)
 
 ---
