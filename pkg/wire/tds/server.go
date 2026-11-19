@@ -2963,6 +2963,9 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 		} else if lowerCol == "type" {
 			colType = TypeVarChar
 			colSize = 255
+		} else if strings.Contains(lowerCol, "varbinary") || strings.Contains(lowerCol, "binary") || strings.Contains(lowerCol, "image") {
+			colType = TypeBigVarBin
+			colSize = 8000
 		}
 
 		// Scan non-null sample values from rows
@@ -3055,6 +3058,15 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 							colSize = -1
 						} else if len(decodedBin) > 0 {
 							colSize = len(decodedBin)
+						} else {
+							colSize = 50
+						}
+					} else if strings.Contains(lowerCol, "varbinary") || strings.Contains(lowerCol, "binary") || strings.Contains(lowerCol, "image") {
+						colType = TypeBigVarBin
+						if len(val) > 8000 || strings.Contains(lowerCol, "max") || strings.Contains(lowerCol, "lob") {
+							colSize = -1
+						} else if len(val) > 0 {
+							colSize = len(val)
 						} else {
 							colSize = 50
 						}

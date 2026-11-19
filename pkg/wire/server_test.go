@@ -1267,6 +1267,153 @@ func TestFormatParamForSQL_NumericPrecision(t *testing.T) {
 	}
 }
 
+func TestPGWire_BatchMultiResultSetDelivery(t *testing.T) {
+	srv, _, _ := setupTestWireServer(t)
+	clientConn := connectPGClient(t, srv)
+
+	// Helper to send query and collect detailed message trace
+	type msgTrace struct {
+		msgType byte
+		payload []byte
+	}
+	sendAndTrace := func(sql string) []msgTrace {
+		if !strings.HasSuffix(sql, "\x00") {
+			sql += "\x00"
+		}
+		queryBuf := make([]byte, 1+4+len(sql))
+		queryBuf[0] = 'Q'
+		binary.BigEndian.PutUint32(queryBuf[1:5], uint32(4+len(sql)))
+		copy(queryBuf[5:], sql)
+
+		if _, err := clientConn.Write(queryBuf); err != nil {
+			t.Fatalf("Failed to write query %q: %v", sql, err)
+		}
+
+		var trace []msgTrace
+		for {
+			header := make([]byte, 5)
+			if _, err := io.ReadFull(clientConn, header); err != nil {
+				t.Fatalf("Failed to read header: %v", err)
+			}
+			msgType := header[0]
+			msgLen := binary.BigEndian.Uint32(header[1:5])
+			payload := make([]byte, msgLen-4)
+			if _, err := io.ReadFull(clientConn, payload); err != nil {
+				t.Fatalf("Failed to read payload: %v", err)
+			}
+			trace = append(trace, msgTrace{msgType: msgType, payload: payload})
+			if msgType == MsgReadyForQuery {
+				break
+			}
+		}
+		return trace
+	}
+
+	// 1. Three sequential SELECT statements in a single batch
+	batchSQL := "SELECT 100 AS num, 'first' AS label; SELECT 200 AS num, 'second' AS label; SELECT 300 AS num, 'third' AS label;"
+	trace1 := sendAndTrace(batchSQL)
+
+	var rowDescCount, dataRowCount, cmdCompleteCount int
+	var dataRowVals []string
+	for _, m := range trace1 {
+		switch m.msgType {
+		case MsgRowDescription:
+			rowDescCount++
+		case MsgDataRow:
+			dataRowCount++
+			// Extract string values
+			colCount := binary.BigEndian.Uint16(m.payload[0:2])
+			offset := 2
+			for c := 0; c < int(colCount); c++ {
+				colLen := int32(binary.BigEndian.Uint32(m.payload[offset : offset+4]))
+				offset += 4
+				if colLen >= 0 {
+					val := string(m.payload[offset : offset+int(colLen)])
+					dataRowVals = append(dataRowVals, val)
+					offset += int(colLen)
+				}
+			}
+		case MsgCommandComplete:
+			cmdCompleteCount++
+		}
+	}
+
+	if rowDescCount != 3 {
+		t.Errorf("expected 3 RowDescription messages, got %d", rowDescCount)
+	}
+	if dataRowCount != 3 {
+		t.Errorf("expected 3 DataRow messages, got %d", dataRowCount)
+	}
+	if cmdCompleteCount != 3 {
+		t.Errorf("expected 3 CommandComplete messages, got %d", cmdCompleteCount)
+	}
+	expectedVals := []string{"100", "first", "200", "second", "300", "third"}
+	if len(dataRowVals) != len(expectedVals) {
+		t.Fatalf("expected %d values, got %d: %v", len(expectedVals), len(dataRowVals), dataRowVals)
+	}
+	for i, exp := range expectedVals {
+		if dataRowVals[i] != exp {
+			t.Errorf("val[%d]: expected %q, got %q", i, exp, dataRowVals[i])
+		}
+	}
+
+	// 2. Stored procedure emitting multiple result sets over PGWire
+	procSQL := `CREATE PROCEDURE sp_pg_multi_test AS BEGIN SELECT 10 AS x; SELECT 20 AS y; END;`
+	traceCreate := sendAndTrace(procSQL)
+	if len(traceCreate) == 0 || traceCreate[len(traceCreate)-1].msgType != MsgReadyForQuery {
+		t.Fatalf("failed to create procedure sp_pg_multi_test")
+	}
+
+	traceExec := sendAndTrace("EXEC sp_pg_multi_test;")
+	var procRowDescs, procDataRows, procCmdCompletes int
+	for _, m := range traceExec {
+		switch m.msgType {
+		case MsgRowDescription:
+			procRowDescs++
+		case MsgDataRow:
+			procDataRows++
+		case MsgCommandComplete:
+			procCmdCompletes++
+		}
+	}
+	if procRowDescs != 2 {
+		t.Errorf("procedure exec: expected 2 RowDescription messages, got %d", procRowDescs)
+	}
+	if procDataRows != 2 {
+		t.Errorf("procedure exec: expected 2 DataRow messages, got %d", procDataRows)
+	}
+	if procCmdCompletes != 2 {
+		t.Errorf("procedure exec: expected 2 CommandComplete messages, got %d", procCmdCompletes)
+	}
+
+	// 3. Mixed DML and SELECT batch
+	mixedSQL := "CREATE TABLE test_multi_mixed (id INT PRIMARY KEY); INSERT INTO test_multi_mixed VALUES (42); SELECT id FROM test_multi_mixed;"
+	traceMixed := sendAndTrace(mixedSQL)
+	var mixedRowDescs, mixedDataRows, mixedCmdCompletes int
+	var mixedCmdTags []string
+	for _, m := range traceMixed {
+		switch m.msgType {
+		case MsgRowDescription:
+			mixedRowDescs++
+		case MsgDataRow:
+			mixedDataRows++
+		case MsgCommandComplete:
+			mixedCmdCompletes++
+			tag := string(bytes.TrimRight(m.payload, "\x00"))
+			mixedCmdTags = append(mixedCmdTags, tag)
+		}
+	}
+	if mixedRowDescs != 1 {
+		t.Errorf("mixed batch: expected 1 RowDescription message, got %d", mixedRowDescs)
+	}
+	if mixedDataRows != 1 {
+		t.Errorf("mixed batch: expected 1 DataRow message, got %d", mixedDataRows)
+	}
+	if mixedCmdCompletes != 3 {
+		t.Errorf("mixed batch: expected 3 CommandComplete messages, got %d (tags: %v)", mixedCmdCompletes, mixedCmdTags)
+	}
+}
+
 
 
 

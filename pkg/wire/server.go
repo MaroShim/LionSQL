@@ -2071,49 +2071,51 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 		log.Printf("[DEV][PGWire][Success] query=%s cols=%v rows=%d duration=%dµs", trimmed, res.Columns, len(res.Rows), res.DurationUS)
 	}
 
-	if len(res.Columns) > 0 {
-		var sampleRow map[string]any
-		if len(res.Rows) > 0 {
-			sampleRow = res.Rows[0]
-		}
-		colOIDs := s.resolveColumnOIDs(query, res.Columns, sampleRow)
+	bw := getBufioWriter(conn)
+	defer putBufioWriter(bw)
 
-		bw := getBufioWriter(conn)
-		defer putBufioWriter(bw)
-		if writeRowDesc {
-			cols := make([]ColumnMeta, len(res.Columns))
-			for i, c := range res.Columns {
-				fmtCode := int16(0)
-				if len(resultFormats) == 1 && resultFormats[0] == 1 {
-					fmtCode = 1
-				} else if i < len(resultFormats) && resultFormats[i] == 1 {
-					fmtCode = 1
-				}
-				var oid int32 = 25
-				if i < len(colOIDs) {
-					oid = colOIDs[i]
-				}
-				cols[i] = ColumnMeta{Name: c, DataType: oid, Format: fmtCode}
+	for cur := res; cur != nil; cur = cur.Next {
+		if len(cur.Columns) > 0 {
+			var sampleRow map[string]any
+			if len(cur.Rows) > 0 {
+				sampleRow = cur.Rows[0]
 			}
-			_ = WriteRowDescription(bw, cols)
-		}
+			colOIDs := s.resolveColumnOIDs(query, cur.Columns, sampleRow)
 
-		_ = writePgDataRows(bw, res.Columns, colOIDs, resultFormats, res.Rows, res.Values, false)
-		cmd := res.Command
-		if cmd == "" {
-			cmd = fmt.Sprintf("SELECT %d", len(res.Rows))
-		}
-		tag := formatPgCommandComplete(cmd, res.RowsAffected, len(res.Rows))
-		_ = WriteCommandComplete(bw, tag)
-		_ = bw.Flush()
-		return
-	}
+			if writeRowDesc {
+				cols := make([]ColumnMeta, len(cur.Columns))
+				for i, c := range cur.Columns {
+					fmtCode := int16(0)
+					if len(resultFormats) == 1 && resultFormats[0] == 1 {
+						fmtCode = 1
+					} else if i < len(resultFormats) && resultFormats[i] == 1 {
+						fmtCode = 1
+					}
+					var oid int32 = 25
+					if i < len(colOIDs) {
+						oid = colOIDs[i]
+					}
+					cols[i] = ColumnMeta{Name: c, DataType: oid, Format: fmtCode}
+				}
+				_ = WriteRowDescription(bw, cols)
+			}
 
-	cmd := res.Command
-	if cmd == "" {
-		cmd = trimmed
+			_ = writePgDataRows(bw, cur.Columns, colOIDs, resultFormats, cur.Rows, cur.Values, false)
+			cmd := cur.Command
+			if cmd == "" {
+				cmd = fmt.Sprintf("SELECT %d", len(cur.Rows))
+			}
+			tag := formatPgCommandComplete(cmd, cur.RowsAffected, len(cur.Rows))
+			_ = WriteCommandComplete(bw, tag)
+		} else {
+			cmd := cur.Command
+			if cmd == "" {
+				cmd = trimmed
+			}
+			_ = WriteCommandComplete(bw, formatPgCommandComplete(cmd, cur.RowsAffected, len(cur.Rows)))
+		}
 	}
-	_ = WriteCommandComplete(conn, formatPgCommandComplete(cmd, res.RowsAffected, len(res.Rows)))
+	_ = bw.Flush()
 }
 
 func cleanColumnIdentifier(s string) string {
