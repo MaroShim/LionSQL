@@ -225,19 +225,25 @@ func (s *Coordinator) routeOutputRowDirect(tx storage.Transaction, outInfo outpu
 				if col.Default != "" {
 					targetRec[col.Name] = proc.ParseLiteralDefault(col.Default, col.Type)
 				} else if col.Identity {
-					nextID := s.AllocTableIdentity(targetTable, 1, func() int64 {
+					seed := col.GetIdentitySeed()
+					step := col.GetIdentityIncrement()
+					nextID := s.AllocTableIdentityWithStep(targetTable, 1, seed, step, func() (int64, bool) {
 						var maxID int64 = 0
+						hasRows := false
 						if cur, err := tx.Scan(targetTable); err == nil {
 							for cur.Next() {
 								if r, err := cur.Record(); err == nil {
-									if v, ok := r.Get(col.Name); ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
-										maxID = v.IVal
+									if v, ok := r.Get(col.Name); ok && v.Type == storage.TypeInt && !v.IsNull {
+										if !hasRows || v.IVal > maxID {
+											maxID = v.IVal
+										}
+										hasRows = true
 									}
 								}
 							}
 							cur.Close()
 						}
-						return maxID
+						return maxID, hasRows
 					})
 					targetRec[col.Name] = storage.IntValue(nextID)
 				}
@@ -394,19 +400,25 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 	var nextAllocID int64 = 0
 	if identityCol != nil && !hasIdentityInTarget && len(tupleStrings) > 0 {
 		count := int64(len(tupleStrings))
-		nextAllocID = s.AllocTableIdentity(schema.Name, count, func() int64 {
+		seed := identityCol.GetIdentitySeed()
+		step := identityCol.GetIdentityIncrement()
+		nextAllocID = s.AllocTableIdentityWithStep(schema.Name, count, seed, step, func() (int64, bool) {
 			var scanMax int64 = 0
+			hasRows := false
 			if cur, err := tx.Scan(tableName); err == nil {
 				for cur.Next() {
 					if r, err := cur.Record(); err == nil {
-						if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > scanMax {
-							scanMax = v.IVal
+						if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
+							if !hasRows || v.IVal > scanMax {
+								scanMax = v.IVal
+							}
+							hasRows = true
 						}
 					}
 				}
 				cur.Close()
 			}
-			return scanMax
+			return scanMax, hasRows
 		})
 	}
 
@@ -467,7 +479,8 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		if identityCol != nil {
 			if !hasIdentityInTarget {
 				curID := nextAllocID
-				nextAllocID++
+				step := identityCol.GetIdentityIncrement()
+				nextAllocID += step
 				rec[identityCol.Name] = storage.IntValue(curID)
 				if cs != nil {
 					cs.Mu.Lock()
@@ -475,6 +488,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 					cs.Vars["scope_identity"] = curID
 					cs.Mu.Unlock()
 				}
+				s.SetTableLastIdentity(schema.Name, curID)
 			} else {
 				if v, ok := rec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
 					if cs != nil {
@@ -848,19 +862,25 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 	var nextAllocID int64 = 0
 	if identityCol != nil && !hasIdentityInTarget && len(selRes.Rows) > 0 {
 		count := int64(len(selRes.Rows))
-		nextAllocID = s.AllocTableIdentity(schema.Name, count, func() int64 {
+		seed := identityCol.GetIdentitySeed()
+		step := identityCol.GetIdentityIncrement()
+		nextAllocID = s.AllocTableIdentityWithStep(schema.Name, count, seed, step, func() (int64, bool) {
 			var scanMax int64 = 0
+			hasRows := false
 			if cur, err := tx.Scan(tableName); err == nil {
 				for cur.Next() {
 					if r, err := cur.Record(); err == nil {
-						if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > scanMax {
-							scanMax = v.IVal
+						if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
+							if !hasRows || v.IVal > scanMax {
+								scanMax = v.IVal
+							}
+							hasRows = true
 						}
 					}
 				}
 				cur.Close()
 			}
-			return scanMax
+			return scanMax, hasRows
 		})
 	}
 
@@ -902,7 +922,8 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 		if identityCol != nil {
 			if !hasIdentityInTarget {
 				curID := nextAllocID
-				nextAllocID++
+				step := identityCol.GetIdentityIncrement()
+				nextAllocID += step
 				rec[identityCol.Name] = storage.IntValue(curID)
 				if cs != nil {
 					cs.Mu.Lock()
@@ -910,6 +931,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 					cs.Vars["scope_identity"] = curID
 					cs.Mu.Unlock()
 				}
+				s.SetTableLastIdentity(schema.Name, curID)
 			} else {
 				if v, ok := rec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
 					if cs != nil {

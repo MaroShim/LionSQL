@@ -208,6 +208,7 @@ type IdentityProvider interface {
 	GetTableLastIdentity(tableName string) (int64, bool)
 	SetTableLastIdentity(tableName string, id int64)
 	AllocTableIdentity(tableName string, count int64, initFn func() int64) int64
+	AllocTableIdentityWithStep(tableName string, count int64, seed int64, step int64, initFn func() (int64, bool)) int64
 }
 
 // Executor manages execution of compiled stored procedures, functions, and triggers within ambient ACID transactions.
@@ -322,11 +323,28 @@ func (e *Executor) SetLastIdentity(tableName string, id int64) {
 
 // AllocIdentity atomically allocates a contiguous block of count IDs for tableName.
 func (e *Executor) AllocIdentity(tableName string, count int64, initFn func() int64) int64 {
+	return e.AllocIdentityWithStep(tableName, count, 1, 1, func() (int64, bool) {
+		if initFn == nil {
+			return 0, false
+		}
+		val := initFn()
+		return val, val > 0
+	})
+}
+
+// AllocIdentityWithStep atomically allocates a contiguous block of count IDs for tableName with custom seed and step.
+func (e *Executor) AllocIdentityWithStep(tableName string, count int64, seed int64, step int64, initFn func() (int64, bool)) int64 {
+	if count <= 0 {
+		count = 1
+	}
+	if step == 0 {
+		step = 1
+	}
 	e.mu.RLock()
 	p := e.identProvider
 	e.mu.RUnlock()
 	if p != nil {
-		return p.AllocTableIdentity(tableName, count, initFn)
+		return p.AllocTableIdentityWithStep(tableName, count, seed, step, initFn)
 	}
 	e.identMu.Lock()
 	defer e.identMu.Unlock()
@@ -336,12 +354,16 @@ func (e *Executor) AllocIdentity(tableName string, count int64, initFn func() in
 	lower := strings.ToLower(tableName)
 	cur, exists := e.lastIdentities[lower]
 	if !exists {
+		cur = seed - step
 		if initFn != nil {
-			cur = initFn()
+			if maxVal, hasRows := initFn(); hasRows {
+				cur = maxVal
+			}
 		}
 	}
-	e.lastIdentities[lower] = cur + count
-	return cur + 1
+	start := cur + step
+	e.lastIdentities[lower] = cur + (count * step)
+	return start
 }
 
 // ProcedureGetter defines a callback to retrieve a compiled procedure program by name (e.g. from catalog).
@@ -1616,20 +1638,26 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 	var nextAllocID int64 = 0
 	if identityCol != nil && !hasIdentityInTarget && len(rows) > 0 {
 		count := int64(len(rows))
+		seed := identityCol.GetIdentitySeed()
+		step := identityCol.GetIdentityIncrement()
 		if f.executor != nil {
-			nextAllocID = f.executor.AllocIdentity(tableSchema.Name, count, func() int64 {
+			nextAllocID = f.executor.AllocIdentityWithStep(tableSchema.Name, count, seed, step, func() (int64, bool) {
 				var maxID int64 = 0
+				hasRows := false
 				if cur, err := f.tx.Scan(data.Table); err == nil {
 					for cur.Next() {
 						if r, err := cur.Record(); err == nil {
-							if v, ok := r.Get(identityCol.Name); ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
-								maxID = v.IVal
+							if v, ok := r.Get(identityCol.Name); ok && v.Type == storage.TypeInt && !v.IsNull {
+								if !hasRows || v.IVal > maxID {
+									maxID = v.IVal
+								}
+								hasRows = true
 							}
 						}
 					}
 					cur.Close()
 				}
-				return maxID
+				return maxID, hasRows
 			})
 		}
 	}
@@ -1668,9 +1696,10 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 			}
 		}
 
-		if identityCol != nil && !hasIdentityInTarget && nextAllocID > 0 {
+		if identityCol != nil && !hasIdentityInTarget && nextAllocID != 0 {
 			curID := nextAllocID
-			nextAllocID++
+			step := identityCol.GetIdentityIncrement()
+			nextAllocID += step
 			rec.Set(identityCol.Name, storage.IntValue(curID))
 			if hasTriggers {
 				rowMap[identityCol.Name] = curID
@@ -1923,20 +1952,26 @@ func (f *VMFrame) execInsertExec(data *proc.DMLData) (int64, error) {
 	var nextAllocID int64 = 0
 	if identityCol != nil && !hasIdentityInTarget && len(rows) > 0 {
 		count := int64(len(rows))
+		seed := identityCol.GetIdentitySeed()
+		step := identityCol.GetIdentityIncrement()
 		if f.executor != nil {
-			nextAllocID = f.executor.AllocIdentity(tableSchema.Name, count, func() int64 {
+			nextAllocID = f.executor.AllocIdentityWithStep(tableSchema.Name, count, seed, step, func() (int64, bool) {
 				var maxID int64 = 0
+				hasRows := false
 				if cur, err := f.tx.Scan(data.Table); err == nil {
 					for cur.Next() {
 						if r, err := cur.Record(); err == nil {
-							if v, ok := r.Get(identityCol.Name); ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
-								maxID = v.IVal
+							if v, ok := r.Get(identityCol.Name); ok && v.Type == storage.TypeInt && !v.IsNull {
+								if !hasRows || v.IVal > maxID {
+									maxID = v.IVal
+								}
+								hasRows = true
 							}
 						}
 					}
 					cur.Close()
 				}
-				return maxID
+				return maxID, hasRows
 			})
 		}
 	}
@@ -1975,9 +2010,10 @@ func (f *VMFrame) execInsertExec(data *proc.DMLData) (int64, error) {
 			}
 		}
 
-		if identityCol != nil && !hasIdentityInTarget && nextAllocID > 0 {
+		if identityCol != nil && !hasIdentityInTarget && nextAllocID != 0 {
 			curID := nextAllocID
-			nextAllocID++
+			step := identityCol.GetIdentityIncrement()
+			nextAllocID += step
 			rec.Set(identityCol.Name, storage.IntValue(curID))
 			if hasTriggers {
 				rowMap[identityCol.Name] = curID

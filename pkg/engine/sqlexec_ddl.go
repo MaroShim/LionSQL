@@ -198,21 +198,31 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 	}
 
 	for _, c := range stmt.Columns {
+		seed := c.IdentitySeed
+		if c.Identity && seed == 0 {
+			seed = 1
+		}
+		incr := c.IdentityIncrement
+		if c.Identity && incr == 0 {
+			incr = 1
+		}
 		schema.Columns = append(schema.Columns, storage.Column{
-			Name:         c.Name,
-			Type:         c.Type,
-			RawType:      c.RawType,
-			IsFixed:      c.IsFixed,
-			PrimaryKey:   c.PrimaryKey,
-			Nullable:     c.Nullable,
-			Identity:     c.Identity,
-			IsRowVersion: c.IsRowVersion,
-			Precision:    c.Precision,
-			Scale:        c.Scale,
-			Default:      c.Default,
-			CheckExpr:    c.CheckExpr,
-			ComputedExpr: c.ComputedExpr,
-			IsComputed:   c.IsComputed,
+			Name:              c.Name,
+			Type:              c.Type,
+			RawType:           c.RawType,
+			IsFixed:           c.IsFixed,
+			PrimaryKey:        c.PrimaryKey,
+			Nullable:          c.Nullable,
+			Identity:          c.Identity,
+			IdentitySeed:      seed,
+			IdentityIncrement: incr,
+			IsRowVersion:      c.IsRowVersion,
+			Precision:         c.Precision,
+			Scale:             c.Scale,
+			Default:           c.Default,
+			CheckExpr:         c.CheckExpr,
+			ComputedExpr:      c.ComputedExpr,
+			IsComputed:        c.IsComputed,
 		})
 	}
 
@@ -581,7 +591,7 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *Clien
 	s.InvalidatePKBypassCache()
 	if restartIdentity {
 		for _, tableName := range resolvedTables {
-			s.SetTableLastIdentity(tableName, 0)
+			s.DropTableIdentity(tableName)
 		}
 	}
 
@@ -1223,18 +1233,28 @@ func (s *Coordinator) execAlterTableAddColumns(tableName string, actions []proc.
 	var addedCols []string
 	for _, act := range actions {
 		c := act.Column
+		seed := c.IdentitySeed
+		if c.Identity && seed == 0 {
+			seed = 1
+		}
+		incr := c.IdentityIncrement
+		if c.Identity && incr == 0 {
+			incr = 1
+		}
 		col := &storage.Column{
-			Name:         c.Name,
-			Type:         c.Type,
-			Nullable:     c.Nullable,
-			Identity:     c.Identity,
-			IsRowVersion: c.IsRowVersion,
-			Precision:    c.Precision,
-			Scale:        c.Scale,
-			Default:      c.Default,
-			CheckExpr:    c.CheckExpr,
-			ComputedExpr: c.ComputedExpr,
-			IsComputed:   c.IsComputed,
+			Name:              c.Name,
+			Type:              c.Type,
+			Nullable:          c.Nullable,
+			Identity:          c.Identity,
+			IdentitySeed:      seed,
+			IdentityIncrement: incr,
+			IsRowVersion:      c.IsRowVersion,
+			Precision:         c.Precision,
+			Scale:             c.Scale,
+			Default:           c.Default,
+			CheckExpr:         c.CheckExpr,
+			ComputedExpr:      c.ComputedExpr,
+			IsComputed:        c.IsComputed,
 		}
 
 		if c.IsRowVersion {

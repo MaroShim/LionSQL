@@ -122,6 +122,9 @@ type SQLCoordinator interface {
 	// AllocTableIdentity atomically allocates a contiguous range of count IDs for tableName.
 	AllocTableIdentity(tableName string, count int64, initFn func() int64) int64
 
+	// AllocTableIdentityWithStep atomically allocates a contiguous range of count IDs for tableName with custom seed and step.
+	AllocTableIdentityWithStep(tableName string, count int64, seed int64, step int64, initFn func() (int64, bool)) int64
+
 	// SetTableLastIdentity records or ratchets the identity value generated for a table.
 	SetTableLastIdentity(tableName string, id int64)
 

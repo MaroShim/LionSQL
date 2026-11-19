@@ -156,21 +156,27 @@ func (f *VMFrame) routeOutputRow(data *proc.DMLData, oldRec, newRec storage.Reco
 					if col.Default != "" {
 						targetRec.Set(col.Name, proc.ParseLiteralDefault(col.Default, col.Type))
 					} else if col.Identity {
-						var nextID int64 = 1
+						seed := col.GetIdentitySeed()
+						step := col.GetIdentityIncrement()
+						var nextID int64 = seed
 						if f.executor != nil {
-							nextID = f.executor.AllocIdentity(targetPhys, 1, func() int64 {
+							nextID = f.executor.AllocIdentityWithStep(targetPhys, 1, seed, step, func() (int64, bool) {
 								var maxID int64 = 0
+								hasRows := false
 								if cur, err := f.tx.Scan(targetPhys); err == nil {
 									for cur.Next() {
 										if r, err := cur.Record(); err == nil {
-											if v, ok := r.Get(col.Name); ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
-												maxID = v.IVal
+											if v, ok := r.Get(col.Name); ok && v.Type == storage.TypeInt && !v.IsNull {
+												if !hasRows || v.IVal > maxID {
+													maxID = v.IVal
+												}
+												hasRows = true
 											}
 										}
 									}
 									cur.Close()
 								}
-								return maxID
+								return maxID, hasRows
 							})
 						}
 						targetRec.Set(col.Name, storage.IntValue(nextID))
@@ -1388,21 +1394,27 @@ vmLoop:
 				}
 			} else if !exists || val.IsNull {
 				tableName := tableSchema.Name
-				var nextID int64 = 1
+				seed := identityCol.GetIdentitySeed()
+				step := identityCol.GetIdentityIncrement()
+				var nextID int64 = seed
 				if f.executor != nil {
-					nextID = f.executor.AllocIdentity(tableName, 1, func() int64 {
+					nextID = f.executor.AllocIdentityWithStep(tableName, 1, seed, step, func() (int64, bool) {
 						var maxID int64 = 0
+						hasRows := false
 						if cur, err := f.tx.Scan(data.Table); err == nil {
 							for cur.Next() {
 								if r, err := cur.Record(); err == nil {
-									if v, ok := r.Get(identityCol.Name); ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
-										maxID = v.IVal
+									if v, ok := r.Get(identityCol.Name); ok && v.Type == storage.TypeInt && !v.IsNull {
+										if !hasRows || v.IVal > maxID {
+											maxID = v.IVal
+										}
+										hasRows = true
 									}
 								}
 							}
 							cur.Close()
 						}
-						return maxID
+						return maxID, hasRows
 					})
 				}
 				rec.Set(identityCol.Name, storage.IntValue(nextID))

@@ -207,24 +207,40 @@ func (c *Coordinator) getTableIdentity(tableName string) *TableIdentity {
 // AllocTableIdentity atomically allocates a contiguous range of count IDs for tableName.
 // If the table sequence has not been initialized yet, initFn is invoked to fetch the initial max ID.
 func (c *Coordinator) AllocTableIdentity(tableName string, count int64, initFn func() int64) int64 {
+	return c.AllocTableIdentityWithStep(tableName, count, 1, 1, func() (int64, bool) {
+		if initFn == nil {
+			return 0, false
+		}
+		val := initFn()
+		return val, val > 0
+	})
+}
+
+// AllocTableIdentityWithStep atomically allocates a contiguous range of count IDs for tableName with custom seed and step.
+func (c *Coordinator) AllocTableIdentityWithStep(tableName string, count int64, seed int64, step int64, initFn func() (int64, bool)) int64 {
 	if count <= 0 {
 		count = 1
+	}
+	if step == 0 {
+		step = 1
 	}
 	slot := c.getTableIdentity(tableName)
 	if !slot.initialized.Load() {
 		slot.initMu.Lock()
 		if !slot.initialized.Load() {
-			initVal := int64(0)
+			initVal := seed - step
 			if initFn != nil {
-				initVal = initFn()
+				if maxVal, hasRows := initFn(); hasRows {
+					initVal = maxVal
+				}
 			}
 			slot.seq.Store(initVal)
 			slot.initialized.Store(true)
 		}
 		slot.initMu.Unlock()
 	}
-	end := slot.seq.Add(count)
-	return end - count + 1
+	end := slot.seq.Add(count * step)
+	return end - (count * step) + step
 }
 
 // SetTableLastIdentity records or ratchets the identity value generated for a table.

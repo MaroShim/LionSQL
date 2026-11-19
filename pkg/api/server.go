@@ -502,6 +502,14 @@ func (s *Server) AllocTableIdentity(tableName string, count int64, initFn func()
 	return 1
 }
 
+// AllocTableIdentityWithStep atomically allocates a contiguous range of count IDs for tableName with custom seed and step.
+func (s *Server) AllocTableIdentityWithStep(tableName string, count int64, seed int64, step int64, initFn func() (int64, bool)) int64 {
+	if s.coordinator != nil {
+		return s.coordinator.AllocTableIdentityWithStep(tableName, count, seed, step, initFn)
+	}
+	return seed
+}
+
 // SetTableLastIdentity records or ratchets the identity value generated for a table.
 func (s *Server) SetTableLastIdentity(tableName string, id int64) {
 	if s.coordinator != nil {

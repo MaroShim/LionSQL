@@ -1254,6 +1254,14 @@ func (p *Parser) parseColumnTypeAndConstraints(colName, tableName string) (Colum
 
 	isPK := false
 	isIdentity := isSerial || rawType == "IDENTITY"
+	identitySeed := int64(1)
+	identityIncrement := int64(1)
+	if rawType == "IDENTITY" && prec > 0 {
+		identitySeed = int64(prec)
+		if scale > 0 {
+			identityIncrement = int64(scale)
+		}
+	}
 	isNotNull := isSerial || isRowVersion
 	isUnique := false
 	isGeneratedIdentity := false
@@ -1304,7 +1312,18 @@ func (p *Parser) parseColumnTypeAndConstraints(colName, tableName string) (Colum
 		case "IDENTITY", "AUTO_INCREMENT", "AUTOINCREMENT":
 			p.nextToken()
 			if p.curTokenIs(TokenLParen) {
-				_ = p.parseRawParenContent()
+				raw := p.parseRawParenContent()
+				if raw != "" {
+					parts := strings.Split(raw, ",")
+					if sVal, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64); err == nil {
+						identitySeed = sVal
+					}
+					if len(parts) > 1 {
+						if iVal, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64); err == nil {
+							identityIncrement = iVal
+						}
+					}
+				}
 			}
 			isIdentity = true
 
@@ -1314,7 +1333,18 @@ func (p *Parser) parseColumnTypeAndConstraints(colName, tableName string) (Colum
 				if strings.EqualFold(p.curToken.Literal, "IDENTITY") {
 					p.nextToken()
 					if p.curTokenIs(TokenLParen) {
-						_ = p.parseRawParenContent()
+						raw := p.parseRawParenContent()
+						if raw != "" {
+							parts := strings.Split(raw, ",")
+							if sVal, err := strconv.ParseInt(strings.TrimSpace(parts[0]), 10, 64); err == nil {
+								identitySeed = sVal
+							}
+							if len(parts) > 1 {
+								if iVal, err := strconv.ParseInt(strings.TrimSpace(parts[1]), 10, 64); err == nil {
+									identityIncrement = iVal
+								}
+							}
+						}
 					}
 					isGeneratedIdentity = true
 					isIdentity = true
@@ -1356,21 +1386,27 @@ func (p *Parser) parseColumnTypeAndConstraints(colName, tableName string) (Colum
 		defaultExpr = ""
 	}
 
+	if isIdentity && identityIncrement == 0 {
+		identityIncrement = 1
+	}
+
 	return ColumnDef{
-		Name:         colName,
-		Type:         dt,
-		RawType:      rawType,
-		IsFixed:      isFixed,
-		PrimaryKey:   isPK,
-		Nullable:     !isNotNull,
-		Identity:     isIdentity,
-		IsRowVersion: isRowVersion,
-		Unique:       isUnique,
-		Precision:    prec,
-		Scale:        scale,
-		Default:      defaultExpr,
-		CheckExpr:    checkExpr,
-		ForeignKey:   colFK,
+		Name:              colName,
+		Type:              dt,
+		RawType:           rawType,
+		IsFixed:           isFixed,
+		PrimaryKey:        isPK,
+		Nullable:          !isNotNull,
+		Identity:          isIdentity,
+		IdentitySeed:      identitySeed,
+		IdentityIncrement: identityIncrement,
+		IsRowVersion:      isRowVersion,
+		Unique:            isUnique,
+		Precision:         prec,
+		Scale:             scale,
+		Default:           defaultExpr,
+		CheckExpr:         checkExpr,
+		ForeignKey:        colFK,
 	}, nil
 }
 

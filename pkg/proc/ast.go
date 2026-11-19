@@ -1165,8 +1165,10 @@ type ColumnDef struct {
 	IsFixed      bool
 	PrimaryKey   bool
 	Nullable     bool
-	Identity     bool
-	IsRowVersion bool
+	Identity          bool
+	IdentitySeed      int64
+	IdentityIncrement int64
+	IsRowVersion      bool
 	Unique       bool
 	Precision    int
 	Scale        int

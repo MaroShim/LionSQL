@@ -133,8 +133,10 @@ type Column struct {
 	IsFixed      bool     `json:"is_fixed,omitempty" msgpack:"is_fixed,omitempty"`
 	PrimaryKey   bool     `json:"primary_key" msgpack:"primary_key"`
 	Nullable     bool     `json:"nullable" msgpack:"nullable"`
-	Identity     bool     `json:"identity,omitempty" msgpack:"identity,omitempty"`
-	IsRowVersion bool     `json:"is_rowversion,omitempty" msgpack:"is_rowversion,omitempty"`
+	Identity          bool     `json:"identity,omitempty" msgpack:"identity,omitempty"`
+	IdentitySeed      int64    `json:"identity_seed,omitempty" msgpack:"identity_seed,omitempty"`
+	IdentityIncrement int64    `json:"identity_increment,omitempty" msgpack:"identity_increment,omitempty"`
+	IsRowVersion      bool     `json:"is_rowversion,omitempty" msgpack:"is_rowversion,omitempty"`
 	Hidden       bool     `json:"hidden,omitempty" msgpack:"hidden,omitempty"`
 	Precision    int      `json:"precision,omitempty" msgpack:"precision,omitempty"`
 	Scale        int      `json:"scale,omitempty" msgpack:"scale,omitempty"`
@@ -147,6 +149,22 @@ type Column struct {
 // HasComputedExpr reports whether the column is a computed (virtual/generated) column.
 func (c Column) HasComputedExpr() bool {
 	return (c.IsComputed && c.ComputedExpr != "") || (c.ComputedExpr != "")
+}
+
+// GetIdentitySeed returns the seed value for an identity column, defaulting to 1 if unset.
+func (c Column) GetIdentitySeed() int64 {
+	if c.IdentitySeed != 0 {
+		return c.IdentitySeed
+	}
+	return 1
+}
+
+// GetIdentityIncrement returns the increment/step value for an identity column, defaulting to 1 if unset.
+func (c Column) GetIdentityIncrement() int64 {
+	if c.IdentityIncrement != 0 {
+		return c.IdentityIncrement
+	}
+	return 1
 }
 
 // IndexSchema defines metadata for a secondary index.
@@ -776,6 +794,19 @@ func (s *TableSchema) RowVersionColumn() (*Column, int, bool) {
 		}
 	}
 	return nil, -1, false
+}
+
+// IdentityColumn returns the IDENTITY column if defined on the table.
+func (s *TableSchema) IdentityColumn() (*Column, bool) {
+	if s == nil {
+		return nil, false
+	}
+	for i := range s.Columns {
+		if s.Columns[i].Identity {
+			return &s.Columns[i], true
+		}
+	}
+	return nil, false
 }
 
 func (s *TableSchema) FindColumn(name string) (*Column, int, bool) {

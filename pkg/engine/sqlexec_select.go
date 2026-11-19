@@ -761,9 +761,38 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		}
 		tbl, err := s.engine.GetTable(clean)
 		if err == nil && tbl != nil {
+			if idCol, ok := tbl.IdentityColumn(); ok {
+				return idCol.GetIdentitySeed(), "ident_current"
+			}
 			return int64(1), "ident_current"
 		}
 		return nil, "ident_current"
+	}
+
+	// IDENT_SEED('tableName')
+	if strings.HasPrefix(upper, "IDENT_SEED(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("IDENT_SEED(") : len(trimmed)-1])
+		clean := strings.Trim(strings.TrimSpace(inner), "'\"[]")
+		tbl, err := s.engine.GetTable(clean)
+		if err == nil && tbl != nil {
+			if idCol, ok := tbl.IdentityColumn(); ok {
+				return idCol.GetIdentitySeed(), "ident_seed"
+			}
+		}
+		return nil, "ident_seed"
+	}
+
+	// IDENT_INCR('tableName')
+	if strings.HasPrefix(upper, "IDENT_INCR(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("IDENT_INCR(") : len(trimmed)-1])
+		clean := strings.Trim(strings.TrimSpace(inner), "'\"[]")
+		tbl, err := s.engine.GetTable(clean)
+		if err == nil && tbl != nil {
+			if idCol, ok := tbl.IdentityColumn(); ok {
+				return idCol.GetIdentityIncrement(), "ident_incr"
+			}
+		}
+		return nil, "ident_incr"
 	}
 
 	// COLUMNPROPERTY(object_id, 'column_name', 'property')
@@ -1856,7 +1885,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION
 	if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
 		upperClean := strings.ToUpper(cleaned)
-		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "XACT_STATE") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean, "CURRENT_SETTING") && !strings.Contains(upperClean, "PG_CANCEL_BACKEND") && !strings.Contains(upperClean, "PG_TERMINATE_BACKEND") && !strings.Contains(upperClean[6:], "SELECT") && !strings.Contains(cleaned, "->") {
+		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "XACT_STATE") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "IDENT_") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean, "CURRENT_SETTING") && !strings.Contains(upperClean, "PG_CANCEL_BACKEND") && !strings.Contains(upperClean, "PG_TERMINATE_BACKEND") && !strings.Contains(upperClean[6:], "SELECT") && !strings.Contains(cleaned, "->") {
 			if res, err := s.execVDBESelect(cleaned, start, cs); err == nil && res != nil {
 				return res, nil
 			}

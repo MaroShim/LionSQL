@@ -147,3 +147,119 @@ func TestInsertDefaultOmittedColumn(t *testing.T) {
 		t.Errorf("expected warehouse_id 'wh_default', got %q", whID)
 	}
 }
+
+func TestTSQLIdentitySeedAndIncrement(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := NewCoordinator(cat, eng, Config{})
+	defer coord.Close()
+
+	// 1. Table with custom seed 100 and step 5
+	ddl := `CREATE TABLE t_seed (id INT IDENTITY(100, 5) PRIMARY KEY, val VARCHAR(20));`
+	if _, err := coord.ExecuteSQL(ddl); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+
+	tbl, err := eng.GetTable("t_seed")
+	if err != nil {
+		t.Fatalf("get table failed: %v", err)
+	}
+	idCol, ok := tbl.IdentityColumn()
+	if !ok || idCol == nil {
+		t.Fatalf("identity column not found")
+	}
+	if idCol.IdentitySeed != 100 || idCol.IdentityIncrement != 5 {
+		t.Fatalf("expected seed=100, incr=5; got seed=%d, incr=%d", idCol.IdentitySeed, idCol.IdentityIncrement)
+	}
+
+	// 2. Metadata functions: IDENT_SEED, IDENT_INCR, IDENT_CURRENT before inserts
+	res, err := coord.ExecuteSQL(`SELECT IDENT_SEED('t_seed') AS s, IDENT_INCR('t_seed') AS i, IDENT_CURRENT('t_seed') AS c;`)
+	if err != nil {
+		t.Fatalf("ident functions query failed: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(res.Rows))
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["s"]) != "100" || fmt.Sprintf("%v", res.Rows[0]["i"]) != "5" {
+		t.Fatalf("expected s=100, i=5; got %+v", res.Rows[0])
+	}
+
+	// 3. First insert: should get id = 100
+	if _, err := coord.ExecuteSQL(`INSERT INTO t_seed (val) VALUES ('first');`); err != nil {
+		t.Fatalf("insert 1 failed: %v", err)
+	}
+
+	// 4. Second insert: should get id = 105
+	if _, err := coord.ExecuteSQL(`INSERT INTO t_seed (val) VALUES ('second');`); err != nil {
+		t.Fatalf("insert 2 failed: %v", err)
+	}
+
+	// 5. Multi-row insert: should get id = 110, 115
+	if _, err := coord.ExecuteSQL(`INSERT INTO t_seed (val) VALUES ('third'), ('fourth');`); err != nil {
+		t.Fatalf("insert 3-4 failed: %v", err)
+	}
+
+	res, err = coord.ExecuteSQL(`SELECT id, val FROM t_seed ORDER BY id ASC;`)
+	if err != nil {
+		t.Fatalf("select failed: %v", err)
+	}
+	if len(res.Rows) != 4 {
+		t.Fatalf("expected 4 rows, got %d", len(res.Rows))
+	}
+	expectedIDs := []string{"100", "105", "110", "115"}
+	for i, exp := range expectedIDs {
+		actual := fmt.Sprintf("%v", res.Rows[i]["id"])
+		if actual != exp {
+			t.Errorf("row[%d] id: expected %s, got %s", i, exp, actual)
+		}
+	}
+
+	// 6. Check IDENT_CURRENT after inserts
+	res, err = coord.ExecuteSQL(`SELECT IDENT_CURRENT('t_seed') AS c;`)
+	if err != nil {
+		t.Fatalf("ident_current query failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["c"]) != "115" {
+		t.Errorf("expected IDENT_CURRENT = 115, got %v", res.Rows[0]["c"])
+	}
+
+	// 7. TRUNCATE TABLE t_seed RESTART IDENTITY
+	if _, err := coord.ExecuteSQL(`TRUNCATE TABLE t_seed RESTART IDENTITY;`); err != nil {
+		t.Fatalf("truncate failed: %v", err)
+	}
+
+	// 8. Insert after truncate: should restart at 100
+	if _, err := coord.ExecuteSQL(`INSERT INTO t_seed (val) VALUES ('after_trunc');`); err != nil {
+		t.Fatalf("insert after truncate failed: %v", err)
+	}
+	res, err = coord.ExecuteSQL(`SELECT id, val FROM t_seed;`)
+	if err != nil {
+		t.Fatalf("select after truncate failed: %v", err)
+	}
+	if len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["id"]) != "100" {
+		t.Fatalf("expected 1 row with id=100 after truncate, got %+v", res.Rows)
+	}
+
+	// 9. Stored procedure execution inserting into table with custom identity
+	spDDL := `CREATE PROCEDURE sp_seed_insert @v VARCHAR(20) AS
+	BEGIN
+		INSERT INTO t_seed (val) VALUES (@v);
+	END;`
+	if _, err := coord.ExecuteSQL(spDDL); err != nil {
+		t.Fatalf("create proc failed: %v", err)
+	}
+
+	if _, err := coord.ExecuteSQL(`EXEC sp_seed_insert 'from_sp';`); err != nil {
+		t.Fatalf("exec sp failed: %v", err)
+	}
+	res, err = coord.ExecuteSQL(`SELECT id, val FROM t_seed ORDER BY id ASC;`)
+	if err != nil {
+		t.Fatalf("select after sp failed: %v", err)
+	}
+	if len(res.Rows) != 2 || fmt.Sprintf("%v", res.Rows[1]["id"]) != "105" {
+		t.Fatalf("expected row 2 with id=105 from SP, got %+v", res.Rows)
+	}
+}
