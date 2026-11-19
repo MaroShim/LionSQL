@@ -1,7 +1,9 @@
 package proc
 
 import (
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1344,6 +1346,46 @@ func TestBuiltins_DateDiff_DateDiffBig_DayOfYear(t *testing.T) {
 		if res.IsNull || res.IVal != 1 {
 			t.Fatalf("%s(dayofyear, boundary) expected 1, got %v (IsNull=%v)", fn, res.IVal, res.IsNull)
 		}
+	}
+}
+
+func TestPatindexRegexCache_ConcurrentStressAndBoundedLimit(t *testing.T) {
+	// 1. Concurrent stress: 20 goroutines repeatedly calling PATINDEX on shared and distinct patterns
+	var wg sync.WaitGroup
+	for g := 0; g < 20; g++ {
+		wg.Add(1)
+		go func(gid int) {
+			defer wg.Done()
+			for i := 0; i < 100; i++ {
+				// Shared pattern
+				res := ComputePatindex("%[0-9]%", "abc123def")
+				if res != 4 {
+					t.Errorf("expected 4, got %d", res)
+				}
+				// GID pattern
+				pat := fmt.Sprintf("%%user_%d%%", gid)
+				text := fmt.Sprintf("order_user_%d_placed", gid)
+				res2 := ComputePatindex(pat, text)
+				if res2 != 7 {
+					t.Errorf("expected 7, got %d", res2)
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	// 2. Bounded capacity check: exceed maxPatindexRegexCache (1,024)
+	for i := 0; i < 1200; i++ {
+		pat := fmt.Sprintf("%%unique_token_%d%%", i)
+		_ = ComputePatindex(pat, "sample text with unique_token_1")
+	}
+
+	patindexCacheMu.RLock()
+	cacheLen := len(patindexCache)
+	patindexCacheMu.RUnlock()
+
+	if cacheLen > maxPatindexRegexCache {
+		t.Errorf("cache exceeded maxPatindexRegexCache: %d > %d", cacheLen, maxPatindexRegexCache)
 	}
 }
 

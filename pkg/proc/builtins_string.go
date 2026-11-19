@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"lionsql/pkg/storage"
@@ -71,6 +72,38 @@ func computeSoundex(s string) string {
 	return string(firstChar) + string(digits[:3])
 }
 
+const maxPatindexRegexCache = 1024
+
+var (
+	patindexCacheMu sync.RWMutex
+	patindexCache   = make(map[string]*regexp.Regexp, 256)
+)
+
+func getOrCompilePatindexRegex(rxPattern string) (*regexp.Regexp, error) {
+	patindexCacheMu.RLock()
+	re, ok := patindexCache[rxPattern]
+	patindexCacheMu.RUnlock()
+	if ok {
+		return re, nil
+	}
+
+	compiled, err := regexp.Compile(rxPattern)
+	if err != nil {
+		return nil, err
+	}
+
+	patindexCacheMu.Lock()
+	defer patindexCacheMu.Unlock()
+	if existing, exists := patindexCache[rxPattern]; exists {
+		return existing, nil
+	}
+	if len(patindexCache) >= maxPatindexRegexCache {
+		patindexCache = make(map[string]*regexp.Regexp, 256)
+	}
+	patindexCache[rxPattern] = compiled
+	return compiled, nil
+}
+
 func ComputePatindex(pattern, text string) int64 {
 	if pattern == "" || text == "" {
 		return 0
@@ -129,7 +162,7 @@ func ComputePatindex(pattern, text string) int64 {
 		rx.WriteString("$")
 	}
 
-	re, err := regexp.Compile("(?i)" + rx.String())
+	re, err := getOrCompilePatindexRegex("(?i)" + rx.String())
 	if err != nil {
 		return 0
 	}
