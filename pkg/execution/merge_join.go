@@ -80,20 +80,24 @@ func (m *MergeJoinIterator) Open(ctx context.Context) error {
 	// Defensive key orientation check: if right contains leftKey and not rightKey, swap.
 	if rMap := m.right.ColIndexMap(); rMap != nil {
 		rightCol := m.rightKey
+		rightHasQual := false
 		if idx := strings.Index(rightCol, "."); idx != -1 {
 			rightCol = rightCol[idx+1:]
+			rightHasQual = true
 		}
 		leftCol := m.leftKey
+		leftHasQual := false
 		if idx := strings.Index(leftCol, "."); idx != -1 {
 			leftCol = leftCol[idx+1:]
+			leftHasQual = true
 		}
 
 		_, hasRight := rMap.Index(m.rightKey)
-		if !hasRight {
+		if !hasRight && !rightHasQual {
 			_, hasRight = rMap.Index(rightCol)
 		}
 		_, hasLeft := rMap.Index(m.leftKey)
-		if !hasLeft {
+		if !hasLeft && !leftHasQual {
 			_, hasLeft = rMap.Index(leftCol)
 		}
 

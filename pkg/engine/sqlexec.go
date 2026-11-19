@@ -628,7 +628,11 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 			if len(res.Messages) > 0 {
 				accumulatedMessages = append(accumulatedMessages, res.Messages...)
 			}
-			if res.Command != "PRINT" && res.Command != "EMPTY" {
+			shouldChain := len(res.Columns) > 0 || res.Next != nil
+			if cs != nil && cs.IsPostgres() && res.Command != "PRINT" && res.Command != "EMPTY" {
+				shouldChain = true
+			}
+			if shouldChain {
 				if headRes == nil {
 					headRes = res
 					tailRes = res

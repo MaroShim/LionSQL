@@ -313,7 +313,7 @@
 | `PENDING` | **`FIX-PROC-VIEW-EXPANSION-DISPATCH-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 내부 VIEW 카탈로그 서브쿼리 확장 연동 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-ROLLBACK-INDEX-RESTORE-ERROR-HANDLING-1`** |  | Engine | P2 | 커밋 및 세이브포인트 롤백 과정에서 보조 인덱스 복원 오류 전파 및 복원 누락 방어 |  |  |
 | `DONE` | **`FIX-SECONDARY-INDEX-RECOVERY-FALLBACK-1`** | `2` | --domain | P2 | 2차 인덱스 복원 실패 시 자동 재구축 및 Table Scan 폴백 비활성화 체계 | [`--prio`](--prio) |  |
-| `PENDING` | **`FIX-SELF-CORRELATED-EXISTS-SUBQUERY-1`** |  | 1 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
+| `DONE` | **`FIX-SELF-CORRELATED-EXISTS-SUBQUERY-1`** |  | 1 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-SESSION-DRAIN-CLOSE-UAF-1`** | `1.0-GA` | Engine | P2 | CloseSession 시 In-flight 쿼리 Drain 대기 보장 및 CGo UAF 크래시 방지 | [`notes/plans/FIX_SESSION_DRAIN_CLOSE_UAF_PLAN.ko.md`](notes/plans/FIX_SESSION_DRAIN_CLOSE_UAF_PLAN.ko.md) |  |
 | `DONE` | **`FIX-SESSION-VAR-EXPR-EVAL-1`** | `v0.94.0` | Engine | P1 | SET @var = expr 대화형 세션 변수 수식 평가 결함 수정 (산술 연산 보존 및 proc.EvalRowExpr 바인딩) | [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md) |  |
 | `DONE` | **`FIX-SETOP-INTERSECT-PRECEDENCE-1`** |  | Planner | P1 | 집합 연산자 INTERSECT 우선순위(Precedence) 플래닝 결함 수정 |  |  |
@@ -3400,8 +3400,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] Engine `FIX-SELF-CORRELATED-EXISTS-SUBQUERY-1`
-- **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-19 00:47:09
+### [DONE] Engine `FIX-SELF-CORRELATED-EXISTS-SUBQUERY-1`
+- **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-19 01:12:20
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
 
 ---

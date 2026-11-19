@@ -2721,7 +2721,11 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		}
 		if innerIndex == nil && leftKey != "" && join.Type != "SEMI" && join.Type != "ANTI" {
 			tblL := extractTableQualifier(leftKey)
-			if tblL != "" && (tblL == strings.ToLower(rTable) || tblL == strings.ToLower(rAlias)) {
+			rightQual := strings.ToLower(rTable)
+			if rAlias != "" {
+				rightQual = strings.ToLower(rAlias)
+			}
+			if tblL != "" && tblL == rightQual {
 				leftCol := leftKey
 				if idx := strings.Index(leftCol, "."); idx != -1 {
 					leftCol = leftCol[idx+1:]
@@ -2973,9 +2977,11 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		hjRightKey := rightKey
 		tblL := extractTableQualifier(hjLeftKey)
 		tblR := extractTableQualifier(hjRightKey)
-		candTbl := strings.ToLower(rTable)
-		candAlias := strings.ToLower(rAlias)
-		if tblL == candTbl || tblL == candAlias || (tblR != "" && (tblR != candTbl && tblR != candAlias)) {
+		rightQual := strings.ToLower(rTable)
+		if rAlias != "" {
+			rightQual = strings.ToLower(rAlias)
+		}
+		if (tblL == rightQual && tblR != rightQual) || (tblR != "" && tblR != rightQual && tblL == "") {
 			hjLeftKey, hjRightKey = hjRightKey, hjLeftKey
 		}
 

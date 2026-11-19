@@ -491,6 +491,66 @@ func TestCoordinator_WhereExists(t *testing.T) {
 	}
 }
 
+func TestCoordinator_SelfCorrelatedExists(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+	defer eng.Close()
+
+	if _, err := coord.ExecuteSQL(`CREATE TABLE r4 (id INT PRIMARY KEY, val VARCHAR(20));`); err != nil {
+		t.Fatalf("create failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL(`INSERT INTO r4 VALUES (1, 'one'), (2, 'two');`); err != nil {
+		t.Fatalf("insert failed: %v", err)
+	}
+
+	// 1. Self-correlated EXISTS without outer alias
+	res, err := coord.ExecuteSQL(`SELECT * FROM r4 WHERE EXISTS (SELECT 1 FROM r4 x WHERE x.id = r4.id);`)
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(res.Rows))
+	}
+
+	// 2. Self-correlated EXISTS with reversed condition
+	res, err = coord.ExecuteSQL(`SELECT * FROM r4 WHERE EXISTS (SELECT 1 FROM r4 x WHERE r4.id = x.id);`)
+	if err != nil {
+		t.Fatalf("query reversed failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows for reversed condition, got %d", len(res.Rows))
+	}
+
+	// 3. Self-correlated NOT EXISTS (should match all rows and therefore return 0 rows)
+	res, err = coord.ExecuteSQL(`SELECT * FROM r4 WHERE NOT EXISTS (SELECT 1 FROM r4 x WHERE x.id = r4.id);`)
+	if err != nil {
+		t.Fatalf("query not exists failed: %v", err)
+	}
+	if len(res.Rows) != 0 {
+		t.Fatalf("expected 0 rows for NOT EXISTS matching all, got %d", len(res.Rows))
+	}
+
+	// 4. Self-correlated NOT EXISTS where inner condition does not match (returns 2 rows)
+	res, err = coord.ExecuteSQL(`SELECT * FROM r4 WHERE NOT EXISTS (SELECT 1 FROM r4 x WHERE x.id = r4.id + 10);`)
+	if err != nil {
+		t.Fatalf("query not exists non-matching failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows for non-matching NOT EXISTS, got %d", len(res.Rows))
+	}
+
+	// 5. Self-correlated EXISTS with outer alias
+	res, err = coord.ExecuteSQL(`SELECT * FROM r4 t WHERE EXISTS (SELECT 1 FROM r4 x WHERE x.id = t.id);`)
+	if err != nil {
+		t.Fatalf("query with outer alias failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows with outer alias, got %d", len(res.Rows))
+	}
+}
+
 func setupTestCoordinator(t *testing.T) (*engine.Coordinator, *catalog.Catalog, func()) {
 	eng := memengine.New()
 	cat := catalog.New(eng)

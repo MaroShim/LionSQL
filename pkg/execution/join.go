@@ -90,31 +90,35 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 		lMap := h.left.ColIndexMap()
 		if rMap != nil {
 			rightCol := h.rightKey
+			rightHasQual := false
 			if idx := strings.Index(rightCol, "."); idx != -1 {
 				rightCol = rightCol[idx+1:]
+				rightHasQual = true
 			}
 			leftCol := h.leftKey
+			leftHasQual := false
 			if idx := strings.Index(leftCol, "."); idx != -1 {
 				leftCol = leftCol[idx+1:]
+				leftHasQual = true
 			}
 
 			_, rHasRight := rMap.Index(h.rightKey)
-			if !rHasRight {
+			if !rHasRight && !rightHasQual {
 				_, rHasRight = rMap.Index(rightCol)
 			}
 			_, rHasLeft := rMap.Index(h.leftKey)
-			if !rHasLeft {
+			if !rHasLeft && !leftHasQual {
 				_, rHasLeft = rMap.Index(leftCol)
 			}
 
 			var lHasLeft, lHasRight bool
 			if lMap != nil {
 				_, lHasLeft = lMap.Index(h.leftKey)
-				if !lHasLeft {
+				if !lHasLeft && !leftHasQual {
 					_, lHasLeft = lMap.Index(leftCol)
 				}
 				_, lHasRight = lMap.Index(h.rightKey)
-				if !lHasRight {
+				if !lHasRight && !rightHasQual {
 					_, lHasRight = lMap.Index(rightCol)
 				}
 			}

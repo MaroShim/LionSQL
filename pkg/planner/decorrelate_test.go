@@ -34,6 +34,28 @@ func TestDecorrelate_CorrelatedExists(t *testing.T) {
 	}
 }
 
+func TestDecorrelate_SelfCorrelated(t *testing.T) {
+	p := NewPlanner()
+	q, err := p.ParseSelect("SELECT * FROM r4 WHERE EXISTS (SELECT 1 FROM r4 x WHERE x.id = r4.id);")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	err = p.DecorrelateSubqueries(q, nil)
+	if err != nil {
+		t.Fatalf("DecorrelateSubqueries failed: %v", err)
+	}
+	if len(q.Joins) != 1 {
+		t.Fatalf("expected 1 decorrelated join, got %d", len(q.Joins))
+	}
+	j := q.Joins[0]
+	if j.Type != "SEMI" || j.Table != "r4" || j.Alias != "x" {
+		t.Fatalf("unexpected join metadata: %+v", j)
+	}
+	if j.LeftKey != "r4.id" || j.RightKey != "x.id" {
+		t.Fatalf("expected LeftKey=r4.id RightKey=x.id, got LeftKey=%s RightKey=%s", j.LeftKey, j.RightKey)
+	}
+}
+
 func TestDecorrelate_CorrelatedNotExists(t *testing.T) {
 	p := NewPlanner()
 	q, err := p.ParseSelect("SELECT u.id, u.name FROM users u WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id);")
