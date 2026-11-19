@@ -60,6 +60,28 @@ func TestBuiltin_DateTime(t *testing.T) {
 	if addedYear.SVal != "2028-01-01 00:00:00" {
 		t.Errorf("Expected 2028-01-01 00:00:00, got %s", addedYear.SVal)
 	}
+
+	// DATEADD Month-End Clamping [R2 N-7]
+	clampMonth := EvalBuiltin("DATEADD", []storage.Value{storage.StringValue("month"), storage.IntValue(1), storage.StringValue("2026-01-31 00:00:00")})
+	if clampMonth.SVal != "2026-02-28 00:00:00" {
+		t.Errorf("Expected 2026-02-28 00:00:00, got %s", clampMonth.SVal)
+	}
+	clampLeapYearMonth := EvalBuiltin("DATEADD", []storage.Value{storage.StringValue("month"), storage.IntValue(1), storage.StringValue("2024-01-31 00:00:00")})
+	if clampLeapYearMonth.SVal != "2024-02-29 00:00:00" {
+		t.Errorf("Expected 2024-02-29 00:00:00, got %s", clampLeapYearMonth.SVal)
+	}
+	clampLeapYear := EvalBuiltin("DATEADD", []storage.Value{storage.StringValue("year"), storage.IntValue(1), storage.StringValue("2024-02-29 00:00:00")})
+	if clampLeapYear.SVal != "2025-02-28 00:00:00" {
+		t.Errorf("Expected 2025-02-28 00:00:00, got %s", clampLeapYear.SVal)
+	}
+	clampQuarter := EvalBuiltin("DATEADD", []storage.Value{storage.StringValue("quarter"), storage.IntValue(1), storage.StringValue("2026-01-31 00:00:00")})
+	if clampQuarter.SVal != "2026-04-30 00:00:00" {
+		t.Errorf("Expected 2026-04-30 00:00:00, got %s", clampQuarter.SVal)
+	}
+	clampNegMonth := EvalBuiltin("DATEADD", []storage.Value{storage.StringValue("month"), storage.IntValue(-1), storage.StringValue("2026-03-31 00:00:00")})
+	if clampNegMonth.SVal != "2026-02-28 00:00:00" {
+		t.Errorf("Expected 2026-02-28 00:00:00, got %s", clampNegMonth.SVal)
+	}
 }
 
 func TestBuiltin_Strings(t *testing.T) {

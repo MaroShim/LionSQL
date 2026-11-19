@@ -158,14 +158,34 @@ func evalDateDiff(part string, t1, t2 time.Time) storage.Value {
 	}
 }
 
+func addMonthsClamped(t time.Time, months int) time.Time {
+	curYear := t.Year()
+	curMonth0 := int(t.Month()) - 1
+	totalMonths := int64(curYear)*12 + int64(curMonth0) + int64(months)
+
+	targetYear := int(totalMonths / 12)
+	targetMonth0 := int(totalMonths % 12)
+	if targetMonth0 < 0 {
+		targetYear -= 1
+		targetMonth0 += 12
+	}
+	m := time.Month(targetMonth0 + 1)
+	lastDay := time.Date(targetYear, m+1, 0, 0, 0, 0, 0, t.Location()).Day()
+	day := t.Day()
+	if day > lastDay {
+		day = lastDay
+	}
+	return time.Date(targetYear, m, day, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
+}
+
 func evalDateAdd(part string, n int64, t time.Time) (time.Time, bool) {
 	switch part {
 	case "year":
-		return t.AddDate(int(n), 0, 0), true
+		return addMonthsClamped(t, int(n)*12), true
 	case "quarter":
-		return t.AddDate(0, int(n*3), 0), true
+		return addMonthsClamped(t, int(n)*3), true
 	case "month":
-		return t.AddDate(0, int(n), 0), true
+		return addMonthsClamped(t, int(n)), true
 	case "day", "dayofyear", "weekday":
 		return t.AddDate(0, 0, int(n)), true
 	case "week":

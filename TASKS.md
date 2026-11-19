@@ -268,6 +268,7 @@
 | `DONE` | **`FIX-CURSOR-DECLARE-OPEN-LIFECYCLE-1`** | `v0.94.0` | Engine | P1 | 커서 DECLARE 및 OPEN 생명주기 분리 (DECLARE 시 조기 오픈 및 already open 에러 방지) |  |  |
 | `DONE` | **`FIX-CURSOR-LIFECYCLE-1`** |  | Engine | P1 | 커서 DEALLOCATE 및 배치 종료 시 세션 커서 레지스트리 정리 및 재선언 충돌 해결 | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-DATEADD-MONTH-END-CLAMP-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
+| `DONE` | **`FIX-DATEADD-MONTH-END-CLAMPING-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DATEDIFF-BIG-DAYOFYEAR-1`** |  | Proc | P2 | DATEDIFF_BIG(dayofyear, ...) returns NULL | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-DATEDIFF-BOUNDARY-CROSSING-1`** | `1.0-GA` | Engine | P2 | T-SQL DATEDIFF datepart 경계선 통과 계산 스펙 준수 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DDL-DEFAULT-CHECK-1`** | `1.0-GA` | Engine | P2 | CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 | [`1.0-GA`](1.0-GA) |  |
@@ -3095,6 +3096,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [PENDING] Engine `FIX-DATEADD-MONTH-END-CLAMP-1`
 - **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 00:47:09
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
+
+---
+
+### [DONE] --domain `FIX-DATEADD-MONTH-END-CLAMPING-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 03:54:37
+- **Milestone**: `--prio`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
 
