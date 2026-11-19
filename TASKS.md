@@ -459,7 +459,7 @@
 | `DONE` | **`TEST-OCC-FLAT-3`** |  | Storage | P2 | Flat 모드 쿼리 엔진 풀 스위트 회귀 검증 (SLT 및 Babelfish) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `PENDING` | **`TEST-OCC-FLAT-4`** | `1.0-GA` | Storage | P2 | Flat 모드 24h 장기 소크 및 가변 길이 UPDATE 단편화 검증 | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `DONE` | **`TEST-SQLGLOT-TSQL-ORACLE-1`** | `1.0-GA` | Engine | P1 | tobymao/sqlglot test_tsql.py(3,274줄, 63개 메서드, 526개 validate 케이스) T-SQL 표현식·내장함수·날짜약어·집합연산 파서/실행 오라클 검증 | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`TEST-SUPERSET-GUIDE-E2E-PARITY-1`** | `v0.94.0` | Test | P2 | 단일 통합 슈퍼셋 가이드 문서 E2E 듀얼 프로토콜 검증 테스트 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
+| `DONE` | **`TEST-SUPERSET-GUIDE-E2E-PARITY-1`** | `v0.94.0` | Test | P2 | 단일 통합 슈퍼셋 가이드 문서 E2E 듀얼 프로토콜 검증 테스트 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
 | `DONE` | **`TEST-TDS-GOMSSQLDB-ORACLE-1`** |  | Wire | P1 | 공식 microsoft/go-mssqldb 드라이버 테스트 스위트(550+ 케이스) 라이브 TDS 통합 오라클 이식 및 검증 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`TEST-TDS-MSSQL-JDBC-ORACLE-1`** | `1.0-GA` | Protocol | P1 | microsoft/mssql-jdbc 공식 테스트 스위트(200개 파일, 2,641개 @Test, datatypes/callablestatement/preparedStatement/databasemetadata) 핵심 T-SQL 및 카탈로그 오라클 수확 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`TEST-TDS-PYMSSQL-ORACLE-1`** | `1.0-GA` | Protocol | P1 | pymssql 공식 테스트 스위트(test_sprocs.py 17개 고정/가변 타입 OUTPUT 프로시저, test_types.py, test_queries.py 등 ~200케이스) TDS/Gate 5 오라클 포팅 및 검증 | [`1.0-GA`](1.0-GA) |  |
@@ -4587,8 +4587,8 @@ SSMS Object Explorer 테이블 하위 트리(Columns, Keys, Indexes, Triggers) �
 
 ---
 
-### [PENDING] 단일 통합 슈퍼셋 가이드 문서 E2E 듀얼 프로토콜 검증 테스트 `TEST-SUPERSET-GUIDE-E2E-PARITY-1`
-- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-18 22:58:42
+### [DONE] 단일 통합 슈퍼셋 가이드 문서 E2E 듀얼 프로토콜 검증 테스트 `TEST-SUPERSET-GUIDE-E2E-PARITY-1`
+- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-19 00:18:45
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md)
 
