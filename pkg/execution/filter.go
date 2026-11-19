@@ -381,6 +381,9 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 
 func lookupVal(t Tuple, col string) (any, bool) {
 	col = strings.Trim(col, "\"`[]")
+	if colIdx := sqlutil.FindTopLevelKeyword(col, "COLLATE"); colIdx != -1 {
+		col = strings.TrimSpace(col[:colIdx])
+	}
 	if v, ok := t.GetOK(col); ok {
 		return v, true
 	}

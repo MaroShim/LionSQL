@@ -80,6 +80,7 @@ type groupAccumulator struct {
 type AggregateIterator struct {
 	child         Iterator
 	groupKeys     []string
+	groupKeyIsCS  []bool
 	groupByMod    proc.GroupByModifier
 	projections   []string
 	havingCond    string
@@ -703,6 +704,9 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 	}
 	for _, k := range a.groupKeys {
 		trimmed := strings.TrimSpace(k)
+		if colIdx := sqlutil.FindTopLevelKeyword(trimmed, "COLLATE"); colIdx != -1 {
+			trimmed = strings.TrimSpace(trimmed[:colIdx])
+		}
 		if trimmed == "" || strings.ContainsAny(trimmed, " +-*/%|()") || strings.HasPrefix(trimmed, "'") || strings.HasPrefix(trimmed, "\"") {
 			continue
 		}
@@ -746,8 +750,12 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 	if a.child != nil && len(a.groupKeys) > 0 {
 		schema := a.child.Schema()
 		a.groupKeyIdx = make([]int, len(a.groupKeys))
+		a.groupKeyIsCS = make([]bool, len(a.groupKeys))
 		for i, gk := range a.groupKeys {
 			cleanGk := strings.ToLower(sqlutil.CleanIdentifier(gk))
+			if colIdx := sqlutil.FindTopLevelKeyword(cleanGk, "collate"); colIdx != -1 {
+				cleanGk = strings.TrimSpace(cleanGk[:colIdx])
+			}
 			idx := -1
 			for ci, col := range schema {
 				if strings.ToLower(sqlutil.CleanIdentifier(col)) == cleanGk {
@@ -756,6 +764,10 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 				}
 			}
 			a.groupKeyIdx[i] = idx
+			if colIdx := sqlutil.FindTopLevelKeyword(gk, "COLLATE"); colIdx != -1 {
+				collName := strings.TrimSpace(gk[colIdx+7:])
+				a.groupKeyIsCS[i] = sqlutil.IsCaseSensitiveCollation(collName)
+			}
 		}
 	}
 
@@ -871,6 +883,10 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 							} else {
 								val, _ = lookupVal(tuple, k)
 							}
+							isCS := false
+							if a.groupKeyIsCS != nil && i < len(a.groupKeyIsCS) {
+								isCS = a.groupKeyIsCS[i]
+							}
 							switch v := val.(type) {
 							case nil:
 								gk.WriteString("\x00NULL")
@@ -879,11 +895,31 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 							case int:
 								gk.WriteString(strconv.Itoa(v))
 							case string:
-								gk.WriteString(v)
+								if isCS {
+									gk.WriteString(v)
+								} else {
+									gk.WriteString(strings.ToLower(v))
+								}
+							case storage.Value:
+								if v.IsNull {
+									gk.WriteString("\x00NULL")
+								} else if v.Type == storage.TypeVarChar {
+									if isCS {
+										gk.WriteString(v.SVal)
+									} else {
+										gk.WriteString(strings.ToLower(v.SVal))
+									}
+								} else {
+									gk.WriteString(v.String())
+								}
 							case float64:
 								gk.WriteString(strconv.FormatFloat(v, 'g', -1, 64))
 							default:
-								gk.WriteString(fmt.Sprintf("%v", val))
+								s := fmt.Sprintf("%v", val)
+								if !isCS {
+									s = strings.ToLower(s)
+								}
+								gk.WriteString(s)
 							}
 						}
 						gk.WriteByte('\x00')

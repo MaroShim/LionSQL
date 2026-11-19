@@ -259,7 +259,7 @@
 | `DONE` | **`FIX-ARITHMETIC-OVERFLOW-DETECTION-1`** | `1.0-GA` | Execution | P2 | 정수 산술 연산 64비트 오버플로 검출 및 bigint out of range 에러 반환 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-BATCH-MULTI-RESULTSET-DELIVERY-1`** |  | 1 | P2 | Wire | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`FIX-COLLATION-GROUP-BY-CONSISTENCY-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
+| `DONE` | **`FIX-COLLATION-GROUP-BY-CONSISTENCY-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-COMMIT-PARTIAL-MUTATION-RECOVERY-1`** | `1` | --domain | P2 | Commit 중도 실패 시 부분 변경(Shard/Partition/Index) 복구 누락 결함 수정 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-COMPOSITE-PK-DML-OVERWRITE-1`** | `1.0-GA` | Engine | P1 | 복합 기본키 테이블 DML 실행 시 복합 키 전체 바인딩 및 행 오염 방지 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-COMPUTED-COLUMN-SELECT-EVAL-1`** | `v0.94.0` | Engine | P1 | 계산된 열(Computed Column) SELECT 시 동적 수식 평가 (NULL 반환 결함 수정) |  |  |
@@ -3040,8 +3040,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] Engine `FIX-COLLATION-GROUP-BY-CONSISTENCY-1`
-- **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 00:47:09
+### [DONE] Engine `FIX-COLLATION-GROUP-BY-CONSISTENCY-1`
+- **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 03:47:58
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
 
 ---
