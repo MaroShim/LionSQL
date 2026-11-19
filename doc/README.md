@@ -37,8 +37,8 @@ Guides for client tools, query development, SQL ergonomics, and verification sui
 
 * **[`CLIENT_TOOL_INTEGRATION.md`](CLIENT_TOOL_INTEGRATION.md)** ([Korean](CLIENT_TOOL_INTEGRATION.ko.md))
   * Setup guide for SSMS, DBeaver, psql, Beekeeper Studio, DbGate, and Grafana client tools.
-* **[`SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md`](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md)** ([Korean](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md))
-  * Multi-dialect SQL compatibility and developer ergonomics (MySQL backticks, `DESC`, `SHOW TABLES`, high-ROI functions).
+* **[`SQL_COMPATIBILITY_GUIDE.md`](SQL_COMPATIBILITY_GUIDE.md)** ([Korean](SQL_COMPATIBILITY_GUIDE.ko.md))
+  * Multi-dialect SQL compatibility guide (MySQL backticks, `DESC`, `SHOW TABLES`, high-ROI functions).
 * **[`SQLLOGICTEST_GUIDE.md`](SQLLOGICTEST_GUIDE.md)** ([Korean](SQLLOGICTEST_GUIDE.ko.md))
   * Execution and verification guide for SQLite official SQLLogicTest (550k+ queries) and Babelfish T-SQL procedural suite.
 * **[`COMPLEX_QUERY_BENCHMARK_GUIDE.md`](COMPLEX_QUERY_BENCHMARK_GUIDE.md)** ([Korean](COMPLEX_QUERY_BENCHMARK_GUIDE.ko.md))
@@ -46,7 +46,7 @@ Guides for client tools, query development, SQL ergonomics, and verification sui
 * **[`WEB_STUDIO_GUIDE.md`](WEB_STUDIO_GUIDE.md)** ([Korean](WEB_STUDIO_GUIDE.ko.md))
   * Embedded Web Studio (`TCP :8090 /_/`) dashboard and Excel-style inline row creation guide.
 * **[`WEB_APP_HOSTING_GUIDE.md`](WEB_APP_HOSTING_GUIDE.md)** ([Korean](WEB_APP_HOSTING_GUIDE.ko.md))
-  * Embedded single-binary static SPA web app hosting guide (single HTML file or flat static directory with zero CORS).
+  * Embedded single-binary static SPA web app hosting guide (single HTML file or static SPA directory with zero CORS).
 * **Production Application Integration Guides (`guide/`)**:
   * Real-world guides for 10 open-source apps (Answer, Vaultwarden, Metabase, Umami, Woodpecker, Vikunja, Gitea, Grafana, Casdoor, IOTA ERP) are located in **[`guide/README.md`](../guide/README.md)**.
 

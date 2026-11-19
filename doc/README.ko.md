@@ -38,8 +38,8 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
 
 * **[`CLIENT_TOOL_INTEGRATION.ko.md`](CLIENT_TOOL_INTEGRATION.ko.md)** ([English](CLIENT_TOOL_INTEGRATION.md))
   * SSMS, DBeaver, psql, Beekeeper Studio, DbGate, Grafana 등 주요 클라이언트 GUI 및 CLI 도구 연동 가이드.
-* **[`SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md`](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md)** ([English](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md))
-  * LionSQL 다중 방언 SQL 호환성 및 개발자 편의 문법(MySQL 호환 백틱, `DESC`, `SHOW TABLES`, 고ROI 빌트인 함수 등).
+* **[`SQL_COMPATIBILITY_GUIDE.ko.md`](SQL_COMPATIBILITY_GUIDE.ko.md)** ([English](SQL_COMPATIBILITY_GUIDE.md))
+  * LionSQL 다중 방언 SQL 호환성 가이드(MySQL 호환 백틱, `DESC`, `SHOW TABLES`, 고ROI 빌트인 함수 등).
 * **[`SQLLOGICTEST_GUIDE.ko.md`](SQLLOGICTEST_GUIDE.ko.md)** ([English](SQLLOGICTEST_GUIDE.md))
   * SQLite 공식 SQLLogicTest (55만 쿼리) 및 Babelfish T-SQL 프로시저 스위트 실행·검증 가이드.
 * **[`COMPLEX_QUERY_BENCHMARK_GUIDE.ko.md`](COMPLEX_QUERY_BENCHMARK_GUIDE.ko.md)** ([English](COMPLEX_QUERY_BENCHMARK_GUIDE.md))
@@ -47,7 +47,7 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
 * **[`WEB_STUDIO_GUIDE.ko.md`](WEB_STUDIO_GUIDE.ko.md)** ([English](WEB_STUDIO_GUIDE.md))
   * 내장 Web Studio (`TCP :8090 /_/`) 대시보드 및 엑셀 스타일 인라인 레코드 편집 가이드.
 * **[`WEB_APP_HOSTING_GUIDE.ko.md`](WEB_APP_HOSTING_GUIDE.ko.md)** ([English](WEB_APP_HOSTING_GUIDE.md))
-  * 단일 정적 바이너리로 DB와 SPA 웹 앱(단일 HTML/Flat 폴더)을 동시 호스팅하는 자체 웹서버 및 Same-Origin 활용 가이드.
+  * 단일 정적 바이너리로 DB와 SPA 웹 앱(단일 HTML/SPA 디렉토리)을 동시 호스팅하는 자체 웹서버 및 Same-Origin 활용 가이드.
 * **실전 오픈소스 애플리케이션 연동 가이드 (`guide/`)**:
   * 10대 프로덕션 오픈소스 앱(Answer, Vaultwarden, Metabase, Umami, Woodpecker, Vikunja, Gitea, Grafana, Casdoor, IOTA ERP) 연동 가이드는 **[`guide/README.ko.md`](../guide/README.ko.md)**를 참조하십시오.
 

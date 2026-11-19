@@ -409,15 +409,49 @@ CLI tool managing database schema revisions encoded as reproducible migration sc
   | `down` | Roll back the most recently applied migration (specify steps via `-steps <n>`) |
   | `status` | Display currently applied migration versions and pending file list |
 
-#### 9. `sql` (Lightweight Inline Query Runner)
-Executes SQL statements directly against a local LionSQL server and renders results as formatted terminal tables without requiring external client tools like `psql` or `sqlcmd`.
+#### 9. `cli` / `sql` (Interactive SQL Shell & Inline/Batch Query Runner)
+Executes SQL statements directly against a local LionSQL server and renders results as formatted terminal tables without requiring external client tools like `psql` or `sqlcmd`, or opens an interactive SQL REPL prompt (`lionsql>`).
 
 * **Syntax**:
   ```bash
+  # Enter interactive SQL REPL (aliases: lionsql -i, lionsql shell)
+  lionsql cli [-dir <path>]
+
+  # Execute inline SQL query directly (-e or positional string)
+  lionsql cli -e "<SQL_STATEMENT>" [-dir <path>]
   lionsql sql -query "<SQL_STATEMENT>" [-dir <path>]
+
+  # Execute SQL batch file (-f)
+  lionsql cli -f <batch_file.sql> [-dir <path>]
   ```
+* **Options**:
+  | Flag | Short Alias | Default | Description |
+  | :--- | :---: | :---: | :--- |
+  | `-interactive` | `-i`, `-shell` | `false` | Start interactive SQL REPL shell |
+  | `-execute <sql>` | `-e` | `""` | Execute a single inline SQL statement and exit |
+  | `-file <path>` | `-f` | `""` | Execute a batch SQL script file |
+  | `-dir <path>` | `-data`, `-data-dir` | `data` | Path to data directory |
+  | `-engine <type>` | - | `auto` | Storage engine backend (`wiredtiger`, `memory`) |
+  | `-disk <type>` | - | `auto` | Disk persistence backend (`compact`, `wiredtiger`) |
+
 * **Execution Example**:
   ```bash
+  # 1. Interactive REPL Shell
+  $ lionsql cli
+  LionSQL v0.90.0 Interactive SQL Shell (T-SQL / ANSI)
+  Type "help" or "\?" for help. Type "exit" or "quit" to quit.
+
+  lionsql> SELECT @@VERSION;
+  +-----------------------------------------------------------------+
+  | @@version                                                       |
+  +-----------------------------------------------------------------+
+  | Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 - LionSQL Engine  |
+  +-----------------------------------------------------------------+
+  (1 row affected in 0.45ms)
+
+  lionsql> exit
+
+  # 2. Inline Query Execution
   $ lionsql sql -query "SELECT table_name, row_count FROM sys.tables WHERE is_user_table = 1;"
   +--------------+-----------+
   | table_name   | row_count |
@@ -478,7 +512,7 @@ Prints the official release version, build tags, target OS/architecture, and Git
 | :--- | :---: | :---: | :--- | :--- |
 | **Network Configuration** | | | | |
 | `-http` | string | `:8090` | `LION_HTTP_ADDR` | TCP listener address for HTTP REST API and Web Studio. Empty string (`""`) disables it |
-| `-app` | string | `""` | `LIONSQL_APP` | Path to single HTML file or flat static SPA directory to host (embedded web server) |
+| `-app` | string | `""` | `LIONSQL_APP` | Path to single HTML file or static SPA directory to host (embedded web server) |
 | `-pg` | string | `:5433` | `LION_PG_ADDR` | TCP listener address for PostgreSQL Wire Protocol v3. Empty string disables it |
 | `-tds` | string | `:1433` | `LION_TDS_ADDR` | TCP listener address for Microsoft SQL Server TDS 7.x/8.0. Empty string disables it |
 | `-tls` | bool | `false` | `LION_TLS_ENABLED` | Enable Transport Layer Security (TLS/SSL) encryption layer |
@@ -680,7 +714,7 @@ The following is the canonical schema for `lionsql.json` containing all configur
 
 #### 2. `network` Section
 * **`http_addr`** (string): TCP listener address for REST API and embedded Web Studio (default: `":8090"`).
-* **`app`** (string): Path to single HTML file or flat static SPA directory to host (default: `""`, disabled).
+* **`app`** (string): Path to single HTML file or static SPA directory to host (default: `""`, disabled).
 * **`pg_addr`** (string): TCP listener address for PostgreSQL Wire Protocol v3 (default: `":5433"`).
 * **`tds_addr`** (string): TCP listener address for MS SQL Server TDS 7.x/8.0 (default: `":1433"`).
 * **`tls.enabled`** (bool): Whether Transport Layer Security encryption is activated (default: `false`).

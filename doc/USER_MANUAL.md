@@ -383,10 +383,6 @@ LionSQL provides two simultaneous entrypoints to enter the interactive SQL promp
 ./bin/lionsql cli
 ```
 
-> [!NOTE]
-> **`-p` Flag Convention Protection Policy**:  
-> In the database ecosystem (MySQL, PostgreSQL, MSSQL), `-p` has been universally reserved for **password** or **port** for decades. To avoid cognitive friction and muscle memory clashes, LionSQL reserves `-p` for standard credentials/ports and adopts the global Unix/Python/Node.js standard **`-i` (Interactive)** short flag and **`cli`** subcommand.
-
 #### Headless Query Execution and Batch Scripting ([RULE:HeadlessParity])
 Execute single queries or batch files directly in CI/CD pipelines and shell scripts without interactive terminal prompts:
 ```bash
@@ -678,7 +674,7 @@ LionSQL operates as a **fully ACID-compliant, persistent transactional database*
 
 #### Table-Level Durability Control: T-SQL `WITH (DURABILITY = ...)` Standard
 
-Rather than relying on risky, global server-level ephemeral flags (`-ephemeral`), LionSQL adopts the **Microsoft SQL Server In-Memory OLTP standard for Table-Level Durability**:
+Rather than relying on risky global server-level volatile modes, LionSQL adopts the **Microsoft SQL Server In-Memory OLTP standard for Table-Level Durability**:
 
 ```sql
 -- 1. Standard Persistent Table (Default): Schema and row data are fully persistent
@@ -697,7 +693,7 @@ CREATE TABLE dbo.WebSession (
 ```
 
 > [!NOTE]
-> Tables created with `WITH (DURABILITY = SCHEMA_ONLY)` preserve their schema definitions (`TableSchema`) and secondary indexes across server restarts, preventing `table not found` exceptions in client applications while resetting volatile row data to zero rows. (The legacy server-wide `-ephemeral` flag has been completely removed in favor of granular DDL options, and volatile testing is performed via `-dir ""`.)
+> Tables created with `WITH (DURABILITY = SCHEMA_ONLY)` preserve their schema definitions (`TableSchema`) and secondary indexes across server restarts, preventing `table not found` exceptions in client applications while resetting volatile row data to zero rows. (Volatile testing is performed via `-dir ""`.)
 
 #### The Four Production Workload Recipes
 
@@ -883,7 +879,7 @@ Manage all aspects of the database visually through any web browser (`http://loc
 
 ---
 
-### 4.5. Single File / Flat Folder SPA Web App Hosting (`--app`)
+### 4.5. Single File / Directory SPA Web App Hosting (`--app`)
 
 LionSQL can host frontend web applications and high-concurrency database APIs simultaneously within a single static executable, completely eliminating the need for separate Nginx, Caddy, or Node.js daemons.
 
@@ -891,13 +887,13 @@ LionSQL can host frontend web applications and high-concurrency database APIs si
 1. **Single HTML File Mode**:
    - `lionsql server --app=./dashboard.html`
    - Host self-contained dashboards (Alpine.js, Tailwind CDN) with instant live reloading.
-2. **Flat Directory SPA Mode**:
+2. **Directory SPA Mode (Chroot Sandbox)**:
    - `lionsql server --app=./dist`
-   - Host production builds (React, Vue, Svelte) with automatic HTML5 History API fallback to `index.html`.
+   - Host production builds (React, Vue, Svelte, Vite) including subdirectories (`dist/assets/*.js`) secured by Go standard `os.DirFS` chroot isolation, with automatic HTML5 History API fallback to `index.html`.
 
 #### Same-Origin & Security Highlights
 - **Zero CORS**: Frontend UIs and backend APIs share port `:8090`, completely eliminating cross-origin preflight requests.
-- **Flat Directory Invariant**: Rejects path traversal (`..`) and hidden files (`.env`, `.git`) to ensure impenetrable static asset serving.
+- **Chroot Sandbox Invariant**: Eliminates path traversal (`..`) and hidden files (`.env`, `.git`) at the Go standard `io/fs` level to ensure impenetrable static asset serving.
 
 For full tutorials and architecture details, consult **[`WEB_APP_HOSTING_GUIDE.md`](WEB_APP_HOSTING_GUIDE.md)**.
 

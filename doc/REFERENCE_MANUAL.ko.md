@@ -407,15 +407,49 @@ LionSQL 서버를 운영체제 백그라운드 데몬 프로세스로 분기(For
   | `down` | 직전에 적용된 마이그레이션을 롤백 (`-steps <n>`으로 단계 지정 가능) |
   | `status` | 현재 적용된 마이그레이션 버전과 대기 중인 파일 목록 출력 |
 
-#### 9. `sql` (경량 인라인 쿼리 실행기)
-별도의 `psql`이나 `sqlcmd` 설치 없이 로컬 LionSQL 서버에 즉시 SQL 구문을 전송하여 결과를 터미널 표 형태로 조회합니다.
+#### 9. `cli` / `sql` (대화형 SQL 셸 및 인라인/배치 쿼리 실행기)
+별도의 `psql`이나 `sqlcmd` 설치 없이 로컬 LionSQL 서버에 즉시 SQL 구문을 전송하여 결과를 터미널 표 형태로 조회하거나, 대화형 SQL REPL 프롬프트(`lionsql>`)에 진입합니다.
 
 * **구문(Syntax)**:
   ```bash
+  # 대화형 SQL REPL 진입 (alias: lionsql -i, lionsql shell)
+  lionsql cli [-dir <path>]
+
+  # 인라인 SQL 쿼리 즉시 실행 (-e 또는 따옴표 인자)
+  lionsql cli -e "<SQL_STATEMENT>" [-dir <path>]
   lionsql sql -query "<SQL_STATEMENT>" [-dir <path>]
+
+  # SQL 배치 파일 실행 (-f)
+  lionsql cli -f <batch_file.sql> [-dir <path>]
   ```
+* **옵션 상세**:
+  | 플래그 | 단축 플래그 | 기본값 | 설명 |
+  | :--- | :---: | :---: | :--- |
+  | `-interactive` | `-i`, `-shell` | `false` | 대화형 SQL REPL 프롬프트 진입 |
+  | `-execute <sql>` | `-e` | `""` | 단일 인라인 SQL 구문 실행 후 즉시 종료 |
+  | `-file <path>` | `-f` | `""` | 지정된 SQL 배치 스크립트 파일 실행 |
+  | `-dir <path>` | `-data`, `-data-dir` | `data` | 데이터 디렉토리 경로 지정 |
+  | `-engine <type>` | - | `auto` | 스토리지 엔진 지정 (`wiredtiger`, `memory`) |
+  | `-disk <type>` | - | `auto` | 디스크 영속성 백엔드 지정 (`compact`, `wiredtiger`) |
+
 * **실행 예시**:
   ```bash
+  # 1. 대화형 셸 진입
+  $ lionsql cli
+  LionSQL v0.90.0 Interactive SQL Shell (T-SQL / ANSI)
+  Type "help" or "\?" for help. Type "exit" or "quit" to quit.
+
+  lionsql> SELECT @@VERSION;
+  +-----------------------------------------------------------------+
+  | @@version                                                       |
+  +-----------------------------------------------------------------+
+  | Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 - LionSQL Engine  |
+  +-----------------------------------------------------------------+
+  (1 row affected in 0.45ms)
+
+  lionsql> exit
+
+  # 2. 인라인 단일 쿼리 실행
   $ lionsql sql -query "SELECT table_name, row_count FROM sys.tables WHERE is_user_table = 1;"
   +--------------+-----------+
   | table_name   | row_count |
@@ -475,7 +509,7 @@ LionSQL 바이너리의 정식 릴리즈 버전, 빌드 태그, 대상 OS/아키
 | :--- | :---: | :---: | :--- | :--- |
 | **네트워크 설정** | | | | |
 | `-http` | string | `:8090` | `LION_HTTP_ADDR` | HTTP REST API 및 Web Studio 리스너 주소. 빈 문자열(`""`) 시 비활성화 |
-| `-app` | string | `""` | `LIONSQL_APP` | 호스팅할 단일 HTML 파일 또는 Flat SPA 디렉토리 경로 (자체 웹서버 기능) |
+| `-app` | string | `""` | `LIONSQL_APP` | 호스팅할 단일 HTML 파일 또는 SPA 디렉토리 경로 (자체 웹서버 기능) |
 | `-pg` | string | `:5433` | `LION_PG_ADDR` | PostgreSQL Wire Protocol v3 호환 TCP 리스너 주소. 빈 문자열 시 비활성화 |
 | `-tds` | string | `:1433` | `LION_TDS_ADDR` | Microsoft SQL Server TDS 7.x/8.0 호환 TCP 리스너 주소. 빈 문자열 시 비활성화 |
 | `-tls` | bool | `false` | `LION_TLS_ENABLED` | 전송 계층 보안(TLS/SSL) 암호화 레이어 활성화 |
@@ -677,7 +711,7 @@ $$\text{CLI Flags} > \text{Environment Variables} > \text{Config File (lionsql.j
 
 #### 2. `network` 섹션
 * **`http_addr`** (string): REST API 및 내장 Web Studio 리스너 TCP 주소 (기본값: `":8090"`).
-* **`app`** (string): 호스팅할 단일 HTML 파일 또는 Flat SPA 디렉토리 경로 (기본값: `""`, 비활성화).
+* **`app`** (string): 호스팅할 단일 HTML 파일 또는 SPA 디렉토리 경로 (기본값: `""`, 비활성화).
 * **`pg_addr`** (string): PostgreSQL Wire Protocol v3 호환 TCP 리스너 주소 (기본값: `":5433"`).
 * **`tds_addr`** (string): MS SQL Server TDS 7.x/8.0 호환 TCP 리스너 주소 (기본값: `":1433"`).
 * **`tls.enabled`** (bool): 전송 계층 보안 암호화 활성화 여부 (기본값: `false`).

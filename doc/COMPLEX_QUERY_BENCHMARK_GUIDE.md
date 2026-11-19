@@ -239,8 +239,8 @@ SQLite       ██████████████████████�
 ### 7.2. Pragmatic High-Throughput Status & Roadmap
 LionSQL accelerates complex analytical queries to sub-50ms latencies while preserving row-store simplicity through three targeted enhancements:
 * **1,024-Row Vectorized Chunk Streaming (`ChunkedIterator`, `PullChunk`) [Completed]**: Already implemented across `SeqScan`, `Filter`, `HashJoin`, `Aggregate`, and `Sort` operators, reducing dynamic interface dispatch overhead by a factor of 1,024.
+* **Direct Slot Index Projection (`ColumnIndexMap`, `srcIdx`) [Implemented / Complex Expr Slot Binding Roadmap]**: Bypasses string-based column name lookups during simple projections with $O(1)$ pre-resolved slice index lookups (`tuple.Values[idx]`) and operator-wide `ColumnIndexMap` binding. (Pending: pre-compiled slot binding for complex AST leaf nodes).
 * **Flat Open-Addressing Hash Joins [Upcoming Roadmap]**: Replaces Go runtime maps with contiguous memory slice-backed linear open-addressing integer hash tables for CPU cache-line locality.
-* **Direct Slot Index Projection [Upcoming Roadmap]**: Completely bypasses string-based column name lookups during expression evaluation in favor of pre-resolved tuple register offsets.
 
 ---
 

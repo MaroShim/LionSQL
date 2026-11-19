@@ -16,8 +16,8 @@ By passing a single HTML file (`index.html`) or a built static asset folder (`di
 2. [Key Advantages & Same-Origin Benefits](#2-key-advantages--same-origin-benefits)
 3. [Two Hosting Execution Modes](#3-two-hosting-execution-modes)
    - [3.1. Single HTML File Mode](#31-single-html-file-mode)
-   - [3.2. Flat Directory SPA Mode](#32-flat-directory-spa-mode)
-4. [Security Architecture: Flat Directory Invariant](#4-security-architecture-flat-directory-invariant)
+   - [3.2. Sandbox SPA Directory Mode](#32-sandbox-spa-directory-mode)
+4. [Security Architecture: Chroot Sandbox Invariant](#4-security-architecture-chroot-sandbox-invariant)
 5. [Performance Architecture & High-Concurrency Capacity](#5-performance-architecture--high-concurrency-capacity)
 6. [URL Routing Rules & HTML5 History API](#6-url-routing-rules--html5-history-api)
 7. [Quick Tutorial: Deploying a Full-Stack App in 1 Minute](#7-quick-tutorial-deploying-a-full-stack-app-in-1-minute)
@@ -37,7 +37,7 @@ LionSQL integrates this workflow by combining the simplicity of PocketBase and S
 |                                                                               |
 |   [ Browser Client ]                                                          |
 |           │                                                                   |
-|           ├──> GET / (or /dashboard, /users) ──> Embedded Flat Web Server     |
+|           ├──> GET / (or /dashboard, /users) ──> Embedded Web Server          |
 |           │                                      (--app=./dist / index.html)  |
 |           │                                      (Kernel sendfile: 45k+ RPS)  |
 |           │                                                                   |
@@ -81,12 +81,12 @@ LionSQL inspects the file attributes (`os.Stat`) of the path passed to `--app` a
   lionsql server --app=./dashboard.html
   ```
 
-### 3.2. Flat Directory SPA Mode
+### 3.2. Sandbox SPA Directory Mode
 - **Condition**: A path pointing to a directory (e.g. `./dist`, `./build`).
 - **Requirement**: The target directory must contain a valid `index.html` file.
 - **Characteristics**:
-  - Serves static assets (`*.js`, `*.css`, `*.svg`, etc.) with correct MIME types.
-  - Falls back to `index.html` for clean URLs without extensions (`/`, `/dashboard`, `/users/1`), enabling **HTML5 History API client-side routing** for React, Vue, Svelte, and Angular.
+  - Serves static assets (`dist/assets/*.js`, `dist/static/*.css`, fonts, images, including subdirectories) with correct MIME types.
+  - Falls back to `index.html` for clean URLs without extensions (`/`, `/dashboard`, `/users/1`), enabling **HTML5 History API client-side routing** for React, Vue, Svelte, Vite, and Next.js static exports.
 - **Example**:
   ```bash
   lionsql server --app=./dist
@@ -94,16 +94,16 @@ LionSQL inspects the file attributes (`os.Stat`) of the path passed to `--app` a
 
 ---
 
-## 4. Security Architecture: Flat Directory Invariant
+## 4. Security Architecture: Chroot Sandbox Invariant
 
-Static web servers are often vulnerable to path traversal attacks and accidental disclosure of hidden configuration files. LionSQL strictly enforces the **Flat Directory Invariant**:
+Static web servers are often vulnerable to path traversal attacks and accidental disclosure of hidden configuration files. LionSQL strictly enforces the Go standard `io/fs` and `os.DirFS` based **Chroot Sandbox Invariant**:
 
 1. **Path Traversal Prevention (`..`)**:
    - Any request containing `..` segments is rejected with a `404 Not Found`.
 2. **Hidden Files Rejection**:
    - Any path segment starting with a dot (`.env`, `.git`, `.DS_Store`) is immediately blocked.
-3. **Flat Root Asset Restriction**:
-   - Static assets must reside directly in the flat root of the directory, preventing traversal into nested system directories.
+3. **Chroot Sandbox Isolation (`os.DirFS`)**:
+   - Static assets are safely jailed within Go standard `os.DirFS`, preventing escaping from the designated application root.
 4. **Explicit 404 for Missing Assets**:
    - If an asset with an extension is not found on disk, the server returns a clean `404 Not Found` rather than falling back to `index.html`, preventing MIME type syntax errors inside `<script>` or `<link>` tags.
 
@@ -181,7 +181,7 @@ HTTP requests on port `:8090` are dispatched using the following deterministic h
 | `/api/...` | 1 | BaaS REST API | CRUD operations, T-SQL execution, metrics |
 | `/api/realtime` | 1 | Realtime SSE Stream | Server-Sent Events change stream |
 | `/sdk/lionsql.js` | 1 | JavaScript Client SDK | Standalone browser library (`embed.FS`) |
-| `/*.js`, `/*.css`, `/*.ico` | 2 | Static SPA Asset | Flat root asset serving when `--app` is a directory |
+| `/*.js`, `/*.css`, `/*.ico` | 2 | Static SPA Asset | Static asset serving when `--app` is a directory |
 | `/`, `/dashboard`, `/users` | 3 | HTML5 Route Fallback | Serves single file or `dist/index.html` |
 
 > **Note**: When `--app` is not specified, navigating to `/` issues a `302 Found` redirect to `/_/` (Web Studio). When `--app` is enabled, `/` serves the hosted web application.
@@ -249,5 +249,5 @@ Open `http://localhost:8090` in your browser. Your database and web app are runn
 
 | CLI Flag | Environment Variable | Default | Description |
 | :--- | :--- | :---: | :--- |
-| `-app <path>` | `LIONSQL_APP` | `""` (disabled) | Path to single HTML file or flat static directory to host |
+| `-app <path>` | `LIONSQL_APP` | `""` (disabled) | Path to single HTML file or static SPA directory to host |
 | `-http <addr>` | `LION_HTTP_ADDR` | `:8090` | TCP listener address for Web App, REST API, and Web Studio |

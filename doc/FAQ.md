@@ -73,8 +73,8 @@ Frequently asked questions regarding LionSQL's design philosophy, internal archi
 ### Q14. Why are distributed 2PC (XA) and multi-master sharding excluded?
 > **A.** Under the **Scale-Up First & 1-Writer Multi-Reader philosophy**, 99% of business workloads benefit far more from vertical hardware saturation and operational simplicity than from distributed 2PC network latency and distributed deadlocks. Read scaling is handled via asynchronous/semi-synchronous WAL replication replicas.
 
-### Q15. What is LionSQL's ultimate goal for version 1.0 and beyond?
-> **A.** To be **"the leanest yet most uncompromising OLTP database engine."** Simple and self-contained to deploy like SQLite, while delivering the enterprise capabilities (T-SQL stored procedures, ACID durability, multi-wire protocols) and raw throughput of tier-one enterprise databases.
-
-### Q16. Why embed a static web server and JavaScript SDK inside the database process?
+### Q15. Why embed a static web server and JavaScript SDK inside the database process?
 > **A.** To eliminate the infrastructure complexity, network hop latency, and CORS preflight overhead inherent to traditional 3-tier stacks (Nginx ➔ API ➔ DB). Serving frontend assets and BaaS REST/SQL APIs from a single port (`:8090`) enables zero-hop in-memory dispatch, while OS zero-copy file transmission guarantees zero interference with core high-concurrency OLTP transactions.
+
+### Q16. What is LionSQL's ultimate goal for version 1.0 and beyond?
+> **A.** To be **"the leanest yet most uncompromising OLTP database engine."** Simple and self-contained to deploy like SQLite, while delivering the enterprise capabilities (T-SQL stored procedures, ACID durability, multi-wire protocols) and raw throughput of tier-one enterprise databases.

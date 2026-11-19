@@ -386,10 +386,6 @@ LionSQL은 데이터베이스 서버를 백그라운드나 컨테이너로 띄�
 ./bin/lionsql cli
 ```
 
-> [!NOTE]
-> **`-p` 플래그 관례 보호 정책**:  
-> 데이터베이스 생태계(MySQL, PostgreSQL, MSSQL)에서 `-p`는 수십 년간 **비밀번호(Password)** 또는 **포트(Port)**로 예약되어 있습니다. LionSQL은 사용자의 근육 기억(Muscle Memory) 충돌을 방지하기 위해 `-p`를 프롬프트 플래그로 전용하지 않고, 유닉스/Python/Node.js 전 세계 표준인 **`-i` (Interactive)** 단축 플래그와 **`cli`** 서브커맨드를 표준으로 채택합니다.
-
 #### 헤드리스 쿼리 실행 및 배치 스크립트 ([RULE:HeadlessParity])
 CI/CD 파이프라인이나 셸 스크립트에서 터미널 열람 없이 즉시 단일 쿼리나 스크립트를 실행할 수 있습니다:
 ```bash
@@ -681,7 +677,7 @@ LionSQL은 기본적으로 데이터 디렉토리(`-dir`)가 지정되면 모든
 
 #### 테이블 레벨 영속성 제어: T-SQL `WITH (DURABILITY = ...)` 표준
 
-LionSQL은 서버 전체를 위험하게 휘발성으로 만드는 전역 플래그(`-ephemeral`) 대신, **Microsoft SQL Server In-Memory OLTP 표준인 테이블 단위 내구성(Table-Level Durability)**을 제공합니다:
+LionSQL은 **Microsoft SQL Server In-Memory OLTP 표준인 테이블 단위 내구성(Table-Level Durability)**을 제공합니다:
 
 ```sql
 -- 1. 영구 보존 테이블 (기본값): 스키마 및 행 데이터 영구 보존
@@ -700,7 +696,7 @@ CREATE TABLE dbo.WebSession (
 ```
 
 > [!NOTE]
-> `WITH (DURABILITY = SCHEMA_ONLY)`로 생성된 테이블은 서버가 재시작되어도 스키마 정의(`TableSchema`)와 인덱스 구조가 온전히 복원되므로, 클라이언트 애플리케이션에서 `table not found` 에러가 발생하지 않습니다. 로우 데이터만 0행으로 초기화되어 캐시/작업 큐/세션 저장소에 최적화된 성능을 제공합니다. (기존 전역 `-ephemeral` CLI 옵션은 완전히 삭제되었으며, 휘발성 테이블은 T-SQL DDL 옵션을 사용하고 1회성 인메모리 테스트는 `-dir ""`를 지정합니다.)
+> `WITH (DURABILITY = SCHEMA_ONLY)`로 생성된 테이블은 서버가 재시작되어도 스키마 정의(`TableSchema`)와 인덱스 구조가 온전히 복원되므로, 클라이언트 애플리케이션에서 `table not found` 에러가 발생하지 않습니다. 로우 데이터만 0행으로 초기화되어 캐시/작업 큐/세션 저장소에 최적화된 성능을 제공합니다. (1회성 인메모리 테스트는 `-dir ""`를 지정합니다.)
 
 #### 실무 4대 실행 레시피
 
@@ -886,7 +882,7 @@ LionSQL 엔지니어링 팀에서 100% 정상 작동을 실측 검증한 6대 �
 
 ---
 
-### 4.5. 단일 파일 / 폴더 SPA 웹 앱 호스팅 (`--app`)
+### 4.5. 단일 파일 / 디렉토리 SPA 웹 앱 호스팅 (`--app`)
 
 LionSQL은 외부 웹 서버(Nginx, Caddy, Node.js)를 구축하지 않고도, 단 하나의 바이너리로 데이터베이스와 프론트엔드 웹 애플리케이션을 동시에 서비스할 수 있습니다.
 
@@ -894,13 +890,13 @@ LionSQL은 외부 웹 서버(Nginx, Caddy, Node.js)를 구축하지 않고도, �
 1. **단일 HTML 파일 모드**:
    - `lionsql server --app=./dashboard.html`
    - Alpine.js, Tailwind CDN 등으로 구성된 셀프 컨테인드 단일 페이지 대시보드를 즉시 호스팅합니다.
-2. **Flat 디렉토리 SPA 모드**:
+2. **디렉토리 SPA 모드 (Chroot 샌드박스)**:
    - `lionsql server --app=./dist`
-   - React, Vue, Svelte 등으로 빌드된 정적 에셋 폴더를 호스팅하며, 브라우저 라우팅을 위해 HTML5 History API 폴백(`index.html`)을 자동으로 제공합니다.
+   - React, Vue, Svelte, Vite 등으로 빌드된 정적 에셋 폴더(`dist/assets/*.js` 등 서브디렉토리 포함)를 Go 표준 `os.DirFS` Chroot 샌드박스로 안전하게 호스팅하며, 브라우저 라우팅을 위해 HTML5 History API 폴백(`index.html`)을 자동으로 제공합니다.
 
 #### Same-Origin 및 보안 특징
 - **Zero CORS**: 웹 UI와 DB API(`GET/POST /api/...`)가 동일한 `:8090` 포트에서 실행되므로 복잡한 CORS 설정이 일체 불필요합니다.
-- **Flat Directory Invariant**: 상위 디렉토리 탐색(`..`)과 숨김 파일(`.env`, `.git`) 접근을 원천 차단하여 안전한 웹 서빙을 보장합니다.
+- **Chroot Sandbox Invariant**: 상위 디렉토리 탐색(`..`)과 숨김 파일(`.env`, `.git`) 접근을 Go 표준 `io/fs` 레벨에서 원천 차단하여 안전한 웹 서빙을 보장합니다.
 
 자세한 활용법과 실전 튜토리얼은 **[`WEB_APP_HOSTING_GUIDE.ko.md`](WEB_APP_HOSTING_GUIDE.ko.md)**를 참조하십시오.
 

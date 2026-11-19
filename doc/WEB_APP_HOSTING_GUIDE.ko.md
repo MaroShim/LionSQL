@@ -16,8 +16,8 @@ LionSQL은 별도의 Nginx, Apache, Caddy, Node.js 웹 서버 없이, **단 하�
 2. [핵심 강점 및 Same-Origin 이점](#2-핵심-강점-및-same-origin-이점)
 3. [호스팅 구동 모드 2종](#3-호스팅-구동-모드-2종)
    - [3.1. 단일 파일 모드 (Single HTML File Mode)](#31-단일-파일-모드-single-html-file-mode)
-   - [3.2. Flat 디렉토리 모드 (Flat Directory SPA Mode)](#32-flat-디렉토리-모드-flat-directory-spa-mode)
-4. [보안 아키텍처: Flat Directory Invariant](#4-보안-아키텍처-flat-directory-invariant)
+   - [3.2. 디렉토리 SPA 모드 (Sandbox SPA Directory Mode)](#32-디렉토리-spa-모드-sandbox-spa-directory-mode)
+4. [보안 아키텍처: Chroot Sandbox Invariant](#4-보안-아키텍처-chroot-sandbox-invariant)
 5. [성능 아키텍처 및 대규모 동시 사용자 처리 역량](#5-성능-아키텍처-및-대규모-동시-사용자-처리-역량)
 6. [URL 라우팅 규칙 및 HTML5 History API](#6-url-라우팅-규칙-및-html5-history-api)
 7. [실전 튜토리얼: 1분 만에 풀스택 대시보드 배포하기](#7-실전-튜토리얼-1분-만에-풀스택-대시보드-배포하기)
@@ -37,7 +37,7 @@ LionSQL의 내장 웹 앱 호스팅 기능은 **"PocketBase와 SQLite의 배포 
 |                                                                               |
 |   [ Browser Client ]                                                          |
 |           │                                                                   |
-|           ├──> GET / (or /dashboard, /users) ──> Embedded Flat Web Server     |
+|           ├──> GET / (or /dashboard, /users) ──> Embedded Web Server          |
 |           │                                      (--app=./dist / index.html)  |
 |           │                                      (Kernel sendfile: 45k+ RPS)  |
 |           │                                                                   |
@@ -81,11 +81,11 @@ LionSQL은 `--app` 플래그에 전달된 경로의 파일 시스템 속성(`os.
   lionsql server --app=./dashboard.html
   ```
 
-### 3.2. Flat 디렉토리 모드 (Flat Directory SPA Mode)
+### 3.2. 디렉토리 SPA 모드 (Sandbox SPA Directory Mode)
 - **적용 대상**: 디렉토리 경로가 전달된 경우 (예: `./dist`, `./web`)
 - **필수 요건**: 지정된 디렉토리 루트에 반드시 **`index.html`** 정규 파일이 존재해야 합니다.
 - **특징**:
-  - 확장자가 있는 에셋 파일 요청(`*.js`, `*.css`, `*.png`, `*.svg` 등)은 해당 디렉토리 루트에서 올바른 MIME 타입(`Content-Type`)과 함께 직접 서빙합니다.
+  - 확장자가 있는 에셋 파일 요청(`dist/assets/*.js`, `dist/static/*.css`, 이미지, 폰트 등 서브디렉토리 포함)은 해당 디렉토리 트리에서 올바른 MIME 타입(`Content-Type`)과 함께 안전하게 직접 서빙합니다.
   - 확장자가 없는 경로(`/`, `/dashboard`, `/settings/profile` 등)는 React, Vue, Svelte의 **HTML5 History API 라우팅을 위해 `index.html`로 자동 폴백**됩니다.
 - **실행 예시**:
   ```bash
@@ -94,16 +94,16 @@ LionSQL은 `--app` 플래그에 전달된 경로의 파일 시스템 속성(`os.
 
 ---
 
-## 4. 보안 아키텍처: Flat Directory Invariant
+## 4. 보안 아키텍처: Chroot Sandbox Invariant
 
-정적 파일 웹 서버에서 가장 빈번하게 발생하는 보안 취약점은 상위 디렉토리 탐색(Path Traversal)과 민감한 설정 파일 노출입니다. LionSQL은 이를 방지하기 위해 엄격한 **Flat Directory Invariant**를 적용합니다:
+정적 파일 웹 서버에서 가장 빈번하게 발생하는 보안 취약점은 상위 디렉토리 탐색(Path Traversal)과 민감한 설정 파일 노출입니다. LionSQL은 이를 방지하기 위해 Go 표준 라이브러리(`io/fs`, `os.DirFS`) 기반의 엄격한 **Chroot Sandbox Invariant**를 적용합니다:
 
 1. **상위 디렉토리 탐색(`..`) 차단**:
    - URL 경로에 `..` 문자열이 포함된 요청은 핸들러 진입 즉시 거절(404)됩니다.
 2. **도트(`.`) 숨김 파일 및 시스템 디렉토리 차단**:
    - `.env`, `.git`, `.DS_Store` 등 도트로 시작하는 모든 파일이나 세그먼트 요청은 즉시 거절(404)됩니다.
-3. **Flat Root 에셋 한정 서빙**:
-   - 정적 자산(확장자가 있는 파일)은 오직 지정된 디렉토리의 루트 레벨에서만 제공되며, 임의의 깊은 서브디렉토리 순회로 인한 리소스 유출을 방지합니다.
+3. **Chroot 격리 서빙 (`os.DirFS`)**:
+   - 정적 자산은 Go 표준 `os.DirFS` 샌드박스 내에서 격리 서빙되며, 지정된 앱 디렉토리 외부로의 경로 탈출이 원천 차단됩니다.
 4. **존재하지 않는 에셋 404 강제 (MIME 오염 방지)**:
    - 디스크에 존재하지 않는 에셋 파일(`bundle.missing.js` 등) 요청 시 `index.html`을 잘못 반환하여 브라우저 스크립트 실행 에러를 유발하는 일반적인 SPA 서버들의 버그를 방지하고, 정확한 `404 Not Found`를 반환합니다.
 
@@ -181,7 +181,7 @@ LionSQL `:8090` 포트에 수신되는 모든 HTTP 요청은 다음 우선순위
 | `/api/...` | 1 | LionSQL BaaS REST API | 레코드 CRUD, T-SQL 실행, 시스템 메트릭 |
 | `/api/realtime` | 1 | 실시간 변경 스트림 | SSE (Server-Sent Events) 이벤트 소스 |
 | `/sdk/lionsql.js` | 1 | 내장 JavaScript 클라이언트 SDK | 단일 파일 브라우저 라이브러리 (`embed.FS`) |
-| `/*.js`, `/*.css`, `/*.ico` | 2 | SPA 정적 에셋 서빙 | `--app`이 디렉토리일 때 flat root 파일 서빙 |
+| `/*.js`, `/*.css`, `/*.ico` | 2 | SPA 정적 에셋 서빙 | `--app`이 디렉토리일 때 정적 파일 서빙 |
 | `/`, `/users`, `/orders/1` | 3 | SPA HTML5 라우트 폴백 | 단일 파일 또는 `dist/index.html` 서빙 |
 
 > **알림**: `--app` 플래그가 지정되지 않은 기본 상태에서는 루트 URL(`/`) 접근 시 자동으로 관리 스튜디오(`/_/`)로 302 리다이렉트됩니다. `--app`이 활성화되면 루트 URL(`/`)은 사용자의 웹 애플리케이션으로 서비스됩니다.
@@ -253,7 +253,7 @@ lionsql server --data-dir=./data --app=./index.html
 
 | CLI 옵션 | 환경 변수 | 기본값 | 설명 |
 | :--- | :--- | :---: | :--- |
-| `-app <path>` | `LIONSQL_APP` | `""` (비활성화) | 호스팅할 단일 HTML 파일 또는 Flat 디렉토리 경로 |
+| `-app <path>` | `LIONSQL_APP` | `""` (비활성화) | 호스팅할 단일 HTML 파일 또는 SPA 디렉토리 경로 |
 | `-http <addr>` | `LION_HTTP_ADDR` | `:8090` | 웹 앱, REST API 및 Web Studio가 바인딩되는 TCP 주소 |
 
 - **환경 변수로 설정하기**:
