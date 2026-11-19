@@ -258,6 +258,7 @@
 | `DONE` | **`FIX-3VL-AND-OR-NULL-LOGIC-1`** |  | Engine | P2 | VDBE VM OpAnd/OpOr 3-Valued Logic(3VL) NULL 평가 결함 수정 |  |  |
 | `DONE` | **`FIX-ARITHMETIC-OVERFLOW-DETECTION-1`** | `1.0-GA` | Execution | P2 | 정수 산술 연산 64비트 오버플로 검출 및 bigint out of range 에러 반환 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-BATCH-MULTI-RESULTSET-DELIVERY-1`** |  | 1 | P2 | Wire | [`v0.94.0`](v0.94.0) |  |
+| `DONE` | **`FIX-CAST-INTEGER-RANGE-OVERFLOW-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-COLLATION-GROUP-BY-CONSISTENCY-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-COMMIT-PARTIAL-MUTATION-RECOVERY-1`** | `1` | --domain | P2 | Commit 중도 실패 시 부분 변경(Shard/Partition/Index) 복구 누락 결함 수정 | [`--prio`](--prio) |  |
@@ -3034,6 +3035,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [DONE] Wire `FIX-BATCH-MULTI-RESULTSET-DELIVERY-1`
 - **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-19 01:04:12
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
+
+---
+
+### [DONE] --domain `FIX-CAST-INTEGER-RANGE-OVERFLOW-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 04:11:36
+- **Milestone**: `--prio`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
 

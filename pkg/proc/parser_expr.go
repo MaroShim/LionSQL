@@ -537,6 +537,20 @@ func (p *Parser) parseTypeSpec() (storage.DataType, int, int, bool) {
 	if prec == 0 && strings.EqualFold(cleanFirst, "BINARY") {
 		prec = 1
 	}
+	if dt == storage.TypeInt && prec == 0 {
+		switch strings.ToUpper(cleanFirst) {
+		case "TINYINT":
+			prec = 1
+		case "SMALLINT", "INT2":
+			prec = 2
+		case "INT", "INTEGER", "INT4", "SIGNED", "UNSIGNED":
+			prec = 4
+		case "BIGINT", "INT8":
+			prec = 8
+		default:
+			prec = 4
+		}
+	}
 	// Optional PostgreSQL [WITH | WITHOUT] TIME ZONE suffix
 	if p.curTokenIs(TokenWith) || (p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "WITH") || strings.EqualFold(p.curToken.Literal, "WITHOUT"))) {
 		p.nextToken()

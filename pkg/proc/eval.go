@@ -1806,34 +1806,53 @@ func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style i
 
 	switch targetType {
 	case storage.TypeInt:
+		var i int64
 		switch v.Type {
 		case storage.TypeInt:
-			return v, nil
+			i = v.IVal
 		case storage.TypeFloat:
-			return storage.IntValue(int64(v.FVal)), nil
+			i = int64(v.FVal)
 		case storage.TypeBool:
 			if v.BVal {
-				return storage.IntValue(1), nil
+				i = 1
+			} else {
+				i = 0
 			}
-			return storage.IntValue(0), nil
 		case storage.TypeVarChar:
 			s := strings.TrimSpace(v.SVal)
-			i, err := strconv.ParseInt(s, 10, 64)
+			parsed, err := strconv.ParseInt(s, 10, 64)
 			if err != nil {
 				if f, err2 := strconv.ParseFloat(s, 64); err2 == nil {
-					return storage.IntValue(int64(f)), nil
+					parsed = int64(f)
+				} else {
+					return fail(fmt.Errorf("conversion failed when converting %q to data type int", v.SVal))
 				}
-				return fail(fmt.Errorf("conversion failed when converting %q to data type int", v.SVal))
 			}
-			return storage.IntValue(i), nil
+			i = parsed
 		case storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
-			return storage.IntValue(v.TVal.Unix()), nil
+			i = v.TVal.Unix()
 		case storage.TypeDecimal:
 			f := v.DVal.Float64()
-			return storage.IntValue(int64(f)), nil
+			i = int64(f)
 		default:
 			return fail(fmt.Errorf("unsupported conversion from %v to int", v.Type))
 		}
+
+		switch prec {
+		case 1:
+			if i < 0 || i > 255 {
+				return fail(fmt.Errorf("arithmetic overflow error converting %d to data type tinyint", i))
+			}
+		case 2:
+			if i < math.MinInt16 || i > math.MaxInt16 {
+				return fail(fmt.Errorf("arithmetic overflow error converting %d to data type smallint", i))
+			}
+		case 4:
+			if i < math.MinInt32 || i > math.MaxInt32 {
+				return fail(fmt.Errorf("arithmetic overflow error converting %d to data type int", i))
+			}
+		}
+		return storage.IntValue(i), nil
 
 	case storage.TypeFloat, storage.TypeReal:
 		switch v.Type {
