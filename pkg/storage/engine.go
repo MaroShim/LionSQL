@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"lionsql/pkg/sqlutil"
 )
@@ -21,35 +22,87 @@ const MaxInlineRowSize = 8060
 // MaxRowSize is the absolute upper bound for a single logical tuple including LOB/overflow columns (16 MB).
 const MaxRowSize = 16 * 1024 * 1024
 
+// MaxIdentifierLength is the maximum length in UTF-8 characters (runes) for SQL identifiers (128).
+const MaxIdentifierLength = 128
+
+// MaxIndexColumns is the maximum number of key columns allowed in a single index (32).
+const MaxIndexColumns = 32
+
+// MaxIndexKeyBytes is the maximum byte size of an index key in a B-Tree index (1,700 bytes).
+const MaxIndexKeyBytes = 1700
+
 var (
-	ErrTableNotFound        = errors.New("table not found")
-	ErrTableExists          = errors.New("table already exists")
-	ErrIndexNotFound        = errors.New("index not found")
-	ErrIndexExists          = errors.New("index already exists")
-	ErrIndexDisabled        = errors.New("index is disabled")
-	ErrUniqueViolation      = errors.New("unique constraint violation on index")
-	ErrKeyNotFound          = errors.New("key not found")
-	ErrKeyExists            = errors.New("key already exists (primary key constraint)")
-	ErrTxClosed             = errors.New("transaction is already closed")
-	ErrColumnNotFound       = errors.New("column not found")
-	ErrInvalidDataType      = errors.New("invalid data type for column")
-	ErrNotNullViolation     = errors.New("not null constraint violation")
-	ErrCheckViolation       = errors.New("check constraint violation")
-	ErrForeignKeyViolation  = errors.New("foreign key constraint violation")
+	ErrTableNotFound         = errors.New("table not found")
+	ErrTableExists           = errors.New("table already exists")
+	ErrIndexNotFound         = errors.New("index not found")
+	ErrIndexExists           = errors.New("index already exists")
+	ErrIndexDisabled         = errors.New("index is disabled")
+	ErrUniqueViolation       = errors.New("unique constraint violation on index")
+	ErrKeyNotFound           = errors.New("key not found")
+	ErrKeyExists             = errors.New("key already exists (primary key constraint)")
+	ErrTxClosed              = errors.New("transaction is already closed")
+	ErrColumnNotFound        = errors.New("column not found")
+	ErrDuplicateColumn       = errors.New("duplicate column name")
+	ErrInvalidDataType       = errors.New("invalid data type for column")
+	ErrNotNullViolation      = errors.New("not null constraint violation")
+	ErrCheckViolation        = errors.New("check constraint violation")
+	ErrForeignKeyViolation   = errors.New("foreign key constraint violation")
 	ErrDependentObjectsExist = errors.New("cannot drop table because other objects depend on it")
-	ErrSerializationFailure = errors.New("serialization failure: concurrent update conflict")
-	ErrInvalidJSON          = errors.New("invalid JSON syntax")
-	ErrSavepointNotFound    = errors.New("savepoint not found")
-	ErrPartitionNotFound    = errors.New("partition not found")
-	ErrTableNotPartitioned  = errors.New("table is not partitioned")
-	ErrReadOnlyTransaction  = errors.New("cannot execute mutation in read-only transaction (SQLSTATE 25006)")
-	ErrReadOnlyReplica      = errors.New("cannot execute write operations on read-only replica (SQLSTATE 25006)")
-	ErrTableFull            = errors.New("table data limit exceeded (SQLSTATE 53200)")
-	ErrEngineTainted        = errors.New("storage: engine is tainted due to unrecoverable I/O or fsync failure")
-	ErrTooManyColumns       = errors.New("table exceeds maximum column limit (1024 columns)")
-	ErrInlineRowTooLarge    = errors.New("table exceeds maximum in-row inline size (8060 bytes)")
-	ErrRowTooLarge          = errors.New("row size exceeds maximum limit (16MB)")
+	ErrSerializationFailure  = errors.New("serialization failure: concurrent update conflict")
+	ErrInvalidJSON           = errors.New("invalid JSON syntax")
+	ErrSavepointNotFound     = errors.New("savepoint not found")
+	ErrPartitionNotFound     = errors.New("partition not found")
+	ErrTableNotPartitioned   = errors.New("table is not partitioned")
+	ErrReadOnlyTransaction   = errors.New("cannot execute mutation in read-only transaction (SQLSTATE 25006)")
+	ErrReadOnlyReplica       = errors.New("cannot execute write operations on read-only replica (SQLSTATE 25006)")
+	ErrTableFull             = errors.New("table data limit exceeded (SQLSTATE 53200)")
+	ErrEngineTainted         = errors.New("storage: engine is tainted due to unrecoverable I/O or fsync failure")
+	ErrTooManyColumns        = errors.New("table exceeds maximum column limit (1024 columns)")
+	ErrInlineRowTooLarge     = errors.New("table exceeds maximum in-row inline size (8060 bytes)")
+	ErrRowTooLarge           = errors.New("row size exceeds maximum limit (16MB)")
+	ErrIdentifierTooLong     = errors.New("identifier exceeds maximum length limit (128 characters, SQLSTATE 42622, Msg 103)")
+	ErrTooManyIndexColumns   = errors.New("index exceeds maximum column limit (32 columns, SQLSTATE 54011, Msg 1904)")
+	ErrIndexKeyTooLarge      = errors.New("index key exceeds maximum size limit (1700 bytes, SQLSTATE 54000, Msg 1946)")
 )
+
+// ValidateIdentifier verifies that an identifier does not exceed MaxIdentifierLength (128 characters).
+func ValidateIdentifier(name string) error {
+	trimmed := strings.Trim(strings.TrimSpace(name), "[]\"'`")
+	if trimmed == "" {
+		return nil
+	}
+	// Strip internal temporary table prefix (__temp_<sess>_<userTable>) before checking user identifier length
+	if strings.HasPrefix(trimmed, "__temp_") {
+		rest := strings.TrimPrefix(trimmed, "__temp_")
+		if idx := strings.LastIndex(rest, "_"); idx != -1 && idx+1 < len(rest) {
+			trimmed = rest[idx+1:]
+		}
+	} else if strings.HasPrefix(trimmed, "__db_") {
+		// 3-tier composite key (__db_<db>_<schema>_<table>): validate each segment
+		rest := strings.TrimPrefix(trimmed, "__db_")
+		parts := strings.SplitN(rest, "_", 3)
+		for _, p := range parts {
+			if rc := utf8.RuneCountInString(p); rc > MaxIdentifierLength {
+				return fmt.Errorf("%w: identifier %q has %d characters (max %d)", ErrIdentifierTooLong, p, rc, MaxIdentifierLength)
+			}
+		}
+		return nil
+	}
+	// If dotted (schema.table), check each segment
+	if strings.Contains(trimmed, ".") {
+		for _, part := range strings.Split(trimmed, ".") {
+			cleanPart := strings.Trim(strings.TrimSpace(part), "[]\"'`")
+			if rc := utf8.RuneCountInString(cleanPart); rc > MaxIdentifierLength {
+				return fmt.Errorf("%w: identifier %q has %d characters (max %d)", ErrIdentifierTooLong, cleanPart, rc, MaxIdentifierLength)
+			}
+		}
+		return nil
+	}
+	if rc := utf8.RuneCountInString(trimmed); rc > MaxIdentifierLength {
+		return fmt.Errorf("%w: identifier %q has %d characters (max %d)", ErrIdentifierTooLong, trimmed, rc, MaxIdentifierLength)
+	}
+	return nil
+}
 
 // IsWriteConflict checks whether an error is a concurrency write-write conflict
 // or serialization failure (e.g., OCC version mismatch, WiredTiger WT_ROLLBACK / -31800).
@@ -403,19 +456,123 @@ func (s *TableSchema) FixedRowSize() int {
 			size += 16
 		case TypeDecimal:
 			size += 16
+		case TypeVarChar, TypeBinary, TypeJSON:
+			if col.IsFixed || strings.EqualFold(col.RawType, "CHAR") || strings.EqualFold(col.RawType, "NCHAR") || strings.EqualFold(col.RawType, "BINARY") {
+				n := col.Precision
+				if n <= 0 {
+					n = 1
+				}
+				if strings.EqualFold(col.RawType, "NCHAR") {
+					n *= 2
+				}
+				size += n
+			} else if col.Precision < 0 {
+				// 24-byte in-row LOB pointer footprint for VARCHAR(MAX)/NVARCHAR(MAX)/VARBINARY(MAX)
+				size += 24
+			} else {
+				// 2-byte variable column offset/length entry
+				size += 2
+			}
 		}
 	}
 	return size
 }
 
-// ValidateRowSize validates that the table schema does not exceed the SQL Server in-row limit (8,060 bytes).
+// ValidateRowSize validates that the table schema adheres to identifier length, column uniqueness,
+// SQL Server in-row inline byte limit (8,060 bytes), and index key/column constraints.
 func (s *TableSchema) ValidateRowSize() error {
 	if s == nil {
 		return errors.New("nil table schema")
 	}
+	if err := ValidateIdentifier(s.Name); err != nil {
+		return err
+	}
+	seenCols := make(map[string]bool, len(s.Columns))
+	for _, col := range s.Columns {
+		if err := ValidateIdentifier(col.Name); err != nil {
+			return err
+		}
+		lower := strings.ToLower(strings.TrimSpace(col.Name))
+		if lower != "" {
+			if seenCols[lower] {
+				return fmt.Errorf("%w: column %q specified more than once in table %q", ErrDuplicateColumn, col.Name, s.Name)
+			}
+			seenCols[lower] = true
+		}
+	}
 	fixedSize := s.FixedRowSize()
 	if fixedSize > MaxInlineRowSize {
 		return fmt.Errorf("%w: fixed column footprint %d bytes exceeds maximum in-row inline limit (%d bytes)", ErrInlineRowTooLarge, fixedSize, MaxInlineRowSize)
+	}
+	for i := range s.Indexes {
+		if err := s.Indexes[i].Validate(s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Validate checks that the index adheres to identifier length (128), column count (32),
+// column existence/uniqueness, and maximum index key size (1,700 bytes) limits.
+func (s *IndexSchema) Validate(tableSchema *TableSchema) error {
+	if s == nil {
+		return errors.New("nil index schema")
+	}
+	if err := ValidateIdentifier(s.Name); err != nil {
+		return err
+	}
+	if len(s.Columns) > MaxIndexColumns {
+		return fmt.Errorf("%w: index %q has %d columns (max %d)", ErrTooManyIndexColumns, s.Name, len(s.Columns), MaxIndexColumns)
+	}
+	if !s.IsExpression() {
+		seenCols := make(map[string]bool, len(s.Columns))
+		keyBytes := 0
+		for _, colName := range s.Columns {
+			lower := strings.ToLower(strings.TrimSpace(colName))
+			if lower != "" {
+				if seenCols[lower] {
+					return fmt.Errorf("%w: column %q specified more than once in index %q", ErrDuplicateColumn, colName, s.Name)
+				}
+				seenCols[lower] = true
+			}
+			if tableSchema != nil {
+				col, _, found := tableSchema.FindColumn(colName)
+				if !found || col == nil {
+					return fmt.Errorf("%w: %s on table %s", ErrColumnNotFound, colName, tableSchema.Name)
+				}
+				switch col.Type {
+				case TypeInt, TypeFloat, TypeDateTime, TypeDate, TypeTime:
+					keyBytes += 8
+				case TypeReal:
+					keyBytes += 4
+				case TypeBool:
+					keyBytes += 1
+				case TypeUUID, TypeDecimal:
+					keyBytes += 16
+				case TypeVarChar, TypeBinary, TypeJSON:
+					if col.Precision < 0 {
+						return fmt.Errorf("%w: column %q in index %q is of a LOB/MAX type invalid for index key", ErrIndexKeyTooLarge, col.Name, s.Name)
+					}
+					if col.Precision > 0 {
+						n := col.Precision
+						if strings.EqualFold(col.RawType, "NCHAR") || strings.EqualFold(col.RawType, "NVARCHAR") {
+							n *= 2
+						}
+						keyBytes += n
+					}
+				}
+			}
+		}
+		if keyBytes > MaxIndexKeyBytes {
+			return fmt.Errorf("%w: index %q key size %d bytes exceeds maximum limit (%d bytes)", ErrIndexKeyTooLarge, s.Name, keyBytes, MaxIndexKeyBytes)
+		}
+	}
+	if tableSchema != nil {
+		for _, colName := range s.IncludeCols {
+			if _, _, found := tableSchema.FindColumn(colName); !found {
+				return fmt.Errorf("%w: %s on table %s", ErrColumnNotFound, colName, tableSchema.Name)
+			}
+		}
 	}
 	return nil
 }

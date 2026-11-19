@@ -262,7 +262,7 @@ func TestSecondaryIndex_UniqueViolationAndNulls(t *testing.T) {
 		Name: "members",
 		Columns: []storage.Column{
 			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
-			{Name: "national_id", Type: storage.TypeVarChar},
+			{Name: "national_id", Type: storage.TypeVarChar, Nullable: true},
 		},
 		Indexes: []storage.IndexSchema{
 			{Name: "ix_nid", TableName: "members", Columns: []string{"national_id"}, Unique: true},

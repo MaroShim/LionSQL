@@ -154,10 +154,13 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 			}
 		}
 	} else {
-		for _, colName := range index.Columns {
-			if _, _, found := td.Schema.FindColumn(colName); !found {
-				return fmt.Errorf("%w: %s on table %s", storage.ErrColumnNotFound, colName, index.TableName)
-			}
+		if err := index.Validate(&td.Schema); err != nil {
+			return err
+		}
+	}
+	if index.IsExpression() {
+		if err := storage.ValidateIdentifier(index.Name); err != nil {
+			return err
 		}
 	}
 	for _, colName := range index.IncludeCols {
