@@ -330,6 +330,8 @@ type Engine struct {
 	tainted     atomic.Bool
 	taintMu     sync.RWMutex
 	taintErr    error
+	cacheSize   string
+	sessionMax  int
 }
 
 func (e *Engine) markTainted(err error) {
@@ -557,11 +559,46 @@ func (e *Engine) recordWALLocked(ops []memengine.WALOp) memengine.WALRecord {
 // (verified across 10/10 rounds of abrupt SIGKILL crash tests with zero acknowledged data loss).
 const WiredTigerOpenConfig = "create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true)"
 
+// BuildWiredTigerOpenConfig dynamically constructs a verified configuration passed to wiredtiger_open
+// with custom cache_size and session_max, strictly maintaining Invariant 10 ([RULE:RadicalKISS / Invariant 10]).
+func BuildWiredTigerOpenConfig(cacheSize string, sessionMax int) string {
+	if cacheSize == "" {
+		cacheSize = "500M"
+	}
+	if sessionMax <= 0 {
+		sessionMax = 2000
+	}
+	cfg := fmt.Sprintf("create,cache_size=%s,session_max=%d,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true)", cacheSize, sessionMax)
+	if strings.Contains(cfg, "transaction_sync") {
+		panic("ILLEGAL WIREDTIGER CONFIG: 'transaction_sync' is strictly prohibited in LionSQL (causes 96% concurrency throughput collapse)")
+	}
+	return cfg
+}
+
+// SetCacheSize sets the WiredTiger heap cache allocation before Open().
+func (e *Engine) SetCacheSize(sz string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.cacheSize = sz
+}
+
+// SetSessionMax sets the maximum concurrent internal sessions allocated by WiredTiger.
+func (e *Engine) SetSessionMax(max int) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.sessionMax = max
+}
+
 func (e *Engine) Open(dir string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if strings.Contains(WiredTigerOpenConfig, "transaction_sync") {
+	cfgStr := WiredTigerOpenConfig
+	if e.cacheSize != "" || e.sessionMax > 0 {
+		cfgStr = BuildWiredTigerOpenConfig(e.cacheSize, e.sessionMax)
+	}
+
+	if strings.Contains(cfgStr, "transaction_sync") {
 		panic("ILLEGAL WIREDTIGER CONFIG: 'transaction_sync' is strictly prohibited in LionSQL (causes 96% concurrency throughput collapse)")
 	}
 
@@ -576,7 +613,7 @@ func (e *Engine) Open(dir string) error {
 	cHome := C.CString(dir)
 	defer C.free(unsafe.Pointer(cHome))
 
-	cConfig := C.CString(WiredTigerOpenConfig)
+	cConfig := C.CString(cfgStr)
 	defer C.free(unsafe.Pointer(cConfig))
 
 	var conn *C.WT_CONNECTION

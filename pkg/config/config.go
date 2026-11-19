@@ -80,11 +80,14 @@ type AuthConfig struct {
 
 // ResourcesConfig defines concurrency and memory limits.
 type ResourcesConfig struct {
+	MaxConnections  int    `json:"max_connections,omitempty"`
 	MaxWorkers      int    `json:"max_workers"`
 	MaxIdleSessions int    `json:"max_idle_sessions"`
 	WorkMem         string `json:"work_mem"`
 	MaxMemory       string `json:"max_memory"`
 	GCPercent       int    `json:"gc_percent,omitempty"`
+	WTCacheSize     string `json:"wt_cache_size,omitempty"`
+	WTSessionMax    int    `json:"wt_session_max,omitempty"`
 }
 
 // SlowQueryLogConfig defines criteria and destination for slow queries.
@@ -269,10 +272,13 @@ func DefaultConfig() *Config {
 			AdminPass:  "1234567890",
 		},
 		Resources: ResourcesConfig{
+			MaxConnections:  200,
 			MaxWorkers:      0, // NumCPU * 4
 			MaxIdleSessions: 64,
 			WorkMem:         "64MB",
 			GCPercent:       200,
+			WTCacheSize:     "500M",
+			WTSessionMax:    2000,
 		},
 		Logging: LoggingConfig{
 			SlowQuery: SlowQueryLogConfig{

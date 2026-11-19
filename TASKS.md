@@ -399,12 +399,12 @@
 | `DONE` | **`INTEG-WIKIJS-1`** | `1.0-GA` | Ecosystem | P2 | Wiki.js (Node.js/Knex 기반 위키 및 문서 플랫폼) 스키마 마이그레이션 및 쿼리 호환성 검증 | [`notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md`](notes/plans/EXTERNAL_APP_COMPATIBILITY_EXPLORATION_PLAN.ko.md) |  |
 | `DONE` | **`INTEG-WOODPECKER-1`** |  | Durability | P2 | Woodpecker CI (CI/CD 엔진) | [`notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/plans/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md) |  |
 | `PENDING` | **`LIMITS-IDENTIFIER-LENGTH-GUARD-1`** | `v0.94.0` | Engine | P1 | 식별자 최대 길이(128자) DDL 파서 및 카탈로그 가드 | [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md) |  |
-| `IN_PROGRESS` | **`LIMITS-IDLE-IN-TX-SESSION-ISOLATION-1`** | `v0.94.0` | Engine | P1 | idle_in_transaction_session_timeout 세션별 격리 및 활성 트랜잭션 바인딩 | [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md) |  |
+| `DONE` | **`LIMITS-IDLE-IN-TX-SESSION-ISOLATION-1`** | `v0.94.0` | Engine | P1 | idle_in_transaction_session_timeout 세션별 격리 및 활성 트랜잭션 바인딩 | [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md) |  |
 | `PENDING` | **`LIMITS-INDEX-KEY-AND-COLUMNS-GUARD-1`** | `v0.94.0` | Storage | P1 | 인덱스 키 최대 바이트(1,700B) 및 인덱스당 컬럼(32개) 상한 DDL 가드 | [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md) |  |
 | `PENDING` | **`LIMITS-INLINE-ROW-CHAR-FOOTPRINT-1`** | `v0.94.0` | Storage | P1 | FixedRowSize CHAR(n) 및 가변 오프셋 메타데이터 합산 검증 | [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md) |  |
-| `IN_PROGRESS` | **`LIMITS-MAX-CONNECTIONS-SEMAPHORE-1`** | `v0.94.0` | Wire | P1 | max_connections 와이어 리스너 세마포어 강제 및 SHOW 동적 반환 | [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md) |  |
+| `DONE` | **`LIMITS-MAX-CONNECTIONS-SEMAPHORE-1`** | `v0.94.0` | Wire | P1 | max_connections 와이어 리스너 세마포어 강제 및 SHOW 동적 반환 | [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md) |  |
 | `DONE` | **`LIMITS-QUOTA-SPEC-DOC-1`** | `v0.94.0` | DOC | P1 | LIONSQL LIMITS AND QUOTAS 공식 명세서 작성 및 영속화 | [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md) |  |
-| `IN_PROGRESS` | **`LIMITS-WIREDTIGER-CACHE-CONFIG-1`** | `v0.94.0` | Storage | P1 | WiredTiger cache_size 및 session_max 설정화 (Invariant 10 보존) | [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md) |  |
+| `DONE` | **`LIMITS-WIREDTIGER-CACHE-CONFIG-1`** | `v0.94.0` | Storage | P1 | WiredTiger cache_size 및 session_max 설정화 (Invariant 10 보존) | [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md) |  |
 | `PENDING` | **`LOC-1`** | `v1.99.0` | Engine | P3 | MSSQL Collation 및 유니코드 다국어 로케일 정렬/비교 | [`notes/plans/COLLATION_AND_LOCALE_PLAN.md`](notes/plans/COLLATION_AND_LOCALE_PLAN.md) |  |
 | `DONE` | **`M1`** |  | Ecosystem | P3 | v0.90.0 Feature Freeze & Production Hardening (100% PASS) |  |  |
 | `DONE` | **`M2`** |  | Ecosystem | P3 | v0.90.0 액티브 스프린트 완료 과제 (18개 전량 완료 아카이브) |  | - [x] **`PERF-PGWIRE-PREP-TX`**: PGWi... |
@@ -4066,8 +4066,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [IN_PROGRESS] idle_in_transaction_session_timeout 세션별 격리 및 활성 트랜잭션 바인딩 `LIMITS-IDLE-IN-TX-SESSION-ISOLATION-1`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-19 04:51:29
+### [DONE] idle_in_transaction_session_timeout 세션별 격리 및 활성 트랜잭션 바인딩 `LIMITS-IDLE-IN-TX-SESSION-ISOLATION-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-19 05:19:31
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md)
 
@@ -4087,8 +4087,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [IN_PROGRESS] max_connections 와이어 리스너 세마포어 강제 및 SHOW 동적 반환 `LIMITS-MAX-CONNECTIONS-SEMAPHORE-1`
-- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-19 04:51:29
+### [DONE] max_connections 와이어 리스너 세마포어 강제 및 SHOW 동적 반환 `LIMITS-MAX-CONNECTIONS-SEMAPHORE-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-19 05:19:31
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md)
 
@@ -4101,8 +4101,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [IN_PROGRESS] WiredTiger cache_size 및 session_max 설정화 (Invariant 10 보존) `LIMITS-WIREDTIGER-CACHE-CONFIG-1`
-- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-19 04:51:29
+### [DONE] WiredTiger cache_size 및 session_max 설정화 (Invariant 10 보존) `LIMITS-WIREDTIGER-CACHE-CONFIG-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-19 05:19:31
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md`](doc/internal/LIONSQL_LIMITS_AND_QUOTAS_SPEC.ko.md)
 

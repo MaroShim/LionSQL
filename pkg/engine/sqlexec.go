@@ -1296,6 +1296,22 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 					DurationUS: time.Since(start).Microseconds(),
 				}, nil
 			}
+			if param == "idle_in_transaction_session_timeout" || param == "tx_idle_timeout" {
+				d, err := ParseTimeoutDuration(valStr)
+				if err != nil {
+					return nil, fmt.Errorf("invalid value for %s %q: %w", param, valStr, err)
+				}
+				cs.SetIdleInTxTimeout(d)
+				cs.Mu.Lock()
+				cs.Vars[param] = valStr
+				cs.Mu.Unlock()
+				return &QueryResult{
+					Success:    true,
+					Command:    "SET",
+					Messages:   []string{fmt.Sprintf("SET: %s set to %v.", param, d)},
+					DurationUS: time.Since(start).Microseconds(),
+				}, nil
+			}
 			cs.Mu.Lock()
 			cs.Vars[param] = valStr
 			cs.Mu.Unlock()
@@ -1371,9 +1387,14 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			case "integer_datetimes":
 				valStr = "on"
 			case "max_connections":
-				valStr = "100"
+				valStr = strconv.Itoa(s.MaxConnections())
 			case "idle_in_transaction_session_timeout", "tx_idle_timeout":
-				ttl := s.ClientSessionIdleTTL()
+				var ttl time.Duration
+				if cs != nil {
+					ttl = cs.IdleInTxTimeout(s.ClientSessionIdleTTL())
+				} else {
+					ttl = s.ClientSessionIdleTTL()
+				}
 				if ttl <= 0 {
 					valStr = "0"
 				} else if ttl%time.Minute == 0 {

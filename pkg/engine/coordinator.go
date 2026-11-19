@@ -104,6 +104,12 @@ type SQLCoordinator interface {
 	// GetSessionTxStatus returns PostgreSQL transaction status byte ('I', 'T', 'E').
 	GetSessionTxStatus(id string) byte
 
+	// MaxConnections returns the configured maximum concurrent client connections limit.
+	MaxConnections() int
+
+	// SetMaxConnections dynamically updates the maximum concurrent connections limit.
+	SetMaxConnections(n int)
+
 	// GetSession returns the active ClientSession by ID, or nil if not found.
 	GetSession(id string) *ClientSession
 

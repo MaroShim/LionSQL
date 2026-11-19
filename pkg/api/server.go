@@ -178,6 +178,21 @@ func (s *Server) ClientSessionIdleTTL() time.Duration {
 	return 5 * time.Minute
 }
 
+// MaxConnections returns the configured maximum concurrent client connections limit.
+func (s *Server) MaxConnections() int {
+	if s.coordinator != nil {
+		return s.coordinator.MaxConnections()
+	}
+	return 200
+}
+
+// SetMaxConnections dynamically updates the maximum concurrent connections limit.
+func (s *Server) SetMaxConnections(n int) {
+	if s.coordinator != nil {
+		s.coordinator.SetMaxConnections(n)
+	}
+}
+
 
 func (s *Server) newPlanner() *planner.Planner {
 	p := planner.NewPlanner()

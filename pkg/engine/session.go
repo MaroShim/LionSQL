@@ -88,10 +88,28 @@ type ClientSession struct {
 	sessInUse       bool                  // whether Session is currently leased to an active autocommit execution
 	activeQueries   int                   // number of active top-level queries on this session
 	closed          bool                  // whether CloseSession has been called on this session
+	idleInTxTimeout time.Duration         // per-session idle_in_transaction_session_timeout override
 	lastUsedAt      time.Time             // last query/transaction activity timestamp for idle session reclamation
 	releaseOnDrain  func(storage.Session) // callback to release storage session when in-flight queries drain
 	cancelMu        sync.Mutex            // dedicated lock for cooperative cancellation to avoid deadlocks with cs.Mu
 	Mu              sync.Mutex
+}
+
+// IdleInTxTimeout returns the session-specific idle transaction timeout, or defaultTTL if not explicitly configured.
+func (cs *ClientSession) IdleInTxTimeout(defaultTTL time.Duration) time.Duration {
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.idleInTxTimeout > 0 {
+		return cs.idleInTxTimeout
+	}
+	return defaultTTL
+}
+
+// SetIdleInTxTimeout sets the session-specific idle transaction timeout.
+func (cs *ClientSession) SetIdleInTxTimeout(d time.Duration) {
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	cs.idleInTxTimeout = d
 }
 
 // checkAndDrainClosedLocked checks whether the session was marked closed while queries were in-flight,

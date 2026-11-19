@@ -78,6 +78,7 @@ func runServer(args []string) error {
 	adminEmail := fs.String("admin-email", "admin@lionsql.local", "Default superuser email")
 	adminPass := fs.String("admin-pass", "1234567890", "Default superuser password")
 	enableAuth := fs.Bool("auth", true, "Enforce JWT authentication on protected REST endpoints (default: true)")
+	maxConnections := fs.Int("max-connections", 200, "Maximum concurrent client connections limit (default: 200)")
 	maxWorkers := fs.Int("max-workers", 0, "Max concurrent query execution workers (default: NumCPU * 4)")
 	maxIdleSessions := fs.Int("max-idle-sessions", 64, "Max idle storage sessions to retain in pool")
 	txIdleTimeout := fs.Duration("tx-idle-timeout", 5*time.Minute, "Idle transaction/session timeout before automatic rollback (default: 5m, 0 to disable)")
@@ -199,6 +200,9 @@ func runServer(args []string) error {
 	}
 	if visited["auth"] {
 		cfg.Auth.Enabled = *enableAuth
+	}
+	if visited["max-connections"] {
+		cfg.Resources.MaxConnections = *maxConnections
 	}
 	if visited["max-workers"] {
 		cfg.Resources.MaxWorkers = *maxWorkers
@@ -538,6 +542,14 @@ func runServer(args []string) error {
 			log.Fatalf("[LionSQL] Failed to create data directory: %v", err)
 		}
 		wtEng := wiredtiger.New()
+		if cfg.Resources.WTCacheSize != "" {
+			wtEng.SetCacheSize(cfg.Resources.WTCacheSize)
+		}
+		if cfg.Resources.WTSessionMax > 0 {
+			wtEng.SetSessionMax(cfg.Resources.WTSessionMax)
+		} else if cfg.Resources.MaxConnections > 0 {
+			wtEng.SetSessionMax(cfg.Resources.MaxConnections + 64)
+		}
 		if err := wtEng.Open(cfg.Server.DataDir); err != nil {
 			log.Fatalf("[LionSQL] Failed to open WiredTiger storage: %v", err)
 		}
@@ -682,6 +694,9 @@ func runServer(args []string) error {
 			poolCfg.MaxIdleSessions = cfg.Resources.MaxIdleSessions
 		}
 		server.SetPoolConfig(poolCfg)
+	}
+	if cfg.Resources.MaxConnections > 0 {
+		server.Coordinator().SetMaxConnections(cfg.Resources.MaxConnections)
 	}
 	server.SetClientSessionIdleTTL(*txIdleTimeout)
 
@@ -849,11 +864,17 @@ func runServer(args []string) error {
 		wireServer = wire.NewServerWithCache(cfg.Network.PGAddr, cat, eng, sharedCache)
 		wireServer.SetCoordinator(server.Coordinator())
 		wireServer.SetDevMode(cfg.Logging.DevMode)
+		if cfg.Resources.MaxConnections > 0 {
+			wireServer.SetMaxConnections(cfg.Resources.MaxConnections)
+		}
 	}
 	if tdsEnabled {
 		tdsServer = tds.NewServerWithCache(cfg.Network.TDSAddr, cat, eng, sharedCache)
 		tdsServer.SetCoordinator(server.Coordinator())
 		tdsServer.SetDevMode(cfg.Logging.DevMode)
+		if cfg.Resources.MaxConnections > 0 {
+			tdsServer.SetMaxConnections(cfg.Resources.MaxConnections)
+		}
 	}
 
 	if (pgEnabled || tdsEnabled) && cfg.Network.TLS.IsEnabled() {

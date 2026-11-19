@@ -1467,7 +1467,7 @@ func generatePgSettings(src Source, whereClause string) ([]string, []map[string]
 		{"IntervalStyle", "postgres", "Client Connection Defaults / Locale and Formatting", "Sets the display format for interval values.", "string"},
 		{"standard_conforming_strings", "on", "Version and Platform Compatibility / Previous PostgreSQL Versions", "Causes ... to be treated literally in strings.", "bool"},
 		{"integer_datetimes", "on", "Preset Options", "Datetimes are integer based.", "bool"},
-		{"max_connections", "100", "Connections and Authentication / Connection Settings", "Sets the maximum number of concurrent connections.", "integer"},
+		{"max_connections", "200", "Connections and Authentication / Connection Settings", "Sets the maximum number of concurrent connections.", "integer"},
 		{"work_mem", "4MB", "Resource Usage / Memory", "Sets the maximum memory to be used for query workspaces.", "integer"},
 		{"search_path", "\"$user\", public", "Client Connection Defaults / Statement Behavior", "Sets the schema search order for names that are not schema-qualified.", "string"},
 	}

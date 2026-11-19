@@ -1059,7 +1059,7 @@ func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
 		{"SHOW transaction_isolation;", "transaction_isolation", "read committed"},
 		{"SHOW timezone;", "timezone", "UTC"},
 		{"SHOW server_version;", "server_version", "15.0 (LionSQL)"},
-		{"SHOW max_connections;", "max_connections", "100"},
+		{"SHOW max_connections;", "max_connections", "200"},
 	}
 	for _, sq := range showQueries {
 		res, err = server.ExecuteSessionSQL("sess1", sq.query)

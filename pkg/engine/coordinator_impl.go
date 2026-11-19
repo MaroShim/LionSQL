@@ -33,6 +33,7 @@ type Config struct {
 	PoolConfig           PoolConfig
 	ClientSessionIdleTTL time.Duration // Idle duration after which an inactive ClientSession releases its pinned storage session (default 5m)
 	SessionSweepInterval time.Duration // Interval for checking idle ClientSessions (default 10s)
+	MaxConnections       int           // Maximum concurrent client connections limit (default 200)
 }
 
 // DefaultConfig returns default configuration parameters.
@@ -44,6 +45,7 @@ func DefaultConfig() Config {
 		PoolConfig:           DefaultPoolConfig(),
 		ClientSessionIdleTTL: 5 * time.Minute,
 		SessionSweepInterval: 10 * time.Second,
+		MaxConnections:       200,
 	}
 }
 
@@ -74,6 +76,7 @@ type Coordinator struct {
 	startTime            time.Time
 	tolerantDDL          atomic.Bool
 	clientSessionIdleTTL atomic.Int64
+	maxConnections       atomic.Int64
 	dbMailInitOnce       sync.Once
 	dbMailInitErr        error
 	dbMailItemCounter    atomic.Int64
@@ -139,6 +142,11 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 		stopCh:             make(chan struct{}),
 	}
 	coord.clientSessionIdleTTL.Store(int64(clientIdleTTL))
+	maxConns := cfg.MaxConnections
+	if maxConns <= 0 {
+		maxConns = 200
+	}
+	coord.maxConnections.Store(int64(maxConns))
 
 	coord.bgWg.Add(1)
 	go coord.idleSessionReapLoop(sweepInterval)
@@ -527,6 +535,23 @@ func (c *Coordinator) SetClientSessionIdleTTL(d time.Duration) {
 	c.clientSessionIdleTTL.Store(int64(d))
 }
 
+// MaxConnections returns the configured maximum concurrent client connections limit.
+func (c *Coordinator) MaxConnections() int {
+	mc := c.maxConnections.Load()
+	if mc <= 0 {
+		return 200
+	}
+	return int(mc)
+}
+
+// SetMaxConnections dynamically updates the maximum concurrent connections limit.
+func (c *Coordinator) SetMaxConnections(n int) {
+	if n <= 0 {
+		n = 200
+	}
+	c.maxConnections.Store(int64(n))
+}
+
 func (c *Coordinator) idleSessionReapLoop(interval time.Duration) {
 	defer c.bgWg.Done()
 	ticker := time.NewTicker(interval)
@@ -565,14 +590,19 @@ func (c *Coordinator) ReapIdleClientSessions(idleTTL time.Duration) int {
 	for _, cs := range snapshot {
 		cs.Mu.Lock()
 		idleDur := now.Sub(cs.lastUsedAt)
-		if !cs.closed && !cs.sessInUse && cs.activeQueries == 0 && cs.Session != nil && idleDur >= idleTTL {
-			if cs.Tx() != nil {
+		hasTx := cs.Tx() != nil
+		threshold := idleTTL
+		if hasTx && cs.idleInTxTimeout > 0 {
+			threshold = cs.idleInTxTimeout
+		}
+		if !cs.closed && !cs.sessInUse && cs.activeQueries == 0 && cs.Session != nil && threshold > 0 && idleDur >= threshold {
+			if hasTx {
 				if cs.TxMgr != nil {
 					_ = cs.TxMgr.Rollback(context.Background())
 				} else {
 					_ = cs.Tx().Rollback()
 				}
-				log.Printf("[TX-IDLE-TIMEOUT] session=%s forcibly rolled back uncommitted transaction after %v idle (threshold=%v)", cs.ID, idleDur.Round(time.Millisecond), idleTTL)
+				log.Printf("[TX-IDLE-TIMEOUT] session=%s forcibly rolled back uncommitted transaction after %v idle (threshold=%v)", cs.ID, idleDur.Round(time.Millisecond), threshold)
 			}
 			detached = append(detached, cs.Session)
 			cs.Session = nil

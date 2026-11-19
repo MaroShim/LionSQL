@@ -45,8 +45,9 @@ type Server struct {
 	requireSSL  bool
 	devMode     bool
 	mu          sync.Mutex
-	closed      bool
-	wg          sync.WaitGroup
+	closed                bool
+	maxConnections       int
+	wg                    sync.WaitGroup
 	activeConns           map[net.Conn]struct{}
 	maxPreparedPerSession int
 }
@@ -250,6 +251,26 @@ func (s *Server) DevMode() bool {
 	return s.devMode
 }
 
+// SetMaxConnections sets the maximum concurrent client connections limit.
+func (s *Server) SetMaxConnections(max int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.maxConnections = max
+}
+
+func (s *Server) getMaxConnections() int {
+	s.mu.Lock()
+	explicit := s.maxConnections
+	s.mu.Unlock()
+	if explicit > 0 {
+		return explicit
+	}
+	if s.coordinator != nil {
+		return s.coordinator.MaxConnections()
+	}
+	return 200
+}
+
 func (s *Server) acceptLoop() {
 	defer s.wg.Done()
 	for {
@@ -275,6 +296,18 @@ func (s *Server) acceptLoop() {
 			s.mu.Unlock()
 			_ = conn.Close()
 			return
+		}
+		maxConns := s.maxConnections
+		if maxConns <= 0 && s.coordinator != nil {
+			maxConns = s.coordinator.MaxConnections()
+		}
+		if maxConns <= 0 {
+			maxConns = 200
+		}
+		if len(s.activeConns) >= maxConns {
+			s.mu.Unlock()
+			_ = conn.Close()
+			continue
 		}
 		if s.activeConns == nil {
 			s.activeConns = make(map[net.Conn]struct{})
