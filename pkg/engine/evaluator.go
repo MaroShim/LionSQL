@@ -90,20 +90,34 @@ func EvalBinaryOp(op byte, leftVal, rightVal storage.Value, targetType storage.D
 		return storage.FloatValue(res), nil
 
 	case storage.TypeDecimal:
-		var res float64
+		da := leftVal.Decimal()
+		db := rightVal.Decimal()
 		switch op {
 		case '+':
-			res = leftF + rightF
+			return storage.DecimalValueFromDecimal(da.Add(db)), nil
 		case '-':
-			res = leftF - rightF
+			return storage.DecimalValueFromDecimal(da.Sub(db)), nil
 		case '*':
-			res = leftF * rightF
+			return storage.DecimalValueFromDecimal(da.Mul(db)), nil
 		case '/':
-			res = leftF / rightF
+			if db.IsZero() {
+				return storage.NullValue(targetType), fmt.Errorf("divide by zero error encountered")
+			}
+			targetScale := da.Scale()
+			if db.Scale() > targetScale {
+				targetScale = db.Scale()
+			}
+			if targetScale < 4 {
+				targetScale = 4
+			}
+			divDec, err := da.Div(db, targetScale)
+			if err != nil {
+				return storage.NullValue(targetType), err
+			}
+			return storage.DecimalValueFromDecimal(divDec), nil
 		default:
 			return storage.NullValue(targetType), fmt.Errorf("unsupported operator %c for TypeDecimal", op)
 		}
-		return storage.DecimalValue(strconv.FormatFloat(res, 'f', 2, 64)), nil
 
 	default:
 		return CoerceAndCalculate(op, leftVal, rightVal)
@@ -169,7 +183,10 @@ func ResolveOperand(token string, rec storage.Record) (storage.Value, bool) {
 		return storage.IntValue(i), true
 	}
 	if f, err := strconv.ParseFloat(unquoted, 64); err == nil {
-		return storage.FloatValue(f), true
+		if strings.ContainsAny(unquoted, "eE") {
+			return storage.FloatValue(f), true
+		}
+		return storage.DecimalValue(unquoted), true
 	}
 	return storage.NullValue(storage.TypeVarChar), false
 }

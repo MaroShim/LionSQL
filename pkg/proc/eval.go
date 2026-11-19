@@ -225,8 +225,10 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		switch e.Val.Type {
 		case storage.TypeInt:
 			return e.Val.IVal, nil
-		case storage.TypeFloat:
+		case storage.TypeFloat, storage.TypeReal:
 			return e.Val.FVal, nil
+		case storage.TypeDecimal:
+			return e.Val.Decimal(), nil
 		case storage.TypeBool:
 			return e.Val.BVal, nil
 		case storage.TypeDateTime:
@@ -993,6 +995,44 @@ func evalRowBinaryOpWithCollation(op TokenType, left, right any, collate string)
 }
 
 func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
+	if (isDecimalVal(left) || isDecimalVal(right)) && !isFloatVal(left) && !isFloatVal(right) {
+		if d1, ok1 := toDecimalVal(left); ok1 {
+			if d2, ok2 := toDecimalVal(right); ok2 {
+				switch op {
+				case TokenEq:
+					return d1.Cmp(d2) == 0, nil
+				case TokenNeq:
+					return d1.Cmp(d2) != 0, nil
+				case TokenLt:
+					return d1.Cmp(d2) < 0, nil
+				case TokenLte:
+					return d1.Cmp(d2) <= 0, nil
+				case TokenGt:
+					return d1.Cmp(d2) > 0, nil
+				case TokenGte:
+					return d1.Cmp(d2) >= 0, nil
+				case TokenPlus:
+					return d1.Add(d2), nil
+				case TokenMinus:
+					return d1.Sub(d2), nil
+				case TokenAsterisk:
+					return d1.Mul(d2), nil
+				case TokenSlash, TokenDiv:
+					if d2.IsZero() {
+						return nil, fmt.Errorf("division by zero: divide by zero error encountered")
+					}
+					scale := d1.Scale()
+					if d2.Scale() > scale {
+						scale = d2.Scale()
+					}
+					if scale < 4 {
+						scale = 4
+					}
+					return d1.Div(d2, scale)
+				}
+			}
+		}
+	}
 	switch op {
 	case TokenEq:
 		if isNullVal(left) || isNullVal(right) {
@@ -1425,11 +1465,33 @@ func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[str
 			return nil, nil
 		}
 		// In T-SQL, ISNULL binds to data type and length of check_expression!
-		if castExpr, ok := args[0].(*CastExpr); ok && castExpr.Precision > 0 {
-			if s, isStr := v1.(string); isStr {
-				runes := []rune(s)
-				if len(runes) > castExpr.Precision {
-					v1 = string(runes[:castExpr.Precision])
+		if castExpr, ok := args[0].(*CastExpr); ok {
+			if castExpr.TargetType == storage.TypeFloat || castExpr.TargetType == storage.TypeReal {
+				if d, okD := v1.(storage.Decimal); okD {
+					v1 = d.Float64()
+				}
+			} else if castExpr.Precision > 0 {
+				if s, isStr := v1.(string); isStr {
+					runes := []rune(s)
+					if len(runes) > castExpr.Precision {
+						v1 = string(runes[:castExpr.Precision])
+					}
+				}
+			}
+		} else if colRef, ok := args[0].(*ColumnRefExpr); ok && row != nil {
+			if colTypes, okT := row["__col_types"].(map[string]storage.DataType); okT {
+				targetType := colTypes[colRef.Name]
+				if targetType == 0 {
+					targetType = colTypes[strings.ToLower(colRef.Name)]
+				}
+				if targetType == storage.TypeFloat || targetType == storage.TypeReal {
+					if d, okD := v1.(storage.Decimal); okD {
+						v1 = d.Float64()
+					}
+				} else if targetType == storage.TypeInt {
+					if d, okD := v1.(storage.Decimal); okD {
+						v1 = d.Int64()
+					}
 				}
 			}
 		}
@@ -1612,6 +1674,54 @@ func toArithmeticFloat(v any) (float64, bool) {
 		}
 	}
 	return 0, false
+}
+
+func isFloatVal(v any) bool {
+	if v == nil {
+		return false
+	}
+	switch val := v.(type) {
+	case float64, float32:
+		return true
+	case storage.Value:
+		return val.Type == storage.TypeFloat || val.Type == storage.TypeReal
+	}
+	return false
+}
+
+func isDecimalVal(v any) bool {
+	if v == nil {
+		return false
+	}
+	switch val := v.(type) {
+	case storage.Decimal:
+		return true
+	case storage.Value:
+		return val.Type == storage.TypeDecimal
+	}
+	return false
+}
+
+func toDecimalVal(v any) (storage.Decimal, bool) {
+	if v == nil {
+		return storage.Decimal{}, false
+	}
+	switch val := v.(type) {
+	case storage.Decimal:
+		return val, true
+	case storage.Value:
+		if val.Type == storage.TypeDecimal {
+			return val.Decimal(), true
+		}
+		if val.Type == storage.TypeInt {
+			return storage.NewDecimalFromInt(val.IVal, 0), true
+		}
+	case int64:
+		return storage.NewDecimalFromInt(val, 0), true
+	case int:
+		return storage.NewDecimalFromInt(int64(val), 0), true
+	}
+	return storage.Decimal{}, false
 }
 
 func toFloat(v any) (float64, bool) {

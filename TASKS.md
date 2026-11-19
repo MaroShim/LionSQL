@@ -271,7 +271,7 @@
 | `DONE` | **`FIX-DATEDIFF-BIG-DAYOFYEAR-1`** |  | Proc | P2 | DATEDIFF_BIG(dayofyear, ...) returns NULL | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-DATEDIFF-BOUNDARY-CROSSING-1`** | `1.0-GA` | Engine | P2 | T-SQL DATEDIFF datepart 경계선 통과 계산 스펙 준수 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DDL-DEFAULT-CHECK-1`** | `1.0-GA` | Engine | P2 | CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`FIX-DECIMAL-LITERAL-ARITHMETIC-PRECISION-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
+| `DONE` | **`FIX-DECIMAL-LITERAL-ARITHMETIC-PRECISION-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-DEFAULT-EXPR-DYNAMIC-EVAL-1`** | `1.0-GA` | Engine | P2 | DEFAULT 표현식(NEWID, GETDATE 등) 파싱 시점 캐싱 폐지 및 INSERT 실행 시 동적 평가 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-DIV-BY-ZERO-ERROR-VISIBILITY-1`** | `1.0-GA` | Engine | P2 | 나눗셈(/) 0 나누기 시 명시적 division by zero 에러 반환 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DML-OUTPUT-INTO-TABLE-VAR-1`** | `v0.94.0` | Engine | P1 | INSERT ... OUTPUT ... INTO @table_variable 데이터 사일런트 유실 패치 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
@@ -3118,8 +3118,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] Engine `FIX-DECIMAL-LITERAL-ARITHMETIC-PRECISION-1`
-- **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 00:47:09
+### [DONE] Engine `FIX-DECIMAL-LITERAL-ARITHMETIC-PRECISION-1`
+- **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 03:44:05
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
 
 ---

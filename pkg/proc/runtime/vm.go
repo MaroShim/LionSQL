@@ -3587,6 +3587,11 @@ func storageAdd(a, b storage.Value) storage.Value {
 	if a.IsNull || b.IsNull {
 		return storage.NullValue(storage.TypeUnknown)
 	}
+	if (a.Type == storage.TypeDecimal || b.Type == storage.TypeDecimal) && a.Type != storage.TypeFloat && b.Type != storage.TypeFloat && a.Type != storage.TypeReal && b.Type != storage.TypeReal {
+		da := a.Decimal()
+		db := b.Decimal()
+		return storage.DecimalValueFromDecimal(da.Add(db))
+	}
 	n1, ok1 := toFloatNum(a)
 	n2, ok2 := toFloatNum(b)
 	if ok1 && ok2 {
@@ -3603,6 +3608,11 @@ func storageSub(a, b storage.Value) storage.Value {
 	if a.IsNull || b.IsNull {
 		return storage.NullValue(storage.TypeUnknown)
 	}
+	if (a.Type == storage.TypeDecimal || b.Type == storage.TypeDecimal) && a.Type != storage.TypeFloat && b.Type != storage.TypeFloat && a.Type != storage.TypeReal && b.Type != storage.TypeReal {
+		da := a.Decimal()
+		db := b.Decimal()
+		return storage.DecimalValueFromDecimal(da.Sub(db))
+	}
 	n1, _ := toFloatNum(a)
 	n2, _ := toFloatNum(b)
 	diff := n1 - n2
@@ -3616,6 +3626,11 @@ func storageMul(a, b storage.Value) storage.Value {
 	if a.IsNull || b.IsNull {
 		return storage.NullValue(storage.TypeUnknown)
 	}
+	if (a.Type == storage.TypeDecimal || b.Type == storage.TypeDecimal) && a.Type != storage.TypeFloat && b.Type != storage.TypeFloat && a.Type != storage.TypeReal && b.Type != storage.TypeReal {
+		da := a.Decimal()
+		db := b.Decimal()
+		return storage.DecimalValueFromDecimal(da.Mul(db))
+	}
 	n1, _ := toFloatNum(a)
 	n2, _ := toFloatNum(b)
 	prod := n1 * n2
@@ -3628,6 +3643,25 @@ func storageMul(a, b storage.Value) storage.Value {
 func storageDiv(a, b storage.Value) (storage.Value, error) {
 	if a.IsNull || b.IsNull {
 		return storage.NullValue(storage.TypeUnknown), nil
+	}
+	if (a.Type == storage.TypeDecimal || b.Type == storage.TypeDecimal) && a.Type != storage.TypeFloat && b.Type != storage.TypeFloat && a.Type != storage.TypeReal && b.Type != storage.TypeReal {
+		da := a.Decimal()
+		db := b.Decimal()
+		if db.IsZero() {
+			return storage.NullValue(storage.TypeUnknown), fmt.Errorf("division by zero: divide by zero error encountered")
+		}
+		targetScale := da.Scale()
+		if db.Scale() > targetScale {
+			targetScale = db.Scale()
+		}
+		if targetScale < 4 {
+			targetScale = 4
+		}
+		divDec, err := da.Div(db, targetScale)
+		if err != nil {
+			return storage.NullValue(storage.TypeUnknown), err
+		}
+		return storage.DecimalValueFromDecimal(divDec), nil
 	}
 	if a.Type == storage.TypeInt && b.Type == storage.TypeInt {
 		if b.IVal == 0 {

@@ -366,9 +366,24 @@ func ConvertValue(v any, targetType storage.DataType) storage.Value {
 	if v == nil {
 		return storage.NullValue(targetType)
 	}
+	if sv, ok := v.(storage.Value); ok {
+		if sv.Type == targetType {
+			return sv
+		}
+		if sv.IsNull {
+			return storage.NullValue(targetType)
+		}
+		if sv.Type == storage.TypeDecimal {
+			v = sv.Decimal()
+		} else {
+			v = sv.Interface()
+		}
+	}
 	switch targetType {
 	case storage.TypeInt:
 		switch num := v.(type) {
+		case storage.Decimal:
+			return storage.IntValue(num.Int64())
 		case float64:
 			return storage.IntValue(int64(num))
 		case int:
@@ -387,6 +402,8 @@ func ConvertValue(v any, targetType storage.DataType) storage.Value {
 		return storage.StringValue(fmt.Sprintf("%v", v))
 	case storage.TypeReal:
 		switch num := v.(type) {
+		case storage.Decimal:
+			return storage.RealValue(float32(num.Float64()))
 		case float32:
 			return storage.RealValue(num)
 		case float64:
@@ -404,6 +421,8 @@ func ConvertValue(v any, targetType storage.DataType) storage.Value {
 		}
 	case storage.TypeFloat:
 		switch num := v.(type) {
+		case storage.Decimal:
+			return storage.FloatValue(num.Float64())
 		case float64:
 			return storage.FloatValue(num)
 		case int:

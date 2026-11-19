@@ -19,6 +19,7 @@ import (
 type ColumnIndexMap struct {
 	indices   map[string]int
 	cols      []string
+	types     map[string]storage.DataType
 	tableCols map[string][]string
 }
 
@@ -35,6 +36,7 @@ func (m *ColumnIndexMap) TableColumns(table string) []string {
 func NewColumnIndexMap(schema *storage.TableSchema, alias string) *ColumnIndexMap {
 	m := &ColumnIndexMap{
 		indices:   make(map[string]int),
+		types:     make(map[string]storage.DataType),
 		tableCols: make(map[string][]string),
 	}
 	if schema != nil {
@@ -50,16 +52,28 @@ func NewColumnIndexMap(schema *storage.TableSchema, alias string) *ColumnIndexMa
 			m.indices[strings.ToLower(c.Name)] = i
 			m.indices[cleanCol] = i
 			m.indices[strings.ToLower(cleanCol)] = i
+			m.types[c.Name] = c.Type
+			m.types[strings.ToLower(c.Name)] = c.Type
+			m.types[cleanCol] = c.Type
+			m.types[strings.ToLower(cleanCol)] = c.Type
 			if alias != "" {
 				m.indices[alias+"."+c.Name] = i
 				m.indices[strings.ToLower(alias+"."+c.Name)] = i
 				m.indices[cleanAlias+"."+cleanCol] = i
 				m.indices[strings.ToLower(cleanAlias+"."+cleanCol)] = i
+				m.types[alias+"."+c.Name] = c.Type
+				m.types[strings.ToLower(alias+"."+c.Name)] = c.Type
+				m.types[cleanAlias+"."+cleanCol] = c.Type
+				m.types[strings.ToLower(cleanAlias+"."+cleanCol)] = c.Type
 			} else if schema.Name != "" {
 				m.indices[schema.Name+"."+c.Name] = i
 				m.indices[strings.ToLower(schema.Name+"."+c.Name)] = i
 				m.indices[cleanSchema+"."+cleanCol] = i
 				m.indices[strings.ToLower(cleanSchema+"."+cleanCol)] = i
+				m.types[schema.Name+"."+c.Name] = c.Type
+				m.types[strings.ToLower(schema.Name+"."+c.Name)] = c.Type
+				m.types[cleanSchema+"."+cleanCol] = c.Type
+				m.types[strings.ToLower(cleanSchema+"."+cleanCol)] = c.Type
 			}
 		}
 		if cleanAlias != "" {
@@ -343,6 +357,9 @@ func (t Tuple) ToEvalMap() map[string]any {
 			}
 			res[k] = v
 		}
+	}
+	if len(t.Index.types) > 0 {
+		res["__col_types"] = t.Index.types
 	}
 	return res
 }

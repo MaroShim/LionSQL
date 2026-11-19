@@ -191,6 +191,11 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 			return args[0]
 		}
 		res := args[1]
+		if !res.IsNull && args[0].Type != 0 && args[0].Type != storage.TypeUnknown && res.Type != args[0].Type {
+			if castVal, err := EvalCast(res, args[0].Type, args[0].Precision, 0, 0, true); err == nil && !castVal.IsNull {
+				res = castVal
+			}
+		}
 		if !res.IsNull && args[0].Precision > 0 {
 			if res.Type == storage.TypeVarChar {
 				runes := []rune(res.SVal)

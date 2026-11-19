@@ -335,8 +335,13 @@ func (p *Parser) parsePrefix() Expr {
 		p.nextToken()
 		return expr
 	case TokenFloat:
-		val, _ := strconv.ParseFloat(p.curToken.Literal, 64)
-		expr := &LiteralExpr{Val: storage.FloatValue(val)}
+		if strings.ContainsAny(p.curToken.Literal, "eE") {
+			val, _ := strconv.ParseFloat(p.curToken.Literal, 64)
+			expr := &LiteralExpr{Val: storage.FloatValue(val)}
+			p.nextToken()
+			return expr
+		}
+		expr := &LiteralExpr{Val: storage.DecimalValue(p.curToken.Literal)}
 		p.nextToken()
 		return expr
 	case TokenString:

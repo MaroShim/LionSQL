@@ -669,10 +669,8 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			if err != nil {
 				return err
 			}
-			if s.Type == storage.TypeBool {
-				c.emit(OpCast, valReg, valReg, 0, &CastData{TargetType: storage.TypeBool})
-			} else if c.isIntegerExpr(s.Init) {
-				c.varTypes[varName] = storage.TypeInt
+			if s.Type != 0 && s.Type != storage.TypeUnknown {
+				c.emit(OpCast, valReg, valReg, 0, &CastData{TargetType: s.Type, Precision: s.Precision})
 			}
 			c.emit(OpStoreVar, valReg, slot, 0, varName)
 			c.freeReg(1)
@@ -686,7 +684,9 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		}
 		varName := cleanVarName(s.Name)
 		slot := c.getOrAllocSlot(varName)
-		if c.isIntegerExpr(s.Value) {
+		if vType, ok := c.varTypes[varName]; ok && vType != 0 && vType != storage.TypeUnknown {
+			c.emit(OpCast, valReg, valReg, 0, &CastData{TargetType: vType})
+		} else if c.isIntegerExpr(s.Value) {
 			c.varTypes[varName] = storage.TypeInt
 		}
 		c.emit(OpStoreVar, valReg, slot, 0, varName)

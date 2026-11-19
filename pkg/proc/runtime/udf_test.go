@@ -5,6 +5,7 @@ import (
 
 	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 )
 
@@ -146,6 +147,19 @@ func toFloat(v any) float64 {
 		return float64(n)
 	case int:
 		return float64(n)
+	case storage.Decimal:
+		return n.Float64()
+	case storage.Value:
+		if n.Type == storage.TypeDecimal {
+			return n.Decimal().Float64()
+		}
+		if n.Type == storage.TypeFloat || n.Type == storage.TypeReal {
+			return n.FVal
+		}
+		if n.Type == storage.TypeInt {
+			return float64(n.IVal)
+		}
+		return 0
 	default:
 		return 0
 	}

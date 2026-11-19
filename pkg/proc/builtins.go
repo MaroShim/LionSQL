@@ -127,6 +127,8 @@ func toFloatNum(v storage.Value) (float64, bool) {
 		return float64(v.IVal), true
 	case storage.TypeFloat, storage.TypeReal:
 		return v.FVal, true
+	case storage.TypeDecimal:
+		return v.Decimal().Float64(), true
 	case storage.TypeVarChar:
 		f, err := strconv.ParseFloat(strings.TrimSpace(v.SVal), 64)
 		return f, err == nil
