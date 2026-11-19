@@ -240,6 +240,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ## 4. Engineering Guidelines & Development Pipeline
 
+### Mandatory Regression Test Invariant for All Bug & Issue Fixes (`[RULE:MandatoryRegressionTest]`)
+Every bug fix, issue remediation, live audit finding remedy, and behavioral patch must **unconditionally accompany dedicated, isolated regression tests** before completion:
+1. **Zero-Unverified Fix Invariant**: No bug fix or remediation PR/commit may modify production engine logic without adding corresponding regression test cases in the relevant package test files (e.g. `pkg/engine/*_regression_test.go`, `pkg/proc/runtime/*_regression_test.go`).
+2. **Deterministic Defect Reproduction**: Regression tests must explicitly reproduce the defect symptom before the patch and assert expected SQL Server / PostgreSQL standard behavior after the patch.
+3. **Hermeticity & Flake-Free Execution (`[RULE:DeterministicTesting]`)**: Regression tests must run deterministically under `-race` with zero timing dependencies (`time.Sleep`), zero reliance on external daemons, and zero leakage of ephemeral objects (mandatory cleanups).
+4. **Permanent Regression Shield**: Regression tests become an immutable shield in the test suite, preventing future refactorings from re-introducing previously resolved defects.
+
 ### 3-Stage Verification Pipeline (Build ➔ Test ➔ Commit)
 All code modifications, refactorings, and feature additions must strictly pass all 3 stages in order before committing:
 1. **Build**:
