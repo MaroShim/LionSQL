@@ -1244,6 +1244,8 @@ func (s *Coordinator) execAlterTableAddColumns(tableName string, actions []proc.
 		col := &storage.Column{
 			Name:              c.Name,
 			Type:              c.Type,
+			RawType:           c.RawType,
+			IsFixed:           c.IsFixed,
 			Nullable:          c.Nullable,
 			Identity:          c.Identity,
 			IdentitySeed:      seed,

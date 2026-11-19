@@ -130,6 +130,9 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	if _, _, exists := td.Schema.FindIndex(index.Name); exists {
 		return fmt.Errorf("%w: %s", storage.ErrIndexExists, index.Name)
 	}
+	if len(td.Schema.Indexes) >= storage.MaxIndexesPerTable {
+		return fmt.Errorf("%w: table %q has reached maximum index limit (%d)", storage.ErrTooManyIndexes, index.TableName, storage.MaxIndexesPerTable)
+	}
 
 	// Validate columns
 	if index.IsExpression() {

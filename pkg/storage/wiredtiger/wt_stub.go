@@ -63,6 +63,10 @@ func (e *Engine) AddWALHook(fn func(rec memengine.WALRecord)) {}
 
 func (e *Engine) SetFsyncPolicy(policy memengine.FsyncPolicy) {}
 
+func (e *Engine) SetMaxDataBytes(bytes int64) {}
+
+func (e *Engine) MaxDataBytes() int64 { return 0 }
+
 func (e *Engine) FsyncPolicy() memengine.FsyncPolicy { return memengine.FsyncEverySec }
 
 func (e *Engine) SyncCount() int64 { return 0 }

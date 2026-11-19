@@ -261,3 +261,44 @@ func TestEngine_AuditRound8_WindowFrame_Regression(t *testing.T) {
 		})
 	}
 }
+
+func TestEngine_Audit_CreateIndex_MaxColumnsAndLimitsEnforcement(t *testing.T) {
+	coord, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	// Create table with 35 columns
+	var colDefs []string
+	for i := 1; i <= 35; i++ {
+		colDefs = append(colDefs, fmt.Sprintf("c%d INT", i))
+	}
+	_, err := coord.ExecuteSQL(fmt.Sprintf("CREATE TABLE wide_idx_tbl (id INT PRIMARY KEY, %s);", strings.Join(colDefs, ", ")))
+	if err != nil {
+		t.Fatalf("CREATE TABLE wide_idx_tbl failed: %v", err)
+	}
+
+	// 1. CREATE INDEX with 33 columns (> MaxIndexColumns 32) MUST fail
+	var idxCols33 []string
+	for i := 1; i <= 33; i++ {
+		idxCols33 = append(idxCols33, fmt.Sprintf("c%d", i))
+	}
+	_, err = coord.ExecuteSQL(fmt.Sprintf("CREATE INDEX idx_too_many_cols ON wide_idx_tbl (%s);", strings.Join(idxCols33, ", ")))
+	if err == nil {
+		t.Fatalf("expected error when creating index with 33 columns, but succeeded")
+	}
+	if !strings.Contains(err.Error(), "32 columns") {
+		t.Fatalf("expected 32 columns limit error, got: %v", err)
+	}
+
+	// 2. CREATE INDEX with 32 columns (exactly MaxIndexColumns) MUST succeed
+	var idxCols32 []string
+	for i := 1; i <= 32; i++ {
+		idxCols32 = append(idxCols32, fmt.Sprintf("c%d", i))
+	}
+	res, err := coord.ExecuteSQL(fmt.Sprintf("CREATE INDEX idx_max_allowed_cols ON wide_idx_tbl (%s);", strings.Join(idxCols32, ", ")))
+	if err != nil {
+		t.Fatalf("CREATE INDEX with 32 columns failed: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("expected success with 32 columns index, got: %+v", res)
+	}
+}

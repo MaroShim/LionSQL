@@ -123,6 +123,9 @@ func cleanCatalogIdent(name string) string {
 
 // RegisterProcedure saves or updates a stored procedure in the catalog (upsert semantics).
 func (c *Catalog) RegisterProcedure(proc *Procedure) error {
+	if err := storage.ValidateIdentifier(cleanCatalogIdent(proc.Name)); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -147,6 +150,9 @@ func (c *Catalog) RegisterProcedure(proc *Procedure) error {
 // CreateProcedure registers a new stored procedure in the catalog.
 // If a procedure with the same name (case-insensitive) already exists, it returns ErrProcExists.
 func (c *Catalog) CreateProcedure(proc *Procedure) error {
+	if err := storage.ValidateIdentifier(cleanCatalogIdent(proc.Name)); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -241,6 +247,9 @@ func (c *Catalog) DropProcedure(name string) error {
 
 // RegisterFunction saves or updates a UDF in the catalog.
 func (c *Catalog) RegisterFunction(fn *Function) error {
+	if err := storage.ValidateIdentifier(cleanCatalogIdent(fn.Name)); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -264,6 +273,9 @@ func (c *Catalog) RegisterFunction(fn *Function) error {
 
 // CreateFunction registers a new UDF in the catalog, returning ErrFuncExists if duplicate.
 func (c *Catalog) CreateFunction(fn *Function) error {
+	if err := storage.ValidateIdentifier(cleanCatalogIdent(fn.Name)); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -357,6 +369,9 @@ func (c *Catalog) DropFunction(name string) error {
 
 // RegisterTrigger saves or updates a trigger in the catalog.
 func (c *Catalog) RegisterTrigger(trg *Trigger) error {
+	if err := storage.ValidateIdentifier(cleanCatalogIdent(trg.Name)); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -380,6 +395,9 @@ func (c *Catalog) RegisterTrigger(trg *Trigger) error {
 
 // CreateTrigger registers a new trigger in the catalog, returning ErrTriggerExists if duplicate.
 func (c *Catalog) CreateTrigger(trg *Trigger) error {
+	if err := storage.ValidateIdentifier(cleanCatalogIdent(trg.Name)); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -769,6 +787,9 @@ func (c *Catalog) persistTableStatsLocked() error {
 
 // CreateView registers a new view. Returns ErrViewExists if a view with that name already exists.
 func (c *Catalog) CreateView(v *View) error {
+	if err := storage.ValidateIdentifier(cleanCatalogIdent(v.Name)); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := strings.ToLower(cleanCatalogIdent(v.Name))
@@ -882,6 +903,9 @@ func (c *Catalog) ListViews() []*View {
 
 // CreateStatistics registers an extended statistics definition in the catalog (C-5).
 func (c *Catalog) CreateStatistics(stat *StatisticDef) error {
+	if err := storage.ValidateIdentifier(cleanCatalogIdent(stat.Name)); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := strings.ToLower(cleanCatalogIdent(stat.TableName) + "." + cleanCatalogIdent(stat.Name))

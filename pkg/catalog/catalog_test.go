@@ -1,6 +1,7 @@
 package catalog_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -286,5 +287,40 @@ func TestP1_BatchM1_CleanCatalogIdentCompoundBrackets(t *testing.T) {
 	got2, err := cat.GetProcedure("dbo.[my_proc]")
 	if err != nil || got2 == nil {
 		t.Fatalf("expected GetProcedure('dbo.[my_proc]') to find '[dbo].[my_proc]', got err=%v", err)
+	}
+}
+
+func TestCatalog_IdentifierLengthValidation(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	longName := "x"
+	for len(longName) <= 128 {
+		longName += "long_identifier_padding_string_"
+	}
+
+	// 1. Procedure
+	err := cat.CreateProcedure(&catalog.Procedure{Name: longName})
+	if err == nil || !errors.Is(err, storage.ErrIdentifierTooLong) {
+		t.Fatalf("expected ErrIdentifierTooLong for long procedure name, got %v", err)
+	}
+
+	// 2. Function
+	err = cat.CreateFunction(&catalog.Function{Name: longName})
+	if err == nil || !errors.Is(err, storage.ErrIdentifierTooLong) {
+		t.Fatalf("expected ErrIdentifierTooLong for long function name, got %v", err)
+	}
+
+	// 3. Trigger
+	err = cat.CreateTrigger(&catalog.Trigger{Name: longName})
+	if err == nil || !errors.Is(err, storage.ErrIdentifierTooLong) {
+		t.Fatalf("expected ErrIdentifierTooLong for long trigger name, got %v", err)
+	}
+
+	// 4. View
+	err = cat.CreateView(&catalog.View{Name: longName})
+	if err == nil || !errors.Is(err, storage.ErrIdentifierTooLong) {
+		t.Fatalf("expected ErrIdentifierTooLong for long view name, got %v", err)
 	}
 }

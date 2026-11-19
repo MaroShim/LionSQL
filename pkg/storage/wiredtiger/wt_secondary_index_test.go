@@ -1152,6 +1152,101 @@ func TestRegression_Enterprise_WiredTiger_CompositeUniqueIndex_AllowMultipleNull
 	}
 }
 
+func TestSecondaryIndex_MaxIndexLimitsAndDiskQuota(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_limits_quota_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	dbPath := filepath.Join(tmpDir, "db")
+	eng := New()
+	if err := eng.Open(dbPath); err != nil {
+		t.Fatalf("failed to open engine: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "metrics",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeInt},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	// 1. Test MaxIndexesPerTable guard
+	eng.mu.Lock()
+	rawTbl := eng.tables["metrics"]
+	for i := 0; i < storage.MaxIndexesPerTable; i++ {
+		rawTbl.Indexes = append(rawTbl.Indexes, storage.IndexSchema{
+			Name:      "dummy_idx",
+			TableName: "metrics",
+			Columns:   []string{"val"},
+		})
+	}
+	eng.mu.Unlock()
+
+	err = eng.CreateIndex(&storage.IndexSchema{
+		Name:      "idx_overflow",
+		TableName: "metrics",
+		Columns:   []string{"val"},
+	})
+	if err == nil || !errors.Is(err, storage.ErrTooManyIndexes) {
+		t.Fatalf("expected ErrTooManyIndexes when exceeding 999 indexes, got %v", err)
+	}
+	// Restore indexes
+	eng.mu.Lock()
+	rawTbl.Indexes = nil
+	eng.mu.Unlock()
+
+	// 2. Test Disk Quota (ErrTableFull)
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx.Insert("metrics", storage.Record{"id": storage.IntValue(1), "val": storage.IntValue(100)}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Set disk quota limit to 1 byte (strictly exceeded by existing table files)
+	eng.SetMaxDataBytes(1)
+
+	tx2, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx2.Insert("metrics", storage.Record{"id": storage.IntValue(2), "val": storage.IntValue(200)}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	err = tx2.Commit()
+	if err == nil || !errors.Is(err, storage.ErrTableFull) {
+		t.Fatalf("expected ErrTableFull when disk quota exceeded, got: %v", err)
+	}
+
+	// Reset disk quota to unlimited
+	eng.SetMaxDataBytes(0)
+	tx3, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx3.Insert("metrics", storage.Record{"id": storage.IntValue(3), "val": storage.IntValue(300)}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx3.Commit(); err != nil {
+		t.Fatalf("Commit with quota reset failed: %v", err)
+	}
+}
+
 
 
 

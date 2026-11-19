@@ -330,8 +330,9 @@ type Engine struct {
 	tainted     atomic.Bool
 	taintMu     sync.RWMutex
 	taintErr    error
-	cacheSize   string
-	sessionMax  int
+	cacheSize    string
+	sessionMax   int
+	maxDataBytes atomic.Int64
 }
 
 func (e *Engine) markTainted(err error) {
@@ -383,6 +384,16 @@ func New() *Engine {
 // SetFsyncPolicy configures the journal synchronization policy (FsyncNone, FsyncEverySec, FsyncAlways).
 func (e *Engine) SetFsyncPolicy(policy memengine.FsyncPolicy) {
 	e.fsyncPolicy.Store(int32(policy))
+}
+
+// SetMaxDataBytes sets the maximum capacity in bytes allowed for storage in the WiredTiger engine.
+func (e *Engine) SetMaxDataBytes(bytes int64) {
+	e.maxDataBytes.Store(bytes)
+}
+
+// MaxDataBytes returns the current maximum capacity limit in bytes (0 if unlimited).
+func (e *Engine) MaxDataBytes() int64 {
+	return e.maxDataBytes.Load()
 }
 
 // FsyncPolicy returns the current journal synchronization policy.
@@ -2047,8 +2058,16 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	}
 	index.TableName = t.Name
 
+	if err := index.Validate(t); err != nil {
+		return err
+	}
+
 	if _, _, exists := t.FindIndex(index.Name); exists {
 		return fmt.Errorf("%w: %s", storage.ErrIndexExists, index.Name)
+	}
+
+	if len(t.Indexes) >= storage.MaxIndexesPerTable {
+		return fmt.Errorf("%w: table %q has reached maximum index limit (%d)", storage.ErrTooManyIndexes, t.Name, storage.MaxIndexesPerTable)
 	}
 
 	var sess *C.WT_SESSION
@@ -3954,6 +3973,36 @@ func (tx *WTTx) Commit() error {
 			tx.sess.activeTx = false
 			tx.sess.mu.Unlock()
 			return err
+		}
+	}
+
+	// 2. Enforce disk quota limit guard if writes occurred
+	if tx.hasWrites {
+		if limit := tx.sess.engine.maxDataBytes.Load(); limit > 0 {
+			var totalBytes int64
+			if tx.sess.engine.homeDir != "" {
+				_ = filepath.Walk(tx.sess.engine.homeDir, func(path string, info os.FileInfo, err error) error {
+					if err == nil && info != nil && !info.IsDir() {
+						totalBytes += info.Size()
+					}
+					return nil
+				})
+			}
+			if totalBytes >= limit {
+				tx.closed = true
+				tempTx := tx.tempTx
+				tx.tempTx = nil
+				if tempTx != nil {
+					_ = tempTx.Rollback()
+				}
+				_ = C.go_wt_session_rollback(tx.sess.sess, nil)
+				_ = C.go_wt_session_reset(tx.sess.sess)
+				tx.sess.mu.Lock()
+				tx.sess.activeTx = false
+				tx.sess.mu.Unlock()
+				return fmt.Errorf("%w: wiredtiger storage disk quota exceeded (%d >= %d bytes)",
+					storage.ErrTableFull, totalBytes, limit)
+			}
 		}
 	}
 

@@ -31,6 +31,9 @@ const MaxIndexColumns = 32
 // MaxIndexKeyBytes is the maximum byte size of an index key in a B-Tree index (1,700 bytes).
 const MaxIndexKeyBytes = 1700
 
+// MaxIndexesPerTable is the maximum number of non-clustered indexes allowed per table (999).
+const MaxIndexesPerTable = 999
+
 var (
 	ErrTableNotFound         = errors.New("table not found")
 	ErrTableExists           = errors.New("table already exists")
@@ -63,6 +66,7 @@ var (
 	ErrIdentifierTooLong     = errors.New("identifier exceeds maximum length limit (128 characters, SQLSTATE 42622, Msg 103)")
 	ErrTooManyIndexColumns   = errors.New("index exceeds maximum column limit (32 columns, SQLSTATE 54011, Msg 1904)")
 	ErrIndexKeyTooLarge      = errors.New("index key exceeds maximum size limit (1700 bytes, SQLSTATE 54000, Msg 1946)")
+	ErrTooManyIndexes        = errors.New("table exceeds maximum index limit (999 indexes, SQLSTATE 54000, Msg 1905)")
 )
 
 // ValidateIdentifier verifies that an identifier does not exceed MaxIdentifierLength (128 characters).
@@ -503,6 +507,9 @@ func (s *TableSchema) ValidateRowSize() error {
 	fixedSize := s.FixedRowSize()
 	if fixedSize > MaxInlineRowSize {
 		return fmt.Errorf("%w: fixed column footprint %d bytes exceeds maximum in-row inline limit (%d bytes)", ErrInlineRowTooLarge, fixedSize, MaxInlineRowSize)
+	}
+	if len(s.Indexes) > MaxIndexesPerTable {
+		return fmt.Errorf("%w: table %q has %d indexes (max %d)", ErrTooManyIndexes, s.Name, len(s.Indexes), MaxIndexesPerTable)
 	}
 	for i := range s.Indexes {
 		if err := s.Indexes[i].Validate(s); err != nil {
