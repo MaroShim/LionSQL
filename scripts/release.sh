@@ -357,9 +357,9 @@ else
     go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/crashtest ./cmd/crashtest
     go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/soaktest ./cmd/soaktest
 
-    echo -e "[Gate 1/6] Running core unit & regression tests across all packages..."
-    go test -tags wiredtiger -count=1 ./pkg/...
-    echo -e "${CLR_GREEN}Gate 1 OK: 100% PASS across 23 core packages${CLR_RESET}"
+    echo -e "[Gate 1/6] Running core unit, regression & E2E parity tests across all packages..."
+    go test -tags wiredtiger -count=1 ./pkg/... ./test/e2e/...
+    echo -e "${CLR_GREEN}Gate 1 OK: 100% PASS across 23 core packages and E2E parity suites${CLR_RESET}"
 
     echo -e "[Gate 2/6] Running 13-Domain Extended Smoke Test (memory & wiredtiger)..."
     bash scripts/verify_report.sh --engine=memory
@@ -567,7 +567,7 @@ See the detailed changelog delta below for commit-level records across procedura
 
 1. **3-Stage Pipeline Verification (\`[RULE:PipelineVerification]\`)**:
    - Official release binaries built for macOS (\`darwin-arm64\`), Linux (\`linux-amd64\`), and Windows (\`windows-amd64\`).
-   - \`go test -tags wiredtiger -count=1 -race ./pkg/... ./test/slt_proc/...\` 100% PASS (0 data races).
+   - \`go test -tags wiredtiger -count=1 -race ./pkg/... ./test/slt_proc/... ./test/e2e/...\` 100% PASS (0 data races).
 EOF
 fi
 
@@ -598,7 +598,7 @@ LionSQL \`${TAG}\` 버전은 누적된 안정성 강화, 성능 최적화 및 �
 
 1. **3-Stage 검증 파이프라인 통과 (\`[RULE:PipelineVerification]\`)**:
    - macOS (\`darwin-arm64\`), Linux (\`linux-amd64\`), Windows (\`windows-amd64\`) 3대 플랫폼 공식 릴리즈 바이너리 무결성 100% 빌드 성공.
-   - \`go test -tags wiredtiger -count=1 -race ./pkg/... ./test/slt_proc/...\` 100% 통과 (0 Data Races).
+   - \`go test -tags wiredtiger -count=1 -race ./pkg/... ./test/slt_proc/... ./test/e2e/...\` 100% 통과 (0 Data Races).
 EOF
 fi
 
