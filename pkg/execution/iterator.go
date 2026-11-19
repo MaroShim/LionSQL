@@ -671,6 +671,11 @@ func toRawString(v any) (string, bool) {
 // Returns -1 if a < b, 0 if a == b, 1 if a > b.
 // NULL is ordered smaller than non-NULL.
 func CompareValues(a, b any) int {
+	return CompareValuesCS(a, b, false)
+}
+
+// CompareValuesCS compares two generic values, supporting case-sensitive string matching if cs=true.
+func CompareValuesCS(a, b any, cs bool) int {
 	if a == nil && b == nil {
 		return 0
 	}
@@ -685,8 +690,14 @@ func CompareValues(a, b any) int {
 	sa, isStrA := toRawString(a)
 	sb, isStrB := toRawString(b)
 	if isStrA && isStrB {
-		cA := strings.TrimRight(strings.ToLower(sa), " ")
-		cB := strings.TrimRight(strings.ToLower(sb), " ")
+		var cA, cB string
+		if cs {
+			cA = strings.TrimRight(sa, " ")
+			cB = strings.TrimRight(sb, " ")
+		} else {
+			cA = strings.TrimRight(strings.ToLower(sa), " ")
+			cB = strings.TrimRight(strings.ToLower(sb), " ")
+		}
 		return strings.Compare(cA, cB)
 	}
 

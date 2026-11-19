@@ -236,8 +236,8 @@
 | `DONE` | **`FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`** | `v0.94.0` | Security | P2 | 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리) | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `PENDING` | **`FEAT-SQL-SERVER-AGENT-INPROCESS-1`** | `v0.94.0` | Engine | P2 | SQL Server Agent 인-프로세스 스케줄러 (msdb.dbo.sysjobs, sysjobhistory, sp_add_job) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`** | `v0.94.0` | Engine | P2 | 서버 전역 dialect_preference 설정 체계 및 CLI/환경변수 바인딩 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
-| `IN_PROGRESS` | **`FEAT-SUPERSET-EXPR-COLLATE-1`** | `v0.94.0` | Engine | P2 | 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
-| `IN_PROGRESS` | **`FEAT-SUPERSET-ILIKE-SYNTAX-1`** | `v0.94.0` | Engine | P2 | pkg/proc/ Native Pratt Parser 및 VDBE ILIKE 연산자 전역 지원 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-SUPERSET-EXPR-COLLATE-1`** | `v0.94.0` | Engine | P2 | 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-SUPERSET-ILIKE-SYNTAX-1`** | `v0.94.0` | Engine | P2 | pkg/proc/ Native Pratt Parser 및 VDBE ILIKE 연산자 전역 지원 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TABLE-VAR-1`** |  | Engine | P2 | T-SQL 테이블 변수(DECLARE @tbl TABLE) 지원 및 DML/배치 라이프사이클 통합 | [`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TDS-MULTIPLE-RESULT-SETS-1`** | `1.0-GA` | Wire | P2 | TDS 다중 결과 집합(Multiple Result Sets / Sequential NextResult) 스트리밍 반환 지원 | [`notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md`](notes/plans/TDS_MULTIPLE_RESULT_SETS_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TIMESERIES-LSM-1`** | `v1.99.0` | FEAT | P2 | LSM Time-Series Chunk Storage & time_bucket | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
@@ -2870,15 +2870,15 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [IN_PROGRESS] 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 `FEAT-SUPERSET-EXPR-COLLATE-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:05:49
+### [DONE] 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 `FEAT-SUPERSET-EXPR-COLLATE-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 00:14:39
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md)
 
 ---
 
-### [IN_PROGRESS] pkg/proc/ Native Pratt Parser 및 VDBE ILIKE 연산자 전역 지원 `FEAT-SUPERSET-ILIKE-SYNTAX-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:05:49
+### [DONE] pkg/proc/ Native Pratt Parser 및 VDBE ILIKE 연산자 전역 지원 `FEAT-SUPERSET-ILIKE-SYNTAX-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 00:14:39
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md)
 

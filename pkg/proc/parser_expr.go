@@ -73,8 +73,9 @@ func (p *Parser) parseExpression(precedence int) Expr {
 				leftExp = &IsNullExpr{Expr: leftExp, Not: true}
 				break
 			}
-			if p.curTokenIs(TokenLike) {
-				p.nextToken() // eat LIKE
+			if p.curTokenIs(TokenLike) || p.curTokenIs(TokenILike) {
+				isILike := p.curTokenIs(TokenILike)
+				p.nextToken() // eat LIKE or ILIKE
 				pattern := p.parseExpression(precSum)
 				if pattern == nil {
 					p.addError("expected pattern expression after NOT LIKE")
@@ -85,7 +86,7 @@ func (p *Parser) parseExpression(precedence int) Expr {
 					p.nextToken() // eat ESCAPE
 					escExpr = p.parseExpression(precSum)
 				}
-				leftExp = &LikeExpr{Expr: leftExp, Not: true, Pattern: pattern, Escape: escExpr}
+				leftExp = &LikeExpr{Expr: leftExp, Not: true, Pattern: pattern, Escape: escExpr, CaseInsensitive: isILike}
 				break
 			}
 			if p.curTokenIs(TokenBetween) {
@@ -168,8 +169,9 @@ func (p *Parser) parseExpression(precedence int) Expr {
 			}
 			leftExp = &BetweenExpr{Expr: leftExp, Not: false, Low: low, High: high}
 
-		case TokenLike:
-			p.nextToken() // eat LIKE
+		case TokenLike, TokenILike:
+			isILike := p.curTokenIs(TokenILike)
+			p.nextToken() // eat LIKE or ILIKE
 			pattern := p.parseExpression(precSum)
 			if pattern == nil {
 				p.addError(fmt.Sprintf("expected pattern expression after LIKE at line %d:%d", p.curToken.Line, p.curToken.Col))
@@ -180,7 +182,7 @@ func (p *Parser) parseExpression(precedence int) Expr {
 				p.nextToken() // eat ESCAPE
 				escExpr = p.parseExpression(precSum)
 			}
-			leftExp = &LikeExpr{Expr: leftExp, Not: false, Pattern: pattern, Escape: escExpr}
+			leftExp = &LikeExpr{Expr: leftExp, Not: false, Pattern: pattern, Escape: escExpr, CaseInsensitive: isILike}
 
 		case TokenIs:
 			p.nextToken() // eat IS
@@ -209,6 +211,18 @@ func (p *Parser) parseExpression(precedence int) Expr {
 				Try:        false,
 				IsFixed:    isFixed,
 			}
+
+		case TokenCollate:
+			p.nextToken() // eat COLLATE
+			var collation string
+			if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenString) {
+				collation = p.curToken.Literal
+				p.nextToken()
+			} else {
+				p.addError(fmt.Sprintf("expected collation name after COLLATE at line %d:%d", p.curToken.Line, p.curToken.Col))
+				return nil
+			}
+			leftExp = &CollateExpr{Expr: leftExp, Collation: collation}
 
 		case TokenEq, TokenNeq, TokenLt, TokenLte, TokenGt, TokenGte:
 			if p.peekTokenIs(TokenAll) || p.peekTokenIs(TokenAny) || p.peekTokenIs(TokenSome) {

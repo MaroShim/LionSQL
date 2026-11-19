@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -363,6 +364,40 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 		}
 		return false, false
 
+	case *proc.CollateExpr:
+		return EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
+
+	case *proc.LikeExpr:
+		val, okV := EvalTupleExprWithContext(t, e.Expr, execSubquery, sessionVars)
+		pat, okP := EvalTupleExprWithContext(t, e.Pattern, execSubquery, sessionVars)
+		if !okV || !okP {
+			return nil, false
+		}
+		if val == nil || pat == nil {
+			return nil, true
+		}
+		if sVal, ok := val.(storage.Value); ok && sVal.IsNull {
+			return nil, true
+		}
+		if sVal, ok := pat.(storage.Value); ok && sVal.IsNull {
+			return nil, true
+		}
+		valStr := fmt.Sprintf("%v", val)
+		patStr := fmt.Sprintf("%v", pat)
+		caseInsensitive := true
+		if e.Collation != "" {
+			caseInsensitive = !sqlutil.IsCaseSensitiveCollation(e.Collation)
+		} else if !e.CaseInsensitive {
+			if c, ok := e.Expr.(*proc.CollateExpr); ok && sqlutil.IsCaseSensitiveCollation(c.Collation) {
+				caseInsensitive = false
+			}
+		}
+		matched := sqlutil.MatchLike(patStr, valStr, caseInsensitive)
+		if e.Not {
+			matched = !matched
+		}
+		return matched, true
+
 	case *proc.ScalarSubqueryExpr:
 		evalMap := t.ToEvalMap()
 		if len(sessionVars) > 0 {
@@ -506,6 +541,13 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 		return nil, true
 	}
 
+	var isCS bool
+	if c, ok := e.Left.(*proc.CollateExpr); ok && sqlutil.IsCaseSensitiveCollation(c.Collation) {
+		isCS = true
+	} else if c, ok := e.Right.(*proc.CollateExpr); ok && sqlutil.IsCaseSensitiveCollation(c.Collation) {
+		isCS = true
+	}
+
 	// 1. Arithmetic Operators (+, -, *, /, DIV, %) and Bitwise Operators (|, &, ^)
 	switch e.Op {
 	case proc.TokenBitwiseOr, proc.TokenBitwiseAnd, proc.TokenBitwiseXor:
@@ -632,17 +674,17 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 
 	// 2. Comparison Operators (=, ==, !=, <>, <, <=, >, >=)
 	case proc.TokenEq:
-		return CompareValues(left, right) == 0, true
+		return CompareValuesCS(left, right, isCS) == 0, true
 	case proc.TokenNeq:
-		return CompareValues(left, right) != 0, true
+		return CompareValuesCS(left, right, isCS) != 0, true
 	case proc.TokenLt:
-		return CompareValues(left, right) < 0, true
+		return CompareValuesCS(left, right, isCS) < 0, true
 	case proc.TokenLte:
-		return CompareValues(left, right) <= 0, true
+		return CompareValuesCS(left, right, isCS) <= 0, true
 	case proc.TokenGt:
-		return CompareValues(left, right) > 0, true
+		return CompareValuesCS(left, right, isCS) > 0, true
 	case proc.TokenGte:
-		return CompareValues(left, right) >= 0, true
+		return CompareValuesCS(left, right, isCS) >= 0, true
 
 	// 3. JSON Extract Operators (->, ->>)
 	case proc.TokenJSONExtract:

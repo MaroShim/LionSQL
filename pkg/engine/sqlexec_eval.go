@@ -261,7 +261,13 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 	for _, op := range ops {
 		idx := strings.Index(strings.ToUpper(whereStr), op)
 		if idx != -1 {
-			leftCol := cleanIdentifier(whereStr[:idx])
+			rawLeft := whereStr[:idx]
+			var collate string
+			if cIdx := sqlutil.FindTopLevelKeyword(rawLeft, "COLLATE"); cIdx != -1 {
+				collate = strings.TrimSpace(rawLeft[cIdx+len("COLLATE"):])
+				rawLeft = strings.TrimSpace(rawLeft[:cIdx])
+			}
+			leftCol := cleanIdentifier(rawLeft)
 			rawRight := strings.TrimSpace(whereStr[idx+len(op):])
 			var rightVal string
 			var rightIsQuoted bool
@@ -320,6 +326,9 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 						return !bVal
 					}
 				}
+				if collate != "" && sqlutil.IsCaseSensitiveCollation(collate) {
+					return strVal == rightVal || strings.TrimRight(strVal, " ") == strings.TrimRight(rightVal, " ")
+				}
 				return strings.EqualFold(strVal, rightVal) || strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(rightVal, " "))
 			case "!=", "<>":
 				if isBool {
@@ -329,6 +338,9 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 					if rightVal == "0" || strings.EqualFold(rightVal, "false") {
 						return bVal
 					}
+				}
+				if collate != "" && sqlutil.IsCaseSensitiveCollation(collate) {
+					return !(strVal == rightVal || strings.TrimRight(strVal, " ") == strings.TrimRight(rightVal, " "))
 				}
 				return !strings.EqualFold(strVal, rightVal) && !strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(rightVal, " "))
 			case ">", ">=", "!<", "<", "<=", "!>":
@@ -371,9 +383,11 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 				}
 				return strVal > rightVal
 			case "LIKE", "ILIKE":
-				return sqlutil.MatchLike(rightVal, strVal, true)
+				isCS := strings.TrimSpace(op) != "ILIKE" && collate != "" && sqlutil.IsCaseSensitiveCollation(collate)
+				return sqlutil.MatchLike(rightVal, strVal, !isCS)
 			case "NOT LIKE", "NOT ILIKE":
-				return !sqlutil.MatchLike(rightVal, strVal, true)
+				isCS := strings.TrimSpace(op) != "NOT ILIKE" && collate != "" && sqlutil.IsCaseSensitiveCollation(collate)
+				return !sqlutil.MatchLike(rightVal, strVal, !isCS)
 			}
 		}
 	}

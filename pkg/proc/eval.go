@@ -343,7 +343,13 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			if err != nil {
 				return nil, err
 			}
-			return evalRowBinaryOp(e.Op, leftVal, rightVal)
+			var collate string
+			if c, ok := e.Left.(*CollateExpr); ok {
+				collate = c.Collation
+			} else if c, ok := e.Right.(*CollateExpr); ok {
+				collate = c.Collation
+			}
+			return evalRowBinaryOpWithCollation(e.Op, leftVal, rightVal, collate)
 		}
 
 	case *InExpr:
@@ -497,6 +503,13 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			}
 		}
 		matched := sqlutil.MatchLikeEscape(strPat, strVal, escStr, true)
+		if e.Collation != "" {
+			matched = sqlutil.MatchLikeEscape(strPat, strVal, escStr, !sqlutil.IsCaseSensitiveCollation(e.Collation))
+		} else if !e.CaseInsensitive {
+			if c, ok := e.Expr.(*CollateExpr); ok {
+				matched = sqlutil.MatchLikeEscape(strPat, strVal, escStr, !sqlutil.IsCaseSensitiveCollation(c.Collation))
+			}
+		}
 		if e.Not {
 			return !matched, nil
 		}
@@ -579,6 +592,9 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		default:
 			return res.SVal, nil
 		}
+
+	case *CollateExpr:
+		return EvalRowExpr(e.Expr, row, execSubquery)
 
 	case *FunctionCallExpr:
 		return evalRowFunction(e, e.Name, e.Args, row, execSubquery)
@@ -893,6 +909,32 @@ func isStringType(v any) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func evalRowBinaryOpWithCollation(op TokenType, left, right any, collate string) (any, error) {
+	if collate != "" && sqlutil.IsCaseSensitiveCollation(collate) {
+		switch op {
+		case TokenEq:
+			if isNullVal(left) || isNullVal(right) {
+				return nil, nil
+			}
+			if s1, ok1 := isStringType(left); ok1 {
+				if s2, ok2 := isStringType(right); ok2 {
+					return s1 == s2 || strings.TrimRight(s1, " ") == strings.TrimRight(s2, " "), nil
+				}
+			}
+		case TokenNeq:
+			if isNullVal(left) || isNullVal(right) {
+				return nil, nil
+			}
+			if s1, ok1 := isStringType(left); ok1 {
+				if s2, ok2 := isStringType(right); ok2 {
+					return !(s1 == s2 || strings.TrimRight(s1, " ") == strings.TrimRight(s2, " ")), nil
+				}
+			}
+		}
+	}
+	return evalRowBinaryOp(op, left, right)
 }
 
 func evalRowBinaryOp(op TokenType, left, right any) (any, error) {

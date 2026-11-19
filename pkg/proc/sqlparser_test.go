@@ -928,6 +928,92 @@ func TestParseSQL_LateralJoin(t *testing.T) {
 	}
 }
 
+func TestParseSQL_ILikeAndCollate(t *testing.T) {
+	// 1. ILIKE parsing
+	q1 := "SELECT * FROM users WHERE email ILIKE '%@GMAIL.COM';"
+	stmt1, err := proc.ParseSQL(q1)
+	if err != nil {
+		t.Fatalf("ParseSQL ILIKE failed: %v", err)
+	}
+	sel1 := stmt1.(*proc.GeneralSelectStmt)
+	like1, ok := sel1.Where.(*proc.LikeExpr)
+	if !ok || !like1.CaseInsensitive {
+		t.Fatalf("expected CaseInsensitive LikeExpr for ILIKE, got %+v", sel1.Where)
+	}
+
+	// 2. NOT ILIKE parsing
+	q2 := "SELECT * FROM users WHERE email NOT ILIKE '%@company.com';"
+	stmt2, err := proc.ParseSQL(q2)
+	if err != nil {
+		t.Fatalf("ParseSQL NOT ILIKE failed: %v", err)
+	}
+	sel2 := stmt2.(*proc.GeneralSelectStmt)
+	like2, ok := sel2.Where.(*proc.LikeExpr)
+	if !ok || !like2.Not || !like2.CaseInsensitive {
+		t.Fatalf("expected Not CaseInsensitive LikeExpr for NOT ILIKE, got %+v", sel2.Where)
+	}
+
+	// 3. COLLATE in LIKE
+	q3 := "SELECT * FROM users WHERE name COLLATE Latin1_General_CS_AS LIKE 'Alice%';"
+	stmt3, err := proc.ParseSQL(q3)
+	if err != nil {
+		t.Fatalf("ParseSQL COLLATE LIKE failed: %v", err)
+	}
+	sel3 := stmt3.(*proc.GeneralSelectStmt)
+	like3, ok := sel3.Where.(*proc.LikeExpr)
+	if !ok {
+		t.Fatalf("expected LikeExpr, got %+v", sel3.Where)
+	}
+	collate3, ok := like3.Expr.(*proc.CollateExpr)
+	if !ok || collate3.Collation != "Latin1_General_CS_AS" {
+		t.Fatalf("expected CollateExpr with Latin1_General_CS_AS, got %+v", like3.Expr)
+	}
+
+	// 4. COLLATE in Binary Equality
+	q4 := "SELECT * FROM users WHERE name COLLATE Latin1_General_BIN = 'Alice';"
+	stmt4, err := proc.ParseSQL(q4)
+	if err != nil {
+		t.Fatalf("ParseSQL COLLATE = failed: %v", err)
+	}
+	sel4 := stmt4.(*proc.GeneralSelectStmt)
+	bin4, ok := sel4.Where.(*proc.BinaryExpr)
+	if !ok || bin4.Op != proc.TokenEq {
+		t.Fatalf("expected BinaryExpr =, got %+v", sel4.Where)
+	}
+	collate4, ok := bin4.Left.(*proc.CollateExpr)
+	if !ok || collate4.Collation != "Latin1_General_BIN" {
+		t.Fatalf("expected CollateExpr with Latin1_General_BIN, got %+v", bin4.Left)
+	}
+
+	// 5. Evaluation tests
+	rowLower := map[string]any{"name": "alice", "email": "alice@gmail.com"}
+	rowUpper := map[string]any{"name": "Alice", "email": "ALICE@GMAIL.COM"}
+
+	// ILIKE matches both
+	if !proc.EvalBoolExpr(sel1.Where, rowLower, nil) {
+		t.Errorf("expected ILIKE to match lowercase email")
+	}
+	if !proc.EvalBoolExpr(sel1.Where, rowUpper, nil) {
+		t.Errorf("expected ILIKE to match uppercase email")
+	}
+
+	// Case-sensitive LIKE matches Alice, rejects alice
+	if proc.EvalBoolExpr(sel3.Where, rowLower, nil) {
+		t.Errorf("expected CS LIKE to reject 'alice' against 'Alice%%'")
+	}
+	if !proc.EvalBoolExpr(sel3.Where, rowUpper, nil) {
+		t.Errorf("expected CS LIKE to match 'Alice' against 'Alice%%'")
+	}
+
+	// Case-sensitive = matches Alice, rejects alice
+	if proc.EvalBoolExpr(sel4.Where, rowLower, nil) {
+		t.Errorf("expected CS = to reject 'alice' against 'Alice'")
+	}
+	if !proc.EvalBoolExpr(sel4.Where, rowUpper, nil) {
+		t.Errorf("expected CS = to match 'Alice' against 'Alice'")
+	}
+}
+
 
 
 

@@ -37,6 +37,7 @@ var precedences = map[TokenType]int{
 	TokenIn:              precEquals,
 	TokenBetween:         precEquals,
 	TokenLike:            precEquals,
+	TokenILike:           precEquals,
 	TokenIs:              precEquals,
 	TokenEq:              precEquals,
 	TokenNeq:             precEquals,
@@ -54,6 +55,7 @@ var precedences = map[TokenType]int{
 	TokenJSONExtract:     precJSON,
 	TokenJSONExtractText: precJSON,
 	TokenDoubleColon:     precPrefix,
+	TokenCollate:         precPrefix,
 }
 
 // Parser parses T-SQL tokens into an AST.

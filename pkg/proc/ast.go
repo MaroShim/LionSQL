@@ -696,12 +696,14 @@ func (e *BetweenExpr) String() string {
 	return fmt.Sprintf("%s %sBETWEEN %s AND %s", e.Expr.String(), notStr, e.Low.String(), e.High.String())
 }
 
-// LikeExpr represents Expr [NOT] LIKE Pattern [ESCAPE Escape]
+// LikeExpr represents Expr [NOT] LIKE Pattern [ESCAPE Escape] or Expr [NOT] ILIKE Pattern [ESCAPE Escape]
 type LikeExpr struct {
-	Expr    Expr
-	Not     bool
-	Pattern Expr
-	Escape  Expr
+	Expr            Expr
+	Not             bool
+	Pattern         Expr
+	Escape          Expr
+	CaseInsensitive bool
+	Collation       string
 }
 
 func (e *LikeExpr) exprNode() {}
@@ -722,7 +724,30 @@ func (e *LikeExpr) String() string {
 	if e.Escape != nil {
 		escStr = fmt.Sprintf(" ESCAPE %s", e.Escape.String())
 	}
-	return fmt.Sprintf("%s %sLIKE %s%s", exprStr, notStr, patStr, escStr)
+	opStr := "LIKE"
+	if e.CaseInsensitive {
+		opStr = "ILIKE"
+	}
+	collateStr := ""
+	if e.Collation != "" {
+		collateStr = fmt.Sprintf(" COLLATE %s", e.Collation)
+	}
+	return fmt.Sprintf("%s%s %s%s %s%s", exprStr, collateStr, notStr, opStr, patStr, escStr)
+}
+
+// CollateExpr represents Expr COLLATE collation_name
+type CollateExpr struct {
+	Expr      Expr
+	Collation string
+}
+
+func (e *CollateExpr) exprNode() {}
+func (e *CollateExpr) String() string {
+	exprStr := ""
+	if e.Expr != nil {
+		exprStr = e.Expr.String()
+	}
+	return fmt.Sprintf("%s COLLATE %s", exprStr, e.Collation)
 }
 
 // IsNullExpr represents Expr IS [NOT] NULL

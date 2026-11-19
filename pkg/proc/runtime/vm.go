@@ -3537,6 +3537,10 @@ func storageNeg(a storage.Value) storage.Value {
 }
 
 func storageEq(a, b storage.Value) bool {
+	return storageEqCS(a, b, false)
+}
+
+func storageEqCS(a, b storage.Value, cs bool) bool {
 	if a.IsNull && b.IsNull {
 		return true
 	}
@@ -3555,6 +3559,9 @@ func storageEq(a, b storage.Value) bool {
 		h1 := strings.TrimRight(strings.ToLower(s1[2:]), "0")
 		h2 := strings.TrimRight(strings.ToLower(s2[2:]), "0")
 		return h1 == h2
+	}
+	if cs {
+		return s1 == s2
 	}
 	return strings.EqualFold(s1, s2)
 }

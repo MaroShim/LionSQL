@@ -529,6 +529,8 @@ vmLoop:
 			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
 		} else if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt {
 			f.regs[inst.A] = storage.BoolValue(vb.IVal == vc.IVal)
+		} else if inst.Flags&1 != 0 {
+			f.regs[inst.A] = storage.BoolValue(storageEqCS(vb, vc, true))
 		} else {
 			f.regs[inst.A] = storage.BoolValue(storageEq(vb, vc))
 		}
@@ -539,6 +541,8 @@ vmLoop:
 			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
 		} else if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt {
 			f.regs[inst.A] = storage.BoolValue(vb.IVal != vc.IVal)
+		} else if inst.Flags&1 != 0 {
+			f.regs[inst.A] = storage.BoolValue(!storageEqCS(vb, vc, true))
 		} else {
 			f.regs[inst.A] = storage.BoolValue(!storageEq(vb, vc))
 		}
@@ -605,7 +609,8 @@ vmLoop:
 					return nil, fmt.Errorf("The ESCAPE clause must be a single character")
 				}
 			}
-			matched := matchLike(str, pat, esc)
+			isCS := inst.Flags&2 != 0
+			matched := sqlutil.MatchLikeEscape(pat, str, esc, !isCS)
 			if inst.Flags&1 != 0 {
 				matched = !matched
 			}

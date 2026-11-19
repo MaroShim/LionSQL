@@ -1294,6 +1294,16 @@ func (c *Compiler) isIntegerExpr(e Expr) bool {
 	return false
 }
 
+func isExprCollateCS(expr Expr) bool {
+	if expr == nil {
+		return false
+	}
+	if c, ok := expr.(*CollateExpr); ok {
+		return sqlutil.IsCaseSensitiveCollation(c.Collation)
+	}
+	return false
+}
+
 func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 	if expr == nil {
 		r := c.allocReg()
@@ -1381,13 +1391,21 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 			if isInt {
 				c.emit(OpEqInt, leftReg, leftReg, rightReg, nil)
 			} else {
-				c.emit(OpEq, leftReg, leftReg, rightReg, nil)
+				var flags uint8
+				if isExprCollateCS(e.Left) || isExprCollateCS(e.Right) {
+					flags = 1
+				}
+				c.emitWithFlags(OpEq, flags, leftReg, leftReg, rightReg, nil)
 			}
 		case TokenNeq:
 			if isInt {
 				c.emit(OpNeqInt, leftReg, leftReg, rightReg, nil)
 			} else {
-				c.emit(OpNeq, leftReg, leftReg, rightReg, nil)
+				var flags uint8
+				if isExprCollateCS(e.Left) || isExprCollateCS(e.Right) {
+					flags = 1
+				}
+				c.emitWithFlags(OpNeq, flags, leftReg, leftReg, rightReg, nil)
 			}
 		case TokenLt:
 			if isInt {
@@ -1498,7 +1516,12 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		}
 		var flags uint8
 		if e.Not {
-			flags = 1
+			flags |= 1
+		}
+		if e.Collation != "" && sqlutil.IsCaseSensitiveCollation(e.Collation) {
+			flags |= 2
+		} else if !e.CaseInsensitive && isExprCollateCS(e.Expr) {
+			flags |= 2
 		}
 		var aux any
 		if e.Escape != nil {
@@ -1514,6 +1537,9 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 			c.freeReg(1)
 		}
 		return valReg, nil
+
+	case *CollateExpr:
+		return c.compileExpr(e.Expr)
 
 	case *IsNullExpr:
 		valReg, err := c.compileExpr(e.Expr)
