@@ -251,9 +251,9 @@ func formatWithCommas(n float64, decimals int) string {
 
 func isStringBuiltin(name string) bool {
 	switch name {
-	case "CONCAT", "CONCAT_WS", "QUOTENAME", "QUOTE_IDENT", "QUOTE_LITERAL", "ASCII", "CHAR", "CHR", "LEN", "LENGTH", "DATALENGTH", "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM",
+	case "CONCAT", "CONCAT_WS", "QUOTENAME", "QUOTE_IDENT", "QUOTE_LITERAL", "ASCII", "CHAR", "CHR", "LEN", "LENGTH", "CHAR_LENGTH", "CHARACTER_LENGTH", "DATALENGTH", "UPPER", "LOWER", "TRIM", "BTRIM", "LTRIM", "RTRIM",
 		"LEFT", "RIGHT", "SUBSTRING", "SUBSTR", "REPLACE", "REVERSE", "CHARINDEX", "SPACE", "REPLICATE", "REPEAT", "STUFF",
-		"PARSENAME", "STRING_ESCAPE", "FORMATMESSAGE",
+		"PARSENAME", "STRING_ESCAPE", "FORMATMESSAGE", "STR",
 		"PATINDEX", "UNICODE", "NCHAR", "SOUNDEX", "DIFFERENCE", "TRANSLATE", "FORMAT",
 		"STRPOS", "INSTR", "MD5", "SHA256", "HEX", "UNHEX", "LPAD", "RPAD", "OCTET_LENGTH", "BIT_LENGTH", "INITCAP", "TO_CHAR",
 		"GREP", "REGEXP_LIKE", "AWK", "SPLIT_PART",
@@ -375,7 +375,7 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		s := strings.TrimRight(valToString(args[0]), " ")
 		return storage.IntValue(int64(len([]rune(s))))
 
-	case "LENGTH":
+	case "LENGTH", "CHAR_LENGTH", "CHARACTER_LENGTH":
 		if len(args) == 0 || args[0].IsNull {
 			return storage.NullValue(storage.TypeInt)
 		}
@@ -424,6 +424,61 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		arg1 := valToString(args[1])
 		// Check if first arg is cutset (e.g. TRIM('.,! ' FROM target))
 		return storage.StringValue(strings.Trim(arg1, arg0))
+
+	case "BTRIM":
+		if len(args) == 0 || args[0].IsNull || (len(args) >= 2 && args[1].IsNull) {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		if len(args) == 1 {
+			return storage.StringValue(strings.TrimSpace(valToString(args[0])))
+		}
+		return storage.StringValue(strings.Trim(valToString(args[0]), valToString(args[1])))
+
+	case "STR":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		num, ok := toFloatNum(args[0])
+		if !ok {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		length := 10
+		if len(args) >= 2 {
+			if args[1].IsNull {
+				return storage.NullValue(storage.TypeVarChar)
+			}
+			l, okL := toIntNum(args[1])
+			if !okL || l <= 0 || l > 8000 {
+				return storage.NullValue(storage.TypeVarChar)
+			}
+			length = int(l)
+		}
+		decimals := 0
+		if len(args) >= 3 {
+			if args[2].IsNull {
+				return storage.NullValue(storage.TypeVarChar)
+			}
+			d, okD := toIntNum(args[2])
+			if !okD || d < 0 {
+				return storage.NullValue(storage.TypeVarChar)
+			}
+			decimals = int(d)
+			if decimals > 16 {
+				decimals = 16
+			}
+		}
+		formatted := strconv.FormatFloat(num, 'f', decimals, 64)
+		if len(formatted) > length {
+			intOnly := strconv.FormatFloat(num, 'f', 0, 64)
+			if len(intOnly) > length {
+				return storage.StringValue(strings.Repeat("*", length))
+			}
+			formatted = formatted[:length]
+		}
+		if len(formatted) < length {
+			formatted = strings.Repeat(" ", length-len(formatted)) + formatted
+		}
+		return storage.StringValue(formatted)
 
 	case "LTRIM":
 		if len(args) == 0 || args[0].IsNull || (len(args) >= 2 && args[1].IsNull) {

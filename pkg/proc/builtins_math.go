@@ -12,9 +12,9 @@ import (
 
 func isMathBuiltin(name string) bool {
 	switch name {
-	case "ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "SQRT", "SQUARE", "SIGN", "PI",
+	case "ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "POW", "SQRT", "CBRT", "SQUARE", "SIGN", "PI",
 		"MOD", "TRUNC", "TRUNCATE",
-		"EXP", "LOG", "LOG10", "SIN", "COS", "TAN", "COT", "ASIN", "ACOS", "ATAN", "ATN2", "DEGREES", "RADIANS", "RAND", "RANDOM",
+		"EXP", "LOG", "LN", "LOG10", "SIN", "COS", "TAN", "COT", "ASIN", "ACOS", "ATAN", "ATN2", "ATAN2", "DEGREES", "RADIANS", "RAND", "RANDOM",
 		"BIT_COUNT", "GET_BIT", "SET_BIT", "LEFT_SHIFT", "RIGHT_SHIFT":
 		return true
 	default:
@@ -30,7 +30,7 @@ func evalMathBuiltinWithErr(upper string, args []storage.Value) (storage.Value, 
 				return storage.NullValue(storage.TypeFloat), fmt.Errorf("Msg 3623, Level 16, State 1: An invalid floating point operation occurred.")
 			}
 		}
-	case "LOG":
+	case "LOG", "LN":
 		if len(args) > 0 && !args[0].IsNull {
 			if n, ok := toFloatNum(args[0]); ok && n <= 0 {
 				return storage.NullValue(storage.TypeFloat), fmt.Errorf("Msg 3623, Level 16, State 1: An invalid floating point operation occurred.")
@@ -161,7 +161,7 @@ func evalMathBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		return storage.NullValue(storage.TypeInt)
 
-	case "POWER":
+	case "POWER", "POW":
 		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
 			return storage.NullValue(storage.TypeFloat)
 		}
@@ -185,6 +185,19 @@ func evalMathBuiltin(upper string, args []storage.Value) storage.Value {
 				return storage.NullValue(storage.TypeFloat)
 			}
 			return storage.FloatValue(math.Sqrt(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "CBRT":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			res := math.Cbrt(n)
+			if res == math.Trunc(res) && math.Abs(res) < float64(math.MaxInt64) {
+				return storage.IntValue(int64(res))
+			}
+			return storage.FloatValue(res)
 		}
 		return storage.NullValue(storage.TypeFloat)
 
@@ -227,7 +240,7 @@ func evalMathBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		return storage.NullValue(storage.TypeFloat)
 
-	case "LOG":
+	case "LOG", "LN":
 		if len(args) == 0 || args[0].IsNull {
 			return storage.NullValue(storage.TypeFloat)
 		}
@@ -327,7 +340,7 @@ func evalMathBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		return storage.NullValue(storage.TypeFloat)
 
-	case "ATN2":
+	case "ATN2", "ATAN2":
 		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
 			return storage.NullValue(storage.TypeFloat)
 		}

@@ -1400,7 +1400,15 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 
 func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[string]any, execSubquery SubqueryExecutor) (any, error) {
 	uName := strings.ToUpper(strings.TrimSpace(name))
-	isAggFn := uName == "COUNT" || uName == "SUM" || uName == "AVG" || uName == "MIN" || uName == "MAX" || uName == "STRING_AGG" || uName == "GROUP_CONCAT"
+	if err := ValidateBuiltinArity(uName, len(args)); err != nil {
+		return nil, err
+	}
+	isAggFn := uName == "COUNT" || uName == "COUNT_BIG" || uName == "SUM" || uName == "TOTAL" || uName == "AVG" || uName == "MIN" || uName == "MAX" ||
+		uName == "STRING_AGG" || uName == "GROUP_CONCAT" ||
+		uName == "STDEV" || uName == "STDEVP" || uName == "STDDEV" || uName == "STDDEV_POP" || uName == "STDDEV_SAMP" ||
+		uName == "VAR" || uName == "VARP" || uName == "VAR_POP" || uName == "VAR_SAMP" || uName == "VARIANCE" ||
+		uName == "CHECKSUM_AGG" || uName == "BOOL_AND" || uName == "BOOL_OR" || uName == "EVERY" ||
+		uName == "ARRAY_AGG" || uName == "JSON_AGG" || uName == "JSONB_AGG" || uName == "GROUPING" || uName == "MEDIAN" || uName == "APPROX_PERCENTILE"
 	if row != nil {
 		var argStrs []string
 		for _, a := range args {
@@ -1533,6 +1541,18 @@ func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[str
 			}
 		}
 		return nil, nil
+	}
+
+	if uName == "IIF" {
+		if _, isLit := args[0].(*LiteralExpr); isLit {
+			if lit, ok := args[0].(*LiteralExpr); ok && lit.Val.IsNull {
+				return nil, fmt.Errorf("An expression of non-boolean type specified in a context where a condition is expected, near ','.")
+			}
+		}
+		if EvalBoolExpr(args[0], row, execSubquery) {
+			return EvalRowExpr(args[1], row, execSubquery)
+		}
+		return EvalRowExpr(args[2], row, execSubquery)
 	}
 
 	if (uName == "DB_NAME" || uName == "CURRENT_DATABASE") && len(args) == 0 && row != nil {

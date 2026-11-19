@@ -431,6 +431,9 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 		}
 		res, err := proc.EvalRowExpr(expr, evalMap, execSubquery)
 		if err != nil {
+			if _, isCol := expr.(*proc.ColumnRefExpr); !isCol {
+				return err, true
+			}
 			return nil, false
 		}
 		return res, true

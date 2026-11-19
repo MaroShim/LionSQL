@@ -142,8 +142,8 @@ func parseObjectPieces(s string) []string {
 func isSysBuiltin(name string) bool {
 	switch name {
 	case "ISNULL", "COALESCE", "NULLIF", "IFNULL", "NVL", "ISNUMERIC", "IIF", "CHOOSE", "GREATEST", "LEAST",
-		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID", "SETVAL", "NEXTVAL",
-		"SCOPE_IDENTITY", "SERVERPROPERTY", "SESSIONPROPERTY", "CONNECTIONPROPERTY", "COLLATIONPROPERTY",
+		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "NEWSEQUENTIALID", "GEN_RANDOM_UUID", "SETVAL", "NEXTVAL",
+		"SCOPE_IDENTITY", "SERVERPROPERTY", "SESSIONPROPERTY", "CONNECTIONPROPERTY", "COLLATIONPROPERTY", "SESSION_CONTEXT",
 		"ERROR_NUMBER", "ERROR_MESSAGE", "ERROR_LINE", "ERROR_SEVERITY", "ERROR_STATE", "ERROR_PROCEDURE", "@@ERROR",
 		"XACT_STATE", "CONTEXT_INFO",
 		"OBJECT_ID", "OBJECT_NAME", "COL_LENGTH", "COL_NAME", "SCHEMA_NAME", "SCHEMA_ID", "DB_NAME", "DB_ID", "APP_NAME", "IDENT_CURRENT", "IDENT_SEED", "IDENT_INCR",
@@ -166,6 +166,21 @@ func isSysBuiltin(name string) bool {
 	default:
 		return false
 	}
+}
+
+func evalSysBuiltinWithErr(upper string, args []storage.Value) (storage.Value, error) {
+	switch upper {
+	case "HASHBYTES":
+		if len(args) >= 1 && !args[0].IsNull {
+			algo := strings.ToUpper(strings.TrimSpace(valToString(args[0])))
+			switch algo {
+			case "MD2", "MD4", "MD5", "SHA", "SHA1", "SHA2_256", "SHA2_512":
+			default:
+				return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 8116, Level 16, State 1: The algorithm argument '%s' is invalid for function hashbytes.", algo)
+			}
+		}
+	}
+	return evalSysBuiltin(upper, args), nil
 }
 
 func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
@@ -317,7 +332,7 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 	case "NEWID":
 		return storage.StringValue(generateUUIDv4())
 
-	case "NEWID7", "UUIDV7", "UUID_GENERATE_V7":
+	case "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "NEWSEQUENTIALID":
 		return storage.Value{Type: storage.TypeUUID, SVal: generateUUIDv7()}
 
 	case "GEN_RANDOM_UUID":
@@ -385,6 +400,9 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 
 	case "CONTEXT_INFO":
 		return storage.NullValue(storage.TypeBinary)
+
+	case "SESSION_CONTEXT":
+		return storage.NullValue(storage.TypeVarChar)
 
 	case "COLLATIONPROPERTY":
 		if len(args) < 2 || args[0].IsNull || args[1].IsNull {

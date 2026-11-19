@@ -477,6 +477,21 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		return nil, "scope_identity"
 	}
 
+	// Direct arity check for scalar calls in fast path
+	if openP := strings.Index(trimmed, "("); openP != -1 && strings.HasSuffix(trimmed, ")") {
+		fnName := strings.TrimSpace(trimmed[:openP])
+		if !strings.ContainsAny(fnName, " \t\r\n+-*/%<>=!&|^,") {
+			argsStr := trimmed[openP+1 : len(trimmed)-1]
+			var rawArgs []string
+			if strings.TrimSpace(argsStr) != "" {
+				rawArgs = sqlutil.SplitTopLevel(argsStr, ',')
+			}
+			if err := proc.ValidateBuiltinArity(fnName, len(rawArgs)); err != nil {
+				return err, fnName
+			}
+		}
+	}
+
 	// System variable @@var
 	if strings.HasPrefix(upper, "@@") {
 		varName := strings.ToLower(trimmed[2:])
@@ -1076,6 +1091,10 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 			if _, isCol := astExpr.(*proc.ColumnRefExpr); !isCol {
 				return nil, trimmed
 			}
+		} else {
+			if _, isCol := astExpr.(*proc.ColumnRefExpr); !isCol {
+				return err, trimmed
+			}
 		}
 	}
 
@@ -1161,6 +1180,9 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 		}
 
 		val, defAlias := s.evalScalarExpr(exprStr, cs)
+		if err, isErr := val.(error); isErr {
+			return nil, err
+		}
 		if val == exprStr {
 			// If expression failed to evaluate as a recognized scalar, report error
 			p := proc.NewParser(proc.NewLexer(exprStr))

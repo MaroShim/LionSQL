@@ -195,6 +195,50 @@ func (w *WindowIterator) Open(ctx context.Context) (retErr error) {
 }
 
 func (w *WindowIterator) validateWindowDef(winDef planner.WindowDef, indexMap *ColumnIndexMap) error {
+	fn := strings.ToUpper(winDef.Function)
+	// Validate function arity
+	if err := proc.ValidateBuiltinArity(fn, len(winDef.Args)); err != nil {
+		return err
+	}
+	// T-SQL requires ORDER BY in OVER clause for ranking, offset and distribution window functions
+	switch fn {
+	case "ROW_NUMBER", "RANK", "DENSE_RANK", "NTILE", "LAG", "LEAD", "PERCENT_RANK", "CUME_DIST":
+		if len(winDef.OrderByKeys) == 0 {
+			return fmt.Errorf("The function %q must have an OVER clause with ORDER BY.", fn)
+		}
+	}
+	if fn == "NTILE" && len(winDef.Args) > 0 {
+		if n, err := strconv.ParseInt(strings.TrimSpace(winDef.Args[0]), 10, 64); err == nil && n <= 0 {
+			return fmt.Errorf("Msg 3146, Level 16, State 1: The argument of the NTILE function must be a positive integer.")
+		}
+	}
+	if (fn == "LAG" || fn == "LEAD") && len(winDef.Args) > 1 {
+		if offset, err := strconv.ParseInt(strings.TrimSpace(winDef.Args[1]), 10, 64); err == nil && offset < 0 {
+			return fmt.Errorf("Msg 8730, Level 16, State 1: Offset argument of LAG or LEAD function must be a non-negative integer.")
+		}
+	}
+	// Validate window frame bounds if frame is present
+	if f := winDef.Frame; f != nil {
+		if f.Start.Type == planner.FrameUnboundedFollowing {
+			return fmt.Errorf("Window frame start cannot be UNBOUNDED FOLLOWING.")
+		}
+		if f.End.Type == planner.FrameUnboundedPreceding {
+			return fmt.Errorf("Window frame end cannot be UNBOUNDED PRECEDING.")
+		}
+		if f.Start.Type == planner.FrameFollowing && f.End.Type == planner.FramePreceding {
+			return fmt.Errorf("Window frame start cannot be FOLLOWING if frame end is PRECEDING.")
+		}
+		if f.Start.Type == planner.FrameFollowing && f.End.Type == planner.FrameFollowing {
+			if f.Start.Offset > f.End.Offset {
+				return fmt.Errorf("Window frame start offset cannot exceed frame end offset.")
+			}
+		}
+		if f.Start.Type == planner.FramePreceding && f.End.Type == planner.FramePreceding {
+			if f.Start.Offset < f.End.Offset {
+				return fmt.Errorf("Window frame start offset cannot be smaller than frame end offset.")
+			}
+		}
+	}
 	// Validate partition columns
 	for _, pCol := range winDef.PartitionKeys {
 		cleanPCol := strings.TrimSpace(cleanIdentifierParts(pCol))

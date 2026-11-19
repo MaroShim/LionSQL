@@ -516,12 +516,323 @@ func isDateBuiltin(name string) bool {
 		"CURDATE", "CURRENT_DATE", "CURTIME", "CURRENT_TIME",
 		"YEAR", "MONTH", "DAY", "DATEPART", "DATE_PART", "EXTRACT", "DATENAME", "DATEDIFF", "DATEDIFF_BIG", "DATEADD", "EOMONTH", "ISDATE",
 		"DATETRUNC", "DATE_TRUNC", "DATE_BUCKET", "DATEBUCKET",
-		"DATEFROMPARTS", "TIMEFROMPARTS", "DATETIMEFROMPARTS", "SMALLDATETIMEFROMPARTS", "TO_DATE", "TO_TIMESTAMP",
+		"DATEFROMPARTS", "TIMEFROMPARTS", "DATETIMEFROMPARTS", "SMALLDATETIMEFROMPARTS",
+		"DATETIME2FROMPARTS", "DATETIMEOFFSETFROMPARTS",
+		"TO_DATE", "TO_TIMESTAMP",
 		"SWITCHOFFSET", "TODATETIMEOFFSET":
 		return true
 	default:
 		return false
 	}
+}
+
+func isValidCalendarDate(y, m, d, minYear, maxYear int) bool {
+	if y < minYear || y > maxYear || m < 1 || m > 12 || d < 1 || d > 31 {
+		return false
+	}
+	t := time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
+	return t.Year() == y && int(t.Month()) == m && t.Day() == d
+}
+
+func isValidTimeOfDay(h, min, s int) bool {
+	return h >= 0 && h <= 23 && min >= 0 && min <= 59 && s >= 0 && s <= 59
+}
+
+func isValidFractionForPrecision(frac int64, prec int) bool {
+	if prec < 0 || prec > 7 || frac < 0 {
+		return false
+	}
+	if prec == 0 {
+		return frac == 0
+	}
+	maxFrac := int64(1)
+	for i := 0; i < prec; i++ {
+		maxFrac *= 10
+	}
+	return frac < maxFrac
+}
+
+func isValidDatePartUnit(part string, allowEpoch bool) bool {
+	switch part {
+	case "year", "quarter", "month", "day", "weekday", "dayofyear", "week",
+		"hour", "minute", "second", "millisecond", "microsecond", "nanosecond":
+		return true
+	case "epoch":
+		return allowEpoch
+	default:
+		return false
+	}
+}
+
+func evalDateBuiltinWithErr(upper string, args []storage.Value) (storage.Value, error) {
+	switch upper {
+	case "CURRENT_TIMESTAMP", "NOW", "CURRENT_TIME":
+		if len(args) == 1 && !args[0].IsNull {
+			prec, ok := toIntNum(args[0])
+			if !ok || prec < 0 || prec > 7 {
+				return storage.NullValue(storage.TypeDateTime), fmt.Errorf("TIMESTAMP precision (%d) must be between 0 and 7.", prec)
+			}
+		}
+
+	case "YEAR", "MONTH", "DAY", "EOMONTH":
+		if len(args) >= 1 && !args[0].IsNull {
+			if _, ok := parseDateValue(args[0]); !ok {
+				return storage.NullValue(storage.TypeInt), fmt.Errorf("Msg 241, Level 16, State 1: Conversion failed when converting date and/or time from character string.")
+			}
+		}
+
+	case "DATEPART", "DATE_PART", "EXTRACT", "DATENAME":
+		if len(args) >= 1 {
+			rawPart := strings.TrimSpace(valToString(args[0]))
+			part := normalizeDatePart(rawPart)
+			allowEpoch := upper != "DATENAME"
+			if args[0].IsNull || !isValidDatePartUnit(part, allowEpoch) {
+				return storage.NullValue(storage.TypeInt), fmt.Errorf("'%s' is not a recognized %s option.", rawPart, strings.ToLower(upper))
+			}
+		}
+		if len(args) >= 2 && !args[1].IsNull {
+			if _, ok := parseDateValue(args[1]); !ok {
+				return storage.NullValue(storage.TypeInt), fmt.Errorf("Msg 241, Level 16, State 1: Conversion failed when converting date and/or time from character string.")
+			}
+		}
+
+	case "DATETRUNC", "DATE_TRUNC":
+		if len(args) >= 1 {
+			rawPart := strings.TrimSpace(valToString(args[0]))
+			part := normalizeDatePart(rawPart)
+			if args[0].IsNull || !isValidDatePartUnit(part, false) {
+				return storage.NullValue(storage.TypeVarChar), fmt.Errorf("'%s' is not a recognized %s option.", rawPart, strings.ToLower(upper))
+			}
+		}
+		if len(args) >= 2 && !args[1].IsNull {
+			if _, ok := parseDateValue(args[1]); !ok {
+				return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 241, Level 16, State 1: Conversion failed when converting date and/or time from character string.")
+			}
+		}
+
+	case "DATEADD":
+		if len(args) >= 1 {
+			rawPart := strings.TrimSpace(valToString(args[0]))
+			part := normalizeDatePart(rawPart)
+			if args[0].IsNull || !isValidDatePartUnit(part, false) {
+				return storage.NullValue(storage.TypeVarChar), fmt.Errorf("'%s' is not a recognized dateadd option.", rawPart)
+			}
+		}
+		if len(args) >= 3 && !args[2].IsNull {
+			if _, ok := parseDateValue(args[2]); !ok {
+				return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 241, Level 16, State 1: Conversion failed when converting date and/or time from character string.")
+			}
+		}
+
+	case "DATEDIFF", "DATEDIFF_BIG":
+		if len(args) >= 1 {
+			rawPart := strings.TrimSpace(valToString(args[0]))
+			part := normalizeDatePart(rawPart)
+			if args[0].IsNull || !isValidDatePartUnit(part, false) {
+				return storage.NullValue(storage.TypeInt), fmt.Errorf("'%s' is not a recognized %s option.", rawPart, strings.ToLower(upper))
+			}
+		}
+		if len(args) >= 2 && !args[1].IsNull {
+			if _, ok := parseDateValue(args[1]); !ok {
+				return storage.NullValue(storage.TypeInt), fmt.Errorf("Msg 241, Level 16, State 1: Conversion failed when converting date and/or time from character string.")
+			}
+		}
+		if len(args) >= 3 && !args[2].IsNull {
+			if _, ok := parseDateValue(args[2]); !ok {
+				return storage.NullValue(storage.TypeInt), fmt.Errorf("Msg 241, Level 16, State 1: Conversion failed when converting date and/or time from character string.")
+			}
+		}
+
+	case "DATEFROMPARTS":
+		if len(args) != 3 {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("The datefromparts function requires 3 argument(s).")
+		}
+		for i := 0; i < 3; i++ {
+			if args[i].IsNull {
+				return storage.NullValue(storage.TypeVarChar), nil
+			}
+		}
+		y, okY := toIntNum(args[0])
+		m, okM := toIntNum(args[1])
+		d, okD := toIntNum(args[2])
+		if !okY || !okM || !okD || !isValidCalendarDate(int(y), int(m), int(d), 1, 9999) {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 289, Level 16, State 1: Cannot construct data type date, some of the arguments have values which are not valid.")
+		}
+		return storage.StringValue(fmt.Sprintf("%04d-%02d-%02d", y, m, d)), nil
+
+	case "TIMEFROMPARTS":
+		if len(args) != 3 && len(args) != 5 {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("The timefromparts function requires 5 argument(s).")
+		}
+		if len(args) == 5 && args[4].IsNull {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 10760, Level 16, State 1: Scale argument is not valid. Valid expressions for data type time scale argument are integer constants and integer constant expressions.")
+		}
+		prec := 0
+		if len(args) == 5 {
+			pVal, okP := toIntNum(args[4])
+			if !okP || pVal < 0 || pVal > 7 {
+				return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 289, Level 16, State 2: Cannot construct data type time, some of the arguments have values which are not valid.")
+			}
+			prec = int(pVal)
+		}
+		checkCount := len(args)
+		if checkCount == 5 {
+			checkCount = 4
+		}
+		for i := 0; i < checkCount; i++ {
+			if args[i].IsNull {
+				return storage.NullValue(storage.TypeVarChar), nil
+			}
+		}
+		h, okH := toIntNum(args[0])
+		m, okM := toIntNum(args[1])
+		s, okS := toIntNum(args[2])
+		frac := int64(0)
+		okF := true
+		if len(args) == 5 {
+			frac, okF = toIntNum(args[3])
+		}
+		if !okH || !okM || !okS || !okF || !isValidTimeOfDay(int(h), int(m), int(s)) || !isValidFractionForPrecision(frac, prec) {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 289, Level 16, State 2: Cannot construct data type time, some of the arguments have values which are not valid.")
+		}
+		if prec > 0 {
+			return storage.StringValue(fmt.Sprintf("%02d:%02d:%02d.%0*d", h, m, s, prec, frac)), nil
+		}
+		return storage.StringValue(fmt.Sprintf("%02d:%02d:%02d", h, m, s)), nil
+
+	case "DATETIMEFROMPARTS":
+		if len(args) != 7 {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("The datetimefromparts function requires 7 argument(s).")
+		}
+		for i := 0; i < 7; i++ {
+			if args[i].IsNull {
+				return storage.NullValue(storage.TypeVarChar), nil
+			}
+		}
+		y, okY := toIntNum(args[0])
+		m, okM := toIntNum(args[1])
+		d, okD := toIntNum(args[2])
+		h, okH := toIntNum(args[3])
+		min, okMin := toIntNum(args[4])
+		s, okS := toIntNum(args[5])
+		ms, okMS := toIntNum(args[6])
+		if !okY || !okM || !okD || !okH || !okMin || !okS || !okMS ||
+			!isValidCalendarDate(int(y), int(m), int(d), 1753, 9999) ||
+			!isValidTimeOfDay(int(h), int(min), int(s)) ||
+			ms < 0 || ms > 999 {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 289, Level 16, State 3: Cannot construct data type datetime, some of the arguments have values which are not valid.")
+		}
+		return storage.StringValue(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%03d", y, m, d, h, min, s, ms)), nil
+
+	case "SMALLDATETIMEFROMPARTS":
+		if len(args) != 5 {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("The smalldatetimefromparts function requires 5 argument(s).")
+		}
+		for i := 0; i < 5; i++ {
+			if args[i].IsNull {
+				return storage.NullValue(storage.TypeVarChar), nil
+			}
+		}
+		y, okY := toIntNum(args[0])
+		m, okM := toIntNum(args[1])
+		d, okD := toIntNum(args[2])
+		hh, okH := toIntNum(args[3])
+		mm, okMin := toIntNum(args[4])
+		if !okY || !okM || !okD || !okH || !okMin ||
+			!isValidCalendarDate(int(y), int(m), int(d), 1900, 2079) ||
+			!isValidTimeOfDay(int(hh), int(mm), 0) {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 289, Level 16, State 4: Cannot construct data type smalldatetime, some of the arguments have values which are not valid.")
+		}
+		return storage.StringValue(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:00", y, m, d, hh, mm)), nil
+
+	case "DATETIME2FROMPARTS":
+		if len(args) != 8 {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("The datetime2fromparts function requires 8 argument(s).")
+		}
+		if args[7].IsNull {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 10760, Level 16, State 1: Scale argument is not valid. Valid expressions for data type datetime2 scale argument are integer constants and integer constant expressions.")
+		}
+		pVal, okP := toIntNum(args[7])
+		if !okP || pVal < 0 || pVal > 7 {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 289, Level 16, State 5: Cannot construct data type datetime2, some of the arguments have values which are not valid.")
+		}
+		prec := int(pVal)
+		for i := 0; i < 7; i++ {
+			if args[i].IsNull {
+				return storage.NullValue(storage.TypeVarChar), nil
+			}
+		}
+		y, okY := toIntNum(args[0])
+		m, okM := toIntNum(args[1])
+		d, okD := toIntNum(args[2])
+		h, okH := toIntNum(args[3])
+		min, okMin := toIntNum(args[4])
+		s, okS := toIntNum(args[5])
+		frac, okF := toIntNum(args[6])
+		if !okY || !okM || !okD || !okH || !okMin || !okS || !okF ||
+			!isValidCalendarDate(int(y), int(m), int(d), 1, 9999) ||
+			!isValidTimeOfDay(int(h), int(min), int(s)) ||
+			!isValidFractionForPrecision(frac, prec) {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 289, Level 16, State 5: Cannot construct data type datetime2, some of the arguments have values which are not valid.")
+		}
+		if prec > 0 {
+			return storage.StringValue(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%0*d", y, m, d, h, min, s, prec, frac)), nil
+		}
+		return storage.StringValue(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", y, m, d, h, min, s)), nil
+
+	case "DATETIMEOFFSETFROMPARTS":
+		if len(args) != 10 {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("The datetimeoffsetfromparts function requires 10 argument(s).")
+		}
+		if args[9].IsNull {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 10760, Level 16, State 1: Scale argument is not valid. Valid expressions for data type datetimeoffset scale argument are integer constants and integer constant expressions.")
+		}
+		pVal, okP := toIntNum(args[9])
+		if !okP || pVal < 0 || pVal > 7 {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 289, Level 16, State 6: Cannot construct data type datetimeoffset, some of the arguments have values which are not valid.")
+		}
+		prec := int(pVal)
+		for i := 0; i < 9; i++ {
+			if args[i].IsNull {
+				return storage.NullValue(storage.TypeVarChar), nil
+			}
+		}
+		y, okY := toIntNum(args[0])
+		m, okM := toIntNum(args[1])
+		d, okD := toIntNum(args[2])
+		h, okH := toIntNum(args[3])
+		min, okMin := toIntNum(args[4])
+		s, okS := toIntNum(args[5])
+		frac, okF := toIntNum(args[6])
+		hOff, okHO := toIntNum(args[7])
+		mOff, okMO := toIntNum(args[8])
+		if !okY || !okM || !okD || !okH || !okMin || !okS || !okF || !okHO || !okMO ||
+			!isValidCalendarDate(int(y), int(m), int(d), 1, 9999) ||
+			!isValidTimeOfDay(int(h), int(min), int(s)) ||
+			!isValidFractionForPrecision(frac, prec) ||
+			hOff < -14 || hOff > 14 || mOff < -59 || mOff > 59 ||
+			(hOff > 0 && mOff < 0) || (hOff < 0 && mOff > 0) ||
+			(hOff*60+mOff) < -14*60 || (hOff*60+mOff) > 14*60 {
+			return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 289, Level 16, State 6: Cannot construct data type datetimeoffset, some of the arguments have values which are not valid.")
+		}
+		sign := "+"
+		absH := hOff
+		absM := mOff
+		if hOff < 0 || mOff < 0 {
+			sign = "-"
+			if absH < 0 {
+				absH = -absH
+			}
+			if absM < 0 {
+				absM = -absM
+			}
+		}
+		if prec > 0 {
+			return storage.StringValue(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%0*d %s%02d:%02d", y, m, d, h, min, s, prec, frac, sign, absH, absM)), nil
+		}
+		return storage.StringValue(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d %s%02d:%02d", y, m, d, h, min, s, sign, absH, absM)), nil
+	}
+	return evalDateBuiltin(upper, args), nil
 }
 
 func evalDateBuiltin(upper string, args []storage.Value) storage.Value {

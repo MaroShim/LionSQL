@@ -1664,6 +1664,19 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		return r, nil
 
 	case *FunctionCallExpr:
+		fnName := strings.ToUpper(e.Name)
+		if err := ValidateBuiltinArity(fnName, len(e.Args)); err != nil {
+			return 0, err
+		}
+		if fnName == "IIF" && len(e.Args) == 3 {
+			if lit, ok := e.Args[0].(*LiteralExpr); ok && lit.Val.IsNull {
+				return 0, fmt.Errorf("An expression of non-boolean type specified in a context where a condition is expected, near ','.")
+			}
+			return c.compileExpr(&CaseExpr{
+				Whens: []CaseWhen{{Condition: e.Args[0], Result: e.Args[1]}},
+				Else:  e.Args[2],
+			})
+		}
 		var argRegs []int32
 		for _, a := range e.Args {
 			ar, err := c.compileExpr(a)
@@ -1681,7 +1694,6 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		} else {
 			r = c.allocReg()
 		}
-		fnName := strings.ToUpper(e.Name)
 		if isBuiltinFunction(fnName) {
 			c.emit(OpCallBuiltin, r, int32(len(argRegs)), 0, &CallData{
 				Name:    fnName,

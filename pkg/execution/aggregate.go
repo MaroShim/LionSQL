@@ -85,6 +85,7 @@ type AggregateIterator struct {
 	projections   []string
 	havingCond    string
 	parsedHaving  proc.Expr
+	initErr       error
 	fields        []aggField
 	tuples        []Tuple
 	idx           int
@@ -262,6 +263,9 @@ func (a *AggregateIterator) parseFields() {
 		switch e := expr.(type) {
 		case *proc.FunctionCallExpr:
 			fnName := strings.ToUpper(e.Name)
+			if err := proc.ValidateBuiltinArity(fnName, len(e.Args)); err != nil && a.initErr == nil {
+				a.initErr = err
+			}
 			if fnName == "COUNT" || fnName == "SUM" || fnName == "TOTAL" || fnName == "AVG" || fnName == "MIN" || fnName == "MAX" || fnName == "GROUP_CONCAT" || fnName == "STRING_AGG" {
 				var fnType aggFuncType
 				switch fnName {
@@ -362,6 +366,11 @@ func (a *AggregateIterator) parseFields() {
 		case *proc.WithinGroupExpr:
 			if e.Function != nil {
 				fnName := strings.ToUpper(e.Function.Name)
+				if fnName != "PERCENTILE_CONT" && fnName != "PERCENTILE_DISC" {
+					if err := proc.ValidateBuiltinArity(fnName, len(e.Function.Args)); err != nil && a.initErr == nil {
+						a.initErr = err
+					}
+				}
 				if fnName == "STRING_AGG" || fnName == "GROUP_CONCAT" {
 					rawCall := e.String()
 					already := false
@@ -447,8 +456,11 @@ func (a *AggregateIterator) parseFields() {
 		if hasAST {
 			if fn, ok := ast.(*proc.FunctionCallExpr); ok {
 				fnName := strings.ToUpper(fn.Name)
+				if err := proc.ValidateBuiltinArity(fnName, len(fn.Args)); err != nil && a.initErr == nil {
+					a.initErr = err
+				}
 				if fnName == "COUNT" {
-					isStar := len(fn.Args) == 0
+					isStar := false
 					if len(fn.Args) == 1 {
 						if colRef, isCol := fn.Args[0].(*proc.ColumnRefExpr); isCol && colRef.Name == "*" {
 							isStar = true
@@ -569,6 +581,11 @@ func (a *AggregateIterator) parseFields() {
 
 			if wg, ok := ast.(*proc.WithinGroupExpr); ok && wg.Function != nil {
 				fnName := strings.ToUpper(wg.Function.Name)
+				if fnName != "PERCENTILE_CONT" && fnName != "PERCENTILE_DISC" {
+					if err := proc.ValidateBuiltinArity(fnName, len(wg.Function.Args)); err != nil && a.initErr == nil {
+						a.initErr = err
+					}
+				}
 				if (fnName == "STRING_AGG" || fnName == "GROUP_CONCAT") && len(wg.Function.Args) >= 1 {
 					parsedArg := wg.Function.Args[0]
 					arg := strings.Trim(strings.TrimSpace(parsedArg.String()), "\"`[]")
@@ -680,6 +697,9 @@ func (a *AggregateIterator) parseFields() {
 }
 
 func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
+	if a.initErr != nil {
+		return a.initErr
+	}
 	if a.child == nil {
 		return fmt.Errorf("aggregate: child iterator is nil")
 	}
@@ -975,7 +995,12 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 				continue
 			}
 			if f.parsed != nil {
-				if res, err := proc.EvalRowExpr(f.parsed, evalMap, nil); err == nil {
+				res, err := proc.EvalRowExpr(f.parsed, evalMap, nil)
+				if err != nil {
+					if _, isCol := f.parsed.(*proc.ColumnRefExpr); !isCol {
+						return err
+					}
+				} else {
 					vals[fIdx] = res
 				}
 			}
@@ -1217,6 +1242,9 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 				if err == nil {
 					vals[fIdx] = res
 				} else {
+					if _, isCol := f.parsed.(*proc.ColumnRefExpr); !isCol {
+						return err
+					}
 					vals[fIdx] = nil
 				}
 			} else {
