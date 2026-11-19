@@ -557,9 +557,10 @@ type VMFrame struct {
 	vars            map[string]storage.Value
 	evalCtx         map[string]any
 	cursors         map[string]*cursorState
-	transientTables map[string][]map[string]any
-	tableVars       map[string]string
-	catchStack      []int
+	transientTables   map[string][]map[string]any
+	tableVars         map[string]string
+	sessionTempTables map[string]string
+	catchStack        []int
 	logs            []string
 	rows            []map[string]any
 	columns         []string
@@ -580,14 +581,25 @@ type VMFrame struct {
 }
 
 func (f *VMFrame) bindParams(params map[string]any) {
+	if sttAny, ok := params["__session_temp_tables__"]; ok {
+		if sttMap, ok := sttAny.(map[string]string); ok {
+			f.sessionTempTables = sttMap
+		}
+	}
 	// 1. First pass: bare keys without '@' prefix
 	for k, v := range params {
+		if strings.HasPrefix(k, "__") {
+			continue
+		}
 		if !strings.HasPrefix(k, "@") {
 			f.setParamVar(cleanSymbol(k), toStorageValue(v))
 		}
 	}
 	// 2. Second pass: explicit '@' prefixed keys (canonical session variables override bare keys)
 	for k, v := range params {
+		if strings.HasPrefix(k, "__") {
+			continue
+		}
 		if strings.HasPrefix(k, "@") {
 			f.setParamVar(cleanSymbol(k), toStorageValue(v))
 		}
@@ -677,13 +689,28 @@ func (f *VMFrame) getStorageVarsMap() map[string]storage.Value {
 
 func (f *VMFrame) resolveTable(name string) string {
 	raw := strings.TrimSpace(name)
+	lower := strings.ToLower(raw)
 	if f.tableVars != nil {
-		lower := strings.ToLower(raw)
 		if phys, ok := f.tableVars[lower]; ok {
 			return phys
 		}
 		if !strings.HasPrefix(lower, "@") {
 			if phys, ok := f.tableVars["@"+lower]; ok {
+				return phys
+			}
+		}
+	}
+	if f.sessionTempTables != nil {
+		if phys, ok := f.sessionTempTables[lower]; ok {
+			return phys
+		}
+		if strings.HasPrefix(lower, "#") {
+			clean := strings.TrimPrefix(lower, "#")
+			if phys, ok := f.sessionTempTables[clean]; ok {
+				return phys
+			}
+		} else {
+			if phys, ok := f.sessionTempTables["#"+lower]; ok {
 				return phys
 			}
 		}
@@ -965,6 +992,7 @@ func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame
 	} else {
 		clear(f.tableVars)
 	}
+	f.sessionTempTables = nil
 	f.catchStack = f.catchStack[:0]
 	f.logs = f.logs[:0]
 
@@ -1036,6 +1064,7 @@ func (f *VMFrame) resetForPool() {
 		}
 		clear(f.tableVars)
 	}
+	f.sessionTempTables = nil
 
 	// 4. Detach all execution results, sessions, and contexts
 	f.rows = nil
@@ -1072,7 +1101,7 @@ func (e *Executor) releaseFrame(frame *VMFrame) {
 
 func (f *VMFrame) bindWhereVariables(where string) string {
 	allVars := f.getStorageVarsMap()
-	if where == "" || (len(allVars) == 0 && len(f.tableVars) == 0) {
+	if where == "" || (len(allVars) == 0 && len(f.tableVars) == 0 && len(f.sessionTempTables) == 0) {
 		return where
 	}
 	res := where
@@ -1120,6 +1149,21 @@ func (f *VMFrame) bindWhereVariables(where string) string {
 		if !seen[lowerK] {
 			seen[lowerK] = true
 			bindings = append(bindings, varBinding{name: tblKey, val: physName})
+		}
+	}
+
+	for tblKey, physName := range f.sessionTempTables {
+		lowerK := strings.ToLower(tblKey)
+		if !seen[lowerK] {
+			seen[lowerK] = true
+			bindings = append(bindings, varBinding{name: tblKey, val: physName})
+			if strings.HasPrefix(tblKey, "#") {
+				bare := strings.TrimPrefix(tblKey, "#")
+				if !seen[bare] {
+					seen[bare] = true
+					bindings = append(bindings, varBinding{name: bare, val: physName})
+				}
+			}
 		}
 	}
 
@@ -1586,9 +1630,22 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 	}
 
 	selectSQL := data.Select.String()
-	if len(f.tableVars) > 0 {
+	if len(f.tableVars) > 0 || len(f.sessionTempTables) > 0 {
 		for varName, physTable := range f.tableVars {
-			selectSQL = sqlutil.SubstituteParamOutsideQuotes(selectSQL, "@"+strings.TrimPrefix(varName, "@"), "["+physTable+"]")
+			if strings.HasPrefix(varName, "#") {
+				selectSQL = sqlutil.SubstituteParamOutsideQuotes(selectSQL, varName, "["+physTable+"]")
+			} else {
+				selectSQL = sqlutil.SubstituteParamOutsideQuotes(selectSQL, "@"+strings.TrimPrefix(varName, "@"), "["+physTable+"]")
+			}
+		}
+		for varName, physTable := range f.sessionTempTables {
+			if _, overridden := f.tableVars[strings.ToLower(varName)]; !overridden {
+				if strings.HasPrefix(varName, "#") {
+					selectSQL = sqlutil.SubstituteParamOutsideQuotes(selectSQL, varName, "["+physTable+"]")
+				} else {
+					selectSQL = sqlutil.SubstituteParamOutsideQuotes(selectSQL, "#"+varName, "["+physTable+"]")
+				}
+			}
 		}
 	}
 	rows, cols, err := qe(f.ctx, selectSQL, f.tx, f.getStorageVarsMap())

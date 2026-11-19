@@ -1042,16 +1042,14 @@ vmLoop:
 		physTable := rawName
 		if isLocalTemp {
 			if f.tableVars != nil {
-				if oldPhys, exists := f.tableVars[lowerName]; exists {
+				if _, exists := f.tableVars[lowerName]; exists {
 					if stmt.IfNotExists {
 						continue vmLoop
 					}
-					if f.executor != nil {
-						if tm := f.executor.getTableManager(); tm != nil {
-							_ = tm.DropTable(oldPhys)
-						}
+					if catchErr := f.handleCatch(fmt.Errorf("there is already an object named %q in the database", rawName), &pc); catchErr != nil {
+						return nil, catchErr
 					}
-					delete(f.tableVars, lowerName)
+					continue vmLoop
 				}
 			} else {
 				f.tableVars = make(map[string]string)
@@ -2278,9 +2276,22 @@ vmLoop:
 			return nil, fmt.Errorf("OpRelQuery: empty query SQL")
 		}
 
-		if len(f.tableVars) > 0 {
+		if len(f.tableVars) > 0 || len(f.sessionTempTables) > 0 {
 			for varName, physTable := range f.tableVars {
-				sql = sqlutil.SubstituteParamOutsideQuotes(sql, "@"+strings.TrimPrefix(varName, "@"), "["+physTable+"]")
+				if strings.HasPrefix(varName, "#") {
+					sql = sqlutil.SubstituteParamOutsideQuotes(sql, varName, "["+physTable+"]")
+				} else {
+					sql = sqlutil.SubstituteParamOutsideQuotes(sql, "@"+strings.TrimPrefix(varName, "@"), "["+physTable+"]")
+				}
+			}
+			for varName, physTable := range f.sessionTempTables {
+				if _, overridden := f.tableVars[strings.ToLower(varName)]; !overridden {
+					if strings.HasPrefix(varName, "#") {
+						sql = sqlutil.SubstituteParamOutsideQuotes(sql, varName, "["+physTable+"]")
+					} else {
+						sql = sqlutil.SubstituteParamOutsideQuotes(sql, "#"+varName, "["+physTable+"]")
+					}
+				}
 			}
 			queryData = nil
 		}

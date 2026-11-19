@@ -897,8 +897,16 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	upper := strings.ToUpper(trimmed)
 
+	// Procedural definitions (procedures, functions, triggers) encapsulate their own scope:
+	// ambient session table variables and temporary tables must NOT be rewritten inside procedure bodies.
+	isProceduralDDL := sqlutil.HasAnyPrefixKeyword(trimmed,
+		"CREATE PROCEDURE", "CREATE PROC", "CREATE OR ALTER PROCEDURE", "CREATE OR ALTER PROC", "ALTER PROCEDURE", "ALTER PROC",
+		"CREATE FUNCTION", "CREATE OR ALTER FUNCTION", "ALTER FUNCTION",
+		"CREATE TRIGGER", "CREATE OR ALTER TRIGGER", "ALTER TRIGGER",
+	)
+
 	// Rewrite table variables (@table -> physical table)
-	if cs != nil {
+	if cs != nil && !isProceduralDDL {
 		cs.Mu.Lock()
 		_, _, isTblDecl, _ := parseTableVarDecl(trimmed)
 		isCreateTbl := sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE TABLE", "CREATE TEMP TABLE", "CREATE TEMPORARY TABLE")
@@ -924,7 +932,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// Rewrite session-isolated local temporary tables (#temp -> __temp_<sessionID>_temp)
-	if cs != nil && strings.Contains(trimmed, "#") {
+	if cs != nil && strings.Contains(trimmed, "#") && !isProceduralDDL {
 		trimmed = RewriteSessionTempTables(trimmed, cs)
 		upper = strings.ToUpper(trimmed)
 	}

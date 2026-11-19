@@ -223,7 +223,7 @@ func SubstituteParamsSinglePass(query string, bindings map[string]string) string
 
 	normBindings := make(map[string]string, len(bindings))
 	for k, v := range bindings {
-		if !strings.HasPrefix(k, "@") {
+		if !strings.HasPrefix(k, "@") && !strings.HasPrefix(k, "#") {
 			k = "@" + k
 		}
 		normBindings[strings.ToLower(k)] = v
@@ -291,12 +291,46 @@ func SubstituteParamsSinglePass(query string, bindings map[string]string) string
 			continue
 		}
 
-		if ch == '@' {
-			// Extract full identifier starting with @ (e.g. @param or @@version)
+		// Bracketed identifier: [#temp] or [@param]
+		if ch == '[' {
+			closeIdx := -1
+			for j := i + 1; j < len(runes); j++ {
+				if runes[j] == ']' {
+					closeIdx = j
+					break
+				}
+			}
+			if closeIdx != -1 {
+				ident := strings.ToLower(string(runes[i+1 : closeIdx]))
+				if rep, ok := normBindings[ident]; ok {
+					b.WriteString(rep)
+					i = closeIdx + 1
+					continue
+				}
+				if !strings.HasPrefix(ident, "@") && !strings.HasPrefix(ident, "#") {
+					if rep, ok := normBindings["@"+ident]; ok {
+						b.WriteString(rep)
+						i = closeIdx + 1
+						continue
+					}
+					if rep, ok := normBindings["#"+ident]; ok {
+						b.WriteString(rep)
+						i = closeIdx + 1
+						continue
+					}
+				}
+				b.WriteString(string(runes[i : closeIdx+1]))
+				i = closeIdx + 1
+				continue
+			}
+		}
+
+		if ch == '@' || ch == '#' {
+			// Extract full identifier starting with @ or # (e.g. @param, @@version, #temp, ##global)
 			start := i
 			i++
-			if i < len(runes) && runes[i] == '@' {
-				i++ // handle @@
+			if i < len(runes) && (runes[i] == '@' || runes[i] == '#') {
+				i++ // handle @@ or ##
 			}
 			for i < len(runes) && isRuneIdentChar(runes[i]) {
 				i++
@@ -416,8 +450,12 @@ func SubstituteIdentsSinglePass(query string, bindings map[string]string) string
 			continue
 		}
 
-		if isRuneIdentChar(ch) {
+		if ch == '#' || isRuneIdentChar(ch) {
 			start := i
+			i++
+			if ch == '#' && i < len(runes) && runes[i] == '#' {
+				i++ // handle ##
+			}
 			for i < len(runes) && isRuneIdentChar(runes[i]) {
 				i++
 			}

@@ -627,6 +627,20 @@ func (cs *ClientSession) ExecuteProgram(
 	if cs != nil && cs.IsPostgres() && paramMap != nil {
 		paramMap["identity_insert_all"] = true
 	}
+	if cs != nil {
+		cs.Mu.Lock()
+		if len(cs.TempTableMap) > 0 {
+			if paramMap == nil {
+				paramMap = make(map[string]any)
+			}
+			tempCopy := make(map[string]string, len(cs.TempTableMap))
+			for k, v := range cs.TempTableMap {
+				tempCopy[k] = v
+			}
+			paramMap["__session_temp_tables__"] = tempCopy
+		}
+		cs.Mu.Unlock()
+	}
 	if cs == nil {
 		if eng == nil || exec == nil {
 			return nil, false, fmt.Errorf("storage engine or executor not configured")
