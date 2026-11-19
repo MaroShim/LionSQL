@@ -281,7 +281,11 @@ func (m *Manager) Savepoint(name string) error {
 	if m.current.GetState() == StateInError {
 		return ErrTxInError
 	}
-	m.current.Savepoints.Push(name, 0)
+	m.current.mu.RLock()
+	defOffset := len(m.current.DeferredActions)
+	rbOffset := len(m.current.RollbackActions)
+	m.current.mu.RUnlock()
+	m.current.Savepoints.PushWithOffsets(name, 0, defOffset, rbOffset)
 	return nil
 }
 
@@ -290,10 +294,20 @@ func (m *Manager) RollbackTo(name string) error {
 	if m.current == nil {
 		return ErrTxIdle
 	}
-	_, err := m.current.Savepoints.RollbackTo(name)
+	sp, err := m.current.Savepoints.RollbackTo(name)
 	if err != nil {
 		return err
 	}
+
+	// [TX-001] Truncate deferred and rollback actions recorded after this savepoint
+	m.current.mu.Lock()
+	if sp.DeferredOffset <= len(m.current.DeferredActions) {
+		m.current.DeferredActions = m.current.DeferredActions[:sp.DeferredOffset]
+	}
+	if sp.RollbackOffset <= len(m.current.RollbackActions) {
+		m.current.RollbackActions = m.current.RollbackActions[:sp.RollbackOffset]
+	}
+	m.current.mu.Unlock()
 
 	// If transaction was in StateInError, rolling back to a valid savepoint recovers it to StateActive
 	if m.current.GetState() == StateInError {

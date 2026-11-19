@@ -378,6 +378,28 @@ func (s *AuthService) DenyTable(user, table string, priv Privilege) error {
 	return nil
 }
 
+// RenameTable transfers all grants and denies on oldTable to newTable.
+func (s *AuthService) RenameTable(oldTable, newTable string) error {
+	normOld := strings.ToLower(strings.TrimSpace(oldTable))
+	normNew := strings.ToLower(strings.TrimSpace(newTable))
+	if normOld == normNew || normOld == "" || normNew == "" {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for subj, tables := range s.grants {
+		if perms, exists := tables[normOld]; exists {
+			tables[normNew] = perms
+			delete(tables, normOld)
+			s.grants[subj] = tables
+		}
+	}
+	_ = s.saveLocked()
+	return nil
+}
+
 // HasTablePermission checks if a user has the specified privilege on a table.
 // Administrative principals (sa, admin, dbo) bypass all checks.
 // Explicit DENY takes precedence over any GRANT.

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"lionsql/pkg/auth"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
@@ -57,6 +58,49 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 	parsed, err := parseMergeQuery(cleaned)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse MERGE statement: %w", err)
+	}
+
+	// [SEC-005] RBAC checks on target and source tables
+	hasInsert := false
+	hasUpdate := false
+	hasDelete := false
+	for _, cl := range parsed.clauses {
+		switch cl.clauseType {
+		case mergeNotMatchedInsert:
+			hasInsert = true
+		case mergeMatchedUpdate, mergeNotMatchedSourceUpdate:
+			hasUpdate = true
+		case mergeMatchedDelete, mergeNotMatchedSourceDelete:
+			hasDelete = true
+		}
+	}
+	if hasInsert {
+		if err := s.checkTableAccess(cs, parsed.targetTable, auth.PrivInsert); err != nil {
+			return nil, err
+		}
+	}
+	if hasUpdate {
+		if err := s.checkTableAccess(cs, parsed.targetTable, auth.PrivUpdate); err != nil {
+			return nil, err
+		}
+	}
+	if hasDelete {
+		if err := s.checkTableAccess(cs, parsed.targetTable, auth.PrivDelete); err != nil {
+			return nil, err
+		}
+	}
+	// Target table is always read for matching
+	if err := s.checkTableAccess(cs, parsed.targetTable, auth.PrivSelect); err != nil {
+		return nil, err
+	}
+	// If source is a table relation (not a subquery), check SELECT access
+	if !strings.HasPrefix(strings.TrimSpace(parsed.sourceRaw), "(") {
+		srcTable := cleanIdentifier(parsed.sourceRaw)
+		if srcTable != "" {
+			if err := s.checkTableAccess(cs, srcTable, auth.PrivSelect); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	targetSchema, err := s.engine.GetTable(parsed.targetTable)

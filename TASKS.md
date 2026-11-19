@@ -68,7 +68,7 @@
 | `DONE` | **`AUDIT-ROUND10-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 10 Engine & Execution (ENG-001~010) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND10.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND10.ko.md) |  |
 | `PENDING` | **`AUDIT-ROUND11-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 11 Sequences, Limits & Isolation (ENG-011~017) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND11.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND11.ko.md) |  |
 | `PENDING` | **`AUDIT-ROUND12-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 12 JSON strict, CONVERT style & Cultural Parse (ENG-018~022) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND12.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND12.ko.md) |  |
-| `PENDING` | **`AUDIT-ROUND9-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 9 Security/RBAC (SEC-001~009) & ACID (ACID-001~008) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md) |  |
+| `DONE` | **`AUDIT-ROUND9-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 9 Security/RBAC (SEC-001~009) & ACID (ACID-001~008) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md) |  |
 | `DONE` | **`AUDIT-STRINGS-CATALOG`** | `1.0-GA` | Catalog | P1 | 코드베이스 전수 조사 Phase 2: pkg/catalog 가상 뷰 인터셉터 strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-STRINGS-DISPATCH`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사 Phase 5: pkg/engine 구문 디스패치 및 query_utils strings.* 안티패턴 전수 제거 | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-STRINGS-ENGINE`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사 Phase 3: pkg/engine 핵심 실행/DDL/DML strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
@@ -1093,8 +1093,8 @@
 
 ---
 
-### [PENDING] Live Audit Round 9 Security/RBAC (SEC-001~009) & ACID (ACID-001~008) Remediation `AUDIT-ROUND9-REMEDY`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-19 08:52:56
+### [DONE] Live Audit Round 9 Security/RBAC (SEC-001~009) & ACID (ACID-001~008) Remediation `AUDIT-ROUND9-REMEDY`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-19 10:13:49
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md)
 

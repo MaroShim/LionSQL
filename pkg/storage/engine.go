@@ -1574,6 +1574,7 @@ type Transaction interface {
 	SnapshotTimestamp() int64
 	CommitLSN() int64
 	CommitTimestamp() int64
+	SetReadOnly(ro bool)
 }
 
 // Session represents an active connection/session.

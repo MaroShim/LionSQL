@@ -1909,6 +1909,16 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	//     becomes WITH v_engineers AS (SELECT id, name, salary FROM employees WHERE dept='Engineering')
 	//             SELECT name FROM v_engineers WHERE salary > 85000
 	if cteQuery, ok := s.rewriteViewsAsCTE(cleaned); ok {
+		// [SEC-007] Verify caller permission on all referenced views before expanding
+		if cs != nil && s.catalog != nil {
+			for _, v := range s.catalog.ListViews() {
+				if sqlutil.ContainsKeyword(cleaned, v.Name, false) {
+					if err := s.checkTableAccess(cs, v.Name, auth.PrivSelect); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
 		return s.execCTE(cteQuery, start, cs)
 	}
 

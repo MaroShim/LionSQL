@@ -8,9 +8,11 @@ import (
 
 // Savepoint represents a transactional savepoint marker.
 type Savepoint struct {
-	Name      string
-	DMLOffset int
-	CreatedAt time.Time
+	Name            string
+	DMLOffset       int
+	CreatedAt       time.Time
+	DeferredOffset  int
+	RollbackOffset  int
 }
 
 // SavepointStack manages a LIFO stack of savepoints within a transaction.
@@ -28,11 +30,18 @@ func NewSavepointStack() *SavepointStack {
 // Push adds a new savepoint to the stack. If a savepoint with the same name
 // already exists, standard SQL dictates that the older one is replaced/shadowed.
 func (s *SavepointStack) Push(name string, dmlOffset int) Savepoint {
+	return s.PushWithOffsets(name, dmlOffset, 0, 0)
+}
+
+// PushWithOffsets adds a savepoint with recorded offsets for deferred and rollback action slices.
+func (s *SavepointStack) PushWithOffsets(name string, dmlOffset, deferredOffset, rollbackOffset int) Savepoint {
 	cleanName := strings.ToLower(strings.TrimSpace(name))
 	sp := Savepoint{
-		Name:      cleanName,
-		DMLOffset: dmlOffset,
-		CreatedAt: time.Now(),
+		Name:           cleanName,
+		DMLOffset:      dmlOffset,
+		CreatedAt:      time.Now(),
+		DeferredOffset: deferredOffset,
+		RollbackOffset: rollbackOffset,
 	}
 
 	// If already exists, remove it first to place at top of stack

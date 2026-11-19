@@ -357,6 +357,13 @@ func (tx *Transaction) CommitTimestamp() int64 {
 	return tx.commitTimestamp
 }
 
+// SetReadOnly dynamically toggles the ReadOnly status of an active transaction.
+func (tx *Transaction) SetReadOnly(ro bool) {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	tx.opts.ReadOnly = ro
+}
+
 // getTableLocked retrieves a *TableData, caching it per-transaction using an atomic snapshot to eliminate engine.mu RLock contention.
 func (tx *Transaction) getTableLocked(tableName string) (*TableData, error) {
 	if td, cached := sqlutil.MapGetFold(tx.tableCache, tableName); cached {
@@ -2859,16 +2866,13 @@ func (tx *Transaction) Savepoint(name string) error {
 		changes:  cloneChangesMap(tx.changes),
 	}
 
-	found := false
-	for _, n := range tx.spNames {
+	for i, n := range tx.spNames {
 		if n == normName {
-			found = true
+			tx.spNames = append(tx.spNames[:i], tx.spNames[i+1:]...)
 			break
 		}
 	}
-	if !found {
-		tx.spNames = append(tx.spNames, normName)
-	}
+	tx.spNames = append(tx.spNames, normName)
 	tx.savepoints[normName] = state
 	return nil
 }

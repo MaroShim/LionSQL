@@ -734,8 +734,9 @@ func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) e
 	if cs.Session == nil {
 		return fmt.Errorf("no storage engine session available")
 	}
-	if cs.isReadOnlyLocked() || s.IsReadOnly() {
+	if cs.isReadOnlyLocked() || s.IsReadOnly() || opts.ReadOnly {
 		opts.ReadOnly = true
+		cs.Vars["transaction_read_only"] = true
 	}
 	if cs.TxMgr != nil {
 		_, startErr := cs.TxMgr.Begin(context.Background(), tx.Options{ReadOnly: opts.ReadOnly})
@@ -806,6 +807,7 @@ func (s *Coordinator) CommitSessionTx(sessionID string) error {
 	txMgr := cs.TxMgr
 	cs.ResetTranCount()
 	cs.ClearTxFailed()
+	delete(cs.Vars, "transaction_read_only")
 	// Close non-WITH HOLD cursors on COMMIT
 	if cs.Cursors != nil {
 		for _, cur := range cs.Cursors {
@@ -858,6 +860,7 @@ func (s *Coordinator) RollbackSessionTx(sessionID string) error {
 	txMgr := cs.TxMgr
 	cs.ResetTranCount()
 	cs.ClearTxFailed()
+	delete(cs.Vars, "transaction_read_only")
 	// Close all cursors on ROLLBACK (per SQL standard lifecycle)
 	if cs.Cursors != nil {
 		for _, cur := range cs.Cursors {
@@ -939,6 +942,15 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// Process Management: KILL <spid> [WITH STATUSONLY]
 	if spid, ok := parseKillCommand(trimmed); ok {
+		// [SEC-009] Check caller permission: only sysadmin (sa, dbo) can kill sessions
+		if cs != nil {
+			cs.Mu.Lock()
+			caller := cs.User
+			cs.Mu.Unlock()
+			if !strings.EqualFold(caller, "sa") && !strings.EqualFold(caller, "dbo") {
+				return nil, fmt.Errorf("Msg 224, Level 16, State 1: User does not have permission to use the KILL statement.")
+			}
+		}
 		canceled := s.CancelQueryBySPID(spid)
 		msg := "Command(s) completed successfully."
 		if !canceled {
@@ -1120,6 +1132,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	// 0.045 Connection Pool Reset: DISCARD ALL / RESET ALL / DEALLOCATE ALL / UNLISTEN *
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "DISCARD", "RESET ALL", "DEALLOCATE ALL", "UNLISTEN") {
 		if cs != nil {
+			// [TX-006] DISCARD ALL cannot run inside a transaction block
+			if sqlutil.HasPrefixKeyword(trimmed, "DISCARD ALL") && cs.Tx() != nil {
+				return nil, fmt.Errorf("ERROR 25001: DISCARD ALL cannot run inside a transaction block")
+			}
 			resetTx := !sqlutil.HasPrefixKeyword(trimmed, "DISCARD TEMP")
 			_ = s.ResetSession(cs.ID, resetTx)
 		}
@@ -1137,6 +1153,18 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		// A. SET TRANSACTION ISOLATION LEVEL <level>
 		if rem, ok := sqlutil.TrimPrefixKeyword(rest, "TRANSACTION ISOLATION LEVEL"); ok {
 			level := strings.TrimSpace(rem)
+			normLevel := strings.ToUpper(level)
+			// [TX-005] Validate isolation level
+			validLevels := map[string]bool{
+				"READ UNCOMMITTED": true,
+				"READ COMMITTED":   true,
+				"REPEATABLE READ":  true,
+				"SERIALIZABLE":     true,
+				"SNAPSHOT":         true,
+			}
+			if !validLevels[normLevel] {
+				return nil, fmt.Errorf("invalid transaction isolation level: %q", level)
+			}
 			cs.Mu.Lock()
 			cs.Vars["transaction_isolation"] = strings.ToLower(level)
 			cs.Mu.Unlock()
@@ -1151,8 +1179,18 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		// B. SET TRANSACTION READ ONLY / READ WRITE
 		if rem, ok := sqlutil.TrimPrefixKeyword(rest, "TRANSACTION READ"); ok {
 			mode := strings.TrimSpace(rem)
+			if !strings.EqualFold(mode, "ONLY") && !strings.EqualFold(mode, "WRITE") {
+				return nil, fmt.Errorf("invalid transaction access mode: READ %s", mode)
+			}
+			isRO := strings.EqualFold(mode, "ONLY")
 			cs.Mu.Lock()
-			cs.Vars["transaction_read_only"] = strings.EqualFold(mode, "ONLY")
+			cs.Vars["transaction_read_only"] = isRO
+			if cs.Tx() != nil {
+				cs.Tx().SetReadOnly(isRO)
+			}
+			if txCtx := s.getTxContext(cs); txCtx != nil {
+				txCtx.Opts.ReadOnly = isRO
+			}
 			cs.Mu.Unlock()
 			return &QueryResult{
 				Success:    true,
@@ -1681,25 +1719,25 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		"CREATE OR ALTER PROCEDURE", "CREATE OR ALTER PROC",
 		"ALTER PROCEDURE", "ALTER PROC",
 	) {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execCreateProcedure(trimmed, start)
 	}
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "DROP PROCEDURE", "DROP PROC") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execDropProcedure(trimmed, start)
 	}
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", "CREATE OR ALTER FUNCTION", "ALTER FUNCTION") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execCreateFunction(trimmed, start)
 	}
 	if sqlutil.HasPrefixKeyword(trimmed, "DROP FUNCTION") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execDropFunction(trimmed, start)
@@ -1708,13 +1746,13 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		"CREATE TRIGGER", "CREATE OR REPLACE TRIGGER", "CREATE OR ALTER TRIGGER", "ALTER TRIGGER",
 		"CREATE TEMP TRIGGER", "CREATE TEMPORARY TRIGGER",
 	) {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execCreateTrigger(trimmed, start)
 	}
 	if sqlutil.HasPrefixKeyword(trimmed, "DROP TRIGGER") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execDropTrigger(trimmed, start)
@@ -1722,42 +1760,66 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 1.5 DDL: CREATE VIEW / CREATE OR REPLACE VIEW / CREATE OR ALTER VIEW / ALTER VIEW / CREATE TEMP VIEW / DROP VIEW
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE VIEW", "CREATE OR REPLACE VIEW", "CREATE OR ALTER VIEW", "ALTER VIEW", "CREATE TEMP VIEW", "CREATE TEMPORARY VIEW") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
-		return s.execCreateView(trimmed, start)
+		return s.execCreateView(trimmed, start, cs)
 	}
 	if sqlutil.HasPrefixKeyword(trimmed, "DROP VIEW") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
-		return s.execDropView(trimmed, start)
+		return s.execDropView(trimmed, start, cs)
 	}
 
 	// 1.6 RBAC DCL / Security: LOGIN, USER, GRANT, REVOKE, DENY, SETUSER, EXECUTE AS USER, REVERT
 	if sqlutil.HasPrefixKeyword(trimmed, "CREATE LOGIN") {
-		return s.execCreateLogin(trimmed, start)
+		if err := s.checkDDLAllowed(cs); err != nil {
+			return nil, err
+		}
+		return s.execCreateLogin(trimmed, start, cs)
 	}
 	if sqlutil.HasPrefixKeyword(trimmed, "ALTER LOGIN") {
-		return s.execAlterLogin(trimmed, start)
+		if err := s.checkDDLAllowed(cs); err != nil {
+			return nil, err
+		}
+		return s.execAlterLogin(trimmed, start, cs)
 	}
 	if sqlutil.HasPrefixKeyword(trimmed, "DROP LOGIN") {
-		return s.execDropLogin(trimmed, start)
+		if err := s.checkDDLAllowed(cs); err != nil {
+			return nil, err
+		}
+		return s.execDropLogin(trimmed, start, cs)
 	}
 	if sqlutil.HasPrefixKeyword(trimmed, "CREATE USER") {
-		return s.execCreateUser(trimmed, start)
+		if err := s.checkDDLAllowed(cs); err != nil {
+			return nil, err
+		}
+		return s.execCreateUser(trimmed, start, cs)
 	}
 	if sqlutil.HasPrefixKeyword(trimmed, "DROP USER") {
-		return s.execDropUser(trimmed, start)
+		if err := s.checkDDLAllowed(cs); err != nil {
+			return nil, err
+		}
+		return s.execDropUser(trimmed, start, cs)
 	}
 	if sqlutil.HasPrefixKeyword(trimmed, "GRANT") {
-		return s.execGrant(trimmed, start)
+		if err := s.checkDDLAllowed(cs); err != nil {
+			return nil, err
+		}
+		return s.execGrant(trimmed, start, cs)
 	}
 	if sqlutil.HasPrefixKeyword(trimmed, "REVOKE") {
-		return s.execRevoke(trimmed, start)
+		if err := s.checkDDLAllowed(cs); err != nil {
+			return nil, err
+		}
+		return s.execRevoke(trimmed, start, cs)
 	}
 	if sqlutil.HasPrefixKeyword(trimmed, "DENY") {
-		return s.execDeny(trimmed, start)
+		if err := s.checkDDLAllowed(cs); err != nil {
+			return nil, err
+		}
+		return s.execDeny(trimmed, start, cs)
 	}
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "SETUSER", "EXECUTE AS USER", "EXEC AS USER", "REVERT") {
 		return s.execSetUser(trimmed, start, cs)
@@ -1785,7 +1847,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 3. DDL: CREATE TABLE
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE TABLE", "CREATE TEMP TABLE", "CREATE TEMPORARY TABLE") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execCreateTable(trimmed, start, cs)
@@ -1793,7 +1855,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 3.1 DDL: CREATE INDEX
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE INDEX", "CREATE UNIQUE INDEX") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execCreateIndex(trimmed, start, cs)
@@ -1801,7 +1863,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 3.2 DDL: CREATE STATISTICS (C-5)
 	if sqlutil.HasPrefixKeyword(trimmed, "CREATE STATISTICS") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execCreateStatistics(trimmed, start)
@@ -1809,7 +1871,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 4. DDL: DROP TABLE
 	if sqlutil.HasPrefixKeyword(trimmed, "DROP TABLE") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execDropTable(trimmed, start, cs)
@@ -1817,7 +1879,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 4.1 DDL: DROP INDEX
 	if sqlutil.HasPrefixKeyword(trimmed, "DROP INDEX") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execDropIndex(trimmed, start, cs)
@@ -1825,7 +1887,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 4.1.2 DDL/Maintenance: REINDEX
 	if sqlutil.HasPrefixKeyword(trimmed, "REINDEX") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execReindex(trimmed, start)
@@ -1833,7 +1895,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 4.1.5 DDL: DROP STATISTICS (C-5)
 	if sqlutil.HasPrefixKeyword(trimmed, "DROP STATISTICS") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execDropStatistics(trimmed, start)
@@ -1841,7 +1903,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 4.2 DDL/DML: TRUNCATE TABLE
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "TRUNCATE TABLE", "TRUNCATE") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execTruncateTable(trimmed, start, cs)
@@ -1849,7 +1911,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 4.3 DDL: ALTER TABLE
 	if sqlutil.HasPrefixKeyword(trimmed, "ALTER TABLE") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execAlterTable(trimmed, start, cs)
@@ -1946,7 +2008,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 5. DML: INSERT INTO / UPSERT
 	if kind, _, ok := dmlHead(trimmed); ok && kind == dmlInsert {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execInsert(trimmed, start, cs)
@@ -1971,7 +2033,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 7. DML: UPDATE
 	if kind, _, ok := dmlHead(trimmed); ok && kind == dmlUpdate {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execUpdate(trimmed, start, cs)
@@ -1979,7 +2041,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 8. DML: DELETE
 	if kind, _, ok := dmlHead(trimmed); ok && kind == dmlDelete {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execDelete(trimmed, start, cs)
@@ -1987,7 +2049,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 9. DML: MERGE INTO
 	if sqlutil.HasPrefixKeyword(trimmed, "MERGE") {
-		if err := s.checkWriteAllowed(); err != nil {
+		if err := s.checkDDLAllowed(cs); err != nil {
 			return nil, err
 		}
 		return s.execMerge(trimmed, start, cs)
@@ -2029,6 +2091,22 @@ func isRollbackOrResetQuery(q string) bool {
 func (s *Coordinator) checkWriteAllowed() error {
 	if s.IsReadOnly() {
 		return fmt.Errorf("cannot execute write operation on read-only replica: %w", replication.ErrReadOnlyReplica)
+	}
+	return nil
+}
+
+// checkDDLAllowed verifies replica read-only mode and active session read-only transaction mode.
+func (s *Coordinator) checkDDLAllowed(cs *ClientSession) error {
+	if err := s.checkWriteAllowed(); err != nil {
+		return err
+	}
+	if cs != nil {
+		cs.Mu.Lock()
+		isRO := cs.isReadOnlyLocked()
+		cs.Mu.Unlock()
+		if isRO {
+			return fmt.Errorf("Msg 3923, Level 16, State 1: Cannot execute DDL statements in a read-only transaction.")
+		}
 	}
 	return nil
 }

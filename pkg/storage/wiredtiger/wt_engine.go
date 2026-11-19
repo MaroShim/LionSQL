@@ -2654,6 +2654,13 @@ func (tx *WTTx) CommitTimestamp() int64 {
 	return tx.commitTimestamp
 }
 
+// SetReadOnly dynamically toggles the ReadOnly status of an active transaction.
+func (tx *WTTx) SetReadOnly(ro bool) {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	tx.opts.ReadOnly = ro
+}
+
 func serializeRecord(cur *C.WT_CURSOR, schema *storage.TableSchema, record storage.Record) ([]byte, error) {
 	bufPtr := storage.GetTupleBuffer()
 	defer storage.PutTupleBuffer(bufPtr)
@@ -4159,16 +4166,13 @@ func (tx *WTTx) Savepoint(name string) error {
 		tx.spWALIndices = make(map[string]int)
 	}
 
-	found := false
-	for _, n := range tx.spNames {
+	for i, n := range tx.spNames {
 		if n == normName {
-			found = true
+			tx.spNames = append(tx.spNames[:i], tx.spNames[i+1:]...)
 			break
 		}
 	}
-	if !found {
-		tx.spNames = append(tx.spNames, normName)
-	}
+	tx.spNames = append(tx.spNames, normName)
 	tx.savepoints[normName] = len(tx.undoLog)
 	tx.spWALIndices[normName] = len(tx.walOps)
 	return nil

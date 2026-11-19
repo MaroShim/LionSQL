@@ -826,6 +826,10 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 			innerRes, err = execSubquery(innerSQL)
 		}
 		if err != nil {
+			// Fail-closed on auth permission errors
+			if strings.Contains(err.Error(), "permission denied") {
+				return "", err
+			}
 			// If inner query failed (e.g. contains outer reference), skip so planner can decorrelate
 			offset = mEnd
 			continue
@@ -872,6 +876,9 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		}
 		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
+			if strings.Contains(err.Error(), "permission denied") {
+				return "", err
+			}
 			offset = mEnd
 			continue
 		}
@@ -986,6 +993,9 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 
 		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
+			if strings.Contains(err.Error(), "permission denied") {
+				return "", err
+			}
 			offset = mEnd
 			continue
 		}
@@ -1104,6 +1114,9 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		}
 		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
+			if strings.Contains(err.Error(), "permission denied") {
+				return "", err
+			}
 			offset = mEnd
 			continue
 		}

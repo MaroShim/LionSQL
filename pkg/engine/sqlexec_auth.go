@@ -226,8 +226,24 @@ func (s *Coordinator) checkTableAccess(cs *ClientSession, table string, priv aut
 	return nil
 }
 
+func (s *Coordinator) checkDCLPermission(cs *ClientSession) error {
+	if cs == nil {
+		return nil
+	}
+	cs.Mu.Lock()
+	caller := cs.User
+	cs.Mu.Unlock()
+	if !strings.EqualFold(caller, "sa") && !strings.EqualFold(caller, "dbo") {
+		return fmt.Errorf("Msg 15247, Level 16, State 1: User does not have permission to perform this action.")
+	}
+	return nil
+}
+
 // execCreateLogin handles CREATE LOGIN <name> WITH PASSWORD = '<password>'.
-func (s *Coordinator) execCreateLogin(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execCreateLogin(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if err := s.checkDCLPermission(cs); err != nil {
+		return nil, err
+	}
 	rawLogin, password, ok := parseLoginWithPassword(query, "CREATE")
 	if !ok {
 		return nil, fmt.Errorf("invalid syntax: expected CREATE LOGIN <login_name> WITH PASSWORD = '<password>'")
@@ -249,7 +265,10 @@ func (s *Coordinator) execCreateLogin(query string, start time.Time) (*QueryResu
 }
 
 // execAlterLogin handles ALTER LOGIN <name> WITH PASSWORD = '<password>'.
-func (s *Coordinator) execAlterLogin(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execAlterLogin(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if err := s.checkDCLPermission(cs); err != nil {
+		return nil, err
+	}
 	rawLogin, password, ok := parseLoginWithPassword(query, "ALTER")
 	if !ok {
 		return nil, fmt.Errorf("invalid syntax: expected ALTER LOGIN <login_name> WITH PASSWORD = '<password>'")
@@ -271,7 +290,10 @@ func (s *Coordinator) execAlterLogin(query string, start time.Time) (*QueryResul
 }
 
 // execDropLogin handles DROP LOGIN [IF EXISTS] <name>.
-func (s *Coordinator) execDropLogin(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDropLogin(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if err := s.checkDCLPermission(cs); err != nil {
+		return nil, err
+	}
 	rawLogin, ok := parseDropPrincipal(query, "LOGIN")
 	if !ok {
 		return nil, fmt.Errorf("invalid syntax: expected DROP LOGIN [IF EXISTS] <login_name>")
@@ -303,7 +325,10 @@ func (s *Coordinator) execDropLogin(query string, start time.Time) (*QueryResult
 }
 
 // execCreateUser handles CREATE USER <name> [FOR LOGIN <login>] [WITH PASSWORD = '<password>'].
-func (s *Coordinator) execCreateUser(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execCreateUser(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if err := s.checkDCLPermission(cs); err != nil {
+		return nil, err
+	}
 	rawUser, rawLogin, password, ok := parseCreateUserCmd(query)
 	if !ok {
 		return nil, fmt.Errorf("invalid syntax: expected CREATE USER <user_name> [FOR LOGIN <login_name>]")
@@ -337,7 +362,10 @@ func (s *Coordinator) execCreateUser(query string, start time.Time) (*QueryResul
 }
 
 // execDropUser handles DROP USER [IF EXISTS] <name>.
-func (s *Coordinator) execDropUser(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDropUser(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if err := s.checkDCLPermission(cs); err != nil {
+		return nil, err
+	}
 	rawUser, ok := parseDropPrincipal(query, "USER")
 	if !ok {
 		return nil, fmt.Errorf("invalid syntax: expected DROP USER [IF EXISTS] <user_name>")
@@ -369,16 +397,13 @@ func (s *Coordinator) execDropUser(query string, start time.Time) (*QueryResult,
 }
 
 // execGrant handles GRANT <permission> ON [TABLE] <table_name> TO <user_name>.
-func (s *Coordinator) execGrant(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execGrant(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if err := s.checkDCLPermission(cs); err != nil {
+		return nil, err
+	}
 	rawPriv, rawTable, rawUser, ok := parsePermissionDCL(query, "GRANT", "TO")
 	if !ok {
-		return &QueryResult{
-			Success:      true,
-			Command:      "GRANT",
-			RowsAffected: 0,
-			Messages:     []string{"GRANT statement executed successfully."},
-			DurationUS:   time.Since(start).Microseconds(),
-		}, nil
+		return nil, fmt.Errorf("invalid syntax: expected GRANT <privilege> ON [TABLE] <table_name> TO <user_name>")
 	}
 
 	privStr := strings.TrimSpace(rawPriv)
@@ -387,23 +412,11 @@ func (s *Coordinator) execGrant(query string, start time.Time) (*QueryResult, er
 
 	priv, err := auth.ParsePrivilege(privStr)
 	if err != nil {
-		return &QueryResult{
-			Success:      true,
-			Command:      "GRANT",
-			RowsAffected: 0,
-			Messages:     []string{fmt.Sprintf("Privilege %s granted.", privStr)},
-			DurationUS:   time.Since(start).Microseconds(),
-		}, nil
+		return nil, err
 	}
 
 	if err := s.auth.GrantTable(userName, tableName, priv); err != nil {
-		return &QueryResult{
-			Success:      true,
-			Command:      "GRANT",
-			RowsAffected: 0,
-			Messages:     []string{fmt.Sprintf("Privilege %s granted on %s to %s.", priv, tableName, userName)},
-			DurationUS:   time.Since(start).Microseconds(),
-		}, nil
+		return nil, err
 	}
 
 	return &QueryResult{
@@ -416,16 +429,13 @@ func (s *Coordinator) execGrant(query string, start time.Time) (*QueryResult, er
 }
 
 // execRevoke handles REVOKE <permission> ON [TABLE] <table_name> FROM <user_name>.
-func (s *Coordinator) execRevoke(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execRevoke(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if err := s.checkDCLPermission(cs); err != nil {
+		return nil, err
+	}
 	rawPriv, rawTable, rawUser, ok := parsePermissionDCL(query, "REVOKE", "FROM")
 	if !ok {
-		return &QueryResult{
-			Success:      true,
-			Command:      "REVOKE",
-			RowsAffected: 0,
-			Messages:     []string{"REVOKE statement executed successfully."},
-			DurationUS:   time.Since(start).Microseconds(),
-		}, nil
+		return nil, fmt.Errorf("invalid syntax: expected REVOKE <privilege> ON [TABLE] <table_name> FROM <user_name>")
 	}
 
 	privStr := strings.TrimSpace(rawPriv)
@@ -434,23 +444,11 @@ func (s *Coordinator) execRevoke(query string, start time.Time) (*QueryResult, e
 
 	priv, err := auth.ParsePrivilege(privStr)
 	if err != nil {
-		return &QueryResult{
-			Success:      true,
-			Command:      "REVOKE",
-			RowsAffected: 0,
-			Messages:     []string{fmt.Sprintf("Privilege %s revoked.", privStr)},
-			DurationUS:   time.Since(start).Microseconds(),
-		}, nil
+		return nil, err
 	}
 
 	if err := s.auth.RevokeTable(userName, tableName, priv); err != nil {
-		return &QueryResult{
-			Success:      true,
-			Command:      "REVOKE",
-			RowsAffected: 0,
-			Messages:     []string{fmt.Sprintf("Privilege %s revoked on %s from %s.", priv, tableName, userName)},
-			DurationUS:   time.Since(start).Microseconds(),
-		}, nil
+		return nil, err
 	}
 
 	return &QueryResult{
@@ -463,7 +461,10 @@ func (s *Coordinator) execRevoke(query string, start time.Time) (*QueryResult, e
 }
 
 // execDeny handles DENY <permission> ON [TABLE] <table_name> TO <user_name>.
-func (s *Coordinator) execDeny(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDeny(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if err := s.checkDCLPermission(cs); err != nil {
+		return nil, err
+	}
 	rawPriv, rawTable, rawUser, ok := parsePermissionDCL(query, "DENY", "TO")
 	if !ok {
 		return nil, fmt.Errorf("invalid syntax: expected DENY <privilege> ON [TABLE] <table_name> TO <user_name>")
@@ -504,10 +505,17 @@ func (s *Coordinator) execSetUser(query string, start time.Time, cs *ClientSessi
 
 	// Revert commands
 	if upper == "SETUSER" || upper == "REVERT" || upper == "REVERT;" {
-		if cs.OriginalUser != "" {
-			cs.User = cs.OriginalUser
+		if len(cs.ImpersonationStack) == 0 {
+			return nil, fmt.Errorf("Msg 15151, Level 16, State 1: The REVERT statement cannot be executed because the security context has not been changed.")
+		}
+		// Pop previous identity from the stack
+		prevUser := cs.ImpersonationStack[len(cs.ImpersonationStack)-1]
+		cs.ImpersonationStack = cs.ImpersonationStack[:len(cs.ImpersonationStack)-1]
+		cs.User = prevUser
+		if len(cs.ImpersonationStack) == 0 {
+			cs.OriginalUser = ""
 		} else {
-			cs.User = "dbo"
+			cs.OriginalUser = cs.ImpersonationStack[0]
 		}
 		return &QueryResult{
 			Success:    true,
@@ -522,9 +530,15 @@ func (s *Coordinator) execSetUser(query string, start time.Time, cs *ClientSessi
 		if _, err := s.auth.GetUser(targetUser); err != nil && targetUser != "dbo" && targetUser != "guest" && targetUser != "sa" {
 			return nil, err
 		}
-		if cs.OriginalUser == "" {
+		// Permission check: only sysadmin (sa, dbo) can execute impersonation without explicit check
+		caller := cs.User
+		if !strings.EqualFold(caller, "sa") && !strings.EqualFold(caller, "dbo") && !strings.EqualFold(caller, targetUser) {
+			return nil, fmt.Errorf("Msg 15151, Level 16, State 1: Cannot execute as user %q, because it does not exist or you do not have permission.", targetUser)
+		}
+		if len(cs.ImpersonationStack) == 0 {
 			cs.OriginalUser = cs.User
 		}
+		cs.ImpersonationStack = append(cs.ImpersonationStack, cs.User)
 		cs.User = targetUser
 		if isExecAs {
 			return &QueryResult{

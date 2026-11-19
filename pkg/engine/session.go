@@ -76,9 +76,10 @@ type ClientSession struct {
 	EphemeralTables map[string]*EphemeralTable // session-local in-memory ephemeral tables (e.g. materialized CTEs)
 	PreparedStmts   map[string]*PreparedStatement
 	Cursors         map[string]*SessionCursor // server-side cursor state
-	User            string                    // active database user principal for RBAC
-	OriginalUser    string                    // original user prior to SETUSER / EXECUTE AS
-	Database        string                    // active virtual database context (default: "master")
+	User               string                    // active database user principal for RBAC
+	OriginalUser       string                    // original user prior to SETUSER / EXECUTE AS
+	ImpersonationStack []string                  // execution context stack for nested EXECUTE AS / SETUSER / REVERT
+	Database           string                    // active virtual database context (default: "master")
 	QueryCtx        context.Context
 	CancelFunc      context.CancelFunc
 	RunningQuery    string

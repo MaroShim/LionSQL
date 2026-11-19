@@ -136,10 +136,16 @@ func (s *Coordinator) recordDDLRestoreDroppedColumn(cs *ClientSession, tableName
 }
 
 func (s *Coordinator) recordDDLRenameTable(cs *ClientSession, oldName, newName string) {
+	if s.auth != nil {
+		_ = s.auth.RenameTable(oldName, newName)
+	}
 	if txCtx := s.getTxContext(cs); txCtx != nil {
 		txCtx.AddRollbackAction(func() error {
 			if newName != "" && oldName != "" {
 				_ = s.engine.RenameTable(newName, oldName)
+				if s.auth != nil {
+					_ = s.auth.RenameTable(newName, oldName)
+				}
 				s.InvalidatePKBypassCache()
 			}
 			return nil
@@ -160,6 +166,31 @@ func (s *Coordinator) recordDDLRenameColumn(cs *ClientSession, tableName, oldNam
 					}
 					return nil
 				})
+				s.InvalidatePKBypassCache()
+			}
+			return nil
+		})
+	}
+}
+
+func (s *Coordinator) recordDDLDropCreatedView(cs *ClientSession, viewName string) {
+	if txCtx := s.getTxContext(cs); txCtx != nil {
+		txCtx.AddRollbackAction(func() error {
+			if s.catalog != nil {
+				_ = s.catalog.DropView(viewName)
+				s.InvalidatePKBypassCache()
+			}
+			return nil
+		})
+	}
+}
+
+func (s *Coordinator) recordDDLRestoreDroppedView(cs *ClientSession, view *catalog.View) {
+	if txCtx := s.getTxContext(cs); txCtx != nil && view != nil {
+		vCopy := *view
+		txCtx.AddRollbackAction(func() error {
+			if s.catalog != nil {
+				_ = s.catalog.CreateView(&vCopy)
 				s.InvalidatePKBypassCache()
 			}
 			return nil
@@ -1093,7 +1124,7 @@ func (s *Coordinator) execReindex(query string, start time.Time) (*QueryResult, 
 }
 
 // execCreateView handles CREATE [OR REPLACE|OR ALTER] [TEMP|TEMPORARY] VIEW [IF NOT EXISTS] name AS <select> and ALTER VIEW name AS <select>.
-func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execCreateView(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	asIdx := sqlutil.FindTopLevelKeyword(cleaned, "AS")
@@ -1133,11 +1164,21 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 	cmdName := "CREATE VIEW"
 	if isAlter {
 		cmdName = "ALTER VIEW"
+		oldV, _ := s.catalog.GetView(viewName)
 		if err := s.catalog.AlterView(view); err != nil {
 			return nil, err
 		}
+		if oldV != nil {
+			s.recordDDLRestoreDroppedView(cs, oldV)
+		}
 	} else if orReplace {
+		oldV, _ := s.catalog.GetView(viewName)
 		s.catalog.CreateOrReplaceView(view)
+		if oldV != nil {
+			s.recordDDLRestoreDroppedView(cs, oldV)
+		} else {
+			s.recordDDLDropCreatedView(cs, viewName)
+		}
 	} else {
 		if err := s.catalog.CreateView(view); err != nil {
 			if ifNotExists {
@@ -1150,6 +1191,7 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 			}
 			return nil, err
 		}
+		s.recordDDLDropCreatedView(cs, viewName)
 	}
 
 	s.InvalidatePKBypassCache()
@@ -1163,13 +1205,14 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 }
 
 // execDropView handles DROP VIEW [IF EXISTS] <name>.
-func (s *Coordinator) execDropView(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDropView(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	stmt, err := proc.NewParser(proc.NewLexer(cleaned)).ParseDropView()
 	if err != nil {
 		return nil, err
 	}
 
+	oldV, _ := s.catalog.GetView(stmt.Name)
 	if err := s.catalog.DropView(stmt.Name); err != nil {
 		if stmt.IfExists {
 			return &QueryResult{
@@ -1180,6 +1223,10 @@ func (s *Coordinator) execDropView(query string, start time.Time) (*QueryResult,
 			}, nil
 		}
 		return nil, err
+	}
+
+	if oldV != nil {
+		s.recordDDLRestoreDroppedView(cs, oldV)
 	}
 
 	s.InvalidatePKBypassCache()

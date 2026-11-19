@@ -500,7 +500,7 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 		PreparedStmts:   make(map[string]*PreparedStatement),
 		Cursors:         make(map[string]*SessionCursor),
 		User:            "dbo",
-		OriginalUser:    "dbo",
+		OriginalUser:    "",
 		IsReadOnlyFn:    c.IsReadOnly,
 		lastUsedAt:      time.Now(),
 	}
@@ -772,9 +772,14 @@ func (c *Coordinator) ResetSession(id string, resetTx bool) error {
 	cs.VarLengths = nil
 
 	// Revert user impersonation (SETUSER / EXECUTE AS)
-	if cs.OriginalUser != "" {
-		cs.User = cs.OriginalUser
+	if cs.OriginalUser != "" || len(cs.ImpersonationStack) > 0 {
+		if len(cs.ImpersonationStack) > 0 {
+			cs.User = cs.ImpersonationStack[0]
+		} else {
+			cs.User = cs.OriginalUser
+		}
 		cs.OriginalUser = ""
+		cs.ImpersonationStack = nil
 	}
 	cs.Database = "master"
 
@@ -837,6 +842,7 @@ func (c *Coordinator) SetSessionUser(id, user string) {
 		cs.Mu.Lock()
 		cs.User = user
 		cs.OriginalUser = user
+		cs.ImpersonationStack = nil
 		cs.Mu.Unlock()
 	}
 }
