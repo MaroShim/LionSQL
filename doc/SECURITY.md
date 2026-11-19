@@ -34,19 +34,43 @@ LionSQL delegates data-at-rest encryption to the underlying OS and cloud block s
 
 ## 2. Authentication & Access Control
 
-### 2.1. Superuser Authentication
+### 2.1. Superuser Authentication & Built-in Administrator Model
+- **Superuser Principals (`sa`, `dbo`, `admin`, `postgres`)**:
+  - `sa` (System Administrator) is the instance-level root authority for TDS (:1433), SQL Server tools (SSMS), and CLI operations.
+  - Built-in administrator principals bypass standard table grant checks (`HasTablePermission`) and possess unconditional execution rights across all DDL, DML, DCL, and diagnostic routines.
+  - `DENY` restrictions are not applied to superusers, ensuring the administrative context is never locked out of system recovery paths.
 - **Password Hashing**: Passwords are encrypted using `bcrypt` with cost factor 12. Plaintext passwords are never persisted.
 - **JWT Tokens**: Authentication produces signed JWT tokens using HMAC-SHA256 with configurable validity periods.
 - **Token Invalidation**: Calling `POST /api/auth/logout` adds the active token ID to an in-memory revocation blocklist.
 
-### 2.2. Granular API Key Scoping
+### 2.2. SQL Role-Based Access Control (RBAC) & Principle of Least Privilege
+LionSQL implements strict ANSI SQL and Microsoft T-SQL compliant RBAC for database users (e.g. `guest`, `app_user`):
+- **Fail-Closed Default Deny**: Non-administrative users possess zero table or object permissions by default. Access to relations, views, and procedures must be explicitly granted via `GRANT` or inherited through assigned database roles.
+- **Explicit DENY Precedence**: An explicit `DENY` rule on a table or relation strictly overrides all direct or role-inherited `GRANT` privileges.
+- **DCL Authorization Boundaries (`[SEC-003]`, `[SEC-004]`)**:
+  - DCL statements (`CREATE LOGIN`, `ALTER LOGIN`, `DROP LOGIN`, `CREATE USER`, `DROP USER`, `GRANT`, `REVOKE`, `DENY`) require administrative credentials (`sa` or `dbo`).
+  - Calls by unprivileged principals fail-closed with `Msg 15247, Level 16, State 1: User does not have permission to perform this action.`
+  - Invalid privileges (e.g. non-existent permissions) fail-closed with explicit diagnostic errors rather than silent successes.
+- **Execution Context & Impersonation Safety (`[SEC-001]`, `[SEC-002]`)**:
+  - `EXECUTE AS USER = 'target'` / `SETUSER 'target'` pushes the previous user onto an isolated FIFO execution stack (`cs.ImpersonationStack`). Unprivileged principals cannot impersonate `sa` or other users without permission (`Msg 15151`).
+  - `REVERT` pops the previous security context from the stack. Executing `REVERT` in a session without prior impersonation fails-closed with `Msg 15151`, preventing unauthorized privilege escalation to `dbo`.
+- **Query & DML Access Verification (`[SEC-005]`, `[SEC-006]`, `[SEC-007]`)**:
+  - `MERGE`: Access permissions (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) are verified on target and source tables according to the parsed `WHEN MATCHED` / `WHEN NOT MATCHED` clauses.
+  - Subqueries: Subqueries embedded in `WHERE` predicates (`IN`, `EXISTS`, scalar subqueries) evaluate table access rights; permission failures immediately abort the outer query.
+  - Views: View expansions evaluate caller permissions on the view object prior to CTE expansion.
+- **Object Renaming RBAC Synchronization (`[SEC-008]`)**:
+  - `ALTER TABLE RENAME` and `sp_rename` automatically migrate existing `GRANT` and `DENY` security maps to the new table name, ensuring renamed tables retain active security policies.
+- **Administrative Process Management (`[SEC-009]`)**:
+  - The `KILL <spid>` command is strictly restricted to administrative principals (`sa`, `dbo`). Unprivileged callers are rejected with `Msg 224: User does not have permission to use the KILL statement.`
+
+### 2.3. Granular API Key Scoping
 For client-side applications and microservices:
 - **Roles**:
   - `superuser`: Unrestricted access across all REST APIs and tables.
   - `readonly`: Permitted only to execute `GET` queries. Mutations are rejected with `403 Forbidden`.
 - **Table Whitelists**: API keys can be locked to a specific slice of tables (`allowed_tables: ["products", "categories"]`). Requests targeting unlisted tables are rejected.
 
-### 2.3. Enterprise Immutable Audit Logging (PCI-DSS / SOC2 Compliance)
+### 2.4. Enterprise Immutable Audit Logging (PCI-DSS / SOC2 Compliance)
 LionSQL incorporates an append-only, tamper-evident audit logging subsystem (`pkg/audit`) specifically engineered for strict financial and enterprise security compliance:
 - **Audited Security Events**:
   - **Authentication**: Connection attempts, login success, and authentication failures across PGWire (`:5433`), TDS (`:1433`), and Web/REST API (`:8090`).
@@ -60,7 +84,7 @@ LionSQL incorporates an append-only, tamper-evident audit logging subsystem (`pk
 - **Non-Blocking Zero-Overhead Durability**:
   - Audit events are emitted through ring buffers and flushed asynchronously to disk (`audit.log`) via background batch writer threads, avoiding synchronization bottlenecks on low-latency OLTP execution paths.
 
-### 2.4. High-Availability Cluster Inter-Node Authentication (`ClusterToken`)
+### 2.5. High-Availability Cluster Inter-Node Authentication (`ClusterToken`)
 LionSQL safeguards its 1-Writer Multi-Reader High-Availability Availability Group clustering and Raft-style failover endpoints (`pkg/replication`) with pre-shared cluster token authentication:
 - **Scope of Protected Endpoints**:
   - Streaming: `GET /api/replication/stream` (prevents unauthorized real-time WAL data exfiltration)

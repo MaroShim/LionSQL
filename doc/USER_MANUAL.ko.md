@@ -156,11 +156,14 @@
   * Primary 노드 설정 및 Replica 노드 LSN 스트리밍 연동 (`-replica-of=...`)
   * 리더 하트비트 타임아웃 감지 및 자동 장애 조치(Auto-Failover)
   * 수동 승격 명령 (`POST /api/replication/promote`)
-* **6.4. 엔터프라이즈 보안 및 네트워크 암호화**
+* **6.4. 엔터프라이즈 보안 및 역할 기반 접근 제어 (RBAC)**
+  * 슈퍼유저(`sa`, `dbo`) vs 일반 사용자(`guest`, `app_user`) 권한 모델
+  * 로그인/사용자 관리 및 DCL 권한 제어 (`CREATE/ALTER LOGIN`, `USER`, `GRANT`, `DENY`)
+  * 세션 가장 및 복원 보안 (`EXECUTE AS`, `REVERT`)
+* **6.5. 네트워크 암호화 (TLS/SSL)**
   * TLS/SSL 인증서 및 개인키 설정 (`--tls`, `--tls-cert`, `--tls-key`)
   * 비암호화 연결 차단 및 SSL 연결 강제 (`--require-ssl`)
-  * 프로세스 격리 원칙 및 단일 카탈로그 보안 경계
-* **6.5. 장애 진단 및 문제 해결 (Troubleshooting)**
+* **6.6. 장애 진단 및 문제 해결 (Troubleshooting)**
   * 포트 충돌(`bind: address already in use`) 및 좀비 프로세스 정리
   * 시스템 진단 도구 실행 (`./bin/lionsql doctor`)
   * 트랜잭션 락 경합 및 메모리 거버너 차단 에러 진단
@@ -1408,7 +1411,47 @@ $ curl -s http://127.0.0.1:8091/api/replication/status
 
 ---
 
-### 6.4. 엔터프라이즈 보안 및 네트워크 암호화
+### 6.4. 엔터프라이즈 보안, 역할 기반 접근 제어(RBAC) 및 네트워크 암호화
+
+LionSQL은 엔터프라이즈 프로덕션 환경을 위해 다층 보안(Defense-in-Depth) 및 최소 권한 원칙(Principle of Least Privilege)을 준수하는 강력한 역할 기반 접근 제어(RBAC) 체계를 제공합니다.
+
+#### 1. 슈퍼유저(`sa`) vs 일반 사용자 권한 모델
+* **`sa` (System Administrator / 슈퍼유저)**:
+  - 인스턴스 전역의 루트 권한 계정으로, `dbo`, `admin`, `postgres`와 함께 모든 카탈로그 테이블 및 관리 커맨드에 대한 무조건 접근(Bypass) 권한을 갖습니다.
+  - 임의 사용자에 대한 `DENY` 규칙이 설정되어 있더라도 `sa`의 쿼리는 차단되지 않아 시스템 복구 경로가 보장됩니다.
+  - 로그인 및 사용자 생성/수정/삭제(`CREATE/ALTER/DROP LOGIN/USER`), 권한 부여(`GRANT/REVOKE/DENY`), 세션 강제 종료(`KILL`) 명령은 오직 `sa` 및 `dbo`만 실행할 수 있습니다.
+* **일반 사용자(General User, e.g. `guest`, `app_user`)**:
+  - **기본 거부(Fail-Closed Default Deny)**: 기본적으로 테이블 및 데이터베이스 객체에 대한 권한이 전혀 없으며, 명시적 `GRANT` 또는 소속된 데이터베이스 역할(Role)을 통해 부여받은 권한만 행사할 수 있습니다.
+  - **DENY 최우선 적용(Deny Precedence)**: 상위 그룹이나 개별 `GRANT`가 존재하더라도 테이블에 대해 명시적 `DENY`가 설정된 경우 조회가 철저히 차단됩니다.
+  - **관리 DCL 실행 차단**: 비인가 사용자가 `CREATE LOGIN`, `GRANT` 등을 시도하면 `Msg 15247: User does not have permission to perform this action.` 에러가 발생합니다.
+  - **임퍼소네이션 및 복원 보안**: `EXECUTE AS USER = 'target'`으로 임의의 계정을 사칭할 수 없으며, 가장 이력이 없는 일반 세션에서 `REVERT;`를 실행하여 `dbo`로 권한을 부당 상승시키는 행위는 `Msg 15151`로 엄격히 차단됩니다.
+
+#### 2. DCL 권한 제어 실습 예제:
+```sql
+-- 1. [관리자 계정 sa] 애플리케이션용 로그인 및 사용자 생성
+CREATE LOGIN app_user WITH PASSWORD = 'StrongPassword123!';
+CREATE USER app_user FOR LOGIN app_user;
+
+-- 2. 특정 테이블에 대한 SELECT, INSERT 권한 부여
+GRANT SELECT, INSERT ON orders TO app_user;
+
+-- 3. 민감 정보 테이블에 대한 명시적 거부 설정
+DENY SELECT ON salaries TO app_user;
+
+-- 4. [일반 사용자 app_user] 접근 테스트
+-- orders 테이블: 조회 및 삽입 정상 동작
+SELECT * FROM orders;
+
+-- salaries 테이블: 명시적 DENY에 의해 차단 (permission denied)
+SELECT * FROM salaries;
+
+-- 비인가 관리자 명령 시도: 즉시 실패 (Msg 15247)
+ALTER LOGIN sa WITH PASSWORD = 'hacked';
+```
+
+---
+
+### 6.5. 네트워크 암호화 (TLS/SSL)
 
 프로덕션 환경에서는 공용 인터넷 노출을 방지하고 전송 계층 암호화를 활성화해야 합니다:
 
@@ -1432,7 +1475,7 @@ lionsql start -dir=/var/lib/lionsql/data \
 
 ---
 
-### 6.5. 장애 진단 및 문제 해결 (Troubleshooting)
+### 6.6. 장애 진단 및 문제 해결 (Troubleshooting)
 
 실무 운영 중 발생할 수 있는 주요 상황과 해결 방법입니다:
 
