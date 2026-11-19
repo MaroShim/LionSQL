@@ -1844,6 +1844,12 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		return nil, proc.DiagnoseParseFailure(cleaned, fmt.Errorf("FOR XML clause is not supported"))
 	}
 
+	// -1. CTE execution: if query begins with WITH, execute via CTE engine.
+	unwrapped := sqlutil.UnwrapOuterParens(cleaned)
+	if sqlutil.HasPrefixKeyword(unwrapped, "WITH") {
+		return s.execCTE(unwrapped, start, cs)
+	}
+
 	// -1. View expansion: if FROM clause references a known view, rewrite as a CTE.
 	//     e.g. SELECT name FROM v_engineers WHERE salary > 85000
 	//     becomes WITH v_engineers AS (SELECT id, name, salary FROM employees WHERE dept='Engineering')
@@ -2034,7 +2040,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 				break
 			}
 		}
-		if !hasComplexInProj && len(qInfo.WindowDefs) == 0 && !sqlutil.ContainsKeyword(cleaned, "OVER", true) {
+		if cs != nil && cs.ID != "internal-vm-subquery" && !hasComplexInProj && len(qInfo.WindowDefs) == 0 && !sqlutil.ContainsKeyword(cleaned, "OVER", true) {
 			if res, err := s.execVDBESelect(cleaned, start, cs); err == nil {
 				if qInfo.Distinct {
 					res.Rows, res.Values = deduplicateRowsAndValues(res.Rows, res.Values)

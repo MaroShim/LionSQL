@@ -222,6 +222,7 @@ type Executor struct {
 	tableGetter    execution.TableGetter
 	tableManager   TableManager
 	queryExecutor  QueryExecutor
+	viewRewriter   ViewRewriter
 	procGetter     ProcedureGetter
 	identProvider  IdentityProvider
 	identMu        sync.RWMutex
@@ -268,6 +269,9 @@ func NewExecutor(cache *PlanCache) *Executor {
 // QueryExecutor defines a callback to execute a full SQL SELECT statement in an existing transaction.
 type QueryExecutor func(ctx context.Context, sql string, tx storage.Transaction, vars map[string]storage.Value) ([]map[string]any, []string, error)
 
+// ViewRewriter defines a callback to expand catalog views in a SQL query into CTEs.
+type ViewRewriter func(query string) (string, bool)
+
 // SetQueryExecutor registers a subquery execution callback for evaluation inside the VDBE VM.
 func (e *Executor) SetQueryExecutor(qe QueryExecutor) {
 	e.mu.Lock()
@@ -279,6 +283,19 @@ func (e *Executor) getQueryExecutor() QueryExecutor {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.queryExecutor
+}
+
+// SetViewRewriter registers a view expansion callback.
+func (e *Executor) SetViewRewriter(vr ViewRewriter) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.viewRewriter = vr
+}
+
+func (e *Executor) getViewRewriter() ViewRewriter {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.viewRewriter
 }
 
 // SetIdentityProvider registers an external IdentityProvider (such as Coordinator).
@@ -1307,29 +1324,51 @@ func replaceVariableBoundaries(s, target, replacement string) string {
 	return sb.String()
 }
 
+func (f *VMFrame) tryExecViaQueryExecutor(sql string) ([]map[string]any, []string, [][]any, error) {
+	if f.executor == nil {
+		return nil, nil, nil, fmt.Errorf("executor not initialized")
+	}
+	qe := f.executor.getQueryExecutor()
+	if qe == nil {
+		return nil, nil, nil, fmt.Errorf("query executor not configured")
+	}
+	rows, cols, err := qe(f.ctx, sql, f.tx, f.getStorageVarsMap())
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	var vals [][]any
+	for _, r := range rows {
+		rowVals := make([]any, len(cols))
+		for ci, col := range cols {
+			rowVals[ci] = r[col]
+		}
+		vals = append(vals, rowVals)
+	}
+	return rows, cols, vals, nil
+}
+
 func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[string]any, []string, [][]any, error) {
 	if strings.Contains(sql, "@") || strings.Contains(sql, "#") {
 		sql = f.bindWhereVariables(sql)
 		queryData = nil
 	}
-	if setQuery, ok := planner.FindTopLevelSetOps(sql); ok && setQuery != nil && len(setQuery.Segments) >= 2 {
-		if f.executor != nil {
-			if qe := f.executor.getQueryExecutor(); qe != nil {
-				rows, cols, err := qe(f.ctx, sql, f.tx, f.getStorageVarsMap())
-				if err != nil {
-					return nil, nil, nil, err
-				}
-				var vals [][]any
-				for _, r := range rows {
-					rowVals := make([]any, len(cols))
-					for ci, col := range cols {
-						rowVals[ci] = r[col]
-					}
-					vals = append(vals, rowVals)
-				}
-				return rows, cols, vals, nil
+
+	if f.executor != nil {
+		if rw := f.executor.getViewRewriter(); rw != nil {
+			if rewritten, ok := rw(sql); ok {
+				sql = rewritten
+				queryData = nil
 			}
 		}
+	}
+
+	trimmedUpper := strings.ToUpper(strings.TrimSpace(sql))
+	isCTE := strings.HasPrefix(trimmedUpper, "WITH ")
+	setQuery, isSetOp := planner.FindTopLevelSetOps(sql)
+	hasSetOps := isSetOp && setQuery != nil && len(setQuery.Segments) >= 2
+
+	if isCTE || hasSetOps {
+		return f.tryExecViaQueryExecutor(sql)
 	}
 
 	p := planner.NewPlanner()
@@ -1348,6 +1387,10 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 			queryData.SetCachedQueryInfo(parsed.Clone())
 		}
 		qInfo = parsed
+	}
+
+	if len(qInfo.CTEs) > 0 {
+		return f.tryExecViaQueryExecutor(sql)
 	}
 
 	if qInfo.WhereClause != "" {

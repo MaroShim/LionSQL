@@ -144,6 +144,7 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 
 	coord.autoAnalyzer = NewAutoAnalyzer(coord, DefaultAutoAnalyzeConfig())
 	executor.SetIdentityProvider(coord)
+	executor.SetViewRewriter(coord.rewriteViewsAsCTE)
 	executor.SetQueryExecutor(func(ctx context.Context, sql string, stx storage.Transaction, vars map[string]storage.Value) ([]map[string]any, []string, error) {
 		cs := &ClientSession{
 			ID:    "internal-vm-subquery",

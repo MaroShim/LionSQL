@@ -303,14 +303,14 @@
 | `DONE` | **`FIX-ORDERBY-INVALID-COLUMN-AND-ORDINAL-1`** | `1.0-GA` | Planner | P2 | ORDER BY 절 비유효 컬럼 및 범위 초과 서수 유효성 검증 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`** | `1.0-GA` | Storage | P1 | PITR 기준 백업 시점/LSN 불변성 검증, 백업-WAL LSN 경계 필터링 및 LSN 연속성(Gap) 누락 검출 보완 | [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md) |  |
 | `DONE` | **`FIX-PITR-WAL-COMPOSITE-PK-1`** | `1.0-GA` | Storage | P2 | PITR WAL 재생 시 복합 PK 테이블 UPDATE/DELETE 복구 유실 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
-| `PENDING` | **`FIX-PROC-CTE-EPHEMERAL-DISPATCH-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 내부 CTE(WITH) EphemeralTable 바인딩 연동 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `DONE` | **`FIX-PROC-CTE-EPHEMERAL-DISPATCH-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 내부 CTE(WITH) EphemeralTable 바인딩 연동 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-LOCAL-TEMP-TABLE-LIFECYCLE-1`** | `v0.94.0` | Engine | P2 | 프로시저 로컬 #temp 테이블 프로시저 종료 시 자동 파기 훅 구현 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `PENDING` | **`FIX-PROC-PARAM-SHADOWING-DUPLICATE-CHECK-1`** | `v0.94.0` | Engine | P2 | 프로시저 매개변수와 동일 이름 로컬 변수 재선언 차단(Msg 134) | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `PENDING` | **`FIX-PROC-PARSER-MERGE-TOKEN-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 본문 MERGE INTO 구문 파싱 및 컴파일 허용 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `PENDING` | **`FIX-PROC-PARSER-STATIC-DDL-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 본문 정적 DDL(ALTER TABLE 등) 파싱 허용 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-PROC-TEMP-TABLE-DDL-1`** |  | Engine | P1 | 저장 프로시저 본문 내부 CREATE TABLE #temp / DROP TABLE #temp 파싱 및 실행 지원 | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`FIX-PROC-VIEW-EXPANSION-DISPATCH-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 내부 VIEW 카탈로그 서브쿼리 확장 연동 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `DONE` | **`FIX-PROC-VIEW-EXPANSION-DISPATCH-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 내부 VIEW 카탈로그 서브쿼리 확장 연동 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-ROLLBACK-INDEX-RESTORE-ERROR-HANDLING-1`** |  | Engine | P2 | 커밋 및 세이브포인트 롤백 과정에서 보조 인덱스 복원 오류 전파 및 복원 누락 방어 |  |  |
 | `DONE` | **`FIX-SECONDARY-INDEX-RECOVERY-FALLBACK-1`** | `2` | --domain | P2 | 2차 인덱스 복원 실패 시 자동 재구축 및 Table Scan 폴백 비활성화 체계 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-SELF-CORRELATED-EXISTS-SUBQUERY-1`** |  | 1 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
@@ -3340,8 +3340,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] Stored Procedure 내부 CTE(WITH) EphemeralTable 바인딩 연동 `FIX-PROC-CTE-EPHEMERAL-DISPATCH-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+### [DONE] Stored Procedure 내부 CTE(WITH) EphemeralTable 바인딩 연동 `FIX-PROC-CTE-EPHEMERAL-DISPATCH-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 02:36:51
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
 
@@ -3387,8 +3387,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] Stored Procedure 내부 VIEW 카탈로그 서브쿼리 확장 연동 `FIX-PROC-VIEW-EXPANSION-DISPATCH-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-18 23:58:59
+### [DONE] Stored Procedure 내부 VIEW 카탈로그 서브쿼리 확장 연동 `FIX-PROC-VIEW-EXPANSION-DISPATCH-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 02:36:51
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
 
