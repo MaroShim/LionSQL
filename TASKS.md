@@ -291,6 +291,7 @@
 | `DONE` | **`FIX-HTTP-REAP-ABANDONED-TX-1`** | `1.0-GA` | API | P2 | Web Studio/HTTP 유휴 세션 회수 시 미종료 트랜잭션 자동 롤백 및 스토리지 잠금 해제 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-HYBRID-TX-SPLIT-BRAIN-1`** | `1.0-GA` | Storage | P2 | 하이브리드 트랜잭션 2PC 부재로 인한 분할 커밋(Split-Brain) 방지 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-IDENTITY-SEED-INCREMENT-HONORED-1`** | `v0.94.0` | Storage | P2 | IDENTITY(seed, increment) 초기 시드 및 증가분 스토리지 시퀀스 반영 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `DONE` | **`FIX-INT-ARITHMETIC-OVERFLOW-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-INT-ARITHMETIC-OVERFLOW-ERROR-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `PENDING` | **`FIX-LEFT-NEGATIVE-LENGTH-ERROR-1`** |  | 3 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-LEXER-HEX-BINARY-LITERAL-1`** |  | Parser | P2 | Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
@@ -3252,6 +3253,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-19 01:23:52
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
+
+---
+
+### [DONE] --domain `FIX-INT-ARITHMETIC-OVERFLOW-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 04:25:42
+- **Milestone**: `--prio`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
 

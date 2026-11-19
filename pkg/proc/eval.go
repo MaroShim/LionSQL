@@ -635,7 +635,7 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		}
 		switch res.Type {
 		case storage.TypeInt:
-			return res.IVal, nil
+			return storage.Value{Type: storage.TypeInt, IVal: res.IVal, Precision: e.Precision}, nil
 		case storage.TypeFloat, storage.TypeReal:
 			return res.FVal, nil
 		case storage.TypeBool:
@@ -1166,6 +1166,13 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		}
 		if i1, isInt1 := isInteger(left); isInt1 {
 			if i2, isInt2 := isInteger(right); isInt2 {
+				if isInt32Val(left) && isInt32Val(right) {
+					res := i1 + i2
+					if res < math.MinInt32 || res > math.MaxInt32 {
+						return nil, fmt.Errorf("Msg 8115, Level 16, State 2: Arithmetic overflow error converting expression to data type int.")
+					}
+					return storage.Value{Type: storage.TypeInt, IVal: res, Precision: 4}, nil
+				}
 				if (i2 > 0 && i1 > math.MaxInt64-i2) || (i2 < 0 && i1 < math.MinInt64-i2) {
 					return nil, fmt.Errorf("arithmetic overflow error: bigint out of range")
 				}
@@ -1189,6 +1196,13 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		}
 		if i1, isInt1 := isInteger(left); isInt1 {
 			if i2, isInt2 := isInteger(right); isInt2 {
+				if isInt32Val(left) && isInt32Val(right) {
+					res := i1 - i2
+					if res < math.MinInt32 || res > math.MaxInt32 {
+						return nil, fmt.Errorf("Msg 8115, Level 16, State 2: Arithmetic overflow error converting expression to data type int.")
+					}
+					return storage.Value{Type: storage.TypeInt, IVal: res, Precision: 4}, nil
+				}
 				if (i2 < 0 && i1 > math.MaxInt64+i2) || (i2 > 0 && i1 < math.MinInt64+i2) {
 					return nil, fmt.Errorf("arithmetic overflow error: bigint out of range")
 				}
@@ -1212,6 +1226,13 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		}
 		if i1, isInt1 := isInteger(left); isInt1 {
 			if i2, isInt2 := isInteger(right); isInt2 {
+				if isInt32Val(left) && isInt32Val(right) {
+					res := i1 * i2
+					if i1 != 0 && res/i1 != i2 || res < math.MinInt32 || res > math.MaxInt32 {
+						return nil, fmt.Errorf("Msg 8115, Level 16, State 2: Arithmetic overflow error converting expression to data type int.")
+					}
+					return storage.Value{Type: storage.TypeInt, IVal: res, Precision: 4}, nil
+				}
 				if i1 != 0 && i2 != 0 {
 					if (i1 == -1 && i2 == math.MinInt64) || (i2 == -1 && i1 == math.MinInt64) {
 						return nil, fmt.Errorf("arithmetic overflow error: bigint out of range")
@@ -1627,6 +1648,30 @@ func anyToStorageVal(v any) storage.Value {
 		return storage.DateTimeValue(val)
 	default:
 		return storage.StringValue(fmt.Sprintf("%v", val))
+	}
+}
+
+func isInt32Val(v any) bool {
+	if v == nil {
+		return false
+	}
+	switch val := v.(type) {
+	case int32, int16, int8, uint16, uint8:
+		return true
+	case int:
+		return val >= math.MinInt32 && val <= math.MaxInt32
+	case int64:
+		return val >= math.MinInt32 && val <= math.MaxInt32
+	case storage.Value:
+		if val.Type == storage.TypeInt {
+			if val.Precision == 8 {
+				return false
+			}
+			return val.Precision == 4 || (val.Precision == 0 && val.IVal >= math.MinInt32 && val.IVal <= math.MaxInt32)
+		}
+		return false
+	default:
+		return false
 	}
 }
 

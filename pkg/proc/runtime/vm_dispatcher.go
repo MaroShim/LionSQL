@@ -579,6 +579,18 @@ vmLoop:
 	case proc.OpAdd, proc.OpAddInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
 		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			if (vb.Precision == 4 || (vb.Precision == 0 && vb.IVal >= math.MinInt32 && vb.IVal <= math.MaxInt32)) &&
+				(vc.Precision == 4 || (vc.Precision == 0 && vc.IVal >= math.MinInt32 && vc.IVal <= math.MaxInt32)) {
+				res := vb.IVal + vc.IVal
+				if res < math.MinInt32 || res > math.MaxInt32 {
+					if catchErr := f.handleCatch(fmt.Errorf("Msg 8115, Level 16, State 2: Arithmetic overflow error converting expression to data type int."), &pc); catchErr != nil {
+						return nil, catchErr
+					}
+					continue vmLoop
+				}
+				f.regs[inst.A] = storage.Value{Type: storage.TypeInt, IVal: res, Precision: 4}
+				continue vmLoop
+			}
 			if (vc.IVal > 0 && vb.IVal > math.MaxInt64-vc.IVal) || (vc.IVal < 0 && vb.IVal < math.MinInt64-vc.IVal) {
 				if catchErr := f.handleCatch(fmt.Errorf("arithmetic overflow error: bigint out of range"), &pc); catchErr != nil {
 					return nil, catchErr
@@ -593,6 +605,18 @@ vmLoop:
 	case proc.OpSub, proc.OpSubInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
 		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			if (vb.Precision == 4 || (vb.Precision == 0 && vb.IVal >= math.MinInt32 && vb.IVal <= math.MaxInt32)) &&
+				(vc.Precision == 4 || (vc.Precision == 0 && vc.IVal >= math.MinInt32 && vc.IVal <= math.MaxInt32)) {
+				res := vb.IVal - vc.IVal
+				if res < math.MinInt32 || res > math.MaxInt32 {
+					if catchErr := f.handleCatch(fmt.Errorf("Msg 8115, Level 16, State 2: Arithmetic overflow error converting expression to data type int."), &pc); catchErr != nil {
+						return nil, catchErr
+					}
+					continue vmLoop
+				}
+				f.regs[inst.A] = storage.Value{Type: storage.TypeInt, IVal: res, Precision: 4}
+				continue vmLoop
+			}
 			if (vc.IVal < 0 && vb.IVal > math.MaxInt64+vc.IVal) || (vc.IVal > 0 && vb.IVal < math.MinInt64+vc.IVal) {
 				if catchErr := f.handleCatch(fmt.Errorf("arithmetic overflow error: bigint out of range"), &pc); catchErr != nil {
 					return nil, catchErr
@@ -607,6 +631,18 @@ vmLoop:
 	case proc.OpMul, proc.OpMulInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
 		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			if (vb.Precision == 4 || (vb.Precision == 0 && vb.IVal >= math.MinInt32 && vb.IVal <= math.MaxInt32)) &&
+				(vc.Precision == 4 || (vc.Precision == 0 && vc.IVal >= math.MinInt32 && vc.IVal <= math.MaxInt32)) {
+				res := vb.IVal * vc.IVal
+				if vb.IVal != 0 && res/vb.IVal != vc.IVal || res < math.MinInt32 || res > math.MaxInt32 {
+					if catchErr := f.handleCatch(fmt.Errorf("Msg 8115, Level 16, State 2: Arithmetic overflow error converting expression to data type int."), &pc); catchErr != nil {
+						return nil, catchErr
+					}
+					continue vmLoop
+				}
+				f.regs[inst.A] = storage.Value{Type: storage.TypeInt, IVal: res, Precision: 4}
+				continue vmLoop
+			}
 			if vb.IVal != 0 && vc.IVal != 0 {
 				if (vb.IVal == -1 && vc.IVal == math.MinInt64) || (vc.IVal == -1 && vb.IVal == math.MinInt64) || (vb.IVal*vc.IVal)/vc.IVal != vb.IVal {
 					if catchErr := f.handleCatch(fmt.Errorf("arithmetic overflow error: bigint out of range"), &pc); catchErr != nil {

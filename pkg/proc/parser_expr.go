@@ -2,6 +2,7 @@ package proc
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -331,7 +332,11 @@ func (p *Parser) parsePrefix() Expr {
 	switch p.curToken.Type {
 	case TokenInt:
 		val, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
-		expr := &LiteralExpr{Val: storage.IntValue(val)}
+		prec := 4
+		if val < math.MinInt32 || val > math.MaxInt32 {
+			prec = 8
+		}
+		expr := &LiteralExpr{Val: storage.Value{Type: storage.TypeInt, IVal: val, Precision: prec}}
 		p.nextToken()
 		return expr
 	case TokenFloat:
