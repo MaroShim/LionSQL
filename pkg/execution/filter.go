@@ -18,6 +18,7 @@ type FilterIterator struct {
 	condition        string
 	parsed           proc.Expr
 	hasParsed        bool
+	hasSubquery      bool
 	subqueryExecutor func(sql string) ([]map[string]any, []string, error)
 	sessionVars      map[string]any
 	inChunk          Chunk
@@ -46,6 +47,9 @@ func NewFilterIterator(child Iterator, condition string) *FilterIterator {
 					}
 				}
 			}
+			f.hasSubquery = proc.ExprHasSubquery(f.parsed)
+		} else {
+			f.hasSubquery = sqlutil.ContainsKeyword(f.condition, "SELECT", true) || sqlutil.ContainsKeyword(f.condition, "EXISTS", true)
 		}
 	}
 	return f
@@ -168,9 +172,12 @@ func (f *FilterIterator) evaluate(t Tuple) bool {
 	}
 
 	var subExec proc.SubqueryExecutor
-	if f.subqueryExecutor != nil {
-		evalMap := t.ToEvalMap()
+	if f.hasSubquery && f.subqueryExecutor != nil {
+		var evalMap map[string]any
 		subExec = func(rawSubSQL string) ([]map[string]any, []string, error) {
+			if evalMap == nil {
+				evalMap = t.ToEvalMap()
+			}
 			paramSQL := sqlutil.ParameterizeSubquery(rawSubSQL, evalMap)
 			return f.subqueryExecutor(paramSQL)
 		}

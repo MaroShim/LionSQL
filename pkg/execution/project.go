@@ -26,6 +26,7 @@ type ProjectionIterator struct {
 	isSelectAll      bool
 	schema           []string
 	colIndexMap      *ColumnIndexMap
+	hasSubquery      bool
 	subqueryExecutor func(sql string) ([]map[string]any, []string, error)
 	sessionVars      map[string]any
 	inChunk          Chunk
@@ -97,6 +98,11 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 		parser := proc.NewParser(proc.NewLexer(expr))
 		if ast := parser.ParseExpr(); ast != nil && len(parser.Errors()) == 0 {
 			f.parsed = ast
+			if proc.ExprHasSubquery(f.parsed) {
+				p.hasSubquery = true
+			}
+		} else if sqlutil.ContainsKeyword(expr, "SELECT", true) {
+			p.hasSubquery = true
 		}
 		p.fields = append(p.fields, f)
 		p.schema = append(p.schema, schemaAlias)
@@ -223,9 +229,12 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 	vals := make([]any, len(p.fields))
 
 	var subExec proc.SubqueryExecutor
-	if p.subqueryExecutor != nil {
-		evalMap := tuple.ToEvalMap()
+	if p.hasSubquery && p.subqueryExecutor != nil {
+		var evalMap map[string]any
 		subExec = func(rawSubSQL string) ([]map[string]any, []string, error) {
+			if evalMap == nil {
+				evalMap = tuple.ToEvalMap()
+			}
 			paramSQL := sqlutil.ParameterizeSubquery(rawSubSQL, evalMap)
 			return p.subqueryExecutor(paramSQL)
 		}

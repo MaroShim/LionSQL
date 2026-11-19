@@ -262,4 +262,40 @@ func TestTSQLIdentitySeedAndIncrement(t *testing.T) {
 	if len(res.Rows) != 2 || fmt.Sprintf("%v", res.Rows[1]["id"]) != "105" {
 		t.Fatalf("expected row 2 with id=105 from SP, got %+v", res.Rows)
 	}
+
+	// 10. INSERT INTO t_seed (val) SELECT ... (verifying custom seed and increment in INSERT ... SELECT)
+	if _, err := coord.ExecuteSQL(`CREATE TABLE src_data (val VARCHAR(20));`); err != nil {
+		t.Fatalf("create src_data failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL(`INSERT INTO src_data VALUES ('sel_1'), ('sel_2');`); err != nil {
+		t.Fatalf("insert src_data failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL(`INSERT INTO t_seed (val) SELECT val FROM src_data ORDER BY val ASC;`); err != nil {
+		t.Fatalf("insert select failed: %v", err)
+	}
+	res, err = coord.ExecuteSQL(`SELECT id, val FROM t_seed ORDER BY id ASC;`)
+	if err != nil {
+		t.Fatalf("select after insert select failed: %v", err)
+	}
+	if len(res.Rows) != 4 {
+		t.Fatalf("expected 4 rows after insert select, got %d", len(res.Rows))
+	}
+	if fmt.Sprintf("%v", res.Rows[2]["id"]) != "110" || fmt.Sprintf("%v", res.Rows[3]["id"]) != "115" {
+		t.Errorf("expected ids 110, 115 from insert select; got row2=%v, row3=%v", res.Rows[2]["id"], res.Rows[3]["id"])
+	}
+
+	// 11. Multi-table isolation with independent custom seeds: t_seed_2 with seed 1000, step 50
+	if _, err := coord.ExecuteSQL(`CREATE TABLE t_seed_2 (id INT IDENTITY(1000, 50) PRIMARY KEY, info VARCHAR(20));`); err != nil {
+		t.Fatalf("create t_seed_2 failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL(`INSERT INTO t_seed_2 (info) VALUES ('first_2'), ('second_2');`); err != nil {
+		t.Fatalf("insert t_seed_2 failed: %v", err)
+	}
+	res2, err := coord.ExecuteSQL(`SELECT id, info FROM t_seed_2 ORDER BY id ASC;`)
+	if err != nil {
+		t.Fatalf("select t_seed_2 failed: %v", err)
+	}
+	if len(res2.Rows) != 2 || fmt.Sprintf("%v", res2.Rows[0]["id"]) != "1000" || fmt.Sprintf("%v", res2.Rows[1]["id"]) != "1050" {
+		t.Fatalf("expected t_seed_2 ids 1000, 1050; got %+v", res2.Rows)
+	}
 }

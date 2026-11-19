@@ -15,6 +15,61 @@ import (
 // SubqueryExecutor is a callback function to evaluate nested subqueries.
 type SubqueryExecutor func(sql string) ([]map[string]any, []string, error)
 
+// ExprHasSubquery reports whether an expression AST contains any subquery nodes
+// (ScalarSubqueryExpr, ExistsExpr, QuantifiedComparisonExpr, or InExpr with Query).
+func ExprHasSubquery(expr Expr) bool {
+	if expr == nil {
+		return false
+	}
+	switch e := expr.(type) {
+	case *ScalarSubqueryExpr, *ExistsExpr, *QuantifiedComparisonExpr:
+		return true
+	case *InExpr:
+		if e.Query != nil {
+			return true
+		}
+		for _, itm := range e.List {
+			if ExprHasSubquery(itm) {
+				return true
+			}
+		}
+		return ExprHasSubquery(e.Expr)
+	case *BinaryExpr:
+		return ExprHasSubquery(e.Left) || ExprHasSubquery(e.Right)
+	case *UnaryExpr:
+		return ExprHasSubquery(e.Expr)
+	case *CastExpr:
+		return ExprHasSubquery(e.Expr)
+	case *CaseExpr:
+		if ExprHasSubquery(e.Operand) || ExprHasSubquery(e.Else) {
+			return true
+		}
+		for _, b := range e.Whens {
+			if ExprHasSubquery(b.Condition) || ExprHasSubquery(b.Result) {
+				return true
+			}
+		}
+		return false
+	case *FunctionCallExpr:
+		for _, a := range e.Args {
+			if ExprHasSubquery(a) {
+				return true
+			}
+		}
+		return false
+	case *BetweenExpr:
+		return ExprHasSubquery(e.Expr) || ExprHasSubquery(e.Low) || ExprHasSubquery(e.High)
+	case *LikeExpr:
+		return ExprHasSubquery(e.Expr) || ExprHasSubquery(e.Pattern) || ExprHasSubquery(e.Escape)
+	case *CollateExpr:
+		return ExprHasSubquery(e.Expr)
+	case *IsNullExpr:
+		return ExprHasSubquery(e.Expr)
+	default:
+		return false
+	}
+}
+
 // EvalBoolExpr evaluates an AST Expr in a boolean context against a row map.
 func EvalBoolExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) bool {
 	if expr == nil {
