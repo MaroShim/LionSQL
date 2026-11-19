@@ -417,7 +417,7 @@
 | `DONE` | **`PERF-OCC-FLAT-DECODE-1`** |  | Storage | P2 | FlatRecord 스캔 디코딩 할당 최적화 (Option A: SSO 2중 할당 제거 및 Arena 슬랩 풀링) |  |  |
 | `SPEC-OUT` | **`PERF-OCC-INSTANT-DROP-COL-1`** | `Spec-Out` | Storage | P2 | In-Memory OCC FlatRecordLayout 컬럼 가상 스킵 마스킹을 통한 Instant DROP COLUMN (O(1) DDL) 지원 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`PERF-OCC-ZERO-LOCK-1`** | `Spec-Out` | Storage | P3 | In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 영구 기각 (Spec-Out) | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-OPT-AGGREGATE-GROUP-SLICES-1`** | `1` | --domain | P2 | AggregateIterator 그룹당 9개 map 할당을 고정 슬라이스로 전환 (P1) | [`--prio`](--prio) |  |
+| `DONE` | **`PERF-OPT-AGGREGATE-GROUP-SLICES-1`** | `1` | --domain | P2 | AggregateIterator 그룹당 9개 map 할당을 고정 슬라이스로 전환 (P1) | [`--prio`](--prio) |  |
 | `DONE` | **`PERF-OPT-FILTER-PROJECT-EVALMAP-1`** | `1` | --domain | P2 | Filter/Project 무조건 ToEvalMap() 및 Materialize() 지연화로 불필요한 디코딩/할당 제거 (P0) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-HASH-JOIN-INT-FASTPATH-1`** | `2` | --domain | P2 | HashJoinIterator 정수 키 Fast-Path 및 키 인덱스 사전 바인딩 (P3) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-PATINDEX-REGEX-CACHE-1`** | `3` | --domain | P2 | PATINDEX 등 내장 함수 정규식 컴파일 결과 LRU/RWMutex 캐싱 (P5) | [`--prio`](--prio) |  |
@@ -4230,8 +4230,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] AggregateIterator 그룹당 9개 map 할당을 고정 슬라이스로 전환 (P1) `PERF-OPT-AGGREGATE-GROUP-SLICES-1`
-- **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-19 01:27:15
+### [DONE] AggregateIterator 그룹당 9개 map 할당을 고정 슬라이스로 전환 (P1) `PERF-OPT-AGGREGATE-GROUP-SLICES-1`
+- **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-19 01:37:54
 - **Milestone**: `1`
 - **Plan Doc**: [`--prio`](--prio)
 

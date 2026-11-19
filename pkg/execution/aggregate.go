@@ -63,33 +63,123 @@ type strOrderItem struct {
 type groupAccumulator struct {
 	groupTuple Tuple
 	groupMask  uint32
-	counts     map[int]int64
-	sums       map[int]float64
-	decSums    map[int]storage.Decimal
-	isDecimal  map[int]bool
-	mins       map[int]any
-	maxs       map[int]any
-	values     map[int][]float64
-	strLists   map[int][]string
-	strOrders  map[int][]strOrderItem
-	tDigests   map[int]*TDigest
-	distincts  map[int]map[string]struct{}
+	counts     []int64
+	sums       []float64
+	decSums    []storage.Decimal
+	isDecimal  []bool
+	mins       []any
+	maxs       []any
+	values     [][]float64
+	strLists   [][]string
+	strOrders  [][]strOrderItem
+	tDigests   []*TDigest
+	distincts  []map[string]struct{}
 }
 
 // AggregateIterator evaluates GROUP BY, aggregate functions (COUNT, SUM, AVG, MIN, MAX), and HAVING filters.
 type AggregateIterator struct {
-	child       Iterator
-	groupKeys   []string
-	groupByMod  proc.GroupByModifier
-	projections  []string
-	havingCond   string
-	parsedHaving proc.Expr
-	fields       []aggField
-	tuples      []Tuple
-	idx         int
-	schema      []string
-	colIndexMap *ColumnIndexMap
-	arena       *storage.Arena
+	child         Iterator
+	groupKeys     []string
+	groupByMod    proc.GroupByModifier
+	projections   []string
+	havingCond    string
+	parsedHaving  proc.Expr
+	fields        []aggField
+	tuples        []Tuple
+	idx           int
+	schema        []string
+	colIndexMap   *ColumnIndexMap
+	arena         *storage.Arena
+	groupKeyIdx   []int
+	needCounts    bool
+	needSums      bool
+	needMins      bool
+	needMaxs      bool
+	needValues    bool
+	needStrLists  bool
+	needStrOrders bool
+	needTDigests  bool
+	needDistincts bool
+}
+
+func (a *AggregateIterator) initAccumulatorNeeds() {
+	a.needCounts = false
+	a.needSums = false
+	a.needMins = false
+	a.needMaxs = false
+	a.needValues = false
+	a.needStrLists = false
+	a.needStrOrders = false
+	a.needTDigests = false
+	a.needDistincts = false
+
+	for _, f := range a.fields {
+		if f.isDistinct {
+			a.needDistincts = true
+		}
+		switch f.fnType {
+		case aggCount:
+			a.needCounts = true
+		case aggSum, aggTotal, aggAvg:
+			a.needCounts = true
+			a.needSums = true
+		case aggMin:
+			a.needMins = true
+		case aggMax:
+			a.needMaxs = true
+		case aggGroupConcat:
+			a.needCounts = true
+			a.needStrLists = true
+			if f.orderByExpr != nil {
+				a.needStrOrders = true
+			}
+		case aggPercentileCont, aggPercentileDisc, aggMedian:
+			a.needCounts = true
+			a.needValues = true
+		case aggApproxPercentile:
+			a.needCounts = true
+			a.needValues = true
+			a.needTDigests = true
+		}
+	}
+}
+
+func (a *AggregateIterator) newGroupAccumulator(tuple Tuple, mask uint32) *groupAccumulator {
+	n := len(a.fields)
+	acc := &groupAccumulator{
+		groupTuple: tuple,
+		groupMask:  mask,
+	}
+	if a.needCounts {
+		acc.counts = make([]int64, n)
+	}
+	if a.needSums {
+		acc.sums = make([]float64, n)
+		acc.decSums = make([]storage.Decimal, n)
+		acc.isDecimal = make([]bool, n)
+	}
+	if a.needMins {
+		acc.mins = make([]any, n)
+	}
+	if a.needMaxs {
+		acc.maxs = make([]any, n)
+	}
+	if a.needValues {
+		acc.values = make([][]float64, n)
+	}
+	if a.needStrLists {
+		acc.strLists = make([][]string, n)
+	}
+	if a.needStrOrders {
+		acc.strOrders = make([][]strOrderItem, n)
+	}
+	if a.needTDigests {
+		acc.tDigests = make([]*TDigest, n)
+	}
+	if a.needDistincts {
+		acc.distincts = make([]map[string]struct{}, n)
+	}
+	return acc
 }
 
 // SetArena configures an optional memory arena for aggregate result tuples.
@@ -652,6 +742,23 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 	a.tuples = nil
 	a.idx = 0
 
+	a.initAccumulatorNeeds()
+	if a.child != nil && len(a.groupKeys) > 0 {
+		schema := a.child.Schema()
+		a.groupKeyIdx = make([]int, len(a.groupKeys))
+		for i, gk := range a.groupKeys {
+			cleanGk := strings.ToLower(sqlutil.CleanIdentifier(gk))
+			idx := -1
+			for ci, col := range schema {
+				if strings.ToLower(sqlutil.CleanIdentifier(col)) == cleanGk {
+					idx = ci
+					break
+				}
+			}
+			a.groupKeyIdx[i] = idx
+		}
+	}
+
 	groups := make(map[string]*groupAccumulator)
 	var groupOrder []string
 
@@ -695,17 +802,7 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 
 	if len(a.groupKeys) == 0 {
 		// Fast-path: Global aggregation (no GROUP BY). Avoids string formatting and map hashing per tuple.
-		globalAcc := &groupAccumulator{
-			counts:    make(map[int]int64),
-			sums:      make(map[int]float64),
-			decSums:   make(map[int]storage.Decimal),
-			isDecimal: make(map[int]bool),
-			mins:      make(map[int]any),
-			maxs:      make(map[int]any),
-			values:    make(map[int][]float64),
-			strLists:  make(map[int][]string),
-			tDigests:  make(map[int]*TDigest),
-		}
+		globalAcc := a.newGroupAccumulator(Tuple{}, 0)
 		groups[""] = globalAcc
 		groupOrder = append(groupOrder, "")
 
@@ -768,8 +865,26 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 					gk.WriteByte('\x01')
 					for i, k := range a.groupKeys {
 						if (mask & (1 << i)) != 0 {
-							val, _ := lookupVal(tuple, k)
-							gk.WriteString(fmt.Sprintf("%v", val))
+							var val any
+							if a.groupKeyIdx != nil && i < len(a.groupKeyIdx) && a.groupKeyIdx[i] >= 0 && a.groupKeyIdx[i] < len(tuple.Values) {
+								val = tuple.Values[a.groupKeyIdx[i]]
+							} else {
+								val, _ = lookupVal(tuple, k)
+							}
+							switch v := val.(type) {
+							case nil:
+								gk.WriteString("\x00NULL")
+							case int64:
+								gk.WriteString(strconv.FormatInt(v, 10))
+							case int:
+								gk.WriteString(strconv.Itoa(v))
+							case string:
+								gk.WriteString(v)
+							case float64:
+								gk.WriteString(strconv.FormatFloat(v, 'g', -1, 64))
+							default:
+								gk.WriteString(fmt.Sprintf("%v", val))
+							}
 						}
 						gk.WriteByte('\x00')
 					}
@@ -777,19 +892,7 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 
 					acc, exists := groups[groupKeyStr]
 					if !exists {
-						acc = &groupAccumulator{
-							groupTuple: tuple,
-							groupMask:  mask,
-							counts:     make(map[int]int64),
-							sums:       make(map[int]float64),
-							decSums:    make(map[int]storage.Decimal),
-							isDecimal:  make(map[int]bool),
-							mins:       make(map[int]any),
-							maxs:       make(map[int]any),
-							values:     make(map[int][]float64),
-							strLists:   make(map[int][]string),
-							tDigests:   make(map[int]*TDigest),
-						}
+						acc = a.newGroupAccumulator(tuple, mask)
 						groups[groupKeyStr] = acc
 						groupOrder = append(groupOrder, groupKeyStr)
 					}
@@ -1007,7 +1110,8 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 			case aggApproxPercentile:
 				if acc.counts[fIdx] == 0 {
 					val = nil
-				} else if td, ok := acc.tDigests[fIdx]; ok {
+				} else if len(acc.tDigests) > fIdx && acc.tDigests[fIdx] != nil {
+					td := acc.tDigests[fIdx]
 					var res float64
 					if len(acc.values[fIdx]) <= 10000 {
 						sort.Float64s(acc.values[fIdx])
@@ -1154,10 +1258,10 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 
 		if f.isDistinct {
 			if acc.distincts == nil {
-				acc.distincts = make(map[int]map[string]struct{})
+				acc.distincts = make([]map[string]struct{}, len(a.fields))
 			}
-			set, exists := acc.distincts[fIdx]
-			if !exists {
+			set := acc.distincts[fIdx]
+			if set == nil {
 				set = make(map[string]struct{})
 				acc.distincts[fIdx] = set
 			}
@@ -1220,11 +1324,11 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 			}
 			acc.counts[fIdx]++
 		case aggMin:
-			if cur, ok := acc.mins[fIdx]; !ok || CompareValues(val, cur) < 0 {
+			if acc.mins[fIdx] == nil || CompareValues(val, acc.mins[fIdx]) < 0 {
 				acc.mins[fIdx] = val
 			}
 		case aggMax:
-			if cur, ok := acc.maxs[fIdx]; !ok || CompareValues(val, cur) > 0 {
+			if acc.maxs[fIdx] == nil || CompareValues(val, acc.maxs[fIdx]) > 0 {
 				acc.maxs[fIdx] = val
 			}
 		case aggGroupConcat:
@@ -1233,7 +1337,7 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 				acc.strLists[fIdx] = append(acc.strLists[fIdx], strVal)
 				if f.orderByExpr != nil {
 					if acc.strOrders == nil {
-						acc.strOrders = make(map[int][]strOrderItem)
+						acc.strOrders = make([][]strOrderItem, len(a.fields))
 					}
 					ordVal, ok := EvalTupleExpr(tuple, f.orderByExpr)
 					if !ok {
@@ -1250,8 +1354,11 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 			}
 		case aggApproxPercentile:
 			if fVal, ok := toFloat64(val); ok {
-				td, exists := acc.tDigests[fIdx]
-				if !exists {
+				if acc.tDigests == nil {
+					acc.tDigests = make([]*TDigest, len(a.fields))
+				}
+				td := acc.tDigests[fIdx]
+				if td == nil {
 					td = NewTDigest(100)
 					acc.tDigests[fIdx] = td
 				}
