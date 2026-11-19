@@ -188,3 +188,109 @@ END;`,
 		})
 	}
 }
+
+// TestEngine_FromPartsAllSixValidation verifies all 6 *FROMPARTS constructors:
+// DATEFROMPARTS, TIMEFROMPARTS, DATETIMEFROMPARTS, SMALLDATETIMEFROMPARTS,
+// DATETIME2FROMPARTS, and DATETIMEOFFSETFROMPARTS (R3-22, R4-10, R5-083, R5-084).
+func TestEngine_FromPartsAllSixValidation(t *testing.T) {
+	coord, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	tests := []struct {
+		name      string
+		sql       string
+		expectVal string
+		expectErr string
+	}{
+		{
+			name:      "DateFromParts_Valid",
+			sql:       "SELECT DATEFROMPARTS(2026, 2, 28) AS res;",
+			expectVal: "2026-02-28",
+		},
+		{
+			name:      "DateFromParts_InvalidFeb30_R3_22",
+			sql:       "SELECT DATEFROMPARTS(2026, 2, 30) AS res;",
+			expectErr: "Cannot construct data type date",
+		},
+		{
+			name:      "TimeFromParts_Valid",
+			sql:       "SELECT TIMEFROMPARTS(14, 30, 15, 5, 2) AS res;",
+			expectVal: "14:30:15.05",
+		},
+		{
+			name:      "TimeFromParts_InvalidHour25_R5_083",
+			sql:       "SELECT TIMEFROMPARTS(25, 0, 0, 0, 0) AS res;",
+			expectErr: "Cannot construct data type time",
+		},
+		{
+			name:      "DateTimeFromParts_Valid",
+			sql:       "SELECT DATETIMEFROMPARTS(2026, 11, 19, 14, 30, 0, 123) AS res;",
+			expectVal: "2026-11-19 14:30:00.123",
+		},
+		{
+			name:      "DateTimeFromParts_InvalidHour25_R4_10",
+			sql:       "SELECT DATETIMEFROMPARTS(2026, 11, 19, 25, 0, 0, 0) AS res;",
+			expectErr: "Cannot construct data type datetime",
+		},
+		{
+			name:      "SmallDateTimeFromParts_Valid",
+			sql:       "SELECT SMALLDATETIMEFROMPARTS(2026, 11, 19, 14, 30) AS res;",
+			expectVal: "2026-11-19 14:30:00",
+		},
+		{
+			name:      "SmallDateTimeFromParts_InvalidFeb30_R5_084",
+			sql:       "SELECT SMALLDATETIMEFROMPARTS(2026, 2, 30, 0, 0) AS res;",
+			expectErr: "Cannot construct data type smalldatetime",
+		},
+		{
+			name:      "DateTime2FromParts_Valid",
+			sql:       "SELECT DATETIME2FROMPARTS(2026, 11, 19, 14, 30, 45, 50, 3) AS res;",
+			expectVal: "2026-11-19 14:30:45.050",
+		},
+		{
+			name:      "DateTime2FromParts_InvalidFeb30",
+			sql:       "SELECT DATETIME2FROMPARTS(2026, 2, 30, 14, 30, 45, 0, 0) AS res;",
+			expectErr: "Cannot construct data type datetime2",
+		},
+		{
+			name:      "DateTime2FromParts_InvalidFractionForPrecision",
+			sql:       "SELECT DATETIME2FROMPARTS(2026, 11, 19, 14, 30, 45, 500, 2) AS res;",
+			expectErr: "Cannot construct data type datetime2",
+		},
+		{
+			name:      "DateTimeOffsetFromParts_Valid",
+			sql:       "SELECT DATETIMEOFFSETFROMPARTS(2026, 11, 19, 14, 30, 45, 5, 9, 0, 2) AS res;",
+			expectVal: "2026-11-19 14:30:45.05 +09:00",
+		},
+		{
+			name:      "DateTimeOffsetFromParts_InvalidOffset",
+			sql:       "SELECT DATETIMEOFFSETFROMPARTS(2026, 11, 19, 14, 30, 45, 0, 15, 0, 0) AS res;",
+			expectErr: "Cannot construct data type datetimeoffset",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := coord.ExecuteSQL(tt.sql)
+			if tt.expectErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got success: %+v", tt.expectErr, res)
+				}
+				if !strings.Contains(err.Error(), tt.expectErr) {
+					t.Fatalf("expected error containing %q, got: %v", tt.expectErr, err)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("expected success, got error: %v", err)
+				}
+				if len(res.Rows) != 1 {
+					t.Fatalf("expected 1 row, got %d", len(res.Rows))
+				}
+				got := res.Rows[0]["res"]
+				if got != tt.expectVal {
+					t.Fatalf("expected %q, got %q", tt.expectVal, got)
+				}
+			}
+		})
+	}
+}
