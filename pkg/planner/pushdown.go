@@ -66,12 +66,58 @@ func ExtractColumnRefs(cond string) []ColumnRef {
 		tokens = append(tokens, tok)
 	}
 
+	convertDepth := -1
+	parenDepth := 0
+
 	for i := 0; i < len(tokens); i++ {
 		tok := tokens[i]
+
+		if tok.Type == proc.TokenLParen {
+			parenDepth++
+			continue
+		} else if tok.Type == proc.TokenRParen {
+			if convertDepth == parenDepth {
+				convertDepth = -1
+			}
+			parenDepth--
+			continue
+		}
+
+		if tok.Type == proc.TokenConvert || tok.Type == proc.TokenTryConvert {
+			// In CONVERT(data_type, expr [, style]), the first argument before comma is a type
+			convertDepth = parenDepth + 1
+			continue
+		}
+
+		if convertDepth == parenDepth && tok.Type == proc.TokenComma {
+			// Reached the end of the data_type argument in CONVERT(...)
+			convertDepth = -1
+			continue
+		}
+
 		if tok.Type == proc.TokenIdent {
-			// If followed by '(', it's a function call (e.g. UPPER, COUNT), not a column reference
+			// If followed by '(', it's a function call (e.g. UPPER, COUNT) or type with params (e.g. VARCHAR(50))
 			if i+1 < len(tokens) && tokens[i+1].Type == proc.TokenLParen {
 				continue
+			}
+
+			// If inside the first argument of CONVERT/TRY_CONVERT, it's a data type
+			if convertDepth == parenDepth {
+				continue
+			}
+
+			// If preceded by AS, ::, or COLLATE, it's an alias, cast type, or collation name
+			if i > 0 {
+				prev := tokens[i-1].Type
+				if prev == proc.TokenAs || prev == proc.TokenDoubleColon || prev == proc.TokenCollate {
+					continue
+				}
+				// Also check multi-word type continuation, e.g. DOUBLE PRECISION or CHARACTER VARYING
+				if i > 1 && (tokens[i-2].Type == proc.TokenAs || tokens[i-2].Type == proc.TokenDoubleColon) {
+					if sqlutil.IsSQLTypeName(tokens[i-1].Literal) && sqlutil.IsSQLTypeName(tok.Literal) {
+						continue
+					}
+				}
 			}
 
 			lit := cleanIdent(tok.Literal)

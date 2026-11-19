@@ -257,6 +257,9 @@ func (s *SortIterator) Open(ctx context.Context) (retErr error) {
 							qualified = ref.TableOrAlias + "." + col
 						}
 						if _, ok2 := childIndexMap.Index(qualified); !ok2 {
+							if sqlutil.IsSQLTypeName(col) {
+								continue
+							}
 							return fmt.Errorf("column %q does not exist", col)
 						}
 					}

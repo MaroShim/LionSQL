@@ -360,7 +360,7 @@
 | `DONE` | **`FIX-UPDATE-SNAPSHOT-COLUMN-SWAP-1`** | `1.0-GA` | Engine | P2 | UPDATE 다중 컬럼 대입 시 원본 튜플 스냅샷 기반 평가(SET a = b, b = a 원자적 스왑 보장) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-VM-HIDDEN-ROWID-1`** |  | Engine | P1 | PK 없는 테이블에 대한 VDBE VM OpInsert 실행 시 숨은 _row_id 자동 발번 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-WIN-NEGATIVE-DEFAULT-1`** | `1.0-GA` | Engine | P2 | LAG/LEAD 윈도우 함수 음수 기본값 인자(LEAD(val, 1, -1)) 파싱 시 0 반환 오류 수정 | [`1.0-GA`](1.0-GA) |  |
-| `PENDING` | **`FIX-WINDOW-ARG-CAST-VALIDATION-1`** |  | 1 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
+| `DONE` | **`FIX-WINDOW-ARG-CAST-VALIDATION-1`** |  | 1 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-WINDOW-ARG-INVALID-COLUMN-1`** | `1.0-GA` | Execution | P2 | 윈도우 함수 내부 인자 비유효 컬럼 시맨틱 검증 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WINDOW-AVG-SLIDING-FRAME-1`** |  | Engine | P2 | AVG(...) OVER (ORDER BY ...) 슬라이딩 프레임 누적 평균 계산 결함 수정 | [`notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md`](notes/20261118_UPDATE_FROM_JOIN_PLAN.ko.md) |  |
 | `DONE` | **`FIX-WINDOW-FIRST-LAST-VALUE-1`** |  | Execution | P1 | FIRST_VALUE 및 LAST_VALUE 윈도우 함수 구현 (사일런트 NULL 해결) |  |  |
@@ -3705,8 +3705,8 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
-### [PENDING] Engine `FIX-WINDOW-ARG-CAST-VALIDATION-1`
-- **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-19 00:47:09
+### [DONE] Engine `FIX-WINDOW-ARG-CAST-VALIDATION-1`
+- **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-19 00:53:14
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
 
 ---

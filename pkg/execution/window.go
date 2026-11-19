@@ -12,6 +12,7 @@ import (
 
 	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 )
 
 // ErrWindowWorkMemExceeded is returned when the window function materialization exceeds work_mem.
@@ -260,6 +261,9 @@ func (w *WindowIterator) validateWindowDef(winDef planner.WindowDef, indexMap *C
 						qualified = ref.TableOrAlias + "." + col
 					}
 					if _, ok2 := indexMap.Index(qualified); !ok2 {
+						if sqlutil.IsSQLTypeName(col) {
+							continue
+						}
 						return fmt.Errorf("column %q does not exist", col)
 					}
 				}

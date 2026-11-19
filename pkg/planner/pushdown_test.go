@@ -36,6 +36,34 @@ func TestPushdown_ExtractColumnRefs(t *testing.T) {
 			cond:     "1 = 1",
 			expected: nil,
 		},
+		{
+			cond:     "CAST(id AS INT) > 10",
+			expected: []planner.ColumnRef{{TableOrAlias: "", Column: "id"}},
+		},
+		{
+			cond:     "TRY_CAST(u.age AS BIGINT) IS NOT NULL",
+			expected: []planner.ColumnRef{{TableOrAlias: "u", Column: "age"}},
+		},
+		{
+			cond:     "CONVERT(INT, id) = 5",
+			expected: []planner.ColumnRef{{TableOrAlias: "", Column: "id"}},
+		},
+		{
+			cond:     "TRY_CONVERT(VARCHAR(50), o.order_id) = '100'",
+			expected: []planner.ColumnRef{{TableOrAlias: "o", Column: "order_id"}},
+		},
+		{
+			cond:     "val::FLOAT > 3.14",
+			expected: []planner.ColumnRef{{TableOrAlias: "", Column: "val"}},
+		},
+		{
+			cond:     "CAST(amount AS DOUBLE PRECISION) < 1000.0",
+			expected: []planner.ColumnRef{{TableOrAlias: "", Column: "amount"}},
+		},
+		{
+			cond:     "name = 'Alice' COLLATE Latin1_General_BIN",
+			expected: []planner.ColumnRef{{TableOrAlias: "", Column: "name"}},
+		},
 	}
 
 	for _, tt := range tests {
