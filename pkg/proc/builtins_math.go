@@ -1,6 +1,7 @@
 package proc
 
 import (
+	"fmt"
 	"math"
 	"math/bits"
 	mathrand "math/rand/v2"
@@ -19,6 +20,35 @@ func isMathBuiltin(name string) bool {
 	default:
 		return false
 	}
+}
+
+func evalMathBuiltinWithErr(upper string, args []storage.Value) (storage.Value, error) {
+	switch upper {
+	case "SQRT":
+		if len(args) > 0 && !args[0].IsNull {
+			if n, ok := toFloatNum(args[0]); ok && n < 0 {
+				return storage.NullValue(storage.TypeFloat), fmt.Errorf("Msg 3623, Level 16, State 1: An invalid floating point operation occurred.")
+			}
+		}
+	case "LOG":
+		if len(args) > 0 && !args[0].IsNull {
+			if n, ok := toFloatNum(args[0]); ok && n <= 0 {
+				return storage.NullValue(storage.TypeFloat), fmt.Errorf("Msg 3623, Level 16, State 1: An invalid floating point operation occurred.")
+			}
+		}
+		if len(args) >= 2 && !args[1].IsNull {
+			if base, ok := toFloatNum(args[1]); ok && (base <= 0 || base == 1) {
+				return storage.NullValue(storage.TypeFloat), fmt.Errorf("Msg 3623, Level 16, State 1: An invalid floating point operation occurred.")
+			}
+		}
+	case "LOG10":
+		if len(args) > 0 && !args[0].IsNull {
+			if n, ok := toFloatNum(args[0]); ok && n <= 0 {
+				return storage.NullValue(storage.TypeFloat), fmt.Errorf("Msg 3623, Level 16, State 1: An invalid floating point operation occurred.")
+			}
+		}
+	}
+	return evalMathBuiltin(upper, args), nil
 }
 
 func evalMathBuiltin(upper string, args []storage.Value) storage.Value {

@@ -1557,7 +1557,10 @@ func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[str
 		return nil, fmt.Errorf("unknown scalar function %s", name)
 	}
 
-	res := EvalBuiltin(name, stArgs)
+	res, err := EvalBuiltinWithErr(name, stArgs)
+	if err != nil {
+		return nil, err
+	}
 	if res.IsNull {
 		return nil, nil
 	}

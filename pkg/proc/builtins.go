@@ -33,37 +33,43 @@ func HasScalarFunction(name string) bool {
 	return ok
 }
 
-// EvalBuiltin evaluates standard T-SQL scalar functions and registered native Go scalar UDFs.
-func EvalBuiltin(name string, args []storage.Value) storage.Value {
+// EvalBuiltinWithErr evaluates standard T-SQL scalar functions and returns an error on domain or parameter errors.
+func EvalBuiltinWithErr(name string, args []storage.Value) (storage.Value, error) {
 	upper := strings.ToUpper(cleanBuiltinName(name))
 
 	// 1. Fast-path lookup for registered native Go scalar functions
 	if val, ok := customScalarFunctions.Load(upper); ok {
 		if fn, isFn := val.(ScalarFunction); isFn && fn != nil {
-			return fn(args)
+			return fn(args), nil
 		}
 	}
 
 	if isDateBuiltin(upper) {
-		return evalDateBuiltin(upper, args)
+		return evalDateBuiltin(upper, args), nil
 	}
 	if isStringBuiltin(upper) {
-		return evalStringBuiltin(upper, args)
+		return evalStringBuiltinWithErr(upper, args)
 	}
 	if isMathBuiltin(upper) {
-		return evalMathBuiltin(upper, args)
+		return evalMathBuiltinWithErr(upper, args)
 	}
 	if isJSONBuiltin(upper) {
-		return evalJSONBuiltin(upper, args)
+		return evalJSONBuiltin(upper, args), nil
 	}
 	if isSysBuiltin(upper) {
-		return evalSysBuiltin(upper, args)
+		return evalSysBuiltin(upper, args), nil
 	}
 
 	if len(args) > 0 {
-		return args[0]
+		return args[0], nil
 	}
-	return storage.NullValue(storage.TypeUnknown)
+	return storage.NullValue(storage.TypeUnknown), nil
+}
+
+// EvalBuiltin evaluates standard T-SQL scalar functions and registered native Go scalar UDFs.
+func EvalBuiltin(name string, args []storage.Value) storage.Value {
+	v, _ := EvalBuiltinWithErr(name, args)
+	return v
 }
 
 // IsBuiltinFunction reports whether the named function is a built-in scalar function.
@@ -132,6 +138,30 @@ func toFloatNum(v storage.Value) (float64, bool) {
 	case storage.TypeVarChar:
 		f, err := strconv.ParseFloat(strings.TrimSpace(v.SVal), 64)
 		return f, err == nil
+	case storage.TypeBool:
+		if v.BVal {
+			return 1, true
+		}
+		return 0, true
+	default:
+		return 0, false
+	}
+}
+
+func toIntNum(v storage.Value) (int64, bool) {
+	if v.IsNull {
+		return 0, false
+	}
+	switch v.Type {
+	case storage.TypeInt:
+		return v.IVal, true
+	case storage.TypeFloat, storage.TypeReal:
+		return int64(v.FVal), true
+	case storage.TypeDecimal:
+		return v.Decimal().Int64(), true
+	case storage.TypeVarChar:
+		i, err := strconv.ParseInt(strings.TrimSpace(v.SVal), 10, 64)
+		return i, err == nil
 	case storage.TypeBool:
 		if v.BVal {
 			return 1, true

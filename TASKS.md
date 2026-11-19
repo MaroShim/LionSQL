@@ -293,6 +293,7 @@
 | `PENDING` | **`FIX-INT-ARITHMETIC-OVERFLOW-ERROR-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `PENDING` | **`FIX-LEFT-NEGATIVE-LENGTH-ERROR-1`** |  | 3 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-LEXER-HEX-BINARY-LITERAL-1`** |  | Parser | P2 | Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `DONE` | **`FIX-MATH-DOMAIN-ERROR-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `PENDING` | **`FIX-MATH-DOMAIN-ERROR-POLICY-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-MEMENGINE-DDL-WAL-FAILCLOSED-1`** | `1` | --domain | P2 | DDL WAL 기록 실패 시 인메모리 카탈로그 복구 및 선기록 패턴 적용 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-MEMENGINE-WAL-FSYNC-ROLLBACK-1`** | `1.0-GA` | Storage | P2 | MemEngine WAL fsync 실패 시 메모리 데이터 잔류(Phantom Commit) 롤백 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
@@ -305,6 +306,7 @@
 | `DONE` | **`FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`** | `1.0-GA` | Storage | P1 | PITR 기준 백업 시점/LSN 불변성 검증, 백업-WAL LSN 경계 필터링 및 LSN 연속성(Gap) 누락 검출 보완 | [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md) |  |
 | `DONE` | **`FIX-PITR-WAL-COMPOSITE-PK-1`** | `1.0-GA` | Storage | P2 | PITR WAL 재생 시 복합 PK 테이블 UPDATE/DELETE 복구 유실 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-PROC-CTE-EPHEMERAL-DISPATCH-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 내부 CTE(WITH) EphemeralTable 바인딩 연동 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `DONE` | **`FIX-PROC-DUPLICATE-VARIABLE-DECLARATION-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-LOCAL-TEMP-TABLE-LIFECYCLE-1`** | `v0.94.0` | Engine | P2 | 프로시저 로컬 #temp 테이블 프로시저 종료 시 자동 파기 훅 구현 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `PENDING` | **`FIX-PROC-PARAM-SHADOWING-DUPLICATE-CHECK-1`** | `v0.94.0` | Engine | P2 | 프로시저 매개변수와 동일 이름 로컬 변수 재선언 차단(Msg 134) | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
@@ -325,6 +327,7 @@
 | `DONE` | **`FIX-SQL-TRIM-BOTH-FROM-PARSING-1`** |  | Engine | P2 | ANSI SQL TRIM(BOTH/LEADING/TRAILING FROM) 문법 파싱 및 평가 지원 |  |  |
 | `DONE` | **`FIX-SQLUTIL-PARSER-1`** |  | Engine | P2 | pkg/sqlutil SQL 파서/정규화기 결함 보강 및 렉서 공통화 | [`notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md`](notes/plans/SQL_PARSER_HARDENING_PLAN.ko.md) |  |
 | `DONE` | **`FIX-STR-COMPARE-CANONICAL-STRIP-1`** | `1.0-GA` | Execution | P1 | 문자열 값 비교 시 CanonicalIdent 대괄호 무단 제거 방지 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-STRING-FUNC-NEGATIVE-LENGTH-ERROR-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-SUBQUERY-WILDCARD-PROJECTION-LEAK-1`** | `1.0-GA` | Planner | P1 | IN/NOT IN 서브쿼리 SEMI/ANTI 조인 시 SELECT * 와일드카드 프로젝션 오염 방지 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-SUBSTRING-NONPOSITIVE-POS-1`** | `1.0-GA` | Engine | P2 | SUBSTRING 2인자 pos <= 0 비양수 시작 오프셋 문자열 끝 절삭 결함 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-SUBSTRING-TWO-ARGUMENTS-1`** |  | Engine | P2 | SUBSTRING/SUBSTR 2인자 표준 호출(start부터 끝까지) 지원 |  |  |
@@ -3262,6 +3265,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] --domain `FIX-MATH-DOMAIN-ERROR-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 04:01:12
+- **Milestone**: `--prio`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
 ### [PENDING] Engine `FIX-MATH-DOMAIN-ERROR-POLICY-1`
 - **Domain**: 2 | **Priority**: P2 | **Updated**: 2026-11-19 00:47:09
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
@@ -3352,6 +3362,13 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 02:36:51
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
+
+---
+
+### [DONE] --domain `FIX-PROC-DUPLICATE-VARIABLE-DECLARATION-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 04:01:12
+- **Milestone**: `--prio`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---
 
@@ -3479,6 +3496,13 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 ### [DONE] 문자열 값 비교 시 CanonicalIdent 대괄호 무단 제거 방지 `FIX-STR-COMPARE-CANONICAL-STRIP-1`
 - **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-18 09:44:27
 - **Milestone**: `1.0-GA`
+- **Plan Doc**: [`1.0-GA`](1.0-GA)
+
+---
+
+### [DONE] --domain `FIX-STRING-FUNC-NEGATIVE-LENGTH-ERROR-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 04:01:12
+- **Milestone**: `--prio`
 - **Plan Doc**: [`1.0-GA`](1.0-GA)
 
 ---

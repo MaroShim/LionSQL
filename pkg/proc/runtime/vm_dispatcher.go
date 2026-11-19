@@ -2233,7 +2233,14 @@ vmLoop:
 				f.regs[inst.A] = proc.EvalBuiltin(callData.Name, args)
 			}
 		} else {
-			f.regs[inst.A] = proc.EvalBuiltin(callData.Name, args)
+			res, err := proc.EvalBuiltinWithErr(callData.Name, args)
+			if err != nil {
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
+			}
+			f.regs[inst.A] = res
 		}
 
 	case proc.OpCallUDF:

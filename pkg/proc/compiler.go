@@ -43,6 +43,7 @@ type Compiler struct {
 	maxRegisters    int32
 	constMap        map[string]int32
 	varNames        map[string]bool
+	declaredVars    map[string]bool
 	varSlots        map[string]int32
 	varTypes        map[string]storage.DataType
 	slotNames       []string
@@ -64,6 +65,7 @@ func NewCompiler() *Compiler {
 		},
 		constMap:        make(map[string]int32),
 		varNames:        make(map[string]bool),
+		declaredVars:    make(map[string]bool),
 		varSlots:        make(map[string]int32),
 		varTypes:        make(map[string]storage.DataType),
 		slotNames:       make([]string, 0),
@@ -247,6 +249,11 @@ func CompileProcedure(stmt *CreateProcStmt) (*Program, error) {
 
 	for _, p := range stmt.Params {
 		varName := cleanVarName(p.Name)
+		lower := strings.ToLower(varName)
+		if c.declaredVars[lower] {
+			return nil, fmt.Errorf("The variable name '@%s' has already been declared. Variable names must be unique within a query batch or stored procedure.", varName)
+		}
+		c.declaredVars[lower] = true
 		c.getOrAllocSlot(varName)
 		if p.Type == storage.TypeInt {
 			c.varTypes[varName] = storage.TypeInt
@@ -275,6 +282,11 @@ func CompileFunction(stmt *CreateFunctionStmt) (*Program, error) {
 
 	for _, p := range stmt.Params {
 		varName := cleanVarName(p.Name)
+		lower := strings.ToLower(varName)
+		if c.declaredVars[lower] {
+			return nil, fmt.Errorf("The variable name '@%s' has already been declared. Variable names must be unique within a query batch or stored procedure.", varName)
+		}
+		c.declaredVars[lower] = true
 		c.getOrAllocSlot(varName)
 		if p.Type == storage.TypeInt {
 			c.varTypes[varName] = storage.TypeInt
@@ -658,6 +670,11 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 
 	case *DeclareStmt:
 		varName := cleanVarName(s.Name)
+		lower := strings.ToLower(varName)
+		if c.declaredVars[lower] {
+			return fmt.Errorf("The variable name '@%s' has already been declared. Variable names must be unique within a query batch or stored procedure.", varName)
+		}
+		c.declaredVars[lower] = true
 		slot := c.getOrAllocSlot(varName)
 		if s.Type == storage.TypeInt {
 			c.varTypes[varName] = storage.TypeInt

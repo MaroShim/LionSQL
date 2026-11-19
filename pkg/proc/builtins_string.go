@@ -264,6 +264,24 @@ func isStringBuiltin(name string) bool {
 	}
 }
 
+func evalStringBuiltinWithErr(upper string, args []storage.Value) (storage.Value, error) {
+	switch upper {
+	case "LEFT", "RIGHT":
+		if len(args) >= 2 && !args[1].IsNull {
+			if n64, ok := toIntNum(args[1]); ok && n64 < 0 {
+				return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 536, Level 16, State 5: Invalid length parameter passed to the LEFT or SUBSTRING function.")
+			}
+		}
+	case "SUBSTRING", "SUBSTR":
+		if len(args) >= 3 && !args[2].IsNull {
+			if n64, ok := toIntNum(args[2]); ok && n64 < 0 {
+				return storage.NullValue(storage.TypeVarChar), fmt.Errorf("Msg 536, Level 16, State 5: Invalid length parameter passed to the LEFT or SUBSTRING function.")
+			}
+		}
+	}
+	return evalStringBuiltin(upper, args), nil
+}
+
 func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 	switch upper {
 	// 2. String Functions
