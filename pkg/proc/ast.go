@@ -1318,6 +1318,16 @@ func (s *TruncateStmt) String() string {
 	return fmt.Sprintf("TRUNCATE TABLE %s", strings.Join(s.Tables, ", "))
 }
 
+// MergeStmt represents a T-SQL MERGE statement.
+type MergeStmt struct {
+	SQL string
+}
+
+func (s *MergeStmt) stmtNode() {}
+func (s *MergeStmt) String() string {
+	return s.SQL
+}
+
 // CreateViewStmt represents CREATE [OR REPLACE|OR ALTER] VIEW [IF NOT EXISTS] <name> AS <select> or ALTER VIEW <name> AS <select>
 type CreateViewStmt struct {
 	Name        string

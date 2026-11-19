@@ -17,6 +17,7 @@ import (
 	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
 	"lionsql/pkg/replication"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 	"lionsql/pkg/tx"
@@ -161,7 +162,14 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 				cs.Vars["@"+k] = v.Interface()
 			}
 		}
-		res, err := coord.execSelect(sql, time.Now(), cs)
+		trimmed := strings.TrimSpace(sql)
+		var res *QueryResult
+		var err error
+		if sqlutil.HasPrefixKeyword(trimmed, "MERGE") {
+			res, err = coord.execMerge(trimmed, time.Now(), cs)
+		} else {
+			res, err = coord.execSelect(sql, time.Now(), cs)
+		}
 		if err != nil {
 			return nil, nil, err
 		}

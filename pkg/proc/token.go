@@ -179,9 +179,11 @@ const (
 	TokenAll             // ALL
 	TokenAny             // ANY
 	TokenSome            // SOME
+	TokenMerge           // MERGE
 )
 
 var keywords = map[string]TokenType{
+	"MERGE":         TokenMerge,
 	"WAITFOR":       TokenWaitfor,
 	"DELAY":         TokenDelay,
 	"TIME":          TokenTime,
@@ -448,6 +450,8 @@ type Token struct {
 	Raw     string
 	Line    int
 	Col     int
+	Pos     int
+	End     int
 }
 
 // IdentLiteral returns the original case-preserved lexeme when a keyword token

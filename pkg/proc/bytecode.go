@@ -99,6 +99,7 @@ const (
 	OpSelectInto
 	OpSelectAssign
 	OpTruncate
+	OpMerge
 	OpDeclareTable
 	OpCreateTable
 	OpDropTable
@@ -305,6 +306,8 @@ func (op OpCode) String() string {
 		return "SELECT_ASSIGN"
 	case OpTruncate:
 		return "TRUNCATE"
+	case OpMerge:
+		return "MERGE"
 	case OpDeclareTable:
 		return "DECLARE_TABLE"
 	case OpCreateTable:
@@ -463,6 +466,11 @@ func (d *RelQueryData) SetCachedQueryInfo(v any) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.CachedQueryInfo = v
+}
+
+// MergeData holds metadata for OpMerge execution.
+type MergeData struct {
+	SQL string
 }
 
 func (d *RelQueryData) GetCachedPlan() any {

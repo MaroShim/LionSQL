@@ -89,6 +89,8 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return p.parseDelete()
 	case TokenTruncate:
 		return p.parseTruncate()
+	case TokenMerge:
+		return p.parseMerge()
 	case TokenExec:
 		return p.parseExec()
 	case TokenGoto:
@@ -144,6 +146,24 @@ func (p *Parser) parseGoto() (Statement, error) {
 
 func (p *Parser) parseTruncate() (Statement, error) {
 	return p.ParseTruncate()
+}
+
+func (p *Parser) parseMerge() (Statement, error) {
+	startPos := p.curToken.Pos
+	endPos := p.curToken.End
+	for !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEnd) {
+		endPos = p.curToken.End
+		p.nextToken()
+	}
+	if p.curTokenIs(TokenSemicolon) {
+		endPos = p.curToken.End
+		p.nextToken() // eat ';'
+	}
+	var rawSQL string
+	if p.l != nil && startPos >= 0 && endPos <= len(p.l.input) && startPos <= endPos {
+		rawSQL = strings.TrimSpace(p.l.input[startPos:endPos])
+	}
+	return &MergeStmt{SQL: rawSQL}, nil
 }
 
 func (p *Parser) parseOpen() (Statement, error) {

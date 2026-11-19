@@ -280,7 +280,7 @@ func isReservedAfterFromOrJoin(tok TokenType) bool {
 	case TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,
 		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenFull, TokenCross, TokenOuter, TokenApply,
 		TokenOn, TokenWith, TokenFor, TokenOffset, TokenFetch, TokenOption,
-		TokenSemicolon, TokenRParen, TokenEOF, TokenComma:
+		TokenSemicolon, TokenRParen, TokenEOF, TokenComma, TokenMerge:
 		return true
 	default:
 		return false

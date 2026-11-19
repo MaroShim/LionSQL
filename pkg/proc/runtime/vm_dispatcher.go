@@ -1809,6 +1809,51 @@ vmLoop:
 			continue vmLoop
 		}
 
+	case proc.OpMerge:
+		data, ok := f.aux(&inst).(*proc.MergeData)
+		if !ok || data == nil {
+			return nil, fmt.Errorf("invalid OpMerge metadata")
+		}
+		sql := data.SQL
+		if len(f.tableVars) > 0 || len(f.sessionTempTables) > 0 {
+			for varName, physTable := range f.tableVars {
+				if strings.HasPrefix(varName, "#") {
+					sql = sqlutil.SubstituteParamOutsideQuotes(sql, varName, "["+physTable+"]")
+				} else {
+					sql = sqlutil.SubstituteParamOutsideQuotes(sql, "@"+strings.TrimPrefix(varName, "@"), "["+physTable+"]")
+				}
+			}
+			for varName, physTable := range f.sessionTempTables {
+				if _, overridden := f.tableVars[strings.ToLower(varName)]; !overridden {
+					if strings.HasPrefix(varName, "#") {
+						sql = sqlutil.SubstituteParamOutsideQuotes(sql, varName, "["+physTable+"]")
+					} else {
+						sql = sqlutil.SubstituteParamOutsideQuotes(sql, "#"+varName, "["+physTable+"]")
+					}
+				}
+			}
+		}
+		if strings.Contains(sql, "@") || strings.Contains(sql, "#") {
+			sql = f.bindWhereVariables(sql)
+		}
+		if f.executor == nil {
+			return nil, fmt.Errorf("executor not initialized")
+		}
+		qe := f.executor.getQueryExecutor()
+		if qe == nil {
+			return nil, fmt.Errorf("query executor not configured")
+		}
+		rows, cols, err := qe(f.ctx, sql, f.tx, f.getStorageVarsMap())
+		if err != nil {
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
+		}
+		f.rows = rows
+		f.columns = cols
+		f.rowCount = int64(len(rows))
+
 	case proc.OpSelectInto:
 		data, ok := f.aux(&inst).(*proc.SelectIntoData)
 		if !ok || data == nil {

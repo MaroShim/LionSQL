@@ -75,6 +75,8 @@ func (l *Lexer) NextToken() Token {
 
 	startPos := l.pos
 	tok := l.scanToken(tokLine, tokCol)
+	tok.Pos = startPos
+	tok.End = l.pos
 
 	// Defensive Forward-Progress Invariant ([RULE:LexicalSafety]):
 	// If any branch forgot to advance the cursor on a non-EOF rune, force advancement

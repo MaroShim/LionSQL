@@ -978,6 +978,12 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		}
 		return nil
 
+	case *MergeStmt:
+		c.emit(OpMerge, 0, 0, 0, &MergeData{
+			SQL: s.SQL,
+		})
+		return nil
+
 	case *SelectIntoStmt:
 		intoVar := cleanVarName(s.IntoVar)
 		slot := c.getOrAllocSlot(intoVar)

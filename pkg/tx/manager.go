@@ -92,11 +92,18 @@ func (m *Manager) ActiveStorageTx() storage.Transaction {
 	return m.current.StorageTx
 }
 
-// SetActiveStorageTx updates the active storage transaction (e.g. after procedure execution).
+// SetActiveStorageTx updates the active storage transaction (e.g. after procedure execution or in VM subqueries).
 // Caller must hold Manager.Lock() or invoke within serialized session execution.
 func (m *Manager) SetActiveStorageTx(stx storage.Transaction) {
 	if m.current != nil {
 		m.current.StorageTx = stx
+	} else if stx != nil {
+		m.current = &Context{
+			ID:        m.nextXID.Add(1),
+			StorageTx: stx,
+			State:     StateActive,
+			Ephemeral: false,
+		}
 	}
 }
 
