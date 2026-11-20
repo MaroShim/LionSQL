@@ -16,10 +16,11 @@ import (
 
 // PreparedStatement stores compiled bytecode and parameter definitions for repeated execution.
 type PreparedStatement struct {
-	Name       string
-	Query      string
-	Program    *proc.Program
-	ParamNames []string
+	Name          string
+	Query         string
+	Program       *proc.Program
+	ParamNames    []string
+	SchemaVersion uint64
 }
 
 // SessionCursor maintains stateful row iteration for server-side SQL cursors.

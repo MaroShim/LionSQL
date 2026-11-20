@@ -14,7 +14,15 @@ func modifyJSONByPath(doc, path string, newVal storage.Value) (string, error) {
 	if err := json.Unmarshal([]byte(doc), &data); err != nil {
 		return doc, err
 	}
-	cleanPath := strings.TrimPrefix(strings.TrimSpace(path), "$")
+	trimmedPath := strings.TrimSpace(path)
+	trimmedPath = strings.Trim(trimmedPath, "'\"`")
+	isAppend := false
+	if strings.HasPrefix(strings.ToUpper(trimmedPath), "APPEND ") {
+		isAppend = true
+		trimmedPath = strings.TrimSpace(trimmedPath[7:])
+	}
+
+	cleanPath := strings.TrimPrefix(trimmedPath, "$")
 	cleanPath = strings.TrimPrefix(cleanPath, ".")
 	if cleanPath == "" {
 		if newVal.IsNull {
@@ -43,6 +51,17 @@ func modifyJSONByPath(doc, path string, newVal storage.Value) (string, error) {
 		lastKey := parts[len(parts)-1]
 		if newVal.IsNull {
 			delete(current, lastKey)
+		} else if isAppend {
+			valToAdd := storageValueToInterface(newVal)
+			if existing, exists := current[lastKey]; exists {
+				if slice, ok := existing.([]any); ok {
+					current[lastKey] = append(slice, valToAdd)
+				} else {
+					current[lastKey] = []any{existing, valToAdd}
+				}
+			} else {
+				current[lastKey] = []any{valToAdd}
+			}
 		} else {
 			current[lastKey] = storageValueToInterface(newVal)
 		}
@@ -223,7 +242,10 @@ func evalJSONBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		doc := valToString(args[0])
 		path := valToString(args[1])
-		val, ok := storage.JSONValueByPath(doc, path)
+		val, ok, err := storage.JSONValueByPathStrict(doc, path)
+		if err != nil {
+			panic(err)
+		}
 		if !ok || val == nil {
 			return storage.NullValue(storage.TypeVarChar)
 		}
@@ -252,7 +274,10 @@ func evalJSONBuiltin(upper string, args []storage.Value) storage.Value {
 			path = valToString(args[1])
 		}
 		doc := valToString(args[0])
-		val, ok := storage.JSONQueryByPath(doc, path)
+		val, ok, err := storage.JSONQueryByPathStrict(doc, path)
+		if err != nil {
+			panic(err)
+		}
 		if !ok || val == "" {
 			return storage.NullValue(storage.TypeJSON)
 		}

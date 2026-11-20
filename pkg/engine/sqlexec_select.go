@@ -321,6 +321,27 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		cs.Mu.Unlock()
 	}
 
+	// NEXT VALUE FOR <seq> (T-SQL Sequence Evaluation)
+	if sqlutil.HasPrefixKeyword(trimmed, "NEXT VALUE FOR") {
+		rem, _ := sqlutil.TrimPrefixKeyword(trimmed, "NEXT VALUE FOR")
+		seqName := cleanIdentifier(strings.TrimSpace(rem))
+		if dotIdx := strings.LastIndex(seqName, "."); dotIdx != -1 {
+			seqName = seqName[dotIdx+1:]
+		}
+		if s.catalog != nil {
+			seq, err := s.catalog.GetSequence(seqName)
+			if err != nil {
+				return err, seqName
+			}
+			val, err := seq.Next()
+			if err != nil {
+				return err, seqName
+			}
+			return val, seqName
+		}
+		return fmt.Errorf("catalog not initialized"), seqName
+	}
+
 	// EXISTS(subquery)
 	if sqlutil.HasPrefixKeyword(trimmed, "EXISTS") {
 		after := strings.TrimSpace(trimmed[6:])
@@ -401,11 +422,7 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		return int64(51), "@@spid"
 	case "@@TRANCOUNT":
 		if cs != nil {
-			tc := int64(cs.TranCount())
-			if tc == 0 && cs.Tx() != nil {
-				tc = 1
-			}
-			return tc, "@@trancount"
+			return int64(cs.TranCount()), "@@trancount"
 		}
 		return int64(0), "@@trancount"
 	case "XACT_STATE()", "XACT_STATE":
@@ -1051,6 +1068,31 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		return nil, trimmed
 	}
 
+	// XML/UDT variable method invocation: @x.value(...), @x.query(...) [ENG-020]
+	if strings.HasPrefix(trimmed, "@") && strings.Contains(trimmed, ".") && strings.Contains(trimmed, "(") {
+		dotIdx := strings.Index(trimmed, ".")
+		varName := strings.TrimSpace(trimmed[:dotIdx])
+		methodPart := strings.TrimSpace(trimmed[dotIdx+1:])
+		parenIdx := strings.Index(methodPart, "(")
+		methodName := methodPart
+		if parenIdx != -1 {
+			methodName = strings.TrimSpace(methodPart[:parenIdx])
+		}
+		// If variable exists in session, return explicit error for XML/UDT methods rather than silent XML dump
+		if cs != nil {
+			cs.Mu.Lock()
+			_, exists := cs.Vars[varName]
+			if !exists {
+				_, exists = cs.Vars[strings.TrimPrefix(varName, "@")]
+			}
+			cs.Mu.Unlock()
+			if exists {
+				return fmt.Errorf("Msg 2812, Level 16, State 62: Could not find stored procedure/method %q on XML/UDT variable %s", methodName, varName), varName
+			}
+		}
+		return fmt.Errorf("Msg 102, Level 15, State 1: Incorrect syntax near '.'"), trimmed
+	}
+
 	// String literal
 	if isSingleQuotedLiteral(trimmed) {
 		var unquoted string
@@ -1528,18 +1570,23 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 		if cs != nil {
 			cs.Mu.Lock()
 			if len(cs.Vars) > 0 {
-				params = make(map[string]any, len(cs.Vars))
+				params = make(map[string]any, len(cs.Vars)+2)
 				for k, v := range cs.Vars {
 					params[k] = v
 				}
 			}
 			if cs.IsPostgres() {
 				if params == nil {
-					params = make(map[string]any)
+					params = make(map[string]any, 2)
 				}
 				params["identity_insert_all"] = true
 			}
+			tc := cs.TranCount()
 			cs.Mu.Unlock()
+			if params == nil {
+				params = make(map[string]any, 1)
+			}
+			params["__trancount__"] = tc
 		}
 
 		ctx := cs.GetQueryContext()

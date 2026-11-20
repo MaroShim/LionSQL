@@ -91,6 +91,7 @@ type Catalog struct {
 	functions      map[string]*Function
 	triggers       map[string]*Trigger
 	views          map[string]*View
+	sequences      map[string]*SequenceDef
 	tableStats     map[string]*planner.TableStats
 	statistics     map[string]*StatisticDef
 }
@@ -103,6 +104,7 @@ func New(eng storage.Engine) *Catalog {
 		functions:  make(map[string]*Function),
 		triggers:   make(map[string]*Trigger),
 		views:      make(map[string]*View),
+		sequences:  make(map[string]*SequenceDef),
 		tableStats: make(map[string]*planner.TableStats),
 		statistics: make(map[string]*StatisticDef),
 	}

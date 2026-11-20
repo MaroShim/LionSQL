@@ -816,6 +816,40 @@ func (s *TableSchema) FindForeignKey(name string) (*ForeignKeySchema, int, bool)
 	return nil, -1, false
 }
 
+// HasConstraint checks whether a constraint, unique index, or foreign key with the given name exists on the table.
+func (s *TableSchema) HasConstraint(name string) bool {
+	if s == nil || name == "" {
+		return false
+	}
+	clean := strings.ToLower(strings.TrimSpace(name))
+	for _, idx := range s.Indexes {
+		if strings.ToLower(idx.Name) == clean {
+			return true
+		}
+	}
+	for _, fk := range s.ForeignKeys {
+		if strings.ToLower(fk.Name) == clean {
+			return true
+		}
+	}
+	prefix := clean + ":"
+	for _, chk := range s.CheckConstraints {
+		lowerChk := strings.ToLower(chk)
+		if strings.HasPrefix(lowerChk, prefix) || lowerChk == clean {
+			return true
+		}
+	}
+	for _, col := range s.Columns {
+		if col.CheckExpr != "" {
+			lowerChk := strings.ToLower(col.CheckExpr)
+			if strings.HasPrefix(lowerChk, prefix) || lowerChk == clean {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (s *TableSchema) HasPrimaryKey() bool {
 	if s == nil {
 		return false

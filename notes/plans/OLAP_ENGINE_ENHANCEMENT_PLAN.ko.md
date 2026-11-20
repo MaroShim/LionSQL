@@ -1,4 +1,4 @@
-# LionSQL Post-1.0 고성능 OLAP 및 대용량 분석 쿼리 엔진 아키텍처 플랜 (`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`)
+# LionSQL 고성능 OLAP 및 대용량 분석 쿼리 엔진 아키텍처 플랜 (`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`)
 
 - **작성일자**: 2026-11-19
 - **적용 마일스톤**: `Post-1.0` (v1.10.0 ~ v1.99.0)

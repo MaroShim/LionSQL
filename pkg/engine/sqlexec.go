@@ -1320,9 +1320,12 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			param := strings.ToLower(cleanIdentifier(rawParam))
 			valStr := strings.Trim(strings.TrimSpace(rawVal), "';\"")
 			if param == "work_mem" {
+				if strings.HasPrefix(strings.TrimSpace(valStr), "-") {
+					return nil, fmt.Errorf("ERROR 22023: invalid value for parameter \"work_mem\": %q", valStr)
+				}
 				bytes, err := execution.ParseMemSize(valStr)
-				if err != nil {
-					return nil, fmt.Errorf("invalid value for work_mem %q: %w", valStr, err)
+				if err != nil || bytes < 0 {
+					return nil, fmt.Errorf("ERROR 22023: invalid value for parameter \"work_mem\": %q", valStr)
 				}
 				cs.Mu.Lock()
 				cs.Vars["work_mem"] = bytes
@@ -1334,10 +1337,31 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 					DurationUS: time.Since(start).Microseconds(),
 				}, nil
 			}
+			if param == "statement_timeout" || param == "lock_timeout" || param == "query_timeout" {
+				if strings.HasPrefix(strings.TrimSpace(valStr), "-") {
+					return nil, fmt.Errorf("ERROR 22023: invalid value for parameter %q: %q", param, valStr)
+				}
+				d, err := ParseTimeoutDurationStrict(valStr)
+				if err != nil || d < 0 {
+					return nil, fmt.Errorf("ERROR 22023: invalid value for parameter %q: %q", param, valStr)
+				}
+				cs.Mu.Lock()
+				cs.Vars[param] = valStr
+				cs.Mu.Unlock()
+				return &QueryResult{
+					Success:    true,
+					Command:    "SET",
+					Messages:   []string{fmt.Sprintf("SET: %s set to %v.", param, d)},
+					DurationUS: time.Since(start).Microseconds(),
+				}, nil
+			}
 			if param == "idle_in_transaction_session_timeout" || param == "tx_idle_timeout" {
-				d, err := ParseTimeoutDuration(valStr)
-				if err != nil {
-					return nil, fmt.Errorf("invalid value for %s %q: %w", param, valStr, err)
+				if strings.HasPrefix(strings.TrimSpace(valStr), "-") {
+					return nil, fmt.Errorf("ERROR 22023: invalid value for parameter %q: %q", param, valStr)
+				}
+				d, err := ParseTimeoutDurationStrict(valStr)
+				if err != nil || d < 0 {
+					return nil, fmt.Errorf("ERROR 22023: invalid value for parameter %q: %q", param, valStr)
 				}
 				cs.SetIdleInTxTimeout(d)
 				cs.Mu.Lock()
@@ -1986,18 +2010,43 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
-	// 4.41 Tolerant PG Compatibility: SEQUENCE
-	if sqlutil.HasAnyPrefixKeyword(trimmed, "CREATE SEQUENCE", "ALTER SEQUENCE", "DROP SEQUENCE") {
-		return &QueryResult{
-			Success:    true,
-			Command:    "SEQUENCE",
-			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{"Sequence command completed successfully."},
-		}, nil
+	// 4.41 DDL: SEQUENCE
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE SEQUENCE") {
+		return s.execCreateSequence(trimmed, start, cs)
+	}
+	if sqlutil.HasPrefixKeyword(trimmed, "ALTER SEQUENCE") {
+		return s.execAlterSequence(trimmed, start, cs)
+	}
+	if sqlutil.HasPrefixKeyword(trimmed, "DROP SEQUENCE") {
+		return s.execDropSequence(trimmed, start, cs)
 	}
 
 	// 4.42 Tolerant PG Compatibility: LOCK TABLE
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "LOCK TABLE", "LOCK") {
+		// [ENG-017] Verify target relation exists; fail with 42P01 if absent.
+		rest := strings.TrimSpace(trimmed)
+		if rem, ok := sqlutil.TrimPrefixKeyword(rest, "LOCK TABLE"); ok {
+			rest = strings.TrimSpace(rem)
+		} else if rem, ok := sqlutil.TrimPrefixKeyword(rest, "LOCK"); ok {
+			rest = strings.TrimSpace(rem)
+		}
+		// Optional TABLE keyword if parsed after LOCK
+		if rem, ok := sqlutil.TrimPrefixKeyword(rest, "TABLE"); ok {
+			rest = strings.TrimSpace(rem)
+		}
+		// Extract table identifier up to whitespace, semicolon, or IN clause
+		targetTable := rest
+		if idx := strings.IndexAny(rest, " \t\r\n;"); idx != -1 {
+			targetTable = rest[:idx]
+		}
+		targetTable = cleanIdentifier(targetTable)
+		if targetTable != "" {
+			tbl, err := s.engine.GetTable(targetTable)
+			if err != nil || tbl == nil {
+				return nil, fmt.Errorf("ERROR 42P01: relation %q does not exist", targetTable)
+			}
+		}
+
 		return &QueryResult{
 			Success:    true,
 			Command:    "LOCK TABLE",

@@ -104,10 +104,11 @@ func (s *Coordinator) execPrepare(query string, start time.Time, cs *ClientSessi
 			cs.PreparedStmts = make(map[string]*PreparedStatement)
 		}
 		cs.PreparedStmts[strings.ToLower(stmtName)] = &PreparedStatement{
-			Name:       stmtName,
-			Query:      normalized,
-			Program:    prog,
-			ParamNames: paramNames,
+			Name:          stmtName,
+			Query:         normalized,
+			Program:       prog,
+			ParamNames:    paramNames,
+			SchemaVersion: s.schemaVersion.Load(),
 		}
 		cs.Mu.Unlock()
 	}
@@ -198,6 +199,26 @@ func (s *Coordinator) execDeallocate(query string, start time.Time, cs *ClientSe
 func (s *Coordinator) execPreparedStatement(prep *PreparedStatement, rawArgs []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
 	if prep == nil || prep.Program == nil {
 		return nil, fmt.Errorf("invalid prepared statement")
+	}
+
+	// [ENG-013] If schema version has advanced since PREPARE, recompile query against current schema.
+	// If a column referenced by the query was dropped, compilation must fail with Msg 207.
+	if prep.Query != "" && prep.SchemaVersion != s.schemaVersion.Load() {
+		if err := s.validatePreparedStatementSchema(prep.Query); err != nil {
+			return nil, err
+		}
+		var newProg *proc.Program
+		var err error
+		if s.executor != nil && s.executor.Cache() != nil {
+			newProg, err = s.executor.Cache().GetOrCompile(prep.Query)
+		} else {
+			newProg, err = proc.Compile(prep.Query)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("Msg 207, Level 16, State 1: Invalid column name or schema mismatch: %w", err)
+		}
+		prep.Program = newProg
+		prep.SchemaVersion = s.schemaVersion.Load()
 	}
 
 	cmdType := strings.ToUpper(prep.Program.Type)
@@ -607,6 +628,38 @@ func parseArgValue(arg string, cs *ClientSession) any {
 
 func isIdentStart(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_'
+}
+
+// validatePreparedStatementSchema validates that relations and columns in a prepared query still exist in the catalog.
+func (s *Coordinator) validatePreparedStatementSchema(query string) error {
+	p := s.newPlanner()
+	qInfo, err := p.ParseSelect(query)
+	if err != nil || qInfo == nil || qInfo.TableName == "" {
+		return nil // Non-SELECT statements or complex queries defer to execution-time validation
+	}
+
+	sch, err := s.engine.GetTable(qInfo.TableName)
+	if err != nil || sch == nil {
+		return fmt.Errorf("ERROR 42P01: relation %q does not exist", qInfo.TableName)
+	}
+
+	for _, proj := range qInfo.Projections {
+		cleanCol := strings.TrimSpace(proj)
+		if cleanCol == "" || cleanCol == "*" || strings.HasSuffix(cleanCol, ".*") {
+			continue
+		}
+		// Extract raw column identifier if simple expression or alias
+		if expr, _, hasAs := sqlutil.SplitAsAlias(cleanCol); hasAs {
+			cleanCol = expr
+		}
+		cleanCol = sqlutil.ExtractLeafColumn(cleanCol)
+		if cleanCol != "" && !strings.ContainsAny(cleanCol, "()+-*/% ") {
+			if _, _, found := sch.FindColumn(cleanCol); !found {
+				return fmt.Errorf("Msg 207, Level 16, State 1: Invalid column name '%s'.", cleanCol)
+			}
+		}
+	}
+	return nil
 }
 
 func isIdentPart(r rune) bool {

@@ -1852,8 +1852,9 @@ func (p *Parser) parseAlterTableAction(tableName string) ([]AlterTableAction, er
 					}
 					for _, chk := range tmpStmt.CheckConstraints {
 						actions = append(actions, AlterTableAction{
-							Type:      AlterAddCheck,
-							CheckExpr: chk,
+							Type:           AlterAddCheck,
+							ConstraintName: cName,
+							CheckExpr:      chk,
 						})
 					}
 				}

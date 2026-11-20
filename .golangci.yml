@@ -1,0 +1,55 @@
+version: "2"
+run:
+  tests: false
+linters:
+  default: none
+  enable:
+    - depguard
+    - ineffassign
+    - staticcheck
+  settings:
+    depguard:
+      rules:
+        no-regexp-in-query-path:
+          files:
+            - '**/pkg/engine/**'
+            - '**/pkg/planner/**'
+            - '**/pkg/execution/**'
+          deny:
+            - pkg: regexp
+              desc: '[Invariant 7: Zero-Regex SQL Parsing in Production Paths] Use deterministic tokenizer or proc/sqlutil AST instead of regexp.'
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - staticcheck
+        text: 'ST1005:' # Allow SQL Server error code prefixes like "Msg 13608"
+      - linters:
+          - staticcheck
+        text: 'QF' # Quick-fix style suggestions (De Morgan, switch)
+      - linters:
+          - staticcheck
+        text: 'ST1023:' # redundant type from rhs
+      - linters:
+          - staticcheck
+        text: 'S1017:' # strings.TrimPrefix simplification
+    paths:
+      - bin
+      - scripts
+      - doc
+      - notes
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

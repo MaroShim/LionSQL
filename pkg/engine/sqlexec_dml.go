@@ -448,23 +448,73 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		for i, colName := range targetCols {
 			colSchema, _, found := schema.FindColumn(colName)
 			valStr := strings.TrimSpace(vals[i])
+
+			// Resolve scalar expressions such as NEXT VALUE FOR <seq> or @@TRANCOUNT
+			evalVal := func(sVal string, targetType storage.DataType) (storage.Value, error) {
+				if strings.EqualFold(sVal, "@@TRANCOUNT") {
+					if cs != nil {
+						tc := int64(cs.TranCount())
+						return storage.IntValue(tc), nil
+					}
+					return storage.IntValue(0), nil
+				}
+				if sqlutil.HasPrefixKeyword(sVal, "NEXT VALUE FOR") {
+					val, _ := s.evalScalarExprCore(sVal, cs)
+					if err, isErr := val.(error); isErr {
+						return storage.Value{}, err
+					}
+					if n, ok := val.(int64); ok {
+						return storage.IntValue(n), nil
+					}
+				}
+				if val, _ := s.evalScalarExprCore(sVal, cs); val != nil {
+					if n, ok := val.(int64); ok {
+						return storage.IntValue(n), nil
+					}
+					if n, ok := val.(int); ok {
+						return storage.IntValue(int64(n)), nil
+					}
+				}
+				return parseLiteralValue(sVal, targetType), nil
+			}
+
 			if !found {
 				if strings.EqualFold(valStr, "DEFAULT") {
 					rec[colName] = storage.NullValue(storage.TypeVarChar)
 				} else {
-					rec[colName] = parseLiteralValue(valStr, storage.TypeVarChar)
+					v, err := evalVal(valStr, storage.TypeVarChar)
+					if err != nil {
+						if isEphemeral {
+							_ = tx.Rollback()
+						}
+						return nil, err
+					}
+					rec[colName] = v
 				}
 			} else {
 				canonicalName := colSchema.Name
 				if strings.EqualFold(valStr, "DEFAULT") {
 					if colSchema.Default != "" {
-						parsed := parseLiteralValue(colSchema.Default, colSchema.Type)
-						rec[canonicalName] = parsed
+						v, err := evalVal(colSchema.Default, colSchema.Type)
+						if err != nil {
+							if isEphemeral {
+								_ = tx.Rollback()
+							}
+							return nil, err
+						}
+						rec[canonicalName] = v
 					} else {
 						rec[canonicalName] = storage.NullValue(colSchema.Type)
 					}
 				} else {
-					rec[canonicalName] = parseLiteralValue(valStr, colSchema.Type)
+					v, err := evalVal(valStr, colSchema.Type)
+					if err != nil {
+						if isEphemeral {
+							_ = tx.Rollback()
+						}
+						return nil, err
+					}
+					rec[canonicalName] = v
 				}
 			}
 		}

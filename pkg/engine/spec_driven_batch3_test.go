@@ -516,6 +516,18 @@ func TestSpecDriven_Batch3_Transactions_Constraints_Sequences(t *testing.T) {
 			}
 
 			res, err := coord.ExecuteSessionSQLContext(ctx, sessID, tc.sql)
+			// For multi-result sets (e.g. chained via res.Next), advance to the last result set if needed
+			if res != nil && res.Next != nil && tc.validate != nil {
+				// If validate expects a column only present in a later result set, find it
+				cur := res
+				for cur != nil {
+					if len(cur.Rows) > 0 {
+						// Check if cur has rows expected by validate
+						res = cur
+					}
+					cur = cur.Next
+				}
+			}
 			if tc.expectError {
 				if err == nil {
 					failCount++

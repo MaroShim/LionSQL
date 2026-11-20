@@ -156,6 +156,29 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 	coord.autoAnalyzer = NewAutoAnalyzer(coord, DefaultAutoAnalyzeConfig())
 	executor.SetIdentityProvider(coord)
 	executor.SetViewRewriter(coord.rewriteViewsAsCTE)
+
+	// [ENG-011] Register global sequence handler for NEXTVAL / SETVAL built-in calls
+	proc.RegisterGlobalSequenceHandler(func(op string, seqName string, val int64) (int64, error) {
+		if coord.catalog == nil {
+			return 0, fmt.Errorf("catalog not initialized")
+		}
+		cleanName := strings.Trim(seqName, "'\"[]`")
+		if dotIdx := strings.LastIndex(cleanName, "."); dotIdx != -1 {
+			cleanName = cleanName[dotIdx+1:]
+		}
+		seq, err := coord.catalog.GetSequence(cleanName)
+		if err != nil {
+			return 0, err
+		}
+		if strings.EqualFold(op, "SETVAL") {
+			if err := seq.Restart(val); err != nil {
+				return 0, err
+			}
+			return val, nil
+		}
+		return seq.Next()
+	})
+
 	executor.SetQueryExecutor(func(ctx context.Context, sql string, stx storage.Transaction, vars map[string]storage.Value) ([]map[string]any, []string, error) {
 		cs := &ClientSession{
 			ID:    "internal-vm-subquery",

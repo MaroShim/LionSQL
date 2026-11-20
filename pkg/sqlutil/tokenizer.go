@@ -2270,3 +2270,12 @@ func CleanIdentifierParts(name string) string {
 	return strings.Join(parts, ".")
 }
 
+// ExtractLeafColumn returns the terminal column name from a potentially qualified column expression (e.g. "tbl.col" -> "col").
+func ExtractLeafColumn(ident string) string {
+	clean := CleanIdentifier(ident)
+	if dot := strings.LastIndex(clean, "."); dot != -1 {
+		return clean[dot+1:]
+	}
+	return clean
+}
+

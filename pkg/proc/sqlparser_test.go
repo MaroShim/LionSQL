@@ -469,6 +469,33 @@ func TestParseSQL_CastAndConvert(t *testing.T) {
 	if err != nil || vPg != int64(42) {
 		t.Errorf("expected 42 for pgCast1, got val=%v, err=%v", vPg, err)
 	}
+
+	// 6. PARSE and TRY_PARSE evaluation (ENG-022)
+	sqlParse := `SELECT PARSE('123.45' AS DECIMAL(10,2) USING 'en-US') AS p1, TRY_PARSE('invalid' AS INT) AS p2;`
+	stmtParse, err := proc.ParseSQL(sqlParse)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for PARSE: %v", err)
+	}
+	selParse := stmtParse.(*proc.GeneralSelectStmt)
+	pCast1, ok := selParse.Projections[0].Expr.(*proc.CastExpr)
+	if !ok || pCast1.TargetType != storage.TypeDecimal {
+		t.Fatalf("unexpected pCast1: %+v", pCast1)
+	}
+	vParse1, err := proc.EvalRowExpr(pCast1, nil, nil)
+	if err != nil {
+		t.Fatalf("EvalRowExpr for PARSE failed: %v", err)
+	}
+	if fmt.Sprintf("%v", vParse1) != "123.45" {
+		t.Errorf("expected 123.45 for PARSE, got %v", vParse1)
+	}
+	pCast2, ok := selParse.Projections[1].Expr.(*proc.CastExpr)
+	if !ok || !pCast2.Try {
+		t.Fatalf("unexpected pCast2: %+v", pCast2)
+	}
+	vParse2, err := proc.EvalRowExpr(pCast2, nil, nil)
+	if err != nil || vParse2 != nil {
+		t.Errorf("expected nil for failed TRY_PARSE, got val=%v, err=%v", vParse2, err)
+	}
 }
 
 func TestParseSQL_Apply_Hints_Output(t *testing.T) {

@@ -23,7 +23,15 @@ var (
 	uuidv7Mu sync.Mutex
 	lastV7Ms int64
 	v7Seq    uint16
+
+	// GlobalSequenceHandler is invoked by NEXTVAL('seq') or SETVAL('seq', val) when registered.
+	GlobalSequenceHandler func(op string, seqName string, val int64) (int64, error)
 )
+
+// RegisterGlobalSequenceHandler registers the engine's sequence handler callback.
+func RegisterGlobalSequenceHandler(fn func(op string, seqName string, val int64) (int64, error)) {
+	GlobalSequenceHandler = fn
+}
 
 // GetCurrentDBTS returns the current database 8-byte rowversion/timestamp counter as a big-endian byte slice.
 func GetCurrentDBTS() []byte {
@@ -343,11 +351,26 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 
 	case "SETVAL":
 		if len(args) >= 2 {
+			seqName := strings.Trim(valToString(args[0]), "'\"")
+			val := args[1].IVal
+			if GlobalSequenceHandler != nil {
+				if v, err := GlobalSequenceHandler("SETVAL", seqName, val); err == nil {
+					return storage.IntValue(v)
+				}
+			}
 			return args[1]
 		}
 		return storage.IntValue(1)
 
 	case "NEXTVAL":
+		if len(args) > 0 {
+			seqName := strings.Trim(valToString(args[0]), "'\"")
+			if GlobalSequenceHandler != nil {
+				if v, err := GlobalSequenceHandler("NEXTVAL", seqName, 0); err == nil {
+					return storage.IntValue(v)
+				}
+			}
+		}
 		return storage.IntValue(1)
 
 	case "SERVERPROPERTY":

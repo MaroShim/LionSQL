@@ -308,6 +308,31 @@ func ParseTimeoutDuration(s string) (time.Duration, error) {
 	return 0, nil
 }
 
+// ParseTimeoutDurationStrict strictly validates timeout duration strings.
+// Returns an error if the input cannot be parsed or represents a negative duration.
+func ParseTimeoutDurationStrict(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "0" {
+		return 0, nil
+	}
+	if strings.HasPrefix(s, "-") {
+		return 0, fmt.Errorf("duration cannot be negative: %s", s)
+	}
+	if d, err := time.ParseDuration(s); err == nil {
+		if d < 0 {
+			return 0, fmt.Errorf("duration cannot be negative: %s", s)
+		}
+		return d, nil
+	}
+	if ms, err := strconv.ParseInt(s, 10, 64); err == nil {
+		if ms < 0 {
+			return 0, fmt.Errorf("duration cannot be negative: %d", ms)
+		}
+		return time.Duration(ms) * time.Millisecond, nil
+	}
+	return 0, fmt.Errorf("invalid duration format: %s", s)
+}
+
 // CleanSavepointName strips delimiters, semicolons, quotes, and brackets from savepoint names.
 func CleanSavepointName(raw string) string {
 	raw = strings.TrimSpace(raw)

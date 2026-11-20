@@ -154,13 +154,21 @@ func ValidateRecordChecks(schema *storage.TableSchema, rec storage.Record) error
 
 	for _, col := range schema.Columns {
 		if col.CheckExpr != "" {
-			if err := evalCheck(col.CheckExpr); err != nil {
+			chk := col.CheckExpr
+			if idx := strings.Index(chk, ":"); idx != -1 {
+				chk = chk[idx+1:]
+			}
+			if err := evalCheck(chk); err != nil {
 				return err
 			}
 		}
 	}
 	for _, chk := range schema.CheckConstraints {
-		if err := evalCheck(chk); err != nil {
+		expr := chk
+		if idx := strings.Index(expr, ":"); idx != -1 {
+			expr = expr[idx+1:]
+		}
+		if err := evalCheck(expr); err != nil {
 			return err
 		}
 	}
@@ -1977,7 +1985,11 @@ func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style i
 		var str string
 		switch v.Type {
 		case storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
-			str = formatDateTimeByStyle(v.TVal, style)
+			formatted, err := formatDateTimeByStyleChecked(v.TVal, style)
+			if err != nil {
+				return fail(err)
+			}
+			str = formatted
 		case storage.TypeBinary:
 			if style == 1 {
 				str = "0x" + hex.EncodeToString(v.Bytes())
@@ -1995,9 +2007,17 @@ func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style i
 		default:
 			if style > 0 {
 				if t, err := parseDateTimeByStyle(v.String(), 120); err == nil {
-					str = formatDateTimeByStyle(t, style)
+					formatted, err := formatDateTimeByStyleChecked(t, style)
+					if err != nil {
+						return fail(err)
+					}
+					str = formatted
 				} else if dt, err := storage.DateTimeValueFromAny(v); err == nil && !dt.IsNull {
-					str = formatDateTimeByStyle(dt.TVal, style)
+					formatted, err := formatDateTimeByStyleChecked(dt.TVal, style)
+					if err != nil {
+						return fail(err)
+					}
+					str = formatted
 				} else {
 					str = v.String()
 				}
@@ -2166,37 +2186,74 @@ func formatMoneyToString(d storage.Decimal, style int) string {
 }
 
 func formatDateTimeByStyle(t time.Time, style int) string {
+	str, _ := formatDateTimeByStyleChecked(t, style)
+	return str
+}
+
+func formatDateTimeByStyleChecked(t time.Time, style int) (string, error) {
 	switch style {
+	case 0, 100:
+		return t.Format("Jan 02 2006 03:04PM"), nil
 	case 1:
-		return t.Format("01/02/06")
+		return t.Format("01/02/06"), nil
 	case 101:
-		return t.Format("01/02/2006")
+		return t.Format("01/02/2006"), nil
 	case 2:
-		return t.Format("06.01.02")
+		return t.Format("06.01.02"), nil
 	case 102:
-		return t.Format("2006.01.02")
+		return t.Format("2006.01.02"), nil
 	case 3:
-		return t.Format("02/01/06")
+		return t.Format("02/01/06"), nil
 	case 103:
-		return t.Format("02/01/2006")
+		return t.Format("02/01/2006"), nil
+	case 4:
+		return t.Format("02.01.06"), nil
+	case 104:
+		return t.Format("02.01.2006"), nil
+	case 5:
+		return t.Format("02-01-06"), nil
+	case 105:
+		return t.Format("02-01-2006"), nil
+	case 6:
+		return t.Format("02 Jan 06"), nil
+	case 106:
+		return t.Format("02 Jan 2006"), nil
+	case 7:
+		return t.Format("Jan 02, 06"), nil
+	case 107:
+		return t.Format("Jan 02, 2006"), nil
+	case 8, 108, 24:
+		return t.Format("15:04:05"), nil
+	case 9, 109:
+		return t.Format("Jan 02 2006 03:04:05:000PM"), nil
+	case 10, 110:
+		return t.Format("01-02-2006"), nil
+	case 11:
+		return t.Format("06/01/02"), nil
+	case 111:
+		return t.Format("2006/01/02"), nil
 	case 12:
-		return t.Format("060102")
+		return t.Format("060102"), nil
 	case 112:
-		return t.Format("20060102")
+		return t.Format("20060102"), nil
+	case 13, 113:
+		return t.Format("02 Jan 2006 15:04:05:000"), nil
+	case 14, 114:
+		return t.Format("15:04:05:000"), nil
+	case 20, 120:
+		return t.Format("2006-01-02 15:04:05"), nil
+	case 21, 121:
+		return t.Format("2006-01-02 15:04:05.000"), nil
 	case 23:
-		return t.Format("2006-01-02")
-	case 120, 20:
-		return t.Format("2006-01-02 15:04:05")
-	case 121, 21:
-		return t.Format("2006-01-02 15:04:05.000")
+		return t.Format("2006-01-02"), nil
 	case 126:
-		return t.Format(time.RFC3339)
-	case 8, 108:
-		return t.Format("15:04:05")
-	case 24:
-		return t.Format("15:04:05")
+		return t.Format(time.RFC3339), nil
+	case 127:
+		return t.Format(time.RFC3339Nano), nil
+	case 130, 131:
+		return t.Format("02/01/2006 15:04:05"), nil
 	default:
-		return t.Format("2006-01-02 15:04:05")
+		return "", fmt.Errorf("Msg 281, Level 16, State 1: Cannot convert date and/or time to character string using style %d.", style)
 	}
 }
 

@@ -376,6 +376,10 @@ func (p *Parser) parsePrefix() Expr {
 		return p.parseConvert(false)
 	case TokenTryConvert:
 		return p.parseConvert(true)
+	case TokenParse:
+		return p.parseParse(false)
+	case TokenTryParse:
+		return p.parseParse(true)
 	case TokenIsNull, TokenCoalesce:
 		funcName := p.curToken.Literal
 		p.nextToken()
@@ -413,9 +417,17 @@ func (p *Parser) parsePrefix() Expr {
 		p.nextToken() // eat )
 		return &ExistsExpr{Query: sel, Not: false}
 	case TokenVariable:
-		expr := &VariableExpr{Name: p.curToken.Literal}
+		varName := p.curToken.Literal
 		p.nextToken()
-		return expr
+		// XML / UDT variable method invocation: @x.value(...)
+		if p.curTokenIs(TokenIdent) && strings.HasPrefix(p.curToken.Literal, ".") {
+			methodName := strings.TrimPrefix(p.curToken.Literal, ".")
+			p.nextToken()
+			if p.curTokenIs(TokenLParen) {
+				return p.parseFunctionCall(varName + "." + methodName)
+			}
+		}
+		return &VariableExpr{Name: varName}
 	case TokenIdent:
 		ident := p.curToken.Literal
 		p.nextToken()
@@ -654,6 +666,45 @@ func (p *Parser) parseConvert(try bool) Expr {
 		Precision:  prec,
 		Scale:      scale,
 		Style:      style,
+		Try:        try,
+		IsFixed:    isFixed,
+	}
+}
+
+// parseParse parses PARSE(string_expr AS data_type [USING culture]) and TRY_PARSE(...)
+func (p *Parser) parseParse(try bool) Expr {
+	p.nextToken() // eat PARSE or TRY_PARSE
+	if !p.curTokenIs(TokenLParen) {
+		return nil
+	}
+	p.nextToken() // eat (
+	expr := p.parseExpression(precLowest)
+	if expr == nil {
+		return nil
+	}
+	if !p.curTokenIs(TokenAs) {
+		return nil
+	}
+	p.nextToken() // eat AS
+	if !p.curTokenIs(TokenIdent) {
+		return nil
+	}
+	dt, prec, scale, isFixed := p.parseTypeSpec()
+	if p.curTokenIs(TokenUsing) {
+		p.nextToken() // eat USING
+		if p.curTokenIs(TokenString) || p.curTokenIs(TokenIdent) {
+			p.nextToken() // eat culture
+		}
+	}
+	if !p.curTokenIs(TokenRParen) {
+		return nil
+	}
+	p.nextToken() // eat )
+	return &CastExpr{
+		Expr:       expr,
+		TargetType: dt,
+		Precision:  prec,
+		Scale:      scale,
 		Try:        try,
 		IsFixed:    isFixed,
 	}

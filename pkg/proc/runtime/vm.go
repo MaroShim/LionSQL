@@ -634,6 +634,11 @@ func (f *VMFrame) bindParams(params map[string]any) {
 			f.scopeIdentity = scopeVal.IVal
 		}
 	}
+	if tcAny, ok := params["__trancount__"]; ok {
+		if tcVal := toStorageValue(tcAny); tcVal.Type == storage.TypeInt {
+			f.tranCount = int(tcVal.IVal)
+		}
+	}
 	if len(params) > 0 {
 		f.evalCtxDirty = true
 	}
@@ -931,11 +936,16 @@ func (frame *VMFrame) buildExecutionResult(start time.Time, retVal any) *Executi
 	}
 
 	var activeTx storage.Transaction
-	if frame.tranCount > 0 {
+	if frame.session != nil {
+		if frame.tranCount > 0 {
+			activeTx = frame.tx
+		} else if frame.tx != nil {
+			_ = frame.tx.Commit()
+			activeTx = nil
+		}
+	} else {
+		// When session is nil, the transaction lifecycle is managed by caller (e.g. ExecuteInTxContext)
 		activeTx = frame.tx
-	} else if frame.tx != nil {
-		_ = frame.tx.Commit()
-		activeTx = nil
 	}
 
 	return &ExecutionResult{

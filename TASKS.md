@@ -6,7 +6,7 @@
 > 모든 태스크 추가, 상태 변경, 마일스톤 수정은 반드시 `./bin/sprint` CLI를 통해서만 수행해야 합니다.
 > 수정 후 `./bin/sprint backup TASKS.md` 명령으로 이 문서를 동기화하십시오.
 
-> - **Last Synced**: 2026-11-19
+> - **Last Synced**: 2026-11-20
 > - **Primary Source of Truth (SSOT)**: SQLite `sprint_tasks` Table
 > - **Backup File**: Auto-synced on task update & Git commit
 
@@ -66,8 +66,8 @@
 | `PENDING` | **`AUDIT-R36-C7-GROUPBY-WINDOW-SETOP-AND-CONCURRENCY`** | `v0.94.0` | Engine | P1 | Live Audit R3-R6 Cluster 7: GROUP BY + Window/HAVING 서브쿼리(R3-47, R4-04), SELECT FOR UPDATE 행 락(R6-001), SAVEPOINT 덮어쓰기/RELEASE(R6-006,007), EXCEPT ALL 및 중첩 SetOp(R3-26, R6-012), GROUPING SETS, TOP/FETCH/LIMIT 경계 검증 | [`notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md`](notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md) |  |
 | `PENDING` | **`AUDIT-R36-C8-TYPES-CAST-MATH-DATE-STRING-JSON`** | `v0.94.0` | Engine | P1 | Live Audit R3-R6 Cluster 8: TRY_CAST 오버플로 NULL(R5-011), DECIMAL(20,0) 정밀도(R5-012), UNION 타입 검증(R5-016), SUM(BIGINT)/ABS/SQUARE/단항 음수 오버플로, IIF 단락 평가(R3-12), 날짜 산술 및 문자열/JSON/내장함수 Arity·도메인 검증 | [`notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md`](notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`AUDIT-ROUND10-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 10 Engine & Execution (ENG-001~010) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND10.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND10.ko.md) |  |
-| `PENDING` | **`AUDIT-ROUND11-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 11 Sequences, Limits & Isolation (ENG-011~017) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND11.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND11.ko.md) |  |
-| `PENDING` | **`AUDIT-ROUND12-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 12 JSON strict, CONVERT style & Cultural Parse (ENG-018~022) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND12.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND12.ko.md) |  |
+| `DONE` | **`AUDIT-ROUND11-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 11 Sequences, Limits & Isolation (ENG-011~017) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND11.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND11.ko.md) |  |
+| `DONE` | **`AUDIT-ROUND12-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 12 JSON strict, CONVERT style & Cultural Parse (ENG-018~022) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND12.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND12.ko.md) |  |
 | `DONE` | **`AUDIT-ROUND9-REMEDY`** | `1.0-GA` | Engine | P1 | Live Audit Round 9 Security/RBAC (SEC-001~009) & ACID (ACID-001~008) Remediation | [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND9.ko.md) |  |
 | `DONE` | **`AUDIT-STRINGS-CATALOG`** | `1.0-GA` | Catalog | P1 | 코드베이스 전수 조사 Phase 2: pkg/catalog 가상 뷰 인터셉터 strings.* 안티패턴 전수 제거 및 sqlutil 전환 | [`GEMINI.md`](GEMINI.md) |  |
 | `DONE` | **`AUDIT-STRINGS-DISPATCH`** | `1.0-GA` | Engine | P1 | 코드베이스 전수 조사 Phase 5: pkg/engine 구문 디스패치 및 query_utils strings.* 안티패턴 전수 제거 | [`GEMINI.md`](GEMINI.md) |  |
@@ -213,6 +213,7 @@
 | `DONE` | **`CORPUS-KNEX-MSSQL-1`** | `1.0-GA` | Ecosystem | P2 | Knex.js MSSQL Dialect 쿼리 코퍼스 수집 및 Wiki.js 대응 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`CORPUS-NORTHWIND-PUBS-1`** | `1.0-GA` | Ecosystem | P2 | Northwind 및 Pubs 공식 표준 관계형 코퍼스 수집 및 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`DEPRECATE-OCC-PERF-1`** |  | Storage | P2 | v1.0 이전 OCC performance 모드(-memory=performance) Deprecate 명기 (v1.0 옵션 유지) |  |  |
+| `PENDING` | **`DIST-LIONESS-SHARDING-ROUTER-1`** |  | --priority | P3 | Lioness: Vitess/Citus Model Hash Partitioning Sharding Router Architecture & Core |  |  |
 | `DONE` | **`DOC-REVAMP-10`** | `1.0-GA` | Documentation | P2 | 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 | [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md) |  |
 | `DONE` | **`DOGFOOD-SPRINT-1`** |  | Performance | P1 | LionSQL 자체 백엔드 기반 정형 스프린트/태스크 관리 시스템 구축 (Dogfooding) |  |  |
 | `DONE` | **`DURA-HYBRID-COMMIT-TAINT-1`** | `1.0-GA` | Storage | P2 | WiredTiger C 커밋 실패 시 Fail-Closed markTainted 방어벽 확립 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
@@ -220,6 +221,7 @@
 | `DONE` | **`DURA-SLT-1`** |  | Durability | P2 | SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 | [`notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`DURA-SLT-2`** |  | Durability | P2 | SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 | [`notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`DURA-SOAK-1`** | `1.0-GA` | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
+| `PENDING` | **`EXEC-SIMPLIFIED-SPILL-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | Simplified Spill Hash Join (Fixed 16-Bucket Out-of-Core Spill Join) | [`notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md`](notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-ALTER-COLUMN-ONLINE-EXPANSION-1`** | `v1.1.0` | Storage | P2 | ALTER TABLE ALTER COLUMN 가변길이 컬럼 온라인 확장 지원 |  |  |
 | `PENDING` | **`FEAT-CDC-DUCKDB-INITIAL-SNAPSHOT-CHECKPOINT-1`** | `1.0-GA` | Ecosystem | P2 | CDC 및 DuckDB 연동 최초 스냅샷 적재, LSN 체크포인트 영속화 및 자동 재연결 파이프라인 | [`guide/DUCKDB_INTEGRATION_GUIDE.ko.md`](guide/DUCKDB_INTEGRATION_GUIDE.ko.md) |  |
 | `DONE` | **`FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`** | `1.0-GA` | CLI | P2 | lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 | [`doc/USER_MANUAL.ko.md`](doc/USER_MANUAL.ko.md) |  |
@@ -243,6 +245,7 @@
 | `PENDING` | **`FEAT-PG-STAT-ACTIVITY-AND-SETTINGS-1`** | `v1.2.0` | Catalog | P2 | pg_stat_activity, pg_settings 가상 뷰 확충 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-POSTGRES-SYNTAX-SUGAR-1`** | `v0.94.0` | Engine | P2 | PostgreSQL 호환 문법 슈가 지원 (CREATE TEMP TABLE DDL 라우팅 및 RETURNING -> OUTPUT AST 로워링) | [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PUREGO-WT-ENGINE`** | `v1.20.0` | Storage | P3 | WiredTiger 호환 자체 Pure-Go MVCC 스토리지 엔진 구현 및 CGo 분리 (Post-1.0) |  |  |
+| `PENDING` | **`FEAT-REDIS-PRIMITIVES-AND-TTL-1`** |  | --priority | P3 | Game Server Primitives: Native Sorted Set (ZSET), Auto-TTL Tables, and Atomic INCRBY/SETNX |  |  |
 | `PENDING` | **`FEAT-ROW-LOCK-WAIT-MANAGER-1`** | `v1.1.0` | Storage | P2 | WITH (UPDLOCK) 명시 힌트 기반 2PL 행 잠금 대기(Lock-Wait) 및 데드락 감지 매니저 (Step 2) | [`notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md`](notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SANDBOX-SPA-HANDLER-OSDIRFS-1`** | `v0.94.0` | ARCHITECTURE | P2 | Modernize SPA Hosting with Go os.DirFS Chroot Sandbox and Subdirectory Support | [`notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md`](notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`** | `v0.94.0` | Security | P2 | 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리) | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
@@ -422,14 +425,14 @@
 | `DONE` | **`M2`** |  | Ecosystem | P3 | v0.90.0 액티브 스프린트 완료 과제 (18개 전량 완료 아카이브) |  | - [x] **`PERF-PGWIRE-PREP-TX`**: PGWi... |
 | `DONE` | **`M3`** |  | Ecosystem | P3 | 내구성 및 신뢰성 1차 검증 완료 이력 |  |  |
 | `DONE` | **`OCC-HYPER-2`** |  | STORAGE | P2 | In-Memory OCC Pointer-Free Flat Record A/B Benchmark & Implementation | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
-| `PENDING` | **`OLAP-CBO-EXTENDED-STATS-1`** | `Post-1.0` | Planner | P2 | 다중 컬럼 확장 통계 (CREATE STATISTICS) 및 함수 종속성 상관계수 | [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`OLAP-CBO-HISTOGRAM-MCV-1`** | `Post-1.0` | Planner | P2 | Equi-depth 히스토그램 및 MCV 최빈값 통계 수집기 구현 | [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`OLAP-DYNAMIC-PARTITION-PRUNING-1`** | `Post-1.0` | Planner | P2 | Bloom Filter 기반 런타임 동적 파티션 프루닝 (DPP) | [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`OLAP-INTRA-QUERY-PARALLEL-FRAMEWORK-1`** | `Post-1.0` | Execution | P2 | Volcano 화산 모델 Gather/Exchange 노드 및 병렬 워커 프레임워크 | [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`OLAP-JOIN-ORDERING-DP-1`** | `Post-1.0` | Planner | P2 | DPsize / DPsb 기반 다중 테이블 최적 조인 트리 탐색기 | [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`OLAP-OUT-OF-CORE-GRACE-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | 2-Pass Hybrid Grace Hash Join 디스크 파티셔닝 스필 조인 연산자 | [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`OLAP-OUT-OF-CORE-HASH-AGG-1`** | `Post-1.0` | Execution | P2 | 2-Pass Hybrid Hash Aggregation 디스크 파티셔닝 스필 집계 연산자 | [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`OLAP-PARALLEL-SCAN-AND-JOIN-1`** | `Post-1.0` | Execution | P2 | Parallel SeqScan 및 Parallel Shared-Hash Join 구현 (36코어 가속) | [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
+| `PENDING` | **`OLAP-CBO-EXTENDED-STATS-1`** | `Post-1.0` | Planner | P2 | 다중 컬럼 확장 통계 (CREATE STATISTICS) 및 함수 종속성 상관계수 | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
+| `PENDING` | **`OLAP-CBO-HISTOGRAM-MCV-1`** | `Post-1.0` | Planner | P2 | Equi-depth 히스토그램 및 MCV 최빈값 통계 수집기 구현 | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
+| `PENDING` | **`OLAP-DYNAMIC-PARTITION-PRUNING-1`** | `Post-1.0` | Planner | P2 | Bloom Filter 기반 런타임 동적 파티션 프루닝 (DPP) | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
+| `PENDING` | **`OLAP-INTRA-QUERY-PARALLEL-FRAMEWORK-1`** | `Post-1.0` | Execution | P2 | Volcano 화산 모델 Gather/Exchange 노드 및 병렬 워커 프레임워크 | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
+| `PENDING` | **`OLAP-JOIN-ORDERING-DP-1`** | `Post-1.0` | Planner | P2 | DPsize / DPsb 기반 다중 테이블 최적 조인 트리 탐색기 | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
+| `SPEC_OUT` | **`OLAP-OUT-OF-CORE-GRACE-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | 2-Pass Hybrid Grace Hash Join 디스크 파티셔닝 스필 조인 연산자 | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
+| `PENDING` | **`OLAP-OUT-OF-CORE-HASH-AGG-1`** | `Post-1.0` | Execution | P2 | 2-Pass Hybrid Hash Aggregation 디스크 파티셔닝 스필 집계 연산자 | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
+| `PENDING` | **`OLAP-PARALLEL-SCAN-AND-JOIN-1`** | `Post-1.0` | Execution | P2 | Parallel SeqScan 및 Parallel Shared-Hash Join 구현 (36코어 가속) | [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md) |  |
 | `DONE` | **`OPT-LARGE-JOIN-1`** |  | Durability | P2 | 대규모 조인(10+ Tables) 최적화 | [`notes/plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/plans/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`OPT-SUBQUERY-HASHSET-MATERIALIZATION-1`** |  | Engine | P2 | 비상관 IN (SELECT) 서브쿼리 In-Memory HashSet 구체화 최적화 (10,000건 Cap, hasNull, Canonical Type Normalization) | [`notes/20261118_SUBQUERY_HASHSET_MATERIALIZATION_PLAN.ko.md`](notes/20261118_SUBQUERY_HASHSET_MATERIALIZATION_PLAN.ko.md) |  |
 | `DONE` | **`P-2`** |  | Performance | P1 | WiredTiger VDBE 바이너리 튜플 지연 역직렬화 |  | - [x] **Phase 1 (`BENCH-P2-BASE`)**: ... |
@@ -453,9 +456,11 @@
 | `DONE` | **`PERF-OPT-AGGREGATE-GROUP-SLICES-1`** | `1` | --domain | P2 | AggregateIterator 그룹당 9개 map 할당을 고정 슬라이스로 전환 (P1) | [`--prio`](--prio) |  |
 | `DONE` | **`PERF-OPT-FILTER-PROJECT-EVALMAP-1`** | `1` | --domain | P2 | Filter/Project 무조건 ToEvalMap() 및 Materialize() 지연화로 불필요한 디코딩/할당 제거 (P0) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-HASH-JOIN-INT-FASTPATH-1`** | `Post-1.0` | --domain | P2 | HashJoinIterator 정수 키 Fast-Path 및 키 인덱스 사전 바인딩 (P3) | [`--prio`](--prio) |  |
+| `PENDING` | **`PERF-OPT-MERGE-JOIN-ARENA-AND-CHUNK-1`** | `Post-1.0` | Execution | P2 | Sort Merge Join NextChunk 벡터화 및 Arena 제로-GC 최적화 | [`notes/plans/MERGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/plans/MERGE_JOIN_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OPT-PATINDEX-REGEX-CACHE-1`** | `3` | --domain | P2 | PATINDEX 등 내장 함수 정규식 컴파일 결과 LRU/RWMutex 캐싱 (P5) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-PROJECTION-SRCIDX-DEFER-DECODE-1`** | `Post-1.0` | --domain | P2 | ProjectionIterator 일반 컬럼 srcIdx 사전 바인딩 및 LazyTuple 선택 디코딩 (P4) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-SELECT-VALUES-ROWS-DEDUPE-1`** | `Post-1.0` | --domain | P2 | sqlexec_select.go Values/Rows 이중 할당 제거 및 Wire 프로토콜 Values 직결 (P2) | [`--prio`](--prio) |  |
+| `PENDING` | **`PERF-PARALLEL-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | Parallel Hash Join (1-Build N-Probe) Probe 병렬화 실행기 | [`notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md`](notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | `v0.94.0` | Engine | P3 | WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** |  | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
 | `PENDING` | **`PERF-REPL-SONIC-1`** | `v1.10.0` | Replication | P2 | 고성능 SIMD JSON (ByteDance Sonic) 기반 복제 스트리밍 가속 |  |  |
@@ -502,6 +507,7 @@
 | `PENDING` | **`TDS-COMPAT-6`** | `v1.99.0` | Wire | P2 | TDS 7.x/8.0 MARS (Multiple Active Result Sets) 스트리밍 | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`TDS-MOD-1`** |  | Architecture | P3 | TDS 대규모 파일 모듈 분할 기각 (Spec-Out) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`TEST-BABELFISH-GROUND-TRUTH-ANSWERS-1`** | `1.0-GA` | Testing | P2 | Populate value-verified expected answers for Babelfish Oracle suites | [`notes/plans/BABELFISH_ORACLE_GROUND_TRUTH_ANSWERS_PLAN.ko.md`](notes/plans/BABELFISH_ORACLE_GROUND_TRUTH_ANSWERS_PLAN.ko.md) |  |
+| `PENDING` | **`TEST-E2E-SERVICES-1`** | `1.0-GA` | Test | P1 | E2E Enterprise Services & GUI Tools (DBeaver/Beekeeper) Dual-Engine Regression Suite | [`notes/E2E_SERVICE_REGRESSION_SUITE_PLAN.ko.md`](notes/E2E_SERVICE_REGRESSION_SUITE_PLAN.ko.md) |  |
 | `DONE` | **`TEST-GORM-SQLSERVER-ORACLE-1`** | `1.0-GA` | Engine | P1 | go-gorm/sqlserver 드라이버 핵심 쿼리(MERGE USING VALUES, OUTPUT INSERTED, sp_rename, sys.indexes/foreign_keys/check_constraints 조인, IDENTITY_INSERT) 호환성 오라클 검증 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`TEST-OCC-FLAT-1`** |  | Storage | P2 | Flat 모드 크래시 복구 무결성 검증 (AOF/RDB 및 kill -9) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `DONE` | **`TEST-OCC-FLAT-2`** |  | Storage | P2 | Flat 모드 복합 DDL/DML 회귀 검증 (복합 보조 인덱스, SkipList, FK) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
@@ -524,6 +530,7 @@
 | `DONE` | **`TUNE-SP-FASTPATH-1`** |  | Durability | P2 | TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 | [`notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/plans/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md) | - [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)... |
 | `DONE` | **`WAL-DELTA-1`** | `Spec-Out` | Engine | P2 | Partial / Delta WAL 로깅 (UPDATE 컬럼 차분 비트마스킹) |  |  |
 | `DONE` | **`WEB-SPA-1`** |  | Ecosystem | P3 | 단일 바이너리 내장 SPA 웹 서버 호스팅 | [`notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/plans/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) |  |
+| `PENDING` | **`WIRE-FLATBUFFERS-BINARY-RPC-1`** |  | --priority | P3 | FlatBuffers Zero-Copy Binary RPC Protocol for Game Servers (LionSQL & Lioness Shared) |  |  |
 | `DONE` | **`WT-LOCKDOWN-1`** |  | Storage | P1 | WiredTiger 고동시성 4계층 잠금 및 transaction_sync 영구 배제 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 
 ---
@@ -1079,15 +1086,15 @@
 
 ---
 
-### [PENDING] Live Audit Round 11 Sequences, Limits & Isolation (ENG-011~017) Remediation `AUDIT-ROUND11-REMEDY`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-19 08:53:04
+### [DONE] Live Audit Round 11 Sequences, Limits & Isolation (ENG-011~017) Remediation `AUDIT-ROUND11-REMEDY`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-20 00:25:59
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND11.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND11.ko.md)
 
 ---
 
-### [PENDING] Live Audit Round 12 JSON strict, CONVERT style & Cultural Parse (ENG-018~022) Remediation `AUDIT-ROUND12-REMEDY`
-- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-19 08:53:07
+### [DONE] Live Audit Round 12 JSON strict, CONVERT style & Cultural Parse (ENG-018~022) Remediation `AUDIT-ROUND12-REMEDY`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-20 00:25:59
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND12.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT_ROUND12.ko.md)
 
@@ -2676,6 +2683,11 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] Lioness: Vitess/Citus Model Hash Partitioning Sharding Router Architecture & Core `DIST-LIONESS-SHARDING-ROUTER-1`
+- **Domain**: --priority | **Priority**: P3 | **Updated**: 2026-11-19 12:48:34
+
+---
+
 ### [DONE] 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 `DOC-REVAMP-10`
 - **Domain**: Documentation | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
@@ -2802,6 +2814,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - `Scan()` 찢긴 읽기(torn read) 결함 발굴 및 `snapshotRowsAndKeys` 카노니컬 샤드 RLock 스냅샷으로 완치.
 - 다중 워커 계좌 이체 간 `KeyLatch` 상호 교차 대기 데드락 및 `CancelSessionQuery`의 `cs.Mu` 블로킹 결함 발굴, 25ms 타임아웃 `ErrSerializationFailure` (`SQLSTATE 40001`) 반환 및 `cancelMu` 분리로 원천 완치 (`pkg/storage/key_latch.go`, `pkg/engine/coordinator_impl.go`, `session.go`).
 - 5분 연속 소크 완주: `60,000` ops (`32,986` commits 일치), 잔액 불변(`SUM(balance)=1,000,000`, 위반 0건), RSS 비율 1.00, FD 비율 1.00 (`24` 고정), 고루틴 비율 1.00 (`22` 고정), p99 비율 0.92 (`2.18ms ➔ 2.02ms`, 성능 열화 0) 전 지표 PASS.
+
+---
+
+### [PENDING] Simplified Spill Hash Join (Fixed 16-Bucket Out-of-Core Spill Join) `EXEC-SIMPLIFIED-SPILL-HASH-JOIN-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-19 12:26:25
+- **Milestone**: `Post-1.0`
+- **Plan Doc**: [`notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md`](notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md)
 
 ---
 
@@ -2965,6 +2984,11 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 **Details & Resolution**:
 1. CGo 호출 오버헤드 제거 및 Go 고루틴 스케줄러 밀착 극강 성능 달성
 2. Windows 환경에서 CGo 제약으로 인메모리에 머물던 한계를 극복하고, CGO_ENABLED=0 순수 단일 정적 바이너리로 Windows 네이티브 디스크 영속 MVCC B+Tree 완벽 지원 ([RULE:HermeticParity], [RULE:StaticBinary])
+
+---
+
+### [PENDING] Game Server Primitives: Native Sorted Set (ZSET), Auto-TTL Tables, and Atomic INCRBY/SETNX `FEAT-REDIS-PRIMITIVES-AND-TTL-1`
+- **Domain**: --priority | **Priority**: P3 | **Updated**: 2026-11-19 13:13:40
 
 ---
 
@@ -4269,56 +4293,56 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ### [PENDING] 다중 컬럼 확장 통계 (CREATE STATISTICS) 및 함수 종속성 상관계수 `OLAP-CBO-EXTENDED-STATS-1`
 - **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-19 05:11:38
 - **Milestone**: `Post-1.0`
-- **Plan Doc**: [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
 
 ---
 
 ### [PENDING] Equi-depth 히스토그램 및 MCV 최빈값 통계 수집기 구현 `OLAP-CBO-HISTOGRAM-MCV-1`
 - **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-19 05:11:38
 - **Milestone**: `Post-1.0`
-- **Plan Doc**: [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
 
 ---
 
 ### [PENDING] Bloom Filter 기반 런타임 동적 파티션 프루닝 (DPP) `OLAP-DYNAMIC-PARTITION-PRUNING-1`
 - **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-19 05:11:38
 - **Milestone**: `Post-1.0`
-- **Plan Doc**: [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
 
 ---
 
 ### [PENDING] Volcano 화산 모델 Gather/Exchange 노드 및 병렬 워커 프레임워크 `OLAP-INTRA-QUERY-PARALLEL-FRAMEWORK-1`
 - **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-19 05:11:38
 - **Milestone**: `Post-1.0`
-- **Plan Doc**: [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
 
 ---
 
 ### [PENDING] DPsize / DPsb 기반 다중 테이블 최적 조인 트리 탐색기 `OLAP-JOIN-ORDERING-DP-1`
 - **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-19 05:11:38
 - **Milestone**: `Post-1.0`
-- **Plan Doc**: [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
 
 ---
 
-### [PENDING] 2-Pass Hybrid Grace Hash Join 디스크 파티셔닝 스필 조인 연산자 `OLAP-OUT-OF-CORE-GRACE-HASH-JOIN-1`
-- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-19 05:11:38
+### [SPEC_OUT] 2-Pass Hybrid Grace Hash Join 디스크 파티셔닝 스필 조인 연산자 `OLAP-OUT-OF-CORE-GRACE-HASH-JOIN-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-19 12:19:48
 - **Milestone**: `Post-1.0`
-- **Plan Doc**: [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
 
 ---
 
 ### [PENDING] 2-Pass Hybrid Hash Aggregation 디스크 파티셔닝 스필 집계 연산자 `OLAP-OUT-OF-CORE-HASH-AGG-1`
 - **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-19 05:11:38
 - **Milestone**: `Post-1.0`
-- **Plan Doc**: [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
 
 ---
 
 ### [PENDING] Parallel SeqScan 및 Parallel Shared-Hash Join 구현 (36코어 가속) `OLAP-PARALLEL-SCAN-AND-JOIN-1`
 - **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-19 05:11:38
 - **Milestone**: `Post-1.0`
-- **Plan Doc**: [`notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/POST_1_0_OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
+- **Plan Doc**: [`notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md`](notes/plans/OLAP_ENGINE_ENHANCEMENT_PLAN.ko.md)
 
 ---
 
@@ -4515,6 +4539,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [PENDING] Sort Merge Join NextChunk 벡터화 및 Arena 제로-GC 최적화 `PERF-OPT-MERGE-JOIN-ARENA-AND-CHUNK-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-19 12:27:27
+- **Milestone**: `Post-1.0`
+- **Plan Doc**: [`notes/plans/MERGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/plans/MERGE_JOIN_OPTIMIZATION_PLAN.ko.md)
+
+---
+
 ### [DONE] PATINDEX 등 내장 함수 정규식 컴파일 결과 LRU/RWMutex 캐싱 (P5) `PERF-OPT-PATINDEX-REGEX-CACHE-1`
 - **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-19 01:44:55
 - **Milestone**: `3`
@@ -4533,6 +4564,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-19 01:49:14
 - **Milestone**: `Post-1.0`
 - **Plan Doc**: [`--prio`](--prio)
+
+---
+
+### [PENDING] Parallel Hash Join (1-Build N-Probe) Probe 병렬화 실행기 `PERF-PARALLEL-HASH-JOIN-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-19 12:26:26
+- **Milestone**: `Post-1.0`
+- **Plan Doc**: [`notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md`](notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md)
 
 ---
 
@@ -4930,6 +4968,13 @@ SSMS Object Explorer 테이블 하위 트리(Columns, Keys, Indexes, Triggers) �
 
 ---
 
+### [PENDING] E2E Enterprise Services & GUI Tools (DBeaver/Beekeeper) Dual-Engine Regression Suite `TEST-E2E-SERVICES-1`
+- **Domain**: Test | **Priority**: P1 | **Updated**: 2026-11-19 23:40:03
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/E2E_SERVICE_REGRESSION_SUITE_PLAN.ko.md`](notes/E2E_SERVICE_REGRESSION_SUITE_PLAN.ko.md)
+
+---
+
 ### [DONE] go-gorm/sqlserver 드라이버 핵심 쿼리(MERGE USING VALUES, OUTPUT INSERTED, sp_rename, sys.indexes/foreign_keys/check_constraints 조인, IDENTITY_INSERT) 호환성 오라클 검증 `TEST-GORM-SQLSERVER-ORACLE-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
@@ -5120,6 +5165,11 @@ SQL Server 호환성 매트릭스 §9.9 잔여 항목(Post-1.0). 클라이언트
 
 **Details & Resolution**:
 - `--app`, `--public` 플래그를 통한 SPA 정적 웹 호스팅 및 네이티브 DB 서빙 ([`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md))
+
+---
+
+### [PENDING] FlatBuffers Zero-Copy Binary RPC Protocol for Game Servers (LionSQL & Lioness Shared) `WIRE-FLATBUFFERS-BINARY-RPC-1`
+- **Domain**: --priority | **Priority**: P3 | **Updated**: 2026-11-19 12:57:29
 
 ---
 

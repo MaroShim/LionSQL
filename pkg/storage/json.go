@@ -361,110 +361,142 @@ func parseSimpleTopLevelPath(path string) (string, bool) {
 // JSONValueByPath extracts a scalar value from JSON string at specified path (e.g. "$.user.name" or "$.tags[0]").
 // Per SQL standard, if target element is an object or array, JSON_VALUE returns nil.
 func JSONValueByPath(doc string, path string) (any, bool) {
-	if topKey, ok := parseSimpleTopLevelPath(path); ok {
+	val, ok, _ := JSONValueByPathStrict(doc, path)
+	return val, ok
+}
+
+// JSONValueByPathStrict extracts a scalar value from JSON and returns strict mode errors.
+func JSONValueByPathStrict(doc string, path string) (any, bool, error) {
+	if topKey, ok := parseSimpleTopLevelPath(path); ok && !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(path)), "STRICT") {
 		if rawVal, found := ScanJSONTopLevelKey(doc, topKey, true); found {
 			if rawVal == "null" {
-				return nil, false
+				return nil, false, nil
 			}
 			if strings.HasPrefix(rawVal, "{") || strings.HasPrefix(rawVal, "[") {
-				return nil, false
+				return nil, false, nil
 			}
 			if rawVal == "true" {
-				return true, true
+				return true, true, nil
 			}
 			if rawVal == "false" {
-				return false, true
+				return false, true, nil
 			}
 			if n, err := strconv.ParseInt(rawVal, 10, 64); err == nil {
-				return n, true
+				return n, true, nil
 			}
 			if f, err := strconv.ParseFloat(rawVal, 64); err == nil {
-				return f, true
+				return f, true, nil
 			}
-			return rawVal, true
+			return rawVal, true, nil
 		}
 	}
 
-	target, ok := navigatePath(doc, path)
+	target, ok, err := navigatePathWithMode(doc, path)
+	if err != nil {
+		return nil, false, err
+	}
 	if !ok || target == nil {
-		return nil, false
+		return nil, false, nil
 	}
 
 	switch v := target.(type) {
 	case map[string]any, []any:
 		// JSON_VALUE only returns scalars
-		return nil, false
+		if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(path)), "STRICT") {
+			return nil, false, fmt.Errorf("Msg 13608, Level 16, State 1: Property cannot be found on the specified JSON path: non-scalar target")
+		}
+		return nil, false, nil
 	case string:
-		return v, true
+		return v, true, nil
 	case float64:
 		if v == float64(int64(v)) {
-			return int64(v), true
+			return int64(v), true, nil
 		}
-		return v, true
+		return v, true, nil
 	case bool:
-		return v, true
+		return v, true, nil
 	default:
-		return fmt.Sprintf("%v", v), true
+		return fmt.Sprintf("%v", v), true, nil
 	}
 }
 
 // JSONQueryByPath extracts an object or array from JSON string at specified path (e.g. "$.tags").
 // Per SQL standard, if target element is a scalar, JSON_QUERY returns nil.
 func JSONQueryByPath(doc string, path string) (string, bool) {
-	if topKey, ok := parseSimpleTopLevelPath(path); ok {
+	res, ok, _ := JSONQueryByPathStrict(doc, path)
+	return res, ok
+}
+
+// JSONQueryByPathStrict extracts an object or array and returns strict mode errors.
+func JSONQueryByPathStrict(doc string, path string) (string, bool, error) {
+	if topKey, ok := parseSimpleTopLevelPath(path); ok && !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(path)), "STRICT") {
 		if rawVal, found := ScanJSONTopLevelKey(doc, topKey, false); found {
 			if strings.HasPrefix(rawVal, "{") || strings.HasPrefix(rawVal, "[") {
-				return rawVal, true
+				return rawVal, true, nil
 			}
-			return "", false
+			return "", false, nil
 		}
 	}
 
-	target, ok := navigatePath(doc, path)
+	target, ok, err := navigatePathWithMode(doc, path)
+	if err != nil {
+		return "", false, err
+	}
 	if !ok || target == nil {
-		return "", false
+		return "", false, nil
 	}
 
 	switch v := target.(type) {
 	case map[string]any, []any:
 		b, err := json.Marshal(v)
 		if err != nil {
-			return "", false
+			return "", false, nil
 		}
-		return string(b), true
+		return string(b), true, nil
 	default:
+		if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(path)), "STRICT") {
+			return "", false, fmt.Errorf("Msg 13608, Level 16, State 1: Property cannot be found on the specified JSON path: scalar target")
+		}
 		// JSON_QUERY only returns objects and arrays
-		return "", false
+		return "", false, nil
 	}
 }
 
 func navigatePath(doc string, path string) (any, bool) {
+	val, ok, _ := navigatePathWithMode(doc, path)
+	return val, ok
+}
+
+// navigatePathWithMode navigates a JSON path and returns whether strict mode was specified and violated.
+func navigatePathWithMode(doc string, path string) (any, bool, error) {
 	doc = strings.TrimSpace(doc)
 	if doc == "" {
-		return nil, false
+		return nil, false, nil
 	}
 
 	root, err := getParsedJSONDOM(doc)
 	if err != nil {
-		return nil, false
+		return nil, false, nil
 	}
 
 	p := strings.TrimSpace(path)
+	p = strings.Trim(p, "'\"`")
 	pUpper := strings.ToUpper(p)
+	isStrict := false
 	if strings.HasPrefix(pUpper, "LAX ") {
 		p = strings.TrimSpace(p[4:])
 	} else if strings.HasPrefix(pUpper, "STRICT ") {
+		isStrict = true
 		p = strings.TrimSpace(p[7:])
 	}
 
-	p = strings.Trim(p, "'\"`")
 	if strings.HasPrefix(p, "$") {
 		p = p[1:]
 	}
 	p = strings.TrimPrefix(p, ".")
 
 	if p == "" {
-		return root, true
+		return root, true, nil
 	}
 
 	segments := parsePathSegments(p)
@@ -475,27 +507,39 @@ func navigatePath(doc string, path string) (any, bool) {
 			idxStr := seg[1 : len(seg)-1]
 			idx, err := strconv.Atoi(idxStr)
 			if err != nil {
-				return nil, false
+				if isStrict {
+					return nil, false, fmt.Errorf("Msg 13608, Level 16, State 1: Property cannot be found on the specified JSON path: invalid array index %q", seg)
+				}
+				return nil, false, nil
 			}
 			slice, ok := curr.([]any)
 			if !ok || idx < 0 || idx >= len(slice) {
-				return nil, false
+				if isStrict {
+					return nil, false, fmt.Errorf("Msg 13608, Level 16, State 1: Property cannot be found on the specified JSON path: index %d out of bounds", idx)
+				}
+				return nil, false, nil
 			}
 			curr = slice[idx]
 		} else {
 			m, ok := curr.(map[string]any)
 			if !ok {
-				return nil, false
+				if isStrict {
+					return nil, false, fmt.Errorf("Msg 13608, Level 16, State 1: Property %q cannot be found on the specified JSON path.", seg)
+				}
+				return nil, false, nil
 			}
 			val, exists := m[seg]
 			if !exists {
-				return nil, false
+				if isStrict {
+					return nil, false, fmt.Errorf("Msg 13608, Level 16, State 1: Property %q cannot be found on the specified JSON path.", seg)
+				}
+				return nil, false, nil
 			}
 			curr = val
 		}
 	}
 
-	return curr, true
+	return curr, true, nil
 }
 
 func parsePathSegments(p string) []string {

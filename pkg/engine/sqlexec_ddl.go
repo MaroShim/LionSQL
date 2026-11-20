@@ -1383,6 +1383,11 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 		if cName == "" {
 			cName = fmt.Sprintf("uq_%s_%s", tableName, strings.Join(act.ConstraintCols, "_"))
 		}
+		if curSch, err := s.engine.GetTable(tableName); err == nil && curSch != nil {
+			if curSch.HasConstraint(cName) {
+				return nil, fmt.Errorf("Msg 2714, Level 16, State 5: There is already an object named %q in the database.", cName)
+			}
+		}
 		idxSchema := &storage.IndexSchema{
 			Name:      cName,
 			TableName: tableName,
@@ -1407,6 +1412,12 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 		}
 		fk.ChildTable = tableName
 
+		if curSch, err := s.engine.GetTable(tableName); err == nil && curSch != nil {
+			if fk.Name != "" && curSch.HasConstraint(fk.Name) {
+				return nil, fmt.Errorf("Msg 2714, Level 16, State 5: There is already an object named %q in the database.", fk.Name)
+			}
+		}
+
 		if !strings.EqualFold(fk.ParentTable, tableName) {
 			parentTbl, err := s.engine.GetTable(fk.ParentTable)
 			if err != nil || parentTbl == nil {
@@ -1423,6 +1434,9 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 		}
 
 		if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			if fk.Name != "" && sch.HasConstraint(fk.Name) {
+				return fmt.Errorf("Msg 2714, Level 16, State 5: There is already an object named %q in the database.", fk.Name)
+			}
 			if strings.EqualFold(fk.ParentTable, sch.Name) && len(fk.ParentColumns) == 0 {
 				pkCol, err := sch.PrimaryKeyColumn()
 				if err != nil || pkCol == nil {
@@ -1452,8 +1466,20 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 		if act.CheckExpr == "" {
 			return nil, fmt.Errorf("invalid check constraint syntax: missing expression")
 		}
+		chkStored := act.CheckExpr
+		if act.ConstraintName != "" {
+			chkStored = act.ConstraintName + ":" + act.CheckExpr
+		}
+		if curSch, err := s.engine.GetTable(tableName); err == nil && curSch != nil {
+			if act.ConstraintName != "" && curSch.HasConstraint(act.ConstraintName) {
+				return nil, fmt.Errorf("Msg 2714, Level 16, State 5: There is already an object named %q in the database.", act.ConstraintName)
+			}
+		}
 		if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
-			sch.CheckConstraints = append(sch.CheckConstraints, act.CheckExpr)
+			if act.ConstraintName != "" && sch.HasConstraint(act.ConstraintName) {
+				return fmt.Errorf("Msg 2714, Level 16, State 5: There is already an object named %q in the database.", act.ConstraintName)
+			}
+			sch.CheckConstraints = append(sch.CheckConstraints, chkStored)
 			return nil
 		}); err != nil {
 			return nil, err

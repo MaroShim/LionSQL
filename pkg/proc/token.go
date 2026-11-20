@@ -180,9 +180,15 @@ const (
 	TokenAny             // ANY
 	TokenSome            // SOME
 	TokenMerge           // MERGE
+	TokenParse           // PARSE
+	TokenTryParse        // TRY_PARSE
+	TokenUsing           // USING
 )
 
 var keywords = map[string]TokenType{
+	"PARSE":         TokenParse,
+	"TRY_PARSE":     TokenTryParse,
+	"USING":         TokenUsing,
 	"MERGE":         TokenMerge,
 	"WAITFOR":       TokenWaitfor,
 	"DELAY":         TokenDelay,
