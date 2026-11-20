@@ -204,6 +204,12 @@ func parseValueExpression(exprStr string) any {
 	astExpr := p.ParseExpr()
 	if astExpr != nil && len(p.Errors()) == 0 {
 		if val, err := proc.EvalRowExpr(astExpr, nil, nil); err == nil {
+			if sv, ok := val.(storage.Value); ok {
+				return formatStorageValue(sv)
+			}
+			if i, ok := val.(int); ok {
+				return int64(i)
+			}
 			return val
 		}
 	}

@@ -1372,9 +1372,11 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 				var evalMap map[string]any
 				rowSubExec = func(rawSubSQL string) ([]map[string]any, []string, error) {
 					if evalMap == nil {
-						evalMap = make(map[string]any, len(rec))
+						evalMap = make(map[string]any, len(rec)*2)
 						for k, v := range rec {
-							evalMap[k] = formatStorageValue(v)
+							sv := formatStorageValue(v)
+							evalMap[k] = sv
+							evalMap[tableName+"."+k] = sv
 						}
 					}
 					paramSQL := sqlutil.ParameterizeSubquery(rawSubSQL, evalMap)
@@ -1632,9 +1634,11 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 			var evalMap map[string]any
 			rowSubExec = func(rawSubSQL string) ([]map[string]any, []string, error) {
 				if evalMap == nil {
-					evalMap = make(map[string]any, len(rec))
+					evalMap = make(map[string]any, len(rec)*2)
 					for k, v := range rec {
-						evalMap[k] = formatStorageValue(v)
+						sv := formatStorageValue(v)
+						evalMap[k] = sv
+						evalMap[tableName+"."+k] = sv
 					}
 				}
 				paramSQL := sqlutil.ParameterizeSubquery(rawSubSQL, evalMap)

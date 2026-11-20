@@ -509,6 +509,11 @@ func (a *AggregateIterator) parseFields() {
 						parsedArg = fn.Args[0]
 						arg = strings.Trim(strings.TrimSpace(fn.Args[0].String()), "\"`[]")
 						if fnType == aggGroupConcat && len(fn.Args) > 1 {
+							if lit, ok := fn.Args[1].(*proc.LiteralExpr); (ok && lit.Val.IsNull) || strings.EqualFold(strings.Trim(fn.Args[1].String(), "'\""), "NULL") {
+								if a.initErr == nil {
+									a.initErr = fmt.Errorf("Msg 8711, Level 16, State 1: The separator expression for STRING_AGG cannot be NULL")
+								}
+							}
 							sep = strings.Trim(fn.Args[1].String(), "'\"")
 						}
 					}
@@ -593,6 +598,11 @@ func (a *AggregateIterator) parseFields() {
 					arg := strings.Trim(strings.TrimSpace(parsedArg.String()), "\"`[]")
 					sep := ","
 					if len(wg.Function.Args) > 1 {
+						if lit, ok := wg.Function.Args[1].(*proc.LiteralExpr); (ok && lit.Val.IsNull) || strings.EqualFold(strings.Trim(wg.Function.Args[1].String(), "'\""), "NULL") {
+							if a.initErr == nil {
+								a.initErr = fmt.Errorf("Msg 8711, Level 16, State 1: The separator expression for STRING_AGG cannot be NULL")
+							}
+						}
 						sep = strings.Trim(wg.Function.Args[1].String(), "'\"")
 					}
 					alias := extractedAlias
@@ -916,7 +926,7 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 					for i, k := range a.groupKeys {
 						if (mask & (1 << i)) != 0 {
 							var val any
-							if a.groupKeyIdx != nil && i < len(a.groupKeyIdx) && a.groupKeyIdx[i] >= 0 && a.groupKeyIdx[i] < len(tuple.Values) {
+							if tuple.Lazy == nil && a.groupKeyIdx != nil && i < len(a.groupKeyIdx) && a.groupKeyIdx[i] >= 0 && a.groupKeyIdx[i] < len(tuple.Values) {
 								val = tuple.Values[a.groupKeyIdx[i]]
 							} else {
 								val, _ = lookupVal(tuple, k)

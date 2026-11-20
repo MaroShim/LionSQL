@@ -130,6 +130,7 @@ const (
 	OpIndexScan
 
 	// Scalar / Point Query Direct Result Generation
+	OpResultCols
 	OpResultRow
 	OpPointSelect
 
@@ -151,6 +152,8 @@ func (op OpCode) String() string {
 		return "MOD"
 	case OpWaitfor:
 		return "WAITFOR"
+	case OpResultCols:
+		return "RESULT_COLS"
 	case OpResultRow:
 		return "RESULT_ROW"
 	case OpPointSelect:
@@ -521,6 +524,18 @@ func (d *IndexScanData) String() string {
 		return ""
 	}
 	return fmt.Sprintf("Table:%s Index:%s", d.Table, d.IndexName)
+}
+
+// ResultColsData holds metadata for declaring result set column names prior to row evaluation.
+type ResultColsData struct {
+	Columns []string
+}
+
+func (d *ResultColsData) String() string {
+	if d == nil {
+		return ""
+	}
+	return fmt.Sprintf("Cols:%v", d.Columns)
 }
 
 // ResultRowData holds metadata for emitting a scalar / calculated row directly from registers.

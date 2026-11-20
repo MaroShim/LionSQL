@@ -1645,6 +1645,19 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 			if !found {
 				return fmt.Errorf("%w: column %q does not exist in table %q", storage.ErrColumnNotFound, oldName, tableName)
 			}
+			// Synchronize secondary index definitions referencing oldName
+			for i := range sch.Indexes {
+				for j := range sch.Indexes[i].Columns {
+					if strings.EqualFold(sch.Indexes[i].Columns[j], oldName) {
+						sch.Indexes[i].Columns[j] = newName
+					}
+				}
+				for j := range sch.Indexes[i].IncludeCols {
+					if strings.EqualFold(sch.Indexes[i].IncludeCols[j], oldName) {
+						sch.Indexes[i].IncludeCols[j] = newName
+					}
+				}
+			}
 			return nil
 		}); err != nil {
 			return nil, err

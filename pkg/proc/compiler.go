@@ -1203,6 +1203,8 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 				colNames = append(colNames, name)
 			}
 
+			c.emit(OpResultCols, 0, 0, 0, &ResultColsData{Columns: colNames})
+
 			startReg := int32(0)
 			if len(projRegs) > 0 {
 				startReg = projRegs[0]

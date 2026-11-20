@@ -3003,7 +3003,11 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 
 		// Scan non-null sample values from rows
 		for _, row := range res.Rows {
-			if v, ok := row[colName]; ok && v != nil {
+			if rawV, ok := row[colName]; ok && rawV != nil {
+				v := unwrapTdsOutputValue(rawV)
+				if v == nil {
+					continue
+				}
 				switch val := v.(type) {
 				case int, int64, int32, int16, int8:
 					colType = TypeIntN

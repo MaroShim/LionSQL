@@ -2632,6 +2632,21 @@ vmLoop:
 			f.regs[inst.A] = storage.IntValue(int64(len(rows)))
 		}
 
+	case proc.OpResultCols:
+		data, ok := f.aux(&inst).(*proc.ResultColsData)
+		if ok && data != nil && len(data.Columns) > 0 {
+			if len(f.columns) > 0 && (len(f.rows) > 0 || len(f.values) > 0) {
+				f.resultSets = append(f.resultSets, VMResultSet{
+					Columns: f.columns,
+					Rows:    f.rows,
+					Values:  f.values,
+				})
+				f.rows = nil
+				f.values = nil
+			}
+			f.columns = data.Columns
+		}
+
 	case proc.OpResultRow:
 		data, ok := f.aux(&inst).(*proc.ResultRowData)
 		if !ok || data == nil || data.Count < 0 {
@@ -2661,7 +2676,7 @@ vmLoop:
 			row[colName] = val
 		}
 
-		if len(f.columns) > 0 {
+		if len(f.columns) > 0 && !slicesEqualStrings(f.columns, cols) && (len(f.rows) > 0 || len(f.values) > 0) {
 			f.resultSets = append(f.resultSets, VMResultSet{
 				Columns: f.columns,
 				Rows:    f.rows,

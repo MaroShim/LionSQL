@@ -70,9 +70,10 @@ type FrameBound struct {
 
 // WindowFrame defines a window frame specification (e.g. ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING).
 type WindowFrame struct {
-	Unit  FrameUnit  `json:"unit"`
-	Start FrameBound `json:"start"`
-	End   FrameBound `json:"end"`
+	Unit             FrameUnit  `json:"unit"`
+	Start            FrameBound `json:"start"`
+	End              FrameBound `json:"end"`
+	ExcludeCurrentRow bool      `json:"exclude_current_row,omitempty"`
 }
 
 // WindowDef defines a window function specification (function, args, partition by, order by, alias, frame).
@@ -2257,6 +2258,13 @@ func parseWindowFrame(frameStr string) *WindowFrame {
 		return nil
 	}
 
+	excludeCurrentRow := false
+	if exclIdx := sqlutil.FindTopLevelKeyword(sUpper, "EXCLUDE CURRENT ROW"); exclIdx != -1 {
+		excludeCurrentRow = true
+		s = strings.TrimSpace(s[:exclIdx])
+		sUpper = strings.TrimSpace(sUpper[:exclIdx])
+	}
+
 	if strings.HasPrefix(sUpper, "BETWEEN ") {
 		rest := strings.TrimSpace(s[8:])
 		andIdx := sqlutil.FindTopLevelKeyword(rest, "AND")
@@ -2270,7 +2278,12 @@ func parseWindowFrame(frameStr string) *WindowFrame {
 		if !ok1 || !ok2 {
 			return nil
 		}
-		return &WindowFrame{Unit: unit, Start: startBound, End: endBound}
+		return &WindowFrame{
+			Unit:              unit,
+			Start:             startBound,
+			End:               endBound,
+			ExcludeCurrentRow: excludeCurrentRow,
+		}
 	}
 
 	// Shorthand: e.g. ROWS UNBOUNDED PRECEDING, ROWS 5 PRECEDING, ROWS CURRENT ROW
@@ -2279,9 +2292,10 @@ func parseWindowFrame(frameStr string) *WindowFrame {
 		return nil
 	}
 	return &WindowFrame{
-		Unit:  unit,
-		Start: startBound,
-		End:   FrameBound{Type: FrameCurrentRow},
+		Unit:              unit,
+		Start:             startBound,
+		End:               FrameBound{Type: FrameCurrentRow},
+		ExcludeCurrentRow: excludeCurrentRow,
 	}
 }
 

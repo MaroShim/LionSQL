@@ -210,6 +210,9 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 
 			if isMatched {
 				pkKey := pkVal.String()
+				if matchedTargetKeys[pkKey] {
+					return nil, fmt.Errorf("Msg 8672, Level 16, State 1: The MERGE statement attempted to UPDATE or DELETE the same row more than once. This happens when a target row matches more than one source row. A MERGE statement cannot UPDATE/DELETE the same row of the target table multiple times. Refine the ON clause to ensure a target row matches at most one source row, or use the GROUP BY clause to group the source rows.")
+				}
 				matchedTargetKeys[pkKey] = true
 
 				for _, clause := range parsed.clauses {
@@ -407,6 +410,9 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 				pkVal = tRec[pkCol.Name]
 			}
 			pkKey := pkVal.String()
+			if matchedTargetKeys[pkKey] {
+				return nil, fmt.Errorf("Msg 8672, Level 16, State 1: The MERGE statement attempted to UPDATE or DELETE the same row more than once. This happens when a target row matches more than one source row. A MERGE statement cannot UPDATE/DELETE the same row of the target table multiple times. Refine the ON clause to ensure a target row matches at most one source row, or use the GROUP BY clause to group the source rows.")
+			}
 			matchedTargetKeys[pkKey] = true
 
 			for _, clause := range parsed.clauses {
@@ -623,7 +629,7 @@ func (s *Coordinator) loadMergeSourceRows(parsed *parsedMerge, tx storage.Transa
 	// Case 2: (SELECT ...)
 	if strings.HasPrefix(raw, "(") && strings.HasSuffix(raw, ")") {
 		subquery := strings.TrimSpace(raw[1 : len(raw)-1])
-		res, err := s.execSelect(subquery, start, cs)
+		res, err := s.executeNestedSessionSQL(cs, subquery)
 		if err != nil {
 			return nil, err
 		}

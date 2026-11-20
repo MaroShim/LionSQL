@@ -693,10 +693,17 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 			endK = total - 1
 		}
 
+		isExcluded := func(k int) bool {
+			return frame != nil && frame.ExcludeCurrentRow && k == i
+		}
+
 		switch fn {
 		case "COUNT":
 			cnt := int64(0)
 			for k := startK; k <= endK; k++ {
+				if isExcluded(k) {
+					continue
+				}
 				kRowIdx := indices[k]
 				if targetCol == "" || targetCol == "*" || getValFromRow(w.rows[kRowIdx], targetCol, parsedExpr) != nil {
 					cnt++
@@ -708,6 +715,9 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 			sum := float64(0)
 			hasVal := false
 			for k := startK; k <= endK; k++ {
+				if isExcluded(k) {
+					continue
+				}
 				kRowIdx := indices[k]
 				if v := getValFromRow(w.rows[kRowIdx], targetCol, parsedExpr); v != nil {
 					if f, ok := toFloat64(v); ok {
@@ -726,6 +736,9 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 			sum := float64(0)
 			count := 0
 			for k := startK; k <= endK; k++ {
+				if isExcluded(k) {
+					continue
+				}
 				kRowIdx := indices[k]
 				if v := getValFromRow(w.rows[kRowIdx], targetCol, parsedExpr); v != nil {
 					if f, ok := toFloat64(v); ok {
@@ -743,6 +756,9 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 		case "MIN":
 			var minVal any = nil
 			for k := startK; k <= endK; k++ {
+				if isExcluded(k) {
+					continue
+				}
 				kRowIdx := indices[k]
 				v := getValFromRow(w.rows[kRowIdx], targetCol, parsedExpr)
 				if v != nil {
@@ -756,6 +772,9 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 		case "MAX":
 			var maxVal any = nil
 			for k := startK; k <= endK; k++ {
+				if isExcluded(k) {
+					continue
+				}
 				kRowIdx := indices[k]
 				v := getValFromRow(w.rows[kRowIdx], targetCol, parsedExpr)
 				if v != nil {
@@ -767,10 +786,26 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 			winValues[rowIdx] = maxVal
 
 		case "FIRST_VALUE":
-			winValues[rowIdx] = getValFromRow(w.rows[indices[startK]], targetCol, parsedExpr)
+			firstK := startK
+			for firstK <= endK && isExcluded(firstK) {
+				firstK++
+			}
+			if firstK <= endK {
+				winValues[rowIdx] = getValFromRow(w.rows[indices[firstK]], targetCol, parsedExpr)
+			} else {
+				winValues[rowIdx] = nil
+			}
 
 		case "LAST_VALUE":
-			winValues[rowIdx] = getValFromRow(w.rows[indices[endK]], targetCol, parsedExpr)
+			lastK := endK
+			for lastK >= startK && isExcluded(lastK) {
+				lastK--
+			}
+			if lastK >= startK {
+				winValues[rowIdx] = getValFromRow(w.rows[indices[lastK]], targetCol, parsedExpr)
+			} else {
+				winValues[rowIdx] = nil
+			}
 		}
 	}
 }
