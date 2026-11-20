@@ -296,7 +296,7 @@
 | `DONE` | **`FIX-EVAL-NOT-IN-NULL-3VL-1`** | `1.0-GA` | Engine | P2 | NOT IN 서브쿼리 및 리스트에 NULL 포함 시 3치 논리(3VL UNKNOWN) 엄격 적용 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-EXEC-DEFAULT-KEYWORD-1`** |  | Parser | P2 | EXEC arg DEFAULT keyword must bind the declared default instead of the string literal | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-EXEC-UNKNOWN-NAMED-ARG-1`** |  | Engine | P2 | EXEC with an unknown named argument must raise error 8145 instead of being ignored | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
-| `PENDING` | **`FIX-FK-CONCURRENT-PARENT-LOCK-1`** | `v0.94.0` | Storage | P2 | 동시성 FK 검증 시 부모 행 삭제 방지 참조 락 체계 확립 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-FK-CONCURRENT-PARENT-LOCK-1`** | `v0.94.0` | Storage | P2 | 동시성 FK 검증 시 부모 행 삭제 방지 참조 락 체계 확립 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-GROUPBY-INVALID-COLUMN-VALIDATION-1`** | `1.0-GA` | Planner | P1 | GROUP BY 존재하지 않는 비유효 컬럼 지정 시 명시적 컴파일 에러 검증 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-GROUPBY-ORDINAL-POSITION-1`** |  | Planner | P1 | GROUP BY 1 서수 위치(Ordinal Position) 지원 및 단일 그룹 압축 결함 수정 |  |  |
 | `DONE` | **`FIX-GROUPBY-OUTPUT-ALIAS-1`** |  | Planner | P2 | GROUP BY <alias> 프로젝션 별칭 평가 지원 |  |  |
@@ -3326,8 +3326,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] 동시성 FK 검증 시 부모 행 삭제 방지 참조 락 체계 확립 `FIX-FK-CONCURRENT-PARENT-LOCK-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
+### [DONE] 동시성 FK 검증 시 부모 행 삭제 방지 참조 락 체계 확립 `FIX-FK-CONCURRENT-PARENT-LOCK-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-20 01:15:53
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
 

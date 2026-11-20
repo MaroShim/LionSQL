@@ -208,6 +208,7 @@ type Transaction struct {
 	tableNames        []string
 	neededShards      []shardRef
 	acquiredLocks     []lockRef
+	acquiredRefLocks  []lockRef
 	readCache         map[string]cachedRow              // "table\x00key" -> cached decoded row & ver
 	closed            bool
 	committed         bool
@@ -283,6 +284,16 @@ func (tx *Transaction) tryAcquireWriteLockLocked(td *TableData, pkKey string) er
 	if owner, exists := sh.activeWriters[pkKey]; exists && owner != tx.txID {
 		return storage.ErrSerializationFailure
 	}
+	// Check if other transactions hold a shared foreign key reference lock on this row
+	if sh.activeReaders != nil {
+		if readers, hasReaders := sh.activeReaders[pkKey]; hasReaders {
+			for rTxID := range readers {
+				if rTxID != tx.txID {
+					return storage.ErrSerializationFailure
+				}
+			}
+		}
+	}
 	if _, exists := sh.activeWriters[pkKey]; !exists {
 		sh.activeWriters[pkKey] = tx.txID
 		tx.acquiredLocks = append(tx.acquiredLocks, lockRef{
@@ -294,11 +305,43 @@ func (tx *Transaction) tryAcquireWriteLockLocked(td *TableData, pkKey string) er
 	return nil
 }
 
+func (tx *Transaction) tryAcquireRefLockLocked(td *TableData, pkKey string) error {
+	if td == nil {
+		return nil
+	}
+	td.ensureShardsInit()
+	sIdx := hashShard(pkKey)
+	sh := &td.shards[sIdx]
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
+
+	// If another transaction is actively mutating this parent row, conflict
+	if sh.activeWriters != nil {
+		if owner, exists := sh.activeWriters[pkKey]; exists && owner != tx.txID {
+			return storage.ErrSerializationFailure
+		}
+	}
+	if sh.activeReaders == nil {
+		sh.activeReaders = make(map[string]map[uint64]struct{})
+	}
+	readers, ok := sh.activeReaders[pkKey]
+	if !ok {
+		readers = make(map[uint64]struct{})
+		sh.activeReaders[pkKey] = readers
+	}
+	if _, exists := readers[tx.txID]; !exists {
+		readers[tx.txID] = struct{}{}
+		tx.acquiredRefLocks = append(tx.acquiredRefLocks, lockRef{
+			td:       td,
+			shardIdx: sIdx,
+			key:      pkKey,
+		})
+	}
+	return nil
+}
+
 func (tx *Transaction) releaseAcquiredLocksLocked() {
 	nLocks := len(tx.acquiredLocks)
-	if nLocks == 0 {
-		return
-	}
 	shrinkMap := nLocks > 128
 	for _, ref := range tx.acquiredLocks {
 		if ref.td != nil && ref.shardIdx >= 0 && ref.shardIdx < numTableShards {
@@ -317,6 +360,32 @@ func (tx *Transaction) releaseAcquiredLocksLocked() {
 		tx.acquiredLocks = nil
 	} else {
 		tx.acquiredLocks = tx.acquiredLocks[:0]
+	}
+
+	nRefLocks := len(tx.acquiredRefLocks)
+	shrinkRefMap := nRefLocks > 128
+	for _, ref := range tx.acquiredRefLocks {
+		if ref.td != nil && ref.shardIdx >= 0 && ref.shardIdx < numTableShards {
+			sh := &ref.td.shards[ref.shardIdx]
+			sh.mu.Lock()
+			if sh.activeReaders != nil {
+				if readers, ok := sh.activeReaders[ref.key]; ok {
+					delete(readers, tx.txID)
+					if len(readers) == 0 {
+						delete(sh.activeReaders, ref.key)
+					}
+				}
+				if shrinkRefMap && len(sh.activeReaders) == 0 {
+					sh.activeReaders = nil
+				}
+			}
+			sh.mu.Unlock()
+		}
+	}
+	if shrinkRefMap {
+		tx.acquiredRefLocks = nil
+	} else {
+		tx.acquiredRefLocks = tx.acquiredRefLocks[:0]
 	}
 }
 
@@ -1296,7 +1365,14 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 		if _, inLocal := tx.getLocal(fk.ParentTable, parentKey); inLocal {
 			return true, nil
 		}
-		return parentTd.hasKey(parentKey), nil
+		if !parentTd.hasKey(parentKey) {
+			return false, nil
+		}
+		// Enforce reference share lock on parent row to prevent concurrent parent deletion [FIX-FK-CONCURRENT-PARENT-LOCK-1]
+		if err := tx.tryAcquireRefLockLocked(parentTd, parentKey); err != nil {
+			return false, err
+		}
+		return true, nil
 	}
 
 	matched := false

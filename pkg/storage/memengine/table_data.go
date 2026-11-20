@@ -195,7 +195,8 @@ func (e shardEntry) materializeWithLayout(mode MemoryMode, schema *storage.Table
 type tableShard struct {
 	mu            sync.RWMutex
 	entries       map[string]shardEntry
-	activeWriters map[string]uint64 // pkKey -> txID (uncommitted active writer tracking)
+	activeWriters map[string]uint64           // pkKey -> txID (uncommitted active writer tracking)
+	activeReaders map[string]map[uint64]struct{} // pkKey -> set of txIDs referencing parent rows
 	_pad          [32]byte
 }
 
@@ -288,6 +289,9 @@ func (td *TableData) initShardsInternal() {
 		}
 		if td.shards[i].activeWriters == nil {
 			td.shards[i].activeWriters = make(map[string]uint64)
+		}
+		if td.shards[i].activeReaders == nil {
+			td.shards[i].activeReaders = make(map[string]map[uint64]struct{})
 		}
 	}
 	if len(td.Rows) > 0 {
