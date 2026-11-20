@@ -12,10 +12,11 @@ import (
 type OpType string
 
 const (
-	OpInsert OpType = "INSERT"
-	OpUpdate OpType = "UPDATE"
-	OpDelete OpType = "DELETE"
-	OpDDL    OpType = "DDL"
+	OpInsert   OpType = "INSERT"
+	OpUpdate   OpType = "UPDATE"
+	OpDelete   OpType = "DELETE"
+	OpDDL      OpType = "DDL"
+	OpSnapshot OpType = "SNAPSHOT"
 )
 
 // ChangeEvent represents a single committed row-level or schema mutation event.

@@ -24,6 +24,8 @@ type Streamer struct {
 	latestLSN   atomic.Int64
 	closed      atomic.Bool
 	nextSubID   atomic.Uint64
+	snapshotGen *SnapshotGenerator
+	checkpoints CheckpointStore
 }
 
 type subscriber struct {
@@ -94,6 +96,34 @@ func (s *Streamer) SubscriberCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.subscribers)
+}
+
+// SetSnapshotGenerator attaches a snapshot generator to enable initial baseline snapshot streaming.
+func (s *Streamer) SetSnapshotGenerator(gen *SnapshotGenerator) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.snapshotGen = gen
+}
+
+// SetCheckpointStore attaches a persistent or in-memory checkpoint store.
+func (s *Streamer) SetCheckpointStore(store CheckpointStore) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.checkpoints = store
+}
+
+// CheckpointStore returns the attached checkpoint store, if any.
+func (s *Streamer) CheckpointStore() CheckpointStore {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.checkpoints
+}
+
+// SnapshotGenerator returns the attached snapshot generator, if any.
+func (s *Streamer) SnapshotGenerator() *SnapshotGenerator {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.snapshotGen
 }
 
 // Subscribe registers a new subscriber channel starting from fromLSN with an optional table filter.
@@ -195,6 +225,8 @@ func (s *Streamer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fromLSNStr := r.URL.Query().Get("from_lsn")
+	consumerID := r.URL.Query().Get("consumer_id")
+	snapshotMode := r.URL.Query().Get("snapshot") // "auto" (default if from_lsn <= 0), "never", "always"
 	var fromLSN int64
 	if fromLSNStr != "" {
 		if parsed, err := strconv.ParseInt(fromLSNStr, 10, 64); err == nil {
@@ -207,6 +239,14 @@ func (s *Streamer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		format = "ndjson"
 	}
 
+	// Automatic checkpoint resumption if consumer_id is specified and from_lsn was not passed
+	cpStore := s.CheckpointStore()
+	if consumerID != "" && fromLSNStr == "" && cpStore != nil {
+		if savedLSN, err := cpStore.GetCheckpoint(consumerID, tableFilter); err == nil && savedLSN > 0 {
+			fromLSN = savedLSN
+		}
+	}
+
 	if format == "sse" {
 		w.Header().Set("Content-Type", "text/event-stream")
 	} else {
@@ -217,6 +257,41 @@ func (s *Streamer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
+
+	writeEvent := func(ev ChangeEvent) error {
+		data, err := ev.ToJSON()
+		if err != nil {
+			return err
+		}
+		if format == "sse" {
+			if _, err := fmt.Fprintf(w, "id: %d\nevent: change\ndata: %s\n\n", ev.LSN, string(data)); err != nil {
+				return err
+			}
+		} else {
+			if _, err := w.Write(data); err != nil {
+				return err
+			}
+			if _, err := w.Write([]byte("\n")); err != nil {
+				return err
+			}
+		}
+		flusher.Flush()
+		return nil
+	}
+
+	// 1. Initial baseline snapshot if requested or on fresh start (fromLSN <= 0 and snapshot != "never")
+	snapGen := s.SnapshotGenerator()
+	if snapGen != nil && tableFilter != "" && snapshotMode != "never" && (fromLSN <= 0 || snapshotMode == "always") {
+		snapLSN, _, err := snapGen.GenerateTableSnapshot(r.Context(), tableFilter, func(ev ChangeEvent) error {
+			return writeEvent(ev)
+		})
+		if err == nil && snapLSN > fromLSN {
+			fromLSN = snapLSN
+			if consumerID != "" && cpStore != nil {
+				_ = cpStore.SaveCheckpoint(consumerID, tableFilter, snapLSN)
+			}
+		}
+	}
 
 	ch, cancel, err := s.Subscribe(r.Context(), fromLSN, tableFilter, 2048)
 	if err != nil {
@@ -243,17 +318,12 @@ func (s *Streamer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			data, err := ev.ToJSON()
-			if err != nil {
-				continue
+			if err := writeEvent(ev); err != nil {
+				return
 			}
-			if format == "sse" {
-				fmt.Fprintf(w, "id: %d\nevent: change\ndata: %s\n\n", ev.LSN, string(data))
-			} else {
-				w.Write(data)
-				w.Write([]byte("\n"))
+			if consumerID != "" && cpStore != nil && ev.LSN > 0 {
+				_ = cpStore.SaveCheckpoint(consumerID, ev.Table, ev.LSN)
 			}
-			flusher.Flush()
 		}
 	}
 }

@@ -795,8 +795,16 @@ func runServer(args []string) error {
 		}
 	}
 
-	// Initialize CDC Streamer
+	// Initialize CDC Streamer with SnapshotGenerator and persistent CheckpointStore
 	cdcStreamer := cdc.NewStreamer(10000)
+	cdcStreamer.SetSnapshotGenerator(cdc.NewSnapshotGenerator(eng))
+	if cfg.Server.DataDir != "" {
+		if cpStore, err := cdc.NewFileCheckpointStore(cfg.Server.DataDir, "cdc_checkpoints.json"); err == nil {
+			cdcStreamer.SetCheckpointStore(cpStore)
+		}
+	} else {
+		cdcStreamer.SetCheckpointStore(cdc.NewMemoryCheckpointStore())
+	}
 	type walHookAdder interface {
 		AddWALHook(fn func(rec memengine.WALRecord))
 	}
