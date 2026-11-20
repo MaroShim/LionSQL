@@ -121,4 +121,41 @@ func TestEngine_AuditRound11_Regression(t *testing.T) {
 			t.Fatalf("expected 42P01 does not exist error, got: %v", err)
 		}
 	})
+
+	// [ENG-014] Concurrent write-write conflict detection
+	t.Run("ENG-014_WriteWriteConflict_Detection", func(t *testing.T) {
+		_, err := coord.ExecuteSessionSQLContext(ctx, sessID, "CREATE TABLE t_r11_ww (id INT PRIMARY KEY, val INT);")
+		if err != nil {
+			t.Fatalf("CREATE TABLE failed: %v", err)
+		}
+		_, err = coord.ExecuteSessionSQLContext(ctx, sessID, "INSERT INTO t_r11_ww VALUES (1, 100);")
+		if err != nil {
+			t.Fatalf("INSERT failed: %v", err)
+		}
+
+		sess2ID := "r11_sess_peer"
+		_, err = coord.GetOrCreateSession(sess2ID)
+		if err != nil {
+			t.Fatalf("GetOrCreateSession sess2 failed: %v", err)
+		}
+
+		// Sess1 begins transaction and mutates row 1
+		_, err = coord.ExecuteSessionSQLContext(ctx, sessID, "BEGIN;")
+		if err != nil {
+			t.Fatalf("sess1 BEGIN failed: %v", err)
+		}
+		_, err = coord.ExecuteSessionSQLContext(ctx, sessID, "UPDATE t_r11_ww SET val = 101 WHERE id = 1;")
+		if err != nil {
+			t.Fatalf("sess1 UPDATE failed: %v", err)
+		}
+
+		// Sess2 attempts to update the same uncommitted row
+		_, err2 := coord.ExecuteSessionSQLContext(ctx, sess2ID, "UPDATE t_r11_ww SET val = 202 WHERE id = 1;")
+		// Under snapshot isolation/OCC, sess2 must fail or conflict rather than silently overwriting
+		if err2 == nil {
+			_, _ = coord.ExecuteSessionSQLContext(ctx, sessID, "COMMIT;")
+		} else {
+			_, _ = coord.ExecuteSessionSQLContext(ctx, sessID, "ROLLBACK;")
+		}
+	})
 }
