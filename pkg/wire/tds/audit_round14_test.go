@@ -15,6 +15,7 @@ func TestTDS_AuditRound14_Regression(t *testing.T) {
 	// DEFECT 1: Large binary / string literal (> 8000 bytes) serialization must use PLP
 	// -------------------------------------------------------------------------
 	t.Run("DEFECT1_LargeBinary_PLP_Mode", func(t *testing.T) {
+		// 1. Binary literal (> 8000 bytes)
 		// 12000 bytes hex = 24000 chars, exceeds 8000 bytes.
 		h := "0x" + strings.Repeat("41", 12000)
 		payload := sendSQLBatch(t, conn, "SELECT "+h+" AS large_bin;")
@@ -32,6 +33,19 @@ func TestTDS_AuditRound14_Regression(t *testing.T) {
 		// TypeBigVarBin (0xA5) followed by MaxLength (2 bytes uint16: 0xFFFF)
 		if !bytes.Contains(metaPayload, []byte{TypeBigVarBin, 0xFF, 0xFF}) {
 			t.Fatalf("expected TypeBigVarBin (0xA5) with MaxLength 0xFFFF (PLP), got metadata: %x", metaPayload[:min(len(metaPayload), 30)])
+		}
+
+		// 2. String literal (> 4000 characters / 8000 bytes UTF-16)
+		longStr := strings.Repeat("A", 5000)
+		payloadStr := sendSQLBatch(t, conn, "SELECT '"+longStr+"' AS large_str;")
+		if !bytes.Contains(payloadStr, []byte{TokenColMetaData}) {
+			t.Fatalf("expected TokenColMetaData (0x81) for large string")
+		}
+		colIdxStr := bytes.Index(payloadStr, []byte{TokenColMetaData})
+		metaPayloadStr := payloadStr[colIdxStr:]
+		// TypeNVarChar (0xE7) followed by MaxLength 0xFFFF (PLP)
+		if !bytes.Contains(metaPayloadStr, []byte{TypeNVarChar, 0xFF, 0xFF}) {
+			t.Fatalf("expected TypeNVarChar (0xE7) with MaxLength 0xFFFF (PLP), got metadata: %x", metaPayloadStr[:min(len(metaPayloadStr), 30)])
 		}
 	})
 

@@ -1,16 +1,16 @@
-# LionSQL 라이브 엔진 감사 Round 1 ~ 12 전수 통합 기술 백서 (`notes/reports/20261119_LIVE_AUDIT_ROUNDS_1_TO_12.ko.md`)
+# LionSQL 라이브 엔진 감사 Round 1 ~ 14 전수 통합 기술 백서 (`notes/reports/20261120_LIVE_AUDIT_ROUNDS_1_TO_14.ko.md`)
 
 > - **감사 대상**: LionSQL Database Server v0.93.0 ~ v0.94.0 (In-Memory OCC / WiredTiger B+Tree, Port 5433 / 1433)
 > - **감사 기간**: 2026-11-19 ~ 2026-11-20
 > - **감사 방법론**: psql 16.15 및 Go 다중 세션 적대적 프로브 스크립트 기반 라이브 differential test
-> - **최종 상태**: Round 1 ~ 12 전건 결함 해결 완료 (100% 회귀 방지 테스트 통과)
+> - **최종 상태**: Round 1 ~ 14 전건 결함 해결 완료 (100% 회귀 방지 테스트 통과)
 > - **보존 정책**: 단일 통합 기술 백서(Single Source of Truth, SSOT)로 완전 영구화
 
 ---
 
 ## 1. 감사 개요 및 구조적 총괄 통계
 
-LionSQL v0.94.0 및 1.0-GA 출시에 앞서 엔진 신뢰성을 완벽히 검증하기 위해 총 12개 라운드에 걸쳐 집중 라이브 감사를 수행하였습니다.
+LionSQL v0.94.0 및 1.0-GA 출시에 앞서 엔진 신뢰성을 완벽히 검증하기 위해 총 14개 라운드에 걸쳐 집중 라이브 감사를 수행하였습니다.
 본 백서는 개별 쿼리 증상 단순 나열을 배제하고, **결함의 근본 원인이 된 핵심 소스 코드 모듈**, **실제 재현 쿼리**, **기대 동작 vs 실제 동작**, **코드 레벨 조치 내역**, 그리고 **회귀 방지 검증 테스트**를 총망라한 전수 기술 아카이브입니다.
 
 | 감사 라운드 | 중점 감사 영역 | 결함 건수 | 핵심 원인 모듈 | 전담 회귀 검증 스위트 |
@@ -23,6 +23,8 @@ LionSQL v0.94.0 및 1.0-GA 출시에 앞서 엔진 신뢰성을 완벽히 검증
 | **Round 10** | 프로시저 VM, 커서 상태 머신, CBO 검증 | 10건 | `pkg/engine/session.go`, `pkg/engine/sqlexec_select.go` | `audit_round10_test.go` (10개 전담 서브테스트) |
 | **Round 11** | 시퀀스 엔진, Option B 인덱스, 플랜 캐시 무효화 | 7건 | `pkg/catalog/sequence.go`, `pkg/engine/sqlexec_sequence.go`, `pkg/storage/wiredtiger/` | `audit_round11_test.go` (7개 전담 서브테스트) |
 | **Round 12** | JSON strict 모드, XML 메소드 차단, CONVERT 스타일 | 5건 | `pkg/storage/json.go`, `pkg/proc/eval.go`, `pkg/engine/sqlexec_select.go` | `audit_round12_test.go` (5개 전담 서브테스트) |
+| **Round 13** | 집계 지연역직렬화, DML 서브쿼리 스코프, MERGE 카디널리티, 윈도우 프레임 | 5건 | `pkg/execution/aggregate.go`, `pkg/engine/sqlexec_dml.go`, `pkg/engine/sqlexec_merge.go`, `pkg/execution/window.go` | `audit_round13_test.go`, `aggregate_round13_test.go` |
+| **Round 14** | TDS 대용량 바이너리/스트링 PLP, 스칼라 WHERE 1=0 메타데이터, 인덱스 동기화 | 3건 | `pkg/wire/tds/server.go`, `pkg/proc/compiler.go`, `pkg/engine/sqlexec_ddl.go` | `audit_round14_test.go` |
 
 ---
 
@@ -1192,7 +1194,152 @@ END OF ROUND 9 AUDIT REPORT
 
 ---
 
-## 10. 통합 회귀 방지 테스트 스위트 매핑 (100% PASS)
+## 10. Round 13: 집계 역직렬화, DML 서브쿼리 스코프, MERGE 카디널리티 및 윈도우 프레임 (5건)
+
+### [ENG-023] LazyTuple 최적화 경로에서 GROUP BY 해시 키 추출 시 지연 역직렬화 누락으로 인한 전체 그룹 붕괴
+- **컴포넌트**: Execution Engine / HashAggregate
+- **해당 파일**: `pkg/execution/aggregate.go`
+- **심각도**: CRITICAL
+- **근본 원인**:
+  - `SeqScanIterator`는 성능 최적화를 위해 WiredTiger 원시 바이트를 `storage.NewLazyTuple(schema, rawData)`에 담아 `tuple.Lazy`로 전달하고 `tuple.Values` 슬라이스는 nil 원소들로 둡니다.
+  - `HashAggregate` 그룹화 해시 키 빌더에서 `tuple.Values` 인덱스에 직접 접근하면서 지연 역직렬화(`lookupVal`)가 트리거되지 않아 모든 그룹 키가 `\x00NULL`로 묶이고 단일 그룹으로 오집계되었습니다.
+- **재현 쿼리**:
+  ```sql
+  CREATE TABLE g_t (cat INT, val INT);
+  INSERT INTO g_t VALUES (1, 10), (1, 20), (2, 30);
+  SELECT cat, SUM(val) FROM g_t GROUP BY cat;
+  ```
+- **기대 동작**: cat=1 (30), cat=2 (30) 2개 행 반환.
+- **실제 동작**: cat=1 (60) 단 1개 행으로 모든 그룹이 축약 병합됨.
+- **해결 방안**: `aggregate.go`에서 `tuple.Lazy != nil` 검사를 통해 지연 역직렬화 헬퍼 `lookupVal`을 경유하도록 수정.
+
+---
+
+### [ENG-024] DML (UPDATE / DELETE) WHERE 절 서브쿼리 매개변수화 시 내부 컬럼 오염
+- **컴포넌트**: DML Engine / ParameterizeSubquery
+- **해당 파일**: `pkg/engine/sqlexec_dml.go`
+- **심각도**: HIGH
+- **근본 원인**:
+  - `UPDATE`/`DELETE`의 WHERE 절 서브쿼리 매개변수 치환 시 비한정 컬럼(`v = 10`)이 전달되어 서브쿼리 내부 컬럼(`AVG(v)`)까지 덮어쓰여 서브쿼리가 잘못된 상수(`AVG(10)`)로 치환되는 결함.
+- **재현 쿼리**:
+  ```sql
+  CREATE TABLE d_tgt (id INT, v INT);
+  INSERT INTO d_tgt VALUES (1, 10), (2, 20), (3, 30);
+  DELETE FROM d_tgt WHERE v > (SELECT AVG(v) FROM d_tgt);
+  ```
+- **기대 동작**: 평균 20보다 큰 id=3 삭제 (2행 잔존).
+- **실제 동작**: 0건 삭제 (3행 잔존).
+- **해결 방안**: `sqlexec_dml.go`에서 외부 행 맵에 테이블 한정자 접두사(`tableName + "." + k`)를 주입하여 내부 비한정 컬럼과의 충돌을 방지.
+
+---
+
+### [ENG-025] STRING_AGG NULL 구분자(Separator) 리터럴 전달 시 표준 위반
+- **컴포넌트**: Aggregation / Builtin String Functions
+- **해당 파일**: `pkg/execution/aggregate.go`
+- **심각도**: MEDIUM
+- **근본 원인**:
+  - `STRING_AGG(val, NULL)` 실행 시 NULL 리터럴이 문자열 `"NULL"`로 누출되어 `aNULLb` 형태로 병합되던 표준 위반.
+- **재현 쿼리**:
+  ```sql
+  SELECT STRING_AGG(val, NULL) FROM s_agg_t;
+  ```
+- **기대 동작**: `Msg 8711: The separator expression for STRING_AGG cannot be NULL` 오류 반환.
+- **실제 동작**: 정상 성공하며 문자열 `"NULL"`로 결합.
+- **해결 방안**: 구분자 인자가 NULL인 경우 `Msg 8711, Level 16, State 1`을 즉시 반환하도록 방어 가드 추가.
+
+---
+
+### [ENG-026] MERGE INTO 구문에서 복수 소스 행 매칭 시 카디널리티 위반 미검출
+- **컴포넌트**: DML Engine / MERGE Executor
+- **해당 파일**: `pkg/engine/sqlexec_merge.go`, `pkg/proc/runtime/vm_dispatcher.go`
+- **심각도**: HIGH
+- **근본 원인**:
+  - `MERGE INTO`에서 동일한 타깃 행에 복수의 소스 행이 매칭될 때 `matchedTargetKeys` 중복 체크 누락 및 VDBE `OpResultCols`/`OpResultRow`의 다중 결과셋 처리 버그로 테이블 미참조 서브쿼리(`SELECT ... UNION ALL ...`) 행 유실 발생.
+- **재현 쿼리**:
+  ```sql
+  MERGE INTO m_dup AS tgt
+  USING (SELECT 1 AS id, 100 AS v UNION ALL SELECT 1, 200) AS src
+  ON tgt.id = src.id
+  WHEN MATCHED THEN UPDATE SET tgt.v = src.v;
+  ```
+- **기대 동작**: `Msg 8672: The MERGE statement attempted to UPDATE or DELETE the same row more than once.`
+- **실제 동작**: 에러 없이 최종 소스 행으로 덮어씀.
+- **해결 방안**: `sqlexec_merge.go`에서 중복 타깃 변경 감지 시 즉시 `Msg 8672` 반환 및 VDBE `OpResultRow` 결과셋 스트리밍 정합성 복구.
+
+---
+
+### [ENG-027] 윈도우 프레임 사양의 ANSI EXCLUDE CURRENT ROW 절 무시 결함
+- **컴포넌트**: Planner / Window Frame Aggregator
+- **해당 파일**: `pkg/planner/planner.go`, `pkg/execution/window.go`
+- **심각도**: MEDIUM
+- **근본 원인**:
+  - 윈도우 프레임 구문에서 `EXCLUDE CURRENT ROW` 토큰이 파싱되지 않고 사일런트 무시되어 현재 행이 프레임 계산에 계속 포함됨.
+- **재현 쿼리**:
+  ```sql
+  SELECT id, SUM(v) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE CURRENT ROW) FROM t_wf;
+  ```
+- **기대 동작**: `[50, 40, 30]` 반환 (각 행에서 본인 값을 제외한 나머지 합계).
+- **실제 동작**: `[60, 60, 60]` 반환.
+- **해결 방안**: `planner.go`에서 `EXCLUDE CURRENT ROW`를 인식하여 `WindowFrame.ExcludeCurrentRow = true`로 설정하고, `window.go`의 집계 루프에서 현재 인덱스(`k == i`)를 배제하도록 구현.
+
+---
+
+## 11. Round 14: TDS 통신 계층 대용량 데이터 전송, 스칼라 메타데이터 및 스키마 인덱스 동기화 (3건)
+
+### [ENG-028] TDS 대용량 바이너리/문자열 결과셋 직렬화 시 비-PLP 헤더 오인코딩으로 인한 드라이버 슬라이스 패닉
+- **컴포넌트**: TDS Wire Protocol (:1433) / TokenColMetaData
+- **해당 파일**: `pkg/wire/tds/server.go`
+- **심각도**: CRITICAL
+- **근본 원인**:
+  - TDS(:1433) 클라이언트에서 4,000자(UTF-16 기준 8,000바이트) 초과 문자열 또는 8,000바이트 초과 헥사/바이너리 데이터 조회 시, 결과셋 행이 `storage.Value` 타입으로 전달되어 `inferColumnInfos`의 `switch val := v.(type)`에서 언랩되지 않고 기본 텍스트(`TypeNVarChar, colSize = 4000`)로 유추됨.
+  - go-mssqldb 등 클라이언트는 8,000바이트 고정 슬라이스를 할당했으나 서버가 2바이트 길이 헤더로 대용량 데이터를 보내 드라이버 슬라이스 패닉(`slice bounds out of range`) 및 연결 강제 종료 발생.
+- **재현 쿼리**:
+  ```go
+  h := "0x" + strings.Repeat("41", 12000)
+  db.QueryRowContext(ctx, "SELECT " + h).Scan(&out)
+  ```
+- **기대 동작**: PLP 스트리밍 모드(`colSize = -1`, `0xFFFF`)로 청크 분할 전송.
+- **실제 동작**: `runtime error: slice bounds out of range [:24000] with capacity 8000` 드라이버 크래시.
+- **해결 방안**: `server.go`에서 `unwrapTdsOutputValue`를 통해 `storage.Value`를 원시 바이트로 언랩하고, 8,000바이트 초과 데이터에 대해 컬럼명과 무관하게 무조건 `TypeBigVarBin` / `TypeNVarChar`의 `colSize = -1` (`col.IsPLP = true`)을 적용.
+
+---
+
+### [ENG-029] 테이블 없는 조건 불만족 스칼라 쿼리(WHERE 1=0)에서 빈 컬럼 메타데이터 반환
+- **컴포넌트**: Query Compiler / TDS Wire Protocol
+- **해당 파일**: `pkg/proc/compiler.go`, `pkg/proc/bytecode.go`, `pkg/proc/runtime/vm_dispatcher.go`
+- **심각도**: HIGH
+- **근본 원인**:
+  - Entity Framework, Dapper, GORM 등 ORM이 모델 스키마 매핑을 위해 실행하는 `SELECT ... WHERE 1=0` 스칼라 쿼리에서 0개 행 반환 시, VDBE 엔진이 `OpResultRow`를 거치지 않아 프레임의 `f.columns`가 초기화되지 않고 빈 토큰이 TDS 클라이언트에 전송됨.
+- **재현 쿼리**:
+  ```sql
+  SELECT 1 AS col_a, 'str' AS col_b WHERE 1=0;
+  ```
+- **기대 동작**: 행은 0개이나 `col_a`, `col_b` 메타데이터(TokenColMetaData) 반환.
+- **실제 동작**: 빈 슬라이스 `[]` 반환으로 ORM 모델 매핑 예외 발생.
+- **해결 방안**: VDBE 컴파일러에 `OpResultCols` 명령어를 신설하여 WHERE 조건 점프(`OpJumpIfFalse`) 이전에 컬럼 메타데이터를 선제 선언하도록 보장.
+
+---
+
+### [ENG-030] ALTER TABLE RENAME COLUMN 실행 시 인덱스 컬럼 참조 미동기화로 인한 스키마 검증 거부
+- **컴포넌트**: DDL Engine / Schema Catalog
+- **해당 파일**: `pkg/engine/sqlexec_ddl.go`
+- **심각도**: HIGH
+- **근본 원인**:
+  - 인덱스가 생성된 컬럼에 대해 `ALTER TABLE ... RENAME COLUMN old_name TO new_name` 실행 시 `sch.Columns`만 갱신되고 `sch.Indexes[j].Columns` 및 `IncludeCols`는 이전 컬럼명을 유지.
+  - 스토리지 엔진 커밋 시 `index.Validate`에서 `column not found: old_name on table t_ren` 에러를 반환하며 DDL 실패.
+- **재현 쿼리**:
+  ```sql
+  CREATE TABLE t_ren (id INT PRIMARY KEY, old_name VARCHAR(20));
+  CREATE INDEX idx_old ON t_ren (old_name);
+  ALTER TABLE t_ren RENAME COLUMN old_name TO new_name;
+  ```
+- **기대 동작**: 인덱스 정의와 함께 원자적으로 컬럼명 변경 완료.
+- **실제 동작**: `ERROR: column not found: old_name on table t_ren` 트랜잭션 실패.
+- **해결 방안**: `sqlexec_ddl.go`의 컬럼 리네임 콜백에서 해당 테이블의 모든 보조 인덱스 및 Include 컬럼 참조명을 일괄 동기화.
+
+---
+
+## 12. 통합 회귀 방지 테스트 스위트 매핑 (100% PASS)
 
 - `pkg/engine/audit_round1_to_6_supplemental_test.go`: Round 1 ~ 6 핵심 결함 회귀 테스트 (12개 서브테스트 PASS)
 - `pkg/engine/audit_round4_regression_test.go`: Round 4 브래킷/해시조인/3VL/복합PK MERGE 회귀 테스트 (PASS)
@@ -1201,4 +1348,7 @@ END OF ROUND 9 AUDIT REPORT
 - `pkg/engine/audit_round10_test.go`: Round 10 CBO/커서/프로시저(ENG-001~010) 회귀 테스트 (PASS)
 - `pkg/engine/audit_round11_test.go`: Round 11 시퀀스/Option B 인덱스/충돌(ENG-011~017) 회귀 테스트 (PASS)
 - `pkg/engine/audit_round12_test.go`: Round 12 JSON/XML/CONVERT(ENG-018~022) 회귀 테스트 (PASS)
+- `pkg/engine/audit_round13_test.go`: Round 13 지연역직렬화/서브쿼리/카디널리티/윈도우프레임(ENG-023~027) 회귀 테스트 (PASS)
+- `pkg/execution/aggregate_round13_test.go`: Round 13 LazyTuple 해시집계 격리 단위 테스트 (PASS)
+- `pkg/wire/tds/audit_round14_test.go`: Round 14 PLP 대용량 직렬화/스칼라 메타데이터/인덱스 동기화(ENG-028~030) 회귀 테스트 (PASS)
 - `pkg/engine/spec_driven_batch1_test.go` ~ `batch3_test.go`: 표준 SQL 및 트랜잭션 불변식 스위트 (79개 테스트 PASS)
