@@ -63,6 +63,7 @@ type Server struct {
 	outboxDispatcher *cdc.OutboxDispatcher
 	requestLogger    *RequestActivityLogger
 	appHandler       http.Handler
+	noStudio         bool
 	startTime        time.Time
 	memCache         memStatsCache
 	closeOnce        sync.Once
@@ -227,6 +228,16 @@ func (s *Server) AutoAnalyzer() *engine.AutoAnalyzer {
 		return s.coordinator.AutoAnalyzer()
 	}
 	return nil
+}
+
+// SetNoStudio enables or disables the embedded Web Studio UI (/ and /_/).
+func (s *Server) SetNoStudio(noStudio bool) {
+	s.noStudio = noStudio
+}
+
+// IsNoStudio reports whether the embedded Web Studio UI is disabled.
+func (s *Server) IsNoStudio() bool {
+	return s.noStudio
 }
 
 // SetPoolConfig updates the connection pool configuration.
@@ -582,6 +593,10 @@ func (s *Server) routes() {
 			return
 		}
 		if r.URL.Path == "/" {
+			if s.noStudio {
+				http.NotFound(w, r)
+				return
+			}
 			http.Redirect(w, r, "/_/", http.StatusFound)
 			return
 		}
@@ -589,6 +604,10 @@ func (s *Server) routes() {
 	})
 
 	s.mux.HandleFunc("GET /_/", func(w http.ResponseWriter, r *http.Request) {
+		if s.noStudio {
+			http.NotFound(w, r)
+			return
+		}
 		html, err := ui.IndexHTML()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

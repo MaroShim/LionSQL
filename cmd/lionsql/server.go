@@ -109,6 +109,7 @@ func runServer(args []string) error {
 	initConfig := fs.String("init-config", "", "Generate a default lionsql.json configuration file at specified path (or ./lionsql.json) and exit")
 	doctorFlag := fs.Bool("doctor", false, "Run self-diagnostic health checks on host environment, resources, ports, and storage engines and exit")
 	appPath := fs.String("app", "", "Path to single-page HTML file or flat static assets directory to host")
+	noStudioFlag := fs.Bool("no-studio", false, "Disable embedded Web Studio UI (/ and /_/)")
 	devFlag := fs.Bool("dev", false, "Enable developer mode (verbose wire query and parameter logging on stdout/stderr)")
 	outboxFlag := fs.Bool("outbox", false, "Enable Transactional Outbox broker dispatcher")
 	outboxTable := fs.String("outbox-table", "", "Filter outbox dispatcher to specific table (default: all)")
@@ -191,6 +192,9 @@ func runServer(args []string) error {
 	}
 	if visited["app"] {
 		cfg.Server.AppPath = *appPath
+	}
+	if visited["no-studio"] {
+		cfg.Server.NoStudio = *noStudioFlag
 	}
 	if visited["admin-email"] {
 		cfg.Auth.AdminEmail = *adminEmail
@@ -732,6 +736,11 @@ func runServer(args []string) error {
 		log.Printf("[LionSQL] Bound SPA web app from %s (Flat Invariant Active)", cfg.Server.AppPath)
 	}
 
+	if cfg.Server.NoStudio {
+		server.SetNoStudio(true)
+		log.Printf("[LionSQL] Embedded Web Studio UI disabled (--no-studio active)")
+	}
+
 	if cfg.Logging.SlowQuery.ThresholdMS > 0 {
 		server.SetSlowQueryThreshold(time.Duration(cfg.Logging.SlowQuery.ThresholdMS * float64(time.Millisecond)))
 	}
@@ -1088,7 +1097,11 @@ func renderStartupBanner(cfg *config.Config, ctx bannerContext) string {
 		if cfg.Server.AppPath != "" {
 			b.WriteString(fmt.Sprintf(" [App Hosting]    http://%s/ -> %s (SPA Mode)\n", cfg.Network.HTTPAddr, cfg.Server.AppPath))
 		}
-		b.WriteString(fmt.Sprintf(" [Web Dashboard]  http://%s/_/\n", cfg.Network.HTTPAddr))
+		if cfg.Server.NoStudio {
+			b.WriteString(" [Web Dashboard]  Disabled (--no-studio active)\n")
+		} else {
+			b.WriteString(fmt.Sprintf(" [Web Dashboard]  http://%s/_/\n", cfg.Network.HTTPAddr))
+		}
 		b.WriteString(fmt.Sprintf(" [HTTP API]       http://%s/api/health\n", cfg.Network.HTTPAddr))
 		b.WriteString(fmt.Sprintf(" [CDC Stream]     http://%s/api/cdc/stream (NDJSON / SSE)\n", cfg.Network.HTTPAddr))
 	} else {

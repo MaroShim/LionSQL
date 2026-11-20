@@ -22,6 +22,7 @@ type ServerConfig struct {
 	PIDFile                  string `json:"pid_file,omitempty"`
 	LogFile                  string `json:"log_file,omitempty"`
 	AppPath                  string `json:"app_path,omitempty"`
+	NoStudio                 bool   `json:"no_studio,omitempty"`
 }
 
 // TLSConfig defines encryption parameters for wire protocols.

@@ -79,6 +79,7 @@ Commands (기본 명령체계):
   set <key> <val>        Update runtime configuration parameter (sudo-like password prompt)
   backup <file>          Create a point-in-time database snapshot backup archive
   restore <file>         Restore database state from a backup archive
+  studio [flags]         Run standalone Web Studio proxy server connecting to remote LionSQL
   dbmail-worker          Run DatabaseMail background queue dispatcher worker
   version                Display version and storage engine information
   help                   Show this help message
@@ -92,6 +93,7 @@ Options by Category (옵션 상세):
 
   [Network & Wire Protocols]
     -http <addr>               HTTP service & Web Studio address (default: 127.0.0.1:8090, empty to disable)
+    -no-studio                 Disable embedded Web Studio UI (/ and /_/)
     -app <path>                Host single-page HTML file or flat static assets directory (SPA Mode)
     -pg <addr>                 PostgreSQL v3 wire listen address (default: 127.0.0.1:5433, empty to disable)
     -tds <addr>                MS SQL Server TDS listen address (default: 127.0.0.1:1433, empty to disable)
@@ -348,6 +350,14 @@ func main() {
 		sourceArchive := subargs[0]
 		passArgs := append([]string{"-restore=" + sourceArchive}, subargs[1:]...)
 		if err := runServer(passArgs); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	case "studio":
+		if err := runStudioProxy(subargs); err != nil {
+			if err == flag.ErrHelp {
+				return
+			}
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
