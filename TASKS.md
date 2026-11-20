@@ -507,7 +507,7 @@
 | `PENDING` | **`TDS-COMPAT-6`** | `v1.99.0` | Wire | P2 | TDS 7.x/8.0 MARS (Multiple Active Result Sets) 스트리밍 | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`TDS-MOD-1`** |  | Architecture | P3 | TDS 대규모 파일 모듈 분할 기각 (Spec-Out) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`TEST-BABELFISH-GROUND-TRUTH-ANSWERS-1`** | `1.0-GA` | Testing | P2 | Populate value-verified expected answers for Babelfish Oracle suites | [`notes/plans/BABELFISH_ORACLE_GROUND_TRUTH_ANSWERS_PLAN.ko.md`](notes/plans/BABELFISH_ORACLE_GROUND_TRUTH_ANSWERS_PLAN.ko.md) |  |
-| `PENDING` | **`TEST-E2E-SERVICES-1`** | `1.0-GA` | Test | P1 | E2E Enterprise Services & GUI Tools (DBeaver/Beekeeper) Dual-Engine Regression Suite | [`notes/E2E_SERVICE_REGRESSION_SUITE_PLAN.ko.md`](notes/E2E_SERVICE_REGRESSION_SUITE_PLAN.ko.md) |  |
+| `DONE` | **`TEST-E2E-SERVICES-1`** | `1.0-GA` | Test | P1 | E2E Enterprise Services & GUI Tools (DBeaver/Beekeeper) Dual-Engine Regression Suite | [`notes/E2E_SERVICE_REGRESSION_SUITE_PLAN.ko.md`](notes/E2E_SERVICE_REGRESSION_SUITE_PLAN.ko.md) |  |
 | `DONE` | **`TEST-GORM-SQLSERVER-ORACLE-1`** | `1.0-GA` | Engine | P1 | go-gorm/sqlserver 드라이버 핵심 쿼리(MERGE USING VALUES, OUTPUT INSERTED, sp_rename, sys.indexes/foreign_keys/check_constraints 조인, IDENTITY_INSERT) 호환성 오라클 검증 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`TEST-OCC-FLAT-1`** |  | Storage | P2 | Flat 모드 크래시 복구 무결성 검증 (AOF/RDB 및 kill -9) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
 | `DONE` | **`TEST-OCC-FLAT-2`** |  | Storage | P2 | Flat 모드 복합 DDL/DML 회귀 검증 (복합 보조 인덱스, SkipList, FK) | [`notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md`](notes/plans/FLAT_RECORD_RELIABILITY_PLAN.ko.md) |  |
@@ -4968,8 +4968,8 @@ SSMS Object Explorer 테이블 하위 트리(Columns, Keys, Indexes, Triggers) �
 
 ---
 
-### [PENDING] E2E Enterprise Services & GUI Tools (DBeaver/Beekeeper) Dual-Engine Regression Suite `TEST-E2E-SERVICES-1`
-- **Domain**: Test | **Priority**: P1 | **Updated**: 2026-11-19 23:40:03
+### [DONE] E2E Enterprise Services & GUI Tools (DBeaver/Beekeeper) Dual-Engine Regression Suite `TEST-E2E-SERVICES-1`
+- **Domain**: Test | **Priority**: P1 | **Updated**: 2026-11-20 06:07:14
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/E2E_SERVICE_REGRESSION_SUITE_PLAN.ko.md`](notes/E2E_SERVICE_REGRESSION_SUITE_PLAN.ko.md)
 
