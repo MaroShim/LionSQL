@@ -194,6 +194,11 @@ func ResolveOperand(token string, rec storage.Record) (storage.Value, bool) {
 // EvalUpdateExpr evaluates an update assignment expression (e.g. "price + 20", "val / 2", "[Price]")
 // against an existing record, writing the computed result into targetType.
 func EvalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataType) (storage.Value, error) {
+	return EvalUpdateExprWithSubquery(exprStr, rec, targetType, nil)
+}
+
+// EvalUpdateExprWithSubquery evaluates an update assignment expression with an optional SubqueryExecutor.
+func EvalUpdateExprWithSubquery(exprStr string, rec storage.Record, targetType storage.DataType, execSubquery proc.SubqueryExecutor) (storage.Value, error) {
 	exprStr = strings.TrimSpace(exprStr)
 	if opIdx, op := sqlutil.FindTopLevelArithmeticOp(exprStr); opIdx != -1 {
 		leftStr := strings.TrimSpace(exprStr[:opIdx])
@@ -211,14 +216,14 @@ func EvalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataT
 		return val, nil
 	}
 
-	// Full AST expression fallback (e.g. CURRENT_TIMESTAMP, casts ::int4/::text, parenthesized arithmetic, functions)
+	// Full AST expression fallback (e.g. CURRENT_TIMESTAMP, casts ::int4/::text, parenthesized arithmetic, functions, subqueries)
 	p := proc.NewParser(proc.NewLexer(exprStr))
 	if astExpr := p.ParseExpr(); astExpr != nil && len(p.Errors()) == 0 {
 		rMap := make(map[string]any, len(rec))
 		for k, v := range rec {
 			rMap[k] = formatStorageValue(v)
 		}
-		resVal, err := proc.EvalUpdateRowExpr(astExpr, rMap, nil)
+		resVal, err := proc.EvalUpdateRowExpr(astExpr, rMap, execSubquery)
 		if err != nil {
 			return storage.NullValue(targetType), err
 		}

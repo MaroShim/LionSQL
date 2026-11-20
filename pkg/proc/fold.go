@@ -81,9 +81,7 @@ func FoldConstants(expr Expr) Expr {
 
 		// Compile-time evaluation of constant binary operations
 		if isConstantExpr(e.Left) && isConstantExpr(e.Right) {
-			leftVal := literalToAny(e.Left.(*LiteralExpr).Val)
-			rightVal := literalToAny(e.Right.(*LiteralExpr).Val)
-			val, err := evalRowBinaryOp(e.Op, leftVal, rightVal)
+			val, err := EvalRowExpr(e, nil, nil)
 			if err == nil {
 				return anyToLiteralExpr(val)
 			}

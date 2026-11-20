@@ -1262,9 +1262,10 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		return s.execUpdateFromJoin(dml, start, cs)
 	}
 
-	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT or RETURNING clause present)
+	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT, RETURNING, or subquery present)
 	hasOutput := sqlutil.ContainsKeyword(cleaned, "OUTPUT", false) || sqlutil.ContainsKeyword(cleaned, "RETURNING", false)
-	if !hasOutput {
+	hasSubquery := sqlutil.ContainsKeyword(cleaned, "SELECT", true) || sqlutil.ContainsKeyword(cleaned, "EXISTS", true)
+	if !hasOutput && !hasSubquery {
 		if res, err := s.execVBDEDML("UPDATE", cleaned, start, cs); err == nil {
 			return res, nil
 		}
@@ -1346,6 +1347,17 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		}
 		toUpdate := make([]updateEntry, 0)
 
+		var subExec proc.SubqueryExecutor
+		if hasSubquery {
+			subExec = func(rawSubSQL string) ([]map[string]any, []string, error) {
+				res, err := s.executeNestedSessionSQL(cs, rawSubSQL)
+				if err != nil {
+					return nil, nil, err
+				}
+				return res.Rows, res.Columns, nil
+			}
+		}
+
 		var scanErr error
 		for cursor.Next() {
 			rec, err := cursor.Record()
@@ -1354,7 +1366,23 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 				break
 			}
 
-			if whereClause != "" && !evaluateWhereCondition(rec, whereClause) {
+			// Parameterize subquery if needed for correlated subqueries
+			var rowSubExec proc.SubqueryExecutor
+			if subExec != nil {
+				var evalMap map[string]any
+				rowSubExec = func(rawSubSQL string) ([]map[string]any, []string, error) {
+					if evalMap == nil {
+						evalMap = make(map[string]any, len(rec))
+						for k, v := range rec {
+							evalMap[k] = formatStorageValue(v)
+						}
+					}
+					paramSQL := sqlutil.ParameterizeSubquery(rawSubSQL, evalMap)
+					return subExec(paramSQL)
+				}
+			}
+
+			if whereClause != "" && !evaluateWhereConditionWithSubquery(rec, whereClause, rowSubExec) {
 				continue
 			}
 
@@ -1377,7 +1405,7 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 					targetCol = colSchema.Name
 					targetType = colSchema.Type
 				}
-				val, err := evalUpdateExpr(exprStr, origSnapshot, targetType)
+				val, err := EvalUpdateExprWithSubquery(exprStr, origSnapshot, targetType, rowSubExec)
 				if err != nil {
 					evalErr = err
 					break
@@ -1525,9 +1553,10 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		return s.execDeleteFromJoin(dml, start, cs)
 	}
 
-	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT or RETURNING clause present)
+	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT, RETURNING, or subquery present)
 	hasOutput := sqlutil.ContainsKeyword(cleaned, "OUTPUT", false) || sqlutil.ContainsKeyword(cleaned, "RETURNING", false)
-	if !hasOutput {
+	hasSubquery := sqlutil.ContainsKeyword(cleaned, "SELECT", true) || sqlutil.ContainsKeyword(cleaned, "EXISTS", true)
+	if !hasOutput && !hasSubquery {
 		if res, err := s.execVBDEDML("DELETE", cleaned, start, cs); err == nil {
 			return res, nil
 		}
@@ -1577,6 +1606,18 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		orig storage.Record
 	}
 	toDelete := make([]deleteEntry, 0)
+
+	var subExec proc.SubqueryExecutor
+	if hasSubquery {
+		subExec = func(rawSubSQL string) ([]map[string]any, []string, error) {
+			res, err := s.executeNestedSessionSQL(cs, rawSubSQL)
+			if err != nil {
+				return nil, nil, err
+			}
+			return res.Rows, res.Columns, nil
+		}
+	}
+
 	for cursor.Next() {
 		rec, err := cursor.Record()
 		if err != nil {
@@ -1586,7 +1627,22 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 			return nil, fmt.Errorf("failed to read record during DELETE scan: %w", err)
 		}
 
-		if whereClause != "" && !evaluateWhereCondition(rec, whereClause) {
+		var rowSubExec proc.SubqueryExecutor
+		if subExec != nil {
+			var evalMap map[string]any
+			rowSubExec = func(rawSubSQL string) ([]map[string]any, []string, error) {
+				if evalMap == nil {
+					evalMap = make(map[string]any, len(rec))
+					for k, v := range rec {
+						evalMap[k] = formatStorageValue(v)
+					}
+				}
+				paramSQL := sqlutil.ParameterizeSubquery(rawSubSQL, evalMap)
+				return subExec(paramSQL)
+			}
+		}
+
+		if whereClause != "" && !evaluateWhereConditionWithSubquery(rec, whereClause, rowSubExec) {
 			continue
 		}
 

@@ -111,6 +111,10 @@ func parseValueToType(s string, t storage.DataType) storage.Value {
 
 
 func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
+	return evaluateWhereConditionWithSubquery(rec, whereStr, nil)
+}
+
+func evaluateWhereConditionWithSubquery(rec storage.Record, whereStr string, execSubquery proc.SubqueryExecutor) bool {
 	whereStr = strings.TrimSpace(whereStr)
 	if whereStr == "" || whereStr == "1=1" || whereStr == "1 = 1" || strings.EqualFold(whereStr, "NOT 1=0") || strings.EqualFold(whereStr, "NOT 1 = 0") {
 		return true
@@ -123,10 +127,14 @@ func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
 	for k, v := range rec {
 		rMap[k] = formatStorageValue(v)
 	}
-	return evaluateWhereConditionMap(rMap, whereStr)
+	return evaluateWhereConditionMapWithSubquery(rMap, whereStr, execSubquery)
 }
 
 func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
+	return evaluateWhereConditionMapWithSubquery(rec, whereStr, nil)
+}
+
+func evaluateWhereConditionMapWithSubquery(rec map[string]any, whereStr string, execSubquery proc.SubqueryExecutor) bool {
 	whereStr = strings.TrimSpace(whereStr)
 	if whereStr == "" || whereStr == "1=1" || whereStr == "1 = 1" || strings.EqualFold(whereStr, "NOT 1=0") || strings.EqualFold(whereStr, "NOT 1 = 0") {
 		return true
@@ -138,13 +146,13 @@ func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 	p := proc.NewParser(proc.NewLexer(whereStr))
 	expr := p.ParseExpr()
 	if expr != nil && len(p.Errors()) == 0 {
-		return proc.EvalBoolExpr(expr, rec, nil)
+		return proc.EvalBoolExpr(expr, rec, execSubquery)
 	}
 
 	orParts := sqlutil.SplitTopLevelKeyword(whereStr, "OR")
 	if len(orParts) > 1 {
 		for _, part := range orParts {
-			if evaluateWhereConditionMap(rec, part) {
+			if evaluateWhereConditionMapWithSubquery(rec, part, execSubquery) {
 				return true
 			}
 		}
@@ -154,7 +162,7 @@ func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 	andParts := sqlutil.SplitTopLevelKeyword(whereStr, "AND")
 	if len(andParts) > 1 {
 		for _, part := range andParts {
-			if !evaluateWhereConditionMap(rec, part) {
+			if !evaluateWhereConditionMapWithSubquery(rec, part, execSubquery) {
 				return false
 			}
 		}
