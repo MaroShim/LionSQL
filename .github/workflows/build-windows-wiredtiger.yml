@@ -55,53 +55,9 @@ jobs:
           echo "Cloning WiredTiger v${WT_VER} into ./wt_source..."
           git clone --depth 1 --branch "${WT_VER}" https://github.com/wiredtiger/wiredtiger.git wt_source
 
-      - name: Build WiredTiger Shared DLL via MSVC (/MT Static CRT)
+      - name: Build WiredTiger Shared DLL via MSVC and Generate Import Library
         run: |
-          cd wt_source
-
-          # Guard Python3 Development component check in base.cmake
-          sed -i 's/source_python3_package.*/set(python_version "3.10")/' cmake/configs/base.cmake
-
-          mkdir -p build && cd build
-
-          echo "Configuring CMake with Visual Studio 2022 x64..."
-          cmake .. -G "Visual Studio 17 2022" -A x64 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded \
-            -DENABLE_SHARED=1 \
-            -DENABLE_STATIC=0 \
-            -DENABLE_PYTHON=0 \
-            -DENABLE_SNAPPY=0 \
-            -DENABLE_LZ4=0 \
-            -DENABLE_ZLIB=0 \
-            -DENABLE_ZSTD=0
-
-          echo "Building wiredtiger_shared target..."
-          cmake --build . --config Release --target wiredtiger_shared
-
-      - name: Generate MinGW-compatible Import Library (.dll.a)
-        run: |
-          DLL_PATH=$(find wt_source/build -name "wiredtiger.dll" | head -n 1)
-          if [ -z "$DLL_PATH" ]; then
-            echo "Error: wiredtiger.dll not found in build tree"
-            exit 1
-          fi
-          echo "Found DLL at: $DLL_PATH"
-          mkdir -p pkg/storage/wiredtiger/lib/windows_amd64/include
-
-          # Copy DLL, MSVC .lib, and headers
-          cp -v "$DLL_PATH" pkg/storage/wiredtiger/lib/windows_amd64/
-          find wt_source/build -name "wiredtiger.lib" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/ \; 2>/dev/null || true
-          find wt_source -name "wiredtiger.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \;
-          find wt_source -name "wiredtiger_ext.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \; 2>/dev/null || true
-
-          cd pkg/storage/wiredtiger/lib/windows_amd64
-
-          # Extract exports from DLL using dumpbin and generate MinGW libwiredtiger.dll.a
-          python "${GITHUB_WORKSPACE}/scripts/generate_wt_def.py" wiredtiger.dll wiredtiger.def
-          cat wiredtiger.def
-          dlltool -d wiredtiger.def -l libwiredtiger.dll.a -D wiredtiger.dll
-          ls -lh
+          python scripts/build_windows_wiredtiger.py
 
       - name: Commit and Push Vendored DLL to Repository
         run: |
