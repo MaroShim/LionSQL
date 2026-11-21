@@ -22,6 +22,7 @@ From local development setups to cloud production deployments, users can design 
 8. [Real-Time Query & Request Logs](#8-real-time-query--request-logs)
 9. [Database Hot Backup & Restore](#9-database-hot-backup--restore)
 10. [Security & Performance Optimization](#10-security--performance-optimization)
+11. [Hybrid Deployment Architecture (Network Isolation & Standalone Studio Proxy)](#11-hybrid-deployment-architecture-network-isolation--standalone-studio-proxy)
 
 ---
 
@@ -259,6 +260,56 @@ Every Web Studio HTTP response enforces enterprise security headers:
 
 ### 10.3. High-Speed Gzip Compression
 All HTML, CSS, and JavaScript assets are compressed with gzip on the fly for requests carrying `Accept-Encoding: gzip`, allowing the single-page application to load in tens of milliseconds over low-bandwidth networks.
+
+---
+
+## 11. Hybrid Deployment Architecture (Network Isolation & Standalone Studio Proxy)
+
+LionSQL Web Studio supports zero-config embedded operation out of the box, as well as an enterprise **Hybrid Deployment Model** tailored for strict network isolation, DMZs, and security compliance.
+
+```
+[ Enterprise Hybrid Network Isolation Topology ]
+
+  (Internet / Management Bastion Host)           (Internal Private VPC Subnet)
+┌─────────────────────────────────┐          ┌──────────────────────────────────┐
+│ Standalone Studio Proxy Command │          │ Core DB Engine (UI Disabled)     │
+│ ./lionsql studio                │ ──HTTP──►│ ./lionsql --no-studio            │
+│ --listen :8090                  │  Proxy   │ --http-port :8090 (REST/Health)  │
+│ --target http://db-node:8090    │          │ --pg-port :5433 / --tds :1433    │
+│ (UI Serving & Reverse Proxy)    │          │ (Dedicated Engine & Wire Ports)  │
+└─────────────────────────────────┘          └──────────────────────────────────┘
+```
+
+### 11.1. Core DB Node: Disable Web Studio UI (`--no-studio`)
+In financial, healthcare, or government production deployments, compliance regulations frequently prohibit exposing administrative browser UIs (HTML/JavaScript) directly on database hosts.
+Passing the `--no-studio` flag turns off Web Studio UI routing (`/` and `/_/`) on the database instance, while keeping health check (`/health`), metrics (`/metrics`), CDC streaming (`/api/cdc/stream`), and programmatic REST APIs intact.
+
+```bash
+# Launch database node with Web Studio UI disabled
+./bin/lionsql --data-dir ./data --no-studio
+```
+
+- **Enforcement**: Navigating to `http://<db-ip>:8090/_/` or `/` returns `403 Forbidden` (`Web Studio is disabled on this server (--no-studio active)`).
+- **Backend Retention**: Core monitoring (`/health`, `/metrics`) and REST endpoints remain accessible to reverse proxies and internal scrapers.
+
+### 11.2. Bastion / Management Node: Standalone Studio Proxy (`lionsql studio`)
+To access the Web Studio interface from an isolated management network or bastion host, launch the standalone `lionsql studio` subcommand without installing any external tools or runtimes.
+
+```bash
+# Launch standalone proxy on local port 8090 forwarding to local DB
+./bin/lionsql studio
+
+# Launch proxy listening on all interfaces forwarding to remote internal DB
+./bin/lionsql studio --listen 0.0.0.0:8090 --target http://db-internal.vpc:8090
+```
+
+- **Command Flags**:
+  - `--listen` / `--http`: Bind address for the standalone Web Studio server (default: `127.0.0.1:8090`).
+  - `--target`: Target URL of the upstream LionSQL core database instance (default: `http://127.0.0.1:8090`).
+- **How It Works**:
+  1. Administrative browsers connecting to `http://bastion:8090/_/` receive the SPA dashboard served directly from the proxy binary's embedded assets.
+  2. All authentication (`/auth/`), SQL query executions, REST CRUD operations, and metric collections (`/api/`) are forwarded via high-throughput single-host reverse proxy (`httputil.ReverseProxy`) to the upstream DB node specified by `--target`.
+  3. If the upstream database node is unreachable or encounters network partition, the proxy responds with `502 Bad Gateway` and actionable diagnostic information.
 
 ---
 

@@ -23,6 +23,7 @@ LionSQL Web Studio는 별도의 외부 웹 서버(Nginx, Apache)나 런타임(No
 8. [실시간 쿼리 및 감사 로그 뷰어 (Query Logs)](#8-실시간-쿼리-및-감사-로그-뷰어-query-logs)
 9. [데이터베이스 백업 및 복원 (Hot Backup & Restore)](#9-데이터베이스-백업-및-복원-hot-backup--restore)
 10. [보안 및 성능 최적화](#10-보안-및-성능-최적화)
+11. [하이브리드 배포 아키텍처 (망분리 및 독립 프록시 모드)](#11-하이브리드-배포-아키텍처-망분리-및-독립-프록시-모드)
 
 ---
 
@@ -261,6 +262,56 @@ LionSQL Web Studio는 외부 프로덕션 배포 시에도 안전하게 사용�
 
 ### 10.3. Gzip 고속 압축 전송
 모든 HTML, CSS, JavaScript 응답은 `Accept-Encoding: gzip` 요청에 대해 서버 수준에서 자동으로 gzip 압축되어 전송되므로, 수백 킬로바이트의 단일 페이지 애플리케이션도 수십 밀리초 이내에 로딩됩니다.
+
+---
+
+## 11. 하이브리드 배포 아키텍처 (망분리 및 독립 프록시 모드)
+
+LionSQL Web Studio는 단일 바이너리 내장 구동(Zero-Config)뿐만 아니라, 엔터프라이즈 망분리(Network Isolation) 및 보안 규정 준수를 위한 **하이브리드 배포 모델**을 완벽하게 지원합니다.
+
+```
+[ 엔터프라이즈 하이브리드 망분리 토폴로지 ]
+
+  (인터넷 / 관리망 Bastion Host)                (내부 Private VPC 망)
+┌─────────────────────────────────┐          ┌──────────────────────────────────┐
+│  독립 웹 스튜디오 프록시 서브커맨드   │          │  코어 DB 엔진 (웹 서버 비활성화)   │
+│  ./lionsql studio               │ ──HTTP──►│  ./lionsql --no-studio           │
+│  --listen :8090                 │  Proxy   │  --http-port :8090 (REST/Health) │
+│  --target http://db-node:8090   │          │  --pg-port :5433 / --tds :1433   │
+│  (UI 서빙 및 API 역방향 프록시)   │          │  (스토리지 엔진 및 Wire 포트 전담) │
+└─────────────────────────────────┘          └──────────────────────────────────┘
+```
+
+### 11.1. DB 노드: Web Studio UI 비활성화 (`--no-studio`)
+금융망, 공공기관 및 대규모 엔터프라이즈 환경에서는 보안 감사 규정에 따라 코어 데이터베이스 노드에 관리용 브라우저 UI(HTML/JS)가 직접 노출되는 것을 금지합니다.
+이 경우 `--no-studio` 플래그를 지정하여 기동하면 대시보드 UI 서빙(`/`, `/_/`)만 완전히 차단하고, 헬스체크(`/health`), 메트릭(`/metrics`), CDC 스트리밍(`/api/cdc/stream`), REST API는 그대로 안전하게 유지할 수 있습니다.
+
+```bash
+# DB 서버 기동 (Web Studio UI 비활성화)
+./bin/lionsql --data-dir ./data --no-studio
+```
+
+- **차단 동작**: 브라우저로 `http://<db-ip>:8090/_/` 또는 `/` 접근 시 즉시 `403 Forbidden` (`Web Studio is disabled on this server (--no-studio active)`) 에러를 반환합니다.
+- **백엔드 유지**: `/health`, `/metrics`, `/api/*`, `/auth/*` 엔드포인트는 정상 동작하여 모니터링 및 독립 프록시와의 통신을 지원합니다.
+
+### 11.2. 관리망/Bastion 서버: 독립 웹 스튜디오 프록시 (`lionsql studio`)
+보안 관리망이나 Bastion 호스트에서 DB 서버의 Web Studio에 접근하고자 할 때는, 추가 소프트웨어 설치 없이 LionSQL 바이너리의 내장 서브커맨드 `lionsql studio`를 실행합니다.
+
+```bash
+# 기본 로컬 프록시 구동 (포트 8090으로 리슨하고 로컬 DB 프록시)
+./bin/lionsql studio
+
+# 원격 DB 노드를 지정하여 외부 관리망에 Web Studio UI 서빙
+./bin/lionsql studio --listen 0.0.0.0:8090 --target http://db-internal.vpc:8090
+```
+
+- **옵션 명세**:
+  - `--listen` / `--http`: 독립 Web Studio가 수신할 HTTP 주소 (기본값: `127.0.0.1:8090`)
+  - `--target`: 실제 LionSQL DB 노드의 HTTP 주소 (기본값: `http://127.0.0.1:8090`)
+- **동작 원리**:
+  1. 관리자 브라우저가 Bastion 서버의 `http://bastion:8090/_/`에 접속하면, 프록시가 내장된 최신 대시보드 SPA를 로컬에서 즉시 렌더링합니다.
+  2. 브라우저에서 발생하는 모든 인증(`/auth/`), 쿼리 실행, REST CRUD, 메트릭 수집 요청(`/api/`)은 `--target`으로 지정된 내부 DB 노드로 고성능 단일 호스트 리버스 프록시(`httputil.ReverseProxy`)를 통해 안전하게 중계됩니다.
+  3. 대상 DB 서버가 다운되거나 네트워크가 단절된 경우 `502 Bad Gateway`와 함께 상세 진단 메시지를 반환합니다.
 
 ---
 

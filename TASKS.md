@@ -265,7 +265,7 @@
 | `DONE` | **`FEAT-TYPE-VALIDATOR-AND-NORMALIZER-1`** | `-` | Engine | P1 | 컬럼 타입별 데이터 검증기 및 정규화 엔진 (VARCHAR/CHAR/DECIMAL/TINYINT) | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-VDBE-PLAN-CACHE-DDL-INVALIDATE-1`** | `1.0-GA` | Engine | P2 | 테이블 DDL 변경 시 VDBE 바이트코드 프로시저 및 실행 계획 캐시 자동 Invalidate | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `PENDING` | **`FEAT-VECTOR-1`** | `v1.60.0` | FEAT | P2 | Pure-Go Vector Search Engine (pgvector compat) | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-WAL-ARCHIVER-INPROCESS-1`** | `1.0-GA` | Storage | P3 | WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-WAL-ARCHIVER-INPROCESS-1`** | `v1.1.0` | Storage | P3 | WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WASM-UDF-1`** | `v1.99.0` | Engine | P2 | WebAssembly 런타임 샌드박스 UDF (wazero) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `DONE` | **`FEAT-WEB-STUDIO-HYBRID-1`** | `1.0-GA` | API | P2 | Web Studio 하이브리드 지원 (--no-studio 플래그 및 lionsql studio 서브커맨드 프록시) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `SPEC-OUT` | **`FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`** | `v0.94.0` | 1 | P2 | Storage | [`--milestone`](--milestone) |  |
@@ -475,7 +475,7 @@
 | `DONE` | **`PERF-WIRE-ZEROALLOC-1`** |  | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WT-INSTANT-ADD-COL-1`** | `1.0-GA` | Storage | P2 | WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`PERF-WT-ROW-DIRECT-1`** | `v1.10.0` | Storage | P2 | WiredTiger InsertRow 중간 Record 맵 2중 할당 우회 및 EncodeRowToBuffer 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
-| `PENDING` | **`PKG-OFFLINE-DOCS`** | `1.0-GA` | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
+| `PENDING` | **`PKG-OFFLINE-DOCS`** | `v1.1.0` | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
 | `DONE` | **`PLANNER-SLIM-1`** |  | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** |  | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** |  | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
@@ -3122,8 +3122,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 `FEAT-WAL-ARCHIVER-INPROCESS-1`
-- **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-16 14:21:01
-- **Milestone**: `1.0-GA`
+- **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-21 09:46:25
+- **Milestone**: `v1.1.0`
 - **Plan Doc**: [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
 
 ---
@@ -4691,8 +4691,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) `PKG-OFFLINE-DOCS`
-- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-16 14:21:04
-- **Milestone**: `1.0-GA`
+- **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-21 09:46:25
+- **Milestone**: `v1.1.0`
 - **Plan Doc**: [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
 
 **Details & Resolution**:
