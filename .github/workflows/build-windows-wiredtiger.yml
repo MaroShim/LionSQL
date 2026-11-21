@@ -75,8 +75,11 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="../cmake/toolchains/cl.cmake" `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+            -DCMAKE_SHARED_LINKER_FLAGS="/DEF:../cmake/configs/wiredtiger.def" `
+            -Wno-dev `
             -DENABLE_SHARED=1 `
             -DENABLE_STATIC=0 `
+            -DENABLE_STRICT=0 `
             -DENABLE_PYTHON=0 `
             -DENABLE_SNAPPY=0 `
             -DENABLE_LZ4=0 `
