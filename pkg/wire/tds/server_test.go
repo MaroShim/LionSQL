@@ -1691,6 +1691,94 @@ func TestTDS_InferColumnInfos_SmallInt(t *testing.T) {
 	}
 }
 
+func TestTDS_ExecuteSQL_VDBEFastPath_And_MetadataCache(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	// Create test table and insert data
+	_ = sendSQLBatch(t, conn, `CREATE TABLE products (id INT PRIMARY KEY, name VARCHAR(50), price INT);`)
+	_ = sendSQLBatch(t, conn, `INSERT INTO products (id, name, price) VALUES (1, 'Widget', 100), (2, 'Gadget', 250);`)
+
+	stmtSQL := "SELECT id, name, price FROM products WHERE id = @p1;"
+
+	// 1. First execution of sp_executesql (ProcID 10): compiles and populates WireColMeta cache
+	var execParams1 bytes.Buffer
+	execParams1.Write(buildNVarCharParam("@stmt", false, stmtSQL))
+	execParams1.Write(buildNVarCharParam("@params", false, "@p1 INT"))
+	execParams1.Write(buildIntParam("@p1", false, 1))
+
+	resp1 := sendRPC(t, conn, 10, 0, execParams1.Bytes())
+	if !bytes.Contains(resp1, []byte{TokenColMetaData}) {
+		t.Fatalf("first sp_executesql: expected TokenColMetaData (0x81)")
+	}
+	if !bytes.Contains(resp1, []byte{TokenRow}) {
+		t.Fatalf("first sp_executesql: expected TokenRow (0xD1)")
+	}
+	if !bytes.Contains(resp1, []byte{TokenDoneProc}) {
+		t.Fatalf("first sp_executesql: expected TokenDoneProc (0xFE)")
+	}
+
+	// Verify that VDBE PlanCache has compiled the statement and cached WireColMeta
+	cache := srv.BytecodePlanCache()
+	if cache == nil {
+		t.Fatalf("expected non-nil BytecodePlanCache on server")
+	}
+	prog, err := cache.GetOrCompile(stmtSQL)
+	if err != nil || prog == nil {
+		t.Fatalf("expected compiled program in plan cache for %q: err=%v", stmtSQL, err)
+	}
+	cachedVal := prog.WireColMeta.Load()
+	if cachedVal == nil {
+		t.Fatalf("expected WireColMeta to be cached on Program after first execution")
+	}
+	cachedMeta, ok := cachedVal.(*tdsCachedMetadata)
+	if !ok || cachedMeta == nil {
+		t.Fatalf("expected *tdsCachedMetadata in WireColMeta, got %T", cachedVal)
+	}
+	if len(cachedMeta.cols) != 3 {
+		t.Fatalf("expected 3 cached columns, got %d", len(cachedMeta.cols))
+	}
+	if len(cachedMeta.metaBytes) == 0 {
+		t.Fatalf("expected non-empty cached metaBytes")
+	}
+
+	// 2. Second execution with different parameter: hits WireColMeta fast-path with zero re-inferences
+	var execParams2 bytes.Buffer
+	execParams2.Write(buildNVarCharParam("@stmt", false, stmtSQL))
+	execParams2.Write(buildNVarCharParam("@params", false, "@p1 INT"))
+	execParams2.Write(buildIntParam("@p1", false, 2))
+
+	resp2 := sendRPC(t, conn, 10, 0, execParams2.Bytes())
+	if !bytes.Contains(resp2, []byte{TokenColMetaData}) {
+		t.Fatalf("second sp_executesql: expected TokenColMetaData (0x81)")
+	}
+	if !bytes.Contains(resp2, []byte{TokenRow}) {
+		t.Fatalf("second sp_executesql: expected TokenRow (0xD1)")
+	}
+	if !bytes.Contains(resp2, []byte{TokenDoneProc}) {
+		t.Fatalf("second sp_executesql: expected TokenDoneProc (0xFE)")
+	}
+
+	// 3. Question mark placeholder query via sp_executesql
+	var execParamsQ bytes.Buffer
+	execParamsQ.Write(buildNVarCharParam("@stmt", false, "SELECT id, name FROM products WHERE id = ?;"))
+	execParamsQ.Write(buildNVarCharParam("@params", false, "@p1 INT"))
+	execParamsQ.Write(buildIntParam("@p1", false, 1))
+
+	respQ := sendRPC(t, conn, 10, 0, execParamsQ.Bytes())
+	if !bytes.Contains(respQ, []byte{TokenColMetaData}) {
+		t.Fatalf("question mark sp_executesql: expected TokenColMetaData (0x81)")
+	}
+	if !bytes.Contains(respQ, []byte{TokenRow}) {
+		t.Fatalf("question mark sp_executesql: expected TokenRow (0xD1)")
+	}
+	if !bytes.Contains(respQ, []byte{TokenDoneProc}) {
+		t.Fatalf("question mark sp_executesql: expected TokenDoneProc (0xFE)")
+	}
+}
+
+
 
 
 

@@ -469,6 +469,7 @@
 | `DONE` | **`PERF-SERVER-PIPELINE-P3-P4`** |  | Ecosystem | P3 | 서버 파이프라인 Phase 3/4 | [`notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-SKIPLIST-BACKWARD-POINTER-1`** | `v1.20.0` | Storage | P3 | MemEngine SkipList 양방향 포인터 도입으로 IndexScanDesc Zero-Alloc 역방향 스캔 달성 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-SUBQUERY-MEMO-1`** | `1.0-GA` | Engine | P2 | [1.0(?)] 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 | [`notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md`](notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md) |  |
+| `DONE` | **`PERF-TDS-OPTIMIZATION-1`** | `1.0-GA` | Wire | P1 | TDS 성능 가속화: sp_executesql VDBE FastPath 직결, COLMETADATA 캐싱, 소켓 버퍼링 | [`notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-TDS-ZEROCOPY-FRAME-1`** | `v1.10.0` | Wire | P2 | TDS tdsStreamWriter 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 copy 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-VDBE-EXTREME-OPT-1`** |  | Durability | P2 | T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 | [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 1 (`PERF-VDBE-SLOT-1`)*... |
 | `PENDING` | **`PERF-VDBE-FRAME-SLIM-1`** | `v1.10.0` | Engine | P2 | VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
@@ -4639,6 +4640,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md`](notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md)
+
+---
+
+### [DONE] TDS 성능 가속화: sp_executesql VDBE FastPath 직결, COLMETADATA 캐싱, 소켓 버퍼링 `PERF-TDS-OPTIMIZATION-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-21 13:07:39
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)
 
 ---
 

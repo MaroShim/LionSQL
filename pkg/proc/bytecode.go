@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"lionsql/pkg/storage"
 )
@@ -605,7 +606,8 @@ type Program struct {
 	VarSlots     map[string]int32 // Slot index mapping for fast O(1) indexed variable access
 	SlotCount    int32            // Total number of allocated variable slots
 	NumRegisters int32
-	QuerySQL     string // Optional raw query SQL for ad-hoc / relational query programs
+	QuerySQL     string       // Optional raw query SQL for ad-hoc / relational query programs
+	WireColMeta  atomic.Value // Thread-safe cached wire protocol column metadata
 }
 
 // AddAux registers an auxiliary metadata object in Program.AuxData and returns a 1-based index.

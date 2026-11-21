@@ -1,6 +1,7 @@
 package tds
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -23,6 +24,23 @@ var tdsPayloadBufferPool = sync.Pool{
 	},
 }
 
+var tdsBufioWriterPool = sync.Pool{
+	New: func() any {
+		return bufio.NewWriterSize(nil, 32768)
+	},
+}
+
+func getTdsBufioWriter(w io.Writer) *bufio.Writer {
+	bw := tdsBufioWriterPool.Get().(*bufio.Writer)
+	bw.Reset(w)
+	return bw
+}
+
+func putTdsBufioWriter(bw *bufio.Writer) {
+	bw.Reset(nil)
+	tdsBufioWriterPool.Put(bw)
+}
+
 func getTdsPayloadBuffer() *bytes.Buffer {
 	buf := tdsPayloadBufferPool.Get().(*bytes.Buffer)
 	buf.Reset()
@@ -43,6 +61,8 @@ func putTdsPayloadBuffer(buf *bytes.Buffer) {
 // avoiding multi-megabyte full-result buffering on large SELECT queries.
 type tdsStreamWriter struct {
 	w          io.Writer
+	bw         *bufio.Writer
+	borrowedBw bool
 	pType      byte
 	spid       uint16
 	packetSize uint32
@@ -56,8 +76,18 @@ func newTdsStreamWriter(w io.Writer, pType byte, spid uint16, packetSize uint32)
 	if packetSize < 512 || packetSize > MaxTDSPacketSize {
 		packetSize = DefaultPacketSize
 	}
+	var bw *bufio.Writer
+	var borrowed bool
+	if existingBw, ok := w.(*bufio.Writer); ok {
+		bw = existingBw
+	} else if w != nil {
+		bw = getTdsBufioWriter(w)
+		borrowed = true
+	}
 	return &tdsStreamWriter{
 		w:          w,
+		bw:         bw,
+		borrowedBw: borrowed,
 		pType:      pType,
 		spid:       spid,
 		packetSize: packetSize,
@@ -92,7 +122,12 @@ func (s *tdsStreamWriter) writeFrame(chunk []byte, status byte) error {
 	frame[7] = 0
 	copy(frame[HeaderSize:], chunk)
 
-	_, err := s.w.Write(frame)
+	var err error
+	if s.bw != nil {
+		_, err = s.bw.Write(frame)
+	} else {
+		_, err = s.w.Write(frame)
+	}
 	putFrameBuffer(uint32(totalLen), ptr)
 	s.packetID++
 	s.wroteAny = true
@@ -116,6 +151,11 @@ func (s *tdsStreamWriter) FlushIfReady() error {
 // Close flushes remaining payload frames (with StatusEOM on the final packet) and returns pooled buffers.
 func (s *tdsStreamWriter) Close() error {
 	if s.buf == nil {
+		if s.bw != nil && s.borrowedBw {
+			_ = s.bw.Flush()
+			putTdsBufioWriter(s.bw)
+			s.bw = nil
+		}
 		return nil
 	}
 	payload := s.buf.Bytes()
@@ -123,6 +163,15 @@ func (s *tdsStreamWriter) Close() error {
 		err := s.writeFrame(nil, StatusEOM)
 		putTdsPayloadBuffer(s.buf)
 		s.buf = nil
+		if s.bw != nil {
+			if flushErr := s.bw.Flush(); err == nil && flushErr != nil {
+				err = flushErr
+			}
+			if s.borrowedBw {
+				putTdsBufioWriter(s.bw)
+				s.bw = nil
+			}
+		}
 		return err
 	}
 
@@ -143,6 +192,15 @@ func (s *tdsStreamWriter) Close() error {
 	}
 	putTdsPayloadBuffer(s.buf)
 	s.buf = nil
+	if s.bw != nil {
+		if flushErr := s.bw.Flush(); writeErr == nil && flushErr != nil {
+			writeErr = flushErr
+		}
+		if s.borrowedBw {
+			putTdsBufioWriter(s.bw)
+			s.bw = nil
+		}
+	}
 	return writeErr
 }
 

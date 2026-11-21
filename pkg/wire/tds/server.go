@@ -545,7 +545,7 @@ func (s *Server) executeVDBEPreparedFastPath(
 	for i, p := range boundParams {
 		if p.Name != "" {
 			cleanName := strings.TrimPrefix(p.Name, "@")
-			if prog != nil && len(prog.Params) > 0 {
+			if prog != nil && len(prog.Params) > 0 && procParamNames == nil {
 				matched := false
 				for _, pd := range prog.Params {
 					if strings.EqualFold(strings.TrimPrefix(pd.Name, "@"), cleanName) {
@@ -564,6 +564,8 @@ func (s *Server) executeVDBEPreparedFastPath(
 			}
 			paramMap[cleanName] = p.Value
 			paramMap["@"+cleanName] = p.Value
+			paramMap[strings.ToLower(cleanName)] = p.Value
+			paramMap["@"+strings.ToLower(cleanName)] = p.Value
 		}
 		pIdx := i + 1
 		pName, atName := getParamNames(pIdx)
@@ -577,6 +579,8 @@ func (s *Server) executeVDBEPreparedFastPath(
 				paramMap[targetProcName] = p.Value
 				paramMap[clean] = p.Value
 				paramMap["@"+clean] = p.Value
+				paramMap[strings.ToLower(clean)] = p.Value
+				paramMap["@"+strings.ToLower(clean)] = p.Value
 			}
 		}
 	}
@@ -601,7 +605,7 @@ func (s *Server) executeVDBEPreparedFastPath(
 	}
 
 	if runErr == nil && res != nil {
-		s.respondExecutionResult(conn, res, sess, withOutputParams(extraTokens, boundParams, procParamNames, res.Vars))
+		s.respondExecutionResult(conn, res, sess, withOutputParams(extraTokens, boundParams, procParamNames, res.Vars), prog)
 		return true
 	}
 	if ctx.Err() != nil {
@@ -1452,7 +1456,18 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 	}, ctx)
 }
 
-func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionResult, sess *ConnectionSession, extraTokens func(buf *bytes.Buffer)) {
+type tdsCachedMetadata struct {
+	cols      []ColumnInfo
+	metaBytes []byte
+}
+
+func (s *Server) respondExecutionResult(
+	conn net.Conn,
+	res *runtime.ExecutionResult,
+	sess *ConnectionSession,
+	extraTokens func(buf *bytes.Buffer),
+	prog *proc.Program,
+) {
 	stream := sess.newStreamWriter(conn, PacketTabular)
 	buf := stream.Buffer()
 
@@ -1463,14 +1478,36 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 	returnStatus := engine.ReturnStatusFromValue(res.ReturnValue)
 
 	if len(res.Columns) > 0 {
-		qr := &engine.QueryResult{
-			Columns: res.Columns,
-			Rows:    res.Rows,
-			Values:  res.Values,
-			Success: true,
+		var cols []ColumnInfo
+		var metaBytes []byte
+
+		if prog != nil {
+			if cachedVal := prog.WireColMeta.Load(); cachedVal != nil {
+				if cached, ok := cachedVal.(*tdsCachedMetadata); ok && cached != nil && len(cached.cols) == len(res.Columns) {
+					cols = cached.cols
+					metaBytes = cached.metaBytes
+				}
+			}
 		}
-		cols := s.inferColumnInfos(qr)
-		buf.Write(BuildColMetaData(cols))
+
+		if metaBytes == nil {
+			qr := &engine.QueryResult{
+				Columns: res.Columns,
+				Rows:    res.Rows,
+				Values:  res.Values,
+				Success: true,
+			}
+			cols = s.inferColumnInfos(qr)
+			metaBytes = BuildColMetaData(cols)
+			if prog != nil {
+				prog.WireColMeta.Store(&tdsCachedMetadata{
+					cols:      cols,
+					metaBytes: metaBytes,
+				})
+			}
+		}
+
+		buf.Write(metaBytes)
 
 		if streamErr := s.streamQueryRows(stream, sess, cols, res.Rows, res.Values); streamErr != nil {
 			num, state, sev, msg := extractTdsErrorInfo(streamErr)
@@ -1576,6 +1613,43 @@ func (s *Server) handleRPCExecuteSQL(conn net.Conn, rpc *parsedRPC, sess *Connec
 			}
 		}
 		boundParams = append(boundParams, p)
+	}
+
+	// Fast-path: Execute via precompiled VDBE bytecode Program if available
+	trimmedStmt := strings.TrimSpace(stmt)
+	if trimmedStmt != "" {
+		normalizedStmt := replaceQuestionPlaceholders(trimmedStmt)
+		var prog *proc.Program
+		var procParamNames []string
+
+		if cache := s.BytecodePlanCache(); cache != nil {
+			prog, _ = cache.GetOrCompile(normalizedStmt)
+		} else {
+			prog, _ = proc.Compile(normalizedStmt)
+		}
+
+		if prog == nil && s.catalog != nil {
+			if procInfo := engine.ResolvePreparedProcedure(normalizedStmt, s.catalog, s.BytecodePlanCache()); procInfo != nil && procInfo.Program != nil {
+				prog = procInfo.Program
+				procParamNames = procInfo.ParamNames
+			}
+		}
+
+		if len(procParamNames) == 0 && paramsDecl != "" {
+			decls := parseParamDeclarations(paramsDecl)
+			if len(decls) > 0 {
+				procParamNames = make([]string, len(decls))
+				for i, d := range decls {
+					procParamNames[i] = d.Name
+				}
+			}
+		}
+
+		if prog != nil {
+			if s.executeVDBEPreparedFastPath(ctx, conn, prog, boundParams, sess, nil, procParamNames) {
+				return
+			}
+		}
 	}
 
 	execSQL := s.buildBoundSQL(stmt, paramsDecl, boundParams)
