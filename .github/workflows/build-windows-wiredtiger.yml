@@ -43,22 +43,22 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          update: true
+          update: false
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-binutils
-            mingw-w64-x86_64-tools-git
+            mingw-w64-x86_64-tools
 
       - name: Clone WiredTiger source
         run: |
           WT_VER="${{ github.event.inputs.wt_version || '11.3.1' }}"
-          echo "Cloning WiredTiger v${WT_VER}..."
-          git clone --depth 1 --branch "${WT_VER}" https://github.com/wiredtiger/wiredtiger.git D:/wt
+          echo "Cloning WiredTiger v${WT_VER} to ${RUNNER_TEMP}/wt..."
+          git clone --depth 1 --branch "${WT_VER}" https://github.com/wiredtiger/wiredtiger.git "${RUNNER_TEMP}/wt"
 
       - name: Build WiredTiger Shared DLL via MSVC (/MT Static CRT)
         run: |
-          cd D:/wt
-          mkdir build && cd build
+          cd "${RUNNER_TEMP}/wt"
+          mkdir -p build && cd build
 
           # Configure CMake with MSVC, MultiThreaded (/MT) static CRT, and shared DLL target
           cmake .. -G "Visual Studio 17 2022" -A x64 \
@@ -72,11 +72,11 @@ jobs:
             -DENABLE_ZLIB=0 \
             -DENABLE_ZSTD=0
 
-          cmake --build . --config Release --target wiredtiger
+          cmake --build . --config Release --target wiredtiger_shared
 
       - name: Generate MinGW-compatible Import Library (.dll.a)
         run: |
-          DLL_PATH=$(find D:/wt/build -name "wiredtiger.dll" | head -n 1)
+          DLL_PATH=$(find "${RUNNER_TEMP}/wt/build" -name "wiredtiger.dll" | head -n 1)
           if [ -z "$DLL_PATH" ]; then
             echo "Error: wiredtiger.dll not found in build tree"
             exit 1
@@ -84,10 +84,11 @@ jobs:
           echo "Found DLL at: $DLL_PATH"
           mkdir -p pkg/storage/wiredtiger/lib/windows_amd64/include
 
-          # Copy DLL and MSVC headers
+          # Copy DLL, MSVC .lib, and headers
           cp -v "$DLL_PATH" pkg/storage/wiredtiger/lib/windows_amd64/
-          find D:/wt -name "wiredtiger.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \;
-          find D:/wt -name "wiredtiger_ext.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \; 2>/dev/null || true
+          find "${RUNNER_TEMP}/wt/build" -name "wiredtiger.lib" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/ \; 2>/dev/null || true
+          find "${RUNNER_TEMP}/wt" -name "wiredtiger.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \;
+          find "${RUNNER_TEMP}/wt" -name "wiredtiger_ext.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \; 2>/dev/null || true
 
           cd pkg/storage/wiredtiger/lib/windows_amd64
           # Generate DEF file and MinGW-compatible import library
@@ -99,10 +100,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pkg/storage/wiredtiger/lib/windows_amd64/wiredtiger.dll
-          git add pkg/storage/wiredtiger/lib/windows_amd64/libwiredtiger.dll.a
-          git add pkg/storage/wiredtiger/lib/windows_amd64/include/
-          git commit -m "chore(storage/wiredtiger): vendor precompiled windows msvc dll and import library" || echo "No changes to commit"
+          git add pkg/storage/wiredtiger/lib/windows_amd64/
+          git status
+          git diff --staged --quiet || git commit -m "chore(storage/wiredtiger): vendor precompiled windows msvc dll and import library"
           git push origin main
 
       - name: Compile LionSQL Windows Executable with WiredTiger Cgo
