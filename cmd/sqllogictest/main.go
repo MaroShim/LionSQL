@@ -87,6 +87,7 @@ func runSingleFile(file string, engineType string, mode string, verbose bool, op
 
 	switch strings.ToLower(mode) {
 	case "inproc", "direct":
+		coord.SetSessionDialect("slt_default", engine.DialectSQLite)
 		exec = slt.NewCoordinatorExecutor(coord)
 	case "pgwire", "wire", "tcp":
 		wireSrv = wire.NewServer("127.0.0.1:0", cat, eng)
@@ -163,7 +164,7 @@ func main() {
 	engineFlag := flag.String("engine", "memory", "Storage engine backend (memory, wiredtiger)")
 	modeFlag := flag.String("mode", "inproc", "Execution mode (inproc, pgwire)")
 	parallelFlag := flag.Int("parallel", 1, "Number of concurrent SLT file workers")
-	targetFlag := flag.String("target", "sqlite,lionsql", "Comma-separated target database dialect tags for onlyif/skipif directives")
+	targetFlag := flag.String("target", "mssql,lionsql", "Comma-separated target database dialect tags for onlyif/skipif directives")
 	flag.Parse()
 
 	var targetDialects []string

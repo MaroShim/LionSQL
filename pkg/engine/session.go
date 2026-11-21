@@ -58,6 +58,8 @@ const (
 	DialectPostgres
 	// DialectMySQL is MySQL client compatibility dialect.
 	DialectMySQL
+	// DialectSQLite is SQLite compatibility dialect for SQLLogicTest.
+	DialectSQLite
 )
 
 // DDLUndoKind defines the undo operation kind for transactional DDL rollback.
@@ -631,6 +633,14 @@ func (cs *ClientSession) IsTSQL() bool {
 		return true
 	}
 	return cs.Dialect == DialectTSQL || cs.Dialect == DialectDefault
+}
+
+// IsSQLite reports whether the session operates under SQLite compatibility dialect semantics (e.g. for SQLLogicTest).
+func (cs *ClientSession) IsSQLite() bool {
+	if cs == nil {
+		return false
+	}
+	return cs.Dialect == DialectSQLite || strings.HasPrefix(cs.ID, "slt")
 }
 
 // ExecuteProgram executes a compiled program in the session's active transaction if present,

@@ -568,9 +568,9 @@ func (p *Parser) parseTypeSpec() (storage.DataType, int, int, bool) {
 			prec = 1
 		case "SMALLINT", "INT2":
 			prec = 2
-		case "INT", "INTEGER", "INT4", "SIGNED", "UNSIGNED":
+		case "INT", "INT4", "SIGNED", "UNSIGNED":
 			prec = 4
-		case "BIGINT", "INT8":
+		case "BIGINT", "INTEGER", "INT8":
 			prec = 8
 		default:
 			prec = 4

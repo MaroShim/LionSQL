@@ -315,6 +315,9 @@ func encodeTupleKey(t *Tuple) string {
 		if i > 0 {
 			sb.WriteByte('\x00')
 		}
+		if sv, ok := v.(storage.Value); ok {
+			v = sv.Interface()
+		}
 		if v == nil {
 			sb.WriteString("N:")
 			continue
@@ -323,14 +326,29 @@ func encodeTupleKey(t *Tuple) string {
 		case storage.Decimal:
 			sb.WriteString("D:")
 			sb.WriteString(val.String())
-		case storage.Value:
-			sb.WriteString("V:")
-			sb.WriteString(val.String())
 		case int64:
 			sb.WriteString(fmt.Sprintf("I:%d", val))
 		case int:
 			sb.WriteString(fmt.Sprintf("I:%d", val))
+		case int32:
+			sb.WriteString(fmt.Sprintf("I:%d", val))
+		case int16:
+			sb.WriteString(fmt.Sprintf("I:%d", val))
+		case int8:
+			sb.WriteString(fmt.Sprintf("I:%d", val))
+		case uint64:
+			sb.WriteString(fmt.Sprintf("I:%d", val))
+		case uint32:
+			sb.WriteString(fmt.Sprintf("I:%d", val))
+		case uint16:
+			sb.WriteString(fmt.Sprintf("I:%d", val))
+		case uint8:
+			sb.WriteString(fmt.Sprintf("I:%d", val))
+		case uint:
+			sb.WriteString(fmt.Sprintf("I:%d", val))
 		case float64:
+			sb.WriteString(fmt.Sprintf("F:%v", val))
+		case float32:
 			sb.WriteString(fmt.Sprintf("F:%v", val))
 		case string:
 			sb.WriteString("S:")

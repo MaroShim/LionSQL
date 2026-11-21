@@ -3,6 +3,7 @@ package slt
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"strconv"
@@ -37,7 +38,7 @@ func (e *CoordinatorExecutor) Execute(sqlStr string) ([]string, []map[string]any
 		sqlStr = strings.ReplaceAll(sqlStr, "@P1", "2")
 		sqlStr = strings.ReplaceAll(sqlStr, "@P2", "3")
 	}
-	res, err := e.coord.ExecuteSQL(sqlStr)
+	res, err := e.coord.ExecuteSessionSQL("slt_default", sqlStr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -201,6 +202,8 @@ func FormatCell(val any, colType byte) string {
 			val = sv.BVal
 		case storage.TypeDateTime:
 			val = sv.TVal
+		case storage.TypeBinary:
+			val = sv.Interface()
 		default:
 			val = sv.SVal
 		}
@@ -309,7 +312,7 @@ func FormatCell(val any, colType byte) string {
 		}
 		return v
 	case []byte:
-		return string(v)
+		return "0x" + hex.EncodeToString(v)
 	default:
 		return fmt.Sprintf("%v", v)
 	}

@@ -1139,10 +1139,15 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		if cs != nil {
 			cs.Mu.Lock()
 			if len(cs.Vars) > 0 {
-				varRow = make(map[string]any, len(cs.Vars))
+				varRow = make(map[string]any, len(cs.Vars)+1)
 				for k, v := range cs.Vars {
 					varRow[k] = v
 				}
+			} else {
+				varRow = make(map[string]any, 1)
+			}
+			if cs.IsSQLite() {
+				varRow["__sqlite_compat__"] = true
 			}
 			cs.Mu.Unlock()
 		}

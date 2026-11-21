@@ -76,14 +76,17 @@ func ValidateAndNormalizeValue(col *Column, val Value, tableName string) (Value,
 				return val, fmt.Errorf("arithmetic overflow converting %d to data type smallint: value out of range [-32768, 32767] (table %q, column %q)",
 					i, tableName, col.Name)
 			}
-		} else if raw == "INT" || raw == "INTEGER" || raw == "INT4" {
+		} else if raw == "INT" || raw == "INT4" {
 			if i < -2147483648 || i > 2147483647 {
 				return val, fmt.Errorf("arithmetic overflow converting %d to data type int: value out of range [-2147483648, 2147483647] (table %q, column %q)",
 					i, tableName, col.Name)
 			}
 		}
 		if val.Type != TypeInt {
-			return IntValue(i), nil
+			val = IntValue(i)
+		}
+		if col.Precision > 0 {
+			val.Precision = col.Precision
 		}
 		return val, nil
 

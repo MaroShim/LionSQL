@@ -1027,8 +1027,12 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 			if f.parsed != nil {
 				res, err := proc.EvalRowExpr(f.parsed, evalMap, nil)
 				if err != nil {
-					if _, isCol := f.parsed.(*proc.ColumnRefExpr); !isCol {
-						return err
+					if strings.Contains(err.Error(), "division by zero") || strings.Contains(err.Error(), "divide by zero") {
+						vals[fIdx] = nil
+					} else {
+						if _, isCol := f.parsed.(*proc.ColumnRefExpr); !isCol {
+							return err
+						}
 					}
 				} else {
 					vals[fIdx] = res
@@ -1223,6 +1227,44 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 			vals[fIdx] = val
 		}
 
+		// Pre-check HAVING filter using group keys and computed aggregate values.
+		// If HAVING fails, avoid executing projection expressions (Pass 2) for this discarded group.
+		if a.havingCond != "" {
+			hEvalMap := acc.groupTuple.ToEvalMap()
+			if hEvalMap == nil {
+				hEvalMap = make(map[string]any, len(a.fields)*2)
+			}
+			for afIdx, af := range a.fields {
+				if !af.isLiteral {
+					if af.rawExpr != "" {
+						hEvalMap[af.rawExpr] = vals[afIdx]
+						hEvalMap[strings.ToUpper(af.rawExpr)] = vals[afIdx]
+						hEvalMap[strings.ToLower(af.rawExpr)] = vals[afIdx]
+					}
+					if af.alias != "" {
+						hEvalMap[af.alias] = vals[afIdx]
+						hEvalMap[strings.ToUpper(af.alias)] = vals[afIdx]
+						hEvalMap[strings.ToLower(af.alias)] = vals[afIdx]
+					}
+					if af.argCol != "" {
+						hEvalMap[af.argCol] = vals[afIdx]
+						hEvalMap[strings.ToUpper(af.argCol)] = vals[afIdx]
+						hEvalMap[strings.ToLower(af.argCol)] = vals[afIdx]
+					}
+				}
+			}
+			havingPass := true
+			if a.parsedHaving != nil {
+				havingPass = proc.EvalBoolExpr(a.parsedHaving, hEvalMap, nil)
+			} else {
+				row := Tuple{Values: vals, Index: a.colIndexMap}
+				havingPass = EvalConditionTuple(row, a.havingCond)
+			}
+			if !havingPass {
+				continue
+			}
+		}
+
 		// Pass 2: Compute group-by columns and literal/composite expressions (f.isLiteral).
 		var evalMap map[string]any
 		for fIdx, f := range a.fields {
@@ -1272,10 +1314,14 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 				if err == nil {
 					vals[fIdx] = res
 				} else {
-					if _, isCol := f.parsed.(*proc.ColumnRefExpr); !isCol {
-						return err
+					if strings.Contains(err.Error(), "division by zero") || strings.Contains(err.Error(), "divide by zero") {
+						vals[fIdx] = nil
+					} else {
+						if _, isCol := f.parsed.(*proc.ColumnRefExpr); !isCol {
+							return err
+						}
+						vals[fIdx] = nil
 					}
-					vals[fIdx] = nil
 				}
 			} else {
 				v, _ := lookupVal(acc.groupTuple, f.argCol)
@@ -1572,6 +1618,66 @@ func exprHasAgg(expr proc.Expr) bool {
 	return hasAgg
 }
 
+func isConstant(e proc.Expr) bool {
+	if _, ok := e.(*proc.LiteralExpr); ok {
+		return true
+	}
+	if u, ok := e.(*proc.UnaryExpr); ok && (u.Op == proc.TokenPlus || u.Op == proc.TokenMinus) {
+		return isConstant(u.Expr)
+	}
+	return false
+}
+
+func isConstantNonNull(e proc.Expr) bool {
+	if e == nil {
+		return false
+	}
+	folded := proc.FoldConstants(e)
+	if lit, ok := folded.(*proc.LiteralExpr); ok && !lit.Val.IsNull {
+		return true
+	}
+	if cast, ok := e.(*proc.CastExpr); ok {
+		return isConstantNonNull(cast.Expr)
+	}
+	if lit, ok := e.(*proc.LiteralExpr); ok && !lit.Val.IsNull {
+		return true
+	}
+	if u, ok := e.(*proc.UnaryExpr); ok && (u.Op == proc.TokenPlus || u.Op == proc.TokenMinus) {
+		return isConstantNonNull(u.Expr)
+	}
+	if b, ok := e.(*proc.BinaryExpr); ok {
+		if b.Op == proc.TokenPlus || b.Op == proc.TokenMinus || b.Op == proc.TokenAsterisk {
+			return isConstantNonNull(b.Left) && isConstantNonNull(b.Right)
+		}
+	}
+	if fn, ok := e.(*proc.FunctionCallExpr); ok {
+		uName := strings.ToUpper(fn.Name)
+		if uName == "COALESCE" || uName == "ISNULL" || uName == "NVL" || uName == "IFNULL" {
+			if len(fn.Args) > 0 && isConstantNonNull(fn.Args[0]) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isConstantNull(e proc.Expr) bool {
+	if e == nil {
+		return false
+	}
+	folded := proc.FoldConstants(e)
+	if lit, ok := folded.(*proc.LiteralExpr); ok && lit.Val.IsNull {
+		return true
+	}
+	if u, ok := e.(*proc.UnaryExpr); ok && (u.Op == proc.TokenPlus || u.Op == proc.TokenMinus) {
+		return isConstantNull(u.Expr)
+	}
+	if cast, ok := e.(*proc.CastExpr); ok {
+		return isConstantNull(cast.Expr)
+	}
+	return false
+}
+
 func validateHavingClause(expr proc.Expr, groupKeys []string, fields []aggField) error {
 	if expr == nil {
 		return nil
@@ -1595,15 +1701,13 @@ func validateHavingClause(expr proc.Expr, groupKeys []string, fields []aggField)
 		}
 	}
 	for _, f := range fields {
-		if !f.isLiteral || exprHasAgg(f.parsed) {
-			if f.alias != "" {
-				clean := strings.ToLower(cleanIdentifierParts(f.alias))
-				groupKeySet[clean] = struct{}{}
-				groupKeySet[norm(f.alias)] = struct{}{}
-				if idx := strings.Index(clean, "."); idx != -1 {
-					groupKeySet[clean[idx+1:]] = struct{}{}
-					groupKeySet[norm(clean[idx+1:])] = struct{}{}
-				}
+		if f.alias != "" {
+			clean := strings.ToLower(cleanIdentifierParts(f.alias))
+			groupKeySet[clean] = struct{}{}
+			groupKeySet[norm(f.alias)] = struct{}{}
+			if idx := strings.Index(clean, "."); idx != -1 {
+				groupKeySet[clean[idx+1:]] = struct{}{}
+				groupKeySet[norm(clean[idx+1:])] = struct{}{}
 			}
 		}
 	}
@@ -1636,6 +1740,17 @@ func validateHavingClause(expr proc.Expr, groupKeys []string, fields []aggField)
 
 		case *proc.FunctionCallExpr:
 			fnName := strings.ToUpper(node.Name)
+			if fnName == "COALESCE" || fnName == "ISNULL" || fnName == "NVL" || fnName == "IFNULL" {
+				for _, arg := range node.Args {
+					if isConstantNonNull(arg) {
+						break
+					}
+					if err := check(arg, inAgg); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
 			if fnName == "COUNT" || fnName == "SUM" || fnName == "TOTAL" || fnName == "AVG" ||
 				fnName == "MIN" || fnName == "MAX" || fnName == "GROUP_CONCAT" || fnName == "STRING_AGG" ||
 				fnName == "STDEV" || fnName == "STDEVP" || fnName == "VAR" || fnName == "VARP" {
@@ -1663,12 +1778,36 @@ func validateHavingClause(expr proc.Expr, groupKeys []string, fields []aggField)
 			return check(node.Expr, inAgg)
 
 		case *proc.CaseExpr:
+			allWhensNull := len(node.Whens) > 0
+			for _, w := range node.Whens {
+				if !isConstantNull(w.Condition) {
+					allWhensNull = false
+					break
+				}
+			}
+			if allWhensNull {
+				if node.Else != nil {
+					return check(node.Else, inAgg)
+				}
+				return nil
+			}
+
 			if node.Operand != nil {
 				if err := check(node.Operand, inAgg); err != nil {
 					return err
 				}
 			}
 			for _, w := range node.Whens {
+				if isConstantNull(w.Condition) {
+					continue
+				}
+				if node.Operand != nil && isConstant(node.Operand) && isConstant(w.Condition) {
+					vOp, _ := proc.EvalRowExpr(node.Operand, nil, nil)
+					vCond, _ := proc.EvalRowExpr(w.Condition, nil, nil)
+					if vOp != vCond {
+						continue
+					}
+				}
 				if err := check(w.Condition, inAgg); err != nil {
 					return err
 				}

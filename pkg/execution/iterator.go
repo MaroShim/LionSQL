@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -563,7 +564,12 @@ func FormatRecord(rec storage.Record, schema *storage.TableSchema, alias string,
 	vals := make([]any, n)
 	for i, c := range schema.Columns {
 		if stVal, ok := rec[c.Name]; ok {
-			vals[i] = formatStorageVal(stVal)
+			if !stVal.IsNull && stVal.Type == storage.TypeInt && c.Precision > 0 {
+				stVal.Precision = c.Precision
+				vals[i] = stVal
+			} else {
+				vals[i] = formatStorageVal(stVal)
+			}
 		}
 	}
 
@@ -627,7 +633,14 @@ func FormatRowWithArena(row storage.Row, schema *storage.TableSchema, alias stri
 	}
 	numVals := len(row.Values)
 	for i := 0; i < n && i < numVals; i++ {
-		vals[i] = formatStorageVal(row.Values[i])
+		c := schema.Columns[i]
+		stVal := row.Values[i]
+		if !stVal.IsNull && stVal.Type == storage.TypeInt && c.Precision > 0 {
+			stVal.Precision = c.Precision
+			vals[i] = stVal
+		} else {
+			vals[i] = formatStorageVal(stVal)
+		}
 	}
 
 	t := Tuple{
@@ -654,6 +667,9 @@ func formatStorageVal(v storage.Value) any {
 	}
 	switch v.Type {
 	case storage.TypeInt:
+		if v.Precision == 4 && v.IVal >= math.MinInt32 && v.IVal <= math.MaxInt32 {
+			return int32(v.IVal)
+		}
 		return v.IVal
 	case storage.TypeVarChar:
 		return v.SVal
@@ -805,6 +821,22 @@ func toInt64(v any) (int64, bool) {
 		return n, true
 	case int:
 		return int64(n), true
+	case int32:
+		return int64(n), true
+	case int16:
+		return int64(n), true
+	case int8:
+		return int64(n), true
+	case uint:
+		return int64(n), true
+	case uint64:
+		return int64(n), true
+	case uint32:
+		return int64(n), true
+	case uint16:
+		return int64(n), true
+	case uint8:
+		return int64(n), true
 	case float64:
 		return int64(n), true
 	case bool:
@@ -851,6 +883,22 @@ func toFloat64(v any) (float64, bool) {
 	case int64:
 		return float64(n), true
 	case int:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	case int16:
+		return float64(n), true
+	case int8:
+		return float64(n), true
+	case uint:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	case uint32:
+		return float64(n), true
+	case uint16:
+		return float64(n), true
+	case uint8:
 		return float64(n), true
 	case bool:
 		if n {

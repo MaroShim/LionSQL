@@ -329,9 +329,29 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 			gStr := g.String()
 			for _, p := range stmt.Projections {
 				if p.Alias != "" && strings.EqualFold(p.Alias, gStr) {
+					if _, isLit := p.Expr.(*proc.LiteralExpr); isLit {
+						continue
+					}
 					if hasTopLevelAggregateExpr(p.Expr) {
 						qErr = fmt.Errorf("aggregate functions are not allowed in GROUP BY")
 						break
+					}
+					isExistingColRef := false
+					for _, otherP := range stmt.Projections {
+						if otherP.Expr != nil {
+							for _, ref := range ExtractColumnRefs(otherP.Expr.String()) {
+								if strings.EqualFold(ref.Column, gStr) {
+									isExistingColRef = true
+									break
+								}
+							}
+						}
+						if isExistingColRef {
+							break
+						}
+					}
+					if isExistingColRef {
+						continue
 					}
 					resolvedCol = p.Expr.String()
 					break
@@ -2879,7 +2899,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		cleanType = "INNER"
 	}
 
-	var rightFilters, postJoinFilters []string
+	var rightFilters, joinFilters, postJoinFilters []string
 	if join.Filter != "" {
 		for _, subCond := range splitAndConditions(join.Filter) {
 			refs := ExtractColumnRefs(subCond)
@@ -2891,13 +2911,18 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 				}
 			}
 			if hasOuter {
-				postJoinFilters = append(postJoinFilters, subCond)
+				if cleanType == "LEFT" || cleanType == "RIGHT" || cleanType == "FULL" {
+					joinFilters = append(joinFilters, subCond)
+				} else {
+					postJoinFilters = append(postJoinFilters, subCond)
+				}
 			} else {
 				rightFilters = append(rightFilters, subCond)
 			}
 		}
 	}
 	rightFilter := strings.Join(rightFilters, " AND ")
+	joinFilter := strings.Join(joinFilters, " AND ")
 	postJoinFilter := strings.Join(postJoinFilters, " AND ")
 
 	if joinStrategy == "LOOP" {
@@ -3003,6 +3028,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 			Type:          NodeHashJoin,
 			JoinType:      cleanType,
 			HashCond:      fmt.Sprintf("(%s = %s)", hjLeftKey, hjRightKey),
+			JoinCond:      joinFilter,
 			StartupCost:   hashBuildCost,
 			TotalCost:     hashJoinTotalCost,
 			EstimatedRows: joinEstRows,

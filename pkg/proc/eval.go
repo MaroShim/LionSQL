@@ -245,6 +245,8 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			return e.Val.BVal, nil
 		case storage.TypeDateTime:
 			return e.Val.TVal, nil
+		case storage.TypeBinary:
+			return e.Val.Interface(), nil
 		default:
 			return e.Val.SVal, nil
 		}
@@ -428,7 +430,7 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			} else if c, ok := e.Right.(*CollateExpr); ok {
 				collate = c.Collation
 			}
-			return evalRowBinaryOpWithCollation(e.Op, leftVal, rightVal, collate)
+			return evalRowBinaryOpWithCollation(e.Op, leftVal, rightVal, collate, isSQLiteCompat(row))
 		}
 
 	case *InExpr:
@@ -996,7 +998,19 @@ func isStringType(v any) (string, bool) {
 	return "", false
 }
 
-func evalRowBinaryOpWithCollation(op TokenType, left, right any, collate string) (any, error) {
+func isSQLiteCompat(row map[string]any) bool {
+	if row == nil {
+		return false
+	}
+	if v, ok := row["__sqlite_compat__"]; ok {
+		if b, bOk := v.(bool); bOk {
+			return b
+		}
+	}
+	return false
+}
+
+func evalRowBinaryOpWithCollation(op TokenType, left, right any, collate string, isSQLite bool) (any, error) {
 	if collate != "" && sqlutil.IsCaseSensitiveCollation(collate) {
 		switch op {
 		case TokenEq:
@@ -1019,10 +1033,14 @@ func evalRowBinaryOpWithCollation(op TokenType, left, right any, collate string)
 			}
 		}
 	}
-	return evalRowBinaryOp(op, left, right)
+	return evalRowBinaryOpWithContext(op, left, right, isSQLite)
 }
 
 func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
+	return evalRowBinaryOpWithContext(op, left, right, false)
+}
+
+func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool) (any, error) {
 	if (isDecimalVal(left) || isDecimalVal(right)) && !isFloatVal(left) && !isFloatVal(right) {
 		if d1, ok1 := toDecimalVal(left); ok1 {
 			if d2, ok2 := toDecimalVal(right); ok2 {
@@ -1047,6 +1065,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 					return d1.Mul(d2), nil
 				case TokenSlash, TokenDiv:
 					if d2.IsZero() {
+						if isSQLite {
+							return nil, nil
+						}
 						return nil, fmt.Errorf("division by zero: divide by zero error encountered")
 					}
 					scale := d1.Scale()
@@ -1194,7 +1215,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		}
 		if i1, isInt1 := isInteger(left); isInt1 {
 			if i2, isInt2 := isInteger(right); isInt2 {
-				if isInt32Val(left) && isInt32Val(right) {
+				if !isSQLite && isInt32Val(left) && isInt32Val(right) {
 					res := i1 + i2
 					if res < math.MinInt32 || res > math.MaxInt32 {
 						return nil, fmt.Errorf("Msg 8115, Level 16, State 2: Arithmetic overflow error converting expression to data type int.")
@@ -1224,7 +1245,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		}
 		if i1, isInt1 := isInteger(left); isInt1 {
 			if i2, isInt2 := isInteger(right); isInt2 {
-				if isInt32Val(left) && isInt32Val(right) {
+				if !isSQLite && isInt32Val(left) && isInt32Val(right) {
 					res := i1 - i2
 					if res < math.MinInt32 || res > math.MaxInt32 {
 						return nil, fmt.Errorf("Msg 8115, Level 16, State 2: Arithmetic overflow error converting expression to data type int.")
@@ -1254,7 +1275,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		}
 		if i1, isInt1 := isInteger(left); isInt1 {
 			if i2, isInt2 := isInteger(right); isInt2 {
-				if isInt32Val(left) && isInt32Val(right) {
+				if !isSQLite && isInt32Val(left) && isInt32Val(right) {
 					res := i1 * i2
 					if i1 != 0 && res/i1 != i2 || res < math.MinInt32 || res > math.MaxInt32 {
 						return nil, fmt.Errorf("Msg 8115, Level 16, State 2: Arithmetic overflow error converting expression to data type int.")
@@ -1292,6 +1313,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if i1, isInt1 := isInteger(left); isInt1 {
 			if i2, isInt2 := isInteger(right); isInt2 {
 				if i2 == 0 {
+					if isSQLite {
+						return nil, nil
+					}
 					return nil, fmt.Errorf("division by zero: divide by zero error encountered")
 				}
 				if i1 == math.MinInt64 && i2 == -1 {
@@ -1304,6 +1328,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		n2, isNum2 := toArithmeticFloat(right)
 		if isNum1 && isNum2 {
 			if n2 == 0 {
+				if isSQLite {
+					return nil, nil
+				}
 				return nil, fmt.Errorf("division by zero: divide by zero error encountered")
 			}
 			div := n1 / n2

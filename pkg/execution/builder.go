@@ -225,6 +225,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		}
 
 		hIter := NewHashJoinIterator(leftIter, rightIter, plan.JoinType, leftKey, rightKey)
+		if plan.JoinCond != "" {
+			hIter.SetJoinFilter(plan.JoinCond)
+		}
 		if opts.WorkMem > 0 {
 			hIter.SetWorkMem(opts.WorkMem)
 		}

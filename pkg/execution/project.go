@@ -250,29 +250,6 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) (Tuple, error) {
 			continue
 		}
 		if f.parsed != nil {
-			if _, isLit := f.parsed.(*proc.LiteralExpr); isLit {
-				if res, ok := EvalTupleExprWithContext(tuple, f.parsed, subExec, p.sessionVars); ok {
-					if err, isErr := res.(error); isErr {
-						return Tuple{}, err
-					}
-					vals[i] = res
-					continue
-				}
-			}
-		}
-		// Prioritize qualified expression (e.g. "o.amount", "u.name") over unqualified alias
-		// to prevent shadowing when multiple relations share identical column names.
-		if val, ok := tuple.GetOK(f.expr); ok {
-			vals[i] = val
-			continue
-		}
-		if f.alias != "" {
-			if val, ok := tuple.GetOK(f.alias); ok {
-				vals[i] = val
-				continue
-			}
-		}
-		if f.parsed != nil {
 			if res, ok := EvalTupleExprWithContext(tuple, f.parsed, subExec, p.sessionVars); ok {
 				if err, isErr := res.(error); isErr {
 					return Tuple{}, err
@@ -280,6 +257,11 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) (Tuple, error) {
 				vals[i] = res
 				continue
 			}
+		}
+		// Prioritize qualified expression (e.g. "o.amount", "u.name")
+		if val, ok := tuple.GetOK(f.expr); ok {
+			vals[i] = val
+			continue
 		}
 		val, found := lookupVal(tuple, f.expr)
 		if !found {

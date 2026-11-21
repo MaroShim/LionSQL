@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
 	"lionsql/pkg/storage"
 )
 
@@ -32,17 +33,20 @@ type HashJoinIterator struct {
 	unmatchedIdx   int
 	rightHasNullKey bool
 	currentProbe   Tuple
-	currentMatches []hashMatch
-	matchIdx       int
-	emittedAny     bool
-	workMem        int64
-	buildMemory    int64
-	colIndexMap    *ColumnIndexMap
-	inChunk        Chunk
-	inIdx          int
-	outChunk       Chunk
-	outIdx         int
-	arena          *storage.Arena
+	currentMatches   []hashMatch
+	matchIdx         int
+	emittedAny       bool
+	workMem          int64
+	buildMemory      int64
+	colIndexMap      *ColumnIndexMap
+	inChunk          Chunk
+	inIdx            int
+	outChunk         Chunk
+	outIdx           int
+	arena            *storage.Arena
+	joinFilter       string
+	parsedJoinFilter proc.Expr
+	hasJoinFilter    bool
 }
 
 // NewHashJoinIterator creates a new Hash Join operator.
@@ -77,6 +81,29 @@ func (h *HashJoinIterator) SetWorkMem(bytes int64) {
 // BuildMemory returns the bytes used by the hash table.
 func (h *HashJoinIterator) BuildMemory() int64 {
 	return h.buildMemory
+}
+
+// SetJoinFilter configures an extra boolean condition evaluated on merged candidate tuples.
+func (h *HashJoinIterator) SetJoinFilter(filter string) {
+	h.joinFilter = strings.TrimSpace(filter)
+	if h.joinFilter != "" && h.joinFilter != "1=1" && h.joinFilter != "1 = 1" {
+		h.hasJoinFilter = true
+		p := proc.NewParser(proc.NewLexer(h.joinFilter))
+		expr := p.ParseExpr()
+		if expr != nil && len(p.Errors()) == 0 {
+			h.parsedJoinFilter = proc.FoldConstants(expr)
+		}
+	}
+}
+
+func (h *HashJoinIterator) evalJoinFilter(merged Tuple) bool {
+	if !h.hasJoinFilter {
+		return true
+	}
+	if h.parsedJoinFilter != nil {
+		return EvalTupleBoolExprWithContext(merged, h.parsedJoinFilter, nil, nil)
+	}
+	return EvalConditionTupleWithContext(merged, h.joinFilter, nil, nil)
 }
 
 func (h *HashJoinIterator) Open(ctx context.Context) error {
@@ -254,14 +281,17 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 
 		// If current probe tuple has pending matches, emit next match (only for standard joins)
 		if h.joinType != "SEMI" && h.joinType != "ANTI" {
-			if !h.currentProbe.IsNil() && h.matchIdx < len(h.currentMatches) {
+			for !h.currentProbe.IsNil() && h.matchIdx < len(h.currentMatches) {
 				m := h.currentMatches[h.matchIdx]
 				h.matchIdx++
-				h.emittedAny = true
-				if trackRight && m.idx >= 0 && m.idx < len(h.matchedRight) {
-					h.matchedRight[m.idx] = true
+				merged := mergeTuplesWithArena(h.currentProbe, m.tuple, h.colIndexMap, h.arena)
+				if h.evalJoinFilter(merged) {
+					h.emittedAny = true
+					if trackRight && m.idx >= 0 && m.idx < len(h.matchedRight) {
+						h.matchedRight[m.idx] = true
+					}
+					return merged, nil
 				}
-				return mergeTuplesWithArena(h.currentProbe, m.tuple, h.colIndexMap, h.arena), nil
 			}
 		}
 
@@ -309,8 +339,13 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 
 		if h.joinType == "SEMI" {
 			if hasMatch {
-				h.currentProbe = Tuple{}
-				return probeTuple, nil
+				for _, m := range h.currentMatches {
+					merged := mergeTuplesWithArena(probeTuple, m.tuple, h.colIndexMap, h.arena)
+					if h.evalJoinFilter(merged) {
+						h.currentProbe = Tuple{}
+						return probeTuple, nil
+					}
+				}
 			}
 			continue
 		}
@@ -324,17 +359,32 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 				h.currentProbe = Tuple{}
 				return probeTuple, nil
 			}
+			matchedAny := false
+			for _, m := range h.currentMatches {
+				merged := mergeTuplesWithArena(probeTuple, m.tuple, h.colIndexMap, h.arena)
+				if h.evalJoinFilter(merged) {
+					matchedAny = true
+					break
+				}
+			}
+			if !matchedAny {
+				h.currentProbe = Tuple{}
+				return probeTuple, nil
+			}
 			continue
 		}
 
-		if hasMatch {
+		for h.matchIdx < len(h.currentMatches) {
 			m := h.currentMatches[h.matchIdx]
 			h.matchIdx++
-			h.emittedAny = true
-			if trackRight && m.idx >= 0 && m.idx < len(h.matchedRight) {
-				h.matchedRight[m.idx] = true
+			merged := mergeTuplesWithArena(h.currentProbe, m.tuple, h.colIndexMap, h.arena)
+			if h.evalJoinFilter(merged) {
+				h.emittedAny = true
+				if trackRight && m.idx >= 0 && m.idx < len(h.matchedRight) {
+					h.matchedRight[m.idx] = true
+				}
+				return merged, nil
 			}
-			return mergeTuplesWithArena(h.currentProbe, m.tuple, h.colIndexMap, h.arena), nil
 		}
 
 		// If LEFT JOIN or FULL JOIN and no matches, emit probe tuple with NULLs
@@ -819,12 +869,32 @@ func toStorageValFromAny(v any) storage.Value {
 		return storage.NullValue(storage.TypeUnknown)
 	}
 	switch val := v.(type) {
+	case storage.Value:
+		return val
 	case int64:
 		return storage.IntValue(val)
 	case int:
 		return storage.IntValue(int64(val))
+	case int32:
+		return storage.IntValue(int64(val))
+	case int16:
+		return storage.IntValue(int64(val))
+	case int8:
+		return storage.IntValue(int64(val))
+	case uint64:
+		return storage.IntValue(int64(val))
+	case uint32:
+		return storage.IntValue(int64(val))
+	case uint16:
+		return storage.IntValue(int64(val))
+	case uint8:
+		return storage.IntValue(int64(val))
+	case uint:
+		return storage.IntValue(int64(val))
 	case float64:
 		return storage.FloatValue(val)
+	case float32:
+		return storage.FloatValue(float64(val))
 	case storage.Decimal:
 		return storage.DecimalValueFromDecimal(val)
 	case string:

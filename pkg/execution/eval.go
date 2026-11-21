@@ -86,7 +86,7 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 		}
 		switch e.Val.Type {
 		case storage.TypeInt:
-			return e.Val.IVal, true
+			return e.Val, true
 		case storage.TypeFloat:
 			return e.Val.FVal, true
 		case storage.TypeBool:
@@ -621,7 +621,7 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 					return lF * rF, true
 				case proc.TokenSlash:
 					if rF == 0 {
-						return nil, false
+						return nil, true
 					}
 					return lF / rF, true
 				case proc.TokenPercent:
@@ -819,16 +819,9 @@ func isInt32Val(v any) bool {
 	switch val := v.(type) {
 	case int32, int16, int8, uint16, uint8:
 		return true
-	case int:
-		return val >= math.MinInt32 && val <= math.MaxInt32
-	case int64:
-		return val >= math.MinInt32 && val <= math.MaxInt32
 	case storage.Value:
 		if val.Type == storage.TypeInt {
-			if val.Precision == 8 {
-				return false
-			}
-			return val.Precision == 4 || (val.Precision == 0 && val.IVal >= math.MinInt32 && val.IVal <= math.MaxInt32)
+			return val.Precision == 4
 		}
 		return false
 	default:

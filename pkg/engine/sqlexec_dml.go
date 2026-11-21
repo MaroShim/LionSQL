@@ -1278,7 +1278,42 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {
-		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
+		if s.catalog != nil {
+			if v, vErr := s.catalog.GetView(tableName); vErr == nil && v != nil {
+				fromIdx := sqlutil.FindTopLevelKeyword(v.Query, "FROM")
+				if fromIdx != -1 {
+					rest := strings.TrimSpace(v.Query[fromIdx+4:])
+					whereIdx := sqlutil.FindTopLevelKeyword(rest, "WHERE")
+					tblPart := rest
+					viewWhere := ""
+					if whereIdx != -1 {
+						tblPart = strings.TrimSpace(rest[:whereIdx])
+						viewWhere = strings.TrimSpace(rest[whereIdx+5:])
+					}
+					if !strings.ContainsAny(tblPart, ",()") && sqlutil.FindTopLevelKeyword(tblPart, "JOIN") == -1 {
+						fields := strings.Fields(tblPart)
+						if len(fields) > 0 {
+							baseTbl := cleanIdentifier(fields[0])
+							if baseSchema, bErr := s.engine.GetTable(baseTbl); bErr == nil && baseSchema != nil {
+								tableName = baseTbl
+								schema = baseSchema
+								err = nil
+								if viewWhere != "" {
+									if whereClause != "" {
+										whereClause = "(" + viewWhere + ") AND (" + whereClause + ")"
+									} else {
+										whereClause = viewWhere
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("table %q not found: %w", tableName, err)
+		}
 	}
 
 	isExplicitTx := (cs != nil && cs.Tx() != nil)
@@ -1570,7 +1605,42 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {
-		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
+		if s.catalog != nil {
+			if v, vErr := s.catalog.GetView(tableName); vErr == nil && v != nil {
+				fromIdx := sqlutil.FindTopLevelKeyword(v.Query, "FROM")
+				if fromIdx != -1 {
+					rest := strings.TrimSpace(v.Query[fromIdx+4:])
+					whereIdx := sqlutil.FindTopLevelKeyword(rest, "WHERE")
+					tblPart := rest
+					viewWhere := ""
+					if whereIdx != -1 {
+						tblPart = strings.TrimSpace(rest[:whereIdx])
+						viewWhere = strings.TrimSpace(rest[whereIdx+5:])
+					}
+					if !strings.ContainsAny(tblPart, ",()") && sqlutil.FindTopLevelKeyword(tblPart, "JOIN") == -1 {
+						fields := strings.Fields(tblPart)
+						if len(fields) > 0 {
+							baseTbl := cleanIdentifier(fields[0])
+							if baseSchema, bErr := s.engine.GetTable(baseTbl); bErr == nil && baseSchema != nil {
+								tableName = baseTbl
+								schema = baseSchema
+								err = nil
+								if viewWhere != "" {
+									if whereClause != "" {
+										whereClause = "(" + viewWhere + ") AND (" + whereClause + ")"
+									} else {
+										whereClause = viewWhere
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		if err != nil {
+			return nil, fmt.Errorf("table %q not found: %w", tableName, err)
+		}
 	}
 
 	var tx storage.Transaction
