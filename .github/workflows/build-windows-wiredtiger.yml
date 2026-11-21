@@ -58,9 +58,10 @@ jobs:
           Set-Content -Path $baseCmake -Value $c -NoNewline
           Write-Host "Successfully patched base.cmake"
 
-          # 2. Patch x86/windows/config.cmake to enable SHARED DLL compilation
+          # 2. Patch x86/windows/config.cmake to enable SHARED DLL and disable STATIC library
           $winConfig = "wt_source/cmake/configs/x86/windows/config.cmake"
           $w = Get-Content $winConfig -Raw
+          $w = $w -replace 'set\(ENABLE_STATIC ON.*?\)', "`nset(ENABLE_STATIC OFF CACHE BOOL `"`" FORCE)`n"
           $w = $w -replace 'set\(ENABLE_SHARED OFF.*?\)', "`nset(ENABLE_SHARED ON CACHE BOOL `"`" FORCE)`n"
           Set-Content -Path $winConfig -Value $w -NoNewline
           Write-Host "Successfully patched x86/windows/config.cmake"
@@ -75,7 +76,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
             -DENABLE_SHARED=1 `
-            -DENABLE_STATIC=1 `
+            -DENABLE_STATIC=0 `
             -DENABLE_PYTHON=0 `
             -DENABLE_SNAPPY=0 `
             -DENABLE_LZ4=0 `
