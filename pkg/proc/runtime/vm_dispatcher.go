@@ -2106,6 +2106,9 @@ vmLoop:
 					cols = append(cols, cleanName)
 
 					vAny, _ := proc.EvalRowExpr(p.Expr, rowCtx, nil)
+					if sv, ok := vAny.(storage.Value); ok {
+						vAny = sv.Interface()
+					}
 					outRow[cleanName] = vAny
 					if colName != cleanName {
 						outRow[colName] = vAny

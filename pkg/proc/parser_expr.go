@@ -446,6 +446,14 @@ func (p *Parser) parsePrefix() Expr {
 	case TokenMinus:
 		p.nextToken()
 		right := p.parseExpression(precPrefix)
+		if lit, ok := right.(*LiteralExpr); ok && lit.Val.Type == storage.TypeInt {
+			neg := -lit.Val.IVal
+			prec := 4
+			if neg < math.MinInt32 || neg > math.MaxInt32 {
+				prec = 8
+			}
+			return &LiteralExpr{Val: storage.Value{Type: storage.TypeInt, IVal: neg, Precision: prec}}
+		}
 		return &UnaryExpr{Op: TokenMinus, Expr: right}
 	case TokenBitwiseNot:
 		p.nextToken()

@@ -727,27 +727,6 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 		}
 	}()
 
-	if a.parsedHaving != nil {
-		if err := validateHavingClause(a.parsedHaving, a.groupKeys, a.fields); err != nil {
-			return err
-		}
-	}
-
-	// ANSI SQL: If query has GROUP BY, any non-aggregate projection field must be in groupKeys
-	if len(a.groupKeys) > 0 {
-		for _, f := range a.fields {
-			exprToCheck := f.fnExpr
-			if exprToCheck == nil {
-				exprToCheck = f.parsed
-			}
-			if exprToCheck != nil && !exprHasAgg(exprToCheck) && !f.isLiteral {
-				if err := validateHavingClause(exprToCheck, a.groupKeys, nil); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
 	childMap := a.child.ColIndexMap()
 	if childMap == nil {
 		childMap = NewColumnIndexMapFromCols(a.child.Schema())
@@ -787,6 +766,27 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 		}
 		if !found {
 			return fmt.Errorf("column %q does not exist", k)
+		}
+	}
+
+	if a.parsedHaving != nil {
+		if err := validateHavingClause(a.parsedHaving, a.groupKeys, a.fields); err != nil {
+			return err
+		}
+	}
+
+	// ANSI SQL: If query has GROUP BY, any non-aggregate projection field must be in groupKeys
+	if len(a.groupKeys) > 0 {
+		for _, f := range a.fields {
+			exprToCheck := f.fnExpr
+			if exprToCheck == nil {
+				exprToCheck = f.parsed
+			}
+			if exprToCheck != nil && !exprHasAgg(exprToCheck) {
+				if err := validateHavingClause(exprToCheck, a.groupKeys, nil); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
@@ -1577,12 +1577,21 @@ func validateHavingClause(expr proc.Expr, groupKeys []string, fields []aggField)
 		return nil
 	}
 
-	groupKeySet := make(map[string]struct{}, (len(groupKeys)+len(fields))*2)
+	norm := func(s string) string {
+		return strings.ToLower(strings.ReplaceAll(cleanIdentifierParts(s), " ", ""))
+	}
+	groupKeySet := make(map[string]struct{}, (len(groupKeys)+len(fields))*4)
 	for _, k := range groupKeys {
-		clean := strings.ToLower(cleanIdentifierParts(k))
+		trimmed := strings.TrimSpace(k)
+		if colIdx := sqlutil.FindTopLevelKeyword(trimmed, "COLLATE"); colIdx != -1 {
+			trimmed = strings.TrimSpace(trimmed[:colIdx])
+		}
+		clean := strings.ToLower(cleanIdentifierParts(trimmed))
 		groupKeySet[clean] = struct{}{}
+		groupKeySet[norm(trimmed)] = struct{}{}
 		if idx := strings.Index(clean, "."); idx != -1 {
 			groupKeySet[clean[idx+1:]] = struct{}{}
+			groupKeySet[norm(clean[idx+1:])] = struct{}{}
 		}
 	}
 	for _, f := range fields {
@@ -1590,8 +1599,10 @@ func validateHavingClause(expr proc.Expr, groupKeys []string, fields []aggField)
 			if f.alias != "" {
 				clean := strings.ToLower(cleanIdentifierParts(f.alias))
 				groupKeySet[clean] = struct{}{}
+				groupKeySet[norm(f.alias)] = struct{}{}
 				if idx := strings.Index(clean, "."); idx != -1 {
 					groupKeySet[clean[idx+1:]] = struct{}{}
+					groupKeySet[norm(clean[idx+1:])] = struct{}{}
 				}
 			}
 		}
@@ -1600,6 +1611,9 @@ func validateHavingClause(expr proc.Expr, groupKeys []string, fields []aggField)
 	var check func(e proc.Expr, inAgg bool) error
 	check = func(e proc.Expr, inAgg bool) error {
 		if e == nil {
+			return nil
+		}
+		if _, ok := groupKeySet[norm(e.String())]; ok {
 			return nil
 		}
 		switch node := e.(type) {

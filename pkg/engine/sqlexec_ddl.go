@@ -1722,20 +1722,39 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 					}
 				}
 			}
+			dropSet := make(map[string]bool, len(droppedCols))
+			for _, dc := range droppedCols {
+				dropSet[strings.ToLower(dc)] = true
+			}
 			newCols := make([]storage.Column, 0, len(sch.Columns))
 			for _, col := range sch.Columns {
-				shouldDrop := false
-				for _, dc := range droppedCols {
-					if strings.EqualFold(col.Name, dc) {
-						shouldDrop = true
-						break
-					}
-				}
-				if !shouldDrop {
+				if !dropSet[strings.ToLower(col.Name)] {
 					newCols = append(newCols, col)
 				}
 			}
 			sch.Columns = newCols
+			if len(sch.Indexes) > 0 {
+				newIndexes := make([]storage.IndexSchema, 0, len(sch.Indexes))
+				for _, idx := range sch.Indexes {
+					usesDropped := false
+					for _, c := range idx.Columns {
+						if dropSet[strings.ToLower(c)] {
+							usesDropped = true
+							break
+						}
+					}
+					for _, c := range idx.IncludeCols {
+						if dropSet[strings.ToLower(c)] {
+							usesDropped = true
+							break
+						}
+					}
+					if !usesDropped {
+						newIndexes = append(newIndexes, idx)
+					}
+				}
+				sch.Indexes = newIndexes
+			}
 			return nil
 		}); err != nil {
 			return nil, err

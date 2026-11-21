@@ -1155,7 +1155,13 @@ func (v Value) Interface() any {
 	case TypeDecimal:
 		return v.DVal
 	case TypeBinary:
-		return v.BinVal
+		if len(v.BinVal) > 0 {
+			return "0x" + hex.EncodeToString([]byte(v.BinVal))
+		}
+		if v.SVal != "" {
+			return v.SVal
+		}
+		return "0x"
 	default:
 		return v.SVal
 	}

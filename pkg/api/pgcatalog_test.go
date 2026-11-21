@@ -112,7 +112,8 @@ func TestPgCatalog_InformationSchema_TablesAndColumns(t *testing.T) {
 		t.Errorf("unexpected emp_id column: %+v", res.Rows[0])
 	}
 	// Check emp_name
-	if fmt.Sprintf("%v", res.Rows[1]["column_name"]) != "emp_name" || fmt.Sprintf("%v", res.Rows[1]["data_type"]) != "varchar" {
+	dt := fmt.Sprintf("%v", res.Rows[1]["data_type"])
+	if fmt.Sprintf("%v", res.Rows[1]["column_name"]) != "emp_name" || (dt != "varchar" && dt != "character varying") {
 		t.Errorf("unexpected emp_name column: %+v", res.Rows[1])
 	}
 }

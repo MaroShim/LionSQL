@@ -1659,9 +1659,11 @@ func validateAndExtractSpArgs(valArgs []string, decls []spParamDecl, cs *ClientS
 			// In T-SQL sp_executesql, if the argument is an OUTPUT parameter (@p = @v OUTPUT),
 			// and @v is an unassigned variable or output target, do NOT replace @p in the statement
 			// with NULL or its initial value; let the inner statement assign to @p directly.
-			_, isOut := stripTrailingOutputKeyword(rhs)
-			if isOut {
-				// Do not bind/substitute this parameter in namedArgs so the inner assignment executes
+			// In T-SQL sp_executesql, if the argument is an OUTPUT variable parameter (@p = @v OUTPUT),
+			// let the inner statement assign to @p directly without replacing it with caller's current value.
+			// If it's a literal (@p = 1 OUTPUT), bind it so input evaluation works.
+			rhsClean, isOut := stripTrailingOutputKeyword(rhs)
+			if isOut && strings.HasPrefix(rhsClean, "@") {
 				continue
 			}
 			namedArgs[pKey] = formatBoundArgValue(cleanOutputSuffix(rhs), cs)

@@ -589,6 +589,10 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 			isTimeoutOrCancel := errors.Is(err, context.DeadlineExceeded) ||
 				errors.Is(err, context.Canceled) ||
 				(queryCtx.Err() != nil && (errors.Is(queryCtx.Err(), context.DeadlineExceeded) || errors.Is(queryCtx.Err(), context.Canceled)))
+			isConflict := errors.Is(err, storage.ErrSerializationFailure) || strings.Contains(err.Error(), "serialization failure")
+			if isConflict && s.Metrics() != nil {
+				s.Metrics().RecordTransaction("conflict")
+			}
 			if cs != nil {
 				cs.Mu.Lock()
 				errNum := int64(50000)
@@ -602,7 +606,7 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 					}
 				}
 				cs.Vars["error"] = errNum
-				if cs.Tx() != nil && (cs.IsPostgres() || isTimeoutOrCancel) {
+				if cs.Tx() != nil && (cs.IsPostgres() || isTimeoutOrCancel || isConflict) {
 					cs.MarkTxFailed()
 				}
 				cs.Mu.Unlock()

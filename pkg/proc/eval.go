@@ -311,8 +311,10 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		}
 		switch e.Op {
 		case TokenPlus:
-			if d, ok := toDecimalVal(val); ok {
-				return d, nil
+			if isDecimalVal(val) {
+				if d, ok := toDecimalVal(val); ok {
+					return d, nil
+				}
 			}
 			if n, ok := toFloat(val); ok {
 				if n == math.Trunc(n) {
@@ -322,8 +324,10 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			}
 			return val, nil
 		case TokenMinus:
-			if d, ok := toDecimalVal(val); ok {
-				return d.Neg(), nil
+			if isDecimalVal(val) {
+				if d, ok := toDecimalVal(val); ok {
+					return d.Neg(), nil
+				}
 			}
 			if n, ok := toFloat(val); ok {
 				if n == math.Trunc(n) {

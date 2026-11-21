@@ -3070,7 +3070,7 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 		} else if lowerCol == "type" {
 			colType = TypeVarChar
 			colSize = 255
-		} else if strings.Contains(lowerCol, "varbinary") || strings.Contains(lowerCol, "binary") || strings.Contains(lowerCol, "image") {
+		} else if strings.Contains(lowerCol, "varbinary") || strings.Contains(lowerCol, "binary") || strings.Contains(lowerCol, "image") || strings.Contains(lowerCol, "_bin") || strings.HasSuffix(lowerCol, "bin") {
 			colType = TypeBigVarBin
 			colSize = 8000
 		}
@@ -3172,7 +3172,7 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 						} else {
 							colSize = 50
 						}
-					} else if strings.Contains(lowerCol, "varbinary") || strings.Contains(lowerCol, "binary") || strings.Contains(lowerCol, "image") {
+					} else if strings.Contains(lowerCol, "varbinary") || strings.Contains(lowerCol, "binary") || strings.Contains(lowerCol, "image") || strings.Contains(lowerCol, "_bin") || strings.HasSuffix(lowerCol, "bin") {
 						colType = TypeBigVarBin
 						if len(val) > 8000 || strings.Contains(lowerCol, "max") || strings.Contains(lowerCol, "lob") {
 							colSize = -1

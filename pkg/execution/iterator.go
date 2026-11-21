@@ -279,6 +279,9 @@ func (t Tuple) ToMap() map[string]any {
 		var v any
 		if i < len(t.Values) {
 			v = t.Values[i]
+			if sv, ok := v.(storage.Value); ok {
+				v = sv.Interface()
+			}
 			if dec, ok := v.(storage.Decimal); ok {
 				v = dec.String()
 			}
