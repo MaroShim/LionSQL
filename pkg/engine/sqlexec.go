@@ -730,7 +730,7 @@ func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) e
 	if cs.closed {
 		return fmt.Errorf("session %s is closed", cs.ID)
 	}
-	if cs.Tx() != nil {
+	if cs.InTransaction() || cs.Tx() != nil {
 		if cs.IsPostgres() {
 			return fmt.Errorf("transaction already active on session %s", cs.ID)
 		}

@@ -24,13 +24,22 @@ var (
 	lastV7Ms int64
 	v7Seq    uint16
 
-	// GlobalSequenceHandler is invoked by NEXTVAL('seq') or SETVAL('seq', val) when registered.
-	GlobalSequenceHandler func(op string, seqName string, val int64) (int64, error)
+	globalSeqMu           sync.RWMutex
+	globalSequenceHandler func(op string, seqName string, val int64) (int64, error)
 )
 
 // RegisterGlobalSequenceHandler registers the engine's sequence handler callback.
 func RegisterGlobalSequenceHandler(fn func(op string, seqName string, val int64) (int64, error)) {
-	GlobalSequenceHandler = fn
+	globalSeqMu.Lock()
+	globalSequenceHandler = fn
+	globalSeqMu.Unlock()
+}
+
+func getGlobalSequenceHandler() func(op string, seqName string, val int64) (int64, error) {
+	globalSeqMu.RLock()
+	fn := globalSequenceHandler
+	globalSeqMu.RUnlock()
+	return fn
 }
 
 // GetCurrentDBTS returns the current database 8-byte rowversion/timestamp counter as a big-endian byte slice.
@@ -353,8 +362,8 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		if len(args) >= 2 {
 			seqName := strings.Trim(valToString(args[0]), "'\"")
 			val := args[1].IVal
-			if GlobalSequenceHandler != nil {
-				if v, err := GlobalSequenceHandler("SETVAL", seqName, val); err == nil {
+			if fn := getGlobalSequenceHandler(); fn != nil {
+				if v, err := fn("SETVAL", seqName, val); err == nil {
 					return storage.IntValue(v)
 				}
 			}
@@ -365,8 +374,8 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 	case "NEXTVAL":
 		if len(args) > 0 {
 			seqName := strings.Trim(valToString(args[0]), "'\"")
-			if GlobalSequenceHandler != nil {
-				if v, err := GlobalSequenceHandler("NEXTVAL", seqName, 0); err == nil {
+			if fn := getGlobalSequenceHandler(); fn != nil {
+				if v, err := fn("NEXTVAL", seqName, 0); err == nil {
 					return storage.IntValue(v)
 				}
 			}

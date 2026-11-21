@@ -73,6 +73,8 @@ func normalizeDatePart(dp string) string {
 		return "microsecond"
 	case "nanosecond", "ns":
 		return "nanosecond"
+	case "tzoffset", "tz":
+		return "tzoffset"
 	case "epoch":
 		return "epoch"
 	default:
@@ -107,6 +109,9 @@ func evalDatePart(part string, t time.Time) storage.Value {
 		return storage.IntValue(int64(t.Second()))
 	case "millisecond":
 		return storage.IntValue(int64(t.Nanosecond() / 1e6))
+	case "tzoffset":
+		_, offsetSec := t.Zone()
+		return storage.IntValue(int64(offsetSec / 60))
 	default:
 		return storage.NullValue(storage.TypeInt)
 	}
@@ -471,6 +476,15 @@ func evalDateName(part string, t time.Time) storage.Value {
 		return storage.StringValue(strconv.Itoa(t.Second()))
 	case "millisecond":
 		return storage.StringValue(strconv.Itoa(t.Nanosecond() / 1e6))
+	case "tzoffset":
+		_, offsetSec := t.Zone()
+		sign := "+"
+		if offsetSec < 0 {
+			sign = "-"
+			offsetSec = -offsetSec
+		}
+		offsetMin := offsetSec / 60
+		return storage.StringValue(fmt.Sprintf("%s%02d:%02d", sign, offsetMin/60, offsetMin%60))
 	default:
 		return storage.NullValue(storage.TypeVarChar)
 	}
@@ -555,7 +569,7 @@ func isValidFractionForPrecision(frac int64, prec int) bool {
 func isValidDatePartUnit(part string, allowEpoch bool) bool {
 	switch part {
 	case "year", "quarter", "month", "day", "weekday", "dayofyear", "week",
-		"hour", "minute", "second", "millisecond", "microsecond", "nanosecond":
+		"hour", "minute", "second", "millisecond", "microsecond", "nanosecond", "tzoffset":
 		return true
 	case "epoch":
 		return allowEpoch

@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"lionsql/pkg/catalog"
@@ -50,10 +51,10 @@ END;
 	if len(res1.Rows) != 2 {
 		t.Fatalf("expected 2 rows from sp_TestViewInsideProc, got %d rows: %+v", len(res1.Rows), res1.Rows)
 	}
-	if res1.Rows[0]["id"] != int64(1) || res1.Rows[0]["double_val"] != int64(20) {
+	if fmt.Sprintf("%v", res1.Rows[0]["id"]) != "1" || fmt.Sprintf("%v", res1.Rows[0]["double_val"]) != "20" {
 		t.Errorf("unexpected row 0: %+v", res1.Rows[0])
 	}
-	if res1.Rows[1]["id"] != int64(2) || res1.Rows[1]["double_val"] != int64(40) {
+	if fmt.Sprintf("%v", res1.Rows[1]["id"]) != "2" || fmt.Sprintf("%v", res1.Rows[1]["double_val"]) != "40" {
 		t.Errorf("unexpected row 1: %+v", res1.Rows[1])
 	}
 
@@ -79,7 +80,7 @@ END;
 	if len(res2.Rows) != 1 {
 		t.Fatalf("expected 1 row from sp_TestCTEInsideProc, got %d rows: %+v", len(res2.Rows), res2.Rows)
 	}
-	if res2.Rows[0]["id"] != int64(1) || res2.Rows[0]["val"] != int64(10) {
+	if fmt.Sprintf("%v", res2.Rows[0]["id"]) != "1" || fmt.Sprintf("%v", res2.Rows[0]["val"]) != "10" {
 		t.Errorf("unexpected CTE row 0: %+v", res2.Rows[0])
 	}
 

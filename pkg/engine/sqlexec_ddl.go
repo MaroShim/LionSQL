@@ -299,6 +299,17 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 				err = nil
 			}
 		}
+		if errors.Is(err, storage.ErrTableExists) && cs != nil {
+			if shadow := cs.GetShadowCatalog(); shadow != nil && shadow.IsTableDropped(tableName) {
+				tombstone := fmt.Sprintf("__tombstone_%s_%d_%s", cs.ID, time.Now().UnixNano(), tableName)
+				if renameErr := s.engine.RenameTable(tableName, tombstone); renameErr == nil {
+					s.recordDDLRestoreDroppedTable(cs, tableName, tombstone)
+					if retryErr := s.engine.CreateTable(schema); retryErr == nil {
+						err = nil
+					}
+				}
+			}
+		}
 		if err != nil {
 			if (stmt.IfNotExists || s.TolerantDDL()) && errors.Is(err, storage.ErrTableExists) {
 				return &QueryResult{
@@ -328,6 +339,12 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		s.recordDDLDropTempTable(cs, tableName)
 	} else {
 		s.recordDDLDropCreatedTable(cs, schema.Name)
+	}
+
+	if cs != nil {
+		if shadow := cs.GetShadowCatalog(); shadow != nil {
+			shadow.MarkTableCreated(schema)
+		}
 	}
 
 	s.InvalidatePKBypassCache()

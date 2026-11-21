@@ -3905,10 +3905,7 @@ func valToAny(v storage.Value) any {
 	case storage.TypeDateTime:
 		return v.TVal
 	case storage.TypeBinary:
-		if v.BinVal != "" {
-			return v.BinVal
-		}
-		return v.SVal
+		return v.Interface()
 	case storage.TypeDecimal:
 		return v.Decimal()
 	default:
