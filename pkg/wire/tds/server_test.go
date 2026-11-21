@@ -16,7 +16,7 @@ import (
 	"lionsql/pkg/storage/memengine"
 )
 
-func setupTestServer(t *testing.T) *Server {
+func setupTestServer(t testing.TB) *Server {
 	t.Helper()
 	eng := memengine.New()
 	cat := catalog.New(eng)
@@ -24,7 +24,7 @@ func setupTestServer(t *testing.T) *Server {
 	return NewServer("127.0.0.1:0", cat, eng)
 }
 
-func connectClient(t *testing.T, srv *Server) net.Conn {
+func connectClient(t testing.TB, srv *Server) net.Conn {
 	t.Helper()
 	clientConn, serverConn := net.Pipe()
 	go srv.handleConnection(serverConn)
@@ -35,7 +35,7 @@ func connectClient(t *testing.T, srv *Server) net.Conn {
 }
 
 // performHandshake sends Prelogin and Login7 packets and verifies the server's responses.
-func performHandshake(t *testing.T, conn net.Conn) {
+func performHandshake(t testing.TB, conn net.Conn) {
 	t.Helper()
 
 	// 1. Send Prelogin
@@ -176,7 +176,7 @@ func performHandshake(t *testing.T, conn net.Conn) {
 }
 
 // sendSQLBatch sends a SQL batch command and returns the response payload.
-func sendSQLBatch(t *testing.T, conn net.Conn, sql string) []byte {
+func sendSQLBatch(t testing.TB, conn net.Conn, sql string) []byte {
 	t.Helper()
 	u16SQL := EncodeUTF16LE(sql)
 	if err := WritePacket(conn, PacketSQLBatch, 1, u16SQL); err != nil {
@@ -410,7 +410,7 @@ func TestTDS_WritePacket_SingleSyscallPerPacket(t *testing.T) {
 	}
 }
 
-func sendRPC(t *testing.T, conn net.Conn, procID uint16, optionFlags uint16, paramsPayload []byte) []byte {
+func sendRPC(t testing.TB, conn net.Conn, procID uint16, optionFlags uint16, paramsPayload []byte) []byte {
 	t.Helper()
 	var rpcBuf bytes.Buffer
 
@@ -1040,6 +1040,59 @@ func BenchmarkTDS_BuildBoundSQL(b *testing.B) {
 		bound := srv.buildBoundSQL(query, paramsDecl, params)
 		if len(bound) == 0 {
 			b.Fatal("empty bound SQL")
+		}
+	}
+}
+
+func BenchmarkTDS_ExecuteSQL_FastPath(b *testing.B) {
+	srv := setupTestServer(b)
+	conn := connectClient(b, srv)
+	performHandshake(b, conn)
+
+	_ = sendSQLBatch(b, conn, `CREATE TABLE bench_items (id INT PRIMARY KEY, name VARCHAR(50), price INT);`)
+	_ = sendSQLBatch(b, conn, `INSERT INTO bench_items (id, name, price) VALUES (1, 'Widget', 100);`)
+
+	stmtSQL := "SELECT id, name, price FROM bench_items WHERE id = @p1;"
+	var execParams bytes.Buffer
+	execParams.Write(buildNVarCharParam("@stmt", false, stmtSQL))
+	execParams.Write(buildNVarCharParam("@params", false, "@p1 INT"))
+	execParams.Write(buildIntParam("@p1", false, 1))
+	payload := execParams.Bytes()
+
+	// Pre-warm single execution to populate plan cache and WireColMeta
+	_ = sendRPC(b, conn, 10, 0, payload)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		resp := sendRPC(b, conn, 10, 0, payload)
+		if len(resp) == 0 {
+			b.Fatal("empty response")
+		}
+	}
+}
+
+func BenchmarkTDS_ExecuteSQL_FallbackStringSubstitution(b *testing.B) {
+	srv := setupTestServer(b)
+	conn := connectClient(b, srv)
+	performHandshake(b, conn)
+
+	_ = sendSQLBatch(b, conn, `CREATE TABLE bench_items_fallback (id INT PRIMARY KEY, name VARCHAR(50), price INT);`)
+	_ = sendSQLBatch(b, conn, `INSERT INTO bench_items_fallback (id, name, price) VALUES (1, 'Widget', 100);`)
+
+	stmtSQL := "SELECT id, name, price FROM bench_items_fallback WHERE id = @p1;"
+	paramsDecl := "@p1 INT"
+	params := []RPCParam{
+		{Name: "@p1", Value: 1},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		boundSQL := srv.buildBoundSQL(stmtSQL, paramsDecl, params)
+		resp := sendSQLBatch(b, conn, boundSQL)
+		if len(resp) == 0 {
+			b.Fatal("empty response")
 		}
 	}
 }
