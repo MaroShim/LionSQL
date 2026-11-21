@@ -1,7 +1,8 @@
 # Windows Cgo 독립 패키지 생태계 구축 및 LionSQL Organization 이전 연계 계획
 > **문서 ID**: `PLAN-WINDOWS-CGO-STANDALONE-ECOSYSTEM-1`  
 > **생성일자**: 2026-11-21  
-> **상태**: `PENDING` (Phase 1 준비)  
+> **마일스톤**: `Post-1.0` (LionSQL 1.0-GA 릴리스 및 github.com/LionSQL 이전 시 재검토)  
+> **상태**: `PENDING` (1.0-GA 릴리스 이후 재검토 대기)  
 > **책임**: LionSQL Core & Storage Architecture Team  
 > **연관 문서**: 
 > - [`doc/WIREDTIGER_WINDOWS_MSVC_DLL_CGO_GUIDE.ko.md`](../../doc/WIREDTIGER_WINDOWS_MSVC_DLL_CGO_GUIDE.ko.md)

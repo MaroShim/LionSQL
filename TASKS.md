@@ -477,7 +477,7 @@
 | `DONE` | **`PERF-WT-INSTANT-ADD-COL-1`** | `1.0-GA` | Storage | P2 | WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`PERF-WT-ROW-DIRECT-1`** | `v1.10.0` | Storage | P2 | WiredTiger InsertRow 중간 Record 맵 2중 할당 우회 및 EncodeRowToBuffer 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | `v1.1.0` | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
-| `PENDING` | **`PLAN-WINDOWS-CGO-STANDALONE-ECOSYSTEM-1`** | `v1.2.0` | Storage | P2 | Windows Cgo Standalone Ecosystem Packages & LionSQL Org Migration Plan | [`notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md`](notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md) |  |
+| `PENDING` | **`PLAN-WINDOWS-CGO-STANDALONE-ECOSYSTEM-1`** | `Post-1.0` | Storage | P2 | Windows Cgo Standalone Ecosystem Packages & LionSQL Org Migration Plan | [`notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md`](notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md) |  |
 | `DONE` | **`PLANNER-SLIM-1`** |  | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** |  | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** |  | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
@@ -4713,8 +4713,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] Windows Cgo Standalone Ecosystem Packages & LionSQL Org Migration Plan `PLAN-WINDOWS-CGO-STANDALONE-ECOSYSTEM-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-21 12:09:06
-- **Milestone**: `v1.2.0`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-21 12:16:57
+- **Milestone**: `Post-1.0`
 - **Plan Doc**: [`notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md`](notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md)
 
 ---
