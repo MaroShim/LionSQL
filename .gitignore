@@ -5,6 +5,12 @@ bin/
 *.so
 *.dylib
 
+# Allow vendored native libraries for cgo
+!pkg/storage/wiredtiger/lib/**/wiredtiger.dll
+!pkg/storage/wiredtiger/lib/**/*.dll
+!pkg/storage/wiredtiger/lib/**/*.so
+!pkg/storage/wiredtiger/lib/**/*.dylib
+
 # Test artifacts
 *.out
 *.test
