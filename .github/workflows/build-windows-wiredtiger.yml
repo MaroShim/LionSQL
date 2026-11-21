@@ -44,15 +44,10 @@ jobs:
         with:
           arch: x64
 
-      - name: Set up MinGW-w64 (for Cgo linking)
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: false
-          install: >-
-            mingw-w64-x86_64-gcc
-            mingw-w64-x86_64-binutils
-            mingw-w64-x86_64-tools
+      - name: Add Pre-installed MinGW to PATH (for Cgo linking)
+        run: |
+          echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
+          echo "C:\msys64\usr\bin" >> $GITHUB_PATH
 
       - name: Clone WiredTiger source
         run: |
@@ -101,8 +96,19 @@ jobs:
           find wt_source -name "wiredtiger_ext.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \; 2>/dev/null || true
 
           cd pkg/storage/wiredtiger/lib/windows_amd64
-          # Generate DEF file and MinGW-compatible import library
-          gendef wiredtiger.dll
+
+          # Extract exports from DLL using dumpbin and generate MinGW libwiredtiger.dll.a
+          python -c "
+import subprocess
+out = subprocess.check_output(['dumpbin', '/EXPORTS', 'wiredtiger.dll']).decode('utf-8', errors='ignore')
+lines = ['EXPORTS\n']
+for line in out.splitlines():
+    parts = line.strip().split()
+    if len(parts) >= 4 and parts[0].isdigit():
+        lines.append(f'    {parts[3]}\n')
+open('wiredtiger.def', 'w').writelines(lines)
+"
+          cat wiredtiger.def
           dlltool -d wiredtiger.def -l libwiredtiger.dll.a -D wiredtiger.dll
           ls -lh
 
@@ -117,8 +123,7 @@ jobs:
 
       - name: Compile LionSQL Windows Executable with WiredTiger Cgo
         run: |
-          export PATH="/c/msys64/mingw64/bin:$PATH"
-          export CC="x86_64-w64-mingw32-gcc"
+          export CC="gcc"
           export CGO_ENABLED=1
           export GOOS=windows
           export GOARCH=amd64
@@ -133,13 +138,13 @@ jobs:
 
       - name: Verify Windows Binary & WiredTiger Engine
         run: |
-          export PATH="/c/msys64/mingw64/bin:$PATH:$(pwd)/bin"
+          export PATH="$(pwd)/bin:$PATH"
           ./bin/lionsql.exe --version || true
           ./bin/lionsql.exe --doctor || true
 
           echo "Running WiredTiger storage unit tests on Windows..."
           export CGO_ENABLED=1
-          export CC="x86_64-w64-mingw32-gcc"
+          export CC="gcc"
           go test -tags wiredtiger -v -run TestWT_ ./pkg/storage/wiredtiger/...
 
       - name: Upload Windows WiredTiger Build Artifacts
