@@ -48,6 +48,9 @@ jobs:
 
       - name: Build WiredTiger Shared DLL via MSVC and Export Import Library
         run: |
+          Write-Host "Compiler location: $(Get-Command cl.exe | Select-Object -ExpandProperty Source)"
+          Write-Host "Ninja location: $(Get-Command ninja.exe | Select-Object -ExpandProperty Source)"
+
           # 1. Patch base.cmake to bypass Python3 development component check
           $baseCmake = "wt_source/cmake/configs/base.cmake"
           $content = Get-Content $baseCmake -Raw
@@ -58,16 +61,27 @@ jobs:
           Set-Content -Path $baseCmake -Value $patched -NoNewline
           Write-Host "Successfully patched base.cmake"
 
-          # 2. Configure CMake with Visual Studio 17 2022 (x64) and /MT Static CRT
+          # 2. Patch x86/windows/config.cmake to enable SHARED DLL compilation
+          $winConfig = "wt_source/cmake/configs/x86/windows/config.cmake"
+          $winc = Get-Content $winConfig -Raw
+          $patchedWin = $winc.Replace(
+              'set(ENABLE_SHARED OFF CACHE BOOL "" FORCE)',
+              'set(ENABLE_SHARED ON CACHE BOOL "" FORCE)'
+          )
+          Set-Content -Path $winConfig -Value $patchedWin -NoNewline
+          Write-Host "Successfully patched x86/windows/config.cmake"
+
+          # 3. Configure CMake with Ninja + MSVC cl.exe toolchain
           New-Item -ItemType Directory -Force -Path wt_source/build | Out-Null
           Set-Location wt_source/build
 
-          Write-Host "Configuring CMake with Visual Studio 2022 x64 (/MT)..."
-          cmake .. -G "Visual Studio 17 2022" -A x64 `
+          Write-Host "Configuring CMake with Ninja + MSVC cl.exe (/MT)..."
+          cmake .. -G "Ninja" `
+            -DCMAKE_TOOLCHAIN_FILE="../cmake/toolchains/cl.cmake" `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
             -DENABLE_SHARED=1 `
-            -DENABLE_STATIC=0 `
+            -DENABLE_STATIC=1 `
             -DENABLE_PYTHON=0 `
             -DENABLE_SNAPPY=0 `
             -DENABLE_LZ4=0 `
@@ -76,21 +90,29 @@ jobs:
 
           if ($LASTEXITCODE -ne 0) { throw "CMake configuration failed with exit code $LASTEXITCODE" }
 
-          # 3. Build wiredtiger_shared target
-          Write-Host "Building wiredtiger_shared via MSVC..."
+          # 4. Build wiredtiger via Ninja
+          Write-Host "Building wiredtiger targets via Ninja..."
           cmake --build . --config Release --target wiredtiger_shared
-          if ($LASTEXITCODE -ne 0) { throw "CMake build failed with exit code $LASTEXITCODE" }
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "Building default target..."
+              cmake --build . --config Release
+          }
 
-          # 4. Copy DLL, LIB, and headers to target directory
+          # 5. Copy DLL, LIB, and headers to target directory
           $TargetDir = "$env:GITHUB_WORKSPACE/pkg/storage/wiredtiger/lib/windows_amd64"
           New-Item -ItemType Directory -Force -Path "$TargetDir/include" | Out-Null
 
-          $builtDll = (Get-ChildItem -Path . -Recurse -Filter "wiredtiger.dll" | Select-Object -First 1).FullName
-          Write-Host "Found built DLL: $builtDll"
-          Copy-Item $builtDll -Destination "$TargetDir/wiredtiger.dll" -Force
+          $builtDll = (Get-ChildItem -Path . -Recurse -Filter "wiredtiger.dll" | Select-Object -First 1)
+          if ($builtDll) {
+              Write-Host "Found built DLL: $($builtDll.FullName)"
+              Copy-Item $builtDll.FullName -Destination "$TargetDir/wiredtiger.dll" -Force
+          } else {
+              throw "Error: wiredtiger.dll not found in build outputs!"
+          }
 
           $builtLib = (Get-ChildItem -Path . -Recurse -Filter "wiredtiger.lib" | Select-Object -First 1)
           if ($builtLib) {
+              Write-Host "Found built LIB: $($builtLib.FullName)"
               Copy-Item $builtLib.FullName -Destination "$TargetDir/wiredtiger.lib" -Force
           }
 
@@ -102,7 +124,7 @@ jobs:
               Copy-Item $extHeader.FullName -Destination "$TargetDir/include/wiredtiger_ext.h" -Force
           }
 
-          # 5. Generate MinGW-compatible libwiredtiger.dll.a using WiredTiger official def
+          # 6. Generate MinGW-compatible libwiredtiger.dll.a using WiredTiger official def
           Copy-Item ../cmake/configs/wiredtiger.def "$TargetDir/wiredtiger.def" -Force
           Set-Location $TargetDir
 
