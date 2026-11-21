@@ -6,8 +6,8 @@
 > **책임**: LionSQL Core & Storage Architecture Team  
 > **연관 문서**: 
 > - [`doc/WIREDTIGER_WINDOWS_MSVC_DLL_CGO_GUIDE.ko.md`](../../doc/WIREDTIGER_WINDOWS_MSVC_DLL_CGO_GUIDE.ko.md)
-> - [`articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md`](../../articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md)
-> - [`articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.md`](../../articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.md)
+> - [`notes/articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md`](../articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md)
+> - [`notes/articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.md`](../articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.md)
 
 ---
 
@@ -83,10 +83,10 @@ flowchart TD
 - **목표**: Reddit, Hacker News, GeekNews 메인 상단을 공략하여 전 세계 Go 개발자들의 주목을 끌고 패키지 및 LionSQL 레포지토리 유입 유도.
 - **실행 채널**:
   1. **국내 (GeekNews / Velog)**:
-     - 기고문: [`articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md`](../../articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md)
+     - 기고문: [`notes/articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md`](../articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md)
      - 타이틀: *Go 개발자를 위한 Windows Cgo 지옥 탈출기: MSVC 전용 C 라이브러리를 MinGW 충돌 없이 단일 실행 파일(.exe)로 패키징하는 완벽 가이드*
   2. **글로벌 (Reddit `r/golang` / Hacker News)**:
-     - 기고문: [`articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.md`](../../articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.md)
+     - 기고문: [`notes/articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.md`](../articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.md)
      - 타이틀: *How we solved the Go Cgo Windows nightmare: Linking MSVC C libraries with zero external DLLs (Show HN / r/golang)*
   3. **Golang Weekly 투고**: 기사 발행 후 Golang Weekly 큐레이션 제출.
 

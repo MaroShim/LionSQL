@@ -6,7 +6,7 @@
 > **연관 문서**:
 > - [`notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md`](plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md)
 > - [`doc/WIREDTIGER_WINDOWS_MSVC_DLL_CGO_GUIDE.ko.md`](../doc/WIREDTIGER_WINDOWS_MSVC_DLL_CGO_GUIDE.ko.md)
-> - [`articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md`](../articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md)
+> - [`notes/articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md`](articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md)
 
 ---
 
@@ -133,7 +133,7 @@ WiredTiger가 기술적 탁월함에도 불구하고 왜 이렇게 철저히 고
 - Go 커뮤니티에서 WiredTiger 패키지를 채택하는 모든 개발자가 자연스럽게 LionSQL 데이터베이스 엔진의 존재를 인지하고 스타(Star)와 커뮤니티로 유입됩니다.
 
 ### 5.3 전략 3: 글로벌 기술 아티클 캠페인 전개
-- 이미 완성된 [articles/.../README.md](../articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.md) 및 [README.ko.md](../articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md)를 활용하여:
+- 이미 완성된 [articles/.../README.md](articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.md) 및 [README.ko.md](articles/how-to-link-msvc-c-libraries-with-go-cgo-windows/README.ko.md)를 활용하여:
   - **스토리텔링**: *"버클리 DB의 후예 WiredTiger는 왜 몽고DB 안에 8년간 갇혀 있었으며, 우리는 어떻게 윈도우와 Cgo의 한계를 깨고 이를 Go 생태계로 해방시켰는가?"*
   - **배포 채널**: Reddit `r/golang`, Hacker News, GeekNews, Velog, Twitter/X.
   - 단순한 코드 홍보가 아니라 **컴파일러/링커/운영체제 수준의 깊이 있는 엔지니어링 지식 공유**로서 신뢰도와 화제성을 극대화합니다.
