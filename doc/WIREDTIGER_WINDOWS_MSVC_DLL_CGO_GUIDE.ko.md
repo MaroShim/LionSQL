@@ -61,69 +61,51 @@ Go의 Cgo 빌드 시 윈도우 링커는 MinGW GCC 계열(`x86_64-w64-mingw32-gc
 
 ---
 
-## 4. 12단계의 실패 과정과 핵심 주의점 (Failure Analysis & Pitfalls)
+## 4. 핵심 엔지니어링 장벽과 실패 분석 (Core Hurdles & Analysis)
 
-GitHub Actions 워크플로 구축 과정에서 겪은 12번의 빌드 실패와 각각의 기술적 원인, 해결책은 다음과 같습니다.
+### 4.1 반드시 해결해야 할 WiredTiger & Cgo 5대 기술적 장벽
 
-### 실패 1: MinGW 패키지 오타 및 환경 오염
-- **현상**: GitHub Actions에서 `msys2/setup-msys2` 액션을 사용해 MinGW 툴체인을 설치하려 했으나 `mingw-w64-x86_64-tools-git` 패키지를 찾을 수 없어 1단계에서 즉시 실패.
-- **원인**: 패키지 이름 오타 및 불필요한 서드파티 액션 도입.
-- **주의점**: GitHub Actions의 `windows-latest` 러너는 이미 `C:\msys64\mingw64\bin`에 최신 MinGW GCC 및 `dlltool`이 기본 탑재되어 있습니다. 불필요한 외부 액션으로 러너를 오염시키지 말고 기본 경로(`$env:PATH = "C:\msys64\mingw64\bin;$env:PATH"`)를 사용하는 것이 가장 신뢰성이 높습니다.
+WiredTiger를 Windows MSVC로 컴파일하고 Go Cgo에 연동하기 위해 반드시 돌파해야 하는 핵심 기술적 장벽은 다음과 같습니다.
 
-### 실패 2: Git Bash의 `${RUNNER_TEMP}` ASCII 이스케이프 버그
-- **현상**: Git Bash 스크립트 실행 중 `D:\a\_temp` 경로에서 알 수 없는 디렉터리 참조 에러 발생.
-- **원인**: Windows 경로의 `\a`가 Bash에서 ASCII Alert (Bell, 문자 코드 `0x07`)로 해석되는 파싱 참사.
-- **주의점**: 윈도우 러너의 Git Bash에서 환경변수 경로를 다룰 때 백슬래시(`\`) 처리가 불안정합니다. 외부 임시 디렉터리 대신 워크스페이스 내부의 상대 경로(`./wt_source`, `./wt_build`)를 고정 사용하는 것이 안전합니다.
+#### 1. MSVC 정적 CRT(`/MT`) 은닉과 Cgo C ABI 격리
+- **현상**: MSVC로 정적 라이브러리(`wiredtiger.lib`)를 빌드하여 Go Cgo에 전달하면 `undefined reference to __chkstk`, `undefined reference to __security_cookie` 에러가 발생하며 링크 실패.
+- **원인**: MSVC 정적 라이브러리는 컴파일러 전용 런타임 심볼(CRT)을 내포합니다. Go Cgo 링커(MinGW GCC/ld)는 GNU CRT/UCRT를 사용하므로 MSVC 전용 내부 심볼을 해석할 수 없습니다.
+- **해결책**: 동적 라이브러리(`wiredtiger.dll`)를 정적 CRT 플래그(`/MT`)로 빌드하여 MSVC 런타임 의존성을 DLL 내부에 완전히 캡슐화합니다. 외부에 순수 C 규격 ABI만 노출함으로써 Cgo 링커와의 CRT 충돌을 원천 차단합니다.
 
-### 실패 3: 인라인 Python 들여쓰기 구문 오류
-- **현상**: YAML 내에 멀티라인 `python -c "..."`로 export 함수 목록을 파싱하려 했으나 YAML 블록 스칼라 들여쓰기 깨짐으로 문법 오류 발생.
-- **주의점**: CI 파이프라인에서 5줄 이상의 로직은 절대 YAML 인라인으로 작성하지 말고, `scripts/generate_wt_def.py`와 같이 독립된 스크립트 파일로 분리하여 버전 관리해야 합니다.
+#### 2. Ninja 빌드 그래프의 복수 아티팩트 충돌 (`multiple rules generate wiredtiger.lib`)
+- **현상**: Ninja 빌드 시 `ninja: error: build.ninja:2282: multiple rules generate wiredtiger.lib` 에러로 설정 단계 중단.
+- **원인**: WiredTiger CMakeLists는 `wiredtiger_static`과 `wiredtiger_shared` 타깃을 동시에 정의합니다. MSVC 환경에서는 정적 라이브러리 파일명과 공유 라이브러리의 임포트 라이브러리 파일명이 모두 `wiredtiger.lib`로 동일하여 단일 빌드 그래프 내 출력 충돌이 발생합니다.
+- **해결책**: `x86/windows/config.cmake`의 기본 설정을 오버라이드하여 정적 빌드를 명시적으로 비활성화하고 공유 DLL만 생성하도록 강제합니다 (`-DENABLE_STATIC=0 -DENABLE_SHARED=1`).
 
-### 실패 4: Git Bash CRLF 줄바꿈 깨짐 및 `sed -i` Windows 파일 락
-- **현상**: Bash 스크립트에서 백슬래시(`\`)로 이어진 멀티라인 명령어가 CRLF 개행으로 인해 쪼개져 1초 만에 비정상 종료되고, `sed -i`가 파일 락으로 인해 실패.
-- **원인**: Windows 파일 시스템의 핸들 잠금(File Locking) 특성과 Git 체크아웃 시의 CRLF 개행 변환 충돌.
-- **주의점**: Windows CI에서는 Bash 대신 Windows 네이티브 셸인 **PowerShell (`pwsh`)**을 100% 기본 셸로 채택해야 합니다.
+#### 3. MSVC 엄격 경고 승격(`/WX`) 비활성화와 최신 SDK 헤더 격리
+- **현상**: `log.c.obj` 컴파일 중 알 수 없는 C4996/C4244 경고와 함께 `code=2`로 컴파일 중단.
+- **원인**: WiredTiger의 기본 설정인 `ENABLE_STRICT=ON`으로 인해 `cl_strict.cmake`가 MSVC 플래그에 `/WX`(모든 컴파일러 경고를 에러로 승격)를 강제 주입합니다. 최신 Windows SDK 및 MSVC 2022 헤더 변경 사항으로 인한 사소한 타입 변환 경고가 전부 치명적 에러로 취급됩니다.
+- **해결책**: CMake 설정 시 `-DENABLE_STRICT=0 -Wno-dev`를 지정하여 외부 라이브러리 컴파일 시의 엄격 경고 승격을 비활성화합니다.
 
-### 실패 5: 파이썬 서브프로세스 `WinError 2` (cmake 실행 파일 누락)
-- **현상**: 파이썬 `subprocess.run(["cmake", ...])` 호출 시 `FileNotFoundError: [WinError 2] 지정된 파일을 찾을 수 없습니다` 발생.
-- **원인**: 윈도우 환경에서 확장자(`.exe`)가 없는 바이너리 탐색 실패 및 PATH 상속 불일치.
-- **주의점**: 파이썬 래퍼 계층을 제거하고 PowerShell에서 직접 `cmake`를 호출하도록 단순화([RULE:RadicalKISS]).
+#### 4. MSVC 심볼 미익스포트 해결을 위한 `.def` 모듈 정의 파일 주입
+- **현상**: `wiredtiger.dll`은 성공적으로 빌드되었으나, `dumpbin /exports wiredtiger.dll` 확인 시 익스포트된 함수가 존재하지 않음.
+- **원인**: Windows MSVC 링커는 소스코드에 `__declspec(dllexport)`가 명시되어 있지 않으면 DLL 외부로 심볼을 노출하지 않습니다. WiredTiger 소스코드는 리눅스 가시성(`visibility("default")`) 위주로 선언되어 있어 MSVC에서 기본적으로 모든 심볼이 은닉됩니다.
+- **해결책**: 퍼블릭 API(`wiredtiger_open`, `wiredtiger_strerror` 등)를 명시한 `wiredtiger.def` 모듈 정의 파일을 링크 플래그에 직접 주입합니다 (`-DCMAKE_SHARED_LINKER_FLAGS="/DEF:../cmake/configs/wiredtiger.def"`).
 
-### 실패 6: MSVC 환경 변수와 CMake Visual Studio Generator 충돌
-- **현상**: `ilammy/msvc-dev-cmd` 액션으로 MSVC 환경변수를 설정한 뒤 `cmake -G "Visual Studio 17 2022"`를 호출하자 `Visual Studio could not be found` 에러 발생.
-- **원인**: `msvc-dev-cmd`는 환경변수에 `CC=cl.exe`, `CXX=cl.exe`를 주입합니다. CMake의 Visual Studio 솔루션 제너레이터는 자체적인 MSBuild 컴파일러 탐색을 수행하므로 주입된 `CC` 환경변수와 충돌합니다.
-- **해결책**: WiredTiger 공식 CI(MongoDB Evergreen)의 표준 설정에 따라 **Ninja 제너레이터(`-G "Ninja"`)**와 MSVC 공식 툴체인 파일(`-DCMAKE_TOOLCHAIN_FILE="../cmake/toolchains/cl.cmake"`)을 명시해야 합니다.
+#### 5. MinGW `dlltool` 기반 GNU 임포트 라이브러리(`libwiredtiger.dll.a`) 브릿지 구축
+- **현상**: MSVC가 생성한 COFF 포맷 임포트 라이브러리(`wiredtiger.lib`)는 Go Cgo(MinGW GCC)가 직접 인식하기 어렵거나 툴체인 버전에 따라 링크 에러를 유발함.
+- **해결책**: MinGW의 `dlltool`을 사용하여 `wiredtiger.def`와 `wiredtiger.dll`로부터 GNU ar 포맷의 임포트 라이브러리(`libwiredtiger.dll.a`)를 생성합니다. Go Cgo는 `#cgo windows,amd64 LDFLAGS: -L... -lwiredtiger` 지시자를 통해 이 브릿지 라이브러리에 안정적으로 링크됩니다.
 
-### 실패 7: PowerShell 싱글 쿼트 내 개행 이스케이프 파싱 오류
-- **현상**: PowerShell에서 `x86/windows/config.cmake`의 설정을 변경하기 위해 `-replace`를 쓸 때 `'`nset(...)`' 따옴표 내에서 개행(`` `n ``)이 리터럴 문자열로 들어가 CMake 구문 오류 유발.
-- **원인**: PowerShell 싱글 쿼트(`'...'`)는 백틱 이스케이프를 해석하지 않음.
-- **주의점**: PowerShell 문자열 치환 시 특수문자나 개행을 포함할 때는 반드시 더블 쿼트(`"..."`)를 사용해야 합니다.
+---
 
-### 실패 8: Ninja 중복 출력 규칙 충돌 (`multiple rules generate wiredtiger.lib`)
-- **현상**: `ninja: error: build.ninja:2282: multiple rules generate wiredtiger.lib`.
-- **원인**: WiredTiger의 CMakeLists는 `wiredtiger_static`과 `wiredtiger_shared` 타깃을 동시에 정의합니다. MSVC 환경에서 정적 라이브러리의 출력 파일명도 `wiredtiger.lib`이고, 동적 라이브러리의 임포트 라이브러리 출력 파일명도 기본값이 `wiredtiger.lib`입니다. Ninja는 단일 빌드 그래프에서 동일한 파일명을 복수의 타깃이 생성하는 것을 엄격히 차단합니다.
-- **해결책**: `x86/windows/config.cmake`에서 정적 빌드를 끄고(`set(ENABLE_STATIC OFF)`), CMake 인자로 `-DENABLE_STATIC=0 -DENABLE_SHARED=1`을 주어 Shared DLL 타깃만 독점 생성하도록 강제해야 합니다.
+### 4.2 환경 아키텍처 교훈: "처음부터 파워쉘(PowerShell)이어야 했다"
 
-### 실패 9: `/WX` 경고 에러 처리로 인한 컴파일 중단 (`code=2 log.c.obj`)
-- **현상**: Ninja 빌드 중 `log.c.obj`에서 알 수 없는 C4996/C4244 경고가 발생하며 빌드 중단 (`Exit code 2`).
-- **원인**: WiredTiger의 기본 설정인 `ENABLE_STRICT=ON`이 활성화되어, `cl_strict.cmake`가 MSVC 플래그에 `/WX`(모든 컴파일러 경고를 에러로 승격)를 강제 추가함. 최신 Windows SDK 및 MSVC 2022 헤더 변경 사항으로 인한 사소한 타입 변환 경고가 전부 에러로 취급됨.
-- **해결책**: CMake 인자로 `-DENABLE_STRICT=0 -Wno-dev`를 명시하여 엄격 모드를 비활성화해야 합니다.
+전체 시행착오 과정에서 겪었던 수많은 잔여 실패들은 라이브러리 자체의 문제가 아니라, **Windows 환경에서 POSIX 셸(Git Bash)을 흉내 내려다 발생한 환경적 잡음**이었습니다:
 
-### 실패 10: DLL 심볼 미익스포트 및 빈 라이브러리 현상
-- **현상**: `wiredtiger.dll`은 생성되었으나, `dumpbin /exports wiredtiger.dll` 확인 시 익스포트된 함수가 단 하나도 없음.
-- **원인**: Windows MSVC 링커는 소스코드에 `__declspec(dllexport)`가 명시되어 있지 않으면 DLL 외부로 심볼을 공개하지 않습니다. WiredTiger 소스는 리눅스 가시성(`__attribute__((visibility("default")))`) 위주로 작성되어 있어 MSVC에서 심볼이 전혀 노출되지 않았습니다.
-- **해결책**: WiredTiger 공식 `wiredtiger.def` 모듈 정의 파일(또는 퍼블릭 API를 명시한 DEF 파일)을 링크 타임에 주입해야 합니다:
-  `-DCMAKE_SHARED_LINKER_FLAGS="/DEF:../cmake/configs/wiredtiger.def"`
-
-### 실패 11: `.gitignore` 규칙에 의한 DLL 커밋 누락
-- **현상**: CI에서 DLL 빌드, Go 바이너리 컴파일, 엔진 단위 테스트가 100% 통과했으나, 깃 커밋 후 확인해 보니 레포지토리에 `wiredtiger.dll`만 쏙 빠져 있음.
-- **원인**: 루트 `.gitignore`에 기존에 선언되어 있던 `*.dll` 와일드카드 규칙으로 인해 `git add`가 무시됨.
-- **해결책**:
-  1. `.gitignore`에 `!pkg/storage/wiredtiger/lib/**/*.dll` 예외 허용 규칙 추가.
-  2. 워크플로 커밋 단계에서 명시적으로 `git add -f pkg/storage/wiredtiger/lib/windows_amd64/wiredtiger.dll` 강제 추가 플래그 적용.
-
-### 실패 12: 최종 성공 및 완전 자동화 검증
-- MSVC DLL 컴파일 ➔ `dlltool` 임포트 라이브러리 생성 ➔ 깃 자동 커밋 ➔ Go Cgo `lionsql.exe` 빌드 ➔ `--version`, `--doctor`, 단위 테스트(`TestWT_`) 실행 ➔ 아티팩트 업로드까지 **전 단계 무결점 통과**.
+> [!IMPORTANT]
+> **Windows CI에서 POSIX 에뮬레이션을 배제해야 하는 4가지 이유**:
+> 1. **경로 백슬래시(`\`)와 제어 문자 파싱 충돌**: Git Bash 환경변수에서 `D:\a\_temp` 경로의 `\a`가 ASCII Bell(제어코드 `0x07`)로 파싱되어 디렉터리 탐색 실패.
+> 2. **CRLF 개행 변환과 멀티라인(`\`) 명령어 붕괴**: Git 체크아웃 시 CRLF 개행이 삽입되어 백슬래시로 이어진 긴 셸 명령어가 중간에 쪼개져 1초 만에 비정상 종료.
+> 3. **Windows OS의 배타적 파일 핸들 락(File Locking)**: POSIX 표준 인라인 치환 도구인 `sed -i`가 Windows 파일 핸들 잠금 메커니즘과 충돌하여 파일 덮어쓰기 실패.
+> 4. **파이썬 서브프로세스의 확장자(`.exe`) 탐색 누락**: POSIX 방식 우회를 위해 작성한 파이썬 `subprocess`가 윈도우 PATH에서 확장자 없는 실행 파일 탐색 실패 (`WinError 2`).
+>
+> **골든 룰 ([RULE:PlatformPrimitives])**:
+> WiredTiger 공식 저장소의 Evergreen CI 스크립트(`test/evergreen/build_windows.ps1`) 역시 처음부터 PowerShell로 작성되어 있습니다. Windows CI/CD 구축 시에는 POSIX 에뮬레이션 계층을 완전히 배제하고, **첫 단계부터 100% 네이티브 PowerShell (`pwsh`)을 채택**해야 불필요한 환경 삽질을 원천 차단할 수 있습니다.
 
 ---
 
@@ -285,6 +267,7 @@ func init() {
 
 향후 다른 복잡한 C/C++ 엔진(RocksDB, DuckDB, LevelDB 등)을 윈도우 Cgo 환경에 연동할 때 반드시 준수해야 할 골든 룰입니다:
 
+0. **Windows CI는 첫 줄부터 무조건 네이티브 PowerShell(`pwsh`)로 작성할 것**: Git Bash, MSYS2 등 POSIX 셸 에뮬레이션은 백슬래시(`\`) 이스케이프 파싱, CRLF 개행, 파일 핸들 락(`sed -i`), 경로 해석에서 기괴한 버그를 양산합니다. 대상 플랫폼의 네이티브 셸을 처음부터 쓰는 것이 파이프라인 안정화의 50%를 차지합니다 ([RULE:PlatformPrimitives]).
 1. **MinGW 컴파일 환상을 버릴 것**: 대상 라이브러리가 윈도우 전용 코드를 포함하고 있다면, 무조건 MSVC(`cl.exe`)로 네이티브 컴파일해야 합니다.
 2. **정적 라이브러리(`.lib`) 직접 링킹을 시도하지 말 것**: MSVC 런타임 심볼과 MinGW 런타임 심볼은 충돌합니다. 반드시 `/MT` 동적 DLL로 캡슐화하십시오.
 3. **`dlltool`을 활용한 GNU 임포트 라이브러리 브릿지 구축**: MinGW GCC 링커가 인식할 수 있는 `lib<name>.dll.a`를 생성하십시오.
