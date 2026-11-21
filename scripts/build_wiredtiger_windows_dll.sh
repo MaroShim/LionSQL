@@ -21,7 +21,7 @@ docker run --platform linux/amd64 --rm \
         export DEBIAN_FRONTEND=noninteractive
         echo 'Installing MinGW cross-compiler and build tools...'
         apt-get update -qq && apt-get install -y -qq --no-install-recommends \
-            git ca-certificates cmake ninja-build python3 mingw-w64 binutils-mingw-w64
+            git ca-certificates cmake ninja-build python3 mingw-w64 binutils-mingw-w64 mingw-w64-tools
 
         echo 'Cloning WiredTiger v${WT_VERSION}...'
         git clone --depth 1 --branch '${WT_VERSION}' https://github.com/wiredtiger/wiredtiger.git /tmp/wt
@@ -71,10 +71,11 @@ docker run --platform linux/amd64 --rm \
 
         echo 'Extracting DLL and generating import library...'
         find . -name 'libwiredtiger*.dll' -exec cp -v {} /out/wiredtiger.dll \; || find . -name 'wiredtiger.dll' -exec cp -v {} /out/wiredtiger.dll \;
+        find . -name 'libwiredtiger*.dll.a' -exec cp -v {} /out/libwiredtiger.dll.a \; || true
         find /tmp/wt -name 'wiredtiger.h' -exec cp -v {} /out/include/ \;
         find /tmp/wt -name 'wiredtiger_ext.h' -exec cp -v {} /out/include/ \; 2>/dev/null || true
 
-        if [ -f /out/wiredtiger.dll ]; then
+        if [ -f /out/wiredtiger.dll ] && [ ! -f /out/libwiredtiger.dll.a ]; then
             cd /out
             gendef wiredtiger.dll || true
             if [ -f wiredtiger.def ]; then

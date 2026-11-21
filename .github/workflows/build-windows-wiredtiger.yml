@@ -12,6 +12,9 @@ on:
       - '.github/workflows/build-windows-wiredtiger.yml'
       - 'scripts/build_wiredtiger_windows*.sh'
 
+permissions:
+  contents: write
+
 jobs:
   build-wiredtiger-dll:
     runs-on: windows-latest
@@ -22,6 +25,8 @@ jobs:
     steps:
       - name: Checkout LionSQL repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -89,6 +94,16 @@ jobs:
           gendef wiredtiger.dll
           dlltool -d wiredtiger.def -l libwiredtiger.dll.a -D wiredtiger.dll
           ls -lh
+
+      - name: Commit and Push Vendored DLL to Repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pkg/storage/wiredtiger/lib/windows_amd64/wiredtiger.dll
+          git add pkg/storage/wiredtiger/lib/windows_amd64/libwiredtiger.dll.a
+          git add pkg/storage/wiredtiger/lib/windows_amd64/include/
+          git commit -m "chore(storage/wiredtiger): vendor precompiled windows msvc dll and import library" || echo "No changes to commit"
+          git push origin main
 
       - name: Compile LionSQL Windows Executable with WiredTiger Cgo
         run: |
