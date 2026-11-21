@@ -1,5 +1,8 @@
 # WiredTiger Windows MSVC 동적 DLL 빌드 및 Go Cgo 링킹 아키텍처 가이드
 > **부제**: 12단계의 시행착오를 통해 정립한 MSVC-MinGW 하이브리드 빌드 및 Self-Extracting 런타임 로더 노하우
+>
+> **핵심 철학 (Architectural Axiom)**:
+> *"외부 라이브러리를 포팅할 때 가장 단순하고 명백한 정답은, 해당 라이브러리가 원래 태어나고 검증된 **원본 컴파일러(MSVC)**와 **원본 빌드 스크립트(PowerShell)**를 그대로 따르는 것이다. 내 도구(Go MinGW / Bash)의 틀에 라이브러리를 억지로 욱여넣으려 하지 말고, 네이티브 빌드 환경을 온전히 존중한 뒤 순수 C ABI 경계에서만 가볍게 결합(Decoupling)하라."*
 
 ---
 
