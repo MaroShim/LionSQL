@@ -311,6 +311,9 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		}
 		switch e.Op {
 		case TokenPlus:
+			if d, ok := toDecimalVal(val); ok {
+				return d, nil
+			}
 			if n, ok := toFloat(val); ok {
 				if n == math.Trunc(n) {
 					return int64(n), nil
@@ -319,6 +322,9 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			}
 			return val, nil
 		case TokenMinus:
+			if d, ok := toDecimalVal(val); ok {
+				return d.Neg(), nil
+			}
 			if n, ok := toFloat(val); ok {
 				if n == math.Trunc(n) {
 					return int64(-n), nil
@@ -429,7 +435,6 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		if err != nil || isNullVal(val) {
 			return nil, nil
 		}
-		strVal := fmt.Sprintf("%v", val)
 		found := false
 		hasNull := false
 		if e.Query != nil {
@@ -454,8 +459,10 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 					hasNull = true
 					continue
 				}
-				s2 := fmt.Sprintf("%v", itemVal)
-				if strings.EqualFold(strVal, s2) || strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(s2, " ")) {
+				matched, _ := evalRowBinaryOp(TokenEq, val, itemVal)
+				if matched == nil {
+					hasNull = true
+				} else if b, ok := matched.(bool); ok && b {
 					found = true
 					break
 				}
@@ -470,8 +477,10 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 					hasNull = true
 					continue
 				}
-				s2 := fmt.Sprintf("%v", itemVal)
-				if strings.EqualFold(strVal, s2) || strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(s2, " ")) {
+				matched, _ := evalRowBinaryOp(TokenEq, val, itemVal)
+				if matched == nil {
+					hasNull = true
+				} else if b, ok := matched.(bool); ok && b {
 					found = true
 					break
 				}
@@ -501,25 +510,19 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 
 		var condLow, condHigh *bool
 		if val != nil && lowVal != nil {
-			vNum, isNum1 := toFloat(val)
-			lNum, isNum2 := toFloat(lowVal)
-			if isNum1 && isNum2 {
-				res := vNum >= lNum
-				condLow = &res
-			} else {
-				res := fmt.Sprintf("%v", val) >= fmt.Sprintf("%v", lowVal)
-				condLow = &res
+			res, err := evalRowBinaryOp(TokenGte, val, lowVal)
+			if err == nil && res != nil {
+				if b, ok := res.(bool); ok {
+					condLow = &b
+				}
 			}
 		}
 		if val != nil && highVal != nil {
-			vNum, isNum1 := toFloat(val)
-			hNum, isNum3 := toFloat(highVal)
-			if isNum1 && isNum3 {
-				res := vNum <= hNum
-				condHigh = &res
-			} else {
-				res := fmt.Sprintf("%v", val) <= fmt.Sprintf("%v", highVal)
-				condHigh = &res
+			res, err := evalRowBinaryOp(TokenLte, val, highVal)
+			if err == nil && res != nil {
+				if b, ok := res.(bool); ok {
+					condHigh = &b
+				}
 			}
 		}
 
@@ -1859,6 +1862,9 @@ func isTruthyValue(v any) bool {
 	if v == nil {
 		return false
 	}
+	if _, isErr := v.(error); isErr {
+		return false
+	}
 	switch val := v.(type) {
 	case bool:
 		return val
@@ -1868,10 +1874,28 @@ func isTruthyValue(v any) bool {
 		return val != 0
 	case float64:
 		return val != 0.0
+	case float32:
+		return val != 0.0
 	case string:
 		return len(val) > 0 && !strings.EqualFold(val, "false") && val != "0"
+	case storage.Value:
+		if val.IsNull {
+			return false
+		}
+		switch val.Type {
+		case storage.TypeBool:
+			return val.BVal
+		case storage.TypeInt:
+			return val.IVal != 0
+		case storage.TypeFloat, storage.TypeReal:
+			return val.FVal != 0.0
+		case storage.TypeDecimal:
+			return !val.Decimal().IsZero()
+		default:
+			return len(val.SVal) > 0 && !strings.EqualFold(val.SVal, "false") && val.SVal != "0"
+		}
 	default:
-		return true
+		return false
 	}
 }
 

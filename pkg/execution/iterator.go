@@ -351,9 +351,6 @@ func (t Tuple) ToEvalMap() map[string]any {
 			var v any
 			if idx < len(t.Values) {
 				v = t.Values[idx]
-				if dec, ok := v.(storage.Decimal); ok {
-					v = dec.String()
-				}
 			}
 			res[k] = v
 		}
@@ -718,8 +715,8 @@ func CompareValuesCS(a, b any, cs bool) int {
 		return strings.Compare(cA, cB)
 	}
 
-	// 2. Exact Decimal comparison if either value is storage.Decimal
-	if isDecValue(a) || isDecValue(b) {
+	// 2. Exact Decimal comparison if either value is storage.Decimal (unless either is Float)
+	if (isDecValue(a) || isDecValue(b)) && !isFloatValue(a) && !isFloatValue(b) {
 		if decA, okA := tryDecimal(a); okA {
 			if decB, okB := tryDecimal(b); okB {
 				return decA.Cmp(decB)
@@ -846,6 +843,8 @@ func toFloat64(v any) (float64, bool) {
 	switch n := v.(type) {
 	case float64:
 		return n, true
+	case float32:
+		return float64(n), true
 	case int64:
 		return float64(n), true
 	case int:
@@ -855,6 +854,8 @@ func toFloat64(v any) (float64, bool) {
 			return 1.0, true
 		}
 		return 0.0, true
+	case storage.Decimal:
+		return n.Float64(), true
 	case storage.Value:
 		if n.Type == storage.TypeBool {
 			if n.BVal {
@@ -863,8 +864,10 @@ func toFloat64(v any) (float64, bool) {
 			return 0.0, true
 		} else if n.Type == storage.TypeInt {
 			return float64(n.IVal), true
-		} else if n.Type == storage.TypeFloat {
+		} else if n.Type == storage.TypeFloat || n.Type == storage.TypeReal {
 			return n.FVal, true
+		} else if n.Type == storage.TypeDecimal {
+			return n.Decimal().Float64(), true
 		}
 		return 0, false
 	default:
@@ -899,7 +902,7 @@ func isFloatValue(v any) bool {
 	case float64, float32:
 		return true
 	case storage.Value:
-		return n.Type == storage.TypeFloat
+		return n.Type == storage.TypeFloat || n.Type == storage.TypeReal
 	default:
 		return false
 	}
@@ -910,6 +913,11 @@ func tryDecimal(v any) (storage.Decimal, bool) {
 		return storage.ZeroDecimal(0), false
 	}
 	switch n := v.(type) {
+	case bool:
+		if n {
+			return storage.NewDecimalFromInt(1, 0), true
+		}
+		return storage.NewDecimalFromInt(0, 0), true
 	case storage.Decimal:
 		return n, true
 	case storage.Value:

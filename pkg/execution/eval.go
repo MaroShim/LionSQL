@@ -134,6 +134,12 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 		}
 		switch e.Op {
 		case proc.TokenPlus:
+			if d, ok := val.(storage.Decimal); ok {
+				return d, true
+			}
+			if sv, ok := val.(storage.Value); ok && sv.Type == storage.TypeDecimal {
+				return sv.Decimal(), true
+			}
 			if fVal, ok := val.(float64); ok {
 				return fVal, true
 			}
@@ -148,6 +154,12 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 			}
 			return val, true
 		case proc.TokenMinus:
+			if d, ok := val.(storage.Decimal); ok {
+				return d.Neg(), true
+			}
+			if sv, ok := val.(storage.Value); ok && sv.Type == storage.TypeDecimal {
+				return sv.Decimal().Neg(), true
+			}
 			if fVal, ok := val.(float64); ok {
 				return -fVal, true
 			}
@@ -797,21 +809,7 @@ func EvalTupleBoolExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Sub
 	if res == nil {
 		return false
 	}
-	if b, ok := res.(bool); ok {
-		return b
-	}
-	switch v := res.(type) {
-	case int64:
-		return v != 0
-	case int:
-		return v != 0
-	case float64:
-		return v != 0.0
-	case string:
-		return len(v) > 0 && !strings.EqualFold(v, "false") && v != "0"
-	default:
-		return true
-	}
+	return proc.IsTruthyValue(res)
 }
 
 func isInt32Val(v any) bool {

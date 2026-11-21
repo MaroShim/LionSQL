@@ -3838,8 +3838,10 @@ func toFloatNum(v storage.Value) (float64, bool) {
 	switch v.Type {
 	case storage.TypeInt:
 		return float64(v.IVal), true
-	case storage.TypeFloat, storage.TypeReal, storage.TypeDecimal:
+	case storage.TypeFloat, storage.TypeReal:
 		return v.FVal, true
+	case storage.TypeDecimal:
+		return v.Decimal().Float64(), true
 	case storage.TypeBool:
 		if v.BVal {
 			return 1, true

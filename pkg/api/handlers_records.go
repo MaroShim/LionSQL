@@ -526,7 +526,12 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 				// Auto-generate numeric, UUID, or string ID if not provided with guaranteed uniqueness
 				if col.Type == storage.TypeInt {
 					seq := apiPKCounter.Add(1)
-					v = (time.Now().UnixMicro() * 1000) + int64(seq%1000)
+					if col.Precision == 8 {
+						v = (time.Now().UnixMicro() * 1000) + int64(seq%1000)
+					} else {
+						// 32-bit INT range [-2147483648, 2147483647]: ensure value fits cleanly within int32 bounds
+						v = int64((time.Now().Unix()%1000000000) + int64(seq%100000) + 10000)
+					}
 				} else if col.Type == storage.TypeUUID || col.Type == storage.TypeVarChar {
 					v = uuid.New().String()
 				}

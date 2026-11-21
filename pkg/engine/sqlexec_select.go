@@ -1288,6 +1288,10 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 			colKey = fmt.Sprintf("%s_%d", alias, i+1)
 		}
 
+		if sv, ok := val.(storage.Value); ok {
+			val = formatStorageValue(sv)
+		}
+
 		columns = append(columns, alias)
 		vals = append(vals, val)
 		row[colKey] = val
@@ -2733,6 +2737,9 @@ func parseSelectVarAssignments(query string) (assignments []selectVarAssignment,
 func (s *Coordinator) setSessionVar(cs *ClientSession, varName string, val any) {
 	if cs == nil {
 		return
+	}
+	if sv, ok := val.(storage.Value); ok {
+		val = formatStorageValue(sv)
 	}
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()

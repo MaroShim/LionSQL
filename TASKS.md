@@ -212,6 +212,13 @@
 | `DONE` | **`CORPUS-CALCITE-TSQL-1`** | `1.0-GA` | Ecosystem | P2 | Apache Calcite T-SQL 빌트인 함수/표현식 코퍼스 수집 및 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`CORPUS-KNEX-MSSQL-1`** | `1.0-GA` | Ecosystem | P2 | Knex.js MSSQL Dialect 쿼리 코퍼스 수집 및 Wiki.js 대응 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`CORPUS-NORTHWIND-PUBS-1`** | `1.0-GA` | Ecosystem | P2 | Northwind 및 Pubs 공식 표준 관계형 코퍼스 수집 및 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
+| `DONE` | **`DEFECT-ENGINE-BIT-FLOAT-LITERAL-EVAL-1`** | `1.0-GA` | Engine | P1 | BIT 컬럼과 0.0/1.0 부동소수점 리터럴 비교 시 WHERE 문자열 '0.0' 불일치로 행 누락 결함 | [`test/spec_defects/spec_defect_bit_float_equality_test.go`](test/spec_defects/spec_defect_bit_float_equality_test.go) |  |
+| `DONE` | **`DEFECT-ENGINE-NOREC-3VL-IN-NULL-OR-1`** | `1.0-GA` | Engine | P1 | NULL 포함 IN 리스트 복합 OR 조건 3VL 논리 평가 불일치 결함 | [`test/spec_defects/spec_defect_1_test.go`](test/spec_defects/spec_defect_1_test.go) |  |
+| `DONE` | **`DEFECT-EXEC-ARITHMETIC-OVERFLOW-TRUTHY-EVAL-1`** | `1.0-GA` | Execution | P1 | WHERE 절 산술 오버플로우 에러를 boolean true(매칭)로 오평가하는 결함 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
+| `DONE` | **`DEFECT-EXEC-FLOAT-DECIMAL-SCALE-TRUNCATION-1`** | `1.0-GA` | Execution | P1 | tryDecimal float64 스케일 4 고정 단편화로 인한 FLOAT 컬럼 리터럴 비교 불일치 결함 | [`test/spec_defects/spec_defect_8_test.go`](test/spec_defects/spec_defect_8_test.go) |  |
+| `DONE` | **`DEFECT-PROC-EVAL-BETWEEN-CASE-INSENSITIVE-COLLATION-1`** | `1.0-GA` | Engine | P1 | proc/eval.go BETWEEN 문자열 평가 시 대소문자 무시(CI) Collation 미반영 결함 | [`test/spec_defects/spec_defect_collation_between_test.go`](test/spec_defects/spec_defect_collation_between_test.go) |  |
+| `DONE` | **`DEFECT-PROC-EVAL-BIT-IN-LIST-1`** | `1.0-GA` | Engine | P1 | BIT 타입 컬럼 IN (0, 1) 평가 시 proc/eval.go 문자열 'false'/'0' 불일치 결함 | [`test/spec_defects/spec_defect_122_test.go`](test/spec_defects/spec_defect_122_test.go) |  |
+| `DONE` | **`DEFECT-VDBE-DECIMAL-FVAL-CORRUPTION-1`** | `1.0-GA` | VM | P1 | VDBE toFloatNum이 DECIMAL 컬럼 FVal(0.0)을 직접 읽어 비교식이 왜곡되는 결함 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
 | `DONE` | **`DEPRECATE-OCC-PERF-1`** |  | Storage | P2 | v1.0 이전 OCC performance 모드(-memory=performance) Deprecate 명기 (v1.0 옵션 유지) |  |  |
 | `PENDING` | **`DIST-LIONESS-SHARDING-ROUTER-1`** |  | --priority | P3 | Lioness: Vitess/Citus Model Hash Partitioning Sharding Router Architecture & Core |  |  |
 | `DONE` | **`DOC-REVAMP-10`** | `1.0-GA` | Documentation | P2 | 공식 문서 및 엔지니어링 지식 체계 10대 핵심 고도화 마스터 플랜 | [`notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md`](notes/plans/DOCUMENTATION_SYSTEM_UPGRADE_PLAN.ko.md) |  |
@@ -249,6 +256,7 @@
 | `PENDING` | **`FEAT-ROW-LOCK-WAIT-MANAGER-1`** | `v1.1.0` | Storage | P2 | WITH (UPDLOCK) 명시 힌트 기반 2PL 행 잠금 대기(Lock-Wait) 및 데드락 감지 매니저 (Step 2) | [`notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md`](notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SANDBOX-SPA-HANDLER-OSDIRFS-1`** | `v0.94.0` | ARCHITECTURE | P2 | Modernize SPA Hosting with Go os.DirFS Chroot Sandbox and Subdirectory Support | [`notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md`](notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`** | `v0.94.0` | Security | P2 | 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리) | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
+| `DONE` | **`FEAT-SPECKIT-CORE-AND-ORACLE-RUNNER-1`** | `1.0-GA` | Test | P1 | 스펙 기반 쿼리 생성 엔진, NoREC/듀얼엔진 오라클 및 cmd/spec_fuzz CLI 구축 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SQL-SERVER-AGENT-INPROCESS-1`** | `v0.95.0` | Engine | P2 | SQL Server Agent 인-프로세스 스케줄러 (msdb.dbo.sysjobs, sysjobhistory, sp_add_job) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`** | `v0.95.0` | Engine | P2 | 서버 전역 dialect_preference 설정 체계 및 CLI/환경변수 바인딩 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SUPERSET-EXPR-COLLATE-1`** | `v0.94.0` | Engine | P2 | 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
@@ -478,7 +486,7 @@
 | `DONE` | **`PERF-WT-INSTANT-ADD-COL-1`** | `1.0-GA` | Storage | P2 | WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`PERF-WT-ROW-DIRECT-1`** | `v1.10.0` | Storage | P2 | WiredTiger InsertRow 중간 Record 맵 2중 할당 우회 및 EncodeRowToBuffer 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | `v1.1.0` | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
-| `PENDING` | **`PLAN-SPEC-DRIVEN-TEST-DISCOVERY-METHODOLOGY-1`** | `1.0-GA` | Test | P1 | 스펙 기반 쿼리 생성, 차등 오라클 불일치 발견, RCA 및 TDD Red 등록 방법론 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
+| `DONE` | **`PLAN-SPEC-DRIVEN-TEST-DISCOVERY-METHODOLOGY-1`** | `1.0-GA` | Test | P1 | 스펙 기반 쿼리 생성, 차등 오라클 불일치 발견, RCA 및 TDD Red 등록 방법론 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
 | `PENDING` | **`PLAN-WINDOWS-CGO-STANDALONE-ECOSYSTEM-1`** | `Post-1.0` | Storage | P2 | Windows Cgo Standalone Ecosystem Packages & LionSQL Org Migration Plan | [`notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md`](notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md) |  |
 | `DONE` | **`PLANNER-SLIM-1`** |  | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** |  | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
@@ -2682,6 +2690,55 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] BIT 컬럼과 0.0/1.0 부동소수점 리터럴 비교 시 WHERE 문자열 '0.0' 불일치로 행 누락 결함 `DEFECT-ENGINE-BIT-FLOAT-LITERAL-EVAL-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-21 14:49:36
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`test/spec_defects/spec_defect_bit_float_equality_test.go`](test/spec_defects/spec_defect_bit_float_equality_test.go)
+
+---
+
+### [DONE] NULL 포함 IN 리스트 복합 OR 조건 3VL 논리 평가 불일치 결함 `DEFECT-ENGINE-NOREC-3VL-IN-NULL-OR-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-21 14:58:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`test/spec_defects/spec_defect_1_test.go`](test/spec_defects/spec_defect_1_test.go)
+
+---
+
+### [DONE] WHERE 절 산술 오버플로우 에러를 boolean true(매칭)로 오평가하는 결함 `DEFECT-EXEC-ARITHMETIC-OVERFLOW-TRUTHY-EVAL-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-21 14:50:57
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md)
+
+---
+
+### [DONE] tryDecimal float64 스케일 4 고정 단편화로 인한 FLOAT 컬럼 리터럴 비교 불일치 결함 `DEFECT-EXEC-FLOAT-DECIMAL-SCALE-TRUNCATION-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-21 14:58:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`test/spec_defects/spec_defect_8_test.go`](test/spec_defects/spec_defect_8_test.go)
+
+---
+
+### [DONE] proc/eval.go BETWEEN 문자열 평가 시 대소문자 무시(CI) Collation 미반영 결함 `DEFECT-PROC-EVAL-BETWEEN-CASE-INSENSITIVE-COLLATION-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-21 14:58:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`test/spec_defects/spec_defect_collation_between_test.go`](test/spec_defects/spec_defect_collation_between_test.go)
+
+---
+
+### [DONE] BIT 타입 컬럼 IN (0, 1) 평가 시 proc/eval.go 문자열 'false'/'0' 불일치 결함 `DEFECT-PROC-EVAL-BIT-IN-LIST-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-21 14:58:23
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`test/spec_defects/spec_defect_122_test.go`](test/spec_defects/spec_defect_122_test.go)
+
+---
+
+### [DONE] VDBE toFloatNum이 DECIMAL 컬럼 FVal(0.0)을 직접 읽어 비교식이 왜곡되는 결함 `DEFECT-VDBE-DECIMAL-FVAL-CORRUPTION-1`
+- **Domain**: VM | **Priority**: P1 | **Updated**: 2026-11-21 14:58:12
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md)
+
+---
+
 ### [DONE] v1.0 이전 OCC performance 모드(-memory=performance) Deprecate 명기 (v1.0 옵션 유지) `DEPRECATE-OCC-PERF-1`
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 
@@ -3014,6 +3071,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Security | **Priority**: P2 | **Updated**: 2026-11-18 06:26:44
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md)
+
+---
+
+### [DONE] 스펙 기반 쿼리 생성 엔진, NoREC/듀얼엔진 오라클 및 cmd/spec_fuzz CLI 구축 `FEAT-SPECKIT-CORE-AND-ORACLE-RUNNER-1`
+- **Domain**: Test | **Priority**: P1 | **Updated**: 2026-11-21 13:38:05
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md)
 
 ---
 
@@ -4721,8 +4785,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] 스펙 기반 쿼리 생성, 차등 오라클 불일치 발견, RCA 및 TDD Red 등록 방법론 `PLAN-SPEC-DRIVEN-TEST-DISCOVERY-METHODOLOGY-1`
-- **Domain**: Test | **Priority**: P1 | **Updated**: 2026-11-21 13:22:17
+### [DONE] 스펙 기반 쿼리 생성, 차등 오라클 불일치 발견, RCA 및 TDD Red 등록 방법론 `PLAN-SPEC-DRIVEN-TEST-DISCOVERY-METHODOLOGY-1`
+- **Domain**: Test | **Priority**: P1 | **Updated**: 2026-11-21 13:38:09
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md)
 

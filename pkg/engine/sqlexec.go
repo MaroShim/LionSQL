@@ -328,6 +328,9 @@ func evalSessionVarExpr(rawExpr string, vars map[string]any) any {
 	p := proc.NewParser(proc.NewLexer(expr))
 	if ast := p.ParseExpr(); ast != nil {
 		if val, err := proc.EvalRowExpr(ast, evalVars, nil); err == nil {
+			if sv, ok := val.(storage.Value); ok {
+				return formatStorageValue(sv)
+			}
 			return val
 		}
 	}
@@ -1681,6 +1684,9 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		cs.Mu.Lock()
 		val := cs.Vars[varName]
 		cs.Mu.Unlock()
+		if sv, ok := val.(storage.Value); ok {
+			val = formatStorageValue(sv)
+		}
 		return &QueryResult{
 			Success:      true,
 			Command:      "SELECT",

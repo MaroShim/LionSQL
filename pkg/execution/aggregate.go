@@ -329,7 +329,9 @@ func (a *AggregateIterator) parseFields() {
 						isDistinct: isDist,
 						isStar:     isStar,
 						rawExpr:    rawCall,
+						origExpr:   rawCall,
 						parsed:     parsedArg,
+						fnExpr:     e,
 					})
 				}
 			}

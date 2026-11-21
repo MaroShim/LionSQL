@@ -105,6 +105,25 @@ func formatStorageValue(v storage.Value) any {
 }
 
 
+func matchBoolLiteral(bVal bool, literal string) bool {
+	literal = strings.TrimSpace(literal)
+	if literal == "1" || strings.EqualFold(literal, "true") {
+		return bVal
+	}
+	if literal == "0" || strings.EqualFold(literal, "false") {
+		return !bVal
+	}
+	if f, err := strconv.ParseFloat(literal, 64); err == nil {
+		if f == 1.0 {
+			return bVal
+		}
+		if f == 0.0 {
+			return !bVal
+		}
+	}
+	return false
+}
+
 func parseValueToType(s string, t storage.DataType) storage.Value {
 	return planner.ParseValueToType(s, t)
 }
@@ -231,8 +250,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 			}
 			if strings.EqualFold(strVal, item) ||
 				strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(item, " ")) ||
-				(isBool && bVal && (item == "1" || strings.EqualFold(item, "true"))) ||
-				(isBool && !bVal && (item == "0" || strings.EqualFold(item, "false"))) {
+				(isBool && matchBoolLiteral(bVal, item)) {
 				found = true
 				break
 			}
@@ -327,12 +345,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 			switch strings.TrimSpace(op) {
 			case "=":
 				if isBool {
-					if rightVal == "1" || strings.EqualFold(rightVal, "true") {
-						return bVal
-					}
-					if rightVal == "0" || strings.EqualFold(rightVal, "false") {
-						return !bVal
-					}
+					return matchBoolLiteral(bVal, rightVal)
 				}
 				if collate != "" && sqlutil.IsCaseSensitiveCollation(collate) {
 					return strVal == rightVal || strings.TrimRight(strVal, " ") == strings.TrimRight(rightVal, " ")
@@ -340,12 +353,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 				return strings.EqualFold(strVal, rightVal) || strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(rightVal, " "))
 			case "!=", "<>":
 				if isBool {
-					if rightVal == "1" || strings.EqualFold(rightVal, "true") {
-						return !bVal
-					}
-					if rightVal == "0" || strings.EqualFold(rightVal, "false") {
-						return bVal
-					}
+					return !matchBoolLiteral(bVal, rightVal)
 				}
 				if collate != "" && sqlutil.IsCaseSensitiveCollation(collate) {
 					return !(strVal == rightVal || strings.TrimRight(strVal, " ") == strings.TrimRight(rightVal, " "))

@@ -306,6 +306,16 @@ func (d Decimal) Add(other Decimal) Decimal {
 	}
 }
 
+// Neg returns -d with the same scale.
+func (d Decimal) Neg() Decimal {
+	val := d.UnscaledValue()
+	neg := new(big.Int).Neg(val)
+	return Decimal{
+		value: neg,
+		scale: d.scale,
+	}
+}
+
 // Sub returns d - other.
 func (d Decimal) Sub(other Decimal) Decimal {
 	v1, v2, commonScale := alignScales(d, other)

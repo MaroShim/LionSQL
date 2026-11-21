@@ -1350,6 +1350,12 @@ func (v Value) Decimal() Decimal {
 		}
 		return ZeroDecimal(2)
 	}
+	if v.Type == TypeBool {
+		if v.BVal {
+			return NewDecimalFromInt(1, 0)
+		}
+		return NewDecimalFromInt(0, 0)
+	}
 	if v.Type == TypeInt {
 		return NewDecimalFromInt(v.IVal, 0)
 	}
