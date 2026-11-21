@@ -45,7 +45,7 @@ flowchart TD
   * Compiles three standalone binaries across target OS and CPU architectures:
     1. **`bin/lionsql-darwin-arm64`**: macOS Apple Silicon (M1/M2/M3/M4, WiredTiger MVCC)
     2. **`bin/lionsql-linux-amd64`**: Linux x86_64 server (Pure Go Zero-CGo, OCC)
-    3. **`bin/lionsql-windows-amd64.exe`**: Windows x86_64 (Pure Go Zero-CGo, 1ms high-resolution timer)
+    3. **`bin/lionsql-windows-amd64.exe`**: Windows x86_64 (WiredTiger Cgo / MSVC DLL Self-Extraction with Pure-Go fallback)
 
 ### [Step 3] Git Log Collection & Changelog Categorization
 Parses `git log ${PREV_TAG}..HEAD` in chronological order and categorizes commits according to Conventional Commits:

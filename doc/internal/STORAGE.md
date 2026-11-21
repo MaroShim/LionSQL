@@ -80,6 +80,12 @@ WiredTiger durability is controlled via `SetFsyncPolicy()` and `FsyncPolicy()`:
 - **`FsyncAlways`**: Enforces strict zero-loss durability using a **Leader/Follower Group Commit** mechanism. Concurrent commits serialize on `syncMu`; the leader thread issues `session->log_flush(session, "sync=on")` covering all accumulated sequence writes, and follower threads wake up immediately once their target write sequence is synced without issuing redundant physical disk barriers.
 - **`FsyncNone`**: Journal entries are written to OS cache without explicit `log_flush("sync=on")`.
 
+### 2.5. Windows MSVC Native DLL & Self-Extracting Runtime (`dll_loader_windows.go`)
+To eliminate MinGW C-runtime (CRT) symbol conflicts while maintaining LionSQL's single standalone static executable architecture (`[RULE:StaticBinary]`, `[RULE:HermeticParity]`):
+- **MSVC Native DLL with Static CRT (`/MT`)**: WiredTiger is compiled via Microsoft Visual Studio 2022 on GitHub Actions Windows runners with `-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded`. All internal file I/O, locks, and CRT dependencies are sealed inside `wiredtiger.dll`, eliminating any requirement for external Visual C++ redistributable packages (`vcruntime140.dll`).
+- **MinGW Import Library (`libwiredtiger.dll.a`)**: Generated via `gendef` and `dlltool` from the native DLL to provide deterministic symbol linking for Go's Windows Cgo toolchain (`#cgo windows,amd64 LDFLAGS: -L... -lwiredtiger`).
+- **Self-Extracting Loader (`EnsureWiredTigerDLL`)**: On Windows startup, `EnsureWiredTigerDLL()` verifies DLL presence across the executable directory and `%LOCALAPPDATA%\LionSQL\bin\`. If missing but embedded via `//go:embed`, it atomically writes the DLL (`[RULE:AtomicSaves]`) and registers the directory dynamically using the Win32 `SetDllDirectoryW` API, providing an out-of-the-box single `.exe` experience.
+
 > [!IMPORTANT]
 > **Zero-`transaction_sync` Invariant (`GEMINI.md` Invariant 10)**  
 > Never specify `transaction_sync` in `WiredTigerOpenConfig`. Enabling transaction sync forces WiredTiger to serialize all transaction commits through a single C global mutex, collapsing multi-worker throughput from 146,000 TPS to 4,800 TPS. Durability is strictly maintained via `log=(enabled=true)` and background/group flush. For detailed postmortem and benchmarks, see [`notes/reports/WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md`](../../notes/reports/WIREDTIGER_TRANSACTION_SYNC_POSTMORTEM.ko.md).

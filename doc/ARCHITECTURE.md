@@ -226,6 +226,9 @@ LionSQL enforces a Single Source of Truth (SSOT) architecture, eradicating distr
    - 4-byte aligned header, 1,024 column limit, and tightly packed null bitmap.
    - Delivers $O(1)$ instant schema expansion (`ADD COLUMN`) and instant tail column removal (`DROP COLUMN`) without physical data rewrites (Instant Tail DDL).
    - Enforces a Two-Tier Row Size Firewall: Layer 1 inline limit of 8,060 bytes (`storage.MaxInlineRowSize`) and Layer 2 maximum logical record limit of 16MB (`storage.MaxRowSize`).
+4. **Windows Platform MSVC DLL & Self-Extracting Runtime**:
+   - To prevent MinGW C-runtime symbol conflicts, `wiredtiger.dll` is compiled on GitHub Actions Windows runners with MSVC `/MT` (Static CRT), completely eliminating external Visual C++ runtime dependencies (`vcruntime140.dll`).
+   - Binds the MinGW import library (`libwiredtiger.dll.a`) for Cgo compilation, and preserves the single-binary principle (`[RULE:StaticBinary]`) by dynamically extracting embedded DLLs to `%LOCALAPPDATA%\LionSQL\bin\` and registering search paths via `SetDllDirectoryW` at startup.
 
 ---
 

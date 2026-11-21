@@ -225,6 +225,9 @@ LionSQL은 분산된 상태 플래그를 완전히 배제하고 단일 진실원
    - 4바이트 정렬 헤더, 1,024개 컬럼 상한, 널 비트맵.
    - 테이블 끝단 컬럼의 `ADD/DROP COLUMN`을 데이터 복사 없이 $O(1)$ 즉시 수행(Instant Tail DDL).
    - Layer 1 인라인 8,060B 상한(`storage.MaxInlineRowSize`) 및 Layer 2 단일 논리 행 16MB 상한(`storage.MaxRowSize`)의 2계층 방어벽 적용.
+4. **Windows 플랫폼 MSVC DLL 및 자가 추출(Self-Extracting) 런타임**:
+   - MinGW C 런타임 심볼 충돌을 방지하기 위해 GitHub Actions 윈도우 러너에서 MSVC `/MT` (정적 CRT)로 `wiredtiger.dll`을 빌드하여 외부 런타임 의존성을 제거합니다.
+   - `dlltool` 기반의 MinGW 임포트 라이브러리(`libwiredtiger.dll.a`)를 바인딩하고, 단일 실행 파일 원칙(`[RULE:StaticBinary]`)을 지키기 위해 기동 시 DLL 부재 시 `%LOCALAPPDATA%\LionSQL\bin\`으로 자동 원자 추출 및 `SetDllDirectoryW` 등록을 수행합니다.
 
 ---
 

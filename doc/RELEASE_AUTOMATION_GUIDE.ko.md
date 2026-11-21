@@ -45,7 +45,7 @@ flowchart TD
   * 각 OS 및 CPU 아키텍처가 명확히 분리된 3종의 공식 바이너리를 빌드합니다:
     1. **`bin/lionsql-darwin-arm64`**: macOS Apple Silicon (M1/M2/M3/M4, WiredTiger MVCC)
     2. **`bin/lionsql-linux-amd64`**: Linux x86_64 표준 서버 (Pure Go Zero-Cgo, OCC)
-    3. **`bin/lionsql-windows-amd64.exe`**: Windows x86_64 (Pure Go Zero-Cgo, 1ms 고해상도 타이머)
+    3. **`bin/lionsql-windows-amd64.exe`**: Windows x86_64 (WiredTiger Cgo / MSVC DLL 자가 추출 및 Pure Go fallback 지원)
 
 ### [Step 3] Git Log 수집 및 변경 로그 카테고리화
 `git log ${PREV_TAG}..HEAD`의 커밋 메시지를 역순(시간순)으로 파싱하여 Conventional Commits 규약에 맞춰 섹션을 자동 구성합니다:
