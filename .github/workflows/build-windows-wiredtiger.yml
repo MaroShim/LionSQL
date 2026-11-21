@@ -10,7 +10,7 @@ on:
   push:
     paths:
       - '.github/workflows/build-windows-wiredtiger.yml'
-      - 'scripts/build_wiredtiger_windows*.sh'
+      - 'scripts/build_wiredtiger_windows*'
 
 permissions:
   contents: write
@@ -20,7 +20,7 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
-        shell: bash
+        shell: pwsh
 
     steps:
       - name: Checkout LionSQL repository
@@ -34,30 +34,92 @@ jobs:
           go-version: '1.24'
           check-latest: true
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
       - name: Set up MSVC Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      - name: Add Pre-installed MinGW to PATH (for Cgo linking)
-        run: |
-          echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
-          echo "C:\msys64\usr\bin" >> $GITHUB_PATH
-
       - name: Clone WiredTiger source
         run: |
-          WT_VER="${{ github.event.inputs.wt_version || '11.3.1' }}"
-          echo "Cloning WiredTiger v${WT_VER} into ./wt_source..."
-          git clone --depth 1 --branch "${WT_VER}" https://github.com/wiredtiger/wiredtiger.git wt_source
+          $ver = "${{ github.event.inputs.wt_version }}"
+          if (-not $ver) { $ver = "11.3.1" }
+          Write-Host "Cloning WiredTiger v$ver into ./wt_source..."
+          git clone --depth 1 --branch $ver https://github.com/wiredtiger/wiredtiger.git wt_source
 
-      - name: Build WiredTiger Shared DLL via MSVC and Generate Import Library
+      - name: Build WiredTiger Shared DLL via MSVC and Export Import Library
         run: |
-          python scripts/build_windows_wiredtiger.py
+          # 1. Patch base.cmake to bypass Python3 development component check
+          $baseCmake = "wt_source/cmake/configs/base.cmake"
+          $content = Get-Content $baseCmake -Raw
+          $patched = $content.Replace(
+              'source_python3_package(python_libs python_version python_executable)',
+              'set(python_version "3.10")`nset(default_enable_python OFF)'
+          )
+          Set-Content -Path $baseCmake -Value $patched -NoNewline
+          Write-Host "Successfully patched base.cmake"
+
+          # 2. Configure CMake with Visual Studio 17 2022 (x64) and /MT Static CRT
+          New-Item -ItemType Directory -Force -Path wt_source/build | Out-Null
+          Set-Location wt_source/build
+
+          Write-Host "Configuring CMake with Visual Studio 2022 x64 (/MT)..."
+          cmake .. -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+            -DENABLE_SHARED=1 `
+            -DENABLE_STATIC=0 `
+            -DENABLE_PYTHON=0 `
+            -DENABLE_SNAPPY=0 `
+            -DENABLE_LZ4=0 `
+            -DENABLE_ZLIB=0 `
+            -DENABLE_ZSTD=0
+
+          if ($LASTEXITCODE -ne 0) { throw "CMake configuration failed with exit code $LASTEXITCODE" }
+
+          # 3. Build wiredtiger_shared target
+          Write-Host "Building wiredtiger_shared via MSVC..."
+          cmake --build . --config Release --target wiredtiger_shared
+          if ($LASTEXITCODE -ne 0) { throw "CMake build failed with exit code $LASTEXITCODE" }
+
+          # 4. Copy DLL, LIB, and headers to target directory
+          $TargetDir = "$env:GITHUB_WORKSPACE/pkg/storage/wiredtiger/lib/windows_amd64"
+          New-Item -ItemType Directory -Force -Path "$TargetDir/include" | Out-Null
+
+          $builtDll = (Get-ChildItem -Path . -Recurse -Filter "wiredtiger.dll" | Select-Object -First 1).FullName
+          Write-Host "Found built DLL: $builtDll"
+          Copy-Item $builtDll -Destination "$TargetDir/wiredtiger.dll" -Force
+
+          $builtLib = (Get-ChildItem -Path . -Recurse -Filter "wiredtiger.lib" | Select-Object -First 1)
+          if ($builtLib) {
+              Copy-Item $builtLib.FullName -Destination "$TargetDir/wiredtiger.lib" -Force
+          }
+
+          $header = (Get-ChildItem -Path .. -Recurse -Filter "wiredtiger.h" | Select-Object -First 1).FullName
+          Copy-Item $header -Destination "$TargetDir/include/wiredtiger.h" -Force
+
+          $extHeader = (Get-ChildItem -Path .. -Recurse -Filter "wiredtiger_ext.h" | Select-Object -First 1)
+          if ($extHeader) {
+              Copy-Item $extHeader.FullName -Destination "$TargetDir/include/wiredtiger_ext.h" -Force
+          }
+
+          # 5. Generate MinGW-compatible libwiredtiger.dll.a using WiredTiger official def
+          Copy-Item ../cmake/configs/wiredtiger.def "$TargetDir/wiredtiger.def" -Force
+          Set-Location $TargetDir
+
+          $dlltool = "dlltool"
+          if (-not (Get-Command dlltool -ErrorAction SilentlyContinue)) {
+              if (Test-Path "C:\msys64\mingw64\bin\dlltool.exe") {
+                  $dlltool = "C:\msys64\mingw64\bin\dlltool.exe"
+              } elseif (Test-Path "C:\Program Files\Git\mingw64\bin\dlltool.exe") {
+                  $dlltool = "C:\Program Files\Git\mingw64\bin\dlltool.exe"
+              }
+          }
+          Write-Host "Using dlltool: $dlltool"
+          & $dlltool -d wiredtiger.def -l libwiredtiger.dll.a -D wiredtiger.dll
+          if ($LASTEXITCODE -ne 0) { throw "dlltool failed with exit code $LASTEXITCODE" }
+
+          Write-Host "Contents of $TargetDir :"
+          Get-ChildItem -Path $TargetDir
 
       - name: Commit and Push Vendored DLL to Repository
         run: |
@@ -65,36 +127,47 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add pkg/storage/wiredtiger/lib/windows_amd64/
           git status
-          git diff --staged --quiet || git commit -m "chore(storage/wiredtiger): vendor precompiled windows msvc dll and import library"
-          git push origin main
+          $diff = git diff --staged --name-only
+          if ($diff) {
+              Write-Host "Committing vendored Windows WiredTiger DLL..."
+              git commit -m "chore(storage/wiredtiger): vendor precompiled windows msvc dll and import library"
+              git push origin main
+          } else {
+              Write-Host "No changes to commit (already up to date)."
+          }
 
       - name: Compile LionSQL Windows Executable with WiredTiger Cgo
         run: |
-          export CC="gcc"
-          export CGO_ENABLED=1
-          export GOOS=windows
-          export GOARCH=amd64
+          $env:CGO_ENABLED = "1"
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          $env:CC = "gcc"
+          $env:Path = "C:\msys64\mingw64\bin;C:\Program Files\Git\mingw64\bin;" + $env:Path
 
-          mkdir -p bin
-          echo "Building lionsql.exe with -tags wiredtiger..."
+          New-Item -ItemType Directory -Force -Path bin | Out-Null
+          Write-Host "Building lionsql.exe with Cgo -tags wiredtiger..."
           go build -tags wiredtiger -v -ldflags "-s -w" -buildvcs=false -o bin/lionsql.exe ./cmd/lionsql
+          if ($LASTEXITCODE -ne 0) { throw "go build failed with exit code $LASTEXITCODE" }
 
-          # Copy DLL next to executable for execution tests
-          cp pkg/storage/wiredtiger/lib/windows_amd64/wiredtiger.dll bin/
-          ls -lh bin/
+          Copy-Item pkg/storage/wiredtiger/lib/windows_amd64/wiredtiger.dll bin/ -Force
+          Write-Host "Bin directory contents:"
+          Get-ChildItem bin/
 
       - name: Verify Windows Binary & WiredTiger Engine
         run: |
-          export PATH="$(pwd)/bin:$PATH"
-          ./bin/lionsql.exe --version || true
-          ./bin/lionsql.exe --doctor || true
+          $env:Path = "$pwd/bin;C:\msys64\mingw64\bin;C:\Program Files\Git\mingw64\bin;" + $env:Path
+          Write-Host "Checking lionsql.exe version..."
+          ./bin/lionsql.exe --version
+          ./bin/lionsql.exe --doctor
 
-          echo "Running WiredTiger storage unit tests on Windows..."
-          export CGO_ENABLED=1
-          export CC="gcc"
+          Write-Host "Running WiredTiger storage unit tests on Windows..."
+          $env:CGO_ENABLED = "1"
+          $env:CC = "gcc"
           go test -tags wiredtiger -v -run TestWT_ ./pkg/storage/wiredtiger/...
+          if ($LASTEXITCODE -ne 0) { throw "go test failed with exit code $LASTEXITCODE" }
 
       - name: Upload Windows WiredTiger Build Artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lionsql-windows-wiredtiger-x64
