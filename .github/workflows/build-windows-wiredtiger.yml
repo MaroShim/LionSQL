@@ -53,22 +53,16 @@ jobs:
 
           # 1. Patch base.cmake to bypass Python3 development component check
           $baseCmake = "wt_source/cmake/configs/base.cmake"
-          $content = Get-Content $baseCmake -Raw
-          $patched = $content.Replace(
-              'source_python3_package(python_libs python_version python_executable)',
-              'set(python_version "3.10")`nset(default_enable_python OFF)'
-          )
-          Set-Content -Path $baseCmake -Value $patched -NoNewline
+          $c = Get-Content $baseCmake -Raw
+          $c = $c -replace 'source_python3_package\(.*?\)', "`nset(python_version `"3.10`")`nset(default_enable_python OFF)`n"
+          Set-Content -Path $baseCmake -Value $c -NoNewline
           Write-Host "Successfully patched base.cmake"
 
           # 2. Patch x86/windows/config.cmake to enable SHARED DLL compilation
           $winConfig = "wt_source/cmake/configs/x86/windows/config.cmake"
-          $winc = Get-Content $winConfig -Raw
-          $patchedWin = $winc.Replace(
-              'set(ENABLE_SHARED OFF CACHE BOOL "" FORCE)',
-              'set(ENABLE_SHARED ON CACHE BOOL "" FORCE)'
-          )
-          Set-Content -Path $winConfig -Value $patchedWin -NoNewline
+          $w = Get-Content $winConfig -Raw
+          $w = $w -replace 'set\(ENABLE_SHARED OFF.*?\)', "`nset(ENABLE_SHARED ON CACHE BOOL `"`" FORCE)`n"
+          Set-Content -Path $winConfig -Value $w -NoNewline
           Write-Host "Successfully patched x86/windows/config.cmake"
 
           # 3. Configure CMake with Ninja + MSVC cl.exe toolchain
