@@ -176,14 +176,24 @@ jobs:
       - name: Verify Windows Binary & WiredTiger Engine
         run: |
           $env:Path = "$pwd/bin;C:\msys64\mingw64\bin;C:\Program Files\Git\mingw64\bin;" + $env:Path
-          Write-Host "Checking lionsql.exe version..."
+          Write-Host "Checking lionsql.exe version and doctor..."
           ./bin/lionsql.exe --version
           ./bin/lionsql.exe --doctor
 
-          Write-Host "Running WiredTiger storage unit tests on Windows..."
+          Write-Host "Verifying Self-Extracting Standalone Binary in clean isolation..."
+          $testDir = New-Item -ItemType Directory -Path "$env:TEMP\lionsql_standalone_test" -Force
+          Copy-Item bin/lionsql.exe $testDir.FullName -Force
+          Push-Location $testDir.FullName
+          # Test running standalone executable where wiredtiger.dll is NOT present in the directory
+          ./lionsql.exe --version
+          ./lionsql.exe --doctor
+          Pop-Location
+          Remove-Item -Recurse -Force $testDir.FullName
+
+          Write-Host "Running full WiredTiger storage unit tests on Windows..."
           $env:CGO_ENABLED = "1"
           $env:CC = "gcc"
-          go test -tags wiredtiger -v -run TestWT_ ./pkg/storage/wiredtiger/...
+          go test -tags wiredtiger -v ./pkg/storage/wiredtiger/...
           if ($LASTEXITCODE -ne 0) { throw "go test failed with exit code $LASTEXITCODE" }
 
       - name: Upload Windows WiredTiger Build Artifacts

@@ -668,12 +668,12 @@ OK: tolerant_ddl set to true (in-memory volatile)
 
 ### 3.5. 스토리지 엔진 선택 및 실무 워크로드 레시피
 
-LionSQL은 기본적으로 데이터 디렉토리(`-dir`)가 지정되면 모든 DDL과 데이터를 디스크에 안전하게 영구 저장하는 **완전한 ACID 트랜잭션 데이터베이스**입니다. 플랫폼별로 최적의 스토리지 엔진이 기본 제공됩니다:
+LionSQL은 기본적으로 데이터 디렉토리(`-dir`)가 지정되면 모든 DDL과 데이터를 디스크에 안전하게 영구 저장하는 **완전한 ACID 트랜잭션 데이터베이스**입니다. macOS, Linux, Windows 전 플랫폼에서 동일하게 듀얼 스토리지 엔진을 완전하게 지원합니다:
 
-* **Windows**: **Pure-Go `compact` (In-Memory OCC + AOF/WAL) 엔진 기본 채택**  
-  외부 C 라이브러리 및 Cgo 의존성을 100% 배제하여 단일 정적 실행 파일(`lionsql.exe`)로 자립 구동되며, WAL 및 스냅샷 컴팩션을 통해 재시작 후에도 100% 완전한 영속성을 보장합니다.
-* **macOS / Linux**: **`WiredTiger` (MVCC B+Tree) 엔진 기본 채택**  
-  대규모 프로덕션 OLTP 워크로드를 위해 초고성능 디스크 MVCC 엔진을 기본 채택하며, 필요 시 `-disk compact`를 선택할 수 있습니다.
+* **`WiredTiger` (MVCC B+Tree) 엔진 (기본 권장 엔터프라이즈 스토리지)**  
+  대규모 프로덕션 OLTP 워크로드를 위한 고동시성 디스크 MVCC B+Tree 엔진입니다. macOS와 Linux뿐만 아니라 **Windows에서도 사전 컴파일된 MSVC DLL이 바이너리에 내장(Self-Extracting)되어 있어, 외부 DLL 설치나 `%PATH%` 설정 없이 단일 독립 파일(`lionsql.exe`)로 즉시 구동**됩니다.
+* **`compact` (Pure-Go In-Memory OCC + AOF/WAL) 엔진 (초저지연 메모리 스토리지)**  
+  Cgo 및 C 라이브러리 의존성을 일절 사용하지 않는 순수 Go 인메모리 스토리지 엔진으로, 초저지연 워크로드 및 경량 임베디드 환경에 최적화되어 있습니다 (`-disk compact`).
 
 #### 테이블 레벨 영속성 제어: T-SQL `WITH (DURABILITY = ...)` 표준
 
@@ -702,7 +702,7 @@ CREATE TABLE dbo.WebSession (
 
 자세한 분석은 [`TRANSACTION_PERFORMANCE_GUIDE.ko.md`](TRANSACTION_PERFORMANCE_GUIDE.ko.md) 문서를 참조하십시오:
 
-#### 레시피 1: 초고속 Pure-Go 인메모리 OCC 모드 (Windows 기본값 / 초저지연)
+#### 레시피 1: 초저지연 인메모리 OCC 모드 (Pure-Go / 마이크로초 지연시간)
 ```bash
 lionsql serve -dir /var/lib/lionsql/data -disk compact -fsync everysec -max-memory 2GB
 ```

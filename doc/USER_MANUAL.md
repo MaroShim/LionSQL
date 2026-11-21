@@ -665,12 +665,12 @@ OK: tolerant_ddl set to true (in-memory volatile)
 
 ### 3.5. Storage Engine Selection and Practical Workload Recipes
 
-LionSQL operates as a **fully ACID-compliant, persistent transactional database** whenever a data directory (`-dir`) is provided. The optimal storage engine is configured out of the box per platform:
+LionSQL operates as a **fully ACID-compliant, persistent transactional database** whenever a data directory (`-dir`) is provided. Both dual storage engines are fully supported across macOS, Linux, and Windows:
 
-* **Windows**: **Pure-Go `compact` (In-Memory OCC + AOF/WAL) Default**  
-  Eliminates 100% of external C libraries and Cgo dependencies, producing a standalone static binary (`lionsql.exe`) that guarantees full persistence and crash recovery across restarts via WAL and snapshot compaction.
-* **macOS / Linux**: **`WiredTiger` (MVCC B+Tree) Default**  
-  Employs the high-concurrency disk MVCC engine for enterprise production OLTP workloads, with `-disk compact` available on demand.
+* **`WiredTiger` (MVCC B+Tree) Engine (Default Enterprise Storage)**  
+  High-concurrency disk MVCC B+Tree engine designed for heavy production OLTP workloads. Across macOS, Linux, and **Windows, precompiled MSVC DLLs are embedded into the binary (Self-Extracting), enabling out-of-the-box execution as a standalone executable (`lionsql.exe`) with zero external DLL installations or `%PATH%` configuration**.
+* **`compact` (Pure-Go In-Memory OCC + AOF/WAL) Engine (Ultra-Low Latency)**  
+  Zero-dependency in-memory storage engine bypassing Cgo, optimized for microsecond-latency workloads and lightweight environments (`-disk compact`).
 
 #### Table-Level Durability Control: T-SQL `WITH (DURABILITY = ...)` Standard
 
@@ -699,7 +699,7 @@ CREATE TABLE dbo.WebSession (
 
 For an in-depth analysis, refer to [`TRANSACTION_PERFORMANCE_GUIDE.md`](TRANSACTION_PERFORMANCE_GUIDE.md):
 
-#### Recipe 1: Ultra-Fast Pure-Go In-Memory OCC Mode (Windows Default / Sub-Millisecond)
+#### Recipe 1: Ultra-Low Latency In-Memory OCC Mode (Pure-Go / Sub-Millisecond)
 ```bash
 lionsql serve -dir /var/lib/lionsql/data -disk compact -fsync everysec -max-memory 2GB
 ```
