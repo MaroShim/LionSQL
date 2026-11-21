@@ -34,6 +34,11 @@ jobs:
           go-version: '1.24'
           check-latest: true
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: Set up MSVC Developer Command Prompt
         uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -52,15 +57,19 @@ jobs:
       - name: Clone WiredTiger source
         run: |
           WT_VER="${{ github.event.inputs.wt_version || '11.3.1' }}"
-          echo "Cloning WiredTiger v${WT_VER} to ${RUNNER_TEMP}/wt..."
-          git clone --depth 1 --branch "${WT_VER}" https://github.com/wiredtiger/wiredtiger.git "${RUNNER_TEMP}/wt"
+          echo "Cloning WiredTiger v${WT_VER} into ./wt_source..."
+          git clone --depth 1 --branch "${WT_VER}" https://github.com/wiredtiger/wiredtiger.git wt_source
 
       - name: Build WiredTiger Shared DLL via MSVC (/MT Static CRT)
         run: |
-          cd "${RUNNER_TEMP}/wt"
+          cd wt_source
+
+          # Guard Python3 Development component check in base.cmake
+          sed -i 's/source_python3_package.*/set(python_version "3.10")/' cmake/configs/base.cmake
+
           mkdir -p build && cd build
 
-          # Configure CMake with MSVC, MultiThreaded (/MT) static CRT, and shared DLL target
+          echo "Configuring CMake with Visual Studio 2022 x64..."
           cmake .. -G "Visual Studio 17 2022" -A x64 \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded \
@@ -72,11 +81,12 @@ jobs:
             -DENABLE_ZLIB=0 \
             -DENABLE_ZSTD=0
 
+          echo "Building wiredtiger_shared target..."
           cmake --build . --config Release --target wiredtiger_shared
 
       - name: Generate MinGW-compatible Import Library (.dll.a)
         run: |
-          DLL_PATH=$(find "${RUNNER_TEMP}/wt/build" -name "wiredtiger.dll" | head -n 1)
+          DLL_PATH=$(find wt_source/build -name "wiredtiger.dll" | head -n 1)
           if [ -z "$DLL_PATH" ]; then
             echo "Error: wiredtiger.dll not found in build tree"
             exit 1
@@ -86,9 +96,9 @@ jobs:
 
           # Copy DLL, MSVC .lib, and headers
           cp -v "$DLL_PATH" pkg/storage/wiredtiger/lib/windows_amd64/
-          find "${RUNNER_TEMP}/wt/build" -name "wiredtiger.lib" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/ \; 2>/dev/null || true
-          find "${RUNNER_TEMP}/wt" -name "wiredtiger.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \;
-          find "${RUNNER_TEMP}/wt" -name "wiredtiger_ext.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \; 2>/dev/null || true
+          find wt_source/build -name "wiredtiger.lib" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/ \; 2>/dev/null || true
+          find wt_source -name "wiredtiger.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \;
+          find wt_source -name "wiredtiger_ext.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \; 2>/dev/null || true
 
           cd pkg/storage/wiredtiger/lib/windows_amd64
           # Generate DEF file and MinGW-compatible import library
