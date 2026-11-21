@@ -1,0 +1,128 @@
+name: Build Windows WiredTiger DLL & Verify Cgo
+
+on:
+  workflow_dispatch:
+    inputs:
+      wt_version:
+        description: 'WiredTiger Git branch or tag'
+        required: true
+        default: '11.3.1'
+  push:
+    paths:
+      - '.github/workflows/build-windows-wiredtiger.yml'
+      - 'scripts/build_wiredtiger_windows*.sh'
+
+jobs:
+  build-wiredtiger-dll:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout LionSQL repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          check-latest: true
+
+      - name: Set up MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up MinGW-w64 (for Cgo linking)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-binutils
+            mingw-w64-x86_64-tools-git
+
+      - name: Clone WiredTiger source
+        run: |
+          WT_VER="${{ github.event.inputs.wt_version || '11.3.1' }}"
+          echo "Cloning WiredTiger v${WT_VER}..."
+          git clone --depth 1 --branch "${WT_VER}" https://github.com/wiredtiger/wiredtiger.git D:/wt
+
+      - name: Build WiredTiger Shared DLL via MSVC (/MT Static CRT)
+        run: |
+          cd D:/wt
+          mkdir build && cd build
+
+          # Configure CMake with MSVC, MultiThreaded (/MT) static CRT, and shared DLL target
+          cmake .. -G "Visual Studio 17 2022" -A x64 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded \
+            -DENABLE_SHARED=1 \
+            -DENABLE_STATIC=0 \
+            -DENABLE_PYTHON=0 \
+            -DENABLE_SNAPPY=0 \
+            -DENABLE_LZ4=0 \
+            -DENABLE_ZLIB=0 \
+            -DENABLE_ZSTD=0
+
+          cmake --build . --config Release --target wiredtiger
+
+      - name: Generate MinGW-compatible Import Library (.dll.a)
+        run: |
+          DLL_PATH=$(find D:/wt/build -name "wiredtiger.dll" | head -n 1)
+          if [ -z "$DLL_PATH" ]; then
+            echo "Error: wiredtiger.dll not found in build tree"
+            exit 1
+          fi
+          echo "Found DLL at: $DLL_PATH"
+          mkdir -p pkg/storage/wiredtiger/lib/windows_amd64/include
+
+          # Copy DLL and MSVC headers
+          cp -v "$DLL_PATH" pkg/storage/wiredtiger/lib/windows_amd64/
+          find D:/wt -name "wiredtiger.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \;
+          find D:/wt -name "wiredtiger_ext.h" -exec cp -v {} pkg/storage/wiredtiger/lib/windows_amd64/include/ \; 2>/dev/null || true
+
+          cd pkg/storage/wiredtiger/lib/windows_amd64
+          # Generate DEF file and MinGW-compatible import library
+          gendef wiredtiger.dll
+          dlltool -d wiredtiger.def -l libwiredtiger.dll.a -D wiredtiger.dll
+          ls -lh
+
+      - name: Compile LionSQL Windows Executable with WiredTiger Cgo
+        run: |
+          export PATH="/c/msys64/mingw64/bin:$PATH"
+          export CC="x86_64-w64-mingw32-gcc"
+          export CGO_ENABLED=1
+          export GOOS=windows
+          export GOARCH=amd64
+
+          mkdir -p bin
+          echo "Building lionsql.exe with -tags wiredtiger..."
+          go build -tags wiredtiger -v -ldflags "-s -w" -buildvcs=false -o bin/lionsql.exe ./cmd/lionsql
+
+          # Copy DLL next to executable for execution tests
+          cp pkg/storage/wiredtiger/lib/windows_amd64/wiredtiger.dll bin/
+          ls -lh bin/
+
+      - name: Verify Windows Binary & WiredTiger Engine
+        run: |
+          export PATH="/c/msys64/mingw64/bin:$PATH:$(pwd)/bin"
+          ./bin/lionsql.exe --version || true
+          ./bin/lionsql.exe --doctor || true
+
+          echo "Running WiredTiger storage unit tests on Windows..."
+          export CGO_ENABLED=1
+          export CC="x86_64-w64-mingw32-gcc"
+          go test -tags wiredtiger -v -run TestWT_ ./pkg/storage/wiredtiger/...
+
+      - name: Upload Windows WiredTiger Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lionsql-windows-wiredtiger-x64
+          path: |
+            bin/lionsql.exe
+            pkg/storage/wiredtiger/lib/windows_amd64/wiredtiger.dll
+            pkg/storage/wiredtiger/lib/windows_amd64/libwiredtiger.dll.a
+            pkg/storage/wiredtiger/lib/windows_amd64/include/wiredtiger.h

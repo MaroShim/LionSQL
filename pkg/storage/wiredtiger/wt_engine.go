@@ -3,8 +3,10 @@
 package wiredtiger
 
 /*
-#cgo CFLAGS: -I/opt/homebrew/include -I/usr/local/include
-#cgo LDFLAGS: -L/opt/homebrew/lib -L/usr/local/lib -lwiredtiger
+#cgo !windows CFLAGS: -I/opt/homebrew/include -I/usr/local/include -I/usr/include
+#cgo !windows LDFLAGS: -L/opt/homebrew/lib -L/usr/local/lib -L/usr/lib -lwiredtiger
+#cgo windows,amd64 CFLAGS: -I${SRCDIR}/lib/windows_amd64/include
+#cgo windows,amd64 LDFLAGS: -L${SRCDIR}/lib/windows_amd64 -lwiredtiger
 
 #include <stdlib.h>
 #include <string.h>
@@ -601,6 +603,10 @@ func (e *Engine) SetSessionMax(max int) {
 }
 
 func (e *Engine) Open(dir string) error {
+	if err := EnsureWiredTigerDLL(); err != nil {
+		return fmt.Errorf("failed to initialize wiredtiger dll: %w", err)
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
