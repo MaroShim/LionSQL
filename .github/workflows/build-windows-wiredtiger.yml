@@ -98,16 +98,7 @@ jobs:
           cd pkg/storage/wiredtiger/lib/windows_amd64
 
           # Extract exports from DLL using dumpbin and generate MinGW libwiredtiger.dll.a
-          python -c "
-import subprocess
-out = subprocess.check_output(['dumpbin', '/EXPORTS', 'wiredtiger.dll']).decode('utf-8', errors='ignore')
-lines = ['EXPORTS\n']
-for line in out.splitlines():
-    parts = line.strip().split()
-    if len(parts) >= 4 and parts[0].isdigit():
-        lines.append(f'    {parts[3]}\n')
-open('wiredtiger.def', 'w').writelines(lines)
-"
+          python "${GITHUB_WORKSPACE}/scripts/generate_wt_def.py" wiredtiger.dll wiredtiger.def
           cat wiredtiger.def
           dlltool -d wiredtiger.def -l libwiredtiger.dll.a -D wiredtiger.dll
           ls -lh
