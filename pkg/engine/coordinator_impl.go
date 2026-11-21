@@ -83,6 +83,10 @@ type Coordinator struct {
 	dbMailInitErr        error
 	dbMailItemCounter    atomic.Int64
 	dbMailLogCounter     atomic.Int64
+	agentInitOnce        sync.Once
+	agentInitErr         error
+	agentHistoryCounter  atomic.Int64
+	agentScheduleCounter atomic.Int64
 	stopCh               chan struct{}
 	bgWg                 sync.WaitGroup
 	closeOnce            sync.Once

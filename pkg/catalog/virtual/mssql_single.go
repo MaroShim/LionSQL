@@ -1057,28 +1057,8 @@ func GenerateSysCatalogRows(src Source, norm string, currDb string) (columns []s
 		allRows = []map[string]any{}
 		return columns, allRows, true, nil
 
-	case "sysjobs", "dbo.sysjobs", "sys.sysjobs":
-		columns = []string{"job_id", "name", "enabled", "description", "start_step_id", "category_id", "owner_sid", "notify_level_eventlog", "notify_level_email", "date_created", "date_modified", "version_number"}
-		allRows = []map[string]any{}
-		return columns, allRows, true, nil
-
 	case "syscategories", "dbo.syscategories", "sys.syscategories":
 		columns = []string{"category_id", "category_type", "name"}
-		allRows = []map[string]any{}
-		return columns, allRows, true, nil
-
-	case "sysjobsteps", "dbo.sysjobsteps", "sys.sysjobsteps":
-		columns = []string{"job_id", "step_id", "step_name", "subsystem", "command", "flags"}
-		allRows = []map[string]any{}
-		return columns, allRows, true, nil
-
-	case "sysschedules", "dbo.sysschedules", "sys.sysschedules":
-		columns = []string{"schedule_id", "schedule_uid", "name", "enabled", "freq_type", "freq_interval"}
-		allRows = []map[string]any{}
-		return columns, allRows, true, nil
-
-	case "sysjobhistory", "dbo.sysjobhistory", "sys.sysjobhistory":
-		columns = []string{"instance_id", "job_id", "step_id", "step_name", "sql_message_id", "sql_severity", "message", "run_status", "run_date", "run_time", "run_duration"}
 		allRows = []map[string]any{}
 		return columns, allRows, true, nil
 

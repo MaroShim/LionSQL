@@ -970,6 +970,16 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 		return s.execSpUnprepare(args, start, cs)
 	case "sp_send_dbmail":
 		return s.execSpSendDbMail(args, rawArgs, start, cs)
+	case "sp_add_job":
+		return s.execSpAddJob(args, rawArgs, start, cs)
+	case "sp_add_jobstep":
+		return s.execSpAddJobStep(args, rawArgs, start, cs)
+	case "sp_add_jobschedule":
+		return s.execSpAddJobSchedule(args, rawArgs, start, cs)
+	case "sp_start_job":
+		return s.execSpStartJob(args, rawArgs, start, cs)
+	case "sp_delete_job":
+		return s.execSpDeleteJob(args, rawArgs, start, cs)
 	case "sp_babelfish_configure":
 		// Tolerant virtual No-Op for Babelfish environment configuration
 		return &QueryResult{

@@ -57,12 +57,8 @@ var sysViewAliases = map[string]struct{}{
 	"syspolicy_target_set_levels": {}, "sys.syspolicy_target_set_levels": {}, "dbo.syspolicy_target_set_levels": {},
 	"syspolicy_policy_execution_history": {}, "sys.syspolicy_policy_execution_history": {}, "dbo.syspolicy_policy_execution_history": {},
 	"syspolicy_policy_execution_history_details": {}, "sys.syspolicy_policy_execution_history_details": {}, "dbo.syspolicy_policy_execution_history_details": {},
-	// SQL Server Agent / msdb catalog views
-	"sysjobs": {}, "sys.sysjobs": {}, "dbo.sysjobs": {},
+	// SQL Server Agent / msdb catalog views (syscategories, sysalerts, sysoperators are virtual stubs)
 	"syscategories": {}, "sys.syscategories": {}, "dbo.syscategories": {},
-	"sysjobsteps": {}, "sys.sysjobsteps": {}, "dbo.sysjobsteps": {},
-	"sysschedules": {}, "sys.sysschedules": {}, "dbo.sysschedules": {},
-	"sysjobhistory": {}, "sys.sysjobhistory": {}, "dbo.sysjobhistory": {},
 	"sysalerts": {}, "sys.sysalerts": {}, "dbo.sysalerts": {},
 	"sysoperators": {}, "sys.sysoperators": {}, "dbo.sysoperators": {},
 	// SQL Server Backup & Restore / msdb catalog views
