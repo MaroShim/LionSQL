@@ -26,7 +26,8 @@ func ResolvePreparedProcedure(query string, cat *catalog.Catalog, cache *runtime
 	if cat == nil {
 		return nil
 	}
-	trimmed := strings.TrimSpace(query)
+	trimmed := strings.TrimRight(strings.TrimSpace(query), ";")
+	trimmed = strings.TrimSpace(trimmed)
 	if !sqlutil.HasAnyPrefixKeyword(trimmed, "EXEC", "EXECUTE", "CALL") {
 		return nil
 	}
@@ -36,8 +37,8 @@ func ResolvePreparedProcedure(query string, cat *catalog.Catalog, cache *runtime
 		return nil
 	}
 	lowerName := strings.ToLower(procName)
-	if strings.HasPrefix(lowerName, "sp_") {
-		// System procedures have custom logic; do not bypass to generic VDBE
+	if isBuiltinSystemProcedure(lowerName) {
+		// Built-in system procedures have custom coordinator logic; do not bypass to generic VDBE
 		return nil
 	}
 
@@ -121,6 +122,12 @@ func ResolvePreparedProcedure(query string, cat *catalog.Catalog, cache *runtime
 	}
 
 	if maxSlot < 0 {
+		if len(args) == 0 {
+			return &PreparedProcInfo{
+				ProcName: procName,
+				Program:  prog,
+			}
+		}
 		return nil
 	}
 
@@ -157,4 +164,18 @@ func extractPlaceholderIndex(val string, defaultPos int) int {
 		return defaultPos
 	}
 	return -1
+}
+
+func isBuiltinSystemProcedure(lowerName string) bool {
+	switch lowerName {
+	case "sp_help", "sp_spaceused", "sp_who", "sp_who2", "sp_lock", "sp_rename",
+		"sp_tables", "sp_columns", "sp_pkeys", "sp_fkeys", "sp_reset_connection",
+		"sp_executesql", "sp_prepare", "sp_execute", "sp_unprepare", "sp_send_dbmail",
+		"sp_add_job", "sp_add_jobstep", "sp_add_jobschedule", "sp_start_job", "sp_delete_job",
+		"sp_babelfish_configure", "sp_syspolicy_configure", "sp_syspolicy_set_config_enabled",
+		"sp_syspolicy_set_config_history_retention":
+		return true
+	default:
+		return false
+	}
 }

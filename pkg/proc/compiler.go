@@ -1262,6 +1262,10 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		for _, p := range s.Projections {
 			if p.Alias != "" {
 				projNames = append(projNames, p.Alias)
+			} else if colRef, ok := p.Expr.(*ColumnRefExpr); ok {
+				projNames = append(projNames, colRef.Name)
+			} else if p.Expr != nil {
+				projNames = append(projNames, p.Expr.String())
 			}
 		}
 		c.emit(OpRelQuery, 0, 0, 0, &RelQueryData{

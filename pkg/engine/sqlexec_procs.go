@@ -33,6 +33,8 @@ func unwrapSQLString(s string) string {
 // ParseProcArgs parses procedure name and argument tokens from EXEC / CALL query string.
 func ParseProcArgs(raw string) (string, []string) {
 	raw = strings.TrimSpace(raw)
+	raw = strings.TrimRight(raw, ";")
+	raw = strings.TrimSpace(raw)
 	if rem, ok := sqlutil.TrimAnyPrefixKeyword(raw, "EXECUTE", "EXEC", "CALL"); ok {
 		raw = rem
 	}

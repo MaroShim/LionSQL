@@ -645,6 +645,9 @@ func (p *Program) ResultColumns() []string {
 		if rowData, ok := aux.(*ResultRowData); ok && len(rowData.Columns) > 0 {
 			return rowData.Columns
 		}
+		if relData, ok := aux.(*RelQueryData); ok && len(relData.Projections) > 0 {
+			return relData.Projections
+		}
 		if pointData, ok := aux.(*PointSelectData); ok && len(pointData.Projections) > 0 {
 			var cols []string
 			for _, pr := range pointData.Projections {

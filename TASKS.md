@@ -224,6 +224,7 @@
 | `DONE` | **`DEFECT-PG-CATALOG-PG-POLICY-1`** | `v1.10.0` | Catalog | P2 | psql \d 실행을 위한 pg_catalog.pg_policy 가상 뷰 누락 보완 | [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go) |  |
 | `DONE` | **`DEFECT-PG-ESCAPE-STRING-LITERAL-1`** | `v1.10.0` | Engine | P2 | PostgreSQL E'...' 이스케이프 문자열 파싱 결함 및 psql \l 호환성 복구 | [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go) |  |
 | `DONE` | **`DEFECT-PG-JOIN-ALIAS-COLUMN-LIST-1`** | `v1.10.0` | Engine | P2 | JOIN/FROM 절 테이블/함수 컬럼 별칭 리스트 alias(col1, col2) 파싱 결함 (psql \dx 호환성) | [`docs/`](docs/) |  |
+| `DONE` | **`DEFECT-PGWIRE-EXTENDED-QUERY-MULTIPLE-RESULT-SETS-1`** | `v0.94.0` | Protocol | P2 | PGWire Extended Query Multiple Result Sets Dropping Defect Remediation | [`notes/PGWIRE_EXTENDED_QUERY_MULTIPLE_RESULT_SETS_PLAN.ko.md`](notes/PGWIRE_EXTENDED_QUERY_MULTIPLE_RESULT_SETS_PLAN.ko.md) |  |
 | `DONE` | **`DEFECT-PROC-EVAL-BETWEEN-CASE-INSENSITIVE-COLLATION-1`** | `1.0-GA` | Engine | P1 | proc/eval.go BETWEEN 문자열 평가 시 대소문자 무시(CI) Collation 미반영 결함 | [`test/spec_defects/spec_defect_collation_between_test.go`](test/spec_defects/spec_defect_collation_between_test.go) |  |
 | `DONE` | **`DEFECT-PROC-EVAL-BIT-IN-LIST-1`** | `1.0-GA` | Engine | P1 | BIT 타입 컬럼 IN (0, 1) 평가 시 proc/eval.go 문자열 'false'/'0' 불일치 결함 | [`test/spec_defects/spec_defect_122_test.go`](test/spec_defects/spec_defect_122_test.go) |  |
 | `DONE` | **`DEFECT-TDS-RPC-MULTIPLE-RESULT-SETS-1`** | `v0.94.0` | Protocol | P2 | TDS RPC Multiple Result Sets Dropping Defect Remediation | [`notes/TDS_RPC_MULTIPLE_RESULT_SETS_PLAN.ko.md`](notes/TDS_RPC_MULTIPLE_RESULT_SETS_PLAN.ko.md) |  |
@@ -2784,6 +2785,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-22 03:47:09
 - **Milestone**: `v1.10.0`
 - **Plan Doc**: [`docs/`](docs/)
+
+---
+
+### [DONE] PGWire Extended Query Multiple Result Sets Dropping Defect Remediation `DEFECT-PGWIRE-EXTENDED-QUERY-MULTIPLE-RESULT-SETS-1`
+- **Domain**: Protocol | **Priority**: P2 | **Updated**: 2026-11-22 11:42:33
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`notes/PGWIRE_EXTENDED_QUERY_MULTIPLE_RESULT_SETS_PLAN.ko.md`](notes/PGWIRE_EXTENDED_QUERY_MULTIPLE_RESULT_SETS_PLAN.ko.md)
 
 ---
 

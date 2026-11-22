@@ -1664,6 +1664,27 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		}
 	}
 
+	if stmt != nil && stmt.Program != nil {
+		if cols := stmt.Program.ResultColumns(); len(cols) > 0 {
+			colOIDs := s.resolveColumnOIDs(stmt.Query, cols, nil)
+			colMetas := make([]ColumnMeta, len(cols))
+			for i, c := range cols {
+				var oid int32
+				if i < len(colOIDs) {
+					oid = colOIDs[i]
+				}
+				if oid == 0 {
+					oid = 25
+				}
+				colMetas[i] = ColumnMeta{Name: c, DataType: oid}
+			}
+			recordCols(colMetas)
+			applyFormats(colMetas)
+			_ = WriteRowDescription(conn, colMetas)
+			return
+		}
+	}
+
 	if sqlutil.HasPrefixKeyword(query, "EXEC") || sqlutil.HasPrefixKeyword(query, "CALL") {
 		procName, _ := engine.ParseProcArgs(query)
 		if procName != "" {
@@ -1975,9 +1996,47 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 		return
 	}
 
-	// 4. All rows delivered; send CommandComplete ('C')
+	// 4. All rows delivered for initial result set; send CommandComplete ('C')
 	tag := formatPgCommandComplete(res.Command, res.RowsAffected, totalRows)
 	_ = WriteCommandComplete(bw, tag)
+
+	// 5. If this portal execution produced multiple sequential result sets (e.g. stored procedure with multiple SELECTs),
+	// stream each subsequent result set: RowDescription ('T') -> DataRow ('D') -> CommandComplete ('C')
+	for cur := res.Next; cur != nil; cur = cur.Next {
+		if len(cur.Columns) > 0 {
+			var curSampleRow map[string]any
+			if len(cur.Rows) > 0 {
+				curSampleRow = cur.Rows[0]
+			}
+			curOIDs := s.resolveColumnOIDs(queryForOIDs, cur.Columns, curSampleRow)
+			curCols := make([]ColumnMeta, len(cur.Columns))
+			for i, c := range cur.Columns {
+				fmtCode := int16(0)
+				if len(portal.ResultFormats) == 1 && portal.ResultFormats[0] == 1 {
+					fmtCode = 1
+				} else if i < len(portal.ResultFormats) && portal.ResultFormats[i] == 1 {
+					fmtCode = 1
+				}
+				var oid int32 = 25
+				if i < len(curOIDs) {
+					oid = curOIDs[i]
+				}
+				curCols[i] = ColumnMeta{
+					Name:     c,
+					DataType: oid,
+					Format:   fmtCode,
+				}
+			}
+			_ = WriteRowDescription(bw, curCols)
+			_ = writePgDataRows(bw, cur.Columns, curOIDs, portal.ResultFormats, cur.Rows, cur.Values, false)
+			curTag := formatPgCommandComplete(cur.Command, cur.RowsAffected, len(cur.Rows))
+			_ = WriteCommandComplete(bw, curTag)
+		} else {
+			curTag := formatPgCommandComplete(cur.Command, cur.RowsAffected, len(cur.Rows))
+			_ = WriteCommandComplete(bw, curTag)
+		}
+	}
+
 	_ = bw.Flush()
 }
 
