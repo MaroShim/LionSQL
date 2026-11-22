@@ -320,4 +320,73 @@ END;`
 	}
 }
 
+func TestResolvePreparedProcedure_DualPath_EdgeCases(t *testing.T) {
+	memEng := memengine.New()
+	cat := catalog.New(memEng)
+	cache := runtime.NewPlanCache()
+
+	// 1. User procedure starting with "sp_" and 0 parameters
+	_ = cat.RegisterProcedure(&catalog.Procedure{
+		Name: "sp_user_zero_param",
+		Body: `CREATE PROCEDURE sp_user_zero_param AS BEGIN SELECT 1 AS a; END;`,
+	})
+
+	// 2. User procedure starting with "sp_" and parameters
+	_ = cat.RegisterProcedure(&catalog.Procedure{
+		Name: "sp_user_with_params",
+		Params: []catalog.ParamDef{
+			{Name: "@val", Type: storage.TypeInt},
+		},
+		Body: `CREATE PROCEDURE sp_user_with_params @val INT AS BEGIN SELECT @val * 2 AS res; END;`,
+	})
+
+	// Case A: 0-parameter with sp_ prefix and trailing semicolon
+	t.Run("Zero Param with sp_ prefix and semicolon", func(t *testing.T) {
+		info := ResolvePreparedProcedure("EXEC sp_user_zero_param;", cat, cache)
+		if info == nil {
+			t.Fatalf("expected non-nil info for zero param sp_user_zero_param")
+		}
+		if info.ProcName != "sp_user_zero_param" {
+			t.Errorf("expected sp_user_zero_param, got %s", info.ProcName)
+		}
+		if info.Program == nil {
+			t.Fatalf("expected non-nil program")
+		}
+	})
+
+	// Case B: CALL syntax with parentheses and semicolon
+	t.Run("CALL syntax with sp_ prefix and parentheses", func(t *testing.T) {
+		info := ResolvePreparedProcedure("CALL sp_user_zero_param();", cat, cache)
+		if info == nil {
+			t.Fatalf("expected non-nil info for CALL sp_user_zero_param()")
+		}
+		if info.ProcName != "sp_user_zero_param" {
+			t.Errorf("expected sp_user_zero_param, got %s", info.ProcName)
+		}
+	})
+
+	// Case C: Parameterized procedure with sp_ prefix and $1 placeholder
+	t.Run("Parameterized sp_ procedure with $1", func(t *testing.T) {
+		info := ResolvePreparedProcedure("EXEC sp_user_with_params $1;", cat, cache)
+		if info == nil {
+			t.Fatalf("expected non-nil info for sp_user_with_params $1")
+		}
+		if len(info.ParamNames) != 1 || info.ParamNames[0] != "@val" {
+			t.Errorf("expected [@val], got %v", info.ParamNames)
+		}
+	})
+
+	// Case D: True built-in system procedure MUST return nil (fallback to coordinator)
+	t.Run("Builtin system proc sp_help returns nil", func(t *testing.T) {
+		info := ResolvePreparedProcedure("EXEC sp_help;", cat, cache)
+		if info != nil {
+			t.Fatalf("expected nil for builtin sp_help, got %+v", info)
+		}
+		info2 := ResolvePreparedProcedure("EXEC sp_executesql @stmt=$1;", cat, cache)
+		if info2 != nil {
+			t.Fatalf("expected nil for builtin sp_executesql, got %+v", info2)
+		}
+	})
+}
+
 

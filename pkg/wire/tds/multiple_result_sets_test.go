@@ -356,3 +356,150 @@ func TestTDS_BatchError_DriverNavigation(t *testing.T) {
 	}
 }
 
+// TestTDS_MultipleResultSets_DualPath_BatchAndRPC_Symmetry enforces strict wire protocol
+// symmetry between SQL Batch (PacketSQLBatch 0x01) and RPC (PacketRPC 0x03) paths when executing
+// stored procedures that return multiple result sets.
+func TestTDS_MultipleResultSets_DualPath_BatchAndRPC_Symmetry(t *testing.T) {
+	db, cleanup := openTdsServerForMultiResults(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	procSQL := `
+CREATE PROCEDURE sp_dual_path_symmetry
+    @seed INT
+AS
+BEGIN
+    SELECT @seed * 1 AS id, 'first_set' AS tag;
+    SELECT @seed * 2 AS id, 'second_set' AS tag;
+    SELECT @seed * 3 AS id, 'third_set' AS tag;
+END;
+`
+	if _, err := db.ExecContext(ctx, procSQL); err != nil {
+		t.Fatalf("CREATE PROCEDURE failed: %v", err)
+	}
+
+	validateStream := func(rows *sql.Rows, mode string, seed int) {
+		defer rows.Close()
+
+		// Result Set 1
+		if !rows.Next() {
+			t.Fatalf("[%s] expected row in set 1", mode)
+		}
+		var id int
+		var tag string
+		if err := rows.Scan(&id, &tag); err != nil || id != seed*1 || tag != "first_set" {
+			t.Fatalf("[%s] set 1 scan mismatch: id=%d, tag=%s, err=%v", mode, id, tag, err)
+		}
+		if rows.Next() {
+			t.Fatalf("[%s] unexpected extra row in set 1", mode)
+		}
+
+		// Result Set 2
+		if !rows.NextResultSet() {
+			t.Fatalf("[%s] expected NextResultSet() == true for set 2", mode)
+		}
+		if !rows.Next() {
+			t.Fatalf("[%s] expected row in set 2", mode)
+		}
+		if err := rows.Scan(&id, &tag); err != nil || id != seed*2 || tag != "second_set" {
+			t.Fatalf("[%s] set 2 scan mismatch: id=%d, tag=%s, err=%v", mode, id, tag, err)
+		}
+		if rows.Next() {
+			t.Fatalf("[%s] unexpected extra row in set 2", mode)
+		}
+
+		// Result Set 3
+		if !rows.NextResultSet() {
+			t.Fatalf("[%s] expected NextResultSet() == true for set 3", mode)
+		}
+		if !rows.Next() {
+			t.Fatalf("[%s] expected row in set 3", mode)
+		}
+		if err := rows.Scan(&id, &tag); err != nil || id != seed*3 || tag != "third_set" {
+			t.Fatalf("[%s] set 3 scan mismatch: id=%d, tag=%s, err=%v", mode, id, tag, err)
+		}
+		if rows.Next() {
+			t.Fatalf("[%s] unexpected extra row in set 3", mode)
+		}
+
+		// Terminus
+		if rows.NextResultSet() {
+			t.Fatalf("[%s] expected no more result sets after set 3", mode)
+		}
+	}
+
+	// Path A: SQL Batch invocation
+	batchRows, err := db.QueryContext(ctx, "EXEC sp_dual_path_symmetry @seed = 10;")
+	if err != nil {
+		t.Fatalf("Batch QueryContext failed: %v", err)
+	}
+	validateStream(batchRows, "SQL_Batch", 10)
+
+	// Path B: RPC direct invocation
+	rpcRows, err := db.QueryContext(ctx, "sp_dual_path_symmetry", sql.Named("seed", 20))
+	if err != nil {
+		t.Fatalf("RPC QueryContext failed: %v", err)
+	}
+	validateStream(rpcRows, "RPC_FastPath", 20)
+}
+
+// TestTDS_MultipleResultSets_RPC_ZeroParamProc validates that zero-parameter stored procedures
+// returning multiple result sets function identically across RPC execution.
+func TestTDS_MultipleResultSets_RPC_ZeroParamProc(t *testing.T) {
+	db, cleanup := openTdsServerForMultiResults(t)
+	defer cleanup()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	procSQL := `
+CREATE PROCEDURE sp_zero_param_multiset
+AS
+BEGIN
+    SELECT 111 AS code, 'status_ok' AS msg;
+    SELECT 222 AS code, 'status_done' AS msg;
+END;
+`
+	if _, err := db.ExecContext(ctx, procSQL); err != nil {
+		t.Fatalf("CREATE PROCEDURE failed: %v", err)
+	}
+
+	// Executed via RPC without parameters
+	rows, err := db.QueryContext(ctx, "sp_zero_param_multiset")
+	if err != nil {
+		t.Fatalf("RPC QueryContext zero-param failed: %v", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		t.Fatalf("expected row in set 1")
+	}
+	var code int
+	var msg string
+	if err := rows.Scan(&code, &msg); err != nil || code != 111 || msg != "status_ok" {
+		t.Fatalf("set 1 scan failed: code=%d, msg=%s, err=%v", code, msg, err)
+	}
+	if rows.Next() {
+		t.Fatalf("unexpected row in set 1")
+	}
+
+	if !rows.NextResultSet() {
+		t.Fatalf("expected NextResultSet() == true for set 2")
+	}
+	if !rows.Next() {
+		t.Fatalf("expected row in set 2")
+	}
+	if err := rows.Scan(&code, &msg); err != nil || code != 222 || msg != "status_done" {
+		t.Fatalf("set 2 scan failed: code=%d, msg=%s, err=%v", code, msg, err)
+	}
+	if rows.Next() {
+		t.Fatalf("unexpected row in set 2")
+	}
+
+	if rows.NextResultSet() {
+		t.Fatalf("expected no more result sets")
+	}
+}
+
