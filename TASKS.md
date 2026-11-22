@@ -6,7 +6,7 @@
 > 모든 태스크 추가, 상태 변경, 마일스톤 수정은 반드시 `./bin/sprint` CLI를 통해서만 수행해야 합니다.
 > 수정 후 `./bin/sprint backup TASKS.md` 명령으로 이 문서를 동기화하십시오.
 
-> - **Last Synced**: 2026-11-21
+> - **Last Synced**: 2026-11-22
 > - **Primary Source of Truth (SSOT)**: SQLite `sprint_tasks` Table
 > - **Backup File**: Auto-synced on task update & Git commit
 
@@ -28,6 +28,7 @@
 | `PENDING` | **`ARCH-PARALLEL-SCAN-1`** | `v1.99.0` | Engine | P2 | 멀티코어 병렬 분석 쿼리 실행기 (ParallelSeqScan) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `v0.95.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
+| `PENDING` | **`ARCH-UNIFIED-TUPLE-PROTOCOL-1`** | `v1.10.0` | Architecture | P2 | 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-UNIFIED-TX-MANAGER`** | `1.0-GA` | ENGINE | P1 | Unified TxManager (DDL + DML) Architecture | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** |  | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-WT-FILE-LAYOUT-1`** | `v0.94.0` | Storage | P2 | WiredTiger 물리 파일 레이아웃(테이블별 파일 vs 단일 파일) 및 세컨더리 인덱스 멀티플렉싱(인덱스별 vs 테이블당 1개 vs 테이블 파일 합본) 아키텍처 설계 및 전환 | [`notes/plans/WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING_PLAN.ko.md`](notes/plans/WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING_PLAN.ko.md) |  |
@@ -298,6 +299,7 @@
 | `DONE` | **`FIX-DATEDIFF-BOUNDARY-CROSSING-1`** | `1.0-GA` | Engine | P2 | T-SQL DATEDIFF datepart 경계선 통과 계산 스펙 준수 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DDL-DEFAULT-CHECK-1`** | `1.0-GA` | Engine | P2 | CREATE TABLE 컬럼 정의에서 DEFAULT 절 뒤 CHECK 제약조건 동시 지정 시 CHECK 누락 수정 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DECIMAL-LITERAL-ARITHMETIC-PRECISION-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
+| `PENDING` | **`FIX-DECIMAL-OVERFLOW-AND-LIKE-BRACKET-1`** | `v0.95.0` | Storage | P1 | 대형 Decimal to BigInt Overflow 가드 및 LIKE 브래킷 이스케이프 정합성 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-DEFAULT-EXPR-DYNAMIC-EVAL-1`** | `1.0-GA` | Engine | P2 | DEFAULT 표현식(NEWID, GETDATE 등) 파싱 시점 캐싱 폐지 및 INSERT 실행 시 동적 평가 보장 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-DIV-BY-ZERO-ERROR-VISIBILITY-1`** | `1.0-GA` | Engine | P2 | 나눗셈(/) 0 나누기 시 명시적 division by zero 에러 반환 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-DML-OUTPUT-INTO-TABLE-VAR-1`** | `v0.94.0` | Engine | P1 | INSERT ... OUTPUT ... INTO @table_variable 데이터 사일런트 유실 패치 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
@@ -329,12 +331,14 @@
 | `DONE` | **`FIX-OPEN-ERROR-CURSOR-LEAK-1`** |  | Execution | P1 | Open() 에러 시 하위 자식 이터레이터/스토리지 커서 미정리 누수 결함 수정 |  |  |
 | `DONE` | **`FIX-OPEN-ERROR-ITERATOR-LEAK-ALL-1`** | `1.0-GA` | Execution | P1 | Volcano 이터레이터 전반(Window, Sort) Open 에러 시 하위 커서 정리 보장 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-ORDERBY-INVALID-COLUMN-AND-ORDINAL-1`** | `1.0-GA` | Planner | P2 | ORDER BY 절 비유효 컬럼 및 범위 초과 서수 유효성 검증 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
+| `PENDING` | **`FIX-PAGINATION-TOP-PERCENT-PIPELINE-1`** | `v0.95.0` | Engine | P1 | TOP / LIMIT / OFFSET 단일 파이프라인 및 TOP n PERCENT 동적 행 계산 지원 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`** | `1.0-GA` | Storage | P1 | PITR 기준 백업 시점/LSN 불변성 검증, 백업-WAL LSN 경계 필터링 및 LSN 연속성(Gap) 누락 검출 보완 | [`notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md`](notes/PRE_RELEASE_AUDIT_FINDINGS.ko.md) |  |
 | `DONE` | **`FIX-PITR-WAL-COMPOSITE-PK-1`** | `1.0-GA` | Storage | P2 | PITR WAL 재생 시 복합 PK 테이블 UPDATE/DELETE 복구 유실 수정 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-PROC-CTE-EPHEMERAL-DISPATCH-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 내부 CTE(WITH) EphemeralTable 바인딩 연동 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-PROC-DUPLICATE-VARIABLE-DECLARATION-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-EXEC-RETURN-VAR-1`** |  | Engine | P1 | EXEC @rc = sp_name ... 프로시저 반환 상태 코드(@return_status) 변수 캡처 바인딩 지원 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-PROC-LOCAL-TEMP-TABLE-LIFECYCLE-1`** | `v0.94.0` | Engine | P2 | 프로시저 로컬 #temp 테이블 프로시저 종료 시 자동 파기 훅 구현 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
+| `PENDING` | **`FIX-PROC-OUTPUT-VAR-COERCE-1`** | `v0.95.0` | Engine | P1 | 세션 변수 및 프로시저 OUTPUT 파라미터 정적 타입 CoerceValue 강제 파이프라인 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
 | `DONE` | **`FIX-PROC-PARAM-SHADOWING-DUPLICATE-CHECK-1`** | `v0.94.0` | Engine | P2 | 프로시저 매개변수와 동일 이름 로컬 변수 재선언 차단(Msg 134) | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-PROC-PARSER-MERGE-TOKEN-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 본문 MERGE INTO 구문 파싱 및 컴파일 허용 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-PROC-PARSER-STATIC-DDL-1`** | `v0.94.0` | Engine | P2 | Stored Procedure 본문 정적 DDL(ALTER TABLE 등) 파싱 허용 | [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md) |  |
@@ -700,6 +704,13 @@
 - **Domain**: ARCHITECTURE | **Priority**: P2 | **Updated**: 2026-11-16 14:21:00
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md)
+
+---
+
+### [PENDING] 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 `ARCH-UNIFIED-TUPLE-PROTOCOL-1`
+- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-22 00:33:19
+- **Milestone**: `v1.10.0`
+- **Plan Doc**: [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md)
 
 ---
 
@@ -3354,6 +3365,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] 대형 Decimal to BigInt Overflow 가드 및 LIKE 브래킷 이스케이프 정합성 `FIX-DECIMAL-OVERFLOW-AND-LIKE-BRACKET-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-22 00:33:19
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md)
+
+---
+
 ### [DONE] DEFAULT 표현식(NEWID, GETDATE 등) 파싱 시점 캐싱 폐지 및 INSERT 실행 시 동적 평가 보장 `FIX-DEFAULT-EXPR-DYNAMIC-EVAL-1`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
 - **Milestone**: `1.0-GA`
@@ -3570,6 +3588,13 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 
 ---
 
+### [PENDING] TOP / LIMIT / OFFSET 단일 파이프라인 및 TOP n PERCENT 동적 행 계산 지원 `FIX-PAGINATION-TOP-PERCENT-PIPELINE-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-22 00:33:19
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md)
+
+---
+
 ### [DONE] PITR 기준 백업 시점/LSN 불변성 검증, 백업-WAL LSN 경계 필터링 및 LSN 연속성(Gap) 누락 검출 보완 `FIX-PITR-BASE-BOUNDARY-AND-LSN-GAP-1`
 - **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-16 14:21:02
 - **Milestone**: `1.0-GA`
@@ -3608,6 +3633,13 @@ MemoryCompact 기본값 전환(af21018)에 따른 2단계 Audit 결함 수정 (�
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-19 02:01:48
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md`](notes/reports/20261119_LIVE_AUDIT_REPORT.ko.md)
+
+---
+
+### [PENDING] 세션 변수 및 프로시저 OUTPUT 파라미터 정적 타입 CoerceValue 강제 파이프라인 `FIX-PROC-OUTPUT-VAR-COERCE-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-22 00:33:19
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md)
 
 ---
 
