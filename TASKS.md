@@ -420,6 +420,7 @@
 | `DONE` | **`GA-REGEX-FINAL-3`** |  | Engine | P2 | 쿼리 실행 런타임 LIKE 정규식 100% 완전 제거 | [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`GA-RELEASE-AUDIT-1`** | `1.0-GA` | Durability | P2 | 1.0 GA 직전 릴리스 게이트 (Dual-AI Audit Diff 점검, Version SSOT 동기화, release.sh 태깅) | [`doc/RELEASE_AUDIT_PROTOCOL.ko.md`](doc/RELEASE_AUDIT_PROTOCOL.ko.md) |  |
 | `PENDING` | **`GA-VALID-3`** | `1.0-GA` | Ecosystem | P2 | 연동 앱 섀도 모드 실운영 도그푸딩 (Vaultwarden, Umami, Answer 등) |  |  |
+| `DONE` | **`GATE-PROTOCOL-SYMMETRY-1`** | `1.0-GA` | Wire | P1 | Dual-Path Protocol Symmetry Universal Gate Test Suite (TDS Batch/RPC & PGWire Simple/Extended) | [`notes/DUAL_PATH_PROTOCOL_SYMMETRY_GATE_PLAN.ko.md`](notes/DUAL_PATH_PROTOCOL_SYMMETRY_GATE_PLAN.ko.md) |  |
 | `DONE` | **`GATE5-TSQL-1000-SUITES`** |  | Engine | P1 | Gate 5 T-SQL 저장 프로시저 및 AWS Babelfish 오라클 1,000개 스위트 확장 (7,312 쿼리, 21,248 레코드 100% PASS) | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`GATE5-TSQL-3000-SUITES`** |  | Engine | P1 | Gate 5 T-SQL 저장 프로시저 및 AWS Babelfish 오라클 3,000개 스위트 확장 (13,418 쿼리, 47,660 레코드 100% PASS) | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`INTEG-ANSWER-1`** |  | Durability | P2 | Apache Answer (Q&A 지식베이스) |  |  |
@@ -4194,6 +4195,13 @@ v1.0.0 정식 릴리즈 직전 필수 관문. 근거: doc/RELEASE_AUDIT_PROTOCOL
 ### [PENDING] 연동 앱 섀도 모드 실운영 도그푸딩 (Vaultwarden, Umami, Answer 등) `GA-VALID-3`
 - **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
+
+---
+
+### [DONE] Dual-Path Protocol Symmetry Universal Gate Test Suite (TDS Batch/RPC & PGWire Simple/Extended) `GATE-PROTOCOL-SYMMETRY-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-22 12:13:08
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/DUAL_PATH_PROTOCOL_SYMMETRY_GATE_PLAN.ko.md`](notes/DUAL_PATH_PROTOCOL_SYMMETRY_GATE_PLAN.ko.md)
 
 ---
 
