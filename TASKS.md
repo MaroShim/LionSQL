@@ -489,6 +489,7 @@
 | `DONE` | **`PERF-WIRE-ZEROALLOC-1`** |  | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WT-INSTANT-ADD-COL-1`** | `1.0-GA` | Storage | P2 | WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`PERF-WT-ROW-DIRECT-1`** | `v1.10.0` | Storage | P2 | WiredTiger InsertRow 중간 Record 맵 2중 할당 우회 및 EncodeRowToBuffer 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
+| `PENDING` | **`PKG-DEBIAN-UBUNTU-DEB-SYSTEMD-1`** | `v1.10.0` | Ecosystem | P2 | Debian 및 Ubuntu 공식 .deb 패키징, systemd 서비스 유닛 통합 및 배포 인프라 구축 | [`notes/DEBIAN_UBUNTU_OFFICIAL_PACKAGING_PLAN.ko.md`](notes/DEBIAN_UBUNTU_OFFICIAL_PACKAGING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | `v1.1.0` | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
 | `DONE` | **`PLAN-SPEC-DRIVEN-TEST-DISCOVERY-METHODOLOGY-1`** | `1.0-GA` | Test | P1 | 스펙 기반 쿼리 생성, 차등 오라클 불일치 발견, RCA 및 TDD Red 등록 방법론 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
 | `PENDING` | **`PLAN-WINDOWS-CGO-STANDALONE-ECOSYSTEM-1`** | `Post-1.0` | Storage | P2 | Windows Cgo Standalone Ecosystem Packages & LionSQL Org Migration Plan | [`notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md`](notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md) |  |
@@ -4801,6 +4802,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `v1.10.0`
 - **Plan Doc**: [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md)
+
+---
+
+### [PENDING] Debian 및 Ubuntu 공식 .deb 패키징, systemd 서비스 유닛 통합 및 배포 인프라 구축 `PKG-DEBIAN-UBUNTU-DEB-SYSTEMD-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-22 02:48:20
+- **Milestone**: `v1.10.0`
+- **Plan Doc**: [`notes/DEBIAN_UBUNTU_OFFICIAL_PACKAGING_PLAN.ko.md`](notes/DEBIAN_UBUNTU_OFFICIAL_PACKAGING_PLAN.ko.md)
 
 ---
 
