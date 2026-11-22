@@ -1081,6 +1081,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		c.emit(OpCallProc, destSlot, 0, 0, &CallData{
 			Name:     s.ProcName,
 			ArgRegs:  argRegs,
+			ArgNames: s.ArgNames,
 			OutSlots: outSlots,
 		})
 		c.freeReg(allocCount)

@@ -2383,7 +2383,7 @@ vmLoop:
 		if !ok || callData == nil {
 			return nil, fmt.Errorf("invalid OpCallProc metadata")
 		}
-		retVal, err := f.callProc(callData.Name, callData.ArgRegs, callData.OutSlots)
+		retVal, err := f.callProc(callData.Name, callData.ArgRegs, callData.ArgNames, callData.OutSlots)
 		if err != nil {
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
 				return nil, catchErr

@@ -488,6 +488,7 @@ func (s *DeleteStmt) String() string {
 type ExecStmt struct {
 	ProcName  string
 	Args      []Expr
+	ArgNames  []string
 	OutVars   []string
 	ReturnVar string
 }
@@ -496,7 +497,11 @@ func (s *ExecStmt) stmtNode() {}
 func (s *ExecStmt) String() string {
 	argStrs := make([]string, len(s.Args))
 	for i, a := range s.Args {
-		argStrs[i] = a.String()
+		prefix := ""
+		if i < len(s.ArgNames) && s.ArgNames[i] != "" {
+			prefix = s.ArgNames[i] + " = "
+		}
+		argStrs[i] = prefix + a.String()
 	}
 	prefix := ""
 	if s.ReturnVar != "" {

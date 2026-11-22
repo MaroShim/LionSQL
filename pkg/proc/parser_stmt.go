@@ -896,11 +896,16 @@ func (p *Parser) parseExec() (Statement, error) {
 	p.nextToken()
 
 	var args []Expr
+	var argNames []string
 	var outVars []string
 	for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEnd) && !p.curTokenIs(TokenEOF) {
 		arg := p.parseExpression(precLowest)
+		argName := ""
 		outVar := ""
 		if bin, ok := arg.(*BinaryExpr); ok && (bin.Op == TokenEq || bin.Op == TokenAssign) {
+			if v, ok := bin.Left.(*VariableExpr); ok {
+				argName = v.Name
+			}
 			arg = bin.Right
 		}
 		if p.curTokenIs(TokenOutput) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "OUT")) {
@@ -911,6 +916,7 @@ func (p *Parser) parseExec() (Statement, error) {
 		}
 		if arg != nil {
 			args = append(args, arg)
+			argNames = append(argNames, argName)
 			outVars = append(outVars, outVar)
 		}
 		if p.curTokenIs(TokenComma) {
@@ -924,7 +930,7 @@ func (p *Parser) parseExec() (Statement, error) {
 		p.nextToken()
 	}
 
-	return &ExecStmt{ProcName: name, Args: args, OutVars: outVars, ReturnVar: returnVar}, nil
+	return &ExecStmt{ProcName: name, Args: args, ArgNames: argNames, OutVars: outVars, ReturnVar: returnVar}, nil
 }
 
 func (p *Parser) parseWaitfor() (Statement, error) {

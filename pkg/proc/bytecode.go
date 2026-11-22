@@ -381,6 +381,7 @@ type Instruction struct {
 type CallData struct {
 	Name     string
 	ArgRegs  []int32
+	ArgNames []string
 	OutSlots []int32
 }
 

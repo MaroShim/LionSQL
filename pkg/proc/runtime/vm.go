@@ -3374,7 +3374,7 @@ func (f *VMFrame) callUDF(fnName string, argRegs []int32) (storage.Value, error)
 	return toStorageValue(retVal), nil
 }
 
-func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (storage.Value, error) {
+func (f *VMFrame) callProc(procName string, argRegs []int32, argNames []string, outSlots []int32) (storage.Value, error) {
 	if f.callDepth >= 64 {
 		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("maximum stored procedure call depth (64) exceeded (possible infinite recursion)")
 	}
@@ -3479,19 +3479,54 @@ func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (
 		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("procedure %s not found", procName)
 	}
 
+	paramMapByName := make(map[string]int, len(prog.Params))
+	for idx, p := range prog.Params {
+		cleanName := strings.ToLower(strings.TrimPrefix(p.Name, "@"))
+		paramMapByName[cleanName] = idx
+	}
+
 	params := make(map[string]any)
-	for i, p := range prog.Params {
-		if i < len(argRegs) {
-			regIdx := argRegs[i]
-			if regIdx == -1 {
-				if p.Default == nil {
-					return storage.NullValue(storage.TypeUnknown), fmt.Errorf("procedure %s parameter %s has no DEFAULT value declared", procName, p.Name)
-				}
-				continue
+	outSlotByParamIndex := make(map[int]int32, len(outSlots))
+
+	hasNamedArgs := false
+	for k, regIdx := range argRegs {
+		var targetParamIndex int
+		var targetParam *proc.ParamDef
+
+		isNamed := k < len(argNames) && argNames[k] != ""
+		if isNamed {
+			hasNamedArgs = true
+			cleanArg := strings.ToLower(strings.TrimPrefix(argNames[k], "@"))
+			idx, exists := paramMapByName[cleanArg]
+			if !exists {
+				return storage.NullValue(storage.TypeUnknown), fmt.Errorf("procedure %s has no parameter named %s", procName, argNames[k])
 			}
-			if regIdx >= 0 && int(regIdx) < len(f.regs) {
-				params[p.Name] = valToAny(f.regs[regIdx])
+			targetParamIndex = idx
+			targetParam = &prog.Params[idx]
+		} else {
+			if hasNamedArgs {
+				return storage.NullValue(storage.TypeUnknown), fmt.Errorf("positional argument cannot follow named argument in call to %s", procName)
 			}
+			if k >= len(prog.Params) {
+				return storage.NullValue(storage.TypeUnknown), fmt.Errorf("too many arguments provided for procedure %s", procName)
+			}
+			targetParamIndex = k
+			targetParam = &prog.Params[k]
+		}
+
+		if k < len(outSlots) && outSlots[k] >= 0 {
+			outSlotByParamIndex[targetParamIndex] = outSlots[k]
+		}
+
+		if regIdx == -1 {
+			if targetParam.Default == nil {
+				return storage.NullValue(storage.TypeUnknown), fmt.Errorf("procedure %s parameter %s has no DEFAULT value declared", procName, targetParam.Name)
+			}
+			continue
+		}
+
+		if regIdx >= 0 && int(regIdx) < len(f.regs) {
+			params[targetParam.Name] = valToAny(f.regs[regIdx])
 		}
 	}
 
@@ -3515,9 +3550,10 @@ func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (
 	if subFrame.lastIdentity > 0 {
 		f.lastIdentity = subFrame.lastIdentity // @@IDENTITY updated by proc execution
 	}
-	if err == nil && len(outSlots) > 0 {
-		for i, p := range prog.Params {
-			if i < len(outSlots) && outSlots[i] >= 0 && int(outSlots[i]) < len(f.slots) {
+	if err == nil && len(outSlotByParamIndex) > 0 {
+		for pIdx, callerSlot := range outSlotByParamIndex {
+			if callerSlot >= 0 && int(callerSlot) < len(f.slots) && pIdx < len(prog.Params) {
+				p := prog.Params[pIdx]
 				cleanP := cleanSymbol(p.Name)
 				subSlot := int32(-1)
 				if prog.VarSlots != nil {
@@ -3528,10 +3564,10 @@ func (f *VMFrame) callProc(procName string, argRegs []int32, outSlots []int32) (
 					}
 				}
 				if subSlot >= 0 && int(subSlot) < len(subFrame.slots) {
-					f.slots[outSlots[i]] = subFrame.slots[subSlot]
+					f.slots[callerSlot] = subFrame.slots[subSlot]
 					f.evalCtxDirty = true
 				} else if subVal, ok := subFrame.vars[cleanP]; ok {
-					f.slots[outSlots[i]] = subVal
+					f.slots[callerSlot] = subVal
 					f.evalCtxDirty = true
 				}
 			}
