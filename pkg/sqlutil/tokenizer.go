@@ -1200,10 +1200,90 @@ func SplitJoinCond(cond string) (string, string) {
 // CleanIdentifier strips quotes (`"`, `'`), backticks (```), and brackets (`[`, `]`) from an identifier.
 func CleanIdentifier(s string) string {
 	s = strings.TrimSpace(s)
-	if (strings.HasPrefix(s, "N'") || strings.HasPrefix(s, "n'")) && strings.HasSuffix(s, "'") && len(s) >= 3 {
+	if (strings.HasPrefix(s, "N'") || strings.HasPrefix(s, "n'") || strings.HasPrefix(s, "E'") || strings.HasPrefix(s, "e'")) && strings.HasSuffix(s, "'") && len(s) >= 3 {
 		s = s[2 : len(s)-1]
 	}
 	return strings.Trim(s, "\"`'[]")
+}
+
+// UnescapePostgresStringLiteral decodes PostgreSQL E'...' escape sequences.
+func UnescapePostgresStringLiteral(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	n := len(s)
+	for i := 0; i < n; i++ {
+		ch := s[i]
+		if ch == '\'' && i+1 < n && s[i+1] == '\'' {
+			b.WriteByte('\'')
+			i++
+			continue
+		}
+		if ch == '\\' && i+1 < n {
+			i++
+			esc := s[i]
+			switch esc {
+			case 'b':
+				b.WriteByte('\b')
+			case 'f':
+				b.WriteByte('\f')
+			case 'n':
+				b.WriteByte('\n')
+			case 'r':
+				b.WriteByte('\r')
+			case 't':
+				b.WriteByte('\t')
+			case '\\':
+				b.WriteByte('\\')
+			case '\'':
+				b.WriteByte('\'')
+			case '"':
+				b.WriteByte('"')
+			case 'x', 'X':
+				hexVal := 0
+				digits := 0
+				for digits < 2 && i+1 < n {
+					nextCh := s[i+1]
+					var d int
+					if nextCh >= '0' && nextCh <= '9' {
+						d = int(nextCh - '0')
+					} else if nextCh >= 'a' && nextCh <= 'f' {
+						d = int(nextCh-'a') + 10
+					} else if nextCh >= 'A' && nextCh <= 'F' {
+						d = int(nextCh-'A') + 10
+					} else {
+						break
+					}
+					hexVal = (hexVal << 4) | d
+					digits++
+					i++
+				}
+				if digits > 0 {
+					b.WriteByte(byte(hexVal))
+				} else {
+					b.WriteByte('x')
+				}
+			case '0', '1', '2', '3', '4', '5', '6', '7':
+				octVal := int(esc - '0')
+				digits := 1
+				for digits < 3 && i+1 < n {
+					nextCh := s[i+1]
+					if nextCh >= '0' && nextCh <= '7' {
+						octVal = (octVal << 3) | int(nextCh-'0')
+						digits++
+						i++
+					} else {
+						break
+					}
+				}
+				b.WriteByte(byte(octVal))
+			default:
+				b.WriteByte(esc)
+			}
+			continue
+		}
+		b.WriteByte(ch)
+	}
+	return b.String()
 }
 
 // FindTopLevelChar finds the byte index of target in s outside quotes, brackets, and parentheses (depth == 0).

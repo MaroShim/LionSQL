@@ -214,9 +214,12 @@
 | `DONE` | **`CORPUS-KNEX-MSSQL-1`** | `1.0-GA` | Ecosystem | P2 | Knex.js MSSQL Dialect 쿼리 코퍼스 수집 및 Wiki.js 대응 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`CORPUS-NORTHWIND-PUBS-1`** | `1.0-GA` | Ecosystem | P2 | Northwind 및 Pubs 공식 표준 관계형 코퍼스 수집 및 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`DEFECT-ENGINE-BIT-FLOAT-LITERAL-EVAL-1`** | `1.0-GA` | Engine | P1 | BIT 컬럼과 0.0/1.0 부동소수점 리터럴 비교 시 WHERE 문자열 '0.0' 불일치로 행 누락 결함 | [`test/spec_defects/spec_defect_bit_float_equality_test.go`](test/spec_defects/spec_defect_bit_float_equality_test.go) |  |
+| `DONE` | **`DEFECT-ENGINE-FILTER-CLAUSE-FROM-TABLE-LOSS-1`** | `v1.10.0` | Engine | P2 | FILTER (WHERE ...) 구문 처리 시 FROM 절 테이블 식별자 유실 결함 | [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go) |  |
 | `DONE` | **`DEFECT-ENGINE-NOREC-3VL-IN-NULL-OR-1`** | `1.0-GA` | Engine | P1 | NULL 포함 IN 리스트 복합 OR 조건 3VL 논리 평가 불일치 결함 | [`test/spec_defects/spec_defect_1_test.go`](test/spec_defects/spec_defect_1_test.go) |  |
 | `DONE` | **`DEFECT-EXEC-ARITHMETIC-OVERFLOW-TRUTHY-EVAL-1`** | `1.0-GA` | Execution | P1 | WHERE 절 산술 오버플로우 에러를 boolean true(매칭)로 오평가하는 결함 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
 | `DONE` | **`DEFECT-EXEC-FLOAT-DECIMAL-SCALE-TRUNCATION-1`** | `1.0-GA` | Execution | P1 | tryDecimal float64 스케일 4 고정 단편화로 인한 FLOAT 컬럼 리터럴 비교 불일치 결함 | [`test/spec_defects/spec_defect_8_test.go`](test/spec_defects/spec_defect_8_test.go) |  |
+| `DONE` | **`DEFECT-PG-CATALOG-PG-POLICY-1`** | `v1.10.0` | Catalog | P2 | psql \d 실행을 위한 pg_catalog.pg_policy 가상 뷰 누락 보완 | [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go) |  |
+| `DONE` | **`DEFECT-PG-ESCAPE-STRING-LITERAL-1`** | `v1.10.0` | Engine | P2 | PostgreSQL E'...' 이스케이프 문자열 파싱 결함 및 psql \l 호환성 복구 | [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go) |  |
 | `DONE` | **`DEFECT-PROC-EVAL-BETWEEN-CASE-INSENSITIVE-COLLATION-1`** | `1.0-GA` | Engine | P1 | proc/eval.go BETWEEN 문자열 평가 시 대소문자 무시(CI) Collation 미반영 결함 | [`test/spec_defects/spec_defect_collation_between_test.go`](test/spec_defects/spec_defect_collation_between_test.go) |  |
 | `DONE` | **`DEFECT-PROC-EVAL-BIT-IN-LIST-1`** | `1.0-GA` | Engine | P1 | BIT 타입 컬럼 IN (0, 1) 평가 시 proc/eval.go 문자열 'false'/'0' 불일치 결함 | [`test/spec_defects/spec_defect_122_test.go`](test/spec_defects/spec_defect_122_test.go) |  |
 | `DONE` | **`DEFECT-VDBE-DECIMAL-FVAL-CORRUPTION-1`** | `1.0-GA` | VM | P1 | VDBE toFloatNum이 DECIMAL 컬럼 FVal(0.0)을 직접 읽어 비교식이 왜곡되는 결함 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
@@ -2709,6 +2712,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] FILTER (WHERE ...) 구문 처리 시 FROM 절 테이블 식별자 유실 결함 `DEFECT-ENGINE-FILTER-CLAUSE-FROM-TABLE-LOSS-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-22 03:33:44
+- **Milestone**: `v1.10.0`
+- **Plan Doc**: [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go)
+
+---
+
 ### [DONE] NULL 포함 IN 리스트 복합 OR 조건 3VL 논리 평가 불일치 결함 `DEFECT-ENGINE-NOREC-3VL-IN-NULL-OR-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-21 14:58:23
 - **Milestone**: `1.0-GA`
@@ -2727,6 +2737,20 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-21 14:58:23
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`test/spec_defects/spec_defect_8_test.go`](test/spec_defects/spec_defect_8_test.go)
+
+---
+
+### [DONE] psql \d 실행을 위한 pg_catalog.pg_policy 가상 뷰 누락 보완 `DEFECT-PG-CATALOG-PG-POLICY-1`
+- **Domain**: Catalog | **Priority**: P2 | **Updated**: 2026-11-22 03:33:44
+- **Milestone**: `v1.10.0`
+- **Plan Doc**: [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go)
+
+---
+
+### [DONE] PostgreSQL E'...' 이스케이프 문자열 파싱 결함 및 psql \l 호환성 복구 `DEFECT-PG-ESCAPE-STRING-LITERAL-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-22 03:33:44
+- **Milestone**: `v1.10.0`
+- **Plan Doc**: [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go)
 
 ---
 

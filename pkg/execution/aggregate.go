@@ -474,7 +474,7 @@ func (a *AggregateIterator) parseFields() {
 						if alias == "" {
 							alias = "count"
 						}
-						a.fields = append(a.fields, aggField{fnType: aggCount, isStar: true, alias: alias, rawExpr: "COUNT(*)"})
+						a.fields = append(a.fields, aggField{fnType: aggCount, isStar: true, alias: alias, rawExpr: "COUNT(*)", fnExpr: fn})
 						a.schema = append(a.schema, alias)
 						continue
 					}
@@ -1379,6 +1379,17 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 	for fIdx, f := range a.fields {
 		if f.isLiteral || f.fnType == aggGrouping {
 			continue
+		}
+		var filterExpr proc.Expr
+		if fnCall, ok := f.fnExpr.(*proc.FunctionCallExpr); ok {
+			filterExpr = fnCall.Filter
+		} else if wg, ok := f.fnExpr.(*proc.WithinGroupExpr); ok && wg.Function != nil {
+			filterExpr = wg.Function.Filter
+		}
+		if filterExpr != nil {
+			if !EvalTupleBoolExpr(tuple, filterExpr) {
+				continue
+			}
 		}
 		if f.isStar {
 			acc.counts[fIdx]++

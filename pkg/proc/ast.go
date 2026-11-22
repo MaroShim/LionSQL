@@ -621,6 +621,7 @@ type FunctionCallExpr struct {
 	Distinct   bool
 	HasOver    bool
 	OverClause string
+	Filter     Expr // for FILTER (WHERE condition)
 }
 
 func (e *FunctionCallExpr) exprNode() {}
@@ -632,6 +633,9 @@ func (e *FunctionCallExpr) String() string {
 	base := fmt.Sprintf("%s(%s)", e.Name, strings.Join(argStrs, ", "))
 	if e.Distinct {
 		base = fmt.Sprintf("%s(DISTINCT %s)", e.Name, strings.Join(argStrs, ", "))
+	}
+	if e.Filter != nil {
+		base = fmt.Sprintf("%s FILTER (WHERE %s)", base, e.Filter.String())
 	}
 	if e.HasOver {
 		return fmt.Sprintf("%s OVER (%s)", base, e.OverClause)

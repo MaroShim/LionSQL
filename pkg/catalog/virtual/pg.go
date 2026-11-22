@@ -859,6 +859,7 @@ func init() {
 	regPG("pg_extension", generatePgExtension)
 	regPG("pg_available_extensions", generatePgAvailableExtensions)
 	regPG("pg_get_keywords", generatePgGetKeywords)
+	regPG("pg_policy", generatePgPolicy)
 }
 
 func generatePgDatabase(src Source, whereClause string) ([]string, []map[string]any) {
@@ -1968,6 +1969,12 @@ func generatePgGetKeywords(src Source, whereClause string) ([]string, []map[stri
 			"catdesc": kw.catdesc,
 		})
 	}
+	return columns, allRows
+}
+
+func generatePgPolicy(src Source, whereClause string) ([]string, []map[string]any) {
+	columns := []string{"oid", "polname", "polrelid", "polcmd", "polpermissive", "polroles", "polqual", "polwithcheck"}
+	allRows := make([]map[string]any, 0)
 	return columns, allRows
 }
 

@@ -2195,7 +2195,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		hasComplexInProj := false
 		for _, p := range qInfo.Projections {
 			pUpper := strings.ToUpper(p)
-			if strings.Contains(pUpper, "SELECT") || strings.Contains(pUpper, "OVER") {
+			if strings.Contains(pUpper, "SELECT") || strings.Contains(pUpper, "OVER") || strings.Contains(pUpper, "FILTER") {
 				hasComplexInProj = true
 				break
 			}

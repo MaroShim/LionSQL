@@ -988,6 +988,23 @@ func (p *Parser) parseFunctionCall(name string) Expr {
 		Distinct: isDistinct,
 	}
 
+	if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "FILTER") && p.peekTokenIs(TokenLParen) {
+		p.nextToken() // eat FILTER
+		p.nextToken() // eat (
+		if p.curTokenIs(TokenWhere) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "WHERE")) {
+			p.nextToken() // eat WHERE
+			fn.Filter = p.parseExpression(precLowest)
+			if p.curTokenIs(TokenRParen) {
+				p.nextToken() // eat )
+			}
+		} else {
+			fn.Filter = p.parseExpression(precLowest)
+			if p.curTokenIs(TokenRParen) {
+				p.nextToken() // eat )
+			}
+		}
+	}
+
 	if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "WITHIN") {
 		p.nextToken() // eat WITHIN
 		if p.curTokenIs(TokenGroup) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "GROUP")) {

@@ -151,15 +151,20 @@ func ParseLiteralDefault(s string, targetType DataType) Value {
 	}
 
 	isNStr := (strings.HasPrefix(s, "N'") || strings.HasPrefix(s, "n'")) && strings.HasSuffix(s, "'") && len(s) >= 3
+	isEStr := (strings.HasPrefix(s, "E'") || strings.HasPrefix(s, "e'")) && strings.HasSuffix(s, "'") && len(s) >= 3
 	isRegularStr := strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2
-	if isNStr || isRegularStr {
+	if isNStr || isEStr || isRegularStr {
 		var strVal string
-		if isNStr {
+		if isNStr || isEStr {
 			strVal = s[2 : len(s)-1]
 		} else {
 			strVal = s[1 : len(s)-1]
 		}
-		strVal = strings.ReplaceAll(strVal, "''", "'")
+		if isEStr {
+			strVal = unescapePostgresString(strVal)
+		} else {
+			strVal = strings.ReplaceAll(strVal, "''", "'")
+		}
 		if targetType == TypeInt {
 			trimmed := strings.TrimSpace(strVal)
 			if i, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
@@ -257,4 +262,45 @@ func ParseLiteralDefault(s string, targetType DataType) Value {
 		return BoolValueFromAny(StringValue(s))
 	}
 	return StringValue(s)
+}
+
+func unescapePostgresString(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	n := len(s)
+	for i := 0; i < n; i++ {
+		ch := s[i]
+		if ch == '\'' && i+1 < n && s[i+1] == '\'' {
+			b.WriteByte('\'')
+			i++
+			continue
+		}
+		if ch == '\\' && i+1 < n {
+			i++
+			esc := s[i]
+			switch esc {
+			case 'b':
+				b.WriteByte('\b')
+			case 'f':
+				b.WriteByte('\f')
+			case 'n':
+				b.WriteByte('\n')
+			case 'r':
+				b.WriteByte('\r')
+			case 't':
+				b.WriteByte('\t')
+			case '\\':
+				b.WriteByte('\\')
+			case '\'':
+				b.WriteByte('\'')
+			case '"':
+				b.WriteByte('"')
+			default:
+				b.WriteByte(esc)
+			}
+			continue
+		}
+		b.WriteByte(ch)
+	}
+	return b.String()
 }

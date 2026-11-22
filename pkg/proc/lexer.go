@@ -235,6 +235,10 @@ func (l *Lexer) scanToken(tokLine, tokCol int) Token {
 			l.readChar() // skip 'N', 'n', 'X', or 'x'
 			return Token{Type: TokenString, Literal: l.readString(), Line: tokLine, Col: tokCol}
 		}
+		if (l.ch == 'E' || l.ch == 'e') && l.peekChar() == '\'' {
+			l.readChar() // skip 'E' or 'e'
+			return Token{Type: TokenString, Literal: l.readEscapeString(), Line: tokLine, Col: tokCol}
+		}
 		if isLetter(l.ch) {
 			ident := l.readIdentifier()
 			upper := strings.ToUpper(ident)
@@ -610,6 +614,97 @@ func (l *Lexer) readString() string {
 			}
 			l.readChar() // skip closing quote
 			break
+		}
+		b.WriteRune(l.ch)
+		l.readChar()
+	}
+	return b.String()
+}
+
+func (l *Lexer) readEscapeString() string {
+	l.readChar() // skip initial quote
+	var b strings.Builder
+	for l.ch != 0 {
+		if l.ch == '\'' {
+			if l.peekChar() == '\'' {
+				// Escaped quote ''
+				b.WriteRune('\'')
+				l.readChar()
+				l.readChar()
+				continue
+			}
+			l.readChar() // skip closing quote
+			break
+		}
+		if l.ch == '\\' {
+			l.readChar() // skip backslash
+			switch l.ch {
+			case 'b':
+				b.WriteByte('\b')
+			case 'f':
+				b.WriteByte('\f')
+			case 'n':
+				b.WriteByte('\n')
+			case 'r':
+				b.WriteByte('\r')
+			case 't':
+				b.WriteByte('\t')
+			case '\\':
+				b.WriteByte('\\')
+			case '\'':
+				b.WriteByte('\'')
+			case '"':
+				b.WriteByte('"')
+			case 'x', 'X':
+				hexVal := 0
+				digits := 0
+				for digits < 2 {
+					nextCh := l.peekChar()
+					if (nextCh >= '0' && nextCh <= '9') || (nextCh >= 'a' && nextCh <= 'f') || (nextCh >= 'A' && nextCh <= 'F') {
+						l.readChar()
+						d := 0
+						if l.ch >= '0' && l.ch <= '9' {
+							d = int(l.ch - '0')
+						} else if l.ch >= 'a' && l.ch <= 'f' {
+							d = int(l.ch-'a') + 10
+						} else {
+							d = int(l.ch-'A') + 10
+						}
+						hexVal = (hexVal << 4) | d
+						digits++
+					} else {
+						break
+					}
+				}
+				if digits > 0 {
+					b.WriteByte(byte(hexVal))
+				} else {
+					b.WriteByte('x')
+				}
+			case '0', '1', '2', '3', '4', '5', '6', '7':
+				octVal := int(l.ch - '0')
+				digits := 1
+				for digits < 3 {
+					nextCh := l.peekChar()
+					if nextCh >= '0' && nextCh <= '7' {
+						l.readChar()
+						octVal = (octVal << 3) | int(l.ch-'0')
+						digits++
+					} else {
+						break
+					}
+				}
+				b.WriteByte(byte(octVal))
+			case 0:
+				b.WriteByte('\\')
+				break
+			default:
+				b.WriteRune(l.ch)
+			}
+			if l.ch != 0 {
+				l.readChar()
+			}
+			continue
 		}
 		b.WriteRune(l.ch)
 		l.readChar()
