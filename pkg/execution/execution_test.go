@@ -197,6 +197,42 @@ func TestProjectionIterator(t *testing.T) {
 	}
 }
 
+func TestProjectionIterator_DuplicateColumns(t *testing.T) {
+	ctx := context.Background()
+	mock := newMockIterator([]string{"e.emp_id", "e.emp_name", "m.emp_name"},
+		map[string]any{"e.emp_id": int64(102), "e.emp_name": "Lee", "m.emp_name": "Kim"},
+	)
+
+	proj := execution.NewProjectionIterator(mock, []string{"e.emp_id", "e.emp_name", "m.emp_name"})
+	if err := proj.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer proj.Close()
+
+	schema := proj.Schema()
+	expectedSchema := []string{"emp_id", "emp_name", "emp_name"}
+	if len(schema) != len(expectedSchema) {
+		t.Fatalf("expected schema len %d, got %d (%v)", len(expectedSchema), len(schema), schema)
+	}
+	for i := range expectedSchema {
+		if schema[i] != expectedSchema[i] {
+			t.Errorf("schema[%d] = %q; expected %q", i, schema[i], expectedSchema[i])
+		}
+	}
+
+	tuple, err := proj.Next(ctx)
+	if err != nil {
+		t.Fatalf("Next error: %v", err)
+	}
+
+	if len(tuple.Values) != 3 {
+		t.Fatalf("expected 3 values, got %d (%v)", len(tuple.Values), tuple.Values)
+	}
+	if tuple.Values[0] != int64(102) || tuple.Values[1] != "Lee" || tuple.Values[2] != "Kim" {
+		t.Fatalf("unexpected values: %v (expected [102, Lee, Kim])", tuple.Values)
+	}
+}
+
 func TestHashJoinIterator(t *testing.T) {
 	ctx := context.Background()
 	users := newMockIterator([]string{"u.id", "u.name"},

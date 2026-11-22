@@ -643,3 +643,25 @@ func TestTDS_BVarcharAndUSVarchar_AuditFull034(t *testing.T) {
 		t.Fatalf("AUDIT-FULL-034: expected EnvChangeDatabase newDB char count 4, got %d", newDBCharCount)
 	}
 }
+
+func TestCleanTDSColumnName_ComplexExpressions(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"amount", "amount"},
+		{"o.amount", "amount"},
+		{"[dbo].[Orders].[amount]", "amount"},
+		{"COALESCE(SUM(o.amount), 0)", "COALESCE(SUM(o.amount), 0)"},
+		{"COUNT(o.order_id)", "COUNT(o.order_id)"},
+		{"CONCAT(e.first_name, ' ', e.last_name)", "CONCAT(e.first_name, ' ', e.last_name)"},
+		{"AVG(p.price * 1.1)", "AVG(p.price * 1.1)"},
+	}
+
+	for _, tc := range tests {
+		actual := CleanTDSColumnName(tc.input)
+		if actual != tc.expected {
+			t.Errorf("CleanTDSColumnName(%q) = %q; expected %q", tc.input, actual, tc.expected)
+		}
+	}
+}
