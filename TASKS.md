@@ -489,8 +489,8 @@
 | `DONE` | **`PERF-WIRE-ZEROALLOC-1`** |  | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WT-INSTANT-ADD-COL-1`** | `1.0-GA` | Storage | P2 | WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`PERF-WT-ROW-DIRECT-1`** | `v1.10.0` | Storage | P2 | WiredTiger InsertRow 중간 Record 맵 2중 할당 우회 및 EncodeRowToBuffer 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
-| `PENDING` | **`PKG-DEBIAN-UBUNTU-DEB-SYSTEMD-1`** | `v1.10.0` | Ecosystem | P2 | Debian 및 Ubuntu 공식 .deb 패키징, systemd 서비스 유닛 통합 및 배포 인프라 구축 | [`notes/DEBIAN_UBUNTU_OFFICIAL_PACKAGING_PLAN.ko.md`](notes/DEBIAN_UBUNTU_OFFICIAL_PACKAGING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | `v1.1.0` | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
+| `PENDING` | **`PKG-OS-NATIVE-DISTRIBUTION-1`** | `v1.10.0` | Ecosystem | P2 | OS 네이티브 패키징 및 배포 인프라 구축 (Debian/Ubuntu .deb & macOS Homebrew) | [`notes/OS_NATIVE_PACKAGING_AND_DISTRIBUTION_PLAN.ko.md`](notes/OS_NATIVE_PACKAGING_AND_DISTRIBUTION_PLAN.ko.md) |  |
 | `DONE` | **`PLAN-SPEC-DRIVEN-TEST-DISCOVERY-METHODOLOGY-1`** | `1.0-GA` | Test | P1 | 스펙 기반 쿼리 생성, 차등 오라클 불일치 발견, RCA 및 TDD Red 등록 방법론 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
 | `PENDING` | **`PLAN-WINDOWS-CGO-STANDALONE-ECOSYSTEM-1`** | `Post-1.0` | Storage | P2 | Windows Cgo Standalone Ecosystem Packages & LionSQL Org Migration Plan | [`notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md`](notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md) |  |
 | `DONE` | **`PLANNER-SLIM-1`** |  | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
@@ -4805,13 +4805,6 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Debian 및 Ubuntu 공식 .deb 패키징, systemd 서비스 유닛 통합 및 배포 인프라 구축 `PKG-DEBIAN-UBUNTU-DEB-SYSTEMD-1`
-- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-22 02:48:20
-- **Milestone**: `v1.10.0`
-- **Plan Doc**: [`notes/DEBIAN_UBUNTU_OFFICIAL_PACKAGING_PLAN.ko.md`](notes/DEBIAN_UBUNTU_OFFICIAL_PACKAGING_PLAN.ko.md)
-
----
-
 ### [PENDING] 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) `PKG-OFFLINE-DOCS`
 - **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-21 09:46:25
 - **Milestone**: `v1.1.0`
@@ -4822,6 +4815,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **기능**: DB 엔진 바이너리 순수성을 유지하면서 공식 배포 아카이브(`tar.gz`/`zip`) 내에 소스코드를 제외한 순수 문서(`docs/`)와 오프라인 브라우저 뷰어(`docs/index.html`) 번들링.
 - **특징**: 폐쇄망/에어갭 환경 100% 자립, 오프라인 문서 검색, SQL 예제 즉시 실행(`[Try in Studio]`) 연동.
 - **설계 참조**: [`notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/OFFLINE_DOCS_PACKAGING_PLAN.ko.md)
+
+---
+
+### [PENDING] OS 네이티브 패키징 및 배포 인프라 구축 (Debian/Ubuntu .deb & macOS Homebrew) `PKG-OS-NATIVE-DISTRIBUTION-1`
+- **Domain**: Ecosystem | **Priority**: P2 | **Updated**: 2026-11-22 03:01:36
+- **Milestone**: `v1.10.0`
+- **Plan Doc**: [`notes/OS_NATIVE_PACKAGING_AND_DISTRIBUTION_PLAN.ko.md`](notes/OS_NATIVE_PACKAGING_AND_DISTRIBUTION_PLAN.ko.md)
 
 ---
 
