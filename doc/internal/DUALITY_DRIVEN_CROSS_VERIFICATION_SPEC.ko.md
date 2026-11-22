@@ -115,8 +115,8 @@ $$\text{StateCheckSum}(\text{MemEngine}(\mathcal{T})) \equiv \text{StateCheckSum
 
 ---
 
-### 3.5 SLT(SQLLogicTest) 3대 Duality 확장 규격 (Duality-Driven SQLLogicTest Architecture)
-SQLLogicTest(SLT)는 수만 개의 복잡한 SQL 쿼리와 결과셋이 검증된 정답 코퍼스(Corpus)를 보유하고 있습니다. 본 절에서는 `pkg/slt.Executor` 인터페이스를 **Duality 교차 검증 러너**로 확장하여, 수만 개의 실전 쿼리를 통해 엔진 전 계층의 2중화를 전수 검증하는 3대 실행 시나리오를 명세합니다.
+### 3.5 SLT(SQLLogicTest) 6대 Duality 확장 규격 (Duality-Driven SQLLogicTest Architecture)
+SQLLogicTest(SLT)는 수만 개의 복잡한 SQL 쿼리와 결과셋이 검증된 정답 코퍼스(Corpus)를 보유하고 있습니다. 본 절에서는 `pkg/slt.Executor` 인터페이스를 **Duality 교차 검증 러너**로 확장하여, 수만 개의 실전 쿼리를 통해 엔진 전 계층의 2중화를 전수 검증하는 6대 실행 시나리오를 명세합니다.
 
 ```
                                     [ SLT 코퍼스 쿼리 Q ]
@@ -155,8 +155,27 @@ SQLLogicTest(SLT)는 수만 개의 복잡한 SQL 쿼리와 결과셋이 검증�
 * **적출 대상 결함**:
   - Pratt 파서가 공식 문법과 다르게 잘못 연산자 우선순위를 매기거나 조용히 조건을 누락하는 사일런트 파싱 결함(Silent Parsing Defect)을 100% 감지.
 
+#### 시나리오 D: T-SQL 저장 프로시저 30개 핵심 스위트 와이어 대칭 SLT (`SLT-DUALITY-TSQL-WIRE-1`)
+* **설계 원리**:
+  - `test/slt_proc/01` ~ `30`에 이르는 30개 공식 T-SQL 프로시저 스위트 전체를 **TDS 네트워크 와이어(`:1433`)**를 통해 드라이버로 원격 호출한 결과와, **In-Process Coordinator** 내부 직접 실행 결과를 1:1 교차 대조.
+* **적출 대상 결함**:
+  - 프로시저 실행 도중 다중 결과셋 반환(`Multi-ResultSet`), 출력 매개변수(`OUTPUT`), 반환 코드(`RETURN @val`), 에러 핸들링(`TRY...CATCH`)의 TDS 토큰 스트리밍 직렬화 정합성 전수 검증.
+
+#### 시나리오 E: 프로토콜 내부 듀얼 경로 대칭 SLT (`SLT-DUALITY-DUALPATH-1`)
+* **설계 원리**:
+  - TDS 내에서 동일 쿼리를 **SQL Batch 패킷**으로 전송한 결과와 **RPC `sp_executesql`**로 전송한 결과 대조.
+  - PGWire 내에서 동일 쿼리를 **Simple Query ('Q')**로 전송한 결과와 **Extended Query (Parse-Bind-Execute 'PBE')**로 전송한 결과를 1:1 대조.
+* **적출 대상 결함**:
+  - 단일 프로토콜 내에서 클라이언트 드라이버나 ORM(GORM, Hibernate, Dapper, EF Core)이 선택하는 전송 모드에 따라 결과셋이나 타입 캐스팅이 달라지는 불일치 결함 박멸.
+
+#### 시나리오 F: Cold Compilation vs Hot PlanCache 대칭 SLT (`SLT-DUALITY-PLANCACHE-1`)
+* **설계 원리**:
+  - 1회차 실행(Cold: 신규 파싱 및 쿼리 플랜 신규 컴파일) 결과셋과, 플랜 캐시에 적재된 후 2회차 이후 실행(Hot: Plan Cache Hit 재사용) 결과셋을 대조.
+* **적출 대상 결함**:
+  - 쿼리 실행기가 캐시된 실행 계획(Plan AST / Bytecode Program)의 내부 상태(레지스터, 필터 조건자, 커서 컨텍스트)를 실행 도중 오염(Mutate)시켜 후속 실행에서 잘못된 결과를 반환하는 캐시 상태 오염 결함 원천 차단.
+
 #### 올-인-원 통합 모드 (`-duality=all`)
-* CLI 및 테스트 플래그 `go test ./test/slt -duality=all`을 통해 A, B, C 세 가지 시나리오를 동시에 결합하여, **파서 ➔ 실행 엔진 ➔ 스토리지 ➔ 와이어 프로토콜에 이르는 4계층 전수 교차 검증**을 자동 완주.
+* CLI 및 테스트 플래그 `go test ./test/slt -duality=all`을 통해 A부터 F까지 전 시나리오를 유기적으로 결합하여, **파서 ➔ 플랜 캐시 ➔ 실행 엔진 ➔ 스토리지 ➔ 와이어 프로토콜에 이르는 4계층 전수 교차 검증**을 자동 완주.
 
 ---
 
@@ -178,10 +197,13 @@ SQLLogicTest(SLT)는 수만 개의 복잡한 SQL 쿼리와 결과셋이 검증�
 
 1. **Gate 1 (배포 차단 게이트 완성)**:
    - `test/spec_defects/gate_protocol_symmetry_test.go`를 `scripts/release.sh` 파이프라인의 핵심 검증 단계로 영구 편입하여, 와이어 대칭성이 깨지면 릴리스 빌드 원천 차단 (`GATE-PROTOCOL-SYMMETRY-1`, 완료).
-2. **Gate 2 (SLT 3대 Duality 러너 구축)**:
-   - `SLT-DUALITY-WIRE-1`: TDS vs PGWire 차분 SQLLogicTest 러너 구현.
-   - `SLT-DUALITY-STORAGE-1`: MemEngine vs WiredTiger 트윈 스토리지 SQLLogicTest 러너 구현.
-   - `SLT-DUALITY-PARSER-1`: Pratt vs ANTLR4 차분 파서 동등성 SQLLogicTest 러너 구현.
+2. **Gate 2 (SLT 6대 Duality 러너 체계 구축)**:
+   - `SLT-DUALITY-WIRE-1`: TDS vs PGWire 차분 SQLLogicTest 러너 구현 (Scenario A, 완료).
+   - `SLT-DUALITY-STORAGE-1`: MemEngine vs WiredTiger 트윈 스토리지 SQLLogicTest 러너 구현 (Scenario B).
+   - `SLT-DUALITY-PARSER-1`: Pratt vs ANTLR4 차분 파서 동등성 SQLLogicTest 러너 구현 (Scenario C).
+   - `SLT-DUALITY-TSQL-WIRE-1`: T-SQL 저장 프로시저 30개 핵심 스위트 와이어 대칭 러너 구현 (Scenario D).
+   - `SLT-DUALITY-DUALPATH-1`: 프로토콜 내부 듀얼 경로(TDS Batch/RPC, PGWire Simple/Extended) 대칭 러너 구현 (Scenario E).
+   - `SLT-DUALITY-PLANCACHE-1`: Cold Compilation vs Hot PlanCache 대칭 러너 구현 (Scenario F).
 3. **Gate 3 (소크 및 카오스 연계)**:
    - 스프린트 과제 `DURA-SOAK-1`(24h~72h 장기 소크 테스트)에 Layer 4 스토리지 트윈 검증기(MemEngine vs WiredTiger)를 결합하여 고동시성 메모리 누수 및 데이터 정합성 지속 감시.
 4. **영구 불변식 등록**:
