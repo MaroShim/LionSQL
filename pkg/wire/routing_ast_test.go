@@ -64,6 +64,18 @@ func TestRoutingAST_VirtualCatalogAndVDBECompilation(t *testing.T) {
 			wantVDBE:    false, // must route to sqlexec for output rows
 		},
 		{
+			name:        "transaction begin statement",
+			query:       "BEGIN TRANSACTION",
+			wantVirtual: false,
+			wantVDBE:    false, // must route to session-level transaction manager
+		},
+		{
+			name:        "transaction rollback statement",
+			query:       "ROLLBACK",
+			wantVirtual: false,
+			wantVDBE:    false, // must route to session-level transaction manager
+		},
+		{
 			name:        "virtual catalog sys.tables",
 			query:       "SELECT * FROM sys.tables",
 			wantVirtual: true,

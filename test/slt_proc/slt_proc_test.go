@@ -256,3 +256,75 @@ func TestTSQL_Duality_Wire_CoreProcedures(t *testing.T) {
 		})
 	}
 }
+
+// TestTSQL_Duality_DualPath_TDS runs all 30 core T-SQL stored procedure suites
+// comparing TDS SQL Batch (Type 1) vs RPC sp_executesql (Type 3) over real TCP wire,
+// asserting 100% intra-protocol parity (SLT-DUALITY-DUALPATH-1).
+func TestTSQL_Duality_DualPath_TDS(t *testing.T) {
+	files1, err := filepath.Glob("0*.slt")
+	if err != nil {
+		t.Fatalf("failed to glob 0*.slt: %v", err)
+	}
+	files2, _ := filepath.Glob("[1-3]*.slt")
+	coreFiles := append(files1, files2...)
+
+	if len(coreFiles) != 30 {
+		t.Fatalf("expected 30 core T-SQL procedure suites, found %d", len(coreFiles))
+	}
+
+	for _, file := range coreFiles {
+		file := file
+		t.Run(file, func(t *testing.T) {
+			records, err := slt.ParseFile(file)
+			if err != nil {
+				t.Fatalf("failed to parse %s: %v", file, err)
+			}
+
+			// Server A: TDS SQL Batch
+			var engA storage.Engine = memengine.New()
+			_ = engA.Open("")
+			defer engA.Close()
+			catA := catalog.New(engA)
+			tdsSrvA := tds.NewServer("127.0.0.1:0", catA, engA)
+			if err := tdsSrvA.Start(); err != nil {
+				t.Fatalf("failed to start TDS server A: %v", err)
+			}
+			defer tdsSrvA.Close()
+
+			execBatch, err := slt.NewTDSExecutorWithRPC(tdsSrvA.Addr().String(), false)
+			if err != nil {
+				t.Fatalf("failed to connect TDS Batch executor: %v", err)
+			}
+			defer execBatch.Close()
+
+			// Server B: TDS RPC sp_executesql
+			var engB storage.Engine = memengine.New()
+			_ = engB.Open("")
+			defer engB.Close()
+			catB := catalog.New(engB)
+			tdsSrvB := tds.NewServer("127.0.0.1:0", catB, engB)
+			if err := tdsSrvB.Start(); err != nil {
+				t.Fatalf("failed to start TDS server B: %v", err)
+			}
+			defer tdsSrvB.Close()
+
+			execRPC, err := slt.NewTDSExecutorWithRPC(tdsSrvB.Addr().String(), true)
+			if err != nil {
+				t.Fatalf("failed to connect TDS RPC executor: %v", err)
+			}
+			defer execRPC.Close()
+
+			dualityExec := slt.NewDualityExecutor(execBatch, "TDS_SQL_Batch", execRPC, "TDS_RPC_sp_executesql")
+
+			passCount := 0
+			for i, rec := range records {
+				if err := slt.RunRecord(dualityExec, rec); err != nil {
+					t.Fatalf("[%s:%d] record #%d TDS Dual-Path failure: %v\nSQL:\n%s",
+						rec.FilePath, rec.LineNumber, i, err, rec.SQL)
+				}
+				passCount++
+			}
+			t.Logf("[%s] 100%% PASS: verified %d records over TDS Protocol Dual-Path", file, passCount)
+		})
+	}
+}

@@ -525,7 +525,7 @@
 | `DONE` | **`SEC-BOOT-DEFAULT-PASS-WARN`** |  | SEC | P2 | 초기 패스워드 미변경 시 부팅 출력 최후행 대문자 보안 경고 불변식 | [`notes/plans/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md`](notes/plans/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md) |  |
 | `DONE` | **`SEC-PGWIRE-PARAM-1`** |  | Wire | P2 | PGWire 달러 파라미터() 상태머신 토크나이저 전환 및 보안 강화 | [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md) |  |
 | `DONE` | **`SEED-EMBED-UNIFY-1`** | `Ecosystem` | --milestone | P1 | 데모 시드 스크립트(demo_seed.sql) 단일 바이너리 내장 및 Web Studio 시드 데이터 일치화 | [`--domain`](--domain) |  |
-| `PENDING` | **`SLT-DUALITY-DUALPATH-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario E: Protocol Dual-Path Symmetry SLT (TDS Batch/RPC & PGWire Simple/Extended) | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
+| `DONE` | **`SLT-DUALITY-DUALPATH-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario E: Protocol Dual-Path Symmetry SLT (TDS Batch/RPC & PGWire Simple/Extended) | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`SLT-DUALITY-PARSER-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario C: Dual-Parser Differential Equivalence SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `PENDING` | **`SLT-DUALITY-PLANCACHE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario F: Cold Compilation vs Hot PlanCache Duality (Cache Mutation Safety) | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`SLT-DUALITY-STORAGE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario B: Dual-Storage Twin-Engine SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
@@ -5094,8 +5094,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Duality SLT Scenario E: Protocol Dual-Path Symmetry SLT (TDS Batch/RPC & PGWire Simple/Extended) `SLT-DUALITY-DUALPATH-1`
-- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-22 13:25:48
+### [DONE] Duality SLT Scenario E: Protocol Dual-Path Symmetry SLT (TDS Batch/RPC & PGWire Simple/Extended) `SLT-DUALITY-DUALPATH-1`
+- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-22 14:07:25
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)
 

@@ -49,7 +49,7 @@ func TestPGWire_StatementMetadataCaching(t *testing.T) {
 
 	conn1 := &dummyConn{}
 	// First describe - should resolve and populate ColumnNames and ColumnOIDs
-	server.writeSchemaDescription(conn1, prep.Query, []int32{23}, prep, nil)
+	server.writeSchemaDescription(conn1, prep.Query, []int32{23}, prep, nil, "")
 
 	if len(prep.ColumnNames) != 3 || len(prep.ColumnOIDs) != 3 {
 		t.Fatalf("expected 3 cached columns, got %d names, %d oids", len(prep.ColumnNames), len(prep.ColumnOIDs))
@@ -61,7 +61,7 @@ func TestPGWire_StatementMetadataCaching(t *testing.T) {
 
 	// Second describe - should use cached ColumnOIDs directly
 	conn2 := &dummyConn{}
-	server.writeSchemaDescription(conn2, prep.Query, []int32{23}, prep, nil)
+	server.writeSchemaDescription(conn2, prep.Query, []int32{23}, prep, nil, "")
 
 	if conn2.buf.Len() == 0 {
 		t.Fatalf("expected RowDescription message in conn2 buffer, got 0 bytes")
@@ -74,13 +74,13 @@ func TestPGWire_StatementMetadataCaching(t *testing.T) {
 	}
 
 	conn3 := &dummyConn{}
-	server.writeSchemaDescription(conn3, prepUpdate.Query, []int32{23}, prepUpdate, nil)
+	server.writeSchemaDescription(conn3, prepUpdate.Query, []int32{23}, prepUpdate, nil, "")
 	if !prepUpdate.NoData {
 		t.Fatalf("expected prepUpdate.NoData to be true after describe")
 	}
 
 	conn4 := &dummyConn{}
-	server.writeSchemaDescription(conn4, prepUpdate.Query, []int32{23}, prepUpdate, nil)
+	server.writeSchemaDescription(conn4, prepUpdate.Query, []int32{23}, prepUpdate, nil, "")
 	// Byte 'n' (0x6e) is NoData message in PostgreSQL wire protocol
 	if conn4.buf.Bytes()[0] != 'n' {
 		t.Fatalf("expected NoData byte 'n', got %c", conn4.buf.Bytes()[0])

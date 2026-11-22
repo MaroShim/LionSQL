@@ -1506,6 +1506,10 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 		rows = append(rows, tuple.ToMap())
 	}
 
+	if qInfo.Distinct {
+		rows, values = sqlutil.DeduplicateRowsAndValues(rows, values)
+	}
+
 	if qInfo.IsTopPercent && qInfo.LimitCount >= 0 {
 		effectiveLimit := int64(math.Ceil(float64(len(rows)) * float64(qInfo.LimitCount) / 100.0))
 		if effectiveLimit < int64(len(rows)) {

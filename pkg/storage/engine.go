@@ -1136,6 +1136,11 @@ func (v Value) Bytes() []byte {
 	return []byte(v.BinVal)
 }
 
+// IsNullValue returns true if the Value represents a SQL NULL.
+func (v Value) IsNullValue() bool {
+	return v.IsNull
+}
+
 // Interface converts a storage.Value into a standard Go any value.
 func (v Value) Interface() any {
 	if v.IsNull {

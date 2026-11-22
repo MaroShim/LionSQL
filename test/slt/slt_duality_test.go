@@ -219,3 +219,75 @@ func TestSQLLogicTest_Duality_DualParser(t *testing.T) {
 		})
 	}
 }
+
+func runDualPathPGWireSLTFile(t *testing.T, file string) {
+	t.Helper()
+	records, err := slt.ParseFile(file)
+	if err != nil {
+		t.Fatalf("failed to parse %s: %v", file, err)
+	}
+
+	// Server A: Simple Query Protocol ('Q')
+	var engA storage.Engine = memengine.New()
+	_ = engA.Open("")
+	defer engA.Close()
+	catA := catalog.New(engA)
+	coordA := engine.NewCoordinator(catA, engA, engine.DefaultConfig())
+
+	pgSrvA := wire.NewServer("127.0.0.1:0", catA, engA)
+	pgSrvA.SetCoordinator(coordA)
+	if err := pgSrvA.Start(); err != nil {
+		t.Fatalf("failed to start PGWire server A: %v", err)
+	}
+	defer pgSrvA.Close()
+
+	// Server B: Extended Query Protocol ('PBE')
+	var engB storage.Engine = memengine.New()
+	_ = engB.Open("")
+	defer engB.Close()
+	catB := catalog.New(engB)
+	coordB := engine.NewCoordinator(catB, engB, engine.DefaultConfig())
+
+	pgSrvB := wire.NewServer("127.0.0.1:0", catB, engB)
+	pgSrvB.SetCoordinator(coordB)
+	if err := pgSrvB.Start(); err != nil {
+		t.Fatalf("failed to start PGWire server B: %v", err)
+	}
+	defer pgSrvB.Close()
+
+	execSimple, err := slt.NewPGWireExecutorWithMode(pgSrvA.Addr().String(), true)
+	if err != nil {
+		t.Fatalf("failed to connect Simple protocol: %v", err)
+	}
+	defer execSimple.Close()
+
+	execExtended, err := slt.NewPGWireExecutorWithMode(pgSrvB.Addr().String(), false)
+	if err != nil {
+		t.Fatalf("failed to connect Extended protocol: %v", err)
+	}
+	defer execExtended.Close()
+
+	dualityExec := slt.NewDualityExecutor(execSimple, "PGWire_Simple_Q", execExtended, "PGWire_Extended_PBE")
+
+	passCount := 0
+	for i, rec := range records {
+		if err := slt.RunRecord(dualityExec, rec); err != nil {
+			t.Fatalf("[%s:%d] record #%d Protocol Dual-Path mismatch: %v\nSQL:\n%s",
+				rec.FilePath, rec.LineNumber, i, err, rec.SQL)
+		}
+		passCount++
+	}
+	t.Logf("[%s] 100%% PASS: verified %d records over Protocol Dual-Path", file, passCount)
+}
+
+// TestSQLLogicTest_Duality_DualPath_PGWire executes SQLLogicTest core suites simultaneously
+// over PGWire Simple Query ('Q') and Extended Query ('PBE') protocols, asserting 100% intra-protocol parity (SLT-DUALITY-DUALPATH-1).
+func TestSQLLogicTest_Duality_DualPath_PGWire(t *testing.T) {
+	testSuites := discoverSLTFiles(t)
+
+	for _, file := range testSuites {
+		t.Run(file, func(t *testing.T) {
+			runDualPathPGWireSLTFile(t, file)
+		})
+	}
+}

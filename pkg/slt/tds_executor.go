@@ -13,12 +13,18 @@ import (
 
 // TDSExecutor opens a persistent connection to the given TDS address (e.g. "127.0.0.1:1433").
 type TDSExecutor struct {
-	db   *sql.DB
-	conn *sql.Conn
+	db     *sql.DB
+	conn   *sql.Conn
+	useRPC bool
 }
 
 // NewTDSExecutor opens a persistent single TCP connection to the TDS server.
 func NewTDSExecutor(addr string) (*TDSExecutor, error) {
+	return NewTDSExecutorWithRPC(addr, false)
+}
+
+// NewTDSExecutorWithRPC opens a persistent TCP connection with either raw SQL Batch or RPC sp_executesql mode.
+func NewTDSExecutorWithRPC(addr string, useRPC bool) (*TDSExecutor, error) {
 	parts := strings.Split(addr, ":")
 	host := parts[0]
 	port := "1433"
@@ -37,7 +43,7 @@ func NewTDSExecutor(addr string) (*TDSExecutor, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	return &TDSExecutor{db: db, conn: conn}, nil
+	return &TDSExecutor{db: db, conn: conn, useRPC: useRPC}, nil
 }
 
 // Close releases the underlying connection and database handle.
@@ -53,7 +59,16 @@ func (e *TDSExecutor) Close() error {
 
 // Execute runs SQL over TDS and decodes tabular rows.
 func (e *TDSExecutor) Execute(sqlStr string) ([]string, []map[string]any, error) {
-	rows, err := e.conn.QueryContext(context.Background(), sqlStr)
+	query := sqlStr
+	if e.useRPC {
+		trimmed := strings.TrimSpace(sqlStr)
+		upper := strings.ToUpper(trimmed)
+		if !strings.HasPrefix(upper, "EXEC SP_EXECUTESQL") && !strings.Contains(upper, "\nGO") {
+			escaped := strings.ReplaceAll(trimmed, "'", "''")
+			query = fmt.Sprintf("EXEC sp_executesql N'%s'", escaped)
+		}
+	}
+	rows, err := e.conn.QueryContext(context.Background(), query)
 	if err != nil {
 		return nil, nil, err
 	}

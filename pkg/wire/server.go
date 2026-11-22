@@ -788,7 +788,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			s.handleBind(conn, payload, statements, portals)
 
 		case 'D': // Describe
-			s.handleDescribe(conn, payload, statements, portals)
+			s.handleDescribe(conn, payload, statements, portals, sessID)
 
 		case 'E': // Execute
 			s.handleExecute(conn, payload, portals, sessID)
@@ -901,6 +901,10 @@ func isVirtualCatalogQuery(query string, qc proc.QueryCharacteristics) bool {
 }
 
 func canCompileToVDBE(query string, qc proc.QueryCharacteristics) bool {
+	// Bypass transaction boundary statements (must route to session-level transaction manager)
+	if qc.StatementType == "TX" {
+		return false
+	}
 	// Bypass virtual catalog tables (must route to virtual catalog views)
 	if isVirtualCatalogQuery(query, qc) {
 		return false
@@ -1301,7 +1305,7 @@ func buildPreviewSQL(query string, paramTypes []int32) string {
 	})
 }
 
-func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *PreparedStatementCache, portals map[string]*Portal) {
+func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *PreparedStatementCache, portals map[string]*Portal, sessID string) {
 	if len(payload) < 2 {
 		_ = WriteNoData(conn)
 		return
@@ -1326,7 +1330,7 @@ func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *Prepa
 			}
 		}
 		_ = WriteParameterDescription(conn, stmt.ParamTypes)
-		s.writeSchemaDescription(conn, stmt.Query, stmt.ParamTypes, stmt, nil)
+		s.writeSchemaDescription(conn, stmt.Query, stmt.ParamTypes, stmt, nil, sessID)
 	} else if targetType == 'P' {
 		portal, exists := portals[targetName]
 		if !exists {
@@ -1341,13 +1345,13 @@ func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *Prepa
 			stmt = portal.Statement
 			portalQuery = portal.Statement.Query
 		}
-		s.writeSchemaDescription(conn, portalQuery, paramTypes, stmt, portal.ResultFormats)
+		s.writeSchemaDescription(conn, portalQuery, paramTypes, stmt, portal.ResultFormats, sessID)
 	} else {
 		_ = WriteNoData(conn)
 	}
 }
 
-func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes []int32, stmt *PreparedStatement, resultFormats []int16) {
+func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes []int32, stmt *PreparedStatement, resultFormats []int16, sessID string) {
 	applyFormats := func(cols []ColumnMeta) {
 		for i := range cols {
 			fmtCode := int16(0)
@@ -1495,7 +1499,18 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 						rawExpr = strings.TrimSpace(expr)
 						lookupName = cleanColumnIdentifier(expr)
 					} else {
-						outColName = cleanColumnIdentifier(colName)
+						trimmedCol := strings.TrimSpace(colName)
+						if paren := strings.Index(trimmedCol, "("); paren != -1 {
+							fn := strings.ToLower(strings.TrimSpace(trimmedCol[:paren]))
+							switch fn {
+							case "count", "sum", "avg", "min", "max", "total", "group_concat", "string_agg":
+								outColName = fn
+							default:
+								outColName = cleanColumnIdentifier(colName)
+							}
+						} else {
+							outColName = cleanColumnIdentifier(colName)
+						}
 						lookupName = outColName
 					}
 
@@ -1592,7 +1607,11 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 			return
 		}
 		previewSQL := buildPreviewSQL(query, paramTypes)
-		if res, err := s.coordinator.ExecuteSessionSQL("default", previewSQL); err == nil && len(res.Columns) > 0 {
+		targetSess := sessID
+		if targetSess == "" {
+			targetSess = "default"
+		}
+		if res, err := s.coordinator.ExecuteSessionSQL(targetSess, previewSQL); err == nil && len(res.Columns) > 0 {
 			var sampleRow map[string]any
 			if len(res.Rows) > 0 {
 				sampleRow = res.Rows[0]

@@ -48,7 +48,7 @@ func ExtractQueryCharacteristics(sql string) QueryCharacteristics {
 				qc.StatementType = "DELETE"
 			case TokenCreate, TokenAlter, TokenDrop:
 				qc.StatementType = "DDL"
-			case TokenBegin, TokenCommit, TokenRollback:
+			case TokenBegin, TokenCommit, TokenRollback, TokenSave, TokenSavepoint:
 				qc.StatementType = "TX"
 			default:
 				if upper == "WITH" {
@@ -58,6 +58,8 @@ func ExtractQueryCharacteristics(sql string) QueryCharacteristics {
 					qc.StatementType = "EXEC"
 				} else if upper == "TRUNCATE" {
 					qc.StatementType = "DDL"
+				} else if upper == "RELEASE" {
+					qc.StatementType = "TX"
 				} else {
 					qc.StatementType = upper
 				}

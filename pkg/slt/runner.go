@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/lib/pq"
 
 	"lionsql/pkg/engine"
@@ -92,8 +93,18 @@ type PGWireExecutor struct {
 
 // NewPGWireExecutor opens a persistent single TCP connection to the given PGWire address (e.g. "127.0.0.1:5433").
 func NewPGWireExecutor(addr string) (*PGWireExecutor, error) {
-	dsn := fmt.Sprintf("postgres://admin:admin@%s/lionsql?sslmode=disable", addr)
-	db, err := sql.Open("postgres", dsn)
+	return NewPGWireExecutorWithMode(addr, false)
+}
+
+// NewPGWireExecutorWithMode opens a persistent TCP connection to PGWire with a specific driver mode
+// (simpleProtocol=true for 'Q' simple query protocol, false for extended Parse-Bind-Execute protocol).
+func NewPGWireExecutorWithMode(addr string, simpleProtocol bool) (*PGWireExecutor, error) {
+	mode := "exec"
+	if simpleProtocol {
+		mode = "simple_protocol"
+	}
+	dsn := fmt.Sprintf("postgres://admin:admin@%s/lionsql?sslmode=disable&default_query_exec_mode=%s", addr, mode)
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, err
 	}
