@@ -57,6 +57,11 @@
 * **[`PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)**
   * 다중 와이어 프로토콜(PGWire v3, TDS 7.x/8.0) 에뮬레이션 경계 및 호환성 한계 규격서.
 
+### 4. 아키텍처적 쌍대성 & 교차 검증 (Architectural Duality & Cross-Verification)
+* **[`DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)** ([English](DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.md))
+  * **4계층 아키텍처적 이중성의 자가 정답지화 및 6대 쌍대성 교차 검증 공식 명세서 (`ARCH-DUALITY-CROSS-VERIFICATION-1`)**.
+  * 와이어(TDS vs PGWire), 스토리지(OCC vs WiredTiger MVCC), 파서(Pratt vs ANTLR4), T-SQL 프로시저(와이어 vs 인프로세스), 프로토콜 듀얼 패스(Simple vs Extended, Batch vs RPC), 플랜 캐시(Cold vs Hot) 6대 전수 검증 하네스.
+
 ---
 
 ## 연계 문서 및 진실 공급원 (SSOT)

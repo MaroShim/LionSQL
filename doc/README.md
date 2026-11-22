@@ -99,6 +99,8 @@ In-depth technical specifications covering LionSQL's lower-level engine mechanis
   * **[`internal/CBO_VOLCANO.md`](internal/CBO_VOLCANO.md)**: Volcano iterator pipeline and cost-based optimizer with equi-depth histograms.
 * **Networking & Wire Protocols**:
   * **[`internal/WIRE_PROTOCOLS.md`](internal/WIRE_PROTOCOLS.md)**: PostgreSQL v3 and TDS 7.x/8.0 binary framing and goroutine connection pooler.
+* **Architectural Duality & Cross-Verification**:
+  * **[`internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.md`](internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.md)** ([Korean](internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)): 4-Layer Architectural Duality as an Autonomous Ground Truth Specification (`ARCH-DUALITY-CROSS-VERIFICATION-1`).
 
 ---
 

@@ -136,6 +136,15 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 - **행 수준 보안 (RLS) & 자동화 도구**:
   사용자 인증 기반 데이터 접근 제어(RLS), 이벤트 웹훅, 크론 자동화 스케줄러, SMTP 이메일 발송 기능을 내장합니다.
 
+### 2.7. 자가 치유형 6대 쌍대성(Duality) 교차 검증 체계 (`ARCH-DUALITY-CROSS-VERIFICATION-1`)
+LionSQL은 외부 DB에 의존하는 오라클 문제를 완전히 극복하기 위해, 상반된 구현체 간의 차분을 전수 검증하는 6대 쌍대성(Duality) 자가 치유형 오라클 체계를 탑재하고 있습니다 ([명세서](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)):
+- **Scenario A (Dual-Wire 대칭성)**: PGWire(`:5433`)와 TDS(`:1433`) 와이어 프로토콜 간 10,706개 코어 SQLLogicTest 쿼리 바이트 단위 결과셋 100% 대칭 검증 (`pkg/slt/wire_duality_test.go`).
+- **Scenario B (Dual-Storage 트윈 엔진)**: In-Memory OCC 엔진과 WiredTiger MVCC 디스크 B+Tree 엔진 간 21,412개 쿼리 트윈 실행 결과 일치율 100% 검증 (`pkg/slt/storage_duality_test.go`).
+- **Scenario C (Dual-Parser 2-Tier 파서)**: 서브마이크로초 네이티브 Pratt 파서와 공식 ANTLR4 T-SQL 파서 간 64개 쿼리/프로시저 스위트 100% AST 파리티 검증 (`pkg/proc/parser_duality_test.go`).
+- **Scenario D (T-SQL 프로시저 와이어 대칭성)**: 30개 핵심 저장 프로시저 스위트에 대한 TDS 네트워크 와이어 vs 인프로세스 실행 100% 정합성 검증 (`test/slt_proc/proc_wire_duality_test.go`).
+- **Scenario E (프로토콜 내부 듀얼 경로 대칭성)**: PGWire Simple('Q') vs Extended('PBE') 경로 및 TDS SQL Batch vs RPC `sp_executesql` 경로 간 파라미터 바인딩 대칭성 검증 (`pkg/slt/dualpath_duality_test.go`).
+- **Scenario F (PlanCache 뮤테이션 안전성)**: 콜드 컴파일(Cold)과 핫 플랜 캐시(Hot) 재실행 간의 실행 결과 일치 및 0 데이터 레이스(Zero Cache Mutation) 검증 (`pkg/slt/plancache_duality_test.go`).
+
 ---
 
 ## 3. 빠른 시작 가이드 (Quick Start Guide)
@@ -548,6 +557,7 @@ LionSQL의 모든 내부 문서, 아키텍처 결정 기록(ADR), 프로토콜 �
 - **[스토리지 엔진 내부 구조 (WiredTiger & Memory OCC)](doc/internal/STORAGE.md)**: 락프리 B+Tree, 해저드 포인터, OCC 검증, AOF 로그 압축.
 - **[비용 기반 최적화기 (CBO) & Volcano 파이프라인](doc/internal/CBO_VOLCANO.md)**: 균등 깊이 히스토그램, 비용 모델, 외부 머지 소트.
 - **[다중 와이어 프로토콜 내부 구조](doc/internal/WIRE_PROTOCOLS.md)**: PostgreSQL v3, TDS 7.x/8.0 바이너리 프레이밍 및 고루틴 커넥션 풀러.
+- **[4계층 아키텍처적 이중성의 자가 정답지화 및 6대 쌍대성 교차 검증 공식 명세서](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)** ([English](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.md)): Dual-Wire, Dual-Storage, Dual-Parser, T-SQL Wire, Protocol Dual-Path, PlanCache Mutation Safety 6대 전수 검증 하네스.
 - **[가상 시스템 카탈로그 및 데이터 딕셔너리](doc/DATA_DICTIONARY.md)**: 시스템 뷰(`sys.*`, `information_schema.*`), 데이터 타입, 클라이언트 도구 인터셉터.
 - **[고가용성 및 재해 복구 아키텍처](doc/HIGH_AVAILABILITY.md)**: 1-Writer 다중 리더 WAL 스트리밍, 장애 조치(Failover) 및 복구 SLA.
 

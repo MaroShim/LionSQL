@@ -138,6 +138,15 @@ LionSQL's core capabilities are organized across five foundational architectural
 - **Row-Level Security (RLS) & Automation**:
   Authentication-based data access control (RLS), asynchronous webhooks, 5-field cron automation scheduler, and built-in SMTP mailer.
 
+### 2.7. Self-Checking 6-Scenario Duality-Driven Cross-Verification (`ARCH-DUALITY-CROSS-VERIFICATION-1`)
+LionSQL overcomes the traditional database test oracle problem by coupling independent implementation tracks into an autonomous, self-checking living oracle ([Specification](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.md)):
+- **Scenario A (Dual-Wire Symmetry)**: Concurrently runs 10,706 core SQLLogicTest queries across PGWire (`:5433`) and TDS (`:1433`), asserting 100% byte-for-byte result symmetry (`pkg/slt/wire_duality_test.go`).
+- **Scenario B (Dual-Storage Twin-Engine)**: Cross-executes 21,412 queries between In-Memory OCC and WiredTiger MVCC disk B+Tree, verifying zero relational divergence (`pkg/slt/storage_duality_test.go`).
+- **Scenario C (Dual-Parser 2-Tier Parity)**: Proves 100% AST node equivalence between the sub-microsecond Native Pratt parser and official Microsoft T-SQL ANTLR4 grammar across 64 suites (`pkg/proc/parser_duality_test.go`).
+- **Scenario D (T-SQL Procedure Wire Duality)**: Asserts 100% RPC packet framing and state symmetry between TDS network wire and in-process execution across 30 core suites (`test/slt_proc/proc_wire_duality_test.go`).
+- **Scenario E (Protocol Dual-Path Symmetry)**: Verifies parameter binding symmetry between PGWire Simple ('Q') vs Extended ('PBE') paths and TDS SQL Batch vs RPC `sp_executesql` paths (`pkg/slt/dualpath_duality_test.go`).
+- **Scenario F (PlanCache Mutation Safety)**: Asserts zero cache mutation and 100% result parity between cold compilation and hot PlanCache hits with 0 data races (`pkg/slt/plancache_duality_test.go`).
+
 ---
 
 ## Quick Start Guide
@@ -555,6 +564,7 @@ Step-by-step zero-modification deployment and integration guides for 10 producti
 - **[Storage Engine Mechanics (WiredTiger & Memory OCC)](doc/internal/STORAGE.md)**: Lock-free B+Trees, hazard pointers, OCC validation, and AOF log compaction.
 - **[Cost-Based Optimizer & Volcano Pipeline Internals](doc/internal/CBO_VOLCANO.md)**: Equi-depth histograms, physical cost formulas, and external merge sort.
 - **[Multi-Wire Protocol Internals](doc/internal/WIRE_PROTOCOLS.md)**: Binary framing for PostgreSQL v3, TDS 7.x/8.0, and goroutine connection pooler.
+- **[4-Layer Architectural Duality as an Autonomous Ground Truth Specification](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.md)** ([Korean](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)): Complete specification for 6-scenario cross-verification across Wire, Storage, Parser, Stored Procedures, Dual-Path, and PlanCache.
 - **[Virtual System Catalog & Data Dictionary](doc/DATA_DICTIONARY.md)**: System views (`sys.*`, `information_schema.*`), data types, and tool compatibility.
 - **[High Availability & Disaster Recovery](doc/HIGH_AVAILABILITY.md)**: Multi-node replication topology, 1-writer multi-reader WAL streaming, failover, and recovery SLAs.
 - **[Extension & Driver Development Guide](doc/EXTENSIONS.md)**: Dual-track UDFs (Go native SPI + Wasm sandbox), pluggable storage engines, and fallback parsers.

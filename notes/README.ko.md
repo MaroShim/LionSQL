@@ -23,6 +23,8 @@
   * **WiredTiger 고동시성 락 직렬화 분석 및 4계층 봉인 포스트모텀**: `transaction_sync` 옵션으로 인한 96% 성능 급락(146k ➔ 4.8k TPS)의 C 라이브러리 내부 원인, MongoDB 실태 조사, 10회 연속 `kill -9` 100% 무손실 복구 실증 및 영구 재발 방지 4계층 잠금 체계.
 * **[`HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`](../doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md)** ([English](../doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md))
   * **6대 골든 릴리즈 게이트 엔지니어링 신뢰성 철학**: 릴리즈마다 기계적으로 실행되는 6대 검증 게이트(단위, 13대 도메인 스모크, TPC-C 75만 tpmC, SLT 41만 쿼리, T-SQL 30대 스위트, SIGKILL 전원 차단 무손실 복구)가 어떻게 데이터베이스의 가치를 엔터프라이즈 미션 크리티컬 인프라로 격상시키는가에 대한 기술 백서.
+* **[`DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](../doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)** ([English](../doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.md))
+  * **4계층 아키텍처적 이중성의 자가 정답지화 및 6대 쌍대성 교차 검증 공식 명세서 (`ARCH-DUALITY-CROSS-VERIFICATION-1`)**: Dual-Wire (PGWire vs TDS), Dual-Storage (OCC vs WiredTiger MVCC), Dual-Parser (Pratt vs ANTLR4), T-SQL 프로시저(와이어 vs 인프로세스), 프로토콜 듀얼 패스(Simple vs Extended, Batch vs RPC), 플랜 캐시(Cold vs Hot) 6대 전수 검증 하네스.
 * **[`PROTOCOL_EMULATION_BOUNDARIES.md`](../doc/internal/PROTOCOL_EMULATION_BOUNDARIES.md)**
   * **다중 프로토콜 에뮬레이션 경계**: TDS(1433), PGWire(5433), MySQL 호환 구문의 수용 범위와 중단 기준.
 * **[`TSQL_COMPATIBILITY_MATRIX.ko.md`](../doc/TSQL_COMPATIBILITY_MATRIX.ko.md)** (한국어)
@@ -164,6 +166,8 @@ LionSQL 1.0 정식 릴리스 품질 완성을 위해 현재 집중 진행 중인
 * **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](plans/archive/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)**
   * AWS Babelfish T-SQL Stored Procedure 전용 SLT 테스트 스위트 구축 계획서.
 * **공식 릴리즈 노트 아카이브 (`notes/release_notes/`)**:
+  * **[`RELEASE_NOTES_v0.94.0.ko.md`](release_notes/RELEASE_NOTES_v0.94.0.ko.md)** ([English](release_notes/RELEASE_NOTES_v0.94.0.md)): LionSQL v0.94.0 공식 릴리즈 노트 (6대 쌍대성 교차 검증 하네스 확립, 14개 라운드 라이브 엔진 전수 감사 500+ 결함 완치, 세션 트랜잭션 관리자 하드닝, Canonical sqlutil 표준화).
+  * **[`RELEASE_NOTES_v0.93.0.ko.md`](release_notes/RELEASE_NOTES_v0.93.0.ko.md)** ([English](release_notes/RELEASE_NOTES_v0.93.0.md)): LionSQL v0.93.0 공식 릴리즈 노트 (Dual-AI 사전 릴리스 적대적 감사 및 22개 결함 완치, Zero-Tampering 오라클 4계층 봉인, 6대 오픈소스 드라이버 코퍼스 100% 정합성, 모델 B 논리 3단계층 공식화).
   * **[`RELEASE_NOTES_v0.92.0.ko.md`](release_notes/RELEASE_NOTES_v0.92.0.ko.md)** ([English](release_notes/RELEASE_NOTES_v0.92.0.md)): LionSQL v0.92.0 공식 릴리즈 노트 (37선 P0 전수 결함 완치, WiredTiger 고동시성 락 해제, TPC-C 역대 최고 성능).
   * **[`RELEASE_NOTES_v0.91.0.ko.md`](release_notes/RELEASE_NOTES_v0.91.0.ko.md)** ([English](release_notes/RELEASE_NOTES_v0.91.0.md)): LionSQL v0.91.0 공식 릴리즈 노트 (단일 바이너리 내장 SPA 웹 서버, 전역 정규식 박멸).
 * **역사적 아카이브 디렉토리 (`notes/archive/`)**:

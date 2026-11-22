@@ -100,6 +100,8 @@ LionSQL의 심층 하부 구현, 바이트코드 가상 머신(VDBE), 제로 할
   * **[`internal/CBO_VOLCANO.md`](internal/CBO_VOLCANO.md)**: Volcano 반복자 파이프라인 및 64-버킷 균등 깊이 히스토그램 기반 비용 최적화기.
 * **네트워킹 및 와이어 프로토콜**:
   * **[`internal/WIRE_PROTOCOLS.md`](internal/WIRE_PROTOCOLS.md)**: PostgreSQL v3 및 TDS 7.x/8.0 바이너리 프레이밍 및 고루틴 커넥션 풀러.
+* **아키텍처적 쌍대성 & 교차 검증**:
+  * **[`internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)** ([English](internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.md)): 4계층 아키텍처적 이중성의 자가 정답지화 및 6대 쌍대성 교차 검증 공식 명세서 (`ARCH-DUALITY-CROSS-VERIFICATION-1`).
 
 ---
 

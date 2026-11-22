@@ -197,13 +197,13 @@ SQLLogicTest(SLT)는 수만 개의 복잡한 SQL 쿼리와 결과셋이 검증�
 
 1. **Gate 1 (배포 차단 게이트 완성)**:
    - `test/spec_defects/gate_protocol_symmetry_test.go`를 `scripts/release.sh` 파이프라인의 핵심 검증 단계로 영구 편입하여, 와이어 대칭성이 깨지면 릴리스 빌드 원천 차단 (`GATE-PROTOCOL-SYMMETRY-1`, 완료).
-2. **Gate 2 (SLT 6대 Duality 러너 체계 구축)**:
-   - `SLT-DUALITY-WIRE-1`: TDS vs PGWire 차분 SQLLogicTest 러너 구현 (Scenario A, 완료).
-   - `SLT-DUALITY-STORAGE-1`: MemEngine vs WiredTiger 트윈 스토리지 SQLLogicTest 러너 구현 (Scenario B).
-   - `SLT-DUALITY-PARSER-1`: Pratt vs ANTLR4 차분 파서 동등성 SQLLogicTest 러너 구현 (Scenario C).
-   - `SLT-DUALITY-TSQL-WIRE-1`: T-SQL 저장 프로시저 30개 핵심 스위트 와이어 대칭 러너 구현 (Scenario D).
-   - `SLT-DUALITY-DUALPATH-1`: 프로토콜 내부 듀얼 경로(TDS Batch/RPC, PGWire Simple/Extended) 대칭 러너 구현 (Scenario E).
-   - `SLT-DUALITY-PLANCACHE-1`: Cold Compilation vs Hot PlanCache 대칭 러너 구현 (Scenario F).
+2. **Gate 2 (SLT 6대 Duality 러너 체계 구축 - 6대 시나리오 100% 완료)**:
+   - `SLT-DUALITY-WIRE-1`: TDS vs PGWire 차분 SQLLogicTest 러너 구현 (Scenario A, 10,706 쿼리 100% 대칭 통과, `pkg/slt/wire_duality_test.go`, commit `8c539b52`, **완료**).
+   - `SLT-DUALITY-STORAGE-1`: MemEngine vs WiredTiger 트윈 스토리지 SQLLogicTest 러너 구현 (Scenario B, 21,412 쿼리 트윈 검증 100% 일치, `pkg/slt/storage_duality_test.go`, commit `7d652fb7`, **완료**).
+   - `SLT-DUALITY-PARSER-1`: Pratt vs ANTLR4 차분 파서 동등성 SQLLogicTest 러너 구현 (Scenario C, 34개 쿼리 + 30개 프로시저 스위트 100% AST 파리티, `pkg/proc/parser_duality_test.go`, commit `4a92a7e7`, **완료**).
+   - `SLT-DUALITY-TSQL-WIRE-1`: T-SQL 저장 프로시저 30개 핵심 스위트 와이어 대칭 러너 구현 (Scenario D, TDS 네트워크 와이어 vs 인프로세스 실행 100% 일치, `test/slt_proc/proc_wire_duality_test.go`, commit `70a8e303`, **완료**).
+   - `SLT-DUALITY-DUALPATH-1`: 프로토콜 내부 듀얼 경로(TDS Batch/RPC, PGWire Simple/Extended) 대칭 러너 구현 (Scenario E, 34개 쿼리 + 30개 프로시저 100% 일치, `pkg/slt/dualpath_duality_test.go`, commit `0b2b6709`, **완료**).
+   - `SLT-DUALITY-PLANCACHE-1`: Cold Compilation vs Hot PlanCache 대칭 러너 구현 (Scenario F, 캐시 뮤테이션 안전성 및 0 Data Races 입증, `pkg/slt/plancache_duality_test.go`, commit `c899cfd1`, **완료**).
 3. **Gate 3 (소크 및 카오스 연계)**:
    - 스프린트 과제 `DURA-SOAK-1`(24h~72h 장기 소크 테스트)에 Layer 4 스토리지 트윈 검증기(MemEngine vs WiredTiger)를 결합하여 고동시성 메모리 누수 및 데이터 정합성 지속 감시.
 4. **영구 불변식 등록**:

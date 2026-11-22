@@ -21,6 +21,8 @@ Foundational engineering principles, architectural invariants, code landmines, a
   * **Task Identifier Taxonomy**: Consolidated reference for `P1~P3` (priority tasks), `VPERF` (complex queries), `GA-REGEX` (zero-regex gates), and `S-1~S-7` (syntax completeness).
 * **[`HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md`](../doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.md)** ([Korean](../doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md))
   * **The 6 Golden Release Gates Philosophy**: Technical whitepaper on how executing 6 automated mechanical verification gates on every single release elevates LionSQL to enterprise-grade mission-critical infrastructure.
+* **[`DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.md`](../doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.md)** ([Korean](../doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md))
+  * **4-Layer Architectural Duality as an Autonomous Ground Truth Specification (`ARCH-DUALITY-CROSS-VERIFICATION-1`)**: Dual-Wire (PGWire vs TDS), Dual-Storage (OCC vs WiredTiger MVCC), Dual-Parser (Pratt vs ANTLR4), T-SQL Procedure (Wire vs In-Proc), Protocol Dual-Path (Simple vs Extended, Batch vs RPC), and PlanCache (Cold vs Hot) 6-scenario verification harness.
 * **[`PROTOCOL_EMULATION_BOUNDARIES.md`](../doc/internal/PROTOCOL_EMULATION_BOUNDARIES.md)**
   * **Multi-Protocol Emulation Boundaries**: TDS (1433), PGWire (5433), and MySQL wire compatibility scopes and cutoff boundaries.
 * **Master Roadmap & SSOT Backlogs**:
@@ -119,6 +121,8 @@ Hard-learned operational lessons, test blind-spot analyses, and explicit evaluat
 * **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](plans/archive/BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)** (Korean)
   * Babelfish T-SQL Stored Procedure dedicated SLT test suite creation plan.
 * **Official Release Notes Archive (`notes/release_notes/`)**:
+  * **[`RELEASE_NOTES_v0.94.0.md`](release_notes/RELEASE_NOTES_v0.94.0.md)** ([Korean](release_notes/RELEASE_NOTES_v0.94.0.ko.md)): LionSQL v0.94.0 official release notes (6-scenario duality-driven cross-verification suite, 14-round live engine audit 500+ defects remediated, session transaction manager hardening, canonical sqlutil standardization).
+  * **[`RELEASE_NOTES_v0.93.0.md`](release_notes/RELEASE_NOTES_v0.93.0.md)** ([Korean](release_notes/RELEASE_NOTES_v0.93.0.ko.md)): LionSQL v0.93.0 official release notes (Dual-AI pre-release adversarial audit & 22 defects resolved, Zero-Tampering oracle 4-layer lockdown, 6 open-source driver corpora 100% parity, Model B logical 3-tier namespace formalization).
   * **[`RELEASE_NOTES_v0.92.0.md`](release_notes/RELEASE_NOTES_v0.92.0.md)** ([Korean](release_notes/RELEASE_NOTES_v0.92.0.ko.md)): LionSQL v0.92.0 official release notes (37 P0 defect remediations, WiredTiger lock removal, all-time high TPC-C throughput).
   * **[`RELEASE_NOTES_v0.91.0.md`](release_notes/RELEASE_NOTES_v0.91.0.md)** ([Korean](release_notes/RELEASE_NOTES_v0.91.0.ko.md)): LionSQL v0.91.0 official release notes (embedded SPA web server, total regex elimination).
 * **Historical Archive (`notes/archive/`)**:

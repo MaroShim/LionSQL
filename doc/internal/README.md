@@ -42,6 +42,11 @@ This directory contains low-level architectural blueprints, binary format specif
   * **Microsoft SQL Server TDS 7.x/8.0** (Port `1433`): Prelogin, Login7, RPC packets, and `sp_prepexec` bytecode plan cache connection.
   * Client compatibility matrix and goroutine connection pooler.
 
+### 4. Architectural Duality & Cross-Verification
+* **[`DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.md`](DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.md)** ([Korean](DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md))
+  * **4-Layer Architectural Duality as an Autonomous Ground Truth Specification (`ARCH-DUALITY-CROSS-VERIFICATION-1`)**.
+  * Complete specification for 6-scenario cross-verification: Dual-Wire (TDS vs PGWire), Dual-Storage (OCC vs WiredTiger MVCC), Dual-Parser (Pratt vs ANTLR4), T-SQL Procedure (Wire vs In-Proc), Protocol Dual-Path (Simple vs Extended, Batch vs RPC), and PlanCache (Cold vs Hot).
+
 ---
 
 ## Navigation & SSOT
