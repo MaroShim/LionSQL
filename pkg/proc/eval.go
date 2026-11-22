@@ -350,45 +350,41 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 	case *BinaryExpr:
 		switch e.Op {
 		case TokenAnd:
-			leftVal, err := EvalRowExpr(e.Left, row, execSubquery)
-			if err != nil {
-				return nil, err
-			}
-			leftNull := isNullVal(leftVal)
-			if !leftNull && !isTruthyValue(leftVal) {
+			leftVal, errL := EvalRowExpr(e.Left, row, execSubquery)
+			if errL == nil && !isNullVal(leftVal) && !isTruthyValue(leftVal) {
 				return false, nil
 			}
-			rightVal, err := EvalRowExpr(e.Right, row, execSubquery)
-			if err != nil {
-				return nil, err
-			}
-			rightNull := isNullVal(rightVal)
-			if !rightNull && !isTruthyValue(rightVal) {
+			rightVal, errR := EvalRowExpr(e.Right, row, execSubquery)
+			if errR == nil && !isNullVal(rightVal) && !isTruthyValue(rightVal) {
 				return false, nil
 			}
-			if leftNull || rightNull {
+			if errL != nil {
+				return nil, errL
+			}
+			if errR != nil {
+				return nil, errR
+			}
+			if isNullVal(leftVal) || isNullVal(rightVal) {
 				return nil, nil
 			}
 			return true, nil
 
 		case TokenOr:
-			leftVal, err := EvalRowExpr(e.Left, row, execSubquery)
-			if err != nil {
-				return nil, err
-			}
-			leftNull := isNullVal(leftVal)
-			if !leftNull && isTruthyValue(leftVal) {
+			leftVal, errL := EvalRowExpr(e.Left, row, execSubquery)
+			if errL == nil && !isNullVal(leftVal) && isTruthyValue(leftVal) {
 				return true, nil
 			}
-			rightVal, err := EvalRowExpr(e.Right, row, execSubquery)
-			if err != nil {
-				return nil, err
-			}
-			rightNull := isNullVal(rightVal)
-			if !rightNull && isTruthyValue(rightVal) {
+			rightVal, errR := EvalRowExpr(e.Right, row, execSubquery)
+			if errR == nil && !isNullVal(rightVal) && isTruthyValue(rightVal) {
 				return true, nil
 			}
-			if leftNull || rightNull {
+			if errL != nil {
+				return nil, errL
+			}
+			if errR != nil {
+				return nil, errR
+			}
+			if isNullVal(leftVal) || isNullVal(rightVal) {
 				return nil, nil
 			}
 			return false, nil

@@ -467,30 +467,31 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 	// Logical AND/OR short-circuiting with SQL 3-Valued Logic (NULL = UNKNOWN)
 	if e.Op == proc.TokenAnd {
 		leftVal, okL := EvalTupleExprWithContext(t, e.Left, execSubquery, sessionVars)
-		if !okL {
+		if okL && leftVal != nil {
+			if sv, ok := leftVal.(storage.Value); !ok || !sv.IsNull {
+				if b, ok := leftVal.(bool); ok && !b {
+					return false, true
+				}
+			}
+		}
+		rightVal, okR := EvalTupleExprWithContext(t, e.Right, execSubquery, sessionVars)
+		if okR && rightVal != nil {
+			if sv, ok := rightVal.(storage.Value); !ok || !sv.IsNull {
+				if b, ok := rightVal.(bool); ok && !b {
+					return false, true
+				}
+			}
+		}
+		if !okL || !okR {
 			return false, false
 		}
 		leftNull := leftVal == nil
 		if sv, ok := leftVal.(storage.Value); ok && sv.IsNull {
 			leftNull = true
 		}
-		if !leftNull {
-			if b, ok := leftVal.(bool); ok && !b {
-				return false, true
-			}
-		}
-		rightVal, okR := EvalTupleExprWithContext(t, e.Right, execSubquery, sessionVars)
-		if !okR {
-			return false, false
-		}
 		rightNull := rightVal == nil
 		if sv, ok := rightVal.(storage.Value); ok && sv.IsNull {
 			rightNull = true
-		}
-		if !rightNull {
-			if b, ok := rightVal.(bool); ok && !b {
-				return false, true
-			}
 		}
 		if leftNull || rightNull {
 			return nil, true
@@ -505,30 +506,31 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 
 	if e.Op == proc.TokenOr {
 		leftVal, okL := EvalTupleExprWithContext(t, e.Left, execSubquery, sessionVars)
-		if !okL {
+		if okL && leftVal != nil {
+			if sv, ok := leftVal.(storage.Value); !ok || !sv.IsNull {
+				if b, ok := leftVal.(bool); ok && b {
+					return true, true
+				}
+			}
+		}
+		rightVal, okR := EvalTupleExprWithContext(t, e.Right, execSubquery, sessionVars)
+		if okR && rightVal != nil {
+			if sv, ok := rightVal.(storage.Value); !ok || !sv.IsNull {
+				if b, ok := rightVal.(bool); ok && b {
+					return true, true
+				}
+			}
+		}
+		if !okL || !okR {
 			return false, false
 		}
 		leftNull := leftVal == nil
 		if sv, ok := leftVal.(storage.Value); ok && sv.IsNull {
 			leftNull = true
 		}
-		if !leftNull {
-			if b, ok := leftVal.(bool); ok && b {
-				return true, true
-			}
-		}
-		rightVal, okR := EvalTupleExprWithContext(t, e.Right, execSubquery, sessionVars)
-		if !okR {
-			return false, false
-		}
 		rightNull := rightVal == nil
 		if sv, ok := rightVal.(storage.Value); ok && sv.IsNull {
 			rightNull = true
-		}
-		if !rightNull {
-			if b, ok := rightVal.(bool); ok && b {
-				return true, true
-			}
 		}
 		if leftNull || rightNull {
 			return nil, true

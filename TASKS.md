@@ -219,6 +219,7 @@
 | `DONE` | **`DEFECT-ENGINE-NOREC-3VL-IN-NULL-OR-1`** | `1.0-GA` | Engine | P1 | NULL 포함 IN 리스트 복합 OR 조건 3VL 논리 평가 불일치 결함 | [`test/spec_defects/spec_defect_1_test.go`](test/spec_defects/spec_defect_1_test.go) |  |
 | `DONE` | **`DEFECT-EXEC-ARITHMETIC-OVERFLOW-TRUTHY-EVAL-1`** | `1.0-GA` | Execution | P1 | WHERE 절 산술 오버플로우 에러를 boolean true(매칭)로 오평가하는 결함 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
 | `DONE` | **`DEFECT-EXEC-FLOAT-DECIMAL-SCALE-TRUNCATION-1`** | `1.0-GA` | Execution | P1 | tryDecimal float64 스케일 4 고정 단편화로 인한 FLOAT 컬럼 리터럴 비교 불일치 결함 | [`test/spec_defects/spec_defect_8_test.go`](test/spec_defects/spec_defect_8_test.go) |  |
+| `DONE` | **`DEFECT-NOREC-SHORTCIRCUIT-COMMUTATIVE-OR-1`** | `v0.94.0` | Engine | P1 | Resolve boolean OR/AND evaluation error short-circuit and preserve commutative equivalence (NoREC invariant) | [`test/spec_defects/spec_defect_norec_shortcircuit_test.go`](test/spec_defects/spec_defect_norec_shortcircuit_test.go) |  |
 | `DONE` | **`DEFECT-PG-ARRAY-SUBQUERY-CONSTRUCTOR-1`** | `v1.10.0` | Engine | P2 | ARRAY(SELECT ...) 서브쿼리 배열 생성자 파싱 결함 (psql \d 호환성) | [`docs/`](docs/) |  |
 | `DONE` | **`DEFECT-PG-CATALOG-PG-POLICY-1`** | `v1.10.0` | Catalog | P2 | psql \d 실행을 위한 pg_catalog.pg_policy 가상 뷰 누락 보완 | [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go) |  |
 | `DONE` | **`DEFECT-PG-ESCAPE-STRING-LITERAL-1`** | `v1.10.0` | Engine | P2 | PostgreSQL E'...' 이스케이프 문자열 파싱 결함 및 psql \l 호환성 복구 | [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go) |  |
@@ -2747,6 +2748,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-21 14:58:23
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`test/spec_defects/spec_defect_8_test.go`](test/spec_defects/spec_defect_8_test.go)
+
+---
+
+### [DONE] Resolve boolean OR/AND evaluation error short-circuit and preserve commutative equivalence (NoREC invariant) `DEFECT-NOREC-SHORTCIRCUIT-COMMUTATIVE-OR-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-22 09:36:39
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`test/spec_defects/spec_defect_norec_shortcircuit_test.go`](test/spec_defects/spec_defect_norec_shortcircuit_test.go)
 
 ---
 
