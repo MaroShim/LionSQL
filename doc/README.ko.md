@@ -60,7 +60,7 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
 고가용성, 보안, 스토리지 암호화, API 및 백엔드 서비스 운영 지침입니다.
 
 * **운영 및 모니터링**:
-  * **[`OPERATIONS.md`](OPERATIONS.md)**: 무중단 프로덕션 운영, 시스템 튜닝, 백업 및 복구 파이프라인.
+  * **[`OPERATIONS.ko.md`](OPERATIONS.ko.md)** ([English](OPERATIONS.md)): 무중단 프로덕션 운영, 시스템 튜닝, 백업 및 복구 파이프라인.
   * **[`HIGH_AVAILABILITY.md`](HIGH_AVAILABILITY.md)**: 1-Writer Multi-Reader WAL 실시간 복제 및 페일오버.
   * **[`METRICS.md`](METRICS.md)**: Prometheus (`/metrics`) 엔드포인트 및 내부 성능 계측 지표.
   * **[`TRANSACTION_PERFORMANCE_GUIDE.ko.md`](TRANSACTION_PERFORMANCE_GUIDE.ko.md)** ([English](TRANSACTION_PERFORMANCE_GUIDE.md)): 고동시성 트랜잭션 성능 최적화 가이드.

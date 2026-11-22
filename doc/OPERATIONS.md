@@ -254,6 +254,51 @@ server {
 | `1433` | TCP | Private VPC / Internal | Microsoft TDS Protocol (SSMS, sqlcmd, drivers) |
 | `8090` | TCP | Localhost / Reverse Proxy | Embedded Web Studio, REST API, Health & Metrics |
 
+### 5.3. Production Pre-Flight Security & Port Hardening Checklist
+
+> [!CAUTION]
+> **Zero-Trust Production Lockdown Requirement**:
+> In development, LionSQL defaults to binding all listeners to `127.0.0.1` and provisions a default administrator account (`admin@lionsql.local` / `1234567890`) to facilitate frictionless local onboarding. **Deploying these defaults directly to staging or production is strictly forbidden.**
+
+Before exposing LionSQL to network traffic, verify and enforce the following mandatory pre-flight controls:
+
+1. **Mandatory Superuser Credential Override**:
+   - LionSQL logs a prominent startup warning if the default password is unchanged:
+     `WARNING: DEFAULT SUPERUSER PASSWORD HAS NOT BEEN CHANGED! CHANGE PASSWORD IMMEDIATELY TO PREVENT UNAUTHORIZED ACCESS!`
+   - Override the default credentials via CLI flags or environment variables:
+     ```bash
+     -admin-email="dba@company.com" -admin-pass="StrongUniquePassphrase123!#"
+     # Or via environment variables:
+     export LIONSQL_ADMIN_EMAIL="dba@company.com"
+     export LIONSQL_ADMIN_PASS="StrongUniquePassphrase123!#"
+     ```
+
+2. **Disabling Unused Wire Protocols (Minimizing Attack Surface & Port Collisions)**:
+   - LionSQL concurrently initializes three distinct wire protocol listeners by default: PGWire (`:5433`), TDS (`:1433`), and HTTP/Studio (`:8090`).
+   - If your production architecture only utilizes one protocol, disable all unused listeners to prevent port conflicts, conserve file descriptors, and eliminate unnecessary network exposure:
+     ```bash
+     # Case A: Pure PostgreSQL / ORM Microservice (Disable TDS and Web Studio)
+     lionsql serve -pg=0.0.0.0:5433 -tds="" -no-studio
+     # (Or disable HTTP completely if no REST/health monitoring is needed: -http="")
+
+     # Case B: Pure SQL Server / SSMS Workload (Disable PostgreSQL and Web Studio)
+     lionsql serve -tds=0.0.0.0:1433 -pg="" -no-studio
+
+     # Case C: Headless High-Security DB (Keep health check API, disable Web Studio UI)
+     lionsql serve -pg=0.0.0.0:5433 -tds=0.0.0.0:1433 -http=127.0.0.1:8090 -no-studio
+     ```
+
+3. **Restricting Listener Interfaces (Localhost vs. Public Binding)**:
+   - By default, all listeners bind strictly to `127.0.0.1`.
+   - Never bind `-http` directly to `0.0.0.0` in public networks. Keep HTTP bound to `127.0.0.1:8090` behind a hardened reverse proxy (Nginx/Caddy) with HTTPS and rate-limiting.
+   - For database ports (`-pg`, `-tds`), bind strictly to private VPC network interfaces (e.g. `-pg=10.0.1.20:5433`) rather than exposing them directly to the public internet.
+
+4. **Enforcing SSL/TLS Encryption**:
+   - Enforce encrypted transport across all wire connections:
+     ```bash
+     -tls -tls-cert=/etc/lionsql/certs/server.crt -tls-key=/etc/lionsql/certs/server.key -require-ssl
+     ```
+
 ---
 
 ## 6. Health Monitoring & Observability

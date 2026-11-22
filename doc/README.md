@@ -59,7 +59,7 @@ Guides for client tools, query development, SQL ergonomics, and verification sui
 Operational procedures, high availability, security hardening, APIs, and background services.
 
 * **Operations & Monitoring**:
-  * **[`OPERATIONS.md`](OPERATIONS.md)**: Production deployment, kernel tuning, and backup/restore workflows.
+  * **[`OPERATIONS.md`](OPERATIONS.md)** ([Korean](OPERATIONS.ko.md)): Production deployment, kernel tuning, and backup/restore workflows.
   * **[`HIGH_AVAILABILITY.md`](HIGH_AVAILABILITY.md)**: 1-Writer Multi-Reader live replication streaming and failover.
   * **[`METRICS.md`](METRICS.md)**: Prometheus (`/metrics`) telemetry metrics and internal diagnostics.
   * **[`TRANSACTION_PERFORMANCE_GUIDE.md`](TRANSACTION_PERFORMANCE_GUIDE.md)** ([Korean](TRANSACTION_PERFORMANCE_GUIDE.ko.md)): Concurrency tuning guide.
