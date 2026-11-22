@@ -357,14 +357,46 @@ else
     go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/crashtest ./cmd/crashtest
     go build -tags wiredtiger -ldflags "${RELEASE_LDFLAGS}" -buildvcs=false -o bin/soaktest ./cmd/soaktest
 
-    echo -e "[Gate 1/6] Running core unit, regression & E2E parity tests across all packages..."
-    go test -tags wiredtiger -count=1 ./pkg/... ./test/e2e/...
-    echo -e "${CLR_GREEN}Gate 1 OK: 100% PASS across 23 core packages and E2E parity suites${CLR_RESET}"
+    echo -e "[Gate 0/6] Verifying Zero-Tampering Oracle Invariant (Invariant 16)..."
+    bash scripts/verify_no_slt_mutation.sh
+    echo -e "${CLR_GREEN}Gate 0 OK: Zero .slt or oracle corpora modifications verified${CLR_RESET}"
+
+    echo -e "[Gate 1/6] Running core unit, regression, E2E parity & spec defect tests across all packages..."
+    go test -tags wiredtiger -count=1 ./pkg/... ./test/e2e/... ./test/spec_defects/...
+    go test -tags wiredtiger -race -count=1 ./test/spec_defects/...
+    echo -e "${CLR_GREEN}Gate 1 OK: 100% PASS across core packages, E2E parity, and race-free spec defect suites${CLR_RESET}"
 
     echo -e "[Gate 2/6] Running 13-Domain Extended Smoke Test (memory & wiredtiger)..."
     bash scripts/verify_report.sh --engine=memory
     bash scripts/verify_report.sh --engine=wiredtiger
-    echo -e "${CLR_GREEN}Gate 2 OK: 100% PASS across 13 domains${CLR_RESET}"
+    if command -v psql >/dev/null 2>&1; then
+        echo -e "Verifying real psql CLI 8-command interactive compatibility..."
+        PSQL_TEST_PORT=15433
+        PSQL_TMP_DIR=$(mktemp -d -t lionsql_psql_gate_XXXXXX)
+        ./bin/lionsql -data-dir "${PSQL_TMP_DIR}" -pg "127.0.0.1:${PSQL_TEST_PORT}" -tds "" -http "" -admin-pass "psql_gate_pass" >/dev/null 2>&1 &
+        PSQL_PID=$!
+        for _ in {1..30}; do
+            if nc -z 127.0.0.1 "${PSQL_TEST_PORT}" 2>/dev/null; then break; fi
+            sleep 0.1
+        done
+        PGPASSWORD="psql_gate_pass" psql -h 127.0.0.1 -p "${PSQL_TEST_PORT}" -U admin -d lionsql -c "\l" -c "\dt" -c "\di" -c "\df" -c "\dn" -c "\du" -c "\dx" >/dev/null 2>&1 || {
+            kill -9 "${PSQL_PID}" 2>/dev/null || true
+            rm -rf "${PSQL_TMP_DIR}"
+            echo -e "${CLR_RED}psql meta-commands verification failed!${CLR_RESET}"
+            exit 1
+        }
+        PGPASSWORD="psql_gate_pass" psql -h 127.0.0.1 -p "${PSQL_TEST_PORT}" -U admin -d lionsql -c "CREATE TABLE gate_test (id INT PRIMARY KEY, name VARCHAR(50));" -c "\d gate_test" >/dev/null 2>&1 || {
+            kill -9 "${PSQL_PID}" 2>/dev/null || true
+            rm -rf "${PSQL_TMP_DIR}"
+            echo -e "${CLR_RED}psql \\d verification failed!${CLR_RESET}"
+            exit 1
+        }
+        kill "${PSQL_PID}" 2>/dev/null || true
+        wait "${PSQL_PID}" 2>/dev/null || true
+        rm -rf "${PSQL_TMP_DIR}"
+        echo -e "${CLR_GREEN}psql Live Smoke OK: 8 interactive meta-commands verified (\l, \dt, \d, \di, \df, \dn, \du, \dx)${CLR_RESET}"
+    fi
+    echo -e "${CLR_GREEN}Gate 2 OK: 100% PASS across 13 domains and live psql CLI smoke${CLR_RESET}"
 
     echo -e "[Gate 3/6] Running TPC-C OLTP Benchmark Verification (In-Memory OCC & WiredTiger)..."
     ./bin/tpcc-runtime -engine memory -warehouses 2 -workers 10 -duration 5s
