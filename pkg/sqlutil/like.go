@@ -104,8 +104,15 @@ func matchBracket(pRunes []rune, pIdx, pLen int, ch rune, caseInsensitive bool) 
 	if pIdx >= pLen || pRunes[pIdx] != '[' {
 		return false, pIdx, false
 	}
+	searchStart := pIdx + 1
+	if searchStart < pLen && pRunes[searchStart] == '^' {
+		searchStart++
+	}
+	if searchStart < pLen && pRunes[searchStart] == ']' {
+		searchStart++
+	}
 	endIdx := -1
-	for i := pIdx + 1; i < pLen; i++ {
+	for i := searchStart; i < pLen; i++ {
 		if pRunes[i] == ']' {
 			endIdx = i
 			break

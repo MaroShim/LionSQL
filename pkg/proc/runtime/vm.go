@@ -1506,6 +1506,16 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 		rows = append(rows, tuple.ToMap())
 	}
 
+	if qInfo.IsTopPercent && qInfo.LimitCount >= 0 {
+		effectiveLimit := int64(math.Ceil(float64(len(rows)) * float64(qInfo.LimitCount) / 100.0))
+		if effectiveLimit < int64(len(rows)) {
+			rows = rows[:effectiveLimit]
+			if len(values) >= int(effectiveLimit) {
+				values = values[:effectiveLimit]
+			}
+		}
+	}
+
 	cols := exec.Schema()
 	if len(cols) == 0 && len(rows) > 0 {
 		for k := range rows[0] {

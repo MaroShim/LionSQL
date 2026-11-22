@@ -1617,6 +1617,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				} else if cs.VarLengths != nil {
 					delete(cs.VarLengths, varName)
 				}
+				dt := proc.ParseDataType(typeName)
+				cs.SetVarTypeLocked(varName, dt)
 			}
 			var val any = nil
 			if len(eqParts) == 2 {
@@ -1638,14 +1640,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 					}
 				}
 			}
-			if val != nil {
-				if maxLen, ok := cs.VarLengths[varName]; ok && maxLen > 0 {
-					if sVal, ok := val.(string); ok && len(sVal) > maxLen {
-						val = sVal[:maxLen]
-					}
-				}
-			}
-			cs.Vars[varName] = val
+			cs.CoerceAndSetVarLocked(varName, val)
 		}
 		cs.Mu.Unlock()
 		return &QueryResult{
@@ -1660,17 +1655,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		cs.Mu.Lock()
 		defer cs.Mu.Unlock()
 		val := evalSessionVarExpr(rawExpr, cs.Vars)
-		if maxLen, ok := cs.VarLengths["@"+varName]; ok && maxLen > 0 {
-			if sVal, ok := val.(string); ok && len(sVal) > maxLen {
-				val = sVal[:maxLen]
-			}
-		}
-		clean := strings.TrimPrefix(varName, "@")
-		lower := strings.ToLower(clean)
-		cs.Vars["@"+clean] = val
-		cs.Vars[clean] = val
-		cs.Vars["@"+lower] = val
-		cs.Vars[lower] = val
+		cs.CoerceAndSetVarLocked(varName, val)
 		return &QueryResult{
 			Success:    true,
 			Command:    "SET",

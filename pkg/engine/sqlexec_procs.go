@@ -1179,12 +1179,7 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 					found = true
 				}
 				if found {
-					cleanCall := strings.TrimPrefix(callerVar, "@")
-					lowerCall := strings.ToLower(cleanCall)
-					cs.Vars["@"+cleanCall] = outVal
-					cs.Vars[cleanCall] = outVal
-					cs.Vars["@"+lowerCall] = outVal
-					cs.Vars[lowerCall] = outVal
+					cs.CoerceAndSetVarLocked(callerVar, outVal)
 				}
 			}
 		}
@@ -1483,12 +1478,7 @@ func (s *Coordinator) execSpExecuteSQL(args []string, rawArgs []string, start ti
 				found = true
 			}
 			if found {
-				cleanCall := strings.TrimPrefix(callerVar, "@")
-				lowerCall := strings.ToLower(cleanCall)
-				cs.Vars["@"+cleanCall] = outVal
-				cs.Vars[cleanCall] = outVal
-				cs.Vars["@"+lowerCall] = outVal
-				cs.Vars[lowerCall] = outVal
+				cs.CoerceAndSetVarLocked(callerVar, outVal)
 			}
 		}
 		cs.Mu.Unlock()

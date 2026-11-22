@@ -1973,8 +1973,10 @@ func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style i
 		case storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
 			i = v.TVal.Unix()
 		case storage.TypeDecimal:
-			f := v.DVal.Float64()
-			i = int64(f)
+			if !v.DVal.IsInt64() {
+				return fail(fmt.Errorf("arithmetic overflow error converting numeric to data type bigint"))
+			}
+			i = v.DVal.Int64()
 		default:
 			return fail(fmt.Errorf("unsupported conversion from %v to int", v.Type))
 		}

@@ -443,6 +443,15 @@ func (d Decimal) Float64() float64 {
 	return f
 }
 
+// IsInt64 reports whether the truncated integer part of Decimal fits within int64.
+func (d Decimal) IsInt64() bool {
+	rescaled := d.Rescale(0)
+	if rescaled.value == nil {
+		return true
+	}
+	return rescaled.value.IsInt64()
+}
+
 // Int64 converts Decimal to int64 by truncating fractional digits.
 func (d Decimal) Int64() int64 {
 	rescaled := d.Rescale(0)

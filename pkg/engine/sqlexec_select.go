@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -230,6 +231,16 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		}
 		if err == io.EOF {
 			break
+		}
+	}
+
+	if qInfo.IsTopPercent && qInfo.LimitCount >= 0 {
+		effectiveLimit := int64(math.Ceil(float64(len(rows)) * float64(qInfo.LimitCount) / 100.0))
+		if effectiveLimit < int64(len(rows)) {
+			rows = rows[:effectiveLimit]
+			if len(values) >= int(effectiveLimit) {
+				values = values[:effectiveLimit]
+			}
 		}
 	}
 
@@ -2585,8 +2596,12 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 			aggRows = nil
 		}
 	}
-	if qInfo.LimitCount >= 0 && int64(len(aggRows)) > qInfo.LimitCount {
-		aggRows = aggRows[:qInfo.LimitCount]
+	effectiveLimit := qInfo.LimitCount
+	if qInfo.IsTopPercent && effectiveLimit >= 0 {
+		effectiveLimit = int64(math.Ceil(float64(len(aggRows)) * float64(effectiveLimit) / 100.0))
+	}
+	if effectiveLimit >= 0 && int64(len(aggRows)) > effectiveLimit {
+		aggRows = aggRows[:effectiveLimit]
 	}
 
 	// 7. Project final rows strictly to colHeaders
@@ -2746,17 +2761,7 @@ func (s *Coordinator) setSessionVar(cs *ClientSession, varName string, val any) 
 	if sv, ok := val.(storage.Value); ok {
 		val = formatStorageValue(sv)
 	}
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
-	if cs.Vars == nil {
-		cs.Vars = make(map[string]any, 8)
-	}
-	clean := strings.TrimPrefix(varName, "@")
-	cs.Vars["@"+clean] = val
-	cs.Vars[clean] = val
-	lower := strings.ToLower(clean)
-	cs.Vars["@"+lower] = val
-	cs.Vars[lower] = val
+	cs.CoerceAndSetVar(varName, val)
 }
 
 func (s *Coordinator) tryExecSelectVarAssignment(query string, start time.Time, cs *ClientSession) (bool, *QueryResult, error) {

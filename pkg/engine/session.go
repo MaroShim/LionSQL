@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -73,8 +74,9 @@ type ClientSession struct {
 	Session         storage.Session
 	TxMgr           *tx.Manager // dedicated transaction manager and command serializer (SSOT)
 	Vars            map[string]any
-	VarLengths      map[string]int    // @var -> max length constraint (e.g. VARCHAR(1))
-	TableVars       map[string]string // @table_var -> physical table name
+	VarTypes        map[string]storage.DataType // @var -> declared storage data type (e.g. TypeInt)
+	VarLengths      map[string]int              // @var -> max length constraint (e.g. VARCHAR(1))
+	TableVars       map[string]string           // @table_var -> physical table name
 	TempTableMap    map[string]string // user #temp_table name -> physical __temp_<sessionID>_tableName (SSOT)
 	EphemeralTables map[string]*EphemeralTable // session-local in-memory ephemeral tables (e.g. materialized CTEs)
 	PreparedStmts   map[string]*PreparedStatement
@@ -148,6 +150,221 @@ func (cs *ClientSession) GetQueryContext() context.Context {
 		return ctx
 	}
 	return context.Background()
+}
+
+// SetVarTypeLocked records the declared DataType of a variable. MUST be called with cs.Mu held.
+func (cs *ClientSession) SetVarTypeLocked(name string, dt storage.DataType) {
+	if cs.VarTypes == nil {
+		cs.VarTypes = make(map[string]storage.DataType)
+	}
+	clean := strings.TrimPrefix(name, "@")
+	lower := strings.ToLower(clean)
+	cs.VarTypes["@"+clean] = dt
+	cs.VarTypes[clean] = dt
+	cs.VarTypes["@"+lower] = dt
+	cs.VarTypes[lower] = dt
+}
+
+// CoerceAndSetVarLocked coerces val according to the variable's declared DataType (if any)
+// and length constraint, storing it across canonical aliases. MUST be called with cs.Mu held.
+func (cs *ClientSession) CoerceAndSetVarLocked(name string, val any) {
+	if cs.Vars == nil {
+		cs.Vars = make(map[string]any)
+	}
+	clean := strings.TrimPrefix(name, "@")
+	lower := strings.ToLower(clean)
+
+	var dt storage.DataType = storage.TypeUnknown
+	if cs.VarTypes != nil {
+		if t, ok := cs.VarTypes["@"+lower]; ok {
+			dt = t
+		} else if t, ok := cs.VarTypes[lower]; ok {
+			dt = t
+		}
+	}
+
+	if dt != storage.TypeUnknown && val != nil {
+		val = coerceAnyToDataType(val, dt)
+	}
+
+	if maxLen, ok := cs.VarLengths["@"+lower]; ok && maxLen > 0 {
+		if sVal, ok := val.(string); ok && len(sVal) > maxLen {
+			val = sVal[:maxLen]
+		}
+	} else if maxLen, ok := cs.VarLengths[lower]; ok && maxLen > 0 {
+		if sVal, ok := val.(string); ok && len(sVal) > maxLen {
+			val = sVal[:maxLen]
+		}
+	}
+
+	cs.Vars["@"+clean] = val
+	cs.Vars[clean] = val
+	cs.Vars["@"+lower] = val
+	cs.Vars[lower] = val
+}
+
+// CoerceAndSetVar is a thread-safe wrapper around CoerceAndSetVarLocked.
+func (cs *ClientSession) CoerceAndSetVar(name string, val any) {
+	if cs == nil {
+		return
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	cs.CoerceAndSetVarLocked(name, val)
+}
+
+func coerceAnyToDataType(val any, dt storage.DataType) any {
+	if val == nil {
+		return nil
+	}
+	if sv, ok := val.(storage.Value); ok {
+		if sv.IsNull {
+			return nil
+		}
+		val = sv.Interface()
+	}
+	switch dt {
+	case storage.TypeInt:
+		switch v := val.(type) {
+		case int:
+			return int64(v)
+		case int8:
+			return int64(v)
+		case int16:
+			return int64(v)
+		case int32:
+			return int64(v)
+		case int64:
+			return v
+		case uint:
+			return int64(v)
+		case uint8:
+			return int64(v)
+		case uint16:
+			return int64(v)
+		case uint32:
+			return int64(v)
+		case uint64:
+			return int64(v)
+		case float32:
+			return int64(v)
+		case float64:
+			return int64(v)
+		case bool:
+			if v {
+				return int64(1)
+			}
+			return int64(0)
+		case storage.Decimal:
+			return int64(v.Float64())
+		case *storage.Decimal:
+			if v != nil {
+				return int64(v.Float64())
+			}
+			return int64(0)
+		case string:
+			s := strings.TrimSpace(v)
+			if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+				return i
+			}
+			if f, err := strconv.ParseFloat(s, 64); err == nil {
+				return int64(f)
+			}
+			return val
+		default:
+			return val
+		}
+	case storage.TypeFloat, storage.TypeReal:
+		switch v := val.(type) {
+		case float32:
+			if dt == storage.TypeReal {
+				return v
+			}
+			return float64(v)
+		case float64:
+			if dt == storage.TypeReal {
+				return float32(v)
+			}
+			return v
+		case int:
+			return float64(v)
+		case int64:
+			return float64(v)
+		case storage.Decimal:
+			if dt == storage.TypeReal {
+				return float32(v.Float64())
+			}
+			return v.Float64()
+		case *storage.Decimal:
+			if v != nil {
+				if dt == storage.TypeReal {
+					return float32(v.Float64())
+				}
+				return v.Float64()
+			}
+			return float64(0)
+		case string:
+			if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
+				if dt == storage.TypeReal {
+					return float32(f)
+				}
+				return f
+			}
+			return val
+		default:
+			return val
+		}
+	case storage.TypeDecimal:
+		switch v := val.(type) {
+		case storage.Decimal:
+			return v
+		case *storage.Decimal:
+			if v != nil {
+				return *v
+			}
+			return storage.ZeroDecimal(0)
+		case int:
+			return storage.NewDecimalFromInt(int64(v), 0)
+		case int64:
+			return storage.NewDecimalFromInt(v, 0)
+		case float64:
+			return storage.NewDecimalFromFloat(v, 4)
+		case string:
+			if dec, err := storage.ParseDecimal(v); err == nil {
+				return dec
+			}
+			return val
+		default:
+			return val
+		}
+	case storage.TypeBool:
+		switch v := val.(type) {
+		case bool:
+			return v
+		case int:
+			return v != 0
+		case int64:
+			return v != 0
+		case float64:
+			return v != 0
+		case string:
+			s := strings.Trim(strings.TrimSpace(v), "'\"")
+			return strings.EqualFold(s, "true") || s == "1"
+		default:
+			return val
+		}
+	case storage.TypeVarChar:
+		switch v := val.(type) {
+		case string:
+			return v
+		case []byte:
+			return string(v)
+		default:
+			return fmt.Sprintf("%v", v)
+		}
+	default:
+		return val
+	}
 }
 
 // GetUser safely returns the active database user principal under cs.Mu.

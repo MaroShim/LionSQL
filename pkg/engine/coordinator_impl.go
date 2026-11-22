@@ -520,6 +520,7 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 		Session:         sess,
 		Database:        defaultDB,
 		Vars:            make(map[string]any),
+		VarTypes:        make(map[string]storage.DataType),
 		VarLengths:      make(map[string]int),
 		TableVars:       make(map[string]string),
 		TempTableMap:    make(map[string]string),
@@ -797,6 +798,7 @@ func (c *Coordinator) ResetSession(id string, resetTx bool) error {
 	cs.Vars["search_path"] = `"$user", public`
 	cs.Vars["timezone"] = "UTC"
 	cs.VarLengths = nil
+	cs.VarTypes = nil
 
 	// Revert user impersonation (SETUSER / EXECUTE AS)
 	if cs.OriginalUser != "" || len(cs.ImpersonationStack) > 0 {

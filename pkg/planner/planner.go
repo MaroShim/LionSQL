@@ -188,6 +188,7 @@ type QueryInfo struct {
 	HavingClause  string
 	OrderByClause string
 	LimitCount    int64
+	IsTopPercent  bool
 	OffsetCount   int64
 	HasAggregates bool
 	Distinct      bool
@@ -416,6 +417,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		HavingClause:  havingClause,
 		OrderByClause: orderByClause,
 		LimitCount:    stmt.Limit,
+		IsTopPercent:  stmt.TopPercent,
 		OffsetCount:   stmt.Offset,
 		HasAggregates: hasAgg,
 		Distinct:      stmt.Distinct,
@@ -1918,9 +1920,9 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 	}
 
 	// Limit Node
-	if q.LimitCount >= 0 || q.OffsetCount > 0 {
+	if (!q.IsTopPercent && q.LimitCount >= 0) || q.OffsetCount > 0 {
 		limitEstRows := currentNode.EstimatedRows
-		if q.LimitCount >= 0 && q.LimitCount < limitEstRows {
+		if !q.IsTopPercent && q.LimitCount >= 0 && q.LimitCount < limitEstRows {
 			limitEstRows = q.LimitCount
 		}
 
@@ -1930,9 +1932,13 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		}
 		limitCost := currentNode.StartupCost + (currentNode.TotalCost-currentNode.StartupCost)*ratio
 
+		limitCnt := q.LimitCount
+		if q.IsTopPercent {
+			limitCnt = -1
+		}
 		limitNode := &PlanNode{
 			Type:          NodeLimit,
-			LimitCount:    q.LimitCount,
+			LimitCount:    limitCnt,
 			OffsetCount:   q.OffsetCount,
 			StartupCost:   currentNode.StartupCost,
 			TotalCost:     limitCost,
