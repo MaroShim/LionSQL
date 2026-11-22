@@ -291,3 +291,53 @@ func TestSQLLogicTest_Duality_DualPath_PGWire(t *testing.T) {
 		})
 	}
 }
+
+func runPlanCacheSLTFile(t *testing.T, file string) {
+	t.Helper()
+	records, err := slt.ParseFile(file)
+	if err != nil {
+		t.Fatalf("failed to parse %s: %v", file, err)
+	}
+
+	// Coordinator Cold (PlanCache cleared before every query)
+	var engCold storage.Engine = memengine.New()
+	_ = engCold.Open("")
+	defer engCold.Close()
+	catCold := catalog.New(engCold)
+	coordCold := engine.NewCoordinator(catCold, engCold, engine.DefaultConfig())
+	defer coordCold.Close()
+	execCold := slt.NewColdCoordinatorExecutor(coordCold, "slt_cold")
+
+	// Coordinator Hot (PlanCache retained, read-only queries executed twice from hot cache)
+	var engHot storage.Engine = memengine.New()
+	_ = engHot.Open("")
+	defer engHot.Close()
+	catHot := catalog.New(engHot)
+	coordHot := engine.NewCoordinator(catHot, engHot, engine.DefaultConfig())
+	defer coordHot.Close()
+	execHot := slt.NewHotCoordinatorExecutor(coordHot, "slt_hot")
+
+	dualityExec := slt.NewDualityExecutor(execCold, "Cold_Compilation", execHot, "Hot_PlanCache")
+
+	passCount := 0
+	for i, rec := range records {
+		if err := slt.RunRecord(dualityExec, rec); err != nil {
+			t.Fatalf("[%s:%d] record #%d PlanCache Duality mismatch: %v\nSQL:\n%s",
+				rec.FilePath, rec.LineNumber, i, err, rec.SQL)
+		}
+		passCount++
+	}
+	t.Logf("[%s] 100%% PASS: verified %d records over PlanCache Duality (Cold vs Hot)", file, passCount)
+}
+
+// TestSQLLogicTest_Duality_PlanCache executes SQLLogicTest core suites simultaneously
+// comparing Cold Compilation vs Hot PlanCache execution, proving 100% execution symmetry and cache immutability (SLT-DUALITY-PLANCACHE-1).
+func TestSQLLogicTest_Duality_PlanCache(t *testing.T) {
+	testSuites := discoverSLTFiles(t)
+
+	for _, file := range testSuites {
+		t.Run(file, func(t *testing.T) {
+			runPlanCacheSLTFile(t, file)
+		})
+	}
+}

@@ -527,7 +527,7 @@
 | `DONE` | **`SEED-EMBED-UNIFY-1`** | `Ecosystem` | --milestone | P1 | 데모 시드 스크립트(demo_seed.sql) 단일 바이너리 내장 및 Web Studio 시드 데이터 일치화 | [`--domain`](--domain) |  |
 | `DONE` | **`SLT-DUALITY-DUALPATH-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario E: Protocol Dual-Path Symmetry SLT (TDS Batch/RPC & PGWire Simple/Extended) | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`SLT-DUALITY-PARSER-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario C: Dual-Parser Differential Equivalence SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
-| `PENDING` | **`SLT-DUALITY-PLANCACHE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario F: Cold Compilation vs Hot PlanCache Duality (Cache Mutation Safety) | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
+| `DONE` | **`SLT-DUALITY-PLANCACHE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario F: Cold Compilation vs Hot PlanCache Duality (Cache Mutation Safety) | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`SLT-DUALITY-STORAGE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario B: Dual-Storage Twin-Engine SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`SLT-DUALITY-TSQL-WIRE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario D: T-SQL Stored Procedure 30 Core Suites Wire Duality (TDS :1433 vs In-Proc) | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`SLT-DUALITY-WIRE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario A: Dual-Wire Differential SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
@@ -5108,8 +5108,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Duality SLT Scenario F: Cold Compilation vs Hot PlanCache Duality (Cache Mutation Safety) `SLT-DUALITY-PLANCACHE-1`
-- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-22 13:25:48
+### [DONE] Duality SLT Scenario F: Cold Compilation vs Hot PlanCache Duality (Cache Mutation Safety) `SLT-DUALITY-PLANCACHE-1`
+- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-22 14:15:26
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)
 

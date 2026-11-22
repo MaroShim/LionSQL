@@ -43,11 +43,15 @@ func (e *CoordinatorExecutor) Execute(sqlStr string) ([]string, []map[string]any
 	if err != nil {
 		return nil, nil, err
 	}
+	return DecodeQueryResult(res)
+}
+
+// DecodeQueryResult advances to the final result set in the chain and decodes columns/rows,
+// safely disambiguating duplicate column names to protect against map key collisions.
+func DecodeQueryResult(res *engine.QueryResult) ([]string, []map[string]any, error) {
 	if res == nil {
 		return nil, nil, nil
 	}
-	// For SQLLogicTest query assertions across multi-statement batches,
-	// advance to the final result set in the chain.
 	for res.Next != nil {
 		res = res.Next
 	}

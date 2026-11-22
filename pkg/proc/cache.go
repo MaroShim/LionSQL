@@ -86,6 +86,20 @@ func (c *PlanCache) PutByName(name string, plan *CreateProcStmt) {
 	c.plans[name] = plan
 }
 
+// Clear flushes all cached procedure ASTs.
+func (c *PlanCache) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.plans = make(map[string]*CreateProcStmt)
+}
+
+// Len returns the number of cached plans.
+func (c *PlanCache) Len() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.plans)
+}
+
 func hashScript(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])

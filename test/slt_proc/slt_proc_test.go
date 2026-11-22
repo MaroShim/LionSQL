@@ -328,3 +328,59 @@ func TestTSQL_Duality_DualPath_TDS(t *testing.T) {
 		})
 	}
 }
+
+// TestTSQL_Duality_PlanCache_CoreProcedures executes all 30 core T-SQL stored procedure suites
+// simultaneously comparing Cold Compilation vs Hot PlanCache execution, proving 100% execution symmetry
+// and verifying that cached plans are immutable across repeated executions (SLT-DUALITY-PLANCACHE-1).
+func TestTSQL_Duality_PlanCache_CoreProcedures(t *testing.T) {
+	files1, err := filepath.Glob("0*.slt")
+	if err != nil {
+		t.Fatalf("failed to glob 0*.slt: %v", err)
+	}
+	files2, _ := filepath.Glob("[1-3]*.slt")
+	coreFiles := append(files1, files2...)
+
+	if len(coreFiles) != 30 {
+		t.Fatalf("expected 30 core T-SQL procedure suites, found %d", len(coreFiles))
+	}
+
+	for _, file := range coreFiles {
+		file := file
+		t.Run(file, func(t *testing.T) {
+			records, err := slt.ParseFile(file)
+			if err != nil {
+				t.Fatalf("failed to parse %s: %v", file, err)
+			}
+
+			// Track A: Cold Coordinator (PlanCaches flushed on every statement)
+			var engCold storage.Engine = memengine.New()
+			_ = engCold.Open("")
+			defer engCold.Close()
+			catCold := catalog.New(engCold)
+			coordCold := engine.NewCoordinator(catCold, engCold, engine.DefaultConfig())
+			defer coordCold.Close()
+			execCold := slt.NewColdCoordinatorExecutor(coordCold, "slt_proc_cold")
+
+			// Track B: Hot Coordinator (PlanCaches retained and reused)
+			var engHot storage.Engine = memengine.New()
+			_ = engHot.Open("")
+			defer engHot.Close()
+			catHot := catalog.New(engHot)
+			coordHot := engine.NewCoordinator(catHot, engHot, engine.DefaultConfig())
+			defer coordHot.Close()
+			execHot := slt.NewHotCoordinatorExecutor(coordHot, "slt_proc_hot")
+
+			dualityExec := slt.NewDualityExecutor(execCold, "Cold_Compilation", execHot, "Hot_PlanCache")
+
+			passCount := 0
+			for i, rec := range records {
+				if err := slt.RunRecord(dualityExec, rec); err != nil {
+					t.Fatalf("[%s:%d] record #%d PlanCache Duality failure: %v\nSQL:\n%s",
+						rec.FilePath, rec.LineNumber, i, err, rec.SQL)
+				}
+				passCount++
+			}
+			t.Logf("[%s] 100%% PASS: verified %d records over PlanCache Duality", file, passCount)
+		})
+	}
+}
