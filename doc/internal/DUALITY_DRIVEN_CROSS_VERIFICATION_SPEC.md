@@ -104,13 +104,47 @@ This specification transforms these dual tracks into a **Self-Checking Living Or
 
 ---
 
-## 5. Verification Status
+## 5. Real-World Case Studies Uncovered by Duality SLT
 
-All 6 Duality Cross-Verification scenarios are integrated into the automated release pipeline (`scripts/release.sh`) and continuous integration test suites.
-- `gate_protocol_symmetry_test.go`: Verified in Gate 1.
-- `wire_duality_test.go`: 10,706 queries verified.
-- `storage_duality_test.go`: 21,412 queries verified.
-- `parser_duality_test.go`: 64 suites verified.
-- `proc_wire_duality_test.go`: 30 suites verified.
-- `dualpath_duality_test.go`: 64 suites verified.
-- `plancache_duality_test.go`: 64 suites verified.
+When running Scenario A (Dual-Wire SLT: TDS `:1433` vs PGWire `:5433`) on the 32 core suites, two latent defects previously masked by single-wire testing were immediately pinpointed:
+
+### Case 1: Dot-Splitting Identifier Truncation in Nested Aggregate Expressions
+- **Location**: `pkg/wire/tds/token.go:CleanTDSColumnName`
+- **Trigger**: `test/slt/core/agg_stress.slt:68`
+- **Query**:
+  ```sql
+  SELECT d.dept_name, COUNT(o.order_id), COALESCE(SUM(o.amount), 0)
+  FROM slt_sales_dept d
+  LEFT JOIN slt_sales_orders o ON d.dept_id = o.dept_id
+  GROUP BY d.dept_name
+  ORDER BY d.dept_name;
+  ```
+- **Discrepancy**: TDS truncated the column name to `"amount), 0)"` due to context-blind `strings.LastIndex(name, ".")`, while PGWire preserved the full expression `COALESCE(SUM(o.amount), 0)`.
+- **Root Cause & Fix**: Single-wire TDS tests masked this because both sender and receiver shared the same corrupted key. Cross-verification exposed the column header and cell mismatch immediately. Fixed by guarding against dot-splitting when parentheses are present (`[Invariant 12]`).
+
+### Case 2: Forced Column Renaming in Self-Joins
+- **Location**: `pkg/execution/project.go:addField`
+- **Trigger**: `test/slt/core/join_advanced.slt:48`
+- **Query**:
+  ```sql
+  SELECT e.emp_id, e.emp_name, m.emp_name
+  FROM slt_emp2 e
+  JOIN slt_emp2 m ON e.mgr_id = m.emp_id;
+  ```
+- **Discrepancy**: TDS preserved the exact requested column name `emp_name`, while Volcano renamed the 3rd column to `m.emp_name`, causing a schema mismatch.
+- **Root Cause & Fix**: Removed the legacy forced uniquification heuristic in `addField`, adhering to ANSI SQL standards where duplicate projected column names are fully permitted (`[RULE:RadicalKISS]`).
+
+---
+
+## 6. Conclusion & Roadmap to 1.0-GA
+
+As evidenced by these real-world findings, the **Duality-Driven Cross-Verification Methodology** serves as an autonomous magnifying glass that elevates LionSQL's quality assurance to SQLite-grade standards:
+
+1. **Gate 1 (Release Gate Integration)**:
+   - `test/spec_defects/gate_protocol_symmetry_test.go` is permanently integrated into `scripts/release.sh` (`GATE-PROTOCOL-SYMMETRY-1`, Completed).
+2. **Gate 2 (Full SLT 6-Scenario Coverage)**:
+   - All 6 scenarios (A through F) are 100% implemented, passing, and permanently locked down.
+3. **Gate 3 (Soak & Chaos Integration)**:
+   - Scenario B (Dual-Storage) is bound to 24h~72h long-running soak benchmarks to continuously monitor concurrency and memory safety.
+4. **Permanent Invariant**:
+   - Codified in `GEMINI.md` as **[RULE:DualitySymmetry]**, requiring all future wire protocol and storage features to maintain verified symmetry.

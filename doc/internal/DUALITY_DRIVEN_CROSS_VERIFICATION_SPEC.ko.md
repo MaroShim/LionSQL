@@ -191,27 +191,7 @@ SQLLogicTest(SLT)는 수만 개의 복잡한 SQL 쿼리와 결과셋이 검증�
 
 ---
 
-## 5. 결론 및 향후 로드맵 (Roadmap to 1.0-GA)
-
-본 **이중성 기반 상호 교차 검증 방법론(Duality-Driven Cross-Verification Methodology)**은 LionSQL 1.0 프로덕션 릴리스의 핵심 품질 보증 축으로 영구 유지됩니다.
-
-1. **Gate 1 (배포 차단 게이트 완성)**:
-   - `test/spec_defects/gate_protocol_symmetry_test.go`를 `scripts/release.sh` 파이프라인의 핵심 검증 단계로 영구 편입하여, 와이어 대칭성이 깨지면 릴리스 빌드 원천 차단 (`GATE-PROTOCOL-SYMMETRY-1`, 완료).
-2. **Gate 2 (SLT 6대 Duality 러너 체계 구축 - 6대 시나리오 100% 완료)**:
-   - `SLT-DUALITY-WIRE-1`: TDS vs PGWire 차분 SQLLogicTest 러너 구현 (Scenario A, 10,706 쿼리 100% 대칭 통과, `pkg/slt/wire_duality_test.go`, commit `8c539b52`, **완료**).
-   - `SLT-DUALITY-STORAGE-1`: MemEngine vs WiredTiger 트윈 스토리지 SQLLogicTest 러너 구현 (Scenario B, 21,412 쿼리 트윈 검증 100% 일치, `pkg/slt/storage_duality_test.go`, commit `7d652fb7`, **완료**).
-   - `SLT-DUALITY-PARSER-1`: Pratt vs ANTLR4 차분 파서 동등성 SQLLogicTest 러너 구현 (Scenario C, 34개 쿼리 + 30개 프로시저 스위트 100% AST 파리티, `pkg/proc/parser_duality_test.go`, commit `4a92a7e7`, **완료**).
-   - `SLT-DUALITY-TSQL-WIRE-1`: T-SQL 저장 프로시저 30개 핵심 스위트 와이어 대칭 러너 구현 (Scenario D, TDS 네트워크 와이어 vs 인프로세스 실행 100% 일치, `test/slt_proc/proc_wire_duality_test.go`, commit `70a8e303`, **완료**).
-   - `SLT-DUALITY-DUALPATH-1`: 프로토콜 내부 듀얼 경로(TDS Batch/RPC, PGWire Simple/Extended) 대칭 러너 구현 (Scenario E, 34개 쿼리 + 30개 프로시저 100% 일치, `pkg/slt/dualpath_duality_test.go`, commit `0b2b6709`, **완료**).
-   - `SLT-DUALITY-PLANCACHE-1`: Cold Compilation vs Hot PlanCache 대칭 러너 구현 (Scenario F, 캐시 뮤테이션 안전성 및 0 Data Races 입증, `pkg/slt/plancache_duality_test.go`, commit `c899cfd1`, **완료**).
-3. **Gate 3 (소크 및 카오스 연계)**:
-   - 스프린트 과제 `DURA-SOAK-1`(24h~72h 장기 소크 테스트)에 Layer 4 스토리지 트윈 검증기(MemEngine vs WiredTiger)를 결합하여 고동시성 메모리 누수 및 데이터 정합성 지속 감시.
-4. **영구 불변식 등록**:
-   - `GEMINI.md` 및 프로젝트 아키텍처 가이드라인에 **[RULE:DualitySymmetry]**를 명문화하여 향후 추가되는 모든 와이어 프로토콜 기능과 스토리지 기능이 대칭성 검증을 필수로 통과하도록 강제.
-
----
-
-## 6. 실전 결함 적출 사례 연구 (Real-World Case Studies Uncovered by Duality SLT)
+## 5. 실전 결함 적출 사례 연구 (Real-World Case Studies Uncovered by Duality SLT)
 
 본 절에서는 `test/slt` 32개 핵심 스위트에 대해 **시나리오 A(Dual-Wire SLT: TDS `:1433` vs PGWire `:5433`)** 러너를 최초 가동했을 때, 기존 단일 와이어 테스트나 개별 단위 테스트에서는 발견되지 않고 은폐되어 있던 2건의 중대 결함이 실시간 교차 검증을 통해 어떻게 즉각 적출(Pinpointed)되었는지 그 실전 사례를 기록한다.
 
@@ -343,6 +323,20 @@ SQLLogicTest(SLT)는 수만 개의 복잡한 SQL 쿼리와 결과셋이 검증�
 
 ---
 
-### 결론: 이중화 아키텍처가 증명한 결함 발견 가치
-위 2건의 사례는 Duality-Driven 방법론이 단순한 "추가 테스트"를 넘어, **기존의 모든 정적 테스트와 단일 프로토콜 블랙박스 테스트를 뚫고 지나갔던 심층적인 프로토콜/엔진 레벨의 불일치를 자동으로 수면 위로 끌어올리는 강력한 돋보기**임을 입증한다.
-LionSQL은 본 방법론을 통해 SQLite 이상의 자가 치유형 품질 검증 체계를 확립하였다.
+## 6. 결론 및 향후 로드맵 (Roadmap to 1.0-GA)
+
+위 실전 사례가 증명하듯, **이중성 기반 상호 교차 검증 방법론(Duality-Driven Cross-Verification Methodology)**은 단순한 "추가 테스트"를 넘어, 기존의 모든 정적 테스트와 단일 프로토콜 블랙박스 테스트를 뚫고 지나갔던 심층적인 프로토콜/엔진 레벨의 불일치를 자동으로 수면 위로 끌어올리는 강력한 돋보기이자 LionSQL 1.0 프로덕션 릴리스의 핵심 품질 보증 축으로 영구 유지됩니다.
+
+1. **Gate 1 (배포 차단 게이트 완성)**:
+   - `test/spec_defects/gate_protocol_symmetry_test.go`를 `scripts/release.sh` 파이프라인의 핵심 검증 단계로 영구 편입하여, 와이어 대칭성이 깨지면 릴리스 빌드 원천 차단 (`GATE-PROTOCOL-SYMMETRY-1`, 완료).
+2. **Gate 2 (SLT 6대 Duality 러너 체계 구축 - 6대 시나리오 100% 완료)**:
+   - `SLT-DUALITY-WIRE-1`: TDS vs PGWire 차분 SQLLogicTest 러너 구현 (Scenario A, 10,706 쿼리 100% 대칭 통과, `pkg/slt/wire_duality_test.go`, commit `8c539b52`, **완료**).
+   - `SLT-DUALITY-STORAGE-1`: MemEngine vs WiredTiger 트윈 스토리지 SQLLogicTest 러너 구현 (Scenario B, 21,412 쿼리 트윈 검증 100% 일치, `pkg/slt/storage_duality_test.go`, commit `7d652fb7`, **완료**).
+   - `SLT-DUALITY-PARSER-1`: Pratt vs ANTLR4 차분 파서 동등성 SQLLogicTest 러너 구현 (Scenario C, 34개 쿼리 + 30개 프로시저 스위트 100% AST 파리티, `pkg/proc/parser_duality_test.go`, commit `4a92a7e7`, **완료**).
+   - `SLT-DUALITY-TSQL-WIRE-1`: T-SQL 저장 프로시저 30개 핵심 스위트 와이어 대칭 러너 구현 (Scenario D, TDS 네트워크 와이어 vs 인프로세스 실행 100% 일치, `test/slt_proc/proc_wire_duality_test.go`, commit `70a8e303`, **완료**).
+   - `SLT-DUALITY-DUALPATH-1`: 프로토콜 내부 듀얼 경로(TDS Batch/RPC, PGWire Simple/Extended) 대칭 러너 구현 (Scenario E, 34개 쿼리 + 30개 프로시저 100% 일치, `pkg/slt/dualpath_duality_test.go`, commit `0b2b6709`, **완료**).
+   - `SLT-DUALITY-PLANCACHE-1`: Cold Compilation vs Hot PlanCache 대칭 러너 구현 (Scenario F, 캐시 뮤테이션 안전성 및 0 Data Races 입증, `pkg/slt/plancache_duality_test.go`, commit `c899cfd1`, **완료**).
+3. **Gate 3 (소크 및 카오스 연계)**:
+   - 스프린트 과제 `DURA-SOAK-1`(24h~72h 장기 소크 테스트)에 Layer 4 스토리지 트윈 검증기(MemEngine vs WiredTiger)를 결합하여 고동시성 메모리 누수 및 데이터 정합성 지속 감시.
+4. **영구 불변식 등록**:
+   - `GEMINI.md` 및 프로젝트 아키텍처 가이드라인에 **[RULE:DualitySymmetry]**를 명문화하여 향후 추가되는 모든 와이어 프로토콜 기능과 스토리지 기능이 대칭성 검증을 필수로 통과하도록 강제.
