@@ -2,7 +2,10 @@ package slt
 
 import (
 	"fmt"
+	"sort"
 	"strings"
+
+	"lionsql/pkg/sqlutil"
 )
 
 // DualityMismatchError represents a differential divergence between two execution tracks.
@@ -76,9 +79,20 @@ func (d *DualityExecutor) Execute(sqlStr string) ([]string, []map[string]any, er
 	}
 
 	// 4. Value parity across all rows and cells
-	for rIdx := range rowsA {
-		rA := rowsA[rIdx]
-		rB := rowsB[rIdx]
+	// In relational algebra, queries without explicit ORDER BY represent unordered sets/bags.
+	// Different query engines (e.g. Volcano CBO join reordering vs VDBE nested loops) may emit
+	// rows in different physical arrival orders. If ORDER BY is absent, canonicalize row ordering
+	// before cell-by-cell equivalence verification.
+	cmpA := rowsA
+	cmpB := rowsB
+	if !sqlutil.ContainsKeyword(sqlStr, "ORDER BY", true) {
+		cmpA = canonicalSortRows(rowsA, colsA)
+		cmpB = canonicalSortRows(rowsB, colsA)
+	}
+
+	for rIdx := range cmpA {
+		rA := cmpA[rIdx]
+		rB := cmpB[rIdx]
 		for _, col := range colsA {
 			vA := normalizeDualityVal(rA[col])
 			vB := normalizeDualityVal(rB[col])
@@ -94,6 +108,23 @@ func (d *DualityExecutor) Execute(sqlStr string) ([]string, []map[string]any, er
 	}
 
 	return colsA, rowsA, nil
+}
+
+func canonicalSortRows(rows []map[string]any, cols []string) []map[string]any {
+	sorted := make([]map[string]any, len(rows))
+	copy(sorted, rows)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		rI, rJ := sorted[i], sorted[j]
+		for _, col := range cols {
+			vI := normalizeDualityVal(rI[col])
+			vJ := normalizeDualityVal(rJ[col])
+			if vI != vJ {
+				return vI < vJ
+			}
+		}
+		return false
+	})
+	return sorted
 }
 
 func normalizeDualityVal(v any) string {

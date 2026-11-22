@@ -14,6 +14,68 @@ import (
 	"lionsql/pkg/wire/tds"
 )
 
+func runDualWireSLTFile(t *testing.T, file string) {
+	t.Helper()
+	records, err := slt.ParseFile(file)
+	if err != nil {
+		t.Fatalf("failed to parse %s: %v", file, err)
+	}
+
+	// Track A: TDS Wire Server backed by isolated Engine A
+	var engTDS storage.Engine = memengine.New()
+	_ = engTDS.Open("")
+	defer engTDS.Close()
+	catTDS := catalog.New(engTDS)
+
+	tdsSrv := tds.NewServer("127.0.0.1:0", catTDS, engTDS)
+	if err := tdsSrv.Start(); err != nil {
+		t.Fatalf("failed to start TDS server: %v", err)
+	}
+	defer tdsSrv.Close()
+
+	// Track B: PGWire Server backed by isolated Engine B
+	var engPG storage.Engine = memengine.New()
+	_ = engPG.Open("")
+	defer engPG.Close()
+	catPG := catalog.New(engPG)
+	coordPG := engine.NewCoordinator(catPG, engPG, engine.DefaultConfig())
+
+	pgSrv := wire.NewServer("127.0.0.1:0", catPG, engPG)
+	pgSrv.SetCoordinator(coordPG)
+	if err := pgSrv.Start(); err != nil {
+		t.Fatalf("failed to start PGWire server: %v", err)
+	}
+	defer pgSrv.Close()
+
+	tdsExec, err := slt.NewTDSExecutor(tdsSrv.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to connect TDS executor: %v", err)
+	}
+	defer tdsExec.Close()
+
+	pgExec, err := slt.NewPGWireExecutor(pgSrv.Addr().String())
+	if err != nil {
+		t.Fatalf("failed to connect PGWire executor: %v", err)
+	}
+	defer pgExec.Close()
+
+	// Wrap both in DualityExecutor: every query runs over TDS AND PGWire
+	dualityExec := slt.NewDualityExecutor(tdsExec, "TDS_1433", pgExec, "PGWire_5433")
+
+	passCount := 0
+	for i, rec := range records {
+		if i > 0 && i%500 == 0 {
+			t.Logf("[%s] Progress: %d / %d records verified over Dual-Wire", file, i, len(records))
+		}
+		if err := slt.RunRecord(dualityExec, rec); err != nil {
+			t.Fatalf("[%s:%d] record #%d Duality Dual-Wire mismatch failure: %v\nSQL:\n%s",
+				rec.FilePath, rec.LineNumber, i, err, rec.SQL)
+		}
+		passCount++
+	}
+	t.Logf("[%s] 100%% PASS: verified %d records over Dual-Wire", file, passCount)
+}
+
 // TestSQLLogicTest_Duality_DualWire executes SQLLogicTest core suites simultaneously over
 // TDS (:1433) and PGWire (:5433), asserting 100% 1:1 cross-protocol parity on every single query (SLT-DUALITY-WIRE-1).
 func TestSQLLogicTest_Duality_DualWire(t *testing.T) {
@@ -21,58 +83,27 @@ func TestSQLLogicTest_Duality_DualWire(t *testing.T) {
 
 	for _, file := range testSuites {
 		t.Run(file, func(t *testing.T) {
-			records, err := slt.ParseFile(file)
-			if err != nil {
-				t.Fatalf("failed to parse %s: %v", file, err)
-			}
+			runDualWireSLTFile(t, file)
+		})
+	}
+}
 
-			// Track A: TDS Wire Server backed by isolated Engine A
-			var engTDS storage.Engine = memengine.New()
-			_ = engTDS.Open("")
-			defer engTDS.Close()
-			catTDS := catalog.New(engTDS)
-
-			tdsSrv := tds.NewServer("127.0.0.1:0", catTDS, engTDS)
-			if err := tdsSrv.Start(); err != nil {
-				t.Fatalf("failed to start TDS server: %v", err)
-			}
-			defer tdsSrv.Close()
-
-			// Track B: PGWire Server backed by isolated Engine B
-			var engPG storage.Engine = memengine.New()
-			_ = engPG.Open("")
-			defer engPG.Close()
-			catPG := catalog.New(engPG)
-			coordPG := engine.NewCoordinator(catPG, engPG, engine.DefaultConfig())
-
-			pgSrv := wire.NewServer("127.0.0.1:0", catPG, engPG)
-			pgSrv.SetCoordinator(coordPG)
-			if err := pgSrv.Start(); err != nil {
-				t.Fatalf("failed to start PGWire server: %v", err)
-			}
-			defer pgSrv.Close()
-
-			tdsExec, err := slt.NewTDSExecutor(tdsSrv.Addr().String())
-			if err != nil {
-				t.Fatalf("failed to connect TDS executor: %v", err)
-			}
-			defer tdsExec.Close()
-
-			pgExec, err := slt.NewPGWireExecutor(pgSrv.Addr().String())
-			if err != nil {
-				t.Fatalf("failed to connect PGWire executor: %v", err)
-			}
-			defer pgExec.Close()
-
-			// Wrap both in DualityExecutor: every query runs over TDS AND PGWire
-			dualityExec := slt.NewDualityExecutor(tdsExec, "TDS_1433", pgExec, "PGWire_5433")
-
-			for _, rec := range records {
-				if err := slt.RunRecord(dualityExec, rec); err != nil {
-					t.Fatalf("[%s:%d] Duality Dual-Wire mismatch failure: %v\nSQL:\n%s",
-						rec.FilePath, rec.LineNumber, err, rec.SQL)
-				}
-			}
+// TestSQLLogicTest_Duality_DualWire_FullSelect executes the full-scale SQLLogicTest select suites
+// (select1.slt ~ select5.slt, 10,706 queries) simultaneously over TDS and PGWire.
+func TestSQLLogicTest_Duality_DualWire_FullSelect(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping full dual-wire SLT in short mode")
+	}
+	fullSuites := []string{
+		"full/select1.slt",
+		"full/select2.slt",
+		"full/select3.slt",
+		"full/select4.slt",
+		"full/select5.slt",
+	}
+	for _, file := range fullSuites {
+		t.Run(file, func(t *testing.T) {
+			runDualWireSLTFile(t, file)
 		})
 	}
 }
