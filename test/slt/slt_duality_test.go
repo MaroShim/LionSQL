@@ -2,7 +2,6 @@ package slt_test
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	"lionsql/pkg/catalog"
@@ -18,10 +17,7 @@ import (
 // TestSQLLogicTest_Duality_DualWire executes SQLLogicTest core suites simultaneously over
 // TDS (:1433) and PGWire (:5433), asserting 100% 1:1 cross-protocol parity on every single query (SLT-DUALITY-WIRE-1).
 func TestSQLLogicTest_Duality_DualWire(t *testing.T) {
-	testSuites, err := filepath.Glob("core/*.slt")
-	if err != nil || len(testSuites) == 0 {
-		t.Fatalf("failed to find core SLT files: %v", err)
-	}
+	testSuites := discoverSLTFiles(t)
 
 	for _, file := range testSuites {
 		t.Run(file, func(t *testing.T) {
@@ -84,10 +80,7 @@ func TestSQLLogicTest_Duality_DualWire(t *testing.T) {
 // TestSQLLogicTest_Duality_DualStorage executes SQLLogicTest suites simultaneously on
 // In-Memory OCC and WiredTiger B+Tree, asserting 1:1 storage ACID and tuple parity (SLT-DUALITY-STORAGE-1).
 func TestSQLLogicTest_Duality_DualStorage(t *testing.T) {
-	testSuites, err := filepath.Glob("core/*.slt")
-	if err != nil || len(testSuites) == 0 {
-		t.Fatalf("failed to find core SLT files: %v", err)
-	}
+	testSuites := discoverSLTFiles(t)
 
 	for _, file := range testSuites {
 		t.Run(file, func(t *testing.T) {
