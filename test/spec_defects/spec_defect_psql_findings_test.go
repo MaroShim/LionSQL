@@ -7,6 +7,7 @@ import (
 
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/engine"
+	"lionsql/pkg/proc"
 	"lionsql/pkg/storage/memengine"
 )
 
@@ -118,5 +119,78 @@ func TestSpecDefect_Postgres_FilterClause_TableName(t *testing.T) {
 		t.Logf("FILTER clause returned: %v (verifying table name not lost)", err)
 	} else if len(res.Rows) > 0 {
 		t.Logf("FILTER clause result: %v", res.Rows)
+	}
+}
+
+// TestSpecDefect_Postgres_ArraySubqueryConstructor verifies:
+// Defect ID: DEFECT-PG-ARRAY-SUBQUERY-CONSTRUCTOR-1
+// Root Cause: psql \d uses ARRAY(SELECT ...) constructor inside function arguments, which fails with
+// "expected projection expression, got SELECT".
+func TestSpecDefect_Postgres_ArraySubqueryConstructor(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.Config{})
+	defer coord.Close()
+
+	sessID := "TestSpecDefect_ArraySubquery_sess"
+	_, _ = coord.GetOrCreateSession(sessID)
+	defer coord.CloseSession(sessID)
+
+	ctx := context.Background()
+	_, _ = coord.ExecuteSessionSQLContext(ctx, sessID, "CREATE TABLE t_arr_roles (oid INT, rolname VARCHAR(50));")
+	_, _ = coord.ExecuteSessionSQLContext(ctx, sessID, "INSERT INTO t_arr_roles VALUES (1, 'admin'), (2, 'guest');")
+
+	query := `SELECT pol.polname, pol.polpermissive,
+  CASE WHEN pol.polroles = '{0}' THEN NULL ELSE pg_catalog.array_to_string(array(select rolname from pg_catalog.pg_roles where oid = any (pol.polroles) order by 1),',') END,
+  pg_catalog.pg_get_expr(pol.polqual, pol.polrelid),
+  pg_catalog.pg_get_expr(pol.polwithcheck, pol.polrelid),
+  CASE pol.polcmd
+    WHEN 'r' THEN 'SELECT'
+    WHEN 'a' THEN 'INSERT'
+    WHEN 'w' THEN 'UPDATE'
+    WHEN 'd' THEN 'DELETE'
+    END AS cmd
+FROM pg_catalog.pg_policy pol
+WHERE pol.polrelid = '16384' ORDER BY 1;`
+	stmt, parseErr := proc.ParseSQL(query)
+	t.Logf("proc.ParseSQL: stmt=%T, err=%v", stmt, parseErr)
+	res, err := coord.ExecuteSessionSQLContext(ctx, sessID, query)
+	if err != nil {
+		t.Fatalf("psql \\d pg_policy query failed: %v", err)
+	}
+	if len(res.Rows) != 0 {
+		t.Fatalf("expected 0 rows from empty pg_policy, got %d", len(res.Rows))
+	}
+}
+
+// TestSpecDefect_Postgres_JoinAliasColumnList verifies:
+// Defect ID: DEFECT-PG-JOIN-ALIAS-COLUMN-LIST-1
+// Root Cause: psql \dx uses JOIN func() alias(col1, col2) ON ..., which fails with
+// "expected ON after JOIN table, got (".
+func TestSpecDefect_Postgres_JoinAliasColumnList(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.Config{})
+	defer coord.Close()
+
+	sessID := "TestSpecDefect_JoinAliasColList_sess"
+	_, _ = coord.GetOrCreateSession(sessID)
+	defer coord.CloseSession(sessID)
+
+	ctx := context.Background()
+	_, _ = coord.ExecuteSessionSQLContext(ctx, sessID, "CREATE TABLE t_ext (extname VARCHAR(50));")
+	_, _ = coord.ExecuteSessionSQLContext(ctx, sessID, "CREATE TABLE t_avail (name VARCHAR(50), ver VARCHAR(20));")
+
+	query := "SELECT e.extname FROM t_ext e LEFT JOIN t_avail a(name, ver) ON a.name = e.extname;"
+	res, err := coord.ExecuteSessionSQLContext(ctx, sessID, query)
+	if err != nil {
+		t.Fatalf("JOIN alias(col1, col2) parsing failed: %v", err)
+	}
+	if len(res.Columns) == 0 {
+		t.Fatalf("expected columns, got 0")
 	}
 }

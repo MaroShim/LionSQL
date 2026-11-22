@@ -944,12 +944,13 @@ func (p Projection) String() string {
 
 // TableRef represents a referenced table, TVF call, or derived table subquery.
 type TableRef struct {
-	Name     string
-	Alias    string
-	IsTVF    bool
-	TVFArgs  []Expr
-	Subquery *GeneralSelectStmt
-	Hints    []string
+	Name          string
+	Alias         string
+	ColumnAliases []string
+	IsTVF         bool
+	TVFArgs       []Expr
+	Subquery      *GeneralSelectStmt
+	Hints         []string
 }
 
 func (t TableRef) String() string {
@@ -967,6 +968,9 @@ func (t TableRef) String() string {
 	}
 	if t.Alias != "" && t.Alias != t.Name {
 		s = fmt.Sprintf("%s AS %s", s, t.Alias)
+		if len(t.ColumnAliases) > 0 {
+			s = fmt.Sprintf("%s(%s)", s, strings.Join(t.ColumnAliases, ", "))
+		}
 	}
 	if len(t.Hints) > 0 {
 		s = fmt.Sprintf("%s WITH (%s)", s, strings.Join(t.Hints, ", "))

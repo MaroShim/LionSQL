@@ -684,13 +684,15 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				alias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}
+			colAliases := p.parseColumnAliasList()
 			fromHints := p.parseTableHints()
 
 			stmt.From = TableRef{
-				Name:     subSel.String(),
-				Alias:    alias,
-				Subquery: subSel,
-				Hints:    fromHints,
+				Name:          subSel.String(),
+				Alias:         alias,
+				ColumnAliases: colAliases,
+				Subquery:      subSel,
+				Hints:         fromHints,
 			}
 		} else {
 			if !p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenVariable) {
@@ -736,9 +738,10 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					p.nextToken()
 				}
 			}
+			colAliases := p.parseColumnAliasList()
 			fromHints := p.parseTableHints()
 
-			stmt.From = TableRef{Name: tblName, Alias: alias, IsTVF: isTVF, TVFArgs: tvfArgs, Hints: fromHints}
+			stmt.From = TableRef{Name: tblName, Alias: alias, ColumnAliases: colAliases, IsTVF: isTVF, TVFArgs: tvfArgs, Hints: fromHints}
 		}
 
 		for fromParens > 0 && p.curTokenIs(TokenRParen) {
@@ -927,6 +930,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					p.nextToken()
 				}
 			}
+			colAliases := p.parseColumnAliasList()
 			jHints := p.parseTableHints()
 
 			var onExpr Expr
@@ -943,7 +947,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 
 			stmt.Joins = append(stmt.Joins, JoinClause{
 				Type:  joinType,
-				Table: TableRef{Name: subSel.String(), Alias: jAlias, Subquery: subSel, Hints: jHints},
+				Table: TableRef{Name: subSel.String(), Alias: jAlias, ColumnAliases: colAliases, Subquery: subSel, Hints: jHints},
 				On:    onExpr,
 			})
 		} else {
@@ -1001,6 +1005,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					p.nextToken()
 				}
 			}
+			colAliases := p.parseColumnAliasList()
 			jHints := p.parseTableHints()
 
 			var onExpr Expr
@@ -1017,7 +1022,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 
 			stmt.Joins = append(stmt.Joins, JoinClause{
 				Type:  joinType,
-				Table: TableRef{Name: jTbl, Alias: jAlias, IsTVF: isTVF, TVFArgs: tvfArgs, Hints: jHints},
+				Table: TableRef{Name: jTbl, Alias: jAlias, ColumnAliases: colAliases, IsTVF: isTVF, TVFArgs: tvfArgs, Hints: jHints},
 				On:    onExpr,
 			})
 		}
@@ -1516,5 +1521,28 @@ func (p *Parser) parseWith() (*GeneralSelectStmt, error) {
 	}
 	mainSelect.CTEs = ctes
 	return mainSelect, nil
+}
+
+func (p *Parser) parseColumnAliasList() []string {
+	if !p.curTokenIs(TokenLParen) {
+		return nil
+	}
+	p.nextToken() // eat (
+	var cols []string
+	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenString) {
+			cols = append(cols, cleanSchemaPrefix(p.curToken.Literal))
+			p.nextToken()
+		}
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+	if p.curTokenIs(TokenRParen) {
+		p.nextToken() // eat )
+	}
+	return cols
 }
 

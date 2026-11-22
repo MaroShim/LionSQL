@@ -860,6 +860,10 @@ func init() {
 	regPG("pg_available_extensions", generatePgAvailableExtensions)
 	regPG("pg_get_keywords", generatePgGetKeywords)
 	regPG("pg_policy", generatePgPolicy)
+	regPG("pg_statistic_ext", generatePgStatisticExt)
+	regPG("pg_publication", generatePgPublication)
+	regPG("pg_publication_rel", generatePgPublicationRel)
+	regPG("pg_publication_namespace", generatePgPublicationNamespace)
 }
 
 func generatePgDatabase(src Source, whereClause string) ([]string, []map[string]any) {
@@ -1974,6 +1978,30 @@ func generatePgGetKeywords(src Source, whereClause string) ([]string, []map[stri
 
 func generatePgPolicy(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{"oid", "polname", "polrelid", "polcmd", "polpermissive", "polroles", "polqual", "polwithcheck"}
+	allRows := make([]map[string]any, 0)
+	return columns, allRows
+}
+
+func generatePgStatisticExt(src Source, whereClause string) ([]string, []map[string]any) {
+	columns := []string{"oid", "stxrelid", "stxnamespace", "stxname", "stxkeys", "stxkind", "stxstattarget", "stxowner"}
+	allRows := make([]map[string]any, 0)
+	return columns, allRows
+}
+
+func generatePgPublication(src Source, whereClause string) ([]string, []map[string]any) {
+	columns := []string{"oid", "pubname", "pubowner", "puballtables", "pubinsert", "pubupdate", "pubdelete", "pubtruncate", "pubviaroot"}
+	allRows := make([]map[string]any, 0)
+	return columns, allRows
+}
+
+func generatePgPublicationRel(src Source, whereClause string) ([]string, []map[string]any) {
+	columns := []string{"oid", "prpubid", "prrelid", "prqual", "prattrs"}
+	allRows := make([]map[string]any, 0)
+	return columns, allRows
+}
+
+func generatePgPublicationNamespace(src Source, whereClause string) ([]string, []map[string]any) {
+	columns := []string{"oid", "pnpubid", "pnnspid"}
 	allRows := make([]map[string]any, 0)
 	return columns, allRows
 }

@@ -483,6 +483,21 @@ func (p *Parser) parsePrefix() Expr {
 		}
 		right := p.parseExpression(precNot)
 		return &UnaryExpr{Op: TokenNot, Expr: right}
+	case TokenSelect:
+		p.nextToken() // eat SELECT
+		sel, err := p.parseGeneralSelect()
+		if err == nil && sel != nil {
+			sub := &ScalarSubqueryExpr{
+				Query: sel,
+				Table: sel.From.Name,
+				Where: sel.Where,
+			}
+			if len(sel.Projections) > 0 {
+				sub.Column = sel.Projections[0].String()
+			}
+			return sub
+		}
+		return nil
 	case TokenLParen:
 		p.nextToken()
 		// Check for scalar subquery (SELECT ...)
