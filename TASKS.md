@@ -22,6 +22,7 @@
 | `DONE` | **`ARCH-ANTLR-ORACLE-1`** | `1.0-GA` | Architecture | P2 | ANTLR4 기반 T-SQL 문법 검증 및 미지원 기능 정밀 진단 오라클 아키텍처 | [`notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md`](notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-ARIES-LOGGING-1`** |  | ARCH | P2 | Implement ARIES Physiological Undo/Redo Logging for Savepoints | [`notes/plans/ARCH_ARIES_LOGGING_PLAN.ko.md`](notes/plans/ARCH_ARIES_LOGGING_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-AST-GUARD-1`** | `v0.94.0` | Engine | P2 | Phase 2 완료 후 go/ast 정적 분석 아키텍처 가드를 통한 엔진 수동 문자열 파싱 재유입 및 Lexer 캡슐화 침해 영구 차단 | [`notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md`](notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md) |  |
+| `DONE` | **`ARCH-DUALITY-CROSS-VERIFICATION-1`** | `1.0-GA` | Architecture | P1 | Duality-Driven Cross-Verification Methodology Specification | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`ARCH-EPHEMERAL-SCHEMA-PERSISTENCE-1`** | `v0.94.0` | Storage | P1 | Ephemeral Mode Schema-Only Persistence (SQL Server SCHEMA_ONLY / MySQL MEMORY Parity: Persist DDL Schemas, Indexes & Catalog Objects Across Restarts While Keeping Row Data Ephemeral) | [`notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md`](notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-INTRA-QUERY-PARALLEL-1`** |  | Architecture | P3 | 단일 쿼리 멀티코어 병렬 실행 (Intra-Query Parallelism) 영구 기각 (Spec-Out) | [`GEMINI.md`](GEMINI.md) |  |
 | `PENDING` | **`ARCH-LOGICAL-NAMESPACE-1`** | `v1.10.0` | ENGINE | P2 | 프리픽스 기반 논리적 네임스페이스 및 USE <dbname> 물리 매핑 아키텍처 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
@@ -524,6 +525,9 @@
 | `DONE` | **`SEC-BOOT-DEFAULT-PASS-WARN`** |  | SEC | P2 | 초기 패스워드 미변경 시 부팅 출력 최후행 대문자 보안 경고 불변식 | [`notes/plans/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md`](notes/plans/BOOT_DEFAULT_PASSWORD_WARNING_PLAN.ko.md) |  |
 | `DONE` | **`SEC-PGWIRE-PARAM-1`** |  | Wire | P2 | PGWire 달러 파라미터() 상태머신 토크나이저 전환 및 보안 강화 | [`notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md`](notes/plans/REGULAR_EXPRESSION_REFACTORING_PLAN.ko.md) |  |
 | `DONE` | **`SEED-EMBED-UNIFY-1`** | `Ecosystem` | --milestone | P1 | 데모 시드 스크립트(demo_seed.sql) 단일 바이너리 내장 및 Web Studio 시드 데이터 일치화 | [`--domain`](--domain) |  |
+| `PENDING` | **`SLT-DUALITY-PARSER-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario C: Dual-Parser Differential Equivalence SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
+| `PENDING` | **`SLT-DUALITY-STORAGE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario B: Dual-Storage Twin-Engine SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
+| `PENDING` | **`SLT-DUALITY-WIRE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario A: Dual-Wire Differential SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`SQL-GOOSE-IDENTITY-1`** |  | Durability | P2 | PostgreSQL `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` 지원 및 goose 마이그레이션 호환 |  |  |
 | `DONE` | **`SQL-WRITABLE-CTE-1`** |  | Durability | P2 | PostgreSQL Writable CTE (`WITH ... INSERT/UPDATE/DELETE ... RETURNING`) 및 `::type[]` 캐스트 지원 |  |  |
 | `DONE` | **`SSMS-OE-3PART-TOP`** | `1.0-GA` | Ecosystem | P2 | SSMS 테이블 우클릭 Select Top 1000 / Edit Top 200 3-Part 이름 정규화 및 실행 검증 | [`notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`](notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md) |  |
@@ -667,6 +671,13 @@
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-17 09:31:27
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md`](notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md)
+
+---
+
+### [DONE] Duality-Driven Cross-Verification Methodology Specification `ARCH-DUALITY-CROSS-VERIFICATION-1`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-22 12:22:44
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)
 
 ---
 
@@ -5077,6 +5088,27 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: --milestone | **Priority**: P1 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `Ecosystem`
 - **Plan Doc**: [`--domain`](--domain)
+
+---
+
+### [PENDING] Duality SLT Scenario C: Dual-Parser Differential Equivalence SQLLogicTest Runner `SLT-DUALITY-PARSER-1`
+- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-22 12:25:06
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)
+
+---
+
+### [PENDING] Duality SLT Scenario B: Dual-Storage Twin-Engine SQLLogicTest Runner `SLT-DUALITY-STORAGE-1`
+- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-22 12:25:06
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)
+
+---
+
+### [PENDING] Duality SLT Scenario A: Dual-Wire Differential SQLLogicTest Runner `SLT-DUALITY-WIRE-1`
+- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-22 12:25:06
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)
 
 ---
 
