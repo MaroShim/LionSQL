@@ -187,3 +187,35 @@ func TestSQLLogicTest_Duality_DualStorage_FullSelect(t *testing.T) {
 		})
 	}
 }
+
+// TestSQLLogicTest_Duality_DualParser executes SQLLogicTest suites through DualParserExecutor,
+// asserting that every query and statement is verified across the 2-Tier Parser Architecture (SLT-DUALITY-PARSER-1).
+func TestSQLLogicTest_Duality_DualParser(t *testing.T) {
+	testSuites := discoverSLTFiles(t)
+
+	for _, file := range testSuites {
+		t.Run(file, func(t *testing.T) {
+			records, err := slt.ParseFile(file)
+			if err != nil {
+				t.Fatalf("failed to parse %s: %v", file, err)
+			}
+
+			var eng storage.Engine = memengine.New()
+			_ = eng.Open("")
+			defer eng.Close()
+			cat := catalog.New(eng)
+			coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+			defer coord.Close()
+
+			coordExec := slt.NewCoordinatorExecutor(coord)
+			dualParserExec := slt.NewDualParserExecutor(coordExec)
+
+			for _, rec := range records {
+				if err := slt.RunRecord(dualParserExec, rec); err != nil {
+					t.Fatalf("[%s:%d] Dual-Parser differential equivalence failure: %v\nSQL:\n%s",
+						rec.FilePath, rec.LineNumber, err, rec.SQL)
+				}
+			}
+		})
+	}
+}

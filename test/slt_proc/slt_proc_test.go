@@ -146,3 +146,46 @@ func TestTSQL_StoredProcedure_Suites(t *testing.T) {
 		t.Fatalf("Gate 5 conformance failed: expected at least 950 passing suites, got %d (failed %d)", passedCount.Load(), failedCount.Load())
 	}
 }
+
+// TestTSQL_Duality_DualParser_CoreProcedures runs all 30 core T-SQL stored procedure suites
+// through DualParserExecutor, asserting 1:1 parser differential equivalence between
+// Tier 1 Pratt Fast-Path parser and Tier 2 ANTLR4 Full-Grammar parser (SLT-DUALITY-PARSER-1).
+func TestTSQL_Duality_DualParser_CoreProcedures(t *testing.T) {
+	files1, err := filepath.Glob("0*.slt")
+	if err != nil {
+		t.Fatalf("failed to glob 0*.slt: %v", err)
+	}
+	files2, _ := filepath.Glob("[1-3]*.slt")
+	coreFiles := append(files1, files2...)
+
+	if len(coreFiles) != 30 {
+		t.Fatalf("expected 30 core T-SQL procedure suites, found %d", len(coreFiles))
+	}
+
+	for _, file := range coreFiles {
+		file := file
+		t.Run(file, func(t *testing.T) {
+			records, err := slt.ParseFile(file)
+			if err != nil {
+				t.Fatalf("failed to parse %s: %v", file, err)
+			}
+
+			var eng storage.Engine = memengine.New()
+			_ = eng.Open("")
+			defer eng.Close()
+			cat := catalog.New(eng)
+			coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+			defer coord.Close()
+
+			coordExec := slt.NewCoordinatorExecutor(coord)
+			dualParserExec := slt.NewDualParserExecutor(coordExec)
+
+			for _, rec := range records {
+				if err := slt.RunRecord(dualParserExec, rec); err != nil {
+					t.Fatalf("[%s:%d] Dual-Parser differential equivalence failure: %v\nSQL:\n%s",
+						rec.FilePath, rec.LineNumber, err, rec.SQL)
+				}
+			}
+		})
+	}
+}

@@ -53,6 +53,21 @@ func BuildProcedure(script string) (*proc.CreateProcStmt, error) {
 	return plan, nil
 }
 
+// BuildProcedureWithVisitor forces the full ANTLR ASTBuilder visitor pipeline directly
+// without bypassing through the Pratt fast-path parser.
+func BuildProcedureWithVisitor(script string) (*proc.CreateProcStmt, error) {
+	res, err := ParseTSql(script)
+	if err != nil {
+		return nil, err
+	}
+	builder := NewASTBuilder(script)
+	val := builder.Visit(res.Tree)
+	if node, ok := val.(*proc.CreateProcStmt); ok && node != nil {
+		return node, nil
+	}
+	return nil, fmt.Errorf("ANTLR visitor did not produce CreateProcStmt")
+}
+
 func (b *ASTBuilder) Visit(tree antlr.ParseTree) interface{} {
 	if tree == nil {
 		return nil
