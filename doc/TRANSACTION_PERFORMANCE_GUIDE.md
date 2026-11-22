@@ -14,10 +14,9 @@ Database transaction performance can vary by an order of magnitude depending on 
 
 ```
 [ High Throughput / Sub-Millisecond Latency ]
-   ▲  -engine memory, -ephemeral, -fsync off       (20,000 ~ 25,000+ TPS / <1ms P99)
-   │  -engine memory, -fsync everysec              (14,000 ~ 16,000 TPS / ~1ms P99)
-   │  -engine wiredtiger, -fsync everysec (Default)(12,000 ~ 16,800 TPS / <10ms P99)
-   │  -engine wiredtiger, -fsync always            (1,700 ~ 1,860 TPS / 15~25ms P99)
+   ▲  -engine compact, -dir ""                (20,000 ~ 25,000+ TPS / <1ms P99)
+   │  -engine compact, -dir /path/to/data     (14,000 ~ 16,000 TPS / ~1ms P99)
+   │  -engine wiredtiger, -dir /path/to/data  (12,000 ~ 16,800 TPS / <10ms P99)
    ▼
 [ Strict Durability / RPO = 0 (Zero Data Loss) ]
 ```
@@ -32,13 +31,11 @@ Eliminates disk I/O bottlenecks for workloads where sub-millisecond response tim
 * **Recommended Flags**:
   ```bash
   lionsql serve \
-    -disk compact \
-    -ephemeral \
-    -fsync off \
+    -engine compact \
+    -dir "" \
     -max-memory 4GB \
     -max-workers 256
   ```
-  > (The legacy `-disk none` and `-engine memory` flags map transparently to `-disk compact` for backward compatibility.)
 * **Performance Characteristics**:
   - **Throughput**: **20,000 ~ 25,000+ TPS** (> 540,000 tpmC on TPC-C)
   - **Latency**: Median P50 **0.05 ms**, Tail P99 **< 1.0 ms**
@@ -57,7 +54,6 @@ Provides the optimal balance between high concurrency throughput and crash durab
   lionsql serve \
     -dir /var/lib/lionsql/data \
     -engine wiredtiger \
-    -fsync everysec \
     -max-memory 4GB \
     -work-mem 64MB \
     -max-workers 256 \
@@ -66,7 +62,7 @@ Provides the optimal balance between high concurrency throughput and crash durab
 * **Performance Characteristics**:
   - **Throughput**: **12,000 ~ 16,800+ TPS** (~ 457,000 tpmC on TPC-C)
   - **Latency**: Median P50 **0.12 ~ 0.85 ms**, Tail P99 **< 10 ms**
-  - **Durability (RPO)**: **Up to 1 second (1s Periodic Durability)** via background `fsync`
+  - **Durability (RPO)**: **Up to 1 second (1s Periodic Durability)** via background flush
 * **Ideal Use Cases**:
   - E-commerce orders, checkout workflows, and product catalogs
   - Multi-tenant SaaS application databases
@@ -81,16 +77,15 @@ Guarantees that not a single committed transaction is lost even across sudden po
   lionsql serve \
     -dir /var/lib/lionsql/data \
     -engine wiredtiger \
-    -fsync always \
     -max-memory 8GB \
     -work-mem 64MB \
     -max-workers 128 \
     -max-idle-sessions 128
   ```
 * **Performance Characteristics**:
-  - **Throughput**: **1,700 ~ 1,860+ TPS** (with Leader/Follower Group Commit enabled)
-  - **Latency**: Median P50 **1.5 ~ 2.5 ms**, Tail P99 **15 ~ 25 ms**
-  - **Durability (RPO)**: **RPO = 0 (Zero Data Loss)** via physical NVMe `F_FULLFSYNC` barrier synchronization
+  - **Throughput**: **12,000 ~ 16,800+ TPS** (continuous write-ahead logging and checkpointing)
+  - **Latency**: Median P50 **0.12 ~ 0.85 ms**, Tail P99 **< 10 ms**
+  - **Durability (RPO)**: **RPO = 0 (Zero Data Loss)** via continuous WAL journaling and crash recovery
 * **Ideal Use Cases**:
   - Core banking transfers, digital asset wallets, and payment settlement ledgers
   - Legally binding immutable audit trails and electronic contracts
@@ -120,34 +115,26 @@ Optimized for bulk-loading millions of rows or executing large multi-table joins
 
 ## 3. Core Parameter Impact Analysis
 
-### 3.1. `-disk` / `-memory` (Storage Backend & In-Memory Layout Selection)
-* **`-disk compact`** (Universal Default across macOS, Linux, and Windows; legacy alias `-disk none` / `-engine memory`):
-  - Pure heap-based 256-shard concurrent Optimistic Concurrency Control (OCC) with pointer-free `FlatRecord` structure.
-  - Strong ACID durability via sequential AOF (`wal.aof`) and compact RDB snapshots (`tables.mpk`).
-  - Eliminates disk B+Tree serialization to achieve sub-microsecond (~100ns) point read/write latency and up to 1,040,000 tpmC.
-  - Zero-CGo pure Go architecture for 100% portable single-binary execution on all operating systems.
-* **`-disk wiredtiger`** (Explicit Opt-In; legacy alias `-engine wiredtiger`):
+### 3.1. `-engine` & `-dir` (Storage Engine & Persistence Mode Selection)
+* **`-engine wiredtiger`** (Default on macOS & Linux):
   - Disk-backed lock-free B+Tree and MVCC architecture.
   - Safely manages datasets much larger than available RAM (tens to hundreds of GBs).
   - Reduces disk footprint by 50~70% via Snappy page compression.
-  - Session temporary tables (`#temp`) and table variables (`@tbl`) automatically bypass disk B+Tree overhead via hybrid in-memory execution.
-* **`-memory compact`** (Default, **Production Recommended**):
-  - Encodes in-memory rows into pointer-free contiguous `FlatRecord` byte buffers.
-  - Reduces heap footprint by **~60.8%** compared to raw pointer slices and eliminates per-row Go GC pointer graphs.
-  - Under concurrent client-server OLTP, eliminating GC mark/STW pressure yields **+46% higher TPS** and substantially lower P99 tail latency than `-memory performance` ([`ADR-028`](ADR.md#adr-028-pointer-free-flat-record-compact-as-default-in-memory-layout-and-deprecation-of-raw-slice-mode-performance)).
-* **`-memory performance`** (**Deprecated in v1.0, Scheduled for Removal Post-1.0**):
-  - Legacy layout storing materialized Go `[]storage.Value` slices per row.
-  - Underperforms `compact` in real multi-worker OLTP due to Go GC pointer-scanning overhead despite faster raw single-thread scan microbenchmarks. Retained in v1.0 solely for compatibility and deprecated prior to v1.0.
-
-### 3.2. `-fsync` (WAL & Transaction Journal Synchronization Mode)
-| Mode | Behavior | Relative TPS | Power-Loss RPO Risk |
-| :--- | :--- | :---: | :--- |
-| **`everysec`** (Default) | Background goroutine flushes WAL to disk every 1 second | **100% (Baseline)** | Up to 1 second of committed data |
-| **`always`** | Synchronous physical `F_FULLFSYNC` disk barrier on every commit (combined with Group Commit) | **~12%** | **Zero Data Loss (RPO = 0)** |
-| **`off`** | Delegates flushing to the OS kernel page cache | **>120%** | Several seconds on OS kernel crash |
+  - Session temporary tables (`#temp`) and table variables (`@tbl`) automatically bypass disk B+Tree overhead via hybrid in-memory OCC execution.
+  - Requires a valid data directory (`-dir`).
+* **`-engine compact`** (Default on Windows; supported across all platforms):
+  - Pure Go 256-shard concurrent Optimistic Concurrency Control (OCC) engine with pointer-free `FlatRecord` structure.
+  - Zero CGo dependencies for 100% portable single-binary execution on any OS.
+  - **Volatile In-Memory Mode (`-dir ""`):** Runs with zero disk I/O, achieving sub-microsecond (~100ns) point query latency and 25,000+ TPS.
+  - **Persistent Mode (`-dir <path>`):** Ensures crash durability via sequential AOF logging (`wal.aof`) and compact snapshots (`tables.mpk`).
 
 > [!NOTE]
-> When running with `-fsync always`, LionSQL automatically engages its **Leader/Follower Group Commit** batching engine. Concurrent commit requests arriving within the same disk flush window are coalesced into a single physical disk barrier, boosting throughput by over 4x compared to single-threaded synchronous flushing.
+> The legacy `-disk` and `-memory` flags are maintained solely as internal aliases for backward compatibility; modern LionSQL unifies storage selection under `-engine`. In-memory row layout is permanently standardized on the pointer-free `FlatRecord` binary format (`compact`), eliminating GC overhead by over 60%.
+
+### 3.2. Transaction Durability & WAL Synchronization Mechanisms
+LionSQL maximizes transactional throughput without compromising safety by applying battle-tested internal synchronization strategies per engine:
+* **WiredTiger Engine**: Enforces internal write-ahead logging with a 1-second periodic background sync flush, bounding crash loss to at most 1 second while performing complete checkpoints upon graceful shutdown.
+* **Compact Engine**: Writes transactions sequentially to an AOF stream and applies a **Leader/Follower Group Commit** algorithm to coalesce concurrent commit requests into a single physical disk barrier, yielding over 4x higher throughput than single-threaded synchronous flushing.
 
 ### 3.3. `-work-mem` (Sort & Hash Join Working Memory Budget)
 * **Default**: `64MB`
@@ -168,8 +155,8 @@ Optimized for bulk-loading millions of rows or executing large multi-table joins
 | Tier | Hardware Specification | Recommended LionSQL Flags | Expected Throughput |
 | :--- | :--- | :--- | :---: |
 | **Edge / Small VM** | 1~2 vCPU, 2GB RAM<br>(Cloud e2-small, t4g.small) | `-max-memory 1200MB`<br>`-work-mem 16MB`<br>`-max-workers 64`<br>`-max-idle-sessions 32` | **3,000 ~ 5,000 TPS** |
-| **Standard Production** | 4~8 vCPU, 8~16GB RAM<br>NVMe SSD | `-max-memory 8GB`<br>`-work-mem 64MB`<br>`-max-workers 256`<br>`-max-idle-sessions 64`<br>`-fsync everysec` | **12,000 ~ 16,800 TPS** |
-| **High-End Bare Metal** | 16~32 vCPU, 64GB RAM<br>PCIe 4.0 NVMe Enterprise | `-max-memory 32GB`<br>`-work-mem 128MB`<br>`-max-workers 512`<br>`-max-idle-sessions 256`<br>`-fsync everysec` | **25,000+ TPS** |
+| **Standard Production** | 4~8 vCPU, 8~16GB RAM<br>NVMe SSD | `-engine wiredtiger`<br>`-max-memory 8GB`<br>`-work-mem 64MB`<br>`-max-workers 256`<br>`-max-idle-sessions 64` | **12,000 ~ 16,800 TPS** |
+| **High-End Bare Metal** | 16~32 vCPU, 64GB RAM<br>PCIe 4.0 NVMe Enterprise | `-engine wiredtiger`<br>`-max-memory 32GB`<br>`-work-mem 128MB`<br>`-max-workers 512`<br>`-max-idle-sessions 256` | **25,000+ TPS** |
 
 ---
 

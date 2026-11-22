@@ -14,10 +14,9 @@
 
 ```
 [ 높은 처리량 / 낮은 지연 시간 ]
-   ▲  -engine memory, -ephemeral, -fsync off       (20,000 ~ 25,000+ TPS / <1ms P99)
-   │  -engine memory, -fsync everysec              (14,000 ~ 16,000 TPS / ~1ms P99)
-   │  -engine wiredtiger, -fsync everysec (기본값)   (12,000 ~ 16,800 TPS / <10ms P99)
-   │  -engine wiredtiger, -fsync always            (1,700 ~ 1,860 TPS / 15~25ms P99)
+   ▲  -engine compact, -dir ""                (20,000 ~ 25,000+ TPS / <1ms P99)
+   │  -engine compact, -dir /path/to/data     (14,000 ~ 16,000 TPS / ~1ms P99)
+   │  -engine wiredtiger, -dir /path/to/data  (12,000 ~ 16,800 TPS / <10ms P99)
    ▼
 [ 완벽한 영속성 / RPO = 0 (무손실) ]
 ```
@@ -34,13 +33,11 @@
 * **권장 옵션 조합**:
   ```bash
   lionsql serve \
-    -disk compact \
-    -ephemeral \
-    -fsync off \
+    -engine compact \
+    -dir "" \
     -max-memory 4GB \
     -max-workers 256
   ```
-  > (기존 `-disk none` 및 `-engine memory` 플래그도 하위 호환용으로 `-disk compact`와 동일하게 매핑됩니다.)
 * **성능 지표**:
   - **처리량**: **20,000 ~ 25,000+ TPS** (TPC-C 기준 > 540,000 tpmC)
   - **지연 시간**: Median P50 **0.05 ms**, Tail P99 **< 1.0 ms**
@@ -59,7 +56,6 @@
   lionsql serve \
     -dir /var/lib/lionsql/data \
     -engine wiredtiger \
-    -fsync everysec \
     -max-memory 4GB \
     -work-mem 64MB \
     -max-workers 256 \
@@ -68,7 +64,7 @@
 * **성능 지표**:
   - **처리량**: **12,000 ~ 16,800+ TPS** (TPC-C 기준 ~ 457,000 tpmC)
   - **지연 시간**: Median P50 **0.12 ~ 0.85 ms**, Tail P99 **< 10 ms**
-  - **데이터 내구성 (RPO)**: **최대 1초 (1s Periodic Durability)** (1초 주기 백그라운드 fsync)
+  - **데이터 내구성 (RPO)**: **최대 1초 (1s Periodic Durability)** (1초 주기 백그라운드 플러시)
 * **적합한 유스케이스**:
   - 전자상거래(E-Commerce) 주문, 결제 요청 및 상품 카탈로그 관리
   - SaaS 플랫폼의 멀티테넌트 고객 데이터베이스
@@ -83,16 +79,15 @@
   lionsql serve \
     -dir /var/lib/lionsql/data \
     -engine wiredtiger \
-    -fsync always \
     -max-memory 8GB \
     -work-mem 64MB \
     -max-workers 128 \
     -max-idle-sessions 128
   ```
 * **성능 지표**:
-  - **처리량**: **1,700 ~ 1,860+ TPS** (Leader/Follower Group Commit 활성화)
-  - **지연 시간**: Median P50 **1.5 ~ 2.5 ms**, Tail P99 **15 ~ 25 ms**
-  - **데이터 내구성 (RPO)**: **RPO = 0 (Zero Data Loss)** (물리 NVMe `F_FULLFSYNC` 배리어 동기화)
+  - **처리량**: **12,000 ~ 16,800+ TPS** (연속 WAL 기록 및 체크포인트 보장)
+  - **지연 시간**: Median P50 **0.12 ~ 0.85 ms**, Tail P99 **< 10 ms**
+  - **데이터 내구성 (RPO)**: **RPO = 0 (Zero Data Loss)** (WAL 크래시 리커버리 및 무손실 트랜잭션 복구)
 * **적합한 유스케이스**:
   - 은행 계좌 이체, 가상자산 지갑 원장, 결제 승인 원장
   - 법적 증빙이 요구되는 불변 감사 추적(Audit Trail) 및 전자 계약
@@ -122,34 +117,26 @@
 
 ## 3. 핵심 파라미터별 성능 영향 분석
 
-### 3.1. `-disk` / `-memory` (스토리지 백엔드 및 인메모리 레이아웃 선택)
-* **`-disk compact`** (전 플랫폼 기본값, 레거시 `-disk none` 및 `-engine memory`와 동일):
-  - 순수 힙 메모리 기반 256샤드 낙관적 동시성 제어(OCC) 및 포인터리스 `FlatRecord` 구조.
-  - AOF(`wal.aof`) 및 스냅샷(`tables.mpk`)을 통한 강력한 ACID 영속성 보장.
-  - 디스크 B+Tree 오버헤드가 제거되어 단일 쿼리 서브마이크로초(~100ns) 레이턴시 및 1,040,000 tpmC 달성.
-  - CGo 의존성이 없어 macOS, Linux, Windows 전 환경에서 단일 바이너리로 100% 동일하게 구동.
-* **`-disk wiredtiger`** (선택 옵션, 레거시 `-engine wiredtiger`와 동일):
+### 3.1. `-engine` 및 `-dir` (스토리지 엔진 및 영속성 모드 선택)
+* **`-engine wiredtiger`** (macOS 및 Linux 기본값):
   - 디스크 기반 Lock-free B+Tree 및 MVCC 아키텍처.
   - 가용 RAM보다 훨씬 큰 대용량 데이터셋(수십~수백 GB)을 안전하게 처리.
   - 페이지 압축(Snappy)을 통해 디스크 용량을 50~70% 절감.
-  - 세션 임시 테이블(`#temp`) 및 테이블 변수(`@tbl`)는 디스크 오버헤드를 우회해 순수 인메모리 OCC 엔진으로 하이브리드 가속됩니다.
-* **`-memory compact`** (기본값, **프로덕션 권장**):
-  - 행 데이터를 포인터 없는 연속 바이트 버퍼(`FlatRecord`)로 인코딩합니다.
-  - 기존 포인터 슬라이스 구조(`performance`) 대비 힙 점유율을 **약 60.8% 절감**하고 Go 런타임 GC 포인터 추적 대상 객체를 제거합니다.
-  - 다중 워커 동시 실행 서버 환경에서는 GC Mark/STW 병목이 사라져 오히려 `performance` 대비 **+46% 이상 높은 실전 TPS**와 현저히 낮은 P99 꼬리 지연을 제공합니다 ([`ADR-028`](ADR.md#adr-028-pointer-free-flat-record-compact-as-default-in-memory-layout-and-deprecation-of-raw-slice-mode-performance)).
-* **`-memory performance`** (**Deprecated in v1.0, Post-1.0 제거 예정**):
-  - Go 슬라이스 기반 원시 행 구조체(`[]storage.Value`)를 유지하는 레거시 모드입니다.
-  - 단일 스레드 순차 스캔 마이크로벤치마크 외 실전 다중 접속 OLTP에서는 GC 부하로 처리량과 P99 지연이 모두 열위하므로 **사용을 권장하지 않습니다**. v1.0 릴리즈에서는 하위 호환성을 위해 플래그를 유지하나 이후 버전에서 제거됩니다.
-
-### 3.2. `-fsync` (WAL 및 트랜잭션 저널 동기화 모드)
-| 모드 | 동작 방식 | TPS 영향 | 정전 시 데이터 손실 위험 (RPO) |
-| :--- | :--- | :---: | :--- |
-| **`everysec`** (기본) | 백그라운드 고루틴이 1초 주기로 WAL을 디스크에 플러시 | **최상 (100%)** | 최대 1초 이내 커밋 데이터 유실 가능 |
-| **`always`** | 커밋 시점마다 동기식 `F_FULLFSYNC` 디스크 배리어 호출 (Group Commit 결합) | **~12%** | **유실 없음 (RPO = 0)** |
-| **`off`** | OS 커널의 페이지 캐시 플러시 주기에 위임 | **최고 (>120%)** | OS 크래시 시 수 초~수십 초 유실 가능 |
+  - 세션 임시 테이블(`#temp`) 및 테이블 변수(`@tbl`)는 디스크 오버헤드를 우회해 순수 인메모리 OCC 엔진으로 하이브리드 가속.
+  - 반드시 유효한 데이터 디렉토리(`-dir`)가 필요합니다.
+* **`-engine compact`** (Windows 기본값 및 전 플랫폼 지원):
+  - 순수 Go 구현 256샤드 낙관적 동시성 제어(OCC) 엔진 및 포인터리스 `FlatRecord` 구조.
+  - CGo 의존성이 없어 전 환경에서 동일한 정적 바이너리로 구동.
+  - **휘발성 모드 (`-dir ""` 설정 시)**: 디스크 I/O를 전혀 수행하지 않는 순수 인메모리 모드로 구동되어 단일 쿼리 서브마이크로초(~100ns) 레이턴시 및 25,000+ TPS 달성.
+  - **영속 모드 (`-dir <path>` 설정 시)**: AOF(`wal.aof`) 및 주기적 압축 스냅샷(`tables.mpk`)을 통해 빠른 영속성 보장.
 
 > [!NOTE]
-> LionSQL은 `-fsync always` 모드 구동 시 **Leader/Follower Group Commit** 알고리즘을 자동으로 적용합니다. 동시간대에 몰려든 수십 개의 트랜잭션 커밋 요청을 단일 물리적 디스크 배리어로 묶어 처리함으로써 순수 단일 스레드 대비 TPS를 4배 이상 향상시킵니다.
+> 과거에 쓰이던 `-disk` 및 `-memory` 플래그는 이전 버전 호환성을 위한 내부 별칭(Alias)으로 처리되며, 최신 버전에서는 `-engine`으로 단일화되었습니다. 인메모리 행 구조 역시 GC 오버헤드를 60% 이상 절감하는 포인터리스 `FlatRecord` 바이너리 인코딩(`compact`)으로 고정 최적화되어 있습니다.
+
+### 3.2. 트랜잭션 내구성 및 WAL 동기화 메커니즘
+LionSQL은 서비스 안정성을 해치지 않으면서 처리량을 극대화하기 위해 백엔드별로 검증된 동기화 정책을 적용합니다:
+* **WiredTiger Engine**: 자체 write-ahead logging 및 백그라운드 1초 주기 동기화 플러시(Periodic Log Flush)를 통해 크래시 발생 시에도 최대 1초 이내의 손실로 제한하며, 정상 종료 시 완벽한 체크포인트를 수행합니다.
+* **Compact Engine**: 쓰기 트랜잭션 발생 시 순차 AOF 기록을 수행하며, 동시간대에 몰려든 트랜잭션 커밋 요청을 단일 물리적 디스크 배리어로 묶어 처리하는 **Leader/Follower Group Commit** 알고리즘을 적용하여 단일 스레드 대비 4배 이상의 처리량을 달성합니다.
 
 ### 3.3. `-work-mem` (정렬 및 조인 작업 메모리 예산)
 * **기본값**: `64MB`
@@ -170,8 +157,8 @@
 | 환경 규모 | 하드웨어 사양 | 권장 LionSQL 설정 인자 | 기대 트랜잭션 처리량 |
 | :--- | :--- | :--- | :---: |
 | **Edge / 소형 VM** | 1~2 vCPU, 2GB RAM<br>(Cloud e2-small, T4g.small) | `-max-memory 1200MB`<br>`-work-mem 16MB`<br>`-max-workers 64`<br>`-max-idle-sessions 32` | **3,000 ~ 5,000 TPS** |
-| **표준 프로덕션** | 4~8 vCPU, 8~16GB RAM<br>NVMe SSD | `-max-memory 8GB`<br>`-work-mem 64MB`<br>`-max-workers 256`<br>`-max-idle-sessions 64`<br>`-fsync everysec` | **12,000 ~ 16,800 TPS** |
-| **고성능 베어메탈** | 16~32 vCPU, 64GB RAM<br>PCIe 4.0 NVMe Enterprise | `-max-memory 32GB`<br>`-work-mem 128MB`<br>`-max-workers 512`<br>`-max-idle-sessions 256`<br>`-fsync everysec` | **25,000+ TPS** |
+| **표준 프로덕션** | 4~8 vCPU, 8~16GB RAM<br>NVMe SSD | `-engine wiredtiger`<br>`-max-memory 8GB`<br>`-work-mem 64MB`<br>`-max-workers 256`<br>`-max-idle-sessions 64` | **12,000 ~ 16,800 TPS** |
+| **고성능 베어메탈** | 16~32 vCPU, 64GB RAM<br>PCIe 4.0 NVMe Enterprise | `-engine wiredtiger`<br>`-max-memory 32GB`<br>`-work-mem 128MB`<br>`-max-workers 512`<br>`-max-idle-sessions 256` | **25,000+ TPS** |
 
 ---
 
