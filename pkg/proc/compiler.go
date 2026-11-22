@@ -1200,6 +1200,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 					} else {
 						name = p.Expr.String()
 					}
+					name = sqlutil.CleanIdentifier(name)
 				}
 				colNames = append(colNames, name)
 			}

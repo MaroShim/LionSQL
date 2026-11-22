@@ -14,6 +14,7 @@ import (
 	"lionsql/pkg/slt"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
+	"lionsql/pkg/wire/tds"
 )
 
 // TestOracleIntegrity_ZeroTampering verifies that zero .slt oracle test files have been altered,
@@ -186,6 +187,72 @@ func TestTSQL_Duality_DualParser_CoreProcedures(t *testing.T) {
 						rec.FilePath, rec.LineNumber, err, rec.SQL)
 				}
 			}
+		})
+	}
+}
+
+// TestTSQL_Duality_Wire_CoreProcedures runs all 30 core T-SQL stored procedure suites
+// over real TDS TCP wire (:1433) vs in-process Coordinator, enforcing 1:1 wire serialization
+// and execution parity (SLT-DUALITY-TSQL-WIRE-1).
+func TestTSQL_Duality_Wire_CoreProcedures(t *testing.T) {
+	files1, err := filepath.Glob("0*.slt")
+	if err != nil {
+		t.Fatalf("failed to glob 0*.slt: %v", err)
+	}
+	files2, _ := filepath.Glob("[1-3]*.slt")
+	coreFiles := append(files1, files2...)
+
+	if len(coreFiles) != 30 {
+		t.Fatalf("expected 30 core T-SQL procedure suites, found %d", len(coreFiles))
+	}
+
+	for _, file := range coreFiles {
+		file := file
+		t.Run(file, func(t *testing.T) {
+			records, err := slt.ParseFile(file)
+			if err != nil {
+				t.Fatalf("failed to parse %s: %v", file, err)
+			}
+
+			// Track A: TDS Wire Server backed by isolated Engine A
+			var engTDS storage.Engine = memengine.New()
+			_ = engTDS.Open("")
+			defer engTDS.Close()
+			catTDS := catalog.New(engTDS)
+
+			tdsSrv := tds.NewServer("127.0.0.1:0", catTDS, engTDS)
+			if err := tdsSrv.Start(); err != nil {
+				t.Fatalf("failed to start TDS server: %v", err)
+			}
+			defer tdsSrv.Close()
+
+			tdsExec, err := slt.NewTDSExecutor(tdsSrv.Addr().String())
+			if err != nil {
+				t.Fatalf("failed to connect TDS executor: %v", err)
+			}
+			defer tdsExec.Close()
+
+			// Track B: In-Process Coordinator backed by isolated Engine B
+			var engCoord storage.Engine = memengine.New()
+			_ = engCoord.Open("")
+			defer engCoord.Close()
+			catCoord := catalog.New(engCoord)
+			coord := engine.NewCoordinator(catCoord, engCoord, engine.DefaultConfig())
+			defer coord.Close()
+			coordExec := slt.NewCoordinatorExecutor(coord)
+
+			// Wrap both in DualityExecutor: every query runs over TDS AND Coordinator
+			dualityExec := slt.NewDualityExecutor(tdsExec, "TDS_Wire_1433", coordExec, "Coordinator_InProc")
+
+			passCount := 0
+			for i, rec := range records {
+				if err := slt.RunRecord(dualityExec, rec); err != nil {
+					t.Fatalf("[%s:%d] record #%d T-SQL Wire Duality failure: %v\nSQL:\n%s",
+						rec.FilePath, rec.LineNumber, i, err, rec.SQL)
+				}
+				passCount++
+			}
+			t.Logf("[%s] 100%% PASS: verified %d records over TDS Wire Duality", file, passCount)
 		})
 	}
 }

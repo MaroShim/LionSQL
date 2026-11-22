@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "github.com/microsoft/go-mssqldb"
 )
@@ -93,7 +94,13 @@ func (e *TDSExecutor) Execute(sqlStr string) ([]string, []map[string]any, error)
 		rowMap := make(map[string]any, len(cols))
 		for i, colName := range uniqueCols {
 			val := rawVals[i]
-			if b, ok := val.([]byte); ok {
+			if t, ok := val.(time.Time); ok {
+				if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 {
+					val = t.Format("2006-01-02")
+				} else {
+					val = t.Format("2006-01-02 15:04:05")
+				}
+			} else if b, ok := val.([]byte); ok {
 				s := string(b)
 				if f, ferr := strconv.ParseFloat(s, 64); ferr == nil && !strings.HasPrefix(s, "0x") {
 					if iVal, ierr := strconv.ParseInt(s, 10, 64); ierr == nil {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"lionsql/pkg/sqlutil"
 )
@@ -131,5 +132,15 @@ func normalizeDualityVal(v any) string {
 	if v == nil {
 		return "NULL"
 	}
-	return strings.TrimSpace(fmt.Sprintf("%v", v))
+	if t, ok := v.(time.Time); ok {
+		if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 {
+			return t.Format("2006-01-02")
+		}
+		return t.Format("2006-01-02 15:04:05")
+	}
+	s := strings.TrimSpace(fmt.Sprintf("%v", v))
+	if strings.HasSuffix(s, " 00:00:00 +0000 UTC") {
+		return strings.TrimSuffix(s, " 00:00:00 +0000 UTC")
+	}
+	return s
 }
