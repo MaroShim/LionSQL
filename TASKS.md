@@ -204,6 +204,7 @@
 | `DONE` | **`BUG-WT-UNIQUE-INDEX-UNENFORCED-1`** |  | Integrity | P2 | WiredTiger 스토리지 엔진 보조 유니크 인덱스 제약 검증 및 색인 누락 방지 (WT Unique Index Bug) |  |  |
 | `DONE` | **`CFG-MEMORY-COMPACT-DEFAULT-1`** |  | STORAGE | P1 | 인메모리 컴팩트(compact) 모드 4대 게이트 검증 및 기본값 공식 승격 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
 | `DONE` | **`CFG-STORAGE-OPT-1`** |  | CONFIG | P1 | 스토리지 옵션 계층 분리(--disk/--memory) 및 하위 호환성 매핑 | [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md) |  |
+| `DONE` | **`CI-RELEASE-MULTI-OS-WT-1`** | `v0.94.0` | CI/CD | P1 | GitHub Actions Multi-OS (macOS/Linux/Windows) Native WiredTiger Release Workflow | [`.github/workflows/release.yml`](.github/workflows/release.yml) |  |
 | `DONE` | **`COMPAT-BABELFISH-CALIBRATION-86`** | `v0.94.0` | Compatibility | P2 | Babelfish 잔여 86개 오라클 스위트 Microsoft SQL Server 2022 실측 정답지 전수 캘리브레이션 | [`notes/plans/BABELFISH_SQLSERVER_CALIBRATION_PLAN.ko.md`](notes/plans/BABELFISH_SQLSERVER_CALIBRATION_PLAN.ko.md) |  |
 | `DONE` | **`COMPAT-BABELFISH-CALIBRATION-P2`** | `Compatibility` | --milestone | P2 | Babelfish 2차 실측 캘리브레이션 (1608 누적합, 1572-1574 바이너리, 1562-1349 하베스터 더미 제거) | [`--category`](--category) |  |
 | `PENDING` | **`COMPAT-DECLARATIVE-1`** | `v1.99.0` | Durability | P2 | 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) |  |  |
@@ -2627,6 +2628,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [DONE] 스토리지 옵션 계층 분리(--disk/--memory) 및 하위 호환성 매핑 `CFG-STORAGE-OPT-1`
 - **Domain**: CONFIG | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Plan Doc**: [`notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md`](notes/plans/STORAGE_OPTIONS_AND_MEMORY_COMPACT_PLAN.ko.md)
+
+---
+
+### [DONE] GitHub Actions Multi-OS (macOS/Linux/Windows) Native WiredTiger Release Workflow `CI-RELEASE-MULTI-OS-WT-1`
+- **Domain**: CI/CD | **Priority**: P1 | **Updated**: 2026-11-22 08:02:14
+- **Milestone**: `v0.94.0`
+- **Plan Doc**: [`.github/workflows/release.yml`](.github/workflows/release.yml)
 
 ---
 

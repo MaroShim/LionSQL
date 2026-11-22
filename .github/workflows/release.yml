@@ -1,0 +1,250 @@
+name: Release Multi-Platform Binaries with WiredTiger
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v0.94.0)'
+        required: false
+        default: ''
+      draft:
+        description: 'Create draft release'
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Create prerelease'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-darwin-arm64:
+    name: Build macOS arm64 (WiredTiger Cgo)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          check-latest: true
+
+      - name: Install WiredTiger via Homebrew
+        run: |
+          brew install wiredtiger
+
+      - name: Compile macOS Binary with WiredTiger
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [ -z "$TAG" ] || [ "$TAG" = "main" ]; then
+            TAG="${{ inputs.tag_name }}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.94.0")"
+          fi
+          VER="${TAG#v}"
+          COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo "dev")"
+          BUILD_DATE="$(date +"%Y-%m-%d %H:%M:%S %Z")"
+          LDFLAGS="-s -w -X 'lionsql/pkg/config.Version=${VER}' -X 'lionsql/pkg/config.GitCommit=${COMMIT}' -X 'lionsql/pkg/config.BuildDate=${BUILD_DATE}'"
+
+          mkdir -p bin
+          echo "Building bin/lionsql-darwin-arm64 with WiredTiger (Version: ${VER}, Commit: ${COMMIT})..."
+          go build -tags wiredtiger -ldflags "${LDFLAGS}" -buildvcs=false -o bin/lionsql-darwin-arm64 ./cmd/lionsql
+
+      - name: Verify macOS Binary
+        run: |
+          chmod +x bin/lionsql-darwin-arm64
+          ./bin/lionsql-darwin-arm64 version
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lionsql-darwin-arm64
+          path: bin/lionsql-darwin-arm64
+          if-no-files-found: error
+
+  build-linux-amd64:
+    name: Build Linux amd64 (WiredTiger Cgo)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          check-latest: true
+
+      - name: Install WiredTiger Development Package
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwiredtiger-dev
+
+      - name: Compile Linux Binary with WiredTiger
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [ -z "$TAG" ] || [ "$TAG" = "main" ]; then
+            TAG="${{ inputs.tag_name }}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.94.0")"
+          fi
+          VER="${TAG#v}"
+          COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo "dev")"
+          BUILD_DATE="$(date +"%Y-%m-%d %H:%M:%S %Z")"
+          LDFLAGS="-s -w -X 'lionsql/pkg/config.Version=${VER}' -X 'lionsql/pkg/config.GitCommit=${COMMIT}' -X 'lionsql/pkg/config.BuildDate=${BUILD_DATE}'"
+
+          mkdir -p bin
+          echo "Building bin/lionsql-linux-amd64 with WiredTiger (Version: ${VER}, Commit: ${COMMIT})..."
+          CGO_ENABLED=1 go build -tags wiredtiger -ldflags "${LDFLAGS}" -buildvcs=false -o bin/lionsql-linux-amd64 ./cmd/lionsql
+
+      - name: Verify Linux Binary
+        run: |
+          chmod +x bin/lionsql-linux-amd64
+          ./bin/lionsql-linux-amd64 version
+
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lionsql-linux-amd64
+          path: bin/lionsql-linux-amd64
+          if-no-files-found: error
+
+  build-windows-amd64:
+    name: Build Windows amd64 (WiredTiger Cgo)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          check-latest: true
+
+      - name: Compile Windows Binary with WiredTiger
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if (-not $tag -or $tag -eq "main") {
+            $tag = "${{ inputs.tag_name }}"
+          }
+          if (-not $tag) {
+            $tag = $(git describe --tags --abbrev=0 2>$null)
+            if (-not $tag) { $tag = "v0.94.0" }
+          }
+          $ver = $tag.TrimStart("v")
+          $commit = $(git rev-parse --short HEAD 2>$null)
+          if (-not $commit) { $commit = "dev" }
+          $buildDate = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss KST")
+          $ldflags = "-s -w -X 'lionsql/pkg/config.Version=$ver' -X 'lionsql/pkg/config.GitCommit=$commit' -X 'lionsql/pkg/config.BuildDate=$buildDate'"
+
+          $env:CGO_ENABLED = "1"
+          $env:GOOS = "windows"
+          $env:GOARCH = "amd64"
+          $env:CC = "gcc"
+          $env:Path = "C:\msys64\mingw64\bin;C:\Program Files\Git\mingw64\bin;" + $env:Path
+
+          New-Item -ItemType Directory -Force -Path bin | Out-Null
+          Write-Host "Building bin/lionsql-windows-amd64.exe with WiredTiger (Version: $ver, Commit: $commit)..."
+          go build -tags wiredtiger -v -ldflags "$ldflags" -buildvcs=false -o bin/lionsql-windows-amd64.exe ./cmd/lionsql
+          if ($LASTEXITCODE -ne 0) { throw "go build failed with exit code $LASTEXITCODE" }
+
+      - name: Verify Windows Binary & Standalone Extraction
+        run: |
+          $env:Path = "C:\msys64\mingw64\bin;C:\Program Files\Git\mingw64\bin;" + $env:Path
+          ./bin/lionsql-windows-amd64.exe version
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lionsql-windows-amd64.exe
+          path: bin/lionsql-windows-amd64.exe
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish Official Release with All 3 WT Binaries
+    runs-on: ubuntu-latest
+    needs:
+      - build-darwin-arm64
+      - build-linux-amd64
+      - build-windows-amd64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all built binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Compute SHA-256 Checksums
+        run: |
+          cd dist
+          chmod +x lionsql-darwin-arm64 lionsql-linux-amd64 || true
+          sha256sum lionsql-darwin-arm64 lionsql-linux-amd64 lionsql-windows-amd64.exe > SHA256SUMS.txt
+          echo "Generated SHA-256 Checksums:"
+          cat SHA256SUMS.txt
+
+      - name: Publish or Update GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          if [ -z "$TAG" ] || [ "$TAG" = "main" ]; then
+            TAG="${{ inputs.tag_name }}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.94.0")"
+          fi
+
+          PRERELEASE_FLAG=""
+          if [[ "$TAG" =~ (beta|alpha|rc) ]] || [ "${{ inputs.prerelease }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          DRAFT_FLAG=""
+          if [ "${{ inputs.draft }}" = "true" ]; then
+            DRAFT_FLAG="--draft"
+          fi
+
+          echo "Target Release Tag: ${TAG}"
+
+          # Locate formal release notes if available
+          NOTES_OPT=""
+          NOTES_DOC="notes/release_notes/RELEASE_NOTES_${TAG}.md"
+          if [ -f "${NOTES_DOC}" ]; then
+            NOTES_OPT="--notes-file ${NOTES_DOC}"
+          else
+            NOTES_OPT="--generate-notes"
+          fi
+
+          # If release already exists (e.g. created by release.sh or pre-existing), upload/clobber assets
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} exists. Uploading official WT release assets..."
+            gh release upload "${TAG}" dist/* --clobber
+          else
+            echo "Creating new GitHub Release ${TAG}..."
+            gh release create "${TAG}" dist/* --title "LionSQL ${TAG}" ${NOTES_OPT} ${PRERELEASE_FLAG} ${DRAFT_FLAG}
+          fi
+          echo "GitHub Release ${TAG} assets successfully synchronized."

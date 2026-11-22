@@ -3,8 +3,10 @@
 package wiredtiger
 
 /*
-#cgo !windows CFLAGS: -I/opt/homebrew/include -I/usr/local/include -I/usr/include
-#cgo !windows LDFLAGS: -L/opt/homebrew/lib -L/usr/local/lib -L/usr/lib -lwiredtiger
+#cgo darwin CFLAGS: -I/opt/homebrew/include -I/usr/local/include
+#cgo darwin LDFLAGS: -L/opt/homebrew/lib -L/usr/local/lib -lwiredtiger
+#cgo linux CFLAGS: -I/usr/local/include -I/usr/include
+#cgo linux LDFLAGS: -L/usr/local/lib -L/usr/lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/aarch64-linux-gnu -lwiredtiger
 #cgo windows,amd64 CFLAGS: -I${SRCDIR}/lib/windows_amd64/include
 #cgo windows,amd64 LDFLAGS: -L${SRCDIR}/lib/windows_amd64 -lwiredtiger
 
