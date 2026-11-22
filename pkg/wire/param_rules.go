@@ -207,13 +207,17 @@ func (s *Server) describeDMLReturningColumns(dml *engine.DMLStatement) []ColumnM
 			outName = cleanColumnIdentifier(alias)
 		} else {
 			outName = cleanColumnIdentifier(rc)
-			if dotIdx := strings.LastIndex(outName, "."); dotIdx != -1 {
-				outName = outName[dotIdx+1:]
+			if !strings.Contains(outName, "(") {
+				if dotIdx := strings.LastIndex(outName, "."); dotIdx != -1 {
+					outName = outName[dotIdx+1:]
+				}
 			}
 		}
 		lookupCol := cleanColumnIdentifier(exprStr)
-		if dotIdx := strings.LastIndex(lookupCol, "."); dotIdx != -1 {
-			lookupCol = lookupCol[dotIdx+1:]
+		if !strings.Contains(lookupCol, "(") {
+			if dotIdx := strings.LastIndex(lookupCol, "."); dotIdx != -1 {
+				lookupCol = lookupCol[dotIdx+1:]
+			}
 		}
 		oid := int32(25)
 		if tbl != nil {
@@ -264,8 +268,10 @@ func (s *Server) describeWithQueryColumns(query string) ([]ColumnMeta, bool) {
 						outName = cleanColumnIdentifier(alias)
 					} else {
 						outName = cleanColumnIdentifier(rc)
-						if dotIdx := strings.LastIndex(outName, "."); dotIdx != -1 {
-							outName = outName[dotIdx+1:]
+						if !strings.Contains(outName, "(") {
+							if dotIdx := strings.LastIndex(outName, "."); dotIdx != -1 {
+								outName = outName[dotIdx+1:]
+							}
 						}
 					}
 					colNames = append(colNames, outName)
@@ -367,22 +373,26 @@ func (s *Server) describeWithQueryColumns(query string) ([]ColumnMeta, bool) {
 			outColName = cleanColumnIdentifier(alias)
 		} else {
 			outColName = cleanColumnIdentifier(rawCol)
-			if dotIdx := strings.LastIndex(outColName, "."); dotIdx != -1 {
-				outColName = outColName[dotIdx+1:]
+			if !strings.Contains(outColName, "(") {
+				if dotIdx := strings.LastIndex(outColName, "."); dotIdx != -1 {
+					outColName = outColName[dotIdx+1:]
+				}
 			}
 		}
 
 		cleanExpr := cleanColumnIdentifier(exprPart)
 		var oid int32
-		if dotIdx := strings.LastIndex(cleanExpr, "."); dotIdx != -1 {
-			prefix := strings.ToLower(cleanColumnIdentifier(cleanExpr[:dotIdx]))
-			bare := cleanColumnIdentifier(cleanExpr[dotIdx+1:])
-			if cteName, ok := aliasToCTE[prefix]; ok {
-				if cList, ok := cteSchemas[cteName]; ok {
-					for _, cm := range cList {
-						if strings.EqualFold(cm.Name, bare) {
-							oid = cm.DataType
-							break
+		if !strings.Contains(cleanExpr, "(") {
+			if dotIdx := strings.LastIndex(cleanExpr, "."); dotIdx != -1 {
+				prefix := strings.ToLower(cleanColumnIdentifier(cleanExpr[:dotIdx]))
+				bare := cleanColumnIdentifier(cleanExpr[dotIdx+1:])
+				if cteName, ok := aliasToCTE[prefix]; ok {
+					if cList, ok := cteSchemas[cteName]; ok {
+						for _, cm := range cList {
+							if strings.EqualFold(cm.Name, bare) {
+								oid = cm.DataType
+								break
+							}
 						}
 					}
 				}
@@ -463,8 +473,10 @@ func (s *Server) inferStmtDMLParamTypes(stmtSQL string, count int, oids []int32)
 
 	lookupColOID := func(colName string) int32 {
 		cName := cleanColumnIdentifier(colName)
-		if dotIdx := strings.LastIndex(cName, "."); dotIdx != -1 {
-			cName = cName[dotIdx+1:]
+		if !strings.Contains(cName, "(") {
+			if dotIdx := strings.LastIndex(cName, "."); dotIdx != -1 {
+				cName = cName[dotIdx+1:]
+			}
 		}
 		for _, c := range tbl.Columns {
 			if strings.EqualFold(c.Name, cName) {

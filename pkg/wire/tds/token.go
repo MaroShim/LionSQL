@@ -827,6 +827,9 @@ func CleanTDSColumnName(name string) string {
 	if name == "" {
 		return name
 	}
+	if strings.Contains(name, "(") || strings.Contains(name, ")") {
+		return name
+	}
 	name = strings.Trim(name, "[]\"'`")
 	if dot := strings.LastIndex(name, "."); dot != -1 {
 		name = strings.Trim(name[dot+1:], "[]\"'`")

@@ -2237,6 +2237,9 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 
 func cleanColumnIdentifier(s string) string {
 	s = strings.TrimSpace(s)
+	if strings.Contains(s, "(") || strings.Contains(s, ")") {
+		return s
+	}
 	s = strings.Trim(s, "()")
 	if strings.Contains(s, ".") {
 		parts := strings.Split(s, ".")
@@ -2264,8 +2267,10 @@ func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow ma
 		var oid int32 = 0
 		cleanCol := cleanColumnIdentifier(colName)
 		bareCol := cleanCol
-		if dotIdx := strings.LastIndex(bareCol, "."); dotIdx != -1 {
-			bareCol = bareCol[dotIdx+1:]
+		if !strings.Contains(bareCol, "(") {
+			if dotIdx := strings.LastIndex(bareCol, "."); dotIdx != -1 {
+				bareCol = bareCol[dotIdx+1:]
+			}
 		}
 		for _, t := range tables {
 			for _, c := range t.Columns {

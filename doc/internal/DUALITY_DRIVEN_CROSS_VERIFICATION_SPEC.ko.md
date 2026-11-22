@@ -186,3 +186,141 @@ SQLLogicTest(SLT)는 수만 개의 복잡한 SQL 쿼리와 결과셋이 검증�
    - 스프린트 과제 `DURA-SOAK-1`(24h~72h 장기 소크 테스트)에 Layer 4 스토리지 트윈 검증기(MemEngine vs WiredTiger)를 결합하여 고동시성 메모리 누수 및 데이터 정합성 지속 감시.
 4. **영구 불변식 등록**:
    - `GEMINI.md` 및 프로젝트 아키텍처 가이드라인에 **[RULE:DualitySymmetry]**를 명문화하여 향후 추가되는 모든 와이어 프로토콜 기능과 스토리지 기능이 대칭성 검증을 필수로 통과하도록 강제.
+
+---
+
+## 6. 실전 결함 적출 사례 연구 (Real-World Case Studies Uncovered by Duality SLT)
+
+본 절에서는 `test/slt` 32개 핵심 스위트에 대해 **시나리오 A(Dual-Wire SLT: TDS `:1433` vs PGWire `:5433`)** 러너를 최초 가동했을 때, 기존 단일 와이어 테스트나 개별 단위 테스트에서는 발견되지 않고 은폐되어 있던 2건의 중대 결함이 실시간 교차 검증을 통해 어떻게 즉각 적출(Pinpointed)되었는지 그 실전 사례를 기록한다.
+
+```
++---------------------------------------------------------------------------------------+
+|                 Dual-Wire SQLLogicTest Runner (Scenario A Execution)                 |
+|                                                                                       |
+|   [Query] ---> Track 1: TDS (:1433)   ---> Output Rowset A                            |
+|           ---> Track 2: PGWire (:5433) ---> Output Rowset B                           |
+|                                                      |                                |
+|                        [Duality Comparator] <--------+                                |
+|                                 |                                                     |
+|                   +-------------+-------------+                                       |
+|                   |                           |                                       |
+|         Rowset A == Rowset B        Rowset A != Rowset B                              |
+|             [100% PASS]               [MISMATCH DETECTED]                             |
+|                                       - Case 1: agg_stress.slt:68                     |
+|                                       - Case 2: join_advanced.slt:48                  |
++---------------------------------------------------------------------------------------+
+```
+
+---
+
+### 사례 1. 중첩 집계 함수 표현식의 점(`.`) 분할로 인한 식별자 절단 결함
+* **발견 위치**: `pkg/wire/tds/token.go:CleanTDSColumnName` 및 `pkg/wire/param_rules.go` / `server.go`
+* **적출 트리거**: `test/slt/core/agg_stress.slt:68`
+* **실행 쿼리**:
+  ```sql
+  SELECT d.dept_name, COUNT(o.order_id), COALESCE(SUM(o.amount), 0)
+  FROM slt_sales_dept d
+  LEFT JOIN slt_sales_orders o ON d.dept_id = o.dept_id
+  GROUP BY d.dept_name
+  ORDER BY d.dept_name;
+  ```
+
+#### 1) Duality Observer 관측 불일치 (Discrepancy)
+* **TDS Track (`:1433`)**: 컬럼 메타데이터를 `"amount), 0)"`로 절단하여 전송하고, 내부 행 맵에서도 절단된 키로 값을 찾아 `"1000"` 반환.
+* **PGWire Track (`:5433`)**: 정상적인 전체 함수 표현식 `COALESCE(SUM(o.amount), 0)`을 컬럼명으로 유지.
+* **러너 적출 메시지**:
+  ```text
+  --- FAIL: TestSQLLogicTest_Duality_DualWire/core/agg_stress.slt (0.01s)
+      slt_duality_test.go:76: [core/agg_stress.slt:68] Duality Dual-Wire mismatch failure:
+        [DUALITY-MISMATCH] TDS_1433 vs PGWire_5433:
+          Divergence: Row 0 Col "amount), 0)" Value mismatch:
+            TDS_1433:    "1000" (int64)
+            PGWire_5433: "NULL" (<nil>)
+  ```
+
+#### 2) 근본 원인 분석 (Root Cause Analysis)
+* TDS 프로토콜 핸들러의 컬럼명 정리 함수인 `CleanTDSColumnName` 및 PGWire 파라미터 규칙에서 문맥을 무시한 단순 점(`.`) 분할이 적용되어 있었음:
+  ```go
+  // [결함 코드] pkg/wire/tds/token.go
+  func CleanTDSColumnName(name string) string {
+      name = strings.TrimSpace(name)
+      if name == "" {
+          return name
+      }
+      name = strings.Trim(name, "[]\"'`")
+      if dot := strings.LastIndex(name, "."); dot != -1 {
+          name = strings.Trim(name[dot+1:], "[]\"'`") // [버그] 점(.) 뒤를 컬럼명으로 간주
+      }
+      return name
+  }
+  ```
+* 단순 테이블 컬럼인 `o.amount`에서는 점(`.`)을 분할하여 `amount`를 취하는 것이 정상 작동함.
+* 그러나 테이블 한정 컬럼이 `COALESCE(SUM(o.amount), 0)`와 같이 **중첩 함수 표현식 내부**에 포함되어 있을 때, `strings.LastIndex(name, ".")`를 수행하면서 점(`.`) 이후의 문자열인 `amount), 0)`가 컬럼 메타데이터 이름으로 처참하게 잘려나감.
+* TDS 레이어는 전송 메타데이터와 행 조회 모두에서 이 절단 함수를 호출하여 우연히 일치하는 바람에 단독 테스트에서는 결함이 은폐되었으나, 전체 표현식을 보존하던 PGWire와의 교차 검증에서 **컬럼명 절단 및 셀 값 불일치**가 수면 위로 즉각 적출됨.
+* **위반 불변식**: `[Invariant 12: Context-Blind strings.* SQL Parsing Prohibition & Mandatory sqlutil Primacy]`.
+
+#### 3) 단일 테스트에서 은폐되었던 이유와 Duality의 해결
+* 단일 프로토콜(TDS 전용) 테스트에서는 송신 측과 수신 측이 모두 동일하게 오염된 키(`amount), 0)`)를 공유하여 정상 통과된 것처럼 가장되었음.
+* Duality 러너는 독립된 두 와이어 프로토콜(TDS와 PGWire)로 동일 쿼리를 동시 주입하고 결과셋 스키마와 셀 값을 1:1로 실시간 대조함으로써, 암묵적으로 은폐되어 있던 식별자 절단 결함을 완벽히 적출함.
+* **조치 방안**: 식별자/표현식에 괄호(`(`)가 존재하는 경우 단순 식별자가 아닌 복합 함수/연산 표현식이므로 점(`.`) 분할을 안전하게 우회하도록 가드 추가.
+
+---
+
+### 사례 2. 셀프 조인 시 중복 프로젝션 컬럼명의 강제 리네이밍 결함
+* **발견 위치**: `pkg/execution/project.go:addField`
+* **적출 트리거**: `test/slt/core/join_advanced.slt:48`
+* **실행 쿼리**:
+  ```sql
+  SELECT e.emp_id, e.emp_name, m.emp_name
+  FROM slt_emp2 e
+  JOIN slt_emp2 m ON e.mgr_id = m.emp_id;
+  ```
+
+#### 1) Duality Observer 관측 불일치 (Discrepancy)
+* **TDS Track (`:1433`)**: 쿼리에 명시된 프로젝션 컬럼명(`emp_name`) 그대로 반환 -> 클라이언트 행 스캔 정상 완료 (`"Kim"` 반환).
+* **PGWire Track (`:5433`)**: Volcano 실행 엔진이 두 번째 컬럼을 `m.emp_name`으로 강제 리네이밍 -> TDS와 컬럼명 불일치로 인해 `"NULL"` 반환.
+* **러너 적출 메시지**:
+  ```text
+  --- FAIL: TestSQLLogicTest_Duality_DualWire/core/join_advanced.slt (0.01s)
+      slt_duality_test.go:76: [core/join_advanced.slt:48] Duality Dual-Wire mismatch failure:
+        [DUALITY-MISMATCH] TDS_1433 vs PGWire_5433:
+          Divergence: Row 0 Col "emp_name#1" Value mismatch:
+            TDS_1433:    "Kim" (string)
+            PGWire_5433: "NULL" (<nil>)
+  ```
+
+#### 2) 근본 원인 분석 (Root Cause Analysis)
+* Volcano 실행 엔진의 프로젝션 이터레이터(`pkg/execution/project.go`)는 결과 스키마에 동일한 컬럼명이 2개 이상 존재하면 이를 임의로 고유화(Uniquify)하려는 레거시 휴리스틱이 잔존해 있었음:
+  ```go
+  // [결함 코드] pkg/execution/project.go
+  addField := func(expr, alias string) {
+      schemaAlias := alias
+      for _, existing := range p.schema {
+          if strings.EqualFold(existing, schemaAlias) {
+              cleanExpr := sqlutil.CleanIdentifier(expr)
+              if cleanExpr != "" && !strings.EqualFold(cleanExpr, schemaAlias) {
+                  schemaAlias = cleanExpr // [버그] m.emp_name으로 강제 리네이밍
+              } else {
+                  schemaAlias = fmt.Sprintf("%s_%d", alias, len(p.schema)+1)
+              }
+              break
+          }
+      }
+      // ...
+      p.schema = append(p.schema, schemaAlias)
+  }
+  ```
+* 셀프 조인 쿼리 `SELECT e.emp_id, e.emp_name, m.emp_name`에서 세 번째 컬럼 `m.emp_name`은 원래 `emp_name`이라는 컬럼 레이블을 가져야 하지만, 이미 첫 번째 `emp_name`이 스키마에 등록되어 있다는 이유로 엔진이 임의로 `m.emp_name`으로 변조함.
+* 그러나 **ANSI SQL 표준 및 PostgreSQL, Microsoft SQL Server 표준 규격**에서는 프로젝션 절에 중복된 컬럼명이 존재하는 것을 완전히 허용하며, 엔진이 임의로 결과셋 컬럼 레이블을 개작해서는 안 됨.
+* 결과셋 메타데이터의 컬럼명이 TDS는 `emp_name`, PGWire(Volcano)는 `m.emp_name`으로 분기됨에 따라 와이어 프로토콜 대칭성이 파괴됨.
+
+#### 3) 단일 테스트에서 은폐되었던 이유와 Duality의 해결
+* 단일 프로토콜 환경에서는 엔진이 내부적으로 리네이밍을 해도 그 상태 그대로 클라이언트에 전달되어 얼핏 오류 없이 지나치는 경우가 많음.
+* 하지만 TDS 드라이버와 PGWire 드라이버가 동일한 셀프 조인 쿼리를 각각 실행하고 그 결과셋 메타데이터와 셀 데이터를 교차 검증했을 때, 컬럼 명칭과 튜플 값의 위치 불일치가 극명하게 드러남.
+* **조치 방안**: 과거 `map[string]any` 충돌 방지용으로 추가되었던 불필요한 스키마 강제 리네이밍 로직을 전면 제거하고, 쿼리가 명시한 프로젝션 컬럼명을 충실하게 보존하도록 수정 (`[RULE:RadicalKISS]`).
+
+---
+
+### 결론: 이중화 아키텍처가 증명한 결함 발견 가치
+위 2건의 사례는 Duality-Driven 방법론이 단순한 "추가 테스트"를 넘어, **기존의 모든 정적 테스트와 단일 프로토콜 블랙박스 테스트를 뚫고 지나갔던 심층적인 프로토콜/엔진 레벨의 불일치를 자동으로 수면 위로 끌어올리는 강력한 돋보기**임을 입증한다.
+LionSQL은 본 방법론을 통해 SQLite 이상의 자가 치유형 품질 검증 체계를 확립하였다.

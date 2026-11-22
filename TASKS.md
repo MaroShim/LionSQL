@@ -527,7 +527,7 @@
 | `DONE` | **`SEED-EMBED-UNIFY-1`** | `Ecosystem` | --milestone | P1 | 데모 시드 스크립트(demo_seed.sql) 단일 바이너리 내장 및 Web Studio 시드 데이터 일치화 | [`--domain`](--domain) |  |
 | `PENDING` | **`SLT-DUALITY-PARSER-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario C: Dual-Parser Differential Equivalence SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `PENDING` | **`SLT-DUALITY-STORAGE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario B: Dual-Storage Twin-Engine SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
-| `PENDING` | **`SLT-DUALITY-WIRE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario A: Dual-Wire Differential SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
+| `DONE` | **`SLT-DUALITY-WIRE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario A: Dual-Wire Differential SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`SQL-GOOSE-IDENTITY-1`** |  | Durability | P2 | PostgreSQL `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` 지원 및 goose 마이그레이션 호환 |  |  |
 | `DONE` | **`SQL-WRITABLE-CTE-1`** |  | Durability | P2 | PostgreSQL Writable CTE (`WITH ... INSERT/UPDATE/DELETE ... RETURNING`) 및 `::type[]` 캐스트 지원 |  |  |
 | `DONE` | **`SSMS-OE-3PART-TOP`** | `1.0-GA` | Ecosystem | P2 | SSMS 테이블 우클릭 Select Top 1000 / Edit Top 200 3-Part 이름 정규화 및 실행 검증 | [`notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md`](notes/plans/SSMS_OBJECT_EXPLORER_COMPATIBILITY_PLAN.ko.md) |  |
@@ -5105,8 +5105,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Duality SLT Scenario A: Dual-Wire Differential SQLLogicTest Runner `SLT-DUALITY-WIRE-1`
-- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-22 12:25:06
+### [DONE] Duality SLT Scenario A: Dual-Wire Differential SQLLogicTest Runner `SLT-DUALITY-WIRE-1`
+- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-22 12:55:23
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)
 
