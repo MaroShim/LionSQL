@@ -11,10 +11,9 @@ LionSQL is architected as an **autonomous, high-concurrency embedded OLTP databa
 To maximize ecosystem reach, LionSQL exposes multiple database network listeners concurrently from its single static executable:
 - **TDS 7.x/8.0 Protocol** (Default TCP `:1433`): Native Microsoft SQL Server tools, SSMS, `go-mssqldb`.
 - **PostgreSQL Wire Protocol v3** (Default TCP `:5433`): `psql`, `pgx/v5`, `lib/pq`, DBeaver, Beekeeper Studio, Navicat, DataGrip, GORM, Prisma.
-- **MySQL Client/Server Protocol** (Planned TCP `:3306`): `mysql` CLI, Navicat, MySQL Workbench, `go-sql-driver/mysql`, PHP/Python MySQL drivers.
 - **HTTP / REST & Web Studio** (Default TCP `:8090`): Web dashboard, health probes, automated REST API.
 
-This document establishes the **permanent scope boundaries and architectural stop criteria** for PostgreSQL and MySQL protocol emulation to prevent engine bloat, semantic collisions, and infinite dialect rabbit holes.
+This document establishes the **permanent scope boundaries and architectural stop criteria** for wire protocol emulation to prevent engine bloat, semantic collisions, and infinite dialect rabbit holes. (Note: A dedicated MySQL wire listener on TCP `:3306` was permanently Spec-Out per `doc/SPEC_OUT_DECISIONS.ko.md` and `doc/DUCKDB_AND_MYSQL_COMPATIBILITY_EVALUATION.ko.md`).
 
 ---
 
@@ -119,42 +118,7 @@ To preserve architectural purity, PostgreSQL support shall halt after implementi
 
 ---
 
-## 5. MySQL Protocol Boundary Specification (`pkg/wire/mysql/`, Port :3306)
-
-When implementing the MySQL wire listener, the following strict bounds must be maintained:
-
-### 5.1. Scope of Implementation (In-Scope)
-1. **Network Listener & Handshake**:
-   - Listen on TCP `:3306`.
-   - Implement MySQL Protocol 4.1 Initial Handshake packet (Protocol version 10, server capabilities, auth plugin `mysql_native_password`).
-   - Handshake Response packet parser with SHA1 password verification.
-   - Standard packet header handling (3-byte payload length + 1-byte sequence ID).
-2. **Command Dispatcher**:
-   - `COM_QUIT` (0x01): Clean connection termination.
-   - `COM_INIT_DB` (0x02): No-op acceptance (isolated instance model).
-   - `COM_QUERY` (0x03): Text-based SQL statement execution.
-   - `COM_PING` (0x0E): Keep-alive probe returning OK packet.
-   - `COM_STMT_PREPARE` (0x16), `COM_STMT_EXECUTE` (0x17), `COM_STMT_CLOSE` (0x19): Prepared statement protocol.
-3. **Handshake Interception & System Variables**:
-   - `SELECT @@version_comment, @@version`
-   - `SELECT @@collation_server, @@character_set_server`
-   - `SHOW VARIABLES LIKE ...`
-   - `SHOW STATUS LIKE ...`
-   - `SHOW TABLES` and `SHOW COLUMNS FROM ...`
-
-### 5.2. Explicitly Spec-Out / Deferred (Do Not Implement)
-1. **MySQL Stored Procedures & Functions**:
-   - `CREATE PROCEDURE ... BEGIN ... END` using `DELIMITER` syntax is Spec-Out.
-2. **Replication & Binary Logging**:
-   - `COM_BINLOG_DUMP`, `COM_REGISTER_SLAVE`, and GTID event streaming are Spec-Out (LionSQL uses native WAL replication).
-3. **Administrative & Maintenance Commands**:
-   - `FLUSH PRIVILEGES`, `OPTIMIZE TABLE`, `ANALYZE TABLE`, `RESET MASTER` are Spec-Out.
-4. **Non-Standard Implicit Coercions**:
-   - Silent truncation or zero-date quirks (`0000-00-00`) are Spec-Out.
-
----
-
-## 6. Summary: Architectural Checklist for Future Protocol Extensions
+## 5. Summary: Architectural Checklist for Future Protocol Extensions
 
 Before adding any new wire protocol feature or SQL dialect syntax, evaluate against this checklist:
 
