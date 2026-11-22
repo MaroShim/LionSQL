@@ -167,16 +167,28 @@ jobs:
           go build -tags wiredtiger -v -ldflags "$ldflags" -buildvcs=false -o bin/lionsql-windows-amd64.exe ./cmd/lionsql
           if ($LASTEXITCODE -ne 0) { throw "go build failed with exit code $LASTEXITCODE" }
 
+          # Copy wiredtiger.dll to bin/ so the executable can load it
+          Copy-Item pkg/storage/wiredtiger/lib/windows_amd64/wiredtiger.dll bin/ -Force
+
       - name: Verify Windows Binary & Standalone Extraction
         run: |
-          $env:Path = "C:\msys64\mingw64\bin;C:\Program Files\Git\mingw64\bin;" + $env:Path
+          $env:Path = "$pwd\bin;C:\msys64\mingw64\bin;C:\Program Files\Git\mingw64\bin;" + $env:Path
           ./bin/lionsql-windows-amd64.exe version
+          ./bin/lionsql-windows-amd64.exe doctor
+
+      - name: Package Windows Release Bundle
+        run: |
+          # Package both lionsql-windows-amd64.exe and wiredtiger.dll together
+          Compress-Archive -Path bin/lionsql-windows-amd64.exe, bin/wiredtiger.dll -DestinationPath bin/lionsql-windows-amd64.zip -Force
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lionsql-windows-amd64.exe
-          path: bin/lionsql-windows-amd64.exe
+          name: lionsql-windows-amd64
+          path: |
+            bin/lionsql-windows-amd64.exe
+            bin/wiredtiger.dll
+            bin/lionsql-windows-amd64.zip
           if-no-files-found: error
 
   publish-release:
@@ -202,7 +214,7 @@ jobs:
         run: |
           cd dist
           chmod +x lionsql-darwin-arm64 lionsql-linux-amd64 || true
-          sha256sum lionsql-darwin-arm64 lionsql-linux-amd64 lionsql-windows-amd64.exe > SHA256SUMS.txt
+          find . -maxdepth 1 -type f ! -name "SHA256SUMS.txt" -exec sha256sum {} + | sort > SHA256SUMS.txt
           echo "Generated SHA-256 Checksums:"
           cat SHA256SUMS.txt
 
