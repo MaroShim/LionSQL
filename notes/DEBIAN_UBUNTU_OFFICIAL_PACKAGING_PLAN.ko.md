@@ -167,7 +167,52 @@ WantedBy=multi-user.target
 
 ---
 
-## 6. 테스트 및 무결성 검증 기준 (`piuparts` & Lintian)
+## 6. 데비안 패키징 리뷰 심사 기준 및 현 상태 실사 진단 (Debian Review Gap Analysis)
+
+데비안 공식 아카이브(NEW Queue)의 FTP Master 및 Debian Go Packaging Team(`pkg-go`) 심사관의 관점에서 현재 코드베이스를 실사한 결과, **아키텍처 및 라이선스는 매우 우수하나 제출 전 반드시 사전에 보완해야 할 4가지 필수 기술 과제**가 존재합니다.
+
+### 6.1 현 상태 기준의 강점 (통과에 매우 유리한 요소)
+1. **DFSG 100% 부합 라이선스 (GNU GPL v3.0)**:
+   - 메인 라이선스가 GPL-3.0이며, 모든 연계 소스가 데비안 자유 소프트웨어 가이드라인(DFSG)에 완벽히 부합합니다.
+2. **클린한 Web Studio 소스 (`pkg/ui/dashboard.html`)**:
+   - 데비안은 난독화/압축된 자바스크립트(Minified JS)를 '소스 미공개(Sourceless binary blob)'로 간주해 엄격히 탈락시킵니다.
+   - LionSQL의 Web Studio는 웹팩 번들이 아니라 **사람이 직접 읽고 수정할 수 있는 단일 바닐라 HTML/CSS/JS 소스**이므로 데비안 심사를 무난히 통과합니다.
+3. **리눅스 네이티브 WiredTiger 동적 링크 설계 (`pkg/storage/wiredtiger/wt_engine.go`)**:
+   - 리눅스 환경에서 Cgo 플래그가 시스템 라이브러리(`-lwiredtiger`, `/usr/include`, `/usr/lib`)를 동적으로 링크하도록 이미 설계되어 있습니다.
+   - 데비안 공식 아카이브에 이미 `libwiredtiger-dev` 및 `libwiredtiger0` 패키지가 정식 등재되어 있으므로, 빌드 의존성 매핑이 매우 자연스럽습니다.
+
+### 6.2 NEW Queue 탈락(REJECT) 방지를 위한 4대 필수 보완 과제
+
+지금 상태 그대로 소스를 묶어 업로드할 경우 즉시 리젝(REJECT)되는 항목들과 그에 대한 기술적 해결책입니다:
+
+1. **소스 타르볼 내 "프리컴파일 바이너리 블롭(Binary Blob)" 배제 [최우선]**:
+   - **현상**: `pkg/storage/wiredtiger/lib/windows_amd64/` 내에 `wiredtiger.dll`, `libwiredtiger.a`, `wiredtiger.lib`가 존재하며, 로컬 빌드 결과물 `bin/*`이 git에 잔존할 수 있습니다.
+   - **데비안 기준**: 데비안은 소스 패키지(`orig.tar.gz`) 내에 단 하나의 기컴파일 바이너리(`.dll`, `.a`, `.so`, `.exe`)도 허용하지 않습니다 (NEW Queue 리젝 사유: `contains prebuilt binary blob without source`).
+   - **보완책**: `debian/copyright` 파일에 `Files-Excluded:` 필드를 명시하여, 데비안 소스 타르볼 생성 시 윈도우용 DLL/정적 아카이브 및 `bin/` 디렉토리가 원천 제외되도록 구성합니다.
+2. **공식 `debian/` 패키징 메타데이터 구축 (현재 미보유)**:
+   - **현상**: 저장소에 `debian/` 디렉토리와 필수 메타데이터 파일들이 아직 없습니다.
+   - **보완책**:
+     - `debian/control`: 패키지 설명, 빌드 의존성(`golang-go`, `libwiredtiger-dev`, `debhelper-compat (= 13)`) 정의
+     - `debian/rules`: `dh $@ --buildsystem=golang` 표준 컴파일 규칙
+     - `debian/copyright`: 기여자와 서드파티 라이브러리 라이선스를 명시한 DEP-5 표준 저작권 파일
+     - `debian/changelog`: 데비안 표준 버전 변경 이력
+3. **필수 터미널 매뉴얼 페이지 (`man 1 lionsql`) 작성**:
+   - **데비안 기준 (Debian Policy §12.1)**: `/usr/bin/`에 설치되는 모든 실행 파일은 반드시 매뉴얼 페이지(`.1` man page)를 동봉해야 하며, 누락 시 Lintian 경고(W) 및 리젝 사유가 됩니다.
+   - **보완책**: `packaging/man/lionsql.1`을 작성하여 `man lionsql` 실행 시 모든 CLI 플래그와 사용법이 뜨도록 패키지에 동봉합니다.
+4. **외부 의존성(Go Modules) 오프라인 빌드 격리 정합성**:
+   - **데비안 기준**: 데비안 공식 빌드 팜(`sbuild`)은 인터넷이 차단된 완전 오프라인 샌드박스에서 빌드됩니다. 빌드 도중 `go get`으로 패키지를 가져오는 행위는 전면 차단됩니다.
+   - **보완책**: LionSQL의 의존성(`antlr4`, `pgx`, `lib/pq`, `go-mssqldb`) 중 데비안 아카이브에 이미 존재하는 것은 `golang-github-...-dev` 패키지를 `Build-Depends`로 매핑하고, 아직 없는 패키지는 `vendor/` 모드로 패키징 타르볼에 안전하게 포함시킵니다.
+
+### 6.3 최종 진단 및 단계별 추진 전략
+- **현재 시점 심사 제출 시 통과율**: **약 40%** (메타데이터 미구축 및 윈도우 DLL 블롭 혼재로 NEW Queue 리젝)
+- **4대 보완점 해결 후 통과율**: **95% 이상** (단일 정적 바이너리의 단순성 덕분에 초고속 승인 가능)
+- **추진 전략**:
+  - `v1.10.0`에서는 공식 데비안 업스트림 제출 전, 자체 `scripts/build_deb.sh`와 `systemd` 서비스 유닛을 완성하여 GitHub Release용 `.deb` 파일부터 완벽하게 제공합니다.
+  - `v1.20.0 ~ v1.30.0`에서 위 4대 보완점(바이너리 블롭 배제, DEP-5 저작권, man 페이지)을 정돈하여 데비안 Go 패키징 팀에 ITP 티켓을 제출하고 공식 업스트림 입성을 완수합니다.
+
+---
+
+## 7. 테스트 및 무결성 검증 기준 (`piuparts` & Lintian)
 
 1. **`lintian` 정적 분석**:
    - 데비안 패키징 규칙 위반(심볼릭 링크 결함, 권한 오류, man 페이지 누락) 전수 검사.
@@ -179,7 +224,7 @@ WantedBy=multi-user.target
 
 ---
 
-## 7. 결론 및 마일스톤 배정
+## 8. 결론 및 마일스톤 배정
 
 - **`v1.10.0`**: Phase 1 완료 (`packaging/` 구성, `.deb` 빌더 및 `systemd` 서비스 유닛 내장, GitHub Releases 첨부)
 - **`v1.20.0`**: Phase 2 완료 (Launchpad PPA 개설 및 `pkg.lionsql.com` APT 저장소 배포)
