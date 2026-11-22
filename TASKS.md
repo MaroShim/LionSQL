@@ -528,7 +528,7 @@
 | `PENDING` | **`SLT-DUALITY-DUALPATH-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario E: Protocol Dual-Path Symmetry SLT (TDS Batch/RPC & PGWire Simple/Extended) | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `PENDING` | **`SLT-DUALITY-PARSER-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario C: Dual-Parser Differential Equivalence SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `PENDING` | **`SLT-DUALITY-PLANCACHE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario F: Cold Compilation vs Hot PlanCache Duality (Cache Mutation Safety) | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
-| `PENDING` | **`SLT-DUALITY-STORAGE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario B: Dual-Storage Twin-Engine SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
+| `DONE` | **`SLT-DUALITY-STORAGE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario B: Dual-Storage Twin-Engine SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `PENDING` | **`SLT-DUALITY-TSQL-WIRE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario D: T-SQL Stored Procedure 30 Core Suites Wire Duality (TDS :1433 vs In-Proc) | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`SLT-DUALITY-WIRE-1`** | `1.0-GA` | Test | P2 | Duality SLT Scenario A: Dual-Wire Differential SQLLogicTest Runner | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`SQL-GOOSE-IDENTITY-1`** |  | Durability | P2 | PostgreSQL `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` 지원 및 goose 마이그레이션 호환 |  |  |
@@ -5115,8 +5115,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Duality SLT Scenario B: Dual-Storage Twin-Engine SQLLogicTest Runner `SLT-DUALITY-STORAGE-1`
-- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-22 12:25:06
+### [DONE] Duality SLT Scenario B: Dual-Storage Twin-Engine SQLLogicTest Runner `SLT-DUALITY-STORAGE-1`
+- **Domain**: Test | **Priority**: P2 | **Updated**: 2026-11-22 13:36:26
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md)
 

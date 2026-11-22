@@ -108,6 +108,54 @@ func TestSQLLogicTest_Duality_DualWire_FullSelect(t *testing.T) {
 	}
 }
 
+func runDualStorageSLTFile(t *testing.T, file string) {
+	t.Helper()
+	records, err := slt.ParseFile(file)
+	if err != nil {
+		t.Fatalf("failed to parse %s: %v", file, err)
+	}
+
+	// Track A: In-Memory OCC
+	engA := memengine.New()
+	_ = engA.Open("")
+	defer engA.Close()
+	catA := catalog.New(engA)
+	coordA := engine.NewCoordinator(catA, engA, engine.DefaultConfig())
+	execA := slt.NewCoordinatorExecutor(coordA)
+
+	// Track B: WiredTiger MVCC B+Tree
+	tmpDir, err := os.MkdirTemp("", "slt_wt_*")
+	if err != nil {
+		t.Fatalf("failed to create wt temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	engB := wiredtiger.New()
+	if err := engB.Open(tmpDir); err != nil {
+		t.Skipf("skipping WiredTiger duality test: %v", err)
+	}
+	defer engB.Close()
+	catB := catalog.New(engB)
+	coordB := engine.NewCoordinator(catB, engB, engine.DefaultConfig())
+	execB := slt.NewCoordinatorExecutor(coordB)
+
+	// Wrap in DualityExecutor: every query runs on MemEngine AND WiredTiger
+	dualityExec := slt.NewDualityExecutor(execA, "MemEngine_OCC", execB, "WiredTiger_MVCC")
+
+	passCount := 0
+	for i, rec := range records {
+		if i > 0 && i%500 == 0 {
+			t.Logf("[%s] Progress: %d / %d records verified over Dual-Storage", file, i, len(records))
+		}
+		if err := slt.RunRecord(dualityExec, rec); err != nil {
+			t.Fatalf("[%s:%d] record #%d Duality Dual-Storage mismatch failure: %v\nSQL:\n%s",
+				rec.FilePath, rec.LineNumber, i, err, rec.SQL)
+		}
+		passCount++
+	}
+	t.Logf("[%s] 100%% PASS: verified %d records over Dual-Storage", file, passCount)
+}
+
 // TestSQLLogicTest_Duality_DualStorage executes SQLLogicTest suites simultaneously on
 // In-Memory OCC and WiredTiger B+Tree, asserting 1:1 storage ACID and tuple parity (SLT-DUALITY-STORAGE-1).
 func TestSQLLogicTest_Duality_DualStorage(t *testing.T) {
@@ -115,44 +163,27 @@ func TestSQLLogicTest_Duality_DualStorage(t *testing.T) {
 
 	for _, file := range testSuites {
 		t.Run(file, func(t *testing.T) {
-			records, err := slt.ParseFile(file)
-			if err != nil {
-				t.Fatalf("failed to parse %s: %v", file, err)
-			}
+			runDualStorageSLTFile(t, file)
+		})
+	}
+}
 
-			// Track A: In-Memory OCC
-			engA := memengine.New()
-			_ = engA.Open("")
-			defer engA.Close()
-			catA := catalog.New(engA)
-			coordA := engine.NewCoordinator(catA, engA, engine.DefaultConfig())
-			execA := slt.NewCoordinatorExecutor(coordA)
-
-			// Track B: WiredTiger MVCC B+Tree
-			tmpDir, err := os.MkdirTemp("", "slt_wt_*")
-			if err != nil {
-				t.Fatalf("failed to create wt temp dir: %v", err)
-			}
-			defer os.RemoveAll(tmpDir)
-
-			engB := wiredtiger.New()
-			if err := engB.Open(tmpDir); err != nil {
-				t.Skipf("skipping WiredTiger duality test: %v", err)
-			}
-			defer engB.Close()
-			catB := catalog.New(engB)
-			coordB := engine.NewCoordinator(catB, engB, engine.DefaultConfig())
-			execB := slt.NewCoordinatorExecutor(coordB)
-
-			// Wrap in DualityExecutor: every query runs on MemEngine AND WiredTiger
-			dualityExec := slt.NewDualityExecutor(execA, "MemEngine_OCC", execB, "WiredTiger_MVCC")
-
-			for _, rec := range records {
-				if err := slt.RunRecord(dualityExec, rec); err != nil {
-					t.Fatalf("[%s:%d] Duality Dual-Storage mismatch failure: %v\nSQL:\n%s",
-						rec.FilePath, rec.LineNumber, err, rec.SQL)
-				}
-			}
+// TestSQLLogicTest_Duality_DualStorage_FullSelect executes the full-scale SQLLogicTest select suites
+// (select1.slt ~ select5.slt, 10,706 queries) simultaneously on MemEngine and WiredTiger.
+func TestSQLLogicTest_Duality_DualStorage_FullSelect(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping full dual-storage SLT in short mode")
+	}
+	fullSuites := []string{
+		"full/select1.slt",
+		"full/select2.slt",
+		"full/select3.slt",
+		"full/select4.slt",
+		"full/select5.slt",
+	}
+	for _, file := range fullSuites {
+		t.Run(file, func(t *testing.T) {
+			runDualStorageSLTFile(t, file)
 		})
 	}
 }
