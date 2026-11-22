@@ -116,7 +116,7 @@ When concurrent transactions attempt to modify the same record:
   - Row-level latches and transaction snapshots detect conflicts early.
   - Transactions encountering uncommitted changes fail-fast with `WT_ROLLBACK`.
 - **2PL Row Lock Waiting (`WITH (UPDLOCK)`)**:
-  - Explicit hints currently operate in fail-fast detection mode. Multi-second lock-wait queues are scheduled for v1.1.0.
+  - Explicit hints currently operate in fail-fast detection mode. Multi-second lock-wait queues are scheduled for v1.10.0.
 
 ---
 
@@ -138,13 +138,13 @@ When concurrent transactions attempt to modify the same record:
 
 | Domain | Issue / Feature | Workaround | Target Milestone |
 | :---: | :--- | :--- | :---: |
-| **PostgreSQL** | Universal `expr::type` cast | Use standard `CAST(expr AS type)` | `v1.1.0` |
-| **PostgreSQL** | `SELECT DISTINCT ON (...)` | Use `ROW_NUMBER() OVER (PARTITION BY ...)` | `v1.1.0` |
-| **PostgreSQL** | `FILTER (WHERE ...)` aggregate clause | Use `CASE WHEN ... THEN val END` | `v1.1.0` |
-| **PostgreSQL** | `ILIKE` and POSIX regex (`~`, `!~`) | Use `LOWER(col) LIKE LOWER(pattern)` | `v1.1.0` |
-| **PostgreSQL** | `CREATE SEQUENCE` and `SERIAL` | Fully supported via `INT IDENTITY(1,1)` | `v1.1.0` |
-| **Storage** | `ALTER COLUMN` online variable-length expansion | Use Copy-and-Switch pattern | `v1.1.0` |
-| **Concurrency** | `WITH (UPDLOCK)` 2PL lock-wait queue manager | Currently operates in fail-fast mode | `v1.1.0` |
+| **PostgreSQL** | Universal `expr::type` cast | Use standard `CAST(expr AS type)` | `v1.10.0` |
+| **PostgreSQL** | `SELECT DISTINCT ON (...)` | Use `ROW_NUMBER() OVER (PARTITION BY ...)` | `v1.10.0` |
+| **PostgreSQL** | `FILTER (WHERE ...)` aggregate clause | Use `CASE WHEN ... THEN val END` | `v1.10.0` |
+| **PostgreSQL** | `ILIKE` and POSIX regex (`~`, `!~`) | Use `LOWER(col) LIKE LOWER(pattern)` | `v1.10.0` |
+| **PostgreSQL** | `CREATE SEQUENCE` and `SERIAL` | Fully supported via `INT IDENTITY(1,1)` | `v1.10.0` |
+| **Storage** | `ALTER COLUMN` online variable-length expansion | Use Copy-and-Switch pattern | `v1.10.0` |
+| **Concurrency** | `WITH (UPDLOCK)` 2PL lock-wait queue manager | Currently operates in fail-fast mode | `v1.10.0` |
 | **Performance** | Unified Tuple Protocol (`ARCH-UNIFIED-TUPLE-PROTOCOL-1`) | Eliminates `map[string]any` across VM and Wire (100k TPS) | `v1.10.0` |
 | **Enterprise** | Materialized View virtual alias & refresh | Enterprise dashboard compatibility layer | `v1.20.0` |
 | **AI / Search** | Pure-Go Vector Search (`pgvector` compatible) | IVFFlat / HNSW vector indexing | `v1.60.0` |

@@ -124,7 +124,7 @@ LionSQL은 고전적인 2PL(Two-Phase Locking) 기반의 무거운 읽기 공유
   - 디스크 B+Tree 상에서 행 단위 래치와 트랜잭션 스냅샷을 통해 제어합니다.
   - 다른 트랜잭션이 이미 커밋되지 않은 수정을 가한 행에 접근하면 WiredTiger 레벨에서 충돌을 감지하고 `WT_ROLLBACK`을 반환합니다.
 - **2PL 행 잠금 대기 (`WITH (UPDLOCK)`) 제약**:
-  - 명시적 잠금 힌트는 인메모리 감지 수준으로 동작하며, 장시간 대기 큐(Lock-Wait Queue) 기반의 2단계 잠금 관리자는 v1.1.0 로드맵에 배정되어 있습니다.
+  - 명시적 잠금 힌트는 인메모리 감지 수준으로 동작하며, 장시간 대기 큐(Lock-Wait Queue) 기반의 2단계 잠금 관리자는 v1.10.0 로드맵에 배정되어 있습니다.
 
 ---
 
@@ -154,13 +154,13 @@ LionSQL의 v0.94.0 및 1.0-GA 이후 단계적으로 해소될 알려진 호환�
 
 | 구분 | 과제 내용 | 현재 상태 및 회피책(Workaround) | 계획 마일스톤 |
 | :---: | :--- | :--- | :---: |
-| **PostgreSQL** | `expr::type` 캐스팅 전면 지원 | 일부 위치(WHERE/SELECT) 지원, `CAST(expr AS type)` 표준 구문 사용 권장 | `v1.1.0` |
-| **PostgreSQL** | `SELECT DISTINCT ON (...)` 구문 | 미지원. `ROW_NUMBER() OVER (PARTITION BY ...)`로 우회 가능 | `v1.1.0` |
-| **PostgreSQL** | `FILTER (WHERE ...)` 집계 절 | 미지원. `CASE WHEN ... THEN val END` 집계로 우회 가능 | `v1.1.0` |
-| **PostgreSQL** | `ILIKE` 및 POSIX 정규식 연산자 (`~`, `!~`) | 미지원. `LOWER(col) LIKE LOWER(pattern)` 사용 권장 | `v1.1.0` |
-| **PostgreSQL** | `CREATE SEQUENCE` 및 `SERIAL` | `INT IDENTITY(1,1)` T-SQL 표준 시퀀스로 완벽 대체 지원 | `v1.1.0` |
-| **스토리지** | `ALTER COLUMN` 가변길이 온라인 확장 | 현재 새 테이블 생성 후 이관(Copy-and-Switch) 권장 | `v1.1.0` |
-| **동시성** | `WITH (UPDLOCK)` 2PL 행 잠금 대기 매니저 | 현재 즉시 충돌 감지(Fast-Fail) 방식 동작 | `v1.1.0` |
+| **PostgreSQL** | `expr::type` 캐스팅 전면 지원 | 일부 위치(WHERE/SELECT) 지원, `CAST(expr AS type)` 표준 구문 사용 권장 | `v1.10.0` |
+| **PostgreSQL** | `SELECT DISTINCT ON (...)` 구문 | 미지원. `ROW_NUMBER() OVER (PARTITION BY ...)`로 우회 가능 | `v1.10.0` |
+| **PostgreSQL** | `FILTER (WHERE ...)` 집계 절 | 미지원. `CASE WHEN ... THEN val END` 집계로 우회 가능 | `v1.10.0` |
+| **PostgreSQL** | `ILIKE` 및 POSIX 정규식 연산자 (`~`, `!~`) | 미지원. `LOWER(col) LIKE LOWER(pattern)` 사용 권장 | `v1.10.0` |
+| **PostgreSQL** | `CREATE SEQUENCE` 및 `SERIAL` | `INT IDENTITY(1,1)` T-SQL 표준 시퀀스로 완벽 대체 지원 | `v1.10.0` |
+| **스토리지** | `ALTER COLUMN` 가변길이 온라인 확장 | 현재 새 테이블 생성 후 이관(Copy-and-Switch) 권장 | `v1.10.0` |
+| **동시성** | `WITH (UPDLOCK)` 2PL 행 잠금 대기 매니저 | 현재 즉시 충돌 감지(Fast-Fail) 방식 동작 | `v1.10.0` |
 | **성능** | 타입 타워 3중화 해소 (`ARCH-UNIFIED-TUPLE-PROTOCOL-1`) | `storage.Row` 포지셔널 슬라이스 직결 (100k TPS 목표) | `v1.10.0` |
 | **엔터프라이즈** | Materialized View 가상 별칭 및 자동 리프레시 | Mattermost / NocoDB 대시보드 호환 계층 | `v1.20.0` |
 | **AI / 검색** | Pure-Go Vector Search (`pgvector` 호환) | 임베딩 벡터 인덱싱 (IVFFlat/HNSW) 지원 예정 | `v1.60.0` |
