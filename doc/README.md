@@ -26,6 +26,8 @@ Primary authoritative references covering fundamentals, SQL/T-SQL specifications
   * Single-page 3-second cheatsheet for T-SQL functions, system variables, and procedural syntax sorted alphabetically A-Z.
 * **[`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)** ([Korean](TROUBLESHOOTING.ko.md))
   * Troubleshooting guide and error dictionary for SQLSTATE `40001`, `23505`, `42P01` and TDS error codes.
+* **[`LIMITATIONS.md`](LIMITATIONS.md)** ([Korean](LIMITATIONS.ko.md))
+  * Official limits and quotas specification covering table/row/column/index capacities, connection limits, memory budgets, unsupported SQL, concurrency constraints, and roadmap items.
 * **[`MSSQL_MIGRATION_CHECKLIST.md`](MSSQL_MIGRATION_CHECKLIST.md)** ([Korean](MSSQL_MIGRATION_CHECKLIST.ko.md))
   * Practical checklist and migration guide for moving schemas, procedures, and data from Microsoft SQL Server to LionSQL.
 

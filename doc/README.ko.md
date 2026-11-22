@@ -27,6 +27,8 @@ LionSQL의 기본 사용법, 전체 SQL/T-SQL 사양, 엔진 아키텍처 및 �
   * T-SQL 함수, 시스템 변수, 제어 흐름을 알파벳 A~Z 순서로 정리한 3초 초고속 검색 치트시트.
 * **[`TROUBLESHOOTING.ko.md`](TROUBLESHOOTING.ko.md)** ([English](TROUBLESHOOTING.md))
   * SQLSTATE `40001`, `23505`, `42P01` 및 TDS 에러 코드 원인과 해결 레시피를 집대성한 트러블슈팅 사전.
+* **[`LIMITATIONS.ko.md`](LIMITATIONS.ko.md)** ([English](LIMITATIONS.md))
+  * 테이블/레코드/컬럼/인덱스 크기 한도, 최대 연결 수, 메모리 버짓, 미지원 SQL 구문, 동시성/스토리지 제약 및 알려진 미해결 과제를 정리한 공식 제한사항 명세서.
 * **[`MSSQL_MIGRATION_CHECKLIST.ko.md`](MSSQL_MIGRATION_CHECKLIST.ko.md)** ([English](MSSQL_MIGRATION_CHECKLIST.md))
   * Microsoft SQL Server에서 LionSQL로의 스키마, 프로시저, 데이터 대량 이전 실무 체크리스트.
 
