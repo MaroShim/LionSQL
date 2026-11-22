@@ -1477,7 +1477,43 @@ func (s *Server) respondExecutionResult(
 
 	returnStatus := engine.ReturnStatusFromValue(res.ReturnValue)
 
-	if len(res.Columns) > 0 {
+	if len(res.ResultSets) > 1 {
+		var lastRowCount uint64
+		for _, rs := range res.ResultSets {
+			if len(rs.Columns) == 0 {
+				continue
+			}
+			qr := &engine.QueryResult{
+				Columns: rs.Columns,
+				Rows:    rs.Rows,
+				Values:  rs.Values,
+				Success: true,
+			}
+			cols := s.inferColumnInfos(qr)
+			buf.Write(BuildColMetaData(cols))
+
+			if streamErr := s.streamQueryRows(stream, sess, cols, rs.Rows, rs.Values); streamErr != nil {
+				num, state, sev, msg := extractTdsErrorInfo(streamErr)
+				buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
+				WriteDoneDirect(buf, TokenDoneInProc, DoneFinal|DoneError, 0xC1, 0)
+				_ = stream.Close()
+				return
+			}
+
+			lastRowCount = uint64(len(rs.Rows))
+			WriteDoneDirect(buf, TokenDoneInProc, DoneMore|DoneCount, 0xC1, lastRowCount)
+		}
+
+		doneStatus := DoneFinal
+		if sess.inTx {
+			doneStatus |= DoneInXact
+		}
+		WriteReturnStatusDirect(buf, returnStatus)
+		if extraTokens != nil {
+			extraTokens(buf)
+		}
+		WriteDoneDirect(buf, TokenDoneProc, doneStatus, 0xC1, lastRowCount)
+	} else if len(res.Columns) > 0 {
 		var cols []ColumnInfo
 		var metaBytes []byte
 

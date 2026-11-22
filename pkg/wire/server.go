@@ -1804,14 +1804,38 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 			if len(execRes.Rows) > 0 && (strings.HasPrefix(strings.ToUpper(cmd), "SELECT") || cmd == "") {
 				cmd = "SELECT"
 			}
-			portal.Result = &engine.QueryResult{
-				Success:      true,
-				Command:      cmd,
-				Columns:      execRes.Columns,
-				Rows:         execRes.Rows,
-				Values:       execRes.Values,
-				RowsAffected: execRes.RowsAffected,
-				Messages:     execRes.Logs,
+			if len(execRes.ResultSets) > 1 {
+				var headRes *engine.QueryResult
+				var tailRes *engine.QueryResult
+				for i, rs := range execRes.ResultSets {
+					qr := &engine.QueryResult{
+						Success:      true,
+						Command:      cmd,
+						Columns:      rs.Columns,
+						Rows:         rs.Rows,
+						Values:       rs.Values,
+						RowsAffected: int64(len(rs.Rows)),
+						Messages:     execRes.Logs,
+					}
+					if i == 0 {
+						headRes = qr
+						tailRes = qr
+					} else {
+						tailRes.Next = qr
+						tailRes = qr
+					}
+				}
+				portal.Result = headRes
+			} else {
+				portal.Result = &engine.QueryResult{
+					Success:      true,
+					Command:      cmd,
+					Columns:      execRes.Columns,
+					Rows:         execRes.Rows,
+					Values:       execRes.Values,
+					RowsAffected: execRes.RowsAffected,
+					Messages:     execRes.Logs,
+				}
 			}
 			portal.Pos = 0
 			portal.Executed = true
