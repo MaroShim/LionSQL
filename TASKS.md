@@ -537,6 +537,10 @@
 | `PENDING` | **`PLAN-WINDOWS-CGO-STANDALONE-ECOSYSTEM-1`** | `Post-1.0` | Storage | P2 | Windows Cgo Standalone Ecosystem Packages & LionSQL Org Migration Plan | [`notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md`](notes/plans/WINDOWS_CGO_STANDALONE_ECOSYSTEM_PLAN.ko.md) |  |
 | `DONE` | **`PLANNER-SLIM-1`** |  | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** |  | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
+| `PENDING` | **`REFAC-STORAGE-FOREIGN-KEY-ENGINE-1`** | `v0.96.0` | Storage | P2 | 외래키 무결성 검증 및 CASCADE 전파 엔진 공통화 (ForeignKeyEngine) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
+| `PENDING` | **`REFAC-STORAGE-INDEX-CODEC-1`** | `v0.95.0` | Storage | P2 | 보조 인덱스 키/값 포맷터 및 바이너리 인코딩 모듈화 (formatIndexKeyValue) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
+| `PENDING` | **`REFAC-STORAGE-ROW-LOCK-MANAGER-1`** | `v0.95.0` | Storage | P2 | 행 레벨 쓰기 잠금 샤드 관리자 공통화 (RowLockManager) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
+| `PENDING` | **`REFAC-WIRE-RESET-SESSION-COORDINATOR-1`** | `v0.95.0` | Engine | P2 | PG/TDS 와이어 프로토콜 세션 리셋 Coordinator 단일 진입점 (ResetSession) | [`notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md`](notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md) |  |
 | `DONE` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** |  | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-CLIENT-SESSION-TX-SSOT-1`** |  | Engine | P1 | ClientSession 트랜잭션 관리 단일 창구 통합 (tx.Manager SSOT 및 cs.Tx() 접근자 마이그레이션) | [`notes/CLIENT_SESSION_TX_REFACTOR_PLAN.ko.md`](notes/CLIENT_SESSION_TX_REFACTOR_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-ENGINE-AST-PARSER-1`** | `v0.94.0` | Engine | P1 | 엔진 내부 35+개 조잡한 문자열 파싱 레거시 전수 제거 및 pkg/proc Pratt AST 전면 전환 | [`notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md`](notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md) |  |
@@ -5205,6 +5209,34 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 **Details & Resolution**:
 - 상세 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
+
+---
+
+### [PENDING] 외래키 무결성 검증 및 CASCADE 전파 엔진 공통화 (ForeignKeyEngine) `REFAC-STORAGE-FOREIGN-KEY-ENGINE-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 23:19:08
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
+
+---
+
+### [PENDING] 보조 인덱스 키/값 포맷터 및 바이너리 인코딩 모듈화 (formatIndexKeyValue) `REFAC-STORAGE-INDEX-CODEC-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 23:19:00
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
+
+---
+
+### [PENDING] 행 레벨 쓰기 잠금 샤드 관리자 공통화 (RowLockManager) `REFAC-STORAGE-ROW-LOCK-MANAGER-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 23:18:56
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
+
+---
+
+### [PENDING] PG/TDS 와이어 프로토콜 세션 리셋 Coordinator 단일 진입점 (ResetSession) `REFAC-WIRE-RESET-SESSION-COORDINATOR-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-23 23:19:04
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md`](notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md)
 
 ---
 
