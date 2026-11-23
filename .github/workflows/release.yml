@@ -264,21 +264,39 @@ jobs:
 
           echo "Target Release Tag: ${TAG}"
 
-          # Locate formal release notes if available
+          # Prepare release notes with Detailed Changelog Delta if available
           NOTES_OPT=""
           NOTES_DOC="notes/release_notes/RELEASE_NOTES_${TAG}.md"
+          FINAL_NOTES_FILE=""
           if [ -f "${NOTES_DOC}" ]; then
-            NOTES_OPT="--notes-file ${NOTES_DOC}"
+            FINAL_NOTES_FILE="$(mktemp)"
+            cat "${NOTES_DOC}" > "${FINAL_NOTES_FILE}"
+            VER="${TAG#v}"
+            if grep -q "## \[${VER}\]" CHANGELOG.md; then
+              CHANGELOG_DELTA="$(awk -v ver="## [${VER}]" '
+                index($0, ver) > 0 { p=1; next }
+                p && /^## \[/ { exit }
+                p { print }
+              ' CHANGELOG.md | sed -e :a -e '/^\n*$/{$d;N;};/\n$/ba')"
+              if [ -n "${CHANGELOG_DELTA}" ]; then
+                printf "\n\n---\n\n<details>\n<summary><b>Detailed Changelog Delta</b></summary>\n\n%s\n\n</details>\n" "${CHANGELOG_DELTA}" >> "${FINAL_NOTES_FILE}"
+              fi
+            fi
+            NOTES_OPT="--notes-file ${FINAL_NOTES_FILE}"
           else
             NOTES_OPT="--generate-notes"
           fi
 
-          # If release already exists (e.g. created by release.sh or pre-existing), upload/clobber assets
+          # If release already exists (e.g. created by release.sh or pre-existing), upload/clobber assets & update notes
           if gh release view "${TAG}" >/dev/null 2>&1; then
             echo "Release ${TAG} exists. Uploading official WT release assets..."
             gh release upload "${TAG}" dist/* --clobber
+            if [ -n "${NOTES_OPT}" ]; then
+              gh release edit "${TAG}" ${NOTES_OPT}
+            fi
           else
             echo "Creating new GitHub Release ${TAG}..."
             gh release create "${TAG}" dist/* --title "LionSQL ${TAG}" ${NOTES_OPT} ${PRERELEASE_FLAG} ${DRAFT_FLAG}
           fi
+          [ -n "${FINAL_NOTES_FILE}" ] && rm -f "${FINAL_NOTES_FILE}"
           echo "GitHub Release ${TAG} assets successfully synchronized."
