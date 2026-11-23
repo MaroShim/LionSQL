@@ -8,14 +8,7 @@
 
 ## 1. 릴리즈 하이라이트 개요
 
-LionSQL `v0.93.0` 버전은 228개 누적 커밋에 대한 Dual-AI 전수 적대적 감사를 통해 엔진 무결성을 극한으로 끌어올리고, 6대 글로벌 오픈소스 드라이버 코퍼스 및 1,289개 T-SQL 저장 프로시저 오라클에 대한 100% 실측 정합성을 증명한 엔터프라이즈 마일스톤 릴리즈입니다:
-
-- **Dual-AI 사전 릴리스 적대적 감사 프로토콜 및 22개 결함 완치 (`doc/RELEASE_AUDIT_PROTOCOL.ko.md`)**:
-  - `v0.92.0..HEAD` 전 소스코드 변경분에 대해 2개의 독립 AI 에이전트가 라인 단위로 적대적 교차 감사를 수행하는 4단계 감사 체계(독립 감사 ➔ 원탁 조정 ➔ TDD 패치 ➔ 불변식 검증)를 공식 가동.
-  - 전역 스캔을 통해 식별된 22건의 잠재 결함(VDBE VM 바이트코드, TDS 프로토콜 프레이밍, CBO 플래너, 트랜잭션 격리 전반)을 전수 완치하고 `notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md`에 완결 기록.
-
-- **Zero-Tampering 오라클 불변식(`[RULE:ZeroOracleTampering]`, Invariant 16) 4계층 방어막 확립**:
-  - 외부 오라클 테스트 스위트 및 정답지를 임의 변조하거나 약화시키는 행위를 원천 차단하는 4단계 방어 체계 구축 (`chmod 444` 파일시스템 락, SHA-256 해시 검증, 프리커밋 파이어월, `GEMINI.md` 헌법 영구 봉인).
+LionSQL `v0.93.0` 버전은 6대 글로벌 오픈소스 드라이버 코퍼스 및 1,289개 T-SQL 저장 프로시저 오라클에 대한 100% 실측 정합성을 증명하고, 228개 누적 커밋에 대한 Dual-AI 전수 적대적 감사를 통해 엔진 무결성을 극한으로 끌어올린 엔터프라이즈 마일스톤 릴리즈입니다:
 
 - **Microsoft SQL Server 정통 드라이버 & ORM 코퍼스 6종 100% PASS (1,289 스위트)**:
   - 인위적 패딩(Synthetic Padding)을 완전히 배제하고, 실무 글로벌 에코시스템 드라이버 및 ORM 코퍼스를 직수입하여 T-SQL VM 런타임의 완전한 실무 상호운용성을 실증:
@@ -26,6 +19,13 @@ LionSQL `v0.93.0` 버전은 228개 누적 커밋에 대한 Dual-AI 전수 적대
     - **sqlglot (SQL 방언 트랜스파일러)**: 57개 스위트 **100% PASS**.
     - **tedious (Node.js 공식 드라이버)**: 36개 스위트 **100% PASS**.
     - **전체 1,289개 스위트(37,178개 레코드)**를 단 **2.0초** 만에 완주하며 압도적인 T-SQL VM 실행 속도 증명.
+
+- **Dual-AI 사전 릴리스 적대적 감사 프로토콜 및 22개 결함 완치 (`doc/RELEASE_AUDIT_PROTOCOL.ko.md`)**:
+  - `v0.92.0..HEAD` 전 소스코드 변경분에 대해 2개의 독립 AI 에이전트가 라인 단위로 적대적 교차 감사를 수행하는 4단계 감사 체계(독립 감사 ➔ 원탁 조정 ➔ TDD 패치 ➔ 불변식 검증)를 공식 가동.
+  - 전역 스캔을 통해 식별된 22건의 잠재 결함(VDBE VM 바이트코드, TDS 프로토콜 프레이밍, CBO 플래너, 트랜잭션 격리 전반)을 전수 완치하고 `notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md`에 완결 기록.
+
+- **Zero-Tampering 오라클 불변식(`[RULE:ZeroOracleTampering]`, Invariant 16) 4계층 방어막 확립**:
+  - 외부 오라클 테스트 스위트 및 정답지를 임의 변조하거나 약화시키는 행위를 원천 차단하는 4단계 방어 체계 구축 (`chmod 444` 파일시스템 락, SHA-256 해시 검증, 프리커밋 파이어월, `GEMINI.md` 헌법 영구 봉인).
 
 - **VDBE VM 정적 준비 구문(`sp_prepare`, `sp_execute`, `sp_unprepare`) 및 매개변수 가드 탑재**:
   - `sp_prepare` 호출 시 VDBE VM 바이트코드 프로그램을 사전에 컴파일하여 세션 캐시에 보관하고 고유 핸들(`@handle INT`)을 반환하는 메커니즘 구현.
@@ -45,7 +45,16 @@ LionSQL `v0.93.0` 버전은 228개 누적 커밋에 대한 Dual-AI 전수 적대
 
 ## 2. 세부 변경 사항
 
-### 2.1. Dual-AI 사전 릴리스 적대적 감사 및 코어 결함 완치
+### 2.1. Microsoft SQL Server 정통 드라이버 & ORM 코퍼스 100% 정합성 및 Zero-Tampering 오라클 봉인
+- **6대 글로벌 오픈소스 드라이버 및 실무 코퍼스 정합성 완주**:
+  - AdventureWorksLT 실무 4대 스위트(스키마, 시드, 주문/고객 뷰, 복합 서브쿼리) 100% PASS.
+  - `gorm-sqlserver` 3개 스위트, `mssql-jdbc` 39개 스위트, `pymssql` 10개 스위트, `sqlglot` 57개 스위트, `tedious` 36개 스위트 전수 통과.
+  - T-SQL VM에서 로컬 변수, `OUTPUT` 매개변수, 다중 결과셋(Multiple Result Sets), 트랜잭션 롤백 라이프사이클을 완벽 검증.
+- **오라클 불변식 영구 봉인 (`[RULE:ZeroOracleTampering]`)**:
+  - `test/slt_proc/CHECKSUMS.sha256`에 등록된 1,289개 스위트의 SHA-256 해시를 빌드 및 CI 단계에서 자동 대조.
+  - 임의의 `.slt` 파일 수정 시 `verify_no_slt_mutation.sh`에 의해 커밋 및 릴리스가 Fail-Closed로 즉시 차단되는 안전장치 확립.
+
+### 2.2. Dual-AI 사전 릴리스 적대적 감사 및 코어 결함 완치
 - **적대적 교차 감사 하네스 (`scripts/audit_diff.sh` & `doc/RELEASE_AUDIT_PROTOCOL.ko.md`)**:
   - 릴리스 전 2개 독립 AI가 코드베이스 변경분을 독립적으로 스캔하고, P0/P1/P2 결함을 대조하여 만장일치로 합의된 결함 장부(`AUDIT_<TAG>_CONSOLIDATED.ko.md`)를 도출하는 감사 파이프라인 정착.
 - **CBO 플래너 및 다중 절 스캐너 고도화**:
@@ -54,15 +63,6 @@ LionSQL `v0.93.0` 버전은 228개 누적 커밋에 대한 Dual-AI 전수 적대
 - **TDS 프로토콜 프레이밍 및 세션 하드닝**:
   - TDS 대용량 가변길이 컬럼(PLP) 스트리밍 시 바이트 오프셋 계산 정밀화.
   - 미인증 세션의 SQL Batch 임의 실행 방지 및 연결 해제 시 트랜잭션 드레인 안전성 강화.
-
-### 2.2. Zero-Tampering 오라클 4계층 봉인 및 6대 코퍼스 100% 정합성
-- **오라클 불변식 영구 봉인 (`[RULE:ZeroOracleTampering]`)**:
-  - `test/slt_proc/CHECKSUMS.sha256`에 등록된 1,289개 스위트의 SHA-256 해시를 빌드 및 CI 단계에서 자동 대조.
-  - 임의의 `.slt` 파일 수정 시 `verify_no_slt_mutation.sh`에 의해 커밋 및 릴리스가 Fail-Closed로 즉시 차단되는 안전장치 확립.
-- **6대 글로벌 오픈소스 드라이버 및 실무 코퍼스 정합성 완주**:
-  - AdventureWorksLT 실무 4대 스위트(스키마, 시드, 주문/고객 뷰, 복합 서브쿼리) 100% PASS.
-  - `gorm-sqlserver` 3개 스위트, `mssql-jdbc` 39개 스위트, `pymssql` 10개 스위트, `sqlglot` 57개 스위트, `tedious` 36개 스위트 전수 통과.
-  - T-SQL VM에서 로컬 변수, `OUTPUT` 매개변수, 다중 결과셋(Multiple Result Sets), 트랜잭션 롤백 라이프사이클을 완벽 검증.
 
 ### 2.3. VDBE 런타임 저장 프로시저 및 준비 구문 고도화
 - **정적 준비 구문 세션 캐싱 (`sp_prepare`, `sp_execute`, `sp_unprepare`)**:

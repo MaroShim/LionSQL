@@ -8,7 +8,12 @@
 
 ## 1. Release Highlights
 
-LionSQL `v0.94.0` is an enterprise milestone release encompassing 216 cumulative commits. It establishes an end-to-end **6-Scenario Duality-Driven Cross-Verification Harness** that validates engine invariants across dual architectural axes, and completes an exhaustive **14-Round Live Engine Audit** resolving all real-world edge cases:
+LionSQL `v0.94.0` is an enterprise milestone release encompassing 216 cumulative commits. It establishes an end-to-end **Transaction Management & Lexical Safety Architecture**, implements a **6-Scenario Duality-Driven Cross-Verification Harness** validating engine invariants across dual architectural axes, and completes an exhaustive **14-Round Live Engine Audit** resolving all real-world edge cases:
+
+- **Transaction Management & Lexical Safety (Unified TxManager & Canonical sqlutil)**:
+  - **Unified Transaction Manager & Session Lifecycle Hardening**: Eliminated transaction handle and lock leaks during abrupt client disconnects and network timeouts. Bound transaction control statements (`BEGIN`, `COMMIT`, `ROLLBACK`) strictly to the connection's session transaction manager (`cs.Tx()`), preventing ephemeral VDBE VM bytecode misrouting.
+  - **Canonical `pkg/sqlutil` Standardization & Modular Deduplication**: Introduced `sqlutil.DeduplicateRowsAndValues` (`pkg/sqlutil/dedup.go`) to ensure identical `SELECT DISTINCT` behavior across simple and extended query protocols. Exported `DecodeQueryResult` with sequential column mapping (`col#1`, `col#2`) to resolve column name overwrites in self-joins and composite aggregates.
+  - **Context-Blind `strings.*` SQL Parsing Ban**: Enforced Invariant 12: Total ban on context-blind `strings.*` SQL manipulation in favor of grammar-aware `pkg/sqlutil` primitives.
 
 - **6-Scenario Duality-Driven Cross-Verification Architecture (`ARCH-DUALITY-CROSS-VERIFICATION-1`)**:
   - Moves beyond single-point test suites by coupling the engine's dual implementation axes into continuous symmetry verification:
@@ -32,15 +37,6 @@ LionSQL `v0.94.0` is an enterprise milestone release encompassing 216 cumulative
     - **Round 13 (Aggregates & DML Scopes)**: Deferred tuple deserialization parity, MERGE cardinality guards, and DML subquery scope isolation.
     - **Round 14 (TDS Framing)**: Fixed byte offsets and framing for large variable-length PLP binary streams and synchronized scalar WHERE 1=0 metadata.
 
-- **Unified Transaction Manager & Session Lifecycle Hardening**:
-  - Eliminated transaction handle and lock leaks during abrupt client disconnects and network timeouts.
-  - Bound transaction control statements (`BEGIN`, `COMMIT`, `ROLLBACK`) strictly to the connection's session transaction manager (`cs.Tx()`), preventing ephemeral VDBE VM bytecode misrouting.
-
-- **Canonical `pkg/sqlutil` Standardization & Modular Deduplication**:
-  - Introduced `sqlutil.DeduplicateRowsAndValues` (`pkg/sqlutil/dedup.go`) to ensure identical `SELECT DISTINCT` behavior across simple and extended query protocols.
-  - Exported `DecodeQueryResult` with sequential column mapping (`col#1`, `col#2`) to resolve column name overwrites in self-joins and composite aggregates.
-  - Enforced Invariant 12: Total ban on context-blind `strings.*` SQL manipulation in favor of grammar-aware `pkg/sqlutil` primitives.
-
 - **Zero-Tampering Oracle 4-Layer Lockdown & 1,289 T-SQL Procedural Suites 100% PASS**:
   - Validated 409,000+ SQLLogicTest queries and 1,289 T-SQL procedural suites (37,178 records) with 0 data races.
 
@@ -48,7 +44,15 @@ LionSQL `v0.94.0` is an enterprise milestone release encompassing 216 cumulative
 
 ## 2. Detailed Changes
 
-### 2.1. 6-Scenario Duality-Driven Cross-Verification (`ARCH-DUALITY-CROSS-VERIFICATION-1`)
+### 2.1. Transaction Management & Lexical Safety
+- **Centralized Session Transaction Control**:
+  - Routed all transaction control statements directly to `TxManager`.
+- **Modular Deduplication (`pkg/sqlutil/dedup.go`)**:
+  - Centralized row and value deduplication logic across VDBE and Volcano execution paths.
+- **Eradication of Context-Blind `strings.*`**:
+  - Replaced flat string operations with grammar-aware lexing primitives (`sqlutil.FindTopLevelKeyword`, `sqlutil.SplitTopLevel`).
+
+### 2.2. 6-Scenario Duality-Driven Cross-Verification (`ARCH-DUALITY-CROSS-VERIFICATION-1`)
 - **Dual-Wire Differential SLT (`SLT-DUALITY-WIRE-1`)**:
   - Implemented `pkg/slt/wire_duality_test.go` to stream identical SLT test scripts to PGWire and TDS endpoints, asserting byte-for-byte result symmetry across 10,706 queries.
 - **Dual-Storage Twin-Engine SLT (`SLT-DUALITY-STORAGE-1`)**:
@@ -62,7 +66,7 @@ LionSQL `v0.94.0` is an enterprise milestone release encompassing 216 cumulative
 - **PlanCache Cold vs Hot Duality (`SLT-DUALITY-PLANCACHE-1`)**:
   - Implemented `pkg/slt/plancache_duality_test.go` proving zero cache mutation and identical execution semantics across cold compilation and hot cache hits.
 
-### 2.2. Core Engine Audit Fixes
+### 2.3. Core Engine Audit Fixes
 - **Procedure DML `OUTPUT INTO @table_variable` Routing**:
   - Routed generated keys and output tuples into table variables in `pkg/engine/sqlexec_dml.go` and `pkg/proc/runtime/vm.go`.
 - **Trigger `SCOPE_IDENTITY()` Frame Isolation**:
@@ -71,14 +75,6 @@ LionSQL `v0.94.0` is an enterprise milestone release encompassing 216 cumulative
   - Added deterministic cleanup hooks to session unwinding upon procedure completion.
 - **TDS PLP Stream Framing**:
   - Fixed chunk offset calculations and termination headers for LOB and binary streams exceeding 8,000 bytes.
-
-### 2.3. Transaction Management & Lexical Safety
-- **Centralized Session Transaction Control**:
-  - Routed all transaction control statements directly to `TxManager`.
-- **Modular Deduplication (`pkg/sqlutil/dedup.go`)**:
-  - Centralized row and value deduplication logic across VDBE and Volcano execution paths.
-- **Eradication of Context-Blind `strings.*`**:
-  - Replaced flat string operations with grammar-aware lexing primitives (`sqlutil.FindTopLevelKeyword`, `sqlutil.SplitTopLevel`).
 
 ---
 

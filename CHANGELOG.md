@@ -1029,7 +1029,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - resolve P0-27 by enforcing bounded payload frame limits on TDS and PGWire (cbab713)
 - resolve P0-29 by zeroing pointers and bounding slice capacity in sync.Pools (64240d6)
 - resolve P0-30 by shrinking session lock scope and guarding reentrant worker slots (7b28ad7)
-- resolve P0-32 by enforcing @@TRANCOUNT semantics and preventing early physical commits (e047525)
+- resolve P0-32 by enforcing `@@TRANCOUNT` semantics and preventing early physical commits (e047525)
 - resolve P0-34 by failing closed on broadcaster buffer overflow to prevent silent drop (cd04bca)
 - resolve P0-35 by enforcing 32MB request body limit on chunked transfer encoding (0b6abab)
 - resolve P0-31 by isolating RLS with AST composition and single-pass param scanning (f174f6b)

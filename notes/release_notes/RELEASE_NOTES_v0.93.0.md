@@ -8,14 +8,7 @@
 
 ## 1. Release Highlights
 
-LionSQL `v0.93.0` is an enterprise milestone release that hardens database kernel integrity across 228 cumulative commits via line-by-line Dual-AI adversarial auditing, while demonstrating 100% empirical conformance across 6 global open-source driver corpora and 1,289 T-SQL stored procedure oracle suites:
-
-- **Dual-AI Pre-Release Adversarial Audit Protocol & 22 Defect Remediations (`doc/RELEASE_AUDIT_PROTOCOL.ko.md`)**:
-  - Formally integrated a 4-phase mandatory release verification gate (Independent Audit ➔ Round-Table Consensus ➔ TDD Remediation ➔ Invariant Verification) where two independent AI agents execute adversarial cross-auditing on every code change in `v0.92.0..HEAD`.
-  - Remediated all 22 latent defects identified across VDBE bytecode VM, TDS protocol framing, CBO cost-based planner, and transaction isolation, fully codified in `notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md`.
-
-- **Zero-Tampering Oracle Invariant (`[RULE:ZeroOracleTampering]`, Invariant 16) 4-Layer Lockdown**:
-  - Enforced a multi-layer defense firewall completely preventing tampering with, weakening, or falsifying external test suites and oracle expectations: `chmod 444` filesystem locks, cryptographic SHA-256 integrity verification, pre-commit firewall, and permanent codification in `GEMINI.md`.
+LionSQL `v0.93.0` is an enterprise milestone release that demonstrates 100% empirical conformance across 6 global open-source driver corpora and 1,289 T-SQL stored procedure oracle suites, while hardening database kernel integrity across 228 cumulative commits via line-by-line Dual-AI adversarial auditing:
 
 - **Authentic Microsoft SQL Server Drivers & ORM Corpora 100% Conformance (1,289 Suites)**:
   - Completely eradicated synthetic padding by vendor-importing genuine open-source driver and ORM test corpora to prove true real-world interoperability:
@@ -26,6 +19,13 @@ LionSQL `v0.93.0` is an enterprise milestone release that hardens database kerne
     - **sqlglot (SQL Dialect Transpiler)**: 57 suites **100% PASS**.
     - **tedious (Official Node.js Driver)**: 36 suites **100% PASS**.
     - Completed all **1,289 suites (37,178 records)** in just **2.0 seconds**, verifying sub-microsecond T-SQL VM execution throughput.
+
+- **Dual-AI Pre-Release Adversarial Audit Protocol & 22 Defect Remediations (`doc/RELEASE_AUDIT_PROTOCOL.ko.md`)**:
+  - Formally integrated a 4-phase mandatory release verification gate (Independent Audit ➔ Round-Table Consensus ➔ TDD Remediation ➔ Invariant Verification) where two independent AI agents execute adversarial cross-auditing on every code change in `v0.92.0..HEAD`.
+  - Remediated all 22 latent defects identified across VDBE bytecode VM, TDS protocol framing, CBO cost-based planner, and transaction isolation, fully codified in `notes/reports/AUDIT_v0.93.0_DUAL_ADVERSARIAL_LEDGER.ko.md`.
+
+- **Zero-Tampering Oracle Invariant (`[RULE:ZeroOracleTampering]`, Invariant 16) 4-Layer Lockdown**:
+  - Enforced a multi-layer defense firewall completely preventing tampering with, weakening, or falsifying external test suites and oracle expectations: `chmod 444` filesystem locks, cryptographic SHA-256 integrity verification, pre-commit firewall, and permanent codification in `GEMINI.md`.
 
 - **VDBE Bytecode VM Static Prepared Statements (`sp_prepare`, `sp_execute`, `sp_unprepare`)**:
   - Implemented bytecode VM pre-compilation, session cache management, and unique handle allocation (`@handle INT`) on `sp_prepare`.
@@ -45,7 +45,15 @@ LionSQL `v0.93.0` is an enterprise milestone release that hardens database kerne
 
 ## 2. Detailed Changes
 
-### 2.1. Dual-AI Pre-Release Adversarial Audit Protocol & Core Defect Remediations
+### 2.1. Authentic Microsoft SQL Server Drivers, ORM Corpora & Zero-Tampering Oracle Lockdown
+- **Global Driver & Enterprise Ecosystem Conformance**:
+  - 100% PASS across AdventureWorksLT enterprise scenarios, `gorm-sqlserver`, `mssql-jdbc`, `pymssql`, `sqlglot`, and `tedious`.
+  - Comprehensive verification of local variables, `OUTPUT` parameter bindings, multiple result sets, and transaction rollback lifecycles in the native T-SQL VM.
+- **Permanent Oracle Invariant Codification (`[RULE:ZeroOracleTampering]`)**:
+  - Cryptographic comparison of all 1,289 suites against `test/slt_proc/CHECKSUMS.sha256` during build and test stages.
+  - Zero-tolerance pre-commit rejection of any modified `.slt` files via `verify_no_slt_mutation.sh`.
+
+### 2.2. Dual-AI Pre-Release Adversarial Audit Protocol & Core Defect Remediations
 - **Adversarial Cross-Audit Verification Harness (`scripts/audit_diff.sh` & `doc/RELEASE_AUDIT_PROTOCOL.ko.md`)**:
   - Codified the audit pipeline where two independent AI agents inspect every commit diff, synthesize unanimous findings into `AUDIT_<TAG>_CONSOLIDATED.ko.md`, and verify zero unresolved P0 defects.
 - **CBO Planner & Clause Scanner Modernization**:
@@ -54,14 +62,6 @@ LionSQL `v0.93.0` is an enterprise milestone release that hardens database kerne
 - **TDS Protocol Framing & Session Hardening**:
   - Refined PLP byte offset arithmetic during large variable-length stream transfers.
   - Prevented arbitrary batch execution on unauthenticated sessions and enforced rollback-first transaction draining on disconnect.
-
-### 2.2. Zero-Tampering Oracle 4-Layer Lockdown & 6-Corpora Conformance
-- **Permanent Oracle Invariant Codification (`[RULE:ZeroOracleTampering]`)**:
-  - Cryptographic comparison of all 1,289 suites against `test/slt_proc/CHECKSUMS.sha256` during build and test stages.
-  - Zero-tolerance pre-commit rejection of any modified `.slt` files via `verify_no_slt_mutation.sh`.
-- **Global Driver & Enterprise Ecosystem Conformance**:
-  - 100% PASS across AdventureWorksLT enterprise scenarios, `gorm-sqlserver`, `mssql-jdbc`, `pymssql`, `sqlglot`, and `tedious`.
-  - Comprehensive verification of local variables, `OUTPUT` parameter bindings, multiple result sets, and transaction rollback lifecycles in the native T-SQL VM.
 
 ### 2.3. VDBE Stored Procedure & Static Prepared Statement Engine
 - **Static Prepared Statement Caching (`sp_prepare`, `sp_execute`, `sp_unprepare`)**:

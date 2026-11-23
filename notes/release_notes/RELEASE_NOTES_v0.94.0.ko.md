@@ -8,7 +8,12 @@
 
 ## 1. 릴리즈 하이라이트 개요
 
-LionSQL `v0.94.0` 버전은 216개의 누적 커밋에 걸쳐 데이터베이스 엔진의 신뢰성을 극한으로 검증하기 위한 **6대 쌍대성(Duality-Driven Cross-Verification) 교차 검증 하네스**를 확립하고, 실무 환경에서 발생할 수 있는 엣지 케이스를 색출한 **14개 라운드의 라이브 엔진 전수 감사**를 완료한 엔터프라이즈 마일스톤 릴리즈입니다:
+LionSQL `v0.94.0` 버전은 216개의 누적 커밋에 걸쳐 데이터베이스 엔진의 신뢰성을 극한으로 검증하기 위한 **트랜잭션 관리자 및 어휘/문법 안전성 아키텍처**를 완비하고, 엔진 불변식을 상호 대조하는 **6대 쌍대성(Duality-Driven Cross-Verification) 교차 검증 하네스**를 확립하며, 실무 환경의 엣지 케이스를 색출한 **14개 라운드의 라이브 엔진 전수 감사**를 완료한 엔터프라이즈 마일스톤 릴리즈입니다:
+
+- **트랜잭션 관리자 및 어휘/문법 안전성 표준화 (통합 TxManager & Canonical sqlutil)**:
+  - **통합 트랜잭션 관리자(Unified Transaction Manager) 및 세션 수명주기 하드닝**: 와이어 프로토콜 분리나 네트워크 단절 시 발생하던 트랜잭션 핸들 및 락 누수를 완벽 차단. VDBE 가상 머신 컴파일러에서 트랜잭션 제어 구문(`BEGIN`, `COMMIT`, `ROLLBACK`)을 VDBE 바이트코드 분기에서 제외하여 세션 트랜잭션 관리자(`cs.Tx()`)에 바인딩되도록 일원화.
+  - **Canonical `pkg/sqlutil` 표준화 및 중복 제거 모듈 추상화**: 행/값 중복 제거(`sqlutil.DeduplicateRowsAndValues`)를 모듈화하여 `SELECT DISTINCT` 쿼리의 프로토콜 간 일치성 보장. 쿼리 디코더(`DecodeQueryResult`)에서 중복 컬럼명에 대한 순번 매핑(`col#1`, `col#2`)을 지원하여 셀프 조인 및 복합 집계 쿼리의 컬럼 덮어쓰기 결함 근절.
+  - **Context-Blind `strings.*` SQL 파싱 퇴출**: SQL 문자열 조작 시 `strings.*` 직호출을 전면 금지하고 문맥 인식 파서(`pkg/sqlutil`)를 강제하는 Invariant 12 확립.
 
 - **6대 쌍대성(Duality-Driven Cross-Verification) 교차 검증 체계 확립 (`ARCH-DUALITY-CROSS-VERIFICATION-1`)**:
   - 단일 테스트 스위트에 의존하지 않고, 엔진의 상반된 두 축(Dual Axes)을 맞물려 상호 검증하는 전면 대칭성 아키텍처 구축:
@@ -32,15 +37,6 @@ LionSQL `v0.94.0` 버전은 216개의 누적 커밋에 걸쳐 데이터베이스
     - **Round 13 (집계 및 DML 스코프)**: 지연 역직렬화 정합성, MERGE 카디널리티 및 DML 서브쿼리 스코프 격리.
     - **Round 14 (TDS 및 와이어 프레이밍)**: TDS 대용량 가변길이 컬럼(PLP) 스트리밍 프레이밍 정밀화 및 스칼라 WHERE 1=0 메타데이터 동기화.
 
-- **통합 트랜잭션 관리자(Unified Transaction Manager) 및 세션 수명주기 하드닝**:
-  - 와이어 프로토콜 분리나 네트워크 단절 시 발생하던 트랜잭션 핸들 및 락 누수를 완벽 차단.
-  - VDBE 가상 머신 컴파일러에서 트랜잭션 제어 구문(`BEGIN`, `COMMIT`, `ROLLBACK`)을 VDBE 바이트코드 분기에서 제외하여 세션 트랜잭션 관리자(`cs.Tx()`)에 바인딩되도록 일원화.
-
-- **Canonical `pkg/sqlutil` 표준화 및 중복 제거 모듈 추상화**:
-  - 행/값 중복 제거(`sqlutil.DeduplicateRowsAndValues`)를 모듈화하여 `SELECT DISTINCT` 쿼리의 프로토콜 간 일치성 보장.
-  - 쿼리 디코더(`DecodeQueryResult`)에서 중복 컬럼명에 대한 순번 매핑(`col#1`, `col#2`)을 지원하여 셀프 조인 및 복합 집계 쿼리의 컬럼 덮어쓰기 결함 근절.
-  - SQL 문자열 조작 시 `strings.*` 직호출을 금지하고 문맥 인식 파서(`pkg/sqlutil`)를 강제하는 Invariant 12 확립.
-
 - **Zero-Tampering 오라클 4계층 봉인 및 1,289개 T-SQL 프로시저 스위트 100% 통과**:
   - SQLLogicTest 409,000+ 쿼리 및 T-SQL 저장 프로시저 1,289개 스위트(37,178개 레코드) 전수 무결점 통과 (0 Data Races).
 
@@ -48,7 +44,15 @@ LionSQL `v0.94.0` 버전은 216개의 누적 커밋에 걸쳐 데이터베이스
 
 ## 2. 세부 변경 사항
 
-### 2.1. 6대 쌍대성(Duality) 교차 검증 하네스 (`ARCH-DUALITY-CROSS-VERIFICATION-1`)
+### 2.1. 트랜잭션 관리자 및 파서 표준화
+- **세션 트랜잭션 제어 일원화**:
+  - `BEGIN TRANSACTION`, `COMMIT`, `ROLLBACK` 구문이 VDBE 임시 트랜잭션이 아닌 세션의 전용 트랜잭션 관리자(`TxManager`)에 귀속되도록 수정.
+- **모듈러 중복 제거 (`pkg/sqlutil/dedup.go`)**:
+  - `sqlutil.DeduplicateRowsAndValues` 모듈을 도입하여 VDBE 릴레이셔널 실행 경로에서 중복 행 필터링 보장.
+- **Context-Blind `strings.*` SQL 파싱 퇴출**:
+  - 원시 문자열 함수 대신 `sqlutil.FindTopLevelKeyword`, `sqlutil.SplitTopLevel` 등 문맥 인식 파서 프리미티브로 전면 교체.
+
+### 2.2. 6대 쌍대성(Duality) 교차 검증 하네스 (`ARCH-DUALITY-CROSS-VERIFICATION-1`)
 - **Dual-Wire 대칭성 검증 (`SLT-DUALITY-WIRE-1`)**:
   - `pkg/slt/wire_duality_test.go`를 구현하여 동일한 SLT 스크립트를 PGWire와 TDS 클라이언트로 동시 전송하고 응답 바이트를 상호 대조.
   - 10,706개 쿼리에 대해 결과셋, 상태 코드, NULL 정렬 대칭성 100% 입증.
@@ -63,7 +67,7 @@ LionSQL `v0.94.0` 버전은 216개의 누적 커밋에 걸쳐 데이터베이스
 - **플랜 캐시 뮤테이션 안전성 (`SLT-DUALITY-PLANCACHE-1`)**:
   - `pkg/slt/plancache_duality_test.go`를 구축하여 쿼리/프로시저의 콜드 컴파일과 핫 캐시 재실행 간 결과 대칭성 검증 및 AST 변이 위험 원천 차단.
 
-### 2.2. 라이브 엔진 감사 핵심 결함 완치
+### 2.3. 라이브 엔진 감사 핵심 결함 완치
 - **프로시저 DML `OUTPUT INTO @table_variable` 파이프라인 복원**:
   - `pkg/engine/sqlexec_dml.go` 및 `pkg/proc/runtime/vm.go`에 출력 데이터 라우팅을 연결하여 무음 데이터 유실 결함 완치.
 - **트리거 `SCOPE_IDENTITY()` 스택 격리**:
@@ -72,14 +76,6 @@ LionSQL `v0.94.0` 버전은 216개의 누적 커밋에 걸쳐 데이터베이스
   - 세션 내 프로시저 종료 시 임시 테이블이 남지 않도록 unwind 훅 정비.
 - **TDS PLP 대용량 스트리밍 정밀화**:
   - 8KB 초과 바이너리/문자열 전송 시 청크 오프셋 및 종료 마커 프레이밍 정비.
-
-### 2.3. 트랜잭션 관리자 및 파서 표준화
-- **세션 트랜잭션 제어 일원화**:
-  - `BEGIN TRANSACTION`, `COMMIT`, `ROLLBACK` 구문이 VDBE 임시 트랜잭션이 아닌 세션의 전용 트랜잭션 관리자(`TxManager`)에 귀속되도록 수정.
-- **모듈러 중복 제거 (`pkg/sqlutil/dedup.go`)**:
-  - `sqlutil.DeduplicateRowsAndValues` 모듈을 도입하여 VDBE 릴레이셔널 실행 경로에서 중복 행 필터링 보장.
-- **Context-Blind `strings.*` SQL 파싱 퇴출**:
-  - 원시 문자열 함수 대신 `sqlutil.FindTopLevelKeyword`, `sqlutil.SplitTopLevel` 등 문맥 인식 파서 프리미티브로 전면 교체.
 
 ---
 
