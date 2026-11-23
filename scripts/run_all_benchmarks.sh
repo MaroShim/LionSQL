@@ -377,9 +377,6 @@ for eng in "${ENGINES[@]}"; do
     mkdir -p "$server_dir"
     
     srv_flags=("-dir=${server_dir}" "-engine=${eng}" "-pg=127.0.0.1:${PG_PORT}" "-tds=127.0.0.1:${TDS_PORT}" "-http=")
-    if [ "$eng" = "memory" ]; then
-        srv_flags+=("-ephemeral")
-    fi
     
     # Ensure ports are free before starting
     for p in "$PG_PORT" "$TDS_PORT"; do
