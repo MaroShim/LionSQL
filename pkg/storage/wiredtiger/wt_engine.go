@@ -340,7 +340,7 @@ var (
 	cSyncOn  = C.CString("sync=on")
 )
 
-const numWTLockShards = 64
+const numWTLockShards = 1024
 
 type wtLockShard struct {
 	mu            sync.RWMutex
@@ -358,7 +358,7 @@ func hashWTLockKey(key string) int {
 		h ^= uint64(key[i])
 		h *= 1099511628211
 	}
-	return int(h % numWTLockShards)
+	return int(h & (numWTLockShards - 1))
 }
 
 // Engine implements storage.Engine via the WiredTiger C API, routing
@@ -2597,23 +2597,35 @@ func (tx *WTTx) tryAcquireWriteLockLocked(tableName string, pkKey string) error 
 	defer tx.lockMu.Unlock()
 
 	sh := &eng.lockShards[sIdx]
-	sh.mu.Lock()
-	defer sh.mu.Unlock()
 
-	if sh.activeWriters == nil {
-		sh.activeWriters = make(map[string]uint64)
+	for spin := 0; spin < 3; spin++ {
+		sh.mu.Lock()
+		if sh.activeWriters == nil {
+			sh.activeWriters = make(map[string]uint64)
+		}
+		owner, exists := sh.activeWriters[lockKey]
+		if !exists || owner == tx.txID {
+			if !exists {
+				sh.activeWriters[lockKey] = tx.txID
+				tx.acquiredLocks = append(tx.acquiredLocks, wtLockRef{
+					shardIdx: sIdx,
+					key:      lockKey,
+				})
+			}
+			sh.mu.Unlock()
+			return nil
+		}
+		sh.mu.Unlock()
+
+		// Allow the active owner transaction a brief window to commit and release its locks
+		if spin == 0 {
+			runtime.Gosched()
+		} else {
+			time.Sleep(time.Duration(spin*25) * time.Microsecond)
+		}
 	}
-	if owner, exists := sh.activeWriters[lockKey]; exists && owner != tx.txID {
-		return storage.ErrSerializationFailure
-	}
-	if _, exists := sh.activeWriters[lockKey]; !exists {
-		sh.activeWriters[lockKey] = tx.txID
-		tx.acquiredLocks = append(tx.acquiredLocks, wtLockRef{
-			shardIdx: sIdx,
-			key:      lockKey,
-		})
-	}
-	return nil
+
+	return storage.ErrSerializationFailure
 }
 
 func (tx *WTTx) releaseAcquiredLocksLocked() {
@@ -2630,19 +2642,34 @@ func (tx *WTTx) releaseAcquiredLocksLocked() {
 		return
 	}
 	shrinkMap := nLocks > 128
-	for _, ref := range tx.acquiredLocks {
-		if ref.shardIdx >= 0 && ref.shardIdx < numWTLockShards {
-			sh := &eng.lockShards[ref.shardIdx]
-			sh.mu.Lock()
-			if sh.activeWriters != nil && sh.activeWriters[ref.key] == tx.txID {
-				delete(sh.activeWriters, ref.key)
-				if shrinkMap && len(sh.activeWriters) == 0 {
-					sh.activeWriters = nil
-				}
-			}
-			sh.mu.Unlock()
-		}
+
+	if nLocks > 1 {
+		sort.Slice(tx.acquiredLocks, func(i, j int) bool {
+			return tx.acquiredLocks[i].shardIdx < tx.acquiredLocks[j].shardIdx
+		})
 	}
+
+	for i := 0; i < nLocks; {
+		shardIdx := tx.acquiredLocks[i].shardIdx
+		if shardIdx < 0 || shardIdx >= numWTLockShards {
+			i++
+			continue
+		}
+		sh := &eng.lockShards[shardIdx]
+		sh.mu.Lock()
+		for i < nLocks && tx.acquiredLocks[i].shardIdx == shardIdx {
+			curKey := tx.acquiredLocks[i].key
+			if sh.activeWriters != nil && sh.activeWriters[curKey] == tx.txID {
+				delete(sh.activeWriters, curKey)
+			}
+			i++
+		}
+		if shrinkMap && len(sh.activeWriters) == 0 {
+			sh.activeWriters = nil
+		}
+		sh.mu.Unlock()
+	}
+
 	if shrinkMap {
 		tx.acquiredLocks = nil
 	} else {
