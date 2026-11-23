@@ -2346,6 +2346,17 @@ func (s *WTSession) Close() error {
 	s.engine.sessMu.Unlock()
 
 	s.mu.Lock()
+	curTx := s.currentTx
+	s.mu.Unlock()
+
+	if curTx != nil {
+		curTx.mu.Lock()
+		curTx.closed = true
+		curTx.releaseAcquiredLocksLocked()
+		defer curTx.mu.Unlock()
+	}
+
+	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.currentTx != nil {
@@ -2441,6 +2452,13 @@ func (s *WTSession) releaseCursor(uri string, cur *C.WT_CURSOR) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.releaseCursorLocked(uri, cur)
+}
+
+func (s *WTSession) releaseCursorLocked(uri string, cur *C.WT_CURSOR) {
+	if cur == nil {
+		return
+	}
 
 	if s.closed || s.sess == nil {
 		// Session has already been closed; s.Close() closed all cursors in s.allCursors.
@@ -2470,6 +2488,9 @@ func (s *WTSession) getCursor(tableName string) (*C.WT_CURSOR, error) {
 func (s *WTSession) resetCursors() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed || s.sess == nil {
+		return
+	}
 	for cur := range s.allCursors {
 		C.go_wt_cursor_reset(cur)
 	}
@@ -2478,6 +2499,17 @@ func (s *WTSession) resetCursors() {
 // Reset resets all cached cursors and calls WT_SESSION::reset to release resources
 // and prevent sweep-server warnings on idle sessions.
 func (s *WTSession) Reset() error {
+	s.mu.Lock()
+	curTx := s.currentTx
+	s.mu.Unlock()
+
+	if curTx != nil {
+		curTx.mu.Lock()
+		curTx.closed = true
+		curTx.releaseAcquiredLocksLocked()
+		defer curTx.mu.Unlock()
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -3552,16 +3584,24 @@ func (tx *WTTx) getRawBytesLocked(tableName string, pk storage.Value) ([]byte, e
 		defer cleanup()
 	}
 
+	tx.sess.mu.Lock()
+	if tx.sess.closed || tx.sess.sess == nil {
+		tx.sess.mu.Unlock()
+		return nil, storage.ErrTxClosed
+	}
 	var pData unsafe.Pointer
 	var sz C.size_t
 	if ret := C.go_wt_cursor_get(cur, cKey, &pData, &sz); ret != 0 || pData == nil {
+		tx.sess.mu.Unlock()
 		if ret == wtRollback {
 			return nil, wtOpError("cursor_get", int(ret))
 		}
 		return nil, storage.ErrKeyNotFound
 	}
+	raw := C.GoBytes(pData, C.int(sz))
+	tx.sess.mu.Unlock()
 
-	return C.GoBytes(pData, C.int(sz)), nil
+	return raw, nil
 }
 
 func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, error) {
@@ -3624,6 +3664,7 @@ func (tx *WTTx) scanLocked(tableName string) (storage.Cursor, error) {
 	}
 
 	return &WTCursor{
+		tx:     tx,
 		sess:   tx.sess,
 		uri:    uri,
 		cur:    cur,
@@ -3770,7 +3811,12 @@ type wtIndexBTreeCursor struct {
 }
 
 func (c *wtIndexBTreeCursor) Next() bool {
-	if c.closed || c.cur == nil || c.eof || c.err != nil {
+	if c.sess == nil {
+		return false
+	}
+	c.sess.mu.Lock()
+	defer c.sess.mu.Unlock()
+	if c.closed || c.cur == nil || c.eof || c.err != nil || c.sess.closed || c.sess.sess == nil {
 		return false
 	}
 
@@ -3947,41 +3993,61 @@ func (c *wtIndexBTreeCursor) Next() bool {
 }
 
 func (c *wtIndexBTreeCursor) Row() (storage.Row, error) {
-	if c.err != nil {
-		return storage.Row{}, c.err
-	}
-	if c.closed || c.cur == nil || c.eof || c.currPK == "" {
+	if c.sess == nil {
 		return storage.Row{}, fmt.Errorf("cursor closed or out of range")
 	}
+	c.sess.mu.Lock()
+	if c.err != nil {
+		err := c.err
+		c.sess.mu.Unlock()
+		return storage.Row{}, err
+	}
+	if c.closed || c.cur == nil || c.eof || c.currPK == "" || c.sess.closed || c.sess.sess == nil {
+		c.sess.mu.Unlock()
+		return storage.Row{}, fmt.Errorf("cursor closed or out of range")
+	}
+	currPK := c.currPK
+	c.sess.mu.Unlock()
+
 	var pkVal storage.Value
 	if c.tbl.IsCompositePK() {
-		pkVal = storage.StringValue(c.currPK)
+		pkVal = storage.StringValue(currPK)
 	} else {
 		pkCol, err := c.tbl.PrimaryKeyColumn()
 		if err != nil {
 			return storage.Row{}, err
 		}
-		pkVal = storage.ParsePKValue(c.currPK, pkCol.Type)
+		pkVal = storage.ParsePKValue(currPK, pkCol.Type)
 	}
 	return c.tx.GetRow(c.tbl.Name, pkVal)
 }
 
 func (c *wtIndexBTreeCursor) Record() (storage.Record, error) {
-	if c.err != nil {
-		return nil, c.err
-	}
-	if c.closed || c.cur == nil || c.eof || c.currPK == "" {
+	if c.sess == nil {
 		return nil, fmt.Errorf("cursor closed or out of range")
 	}
+	c.sess.mu.Lock()
+	if c.err != nil {
+		err := c.err
+		c.sess.mu.Unlock()
+		return nil, err
+	}
+	if c.closed || c.cur == nil || c.eof || c.currPK == "" || c.sess.closed || c.sess.sess == nil {
+		c.sess.mu.Unlock()
+		return nil, fmt.Errorf("cursor closed or out of range")
+	}
+	currPK := c.currPK
+	c.sess.mu.Unlock()
+
 	var pkVal storage.Value
 	if c.tbl.IsCompositePK() {
-		pkVal = storage.StringValue(c.currPK)
+		pkVal = storage.StringValue(currPK)
 	} else {
 		pkCol, err := c.tbl.PrimaryKeyColumn()
 		if err != nil {
 			return nil, err
 		}
-		pkVal = storage.ParsePKValue(c.currPK, pkCol.Type)
+		pkVal = storage.ParsePKValue(currPK, pkCol.Type)
 	}
 	row, err := c.tx.GetRow(c.tbl.Name, pkVal)
 	if err != nil {
@@ -3991,20 +4057,28 @@ func (c *wtIndexBTreeCursor) Record() (storage.Record, error) {
 }
 
 func (c *wtIndexBTreeCursor) RawTuple() ([]byte, bool) {
-	if c.err != nil || c.closed || c.cur == nil || c.eof || c.currPK == "" {
+	if c.sess == nil || c.tx == nil {
 		return nil, false
 	}
 	c.tx.mu.Lock()
 	defer c.tx.mu.Unlock()
+	c.sess.mu.Lock()
+	if c.err != nil || c.closed || c.cur == nil || c.eof || c.currPK == "" || c.sess.closed || c.sess.sess == nil {
+		c.sess.mu.Unlock()
+		return nil, false
+	}
+	currPK := c.currPK
+	c.sess.mu.Unlock()
+
 	var pkVal storage.Value
 	if c.tbl.IsCompositePK() {
-		pkVal = storage.StringValue(c.currPK)
+		pkVal = storage.StringValue(currPK)
 	} else {
 		pkCol, err := c.tbl.PrimaryKeyColumn()
 		if err != nil {
 			return nil, false
 		}
-		pkVal = storage.ParsePKValue(c.currPK, pkCol.Type)
+		pkVal = storage.ParsePKValue(currPK, pkCol.Type)
 	}
 	data, err := c.tx.getRawBytesLocked(c.tbl.Name, pkVal)
 	if err != nil || len(data) == 0 {
@@ -4014,6 +4088,10 @@ func (c *wtIndexBTreeCursor) RawTuple() ([]byte, bool) {
 }
 
 func (c *wtIndexBTreeCursor) Close() error {
+	if c.sess != nil {
+		c.sess.mu.Lock()
+		defer c.sess.mu.Unlock()
+	}
 	if c.closed || c.cur == nil {
 		return c.err
 	}
@@ -4021,7 +4099,7 @@ func (c *wtIndexBTreeCursor) Close() error {
 	cur := c.cur
 	c.cur = nil
 	if c.sess != nil && c.uri != "" {
-		c.sess.releaseCursor(c.uri, cur)
+		c.sess.releaseCursorLocked(c.uri, cur)
 	} else {
 		C.go_wt_cursor_close(cur)
 	}
@@ -4029,6 +4107,10 @@ func (c *wtIndexBTreeCursor) Close() error {
 }
 
 func (c *wtIndexBTreeCursor) Err() error {
+	if c.sess != nil {
+		c.sess.mu.Lock()
+		defer c.sess.mu.Unlock()
+	}
 	return c.err
 }
 
@@ -4555,6 +4637,7 @@ func (tx *WTTx) removeRawLocked(tableName string, pk storage.Value) error {
 
 // WTCursor iterates over WiredTiger table records.
 type WTCursor struct {
+	tx     *WTTx
 	sess   *WTSession
 	uri    string
 	cur    *C.WT_CURSOR
@@ -4565,7 +4648,12 @@ type WTCursor struct {
 }
 
 func (c *WTCursor) Next() bool {
-	if c.closed || c.cur == nil || c.eof || c.err != nil {
+	if c.sess == nil {
+		return false
+	}
+	c.sess.mu.Lock()
+	defer c.sess.mu.Unlock()
+	if c.closed || c.cur == nil || c.eof || c.err != nil || c.sess.closed || c.sess.sess == nil {
 		return false
 	}
 	ret := C.go_wt_cursor_next(c.cur)
@@ -4580,41 +4668,66 @@ func (c *WTCursor) Next() bool {
 }
 
 func (c *WTCursor) Record() (storage.Record, error) {
-	if c.err != nil {
-		return nil, c.err
+	if c.sess == nil {
+		return nil, fmt.Errorf("cursor closed")
 	}
-	if c.closed || c.cur == nil || c.eof {
+	c.sess.mu.Lock()
+	if c.err != nil {
+		err := c.err
+		c.sess.mu.Unlock()
+		return nil, err
+	}
+	if c.closed || c.cur == nil || c.eof || c.sess.closed || c.sess.sess == nil {
+		c.sess.mu.Unlock()
 		return nil, fmt.Errorf("cursor closed")
 	}
 
 	var pData unsafe.Pointer
 	var sz C.size_t
 	if ret := C.go_wt_cursor_get_val_raw(c.cur, &pData, &sz); ret != 0 || pData == nil {
+		c.sess.mu.Unlock()
 		return nil, fmt.Errorf("cursor_get_val_raw failed: %d", ret)
 	}
+	raw := C.GoBytes(pData, C.int(sz))
+	c.sess.mu.Unlock()
 
-	return decodeRecord(c.schema, C.GoBytes(pData, C.int(sz)))
+	return decodeRecord(c.schema, raw)
 }
 
 func (c *WTCursor) Row() (storage.Row, error) {
-	if c.err != nil {
-		return storage.Row{}, c.err
+	if c.sess == nil {
+		return storage.Row{}, fmt.Errorf("cursor closed")
 	}
-	if c.closed || c.cur == nil || c.eof {
+	c.sess.mu.Lock()
+	if c.err != nil {
+		err := c.err
+		c.sess.mu.Unlock()
+		return storage.Row{}, err
+	}
+	if c.closed || c.cur == nil || c.eof || c.sess.closed || c.sess.sess == nil {
+		c.sess.mu.Unlock()
 		return storage.Row{}, fmt.Errorf("cursor closed")
 	}
 
 	var pData unsafe.Pointer
 	var sz C.size_t
 	if ret := C.go_wt_cursor_get_val_raw(c.cur, &pData, &sz); ret != 0 || pData == nil {
+		c.sess.mu.Unlock()
 		return storage.Row{}, fmt.Errorf("cursor_get_val_raw failed: %d", ret)
 	}
+	raw := C.GoBytes(pData, C.int(sz))
+	c.sess.mu.Unlock()
 
-	return decodeRow(c.schema, C.GoBytes(pData, C.int(sz)))
+	return decodeRow(c.schema, raw)
 }
 
 func (c *WTCursor) RawTuple() ([]byte, bool) {
-	if c.err != nil || c.closed || c.cur == nil || c.eof {
+	if c.sess == nil {
+		return nil, false
+	}
+	c.sess.mu.Lock()
+	defer c.sess.mu.Unlock()
+	if c.err != nil || c.closed || c.cur == nil || c.eof || c.sess.closed || c.sess.sess == nil {
 		return nil, false
 	}
 
@@ -4642,6 +4755,10 @@ func decodeRow(schema *storage.TableSchema, data []byte) (storage.Row, error) {
 }
 
 func (c *WTCursor) Close() error {
+	if c.sess != nil {
+		c.sess.mu.Lock()
+		defer c.sess.mu.Unlock()
+	}
 	if c.closed || c.cur == nil {
 		return c.err
 	}
@@ -4649,7 +4766,7 @@ func (c *WTCursor) Close() error {
 	cur := c.cur
 	c.cur = nil
 	if c.sess != nil && c.uri != "" {
-		c.sess.releaseCursor(c.uri, cur)
+		c.sess.releaseCursorLocked(c.uri, cur)
 	} else {
 		C.go_wt_cursor_close(cur)
 	}
@@ -4657,6 +4774,10 @@ func (c *WTCursor) Close() error {
 }
 
 func (c *WTCursor) Err() error {
+	if c.sess != nil {
+		c.sess.mu.Lock()
+		defer c.sess.mu.Unlock()
+	}
 	return c.err
 }
 
