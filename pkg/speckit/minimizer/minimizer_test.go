@@ -29,6 +29,40 @@ func TestMinimizer_GenerateTDDTestFile(t *testing.T) {
 	if !strings.Contains(content, "TestDefect_1") {
 		t.Errorf("expected test name in generated code")
 	}
+
+	// Test TLP Generator
+	tlpD := &oracle.Discrepancy{
+		Type:       oracle.DiscrepancyTLP,
+		Table:      grammar.TableSchema{Name: "tlp_tbl"},
+		TableDDL:   "CREATE TABLE tlp_tbl (id INT);",
+		InsertDMLs: []string{"INSERT INTO tlp_tbl VALUES (1);"},
+		Query:      "SELECT COUNT(*) FROM tlp_tbl;",
+		Partitions: []string{
+			"SELECT COUNT(*) FROM tlp_tbl WHERE id > 0;",
+			"SELECT COUNT(*) FROM tlp_tbl WHERE NOT (id > 0);",
+			"SELECT COUNT(*) FROM tlp_tbl WHERE (id > 0) IS NULL;",
+		},
+		Details: "TLP 3VL Violation",
+	}
+	tlpContent := GenerateTDDTestFile("spec_defects", "TestDefect_TLP_1", "DEFECT-TLP-1", tlpD)
+	if !strings.Contains(tlpContent, "sumPartitions") {
+		t.Errorf("expected sumPartitions in TLP generated code")
+	}
+
+	// Test PQS Generator
+	pqsD := &oracle.Discrepancy{
+		Type:       oracle.DiscrepancyPQS,
+		Table:      grammar.TableSchema{Name: "pqs_tbl"},
+		TableDDL:   "CREATE TABLE pqs_tbl (id INT);",
+		InsertDMLs: []string{"INSERT INTO pqs_tbl VALUES (42);"},
+		Query:      "SELECT id FROM pqs_tbl WHERE id = 42;",
+		PivotID:    42,
+		Details:    "PQS Missing Pivot",
+	}
+	pqsContent := GenerateTDDTestFile("spec_defects", "TestDefect_PQS_1", "DEFECT-PQS-1", pqsD)
+	if !strings.Contains(pqsContent, "targetPivot := int64(42)") {
+		t.Errorf("expected targetPivot in PQS generated code")
+	}
 	if !strings.Contains(content, "DEFECT-123") {
 		t.Errorf("expected defect ID in generated code")
 	}

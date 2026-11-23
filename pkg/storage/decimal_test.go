@@ -155,7 +155,7 @@ func TestDecimal_Conversions(t *testing.T) {
 	}
 
 	i := d.Int64()
-	if i != 124 { // 123.75 rescaled to scale 0 with half-up rounds to 124
-		t.Errorf("expected 124 int, got %d", i)
+	if i != 123 { // 123.75 truncated to scale 0 towards zero produces 123
+		t.Errorf("expected 123 int, got %d", i)
 	}
 }

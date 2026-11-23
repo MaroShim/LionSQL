@@ -217,19 +217,27 @@
 | `DONE` | **`CORPUS-CALCITE-TSQL-1`** | `1.0-GA` | Ecosystem | P2 | Apache Calcite T-SQL 빌트인 함수/표현식 코퍼스 수집 및 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`CORPUS-KNEX-MSSQL-1`** | `1.0-GA` | Ecosystem | P2 | Knex.js MSSQL Dialect 쿼리 코퍼스 수집 및 Wiki.js 대응 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`CORPUS-NORTHWIND-PUBS-1`** | `1.0-GA` | Ecosystem | P2 | Northwind 및 Pubs 공식 표준 관계형 코퍼스 수집 및 SLT 오라클 스위트 구축 | [`notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md`](notes/NEW_TSQL_CORPORA_INTEGRATION_PLAN.ko.md) |  |
+| `DONE` | **`DEFECT-DECIMAL-TO-BIGINT-ROUNDING-1`** | `v0.95.0` | Storage | P1 | Decimal to BigInt 변환 시 반올림 제거 및 정수 절사(Truncation) 수정 | [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md) |  |
+| `DONE` | **`DEFECT-DUAL-PARSER-VERIFICATION-GAP-1`** | `v0.95.0` | Parser | P2 | Dual Parser (Pratt vs ANTLR4) 광범위 AST 대조 검증 스위트 확충 | [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md) |  |
 | `DONE` | **`DEFECT-ENGINE-BIT-FLOAT-LITERAL-EVAL-1`** | `1.0-GA` | Engine | P1 | BIT 컬럼과 0.0/1.0 부동소수점 리터럴 비교 시 WHERE 문자열 '0.0' 불일치로 행 누락 결함 | [`test/spec_defects/spec_defect_bit_float_equality_test.go`](test/spec_defects/spec_defect_bit_float_equality_test.go) |  |
 | `DONE` | **`DEFECT-ENGINE-FILTER-CLAUSE-FROM-TABLE-LOSS-1`** | `v1.10.0` | Engine | P2 | FILTER (WHERE ...) 구문 처리 시 FROM 절 테이블 식별자 유실 결함 | [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go) |  |
 | `DONE` | **`DEFECT-ENGINE-NOREC-3VL-IN-NULL-OR-1`** | `1.0-GA` | Engine | P1 | NULL 포함 IN 리스트 복합 OR 조건 3VL 논리 평가 불일치 결함 | [`test/spec_defects/spec_defect_1_test.go`](test/spec_defects/spec_defect_1_test.go) |  |
 | `DONE` | **`DEFECT-EXEC-ARITHMETIC-OVERFLOW-TRUTHY-EVAL-1`** | `1.0-GA` | Execution | P1 | WHERE 절 산술 오버플로우 에러를 boolean true(매칭)로 오평가하는 결함 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
 | `DONE` | **`DEFECT-EXEC-FLOAT-DECIMAL-SCALE-TRUNCATION-1`** | `1.0-GA` | Execution | P1 | tryDecimal float64 스케일 4 고정 단편화로 인한 FLOAT 컬럼 리터럴 비교 불일치 결함 | [`test/spec_defects/spec_defect_8_test.go`](test/spec_defects/spec_defect_8_test.go) |  |
+| `DONE` | **`DEFECT-HOT-PLANCACHE-ERROR-MASKING-1`** | `v0.95.0` | Test | P1 | Hot PlanCache 실행 실패 시 에러 은폐 방지 및 양방향 엄격 검증 | [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md) |  |
+| `DONE` | **`DEFECT-INLJ-NULL-KEY-SCAN-1`** | `v0.95.0` | Execution | P1 | IndexNestedLoopJoin NULL 조인 키 인덱스 스캔 차단 및 3VL 준수 | [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md) |  |
 | `DONE` | **`DEFECT-NOREC-SHORTCIRCUIT-COMMUTATIVE-OR-1`** | `v0.94.0` | Engine | P1 | Resolve boolean OR/AND evaluation error short-circuit and preserve commutative equivalence (NoREC invariant) | [`test/spec_defects/spec_defect_norec_shortcircuit_test.go`](test/spec_defects/spec_defect_norec_shortcircuit_test.go) |  |
 | `DONE` | **`DEFECT-PG-ARRAY-SUBQUERY-CONSTRUCTOR-1`** | `v1.10.0` | Engine | P2 | ARRAY(SELECT ...) 서브쿼리 배열 생성자 파싱 결함 (psql \d 호환성) | [`docs/`](docs/) |  |
 | `DONE` | **`DEFECT-PG-CATALOG-PG-POLICY-1`** | `v1.10.0` | Catalog | P2 | psql \d 실행을 위한 pg_catalog.pg_policy 가상 뷰 누락 보완 | [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go) |  |
 | `DONE` | **`DEFECT-PG-ESCAPE-STRING-LITERAL-1`** | `v1.10.0` | Engine | P2 | PostgreSQL E'...' 이스케이프 문자열 파싱 결함 및 psql \l 호환성 복구 | [`test/spec_defects/spec_defect_psql_findings_test.go`](test/spec_defects/spec_defect_psql_findings_test.go) |  |
 | `DONE` | **`DEFECT-PG-JOIN-ALIAS-COLUMN-LIST-1`** | `v1.10.0` | Engine | P2 | JOIN/FROM 절 테이블/함수 컬럼 별칭 리스트 alias(col1, col2) 파싱 결함 (psql \dx 호환성) | [`docs/`](docs/) |  |
+| `DONE` | **`DEFECT-PGWIRE-EXT-EMPTY-COL-DROP-1`** | `v0.95.0` | Wire | P1 | PGWire Extended Query 첫 결과셋 무컬럼 시 후속 결과셋 유실 수정 | [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md) |  |
 | `DONE` | **`DEFECT-PGWIRE-EXTENDED-QUERY-MULTIPLE-RESULT-SETS-1`** | `v0.94.0` | Protocol | P2 | PGWire Extended Query Multiple Result Sets Dropping Defect Remediation | [`notes/PGWIRE_EXTENDED_QUERY_MULTIPLE_RESULT_SETS_PLAN.ko.md`](notes/PGWIRE_EXTENDED_QUERY_MULTIPLE_RESULT_SETS_PLAN.ko.md) |  |
 | `DONE` | **`DEFECT-PROC-EVAL-BETWEEN-CASE-INSENSITIVE-COLLATION-1`** | `1.0-GA` | Engine | P1 | proc/eval.go BETWEEN 문자열 평가 시 대소문자 무시(CI) Collation 미반영 결함 | [`test/spec_defects/spec_defect_collation_between_test.go`](test/spec_defects/spec_defect_collation_between_test.go) |  |
 | `DONE` | **`DEFECT-PROC-EVAL-BIT-IN-LIST-1`** | `1.0-GA` | Engine | P1 | BIT 타입 컬럼 IN (0, 1) 평가 시 proc/eval.go 문자열 'false'/'0' 불일치 결함 | [`test/spec_defects/spec_defect_122_test.go`](test/spec_defects/spec_defect_122_test.go) |  |
+| `DONE` | **`DEFECT-SELECT-TOP-PERCENT-DISTINCT-1`** | `v0.95.0` | Engine | P2 | SELECT TOP PERCENT와 DISTINCT 실행 순서 교정 | [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md) |  |
+| `DONE` | **`DEFECT-SESSION-VAR-COERCE-SILENT-1`** | `v0.95.0` | Engine | P2 | 세션 변수 타입 변환 실패 시 묵인 방지 및 명시적 에러 반환 | [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md) |  |
+| `DONE` | **`DEFECT-SPEC-FUZZ-ORACLE-FLAG-IGNORE-1`** | `v0.95.0` | Tools | P2 | spec_fuzz runner의 -oracle dualengine 옵션 핸들러 바인딩 | [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md) |  |
 | `DONE` | **`DEFECT-TDS-RPC-MULTIPLE-RESULT-SETS-1`** | `v0.94.0` | Protocol | P2 | TDS RPC Multiple Result Sets Dropping Defect Remediation | [`notes/TDS_RPC_MULTIPLE_RESULT_SETS_PLAN.ko.md`](notes/TDS_RPC_MULTIPLE_RESULT_SETS_PLAN.ko.md) |  |
 | `DONE` | **`DEFECT-VDBE-DECIMAL-FVAL-CORRUPTION-1`** | `1.0-GA` | VM | P1 | VDBE toFloatNum이 DECIMAL 컬럼 FVal(0.0)을 직접 읽어 비교식이 왜곡되는 결함 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
 | `DONE` | **`DEPRECATE-OCC-PERF-1`** |  | Storage | P2 | v1.0 이전 OCC performance 모드(-memory=performance) Deprecate 명기 (v1.0 옵션 유지) |  |  |
@@ -476,7 +484,7 @@
 | `DONE` | **`PERF-BENCH-WT-RESTORE-1`** |  | Performance | P1 | WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 |  |  |
 | `DONE` | **`PERF-CACHE-SHARD-1`** | `v1.10.0` | Engine | P2 | PlanCache 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 RLock 캐시라인 바운싱 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-CBO-STATS-BOUNDED-1`** | `1.0-GA` | Planner / Storage | P2 | Support atomic live TableRowCount in WiredTiger and enforce 30,000-row bounded Vitter reservoir sampling in AnalyzeTable ([RULE:BoundedBuffers]) | [`notes/plans/CBO_STATS_BOUNDED_AND_LIVE_ROW_COUNT_PLAN.ko.md`](notes/plans/CBO_STATS_BOUNDED_AND_LIVE_ROW_COUNT_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-COMPLEX-QUERY-2`** | `v1.99.0` | Engine | P2 | Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
+| `PENDING` | **`PERF-COMPLEX-QUERY-2`** | `v0.95.0` | Engine | P2 | Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`PERF-COMPLEX-QUERY-COLUMNAR`** |  | Architecture | P3 | 순수 Columnar Vectorization 전면 재작성 영구 기각 (Spec-Out) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-CTE-EPHEMERAL-1`** |  | Durability | P2 | 세션 로컬 에페머럴 CTE 버퍼 및 Zero-DDL 최적화 | [`notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md`](notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md) |  |
 | `DONE` | **`PERF-CTE-LOWERING-VDBE-1`** |  | Durability | P2 | Writable CTE Stored Procedure 바이트코드 Lowering 가속 | [`notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md) |  |
@@ -489,7 +497,8 @@
 | `DONE` | **`PERF-OCC-ZERO-LOCK-1`** | `Spec-Out` | Storage | P3 | In-Memory OCC Generation/Epoch 기반 Zero-Lock 스냅샷 영구 기각 (Spec-Out) | [`notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/plans/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OPT-AGGREGATE-GROUP-SLICES-1`** | `1` | --domain | P2 | AggregateIterator 그룹당 9개 map 할당을 고정 슬라이스로 전환 (P1) | [`--prio`](--prio) |  |
 | `DONE` | **`PERF-OPT-FILTER-PROJECT-EVALMAP-1`** | `1` | --domain | P2 | Filter/Project 무조건 ToEvalMap() 및 Materialize() 지연화로 불필요한 디코딩/할당 제거 (P0) | [`--prio`](--prio) |  |
-| `PENDING` | **`PERF-OPT-HASH-JOIN-INT-FASTPATH-1`** | `Post-1.0` | --domain | P2 | HashJoinIterator 정수 키 Fast-Path 및 키 인덱스 사전 바인딩 (P3) | [`--prio`](--prio) |  |
+| `PENDING` | **`PERF-OPT-GROUP-BY-INT-FASTPATH-1`** | `v0.95.0` | Execution | P2 | AggregateIterator 단일 정수 키 Fast-Path 및 문자열 직렬화 바이패스 | [`notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-OPT-HASH-JOIN-INT-FASTPATH-1`** | `v0.95.0` | Execution | P2 | HashJoinIterator 정수 키 Fast-Path 및 키 인덱스 사전 바인딩 (P3) | [`notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-OPT-MERGE-JOIN-ARENA-AND-CHUNK-1`** | `Post-1.0` | Execution | P2 | Sort Merge Join NextChunk 벡터화 및 Arena 제로-GC 최적화 | [`notes/plans/MERGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/plans/MERGE_JOIN_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OPT-PATINDEX-REGEX-CACHE-1`** | `3` | --domain | P2 | PATINDEX 등 내장 함수 정규식 컴파일 결과 LRU/RWMutex 캐싱 (P5) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-PROJECTION-SRCIDX-DEFER-DECODE-1`** | `Post-1.0` | --domain | P2 | ProjectionIterator 일반 컬럼 srcIdx 사전 바인딩 및 LazyTuple 선택 디코딩 (P4) | [`--prio`](--prio) |  |
@@ -2760,6 +2769,20 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] Decimal to BigInt 변환 시 반올림 제거 및 정수 절사(Truncation) 수정 `DEFECT-DECIMAL-TO-BIGINT-ROUNDING-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-23 06:18:26
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md)
+
+---
+
+### [DONE] Dual Parser (Pratt vs ANTLR4) 광범위 AST 대조 검증 스위트 확충 `DEFECT-DUAL-PARSER-VERIFICATION-GAP-1`
+- **Domain**: Parser | **Priority**: P2 | **Updated**: 2026-11-23 06:46:13
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md)
+
+---
+
 ### [DONE] BIT 컬럼과 0.0/1.0 부동소수점 리터럴 비교 시 WHERE 문자열 '0.0' 불일치로 행 누락 결함 `DEFECT-ENGINE-BIT-FLOAT-LITERAL-EVAL-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-21 14:49:36
 - **Milestone**: `1.0-GA`
@@ -2792,6 +2815,20 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-21 14:58:23
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`test/spec_defects/spec_defect_8_test.go`](test/spec_defects/spec_defect_8_test.go)
+
+---
+
+### [DONE] Hot PlanCache 실행 실패 시 에러 은폐 방지 및 양방향 엄격 검증 `DEFECT-HOT-PLANCACHE-ERROR-MASKING-1`
+- **Domain**: Test | **Priority**: P1 | **Updated**: 2026-11-23 06:44:11
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md)
+
+---
+
+### [DONE] IndexNestedLoopJoin NULL 조인 키 인덱스 스캔 차단 및 3VL 준수 `DEFECT-INLJ-NULL-KEY-SCAN-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-23 06:16:31
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md)
 
 ---
 
@@ -2830,6 +2867,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] PGWire Extended Query 첫 결과셋 무컬럼 시 후속 결과셋 유실 수정 `DEFECT-PGWIRE-EXT-EMPTY-COL-DROP-1`
+- **Domain**: Wire | **Priority**: P1 | **Updated**: 2026-11-23 06:36:26
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md)
+
+---
+
 ### [DONE] PGWire Extended Query Multiple Result Sets Dropping Defect Remediation `DEFECT-PGWIRE-EXTENDED-QUERY-MULTIPLE-RESULT-SETS-1`
 - **Domain**: Protocol | **Priority**: P2 | **Updated**: 2026-11-22 11:42:33
 - **Milestone**: `v0.94.0`
@@ -2848,6 +2892,27 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-21 14:58:23
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`test/spec_defects/spec_defect_122_test.go`](test/spec_defects/spec_defect_122_test.go)
+
+---
+
+### [DONE] SELECT TOP PERCENT와 DISTINCT 실행 순서 교정 `DEFECT-SELECT-TOP-PERCENT-DISTINCT-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-23 06:31:56
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md)
+
+---
+
+### [DONE] 세션 변수 타입 변환 실패 시 묵인 방지 및 명시적 에러 반환 `DEFECT-SESSION-VAR-COERCE-SILENT-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-23 06:38:07
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md)
+
+---
+
+### [DONE] spec_fuzz runner의 -oracle dualengine 옵션 핸들러 바인딩 `DEFECT-SPEC-FUZZ-ORACLE-FLAG-IGNORE-1`
+- **Domain**: Tools | **Priority**: P2 | **Updated**: 2026-11-23 06:42:46
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md`](notes/reports/20261123_v0.94.0_POST_RELEASE_DEFECTS_AUDIT.ko.md)
 
 ---
 
@@ -4704,7 +4769,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ### [PENDING] Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) `PERF-COMPLEX-QUERY-2`
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
-- **Milestone**: `v1.99.0`
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md)
 
 ---
@@ -4817,10 +4882,17 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [PENDING] AggregateIterator 단일 정수 키 Fast-Path 및 문자열 직렬화 바이패스 `PERF-OPT-GROUP-BY-INT-FASTPATH-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-23 06:02:29
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)
+
+---
+
 ### [PENDING] HashJoinIterator 정수 키 Fast-Path 및 키 인덱스 사전 바인딩 (P3) `PERF-OPT-HASH-JOIN-INT-FASTPATH-1`
-- **Domain**: --domain | **Priority**: P2 | **Updated**: 2026-11-19 01:49:14
-- **Milestone**: `Post-1.0`
-- **Plan Doc**: [`--prio`](--prio)
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-19 01:49:14
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/20261119_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)
 
 ---
 

@@ -666,7 +666,8 @@ func (n *IndexNestedLoopJoinIterator) nextTuple(ctx context.Context) (Tuple, err
 		n.hasMatch = false
 
 		keyVal, found := lookupVal(outerTuple, n.leftKey)
-		if !found || keyVal == nil {
+		stVal := toStorageValFromAny(keyVal)
+		if !found || keyVal == nil || stVal.IsNull || stVal.IsNullValue() {
 			if n.joinType == "ANTI" {
 				n.currentOuter = Tuple{}
 				return outerTuple, nil
@@ -677,9 +678,6 @@ func (n *IndexNestedLoopJoinIterator) nextTuple(ctx context.Context) (Tuple, err
 			}
 			continue
 		}
-
-		// Construct index lookup Value
-		stVal := toStorageValFromAny(keyVal)
 		scanStart := time.Now()
 		cur, err := n.tx.IndexScan(n.innerTable, n.innerIndex.Name, &stVal, &stVal)
 		if err != nil {

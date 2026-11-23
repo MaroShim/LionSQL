@@ -35,6 +35,7 @@ type Result struct {
 	Discrepancies   []*oracle.Discrepancy
 	TDDTestFiles    []string
 	ElapsedDuration time.Duration
+	OracleExecuted  oracle.DiscrepancyType
 }
 
 // Run executes the autonomous discovery loop.
@@ -79,6 +80,20 @@ func Run(ctx context.Context, cfg Config) (*Result, error) {
 			_, _ = coord.GetOrCreateSession(sessID)
 			defer coord.CloseSession(sessID)
 
+			// Setup second coordinator for dualengine verification if requested
+			var coord2 *engine.Coordinator
+			var sessID2 string
+			if cfg.OracleType == "dualengine" || cfg.OracleType == "all" {
+				eng2 := memengine.New()
+				_ = eng2.Open("")
+				defer eng2.Close()
+				cat2 := catalog.New(eng2)
+				coord2 = engine.NewCoordinator(cat2, eng2, engine.Config{})
+				sessID2 = fmt.Sprintf("spec_runner_worker2_%d", wid)
+				_, _ = coord2.GetOrCreateSession(sessID2)
+				defer coord2.CloseSession(sessID2)
+			}
+
 			for {
 				select {
 				case <-ctx.Done():
@@ -101,20 +116,63 @@ func Run(ctx context.Context, cfg Config) (*Result, error) {
 				for _, dml := range insertDMLs {
 					_, _ = coord.ExecuteSessionSQL(sessID, dml)
 				}
+				if coord2 != nil {
+					if _, err := coord2.ExecuteSessionSQL(sessID2, tableDDL); err == nil {
+						for _, dml := range insertDMLs {
+							_, _ = coord2.ExecuteSessionSQL(sessID2, dml)
+						}
+					}
+				}
 
 				// 2. Generate and Evaluate Queries
 				for qIdx := 0; qIdx < 15; qIdx++ {
 					select {
 					case <-ctx.Done():
 						_, _ = coord.ExecuteSessionSQL(sessID, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tblName))
+						if coord2 != nil {
+							_, _ = coord2.ExecuteSessionSQL(sessID2, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tblName))
+						}
 						return
 					default:
 					}
 
-					pair := grammar.GenerateNoRECPair(rng, table, cfg.MaxDepth)
-					queryCount.Add(2) // 2 queries per NoREC pair
+					var disc *oracle.Discrepancy
+					var err error
 
-					disc, err := oracle.CheckNoREC(coord, sessID, pair, tableDDL, insertDMLs)
+					mode := cfg.OracleType
+					if mode == "all" {
+						modes := []string{"norec", "tlp", "pqs", "dualengine"}
+						mode = modes[rng.Intn(len(modes))]
+					}
+
+					switch mode {
+					case "dualengine":
+						res.OracleExecuted = oracle.DiscrepancyDualEngine
+						q := grammar.GenerateSelectQuery(rng, table, cfg.MaxDepth)
+						queryCount.Add(2)
+						if coord2 != nil {
+							disc, err = oracle.CheckDualEngine(coord, sessID, "OCC_1", coord2, sessID2, "OCC_2", q, tableDDL, insertDMLs)
+						}
+					case "tlp":
+						res.OracleExecuted = oracle.DiscrepancyTLP
+						pair := grammar.GenerateTLPPair(rng, table, cfg.MaxDepth)
+						queryCount.Add(4)
+						disc, err = oracle.CheckTLP(coord, sessID, pair, tableDDL, insertDMLs)
+					case "pqs":
+						res.OracleExecuted = oracle.DiscrepancyPQS
+						pivotID := int64(rng.Intn(len(insertDMLs)) + 1)
+						pair := grammar.GeneratePQSPair(rng, table, pivotID)
+						queryCount.Add(1)
+						disc, err = oracle.CheckPQS(coord, sessID, pair, tableDDL, insertDMLs)
+					case "norec":
+						fallthrough
+					default:
+						res.OracleExecuted = oracle.DiscrepancyNoREC
+						pair := grammar.GenerateNoRECPair(rng, table, cfg.MaxDepth)
+						queryCount.Add(2)
+						disc, err = oracle.CheckNoREC(coord, sessID, pair, tableDDL, insertDMLs)
+					}
+
 					if err == nil && disc != nil {
 						// Discrepancy Found!
 						minDisc := minimizer.Minimize(coord, sessID, disc)
@@ -124,17 +182,17 @@ func Run(ctx context.Context, cfg Config) (*Result, error) {
 						res.Discrepancies = append(res.Discrepancies, minDisc)
 
 						if cfg.OutputDir != "" {
-							testName := fmt.Sprintf("TestSpecDefect_NoREC_%d", defectNum)
-							defectID := fmt.Sprintf("DEFECT-ENGINE-NOREC-%d", defectNum)
+							testName := fmt.Sprintf("TestSpecDefect_%s_%d", minDisc.Type, defectNum)
+							defectID := fmt.Sprintf("DEFECT-ENGINE-%s-%d", minDisc.Type, defectNum)
 							content := minimizer.GenerateTDDTestFile("spec_defects", testName, defectID, minDisc)
-							filePath := filepath.Join(cfg.OutputDir, fmt.Sprintf("spec_defect_%d_test.go", defectNum))
+							filePath := filepath.Join(cfg.OutputDir, fmt.Sprintf("spec_defect_%s_%d_test.go", minDisc.Type, defectNum))
 							_ = os.WriteFile(filePath, []byte(content), 0644)
 							res.TDDTestFiles = append(res.TDDTestFiles, filePath)
 						}
 						discMu.Unlock()
 
 						if cfg.Verbose {
-							fmt.Printf("[DISCOVERY] Worker %d found discrepancy #%d: %s\n", wid, defectNum, disc.Details)
+							fmt.Printf("[DISCOVERY] Worker %d found discrepancy #%d (%s): %s\n", wid, defectNum, disc.Type, disc.Details)
 						}
 					}
 				}

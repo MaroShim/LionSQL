@@ -13,6 +13,8 @@ const (
 	DiscrepancyNoREC      DiscrepancyType = "NoREC"
 	DiscrepancyDualEngine DiscrepancyType = "DualEngine"
 	DiscrepancyErrorDiff  DiscrepancyType = "ErrorDifferential"
+	DiscrepancyTLP        DiscrepancyType = "TLP"
+	DiscrepancyPQS        DiscrepancyType = "PQS"
 )
 
 // Discrepancy represents a detected behavioral anomaly between expected and actual results.
@@ -23,6 +25,8 @@ type Discrepancy struct {
 	InsertDMLs      []string
 	Query           string
 	EquivalentQuery string
+	Partitions      []string // For TLP: [TrueSQL, FalseSQL, NullSQL]
+	PivotID         int64    // For PQS
 	Expected        string
 	Actual          string
 	Details         string

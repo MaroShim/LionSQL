@@ -42,6 +42,11 @@ func TestThreeValuedLogic_SQL(t *testing.T) {
 		{"SELECT (NULL OR true) AS val;", true},
 		{"SELECT (NULL OR false) AS val;", nil},
 		{"SELECT (NULL OR NULL) AS val;", nil},
+		{"SELECT (NOT (NULL)) AS val;", nil},
+		{"SELECT (NOT (1 = 2)) AS val;", true},
+		{"SELECT (NOT (1 = 1)) AS val;", false},
+		{"SELECT ((NOT (1 = 2)) IS NULL) AS val;", false},
+		{"SELECT ((NOT (NULL)) IS NULL) AS val;", true},
 	}
 
 	for _, tt := range tests {

@@ -1641,7 +1641,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 					}
 				}
 			}
-			cs.CoerceAndSetVarLocked(varName, val)
+			if err := cs.CoerceAndSetVarLocked(varName, val); err != nil {
+				cs.Mu.Unlock()
+				return nil, err
+			}
 		}
 		cs.Mu.Unlock()
 		return &QueryResult{
@@ -1656,7 +1659,9 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		cs.Mu.Lock()
 		defer cs.Mu.Unlock()
 		val := evalSessionVarExpr(rawExpr, cs.Vars)
-		cs.CoerceAndSetVarLocked(varName, val)
+		if err := cs.CoerceAndSetVarLocked(varName, val); err != nil {
+			return nil, err
+		}
 		return &QueryResult{
 			Success:    true,
 			Command:    "SET",

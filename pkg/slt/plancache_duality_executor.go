@@ -1,6 +1,7 @@
 package slt
 
 import (
+	"fmt"
 	"strings"
 
 	"lionsql/pkg/engine"
@@ -71,7 +72,13 @@ func (e *HotCoordinatorExecutor) Execute(sqlStr string) ([]string, []map[string]
 		if !strings.Contains(upper, "INTO") && !strings.Contains(upper, "INSERT") &&
 			!strings.Contains(upper, "UPDATE") && !strings.Contains(upper, "DELETE") {
 			resHot, errHot := e.coord.ExecuteSessionSQL(e.sess, sqlStr)
-			if errHot == nil && resHot != nil {
+			if errHot != nil {
+				return nil, nil, fmt.Errorf("hot plancache execution error: %w", errHot)
+			}
+			if resHot != nil {
+				if len(resHot.Rows) != len(res.Rows) {
+					return nil, nil, fmt.Errorf("hot plancache row count divergence: cold=%d hot=%d", len(res.Rows), len(resHot.Rows))
+				}
 				return DecodeQueryResult(resHot)
 			}
 		}

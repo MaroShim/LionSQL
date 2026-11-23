@@ -443,22 +443,39 @@ func (d Decimal) Float64() float64 {
 	return f
 }
 
-// IsInt64 reports whether the truncated integer part of Decimal fits within int64.
-func (d Decimal) IsInt64() bool {
-	rescaled := d.Rescale(0)
-	if rescaled.value == nil {
-		return true
+// Truncate returns Decimal truncated to targetScale towards zero (no rounding).
+func (d Decimal) Truncate(targetScale int32) Decimal {
+	if d.value == nil {
+		return ZeroDecimal(targetScale)
 	}
-	return rescaled.value.IsInt64()
+	if targetScale >= d.scale {
+		return d.Rescale(targetScale)
+	}
+	diff := d.scale - targetScale
+	divisor := exp10(diff)
+	quo := new(big.Int).Quo(d.UnscaledValue(), divisor)
+	return Decimal{
+		value: quo,
+		scale: targetScale,
+	}
 }
 
-// Int64 converts Decimal to int64 by truncating fractional digits.
+// IsInt64 reports whether the truncated integer part of Decimal fits within int64.
+func (d Decimal) IsInt64() bool {
+	truncated := d.Truncate(0)
+	if truncated.value == nil {
+		return true
+	}
+	return truncated.value.IsInt64()
+}
+
+// Int64 converts Decimal to int64 by truncating fractional digits towards zero.
 func (d Decimal) Int64() int64 {
-	rescaled := d.Rescale(0)
-	if rescaled.value == nil {
+	truncated := d.Truncate(0)
+	if truncated.value == nil {
 		return 0
 	}
-	return rescaled.value.Int64()
+	return truncated.value.Int64()
 }
 
 func (d Decimal) toRat() *big.Rat {

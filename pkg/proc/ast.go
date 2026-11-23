@@ -773,10 +773,18 @@ type IsNullExpr struct {
 
 func (e *IsNullExpr) exprNode() {}
 func (e *IsNullExpr) String() string {
-	if e.Not {
-		return fmt.Sprintf("%s IS NOT NULL", e.Expr.String())
+	exprStr := ""
+	if e.Expr != nil {
+		exprStr = e.Expr.String()
+		switch e.Expr.(type) {
+		case *BinaryExpr, *BetweenExpr, *InExpr, *LikeExpr, *CaseExpr, *UnaryExpr:
+			exprStr = "(" + exprStr + ")"
+		}
 	}
-	return fmt.Sprintf("%s IS NULL", e.Expr.String())
+	if e.Not {
+		return fmt.Sprintf("%s IS NOT NULL", exprStr)
+	}
+	return fmt.Sprintf("%s IS NULL", exprStr)
 }
 
 // ScalarSubqueryExpr represents (SELECT col FROM table WHERE cond)

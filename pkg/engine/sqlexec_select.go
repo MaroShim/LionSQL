@@ -234,6 +234,10 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		}
 	}
 
+	if qInfo.Distinct {
+		rows, values = deduplicateRowsAndValues(rows, values)
+	}
+
 	if qInfo.IsTopPercent && qInfo.LimitCount >= 0 {
 		effectiveLimit := int64(math.Ceil(float64(len(rows)) * float64(qInfo.LimitCount) / 100.0))
 		if effectiveLimit < int64(len(rows)) {
@@ -242,10 +246,6 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 				values = values[:effectiveLimit]
 			}
 		}
-	}
-
-	if qInfo.Distinct {
-		rows, values = deduplicateRowsAndValues(rows, values)
 	}
 
 	cols := exec.Schema()
@@ -2223,10 +2223,6 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		// Secondary Execution: Direct Volcano CBO execution
 		res, err := s.execVolcanoSelect(qInfo, start, cs)
 		if err == nil && res != nil {
-			if qInfo.Distinct {
-				res.Rows, res.Values = deduplicateRowsAndValues(res.Rows, res.Values)
-				res.RowsAffected = int64(len(res.Rows))
-			}
 			return res, nil
 		}
 		if err != nil {

@@ -167,7 +167,7 @@ func (cs *ClientSession) SetVarTypeLocked(name string, dt storage.DataType) {
 
 // CoerceAndSetVarLocked coerces val according to the variable's declared DataType (if any)
 // and length constraint, storing it across canonical aliases. MUST be called with cs.Mu held.
-func (cs *ClientSession) CoerceAndSetVarLocked(name string, val any) {
+func (cs *ClientSession) CoerceAndSetVarLocked(name string, val any) error {
 	if cs.Vars == nil {
 		cs.Vars = make(map[string]any)
 	}
@@ -184,7 +184,11 @@ func (cs *ClientSession) CoerceAndSetVarLocked(name string, val any) {
 	}
 
 	if dt != storage.TypeUnknown && val != nil {
-		val = coerceAnyToDataType(val, dt)
+		coerced, err := coerceAnyToDataType(val, dt)
+		if err != nil {
+			return err
+		}
+		val = coerced
 	}
 
 	if maxLen, ok := cs.VarLengths["@"+lower]; ok && maxLen > 0 {
@@ -201,25 +205,26 @@ func (cs *ClientSession) CoerceAndSetVarLocked(name string, val any) {
 	cs.Vars[clean] = val
 	cs.Vars["@"+lower] = val
 	cs.Vars[lower] = val
+	return nil
 }
 
 // CoerceAndSetVar is a thread-safe wrapper around CoerceAndSetVarLocked.
-func (cs *ClientSession) CoerceAndSetVar(name string, val any) {
+func (cs *ClientSession) CoerceAndSetVar(name string, val any) error {
 	if cs == nil {
-		return
+		return nil
 	}
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()
-	cs.CoerceAndSetVarLocked(name, val)
+	return cs.CoerceAndSetVarLocked(name, val)
 }
 
-func coerceAnyToDataType(val any, dt storage.DataType) any {
+func coerceAnyToDataType(val any, dt storage.DataType) (any, error) {
 	if val == nil {
-		return nil
+		return nil, nil
 	}
 	if sv, ok := val.(storage.Value); ok {
 		if sv.IsNull {
-			return nil
+			return nil, nil
 		}
 		val = sv.Interface()
 	}
@@ -227,143 +232,149 @@ func coerceAnyToDataType(val any, dt storage.DataType) any {
 	case storage.TypeInt:
 		switch v := val.(type) {
 		case int:
-			return int64(v)
+			return int64(v), nil
 		case int8:
-			return int64(v)
+			return int64(v), nil
 		case int16:
-			return int64(v)
+			return int64(v), nil
 		case int32:
-			return int64(v)
+			return int64(v), nil
 		case int64:
-			return v
+			return v, nil
 		case uint:
-			return int64(v)
+			return int64(v), nil
 		case uint8:
-			return int64(v)
+			return int64(v), nil
 		case uint16:
-			return int64(v)
+			return int64(v), nil
 		case uint32:
-			return int64(v)
+			return int64(v), nil
 		case uint64:
-			return int64(v)
+			return int64(v), nil
 		case float32:
-			return int64(v)
+			return int64(v), nil
 		case float64:
-			return int64(v)
+			return int64(v), nil
 		case bool:
 			if v {
-				return int64(1)
+				return int64(1), nil
 			}
-			return int64(0)
+			return int64(0), nil
 		case storage.Decimal:
-			return int64(v.Float64())
+			return v.Int64(), nil
 		case *storage.Decimal:
 			if v != nil {
-				return int64(v.Float64())
+				return v.Int64(), nil
 			}
-			return int64(0)
+			return int64(0), nil
 		case string:
 			s := strings.TrimSpace(v)
 			if i, err := strconv.ParseInt(s, 10, 64); err == nil {
-				return i
+				return i, nil
 			}
 			if f, err := strconv.ParseFloat(s, 64); err == nil {
-				return int64(f)
+				return int64(f), nil
 			}
-			return val
+			return nil, fmt.Errorf("%w: conversion failed when converting the varchar value %q to data type int", storage.ErrInvalidDataType, v)
 		default:
-			return val
+			return nil, fmt.Errorf("%w: cannot convert value of type %T to int", storage.ErrInvalidDataType, val)
 		}
 	case storage.TypeFloat, storage.TypeReal:
 		switch v := val.(type) {
 		case float32:
 			if dt == storage.TypeReal {
-				return v
+				return v, nil
 			}
-			return float64(v)
+			return float64(v), nil
 		case float64:
 			if dt == storage.TypeReal {
-				return float32(v)
+				return float32(v), nil
 			}
-			return v
+			return v, nil
 		case int:
-			return float64(v)
+			return float64(v), nil
 		case int64:
-			return float64(v)
+			return float64(v), nil
 		case storage.Decimal:
 			if dt == storage.TypeReal {
-				return float32(v.Float64())
+				return float32(v.Float64()), nil
 			}
-			return v.Float64()
+			return v.Float64(), nil
 		case *storage.Decimal:
 			if v != nil {
 				if dt == storage.TypeReal {
-					return float32(v.Float64())
+					return float32(v.Float64()), nil
 				}
-				return v.Float64()
+				return v.Float64(), nil
 			}
-			return float64(0)
+			return float64(0), nil
 		case string:
 			if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil {
 				if dt == storage.TypeReal {
-					return float32(f)
+					return float32(f), nil
 				}
-				return f
+				return f, nil
 			}
-			return val
+			return nil, fmt.Errorf("%w: conversion failed when converting the varchar value %q to float/real", storage.ErrInvalidDataType, v)
 		default:
-			return val
+			return nil, fmt.Errorf("%w: cannot convert value of type %T to float/real", storage.ErrInvalidDataType, val)
 		}
 	case storage.TypeDecimal:
 		switch v := val.(type) {
 		case storage.Decimal:
-			return v
+			return v, nil
 		case *storage.Decimal:
 			if v != nil {
-				return *v
+				return *v, nil
 			}
-			return storage.ZeroDecimal(0)
+			return storage.ZeroDecimal(0), nil
 		case int:
-			return storage.NewDecimalFromInt(int64(v), 0)
+			return storage.NewDecimalFromInt(int64(v), 0), nil
 		case int64:
-			return storage.NewDecimalFromInt(v, 0)
+			return storage.NewDecimalFromInt(v, 0), nil
 		case float64:
-			return storage.NewDecimalFromFloat(v, 4)
+			return storage.NewDecimalFromFloat(v, 4), nil
 		case string:
 			if dec, err := storage.ParseDecimal(v); err == nil {
-				return dec
+				return dec, nil
 			}
-			return val
+			return nil, fmt.Errorf("%w: conversion failed when converting the varchar value %q to decimal", storage.ErrInvalidDataType, v)
 		default:
-			return val
+			return nil, fmt.Errorf("%w: cannot convert value of type %T to decimal", storage.ErrInvalidDataType, val)
 		}
 	case storage.TypeBool:
 		switch v := val.(type) {
 		case bool:
-			return v
+			return v, nil
 		case int:
-			return v != 0
+			return v != 0, nil
 		case int64:
-			return v != 0
+			return v != 0, nil
 		case float64:
-			return v != 0
+			return v != 0, nil
 		case string:
 			s := strings.Trim(strings.TrimSpace(v), "'\"")
-			return strings.EqualFold(s, "true") || s == "1"
+			if strings.EqualFold(s, "true") || s == "1" {
+				return true, nil
+			}
+			if strings.EqualFold(s, "false") || s == "0" {
+				return false, nil
+			}
+			return nil, fmt.Errorf("%w: conversion failed when converting the varchar value %q to bit/boolean", storage.ErrInvalidDataType, v)
 		default:
-			return val
+			return nil, fmt.Errorf("%w: cannot convert value of type %T to bit/boolean", storage.ErrInvalidDataType, val)
 		}
 	case storage.TypeVarChar:
 		switch v := val.(type) {
 		case string:
-			return v
+			return v, nil
 		case []byte:
-			return string(v)
+			return string(v), nil
 		default:
-			return fmt.Sprintf("%v", v)
+			return fmt.Sprintf("%v", v), nil
 		}
 	default:
-		return val
+		return val, nil
 	}
 }
 

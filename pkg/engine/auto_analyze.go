@@ -118,7 +118,10 @@ func (a *AutoAnalyzer) triggerAnalyze(table string, counter *atomic.Int64) {
 		if a.coordinator != nil {
 			_, err := a.coordinator.AnalyzeTable(table)
 			if err != nil {
-				log.Printf("[AutoAnalyze] Warning: Auto-analyze on %q returned: %v", table, err)
+				// If table was already dropped (e.g. during ephemeral fuzzing/DDL workflows), ignore cleanly
+				if !strings.Contains(err.Error(), "table not found") {
+					log.Printf("[AutoAnalyze] Warning: Auto-analyze on %q returned: %v", table, err)
+				}
 			}
 		}
 	}()

@@ -635,6 +635,17 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *Clien
 			}
 
 			if restartIdentity {
+				if txCtx := s.getTxContext(cs); txCtx != nil {
+					oldID, hasOldID := s.GetTableLastIdentity(tableName)
+					txCtx.AddRollbackAction(func() error {
+						if hasOldID {
+							s.SetTableLastIdentity(tableName, oldID)
+						} else {
+							s.DropTableIdentity(tableName)
+						}
+						return nil
+					})
+				}
 				s.SetTableLastIdentity(tableName, 0)
 			}
 		}

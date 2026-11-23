@@ -137,7 +137,7 @@ func ConvertValueToColumn(val Value, col Column) (Value, error) {
 		case TypeBool:
 			return IntValue(boolToInt(val.BVal)), nil
 		case TypeDecimal:
-			s := val.DVal.Rescale(0).String()
+			s := val.DVal.Truncate(0).String()
 			n, err := strconv.ParseInt(s, 10, 64)
 			if err != nil {
 				return Value{}, fmt.Errorf("%w: decimal %s out of INT range for column %q: %v", ErrInvalidDataType, val.String(), col.Name, err)

@@ -165,3 +165,70 @@ func TestOracle_CrossEngine_MemVsWiredTiger_Parity(t *testing.T) {
 		t.Logf("Total Cross-Engine Discrepancies detected: %d", len(discoveredDiscrepancies))
 	}
 }
+
+func TestOracle_TLP_BasicValidation(t *testing.T) {
+	coord, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	sessID := "tlp_test_sess"
+	_, _ = coord.GetOrCreateSession(sessID)
+	defer coord.CloseSession(sessID)
+
+	rng := rand.New(rand.NewSource(12345))
+	table := grammar.GenerateTableSchema(rng, "tlp_tbl", 4)
+	tableDDL := table.GenerateCreateTableDDL()
+	insertDMLs := table.GenerateInsertDML(rng, 10)
+
+	_, err := coord.ExecuteSessionSQL(sessID, tableDDL)
+	if err != nil {
+		t.Fatalf("DDL failed: %v", err)
+	}
+	for _, dml := range insertDMLs {
+		if _, err := coord.ExecuteSessionSQL(sessID, dml); err != nil {
+			t.Fatalf("Insert failed: %v", err)
+		}
+	}
+
+	pair := grammar.GenerateTLPPair(rng, table, 2)
+	disc, err := CheckTLP(coord, sessID, pair, tableDDL, insertDMLs)
+	if err != nil {
+		t.Fatalf("CheckTLP error: %v", err)
+	}
+	if disc != nil {
+		t.Logf("TLP Discrepancy detected (expected during fuzzing): %s", disc)
+	}
+}
+
+func TestOracle_PQS_BasicValidation(t *testing.T) {
+	coord, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	sessID := "pqs_test_sess"
+	_, _ = coord.GetOrCreateSession(sessID)
+	defer coord.CloseSession(sessID)
+
+	rng := rand.New(rand.NewSource(54321))
+	table := grammar.GenerateTableSchema(rng, "pqs_tbl", 4)
+	tableDDL := table.GenerateCreateTableDDL()
+	insertDMLs := table.GenerateInsertDML(rng, 5)
+
+	_, err := coord.ExecuteSessionSQL(sessID, tableDDL)
+	if err != nil {
+		t.Fatalf("DDL failed: %v", err)
+	}
+	for _, dml := range insertDMLs {
+		if _, err := coord.ExecuteSessionSQL(sessID, dml); err != nil {
+			t.Fatalf("Insert failed: %v", err)
+		}
+	}
+
+	// Pivot row is row with ID 1
+	pair := grammar.GeneratePQSPair(rng, table, 1)
+	disc, err := CheckPQS(coord, sessID, pair, tableDDL, insertDMLs)
+	if err != nil {
+		t.Fatalf("CheckPQS error: %v", err)
+	}
+	if disc != nil {
+		t.Fatalf("PQS pivot row was missing unexpectedly: %s", disc)
+	}
+}

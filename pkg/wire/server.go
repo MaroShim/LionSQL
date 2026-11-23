@@ -1953,6 +1953,60 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 			cmd = portal.Statement.Query
 		}
 		_ = WriteCommandComplete(conn, formatPgCommandComplete(cmd, res.RowsAffected, len(res.Rows)))
+
+		if res.Next != nil {
+			bw := getBufioWriter(conn)
+			defer putBufioWriter(bw)
+
+			var queryForOIDs string
+			if portal.Statement != nil {
+				queryForOIDs = portal.Statement.Query
+			}
+			if sqlutil.HasPrefixKeyword(queryForOIDs, "EXEC") || sqlutil.HasPrefixKeyword(queryForOIDs, "CALL") {
+				procName, _ := engine.ParseProcArgs(queryForOIDs)
+				if procName != "" && s.catalog != nil {
+					if procMeta, err := s.catalog.GetProcedure(procName); err == nil && procMeta != nil {
+						queryForOIDs = procMeta.Body
+					}
+				}
+			}
+
+			for cur := res.Next; cur != nil; cur = cur.Next {
+				if len(cur.Columns) > 0 {
+					var curSampleRow map[string]any
+					if len(cur.Rows) > 0 {
+						curSampleRow = cur.Rows[0]
+					}
+					curOIDs := s.resolveColumnOIDs(queryForOIDs, cur.Columns, curSampleRow)
+					curCols := make([]ColumnMeta, len(cur.Columns))
+					for i, c := range cur.Columns {
+						fmtCode := int16(0)
+						if len(portal.ResultFormats) == 1 && portal.ResultFormats[0] == 1 {
+							fmtCode = 1
+						} else if i < len(portal.ResultFormats) && portal.ResultFormats[i] == 1 {
+							fmtCode = 1
+						}
+						var oid int32 = 25
+						if i < len(curOIDs) {
+							oid = curOIDs[i]
+						}
+						curCols[i] = ColumnMeta{
+							Name:     c,
+							DataType: oid,
+							Format:   fmtCode,
+						}
+					}
+					_ = WriteRowDescription(bw, curCols)
+					_ = writePgDataRows(bw, cur.Columns, curOIDs, portal.ResultFormats, cur.Rows, cur.Values, false)
+					curTag := formatPgCommandComplete(cur.Command, cur.RowsAffected, len(cur.Rows))
+					_ = WriteCommandComplete(bw, curTag)
+				} else {
+					curTag := formatPgCommandComplete(cur.Command, cur.RowsAffected, len(cur.Rows))
+					_ = WriteCommandComplete(bw, curTag)
+				}
+			}
+			_ = bw.Flush()
+		}
 		return
 	}
 
