@@ -526,7 +526,7 @@
 | `PENDING` | **`PERF-VDBE-FRAME-SLIM-1`** | `v1.10.0` | Engine | P2 | VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-WAL-ZERO-ALLOC-1`** | `v1.10.0` | Storage | P2 | In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 writeFrame Zero-Alloc | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WIRE-ZEROALLOC-1`** |  | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-WT-ARENA-SLAB-DECODE-1`** | `v0.99.0` | Storage | P2 | WiredTiger sync.Pool/Arena 기반 고정 버퍼 디코딩 및 C.GoBytes 절감 | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-WT-ARENA-SLAB-DECODE-1`** | `v0.95.0` | Storage | P2 | WiredTiger sync.Pool/Arena 기반 고정 버퍼 디코딩 및 C.GoBytes 절감 | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WT-INSTANT-ADD-COL-1`** | `1.0-GA` | Storage | P2 | WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`PERF-WT-OCC-WORKSPACE-BUFFER-1`** | `Post-1.0` | Storage | P2 | WiredTiger In-Memory Private Workspace 버퍼링 (OCC-on-WiredTiger) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WT-READ-CACHE-1`** | `v0.95.0` | Storage | P1 | WiredTiger 트랜잭션 로컬 제로-카피 Read Cache (WTTx.readCache) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
@@ -5114,8 +5114,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] WiredTiger sync.Pool/Arena 기반 고정 버퍼 디코딩 및 C.GoBytes 절감 `PERF-WT-ARENA-SLAB-DECODE-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 14:56:08
-- **Milestone**: `v0.99.0`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 23:53:35
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
 
 ---
@@ -5230,12 +5230,6 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 23:51:33
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
-
-**취소 및 SPEC_OUT 사유 (In-Memory OCC 회귀 방지)**:
-1. **문자열 결합 힙 할당 방지 ([RULE:ZeroAllocation])**: `memengine`은 `TableData` 내부에서 순수 `pkKey`를 키로 직접 사용하여 0ns/Zero-Allocation을 유지합니다. 글로벌 락 테이블로 통일 시 `tableName + "\x00" + pkKey` 결합(`runtime.concatstrings`)이 강제되어 초당 수십만 TPS 핫패스에서 심각한 GC 부하를 초래합니다.
-2. **CPU L1/L2 캐시 국소성 보존 ([RULE:LatencyBudget])**: `memengine`의 `tableShard`는 행 데이터(`entries`), OCC 버전(`shardEntry.ver`), 쓰기 락(`activeWriters`)이 동일한 메모리 청크에 공존하여 단일 포인터 역참조로 L1/L2 캐시에 동시 적재됩니다. 락 테이블 외주화 시 캐시 미스가 급증합니다.
-3. **테이블 간 거짓 경합(False Sharing) 원천 차단**: 테이블마다 256개 샤드가 독립되어 테이블 간 뮤텍스를 절대 공유하지 않습니다. 글로벌 1024 샤드로 통합할 경우 무관한 테이블 간 해시 충돌로 뮤텍스 경합이 발생하여 멀티코어 성능이 저하됩니다.
-4. **결론**: `memengine`의 테이블 샤드 내장 락 구조는 인메모리 OCC 극상 성능(215만 tpmC)을 위한 핵심 아키텍처이므로 현행을 유지하며, 맹목적인 단일 락 매니저 공통화는 영구 SPEC_OUT으로 동결합니다.
 
 ---
 
