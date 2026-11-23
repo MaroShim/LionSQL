@@ -29,7 +29,7 @@
 | `PENDING` | **`ARCH-PARALLEL-SCAN-1`** | `v1.99.0` | Engine | P2 | 멀티코어 병렬 분석 쿼리 실행기 (ParallelSeqScan) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `v0.95.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-UNIFIED-TUPLE-PROTOCOL-1`** | `v1.10.0` | Architecture | P2 | 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
+| `PENDING` | **`ARCH-UNIFIED-TUPLE-PROTOCOL-1`** | `v0.95.0` | Architecture | P2 | 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-UNIFIED-TX-MANAGER`** | `1.0-GA` | ENGINE | P1 | Unified TxManager (DDL + DML) Architecture | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** |  | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-WT-FILE-LAYOUT-1`** | `v0.94.0` | Storage | P2 | WiredTiger 물리 파일 레이아웃(테이블별 파일 vs 단일 파일) 및 세컨더리 인덱스 멀티플렉싱(인덱스별 vs 테이블당 1개 vs 테이블 파일 합본) 아키텍처 설계 및 전환 | [`notes/plans/WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING_PLAN.ko.md`](notes/plans/WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING_PLAN.ko.md) |  |
@@ -238,9 +238,9 @@
 | `DONE` | **`DURA-KILL-1`** | `1.0-GA` | Durability | P2 | kill -9 크래시 복구 장기 라운드 검증 |  |  |
 | `DONE` | **`DURA-SLT-1`** |  | Durability | P2 | SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 | [`notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`DURA-SLT-2`** |  | Durability | P2 | SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 | [`notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md) |  |
-| `IN_PROGRESS` | **`DURA-SOAK-1`** | `1.0-GA` | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
+| `IN_PROGRESS` | **`DURA-SOAK-1`** | `v0.95.0` | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
 | `PENDING` | **`EXEC-SIMPLIFIED-SPILL-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | Simplified Spill Hash Join (Fixed 16-Bucket Out-of-Core Spill Join) | [`notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md`](notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-ALTER-COLUMN-ONLINE-EXPANSION-1`** | `v1.1.0` | Storage | P2 | ALTER TABLE ALTER COLUMN 가변길이 컬럼 온라인 확장 지원 |  |  |
+| `PENDING` | **`FEAT-ALTER-COLUMN-ONLINE-EXPANSION-1`** | `v0.95.0` | Storage | P2 | ALTER TABLE ALTER COLUMN 가변길이 컬럼 온라인 확장 지원 |  |  |
 | `DONE` | **`FEAT-CDC-DUCKDB-INITIAL-SNAPSHOT-CHECKPOINT-1`** | `1.0-GA` | Ecosystem | P2 | CDC 및 DuckDB 연동 최초 스냅샷 적재, LSN 체크포인트 영속화 및 자동 재연결 파이프라인 | [`guide/DUCKDB_INTEGRATION_GUIDE.ko.md`](guide/DUCKDB_INTEGRATION_GUIDE.ko.md) |  |
 | `DONE` | **`FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`** | `1.0-GA` | CLI | P2 | lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 | [`doc/USER_MANUAL.ko.md`](doc/USER_MANUAL.ko.md) |  |
 | `DONE` | **`FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`** | `1.0-GA` | Mail | P2 | SQL Server DatabaseMail 외부 워커 프로세스 분리 및 sp_send_dbmail 지원 | [`notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md`](notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md) |  |
@@ -289,6 +289,8 @@
 | `DONE` | **`FEAT-WEB-STUDIO-HYBRID-1`** | `1.0-GA` | API | P2 | Web Studio 하이브리드 지원 (--no-studio 플래그 및 lionsql studio 서브커맨드 프록시) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WINDOWS-WIREDTIGER-DLL-BUNDLE-1`** | `v1.1.0` | Storage | P1 | Windows WiredTiger MSVC Native DLL Build & Self-Extracting Bundle Pipeline | [`notes/plans/WINDOWS_WIREDTIGER_DLL_BUNDLE_PLAN.ko.md`](notes/plans/WINDOWS_WIREDTIGER_DLL_BUNDLE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`** | `v0.94.0` | 1 | P2 | Storage | [`--milestone`](--milestone) |  |
+| `PENDING` | **`FEAT-WIRE-PG-REMOTE-CANCEL-1`** | `v0.95.0` | Wire | P2 | PGWire 외부 TCP CancelRequest (80877102) 백엔드 쿼리 캔슬 연동 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-WIRE-TDS-BCP-BULK-LOAD-1`** | `v0.95.0` | Wire | P2 | TDS 0x07 BCP (Bulk Load) 대량 데이터 적재 스트리밍 지원 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WT-SECONDARY-INDEX-BTREE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 | [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md) |  |
 | `DONE` | **`FIX-3VL-AND-OR-NULL-LOGIC-1`** |  | Engine | P2 | VDBE VM OpAnd/OpOr 3-Valued Logic(3VL) NULL 평가 결함 수정 |  |  |
 | `DONE` | **`FIX-ARITHMETIC-OVERFLOW-DETECTION-1`** | `1.0-GA` | Execution | P2 | 정수 산술 연산 64비트 오버플로 검출 및 bigint out of range 에러 반환 | [`1.0-GA`](1.0-GA) |  |
@@ -733,8 +735,8 @@
 ---
 
 ### [PENDING] 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 `ARCH-UNIFIED-TUPLE-PROTOCOL-1`
-- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-22 00:33:19
-- **Milestone**: `v1.10.0`
+- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-23 01:28:10
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md)
 
 ---
@@ -2957,8 +2959,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [IN_PROGRESS] 24h ~ 72h 장기 소크 테스트 `DURA-SOAK-1`
-- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
-- **Milestone**: `1.0-GA`
+- **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-23 01:28:10
+- **Milestone**: `v0.95.0`
 - **Target Files**: `cmd/soaktest`
 
 **Phases & Checklist**:
@@ -2985,8 +2987,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] ALTER TABLE ALTER COLUMN 가변길이 컬럼 온라인 확장 지원 `FEAT-ALTER-COLUMN-ONLINE-EXPANSION-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-18 01:06:08
-- **Milestone**: `v1.1.0`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 01:28:10
+- **Milestone**: `v0.95.0`
 
 ---
 
@@ -3320,6 +3322,20 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-23 00:53:41
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`--milestone`](--milestone)
+
+---
+
+### [PENDING] PGWire 외부 TCP CancelRequest (80877102) 백엔드 쿼리 캔슬 연동 `FEAT-WIRE-PG-REMOTE-CANCEL-1`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-23 01:28:10
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
+
+---
+
+### [PENDING] TDS 0x07 BCP (Bulk Load) 대량 데이터 적재 스트리밍 지원 `FEAT-WIRE-TDS-BCP-BULK-LOAD-1`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-23 01:28:10
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
 
 ---
 
