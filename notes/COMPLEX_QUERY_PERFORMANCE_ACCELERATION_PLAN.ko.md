@@ -3,27 +3,28 @@
 
 > - **작성일**: 2026-11-23 (사용자 합의 하 오버엔지니어링 요소 전면 제거 및 압축 조정)
 > - **참조 원본**: `/tmp/OLAP.txt` (CBO 통계 한계, 조인/집계 병목, Intra-Query 병렬 실행기 부재)
-> - **설계 철학**: `[RULE:RadicalKISS]` (과잉 설계 배제, 1.0 체감 속도에 직결되는 4대 핵심 알맹이 집중).
-> - **Spec-Out (오버엔지니어링 폐기)**: 유전 알고리즘(GEQO), 다중 컬럼 확장 통계, 동적 파티션 프루닝, 복잡한 2-Pass Hybrid Grace Hash Join.
+> - **설계 철학**: `[RULE:RadicalKISS]` (과잉 설계 배제, 1.0 체감 속도에 직결되는 5대 핵심 알맹이 집중).
+> - **대안 확정 (Spec-Out 대체)**: 교과서적인 2-Pass Hybrid Grace Hash Join(재귀 파티셔닝, 동적 튜닝)의 과도한 복잡도는 폐기(`OLAP-OUT-OF-CORE-GRACE-HASH-JOIN-1` Spec-Out)하고, 이미 정립된 실속형 대안인 **[`SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md`](notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md)** (`EXEC-SIMPLIFIED-SPILL-HASH-JOIN-1`, 고정 16-버킷 디스크 스필 조인)을 1.0(v0.96.0)으로 당겨와 적용.
 > - **목표 릴리스**: 1.0 GA 이전 (v0.95.0 ~ v0.96.0)
 
 ---
 
-## 1. 4대 실속형 핵심 개선 과제 (Core 4 Pillars)
+## 1. 5대 실속형 핵심 개선 과제 (Core 5 Pillars)
 
 ```mermaid
 flowchart TD
-    subgraph Core4 [v1.0 GA 핵심 성능 개선 4대 기둥]
+    subgraph Core5 [v1.0 GA 핵심 성능 개선 5대 기둥]
         P1["1. CBO 64-버킷 등고선 히스토그램<br>(범위 검색 선택도 정확도 95% 확보)"]
         P2["2. 인메모리 GROUP BY / JOIN 슬롯 가속<br>(문자열 조립 제거, uint64 정수 해시 및 sync.Pool)"]
-        P3["3. Intra-Query 멀티코어 병렬 스캔<br>(ParallelSeqScan 청크 분할 + Gather 병렬 집계)"]
-        P4["4. Bulk Insert 파이프라인 가속<br>(배치 인덱싱 & 트랜잭션 오버헤드 최소화)"]
+        P3["3. Simplified Spill Hash Join<br>(고정 16-버킷 디스크 분할로 work_mem 초과 OOM 완벽 방어)"]
+        P4["4. Intra-Query 멀티코어 병렬 스캔<br>(ParallelSeqScan 청크 분할 + Gather 병렬 집계)"]
+        P5["5. Bulk Insert 파이프라인 가속<br>(배치 인덱싱 & 트랜잭션 오버헤드 최소화)"]
     end
 ```
 
 ---
 
-## 2. 4대 과제별 상세 설계
+## 2. 5대 과제별 상세 설계
 
 ### 2.1. [과제 1] CBO 64-버킷 등고선 히스토그램 (`CBO-STATS-HISTOGRAM-1`, v0.95.0)
 * **문제**: 현재 `Min/Max`만 존재하여 `WHERE col BETWEEN A AND B` 범위 조건에서 카디널리티 오차가 10~100배 발생, 조인 순서 왜곡.
@@ -38,14 +39,21 @@ flowchart TD
   - 그룹 키가 단일 컬럼 또는 정수형일 때 문자열 변환 없이 `uint64` 바이너리 해시로 즉시 매핑.
   - `sync.Pool` 버퍼 재활용으로 그룹 집계 핫패스에서 Zero-Allocation 달성.
 
-### 2.3. [과제 3] Intra-Query 멀티코어 병렬 스캔 및 집계 (`ARCH-PARALLEL-SCAN-1`, v0.96.0)
+### 2.3. [과제 3] Simplified Spill Hash Join (`EXEC-SIMPLIFIED-SPILL-HASH-JOIN-1`, v0.96.0)
+* **문제**: 대용량 조인 시 빌드 테이블이 `work_mem`을 초과하면 OOM 위험 직면.
+* **KISS 대안 (`SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md`)**:
+  - 교과서적인 Hybrid Grace Hash Join(재귀적 동적 분할)의 복잡성을 완전히 배제.
+  - `work_mem` 이내: 기존 초고속 제로-카피 인메모리 해시 조인 유지 (Normal Path).
+  - `work_mem` 초과 시: `Hash(Key) % 16`을 통해 고정 16개 임시 디스크 파일로 양측을 분할 스트리밍하고, 버킷 단위로 1개씩 메모리에 올려 조인 매칭 (OOM 원천 차단, 최대 10억 행 조인 지원).
+
+### 2.4. [과제 4] Intra-Query 멀티코어 병렬 스캔 및 집계 (`ARCH-PARALLEL-SCAN-1`, v0.96.0)
 * **문제**: 36개 코어 머신에서도 단일 분석 쿼리는 고루틴 1개(코어 1개, 2.7%)만 사용하여 수천만 건 풀 스캔 시 지연 발생.
 * **KISS 해결책**:
   - `ParallelSeqScan`: 테이블 오프셋을 64,000행 단위 청크로 나누고 `atomic.Uint64`로 가용 코어 수(16~32개)의 워커 고루틴이 무잠금 병렬 인출.
   - `Gather / Parallel Aggregate`: 워커들이 로컬 청크에서 로컬 필터/부분 집계(`SUM`, `COUNT`)를 수행하고, 상위 `Gather` 노드가 최종 합산.
   - 단일 거대 집계 쿼리 처리 시간 10~20배 선형 단축.
 
-### 2.4. [과제 4] Bulk Insert 파이프라인 가속 (`PERF-BULK-INSERT-PIPELINE-1`, v0.96.0)
+### 2.5. [과제 5] Bulk Insert 파이프라인 가속 (`PERF-BULK-INSERT-PIPELINE-1`, v0.96.0)
 * **문제**: 수만 건 `INSERT ... VALUES (...), (...)` 시 행마다 B-Tree 탐색/수정을 반복하여 쓰기 지연 누적.
 * **KISS 해결책**:
   - 멀티로우 배치 단위로 기본 테이블 인라인 인코딩을 일괄 수행.
@@ -59,13 +67,14 @@ flowchart TD
 | :---: | :--- | :---: | :--- |
 | **v0.95.0** | `CBO-STATS-HISTOGRAM-1` | **P1** | 64-버킷 등고선 히스토그램 & MCV 32개 카디널리티 엔진 |
 | **v0.95.0** | `PERF-GROUPBY-SLOT-HASH-1` | **P1** | GROUP BY / JOIN 인메모리 슬롯 해시 가속 및 Zero-Alloc |
+| **v0.96.0** | `EXEC-SIMPLIFIED-SPILL-HASH-JOIN-1` | **P2** | 고정 16-버킷 Simplified Spill Hash Join (OOM 원천 차단) |
 | **v0.96.0** | `ARCH-PARALLEL-SCAN-1` | **P1** | Intra-Query ParallelSeqScan 및 Gather 병렬 집계 연산자 |
 | **v0.96.0** | `PERF-BULK-INSERT-PIPELINE-1` | **P1** | Bulk Insert 멀티로우 일괄 배치 인덱싱 최적화 |
 
 ---
 
 ## 4. Spec-Out (오버엔지니어링 폐기 공식 명시)
-1. **GEQO (유전 알고리즘)**: 테이블 5개 이하 일반 쿼리 환경에 불필요하여 전면 배제.
-2. **다중 컬럼 확장 통계 (Extended Stats)**: 카탈로그/런타임 복잡도 대비 실익 미미하여 Post-1.0 이연.
-3. **동적 파티션 프루닝 (DPP)**: 분산 DB 기능으로 임베디드 단일 엔진에 부적합하여 전면 배제.
-4. **2-Pass Hybrid Grace Hash Join**: 디스크 스필의 복잡도를 배제하고 인메모리 슬롯 해시 가속에 집중.
+1. **전통적 2-Pass Hybrid Grace Hash Join**: 복잡한 동적 튜닝 및 재귀 파티셔닝은 폐기(`OLAP-OUT-OF-CORE-GRACE-HASH-JOIN-1` Spec-Out)하고, 기 수립된 고정 16-버킷 실속형 `EXEC-SIMPLIFIED-SPILL-HASH-JOIN-1`로 전면 대체.
+2. **GEQO (유전 알고리즘)**: 테이블 5개 이하 일반 쿼리 환경에 불필요하여 전면 배제.
+3. **다중 컬럼 확장 통계 (Extended Stats)**: 카탈로그/런타임 복잡도 대비 실익 미미하여 Post-1.0 이연.
+4. **동적 파티션 프루닝 (DPP)**: 분산 DB 기능으로 단일 노드 B-Tree 엔진에는 인덱스 푸시다운으로 충분.
