@@ -1173,7 +1173,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				return nil, fmt.Errorf("invalid transaction isolation level: %q", level)
 			}
 			cs.Mu.Lock()
-			cs.Vars["transaction_isolation"] = strings.ToLower(level)
+			lowerLevel := strings.ToLower(normLevel)
+			cs.Vars["transaction_isolation"] = lowerLevel
+			cs.Vars["transaction_isolation_level"] = lowerLevel
+			cs.Vars["default_transaction_isolation"] = lowerLevel
 			cs.Mu.Unlock()
 			return &QueryResult{
 				Success:    true,

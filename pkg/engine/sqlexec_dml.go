@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,6 +12,17 @@ import (
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
+
+func (s *Coordinator) fireVolcanoTriggers(tx storage.Transaction, cs *ClientSession, tableName, event string, insertedRecs, deletedRecs []storage.Record) error {
+	if s.executor == nil || !s.executor.HasTriggers(tableName, event) {
+		return nil
+	}
+	var sess storage.Session
+	if cs != nil {
+		sess = cs.Session
+	}
+	return s.executor.FireRecordTriggers(context.Background(), tx, sess, tableName, event, insertedRecs, deletedRecs)
+}
 
 type onConflictAction int
 
@@ -434,6 +446,12 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
 	}
 
+	hasInsTriggers := s.executor != nil && s.executor.HasTriggers(tableName, "INSERT")
+	hasUpdTriggers := s.executor != nil && s.executor.HasTriggers(tableName, "UPDATE")
+	var trigInsertedRecs []storage.Record
+	var trigUpdInserted []storage.Record
+	var trigUpdDeleted []storage.Record
+
 	insertedCount := int64(0)
 	for _, tupleStr := range tupleStrings {
 		vals := splitValues(tupleStr)
@@ -727,6 +745,10 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						}
 						return nil, fmt.Errorf("update row error in ON CONFLICT: %w", err)
 					}
+					if hasUpdTriggers {
+						trigUpdInserted = append(trigUpdInserted, updatedRec.Clone())
+						trigUpdDeleted = append(trigUpdDeleted, existingRec.Clone())
+					}
 					if err := s.routeOutputRowDirect(tx, outInfo, existingRec, updatedRec, schema, cs, &outputRows, &outputVals); err != nil {
 						if isEphemeral {
 							_ = tx.Rollback()
@@ -760,6 +782,9 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			}
 			return nil, fmt.Errorf("insert row error: %w", err)
 		}
+		if hasInsTriggers {
+			trigInsertedRecs = append(trigInsertedRecs, rec.Clone())
+		}
 
 		if err := s.routeOutputRowDirect(tx, outInfo, nil, rec, schema, cs, &outputRows, &outputVals); err != nil {
 			if isEphemeral {
@@ -768,6 +793,23 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			return nil, err
 		}
 		insertedCount++
+	}
+
+	if hasInsTriggers && len(trigInsertedRecs) > 0 {
+		if err := s.fireVolcanoTriggers(tx, cs, tableName, "INSERT", trigInsertedRecs, nil); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, err
+		}
+	}
+	if hasUpdTriggers && len(trigUpdInserted) > 0 {
+		if err := s.fireVolcanoTriggers(tx, cs, tableName, "UPDATE", trigUpdInserted, trigUpdDeleted); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, err
+		}
 	}
 
 	if isEphemeral {
@@ -948,6 +990,12 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 	if len(outputProjs) > 0 && outInfo.IntoTable == "" {
 		_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
 	}
+
+	hasInsTriggers := s.executor != nil && s.executor.HasTriggers(tableName, "INSERT")
+	hasUpdTriggers := s.executor != nil && s.executor.HasTriggers(tableName, "UPDATE")
+	var trigInsertedRecs []storage.Record
+	var trigUpdInserted []storage.Record
+	var trigUpdDeleted []storage.Record
 
 	insertedCount := int64(0)
 	for rowIdx, row := range selRes.Rows {
@@ -1171,6 +1219,10 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 						}
 						return nil, fmt.Errorf("update row error in ON CONFLICT: %w", err)
 					}
+					if hasUpdTriggers {
+						trigUpdInserted = append(trigUpdInserted, updatedRec.Clone())
+						trigUpdDeleted = append(trigUpdDeleted, existingRec.Clone())
+					}
 					if err := s.routeOutputRowDirect(tx, outInfo, existingRec, updatedRec, schema, cs, &outputRows, &outputVals); err != nil {
 						if isEphemeral {
 							_ = tx.Rollback()
@@ -1204,6 +1256,9 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			}
 			return nil, fmt.Errorf("insert row error on %q: %w", tableName, err)
 		}
+		if hasInsTriggers {
+			trigInsertedRecs = append(trigInsertedRecs, rec.Clone())
+		}
 
 		if err := s.routeOutputRowDirect(tx, outInfo, nil, rec, schema, cs, &outputRows, &outputVals); err != nil {
 			if isEphemeral {
@@ -1212,6 +1267,23 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			return nil, err
 		}
 		insertedCount++
+	}
+
+	if hasInsTriggers && len(trigInsertedRecs) > 0 {
+		if err := s.fireVolcanoTriggers(tx, cs, tableName, "INSERT", trigInsertedRecs, nil); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, err
+		}
+	}
+	if hasUpdTriggers && len(trigUpdInserted) > 0 {
+		if err := s.fireVolcanoTriggers(tx, cs, tableName, "UPDATE", trigUpdInserted, trigUpdDeleted); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, err
+		}
 	}
 
 	if isEphemeral {
@@ -1484,6 +1556,9 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 
 		updatedCount := int64(0)
 		var updateErr error
+		hasUpdTriggers := s.executor != nil && s.executor.HasTriggers(tableName, "UPDATE")
+		var trigInserted []storage.Record
+		var trigDeleted []storage.Record
 		for _, item := range toUpdate {
 			if schema != nil && schema.HasCheckConstraints() {
 				merged := item.orig.Clone()
@@ -1507,6 +1582,14 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 				updateErr = fmt.Errorf("update row error: %w", err)
 				break
 			}
+			if hasUpdTriggers {
+				newRec := item.orig.Clone()
+				for k, v := range item.rec {
+					newRec[k] = v
+				}
+				trigInserted = append(trigInserted, newRec)
+				trigDeleted = append(trigDeleted, item.orig.Clone())
+			}
 
 			if len(outputProjs) > 0 {
 				newRec := make(storage.Record, len(item.orig))
@@ -1522,6 +1605,12 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 				}
 			}
 			updatedCount++
+		}
+
+		if updateErr == nil && hasUpdTriggers && len(trigInserted) > 0 {
+			if err := s.fireVolcanoTriggers(tx, cs, tableName, "UPDATE", trigInserted, trigDeleted); err != nil {
+				updateErr = err
+			}
 		}
 
 		if updateErr != nil {
@@ -1745,6 +1834,9 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
 	}
 
+	hasDelTriggers := s.executor != nil && s.executor.HasTriggers(tableName, "DELETE")
+	var trigDeleted []storage.Record
+
 	deletedCount := int64(0)
 	for _, item := range toDelete {
 		if err := tx.Delete(tableName, item.pk); err != nil {
@@ -1752,6 +1844,9 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 				_ = tx.Rollback()
 			}
 			return nil, fmt.Errorf("delete error: %w", err)
+		}
+		if hasDelTriggers {
+			trigDeleted = append(trigDeleted, item.orig.Clone())
 		}
 
 		if err := s.routeOutputRowDirect(tx, outInfo, item.orig, nil, schema, cs, &outputRows, &outputVals); err != nil {
@@ -1761,6 +1856,15 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 			return nil, err
 		}
 		deletedCount++
+	}
+
+	if hasDelTriggers && len(trigDeleted) > 0 {
+		if err := s.fireVolcanoTriggers(tx, cs, tableName, "DELETE", nil, trigDeleted); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, err
+		}
 	}
 
 	if isEphemeral {

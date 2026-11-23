@@ -300,6 +300,7 @@
 | `DONE` | **`FIX-3VL-AND-OR-NULL-LOGIC-1`** |  | Engine | P2 | VDBE VM OpAnd/OpOr 3-Valued Logic(3VL) NULL 평가 결함 수정 |  |  |
 | `DONE` | **`FIX-ARITHMETIC-OVERFLOW-DETECTION-1`** | `1.0-GA` | Execution | P2 | 정수 산술 연산 64비트 오버플로 검출 및 bigint out of range 에러 반환 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-AUDIT-ROUND15-1`** | `v0.95.0` | Integrity | P1 | Live Engine Audit Round 15 결함 패치 및 회귀 방지 (WHERE silent drop, SP DDL rollback, recursive CTE) | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
+| `DONE` | **`FIX-AUDIT-ROUND16-1`** | `v0.95.0` | Integrity | P1 | Live Engine Audit Round 16 결함 패치 및 회귀 방지 (Trigger bypass on RETURNING/Subquery, COPY CSV EOF, NULLS FIRST/LAST, SHOW isolation) | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `DONE` | **`FIX-BATCH-MULTI-RESULTSET-DELIVERY-1`** |  | 1 | P2 | Wire | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-CAST-INTEGER-RANGE-OVERFLOW-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
@@ -3404,6 +3405,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ### [DONE] Live Engine Audit Round 15 결함 패치 및 회귀 방지 (WHERE silent drop, SP DDL rollback, recursive CTE) `FIX-AUDIT-ROUND15-1`
 - **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-23 02:42:43
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
+
+---
+
+### [DONE] Live Engine Audit Round 16 결함 패치 및 회귀 방지 (Trigger bypass on RETURNING/Subquery, COPY CSV EOF, NULLS FIRST/LAST, SHOW isolation) `FIX-AUDIT-ROUND16-1`
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-23 03:10:20
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
 

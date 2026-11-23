@@ -9,8 +9,9 @@ import (
 
 // OrderByItem represents a single sorted column or expression.
 type OrderByItem struct {
-	Column string // Clean identifier or expression
-	Desc   bool   // true if DESC, false if ASC
+	Column     string // Clean identifier or expression
+	Desc       bool   // true if DESC, false if ASC
+	NullsFirst *bool  // optional explicit NULLS FIRST (true) or NULLS LAST (false)
 }
 
 // SetPair represents a column = value assignment in an UPDATE or MERGE statement.
@@ -312,16 +313,30 @@ func ParseOrderBy(clause string) []OrderByItem {
 		}
 
 		desc := false
+		var nullsFirst *bool
 		colTokens := tokens
 
-		if len(tokens) >= 2 {
-			lastToken := tokens[len(tokens)-1]
+		if len(colTokens) >= 3 && strings.EqualFold(colTokens[len(colTokens)-2], "NULLS") {
+			nullsDir := strings.TrimRight(colTokens[len(colTokens)-1], ";")
+			if strings.EqualFold(nullsDir, "FIRST") {
+				nf := true
+				nullsFirst = &nf
+				colTokens = colTokens[:len(colTokens)-2]
+			} else if strings.EqualFold(nullsDir, "LAST") {
+				nf := false
+				nullsFirst = &nf
+				colTokens = colTokens[:len(colTokens)-2]
+			}
+		}
+
+		if len(colTokens) >= 2 {
+			lastToken := strings.TrimRight(colTokens[len(colTokens)-1], ";")
 			if strings.EqualFold(lastToken, "DESC") {
 				desc = true
-				colTokens = tokens[:len(tokens)-1]
+				colTokens = colTokens[:len(colTokens)-1]
 			} else if strings.EqualFold(lastToken, "ASC") {
 				desc = false
-				colTokens = tokens[:len(tokens)-1]
+				colTokens = colTokens[:len(colTokens)-1]
 			}
 		}
 
@@ -331,8 +346,9 @@ func ParseOrderBy(clause string) []OrderByItem {
 		}
 
 		items = append(items, OrderByItem{
-			Column: colExpr,
-			Desc:   desc,
+			Column:     colExpr,
+			Desc:       desc,
+			NullsFirst: nullsFirst,
 		})
 	}
 

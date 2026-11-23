@@ -21,6 +21,7 @@ import (
 type sortItem struct {
 	key        string
 	descending bool
+	nullsFirst *bool
 	parsed     proc.Expr
 }
 
@@ -99,6 +100,7 @@ func NewSortIterator(child Iterator, orderByClause string) *SortIterator {
 		s.items = append(s.items, sortItem{
 			key:        cleanKey,
 			descending: item.Desc,
+			nullsFirst: item.NullsFirst,
 			parsed:     parsed,
 		})
 	}
@@ -158,6 +160,21 @@ func (s *SortIterator) compareTuples(tA, tB Tuple) int {
 				vA, _ = lookupVal(tA, item.key)
 				vB, _ = lookupVal(tB, item.key)
 			}
+		}
+		if vA == nil && vB == nil {
+			continue
+		}
+		if (vA == nil || vB == nil) && item.nullsFirst != nil {
+			if *item.nullsFirst {
+				if vA == nil {
+					return -1
+				}
+				return 1
+			}
+			if vA == nil {
+				return 1
+			}
+			return -1
 		}
 		cmp := CompareValues(vA, vB)
 		if cmp != 0 {

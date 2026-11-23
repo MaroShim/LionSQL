@@ -296,6 +296,13 @@ func (p *Planner) BuildSetOpPlan(setQuery *SetOpQuery, buildSubPlan func(subSQL 
 			if orderItems[0].Desc {
 				sortOrder = "DESC"
 			}
+			if orderItems[0].NullsFirst != nil {
+				if *orderItems[0].NullsFirst {
+					sortOrder += " NULLS FIRST"
+				} else {
+					sortOrder += " NULLS LAST"
+				}
+			}
 		}
 		currPlan = &PlanNode{
 			Type:          NodeSort,

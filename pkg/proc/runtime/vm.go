@@ -562,6 +562,34 @@ func (e *Executor) HasTriggers(tableName, event string) bool {
 	return false
 }
 
+// FireRecordTriggers executes all triggers registered for tableName and event within the given transaction,
+// converting storage.Record slices into transient inserted/deleted table maps.
+func (e *Executor) FireRecordTriggers(ctx context.Context, tx storage.Transaction, sess storage.Session, tableName, event string, insertedRecs, deletedRecs []storage.Record) error {
+	if e == nil || !e.HasTriggers(tableName, event) {
+		return nil
+	}
+	var insMaps []map[string]any
+	if len(insertedRecs) > 0 {
+		insMaps = make([]map[string]any, len(insertedRecs))
+		for i, r := range insertedRecs {
+			insMaps[i] = recordToMap(r)
+		}
+	}
+	var delMaps []map[string]any
+	if len(deletedRecs) > 0 {
+		delMaps = make([]map[string]any, len(deletedRecs))
+		for i, r := range deletedRecs {
+			delMaps[i] = recordToMap(r)
+		}
+	}
+	f := e.newFrame(&proc.Program{}, tx)
+	f.session = sess
+	f.ctx = ctx
+	err := f.fireTriggers(tableName, event, insMaps, delMaps)
+	e.releaseFrame(f)
+	return err
+}
+
 // VMFrame maintains the execution context for a bytecode invocation.
 type VMFrame struct {
 	executor        *Executor

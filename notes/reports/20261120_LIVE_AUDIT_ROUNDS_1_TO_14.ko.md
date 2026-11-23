@@ -1,16 +1,16 @@
-# LionSQL 라이브 엔진 감사 Round 1 ~ 14 전수 통합 기술 백서 (`notes/reports/20261120_LIVE_AUDIT_ROUNDS_1_TO_14.ko.md`)
+# LionSQL 라이브 엔진 감사 Round 1 ~ 16 전수 통합 기술 백서 (`notes/reports/20261120_LIVE_AUDIT_ROUNDS_1_TO_14.ko.md`)
 
-> - **감사 대상**: LionSQL Database Server v0.93.0 ~ v0.94.0 (In-Memory OCC / WiredTiger B+Tree, Port 5433 / 1433)
-> - **감사 기간**: 2026-11-19 ~ 2026-11-20
-> - **감사 방법론**: psql 16.15 및 Go 다중 세션 적대적 프로브 스크립트 기반 라이브 differential test
-> - **최종 상태**: Round 1 ~ 14 전건 결함 해결 완료 (100% 회귀 방지 테스트 통과)
+> - **감사 대상**: LionSQL Database Server v0.93.0 ~ v0.94.0+ (In-Memory OCC / WiredTiger B+Tree, Port 5433 / 1433)
+> - **감사 기간**: 2026-11-19 ~ 2026-11-23
+> - **감사 방법론**: psql 15.0/16.15 및 Python/Go 다중 세션 적대적 프로브 스크립트 기반 라이브 differential test
+> - **최종 상태**: Round 1 ~ 16 전건 결함 해결 완료 (100% 회귀 방지 테스트 통과)
 > - **보존 정책**: 단일 통합 기술 백서(Single Source of Truth, SSOT)로 완전 영구화
 
 ---
 
 ## 1. 감사 개요 및 구조적 총괄 통계
 
-LionSQL v0.94.0 및 1.0-GA 출시에 앞서 엔진 신뢰성을 완벽히 검증하기 위해 총 14개 라운드에 걸쳐 집중 라이브 감사를 수행하였습니다.
+LionSQL v0.94.0 및 1.0-GA 출시에 앞서 엔진 신뢰성을 완벽히 검증하기 위해 총 16개 라운드에 걸쳐 집중 라이브 감사를 수행하였습니다.
 본 백서는 개별 쿼리 증상 단순 나열을 배제하고, **결함의 근본 원인이 된 핵심 소스 코드 모듈**, **실제 재현 쿼리**, **기대 동작 vs 실제 동작**, **코드 레벨 조치 내역**, 그리고 **회귀 방지 검증 테스트**를 총망라한 전수 기술 아카이브입니다.
 
 | 감사 라운드 | 중점 감사 영역 | 결함 건수 | 핵심 원인 모듈 | 전담 회귀 검증 스위트 |
@@ -25,6 +25,8 @@ LionSQL v0.94.0 및 1.0-GA 출시에 앞서 엔진 신뢰성을 완벽히 검증
 | **Round 12** | JSON strict 모드, XML 메소드 차단, CONVERT 스타일 | 5건 | `pkg/storage/json.go`, `pkg/proc/eval.go`, `pkg/engine/sqlexec_select.go` | `audit_round12_test.go` (5개 전담 서브테스트) |
 | **Round 13** | 집계 지연역직렬화, DML 서브쿼리 스코프, MERGE 카디널리티, 윈도우 프레임 | 5건 | `pkg/execution/aggregate.go`, `pkg/engine/sqlexec_dml.go`, `pkg/engine/sqlexec_merge.go`, `pkg/execution/window.go` | `audit_round13_test.go`, `aggregate_round13_test.go` |
 | **Round 14** | TDS 대용량 바이너리/스트링 PLP, 스칼라 WHERE 1=0 메타데이터, 인덱스 동기화 | 3건 | `pkg/wire/tds/server.go`, `pkg/proc/compiler.go`, `pkg/engine/sqlexec_ddl.go` | `audit_round14_test.go` |
+| **Round 15** | WHERE/ON/HAVING 파싱 에러 Fail-Closed, SAVEPOINT DDL 롤백, 재귀 CTE 사이클, 튜플 비교, 윈도우 가드 | 5건 | `pkg/proc/parser_dml.go`, `pkg/tx/manager.go`, `pkg/engine/sqlexec_explain.go` | `parser_syntax_error_test.go`, `savepoint_ddl_rollback_test.go`, `recursive_cte_cycle_test.go`, `tuple_comparison_test.go`, `window_function_clause_guard_test.go` |
+| **Round 16** | Volcano DML 트리거 바이패스 차단, COPY CSV `\.` EOF 마커, `NULLS FIRST/LAST`, `SHOW` 격리 수준 | 4건 | `pkg/engine/sqlexec_dml.go`, `pkg/wire/copy.go`, `pkg/execution/sort.go`, `pkg/engine/sqlexec.go` | `audit_round16_test.go`, `copy_test.go` |
 
 ---
 
@@ -1339,7 +1341,119 @@ END OF ROUND 9 AUDIT REPORT
 
 ---
 
-## 12. 통합 회귀 방지 테스트 스위트 매핑 (100% PASS)
+## 12. Round 15: 파서 절 Fail-Closed 검증, 세이브포인트 DDL 롤백, 재귀 CTE 사이클, 튜플 비교 및 윈도우 가드 (5건)
+
+### [ENG-031] WHERE/SET/ON/HAVING 절 표현식 파싱 에러 시 조건 사일런트 누락(Silent Drop)으로 인한 테이블 전수 오삭제
+- **컴포넌트**: Native Pratt Parser / Compiler
+- **해당 파일**: `pkg/proc/parser_dml.go`, `pkg/proc/parser_stmt.go`, `pkg/proc/compiler.go`
+- **심각도**: CRITICAL
+- **근본 원인**: `p.parseExpression(precLowest)`가 문법 오류 발생 시 `p.errors`에 기록하고 `nil`을 반환하나, DML/SELECT 파서가 `len(p.errors) > 0` 또는 `whereExpr == nil`을 검사하지 않아 조건 없는 `DELETE`/`UPDATE`/`SELECT`로 실행됨.
+- **재현 쿼리**:
+  ```sql
+  DELETE FROM t_del WHERE id = %%%;
+  ```
+- **해결 방안**: 모든 `WHERE`, `SET`, `ON`, `HAVING` 파싱 직후 `len(p.errors) > 0` 및 `expr == nil`을 즉시 검사하고, `CompileStatement`/`CompileQuery` 상위에서도 잔여 파서 에러를 Fail-Closed 차단.
+
+---
+
+### [ENG-032] 트랜잭션 SAVEPOINT 내 DDL(ALTER TABLE ADD COLUMN 등) 롤백 누락 및 스키마 영구 오염
+- **컴포넌트**: Unified Transaction Manager (`pkg/tx`)
+- **해당 파일**: `pkg/tx/manager.go`, `pkg/engine/sqlexec_ddl.go`
+- **심각도**: CRITICAL
+- **근본 원인**: `Manager.RollbackTo(name)`가 `sp.RollbackOffset` 이후에 등록된 DDL 롤백 액션(`RollbackActions`)을 역순으로 실행하지 않고 슬라이스에서 단순 절삭(Truncate)하여 DDL 복구가 누락됨.
+- **재현 쿼리**:
+  ```sql
+  BEGIN;
+  CREATE TABLE t_sp (id INT PRIMARY KEY, col_a INT);
+  SAVEPOINT sp1;
+  ALTER TABLE t_sp ADD COLUMN col_b INT;
+  ROLLBACK TO SAVEPOINT sp1;
+  COMMIT;
+  ```
+- **해결 방안**: `Manager.RollbackTo`에서 `sp.RollbackOffset` 이후의 `RollbackActions`를 LIFO 역순으로 실행한 뒤 슬라이스를 절삭하도록 수정.
+
+---
+
+### [ENG-033] 재귀 CTE(`UNION`) 중복 방문 노드 미제거로 인한 순환 그래프 무한 루프 및 `MAXRECURSION` 소진
+- **컴포넌트**: CTE Execution Engine
+- **해당 파일**: `pkg/engine/sqlexec_explain.go`
+- **심각도**: HIGH
+- **근본 원인**: `UNION`(Distinct)으로 결합된 재귀 CTE에서 이전 단계까지 방문한 행들을 필터링(Set Difference)하지 않고 그대로 다음 워킹 테이블로 전달하여 사이클 그래프에서 무한 반복 발생.
+- **재현 쿼리**:
+  ```sql
+  WITH RECURSIVE reach(node) AS (
+      SELECT 1
+      UNION
+      SELECT e.dst FROM reach r JOIN t_edge e ON r.node = e.src
+  )
+  SELECT node FROM reach ORDER BY node;
+  ```
+- **해결 방안**: `isUnionDistinct` 플래그가 참일 때 방문 행 시그니처 해시셋(`visited`)을 유지하여 신규 행(Distinct Delta)만 워킹 테이블에 공급하고 신규 행이 0건이면 루프를 즉시 종료.
+
+---
+
+### [ENG-034] 다중 컬럼 튜플 비교 `(a, b) IN (...)` 및 `(a, b) = (c, d)` 구문 지원
+- **컴포넌트**: Expression Parser & Evaluator
+- **해당 파일**: `pkg/proc/ast.go`, `pkg/proc/parser_expr.go`, `pkg/proc/eval.go`
+- **심각도**: HIGH
+- **근본 원인**: 괄호 내 쉼표 구분 튜플 식(`TupleExpr`) 파싱 및 슬라이스 간 원소별 동등성 비교 미구현.
+- **해결 방안**: `TupleExpr` AST 노드를 추가하고 `parser_expr.go`에서 콤마 구분 튜플을 파싱하며, `evalRowBinaryOpWithContext`에서 `[]any` 슬라이스 간 원소별 3VL 비교를 수행.
+
+---
+
+### [ENG-035] WHERE 및 HAVING 절 내 윈도우 함수(`OVER ()`) 시맨틱 검증 및 차단
+- **컴포넌트**: Semantic Validator / Parser
+- **해당 파일**: `pkg/proc/ast.go`, `pkg/proc/parser_dml.go`
+- **심각도**: MEDIUM
+- **근본 원인**: `WHERE` 및 `HAVING` 절에 윈도우 함수(`HasOver == true`)가 포함될 때 시맨틱 에러 대신 사일런트하게 `nil`로 평가되어 0건 반환.
+- **해결 방안**: `proc.ContainsWindowFunction(expr)`로 AST 트리를 검사하여 `WHERE`/`HAVING` 절에 윈도우 함수 발견 시 즉시 명시적 에러 반환.
+
+---
+
+## 13. Round 16: Volcano DML 트리거 실행 보장, COPY CSV EOF 마커, `NULLS FIRST/LAST` 정렬 및 `SHOW` 격리 수준 (4건)
+
+### [ENG-036] DML (INSERT/UPDATE/DELETE) 실행 시 OUTPUT/RETURNING 또는 서브쿼리 사용 시 트리거 사일런트 바이패스 차단
+- **컴포넌트**: Volcano DML Engine & VDBE Runtime
+- **해당 파일**: `pkg/engine/sqlexec_dml.go`, `pkg/proc/runtime/vm.go`
+- **심각도**: CRITICAL
+- **근본 원인**: `OUTPUT`/`RETURNING` 또는 서브쿼리가 포함된 DML은 VDBE Fast-Path를 우회하여 Volcano DML(`execInsert`, `execUpdate`, `execDelete`)로 실행되나, 해당 경로에 트리거 실행(`FireRecordTriggers`) 호출이 누락되어 감사/제약 트리거가 사일런트하게 우회됨.
+- **재현 쿼리**:
+  ```sql
+  UPDATE t_src SET val = 999 WHERE id = 1 RETURNING *;
+  UPDATE t_src SET val = (SELECT 555) WHERE id = 1;
+  ```
+- **해결 방안**: `Executor.FireRecordTriggers`를 공개하고 `execInsert`, `execInsertSelect`, `execUpdate`, `execDelete`의 트랜잭션 커밋 직전에 변경 레코드들을 전달하여 모든 DML 경로에서 트리거가 100% 실행되도록 보장.
+
+---
+
+### [ENG-037] `COPY ... FROM STDIN WITH (FORMAT csv)` 실행 시 PostgreSQL 표준 종료 마커(`\.`) 오인식 해결
+- **컴포넌트**: PGWire COPY Stream Parser
+- **해당 파일**: `pkg/wire/copy.go`
+- **심각도**: HIGH
+- **근본 원인**: CSV 포맷 경로가 `csv.NewReader(&dataBuf).ReadAll()` 결과를 필터링 없이 그대로 삽입하여, 클라이언트가 전송한 `\.` 종료 마커가 데이터 행으로 파싱되어 정수형 컬럼 변환 에러 및 배치 전체 롤백 유발.
+- **해결 방안**: `copy.go`의 CSV 파싱 결과에서 `len(rec) == 1 && strings.TrimSpace(rec[0]) == "\\."`인 경우 EOF 마커로 인식하여 루프를 즉시 종료(`break`).
+
+---
+
+### [ENG-038] `ORDER BY ... NULLS LAST` 및 `NULLS FIRST` 구문 지원
+- **컴포넌트**: SQL Tokenizer, Parser, Planner & Sort/Window Execution
+- **해당 파일**: `pkg/sqlutil/tokenizer.go`, `pkg/proc/ast.go`, `pkg/proc/parser_dml.go`, `pkg/planner/planner.go`, `pkg/execution/sort.go`, `pkg/execution/window.go`
+- **심각도**: HIGH
+- **근본 원인**: `OrderByItem` 및 `SortKeyDef`에 `NullsFirst *bool` 필드가 없고 파서가 `NULLS FIRST`/`NULLS LAST` 토큰을 소비하지 않아 NULL 정렬 순서 제어 불가.
+- **해결 방안**: `sqlutil.ParseOrderBy`와 `proc.Parser`에서 `NULLS FIRST`/`NULLS LAST`를 파싱하여 `NullsFirst *bool`에 보존하고, `SortIterator`, `WindowIterator`, 집계 정렬기에서 NULL 우선순위를 반영.
+
+---
+
+### [ENG-039] `SET TRANSACTION ISOLATION LEVEL` 설정 후 `SHOW TRANSACTION ISOLATION LEVEL` 조회 시 키 동기화
+- **컴포넌트**: Session GUC Parameter Subsystem
+- **해당 파일**: `pkg/engine/sqlexec.go`
+- **심각도**: MEDIUM
+- **근본 원인**: `SET TRANSACTION ISOLATION LEVEL`은 `cs.Vars["transaction_isolation"]`만 설정하는 반면, `SHOW TRANSACTION ISOLATION LEVEL`은 `cs.Vars["transaction_isolation_level"]`을 조회하여 기본값 `read committed`가 오반환됨.
+- **해결 방안**: `SET TRANSACTION ISOLATION LEVEL` 실행 시 `transaction_isolation`, `transaction_isolation_level`, `default_transaction_isolation` 키를 일괄 동기화.
+
+---
+
+## 14. 통합 회귀 방지 테스트 스위트 매핑 (100% PASS)
 
 - `pkg/engine/audit_round1_to_6_supplemental_test.go`: Round 1 ~ 6 핵심 결함 회귀 테스트 (12개 서브테스트 PASS)
 - `pkg/engine/audit_round4_regression_test.go`: Round 4 브래킷/해시조인/3VL/복합PK MERGE 회귀 테스트 (PASS)
@@ -1351,4 +1465,6 @@ END OF ROUND 9 AUDIT REPORT
 - `pkg/engine/audit_round13_test.go`: Round 13 지연역직렬화/서브쿼리/카디널리티/윈도우프레임(ENG-023~027) 회귀 테스트 (PASS)
 - `pkg/execution/aggregate_round13_test.go`: Round 13 LazyTuple 해시집계 격리 단위 테스트 (PASS)
 - `pkg/wire/tds/audit_round14_test.go`: Round 14 PLP 대용량 직렬화/스칼라 메타데이터/인덱스 동기화(ENG-028~030) 회귀 테스트 (PASS)
+- `pkg/proc/parser_syntax_error_test.go`, `pkg/engine/savepoint_ddl_rollback_test.go`, `pkg/engine/recursive_cte_cycle_test.go`, `pkg/proc/tuple_comparison_test.go`, `pkg/proc/window_function_clause_guard_test.go`: Round 15 파서 Fail-Closed/세이브포인트 DDL/재귀 CTE/튜플 비교/윈도우 가드(ENG-031~035) 회귀 테스트 (PASS)
+- `pkg/engine/audit_round16_test.go`, `pkg/wire/copy_test.go`: Round 16 Volcano DML 트리거/COPY CSV EOF/`NULLS FIRST/LAST`/`SHOW` 격리 수준(ENG-036~039) 회귀 테스트 (PASS)
 - `pkg/engine/spec_driven_batch1_test.go` ~ `batch3_test.go`: 표준 SQL 및 트랜잭션 불변식 스위트 (79개 테스트 PASS)

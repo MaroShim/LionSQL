@@ -139,6 +139,15 @@ func (w *WindowIterator) Open(ctx context.Context) (retErr error) {
 					for _, ord := range winDef.OrderByKeys {
 						vi := ti.Get(ord.Column)
 						vj := tj.Get(ord.Column)
+						if vi == nil && vj == nil {
+							continue
+						}
+						if (vi == nil || vj == nil) && ord.NullsFirst != nil {
+							if *ord.NullsFirst {
+								return vi == nil
+							}
+							return vi != nil
+						}
 						cmp := CompareValues(vi, vj)
 						if cmp == 0 {
 							continue

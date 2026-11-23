@@ -39,8 +39,9 @@ const (
 
 // SortKeyDef defines a column and sort direction for ordering.
 type SortKeyDef struct {
-	Column    string `json:"column"`
-	Direction string `json:"direction"` // "ASC" or "DESC"
+	Column     string `json:"column"`
+	Direction  string `json:"direction"` // "ASC" or "DESC"
+	NullsFirst *bool  `json:"nulls_first,omitempty"`
 }
 
 // FrameBoundType defines the boundary of a window frame.
@@ -1858,6 +1859,13 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			} else {
 				sortOrder = "ASC"
 			}
+			if orderItems[0].NullsFirst != nil {
+				if *orderItems[0].NullsFirst {
+					sortOrder += " NULLS FIRST"
+				} else {
+					sortOrder += " NULLS LAST"
+				}
+			}
 		}
 
 		n := float64(currentNode.EstimatedRows)
@@ -1900,6 +1908,13 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 				sortOrder = "DESC"
 			} else {
 				sortOrder = "ASC"
+			}
+			if orderItems[0].NullsFirst != nil {
+				if *orderItems[0].NullsFirst {
+					sortOrder += " NULLS FIRST"
+				} else {
+					sortOrder += " NULLS LAST"
+				}
 			}
 		}
 
@@ -2259,8 +2274,9 @@ func ParseWindowDef(item string) (*WindowDef, bool) {
 				dir = "DESC"
 			}
 			w.OrderByKeys = append(w.OrderByKeys, SortKeyDef{
-				Column:    sqlutil.CleanIdentifier(item.Column),
-				Direction: dir,
+				Column:     sqlutil.CleanIdentifier(item.Column),
+				Direction:  dir,
+				NullsFirst: item.NullsFirst,
 			})
 		}
 	}

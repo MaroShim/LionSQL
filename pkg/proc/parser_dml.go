@@ -1226,8 +1226,21 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 			} else if p.curTokenIs(TokenAsc) {
 				p.nextToken()
 			}
+			var nullsFirst *bool
+			if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "NULLS") {
+				p.nextToken() // eat NULLS
+				if p.curTokenIs(TokenFirst) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "FIRST")) {
+					nf := true
+					nullsFirst = &nf
+					p.nextToken()
+				} else if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "LAST") {
+					nf := false
+					nullsFirst = &nf
+					p.nextToken()
+				}
+			}
 			if oExpr != nil {
-				stmt.OrderBy = append(stmt.OrderBy, OrderByItem{Expr: oExpr, Desc: desc})
+				stmt.OrderBy = append(stmt.OrderBy, OrderByItem{Expr: oExpr, Desc: desc, NullsFirst: nullsFirst})
 			}
 			if p.curTokenIs(TokenComma) {
 				p.nextToken()

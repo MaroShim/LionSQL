@@ -2574,6 +2574,15 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 					if !ok2 || v2 == nil {
 						v2 = aggRows[j][bareCol]
 					}
+					if v1 == nil && v2 == nil {
+						continue
+					}
+					if (v1 == nil || v2 == nil) && item.NullsFirst != nil {
+						if *item.NullsFirst {
+							return v1 == nil
+						}
+						return v1 != nil
+					}
 					cmp := sqlutil.CompareAny(v1, v2)
 					if cmp == 0 {
 						continue

@@ -7,6 +7,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- support multi-column tuple comparisons `(a, b) = (c, d)` and `(a, b) IN ((...))` across parser and evaluator (`ENG-034`, Round 15)
+- support `ORDER BY ... NULLS FIRST` and `NULLS LAST` across tokenizer, AST parser, planner, and sort/window iterators (`ENG-038`, Round 16)
+
+### Fixed
+- prevent silent drop of malformed `WHERE`, `SET`, `JOIN ON`, and `HAVING` clauses in Pratt parser and compiler (`ENG-031`, Round 15)
+- execute LIFO DDL rollback actions on `ROLLBACK TO SAVEPOINT` in unified transaction manager (`ENG-032`, Round 15)
+- filter visited rows in `UNION` (distinct) recursive CTEs to terminate cycle traversal cleanly (`ENG-033`, Round 15)
+- reject window functions (`OVER ()`) inside `WHERE` and `HAVING` clauses during semantic validation (`ENG-035`, Round 15)
+- invoke registered DML triggers across Volcano `INSERT`, `UPDATE`, and `DELETE` paths with `OUTPUT`/`RETURNING` or subqueries (`ENG-036`, Round 16)
+- terminate `COPY ... FROM STDIN WITH (FORMAT csv)` cleanly on PostgreSQL `\.` end-of-data marker (`ENG-037`, Round 16)
+- synchronize `transaction_isolation_level` and `default_transaction_isolation` session keys on `SET TRANSACTION ISOLATION LEVEL` (`ENG-039`, Round 16)
+
+### Performance
+- expand WiredTiger `activeWriters` lock table to 1024 shards with spin-yield backoff and sorted batch unlock (`14725a7e`)
+
 ## [0.94.0] - 2026-11-23
 
 ### Added

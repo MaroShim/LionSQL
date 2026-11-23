@@ -339,10 +339,14 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			_ = s.writeReady(conn, sessID)
 			return
 		}
-		if stmt.Header && len(parsed) > 0 {
-			rows = parsed[1:]
-		} else {
-			rows = parsed
+		for _, rec := range parsed {
+			if len(rec) == 1 && strings.TrimSpace(rec[0]) == "\\." {
+				break
+			}
+			rows = append(rows, rec)
+		}
+		if stmt.Header && len(rows) > 0 {
+			rows = rows[1:]
 		}
 	} else {
 		// Tab-separated or delimited text format

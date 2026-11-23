@@ -1002,15 +1002,24 @@ func (j JoinClause) String() string {
 
 // OrderByItem represents an ORDER BY term.
 type OrderByItem struct {
-	Expr Expr
-	Desc bool
+	Expr       Expr
+	Desc       bool
+	NullsFirst *bool
 }
 
 func (o OrderByItem) String() string {
+	s := fmt.Sprintf("%s ASC", o.Expr.String())
 	if o.Desc {
-		return fmt.Sprintf("%s DESC", o.Expr.String())
+		s = fmt.Sprintf("%s DESC", o.Expr.String())
 	}
-	return fmt.Sprintf("%s ASC", o.Expr.String())
+	if o.NullsFirst != nil {
+		if *o.NullsFirst {
+			s += " NULLS FIRST"
+		} else {
+			s += " NULLS LAST"
+		}
+	}
+	return s
 }
 
 // CTEClause represents a Common Table Expression.
