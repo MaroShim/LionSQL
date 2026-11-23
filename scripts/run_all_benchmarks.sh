@@ -146,6 +146,28 @@ log_sub() {
     echo -e "  ${CLR_BLUE}▶${CLR_RESET} ${CLR_BOLD}$1${CLR_RESET}"
 }
 
+check_ports_available() {
+    local conflict=false
+    for port_entry in "PGWire:${PG_PORT}" "TDS:${TDS_PORT}"; do
+        local proto="${port_entry%%:*}"
+        local p="${port_entry##*:}"
+        if nc -z 127.0.0.1 "$p" 2>/dev/null; then
+            conflict=true
+            local proc_info
+            proc_info=$(lsof -iTCP:"$p" -sTCP:LISTEN -P -n 2>/dev/null | awk 'NR==2 {print $1 " (PID " $2 ")"}')
+            echo -e "  [${CLR_YELLOW}WARN${CLR_RESET}] Port conflict detected on ${CLR_BOLD}${proto} TCP port ${p}${CLR_RESET}${proc_info:+ — occupied by ${proc_info}}."
+        fi
+    done
+    if [ "$conflict" = true ]; then
+        echo -e "  [${CLR_RED}ABORT${CLR_RESET}] Refusing to forcibly terminate existing processes on port(s) ${PG_PORT}/${TDS_PORT}."
+        echo -e "          Please stop the conflicting service or run with custom ports: ${CLR_BOLD}--pg-port=<port> --tds-port=<port>${CLR_RESET}"
+        exit 1
+    fi
+}
+
+# Pre-flight Port Conflict Check (Fail-Fast before running benchmarks)
+check_ports_available
+
 # System Environment Detection
 DETECT_OS="$(uname -s) ($(uname -m))"
 DETECT_KERNEL="$(uname -r)"
@@ -378,13 +400,8 @@ for eng in "${ENGINES[@]}"; do
     
     srv_flags=("-dir=${server_dir}" "-engine=${eng}" "-pg=127.0.0.1:${PG_PORT}" "-tds=127.0.0.1:${TDS_PORT}" "-http=")
     
-    # Ensure ports are free before starting
-    for p in "$PG_PORT" "$TDS_PORT"; do
-        if nc -z 127.0.0.1 "$p" 2>/dev/null; then
-            lsof -ti :"$p" 2>/dev/null | xargs kill -9 2>/dev/null || true
-            sleep 0.2
-        fi
-    done
+    # Ensure ports are free before starting (abort safely instead of killing external processes)
+    check_ports_available
 
     "${BIN_DIR}/lionsql" serve "${srv_flags[@]}" >>"$LOG_FILE" 2>&1 &
     srv_pid=$!
