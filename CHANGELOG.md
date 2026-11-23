@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - synchronize `transaction_isolation_level` and `default_transaction_isolation` session keys on `SET TRANSACTION ISOLATION LEVEL` (`ENG-039`, Round 16)
 
 ### Performance
+- implement shared transaction-local zero-copy read cache (`TxReadCache`) across memengine OCC and WiredTiger MVCC (`PERF-WT-READ-CACHE-1`)
 - expand WiredTiger `activeWriters` lock table to 1024 shards with spin-yield backoff and sorted batch unlock (`14725a7e`)
 
 ## [0.94.0] - 2026-11-23

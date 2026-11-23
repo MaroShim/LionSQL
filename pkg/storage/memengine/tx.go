@@ -175,14 +175,9 @@ var txPool = sync.Pool{
 			tableNames:   make([]string, 0, 4),
 			neededShards: make([]shardRef, 0, 16),
 			acquiredLocks: make([]lockRef, 0, 16),
-			readCache:    make(map[string]cachedRow, 16),
+			readCache:    storage.NewTxReadCache(16),
 		}
 	},
-}
-
-type cachedRow struct {
-	row storage.Row
-	ver int64
 }
 
 // Transaction handles copy-on-write delta mutations with zero start overhead, OCC validation, and atomic commit.
@@ -209,7 +204,7 @@ type Transaction struct {
 	neededShards      []shardRef
 	acquiredLocks     []lockRef
 	acquiredRefLocks  []lockRef
-	readCache         map[string]cachedRow              // "table\x00key" -> cached decoded row & ver
+	readCache         *storage.TxReadCache              // Transaction-local read cache ([RULE:ModularAbstraction])
 	closed            bool
 	committed         bool
 	inPool            bool
@@ -250,10 +245,8 @@ func (tx *Transaction) resetForPoolLocked() {
 		clear(tx.changes)
 	}
 
-	if len(tx.readCache) > 128 {
-		tx.readCache = make(map[string]cachedRow, 16)
-	} else if tx.readCache != nil {
-		clear(tx.readCache)
+	if tx.readCache != nil {
+		tx.readCache.Reset()
 	}
 
 	clear(tx.savepoints)
@@ -1092,7 +1085,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 			tx.deleted = preCascadeState.deleted
 			tx.changes = preCascadeState.changes
 			if tx.readCache != nil {
-				clear(tx.readCache)
+				tx.readCache.Clear()
 			}
 		}
 	}
@@ -1283,7 +1276,7 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 			tx.deleted = preCascadeState.deleted
 			tx.changes = preCascadeState.changes
 			if tx.readCache != nil {
-				clear(tx.readCache)
+				tx.readCache.Clear()
 			}
 		}
 	}
@@ -1649,12 +1642,11 @@ func (tx *Transaction) getRowAndVerUnderLock(tableName, pkKey string, clone bool
 		}
 
 		// Check transaction-local read cache ([RULE:ZeroAllocation])
-		cacheKey := tableName + "\x00" + pkKey
-		if cached, ok := tx.readCache[cacheKey]; ok {
+		if cached, ok := tx.readCache.Get(tableName, pkKey); ok {
 			if clone {
-				return cloneRow(cached.row), cached.ver, nil
+				return cloneRow(cached.Row), cached.Ver, nil
 			}
-			return cached.row, cached.ver, nil
+			return cached.Row, cached.Ver, nil
 		}
 	}
 
@@ -1671,7 +1663,7 @@ func (tx *Transaction) getRowAndVerUnderLock(tableName, pkKey string, clone bool
 	}
 
 	if !tx.opts.ReadOnly && tx.readCache != nil {
-		tx.readCache[tableName+"\x00"+pkKey] = cachedRow{row: row, ver: ver}
+		tx.readCache.PutRow(tableName, pkKey, row, ver)
 	}
 
 	if clone {
@@ -3040,7 +3032,7 @@ func (tx *Transaction) RollbackTo(name string) error {
 	tx.deleted = cloneDeletedMap(state.deleted)
 	tx.changes = cloneChangesMap(state.changes)
 	if tx.readCache != nil {
-		clear(tx.readCache)
+		tx.readCache.Clear()
 	}
 
 	for k, ch := range tvChanges {
@@ -3199,7 +3191,7 @@ func (tx *Transaction) putLocal(table, key string, row storage.Row, baseVer int6
 	t[key] = row
 	tx.setBaseVer(table, key, baseVer)
 	if tx.readCache != nil {
-		tx.readCache[table+"\x00"+key] = cachedRow{row: row, ver: baseVer}
+		tx.readCache.PutRow(table, key, row, baseVer)
 	}
 }
 
@@ -3208,7 +3200,7 @@ func (tx *Transaction) removeLocal(table, key string) {
 		delete(t, key)
 	}
 	if tx.readCache != nil {
-		delete(tx.readCache, table+"\x00"+key)
+		tx.readCache.Invalidate(table, key)
 	}
 }
 

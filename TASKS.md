@@ -529,7 +529,7 @@
 | `PENDING` | **`PERF-WT-ARENA-SLAB-DECODE-1`** | `v0.99.0` | Storage | P2 | WiredTiger sync.Pool/Arena 기반 고정 버퍼 디코딩 및 C.GoBytes 절감 | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WT-INSTANT-ADD-COL-1`** | `1.0-GA` | Storage | P2 | WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`PERF-WT-OCC-WORKSPACE-BUFFER-1`** | `Post-1.0` | Storage | P2 | WiredTiger In-Memory Private Workspace 버퍼링 (OCC-on-WiredTiger) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
-| `IN_PROGRESS` | **`PERF-WT-READ-CACHE-1`** | `v0.95.0` | Storage | P1 | WiredTiger 트랜잭션 로컬 제로-카피 Read Cache (WTTx.readCache) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
+| `DONE` | **`PERF-WT-READ-CACHE-1`** | `v0.95.0` | Storage | P1 | WiredTiger 트랜잭션 로컬 제로-카피 Read Cache (WTTx.readCache) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WT-ROW-DIRECT-1`** | `v1.10.0` | Storage | P2 | WiredTiger InsertRow 중간 Record 맵 2중 할당 우회 및 EncodeRowToBuffer 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | `v1.1.0` | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OS-NATIVE-DISTRIBUTION-1`** | `v1.10.0` | Ecosystem | P2 | OS 네이티브 패키징 및 배포 인프라 구축 (Debian/Ubuntu .deb & macOS Homebrew) | [`notes/OS_NATIVE_PACKAGING_AND_DISTRIBUTION_PLAN.ko.md`](notes/OS_NATIVE_PACKAGING_AND_DISTRIBUTION_PLAN.ko.md) |  |
@@ -5130,8 +5130,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [IN_PROGRESS] WiredTiger 트랜잭션 로컬 제로-카피 Read Cache (WTTx.readCache) `PERF-WT-READ-CACHE-1`
-- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-23 02:19:27
+### [DONE] WiredTiger 트랜잭션 로컬 제로-카피 Read Cache (WTTx.readCache) `PERF-WT-READ-CACHE-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-23 23:01:37
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
 

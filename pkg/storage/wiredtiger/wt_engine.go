@@ -2607,6 +2607,7 @@ func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error)
 		snapshotLSN:       snapLSN,
 		snapshotTimestamp: snapTS,
 		snapTables:        snapTables,
+		readCache:         storage.NewTxReadCache(16),
 	}
 	s.currentTx = wttx
 	return wttx, nil
@@ -2638,6 +2639,7 @@ type WTTx struct {
 	rowDeltas         map[string]int64
 	openCursors       []storage.Cursor
 	testFailIndexOp   func(op string, idxName string) error
+	readCache         *storage.TxReadCache
 }
 
 func (tx *WTTx) closeOpenCursorsLocked() {
@@ -3070,6 +3072,9 @@ func (tx *WTTx) insertRowLocked(tableName string, tbl *storage.TableSchema, row 
 		tx.rowDeltas = make(map[string]int64)
 	}
 	tx.rowDeltas[tbl.Name]++
+	if tx.readCache != nil {
+		tx.readCache.PutRow(tableName, pkStr, row, 0)
+	}
 
 	return nil
 }
@@ -3241,6 +3246,9 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 		tx.rowDeltas = make(map[string]int64)
 	}
 	tx.rowDeltas[tbl.Name]++
+	if tx.readCache != nil {
+		tx.readCache.PutRecord(tableName, pkStr, normalized)
+	}
 
 	return nil
 }
@@ -3490,6 +3498,10 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 		})
 	}
 
+	if tx.readCache != nil {
+		tx.readCache.PutRecord(tableName, pk.String(), existing)
+	}
+
 	return nil
 }
 
@@ -3649,6 +3661,9 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 		tx.rowDeltas = make(map[string]int64)
 	}
 	tx.rowDeltas[tbl.Name]--
+	if tx.readCache != nil {
+		tx.readCache.Invalidate(tableName, pk.String())
+	}
 
 	return nil
 }
@@ -4049,11 +4064,28 @@ func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, e
 	if err != nil {
 		return nil, err
 	}
+	pkStr := pk.String()
+	if tx.readCache != nil {
+		if entry, ok := tx.readCache.Get(tableName, pkStr); ok {
+			if entry.Record != nil {
+				return entry.Record.Clone(), nil
+			}
+			if len(entry.Row.Values) > 0 {
+				rec := tbl.RowToRecord(entry.Row)
+				tx.readCache.PutRecord(tableName, pkStr, rec)
+				return rec.Clone(), nil
+			}
+		}
+	}
 	rawBytes, err := tx.getRawBytesLocked(tableName, pk)
 	if err != nil {
 		return nil, err
 	}
-	return decodeRecord(tbl, rawBytes)
+	rec, err := decodeRecord(tbl, rawBytes)
+	if err == nil && tx.readCache != nil {
+		tx.readCache.PutRecord(tableName, pkStr, rec)
+	}
+	return rec, err
 }
 
 func (tx *WTTx) getRowLocked(tableName string, pk storage.Value) (storage.Row, error) {
@@ -4064,11 +4096,28 @@ func (tx *WTTx) getRowLocked(tableName string, pk storage.Value) (storage.Row, e
 	if err != nil {
 		return storage.Row{}, err
 	}
+	pkStr := pk.String()
+	if tx.readCache != nil {
+		if entry, ok := tx.readCache.Get(tableName, pkStr); ok {
+			if len(entry.Row.Values) > 0 {
+				return entry.Row.Clone(), nil
+			}
+			if entry.Record != nil {
+				row := tbl.RecordToRow(entry.Record)
+				tx.readCache.PutRow(tableName, pkStr, row, 0)
+				return row.Clone(), nil
+			}
+		}
+	}
 	rawBytes, err := tx.getRawBytesLocked(tableName, pk)
 	if err != nil {
 		return storage.Row{}, err
 	}
-	return decodeRow(tbl, rawBytes)
+	row, err := decodeRow(tbl, rawBytes)
+	if err == nil && tx.readCache != nil {
+		tx.readCache.PutRow(tableName, pkStr, row, 0)
+	}
+	return row, err
 }
 
 func (tx *WTTx) Scan(tableName string) (storage.Cursor, error) {
@@ -4581,6 +4630,9 @@ func (tx *WTTx) Commit() error {
 	defer tx.mu.Unlock()
 	defer tx.releaseAcquiredLocksLocked()
 	defer tx.closeOpenCursorsLocked()
+	if tx.readCache != nil {
+		tx.readCache.Reset()
+	}
 
 	if tx.closed {
 		return storage.ErrTxClosed
@@ -4739,6 +4791,9 @@ func (tx *WTTx) Rollback() error {
 	defer tx.mu.Unlock()
 	defer tx.releaseAcquiredLocksLocked()
 	defer tx.closeOpenCursorsLocked()
+	if tx.readCache != nil {
+		tx.readCache.Reset()
+	}
 
 	if tx.closed {
 		return storage.ErrTxClosed
@@ -4939,6 +4994,10 @@ func (tx *WTTx) RollbackTo(name string) error {
 		tx.spNames = tx.spNames[:idx+1]
 	}
 
+	if tx.readCache != nil {
+		tx.readCache.Clear()
+	}
+
 	return nil
 }
 
@@ -5035,6 +5094,9 @@ func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes [
 			tx.sess.releaseCursor(idxURI, idxCur)
 		}
 	}
+	if tx.readCache != nil {
+		tx.readCache.Invalidate(tableName, pkStr)
+	}
 	return nil
 }
 
@@ -5075,6 +5137,9 @@ func (tx *WTTx) removeRawLocked(tableName string, pk storage.Value) error {
 
 	if ret := C.go_wt_cursor_remove_key(cur, cKey); ret != 0 && ret != C.WT_NOTFOUND {
 		return wtOpError("cursor_remove", int(ret))
+	}
+	if tx.readCache != nil {
+		tx.readCache.Invalidate(tableName, pkStr)
 	}
 	return nil
 }

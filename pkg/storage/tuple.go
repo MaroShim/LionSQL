@@ -56,6 +56,16 @@ type Row struct {
 	Values []Value
 }
 
+// Clone returns a copy of Row with its Values slice copied.
+func (r Row) Clone() Row {
+	if r.Values == nil {
+		return Row{}
+	}
+	vals := make([]Value, len(r.Values))
+	copy(vals, r.Values)
+	return Row{Values: vals}
+}
+
 // RecordToRow converts a column-mapped Record into an ordered Row according to schema.
 func (s *TableSchema) RecordToRow(rec Record) Row {
 	return s.RecordToRowWithArena(rec, nil)
