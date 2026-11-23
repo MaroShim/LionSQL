@@ -450,6 +450,13 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 				s.InvalidatePKBypassCache()
 				return nil
 			})
+			txCtx.AddRollbackAction(func() error {
+				if shadow := txCtx.ShadowCatalog; shadow != nil {
+					shadow.UnmarkTableDropped(tableName)
+				}
+				s.InvalidatePKBypassCache()
+				return nil
+			})
 		} else {
 			// Fallback legacy tombstone rename if TxMgr is inactive
 			tombstone := fmt.Sprintf("__tombstone_%s_%d_%s", cs.ID, time.Now().UnixNano(), sch.Name)

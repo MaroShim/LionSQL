@@ -1049,8 +1049,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			if err := cs.TxMgr.Savepoint(spName); err != nil {
 				return nil, fmt.Errorf("savepoint error: %w", err)
 			}
-		}
-		if cs.Tx() != nil {
+		} else if cs.Tx() != nil {
 			if err := cs.Tx().Savepoint(spName); err != nil {
 				return nil, fmt.Errorf("savepoint error: %w", err)
 			}
@@ -1077,8 +1076,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			if err := cs.TxMgr.ReleaseSavepoint(spName); err != nil {
 				return nil, fmt.Errorf("release savepoint error: %w", err)
 			}
-		}
-		if cs.Tx() != nil {
+		} else if cs.Tx() != nil {
 			if err := cs.Tx().ReleaseSavepoint(spName); err != nil {
 				return nil, fmt.Errorf("release savepoint error: %w", err)
 			}
@@ -1112,10 +1110,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				if err := cs.TxMgr.RollbackTo(spName); err != nil {
 					return nil, fmt.Errorf("rollback to savepoint error: %w", err)
 				}
-			}
-			err := cs.Tx().RollbackTo(spName)
-			if err != nil {
-				return nil, fmt.Errorf("rollback to savepoint error: %w", err)
+			} else {
+				if err := cs.Tx().RollbackTo(spName); err != nil {
+					return nil, fmt.Errorf("rollback to savepoint error: %w", err)
+				}
 			}
 			return &QueryResult{
 				Success:    true,

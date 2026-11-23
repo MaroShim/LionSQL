@@ -1433,7 +1433,11 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 			startedImplicitTx = true
 		} else {
 			cs.Mu.Lock()
-			if cs.Tx() != nil {
+			if cs.TxMgr != nil && cs.Tx() != nil {
+				if err := cs.TxMgr.Savepoint(cteSavepointName); err == nil {
+					usedSavepoint = true
+				}
+			} else if cs.Tx() != nil {
 				if err := cs.Tx().Savepoint(cteSavepointName); err == nil {
 					usedSavepoint = true
 				}
@@ -1453,7 +1457,9 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 				cs.ClearTxFailed()
 			} else if usedSavepoint && cs != nil {
 				cs.Mu.Lock()
-				if cs.Tx() != nil {
+				if cs.TxMgr != nil && cs.Tx() != nil {
+					_ = cs.TxMgr.RollbackTo(cteSavepointName)
+				} else if cs.Tx() != nil {
 					_ = cs.Tx().RollbackTo(cteSavepointName)
 				}
 				cs.Mu.Unlock()

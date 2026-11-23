@@ -98,12 +98,7 @@ func (m *Manager) SetActiveStorageTx(stx storage.Transaction) {
 	if m.current != nil {
 		m.current.StorageTx = stx
 	} else if stx != nil {
-		m.current = &Context{
-			ID:        m.nextXID.Add(1),
-			StorageTx: stx,
-			State:     StateActive,
-			Ephemeral: false,
-		}
+		m.current = NewContext(m.nextXID.Add(1), m.session, stx, Options{}, false)
 	}
 }
 
@@ -281,6 +276,11 @@ func (m *Manager) Savepoint(name string) error {
 	if m.current.GetState() == StateInError {
 		return ErrTxInError
 	}
+	if m.current.StorageTx != nil {
+		if err := m.current.StorageTx.Savepoint(name); err != nil {
+			return err
+		}
+	}
 	m.current.mu.RLock()
 	defOffset := len(m.current.DeferredActions)
 	rbOffset := len(m.current.RollbackActions)
@@ -299,7 +299,14 @@ func (m *Manager) RollbackTo(name string) error {
 		return err
 	}
 
-	// [TX-001] Truncate deferred and execute rollback actions recorded after this savepoint in LIFO order
+	// 1. Roll back physical storage DML mutations to the savepoint first (strict LIFO order)
+	if m.current.StorageTx != nil {
+		if err := m.current.StorageTx.RollbackTo(name); err != nil {
+			return err
+		}
+	}
+
+	// 2. [TX-001] Truncate deferred and execute rollback actions recorded after this savepoint in LIFO order
 	m.current.mu.Lock()
 	if sp.DeferredOffset <= len(m.current.DeferredActions) {
 		m.current.DeferredActions = m.current.DeferredActions[:sp.DeferredOffset]
@@ -337,7 +344,15 @@ func (m *Manager) ReleaseSavepoint(name string) error {
 	if m.current.GetState() == StateInError {
 		return ErrTxInError
 	}
-	return m.current.Savepoints.Release(name)
+	if err := m.current.Savepoints.Release(name); err != nil {
+		return err
+	}
+	if m.current.StorageTx != nil {
+		if err := m.current.StorageTx.ReleaseSavepoint(name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Close closes the manager and rolls back any uncommitted transaction cleanly.

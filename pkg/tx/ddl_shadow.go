@@ -70,6 +70,16 @@ func (s *ShadowCatalog) MarkTableDropped(tableName string) {
 	delete(s.alteredTables, lower)
 }
 
+// UnmarkTableDropped removes a dropped table marker (e.g. when rolling back to a savepoint).
+func (s *ShadowCatalog) UnmarkTableDropped(tableName string) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.droppedTables, strings.ToLower(tableName))
+}
+
 // MarkTableCreated marks a newly created table in this shadow catalog.
 func (s *ShadowCatalog) MarkTableCreated(sch *storage.TableSchema) {
 	if s == nil || sch == nil {
