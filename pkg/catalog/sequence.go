@@ -42,23 +42,27 @@ func (s *SequenceDef) Next() (int64, error) {
 		return s.Current, nil
 	}
 
-	nextVal := s.Current + s.Increment
 	// Check overflow/bounds
+	var nextVal int64
 	if s.Increment > 0 {
-		if nextVal > s.MaxValue {
+		if s.Current > s.MaxValue-s.Increment {
 			if s.Cycle {
 				nextVal = s.MinValue
 			} else {
 				return 0, fmt.Errorf("%w: sequence %q reached maximum value %d", ErrSequenceExhausted, s.Name, s.MaxValue)
 			}
+		} else {
+			nextVal = s.Current + s.Increment
 		}
 	} else if s.Increment < 0 {
-		if nextVal < s.MinValue {
+		if s.Current < s.MinValue-s.Increment {
 			if s.Cycle {
 				nextVal = s.MaxValue
 			} else {
 				return 0, fmt.Errorf("%w: sequence %q reached minimum value %d", ErrSequenceExhausted, s.Name, s.MinValue)
 			}
+		} else {
+			nextVal = s.Current + s.Increment
 		}
 	}
 

@@ -272,9 +272,6 @@ func coerceAnyToDataType(val any, dt storage.DataType) (any, error) {
 			if i, err := strconv.ParseInt(s, 10, 64); err == nil {
 				return i, nil
 			}
-			if f, err := strconv.ParseFloat(s, 64); err == nil {
-				return int64(f), nil
-			}
 			return nil, fmt.Errorf("%w: conversion failed when converting the varchar value %q to data type int", storage.ErrInvalidDataType, v)
 		default:
 			return nil, fmt.Errorf("%w: cannot convert value of type %T to int", storage.ErrInvalidDataType, val)

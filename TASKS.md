@@ -14,6 +14,7 @@
 
 | Status | ID | Milestone | Domain | Priority | Title | Plan Doc | Metrics |
 | :---: | :---: | :---: | :---: | :---: | :--- | :--- | :--- |
+| `PENDING` | **`--id`** | `Engine` | --title | P2 | AUDIT-R17-DEFECTS-1 | [`--domain`](--domain) |  |
 | `DONE` | **`1.8`** | `1.0-GA` | Durability | P2 | 1.0 GA 검증 및 잔여 정리 | [`notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`](notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`AI-STARTER-1`** | `v1.30.0` | Ecosystem | P2 | AI 에이전트용 컨텍스트 문서 (llms.txt, AGENTS.md 템플릿) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
 | `PENDING` | **`AI-STARTER-2`** | `v1.30.0` | Ecosystem | P2 | 랜딩 AI 앱 스타터 섹션 및 Go/Node/Python 최소 예제 | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
@@ -311,6 +312,7 @@
 | `DONE` | **`FIX-ARITHMETIC-OVERFLOW-DETECTION-1`** | `1.0-GA` | Execution | P2 | 정수 산술 연산 64비트 오버플로 검출 및 bigint out of range 에러 반환 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-AUDIT-ROUND15-1`** | `v0.95.0` | Integrity | P1 | Live Engine Audit Round 15 결함 패치 및 회귀 방지 (WHERE silent drop, SP DDL rollback, recursive CTE) | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `DONE` | **`FIX-AUDIT-ROUND16-1`** | `v0.95.0` | Integrity | P1 | Live Engine Audit Round 16 결함 패치 및 회귀 방지 (Trigger bypass on RETURNING/Subquery, COPY CSV EOF, NULLS FIRST/LAST, SHOW isolation) | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
+| `DONE` | **`FIX-AUDIT-ROUND17-1`** | `v0.95.0` | Engine | P1 | Dual-AI Live Audit Round 17 결함 5건 패치 (3VL IsNull/NullArithmetic/FloatToIntCast/SequenceOverflow) |  |  |
 | `DONE` | **`FIX-BATCH-MULTI-RESULTSET-DELIVERY-1`** |  | 1 | P2 | Wire | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-CAST-INTEGER-RANGE-OVERFLOW-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
@@ -595,6 +597,13 @@
 ---
 
 ## 2. Detailed Task Specifications & Execution Records
+
+### [PENDING] AUDIT-R17-DEFECTS-1 `--id`
+- **Domain**: --title | **Priority**: P2 | **Updated**: 2026-11-23 07:22:23
+- **Milestone**: `Engine`
+- **Plan Doc**: [`--domain`](--domain)
+
+---
 
 ### [DONE] 1.0 GA 검증 및 잔여 정리 `1.8`
 - **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-16 14:21:00
@@ -3497,6 +3506,12 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-23 03:10:20
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
+
+---
+
+### [DONE] Dual-AI Live Audit Round 17 결함 5건 패치 (3VL IsNull/NullArithmetic/FloatToIntCast/SequenceOverflow) `FIX-AUDIT-ROUND17-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-23 07:22:44
+- **Milestone**: `v0.95.0`
 
 ---
 

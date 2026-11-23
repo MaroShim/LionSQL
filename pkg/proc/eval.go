@@ -605,7 +605,7 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		if err != nil {
 			return nil, err
 		}
-		isNull := val == nil
+		isNull := isNullVal(val)
 		if e.Not {
 			return !isNull, nil
 		}
@@ -1048,6 +1048,14 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 }
 
 func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool) (any, error) {
+	if isNullVal(left) || isNullVal(right) {
+		switch op {
+		case TokenPlus, TokenMinus, TokenAsterisk, TokenSlash, TokenDiv, TokenPercent:
+			return nil, nil
+		case TokenEq, TokenNeq, TokenLt, TokenLte, TokenGt, TokenGte:
+			return nil, nil
+		}
+	}
 	if lSlice, okL := left.([]any); okL {
 		if rSlice, okR := right.([]any); okR {
 			if len(lSlice) != len(rSlice) {
@@ -2010,11 +2018,7 @@ func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style i
 			s := strings.TrimSpace(v.SVal)
 			parsed, err := strconv.ParseInt(s, 10, 64)
 			if err != nil {
-				if f, err2 := strconv.ParseFloat(s, 64); err2 == nil {
-					parsed = int64(f)
-				} else {
-					return fail(fmt.Errorf("conversion failed when converting %q to data type int", v.SVal))
-				}
+				return fail(fmt.Errorf("conversion failed when converting %q to data type int", v.SVal))
 			}
 			i = parsed
 		case storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
