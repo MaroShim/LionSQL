@@ -6,7 +6,7 @@
 > 모든 태스크 추가, 상태 변경, 마일스톤 수정은 반드시 `./bin/sprint` CLI를 통해서만 수행해야 합니다.
 > 수정 후 `./bin/sprint backup TASKS.md` 명령으로 이 문서를 동기화하십시오.
 
-> - **Last Synced**: 2026-11-22
+> - **Last Synced**: 2026-11-23
 > - **Primary Source of Truth (SSOT)**: SQLite `sprint_tasks` Table
 > - **Backup File**: Auto-synced on task update & Git commit
 
@@ -288,7 +288,7 @@
 | `PENDING` | **`FEAT-WASM-UDF-1`** | `v1.99.0` | Engine | P2 | WebAssembly 런타임 샌드박스 UDF (wazero) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `DONE` | **`FEAT-WEB-STUDIO-HYBRID-1`** | `1.0-GA` | API | P2 | Web Studio 하이브리드 지원 (--no-studio 플래그 및 lionsql studio 서브커맨드 프록시) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WINDOWS-WIREDTIGER-DLL-BUNDLE-1`** | `v1.1.0` | Storage | P1 | Windows WiredTiger MSVC Native DLL Build & Self-Extracting Bundle Pipeline | [`notes/plans/WINDOWS_WIREDTIGER_DLL_BUNDLE_PLAN.ko.md`](notes/plans/WINDOWS_WIREDTIGER_DLL_BUNDLE_PLAN.ko.md) |  |
-| `SPEC-OUT` | **`FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`** | `v0.94.0` | 1 | P2 | Storage | [`--milestone`](--milestone) |  |
+| `DONE` | **`FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`** | `v0.94.0` | 1 | P2 | Storage | [`--milestone`](--milestone) |  |
 | `DONE` | **`FEAT-WT-SECONDARY-INDEX-BTREE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 | [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md) |  |
 | `DONE` | **`FIX-3VL-AND-OR-NULL-LOGIC-1`** |  | Engine | P2 | VDBE VM OpAnd/OpOr 3-Valued Logic(3VL) NULL 평가 결함 수정 |  |  |
 | `DONE` | **`FIX-ARITHMETIC-OVERFLOW-DETECTION-1`** | `1.0-GA` | Execution | P2 | 정수 산술 연산 64비트 오버플로 검출 및 bigint out of range 에러 반환 | [`1.0-GA`](1.0-GA) |  |
@@ -3316,8 +3316,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [SPEC-OUT] Storage `FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`
-- **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-16 05:56:57
+### [DONE] Storage `FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`
+- **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-23 00:53:41
 - **Milestone**: `v0.94.0`
 - **Plan Doc**: [`--milestone`](--milestone)
 

@@ -55,6 +55,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - introduce universal dual-path protocol symmetry gate test (GATE-PROTOCOL-SYMMETRY-1) (16dc7b90)
 
 ### Fixed
+- dynamically load wiredtiger.dll on windows for true standalone binary execution (2b2f4582)
+- unify default storage engine to wiredtiger across all platforms including windows (fb9a9c27)
 - resolve audit findings on config hierarchy, TLS pair, cursor errors, and memengine safety (3240b7c5)
 - preserve rotated WAL segments on archive failure and propagate manifest update errors (8bd5a7fe)
 - enforce PITR base backup point-in-time boundary, LSN filtering, and missing gap detection (ea082098)
