@@ -1187,9 +1187,17 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 
 	rawList := strings.TrimSpace(cleaned[6:])
 	var whereClause string
+	hasWhere := false
 	if whereIdx := sqlutil.FindTopLevelKeyword(cleaned, "WHERE"); whereIdx != -1 {
 		rawList = strings.TrimSpace(cleaned[6:whereIdx])
 		whereClause = strings.TrimSpace(cleaned[whereIdx+5:])
+		hasWhere = true
+	}
+	if hasWhere && whereClause == "" {
+		return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+	}
+	if err := ValidateWhereClause(whereClause); err != nil {
+		return nil, err
 	}
 	for {
 		if rem, ok := sqlutil.TrimPrefixKeyword(rawList, "ALL"); ok {

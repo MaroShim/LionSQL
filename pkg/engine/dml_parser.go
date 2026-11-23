@@ -31,6 +31,7 @@ type DMLStatement struct {
 	Set     string // SET clause body (UPDATE)
 	From    string // FROM / USING clause for UPDATE ... FROM / DELETE ... FROM
 	Where   string // WHERE clause body (UPDATE / DELETE)
+	HasWhere bool  // true if a WHERE keyword was present in the query
 }
 
 // dmlScanner is a cursor over a statement. Quoted regions ('...', "...",
@@ -352,6 +353,9 @@ func parseUpdateBody(st *DMLStatement, sc *dmlScanner) error {
 		return fmt.Errorf("invalid UPDATE syntax")
 	}
 	st.Set, st.Output, st.From, st.Where = splitOutputWhere(sc.s[sc.pos:])
+	if whereIdx := sqlutil.FindTopLevelKeyword(sc.s[sc.pos:], "WHERE"); whereIdx != -1 {
+		st.HasWhere = true
+	}
 	return nil
 }
 
@@ -361,5 +365,8 @@ func parseDeleteBody(st *DMLStatement, sc *dmlScanner) error {
 		return fmt.Errorf("invalid DELETE syntax")
 	}
 	st.Output, st.From, st.Where = out, from, where
+	if whereIdx := sqlutil.FindTopLevelKeyword(sc.s[sc.pos:], "WHERE"); whereIdx != -1 {
+		st.HasWhere = true
+	}
 	return nil
 }

@@ -128,6 +128,23 @@ func parseValueToType(s string, t storage.DataType) storage.Value {
 }
 
 
+// ValidateWhereClause verifies that whereStr is syntactically well-formed if non-empty.
+func ValidateWhereClause(whereStr string) error {
+	whereStr = strings.TrimSpace(whereStr)
+	if whereStr == "" {
+		return nil
+	}
+	p := proc.NewParser(proc.NewLexer(whereStr))
+	expr := p.ParseExpr()
+	if len(p.Errors()) > 0 {
+		return fmt.Errorf("syntax error in WHERE clause: %s", strings.Join(p.Errors(), "; "))
+	}
+	if expr == nil {
+		return fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+	}
+	return nil
+}
+
 func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
 	return evaluateWhereConditionWithSubquery(rec, whereStr, nil)
 }

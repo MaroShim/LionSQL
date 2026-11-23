@@ -1405,6 +1405,13 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		return s.execUpdateFromJoin(dml, start, cs)
 	}
 
+	if dml.HasWhere && dml.Where == "" {
+		return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+	}
+	if err := ValidateWhereClause(dml.Where); err != nil {
+		return nil, err
+	}
+
 	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT, RETURNING, or subquery present)
 	hasOutput := sqlutil.ContainsKeyword(cleaned, "OUTPUT", false) || sqlutil.ContainsKeyword(cleaned, "RETURNING", false)
 	hasSubquery := sqlutil.ContainsKeyword(cleaned, "SELECT", true) || sqlutil.ContainsKeyword(cleaned, "EXISTS", true)
@@ -1760,6 +1767,13 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 
 	if dml.From != "" {
 		return s.execDeleteFromJoin(dml, start, cs)
+	}
+
+	if dml.HasWhere && dml.Where == "" {
+		return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+	}
+	if err := ValidateWhereClause(dml.Where); err != nil {
+		return nil, err
 	}
 
 	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT, RETURNING, or subquery present)
