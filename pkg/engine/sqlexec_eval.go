@@ -145,6 +145,45 @@ func ValidateWhereClause(whereStr string) error {
 	return nil
 }
 
+// ValidateSetClause verifies that setStr in UPDATE or MERGE is non-empty and all assignment pairs are syntactically valid.
+func ValidateSetClause(setStr string) error {
+	setStr = strings.TrimSpace(setStr)
+	if setStr == "" {
+		return fmt.Errorf("syntax error: empty or invalid SET clause")
+	}
+	rawParts := sqlutil.SplitTopLevel(setStr, ',')
+	if len(rawParts) == 0 {
+		return fmt.Errorf("syntax error: empty or invalid SET clause")
+	}
+	for _, p := range rawParts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			return fmt.Errorf("syntax error: empty assignment or trailing comma in SET clause")
+		}
+		eqIdx := sqlutil.FindTopLevelChar(p, '=')
+		if eqIdx == -1 {
+			return fmt.Errorf("syntax error: missing = in SET assignment: %s", p)
+		}
+		col := strings.TrimSpace(p[:eqIdx])
+		val := strings.TrimSpace(p[eqIdx+1:])
+		if col == "" {
+			return fmt.Errorf("syntax error: missing column name in SET assignment")
+		}
+		if val == "" {
+			return fmt.Errorf("syntax error: empty expression in SET assignment for column %q", col)
+		}
+		parser := proc.NewParser(proc.NewLexer(val))
+		expr := parser.ParseExpr()
+		if len(parser.Errors()) > 0 {
+			return fmt.Errorf("syntax error in SET expression for column %q: %s", col, strings.Join(parser.Errors(), "; "))
+		}
+		if expr == nil {
+			return fmt.Errorf("syntax error: invalid expression in SET assignment for column %q", col)
+		}
+	}
+	return nil
+}
+
 func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
 	return evaluateWhereConditionWithSubquery(rec, whereStr, nil)
 }

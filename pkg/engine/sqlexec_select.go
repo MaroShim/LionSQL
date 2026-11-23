@@ -1199,6 +1199,22 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 	if err := ValidateWhereClause(whereClause); err != nil {
 		return nil, err
 	}
+
+	// Validate trailing clauses on scalar SELECT: ORDER BY, GROUP BY, etc.
+	if orderIdx := sqlutil.FindTopLevelKeyword(rawList, "ORDER BY"); orderIdx != -1 {
+		orderPart := strings.TrimSpace(rawList[orderIdx+8:])
+		if orderPart == "" {
+			return nil, fmt.Errorf("syntax error: empty or invalid expression in ORDER BY clause")
+		}
+		rawList = strings.TrimSpace(rawList[:orderIdx])
+	}
+	if groupIdx := sqlutil.FindTopLevelKeyword(rawList, "GROUP BY"); groupIdx != -1 {
+		groupPart := strings.TrimSpace(rawList[groupIdx+8:])
+		if groupPart == "" {
+			return nil, fmt.Errorf("syntax error: empty or invalid expression in GROUP BY clause")
+		}
+		rawList = strings.TrimSpace(rawList[:groupIdx])
+	}
 	for {
 		if rem, ok := sqlutil.TrimPrefixKeyword(rawList, "ALL"); ok {
 			rawList = rem

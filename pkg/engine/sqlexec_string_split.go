@@ -143,6 +143,12 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 
 	// 3. Parse clauses in rest: [AS alias] [WHERE whereClause] [ORDER BY orderByClause] [LIMIT limit] [OFFSET offset]
 	alias, whereClause, orderByClause, limitCount, offsetCount := extractStringSplitTailClauses(rest)
+	if sqlutil.FindTopLevelKeyword(rest, "WHERE") != -1 && whereClause == "" {
+		return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+	}
+	if err := ValidateWhereClause(whereClause); err != nil {
+		return nil, err
+	}
 
 	// 4. Parse STRING_SPLIT arguments: string, separator [, enable_ordinal]
 	args := sqlutil.SplitTopLevel(argsRaw, ',')

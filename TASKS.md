@@ -352,6 +352,7 @@
 | `DONE` | **`FIX-INT-ARITHMETIC-OVERFLOW-ERROR-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-LEFT-NEGATIVE-LENGTH-ERROR-1`** |  | 3 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-LEXER-HEX-BINARY-LITERAL-1`** |  | Parser | P2 | Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) | [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md) |  |
+| `DONE` | **`FIX-MALFORMED-ALL-CLAUSES-FAILCLOSED-1`** | `v0.95.0` | Engine | P1 | Enforce fail-closed validation on empty or malformed ORDER BY, GROUP BY, LIMIT, OFFSET, SET, VALUES, HAVING | [`notes/DEFECT_AUDIT_PLAN.ko.md`](notes/DEFECT_AUDIT_PLAN.ko.md) |  |
 | `DONE` | **`FIX-MALFORMED-WHERE-FAILCLOSED-1`** | `v0.95.0` | Engine | P1 | Enforce fail-closed validation on empty or malformed WHERE in SELECT, UPDATE, DELETE |  |  |
 | `DONE` | **`FIX-MATH-DOMAIN-ERROR-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-MATH-DOMAIN-ERROR-POLICY-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
@@ -3769,6 +3770,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ### [DONE] Lex 0x hex literals as binary values (replicate(0x01,n), 394_babel_babel_4547) `FIX-LEXER-HEX-BINARY-LITERAL-1`
 - **Domain**: Parser | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
 - **Plan Doc**: [`notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md`](notes/TSQL_AND_ORACLE_24_TASKS_PLAN.ko.md)
+
+---
+
+### [DONE] Enforce fail-closed validation on empty or malformed ORDER BY, GROUP BY, LIMIT, OFFSET, SET, VALUES, HAVING `FIX-MALFORMED-ALL-CLAUSES-FAILCLOSED-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-23 08:15:47
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/DEFECT_AUDIT_PLAN.ko.md`](notes/DEFECT_AUDIT_PLAN.ko.md)
 
 ---
 

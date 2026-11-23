@@ -868,12 +868,25 @@ func parseMergeQuery(query string) (*parsedMerge, error) {
 	}
 
 	onCondition := strings.TrimSpace(afterOn[:whenIdx])
+	if onCondition == "" {
+		return nil, fmt.Errorf("syntax error: empty or invalid expression in ON clause")
+	}
+	if err := ValidateWhereClause(onCondition); err != nil {
+		return nil, fmt.Errorf("syntax error in ON clause: %w", err)
+	}
 	whenPart := strings.TrimSpace(afterOn[whenIdx:])
 
 	// Parse WHEN clauses
 	clauses, err := parseWhenClauses(whenPart)
 	if err != nil {
 		return nil, err
+	}
+	for _, cl := range clauses {
+		if cl.andCond != "" {
+			if err := ValidateWhereClause(cl.andCond); err != nil {
+				return nil, fmt.Errorf("syntax error in WHEN AND condition: %w", err)
+			}
+		}
 	}
 
 	return &parsedMerge{

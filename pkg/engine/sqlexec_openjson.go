@@ -301,6 +301,12 @@ func (s *Coordinator) execOpenJsonSelect(query string, start time.Time, cs *Clie
 
 	// Parse alias and tail clauses
 	alias, whereClause, orderByClause, limitCount, offsetCount := extractStringSplitTailClauses(rest)
+	if sqlutil.FindTopLevelKeyword(rest, "WHERE") != -1 && whereClause == "" {
+		return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+	}
+	if err := ValidateWhereClause(whereClause); err != nil {
+		return nil, err
+	}
 
 	args := sqlutil.SplitTopLevel(argsRaw, ',')
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {

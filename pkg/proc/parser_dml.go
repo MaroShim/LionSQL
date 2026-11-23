@@ -605,7 +605,7 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	}
 
 	// 1. Projections
-	for !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenInto) && !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenRParen) {
+	for !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenInto) && !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenGroup) && !p.curTokenIs(TokenHaving) && !p.curTokenIs(TokenOrder) && !p.curTokenIs(TokenLimit) && !p.curTokenIs(TokenOffset) && !p.curTokenIs(TokenFetch) && !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenRParen) {
 		if p.curTokenIs(TokenVariable) && p.peekTokenIs(TokenEq) {
 			varName := p.curToken.Literal
 			p.nextToken() // eat @var
@@ -1137,9 +1137,13 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				p.nextToken() // eat (
 				for {
 					gExpr := p.parseExpression(precLowest)
-					if gExpr != nil {
-						stmt.GroupBy = append(stmt.GroupBy, gExpr)
+					if len(p.errors) > 0 {
+						return nil, fmt.Errorf("syntax error in GROUP BY clause: %s", strings.Join(p.errors, "; "))
 					}
+					if gExpr == nil {
+						return nil, fmt.Errorf("syntax error: empty or invalid expression in GROUP BY clause")
+					}
+					stmt.GroupBy = append(stmt.GroupBy, gExpr)
 					if p.curTokenIs(TokenComma) {
 						p.nextToken()
 					} else {
@@ -1148,6 +1152,8 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				}
 				if p.curTokenIs(TokenRParen) {
 					p.nextToken() // eat )
+				} else {
+					return nil, fmt.Errorf("expected ) closing ROLLUP in GROUP BY")
 				}
 			}
 		} else if p.curTokenIs(TokenCube) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "CUBE")) {
@@ -1157,9 +1163,13 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				p.nextToken() // eat (
 				for {
 					gExpr := p.parseExpression(precLowest)
-					if gExpr != nil {
-						stmt.GroupBy = append(stmt.GroupBy, gExpr)
+					if len(p.errors) > 0 {
+						return nil, fmt.Errorf("syntax error in GROUP BY clause: %s", strings.Join(p.errors, "; "))
 					}
+					if gExpr == nil {
+						return nil, fmt.Errorf("syntax error: empty or invalid expression in GROUP BY clause")
+					}
+					stmt.GroupBy = append(stmt.GroupBy, gExpr)
 					if p.curTokenIs(TokenComma) {
 						p.nextToken()
 					} else {
@@ -1168,14 +1178,20 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				}
 				if p.curTokenIs(TokenRParen) {
 					p.nextToken() // eat )
+				} else {
+					return nil, fmt.Errorf("expected ) closing CUBE in GROUP BY")
 				}
 			}
 		} else {
 			for {
 				gExpr := p.parseExpression(precLowest)
-				if gExpr != nil {
-					stmt.GroupBy = append(stmt.GroupBy, gExpr)
+				if len(p.errors) > 0 {
+					return nil, fmt.Errorf("syntax error in GROUP BY clause: %s", strings.Join(p.errors, "; "))
 				}
+				if gExpr == nil {
+					return nil, fmt.Errorf("syntax error: empty or invalid expression in GROUP BY clause")
+				}
+				stmt.GroupBy = append(stmt.GroupBy, gExpr)
 				if p.curTokenIs(TokenComma) {
 					p.nextToken()
 				} else {
@@ -1192,6 +1208,9 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					p.nextToken()
 				}
 			}
+		}
+		if len(stmt.GroupBy) == 0 {
+			return nil, fmt.Errorf("syntax error: empty or invalid expression in GROUP BY clause")
 		}
 	}
 
@@ -1219,6 +1238,12 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 		p.nextToken() // eat BY
 		for {
 			oExpr := p.parseExpression(precLowest)
+			if len(p.errors) > 0 {
+				return nil, fmt.Errorf("syntax error in ORDER BY clause: %s", strings.Join(p.errors, "; "))
+			}
+			if oExpr == nil {
+				return nil, fmt.Errorf("syntax error: empty or invalid expression in ORDER BY clause")
+			}
 			desc := false
 			if p.curTokenIs(TokenDesc) {
 				desc = true
@@ -1239,14 +1264,15 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					p.nextToken()
 				}
 			}
-			if oExpr != nil {
-				stmt.OrderBy = append(stmt.OrderBy, OrderByItem{Expr: oExpr, Desc: desc, NullsFirst: nullsFirst})
-			}
+			stmt.OrderBy = append(stmt.OrderBy, OrderByItem{Expr: oExpr, Desc: desc, NullsFirst: nullsFirst})
 			if p.curTokenIs(TokenComma) {
 				p.nextToken()
 			} else {
 				break
 			}
+		}
+		if len(stmt.OrderBy) == 0 {
+			return nil, fmt.Errorf("syntax error: empty or invalid expression in ORDER BY clause")
 		}
 	}
 
@@ -1255,20 +1281,34 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 		if p.curTokenIs(TokenLimit) {
 			p.nextToken() // eat LIMIT
 			if p.curTokenIs(TokenInt) {
-				n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
+				n, err := strconv.ParseInt(p.curToken.Literal, 10, 64)
+				if err != nil || n < 0 {
+					return nil, fmt.Errorf("syntax error: LIMIT must not be negative")
+				}
 				stmt.Limit = n
 				p.nextToken()
+			} else if p.curTokenIs(TokenMinus) {
+				return nil, fmt.Errorf("syntax error: LIMIT must not be negative")
 			} else if p.curTokenIs(TokenVariable) || p.curTokenIs(TokenLParen) {
 				stmt.LimitExpr = p.parseExpression(precLowest)
+			} else {
+				return nil, fmt.Errorf("syntax error: empty or invalid expression in LIMIT clause")
 			}
 		} else if p.curTokenIs(TokenOffset) {
 			p.nextToken() // eat OFFSET
 			if p.curTokenIs(TokenInt) {
-				n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
+				n, err := strconv.ParseInt(p.curToken.Literal, 10, 64)
+				if err != nil || n < 0 {
+					return nil, fmt.Errorf("syntax error: OFFSET must not be negative")
+				}
 				stmt.Offset = n
 				p.nextToken()
+			} else if p.curTokenIs(TokenMinus) {
+				return nil, fmt.Errorf("syntax error: OFFSET must not be negative")
 			} else if p.curTokenIs(TokenVariable) || p.curTokenIs(TokenLParen) {
 				stmt.OffsetExpr = p.parseExpression(precLowest)
+			} else {
+				return nil, fmt.Errorf("syntax error: empty or invalid expression in OFFSET clause")
 			}
 			// Optional ROW or ROWS (e.g. OFFSET 10 ROWS)
 			if p.curTokenIs(TokenRow) || p.curTokenIs(TokenRows) {
@@ -1281,11 +1321,18 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				p.nextToken()
 			}
 			if p.curTokenIs(TokenInt) {
-				n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
+				n, err := strconv.ParseInt(p.curToken.Literal, 10, 64)
+				if err != nil || n < 0 {
+					return nil, fmt.Errorf("syntax error: FETCH count must not be negative")
+				}
 				stmt.Limit = n
 				p.nextToken()
+			} else if p.curTokenIs(TokenMinus) {
+				return nil, fmt.Errorf("syntax error: FETCH count must not be negative")
 			} else if p.curTokenIs(TokenVariable) || p.curTokenIs(TokenLParen) {
 				stmt.LimitExpr = p.parseExpression(precLowest)
+			} else {
+				return nil, fmt.Errorf("syntax error: empty or invalid expression in FETCH clause")
 			}
 			// Optional ROW or ROWS
 			if p.curTokenIs(TokenRow) || p.curTokenIs(TokenRows) {
@@ -1458,6 +1505,9 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 		} else {
 			break
 		}
+	}
+	if len(tuples) == 0 {
+		return nil, fmt.Errorf("syntax error: empty or invalid VALUES clause in INSERT")
 	}
 
 	if p.curTokenIs(TokenReturning) {

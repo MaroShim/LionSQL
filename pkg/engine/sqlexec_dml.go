@@ -160,6 +160,12 @@ func parseOnConflict(s string) (*onConflictClause, error) {
 	if whereIdx != -1 {
 		whereCond = strings.TrimSpace(setBody[whereIdx+5:])
 		setBody = strings.TrimSpace(setBody[:whereIdx])
+		if whereCond == "" {
+			return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause of ON CONFLICT DO UPDATE")
+		}
+		if err := ValidateWhereClause(whereCond); err != nil {
+			return nil, err
+		}
 	}
 
 	assignmentParts := splitAssignments(setBody)
@@ -1403,6 +1409,10 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 
 	if dml.From != "" {
 		return s.execUpdateFromJoin(dml, start, cs)
+	}
+
+	if err := ValidateSetClause(dml.Set); err != nil {
+		return nil, err
 	}
 
 	if dml.HasWhere && dml.Where == "" {

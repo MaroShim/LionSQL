@@ -270,6 +270,12 @@ func parsePivotQuery(query string) (*pivotParsedQuery, error) {
 
 	// Parse afterPivot: [AS] <alias> [WHERE <where>] [ORDER BY <order>]
 	pivotAlias, whereClause, orderByClause := parsePivotTailClauses(afterPivot)
+	if sqlutil.FindTopLevelKeyword(afterPivot, "WHERE") != -1 && whereClause == "" {
+		return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+	}
+	if err := ValidateWhereClause(whereClause); err != nil {
+		return nil, err
+	}
 
 	return &pivotParsedQuery{
 		OuterProjections: outerProjs,
@@ -873,6 +879,12 @@ func parseUnpivotQuery(query string) (*unpivotParsedQuery, error) {
 	}
 
 	unpivotAlias, whereClause, orderByClause := parsePivotTailClauses(afterUnpivot)
+	if sqlutil.FindTopLevelKeyword(afterUnpivot, "WHERE") != -1 && whereClause == "" {
+		return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+	}
+	if err := ValidateWhereClause(whereClause); err != nil {
+		return nil, err
+	}
 
 	return &unpivotParsedQuery{
 		OuterProjections: outerProjs,
