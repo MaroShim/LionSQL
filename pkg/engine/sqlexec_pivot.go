@@ -1130,27 +1130,45 @@ func parseForJSONQuery(query string) (*forJSONOptions, error) {
 	}
 
 	if rawOptions != "" {
-		// Split options by comma
-		optParts := strings.Split(rawOptions, ",")
-		for _, part := range optParts {
-			p := strings.TrimSpace(part)
-			pUpper := strings.ToUpper(p)
-			if pUpper == "WITHOUT_ARRAY_WRAPPER" {
-				opts.WithoutArrayWrapper = true
-			} else if pUpper == "INCLUDE_NULL_VALUES" {
-				opts.IncludeNullValues = true
-			} else if strings.HasPrefix(pUpper, "ROOT") {
-				// ROOT or ROOT('name')
-				afterRoot := strings.TrimSpace(p[4:])
-				if strings.HasPrefix(afterRoot, "(") && strings.HasSuffix(afterRoot, ")") {
-					inner := strings.Trim(strings.TrimSpace(afterRoot[1:len(afterRoot)-1]), "'\"")
-					if inner != "" {
-						opts.RootName = inner
-					} else {
+		cleanedOpt := strings.TrimRight(strings.TrimSpace(rawOptions), ";")
+		if cleanedOpt != "" {
+			if strings.HasPrefix(cleanedOpt, ",") {
+				cleanedOpt = strings.TrimSpace(cleanedOpt[1:])
+				if cleanedOpt == "" {
+					return nil, fmt.Errorf("syntax error: trailing comma or empty option in FOR JSON")
+				}
+			} else {
+				return nil, fmt.Errorf("syntax error: expected comma before options in FOR JSON, got %q", cleanedOpt)
+			}
+			// Split options by comma
+			optParts := strings.Split(cleanedOpt, ",")
+			for _, part := range optParts {
+				p := strings.TrimSpace(part)
+				if p == "" {
+					return nil, fmt.Errorf("syntax error: empty option in FOR JSON")
+				}
+				pUpper := strings.ToUpper(p)
+				if pUpper == "WITHOUT_ARRAY_WRAPPER" {
+					opts.WithoutArrayWrapper = true
+				} else if pUpper == "INCLUDE_NULL_VALUES" {
+					opts.IncludeNullValues = true
+				} else if strings.HasPrefix(pUpper, "ROOT") {
+					// ROOT or ROOT('name')
+					afterRoot := strings.TrimSpace(p[4:])
+					if strings.HasPrefix(afterRoot, "(") && strings.HasSuffix(afterRoot, ")") {
+						inner := strings.Trim(strings.TrimSpace(afterRoot[1:len(afterRoot)-1]), "'\"")
+						if inner != "" {
+							opts.RootName = inner
+						} else {
+							opts.RootName = "root"
+						}
+					} else if afterRoot == "" {
 						opts.RootName = "root"
+					} else {
+						return nil, fmt.Errorf("syntax error in FOR JSON option: %s", part)
 					}
 				} else {
-					opts.RootName = "root"
+					return nil, fmt.Errorf("syntax error: invalid FOR JSON option: %s", part)
 				}
 			}
 		}

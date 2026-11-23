@@ -10,12 +10,13 @@ import (
 // Internal cursor state (pos, readPos, ch) is strictly encapsulated; callers must
 // interact exclusively via NextToken() and ConsumeDotIfPresent().
 type Lexer struct {
-	input   string
-	pos     int
-	readPos int
-	ch      rune
-	line    int
-	col     int
+	input          string
+	pos            int
+	readPos        int
+	ch             rune
+	line           int
+	col            int
+	unclosedComment bool
 }
 
 // NewLexer creates a new Lexer for the given input.
@@ -68,6 +69,11 @@ func (l *Lexer) NextToken() Token {
 
 	tokLine := max(l.line, 1)
 	tokCol := max(l.col, 1)
+
+	if l.unclosedComment {
+		l.unclosedComment = false
+		return Token{Type: TokenIllegal, Literal: "/*", Line: tokLine, Col: tokCol}
+	}
 
 	if l.ch == 0 {
 		return Token{Type: TokenEOF, Literal: "", Line: tokLine, Col: tokCol}
@@ -204,20 +210,39 @@ func (l *Lexer) scanToken(tokLine, tokCol int) Token {
 		l.readChar()
 		return Token{Type: TokenBitwiseNot, Literal: "~", Line: tokLine, Col: tokCol}
 	case '\'':
-		return Token{Type: TokenString, Literal: l.readString(), Line: tokLine, Col: tokCol}
+		lit, closed := l.readString()
+		if !closed {
+			return Token{Type: TokenIllegal, Literal: "'" + lit, Line: tokLine, Col: tokCol}
+		}
+		return Token{Type: TokenString, Literal: lit, Line: tokLine, Col: tokCol}
 	case '"':
-		return Token{Type: TokenIdent, Literal: l.readQuotedIdentifier(), Line: tokLine, Col: tokCol}
+		lit, closed := l.readQuotedIdentifier()
+		if !closed {
+			return Token{Type: TokenIllegal, Literal: `"` + lit, Line: tokLine, Col: tokCol}
+		}
+		return Token{Type: TokenIdent, Literal: lit, Line: tokLine, Col: tokCol}
 	case '[':
-		return Token{Type: TokenIdent, Literal: l.readBracketedIdentifier(), Line: tokLine, Col: tokCol}
+		lit, closed := l.readBracketedIdentifier()
+		if !closed {
+			return Token{Type: TokenIllegal, Literal: "[" + lit, Line: tokLine, Col: tokCol}
+		}
+		return Token{Type: TokenIdent, Literal: lit, Line: tokLine, Col: tokCol}
 	case '`':
-		return Token{Type: TokenIdent, Literal: l.readBacktickIdentifier(), Line: tokLine, Col: tokCol}
+		lit, closed := l.readBacktickIdentifier()
+		if !closed {
+			return Token{Type: TokenIllegal, Literal: "`" + lit, Line: tokLine, Col: tokCol}
+		}
+		return Token{Type: TokenIdent, Literal: lit, Line: tokLine, Col: tokCol}
 	case '@':
 		return Token{Type: TokenVariable, Literal: l.readVariable(), Line: tokLine, Col: tokCol}
 	case '$':
 		return l.readDollarToken(tokLine, tokCol)
 	case '.':
 		if isDigit(l.peekChar()) {
-			lit, isFloat := l.readNumber()
+			lit, isFloat, valid := l.readNumber()
+			if !valid {
+				return Token{Type: TokenIllegal, Literal: lit, Line: tokLine, Col: tokCol}
+			}
 			if isFloat {
 				return Token{Type: TokenFloat, Literal: lit, Line: tokLine, Col: tokCol}
 			}
@@ -226,14 +251,22 @@ func (l *Lexer) scanToken(tokLine, tokCol int) Token {
 		if l.peekChar() == '.' || isLetter(l.peekChar()) || l.peekChar() == '[' || l.peekChar() == '"' || l.peekChar() == '`' {
 			startPos := l.pos
 			l.consumeRawDotChain()
-			return Token{Type: TokenIdent, Literal: l.input[startPos:l.pos], Raw: l.input[startPos:l.pos], Line: tokLine, Col: tokCol}
+			lit := l.input[startPos:l.pos]
+			if lit == "." || lit == ".." || strings.HasSuffix(lit, "..") || (strings.HasSuffix(lit, ".") && !strings.HasSuffix(lit, ".*")) {
+				return Token{Type: TokenIllegal, Literal: lit, Line: tokLine, Col: tokCol}
+			}
+			return Token{Type: TokenIdent, Literal: lit, Raw: lit, Line: tokLine, Col: tokCol}
 		}
 		l.readChar()
 		return Token{Type: TokenIllegal, Literal: ".", Line: tokLine, Col: tokCol}
 	default:
 		if (l.ch == 'N' || l.ch == 'n' || l.ch == 'X' || l.ch == 'x') && l.peekChar() == '\'' {
 			l.readChar() // skip 'N', 'n', 'X', or 'x'
-			return Token{Type: TokenString, Literal: l.readString(), Line: tokLine, Col: tokCol}
+			lit, closed := l.readString()
+			if !closed {
+				return Token{Type: TokenIllegal, Literal: "'" + lit, Line: tokLine, Col: tokCol}
+			}
+			return Token{Type: TokenString, Literal: lit, Line: tokLine, Col: tokCol}
 		}
 		if (l.ch == 'E' || l.ch == 'e') && l.peekChar() == '\'' {
 			l.readChar() // skip 'E' or 'e'
@@ -249,9 +282,16 @@ func (l *Lexer) scanToken(tokLine, tokCol int) Token {
 		}
 		if isDigit(l.ch) {
 			if l.ch == '0' && (l.peekChar() == 'x' || l.peekChar() == 'X') {
-				return Token{Type: TokenBinary, Literal: l.readHexLiteral(), Line: tokLine, Col: tokCol}
+				lit, valid := l.readHexLiteral()
+				if !valid {
+					return Token{Type: TokenIllegal, Literal: lit, Line: tokLine, Col: tokCol}
+				}
+				return Token{Type: TokenBinary, Literal: lit, Line: tokLine, Col: tokCol}
 			}
-			lit, isFloat := l.readNumber()
+			lit, isFloat, valid := l.readNumber()
+			if !valid {
+				return Token{Type: TokenIllegal, Literal: lit, Line: tokLine, Col: tokCol}
+			}
 			if isFloat {
 				return Token{Type: TokenFloat, Literal: lit, Line: tokLine, Col: tokCol}
 			}
@@ -375,6 +415,7 @@ func (l *Lexer) skipWhitespaceAndComments() {
 			// Multi-line comment
 			l.readChar()
 			l.readChar()
+			closed := false
 			for !(l.ch == '*' && l.peekChar() == '/') && l.ch != 0 {
 				if l.ch == '\n' {
 					l.line++
@@ -382,9 +423,14 @@ func (l *Lexer) skipWhitespaceAndComments() {
 				}
 				l.readChar()
 			}
-			if l.ch == '*' {
+			if l.ch == '*' && l.peekChar() == '/' {
 				l.readChar() // eat *
 				l.readChar() // eat /
+				closed = true
+			}
+			if !closed {
+				l.unclosedComment = true
+				break
 			}
 		} else {
 			break
@@ -392,36 +438,39 @@ func (l *Lexer) skipWhitespaceAndComments() {
 	}
 }
 
-func (l *Lexer) readBracketedIdentifier() string {
+func (l *Lexer) readBracketedIdentifier() (string, bool) {
 	startPos := l.pos
-	l.readBracketedSegment()
+	closed := l.readBracketedSegment()
 	l.consumeRawDotChain()
-	return l.input[startPos:l.pos]
+	return l.input[startPos:l.pos], closed
 }
 
-func (l *Lexer) readBracketedSegment() {
+func (l *Lexer) readBracketedSegment() bool {
 	l.readChar() // skip '['
 	for l.ch != ']' && l.ch != 0 {
 		l.readChar()
 	}
 	if l.ch == ']' {
 		l.readChar() // skip ']'
+		return true
 	}
+	return false
 }
 
-func (l *Lexer) readQuotedIdentifier() string {
+func (l *Lexer) readQuotedIdentifier() (string, bool) {
 	return l.readDelimitedIdentifier('"')
 }
 
-func (l *Lexer) readBacktickIdentifier() string {
+func (l *Lexer) readBacktickIdentifier() (string, bool) {
 	return l.readDelimitedIdentifier('`')
 }
 
 // readDelimitedIdentifier reads a double-quoted ("...") or backtick-quoted (`...`)
 // identifier segment, unescaping doubled delimiters, and appends any dot-qualified suffix.
-func (l *Lexer) readDelimitedIdentifier(quote rune) string {
+func (l *Lexer) readDelimitedIdentifier(quote rune) (string, bool) {
 	l.readChar() // skip initial delimiter
 	var b strings.Builder
+	closed := false
 	for l.ch != 0 {
 		if l.ch == quote {
 			if l.peekChar() == quote {
@@ -431,12 +480,13 @@ func (l *Lexer) readDelimitedIdentifier(quote rune) string {
 				continue
 			}
 			l.readChar() // skip closing delimiter
+			closed = true
 			break
 		}
 		b.WriteRune(l.ch)
 		l.readChar()
 	}
-	return b.String() + l.readChainedSuffix()
+	return b.String() + l.readChainedSuffix(), closed
 }
 
 // readChainedSuffix reads optional .part or ..part chains following a quoted/backtick identifier.
@@ -449,11 +499,14 @@ func (l *Lexer) readChainedSuffix() string {
 		l.readChar() // eat second '.'
 		switch {
 		case l.ch == '"':
-			return ".." + l.readQuotedIdentifier()
+			lit, _ := l.readQuotedIdentifier()
+			return ".." + lit
 		case l.ch == '[':
-			return ".." + l.readBracketedIdentifier()
+			lit, _ := l.readBracketedIdentifier()
+			return ".." + lit
 		case l.ch == '`':
-			return ".." + l.readBacktickIdentifier()
+			lit, _ := l.readBacktickIdentifier()
+			return ".." + lit
 		case isLetter(l.ch):
 			return ".." + l.readIdentifier()
 		default:
@@ -465,11 +518,14 @@ func (l *Lexer) readChainedSuffix() string {
 		l.readChar() // eat '.'
 		switch {
 		case l.ch == '"':
-			return "." + l.readQuotedIdentifier()
+			lit, _ := l.readQuotedIdentifier()
+			return "." + lit
 		case l.ch == '[':
-			return "." + l.readBracketedIdentifier()
+			lit, _ := l.readBracketedIdentifier()
+			return "." + lit
 		case l.ch == '`':
-			return "." + l.readBacktickIdentifier()
+			lit, _ := l.readBacktickIdentifier()
+			return "." + lit
 		case l.ch == '*':
 			l.readChar() // eat '*'
 			return ".*"
@@ -504,9 +560,9 @@ func (l *Lexer) consumeRawDotChain() {
 			case l.ch == '[':
 				l.readBracketedSegment()
 			case l.ch == '"':
-				_ = l.readDelimitedIdentifier('"')
+				_, _ = l.readDelimitedIdentifier('"')
 			case l.ch == '`':
-				_ = l.readDelimitedIdentifier('`')
+				_, _ = l.readDelimitedIdentifier('`')
 			case isLetter(l.ch):
 				l.readBareIdentSegment()
 			}
@@ -516,9 +572,9 @@ func (l *Lexer) consumeRawDotChain() {
 			case l.ch == '[':
 				l.readBracketedSegment()
 			case l.ch == '"':
-				_ = l.readDelimitedIdentifier('"')
+				_, _ = l.readDelimitedIdentifier('"')
 			case l.ch == '`':
-				_ = l.readDelimitedIdentifier('`')
+				_, _ = l.readDelimitedIdentifier('`')
 			case l.ch == '*':
 				l.readChar() // eat '*'
 			default:
@@ -542,17 +598,25 @@ func (l *Lexer) readVariable() string {
 	return l.input[startPos:l.pos]
 }
 
-func (l *Lexer) readHexLiteral() string {
+func (l *Lexer) readHexLiteral() (string, bool) {
 	startPos := l.pos
 	l.readChar() // '0'
 	l.readChar() // 'x' or 'X'
+	count := 0
 	for isDigit(l.ch) || (l.ch >= 'a' && l.ch <= 'f') || (l.ch >= 'A' && l.ch <= 'F') {
 		l.readChar()
+		count++
 	}
-	return l.input[startPos:l.pos]
+	if count == 0 {
+		for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
+			l.readChar()
+		}
+		return l.input[startPos:l.pos], false
+	}
+	return l.input[startPos:l.pos], true
 }
 
-func (l *Lexer) readNumber() (string, bool) {
+func (l *Lexer) readNumber() (string, bool, bool) {
 	startPos := l.pos
 	isFloat := false
 	if l.ch == '.' && isDigit(l.peekChar()) {
@@ -594,15 +658,32 @@ func (l *Lexer) readNumber() (string, bool) {
 			for isDigit(l.ch) {
 				l.readChar()
 			}
+		} else {
+			l.readChar() // eat 'e' or 'E'
+			if l.ch == '+' || l.ch == '-' {
+				l.readChar()
+			}
+			for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
+				l.readChar()
+			}
+			return l.input[startPos:l.pos], false, false
 		}
 	}
 
-	return l.input[startPos:l.pos], isFloat
+	if isLetter(l.ch) || l.ch == '_' {
+		for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
+			l.readChar()
+		}
+		return l.input[startPos:l.pos], false, false
+	}
+
+	return l.input[startPos:l.pos], isFloat, true
 }
 
-func (l *Lexer) readString() string {
+func (l *Lexer) readString() (string, bool) {
 	l.readChar() // skip initial quote
 	var b strings.Builder
+	closed := false
 	for l.ch != 0 {
 		if l.ch == '\'' {
 			if l.peekChar() == '\'' {
@@ -613,12 +694,13 @@ func (l *Lexer) readString() string {
 				continue
 			}
 			l.readChar() // skip closing quote
+			closed = true
 			break
 		}
 		b.WriteRune(l.ch)
 		l.readChar()
 	}
-	return b.String()
+	return b.String(), closed
 }
 
 func (l *Lexer) readEscapeString() string {

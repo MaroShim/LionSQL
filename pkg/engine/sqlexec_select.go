@@ -33,8 +33,26 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		outerNames = append(outerNames, cleanIdentifier(qInfo.TableAlias))
 	}
 	if qInfo.WhereClause != "" {
+		if err := ValidateWhereClause(qInfo.WhereClause); err != nil {
+			return nil, err
+		}
 		if resolved, err := s.resolveSubqueriesWithSession(qInfo.WhereClause, cs, outerNames...); err == nil {
 			qInfo.WhereClause = resolved
+		}
+	}
+	if qInfo.HavingClause != "" {
+		if err := ValidateWhereClause(qInfo.HavingClause); err != nil {
+			return nil, err
+		}
+	}
+	if qInfo.OrderByClause != "" {
+		if err := ValidateOrderByClause(qInfo.OrderByClause); err != nil {
+			return nil, err
+		}
+	}
+	if len(qInfo.GroupByCols) > 0 {
+		if err := ValidateGroupByClause(strings.Join(qInfo.GroupByCols, ", ")); err != nil {
+			return nil, err
 		}
 	}
 
@@ -358,12 +376,18 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 		after := strings.TrimSpace(trimmed[6:])
 		if strings.HasPrefix(after, "(") && strings.HasSuffix(after, ")") {
 			subSQL := strings.TrimSpace(after[1 : len(after)-1])
+			if subSQL == "" || !sqlutil.HasPrefixKeyword(subSQL, "SELECT") {
+				return fmt.Errorf("syntax error: expected SELECT inside EXISTS subquery"), "exists"
+			}
 			limitedSQL := ensureExistsLimit1(subSQL)
 			res, err := s.executeNestedSessionSQL(cs, limitedSQL)
 			if err != nil {
 				res, err = s.executeNestedSessionSQL(cs, subSQL)
 			}
-			if err == nil && len(res.Rows) > 0 {
+			if err != nil {
+				return fmt.Errorf("error evaluating subquery in EXISTS expression: %w", err), "exists"
+			}
+			if len(res.Rows) > 0 {
 				return true, "exists"
 			}
 			return false, "exists"
@@ -1184,13 +1208,39 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 	if !sqlutil.HasPrefixKeyword(cleaned, "SELECT") {
 		return nil, fmt.Errorf("invalid SELECT statement")
 	}
-
 	rawList := strings.TrimSpace(cleaned[6:])
+	// Fail-closed firewall: table-less scalar SELECT cannot have GROUP BY or HAVING
+	if groupIdx := sqlutil.FindTopLevelKeyword(rawList, "GROUP BY"); groupIdx != -1 {
+		return nil, fmt.Errorf("syntax error: GROUP BY clause is not allowed in table-less SELECT")
+	}
+	if havingIdx := sqlutil.FindTopLevelKeyword(rawList, "HAVING"); havingIdx != -1 {
+		return nil, fmt.Errorf("syntax error: HAVING clause is not allowed in table-less SELECT")
+	}
+
+	// Validate trailing clauses on scalar SELECT: ORDER BY, etc.
+	if orderIdx := sqlutil.FindTopLevelKeyword(rawList, "ORDER BY"); orderIdx != -1 {
+		orderPart := strings.TrimSpace(rawList[orderIdx+8:])
+		if err := ValidateOrderByClause(orderPart); err != nil {
+			return nil, err
+		}
+		// In table-less SELECT, column names cannot be referenced in ORDER BY
+		items := sqlutil.SplitTopLevel(orderPart, ',')
+		for _, item := range items {
+			p := proc.NewParser(proc.NewLexer(item))
+			if ast := p.ParseExpr(); ast != nil {
+				if _, isCol := ast.(*proc.ColumnRefExpr); isCol {
+					return nil, fmt.Errorf("column %q does not exist in table-less SELECT", item)
+				}
+			}
+		}
+		rawList = strings.TrimSpace(rawList[:orderIdx])
+	}
+
 	var whereClause string
 	hasWhere := false
-	if whereIdx := sqlutil.FindTopLevelKeyword(cleaned, "WHERE"); whereIdx != -1 {
-		rawList = strings.TrimSpace(cleaned[6:whereIdx])
-		whereClause = strings.TrimSpace(cleaned[whereIdx+5:])
+	if whereIdx := sqlutil.FindTopLevelKeyword(rawList, "WHERE"); whereIdx != -1 {
+		whereClause = strings.TrimSpace(rawList[whereIdx+5:])
+		rawList = strings.TrimSpace(rawList[:whereIdx])
 		hasWhere = true
 	}
 	if hasWhere && whereClause == "" {
@@ -1199,21 +1249,40 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 	if err := ValidateWhereClause(whereClause); err != nil {
 		return nil, err
 	}
-
-	// Validate trailing clauses on scalar SELECT: ORDER BY, GROUP BY, etc.
-	if orderIdx := sqlutil.FindTopLevelKeyword(rawList, "ORDER BY"); orderIdx != -1 {
-		orderPart := strings.TrimSpace(rawList[orderIdx+8:])
-		if orderPart == "" {
-			return nil, fmt.Errorf("syntax error: empty or invalid expression in ORDER BY clause")
+	// In table-less SELECT, column references in WHERE without FROM are invalid
+	if whereClause != "" {
+		p := proc.NewParser(proc.NewLexer(whereClause))
+		if expr := p.ParseExpr(); expr != nil {
+			var checkNoCols func(e proc.Expr) error
+			checkNoCols = func(e proc.Expr) error {
+				if e == nil {
+					return nil
+				}
+				switch node := e.(type) {
+				case *proc.ColumnRefExpr:
+					if !proc.IsBuiltinFunction(node.Name) && !strings.HasPrefix(node.Name, "@") {
+						return fmt.Errorf("column %q does not exist in table-less SELECT", node.Name)
+					}
+				case *proc.BinaryExpr:
+					if err := checkNoCols(node.Left); err != nil {
+						return err
+					}
+					return checkNoCols(node.Right)
+				case *proc.UnaryExpr:
+					return checkNoCols(node.Expr)
+				}
+				return nil
+			}
+			if err := checkNoCols(expr); err != nil {
+				return nil, err
+			}
 		}
-		rawList = strings.TrimSpace(rawList[:orderIdx])
 	}
-	if groupIdx := sqlutil.FindTopLevelKeyword(rawList, "GROUP BY"); groupIdx != -1 {
-		groupPart := strings.TrimSpace(rawList[groupIdx+8:])
-		if groupPart == "" {
-			return nil, fmt.Errorf("syntax error: empty or invalid expression in GROUP BY clause")
+	// Fail-closed firewall: disallow unsupported clauses on table-less SELECT
+	for _, kw := range []string{"LIMIT", "OFFSET", "SET", "VALUES", "JOIN", "ON", "USING", "HAVING", "RETURNING", "OUTPUT", "WINDOW"} {
+		if kwIdx := sqlutil.FindTopLevelKeyword(rawList, kw); kwIdx != -1 {
+			return nil, fmt.Errorf("syntax error: unexpected clause %q in table-less scalar SELECT", kw)
 		}
-		rawList = strings.TrimSpace(rawList[:groupIdx])
 	}
 	for {
 		if rem, ok := sqlutil.TrimPrefixKeyword(rawList, "ALL"); ok {
@@ -1292,7 +1361,14 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 		if val == exprStr {
 			// If expression failed to evaluate as a recognized scalar, report error
 			p := proc.NewParser(proc.NewLexer(exprStr))
-			if ast := p.ParseExpr(); ast != nil {
+			ast := p.ParseExpr()
+			if len(p.Errors()) > 0 {
+				return nil, fmt.Errorf("syntax error in projection: %s", strings.Join(p.Errors(), "; "))
+			}
+			if ast == nil {
+				return nil, fmt.Errorf("syntax error: invalid projection expression: %s", exprStr)
+			}
+			if ast != nil {
 				if fn, ok := ast.(*proc.FunctionCallExpr); ok && !proc.IsBuiltinFunction(fn.Name) {
 					return nil, fmt.Errorf("unknown scalar function or invalid expression: %s", exprStr)
 				}
@@ -1308,11 +1384,12 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 					cs.Mu.Unlock()
 				}
 				if res, err := proc.EvalRowExpr(ast, varRow, nil); err != nil {
-					if _, isCol := ast.(*proc.ColumnRefExpr); !isCol {
-						return nil, err
-					}
+					return nil, err
 				} else if res != nil {
 					val = res
+				} else if _, isCol := ast.(*proc.ColumnRefExpr); isCol {
+					// In table-less SELECT, column references without a FROM table are invalid
+					return nil, fmt.Errorf("column %q does not exist", exprStr)
 				}
 			}
 		}
@@ -1976,6 +2053,10 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	cleaned = StripLeadingComments(cleaned)
 	cleaned = sqlutil.UnwrapOuterParens(cleaned)
 
+	if !sqlutil.HasPrefixKeyword(cleaned, "SELECT") && !sqlutil.HasPrefixKeyword(cleaned, "WITH") && !strings.HasPrefix(cleaned, "(") {
+		return nil, fmt.Errorf("invalid SELECT statement: %s", cleaned)
+	}
+
 	// -1. T-SQL Variable Assignment: SELECT @var = expr [, ...] [FROM ...]
 	if isAssign, res, err := s.tryExecSelectVarAssignment(cleaned, start, cs); isAssign {
 		return res, err
@@ -2060,7 +2141,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION
 	if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
 		upperClean := strings.ToUpper(cleaned)
-		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "XACT_STATE") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "IDENT_") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean, "CURRENT_SETTING") && !strings.Contains(upperClean, "PG_CANCEL_BACKEND") && !strings.Contains(upperClean, "PG_TERMINATE_BACKEND") && !strings.Contains(upperClean[6:], "SELECT") && !strings.Contains(cleaned, "->") {
+		if !strings.Contains(upperClean, "WHERE") && !strings.Contains(upperClean, "ORDER BY") && !strings.Contains(upperClean, "GROUP BY") && !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "XACT_STATE") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "IDENT_") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean, "CURRENT_SETTING") && !strings.Contains(upperClean, "PG_CANCEL_BACKEND") && !strings.Contains(upperClean, "PG_TERMINATE_BACKEND") && !strings.Contains(upperClean[6:], "SELECT") && !strings.Contains(cleaned, "->") {
 			if res, err := s.execVDBESelect(cleaned, start, cs); err == nil && res != nil {
 				return res, nil
 			}
@@ -2185,6 +2266,54 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		}
 		if qInfo.Join != nil {
 			if err := s.checkTableAccess(cs, qInfo.Join.Table, auth.PrivSelect); err != nil {
+				return nil, err
+			}
+		}
+
+		var schemas []*storage.TableSchema
+		if tblSch, err := s.getTable(cs, tableName); err == nil && tblSch != nil {
+			schemas = append(schemas, tblSch)
+		}
+		for _, j := range qInfo.Joins {
+			if jSch, err := s.getTable(cs, cleanIdentifier(j.Table)); err == nil && jSch != nil {
+				schemas = append(schemas, jSch)
+			}
+		}
+		if qInfo.Join != nil {
+			if jSch, err := s.getTable(cs, cleanIdentifier(qInfo.Join.Table)); err == nil && jSch != nil {
+				schemas = append(schemas, jSch)
+			}
+		}
+
+		if qInfo.WhereClause != "" {
+			if err := ValidateWhereClauseWithSchemas(qInfo.WhereClause, schemas...); err != nil {
+				return nil, err
+			}
+		}
+		if qInfo.HavingClause != "" {
+			if err := ValidateWhereClause(qInfo.HavingClause); err != nil {
+				return nil, err
+			}
+		}
+		if qInfo.OrderByClause != "" {
+			if err := ValidateOrderByClause(qInfo.OrderByClause); err != nil {
+				return nil, err
+			}
+		}
+		if len(qInfo.GroupByCols) > 0 {
+			if err := ValidateGroupByClause(strings.Join(qInfo.GroupByCols, ", ")); err != nil {
+				return nil, err
+			}
+		}
+		for _, j := range qInfo.Joins {
+			if j.Filter != "" {
+				if err := ValidateWhereClause(j.Filter); err != nil {
+					return nil, err
+				}
+			}
+		}
+		if qInfo.Join != nil && qInfo.Join.Filter != "" {
+			if err := ValidateWhereClause(qInfo.Join.Filter); err != nil {
 				return nil, err
 			}
 		}

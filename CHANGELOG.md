@@ -8,10 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- add 10x Negative Syntax Fuzzer suite covering 14,467 malformed SQL permutations with 100% fail-closed rejection (`FIX-NEGATIVE-SYNTAX-FUZZER-1`)
 - support multi-column tuple comparisons `(a, b) = (c, d)` and `(a, b) IN ((...))` across parser and evaluator (`ENG-034`, Round 15)
 - support `ORDER BY ... NULLS FIRST` and `NULLS LAST` across tokenizer, AST parser, planner, and sort/window iterators (`ENG-038`, Round 16)
 
 ### Fixed
+- enforce fail-closed syntax rejection across all SQL clauses (`WHERE`, `SET`, `ORDER BY`, `GROUP BY`, `LIMIT`, `OFFSET`, `VALUES`, `HAVING`, `RETURNING`, `WINDOW`) eliminating silent query acceptance and silent drops (`FIX-NEGATIVE-SYNTAX-FUZZER-1`)
+- update README.md and README.ko.md to document native WiredTiger storage engine support on Windows platforms
 - prevent silent drop of malformed `WHERE`, `SET`, `JOIN ON`, and `HAVING` clauses in Pratt parser and compiler (`ENG-031`, Round 15)
 - execute LIFO DDL rollback actions on `ROLLBACK TO SAVEPOINT` in unified transaction manager (`ENG-032`, Round 15)
 - filter visited rows in `UNION` (distinct) recursive CTEs to terminate cycle traversal cleanly (`ENG-033`, Round 15)

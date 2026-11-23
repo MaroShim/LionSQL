@@ -33,6 +33,7 @@ func (p *Parser) parseExpression(precedence int) Expr {
 		case TokenIn:
 			p.nextToken() // eat IN
 			if !p.curTokenIs(TokenLParen) {
+				p.addError("expected ( after IN")
 				return nil
 			}
 			p.nextToken() // eat (
@@ -40,9 +41,11 @@ func (p *Parser) parseExpression(precedence int) Expr {
 				p.nextToken() // eat SELECT
 				sel, err := p.parseGeneralSelect()
 				if err != nil {
+					p.addError(err.Error())
 					return nil
 				}
 				if !p.curTokenIs(TokenRParen) {
+					p.addError("expected ) closing subquery in IN")
 					return nil
 				}
 				p.nextToken() // eat )
@@ -52,16 +55,27 @@ func (p *Parser) parseExpression(precedence int) Expr {
 			var list []Expr
 			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
 				item := p.parseExpression(precLowest)
-				if item != nil {
-					list = append(list, item)
+				if item == nil {
+					p.addError("expected expression in IN list")
+					return nil
 				}
+				list = append(list, item)
 				if p.curTokenIs(TokenComma) {
 					p.nextToken()
+					if p.curTokenIs(TokenRParen) {
+						p.addError("unexpected trailing comma in IN list")
+						return nil
+					}
 				} else {
 					break
 				}
 			}
+			if len(list) == 0 {
+				p.addError("syntax error: empty IN list () is not allowed")
+				return nil
+			}
 			if !p.curTokenIs(TokenRParen) {
+				p.addError("expected ) closing IN list")
 				return nil
 			}
 			p.nextToken() // eat )
@@ -109,6 +123,7 @@ func (p *Parser) parseExpression(precedence int) Expr {
 			if p.curTokenIs(TokenIn) {
 				p.nextToken() // eat IN
 				if !p.curTokenIs(TokenLParen) {
+					p.addError("expected ( after NOT IN")
 					return nil
 				}
 				p.nextToken() // eat (
@@ -116,9 +131,11 @@ func (p *Parser) parseExpression(precedence int) Expr {
 					p.nextToken() // eat SELECT
 					sel, err := p.parseGeneralSelect()
 					if err != nil {
+						p.addError(err.Error())
 						return nil
 					}
 					if !p.curTokenIs(TokenRParen) {
+						p.addError("expected ) closing subquery in NOT IN")
 						return nil
 					}
 					p.nextToken() // eat )
@@ -128,16 +145,27 @@ func (p *Parser) parseExpression(precedence int) Expr {
 				var list []Expr
 				for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
 					item := p.parseExpression(precLowest)
-					if item != nil {
-						list = append(list, item)
+					if item == nil {
+						p.addError("expected expression in NOT IN list")
+						return nil
 					}
+					list = append(list, item)
 					if p.curTokenIs(TokenComma) {
 						p.nextToken()
+						if p.curTokenIs(TokenRParen) {
+							p.addError("unexpected trailing comma in NOT IN list")
+							return nil
+						}
 					} else {
 						break
 					}
 				}
+				if len(list) == 0 {
+					p.addError("syntax error: empty NOT IN list () is not allowed")
+					return nil
+				}
 				if !p.curTokenIs(TokenRParen) {
+					p.addError("expected ) closing NOT IN list")
 					return nil
 				}
 				p.nextToken() // eat )
@@ -388,6 +416,10 @@ func (p *Parser) parsePrefix() Expr {
 		}
 		return &ColumnRefExpr{Name: funcName}
 	case TokenAsterisk:
+		if !p.allowStar {
+			p.addError("unexpected token '*' in expression")
+			return nil
+		}
 		p.nextToken()
 		return &ColumnRefExpr{Name: "*"}
 	case TokenCount, TokenSum, TokenAvg, TokenMin, TokenMax, TokenLeft, TokenRight:
@@ -400,18 +432,22 @@ func (p *Parser) parsePrefix() Expr {
 	case TokenExists:
 		p.nextToken() // eat EXISTS
 		if !p.curTokenIs(TokenLParen) {
+			p.addError("expected ( after EXISTS")
 			return nil
 		}
 		p.nextToken() // eat (
 		if !p.curTokenIs(TokenSelect) {
+			p.addError("expected SELECT inside EXISTS subquery")
 			return nil
 		}
 		p.nextToken() // eat SELECT
 		sel, err := p.parseGeneralSelect()
 		if err != nil {
+			p.addError(err.Error())
 			return nil
 		}
 		if !p.curTokenIs(TokenRParen) {
+			p.addError("expected ) closing EXISTS subquery")
 			return nil
 		}
 		p.nextToken() // eat )
@@ -430,6 +466,10 @@ func (p *Parser) parsePrefix() Expr {
 		return &VariableExpr{Name: varName}
 	case TokenIdent:
 		ident := p.curToken.Literal
+		if isReservedClauseKeyword(p.curToken.Type) || strings.EqualFold(ident, "XOR") {
+			p.addError(fmt.Sprintf("syntax error: unexpected keyword %q in expression", ident))
+			return nil
+		}
 		p.nextToken()
 		if p.curTokenIs(TokenLParen) {
 			return p.parseFunctionCall(ident)
@@ -442,10 +482,18 @@ func (p *Parser) parsePrefix() Expr {
 	case TokenPlus:
 		p.nextToken()
 		right := p.parseExpression(precPrefix)
+		if right == nil {
+			p.addError("expected expression after +")
+			return nil
+		}
 		return &UnaryExpr{Op: TokenPlus, Expr: right}
 	case TokenMinus:
 		p.nextToken()
 		right := p.parseExpression(precPrefix)
+		if right == nil {
+			p.addError("expected expression after -")
+			return nil
+		}
 		if lit, ok := right.(*LiteralExpr); ok && lit.Val.Type == storage.TypeInt {
 			neg := -lit.Val.IVal
 			prec := 4
@@ -458,46 +506,63 @@ func (p *Parser) parsePrefix() Expr {
 	case TokenBitwiseNot:
 		p.nextToken()
 		right := p.parseExpression(precPrefix)
+		if right == nil {
+			p.addError("expected expression after ~")
+			return nil
+		}
 		return &UnaryExpr{Op: TokenBitwiseNot, Expr: right}
 	case TokenNot:
 		p.nextToken() // eat NOT
 		if p.curTokenIs(TokenExists) {
 			p.nextToken() // eat EXISTS
 			if !p.curTokenIs(TokenLParen) {
+				p.addError("expected ( after NOT EXISTS")
 				return nil
 			}
 			p.nextToken() // eat (
 			if !p.curTokenIs(TokenSelect) {
+				p.addError("expected SELECT inside NOT EXISTS")
 				return nil
 			}
 			p.nextToken() // eat SELECT
 			sel, err := p.parseGeneralSelect()
 			if err != nil {
+				p.addError(err.Error())
 				return nil
 			}
 			if !p.curTokenIs(TokenRParen) {
+				p.addError("expected ) closing NOT EXISTS")
 				return nil
 			}
 			p.nextToken() // eat )
 			return &ExistsExpr{Query: sel, Not: true}
 		}
 		right := p.parseExpression(precNot)
+		if right == nil {
+			p.addError("expected expression after NOT")
+			return nil
+		}
 		return &UnaryExpr{Op: TokenNot, Expr: right}
 	case TokenSelect:
 		p.nextToken() // eat SELECT
 		sel, err := p.parseGeneralSelect()
-		if err == nil && sel != nil {
-			sub := &ScalarSubqueryExpr{
-				Query: sel,
-				Table: sel.From.Name,
-				Where: sel.Where,
-			}
-			if len(sel.Projections) > 0 {
-				sub.Column = sel.Projections[0].String()
-			}
-			return sub
+		if err != nil {
+			p.addError(err.Error())
+			return nil
 		}
-		return nil
+		if sel == nil || sel.From.Name == "" {
+			p.addError("syntax error: invalid or incomplete SELECT expression")
+			return nil
+		}
+		sub := &ScalarSubqueryExpr{
+			Query: sel,
+			Table: sel.From.Name,
+			Where: sel.Where,
+		}
+		if len(sel.Projections) > 0 {
+			sub.Column = sel.Projections[0].String()
+		}
+		return sub
 	case TokenLParen:
 		p.nextToken()
 		// Check for scalar subquery (SELECT ...)
@@ -1001,22 +1066,58 @@ func (p *Parser) parseFunctionCall(name string) Expr {
 		p.nextToken() // eat ALL
 	}
 
+	prevAllowStar := p.allowStar
+	if strings.EqualFold(name, "COUNT") {
+		p.allowStar = true
+	}
 	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
 		arg := p.parseExpression(precLowest)
-		if arg != nil {
-			args = append(args, arg)
+		if arg == nil {
+			p.addError(fmt.Sprintf("expected argument expression in call to %s", name))
+			return nil
 		}
+		args = append(args, arg)
 		if p.curTokenIs(TokenComma) {
 			p.nextToken()
+			if p.curTokenIs(TokenRParen) {
+				p.addError(fmt.Sprintf("unexpected trailing comma in argument list for %s", name))
+				return nil
+			}
 		} else {
 			break
 		}
 	}
+	p.allowStar = prevAllowStar
 
 	if !p.curTokenIs(TokenRParen) {
+		p.addError(fmt.Sprintf("expected ) closing function %s", name))
 		return nil
 	}
 	p.nextToken() // eat )
+
+	// Zero-argument validation for functions requiring arguments
+	upperName := strings.ToUpper(name)
+	switch upperName {
+	case "COUNT", "SUM", "AVG", "MIN", "MAX", "COALESCE":
+		if len(args) == 0 {
+			p.addError(fmt.Sprintf("function %s requires at least 1 argument", name))
+			return nil
+		}
+	case "NULLIF":
+		if len(args) != 2 {
+			p.addError("NULLIF function requires exactly 2 arguments")
+			return nil
+		}
+	case "ROW_NUMBER", "RANK", "DENSE_RANK":
+		if len(args) > 0 {
+			p.addError(fmt.Sprintf("function %s takes no arguments", name))
+			return nil
+		}
+		if !p.curTokenIs(TokenIdent) || !strings.EqualFold(p.curToken.Literal, "OVER") {
+			p.addError(fmt.Sprintf("function %s must have an OVER clause", name))
+			return nil
+		}
+	}
 
 	if isDistinct && len(args) > 1 {
 		p.addError("DISTINCT aggregate function takes at most 1 argument")

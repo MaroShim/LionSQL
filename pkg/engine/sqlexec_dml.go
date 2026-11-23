@@ -1407,10 +1407,6 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		return nil, parseErr
 	}
 
-	if dml.From != "" {
-		return s.execUpdateFromJoin(dml, start, cs)
-	}
-
 	if err := ValidateSetClause(dml.Set); err != nil {
 		return nil, err
 	}
@@ -1418,7 +1414,19 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	if dml.HasWhere && dml.Where == "" {
 		return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
 	}
-	if err := ValidateWhereClause(dml.Where); err != nil {
+
+	if dml.From != "" {
+		if err := ValidateWhereClause(dml.Where); err != nil {
+			return nil, err
+		}
+		return s.execUpdateFromJoin(dml, start, cs)
+	}
+
+	var updateSchemas []*storage.TableSchema
+	if tblSch, err := s.getTable(cs, cleanIdentifier(dml.Table)); err == nil && tblSch != nil {
+		updateSchemas = append(updateSchemas, tblSch)
+	}
+	if err := ValidateWhereClauseWithSchemas(dml.Where, updateSchemas...); err != nil {
 		return nil, err
 	}
 
@@ -1775,14 +1783,22 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		return nil, parseErr
 	}
 
-	if dml.From != "" {
-		return s.execDeleteFromJoin(dml, start, cs)
-	}
-
 	if dml.HasWhere && dml.Where == "" {
 		return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
 	}
-	if err := ValidateWhereClause(dml.Where); err != nil {
+
+	if dml.From != "" {
+		if err := ValidateWhereClause(dml.Where); err != nil {
+			return nil, err
+		}
+		return s.execDeleteFromJoin(dml, start, cs)
+	}
+
+	var updateSchemas []*storage.TableSchema
+	if tblSch, err := s.getTable(cs, cleanIdentifier(dml.Table)); err == nil && tblSch != nil {
+		updateSchemas = append(updateSchemas, tblSch)
+	}
+	if err := ValidateWhereClauseWithSchemas(dml.Where, updateSchemas...); err != nil {
 		return nil, err
 	}
 

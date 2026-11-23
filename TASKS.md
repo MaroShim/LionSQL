@@ -361,6 +361,7 @@
 | `DONE` | **`FIX-MERGE-ATOMIC-TRIGGERS-1`** | `v0.95.0` | Engine | P1 | MERGE statement-level savepoint rollback & DML triggers execution parity |  |  |
 | `DONE` | **`FIX-MERGE-INTO-COMPOSITE-PK-1`** | `1.0-GA` | Engine | P1 | MERGE INTO 구문 복합 PK 타깃 테이블 매칭/갱신/삭제 정합성 보장 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-MERGE-JOIN-OPEN-ERROR-CURSOR-LEAK-1`** | `1.0-GA` | Execution | P1 | MergeJoinIterator.Open 초기 튜플 Pull 에러 시 양쪽 자식 커서 클린업 보장 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-NEGATIVE-SYNTAX-FUZZER-1`** | `v0.95.0` | Engine | P1 | Implement Negative Syntax & Malformed Query Fuzzer (3,000+ permutations) to eliminate silent drops | [`notes/DEFECT_AUDIT_PLAN.ko.md`](notes/DEFECT_AUDIT_PLAN.ko.md) |  |
 | `DONE` | **`FIX-OCC-COMPACT-AUDIT-1`** | `1.0-GA` | Storage | P1 | MemoryCompact 2단계 Audit 결함 수정 (Arena UAF, AlterTable 레이아웃/WAL, memCursor 레이스, varSlot 오버플로우) | [`notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md`](notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md) |  |
 | `DONE` | **`FIX-OPEN-ERROR-CURSOR-LEAK-1`** |  | Execution | P1 | Open() 에러 시 하위 자식 이터레이터/스토리지 커서 미정리 누수 결함 수정 |  |  |
 | `DONE` | **`FIX-OPEN-ERROR-ITERATOR-LEAK-ALL-1`** | `1.0-GA` | Execution | P1 | Volcano 이터레이터 전반(Window, Sort) Open 에러 시 하위 커서 정리 보장 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
@@ -3830,6 +3831,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-18 09:44:28
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md)
+
+---
+
+### [DONE] Implement Negative Syntax & Malformed Query Fuzzer (3,000+ permutations) to eliminate silent drops `FIX-NEGATIVE-SYNTAX-FUZZER-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-23 14:44:45
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/DEFECT_AUDIT_PLAN.ko.md`](notes/DEFECT_AUDIT_PLAN.ko.md)
 
 ---
 

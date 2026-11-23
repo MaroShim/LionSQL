@@ -19,7 +19,7 @@
 LionSQL은 Microsoft SQL Server의 T-SQL & 저장 프로시저(Stored Procedure)와 복잡한 비즈니스 로직을 네이티브 VDBE 가상 머신에서 마이크로초 단위로 고속 실행하며, 동시에 광범위한 PostgreSQL SQL 방언 및 와이어 프로토콜(PGWire v3) 호환성을 제공하는 고성능 임베디드 OLTP 데이터베이스 엔진입니다. 시스템 모니터링과 데이터 조작을 위한 실시간 웹 관리 어드민(Web Studio), Nginx 없이 단일 바이너리로 프론트엔드 웹 앱(SPA)을 직접 서빙하는 자체 웹 서버(`--app`), 그리고 수만 개 동시 연결을 감당하는 커넥션 풀러까지 내장하고 있어, 추가 소프트웨어 없이도 완전한 풀스택 데이터베이스 및 웹 운영 환경을 갖출 수 있습니다. 이 모든 엔터프라이즈 기능을 100MB 미만(약 50MB)의 극히 가벼운 단일 독립 정적 바이너리 하나에 집약하여, 초당 수만 건의 빠른 트랜잭션을 비차단 스냅샷 격리와 예측 가능한 초저지연으로 처리합니다.
 
 > [!NOTE]
-> **공식 지원 운영체제 (OS)**: LionSQL은 **macOS** 및 **Linux** (`x86_64` 및 `arm64`) 환경을 공식 지원합니다. Windows 환경용 독립 정적 바이너리(`bin/lionsql.exe`, 순수 Go 인메모리 OCC 엔진) 빌드도 제공됩니다.
+> **공식 지원 운영체제 (OS)**: LionSQL은 **macOS**, **Linux**, **Windows** (`x86_64` 및 `arm64`) 환경을 전면 공식 지원합니다. 단독 정적 바이너리(`bin/lionsql` / `bin/lionsql.exe`)는 모든 플랫폼에서 WiredTiger MVCC 디스크 B+Tree 스토리지(Windows 환경에서는 `wiredtiger.dll` 자동 런타임 동적 로딩 지원)와 초고속 순수 Go 인메모리 OCC 엔진을 기본 탑재하고 있습니다.
 
 
 ```

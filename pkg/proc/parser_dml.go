@@ -273,14 +273,19 @@ func (p *Parser) parseUpdate() (Statement, error) {
 	// MSSQL allows UPDATE <table> SET ... [FROM <source_table_or_join>] [WHERE ...]
 	if p.curTokenIs(TokenFrom) {
 		p.nextToken()
+		hasFromTokens := false
 		parenDepth := 0
 		for (!p.curTokenIs(TokenWhere) || parenDepth > 0) && !p.curTokenIs(TokenReturning) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+			hasFromTokens = true
 			if p.curTokenIs(TokenLParen) {
 				parenDepth++
 			} else if p.curTokenIs(TokenRParen) && parenDepth > 0 {
 				parenDepth--
 			}
 			p.nextToken()
+		}
+		if !hasFromTokens {
+			return nil, fmt.Errorf("expected table name or join after FROM in UPDATE")
 		}
 	}
 
@@ -356,14 +361,19 @@ func (p *Parser) parseDelete() (Statement, error) {
 	// MSSQL allows DELETE <table> ... [FROM <source_table_or_join>] [WHERE ...]
 	if p.curTokenIs(TokenFrom) {
 		p.nextToken()
+		hasFromTokens := false
 		parenDepth := 0
 		for (!p.curTokenIs(TokenWhere) || parenDepth > 0) && !p.curTokenIs(TokenReturning) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+			hasFromTokens = true
 			if p.curTokenIs(TokenLParen) {
 				parenDepth++
 			} else if p.curTokenIs(TokenRParen) && parenDepth > 0 {
 				parenDepth--
 			}
 			p.nextToken()
+		}
+		if !hasFromTokens {
+			return nil, fmt.Errorf("expected table name or join after FROM in DELETE")
 		}
 	}
 
@@ -605,7 +615,7 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	}
 
 	// 1. Projections
-	for !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenInto) && !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenGroup) && !p.curTokenIs(TokenHaving) && !p.curTokenIs(TokenOrder) && !p.curTokenIs(TokenLimit) && !p.curTokenIs(TokenOffset) && !p.curTokenIs(TokenFetch) && !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenRParen) {
+	for !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenInto) && !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenGroup) && !p.curTokenIs(TokenHaving) && !p.curTokenIs(TokenOrder) && !p.curTokenIs(TokenLimit) && !p.curTokenIs(TokenOffset) && !p.curTokenIs(TokenFetch) && !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenRParen) && !isReservedAfterProjection(p.curToken.Type) {
 		if p.curTokenIs(TokenVariable) && p.peekTokenIs(TokenEq) {
 			varName := p.curToken.Literal
 			p.nextToken() // eat @var
@@ -622,7 +632,9 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			break
 		}
 
+		p.allowStar = true
 		expr := p.parseExpression(precLowest)
+		p.allowStar = false
 		if expr == nil {
 			return nil, fmt.Errorf("expected projection expression, got %s", p.curToken.Literal)
 		}
@@ -977,14 +989,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					return nil, fmt.Errorf("syntax error: empty or invalid expression in ON clause")
 				}
 			} else if joinType == "CROSS" && p.curTokenIs(TokenOn) {
-				p.nextToken() // eat ON
-				onExpr = p.parseExpression(precLowest)
-				if len(p.errors) > 0 {
-					return nil, fmt.Errorf("syntax error in ON clause: %s", strings.Join(p.errors, "; "))
-				}
-				if onExpr == nil {
-					return nil, fmt.Errorf("syntax error: empty or invalid expression in ON clause")
-				}
+				return nil, fmt.Errorf("syntax error: CROSS JOIN or comma-separated table list cannot have an ON clause")
 			}
 
 			stmt.Joins = append(stmt.Joins, JoinClause{
@@ -1064,14 +1069,7 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					return nil, fmt.Errorf("syntax error: empty or invalid expression in ON clause")
 				}
 			} else if joinType == "CROSS" && p.curTokenIs(TokenOn) {
-				p.nextToken() // eat ON
-				onExpr = p.parseExpression(precLowest)
-				if len(p.errors) > 0 {
-					return nil, fmt.Errorf("syntax error in ON clause: %s", strings.Join(p.errors, "; "))
-				}
-				if onExpr == nil {
-					return nil, fmt.Errorf("syntax error: empty or invalid expression in ON clause")
-				}
+				return nil, fmt.Errorf("syntax error: CROSS JOIN or comma-separated table list cannot have an ON clause")
 			}
 
 			stmt.Joins = append(stmt.Joins, JoinClause{
@@ -1291,6 +1289,12 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				return nil, fmt.Errorf("syntax error: LIMIT must not be negative")
 			} else if p.curTokenIs(TokenVariable) || p.curTokenIs(TokenLParen) {
 				stmt.LimitExpr = p.parseExpression(precLowest)
+				if len(p.errors) > 0 {
+					return nil, fmt.Errorf("syntax error in LIMIT clause: %s", strings.Join(p.errors, "; "))
+				}
+				if stmt.LimitExpr == nil {
+					return nil, fmt.Errorf("syntax error: empty or invalid expression in LIMIT clause")
+				}
 			} else {
 				return nil, fmt.Errorf("syntax error: empty or invalid expression in LIMIT clause")
 			}
@@ -1307,6 +1311,12 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				return nil, fmt.Errorf("syntax error: OFFSET must not be negative")
 			} else if p.curTokenIs(TokenVariable) || p.curTokenIs(TokenLParen) {
 				stmt.OffsetExpr = p.parseExpression(precLowest)
+				if len(p.errors) > 0 {
+					return nil, fmt.Errorf("syntax error in OFFSET clause: %s", strings.Join(p.errors, "; "))
+				}
+				if stmt.OffsetExpr == nil {
+					return nil, fmt.Errorf("syntax error: empty or invalid expression in OFFSET clause")
+				}
 			} else {
 				return nil, fmt.Errorf("syntax error: empty or invalid expression in OFFSET clause")
 			}
@@ -1331,6 +1341,12 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				return nil, fmt.Errorf("syntax error: FETCH count must not be negative")
 			} else if p.curTokenIs(TokenVariable) || p.curTokenIs(TokenLParen) {
 				stmt.LimitExpr = p.parseExpression(precLowest)
+				if len(p.errors) > 0 {
+					return nil, fmt.Errorf("syntax error in FETCH clause: %s", strings.Join(p.errors, "; "))
+				}
+				if stmt.LimitExpr == nil {
+					return nil, fmt.Errorf("syntax error: empty or invalid expression in FETCH clause")
+				}
 			} else {
 				return nil, fmt.Errorf("syntax error: empty or invalid expression in FETCH clause")
 			}
@@ -1393,6 +1409,24 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				p.nextToken() // eat )
 			}
 		}
+	}
+
+	// 10. Trailing FOR clause: FOR UPDATE, FOR SHARE, FOR JSON, FOR XML, etc.
+	if p.curTokenIs(TokenFor) {
+		p.nextToken() // eat FOR
+		upper := strings.ToUpper(p.curToken.Literal)
+		if upper == "UPDATE" || upper == "SHARE" || upper == "JSON" || upper == "XML" || upper == "NO" || upper == "KEY" {
+			p.nextToken() // eat UPDATE / SHARE / JSON / XML
+			for !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) && !isReservedClauseKeyword(p.curToken.Type) {
+				p.nextToken()
+			}
+		} else {
+			return nil, fmt.Errorf("syntax error: expected UPDATE, SHARE, JSON, or XML after FOR, got %q", p.curToken.Literal)
+		}
+	}
+
+	if isReservedClauseKeyword(p.curToken.Type) {
+		return nil, fmt.Errorf("syntax error: unexpected clause %q at end of statement", p.curToken.Literal)
 	}
 
 	return stmt, nil

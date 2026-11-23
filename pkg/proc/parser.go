@@ -64,6 +64,7 @@ type Parser struct {
 	curToken  Token
 	peekToken Token
 	errors    []string
+	allowStar bool // true when * is permitted as a primary operand (e.g. SELECT projections or COUNT(*))
 }
 
 // NewParser creates a new Parser.
@@ -77,6 +78,9 @@ func NewParser(l *Lexer) *Parser {
 func (p *Parser) nextToken() {
 	p.curToken = p.peekToken
 	p.peekToken = p.l.NextToken()
+	if p.curToken.Type == TokenIllegal {
+		p.addError(fmt.Sprintf("lexical error: illegal character or unclosed token %q at line %d:%d", p.curToken.Literal, p.curToken.Line, p.curToken.Col))
+	}
 }
 
 
@@ -280,7 +284,8 @@ func isReservedAfterFromOrJoin(tok TokenType) bool {
 	case TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,
 		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenFull, TokenCross, TokenOuter, TokenApply,
 		TokenOn, TokenWith, TokenFor, TokenOffset, TokenFetch, TokenOption,
-		TokenSemicolon, TokenRParen, TokenEOF, TokenComma, TokenMerge:
+		TokenSemicolon, TokenRParen, TokenEOF, TokenComma, TokenMerge,
+		TokenSet, TokenValues, TokenSelect, TokenInsert, TokenUpdate, TokenDelete:
 		return true
 	default:
 		return false
@@ -292,7 +297,23 @@ func isReservedAfterProjection(tok TokenType) bool {
 	case TokenFrom, TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,
 		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenFull, TokenCross, TokenOuter, TokenApply,
 		TokenOn, TokenWith, TokenFor, TokenOffset, TokenFetch, TokenOption,
-		TokenSemicolon, TokenRParen, TokenEOF, TokenComma:
+		TokenSemicolon, TokenRParen, TokenEOF, TokenComma,
+		TokenSet, TokenValues, TokenSelect, TokenInsert, TokenUpdate, TokenDelete:
+		return true
+	default:
+		return false
+	}
+}
+
+// isReservedClauseKeyword returns true if the token is an unexpected trailing SQL clause keyword.
+// It explicitly excludes punctuation such as semicolons, commas, closing parentheses, and EOF.
+func isReservedClauseKeyword(tok TokenType) bool {
+	switch tok {
+	case TokenFrom, TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,
+		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenFull, TokenCross, TokenOuter, TokenApply,
+		TokenOn, TokenWith, TokenFor, TokenOffset, TokenFetch, TokenOption,
+		TokenSet, TokenValues, TokenSelect, TokenInsert, TokenUpdate, TokenDelete,
+		TokenReturning, TokenOutput:
 		return true
 	default:
 		return false
@@ -339,6 +360,20 @@ func parseDataType(s string) storage.DataType {
 // ParseSQL parses a single interactive or procedural SQL statement into an AST Statement.
 func ParseSQL(sql string) (Statement, error) {
 	p := NewParser(NewLexer(sql))
-	return p.ParseSQLStatement()
+	stmt, err := p.ParseSQLStatement()
+	if err != nil {
+		return nil, err
+	}
+	if len(p.errors) > 0 {
+		return nil, fmt.Errorf("syntax error: %s", strings.Join(p.errors, "; "))
+	}
+	// Assert no trailing garbage tokens after statement
+	for p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+	if !p.curTokenIs(TokenEOF) {
+		return nil, fmt.Errorf("syntax error: unexpected trailing token %q after statement", p.curToken.Literal)
+	}
+	return stmt, nil
 }
 

@@ -275,9 +275,15 @@ func splitOutputWhere(body string) (head, output, from, where string) {
 	if fromIdx := sqlutil.FindTopLevelKeyword(head, "FROM"); fromIdx != -1 {
 		from = strings.TrimSpace(head[fromIdx+len("FROM"):])
 		head = strings.TrimSpace(head[:fromIdx])
+		if from == "" {
+			head = "FROM" // mark invalid so caller fails
+		}
 	} else if usingIdx := sqlutil.FindTopLevelKeyword(head, "USING"); usingIdx != -1 {
 		from = strings.TrimSpace(head[usingIdx+len("USING"):])
 		head = strings.TrimSpace(head[:usingIdx])
+		if from == "" {
+			head = "USING" // mark invalid so caller fails
+		}
 	}
 	return head, output, from, where
 }

@@ -128,8 +128,9 @@ func parseValueToType(s string, t storage.DataType) storage.Value {
 }
 
 
-// ValidateWhereClause verifies that whereStr is syntactically well-formed if non-empty.
-func ValidateWhereClause(whereStr string) error {
+// ValidateWhereClauseWithSchemas verifies that whereStr is syntactically well-formed if non-empty,
+// and optionally validates that all referenced column identifiers exist in schemas or outer names.
+func ValidateWhereClauseWithSchemas(whereStr string, schemas ...*storage.TableSchema) error {
 	whereStr = strings.TrimSpace(whereStr)
 	if whereStr == "" {
 		return nil
@@ -141,6 +142,188 @@ func ValidateWhereClause(whereStr string) error {
 	}
 	if expr == nil {
 		return fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+	}
+	for p.CurrentToken().Type == proc.TokenSemicolon {
+		p.NextToken()
+	}
+	if p.CurrentToken().Type != proc.TokenEOF {
+		return fmt.Errorf("syntax error: unexpected trailing token %q in WHERE clause", p.CurrentToken().Literal)
+	}
+
+	// T-SQL / SQL Standard semantics: Condition expressions cannot be non-boolean literals
+	var checkConditionExpr func(e proc.Expr) error
+	checkConditionExpr = func(e proc.Expr) error {
+		if e == nil {
+			return nil
+		}
+		switch node := e.(type) {
+		case *proc.LiteralExpr:
+			if node.Val.Type != storage.TypeBool {
+				return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
+			}
+		case *proc.UnaryExpr:
+			if node.Op == proc.TokenMinus || node.Op == proc.TokenPlus || node.Op == proc.TokenBitwiseNot {
+				return fmt.Errorf("syntax error: an expression of non-boolean type specified in a context where a condition is expected")
+			}
+			return checkConditionExpr(node.Expr)
+		case *proc.BinaryExpr:
+			if node.Op == proc.TokenAnd || node.Op == proc.TokenOr {
+				if err := checkConditionExpr(node.Left); err != nil {
+					return err
+				}
+				return checkConditionExpr(node.Right)
+			}
+		}
+		return nil
+	}
+	if err := checkConditionExpr(expr); err != nil {
+		return err
+	}
+
+	if len(schemas) > 0 {
+		var checkColumns func(e proc.Expr) error
+		checkColumns = func(e proc.Expr) error {
+			if e == nil {
+				return nil
+			}
+			switch node := e.(type) {
+			case *proc.ColumnRefExpr:
+				colName := cleanIdentifier(node.Name)
+				if dotIdx := strings.Index(colName, "."); dotIdx != -1 {
+					colName = colName[dotIdx+1:]
+				}
+				found := false
+				for _, sch := range schemas {
+					if sch != nil {
+						if _, _, ok := sch.FindColumn(colName); ok {
+							found = true
+							break
+						}
+					}
+				}
+				if !found && !proc.IsBuiltinFunction(node.Name) && !strings.HasPrefix(node.Name, "@") {
+					return fmt.Errorf("column %q does not exist", node.Name)
+				}
+			case *proc.BinaryExpr:
+				if err := checkColumns(node.Left); err != nil {
+					return err
+				}
+				return checkColumns(node.Right)
+			case *proc.UnaryExpr:
+				return checkColumns(node.Expr)
+			case *proc.InExpr:
+				if err := checkColumns(node.Expr); err != nil {
+					return err
+				}
+				for _, item := range node.List {
+					if err := checkColumns(item); err != nil {
+						return err
+					}
+				}
+			case *proc.BetweenExpr:
+				if err := checkColumns(node.Expr); err != nil {
+					return err
+				}
+				if err := checkColumns(node.Low); err != nil {
+					return err
+				}
+				return checkColumns(node.High)
+			}
+			return nil
+		}
+		if err := checkColumns(expr); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ValidateWhereClause verifies that whereStr is syntactically well-formed if non-empty.
+func ValidateWhereClause(whereStr string) error {
+	return ValidateWhereClauseWithSchemas(whereStr)
+}
+
+// ValidateOrderByClause verifies that orderStr in SELECT is non-empty and syntactically well-formed.
+func ValidateOrderByClause(orderStr string) error {
+	orderStr = strings.TrimSpace(orderStr)
+	if orderStr == "" {
+		return fmt.Errorf("syntax error: empty or invalid expression in ORDER BY clause")
+	}
+	items := sqlutil.SplitTopLevel(orderStr, ',')
+	if len(items) == 0 {
+		return fmt.Errorf("syntax error: empty or invalid expression in ORDER BY clause")
+	}
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			return fmt.Errorf("syntax error: empty item in ORDER BY clause")
+		}
+		p := proc.NewParser(proc.NewLexer(item))
+		expr := p.ParseExpr()
+		if len(p.Errors()) > 0 {
+			return fmt.Errorf("syntax error in ORDER BY clause: %s", strings.Join(p.Errors(), "; "))
+		}
+		if expr == nil {
+			return fmt.Errorf("syntax error: empty or invalid expression in ORDER BY clause")
+		}
+		if lit, ok := expr.(*proc.LiteralExpr); ok {
+			if lit.Val.IsNull || lit.Val.Type != storage.TypeInt {
+				return fmt.Errorf("syntax error: a constant expression was encountered in the ORDER BY list")
+			}
+			if lit.Val.Type == storage.TypeInt && lit.Val.IVal <= 0 {
+				return fmt.Errorf("syntax error: ORDER BY position number %d is out of range", lit.Val.IVal)
+			}
+		}
+		if p.CurrentToken().Type == proc.TokenAsc || p.CurrentToken().Type == proc.TokenDesc {
+			p.NextToken()
+		}
+		if p.CurrentToken().Type == proc.TokenIdent && strings.EqualFold(p.CurrentToken().Literal, "NULLS") {
+			p.NextToken()
+			if p.CurrentToken().Type == proc.TokenFirst || (p.CurrentToken().Type == proc.TokenIdent && strings.EqualFold(p.CurrentToken().Literal, "FIRST")) ||
+				(p.CurrentToken().Type == proc.TokenIdent && strings.EqualFold(p.CurrentToken().Literal, "LAST")) {
+				p.NextToken()
+			}
+		}
+		for p.CurrentToken().Type == proc.TokenSemicolon {
+			p.NextToken()
+		}
+		if p.CurrentToken().Type != proc.TokenEOF {
+			return fmt.Errorf("syntax error: unexpected trailing token %q in ORDER BY clause", p.CurrentToken().Literal)
+		}
+	}
+	return nil
+}
+
+// ValidateGroupByClause verifies that groupStr in SELECT is non-empty and syntactically well-formed.
+func ValidateGroupByClause(groupStr string) error {
+	groupStr = strings.TrimSpace(groupStr)
+	if groupStr == "" {
+		return fmt.Errorf("syntax error: empty or invalid expression in GROUP BY clause")
+	}
+	items := sqlutil.SplitTopLevel(groupStr, ',')
+	if len(items) == 0 {
+		return fmt.Errorf("syntax error: empty or invalid expression in GROUP BY clause")
+	}
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			return fmt.Errorf("syntax error: empty item in GROUP BY clause")
+		}
+		p := proc.NewParser(proc.NewLexer(item))
+		expr := p.ParseExpr()
+		if len(p.Errors()) > 0 {
+			return fmt.Errorf("syntax error in GROUP BY clause: %s", strings.Join(p.Errors(), "; "))
+		}
+		if expr == nil {
+			return fmt.Errorf("syntax error: empty or invalid expression in GROUP BY clause")
+		}
+		for p.CurrentToken().Type == proc.TokenSemicolon {
+			p.NextToken()
+		}
+		if p.CurrentToken().Type != proc.TokenEOF {
+			return fmt.Errorf("syntax error: unexpected trailing token %q in GROUP BY clause", p.CurrentToken().Literal)
+		}
 	}
 	return nil
 }
@@ -179,6 +362,12 @@ func ValidateSetClause(setStr string) error {
 		}
 		if expr == nil {
 			return fmt.Errorf("syntax error: invalid expression in SET assignment for column %q", col)
+		}
+		for parser.CurrentToken().Type == proc.TokenSemicolon {
+			parser.NextToken()
+		}
+		if parser.CurrentToken().Type != proc.TokenEOF {
+			return fmt.Errorf("syntax error: unexpected trailing token %q in SET assignment for column %q", parser.CurrentToken().Literal, col)
 		}
 	}
 	return nil

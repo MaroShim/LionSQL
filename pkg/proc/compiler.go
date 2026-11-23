@@ -178,6 +178,12 @@ func CompileStatement(sql string) (*Program, error) {
 	if len(p.errors) > 0 {
 		return nil, DiagnoseParseFailure(sql, fmt.Errorf("syntax error: %s", strings.Join(p.errors, "; ")))
 	}
+	for p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+	if !p.curTokenIs(TokenEOF) {
+		return nil, DiagnoseParseFailure(sql, fmt.Errorf("syntax error: unexpected trailing token %q after statement", p.curToken.Literal))
+	}
 	if err := c.compileStatement(stmt); err != nil {
 		return nil, err
 	}
@@ -230,6 +236,12 @@ func CompileQuery(sql string) (*Program, error) {
 		err = fmt.Errorf("syntax error: %s", strings.Join(p.errors, "; "))
 	}
 	if err == nil && stmt != nil {
+		for p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+		if !p.curTokenIs(TokenEOF) {
+			return nil, fmt.Errorf("syntax error: unexpected trailing token %q after query", p.curToken.Literal)
+		}
 		if stmt.RawSQL == "" {
 			stmt.RawSQL = trimmed
 		}
