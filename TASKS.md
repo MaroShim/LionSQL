@@ -539,7 +539,7 @@
 | `DONE` | **`R-6`** |  | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`REFAC-STORAGE-FOREIGN-KEY-ENGINE-1`** | `v0.96.0` | Storage | P2 | 외래키 무결성 검증 및 CASCADE 전파 엔진 공통화 (ForeignKeyEngine) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `PENDING` | **`REFAC-STORAGE-INDEX-CODEC-1`** | `v0.95.0` | Storage | P2 | 보조 인덱스 키/값 포맷터 및 바이너리 인코딩 모듈화 (formatIndexKeyValue) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
-| `PENDING` | **`REFAC-STORAGE-ROW-LOCK-MANAGER-1`** | `v0.95.0` | Storage | P2 | 행 레벨 쓰기 잠금 샤드 관리자 공통화 (RowLockManager) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
+| `SPEC_OUT` | **`REFAC-STORAGE-ROW-LOCK-MANAGER-1`** | `v0.95.0` | Storage | P2 | 행 레벨 쓰기 잠금 샤드 관리자 공통화 (RowLockManager) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `PENDING` | **`REFAC-WIRE-RESET-SESSION-COORDINATOR-1`** | `v0.95.0` | Engine | P2 | PG/TDS 와이어 프로토콜 세션 리셋 Coordinator 단일 진입점 (ResetSession) | [`notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md`](notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md) |  |
 | `DONE` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** |  | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-CLIENT-SESSION-TX-SSOT-1`** |  | Engine | P1 | ClientSession 트랜잭션 관리 단일 창구 통합 (tx.Manager SSOT 및 cs.Tx() 접근자 마이그레이션) | [`notes/CLIENT_SESSION_TX_REFACTOR_PLAN.ko.md`](notes/CLIENT_SESSION_TX_REFACTOR_PLAN.ko.md) |  |
@@ -5226,10 +5226,16 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] 행 레벨 쓰기 잠금 샤드 관리자 공통화 (RowLockManager) `REFAC-STORAGE-ROW-LOCK-MANAGER-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 23:18:56
+### [SPEC_OUT] 행 레벨 쓰기 잠금 샤드 관리자 공통화 (RowLockManager) `REFAC-STORAGE-ROW-LOCK-MANAGER-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 23:51:33
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
+
+**취소 및 SPEC_OUT 사유 (In-Memory OCC 회귀 방지)**:
+1. **문자열 결합 힙 할당 방지 ([RULE:ZeroAllocation])**: `memengine`은 `TableData` 내부에서 순수 `pkKey`를 키로 직접 사용하여 0ns/Zero-Allocation을 유지합니다. 글로벌 락 테이블로 통일 시 `tableName + "\x00" + pkKey` 결합(`runtime.concatstrings`)이 강제되어 초당 수십만 TPS 핫패스에서 심각한 GC 부하를 초래합니다.
+2. **CPU L1/L2 캐시 국소성 보존 ([RULE:LatencyBudget])**: `memengine`의 `tableShard`는 행 데이터(`entries`), OCC 버전(`shardEntry.ver`), 쓰기 락(`activeWriters`)이 동일한 메모리 청크에 공존하여 단일 포인터 역참조로 L1/L2 캐시에 동시 적재됩니다. 락 테이블 외주화 시 캐시 미스가 급증합니다.
+3. **테이블 간 거짓 경합(False Sharing) 원천 차단**: 테이블마다 256개 샤드가 독립되어 테이블 간 뮤텍스를 절대 공유하지 않습니다. 글로벌 1024 샤드로 통합할 경우 무관한 테이블 간 해시 충돌로 뮤텍스 경합이 발생하여 멀티코어 성능이 저하됩니다.
+4. **결론**: `memengine`의 테이블 샤드 내장 락 구조는 인메모리 OCC 극상 성능(215만 tpmC)을 위한 핵심 아키텍처이므로 현행을 유지하며, 맹목적인 단일 락 매니저 공통화는 영구 SPEC_OUT으로 동결합니다.
 
 ---
 
