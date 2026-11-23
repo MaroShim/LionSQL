@@ -8,15 +8,73 @@ package wiredtiger
 #cgo linux CFLAGS: -I/usr/local/include -I/usr/include
 #cgo linux LDFLAGS: -L/usr/local/lib -L/usr/lib -L/usr/lib/x86_64-linux-gnu -L/usr/lib/aarch64-linux-gnu -lwiredtiger
 #cgo windows,amd64 CFLAGS: -I${SRCDIR}/lib/windows_amd64/include
-#cgo windows,amd64 LDFLAGS: -L${SRCDIR}/lib/windows_amd64 -lwiredtiger
 
 #include <stdlib.h>
 #include <string.h>
 #include <wiredtiger.h>
 
+#if defined(_WIN32) || defined(__CYGWIN__)
+#include <windows.h>
+typedef int (*pfn_wiredtiger_open)(const char *home, WT_EVENT_HANDLER *event_handler, const char *config, WT_CONNECTION **connp);
+typedef const char *(*pfn_wiredtiger_strerror)(int error);
+static HMODULE g_wt_dll_handle = NULL;
+static pfn_wiredtiger_open g_pfn_wt_open = NULL;
+static pfn_wiredtiger_strerror g_pfn_wt_strerror = NULL;
+
+static int go_init_windows_wt(const char *dll_path) {
+    if (g_wt_dll_handle != NULL && g_pfn_wt_open != NULL && g_pfn_wt_strerror != NULL) {
+        return 0;
+    }
+    if (dll_path != NULL && dll_path[0] != '\0') {
+        g_wt_dll_handle = LoadLibraryA(dll_path);
+    }
+    if (g_wt_dll_handle == NULL) {
+        g_wt_dll_handle = LoadLibraryA("wiredtiger.dll");
+    }
+    if (g_wt_dll_handle == NULL) {
+        return -1;
+    }
+    g_pfn_wt_open = (pfn_wiredtiger_open)GetProcAddress(g_wt_dll_handle, "wiredtiger_open");
+    g_pfn_wt_strerror = (pfn_wiredtiger_strerror)GetProcAddress(g_wt_dll_handle, "wiredtiger_strerror");
+    if (g_pfn_wt_open == NULL || g_pfn_wt_strerror == NULL) {
+        return -2;
+    }
+    return 0;
+}
+
+static int go_wt_open(const char *home, const char *config, WT_CONNECTION **connp) {
+    if (g_pfn_wt_open == NULL) {
+        int r = go_init_windows_wt(NULL);
+        if (r != 0) {
+            return -10000;
+        }
+    }
+    return g_pfn_wt_open(home, NULL, config, connp);
+}
+
+static const char *go_wt_strerror(int err) {
+    if (g_pfn_wt_strerror != NULL) {
+        return g_pfn_wt_strerror(err);
+    }
+    if (go_init_windows_wt(NULL) == 0 && g_pfn_wt_strerror != NULL) {
+        return g_pfn_wt_strerror(err);
+    }
+    return "wiredtiger error (wiredtiger.dll not loaded)";
+}
+#else
+static int go_init_windows_wt(const char *dll_path) {
+    (void)dll_path;
+    return 0;
+}
+
 static int go_wt_open(const char *home, const char *config, WT_CONNECTION **connp) {
     return wiredtiger_open(home, NULL, config, connp);
 }
+
+static const char *go_wt_strerror(int err) {
+    return wiredtiger_strerror(err);
+}
+#endif
 
 static int go_wt_close(WT_CONNECTION *conn) {
     return conn->close(conn, NULL);
@@ -264,6 +322,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -629,6 +688,21 @@ func (e *Engine) Open(dir string) error {
 	}
 	e.homeDir = dir
 
+	if runtime.GOOS == "windows" {
+		_ = EnsureWiredTigerDLL()
+		var initRet C.int
+		if p := getResolvedWiredTigerDLL(); p != "" {
+			cP := C.CString(p)
+			initRet = C.go_init_windows_wt(cP)
+			C.free(unsafe.Pointer(cP))
+		} else {
+			initRet = C.go_init_windows_wt(nil)
+		}
+		if initRet != 0 {
+			return fmt.Errorf("failed to load wiredtiger.dll dynamically on windows (code %d)", int(initRet))
+		}
+	}
+
 	cHome := C.CString(dir)
 	defer C.free(unsafe.Pointer(cHome))
 
@@ -638,7 +712,7 @@ func (e *Engine) Open(dir string) error {
 	var conn *C.WT_CONNECTION
 	ret := C.go_wt_open(cHome, cConfig, &conn)
 	if ret != 0 {
-		return fmt.Errorf("wiredtiger_open failed with code %d: %s", ret, C.GoString(C.wiredtiger_strerror(ret)))
+		return fmt.Errorf("wiredtiger_open failed with code %d: %s", ret, C.GoString(C.go_wt_strerror(ret)))
 	}
 
 	e.conn = conn
@@ -3696,7 +3770,7 @@ func (c *wtIndexBTreeCursor) Next() bool {
 					if ret != 0 {
 						c.eof = true
 						if ret != C.WT_NOTFOUND {
-							c.err = fmt.Errorf("wiredtiger index cursor search_near error: %d (%s)", ret, C.GoString(C.wiredtiger_strerror(ret)))
+							c.err = fmt.Errorf("wiredtiger index cursor search_near error: %d (%s)", ret, C.GoString(C.go_wt_strerror(ret)))
 						}
 						return false
 					}
@@ -3704,7 +3778,7 @@ func (c *wtIndexBTreeCursor) Next() bool {
 						if nret := C.go_wt_cursor_next(c.cur); nret != 0 {
 							c.eof = true
 							if nret != C.WT_NOTFOUND {
-								c.err = fmt.Errorf("wiredtiger index cursor next error: %d (%s)", nret, C.GoString(C.wiredtiger_strerror(nret)))
+								c.err = fmt.Errorf("wiredtiger index cursor next error: %d (%s)", nret, C.GoString(C.go_wt_strerror(nret)))
 							}
 							return false
 						}
@@ -3731,7 +3805,7 @@ func (c *wtIndexBTreeCursor) Next() bool {
 					if ret != 0 {
 						c.eof = true
 						if ret != C.WT_NOTFOUND {
-							c.err = fmt.Errorf("wiredtiger index cursor search_near error: %d (%s)", ret, C.GoString(C.wiredtiger_strerror(ret)))
+							c.err = fmt.Errorf("wiredtiger index cursor search_near error: %d (%s)", ret, C.GoString(C.go_wt_strerror(ret)))
 						}
 						return false
 					}
@@ -3739,7 +3813,7 @@ func (c *wtIndexBTreeCursor) Next() bool {
 						if pret := C.go_wt_cursor_prev(c.cur); pret != 0 {
 							c.eof = true
 							if pret != C.WT_NOTFOUND {
-								c.err = fmt.Errorf("wiredtiger index cursor prev error: %d (%s)", pret, C.GoString(C.wiredtiger_strerror(pret)))
+								c.err = fmt.Errorf("wiredtiger index cursor prev error: %d (%s)", pret, C.GoString(C.go_wt_strerror(pret)))
 							}
 							return false
 						}
@@ -3751,7 +3825,7 @@ func (c *wtIndexBTreeCursor) Next() bool {
 				if nret := C.go_wt_cursor_next(c.cur); nret != 0 {
 					c.eof = true
 					if nret != C.WT_NOTFOUND {
-						c.err = fmt.Errorf("wiredtiger index cursor next error: %d (%s)", nret, C.GoString(C.wiredtiger_strerror(nret)))
+						c.err = fmt.Errorf("wiredtiger index cursor next error: %d (%s)", nret, C.GoString(C.go_wt_strerror(nret)))
 					}
 					return false
 				}
@@ -3759,7 +3833,7 @@ func (c *wtIndexBTreeCursor) Next() bool {
 				if pret := C.go_wt_cursor_prev(c.cur); pret != 0 {
 					c.eof = true
 					if pret != C.WT_NOTFOUND {
-						c.err = fmt.Errorf("wiredtiger index cursor prev error: %d (%s)", pret, C.GoString(C.wiredtiger_strerror(pret)))
+						c.err = fmt.Errorf("wiredtiger index cursor prev error: %d (%s)", pret, C.GoString(C.go_wt_strerror(pret)))
 					}
 					return false
 				}
@@ -3772,7 +3846,7 @@ func (c *wtIndexBTreeCursor) Next() bool {
 		if ret := C.go_wt_cursor_get_key_raw(c.cur, &pKeyData, &keySz); ret != 0 || pKeyData == nil {
 			c.eof = true
 			if ret != 0 && ret != C.WT_NOTFOUND {
-				c.err = fmt.Errorf("wiredtiger index cursor get_key error: %d (%s)", ret, C.GoString(C.wiredtiger_strerror(ret)))
+				c.err = fmt.Errorf("wiredtiger index cursor get_key error: %d (%s)", ret, C.GoString(C.go_wt_strerror(ret)))
 			}
 			return false
 		}
@@ -4473,7 +4547,7 @@ func (c *WTCursor) Next() bool {
 	}
 	c.eof = true
 	if ret != C.WT_NOTFOUND {
-		c.err = fmt.Errorf("wiredtiger cursor next error: %d (%s)", ret, C.GoString(C.wiredtiger_strerror(ret)))
+		c.err = fmt.Errorf("wiredtiger cursor next error: %d (%s)", ret, C.GoString(C.go_wt_strerror(ret)))
 	}
 	return false
 }

@@ -14,9 +14,15 @@ var (
 	kernel32            = syscall.NewLazyDLL("kernel32.dll")
 	procSetDllDirectory = kernel32.NewProc("SetDllDirectoryW")
 
-	dllLoadOnce sync.Once
-	dllLoadErr  error
+	dllLoadOnce           sync.Once
+	dllLoadErr            error
+	resolvedWiredTigerDLL string
 )
+
+// getResolvedWiredTigerDLL returns the absolute path to wiredtiger.dll if resolved or extracted.
+func getResolvedWiredTigerDLL() string {
+	return resolvedWiredTigerDLL
+}
 
 // setDllDirectory wraps the Windows SetDllDirectoryW API to add a directory to the DLL search path.
 func setDllDirectory(dir string) error {
@@ -38,16 +44,20 @@ func EnsureWiredTigerDLL() error {
 		// 1. Check if wiredtiger.dll is placed alongside the running executable
 		if exePath, err := os.Executable(); err == nil {
 			exeDir := filepath.Dir(exePath)
-			if _, err := os.Stat(filepath.Join(exeDir, "wiredtiger.dll")); err == nil {
+			candidate := filepath.Join(exeDir, "wiredtiger.dll")
+			if _, err := os.Stat(candidate); err == nil {
 				_ = setDllDirectory(exeDir)
+				resolvedWiredTigerDLL = candidate
 				return
 			}
 		}
 
 		// 2. Check current working directory
 		if cwd, err := os.Getwd(); err == nil {
-			if _, err := os.Stat(filepath.Join(cwd, "wiredtiger.dll")); err == nil {
+			candidate := filepath.Join(cwd, "wiredtiger.dll")
+			if _, err := os.Stat(candidate); err == nil {
 				_ = setDllDirectory(cwd)
+				resolvedWiredTigerDLL = candidate
 				return
 			}
 		}
@@ -60,9 +70,13 @@ func EnsureWiredTigerDLL() error {
 		targetDir := filepath.Join(localAppData, "LionSQL", "bin")
 		targetDLL := filepath.Join(targetDir, "wiredtiger.dll")
 
-		if _, err := os.Stat(targetDLL); err == nil {
-			_ = setDllDirectory(targetDir)
-			return
+		if fi, err := os.Stat(targetDLL); err == nil {
+			// If existing file matches embedded size or no embedded binary, reuse it
+			if len(embeddedWiredTigerDLL) == 0 || fi.Size() == int64(len(embeddedWiredTigerDLL)) {
+				_ = setDllDirectory(targetDir)
+				resolvedWiredTigerDLL = targetDLL
+				return
+			}
 		}
 
 		// 4. Atomically extract embedded DLL if available ([RULE:AtomicSaves])
@@ -81,6 +95,7 @@ func EnsureWiredTigerDLL() error {
 				return
 			}
 			_ = setDllDirectory(targetDir)
+			resolvedWiredTigerDLL = targetDLL
 		}
 	})
 	return dllLoadErr

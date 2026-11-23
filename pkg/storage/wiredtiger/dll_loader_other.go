@@ -6,3 +6,8 @@ package wiredtiger
 func EnsureWiredTigerDLL() error {
 	return nil
 }
+
+// getResolvedWiredTigerDLL returns empty string on non-Windows platforms.
+func getResolvedWiredTigerDLL() string {
+	return ""
+}

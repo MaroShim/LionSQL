@@ -167,12 +167,34 @@ jobs:
           go build -tags wiredtiger -v -ldflags "$ldflags" -buildvcs=false -o bin/lionsql-windows-amd64.exe ./cmd/lionsql
           if ($LASTEXITCODE -ne 0) { throw "go build failed with exit code $LASTEXITCODE" }
 
-          # Copy wiredtiger.dll to bin/ so the executable can load it
+          # Copy wiredtiger.dll to bin/ for archive packaging
           Copy-Item pkg/storage/wiredtiger/lib/windows_amd64/wiredtiger.dll bin/ -Force
 
-      - name: Verify Windows Binary & Standalone Extraction
+      - name: Verify Windows Standalone Execution & Self-Extraction
         run: |
-          $env:Path = "$pwd\bin;C:\msys64\mingw64\bin;C:\Program Files\Git\mingw64\bin;" + $env:Path
+          # 1. Test standalone execution in isolated directory without wiredtiger.dll
+          $tempTestDir = Join-Path $env:TEMP ("lionsql_standalone_test_" + [Guid]::NewGuid().ToString())
+          New-Item -ItemType Directory -Force -Path $tempTestDir | Out-Null
+          Copy-Item bin/lionsql-windows-amd64.exe $tempTestDir/lionsql.exe
+
+          Write-Host "Verifying standalone execution in isolated directory without wiredtiger.dll..."
+          & "$tempTestDir/lionsql.exe" version
+          if ($LASTEXITCODE -ne 0) { throw "Standalone isolated version execution failed with exit code $LASTEXITCODE" }
+
+          & "$tempTestDir/lionsql.exe" doctor
+          if ($LASTEXITCODE -ne 0) { throw "Standalone isolated doctor execution failed with exit code $LASTEXITCODE" }
+
+          # Verify that wiredtiger.dll was extracted to %LOCALAPPDATA%\LionSQL\bin\wiredtiger.dll
+          $extractedDLL = Join-Path $env:LOCALAPPDATA "LionSQL\bin\wiredtiger.dll"
+          if (Test-Path $extractedDLL) {
+            Write-Host "SUCCESS: Auto-extracted wiredtiger.dll verified at $extractedDLL"
+          } else {
+            Write-Host "NOTE: wiredtiger.dll not in LOCALAPPDATA (might be loaded from system)"
+          }
+
+          Remove-Item -Recurse -Force $tempTestDir
+
+          # 2. Test in bin directory
           ./bin/lionsql-windows-amd64.exe version
           ./bin/lionsql-windows-amd64.exe doctor
 
