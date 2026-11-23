@@ -1472,6 +1472,7 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 
 		var res *QueryResult
 		var recSQL string
+		isUnionDistinct := false
 
 		if isRecursive {
 			// Find top-level UNION ALL or UNION
@@ -1480,6 +1481,9 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 			if unionIdx == -1 {
 				unionIdx = sqlutil.FindTopLevelKeyword(cte.InnerSQL, "UNION")
 				unionLen = len("UNION")
+				if unionIdx != -1 {
+					isUnionDistinct = true
+				}
 			}
 			if unionIdx != -1 {
 				baseSQL := strings.TrimSpace(cte.InnerSQL[:unionIdx])
@@ -1532,6 +1536,25 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 			workTempName := fmt.Sprintf("%s_work", tempName)
 			tempTableNames = append(tempTableNames, workTempName)
 
+			var visited map[string]bool
+			rowSig := func(r map[string]any, cols []string) string {
+				var sb strings.Builder
+				for idx, c := range cols {
+					if idx > 0 {
+						sb.WriteString("\x00")
+					}
+					sb.WriteString(fmt.Sprintf("%v", r[c]))
+				}
+				return sb.String()
+			}
+
+			if isUnionDistinct {
+				visited = make(map[string]bool)
+				for _, r := range res.Rows {
+					visited[rowSig(r, res.Columns)] = true
+				}
+			}
+
 			// Initialize working table with initial base query rows
 			if cs != nil {
 				wSchema, wRows, wRecs := buildCTEEphemeralTable(workTempName, targetCols, res.Columns, res, s.engine, cte.InnerSQL)
@@ -1547,6 +1570,20 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 				recRes, recErr := s.execSingleStatement(cs, recSQLWithWork)
 				if recErr != nil || recRes == nil || len(recRes.Rows) == 0 {
 					break
+				}
+				if isUnionDistinct {
+					var distinctRows []map[string]any
+					for _, r := range recRes.Rows {
+						sig := rowSig(r, recRes.Columns)
+						if !visited[sig] {
+							visited[sig] = true
+							distinctRows = append(distinctRows, r)
+						}
+					}
+					if len(distinctRows) == 0 {
+						break
+					}
+					recRes.Rows = distinctRows
 				}
 				newRows, newRecs := convertBatchToRows(schema, targetCols, recRes.Columns, recRes, len(res.Rows))
 				if len(newRows) == 0 {

@@ -41,6 +41,12 @@ func (p *Parser) parseSelect() (Statement, error) {
 				} else {
 					whereVal = p.parseExpression(precLowest)
 				}
+				if len(p.errors) > 0 {
+					return nil, fmt.Errorf("syntax error in WHERE clause: %s", strings.Join(p.errors, "; "))
+				}
+				if whereVal == nil {
+					return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+				}
 			}
 
 			if p.curTokenIs(TokenSemicolon) {
@@ -240,6 +246,12 @@ func (p *Parser) parseUpdate() (Statement, error) {
 		p.nextToken()
 
 		valExpr := p.parseExpression(precLowest)
+		if len(p.errors) > 0 {
+			return nil, fmt.Errorf("syntax error in SET clause: %s", strings.Join(p.errors, "; "))
+		}
+		if valExpr == nil {
+			return nil, fmt.Errorf("syntax error: empty or invalid expression in SET clause")
+		}
 		if isCompound {
 			valExpr = &BinaryExpr{
 				Left:  &ColumnRefExpr{Name: colName},
@@ -276,6 +288,15 @@ func (p *Parser) parseUpdate() (Statement, error) {
 	if p.curTokenIs(TokenWhere) {
 		p.nextToken()
 		whereExpr = p.parseExpression(precLowest)
+		if len(p.errors) > 0 {
+			return nil, fmt.Errorf("syntax error in WHERE clause: %s", strings.Join(p.errors, "; "))
+		}
+		if whereExpr == nil {
+			return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+		}
+		if ContainsWindowFunction(whereExpr) {
+			return nil, fmt.Errorf("window functions are not allowed in WHERE")
+		}
 	}
 
 	if p.curTokenIs(TokenReturning) {
@@ -350,6 +371,15 @@ func (p *Parser) parseDelete() (Statement, error) {
 	if p.curTokenIs(TokenWhere) {
 		p.nextToken()
 		whereExpr = p.parseExpression(precLowest)
+		if len(p.errors) > 0 {
+			return nil, fmt.Errorf("syntax error in WHERE clause: %s", strings.Join(p.errors, "; "))
+		}
+		if whereExpr == nil {
+			return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+		}
+		if ContainsWindowFunction(whereExpr) {
+			return nil, fmt.Errorf("window functions are not allowed in WHERE")
+		}
 	}
 
 	if p.curTokenIs(TokenReturning) {
@@ -940,9 +970,21 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				}
 				p.nextToken() // eat ON
 				onExpr = p.parseExpression(precLowest)
+				if len(p.errors) > 0 {
+					return nil, fmt.Errorf("syntax error in ON clause: %s", strings.Join(p.errors, "; "))
+				}
+				if onExpr == nil {
+					return nil, fmt.Errorf("syntax error: empty or invalid expression in ON clause")
+				}
 			} else if joinType == "CROSS" && p.curTokenIs(TokenOn) {
 				p.nextToken() // eat ON
 				onExpr = p.parseExpression(precLowest)
+				if len(p.errors) > 0 {
+					return nil, fmt.Errorf("syntax error in ON clause: %s", strings.Join(p.errors, "; "))
+				}
+				if onExpr == nil {
+					return nil, fmt.Errorf("syntax error: empty or invalid expression in ON clause")
+				}
 			}
 
 			stmt.Joins = append(stmt.Joins, JoinClause{
@@ -1015,9 +1057,21 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 				}
 				p.nextToken() // eat ON
 				onExpr = p.parseExpression(precLowest)
+				if len(p.errors) > 0 {
+					return nil, fmt.Errorf("syntax error in ON clause: %s", strings.Join(p.errors, "; "))
+				}
+				if onExpr == nil {
+					return nil, fmt.Errorf("syntax error: empty or invalid expression in ON clause")
+				}
 			} else if joinType == "CROSS" && p.curTokenIs(TokenOn) {
 				p.nextToken() // eat ON
 				onExpr = p.parseExpression(precLowest)
+				if len(p.errors) > 0 {
+					return nil, fmt.Errorf("syntax error in ON clause: %s", strings.Join(p.errors, "; "))
+				}
+				if onExpr == nil {
+					return nil, fmt.Errorf("syntax error: empty or invalid expression in ON clause")
+				}
 			}
 
 			stmt.Joins = append(stmt.Joins, JoinClause{
@@ -1058,6 +1112,15 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 	if p.curTokenIs(TokenWhere) {
 		p.nextToken() // eat WHERE
 		stmt.Where = p.parseExpression(precLowest)
+		if len(p.errors) > 0 {
+			return nil, fmt.Errorf("syntax error in WHERE clause: %s", strings.Join(p.errors, "; "))
+		}
+		if stmt.Where == nil {
+			return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+		}
+		if ContainsWindowFunction(stmt.Where) {
+			return nil, fmt.Errorf("window functions are not allowed in WHERE")
+		}
 	}
 
 	// 5. GROUP BY clause
@@ -1136,6 +1199,15 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 	if p.curTokenIs(TokenHaving) {
 		p.nextToken() // eat HAVING
 		stmt.Having = p.parseExpression(precLowest)
+		if len(p.errors) > 0 {
+			return nil, fmt.Errorf("syntax error in HAVING clause: %s", strings.Join(p.errors, "; "))
+		}
+		if stmt.Having == nil {
+			return nil, fmt.Errorf("syntax error: empty or invalid expression in HAVING clause")
+		}
+		if ContainsWindowFunction(stmt.Having) {
+			return nil, fmt.Errorf("window functions are not allowed in HAVING")
+		}
 	}
 
 	// 7. ORDER BY clause

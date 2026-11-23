@@ -523,13 +523,39 @@ func (p *Parser) parsePrefix() Expr {
 			return nil
 		}
 
-		exp := p.parseExpression(precLowest)
+		firstExp := p.parseExpression(precLowest)
+		if firstExp == nil {
+			if !p.curTokenIs(TokenRParen) {
+				p.peekError(TokenRParen)
+			} else {
+				p.nextToken() // empty parens ()
+			}
+			return nil
+		}
+
+		if p.curTokenIs(TokenComma) {
+			elems := []Expr{firstExp}
+			for p.curTokenIs(TokenComma) {
+				p.nextToken() // eat ,
+				nextExp := p.parseExpression(precLowest)
+				if nextExp != nil {
+					elems = append(elems, nextExp)
+				}
+			}
+			if !p.curTokenIs(TokenRParen) {
+				p.peekError(TokenRParen)
+				return nil
+			}
+			p.nextToken() // eat )
+			return &TupleExpr{Elements: elems}
+		}
+
 		if !p.curTokenIs(TokenRParen) {
 			p.peekError(TokenRParen)
 			return nil
 		}
 		p.nextToken()
-		return exp
+		return firstExp
 	default:
 		return nil
 	}

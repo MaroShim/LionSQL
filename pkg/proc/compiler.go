@@ -175,6 +175,9 @@ func CompileStatement(sql string) (*Program, error) {
 	if err != nil {
 		return nil, DiagnoseParseFailure(sql, err)
 	}
+	if len(p.errors) > 0 {
+		return nil, DiagnoseParseFailure(sql, fmt.Errorf("syntax error: %s", strings.Join(p.errors, "; ")))
+	}
 	if err := c.compileStatement(stmt); err != nil {
 		return nil, err
 	}
@@ -223,6 +226,9 @@ func CompileQuery(sql string) (*Program, error) {
 		}
 	}
 
+	if err == nil && len(p.errors) > 0 {
+		err = fmt.Errorf("syntax error: %s", strings.Join(p.errors, "; "))
+	}
 	if err == nil && stmt != nil {
 		if stmt.RawSQL == "" {
 			stmt.RawSQL = trimmed

@@ -446,6 +446,12 @@ func (p *Parser) parseDeclare() (Statement, error) {
 		if p.curTokenIs(TokenWhere) {
 			p.nextToken()
 			whereExpr = p.parseExpression(precLowest)
+			if len(p.errors) > 0 {
+				return nil, fmt.Errorf("syntax error in WHERE clause: %s", strings.Join(p.errors, "; "))
+			}
+			if whereExpr == nil {
+				return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
+			}
 		}
 
 		var orderBy []OrderByItem

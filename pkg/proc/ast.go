@@ -1540,4 +1540,79 @@ func (s *GeneralInsertStmt) String() string {
 	return fmt.Sprintf("INSERT INTO %s (%s)%s VALUES ...", s.Table, strings.Join(s.Columns, ", "), outStr)
 }
 
+// TupleExpr represents a row value constructor / tuple expression like (1, 2) or (colA, colB).
+type TupleExpr struct {
+	Elements []Expr
+}
+
+func (e *TupleExpr) exprNode() {}
+func (e *TupleExpr) String() string {
+	parts := make([]string, len(e.Elements))
+	for i, elem := range e.Elements {
+		parts[i] = elem.String()
+	}
+	return "(" + strings.Join(parts, ", ") + ")"
+}
+
+// ContainsWindowFunction reports whether the expression tree contains any window function (OVER clause).
+func ContainsWindowFunction(expr Expr) bool {
+	if expr == nil {
+		return false
+	}
+	switch e := expr.(type) {
+	case *FunctionCallExpr:
+		if e.HasOver {
+			return true
+		}
+		for _, arg := range e.Args {
+			if ContainsWindowFunction(arg) {
+				return true
+			}
+		}
+	case *WithinGroupExpr:
+		if e.HasOver {
+			return true
+		}
+		if ContainsWindowFunction(e.OrderBy) {
+			return true
+		}
+	case *BinaryExpr:
+		return ContainsWindowFunction(e.Left) || ContainsWindowFunction(e.Right)
+	case *UnaryExpr:
+		return ContainsWindowFunction(e.Expr)
+	case *InExpr:
+		if ContainsWindowFunction(e.Expr) {
+			return true
+		}
+		for _, it := range e.List {
+			if ContainsWindowFunction(it) {
+				return true
+			}
+		}
+	case *BetweenExpr:
+		return ContainsWindowFunction(e.Expr) || ContainsWindowFunction(e.Low) || ContainsWindowFunction(e.High)
+	case *CaseExpr:
+		if ContainsWindowFunction(e.Operand) {
+			return true
+		}
+		for _, w := range e.Whens {
+			if ContainsWindowFunction(w.Condition) || ContainsWindowFunction(w.Result) {
+				return true
+			}
+		}
+		return ContainsWindowFunction(e.Else)
+	case *TupleExpr:
+		for _, el := range e.Elements {
+			if ContainsWindowFunction(el) {
+				return true
+			}
+		}
+	case *CastExpr:
+		return ContainsWindowFunction(e.Expr)
+	case *CollateExpr:
+		return ContainsWindowFunction(e.Expr)
+	}
+	return false
+}
+
 

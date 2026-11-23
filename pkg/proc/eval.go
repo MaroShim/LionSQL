@@ -230,6 +230,17 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 	}
 
 	switch e := expr.(type) {
+	case *TupleExpr:
+		vals := make([]any, len(e.Elements))
+		for i, elem := range e.Elements {
+			v, err := EvalRowExpr(elem, row, execSubquery)
+			if err != nil {
+				return nil, err
+			}
+			vals[i] = v
+		}
+		return vals, nil
+
 	case *LiteralExpr:
 		if e.Val.IsNull {
 			return nil, nil
@@ -1037,6 +1048,46 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 }
 
 func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool) (any, error) {
+	if lSlice, okL := left.([]any); okL {
+		if rSlice, okR := right.([]any); okR {
+			if len(lSlice) != len(rSlice) {
+				if op == TokenEq {
+					return false, nil
+				}
+				if op == TokenNeq {
+					return true, nil
+				}
+				return nil, fmt.Errorf("tuple length mismatch: %d vs %d", len(lSlice), len(rSlice))
+			}
+			for i := range lSlice {
+				res, err := evalRowBinaryOpWithContext(TokenEq, lSlice[i], rSlice[i], isSQLite)
+				if err != nil {
+					return nil, err
+				}
+				if res == nil {
+					if op == TokenEq {
+						return nil, nil // 3VL NULL
+					}
+				} else if b, ok := res.(bool); ok {
+					if !b {
+						if op == TokenEq {
+							return false, nil
+						}
+						if op == TokenNeq {
+							return true, nil
+						}
+					}
+				}
+			}
+			if op == TokenEq {
+				return true, nil
+			}
+			if op == TokenNeq {
+				return false, nil
+			}
+		}
+	}
+
 	if (isDecimalVal(left) || isDecimalVal(right)) && !isFloatVal(left) && !isFloatVal(right) {
 		if d1, ok1 := toDecimalVal(left); ok1 {
 			if d2, ok2 := toDecimalVal(right); ok2 {

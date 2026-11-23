@@ -299,6 +299,7 @@
 | `DONE` | **`FEAT-WT-SECONDARY-INDEX-BTREE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 | [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md) |  |
 | `DONE` | **`FIX-3VL-AND-OR-NULL-LOGIC-1`** |  | Engine | P2 | VDBE VM OpAnd/OpOr 3-Valued Logic(3VL) NULL 평가 결함 수정 |  |  |
 | `DONE` | **`FIX-ARITHMETIC-OVERFLOW-DETECTION-1`** | `1.0-GA` | Execution | P2 | 정수 산술 연산 64비트 오버플로 검출 및 bigint out of range 에러 반환 | [`1.0-GA`](1.0-GA) |  |
+| `DONE` | **`FIX-AUDIT-ROUND15-1`** | `v0.95.0` | Integrity | P1 | Live Engine Audit Round 15 결함 패치 및 회귀 방지 (WHERE silent drop, SP DDL rollback, recursive CTE) | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `DONE` | **`FIX-BATCH-MULTI-RESULTSET-DELIVERY-1`** |  | 1 | P2 | Wire | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-CAST-INTEGER-RANGE-OVERFLOW-1`** | `--prio` | Engine | P2 | --domain | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FIX-CATALOG-ISC-VIEWS-ORDER-1`** | `1.0-GA` | Engine | P2 | information_schema.views 가상 카탈로그 조회 시 뷰 이름순 결정론적 정렬 보장 | [`1.0-GA`](1.0-GA) |  |
@@ -505,7 +506,10 @@
 | `PENDING` | **`PERF-VDBE-FRAME-SLIM-1`** | `v1.10.0` | Engine | P2 | VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-WAL-ZERO-ALLOC-1`** | `v1.10.0` | Storage | P2 | In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 writeFrame Zero-Alloc | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WIRE-ZEROALLOC-1`** |  | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-WT-ARENA-SLAB-DECODE-1`** | `v0.95.0` | Storage | P2 | WiredTiger sync.Pool/Arena 기반 고정 버퍼 디코딩 및 C.GoBytes 절감 | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WT-INSTANT-ADD-COL-1`** | `1.0-GA` | Storage | P2 | WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
+| `PENDING` | **`PERF-WT-OCC-WORKSPACE-BUFFER-1`** | `Post-1.0` | Storage | P2 | WiredTiger In-Memory Private Workspace 버퍼링 (OCC-on-WiredTiger) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
+| `IN_PROGRESS` | **`PERF-WT-READ-CACHE-1`** | `v0.95.0` | Storage | P1 | WiredTiger 트랜잭션 로컬 제로-카피 Read Cache (WTTx.readCache) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-WT-ROW-DIRECT-1`** | `v1.10.0` | Storage | P2 | WiredTiger InsertRow 중간 Record 맵 2중 할당 우회 및 EncodeRowToBuffer 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | `v1.1.0` | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OS-NATIVE-DISTRIBUTION-1`** | `v1.10.0` | Ecosystem | P2 | OS 네이티브 패키징 및 배포 인프라 구축 (Debian/Ubuntu .deb & macOS Homebrew) | [`notes/OS_NATIVE_PACKAGING_AND_DISTRIBUTION_PLAN.ko.md`](notes/OS_NATIVE_PACKAGING_AND_DISTRIBUTION_PLAN.ko.md) |  |
@@ -3398,6 +3402,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [DONE] Live Engine Audit Round 15 결함 패치 및 회귀 방지 (WHERE silent drop, SP DDL rollback, recursive CTE) `FIX-AUDIT-ROUND15-1`
+- **Domain**: Integrity | **Priority**: P1 | **Updated**: 2026-11-23 02:42:43
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
+
+---
+
 ### [DONE] Wire `FIX-BATCH-MULTI-RESULTSET-DELIVERY-1`
 - **Domain**: 1 | **Priority**: P2 | **Updated**: 2026-11-19 01:04:12
 - **Plan Doc**: [`v0.94.0`](v0.94.0)
@@ -4941,10 +4952,31 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [PENDING] WiredTiger sync.Pool/Arena 기반 고정 버퍼 디코딩 및 C.GoBytes 절감 `PERF-WT-ARENA-SLAB-DECODE-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 02:19:19
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
+
+---
+
 ### [DONE] WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) `PERF-WT-INSTANT-ADD-COL-1`
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md)
+
+---
+
+### [PENDING] WiredTiger In-Memory Private Workspace 버퍼링 (OCC-on-WiredTiger) `PERF-WT-OCC-WORKSPACE-BUFFER-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 02:19:19
+- **Milestone**: `Post-1.0`
+- **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
+
+---
+
+### [IN_PROGRESS] WiredTiger 트랜잭션 로컬 제로-카피 Read Cache (WTTx.readCache) `PERF-WT-READ-CACHE-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-23 02:19:27
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
 
 ---
 

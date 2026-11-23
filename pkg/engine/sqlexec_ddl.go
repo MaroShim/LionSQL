@@ -108,7 +108,7 @@ func (s *Coordinator) recordDDLRestoreDroppedIndex(cs *ClientSession, tableName 
 func (s *Coordinator) recordDDLDropAddedColumn(cs *ClientSession, tableName, colName string) {
 	if txCtx := s.getTxContext(cs); txCtx != nil {
 		txCtx.AddRollbackAction(func() error {
-			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 				for idx, col := range sch.Columns {
 					if strings.EqualFold(col.Name, colName) {
 						sch.Columns = append(sch.Columns[:idx], sch.Columns[idx+1:]...)
@@ -118,7 +118,7 @@ func (s *Coordinator) recordDDLDropAddedColumn(cs *ClientSession, tableName, col
 				return nil
 			})
 			s.InvalidatePKBypassCache()
-			return nil
+			return err
 		})
 	}
 }

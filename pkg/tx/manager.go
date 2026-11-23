@@ -299,15 +299,27 @@ func (m *Manager) RollbackTo(name string) error {
 		return err
 	}
 
-	// [TX-001] Truncate deferred and rollback actions recorded after this savepoint
+	// [TX-001] Truncate deferred and execute rollback actions recorded after this savepoint in LIFO order
 	m.current.mu.Lock()
 	if sp.DeferredOffset <= len(m.current.DeferredActions) {
 		m.current.DeferredActions = m.current.DeferredActions[:sp.DeferredOffset]
 	}
-	if sp.RollbackOffset <= len(m.current.RollbackActions) {
+	var actionsToRun []func() error
+	if sp.RollbackOffset < len(m.current.RollbackActions) {
+		actionsToRun = append(actionsToRun, m.current.RollbackActions[sp.RollbackOffset:]...)
 		m.current.RollbackActions = m.current.RollbackActions[:sp.RollbackOffset]
 	}
 	m.current.mu.Unlock()
+
+	var firstErr error
+	for i := len(actionsToRun) - 1; i >= 0; i-- {
+		if err := actionsToRun[i](); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if firstErr != nil {
+		return fmt.Errorf("rollback to savepoint DDL undo error: %w", firstErr)
+	}
 
 	// If transaction was in StateInError, rolling back to a valid savepoint recovers it to StateActive
 	if m.current.GetState() == StateInError {
