@@ -14,14 +14,8 @@ func TestDefaultDiskAndMemory_Platform(t *testing.T) {
 	disk := config.DefaultDisk()
 	mem := config.DefaultMemory()
 
-	if runtime.GOOS == "windows" {
-		if disk != "compact" {
-			t.Fatalf("expected default disk 'compact' on windows, got %q", disk)
-		}
-	} else {
-		if disk != "wiredtiger" {
-			t.Fatalf("expected default disk 'wiredtiger' on %s, got %q", runtime.GOOS, disk)
-		}
+	if disk != "wiredtiger" {
+		t.Fatalf("expected default disk 'wiredtiger', got %q", disk)
 	}
 
 	if mem != "compact" {
@@ -90,14 +84,8 @@ func TestServerConfig_GetDiskAndMemory(t *testing.T) {
 
 func TestDefaultEngine_Platform(t *testing.T) {
 	eng := config.DefaultEngine()
-	if runtime.GOOS == "windows" {
-		if eng != "memory" {
-			t.Fatalf("expected default engine 'memory' on windows, got %q", eng)
-		}
-	} else {
-		if eng != "wiredtiger" {
-			t.Fatalf("expected default engine 'wiredtiger' on %s, got %q", runtime.GOOS, eng)
-		}
+	if eng != "wiredtiger" {
+		t.Fatalf("expected default engine 'wiredtiger', got %q", eng)
 	}
 }
 

@@ -104,7 +104,7 @@ Options by Category (옵션 상세):
 
   [Storage & Persistence]
     -dir <path>                Database data directory (default: ./data) (aliases: -data, -data-dir)
-    -engine <type>             Storage engine backend: wiredtiger or compact (default: wiredtiger on macOS/Linux, compact on Windows)
+    -engine <type>             Storage engine backend: wiredtiger or compact (default: wiredtiger)
                                  - wiredtiger: High-concurrency Disk B+Tree MVCC engine for enterprise databases
                                  - compact   : Pure-Go In-Memory OCC engine with zero-GC flat buffers and AOF/WAL durability (alias: memory)
     -seed                      Automatically seed demo e-commerce sample database on startup

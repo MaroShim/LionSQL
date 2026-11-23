@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -157,15 +156,10 @@ type Config struct {
 	Outbox      OutboxConfig      `json:"outbox,omitempty"`
 }
 
-// DefaultDisk returns the default disk persistence backend for the current platform.
-// On non-Windows platforms (macOS, Linux), the default is "wiredtiger" (Lock-Free B+Tree MVCC)
+// DefaultDisk returns the default disk persistence backend for all platforms ("wiredtiger").
+// On all supported platforms (macOS, Linux, Windows), the default is "wiredtiger" (Lock-Free B+Tree MVCC)
 // to provide a robust, disk-based enterprise OLTP DBMS out-of-the-box.
-// On Windows (runtime.GOOS == "windows"), the default is "compact" (In-Memory OCC with pointer-free flat buffer and WAL/AOF durability)
-// to ensure zero-CGo standalone execution on Windows machines.
 func DefaultDisk() string {
-	if runtime.GOOS == "windows" {
-		return "compact"
-	}
 	return "wiredtiger"
 }
 
@@ -176,13 +170,8 @@ func DefaultMemory() string {
 	return "compact"
 }
 
-// DefaultEngine returns the default storage engine backend for the current platform ("wiredtiger" or "memory").
-// On non-Windows platforms (macOS, Linux), the default is "wiredtiger" (Lock-Free B+Tree MVCC).
-// On Windows (runtime.GOOS == "windows"), the default is "memory" (In-Memory OCC with FlatRecord and AOF durability).
+// DefaultEngine returns the default storage engine backend for all platforms ("wiredtiger").
 func DefaultEngine() string {
-	if runtime.GOOS == "windows" {
-		return "compact"
-	}
 	return "wiredtiger"
 }
 

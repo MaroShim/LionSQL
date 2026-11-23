@@ -6,8 +6,8 @@ import (
 )
 
 func TestVersion_CompactAndDetailed(t *testing.T) {
-	if !strings.HasPrefix(Version, "0.93.") {
-		t.Fatalf("expected version prefix 0.93., got %s", Version)
+	if !strings.HasPrefix(Version, "0.94.") {
+		t.Fatalf("expected version prefix 0.94., got %s", Version)
 	}
 
 	compact := CompactVersion()

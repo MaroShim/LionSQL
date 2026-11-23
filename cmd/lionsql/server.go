@@ -71,7 +71,7 @@ func runServer(args []string) error {
 	fs.StringVar(dataDir, "data", defaultDataDir, "Alias for -dir")
 	fs.StringVar(dataDir, "data-dir", defaultDataDir, "Alias for -dir")
 
-	engineType := fs.String("engine", "", "Storage engine backend: wiredtiger or compact (default: wiredtiger on macOS/Linux, compact on Windows)")
+	engineType := fs.String("engine", "", "Storage engine backend: wiredtiger or compact (default: wiredtiger)")
 	diskType := fs.String("disk", "", "Legacy alias for -engine")
 	memoryType := fs.String("memory", "", "Legacy alias for in-memory layout")
 	autoSeed := fs.Bool("seed", false, "Automatically seed demo sample database (embedded demo_seed.sql) on startup")
