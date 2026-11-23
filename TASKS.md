@@ -356,6 +356,7 @@
 | `DONE` | **`FIX-MATH-DOMAIN-ERROR-POLICY-1`** |  | 2 | P2 | Engine | [`v0.94.0`](v0.94.0) |  |
 | `DONE` | **`FIX-MEMENGINE-DDL-WAL-FAILCLOSED-1`** | `1` | --domain | P2 | DDL WAL 기록 실패 시 인메모리 카탈로그 복구 및 선기록 패턴 적용 | [`--prio`](--prio) |  |
 | `DONE` | **`FIX-MEMENGINE-WAL-FSYNC-ROLLBACK-1`** | `1.0-GA` | Storage | P2 | MemEngine WAL fsync 실패 시 메모리 데이터 잔류(Phantom Commit) 롤백 | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
+| `DONE` | **`FIX-MERGE-ATOMIC-TRIGGERS-1`** | `v0.95.0` | Engine | P1 | MERGE statement-level savepoint rollback & DML triggers execution parity |  |  |
 | `DONE` | **`FIX-MERGE-INTO-COMPOSITE-PK-1`** | `1.0-GA` | Engine | P1 | MERGE INTO 구문 복합 PK 타깃 테이블 매칭/갱신/삭제 정합성 보장 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-MERGE-JOIN-OPEN-ERROR-CURSOR-LEAK-1`** | `1.0-GA` | Execution | P1 | MergeJoinIterator.Open 초기 튜플 Pull 에러 시 양쪽 자식 커서 클린업 보장 | [`notes/20261118_BUG_REMEDIATION_PLAN.ko.md`](notes/20261118_BUG_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`FIX-OCC-COMPACT-AUDIT-1`** | `1.0-GA` | Storage | P1 | MemoryCompact 2단계 Audit 결함 수정 (Arena UAF, AlterTable 레이아웃/WAL, memCursor 레이스, varSlot 오버플로우) | [`notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md`](notes/reports/MEMORY_COMPACT_AUDIT_REPORT.ko.md) |  |
@@ -3794,6 +3795,12 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-16 14:21:02
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md)
+
+---
+
+### [DONE] MERGE statement-level savepoint rollback & DML triggers execution parity `FIX-MERGE-ATOMIC-TRIGGERS-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-23 07:34:54
+- **Milestone**: `v0.95.0`
 
 ---
 

@@ -119,9 +119,17 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 
 	var tx storage.Transaction
 	var isEphemeral bool
+	var hasStmtSP bool
+	stmtCommitted := false
 	if cs != nil && cs.Tx() != nil {
 		tx = cs.Tx()
 		isEphemeral = false
+		hasStmtSP = s.beginStmtSavepoint(cs)
+		defer func() {
+			if !stmtCommitted {
+				s.rollbackStmtSavepoint(cs, hasStmtSP)
+			}
+		}()
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
@@ -145,6 +153,14 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 			_ = tx.Rollback()
 		}
 	}()
+
+	hasInsTriggers := s.executor != nil && s.executor.HasTriggers(parsed.targetTable, "INSERT")
+	hasUpdTriggers := s.executor != nil && s.executor.HasTriggers(parsed.targetTable, "UPDATE")
+	hasDelTriggers := s.executor != nil && s.executor.HasTriggers(parsed.targetTable, "DELETE")
+	var trigInsRecs []storage.Record
+	var trigUpdInserted []storage.Record
+	var trigUpdDeleted []storage.Record
+	var trigDelRecs []storage.Record
 
 	// 1. Load source rows
 	sourceRows, err := s.loadMergeSourceRows(parsed, tx, start, cs)
@@ -227,6 +243,9 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 						if err := tx.Delete(parsed.targetTable, pkVal); err != nil {
 							return nil, fmt.Errorf("MERGE DELETE failed: %w", err)
 						}
+						if hasDelTriggers {
+							trigDelRecs = append(trigDelRecs, tRec.Clone())
+						}
 						rowsAffected++
 						break
 					} else if clause.clauseType == mergeMatchedUpdate {
@@ -242,6 +261,10 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 						}
 						if err := tx.Update(parsed.targetTable, pkVal, updatedRec); err != nil {
 							return nil, fmt.Errorf("MERGE UPDATE failed: %w", err)
+						}
+						if hasUpdTriggers {
+							trigUpdInserted = append(trigUpdInserted, updatedRec.Clone())
+							trigUpdDeleted = append(trigUpdDeleted, tRec.Clone())
 						}
 						rowsAffected++
 						break
@@ -326,6 +349,9 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 					if err := tx.Insert(parsed.targetTable, newRec); err != nil {
 						return nil, fmt.Errorf("MERGE INSERT failed: %w", err)
 					}
+					if hasInsTriggers {
+						trigInsRecs = append(trigInsRecs, newRec.Clone())
+					}
 					if insPKVal, ok := newRec[pkCol.Name]; ok {
 						newlyInsertedKeys[insPKVal.String()] = true
 					}
@@ -335,11 +361,30 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 			}
 		}
 
+		if hasInsTriggers && len(trigInsRecs) > 0 {
+			if err := s.fireVolcanoTriggers(tx, cs, parsed.targetTable, "INSERT", trigInsRecs, nil); err != nil {
+				return nil, fmt.Errorf("MERGE trigger error (INSERT): %w", err)
+			}
+		}
+		if hasUpdTriggers && len(trigUpdInserted) > 0 {
+			if err := s.fireVolcanoTriggers(tx, cs, parsed.targetTable, "UPDATE", trigUpdInserted, trigUpdDeleted); err != nil {
+				return nil, fmt.Errorf("MERGE trigger error (UPDATE): %w", err)
+			}
+		}
+		if hasDelTriggers && len(trigDelRecs) > 0 {
+			if err := s.fireVolcanoTriggers(tx, cs, parsed.targetTable, "DELETE", nil, trigDelRecs); err != nil {
+				return nil, fmt.Errorf("MERGE trigger error (DELETE): %w", err)
+			}
+		}
+
 		if isEphemeral {
 			if err := tx.Commit(); err != nil {
 				return nil, fmt.Errorf("commit error: %w", err)
 			}
 			tx = nil
+		} else {
+			stmtCommitted = true
+			s.releaseStmtSavepoint(cs, hasStmtSP)
 		}
 
 		if cs != nil {
@@ -427,6 +472,9 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 					if err := tx.Delete(parsed.targetTable, pkVal); err != nil {
 						return nil, fmt.Errorf("MERGE DELETE failed: %w", err)
 					}
+					if hasDelTriggers {
+						trigDelRecs = append(trigDelRecs, tRec.Clone())
+					}
 					rowsAffected++
 					break
 				} else if clause.clauseType == mergeMatchedUpdate {
@@ -442,6 +490,10 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 					}
 					if err := tx.Update(parsed.targetTable, pkVal, updatedRec); err != nil {
 						return nil, fmt.Errorf("MERGE UPDATE failed: %w", err)
+					}
+					if hasUpdTriggers {
+						trigUpdInserted = append(trigUpdInserted, updatedRec.Clone())
+						trigUpdDeleted = append(trigUpdDeleted, tRec.Clone())
 					}
 					targetRows[matchedTargetIdx] = updatedRec
 					rowsAffected++
@@ -532,6 +584,9 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 				if err := tx.Insert(parsed.targetTable, newRec); err != nil {
 					return nil, fmt.Errorf("MERGE INSERT failed: %w", err)
 				}
+				if hasInsTriggers {
+					trigInsRecs = append(trigInsRecs, newRec.Clone())
+				}
 				if pkVal, ok := targetSchema.ResolveRecordPK(newRec); ok {
 					newlyInsertedKeys[pkVal.String()] = true
 				} else if pkVal, ok := newRec[pkCol.Name]; ok {
@@ -569,6 +624,9 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 				if err := tx.Delete(parsed.targetTable, pkVal); err != nil {
 					return nil, fmt.Errorf("MERGE DELETE (BY SOURCE) failed: %w", err)
 				}
+				if hasDelTriggers {
+					trigDelRecs = append(trigDelRecs, tRec.Clone())
+				}
 				rowsAffected++
 			} else if clause.clauseType == mergeNotMatchedSourceUpdate {
 				updatedRec := cloneRecord(tRec)
@@ -584,9 +642,29 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 				if err := tx.Update(parsed.targetTable, pkVal, updatedRec); err != nil {
 					return nil, fmt.Errorf("MERGE UPDATE (BY SOURCE) failed: %w", err)
 				}
+				if hasUpdTriggers {
+					trigUpdInserted = append(trigUpdInserted, updatedRec.Clone())
+					trigUpdDeleted = append(trigUpdDeleted, tRec.Clone())
+				}
 				targetRows[idx] = updatedRec
 				rowsAffected++
 			}
+		}
+	}
+
+	if hasInsTriggers && len(trigInsRecs) > 0 {
+		if err := s.fireVolcanoTriggers(tx, cs, parsed.targetTable, "INSERT", trigInsRecs, nil); err != nil {
+			return nil, fmt.Errorf("MERGE trigger error (INSERT): %w", err)
+		}
+	}
+	if hasUpdTriggers && len(trigUpdInserted) > 0 {
+		if err := s.fireVolcanoTriggers(tx, cs, parsed.targetTable, "UPDATE", trigUpdInserted, trigUpdDeleted); err != nil {
+			return nil, fmt.Errorf("MERGE trigger error (UPDATE): %w", err)
+		}
+	}
+	if hasDelTriggers && len(trigDelRecs) > 0 {
+		if err := s.fireVolcanoTriggers(tx, cs, parsed.targetTable, "DELETE", nil, trigDelRecs); err != nil {
+			return nil, fmt.Errorf("MERGE trigger error (DELETE): %w", err)
 		}
 	}
 
@@ -595,6 +673,9 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 			return nil, fmt.Errorf("commit error: %w", err)
 		}
 		tx = nil
+	} else {
+		stmtCommitted = true
+		s.releaseStmtSavepoint(cs, hasStmtSP)
 	}
 
 	if cs != nil {
