@@ -19,8 +19,15 @@ import (
 // Bounded to 12 columns to guarantee maximum 4,096 grouping sets, matching Microsoft SQL Server limit ([RULE:BoundedBuffers]).
 const MaxCubeColumns = 12
 
+// MaxGroupByColumns defines the maximum allowed grouping columns for GROUP BY.
+// Bounded to 64 columns matching Microsoft SQL Server limit and 64-bit mask capacity ([RULE:BoundedBuffers]).
+const MaxGroupByColumns = 64
+
 // ErrTooManyCubeColumns is returned when a CUBE clause exceeds the maximum allowed dimensions.
 var ErrTooManyCubeColumns = errors.New("CUBE clause exceeds maximum allowed dimensions")
+
+// ErrTooManyGroupByColumns is returned when a GROUP BY clause exceeds the maximum allowed columns (64).
+var ErrTooManyGroupByColumns = errors.New("GROUP BY clause exceeds maximum allowed columns (64 columns)")
 
 type aggFuncType int
 
@@ -63,7 +70,7 @@ type strOrderItem struct {
 
 type groupAccumulator struct {
 	groupTuple Tuple
-	groupMask  uint32
+	groupMask  uint64
 	counts     []int64
 	sums       []float64
 	decSums    []storage.Decimal
@@ -147,7 +154,7 @@ func (a *AggregateIterator) initAccumulatorNeeds() {
 	}
 }
 
-func (a *AggregateIterator) newGroupAccumulator(tuple Tuple, mask uint32) *groupAccumulator {
+func (a *AggregateIterator) newGroupAccumulator(tuple Tuple, mask uint64) *groupAccumulator {
 	n := len(a.fields)
 	acc := &groupAccumulator{
 		groupTuple: tuple,
@@ -825,21 +832,25 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 	var groupOrder []string
 
 	nKeys := len(a.groupKeys)
-	if nKeys > 31 {
-		nKeys = 31
+	if nKeys > MaxGroupByColumns {
+		_ = a.child.Close()
+		return fmt.Errorf("%w: %d columns specified, maximum allowed is %d",
+			ErrTooManyGroupByColumns, nKeys, MaxGroupByColumns)
 	}
-	var masks []uint32
+	var masks []uint64
 	if nKeys == 0 {
-		masks = []uint32{0}
+		masks = []uint64{0}
 	} else {
 		switch a.groupByMod {
 		case proc.GroupByRollup:
-			masks = make([]uint32, nKeys+1)
+			masks = make([]uint64, nKeys+1)
 			for lvl := nKeys; lvl >= 0; lvl-- {
 				if lvl == 0 {
 					masks[nKeys-lvl] = 0
+				} else if lvl == 64 {
+					masks[nKeys-lvl] = ^uint64(0)
 				} else {
-					masks[nKeys-lvl] = (uint32(1) << lvl) - 1
+					masks[nKeys-lvl] = (uint64(1) << lvl) - 1
 				}
 			}
 		case proc.GroupByCube:
@@ -849,12 +860,16 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 					ErrTooManyCubeColumns, nKeys, MaxCubeColumns)
 			}
 			totalComb := 1 << nKeys
-			masks = make([]uint32, totalComb)
+			masks = make([]uint64, totalComb)
 			for m := 0; m < totalComb; m++ {
-				masks[m] = uint32(m)
+				masks[m] = uint64(m)
 			}
 		default:
-			masks = []uint32{(uint32(1) << nKeys) - 1}
+			if nKeys == 64 {
+				masks = []uint64{^uint64(0)}
+			} else {
+				masks = []uint64{(uint64(1) << nKeys) - 1}
+			}
 		}
 	}
 
@@ -923,10 +938,10 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 			for _, tuple := range inChunk.Tuples {
 				for _, mask := range masks {
 					var gk strings.Builder
-					gk.WriteString(strconv.FormatUint(uint64(mask), 10))
+					gk.WriteString(strconv.FormatUint(mask, 10))
 					gk.WriteByte('\x01')
 					for i, k := range a.groupKeys {
-						if (mask & (1 << i)) != 0 {
+						if (mask & (uint64(1) << i)) != 0 {
 							var val any
 							if tuple.Lazy == nil && a.groupKeyIdx != nil && i < len(a.groupKeyIdx) && a.groupKeyIdx[i] >= 0 && a.groupKeyIdx[i] < len(tuple.Values) {
 								val = tuple.Values[a.groupKeyIdx[i]]
@@ -939,38 +954,58 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 							}
 							switch v := val.(type) {
 							case nil:
-								gk.WriteString("\x00NULL")
+								gk.WriteString("\x00NULL\x00")
 							case int64:
-								gk.WriteString(strconv.FormatInt(v, 10))
+								s := strconv.FormatInt(v, 10)
+								gk.WriteString(strconv.Itoa(len(s)))
+								gk.WriteByte(':')
+								gk.WriteString(s)
 							case int:
-								gk.WriteString(strconv.Itoa(v))
+								s := strconv.Itoa(v)
+								gk.WriteString(strconv.Itoa(len(s)))
+								gk.WriteByte(':')
+								gk.WriteString(s)
 							case string:
-								if isCS {
-									gk.WriteString(v)
-								} else {
-									gk.WriteString(strings.ToLower(v))
+								s := v
+								if !isCS {
+									s = strings.ToLower(s)
 								}
+								gk.WriteString(strconv.Itoa(len(s)))
+								gk.WriteByte(':')
+								gk.WriteString(s)
 							case storage.Value:
 								if v.IsNull {
-									gk.WriteString("\x00NULL")
+									gk.WriteString("\x00NULL\x00")
 								} else if v.Type == storage.TypeVarChar {
-									if isCS {
-										gk.WriteString(v.SVal)
-									} else {
-										gk.WriteString(strings.ToLower(v.SVal))
+									s := v.SVal
+									if !isCS {
+										s = strings.ToLower(s)
 									}
+									gk.WriteString(strconv.Itoa(len(s)))
+									gk.WriteByte(':')
+									gk.WriteString(s)
 								} else {
-									gk.WriteString(v.String())
+									s := v.String()
+									gk.WriteString(strconv.Itoa(len(s)))
+									gk.WriteByte(':')
+									gk.WriteString(s)
 								}
 							case float64:
-								gk.WriteString(strconv.FormatFloat(v, 'g', -1, 64))
+								s := strconv.FormatFloat(v, 'g', -1, 64)
+								gk.WriteString(strconv.Itoa(len(s)))
+								gk.WriteByte(':')
+								gk.WriteString(s)
 							default:
 								s := fmt.Sprintf("%v", val)
 								if !isCS {
 									s = strings.ToLower(s)
 								}
+								gk.WriteString(strconv.Itoa(len(s)))
+								gk.WriteByte(':')
 								gk.WriteString(s)
 							}
+						} else {
+							gk.WriteString("\x00SKIP\x00")
 						}
 						gk.WriteByte('\x00')
 					}
@@ -1054,8 +1089,8 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 			accA := groups[groupOrder[i]]
 			accB := groups[groupOrder[j]]
 			for k := 0; k < nKeys; k++ {
-				actA := (accA.groupMask & (1 << k)) != 0
-				actB := (accB.groupMask & (1 << k)) != 0
+				actA := (accA.groupMask & (uint64(1) << k)) != 0
+				actB := (accB.groupMask & (uint64(1) << k)) != 0
 				if actA && actB {
 					valA, _ := lookupVal(accA.groupTuple, a.groupKeys[k])
 					valB, _ := lookupVal(accB.groupTuple, a.groupKeys[k])
@@ -1092,7 +1127,7 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 				isAggregated := true
 				for kIdx, k := range a.groupKeys {
 					if matchColName(k, f.argCol) {
-						if (acc.groupMask & (1 << kIdx)) != 0 {
+						if (acc.groupMask & (uint64(1) << kIdx)) != 0 {
 							isAggregated = false
 						}
 						break
@@ -1276,7 +1311,7 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 			for kIdx, k := range a.groupKeys {
 				if matchColName(k, f.argCol) {
 					isGroupCol = true
-					if (acc.groupMask & (1 << kIdx)) != 0 {
+					if (acc.groupMask & (uint64(1) << kIdx)) != 0 {
 						colVal, _ = lookupVal(acc.groupTuple, f.argCol)
 					} else {
 						colVal = nil
