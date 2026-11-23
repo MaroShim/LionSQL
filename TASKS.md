@@ -293,6 +293,7 @@
 | `PENDING` | **`FEAT-WIN-FUNC-PROC-COMPAT-1`** | `v0.95.0` | Engine | P2 | 분석 함수 LEAD/LAG 프로시저 런타임 호환성 점검 및 윈도우 프레임 독립 실행 검증 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WINDOWS-WIREDTIGER-DLL-BUNDLE-1`** | `v1.1.0` | Storage | P1 | Windows WiredTiger MSVC Native DLL Build & Self-Extracting Bundle Pipeline | [`notes/plans/WINDOWS_WIREDTIGER_DLL_BUNDLE_PLAN.ko.md`](notes/plans/WINDOWS_WIREDTIGER_DLL_BUNDLE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`** | `v0.94.0` | 1 | P2 | Storage | [`--milestone`](--milestone) |  |
+| `PENDING` | **`FEAT-WIRE-PG-COPY-STREAM-1`** | `v0.95.0` | Wire | P2 | PGWire 대량 COPY FROM STDIN/TO STDOUT 고속 스트리밍 지원 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WIRE-PG-REMOTE-CANCEL-1`** | `v0.95.0` | Wire | P2 | PGWire 외부 TCP CancelRequest (80877102) 백엔드 쿼리 캔슬 연동 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WIRE-TDS-BCP-BULK-LOAD-1`** | `v0.95.0` | Wire | P2 | TDS 0x07 BCP (Bulk Load) 대량 데이터 적재 스트리밍 지원 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WIRE-TDS-RESET-CONNECTION-1`** | `v0.95.0` | Wire | P2 | TDS RESETCONNECTION (0x08) 수신 시 세션 임시 객체(#temp) 및 상태 원자적 초기화 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
@@ -511,7 +512,7 @@
 | `DONE` | **`PERF-WT-INSTANT-ADD-COL-1`** | `1.0-GA` | Storage | P2 | WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`PERF-WT-OCC-WORKSPACE-BUFFER-1`** | `Post-1.0` | Storage | P2 | WiredTiger In-Memory Private Workspace 버퍼링 (OCC-on-WiredTiger) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`PERF-WT-READ-CACHE-1`** | `v0.95.0` | Storage | P1 | WiredTiger 트랜잭션 로컬 제로-카피 Read Cache (WTTx.readCache) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-WT-ROW-DIRECT-1`** | `v1.10.0` | Storage | P2 | WiredTiger InsertRow 중간 Record 맵 2중 할당 우회 및 EncodeRowToBuffer 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
+| `DONE` | **`PERF-WT-ROW-DIRECT-1`** | `v1.10.0` | Storage | P2 | WiredTiger InsertRow 중간 Record 맵 2중 할당 우회 및 EncodeRowToBuffer 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OFFLINE-DOCS`** | `v1.1.0` | Ecosystem | P3 | 배포 패키지 오프라인 문서 번들링 (`docs/index.html`) | [`notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md`](notes/plans/OFFLINE_DOCS_PACKAGING_PLAN.ko.md) |  |
 | `PENDING` | **`PKG-OS-NATIVE-DISTRIBUTION-1`** | `v1.10.0` | Ecosystem | P2 | OS 네이티브 패키징 및 배포 인프라 구축 (Debian/Ubuntu .deb & macOS Homebrew) | [`notes/OS_NATIVE_PACKAGING_AND_DISTRIBUTION_PLAN.ko.md`](notes/OS_NATIVE_PACKAGING_AND_DISTRIBUTION_PLAN.ko.md) |  |
 | `DONE` | **`PLAN-SPEC-DRIVEN-TEST-DISCOVERY-METHODOLOGY-1`** | `1.0-GA` | Test | P1 | 스펙 기반 쿼리 생성, 차등 오라클 불일치 발견, RCA 및 TDD Red 등록 방법론 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
@@ -3363,6 +3364,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
+### [PENDING] PGWire 대량 COPY FROM STDIN/TO STDOUT 고속 스트리밍 지원 `FEAT-WIRE-PG-COPY-STREAM-1`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-23 05:34:24
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
+
+---
+
 ### [PENDING] PGWire 외부 TCP CancelRequest (80877102) 백엔드 쿼리 캔슬 연동 `FEAT-WIRE-PG-REMOTE-CANCEL-1`
 - **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-23 01:28:10
 - **Milestone**: `v0.95.0`
@@ -4988,8 +4996,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] WiredTiger InsertRow 중간 Record 맵 2중 할당 우회 및 EncodeRowToBuffer 직결 `PERF-WT-ROW-DIRECT-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
+### [DONE] WiredTiger InsertRow 중간 Record 맵 2중 할당 우회 및 EncodeRowToBuffer 직결 `PERF-WT-ROW-DIRECT-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 05:47:13
 - **Milestone**: `v1.10.0`
 - **Plan Doc**: [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md)
 

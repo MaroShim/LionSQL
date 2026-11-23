@@ -1786,6 +1786,25 @@ func formatIndexKeyValue(rec storage.Record, idx *storage.IndexSchema, pkStr str
 	return prefix + keyStr + "\x00" + pkStr, "", isNull
 }
 
+func formatIndexKeyValueFromRow(schema *storage.TableSchema, row storage.Row, idx *storage.IndexSchema, pkStr string) (key string, val string, isNull bool) {
+	keyVal := storage.ExtractIndexKeyFromRow(schema, row, idx)
+	if keyVal.ContainsNull() {
+		isNull = true
+	}
+	var keyStr string
+	if len(idx.Columns) > 1 {
+		keyStr = keyVal.String()
+	} else {
+		keyStr = storage.EncodeIndexKeyPart(keyVal)
+	}
+
+	prefix := idx.KeyPrefix()
+	if idx.Unique && !isNull {
+		return prefix + keyStr, pkStr, false
+	}
+	return prefix + keyStr + "\x00" + pkStr, "", isNull
+}
+
 // isIndexFileURI reports whether uri is the multiplexed secondary index file of a known table.
 func (e *Engine) isIndexFileURI(uri string) bool {
 	if !strings.HasPrefix(uri, "table:_idx_") {
@@ -2881,8 +2900,178 @@ func (tx *WTTx) InsertRow(tableName string, row storage.Row) error {
 	if err != nil {
 		return err
 	}
-	rec := tbl.RowToRecord(row)
-	return tx.insertLocked(tableName, tbl, rec)
+	return tx.insertRowLocked(tableName, tbl, row)
+}
+
+func (tx *WTTx) insertRowLocked(tableName string, tbl *storage.TableSchema, row storage.Row) error {
+	if err := tx.sess.engine.checkTainted(); err != nil {
+		return err
+	}
+
+	// Defensive copy: isolate row to eliminate caller slice mutation side-effects ([RULE:DefensiveIndexing])
+	if len(row.Values) > 0 {
+		vals := make([]storage.Value, len(row.Values))
+		copy(vals, row.Values)
+		row.Values = vals
+	}
+
+	var normErr error
+	row, normErr = storage.ValidateAndNormalizeRow(tbl, row)
+	if normErr != nil {
+		return normErr
+	}
+
+	if _, rvIdx, hasRV := tbl.RowVersionColumn(); hasRV {
+		if rvIdx >= 0 && rvIdx < len(row.Values) {
+			row.Values[rvIdx] = storage.BinaryValue(storage.NextRowVersion())
+		}
+	}
+
+	if _, err := tbl.PrimaryKeyColumn(); err != nil {
+		return err
+	}
+
+	pkVal, has := tbl.ResolveRowPK(row)
+	if !has || pkVal.IsNull {
+		pkCol, _ := tbl.PrimaryKeyColumn()
+		colName := ""
+		if pkCol != nil {
+			colName = pkCol.Name
+		}
+		return fmt.Errorf("%w: missing primary key %s", storage.ErrNotNullViolation, colName)
+	}
+
+	if err := tx.tryAcquireWriteLockLocked(tbl.Name, pkVal.String()); err != nil {
+		return err
+	}
+
+	if err := tx.checkForeignKeyFromRowLocked(tbl, row); err != nil {
+		return err
+	}
+	if err := tx.checkUniqueIndexesFromRowLocked(tableName, tbl, pkVal, row); err != nil {
+		return err
+	}
+
+	pkStr := pkVal.String()
+	uri := tbl.TableURI()
+	cur, err := tx.sess.acquireCursor(uri)
+	if err != nil {
+		return err
+	}
+	defer tx.sess.releaseCursor(uri, cur)
+
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+
+	recBytes, err := storage.EncodeRowToBuffer(tbl, row, *bufPtr)
+	if err != nil {
+		return err
+	}
+
+	var keyBuf [256]byte
+	cKey, cleanup := fastCString(pkStr, keyBuf[:])
+	if cleanup != nil {
+		defer cleanup()
+	}
+
+	// Verify primary key uniqueness
+	var pData unsafe.Pointer
+	var sz C.size_t
+	if ret := C.go_wt_cursor_get(cur, cKey, &pData, &sz); ret == 0 && pData != nil {
+		C.go_wt_cursor_reset(cur)
+		return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkStr, tableName)
+	}
+
+	if len(recBytes) > 0 {
+		pData = unsafe.Pointer(&recBytes[0])
+	} else {
+		pData = nil
+	}
+
+	if ret := C.go_wt_cursor_insert_raw(cur, cKey, pData, C.size_t(len(recBytes))); ret != 0 {
+		return wtOpError("cursor_insert", int(ret))
+	}
+
+	var physRec *storage.PhysiologicalRecord
+	if len(tx.savepoints) > 0 {
+		recCopy := make([]byte, len(recBytes))
+		copy(recCopy, recBytes)
+		physRec = storage.AcquirePhysRecord(storage.OpInsert, tbl.Name, pkVal, nil, recCopy)
+	}
+
+	if len(tbl.Indexes) > 0 {
+		var insertedIdxBuf [8]storage.IndexImage
+		insertedIdx := insertedIdxBuf[:0]
+		rollbackInserted := func() {
+			for j := len(insertedIdx) - 1; j >= 0; j-- {
+				img := insertedIdx[j]
+				if rbCur, rbErr := tx.sess.acquireCursor(img.URI); rbErr == nil {
+					_ = removeIndexEntry(rbCur, img.Key)
+					tx.sess.releaseCursor(img.URI, rbCur)
+				}
+			}
+			_ = C.go_wt_cursor_remove_key(cur, cKey)
+			if physRec != nil {
+				storage.ReleasePhysRecord(physRec)
+			}
+		}
+
+		for _, idx := range tbl.Indexes {
+			if idx.Disabled {
+				continue
+			}
+			if tx.testFailIndexOp != nil {
+				if err := tx.testFailIndexOp("insert", idx.Name); err != nil {
+					rollbackInserted()
+					return err
+				}
+			}
+			idxURI := tbl.IndexFileURI()
+			idxCur, err := tx.sess.acquireCursor(idxURI)
+			if err != nil {
+				rollbackInserted()
+				return err
+			}
+			k, v, _ := formatIndexKeyValueFromRow(tbl, row, &idx, pkStr)
+			if err := insertIndexEntry(idxCur, k, v); err != nil {
+				tx.sess.releaseCursor(idxURI, idxCur)
+				rollbackInserted()
+				return err
+			}
+			tx.sess.releaseCursor(idxURI, idxCur)
+			img := storage.IndexImage{
+				URI:   idxURI,
+				Key:   k,
+				Value: v,
+			}
+			insertedIdx = append(insertedIdx, img)
+			if physRec != nil {
+				physRec.NewIdx = append(physRec.NewIdx, img)
+			}
+		}
+	}
+
+	tx.hasWrites = true
+	if physRec != nil {
+		tx.undoLog = append(tx.undoLog, physRec)
+	}
+	if tx.sess.engine.hasHook.Load() && !storage.IsTemporaryTable(tableName) {
+		recCopy := make([]byte, len(recBytes))
+		copy(recCopy, recBytes)
+		tx.walOps = append(tx.walOps, memengine.WALOp{
+			Type:  memengine.OpInsert,
+			Table: tableName,
+			Key:   pkStr,
+			Data:  recCopy,
+		})
+	}
+
+	if tx.rowDeltas == nil {
+		tx.rowDeltas = make(map[string]int64)
+	}
+	tx.rowDeltas[tbl.Name]++
+
+	return nil
 }
 
 func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record storage.Record) error {
@@ -3508,6 +3697,115 @@ func (tx *WTTx) checkUniqueIndexesLocked(tableName string, tbl *storage.TableSch
 		}
 		C.go_wt_cursor_reset(cur)
 		tx.sess.releaseCursor(idxURI, cur)
+	}
+	return nil
+}
+
+func (tx *WTTx) checkUniqueIndexesFromRowLocked(tableName string, tbl *storage.TableSchema, currentPK storage.Value, row storage.Row) error {
+	pkStr := currentPK.String()
+	for _, idx := range tbl.Indexes {
+		if !idx.Unique {
+			continue
+		}
+		keyVal := storage.ExtractIndexKeyFromRow(tbl, row, &idx)
+		if keyVal.ContainsNull() {
+			continue
+		}
+		var keyStr string
+		if len(idx.Columns) > 1 {
+			keyStr = keyVal.String()
+		} else {
+			keyStr = storage.EncodeIndexKeyPart(keyVal)
+		}
+
+		idxURI := tbl.IndexFileURI()
+		cur, err := tx.sess.acquireCursor(idxURI)
+		if err != nil {
+			return err
+		}
+
+		keyStr = idx.KeyPrefix() + keyStr
+		var kData unsafe.Pointer
+		if len(keyStr) > 0 {
+			kData = unsafe.Pointer(unsafe.StringData(keyStr))
+		}
+		C.go_wt_cursor_set_key_raw(cur, kData, C.size_t(len(keyStr)))
+		ret := C.go_wt_cursor_search(cur)
+		if ret == 0 {
+			var pValData unsafe.Pointer
+			var valSz C.size_t
+			if vret := C.go_wt_cursor_get_val_raw(cur, &pValData, &valSz); vret == 0 && pValData != nil && valSz > 0 {
+				existingPK := string(C.GoBytes(pValData, C.int(valSz)))
+				if existingPK != pkStr {
+					C.go_wt_cursor_reset(cur)
+					tx.sess.releaseCursor(idxURI, cur)
+					return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idx.Name)
+				}
+			}
+		}
+		C.go_wt_cursor_reset(cur)
+		tx.sess.releaseCursor(idxURI, cur)
+	}
+	return nil
+}
+
+func (tx *WTTx) checkForeignKeyFromRowLocked(tbl *storage.TableSchema, row storage.Row) error {
+	for _, fk := range tbl.ForeignKeys {
+		childVals := make([]storage.Value, len(fk.ChildColumns))
+		hasNull := false
+		for i, cCol := range fk.ChildColumns {
+			_, cIdx, ok := tbl.FindColumn(cCol)
+			if !ok || cIdx < 0 || cIdx >= len(row.Values) || row.Values[cIdx].IsNull {
+				hasNull = true
+				break
+			}
+			childVals[i] = row.Values[cIdx]
+		}
+		if hasNull {
+			continue
+		}
+
+		pTbl, err := tx.getTableLocked(fk.ParentTable)
+		if err != nil {
+			return fmt.Errorf("%w: referenced table %q not found", storage.ErrTableNotFound, fk.ParentTable)
+		}
+
+		pCols := fk.ParentColumns
+		if len(pCols) == 0 {
+			pkCol, err := pTbl.PrimaryKeyColumn()
+			if err != nil || pkCol == nil {
+				return fmt.Errorf("referenced table %q has no primary key", fk.ParentTable)
+			}
+			pCols = []string{pkCol.Name}
+		}
+
+		parentPkCol, _ := pTbl.PrimaryKeyColumn()
+		if parentPkCol != nil && len(pCols) == 1 && strings.EqualFold(pCols[0], parentPkCol.Name) {
+			_, err := tx.getRawBytesLocked(pTbl.Name, childVals[0])
+			if err != nil {
+				return fmt.Errorf("%w: foreign key %q references non-existent row in %q",
+					storage.ErrForeignKeyViolation, fk.Name, fk.ParentTable)
+			}
+			continue
+		}
+
+		cur, err := tx.scanLocked(pTbl.Name)
+		if err != nil {
+			return err
+		}
+		matched := false
+		for cur.Next() {
+			r, rErr := cur.Row()
+			if rErr == nil && pTbl.RowMatchesFK(r, pCols, childVals) {
+				matched = true
+				break
+			}
+		}
+		cur.Close()
+		if !matched {
+			return fmt.Errorf("%w: foreign key %q references non-existent row in %q",
+				storage.ErrForeignKeyViolation, fk.Name, fk.ParentTable)
+		}
 	}
 	return nil
 }

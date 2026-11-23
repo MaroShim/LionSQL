@@ -5,7 +5,7 @@
 > - **관련 태스크 ID (`v1.0.0` Active / `DONE`)**:
 >   - **1순위**: `PERF-VDBE-FRAME-SLIM-1` (VDBE 프레임/레지스터 슬림 초기화: 중복 초기화 루프 제거만 채택) — **[유지 (`v1.0.0` Active / 1.0 이전 구현)]**
 >   - **2순위**: `PERF-WAL-ZERO-ALLOC-1` (In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 `writeFrame` Zero-Alloc) — **[유지 (`v1.0.0` Active / 1.0 이전 구현)]**
->   - **3순위**: `PERF-WT-ROW-DIRECT-1` (WiredTiger `InsertRow`/`Update` 중간 `Record` 맵 2중 할당 우회 및 `EncodeRowToBuffer` 직결) — **[유지 (`v1.0.0` Active / 1.0 이전 구현)]**
+>   - **3순위**: `PERF-WT-ROW-DIRECT-1` (WiredTiger `InsertRow`/`Update` 중간 `Record` 맵 2중 할당 우회 및 `EncodeRowToBuffer` 직결) — **[완료 (`DONE`)]**
 >   - **4순위**: `PERF-RESULT-ROW-STREAM-1` (쿼리 결과셋 `Rows []map[string]any` 이중 구체화 제거 및 `[]storage.Row` Zero-Boxing 스트리밍) — **[영구 기각 (Spec-Out `DONE`)]**
 >   - **5순위**: `PERF-TDS-ZEROCOPY-FRAME-1` (TDS `tdsStreamWriter` 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 `copy` 제거) — **[영구 기각 (Spec-Out `DONE`)]**
 >   - **6순위**: `PERF-CACHE-SHARD-1` (`PlanCache` 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 `RLock` 캐시라인 바운싱 제거) — **[영구 기각 (Spec-Out `DONE`)]**
@@ -28,7 +28,7 @@ LionSQL은 v0.92.0까지 튜플 바이너리 코덱(V2), Pointer-Free FlatRecord
 |:---:|---|---|---|---|:---:|:---:|
 | **1순위** | **`PERF-VDBE-FRAME-SLIM-1`** | `pkg/proc/runtime`, `pkg/wire` | `newFrame()`에서 매번 최소 64개 레지스터(3KB) 루프 초기화 + PGWire/TDS Prepared 실행 시 `paramMap` 3~5중 해시 삽입 | 프로시저/Prepared 호출당 맵 해싱 0회, 프레임 초기화 비용 75% 절감 | ★☆☆ | **유지 (범위 단순화)** |
 | **2순위** | **`PERF-WAL-ZERO-ALLOC-1`** | `pkg/storage/memengine` | `WALWriter.writeFrame`에서 `MarshalMsgPack` 슬라이스 할당 후 `make([]byte, 4+len)` 2차 할당 및 전체 `copy` | 쓰기 트랜잭션 커밋당 힙 할당 2회 ➔ 0회 (Zero-Alloc WAL) | ★☆☆ | **즉시 착수 (Active)** |
-| **3순위** | **`PERF-WT-ROW-DIRECT-1`** | `pkg/storage/wiredtiger`, `pkg/storage` | `WTTx.InsertRow`가 포지셔널 `Row`를 받아 `RowToRecord` 맵 생성 후 `insertLocked`에서 또 `normalized` 맵을 생성 | WiredTiger `INSERT` 시 행당 `map[string]Value` 할당 2회 완전 제거 | ★★☆ | **즉시 착수 (Active)** |
+| **3순위** | **`PERF-WT-ROW-DIRECT-1`** | `pkg/storage/wiredtiger`, `pkg/storage` | `WTTx.InsertRow`가 포지셔널 `Row`를 받아 `RowToRecord` 맵 생성 후 `insertLocked`에서 또 `normalized` 맵을 생성 | WiredTiger `INSERT` 시 행당 `map[string]Value` 할당 2회 완전 제거 | ★★☆ | **완료 (`DONE`)** |
 | **4순위** | **`PERF-RESULT-ROW-STREAM-1`** | `pkg/proc/runtime`, `pkg/wire`, `pkg/wire/tds` | `ExecutionResult`가 와이어에서 쓰이지도 않는 `Rows []map[string]any`와 `Values [][]any`를 동시 생성 및 `any` 박싱 | `SELECT` 다건 조회 처리량 30~50% 향상 및 GC 압력 대폭 감소 | ★★☆ | **영구 기각 (Spec-Out)** |
 | **5순위** | **`PERF-TDS-ZEROCOPY-FRAME-1`** | `pkg/wire/tds` | `tdsStreamWriter`가 `bytes.Buffer`에 쓴 뒤 `frame` 버퍼로 재복사하고 `FlushIfReady`에서 잔여 바이트를 슬라이딩 복사 | TDS 대량 결과셋 패킷 프레이밍 시 메모리 `copy` 0회 달성 | ★★☆ | **영구 기각 (Spec-Out)** |
 | **6순위** | **`PERF-CACHE-SHARD-1`** | `pkg/proc/runtime`, `pkg/api` | 고동시성(64코어+) 환경에서 단일 `PlanCache.mu.RLock()`의 `readerCount` 원자적 카운터 캐시라인 바운싱 | 다중 코어 동시 쿼리 디스패치 시 L1 캐시 무효화 제거 | ★★☆ | **영구 기각 (Spec-Out)** |
