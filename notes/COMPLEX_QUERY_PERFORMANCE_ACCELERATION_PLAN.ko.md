@@ -1,9 +1,9 @@
-# LionSQL OLAP 엔진 고도화 및 분석 쿼리 가속 아키텍처 플랜
-(`notes/OLAP_ENGINE_ACCELERATION_PLAN.ko.md`)
+# LionSQL 복합 쿼리 성능 개선 및 멀티코어 병렬 실행 고도화 플랜
+(`notes/COMPLEX_QUERY_PERFORMANCE_ACCELERATION_PLAN.ko.md`)
 
 > - **작성일**: 2026-11-23
 > - **참조 원본**: `/tmp/OLAP.txt` (CBO 통계 한계, 조인/집계 스필 및 적응성 결여, Intra-Query 병렬 실행기 부재)
-> - **목표**: 1.0 GA 릴리스 이전 LionSQL의 집계(Aggregation), GROUP BY, JOIN 병목을 해소하고 대용량 단일 쿼리가 멀티코어(32~36코어) 하드웨어를 100% 포화 구동할 수 있도록 CBO와 실행 엔진을 전면 고도화.
+> - **목표**: 1.0 GA 릴리스 이전 LionSQL의 집계(Aggregation), GROUP BY, JOIN 병목을 해소하고 대용량 단일 복합 쿼리가 멀티코어(32~36코어) 하드웨어를 100% 포화 구동할 수 있도록 CBO와 실행 엔진을 전면 고도화.
 > - **엔지니어링 원칙**: `[RULE:RadicalKISS]`, `[RULE:BoundedBuffers]`, `[RULE:PipelineVerification]`, `[Invariant 4]` (Zero External Sidecars, Self-Contained Binary).
 
 ---
@@ -18,7 +18,7 @@ flowchart TD
         P3["3. Intra-Query 병렬 부재<br>(단일 고루틴 순차 스캔/조인)"] --> E3["36개 코어 머신에서도 코어 1개만 100% 사용"]
     end
 
-    subgraph Solution [LionSQL OLAP 혁신 3대 축]
+    subgraph Solution [복합 쿼리 성능 혁신 3대 축]
         S1["Phase 1: CBO 통계 고도화<br>(Equi-Depth 히스토그램 & MCV & 다중컬럼 통계)"]
         S2["Phase 2: Simplified Spill Hash Join & Out-of-Core Agg<br>(16-버킷 고정 파티션 디스크 스필 조인)"]
         S3["Phase 3: Intra-Query Parallel Execution<br>(ParallelSeqScan + Gather + ParallelHashJoin)"]
