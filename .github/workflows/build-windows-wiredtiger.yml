@@ -8,6 +8,8 @@ on:
         required: true
         default: '11.3.1'
   push:
+    branches:
+      - main
     paths:
       - '.github/workflows/build-windows-wiredtiger.yml'
       - 'scripts/build_wiredtiger_windows*'
@@ -151,7 +153,7 @@ jobs:
           if ($diff) {
               Write-Host "Committing vendored Windows WiredTiger DLL..."
               git commit -m "chore(storage/wiredtiger): vendor precompiled windows msvc dll and import library"
-              git push origin main
+              git push origin HEAD:main
           } else {
               Write-Host "No changes to commit (already up to date)."
           }
