@@ -92,6 +92,9 @@ type SQLCoordinator interface {
 	// ResetSession restores a persistent client session to a clean, isolated initial state for connection pooling reuse.
 	ResetSession(id string, resetTx bool) error
 
+	// DiscardSessionTempTables drops all session-local temporary and ephemeral tables without altering other session state.
+	DiscardSessionTempTables(id string) error
+
 	// CancelSessionQuery triggers cooperative cancellation for the currently active statement on sessionID.
 	CancelSessionQuery(sessionID string) bool
 

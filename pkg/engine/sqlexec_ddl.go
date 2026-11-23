@@ -1627,11 +1627,36 @@ func (s *Coordinator) execSingleAlterAction(tableName string, act proc.AlterTabl
 	case proc.AlterColumnType:
 		colName := act.ColumnName
 		newType := act.Column.Type
+
+		// Check if shrinking precision outside AlterTable lock ([RULE:LockHierarchy])
+		if curSch, err := s.engine.GetTable(tableName); err == nil && curSch != nil {
+			for i, c := range curSch.Columns {
+				if strings.EqualFold(c.Name, colName) {
+					if act.Column.Precision > 0 && c.Precision > 0 && act.Column.Precision < c.Precision {
+						if err := s.validateColumnLengthUnderLimit(tableName, i, act.Column.Precision); err != nil {
+							return nil, err
+						}
+					}
+					break
+				}
+			}
+		}
+
 		if err := s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
 			found := false
 			for i := range sch.Columns {
 				if strings.EqualFold(sch.Columns[i].Name, colName) {
 					sch.Columns[i].Type = newType
+					if act.Column.RawType != "" {
+						sch.Columns[i].RawType = act.Column.RawType
+					}
+					if act.Column.Precision != 0 {
+						sch.Columns[i].Precision = act.Column.Precision
+					}
+					if act.Column.Scale > 0 {
+						sch.Columns[i].Scale = act.Column.Scale
+					}
+					sch.Columns[i].IsFixed = act.Column.IsFixed
 					found = true
 					break
 				}
@@ -2047,4 +2072,44 @@ func (s *Coordinator) execDropStatistics(query string, start time.Time) (*QueryR
 		Messages:   []string{fmt.Sprintf("Statistics %q dropped successfully.", stmt.Name)},
 		DurationUS: time.Since(start).Microseconds(),
 	}, nil
+}
+
+func (s *Coordinator) validateColumnLengthUnderLimit(tableName string, colIdx int, maxLen int) error {
+	if s.engine == nil {
+		return nil
+	}
+	sess, err := s.engine.NewSession()
+	if err != nil {
+		return nil
+	}
+	defer sess.Close()
+	tx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil
+	}
+	defer tx.Rollback()
+	cur, err := tx.Scan(tableName)
+	if err != nil {
+		return nil
+	}
+	defer cur.Close()
+	for cur.Next() {
+		row, err := cur.Row()
+		if err != nil {
+			return err
+		}
+		if colIdx < len(row.Values) && !row.Values[colIdx].IsNull {
+			val := row.Values[colIdx]
+			var strLen int
+			if val.Type == storage.TypeVarChar {
+				strLen = len([]rune(val.SVal))
+			} else if val.Type == storage.TypeBinary {
+				strLen = len(val.BinVal)
+			}
+			if strLen > maxLen {
+				return fmt.Errorf("Msg 8152, Level 16, State 14: String or binary data would be truncated (value length %d exceeds new column limit %d)", strLen, maxLen)
+			}
+		}
+	}
+	return nil
 }

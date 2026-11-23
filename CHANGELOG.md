@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- support PostgreSQL connection pooler reset commands `DISCARD ALL`, `DISCARD PLANS`, `DISCARD SEQUENCES`, `DISCARD TEMP/TEMPORARY` (`FEAT-PG-DISCARD-COMMANDS-1`)
+- support TDS `StatusResetConnection` (0x08) and `sp_reset_connection` RPC atomic session state isolation (`FEAT-WIRE-TDS-RESET-CONNECTION-1`)
+- support online O(1) variable-length column expansion for `ALTER TABLE ... ALTER COLUMN` with truncation protection (`FEAT-ALTER-COLUMN-ONLINE-EXPANSION-1`)
 - add 10x Negative Syntax Fuzzer suite covering 14,467 malformed SQL permutations with 100% fail-closed rejection (`FIX-NEGATIVE-SYNTAX-FUZZER-1`)
 - support multi-column tuple comparisons `(a, b) = (c, d)` and `(a, b) IN ((...))` across parser and evaluator (`ENG-034`, Round 15)
 - support `ORDER BY ... NULLS FIRST` and `NULLS LAST` across tokenizer, AST parser, planner, and sort/window iterators (`ENG-038`, Round 16)

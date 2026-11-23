@@ -827,7 +827,7 @@ func (c *Coordinator) ResetSession(id string, resetTx bool) error {
 	return nil
 }
 
-// dropSessionStorageTables drops the given list of physical temporary/table-variable storage tables.
+// DropSessionStorageTables drops the given list of physical temporary/table-variable storage tables.
 func (c *Coordinator) dropSessionStorageTables(tables []string) {
 	if c.engine == nil {
 		return
@@ -835,6 +835,22 @@ func (c *Coordinator) dropSessionStorageTables(tables []string) {
 	for _, tbl := range tables {
 		_ = c.engine.DropTable(tbl)
 	}
+}
+
+// DiscardSessionTempTables drops all session-local temporary and ephemeral tables without altering other session state.
+func (c *Coordinator) DiscardSessionTempTables(id string) error {
+	if id == "" {
+		return nil
+	}
+	cs := c.GetSession(id)
+	if cs == nil {
+		return nil
+	}
+	cs.Mu.Lock()
+	toDropLocal := cs.drainStorageTablesToDropLocked()
+	cs.Mu.Unlock()
+	c.dropSessionStorageTables(toDropLocal)
+	return nil
 }
 
 // GetSession returns the active ClientSession by ID, or nil if not found.

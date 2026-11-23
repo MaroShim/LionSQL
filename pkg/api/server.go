@@ -484,6 +484,11 @@ func (s *Server) ResetSession(id string, resetTx bool) error {
 	return s.coordinator.ResetSession(id, resetTx)
 }
 
+// DiscardSessionTempTables drops all session-local temporary and ephemeral tables without altering other session state.
+func (s *Server) DiscardSessionTempTables(id string) error {
+	return s.coordinator.DiscardSessionTempTables(id)
+}
+
 // GetSession returns the active ClientSession by ID, or nil if not found.
 func (s *Server) GetSession(id string) *ClientSession {
 	return s.coordinator.GetSession(id)

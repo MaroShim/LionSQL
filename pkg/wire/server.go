@@ -872,8 +872,12 @@ func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string, s
 		_ = WriteCommandComplete(conn, "DISCARD PLANS")
 		return
 
+	case "DISCARD SEQUENCES":
+		_ = WriteCommandComplete(conn, "DISCARD SEQUENCES")
+		return
+
 	case "DISCARD TEMP", "DISCARD TEMPORARY":
-		_ = s.coordinator.ResetSession(sessID, false)
+		_ = s.coordinator.DiscardSessionTempTables(sessID)
 		_ = WriteCommandComplete(conn, "DISCARD TEMP")
 		return
 	}

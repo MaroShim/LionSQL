@@ -1134,19 +1134,76 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
-	// 0.045 Connection Pool Reset: DISCARD ALL / RESET ALL / DEALLOCATE ALL / UNLISTEN *
-	if sqlutil.HasAnyPrefixKeyword(trimmed, "DISCARD", "RESET ALL", "DEALLOCATE ALL", "UNLISTEN") {
-		if cs != nil {
-			// [TX-006] DISCARD ALL cannot run inside a transaction block
-			if sqlutil.HasPrefixKeyword(trimmed, "DISCARD ALL") && cs.Tx() != nil {
-				return nil, fmt.Errorf("ERROR 25001: DISCARD ALL cannot run inside a transaction block")
+	// 0.045 Connection Pool Reset: DISCARD { ALL | PLANS | SEQUENCES | TEMPORARY | TEMP } / RESET ALL / DEALLOCATE ALL / UNLISTEN *
+	if sqlutil.HasPrefixKeyword(trimmed, "DISCARD") {
+		sub := strings.TrimRight(strings.TrimSpace(trimmed[len("DISCARD"):]), ";")
+		subUpper := strings.ToUpper(strings.TrimSpace(sub))
+		switch subUpper {
+		case "ALL":
+			if cs != nil {
+				// [TX-006] DISCARD ALL cannot run inside a transaction block
+				if cs.Tx() != nil {
+					return nil, fmt.Errorf("ERROR 25001: DISCARD ALL cannot run inside a transaction block")
+				}
+				_ = s.ResetSession(cs.ID, true)
 			}
-			resetTx := !sqlutil.HasPrefixKeyword(trimmed, "DISCARD TEMP")
-			_ = s.ResetSession(cs.ID, resetTx)
+			return &QueryResult{
+				Success:    true,
+				Command:    "DISCARD ALL",
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+
+		case "PLANS":
+			if cs != nil {
+				cs.Mu.Lock()
+				cs.PreparedStmts = make(map[string]*PreparedStatement)
+				cs.Mu.Unlock()
+			}
+			return &QueryResult{
+				Success:    true,
+				Command:    "DISCARD PLANS",
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+
+		case "SEQUENCES":
+			// In PostgreSQL, DISCARD SEQUENCES discards cached sequence-related state in session.
+			return &QueryResult{
+				Success:    true,
+				Command:    "DISCARD SEQUENCES",
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+
+		case "TEMP", "TEMPORARY":
+			if cs != nil {
+				if cs.Tx() != nil {
+					return nil, fmt.Errorf("ERROR 25001: DISCARD TEMP cannot run inside a transaction block")
+				}
+				_ = s.DiscardSessionTempTables(cs.ID)
+			}
+			return &QueryResult{
+				Success:    true,
+				Command:    "DISCARD TEMP",
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+
+		default:
+			return nil, fmt.Errorf("syntax error at or near %q: expected ALL, PLANS, SEQUENCES, TEMPORARY, or TEMP after DISCARD", sub)
+		}
+	}
+
+	if sqlutil.HasAnyPrefixKeyword(trimmed, "RESET ALL", "DEALLOCATE ALL", "UNLISTEN") {
+		if cs != nil {
+			_ = s.ResetSession(cs.ID, true)
+		}
+		cmd := "RESET"
+		if sqlutil.HasPrefixKeyword(trimmed, "DEALLOCATE ALL") {
+			cmd = "DEALLOCATE ALL"
+		} else if sqlutil.HasPrefixKeyword(trimmed, "UNLISTEN") {
+			cmd = "UNLISTEN"
 		}
 		return &QueryResult{
 			Success:    true,
-			Command:    "RESET",
+			Command:    cmd,
 			DurationUS: time.Since(start).Microseconds(),
 		}, nil
 	}
