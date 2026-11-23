@@ -6,7 +6,7 @@
 > 모든 태스크 추가, 상태 변경, 마일스톤 수정은 반드시 `./bin/sprint` CLI를 통해서만 수행해야 합니다.
 > 수정 후 `./bin/sprint backup TASKS.md` 명령으로 이 문서를 동기화하십시오.
 
-> - **Last Synced**: 2026-11-23
+> - **Last Synced**: 2026-11-24
 > - **Primary Source of Truth (SSOT)**: SQLite `sprint_tasks` Table
 > - **Backup File**: Auto-synced on task update & Git commit
 
@@ -252,7 +252,7 @@
 | `DONE` | **`DURA-SLT-2`** |  | Durability | P2 | SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 | [`notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`DURA-SOAK-1`** | `v0.95.0` | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
 | `PENDING` | **`EXEC-SIMPLIFIED-SPILL-HASH-JOIN-1`** | `v0.96.0` | Execution | P2 | Simplified Spill Hash Join (Fixed 16-Bucket Out-of-Core Spill Join) | [`notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md`](notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-ALTER-COLUMN-ONLINE-EXPANSION-1`** | `v0.99.0` | Storage | P2 | ALTER TABLE ALTER COLUMN 가변길이 컬럼 온라인 확장 지원 |  |  |
+| `PENDING` | **`FEAT-ALTER-COLUMN-ONLINE-EXPANSION-1`** | `v0.95.0` | Storage | P2 | ALTER TABLE ALTER COLUMN 가변길이 컬럼 온라인 확장 지원 |  |  |
 | `DONE` | **`FEAT-CDC-DUCKDB-INITIAL-SNAPSHOT-CHECKPOINT-1`** | `1.0-GA` | Ecosystem | P2 | CDC 및 DuckDB 연동 최초 스냅샷 적재, LSN 체크포인트 영속화 및 자동 재연결 파이프라인 | [`guide/DUCKDB_INTEGRATION_GUIDE.ko.md`](guide/DUCKDB_INTEGRATION_GUIDE.ko.md) |  |
 | `DONE` | **`FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`** | `1.0-GA` | CLI | P2 | lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 | [`doc/USER_MANUAL.ko.md`](doc/USER_MANUAL.ko.md) |  |
 | `DONE` | **`FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`** | `1.0-GA` | Mail | P2 | SQL Server DatabaseMail 외부 워커 프로세스 분리 및 sp_send_dbmail 지원 | [`notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md`](notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md) |  |
@@ -263,7 +263,7 @@
 | `PENDING` | **`FEAT-PG-AGG-FILTER-CLAUSE-1`** | `v1.1.0` | Engine | P2 | 집계 함수 FILTER (WHERE ...) 구문 지원 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-ARRAY-OPERATORS-AND-UNNEST-1`** | `v1.2.0` | Engine | P2 | 배열 리터럴, 인덱싱 arr[1], UNNEST(), ANY() 연산자 지원 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-CATALOG-FUNCTIONS-1`** | `v1.2.0` | Catalog | P2 | format_type(), pg_get_expr(), pg_get_constraintdef() 등 메타 함수 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-PG-DISCARD-COMMANDS-1`** | `v0.99.0` | Wire | P2 | 커넥션 풀러용 DISCARD ALL / PLANS / SEQUENCES / TEMP 지원 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-PG-DISCARD-COMMANDS-1`** | `v0.95.0` | Wire | P2 | 커넥션 풀러용 DISCARD ALL / PLANS / SEQUENCES / TEMP 지원 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-DISTINCT-ON-1`** | `v1.1.0` | Engine | P2 | SELECT DISTINCT ON (...) 구문 지원 및 정렬 기반 중복 제거 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-DOUBLE-COLON-CAST-ALL-1`** | `v1.1.0` | Engine | P2 | 범용 expr::type 캐스팅 전면 지원 (SELECT, WHERE, VALUES, JOIN, FUNC) | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-E2E-TOOLING-VALIDATION-1`** | `v1.2.0` | Test | P2 | psql, Prisma, GORM, DBeaver PGWire E2E 통합 테스트 스위트 구축 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
@@ -306,7 +306,7 @@
 | `PENDING` | **`FEAT-WIRE-PG-COPY-STREAM-1`** | `v0.99.0` | Wire | P2 | PGWire 대량 COPY FROM STDIN/TO STDOUT 고속 스트리밍 지원 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WIRE-PG-REMOTE-CANCEL-1`** | `v0.99.0` | Wire | P2 | PGWire 외부 TCP CancelRequest (80877102) 백엔드 쿼리 캔슬 연동 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WIRE-TDS-BCP-BULK-LOAD-1`** | `v0.99.0` | Wire | P2 | TDS 0x07 BCP (Bulk Load) 대량 데이터 적재 스트리밍 지원 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-WIRE-TDS-RESET-CONNECTION-1`** | `v0.99.0` | Wire | P2 | TDS RESETCONNECTION (0x08) 수신 시 세션 임시 객체(#temp) 및 상태 원자적 초기화 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-WIRE-TDS-RESET-CONNECTION-1`** | `v0.95.0` | Wire | P2 | TDS RESETCONNECTION (0x08) 수신 시 세션 임시 객체(#temp) 및 상태 원자적 초기화 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WT-SECONDARY-INDEX-BTREE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 | [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md) |  |
 | `DONE` | **`FIX-3VL-AND-OR-NULL-LOGIC-1`** |  | Engine | P2 | VDBE VM OpAnd/OpOr 3-Valued Logic(3VL) NULL 평가 결함 수정 |  |  |
 | `DONE` | **`FIX-ARITHMETIC-OVERFLOW-DETECTION-1`** | `1.0-GA` | Execution | P2 | 정수 산술 연산 64비트 오버플로 검출 및 bigint out of range 에러 반환 | [`1.0-GA`](1.0-GA) |  |
@@ -3100,8 +3100,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] ALTER TABLE ALTER COLUMN 가변길이 컬럼 온라인 확장 지원 `FEAT-ALTER-COLUMN-ONLINE-EXPANSION-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 14:56:07
-- **Milestone**: `v0.99.0`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 15:00:02
+- **Milestone**: `v0.95.0`
 
 ---
 
@@ -3176,8 +3176,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] 커넥션 풀러용 DISCARD ALL / PLANS / SEQUENCES / TEMP 지원 `FEAT-PG-DISCARD-COMMANDS-1`
-- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-23 14:56:07
-- **Milestone**: `v0.99.0`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-23 15:00:02
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md)
 
 ---
@@ -3474,8 +3474,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] TDS RESETCONNECTION (0x08) 수신 시 세션 임시 객체(#temp) 및 상태 원자적 초기화 `FEAT-WIRE-TDS-RESET-CONNECTION-1`
-- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-23 14:56:08
-- **Milestone**: `v0.99.0`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-23 15:00:02
+- **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
 
 ---
