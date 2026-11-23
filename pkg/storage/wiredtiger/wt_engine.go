@@ -2352,6 +2352,7 @@ func (s *WTSession) Close() error {
 	if curTx != nil {
 		curTx.mu.Lock()
 		curTx.closed = true
+		curTx.closeOpenCursorsLocked()
 		curTx.releaseAcquiredLocksLocked()
 		defer curTx.mu.Unlock()
 	}
@@ -2506,6 +2507,7 @@ func (s *WTSession) Reset() error {
 	if curTx != nil {
 		curTx.mu.Lock()
 		curTx.closed = true
+		curTx.closeOpenCursorsLocked()
 		curTx.releaseAcquiredLocksLocked()
 		defer curTx.mu.Unlock()
 	}
@@ -2615,6 +2617,16 @@ type WTTx struct {
 	tableCache        map[string]*storage.TableSchema
 	snapTables        []*storage.TableSchema
 	rowDeltas         map[string]int64
+	openCursors       []storage.Cursor
+}
+
+func (tx *WTTx) closeOpenCursorsLocked() {
+	for _, cur := range tx.openCursors {
+		if cur != nil {
+			_ = cur.Close()
+		}
+	}
+	tx.openCursors = nil
 }
 
 func (tx *WTTx) tryAcquireWriteLockLocked(tableName string, pkKey string) error {
@@ -3663,13 +3675,15 @@ func (tx *WTTx) scanLocked(tableName string) (storage.Cursor, error) {
 		return nil, err
 	}
 
-	return &WTCursor{
+	wtCur := &WTCursor{
 		tx:     tx,
 		sess:   tx.sess,
 		uri:    uri,
 		cur:    cur,
 		schema: tbl,
-	}, nil
+	}
+	tx.openCursors = append(tx.openCursors, wtCur)
+	return wtCur, nil
 }
 
 func (tx *WTTx) ScanPartitions(tableName string, partitions []string) (storage.Cursor, error) {
@@ -3772,6 +3786,7 @@ func (tx *WTTx) indexScanBTreeLocked(tableName string, indexName string, low, hi
 		btreeCur.highKey = encodeSecondaryIndexKey(idx, *high)
 	}
 
+	tx.openCursors = append(tx.openCursors, btreeCur)
 	return btreeCur, nil
 }
 
@@ -4137,10 +4152,12 @@ func (tx *WTTx) Commit() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 	defer tx.releaseAcquiredLocksLocked()
+	defer tx.closeOpenCursorsLocked()
 
 	if tx.closed {
 		return storage.ErrTxClosed
 	}
+	tx.closeOpenCursorsLocked()
 
 	if err := tx.sess.engine.checkTainted(); err != nil {
 		tx.closed = true
@@ -4293,10 +4310,12 @@ func (tx *WTTx) Rollback() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 	defer tx.releaseAcquiredLocksLocked()
+	defer tx.closeOpenCursorsLocked()
 
 	if tx.closed {
 		return storage.ErrTxClosed
 	}
+	tx.closeOpenCursorsLocked()
 	tx.closed = true
 	tx.rowDeltas = nil
 	tx.tableCache = nil

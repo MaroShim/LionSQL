@@ -144,3 +144,92 @@ func TestWTSession_CloseInvalidatesOpenCursorsAndTransactions(t *testing.T) {
 		wg.Wait()
 	}
 }
+
+func TestWTSession_TxCommitOrRollbackInvalidatesAndReclaimsOpenCursors(t *testing.T) {
+	dir := t.TempDir()
+	eng := New()
+	if err := eng.Open(dir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "t_tx_cursor_lifecycle",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_val", TableName: "t_tx_cursor_lifecycle", Columns: []string{"val"}},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	txSeed, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	for i := 1; i <= 10; i++ {
+		if err := txSeed.Insert("t_tx_cursor_lifecycle", storage.Record{
+			"id":  storage.IntValue(int64(i)),
+			"val": storage.StringValue("a"),
+		}); err != nil {
+			t.Fatalf("Insert failed: %v", err)
+		}
+	}
+	if err := txSeed.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// 1. Open table cursor and index cursor in tx1, advance once, then Commit tx1 WITHOUT calling cur.Close()
+	tx1, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx tx1 failed: %v", err)
+	}
+	cur1, err := tx1.Scan("t_tx_cursor_lifecycle")
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	if !cur1.Next() {
+		t.Fatalf("expected cur1.Next() to succeed inside tx1")
+	}
+	v := storage.StringValue("a")
+	idxCur1, err := tx1.IndexScan("t_tx_cursor_lifecycle", "idx_val", &v, &v)
+	if err != nil {
+		t.Fatalf("IndexScan failed: %v", err)
+	}
+	if !idxCur1.Next() {
+		t.Fatalf("expected idxCur1.Next() to succeed inside tx1")
+	}
+
+	if err := tx1.Commit(); err != nil {
+		t.Fatalf("tx1.Commit failed: %v", err)
+	}
+
+	// Start tx2 on the same session
+	tx2, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx tx2 failed: %v", err)
+	}
+	defer tx2.Rollback()
+
+	// Stale cursors from tx1 MUST be invalidated and return false/error even though sess is open and tx2 is active!
+	if cur1.Next() {
+		t.Fatalf("expected stale cur1.Next() from committed tx1 to return false after tx1.Commit(), but returned true!")
+	}
+	if _, err := cur1.Row(); err == nil {
+		t.Fatalf("expected stale cur1.Row() from committed tx1 to return error, got nil")
+	}
+	if idxCur1.Next() {
+		t.Fatalf("expected stale idxCur1.Next() from committed tx1 to return false after tx1.Commit(), but returned true!")
+	}
+}
+
