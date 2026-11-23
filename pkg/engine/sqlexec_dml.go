@@ -24,6 +24,57 @@ func (s *Coordinator) fireVolcanoTriggers(tx storage.Transaction, cs *ClientSess
 	return s.executor.FireRecordTriggers(context.Background(), tx, sess, tableName, event, insertedRecs, deletedRecs)
 }
 
+const stmtAtomicSavepoint = "__lionsql_stmt_atomic_sp"
+
+func (s *Coordinator) beginStmtSavepoint(cs *ClientSession) bool {
+	if cs == nil || cs.Tx() == nil {
+		return false
+	}
+	return cs.Tx().Savepoint(stmtAtomicSavepoint) == nil
+}
+
+func (s *Coordinator) rollbackStmtSavepoint(cs *ClientSession, active bool) {
+	if !active || cs == nil || cs.Tx() == nil {
+		return
+	}
+	_ = cs.Tx().RollbackTo(stmtAtomicSavepoint)
+	_ = cs.Tx().ReleaseSavepoint(stmtAtomicSavepoint)
+}
+
+func (s *Coordinator) releaseStmtSavepoint(cs *ClientSession, active bool) {
+	if !active || cs == nil || cs.Tx() == nil {
+		return
+	}
+	_ = cs.Tx().ReleaseSavepoint(stmtAtomicSavepoint)
+}
+
+func isRuntimeDMLError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return errors.Is(err, storage.ErrKeyExists) ||
+		errors.Is(err, storage.ErrUniqueViolation) ||
+		errors.Is(err, storage.ErrForeignKeyViolation) ||
+		errors.Is(err, storage.ErrNotNullViolation) ||
+		errors.Is(err, storage.ErrCheckViolation) ||
+		errors.Is(err, storage.ErrSerializationFailure) ||
+		errors.Is(err, storage.ErrReadOnlyTransaction) ||
+		errors.Is(err, storage.ErrReadOnlyReplica) ||
+		errors.Is(err, storage.ErrRowTooLarge) ||
+		errors.Is(err, storage.ErrInlineRowTooLarge) ||
+		errors.Is(err, storage.ErrTableFull) ||
+		errors.Is(err, storage.ErrInvalidJSON) ||
+		errors.Is(err, storage.ErrInvalidDataType) ||
+		errors.Is(err, storage.ErrInvalidDecimal) ||
+		errors.Is(err, storage.ErrDivisionByZero) ||
+		errors.Is(err, storage.ErrTxClosed) ||
+		errors.Is(err, storage.ErrEngineTainted) ||
+		errors.Is(err, storage.ErrIndexKeyTooLarge) ||
+		storage.IsWriteConflict(err) ||
+		strings.Contains(err.Error(), "trigger error") ||
+		strings.Contains(err.Error(), "canceling statement due to user request")
+}
+
 type onConflictAction int
 
 const (
@@ -292,9 +343,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 	if !hasOutput && !hasConflict {
 		if res, err := s.execVBDEDML("INSERT", cleaned, start, cs); err == nil {
 			return res, nil
-		} else if strings.Contains(err.Error(), "IDENTITY_INSERT") {
-			return nil, err
-		} else if dml != nil && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(dml.Values)), "EXEC") {
+		} else if isRuntimeDMLError(err) || strings.Contains(err.Error(), "IDENTITY_INSERT") || (dml != nil && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(dml.Values)), "EXEC")) {
 			return nil, err
 		}
 	}
@@ -390,9 +439,17 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 
 	var tx storage.Transaction
 	var isEphemeral bool
+	var hasStmtSP bool
+	stmtCommitted := false
 	if cs != nil && cs.Tx() != nil {
 		tx = wrapSessionTx(cs, cs.Tx())
 		isEphemeral = false
+		hasStmtSP = s.beginStmtSavepoint(cs)
+		defer func() {
+			if !stmtCommitted {
+				s.rollbackStmtSavepoint(cs, hasStmtSP)
+			}
+		}()
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
@@ -816,6 +873,9 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("transaction commit error: %w", err)
 		}
+	} else {
+		stmtCommitted = true
+		s.releaseStmtSavepoint(cs, hasStmtSP)
 	}
 
 	cmdName := "INSERT"
@@ -934,9 +994,17 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 	// 3. Begin Transaction if not already in session transaction
 	var tx storage.Transaction
 	var isEphemeral bool
+	var hasStmtSP bool
+	stmtCommitted := false
 	if cs != nil && cs.Tx() != nil {
 		tx = wrapSessionTx(cs, cs.Tx())
 		isEphemeral = false
+		hasStmtSP = s.beginStmtSavepoint(cs)
+		defer func() {
+			if !stmtCommitted {
+				s.rollbackStmtSavepoint(cs, hasStmtSP)
+			}
+		}()
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
@@ -1290,6 +1358,9 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("transaction commit error: %w", err)
 		}
+	} else {
+		stmtCommitted = true
+		s.releaseStmtSavepoint(cs, hasStmtSP)
 	}
 
 	if identityCol != nil && cs != nil {
@@ -1340,6 +1411,8 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	if !hasOutput && !hasSubquery {
 		if res, err := s.execVBDEDML("UPDATE", cleaned, start, cs); err == nil {
 			return res, nil
+		} else if isRuntimeDMLError(err) {
+			return nil, err
 		}
 	}
 
@@ -1559,6 +1632,10 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		hasUpdTriggers := s.executor != nil && s.executor.HasTriggers(tableName, "UPDATE")
 		var trigInserted []storage.Record
 		var trigDeleted []storage.Record
+		var hasStmtSP bool
+		if isExplicitTx {
+			hasStmtSP = s.beginStmtSavepoint(cs)
+		}
 		for _, item := range toUpdate {
 			if schema != nil && schema.HasCheckConstraints() {
 				merged := item.orig.Clone()
@@ -1614,6 +1691,9 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		}
 
 		if updateErr != nil {
+			if isExplicitTx {
+				s.rollbackStmtSavepoint(cs, hasStmtSP)
+			}
 			if isEphemeral {
 				_ = tx.Rollback()
 				if closeFn != nil {
@@ -1625,6 +1705,9 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 				}
 			}
 			return nil, updateErr
+		}
+		if isExplicitTx {
+			s.releaseStmtSavepoint(cs, hasStmtSP)
 		}
 
 		if isEphemeral {
@@ -1685,6 +1768,8 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 	if !hasOutput && !hasSubquery {
 		if res, err := s.execVBDEDML("DELETE", cleaned, start, cs); err == nil {
 			return res, nil
+		} else if isRuntimeDMLError(err) {
+			return nil, err
 		}
 	}
 
@@ -1734,9 +1819,17 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 
 	var tx storage.Transaction
 	var isEphemeral bool
+	var hasStmtSP bool
+	stmtCommitted := false
 	if cs != nil && cs.Tx() != nil {
 		tx = wrapSessionTx(cs, cs.Tx())
 		isEphemeral = false
+		hasStmtSP = s.beginStmtSavepoint(cs)
+		defer func() {
+			if !stmtCommitted {
+				s.rollbackStmtSavepoint(cs, hasStmtSP)
+			}
+		}()
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
@@ -1871,6 +1964,9 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		if err := tx.Commit(); err != nil {
 			return nil, fmt.Errorf("commit error: %w", err)
 		}
+	} else {
+		stmtCommitted = true
+		s.releaseStmtSavepoint(cs, hasStmtSP)
 	}
 
 	return &QueryResult{
@@ -1944,9 +2040,17 @@ func (s *Coordinator) execDeleteFromJoin(dml *DMLStatement, start time.Time, cs 
 
 	var tx storage.Transaction
 	var isEphemeral bool
+	var hasStmtSP bool
+	stmtCommitted := false
 	if cs != nil && cs.Tx() != nil {
 		tx = wrapSessionTx(cs, cs.Tx())
 		isEphemeral = false
+		hasStmtSP = s.beginStmtSavepoint(cs)
+		defer func() {
+			if !stmtCommitted {
+				s.rollbackStmtSavepoint(cs, hasStmtSP)
+			}
+		}()
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
@@ -1997,6 +2101,9 @@ func (s *Coordinator) execDeleteFromJoin(dml *DMLStatement, start time.Time, cs 
 		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
+	} else {
+		stmtCommitted = true
+		s.releaseStmtSavepoint(cs, hasStmtSP)
 	}
 
 	return &QueryResult{
@@ -2063,9 +2170,17 @@ func (s *Coordinator) execUpdateFromJoin(dml *DMLStatement, start time.Time, cs 
 
 	var tx storage.Transaction
 	var isEphemeral bool
+	var hasStmtSP bool
+	stmtCommitted := false
 	if cs != nil && cs.Tx() != nil {
 		tx = wrapSessionTx(cs, cs.Tx())
 		isEphemeral = false
+		hasStmtSP = s.beginStmtSavepoint(cs)
+		defer func() {
+			if !stmtCommitted {
+				s.rollbackStmtSavepoint(cs, hasStmtSP)
+			}
+		}()
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
@@ -2129,6 +2244,9 @@ func (s *Coordinator) execUpdateFromJoin(dml *DMLStatement, start time.Time, cs 
 		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
+	} else {
+		stmtCommitted = true
+		s.releaseStmtSavepoint(cs, hasStmtSP)
 	}
 
 	return &QueryResult{

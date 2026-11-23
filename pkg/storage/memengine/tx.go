@@ -1076,6 +1076,26 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 
 	// If this table is referenced by child tables, check if any referenced columns changed
 	childRefs := tx.engine.GetChildFKRefs(tableName)
+	var preCascadeState *savepointState
+	if depth == 0 && len(childRefs) > 0 {
+		preCascadeState = &savepointState{
+			local:    cloneLocalMap(tx.local),
+			baseVers: cloneBaseVersMap(tx.baseVers),
+			deleted:  cloneDeletedMap(tx.deleted),
+			changes:  cloneChangesMap(tx.changes),
+		}
+	}
+	restorePreCascade := func() {
+		if preCascadeState != nil {
+			tx.local = preCascadeState.local
+			tx.baseVers = preCascadeState.baseVers
+			tx.deleted = preCascadeState.deleted
+			tx.changes = preCascadeState.changes
+			if tx.readCache != nil {
+				clear(tx.readCache)
+			}
+		}
+	}
 
 	// Stage local update before cascading so that child updates see the new parent row
 	newPkKey := pkKey
@@ -1148,6 +1168,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 		if changed {
 			matchingChildPKs, err := tx.findMatchingChildPKsUnderLock(cr.ChildTable, cr.FK, base)
 			if err != nil {
+				restorePreCascade()
 				return err
 			}
 			if len(matchingChildPKs) > 0 {
@@ -1160,6 +1181,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 							patch[cCol] = updated[pCol]
 						}
 						if err := tx.updateLocked(cr.ChildTable, cpk, patch, depth+1); err != nil {
+							restorePreCascade()
 							return err
 						}
 					}
@@ -1180,13 +1202,16 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 							patch[cCol] = storage.NullValue(colType)
 						}
 						if err := tx.updateLocked(cr.ChildTable, cpk, patch, depth+1); err != nil {
+							restorePreCascade()
 							return err
 						}
 					}
 				case storage.ActionRestrict, storage.ActionNoAction:
+					restorePreCascade()
 					return fmt.Errorf("%w: cannot update %q because %q has referencing rows (foreign key %q)",
 						storage.ErrForeignKeyViolation, tableName, cr.ChildTable, cr.FK.Name)
 				default:
+					restorePreCascade()
 					return fmt.Errorf("%w: cannot update %q because %q has referencing rows (foreign key %q)",
 						storage.ErrForeignKeyViolation, tableName, cr.ChildTable, cr.FK.Name)
 				}
@@ -1242,11 +1267,32 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 
 	// Find all child tables that have a foreign key referencing tableName
 	childRefs := tx.engine.GetChildFKRefs(tableName)
+	var preCascadeState *savepointState
+	if depth == 0 && len(childRefs) > 0 {
+		preCascadeState = &savepointState{
+			local:    cloneLocalMap(tx.local),
+			baseVers: cloneBaseVersMap(tx.baseVers),
+			deleted:  cloneDeletedMap(tx.deleted),
+			changes:  cloneChangesMap(tx.changes),
+		}
+	}
+	restorePreCascade := func() {
+		if preCascadeState != nil {
+			tx.local = preCascadeState.local
+			tx.baseVers = preCascadeState.baseVers
+			tx.deleted = preCascadeState.deleted
+			tx.changes = preCascadeState.changes
+			if tx.readCache != nil {
+				clear(tx.readCache)
+			}
+		}
+	}
 
 	// For each referencing child table, find rows that reference this parent row
 	for _, cr := range childRefs {
 		matchingChildPKs, err := tx.findMatchingChildPKsUnderLock(cr.ChildTable, cr.FK, base)
 		if err != nil {
+			restorePreCascade()
 			return err
 		}
 		if len(matchingChildPKs) > 0 {
@@ -1254,6 +1300,7 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 			case storage.ActionCascade:
 				for _, cpk := range matchingChildPKs {
 					if err := tx.deleteLocked(cr.ChildTable, cpk, depth+1); err != nil {
+						restorePreCascade()
 						return err
 					}
 				}
@@ -1274,13 +1321,16 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 						nullPatch[cCol] = storage.NullValue(colType)
 					}
 					if err := tx.updateLocked(cr.ChildTable, cpk, nullPatch, depth+1); err != nil {
+						restorePreCascade()
 						return err
 					}
 				}
 			case storage.ActionRestrict, storage.ActionNoAction:
+				restorePreCascade()
 				return fmt.Errorf("%w: cannot delete from %q because %q has referencing rows (foreign key %q)",
 					storage.ErrForeignKeyViolation, tableName, cr.ChildTable, cr.FK.Name)
 			default:
+				restorePreCascade()
 				return fmt.Errorf("%w: cannot delete from %q because %q has referencing rows (foreign key %q)",
 					storage.ErrForeignKeyViolation, tableName, cr.ChildTable, cr.FK.Name)
 			}
@@ -2984,11 +3034,14 @@ func (tx *Transaction) RollbackTo(name string) error {
 		}
 	}
 
-	// Restore snapshot state
+	// Restore snapshot state and invalidate readCache so rolled-back mutations are never served
 	tx.local = cloneLocalMap(state.local)
 	tx.baseVers = cloneBaseVersMap(state.baseVers)
 	tx.deleted = cloneDeletedMap(state.deleted)
 	tx.changes = cloneChangesMap(state.changes)
+	if tx.readCache != nil {
+		clear(tx.readCache)
+	}
 
 	for k, ch := range tvChanges {
 		tx.changes[k] = ch

@@ -1610,8 +1610,15 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 		}
 
 		ctx := cs.GetQueryContext()
+		hasStmtSP := false
+		if isExplicitTx {
+			hasStmtSP = s.beginStmtSavepoint(cs)
+		}
 		execRes, err := s.executor.ExecuteInTxContext(ctx, prog, params, tx, nil)
 		if err != nil {
+			if isExplicitTx {
+				s.rollbackStmtSavepoint(cs, hasStmtSP)
+			}
 			if isEphemeral && tx != nil {
 				_ = tx.Rollback()
 			}
@@ -1626,6 +1633,9 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 				continue
 			}
 			return nil, err
+		}
+		if isExplicitTx {
+			s.releaseStmtSavepoint(cs, hasStmtSP)
 		}
 
 		if isEphemeral {

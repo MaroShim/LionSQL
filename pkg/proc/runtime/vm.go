@@ -2494,11 +2494,19 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		oldRows = make([]map[string]any, 0, len(toUpdate))
 		newRows = make([]map[string]any, 0, len(toUpdate))
 	}
-	for _, item := range toUpdate {
+	rollbackUpdatedRows := func(upto int) {
+		for j := upto - 1; j >= 0; j-- {
+			if toUpdate[j].orig != nil {
+				_ = f.tx.Update(targetTable, toUpdate[j].pk, toUpdate[j].orig)
+			}
+		}
+	}
+	for i, item := range toUpdate {
 		if err := f.tx.Update(targetTable, item.pk, item.updates); err != nil {
 			if errors.Is(err, storage.ErrKeyNotFound) {
 				continue
 			}
+			rollbackUpdatedRows(i)
 			return 0, fmt.Errorf("update error on %s: %w", targetTable, err)
 		}
 		updatedCount++
@@ -2511,6 +2519,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 				newRec[k] = v
 			}
 			if err := f.routeOutputRow(data, item.orig, newRec, nil, tableSchema); err != nil {
+				rollbackUpdatedRows(i + 1)
 				return 0, err
 			}
 		}
@@ -2522,6 +2531,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 
 	if hasTriggers && updatedCount > 0 {
 		if err := f.fireTriggers(targetTable, "UPDATE", newRows, oldRows); err != nil {
+			rollbackUpdatedRows(len(toUpdate))
 			return 0, fmt.Errorf("trigger error on %s: %w", targetTable, err)
 		}
 	}
@@ -2636,16 +2646,25 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 	if hasTriggers {
 		deletedRows = make([]map[string]any, 0, len(toDelete))
 	}
-	for _, item := range toDelete {
+	rollbackDeletedRows := func(upto int) {
+		for j := upto - 1; j >= 0; j-- {
+			if toDelete[j].orig != nil {
+				_ = f.tx.Insert(targetTable, toDelete[j].orig)
+			}
+		}
+	}
+	for i, item := range toDelete {
 		if err := f.tx.Delete(targetTable, item.pk); err != nil {
 			if errors.Is(err, storage.ErrKeyNotFound) {
 				continue
 			}
+			rollbackDeletedRows(i)
 			return 0, fmt.Errorf("delete error on %s: %w", targetTable, err)
 		}
 		deletedCount++
 		if len(data.OutputCols) > 0 && item.orig != nil {
 			if err := f.routeOutputRow(data, item.orig, nil, nil, tableSchema); err != nil {
+				rollbackDeletedRows(i + 1)
 				return 0, err
 			}
 		}
@@ -2656,6 +2675,7 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 
 	if hasTriggers && len(deletedRows) > 0 {
 		if err := f.fireTriggers(targetTable, "DELETE", nil, deletedRows); err != nil {
+			rollbackDeletedRows(len(toDelete))
 			return 0, fmt.Errorf("trigger error on %s: %w", targetTable, err)
 		}
 	}

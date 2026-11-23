@@ -2618,6 +2618,7 @@ type WTTx struct {
 	snapTables        []*storage.TableSchema
 	rowDeltas         map[string]int64
 	openCursors       []storage.Cursor
+	testFailIndexOp   func(op string, idxName string) error
 }
 
 func (tx *WTTx) closeOpenCursorsLocked() {
@@ -2980,30 +2981,55 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 		physRec = storage.AcquirePhysRecord(storage.OpInsert, tbl.Name, pkVal, nil, recCopy)
 	}
 
-	for _, idx := range tbl.Indexes {
-		idxURI := tbl.IndexFileURI()
-		idxCur, err := tx.sess.acquireCursor(idxURI)
-		if err != nil {
+	if len(tbl.Indexes) > 0 {
+		var insertedIdxBuf [8]storage.IndexImage
+		insertedIdx := insertedIdxBuf[:0]
+		rollbackInserted := func() {
+			for j := len(insertedIdx) - 1; j >= 0; j-- {
+				img := insertedIdx[j]
+				if rbCur, rbErr := tx.sess.acquireCursor(img.URI); rbErr == nil {
+					_ = removeIndexEntry(rbCur, img.Key)
+					tx.sess.releaseCursor(img.URI, rbCur)
+				}
+			}
+			_ = C.go_wt_cursor_remove_key(cur, cKey)
 			if physRec != nil {
 				storage.ReleasePhysRecord(physRec)
 			}
-			return err
 		}
-		k, v, _ := formatIndexKeyValue(record, &idx, pkStr)
-		if err := insertIndexEntry(idxCur, k, v); err != nil {
+
+		for _, idx := range tbl.Indexes {
+			if idx.Disabled {
+				continue
+			}
+			if tx.testFailIndexOp != nil {
+				if err := tx.testFailIndexOp("insert", idx.Name); err != nil {
+					rollbackInserted()
+					return err
+				}
+			}
+			idxURI := tbl.IndexFileURI()
+			idxCur, err := tx.sess.acquireCursor(idxURI)
+			if err != nil {
+				rollbackInserted()
+				return err
+			}
+			k, v, _ := formatIndexKeyValue(record, &idx, pkStr)
+			if err := insertIndexEntry(idxCur, k, v); err != nil {
+				tx.sess.releaseCursor(idxURI, idxCur)
+				rollbackInserted()
+				return err
+			}
 			tx.sess.releaseCursor(idxURI, idxCur)
-			if physRec != nil {
-				storage.ReleasePhysRecord(physRec)
-			}
-			return err
-		}
-		tx.sess.releaseCursor(idxURI, idxCur)
-		if physRec != nil {
-			physRec.NewIdx = append(physRec.NewIdx, storage.IndexImage{
+			img := storage.IndexImage{
 				URI:   idxURI,
 				Key:   k,
 				Value: v,
-			})
+			}
+			insertedIdx = append(insertedIdx, img)
+			if physRec != nil {
+				physRec.NewIdx = append(physRec.NewIdx, img)
+			}
 		}
 	}
 
@@ -3097,6 +3123,10 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 	if err != nil {
 		return err
 	}
+	var oldRec storage.Record
+	if len(tbl.Indexes) > 0 {
+		oldRec = existing.Clone()
+	}
 
 	for col, val := range record {
 		if colSchema, _, ok := tbl.FindColumn(col); ok {
@@ -3164,40 +3194,94 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 	}
 
 	if len(tbl.Indexes) > 0 {
-		oldRec, err := decodeRecord(tbl, oldData)
-		if err == nil {
-			for _, idx := range tbl.Indexes {
-				oldKey, oldVal, _ := formatIndexKeyValue(oldRec, &idx, pkStr)
-				newKey, newVal, _ := formatIndexKeyValue(existing, &idx, pkStr)
-				if oldKey == newKey {
-					continue
-				}
-				idxURI := tbl.IndexFileURI()
-				idxCur, err := tx.sess.acquireCursor(idxURI)
-				if err != nil {
-					continue
-				}
-				_ = removeIndexEntry(idxCur, oldKey)
-				if err := insertIndexEntry(idxCur, newKey, newVal); err != nil {
-					tx.sess.releaseCursor(idxURI, idxCur)
-					if physRec != nil {
-						storage.ReleasePhysRecord(physRec)
+		type idxUpdateUndo struct {
+			uri    string
+			oldKey string
+			oldVal string
+			newKey string
+		}
+		var undoBuf [8]idxUpdateUndo
+		undos := undoBuf[:0]
+		rollbackUpdated := func() {
+			for j := len(undos) - 1; j >= 0; j-- {
+				u := undos[j]
+				if rbCur, rbErr := tx.sess.acquireCursor(u.uri); rbErr == nil {
+					if u.newKey != "" {
+						_ = removeIndexEntry(rbCur, u.newKey)
 					}
+					_ = insertIndexEntry(rbCur, u.oldKey, u.oldVal)
+					tx.sess.releaseCursor(u.uri, rbCur)
+				}
+			}
+			var oldPData unsafe.Pointer
+			if len(oldData) > 0 {
+				oldPData = unsafe.Pointer(&oldData[0])
+			}
+			_ = C.go_wt_cursor_update_raw(cur, cKey, oldPData, C.size_t(len(oldData)))
+			if physRec != nil {
+				storage.ReleasePhysRecord(physRec)
+			}
+		}
+
+		for _, idx := range tbl.Indexes {
+			if idx.Disabled {
+				continue
+			}
+			oldKey, oldVal, _ := formatIndexKeyValue(oldRec, &idx, pkStr)
+			newKey, newVal, _ := formatIndexKeyValue(existing, &idx, pkStr)
+			if oldKey == newKey && oldVal == newVal {
+				continue
+			}
+			idxURI := tbl.IndexFileURI()
+			idxCur, err := tx.sess.acquireCursor(idxURI)
+			if err != nil {
+				rollbackUpdated()
+				return err
+			}
+			if tx.testFailIndexOp != nil {
+				if err := tx.testFailIndexOp("remove", idx.Name); err != nil {
+					tx.sess.releaseCursor(idxURI, idxCur)
+					rollbackUpdated()
 					return err
 				}
+			}
+			if err := removeIndexEntry(idxCur, oldKey); err != nil {
 				tx.sess.releaseCursor(idxURI, idxCur)
-				if physRec != nil {
-					physRec.OldIdx = append(physRec.OldIdx, storage.IndexImage{
-						URI:   idxURI,
-						Key:   oldKey,
-						Value: oldVal,
-					})
-					physRec.NewIdx = append(physRec.NewIdx, storage.IndexImage{
-						URI:   idxURI,
-						Key:   newKey,
-						Value: newVal,
-					})
+				rollbackUpdated()
+				return err
+			}
+			if tx.testFailIndexOp != nil {
+				if err := tx.testFailIndexOp("insert", idx.Name); err != nil {
+					_ = insertIndexEntry(idxCur, oldKey, oldVal)
+					tx.sess.releaseCursor(idxURI, idxCur)
+					rollbackUpdated()
+					return err
 				}
+			}
+			if err := insertIndexEntry(idxCur, newKey, newVal); err != nil {
+				_ = insertIndexEntry(idxCur, oldKey, oldVal)
+				tx.sess.releaseCursor(idxURI, idxCur)
+				rollbackUpdated()
+				return err
+			}
+			tx.sess.releaseCursor(idxURI, idxCur)
+			undos = append(undos, idxUpdateUndo{
+				uri:    idxURI,
+				oldKey: oldKey,
+				oldVal: oldVal,
+				newKey: newKey,
+			})
+			if physRec != nil {
+				physRec.OldIdx = append(physRec.OldIdx, storage.IndexImage{
+					URI:   idxURI,
+					Key:   oldKey,
+					Value: oldVal,
+				})
+				physRec.NewIdx = append(physRec.NewIdx, storage.IndexImage{
+					URI:   idxURI,
+					Key:   newKey,
+					Value: newVal,
+				})
 			}
 		}
 	}
@@ -3260,9 +3344,20 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 	var oldData []byte
 	var existingRec storage.Record
 	if len(tx.savepoints) > 0 || len(tbl.Indexes) > 0 {
-		oldData, _ = tx.getRawBytesLocked(tableName, pk)
-		if len(oldData) > 0 {
-			existingRec, _ = decodeRecord(tbl, oldData)
+		var gerr error
+		oldData, gerr = tx.getRawBytesLocked(tableName, pk)
+		if gerr != nil {
+			if errors.Is(gerr, storage.ErrKeyNotFound) {
+				return nil
+			}
+			return gerr
+		}
+		if len(tbl.Indexes) > 0 && len(oldData) > 0 {
+			var derr error
+			existingRec, derr = decodeRecord(tbl, oldData)
+			if derr != nil {
+				return derr
+			}
 		}
 	}
 
@@ -3295,21 +3390,56 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 	}
 
 	if existingRec != nil && len(tbl.Indexes) > 0 {
+		var removedIdxBuf [8]storage.IndexImage
+		removedIdx := removedIdxBuf[:0]
+		rollbackDeleted := func() {
+			for j := len(removedIdx) - 1; j >= 0; j-- {
+				img := removedIdx[j]
+				if rbCur, rbErr := tx.sess.acquireCursor(img.URI); rbErr == nil {
+					_ = insertIndexEntry(rbCur, img.Key, img.Value)
+					tx.sess.releaseCursor(img.URI, rbCur)
+				}
+			}
+			if len(oldData) > 0 {
+				oldPData := unsafe.Pointer(&oldData[0])
+				_ = C.go_wt_cursor_insert_raw(cur, cKey, oldPData, C.size_t(len(oldData)))
+			}
+			if physRec != nil {
+				storage.ReleasePhysRecord(physRec)
+			}
+		}
+
 		for _, idx := range tbl.Indexes {
+			if idx.Disabled {
+				continue
+			}
+			if tx.testFailIndexOp != nil {
+				if err := tx.testFailIndexOp("remove", idx.Name); err != nil {
+					rollbackDeleted()
+					return err
+				}
+			}
 			idxURI := tbl.IndexFileURI()
 			idxCur, err := tx.sess.acquireCursor(idxURI)
 			if err != nil {
-				continue
+				rollbackDeleted()
+				return err
 			}
 			k, v, _ := formatIndexKeyValue(existingRec, &idx, pkStr)
-			_ = removeIndexEntry(idxCur, k)
+			if err := removeIndexEntry(idxCur, k); err != nil {
+				tx.sess.releaseCursor(idxURI, idxCur)
+				rollbackDeleted()
+				return err
+			}
 			tx.sess.releaseCursor(idxURI, idxCur)
+			img := storage.IndexImage{
+				URI:   idxURI,
+				Key:   k,
+				Value: v,
+			}
+			removedIdx = append(removedIdx, img)
 			if physRec != nil {
-				physRec.OldIdx = append(physRec.OldIdx, storage.IndexImage{
-					URI:   idxURI,
-					Key:   k,
-					Value: v,
-				})
+				physRec.OldIdx = append(physRec.OldIdx, img)
 			}
 		}
 	}
@@ -4586,25 +4716,35 @@ func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes [
 		}
 	}
 	if updateIndexes && len(tbl.Indexes) > 0 {
-		if rec, err := decodeRecord(tbl, recBytes); err == nil {
-			for _, idx := range tbl.Indexes {
-				idxURI := tbl.IndexFileURI()
-				if idxCur, err := tx.sess.acquireCursor(idxURI); err == nil {
-					k, v, _ := formatIndexKeyValue(rec, &idx, pkStr)
-					if err := insertIndexEntry(idxCur, k, v); err != nil {
-						tx.sess.releaseCursor(idxURI, idxCur)
-						return err
-					}
-					tx.sess.releaseCursor(idxURI, idxCur)
-				}
+		rec, err := decodeRecord(tbl, recBytes)
+		if err != nil {
+			return err
+		}
+		for _, idx := range tbl.Indexes {
+			if idx.Disabled {
+				continue
 			}
+			idxURI := tbl.IndexFileURI()
+			idxCur, err := tx.sess.acquireCursor(idxURI)
+			if err != nil {
+				return err
+			}
+			k, v, _ := formatIndexKeyValue(rec, &idx, pkStr)
+			if err := insertIndexEntry(idxCur, k, v); err != nil {
+				tx.sess.releaseCursor(idxURI, idxCur)
+				return err
+			}
+			tx.sess.releaseCursor(idxURI, idxCur)
 		}
 	}
 	return nil
 }
 
 func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Record) error {
-	tbl, _ := tx.sess.engine.GetTable(tableName)
+	tbl, err := tx.sess.engine.GetTable(tableName)
+	if err != nil {
+		return err
+	}
 	bufPtr := storage.GetTupleBuffer()
 	defer storage.PutTupleBuffer(bufPtr)
 
@@ -4635,22 +4775,9 @@ func (tx *WTTx) removeRawLocked(tableName string, pk storage.Value) error {
 		defer cleanup()
 	}
 
-	if len(tbl.Indexes) > 0 {
-		if oldData, err := tx.getRawBytesLocked(tableName, pk); err == nil && len(oldData) > 0 {
-			if oldRec, err := decodeRecord(tbl, oldData); err == nil {
-				for _, idx := range tbl.Indexes {
-					idxURI := tbl.IndexFileURI()
-					if idxCur, err := tx.sess.acquireCursor(idxURI); err == nil {
-						k, _, _ := formatIndexKeyValue(oldRec, &idx, pkStr)
-						_ = removeIndexEntry(idxCur, k)
-						tx.sess.releaseCursor(idxURI, idxCur)
-					}
-				}
-			}
-		}
+	if ret := C.go_wt_cursor_remove_key(cur, cKey); ret != 0 && ret != C.WT_NOTFOUND {
+		return wtOpError("cursor_remove", int(ret))
 	}
-
-	_ = C.go_wt_cursor_remove_key(cur, cKey)
 	return nil
 }
 
