@@ -1584,6 +1584,7 @@ type Cursor interface {
 type RawTupleCursor interface {
 	Cursor
 	RawTuple() ([]byte, bool)
+	RawTupleBuffer(dest *[]byte) bool
 }
 
 // ArenaRowCursor is an optional interface implemented by cursors that can decode

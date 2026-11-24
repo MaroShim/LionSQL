@@ -1739,6 +1739,121 @@ func TestRegression_AUDIT_093_006_GetTableAndListTablesReturnDeepClone(t *testin
 	}
 }
 
+func TestWTCursor_RawTupleBuffer(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_raw_buf_*")
+	if err != nil {
+		t.Fatalf("MkdirTemp failed: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("eng.Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "test_raw_buf",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+			{Name: "score", Type: storage.TypeInt},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_score", Columns: []string{"score"}},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	for i := 1; i <= 10; i++ {
+		_ = tx.Insert("test_raw_buf", storage.Record{
+			"id":    storage.IntValue(int64(i)),
+			"name":  storage.StringValue(fmt.Sprintf("user_%d", i)),
+			"score": storage.IntValue(int64(i * 10)),
+		})
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	readTx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx.Rollback()
+
+	// 1. Verify WTCursor.RawTupleBuffer on primary table scan
+	cur, err := readTx.Scan("test_raw_buf")
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	defer cur.Close()
+
+	rawCur, ok := cur.(storage.RawTupleCursor)
+	if !ok {
+		t.Fatalf("expected cur to implement RawTupleCursor")
+	}
+
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+
+	count := 0
+	for cur.Next() {
+		count++
+		rawAlloc, ok1 := rawCur.RawTuple()
+		if !ok1 {
+			t.Fatalf("RawTuple failed on row %d", count)
+		}
+		ok2 := rawCur.RawTupleBuffer(bufPtr)
+		if !ok2 {
+			t.Fatalf("RawTupleBuffer failed on row %d", count)
+		}
+		if string(rawAlloc) != string(*bufPtr) {
+			t.Fatalf("mismatch between RawTuple and RawTupleBuffer on row %d", count)
+		}
+	}
+	if count != 10 {
+		t.Fatalf("expected 10 rows from scan, got %d", count)
+	}
+
+	// 2. Verify wtIndexBTreeCursor.RawTupleBuffer on secondary index scan
+	idxCur, err := readTx.IndexScan("test_raw_buf", "idx_score", nil, nil)
+	if err != nil {
+		t.Fatalf("IndexScan failed: %v", err)
+	}
+	defer idxCur.Close()
+
+	rawIdxCur, ok := idxCur.(storage.RawTupleCursor)
+	if !ok {
+		t.Fatalf("expected idxCur to implement RawTupleCursor")
+	}
+
+	idxCount := 0
+	for idxCur.Next() {
+		idxCount++
+		rawAlloc, ok1 := rawIdxCur.RawTuple()
+		if !ok1 {
+			t.Fatalf("Index RawTuple failed on row %d", idxCount)
+		}
+		ok2 := rawIdxCur.RawTupleBuffer(bufPtr)
+		if !ok2 {
+			t.Fatalf("Index RawTupleBuffer failed on row %d", idxCount)
+		}
+		if string(rawAlloc) != string(*bufPtr) {
+			t.Fatalf("mismatch between index RawTuple and RawTupleBuffer on row %d", idxCount)
+		}
+	}
+	if idxCount != 10 {
+		t.Fatalf("expected 10 rows from index scan, got %d", idxCount)
+	}
+}
+
 
 
 

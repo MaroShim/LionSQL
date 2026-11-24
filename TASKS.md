@@ -496,6 +496,7 @@
 | `DONE` | **`PERF-COMPLEX-QUERY-COLUMNAR`** |  | Architecture | P3 | 순수 Columnar Vectorization 전면 재작성 영구 기각 (Spec-Out) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-CTE-EPHEMERAL-1`** |  | Durability | P2 | 세션 로컬 에페머럴 CTE 버퍼 및 Zero-DDL 최적화 | [`notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md`](notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md) |  |
 | `DONE` | **`PERF-CTE-LOWERING-VDBE-1`** |  | Durability | P2 | Writable CTE Stored Procedure 바이트코드 Lowering 가속 | [`notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md) |  |
+| `DONE` | **`PERF-CURSOR-ZERO-COPY-SCAN-1`** | `v0.95.0` | Storage | P1 | WiredTiger 커서 Zero-Copy 버퍼 재사용 및 Scan 힙 메모리 할당 제거 | [`notes/plans/CURSOR_ZERO_COPY_SCAN_PLAN.ko.md`](notes/plans/CURSOR_ZERO_COPY_SCAN_PLAN.ko.md) |  |
 | `DONE` | **`PERF-EXEC-TUPLE-DEFENSIVE-PAD-1`** | `1.0-GA` | Engine | P2 | Volcano 쿼리 실행기 동적 프로젝션 슬라이스 경계 방어 및 가변 폭 튜플 자동 Null 패딩 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `DONE` | **`PERF-EXISTS-SUBQUERY-LIMIT-1`** | `1.0-GA` | Engine | P2 | EXISTS (SELECT ...) 구문 평가 시 암시적 LIMIT 1 푸시다운 및 1건 조기 탈출(결함 73) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-GROUPBY-SLOT-HASH-1`** | `v0.99.0` | Execution | P1 | GROUP BY 및 JOIN 인메모리 정수 슬롯 해시 가속 | [`--priority`](--priority) |  |
@@ -4874,6 +4875,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 **Details & Resolution**:
 - 설계 계획서: [`notes/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)
+
+---
+
+### [DONE] WiredTiger 커서 Zero-Copy 버퍼 재사용 및 Scan 힙 메모리 할당 제거 `PERF-CURSOR-ZERO-COPY-SCAN-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-24 06:22:13
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/CURSOR_ZERO_COPY_SCAN_PLAN.ko.md`](notes/plans/CURSOR_ZERO_COPY_SCAN_PLAN.ko.md)
 
 ---
 

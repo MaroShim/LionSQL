@@ -4937,6 +4937,38 @@ func (c *wtIndexBTreeCursor) RawTuple() ([]byte, bool) {
 	return data, true
 }
 
+func (c *wtIndexBTreeCursor) RawTupleBuffer(dest *[]byte) bool {
+	if c.sess == nil || c.tx == nil {
+		return false
+	}
+	c.tx.mu.Lock()
+	defer c.tx.mu.Unlock()
+	c.sess.mu.Lock()
+	if c.err != nil || c.closed || c.cur == nil || c.eof || c.currPK == "" || c.sess.closed || c.sess.sess == nil {
+		c.sess.mu.Unlock()
+		return false
+	}
+	currPK := c.currPK
+	c.sess.mu.Unlock()
+
+	var pkVal storage.Value
+	if c.tbl.IsCompositePK() {
+		pkVal = storage.StringValue(currPK)
+	} else {
+		pkCol, err := c.tbl.PrimaryKeyColumn()
+		if err != nil {
+			return false
+		}
+		pkVal = storage.ParsePKValue(currPK, pkCol.Type)
+	}
+	data, err := c.tx.getRawBytesLocked(c.tbl.Name, pkVal)
+	if err != nil || len(data) == 0 {
+		return false
+	}
+	*dest = append((*dest)[:0], data...)
+	return true
+}
+
 func (c *wtIndexBTreeCursor) Close() error {
 	if c.sess != nil {
 		c.sess.mu.Lock()
@@ -5622,6 +5654,27 @@ func (c *WTCursor) RawTuple() ([]byte, bool) {
 	res := make([]byte, len(cSlice))
 	copy(res, cSlice)
 	return res, true
+}
+
+func (c *WTCursor) RawTupleBuffer(dest *[]byte) bool {
+	if c.sess == nil {
+		return false
+	}
+	c.sess.mu.Lock()
+	defer c.sess.mu.Unlock()
+	if c.err != nil || c.closed || c.cur == nil || c.eof || c.sess.closed || c.sess.sess == nil {
+		return false
+	}
+
+	var pData unsafe.Pointer
+	var sz C.size_t
+	if ret := C.go_wt_cursor_get_val_raw(c.cur, &pData, &sz); ret != 0 || pData == nil {
+		return false
+	}
+
+	cSlice := unsafe.Slice((*byte)(pData), int(sz))
+	*dest = append((*dest)[:0], cSlice...)
+	return true
 }
 
 func decodeRecord(schema *storage.TableSchema, data []byte) (storage.Record, error) {

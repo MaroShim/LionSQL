@@ -27,6 +27,14 @@ func (c *mockRawCursor) RawTuple() ([]byte, bool) {
 	return nil, false
 }
 
+func (c *mockRawCursor) RawTupleBuffer(dest *[]byte) bool {
+	if c.idx > 0 && c.idx <= len(c.records) {
+		*dest = append((*dest)[:0], c.records[c.idx-1]...)
+		return true
+	}
+	return false
+}
+
 func (c *mockRawCursor) Record() (storage.Record, error) {
 	return storage.Record{}, nil
 }

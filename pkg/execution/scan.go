@@ -91,6 +91,9 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 	arenaCur, hasArena := cursor.(storage.ArenaRowCursor)
 	hasSelection := len(requiredCols) > 0 && schema != nil && len(requiredCols) < len(schema.Columns)
 
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+
 	for dest.Len() < DefaultChunkSize {
 		if !cursor.Next() {
 			*eof = true
@@ -104,7 +107,35 @@ func fillScanChunk(ctx context.Context, cursor storage.Cursor, schema *storage.T
 		}
 
 		if hasRaw {
-			if rawData, ok := rawCur.RawTuple(); ok {
+			if rawCur.RawTupleBuffer(bufPtr) {
+				if hasSelection {
+					if row, err := storage.DecodeTupleSelectedWithArena(schema, *bufPtr, requiredCols, arena); err == nil {
+						dest.Tuples = append(dest.Tuples, FormatRowWithSelectedCols(row, schema, alias, colMap, requiredCols, arena))
+						continue
+					}
+				}
+				var tupleBytes []byte
+				if arena != nil {
+					tupleBytes = arena.AllocBytes(*bufPtr)
+				} else {
+					tupleBytes = make([]byte, len(*bufPtr))
+					copy(tupleBytes, *bufPtr)
+				}
+				if lazy, err := storage.NewLazyTuple(schema, tupleBytes); err == nil {
+					var vals []any
+					if arena != nil {
+						vals = arena.AllocAnySlice(len(schema.Columns))
+					} else {
+						vals = make([]any, len(schema.Columns))
+					}
+					dest.Tuples = append(dest.Tuples, Tuple{
+						Values: vals,
+						Index:  colMap,
+						Lazy:   lazy,
+					})
+					continue
+				}
+			} else if rawData, ok := rawCur.RawTuple(); ok {
 				if hasSelection {
 					if row, err := storage.DecodeTupleSelectedWithArena(schema, rawData, requiredCols, arena); err == nil {
 						dest.Tuples = append(dest.Tuples, FormatRowWithSelectedCols(row, schema, alias, colMap, requiredCols, arena))
