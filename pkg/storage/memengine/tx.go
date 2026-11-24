@@ -141,10 +141,12 @@ type rowChange struct {
 }
 
 type savepointState struct {
-	local    map[string]map[string]storage.Row
-	baseVers map[string]map[string]int64
-	deleted  map[string]map[string]bool
-	changes  map[string]rowChange
+	local       map[string]map[string]storage.Row
+	baseVers    map[string]map[string]int64
+	deleted     map[string]map[string]bool
+	changes     map[string]rowChange
+	numLocks    int
+	numRefLocks int
 }
 
 type shardRef struct {
@@ -379,6 +381,44 @@ func (tx *Transaction) releaseAcquiredLocksLocked() {
 		tx.acquiredRefLocks = nil
 	} else {
 		tx.acquiredRefLocks = tx.acquiredRefLocks[:0]
+	}
+}
+
+// releaseLocksSinceLocked releases locks acquired after the specified indices (for Savepoint rollback).
+func (tx *Transaction) releaseLocksSinceLocked(savedLocks, savedRefLocks int) {
+	if savedLocks >= 0 && savedLocks < len(tx.acquiredLocks) {
+		toRelease := tx.acquiredLocks[savedLocks:]
+		for _, ref := range toRelease {
+			if ref.td != nil && ref.shardIdx >= 0 && ref.shardIdx < numTableShards {
+				sh := &ref.td.shards[ref.shardIdx]
+				sh.mu.Lock()
+				if sh.activeWriters != nil && sh.activeWriters[ref.key] == tx.txID {
+					delete(sh.activeWriters, ref.key)
+				}
+				sh.mu.Unlock()
+			}
+		}
+		tx.acquiredLocks = tx.acquiredLocks[:savedLocks]
+	}
+
+	if savedRefLocks >= 0 && savedRefLocks < len(tx.acquiredRefLocks) {
+		toReleaseRef := tx.acquiredRefLocks[savedRefLocks:]
+		for _, ref := range toReleaseRef {
+			if ref.td != nil && ref.shardIdx >= 0 && ref.shardIdx < numTableShards {
+				sh := &ref.td.shards[ref.shardIdx]
+				sh.mu.Lock()
+				if sh.activeReaders != nil {
+					if readers, ok := sh.activeReaders[ref.key]; ok {
+						delete(readers, tx.txID)
+						if len(readers) == 0 {
+							delete(sh.activeReaders, ref.key)
+						}
+					}
+				}
+				sh.mu.Unlock()
+			}
+		}
+		tx.acquiredRefLocks = tx.acquiredRefLocks[:savedRefLocks]
 	}
 }
 
@@ -1073,10 +1113,12 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 	var preCascadeState *savepointState
 	if depth == 0 && len(childRefs) > 0 {
 		preCascadeState = &savepointState{
-			local:    cloneLocalMap(tx.local),
-			baseVers: cloneBaseVersMap(tx.baseVers),
-			deleted:  cloneDeletedMap(tx.deleted),
-			changes:  cloneChangesMap(tx.changes),
+			local:       cloneLocalMap(tx.local),
+			baseVers:    cloneBaseVersMap(tx.baseVers),
+			deleted:     cloneDeletedMap(tx.deleted),
+			changes:     cloneChangesMap(tx.changes),
+			numLocks:    len(tx.acquiredLocks),
+			numRefLocks: len(tx.acquiredRefLocks),
 		}
 	}
 	restorePreCascade := func() {
@@ -1088,6 +1130,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 			if tx.readCache != nil {
 				tx.readCache.Clear()
 			}
+			tx.releaseLocksSinceLocked(preCascadeState.numLocks, preCascadeState.numRefLocks)
 		}
 	}
 
@@ -1264,10 +1307,12 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 	var preCascadeState *savepointState
 	if depth == 0 && len(childRefs) > 0 {
 		preCascadeState = &savepointState{
-			local:    cloneLocalMap(tx.local),
-			baseVers: cloneBaseVersMap(tx.baseVers),
-			deleted:  cloneDeletedMap(tx.deleted),
-			changes:  cloneChangesMap(tx.changes),
+			local:       cloneLocalMap(tx.local),
+			baseVers:    cloneBaseVersMap(tx.baseVers),
+			deleted:     cloneDeletedMap(tx.deleted),
+			changes:     cloneChangesMap(tx.changes),
+			numLocks:    len(tx.acquiredLocks),
+			numRefLocks: len(tx.acquiredRefLocks),
 		}
 	}
 	restorePreCascade := func() {
@@ -1279,6 +1324,7 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 			if tx.readCache != nil {
 				tx.readCache.Clear()
 			}
+			tx.releaseLocksSinceLocked(preCascadeState.numLocks, preCascadeState.numRefLocks)
 		}
 	}
 
@@ -3040,10 +3086,12 @@ func (tx *Transaction) Savepoint(name string) error {
 	}
 
 	state := savepointState{
-		local:    cloneLocalMap(tx.local),
-		baseVers: cloneBaseVersMap(tx.baseVers),
-		deleted:  cloneDeletedMap(tx.deleted),
-		changes:  cloneChangesMap(tx.changes),
+		local:       cloneLocalMap(tx.local),
+		baseVers:    cloneBaseVersMap(tx.baseVers),
+		deleted:     cloneDeletedMap(tx.deleted),
+		changes:     cloneChangesMap(tx.changes),
+		numLocks:    len(tx.acquiredLocks),
+		numRefLocks: len(tx.acquiredRefLocks),
 	}
 
 	for i, n := range tx.spNames {
@@ -3096,6 +3144,9 @@ func (tx *Transaction) RollbackTo(name string) error {
 	if tx.readCache != nil {
 		tx.readCache.Clear()
 	}
+
+	// Release row locks and reference locks acquired after this savepoint
+	tx.releaseLocksSinceLocked(state.numLocks, state.numRefLocks)
 
 	for k, ch := range tvChanges {
 		tx.changes[k] = ch
