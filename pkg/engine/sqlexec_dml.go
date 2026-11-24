@@ -515,6 +515,12 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 	var trigUpdInserted []storage.Record
 	var trigUpdDeleted []storage.Record
 
+	canBatchInsert := onConflict == nil && !hasInsTriggers && len(outputProjs) == 0 && len(tupleStrings) > 1
+	var batchRecords []storage.Record
+	if canBatchInsert {
+		batchRecords = make([]storage.Record, 0, len(tupleStrings))
+	}
+
 	insertedCount := int64(0)
 	for _, tupleStr := range tupleStrings {
 		vals := splitValues(tupleStr)
@@ -633,6 +639,17 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 					s.RecordLastIdentity(v.IVal, v.IVal)
 				}
 			}
+		}
+
+		if canBatchInsert {
+			if err := proc.ValidateRecordChecks(schema, rec); err != nil {
+				if isEphemeral {
+					_ = tx.Rollback()
+				}
+				return nil, fmt.Errorf("check constraint violation on %q: %w", tableName, err)
+			}
+			batchRecords = append(batchRecords, rec)
+			continue
 		}
 
 		if onConflict != nil {
@@ -858,6 +875,19 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		insertedCount++
 	}
 
+	if canBatchInsert && len(batchRecords) > 0 {
+		if err := tx.BatchInsert(tableName, batchRecords); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			if errors.Is(err, storage.ErrKeyExists) || errors.Is(err, storage.ErrUniqueViolation) {
+				return nil, fmt.Errorf("duplicate key value violates unique constraint on %q: %w", tableName, err)
+			}
+			return nil, fmt.Errorf("insert row error: %w", err)
+		}
+		insertedCount = int64(len(batchRecords))
+	}
+
 	if hasInsTriggers && len(trigInsertedRecs) > 0 {
 		if err := s.fireVolcanoTriggers(tx, cs, tableName, "INSERT", trigInsertedRecs, nil); err != nil {
 			if isEphemeral {
@@ -1071,6 +1101,12 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 	var trigUpdInserted []storage.Record
 	var trigUpdDeleted []storage.Record
 
+	canBatchInsert := onConflict == nil && !hasInsTriggers && len(outputProjs) == 0 && len(selRes.Rows) > 1
+	var batchRecords []storage.Record
+	if canBatchInsert {
+		batchRecords = make([]storage.Record, 0, len(selRes.Rows))
+	}
+
 	insertedCount := int64(0)
 	for rowIdx, row := range selRes.Rows {
 		rec := make(storage.Record, len(schema.Columns))
@@ -1119,6 +1155,17 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 					s.RecordLastIdentity(v.IVal, v.IVal)
 				}
 			}
+		}
+
+		if canBatchInsert {
+			if err := proc.ValidateRecordChecks(schema, rec); err != nil {
+				if isEphemeral {
+					_ = tx.Rollback()
+				}
+				return nil, fmt.Errorf("check constraint violation on %q: %w", tableName, err)
+			}
+			batchRecords = append(batchRecords, rec)
+			continue
 		}
 
 		if onConflict != nil {
@@ -1341,6 +1388,19 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			return nil, err
 		}
 		insertedCount++
+	}
+
+	if canBatchInsert && len(batchRecords) > 0 {
+		if err := tx.BatchInsert(tableName, batchRecords); err != nil {
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			if errors.Is(err, storage.ErrKeyExists) || errors.Is(err, storage.ErrUniqueViolation) {
+				return nil, fmt.Errorf("duplicate key value violates unique constraint on %q: %w", tableName, err)
+			}
+			return nil, fmt.Errorf("insert row error: %w", err)
+		}
+		insertedCount = int64(len(batchRecords))
 	}
 
 	if hasInsTriggers && len(trigInsertedRecs) > 0 {

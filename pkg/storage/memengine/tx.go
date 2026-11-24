@@ -563,6 +563,67 @@ func (tx *Transaction) Insert(tableName string, record storage.Record) error {
 	return tx.insertLocked(tableName, record)
 }
 
+func (tx *Transaction) BatchInsert(tableName string, records []storage.Record) error {
+	if len(records) == 0 {
+		return nil
+	}
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+	if tx.opts.ReadOnly {
+		return storage.ErrReadOnlyTransaction
+	}
+
+	for _, rec := range records {
+		if err := tx.insertLocked(tableName, rec); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (tx *Transaction) BatchInsertRows(tableName string, rows []storage.Row) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+	if tx.opts.ReadOnly {
+		return storage.ErrReadOnlyTransaction
+	}
+
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
+	}
+	schema := td.Schema
+
+	for _, r := range rows {
+		row := cloneRow(r)
+		row, err = storage.ValidateAndNormalizeRow(&schema, row)
+		if err != nil {
+			return err
+		}
+		if _, rvIdx, hasRV := schema.RowVersionColumn(); hasRV {
+			if rvIdx >= 0 && rvIdx < len(row.Values) {
+				row.Values[rvIdx] = storage.BinaryValue(storage.NextRowVersion())
+			}
+		}
+		rec := schema.RowToRecord(row)
+		if err := tx.insertLocked(tableName, rec); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (tx *Transaction) InsertRow(tableName string, row storage.Row) error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()

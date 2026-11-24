@@ -1264,6 +1264,20 @@ func (w *sessionTxWrapper) InsertRow(tableName string, row storage.Row) error {
 	return w.Transaction.InsertRow(tableName, row)
 }
 
+func (w *sessionTxWrapper) BatchInsert(tableName string, records []storage.Record) error {
+	if w.isDropped(tableName) {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	return w.Transaction.BatchInsert(tableName, records)
+}
+
+func (w *sessionTxWrapper) BatchInsertRows(tableName string, rows []storage.Row) error {
+	if w.isDropped(tableName) {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	return w.Transaction.BatchInsertRows(tableName, rows)
+}
+
 func (w *sessionTxWrapper) Update(tableName string, pk storage.Value, record storage.Record) error {
 	if w.isDropped(tableName) {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)

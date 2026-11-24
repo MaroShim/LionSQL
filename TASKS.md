@@ -490,7 +490,7 @@
 | `DONE` | **`P2-STABILIZE-AB-1`** |  | engine | P2 | P2 그룹 A/B 경계값 클램핑 및 내장함수 정합성 가드 10건 보강 | [`notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md`](notes/plans/P2_GROUP_A_B_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`P3-INVARIANTS`** |  | Architecture | P3 | By-Design & Spec-Out Architecture Invariants (25 Cases) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`PERF-BENCH-WT-RESTORE-1`** |  | Performance | P1 | WiredTiger Banking SP cmd/bench 5k->120k TPS 회귀 원인 분석 및 성능 복원 |  |  |
-| `PENDING` | **`PERF-BULK-INSERT-PIPELINE-1`** | `v0.96.0` | Storage | P1 | Bulk Insert 멀티로우 일괄 배치 인덱싱 최적화 | [`--priority`](--priority) |  |
+| `DONE` | **`PERF-BULK-INSERT-PIPELINE-1`** | `v0.96.0` | Storage | P1 | Bulk Insert 멀티로우 일괄 배치 인덱싱 최적화 | [`--priority`](--priority) |  |
 | `DONE` | **`PERF-CACHE-SHARD-1`** | `v1.10.0` | Engine | P2 | PlanCache 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 RLock 캐시라인 바운싱 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-CBO-STATS-BOUNDED-1`** | `1.0-GA` | Planner / Storage | P2 | Support atomic live TableRowCount in WiredTiger and enforce 30,000-row bounded Vitter reservoir sampling in AnalyzeTable ([RULE:BoundedBuffers]) | [`notes/plans/CBO_STATS_BOUNDED_AND_LIVE_ROW_COUNT_PLAN.ko.md`](notes/plans/CBO_STATS_BOUNDED_AND_LIVE_ROW_COUNT_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-COMPLEX-QUERY-2`** | `v0.99.0` | Engine | P2 | Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
@@ -4818,8 +4818,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Bulk Insert 멀티로우 일괄 배치 인덱싱 최적화 `PERF-BULK-INSERT-PIPELINE-1`
-- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-23 07:14:29
+### [DONE] Bulk Insert 멀티로우 일괄 배치 인덱싱 최적화 `PERF-BULK-INSERT-PIPELINE-1`
+- **Domain**: Storage | **Priority**: P1 | **Updated**: 2026-11-24 03:15:54
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`--priority`](--priority)
 

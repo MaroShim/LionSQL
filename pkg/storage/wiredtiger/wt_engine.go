@@ -2939,6 +2939,258 @@ func (tx *WTTx) InsertRow(tableName string, row storage.Row) error {
 	return tx.insertRowLocked(tableName, tbl, row)
 }
 
+func (tx *WTTx) BatchInsert(tableName string, records []storage.Record) error {
+	if len(records) == 0 {
+		return nil
+	}
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+	if tx.opts.ReadOnly {
+		return storage.ErrReadOnlyTransaction
+	}
+	if storage.IsTemporaryTable(tableName) {
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return err
+		}
+		return ttx.BatchInsert(tableName, records)
+	}
+
+	tbl, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
+	}
+
+	rows := make([]storage.Row, len(records))
+	for i, rec := range records {
+		rows[i] = tbl.RecordToRow(rec)
+	}
+	return tx.batchInsertRowsLocked(tableName, tbl, rows)
+}
+
+func (tx *WTTx) BatchInsertRows(tableName string, rows []storage.Row) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+	if tx.opts.ReadOnly {
+		return storage.ErrReadOnlyTransaction
+	}
+	if storage.IsTemporaryTable(tableName) {
+		ttx, err := tx.ensureTempTxLocked()
+		if err != nil {
+			return err
+		}
+		return ttx.BatchInsertRows(tableName, rows)
+	}
+
+	tbl, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
+	}
+	return tx.batchInsertRowsLocked(tableName, tbl, rows)
+}
+
+func (tx *WTTx) batchInsertRowsLocked(tableName string, tbl *storage.TableSchema, rows []storage.Row) error {
+	if err := tx.sess.engine.checkTainted(); err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+
+	// 1. Validation, Normalization, PK & Constraint pre-checks
+	type preparedRow struct {
+		row   storage.Row
+		pkVal storage.Value
+		pkStr string
+	}
+	prepRows := make([]preparedRow, len(rows))
+	seenBatchPKs := make(map[string]struct{}, len(rows))
+
+	_, pkColErr := tbl.PrimaryKeyColumn()
+	if pkColErr != nil {
+		return pkColErr
+	}
+	_, rvIdx, hasRV := tbl.RowVersionColumn()
+
+	for i, r := range rows {
+		var rowVals []storage.Value
+		if len(r.Values) > 0 {
+			rowVals = make([]storage.Value, len(r.Values))
+			copy(rowVals, r.Values)
+		}
+		row := storage.Row{Values: rowVals}
+
+		var normErr error
+		row, normErr = storage.ValidateAndNormalizeRow(tbl, row)
+		if normErr != nil {
+			return normErr
+		}
+
+		if hasRV && rvIdx >= 0 && rvIdx < len(row.Values) {
+			row.Values[rvIdx] = storage.BinaryValue(storage.NextRowVersion())
+		}
+
+		pkVal, has := tbl.ResolveRowPK(row)
+		if !has || pkVal.IsNull {
+			pkCol, _ := tbl.PrimaryKeyColumn()
+			colName := ""
+			if pkCol != nil {
+				colName = pkCol.Name
+			}
+			return fmt.Errorf("%w: missing primary key %s", storage.ErrNotNullViolation, colName)
+		}
+
+		pkStr := pkVal.String()
+		if _, duplicateInBatch := seenBatchPKs[pkStr]; duplicateInBatch {
+			return fmt.Errorf("%w: duplicate key %q in batch for table %q", storage.ErrKeyExists, pkStr, tableName)
+		}
+		seenBatchPKs[pkStr] = struct{}{}
+
+		if err := tx.tryAcquireWriteLockLocked(tbl.Name, pkStr); err != nil {
+			return err
+		}
+		if err := tx.checkForeignKeyFromRowLocked(tbl, row); err != nil {
+			return err
+		}
+		if err := tx.checkUniqueIndexesFromRowLocked(tableName, tbl, pkVal, row); err != nil {
+			return err
+		}
+
+		prepRows[i] = preparedRow{
+			row:   row,
+			pkVal: pkVal,
+			pkStr: pkStr,
+		}
+	}
+
+	// 2. Primary Table Insertion: open cursor ONCE for the entire batch
+	tableURI := tbl.TableURI()
+	tableCur, err := tx.sess.acquireCursor(tableURI)
+	if err != nil {
+		return err
+	}
+	defer tx.sess.releaseCursor(tableURI, tableCur)
+
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+
+	hasHook := tx.sess.engine.hasHook.Load() && !storage.IsTemporaryTable(tableName)
+
+	for _, p := range prepRows {
+		recBytes, encErr := storage.EncodeRowToBuffer(tbl, p.row, *bufPtr)
+		if encErr != nil {
+			return encErr
+		}
+
+		var keyBuf [256]byte
+		cKey, cleanup := fastCString(p.pkStr, keyBuf[:])
+		if cleanup != nil {
+			defer cleanup()
+		}
+
+		var pData unsafe.Pointer
+		var sz C.size_t
+		if ret := C.go_wt_cursor_get(tableCur, cKey, &pData, &sz); ret == 0 && pData != nil {
+			C.go_wt_cursor_reset(tableCur)
+			return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, p.pkStr, tableName)
+		}
+
+		if len(recBytes) > 0 {
+			pData = unsafe.Pointer(&recBytes[0])
+		} else {
+			pData = nil
+		}
+
+		if ret := C.go_wt_cursor_insert_raw(tableCur, cKey, pData, C.size_t(len(recBytes))); ret != 0 {
+			return wtOpError("cursor_insert_batch_primary", int(ret))
+		}
+
+		if len(tx.savepoints) > 0 {
+			recCopy := make([]byte, len(recBytes))
+			copy(recCopy, recBytes)
+			physRec := storage.AcquirePhysRecord(storage.OpInsert, tbl.Name, p.pkVal, nil, recCopy)
+			tx.undoLog = append(tx.undoLog, physRec)
+		}
+
+		if hasHook {
+			recCopy := make([]byte, len(recBytes))
+			copy(recCopy, recBytes)
+			tx.walOps = append(tx.walOps, memengine.WALOp{
+				Type:  memengine.OpInsert,
+				Table: tableName,
+				Key:   p.pkStr,
+				Data:  recCopy,
+			})
+		}
+	}
+
+	// 3. Secondary Indexes: sort index entries and insert sequentially with cursor opened once
+	if len(tbl.Indexes) > 0 {
+		type batchIndexEntry struct {
+			key   string
+			value string
+			uri   string
+		}
+
+		for _, idx := range tbl.Indexes {
+			if idx.Disabled {
+				continue
+			}
+
+			entries := make([]batchIndexEntry, len(prepRows))
+			for i, p := range prepRows {
+				k, v, _ := formatIndexKeyValueFromRow(tbl, p.row, &idx, p.pkStr)
+				entries[i] = batchIndexEntry{
+					key:   k,
+					value: v,
+					uri:   tbl.IndexFileURI(),
+				}
+			}
+
+			// Pre-sort index entries in ascending order for optimal B-Tree sequential leaf insertion
+			sort.Slice(entries, func(i, j int) bool {
+				return entries[i].key < entries[j].key
+			})
+
+			idxURI := tbl.IndexFileURI()
+			idxCur, cErr := tx.sess.acquireCursor(idxURI)
+			if cErr != nil {
+				return cErr
+			}
+
+			for _, e := range entries {
+				if err := insertIndexEntry(idxCur, e.key, e.value); err != nil {
+					tx.sess.releaseCursor(idxURI, idxCur)
+					return err
+				}
+				if len(tx.savepoints) > 0 && len(tx.undoLog) > 0 {
+					lastPhys := tx.undoLog[len(tx.undoLog)-1]
+					lastPhys.NewIdx = append(lastPhys.NewIdx, storage.IndexImage{
+						URI:   e.uri,
+						Key:   e.key,
+						Value: e.value,
+					})
+				}
+			}
+			tx.sess.releaseCursor(idxURI, idxCur)
+		}
+	}
+
+	tx.hasWrites = true
+	return nil
+}
+
 func (tx *WTTx) insertRowLocked(tableName string, tbl *storage.TableSchema, row storage.Row) error {
 	if err := tx.sess.engine.checkTainted(); err != nil {
 		return err

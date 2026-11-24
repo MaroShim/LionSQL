@@ -1606,6 +1606,8 @@ type TxOptions struct {
 type Transaction interface {
 	Insert(tableName string, record Record) error
 	InsertRow(tableName string, row Row) error
+	BatchInsert(tableName string, records []Record) error
+	BatchInsertRows(tableName string, rows []Row) error
 	Update(tableName string, pk Value, record Record) error
 	UpdateRow(tableName string, pk Value, row Row) error
 	Delete(tableName string, pk Value) error
