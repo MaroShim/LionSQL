@@ -25,7 +25,7 @@
 | `PENDING` | **`ARCH-AST-ROUTING-REFACTORING-1`** | `v0.99.0` | Architecture | P2 | 단일 쿼리 및 프로시저 간 AST 정규화 및 파서 라우팅 통합 기초 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`ARCH-CHUNK-COLUMN-VECTORIZED-FORMAT-1`** | `Spec-Out` | Execution | P3 | 청크 기반 컬럼형 벡터 슬라이스 (DataChunk: 1024행 단위 슬라이스) - KISS 원칙상 1.0 배제 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `PENDING` | **`ARCH-COOPERATIVE-INSTRUCTION-CANCELLATION-1`** | `1.0-GA` | Execution | P2 | VDBE/Iterator 협력적 명령어 인터럽트 기반 쿼리 타임아웃/취소 (Cooperative Instruction Cancellation) | [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-DEDICATED-BINDER-CATALOG-RESOLVER-1`** | `v0.95.0` | Architecture | P1 | 전용 바인더 레이어 구축 (Dedicated Binder / Catalog Resolver Pass) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
+| `DONE` | **`ARCH-DEDICATED-BINDER-CATALOG-RESOLVER-1`** | `v0.95.0` | Architecture | P1 | 전용 바인더 레이어 구축 (Dedicated Binder / Catalog Resolver Pass) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-DUALITY-CROSS-VERIFICATION-1`** | `1.0-GA` | Architecture | P1 | Duality-Driven Cross-Verification Methodology Specification | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`ARCH-EPHEMERAL-SCHEMA-PERSISTENCE-1`** | `v0.94.0` | Storage | P1 | Ephemeral Mode Schema-Only Persistence (SQL Server SCHEMA_ONLY / MySQL MEMORY Parity: Persist DDL Schemas, Indexes & Catalog Objects Across Restarts While Keeping Row Data Ephemeral) | [`notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md`](notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-INTRA-QUERY-PARALLEL-1`** |  | Architecture | P3 | 단일 쿼리 멀티코어 병렬 실행 (Intra-Query Parallelism) 영구 기각 (Spec-Out) | [`GEMINI.md`](GEMINI.md) |  |
@@ -770,8 +770,8 @@
 
 ---
 
-### [PENDING] 전용 바인더 레이어 구축 (Dedicated Binder / Catalog Resolver Pass) `ARCH-DEDICATED-BINDER-CATALOG-RESOLVER-1`
-- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 08:16:57
+### [DONE] 전용 바인더 레이어 구축 (Dedicated Binder / Catalog Resolver Pass) `ARCH-DEDICATED-BINDER-CATALOG-RESOLVER-1`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 10:21:45
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md)
 

@@ -53,11 +53,14 @@ flowchart TD
 
 ### 3.1 [급소 1] Intra-Query 멀티코어 병렬화 (`ARCH-PARALLEL-SCAN-1`)
 - **문제점**: 10,000건 ~ 100,000건 이상의 스캔 시 머신의 16~36개 코어 중 단 1개의 Goroutine만 100% 사용하고 나머지 코어가 유휴 상태(Idle)로 낭비됨.
-- **워커 수(DOP: Degree of Parallelism) 공식 [사용자 확정 불변식]**:
-  - 공식: `workers = max(1, min(8, runtime.NumCPU() / 2))`
-  - **CPU 수의 절반 (`numCPU / 2`)**: 단일 대형 분석 쿼리가 머신의 CPU를 100% 독점하여 동시 실행 중인 OLTP 트랜잭션, WAL flush, 웹 스튜디오 요청이 기아(Starvation) 상태에 빠지는 것을 방지하고 충분한 시스템 여유 자원(Headroom) 확보.
-  - **최소 1개 (`min = 1`)**: 1코어 환경/저사양 컨테이너에서 `1 / 2 = 0`이 되어 데드락이 발생하는 것을 방어 (`Defensive Minimum = 1`).
-  - **최대 8개 (`max = 8`)**: 32~64코어 고사양 서버에서도 단일 쿼리의 과도한 스케줄링 오버헤드, L3 캐시 경합(캐시 트래싱), Gather 병합 병목(Amdahl's Law)에 의한 수확 체감을 차단하는 엄격한 상한선 캡 (`Upper Cap = 8`).
+- **워커 수(DOP: Degree of Parallelism) 결정 계층 구조 (Override Hierarchy)**:
+  1. **쿼리 힌트 (Query Hint, 최우선)**: `OPTION (MAXDOP n)` 힌트를 통해 쿼리 단위로 병렬도를 명시적 오버라이드 (예: `OPTION (MAXDOP 1)`로 단일 스레드 강제, `OPTION (MAXDOP 4)`로 특정 코어 수 고정).
+  2. **세션/시스템 설정 옵션 (Session / Config Option, 차우선)**: 세션 변수 `SET maxdop = n` / `SET max_parallel_workers = n` 또는 CLI 시작 플래그 `--max-parallel-workers=n`을 통해 세션/인스턴스 기본 병렬도 오버라이드.
+  3. **기본 엔진 자동 산출 불변식 (Engine Default Fallback)**:
+     - 공식: `workers = max(1, min(8, runtime.NumCPU() / 2))`
+     - **CPU 수의 절반 (`numCPU / 2`)**: 단일 대형 분석 쿼리가 머신의 CPU를 100% 독점하여 동시 실행 중인 OLTP 트랜잭션, WAL flush, 웹 스튜디오 요청이 기아(Starvation) 상태에 빠지는 것을 방지하고 충분한 시스템 여유 자원(Headroom) 확보.
+     - **최소 1개 (`min = 1`)**: 1코어 환경/저사양 컨테이너에서 `1 / 2 = 0`이 되어 데드락이 발생하는 것을 방어 (`Defensive Minimum = 1`).
+     - **최대 8개 (`max = 8`)**: 32~64코어 고사양 서버에서도 단일 쿼리의 과도한 스케줄링 오버헤드, L3 캐시 경합(캐시 트래싱), Gather 병합 병목(Amdahl's Law)에 의한 수확 체감을 차단하는 엄격한 상한선 캡 (`Upper Cap = 8`).
 - **KISS 해결책 (Parallel Chunk Scan & Gather Merge)**:
   1. 테이블 레코드 범위를 `workers`개 파티션 청크로 분할 (`atomic.Uint64` 또는 고정 오프셋 인출).
   2. 산출된 `workers`개 고루틴이 병렬 스캔 및 로컬 필터/부분 집계(Partial Aggregation) 수행.
