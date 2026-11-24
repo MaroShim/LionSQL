@@ -445,6 +445,7 @@ type CursorData struct {
 	WhereExpr Expr
 	OrderBy   []OrderByItem
 	IntoVars  []string
+	QuerySQL  string
 }
 
 // RelQueryData holds metadata for relational query execution via Volcano engine.

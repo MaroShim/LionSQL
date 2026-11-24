@@ -420,62 +420,22 @@ func (p *Parser) parseDeclare() (Statement, error) {
 			return nil, fmt.Errorf("expected SELECT in CURSOR FOR, got %s", p.curToken.Literal)
 		}
 		p.nextToken() // eat SELECT
-
-		cols := make([]string, 0)
-		for !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenEOF) {
-			if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenAsterisk) {
-				cols = append(cols, p.curToken.Literal)
-				p.nextToken()
-			} else {
-				p.nextToken()
-			}
-			if p.curTokenIs(TokenComma) {
-				p.nextToken()
-			}
+		selStmt, err := p.parseGeneralSelect()
+		if err != nil {
+			return nil, err
 		}
 
-		if !p.curTokenIs(TokenFrom) {
-			return nil, fmt.Errorf("expected FROM in cursor query")
-		}
-		p.nextToken() // eat FROM
-
-		tblName := p.curToken.Literal
-		p.nextToken()
-
-		var whereExpr Expr
-		if p.curTokenIs(TokenWhere) {
-			p.nextToken()
-			whereExpr = p.parseExpression(precLowest)
-			if len(p.errors) > 0 {
-				return nil, fmt.Errorf("syntax error in WHERE clause: %s", strings.Join(p.errors, "; "))
-			}
-			if whereExpr == nil {
-				return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
-			}
-		}
-
-		var orderBy []OrderByItem
-		if p.curTokenIs(TokenOrder) {
-			p.nextToken() // eat ORDER
-			if p.curTokenIs(TokenBy) {
-				p.nextToken() // eat BY
-			}
-			for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
-				oExpr := p.parseExpression(precLowest)
-				desc := false
-				if p.curTokenIs(TokenDesc) {
-					desc = true
-					p.nextToken()
-				} else if p.curTokenIs(TokenAsc) {
-					p.nextToken()
-				}
-				orderBy = append(orderBy, OrderByItem{Expr: oExpr, Desc: desc})
-				if p.curTokenIs(TokenComma) {
-					p.nextToken()
-				} else {
-					break
+		var cols []string
+		for _, proj := range selStmt.Projections {
+			name := proj.Alias
+			if name == "" {
+				if colRef, ok := proj.Expr.(*ColumnRefExpr); ok {
+					name = colRef.Name
+				} else if proj.Expr != nil {
+					name = proj.Expr.String()
 				}
 			}
+			cols = append(cols, name)
 		}
 
 		if p.curTokenIs(TokenSemicolon) {
@@ -483,11 +443,13 @@ func (p *Parser) parseDeclare() (Statement, error) {
 		}
 
 		return &DeclareCursorStmt{
-			Name:    name,
-			Table:   tblName,
-			Columns: cols,
-			Where:   whereExpr,
-			OrderBy: orderBy,
+			Name:     name,
+			Table:    selStmt.From.Name,
+			Columns:  cols,
+			Where:    selStmt.Where,
+			OrderBy:  selStmt.OrderBy,
+			Select:   selStmt,
+			QuerySQL: selStmt.String(),
 		}, nil
 	}
 

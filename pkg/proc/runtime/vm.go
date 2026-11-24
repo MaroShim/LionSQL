@@ -822,6 +822,7 @@ type cursorState struct {
 	columns   []string
 	whereExpr proc.Expr
 	orderBy   []proc.OrderByItem
+	querySQL  string
 	rows      []storage.Record
 	idx       int
 	isOpen    bool

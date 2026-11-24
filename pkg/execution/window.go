@@ -13,6 +13,7 @@ import (
 	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
+	"lionsql/pkg/storage"
 )
 
 // ErrWindowWorkMemExceeded is returned when the window function materialization exceeds work_mem.
@@ -457,6 +458,16 @@ func (w *WindowIterator) computeWindowFunction(winDef planner.WindowDef, indices
 		}
 		if len(winDef.Args) > 2 {
 			defVal = parseLiteralValue(winDef.Args[2])
+			if defVal != nil && len(indices) > 0 {
+				var sample any
+				for _, idx := range indices {
+					if v := w.rows[idx].Get(targetCol); v != nil {
+						sample = v
+						break
+					}
+				}
+				defVal = coerceDefaultValue(sample, defVal)
+			}
 		}
 
 		for i, rowIdx := range indices {
@@ -483,6 +494,16 @@ func (w *WindowIterator) computeWindowFunction(winDef planner.WindowDef, indices
 		}
 		if len(winDef.Args) > 2 {
 			defVal = parseLiteralValue(winDef.Args[2])
+			if defVal != nil && len(indices) > 0 {
+				var sample any
+				for _, idx := range indices {
+					if v := w.rows[idx].Get(targetCol); v != nil {
+						sample = v
+						break
+					}
+				}
+				defVal = coerceDefaultValue(sample, defVal)
+			}
 		}
 
 		for i, rowIdx := range indices {
@@ -920,3 +941,82 @@ func (w *WindowIterator) Schema() []string {
 func (w *WindowIterator) ColIndexMap() *ColumnIndexMap {
 	return w.colIndexMap
 }
+
+func coerceDefaultValue(sampleVal any, defVal any) any {
+	if sampleVal == nil || defVal == nil {
+		return defVal
+	}
+	switch sampleVal.(type) {
+	case float64:
+		switch v := defVal.(type) {
+		case float64:
+			return v
+		case int64:
+			return float64(v)
+		case int:
+			return float64(v)
+		case storage.Decimal:
+			return v.Float64()
+		case string:
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				return f
+			}
+		}
+	case float32:
+		switch v := defVal.(type) {
+		case float32:
+			return v
+		case float64:
+			return float32(v)
+		case int64:
+			return float32(v)
+		case int:
+			return float32(v)
+		case storage.Decimal:
+			return float32(v.Float64())
+		case string:
+			if f, err := strconv.ParseFloat(v, 32); err == nil {
+				return float32(f)
+			}
+		}
+	case int64:
+		switch v := defVal.(type) {
+		case int64:
+			return v
+		case int:
+			return int64(v)
+		case float64:
+			return int64(v)
+		case storage.Decimal:
+			return v.Int64()
+		case string:
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+				return n
+			}
+		}
+	case int:
+		switch v := defVal.(type) {
+		case int:
+			return v
+		case int64:
+			return int(v)
+		case float64:
+			return int(v)
+		case storage.Decimal:
+			return int(v.Int64())
+		case string:
+			if n, err := strconv.Atoi(v); err == nil {
+				return n
+			}
+		}
+	case string:
+		switch v := defVal.(type) {
+		case string:
+			return v
+		default:
+			return fmt.Sprintf("%v", v)
+		}
+	}
+	return defVal
+}
+

@@ -2175,6 +2175,7 @@ vmLoop:
 				columns:   data.Columns,
 				whereExpr: data.WhereExpr,
 				orderBy:   data.OrderBy,
+				querySQL:  data.QuerySQL,
 				idx:       0,
 				isOpen:    false,
 			}
@@ -2195,15 +2196,37 @@ vmLoop:
 				}
 				continue vmLoop
 			}
-			rows, cols, err := f.scanCursorRows(cur.table, cur.whereExpr, cur.columns)
-			if err != nil {
-				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
-					return nil, catchErr
+			var rows []storage.Record
+			var cols []string
+			if cur.querySQL != "" {
+				relRows, relCols, _, err := f.execRelQuery(cur.querySQL, nil)
+				if err != nil {
+					if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+						return nil, catchErr
+					}
+					continue vmLoop
 				}
-				continue vmLoop
-			}
-			if len(cur.orderBy) > 0 && len(rows) > 1 {
-				f.sortCursorRows(rows, cur.orderBy)
+				cols = relCols
+				rows = make([]storage.Record, len(relRows))
+				for i, r := range relRows {
+					rec := make(storage.Record, len(r))
+					for k, v := range r {
+						rec[k] = toStorageValue(v)
+					}
+					rows[i] = rec
+				}
+			} else {
+				var err error
+				rows, cols, err = f.scanCursorRows(cur.table, cur.whereExpr, cur.columns)
+				if err != nil {
+					if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+						return nil, catchErr
+					}
+					continue vmLoop
+				}
+				if len(cur.orderBy) > 0 && len(rows) > 1 {
+					f.sortCursorRows(rows, cur.orderBy)
+				}
 			}
 			cur.rows = rows
 			if len(cols) > 0 {

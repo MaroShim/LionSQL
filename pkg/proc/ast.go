@@ -888,11 +888,13 @@ func (s *DeleteWhereStmt) String() string {
 
 // DeclareCursorStmt represents DECLARE cur_name CURSOR FOR SELECT cols FROM tbl WHERE cond
 type DeclareCursorStmt struct {
-	Name    string
-	Table   string
-	Columns []string
-	Where   Expr
-	OrderBy []OrderByItem
+	Name     string
+	Table    string
+	Columns  []string
+	Where    Expr
+	OrderBy  []OrderByItem
+	QuerySQL string
+	Select   *GeneralSelectStmt
 }
 
 func (s *DeclareCursorStmt) stmtNode() {}

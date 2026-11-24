@@ -301,7 +301,7 @@
 | `PENDING` | **`FEAT-WAL-ARCHIVER-INPROCESS-1`** | `v1.1.0` | Storage | P3 | WAL 세그먼트 완료 시 S3/원격지 비동기 아카이빙 파이프라인 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WASM-UDF-1`** | `v1.99.0` | Engine | P2 | WebAssembly 런타임 샌드박스 UDF (wazero) | [`ROADMAP.md`](ROADMAP.md) |  |
 | `DONE` | **`FEAT-WEB-STUDIO-HYBRID-1`** | `1.0-GA` | API | P2 | Web Studio 하이브리드 지원 (--no-studio 플래그 및 lionsql studio 서브커맨드 프록시) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-WIN-FUNC-PROC-COMPAT-1`** | `v0.99.0` | Engine | P2 | 분석 함수 LEAD/LAG 프로시저 런타임 호환성 점검 및 윈도우 프레임 독립 실행 검증 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-WIN-FUNC-PROC-COMPAT-1`** | `v0.99.0` | Engine | P2 | 분석 함수 LEAD/LAG 프로시저 런타임 호환성 점검 및 윈도우 프레임 독립 실행 검증 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WINDOWS-WIREDTIGER-DLL-BUNDLE-1`** | `v1.1.0` | Storage | P1 | Windows WiredTiger MSVC Native DLL Build & Self-Extracting Bundle Pipeline | [`notes/plans/WINDOWS_WIREDTIGER_DLL_BUNDLE_PLAN.ko.md`](notes/plans/WINDOWS_WIREDTIGER_DLL_BUNDLE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`** | `v0.94.0` | 1 | P2 | Storage | [`--milestone`](--milestone) |  |
 | `PENDING` | **`FEAT-WIRE-PG-COPY-STREAM-1`** | `v0.99.0` | Wire | P2 | PGWire 대량 COPY FROM STDIN/TO STDOUT 고속 스트리밍 지원 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
@@ -3441,8 +3441,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] 분석 함수 LEAD/LAG 프로시저 런타임 호환성 점검 및 윈도우 프레임 독립 실행 검증 `FEAT-WIN-FUNC-PROC-COMPAT-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-23 14:56:08
+### [DONE] 분석 함수 LEAD/LAG 프로시저 런타임 호환성 점검 및 윈도우 프레임 독립 실행 검증 `FEAT-WIN-FUNC-PROC-COMPAT-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-24 02:27:35
 - **Milestone**: `v0.99.0`
 - **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
 

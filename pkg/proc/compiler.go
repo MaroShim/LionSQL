@@ -1036,12 +1036,17 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		return nil
 
 	case *DeclareCursorStmt:
+		querySQL := s.QuerySQL
+		if querySQL == "" && s.Select != nil && (hasWindowFunctions(s.Select.Projections) || hasAggregates(s.Select.Projections) || len(s.Select.Joins) > 0 || len(s.Select.CTEs) > 0) {
+			querySQL = s.Select.String()
+		}
 		c.emit(OpCursorOpen, 0, 0, 0, &CursorData{
 			Name:      cleanVarName(s.Name),
 			Table:     s.Table,
 			Columns:   s.Columns,
 			WhereExpr: s.Where,
 			OrderBy:   s.OrderBy,
+			QuerySQL:  querySQL,
 		})
 		return nil
 
@@ -1201,7 +1206,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		}
 
 		// 1. Scalar SELECT without FROM (e.g. SELECT 1 + 1 AS res, 'hello' AS msg, GETDATE())
-		if s.From.Name == "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.SetOps) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !s.IsExplain && !hasAggregates(s.Projections) {
+		if s.From.Name == "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.SetOps) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !s.IsExplain && !hasAggregates(s.Projections) && !hasWindowFunctions(s.Projections) {
 			var colNames []string
 			var projRegs []int32
 
@@ -1256,7 +1261,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		}
 
 		// 2. Single-table Point Query (WHERE col = val without joins/groups/aggregates/distinct)
-		if s.From.Name != "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.SetOps) == 0 && len(s.GroupBy) == 0 && s.Having == nil && s.LimitExpr == nil && s.OffsetExpr == nil && s.Offset == 0 && !hasAggregates(s.Projections) && s.Where != nil && !s.Distinct && !s.IsExplain {
+		if s.From.Name != "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.SetOps) == 0 && len(s.GroupBy) == 0 && s.Having == nil && s.LimitExpr == nil && s.OffsetExpr == nil && s.Offset == 0 && !hasAggregates(s.Projections) && !hasWindowFunctions(s.Projections) && s.Where != nil && !s.Distinct && !s.IsExplain {
 			if whereCol, whereVal, ok := ExtractSimpleEq(s.Where); ok {
 				c.emit(OpPointSelect, 0, 0, 0, &PointSelectData{
 					Table:       s.From.Name,
@@ -1315,6 +1320,9 @@ func ExtractSimpleEq(expr Expr) (string, Expr, bool) {
 
 func hasAggregates(projections []Projection) bool {
 	for _, p := range projections {
+		if p.Expr == nil {
+			continue
+		}
 		pUpper := strings.ToUpper(p.Expr.String())
 		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
 			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
@@ -1322,6 +1330,25 @@ func hasAggregates(projections []Projection) bool {
 			strings.Contains(pUpper, "GROUP_CONCAT(") || strings.Contains(pUpper, "PERCENTILE_CONT(") ||
 			strings.Contains(pUpper, "PERCENTILE_DISC(") || strings.Contains(pUpper, "APPROX_PERCENTILE(") ||
 			strings.Contains(pUpper, "MEDIAN(") {
+			return true
+		}
+	}
+	return false
+}
+
+func hasWindowFunctions(projections []Projection) bool {
+	for _, p := range projections {
+		if p.Expr == nil {
+			continue
+		}
+		if fn, ok := p.Expr.(*FunctionCallExpr); ok && fn.HasOver {
+			return true
+		}
+		if wg, ok := p.Expr.(*WithinGroupExpr); ok && wg.HasOver {
+			return true
+		}
+		pUpper := strings.ToUpper(p.Expr.String())
+		if strings.Contains(pUpper, " OVER ") || strings.Contains(pUpper, " OVER(") {
 			return true
 		}
 	}
