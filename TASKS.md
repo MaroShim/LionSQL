@@ -538,7 +538,7 @@
 | `DONE` | **`PLANNER-SLIM-1`** |  | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** |  | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`REFAC-STORAGE-FOREIGN-KEY-ENGINE-1`** | `v0.96.0` | Storage | P2 | 외래키 무결성 검증 및 CASCADE 전파 엔진 공통화 (ForeignKeyEngine) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
-| `PENDING` | **`REFAC-STORAGE-INDEX-CODEC-1`** | `v0.95.0` | Storage | P2 | 보조 인덱스 키/값 포맷터 및 바이너리 인코딩 모듈화 (formatIndexKeyValue) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
+| `SPEC_OUT` | **`REFAC-STORAGE-INDEX-CODEC-1`** | `v0.95.0` | Storage | P2 | 보조 인덱스 키/값 포맷터 및 바이너리 인코딩 모듈화 (formatIndexKeyValue) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`REFAC-STORAGE-ROW-LOCK-MANAGER-1`** | `v0.95.0` | Storage | P2 | 행 레벨 쓰기 잠금 샤드 관리자 공통화 (RowLockManager) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `PENDING` | **`REFAC-WIRE-RESET-SESSION-COORDINATOR-1`** | `v0.95.0` | Engine | P2 | PG/TDS 와이어 프로토콜 세션 리셋 Coordinator 단일 진입점 (ResetSession) | [`notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md`](notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md) |  |
 | `DONE` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** |  | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
@@ -5219,10 +5219,15 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] 보조 인덱스 키/값 포맷터 및 바이너리 인코딩 모듈화 (formatIndexKeyValue) `REFAC-STORAGE-INDEX-CODEC-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 23:19:00
+### [SPEC_OUT] 보조 인덱스 키/값 포맷터 및 바이너리 인코딩 모듈화 (formatIndexKeyValue) `REFAC-STORAGE-INDEX-CODEC-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-24 00:12:23
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
+
+**취소 및 SPEC_OUT 사유 (엔진별 책임 분리 및 정보 은닉 원칙 준수)**:
+1. **WiredTiger 전용 물리 B-Tree 레이아웃 (`ARCH-WT-FILE-LAYOUT-1`)**: `formatIndexKeyValue`의 `prefix + indexKey + "\x00" + pkStr` 조립 규약은 한 테이블의 모든 보조 인덱스를 단일 B-Tree 파일(`_idx_<Table>.wt`)에 멀티플렉싱하는 WiredTiger 전용 물리 파일 포맷입니다.
+2. **In-Memory OCC와의 무관성**: `memengine`은 인덱스마다 독립된 인메모리 `SkipList`를 사용하므로 프리픽스나 바이트 직렬화가 불필요합니다.
+3. **결론**: WiredTiger 전용 B-Tree 직렬화 로직을 상위 공통 패키지(`pkg/storage`)로 노출하는 것은 구현 세부사항 누출(Abstraction Leak)에 해당하므로, `pkg/storage/wiredtiger` 내부의 private 함수로 캡슐화 상태를 영구 유지(SPEC_OUT)합니다.
 
 ---
 
