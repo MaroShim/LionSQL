@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- update `BENCHMARK.md` and `DATA_IMPORT_AND_MIGRATION.md` (and their Korean counterparts) with comprehensive bulk data ingestion benchmarks (244k rows/sec) and migration guides for PGWire `COPY`, TDS `BCP`, and multi-row `INSERT`
 - support high-throughput PGWire `COPY FROM STDIN` and `COPY TO STDOUT` streaming with chunked `BatchInsert` pipeline (`FEAT-WIRE-PG-COPY-STREAM-1`)
 - support TDS 0x07 BCP (Bulk Load Protocol) binary row stream ingestion and `INSERT BULK` protocol negotiation (`FEAT-WIRE-TDS-BCP-BULK-LOAD-1`)
 - support server-wide dialect preference configuration via `--dialect`, `--dialect-preference`, and `LIONSQL_DIALECT_PREFERENCE` (`FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`)
@@ -21,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - support `ORDER BY ... NULLS FIRST` and `NULLS LAST` across tokenizer, AST parser, planner, and sort/window iterators (`ENG-038`, Round 16)
 
 ### Fixed
+- route simple cursor declarations to native `scanCursorRows` fast-path and synchronize `memengine` WAL hook LSN baseline during late subscriber attachment
 - enforce fail-closed syntax rejection across all SQL clauses (`WHERE`, `SET`, `ORDER BY`, `GROUP BY`, `LIMIT`, `OFFSET`, `VALUES`, `HAVING`, `RETURNING`, `WINDOW`) eliminating silent query acceptance and silent drops (`FIX-NEGATIVE-SYNTAX-FUZZER-1`)
 - enforce durable commit before WAL hook notification and fail closed on replication purged LSN gaps (`b539d183`)
 - atomic WAL replay undo rollback and lock table during CreateIndex build preventing missing secondary index entries (`d43a85b0`)
