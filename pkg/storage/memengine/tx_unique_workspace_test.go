@@ -208,3 +208,106 @@ func TestMemEngine_UniqueKeyReleaseInSameTx(t *testing.T) {
 		}
 	})
 }
+
+// TestMemEngine_CommitFailure_NoPrematureUniqueIndexDeletion verifies that if a transaction fails during
+// WAL commit, its existing unique index keys were NEVER prematurely deleted from the SkipList,
+// preventing concurrent transactions from stealing the uncommitted key or corrupting the index.
+func TestMemEngine_CommitFailure_NoPrematureUniqueIndexDeletion(t *testing.T) {
+	dataDir := t.TempDir()
+	eng := New()
+	opts := DefaultOptions(dataDir)
+	if err := eng.OpenWithOptions(opts); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "accounts",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "email", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+	if err := eng.CreateIndex(&storage.IndexSchema{
+		Name:      "idx_accounts_email",
+		TableName: "accounts",
+		Columns:   []string{"email"},
+		Unique:    true,
+	}); err != nil {
+		t.Fatalf("CreateIndex failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	// 1. Initial insert: (1, "target@example.com")
+	txInit, _ := sess.BeginTx(storage.TxOptions{})
+	_ = txInit.Insert("accounts", storage.Record{"id": storage.IntValue(1), "email": storage.StringValue("target@example.com")})
+	if err := txInit.Commit(); err != nil {
+		t.Fatalf("Init commit failed: %v", err)
+	}
+
+	// 2. T1 updates row 1 to "target_updated@example.com"
+	tx1, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx1.Rollback()
+
+	if err := tx1.Update("accounts", storage.IntValue(1), storage.Record{
+		"id":    storage.IntValue(1),
+		"email": storage.StringValue("target_updated@example.com"),
+	}); err != nil {
+		t.Fatalf("Update failed: %v", err)
+	}
+
+	// Simulate WAL corruption/failure so T1 fails during commit
+	if eng.wal != nil && eng.wal.file != nil {
+		_ = eng.wal.file.Close()
+	}
+
+	// T1 commit fails
+	if err := tx1.Commit(); err == nil {
+		t.Fatalf("expected commit to fail on closed WAL, but got nil")
+	}
+
+	// 3. Verify that "target@example.com" was NEVER prematurely deleted:
+	// A new transaction T2 attempting to insert "target@example.com" MUST fail with ErrUniqueViolation
+	tx2, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx T2 failed: %v", err)
+	}
+	defer tx2.Rollback()
+
+	err = tx2.Insert("accounts", storage.Record{
+		"id":    storage.IntValue(2),
+		"email": storage.StringValue("target@example.com"),
+	})
+	if err == nil {
+		t.Fatalf("FATAL: unique index key was prematurely deleted during failed commit! T2 was able to insert duplicate key")
+	}
+	if !errors.Is(err, storage.ErrUniqueViolation) {
+		t.Fatalf("expected ErrUniqueViolation on duplicate key, got: %v", err)
+	}
+
+	// Verify original row 1 still cleanly owns "target@example.com" via IndexScan
+	targetVal := storage.StringValue("target@example.com")
+	cur, err := tx2.IndexScan("accounts", "idx_accounts_email", &targetVal, &targetVal)
+	if err != nil {
+		t.Fatalf("IndexScan failed: %v", err)
+	}
+	defer cur.Close()
+	if !cur.Next() {
+		t.Fatalf("expected original unique key target@example.com to still exist in index")
+	}
+	rec, _ := cur.Record()
+	if rec["id"].IVal != 1 {
+		t.Fatalf("expected row 1, got %v", rec["id"])
+	}
+}

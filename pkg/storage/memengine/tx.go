@@ -2475,7 +2475,99 @@ func (tx *Transaction) Commit() error {
 		return err
 	}
 
-	// 6. Apply changes and update secondary indexes atomically
+	// 6. Assign monotonic LSN and persist WAL frame while shard locks are still held (Point of No Return)
+	// Crucial: WAL fsync MUST succeed before modifying in-memory shards or secondary index entries.
+	// This guarantees that:
+	// a) If WAL append or fsync fails, in-memory state is 100% clean with zero need for complex rollbacks.
+	// b) Existing unique index entries are NOT prematurely deleted during long disk I/O / fsync windows,
+	//    preventing concurrent transactions from stealing unique keys during a failing or in-flight commit.
+	var walRec WALRecord
+	var walSeq int64
+	if needWAL && len(tx.changes) > 0 {
+		ops := make([]WALOp, 0, len(tx.changes))
+		for _, ch := range tx.changes {
+			if storage.IsTemporaryTable(ch.table) {
+				continue
+			}
+			chTD := ch.td
+			if chTD == nil {
+				var err error
+				chTD, err = tx.getTableLocked(ch.table)
+				if err != nil {
+					return err
+				}
+			}
+			if chTD != nil && chTD.Schema.Durability == storage.DurabilitySchemaOnly {
+				continue
+			}
+			var opType WALOpType
+			switch ch.kind {
+			case changeInsert:
+				opType = OpInsert
+			case changeUpdate:
+				opType = OpUpdate
+			case changeDelete:
+				opType = OpDelete
+			}
+			rawData := ch.walData
+			if rawData == nil && ch.kind != changeDelete {
+				td := ch.td
+				if td == nil {
+					var err error
+					td, err = tx.getTableLocked(ch.table)
+					if err != nil {
+						return err
+					}
+				}
+				if td != nil {
+					var err error
+					rawData, err = storage.EncodeRow(&td.Schema, ch.row)
+					if err != nil {
+						return fmt.Errorf("memengine: failed to serialize row for WAL table %s: %w", ch.table, err)
+					}
+				}
+			}
+			if rawData == nil && ch.kind != changeDelete {
+				return fmt.Errorf("memengine: missing serialized row data for WAL table %s", ch.table)
+			}
+			ops = append(ops, WALOp{
+				Type:    opType,
+				Table:   ch.table,
+				Key:     ch.key,
+				Data:    rawData,
+				BaseVer: ch.baseVer,
+			})
+		}
+		if len(ops) > 0 {
+			var err error
+			walRec, walSeq, err = tx.engine.appendWALFrameLocked(ops)
+			if err != nil {
+				return err
+			}
+		} else {
+			tx.commitLSN = tx.engine.nextLSN.Add(1)
+			tx.commitTimestamp = time.Now().UnixNano()
+		}
+	} else {
+		if len(tx.changes) > 0 {
+			tx.engine.changesSinceSave.Add(int64(len(tx.changes)))
+			tx.commitLSN = tx.engine.nextLSN.Add(1)
+		} else {
+			tx.commitLSN = tx.snapshotLSN
+		}
+		tx.commitTimestamp = time.Now().UnixNano()
+	}
+
+	// 7. Perform group commit fsync before in-memory mutations
+	if needWAL && walSeq > 0 {
+		if err := tx.engine.finishWALCommitLocked(walSeq); err != nil {
+			return err
+		}
+		tx.commitLSN = walRec.LSN
+		tx.commitTimestamp = walRec.Timestamp
+	}
+
+	// 8. Apply in-memory shard changes and update secondary indexes
 	type changeItem struct {
 		ch        rowChange
 		td        *TableData
@@ -2740,96 +2832,7 @@ func (tx *Transaction) Commit() error {
 		}
 	}
 
-	// 7. Assign monotonic LSN and append WAL frame while shard locks are still held
-	// so causal row version order and LSN order in the WAL file strictly match.
-	var walRec WALRecord
-	var walSeq int64
-	if needWAL && len(tx.changes) > 0 {
-		ops := make([]WALOp, 0, len(tx.changes))
-		for _, ch := range tx.changes {
-			if storage.IsTemporaryTable(ch.table) {
-				continue
-			}
-			chTD := ch.td
-			if chTD == nil {
-				var err error
-				chTD, err = tx.getTableLocked(ch.table)
-				if err != nil {
-					return wrapCommitErr(err)
-				}
-			}
-			if chTD != nil && chTD.Schema.Durability == storage.DurabilitySchemaOnly {
-				continue
-			}
-			var opType WALOpType
-			switch ch.kind {
-			case changeInsert:
-				opType = OpInsert
-			case changeUpdate:
-				opType = OpUpdate
-			case changeDelete:
-				opType = OpDelete
-			}
-			rawData := ch.walData
-			if rawData == nil && ch.kind != changeDelete {
-				td := ch.td
-				if td == nil {
-					var err error
-					td, err = tx.getTableLocked(ch.table)
-					if err != nil {
-						return wrapCommitErr(err)
-					}
-				}
-				if td != nil {
-					var err error
-					rawData, err = storage.EncodeRow(&td.Schema, ch.row)
-					if err != nil {
-						return wrapCommitErr(fmt.Errorf("memengine: failed to serialize row for WAL table %s: %w", ch.table, err))
-					}
-				}
-			}
-			if rawData == nil && ch.kind != changeDelete {
-				return wrapCommitErr(fmt.Errorf("memengine: missing serialized row data for WAL table %s", ch.table))
-			}
-			ops = append(ops, WALOp{
-				Type:    opType,
-				Table:   ch.table,
-				Key:     ch.key,
-				Data:    rawData,
-				BaseVer: ch.baseVer,
-			})
-		}
-		if len(ops) > 0 {
-			var err error
-			walRec, walSeq, err = tx.engine.appendWALFrameLocked(ops)
-			if err != nil {
-				return wrapCommitErr(err)
-			}
-		} else {
-			tx.commitLSN = tx.engine.nextLSN.Add(1)
-			tx.commitTimestamp = time.Now().UnixNano()
-		}
-	} else {
-		if len(tx.changes) > 0 {
-			tx.engine.changesSinceSave.Add(int64(len(tx.changes)))
-			tx.commitLSN = tx.engine.nextLSN.Add(1)
-		} else {
-			tx.commitLSN = tx.snapshotLSN
-		}
-		tx.commitTimestamp = time.Now().UnixNano()
-	}
-
-	// 8. Perform group commit fsync before releasing shard and table locks so that if fsync fails,
-	// in-memory shard changes can be rolled back cleanly via rollbackApplied().
-	if needWAL && walSeq > 0 {
-		if err := tx.engine.finishWALCommitLocked(walSeq); err != nil {
-			return wrapCommitErr(err)
-		}
-		tx.commitLSN = walRec.LSN
-		tx.commitTimestamp = walRec.Timestamp
-	}
-
-	// Release shard and table locks after WAL commit is durable
+	// Release shard and table locks after all mutations are applied
 	unlockAll()
 
 	tx.committed = true
