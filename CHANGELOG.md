@@ -17,6 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 - enforce fail-closed syntax rejection across all SQL clauses (`WHERE`, `SET`, `ORDER BY`, `GROUP BY`, `LIMIT`, `OFFSET`, `VALUES`, `HAVING`, `RETURNING`, `WINDOW`) eliminating silent query acceptance and silent drops (`FIX-NEGATIVE-SYNTAX-FUZZER-1`)
+- enforce durable commit before WAL hook notification and fail closed on replication purged LSN gaps (`b539d183`)
+- atomic WAL replay undo rollback and lock table during CreateIndex build preventing missing secondary index entries (`d43a85b0`)
+- release savepoint write locks on RollbackTo, optimize non-pk fk lookup, and evict subscribers on demote (`423de2b1`)
+- prevent copy double rollback pool corruption, resolve temp table in copy, and eliminate query context leak (`e2ec2119`)
+- maintain table lock across DropIndex and verify truncate index clearance (`0e1663c2`)
 - update README.md and README.ko.md to document native WiredTiger storage engine support on Windows platforms
 - prevent silent drop of malformed `WHERE`, `SET`, `JOIN ON`, and `HAVING` clauses in Pratt parser and compiler (`ENG-031`, Round 15)
 - execute LIFO DDL rollback actions on `ROLLBACK TO SAVEPOINT` in unified transaction manager (`ENG-032`, Round 15)

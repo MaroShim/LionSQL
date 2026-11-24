@@ -62,6 +62,7 @@
 | `PENDING` | **`AUDIT-LOG-1`** | `v1.99.0` | Integrity | P2 | 암호화 SHA-256 체이닝 불변 감사 로그 서브시스템 | [`notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/plans/IMMUTABLE_AUDIT_LOG_PLAN.md) |  |
 | `DONE` | **`AUDIT-PATCH-P0`** |  | Integrity | P1 | 전수 감사 P0 (Must Fix 37선) 결함 TDD 순차 패치 및 회귀 검증 | [`notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md`](notes/PRE_RELEASE_AUDIT_TRIAGE.ko.md) |  |
 | `DONE` | **`AUDIT-PATCH-P1`** |  | Core | P1 | 1.0 전수 감사 P1 (Should Fix 47선) 난이도별(하/중/상) 순차 안정화 패치 | [`notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md`](notes/plans/P1_AUDIT_STABILIZATION_PLAN.ko.md) | 1단계(하 21건), 2단계(중 18건), 3단계(상 8건) P1 ... |
+| `DONE` | **`AUDIT-R18-CONCURRENCY-DURABILITY-1`** |  | Durability | P1 | 전방위 동시성·복제·스토리지 정합성 전수 감사 및 무결성 패치 |  |  |
 | `DONE` | **`AUDIT-R36-C1-PANIC-AND-VDBE-SUBQUERY-DML`** | `v0.94.0` | Engine | P1 | Live Audit R3-R6 Cluster 1: WHERE 단락 평가 패닉 방지(R5-001) 및 VDBE DML(UPDATE/DELETE/INSERT) 서브쿼리·스칼라 다중행·다중컬럼 검증(R3-05,06,08, R4-02,30,33,36,37, R5-008,010) | [`notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md`](notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`AUDIT-R36-C2-PROJECTION-ALIAS-STAR-WINDOW-UDF`** | `v0.94.0` | Execution | P1 | Live Audit R3-R6 Cluster 2: Volcano ProjectionIterator 별칭 섀도잉(R3-01), SELECT *, expr 확장(R4-17), 수식/CASE 내 중첩 윈도우 함수(R5-009, R6-010) 및 스칼라 UDF/TVF 평가(R3-31, R4-19, R6-067,068) | [`notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md`](notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md) |  |
 | `DONE` | **`AUDIT-R36-C3-OUTER-JOIN-PREDICATES-AND-FILTERS`** | `v0.94.0` | Execution | P1 | Live Audit R3-R6 Cluster 3: LEFT/RIGHT/FULL OUTER JOIN 비등가·다중키·좌측필터·ON 1=0 외곽 행 보존(R4-29,31,32, R5-005,006, R6-011) 및 튜플 IN / = ANY(ARRAY) 비교(R4-01,22) | [`notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md`](notes/plans/20261119_LIVE_AUDIT_ROUND3_TO_6_REMEDIATION_PLAN.ko.md) |  |
@@ -1124,6 +1125,11 @@
 - [x] Mini-Batch 6 (cmd/lionsql, 3건): Scope-132, Scope-133, Scope-131 (cc5850c)
 - [ ] 2단계 난이도 중 (Medium, 18건): 도메인 A(5건), 도메인 B(6건), 도메인 C(7건)
 - [ ] 3단계 난이도 상 (High, 8건)
+
+---
+
+### [DONE] 전방위 동시성·복제·스토리지 정합성 전수 감사 및 무결성 패치 `AUDIT-R18-CONCURRENCY-DURABILITY-1`
+- **Domain**: Durability | **Priority**: P1 | **Updated**: 2026-11-24 01:57:51
 
 ---
 
