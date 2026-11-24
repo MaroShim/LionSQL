@@ -536,5 +536,45 @@ func TestConfig_ClusterTokenValidation(t *testing.T) {
 	}
 }
 
+func TestConfig_DialectPreference(t *testing.T) {
+	cfg := config.DefaultConfig()
+	if pref := cfg.Server.GetDialectPreference(); pref != "sqlserver" {
+		t.Errorf("expected default dialect preference to be 'sqlserver', got %q", pref)
+	}
+
+	validCases := []struct {
+		input    string
+		expected string
+	}{
+		{"sqlserver", "sqlserver"},
+		{"SQLSERVER", "sqlserver"},
+		{"tsql", "sqlserver"},
+		{"T-SQL", "sqlserver"},
+		{"mssql", "sqlserver"},
+		{"postgres", "postgres"},
+		{"POSTGRES", "postgres"},
+		{"pg", "postgres"},
+		{"postgresql", "postgres"},
+	}
+
+	for _, tc := range validCases {
+		norm, err := config.ValidateDialectPreference(tc.input)
+		if err != nil {
+			t.Errorf("ValidateDialectPreference(%q) failed: %v", tc.input, err)
+		}
+		if norm != tc.expected {
+			t.Errorf("ValidateDialectPreference(%q) expected %q, got %q", tc.input, tc.expected, norm)
+		}
+	}
+
+	invalidCases := []string{"mysql", "sqlite", "oracle", "duckdb", "unknown"}
+	for _, inv := range invalidCases {
+		if _, err := config.ValidateDialectPreference(inv); err == nil {
+			t.Errorf("expected ValidateDialectPreference(%q) to fail, got nil", inv)
+		}
+	}
+}
+
+
 
 

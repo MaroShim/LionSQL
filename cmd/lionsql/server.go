@@ -117,6 +117,8 @@ func runServer(args []string) error {
 	outboxWebhook := fs.String("outbox-webhook", "", "Webhook URL for outbox message forwarding")
 	outboxKafka := fs.String("outbox-kafka", "", "Kafka REST Proxy endpoint (e.g. http://localhost:8082)")
 	outboxRabbitMQ := fs.String("outbox-rabbitmq", "", "RabbitMQ Management API endpoint (e.g. http://localhost:15672)")
+	dialectPreference := fs.String("dialect-preference", "", "SQL dialect preference: sqlserver or postgres (default: sqlserver)")
+	fs.StringVar(dialectPreference, "dialect", "", "Alias for -dialect-preference")
 
 	// Daemon control flags
 	var daemon bool
@@ -304,6 +306,17 @@ func runServer(args []string) error {
 		cfg.Outbox.Enabled = true
 		cfg.Outbox.RabbitMQURL = *outboxRabbitMQ
 	}
+
+	if visited["dialect-preference"] || visited["dialect"] {
+		cfg.Server.DialectPreference = *dialectPreference
+	} else if envDialect := os.Getenv("LIONSQL_DIALECT_PREFERENCE"); envDialect != "" {
+		cfg.Server.DialectPreference = envDialect
+	}
+	normDialect, err := config.ValidateDialectPreference(cfg.Server.GetDialectPreference())
+	if err != nil {
+		log.Fatalf("[LionSQL] %v", err)
+	}
+	cfg.Server.DialectPreference = normDialect
 
 	if strings.TrimSpace(cfg.Server.DataDir) == "" {
 		cfg.Server.DataDir = defaultDataDir
@@ -702,6 +715,7 @@ func runServer(args []string) error {
 	if cfg.Resources.MaxConnections > 0 {
 		server.Coordinator().SetMaxConnections(cfg.Resources.MaxConnections)
 	}
+	server.Coordinator().SetDialectPreference(cfg.Server.DialectPreference)
 	server.SetClientSessionIdleTTL(*txIdleTimeout)
 
 	// Memory Governor: Global memory budget (GOMEMLIMIT), GOGC (default 200) & operator work_mem

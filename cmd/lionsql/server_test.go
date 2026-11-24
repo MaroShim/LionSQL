@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"lionsql/pkg/config"
 )
 
 func TestResolveDefaultDataDirFromExe(t *testing.T) {
@@ -66,5 +68,25 @@ func TestOpenDaemonLogFile_PermissionsAndAutoDir(t *testing.T) {
 	}
 	if !strings.Contains(string(data), testMsg) {
 		t.Errorf("expected log file to contain %q, got %q", testMsg, string(data))
+	}
+}
+
+func TestServer_DialectPreferenceValidation(t *testing.T) {
+	valid := []string{"sqlserver", "tsql", "mssql", "postgres", "pg", "postgresql"}
+	for _, v := range valid {
+		norm, err := config.ValidateDialectPreference(v)
+		if err != nil {
+			t.Errorf("expected %q to be valid, got err: %v", v, err)
+		}
+		if norm != "sqlserver" && norm != "postgres" {
+			t.Errorf("unexpected normalized dialect: %s", norm)
+		}
+	}
+
+	invalid := []string{"mysql", "sqlite", "oracle"}
+	for _, inv := range invalid {
+		if _, err := config.ValidateDialectPreference(inv); err == nil {
+			t.Errorf("expected %q to fail validation, got nil", inv)
+		}
 	}
 }

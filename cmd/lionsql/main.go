@@ -108,6 +108,7 @@ Options by Category (옵션 상세):
                                  - wiredtiger: High-concurrency Disk B+Tree MVCC engine for enterprise databases
                                  - compact   : Pure-Go In-Memory OCC engine with zero-GC flat buffers and AOF/WAL durability (alias: memory)
     -seed                      Automatically seed demo e-commerce sample database on startup
+    -dialect <type>            SQL dialect preference: sqlserver or postgres (default: sqlserver) (alias: -dialect-preference)
     -config <path>             Path to JSON configuration file (auto-detects ./lionsql.json)
 
   [Memory & Performance]

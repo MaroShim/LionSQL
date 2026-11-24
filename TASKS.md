@@ -283,7 +283,7 @@
 | `DONE` | **`FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`** | `v0.94.0` | Security | P2 | 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리) | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `DONE` | **`FEAT-SPECKIT-CORE-AND-ORACLE-RUNNER-1`** | `1.0-GA` | Test | P1 | 스펙 기반 쿼리 생성 엔진, NoREC/듀얼엔진 오라클 및 cmd/spec_fuzz CLI 구축 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SQL-SERVER-AGENT-INPROCESS-1`** | `v0.95.0` | Engine | P2 | SQL Server Agent 인-프로세스 스케줄러 (msdb.dbo.sysjobs, sysjobhistory, sp_add_job) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`** | `v0.99.0` | Engine | P2 | 서버 전역 dialect_preference 설정 체계 및 CLI/환경변수 바인딩 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`** | `v0.99.0` | Engine | P2 | 서버 전역 dialect_preference 설정 체계 및 CLI/환경변수 바인딩 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SUPERSET-EXPR-COLLATE-1`** | `v0.94.0` | Engine | P2 | 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SUPERSET-ILIKE-SYNTAX-1`** | `v0.94.0` | Engine | P2 | pkg/proc/ Native Pratt Parser 및 VDBE ILIKE 연산자 전역 지원 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TABLE-VAR-1`** |  | Engine | P2 | T-SQL 테이블 변수(DECLARE @tbl TABLE) 지원 및 DML/배치 라이프사이클 통합 | [`notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md`](notes/plans/TABLE_VARIABLE_SUPPORT_PLAN.ko.md) |  |
@@ -3319,8 +3319,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] 서버 전역 dialect_preference 설정 체계 및 CLI/환경변수 바인딩 `FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-23 14:56:08
+### [DONE] 서버 전역 dialect_preference 설정 체계 및 CLI/환경변수 바인딩 `FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-24 02:33:26
 - **Milestone**: `v0.99.0`
 - **Plan Doc**: [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md)
 

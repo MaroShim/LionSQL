@@ -34,6 +34,7 @@ type Config struct {
 	ClientSessionIdleTTL time.Duration // Idle duration after which an inactive ClientSession releases its pinned storage session (default 5m)
 	SessionSweepInterval time.Duration // Interval for checking idle ClientSessions (default 10s)
 	MaxConnections       int           // Maximum concurrent client connections limit (default 200)
+	DialectPreference    string        // Server SQL dialect preference: "sqlserver" (default) or "postgres"
 }
 
 // DefaultConfig returns default configuration parameters.
@@ -46,6 +47,7 @@ func DefaultConfig() Config {
 		ClientSessionIdleTTL: 5 * time.Minute,
 		SessionSweepInterval: 10 * time.Second,
 		MaxConnections:       200,
+		DialectPreference:    "sqlserver",
 	}
 }
 
@@ -79,6 +81,7 @@ type Coordinator struct {
 	tolerantDDL          atomic.Bool
 	clientSessionIdleTTL atomic.Int64
 	maxConnections       atomic.Int64
+	dialectPreference    string
 	dbMailInitOnce       sync.Once
 	dbMailInitErr        error
 	dbMailItemCounter    atomic.Int64
@@ -153,6 +156,11 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 		maxConns = 200
 	}
 	coord.maxConnections.Store(int64(maxConns))
+	dialect := strings.ToLower(strings.TrimSpace(cfg.DialectPreference))
+	if dialect == "" {
+		dialect = "sqlserver"
+	}
+	coord.dialectPreference = dialect
 
 	coord.bgWg.Add(1)
 	go coord.idleSessionReapLoop(sweepInterval)
@@ -1110,6 +1118,21 @@ func (c *Coordinator) TolerantDDL() bool {
 // SetTolerantDDL atomically toggles the tolerant DDL bootstrap mode in memory.
 func (c *Coordinator) SetTolerantDDL(enabled bool) {
 	c.tolerantDDL.Store(enabled)
+}
+
+// DialectPreference returns the configured SQL dialect preference for the coordinator.
+func (c *Coordinator) DialectPreference() string {
+	if c == nil || c.dialectPreference == "" {
+		return "sqlserver"
+	}
+	return c.dialectPreference
+}
+
+// SetDialectPreference sets the SQL dialect preference ("sqlserver" or "postgres").
+func (c *Coordinator) SetDialectPreference(d string) {
+	if c != nil {
+		c.dialectPreference = strings.ToLower(strings.TrimSpace(d))
+	}
 }
 
 

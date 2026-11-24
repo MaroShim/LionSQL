@@ -22,6 +22,7 @@ type ServerConfig struct {
 	LogFile                  string `json:"log_file,omitempty"`
 	AppPath                  string `json:"app_path,omitempty"`
 	NoStudio                 bool   `json:"no_studio,omitempty"`
+	DialectPreference        string `json:"dialect_preference,omitempty"`
 }
 
 // TLSConfig defines encryption parameters for wire protocols.
@@ -229,15 +230,49 @@ func (s *ServerConfig) GetMemory() string {
 	}
 }
 
+// DefaultDialectPreference is the canonical default SQL dialect preference.
+const DefaultDialectPreference = "sqlserver"
+
+// GetDialectPreference returns the normalized dialect preference, defaulting to "sqlserver".
+func (s *ServerConfig) GetDialectPreference() string {
+	if s == nil || strings.TrimSpace(s.DialectPreference) == "" {
+		return DefaultDialectPreference
+	}
+	norm := strings.ToLower(strings.TrimSpace(s.DialectPreference))
+	switch norm {
+	case "sqlserver", "tsql", "t-sql", "mssql":
+		return "sqlserver"
+	case "postgres", "pg", "postgresql":
+		return "postgres"
+	default:
+		return norm
+	}
+}
+
+// ValidateDialectPreference validates and normalizes the dialect preference string.
+// Only "sqlserver" (and aliases "tsql", "t-sql", "mssql") and "postgres" (and aliases "pg", "postgresql") are supported.
+func ValidateDialectPreference(d string) (string, error) {
+	norm := strings.ToLower(strings.TrimSpace(d))
+	switch norm {
+	case "sqlserver", "tsql", "t-sql", "mssql":
+		return "sqlserver", nil
+	case "postgres", "pg", "postgresql":
+		return "postgres", nil
+	default:
+		return "", fmt.Errorf("invalid dialect preference %q: only 'sqlserver' and 'postgres' are supported", d)
+	}
+}
+
 // DefaultConfig returns the production-ready zero-config baseline.
 func DefaultConfig() *Config {
 	return &Config{
 		Server: ServerConfig{
-			DataDir:  "data",
-			Disk:     "",
-			Memory:   "",
-			Engine:   DefaultEngine(),
-			AutoSeed: false,
+			DataDir:           "data",
+			Disk:              "",
+			Memory:            "",
+			Engine:            DefaultEngine(),
+			AutoSeed:          false,
+			DialectPreference: DefaultDialectPreference,
 		},
 		Outbox: OutboxConfig{
 			TopicPrefix: "lionsql.",
