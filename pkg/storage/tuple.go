@@ -448,7 +448,7 @@ func DecodeTupleValue(colType DataType, data []byte, offset int) (Value, int, er
 			return Value{}, offset, ErrTupleBufferTooShort
 		}
 		end := offset + n + int(binLen)
-		bVal := data[offset+n : end]
+		bVal := append([]byte(nil), data[offset+n:end]...)
 		return BinaryValue(bVal), end, nil
 
 	case TypeDecimal:

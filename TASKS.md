@@ -526,7 +526,7 @@
 | `PENDING` | **`PERF-VDBE-FRAME-SLIM-1`** | `v1.10.0` | Engine | P2 | VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-WAL-ZERO-ALLOC-1`** | `v1.10.0` | Storage | P2 | In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 writeFrame Zero-Alloc | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WIRE-ZEROALLOC-1`** |  | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-WT-ARENA-SLAB-DECODE-1`** | `v0.95.0` | Storage | P2 | WiredTiger sync.Pool/Arena 기반 고정 버퍼 디코딩 및 C.GoBytes 절감 | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
+| `DONE` | **`PERF-WT-ARENA-SLAB-DECODE-1`** | `v0.95.0` | Storage | P2 | WiredTiger sync.Pool/Arena 기반 고정 버퍼 디코딩 및 C.GoBytes 절감 | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WT-INSTANT-ADD-COL-1`** | `1.0-GA` | Storage | P2 | WiredTiger decodeRow 가변 컬럼 기본값 패딩을 통한 Instant ADD COLUMN (O(1) DDL) 지원 (디스크 전수 재작성 제거) | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
 | `PENDING` | **`PERF-WT-OCC-WORKSPACE-BUFFER-1`** | `Post-1.0` | Storage | P2 | WiredTiger In-Memory Private Workspace 버퍼링 (OCC-on-WiredTiger) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WT-READ-CACHE-1`** | `v0.95.0` | Storage | P1 | WiredTiger 트랜잭션 로컬 제로-카피 Read Cache (WTTx.readCache) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
@@ -5113,8 +5113,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] WiredTiger sync.Pool/Arena 기반 고정 버퍼 디코딩 및 C.GoBytes 절감 `PERF-WT-ARENA-SLAB-DECODE-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-23 23:53:35
+### [DONE] WiredTiger sync.Pool/Arena 기반 고정 버퍼 디코딩 및 C.GoBytes 절감 `PERF-WT-ARENA-SLAB-DECODE-1`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-24 00:01:28
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
 

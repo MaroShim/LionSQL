@@ -1319,7 +1319,7 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 		var pData unsafe.Pointer
 		var sz C.size_t
 		if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret == 0 && pData != nil {
-			rec, err := decodeRecord(tbl, C.GoBytes(pData, C.int(sz)))
+			rec, err := decodeRecord(tbl, unsafe.Slice((*byte)(pData), int(sz)))
 			if err != nil {
 				return fmt.Errorf("DropPartition: decode record failed on table %s pk %s: %w", tbl.Name, pkStr, err)
 			}
@@ -1427,7 +1427,7 @@ func (e *Engine) GetPartitions(tableName string) ([]storage.PartitionInfo, error
 		var pData unsafe.Pointer
 		var sz C.size_t
 		if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret == 0 && pData != nil {
-			rec, err := decodeRecord(tbl, C.GoBytes(pData, C.int(sz)))
+			rec, err := decodeRecord(tbl, unsafe.Slice((*byte)(pData), int(sz)))
 			if err == nil {
 				if pKey, err := tbl.ComputePartitionKey(rec); err == nil {
 					partCounts[pKey]++
@@ -1865,7 +1865,7 @@ func removeIndexRange(sess *C.WT_SESSION, idxFileURI, prefix string) error {
 		if kret := C.go_wt_cursor_get_key_raw(cur, &kData, &kSz); kret != 0 || kData == nil {
 			return wtOpError("cursor_get_key during index range removal", int(kret))
 		}
-		if !strings.HasPrefix(string(C.GoBytes(kData, C.int(kSz))), prefix) {
+		if !strings.HasPrefix(string(unsafe.Slice((*byte)(kData), int(kSz))), prefix) {
 			break
 		}
 		if rret := C.go_wt_cursor_remove(cur); rret != 0 {
@@ -1935,7 +1935,7 @@ func buildIndexEntries(sess *C.WT_SESSION, t *storage.TableSchema, index *storag
 		if vret := C.go_wt_cursor_get_val_raw(tblCur, &pData, &sz); vret != 0 || pData == nil {
 			return wtOpError("cursor_get_val during index build", int(vret))
 		}
-		rec, err := decodeRecord(t, C.GoBytes(pData, C.int(sz)))
+		rec, err := decodeRecord(t, unsafe.Slice((*byte)(pData), int(sz)))
 		if err != nil {
 			return fmt.Errorf("index build: decode record pk %s: %w", pkStr, err)
 		}
@@ -2021,10 +2021,10 @@ func migrateLegacyIndex(sess *C.WT_SESSION, t *storage.TableSchema, idx *storage
 			if vret := C.go_wt_cursor_get_val_raw(src, &vData, &vSz); vret != 0 {
 				return true, wtOpError("cursor_get_val during legacy index migration", int(vret))
 			}
-			key := prefix + string(C.GoBytes(kData, C.int(kSz)))
+			key := prefix + string(unsafe.Slice((*byte)(kData), int(kSz)))
 			var val string
 			if vData != nil && vSz > 0 {
-				val = string(C.GoBytes(vData, C.int(vSz)))
+				val = string(unsafe.Slice((*byte)(vData), int(vSz)))
 			}
 			if err := insertIndexEntry(dst, key, val); err != nil {
 				return true, err
@@ -3702,7 +3702,7 @@ func (tx *WTTx) checkUniqueIndexesLocked(tableName string, tbl *storage.TableSch
 			var pValData unsafe.Pointer
 			var valSz C.size_t
 			if vret := C.go_wt_cursor_get_val_raw(cur, &pValData, &valSz); vret == 0 && pValData != nil && valSz > 0 {
-				existingPK := string(C.GoBytes(pValData, C.int(valSz)))
+				existingPK := string(unsafe.Slice((*byte)(pValData), int(valSz)))
 				if existingPK != pkStr {
 					C.go_wt_cursor_reset(cur)
 					tx.sess.releaseCursor(idxURI, cur)
@@ -3750,7 +3750,7 @@ func (tx *WTTx) checkUniqueIndexesFromRowLocked(tableName string, tbl *storage.T
 			var pValData unsafe.Pointer
 			var valSz C.size_t
 			if vret := C.go_wt_cursor_get_val_raw(cur, &pValData, &valSz); vret == 0 && pValData != nil && valSz > 0 {
-				existingPK := string(C.GoBytes(pValData, C.int(valSz)))
+				existingPK := string(unsafe.Slice((*byte)(pValData), int(valSz)))
 				if existingPK != pkStr {
 					C.go_wt_cursor_reset(cur)
 					tx.sess.releaseCursor(idxURI, cur)
@@ -4016,6 +4016,10 @@ func (tx *WTTx) GetRow(tableName string, pk storage.Value) (storage.Row, error) 
 }
 
 func (tx *WTTx) getRawBytesLocked(tableName string, pk storage.Value) ([]byte, error) {
+	return tx.getRawBytesToBufferLocked(tableName, pk, nil)
+}
+
+func (tx *WTTx) getRawBytesToBufferLocked(tableName string, pk storage.Value, targetBuf *[]byte) ([]byte, error) {
 	if tx.closed {
 		return nil, storage.ErrTxClosed
 	}
@@ -4053,10 +4057,17 @@ func (tx *WTTx) getRawBytesLocked(tableName string, pk storage.Value) ([]byte, e
 		}
 		return nil, storage.ErrKeyNotFound
 	}
-	raw := C.GoBytes(pData, C.int(sz))
+	cSlice := unsafe.Slice((*byte)(pData), int(sz))
+	if targetBuf == nil {
+		raw := make([]byte, len(cSlice))
+		copy(raw, cSlice)
+		tx.sess.mu.Unlock()
+		return raw, nil
+	}
+	*targetBuf = append((*targetBuf)[:0], cSlice...)
 	tx.sess.mu.Unlock()
 
-	return raw, nil
+	return *targetBuf, nil
 }
 
 func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, error) {
@@ -4077,7 +4088,10 @@ func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, e
 			}
 		}
 	}
-	rawBytes, err := tx.getRawBytesLocked(tableName, pk)
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+
+	rawBytes, err := tx.getRawBytesToBufferLocked(tableName, pk, bufPtr)
 	if err != nil {
 		return nil, err
 	}
@@ -4109,7 +4123,10 @@ func (tx *WTTx) getRowLocked(tableName string, pk storage.Value) (storage.Row, e
 			}
 		}
 	}
-	rawBytes, err := tx.getRawBytesLocked(tableName, pk)
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+
+	rawBytes, err := tx.getRawBytesToBufferLocked(tableName, pk, bufPtr)
 	if err != nil {
 		return storage.Row{}, err
 	}
@@ -4415,7 +4432,7 @@ func (c *wtIndexBTreeCursor) Next() bool {
 			}
 			return false
 		}
-		keyStr := string(C.GoBytes(pKeyData, C.int(keySz)))
+		keyStr := string(unsafe.Slice((*byte)(pKeyData), int(keySz)))
 
 		// The index file multiplexes every index of the table: stay inside this index's namespace.
 		if !strings.HasPrefix(keyStr, c.prefix) {
@@ -4437,7 +4454,7 @@ func (c *wtIndexBTreeCursor) Next() bool {
 			var valSz C.size_t
 			if vret := C.go_wt_cursor_get_val_raw(c.cur, &pValData, &valSz); vret == 0 && pValData != nil && valSz > 0 {
 				curIndexKey = keyStr
-				curPK = string(C.GoBytes(pValData, C.int(valSz)))
+				curPK = string(unsafe.Slice((*byte)(pValData), int(valSz)))
 			} else {
 				sep := strings.LastIndexByte(keyStr, 0)
 				if sep >= 0 {
@@ -5197,10 +5214,12 @@ func (c *WTCursor) Record() (storage.Record, error) {
 		c.sess.mu.Unlock()
 		return nil, fmt.Errorf("cursor_get_val_raw failed: %d", ret)
 	}
-	raw := C.GoBytes(pData, C.int(sz))
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+	*bufPtr = append((*bufPtr)[:0], unsafe.Slice((*byte)(pData), int(sz))...)
 	c.sess.mu.Unlock()
 
-	return decodeRecord(c.schema, raw)
+	return decodeRecord(c.schema, *bufPtr)
 }
 
 func (c *WTCursor) Row() (storage.Row, error) {
@@ -5224,10 +5243,12 @@ func (c *WTCursor) Row() (storage.Row, error) {
 		c.sess.mu.Unlock()
 		return storage.Row{}, fmt.Errorf("cursor_get_val_raw failed: %d", ret)
 	}
-	raw := C.GoBytes(pData, C.int(sz))
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+	*bufPtr = append((*bufPtr)[:0], unsafe.Slice((*byte)(pData), int(sz))...)
 	c.sess.mu.Unlock()
 
-	return decodeRow(c.schema, raw)
+	return decodeRow(c.schema, *bufPtr)
 }
 
 func (c *WTCursor) RawTuple() ([]byte, bool) {
@@ -5246,7 +5267,10 @@ func (c *WTCursor) RawTuple() ([]byte, bool) {
 		return nil, false
 	}
 
-	return C.GoBytes(pData, C.int(sz)), true
+	cSlice := unsafe.Slice((*byte)(pData), int(sz))
+	res := make([]byte, len(cSlice))
+	copy(res, cSlice)
+	return res, true
 }
 
 func decodeRecord(schema *storage.TableSchema, data []byte) (storage.Record, error) {
