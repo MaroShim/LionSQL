@@ -24,7 +24,7 @@
 | `DONE` | **`ARCH-AST-GUARD-1`** | `v0.94.0` | Engine | P2 | Phase 2 완료 후 go/ast 정적 분석 아키텍처 가드를 통한 엔진 수동 문자열 파싱 재유입 및 Lexer 캡슐화 침해 영구 차단 | [`notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md`](notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-AST-ROUTING-REFACTORING-1`** | `v0.99.0` | Architecture | P2 | 단일 쿼리 및 프로시저 간 AST 정규화 및 파서 라우팅 통합 기초 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`ARCH-CHUNK-COLUMN-VECTORIZED-FORMAT-1`** | `Spec-Out` | Execution | P3 | 청크 기반 컬럼형 벡터 슬라이스 (DataChunk: 1024행 단위 슬라이스) - KISS 원칙상 1.0 배제 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
-| `PENDING` | **`ARCH-COOPERATIVE-INSTRUCTION-CANCELLATION-1`** | `1.0-GA` | Execution | P2 | VDBE/Iterator 협력적 명령어 인터럽트 기반 쿼리 타임아웃/취소 (Cooperative Instruction Cancellation) | [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `DONE` | **`ARCH-COOPERATIVE-INSTRUCTION-CANCELLATION-1`** | `1.0-GA` | Execution | P2 | VDBE/Iterator 협력적 명령어 인터럽트 기반 쿼리 타임아웃/취소 (Cooperative Instruction Cancellation) | [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-DEDICATED-BINDER-CATALOG-RESOLVER-1`** | `v0.95.0` | Architecture | P1 | 전용 바인더 레이어 구축 (Dedicated Binder / Catalog Resolver Pass) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-DUALITY-CROSS-VERIFICATION-1`** | `1.0-GA` | Architecture | P1 | Duality-Driven Cross-Verification Methodology Specification | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`ARCH-EPHEMERAL-SCHEMA-PERSISTENCE-1`** | `v0.94.0` | Storage | P1 | Ephemeral Mode Schema-Only Persistence (SQL Server SCHEMA_ONLY / MySQL MEMORY Parity: Persist DDL Schemas, Indexes & Catalog Objects Across Restarts While Keeping Row Data Ephemeral) | [`notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md`](notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md) |  |
@@ -520,7 +520,7 @@
 | `DONE` | **`PERF-BULK-INSERT-PIPELINE-1`** | `v0.96.0` | Storage | P1 | Bulk Insert 멀티로우 일괄 배치 인덱싱 최적화 | [`--priority`](--priority) |  |
 | `DONE` | **`PERF-CACHE-SHARD-1`** | `v1.10.0` | Engine | P2 | PlanCache 및 세션 레지스트리 32-Shard 분할을 통한 멀티코어 RLock 캐시라인 바운싱 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-CBO-STATS-BOUNDED-1`** | `1.0-GA` | Planner / Storage | P2 | Support atomic live TableRowCount in WiredTiger and enforce 30,000-row bounded Vitter reservoir sampling in AnalyzeTable ([RULE:BoundedBuffers]) | [`notes/plans/CBO_STATS_BOUNDED_AND_LIVE_ROW_COUNT_PLAN.ko.md`](notes/plans/CBO_STATS_BOUNDED_AND_LIVE_ROW_COUNT_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-COMPLEX-QUERY-2`** | `v0.99.0` | Engine | P2 | Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
+| `DONE` | **`PERF-COMPLEX-QUERY-2`** | `v0.99.0` | Engine | P2 | Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) | [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md) |  |
 | `DONE` | **`PERF-COMPLEX-QUERY-COLUMNAR`** |  | Architecture | P3 | 순수 Columnar Vectorization 전면 재작성 영구 기각 (Spec-Out) | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`PERF-CTE-EPHEMERAL-1`** |  | Durability | P2 | 세션 로컬 에페머럴 CTE 버퍼 및 Zero-DDL 최적화 | [`notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md`](notes/plans/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md) |  |
 | `DONE` | **`PERF-CTE-LOWERING-VDBE-1`** |  | Durability | P2 | Writable CTE Stored Procedure 바이트코드 Lowering 가속 | [`notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/plans/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md) |  |
@@ -763,8 +763,8 @@
 
 ---
 
-### [PENDING] VDBE/Iterator 협력적 명령어 인터럽트 기반 쿼리 타임아웃/취소 (Cooperative Instruction Cancellation) `ARCH-COOPERATIVE-INSTRUCTION-CANCELLATION-1`
-- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-24 08:17:02
+### [DONE] VDBE/Iterator 협력적 명령어 인터럽트 기반 쿼리 타임아웃/취소 (Cooperative Instruction Cancellation) `ARCH-COOPERATIVE-INSTRUCTION-CANCELLATION-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-24 10:37:43
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
 
@@ -5064,8 +5064,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) `PERF-COMPLEX-QUERY-2`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-23 14:56:08
+### [DONE] Open-Addressing 정수 플랫 해시 조인 (Flat Hash Join) `PERF-COMPLEX-QUERY-2`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-24 10:34:58
 - **Milestone**: `v0.99.0`
 - **Plan Doc**: [`notes/POST_1.0_CANDIDATES.ko.md`](notes/POST_1.0_CANDIDATES.ko.md)
 
