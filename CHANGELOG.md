@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- add template-based random generative fuzz test suites for DML constraints and 2-tier parser boundary fail-closed validation (`fuzz_dml_constraint_negative_test.go`, `fuzz_two_tier_boundary_test.go`)
 - update `BENCHMARK.md` and `DATA_IMPORT_AND_MIGRATION.md` (and their Korean counterparts) with comprehensive bulk data ingestion benchmarks (244k rows/sec) and migration guides for PGWire `COPY`, TDS `BCP`, and multi-row `INSERT`
 - support high-throughput PGWire `COPY FROM STDIN` and `COPY TO STDOUT` streaming with chunked `BatchInsert` pipeline (`FEAT-WIRE-PG-COPY-STREAM-1`)
 - support TDS 0x07 BCP (Bulk Load Protocol) binary row stream ingestion and `INSERT BULK` protocol negotiation (`FEAT-WIRE-TDS-BCP-BULK-LOAD-1`)
@@ -38,6 +39,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - accelerate GROUP BY and JOIN memory paths via uint64 FNV-1a integer slot hashing, sync.Pool buffer recycling, pre-resolved column indices, and direct tuple materialization, achieving 97.3% memory reduction and 99.6% allocation drop per tuple (`PERF-GROUPBY-SLOT-HASH-1`)
 
 ### Fixed
+- reject INSERT with column count mismatch against target columns or schema with SQLSTATE 42601 (`BUG-DML-INSERT-COLUMN-COUNT-MISMATCH-1`)
+- reject unqualified ambiguous column references in JOIN projections and WHERE clauses with SQLSTATE 42702 (`BUG-JOIN-AMBIGUOUS-COLUMN-VALIDATION-1`)
+- reject non-existent column references on RHS of UPDATE SET with SQLSTATE 42703 preventing silent NULL corruption (`BUG-DML-UPDATE-NON-EXISTENT-COLUMN-1`)
+- require aliases for derived subqueries in FROM and JOIN clauses with SQLSTATE 42601 (`FEAT-FROM-DERIVED-TABLE-ALIAS-REQUIRED-1`)
+- reject omission of NOT NULL columns without DEFAULT in INSERT with SQLSTATE 23502 (`BUG-DML-INSERT-NOT-NULL-OMISSION-1`)
+- enforce fail-closed validation for invalid date literals in INSERT with SQLSTATE 22008 and 22007 (`BUG-DATE-LITERAL-VALIDATION-FAIL-CLOSED-1`)
+- bind session context to evaluate WHERE EXISTS subqueries in scalar table-less SELECT queries (`BUG-EXISTS-SUBQUERY-SCALAR-WHERE-EVAL-1`)
+- raise division by zero error for MOD(x, 0) with SQLSTATE 22012 (`BUG-MATH-MOD-ZERO-DIVISION-ERROR-1`)
+- reject empty projection SELECT lists with syntax error across Pratt parser
 - enforce strict fail-closed semantic validation for unaggregated columns without GROUP BY (SQLSTATE 42803), constant grouping in GROUP BY, and multi-column subqueries in IN expressions (SQLSTATE 42601) (`FEAT-SQL-SEMANTIC-VALIDATION-FAIL-CLOSED-1`)
 - propagate subquery execution errors in projection scalar subqueries instead of silently swallowing errors and falling back to NULL (`BUG-SUBQUERY-PROJ-ERROR-PROPAGATION-1`)
 - expand computed column dependencies in projection pushdown and evaluate computed columns dynamically in `FormatRowWithSelectedCols`

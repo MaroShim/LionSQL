@@ -94,6 +94,50 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		}
 	}
 
+	var allVolcanoSchemas []*storage.TableSchema
+	if leftSchema != nil {
+		allVolcanoSchemas = append(allVolcanoSchemas, leftSchema)
+	}
+	for _, j := range joins {
+		if rSchema := rightSchemas[j.Table]; rSchema != nil {
+			allVolcanoSchemas = append(allVolcanoSchemas, rSchema)
+		}
+	}
+	if len(allVolcanoSchemas) > 1 {
+		for _, proj := range qInfo.Projections {
+			projTrim := strings.TrimSpace(proj)
+			if projTrim == "*" || strings.HasSuffix(projTrim, ".*") {
+				continue
+			}
+			exprPart := projTrim
+			if asIdx := sqlutil.FindTopLevelKeyword(projTrim, "AS"); asIdx != -1 {
+				exprPart = strings.TrimSpace(projTrim[:asIdx])
+			}
+			for _, ref := range planner.ExtractColumnRefs(exprPart) {
+				if ref.TableOrAlias == "" {
+					matches := 0
+					seenTables := make(map[string]bool)
+					for _, sch := range allVolcanoSchemas {
+						if sch != nil && !seenTables[strings.ToLower(sch.Name)] {
+							seenTables[strings.ToLower(sch.Name)] = true
+							if _, _, ok := sch.FindColumn(ref.Column); ok {
+								matches++
+							}
+						}
+					}
+					if matches > 1 {
+						return nil, fmt.Errorf("column reference %q is ambiguous", ref.Column)
+					}
+				}
+			}
+		}
+	}
+	if qInfo.WhereClause != "" {
+		if err := ValidateWhereClauseWithSchemas(qInfo.WhereClause, allVolcanoSchemas...); err != nil {
+			return nil, err
+		}
+	}
+
 	var tx storage.Transaction
 	if cs != nil && cs.Tx() != nil {
 		tx = wrapSessionTx(cs, cs.Tx())
@@ -1172,6 +1216,12 @@ func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, s
 	p := proc.NewParser(proc.NewLexer(trimmed))
 	astExpr := p.ParseExpr()
 	if astExpr != nil && len(p.Errors()) == 0 {
+		for p.CurrentToken().Type == proc.TokenSemicolon {
+			p.NextToken()
+		}
+		if p.CurrentToken().Type != proc.TokenEOF {
+			return fmt.Errorf("syntax error: unexpected trailing token %q", p.CurrentToken().Literal), trimmed
+		}
 		var varRow map[string]any
 		if cs != nil {
 			cs.Mu.Lock()
@@ -1370,6 +1420,12 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 			if ast == nil {
 				return nil, fmt.Errorf("syntax error: invalid projection expression: %s", exprStr)
 			}
+			for p.CurrentToken().Type == proc.TokenSemicolon {
+				p.NextToken()
+			}
+			if p.CurrentToken().Type != proc.TokenEOF {
+				return nil, fmt.Errorf("syntax error: unexpected trailing token %q in expression %q", p.CurrentToken().Literal, exprStr)
+			}
 			if ast != nil {
 				if fn, ok := ast.(*proc.FunctionCallExpr); ok && !proc.IsBuiltinFunction(fn.Name) {
 					return nil, fmt.Errorf("unknown scalar function or invalid expression: %s", exprStr)
@@ -1417,6 +1473,9 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 	}
 
 	if whereClause != "" {
+		if resolved, err := s.resolveSubqueriesWithSession(whereClause, cs); err == nil && resolved != whereClause {
+			whereClause = resolved
+		}
 		p := proc.NewParser(proc.NewLexer(whereClause))
 		expr := p.ParseExpr()
 		if expr != nil && len(p.Errors()) == 0 {
@@ -2289,6 +2348,36 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 			}
 		}
 
+		if len(schemas) > 1 {
+			for _, proj := range qInfo.Projections {
+				projTrim := strings.TrimSpace(proj)
+				if projTrim == "*" || strings.HasSuffix(projTrim, ".*") {
+					continue
+				}
+				exprPart := projTrim
+				if asIdx := sqlutil.FindTopLevelKeyword(projTrim, "AS"); asIdx != -1 {
+					exprPart = strings.TrimSpace(projTrim[:asIdx])
+				}
+				for _, ref := range planner.ExtractColumnRefs(exprPart) {
+					if ref.TableOrAlias == "" {
+						matches := 0
+						seenTables := make(map[string]bool)
+						for _, sch := range schemas {
+							if sch != nil && !seenTables[strings.ToLower(sch.Name)] {
+								seenTables[strings.ToLower(sch.Name)] = true
+								if _, _, ok := sch.FindColumn(ref.Column); ok {
+									matches++
+								}
+							}
+						}
+						if matches > 1 {
+							return nil, fmt.Errorf("column reference %q is ambiguous", ref.Column)
+						}
+					}
+				}
+			}
+		}
+
 		if qInfo.WhereClause != "" {
 			if err := ValidateWhereClauseWithSchemas(qInfo.WhereClause, schemas...); err != nil {
 				return nil, err
@@ -2311,13 +2400,13 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		}
 		for _, j := range qInfo.Joins {
 			if j.Filter != "" {
-				if err := ValidateWhereClause(j.Filter); err != nil {
+				if err := ValidateWhereClauseWithSchemas(j.Filter, schemas...); err != nil {
 					return nil, err
 				}
 			}
 		}
 		if qInfo.Join != nil && qInfo.Join.Filter != "" {
-			if err := ValidateWhereClause(qInfo.Join.Filter); err != nil {
+			if err := ValidateWhereClauseWithSchemas(qInfo.Join.Filter, schemas...); err != nil {
 				return nil, err
 			}
 		}

@@ -47,6 +47,12 @@ func evalMathBuiltinWithErr(upper string, args []storage.Value) (storage.Value, 
 				return storage.NullValue(storage.TypeFloat), fmt.Errorf("Msg 3623, Level 16, State 1: An invalid floating point operation occurred.")
 			}
 		}
+	case "MOD":
+		if len(args) >= 2 && !args[1].IsNull {
+			if n, ok := toFloatNum(args[1]); ok && n == 0 {
+				return storage.NullValue(storage.TypeInt), fmt.Errorf("division by zero: divide by zero error encountered (%w)", storage.ErrDivisionByZero)
+			}
+		}
 	}
 	return evalMathBuiltin(upper, args), nil
 }

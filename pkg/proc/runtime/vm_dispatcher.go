@@ -1361,6 +1361,23 @@ vmLoop:
 			}
 		}
 
+		if len(cols) > 0 {
+			if len(data.ValExprs) > len(cols) {
+				err := fmt.Errorf("INSERT has more expressions than target columns")
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
+			}
+			if len(data.ValExprs) < len(cols) {
+				err := fmt.Errorf("INSERT has more target columns than expressions")
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
+			}
+		}
+
 		// Fast-path Direct Row Insert: bypass Record map allocations when schema matches and no triggers exist
 		canDirectInsert := !isTransientTable(targetTable) && tableSchema != nil && !tableSchema.HasCheckConstraints() && !hasTriggers && len(cols) == len(tableSchema.Columns) && len(data.ValExprs) == len(tableSchema.Columns) && identityCol == nil && (len(data.OutputCols) == 0 || len(data.IntoVars) > 0 || data.IntoTable != "")
 		if canDirectInsert {
@@ -1393,6 +1410,13 @@ vmLoop:
 				if !stVal.IsNull && colSchema.Type != stVal.Type {
 					if colSchema.Type == storage.TypeDecimal && stVal.Type == storage.TypeFloat && colSchema.Scale >= 0 {
 						stVal = proc.ParseLiteralDefault(strconv.FormatFloat(stVal.FVal, 'f', colSchema.Scale, 64), colSchema.Type)
+					} else if colSchema.Type == storage.TypeDate {
+						dVal, dErr := storage.DateValueFromAnyStrict(stVal)
+						if dErr != nil {
+							notNullErr = dErr
+							break
+						}
+						stVal = dVal
 					} else {
 						stVal = proc.ParseLiteralDefault(stVal.String(), colSchema.Type)
 					}
@@ -1470,6 +1494,15 @@ vmLoop:
 						if !isDefaultKw && colSchema.Type != stVal.Type {
 							if colSchema.Type == storage.TypeDecimal && stVal.Type == storage.TypeFloat && colSchema.Scale >= 0 {
 								stVal = proc.ParseLiteralDefault(strconv.FormatFloat(stVal.FVal, 'f', colSchema.Scale, 64), colSchema.Type)
+							} else if colSchema.Type == storage.TypeDate {
+								dVal, dErr := storage.DateValueFromAnyStrict(stVal)
+								if dErr != nil {
+									if catchErr := f.handleCatch(dErr, &pc); catchErr != nil {
+										return nil, catchErr
+									}
+									continue vmLoop
+								}
+								stVal = dVal
 							} else {
 								stVal = proc.ParseLiteralDefault(stVal.String(), colSchema.Type)
 							}
@@ -1489,8 +1522,16 @@ vmLoop:
 
 		if tableSchema != nil {
 			for _, col := range tableSchema.Columns {
-				if _, exists := rec[col.Name]; !exists && col.Default != "" {
-					rec[col.Name] = proc.ParseLiteralDefault(col.Default, col.Type)
+				if _, exists := rec[col.Name]; !exists {
+					if col.Default != "" {
+						rec[col.Name] = proc.ParseLiteralDefault(col.Default, col.Type)
+					} else if !col.Nullable && !col.Identity && !col.Hidden && !col.IsRowVersion && !col.HasComputedExpr() {
+						err := fmt.Errorf("null value in column %q of relation %q violates not-null constraint (%w)", col.Name, targetTable, storage.ErrNotNullViolation)
+						if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+							return nil, catchErr
+						}
+						continue vmLoop
+					}
 				}
 			}
 		}
@@ -1626,6 +1667,12 @@ vmLoop:
 			for _, a := range data.Assignments {
 				if _, _, ok := tableSchema.FindColumn(a.Column); !ok {
 					if catchErr := f.handleCatch(fmt.Errorf("column %q does not exist in table %q", a.Column, targetTable), &pc); catchErr != nil {
+						return nil, catchErr
+					}
+					continue vmLoop
+				}
+				if err := f.validateExprCols(a.Value, tableSchema); err != nil {
+					if catchErr := f.handleCatch(err, &pc); catchErr != nil {
 						return nil, catchErr
 					}
 					continue vmLoop

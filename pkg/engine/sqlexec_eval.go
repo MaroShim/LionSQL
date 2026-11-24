@@ -189,20 +189,51 @@ func ValidateWhereClauseWithSchemas(whereStr string, schemas ...*storage.TableSc
 			switch node := e.(type) {
 			case *proc.ColumnRefExpr:
 				colName := cleanIdentifier(node.Name)
+				tblPrefix := ""
 				if dotIdx := strings.Index(colName, "."); dotIdx != -1 {
+					tblPrefix = colName[:dotIdx]
 					colName = colName[dotIdx+1:]
 				}
-				found := false
-				for _, sch := range schemas {
-					if sch != nil {
-						if _, _, ok := sch.FindColumn(colName); ok {
-							found = true
-							break
+				if tblPrefix == "" {
+					matches := 0
+					seenTables := make(map[string]bool)
+					for _, sch := range schemas {
+						if sch != nil && !seenTables[strings.ToLower(sch.Name)] {
+							seenTables[strings.ToLower(sch.Name)] = true
+							if _, _, ok := sch.FindColumn(colName); ok {
+								matches++
+							}
 						}
 					}
-				}
-				if !found && !proc.IsBuiltinFunction(node.Name) && !strings.HasPrefix(node.Name, "@") {
-					return fmt.Errorf("column %q does not exist", node.Name)
+					if matches > 1 {
+						return fmt.Errorf("column reference %q is ambiguous", node.Name)
+					}
+					if matches == 0 && len(schemas) > 0 && !proc.IsBuiltinFunction(node.Name) && !strings.HasPrefix(node.Name, "@") {
+						return fmt.Errorf("column %q does not exist", node.Name)
+					}
+				} else {
+					found := false
+					for _, sch := range schemas {
+						if sch != nil && (strings.EqualFold(sch.Name, tblPrefix) || strings.EqualFold(cleanIdentifier(sch.Name), tblPrefix)) {
+							if _, _, ok := sch.FindColumn(colName); ok {
+								found = true
+								break
+							}
+						}
+					}
+					if !found {
+						for _, sch := range schemas {
+							if sch != nil {
+								if _, _, ok := sch.FindColumn(colName); ok {
+									found = true
+									break
+								}
+							}
+						}
+					}
+					if !found && !proc.IsBuiltinFunction(node.Name) && !strings.HasPrefix(node.Name, "@") {
+						return fmt.Errorf("column %q does not exist", node.Name)
+					}
 				}
 			case *proc.BinaryExpr:
 				if err := checkColumns(node.Left); err != nil {

@@ -672,6 +672,10 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			hasNonAssign = true
 		}
 	}
+	if len(stmt.Projections) == 0 {
+		return nil, fmt.Errorf("syntax error: SELECT list cannot be empty")
+	}
+
 	if hasAssign && hasNonAssign {
 		return nil, fmt.Errorf("Msg 141, Level 15, State 1: A SELECT statement that assigns a value to a variable must not be combined with data-retrieval operations.")
 	}
@@ -728,6 +732,9 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) && !isSetOpIdent(p.curToken) {
 				alias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
+			}
+			if alias == "" {
+				return nil, fmt.Errorf("subquery in FROM must have an alias")
 			}
 			colAliases := p.parseColumnAliasList()
 			fromHints := p.parseTableHints()
@@ -975,6 +982,9 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					p.nextToken()
 				}
 			}
+			if !isApply && jAlias == "" {
+				return nil, fmt.Errorf("subquery in FROM must have an alias")
+			}
 			colAliases := p.parseColumnAliasList()
 			jHints := p.parseTableHints()
 
@@ -1054,6 +1064,9 @@ func (p *Parser) parseGeneralSelectClauses(stmt *GeneralSelectStmt) (*GeneralSel
 					jAlias = cleanSchemaPrefix(p.curToken.Literal)
 					p.nextToken()
 				}
+			}
+			if !isApply && jAlias == "" {
+				return nil, fmt.Errorf("subquery in FROM must have an alias")
 			}
 			colAliases := p.parseColumnAliasList()
 			jHints := p.parseTableHints()
@@ -1535,6 +1548,18 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 			return nil, fmt.Errorf("expected ) closing VALUES tuple")
 		}
 		p.nextToken() // eat )
+
+		if len(cols) > 0 {
+			if len(vals) > len(cols) {
+				return nil, fmt.Errorf("INSERT has more expressions than target columns")
+			}
+			if len(vals) < len(cols) {
+				return nil, fmt.Errorf("INSERT has more target columns than expressions")
+			}
+		} else if len(tuples) > 0 && len(vals) != len(tuples[0]) {
+			return nil, fmt.Errorf("VALUES lists must all be the same length")
+		}
+
 		tuples = append(tuples, vals)
 
 		if p.curTokenIs(TokenComma) {

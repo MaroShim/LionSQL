@@ -109,6 +109,7 @@
 | `DONE` | **`BUG-COPY-DELIM-1`** |  | Integrity | P2 | COPY FROM DELIMITER 후속 옵션 따옴표 변조 방지 (Copy Delimiter Bug) |  |  |
 | `DONE` | **`BUG-COPY-PK-1`** |  | Integrity | P2 | COPY FROM 정수 PK 0 보존 (Copy PK Zero Bug) |  |  |
 | `DONE` | **`BUG-CTE-MATERIALIZE-1`** |  | Integrity | P2 | CTE 임의 PK 강제 및 VARCHAR 타입 파괴 해결 (CTE Materialize Bug) |  |  |
+| `DONE` | **`BUG-DATE-LITERAL-VALIDATION-FAIL-CLOSED-1`** | `--priority` | DATE 타입 유효하지 않은 날짜 문자열 입력 시 Fail-Closed 차단 (SQLSTATE 22008/22007) | P2 | --title | [`Engine`](Engine) |  |
 | `DONE` | **`BUG-DATE-TODATETIMEOFFSET-INT-MINS-1`** |  | Integrity | P2 | TODATETIMEOFFSET 정수 분 단위 오프셋 시간 오해석 방지 (ToDateTimeOffset Mins Bug) |  |  |
 | `DONE` | **`BUG-DATEADD-NULL-1`** |  | Integrity | P2 | DATEADD/EOMONTH 증분 NULL 시 NULL 정규 반환 (DateAdd NULL Bug) |  |  |
 | `DONE` | **`BUG-DDL-COMPOSITE-PK-PARSE-1`** |  | Integrity | P2 | CREATE TABLE 복합 기본키 콤마 분해 및 스키마 보존 (DDL Composite PK Bug) |  |  |
@@ -117,8 +118,11 @@
 | `DONE` | **`BUG-DECORRELATE-TRIM-1`** |  | Integrity | P2 | 비상관화 and 접미 단순 Trim 결함 해결 (Decorrelate Trim Bug) |  |  |
 | `DONE` | **`BUG-DERIVED-TABLE-PK-GUESS-EMPTY-1`** |  | Integrity | P2 | 0건 파생테이블 Columns[0] 임의 PK 지정 및 제약 파괴 방지 (Derived Table PK Bug) |  |  |
 | `DONE` | **`BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1`** |  | Integrity | P2 | 코디네이터 UPDATE 산술식 미지원 및 0값/타입변조 방지 (Eval Update Arith Bug) |  |  |
+| `DONE` | **`BUG-DML-INSERT-COLUMN-COUNT-MISMATCH-1`** | `--priority` | INSERT 타겟 컬럼 수와 VALUES 값 개수 불일치 Fail-Closed 차단 | P2 | --title | [`Engine`](Engine) |  |
+| `DONE` | **`BUG-DML-INSERT-NOT-NULL-OMISSION-1`** | `--priority` | INSERT 시 DEFAULT 없는 NOT NULL 컬럼 생략 시 NULL 삽입 차단 (SQLSTATE 23502) | P2 | --title | [`Engine`](Engine) |  |
 | `DONE` | **`BUG-DML-PK-RANDOM-1`** |  | Integrity | P2 | 비-id PK 테이블 DML 시 무작위 컬럼 PK 간주 해결 (DML Random PK Bug) |  |  |
 | `DONE` | **`BUG-DML-PK-RANDOM-GUESS-1`** |  | Integrity | P2 | DML/DDL PK 식별 실패 시 임의 순회 행 훼손 방지 (DML PK Guess Bug) |  |  |
+| `DONE` | **`BUG-DML-UPDATE-NON-EXISTENT-COLUMN-1`** | `--priority` | UPDATE SET 우변 미존재 유령 컬럼 참조 차단 및 NULL 오염 방지 (SQLSTATE 42703) | P2 | --title | [`Engine`](Engine) |  |
 | `DONE` | **`BUG-DROP-INDEX-CASE-1`** |  | Integrity | P2 | DropIndex 대소문자 정규화 및 좀비 인덱스 방지 (Drop Index Case Bug) |  |  |
 | `DONE` | **`BUG-EVAL-IN-COMMA-SPLIT-1`** |  | Integrity | P2 | WHERE IN 절 문자열 리터럴 쉼표 오절단 방지 (Eval IN Comma Bug) |  |  |
 | `DONE` | **`BUG-EVAL-NEQ-NULL-1`** |  | Integrity | P2 | evalRowBinaryOp 불일치 비교 NULL 3가 논리 보장 (Eval NEQ NULL Bug) |  |  |
@@ -126,6 +130,7 @@
 | `DONE` | **`BUG-EXEC-BUILDER-JOIN-COND-SPLIT-1`** |  | Integrity | P2 | 복합 조인 조건 '=' 분해 파괴 및 무제한 카테시안 곱 왜곡 방지 (Join Cond Split Bug) |  |  |
 | `DONE` | **`BUG-EXEC-JOIN-STR-CASE-1`** |  | Integrity | P2 | HashJoin/MergeJoin 문자열 조인 키 대소문자 무관 매칭 보장 (Join Str Case Bug) |  |  |
 | `DONE` | **`BUG-EXEC-PROC-TX-BYPASS-1`** |  | Integrity | P2 | EXEC 프로시저 호출 시 외부 트랜잭션 세션 우회 및 독립 자동 커밋 방지 (Exec Proc Tx Bypass Bug) |  |  |
+| `DONE` | **`BUG-EXISTS-SUBQUERY-SCALAR-WHERE-EVAL-1`** | `--priority` | FROM 없는 스칼라 WHERE EXISTS 서브쿼리 참/거짓 평가 정합성 수정 | P2 | --title | [`Engine`](Engine) |  |
 | `DONE` | **`BUG-EXP-1`** |  | Integrity | P2 | EXPLAIN 서브쿼리 무작위 치환 방지 (Explain Bug) |  |  |
 | `DONE` | **`BUG-FK-CASE-1`** |  | Integrity | P2 | 외래키 부모 컬럼 대소문자 정규화 (FK Case Bug) |  |  |
 | `DONE` | **`BUG-FK-CHILD-CASE-1`** |  | Integrity | P2 | 외래키 자식 컬럼 대소문자 정규화 (FK Child Case Bug) |  |  |
@@ -134,8 +139,10 @@
 | `DONE` | **`BUG-HTTP-TABLE-PK-1`** |  | Integrity | P2 | HTTP API 테이블 생성 시 임의 PK 승격 제거 (HTTP Table PK Bug) |  |  |
 | `DONE` | **`BUG-INDEX-KEY-CASE-1`** |  | Integrity | P2 | 세컨더리 인덱스 키 추출 대소문자 정규화 (Index Key Case Bug) |  |  |
 | `DONE` | **`BUG-INDEX-SCAN-ORDERBY-1`** |  | Integrity | P2 | 인덱스 스캔 다중 정렬 무시 및 정렬 누락 방지 (Index Scan Order By Bug) |  |  |
+| `DONE` | **`BUG-JOIN-AMBIGUOUS-COLUMN-VALIDATION-1`** | `--priority` | JOIN 프로젝션 및 WHERE 절 모호한 컬럼(Ambiguous Column) 참조 차단 (SQLSTATE 42702) | P2 | --title | [`Engine`](Engine) |  |
 | `DONE` | **`BUG-JOIN-IDX-1`** |  | Integrity | P2 | 조인 인덱스 임의 선택 방지 (Join Index Guess Bug) |  |  |
 | `DONE` | **`BUG-JOIN-PARSE-1`** |  | Integrity | P2 | 조인 조건 단순 Split 파싱 결함 수정 (Join Parse Bug) |  |  |
+| `DONE` | **`BUG-MATH-MOD-ZERO-DIVISION-ERROR-1`** | `--priority` | MOD(x, 0) 제로 나눗셈 발생 시 division by zero 에러 발생 (SQLSTATE 22012) | P2 | --title | [`Engine`](Engine) |  |
 | `DONE` | **`BUG-MEM-INDEX-LOCAL-ORDER-1`** |  | Integrity | P2 | MemEngine 로컬 삽입 행 인덱스 정렬 보장 (MemEngine Index Order Bug) |  |  |
 | `DONE` | **`BUG-MEM-SHARD-INIT-RACE-1`** |  | Integrity | P2 | TableData 샤드 지연 초기화 동시성 경쟁 런타임 패닉 방지 (MemEngine Shard Init Race Bug) |  |  |
 | `DONE` | **`BUG-MEM-SKIPLIST-UNIQUE-INCLUDE-COPY-1`** |  | Integrity | P2 | SkipList 유니크 인덱스 재인덱싱 시 커버링 컬럼 복사본 갱신 방지 (SkipList Unique Include Bug) |  |  |
@@ -259,6 +266,7 @@
 | `DONE` | **`FEAT-DATABASE-MAIL-EXTERNAL-WORKER-1`** | `1.0-GA` | Mail | P2 | SQL Server DatabaseMail 외부 워커 프로세스 분리 및 sp_send_dbmail 지원 | [`notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md`](notes/DATABASE_MAIL_EXTERNAL_WORKER_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-DATADIR-ENGINE-MANIFEST-1`** | `1.0-GA` | Storage | P1 | 데이터 폴더 초기화 시 엔진 매니페스트(lionsql.engine.json: wiredtiger/compact, 코덱 버전) 원자적 기록, 재기동 시 자동 감지 및 이종 엔진 명시 시 Fail-Closed 차단 | [`1.0-GA`](1.0-GA) |  |
 | `DONE` | **`FEAT-DUAL-AI-AUDIT-PIPELINE-1`** | `1.0-GA` | Durability | P1 | Dual-AI (Antigravity & Claude) Pre-Release Audit Pipeline Automation: scripts/audit_diff.sh and scripts/release.sh Gate 0 integration | [`notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`](notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-FROM-DERIVED-TABLE-ALIAS-REQUIRED-1`** | `--priority` | FROM 파생 테이블(Subquery) 필수 별칭(Alias) 강제 (SQLSTATE 42601) | P2 | --title | [`Engine`](Engine) |  |
 | `PENDING` | **`FEAT-MATVIEW-ALIAS-1`** | `v1.20.0` | FEAT | P2 | Materialized View Virtual Alias & Tolerant Refresh (Mattermost/Enterprise) | [`notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md`](notes/plans/MATERIALIZED_VIEW_VIRTUAL_ALIAS_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-OPENJSON-TVF-1`** | `v0.94.0` | Engine | P2 | T-SQL OPENJSON Table-Valued Function (TVF) 파싱 및 가상 테이블 스캔 엔진 구현 | [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-AGG-FILTER-CLAUSE-1`** | `v1.1.0` | Engine | P2 | 집계 함수 FILTER (WHERE ...) 구문 지원 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
@@ -1586,6 +1594,13 @@ PGWire `COPY FROM` 시 정수 기본키 `0`을 미지정으로 오해하여 Unix
 
 ---
 
+### [DONE] --title `BUG-DATE-LITERAL-VALIDATION-FAIL-CLOSED-1`
+- **Domain**: DATE 타입 유효하지 않은 날짜 문자열 입력 시 Fail-Closed 차단 (SQLSTATE 22008/22007) | **Priority**: P2 | **Updated**: 2026-11-24 07:43:16
+- **Milestone**: `--priority`
+- **Plan Doc**: [`Engine`](Engine)
+
+---
+
 ### [DONE] TODATETIMEOFFSET 정수 분 단위 오프셋 시간 오해석 방지 (ToDateTimeOffset Mins Bug) `BUG-DATE-TODATETIMEOFFSET-INT-MINS-1`
 - **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Target Files**: ``pkg/proc/builtins_date.go:441-458, 733``
@@ -1682,6 +1697,20 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 
 ---
 
+### [DONE] --title `BUG-DML-INSERT-COLUMN-COUNT-MISMATCH-1`
+- **Domain**: INSERT 타겟 컬럼 수와 VALUES 값 개수 불일치 Fail-Closed 차단 | **Priority**: P2 | **Updated**: 2026-11-24 07:43:16
+- **Milestone**: `--priority`
+- **Plan Doc**: [`Engine`](Engine)
+
+---
+
+### [DONE] --title `BUG-DML-INSERT-NOT-NULL-OMISSION-1`
+- **Domain**: INSERT 시 DEFAULT 없는 NOT NULL 컬럼 생략 시 NULL 삽입 차단 (SQLSTATE 23502) | **Priority**: P2 | **Updated**: 2026-11-24 07:43:16
+- **Milestone**: `--priority`
+- **Plan Doc**: [`Engine`](Engine)
+
+---
+
 ### [DONE] 비-id PK 테이블 DML 시 무작위 컬럼 PK 간주 해결 (DML Random PK Bug) `BUG-DML-PK-RANDOM-1`
 - **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Target Files**: ``pkg/engine/sqlexec_dml.go:1071-1078, 1228-1235``
@@ -1703,6 +1732,13 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 
 - VDBE(`execUpdateWhere`, `execDeleteWhere`), 코디네이터(`execUpdate`, `execDelete`), DDL(`TRUNCATE TABLE`)에서 대상 행의 PK를 식별하지 못할 때 `row.Values[0]`으로 임의 추측하거나 Go 맵의 `for _, v := range rec { pkVal = v; break }` 무작위 순회로 첫 번째 컬럼 값을 PK로 임의 간주하여 무관한 엉뚱한 행을 갱신/삭제/트렁케이트하던 치명적 무결성 결함.
 - 임의 컬럼 추측 및 무작위 Go 맵 순회를 완전 삭제하고, 스키마 공식 기본키(`schema.PrimaryKeyColumn()`)를 엄격 조회하며 미지정 시 에러를 반환하도록 정규화.
+
+---
+
+### [DONE] --title `BUG-DML-UPDATE-NON-EXISTENT-COLUMN-1`
+- **Domain**: UPDATE SET 우변 미존재 유령 컬럼 참조 차단 및 NULL 오염 방지 (SQLSTATE 42703) | **Priority**: P2 | **Updated**: 2026-11-24 07:43:16
+- **Milestone**: `--priority`
+- **Plan Doc**: [`Engine`](Engine)
 
 ---
 
@@ -1779,6 +1815,13 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 
 - `execProcedureCall`(`EXEC procName @args`) 실행 시 활성 클라이언트 세션의 트랜잭션(`cs.Tx`)을 확인하지 않고 무조건 `s.engine.NewSession()`으로 독립 스토리지를 생성하여 프로시저를 실행함으로써, 선행 트랜잭션 변경사항을 읽지 못하고 프로시저 수정분이 즉시 자동 커밋되어 외부 `ROLLBACK`이 무력화되던 트랜잭션 원자성 파괴 결함.
 - `cs.Tx` 존재 시 `ExecuteInTxContext`를 통해 상위 활성 트랜잭션을 공유 바인딩하여 트랜잭션 일관성 보장.
+
+---
+
+### [DONE] --title `BUG-EXISTS-SUBQUERY-SCALAR-WHERE-EVAL-1`
+- **Domain**: FROM 없는 스칼라 WHERE EXISTS 서브쿼리 참/거짓 평가 정합성 수정 | **Priority**: P2 | **Updated**: 2026-11-24 07:43:16
+- **Milestone**: `--priority`
+- **Plan Doc**: [`Engine`](Engine)
 
 ---
 
@@ -1878,6 +1921,13 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 
 ---
 
+### [DONE] --title `BUG-JOIN-AMBIGUOUS-COLUMN-VALIDATION-1`
+- **Domain**: JOIN 프로젝션 및 WHERE 절 모호한 컬럼(Ambiguous Column) 참조 차단 (SQLSTATE 42702) | **Priority**: P2 | **Updated**: 2026-11-24 07:43:17
+- **Milestone**: `--priority`
+- **Plan Doc**: [`Engine`](Engine)
+
+---
+
 ### [DONE] 조인 인덱스 임의 선택 방지 (Join Index Guess Bug) `BUG-JOIN-IDX-1`
 - **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Target Files**: ``pkg/execution/builder.go:256``
@@ -1899,6 +1949,13 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 
 - `strings.Split(cond, "=")`로 다중 조건(`a = b AND c = d`) 분해 실패 시 `"", ""`를 반환하여 빈 컬럼명 `" ASC"` 소트 이터레이터를 생성하고, PGWire에서 `strings.Split(upper, "FROM")`로 `valid_from` 컬럼명 등에서 조기 분리되어 테이블명 조회가 파괴되던 결함.
 - 조인 조건 AST 분해 및 PGWire 쿼리 키워드 경계 정규식 기반 정합 분해.
+
+---
+
+### [DONE] --title `BUG-MATH-MOD-ZERO-DIVISION-ERROR-1`
+- **Domain**: MOD(x, 0) 제로 나눗셈 발생 시 division by zero 에러 발생 (SQLSTATE 22012) | **Priority**: P2 | **Updated**: 2026-11-24 07:43:17
+- **Milestone**: `--priority`
+- **Plan Doc**: [`Engine`](Engine)
 
 ---
 
@@ -3154,6 +3211,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Durability | **Priority**: P1 | **Updated**: 2026-11-16 14:21:01
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md`](notes/DUAL_AI_RELEASE_AUDIT_PIPELINE_PLAN.ko.md)
+
+---
+
+### [DONE] --title `FEAT-FROM-DERIVED-TABLE-ALIAS-REQUIRED-1`
+- **Domain**: FROM 파생 테이블(Subquery) 필수 별칭(Alias) 강제 (SQLSTATE 42601) | **Priority**: P2 | **Updated**: 2026-11-24 07:43:17
+- **Milestone**: `--priority`
+- **Plan Doc**: [`Engine`](Engine)
 
 ---
 

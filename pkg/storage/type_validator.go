@@ -12,8 +12,8 @@ import (
 // checking TINYINT/SMALLINT/INT overflow, checking DECIMAL precision and scale limits).
 func ValidateAndNormalizeValue(col *Column, val Value, tableName string) (Value, error) {
 	if val.IsNull {
-		if !col.Nullable && !col.PrimaryKey && !col.Identity && !col.IsRowVersion {
-			return val, fmt.Errorf("cannot insert NULL into column %q of table %q (NOT NULL constraint)", col.Name, tableName)
+		if !col.Nullable && !col.Identity && !col.IsRowVersion {
+			return val, fmt.Errorf("null value in column %q of relation %q violates not-null constraint (%w)", col.Name, tableName, ErrNotNullViolation)
 		}
 		return val, nil
 	}
@@ -145,6 +145,23 @@ func ValidateAndNormalizeValue(col *Column, val Value, tableName string) (Value,
 			}
 		}
 		return val, nil
+
+	case TypeDate:
+		dVal, err := DateValueFromAnyStrict(val)
+		if err != nil {
+			return val, err
+		}
+		return dVal, nil
+
+	case TypeDateTime:
+		dtVal, err := DateTimeValueFromAny(val)
+		if err != nil {
+			if strings.Contains(err.Error(), "out of range") {
+				return val, fmt.Errorf("date/time field value out of range: %q", val.String())
+			}
+			return val, fmt.Errorf("invalid input syntax for type timestamp: %q", val.String())
+		}
+		return dtVal, nil
 	}
 
 	return val, nil
@@ -162,6 +179,10 @@ func ValidateAndNormalizeRecord(schema *TableSchema, rec Record) (Record, error)
 				return nil, err
 			}
 			rec[col.Name] = norm
+		} else {
+			if !col.Nullable && !col.Identity && !col.Hidden && !col.IsRowVersion && !col.HasComputedExpr() && col.Default == "" {
+				return nil, fmt.Errorf("null value in column %q of relation %q violates not-null constraint (%w)", col.Name, schema.Name, ErrNotNullViolation)
+			}
 		}
 	}
 	return rec, nil

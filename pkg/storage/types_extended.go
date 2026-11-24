@@ -97,12 +97,18 @@ func ParseDate(s string) (time.Time, error) {
 		time.RFC3339,
 		"2006-01-02 15:04:05",
 	}
+	var lastErr error
 	for _, l := range layouts {
-		if t, err := time.Parse(l, s); err == nil {
+		t, err := time.Parse(l, s)
+		if err == nil {
 			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC), nil
 		}
+		if strings.Contains(err.Error(), "out of range") {
+			return time.Time{}, err
+		}
+		lastErr = err
 	}
-	return time.Time{}, fmt.Errorf("cannot parse date: %q", s)
+	return time.Time{}, lastErr
 }
 
 // DateValue creates a storage.Value of TypeDate truncated to midnight UTC.
@@ -137,6 +143,28 @@ func DateValueFromAny(v Value) Value {
 		return DateValue(v.TVal)
 	}
 	return DateValueFromString(v.String())
+}
+
+// DateValueFromAnyStrict converts an existing storage.Value to TypeDate, returning an error if parsing fails.
+func DateValueFromAnyStrict(v Value) (Value, error) {
+	if v.IsNull {
+		return NullValue(TypeDate), nil
+	}
+	if v.Type == TypeDate {
+		return v, nil
+	}
+	if v.Type == TypeDateTime {
+		return DateValue(v.TVal), nil
+	}
+	s := v.String()
+	t, err := ParseDate(s)
+	if err != nil {
+		if strings.Contains(err.Error(), "out of range") {
+			return NullValue(TypeDate), fmt.Errorf("date/time field value out of range: %q", s)
+		}
+		return NullValue(TypeDate), fmt.Errorf("invalid input syntax for type date: %q", s)
+	}
+	return DateValue(t), nil
 }
 
 // ParseTime parses a time-of-day string into nanoseconds from midnight and time.Time.

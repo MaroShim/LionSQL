@@ -836,7 +836,11 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 				val = storage.BinaryValueFromString(val.String())
 				record[col.Name] = val
 			} else if col.Type == storage.TypeDate && (val.Type == storage.TypeVarChar || val.Type == storage.TypeDateTime || val.Type == storage.TypeDate) {
-				val = storage.DateValueFromAny(val)
+				dVal, err := storage.DateValueFromAnyStrict(val)
+				if err != nil {
+					return fmt.Errorf("%w: column %q expects date: %v", storage.ErrInvalidDataType, col.Name, err)
+				}
+				val = dVal
 				record[col.Name] = val
 			} else if col.Type == storage.TypeTime && (val.Type == storage.TypeVarChar || val.Type == storage.TypeDateTime || val.Type == storage.TypeTime) {
 				val = storage.TimeValueFromAny(val)

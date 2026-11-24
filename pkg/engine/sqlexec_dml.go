@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"lionsql/pkg/auth"
+	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
@@ -72,7 +73,16 @@ func isRuntimeDMLError(err error) bool {
 		errors.Is(err, storage.ErrIndexKeyTooLarge) ||
 		storage.IsWriteConflict(err) ||
 		strings.Contains(err.Error(), "trigger error") ||
-		strings.Contains(err.Error(), "canceling statement due to user request")
+		strings.Contains(err.Error(), "canceling statement due to user request") ||
+		strings.Contains(err.Error(), "INSERT has more") ||
+		strings.Contains(err.Error(), "column count mismatch") ||
+		strings.Contains(err.Error(), "subquery in FROM must have an alias") ||
+		strings.Contains(err.Error(), "does not exist") ||
+		strings.Contains(err.Error(), "is ambiguous") ||
+		strings.Contains(err.Error(), "violates not-null constraint") ||
+		strings.Contains(err.Error(), "date/time field value out of range") ||
+		strings.Contains(err.Error(), "invalid input syntax for type date") ||
+		strings.Contains(err.Error(), "division by zero")
 }
 
 type onConflictAction int
@@ -562,6 +572,9 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						return storage.IntValue(int64(n)), nil
 					}
 				}
+				if targetType == storage.TypeDate {
+					return storage.DateValueFromAnyStrict(storage.StringValue(sVal))
+				}
 				return parseLiteralValue(sVal, targetType), nil
 			}
 
@@ -608,8 +621,15 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 
 		// Apply column default values for columns not provided in targetCols
 		for _, col := range schema.Columns {
-			if _, exists := rec[col.Name]; !exists && col.Default != "" {
-				rec[col.Name] = parseLiteralValue(col.Default, col.Type)
+			if _, exists := rec[col.Name]; !exists {
+				if col.Default != "" {
+					rec[col.Name] = parseLiteralValue(col.Default, col.Type)
+				} else if !col.Nullable && !col.Identity && !col.Hidden && !col.IsRowVersion && !col.HasComputedExpr() {
+					if isEphemeral {
+						_ = tx.Rollback()
+					}
+					return nil, fmt.Errorf("null value in column %q of relation %q violates not-null constraint (%w)", col.Name, tableName, storage.ErrNotNullViolation)
+				}
 			}
 		}
 
@@ -1124,8 +1144,15 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 
 		// Apply column default values for columns not provided in targetCols
 		for _, col := range schema.Columns {
-			if _, exists := rec[col.Name]; !exists && col.Default != "" {
-				rec[col.Name] = parseLiteralValue(col.Default, col.Type)
+			if _, exists := rec[col.Name]; !exists {
+				if col.Default != "" {
+					rec[col.Name] = parseLiteralValue(col.Default, col.Type)
+				} else if !col.Nullable && !col.Identity && !col.Hidden && !col.IsRowVersion && !col.HasComputedExpr() {
+					if isEphemeral {
+						_ = tx.Rollback()
+					}
+					return nil, fmt.Errorf("null value in column %q of relation %q violates not-null constraint (%w)", col.Name, tableName, storage.ErrNotNullViolation)
+				}
 			}
 		}
 
@@ -1543,6 +1570,24 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		}
 		if err != nil {
 			return nil, fmt.Errorf("table %q not found: %w", tableName, err)
+		}
+	}
+
+	if schema != nil {
+		setPairs := sqlutil.SplitSetClauses(setClause)
+		for _, pair := range setPairs {
+			if _, _, ok := schema.FindColumn(pair.Column); !ok {
+				return nil, fmt.Errorf("column %q does not exist", pair.Column)
+			}
+			for _, ref := range planner.ExtractColumnRefs(pair.Value) {
+				if ref.TableOrAlias == "" || strings.EqualFold(ref.TableOrAlias, schema.Name) {
+					if _, _, ok := schema.FindColumn(ref.Column); !ok {
+						if !proc.IsBuiltinFunction(ref.Column) && !strings.HasPrefix(ref.Column, "@") {
+							return nil, fmt.Errorf("column %q does not exist", ref.Column)
+						}
+					}
+				}
+			}
 		}
 	}
 

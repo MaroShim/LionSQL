@@ -286,12 +286,12 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 		innerSQL := strings.TrimSpace(currentSQL[openParenIdx+1 : closeParenIdx])
 		afterClose := currentSQL[closeParenIdx+1:]
 		alias, colNames, consumed := parseDerivedTableAlias(afterClose)
+		if alias == "" {
+			return "", nil, fmt.Errorf("subquery in FROM must have an alias")
+		}
 		matchEnd := closeParenIdx + 1 + consumed
 
 		counterVal := atomic.AddInt64(&derivedTableCounter, 1)
-		if alias == "" {
-			alias = fmt.Sprintf("dt_%d", counterVal)
-		}
 		tempName := fmt.Sprintf("#__dt_%d_%s", counterVal, alias)
 
 		var innerRes *QueryResult

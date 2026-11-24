@@ -434,13 +434,23 @@ func WriteError(w io.Writer, message string) error {
 		code = "23503" // foreign_key_violation
 	} else if strings.Contains(upper, "NOT NULL CONSTRAINT VIOLATION") || strings.Contains(upper, "VIOLATES NOT-NULL CONSTRAINT") || strings.Contains(upper, "COLUMN DOES NOT ALLOW NULLS") {
 		code = "23502" // not_null_violation
+	} else if strings.Contains(upper, "DIVISION BY ZERO") || strings.Contains(upper, "DIVIDE BY ZERO") {
+		code = "22012" // division_by_zero
+	} else if strings.Contains(upper, "OUT OF RANGE") {
+		code = "22008" // datetime_field_overflow
+	} else if strings.Contains(upper, "INVALID INPUT SYNTAX") {
+		code = "22007" // invalid_datetime_format
+	} else if strings.Contains(upper, "IS AMBIGUOUS") {
+		code = "42702" // ambiguous_column
+	} else if strings.Contains(upper, "COLUMN") && (strings.Contains(upper, "DOES NOT EXIST") || strings.Contains(upper, "NOT FOUND")) {
+		code = "42703" // undefined_column
 	} else if strings.Contains(upper, "INDEX") && (strings.Contains(upper, "DOES NOT EXIST") || strings.Contains(upper, "NOT FOUND")) {
 		code = "42704" // undefined_object (standard PostgreSQL error code for non-existent index)
 	} else if strings.Contains(upper, "NOT FOUND") || strings.Contains(upper, "DOES NOT EXIST") {
 		code = "42P01" // undefined_table / undefined_relation
 	} else if strings.Contains(upper, "MUST APPEAR IN THE GROUP BY CLAUSE") {
 		code = "42803" // grouping_error
-	} else if strings.Contains(upper, "SUBQUERY MUST RETURN ONLY ONE COLUMN") || strings.Contains(upper, "SUBQUERY HAS TOO MANY COLUMNS") {
+	} else if strings.Contains(upper, "SUBQUERY MUST RETURN ONLY ONE COLUMN") || strings.Contains(upper, "SUBQUERY HAS TOO MANY COLUMNS") || strings.Contains(upper, "SUBQUERY IN FROM MUST HAVE AN ALIAS") || strings.Contains(upper, "INSERT HAS MORE") || strings.Contains(upper, "COLUMN COUNT MISMATCH") {
 		code = "42601" // syntax_error / subquery error
 	} else if strings.Contains(upper, "SYNTAX") {
 		code = "42601" // syntax_error

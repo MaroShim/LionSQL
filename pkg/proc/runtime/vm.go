@@ -2245,12 +2245,69 @@ func (f *VMFrame) execInsertExec(data *proc.DMLData) (int64, error) {
 	return insertedCount, nil
 }
 
+func (f *VMFrame) validateExprCols(e proc.Expr, schema *storage.TableSchema) error {
+	if e == nil || schema == nil {
+		return nil
+	}
+	switch node := e.(type) {
+	case *proc.ColumnRefExpr:
+		cName := strings.Trim(node.Name, "[]\"'`")
+		if dotIdx := strings.Index(cName, "."); dotIdx != -1 {
+			cName = cName[dotIdx+1:]
+		}
+		cName = strings.Trim(cName, "[]\"'`")
+		if _, _, ok := schema.FindColumn(cName); !ok {
+			if !proc.IsBuiltinFunction(node.Name) && !strings.HasPrefix(node.Name, "@") {
+				return fmt.Errorf("column %q does not exist", node.Name)
+			}
+		}
+	case *proc.BinaryExpr:
+		if err := f.validateExprCols(node.Left, schema); err != nil {
+			return err
+		}
+		return f.validateExprCols(node.Right, schema)
+	case *proc.UnaryExpr:
+		return f.validateExprCols(node.Expr, schema)
+	case *proc.FunctionCallExpr:
+		for _, arg := range node.Args {
+			if err := f.validateExprCols(arg, schema); err != nil {
+				return err
+			}
+		}
+	case *proc.CastExpr:
+		return f.validateExprCols(node.Expr, schema)
+	case *proc.CaseExpr:
+		if node.Operand != nil {
+			if err := f.validateExprCols(node.Operand, schema); err != nil {
+				return err
+			}
+		}
+		for _, w := range node.Whens {
+			if err := f.validateExprCols(w.Condition, schema); err != nil {
+				return err
+			}
+			if err := f.validateExprCols(w.Result, schema); err != nil {
+				return err
+			}
+		}
+		if node.Else != nil {
+			if err := f.validateExprCols(node.Else, schema); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	targetTable := f.resolveTable(data.Table)
 	if schema, err := f.getTableSchema(targetTable); err == nil && schema != nil {
 		for _, a := range data.Assignments {
 			if _, _, ok := schema.FindColumn(a.Column); !ok {
 				return 0, fmt.Errorf("column %q does not exist in table %q", a.Column, targetTable)
+			}
+			if err := f.validateExprCols(a.Value, schema); err != nil {
+				return 0, err
 			}
 		}
 	}
