@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- support server-wide dialect preference configuration via `--dialect`, `--dialect-preference`, and `LIONSQL_DIALECT_PREFERENCE` (`FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`)
+- verify `LEAD` and `LAG` analytic window functions inside stored procedure bodies and cursor loops (`FEAT-WIN-FUNC-PROC-COMPAT-1`)
+- handle external TCP `CancelRequest` (code 80877102) with cooperative `context.CancelFunc` and SQLSTATE `57014` (`FEAT-WIRE-PG-REMOTE-CANCEL-1`)
 - support PostgreSQL connection pooler reset commands `DISCARD ALL`, `DISCARD PLANS`, `DISCARD SEQUENCES`, `DISCARD TEMP/TEMPORARY` (`FEAT-PG-DISCARD-COMMANDS-1`)
 - support TDS `StatusResetConnection` (0x08) and `sp_reset_connection` RPC atomic session state isolation (`FEAT-WIRE-TDS-RESET-CONNECTION-1`)
 - support online O(1) variable-length column expansion for `ALTER TABLE ... ALTER COLUMN` with truncation protection (`FEAT-ALTER-COLUMN-ONLINE-EXPANSION-1`)
@@ -32,6 +35,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - synchronize `transaction_isolation_level` and `default_transaction_isolation` session keys on `SET TRANSACTION ISOLATION LEVEL` (`ENG-039`, Round 16)
 
 ### Performance
+- add integer key fast-path and column index pre-binding to `HashJoinIterator` bypassing map lookups and string formatting (`PERF-OPT-HASH-JOIN-INT-FASTPATH-1`)
+- add single integer key fast-path and string formatting bypass to `AggregateIterator` (`PERF-OPT-GROUP-BY-INT-FASTPATH-1`)
 - eliminate C.GoBytes heap allocations in WiredTiger via sync.Pool tuple buffer pooling and unsafe.Slice zero-copy decoding (`PERF-WT-ARENA-SLAB-DECODE-1`)
 - implement shared transaction-local zero-copy read cache (`TxReadCache`) across memengine OCC and WiredTiger MVCC (`PERF-WT-READ-CACHE-1`)
 - expand WiredTiger `activeWriters` lock table to 1024 shards with spin-yield backoff and sorted batch unlock (`14725a7e`)
