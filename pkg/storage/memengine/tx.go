@@ -1419,7 +1419,61 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 		return true, nil
 	}
 
-	matched := false
+	// Fast path: Check if parent table has a matching index on parentCols for O(log N) lookup
+	var matchingIdx *IndexData
+	for _, idxData := range parentTd.Indexes {
+		if idxData.Schema.Disabled {
+			continue
+		}
+		if len(idxData.Schema.Columns) == len(parentCols) {
+			matchAll := true
+			for ci, pCol := range parentCols {
+				if !strings.EqualFold(idxData.Schema.Columns[ci], pCol) {
+					matchAll = false
+					break
+				}
+			}
+			if matchAll {
+				matchingIdx = idxData
+				break
+			}
+		}
+	}
+
+	if matchingIdx != nil {
+		var searchKey storage.Value
+		if len(childVals) == 1 {
+			searchKey = childVals[0]
+		} else {
+			var sb strings.Builder
+			for i, v := range childVals {
+				if i > 0 {
+					sb.WriteByte(0)
+				}
+				sb.WriteString(storage.EncodeIndexKeyPart(v))
+			}
+			searchKey = storage.StringValue(sb.String())
+		}
+		pks := matchingIdx.ScanRange(&searchKey, &searchKey)
+		for _, parentKey := range pks {
+			if tx.isLocallyDeleted(fk.ParentTable, parentKey) {
+				continue
+			}
+			if _, inLocal := tx.getLocal(fk.ParentTable, parentKey); inLocal {
+				return true, nil
+			}
+			if parentTd.hasKey(parentKey) {
+				// Enforce reference share lock on parent row to prevent concurrent parent deletion/mutation
+				if err := tx.tryAcquireRefLockLocked(parentTd, parentKey); err != nil {
+					return false, err
+				}
+				return true, nil
+			}
+		}
+	}
+
+	// Fallback scan across all rows if no matching secondary index is present
+	var matchedPK string
 	scanErr := parentTd.forEachRow(func(pkStr string, row storage.Row) bool {
 		if tx.isLocallyDeleted(fk.ParentTable, pkStr) {
 			return true
@@ -1428,7 +1482,7 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 			return true
 		}
 		if rowMatchesFK(parentSchema, row, parentCols, childVals) {
-			matched = true
+			matchedPK = pkStr
 			return false
 		}
 		return true
@@ -1436,7 +1490,11 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 	if scanErr != nil {
 		return false, scanErr
 	}
-	if matched {
+	if matchedPK != "" {
+		// Enforce reference share lock on parent row to prevent concurrent parent deletion/mutation
+		if err := tx.tryAcquireRefLockLocked(parentTd, matchedPK); err != nil {
+			return false, err
+		}
 		return true, nil
 	}
 
