@@ -6,7 +6,7 @@
 > 모든 태스크 추가, 상태 변경, 마일스톤 수정은 반드시 `./bin/sprint` CLI를 통해서만 수행해야 합니다.
 > 수정 후 `./bin/sprint backup TASKS.md` 명령으로 이 문서를 동기화하십시오.
 
-> - **Last Synced**: 2026-11-24
+> - **Last Synced**: 2026-11-25
 > - **Primary Source of Truth (SSOT)**: SQLite `sprint_tasks` Table
 > - **Backup File**: Auto-synced on task update & Git commit
 
@@ -92,6 +92,13 @@
 | `DONE` | **`BENCH-TPCH-1`** |  | Ecosystem | P3 | Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation 영구 대체 기각 (Replaced by PERF-SUBQUERY-MEMO-1, Spec-Out) | [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-CONSOLIDATION-PHASE-1`** | `v0.95.0` | Architecture | P1 | 바인더 통합 1단계: 형상 및 차원 정합성 (INSERT 컬럼/값 불일치, 서브쿼리 단일 컬럼 제약) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-CONSOLIDATION-PHASE-2`** | `v0.95.0` | Architecture | P1 | 바인더 통합 2단계: 식별자 및 문법 스코프 규칙 (FROM 서브쿼리 ALIAS 필수, DISTINCT ORDER BY 제약) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
+| `PENDING` | **`BINDER-EVOL-PHASE-1`** | `v0.95.0` | Architecture | P1 | WalkAST 전수 순회 완료 및 집계 경계 추적기 (AggregateContextTracker) 구현 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `PENDING` | **`BINDER-EVOL-PHASE-2`** | `v0.95.0` | Architecture | P1 | Qualified Column 및 미존재 테이블 별칭(t3.id) 사전 검증 통합 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `PENDING` | **`BINDER-EVOL-PHASE-3`** | `v0.95.0` | Architecture | P1 | JOIN ON 절 비한정 컬럼 모호성(id = id) 검증 및 스코프 확립 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `PENDING` | **`BINDER-EVOL-PHASE-4`** | `v0.95.0` | Architecture | P1 | DML Contract 실제 실행 경로 직결 (NOT NULL, UPDATE SET 대상/우변 검증) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `PENDING` | **`BINDER-EVOL-PHASE-5`** | `v0.96.0` | Architecture | P1 | 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `PENDING` | **`BINDER-EVOL-PHASE-6`** | `v0.97.0` | Architecture | P1 | BoundAST (BoundSelectStmt, BoundExpr) 아키텍처 공식 도입 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `PENDING` | **`BINDER-EVOL-PHASE-7`** | `v0.97.0` | Architecture | P2 | 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `DONE` | **`BUG-ADD-COL-NOT-NULL-1`** |  | Integrity | P2 | 기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug) |  |  |
 | `DONE` | **`BUG-AGG-MIXED-NUM-DEC-1`** |  | Integrity | P2 | AggregateIterator Decimal-정수 혼합 합계 유실 방지 (Agg Mixed Decimal Bug) |  |  |
 | `DONE` | **`BUG-API-CREATE-DEFAULT-1`** |  | Integrity | P2 | HTTP API 레코드 생성 시 NOT NULL DEFAULT 필드 주입 (API Create Default Bug) |  |  |
@@ -1387,6 +1394,55 @@
 - **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 09:38:38
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md)
+
+---
+
+### [PENDING] WalkAST 전수 순회 완료 및 집계 경계 추적기 (AggregateContextTracker) 구현 `BINDER-EVOL-PHASE-1`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 23:24:55
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
+
+---
+
+### [PENDING] Qualified Column 및 미존재 테이블 별칭(t3.id) 사전 검증 통합 `BINDER-EVOL-PHASE-2`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 23:24:55
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
+
+---
+
+### [PENDING] JOIN ON 절 비한정 컬럼 모호성(id = id) 검증 및 스코프 확립 `BINDER-EVOL-PHASE-3`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 23:24:55
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
+
+---
+
+### [PENDING] DML Contract 실제 실행 경로 직결 (NOT NULL, UPDATE SET 대상/우변 검증) `BINDER-EVOL-PHASE-4`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 23:24:55
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
+
+---
+
+### [PENDING] 서브쿼리 및 상관 서브쿼리 계층적 스코프 바인딩 (ScopeContext) `BINDER-EVOL-PHASE-5`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 23:25:02
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
+
+---
+
+### [PENDING] BoundAST (BoundSelectStmt, BoundExpr) 아키텍처 공식 도입 `BINDER-EVOL-PHASE-6`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 23:25:02
+- **Milestone**: `v0.97.0`
+- **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
+
+---
+
+### [PENDING] 4대 실행 경로 동등성 검증 완료 및 다운스트림 중복 코드 전면 정리 `BINDER-EVOL-PHASE-7`
+- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-24 23:25:02
+- **Milestone**: `v0.97.0`
+- **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
 
 ---
 
