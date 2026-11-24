@@ -22,6 +22,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - support `ORDER BY ... NULLS FIRST` and `NULLS LAST` across tokenizer, AST parser, planner, and sort/window iterators (`ENG-038`, Round 16)
 
 ### Performance
+- implement Vectorized Primitive Accumulator for aggregation hot-paths (`PERF-VECTOR-PRIMITIVE-ACCUM-1`):
+  - add 64-bit integer direct accumulation slots (`intSums`, `hasIntSum`) and primitive type fast-path dispatches in `AggregateIterator`, eliminating dynamic `interface{}` unboxing, `tryDecimal`, and `toFloat64` conversions
+  - optimize `aggMin` and `aggMax` with single-instruction primitive comparisons, bypassing reflective `CompareValues` on int64/float64 hot loops
 - implement Storage Projection Pushdown and Transitive Predicate Inference (`PERF-STORAGE-PROJECTION-PUSHDOWN-1`):
   - push down required column sets to `SeqScanIterator` and `IndexScanIterator`, skipping unreferenced columns without decoding or allocating heap strings/LOBs via `storage.DecodeTupleSelectedWithArena` and `SkipTupleColumn`, achieving a 73.7% allocation drop and 38% latency reduction on wide tables
   - implement transitive predicate inference across equi-joined tables (`InferTransitivePredicates`), automatically propagating single-column filters (`= const`, `> const`, `IN`, `BETWEEN`) to joined relations for early index seeks and storage filtering prior to join execution

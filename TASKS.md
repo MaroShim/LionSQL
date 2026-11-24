@@ -528,7 +528,7 @@
 | `DONE` | **`PERF-TDS-ZEROCOPY-FRAME-1`** | `v1.10.0` | Wire | P2 | TDS tdsStreamWriter 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 copy 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-VDBE-EXTREME-OPT-1`** |  | Durability | P2 | T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 | [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 1 (`PERF-VDBE-SLOT-1`)*... |
 | `PENDING` | **`PERF-VDBE-FRAME-SLIM-1`** | `v1.10.0` | Engine | P2 | VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
-| `PENDING` | **`PERF-VECTOR-PRIMITIVE-ACCUM-1`** | `v0.95.0` | Execution | P1 | Vectorized Primitive Accumulator: Interface 언박싱 제거 및 타입 특화 집계 루프 | [`notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md`](notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md) |  |
+| `DONE` | **`PERF-VECTOR-PRIMITIVE-ACCUM-1`** | `v0.95.0` | Execution | P1 | Vectorized Primitive Accumulator: Interface 언박싱 제거 및 타입 특화 집계 루프 | [`notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md`](notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-WAL-ZERO-ALLOC-1`** | `v1.10.0` | Storage | P2 | In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 writeFrame Zero-Alloc | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WIRE-ZEROALLOC-1`** |  | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WT-ARENA-SLAB-DECODE-1`** | `v0.95.0` | Storage | P2 | WiredTiger sync.Pool/Arena 기반 고정 버퍼 디코딩 및 C.GoBytes 절감 | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
@@ -5131,8 +5131,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Vectorized Primitive Accumulator: Interface 언박싱 제거 및 타입 특화 집계 루프 `PERF-VECTOR-PRIMITIVE-ACCUM-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 05:14:02
+### [DONE] Vectorized Primitive Accumulator: Interface 언박싱 제거 및 타입 특화 집계 루프 `PERF-VECTOR-PRIMITIVE-ACCUM-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 05:42:11
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md`](notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md)
 

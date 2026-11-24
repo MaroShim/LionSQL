@@ -74,6 +74,8 @@ type groupAccumulator struct {
 	groupMask  uint64
 	counts     []int64
 	sums       []float64
+	intSums    []int64
+	hasIntSum  []bool
 	decSums    []storage.Decimal
 	isDecimal  []bool
 	mins       []any
@@ -166,6 +168,8 @@ func (a *AggregateIterator) newGroupAccumulator(tuple Tuple, mask uint64) *group
 	}
 	if a.needSums {
 		acc.sums = make([]float64, n)
+		acc.intSums = make([]int64, n)
+		acc.hasIntSum = make([]bool, n)
 		acc.decSums = make([]storage.Decimal, n)
 		acc.isDecimal = make([]bool, n)
 	}
@@ -1174,6 +1178,8 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 					val = nil
 				} else if acc.isDecimal[fIdx] {
 					val = storage.DecimalValueFromDecimal(acc.decSums[fIdx])
+				} else if acc.hasIntSum[fIdx] {
+					val = acc.intSums[fIdx]
 				} else {
 					s := acc.sums[fIdx]
 					if s == math.Trunc(s) {
@@ -1183,11 +1189,15 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 					}
 				}
 			case aggTotal:
-				s := acc.sums[fIdx]
-				if s == math.Trunc(s) {
-					val = int64(s)
+				if acc.hasIntSum[fIdx] {
+					val = acc.intSums[fIdx]
 				} else {
-					val = s
+					s := acc.sums[fIdx]
+					if s == math.Trunc(s) {
+						val = int64(s)
+					} else {
+						val = s
+					}
 				}
 			case aggGroupConcat:
 				list := acc.strLists[fIdx]
@@ -1225,8 +1235,14 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 					} else {
 						val = storage.DecimalValueFromDecimal(acc.decSums[fIdx])
 					}
+				} else if acc.hasIntSum[fIdx] && acc.intSums[fIdx]%acc.counts[fIdx] == 0 {
+					val = acc.intSums[fIdx] / acc.counts[fIdx]
 				} else {
-					avg := acc.sums[fIdx] / float64(acc.counts[fIdx])
+					total := acc.sums[fIdx]
+					if acc.hasIntSum[fIdx] {
+						total += float64(acc.intSums[fIdx])
+					}
+					avg := total / float64(acc.counts[fIdx])
 					if avg == math.Trunc(avg) {
 						val = int64(avg)
 					} else {
@@ -1727,13 +1743,78 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 		case aggCount:
 			acc.counts[fIdx]++
 		case aggSum, aggTotal:
+			switch v := val.(type) {
+			case int64:
+				if !acc.isDecimal[fIdx] {
+					acc.intSums[fIdx] += v
+					acc.hasIntSum[fIdx] = true
+					acc.counts[fIdx]++
+					continue
+				}
+			case int:
+				if !acc.isDecimal[fIdx] {
+					acc.intSums[fIdx] += int64(v)
+					acc.hasIntSum[fIdx] = true
+					acc.counts[fIdx]++
+					continue
+				}
+			case float64:
+				if !acc.isDecimal[fIdx] {
+					if acc.hasIntSum[fIdx] {
+						acc.sums[fIdx] += float64(acc.intSums[fIdx])
+						acc.intSums[fIdx] = 0
+						acc.hasIntSum[fIdx] = false
+					}
+					acc.sums[fIdx] += v
+					acc.counts[fIdx]++
+					continue
+				}
+			case storage.Value:
+				if v.IsNull {
+					continue
+				}
+				if v.Type == storage.TypeInt && !acc.isDecimal[fIdx] {
+					acc.intSums[fIdx] += v.IVal
+					acc.hasIntSum[fIdx] = true
+					acc.counts[fIdx]++
+					continue
+				}
+				if v.Type == storage.TypeFloat && !acc.isDecimal[fIdx] {
+					if acc.hasIntSum[fIdx] {
+						acc.sums[fIdx] += float64(acc.intSums[fIdx])
+						acc.intSums[fIdx] = 0
+						acc.hasIntSum[fIdx] = false
+					}
+					acc.sums[fIdx] += v.FVal
+					acc.counts[fIdx]++
+					continue
+				}
+				if v.Type == storage.TypeDecimal {
+					acc.isDecimal[fIdx] = true
+					if acc.hasIntSum[fIdx] {
+						acc.decSums[fIdx] = acc.decSums[fIdx].Add(storage.NewDecimalFromInt(acc.intSums[fIdx], 0))
+						acc.intSums[fIdx] = 0
+						acc.hasIntSum[fIdx] = false
+					} else if acc.sums[fIdx] != 0 {
+						acc.decSums[fIdx] = acc.decSums[fIdx].Add(storage.NewDecimalFromFloat(acc.sums[fIdx], 4))
+						acc.sums[fIdx] = 0
+					}
+					acc.decSums[fIdx] = acc.decSums[fIdx].Add(v.DVal)
+					acc.counts[fIdx]++
+					continue
+				}
+			}
+
 			if isDecValue(val) {
 				dec, _ := tryDecimal(val)
 				if !acc.isDecimal[fIdx] {
 					acc.isDecimal[fIdx] = true
-					if acc.sums[fIdx] != 0 {
-						existingDec := storage.NewDecimalFromFloat(acc.sums[fIdx], 4)
-						acc.decSums[fIdx] = acc.decSums[fIdx].Add(existingDec)
+					if acc.hasIntSum[fIdx] {
+						acc.decSums[fIdx] = acc.decSums[fIdx].Add(storage.NewDecimalFromInt(acc.intSums[fIdx], 0))
+						acc.intSums[fIdx] = 0
+						acc.hasIntSum[fIdx] = false
+					} else if acc.sums[fIdx] != 0 {
+						acc.decSums[fIdx] = acc.decSums[fIdx].Add(storage.NewDecimalFromFloat(acc.sums[fIdx], 4))
 						acc.sums[fIdx] = 0
 					}
 				}
@@ -1746,18 +1827,88 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 					cur := acc.decSums[fIdx]
 					acc.decSums[fIdx] = cur.Add(dec)
 				} else {
+					if acc.hasIntSum[fIdx] {
+						acc.sums[fIdx] += float64(acc.intSums[fIdx])
+						acc.intSums[fIdx] = 0
+						acc.hasIntSum[fIdx] = false
+					}
 					acc.sums[fIdx] += fVal
 				}
 			}
 			acc.counts[fIdx]++
 		case aggAvg:
+			switch v := val.(type) {
+			case int64:
+				if !acc.isDecimal[fIdx] {
+					acc.intSums[fIdx] += v
+					acc.hasIntSum[fIdx] = true
+					acc.counts[fIdx]++
+					continue
+				}
+			case int:
+				if !acc.isDecimal[fIdx] {
+					acc.intSums[fIdx] += int64(v)
+					acc.hasIntSum[fIdx] = true
+					acc.counts[fIdx]++
+					continue
+				}
+			case float64:
+				if !acc.isDecimal[fIdx] {
+					if acc.hasIntSum[fIdx] {
+						acc.sums[fIdx] += float64(acc.intSums[fIdx])
+						acc.intSums[fIdx] = 0
+						acc.hasIntSum[fIdx] = false
+					}
+					acc.sums[fIdx] += v
+					acc.counts[fIdx]++
+					continue
+				}
+			case storage.Value:
+				if v.IsNull {
+					continue
+				}
+				if v.Type == storage.TypeInt && !acc.isDecimal[fIdx] {
+					acc.intSums[fIdx] += v.IVal
+					acc.hasIntSum[fIdx] = true
+					acc.counts[fIdx]++
+					continue
+				}
+				if v.Type == storage.TypeFloat && !acc.isDecimal[fIdx] {
+					if acc.hasIntSum[fIdx] {
+						acc.sums[fIdx] += float64(acc.intSums[fIdx])
+						acc.intSums[fIdx] = 0
+						acc.hasIntSum[fIdx] = false
+					}
+					acc.sums[fIdx] += v.FVal
+					acc.counts[fIdx]++
+					continue
+				}
+				if v.Type == storage.TypeDecimal {
+					acc.isDecimal[fIdx] = true
+					if acc.hasIntSum[fIdx] {
+						acc.decSums[fIdx] = acc.decSums[fIdx].Add(storage.NewDecimalFromInt(acc.intSums[fIdx], 0))
+						acc.intSums[fIdx] = 0
+						acc.hasIntSum[fIdx] = false
+					} else if acc.sums[fIdx] != 0 {
+						acc.decSums[fIdx] = acc.decSums[fIdx].Add(storage.NewDecimalFromFloat(acc.sums[fIdx], 4))
+						acc.sums[fIdx] = 0
+					}
+					acc.decSums[fIdx] = acc.decSums[fIdx].Add(v.DVal)
+					acc.counts[fIdx]++
+					continue
+				}
+			}
+
 			if isDecValue(val) {
 				dec, _ := tryDecimal(val)
 				if !acc.isDecimal[fIdx] {
 					acc.isDecimal[fIdx] = true
-					if acc.sums[fIdx] != 0 {
-						existingDec := storage.NewDecimalFromFloat(acc.sums[fIdx], 4)
-						acc.decSums[fIdx] = acc.decSums[fIdx].Add(existingDec)
+					if acc.hasIntSum[fIdx] {
+						acc.decSums[fIdx] = acc.decSums[fIdx].Add(storage.NewDecimalFromInt(acc.intSums[fIdx], 0))
+						acc.intSums[fIdx] = 0
+						acc.hasIntSum[fIdx] = false
+					} else if acc.sums[fIdx] != 0 {
+						acc.decSums[fIdx] = acc.decSums[fIdx].Add(storage.NewDecimalFromFloat(acc.sums[fIdx], 4))
 						acc.sums[fIdx] = 0
 					}
 				}
@@ -1770,17 +1921,62 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 					cur := acc.decSums[fIdx]
 					acc.decSums[fIdx] = cur.Add(dec)
 				} else {
+					if acc.hasIntSum[fIdx] {
+						acc.sums[fIdx] += float64(acc.intSums[fIdx])
+						acc.intSums[fIdx] = 0
+						acc.hasIntSum[fIdx] = false
+					}
 					acc.sums[fIdx] += fVal
 				}
 			}
 			acc.counts[fIdx]++
 		case aggMin:
-			if acc.mins[fIdx] == nil || CompareValues(val, acc.mins[fIdx]) < 0 {
+			if acc.mins[fIdx] == nil {
 				acc.mins[fIdx] = val
+			} else {
+				switch cur := acc.mins[fIdx].(type) {
+				case int64:
+					if v, ok := val.(int64); ok {
+						if v < cur {
+							acc.mins[fIdx] = v
+						}
+						continue
+					}
+				case float64:
+					if v, ok := val.(float64); ok {
+						if v < cur {
+							acc.mins[fIdx] = v
+						}
+						continue
+					}
+				}
+				if CompareValues(val, acc.mins[fIdx]) < 0 {
+					acc.mins[fIdx] = val
+				}
 			}
 		case aggMax:
-			if acc.maxs[fIdx] == nil || CompareValues(val, acc.maxs[fIdx]) > 0 {
+			if acc.maxs[fIdx] == nil {
 				acc.maxs[fIdx] = val
+			} else {
+				switch cur := acc.maxs[fIdx].(type) {
+				case int64:
+					if v, ok := val.(int64); ok {
+						if v > cur {
+							acc.maxs[fIdx] = v
+						}
+						continue
+					}
+				case float64:
+					if v, ok := val.(float64); ok {
+						if v > cur {
+							acc.maxs[fIdx] = v
+						}
+						continue
+					}
+				}
+				if CompareValues(val, acc.maxs[fIdx]) > 0 {
+					acc.maxs[fIdx] = val
+				}
 			}
 		case aggGroupConcat:
 			if val != nil {

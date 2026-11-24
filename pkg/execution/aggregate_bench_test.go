@@ -200,3 +200,53 @@ func BenchmarkHashJoin_CompositeKeys(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkAggregate_PrimitiveIntSum(b *testing.B) {
+	nRows := 100000
+	schema := []string{"id", "val"}
+	colMap := execution.NewColumnIndexMapFromCols(schema)
+	tuples := make([]execution.Tuple, nRows)
+	for i := 0; i < nRows; i++ {
+		tuples[i] = execution.Tuple{
+			Values: []any{int64(i % 10), int64(i * 10)},
+			Index:  colMap,
+		}
+	}
+
+	ctx := context.Background()
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		child := &benchTupleIterator{
+			schema:    schema,
+			colIdxMap: colMap,
+			tuples:    tuples,
+		}
+		agg := execution.NewAggregateIterator(
+			child,
+			[]string{"id"},
+			[]string{"id", "SUM(val)", "AVG(val)", "MIN(val)", "MAX(val)"},
+			"",
+		)
+		if err := agg.Open(ctx); err != nil {
+			b.Fatalf("open failed: %v", err)
+		}
+		var count int
+		for {
+			_, err := agg.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				b.Fatalf("next failed: %v", err)
+			}
+			count++
+		}
+		_ = agg.Close()
+		if count != 10 {
+			b.Fatalf("expected 10 groups, got %d", count)
+		}
+	}
+}
+
