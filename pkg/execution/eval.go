@@ -605,10 +605,10 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 				return lDec.Mul(rDec), true
 			case proc.TokenSlash:
 				divRes, err := lDec.Div(rDec, 4)
-				if err == nil {
-					return divRes, true
+				if err != nil {
+					return err, true
 				}
-				return nil, false
+				return divRes, true
 			}
 		}
 
@@ -626,12 +626,12 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 					return lF * rF, true
 				case proc.TokenSlash:
 					if rF == 0 {
-						return nil, true
+						return fmt.Errorf("division by zero: divide by zero error encountered"), true
 					}
 					return lF / rF, true
 				case proc.TokenPercent:
 					if int64(rF) == 0 {
-						return nil, true
+						return fmt.Errorf("division by zero: divide by zero error encountered"), true
 					}
 					return int64(lF) % int64(rF), true
 				}
@@ -683,13 +683,16 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 				}
 				return lInt * rInt, true
 			case proc.TokenSlash, proc.TokenDiv:
-				if rInt == 0 || (lInt == math.MinInt64 && rInt == -1) {
+				if rInt == 0 {
+					return fmt.Errorf("division by zero: divide by zero error encountered"), true
+				}
+				if lInt == math.MinInt64 && rInt == -1 {
 					return nil, true
 				}
 				return lInt / rInt, true
 			case proc.TokenPercent:
 				if rInt == 0 {
-					return nil, true
+					return fmt.Errorf("division by zero: divide by zero error encountered"), true
 				}
 				if lInt == math.MinInt64 && rInt == -1 {
 					return int64(0), true
@@ -712,7 +715,7 @@ func evalTupleBinaryExprWithContext(t Tuple, e *proc.BinaryExpr, execSubquery pr
 				return lF * rF, true
 			case proc.TokenSlash:
 				if rF == 0 {
-					return nil, false
+					return fmt.Errorf("division by zero: divide by zero error encountered"), true
 				}
 				return lF / rF, true
 			}
@@ -796,6 +799,12 @@ func EvalTupleBoolExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Su
 
 // EvalTupleBoolExprWithContext evaluates a boolean condition directly against a Tuple with optional SubqueryExecutor and session variables.
 func EvalTupleBoolExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.SubqueryExecutor, sessionVars map[string]any) bool {
+	b, _ := EvalTupleBoolExprWithContextErr(t, expr, execSubquery, sessionVars)
+	return b
+}
+
+// EvalTupleBoolExprWithContextErr evaluates a boolean condition directly against a Tuple, returning any evaluation error.
+func EvalTupleBoolExprWithContextErr(t Tuple, expr proc.Expr, execSubquery proc.SubqueryExecutor, sessionVars map[string]any) (bool, error) {
 	res, ok := EvalTupleExprWithContext(t, expr, execSubquery, sessionVars)
 	if !ok {
 		evalMap := t.ToEvalMap()
@@ -809,12 +818,15 @@ func EvalTupleBoolExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Sub
 			}
 			evalMap = combined
 		}
-		return proc.EvalBoolExpr(expr, evalMap, execSubquery)
+		return proc.EvalBoolExprWithErr(expr, evalMap, execSubquery)
+	}
+	if err, isErr := res.(error); isErr {
+		return false, err
 	}
 	if res == nil {
-		return false
+		return false, nil
 	}
-	return proc.IsTruthyValue(res)
+	return proc.IsTruthyValue(res), nil
 }
 
 func isInt32Val(v any) bool {

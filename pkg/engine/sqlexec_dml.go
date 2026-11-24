@@ -344,6 +344,23 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		if err := s.checkTableAccess(cs, cleanIdentifier(dml.Table), auth.PrivInsert); err != nil {
 			return nil, err
 		}
+		if tblSch, err := s.getTable(cs, cleanIdentifier(dml.Table)); err == nil && tblSch != nil {
+			if dml.Output != "" {
+				if err := ValidateOutputClause(dml.Output, tblSch); err != nil {
+					return nil, err
+				}
+			}
+		}
+		if dml.Values != "" {
+			tupleStrings := sqlutil.ExtractTopLevelTuples(dml.Values)
+			for _, tupleStr := range tupleStrings {
+				for _, v := range splitValues(tupleStr) {
+					if err := ValidateInsertValueExpr(v); err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
 	}
 
 	isUpsert := dml != nil && dml.Upsert
@@ -1513,6 +1530,11 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	if tblSch, err := s.getTable(cs, cleanIdentifier(dml.Table)); err == nil && tblSch != nil {
 		updateSchemas = append(updateSchemas, tblSch)
 	}
+	if dml.Output != "" && len(updateSchemas) > 0 {
+		if err := ValidateOutputClause(dml.Output, updateSchemas[0]); err != nil {
+			return nil, err
+		}
+	}
 	if err := ValidateWhereClauseWithSchemas(dml.Where, updateSchemas...); err != nil {
 		return nil, err
 	}
@@ -1694,8 +1716,15 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 				}
 			}
 
-			if whereClause != "" && !evaluateWhereConditionWithSubquery(rec, whereClause, rowSubExec) {
-				continue
+			if whereClause != "" {
+				matches, err := evaluateWhereConditionWithSubqueryErr(rec, whereClause, rowSubExec)
+				if err != nil {
+					scanErr = err
+					break
+				}
+				if !matches {
+					continue
+				}
 			}
 
 			pkVal, hasPK := schema.ResolveRecordPK(rec)
@@ -1903,6 +1932,11 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 	if tblSch, err := s.getTable(cs, cleanIdentifier(dml.Table)); err == nil && tblSch != nil {
 		updateSchemas = append(updateSchemas, tblSch)
 	}
+	if dml.Output != "" && len(updateSchemas) > 0 {
+		if err := ValidateOutputClause(dml.Output, updateSchemas[0]); err != nil {
+			return nil, err
+		}
+	}
 	if err := ValidateWhereClauseWithSchemas(dml.Where, updateSchemas...); err != nil {
 		return nil, err
 	}
@@ -2043,8 +2077,17 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 			}
 		}
 
-		if whereClause != "" && !evaluateWhereConditionWithSubquery(rec, whereClause, rowSubExec) {
-			continue
+		if whereClause != "" {
+			matches, err := evaluateWhereConditionWithSubqueryErr(rec, whereClause, rowSubExec)
+			if err != nil {
+				if isEphemeral {
+					_ = tx.Rollback()
+				}
+				return nil, err
+			}
+			if !matches {
+				continue
+			}
 		}
 
 		pkVal, hasPK := schema.ResolveRecordPK(rec)

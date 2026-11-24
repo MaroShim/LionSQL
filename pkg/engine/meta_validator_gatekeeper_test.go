@@ -1,0 +1,134 @@
+package engine
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestMetaValidatorAndBinder_ScopeIsolation(t *testing.T) {
+	coord, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	sess := "test_sess_meta"
+	_, _ = coord.GetOrCreateSession(sess)
+	defer coord.CloseSession(sess)
+
+	initSQL := `
+		CREATE TABLE t1 (id INT PRIMARY KEY, val INT);
+		CREATE TABLE t2 (id INT PRIMARY KEY, score INT);
+		INSERT INTO t1 VALUES (1, 10), (2, 20);
+		INSERT INTO t2 VALUES (1, 100), (2, 200);
+	`
+	for _, stmt := range strings.Split(initSQL, ";") {
+		stmt = strings.TrimSpace(stmt)
+		if stmt != "" {
+			if _, err := coord.ExecuteSessionSQL(sess, stmt); err != nil {
+				t.Fatalf("setup failed on %q: %v", stmt, err)
+			}
+		}
+	}
+
+	testCases := []struct {
+		name        string
+		sql         string
+		expectedErr string
+	}{
+		{
+			name:        "WHERE count(*) > 0 disallowed",
+			sql:         "SELECT * FROM t1 WHERE count(*) > 0",
+			expectedErr: "aggregate functions are not allowed in WHERE",
+		},
+		{
+			name:        "GROUP BY count(*) disallowed",
+			sql:         "SELECT count(*) FROM t1 GROUP BY count(*)",
+			expectedErr: "aggregate functions are not allowed in GROUP BY",
+		},
+		{
+			name:        "JOIN ON count(*) > 0 disallowed",
+			sql:         "SELECT * FROM t1 JOIN t2 ON count(*) > 0",
+			expectedErr: "aggregate functions are not allowed in JOIN ON",
+		},
+		{
+			name:        "GROUP BY ROW_NUMBER() OVER () disallowed",
+			sql:         "SELECT count(*) FROM t1 GROUP BY ROW_NUMBER() OVER ()",
+			expectedErr: "window functions are not allowed in GROUP BY",
+		},
+		{
+			name:        "GROUP BY negative ordinal -1 disallowed",
+			sql:         "SELECT count(*) FROM t1 GROUP BY -1",
+			expectedErr: "GROUP BY position -1 is not in select list",
+		},
+		{
+			name:        "HAVING without GROUP BY non-aggregate column projection disallowed",
+			sql:         "SELECT id FROM t1 HAVING 1=1",
+			expectedErr: "must appear in the GROUP BY clause or be used in an aggregate function",
+		},
+		{
+			name:        "WHERE IN subquery missing table fail-closed",
+			sql:         "SELECT * FROM t1 WHERE id IN (SELECT id FROM non_existent_tbl)",
+			expectedErr: "table not found",
+		},
+		{
+			name:        "Scalar subquery in projection missing table fail-closed",
+			sql:         "SELECT (SELECT id FROM non_existent_tbl)",
+			expectedErr: "table not found",
+		},
+		{
+			name:        "EXISTS subquery missing table fail-closed",
+			sql:         "SELECT 1 WHERE EXISTS (SELECT id FROM non_existent_tbl)",
+			expectedErr: "table not found",
+		},
+		{
+			name:        "UPDATE WHERE IN subquery missing table fail-closed",
+			sql:         "UPDATE t1 SET val = 99 WHERE id IN (SELECT id FROM non_existent_tbl)",
+			expectedErr: "table not found",
+		},
+		{
+			name:        "DELETE WHERE IN subquery missing table fail-closed",
+			sql:         "DELETE FROM t1 WHERE id IN (SELECT id FROM non_existent_tbl)",
+			expectedErr: "table not found",
+		},
+		{
+			name:        "UPDATE RETURNING non-existent column rejected",
+			sql:         "UPDATE t1 SET val = 10 WHERE id = 1 RETURNING ghost_col",
+			expectedErr: "column \"ghost_col\" does not exist",
+		},
+		{
+			name:        "INSERT VALUES ghost column rejected",
+			sql:         "INSERT INTO t1 (id, val) VALUES (3, ghost_col)",
+			expectedErr: "column \"ghost_col\" does not exist",
+		},
+		{
+			name:        "JOIN ORDER BY ambiguous column rejected",
+			sql:         "SELECT t1.id FROM t1 JOIN t2 ON t1.id = t2.id ORDER BY id",
+			expectedErr: "column reference \"id\" is ambiguous",
+		},
+		{
+			name:        "JOIN GROUP BY ambiguous column rejected",
+			sql:         "SELECT count(*) FROM t1 JOIN t2 ON t1.id = t2.id GROUP BY id",
+			expectedErr: "column reference \"id\" is ambiguous",
+		},
+		{
+			name:        "Division by zero error",
+			sql:         "SELECT val / 0 FROM t1",
+			expectedErr: "division by zero",
+		},
+		{
+			name:        "WHERE arithmetic overflow fail-closed",
+			sql:         "SELECT * FROM t1 WHERE (val * 1000000000000000000) > 0",
+			expectedErr: "arithmetic overflow error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := coord.ExecuteSessionSQL(sess, tc.sql)
+			if err == nil {
+				t.Fatalf("[%s] expected error containing %q, got nil", tc.name, tc.expectedErr)
+			}
+			if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tc.expectedErr)) {
+				t.Fatalf("[%s] expected error containing %q, got: %v", tc.name, tc.expectedErr, err)
+			}
+		})
+	}
+}

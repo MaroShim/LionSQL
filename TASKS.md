@@ -23,12 +23,17 @@
 | `DONE` | **`ARCH-ARIES-LOGGING-1`** |  | ARCH | P2 | Implement ARIES Physiological Undo/Redo Logging for Savepoints | [`notes/plans/ARCH_ARIES_LOGGING_PLAN.ko.md`](notes/plans/ARCH_ARIES_LOGGING_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-AST-GUARD-1`** | `v0.94.0` | Engine | P2 | Phase 2 완료 후 go/ast 정적 분석 아키텍처 가드를 통한 엔진 수동 문자열 파싱 재유입 및 Lexer 캡슐화 침해 영구 차단 | [`notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md`](notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-AST-ROUTING-REFACTORING-1`** | `v0.99.0` | Architecture | P2 | 단일 쿼리 및 프로시저 간 AST 정규화 및 파서 라우팅 통합 기초 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
+| `SPEC_OUT` | **`ARCH-CHUNK-COLUMN-VECTORIZED-FORMAT-1`** | `Spec-Out` | Execution | P3 | 청크 기반 컬럼형 벡터 슬라이스 (DataChunk: 1024행 단위 슬라이스) - KISS 원칙상 1.0 배제 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
+| `PENDING` | **`ARCH-COOPERATIVE-INSTRUCTION-CANCELLATION-1`** | `1.0-GA` | Execution | P2 | VDBE/Iterator 협력적 명령어 인터럽트 기반 쿼리 타임아웃/취소 (Cooperative Instruction Cancellation) | [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `PENDING` | **`ARCH-DEDICATED-BINDER-CATALOG-RESOLVER-1`** | `v0.95.0` | Architecture | P1 | 전용 바인더 레이어 구축 (Dedicated Binder / Catalog Resolver Pass) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-DUALITY-CROSS-VERIFICATION-1`** | `1.0-GA` | Architecture | P1 | Duality-Driven Cross-Verification Methodology Specification | [`doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md`](doc/internal/DUALITY_DRIVEN_CROSS_VERIFICATION_SPEC.ko.md) |  |
 | `DONE` | **`ARCH-EPHEMERAL-SCHEMA-PERSISTENCE-1`** | `v0.94.0` | Storage | P1 | Ephemeral Mode Schema-Only Persistence (SQL Server SCHEMA_ONLY / MySQL MEMORY Parity: Persist DDL Schemas, Indexes & Catalog Objects Across Restarts While Keeping Row Data Ephemeral) | [`notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md`](notes/plans/MEMENGINE_ROLE_AND_EPHEMERAL_SCHEMA_PERSISTENCE_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-INTRA-QUERY-PARALLEL-1`** |  | Architecture | P3 | 단일 쿼리 멀티코어 병렬 실행 (Intra-Query Parallelism) 영구 기각 (Spec-Out) | [`GEMINI.md`](GEMINI.md) |  |
 | `PENDING` | **`ARCH-LOGICAL-NAMESPACE-1`** | `v1.10.0` | ENGINE | P2 | 프리픽스 기반 논리적 네임스페이스 및 USE <dbname> 물리 매핑 아키텍처 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-PARALLEL-SCAN-1`** | `v0.96.0` | Engine | P2 | 멀티코어 병렬 분석 쿼리 실행기 (ParallelSeqScan) | [`ROADMAP.md`](ROADMAP.md) |  |
+| `PENDING` | **`ARCH-PLAN-CACHE-PARAMETERIZATION-1`** | `v1.10.0` | Planner | P2 | 정규화된 플랜 캐시 및 파라미터화 (Plan Cache Parameterization & Normalization) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
+| `COMPLETED` | **`ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`** | `v0.95.0` | Architecture | P1 | 단일 시맨틱 검증 게이트웨이(Scope Gatekeeper & DML Contract) 아키텍처 구축 | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `v0.99.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-TOAST-OUT-OF-ROW-CHUNKS-1`** | `v0.99.0` | Storage | P2 | TOAST (Out-of-Row LOB) 청크 아키텍처 기반 설계 및 8,060B 분리 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-UNIFIED-TUPLE-PROTOCOL-1`** | `v0.99.0` | Architecture | P2 | 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
@@ -120,8 +125,10 @@
 | `DONE` | **`BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1`** |  | Integrity | P2 | 코디네이터 UPDATE 산술식 미지원 및 0값/타입변조 방지 (Eval Update Arith Bug) |  |  |
 | `DONE` | **`BUG-DML-INSERT-COLUMN-COUNT-MISMATCH-1`** | `--priority` | INSERT 타겟 컬럼 수와 VALUES 값 개수 불일치 Fail-Closed 차단 | P2 | --title | [`Engine`](Engine) |  |
 | `DONE` | **`BUG-DML-INSERT-NOT-NULL-OMISSION-1`** | `--priority` | INSERT 시 DEFAULT 없는 NOT NULL 컬럼 생략 시 NULL 삽입 차단 (SQLSTATE 23502) | P2 | --title | [`Engine`](Engine) |  |
+| `COMPLETED` | **`BUG-DML-INSERT-VALUES-NON-EXISTENT-COLUMN-1`** | `v0.95.0` | Engine | P1 | INSERT VALUES 우변 미존재 유령 컬럼 참조 차단 및 NULL 오염 방지 (SQLSTATE 42703) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`BUG-DML-PK-RANDOM-1`** |  | Integrity | P2 | 비-id PK 테이블 DML 시 무작위 컬럼 PK 간주 해결 (DML Random PK Bug) |  |  |
 | `DONE` | **`BUG-DML-PK-RANDOM-GUESS-1`** |  | Integrity | P2 | DML/DDL PK 식별 실패 시 임의 순회 행 훼손 방지 (DML PK Guess Bug) |  |  |
+| `COMPLETED` | **`BUG-DML-RETURNING-NON-EXISTENT-COLUMN-1`** | `v0.95.0` | Engine | P1 | DML RETURNING 절 미존재 유령 컬럼 참조 차단 (SQLSTATE 42703) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`BUG-DML-UPDATE-NON-EXISTENT-COLUMN-1`** | `--priority` | UPDATE SET 우변 미존재 유령 컬럼 참조 차단 및 NULL 오염 방지 (SQLSTATE 42703) | P2 | --title | [`Engine`](Engine) |  |
 | `DONE` | **`BUG-DROP-INDEX-CASE-1`** |  | Integrity | P2 | DropIndex 대소문자 정규화 및 좀비 인덱스 방지 (Drop Index Case Bug) |  |  |
 | `DONE` | **`BUG-EVAL-IN-COMMA-SPLIT-1`** |  | Integrity | P2 | WHERE IN 절 문자열 리터럴 쉼표 오절단 방지 (Eval IN Comma Bug) |  |  |
@@ -136,11 +143,16 @@
 | `DONE` | **`BUG-FK-CHILD-CASE-1`** |  | Integrity | P2 | 외래키 자식 컬럼 대소문자 정규화 (FK Child Case Bug) |  |  |
 | `DONE` | **`BUG-FK-PARENT-TABLE-CASE-1`** |  | Integrity | P2 | 외래키 부모 테이블 대소문자 정규화 (FK Parent Table Case Bug) |  |  |
 | `DONE` | **`BUG-FOR-JSON-TABLE-ALIAS-WRAPPER-1`** |  | Integrity | P2 | FOR JSON PATH 테이블 별칭 중첩 객체 오해석 방지 (For JSON Alias Bug) |  |  |
+| `COMPLETED` | **`BUG-GROUP-BY-NEGATIVE-ORDINAL-ACCEPTANCE-1`** | `v0.95.0` | Engine | P1 | GROUP BY 음수 서수(GROUP BY -1, -5) 거부 및 비정상 허용 차단 (SQLSTATE 42803) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
+| `COMPLETED` | **`BUG-HAVING-WITHOUT-GROUP-BY-NON-AGG-COLUMN-1`** | `v0.95.0` | Engine | P1 | HAVING 단독 사용 시 비집계 컬럼 프로젝션 차단 (SQLSTATE 42803) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`BUG-HTTP-TABLE-PK-1`** |  | Integrity | P2 | HTTP API 테이블 생성 시 임의 PK 승격 제거 (HTTP Table PK Bug) |  |  |
+| `COMPLETED` | **`BUG-IN-SUBQUERY-ERROR-PROPAGATION-FAIL-CLOSED-1`** | `v0.95.0` | Engine | P1 | WHERE IN 서브쿼리 미존재 테이블 에러 전파 및 Fail-Closed 차단 | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`BUG-INDEX-KEY-CASE-1`** |  | Integrity | P2 | 세컨더리 인덱스 키 추출 대소문자 정규화 (Index Key Case Bug) |  |  |
 | `DONE` | **`BUG-INDEX-SCAN-ORDERBY-1`** |  | Integrity | P2 | 인덱스 스캔 다중 정렬 무시 및 정렬 누락 방지 (Index Scan Order By Bug) |  |  |
 | `DONE` | **`BUG-JOIN-AMBIGUOUS-COLUMN-VALIDATION-1`** | `--priority` | JOIN 프로젝션 및 WHERE 절 모호한 컬럼(Ambiguous Column) 참조 차단 (SQLSTATE 42702) | P2 | --title | [`Engine`](Engine) |  |
 | `DONE` | **`BUG-JOIN-IDX-1`** |  | Integrity | P2 | 조인 인덱스 임의 선택 방지 (Join Index Guess Bug) |  |  |
+| `COMPLETED` | **`BUG-JOIN-ON-AGGREGATE-FUNCTION-NOT-ALLOWED-1`** | `v0.95.0` | Engine | P1 | JOIN ON 절 내부 집계 함수 사용 차단 (SQLSTATE 42803) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
+| `COMPLETED` | **`BUG-JOIN-ORDER-GROUP-BY-AMBIGUOUS-COLUMN-1`** | `v0.95.0` | Engine | P1 | JOIN 시 ORDER BY/GROUP BY 모호한 컬럼 참조 차단 (SQLSTATE 42702) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`BUG-JOIN-PARSE-1`** |  | Integrity | P2 | 조인 조건 단순 Split 파싱 결함 수정 (Join Parse Bug) |  |  |
 | `DONE` | **`BUG-MATH-MOD-ZERO-DIVISION-ERROR-1`** | `--priority` | MOD(x, 0) 제로 나눗셈 발생 시 division by zero 에러 발생 (SQLSTATE 22012) | P2 | --title | [`Engine`](Engine) |  |
 | `DONE` | **`BUG-MEM-INDEX-LOCAL-ORDER-1`** |  | Integrity | P2 | MemEngine 로컬 삽입 행 인덱스 정렬 보장 (MemEngine Index Order Bug) |  |  |
@@ -170,6 +182,7 @@
 | `DONE` | **`BUG-PROC-SIMPLE-CASE-1`** |  | Integrity | P2 | 단순 CASE 문(Simple CASE) 파싱 및 컴파일 보장 (Simple CASE Bug) |  |  |
 | `DONE` | **`BUG-PROJ-CAST-AS-1`** |  | Integrity | P2 | 수식 내 AS 오분해 방지 (Project Cast AS Bug) |  |  |
 | `DONE` | **`BUG-RECORD-1`** |  | Integrity | P2 | 사일런트 유실 방지 (Silent Loss Bug) |  |  |
+| `COMPLETED` | **`BUG-SCALAR-EXISTS-SUBQUERY-ERROR-PROPAGATION-1`** | `v0.95.0` | Engine | P1 | 스칼라 프로젝션 및 EXISTS 서브쿼리 에러 상위 전파 | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`BUG-SELECT-AGG-CASE-1`** |  | Integrity | P2 | GROUP BY 및 집계함수 대소문자 정합성 보장 (Select Agg Case Bug) |  |  |
 | `DONE` | **`BUG-SELECT-INTO-PK-1`** |  | Integrity | P2 | SELECT INTO PK 임의 추측 방지 (Select Into PK Bug) |  |  |
 | `DONE` | **`BUG-SP-EXEC-SUFFIX-OUT-1`** |  | Integrity | P2 | sp_executesql OUT 접미 변수명 오절단 방지 (SP Suffix OUT Bug) |  |  |
@@ -201,8 +214,11 @@
 | `DONE` | **`BUG-VM-INTO-1`** |  | Integrity | P2 | VDBE 변수대입 무작위 순회 방지 (IntoVar Bug) |  |  |
 | `DONE` | **`BUG-VM-SUBQ-NIL-1`** |  | Integrity | P2 | VDBE 스칼라 서브쿼리 nil 패닉 및 컬럼 침묵 버림 방지 (VM Subquery Nil Bug) |  |  |
 | `DONE` | **`BUG-VM-UPDATE-1`** |  | Integrity | P2 | VDBE UPDATE 컬럼명 정규화 (VM Update Silent Loss) |  |  |
+| `COMPLETED` | **`BUG-VOLCANO-INT-DIV-ZERO-RETURNS-NULL-1`** | `v0.95.0` | Engine | P1 | Volcano 정수 나눗셈/모듈로 0 연산 시 NULL 대신 에러 발생 (SQLSTATE 22012) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`BUG-WAL-TORN-BOOT-1`** |  | Integrity | P2 | MemEngine WAL 테일 절단 시 기동 실패 방지 (WAL Torn Write Boot Bug) |  |  |
 | `DONE` | **`BUG-WHERE-1`** |  | Integrity | P2 | WHERE IN 절 정합성 (WHERE IN Bug) |  |  |
+| `COMPLETED` | **`BUG-WHERE-AGGREGATE-FUNCTION-NOT-ALLOWED-1`** | `v0.95.0` | Engine | P1 | WHERE 절 내부 집계 함수(COUNT, SUM 등) 사용 차단 (SQLSTATE 42803) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
+| `COMPLETED` | **`BUG-WHERE-ARITHMETIC-OVERFLOW-FAIL-CLOSED-1`** | `v0.95.0` | Engine | P1 | WHERE 절 산술 오버플로 시 행 침묵 누락 방지 및 에러 전파 (SQLSTATE 22003) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`BUG-WINDOW-RANGE-PEER-EVAL-1`** |  | Integrity | P2 | 윈도우 함수 RANGE 피어 프레임 집계 왜곡 방지 (Window Range Peer Bug) |  |  |
 | `DONE` | **`BUG-WIRE-COPY-OUT-UNESCAPED-1`** |  | Integrity | P2 | COPY TO STDOUT 텍스트 포맷 탭/줄바꿈 이스케이프 보장 (Copy Out Unescaped Bug) |  |  |
 | `DONE` | **`BUG-WIRE-COPY-SILENT-CORRUPT-1`** |  | Integrity | P2 | COPY FROM STDIN 파싱 에러 침묵 및 0값/현재시각 변조 방지 (Copy Silent Corrupt Bug) |  |  |
@@ -290,7 +306,7 @@
 | `DONE` | **`FEAT-SANDBOX-SPA-HANDLER-OSDIRFS-1`** | `v0.94.0` | ARCHITECTURE | P2 | Modernize SPA Hosting with Go os.DirFS Chroot Sandbox and Subdirectory Support | [`notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md`](notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`** | `v0.94.0` | Security | P2 | 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리) | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `DONE` | **`FEAT-SPECKIT-CORE-AND-ORACLE-RUNNER-1`** | `1.0-GA` | Test | P1 | 스펙 기반 쿼리 생성 엔진, NoREC/듀얼엔진 오라클 및 cmd/spec_fuzz CLI 구축 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
-| `STATUS` | **`FEAT-SQL-SEMANTIC-VALIDATION-FAIL-CLOSED-1`** | `v0.95.0` | Engine | P1 | SQL 시맨틱 유효성 검증 강화 (비집계 컬럼 누락 거부, GROUP BY 상수/서수 정합성, IN 다중 컬럼 서브쿼리 차단) | [`notes/plans/SQL_SEMANTIC_VALIDATION_FAIL_CLOSED_PLAN.ko.md`](notes/plans/SQL_SEMANTIC_VALIDATION_FAIL_CLOSED_PLAN.ko.md) |  |
+| `COMPLETED` | **`FEAT-SQL-SEMANTIC-VALIDATION-FAIL-CLOSED-1`** | `v0.95.0` | Engine | P1 | SQL 시맨틱 유효성 검증 강화 (비집계 컬럼 누락 거부, GROUP BY 상수/서수 정합성, IN 다중 컬럼 서브쿼리 차단) | [`notes/plans/SQL_SEMANTIC_VALIDATION_FAIL_CLOSED_PLAN.ko.md`](notes/plans/SQL_SEMANTIC_VALIDATION_FAIL_CLOSED_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SQL-SERVER-AGENT-INPROCESS-1`** | `v0.95.0` | Engine | P2 | SQL Server Agent 인-프로세스 스케줄러 (msdb.dbo.sysjobs, sysjobhistory, sp_add_job) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`** | `v0.99.0` | Engine | P2 | 서버 전역 dialect_preference 설정 체계 및 CLI/환경변수 바인딩 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SUPERSET-EXPR-COLLATE-1`** | `v0.94.0` | Engine | P2 | 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
@@ -735,6 +751,27 @@
 
 ---
 
+### [SPEC_OUT] 청크 기반 컬럼형 벡터 슬라이스 (DataChunk: 1024행 단위 슬라이스) - KISS 원칙상 1.0 배제 `ARCH-CHUNK-COLUMN-VECTORIZED-FORMAT-1`
+- **Domain**: Execution | **Priority**: P3 | **Updated**: 2026-11-24 08:17:14
+- **Milestone**: `Spec-Out`
+- **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
+
+---
+
+### [PENDING] VDBE/Iterator 협력적 명령어 인터럽트 기반 쿼리 타임아웃/취소 (Cooperative Instruction Cancellation) `ARCH-COOPERATIVE-INSTRUCTION-CANCELLATION-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-24 08:17:02
+- **Milestone**: `1.0-GA`
+- **Plan Doc**: [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
+
+---
+
+### [PENDING] 전용 바인더 레이어 구축 (Dedicated Binder / Catalog Resolver Pass) `ARCH-DEDICATED-BINDER-CATALOG-RESOLVER-1`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 08:16:57
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md)
+
+---
+
 ### [DONE] Duality-Driven Cross-Verification Methodology Specification `ARCH-DUALITY-CROSS-VERIFICATION-1`
 - **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-22 12:22:44
 - **Milestone**: `1.0-GA`
@@ -769,6 +806,13 @@
 
 ---
 
+### [PENDING] 정규화된 플랜 캐시 및 파라미터화 (Plan Cache Parameterization & Normalization) `ARCH-PLAN-CACHE-PARAMETERIZATION-1`
+- **Domain**: Planner | **Priority**: P2 | **Updated**: 2026-11-24 08:17:07
+- **Milestone**: `v1.10.0`
+- **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
+
+---
+
 ### [DONE] & `ARCH-RULE-SLUG`) `ARCH-PRED`
 - **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-16 14:21:00
 - **Target Files**: `pkg/sqlutil/predicate.go`
@@ -780,6 +824,13 @@
 - [x] **`REV-WIRE-010`**: PGWire `handleParse` / `handleBind` 비정상/음수/과대 슬라이스 할당 가드 적용 ([`RULE:DefensiveIndexing`], [`RULE:BoundedBuffers`])
 - [x] **`REV-CAT-003`**: 가상 카탈로그 행 필터링 잔여 정규식 제거 및 `sqlutil.ParseBinaryComparison` 일원화 (`Invariant 7`, [`RULE:ModularAbstraction`])
 - [x] **감사 대시보드 동기화**: `CODE_REVIEW.ko.md`, `CODE_REVIEW.md`, `REFACTORING.ko.md` 최신화 완료 (누적 결함 36건 100% 조치 완료)
+
+---
+
+### [COMPLETED] 단일 시맨틱 검증 게이트웨이(Scope Gatekeeper & DML Contract) 아키텍처 구축 `ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 08:02:20
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md)
 
 ---
 
@@ -1711,6 +1762,13 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 
 ---
 
+### [COMPLETED] INSERT VALUES 우변 미존재 유령 컬럼 참조 차단 및 NULL 오염 방지 (SQLSTATE 42703) `BUG-DML-INSERT-VALUES-NON-EXISTENT-COLUMN-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:56:35
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
+
+---
+
 ### [DONE] 비-id PK 테이블 DML 시 무작위 컬럼 PK 간주 해결 (DML Random PK Bug) `BUG-DML-PK-RANDOM-1`
 - **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Target Files**: ``pkg/engine/sqlexec_dml.go:1071-1078, 1228-1235``
@@ -1732,6 +1790,13 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 
 - VDBE(`execUpdateWhere`, `execDeleteWhere`), 코디네이터(`execUpdate`, `execDelete`), DDL(`TRUNCATE TABLE`)에서 대상 행의 PK를 식별하지 못할 때 `row.Values[0]`으로 임의 추측하거나 Go 맵의 `for _, v := range rec { pkVal = v; break }` 무작위 순회로 첫 번째 컬럼 값을 PK로 임의 간주하여 무관한 엉뚱한 행을 갱신/삭제/트렁케이트하던 치명적 무결성 결함.
 - 임의 컬럼 추측 및 무작위 Go 맵 순회를 완전 삭제하고, 스키마 공식 기본키(`schema.PrimaryKeyColumn()`)를 엄격 조회하며 미지정 시 에러를 반환하도록 정규화.
+
+---
+
+### [COMPLETED] DML RETURNING 절 미존재 유령 컬럼 참조 차단 (SQLSTATE 42703) `BUG-DML-RETURNING-NON-EXISTENT-COLUMN-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:58:37
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
 
 ---
 
@@ -1885,6 +1950,20 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 
 ---
 
+### [COMPLETED] GROUP BY 음수 서수(GROUP BY -1, -5) 거부 및 비정상 허용 차단 (SQLSTATE 42803) `BUG-GROUP-BY-NEGATIVE-ORDINAL-ACCEPTANCE-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:54:13
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
+
+---
+
+### [COMPLETED] HAVING 단독 사용 시 비집계 컬럼 프로젝션 차단 (SQLSTATE 42803) `BUG-HAVING-WITHOUT-GROUP-BY-NON-AGG-COLUMN-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:54:04
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
+
+---
+
 ### [DONE] HTTP API 테이블 생성 시 임의 PK 승격 제거 (HTTP Table PK Bug) `BUG-HTTP-TABLE-PK-1`
 - **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Target Files**: ``pkg/api/handlers_tables.go:147, 160-163``
@@ -1894,6 +1973,13 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 
 - HTTP API 테이블 생성(`CreateTableHandler`) 시 PK 미지정 시 첫 번째 컬럼을 멋대로 PK로 강제 지정(`cols[0].PrimaryKey = true`)하고, 알 수 없는 타입을 조용히 `TypeVarChar`로 대체하는 안티패턴.
 - 임의 PK 승격 제거 및 미지원 타입 전달 시 400 Bad Request 에러 반환.
+
+---
+
+### [COMPLETED] WHERE IN 서브쿼리 미존재 테이블 에러 전파 및 Fail-Closed 차단 `BUG-IN-SUBQUERY-ERROR-PROPAGATION-FAIL-CLOSED-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:54:04
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
 
 ---
 
@@ -1937,6 +2023,20 @@ PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 �
 
 - `IndexNestedLoopJoin` 구성 시 `innerPlan.IndexName`을 찾지 못하면 `else if len(innerSchema.Indexes) > 0 { innerIdx = &innerSchema.Indexes[0] }`로 조인 조건과 무관한 임의의 첫 번째 인덱스(예: `idx_email`)를 가져와 외부 조인 키(예: `user_id = 1001`)로 검색하여 조인 결과를 완전히 파괴하던 결함.
 - 일치하는 조인 인덱스가 없는 경우 안전하게 `HashJoin` 또는 `MergeJoin`으로 Fallback 전환.
+
+---
+
+### [COMPLETED] JOIN ON 절 내부 집계 함수 사용 차단 (SQLSTATE 42803) `BUG-JOIN-ON-AGGREGATE-FUNCTION-NOT-ALLOWED-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:58:37
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
+
+---
+
+### [COMPLETED] JOIN 시 ORDER BY/GROUP BY 모호한 컬럼 참조 차단 (SQLSTATE 42702) `BUG-JOIN-ORDER-GROUP-BY-AMBIGUOUS-COLUMN-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:58:37
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
 
 ---
 
@@ -2264,6 +2364,13 @@ DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 �
 
 - `execUpdate`, `execInsert`에서 DML Record 맵을 구성할 때 쿼리 원문 `colName`(예: `"Name"`)을 키로 저장하여, 스토리지 병합 후 `RecordToRow`가 스키마 컬럼(`"name"`)만 읽어 업데이트 값이 사일런트 유실(Silent Loss)되거나 NULL로 삽입되던 결함.
 - `rec[colSchema.Name] = ...`으로 스키마 공식 컬럼명으로 정규화하여 저장하고, `RecordToRow`에서도 대소문자 방어 로직 추가.
+
+---
+
+### [COMPLETED] 스칼라 프로젝션 및 EXISTS 서브쿼리 에러 상위 전파 `BUG-SCALAR-EXISTS-SUBQUERY-ERROR-PROPAGATION-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:58:37
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
 
 ---
 
@@ -2622,6 +2729,13 @@ VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 대소문자 미정규화로 인한 
 
 ---
 
+### [COMPLETED] Volcano 정수 나눗셈/모듈로 0 연산 시 NULL 대신 에러 발생 (SQLSTATE 22012) `BUG-VOLCANO-INT-DIV-ZERO-RETURNS-NULL-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:54:13
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
+
+---
+
 ### [DONE] MemEngine WAL 테일 절단 시 기동 실패 방지 (WAL Torn Write Boot Bug) `BUG-WAL-TORN-BOOT-1`
 - **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Target Files**: ``pkg/storage/memengine/wal.go:349`, `pkg/storage/memengine/memengine.go:311``
@@ -2643,6 +2757,20 @@ VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 대소문자 미정규화로 인한 
 
 - `evaluateSingleConditionMap`의 다른 조건들과 달리 `WHERE col IN (...)` 블록에서만 대소문자 무관 루프가 누락되어 쿼리 결과가 0건으로 누락되던 결함.
 - `strings.EqualFold` 대소문자 무관 탐색 루프 보강.
+
+---
+
+### [COMPLETED] WHERE 절 내부 집계 함수(COUNT, SUM 등) 사용 차단 (SQLSTATE 42803) `BUG-WHERE-AGGREGATE-FUNCTION-NOT-ALLOWED-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:54:04
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
+
+---
+
+### [COMPLETED] WHERE 절 산술 오버플로 시 행 침묵 누락 방지 및 에러 전파 (SQLSTATE 22003) `BUG-WHERE-ARITHMETIC-OVERFLOW-FAIL-CLOSED-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:54:13
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md)
 
 ---
 
@@ -3383,7 +3511,7 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [STATUS] SQL 시맨틱 유효성 검증 강화 (비집계 컬럼 누락 거부, GROUP BY 상수/서수 정합성, IN 다중 컬럼 서브쿼리 차단) `FEAT-SQL-SEMANTIC-VALIDATION-FAIL-CLOSED-1`
+### [COMPLETED] SQL 시맨틱 유효성 검증 강화 (비집계 컬럼 누락 거부, GROUP BY 상수/서수 정합성, IN 다중 컬럼 서브쿼리 차단) `FEAT-SQL-SEMANTIC-VALIDATION-FAIL-CLOSED-1`
 - **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:02:30
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/SQL_SEMANTIC_VALIDATION_FAIL_CLOSED_PLAN.ko.md`](notes/plans/SQL_SEMANTIC_VALIDATION_FAIL_CLOSED_PLAN.ko.md)

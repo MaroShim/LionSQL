@@ -1,10 +1,10 @@
 # SQL 시맨틱 및 무결성 유효성 검증 마스터 아키텍처 플랜 (SQL Comprehensive Integrity and Semantic Plan)
 
 > **작성일자**: 2026-11-24  
-> **상태**: 완료 (Completed)  
-> **문서 버전**: v1.1  
+> **상태**: 진행 중 (In Progress)  
+> **문서 버전**: v1.3  
 > **관련 마일스톤**: v0.95.0  
-> **대상 이슈**: `/tmp/sql.txt`, `/tmp/sql2.txt`, `/tmp/sql3.txt`, `/tmp/sql4.txt`, `/tmp/sql5.txt`
+> **대상 이슈**: `/tmp/sql.txt` ~ `/tmp/sql8.txt` 및 Fuzz 오라클 적발 3건
 
 ## 1. 개요 및 배경
 본 문서는 `/tmp/sql.txt`부터 `/tmp/sql5.txt`에 걸쳐 제기된 총 11건의 SQL 의미론(Semantic), 제약조건(Integrity Constraint), 날짜/산술 유효성 검증 결함을 집대성한 단일 마스터 아키텍처 계획서(SSOT)이다.
@@ -33,6 +33,21 @@ LionSQL 엔진 전반에 걸쳐 Fail-Closed 원칙에 입각하여, 문법적/�
 | `BUG-DATE-LITERAL-VALIDATION-FAIL-CLOSED-1` | `sql4.txt` #2 | `INSERT INTO t_dt VALUES (1, '2026-02-31'), (2, 'not-a-date');` 시 부적절한 날짜 문자열이 NULL로 묵인됨 | `date/time field value out of range: "2026-02-31"` (SQLSTATE 22008) 또는 `invalid input syntax for type date: "not-a-date"` (SQLSTATE 22007) 에러 반환 | 완료 |
 | `BUG-EXISTS-SUBQUERY-SCALAR-WHERE-EVAL-1` | `sql5.txt` #1 | `SELECT 1 WHERE EXISTS (SELECT 1 FROM t_sub1);` 와 같은 테이블리스 스칼라 SELECT에서 WHERE EXISTS가 false로 평가되어 0행 반환 | EXISTS 서브쿼리를 세션 엔진을 통해 실제 평가하여 true -> 1 반환 | 완료 |
 | `BUG-MATH-MOD-ZERO-DIVISION-ERROR-1` | `sql5.txt` #2 | `SELECT MOD(10, 0);` 실행 시 NULL 반환 | `ERROR: division by zero: divide by zero error encountered` (SQLSTATE 22012) 에러 반환 | 완료 |
+
+### Part 3: 심층 서브쿼리, 집계/윈도우 경계 및 유추 결함 (`/tmp/sql6.txt` 및 Fuzz/유추 적발)
+| 태스크 ID | 파일 및 순번 | 증상 요약 | 표준 동작 (Fail-Closed) | 상태 |
+|---|---|---|---|---|
+| `BUG-WHERE-AGGREGATE-FUNCTION-NOT-ALLOWED-1` | `sql6.txt` #1 + 유추 | `WHERE count(*) > 0`, `GROUP BY count(*)`, `JOIN ON count(*) > 0`, `GROUP BY ROW_NUMBER() OVER ()` 허용 | `aggregate functions are not allowed in WHERE / GROUP BY` (SQLSTATE 42803), `window functions are not allowed in GROUP BY` | 진행 중 |
+| `BUG-IN-SUBQUERY-ERROR-PROPAGATION-FAIL-CLOSED-1` | `sql6.txt` #2 + 유추 | `WHERE id IN / EXISTS (SELECT ... FROM non_existent_table)` 및 UPDATE/DELETE 서브쿼리 에러 묵살 후 0건 처리 | `relation "non_existent_table" does not exist` (SQLSTATE 42P01) 상위 전파 | 진행 중 |
+| `BUG-HAVING-WITHOUT-GROUP-BY-NON-AGG-COLUMN-1` | `sql6.txt` #3 | `SELECT id FROM t HAVING 1=1;` (GROUP BY 부재) 시 비집계 컬럼 `id`에 대해 임의 1행 반환 | `column "id" must appear in the GROUP BY clause or be used in an aggregate function` (SQLSTATE 42803) | 진행 중 |
+| `BUG-DML-INSERT-VALUES-NON-EXISTENT-COLUMN-1` | 유추 (from `sql3.txt`) | `INSERT INTO t (id, val) VALUES (3, ghost_col);` 시 미존재 컬럼이 NULL로 조용히 삽입됨 | `column "ghost_col" does not exist` (SQLSTATE 42703) 에러 반환 | 진행 중 |
+| `BUG-VOLCANO-INT-DIV-ZERO-RETURNS-NULL-1` | Fuzz 적발 | Volcano 실행기에서 `SELECT val / 0`, `val % 0` 정수 연산 시 에러 대신 NULL 반환 | `division by zero: divide by zero error encountered` (SQLSTATE 22012) | 진행 중 |
+| `BUG-GROUP-BY-NEGATIVE-ORDINAL-ACCEPTANCE-1` | Fuzz 적발 | `SELECT count(*) FROM t GROUP BY -1, -5;` 음수 서수/상수 비정상 허용 | `GROUP BY position -1 is not in select list` (SQLSTATE 42803) 에러 반환 | 진행 중 |
+| `BUG-WHERE-ARITHMETIC-OVERFLOW-FAIL-CLOSED-1` | Fuzz TLP 적발 | WHERE 절 산술 오버플로(`c2 * 5 > 2147483647`) 시 행 침묵 누락(TLP 불변식 위반) | `arithmetic overflow error` (SQLSTATE 22003) 에러 전파 | 진행 중 |
+| `BUG-SCALAR-EXISTS-SUBQUERY-ERROR-PROPAGATION-1` | `sql7.txt` #1 | `SELECT (SELECT id FROM non_existent_table);` 및 EXISTS 시 에러를 NULL/0건으로 삼킴 | `relation "non_existent_table" does not exist` (SQLSTATE 42P01) 상위 전파 | 진행 중 |
+| `BUG-DML-RETURNING-NON-EXISTENT-COLUMN-1` | `sql7.txt` #2 | `UPDATE/INSERT ... RETURNING no_such_col;` 시 미존재 컬럼이 NULL로 조용히 반환됨 | `column "no_such_col" does not exist` (SQLSTATE 42703) 에러 반환 | 진행 중 |
+| `BUG-JOIN-ORDER-GROUP-BY-AMBIGUOUS-COLUMN-1` | `sql7.txt` #3 | `SELECT ... JOIN ... ORDER BY id` 및 `GROUP BY id` 모호한 컬럼 검증 누락 | `column reference "id" is ambiguous` (SQLSTATE 42702) 에러 반환 | 진행 중 |
+| `BUG-JOIN-ON-AGGREGATE-FUNCTION-NOT-ALLOWED-1` | `sql7.txt` #4 | `JOIN ON count(*) > 0` 조인 조건 내 집계 함수 사용 묵인 | `aggregate functions are not allowed in JOIN ON` (SQLSTATE 42803) | 진행 중 |
 
 ---
 
@@ -120,6 +135,63 @@ LionSQL 엔진 전반에 걸쳐 Fail-Closed 원칙에 입각하여, 문법적/�
 - **수정 설계**:
   - `pkg/proc/builtins_math.go`: 두 번째 인자가 0인 경우 `fmt.Errorf("division by zero: divide by zero error encountered")` (SQLSTATE 22012) 에러 반환.
   - 내장 함수 평가기 및 VDBE 런타임에서 이 에러가 상위로 전파되어 트랜잭션 롤백 및 클라이언트에 명시적 오류가 전달되도록 보장.
+
+---
+
+### 3.3 Part 3: 구조적 패턴 결함 분석 및 수정 설계 (`sql6.txt`, `sql7.txt` 및 Fuzz/유추)
+
+#### 3.3.1 WHERE / JOIN ON / GROUP BY 내 집계 및 윈도우 함수 금지 (`BUG-WHERE-AGGREGATE-FUNCTION-NOT-ALLOWED-1`, `BUG-JOIN-ON-AGGREGATE-FUNCTION-NOT-ALLOWED-1`)
+- **원인 분석**:
+  - `pkg/planner/planner.go` 및 AST 빌드 단계에서 WHERE 절, JOIN ON 조건, GROUP BY 절 AST에 `proc.AggregateExpr` 및 집계 함수(`COUNT`, `SUM`, `AVG`, `MIN`, `MAX`), 윈도우 함수(`OVER ()`)가 포함되어 있는지 검증하는 루틴이 결여됨.
+- **수정 설계**:
+  - `proc.ExprHasAggregate(expr proc.Expr) bool`, `proc.ExprHasWindow(expr proc.Expr) bool` 헬퍼 함수를 통해:
+    1. WHERE 절 검증: `ExprHasAggregate(whereExpr)` 시 즉시 `aggregate functions are not allowed in WHERE (SQLSTATE 42803)` 에러 반환.
+    2. JOIN ON 조건 검증: `ExprHasAggregate(onExpr)` 시 즉시 `aggregate functions are not allowed in JOIN ON (SQLSTATE 42803)` 에러 반환.
+    3. GROUP BY 절 검증: `ExprHasAggregate(grpExpr)` 시 즉시 `aggregate functions are not allowed in GROUP BY (SQLSTATE 42803)`, `ExprHasWindow(grpExpr)` 시 `window functions are not allowed in GROUP BY` 반환.
+
+#### 3.3.2 서브쿼리 실행 에러 상위 전파 Fail-Closed (`BUG-IN-SUBQUERY-ERROR-PROPAGATION-FAIL-CLOSED-1`, `BUG-SCALAR-EXISTS-SUBQUERY-ERROR-PROPAGATION-1`)
+- **원인 분석**:
+  - `pkg/engine/sqlexec_eval.go:resolveSubqueries`, `resolveSubqueriesWithSession`, `createSubqueryExecutor`, `pkg/proc/eval.go`:
+  - 서브쿼리 실행 시 `res, err := s.ExecuteSessionSQL(...)`에서 `err != nil` (예: `table "non_existent_table" not found`)이 발생했을 때 이를 상위로 전파하지 않고 `nil`, 빈 결과 슬라이스, 혹은 `false`로 대체하여 조용히 삼킴.
+- **수정 설계**:
+  - 서브쿼리 해석 및 실행 콜백(`execSubquery`)의 에러를 상위 표현식 평가기 및 쿼리 실행기까지 무조건 Fail-Closed로 전파하여 쿼리 전체를 중단하고 클라이언트에 `SQLSTATE 42P01` 에러 반환.
+  - UPDATE / DELETE의 WHERE IN/EXISTS 서브쿼리 해석기에도 동일 적용.
+
+#### 3.3.3 HAVING 단독 사용 시 비집계 컬럼 검증 (`BUG-HAVING-WITHOUT-GROUP-BY-NON-AGG-COLUMN-1`)
+- **원인 분석**:
+  - `pkg/planner/planner.go`: `len(q.GroupBy) == 0 && q.HavingClause != ""`인 경우, HAVING 절이 존재함에도 불구하고 쿼리가 집계 모드로 올바르게 인식되지 않아 비집계 프로젝션 컬럼에 대한 `validateHavingClause` / `validateGroupByColumns` 검증이 누락됨.
+- **수정 설계**:
+  - HAVING 절이 존재하면 GROUP BY 지정 여부와 무관하게 쿼리는 집계 모드로 전환되며, 모든 프로젝션 컬럼은 집계 함수로 감싸져 있거나 상수가 아니면 `column "%s" must appear in the GROUP BY clause or be used in an aggregate function (SQLSTATE 42803)`로 차단.
+
+#### 3.3.4 DML RETURNING 및 VALUES 미존재 유령 컬럼 검증 (`BUG-DML-RETURNING-NON-EXISTENT-COLUMN-1`, `BUG-DML-INSERT-VALUES-NON-EXISTENT-COLUMN-1`)
+- **원인 분석**:
+  - INSERT/UPDATE의 RETURNING 절 및 INSERT VALUES 절의 우변 표현식에 대해 대상 테이블 스키마에 존재하지 않는 컬럼(`no_such_col`, `ghost_col`)을 참조할 때, `nil`로 평가되어 NULL이 반환되거나 삽입됨.
+- **수정 설계**:
+  - DML 컴파일 및 실행 시 RETURNING 프로젝션 및 VALUES 표현식의 모든 `ColumnRefExpr`에 대해 대상 테이블 컬럼명 존재 여부를 검증하고, 미존재 시 `column "%s" does not exist (SQLSTATE 42703)`로 차단.
+
+#### 3.3.5 JOIN 시 ORDER BY 및 GROUP BY 모호한 컬럼(Ambiguous Column) 검증 (`BUG-JOIN-ORDER-GROUP-BY-AMBIGUOUS-COLUMN-1`)
+- **원인 분석**:
+  - 다중 테이블 JOIN(`len(schemas) > 1`) 시 프로젝션 및 WHERE 절에는 모호성 검증(`ValidateAmbiguousColumns`)이 적용되었으나, ORDER BY 및 GROUP BY 절의 컬럼 참조에는 검증이 누락됨.
+- **수정 설계**:
+  - `execSelect` 및 `execVolcanoSelect`에서 ORDER BY 및 GROUP BY 절에 명시된 비한정 식별자(unqualified column reference)가 2개 이상의 조인 테이블 스키마에 공통 존재할 경우 `column reference "%s" is ambiguous (SQLSTATE 42702)` 에러 반환.
+
+#### 3.3.6 Volcano 정수 나눗셈/모듈로 0 에러 반환 (`BUG-VOLCANO-INT-DIV-ZERO-RETURNS-NULL-1`)
+- **원인 분석**:
+  - `pkg/execution/eval.go:686-693`: `TokenSlash`, `TokenDiv`, `TokenPercent` 연산자 처리 시 `rInt == 0`일 때 `return nil, true`로 NULL을 반환하고 있음.
+- **수정 설계**:
+  - `rInt == 0`인 경우 `fmt.Errorf("division by zero: divide by zero error encountered")` (SQLSTATE 22012) 에러를 반환하여 즉시 쿼리 실패 처리.
+
+#### 3.3.7 GROUP BY 음수 서수(-1, -5) 거부 (`BUG-GROUP-BY-NEGATIVE-ORDINAL-ACCEPTANCE-1`)
+- **원인 분석**:
+  - `pkg/planner/planner.go`: `GROUP BY`의 정수 리터럴 평가 시 음수 정수(`-1`, `-5`)를 상수 그룹핑으로 잘못 수용함.
+- **수정 설계**:
+  - GROUP BY 절의 음수 정수 표현식에 대해 `GROUP BY position %d is not in select list (SQLSTATE 42803)`로 거부.
+
+#### 3.3.8 WHERE 절 산술 오버플로 Fail-Closed 전파 (`BUG-WHERE-ARITHMETIC-OVERFLOW-FAIL-CLOSED-1`)
+- **원인 분석**:
+  - `pkg/execution/eval.go:812-818`, `pkg/proc/eval.go:1954`: `EvalTupleBoolExprWithContext` 및 `IsTruthyValue`에서 수식 평가 결과가 `error`(산술 오버플로 등)일 때 무조건 `false`로 변환하여 에러를 삼킴.
+- **수정 설계**:
+  - `FilterIterator.evaluate` 및 `EvalTupleBoolExprWithContext`가 런타임 수식 계산 에러(`Arithmetic overflow error`, `out of range`)를 감지하면 필터링을 중단하고 상위 실행기로 에러를 전파하여 Fail-Closed 원칙을 준수.
 
 ---
 

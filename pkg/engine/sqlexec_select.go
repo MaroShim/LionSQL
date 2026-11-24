@@ -38,9 +38,11 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		if err := ValidateWhereClause(qInfo.WhereClause); err != nil {
 			return nil, err
 		}
-		if resolved, err := s.resolveSubqueriesWithSession(qInfo.WhereClause, cs, outerNames...); err == nil {
-			qInfo.WhereClause = resolved
+		resolved, err := s.resolveSubqueriesWithSession(qInfo.WhereClause, cs, outerNames...)
+		if err != nil {
+			return nil, err
 		}
+		qInfo.WhereClause = resolved
 	}
 	if qInfo.HavingClause != "" {
 		if err := ValidateWhereClause(qInfo.HavingClause); err != nil {
@@ -60,7 +62,11 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 
 	for i, proj := range qInfo.Projections {
 		if sqlutil.ContainsKeyword(proj, "SELECT", true) && sqlutil.FindTopLevelChar(proj, '(') != -1 {
-			if resolved, err := s.resolveSubqueriesWithSession(proj, cs, outerNames...); err == nil && resolved != proj {
+			resolved, err := s.resolveSubqueriesWithSession(proj, cs, outerNames...)
+			if err != nil {
+				return nil, err
+			}
+			if resolved != proj {
 				qInfo.Projections[i] = resolved
 			}
 		}
@@ -134,6 +140,16 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	}
 	if qInfo.WhereClause != "" {
 		if err := ValidateWhereClauseWithSchemas(qInfo.WhereClause, allVolcanoSchemas...); err != nil {
+			return nil, err
+		}
+	}
+	if qInfo.OrderByClause != "" {
+		if err := ValidateOrderByClauseWithSchemas(qInfo.OrderByClause, allVolcanoSchemas...); err != nil {
+			return nil, err
+		}
+	}
+	if len(qInfo.GroupByCols) > 0 {
+		if err := ValidateGroupByClauseWithSchemas(strings.Join(qInfo.GroupByCols, ", "), allVolcanoSchemas...); err != nil {
 			return nil, err
 		}
 	}
@@ -1298,6 +1314,15 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 	if hasWhere && whereClause == "" {
 		return nil, fmt.Errorf("syntax error: empty or invalid expression in WHERE clause")
 	}
+	if hasWhere {
+		pWhere := proc.NewParser(proc.NewLexer(whereClause))
+		whereAST := pWhere.ParseExpr()
+		if whereAST != nil && len(pWhere.Errors()) == 0 {
+			if err := planner.CheckDisallowedExprs(whereAST, planner.ScopeWhere); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if err := ValidateWhereClause(whereClause); err != nil {
 		return nil, err
 	}
@@ -1473,7 +1498,11 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 	}
 
 	if whereClause != "" {
-		if resolved, err := s.resolveSubqueriesWithSession(whereClause, cs); err == nil && resolved != whereClause {
+		resolved, err := s.resolveSubqueriesWithSession(whereClause, cs)
+		if err != nil {
+			return nil, err
+		}
+		if resolved != whereClause {
 			whereClause = resolved
 		}
 		p := proc.NewParser(proc.NewLexer(whereClause))
@@ -2389,12 +2418,12 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 			}
 		}
 		if qInfo.OrderByClause != "" {
-			if err := ValidateOrderByClause(qInfo.OrderByClause); err != nil {
+			if err := ValidateOrderByClauseWithSchemas(qInfo.OrderByClause, schemas...); err != nil {
 				return nil, err
 			}
 		}
 		if len(qInfo.GroupByCols) > 0 {
-			if err := ValidateGroupByClause(strings.Join(qInfo.GroupByCols, ", ")); err != nil {
+			if err := ValidateGroupByClauseWithSchemas(strings.Join(qInfo.GroupByCols, ", "), schemas...); err != nil {
 				return nil, err
 			}
 		}
@@ -2481,11 +2510,11 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	// manual in-memory filtering, and bubble/slice sorting resided here. That redundant 3rd execution
 	// path was retired in favor of the unified 2-tier engine (VDBE Fast-Path + Volcano CBO).
 	// Full architectural context is documented in doc/internal/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md.
-	if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
-		return s.execScalarSelect(cleaned, start, cs)
-	}
 	if parseErr != nil {
 		return nil, fmt.Errorf("invalid or unsupported SELECT syntax: %w", parseErr)
+	}
+	if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
+		return s.execScalarSelect(cleaned, start, cs)
 	}
 	return nil, fmt.Errorf("query execution failed")
 }
@@ -3039,7 +3068,11 @@ func (s *Coordinator) tryExecSelectVarAssignment(query string, start time.Time, 
 		for _, a := range assignments {
 			exprStr := a.exprStr
 			if sqlutil.ContainsKeyword(exprStr, "SELECT", true) {
-				if resolved, err := s.resolveSubqueriesWithSession(exprStr, cs); err == nil && resolved != exprStr {
+				resolved, err := s.resolveSubqueriesWithSession(exprStr, cs)
+				if err != nil {
+					return true, nil, err
+				}
+				if resolved != exprStr {
 					exprStr = resolved
 				}
 			}

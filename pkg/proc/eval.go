@@ -72,26 +72,35 @@ func ExprHasSubquery(expr Expr) bool {
 
 // EvalBoolExpr evaluates an AST Expr in a boolean context against a row map.
 func EvalBoolExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) bool {
+	b, _ := EvalBoolExprWithErr(expr, row, execSubquery)
+	return b
+}
+
+// EvalBoolExprWithErr evaluates an AST Expr in a boolean context against a row map, returning any evaluation error.
+func EvalBoolExprWithErr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (bool, error) {
 	if expr == nil {
-		return true
+		return true, nil
 	}
 	val, err := EvalRowExpr(expr, row, execSubquery)
-	if err != nil || val == nil {
-		return false
+	if err != nil {
+		return false, err
+	}
+	if val == nil {
+		return false, nil
 	}
 	switch v := val.(type) {
 	case bool:
-		return v
+		return v, nil
 	case int64:
-		return v != 0
+		return v != 0, nil
 	case int:
-		return v != 0
+		return v != 0, nil
 	case float64:
-		return v != 0.0
+		return v != 0.0, nil
 	case string:
-		return len(v) > 0 && !strings.EqualFold(v, "false") && v != "0"
+		return len(v) > 0 && !strings.EqualFold(v, "false") && v != "0", nil
 	default:
-		return true
+		return true, nil
 	}
 }
 
@@ -445,7 +454,10 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			return e.Not, nil
 		}
 		val, err := EvalRowExpr(e.Expr, row, execSubquery)
-		if err != nil || isNullVal(val) {
+		if err != nil {
+			return nil, err
+		}
+		if isNullVal(val) {
 			return nil, nil
 		}
 		found := false
@@ -487,7 +499,7 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			for _, item := range e.List {
 				itemVal, err := EvalRowExpr(item, row, execSubquery)
 				if err != nil {
-					continue
+					return nil, err
 				}
 				if isNullVal(itemVal) {
 					hasNull = true
@@ -715,7 +727,10 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			subquerySQL = clone.String()
 		}
 		rows, _, err := execSubquery(subquerySQL)
-		hasRows := err == nil && len(rows) > 0
+		if err != nil {
+			return nil, err
+		}
+		hasRows := len(rows) > 0
 		if e.Not {
 			return !hasRows, nil
 		}
@@ -758,7 +773,10 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 
 	case *QuantifiedComparisonExpr:
 		val, err := EvalRowExpr(e.Expr, row, execSubquery)
-		if err != nil || isNullVal(val) {
+		if err != nil {
+			return nil, err
+		}
+		if isNullVal(val) {
 			return nil, nil
 		}
 		var targetVals []any
@@ -1508,17 +1526,23 @@ func evalRowBinaryOpWithContext(op TokenType, left, right any, isSQLite bool) (a
 	return nil, fmt.Errorf("unsupported binary operator %v", op)
 }
 
-func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[string]any, execSubquery SubqueryExecutor) (any, error) {
+// IsAggregateFunctionName reports whether a function name is an aggregate function.
+func IsAggregateFunctionName(name string) bool {
 	uName := strings.ToUpper(strings.TrimSpace(name))
-	if err := ValidateBuiltinArity(uName, len(args)); err != nil {
-		return nil, err
-	}
-	isAggFn := uName == "COUNT" || uName == "COUNT_BIG" || uName == "SUM" || uName == "TOTAL" || uName == "AVG" || uName == "MIN" || uName == "MAX" ||
+	return uName == "COUNT" || uName == "COUNT_BIG" || uName == "SUM" || uName == "TOTAL" || uName == "AVG" || uName == "MIN" || uName == "MAX" ||
 		uName == "STRING_AGG" || uName == "GROUP_CONCAT" ||
 		uName == "STDEV" || uName == "STDEVP" || uName == "STDDEV" || uName == "STDDEV_POP" || uName == "STDDEV_SAMP" ||
 		uName == "VAR" || uName == "VARP" || uName == "VAR_POP" || uName == "VAR_SAMP" || uName == "VARIANCE" ||
 		uName == "CHECKSUM_AGG" || uName == "BOOL_AND" || uName == "BOOL_OR" || uName == "EVERY" ||
 		uName == "ARRAY_AGG" || uName == "JSON_AGG" || uName == "JSONB_AGG" || uName == "GROUPING" || uName == "MEDIAN" || uName == "APPROX_PERCENTILE"
+}
+
+func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[string]any, execSubquery SubqueryExecutor) (any, error) {
+	uName := strings.ToUpper(strings.TrimSpace(name))
+	if err := ValidateBuiltinArity(uName, len(args)); err != nil {
+		return nil, err
+	}
+	isAggFn := IsAggregateFunctionName(uName)
 	if row != nil {
 		var argStrs []string
 		for _, a := range args {

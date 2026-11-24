@@ -240,6 +240,13 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		return nil
 	}
 
+	if err := ValidateQueryAST(stmt, nil); err != nil {
+		return &QueryInfo{
+			Err:      err,
+			RawQuery: stmt.RawSQL,
+		}
+	}
+
 	var ctes []CTEInfo
 	for _, c := range stmt.CTEs {
 		ctes = append(ctes, CTEInfo{

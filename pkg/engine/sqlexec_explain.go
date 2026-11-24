@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"strconv"
@@ -792,6 +793,28 @@ func (s *Coordinator) AnalyzeTable(tbl string) (*planner.TableStats, error) {
 	return ts, nil
 }
 
+func isFatalSubqueryError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, storage.ErrTableNotFound) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "permission denied") ||
+		strings.Contains(msg, "table not found") ||
+		strings.Contains(msg, "does not exist") ||
+		strings.Contains(msg, "42p01") ||
+		strings.Contains(msg, "syntax error") ||
+		strings.Contains(msg, "aggregate functions are not allowed") ||
+		strings.Contains(msg, "window functions are not allowed") ||
+		strings.Contains(msg, "division by zero") ||
+		strings.Contains(msg, "divide by zero") {
+		return true
+	}
+	return false
+}
+
 func (s *Coordinator) resolveSubqueries(whereClause string) (string, error) {
 	return s.resolveSubqueriesWithSession(whereClause, nil)
 }
@@ -828,8 +851,7 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 			innerRes, err = execSubquery(innerSQL)
 		}
 		if err != nil {
-			// Fail-closed on auth permission errors
-			if strings.Contains(err.Error(), "permission denied") {
+			if isFatalSubqueryError(err) {
 				return "", err
 			}
 			// If inner query failed (e.g. contains outer reference), skip so planner can decorrelate
@@ -878,7 +900,7 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		}
 		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
-			if strings.Contains(err.Error(), "permission denied") {
+			if isFatalSubqueryError(err) {
 				return "", err
 			}
 			offset = mEnd
@@ -992,7 +1014,7 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 
 		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
-			if strings.Contains(err.Error(), "permission denied") {
+			if isFatalSubqueryError(err) {
 				return "", err
 			}
 			offset = mEnd
@@ -1110,7 +1132,7 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		}
 		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
-			if strings.Contains(err.Error(), "permission denied") {
+			if isFatalSubqueryError(err) {
 				return "", err
 			}
 			offset = mEnd

@@ -275,8 +275,9 @@ func ValidateWhereClause(whereStr string) error {
 	return ValidateWhereClauseWithSchemas(whereStr)
 }
 
-// ValidateOrderByClause verifies that orderStr in SELECT is non-empty and syntactically well-formed.
-func ValidateOrderByClause(orderStr string) error {
+// ValidateOrderByClauseWithSchemas verifies that orderStr in SELECT is syntactically well-formed,
+// checks disallowed expressions, and checks for ambiguous column references across joined schemas.
+func ValidateOrderByClauseWithSchemas(orderStr string, schemas ...*storage.TableSchema) error {
 	orderStr = strings.TrimSpace(orderStr)
 	if orderStr == "" {
 		return fmt.Errorf("syntax error: empty or invalid expression in ORDER BY clause")
@@ -306,6 +307,28 @@ func ValidateOrderByClause(orderStr string) error {
 				return fmt.Errorf("syntax error: ORDER BY position number %d is out of range", lit.Val.IVal)
 			}
 		}
+		if err := planner.CheckDisallowedExprs(expr, planner.ScopeOrderBy); err != nil {
+			return err
+		}
+		if len(schemas) > 1 {
+			for _, ref := range planner.ExtractColumnRefs(item) {
+				if ref.TableOrAlias == "" {
+					matches := 0
+					seenTables := make(map[string]bool)
+					for _, sch := range schemas {
+						if sch != nil && !seenTables[strings.ToLower(sch.Name)] {
+							seenTables[strings.ToLower(sch.Name)] = true
+							if _, _, ok := sch.FindColumn(ref.Column); ok {
+								matches++
+							}
+						}
+					}
+					if matches > 1 {
+						return fmt.Errorf("column reference %q is ambiguous", ref.Column)
+					}
+				}
+			}
+		}
 		if p.CurrentToken().Type == proc.TokenAsc || p.CurrentToken().Type == proc.TokenDesc {
 			p.NextToken()
 		}
@@ -326,8 +349,15 @@ func ValidateOrderByClause(orderStr string) error {
 	return nil
 }
 
-// ValidateGroupByClause verifies that groupStr in SELECT is non-empty and syntactically well-formed.
-func ValidateGroupByClause(groupStr string) error {
+// ValidateOrderByClause verifies that orderStr in SELECT is non-empty and syntactically well-formed.
+func ValidateOrderByClause(orderStr string) error {
+	return ValidateOrderByClauseWithSchemas(orderStr)
+}
+
+// ValidateGroupByClauseWithSchemas verifies that groupStr in SELECT is syntactically well-formed,
+// checks disallowed expressions (e.g. aggregate functions, window functions, non-positive ordinals),
+// and checks for ambiguous column references across joined schemas.
+func ValidateGroupByClauseWithSchemas(groupStr string, schemas ...*storage.TableSchema) error {
 	groupStr = strings.TrimSpace(groupStr)
 	if groupStr == "" {
 		return fmt.Errorf("syntax error: empty or invalid expression in GROUP BY clause")
@@ -349,6 +379,41 @@ func ValidateGroupByClause(groupStr string) error {
 		if expr == nil {
 			return fmt.Errorf("syntax error: empty or invalid expression in GROUP BY clause")
 		}
+		if err := planner.CheckDisallowedExprs(expr, planner.ScopeGroupBy); err != nil {
+			return err
+		}
+		var intVal *int64
+		if lit, ok := expr.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
+			v := lit.Val.IVal
+			intVal = &v
+		} else if un, ok := expr.(*proc.UnaryExpr); ok && un.Op == proc.TokenMinus {
+			if lit, ok := un.Expr.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
+				v := -lit.Val.IVal
+				intVal = &v
+			}
+		}
+		if intVal != nil && *intVal <= 0 {
+			return fmt.Errorf("GROUP BY position %d is not in select list", *intVal)
+		}
+		if len(schemas) > 1 {
+			for _, ref := range planner.ExtractColumnRefs(item) {
+				if ref.TableOrAlias == "" {
+					matches := 0
+					seenTables := make(map[string]bool)
+					for _, sch := range schemas {
+						if sch != nil && !seenTables[strings.ToLower(sch.Name)] {
+							seenTables[strings.ToLower(sch.Name)] = true
+							if _, _, ok := sch.FindColumn(ref.Column); ok {
+								matches++
+							}
+						}
+					}
+					if matches > 1 {
+						return fmt.Errorf("column reference %q is ambiguous", ref.Column)
+					}
+				}
+			}
+		}
 		for p.CurrentToken().Type == proc.TokenSemicolon {
 			p.NextToken()
 		}
@@ -357,6 +422,62 @@ func ValidateGroupByClause(groupStr string) error {
 		}
 	}
 	return nil
+}
+
+// ValidateGroupByClause verifies that groupStr in SELECT is non-empty and syntactically well-formed.
+func ValidateGroupByClause(groupStr string) error {
+	return ValidateGroupByClauseWithSchemas(groupStr)
+}
+
+// ValidateOutputClause verifies that column references in RETURNING / OUTPUT exist on schema.
+func ValidateOutputClause(rawOutput string, schema *storage.TableSchema) error {
+	if rawOutput == "" || schema == nil {
+		return nil
+	}
+	info := parseOutputClauseInfo(rawOutput)
+	for _, p := range info.Projs {
+		if p.column == "*" {
+			continue
+		}
+		if _, _, ok := schema.FindColumn(p.column); !ok {
+			return fmt.Errorf("column %q does not exist", p.column)
+		}
+	}
+	return nil
+}
+
+// ValidateInsertValueExpr validates that a value expression in an INSERT VALUES tuple is a valid scalar expression
+// and does not reference non-existent columns (ghost columns).
+func ValidateInsertValueExpr(valStr string) error {
+	valStr = strings.TrimSpace(valStr)
+	if valStr == "" || strings.EqualFold(valStr, "NULL") || strings.EqualFold(valStr, "DEFAULT") {
+		return nil
+	}
+	if strings.HasPrefix(valStr, "@") {
+		return nil
+	}
+	if (strings.HasPrefix(valStr, "'") && strings.HasSuffix(valStr, "'")) ||
+		(strings.HasPrefix(valStr, "N'") && strings.HasSuffix(valStr, "'")) {
+		return nil
+	}
+	p := proc.NewParser(proc.NewLexer(valStr))
+	expr := p.ParseExpr()
+	if expr == nil {
+		return nil
+	}
+	return planner.WalkAST(expr, func(node proc.Expr) error {
+		col, ok := node.(*proc.ColumnRefExpr)
+		if !ok {
+			return nil
+		}
+		name := col.Name
+		if strings.HasPrefix(name, "@") || proc.IsBuiltinFunction(name) ||
+			strings.EqualFold(name, "NULL") || strings.EqualFold(name, "DEFAULT") ||
+			strings.EqualFold(name, "TRUE") || strings.EqualFold(name, "FALSE") {
+			return nil
+		}
+		return fmt.Errorf("column %q does not exist", name)
+	})
 }
 
 // ValidateSetClause verifies that setStr in UPDATE or MERGE is non-empty and all assignment pairs are syntactically valid.
@@ -409,19 +530,24 @@ func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
 }
 
 func evaluateWhereConditionWithSubquery(rec storage.Record, whereStr string, execSubquery proc.SubqueryExecutor) bool {
+	b, _ := evaluateWhereConditionWithSubqueryErr(rec, whereStr, execSubquery)
+	return b
+}
+
+func evaluateWhereConditionWithSubqueryErr(rec storage.Record, whereStr string, execSubquery proc.SubqueryExecutor) (bool, error) {
 	whereStr = strings.TrimSpace(whereStr)
 	if whereStr == "" || whereStr == "1=1" || whereStr == "1 = 1" || strings.EqualFold(whereStr, "NOT 1=0") || strings.EqualFold(whereStr, "NOT 1 = 0") {
-		return true
+		return true, nil
 	}
 	if whereStr == "1=0" || whereStr == "1 = 0" || strings.EqualFold(whereStr, "NOT 1=1") || strings.EqualFold(whereStr, "NOT 1 = 1") {
-		return false
+		return false, nil
 	}
 
 	rMap := make(map[string]any, len(rec))
 	for k, v := range rec {
 		rMap[k] = formatStorageValue(v)
 	}
-	return evaluateWhereConditionMapWithSubquery(rMap, whereStr, execSubquery)
+	return evaluateWhereConditionMapWithSubqueryErr(rMap, whereStr, execSubquery)
 }
 
 func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
@@ -429,41 +555,54 @@ func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 }
 
 func evaluateWhereConditionMapWithSubquery(rec map[string]any, whereStr string, execSubquery proc.SubqueryExecutor) bool {
+	b, _ := evaluateWhereConditionMapWithSubqueryErr(rec, whereStr, execSubquery)
+	return b
+}
+
+func evaluateWhereConditionMapWithSubqueryErr(rec map[string]any, whereStr string, execSubquery proc.SubqueryExecutor) (bool, error) {
 	whereStr = strings.TrimSpace(whereStr)
 	if whereStr == "" || whereStr == "1=1" || whereStr == "1 = 1" || strings.EqualFold(whereStr, "NOT 1=0") || strings.EqualFold(whereStr, "NOT 1 = 0") {
-		return true
+		return true, nil
 	}
 	if whereStr == "1=0" || whereStr == "1 = 0" || strings.EqualFold(whereStr, "NOT 1=1") || strings.EqualFold(whereStr, "NOT 1 = 1") {
-		return false
+		return false, nil
 	}
 
 	p := proc.NewParser(proc.NewLexer(whereStr))
 	expr := p.ParseExpr()
 	if expr != nil && len(p.Errors()) == 0 {
-		return proc.EvalBoolExpr(expr, rec, execSubquery)
+		return proc.EvalBoolExprWithErr(expr, rec, execSubquery)
 	}
 
 	orParts := sqlutil.SplitTopLevelKeyword(whereStr, "OR")
 	if len(orParts) > 1 {
 		for _, part := range orParts {
-			if evaluateWhereConditionMapWithSubquery(rec, part, execSubquery) {
-				return true
+			match, err := evaluateWhereConditionMapWithSubqueryErr(rec, part, execSubquery)
+			if err != nil {
+				return false, err
+			}
+			if match {
+				return true, nil
 			}
 		}
-		return false
+		return false, nil
 	}
 
 	andParts := sqlutil.SplitTopLevelKeyword(whereStr, "AND")
 	if len(andParts) > 1 {
 		for _, part := range andParts {
-			if !evaluateWhereConditionMapWithSubquery(rec, part, execSubquery) {
-				return false
+			match, err := evaluateWhereConditionMapWithSubqueryErr(rec, part, execSubquery)
+			if err != nil {
+				return false, err
+			}
+			if !match {
+				return false, nil
 			}
 		}
-		return true
+		return true, nil
 	}
 
-	return evaluateSingleConditionMap(rec, whereStr)
+	return evaluateSingleConditionMap(rec, whereStr), nil
 }
 
 func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {

@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- introduce dedicated Semantic Binder and Gatekeeper architecture pass (`ARCH-DEDICATED-BINDER-CATALOG-RESOLVER-1`, `ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`) in `pkg/planner/validator.go` enforcing compile-time scope isolation, identifier resolution, and DML write contracts
+- document dedicated binder architecture in `notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md` comparing against global DBMS standards (PostgreSQL `parse_analyze`, DuckDB `Binder`, Calcite `SqlValidator`)
 - add template-based random generative fuzz test suites for DML constraints and 2-tier parser boundary fail-closed validation (`fuzz_dml_constraint_negative_test.go`, `fuzz_two_tier_boundary_test.go`)
 - update `BENCHMARK.md` and `DATA_IMPORT_AND_MIGRATION.md` (and their Korean counterparts) with comprehensive bulk data ingestion benchmarks (244k rows/sec) and migration guides for PGWire `COPY`, TDS `BCP`, and multi-row `INSERT`
 - support high-throughput PGWire `COPY FROM STDIN` and `COPY TO STDOUT` streaming with chunked `BatchInsert` pipeline (`FEAT-WIRE-PG-COPY-STREAM-1`)
@@ -39,6 +41,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - accelerate GROUP BY and JOIN memory paths via uint64 FNV-1a integer slot hashing, sync.Pool buffer recycling, pre-resolved column indices, and direct tuple materialization, achieving 97.3% memory reduction and 99.6% allocation drop per tuple (`PERF-GROUPBY-SLOT-HASH-1`)
 
 ### Fixed
+- disallow aggregate functions (COUNT, SUM, AVG, MIN, MAX) in WHERE clause with SQLSTATE 42803 (`BUG-WHERE-AGGREGATE-FUNCTION-NOT-ALLOWED-1`)
+- disallow aggregate functions in JOIN ON clauses with SQLSTATE 42803 (`BUG-JOIN-ON-AGGREGATE-FUNCTION-NOT-ALLOWED-1`)
+- propagate subquery errors (missing table, relation does not exist) fail-closed in WHERE IN expressions with SQLSTATE 42P01 (`BUG-IN-SUBQUERY-ERROR-PROPAGATION-FAIL-CLOSED-1`)
+- propagate subquery errors fail-closed in scalar projections and EXISTS clauses with SQLSTATE 42P01 (`BUG-SCALAR-EXISTS-SUBQUERY-ERROR-PROPAGATION-1`)
+- propagate subquery errors fail-closed in UPDATE and DELETE WHERE conditions (`BUG-SCALAR-EXISTS-SUBQUERY-ERROR-PROPAGATION-1`)
+- reject non-aggregate column projections in HAVING clause when GROUP BY is omitted with SQLSTATE 42803 (`BUG-HAVING-WITHOUT-GROUP-BY-NON-AGG-COLUMN-1`)
+- reject non-existent ghost column references in DML RETURNING / OUTPUT clauses with SQLSTATE 42703 (`BUG-DML-RETURNING-NON-EXISTENT-COLUMN-1`)
+- reject non-existent ghost column references in INSERT VALUES tuples with SQLSTATE 42703 preventing silent NULL corruption (`BUG-DML-INSERT-VALUES-NON-EXISTENT-COLUMN-1`)
+- reject ambiguous column references in ORDER BY and GROUP BY across JOINed schemas with SQLSTATE 42702 (`BUG-JOIN-ORDER-GROUP-BY-AMBIGUOUS-COLUMN-1`)
+- raise division by zero error for integer/float division and modulo by zero in Volcano query engine with SQLSTATE 22012 (`BUG-VOLCANO-INT-DIV-ZERO-RETURNS-NULL-1`)
+- reject non-positive and negative integer positions (e.g. GROUP BY -1, -5) in GROUP BY clause with SQLSTATE 42803 (`BUG-GROUP-BY-NEGATIVE-ORDINAL-ACCEPTANCE-1`)
+- enforce fail-closed error propagation on arithmetic overflow in Volcano WHERE filter evaluation with SQLSTATE 22003 preventing silent row omission (`BUG-WHERE-ARITHMETIC-OVERFLOW-FAIL-CLOSED-1`)
 - reject INSERT with column count mismatch against target columns or schema with SQLSTATE 42601 (`BUG-DML-INSERT-COLUMN-COUNT-MISMATCH-1`)
 - reject unqualified ambiguous column references in JOIN projections and WHERE clauses with SQLSTATE 42702 (`BUG-JOIN-AMBIGUOUS-COLUMN-VALIDATION-1`)
 - reject non-existent column references on RHS of UPDATE SET with SQLSTATE 42703 preventing silent NULL corruption (`BUG-DML-UPDATE-NON-EXISTENT-COLUMN-1`)

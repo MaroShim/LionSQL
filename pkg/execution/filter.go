@@ -106,7 +106,11 @@ func (f *FilterIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 			// matches none
 		} else {
 			for _, t := range f.inChunk.Tuples {
-				if f.evaluate(t) {
+				matched, evalErr := f.evaluateErr(t)
+				if evalErr != nil {
+					return evalErr
+				}
+				if matched {
 					dest.Tuples = append(dest.Tuples, t)
 				}
 			}
@@ -164,11 +168,16 @@ func (f *FilterIterator) ColIndexMap() *ColumnIndexMap {
 }
 
 func (f *FilterIterator) evaluate(t Tuple) bool {
+	b, _ := f.evaluateErr(t)
+	return b
+}
+
+func (f *FilterIterator) evaluateErr(t Tuple) (bool, error) {
 	if f.condition == "" || f.condition == "1=1" || f.condition == "1 = 1" || strings.EqualFold(f.condition, "NOT 1=0") || strings.EqualFold(f.condition, "true") {
-		return true
+		return true, nil
 	}
 	if f.condition == "1=0" || f.condition == "1 = 0" || strings.EqualFold(f.condition, "NOT 1=1") || strings.EqualFold(f.condition, "false") {
-		return false
+		return false, nil
 	}
 
 	var subExec proc.SubqueryExecutor
@@ -184,10 +193,10 @@ func (f *FilterIterator) evaluate(t Tuple) bool {
 	}
 
 	if f.hasParsed && f.parsed != nil {
-		return EvalTupleBoolExprWithContext(t, f.parsed, subExec, f.sessionVars)
+		return EvalTupleBoolExprWithContextErr(t, f.parsed, subExec, f.sessionVars)
 	}
 
-	return EvalConditionTupleWithContext(t, f.condition, subExec, f.sessionVars)
+	return EvalConditionTupleWithContextErr(t, f.condition, subExec, f.sessionVars)
 }
 
 // EvalConditionTuple evaluates a SQL condition string against a Tuple.
@@ -202,42 +211,56 @@ func EvalConditionTupleWithSubquery(t Tuple, cond string, subExec proc.SubqueryE
 
 // EvalConditionTupleWithContext evaluates a SQL condition string against a Tuple with optional SubqueryExecutor and session variables.
 func EvalConditionTupleWithContext(t Tuple, cond string, subExec proc.SubqueryExecutor, sessionVars map[string]any) bool {
+	b, _ := EvalConditionTupleWithContextErr(t, cond, subExec, sessionVars)
+	return b
+}
+
+// EvalConditionTupleWithContextErr evaluates a SQL condition string against a Tuple, returning any evaluation error.
+func EvalConditionTupleWithContextErr(t Tuple, cond string, subExec proc.SubqueryExecutor, sessionVars map[string]any) (bool, error) {
 	cond = strings.TrimSpace(cond)
 	if cond == "" || cond == "1=1" || cond == "1 = 1" {
-		return true
+		return true, nil
 	}
 	if cond == "1=0" || cond == "1 = 0" {
-		return false
+		return false, nil
 	}
 
 	// Try AST expression parsing
 	p := proc.NewParser(proc.NewLexer(cond))
 	expr := p.ParseExpr()
 	if expr != nil && len(p.Errors()) == 0 {
-		return EvalTupleBoolExprWithContext(t, expr, subExec, sessionVars)
+		return EvalTupleBoolExprWithContextErr(t, expr, subExec, sessionVars)
 	}
 
 	orParts := splitLogicalParts(cond, " OR ")
 	if len(orParts) > 1 {
 		for _, part := range orParts {
-			if EvalConditionTupleWithContext(t, part, subExec, sessionVars) {
-				return true
+			matched, err := EvalConditionTupleWithContextErr(t, part, subExec, sessionVars)
+			if err != nil {
+				return false, err
+			}
+			if matched {
+				return true, nil
 			}
 		}
-		return false
+		return false, nil
 	}
 
 	andParts := splitLogicalParts(cond, " AND ")
 	if len(andParts) > 1 {
 		for _, part := range andParts {
-			if !EvalConditionTupleWithContext(t, part, subExec, sessionVars) {
-				return false
+			matched, err := EvalConditionTupleWithContextErr(t, part, subExec, sessionVars)
+			if err != nil {
+				return false, err
+			}
+			if !matched {
+				return false, nil
 			}
 		}
-		return true
+		return true, nil
 	}
 
-	return evalSinglePredicate(t, cond)
+	return evalSinglePredicate(t, cond), nil
 }
 
 func evalSinglePredicate(t Tuple, cond string) bool {
