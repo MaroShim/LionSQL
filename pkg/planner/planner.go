@@ -124,6 +124,7 @@ type PlanNode struct {
 	HavingCond       string               `json:"having_cond,omitempty"`
 	WindowDefs       []WindowDef          `json:"window_defs,omitempty"`
 	JoinType         string               `json:"join_type,omitempty"`
+	BuildSide        string               `json:"build_side,omitempty"`
 	HashCond         string               `json:"hash_cond,omitempty"`
 	JoinCond         string               `json:"join_cond,omitempty"`
 	MergeCond        string               `json:"merge_cond,omitempty"`
@@ -2819,9 +2820,28 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		joinEstRows = int64(math.Max(1, float64(currentEstimatedRows)*0.5))
 	}
 
-	// Calculate Hash Join Cost
+	cleanType := strings.ToUpper(strings.TrimSpace(join.Type))
+	cleanType = strings.ReplaceAll(cleanType, "MERGE", "")
+	cleanType = strings.ReplaceAll(cleanType, "HASH", "")
+	cleanType = strings.ReplaceAll(cleanType, "LOOP", "")
+	cleanType = strings.TrimSpace(cleanType)
+	if cleanType == "" {
+		cleanType = "INNER"
+	}
+
+	buildSide := "RIGHT"
+	// Calculate Hash Join Cost:
+	// Default: build right (rRows), probe left (currentEstimatedRows)
 	hashBuildCost := rScanCost + float64(rRows)*CPUTupleCost
 	hashProbeCost := currentNode.TotalCost + float64(currentEstimatedRows)*CPUOperatorCost
+	if (cleanType == "INNER" || cleanType == "CROSS") && currentEstimatedRows < rRows {
+		// Small-Table Build-Side Optimization:
+		// Left relation is smaller than right relation. Force building on left (currentEstimatedRows)
+		// and probing with right (rRows) to fit hash table into L1/L2 cache and reduce build cost.
+		buildSide = "LEFT"
+		hashBuildCost = currentNode.TotalCost + float64(currentEstimatedRows)*CPUTupleCost
+		hashProbeCost = rScanCost + float64(rRows)*CPUOperatorCost
+	}
 	hashJoinTotalCost := hashBuildCost + hashProbeCost
 
 	// Calculate Index Nested Loop Join Cost
@@ -2920,15 +2940,6 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		} else {
 			joinStrategy = "HASH"
 		}
-	}
-
-	cleanType := strings.ToUpper(strings.TrimSpace(join.Type))
-	cleanType = strings.ReplaceAll(cleanType, "MERGE", "")
-	cleanType = strings.ReplaceAll(cleanType, "HASH", "")
-	cleanType = strings.ReplaceAll(cleanType, "LOOP", "")
-	cleanType = strings.TrimSpace(cleanType)
-	if cleanType == "" {
-		cleanType = "INNER"
 	}
 
 	var rightFilters, joinFilters, postJoinFilters []string
@@ -3062,6 +3073,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		nextNode = &PlanNode{
 			Type:          NodeHashJoin,
 			JoinType:      cleanType,
+			BuildSide:     buildSide,
 			HashCond:      fmt.Sprintf("(%s = %s)", hjLeftKey, hjRightKey),
 			JoinCond:      joinFilter,
 			StartupCost:   hashBuildCost,

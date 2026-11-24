@@ -500,7 +500,7 @@
 | `DONE` | **`PERF-EXISTS-SUBQUERY-LIMIT-1`** | `1.0-GA` | Engine | P2 | EXISTS (SELECT ...) 구문 평가 시 암시적 LIMIT 1 푸시다운 및 1건 조기 탈출(결함 73) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-GROUPBY-SLOT-HASH-1`** | `v0.99.0` | Execution | P1 | GROUP BY 및 JOIN 인메모리 정수 슬롯 해시 가속 | [`--priority`](--priority) |  |
 | `DONE` | **`PERF-GROVE-CONCURRENCY-1`** |  | Durability | P2 | Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 | [`notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 2 (`PERF-HOTSPOT-LATCH-... |
-| `PENDING` | **`PERF-HASH-JOIN-SMALL-BUILD-1`** | `v0.96.0` | Execution | P1 | Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 | [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md) |  |
+| `DONE` | **`PERF-HASH-JOIN-SMALL-BUILD-1`** | `v0.96.0` | Execution | P1 | Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 | [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md) |  |
 | `DONE` | **`PERF-HYBRID-TEMPMEM-1`** |  | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OCC-FLAT-DECODE-1`** |  | Storage | P2 | FlatRecord 스캔 디코딩 할당 최적화 (Option A: SSO 2중 할당 제거 및 Arena 슬랩 풀링) |  |  |
 | `SPEC-OUT` | **`PERF-OCC-INSTANT-DROP-COL-1`** | `Spec-Out` | Storage | P2 | In-Memory OCC FlatRecordLayout 컬럼 가상 스킵 마스킹을 통한 Instant DROP COLUMN (O(1) DDL) 지원 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
@@ -513,7 +513,7 @@
 | `DONE` | **`PERF-OPT-PATINDEX-REGEX-CACHE-1`** | `3` | --domain | P2 | PATINDEX 등 내장 함수 정규식 컴파일 결과 LRU/RWMutex 캐싱 (P5) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-PROJECTION-SRCIDX-DEFER-DECODE-1`** | `Post-1.0` | --domain | P2 | ProjectionIterator 일반 컬럼 srcIdx 사전 바인딩 및 LazyTuple 선택 디코딩 (P4) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-SELECT-VALUES-ROWS-DEDUPE-1`** | `Post-1.0` | --domain | P2 | sqlexec_select.go Values/Rows 이중 할당 제거 및 Wire 프로토콜 Values 직결 (P2) | [`--prio`](--prio) |  |
-| `PENDING` | **`PERF-PARALLEL-HASH-AGG-1`** | `v0.96.0` | Execution | P1 | Parallel Hash Aggregation: 멀티코어 동시 파티션 스캔 및 Coordinator 최종 머지 | [`notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md`](notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-PARALLEL-HASH-AGG-1`** | `Post-1.0` | Execution | P1 | Parallel Hash Aggregation: 멀티코어 동시 파티션 스캔 및 Coordinator 최종 머지 | [`notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md`](notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | Parallel Hash Join (1-Build N-Probe) Probe 병렬화 실행기 | [`notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md`](notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | `Post-1.0` | Engine | P3 | WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** |  | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
@@ -4919,8 +4919,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 `PERF-HASH-JOIN-SMALL-BUILD-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 05:14:02
+### [DONE] Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 `PERF-HASH-JOIN-SMALL-BUILD-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 06:03:15
 - **Milestone**: `v0.96.0`
 - **Plan Doc**: [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md)
 
@@ -5008,8 +5008,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] Parallel Hash Aggregation: 멀티코어 동시 파티션 스캔 및 Coordinator 최종 머지 `PERF-PARALLEL-HASH-AGG-1`
-- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 05:14:02
-- **Milestone**: `v0.96.0`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 05:52:51
+- **Milestone**: `Post-1.0`
 - **Plan Doc**: [`notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md`](notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md)
 
 ---

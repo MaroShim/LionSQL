@@ -693,5 +693,73 @@ func TestP1_Batch4_PlannerExprIndexLoopJoinNoPanic(t *testing.T) {
 	}
 }
 
+func TestPlanner_HashJoin_SmallTableBuildSide(t *testing.T) {
+	p := planner.NewPlanner()
+
+	smallSchema := &storage.TableSchema{
+		Name: "categories",
+		Columns: []storage.Column{
+			{Name: "cat_id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "cat_name", Type: storage.TypeVarChar},
+		},
+	}
+	largeSchema := &storage.TableSchema{
+		Name: "products",
+		Columns: []storage.Column{
+			{Name: "prod_id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "cat_id", Type: storage.TypeInt},
+			{Name: "price", Type: storage.TypeInt},
+		},
+	}
+
+	// Case 1: Left is small (5 rows), Right is large (10,000 rows)
+	// Query: FROM categories c INNER HASH JOIN products p ON c.cat_id = p.cat_id
+	// Planner should force BuildSide = "LEFT"
+	q1, err := p.ParseSelect("SELECT c.cat_id, p.prod_id FROM categories c INNER HASH JOIN products p ON c.cat_id = p.cat_id")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	plan1 := p.BuildJoinPlan(q1, smallSchema, 5, largeSchema, 10000)
+	if plan1 == nil {
+		t.Fatal("expected non-nil plan1")
+	}
+	var hjNode1 *planner.PlanNode
+	if plan1.Type == planner.NodeHashJoin {
+		hjNode1 = plan1
+	} else if len(plan1.Children) > 0 && plan1.Children[0].Type == planner.NodeHashJoin {
+		hjNode1 = plan1.Children[0]
+	}
+	if hjNode1 == nil {
+		t.Fatalf("expected Hash Join node in plan1, got: %s", plan1.Type)
+	}
+	if hjNode1.BuildSide != "LEFT" {
+		t.Errorf("expected BuildSide='LEFT' when left is smaller, got '%s'", hjNode1.BuildSide)
+	}
+
+	// Case 2: Left is large (10,000 rows), Right is small (5 rows)
+	// Query: FROM products p INNER HASH JOIN categories c ON p.cat_id = c.cat_id
+	// Planner should keep BuildSide = "RIGHT"
+	q2, err := p.ParseSelect("SELECT p.prod_id, c.cat_id FROM products p INNER HASH JOIN categories c ON p.cat_id = c.cat_id")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	plan2 := p.BuildJoinPlan(q2, largeSchema, 10000, smallSchema, 5)
+	if plan2 == nil {
+		t.Fatal("expected non-nil plan2")
+	}
+	var hjNode2 *planner.PlanNode
+	if plan2.Type == planner.NodeHashJoin {
+		hjNode2 = plan2
+	} else if len(plan2.Children) > 0 && plan2.Children[0].Type == planner.NodeHashJoin {
+		hjNode2 = plan2.Children[0]
+	}
+	if hjNode2 == nil {
+		t.Fatalf("expected Hash Join node in plan2, got: %s", plan2.Type)
+	}
+	if hjNode2.BuildSide != "RIGHT" {
+		t.Errorf("expected BuildSide='RIGHT' when right is smaller, got '%s'", hjNode2.BuildSide)
+	}
+}
+
 
 

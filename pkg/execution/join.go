@@ -19,28 +19,40 @@ type hashMatch struct {
 	idx   int
 }
 
+type flatIntMatch struct {
+	key   int64
+	tuple Tuple
+	idx   int
+}
+
 // HashJoinIterator implements in-memory Hash Join between two relations.
-// The right child (inner) is buffered into a hash map during Open(), and
-// the left child (outer) is probed tuple-by-tuple during Next().
+// By default, the right child (inner) is buffered into a hash map during Open(),
+// and the left child (outer) is probed tuple-by-tuple during Next().
+// When buildSide is set to "LEFT", the roles are inverted: the left child is
+// buffered into the hash map and the right child is probed.
 type HashJoinIterator struct {
-	left           Iterator // Outer / Probe
-	right          Iterator // Inner / Build
-	joinType       string   // "INNER", "LEFT", "RIGHT", "FULL", "SEMI", "ANTI"
-	leftKey        string
-	rightKey       string
-	leftKeyIdx     int
-	rightKeyIdx    int
-	leftKeyParts   []string
-	leftKeyIdxs    []int
-	rightKeyParts  []string
-	rightKeyIdxs   []int
-	intHashTable   map[int64][]hashMatch
-	hashTable      map[string][]hashMatch
-	allRightTuples []Tuple
-	matchedRight   []bool
-	unmatchedIdx   int
-	rightHasNullKey bool
-	currentProbe   Tuple
+	left             Iterator // Outer / Probe (or Build if buildSide == "LEFT")
+	right            Iterator // Inner / Build (or Probe if buildSide == "LEFT")
+	joinType         string   // "INNER", "LEFT", "RIGHT", "FULL", "SEMI", "ANTI"
+	buildSide        string   // "RIGHT" (default) or "LEFT"
+	leftKey          string
+	rightKey         string
+	leftKeyIdx       int
+	rightKeyIdx      int
+	leftKeyParts     []string
+	leftKeyIdxs      []int
+	rightKeyParts    []string
+	rightKeyIdxs     []int
+	intHashTable     map[int64][]hashMatch
+	hashTable        map[string][]hashMatch
+	flatIntMatches   []flatIntMatch
+	isSmallFlatInt   bool
+	matchesBuf       []hashMatch
+	allRightTuples   []Tuple
+	matchedRight     []bool
+	unmatchedIdx     int
+	rightHasNullKey  bool
+	currentProbe     Tuple
 	currentMatches   []hashMatch
 	matchIdx         int
 	emittedAny       bool
@@ -52,6 +64,7 @@ type HashJoinIterator struct {
 	outChunk         Chunk
 	outIdx           int
 	arena            *storage.Arena
+	ownedArena       *storage.Arena
 	joinFilter       string
 	parsedJoinFilter proc.Expr
 	hasJoinFilter    bool
@@ -67,6 +80,7 @@ func NewHashJoinIterator(left, right Iterator, joinType, leftKey, rightKey strin
 		left:         left,
 		right:        right,
 		joinType:     jType,
+		buildSide:    "RIGHT",
 		leftKey:      strings.TrimSpace(leftKey),
 		rightKey:     strings.TrimSpace(rightKey),
 		leftKeyIdx:   -1,
@@ -74,6 +88,17 @@ func NewHashJoinIterator(left, right Iterator, joinType, leftKey, rightKey strin
 		hashTable:    make(map[string][]hashMatch),
 		intHashTable: make(map[int64][]hashMatch),
 		workMem:      DefaultWorkMem,
+	}
+}
+
+// SetBuildSide configures which relation is built into the hash table ("RIGHT" (default) or "LEFT").
+// For INNER and CROSS joins, building on the smaller relation significantly improves cache locality.
+func (h *HashJoinIterator) SetBuildSide(side string) {
+	s := strings.ToUpper(strings.TrimSpace(side))
+	if s == "LEFT" {
+		h.buildSide = "LEFT"
+	} else {
+		h.buildSide = "RIGHT"
 	}
 }
 
@@ -200,17 +225,40 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 		h.leftKeyIdx = resolveColIndex(h.left.ColIndexMap(), h.leftKey)
 	}
 
-	// 1. Build phase: drain right child into hash table
-	if err := h.right.Open(ctx); err != nil {
+	if h.arena == nil {
+		h.ownedArena = storage.GetArena()
+		h.arena = h.ownedArena
+	}
+
+	buildIter := h.right
+	probeIter := h.left
+	buildKey := h.rightKey
+	buildKeyIdx := h.rightKeyIdx
+	buildKeyParts := h.rightKeyParts
+	buildKeyIdxs := h.rightKeyIdxs
+
+	if h.buildSide == "LEFT" {
+		buildIter = h.left
+		probeIter = h.right
+		buildKey = h.leftKey
+		buildKeyIdx = h.leftKeyIdx
+		buildKeyParts = h.leftKeyParts
+		buildKeyIdxs = h.leftKeyIdxs
+	}
+
+	// 1. Build phase: drain build relation into hash table
+	if err := buildIter.Open(ctx); err != nil {
 		return fmt.Errorf("hash join build open error: %w", err)
 	}
 
 	isFull := h.joinType == "FULL" || strings.HasPrefix(h.joinType, "FULL")
 	isRight := h.joinType == "RIGHT" || strings.HasPrefix(h.joinType, "RIGHT")
-	trackRight := isFull || isRight
+	trackRight := (isFull || isRight) && h.buildSide != "LEFT"
 
 	h.hashTable = make(map[string][]hashMatch)
 	h.intHashTable = make(map[int64][]hashMatch)
+	h.flatIntMatches = nil
+	h.isSmallFlatInt = false
 	h.allRightTuples = nil
 	h.matchedRight = nil
 	h.unmatchedIdx = 0
@@ -226,14 +274,14 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			_ = h.right.Close()
+			_ = buildIter.Close()
 			return ctx.Err()
 		default:
 		}
 
-		err := PullChunk(ctx, h.right, inChunk, DefaultChunkSize)
+		err := PullChunk(ctx, buildIter, inChunk, DefaultChunkSize)
 		if err != nil && err != io.EOF {
-			_ = h.right.Close()
+			_ = buildIter.Close()
 			return fmt.Errorf("hash join build read error: %w", err)
 		}
 		if inChunk.Len() == 0 && err == io.EOF {
@@ -243,7 +291,7 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 		for _, tuple := range inChunk.Tuples {
 			tSize := EstimateTupleSize(tuple)
 			if h.workMem > 0 && h.buildMemory+tSize > h.workMem {
-				_ = h.right.Close()
+				_ = buildIter.Close()
 				return fmt.Errorf("hash join memory budget exceeded: %s > work_mem (%s)",
 					FormatMemSize(h.buildMemory+tSize), FormatMemSize(h.workMem))
 			}
@@ -256,33 +304,34 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 				h.matchedRight = append(h.matchedRight, false)
 			}
 
-			if h.joinType == "CROSS" || (h.leftKey == "" && h.rightKey == "") {
+			if h.joinType == "CROSS" || (buildKey == "" && len(buildKeyParts) == 0) {
 				h.hashTable[""] = append(h.hashTable[""], hashMatch{tuple: tuple, idx: rIdx})
 				continue
 			}
 
-			if len(h.rightKeyParts) > 0 {
-				kStr, found := extractTupleKeyFast(tuple, h.rightKeyParts, h.rightKeyIdxs, h.arena)
+			if len(buildKeyParts) > 0 {
+				kStr, found := extractTupleKeyFast(tuple, buildKeyParts, buildKeyIdxs, h.arena)
 				if !found {
 					h.rightHasNullKey = true
 					continue
 				}
 				h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
-			} else if strings.Contains(h.rightKey, ",") {
-				kStr, found := extractTupleKey(tuple, h.rightKey, h.arena)
+			} else if strings.Contains(buildKey, ",") {
+				kStr, found := extractTupleKey(tuple, buildKey, h.arena)
 				if !found {
 					h.rightHasNullKey = true
 					continue
 				}
 				h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
 			} else {
-				keyVal, found := getTupleValFast(tuple, h.rightKeyIdx, h.rightKey)
+				keyVal, found := getTupleValFast(tuple, buildKeyIdx, buildKey)
 				if !found || keyVal == nil {
 					h.rightHasNullKey = true
 					continue
 				}
 				if iKey, isInt := extractIntKey(keyVal); isInt {
 					h.intHashTable[iKey] = append(h.intHashTable[iKey], hashMatch{tuple: tuple, idx: rIdx})
+					h.flatIntMatches = append(h.flatIntMatches, flatIntMatch{key: iKey, tuple: tuple, idx: rIdx})
 				} else {
 					kStr := formatKeyVal(keyVal)
 					if h.arena != nil {
@@ -297,10 +346,14 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 			break
 		}
 	}
-	_ = h.right.Close()
+	_ = buildIter.Close()
 
-	// 2. Probe phase: open left child
-	if err := h.left.Open(ctx); err != nil {
+	if len(h.flatIntMatches) > 0 && len(h.flatIntMatches) <= 256 && len(h.hashTable) == 0 {
+		h.isSmallFlatInt = true
+	}
+
+	// 2. Probe phase: open probe child
+	if err := probeIter.Open(ctx); err != nil {
 		return fmt.Errorf("hash join probe open error: %w", err)
 	}
 
@@ -316,7 +369,7 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 	return nil
 }
 
-func (h *HashJoinIterator) pullLeft(ctx context.Context) (Tuple, error) {
+func (h *HashJoinIterator) pullProbe(ctx context.Context) (Tuple, error) {
 	if h.inIdx < len(h.inChunk.Tuples) {
 		t := h.inChunk.Tuples[h.inIdx]
 		h.inIdx++
@@ -324,7 +377,11 @@ func (h *HashJoinIterator) pullLeft(ctx context.Context) (Tuple, error) {
 	}
 	h.inChunk.Reset()
 	h.inIdx = 0
-	err := PullChunk(ctx, h.left, &h.inChunk, DefaultChunkSize)
+	iter := h.left
+	if h.buildSide == "LEFT" {
+		iter = h.right
+	}
+	err := PullChunk(ctx, iter, &h.inChunk, DefaultChunkSize)
 	if err != nil && err != io.EOF {
 		return Tuple{}, err
 	}
@@ -336,10 +393,28 @@ func (h *HashJoinIterator) pullLeft(ctx context.Context) (Tuple, error) {
 	return t, nil
 }
 
+func (h *HashJoinIterator) mergeProbeAndMatch(probe, match Tuple) Tuple {
+	if h.buildSide == "LEFT" {
+		return mergeTuplesWithArena(match, probe, h.colIndexMap, h.arena)
+	}
+	return mergeTuplesWithArena(probe, match, h.colIndexMap, h.arena)
+}
+
 func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 	isFull := h.joinType == "FULL" || strings.HasPrefix(h.joinType, "FULL")
 	isRight := h.joinType == "RIGHT" || strings.HasPrefix(h.joinType, "RIGHT")
-	trackRight := isFull || isRight
+	trackRight := (isFull || isRight) && h.buildSide != "LEFT"
+
+	probeKey := h.leftKey
+	probeKeyIdx := h.leftKeyIdx
+	probeKeyParts := h.leftKeyParts
+	probeKeyIdxs := h.leftKeyIdxs
+	if h.buildSide == "LEFT" {
+		probeKey = h.rightKey
+		probeKeyIdx = h.rightKeyIdx
+		probeKeyParts = h.rightKeyParts
+		probeKeyIdxs = h.rightKeyIdxs
+	}
 
 	for {
 		select {
@@ -353,7 +428,7 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 			for !h.currentProbe.IsNil() && h.matchIdx < len(h.currentMatches) {
 				m := h.currentMatches[h.matchIdx]
 				h.matchIdx++
-				merged := mergeTuplesWithArena(h.currentProbe, m.tuple, h.colIndexMap, h.arena)
+				merged := h.mergeProbeAndMatch(h.currentProbe, m.tuple)
 				if h.evalJoinFilter(merged) {
 					h.emittedAny = true
 					if trackRight && m.idx >= 0 && m.idx < len(h.matchedRight) {
@@ -365,7 +440,7 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 		}
 
 		// Pull next probe tuple from outer relation
-		probeTuple, err := h.pullLeft(ctx)
+		probeTuple, err := h.pullProbe(ctx)
 		if err != nil {
 			if err == io.EOF && trackRight {
 				for h.unmatchedIdx < len(h.allRightTuples) {
@@ -399,18 +474,18 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 				hasMatch = true
 				h.currentMatches = matches
 			}
-		} else if len(h.leftKeyParts) > 0 {
+		} else if len(probeKeyParts) > 0 {
 			var kStr string
-			kStr, found = extractTupleKeyFast(probeTuple, h.leftKeyParts, h.leftKeyIdxs, nil)
+			kStr, found = extractTupleKeyFast(probeTuple, probeKeyParts, probeKeyIdxs, nil)
 			if found {
 				if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
 					hasMatch = true
 					h.currentMatches = matches
 				}
 			}
-		} else if strings.Contains(h.leftKey, ",") {
+		} else if strings.Contains(probeKey, ",") {
 			var kStr string
-			kStr, found = extractTupleKey(probeTuple, h.leftKey, nil)
+			kStr, found = extractTupleKey(probeTuple, probeKey, nil)
 			if found {
 				if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
 					hasMatch = true
@@ -418,11 +493,25 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 				}
 			}
 		} else {
-			keyVal, ok := getTupleValFast(probeTuple, h.leftKeyIdx, h.leftKey)
+			keyVal, ok := getTupleValFast(probeTuple, probeKeyIdx, probeKey)
 			if ok && keyVal != nil {
 				found = true
 				if iKey, isInt := extractIntKey(keyVal); isInt {
-					if matches, exists := h.intHashTable[iKey]; exists && len(matches) > 0 {
+					if h.isSmallFlatInt {
+						h.matchesBuf = h.matchesBuf[:0]
+						for i := range h.flatIntMatches {
+							if h.flatIntMatches[i].key == iKey {
+								h.matchesBuf = append(h.matchesBuf, hashMatch{
+									tuple: h.flatIntMatches[i].tuple,
+									idx:   h.flatIntMatches[i].idx,
+								})
+							}
+						}
+						if len(h.matchesBuf) > 0 {
+							hasMatch = true
+							h.currentMatches = h.matchesBuf
+						}
+					} else if matches, exists := h.intHashTable[iKey]; exists && len(matches) > 0 {
 						hasMatch = true
 						h.currentMatches = matches
 					} else if len(h.hashTable) > 0 {
@@ -452,7 +541,7 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 		if h.joinType == "SEMI" {
 			if hasMatch {
 				for _, m := range h.currentMatches {
-					merged := mergeTuplesWithArena(probeTuple, m.tuple, h.colIndexMap, h.arena)
+					merged := h.mergeProbeAndMatch(probeTuple, m.tuple)
 					if h.evalJoinFilter(merged) {
 						h.currentProbe = Tuple{}
 						return probeTuple, nil
@@ -473,7 +562,7 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 			}
 			matchedAny := false
 			for _, m := range h.currentMatches {
-				merged := mergeTuplesWithArena(probeTuple, m.tuple, h.colIndexMap, h.arena)
+				merged := h.mergeProbeAndMatch(probeTuple, m.tuple)
 				if h.evalJoinFilter(merged) {
 					matchedAny = true
 					break
@@ -489,7 +578,7 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 		for h.matchIdx < len(h.currentMatches) {
 			m := h.currentMatches[h.matchIdx]
 			h.matchIdx++
-			merged := mergeTuplesWithArena(h.currentProbe, m.tuple, h.colIndexMap, h.arena)
+			merged := h.mergeProbeAndMatch(h.currentProbe, m.tuple)
 			if h.evalJoinFilter(merged) {
 				h.emittedAny = true
 				if trackRight && m.idx >= 0 && m.idx < len(h.matchedRight) {
@@ -551,6 +640,8 @@ func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
 func (h *HashJoinIterator) Close() error {
 	h.hashTable = nil
 	h.intHashTable = nil
+	h.flatIntMatches = nil
+	h.matchesBuf = nil
 	h.allRightTuples = nil
 	h.matchedRight = nil
 	h.currentProbe = Tuple{}
@@ -559,6 +650,11 @@ func (h *HashJoinIterator) Close() error {
 	h.inIdx = 0
 	h.outChunk.Reset()
 	h.outIdx = 0
+	if h.ownedArena != nil {
+		storage.PutArena(h.ownedArena)
+		h.ownedArena = nil
+		h.arena = nil
+	}
 	var errLeft, errRight error
 	if h.left != nil {
 		errLeft = h.left.Close()
