@@ -92,7 +92,7 @@
 | `DONE` | **`BENCH-TPCH-1`** |  | Ecosystem | P3 | Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation 영구 대체 기각 (Replaced by PERF-SUBQUERY-MEMO-1, Spec-Out) | [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-CONSOLIDATION-PHASE-1`** | `v0.95.0` | Architecture | P1 | 바인더 통합 1단계: 형상 및 차원 정합성 (INSERT 컬럼/값 불일치, 서브쿼리 단일 컬럼 제약) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`BINDER-CONSOLIDATION-PHASE-2`** | `v0.95.0` | Architecture | P1 | 바인더 통합 2단계: 식별자 및 문법 스코프 규칙 (FROM 서브쿼리 ALIAS 필수, DISTINCT ORDER BY 제약) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
-| `PENDING` | **`BINDER-EVOL-PHASE-1`** | `v0.95.0` | Architecture | P1 | WalkAST 전수 순회 완료 및 집계 경계 추적기 (AggregateContextTracker) 구현 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
+| `DONE` | **`BINDER-EVOL-PHASE-1`** | `v0.95.0` | Architecture | P1 | WalkAST 전수 순회 완료 및 집계 경계 추적기 (AggregateContextTracker) 구현 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `PENDING` | **`BINDER-EVOL-PHASE-2`** | `v0.95.0` | Architecture | P1 | Qualified Column 및 미존재 테이블 별칭(t3.id) 사전 검증 통합 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `PENDING` | **`BINDER-EVOL-PHASE-3`** | `v0.95.0` | Architecture | P1 | JOIN ON 절 비한정 컬럼 모호성(id = id) 검증 및 스코프 확립 | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
 | `PENDING` | **`BINDER-EVOL-PHASE-4`** | `v0.95.0` | Architecture | P1 | DML Contract 실제 실행 경로 직결 (NOT NULL, UPDATE SET 대상/우변 검증) | [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md) |  |
@@ -1397,8 +1397,8 @@
 
 ---
 
-### [PENDING] WalkAST 전수 순회 완료 및 집계 경계 추적기 (AggregateContextTracker) 구현 `BINDER-EVOL-PHASE-1`
-- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 23:24:55
+### [DONE] WalkAST 전수 순회 완료 및 집계 경계 추적기 (AggregateContextTracker) 구현 `BINDER-EVOL-PHASE-1`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 23:34:05
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md`](notes/plans/BOUND_AST_AND_DEDICATED_BINDER_EVOLUTION_PLAN.ko.md)
 

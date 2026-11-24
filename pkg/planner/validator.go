@@ -126,6 +126,28 @@ func WalkAST(expr proc.Expr, fn func(node proc.Expr) error) error {
 				return err
 			}
 		}
+	case *proc.WithinGroupExpr:
+		if e.Function != nil {
+			if err := WalkAST(e.Function, fn); err != nil {
+				return err
+			}
+		}
+		if e.OrderBy != nil {
+			if err := WalkAST(e.OrderBy, fn); err != nil {
+				return err
+			}
+		}
+	case *proc.QuantifiedComparisonExpr:
+		if err := WalkAST(e.Expr, fn); err != nil {
+			return err
+		}
+		for _, itm := range e.List {
+			if err := WalkAST(itm, fn); err != nil {
+				return err
+			}
+		}
+		// Subquery boundary: e.Query is evaluated in inner scope
+		return nil
 	case *proc.ScalarSubqueryExpr, *proc.ExistsExpr:
 		// Subquery boundary: do not traverse inner clauses as outer scope
 		return nil
@@ -142,8 +164,8 @@ func CheckDisallowedExprs(expr proc.Expr, scope ClauseScope) error {
 		switch n := node.(type) {
 		case *proc.FunctionCallExpr:
 			if n.HasOver {
-				// Window functions are disallowed in WHERE, HAVING, GROUP BY
-				if scope&(ScopeWhere|ScopeHaving|ScopeGroupBy) != 0 {
+				// Window functions are disallowed in WHERE, HAVING, GROUP BY, and JOIN ON
+				if scope&(ScopeWhere|ScopeHaving|ScopeGroupBy|ScopeJoinOn) != 0 {
 					return fmt.Errorf("window functions are not allowed in %s", scopeName(scope))
 				}
 			} else if proc.IsAggregateFunctionName(n.Name) {
@@ -213,16 +235,7 @@ func ValidateQueryAST(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.
 	if stmt.Having != nil && len(stmt.GroupBy) == 0 {
 		for _, p := range stmt.Projections {
 			if p.Expr != nil && !proc.IsConstantExpr(p.Expr) {
-				err := WalkAST(p.Expr, func(node proc.Expr) error {
-					if fn, ok := node.(*proc.FunctionCallExpr); ok && proc.IsAggregateFunctionName(fn.Name) {
-						return nil // aggregate function inside projection is allowed
-					}
-					if col, ok := node.(*proc.ColumnRefExpr); ok {
-						return fmt.Errorf("column %q must appear in the GROUP BY clause or be used in an aggregate function", col.Name)
-					}
-					return nil
-				})
-				if err != nil {
+				if err := ValidateProjectionUnderHaving(p.Expr, false); err != nil {
 					return err
 				}
 			}
@@ -411,4 +424,124 @@ func ValidateExprColsAgainstSchema(expr proc.Expr, schema *storage.TableSchema) 
 		}
 		return fmt.Errorf("column %q does not exist", name)
 	})
+}
+
+// ValidateProjectionUnderHaving recursively verifies that any column reference
+// in a projection without GROUP BY is strictly enclosed within an aggregate function.
+func ValidateProjectionUnderHaving(expr proc.Expr, inAggregate bool) error {
+	if expr == nil {
+		return nil
+	}
+	switch e := expr.(type) {
+	case *proc.ColumnRefExpr:
+		if !inAggregate {
+			return fmt.Errorf("column %q must appear in the GROUP BY clause or be used in an aggregate function", e.Name)
+		}
+		return nil
+	case *proc.FunctionCallExpr:
+		isAgg := inAggregate || proc.IsAggregateFunctionName(e.Name)
+		for _, arg := range e.Args {
+			if err := ValidateProjectionUnderHaving(arg, isAgg); err != nil {
+				return err
+			}
+		}
+		if e.Filter != nil {
+			if err := ValidateProjectionUnderHaving(e.Filter, isAgg); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *proc.BinaryExpr:
+		if err := ValidateProjectionUnderHaving(e.Left, inAggregate); err != nil {
+			return err
+		}
+		return ValidateProjectionUnderHaving(e.Right, inAggregate)
+	case *proc.UnaryExpr:
+		return ValidateProjectionUnderHaving(e.Expr, inAggregate)
+	case *proc.CastExpr:
+		return ValidateProjectionUnderHaving(e.Expr, inAggregate)
+	case *proc.IsNullExpr:
+		return ValidateProjectionUnderHaving(e.Expr, inAggregate)
+	case *proc.CaseExpr:
+		if err := ValidateProjectionUnderHaving(e.Operand, inAggregate); err != nil {
+			return err
+		}
+		if err := ValidateProjectionUnderHaving(e.Else, inAggregate); err != nil {
+			return err
+		}
+		for _, b := range e.Whens {
+			if err := ValidateProjectionUnderHaving(b.Condition, inAggregate); err != nil {
+				return err
+			}
+			if err := ValidateProjectionUnderHaving(b.Result, inAggregate); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *proc.InExpr:
+		if err := ValidateProjectionUnderHaving(e.Expr, inAggregate); err != nil {
+			return err
+		}
+		for _, itm := range e.List {
+			if err := ValidateProjectionUnderHaving(itm, inAggregate); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *proc.BetweenExpr:
+		if err := ValidateProjectionUnderHaving(e.Expr, inAggregate); err != nil {
+			return err
+		}
+		if err := ValidateProjectionUnderHaving(e.Low, inAggregate); err != nil {
+			return err
+		}
+		return ValidateProjectionUnderHaving(e.High, inAggregate)
+	case *proc.LikeExpr:
+		if err := ValidateProjectionUnderHaving(e.Expr, inAggregate); err != nil {
+			return err
+		}
+		if err := ValidateProjectionUnderHaving(e.Pattern, inAggregate); err != nil {
+			return err
+		}
+		if e.Escape != nil {
+			return ValidateProjectionUnderHaving(e.Escape, inAggregate)
+		}
+		return nil
+	case *proc.CollateExpr:
+		return ValidateProjectionUnderHaving(e.Expr, inAggregate)
+	case *proc.TupleExpr:
+		for _, elem := range e.Elements {
+			if err := ValidateProjectionUnderHaving(elem, inAggregate); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *proc.WithinGroupExpr:
+		isAgg := inAggregate
+		if e.Function != nil {
+			isAgg = isAgg || proc.IsAggregateFunctionName(e.Function.Name)
+			if err := ValidateProjectionUnderHaving(e.Function, isAgg); err != nil {
+				return err
+			}
+		}
+		if e.OrderBy != nil {
+			if err := ValidateProjectionUnderHaving(e.OrderBy, isAgg); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *proc.QuantifiedComparisonExpr:
+		if err := ValidateProjectionUnderHaving(e.Expr, inAggregate); err != nil {
+			return err
+		}
+		for _, itm := range e.List {
+			if err := ValidateProjectionUnderHaving(itm, inAggregate); err != nil {
+				return err
+			}
+		}
+		return nil
+	case *proc.ScalarSubqueryExpr, *proc.ExistsExpr:
+		return nil
+	}
+	return nil
 }

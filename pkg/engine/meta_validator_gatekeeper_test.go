@@ -131,6 +131,18 @@ func TestMetaValidatorAndBinder_ScopeIsolation(t *testing.T) {
 			}
 		})
 	}
+
+	// Positive test: valid aggregate projection under HAVING without GROUP BY must succeed
+	{
+		validSQL := "SELECT SUM(val) FROM t1 HAVING SUM(val) >= 0;"
+		res, err := coord.ExecuteSessionSQL(sess, validSQL)
+		if err != nil {
+			t.Fatalf("valid aggregate projection under HAVING failed: %v", err)
+		}
+		if res == nil {
+			t.Fatalf("expected non-nil result for valid aggregate projection under HAVING")
+		}
+	}
 }
 
 func TestBinder_Phase1_ShapeAndArityValidation(t *testing.T) {
@@ -212,6 +224,16 @@ func TestBinder_Phase1_ShapeAndArityValidation(t *testing.T) {
 			sql:         "SELECT id FROM (SELECT id FROM t_arity);",
 			expectedErr: "subquery in FROM must have an alias",
 		},
+		{
+			name:        "HAVING without GROUP BY with unaggregated column in composite projection rejected",
+			sql:         "SELECT SUM(score) + name FROM t_arity HAVING SUM(score) > 10;",
+			expectedErr: "must appear in the GROUP BY clause or be used in an aggregate function",
+		},
+		{
+			name:        "JOIN ON with window function disallowed",
+			sql:         "SELECT * FROM t_arity t1 JOIN t_arity t2 ON ROW_NUMBER() OVER () = 1;",
+			expectedErr: "window functions are not allowed in JOIN ON",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -224,5 +246,17 @@ func TestBinder_Phase1_ShapeAndArityValidation(t *testing.T) {
 				t.Fatalf("[%s] expected error containing %q, got: %v", tc.name, tc.expectedErr, err)
 			}
 		})
+	}
+
+	// Positive test: valid aggregate projection under HAVING without GROUP BY must succeed
+	{
+		validSQL := "SELECT SUM(score) FROM t_arity HAVING SUM(score) >= 0;"
+		res, err := coord.ExecuteSessionSQL(sess, validSQL)
+		if err != nil {
+			t.Fatalf("valid aggregate projection under HAVING failed: %v", err)
+		}
+		if res == nil {
+			t.Fatalf("expected non-nil result for valid aggregate projection under HAVING")
+		}
 	}
 }
