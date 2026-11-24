@@ -193,3 +193,77 @@ func TestMemEngine_CreateIndex_ConcurrentDML_NoMissingEntries(t *testing.T) {
 		t.Fatalf("CRITICAL: %d index entries missing after concurrent CreateIndex! Missing PKs: %v", len(missingKeys), missingKeys)
 	}
 }
+
+func TestMemEngine_TruncateTables_ClearsSecondaryIndexes(t *testing.T) {
+	eng := New()
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "email", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "uq_email", TableName: "users", Columns: []string{"email"}, Unique: true},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	// Insert row
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx.Insert("users", storage.Record{"id": storage.IntValue(1), "email": storage.StringValue("user@example.com")}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Truncate table
+	if err := eng.TruncateTables([]string{"users"}, false); err != nil {
+		t.Fatalf("TruncateTables failed: %v", err)
+	}
+
+	// Verify table has 0 rows
+	td := eng.tables["users"]
+	if count := td.rowCount(); count != 0 {
+		t.Fatalf("expected 0 rows in table, got %d", count)
+	}
+
+	// Check secondary index entries
+	idxData := td.Indexes["uq_email"]
+	if idxData == nil {
+		t.Fatal("index uq_email not found")
+	}
+	lookupVal := storage.StringValue("user@example.com")
+	entries := idxData.ScanRange(&lookupVal, &lookupVal)
+	if len(entries) != 0 {
+		t.Fatalf("expected 0 index entries after TRUNCATE, but found %d entries: %v", len(entries), entries)
+	}
+
+	// Insert same email again: MUST SUCCEED because table was truncated!
+	tx2, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx tx2 failed: %v", err)
+	}
+	defer tx2.Rollback()
+
+	if err := tx2.Insert("users", storage.Record{"id": storage.IntValue(2), "email": storage.StringValue("user@example.com")}); err != nil {
+		t.Fatalf("Insert after TRUNCATE failed (stale secondary index collision): %v", err)
+	}
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("Commit tx2 failed: %v", err)
+	}
+}
+

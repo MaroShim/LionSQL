@@ -241,9 +241,10 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 	}
 
 	td.mu.Lock()
+	defer td.mu.Unlock()
+
 	foundIdx, idxPos, exists := td.Schema.FindIndex(indexName)
 	if !exists {
-		td.mu.Unlock()
 		return fmt.Errorf("%w: %s", storage.ErrIndexNotFound, indexName)
 	}
 
@@ -253,7 +254,6 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 	sqlutil.MapDeleteFold(td.Indexes, foundIdx.Name)
 	td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], td.Schema.Indexes[idxPos+1:]...)
 	td.refreshSnapSchemaLocked()
-	td.mu.Unlock()
 
 	if !storage.IsTemporaryTable(tableName) {
 		if _, err := e.recordWALLocked([]WALOp{{
@@ -261,13 +261,11 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 			Table:     tableName,
 			IndexName: indexName,
 		}}); err != nil {
-			td.mu.Lock()
 			if backupIdxData != nil {
 				td.Indexes[backupSchemaIdx.Name] = backupIdxData
 			}
 			td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], append([]storage.IndexSchema{backupSchemaIdx}, td.Schema.Indexes[idxPos:]...)...)
 			td.refreshSnapSchemaLocked()
-			td.mu.Unlock()
 			return err
 		}
 	}
