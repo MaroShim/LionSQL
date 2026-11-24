@@ -39,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - push down required column sets to `SeqScanIterator` and `IndexScanIterator`, skipping unreferenced columns without decoding or allocating heap strings/LOBs via `storage.DecodeTupleSelectedWithArena` and `SkipTupleColumn`, achieving a 73.7% allocation drop and 38% latency reduction on wide tables
   - implement transitive predicate inference across equi-joined tables (`InferTransitivePredicates`), automatically propagating single-column filters (`= const`, `> const`, `IN`, `BETWEEN`) to joined relations for early index seeks and storage filtering prior to join execution
 - accelerate GROUP BY and JOIN memory paths via uint64 FNV-1a integer slot hashing, sync.Pool buffer recycling, pre-resolved column indices, and direct tuple materialization, achieving 97.3% memory reduction and 99.6% allocation drop per tuple (`PERF-GROUPBY-SLOT-HASH-1`)
+- integrate Dedicated Semantic Binder & Gatekeeper Invariant verification into Gate 1 of the automated release pipeline (`scripts/release.sh`) and technical whitepaper (`doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`)
 
 ### Refactored
 - consolidate INSERT arity validation (`ValidateInsertArity`) into semantic binder pass before transaction initiation (`BINDER-CONSOLIDATION-PHASE-1`)

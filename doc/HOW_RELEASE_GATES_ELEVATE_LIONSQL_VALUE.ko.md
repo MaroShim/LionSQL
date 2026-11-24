@@ -73,9 +73,13 @@ LionSQL의 릴리즈 자동화 파이프라인([`scripts/release.sh`](../scripts
 ========================================================================================
 ```
 
-### [Gate 1] 23개 코어 패키지 무결성 & 100,000 TPS 인라인 성능 게이트
-- **실행 명령**: `go test -tags wiredtiger -count=1 ./pkg/...`
-- **의미**: LionSQL 본체 23개 Go 패키지의 단위 불변식을 전수 검증합니다. 특히 `pkg/proc/runtime`에 내장된 `TestRegression_TransferFundsPerfGate`를 통해, 8개 동시 워커가 1,000건의 ACID 다중 테이블 송금 트랜잭션을 **100,000+ TPS**로 완수하는지 즉시 측정하여 미세한 잠금 병목이나 지연시간 퇴행을 사전에 차단합니다.
+### [Gate 1] 전용 시맨틱 바인더(Dedicated Binder) 수문장 무결성 & 23개 코어 패키지 100,000 TPS 인라인 게이트
+- **실행 명령**:
+  - `go test -tags wiredtiger -race -count=1 -run "TestMetaValidatorAndBinder|TestBinder_Phase1" ./pkg/engine/...` (Gate 1.1: 바인더 수문장 인라인 게이트)
+  - `go test -tags wiredtiger -count=1 ./pkg/... ./test/e2e/... ./test/spec_defects/...`
+- **의미**:
+  - **전용 바인더 수문장(Gatekeeper Invariant)**: 쿼리가 실행 엔진(Volcano Iterator / VDBE)이나 스토리지 트랜잭션에 도달하기 전 입구에서 튜플 차원 불일치(Arity), 미존재 유령 컬럼 참조(`42703`), 허용되지 않는 집계/윈도우 함수 오용(`42803`), 다중 조인 모호성(`42702`), 윈도우 함수 상수 경계(`NTILE(0)`, `PERCENTILE_CONT(1.5)`) 등을 **100% Fail-Closed 사전 차단**함을 `-race` 모드로 기계적 증명합니다.
+  - **코어 단위 불변식 & 100k TPS 측정**: LionSQL 본체 23개 Go 패키지의 단위 불변식을 전수 검증하며, `pkg/proc/runtime`에 내장된 `TestRegression_TransferFundsPerfGate`를 통해, 8개 동시 워커가 1,000건의 ACID 다중 테이블 송금 트랜잭션을 **100,000+ TPS**로 완수하는지 즉시 측정하여 미세한 잠금 병목이나 지연시간 퇴행을 사전에 차단합니다.
 
 ### [Gate 2] 13대 도메인 종단간(E2E) 스모크 테스트
 - **실행 명령**: `bash scripts/verify_report.sh --engine=memory && bash scripts/verify_report.sh --engine=wiredtiger`

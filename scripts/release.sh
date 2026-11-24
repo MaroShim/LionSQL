@@ -362,6 +362,9 @@ else
     echo -e "${CLR_GREEN}Gate 0 OK: Zero .slt or oracle corpora modifications verified${CLR_RESET}"
 
     echo -e "[Gate 1/6] Running core unit, regression, E2E parity & spec defect tests across all packages..."
+    echo -e "  -> [Gate 1.1] Verifying Dedicated Semantic Binder & Arity Invariants (-race)..."
+    go test -tags wiredtiger -race -count=1 -run "TestMetaValidatorAndBinder|TestBinder_Phase1" ./pkg/engine/...
+    echo -e "${CLR_GREEN}Gate 1.1 OK: Dedicated Semantic Binder 100% Fail-Closed Entrance Guard Verified${CLR_RESET}"
     go test -tags wiredtiger -count=1 ./pkg/... ./test/e2e/... ./test/spec_defects/...
     go test -tags wiredtiger -race -count=1 ./test/spec_defects/...
     echo -e "${CLR_GREEN}Gate 1 OK: 100% PASS across core packages, E2E parity, and race-free spec defect suites${CLR_RESET}"
