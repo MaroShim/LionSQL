@@ -283,7 +283,10 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 			}
 			subRows, cols, err := execSubquery(e.Query.String())
 			if err != nil {
-				return nil, false
+				return err, true
+			}
+			if len(cols) > 1 {
+				return fmt.Errorf("subquery must return only one column, returned %d", len(cols)), true
 			}
 			for _, r := range subRows {
 				var itemVal any
@@ -424,7 +427,7 @@ func EvalTupleExprWithContext(t Tuple, expr proc.Expr, execSubquery proc.Subquer
 		}
 		val, err := proc.EvalRowExpr(e, evalMap, execSubquery)
 		if err != nil {
-			return nil, false
+			return err, true
 		}
 		return val, true
 

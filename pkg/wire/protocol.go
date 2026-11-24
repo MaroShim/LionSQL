@@ -438,6 +438,10 @@ func WriteError(w io.Writer, message string) error {
 		code = "42704" // undefined_object (standard PostgreSQL error code for non-existent index)
 	} else if strings.Contains(upper, "NOT FOUND") || strings.Contains(upper, "DOES NOT EXIST") {
 		code = "42P01" // undefined_table / undefined_relation
+	} else if strings.Contains(upper, "MUST APPEAR IN THE GROUP BY CLAUSE") {
+		code = "42803" // grouping_error
+	} else if strings.Contains(upper, "SUBQUERY MUST RETURN ONLY ONE COLUMN") || strings.Contains(upper, "SUBQUERY HAS TOO MANY COLUMNS") {
+		code = "42601" // syntax_error / subquery error
 	} else if strings.Contains(upper, "SYNTAX") {
 		code = "42601" // syntax_error
 	} else if strings.Contains(upper, "PERMISSION DENIED") {

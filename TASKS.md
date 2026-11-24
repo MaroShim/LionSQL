@@ -178,6 +178,7 @@
 | `DONE` | **`BUG-STR-NULL-1`** |  | Integrity | P2 | 문자열 함수 NULL 전파 보장 (String NULL Bug) |  |  |
 | `DONE` | **`BUG-STRING-SPLIT-SEP-1`** |  | Integrity | P2 | STRING_SPLIT 빈 구분자 콤마 임의 간주 제거 (String Split Sep Bug) |  |  |
 | `DONE` | **`BUG-SUBQ-1`** |  | Integrity | P2 | 스칼라 서브쿼리 무작위 반환 방지 (Subquery Bug) |  |  |
+| `DONE` | **`BUG-SUBQUERY-PROJ-ERROR-PROPAGATION-1`** | `v0.95.0` | Engine | P1 | 프로젝션 스칼라 서브쿼리 내부 에러 삼킴(Silent Drop) 수정 및 유효성 검증 | [`notes/plans/SUBQUERY_PROJ_ERROR_PROPAGATION_PLAN.ko.md`](notes/plans/SUBQUERY_PROJ_ERROR_PROPAGATION_PLAN.ko.md) |  |
 | `DONE` | **`BUG-TABLE-CASE-1`** |  | Integrity | P2 | 테이블명 대소문자 무관 탐색 보장 (Table Case Bug) |  |  |
 | `DONE` | **`BUG-TDS-ROW-CASE-1`** |  | Integrity | P2 | TDS 행 직렬화 대소문자 정규화 (TDS Row Case Bug) |  |  |
 | `DONE` | **`BUG-TDS-RPC-PARAM-NAME-ORDER-1`** |  | Integrity | P2 | TDS sp_executesql 파라미터명 미인식 순서 왜곡 방지 (TDS RPC Param Name Bug) |  |  |
@@ -281,6 +282,7 @@
 | `DONE` | **`FEAT-SANDBOX-SPA-HANDLER-OSDIRFS-1`** | `v0.94.0` | ARCHITECTURE | P2 | Modernize SPA Hosting with Go os.DirFS Chroot Sandbox and Subdirectory Support | [`notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md`](notes/plans/STANDALONE_SANDBOX_SPA_HANDLER_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SESSION-RESET-CONNECTION-POOL-ISOLATION-1`** | `v0.94.0` | Security | P2 | 커넥션 풀 세션 누수 방지 (TDS StatusResetConnection 0x08 및 HTTP 토큰 기반 세션 격리) | [`doc/ARCHITECTURE.ko.md`](doc/ARCHITECTURE.ko.md) |  |
 | `DONE` | **`FEAT-SPECKIT-CORE-AND-ORACLE-RUNNER-1`** | `1.0-GA` | Test | P1 | 스펙 기반 쿼리 생성 엔진, NoREC/듀얼엔진 오라클 및 cmd/spec_fuzz CLI 구축 | [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md) |  |
+| `STATUS` | **`FEAT-SQL-SEMANTIC-VALIDATION-FAIL-CLOSED-1`** | `v0.95.0` | Engine | P1 | SQL 시맨틱 유효성 검증 강화 (비집계 컬럼 누락 거부, GROUP BY 상수/서수 정합성, IN 다중 컬럼 서브쿼리 차단) | [`notes/plans/SQL_SEMANTIC_VALIDATION_FAIL_CLOSED_PLAN.ko.md`](notes/plans/SQL_SEMANTIC_VALIDATION_FAIL_CLOSED_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SQL-SERVER-AGENT-INPROCESS-1`** | `v0.95.0` | Engine | P2 | SQL Server Agent 인-프로세스 스케줄러 (msdb.dbo.sysjobs, sysjobhistory, sp_add_job) | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SUPERSET-DIALECT-PREFERENCE-CONFIG-1`** | `v0.99.0` | Engine | P2 | 서버 전역 dialect_preference 설정 체계 및 CLI/환경변수 바인딩 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-SUPERSET-EXPR-COLLATE-1`** | `v0.94.0` | Engine | P2 | 인라인 COLLATE 식 파싱 및 대소문자 구분(CS/BIN) 동적 평가 | [`notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md`](notes/plans/UNIFIED_SQL_SUPERSET_PRE_1_0_IMPLEMENTATION_PLAN.ko.md) |  |
@@ -2376,6 +2378,13 @@ MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정�
 
 ---
 
+### [DONE] 프로젝션 스칼라 서브쿼리 내부 에러 삼킴(Silent Drop) 수정 및 유효성 검증 `BUG-SUBQUERY-PROJ-ERROR-PROPAGATION-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 06:41:54
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SUBQUERY_PROJ_ERROR_PROPAGATION_PLAN.ko.md`](notes/plans/SUBQUERY_PROJ_ERROR_PROPAGATION_PLAN.ko.md)
+
+---
+
 ### [DONE] 테이블명 대소문자 무관 탐색 보장 (Table Case Bug) `BUG-TABLE-CASE-1`
 - **Domain**: Integrity | **Priority**: P2 | **Updated**: 2026-11-16 14:21:01
 - **Target Files**: ``pkg/storage/memengine/ddl.go:458`, `pkg/storage/wiredtiger/wt_engine.go:745``
@@ -3307,6 +3316,13 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 - **Domain**: Test | **Priority**: P1 | **Updated**: 2026-11-21 13:38:05
 - **Milestone**: `1.0-GA`
 - **Plan Doc**: [`notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md`](notes/SPEC_DRIVEN_TEST_DISCOVERY_AND_TDD_METHODOLOGY_PLAN.ko.md)
+
+---
+
+### [STATUS] SQL 시맨틱 유효성 검증 강화 (비집계 컬럼 누락 거부, GROUP BY 상수/서수 정합성, IN 다중 컬럼 서브쿼리 차단) `FEAT-SQL-SEMANTIC-VALIDATION-FAIL-CLOSED-1`
+- **Domain**: Engine | **Priority**: P1 | **Updated**: 2026-11-24 07:02:30
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/SQL_SEMANTIC_VALIDATION_FAIL_CLOSED_PLAN.ko.md`](notes/plans/SQL_SEMANTIC_VALIDATION_FAIL_CLOSED_PLAN.ko.md)
 
 ---
 

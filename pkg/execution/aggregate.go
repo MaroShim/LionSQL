@@ -787,12 +787,22 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 		}
 	}
 
-	// ANSI SQL: If query has GROUP BY, any non-aggregate projection field must be in groupKeys
-	if len(a.groupKeys) > 0 {
+	// ANSI SQL: If query has GROUP BY or aggregate functions, any non-aggregate projection field must be in groupKeys (or constant)
+	hasAggFuncs := false
+	for _, f := range a.fields {
+		if !f.isLiteral && f.fnType != aggGrouping {
+			hasAggFuncs = true
+			break
+		}
+	}
+	if len(a.groupKeys) > 0 || hasAggFuncs {
 		for _, f := range a.fields {
 			exprToCheck := f.fnExpr
 			if exprToCheck == nil {
 				exprToCheck = f.parsed
+			}
+			if exprToCheck == nil && f.rawExpr != "" {
+				exprToCheck = parseExprOrLiteral(f.rawExpr)
 			}
 			if exprToCheck != nil && !exprHasAgg(exprToCheck) {
 				if err := validateHavingClause(exprToCheck, a.groupKeys, nil); err != nil {

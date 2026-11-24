@@ -720,6 +720,21 @@ func CollectReferencedColumns(schema *storage.TableSchema, tblName string, alias
 		}
 	}
 
+	// Expand dependencies for any matched computed columns
+	for idx, col := range schema.Columns {
+		if matched[idx] && col.HasComputedExpr() {
+			for _, ref := range ExtractColumnRefs(col.ComputedExpr) {
+				refCol := strings.ToLower(cleanIdent(ref.Column))
+				for depIdx, depCol := range schema.Columns {
+					if strings.ToLower(cleanIdent(depCol.Name)) == refCol {
+						matched[depIdx] = true
+						break
+					}
+				}
+			}
+		}
+	}
+
 	// If no columns were matched (e.g. SELECT 1, COUNT(*)), retain at least column 0
 	if len(matched) == 0 {
 		return []int{0}

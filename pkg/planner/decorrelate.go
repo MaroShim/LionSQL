@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"fmt"
 	"strings"
 
 	"lionsql/pkg/sqlutil"
@@ -17,7 +18,9 @@ func (p *Planner) DecorrelateSubqueries(q *QueryInfo, tableExists func(string) b
 	p.decorrelateExists(q, tableExists)
 
 	// 2. Decorrelate [col] [NOT] IN (SELECT ... FROM ... [WHERE ...])
-	p.decorrelateIn(q, tableExists)
+	if err := p.decorrelateIn(q, tableExists); err != nil {
+		return err
+	}
 
 	if len(q.Joins) > 0 && q.Join == nil {
 		q.Join = q.Joins[0]
@@ -116,7 +119,7 @@ func (p *Planner) decorrelateExists(q *QueryInfo, tableExists func(string) bool)
 	}
 }
 
-func (p *Planner) decorrelateIn(q *QueryInfo, tableExists func(string) bool) {
+func (p *Planner) decorrelateIn(q *QueryInfo, tableExists func(string) bool) error {
 	for {
 		mStart, mEnd, prefix, innerSQL, found := findInSubqueryParen(q.WhereClause)
 		if !found {
@@ -137,6 +140,13 @@ func (p *Planner) decorrelateIn(q *QueryInfo, tableExists func(string) bool) {
 		if !ok || subTbl == "" || subProj == "" {
 			break
 		}
+
+		// A subquery inside [col] IN (SELECT ...) must return only one column
+		projCols := sqlutil.SplitTopLevel(subProj, ',')
+		if len(projCols) > 1 {
+			return fmt.Errorf("subquery must return only one column, returned %d", len(projCols))
+		}
+
 		if subAlias == "" {
 			subAlias = subTbl
 		}
@@ -165,6 +175,7 @@ func (p *Planner) decorrelateIn(q *QueryInfo, tableExists func(string) bool) {
 		q.Joins = append(q.Joins, join)
 		q.WhereClause = removeClause(q.WhereClause, mStart, mEnd)
 	}
+	return nil
 }
 
 type subqueryScannerToken struct {

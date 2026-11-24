@@ -115,10 +115,12 @@ func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, 
 		return nil, fmt.Errorf("EXPLAIN parse error: %w", err)
 	}
 	qInfo.IsAnalyze = opts.Analyze
-	_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
+	if err := p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
 		_, err := s.engine.GetTable(cleanIdentifier(tbl))
 		return err == nil
-	})
+	}); err != nil {
+		return nil, err
+	}
 
 	rawTable := qInfo.TableName
 	tableName := cleanIdentifier(rawTable)

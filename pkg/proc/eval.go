@@ -458,6 +458,9 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			if err != nil {
 				return nil, err
 			}
+			if len(cols) > 1 {
+				return nil, fmt.Errorf("subquery must return only one column, returned %d", len(cols))
+			}
 			for _, r := range subRows {
 				var itemVal any
 				if len(cols) > 0 {

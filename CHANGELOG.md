@@ -38,6 +38,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - accelerate GROUP BY and JOIN memory paths via uint64 FNV-1a integer slot hashing, sync.Pool buffer recycling, pre-resolved column indices, and direct tuple materialization, achieving 97.3% memory reduction and 99.6% allocation drop per tuple (`PERF-GROUPBY-SLOT-HASH-1`)
 
 ### Fixed
+- enforce strict fail-closed semantic validation for unaggregated columns without GROUP BY (SQLSTATE 42803), constant grouping in GROUP BY, and multi-column subqueries in IN expressions (SQLSTATE 42601) (`FEAT-SQL-SEMANTIC-VALIDATION-FAIL-CLOSED-1`)
+- propagate subquery execution errors in projection scalar subqueries instead of silently swallowing errors and falling back to NULL (`BUG-SUBQUERY-PROJ-ERROR-PROPAGATION-1`)
+- expand computed column dependencies in projection pushdown and evaluate computed columns dynamically in `FormatRowWithSelectedCols`
 - route simple cursor declarations to native `scanCursorRows` fast-path and synchronize `memengine` WAL hook LSN baseline during late subscriber attachment
 - enforce fail-closed syntax rejection across all SQL clauses (`WHERE`, `SET`, `ORDER BY`, `GROUP BY`, `LIMIT`, `OFFSET`, `VALUES`, `HAVING`, `RETURNING`, `WINDOW`) eliminating silent query acceptance and silent drops (`FIX-NEGATIVE-SYNTAX-FUZZER-1`)
 - enforce durable commit before WAL hook notification and fail closed on replication purged LSN gaps (`b539d183`)

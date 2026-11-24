@@ -223,10 +223,26 @@ func FormatRowWithSelectedCols(row storage.Row, schema *storage.TableSchema, ali
 		}
 	}
 
-	return Tuple{
+	t := Tuple{
 		Values: vals,
 		Index:  colMap,
 	}
+
+	for _, i := range selectedCols {
+		if i < 0 || i >= n {
+			continue
+		}
+		c := schema.Columns[i]
+		if c.HasComputedExpr() && (i >= numVals || row.Values[i].IsNull || vals[i] == nil) {
+			if expr, err := getOrParseComputedExpr(c.ComputedExpr); err == nil && expr != nil {
+				if compVal, ok := EvalTupleExpr(t, expr); ok {
+					vals[i] = compVal
+				}
+			}
+		}
+	}
+
+	return t
 }
 
 func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {

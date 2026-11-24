@@ -23,10 +23,12 @@ import (
 
 func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	p := s.newPlanner()
-	_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
+	if err := p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
 		_, err := s.getTable(cs, cleanIdentifier(tbl))
 		return err == nil
-	})
+	}); err != nil {
+		return nil, err
+	}
 
 	outerNames := []string{cleanIdentifier(qInfo.TableName)}
 	if qInfo.TableAlias != "" {
@@ -2214,10 +2216,12 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 			}
 		}
 
-		_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
+		if err := p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
 			_, err := s.getTable(cs, cleanIdentifier(tbl))
 			return err == nil
-		})
+		}); err != nil {
+			return nil, err
+		}
 
 		rawTable := qInfo.TableName
 		tableName := cleanIdentifier(rawTable)

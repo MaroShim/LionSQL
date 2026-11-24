@@ -322,16 +322,29 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		resolvedCol := ""
 		if lit, ok := g.(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
 			ord := int(lit.Val.IVal)
-			if ord < 1 || ord > len(stmt.Projections) {
-				qErr = fmt.Errorf("GROUP BY position %d is not in select list", ord)
-				break
+			hasNonAggTableCol := false
+			for _, p := range stmt.Projections {
+				if !hasTopLevelAggregateExpr(p.Expr) && !proc.IsConstantExpr(p.Expr) {
+					hasNonAggTableCol = true
+					break
+				}
 			}
-			proj := stmt.Projections[ord-1]
-			if hasTopLevelAggregateExpr(proj.Expr) {
-				qErr = fmt.Errorf("aggregate functions are not allowed in GROUP BY")
-				break
+
+			if !hasNonAggTableCol {
+				// All projections are aggregates or constants: treat GROUP BY <constant> as a single-group constant key
+				resolvedCol = g.String()
+			} else {
+				if ord < 1 || ord > len(stmt.Projections) {
+					qErr = fmt.Errorf("GROUP BY position %d is not in select list", ord)
+					break
+				}
+				proj := stmt.Projections[ord-1]
+				if hasTopLevelAggregateExpr(proj.Expr) {
+					qErr = fmt.Errorf("aggregate functions are not allowed in GROUP BY (cannot group by aggregate column position %d)", ord)
+					break
+				}
+				resolvedCol = proj.Expr.String()
 			}
-			resolvedCol = proj.Expr.String()
 		}
 		if resolvedCol == "" {
 			gStr := g.String()

@@ -636,6 +636,9 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 		expr := p.parseExpression(precLowest)
 		p.allowStar = false
 		if expr == nil {
+			if len(p.errors) > 0 {
+				return nil, fmt.Errorf("%s", strings.Join(p.errors, "; "))
+			}
 			return nil, fmt.Errorf("expected projection expression, got %s", p.curToken.Literal)
 		}
 		alias := ""

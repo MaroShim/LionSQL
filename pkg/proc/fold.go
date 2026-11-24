@@ -172,6 +172,11 @@ func FoldConstants(expr Expr) Expr {
 	}
 }
 
+// IsConstantExpr reports whether expr evaluates to a compile-time constant.
+func IsConstantExpr(expr Expr) bool {
+	return isConstantExpr(expr)
+}
+
 func isConstantExpr(expr Expr) bool {
 	if expr == nil {
 		return true
