@@ -274,3 +274,54 @@ func TestCoordinator_ShowIdleInTransactionSessionTimeoutAndDefaults(t *testing.T
 		t.Fatalf("expected '30s', got %+v", res2.Rows)
 	}
 }
+
+func TestCoordinator_IdleReapedSession_ReacquiresOnNextQuery(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := NewCoordinator(cat, eng, DefaultConfig())
+	defer coord.Close()
+
+	sessID := "reaped-query-client"
+	res1, err := coord.ExecuteSessionSQL(sessID, "SELECT 1 AS v;")
+	if err != nil {
+		t.Fatalf("initial query failed: %v", err)
+	}
+	if len(res1.Rows) != 1 || res1.Rows[0]["v"] != int64(1) {
+		t.Fatalf("unexpected res1: %+v", res1.Rows)
+	}
+
+	cs := coord.GetSession(sessID)
+	if cs == nil {
+		t.Fatalf("session %s not found", sessID)
+	}
+
+	// Forcibly reap idle session
+	reaped := coord.ReapIdleClientSessions(1 * time.Nanosecond)
+	if reaped != 1 {
+		t.Fatalf("expected 1 session reaped, got %d", reaped)
+	}
+
+	cs.Mu.Lock()
+	sessIsNil := (cs.Session == nil)
+	cs.Mu.Unlock()
+	if !sessIsNil {
+		t.Fatal("expected cs.Session to be nil after reap")
+	}
+
+	// Next query must seamlessly reacquire a storage session and succeed
+	res2, err := coord.ExecuteSessionSQL(sessID, "SELECT 42 AS ans;")
+	if err != nil {
+		t.Fatalf("query on reaped session failed: %v", err)
+	}
+	if len(res2.Rows) != 1 || res2.Rows[0]["ans"] != int64(42) {
+		t.Fatalf("unexpected res2: %+v", res2.Rows)
+	}
+
+	cs.Mu.Lock()
+	sessReattached := (cs.Session != nil)
+	cs.Mu.Unlock()
+	if !sessReattached {
+		t.Fatal("expected cs.Session to be reattached after query")
+	}
+}
+

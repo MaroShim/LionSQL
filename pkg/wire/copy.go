@@ -228,6 +228,13 @@ func (s *Server) handleCopy(conn net.Conn, query string, sessID string) {
 		return
 	}
 
+	if s.coordinator != nil && sessID != "" {
+		if cs := s.coordinator.GetSession(sessID); cs != nil && cs.TxMgr != nil {
+			cs.TxMgr.Lock()
+			defer cs.TxMgr.Unlock()
+		}
+	}
+
 	if stmt.Direction == CopyIn {
 		s.handleCopyIn(conn, stmt, sessID)
 	} else {
@@ -236,15 +243,25 @@ func (s *Server) handleCopy(conn net.Conn, query string, sessID string) {
 }
 
 func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
+	var cs *engine.ClientSession
+	if s.coordinator != nil && sessID != "" {
+		cs = s.coordinator.GetSession(sessID)
+	}
+
+	targetTableName := stmt.TableName
+	if cs != nil {
+		targetTableName = cs.ResolveTempTableName(stmt.TableName)
+	}
+
 	// 1. Locate target table schema
-	tbl, err := s.engine.GetTable(stmt.TableName)
+	tbl, err := s.engine.GetTable(targetTableName)
 	if err != nil {
-		tbl, err = s.engine.GetTable(strings.ToLower(stmt.TableName))
+		tbl, err = s.engine.GetTable(strings.ToLower(targetTableName))
 	}
 	if err != nil {
 		tables, _ := s.engine.ListTables()
 		for _, t := range tables {
-			if strings.EqualFold(t.Name, stmt.TableName) {
+			if strings.EqualFold(t.Name, targetTableName) {
 				tbl = t
 				err = nil
 				break
@@ -377,11 +394,6 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 		localSess storage.Session
 	)
 
-	var cs *engine.ClientSession
-	if s.coordinator != nil && sessID != "" {
-		cs = s.coordinator.GetSession(sessID)
-	}
-
 	if cs != nil {
 		if cs.IsTxFailed() {
 			_ = WriteError(conn, "current transaction is aborted, commands ignored until end of transaction block")
@@ -395,6 +407,13 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 	}
 
 	var committed bool
+	var rolledBack bool
+	rollbackOnce := func() {
+		if !committed && !rolledBack && tx != nil {
+			rolledBack = true
+			_ = tx.Rollback()
+		}
+	}
 	if !inTx {
 		var err error
 		localSess, err = s.engine.NewSession()
@@ -417,11 +436,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			_ = s.writeReady(conn, sessID)
 			return
 		}
-		defer func() {
-			if !committed {
-				_ = tx.Rollback()
-			}
-		}()
+		defer rollbackOnce()
 	}
 
 	pkCol, _ := tbl.PrimaryKeyColumn()
@@ -444,7 +459,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 						if inTx && cs != nil {
 							cs.MarkTxFailed()
 						} else if !inTx {
-							_ = tx.Rollback()
+							rollbackOnce()
 						}
 						_ = WriteError(conn, fmt.Sprintf("line %d, column %q: %v", rowIdx+1, col.Name, err))
 						_ = s.writeReady(conn, sessID)
@@ -492,7 +507,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			if inTx && cs != nil {
 				cs.MarkTxFailed()
 			} else if !inTx {
-				_ = tx.Rollback()
+				rollbackOnce()
 			}
 			_ = WriteError(conn, fmt.Sprintf("line %d: %v", rowIdx+1, err))
 			_ = s.writeReady(conn, sessID)
@@ -503,6 +518,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 
 	if !inTx {
 		if err := tx.Commit(); err != nil {
+			rollbackOnce()
 			_ = WriteError(conn, fmt.Sprintf("failed to commit COPY transaction: %v", err))
 			_ = s.writeReady(conn, sessID)
 			return
@@ -516,15 +532,25 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 }
 
 func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
+	var cs *engine.ClientSession
+	if s.coordinator != nil && sessID != "" {
+		cs = s.coordinator.GetSession(sessID)
+	}
+
+	targetTableName := stmt.TableName
+	if cs != nil {
+		targetTableName = cs.ResolveTempTableName(stmt.TableName)
+	}
+
 	// 1. Locate source table
-	tbl, err := s.engine.GetTable(stmt.TableName)
+	tbl, err := s.engine.GetTable(targetTableName)
 	if err != nil {
-		tbl, err = s.engine.GetTable(strings.ToLower(stmt.TableName))
+		tbl, err = s.engine.GetTable(strings.ToLower(targetTableName))
 	}
 	if err != nil {
 		tables, _ := s.engine.ListTables()
 		for _, t := range tables {
-			if strings.EqualFold(t.Name, stmt.TableName) {
+			if strings.EqualFold(t.Name, targetTableName) {
 				tbl = t
 				err = nil
 				break
@@ -568,11 +594,6 @@ func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
 		inTx      bool
 		localSess storage.Session
 	)
-
-	var cs *engine.ClientSession
-	if s.coordinator != nil && sessID != "" {
-		cs = s.coordinator.GetSession(sessID)
-	}
 
 	if cs != nil {
 		if cs.IsTxFailed() {

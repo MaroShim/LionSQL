@@ -532,4 +532,159 @@ func TestWire_CopyFromStdin_CSV_WithEndOfDataMarker(t *testing.T) {
 	}
 }
 
+func TestWire_CopyFromStdin_TempTable(t *testing.T) {
+	srv, _, _ := setupTestWireServer(t)
+
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+
+	go srv.handleConnection(serverConn)
+
+	doHandshake(t, clientConn)
+
+	// Create a session-scoped temporary table
+	sendPGQuery(t, clientConn, "CREATE TEMP TABLE t_wire_temp (id INT PRIMARY KEY, val VARCHAR(50));")
+
+	// COPY into temporary table
+	sendSimpleQuery(t, clientConn, "COPY t_wire_temp FROM STDIN;")
+
+	hdr := make([]byte, 5)
+	if _, err := io.ReadFull(clientConn, hdr); err != nil {
+		t.Fatalf("failed to read CopyInResponse header: %v", err)
+	}
+	if hdr[0] != MsgCopyInResponse {
+		t.Fatalf("expected MsgCopyInResponse ('G'), got %c", hdr[0])
+	}
+	respLen := binary.BigEndian.Uint32(hdr[1:5])
+	payload := make([]byte, respLen-4)
+	if _, err := io.ReadFull(clientConn, payload); err != nil {
+		t.Fatalf("failed to read CopyInResponse payload: %v", err)
+	}
+
+	tsvData := []byte("1\tapple\n2\tbanana\n\\.\n")
+	copyDataMsg := make([]byte, 1+4+len(tsvData))
+	copyDataMsg[0] = MsgCopyData
+	binary.BigEndian.PutUint32(copyDataMsg[1:5], uint32(4+len(tsvData)))
+	copy(copyDataMsg[5:], tsvData)
+	if _, err := clientConn.Write(copyDataMsg); err != nil {
+		t.Fatalf("failed to write CopyData: %v", err)
+	}
+
+	copyDoneMsg := []byte{MsgCopyDone, 0, 0, 0, 4}
+	if _, err := clientConn.Write(copyDoneMsg); err != nil {
+		t.Fatalf("failed to write CopyDone: %v", err)
+	}
+
+	var gotComplete bool
+	for {
+		msgHdr := make([]byte, 5)
+		if _, err := io.ReadFull(clientConn, msgHdr); err != nil {
+			t.Fatalf("failed to read after copy: %v", err)
+		}
+		mType := msgHdr[0]
+		mLen := binary.BigEndian.Uint32(msgHdr[1:5])
+		mPayload := make([]byte, mLen-4)
+		if _, err := io.ReadFull(clientConn, mPayload); err != nil {
+			t.Fatalf("failed to read payload: %v", err)
+		}
+
+		if mType == MsgCommandComplete {
+			gotComplete = true
+		} else if mType == MsgReadyForQuery {
+			break
+		} else if mType == MsgErrorResponse {
+			t.Fatalf("unexpected error response on temp table COPY: %s", string(mPayload))
+		}
+	}
+
+	if !gotComplete {
+		t.Fatal("expected CommandComplete for COPY into temp table")
+	}
+}
+
+func TestWire_CopyFromStdin_Error_NoDoubleRollback(t *testing.T) {
+	srv, eng, _ := setupTestWireServer(t)
+
+	schema := &storage.TableSchema{
+		Name: "t_copy_err",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeInt, Nullable: false},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("failed to create t_copy_err: %v", err)
+	}
+
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+
+	go srv.handleConnection(serverConn)
+
+	doHandshake(t, clientConn)
+
+	sendSimpleQuery(t, clientConn, "COPY t_copy_err FROM STDIN;")
+
+	hdr := make([]byte, 5)
+	if _, err := io.ReadFull(clientConn, hdr); err != nil {
+		t.Fatalf("failed to read CopyInResponse header: %v", err)
+	}
+	if hdr[0] != MsgCopyInResponse {
+		t.Fatalf("expected MsgCopyInResponse ('G'), got %c", hdr[0])
+	}
+	respLen := binary.BigEndian.Uint32(hdr[1:5])
+	payload := make([]byte, respLen-4)
+	if _, err := io.ReadFull(clientConn, payload); err != nil {
+		t.Fatalf("failed to read CopyInResponse payload: %v", err)
+	}
+
+	// Send invalid integer data to cause parseFieldVal error
+	tsvData := []byte("not_an_int\t123\n\\.\n")
+	copyDataMsg := make([]byte, 1+4+len(tsvData))
+	copyDataMsg[0] = MsgCopyData
+	binary.BigEndian.PutUint32(copyDataMsg[1:5], uint32(4+len(tsvData)))
+	copy(copyDataMsg[5:], tsvData)
+	if _, err := clientConn.Write(copyDataMsg); err != nil {
+		t.Fatalf("failed to write CopyData: %v", err)
+	}
+
+	copyDoneMsg := []byte{MsgCopyDone, 0, 0, 0, 4}
+	if _, err := clientConn.Write(copyDoneMsg); err != nil {
+		t.Fatalf("failed to write CopyDone: %v", err)
+	}
+
+	// Read error response and ready for query
+	var gotError, gotReady bool
+	for !gotReady {
+		msgHdr := make([]byte, 5)
+		if _, err := io.ReadFull(clientConn, msgHdr); err != nil {
+			t.Fatalf("failed to read: %v", err)
+		}
+		mType := msgHdr[0]
+		mLen := binary.BigEndian.Uint32(msgHdr[1:5])
+		mPayload := make([]byte, mLen-4)
+		if _, err := io.ReadFull(clientConn, mPayload); err != nil {
+			t.Fatalf("failed to read payload: %v", err)
+		}
+		if mType == MsgErrorResponse {
+			gotError = true
+		} else if mType == MsgReadyForQuery {
+			gotReady = true
+		}
+	}
+	if !gotError {
+		t.Fatal("expected MsgErrorResponse on invalid row value")
+	}
+
+	// Verify next query can execute normally without pool corruption
+	rows := sendPGQuery(t, clientConn, "SELECT COUNT(*) FROM t_copy_err;")
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(rows))
+	}
+}
+
+
+
 

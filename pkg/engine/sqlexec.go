@@ -412,6 +412,12 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 		return nil, err
 	}
 
+	if !isNested {
+		if err := s.ensureClientStorageSession(cs); err != nil {
+			return nil, err
+		}
+	}
+
 	// [RULE:ConcurrencySafety] 1-Session 1-Transaction Invariant:
 	// Top-level queries on the same session are strictly serialized via TxMgr.
 	if !isNested && cs.TxMgr != nil {
@@ -423,17 +429,15 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 	var queryCtx context.Context
 	var cancel context.CancelFunc
 
-	var hasTimeout bool
 	if isNested {
 		queryCtx = ctx
 	} else {
 		if timeout := cs.GetQueryTimeout(); timeout > 0 {
-			hasTimeout = true
 			queryCtx, cancel = context.WithTimeout(ctx, timeout)
-			defer cancel()
 		} else {
 			queryCtx, cancel = context.WithCancel(ctx)
 		}
+		defer cancel()
 		queryCtx = context.WithValue(queryCtx, reentrantQueryKey{}, true)
 
 		cs.Mu.Lock()
@@ -528,9 +532,6 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 			cs.Mu.Unlock()
 			if lastActive {
 				cs.ClearCancel()
-				if !hasTimeout && ctx.Done() != nil {
-					cancel()
-				}
 			}
 			if drainTx != nil {
 				_ = drainTx.Rollback()
