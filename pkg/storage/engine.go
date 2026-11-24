@@ -1596,7 +1596,9 @@ type ArenaRowCursor interface {
 // TxOptions configures transaction behaviors.
 type TxOptions struct {
 	ReadOnly          bool
-	SnapshotLSN       int64 // Optional snapshot visibility bound by LSN (0 for current engine LSN)
+	// SnapshotLSN captures the engine LSN at transaction start for replication boundary and metadata purposes.
+	// It does not provide historical data visibility, snapshot isolation, or time-travel reads.
+	SnapshotLSN       int64
 	SnapshotTimestamp int64 // Optional snapshot visibility bound by unix nano timestamp (0 for current time)
 }
 
@@ -1621,6 +1623,8 @@ type Transaction interface {
 	Savepoint(name string) error
 	RollbackTo(name string) error
 	ReleaseSavepoint(name string) error
+	// SnapshotLSN captures the engine LSN at transaction start for replication boundary and metadata purposes.
+	// It does not provide historical data visibility, snapshot isolation, or time-travel reads.
 	SnapshotLSN() int64
 	SnapshotTimestamp() int64
 	CommitLSN() int64

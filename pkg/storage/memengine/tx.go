@@ -391,7 +391,8 @@ func (tx *Transaction) releaseToPoolLocked() {
 	txPool.Put(tx)
 }
 
-// SnapshotLSN returns the snapshot LSN bound at transaction start.
+// SnapshotLSN captures the engine LSN at transaction start for replication boundary and metadata purposes.
+// It does not provide historical data visibility, snapshot isolation, or time-travel reads.
 func (tx *Transaction) SnapshotLSN() int64 {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
