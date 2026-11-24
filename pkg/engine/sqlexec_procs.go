@@ -954,7 +954,7 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 	switch procLower {
 	case "sp_reset_connection":
 		if cs != nil {
-			_ = s.ResetSession(cs.ID, true)
+			_ = s.ResetSessionWithOptions(cs.ID, ResetOptionsAll())
 		}
 		return &QueryResult{
 			Success:    true,

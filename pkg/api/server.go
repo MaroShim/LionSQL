@@ -484,6 +484,11 @@ func (s *Server) ResetSession(id string, resetTx bool) error {
 	return s.coordinator.ResetSession(id, resetTx)
 }
 
+// ResetSessionWithOptions restores a persistent client session to a clean state according to the given options.
+func (s *Server) ResetSessionWithOptions(id string, opts engine.SessionResetOptions) error {
+	return s.coordinator.ResetSessionWithOptions(id, opts)
+}
+
 // DiscardSessionTempTables drops all session-local temporary and ephemeral tables without altering other session state.
 func (s *Server) DiscardSessionTempTables(id string) error {
 	return s.coordinator.DiscardSessionTempTables(id)

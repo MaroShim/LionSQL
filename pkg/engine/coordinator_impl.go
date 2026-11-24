@@ -767,6 +767,18 @@ func (c *Coordinator) CloseSession(id string) {
 // If resetTx is true, any active uncommitted transaction is rolled back.
 // All temporary tables (#temp), table variables, session cursors, and custom session variables are reset.
 func (c *Coordinator) ResetSession(id string, resetTx bool) error {
+	opts := ResetOptionsAll()
+	opts.ResetTx = resetTx
+	return c.ResetSessionWithOptions(id, opts)
+}
+
+// ResetSessionWithOptions restores session state according to the given options.
+// It executes the canonical 4-step tear-down sequence:
+// 1. Session lock: snapshot resources and clear session metadata
+// 2. Unlock session mutex ([RULE:LockHierarchy])
+// 3. Rollback active transaction outside locks
+// 4. Drop physical temporary/table-variable storage tables outside locks
+func (c *Coordinator) ResetSessionWithOptions(id string, opts SessionResetOptions) error {
 	if id == "" {
 		return nil
 	}
@@ -779,29 +791,58 @@ func (c *Coordinator) ResetSession(id string, resetTx bool) error {
 	cs.Mu.Lock()
 	cs.lastUsedAt = time.Now()
 
+	// 1-1. Close and deallocate server-side cursors first (before transaction rollback)
+	if opts.CloseCursors && cs.Cursors != nil {
+		for _, cur := range cs.Cursors {
+			cur.IsOpen = false
+			cur.IsClosed = true
+			cur.Rows = nil
+			cur.Pos = 0
+		}
+		clear(cs.Cursors)
+	}
+
+	// 1-2. Snapshot transaction handle to rollback outside lock ([RULE:LockHierarchy])
 	var (
 		txToRollback    storage.Transaction
 		txMgrToRollback *tx.Manager
 	)
-
-	if resetTx && cs.Tx() != nil {
+	if opts.ResetTx && cs.Tx() != nil {
 		txToRollback = cs.Tx()
 		txMgrToRollback = cs.TxMgr
+		cs.ResetTranCount()
+		cs.ClearTxFailed()
+		delete(cs.Vars, "transaction_read_only")
 	}
 
-	// Snapshot local temp tables and table variables to drop outside lock ([RULE:LockHierarchy])
-	toDropLocal := cs.drainStorageTablesToDropLocked()
+	// 1-3. Snapshot local temp tables and table variables to drop outside lock
+	var toDropLocal []string
+	if opts.DropTempTables {
+		if opts.ClearPlans && opts.CloseCursors {
+			toDropLocal = cs.drainStorageTablesToDropLocked()
+		} else {
+			toDropLocal = cs.drainTempTablesOnlyLocked()
+		}
+	}
 
-	// Reset user variables and restore default system variables
-	cs.Vars = make(map[string]any)
-	cs.Vars["transaction_isolation"] = "read committed"
-	cs.Vars["search_path"] = `"$user", public`
-	cs.Vars["timezone"] = "UTC"
-	cs.VarLengths = nil
-	cs.VarTypes = nil
+	// 1-4. Clear prepared statements if requested
+	if opts.ClearPlans {
+		cs.PreparedStmts = nil
+	}
 
-	// Revert user impersonation (SETUSER / EXECUTE AS)
-	if cs.OriginalUser != "" || len(cs.ImpersonationStack) > 0 {
+	// 1-5. Reset user variables and restore default system variables
+	if opts.ClearVars {
+		cs.Vars = make(map[string]any)
+		cs.Vars["transaction_isolation"] = "read committed"
+		cs.Vars["search_path"] = `"$user", public`
+		cs.Vars["timezone"] = "UTC"
+		cs.VarLengths = nil
+		cs.VarTypes = nil
+		cs.Database = "master"
+	}
+
+	// 1-6. Revert user impersonation (SETUSER / EXECUTE AS)
+	if opts.ResetAuth && (cs.OriginalUser != "" || len(cs.ImpersonationStack) > 0) {
 		if len(cs.ImpersonationStack) > 0 {
 			cs.User = cs.ImpersonationStack[0]
 		} else {
@@ -810,19 +851,20 @@ func (c *Coordinator) ResetSession(id string, resetTx bool) error {
 		cs.OriginalUser = ""
 		cs.ImpersonationStack = nil
 	}
-	cs.Database = "master"
 
 	cs.Mu.Unlock()
 
-	// 1. Rollback transaction outside lock ([RULE:LockHierarchy])
+	// Step 3: Rollback transaction outside lock ([RULE:LockHierarchy])
 	if txMgrToRollback != nil {
 		_ = txMgrToRollback.Rollback(context.Background())
 	} else if txToRollback != nil {
 		_ = txToRollback.Rollback()
 	}
 
-	// 2. Drop physical temp tables outside lock
-	c.dropSessionStorageTables(toDropLocal)
+	// Step 4: Drop physical temp tables outside lock
+	if len(toDropLocal) > 0 {
+		c.dropSessionStorageTables(toDropLocal)
+	}
 
 	return nil
 }
@@ -839,18 +881,7 @@ func (c *Coordinator) dropSessionStorageTables(tables []string) {
 
 // DiscardSessionTempTables drops all session-local temporary and ephemeral tables without altering other session state.
 func (c *Coordinator) DiscardSessionTempTables(id string) error {
-	if id == "" {
-		return nil
-	}
-	cs := c.GetSession(id)
-	if cs == nil {
-		return nil
-	}
-	cs.Mu.Lock()
-	toDropLocal := cs.drainStorageTablesToDropLocked()
-	cs.Mu.Unlock()
-	c.dropSessionStorageTables(toDropLocal)
-	return nil
+	return c.ResetSessionWithOptions(id, ResetOptionsTempOnly())
 }
 
 // GetSession returns the active ClientSession by ID, or nil if not found.

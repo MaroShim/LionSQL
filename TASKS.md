@@ -540,7 +540,7 @@
 | `PENDING` | **`REFAC-STORAGE-FOREIGN-KEY-ENGINE-1`** | `v0.96.0` | Storage | P2 | 외래키 무결성 검증 및 CASCADE 전파 엔진 공통화 (ForeignKeyEngine) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`REFAC-STORAGE-INDEX-CODEC-1`** | `v0.95.0` | Storage | P2 | 보조 인덱스 키/값 포맷터 및 바이너리 인코딩 모듈화 (formatIndexKeyValue) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`REFAC-STORAGE-ROW-LOCK-MANAGER-1`** | `v0.95.0` | Storage | P2 | 행 레벨 쓰기 잠금 샤드 관리자 공통화 (RowLockManager) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
-| `PENDING` | **`REFAC-WIRE-RESET-SESSION-COORDINATOR-1`** | `v0.95.0` | Engine | P2 | PG/TDS 와이어 프로토콜 세션 리셋 Coordinator 단일 진입점 (ResetSession) | [`notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md`](notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md) |  |
+| `DONE` | **`REFAC-WIRE-RESET-SESSION-COORDINATOR-1`** | `v0.95.0` | Engine | P2 | PG/TDS 와이어 프로토콜 세션 리셋 Coordinator 단일 진입점 (ResetSession) | [`notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md`](notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md) |  |
 | `DONE` | **`REFACTOR-CATALOG-INTERCEPTOR-1`** |  | REFACTOR | P2 | Table-Driven Virtual Catalog Interceptor Refactoring | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-CLIENT-SESSION-TX-SSOT-1`** |  | Engine | P1 | ClientSession 트랜잭션 관리 단일 창구 통합 (tx.Manager SSOT 및 cs.Tx() 접근자 마이그레이션) | [`notes/CLIENT_SESSION_TX_REFACTOR_PLAN.ko.md`](notes/CLIENT_SESSION_TX_REFACTOR_PLAN.ko.md) |  |
 | `DONE` | **`REFACTOR-ENGINE-AST-PARSER-1`** | `v0.94.0` | Engine | P1 | 엔진 내부 35+개 조잡한 문자열 파싱 레거시 전수 제거 및 pkg/proc Pratt AST 전면 전환 | [`notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md`](notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md) |  |
@@ -5224,11 +5224,6 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
 
-**취소 및 SPEC_OUT 사유 (엔진별 책임 분리 및 정보 은닉 원칙 준수)**:
-1. **WiredTiger 전용 물리 B-Tree 레이아웃 (`ARCH-WT-FILE-LAYOUT-1`)**: `formatIndexKeyValue`의 `prefix + indexKey + "\x00" + pkStr` 조립 규약은 한 테이블의 모든 보조 인덱스를 단일 B-Tree 파일(`_idx_<Table>.wt`)에 멀티플렉싱하는 WiredTiger 전용 물리 파일 포맷입니다.
-2. **In-Memory OCC와의 무관성**: `memengine`은 인덱스마다 독립된 인메모리 `SkipList`를 사용하므로 프리픽스나 바이트 직렬화가 불필요합니다.
-3. **결론**: WiredTiger 전용 B-Tree 직렬화 로직을 상위 공통 패키지(`pkg/storage`)로 노출하는 것은 구현 세부사항 누출(Abstraction Leak)에 해당하므로, `pkg/storage/wiredtiger` 내부의 private 함수로 캡슐화 상태를 영구 유지(SPEC_OUT)합니다.
-
 ---
 
 ### [SPEC_OUT] 행 레벨 쓰기 잠금 샤드 관리자 공통화 (RowLockManager) `REFAC-STORAGE-ROW-LOCK-MANAGER-1`
@@ -5238,8 +5233,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
-### [PENDING] PG/TDS 와이어 프로토콜 세션 리셋 Coordinator 단일 진입점 (ResetSession) `REFAC-WIRE-RESET-SESSION-COORDINATOR-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-23 23:19:04
+### [DONE] PG/TDS 와이어 프로토콜 세션 리셋 Coordinator 단일 진입점 (ResetSession) `REFAC-WIRE-RESET-SESSION-COORDINATOR-1`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-24 00:22:57
 - **Milestone**: `v0.95.0`
 - **Plan Doc**: [`notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md`](notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md)
 

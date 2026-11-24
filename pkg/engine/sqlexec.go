@@ -1145,7 +1145,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				if cs.Tx() != nil {
 					return nil, fmt.Errorf("ERROR 25001: DISCARD ALL cannot run inside a transaction block")
 				}
-				_ = s.ResetSession(cs.ID, true)
+				_ = s.ResetSessionWithOptions(cs.ID, ResetOptionsAll())
 			}
 			return &QueryResult{
 				Success:    true,
@@ -1155,9 +1155,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 		case "PLANS":
 			if cs != nil {
-				cs.Mu.Lock()
-				cs.PreparedStmts = make(map[string]*PreparedStatement)
-				cs.Mu.Unlock()
+				_ = s.ResetSessionWithOptions(cs.ID, ResetOptionsPlansOnly())
 			}
 			return &QueryResult{
 				Success:    true,
@@ -1178,7 +1176,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				if cs.Tx() != nil {
 					return nil, fmt.Errorf("ERROR 25001: DISCARD TEMP cannot run inside a transaction block")
 				}
-				_ = s.DiscardSessionTempTables(cs.ID)
+				_ = s.ResetSessionWithOptions(cs.ID, ResetOptionsTempOnly())
 			}
 			return &QueryResult{
 				Success:    true,
@@ -1193,7 +1191,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	if sqlutil.HasAnyPrefixKeyword(trimmed, "RESET ALL", "DEALLOCATE ALL", "UNLISTEN") {
 		if cs != nil {
-			_ = s.ResetSession(cs.ID, true)
+			_ = s.ResetSessionWithOptions(cs.ID, ResetOptionsAll())
 		}
 		cmd := "RESET"
 		if sqlutil.HasPrefixKeyword(trimmed, "DEALLOCATE ALL") {

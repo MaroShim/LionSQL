@@ -858,7 +858,7 @@ func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string, s
 		if portals != nil {
 			clear(portals)
 		}
-		_ = s.coordinator.ResetSession(sessID, true)
+		_ = s.coordinator.ResetSessionWithOptions(sessID, engine.ResetOptionsAll())
 		_ = WriteCommandComplete(conn, upper)
 		return
 
@@ -869,6 +869,7 @@ func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string, s
 		if portals != nil {
 			clear(portals)
 		}
+		_ = s.coordinator.ResetSessionWithOptions(sessID, engine.ResetOptionsPlansOnly())
 		_ = WriteCommandComplete(conn, "DISCARD PLANS")
 		return
 
@@ -877,7 +878,7 @@ func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string, s
 		return
 
 	case "DISCARD TEMP", "DISCARD TEMPORARY":
-		_ = s.coordinator.DiscardSessionTempTables(sessID)
+		_ = s.coordinator.ResetSessionWithOptions(sessID, engine.ResetOptionsTempOnly())
 		_ = WriteCommandComplete(conn, "DISCARD TEMP")
 		return
 	}

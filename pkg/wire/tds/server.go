@@ -746,9 +746,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		if sess.authenticated {
 			if p.Status&StatusResetConnection != 0 {
-				_ = s.coordinator.ResetSession(sess.SessionID, true)
+				_ = s.coordinator.ResetSessionWithOptions(sess.SessionID, engine.ResetOptionsAll())
 			} else if p.Status&StatusResetConnectionSkipTran != 0 {
-				_ = s.coordinator.ResetSession(sess.SessionID, false)
+				_ = s.coordinator.ResetSessionWithOptions(sess.SessionID, engine.ResetOptionsSkipTran())
 			}
 		}
 
@@ -1183,7 +1183,7 @@ func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession, 
 	procID := rpc.ProcID
 	switch strings.ToLower(rpc.ProcName) {
 	case "sp_reset_connection":
-		_ = s.coordinator.ResetSession(sess.SessionID, true)
+		_ = s.coordinator.ResetSessionWithOptions(sess.SessionID, engine.ResetOptionsAll())
 		done := BuildDone(TokenDone, DoneFinal, 0, 0)
 		_ = sess.writePacket(conn, PacketTabular, done)
 		return
@@ -1224,7 +1224,7 @@ func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession, 
 		if rpc.ProcName != "" {
 			procName := cleanProcedureName(rpc.ProcName)
 			if strings.EqualFold(procName, "sp_reset_connection") {
-				_ = s.coordinator.ResetSession(sess.SessionID, true)
+				_ = s.coordinator.ResetSessionWithOptions(sess.SessionID, engine.ResetOptionsAll())
 				done := BuildDone(TokenDone, DoneFinal, 0, 0)
 				_ = sess.writePacket(conn, PacketTabular, done)
 				return

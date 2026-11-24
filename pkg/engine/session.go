@@ -715,6 +715,39 @@ func (cs *ClientSession) drainStorageTablesToDropLocked() []string {
 	return toDrop
 }
 
+// drainTempTablesOnlyLocked extracts all unique physical table names from TableVars, TempTableMap, and EphemeralTables,
+// resets only those temporary table collections, and leaves PreparedStmts and Cursors intact. Caller must hold cs.Mu.
+func (cs *ClientSession) drainTempTablesOnlyLocked() []string {
+	if cs == nil {
+		return nil
+	}
+	totalCap := len(cs.TableVars) + len(cs.TempTableMap)
+	if totalCap == 0 {
+		cs.EphemeralTables = nil
+		return nil
+	}
+	seen := make(map[string]struct{}, totalCap)
+	toDrop := make([]string, 0, totalCap)
+
+	for _, phys := range cs.TableVars {
+		if _, ok := seen[phys]; !ok {
+			seen[phys] = struct{}{}
+			toDrop = append(toDrop, phys)
+		}
+	}
+	for _, phys := range cs.TempTableMap {
+		if _, ok := seen[phys]; !ok {
+			seen[phys] = struct{}{}
+			toDrop = append(toDrop, phys)
+		}
+	}
+
+	cs.TableVars = nil
+	cs.TempTableMap = nil
+	cs.EphemeralTables = nil
+	return toDrop
+}
+
 // DrainStorageTablesToDrop safely locks the session, extracts all registered temporary storage table names,
 // resets ephemeral session objects, and returns the physical table names to drop.
 func (cs *ClientSession) DrainStorageTablesToDrop() []string {

@@ -92,6 +92,9 @@ type SQLCoordinator interface {
 	// ResetSession restores a persistent client session to a clean, isolated initial state for connection pooling reuse.
 	ResetSession(id string, resetTx bool) error
 
+	// ResetSessionWithOptions restores a persistent client session to a clean state according to the given options.
+	ResetSessionWithOptions(id string, opts SessionResetOptions) error
+
 	// DiscardSessionTempTables drops all session-local temporary and ephemeral tables without altering other session state.
 	DiscardSessionTempTables(id string) error
 
@@ -139,4 +142,48 @@ type SQLCoordinator interface {
 
 	// GetTableLastIdentity retrieves the most recent identity value generated for a table.
 	GetTableLastIdentity(tableName string) (int64, bool)
+}
+
+// SessionResetOptions specifies granular options for resetting client session state.
+type SessionResetOptions struct {
+	ResetTx        bool // Rollback active uncommitted transaction
+	DropTempTables bool // Drop session-local temporary tables (#temp) and table variables (@table)
+	ClearVars      bool // Clear session user variables and reset system variables (timezone, isolation, database)
+	ClearPlans     bool // Clear session prepared statements and cached execution plans
+	CloseCursors   bool // Close and deallocate all session server-side cursors
+	ResetAuth      bool // Revert user impersonation (SETUSER / EXECUTE AS) stack
+}
+
+// ResetOptionsAll returns options for a complete session reset (DISCARD ALL, sp_reset_connection, StatusResetConnection).
+func ResetOptionsAll() SessionResetOptions {
+	return SessionResetOptions{
+		ResetTx:        true,
+		DropTempTables: true,
+		ClearVars:      true,
+		ClearPlans:     true,
+		CloseCursors:   true,
+		ResetAuth:      true,
+	}
+}
+
+// ResetOptionsSkipTran returns options for resetting session state while preserving the active transaction
+// (TDS StatusResetConnectionSkipTran 0x10).
+func ResetOptionsSkipTran() SessionResetOptions {
+	opts := ResetOptionsAll()
+	opts.ResetTx = false
+	return opts
+}
+
+// ResetOptionsPlansOnly returns options for clearing prepared statements only (DISCARD PLANS).
+func ResetOptionsPlansOnly() SessionResetOptions {
+	return SessionResetOptions{
+		ClearPlans: true,
+	}
+}
+
+// ResetOptionsTempOnly returns options for dropping session temporary tables only (DISCARD TEMP).
+func ResetOptionsTempOnly() SessionResetOptions {
+	return SessionResetOptions{
+		DropTempTables: true,
+	}
 }
