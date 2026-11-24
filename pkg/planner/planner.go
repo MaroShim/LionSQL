@@ -137,6 +137,7 @@ type PlanNode struct {
 	ActualDurationUS int64                `json:"actual_duration_us,omitempty"`
 	ActualLoops      int64                `json:"actual_loops,omitempty"`
 	Partitions       []string             `json:"partitions,omitempty"`
+	RequiredCols     []int                `json:"required_cols,omitempty"`
 	Children         []*PlanNode          `json:"children,omitempty"`
 }
 
@@ -161,6 +162,10 @@ func (n *PlanNode) Clone() *PlanNode {
 	if len(n.Partitions) > 0 {
 		cp.Partitions = make([]string, len(n.Partitions))
 		copy(cp.Partitions, n.Partitions)
+	}
+	if len(n.RequiredCols) > 0 {
+		cp.RequiredCols = make([]int, len(n.RequiredCols))
+		copy(cp.RequiredCols, n.RequiredCols)
 	}
 	if len(n.Children) > 0 {
 		cp.Children = make([]*PlanNode, len(n.Children))
@@ -1553,6 +1558,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			StartupCost:   0.25,
 			TotalCost:     chosenCost,
 			EstimatedRows: chosenEstRows,
+			RequiredCols:  CollectReferencedColumns(schema, q.TableName, q.TableAlias, q),
 		}
 
 		var remainingPrimary []string
@@ -1624,6 +1630,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			TotalCost:     tableScanTotalCost,
 			EstimatedRows: estimatedTotal,
 			Partitions:    prunedParts,
+			RequiredCols:  CollectReferencedColumns(schema, q.TableName, q.TableAlias, q),
 		}
 
 		if len(pushdownRes.PrimaryConds) > 0 {
@@ -1698,7 +1705,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 				if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema, allSchemas); ok && oriented != nil {
 					join = oriented
 				}
-				currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
+				currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints, q)
 				availableTables[strings.ToLower(cleanIdent(join.Table))] = true
 				if join.Alias != "" {
 					availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
@@ -1721,7 +1728,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 					if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema, allSchemas); ok && oriented != nil {
 						join = oriented
 					}
-					currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
+					currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints, q)
 					availableTables[strings.ToLower(cleanIdent(join.Table))] = true
 					if join.Alias != "" {
 						availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
@@ -1731,7 +1738,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 				// CBO Cost-Based Join Reordering via Selinger Dynamic Programming (B-4)
 				bestNode, bestEstRows, bestTables, ok := optimizeJoinOrderDP(
 					currentNode, currentEstimatedRows, availableTables,
-					innerBlock, rightSchemas, rightStats, allSchemas, q.QueryHints,
+					innerBlock, rightSchemas, rightStats, allSchemas, q.QueryHints, q,
 				)
 				if ok && bestNode != nil {
 					currentNode = bestNode
@@ -1741,7 +1748,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 					// Fallback to Greedy Join Ordering (prevents intermediate Cartesian explosions for > MaxJoinDPThreshold tables)
 					currentNode, currentEstimatedRows, availableTables = optimizeJoinOrderGreedy(
 						currentNode, currentEstimatedRows, availableTables,
-						innerBlock, rightSchemas, rightStats, allSchemas, q.QueryHints,
+						innerBlock, rightSchemas, rightStats, allSchemas, q.QueryHints, q,
 					)
 				}
 			}
@@ -2513,6 +2520,7 @@ func optimizeJoinOrderDP(
 	rightStats map[string]*TableStats,
 	allSchemas map[string]*storage.TableSchema,
 	queryHints []string,
+	q *QueryInfo,
 ) (*PlanNode, int64, map[string]bool, bool) {
 	n := len(innerBlock)
 	if n == 0 {
@@ -2573,7 +2581,7 @@ func optimizeJoinOrderDP(
 					continue
 				}
 
-				joinedNode, joinedEstRows := buildSingleJoinNode(prevEntry.node, prevEntry.estRows, oriented, rightSchemas, rightStats, queryHints)
+				joinedNode, joinedEstRows := buildSingleJoinNode(prevEntry.node, prevEntry.estRows, oriented, rightSchemas, rightStats, queryHints, q)
 				if dp[mask] == nil || joinedNode.TotalCost < dp[mask].totalCost {
 					newTables := make(map[string]bool, len(prevEntry.tables)+2)
 					for t, v := range prevEntry.tables {
@@ -2628,7 +2636,7 @@ func optimizeJoinOrderDP(
 					oriented = &copyJ
 				}
 
-				joinedNode, joinedEstRows := buildSingleJoinNode(prevEntry.node, prevEntry.estRows, oriented, rightSchemas, rightStats, queryHints)
+				joinedNode, joinedEstRows := buildSingleJoinNode(prevEntry.node, prevEntry.estRows, oriented, rightSchemas, rightStats, queryHints, q)
 				if dp[mask] == nil || joinedNode.TotalCost < dp[mask].totalCost {
 					newTables := make(map[string]bool, len(prevEntry.tables)+2)
 					for t, v := range prevEntry.tables {
@@ -2666,6 +2674,7 @@ func optimizeJoinOrderGreedy(
 	rightStats map[string]*TableStats,
 	allSchemas map[string]*storage.TableSchema,
 	queryHints []string,
+	q *QueryInfo,
 ) (*PlanNode, int64, map[string]bool) {
 	remaining := make([]*JoinInfo, len(innerBlock))
 	copy(remaining, innerBlock)
@@ -2716,7 +2725,7 @@ func optimizeJoinOrderGreedy(
 		}
 
 		join := bestOriented
-		currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, queryHints)
+		currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, queryHints, q)
 		tables[strings.ToLower(cleanIdent(join.Table))] = true
 		if join.Alias != "" {
 			tables[strings.ToLower(cleanIdent(join.Alias))] = true
@@ -2728,7 +2737,7 @@ func optimizeJoinOrderGreedy(
 	return currentNode, currentEstimatedRows, tables
 }
 
-func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join *JoinInfo, rightSchemas map[string]*storage.TableSchema, rightStats map[string]*TableStats, queryHints []string) (*PlanNode, int64) {
+func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join *JoinInfo, rightSchemas map[string]*storage.TableSchema, rightStats map[string]*TableStats, queryHints []string, q *QueryInfo) (*PlanNode, int64) {
 	rTable := cleanIdent(join.Table)
 	rAlias := cleanIdent(join.Alias)
 	if rAlias == "" {
@@ -2736,6 +2745,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 	}
 
 	rSchema := resolveRightSchema(join, rightSchemas)
+	rReqCols := CollectReferencedColumns(rSchema, join.Table, rAlias, q)
 
 	var rStat *TableStats
 	if rightStats != nil {
@@ -2958,6 +2968,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 			StartupCost:   0.25,
 			TotalCost:     0.35,
 			EstimatedRows: 1,
+			RequiredCols:  rReqCols,
 		}
 
 		nextNode = &PlanNode{
@@ -2978,6 +2989,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 			StartupCost:   0.0,
 			TotalCost:     rScanCost,
 			EstimatedRows: rRows,
+			RequiredCols:  rReqCols,
 		}
 		if rightFilter != "" {
 			rScanNode = &PlanNode{
@@ -3012,6 +3024,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 			StartupCost:   0.0,
 			TotalCost:     rScanCost,
 			EstimatedRows: rRows,
+			RequiredCols:  rReqCols,
 		}
 		if rightFilter != "" {
 			rScanNode = &PlanNode{

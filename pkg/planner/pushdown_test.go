@@ -292,3 +292,128 @@ func TestPushdown_CompositeQualifiersAndImplicitAlias(t *testing.T) {
 		t.Errorf("expected pushed down primary cond 'a.name = 'Alice'', got %+v", res.PrimaryConds)
 	}
 }
+
+func TestPushdown_TransitivePredicateInference(t *testing.T) {
+	p := planner.NewPlanner()
+	schemaOrders := &storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "order_id", Type: storage.TypeInt},
+			{Name: "cust_id", Type: storage.TypeInt},
+			{Name: "amount", Type: storage.TypeDecimal},
+		},
+	}
+	schemaCustomers := &storage.TableSchema{
+		Name: "customers",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	rightSchemas := map[string]*storage.TableSchema{
+		"customers": schemaCustomers,
+		"c":         schemaCustomers,
+	}
+
+	// Case 1: Equality predicate o.cust_id = 42 infers c.id = 42
+	sql := "SELECT o.amount, c.name FROM orders o JOIN customers c ON o.cust_id = c.id WHERE o.cust_id = 42"
+	q, err := p.ParseSelect(sql)
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+
+	res := planner.PushDownPredicates(q, schemaOrders, rightSchemas)
+	if len(res.PrimaryConds) == 0 || !strings.Contains(res.PrimaryConds[0], "42") {
+		t.Errorf("expected PrimaryConds to contain cust_id = 42, got %+v", res.PrimaryConds)
+	}
+
+	// Verify transitive inference on customers:
+	joinConds, ok := res.JoinConds[0]
+	if !ok || len(joinConds) == 0 {
+		t.Fatalf("expected transitive condition on customers, got none. JoinConds: %+v", res.JoinConds)
+	}
+	found := false
+	for _, c := range joinConds {
+		if strings.Contains(c, "id = 42") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected c.id = 42 inferred for customers, got %+v", joinConds)
+	}
+
+	// Case 2: Range predicate o.cust_id > 100 infers c.id > 100
+	sqlRange := "SELECT o.amount, c.name FROM orders o JOIN customers c ON o.cust_id = c.id WHERE o.cust_id > 100"
+	qRange, err := p.ParseSelect(sqlRange)
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	resRange := planner.PushDownPredicates(qRange, schemaOrders, rightSchemas)
+	joinCondsRange := resRange.JoinConds[0]
+	foundRange := false
+	for _, c := range joinCondsRange {
+		if strings.Contains(c, "id > 100") {
+			foundRange = true
+			break
+		}
+	}
+	if !foundRange {
+		t.Errorf("expected c.id > 100 inferred for customers, got %+v", joinCondsRange)
+	}
+}
+
+func TestPushdown_CollectReferencedColumns(t *testing.T) {
+	p := planner.NewPlanner()
+	schemaWide := &storage.TableSchema{
+		Name: "wide_table",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt},
+			{Name: "name", Type: storage.TypeVarChar},
+			{Name: "age", Type: storage.TypeInt},
+			{Name: "email", Type: storage.TypeVarChar},
+			{Name: "payload", Type: storage.TypeVarChar},
+			{Name: "c5", Type: storage.TypeInt},
+			{Name: "c6", Type: storage.TypeInt},
+			{Name: "c7", Type: storage.TypeInt},
+			{Name: "c8", Type: storage.TypeInt},
+			{Name: "c9", Type: storage.TypeInt},
+		},
+	}
+
+	// Case 1: SELECT id, name FROM wide_table WHERE age > 20
+	q1, err := p.ParseSelect("SELECT id, name FROM wide_table WHERE age > 20")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	cols1 := planner.CollectReferencedColumns(schemaWide, q1.TableName, q1.TableAlias, q1)
+	expected1 := []int{0, 1, 2} // id (0), name (1), age (2)
+	if len(cols1) != len(expected1) {
+		t.Fatalf("expected cols %v, got %v", expected1, cols1)
+	}
+	for i, v := range expected1 {
+		if cols1[i] != v {
+			t.Errorf("at index %d: expected %d, got %d", i, v, cols1[i])
+		}
+	}
+
+	// Case 2: Wildcard SELECT * FROM wide_table -> returns nil (no pruning)
+	q2, err := p.ParseSelect("SELECT * FROM wide_table")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	cols2 := planner.CollectReferencedColumns(schemaWide, q2.TableName, q2.TableAlias, q2)
+	if cols2 != nil {
+		t.Errorf("expected nil for SELECT *, got %v", cols2)
+	}
+
+	// Case 3: SELECT COUNT(*) FROM wide_table -> returns []int{0}
+	q3, err := p.ParseSelect("SELECT COUNT(*) FROM wide_table")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	cols3 := planner.CollectReferencedColumns(schemaWide, q3.TableName, q3.TableAlias, q3)
+	if len(cols3) != 1 || cols3[0] != 0 {
+		t.Errorf("expected [0] for COUNT(*), got %v", cols3)
+	}
+}

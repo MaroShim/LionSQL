@@ -14,7 +14,6 @@
 
 | Status | ID | Milestone | Domain | Priority | Title | Plan Doc | Metrics |
 | :---: | :---: | :---: | :---: | :---: | :--- | :--- | :--- |
-| `PENDING` | **`--id`** | `Engine` | --title | P2 | AUDIT-R17-DEFECTS-1 | [`--domain`](--domain) |  |
 | `DONE` | **`1.8`** | `1.0-GA` | Durability | P2 | 1.0 GA 검증 및 잔여 정리 | [`notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`](notes/plans/GA_REGEX_DDL_REFACTORING_PLAN.ko.md) |  |
 | `PENDING` | **`AI-STARTER-1`** | `v1.30.0` | Ecosystem | P2 | AI 에이전트용 컨텍스트 문서 (llms.txt, AGENTS.md 템플릿) | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
 | `PENDING` | **`AI-STARTER-2`** | `v1.30.0` | Ecosystem | P2 | 랜딩 AI 앱 스타터 섹션 및 Go/Node/Python 최소 예제 | [`notes/AI_APP_STARTER_PLAN.ko.md`](notes/AI_APP_STARTER_PLAN.ko.md) |  |
@@ -501,6 +500,7 @@
 | `DONE` | **`PERF-EXISTS-SUBQUERY-LIMIT-1`** | `1.0-GA` | Engine | P2 | EXISTS (SELECT ...) 구문 평가 시 암시적 LIMIT 1 푸시다운 및 1건 조기 탈출(결함 73) | [`notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md`](notes/plans/ACID_CORE_INTEGRITY_STABILIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-GROUPBY-SLOT-HASH-1`** | `v0.99.0` | Execution | P1 | GROUP BY 및 JOIN 인메모리 정수 슬롯 해시 가속 | [`--priority`](--priority) |  |
 | `DONE` | **`PERF-GROVE-CONCURRENCY-1`** |  | Durability | P2 | Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 | [`notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/plans/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 2 (`PERF-HOTSPOT-LATCH-... |
+| `PENDING` | **`PERF-HASH-JOIN-SMALL-BUILD-1`** | `v0.96.0` | Execution | P1 | Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 | [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md) |  |
 | `DONE` | **`PERF-HYBRID-TEMPMEM-1`** |  | STORAGE | P2 | WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 | [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md) |  |
 | `DONE` | **`PERF-OCC-FLAT-DECODE-1`** |  | Storage | P2 | FlatRecord 스캔 디코딩 할당 최적화 (Option A: SSO 2중 할당 제거 및 Arena 슬랩 풀링) |  |  |
 | `SPEC-OUT` | **`PERF-OCC-INSTANT-DROP-COL-1`** | `Spec-Out` | Storage | P2 | In-Memory OCC FlatRecordLayout 컬럼 가상 스킵 마스킹을 통한 Instant DROP COLUMN (O(1) DDL) 지원 | [`notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md`](notes/FULL_CODEBASE_ADVERSARIAL_AUDIT.ko.md) |  |
@@ -513,18 +513,22 @@
 | `DONE` | **`PERF-OPT-PATINDEX-REGEX-CACHE-1`** | `3` | --domain | P2 | PATINDEX 등 내장 함수 정규식 컴파일 결과 LRU/RWMutex 캐싱 (P5) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-PROJECTION-SRCIDX-DEFER-DECODE-1`** | `Post-1.0` | --domain | P2 | ProjectionIterator 일반 컬럼 srcIdx 사전 바인딩 및 LazyTuple 선택 디코딩 (P4) | [`--prio`](--prio) |  |
 | `PENDING` | **`PERF-OPT-SELECT-VALUES-ROWS-DEDUPE-1`** | `Post-1.0` | --domain | P2 | sqlexec_select.go Values/Rows 이중 할당 제거 및 Wire 프로토콜 Values 직결 (P2) | [`--prio`](--prio) |  |
+| `PENDING` | **`PERF-PARALLEL-HASH-AGG-1`** | `v0.96.0` | Execution | P1 | Parallel Hash Aggregation: 멀티코어 동시 파티션 스캔 및 Coordinator 최종 머지 | [`notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md`](notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PARALLEL-HASH-JOIN-1`** | `Post-1.0` | Execution | P2 | Parallel Hash Join (1-Build N-Probe) Probe 병렬화 실행기 | [`notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md`](notes/plans/PARALLEL_HASH_JOIN_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-PROJECTION-PUSHDOWN-1`** | `Post-1.0` | Engine | P3 | WiredTiger & MemoryCompact LazyTuple 제거 및 Projection Pushdown 선택 컬럼 디코딩 (DecodeTupleSelectedWithArena / DecodeFlatSelectedWithArena + ArenaRowCursor) 동시 적용 (Post-1.0) |  |  |
 | `DONE` | **`PERF-REGRESSION-RECOVERY-1`** |  | Performance | P1 | 성능 회귀 정상화 및 회귀 방지 게이트 구축 |  | - [x] **Phase 3 (`VERIFY-BENCH-RESTOR... |
 | `PENDING` | **`PERF-REPL-SONIC-1`** | `v1.10.0` | Replication | P2 | 고성능 SIMD JSON (ByteDance Sonic) 기반 복제 스트리밍 가속 |  |  |
 | `DONE` | **`PERF-RESULT-ROW-STREAM-1`** | `v1.10.0` | Engine | P2 | 쿼리 결과셋 Rows 맵 이중 구체화 제거 및 []storage.Row Zero-Boxing 스트리밍 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-RUNTIME-BLOOM-FILTER-JOIN-1`** | `Post-1.0` | Execution | P2 | Runtime Bloom Filter Pushdown (Join Build-side 블룸 필터 Probe Scan 주입) | [`notes/plans/RUNTIME_BLOOM_FILTER_PLAN.ko.md`](notes/plans/RUNTIME_BLOOM_FILTER_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SERVER-PIPELINE-P3-P4`** |  | Ecosystem | P3 | 서버 파이프라인 Phase 3/4 | [`notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-SKIPLIST-BACKWARD-POINTER-1`** | `v1.20.0` | Storage | P3 | MemEngine SkipList 양방향 포인터 도입으로 IndexScanDesc Zero-Alloc 역방향 스캔 달성 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
+| `DONE` | **`PERF-STORAGE-PROJECTION-PUSHDOWN-1`** | `v0.95.0` | Execution | P2 | Storage Projection Pushdown 및 불필요 컬럼 디코딩 생략 (Column Pruning) | [`notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md`](notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md) |  |
 | `DONE` | **`PERF-SUBQUERY-MEMO-1`** | `1.0-GA` | Engine | P2 | [1.0(?)] 집계 포함 상관 서브쿼리 결과 유계 메모이제이션 캐시 | [`notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md`](notes/plans/CORRELATED_SUBQUERY_MEMOIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-TDS-OPTIMIZATION-1`** | `1.0-GA` | Wire | P1 | TDS 성능 가속화: sp_executesql VDBE FastPath 직결, COLMETADATA 캐싱, 소켓 버퍼링 | [`notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/TDS_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |  |
 | `DONE` | **`PERF-TDS-ZEROCOPY-FRAME-1`** | `v1.10.0` | Wire | P2 | TDS tdsStreamWriter 8바이트 헤더 예약 인플레이스 직렬화 및 슬라이딩 copy 제거 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-VDBE-EXTREME-OPT-1`** |  | Durability | P2 | T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 | [`notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/plans/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md) | - [x] **Phase 1 (`PERF-VDBE-SLOT-1`)*... |
 | `PENDING` | **`PERF-VDBE-FRAME-SLIM-1`** | `v1.10.0` | Engine | P2 | VDBE 프레임/레지스터 슬림 초기화 및 포지셔널 파라미터 슬라이스 직결 | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
+| `PENDING` | **`PERF-VECTOR-PRIMITIVE-ACCUM-1`** | `v0.95.0` | Execution | P1 | Vectorized Primitive Accumulator: Interface 언박싱 제거 및 타입 특화 집계 루프 | [`notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md`](notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md) |  |
 | `PENDING` | **`PERF-WAL-ZERO-ALLOC-1`** | `v1.10.0` | Storage | P2 | In-Memory OCC WAL 단일 풀 버퍼 직렬화 및 writeFrame Zero-Alloc | [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WIRE-ZEROALLOC-1`** |  | Wire | P1 | 와이어 프로토콜(PGWire / TDS) 직렬화 제로 할당 및 청크 스트리밍 버퍼 결합 | [`notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md`](notes/plans/WIRE_PROTOCOL_ZERO_ALLOC_STREAMING_PLAN.ko.md) |  |
 | `DONE` | **`PERF-WT-ARENA-SLAB-DECODE-1`** | `v0.95.0` | Storage | P2 | WiredTiger sync.Pool/Arena 기반 고정 버퍼 디코딩 및 C.GoBytes 절감 | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
@@ -606,13 +610,6 @@
 ---
 
 ## 2. Detailed Task Specifications & Execution Records
-
-### [PENDING] AUDIT-R17-DEFECTS-1 `--id`
-- **Domain**: --title | **Priority**: P2 | **Updated**: 2026-11-23 07:22:23
-- **Milestone**: `Engine`
-- **Plan Doc**: [`--domain`](--domain)
-
----
 
 ### [DONE] 1.0 GA 검증 및 잔여 정리 `1.8`
 - **Domain**: Durability | **Priority**: P2 | **Updated**: 2026-11-16 14:21:00
@@ -4922,6 +4919,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [PENDING] Hash Join: Small-Table Build-Side 강제 및 Chunk Buffer Pool 재사용 `PERF-HASH-JOIN-SMALL-BUILD-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 05:14:02
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md`](notes/plans/HASH_JOIN_SMALL_BUILD_PLAN.ko.md)
+
+---
+
 ### [DONE] WiredTiger 모드 임시 테이블 및 테이블 변수 인메모리 하이브리드 바이패스 `PERF-HYBRID-TEMPMEM-1`
 - **Domain**: STORAGE | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Plan Doc**: [`notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md`](notes/plans/LOGICAL_NAMESPACE_DATABASE_PREFIX_PLAN.ko.md)
@@ -5003,6 +5007,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [PENDING] Parallel Hash Aggregation: 멀티코어 동시 파티션 스캔 및 Coordinator 최종 머지 `PERF-PARALLEL-HASH-AGG-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 05:14:02
+- **Milestone**: `v0.96.0`
+- **Plan Doc**: [`notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md`](notes/plans/PARALLEL_HASH_AGG_PLAN.ko.md)
+
+---
+
 ### [PENDING] Parallel Hash Join (1-Build N-Probe) Probe 병렬화 실행기 `PERF-PARALLEL-HASH-JOIN-1`
 - **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-19 12:26:26
 - **Milestone**: `Post-1.0`
@@ -5046,6 +5057,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 
 ---
 
+### [PENDING] Runtime Bloom Filter Pushdown (Join Build-side 블룸 필터 Probe Scan 주입) `PERF-RUNTIME-BLOOM-FILTER-JOIN-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-24 05:33:30
+- **Milestone**: `Post-1.0`
+- **Plan Doc**: [`notes/plans/RUNTIME_BLOOM_FILTER_PLAN.ko.md`](notes/plans/RUNTIME_BLOOM_FILTER_PLAN.ko.md)
+
+---
+
 ### [DONE] 서버 파이프라인 Phase 3/4 `PERF-SERVER-PIPELINE-P3-P4`
 - **Domain**: Ecosystem | **Priority**: P3 | **Updated**: 2026-11-16 14:21:04
 - **Plan Doc**: [`notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/plans/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)
@@ -5059,6 +5077,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Storage | **Priority**: P3 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `v1.20.0`
 - **Plan Doc**: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
+
+---
+
+### [DONE] Storage Projection Pushdown 및 불필요 컬럼 디코딩 생략 (Column Pruning) `PERF-STORAGE-PROJECTION-PUSHDOWN-1`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-24 05:34:56
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md`](notes/plans/STORAGE_PROJECTION_PUSHDOWN_PLAN.ko.md)
 
 ---
 
@@ -5103,6 +5128,13 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 - **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-16 14:21:04
 - **Milestone**: `v1.10.0`
 - **Plan Doc**: [`notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md`](notes/plans/MICRO_HOTPATH_ZERO_ALLOC_TUNING_PLAN.ko.md)
+
+---
+
+### [PENDING] Vectorized Primitive Accumulator: Interface 언박싱 제거 및 타입 특화 집계 루프 `PERF-VECTOR-PRIMITIVE-ACCUM-1`
+- **Domain**: Execution | **Priority**: P1 | **Updated**: 2026-11-24 05:14:02
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md`](notes/plans/VECTOR_PRIMITIVE_ACCUM_PLAN.ko.md)
 
 ---
 

@@ -1,6 +1,8 @@
 package planner
 
 import (
+	"fmt"
+	"sort"
 	"strings"
 
 	"lionsql/pkg/proc"
@@ -426,5 +428,312 @@ func PushDownPredicates(q *QueryInfo, schema *storage.TableSchema, rightSchemas 
 	}
 	res.RemainingConds = finalRemaining
 
+	// Transitive Predicate Inference (Equivalence Class Propagation) across equi-joined relations
+	InferTransitivePredicates(res, ctx)
+
 	return res
+}
+
+type equivColKey struct {
+	tableIdx int
+	colName  string
+}
+
+// InferTransitivePredicates performs transitive predicate inference (equivalence class propagation)
+// across equi-joined tables for INNER/CROSS joins.
+// E.g.: o.cust_id = c.id AND o.cust_id = 100 => infers c.id = 100.
+func InferTransitivePredicates(res *PushDownResult, ctx *PushdownContext) {
+	if res == nil || ctx == nil || len(ctx.Joins) == 0 {
+		return
+	}
+
+	// 1. Build adjacency list of column equivalences from INNER join conditions and WHERE equijoins
+	adj := make(map[equivColKey][]equivColKey)
+	addEdge := func(k1, k2 equivColKey) {
+		adj[k1] = append(adj[k1], k2)
+		adj[k2] = append(adj[k2], k1)
+	}
+
+	// From Joins:
+	for _, j := range ctx.Joins {
+		jType := strings.ToUpper(strings.TrimSpace(j.Type))
+		if jType != "INNER" && jType != "CROSS" && jType != "" {
+			continue
+		}
+		if j.LeftKey != "" && j.RightKey != "" {
+			refsL := ExtractColumnRefs(j.LeftKey)
+			refsR := ExtractColumnRefs(j.RightKey)
+			if len(refsL) == 1 && len(refsR) == 1 {
+				idxL, okL := ctx.ResolveTable(refsL[0])
+				idxR, okR := ctx.ResolveTable(refsR[0])
+				if okL && okR && idxL != idxR {
+					kL := equivColKey{tableIdx: idxL, colName: strings.ToLower(cleanIdent(refsL[0].Column))}
+					kR := equivColKey{tableIdx: idxR, colName: strings.ToLower(cleanIdent(refsR[0].Column))}
+					addEdge(kL, kR)
+				}
+			}
+		}
+	}
+
+	// From WHERE equi-conditions in res.RemainingConds:
+	for _, cond := range res.RemainingConds {
+		l, r := sqlutil.SplitJoinCond(cond)
+		if l == "" || r == "" {
+			continue
+		}
+		refsL := ExtractColumnRefs(l)
+		refsR := ExtractColumnRefs(r)
+		if len(refsL) == 1 && len(refsR) == 1 {
+			idxL, okL := ctx.ResolveTable(refsL[0])
+			idxR, okR := ctx.ResolveTable(refsR[0])
+			if okL && okR && idxL != idxR {
+				kL := equivColKey{tableIdx: idxL, colName: strings.ToLower(cleanIdent(refsL[0].Column))}
+				kR := equivColKey{tableIdx: idxR, colName: strings.ToLower(cleanIdent(refsR[0].Column))}
+				addEdge(kL, kR)
+			}
+		}
+	}
+
+	if len(adj) == 0 {
+		return
+	}
+
+	// 2. Find connected components (equivalence classes) using BFS
+	visited := make(map[equivColKey]bool)
+	var equivClasses [][]equivColKey
+
+	for node := range adj {
+		if visited[node] {
+			continue
+		}
+		var comp []equivColKey
+		queue := []equivColKey{node}
+		visited[node] = true
+
+		for len(queue) > 0 {
+			curr := queue[0]
+			queue = queue[1:]
+			comp = append(comp, curr)
+
+			for _, neighbor := range adj[curr] {
+				if !visited[neighbor] {
+					visited[neighbor] = true
+					queue = append(queue, neighbor)
+				}
+			}
+		}
+
+		if len(comp) > 1 {
+			equivClasses = append(equivClasses, comp)
+		}
+	}
+
+	// Helper to get all current conditions for a table
+	getCondsForTable := func(tblIdx int) []string {
+		if tblIdx == 0 {
+			return res.PrimaryConds
+		}
+		return res.JoinConds[tblIdx-1]
+	}
+
+	// Helper to check if a condition on (col, op, val) already exists
+	hasMatchingCond := func(conds []string, col, op, val string) bool {
+		for _, c := range conds {
+			cRawCol, cOp, cVal, ok := parseASTComparison(c)
+			if ok && cOp == op && cVal == val {
+				cCol := strings.ToLower(cleanIdent(cRawCol))
+				if dot := strings.Index(cCol, "."); dot != -1 {
+					cCol = cCol[dot+1:]
+				}
+				if cCol == col {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	// Helper to format table prefix for column
+	getTablePrefix := func(tblIdx int) string {
+		if tblIdx == 0 {
+			if ctx.PrimaryAlias != "" {
+				return ctx.PrimaryAlias + "."
+			}
+			if ctx.PrimaryTable != "" {
+				return ctx.PrimaryTable + "."
+			}
+			return ""
+		}
+		j := ctx.Joins[tblIdx-1]
+		if j.Alias != "" {
+			return j.Alias + "."
+		}
+		if j.Table != "" {
+			return j.Table + "."
+		}
+		return ""
+	}
+
+	// 3. For each equivalence class, collect single-table predicates and propagate across the class
+	for _, eqClass := range equivClasses {
+		type predInfo struct {
+			srcTbl int
+			op     string
+			val    string
+		}
+		var preds []predInfo
+
+		for _, member := range eqClass {
+			conds := getCondsForTable(member.tableIdx)
+			for _, cond := range conds {
+				rawCol, op, val, ok := parseASTComparison(cond)
+				if !ok {
+					continue
+				}
+				cCol := strings.ToLower(cleanIdent(rawCol))
+				if dot := strings.Index(cCol, "."); dot != -1 {
+					cCol = cCol[dot+1:]
+				}
+				if cCol == member.colName {
+					preds = append(preds, predInfo{
+						srcTbl: member.tableIdx,
+						op:     op,
+						val:    val,
+					})
+				}
+			}
+		}
+
+		// Propagate collected predicates to other members of the class
+		for _, p := range preds {
+			for _, member := range eqClass {
+				if member.tableIdx == p.srcTbl {
+					continue
+				}
+				targetConds := getCondsForTable(member.tableIdx)
+				if hasMatchingCond(targetConds, member.colName, p.op, p.val) {
+					continue
+				}
+
+				newCond := fmt.Sprintf("%s%s %s %s", getTablePrefix(member.tableIdx), member.colName, p.op, p.val)
+				if member.tableIdx == 0 {
+					res.PrimaryConds = append(res.PrimaryConds, newCond)
+				} else {
+					joinIdx := member.tableIdx - 1
+					res.JoinConds[joinIdx] = append(res.JoinConds[joinIdx], newCond)
+				}
+			}
+		}
+	}
+}
+
+// CollectReferencedColumns returns the sorted slice of 0-based column indices required from the specified table.
+// If all columns are needed (e.g. wildcard * or full scan), it returns nil.
+func CollectReferencedColumns(schema *storage.TableSchema, tblName string, alias string, q *QueryInfo) []int {
+	if schema == nil || len(schema.Columns) == 0 || q == nil {
+		return nil
+	}
+
+	cleanTbl := strings.ToLower(cleanIdent(tblName))
+	cleanAl := strings.ToLower(cleanIdent(alias))
+
+	// 1. Check for wildcards in projections:
+	// If "*" is present, or "<alias>.*" / "<tblName>.*", then all columns are required.
+	for _, p := range q.Projections {
+		trimmed := strings.TrimSpace(p)
+		if trimmed == "*" {
+			return nil
+		}
+		upper := strings.ToUpper(trimmed)
+		if strings.HasSuffix(upper, ".*") {
+			prefix := strings.ToLower(cleanIdent(trimmed[:len(trimmed)-2]))
+			if prefix == cleanTbl || (cleanAl != "" && prefix == cleanAl) {
+				return nil
+			}
+		}
+	}
+
+	// 2. Collect all candidate column references across all query clauses
+	var allRefs []ColumnRef
+
+	for _, p := range q.Projections {
+		allRefs = append(allRefs, ExtractColumnRefs(p)...)
+	}
+	if q.WhereClause != "" {
+		allRefs = append(allRefs, ExtractColumnRefs(q.WhereClause)...)
+	}
+	if q.HavingClause != "" {
+		allRefs = append(allRefs, ExtractColumnRefs(q.HavingClause)...)
+	}
+	for _, g := range q.GroupByCols {
+		allRefs = append(allRefs, ExtractColumnRefs(g)...)
+	}
+	if q.OrderByClause != "" {
+		allRefs = append(allRefs, ExtractColumnRefs(q.OrderByClause)...)
+	}
+	if q.Join != nil {
+		allRefs = append(allRefs, ExtractColumnRefs(q.Join.LeftKey)...)
+		allRefs = append(allRefs, ExtractColumnRefs(q.Join.RightKey)...)
+		if q.Join.Filter != "" {
+			allRefs = append(allRefs, ExtractColumnRefs(q.Join.Filter)...)
+		}
+	}
+	for _, j := range q.Joins {
+		allRefs = append(allRefs, ExtractColumnRefs(j.LeftKey)...)
+		allRefs = append(allRefs, ExtractColumnRefs(j.RightKey)...)
+		if j.Filter != "" {
+			allRefs = append(allRefs, ExtractColumnRefs(j.Filter)...)
+		}
+	}
+	for _, w := range q.WindowDefs {
+		for _, arg := range w.Args {
+			allRefs = append(allRefs, ExtractColumnRefs(arg)...)
+		}
+		for _, pk := range w.PartitionKeys {
+			allRefs = append(allRefs, ExtractColumnRefs(pk)...)
+		}
+		for _, ok := range w.OrderByKeys {
+			allRefs = append(allRefs, ExtractColumnRefs(ok.Column)...)
+		}
+	}
+
+	// 3. Match column references to the table schema
+	matched := make(map[int]bool)
+	for _, ref := range allRefs {
+		refCol := strings.ToLower(cleanIdent(ref.Column))
+		if refCol == "" {
+			continue
+		}
+
+		if ref.TableOrAlias != "" {
+			refTbl := strings.ToLower(cleanIdent(ref.TableOrAlias))
+			if refTbl != cleanTbl && (cleanAl == "" || refTbl != cleanAl) {
+				continue
+			}
+		}
+
+		for idx, col := range schema.Columns {
+			if strings.ToLower(cleanIdent(col.Name)) == refCol {
+				matched[idx] = true
+				break
+			}
+		}
+	}
+
+	// If no columns were matched (e.g. SELECT 1, COUNT(*)), retain at least column 0
+	if len(matched) == 0 {
+		return []int{0}
+	}
+
+	// If all columns are needed, return nil (meaning full decode without pruning overhead)
+	if len(matched) >= len(schema.Columns) {
+		return nil
+	}
+
+	result := make([]int, 0, len(matched))
+	for idx := range matched {
+		result = append(result, idx)
+	}
+	sort.Ints(result)
+	return result
 }

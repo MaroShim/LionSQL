@@ -64,6 +64,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		} else {
 			sIter = NewSeqScanIterator(tx, plan.Relation, plan.Alias, schema)
 		}
+		if len(plan.RequiredCols) > 0 {
+			sIter.SetRequiredCols(plan.RequiredCols)
+		}
 		if opts.Arena != nil {
 			sIter.SetArena(opts.Arena)
 		}
@@ -78,6 +81,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		low, high := planner.ParseIndexCond(plan.IndexCond, schema, plan.IndexName)
 		it := NewIndexScanIterator(tx, plan.Relation, plan.Alias, plan.IndexName, low, high, schema)
 		it.IndexOnly = (plan.Type == planner.NodeIndexOnlyScan)
+		if len(plan.RequiredCols) > 0 {
+			it.SetRequiredCols(plan.RequiredCols)
+		}
 		if opts.Arena != nil {
 			it.SetArena(opts.Arena)
 		}
@@ -325,6 +331,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		} else {
 			// Fallback to Hash Join if inner index is absent
 			innerScan := NewSeqScanIterator(tx, innerPlan.Relation, innerPlan.Alias, innerSchema)
+			if len(innerPlan.RequiredCols) > 0 {
+				innerScan.SetRequiredCols(innerPlan.RequiredCols)
+			}
 			var rIter Iterator = innerScan
 			if instrument {
 				rIter = NewInstrumentedIterator(innerScan, innerPlan)
