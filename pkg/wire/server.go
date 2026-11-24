@@ -602,6 +602,10 @@ func (s *Server) handleConnection(conn net.Conn) {
 			return
 		}
 		code = binary.BigEndian.Uint32(buf[4:8])
+		if code == 80877102 {
+			s.handleCancelRequest(conn)
+			return
+		}
 	}
 
 	if code == 80877103 {

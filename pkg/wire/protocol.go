@@ -444,7 +444,7 @@ func WriteError(w io.Writer, message string) error {
 		code = "42501" // insufficient_privilege
 	} else if strings.Contains(upper, "CURRENT TRANSACTION IS ABORTED") {
 		code = "25P02" // in_failed_sql_transaction
-	} else if strings.Contains(upper, "TIMEOUT") {
+	} else if strings.Contains(upper, "TIMEOUT") || strings.Contains(upper, "CANCEL") {
 		code = "57014" // query_canceled
 	} else if strings.Contains(upper, "DUPLICATE") || strings.Contains(upper, "UNIQUE") || strings.Contains(upper, "ALREADY EXISTS") {
 		code = "23505" // unique_violation

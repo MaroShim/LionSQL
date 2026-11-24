@@ -305,7 +305,7 @@
 | `DONE` | **`FEAT-WINDOWS-WIREDTIGER-DLL-BUNDLE-1`** | `v1.1.0` | Storage | P1 | Windows WiredTiger MSVC Native DLL Build & Self-Extracting Bundle Pipeline | [`notes/plans/WINDOWS_WIREDTIGER_DLL_BUNDLE_PLAN.ko.md`](notes/plans/WINDOWS_WIREDTIGER_DLL_BUNDLE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WINDOWS-WIREDTIGER-STATIC-BUNDLE-1`** | `v0.94.0` | 1 | P2 | Storage | [`--milestone`](--milestone) |  |
 | `PENDING` | **`FEAT-WIRE-PG-COPY-STREAM-1`** | `v0.99.0` | Wire | P2 | PGWire 대량 COPY FROM STDIN/TO STDOUT 고속 스트리밍 지원 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-WIRE-PG-REMOTE-CANCEL-1`** | `v0.99.0` | Wire | P2 | PGWire 외부 TCP CancelRequest (80877102) 백엔드 쿼리 캔슬 연동 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
+| `DONE` | **`FEAT-WIRE-PG-REMOTE-CANCEL-1`** | `v0.99.0` | Wire | P2 | PGWire 외부 TCP CancelRequest (80877102) 백엔드 쿼리 캔슬 연동 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-WIRE-TDS-BCP-BULK-LOAD-1`** | `v0.99.0` | Wire | P2 | TDS 0x07 BCP (Bulk Load) 대량 데이터 적재 스트리밍 지원 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WIRE-TDS-RESET-CONNECTION-1`** | `v0.95.0` | Wire | P2 | TDS RESETCONNECTION (0x08) 수신 시 세션 임시 객체(#temp) 및 상태 원자적 초기화 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-WT-SECONDARY-INDEX-BTREE-1`** | `1.0-GA` | Storage | P1 | WiredTiger 물리 B-Tree 기반 보조 인덱스(Secondary Index) 실체화 및 O(log N) 탐색/유니크 검증 | [`notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md`](notes/WIREDTIGER_SECONDARY_INDEX_BTREE_PLAN.ko.md) |  |
@@ -3469,8 +3469,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 
 ---
 
-### [PENDING] PGWire 외부 TCP CancelRequest (80877102) 백엔드 쿼리 캔슬 연동 `FEAT-WIRE-PG-REMOTE-CANCEL-1`
-- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-23 14:56:08
+### [DONE] PGWire 외부 TCP CancelRequest (80877102) 백엔드 쿼리 캔슬 연동 `FEAT-WIRE-PG-REMOTE-CANCEL-1`
+- **Domain**: Wire | **Priority**: P2 | **Updated**: 2026-11-24 02:52:02
 - **Milestone**: `v0.99.0`
 - **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
 
