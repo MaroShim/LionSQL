@@ -22,7 +22,7 @@
 | `DONE` | **`ARCH-ANTLR-ORACLE-1`** | `1.0-GA` | Architecture | P2 | ANTLR4 기반 T-SQL 문법 검증 및 미지원 기능 정밀 진단 오라클 아키텍처 | [`notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md`](notes/plans/ANTLR4_SYNTAX_ORACLE_DIAGNOSTICS_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-ARIES-LOGGING-1`** |  | ARCH | P2 | Implement ARIES Physiological Undo/Redo Logging for Savepoints | [`notes/plans/ARCH_ARIES_LOGGING_PLAN.ko.md`](notes/plans/ARCH_ARIES_LOGGING_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-AST-GUARD-1`** | `v0.94.0` | Engine | P2 | Phase 2 완료 후 go/ast 정적 분석 아키텍처 가드를 통한 엔진 수동 문자열 파싱 재유입 및 Lexer 캡슐화 침해 영구 차단 | [`notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md`](notes/plans/ENGINE_AST_PARSER_MIGRATION_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-AST-ROUTING-REFACTORING-1`** | `v0.99.0` | Architecture | P2 | 단일 쿼리 및 프로시저 간 AST 정규화 및 파서 라우팅 통합 기초 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
+| `PENDING` | **`ARCH-AST-ROUTING-REFACTORING-1`** | `v0.98.0` | Architecture | P2 | 단일 쿼리 및 프로시저 간 AST 정규화 및 파서 라우팅 통합 기초 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`ARCH-CHUNK-COLUMN-VECTORIZED-FORMAT-1`** | `Spec-Out` | Execution | P3 | 청크 기반 컬럼형 벡터 슬라이스 (DataChunk: 1024행 단위 슬라이스) - KISS 원칙상 1.0 배제 | [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) |  |
 | `DONE` | **`ARCH-COOPERATIVE-INSTRUCTION-CANCELLATION-1`** | `1.0-GA` | Execution | P2 | VDBE/Iterator 협력적 명령어 인터럽트 기반 쿼리 타임아웃/취소 (Cooperative Instruction Cancellation) | [`notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/plans/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-DEDICATED-BINDER-CATALOG-RESOLVER-1`** | `v0.95.0` | Architecture | P1 | 전용 바인더 레이어 구축 (Dedicated Binder / Catalog Resolver Pass) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
@@ -34,7 +34,7 @@
 | `PENDING` | **`ARCH-PLAN-CACHE-PARAMETERIZATION-1`** | `v1.10.0` | Planner | P2 | 정규화된 플랜 캐시 및 파라미터화 (Plan Cache Parameterization & Normalization) | [`notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md`](notes/plans/SQL_COMPREHENSIVE_INTEGRITY_AND_SEMANTIC_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-PRED`** |  | Ecosystem | P3 | & `ARCH-RULE-SLUG`) |  |  |
 | `COMPLETED` | **`ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`** | `v0.95.0` | Architecture | P1 | 단일 시맨틱 검증 게이트웨이(Scope Gatekeeper & DML Contract) 아키텍처 구축 | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `v0.99.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
+| `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `v0.98.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-TOAST-OUT-OF-ROW-CHUNKS-1`** | `v0.96.0` | Storage | P2 | TOAST (Out-of-Row LOB) 청크 아키텍처 기반 설계 및 8,060B 분리 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-UNIFIED-TUPLE-PROTOCOL-1`** | `v0.97.0` | Architecture | P2 | 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-UNIFIED-TX-MANAGER`** | `1.0-GA` | ENGINE | P1 | Unified TxManager (DDL + DML) Architecture | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
@@ -752,8 +752,8 @@
 ---
 
 ### [PENDING] 단일 쿼리 및 프로시저 간 AST 정규화 및 파서 라우팅 통합 기초 `ARCH-AST-ROUTING-REFACTORING-1`
-- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-23 14:56:07
-- **Milestone**: `v0.99.0`
+- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-24 10:55:35
+- **Milestone**: `v0.98.0`
 - **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
 
 ---
@@ -842,8 +842,8 @@
 ---
 
 ### [PENDING] Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket `ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`
-- **Domain**: ARCHITECTURE | **Priority**: P2 | **Updated**: 2026-11-23 14:56:07
-- **Milestone**: `v0.99.0`
+- **Domain**: ARCHITECTURE | **Priority**: P2 | **Updated**: 2026-11-24 10:55:35
+- **Milestone**: `v0.98.0`
 - **Plan Doc**: [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md)
 
 ---
