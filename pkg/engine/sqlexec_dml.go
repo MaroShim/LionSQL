@@ -345,25 +345,42 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			return nil, err
 		}
 		if tblSch, err := s.getTable(cs, cleanIdentifier(dml.Table)); err == nil && tblSch != nil {
+			identityInsertAllowed := false
+			if cs != nil {
+				cs.Mu.Lock()
+				if cur, ok := cs.Vars["identity_insert_table"].(string); ok {
+					if strings.EqualFold(cur, cleanIdentifier(dml.Table)) {
+						identityInsertAllowed = true
+					}
+				}
+				if cs.IsPostgres() {
+					identityInsertAllowed = true
+				}
+				cs.Mu.Unlock()
+			}
+
 			if dml.Output != "" {
 				if err := ValidateOutputClause(dml.Output, tblSch); err != nil {
 					return nil, err
 				}
 			}
-		}
-		if dml.Values != "" {
-			rawVals := dml.Values
-			if conflictIdx := sqlutil.FindTopLevelKeyword(rawVals, "ON CONFLICT"); conflictIdx != -1 {
-				rawVals = strings.TrimSpace(rawVals[:conflictIdx])
-			}
-			if dupIdx := sqlutil.FindTopLevelKeyword(rawVals, "ON DUPLICATE"); dupIdx != -1 {
-				rawVals = strings.TrimSpace(rawVals[:dupIdx])
-			}
-			tupleStrings := sqlutil.ExtractTopLevelTuples(rawVals)
-			for _, tupleStr := range tupleStrings {
-				for _, v := range splitValues(tupleStr) {
-					if err := ValidateInsertValueExpr(v); err != nil {
-						return nil, err
+			if dml.Values != "" && !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(dml.Values)), "EXEC") {
+				if err := ValidateInsertArity(tblSch, dml.Columns, dml.Values, identityInsertAllowed); err != nil {
+					return nil, err
+				}
+				rawVals := dml.Values
+				if conflictIdx := sqlutil.FindTopLevelKeyword(rawVals, "ON CONFLICT"); conflictIdx != -1 {
+					rawVals = strings.TrimSpace(rawVals[:conflictIdx])
+				}
+				if dupIdx := sqlutil.FindTopLevelKeyword(rawVals, "ON DUPLICATE"); dupIdx != -1 {
+					rawVals = strings.TrimSpace(rawVals[:dupIdx])
+				}
+				tupleStrings := sqlutil.ExtractTopLevelTuples(rawVals)
+				for _, tupleStr := range tupleStrings {
+					for _, v := range splitValues(tupleStr) {
+						if err := ValidateInsertValueExpr(v); err != nil {
+							return nil, err
+						}
 					}
 				}
 			}

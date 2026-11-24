@@ -168,6 +168,16 @@ func ValidateQueryAST(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.
 		if err := CheckDisallowedExprs(stmt.Where, ScopeWhere); err != nil {
 			return err
 		}
+		if err := WalkAST(stmt.Where, func(n proc.Expr) error {
+			if inExpr, ok := n.(*proc.InExpr); ok && inExpr.Query != nil {
+				if len(inExpr.Query.Projections) > 1 {
+					return fmt.Errorf("subquery must return only one column, returned %d", len(inExpr.Query.Projections))
+				}
+			}
+			return nil
+		}); err != nil {
+			return err
+		}
 	}
 
 	// 2. JOIN ON conditions validation
@@ -216,6 +226,20 @@ func ValidateQueryAST(stmt *proc.GeneralSelectStmt, schemas map[string]*storage.
 					return err
 				}
 			}
+		}
+	}
+
+	// Constant domain bounds validation (NTILE, PERCENTILE_CONT)
+	for _, p := range stmt.Projections {
+		if p.Expr != nil {
+			if err := ValidateConstantDomainBounds(p.Expr); err != nil {
+				return err
+			}
+		}
+	}
+	if stmt.Where != nil {
+		if err := ValidateConstantDomainBounds(stmt.Where); err != nil {
+			return err
 		}
 	}
 
@@ -279,6 +303,47 @@ func ValidateAmbiguousExpr(expr proc.Expr, schemas map[string]*storage.TableSche
 		}
 		if matchCount > 1 {
 			return fmt.Errorf("column reference %q is ambiguous", colName)
+		}
+		return nil
+	})
+}
+
+// ValidateConstantDomainBounds checks constant argument bounds for functions such as NTILE and PERCENTILE_CONT.
+func ValidateConstantDomainBounds(expr proc.Expr) error {
+	if expr == nil {
+		return nil
+	}
+	return WalkAST(expr, func(node proc.Expr) error {
+		fn, ok := node.(*proc.FunctionCallExpr)
+		if !ok {
+			return nil
+		}
+		upperName := strings.ToUpper(fn.Name)
+		if upperName == "NTILE" && len(fn.Args) > 0 {
+			if lit, ok := fn.Args[0].(*proc.LiteralExpr); ok && lit.Val.Type == storage.TypeInt && !lit.Val.IsNull {
+				if lit.Val.IVal <= 0 {
+					return fmt.Errorf("ERROR 22003: Msg 7812, Level 16, State 1: The argument of NTILE must be greater than zero.")
+				}
+			}
+			if un, ok := fn.Args[0].(*proc.UnaryExpr); ok && un.Op == proc.TokenMinus {
+				return fmt.Errorf("ERROR 22003: Msg 7812, Level 16, State 1: The argument of NTILE must be greater than zero.")
+			}
+		}
+		if (upperName == "PERCENTILE_CONT" || upperName == "PERCENTILE_DISC") && len(fn.Args) > 0 {
+			if lit, ok := fn.Args[0].(*proc.LiteralExpr); ok && !lit.Val.IsNull {
+				val := 0.0
+				if lit.Val.Type == storage.TypeFloat {
+					val = lit.Val.FVal
+				} else if lit.Val.Type == storage.TypeInt {
+					val = float64(lit.Val.IVal)
+				}
+				if val < 0.0 || val > 1.0 {
+					return fmt.Errorf("ERROR 22003: Msg 8704, Level 16, State 1: Percentile value %v must be between 0.0 and 1.0.", val)
+				}
+			}
+			if un, ok := fn.Args[0].(*proc.UnaryExpr); ok && un.Op == proc.TokenMinus {
+				return fmt.Errorf("ERROR 22003: Msg 8704, Level 16, State 1: Percentile value must be between 0.0 and 1.0.")
+			}
 		}
 		return nil
 	})

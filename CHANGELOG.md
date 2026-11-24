@@ -41,6 +41,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - accelerate GROUP BY and JOIN memory paths via uint64 FNV-1a integer slot hashing, sync.Pool buffer recycling, pre-resolved column indices, and direct tuple materialization, achieving 97.3% memory reduction and 99.6% allocation drop per tuple (`PERF-GROUPBY-SLOT-HASH-1`)
 
 ### Refactored
+- consolidate INSERT arity validation (`ValidateInsertArity`) into semantic binder pass before transaction initiation (`BINDER-CONSOLIDATION-PHASE-1`)
+- consolidate SELECT DISTINCT unprojected ORDER BY check (`ERROR 42P10`) into `ValidateSelectScope` and prune 28 redundant lines from `sqlexec_select.go` (`BINDER-CONSOLIDATION-PHASE-2`)
+- enforce compile-time window function constant domain bounds for NTILE (`Msg 7812`) and PERCENTILE_CONT (`Msg 8704`) in `ValidateConstantDomainBounds`
 - prune redundant ad-hoc validation loops across `sqlexec_select.go` into centralized `ValidateSelectScope` and `ValidateAmbiguousProjections` (`REFAC-POST-BINDER-AD-HOC-IF-PRUNING-1`), eliminating 90+ lines of duplicate branch checks across `execVolcanoSelect` and `execSelect`
 
 ### Fixed

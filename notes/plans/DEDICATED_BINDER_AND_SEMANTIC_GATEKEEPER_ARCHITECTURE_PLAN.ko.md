@@ -180,3 +180,28 @@ DML 실행 함수 진입부(`sqlexec_dml.go`, `vm_dispatcher.go`) 최상단에 �
 - **코드 다이어트**: 수백 라인의 중복/파편화된 방어적 분기 코드 순삭제 (`Deletion-First`).
 - **실행 레이턴시 단축**: 인터랙티브 핫패스에서 불필요한 검증 오버헤드가 제거되어 실행 성능 5~10% 가속.
 - **시맨틱 SSOT 완성**: 쿼리 유효성 검증의 책임이 오직 **바인더 단 1곳(Single Source of Truth)**으로 단일화되어 영구적인 유지보수성 확보.
+
+---
+
+## 8. 산발적 검증 항목의 바인더 통합 로드맵 (Scattered Checks Consolidation Roadmap)
+
+LionSQL 엔진 전반에 흩어져 있는 97개 이상의 산발적 에러 분기(`return nil, fmt.Errorf(...)`)를 체계적으로 바인더로 집약하는 4단계 통합 로드맵:
+
+### 8.1 4단계 통합 로드맵 (4-Phase Consolidation)
+
+| 단계 | 도메인 | 통합 대상 검사 항목 | 이전 위치 | 바인더 통합 위치 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Phase 1** | **형상 및 차원 정합성 (Shape & Arity)** | - `INSERT` 컬럼 목록 수와 `VALUES` 값 개수 일치 (`expected %d values, got %d`)<br>- `INSERT INTO dst SELECT ...` 소스 프로젝션-타겟 컬럼 수 일치<br>- `WHERE x IN (SELECT ...)` 단일 컬럼 반환 강제 | `sqlexec_dml.go`<br>`decorrelate.go` | `pkg/planner/validator.go`<br>(`ValidateInsertArity`, `ValidateSubqueryArity`) |
+| **Phase 2** | **식별자 및 문법 스코프 (Scope & Aliasing)** | - `FROM (SELECT ...)` 파생 테이블 ALIAS(별칭) 필수 규칙<br>- `SELECT DISTINCT` 사용 시 `ORDER BY` 표현식의 SELECT 목록 포함 (`42P10`)<br>- 비집계 컬럼 누락 및 `GROUP BY` 불일치 검사 | `sqlexec_select.go`<br>`planner.go` | `pkg/planner/validator.go`<br>(`ValidateSelectScopeRules`) |
+| **Phase 3** | **함수 인자 및 상수 도메인 경계 (Domain Bounds)** | - `NTILE(n)` 상수 $n \le 0$ 거부 (`7812`)<br>- `PERCENTILE_CONT(p)` 상수 $p < 0.0 \lor p > 1.0$ 거부 (`8704`)<br>- `LIMIT` / `OFFSET` 음수 서수 거부 | `filter.go`<br>`window.go`<br>`sqlexec_eval.go` | `pkg/planner/validator.go`<br>(`ValidateConstantDomainBounds`) |
+| **Phase 4** | **DML 계약 및 카탈로그 제약 (DML Write Contracts)** | - 시스템 카탈로그 및 가상 뷰 쓰기 차단<br>- `IDENTITY` 컬럼 직접 `INSERT` 차단 (`IDENTITY_INSERT` 미설정 시)<br>- 기본값 없는 `NOT NULL` 컬럼 누락 정적 검사 | `sqlexec_dml.go` | `pkg/engine/dml_validator.go`<br>(`ValidateDMLContract`) |
+
+---
+
+## 9. 즉시 실행 작업 목록 (Action Items)
+1. **[BINDER-CONSOLIDATION-PHASE-1]**: 형상 및 차원 정합성 (INSERT 컬럼/값 불일치, 서브쿼리 단일 컬럼 제약) 바인더 통합.
+2. **[BINDER-CONSOLIDATION-PHASE-2]**: 식별자/스코프 규칙 (FROM 서브쿼리 ALIAS 필수, DISTINCT ORDER BY 제약) 바인더 통합.
+3. **[BINDER-CONSOLIDATION-PHASE-3]**: 함수 인자/상수 도메인 경계 (NTILE, PERCENTILE, LIMIT/OFFSET 음수) 바인더 통합.
+4. **[BINDER-CONSOLIDATION-PHASE-4]**: DML 계약 (가상 뷰 쓰기 차단, IDENTITY, NOT NULL 기본값 누락) 바인더 통합.
+5. **[BINDER-CONSOLIDATION-PRUNING]**: `sqlexec_dml.go` 및 `sqlexec_select.go` 다운스트림 중복 if 분기 걷어내기 (Radical KISS).
+

@@ -90,6 +90,8 @@
 | `DONE` | **`AUDIT-TRIAGE-POST`** |  | Integrity | P1 | 전수 감사 완료 직후 공식 Triage(결함 분류) 회의 및 패치 범위 확정 | [`notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md`](notes/plans/PRE_RELEASE_AUDIT_PLAN.ko.md) |  |
 | `DONE` | **`BENCH-ALL-IN-ONE-1`** |  | Durability | P2 | 원클릭 벤치마크 및 종합 검증 스위트 (`scripts/run_all_benchmarks.sh`) 구축 |  | - [x] **Phase 1~4 (성능/와이어 실측)**: Bank... |
 | `DONE` | **`BENCH-TPCH-1`** |  | Ecosystem | P3 | Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation 영구 대체 기각 (Replaced by PERF-SUBQUERY-MEMO-1, Spec-Out) | [`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md`](notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md) |  |
+| `DONE` | **`BINDER-CONSOLIDATION-PHASE-1`** | `v0.95.0` | Architecture | P1 | 바인더 통합 1단계: 형상 및 차원 정합성 (INSERT 컬럼/값 불일치, 서브쿼리 단일 컬럼 제약) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
+| `DONE` | **`BINDER-CONSOLIDATION-PHASE-2`** | `v0.95.0` | Architecture | P1 | 바인더 통합 2단계: 식별자 및 문법 스코프 규칙 (FROM 서브쿼리 ALIAS 필수, DISTINCT ORDER BY 제약) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `DONE` | **`BUG-ADD-COL-NOT-NULL-1`** |  | Integrity | P2 | 기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug) |  |  |
 | `DONE` | **`BUG-AGG-MIXED-NUM-DEC-1`** |  | Integrity | P2 | AggregateIterator Decimal-정수 혼합 합계 유실 방지 (Agg Mixed Decimal Bug) |  |  |
 | `DONE` | **`BUG-API-CREATE-DEFAULT-1`** |  | Integrity | P2 | HTTP API 레코드 생성 시 NOT NULL DEFAULT 필드 주입 (API Create Default Bug) |  |  |
@@ -1369,6 +1371,20 @@
 **Details & Resolution**:
 - 1단계 `EXISTS`/`IN` Semi-Join 탈상관화는 이미 완료됨(`pkg/planner/decorrelate.go`).
 - 집계 포함 상관 서브쿼리의 복잡한 AST 재작성(Kim's Decorrelation)은 Count Bug/3VL 결함 위험으로 구현 안 함(Spec-Out) 확정하고, 단일 쿼리 스코프 유계 메모이제이션 캐시(`PERF-SUBQUERY-MEMO-1`)로 영구 대체함 (`notes/plans/COMPLEX_QUERY_OPTIMIZATION_PLAN.ko.md` §9).
+
+---
+
+### [DONE] 바인더 통합 1단계: 형상 및 차원 정합성 (INSERT 컬럼/값 불일치, 서브쿼리 단일 컬럼 제약) `BINDER-CONSOLIDATION-PHASE-1`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 09:38:38
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md)
+
+---
+
+### [DONE] 바인더 통합 2단계: 식별자 및 문법 스코프 규칙 (FROM 서브쿼리 ALIAS 필수, DISTINCT ORDER BY 제약) `BINDER-CONSOLIDATION-PHASE-2`
+- **Domain**: Architecture | **Priority**: P1 | **Updated**: 2026-11-24 09:38:38
+- **Milestone**: `v0.95.0`
+- **Plan Doc**: [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md)
 
 ---
 

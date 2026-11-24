@@ -132,3 +132,77 @@ func TestMetaValidatorAndBinder_ScopeIsolation(t *testing.T) {
 		})
 	}
 }
+
+func TestBinder_Phase1_ShapeAndArityValidation(t *testing.T) {
+	coord, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	sess := "test_sess_binder_p1"
+	_, _ = coord.GetOrCreateSession(sess)
+	defer coord.CloseSession(sess)
+
+	setupSQLs := []string{
+		"CREATE TABLE t_arity (id INT PRIMARY KEY, name VARCHAR(50), score INT);",
+		"INSERT INTO t_arity VALUES (1, 'Alice', 100);",
+		"CREATE TABLE t_arity_dst (id INT PRIMARY KEY, name VARCHAR(50));",
+	}
+	for _, sql := range setupSQLs {
+		if _, err := coord.ExecuteSessionSQL(sess, sql); err != nil {
+			t.Fatalf("setup failed on %q: %v", sql, err)
+		}
+	}
+
+	testCases := []struct {
+		name        string
+		sql         string
+		expectedErr string
+	}{
+		{
+			name:        "INSERT columns count < values count",
+			sql:         "INSERT INTO t_arity (id, name) VALUES (2, 'Bob', 200);",
+			expectedErr: "column count mismatch: expected 2 values, got 3",
+		},
+		{
+			name:        "INSERT columns count > values count",
+			sql:         "INSERT INTO t_arity (id, name, score) VALUES (2, 'Bob');",
+			expectedErr: "column count mismatch: expected 3 values, got 2",
+		},
+		{
+			name:        "INSERT more expressions than target columns without col list",
+			sql:         "INSERT INTO t_arity VALUES (2, 'Bob', 200, 'extra');",
+			expectedErr: "INSERT has more expressions than target columns",
+		},
+		{
+			name:        "INSERT fewer expressions than target columns without col list",
+			sql:         "INSERT INTO t_arity VALUES (2, 'Bob');",
+			expectedErr: "column count mismatch: expected 3 values, got 2",
+		},
+		{
+			name:        "INSERT multi-tuple second tuple arity mismatch",
+			sql:         "INSERT INTO t_arity (id, name, score) VALUES (2, 'Bob', 200), (3, 'Charlie');",
+			expectedErr: "column count mismatch: expected 3 values, got 2",
+		},
+		{
+			name:        "INSERT ... SELECT target columns mismatch",
+			sql:         "INSERT INTO t_arity_dst SELECT id, name, score FROM t_arity;",
+			expectedErr: "column count mismatch: target table \"t_arity_dst\" expects 2 columns, but SELECT produced 3 columns",
+		},
+		{
+			name:        "WHERE IN multi-column subquery arity violation",
+			sql:         "SELECT * FROM t_arity WHERE id IN (SELECT id, name FROM t_arity);",
+			expectedErr: "subquery must return only one column",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := coord.ExecuteSessionSQL(sess, tc.sql)
+			if err == nil {
+				t.Fatalf("[%s] expected error containing %q, got nil", tc.name, tc.expectedErr)
+			}
+			if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tc.expectedErr)) {
+				t.Fatalf("[%s] expected error containing %q, got: %v", tc.name, tc.expectedErr, err)
+			}
+		})
+	}
+}

@@ -315,9 +315,45 @@ func ValidateSelectScope(qInfo *planner.QueryInfo, schemas []*storage.TableSchem
 	if qInfo == nil {
 		return nil
 	}
+	for _, proj := range qInfo.Projections {
+		p := proc.NewParser(proc.NewLexer(proj))
+		if expr := p.ParseExpr(); expr != nil {
+			if err := planner.ValidateConstantDomainBounds(expr); err != nil {
+				return err
+			}
+		}
+	}
 	if len(schemas) > 1 {
 		if err := ValidateAmbiguousProjections(qInfo.Projections, schemas); err != nil {
 			return err
+		}
+	}
+	// PostgreSQL / SQL Standard compatibility (ERROR 42P10):
+	// For SELECT DISTINCT, all ORDER BY expressions must appear in the SELECT projection list.
+	isSelectStar := len(qInfo.Projections) == 1 && qInfo.Projections[0] == "*"
+	if qInfo.Distinct && qInfo.OrderByClause != "" && !isSelectStar {
+		orderItems := sqlutil.ParseOrderBy(qInfo.OrderByClause)
+		for _, item := range orderItems {
+			cleanOrderCol := strings.ToLower(cleanIdentifier(item.Column))
+			if _, err := strconv.Atoi(cleanOrderCol); err == nil {
+				continue // positional ordinal order by 1, 2
+			}
+			matched := false
+			for _, proj := range qInfo.Projections {
+				cleanProj := strings.ToLower(cleanIdentifier(proj))
+				if cleanProj == cleanOrderCol || strings.HasSuffix(cleanProj, "."+cleanOrderCol) || strings.HasSuffix(cleanProj, " as "+cleanOrderCol) {
+					matched = true
+					break
+				}
+				parts := strings.Split(strings.ToLower(proj), " as ")
+				if len(parts) == 2 && strings.TrimSpace(parts[1]) == cleanOrderCol {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return fmt.Errorf("ERROR 42P10: for SELECT DISTINCT, ORDER BY expressions must appear in select list (%s)", item.Column)
+			}
 		}
 	}
 	if qInfo.WhereClause != "" {
@@ -546,6 +582,66 @@ func ValidateInsertValueExpr(valStr string) error {
 		}
 		return fmt.Errorf("column %q does not exist", name)
 	})
+}
+
+// ValidateInsertArity validates that the number of values in each tuple of an INSERT statement
+// matches the target column count.
+func ValidateInsertArity(schema *storage.TableSchema, rawCols string, rawValues string, identityInsertAllowed bool) error {
+	if schema == nil || rawValues == "" {
+		return nil
+	}
+	trimmedVals := strings.TrimSpace(rawValues)
+	if strings.EqualFold(trimmedVals, "DEFAULT VALUES") || strings.HasPrefix(strings.ToUpper(trimmedVals), "EXEC") {
+		return nil
+	}
+	if conflictIdx := sqlutil.FindTopLevelKeyword(trimmedVals, "ON CONFLICT"); conflictIdx != -1 {
+		trimmedVals = strings.TrimSpace(trimmedVals[:conflictIdx])
+	}
+	if dupIdx := sqlutil.FindTopLevelKeyword(trimmedVals, "ON DUPLICATE"); dupIdx != -1 {
+		trimmedVals = strings.TrimSpace(trimmedVals[:dupIdx])
+	}
+	tupleStrings := sqlutil.ExtractTopLevelTuples(trimmedVals)
+	if len(tupleStrings) == 0 {
+		return fmt.Errorf("no values supplied in INSERT statement")
+	}
+
+	var identityCol *storage.Column
+	for i := range schema.Columns {
+		if schema.Columns[i].Identity {
+			identityCol = &schema.Columns[i]
+			break
+		}
+	}
+
+	var targetCols []string
+	if rawCols != "" {
+		for _, c := range sqlutil.SplitTopLevel(rawCols, ',') {
+			targetCols = append(targetCols, cleanIdentifier(c))
+		}
+	} else {
+		if identityCol != nil && !identityInsertAllowed {
+			for _, c := range schema.Columns {
+				if !c.Identity {
+					targetCols = append(targetCols, c.Name)
+				}
+			}
+		} else {
+			for _, c := range schema.Columns {
+				targetCols = append(targetCols, c.Name)
+			}
+		}
+	}
+
+	for _, tupleStr := range tupleStrings {
+		vals := splitValues(tupleStr)
+		if len(vals) != len(targetCols) {
+			if len(targetCols) > 0 && len(vals) > len(targetCols) && rawCols == "" {
+				return fmt.Errorf("INSERT has more expressions than target columns")
+			}
+			return fmt.Errorf("column count mismatch: expected %d values, got %d in tuple (%s)", len(targetCols), len(vals), tupleStr)
+		}
+	}
+	return nil
 }
 
 // ValidateSetClause verifies that setStr in UPDATE or MERGE is non-empty and all assignment pairs are syntactically valid.
