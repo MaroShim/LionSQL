@@ -392,3 +392,87 @@ func TestReplication_EndToEndStreamingAndFailover(t *testing.T) {
 	}
 }
 
+func TestWALBroadcaster_ReplicationGap_PurgedHistoryError(t *testing.T) {
+	// Ring buffer capacity of 5 records
+	b := replication.NewWALBroadcaster(5)
+	defer b.Close()
+
+	// Broadcast LSN 1..10 (records 1..5 will be evicted; records 6..10 remain)
+	for lsn := int64(1); lsn <= 10; lsn++ {
+		b.Broadcast(memengine.WALRecord{LSN: lsn, Ops: []memengine.WALOp{{Type: memengine.OpCreateTable}}})
+	}
+
+	// 1. Attempt to subscribe from LSN 2 (LSN 3 is missing, purged from ring buffer)
+	_, _, err := b.Subscribe("replica-lagged", "127.0.0.1:5001", 2, 10)
+	if err == nil {
+		t.Fatal("expected Subscribe to fail with ErrWALHistoryPurged for evicted LSN, got nil")
+	}
+
+	// 2. Attempt to subscribe from LSN 5 (next required LSN is 6, which is exactly the head of buffer)
+	ch, cancel, err := b.Subscribe("replica-catchup", "127.0.0.1:5002", 5, 10)
+	if err != nil {
+		t.Fatalf("expected Subscribe from LSN 5 to succeed, got: %v", err)
+	}
+	defer cancel()
+
+	// Should receive LSN 6
+	select {
+	case rec := <-ch:
+		if rec.LSN != 6 {
+			t.Fatalf("expected first replay LSN 6, got %d", rec.LSN)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for replay record LSN 6")
+	}
+}
+
+func TestReplicationClient_MalformedFrame_FailsClosed(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		// Write a corrupted/truncated JSON frame
+		_, _ = w.Write([]byte("{\"lsn\": 1, \"ops\": [MALFORMED JSON\n"))
+		w.(http.Flusher).Flush()
+	}))
+	defer ts.Close()
+
+	eng := memengine.New()
+	defer eng.Close()
+
+	client := replication.NewReplicationClient(ts.URL, "test-replica", eng, 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := client.StreamOnceForTest(ctx)
+	if err == nil {
+		t.Fatal("expected StreamOnce to fail closed on malformed WAL frame, got nil")
+	}
+}
+
+func TestReplicationClient_LSNGap_FailsClosed(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		w.(http.Flusher).Flush()
+		// Write LSN 1 followed by LSN 5 (gap: missing 2, 3, 4)
+		rec1 := "{\"LSN\":1,\"Timestamp\":100,\"Ops\":[]}\n"
+		rec5 := "{\"LSN\":5,\"Timestamp\":200,\"Ops\":[]}\n"
+		_, _ = w.Write([]byte(rec1 + rec5))
+		w.(http.Flusher).Flush()
+	}))
+	defer ts.Close()
+
+	eng := memengine.New()
+	defer eng.Close()
+
+	client := replication.NewReplicationClient(ts.URL, "test-replica", eng, 0)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	err := client.StreamOnceForTest(ctx)
+	if err == nil {
+		t.Fatal("expected StreamOnce to fail closed on LSN gap, got nil")
+	}
+}
+

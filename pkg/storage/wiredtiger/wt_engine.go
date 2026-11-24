@@ -4781,15 +4781,6 @@ func (tx *WTTx) Commit() error {
 		}
 	}
 	seq := eng.writeSeq.Add(1)
-	if len(walOps) > 0 && eng.hasHook.Load() {
-		rec := eng.recordWALLocked(walOps)
-		tx.commitLSN = rec.LSN
-		tx.commitTimestamp = rec.Timestamp
-	} else {
-		tx.commitLSN = eng.nextLSN.Add(1)
-		tx.commitTimestamp = time.Now().UnixNano()
-	}
-
 	if eng.FsyncPolicy() == memengine.FsyncAlways {
 		if err := eng.syncUpTo(tx.sess.sess, seq); err != nil {
 			eng.markTainted(err)
@@ -4800,6 +4791,15 @@ func (tx *WTTx) Commit() error {
 			eng.markTainted(err)
 			return fmt.Errorf("%w: wiredtiger log_flush(sync=off) failed: %v", storage.ErrEngineTainted, err)
 		}
+	}
+
+	if len(walOps) > 0 && eng.hasHook.Load() {
+		rec := eng.recordWALLocked(walOps)
+		tx.commitLSN = rec.LSN
+		tx.commitTimestamp = rec.Timestamp
+	} else {
+		tx.commitLSN = eng.nextLSN.Add(1)
+		tx.commitTimestamp = time.Now().UnixNano()
 	}
 	return nil
 }

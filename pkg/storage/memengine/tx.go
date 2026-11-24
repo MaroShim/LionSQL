@@ -2944,6 +2944,10 @@ func (tx *Transaction) Commit() error {
 		clear(tx.changes)
 	}
 
+	if walRec.LSN > 0 {
+		tx.engine.notifyWALHook(walRec)
+	}
+
 	return nil
 }
 

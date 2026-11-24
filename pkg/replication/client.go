@@ -145,6 +145,11 @@ func (c *ReplicationClient) runLoop(ctx context.Context) {
 	}
 }
 
+// StreamOnceForTest executes a single replication stream attempt for testing.
+func (c *ReplicationClient) StreamOnceForTest(ctx context.Context) error {
+	return c.streamOnce(ctx)
+}
+
 func (c *ReplicationClient) streamOnce(ctx context.Context) error {
 	fromLSN := c.lastLSN.Load()
 	streamURL := fmt.Sprintf("%s/api/replication/stream?from_lsn=%d&replica_id=%s", c.primaryURL, fromLSN, c.replicaID)
@@ -210,20 +215,27 @@ func (c *ReplicationClient) streamOnce(ctx context.Context) error {
 
 		var rec memengine.WALRecord
 		if err := json.Unmarshal(line, &rec); err != nil {
-			continue // Skip malformed frame
+			return fmt.Errorf("replication stream corruption: failed to unmarshal WAL record at line %q: %w", string(line), err)
 		}
 
+		currentLSN := c.lastLSN.Load()
+		if currentLSN > 0 {
+			if rec.LSN <= currentLSN {
+				continue // Duplicate frame already applied
+			}
+			if rec.LSN > currentLSN+1 {
+				return fmt.Errorf("replication gap detected: expected monotonic LSN %d, received LSN %d", currentLSN+1, rec.LSN)
+			}
+		}
 
 		// Apply WAL record to local engine
 		if err := backup.ApplyWALRecordToEngine(c.eng, rec); err != nil {
 			return fmt.Errorf("failed to apply WAL record (LSN=%d): %w", rec.LSN, err)
 		}
 
-		if rec.LSN > c.lastLSN.Load() {
-			c.lastLSN.Store(rec.LSN)
-			if c.onLSNProgress != nil {
-				c.onLSNProgress(rec.LSN)
-			}
+		c.lastLSN.Store(rec.LSN)
+		if c.onLSNProgress != nil {
+			c.onLSNProgress(rec.LSN)
 		}
 	}
 }

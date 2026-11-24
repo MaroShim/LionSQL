@@ -125,6 +125,9 @@ type Engine struct {
 	commitCounter    atomic.Uint64
 	nextTxID         atomic.Uint64
 	walHook          func(rec WALRecord)
+	walHookMu        sync.Mutex
+	lastHookLSN      int64
+	pendingHooks     map[int64]WALRecord
 	stopCh           chan struct{}
 	bgWg             sync.WaitGroup
 	closed           bool
@@ -178,9 +181,10 @@ func (e *Engine) AddWALHook(fn func(rec WALRecord)) {
 	}
 }
 
-// appendWALFrameLocked atomically assigns the next monotonic LSN, writes the WAL frame
-// to the OS file buffer, and notifies walHook in strict LSN order. Group commit fsync and
-// AOF compaction are deferred to finishWALCommitLocked so shard locks are not held during disk sync.
+// appendWALFrameLocked atomically assigns the next monotonic LSN and writes the WAL frame
+// to the OS file buffer. Group commit fsync and walHook notification are deferred to
+// finishWALCommitLocked and notifyWALHook so shard locks are not held during disk sync and
+// uncommitted records are never broadcast externally ([RULE:AtomicSaves]).
 func (e *Engine) appendWALFrameLocked(ops []WALOp) (WALRecord, int64, error) {
 	if len(ops) == 0 {
 		return WALRecord{}, 0, nil
@@ -202,9 +206,8 @@ func (e *Engine) appendWALFrameLocked(ops []WALOp) (WALRecord, int64, error) {
 			return rec, 0, err
 		}
 	}
-	if e.walHook != nil {
-		e.walHook(rec)
-	}
+	// Note: walHook notification is intentionally omitted here to prevent premature broadcast
+	// before disk fsync durability is confirmed.
 	e.walOrderMu.Unlock()
 
 	return rec, seq, nil
@@ -235,7 +238,48 @@ func (e *Engine) finishWALCommitLocked(seq int64) error {
 	return nil
 }
 
-// recordWALLocked writes a WAL record, invokes the registered walHook, and returns the assigned WALRecord.
+// notifyWALHook invokes the registered walHook callback in strict monotonic LSN order
+// after a transaction has been durably committed to disk (fsynced).
+func (e *Engine) notifyWALHook(rec WALRecord) {
+	if rec.LSN <= 0 {
+		return
+	}
+	e.walHookMu.Lock()
+	defer e.walHookMu.Unlock()
+
+	if e.walHook == nil {
+		if rec.LSN > e.lastHookLSN {
+			e.lastHookLSN = rec.LSN
+		}
+		return
+	}
+
+	if e.lastHookLSN == 0 {
+		e.lastHookLSN = rec.LSN - 1
+	}
+
+	if rec.LSN == e.lastHookLSN+1 {
+		e.walHook(rec)
+		e.lastHookLSN = rec.LSN
+		for {
+			nextLSN := e.lastHookLSN + 1
+			nextRec, exists := e.pendingHooks[nextLSN]
+			if !exists {
+				break
+			}
+			delete(e.pendingHooks, nextLSN)
+			e.walHook(nextRec)
+			e.lastHookLSN = nextLSN
+		}
+	} else if rec.LSN > e.lastHookLSN+1 {
+		if e.pendingHooks == nil {
+			e.pendingHooks = make(map[int64]WALRecord)
+		}
+		e.pendingHooks[rec.LSN] = rec
+	}
+}
+
+// recordWALLocked writes a WAL record, performs durable fsync, invokes walHook, and returns the assigned WALRecord.
 func (e *Engine) recordWALLocked(ops []WALOp) (WALRecord, error) {
 	rec, seq, err := e.appendWALFrameLocked(ops)
 	if err != nil {
@@ -244,6 +288,7 @@ func (e *Engine) recordWALLocked(ops []WALOp) (WALRecord, error) {
 	if err := e.finishWALCommitLocked(seq); err != nil {
 		return rec, err
 	}
+	e.notifyWALHook(rec)
 	return rec, nil
 }
 
@@ -258,6 +303,7 @@ func NewWithOptions(opts Options) *Engine {
 		opts:         opts,
 		tables:       make(map[string]*TableData),
 		fkCache:      make(map[string][]ChildFKRef),
+		pendingHooks: make(map[int64]WALRecord),
 		fsyncPolicy:  opts.FsyncPolicy,
 		aofThreshold: opts.AOFThreshold,
 	}

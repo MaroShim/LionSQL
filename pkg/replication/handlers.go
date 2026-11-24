@@ -3,6 +3,7 @@ package replication
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -107,6 +108,10 @@ func (m *Manager) handleStream(w http.ResponseWriter, r *http.Request) {
 
 	ch, cancel, err := m.broadcaster.Subscribe(replicaID, r.RemoteAddr, fromLSN, 1000)
 	if err != nil {
+		if errors.Is(err, ErrWALHistoryPurged) {
+			http.Error(w, fmt.Sprintf("replication gap: %v", err), http.StatusGone)
+			return
+		}
 		http.Error(w, fmt.Sprintf("subscribe failed: %v", err), http.StatusBadRequest)
 		return
 	}

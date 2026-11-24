@@ -53,9 +53,6 @@ func (e *Engine) ApplyWALRecord(rec WALRecord) error {
 }
 
 func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
-	if rec.LSN > e.nextLSN.Load() {
-		e.nextLSN.Store(rec.LSN)
-	}
 	hasDDL := false
 	for _, op := range rec.Ops {
 		if storage.IsTemporaryTable(op.Table) ||
@@ -319,6 +316,9 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 	}
 	if hasDDL {
 		e.rebuildFKCacheLocked()
+	}
+	if rec.LSN > e.nextLSN.Load() {
+		e.nextLSN.Store(rec.LSN)
 	}
 	return nil
 }

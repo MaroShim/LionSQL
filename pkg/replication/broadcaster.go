@@ -1,11 +1,17 @@
 package replication
 
 import (
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"lionsql/pkg/storage/memengine"
 )
+
+// ErrWALHistoryPurged is returned when the requested from_lsn is older than the earliest
+// record retained in the broadcaster's history ring buffer.
+var ErrWALHistoryPurged = errors.New("replication gap: requested from_lsn has been purged from history ring buffer")
 
 // WALBroadcaster manages real-time WAL stream fan-out to connected secondary replicas.
 type WALBroadcaster struct {
@@ -81,6 +87,7 @@ func (b *WALBroadcaster) Broadcast(rec memengine.WALRecord) {
 
 // Subscribe registers a replica subscriber starting from the requested fromLSN.
 // It pre-populates the channel with buffered historical records if fromLSN is behind.
+// If fromLSN has already been purged from the history ring buffer, ErrWALHistoryPurged is returned.
 func (b *WALBroadcaster) Subscribe(replicaID, remoteAddr string, fromLSN int64, bufSize int) (<-chan memengine.WALRecord, func(), error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -89,8 +96,20 @@ func (b *WALBroadcaster) Subscribe(replicaID, remoteAddr string, fromLSN int64, 
 		return nil, nil, ErrStreamClosed
 	}
 
+	// Gap detection: check if requested fromLSN has already been evicted from ring buffer ([RULE:ExplicitError]).
+	if b.historyLen > 0 {
+		earliestLSN := b.history[b.historyHead].LSN
+		if fromLSN+1 < earliestLSN {
+			return nil, nil, fmt.Errorf("%w: requested from_lsn=%d, earliest_available=%d", ErrWALHistoryPurged, fromLSN, earliestLSN)
+		}
+	}
+
 	if bufSize <= 0 {
 		bufSize = 1024
+	}
+	// Pre-size buffer to comfortably hold all replayed history frames without dropping ([RULE:BoundedBuffers])
+	if b.historyLen > 0 && bufSize < b.historyLen+64 {
+		bufSize = b.historyLen + 64
 	}
 
 	ch := make(chan memengine.WALRecord, bufSize)
@@ -114,11 +133,7 @@ func (b *WALBroadcaster) Subscribe(replicaID, remoteAddr string, fromLSN int64, 
 		hIdx := (b.historyHead + i) % b.historyCap
 		rec := b.history[hIdx]
 		if rec.LSN > fromLSN {
-			select {
-			case ch <- rec:
-			default:
-				// Ring buffer replay best effort
-			}
+			ch <- rec
 		}
 	}
 

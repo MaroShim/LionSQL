@@ -335,3 +335,74 @@ func TestMemEngine_GroupCommit_StrictLSNOrdering(t *testing.T) {
 		t.Fatalf("expected %d ordered frames in wal.aof, got %d (maxLSN=%d)", wantTotal, fileIdx, maxLSN)
 	}
 }
+
+func TestMemEngine_CommitFailure_NoPrematureWALHook(t *testing.T) {
+	dir := t.TempDir()
+	eng := New()
+	opts := DefaultOptions(dir)
+	opts.EnableAOF = true
+	opts.FsyncPolicy = FsyncAlways
+	if err := eng.OpenWithOptions(opts); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	var hookMu sync.Mutex
+	var hookCalls []WALRecord
+	eng.SetWALHook(func(rec WALRecord) {
+		hookMu.Lock()
+		defer hookMu.Unlock()
+		hookCalls = append(hookCalls, rec)
+	})
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sess.Close()
+
+	schema := storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(&schema); err != nil {
+		t.Fatal(err)
+	}
+
+	hookMu.Lock()
+	initialHooks := len(hookCalls)
+	hookMu.Unlock()
+	if initialHooks != 1 {
+		t.Fatalf("expected 1 hook call for CreateTable, got %d", initialHooks)
+	}
+
+	// Deliberately close the underlying WAL file descriptor to force finishWALCommitLocked / fsync to fail
+	if eng.wal != nil && eng.wal.file != nil {
+		_ = eng.wal.file.Close()
+	}
+
+	tx2, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tx2.Insert("items", storage.Record{"id": storage.IntValue(1), "val": storage.StringValue("v1")}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Commit must fail due to failed disk fsync
+	commitErr := tx2.Commit()
+	if commitErr == nil {
+		t.Fatal("expected Commit to fail after closing WAL file, got nil")
+	}
+
+	// Crucial assertion: walHook MUST NOT have been notified of the uncommitted/failing transaction
+	hookMu.Lock()
+	afterHooks := len(hookCalls)
+	hookMu.Unlock()
+	if afterHooks != initialHooks {
+		t.Fatalf("walHook was prematurely invoked %d times (expected %d) despite commit failure!", afterHooks, initialHooks)
+	}
+}
