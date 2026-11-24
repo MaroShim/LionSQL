@@ -277,7 +277,7 @@
 | `DONE` | **`DURA-SLT-1`** |  | Durability | P2 | SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 | [`notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/plans/SQLLOGICTEST_INTEGRATION_PLAN.ko.md) |  |
 | `DONE` | **`DURA-SLT-2`** |  | Durability | P2 | SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 | [`notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/plans/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md) |  |
 | `IN_PROGRESS` | **`DURA-SOAK-1`** | `v0.95.0` | Durability | P2 | 24h ~ 72h 장기 소크 테스트 |  |  |
-| `PENDING` | **`EXEC-SIMPLIFIED-SPILL-HASH-JOIN-1`** | `v0.95.0` | Execution | P2 | Simplified Spill Hash Join (Fixed 16-Bucket Out-of-Core Spill Join) | [`notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md`](notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md) |  |
+| `PENDING` | **`EXEC-SIMPLIFIED-SPILL-HASH-JOIN-1`** | `v0.97.0` | Execution | P2 | Simplified Spill Hash Join (Fixed 16-Bucket Out-of-Core Spill Join) | [`notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md`](notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-ALTER-COLUMN-ONLINE-EXPANSION-1`** | `v0.95.0` | Storage | P2 | ALTER TABLE ALTER COLUMN 가변길이 컬럼 온라인 확장 지원 |  |  |
 | `DONE` | **`FEAT-CDC-DUCKDB-INITIAL-SNAPSHOT-CHECKPOINT-1`** | `1.0-GA` | Ecosystem | P2 | CDC 및 DuckDB 연동 최초 스냅샷 적재, LSN 체크포인트 영속화 및 자동 재연결 파이프라인 | [`guide/DUCKDB_INTEGRATION_GUIDE.ko.md`](guide/DUCKDB_INTEGRATION_GUIDE.ko.md) |  |
 | `DONE` | **`FEAT-CLI-INTERACTIVE-ENTRYPOINT-1`** | `1.0-GA` | CLI | P2 | lionsql -i 및 lionsql cli 동시 지원 대화형 SQL 프롬프트 및 헤드리스 쿼리 실행 엔트리포인트 | [`doc/USER_MANUAL.ko.md`](doc/USER_MANUAL.ko.md) |  |
@@ -318,7 +318,7 @@
 | `PENDING` | **`FEAT-TIMESERIES-LSM-1`** | `v1.99.0` | FEAT | P2 | LSM Time-Series Chunk Storage & time_bucket | [`notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md`](notes/plans/POST_1.0_VECTOR_TIMESERIES_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TOLERANT-DDL-1`** |  | FEAT | P2 | Dynamic Runtime Tolerant DDL CLI Switch & PostgreSQL 42704 SQLSTATE | [`notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md`](notes/plans/TOLERANT_DDL_MODE_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-TRANSACTIONAL-DDL-1`** | `1.0-GA` | Engine | P1 | Transactional DDL (CREATE/DROP/ALTER/RENAME/INDEX 롤백 지원) 및 세션-트랜잭션 경계 격리 안전성 강화 | [`notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md`](notes/TRANSACTIONAL_DDL_AND_SESSION_BOUNDARY_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`** | `v0.95.0` | Engine | P2 | Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`** | `v0.97.0` | Engine | P2 | Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 | [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-TSQL-CREATE-SYNONYM-1`** | `v1.2.0` | Engine | P3 | T-SQL CREATE SYNONYM 동의어 객체 지원 |  |  |
 | `PENDING` | **`FEAT-TSQL-GOTO-LABEL-1`** | `v1.1.0` | Engine | P3 | T-SQL LABEL 및 GOTO 흐름 제어 구문 지원 |  |  |
 | `DONE` | **`FEAT-TYPE-ROWVERSION-MONOTONIC-COUNTER-1`** | `1.0-GA` | Storage | P2 | ROWVERSION 데이터 타입 DDL 파싱 및 INSERT/UPDATE 시 @@DBTS 단조 증가 바이너리 자동 스탬핑 | [`doc/REFERENCE_MANUAL.ko.md`](doc/REFERENCE_MANUAL.ko.md) |  |
@@ -576,7 +576,7 @@
 | `DONE` | **`PLANNER-SLIM-1`** |  | Durability | P2 | & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 | [`notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/plans/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md) |  |
 | `DONE` | **`R-6`** |  | Ecosystem | P3 | 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링) | [`notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/plans/MODULAR_ARCHITECTURE_PLAN.ko.md) |  |
 | `COMPLETED` | **`REFAC-POST-BINDER-AD-HOC-IF-PRUNING-1`** | `v0.96.0` | Refactoring | P2 | 바인더 안착 후 다운스트림 산발적 if 문 및 방어적 분기 전면 걷어내기 (Radical KISS Deletion-First) | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
-| `PENDING` | **`REFAC-STORAGE-FOREIGN-KEY-ENGINE-1`** | `v0.95.0` | Storage | P2 | 외래키 무결성 검증 및 CASCADE 전파 엔진 공통화 (ForeignKeyEngine) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
+| `PENDING` | **`REFAC-STORAGE-FOREIGN-KEY-ENGINE-1`** | `v0.97.0` | Storage | P2 | 외래키 무결성 검증 및 CASCADE 전파 엔진 공통화 (ForeignKeyEngine) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`REFAC-STORAGE-INDEX-CODEC-1`** | `v0.95.0` | Storage | P2 | 보조 인덱스 키/값 포맷터 및 바이너리 인코딩 모듈화 (formatIndexKeyValue) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `SPEC_OUT` | **`REFAC-STORAGE-ROW-LOCK-MANAGER-1`** | `v0.95.0` | Storage | P2 | 행 레벨 쓰기 잠금 샤드 관리자 공통화 (RowLockManager) | [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md) |  |
 | `DONE` | **`REFAC-WIRE-RESET-SESSION-COORDINATOR-1`** | `v0.95.0` | Engine | P2 | PG/TDS 와이어 프로토콜 세션 리셋 Coordinator 단일 진입점 (ResetSession) | [`notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md`](notes/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.md) |  |
@@ -3316,8 +3316,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] Simplified Spill Hash Join (Fixed 16-Bucket Out-of-Core Spill Join) `EXEC-SIMPLIFIED-SPILL-HASH-JOIN-1`
-- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-24 10:39:39
-- **Milestone**: `v0.95.0`
+- **Domain**: Execution | **Priority**: P2 | **Updated**: 2026-11-24 10:53:03
+- **Milestone**: `v0.97.0`
 - **Plan Doc**: [`notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md`](notes/plans/SIMPLIFIED_SPILL_HASH_JOIN_PLAN.ko.md)
 
 ---
@@ -3601,8 +3601,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] Transactional Outbox Go 채널 기반 인-프로세스 이벤트 버스 `FEAT-TRANSACTIONAL-OUTBOX-INPROCESS-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-24 10:39:38
-- **Milestone**: `v0.95.0`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-24 10:53:04
+- **Milestone**: `v0.97.0`
 - **Plan Doc**: [`notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md`](notes/STANDALONE_WORKER_PROCESS_ARCHITECTURE_PLAN.ko.md)
 
 ---
@@ -5523,8 +5523,8 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 ---
 
 ### [PENDING] 외래키 무결성 검증 및 CASCADE 전파 엔진 공통화 (ForeignKeyEngine) `REFAC-STORAGE-FOREIGN-KEY-ENGINE-1`
-- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-24 10:39:39
-- **Milestone**: `v0.95.0`
+- **Domain**: Storage | **Priority**: P2 | **Updated**: 2026-11-24 10:53:03
+- **Milestone**: `v0.97.0`
 - **Plan Doc**: [`notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md`](notes/WIREDTIGER_HYBRID_PERFORMANCE_PLAN.ko.md)
 
 ---
