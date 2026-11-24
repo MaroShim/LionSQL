@@ -157,3 +157,26 @@ DML 실행 함수 진입부(`sqlexec_dml.go`, `vm_dispatcher.go`) 최상단에 �
 
 > **핵심 전략 결론**:  
 > 현재 단계에서는 본 문서의 메타 검증기(`ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`)를 즉시 정식 통합하여 모든 시맨틱 결함 및 에러 침묵을 종결짓고, 이를 토대로 독립된 바인더 패스(`ARCH-DEDICATED-BINDER-CATALOG-RESOLVER-1`)로 안착시킨다.
+
+---
+
+## 7. 바인더 안착 후 다운스트림 산발적 `if` 문 전면 걷어내기 (Deletion-First & Code Pruning Policy)
+
+> **핵심 원칙 (`[RULE:RadicalKISS]`)**:  
+> 전용 바인더(Dedicated Binder)가 확립되면, 바인더를 통과한 결과물은 **"더 이상 의심할 필요가 없는 무결한 불변식 계약(Infallible Contract: BoundStatement)"**이 된다.  
+> 따라서 플래너, VDBE 바이트코드 컴파일러, Volcano 실행기, DML 실행 루프에 산발적으로 흩어져 있던 방어적 `if` 문들은 즉시 전면 삭제(Pruning)되어야 한다.
+
+### 7.1 삭제 및 단순화 대상 영역 (Target Pruning Scope)
+1. **`sqlexec_select.go`**:
+   - `execVolcanoSelect`와 `execSelect` 내부에서 실행 도중 개별적으로 수행하던 중복 컬럼 실재성 검사(`if _, ok := schema.FindColumn(...)`), 모호성 중복 루프, 절별 문자열 휴리스틱 검사 일체 제거.
+2. **`sqlexec_dml.go`**:
+   - `execInsert`, `execUpdate`, `execDelete` 내부의 튜플별/컬럼별 중복 방어 분기 및 NULL 침묵 변환 fallback 제거. 바인더에서 확정된 메타데이터를 믿고 즉시 인라인 직결.
+3. **`pushdown.go` & CBO 플래너**:
+   - 프로젝션 푸시다운 및 조인 플래닝 시 스키마 컬럼 유효성을 재확인하던 중복 `if` 분기 제거.
+4. **VDBE VM & Volcano Iterators**:
+   - 런타임 핫패스에서 컬럼 인덱스/타입 미스매치를 방어하던 중복 분기를 제거하여 브랜치 예측 실패(Branch Misprediction) 방지 및 CPU 사이클 절감.
+
+### 7.2 기대 효과 (Architectural Payoff)
+- **코드 다이어트**: 수백 라인의 중복/파편화된 방어적 분기 코드 순삭제 (`Deletion-First`).
+- **실행 레이턴시 단축**: 인터랙티브 핫패스에서 불필요한 검증 오버헤드가 제거되어 실행 성능 5~10% 가속.
+- **시맨틱 SSOT 완성**: 쿼리 유효성 검증의 책임이 오직 **바인더 단 1곳(Single Source of Truth)**으로 단일화되어 영구적인 유지보수성 확보.
