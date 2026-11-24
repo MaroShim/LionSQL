@@ -192,6 +192,26 @@ func TestBinder_Phase1_ShapeAndArityValidation(t *testing.T) {
 			sql:         "SELECT * FROM t_arity WHERE id IN (SELECT id, name FROM t_arity);",
 			expectedErr: "subquery must return only one column",
 		},
+		{
+			name:        "INSERT into virtual system catalog view rejected",
+			sql:         "INSERT INTO sys.tables (name) VALUES ('hacked');",
+			expectedErr: "cannot modify system catalog view",
+		},
+		{
+			name:        "UPDATE virtual system catalog view rejected",
+			sql:         "UPDATE sys.tables SET name = 'hacked' WHERE 1=1;",
+			expectedErr: "cannot modify system catalog view",
+		},
+		{
+			name:        "DELETE from virtual system catalog view rejected",
+			sql:         "DELETE FROM sys.columns WHERE 1=1;",
+			expectedErr: "cannot modify system catalog view",
+		},
+		{
+			name:        "FROM subquery without alias rejected",
+			sql:         "SELECT id FROM (SELECT id FROM t_arity);",
+			expectedErr: "subquery in FROM must have an alias",
+		},
 	}
 
 	for _, tc := range testCases {

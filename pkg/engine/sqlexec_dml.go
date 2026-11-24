@@ -341,6 +341,9 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 	// RBAC Permission Check
 	dml, parseErr := ParseDMLCommand(cleaned)
 	if dml != nil {
+		if err := s.ValidateDMLTableTarget(dml.Table); err != nil {
+			return nil, err
+		}
 		if err := s.checkTableAccess(cs, cleanIdentifier(dml.Table), auth.PrivInsert); err != nil {
 			return nil, err
 		}
@@ -1534,6 +1537,9 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	if parseErr != nil {
 		return nil, parseErr
 	}
+	if err := s.ValidateDMLTableTarget(dml.Table); err != nil {
+		return nil, err
+	}
 
 	if err := ValidateSetClause(dml.Set); err != nil {
 		return nil, err
@@ -1939,6 +1945,9 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 	dml, parseErr := ParseDMLCommand(cleaned)
 	if parseErr != nil {
 		return nil, parseErr
+	}
+	if err := s.ValidateDMLTableTarget(dml.Table); err != nil {
+		return nil, err
 	}
 
 	if dml.HasWhere && dml.Where == "" {

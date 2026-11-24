@@ -42,6 +42,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - integrate Dedicated Semantic Binder & Gatekeeper Invariant verification into Gate 1 of the automated release pipeline (`scripts/release.sh`) and technical whitepaper (`doc/HOW_RELEASE_GATES_ELEVATE_LIONSQL_VALUE.ko.md`)
 
 ### Refactored
+- modularize DML semantic binder into `pkg/engine/dml_validator.go` (`ValidateDMLTableTarget`, `ValidateInsertArity`, `ValidateOutputClause`, `ValidateInsertValueExpr`)
+- enforce read-only virtual system catalog protection in DML INSERT, UPDATE, DELETE statements (`ValidateDMLTableTarget`)
 - consolidate INSERT arity validation (`ValidateInsertArity`) into semantic binder pass before transaction initiation (`BINDER-CONSOLIDATION-PHASE-1`)
 - consolidate SELECT DISTINCT unprojected ORDER BY check (`ERROR 42P10`) into `ValidateSelectScope` and prune 28 redundant lines from `sqlexec_select.go` (`BINDER-CONSOLIDATION-PHASE-2`)
 - enforce compile-time window function constant domain bounds for NTILE (`Msg 7812`) and PERCENTILE_CONT (`Msg 8704`) in `ValidateConstantDomainBounds`
