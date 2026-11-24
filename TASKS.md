@@ -36,7 +36,7 @@
 | `COMPLETED` | **`ARCH-SEMANTIC-VALIDATOR-GATEKEEPER-1`** | `v0.95.0` | Architecture | P1 | 단일 시맨틱 검증 게이트웨이(Scope Gatekeeper & DML Contract) 아키텍처 구축 | [`notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md`](notes/plans/DEDICATED_BINDER_AND_SEMANTIC_GATEKEEPER_ARCHITECTURE_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-STANDALONE-OUTBOX-CDC-STREAMING-1`** | `v0.99.0` | ARCHITECTURE | P2 | Decouple Outbox Dispatcher into Standalone Subsystem Worker via CDC Streaming Socket | [`notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md`](notes/plans/STANDALONE_OUTBOX_WORKER_CDC_STREAMING_PLAN.ko.md) |  |
 | `PENDING` | **`ARCH-TOAST-OUT-OF-ROW-CHUNKS-1`** | `v0.96.0` | Storage | P2 | TOAST (Out-of-Row LOB) 청크 아키텍처 기반 설계 및 8,060B 분리 | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
-| `PENDING` | **`ARCH-UNIFIED-TUPLE-PROTOCOL-1`** | `v0.99.0` | Architecture | P2 | 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
+| `PENDING` | **`ARCH-UNIFIED-TUPLE-PROTOCOL-1`** | `v0.97.0` | Architecture | P2 | 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 | [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-UNIFIED-TX-MANAGER`** | `1.0-GA` | ENGINE | P1 | Unified TxManager (DDL + DML) Architecture | [`notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md`](notes/plans/UNIFIED_TX_MANAGER_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-VDBE-ROUTING-1`** |  | Ecosystem | P3 | AST 및 카탈로그 기반 2-Tier 쿼리 라우팅 정규화 (Anti-Heuristic Refactoring) | [`notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md`](notes/plans/ARCH_VDBE_ROUTING_1_PLAN.ko.md) |  |
 | `DONE` | **`ARCH-WT-FILE-LAYOUT-1`** | `v0.94.0` | Storage | P2 | WiredTiger 물리 파일 레이아웃(테이블별 파일 vs 단일 파일) 및 세컨더리 인덱스 멀티플렉싱(인덱스별 vs 테이블당 1개 vs 테이블 파일 합본) 아키텍처 설계 및 전환 | [`notes/plans/WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING_PLAN.ko.md`](notes/plans/WIREDTIGER_FILE_LAYOUT_AND_INDEX_MULTIPLEXING_PLAN.ko.md) |  |
@@ -301,7 +301,7 @@
 | `PENDING` | **`FEAT-PG-SESSION-SETTINGS-PARITY-1`** | `v1.1.0` | Wire | P2 | SET/SHOW search_path, timezone, current_setting(), set_config() | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PG-STAT-ACTIVITY-AND-SETTINGS-1`** | `v1.2.0` | Catalog | P2 | pg_stat_activity, pg_settings 가상 뷰 확충 | [`notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md`](notes/plans/POSTGRES_COMPATIBILITY_ENHANCEMENT_PLAN.ko.md) |  |
 | `DONE` | **`FEAT-POSTGRES-SYNTAX-SUGAR-1`** | `v0.94.0` | Engine | P2 | PostgreSQL 호환 문법 슈가 지원 (CREATE TEMP TABLE DDL 라우팅 및 RETURNING -> OUTPUT AST 로워링) | [`notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md`](notes/plans/PARSER_ENHANCEMENT_V2_PLAN.ko.md) |  |
-| `PENDING` | **`FEAT-PRATT-DML-SUBQUERY-EXPANSION-1`** | `v0.99.0` | Engine | P2 | Pratt 파서 DML 서브쿼리 및 복합 구문 확장 (UPDATE FROM, MERGE 자체 소화로 ANTLR4 전이 최소화) | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
+| `PENDING` | **`FEAT-PRATT-DML-SUBQUERY-EXPANSION-1`** | `v0.97.0` | Engine | P2 | Pratt 파서 DML 서브쿼리 및 복합 구문 확장 (UPDATE FROM, MERGE 자체 소화로 ANTLR4 전이 최소화) | [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md) |  |
 | `PENDING` | **`FEAT-PUREGO-WT-ENGINE`** | `v1.20.0` | Storage | P3 | WiredTiger 호환 자체 Pure-Go MVCC 스토리지 엔진 구현 및 CGo 분리 (Post-1.0) |  |  |
 | `PENDING` | **`FEAT-REDIS-PRIMITIVES-AND-TTL-1`** |  | --priority | P3 | Game Server Primitives: Native Sorted Set (ZSET), Auto-TTL Tables, and Atomic INCRBY/SETNX |  |  |
 | `PENDING` | **`FEAT-ROW-LOCK-WAIT-MANAGER-1`** | `v0.96.0` | Storage | P2 | WITH (UPDLOCK) 명시 힌트 기반 2PL 행 잠금 대기(Lock-Wait) 및 데드락 감지 매니저 (Step 2) | [`notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md`](notes/plans/CONCURRENCY_AND_DIAGNOSTIC_FIXES_PLAN.ko.md) |  |
@@ -854,8 +854,8 @@
 ---
 
 ### [PENDING] 타입 타워 3중화 해소: storage.Row 기반 Positional Tuple 결과셋 및 Wire 직결 `ARCH-UNIFIED-TUPLE-PROTOCOL-1`
-- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-23 14:56:07
-- **Milestone**: `v0.99.0`
+- **Domain**: Architecture | **Priority**: P2 | **Updated**: 2026-11-24 10:46:03
+- **Milestone**: `v0.97.0`
 - **Plan Doc**: [`notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md`](notes/plans/POST_0_94_STRUCTURAL_REFACTORING_AND_DEFECTS_PLAN.ko.md)
 
 ---
@@ -3481,8 +3481,8 @@ WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 
 ---
 
 ### [PENDING] Pratt 파서 DML 서브쿼리 및 복합 구문 확장 (UPDATE FROM, MERGE 자체 소화로 ANTLR4 전이 최소화) `FEAT-PRATT-DML-SUBQUERY-EXPANSION-1`
-- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-23 14:56:07
-- **Milestone**: `v0.99.0`
+- **Domain**: Engine | **Priority**: P2 | **Updated**: 2026-11-24 10:46:03
+- **Milestone**: `v0.97.0`
 - **Plan Doc**: [`notes/plans/v0.95.0_PLAN.ko.md`](notes/plans/v0.95.0_PLAN.ko.md)
 
 ---
