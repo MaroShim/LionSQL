@@ -484,6 +484,8 @@ type ConnectionSession struct {
 	prepCounter   int32
 	prepared      *TdsPreparedStatementCache
 	clientSession *engine.ClientSession
+	bulkTable     string
+	bulkCols      []string
 }
 
 var tdsReaderPool = sync.Pool{
@@ -794,6 +796,13 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		case PacketAttention:
 			s.handleAttention(conn, p, sess)
+
+		case PacketBulkLoad:
+			if !sess.authenticated {
+				s.rejectUnauthenticated(conn, sess)
+				return
+			}
+			s.handleBulkLoad(conn, p, sess)
 
 		default:
 			// Fallback: send simple DONE
@@ -2930,6 +2939,19 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 
 	// SSMS SMO Server Facet Batch (@MasterPath + IsCaseSensitive + MasterDBPath)
 	if s.handleSsmsServerFacetBatch(conn, trimmed, sess, nil, false) {
+		return
+	}
+
+	// INSERT BULK statement detection (bcp.exe / SqlBulkCopy preparation)
+	if tblName, cols, ok := parseInsertBulkStmt(trimmed); ok {
+		sess.bulkTable = tblName
+		sess.bulkCols = cols
+		doneStatus := DoneFinal
+		if sess.inTx {
+			doneStatus |= DoneInXact
+		}
+		done := BuildDone(TokenDone, doneStatus, 0xC1, 0)
+		_ = sess.writePacket(conn, PacketTabular, done)
 		return
 	}
 
