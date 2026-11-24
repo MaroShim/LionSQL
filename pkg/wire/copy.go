@@ -242,6 +242,80 @@ func (s *Server) handleCopy(conn net.Conn, query string, sessID string) {
 	}
 }
 
+type pgCopyReader struct {
+	conn    net.Conn
+	current []byte
+	buf     []byte
+	eof     bool
+	err     error
+}
+
+func (r *pgCopyReader) Read(p []byte) (int, error) {
+	if r.err != nil {
+		return 0, r.err
+	}
+	for len(r.current) == 0 {
+		if r.eof {
+			return 0, io.EOF
+		}
+		var msgHeader [5]byte
+		if _, err := io.ReadFull(r.conn, msgHeader[:]); err != nil {
+			r.err = err
+			return 0, err
+		}
+
+		msgType := msgHeader[0]
+		msgLen := binary.BigEndian.Uint32(msgHeader[1:5])
+		if msgLen < 4 || msgLen > MaxPGMessageSize {
+			r.err = fmt.Errorf("invalid COPY message length: %d", msgLen)
+			return 0, r.err
+		}
+
+		payloadLen := int(msgLen - 4)
+		if cap(r.buf) < payloadLen {
+			r.buf = make([]byte, payloadLen)
+		} else {
+			r.buf = r.buf[:payloadLen]
+		}
+		if _, err := io.ReadFull(r.conn, r.buf); err != nil {
+			r.err = err
+			return 0, err
+		}
+
+		switch msgType {
+		case MsgCopyData:
+			r.current = r.buf
+		case MsgCopyDone:
+			r.eof = true
+			return 0, io.EOF
+		case MsgCopyFail:
+			errMsg := string(bytes.TrimRight(r.buf, "\x00"))
+			r.err = fmt.Errorf("COPY from stdin cancelled: %s", errMsg)
+			return 0, r.err
+		default:
+			r.err = fmt.Errorf("unexpected message in COPY stream: %c", msgType)
+			return 0, r.err
+		}
+	}
+
+	n := copy(p, r.current)
+	r.current = r.current[n:]
+	return n, nil
+}
+
+func (r *pgCopyReader) Drain() {
+	if r.eof || r.err != nil {
+		return
+	}
+	buf := make([]byte, 32*1024)
+	for {
+		_, err := r.Read(buf)
+		if err != nil {
+			break
+		}
+	}
+}
+
 func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 	var cs *engine.ClientSession
 	if s.coordinator != nil && sessID != "" {
@@ -300,94 +374,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 		targetCols = tbl.Columns
 	}
 
-	// 3. Send CopyInResponse ('G')
-	if err := WriteCopyInResponse(conn, len(targetCols), 0); err != nil {
-		return
-	}
-
-	// 4. Stream CopyData ('d') packets until CopyDone ('c') or CopyFail ('f')
-	var dataBuf bytes.Buffer
-	for {
-		msgHeader := make([]byte, 5)
-		if _, err := io.ReadFull(conn, msgHeader); err != nil {
-			return
-		}
-
-		msgType := msgHeader[0]
-		msgLen := binary.BigEndian.Uint32(msgHeader[1:5])
-		if msgLen < 4 || msgLen > MaxPGMessageSize {
-			_ = WriteError(conn, "COPY message length exceeds maximum limit")
-			_ = s.writeReady(conn, sessID)
-			return
-		}
-		payload := make([]byte, msgLen-4)
-		if _, err := io.ReadFull(conn, payload); err != nil {
-			return
-		}
-
-		if msgType == MsgCopyData {
-			if dataBuf.Len()+len(payload) > MaxPGMessageSize {
-				_ = WriteError(conn, fmt.Sprintf("COPY stream exceeds maximum size limit (%d bytes)", MaxPGMessageSize))
-				_ = s.writeReady(conn, sessID)
-				return
-			}
-			dataBuf.Write(payload)
-		} else if msgType == MsgCopyDone {
-			break
-		} else if msgType == MsgCopyFail {
-			errMsg := string(bytes.TrimRight(payload, "\x00"))
-			_ = WriteError(conn, fmt.Sprintf("COPY from stdin cancelled: %s", errMsg))
-			_ = s.writeReady(conn, sessID)
-			return
-		} else {
-			break
-		}
-	}
-
-	// 5. Parse streamed data into rows
-	var rows [][]string
-	if stmt.Format == FormatCSV {
-		r := csv.NewReader(&dataBuf)
-		r.Comma = stmt.Delimiter
-		r.FieldsPerRecord = -1
-		parsed, err := r.ReadAll()
-		if err != nil {
-			_ = WriteError(conn, fmt.Sprintf("malformed CSV stream: %v", err))
-			_ = s.writeReady(conn, sessID)
-			return
-		}
-		for _, rec := range parsed {
-			if len(rec) == 1 && strings.TrimSpace(rec[0]) == "\\." {
-				break
-			}
-			rows = append(rows, rec)
-		}
-		if stmt.Header && len(rows) > 0 {
-			rows = rows[1:]
-		}
-	} else {
-		// Tab-separated or delimited text format
-		scanner := bufio.NewScanner(&dataBuf)
-		scanner.Buffer(make([]byte, 1024*1024), 64*1024*1024)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if line == "\\." {
-				break
-			}
-			if strings.TrimSpace(line) == "" {
-				continue
-			}
-			fields := splitCopyTextLine(line, stmt.Delimiter)
-			rows = append(rows, fields)
-		}
-		if err := scanner.Err(); err != nil {
-			_ = WriteError(conn, fmt.Sprintf("COPY scan error: %v", err))
-			_ = s.writeReady(conn, sessID)
-			return
-		}
-	}
-
-	// 6. Resolve execution context (active transaction vs autocommit)
+	// 3. Resolve execution context (active transaction vs autocommit)
 	var (
 		tx        storage.Transaction
 		inTx      bool
@@ -439,11 +426,35 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 		defer rollbackOnce()
 	}
 
+	// 4. Send CopyInResponse ('G')
+	if err := WriteCopyInResponse(conn, len(targetCols), 0); err != nil {
+		if !inTx {
+			rollbackOnce()
+		}
+		return
+	}
+
+	copyReader := &pgCopyReader{conn: conn}
 	pkCol, _ := tbl.PrimaryKeyColumn()
 
+	const copyBatchSize = 1000
+	batch := make([]storage.Record, 0, copyBatchSize)
+
+	flushBatch := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		if err := tx.BatchInsert(tbl.Name, batch); err != nil {
+			return err
+		}
+		batch = batch[:0]
+		return nil
+	}
+
 	var insertedCount int64
-	for rowIdx, fields := range rows {
-		rec := make(storage.Record)
+
+	processRow := func(fields []string, rowIdx int) error {
+		rec := make(storage.Record, len(targetCols))
 		for i, col := range targetCols {
 			if i < len(fields) {
 				raw := strings.TrimSpace(fields[i])
@@ -456,14 +467,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 					}
 					v, err := parseFieldVal(fieldVal, col)
 					if err != nil {
-						if inTx && cs != nil {
-							cs.MarkTxFailed()
-						} else if !inTx {
-							rollbackOnce()
-						}
-						_ = WriteError(conn, fmt.Sprintf("line %d, column %q: %v", rowIdx+1, col.Name, err))
-						_ = s.writeReady(conn, sessID)
-						return
+						return fmt.Errorf("line %d, column %q: %w", rowIdx, col.Name, err)
 					}
 					rec[col.Name] = v
 				}
@@ -503,17 +507,120 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			}
 		}
 
-		if err := tx.Insert(tbl.Name, rec); err != nil {
+		batch = append(batch, rec)
+		insertedCount++
+		if len(batch) >= copyBatchSize {
+			if err := flushBatch(); err != nil {
+				return fmt.Errorf("line %d: %w", rowIdx, err)
+			}
+		}
+		return nil
+	}
+
+	var rowIdx int
+	if stmt.Format == FormatCSV {
+		r := csv.NewReader(copyReader)
+		r.Comma = stmt.Delimiter
+		r.FieldsPerRecord = -1
+		firstRow := true
+		for {
+			fields, err := r.Read()
+			if err == io.EOF {
+				break
+			}
+			rowIdx++
+			if err != nil {
+				copyReader.Drain()
+				if inTx && cs != nil {
+					cs.MarkTxFailed()
+				} else if !inTx {
+					rollbackOnce()
+				}
+				_ = WriteError(conn, fmt.Sprintf("malformed CSV stream: %v", err))
+				_ = s.writeReady(conn, sessID)
+				return
+			}
+			if len(fields) == 1 && strings.TrimSpace(fields[0]) == "\\." {
+				break
+			}
+			if stmt.Header && firstRow {
+				firstRow = false
+				continue
+			}
+			firstRow = false
+			if err := processRow(fields, rowIdx); err != nil {
+				copyReader.Drain()
+				if inTx && cs != nil {
+					cs.MarkTxFailed()
+				} else if !inTx {
+					rollbackOnce()
+				}
+				_ = WriteError(conn, err.Error())
+				_ = s.writeReady(conn, sessID)
+				return
+			}
+		}
+	} else {
+		scanner := bufio.NewScanner(copyReader)
+		scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line == "\\." {
+				break
+			}
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			rowIdx++
+			fields := splitCopyTextLine(line, stmt.Delimiter)
+			if err := processRow(fields, rowIdx); err != nil {
+				copyReader.Drain()
+				if inTx && cs != nil {
+					cs.MarkTxFailed()
+				} else if !inTx {
+					rollbackOnce()
+				}
+				_ = WriteError(conn, err.Error())
+				_ = s.writeReady(conn, sessID)
+				return
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			copyReader.Drain()
 			if inTx && cs != nil {
 				cs.MarkTxFailed()
 			} else if !inTx {
 				rollbackOnce()
 			}
-			_ = WriteError(conn, fmt.Sprintf("line %d: %v", rowIdx+1, err))
+			_ = WriteError(conn, fmt.Sprintf("COPY scan error: %v", err))
 			_ = s.writeReady(conn, sessID)
 			return
 		}
-		insertedCount++
+	}
+
+	// Flush any remaining records
+	if err := flushBatch(); err != nil {
+		copyReader.Drain()
+		if inTx && cs != nil {
+			cs.MarkTxFailed()
+		} else if !inTx {
+			rollbackOnce()
+		}
+		_ = WriteError(conn, fmt.Sprintf("line %d: %v", rowIdx, err))
+		_ = s.writeReady(conn, sessID)
+		return
+	}
+
+	copyReader.Drain()
+	if copyReader.err != nil && copyReader.err != io.EOF {
+		if inTx && cs != nil {
+			cs.MarkTxFailed()
+		} else if !inTx {
+			rollbackOnce()
+		}
+		_ = WriteError(conn, copyReader.err.Error())
+		_ = s.writeReady(conn, sessID)
+		return
 	}
 
 	if !inTx {
@@ -526,7 +633,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 		committed = true
 	}
 
-	// 7. Complete command
+	// Complete command
 	_ = WriteCommandComplete(conn, fmt.Sprintf("COPY %d", insertedCount))
 	_ = s.writeReady(conn, sessID)
 }
@@ -665,6 +772,10 @@ func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
 	var rowCount int64
 	var chunkBuf bytes.Buffer
 
+	cw := csv.NewWriter(&chunkBuf)
+	cw.Comma = stmt.Delimiter
+	fields := make([]string, len(targetCols))
+
 	for cur.Next() {
 		rec, err := cur.Record()
 		if err != nil {
@@ -672,9 +783,6 @@ func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
 		}
 
 		if stmt.Format == FormatCSV {
-			cw := csv.NewWriter(&chunkBuf)
-			cw.Comma = stmt.Delimiter
-			fields := make([]string, len(targetCols))
 			for i, c := range targetCols {
 				if val, exists := rec[c.Name]; exists && !val.IsNull {
 					fields[i] = val.String()
@@ -685,7 +793,6 @@ func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
 			_ = cw.Write(fields)
 			cw.Flush()
 		} else {
-			fields := make([]string, len(targetCols))
 			for i, c := range targetCols {
 				if val, exists := rec[c.Name]; exists && !val.IsNull {
 					fields[i] = escapeCopyText(val.String(), stmt.Delimiter)
