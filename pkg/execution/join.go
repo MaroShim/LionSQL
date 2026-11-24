@@ -6,6 +6,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"lionsql/pkg/planner"
@@ -29,6 +30,10 @@ type HashJoinIterator struct {
 	rightKey       string
 	leftKeyIdx     int
 	rightKeyIdx    int
+	leftKeyParts   []string
+	leftKeyIdxs    []int
+	rightKeyParts  []string
+	rightKeyIdxs   []int
 	intHashTable   map[int64][]hashMatch
 	hashTable      map[string][]hashMatch
 	allRightTuples []Tuple
@@ -164,8 +169,34 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 
 	h.leftKeyIdx = -1
 	h.rightKeyIdx = -1
-	if !strings.Contains(h.rightKey, ",") && !strings.Contains(h.leftKey, ",") {
+	h.leftKeyParts = nil
+	h.leftKeyIdxs = nil
+	h.rightKeyParts = nil
+	h.rightKeyIdxs = nil
+
+	if strings.Contains(h.rightKey, ",") {
+		rawParts := strings.Split(h.rightKey, ",")
+		h.rightKeyParts = make([]string, len(rawParts))
+		h.rightKeyIdxs = make([]int, len(rawParts))
+		rMap := h.right.ColIndexMap()
+		for i, p := range rawParts {
+			h.rightKeyParts[i] = strings.TrimSpace(p)
+			h.rightKeyIdxs[i] = resolveColIndex(rMap, h.rightKeyParts[i])
+		}
+	} else {
 		h.rightKeyIdx = resolveColIndex(h.right.ColIndexMap(), h.rightKey)
+	}
+
+	if strings.Contains(h.leftKey, ",") {
+		rawParts := strings.Split(h.leftKey, ",")
+		h.leftKeyParts = make([]string, len(rawParts))
+		h.leftKeyIdxs = make([]int, len(rawParts))
+		lMap := h.left.ColIndexMap()
+		for i, p := range rawParts {
+			h.leftKeyParts[i] = strings.TrimSpace(p)
+			h.leftKeyIdxs[i] = resolveColIndex(lMap, h.leftKeyParts[i])
+		}
+	} else {
 		h.leftKeyIdx = resolveColIndex(h.left.ColIndexMap(), h.leftKey)
 	}
 
@@ -230,7 +261,14 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 				continue
 			}
 
-			if strings.Contains(h.rightKey, ",") {
+			if len(h.rightKeyParts) > 0 {
+				kStr, found := extractTupleKeyFast(tuple, h.rightKeyParts, h.rightKeyIdxs, h.arena)
+				if !found {
+					h.rightHasNullKey = true
+					continue
+				}
+				h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
+			} else if strings.Contains(h.rightKey, ",") {
 				kStr, found := extractTupleKey(tuple, h.rightKey, h.arena)
 				if !found {
 					h.rightHasNullKey = true
@@ -360,6 +398,15 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 			if matches, exists := h.hashTable[""]; exists && len(matches) > 0 {
 				hasMatch = true
 				h.currentMatches = matches
+			}
+		} else if len(h.leftKeyParts) > 0 {
+			var kStr string
+			kStr, found = extractTupleKeyFast(probeTuple, h.leftKeyParts, h.leftKeyIdxs, nil)
+			if found {
+				if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
+					hasMatch = true
+					h.currentMatches = matches
+				}
 			}
 		} else if strings.Contains(h.leftKey, ",") {
 			var kStr string
@@ -996,6 +1043,108 @@ func formatKeyVal(val any) string {
 	default:
 		return strings.ToLower(strings.TrimRight(fmt.Sprintf("%v", val), " "))
 	}
+}
+
+var joinKeyBufPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 0, 256)
+		return &b
+	},
+}
+
+func appendKeyVal(buf []byte, val any) []byte {
+	switch v := val.(type) {
+	case string:
+		s := strings.TrimRight(v, " ")
+		for i := 0; i < len(s); i++ {
+			c := s[i]
+			if c >= 'A' && c <= 'Z' {
+				c += 32
+			}
+			buf = append(buf, c)
+		}
+		return buf
+	case int64:
+		return strconv.AppendInt(buf, v, 10)
+	case int:
+		return strconv.AppendInt(buf, int64(v), 10)
+	case int32:
+		return strconv.AppendInt(buf, int64(v), 10)
+	case storage.Value:
+		if v.IsNull {
+			return append(buf, "NULL"...)
+		}
+		if v.Type == storage.TypeInt {
+			return strconv.AppendInt(buf, v.IVal, 10)
+		}
+		if v.Type == storage.TypeVarChar {
+			s := strings.TrimRight(v.SVal, " ")
+			for i := 0; i < len(s); i++ {
+				c := s[i]
+				if c >= 'A' && c <= 'Z' {
+					c += 32
+				}
+				buf = append(buf, c)
+			}
+			return buf
+		}
+		return append(buf, strings.ToLower(strings.TrimRight(fmt.Sprintf("%v", v), " "))...)
+	case float64:
+		return strconv.AppendFloat(buf, v, 'f', -1, 64)
+	default:
+		return append(buf, strings.ToLower(strings.TrimRight(fmt.Sprintf("%v", val), " "))...)
+	}
+}
+
+func extractTupleKeyFast(t Tuple, parts []string, idxs []int, arena *storage.Arena) (string, bool) {
+	if len(parts) == 0 {
+		return "", false
+	}
+	if len(parts) == 1 {
+		colIdx := -1
+		if len(idxs) > 0 {
+			colIdx = idxs[0]
+		}
+		keyVal, found := getTupleValFast(t, colIdx, parts[0])
+		if !found || keyVal == nil {
+			return "", false
+		}
+		kStr := formatKeyVal(keyVal)
+		if arena != nil {
+			return arena.AllocString(kStr), true
+		}
+		return kStr, true
+	}
+
+	bufPtr := joinKeyBufPool.Get().(*[]byte)
+	buf := (*bufPtr)[:0]
+
+	for i, part := range parts {
+		colIdx := -1
+		if idxs != nil && i < len(idxs) {
+			colIdx = idxs[i]
+		}
+		val, found := getTupleValFast(t, colIdx, part)
+		if !found || val == nil {
+			*bufPtr = buf
+			joinKeyBufPool.Put(bufPtr)
+			return "", false
+		}
+		if i > 0 {
+			buf = append(buf, 0x00)
+		}
+		buf = appendKeyVal(buf, val)
+	}
+
+	res := string(buf)
+	if cap(buf) <= 4096 {
+		*bufPtr = buf
+		joinKeyBufPool.Put(bufPtr)
+	}
+	if arena != nil {
+		return arena.AllocString(res), true
+	}
+	return res, true
 }
 
 func extractTupleKey(t Tuple, key string, arena *storage.Arena) (string, bool) {

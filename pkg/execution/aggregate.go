@@ -49,6 +49,7 @@ const (
 type aggField struct {
 	fnType      aggFuncType
 	argCol      string
+	argColIdx   int
 	separator   string
 	alias       string
 	rawExpr     string
@@ -804,32 +805,44 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 	a.idx = 0
 
 	a.initAccumulatorNeeds()
-	if a.child != nil && len(a.groupKeys) > 0 {
-		schema := a.child.Schema()
-		a.groupKeyIdx = make([]int, len(a.groupKeys))
-		a.groupKeyIsCS = make([]bool, len(a.groupKeys))
-		for i, gk := range a.groupKeys {
-			cleanGk := strings.ToLower(sqlutil.CleanIdentifier(gk))
-			if colIdx := sqlutil.FindTopLevelKeyword(cleanGk, "collate"); colIdx != -1 {
-				cleanGk = strings.TrimSpace(cleanGk[:colIdx])
+	if a.child != nil {
+		childMap := a.child.ColIndexMap()
+		if childMap == nil {
+			childMap = NewColumnIndexMapFromCols(a.child.Schema())
+		}
+		for i := range a.fields {
+			f := &a.fields[i]
+			f.argColIdx = -1
+			if f.argCol != "" && childMap != nil {
+				f.argColIdx = resolveColIndex(childMap, f.argCol)
 			}
-			idx := -1
-			for ci, col := range schema {
-				if strings.ToLower(sqlutil.CleanIdentifier(col)) == cleanGk {
-					idx = ci
-					break
+		}
+		if len(a.groupKeys) > 0 {
+			schema := a.child.Schema()
+			a.groupKeyIdx = make([]int, len(a.groupKeys))
+			a.groupKeyIsCS = make([]bool, len(a.groupKeys))
+			for i, gk := range a.groupKeys {
+				cleanGk := strings.ToLower(sqlutil.CleanIdentifier(gk))
+				if colIdx := sqlutil.FindTopLevelKeyword(cleanGk, "collate"); colIdx != -1 {
+					cleanGk = strings.TrimSpace(cleanGk[:colIdx])
 				}
-			}
-			a.groupKeyIdx[i] = idx
-			if colIdx := sqlutil.FindTopLevelKeyword(gk, "COLLATE"); colIdx != -1 {
-				collName := strings.TrimSpace(gk[colIdx+7:])
-				a.groupKeyIsCS[i] = sqlutil.IsCaseSensitiveCollation(collName)
+				idx := -1
+				for ci, col := range schema {
+					if strings.ToLower(sqlutil.CleanIdentifier(col)) == cleanGk {
+						idx = ci
+						break
+					}
+				}
+				a.groupKeyIdx[i] = idx
+				if colIdx := sqlutil.FindTopLevelKeyword(gk, "COLLATE"); colIdx != -1 {
+					collName := strings.TrimSpace(gk[colIdx+7:])
+					a.groupKeyIsCS[i] = sqlutil.IsCaseSensitiveCollation(collName)
+				}
 			}
 		}
 	}
 
-	groups := make(map[string]*groupAccumulator)
-	var groupOrder []string
+	var orderedAccs []*groupAccumulator
 
 	nKeys := len(a.groupKeys)
 	if nKeys > MaxGroupByColumns {
@@ -880,8 +893,7 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 	if len(a.groupKeys) == 0 {
 		// Fast-path: Global aggregation (no GROUP BY). Avoids string formatting and map hashing per tuple.
 		globalAcc := a.newGroupAccumulator(Tuple{}, 0)
-		groups[""] = globalAcc
-		groupOrder = append(groupOrder, "")
+		orderedAccs = append(orderedAccs, globalAcc)
 
 		for {
 			select {
@@ -916,11 +928,11 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 		}
 	} else if len(a.groupKeys) == 1 && a.groupByMod == proc.GroupByNormal && len(masks) == 1 && masks[0] == 1 {
 		// Fast-path: Single integer key GROUP BY without cube/rollup.
-		// Bypasses strings.Builder formatting and string map lookups per row.
+		// Bypasses string formatting and string map lookups per row.
 		intGroups := make(map[int64]*groupAccumulator)
-		var intGroupOrder []int64
 		var nullAcc *groupAccumulator
-		fallbackToString := false
+		var slotMap map[uint64]*groupSlot
+		fallbackToSlotHash := false
 
 		keyIdx := -1
 		if a.groupKeyIdx != nil && len(a.groupKeyIdx) > 0 {
@@ -952,8 +964,8 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 			hasRows = true
 
 			for _, tuple := range inChunk.Tuples {
-				if fallbackToString {
-					a.accumulateSingleTupleString(tuple, 1, a.groupKeys, a.groupKeyIdx, a.groupKeyIsCS, groups, &groupOrder)
+				if fallbackToSlotHash {
+					a.accumulateTupleSlotHash(tuple, 1, slotMap, &orderedAccs)
 					continue
 				}
 
@@ -967,6 +979,7 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 				if val == nil {
 					if nullAcc == nil {
 						nullAcc = a.newGroupAccumulator(tuple, 1)
+						orderedAccs = append(orderedAccs, nullAcc)
 					}
 					a.accumulateTuple(nullAcc, tuple)
 					continue
@@ -976,6 +989,7 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 					if sv.IsNull {
 						if nullAcc == nil {
 							nullAcc = a.newGroupAccumulator(tuple, 1)
+							orderedAccs = append(orderedAccs, nullAcc)
 						}
 						a.accumulateTuple(nullAcc, tuple)
 						continue
@@ -987,22 +1001,17 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 					if !exists {
 						acc = a.newGroupAccumulator(tuple, 1)
 						intGroups[iKey] = acc
-						intGroupOrder = append(intGroupOrder, iKey)
+						orderedAccs = append(orderedAccs, acc)
 					}
 					a.accumulateTuple(acc, tuple)
 				} else {
-					fallbackToString = true
-					if nullAcc != nil {
-						nullKeyStr := formatNullGroupKey(1)
-						groups[nullKeyStr] = nullAcc
-						groupOrder = append(groupOrder, nullKeyStr)
+					fallbackToSlotHash = true
+					slotMap = make(map[uint64]*groupSlot, len(orderedAccs)+16)
+					for _, existingAcc := range orderedAccs {
+						h := a.computeTupleGroupHash(existingAcc.groupTuple, 1)
+						slotMap[h] = &groupSlot{acc: existingAcc, hash: h}
 					}
-					for _, k := range intGroupOrder {
-						kStr := formatIntGroupKey(k, 1)
-						groups[kStr] = intGroups[k]
-						groupOrder = append(groupOrder, kStr)
-					}
-					a.accumulateSingleTupleString(tuple, 1, a.groupKeys, a.groupKeyIdx, a.groupKeyIsCS, groups, &groupOrder)
+					a.accumulateTupleSlotHash(tuple, 1, slotMap, &orderedAccs)
 				}
 			}
 
@@ -1010,20 +1019,8 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 				break
 			}
 		}
-
-		if !fallbackToString {
-			if nullAcc != nil {
-				nullKeyStr := formatNullGroupKey(1)
-				groups[nullKeyStr] = nullAcc
-				groupOrder = append(groupOrder, nullKeyStr)
-			}
-			for _, k := range intGroupOrder {
-				kStr := strconv.FormatInt(k, 10)
-				groups[kStr] = intGroups[k]
-				groupOrder = append(groupOrder, kStr)
-			}
-		}
 	} else {
+		slotMap := make(map[uint64]*groupSlot)
 		for {
 			select {
 			case <-ctx.Done():
@@ -1046,7 +1043,7 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 
 			for _, tuple := range inChunk.Tuples {
 				for _, mask := range masks {
-					a.accumulateSingleTupleString(tuple, mask, a.groupKeys, a.groupKeyIdx, a.groupKeyIsCS, groups, &groupOrder)
+					a.accumulateTupleSlotHash(tuple, mask, slotMap, &orderedAccs)
 				}
 			}
 
@@ -1113,9 +1110,9 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 	}
 
 	if a.groupByMod != proc.GroupByNormal && nKeys > 0 {
-		sort.SliceStable(groupOrder, func(i, j int) bool {
-			accA := groups[groupOrder[i]]
-			accB := groups[groupOrder[j]]
+		sort.SliceStable(orderedAccs, func(i, j int) bool {
+			accA := orderedAccs[i]
+			accB := orderedAccs[j]
 			for k := 0; k < nKeys; k++ {
 				actA := (accA.groupMask & (uint64(1) << k)) != 0
 				actB := (accB.groupMask & (uint64(1) << k)) != 0
@@ -1135,8 +1132,7 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 	}
 
 	// Materialize groups into result tuples
-	for _, gk := range groupOrder {
-		acc := groups[gk]
+	for _, acc := range orderedAccs {
 		var vals []any
 		if a.arena != nil {
 			vals = a.arena.AllocAnySlice(len(a.fields))
@@ -1177,7 +1173,7 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 				if acc.counts[fIdx] == 0 {
 					val = nil
 				} else if acc.isDecimal[fIdx] {
-					val = acc.decSums[fIdx].String()
+					val = storage.DecimalValueFromDecimal(acc.decSums[fIdx])
 				} else {
 					s := acc.sums[fIdx]
 					if s == math.Trunc(s) {
@@ -1225,9 +1221,9 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 				} else if acc.isDecimal[fIdx] {
 					countDec := storage.NewDecimalFromInt(acc.counts[fIdx], 0)
 					if quo, err := acc.decSums[fIdx].Div(countDec, 4); err == nil {
-						val = quo.String()
+						val = storage.DecimalValueFromDecimal(quo)
 					} else {
-						val = acc.decSums[fIdx].String()
+						val = storage.DecimalValueFromDecimal(acc.decSums[fIdx])
 					}
 				} else {
 					avg := acc.sums[fIdx] / float64(acc.counts[fIdx])
@@ -1438,111 +1434,242 @@ func (a *AggregateIterator) Open(ctx context.Context) (retErr error) {
 	return nil
 }
 
-func (a *AggregateIterator) accumulateSingleTupleString(tuple Tuple, mask uint64, groupKeys []string, groupKeyIdx []int, groupKeyIsCS []bool, groups map[string]*groupAccumulator, groupOrder *[]string) *groupAccumulator {
-	var gk strings.Builder
-	gk.WriteString(strconv.FormatUint(mask, 10))
-	gk.WriteByte('\x01')
-	for i, k := range groupKeys {
-		if (mask & (uint64(1) << i)) != 0 {
-			var val any
-			if tuple.Lazy == nil && groupKeyIdx != nil && i < len(groupKeyIdx) && groupKeyIdx[i] >= 0 && groupKeyIdx[i] < len(tuple.Values) {
-				val = tuple.Values[groupKeyIdx[i]]
-			} else {
-				val, _ = lookupVal(tuple, k)
-			}
-			isCS := false
-			if groupKeyIsCS != nil && i < len(groupKeyIsCS) {
-				isCS = groupKeyIsCS[i]
-			}
-			switch v := val.(type) {
-			case nil:
-				gk.WriteString("\x00NULL\x00")
-			case int64:
-				s := strconv.FormatInt(v, 10)
-				gk.WriteString(strconv.Itoa(len(s)))
-				gk.WriteByte(':')
-				gk.WriteString(s)
-			case int:
-				s := strconv.Itoa(v)
-				gk.WriteString(strconv.Itoa(len(s)))
-				gk.WriteByte(':')
-				gk.WriteString(s)
-			case string:
-				s := v
-				if !isCS {
-					s = strings.ToLower(s)
-				}
-				gk.WriteString(strconv.Itoa(len(s)))
-				gk.WriteByte(':')
-				gk.WriteString(s)
-			case storage.Value:
-				if v.IsNull {
-					gk.WriteString("\x00NULL\x00")
-				} else if v.Type == storage.TypeVarChar {
-					s := v.SVal
-					if !isCS {
-						s = strings.ToLower(s)
-					}
-					gk.WriteString(strconv.Itoa(len(s)))
-					gk.WriteByte(':')
-					gk.WriteString(s)
-				} else {
-					s := v.String()
-					gk.WriteString(strconv.Itoa(len(s)))
-					gk.WriteByte(':')
-					gk.WriteString(s)
-				}
-			case float64:
-				s := strconv.FormatFloat(v, 'g', -1, 64)
-				gk.WriteString(strconv.Itoa(len(s)))
-				gk.WriteByte(':')
-				gk.WriteString(s)
-			default:
-				s := fmt.Sprintf("%v", val)
-				if !isCS {
-					s = strings.ToLower(s)
-				}
-				gk.WriteString(strconv.Itoa(len(s)))
-				gk.WriteByte(':')
-				gk.WriteString(s)
-			}
-		} else {
-			gk.WriteString("\x00SKIP\x00")
+type groupSlot struct {
+	acc  *groupAccumulator
+	hash uint64
+	next *groupSlot
+}
+
+const (
+	fnvOffset64 uint64 = 14695981039346656037
+	fnvPrime64  uint64 = 1099511628211
+)
+
+func hashUint64(h, val uint64) uint64 {
+	h ^= val
+	h *= fnvPrime64
+	return h
+}
+
+func hashStringVal(h uint64, s string, isCS bool) uint64 {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !isCS && c >= 'A' && c <= 'Z' {
+			c += 32
 		}
-		gk.WriteByte('\x00')
+		h ^= uint64(c)
+		h *= fnvPrime64
 	}
-	groupKeyStr := gk.String()
+	return h
+}
 
-	acc, exists := groups[groupKeyStr]
-	if !exists {
-		acc = a.newGroupAccumulator(tuple, mask)
-		groups[groupKeyStr] = acc
-		*groupOrder = append(*groupOrder, groupKeyStr)
+func (a *AggregateIterator) computeTupleGroupHash(tuple Tuple, mask uint64) uint64 {
+	h := hashUint64(fnvOffset64, mask)
+	for i, k := range a.groupKeys {
+		h = hashUint64(h, uint64(i))
+		if (mask & (uint64(1) << i)) == 0 {
+			h = hashUint64(h, 0xFAFAFAFAFAFAFAFA)
+			continue
+		}
+		var val any
+		if tuple.Lazy == nil && a.groupKeyIdx != nil && i < len(a.groupKeyIdx) && a.groupKeyIdx[i] >= 0 && a.groupKeyIdx[i] < len(tuple.Values) {
+			val = tuple.Values[a.groupKeyIdx[i]]
+		} else {
+			val, _ = lookupVal(tuple, k)
+		}
+		isCS := false
+		if a.groupKeyIsCS != nil && i < len(a.groupKeyIsCS) {
+			isCS = a.groupKeyIsCS[i]
+		}
+
+		if val == nil {
+			h = hashUint64(h, 0xFEFEFEFEFEFEFEFE)
+			continue
+		}
+		switch v := val.(type) {
+		case storage.Value:
+			if v.IsNull {
+				h = hashUint64(h, 0xFEFEFEFEFEFEFEFE)
+			} else if v.Type == storage.TypeInt {
+				h = hashUint64(hashUint64(h, 1), uint64(v.IVal))
+			} else if v.Type == storage.TypeVarChar {
+				h = hashUint64(h, 2)
+				h = hashStringVal(h, v.SVal, isCS)
+			} else if v.Type == storage.TypeFloat {
+				h = hashUint64(hashUint64(h, 3), math.Float64bits(v.FVal))
+			} else if v.Type == storage.TypeBool {
+				var bVal uint64
+				if v.BVal {
+					bVal = 1
+				}
+				h = hashUint64(hashUint64(h, 4), bVal)
+			} else {
+				h = hashUint64(h, 5)
+				h = hashStringVal(h, v.String(), isCS)
+			}
+		case int64:
+			h = hashUint64(hashUint64(h, 1), uint64(v))
+		case int:
+			h = hashUint64(hashUint64(h, 1), uint64(v))
+		case int32:
+			h = hashUint64(hashUint64(h, 1), uint64(v))
+		case int16:
+			h = hashUint64(hashUint64(h, 1), uint64(v))
+		case int8:
+			h = hashUint64(hashUint64(h, 1), uint64(v))
+		case uint64:
+			h = hashUint64(hashUint64(h, 1), v)
+		case uint32:
+			h = hashUint64(hashUint64(h, 1), uint64(v))
+		case uint16:
+			h = hashUint64(hashUint64(h, 1), uint64(v))
+		case uint8:
+			h = hashUint64(hashUint64(h, 1), uint64(v))
+		case uint:
+			h = hashUint64(hashUint64(h, 1), uint64(v))
+		case string:
+			h = hashUint64(h, 2)
+			h = hashStringVal(h, v, isCS)
+		case float64:
+			h = hashUint64(hashUint64(h, 3), math.Float64bits(v))
+		case float32:
+			h = hashUint64(hashUint64(h, 3), math.Float64bits(float64(v)))
+		case bool:
+			var bVal uint64
+			if v {
+				bVal = 1
+			}
+			h = hashUint64(hashUint64(h, 4), bVal)
+		default:
+			h = hashUint64(h, 5)
+			h = hashStringVal(h, fmt.Sprintf("%v", val), isCS)
+		}
+	}
+	return h
+}
+
+func (a *AggregateIterator) matchTupleKeys(t1, t2 Tuple, mask uint64) bool {
+	for i, k := range a.groupKeys {
+		if (mask & (uint64(1) << i)) == 0 {
+			continue
+		}
+		var v1, v2 any
+		if t1.Lazy == nil && a.groupKeyIdx != nil && i < len(a.groupKeyIdx) && a.groupKeyIdx[i] >= 0 && a.groupKeyIdx[i] < len(t1.Values) {
+			v1 = t1.Values[a.groupKeyIdx[i]]
+		} else {
+			v1, _ = lookupVal(t1, k)
+		}
+		if t2.Lazy == nil && a.groupKeyIdx != nil && i < len(a.groupKeyIdx) && a.groupKeyIdx[i] >= 0 && a.groupKeyIdx[i] < len(t2.Values) {
+			v2 = t2.Values[a.groupKeyIdx[i]]
+		} else {
+			v2, _ = lookupVal(t2, k)
+		}
+		isCS := false
+		if a.groupKeyIsCS != nil && i < len(a.groupKeyIsCS) {
+			isCS = a.groupKeyIsCS[i]
+		}
+		if !equalGroupVal(v1, v2, isCS) {
+			return false
+		}
+	}
+	return true
+}
+
+func equalGroupVal(v1, v2 any, isCS bool) bool {
+	if v1 == nil {
+		if v2 == nil {
+			return true
+		}
+		if sv2, ok := v2.(storage.Value); ok {
+			return sv2.IsNull
+		}
+		return false
+	}
+	if v2 == nil {
+		if sv1, ok := v1.(storage.Value); ok {
+			return sv1.IsNull
+		}
+		return false
 	}
 
+	if sv1, ok := v1.(storage.Value); ok {
+		if sv1.IsNull {
+			if sv2, ok2 := v2.(storage.Value); ok2 {
+				return sv2.IsNull
+			}
+			return false
+		}
+		if sv2, ok2 := v2.(storage.Value); ok2 {
+			if sv2.IsNull {
+				return false
+			}
+			if sv1.Type == storage.TypeVarChar && sv2.Type == storage.TypeVarChar && !isCS {
+				return strings.EqualFold(sv1.SVal, sv2.SVal)
+			}
+			return sv1.Compare(sv2) == 0
+		}
+		v1 = sv1.Interface()
+	}
+	if sv2, ok := v2.(storage.Value); ok {
+		if sv2.IsNull {
+			return false
+		}
+		v2 = sv2.Interface()
+	}
+
+	i1, isInt1 := extractIntKey(v1)
+	i2, isInt2 := extractIntKey(v2)
+	if isInt1 && isInt2 {
+		return i1 == i2
+	}
+
+	switch a := v1.(type) {
+	case string:
+		if b, ok := v2.(string); ok {
+			if isCS {
+				return a == b
+			}
+			return strings.EqualFold(a, b)
+		}
+	case float64:
+		if b, ok := v2.(float64); ok {
+			return a == b
+		}
+	case bool:
+		if b, ok := v2.(bool); ok {
+			return a == b
+		}
+	}
+	return CompareValues(v1, v2) == 0
+}
+
+func (a *AggregateIterator) accumulateTupleSlotHash(tuple Tuple, mask uint64, slotMap map[uint64]*groupSlot, orderedAccs *[]*groupAccumulator) *groupAccumulator {
+	h := a.computeTupleGroupHash(tuple, mask)
+	head, exists := slotMap[h]
+	if exists {
+		slot := head
+		for slot != nil {
+			if slot.acc.groupMask == mask && a.matchTupleKeys(slot.acc.groupTuple, tuple, mask) {
+				a.accumulateTuple(slot.acc, tuple)
+				return slot.acc
+			}
+			if slot.next == nil {
+				break
+			}
+			slot = slot.next
+		}
+		acc := a.newGroupAccumulator(tuple, mask)
+		slot.next = &groupSlot{acc: acc, hash: h}
+		*orderedAccs = append(*orderedAccs, acc)
+		a.accumulateTuple(acc, tuple)
+		return acc
+	}
+
+	acc := a.newGroupAccumulator(tuple, mask)
+	slotMap[h] = &groupSlot{acc: acc, hash: h}
+	*orderedAccs = append(*orderedAccs, acc)
 	a.accumulateTuple(acc, tuple)
 	return acc
-}
-
-func formatIntGroupKey(k int64, mask uint64) string {
-	s := strconv.FormatInt(k, 10)
-	var gk strings.Builder
-	gk.WriteString(strconv.FormatUint(mask, 10))
-	gk.WriteByte('\x01')
-	gk.WriteString(strconv.Itoa(len(s)))
-	gk.WriteByte(':')
-	gk.WriteString(s)
-	gk.WriteByte('\x00')
-	return gk.String()
-}
-
-func formatNullGroupKey(mask uint64) string {
-	var gk strings.Builder
-	gk.WriteString(strconv.FormatUint(mask, 10))
-	gk.WriteByte('\x01')
-	gk.WriteString("\x00NULL\x00")
-	gk.WriteByte('\x00')
-	return gk.String()
 }
 
 func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) {
@@ -1570,6 +1697,9 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 		var ok bool
 		if f.parsed != nil {
 			val, ok = EvalTupleExpr(tuple, f.parsed)
+		} else if tuple.Lazy == nil && f.argColIdx >= 0 && f.argColIdx < len(tuple.Values) {
+			val = tuple.Values[f.argColIdx]
+			ok = (val != nil)
 		} else {
 			val, ok = lookupVal(tuple, f.argCol)
 		}

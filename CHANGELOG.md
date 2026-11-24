@@ -21,6 +21,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - support multi-column tuple comparisons `(a, b) = (c, d)` and `(a, b) IN ((...))` across parser and evaluator (`ENG-034`, Round 15)
 - support `ORDER BY ... NULLS FIRST` and `NULLS LAST` across tokenizer, AST parser, planner, and sort/window iterators (`ENG-038`, Round 16)
 
+### Performance
+- accelerate GROUP BY and JOIN memory paths via uint64 FNV-1a integer slot hashing, sync.Pool buffer recycling, pre-resolved column indices, and direct tuple materialization, achieving 97.3% memory reduction and 99.6% allocation drop per tuple (`PERF-GROUPBY-SLOT-HASH-1`)
+
 ### Fixed
 - route simple cursor declarations to native `scanCursorRows` fast-path and synchronize `memengine` WAL hook LSN baseline during late subscriber attachment
 - enforce fail-closed syntax rejection across all SQL clauses (`WHERE`, `SET`, `ORDER BY`, `GROUP BY`, `LIMIT`, `OFFSET`, `VALUES`, `HAVING`, `RETURNING`, `WINDOW`) eliminating silent query acceptance and silent drops (`FIX-NEGATIVE-SYNTAX-FUZZER-1`)
