@@ -54,6 +54,14 @@ func (e *Engine) ApplyWALRecord(rec WALRecord) error {
 
 func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 	hasDDL := false
+	var undos []func()
+	rollback := func(err error) error {
+		for i := len(undos) - 1; i >= 0; i-- {
+			undos[i]()
+		}
+		return err
+	}
+
 	for _, op := range rec.Ops {
 		if storage.IsTemporaryTable(op.Table) ||
 			(op.Schema != nil && storage.IsTemporaryTable(op.Schema.Name)) ||
@@ -84,10 +92,24 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 					Entries: make([]IndexEntry, 0),
 				}
 			}
-			e.tables[op.Schema.Name] = td
+			oldTd, hadOld := e.tables[op.Schema.Name]
+			tblName := op.Schema.Name
+			e.tables[tblName] = td
+			undos = append(undos, func() {
+				if hadOld {
+					e.tables[tblName] = oldTd
+				} else {
+					delete(e.tables, tblName)
+				}
+			})
 		case OpDropTable:
 			hasDDL = true
-			sqlutil.MapDeleteFold(e.tables, op.Table)
+			if oldTd, exists := sqlutil.MapGetFold(e.tables, op.Table); exists {
+				sqlutil.MapDeleteFold(e.tables, op.Table)
+				undos = append(undos, func() {
+					e.tables[oldTd.Schema.Name] = oldTd
+				})
+			}
 		case OpRenameTable:
 			hasDDL = true
 			oldName := op.Key
@@ -110,29 +132,56 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 					}
 				}
 				e.rebuildFKCacheLocked()
+				savedOld := oldName
+				savedNew := newName
+				savedTd := td
+				undos = append(undos, func() {
+					sqlutil.MapDeleteFold(e.tables, savedNew)
+					savedTd.Schema.Name = savedOld
+					savedTd.refreshSnapSchemaLocked()
+					e.tables[savedOld] = savedTd
+					e.rebuildFKCacheLocked()
+				})
 			}
 		case OpAlterTable:
 			if td, exists := sqlutil.MapGetFold(e.tables, op.Table); exists {
+				prevSchema := td.Schema.Clone()
 				if op.Schema != nil {
 					if err := e.applySchemaMigrationLocked(td, op.Schema, false); err != nil {
-						return err
+						return rollback(err)
 					}
 				} else if op.Column != nil {
 					trialSchema := td.Schema.Clone()
 					trialSchema.Columns = append(trialSchema.Columns, *op.Column)
 					if err := e.applySchemaMigrationLocked(td, &trialSchema, false); err != nil {
-						return err
+						return rollback(err)
 					}
 				}
+				savedPrev := prevSchema
+				targetTd := td
+				undos = append(undos, func() {
+					_ = e.applySchemaMigrationLocked(targetTd, &savedPrev, false)
+				})
 			}
 		case OpTruncateTable:
 			if td, exists := sqlutil.MapGetFold(e.tables, op.Table); exists {
+				savedKeys, savedEntries := td.snapshotEntriesAndKeys(nil)
 				td.truncateShardsLocked()
 				td.Partitions = make(map[string]map[string]struct{})
 				for _, idx := range td.Indexes {
 					idx.sl = NewSkipList(idx.Schema.Unique)
 					idx.Entries = nil
 				}
+				targetTd := td
+				undos = append(undos, func() {
+					for i, k := range savedKeys {
+						if r, err := savedEntries[i].materialize(targetTd); err == nil {
+							targetTd.putRowAndVer(k, r, 1)
+						}
+					}
+					targetTd.Keys = savedKeys
+					_ = targetTd.restoreIndexesLocked()
+				})
 			}
 		case OpDropPartition:
 			if td, exists := sqlutil.MapGetFold(e.tables, op.Table); exists {
@@ -163,7 +212,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				Entries: make([]IndexEntry, 0),
 			}
 			var insertErr error
-			scanErr := td.forEachRow(func(pk string, row storage.Row) bool {
+			scanErr := td.forEachRowLocked(func(pk string, row storage.Row) bool {
 				keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, row, op.IndexSchema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, row, op.IndexSchema.IncludeCols)
 				if err := idxData.Insert(keyVal, pk, incVals); err != nil {
@@ -173,10 +222,10 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				return true
 			})
 			if scanErr != nil {
-				return fmt.Errorf("memengine: replay OpCreateIndex failed on table %q index %q: %w", td.Schema.Name, op.IndexSchema.Name, scanErr)
+				return rollback(fmt.Errorf("memengine: replay OpCreateIndex failed on table %q index %q: %w", td.Schema.Name, op.IndexSchema.Name, scanErr))
 			}
 			if insertErr != nil {
-				return fmt.Errorf("memengine: replay OpCreateIndex failed on table %q index %q: %w", td.Schema.Name, op.IndexSchema.Name, insertErr)
+				return rollback(fmt.Errorf("memengine: replay OpCreateIndex failed on table %q index %q: %w", td.Schema.Name, op.IndexSchema.Name, insertErr))
 			}
 			if td.Indexes == nil {
 				td.Indexes = make(map[string]*IndexData)
@@ -187,35 +236,64 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				td.Schema.Indexes = append(td.Schema.Indexes, *op.IndexSchema)
 			}
 			td.refreshSnapSchemaLocked()
+			idxName := op.IndexSchema.Name
+			targetTd := td
+			undos = append(undos, func() {
+				delete(targetTd.Indexes, idxName)
+				for i := range targetTd.Schema.Indexes {
+					if targetTd.Schema.Indexes[i].Name == idxName {
+						targetTd.Schema.Indexes = append(targetTd.Schema.Indexes[:i], targetTd.Schema.Indexes[i+1:]...)
+						break
+					}
+				}
+				targetTd.refreshSnapSchemaLocked()
+			})
 		case OpDropIndex:
 			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
 				continue
 			}
+			oldIdx, hadIdx := td.Indexes[op.IndexName]
 			sqlutil.MapDeleteFold(td.Indexes, op.IndexName)
 			_, idxPos, idxFound := td.Schema.FindIndex(op.IndexName)
+			var oldIndexSchema storage.IndexSchema
 			if idxFound {
+				oldIndexSchema = td.Schema.Indexes[idxPos]
 				td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], td.Schema.Indexes[idxPos+1:]...)
 			}
 			td.refreshSnapSchemaLocked()
+			if hadIdx {
+				targetTd := td
+				idxN := op.IndexName
+				undos = append(undos, func() {
+					targetTd.Indexes[idxN] = oldIdx
+					if idxFound {
+						targetTd.Schema.Indexes = append(targetTd.Schema.Indexes, oldIndexSchema)
+					}
+					targetTd.refreshSnapSchemaLocked()
+				})
+			}
 		case OpInsert:
 			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
-				return fmt.Errorf("memengine: wal replay OpInsert table %q not found", op.Table)
+				return rollback(fmt.Errorf("memengine: wal replay OpInsert table %q not found", op.Table))
 			}
 			var row storage.Row
 			if len(op.Data) > 0 {
 				var err error
 				row, err = storage.DecodeTupleToRow(&td.Schema, op.Data)
 				if err != nil {
-					return fmt.Errorf("memengine: wal replay OpInsert tuple decode failed on table %q (pk=%s): %w", td.Schema.Name, op.Key, err)
+					return rollback(fmt.Errorf("memengine: wal replay OpInsert tuple decode failed on table %q (pk=%s): %w", td.Schema.Name, op.Key, err))
 				}
 			} else if op.Record != nil {
 				row = td.Schema.RecordToRow(op.Record)
 			} else {
-				return fmt.Errorf("memengine: wal replay OpInsert missing record and data on table %q (pk=%s)", td.Schema.Name, op.Key)
+				return rollback(fmt.Errorf("memengine: wal replay OpInsert missing record and data on table %q (pk=%s)", td.Schema.Name, op.Key))
 			}
-			if !td.hasKey(op.Key) {
+			hadKey := td.hasKey(op.Key)
+			oldRow, oldVer, err := td.getRowAndVer(op.Key)
+			hadOld := (err == nil)
+			if !hadKey {
 				td.Keys = append(td.Keys, op.Key)
 			}
 			td.putRowAndVer(op.Key, row, 1)
@@ -224,6 +302,29 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 					td.addPartitionKey(pKey, op.Key)
 				}
 			}
+			targetTd := td
+			pkVal := op.Key
+			insertedRow := row
+			undos = append(undos, func() {
+				if hadOld {
+					targetTd.putRowAndVer(pkVal, oldRow, oldVer)
+				} else {
+					targetTd.deleteRowAndVer(pkVal)
+					if !hadKey {
+						targetTd.removeKey(pkVal)
+					}
+				}
+				if targetTd.Schema.IsPartitioned() {
+					if pKey, err := targetTd.Schema.ComputePartitionKeyFromRow(insertedRow); err == nil {
+						targetTd.removePartitionKey(pKey, pkVal)
+					}
+					if hadOld {
+						if oldPKey, err := targetTd.Schema.ComputePartitionKeyFromRow(oldRow); err == nil {
+							targetTd.addPartitionKey(oldPKey, pkVal)
+						}
+					}
+				}
+			})
 			for _, idxData := range td.Indexes {
 				if idxData.Schema.Disabled {
 					continue
@@ -231,34 +332,40 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, row, idxData.Schema.IncludeCols)
 				if err := idxData.Insert(newKey, op.Key, incVals); err != nil {
-					return fmt.Errorf("memengine: wal replay insert index %q on table %q failed (pk=%s): %w", idxData.Schema.Name, td.Schema.Name, op.Key, err)
+					return rollback(fmt.Errorf("memengine: wal replay insert index %q on table %q failed (pk=%s): %w", idxData.Schema.Name, td.Schema.Name, op.Key, err))
 				}
+				curIdx := idxData
+				curK := newKey
+				undos = append(undos, func() {
+					curIdx.Delete(curK, pkVal)
+				})
 			}
 		case OpUpdate:
 			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
-				return fmt.Errorf("memengine: wal replay OpUpdate table %q not found", op.Table)
+				return rollback(fmt.Errorf("memengine: wal replay OpUpdate table %q not found", op.Table))
 			}
-			oldRow, _, err := td.getRowAndVer(op.Key)
+			oldRow, oldVer, err := td.getRowAndVer(op.Key)
 			hadOld := (err == nil)
 			var row storage.Row
 			if len(op.Data) > 0 {
 				var err error
 				row, err = storage.DecodeTupleToRow(&td.Schema, op.Data)
 				if err != nil {
-					return fmt.Errorf("memengine: wal replay OpUpdate tuple decode failed on table %q (pk=%s): %w", td.Schema.Name, op.Key, err)
+					return rollback(fmt.Errorf("memengine: wal replay OpUpdate tuple decode failed on table %q (pk=%s): %w", td.Schema.Name, op.Key, err))
 				}
 			} else if op.Record != nil {
 				row = td.Schema.RecordToRow(op.Record)
 			} else {
-				return fmt.Errorf("memengine: wal replay OpUpdate missing record and data on table %q (pk=%s)", td.Schema.Name, op.Key)
+				return rollback(fmt.Errorf("memengine: wal replay OpUpdate missing record and data on table %q (pk=%s)", td.Schema.Name, op.Key))
 			}
-			if !hadOld {
+			hadKey := td.hasKey(op.Key)
+			if !hadKey {
 				td.Keys = append(td.Keys, op.Key)
 			}
 			td.putRowAndVer(op.Key, row, op.BaseVer+1)
+			var oldPKey, newPKey string
 			if td.Schema.IsPartitioned() {
-				var oldPKey, newPKey string
 				if hadOld {
 					oldPKey, _ = td.Schema.ComputePartitionKeyFromRow(oldRow)
 				}
@@ -272,44 +379,100 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 					}
 				}
 			}
+			targetTd := td
+			pkVal := op.Key
+			savedOldRow := oldRow
+			savedOldVer := oldVer
+			savedOldPKey := oldPKey
+			savedNewPKey := newPKey
+			undos = append(undos, func() {
+				if hadOld {
+					targetTd.putRowAndVer(pkVal, savedOldRow, savedOldVer)
+					if targetTd.Schema.IsPartitioned() {
+						if savedNewPKey != "" {
+							targetTd.removePartitionKey(savedNewPKey, pkVal)
+						}
+						if savedOldPKey != "" {
+							targetTd.addPartitionKey(savedOldPKey, pkVal)
+						}
+					}
+				} else {
+					targetTd.deleteRowAndVer(pkVal)
+					if !hadKey {
+						targetTd.removeKey(pkVal)
+					}
+				}
+			})
 			for _, idxData := range td.Indexes {
 				if idxData.Schema.Disabled {
 					continue
 				}
 				if hadOld {
 					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
+					incVals := extractIncludeValuesFromRow(&td.Schema, oldRow, idxData.Schema.IncludeCols)
 					idxData.Delete(oldKey, op.Key)
+					curIdx := idxData
+					curOldK := oldKey
+					curInc := incVals
+					undos = append(undos, func() {
+						_ = curIdx.Insert(curOldK, pkVal, curInc)
+					})
 				}
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, row, idxData.Schema.IncludeCols)
 				if err := idxData.Insert(newKey, op.Key, incVals); err != nil {
-					return fmt.Errorf("memengine: wal replay update index %q on table %q failed (pk=%s): %w", idxData.Schema.Name, td.Schema.Name, op.Key, err)
+					return rollback(fmt.Errorf("memengine: wal replay update index %q on table %q failed (pk=%s): %w", idxData.Schema.Name, td.Schema.Name, op.Key, err))
 				}
+				curIdx := idxData
+				curNewK := newKey
+				undos = append(undos, func() {
+					curIdx.Delete(curNewK, pkVal)
+				})
 			}
 		case OpDelete:
 			td, exists := sqlutil.MapGetFold(e.tables, op.Table)
 			if !exists {
-				return fmt.Errorf("memengine: wal replay OpDelete table %q not found", op.Table)
+				return rollback(fmt.Errorf("memengine: wal replay OpDelete table %q not found", op.Table))
 			}
-			oldRow, hadOld := td.deleteRowAndVer(op.Key)
+			oldRow, oldVer, err := td.getRowAndVer(op.Key)
+			hadOld := (err == nil)
+			td.deleteRowAndVer(op.Key)
 			if td.Schema.IsPartitioned() && hadOld {
 				if pKey, err := td.Schema.ComputePartitionKeyFromRow(oldRow); err == nil {
 					td.removePartitionKey(pKey, op.Key)
 				}
 			}
-			for i, k := range td.Keys {
-				if k == op.Key {
-					td.Keys = append(td.Keys[:i], td.Keys[i+1:]...)
-					break
-				}
-			}
+			hadKey := td.hasKey(op.Key)
+			td.removeKey(op.Key)
 			if hadOld {
+				targetTd := td
+				pkVal := op.Key
+				savedRow := oldRow
+				savedVer := oldVer
+				undos = append(undos, func() {
+					targetTd.putRowAndVer(pkVal, savedRow, savedVer)
+					if hadKey && !targetTd.hasKey(pkVal) {
+						targetTd.Keys = append(targetTd.Keys, pkVal)
+					}
+					if targetTd.Schema.IsPartitioned() {
+						if pKey, err := targetTd.Schema.ComputePartitionKeyFromRow(savedRow); err == nil {
+							targetTd.addPartitionKey(pKey, pkVal)
+						}
+					}
+				})
 				for _, idxData := range td.Indexes {
 					if idxData.Schema.Disabled {
 						continue
 					}
 					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
+					incVals := extractIncludeValuesFromRow(&td.Schema, oldRow, idxData.Schema.IncludeCols)
 					idxData.Delete(oldKey, op.Key)
+					curIdx := idxData
+					curOldK := oldKey
+					curInc := incVals
+					undos = append(undos, func() {
+						_ = curIdx.Insert(curOldK, pkVal, curInc)
+					})
 				}
 			}
 		}

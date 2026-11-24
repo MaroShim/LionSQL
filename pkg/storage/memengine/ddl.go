@@ -177,9 +177,13 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 		Entries: make([]IndexEntry, 0),
 	}
 
+	// Acquire table-level exclusive write lock across the entire index build and registration
+	// to prevent concurrent transactions from committing and missing the new index ([RULE:ConcurrencySafety]).
+	td.mu.Lock()
+
 	// Populate index from existing rows
 	var insertErr error
-	scanErr := td.forEachRow(func(pk string, row storage.Row) bool {
+	scanErr := td.forEachRowLocked(func(pk string, row storage.Row) bool {
 		keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, row, index)
 		incVals := extractIncludeValuesFromRow(&td.Schema, row, index.IncludeCols)
 		if err := idxData.Insert(keyVal, pk, incVals); err != nil {
@@ -189,13 +193,14 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 		return true
 	})
 	if scanErr != nil {
+		td.mu.Unlock()
 		return scanErr
 	}
 	if insertErr != nil {
+		td.mu.Unlock()
 		return insertErr
 	}
 
-	td.mu.Lock()
 	if td.Indexes == nil {
 		td.Indexes = make(map[string]*IndexData)
 	}

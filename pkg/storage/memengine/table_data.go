@@ -383,10 +383,25 @@ func (td *TableData) deleteRowAndVer(pk string) (storage.Row, bool) {
 	return td.deleteRowAndVerLocked(pk)
 }
 
+func (td *TableData) removeKey(pk string) {
+	for i, k := range td.Keys {
+		if k == pk {
+			td.Keys = append(td.Keys[:i], td.Keys[i+1:]...)
+			return
+		}
+	}
+}
+
 func (td *TableData) forEachRow(fn func(pk string, row storage.Row) bool) error {
-	td.ensureShardsInit()
 	td.mu.RLock()
 	defer td.mu.RUnlock()
+	return td.forEachRowLocked(fn)
+}
+
+// forEachRowLocked iterates over all rows in the table shards.
+// Caller MUST hold td.mu.Lock() or td.mu.RLock().
+func (td *TableData) forEachRowLocked(fn func(pk string, row storage.Row) bool) error {
+	td.ensureShardsInit()
 	schemaSnap := td.getImmutableSchemaLocked()
 	layoutSnap := td.layout
 	for i := 0; i < numTableShards; i++ {
